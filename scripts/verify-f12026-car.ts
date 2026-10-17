@@ -30,6 +30,7 @@ import {
 import { F12026CarSim } from '../src/lib/sim/f12026-car/F12026CarSim';
 import { loadGlbGeometry } from './lib/glb-geometry';
 import { createFlatTestTrack } from './lib/flat-track';
+import { checkBarrierCrashes, vehicleCrashCar } from './lib/barrier-crash';
 
 const failures: string[] = [];
 const check = (name: string, ok: boolean, detail: string) => {
@@ -762,6 +763,8 @@ const crossesWall = (walls: WallQuery, ax: number, az: number, bx: number, bz: n
     impacts.length > 0 && !crossed && finite(car),
     `s ${fmt(pick.s, 0)} m, wall ${fmt(pick.wallLeftM ?? Number.NaN, 1)} m left, ${impacts.length ? `${fmt(impacts[0], 1)} m/s impact` : 'no impact'}, min lateral ${fmt(minLat, 1)} m`
   );
+  // Missed braking points: flat out at 300 km/h into the outside barriers of Turns 1 and 2, then drive away
+  checkBarrierCrashes(check, 'f12026-car', track, walls, () => vehicleCrashCar(new F12026CarSim(track, trackRoot)));
 }
 
 // ---------------------------------------------------------------------------

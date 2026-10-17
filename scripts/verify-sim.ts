@@ -17,6 +17,9 @@ import { buildRwandaCircuitScene } from '../src/lib/scene-builder';
 import { MultiplayerSyncManager } from '../src/lib/sim/multiplayer-sync';
 import { AiOpponentField } from '../src/lib/sim/ai-opponents';
 import { createFlatTestTrack } from './lib/flat-track';
+import { checkBarrierCrashes, vf26CrashCar } from './lib/barrier-crash';
+import { loadGlbGeometry } from './lib/glb-geometry';
+import { TrackWallQuery } from '../src/lib/sim/f12026-car/TrackColliderQuery';
 import * as THREE from 'three';
 import { readFileSync } from 'node:fs';
 
@@ -1075,6 +1078,23 @@ async function runVerification() {
       `Positive camber in every corner (${offCamber} off-camber of ${cornerSamples} corner samples), peak banking ${maxBankDeg.toFixed(1)}° (<= 4.5°), twist ${maxTwistDegPerM.toFixed(3)}°/m (<= 0.15: no diagonal unloading)`
     );
     assert(maxFlare < 0.5, `Run-off / gravel outer edges flare at most ${maxFlare.toFixed(2)} m per metre (< 0.5: no lateral kinks)`);
+  }
+
+  // 12. Missed braking points: flat out at 300 km/h into the outside barriers of Turns 1 and 2, then drive away.
+  // Measured against the GLB barrier face; on the track-data wall lines (no GLB attached) the VF26 can reach up to
+  // ~0.5 m past it where those lines sit outside the modelled barrier.
+  {
+    console.log('\n12. Barrier hits (missed braking points)...');
+    const crashTrack = getRwandaTrackData();
+    const trackRoot = loadGlbGeometry('public/tracks/rwanda/rwanda_2026.glb');
+    const walls = TrackWallQuery.fromTrackRoot(trackRoot);
+    const check = (name: string, ok: boolean, detail: string) => assert(ok, `${name} (${detail})`);
+    checkBarrierCrashes(check, 'VF26 (GLB walls)', crashTrack, walls, () => {
+      const sim = new F1Physics2026(crashTrack);
+      sim.attachTrackRoot(trackRoot);
+      return vf26CrashCar(sim, crashTrack);
+    });
+    checkBarrierCrashes(check, 'VF26 (track-data walls)', crashTrack, walls, () => vf26CrashCar(new F1Physics2026(crashTrack), crashTrack), 0.5);
   }
 
   if (failures.length > 0) {

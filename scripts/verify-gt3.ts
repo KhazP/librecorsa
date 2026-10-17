@@ -16,6 +16,8 @@ import { brakingGuideFor } from '../src/lib/sim/speed-profile';
 import { F12026CarSim } from '../src/lib/sim/f12026-car/F12026CarSim';
 import { loadGlbGeometry } from './lib/glb-geometry';
 import { createFlatTestTrack } from './lib/flat-track';
+import { checkBarrierCrashes, vehicleCrashCar } from './lib/barrier-crash';
+import { TrackWallQuery } from '../src/lib/sim/f12026-car/TrackColliderQuery';
 
 const failures: string[] = [];
 const check = (name: string, ok: boolean, detail: string) => {
@@ -200,6 +202,9 @@ console.log('\n== Autopilot on the Rwanda colliders');
   // A GT3 is ~25–35 % slower round a lap than an F1 car
   const ratio = gt3.lapS / f1.lapS;
   check('GT3 lap 1.15–1.45 × the f12026-car', ratio > 1.15 && ratio < 1.45, `${fmt(gt3.lapS, 1)} s vs ${fmt(f1.lapS, 1)} s (× ${fmt(ratio, 2)})`);
+
+  console.log('\n== Barrier hits (missed braking points, Track_Collider_Wall_*)');
+  checkBarrierCrashes(check, 'GT3', track, TrackWallQuery.fromTrackRoot(root), () => vehicleCrashCar(createAmgGt3Sim(track, root)));
 }
 
 console.log(failures.length ? `\n${failures.length} check(s) failed: ${failures.join(', ')}` : '\nAll GT3 checks passed.');
