@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+/.pnp
+.pnp.js
+
+# Next.js build output
+/.next/
+/out/
+/build/
+
+# TypeScript & caches
+*.tsbuildinfo
+next-env.d.ts
+
+# Local env files
+.env*.local
+
+# Verification / debug artifacts
+/artifacts/
+*.log
+.DS_Store
+Thumbs.db
+.claude/
+
+# Python bytecode & local asset build pipelines
+__pycache__/
+/scripts/vf26/
+/scripts/gt3/
+/scripts/rwanda-2026/
+
+# Force-feedback helper, compiled on first `npm run ffb`
+/scripts/ffb-bridge/bin/
+

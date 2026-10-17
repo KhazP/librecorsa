@@ -1,0 +1,389 @@
+/**
+ * Lap-time optimal racing line for the Rwanda 2026 circuit.
+ *
+ * 1. Start from the minimum-curvature line exported by the Blender pipeline (`ro` in track_data.json).
+ * 2. Parameterise the lateral offset as a periodic cubic B-spline (one control point every K samples)
+ *    and minimise the quasi-steady lap time of the VF26 planning model (`computeSpeedProfile`) with a
+ *    shrinking-step pattern search, inside the usable width (kerbs may take two wheels).
+ * 3. Validate both lines with the full physics AI on a flying lap; keep the faster clean one.
+ * 4. Write `ro`, `r`, `v`, `gas`, `brk`, the turn apex speeds / gears and the braking-board
+ *    distances back to track_data.json.
+ *
+ *   npx tsx scripts/optimize-racing-line.ts            # optimise + validate + write
+ *   npx tsx scripts/optimize-racing-line.ts --dry-run  # optimise + validate only
+ */
+import * as fs from 'fs';
+import * as path from 'path';
+import { getRwandaTrackData } from '../src/lib/track-data';
+import { F1Physics2026 } from '../src/lib/f1-physics-2026';
+import {
+  AI_LINE_WIDTH_SCALE,
+  computeSpeedProfile,
+  createVf26ProfileCarModel,
+  type SpeedProfile,
+} from '../src/lib/sim/speed-profile';
+
+const JSON_PATH = path.join(__dirname, '..', 'public', 'tracks', 'rwanda', 'track_data.json');
+const DRY_RUN = process.argv.includes('--dry-run');
+
+/** Car-centre margin to the asphalt edge (m): plain edge / kerb side (two wheels on the kerb) */
+const EDGE_MARGIN_M = Number(process.env.EDGE_M ?? 1.25);
+const KERB_MARGIN_M = Number(process.env.KERB_M ?? 0.7);
+/** Samples per B-spline control point (~26 m) */
+const K = 6;
+/** Curvature-smoothness weight on the control-point second difference (s/m²) */
+const SMOOTH_W = Number(process.env.SMOOTH_W ?? 0.0015);
+/**
+ * Grip margin of the optimisation model. The physics AI drives the shared profile at the limit,
+ * so a line tuned to the model's exact grip is not one it can hold; optimise with a little less.
+ */
+const OPT_MU_SCALE = Number(process.env.OPT_MU ?? 0.95);
+
+const track = getRwandaTrackData(1200);
+const samples = track.samples;
+const n = samples.length;
+const car = createVf26ProfileCarModel('balanced');
+const optCar = { ...car, muLat: car.muLat * OPT_MU_SCALE, muLong: car.muLong * OPT_MU_SCALE };
+
+// ---------- bounds ----------
+const lo = new Float64Array(n);
+const hi = new Float64Array(n);
+for (let i = 0; i < n; i++) {
+  const half = samples[i].width / 2;
+  // A kerb flag a few samples away still counts (kerbs start before the turn-in point)
+  let kL = false;
+  let kR = false;
+  for (let k = -3; k <= 3; k++) {
+    const sp = samples[(i + k + n) % n];
+    kL ||= sp.kerbLeft;
+    kR ||= sp.kerbRight;
+  }
+  lo[i] = -(half - (kL ? KERB_MARGIN_M : EDGE_MARGIN_M));
+  hi[i] = half - (kR ? KERB_MARGIN_M : EDGE_MARGIN_M);
+}
+
+// ---------- lap time of a line ----------
+function applyLine(e: Float64Array): void {
+  for (let i = 0; i < n; i++) samples[i].racingLineOffset = e[i] / (samples[i].width * AI_LINE_WIDTH_SCALE);
+}
+function lapTimeOf(profile: SpeedProfile): number {
+  let t = 0;
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n;
+    t += (2 * profile.segLenM[i]) / Math.max(1, profile.speedMs[i] + profile.speedMs[j]);
+  }
+  return t;
+}
+function evalLine(e: Float64Array, model = car): { lap: number; profile: SpeedProfile } {
+  applyLine(e);
+  const profile = computeSpeedProfile(samples, model);
+  return { lap: lapTimeOf(profile), profile };
+}
+
+// ---------- periodic cubic B-spline ----------
+const m = Math.floor(n / K);
+const kSpan = n / m;
+const bIdx = new Int32Array(n * 4);
+const bW = new Float64Array(n * 4);
+for (let i = 0; i < n; i++) {
+  const x = i / kSpan;
+  const j = Math.floor(x);
+  const u = x - j;
+  const w = [
+    (1 - u) ** 3 / 6,
+    (3 * u ** 3 - 6 * u ** 2 + 4) / 6,
+    (-3 * u ** 3 + 3 * u ** 2 + 3 * u + 1) / 6,
+    u ** 3 / 6,
+  ];
+  for (let q = 0; q < 4; q++) {
+    bIdx[i * 4 + q] = (j - 1 + q + m) % m;
+    bW[i * 4 + q] = w[q];
+  }
+}
+function splineToLine(c: Float64Array, out: Float64Array): Float64Array {
+  for (let i = 0; i < n; i++) {
+    let v = 0;
+    for (let q = 0; q < 4; q++) v += bW[i * 4 + q] * c[bIdx[i * 4 + q]];
+    out[i] = Math.min(hi[i], Math.max(lo[i], v));
+  }
+  return out;
+}
+function boundViolation(c: Float64Array): number {
+  let p = 0;
+  for (let i = 0; i < n; i++) {
+    let v = 0;
+    for (let q = 0; q < 4; q++) v += bW[i * 4 + q] * c[bIdx[i * 4 + q]];
+    const over = Math.max(0, v - hi[i], lo[i] - v);
+    p += over * over;
+  }
+  return p;
+}
+function smoothness(c: Float64Array): number {
+  let p = 0;
+  for (let j = 0; j < m; j++) {
+    const d = c[(j - 1 + m) % m] - 2 * c[j] + c[(j + 1) % m];
+    p += d * d;
+  }
+  return p;
+}
+
+const lineBuf = new Float64Array(n);
+function cost(c: Float64Array): number {
+  return evalLine(splineToLine(c, lineBuf), optCar).lap + 20 * boundViolation(c) + SMOOTH_W * smoothness(c);
+}
+
+// ---------- initial line: exported minimum-curvature offset, fitted to the spline ----------
+const e0 = new Float64Array(n);
+for (let i = 0; i < n; i++) e0[i] = Math.min(hi[i], Math.max(lo[i], samples[i].racingLineOffset * samples[i].width * AI_LINE_WIDTH_SCALE));
+const c = new Float64Array(m);
+for (let j = 0; j < m; j++) c[j] = e0[Math.round(j * kSpan) % n];
+for (let it = 0; it < 30; it++) {
+  const cur = splineToLine(c, new Float64Array(n));
+  for (let j = 0; j < m; j++) {
+    const i = Math.round(j * kSpan) % n;
+    c[j] += 0.8 * (e0[i] - cur[i]);
+  }
+}
+
+const base = evalLine(e0);
+const lapStart = base.lap;
+console.log(`Starting line (track_data.json ro): model lap ${lapStart.toFixed(3)} s`);
+
+// ---------- pattern search ----------
+const t0 = Date.now();
+let best = cost(c);
+let evals = 0;
+for (const delta of [0.8, 0.5, 0.3, 0.18, 0.1, 0.05]) {
+  for (let sweep = 0; sweep < 4; sweep++) {
+    let improved = 0;
+    for (let j = 0; j < m; j++) {
+      const orig = c[j];
+      let accepted = false;
+      for (const dir of [1, -1]) {
+        c[j] = orig + dir * delta;
+        const v = cost(c);
+        evals++;
+        if (v < best - 1e-5) {
+          best = v;
+          accepted = true;
+          improved++;
+          // keep moving in the same direction while it pays
+          for (let step = 0; step < 8; step++) {
+            const keep = c[j];
+            c[j] += dir * delta;
+            const v2 = cost(c);
+            evals++;
+            if (v2 < best - 1e-5) best = v2;
+            else {
+              c[j] = keep;
+              break;
+            }
+          }
+          break;
+        }
+      }
+      if (!accepted) c[j] = orig;
+    }
+    if (improved === 0) break;
+  }
+  const lapNow = evalLine(splineToLine(c, lineBuf)).lap;
+  console.log(`  δ=${delta.toFixed(2)} m  model lap ${lapNow.toFixed(3)} s  (${evals} evals, ${((Date.now() - t0) / 1000).toFixed(1)} s)`);
+}
+
+const eOpt = splineToLine(c, new Float64Array(n));
+const opt = evalLine(eOpt);
+console.log(`Optimised line: model lap ${opt.lap.toFixed(3)} s (${(lapStart - opt.lap).toFixed(3)} s faster)`);
+
+// ---------- physics validation: flying lap with the full AI ----------
+interface PhysicsLap {
+  lapS: number | null;
+  offTrack: number;
+  brakeOnsets: number[];
+  trace: { s: number; kmh: number; gear: number }[];
+}
+function physicsLap(e: Float64Array): PhysicsLap {
+  applyLine(e);
+  const sim = new F1Physics2026(track);
+  sim.setAssistPreset('pro');
+  sim.resetToStartGrid(true);
+  sim.aiAutopilot = true;
+  let laps = 0;
+  let offTrack = 0;
+  let lapS: number | null = null;
+  let braking = false;
+  const brakeOnsets: number[] = [];
+  const trace: PhysicsLap['trace'] = [];
+  let dbg = 0;
+  let lastDbg = -1000;
+  for (let i = 0; i < 60 * 300; i++) {
+    const prev = sim.telemetry.lastLapTimeMs;
+    sim.step(1 / 60, {});
+    if (process.env.DEBUG_LINE && dbg < 12 && (sim.telemetry.offTrack || sim.telemetry.speedKmh < 40) && i - lastDbg > 120) {
+      dbg++;
+      lastDbg = i;
+      console.log(`    [debug] t=${(i / 60).toFixed(1)} s=${sim.sMeters.toFixed(0)} v=${sim.telemetry.speedKmh.toFixed(0)} lat=${sim.lateralOffsetM.toFixed(2)} hdg=${sim.headingErrorRad.toFixed(2)} off=${sim.telemetry.offTrack}`);
+    }
+    if (laps === 1) {
+      if (sim.telemetry.offTrack) offTrack++;
+      trace.push({ s: sim.sMeters, kmh: sim.telemetry.speedKmh, gear: sim.telemetry.gear });
+      const b = sim.telemetry.brake > 0.3;
+      if (b && !braking) brakeOnsets.push(sim.sMeters);
+      braking = b;
+    }
+    if (sim.telemetry.lastLapTimeMs !== null && sim.telemetry.lastLapTimeMs !== prev) {
+      laps++;
+      if (laps === 2) {
+        lapS = sim.telemetry.lastLapTimeMs / 1000;
+        break;
+      }
+    }
+  }
+  if (lapS === null && process.env.DEBUG_LINE) {
+    console.log(`    [debug] no lap: laps=${laps} s=${sim.sMeters.toFixed(0)} v=${sim.telemetry.speedKmh.toFixed(0)} lat=${sim.lateralOffsetM.toFixed(2)} hdg=${sim.headingErrorRad.toFixed(2)}`);
+  }
+  return { lapS, offTrack, brakeOnsets, trace };
+}
+
+const physStart = physicsLap(e0);
+const physOpt = physicsLap(eOpt);
+console.log(
+  `Physics AI flying lap: starting line ${physStart.lapS?.toFixed(3)} s (offTrack ${physStart.offTrack}), ` +
+    `optimised ${physOpt.lapS?.toFixed(3)} s (offTrack ${physOpt.offTrack})`
+);
+
+const optWins =
+  physOpt.lapS !== null && physOpt.offTrack === 0 && (physStart.lapS === null || physOpt.lapS < physStart.lapS + 0.05);
+const eFinal = optWins ? eOpt : e0;
+const final = evalLine(eFinal);
+const phys = optWins ? physOpt : physStart;
+console.log(`Using the ${optWins ? 'optimised' : 'starting'} line.`);
+
+// ---------- braking zones (profile) vs physics brake onsets ----------
+const L = track.totalLengthM;
+const v = final.profile.speedMs;
+interface Zone {
+  startS: number;
+  endS: number;
+  entryKmh: number;
+  minKmh: number;
+}
+const zones: Zone[] = [];
+{
+  // A sample brakes when the profile speed falls towards the next one faster than drag alone explains
+  const isBrk = new Uint8Array(n);
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n;
+    const decel = (v[i] * v[i] - v[j] * v[j]) / (2 * final.profile.segLenM[i]);
+    isBrk[i] = decel > 6 ? 1 : 0;
+  }
+  let start = -1;
+  for (let k = 0; k < n; k++) if (!isBrk[k] && isBrk[(k + 1) % n]) { start = (k + 1) % n; break; }
+  if (start >= 0) {
+    let i = start;
+    for (let cnt = 0; cnt < n; ) {
+      if (isBrk[i]) {
+        const s0 = i;
+        let len = 0;
+        while (isBrk[i] && len < n) { i = (i + 1) % n; len++; cnt++; }
+        const entry = v[s0];
+        const minV = v[i];
+        if (entry - minV > 30 / 3.6) zones.push({ startS: samples[s0].s, endS: samples[i].s, entryKmh: entry * 3.6, minKmh: minV * 3.6 });
+      } else { i = (i + 1) % n; cnt++; }
+    }
+  }
+  zones.sort((a, b) => a.startS - b.startS);
+  // Stops separated by a short coast are one braking zone (one set of boards)
+  for (let k = zones.length - 1; k > 0; k--) {
+    const a = zones[k - 1];
+    const b = zones[k];
+    if (b.startS - a.endS < 40) {
+      a.endS = b.endS;
+      a.entryKmh = Math.max(a.entryKmh, b.entryKmh);
+      a.minKmh = b.minKmh;
+      zones.splice(k, 1);
+    }
+  }
+}
+console.log('\nBraking zones (profile brake point -> nearest physics AI brake onset):');
+for (const z of zones) {
+  let nearest = Number.NaN;
+  for (const s of phys.brakeOnsets) {
+    const d = ((s - z.startS + L * 1.5) % L) - L / 2;
+    if (Number.isNaN(nearest) || Math.abs(d) < Math.abs(nearest)) nearest = d;
+  }
+  console.log(
+    `  s=${z.startS.toFixed(0).padStart(5)} m  ${z.entryKmh.toFixed(0)} -> ${z.minKmh.toFixed(0)} km/h over ${(((z.endS - z.startS + L) % L)).toFixed(0)} m` +
+      `  physics onset ${Number.isNaN(nearest) ? 'n/a' : `${nearest >= 0 ? '+' : ''}${nearest.toFixed(1)} m`}`
+  );
+}
+
+if (DRY_RUN) {
+  console.log('\n--dry-run: track_data.json not written.');
+  process.exit(0);
+}
+
+// ---------- write back ----------
+const raw = fs.readFileSync(JSON_PATH, 'utf8');
+const json = JSON.parse(raw);
+function atS(arr: ArrayLike<number>, s: number): number {
+  const x = (((s % L) + L) % L) / L * n;
+  const i0 = Math.floor(x) % n;
+  const t = x - Math.floor(x);
+  return arr[i0] + (arr[(i0 + 1) % n] - arr[i0]) * t;
+}
+
+// Throttle / brake reference from the profile's longitudinal acceleration
+const gas = new Float64Array(n);
+const brk = new Float64Array(n);
+for (let i = 0; i < n; i++) {
+  const j = (i + 1) % n;
+  const a = (v[j] * v[j] - v[i] * v[i]) / (2 * final.profile.segLenM[i]);
+  brk[i] = a < -6 ? Math.min(1, -a / 40) : 0;
+  gas[i] = a > 0.5 ? 1 : a > -6 ? 0.35 : 0;
+}
+
+const r3 = (x: number) => Math.round(x * 1000) / 1000;
+for (const js of json.samples) {
+  const ro = atS(eFinal, js.s);
+  const tx = js.t[0];
+  const tz = js.t[2];
+  const tl = Math.hypot(tx, tz) || 1;
+  js.ro = r3(ro);
+  js.r = [r3(js.p[0] + (-tz / tl) * ro), r3(js.p[1] - Math.tan(js.b) * ro), r3(js.p[2] + (tx / tl) * ro)];
+  js.v = Math.round(atS(v, js.s) * 3.6 * 10) / 10;
+  js.gas = Math.round(atS(gas, js.s) * 100) / 100;
+  js.brk = Math.round(atS(brk, js.s) * 100) / 100;
+}
+
+// Turn apex speeds from the profile minimum around each turn, gears from the physics AI there
+for (const turn of json.turns) {
+  let minV = Infinity;
+  for (let ds = -60; ds <= 60; ds += 2) minV = Math.min(minV, atS(v, turn.sApprox + ds));
+  const kmh = Math.round(minV * 3.6);
+  turn.apexSpeedKmh = kmh;
+  let apex: PhysicsLap['trace'][number] | null = null;
+  for (const f of phys.trace) {
+    const d = Math.abs(((f.s - turn.sApprox + L * 1.5) % L) - L / 2);
+    if (d <= 60 && (!apex || f.kmh < apex.kmh)) apex = f;
+  }
+  if (apex) turn.gear = apex.gear;
+  turn.description = turn.description.replace(/apex \d+ km\/h in gear \d+/, `apex ${kmh} km/h in gear ${turn.gear}`);
+}
+
+json.metadata.racingLine = {
+  method: 'lap-time optimised (quasi-steady VF26 model, B-spline pattern search), physics-AI validated',
+  modelLapS: Math.round(final.lap * 1000) / 1000,
+  physicsAiLapS: phys.lapS !== null ? Math.round(phys.lapS * 1000) / 1000 : null,
+  brakingZones: zones.map((z) => ({
+    startS: Math.round(z.startS * 10) / 10,
+    endS: Math.round(z.endS * 10) / 10,
+    entryKmh: Math.round(z.entryKmh),
+    minKmh: Math.round(z.minKmh),
+  })),
+};
+
+const eol = raw.includes('\r\n') ? '\r\n' : '\n';
+const indent = /^\{\s*\n(\s+)"/.exec(raw)?.[1] ?? '';
+const out = indent ? JSON.stringify(json, null, indent.length) : JSON.stringify(json);
+fs.writeFileSync(JSON_PATH, (indent ? out.replace(/\n/g, eol) : out) + (raw.endsWith('\n') ? eol : ''), 'utf8');
+console.log(`\nWrote ${path.relative(process.cwd(), JSON_PATH)}`);

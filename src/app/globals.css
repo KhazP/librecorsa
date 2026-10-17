@@ -1,0 +1,108 @@
+@import "tailwindcss";
+
+/* Phones, tablets and short laptop windows, where the full-size menu layouts run off the bottom */
+@custom-variant compact (@media not all and (min-width: 64rem) and (min-height: 48rem));
+/* Landscape phones and other very short viewports */
+@custom-variant short (@media (max-height: 32rem));
+
+:root {
+  color-scheme: dark;
+  --f1-red: #e10600;
+  --f1-carbon: #15151e;
+  --f1-carbon-deep: #0b0b10;
+  --f1-purple: #b138ff;
+  --f1-green: #00d26a;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: #0b0b10;
+  color: #ffffff;
+  font-family: var(--font-titillium), ui-sans-serif, system-ui, sans-serif;
+  overflow: hidden;
+}
+
+.font-f1-display {
+  font-family: var(--font-orbitron), var(--font-titillium), sans-serif;
+  letter-spacing: 0.05em;
+}
+
+.font-f1-italic {
+  font-family: var(--font-titillium), sans-serif;
+  font-style: italic;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+}
+
+.font-f1-mono {
+  font-family: var(--font-jetbrains), ui-monospace, SFMono-Regular, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.f1-panel {
+  background: linear-gradient(180deg, rgba(21, 21, 30, 0.94) 0%, rgba(11, 11, 16, 0.96) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.75);
+}
+
+.f1-corner-tr {
+  border-top: 3px solid #e10600;
+  border-right: 3px solid #e10600;
+  border-top-right-radius: 14px;
+}
+
+.f1-clip-card {
+  clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 0 100%);
+}
+
+
+/* ---- In-race HUD (F1 game style): high-contrast, translucent, large tabular numbers ---- */
+.hud-panel {
+  background: rgba(12, 12, 18, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(6px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+}
+
+.hud-num {
+  font-family: var(--font-titillium), sans-serif;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+  line-height: 1;
+}
+
+.hud-label {
+  font-family: var(--font-titillium), sans-serif;
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.hud-slant {
+  clip-path: polygon(10px 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
+}
+
+.hud-text-shadow {
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.85);
+}
+
+@keyframes hud-fade-out {
+  0%,
+  60% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.08);
+    visibility: hidden;
+  }
+}
+
+.hud-fade-out {
+  animation: hud-fade-out 2s ease-out forwards;
+}
