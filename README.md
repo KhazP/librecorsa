@@ -86,18 +86,20 @@ This is an independent fan project. It is not affiliated with Formula 1, the FIA
 # Install dependencies
 npm install
 
-# Run the automated 9-suite physics, braking, track & multiplayer verification suite
-npx tsx "scripts/verify-sim.ts"
+# Type-check the whole project (tsc --noEmit)
+npm run typecheck
 
-# Check the f12026-car model (src/lib/sim/f12026-car): flat ground, Rwanda colliders, combined slip, DRS detection, barriers, simulator adapter
-npx tsx "scripts/verify-f12026-car.ts"
+# Run every scripts/verify-*.ts suite except verify-driver-laps, stopping at the first failure
+# (physics, f12026-car, GT3, input, lap tools, race session, realism, telemetry out, WebHID FFB).
+# CI runs typecheck + verify before every GitHub Pages deploy.
+npm run verify
 
-# Check the Mercedes-AMG GT3: straight line, braking, cornering, ABS / TC, its braking-line model, autopilot laps
-npx tsx "scripts/verify-gt3.ts"
+# Run a single suite directly
+npx tsx scripts/verify-gt3.ts
 
-# Player-style laps for both cars in every assist preset at full pace (no spins, stays on the asphalt);
-# pass a pace list to test more, e.g. 0.9,0.95,1
-npx tsx "scripts/verify-driver-laps.ts"
+# Slow: player-style laps for both cars in every assist preset at full pace (no spins, stays on the asphalt);
+# pass a pace list to test more, e.g. npm run verify:laps -- 0.9,0.95,1
+npm run verify:laps
 
 # Start the local development server
 npm run dev
