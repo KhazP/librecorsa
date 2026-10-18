@@ -38,7 +38,131 @@ export interface PlayerSettings {
    * Driver's-eye vertical FOV (degrees); null = the car's own. The other onboard cameras move by the same amount.
    */
   cockpitFovDeg: number | null;
+  /** Controller stick / trigger shaping (the sensitivity presets fill in its rate and dead zone) */
+  padTuning: PadTuning;
+  /** Keyboard pedal / steering ramps and the half-throttle key */
+  keyboardTuning: KeyboardTuning;
+  hud: HudSettings;
+  graphics: GraphicsSettings;
+  touch: TouchSettings;
+  /** Name, three-letter code and colour other players see */
+  profile: DriverProfile;
+  /** Race the ghost of the personal-best lap for this circuit and car */
+  ghost: boolean;
 }
+
+export interface PadTuning {
+  /** Stick smoothing rate multiplier of the steering assist (higher = quicker) */
+  steeringRate: number;
+  /** Inner stick dead zone (0..0.3) */
+  deadzone: number;
+  /** Outer dead zone: stick travel past 1 − this reads as full (0..0.3) */
+  outerDeadzone: number;
+  /** Stick response curve: 1 linear, > 1 finer near centre (0.5..3) */
+  linearity: number;
+  /** Trigger response curves: 1 linear, > 1 finer at light pressure (0.5..3) */
+  throttleGamma: number;
+  brakeGamma: number;
+  /** Impulse-trigger rumble (Xbox): ABS in LT, wheelspin in RT */
+  triggerRumble: boolean;
+}
+
+export interface KeyboardTuning {
+  /** Pedal ramp times 0 → 1 (s) */
+  throttleRiseS: number;
+  brakeRiseS: number;
+  /** Steering ramp to the speed limit and back to centre (s) */
+  steerRiseS: number;
+  steerReturnS: number;
+  /** Throttle while the half-throttle key is held with throttle (0.2..0.9) */
+  halfThrottle: number;
+  /** Eases the throttle in on corner exit while the rear tyres are near their slip limit */
+  exitAssist: boolean;
+}
+
+export type HudPreset = "full" | "minimal" | "broadcast" | "engineer";
+
+export interface HudSettings {
+  preset: HudPreset;
+  /** Overall HUD size (0.75..1.5) */
+  scale: number;
+  /** Rolling throttle / brake / steering trace */
+  inputTrace: boolean;
+  /** Live delta bar against the best lap */
+  deltaBar: boolean;
+  /** Card with sectors, corner speeds and the theoretical best after every lap */
+  lapSummary: boolean;
+}
+
+export type GraphicsQuality = "low" | "medium" | "high";
+
+export interface GraphicsSettings {
+  quality: GraphicsQuality;
+  /** Render resolution relative to the screen (0.5..1.5) */
+  renderScale: number;
+}
+
+export type TouchMode = "auto" | "on" | "off";
+
+export interface TouchSettings {
+  /** On-screen pedals and steering: auto shows them on touch screens */
+  mode: TouchMode;
+  /** Steer by tilting the device instead of the on-screen slider */
+  tiltSteer: boolean;
+  /** Tilt angle for full lock (degrees, 10..60) */
+  tiltRangeDeg: number;
+}
+
+export interface DriverProfile {
+  name: string;
+  /** Three letters, upper case */
+  code: string;
+  /** #RRGGBB */
+  color: string;
+}
+
+export const DEFAULT_PAD_TUNING: PadTuning = {
+  steeringRate: PAD_SENSITIVITY.default.steeringRate,
+  deadzone: PAD_SENSITIVITY.default.deadzone,
+  outerDeadzone: 0.02,
+  linearity: 1,
+  throttleGamma: 1,
+  brakeGamma: 1,
+  triggerRumble: true,
+};
+
+export const DEFAULT_KEYBOARD_TUNING: KeyboardTuning = {
+  throttleRiseS: 0.25,
+  brakeRiseS: 0.17,
+  steerRiseS: 0.22,
+  steerReturnS: 0.14,
+  halfThrottle: 0.5,
+  exitAssist: true,
+};
+
+export const DEFAULT_HUD_SETTINGS: HudSettings = {
+  preset: "full",
+  scale: 1,
+  inputTrace: false,
+  deltaBar: true,
+  lapSummary: true,
+};
+
+export const DEFAULT_GRAPHICS_SETTINGS: GraphicsSettings = { quality: "high", renderScale: 1 };
+
+export const DEFAULT_TOUCH_SETTINGS: TouchSettings = { mode: "auto", tiltSteer: false, tiltRangeDeg: 30 };
+
+export const DEFAULT_DRIVER_PROFILE: DriverProfile = { name: "Driver", code: "DRV", color: "#E10600" };
+
+/** Three upper-case letters from any input ("" → the default code) */
+export const sanitizeDriverCode = (v: string) => {
+  const letters = v.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 3);
+  return letters.length === 3 ? letters : (letters + DEFAULT_DRIVER_PROFILE.code).slice(0, 3);
+};
+/** Printable name of at most 16 characters */
+export const sanitizeDriverName = (v: string) =>
+  v.replace(/[\u0000-\u001f\u007f<>]/g, "").trim().slice(0, 16) || DEFAULT_DRIVER_PROFILE.name;
+export const sanitizeColor = (v: string) => (/^#[0-9a-fA-F]{6}$/.test(v) ? v.toUpperCase() : DEFAULT_DRIVER_PROFILE.color);
 
 export const SETTINGS_STORAGE_KEY = "bugesera.settings.v1";
 
@@ -61,6 +185,13 @@ export const DEFAULT_PLAYER_SETTINGS: PlayerSettings = {
   liveryId: null,
   camera: null,
   cockpitFovDeg: null,
+  padTuning: DEFAULT_PAD_TUNING,
+  keyboardTuning: DEFAULT_KEYBOARD_TUNING,
+  hud: DEFAULT_HUD_SETTINGS,
+  graphics: DEFAULT_GRAPHICS_SETTINGS,
+  touch: DEFAULT_TOUCH_SETTINGS,
+  profile: DEFAULT_DRIVER_PROFILE,
+  ghost: true,
 };
 
 const CAMERA_MODES: readonly CameraMode[] = ["chase", "tv_pod", "cockpit_shoulder", "cockpit", "nose", "helicopter", "tv_side"];
@@ -132,7 +263,91 @@ function parseWheel(v: unknown): WheelSettings {
     ffbKerb: num(v.ffbKerb, 0, 1, d.ffbKerb),
     ffbAbs: num(v.ffbAbs, 0, 1, d.ffbAbs),
     ffbInvert: bool(v.ffbInvert, d.ffbInvert),
+    ffbDamping: num(v.ffbDamping, 0, 1, d.ffbDamping),
+    ffbFilterS: num(v.ffbFilterS, 0, 0.05, d.ffbFilterS),
+    ffbPerCar: parsePerCarFfb(v.ffbPerCar),
+    hidFfb: bool(v.hidFfb, d.hidFfb),
+    telemetryOut: bool(v.telemetryOut, d.telemetryOut),
+    telemetryPort: Math.round(num(v.telemetryPort, 1024, 65535, d.telemetryPort)),
     buttons,
+  };
+}
+
+function parsePerCarFfb(v: unknown): WheelSettings["ffbPerCar"] {
+  const out: WheelSettings["ffbPerCar"] = {};
+  if (!isObj(v)) return out;
+  for (const [car, entry] of Object.entries(v).slice(0, 16)) {
+    if (isObj(entry) && isNum(entry.gain) && isNum(entry.minForce)) {
+      out[car.slice(0, 32)] = { gain: num(entry.gain, 0, 2, 1), minForce: num(entry.minForce, 0, 0.2, 0) };
+    }
+  }
+  return out;
+}
+
+function parsePadTuning(v: unknown): PadTuning {
+  const d = DEFAULT_PAD_TUNING;
+  if (!isObj(v)) return d;
+  return {
+    steeringRate: num(v.steeringRate, 0.1, 1.5, d.steeringRate),
+    deadzone: num(v.deadzone, 0, 0.3, d.deadzone),
+    outerDeadzone: num(v.outerDeadzone, 0, 0.3, d.outerDeadzone),
+    linearity: num(v.linearity, 0.5, 3, d.linearity),
+    throttleGamma: num(v.throttleGamma, 0.5, 3, d.throttleGamma),
+    brakeGamma: num(v.brakeGamma, 0.5, 3, d.brakeGamma),
+    triggerRumble: bool(v.triggerRumble, d.triggerRumble),
+  };
+}
+
+function parseKeyboardTuning(v: unknown): KeyboardTuning {
+  const d = DEFAULT_KEYBOARD_TUNING;
+  if (!isObj(v)) return d;
+  return {
+    throttleRiseS: num(v.throttleRiseS, 0, 1, d.throttleRiseS),
+    brakeRiseS: num(v.brakeRiseS, 0, 1, d.brakeRiseS),
+    steerRiseS: num(v.steerRiseS, 0.05, 1, d.steerRiseS),
+    steerReturnS: num(v.steerReturnS, 0.05, 1, d.steerReturnS),
+    halfThrottle: num(v.halfThrottle, 0.2, 0.9, d.halfThrottle),
+    exitAssist: bool(v.exitAssist, d.exitAssist),
+  };
+}
+
+function parseHud(v: unknown): HudSettings {
+  const d = DEFAULT_HUD_SETTINGS;
+  if (!isObj(v)) return d;
+  return {
+    preset: oneOf(v.preset, ["full", "minimal", "broadcast", "engineer"] as const, d.preset),
+    scale: num(v.scale, 0.75, 1.5, d.scale),
+    inputTrace: bool(v.inputTrace, d.inputTrace),
+    deltaBar: bool(v.deltaBar, d.deltaBar),
+    lapSummary: bool(v.lapSummary, d.lapSummary),
+  };
+}
+
+function parseGraphics(v: unknown): GraphicsSettings {
+  const d = DEFAULT_GRAPHICS_SETTINGS;
+  if (!isObj(v)) return d;
+  return {
+    quality: oneOf(v.quality, ["low", "medium", "high"] as const, d.quality),
+    renderScale: num(v.renderScale, 0.5, 1.5, d.renderScale),
+  };
+}
+
+function parseTouch(v: unknown): TouchSettings {
+  const d = DEFAULT_TOUCH_SETTINGS;
+  if (!isObj(v)) return d;
+  return {
+    mode: oneOf(v.mode, ["auto", "on", "off"] as const, d.mode),
+    tiltSteer: bool(v.tiltSteer, d.tiltSteer),
+    tiltRangeDeg: num(v.tiltRangeDeg, 10, 60, d.tiltRangeDeg),
+  };
+}
+
+function parseProfile(v: unknown): DriverProfile {
+  if (!isObj(v)) return DEFAULT_DRIVER_PROFILE;
+  return {
+    name: sanitizeDriverName(isStr(v.name) ? v.name : ""),
+    code: sanitizeDriverCode(isStr(v.code) ? v.code : ""),
+    color: sanitizeColor(isStr(v.color) ? v.color : ""),
   };
 }
 
@@ -156,6 +371,20 @@ export function parsePlayerSettings(raw: unknown): PlayerSettings {
       typeof raw.cockpitFovDeg === "number" && Number.isFinite(raw.cockpitFovDeg)
         ? Math.round(clampFov(raw.cockpitFovDeg))
         : null,
+    padTuning: isObj(raw.padTuning)
+      ? parsePadTuning(raw.padTuning)
+      : // Older saves only have the preset: start the tuning from it
+        {
+          ...DEFAULT_PAD_TUNING,
+          steeringRate: PAD_SENSITIVITY[oneOf(raw.padSensitivity, Object.keys(PAD_SENSITIVITY) as PadSensitivity[], d.padSensitivity)].steeringRate,
+          deadzone: PAD_SENSITIVITY[oneOf(raw.padSensitivity, Object.keys(PAD_SENSITIVITY) as PadSensitivity[], d.padSensitivity)].deadzone,
+        },
+    keyboardTuning: parseKeyboardTuning(raw.keyboardTuning),
+    hud: parseHud(raw.hud),
+    graphics: parseGraphics(raw.graphics),
+    touch: parseTouch(raw.touch),
+    profile: parseProfile(raw.profile),
+    ghost: bool(raw.ghost, d.ghost),
   };
 }
 

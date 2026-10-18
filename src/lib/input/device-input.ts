@@ -66,6 +66,18 @@ export interface WheelSettings {
   ffbAbs: number;
   /** Reverse the force (for a wheel whose driver pushes the other way) */
   ffbInvert: boolean;
+  /** Rim damping 0..1: resists fast rim movement (calms a direct-drive base, adds weight to a belt wheel) */
+  ffbDamping: number;
+  /** Force low-pass time constant (s, 0..0.05); 0 = unfiltered */
+  ffbFilterS: number;
+  /** Strength per car (gain, minimum force) set from the FFB panel; a car without one uses ffbGain / ffbMinForce */
+  ffbPerCar: Partial<Record<string, { gain: number; minForce: number }>>;
+  /** Experimental: drive a HID PID (direct-drive) wheel straight from the browser over WebHID, no bridge */
+  hidFfb: boolean;
+  /** Stream telemetry over UDP through the bridge (SimHub, bass shakers, dashboards) */
+  telemetryOut: boolean;
+  /** UDP port the bridge sends telemetry to on this PC */
+  telemetryPort: number;
   buttons: Record<PadAction, ButtonBinding | null>;
 }
 
@@ -96,6 +108,12 @@ export const DEFAULT_WHEEL_SETTINGS: WheelSettings = {
   ffbKerb: 0.35,
   ffbAbs: 0.2,
   ffbInvert: false,
+  ffbDamping: 0.1,
+  ffbFilterS: 0,
+  ffbPerCar: {},
+  hidFfb: false,
+  telemetryOut: false,
+  telemetryPort: 20777,
   buttons: emptyWheelButtons(),
 };
 
@@ -292,6 +310,7 @@ export function autoConfigureWheel(pads: readonly PadLike[], current: WheelSetti
   return {
     type,
     ...WHEEL_TYPE_DEFAULTS[type],
+    ffbEnabled: true,
     steer: { padId: wheelPad.id, axis: 0, center: Math.abs(rest) < 0.25 ? rest : 0, invert: false },
   };
 }

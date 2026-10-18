@@ -41,9 +41,9 @@ static class FfbHelper
     // ---- Tuning
     const int WATCHDOG_MS = 150;
     /** Upsampling low-pass for the frame-rate force (s) */
-    const double SMOOTH_TAU_S = 0.008;
+    const double SMOOTH_TAU_S = 0.004;
     /** Output slew limit (full scale per second): fast enough for the kerb buzz, never an instant full-lock jolt */
-    const double SLEW_PER_S = 60;
+    const double SLEW_PER_S = 85;
     const double KERB_HZ = 36, KERB_AMPLITUDE = 0.5;
     const double ABS_HZ = 16, ABS_AMPLITUDE = 0.4;
     /** Direction test: a held pull each way (s, s between, fraction of --max) */
@@ -76,7 +76,7 @@ static class FfbHelper
     const int DI_FFNOMINALMAX = 10000;
     const uint DI8DEVTYPE_DRIVING = 0x16;
     const int DIERR_OTHERAPPHASPRIO = unchecked((int)0x80070005);
-    static readonly IntPtr HWND_MESSAGE = new IntPtr(-3);
+    const uint WS_POPUP = 0x80000000;
 
     static readonly Guid IID_IDirectInput8W = new Guid("BF798031-483A-4DA2-AA99-5D64ED369700");
     static readonly Guid GUID_ConstantForce = new Guid("13541C20-8E33-11D0-9AD0-00A0C9A06E35");
@@ -95,7 +95,7 @@ static class FfbHelper
     // vtable slots (IUnknown: 0 QueryInterface, 1 AddRef, 2 Release)
     const int DI_CreateDevice = 3, DI_EnumDevices = 4;
     const int DEV_GetCapabilities = 3, DEV_EnumObjects = 4, DEV_SetProperty = 6, DEV_Acquire = 7, DEV_Unacquire = 8;
-    const int DEV_SetDataFormat = 11, DEV_SetCooperativeLevel = 13, DEV_CreateEffect = 18, DEV_GetEffectInfo = 20, DEV_SendForceFeedbackCommand = 22;
+    const int DEV_SetDataFormat = 11, DEV_SetCooperativeLevel = 13, DEV_CreateEffect = 18, DEV_GetEffectInfo = 20, DEV_SendForceFeedbackCommand = 22, DEV_Poll = 25;
     const int EFF_SetParameters = 6, EFF_Start = 7, EFF_Stop = 8, EFF_Unload = 11;
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
@@ -241,6 +241,7 @@ static class FfbHelper
     // ---- Shared state between the stdin reader and the force loop
     static readonly object Gate = new object();
     static readonly Stopwatch Clock = Stopwatch.StartNew();
+    static readonly Queue<double> inSubframes = new Queue<double>();
     static double inForce, inKerb, inAbs;
     static long inStampMs = long.MinValue / 2;
     static long packets;
@@ -252,7 +253,7 @@ static class FfbHelper
     {
         string deviceFilter = null;
         double max = 1.0;
-        int rateHz = 333;
+        int rateHz = 500;
         int direction = 1;
         bool list = false, info = false, dryRun = false;
         for (int i = 0; i < args.Length; i++)
@@ -263,7 +264,7 @@ static class FfbHelper
             else if (a == "--dry-run") dryRun = true;
             else if (a == "--device" && i + 1 < args.Length) deviceFilter = args[++i];
             else if (a == "--max" && i + 1 < args.Length) max = Clamp(ParseNum(args[++i], 1.0), 0.05, 1.0);
-            else if (a == "--rate" && i + 1 < args.Length) rateHz = (int)Clamp(ParseNum(args[++i], 333), 60, 1000);
+            else if (a == "--rate" && i + 1 < args.Length) rateHz = (int)Clamp(ParseNum(args[++i], 500), 60, 1000);
             else if (a == "--direction" && i + 1 < args.Length) direction = ParseNum(args[++i], 1) != 0 ? 1 : 0;
         }
 
@@ -451,7 +452,8 @@ static class FfbHelper
             Log("Force-feedback devices: " + string.Join(", ", names.ToArray()) + ". Using " + pick.Name + " (pick another with --device).");
         }
 
-        IntPtr hwnd = CreateWindowExW(0, "STATIC", "FfbHelper", 0, 0, 0, 0, 0, HWND_MESSAGE, IntPtr.Zero, GetModuleHandleW(IntPtr.Zero), IntPtr.Zero);
+        // Top-level WS_POPUP window (never HWND_MESSAGE, which DirectInput8 FFB drivers reject on SetCooperativeLevel)
+        IntPtr hwnd = CreateWindowExW(0, "STATIC", "FfbHelper", WS_POPUP, 0, 0, 1, 1, IntPtr.Zero, IntPtr.Zero, GetModuleHandleW(IntPtr.Zero), IntPtr.Zero);
         IntPtr dev = IntPtr.Zero, effect = IntPtr.Zero, format = IntPtr.Zero;
         IntPtr axes = Marshal.AllocHGlobal(4), dir = Marshal.AllocHGlobal(4), constant = Marshal.AllocHGlobal(4);
         timeBeginPeriod(1);
@@ -503,6 +505,7 @@ static class FfbHelper
 
             SetParametersFn setParameters = Method<SetParametersFn>(effect, EFF_SetParameters);
             NoArgsFn acquire = Method<NoArgsFn>(dev, DEV_Acquire);
+            NoArgsFn poll = Method<NoArgsFn>(dev, DEV_Poll);
             StartFn start = Method<StartFn>(effect, EFF_Start);
             ForceShaper shaper = new ForceShaper(rateHz, max);
             int lastMagnitude = 0;
@@ -521,8 +524,11 @@ static class FfbHelper
                     lastMagnitude = int.MinValue;
                     Status(true, pick.Name, ffAxes.Count, null);
                 }
+                poll(dev);
                 if (magnitude == lastMagnitude) return;
                 Marshal.WriteInt32(constant, magnitude);
+                // Magnitude only: DIEP_START here would restart the effect on every update (at the loop rate); the
+                // effect is started once at creation and again after a re-acquire
                 if (setParameters(effect, ref eff, DIEP_TYPESPECIFICPARAMS) < 0)
                 {
                     lost = true;
@@ -612,7 +618,7 @@ static class FfbHelper
         }
     }
 
-    /** Frame-rate packets → smooth, capped, slew-limited output with the kerb / ABS vibrations and the test sway */
+    /** Frame-rate packets + 240/480 Hz physics subframes → smooth, capped, slew-limited output */
     class ForceShaper
     {
         readonly double dt, max, smoothK;
@@ -632,7 +638,7 @@ static class FfbHelper
             long age;
             lock (Gate)
             {
-                target = inForce;
+                target = inSubframes.Count > 0 ? inSubframes.Dequeue() : inForce;
                 kerb = inKerb;
                 abs = inAbs;
                 age = Clock.ElapsedMilliseconds - inStampMs;
@@ -705,6 +711,11 @@ static class FfbHelper
                         inForce = Clamp(f, -1.5, 1.5);
                         inKerb = Clamp(k, 0, 1);
                         inAbs = Clamp(a, 0, 1);
+                        inSubframes.Clear();
+                        for (int i = 4; i < parts.Length; i++)
+                        {
+                            inSubframes.Enqueue(Clamp(ParseNum(parts[i], f), -1.5, 1.5));
+                        }
                         inStampMs = Clock.ElapsedMilliseconds;
                         packets++;
                     }
@@ -724,6 +735,7 @@ static class FfbHelper
                     lock (Gate)
                     {
                         inForce = inKerb = inAbs = 0;
+                        inSubframes.Clear();
                         inStampMs = long.MinValue / 2;
                     }
                 }

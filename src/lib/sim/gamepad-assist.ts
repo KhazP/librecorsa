@@ -195,7 +195,8 @@ export class GamepadSteeringAssist {
 
     // Countersteering: the player steers toward the side the rear is sliding to
     const isCountersteering = Math.abs(initial) > 1e-6 && inputSign === Math.sign(vRightRear);
-    const rawCounter = isCountersteering ? clampEased(lerpInvSat(Math.abs(rearAngle), 4.5, 10), 0, 1, 0.6) : 0;
+    // Unclamped inverse lerp into the eased clamp (AGALib inverseLerpClampedEased): 0 under ≈2.9°, 1 past ≈11.6°
+    const rawCounter = isCountersteering ? clampEased((Math.abs(rearAngle) - 4.5) / (10 - 4.5), 0, 1, 0.6) : 0;
     const returnRate = lerp(0.8, 0.3, lerpInvSat(Math.abs(frontAngle - rearAngle), 2, 10));
     const counter =
       this.counterIndicator.get(rawCounter, dt, rawCounter < this.counterIndicator.state ? returnRate : 1) * midSpeedFade;

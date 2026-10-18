@@ -45,7 +45,45 @@ export function softLockForce(rimDeg: number): number {
   return over > 0 ? -Math.sign(rimDeg) * Math.min(1, over / SOFT_LOCK_RAMP_DEG) : 0;
 }
 
+/** The gain and minimum force for a car: its own (set from the meter) or the global ones */
+export function ffbStrengthFor(
+  wheel: Pick<WheelSettings, "ffbGain" | "ffbMinForce" | "ffbPerCar">,
+  vehicle: string | undefined
+): Pick<WheelSettings, "ffbGain" | "ffbMinForce"> {
+  const own = vehicle ? wheel.ffbPerCar?.[vehicle] : undefined;
+  return own ? { ffbGain: own.gain, ffbMinForce: own.minForce } : { ffbGain: wheel.ffbGain, ffbMinForce: wheel.ffbMinForce };
+}
+
+/** Rim speed (deg/s) at which the damper reaches its full force */
+const DAMPING_FULL_DEG_S = 600;
+/** Share of full force the damper may add at most */
+const DAMPING_MAX_FORCE = 0.35;
+/** Force history for the gain suggestion: about a lap at 60 fps */
+const METER_WINDOW = 4800;
+
+export interface FfbMeterState {
+  /** Force sent this frame, before the bridge's clip (+ = right) */
+  force: number;
+  clipping: boolean;
+  /** Decaying peak of |force| */
+  peak: number;
+  /** Gain that would put the 98th-percentile force at 90 % for this car; null when the current gain is fine or no data */
+  suggestedGain: number | null;
+}
+
 export class WheelFfbClient {
+  /** Alternative force output (the WebHID driver); when set and WebHID FFB is on, forces go there instead of the bridge */
+  hidSink: ((force: number) => void) | null = null;
+  meter: FfbMeterState = { force: 0, clipping: false, peak: 0, suggestedGain: null };
+  private lastRimDeg: number | null = null;
+  private lastUpdateMs = 0;
+  private filtered = 0;
+  private history = new Float32Array(METER_WINDOW);
+  private historyCount = 0;
+  private historyIdx = 0;
+  private lastSuggestMs = 0;
+  private hidTimeS = 0;
+
   private ws: WebSocket | null = null;
   private replaced = false;
   private lastAttemptMs = -Infinity;
@@ -58,31 +96,124 @@ export class WheelFfbClient {
    * Every frame, menus included: keeps the bridge connection while FFB is on and sends the force (zero outside the
    * car, so the wheel goes limp in the menus as it does in a native sim).
    */
-  update(telemetry: CarTelemetry, wheel: WheelSettings, pads: readonly PadLike[], nowMs: number, driving: boolean): void {
-    this.keepConnection(wheel.ffbEnabled, nowMs);
+  update(
+    telemetry: CarTelemetry,
+    wheelSettings: WheelSettings,
+    pads: readonly PadLike[],
+    nowMs: number,
+    driving: boolean,
+    vehicle?: string
+  ): void {
+    const useHid = wheelSettings.hidFfb && this.hidSink !== null;
+    // The bridge also carries telemetry out; with WebHID force feedback it is only needed for that
+    this.keepConnection((wheelSettings.ffbEnabled && !useHid) || wheelSettings.telemetryOut, nowMs);
+    const wheel: WheelSettings = { ...wheelSettings, ...ffbStrengthFor(wheelSettings, vehicle) };
+    const dtS = this.lastUpdateMs > 0 ? Math.min(0.1, Math.max(0, (nowMs - this.lastUpdateMs) / 1000)) : 0;
+    this.lastUpdateMs = nowMs;
     let force = 0;
     let kerb = 0;
     let abs = 0;
+    let subframes: number[] | undefined;
     if (driving && wheel.ffbEnabled) {
       const torque = Number.isFinite(telemetry.ffbTorqueNorm) ? (telemetry.ffbTorqueNorm as number) : 0;
-      force = shapeFfbForce(torque, wheel);
       const steerPad = wheel.steer ? findPad(pads, wheel.steer.padId) : undefined;
-      if (wheel.steer && steerPad) {
-        force += softLockForce(wheelRimAngleDeg(steerPad.axes[wheel.steer.axis] ?? wheel.steer.center, wheel.steer, wheel.rotationDeg));
+      const rimDeg =
+        wheel.steer && steerPad
+          ? wheelRimAngleDeg(steerPad.axes[wheel.steer.axis] ?? wheel.steer.center, wheel.steer, wheel.rotationDeg)
+          : null;
+      const softLock = rimDeg !== null ? softLockForce(rimDeg) : 0;
+      // Damper: opposes rim speed (+ = right), so a direct-drive base does not oscillate when released
+      let damping = 0;
+      if (rimDeg !== null && this.lastRimDeg !== null && dtS > 0 && wheel.ffbDamping > 0) {
+        const rimSpeed = (rimDeg - this.lastRimDeg) / dtS;
+        damping = -wheel.ffbDamping * DAMPING_MAX_FORCE * Math.max(-1, Math.min(1, rimSpeed / DAMPING_FULL_DEG_S));
       }
+      this.lastRimDeg = rimDeg;
+      let shaped = shapeFfbForce(torque, wheel);
+      // Optional smoothing of the physics torque (the soft lock and damper stay immediate)
+      if (wheel.ffbFilterS > 0 && dtS > 0) {
+        this.filtered += (shaped - this.filtered) * (1 - Math.exp(-dtS / wheel.ffbFilterS));
+        shaped = this.filtered;
+      } else {
+        this.filtered = shaped;
+      }
+      this.recordMeter(shaped, wheel.ffbGain, nowMs);
+      force = shaped + softLock + damping;
       if (wheel.ffbInvert) force = -force;
+
+      const rawSub = telemetry.ffbSubframeSamples;
+      if (rawSub && rawSub.length > 0) {
+        subframes = rawSub.map((sample) => {
+          let sf = shapeFfbForce(Number.isFinite(sample) ? sample : 0, wheel) + softLock;
+          if (wheel.ffbInvert) sf = -sf;
+          return Math.round(sf * 1e4) / 1e4;
+        });
+      }
+
       const fronts = telemetry.wheelSurfaces;
       if (telemetry.speedKmh > 15 && fronts && (fronts[0] === "kerb" || fronts[1] === "kerb")) kerb = wheel.ffbKerb;
       if (telemetry.speedKmh > 5 && telemetry.f12026?.absActive) abs = wheel.ffbAbs;
+    } else {
+      this.lastRimDeg = null;
+      this.filtered = 0;
     }
     this.force = force;
-    this.send({ t: "f", f: Math.round(force * 1e4) / 1e4, k: kerb, a: abs });
+    this.meter = {
+      ...this.meter,
+      force,
+      clipping: Math.abs(force) > 1,
+      peak: Math.max(Math.abs(force), this.meter.peak * Math.exp(-dtS / 1.5)),
+    };
+    if (useHid) {
+      // WebHID has no vibration channel: kerbs and ABS are mixed into the force as a 40 Hz / 25 Hz buzz
+      this.hidTimeS += dtS;
+      const buzz =
+        0.12 * kerb * Math.sin(2 * Math.PI * 40 * this.hidTimeS) +
+        0.1 * abs * Math.sign(Math.sin(2 * Math.PI * 25 * this.hidTimeS));
+      this.hidSink?.(Math.max(-1, Math.min(1, force + (force !== 0 ? buzz : 0))));
+      return;
+    }
+    this.send(
+      subframes && subframes.length > 0
+        ? { t: "f", f: Math.round(force * 1e4) / 1e4, k: kerb, a: abs, s: subframes }
+        : { t: "f", f: Math.round(force * 1e4) / 1e4, k: kerb, a: abs }
+    );
   }
 
   /** Zero the wheel now (pause menu opened) instead of waiting for the next frame */
   stop(): void {
     this.force = 0;
+    this.hidSink?.(0);
     this.send({ t: "f", f: 0, k: 0, a: 0 });
+  }
+
+  /** Forwards a telemetry packet to the bridge, which sends it as one UDP datagram to 127.0.0.1:<port> */
+  sendTelemetry(port: number, packet: object): void {
+    this.send({ t: "tel", port, d: packet });
+  }
+
+  /** Forget the force history (car or gain changed) */
+  resetMeter(): void {
+    this.historyCount = 0;
+    this.historyIdx = 0;
+    this.meter = { force: 0, clipping: false, peak: 0, suggestedGain: null };
+  }
+
+  /** Keeps |force| history and, once a second, works out a gain that uses the wheel's range without clipping */
+  private recordMeter(shaped: number, gain: number, nowMs: number): void {
+    this.history[this.historyIdx] = Math.abs(shaped);
+    this.historyIdx = (this.historyIdx + 1) % METER_WINDOW;
+    this.historyCount = Math.min(METER_WINDOW, this.historyCount + 1);
+    if (nowMs - this.lastSuggestMs < 1000 || this.historyCount < 600 || gain <= 0) return;
+    this.lastSuggestMs = nowMs;
+    const sorted = Array.from(this.history.subarray(0, this.historyCount)).sort((a, b) => a - b);
+    const p98 = sorted[Math.floor(sorted.length * 0.98)];
+    let suggested: number | null = null;
+    if (p98 > 0.02 && (p98 > 1 || p98 < 0.55)) {
+      suggested = Math.round(Math.min(2, Math.max(0.1, (gain * 0.9) / p98)) * 20) / 20;
+      if (Math.abs(suggested - gain) < 0.05) suggested = null;
+    }
+    this.meter = { ...this.meter, suggestedGain: suggested };
   }
 
   /**

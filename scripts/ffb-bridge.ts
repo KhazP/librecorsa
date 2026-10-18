@@ -16,11 +16,14 @@
  *
  * Then turn on Force feedback in Controls → Wheel. Only pages served from localhost may connect (any other page
  * could otherwise move your wheel); allow a deployed copy with FFB_ALLOW_ORIGIN=https://your.site (comma-separated).
+ * Telemetry: the sim's dashboard packets ({ t: "tel", port, d }) are relayed as UDP to 127.0.0.1:port; FFB_TELEMETRY_HOST
+ * set to a LAN address (10.x, 172.16-31.x, 192.168.x) sends them to a tablet or PC on the same network instead.
  */
 import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { existsSync, mkdirSync, statSync } from "node:fs";
 import { createServer, type IncomingMessage } from "node:http";
 import { createHash } from "node:crypto";
+import { createSocket, type Socket } from "node:dgram";
 import { dirname, join, resolve } from "node:path";
 import type { Duplex } from "node:stream";
 
@@ -31,6 +34,21 @@ const EXTRA_ORIGINS = (process.env.FFB_ALLOW_ORIGIN ?? "")
   .split(",")
   .map((s) => s.trim())
   .filter(Boolean);
+
+/** Telemetry UDP destination: 127.0.0.1, or a private LAN IPv4 from FFB_TELEMETRY_HOST (anything else is ignored) */
+function telemetryHost(): string {
+  const raw = (process.env.FFB_TELEMETRY_HOST ?? "").trim();
+  if (!raw) return "127.0.0.1";
+  const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(raw);
+  if (m) {
+    const [a, b, c, d] = m.slice(1).map(Number);
+    const priv = a === 10 || a === 127 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168);
+    if (priv && [a, b, c, d].every((n) => n <= 255)) return raw;
+  }
+  console.warn(`FFB_TELEMETRY_HOST=${raw} is not a private LAN IPv4 address (10.x, 172.16-31.x, 192.168.x); telemetry stays on 127.0.0.1.`);
+  return "127.0.0.1";
+}
+const TELEMETRY_HOST = telemetryHost();
 
 interface HelperStatus {
   ok: boolean;
@@ -56,7 +74,14 @@ function ensureHelper(): void {
   mkdirSync(dirname(HELPER_EXE), { recursive: true });
   console.log("Building FfbHelper.exe …");
   const r = spawnSync(csc, ["-nologo", "-optimize+", "-target:exe", `-out:${HELPER_EXE}`, HELPER_SRC], { encoding: "utf8" });
-  if (r.status !== 0) fail(`Building the force-feedback helper failed:\n${r.stdout}${r.stderr}`);
+  if (r.status !== 0) {
+    const out = `${r.stdout}${r.stderr}`;
+    if (out.includes("CS0016") && existsSync(HELPER_EXE)) {
+      console.warn("Note: FfbHelper.exe is currently in use by a running bridge instance; using existing binary until restarted.");
+      return;
+    }
+    fail(`Building the force-feedback helper failed:\n${out}`);
+  }
 }
 
 function originAllowed(origin: string | undefined): boolean {
@@ -159,17 +184,65 @@ const toHelper = (line: string) => {
   if (helper.stdin.writable) helper.stdin.write(`${line}\n`);
 };
 
+// ---- Telemetry out: one browser packet → one UDP datagram
+
+const TEL_MAX_BYTES = 8 * 1024;
+const TEL_RATE_PER_S = 120;
+let telSocket: Socket | null = null;
+let telLogged = false;
+let telErrLogged = false;
+/** Token bucket: refills at TEL_RATE_PER_S, holds at most one second of datagrams */
+let telTokens = TEL_RATE_PER_S;
+let telLastMs = Date.now();
+
+function telemetrySocket(): Socket {
+  if (!telSocket) {
+    telSocket = createSocket("udp4");
+    telSocket.on("error", (e) => {
+      if (!telErrLogged) console.warn(`Telemetry socket: ${e.message}`);
+      telErrLogged = true;
+    });
+    process.once("exit", () => telSocket?.close());
+  }
+  return telSocket;
+}
+
+function sendTelemetry(port: unknown, d: unknown) {
+  if (typeof port !== "number" || !Number.isInteger(port) || port < 1024 || port > 65535) return;
+  if (typeof d !== "object" || d === null) return;
+  const body = Buffer.from(JSON.stringify(d), "utf8");
+  if (body.length > TEL_MAX_BYTES) return;
+
+  const now = Date.now();
+  telTokens = Math.min(TEL_RATE_PER_S, telTokens + ((now - telLastMs) / 1000) * TEL_RATE_PER_S);
+  telLastMs = now;
+  if (telTokens < 1) return;
+  telTokens -= 1;
+
+  if (!telLogged) {
+    telLogged = true;
+    console.log(`Telemetry → udp://${TELEMETRY_HOST}:${port}`);
+  }
+  telemetrySocket().send(body, port, TELEMETRY_HOST);
+}
+
 /** One browser message → one helper line */
 function onMessage(text: string) {
-  let msg: { t?: string; f?: number; k?: number; a?: number; inv?: boolean };
+  let msg: { t?: string; f?: number; k?: number; a?: number; s?: number[]; inv?: boolean; port?: number; d?: unknown };
   try {
     msg = JSON.parse(text);
   } catch {
     return;
   }
   const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
-  if (msg.t === "f") toHelper(`F ${num(msg.f).toFixed(4)} ${num(msg.k).toFixed(3)} ${num(msg.a).toFixed(3)}`);
-  else if (msg.t === "test") toHelper(msg.inv === true ? "T -1" : "T 1");
+  if (msg.t === "f") {
+    const sub =
+      Array.isArray(msg.s) && msg.s.length > 0
+        ? " " + msg.s.slice(0, 16).map((v) => num(v).toFixed(4)).join(" ")
+        : "";
+    toHelper(`F ${num(msg.f).toFixed(4)} ${num(msg.k).toFixed(3)} ${num(msg.a).toFixed(3)}${sub}`);
+  } else if (msg.t === "test") toHelper(msg.inv === true ? "T -1" : "T 1");
+  else if (msg.t === "tel") sendTelemetry(msg.port, msg.d);
 }
 
 const server = createServer((_req, res) => {

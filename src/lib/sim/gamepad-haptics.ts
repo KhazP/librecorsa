@@ -12,9 +12,19 @@ import type { CarTelemetry } from "@/types/f1";
 
 /** Gamepad Haptics API surface used here (the DOM lib types vibrationActuator only loosely) */
 interface VibrationActuatorLike {
+  /** Effect types the pad supports (Chrome: "dual-rumble", "trigger-rumble"); may be missing */
+  effects?: readonly string[];
   playEffect: (
-    type: "dual-rumble",
-    params: { startDelay: number; duration: number; weakMagnitude: number; strongMagnitude: number }
+    type: "dual-rumble" | "trigger-rumble",
+    params: {
+      startDelay: number;
+      duration: number;
+      weakMagnitude: number;
+      strongMagnitude: number;
+      /** Xbox impulse triggers (trigger-rumble only), 0..1 */
+      leftTrigger?: number;
+      rightTrigger?: number;
+    }
   ) => Promise<unknown> | undefined;
   reset?: () => Promise<unknown> | undefined;
 }
@@ -29,6 +39,9 @@ interface PadOutput {
   lastSentS: number;
   weak: number;
   strong: number;
+  /** Last impulse-trigger magnitudes sent (0 when the pad has no trigger motors) */
+  left: number;
+  right: number;
 }
 
 /** Minimum time between effect calls on one pad */
@@ -37,8 +50,12 @@ const EFFECT_DURATION_MS = 90;
 /** Magnitude change that counts as a new effect while the previous one is still running */
 const MAGNITUDE_EPS = 0.03;
 const KERB_PULSE_HZ = 12;
+const ABS_PULSE_HZ = 20;
+const TC_PULSE_HZ = 25;
 
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
+/** clamp01, with a non-finite input read as no effect */
+const magnitude01 = (v: number) => (Number.isFinite(v) ? clamp01(v) : 0);
 
 const smoothstep = (edge0: number, edge1: number, x: number) => {
   const t = clamp01((x - edge0) / (edge1 - edge0));
@@ -68,6 +85,38 @@ function hapticMagnitudes(t: CarTelemetry, timeS: number): { weak: number; stron
   const strong = clamp01(lockUp + wheelspin + rackLoad + roughSurface);
 
   return { weak, strong };
+}
+
+/**
+ * Impulse-trigger magnitudes (0..1) for the car: the left trigger (brake) feels ABS / lock-up as a 20 Hz pulse,
+ * the right trigger (throttle) feels wheelspin, and traction control as a 25 Hz pulse. Zero when there is nothing to feel.
+ */
+export function triggerMagnitudes(t: CarTelemetry, timeS: number): { left: number; right: number } {
+  // Left trigger: a locked or ABS-releasing front axle pushes back through the brake
+  let left = 0;
+  if (t.brake > 0.05) {
+    const minSlip = Math.min(...t.wheelSlipRatios);
+    const locking = t.f12026?.absActive === true || (t.speedKmh > 30 && minSlip < -0.12);
+    if (locking) {
+      const lockScale = clamp01(-minSlip / 0.45);
+      const pulseOn = (timeS * ABS_PULSE_HZ) % 1 < 0.5;
+      left = pulseOn ? 0.35 + 0.45 * lockScale : 0;
+    }
+  }
+
+  // Right trigger: spinning rear wheels push back through the throttle; TC cuts the throttle in pulses
+  let right = 0;
+  if (t.throttle > 0.1) {
+    const rearSlip = Math.max(t.wheelSlipRatios[2], t.wheelSlipRatios[3]);
+    const spinning = t.f12026?.tcActive === true || rearSlip > 0.12;
+    if (spinning) {
+      const spinScale = clamp01(rearSlip / 0.5);
+      const pulseOn = t.f12026?.tcActive === true ? (timeS * TC_PULSE_HZ) % 1 < 0.5 : true;
+      right = pulseOn ? 0.25 + 0.45 * spinScale : 0;
+    }
+  }
+
+  return { left: magnitude01(left), right: magnitude01(right) };
 }
 
 /** Every connected pad that exposes a vibration actuator */
@@ -101,13 +150,35 @@ function playDualRumble(actuator: VibrationActuatorLike, weak: number, strong: n
   );
 }
 
+/** Pad exposes Xbox impulse triggers (missing effects list → unsupported) */
+function supportsTriggerRumble(actuator: VibrationActuatorLike): boolean {
+  return actuator.effects?.includes("trigger-rumble") === true;
+}
+
+/** Body motors and both impulse triggers in one effect */
+function playTriggerRumble(actuator: VibrationActuatorLike, weak: number, strong: number, left: number, right: number) {
+  send(() =>
+    actuator.playEffect("trigger-rumble", {
+      startDelay: 0,
+      duration: EFFECT_DURATION_MS,
+      weakMagnitude: weak,
+      strongMagnitude: strong,
+      leftTrigger: left,
+      rightTrigger: right,
+    })
+  );
+}
+
 export class GamepadHaptics {
   private timeS = 0;
   private active = false;
   private outputs = new Map<number, PadOutput>();
 
-  /** Call once per frame after the physics step; `enabled` is false while paused or when the toggle is off */
-  update(t: CarTelemetry, dtSeconds: number, enabled: boolean): void {
+  /**
+   * Call once per frame after the physics step; `enabled` is false while paused or when the toggle is off.
+   * `options.triggerRumble` also drives the Xbox impulse triggers on pads that support them (default off).
+   */
+  update(t: CarTelemetry, dtSeconds: number, enabled: boolean, options?: { triggerRumble?: boolean }): void {
     this.timeS += dtSeconds;
     if (!enabled) {
       if (this.active) this.stop();
@@ -116,23 +187,35 @@ export class GamepadHaptics {
     this.active = true;
 
     const { weak, strong } = hapticMagnitudes(t, this.timeS);
+    const wantTriggers = options?.triggerRumble === true;
+    const trig = wantTriggers ? triggerMagnitudes(t, this.timeS) : { left: 0, right: 0 };
     for (const { index, actuator } of connectedPads()) {
-      const out = this.outputs.get(index) ?? { lastSentS: -Infinity, weak: 0, strong: 0 };
+      const out = this.outputs.get(index) ?? { lastSentS: -Infinity, weak: 0, strong: 0, left: 0, right: 0 };
       this.outputs.set(index, out);
 
       const sinceS = this.timeS - out.lastSentS;
       if (sinceS < SEND_INTERVAL_S) continue;
 
-      const changed = Math.abs(weak - out.weak) >= MAGNITUDE_EPS || Math.abs(strong - out.strong) >= MAGNITUDE_EPS;
+      const useTriggers = wantTriggers && supportsTriggerRumble(actuator);
+      const left = useTriggers ? trig.left : 0;
+      const right = useTriggers ? trig.right : 0;
+      const changed =
+        Math.abs(weak - out.weak) >= MAGNITUDE_EPS ||
+        Math.abs(strong - out.strong) >= MAGNITUDE_EPS ||
+        Math.abs(left - out.left) >= MAGNITUDE_EPS ||
+        Math.abs(right - out.right) >= MAGNITUDE_EPS;
       const running = sinceS < EFFECT_DURATION_MS / 1000;
       if (!changed && running) continue;
       // Nothing to feel and the motors are already off: no need to send zeros
-      if (weak === 0 && strong === 0 && out.weak === 0 && out.strong === 0) continue;
+      if (weak === 0 && strong === 0 && left === 0 && right === 0 && out.weak === 0 && out.strong === 0 && out.left === 0 && out.right === 0) continue;
 
-      playDualRumble(actuator, weak, strong);
+      if (useTriggers) playTriggerRumble(actuator, weak, strong, left, right);
+      else playDualRumble(actuator, weak, strong);
       out.lastSentS = this.timeS;
       out.weak = weak;
       out.strong = strong;
+      out.left = left;
+      out.right = right;
     }
   }
 
@@ -142,6 +225,7 @@ export class GamepadHaptics {
     for (const { index, actuator } of connectedPads()) {
       if (!this.outputs.has(index)) continue;
       if (actuator.reset) send(() => actuator.reset?.());
+      else if (supportsTriggerRumble(actuator)) playTriggerRumble(actuator, 0, 0, 0, 0);
       else playDualRumble(actuator, 0, 0);
     }
     this.outputs.clear();

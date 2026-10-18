@@ -18,7 +18,9 @@ export type KeyAction =
   | "mute"
   | "autopilot"
   | "mouseSteer"
-  | "restart";
+  | "restart"
+  | "throttleHalf"
+  | "replay";
 
 /** Actions a controller or wheel button can trigger */
 export type PadAction = "boost" | "aero" | "shiftUp" | "shiftDown" | "camera" | "racingLine" | "restart" | "pause";
@@ -44,6 +46,8 @@ export const KEY_ACTIONS: readonly { id: KeyAction; label: string }[] = [
   { id: "autopilot", label: "Autopilot" },
   { id: "mouseSteer", label: "Mouse steering" },
   { id: "restart", label: "Restart" },
+  { id: "throttleHalf", label: "Half throttle (hold)" },
+  { id: "replay", label: "Instant replay" },
 ];
 
 export const PAD_ACTIONS: readonly { id: PadAction; label: string }[] = [
@@ -73,6 +77,8 @@ export const DEFAULT_KEY_BINDINGS: KeyBindings = {
   autopilot: ["KeyP"],
   mouseSteer: ["KeyV"],
   restart: ["Backspace"],
+  throttleHalf: ["KeyF"],
+  replay: ["KeyT"],
 };
 
 /** Keys that cannot be bound: Esc opens the menu, "/" starts the /boost command */
