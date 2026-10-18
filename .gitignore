@@ -27,7 +27,11 @@ __pycache__/
 /scripts/vf26/
 /scripts/gt3/
 /scripts/rwanda-2026/
+/scripts/tracks/
 
 # Force-feedback helper, compiled on first `npm run ffb`
 /scripts/ffb-bridge/bin/
 
+# Local notes & scratch dumps
+HANDOFF.md
+acevo_physics_strings.txt

@@ -102,19 +102,24 @@ console.log('\n== f12026-car config');
       peakLo = peakHi = rpm;
     } else if (Math.abs(p - peak) < 1e-9) peakHi = rpm;
   }
-  check('ICE peak 580 kW over 10 500–12 500 rpm', peak === 580 && peakLo === 10500 && peakHi === 12500, `${peak} kW ${peakLo}–${peakHi} rpm`);
-  check('Mass / distribution / wheelbase / tracks', cfg.chassis.totalMassKg === 800 && cfg.chassis.frontWeightFraction === 0.455 && cfg.chassis.wheelbase === 3.6 && cfg.chassis.trackWidthFront === 1.6 && cfg.chassis.trackWidthRear === 1.55, '800 kg 45.5 % 3.60 / 1.60 / 1.55 m');
-  check('Gears: 8 fwd + R, 15000 / 13200 / 9800', cfg.gearbox.ratios.length === 8 && cfg.gearbox.reverse > 0 && cfg.gearbox.gears.redline_rpm === 15000 && cfg.gearbox.gears.upshift_rpm === 13200 && cfg.gearbox.gears.downshift_rpm === 9800, '');
+  // reference power.lut is torque at the wheels with turbo boost on top: ≈ 400 kW of 2026 ICE at the crank
+  check('ICE peak 400–440 kW at the crank, 10 500–12 000 rpm', peak > 400 && peak < 440 && peakLo >= 10500 && peakLo <= 12000, `${fmt(peak, 1)} kW at ${peakLo} rpm`);
+  check('Mass / distribution / wheelbase / tracks', cfg.chassis.totalMassKg === 769 && cfg.chassis.frontWeightFraction === 0.455 && cfg.chassis.wheelbase === 3.382 && cfg.chassis.trackWidthFront === 1.56 && cfg.chassis.trackWidthRear === 1.461, '769 kg 45.5 % 3.382 / 1.56 / 1.461 m');
+  check('Gears: 8 fwd + R, 13050 / 11700 / 9360', cfg.gearbox.ratios.length === 8 && cfg.gearbox.reverse > 0 && cfg.gearbox.gears.redline_rpm === 13050 && cfg.gearbox.gears.upshift_rpm === 11700 && cfg.gearbox.gears.downshift_rpm === 9360, '');
   const k = new Lut(cfg.ers.torqueLut);
-  // Deploy torque = min(P / ω, torqueLut): the LUT's chords sit slightly above the 120 kW hyperbola
+  // Deploy torque = min(P / ω, torqueLut): the LUT's chords sit slightly above the 350 kW hyperbola
   const kw = (rpm: number) => Math.min(cfg.ers.ERS_MAX_DEPLOY / ((rpm * Math.PI) / 30), k.evaluate(rpm)) * ((rpm * Math.PI) / 30) / 1000;
   let kwMax = 0;
-  for (let rpm = 1000; rpm <= 15000; rpm += 50) kwMax = Math.max(kwMax, kw(rpm));
-  check('MGU-K ≤ 120 kW, 4 MJ store', kwMax <= 120.001 && kw(12000) > 119 && cfg.ers.ERS_MAX_DEPLOY === 120000 && cfg.ers.ERS_MAX_CHARGE === 4e6, `${fmt(kwMax, 1)} kW peak`);
+  for (let rpm = 1000; rpm <= 13050; rpm += 50) kwMax = Math.max(kwMax, kw(rpm));
+  check('MGU-K ≤ 350 kW, 4 MJ store, 9 MJ per lap', kwMax <= 350.001 && kw(10000) > 340 && cfg.ers.ERS_MAX_DEPLOY === 350000 && cfg.ers.ERS_MAX_CHARGE === 4e6 && cfg.ers.deployPerLapJ === 9e6, `${fmt(kwMax, 1)} kW peak`);
   const tyres = cfg.tyreCompounds;
   const peakOf = (c: keyof typeof tyres) => Math.max(...tyres[c].thermalData.thermalPerformanceCurve.map((p) => p[1]));
-  check('Compound peaks 1.00 / 0.96 / 0.92', peakOf('PhysicsTyreCompound_F1_Soft') === 1 && peakOf('PhysicsTyreCompound_F1_Medium') === 0.96 && peakOf('PhysicsTyreCompound_F1_Hard') === 0.92, '');
-  check('Tyres 305 / 405 × R 0.360, 25 psi', tyres.PhysicsTyreCompound_F1_Soft.front.width === 0.305 && tyres.PhysicsTyreCompound_F1_Soft.rear.width === 0.405 && tyres.PhysicsTyreCompound_F1_Soft.front.radius === 0.36 && tyres.PhysicsTyreCompound_F1_Soft.pressureData.optimalPsi === 25, '');
+  // reference C3 / C2 / C1: the grip step is in DY_REF, the thermal curves all peak at 1
+  const dy = (c: keyof typeof tyres) => tyres[c].modelData.Dy0;
+  check('Compounds: thermal peak 1, DY soft > medium > hard', ['PhysicsTyreCompound_F1_Soft', 'PhysicsTyreCompound_F1_Medium', 'PhysicsTyreCompound_F1_Hard'].every((c) => peakOf(c as keyof typeof tyres) === 1) && dy('PhysicsTyreCompound_F1_Soft') > dy('PhysicsTyreCompound_F1_Medium') && dy('PhysicsTyreCompound_F1_Medium') > dy('PhysicsTyreCompound_F1_Hard'),
+    `DY ${fmt(dy('PhysicsTyreCompound_F1_Soft'), 3)} / ${fmt(dy('PhysicsTyreCompound_F1_Medium'), 3)} / ${fmt(dy('PhysicsTyreCompound_F1_Hard'), 3)}`);
+  const soft = tyres.PhysicsTyreCompound_F1_Soft;
+  check('Tyres 280 / 375 × R 0.3625, 25 / 24 psi hot', soft.front.width === 0.28 && soft.rear.width === 0.375 && soft.front.radius === 0.3625 && soft.pressureData.optimalPsi === 25 && soft.rearOverride?.pressureData?.optimalPsi === 24, '');
 }
 
 // ---------------------------------------------------------------------------
@@ -177,9 +182,9 @@ console.log('\n== Static (grid slot 1, Rwanda colliders)');
   const sum = W.reduce((a, w) => a + w.fz, 0);
   const front = (W[0].fz + W[1].fz) / sum;
   const tel = car.telemetry;
-  check('Wheel loads carry the weight', Math.abs(sum / (800 * 9.81) - 1) < 0.02, `${fmt(sum, 0)} N`);
+  check('Wheel loads carry the weight', Math.abs(sum / (769 * 9.81) - 1) < 0.02, `${fmt(sum, 0)} N`);
   check('Front load share ≈ 45.5 %', Math.abs(front - 0.455) < 0.015, `${fmt(front * 100, 1)} %`);
-  check('Static floor heights ≈ 32 / 70 mm', Math.abs(tel.aeroHeightFront - 0.032) < 0.006 && Math.abs(tel.aeroHeightRear - 0.07) < 0.008, `${fmt(tel.aeroHeightFront * 1000, 1)} / ${fmt(tel.aeroHeightRear * 1000, 1)} mm`);
+  check('Static floor heights ≈ 27 / 51 mm (reference pickups)', Math.abs(tel.aeroHeightFront - 0.027) < 0.004 && Math.abs(tel.aeroHeightRear - 0.051) < 0.005, `${fmt(tel.aeroHeightFront * 1000, 1)} / ${fmt(tel.aeroHeightRear * 1000, 1)} mm`);
   car.step(1, { throttle: 0, brake: 1, steer: 0 });
   check('Parked car stays parked', car.velocity.length() < 0.05, `${fmt(car.velocity.length(), 3)} m/s`);
 }
@@ -212,9 +217,10 @@ console.log('\n== Straight line (flat ground, ρ 1.06)');
   check('0-100 km/h 2.4–3.4 s', t100 > 2.4 && t100 < 3.4, `${fmt(t100)} s`);
   check('0-200 km/h 4.4–6.0 s', t200 > 4.4 && t200 < 6.0, `${fmt(t200)} s`);
   check('Top speed 320–352 km/h (DRS shut)', vmax > 320 && vmax < 352.5, `${fmt(vmax, 1)} km/h after ${fmt(t, 0)} s`);
-  check('Per-lap deploy cap 4 MJ', car.lapDeployJ <= 4e6 + 1, `${fmt(car.lapDeployJ / 1e6, 3)} MJ`);
+  check('Per-lap deploy cap 9 MJ', car.lapDeployJ <= 9e6 + 1, `${fmt(car.lapDeployJ / 1e6, 3)} MJ`);
   check('Shifted into 8th', car.gear === 8, `gear ${car.gear}`);
-  check('Floor runs lower at speed', car.telemetry.AERO_HEIGHT < 0.045 && car.telemetry.AERO_HEIGHT > 0.008, `${fmt(car.telemetry.aeroHeightFront * 1000, 1)} / ${fmt(car.telemetry.aeroHeightRear * 1000, 1)} mm, balance ${fmt(car.telemetry.AERO_BALANCE, 1)} %`);
+  const tl = car.telemetry;
+  check('Floor runs lower at speed, front on the plank at most', tl.aeroHeightFront < 0.02 && tl.aeroHeightRear < 0.045 && Math.min(tl.aeroHeightFront, tl.aeroHeightRear) > -0.004, `${fmt(car.telemetry.aeroHeightFront * 1000, 1)} / ${fmt(car.telemetry.aeroHeightRear * 1000, 1)} mm, balance ${fmt(car.telemetry.AERO_BALANCE, 1)} %`);
 
   // Braking 300 → 100 km/h: threshold braking (no ABS), half-full ES so the MGU-K can harvest
   const b = makeCar(flat);
@@ -325,8 +331,9 @@ console.log('\n== Steps, ledges and gear hunting (flat ground with a step at z =
   const slow = across(0.21, 5, 0.15);
   const fast = across(0.21, 20, 0.3);
   // At walking pace the tyres roll up it; at 72 km/h a 21 cm face throws the car (as a sausage kerb does) but
-  // must not fire it into the sky
-  check('Rolls up a 21 cm step instead of launching', slow.finite && fast.finite && slow.rise < 0.25 && fast.rise < 1 && Math.max(slow.maxFz, fast.maxFz) < 60_000,
+  // must not fire it into the sky. The reference heave dampers and packers are soft, so it rebounds higher than a stiff
+  // setup would (≈1.3 m against 0.9 m)
+  check('Rolls up a 21 cm step instead of launching', slow.finite && fast.finite && slow.rise < 0.35 && fast.rise < 1.5 && Math.max(slow.maxFz, fast.maxFz) < 60_000,
     `overshoot above the settled ride height ${fmt(slow.rise * 1000, 0)} / ${fmt(fast.rise * 1000, 0)} mm at 5 / 20 m/s, peak wheel load ${fmt(Math.max(slow.maxFz, fast.maxFz) / 1000, 1)} kN`);
   // Off a 1.3 m ledge at crawling pace: the body drops while the rears still stand on the top
   const ledge = across(-1.3, 4, 0.1);
@@ -353,10 +360,8 @@ console.log('\n== Steps, ledges and gear hunting (flat ground with a step at z =
 
 console.log('\n== DRS / suspension type / ERS modes');
 {
-  const rw = F12026_CAR_CONFIG.aero.wings.find((w) => w.name === 'REAR_WING')!;
-  const cl = new Lut(rw.lutAOA_CL).evaluate(rw.angleDeg);
-  const cd = new Lut(rw.lutAOA_CD).evaluate(rw.angleDeg);
-  check('Rear wing DRS: −18 % CL, −28 % CD', Math.abs(cl * rw.drs!.clMult / cl - 0.82) < 1e-9 && Math.abs(cd * rw.drs!.cdMult / cd - 0.72) < 1e-9, '');
+  const act = F12026_CAR_CONFIG.aero.rhMap!.activeAero;
+  check('Active aero (straight mode): CL·A −0.25 / −0.35, CD·A −0.28', act.dClAFront === -0.25 && act.dClARear === -0.35 && act.dCdA === -0.28, '');
 
   const events: string[] = [];
   const drsCar = makeCar(flat, { onEvent: (e) => e.type === 'CHANGED_DRS_OPEN' && events.push(String(e.open)) });
@@ -388,17 +393,19 @@ console.log('\n== DRS / suspension type / ERS modes');
   console.warn = origWarn;
   check('Heave ignored on non-double-wishbone', warns.some((w) => w.includes('IGNORING HEAVE SPRING BECAUSE SUSPENSION FRONT IS NOT DOUBLE WISHBONE')), warns[0] ?? 'no warning');
 
+  // RAC / BAL deploy ≈100 kW and only from 75 to 285 / 270 km/h (the reference Balanced / Low maps), so they start just
+  // above their floors
   const soc = (mode: 'PSH' | 'RAC' | 'BAL') => {
     const c = makeCar(flat, { performanceMode: mode });
     c.reset(0, 0, 0, 150 / 3.6);
-    c.ersEnergyJ = 0.45 * 4e6;
+    c.ersEnergyJ = { PSH: 0.45, RAC: 0.25, BAL: 0.43 }[mode] * 4e6;
     run(c, 12, () => ({ throttle: 1, brake: 0, steer: 0 }));
     return c.ersEnergyJ / 4e6;
   };
   const sP = soc('PSH');
   const sR = soc('RAC');
   const sB = soc('BAL');
-  check('SOC floors: PSH < RAC (20 %) < BAL (40 %)', sP < 0.19 && sR >= 0.195 && sR < 0.25 && sB >= 0.395, `PSH ${fmt(sP * 100, 1)} %, RAC ${fmt(sR * 100, 1)} %, BAL ${fmt(sB * 100, 1)} %`);
+  check('SOC floors: PSH < RAC (20 %) < BAL (40 %)', sP < 0.19 && sR >= 0.195 && sR < 0.21 && sB >= 0.395, `PSH ${fmt(sP * 100, 1)} %, RAC ${fmt(sR * 100, 1)} %, BAL ${fmt(sB * 100, 1)} %`);
   const ebb = makeCar(flat, { performanceMode: 'RAC' });
   const ebb0 = makeCar(flat, { performanceMode: 'PSH' });
   check('RAC moves EBB one step forward', ebb.brakeBias > ebb0.brakeBias, `${fmt(ebb0.brakeBias * 100, 1)} → ${fmt(ebb.brakeBias * 100, 1)} %`);
@@ -492,7 +499,7 @@ console.log('\n== Lap on the Rwanda colliders');
   check('Completes a lap on the colliders', travelled >= L && finite(car), `${fmt(travelled, 0)} m`);
   check('Stays on the track', maxLateral < 10, `${fmt(maxLateral, 1)} m`);
   check('Wheels loaded on the collider', air < 0.01, `${fmt(air * 100, 2)} % unloaded wheel-steps`);
-  check('ERS lap counters reset at the line', lapResets >= 1 && car.lapDeployJ <= 4e6 + 1, `${lapResets} reset(s), ${fmt(car.lapDeployJ / 1e6, 2)} MJ deployed since`);
+  check('ERS lap counters reset at the line', lapResets >= 1 && car.lapDeployJ <= 9e6 + 1, `${lapResets} reset(s), ${fmt(car.lapDeployJ / 1e6, 2)} MJ deployed since`);
 }
 
 // ---------------------------------------------------------------------------

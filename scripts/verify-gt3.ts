@@ -12,7 +12,7 @@ import { FlatGroundQuery } from '../src/lib/sim/f12026-car/TrackColliderQuery';
 import { VehiclePhysics, type VehicleInputs } from '../src/lib/sim/f12026-car/VehiclePhysics';
 import { AMG_GT3_CONFIG } from '../src/lib/sim/gt3/AmgGt3Config';
 import { AMG_GT3_PROFILE_CAR, createAmgGt3Sim } from '../src/lib/sim/gt3/AmgGt3Sim';
-import { brakingGuideFor } from '../src/lib/sim/speed-profile';
+import { brakingGuideFor, computeSpeedProfile } from '../src/lib/sim/speed-profile';
 import { F12026CarSim } from '../src/lib/sim/f12026-car/F12026CarSim';
 import { loadGlbGeometry } from './lib/glb-geometry';
 import { createFlatTestTrack } from './lib/flat-track';
@@ -44,7 +44,8 @@ console.log('\n== AMG GT3 config');
 {
   const c = AMG_GT3_CONFIG;
   check('No hybrid, no brake-by-wire', c.ers.ERS_MAX_DEPLOY === 0 && c.ers.maxHarvestW === 0 && c.brakes.brakeByWire === false, '');
-  check('6 gears, 7700 rpm limiter', c.gearbox.ratios.length === 6 && c.gearbox.gears.redline_rpm === 7700, '');
+  // Reference GT3 Evo telemetry peaks at 7899 rpm
+  check('6 gears, 7900 rpm limiter', c.gearbox.ratios.length === 6 && c.gearbox.gears.redline_rpm === 7900, '');
 }
 
 console.log('\n== Straight line (flat ground, ρ 1.06)');
@@ -69,8 +70,9 @@ console.log('\n== Straight line (flat ground, ρ 1.06)');
   console.log(`      0-100 ${fmt(t100)} s, 0-200 ${fmt(t200)} s, vmax ${fmt(vmax, 1)} km/h in ${car.gear}th, MGU-K ${fmt(car.telemetry.MGUK_POWER, 0)} W`);
   check('0-100 km/h 3.0–4.2 s', t100 > 3.0 && t100 < 4.2, `${fmt(t100)} s`);
   check('0-200 km/h 8.5–12.5 s', t200 > 8.5 && t200 < 12.5, `${fmt(t200)} s`);
-  // The gearing tops out at 307 km/h at the limiter; Rwanda's thin air lets it get close
-  check('Top speed 270–307 km/h (ρ 1.06)', vmax > 270 && vmax < 307, `${fmt(vmax, 1)} km/h`);
+  // Drag-limited: 6th (0.96 × 3.4285 on the 0.3525 m rear) runs to ≈320 km/h at the 7900 rpm limiter, past where the
+  // ≈359 kW at the wheels meets the drag in Rwanda's thin air
+  check('Top speed 270–315 km/h (ρ 1.06)', vmax > 270 && vmax < 315, `${fmt(vmax, 1)} km/h`);
   check('Shifted into 6th', car.gear === 6, `gear ${car.gear}`);
 
   const b = makeCar();
@@ -88,7 +90,9 @@ console.log('\n== Straight line (flat ground, ρ 1.06)');
     dist = c.position.z - z0;
     return c.telemetry.speedKmh <= 80;
   });
-  check('Braking 250→80 km/h 105–165 m', dist > 105 && dist < 165, `${fmt(dist, 1)} m, peak ${fmt(peakG, 2)} g`);
+  // Up to 175 m: the 71 % front share (4750 Nm) leaves each rear at 1380 Nm; on reference GT3 grip a threshold stop averages
+  // ≈1.85 g (≈119 m)
+  check('Braking 250→80 km/h 105–175 m', dist > 105 && dist < 175, `${fmt(dist, 1)} m, peak ${fmt(peakG, 2)} g`);
   check('Peak deceleration 1.6–2.5 g', peakG > 1.6 && peakG < 2.5, `${fmt(peakG, 2)} g`);
 
   // The braking line's planning model (AMG_GT3_PROFILE_CAR) must stop no shorter than the car does, and not much longer
@@ -146,7 +150,9 @@ console.log('\n== Driver aids through the adapter (semi_pro vs pro)');
   };
   const tc = launch('semi_pro');
   const raw = launch('pro');
-  check("TC holds wheelspin on a flat-out launch (from 60 km/h)", tc.maxSr < 0.2 && tc.maxSr < raw.maxSr, `max rear slip ${fmt(tc.maxSr, 2)} with TC, ${fmt(raw.maxSr, 2)} without; 0-100 ${fmt(tc.t100)} / ${fmt(raw.t100)} s`);
+  // On dry slicks the GT3 barely spins past 60 km/h (≈0.10 rear slip, the TC target, even without TC), so TC must hold
+  // it under 0.2 and never make it worse; a strict `<` only ever passed on a rounding-level difference
+  check("TC holds wheelspin on a flat-out launch (from 60 km/h)", tc.maxSr < 0.2 && tc.maxSr <= raw.maxSr + 0.002, `max rear slip ${fmt(tc.maxSr, 2)} with TC, ${fmt(raw.maxSr, 2)} without; 0-100 ${fmt(tc.t100)} / ${fmt(raw.t100)} s`);
   const stop = (preset: 'pro' | 'semi_pro') => {
     const sim = createAmgGt3Sim(wide);
     sim.assistPreset = preset;
@@ -185,8 +191,19 @@ console.log('\n== Autopilot on the Rwanda colliders');
     return { done: sim.telemetry.lapCount === lap0 + 2, lapS: (sim.telemetry.lastLapTimeMs ?? 0) / 1000, beyond, maxSlip, top: sim.telemetry.allTimeTopSpeedKmh };
   };
   // The GT3's braking line: longer braking zones and slower corners than the circuit's (VF26) line
-  const guide = brakingGuideFor(track.samples, 'amg-gt3', AMG_GT3_PROFILE_CAR);
+  const guide = brakingGuideFor(track.samples, 'amg-gt3', AMG_GT3_PROFILE_CAR, 'gt3');
   const n = track.samples.length;
+  // Its own racing line (`roGt3`): the lap-time line for the GT3's grip, faster for it than the F1 line
+  const modelLap = (line: 'f1' | 'gt3') => {
+    const p = computeSpeedProfile(track.samples, AMG_GT3_PROFILE_CAR, line);
+    let lapS = 0;
+    for (let i = 0; i < n; i++) lapS += (2 * p.segLenM[i]) / Math.max(1, p.speedMs[i] + p.speedMs[(i + 1) % n]);
+    return lapS;
+  };
+  const lineGap = Math.max(...track.samples.map((s) => Math.abs((s.racingLineOffsetGt3 ?? s.racingLineOffset) - s.racingLineOffset) * s.width * 0.3));
+  const [lapOwn, lapF1] = [modelLap('gt3'), modelLap('f1')];
+  check('GT3 drives its own lap-time line', lineGap > 0.5 && lapOwn < lapF1 - 0.2,
+    `planning-model lap ${fmt(lapOwn, 2)} s on its line vs ${fmt(lapF1, 2)} s on the F1 line, lines up to ${fmt(lineGap, 1)} m apart`);
   const red = (zone: (i: number) => number) => Array.from({ length: n }, (_, i) => zone(i)).filter((z) => z >= 1).length * (track.totalLengthM / n);
   const redGt3 = red((i) => guide.brakingZone[i]);
   const redVf26 = red((i) => track.samples[i].brakingZone);

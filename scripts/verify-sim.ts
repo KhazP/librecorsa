@@ -341,7 +341,8 @@ async function runVerification() {
     const nowMs = i * (1000 / 60);
     remote.step(1 / 60, {});
     remoteTrail.push(remote.worldPosition.clone());
-    if (i % 2 === 0) mpSync.ingestPacket({ ...packetOf(remote), peerId: 'peer_remote', timestampMs: nowMs });
+    // The loop's clock is synthetic, so the arrival time on it is passed (the app uses performance.now() for both)
+    if (i % 2 === 0) mpSync.ingestPacket({ ...packetOf(remote), peerId: 'peer_remote', timestampMs: nowMs }, false, nowMs);
     peers = mpSync.update(nowMs, packetOf(simAi));
     // Rendered ~65 ms (4 frames) behind: compare with where the remote car was then
     if (i > 20 && peers.length === 1) {
@@ -1070,12 +1071,12 @@ async function runVerification() {
       `Centreline vertical curvature |d²Z/ds²| peaks at ${maxD2z.toFixed(5)} 1/m (< 0.004: no bumps or creases at ${ds.toFixed(2)} m sampling)`
     );
     assert(
-      maxGrade > 0.04 && maxGrade < 0.1 && minGrade < -0.04 && minGrade > -0.1,
-      `Longitudinal grades reach +${(maxGrade * 100).toFixed(1)} % / ${(minGrade * 100).toFixed(1)} % (gentle rolling profile: each between 4 and 10 %)`
+      maxGrade > 0.1 && maxGrade < 0.16 && minGrade < -0.1 && minGrade > -0.16,
+      `Longitudinal grades reach +${(maxGrade * 100).toFixed(1)} % / ${(minGrade * 100).toFixed(1)} % (designers' 10.8-15 % climbs and plunges: each between 10 and 16 %)`
     );
     assert(
-      offCamber === 0 && maxBankDeg <= 4.5 && maxTwistDegPerM <= 0.15,
-      `Positive camber in every corner (${offCamber} off-camber of ${cornerSamples} corner samples), peak banking ${maxBankDeg.toFixed(1)}° (<= 4.5°), twist ${maxTwistDegPerM.toFixed(3)}°/m (<= 0.15: no diagonal unloading)`
+      offCamber === 0 && maxBankDeg <= 7.5 && maxTwistDegPerM <= 0.15,
+      `Positive camber in every corner (${offCamber} off-camber of ${cornerSamples} corner samples), peak banking ${maxBankDeg.toFixed(1)}° (<= 7.5°: T2's 12 %), twist ${maxTwistDegPerM.toFixed(3)}°/m (<= 0.15: no diagonal unloading)`
     );
     assert(maxFlare < 0.5, `Run-off / gravel outer edges flare at most ${maxFlare.toFixed(2)} m per metre (< 0.5: no lateral kinks)`);
   }
