@@ -10,6 +10,7 @@
  */
 import type { CarTelemetry } from "@/types/f1";
 import { CAR_WHEEL_LOCK_DEG, findPad, type PadLike, wheelRimAngleDeg, type WheelSettings } from "./device-input";
+import { WebHidFfb } from "./webhid-ffb";
 
 export const FFB_BRIDGE_PORT = 18500;
 const BRIDGE_URL = `ws://127.0.0.1:${FFB_BRIDGE_PORT}`;
@@ -54,6 +55,31 @@ export function ffbStrengthFor(
   return own ? { ffbGain: own.gain, ffbMinForce: own.minForce } : { ffbGain: wheel.ffbGain, ffbMinForce: wheel.ffbMinForce };
 }
 
+/** Direction test, as the bridge helper plays it: a held pull each way (s, s between, share of full force) */
+const TEST_PULL_S = 1.0;
+const TEST_GAP_S = 0.3;
+const TEST_LEVEL = 0.25;
+export const DIRECTION_TEST_S = 2 * TEST_PULL_S + TEST_GAP_S;
+const smoothStep = (e0: number, e1: number, x: number) => {
+  const u = Math.min(1, Math.max(0, (x - e0) / (e1 - e0)));
+  return u * u * (3 - 2 * u);
+};
+const pull = (x: number) => smoothStep(0, 0.2, x) * (1 - smoothStep(0.8, 1, x));
+
+/**
+ * Direction-test force (+ = right) `tS` seconds in: right then left, the other way round when inverted (as the game's
+ * forces will be). Zero before the start and once {@link DIRECTION_TEST_S} has passed.
+ */
+export function directionTestForce(tS: number, invert: boolean): number {
+  const sign = invert ? -1 : 1;
+  const second = TEST_PULL_S + TEST_GAP_S;
+  if (tS < 0 || tS >= DIRECTION_TEST_S) return 0;
+  if (tS < TEST_PULL_S) return sign * TEST_LEVEL * pull(tS / TEST_PULL_S);
+  if (tS < second) return 0;
+  return -sign * TEST_LEVEL * pull((tS - second) / TEST_PULL_S);
+}
+const TEST_STEP_MS = 10;
+
 /** Rim speed (deg/s) at which the damper reaches its full force */
 const DAMPING_FULL_DEG_S = 600;
 /** Share of full force the damper may add at most */
@@ -83,6 +109,8 @@ export class WheelFfbClient {
   private historyIdx = 0;
   private lastSuggestMs = 0;
   private hidTimeS = 0;
+  /** WebHID direction test in progress: it owns the force until it ends */
+  private hidTest: { timer: ReturnType<typeof setInterval> } | null = null;
 
   private ws: WebSocket | null = null;
   private replaced = false;
@@ -165,6 +193,7 @@ export class WheelFfbClient {
       peak: Math.max(Math.abs(force), this.meter.peak * Math.exp(-dtS / 1.5)),
     };
     if (useHid) {
+      if (this.hidTest) return;
       // WebHID has no vibration channel: kerbs and ABS are mixed into the force as a 40 Hz / 25 Hz buzz
       this.hidTimeS += dtS;
       const buzz =
@@ -182,6 +211,7 @@ export class WheelFfbClient {
 
   /** Zero the wheel now (pause menu opened) instead of waiting for the next frame */
   stop(): void {
+    this.cancelHidTest();
     this.force = 0;
     this.hidSink?.(0);
     this.send({ t: "f", f: 0, k: 0, a: 0 });
@@ -217,11 +247,31 @@ export class WheelFfbClient {
   }
 
   /**
-   * Plays the bridge's direction test: a held pull right, then left (left first when inverted, as the game's forces
-   * will be); false when the bridge is not connected
+   * Plays the direction test: a held pull right, then left (left first when inverted, as the game's forces will be).
+   * Through the WebHID wheel while it is the force output, otherwise the bridge's; false when neither is connected.
    */
   test(invert: boolean): boolean {
-    return this.send({ t: "test", inv: invert });
+    if (!this.hidSink) return this.send({ t: "test", inv: invert });
+    this.cancelHidTest();
+    const start = Date.now();
+    const timer = setInterval(() => {
+      const tS = (Date.now() - start) / 1000;
+      if (tS >= DIRECTION_TEST_S || !this.hidSink) {
+        this.cancelHidTest();
+        return;
+      }
+      this.hidSink(directionTestForce(tS, invert));
+    }, TEST_STEP_MS);
+    this.hidTest = { timer };
+    this.hidSink(directionTestForce(0, invert));
+    return true;
+  }
+
+  private cancelHidTest(): void {
+    if (!this.hidTest) return;
+    clearInterval(this.hidTest.timer);
+    this.hidTest = null;
+    this.hidSink?.(0);
   }
 
   /** useSyncExternalStore pair (bound, so they can be passed as they are) */
@@ -233,6 +283,7 @@ export class WheelFfbClient {
   getStatus = (): FfbStatus => this.status;
 
   dispose(): void {
+    this.cancelHidTest();
     this.keepConnection(false, 0);
   }
 
@@ -294,3 +345,20 @@ export class WheelFfbClient {
 
 /** One client for the app: the simulator loop streams through it, the wheel setup screen shows its status */
 export const wheelFfb = new WheelFfbClient();
+
+/**
+ * The app's WebHID driver. Pairing (connect) runs from the wheel setup's click; on load the simulator only reopens a
+ * wheel granted before (reconnect). While it is ready it is wheelFfb's force output; any other state hands the force
+ * back to the bridge.
+ */
+export const webHidFfb = new WebHidFfb();
+linkHidSink(wheelFfb, webHidFfb);
+
+/** Keeps `client.hidSink` pointing at `hid` exactly while it is ready; returns the unsubscribe */
+export function linkHidSink(client: WheelFfbClient, hid: WebHidFfb): () => void {
+  const sync = () => {
+    client.hidSink = hid.status.state === "ready" ? (f) => hid.setForce(f) : null;
+  };
+  sync();
+  return hid.subscribe(sync);
+}

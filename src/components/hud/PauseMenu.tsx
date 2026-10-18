@@ -177,13 +177,18 @@ export const Toggle: React.FC<{
   detail?: string;
   checked: boolean;
   onChange: () => void;
-}> = ({ label, detail, checked, onChange }) => (
-  <label className="flex cursor-pointer items-center justify-between gap-4 rounded px-1.5 py-1.5 transition-colors hover:bg-white/5">
+  disabled?: boolean;
+}> = ({ label, detail, checked, onChange, disabled }) => (
+  <label
+    className={`flex items-center justify-between gap-4 rounded px-1.5 py-1.5 transition-colors ${
+      disabled ? "cursor-not-allowed opacity-40" : "cursor-pointer hover:bg-white/5"
+    }`}
+  >
     <span>
       <span className="block font-f1-italic text-[15px] text-[#F5F7FA] uppercase">{label}</span>
       {detail ? <span className="block font-f1-mono text-[11px] text-[#8E96AA]">{detail}</span> : null}
     </span>
-    <input type="checkbox" checked={checked} onChange={onChange} className="peer sr-only" />
+    <input type="checkbox" checked={checked} onChange={onChange} disabled={disabled} className="peer sr-only" />
     <span
       aria-hidden
       className={`relative h-6 w-11 shrink-0 rounded-full border transition-colors peer-focus-visible:ring-2 peer-focus-visible:ring-[#CCFF00] ${

@@ -20,7 +20,15 @@ import {
   wheelSteerValue,
   type PadLike,
 } from '../src/lib/input/device-input';
-import { shapeFfbForce, softLockForce } from '../src/lib/input/wheel-ffb';
+import {
+  DIRECTION_TEST_S,
+  directionTestForce,
+  linkHidSink,
+  shapeFfbForce,
+  softLockForce,
+  WheelFfbClient,
+} from '../src/lib/input/wheel-ffb';
+import { PAIR_MESSAGE, WebHidFfb, type HidApiLike } from '../src/lib/input/webhid-ffb';
 import { DEFAULT_PLAYER_SETTINGS, parsePlayerSettings } from '../src/lib/settings/player-settings';
 
 let passed = 0;
@@ -213,4 +221,60 @@ check('round trip through JSON', () => {
   assert.deepEqual(parsePlayerSettings(JSON.parse(JSON.stringify(s))), s);
 });
 
-console.log(`\n${passed} checks passed`);
+check('direction test: right then left (left first inverted), zero in the gap and after', () => {
+  near(directionTestForce(0.5, false), 0.25);
+  near(directionTestForce(0.5, true), -0.25);
+  near(directionTestForce(1.15, false), 0);
+  near(directionTestForce(1.8, false), -0.25);
+  near(directionTestForce(1.8, true), 0.25);
+  assert.equal(directionTestForce(DIRECTION_TEST_S, false), 0);
+  assert.equal(directionTestForce(-0.1, false), 0);
+  for (let t = 0; t < DIRECTION_TEST_S; t += 0.01) assert.ok(Math.abs(directionTestForce(t, false)) <= 0.25 + 1e-9);
+});
+check('direction test goes through the WebHID sink while it is the output, else the bridge', () => {
+  const client = new WheelFfbClient();
+  assert.equal(client.test(false), false); // no bridge, no WebHID
+  const sent: number[] = [];
+  client.hidSink = (f) => sent.push(f);
+  assert.equal(client.test(false), true);
+  assert.equal(sent.length, 1);
+  const wheel = { ...DEFAULT_WHEEL_SETTINGS, ffbEnabled: true, hidFfb: true, ffbMinForce: 0, ffbFilterS: 0 };
+  // the game force does not overwrite the test while it runs
+  client.update({ speedKmh: 0, ffbTorqueNorm: 1 } as never, wheel, [], 1000, true);
+  assert.equal(sent.length, 1);
+  client.stop(); // cancels it and zeroes the wheel
+  assert.equal(sent.at(-1), 0);
+  client.update({ speedKmh: 0, ffbTorqueNorm: 0.5 } as never, wheel, [], 1016, true);
+  near(sent.at(-1) as number, 0.5 * wheel.ffbGain, 1e-6);
+});
+
+async function asyncChecks() {
+  // Page load with WebHID saved on and no wheel granted: no prompt, no sink, the bridge keeps the force
+  let prompted = 0;
+  const api: HidApiLike = {
+    requestDevice: async () => {
+      prompted++;
+      return [];
+    },
+    getDevices: async () => [],
+    addEventListener: () => {},
+    removeEventListener: () => {},
+  };
+  const hid = new WebHidFfb(api);
+  const client = new WheelFfbClient();
+  const unlink = linkHidSink(client, hid);
+  assert.equal(await hid.reconnect(), null);
+  assert.equal(prompted, 0);
+  assert.equal(hid.status.state, 'idle');
+  assert.equal(hid.status.message, PAIR_MESSAGE);
+  assert.equal(client.hidSink, null);
+  assert.equal(client.test(false), false); // bridge route (not connected here)
+  unlink();
+  passed++;
+  console.log('  ok  load without a grant: no prompt, no WebHID sink, bridge fallback');
+  console.log(`\n${passed} checks passed`);
+}
+asyncChecks().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});
