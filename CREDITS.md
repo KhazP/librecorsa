@@ -21,12 +21,8 @@ LibreCorsa is an independent, non-commercial, open-source web simulator built wi
 
 Each model below is licensed under [Creative Commons Attribution 4.0 (CC BY 4.0)](http://creativecommons.org/licenses/by/4.0/). Changes for the simulator: uniformly rescaled where needed to match the official lap length, recentred, far-away scenery dropped, textures re-encoded to WebP (max 2048 px), geometry quantised and meshopt-compressed, and hidden physics collider / surface meshes and track data (centreline, kerbs, run-off, barriers, corners) generated from the geometry.
 
-* `"Redbull Ring 2025 Layout"` ([https://skfb.ly/pLBYn](https://skfb.ly/pLBYn)) by **Dave**
 * `"Suzuka Circuit 2001 layout"` ([https://skfb.ly/pLorW](https://skfb.ly/pLorW)) by **Dave**
 * `"Shanghai International Circuit 2018 layout"` ([https://skfb.ly/pLqvL](https://skfb.ly/pLqvL)) by **Dave**
-* `"Circuito de Madring 2026 layout"` ([https://skfb.ly/pMnKI](https://skfb.ly/pMnKI)) by **Dave**
-* `"Nürburgring GP 2016 layout"` ([https://skfb.ly/pLq97](https://skfb.ly/pLq97)) by **Dave**
-* `"Indianapolis Motor Speedway"` ([https://skfb.ly/pLMWQ](https://skfb.ly/pLMWQ)) by **Dave**
 * `"Mobility Resort Motegi (Twin Ring)"` ([https://skfb.ly/pMIoS](https://skfb.ly/pMIoS)) by **Kevin Love SketchFab**
 
 ---

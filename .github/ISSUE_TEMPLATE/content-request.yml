@@ -1,0 +1,62 @@
+# Opened (pre-filled) from the "Request a car or track" panel on the title menu: the field ids below are the
+# query parameters src/components/menu/RequestPanel.tsx fills in, and dropdown values must match its options.
+name: Car or track request
+description: Ask for a car or circuit to be added to LibreCorsa
+title: "[Request] "
+labels: ["content-request"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the idea! LibreCorsa can only ship models it is allowed to redistribute: an open license
+        (CC BY, CC BY-SA, CC0…) or written permission from the creator. Models ripped from other games
+        (Assetto Corsa, ACC, iRacing, F1 games…) can't be used unless the original creator agrees.
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Car or track?
+      options:
+        - Track
+        - Car
+    validations:
+      required: true
+  - type: input
+    id: name
+    attributes:
+      label: What would you like?
+      description: Name, plus the year or layout (e.g. "Spa-Francorchamps, 2022 layout" or "Porsche 911 GT3 R 2023").
+    validations:
+      required: true
+  - type: input
+    id: link
+    attributes:
+      label: Model link
+      description: Where the 3D model can be found (Sketchfab, a mod page…). Leave empty if you don't have one.
+  - type: input
+    id: creator
+    attributes:
+      label: Creator / modder
+  - type: dropdown
+    id: license
+    attributes:
+      label: License
+      options:
+        - CC BY / CC BY-SA
+        - CC0 / public domain
+        - CC BY-NC / CC BY-NC-SA
+        - Other license
+        - Don't know
+  - type: dropdown
+    id: permission
+    attributes:
+      label: Permission to use it
+      options:
+        - The license allows it
+        - The creator gave written permission
+        - Not asked yet
+        - Don't know
+  - type: textarea
+    id: notes
+    attributes:
+      label: Anything else?
+      description: Why it would be fun, links to the creator's permission, reference photos…

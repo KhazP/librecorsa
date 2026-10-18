@@ -12,9 +12,10 @@ import { isLikelyWheel, padDisplayName } from "@/lib/input/device-input";
 import { useGamepads } from "./useMenuNav";
 import { focusInZone, useFocusNav } from "./useFocusNav";
 import { Card, GameTitle, PromptBar, RailItem, SectionLabel } from "./menu-ui";
-import { Flag, Gamepad2, Info, MonitorCog, Play, Route, Timer, Users, Wrench, type LucideIcon } from "lucide-react";
+import { RequestPanel } from "./RequestPanel";
+import { Flag, Gamepad2, Info, MessageSquarePlus, MonitorCog, Play, Route, Timer, Users, Wrench, type LucideIcon } from "lucide-react";
 
-type TitlePanel = "circuit" | "garage" | "multiplayer" | "leaderboard" | "display" | "credits";
+type TitlePanel = "circuit" | "garage" | "multiplayer" | "leaderboard" | "display" | "credits" | "request";
 
 export interface TitleMenuProps extends PauseMenuProps {
   firstRun: boolean;
@@ -205,6 +206,14 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
       : []),
     { id: "controls", label: "Controls", detail: "Keyboard, controller or wheel", icon: Gamepad2, run: onControls },
     { id: "credits", label: "Credits", detail: "Open-source sim · asset sources", icon: Info, panel: "credits", run: () => openPanel("credits") },
+    {
+      id: "request",
+      label: "Request a car or track",
+      detail: "Suggest new content",
+      icon: MessageSquarePlus,
+      panel: "request",
+      run: () => openPanel("request"),
+    },
   ];
   const panelItems = items.filter((i) => i.panel);
 
@@ -263,6 +272,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
                 {panel === "leaderboard" && props.leaderboardPanel ? <LeaderboardPanel {...props.leaderboardPanel} /> : null}
                 {panel === "display" && props.displayPanel ? <DisplayPanel {...props.displayPanel} /> : null}
                 {panel === "credits" ? <Credits /> : null}
+                {panel === "request" ? <RequestPanel /> : null}
               </div>
             ) : null}
           </section>

@@ -2446,13 +2446,6 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     applyGraphicsRef.current?.(settings.graphics.quality, settings.graphics.renderScale);
   }, [settings.graphics.quality, settings.graphics.renderScale]);
 
-  // The lap card clears itself after a while (not while a submit is in flight)
-  useEffect(() => {
-    if (!lapSummary || submitState === "sending") return;
-    const id = window.setTimeout(() => setLapSummary(null), 15_000);
-    return () => window.clearTimeout(id);
-  }, [lapSummary, submitState]);
-
   const ffbMeterOn = phase === "driving" && settings.device === "wheel" && settings.wheel.ffbEnabled;
   useEffect(() => {
     if (!ffbMeterOn) return;

@@ -1,6 +1,8 @@
 "use client";
 
-import React, { useEffect } from "react";
+import React, { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { ChevronDown, ChevronUp, X } from "lucide-react";
 import type { CornerStat, LapSummaryData } from "@/lib/sim/lap-types";
 import {
   HUD_GREEN,
@@ -55,24 +57,121 @@ interface LapSummaryProps {
   submitRank?: number | null;
 }
 
-/** Post-lap card: lap time with status badge, sector splits vs session best, stats, and per-corner speeds */
-export const LapSummary: React.FC<LapSummaryProps> = ({
+/** How long the collapsed toast stays up before it clears itself */
+const TOAST_MS = 12_000;
+
+/**
+ * Post-lap toast, bottom right (top right on touch screens, clear of the on-screen pedals): lap time, status
+ * badge and sector colours, out of the way while driving. It clears itself after a few seconds unless the
+ * pointer is on it or a submit is in flight. Clicking it opens the full card with sector splits vs the
+ * session best, stats and per-corner speeds, which stays until it is collapsed or closed.
+ */
+export const LapSummary: React.FC<LapSummaryProps> = (props) => {
+  const { summary: s, onClose, submitState = "idle" } = props;
+  const [expanded, setExpanded] = useState(false);
+  const [hovered, setHovered] = useState(false);
+  // The HUD re-renders every frame with a fresh onClose; the timer must not restart for that
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+
+  // A new lap starts collapsed again
+  useEffect(() => setExpanded(false), [s.lapNumber]);
+
+  useEffect(() => {
+    if (expanded || hovered || submitState === "sending") return;
+    const id = window.setTimeout(() => closeRef.current(), TOAST_MS);
+    return () => window.clearTimeout(id);
+  }, [expanded, hovered, submitState, s.lapNumber]);
+
+  // Escape folds the open card back into the toast
+  useEffect(() => {
+    if (!expanded) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setExpanded(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [expanded]);
+
+  if (typeof document === "undefined") return null;
+  return createPortal(
+    <div
+      key={s.lapNumber}
+      className="lc-panel-in pointer-events-auto fixed right-3 bottom-28 z-30 w-[min(420px,calc(100vw-1.5rem))] sm:right-4 lg:bottom-4 pointer-coarse:top-44 pointer-coarse:bottom-auto"
+      onPointerEnter={() => setHovered(true)}
+      onPointerLeave={() => setHovered(false)}
+    >
+      {expanded ? (
+        <LapCard {...props} onCollapse={() => setExpanded(false)} />
+      ) : (
+        <LapToast summary={s} onOpen={() => setExpanded(true)} onClose={onClose} />
+      )}
+    </div>,
+    document.body
+  );
+};
+
+function statusBadge(s: LapSummaryData): React.ReactNode {
+  if (!s.valid) return <Pill color={HUD_RED} textColor="#FFFFFF">INVALID</Pill>;
+  if (s.isPersonalBest) return <Pill color={HUD_PURPLE} textColor="#FFFFFF">PB</Pill>;
+  if (s.deltaToBestMs === null) return null;
+  return <Pill color={s.deltaToBestMs <= 0 ? HUD_GREEN : HUD_YELLOW}>{formatDelta(s.deltaToBestMs / 1000)}s</Pill>;
+}
+
+/** Collapsed toast: lap time, status and the three sector colours; the whole card opens the details */
+const LapToast: React.FC<{ summary: LapSummaryData; onOpen: () => void; onClose: () => void }> = ({
+  summary: s,
+  onOpen,
+  onClose,
+}) => (
+  <div className="hud-panel ml-auto flex w-fit max-w-full items-stretch overflow-hidden rounded-lg text-[#F5F7FA]">
+    <button
+      type="button"
+      onClick={onOpen}
+      aria-label={`Lap ${s.lapNumber}: show sector data`}
+      className="flex cursor-pointer items-center gap-3 py-2 pr-2 pl-3 text-left transition-colors hover:bg-[#1B1F2B]/70"
+    >
+      <span className="flex flex-col">
+        <span className="hud-label !text-[9px]">LAP {s.lapNumber}</span>
+        <span className="hud-num text-[22px] leading-tight tracking-tight">{formatLapTime(s.lapTimeMs)}</span>
+      </span>
+      <span className="flex flex-col items-end gap-1.5">
+        {statusBadge(s)}
+        <span className="flex gap-1" aria-hidden>
+          {s.sectorTimesMs.map((t, idx) => (
+            <span
+              key={idx}
+              className="h-1.5 w-5 rounded-full"
+              style={{ backgroundColor: sectorColor(t, s.bestSectorTimesMs[idx]) }}
+            />
+          ))}
+        </span>
+      </span>
+      <span className="flex items-center gap-0.5 self-end font-f1-mono text-[9px] font-bold tracking-wider text-[#8E96AA]">
+        SECTORS <ChevronUp className="h-3 w-3" />
+      </span>
+    </button>
+    <button
+      type="button"
+      onClick={onClose}
+      aria-label="Dismiss lap summary"
+      className="cursor-pointer border-l border-[#262B3D] px-2 text-[#8E96AA] transition-colors hover:text-[#F5F7FA]"
+    >
+      <X className="h-3.5 w-3.5" />
+    </button>
+  </div>
+);
+
+/** Open card: lap time with status badge, sector splits vs session best, stats, and per-corner speeds */
+const LapCard: React.FC<LapSummaryProps & { onCollapse: () => void }> = ({
   summary: s,
   onClose,
+  onCollapse,
   onSaveGhost,
   onSubmit,
   submitState = "idle",
   submitRank = null,
 }) => {
-  // Escape dismisses the card
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
   let badge: React.ReactNode = null;
   if (!s.valid) {
     badge = <Pill color={HUD_RED} textColor="#FFFFFF">INVALID · TRACK LIMITS</Pill>;
@@ -108,7 +207,7 @@ export const LapSummary: React.FC<LapSummaryProps> = ({
     <div
       role="dialog"
       aria-label={`Lap ${s.lapNumber} summary`}
-      className="hud-panel f1-corner-tr pointer-events-auto w-full max-w-[420px] rounded-lg p-4 text-[#F5F7FA]"
+      className="hud-panel f1-corner-tr w-full max-h-[calc(100dvh-9rem)] overflow-y-auto rounded-lg p-4 text-[#F5F7FA]"
     >
       {/* Header: lap number, big lap time, status badge */}
       <div className="flex items-start justify-between gap-3">
@@ -121,7 +220,17 @@ export const LapSummary: React.FC<LapSummaryProps> = ({
             {formatLapTime(s.lapTimeMs)}
           </div>
         </div>
-        <div className="mt-1 shrink-0">{badge}</div>
+        <div className="mt-1 flex shrink-0 items-start gap-2">
+          {badge}
+          <button
+            type="button"
+            onClick={onCollapse}
+            aria-label="Collapse lap summary"
+            className="cursor-pointer rounded border border-[#262B3D] bg-[#08090D] p-1 text-[#8E96AA] transition-colors hover:text-[#F5F7FA]"
+          >
+            <ChevronDown className="h-3.5 w-3.5" />
+          </button>
+        </div>
       </div>
 
       {/* Sector splits, coloured against the session best */}
@@ -232,7 +341,7 @@ export const LapSummary: React.FC<LapSummaryProps> = ({
           onClick={onClose}
           className="cursor-pointer rounded border border-[#262B3D] bg-[#08090D] px-3 py-1.5 font-f1-mono text-[11px] font-bold uppercase text-[#F5F7FA] transition-colors hover:border-[#8E96AA]"
         >
-          Close <span className="text-[#8E96AA]">Esc</span>
+          Close
         </button>
       </div>
     </div>

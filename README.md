@@ -24,7 +24,7 @@
 
 </div>
 
-**LibreCorsa** is an open-source racing simulator that runs entirely in the browser. It has rigid-body vehicle dynamics at 500 Hz, a thermal tyre model, 2026-regulation open-wheelers and a GT3 car. There are eight circuits, AI races, ghosts and replays, and peer-to-peer multiplayer. It works with a keyboard, gamepad, touch screen or a force-feedback wheel. Nothing to install, and no server: it ships as a static site.
+**LibreCorsa** is an open-source racing simulator that runs entirely in the browser. It has rigid-body vehicle dynamics at 500 Hz, a thermal tyre model, 2026-regulation open-wheelers and a GT3 car. There are four circuits, AI races, ghosts and replays, and peer-to-peer multiplayer. It works with a keyboard, gamepad, touch screen or a force-feedback wheel. Nothing to install, and no server: it ships as a static site.
 
 <p align="center">
   <img src="docs/media/race-grid-shanghai.jpg" alt="Lined up on the grid at Shanghai against five AI cars" width="100%" />
@@ -70,12 +70,8 @@ Each car has its own cockpit, steering wheel and shift lights, plus a multi-laye
 | Circuit | Country | Length |
 | :-- | :-- | --: |
 | **Rwanda International Circuit** (fictional, default) | Rwanda | 5.30 km |
-| Red Bull Ring | Austria | 4.32 km |
 | Suzuka Circuit | Japan | 5.83 km |
 | Shanghai International Circuit | China | 5.40 km |
-| Circuito de Madring | Spain | 5.47 km |
-| Nürburgring GP | Germany | 5.18 km |
-| Indianapolis Motor Speedway (oval) | United States | 4.06 km |
 | Mobility Resort Motegi | Japan | 4.78 km |
 
 The Rwanda circuit was built in Blender for this project: 14 corners, 52 m of elevation, 1,400 m above sea level. The others are CC BY 4.0 Sketchfab scans, converted by `scripts/tracks/build_track.py`. It traces the centreline, rescales each scan to the official lap length and detects kerbs, run-off, gravel, barriers, corners and DRS zones. Then `npm run compress-tracks` meshopt-compresses the meshes, and the hidden physics meshes stay bit-exact. Every circuit has a lap-time-optimal racing line for each car class. Open the sim with `?colliders=1` to see the physics surfaces drawn over the scan.

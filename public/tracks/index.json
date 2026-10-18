@@ -1,24 +1,5 @@
 [
   {
-    "id": "redbull_ring",
-    "name": "Red Bull Ring",
-    "layout": "2025 Grand Prix layout",
-    "country": "Austria",
-    "city": "Spielberg",
-    "lengthM": 4319.54,
-    "turns": 8,
-    "direction": "clockwise",
-    "dataUrl": "/tracks/redbull_ring/track_data.json",
-    "credit": {
-      "title": "Redbull Ring 2025 Layout",
-      "author": "Dave",
-      "url": "https://sketchfab.com/3d-models/redbull-ring-2025-layout-f73494f1cdad41678cb85c59057baeb9",
-      "short": "https://skfb.ly/pLBYn",
-      "license": "CC BY 4.0",
-      "licenseUrl": "http://creativecommons.org/licenses/by/4.0/"
-    }
-  },
-  {
     "id": "suzuka",
     "name": "Suzuka Circuit",
     "layout": "2001 layout",
@@ -52,63 +33,6 @@
       "author": "Dave",
       "url": "https://sketchfab.com/3d-models/shanghai-international-circuit-2018-layout-4d3365f4de6442a5ae56e8807c518c4f",
       "short": "https://skfb.ly/pLqvL",
-      "license": "CC BY 4.0",
-      "licenseUrl": "http://creativecommons.org/licenses/by/4.0/"
-    }
-  },
-  {
-    "id": "madring",
-    "name": "Circuito de Madring",
-    "layout": "2026 layout",
-    "country": "Spain",
-    "city": "Madrid",
-    "lengthM": 5462.5,
-    "turns": 23,
-    "direction": "clockwise",
-    "dataUrl": "/tracks/madring/track_data.json",
-    "credit": {
-      "title": "Circuito de Madring 2026 layout",
-      "author": "Dave",
-      "url": "https://sketchfab.com/3d-models/circuito-de-madring-2026-layout-5bbaf6e5048643858a498bc8a4ef4c05",
-      "short": "https://skfb.ly/pMnKI",
-      "license": "CC BY 4.0",
-      "licenseUrl": "http://creativecommons.org/licenses/by/4.0/"
-    }
-  },
-  {
-    "id": "nurburgring",
-    "name": "Nürburgring",
-    "layout": "GP-Strecke 2016",
-    "country": "Germany",
-    "city": "Nürburg",
-    "lengthM": 5181.22,
-    "turns": 17,
-    "direction": "clockwise",
-    "dataUrl": "/tracks/nurburgring/track_data.json",
-    "credit": {
-      "title": "Nürburgring GP 2016 layout",
-      "author": "Dave",
-      "url": "https://sketchfab.com/3d-models/nurburgring-gp-2016-layout-5993aa0140764b4ea23bb285d23aa57e",
-      "short": "https://skfb.ly/pLq97",
-      "license": "CC BY 4.0",
-      "licenseUrl": "http://creativecommons.org/licenses/by/4.0/"
-    }
-  },
-  {
-    "id": "indianapolis",
-    "name": "Indianapolis Motor Speedway",
-    "layout": "Oval",
-    "country": "United States",
-    "city": "Speedway, Indiana",
-    "lengthM": 4062.85,
-    "turns": 7,
-    "direction": "anticlockwise",
-    "dataUrl": "/tracks/indianapolis/track_data.json",
-    "credit": {
-      "title": "Indianapolis Motor Speedway",
-      "author": "Dave",
-      "url": "https://sketchfab.com/3d-models/indianapolis-motor-speedway-63935d209ac14ff495b913669619855a",
-      "short": "https://skfb.ly/pLMWQ",
       "license": "CC BY 4.0",
       "licenseUrl": "http://creativecommons.org/licenses/by/4.0/"
     }
