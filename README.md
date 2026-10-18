@@ -80,7 +80,7 @@ The Rwanda circuit was built in Blender for this project: 14 corners, 52 m of el
 - **Race the AI**: a 5-car field with a standing start behind the lights, traffic and side-by-side racing, and a results screen.
 - **Practice tools**: lap and sector timing, a live delta, a ghost of your best lap (saved in your browser, and it can be exported and imported), a 90-second instant replay with free cameras, and a lap summary.
 - **Multiplayer**: peer-to-peer over WebRTC. Use a 6-character room code, or a manual offer/answer copy-paste with no signalling server at all. Browser tabs on the same machine pair up automatically. Remote cars are interpolated at display rate.
-- **Online leaderboard** (optional): the reference Cloudflare Worker in [`scripts/leaderboard-worker`](scripts/leaderboard-worker) stores laps with their ghosts. Point the build at it with `NEXT_PUBLIC_LEADERBOARD_URL`.
+- **Online leaderboard**: laps and their ghosts go to a free Supabase project ([`scripts/leaderboard-supabase`](scripts/leaderboard-supabase)). Without one configured, the board lists your own best laps. A Cloudflare Worker version is in [`scripts/leaderboard-worker`](scripts/leaderboard-worker).
 - **Cameras**: cockpit eye-point with live mirrors and the steering-wheel display, a broadcast T-cam, chase, and trackside TV cameras that pan, zoom and cut between corners.
 
 ### Hardware

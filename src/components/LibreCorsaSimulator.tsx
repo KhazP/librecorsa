@@ -47,7 +47,7 @@ import {
   fetchRemoteGhost,
   fetchRemoteLeaderboard,
   localLeaderboard,
-  remoteLeaderboardUrl,
+  remoteLeaderboardEnabled,
   submitLap,
 } from "@/lib/net/leaderboard";
 import { buildTelemetryPacket } from "@/lib/input/telemetry-out";
@@ -776,7 +776,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     const vehicle = vehicleModelRef.current;
     const [local, remote] = await Promise.all([
       localLeaderboard(trackId, vehicle).catch((): LeaderboardEntry[] => []),
-      remoteLeaderboardUrl
+      remoteLeaderboardEnabled
         ? fetchRemoteLeaderboard(trackId, vehicle).catch((): LeaderboardEntry[] => [])
         : Promise.resolve<LeaderboardEntry[]>([]),
     ]);
@@ -2600,7 +2600,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       vehicleLabel,
       local: leaderboard.local,
       remote: leaderboard.remote,
-      remoteEnabled: remoteLeaderboardUrl !== null,
+      remoteEnabled: remoteLeaderboardEnabled,
       loading: leaderboard.loading,
       onRefresh: () => void refreshLeaderboard(),
       onRaceGhost: (entry: LeaderboardEntry) => void handleRaceGhostEntry(entry),
@@ -2657,7 +2657,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
                   onClose: () => setLapSummary(null),
                   onSaveGhost: () => exportLapFile(lapSummary.recording),
                   onSubmit:
-                    remoteLeaderboardUrl && lapSummary.summary.valid ? () => void handleSubmitLap() : undefined,
+                    remoteLeaderboardEnabled && lapSummary.summary.valid ? () => void handleSubmitLap() : undefined,
                   submitState,
                   submitRank,
                 }

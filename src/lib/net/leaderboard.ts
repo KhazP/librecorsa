@@ -1,7 +1,9 @@
 /**
- * Lap leaderboards: a local board built from personal bests in ghost-store, and an optional
- * remote board served by the reference Worker in scripts/leaderboard-worker.
- * Only the LapRecording itself is ever sent; remote responses are validated before use.
+ * Lap leaderboards: a local board built from personal bests in ghost-store, and an optional remote board.
+ * The remote board is either a Supabase project running scripts/leaderboard-supabase/schema.sql
+ * (NEXT_PUBLIC_SUPABASE_URL + NEXT_PUBLIC_SUPABASE_ANON_KEY) or the reference Worker in
+ * scripts/leaderboard-worker (NEXT_PUBLIC_LEADERBOARD_URL). Both take the same LapRecording and answer in
+ * the same shapes. Only the LapRecording itself is ever sent; remote responses are validated before use.
  */
 import type { VehicleModelId } from "@/types/f1";
 import { listBestLaps } from "@/lib/sim/ghost-store";
@@ -24,12 +26,39 @@ const VEHICLE_IDS: Record<VehicleModelId, true> = {
   "amg-gt3": true,
 };
 
-const configuredUrl = process.env.NEXT_PUBLIC_LEADERBOARD_URL?.trim() ?? "";
+/** A configured http(s) base URL without its trailing slash, or null */
+function baseUrl(raw: string | undefined): string | null {
+  const url = raw?.trim() ?? "";
+  return /^https?:\/\//.test(url) ? url.replace(/\/+$/, "") : null;
+}
 
-/** Base URL of the remote board (no trailing slash), or null when none is configured */
-export const remoteLeaderboardUrl: string | null = /^https?:\/\//.test(configuredUrl)
-  ? configuredUrl.replace(/\/+$/, "")
-  : null;
+/** Where the remote board lives: a Supabase project (preferred when both are set) or a Worker */
+type RemoteBackend = { kind: "supabase"; url: string; key: string } | { kind: "worker"; url: string };
+
+const supabaseUrl = baseUrl(process.env.NEXT_PUBLIC_SUPABASE_URL);
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() ?? "";
+const workerUrl = baseUrl(process.env.NEXT_PUBLIC_LEADERBOARD_URL);
+
+const remote: RemoteBackend | null =
+  supabaseUrl && supabaseKey
+    ? { kind: "supabase", url: `${supabaseUrl}/rest/v1/rpc`, key: supabaseKey }
+    : workerUrl
+      ? { kind: "worker", url: workerUrl }
+      : null;
+
+/** True when an online leaderboard is configured */
+export const remoteLeaderboardEnabled = remote !== null;
+
+/** Headers for a request to the remote board (Supabase needs its publishable key on every call) */
+function remoteHeaders(json: boolean): Record<string, string> {
+  const headers: Record<string, string> = json ? { "Content-Type": "application/json" } : {};
+  if (remote?.kind === "supabase") {
+    headers.apikey = remote.key;
+    // Legacy JWT anon keys also go in Authorization; the newer sb_publishable_ keys only in apikey
+    if (!remote.key.startsWith("sb_")) headers.Authorization = `Bearer ${remote.key}`;
+  }
+  return headers;
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -136,10 +165,14 @@ export async function fetchRemoteLeaderboard(
   vehicle: VehicleModelId,
   limit: number = DEFAULT_LIMIT,
 ): Promise<LeaderboardEntry[]> {
-  if (!remoteLeaderboardUrl) return [];
+  if (!remote) return [];
   const count = clampLimit(limit);
-  const query = `track=${encodeURIComponent(trackId)}&vehicle=${encodeURIComponent(vehicle)}&limit=${count}`;
-  const res = await requestJson(`${remoteLeaderboardUrl}/laps?${query}`, { method: "GET" });
+  const query = `track=${encodeURIComponent(trackId)}&vehicle=${encodeURIComponent(vehicle)}`;
+  const url =
+    remote.kind === "supabase"
+      ? `${remote.url}/leaderboard?${query}&lim=${count}`
+      : `${remote.url}/laps?${query}&limit=${count}`;
+  const res = await requestJson(url, { method: "GET", headers: remoteHeaders(false) });
   if (!res || res.status < 200 || res.status >= 300 || !isRecord(res.body)) return [];
   const rows = res.body.laps;
   if (!Array.isArray(rows)) return [];
@@ -167,15 +200,16 @@ function toWirePayload(rec: LapRecording): LapRecording {
   };
 }
 
-/** Uploads a valid lap with its ghost: POST `${url}/laps`. Resolves { ok, rank?, error? } */
+/** Uploads a valid lap with its ghost (Worker: POST /laps, Supabase: rpc/submit_lap). Resolves { ok, rank?, error? } */
 export async function submitLap(rec: LapRecording): Promise<{ ok: boolean; rank?: number; error?: string }> {
-  if (!remoteLeaderboardUrl) return { ok: false, error: "No online leaderboard is configured" };
+  if (!remote) return { ok: false, error: "No online leaderboard is configured" };
   const valid = validateLapRecording(rec);
   if (!valid) return { ok: false, error: "The lap recording is invalid" };
-  const res = await requestJson(`${remoteLeaderboardUrl}/laps`, {
+  const payload = toWirePayload(valid);
+  const res = await requestJson(remote.kind === "supabase" ? `${remote.url}/submit_lap` : `${remote.url}/laps`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(toWirePayload(valid)),
+    headers: remoteHeaders(true),
+    body: JSON.stringify(remote.kind === "supabase" ? { rec: payload } : payload),
   });
   if (!res) return { ok: false, error: "Could not reach the leaderboard" };
   const body: Record<string, unknown> = isRecord(res.body) ? res.body : {};
@@ -187,10 +221,14 @@ export async function submitLap(rec: LapRecording): Promise<{ ok: boolean; rank?
   return { ok: false, error: message ?? `Leaderboard rejected the lap (HTTP ${res.status})` };
 }
 
-/** Downloads a remote lap's ghost: GET `${url}/laps/<id>` → LapRecording (validated) or null */
+/** Downloads a remote lap's ghost (Worker: GET /laps/<id>, Supabase: rpc/get_lap) → LapRecording (validated) or null */
 export async function fetchRemoteGhost(id: string): Promise<LapRecording | null> {
-  if (!remoteLeaderboardUrl || cappedString(id, MAX_ID_LENGTH) === null) return null;
-  const res = await requestJson(`${remoteLeaderboardUrl}/laps/${encodeURIComponent(id)}`, { method: "GET" });
+  if (!remote || cappedString(id, MAX_ID_LENGTH) === null) return null;
+  const url =
+    remote.kind === "supabase"
+      ? `${remote.url}/get_lap?lap_id=${encodeURIComponent(id)}`
+      : `${remote.url}/laps/${encodeURIComponent(id)}`;
+  const res = await requestJson(url, { method: "GET", headers: remoteHeaders(false) });
   if (!res || res.status !== 200) return null;
   return validateLapRecording(res.body);
 }

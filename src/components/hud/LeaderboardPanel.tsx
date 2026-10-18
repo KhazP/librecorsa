@@ -149,7 +149,7 @@ export const LeaderboardPanel: React.FC<LeaderboardPanelProps> = ({
           </div>
           {!remoteEnabled ? (
             <p className="py-2 font-f1-mono text-[12px] text-[#8E96AA]">
-              No leaderboard server configured — set NEXT_PUBLIC_LEADERBOARD_URL (see scripts/leaderboard-worker).
+              Online times are not available in this build. Your own best laps are listed above.
             </p>
           ) : loading && remoteSorted.length === 0 ? (
             <p className="py-2 font-f1-mono text-[12px] text-[#8E96AA]">Loading online times…</p>
