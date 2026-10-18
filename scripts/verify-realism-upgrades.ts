@@ -6,13 +6,15 @@
  *   P0: Full physics parity between F1Physics2026 and VehiclePhysics / F12026CarSim
  *   P1: 5-point 3D cambered tire contact patch + ISO 8608 spatial road micro-roughness
  *   P2: 16-sector circumferential tire grid, flat-spots, graining, blistering, dirt pickup, centrifugal growth, & WLF shift
- *   P3: Live 3D AC1-style double-wishbone + steering tie-rod kinematics solver & chassis torsion
+ *   P3: Live 3D AC1-style double-wishbone + steering tie-rod kinematics solver
  *   P4: 2-node physical brake disc thermals (T^4 radiation + speed convection), pad compound mu(T), glazing, & dynamic brake migration
  *   P5: Aerodynamic slipstream tow & dirty-air vortex wake + yaw/roll/wind aero sensitivities
  *   P6: True 3D steering rack FFB solver + 240/480 Hz subframe output & auto-configuration
- *   P7: 3D OBB SAT car-to-car rigid-body collisions, RealRoad dynamic track evolution, & EWMA clock-synced P2P netcode
+ *   P7: 3D OBB SAT car-to-car rigid-body collisions, RealRoad dynamic track evolution (player car in every mode),
+ *       remote-peer aero wake, & EWMA clock-synced P2P netcode
  */
 import assert from 'node:assert/strict';
+import * as THREE from 'three';
 import { getRwandaTrackData } from '../src/lib/track-data';
 import { F1Physics2026 } from '../src/lib/f1-physics-2026';
 import { F12026CarSim } from '../src/lib/sim/f12026-car/F12026CarSim';
@@ -27,7 +29,6 @@ import {
 } from '../src/lib/sim/ac-tyre';
 import {
   buildDoubleWishboneHardpoints,
-  computeTorsionalRollDistribution,
   solveAxleKinematics3D,
   solveCornerKinematics3D,
 } from '../src/lib/sim/suspension-kinematics';
@@ -47,7 +48,15 @@ import {
   resolveCarToCarObbCollision,
   type RigidBodyCollisionCar,
 } from '../src/lib/sim/real-road';
-import { MultiplayerSyncManager, type NetworkVehiclePacket } from '../src/lib/sim/multiplayer-sync';
+import {
+  MultiplayerSyncManager,
+  type InterpolatedPeerState,
+  type NetworkVehiclePacket,
+} from '../src/lib/sim/multiplayer-sync';
+import { peerWakeEmitters, TrackEnvironment } from '../src/lib/sim/track-environment';
+import { AiOpponentField } from '../src/lib/sim/ai-opponents';
+import type { RealRoadSectorQuery } from '../src/lib/sim/real-road';
+import type { AeroWakeState, WakeEmitterCar } from '../src/lib/sim/aero-wake';
 import { autoConfigureWheel, DEFAULT_WHEEL_SETTINGS } from '../src/lib/input/device-input';
 
 let passed = 0;
@@ -197,12 +206,6 @@ check('3D double-wishbone solver reproduces the VF26 camber gains in bump and co
   assert.ok(axle.antiPitchFraction > 0.05, '3D wishbone plane inclinations yield anti-dive / anti-squat');
 });
 
-check('Chassis torsional spring couples front and rear roll stiffnesses realistically', () => {
-  const [frontShareRigid] = computeTorsionalRollDistribution(180_000, 110_000, 1e9);
-  const [frontShareCompliant] = computeTorsionalRollDistribution(180_000, 110_000, 400_000);
-  assert.ok(frontShareCompliant < frontShareRigid, `Compliant chassis torsion reduces stiffer front axle share (${frontShareCompliant} < ${frontShareRigid})`);
-});
-
 // -----------------------------------------------------------------------------
 // P4: Physical 2-Node Brake System, Pad Mu(T), Glazing & Dynamic Migration
 // -----------------------------------------------------------------------------
@@ -314,6 +317,72 @@ check('RealRoad evolves racing-line rubber grip and off-line marbles as cars lap
   const offLineMarbles = rr.sample(200, 4.8, 0);
   assert.ok(rubberedLine.gripMultiplier > initialLine.gripMultiplier, `Rubbered racing line grip (${rubberedLine.gripMultiplier}) > green track (${initialLine.gripMultiplier})`);
   assert.ok(offLineMarbles.marbleLevel > rubberedLine.marbleLevel, `Off-line marbles (${offLineMarbles.marbleLevel}) > racing line (${rubberedLine.marbleLevel})`);
+});
+
+check('Player car gets a RealRoad sample and remote-peer wake with no AI field; an AI field sharing the environment does not double-apply', () => {
+  const env = new TrackEnvironment(track);
+  env.realRoad.reset(0.35); // green track, so the line visibly rubbers in
+  const player = new F1Physics2026(track);
+  player.teleportToDistance(200, 60);
+  const roadSamples: RealRoadSectorQuery[] = [];
+  const wakes: AeroWakeState[] = [];
+  const setRoad = player.setRealRoadSample.bind(player);
+  const setWake = player.setAeroWakeState.bind(player);
+  player.setRealRoadSample = (rr) => {
+    roadSamples.push(rr);
+    setRoad(rr);
+  };
+  player.setAeroWakeState = (w) => {
+    wakes.push(w);
+    setWake(w);
+  };
+
+  // Solo practice: no AI field, no peers
+  for (let i = 0; i < 30; i++) env.update(1 / 60, [player]);
+  assert.equal(roadSamples.length, 30, `Solo player gets one RealRoad sample per frame (${roadSamples.length})`);
+  assert.ok(roadSamples.every((rr) => Number.isFinite(rr.gripMultiplier) && rr.gripMultiplier > 0.85));
+  assert.equal(wakes.at(-1)!.wakeIntensity, 0, 'Clean air with nobody around');
+
+  // A remote player 15 m ahead on the same line puts the player in its wake; the best-lap ghost does not
+  const peerAt = (dsM: number, ghost: boolean): InterpolatedPeerState => {
+    const smp = track.getSampleAtDistance(player.sMeters + dsM);
+    return {
+      peerId: ghost ? 'ghost' : 'peer_remote',
+      driverCode: 'REM',
+      teamColorHex: '#ffffff',
+      position: smp.position.clone().addScaledVector(smp.binormal, player.lateralOffsetM),
+      quaternion: new THREE.Quaternion(),
+      linearVelocity: new THREE.Vector3(),
+      steerAngle: 0,
+      wheelRPMs: [0, 0, 0, 0],
+      throttle: 1,
+      brake: 0,
+      trackS: smp.s,
+      speedKmh: 216,
+      isAiPeer: false,
+      ghost,
+    };
+  };
+  const remote: WakeEmitterCar[] = [];
+  peerWakeEmitters(track, [peerAt(15, true)], remote);
+  assert.equal(remote.length, 0, 'The best-lap ghost sheds no wake');
+  peerWakeEmitters(track, [peerAt(15, false), peerAt(40, true)], remote);
+  assert.equal(remote.length, 1, 'One remote emitter (ghost left out)');
+  env.update(1 / 60, [player], remote);
+  const w = wakes.at(-1)!;
+  assert.ok(w.wakeIntensity > 0.3 && w.frontDownforceMultiplier < 0.95 && w.dragMultiplier < 0.95,
+    `Remote peer 15 m ahead puts the player in dirty air (intensity ${w.wakeIntensity.toFixed(2)}, front DF ×${w.frontDownforceMultiplier.toFixed(3)})`);
+
+  // An AI field given the shared environment leaves the update to its owner: one sample per car per frame
+  const field = new AiOpponentField(track, player, undefined, env);
+  field.startRace(false);
+  roadSamples.length = 0;
+  for (let i = 0; i < 20; i++) {
+    env.update(1 / 60, field.sims());
+    player.step(1 / 60, { throttle: 0.6 });
+    field.update(1 / 60);
+  }
+  assert.equal(roadSamples.length, 20, `Player sampled once per frame alongside a shared-environment AI field (${roadSamples.length})`);
 });
 
 check('MultiplayerSyncManager synchronizes remote peer clock offset via EWMA and rejects out-of-order UDP packets', () => {

@@ -9,8 +9,8 @@
 import * as THREE from 'three';
 import { F1Physics2026 } from '@/lib/f1-physics-2026';
 import type { BuiltTrackData } from '@/lib/track-data';
-import { evaluateAeroWakeDeficit, type WakeEmitterCar } from '@/lib/sim/aero-wake';
-import { RealRoadState, resolveCarToCarObbCollision, type RigidBodyCollisionCar } from '@/lib/sim/real-road';
+import { resolveCarToCarObbCollision, type RigidBodyCollisionCar } from '@/lib/sim/real-road';
+import { TrackEnvironment } from '@/lib/sim/track-environment';
 import { aiLineOffsetM } from '@/lib/sim/speed-profile';
 import type { InterpolatedPeerState } from '@/lib/sim/multiplayer-sync';
 import type { SimulatorCar } from '@/lib/sim/simulator-car';
@@ -166,9 +166,13 @@ export class AiOpponentField {
   /** Race length; the player's flag ends their race (the AI cars finish their own lap and keep circulating) */
   public raceLaps = 5;
   public lightsOn = 0;
-  public readonly realRoad: RealRoadState;
+  /** RealRoad and aero wake shared by every car on the track */
+  public readonly environment: TrackEnvironment;
+  /** True when the field updates `environment` itself (none was given); otherwise its owner does, every car included */
+  private readonly ownsEnvironment: boolean;
   private readonly cars: FieldCar[] = [];
-  private readonly wakeEmitters: WakeEmitterCar[] = [];
+  /** Every car's physics, AI cars in grid order then the player */
+  private readonly allSims: SimulatorCar[] = [];
   private lightsTimerS = 0;
   private holdS = 0;
   private raceTimeS = 0;
@@ -178,9 +182,11 @@ export class AiOpponentField {
   constructor(
     private readonly track: BuiltTrackData,
     private readonly player: SimulatorCar,
-    drivers: AiDriverDef[] = AI_DRIVERS
+    drivers: AiDriverDef[] = AI_DRIVERS,
+    environment?: TrackEnvironment
   ) {
-    this.realRoad = new RealRoadState(track.totalLengthM);
+    this.environment = environment ?? new TrackEnvironment(track);
+    this.ownsEnvironment = !environment;
     for (const d of drivers) {
       const sim = new F1Physics2026(track);
       sim.setAssistPreset('pro');
@@ -189,6 +195,7 @@ export class AiOpponentField {
       this.cars.push(this.makeCar(`ai_${d.code}`, d.code, d.teamColorHex, sim, sim, d.pace));
     }
     this.cars.push(this.makeCar('player', PLAYER_CODE, '#E10600', player, null, 1));
+    for (const car of this.cars) this.allSims.push(car.sim);
   }
 
   private makeCar(
@@ -245,7 +252,7 @@ export class AiOpponentField {
    */
   public startRace(standing: boolean): void {
     const L = this.track.totalLengthM;
-    this.realRoad.reset();
+    this.environment.reset();
     this.cars.forEach((car, slot) => {
       car.sim.resetToStartGrid(!standing, slot);
       if (car.ai) {
@@ -286,7 +293,7 @@ export class AiOpponentField {
     }
 
     this.raceTimeS += dt;
-    this.updateAeroWakeAndRealRoad(dt);
+    if (this.ownsEnvironment) this.environment.update(dt, this.allSims);
     this.planTraffic(dt);
     for (const car of this.cars) {
       car.ai?.step(dt, {});
@@ -296,54 +303,6 @@ export class AiOpponentField {
     for (const car of this.cars) {
       this.trackDistance(car);
       this.syncPeer(car);
-    }
-  }
-
-  /**
-   * Computes multi-car aerodynamic slipstream + vortex wake (P5) and deposits/queries
-   * RealRoad dynamic rubber, marbles, and track evolution (P7) for every car in the field.
-   */
-  private updateAeroWakeAndRealRoad(dt: number): void {
-    const L = this.track.totalLengthM;
-    // Every car's state before any is updated (reused: no per-frame allocation)
-    const emitters = this.wakeEmitters;
-    while (emitters.length < this.cars.length) emitters.push({ sMeters: 0, lateralOffsetM: 0, speedMs: 0 });
-    emitters.length = this.cars.length;
-    for (let i = 0; i < this.cars.length; i++) {
-      const sim = this.cars[i].sim;
-      emitters[i].sMeters = sim.sMeters;
-      emitters[i].lateralOffsetM = sim.lateralOffsetM;
-      emitters[i].speedMs = sim.vxMs;
-    }
-
-    for (let i = 0; i < this.cars.length; i++) {
-      const car = this.cars[i];
-      const sample = this.track.getSampleAtDistance(car.sim.sMeters);
-      const racingLineLatM = aiLineOffsetM(sample);
-
-      // Estimate instantaneous tire sliding power (W) from combined slip and vertical load
-      let slipPowerW = 0;
-      for (let w = 0; w < 4; w++) {
-        const wh = car.sim.wheels[w];
-        if (wh) {
-          slipPowerW += wh.fzN * wh.combinedSlipNorm * Math.abs(car.sim.vxMs) * 0.12;
-        }
-      }
-      this.realRoad.depositCarPass(car.sim.sMeters, car.sim.lateralOffsetM, racingLineLatM, slipPowerW, dt);
-
-      const rr = this.realRoad.sample(car.sim.sMeters, car.sim.lateralOffsetM, racingLineLatM);
-      car.sim.setRealRoadSample?.(rr);
-
-      const wake = evaluateAeroWakeDeficit(
-        car.sim.sMeters,
-        car.sim.lateralOffsetM,
-        car.sim.vxMs,
-        emitters,
-        L,
-        sample.curvature,
-        i
-      );
-      car.sim.setAeroWakeState?.(wake);
     }
   }
 
@@ -513,6 +472,11 @@ export class AiOpponentField {
     p.brake = sim.telemetry.brake;
     p.trackS = sim.sMeters;
     p.speedKmh = sim.telemetry.speedKmh;
+  }
+
+  /** Physics of every car in the field, AI cars in grid order then the player (for the shared track environment) */
+  public sims(): readonly SimulatorCar[] {
+    return this.allSims;
   }
 
   /** Physics of the AI cars, in grid order */

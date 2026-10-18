@@ -23,7 +23,9 @@ import { WingMirrors } from "@/lib/render/wing-mirrors";
 import { CockpitMicroShake, TracksideBroadcastDirector } from "@/lib/render/camera-rig";
 import { LapDeltaTracker } from "@/components/hud/useLapDelta";
 import { SimVisualFxManager } from "@/lib/sim/visual-fx";
-import { AiOpponentField, resolvePlayerVsRemoteCar } from "@/lib/sim/ai-opponents";
+import { AiOpponentField, AI_DRIVERS, resolvePlayerVsRemoteCar } from "@/lib/sim/ai-opponents";
+import { peerWakeEmitters, TrackEnvironment } from "@/lib/sim/track-environment";
+import type { WakeEmitterCar } from "@/lib/sim/aero-wake";
 import { GamepadHaptics } from "@/lib/sim/gamepad-haptics";
 import {
   getMultiplayerManager,
@@ -260,6 +262,9 @@ export const RwandaF1Simulator: React.FC<RwandaF1SimulatorProps> = ({ trackId = 
   const multiplayerRef = useRef<MultiplayerSyncManager | null>(null);
   /** The AI race field while "AI opponents" is enabled */
   const aiFieldRef = useRef<AiOpponentField | null>(null);
+  /** RealRoad and aero wake for every car on the circuit (the player's in every mode); an AI field shares it */
+  const trackEnvRef = useRef<TrackEnvironment | null>(null);
+  const getTrackEnv = useCallback(() => (trackEnvRef.current ??= new TrackEnvironment(track)), [track]);
 
   const [telemetry, setTelemetry] = useState<CarTelemetry>(() => {
     const tempPhys = new F1Physics2026(track);
@@ -590,11 +595,11 @@ export const RwandaF1Simulator: React.FC<RwandaF1SimulatorProps> = ({ trackId = 
       return;
     }
     physics.aiAutopilot = false;
-    const field = new AiOpponentField(track, physics);
+    const field = new AiOpponentField(track, physics, AI_DRIVERS, getTrackEnv());
     field.startRace(true);
     aiFieldRef.current = field;
     setAiOpponents(true);
-  }, [track, unlockAudio]);
+  }, [track, getTrackEnv, unlockAudio]);
 
   const handleSelectTurn = useCallback(
     (turnNumber: number) => {
@@ -701,7 +706,7 @@ export const RwandaF1Simulator: React.FC<RwandaF1SimulatorProps> = ({ trackId = 
       if (physics) {
         physics.aiAutopilot = false;
         if (race) {
-          if (!aiFieldRef.current) aiFieldRef.current = new AiOpponentField(track, physics);
+          if (!aiFieldRef.current) aiFieldRef.current = new AiOpponentField(track, physics, AI_DRIVERS, getTrackEnv());
           aiFieldRef.current.startRace(true);
         } else {
           aiFieldRef.current = null;
@@ -719,7 +724,7 @@ export const RwandaF1Simulator: React.FC<RwandaF1SimulatorProps> = ({ trackId = 
       setLaunchHint(true);
       setPhase("driving");
     },
-    [track, setPhase]
+    [track, getTrackEnv, setPhase]
   );
 
   /** A multiplayer race was started (by us as host, or by the host): line up in our grid slot behind the lights */
@@ -736,6 +741,7 @@ export const RwandaF1Simulator: React.FC<RwandaF1SimulatorProps> = ({ trackId = 
       const race = new MultiplayerRace(start, track.totalLengthM, mp.localPeerId, profile, roster);
       mpRaceRef.current = race;
       aiFieldRef.current = null;
+      getTrackEnv().reset();
       setAiOpponents(false);
       if (physics) {
         physics.aiAutopilot = false;
@@ -753,7 +759,7 @@ export const RwandaF1Simulator: React.FC<RwandaF1SimulatorProps> = ({ trackId = 
       setMpRaceRunning(true);
       setPhase("driving");
     },
-    [track, setPhase, vehiclesForClass, handleChangeVehicle]
+    [track, getTrackEnv, setPhase, vehiclesForClass, handleChangeVehicle]
   );
   const startMpRaceRef = useRef(startMpRace);
   startMpRaceRef.current = startMpRace;
@@ -1038,7 +1044,7 @@ export const RwandaF1Simulator: React.FC<RwandaF1SimulatorProps> = ({ trackId = 
       lapRecorderRef.current?.reset();
       // A running race restarts from the lights with the new car
       if (aiFieldRef.current) {
-        const field = new AiOpponentField(track, physics);
+        const field = new AiOpponentField(track, physics, AI_DRIVERS, getTrackEnv());
         field.startRace(true);
         aiFieldRef.current = field;
       }
@@ -1435,6 +1441,9 @@ export const RwandaF1Simulator: React.FC<RwandaF1SimulatorProps> = ({ trackId = 
     let frameIndex = 0;
     const deviceInput = new DeviceInputReader();
     let menuOrbitRad = 0.6;
+    const trackEnv = getTrackEnv();
+    const soloCars: SimulatorCar[] = [];
+    const remoteWake: WakeEmitterCar[] = [];
     const ghostPos = new THREE.Vector3();
     const ghostQuat = new THREE.Quaternion();
     const ghostVel = new THREE.Vector3();
@@ -1614,6 +1623,10 @@ export const RwandaF1Simulator: React.FC<RwandaF1SimulatorProps> = ({ trackId = 
       const mpFrame = mpRace ? mpRace.frame(multiplayerSync.hostNowMs(nowMs)) : null;
       const mpFrozen = mpFrame !== null && mpFrame.phase !== "racing";
       if (driving) {
+        // The evolving road and the wake of the cars around: the player's car always, the AI field's too when racing,
+        // with the remote players placed from last frame's interpolated poses
+        soloCars[0] = physics;
+        trackEnv.update(dtSeconds, aiField ? aiField.sims() : soloCars, remoteWake);
         if (!aiField?.playerFrozen && !mpFrozen) physics.step(dtSeconds, inputs);
         aiField?.update(dtSeconds);
       }
@@ -1717,6 +1730,7 @@ export const RwandaF1Simulator: React.FC<RwandaF1SimulatorProps> = ({ trackId = 
 
       // A peer on another circuit has coordinates that mean nothing here
       const samePeers = interpolatedPeers.filter((p) => !p.trackId || p.trackId === trackId);
+      peerWakeEmitters(track, samePeers, remoteWake);
       if (mpRace && mpFrame) {
         mpRace.ingestPeers(samePeers);
         // Contact with the other players (one-sided: each client resolves its own car)
@@ -2344,7 +2358,7 @@ export const RwandaF1Simulator: React.FC<RwandaF1SimulatorProps> = ({ trackId = 
       renderer.dispose();
       audioRef.current?.dispose();
     };
-  }, [track, unlockAudio, handleToggleMute, handleToggleRacingLine]);
+  }, [track, getTrackEnv, unlockAudio, handleToggleMute, handleToggleRacingLine]);
 
   // Saved settings and the first-run flag are read after mount (the page is prerendered without
   // storage), once the scene effect above has created the car they apply to

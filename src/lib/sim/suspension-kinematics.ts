@@ -14,8 +14,7 @@
  *   roll-centre height `rollCentreHeightM` and lateral roll-centre migration `rollCentreLatOffsetM`.
  * - Computes Side-View Instant Centres (SVIC) from inclined wishbone axes to evaluate anti-dive
  *   (front braking) and anti-squat (rear traction) vertical link reaction forces.
- * - Models pushrod / pullrod bellcrank rocker motion ratio `motionRatio(zBumpM)` and finite chassis
- *   torsional stiffness `K_chassis` coupling front and rear roll load transfer.
+ * - Models pushrod / pullrod bellcrank rocker motion ratio `motionRatio(zBumpM)`.
  */
 
 export type Vec3Tuple = readonly [number, number, number];
@@ -479,26 +478,4 @@ export function solveAxleKinematics3D(
   const meanSvSlope = 0.5 * (left.svicPitchSlope + right.svicPitchSlope);
   out.antiPitchFraction = Math.max(0.05, Math.min(0.35, meanSvSlope * 0.85));
   return out;
-}
-
-/**
- * Computes the front vs. rear lateral load transfer distribution accounting for finite
- * chassis torsional stiffness `K_chassis` (Nm/rad) in series with the front and rear roll stiffnesses.
- *
- * Returns `[frontRollShare, rearRollShare]` (summing to 1).
- */
-export function computeTorsionalRollDistribution(
-  kRollFrontNmPerRad: number,
-  kRollRearNmPerRad: number,
-  kChassisTorsionNmPerRad = 2_400_000 // ~42,000 Nm/deg for carbon F1 monocoque
-): [number, number] {
-  const kf = Math.max(1000, kRollFrontNmPerRad);
-  const kr = Math.max(1000, kRollRearNmPerRad);
-  const kc = Math.max(50_000, kChassisTorsionNmPerRad);
-
-  // Series compliance of chassis torsion between the axles reduces the stiffer axle's authority
-  const kFrontEff = (kf * (kr + kc)) / (kf + kr + kc);
-  const kRearEff = (kr * (kf + kc)) / (kf + kr + kc);
-  const sum = kFrontEff + kRearEff;
-  return [kFrontEff / sum, kRearEff / sum];
 }
