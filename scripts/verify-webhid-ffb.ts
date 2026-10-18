@@ -7,6 +7,8 @@ import {
   buildReport,
   forceToRaw,
   ForceWriter,
+  isFatalHidStatus,
+  PAIR_MESSAGE,
   ordinalUsage,
   parsePidLayout,
   PID,
@@ -635,6 +637,100 @@ async function main() {
     const none = new WebHidFfb(fakeHid([], [pad]).api, new FakeClock().deps);
     assert.equal(await none.reconnect(), null);
     assert.equal(none.status.state, "idle");
+  });
+  await check("load without a grant: reconnect() never prompts, stays idle and asks for a Connect click", async () => {
+    let prompted = 0;
+    const { api } = fakeHid([wheel()], []);
+    api.requestDevice = async () => {
+      prompted++;
+      return [];
+    };
+    const ffb = new WebHidFfb(api, new FakeClock().deps);
+    let notified = 0;
+    const unsubscribe = ffb.subscribe(() => notified++);
+    assert.equal(await ffb.reconnect(), null);
+    assert.equal(prompted, 0);
+    assert.equal(ffb.getStatus().state, "idle");
+    assert.equal(ffb.getStatus().message, PAIR_MESSAGE);
+    assert.equal(isFatalHidStatus(ffb.getStatus()), false);
+    assert.equal(notified, 1);
+    unsubscribe();
+    // a granted Logitech wheel is not reopened either (it has no PID): same pairing prompt, no error
+    const g923 = wheel();
+    g923.vendorId = 0x046d;
+    const logi = new WebHidFfb(fakeHid([], [g923]).api, new FakeClock().deps);
+    assert.equal(await logi.reconnect(), null);
+    assert.equal(logi.status.message, PAIR_MESSAGE);
+    assert.equal(g923.opened, false);
+  });
+  await check("connect(): requestDevice runs synchronously inside the call (the click's user activation)", async () => {
+    let prompted = false;
+    const dev = wheel();
+    const { api } = fakeHid([dev]);
+    api.requestDevice = async () => {
+      prompted = true;
+      return [dev];
+    };
+    const ffb = new WebHidFfb(api, new FakeClock().deps);
+    const p = ffb.connect();
+    assert.equal(prompted, true, "requestDevice called before connect() yields");
+    assert.equal(await p, "Fake DD Base");
+  });
+  await check("connect() during a load-time reconnect still opens the picked wheel", async () => {
+    const dev = wheel();
+    const { api } = fakeHid([dev], []);
+    let releaseGetDevices: () => void = () => {};
+    api.getDevices = () => new Promise((resolve) => (releaseGetDevices = () => resolve([])));
+    const ffb = new WebHidFfb(api, new FakeClock().deps);
+    const loading = ffb.reconnect();
+    const clicked = ffb.connect();
+    releaseGetDevices();
+    assert.equal(await loading, null);
+    assert.equal(await clicked, "Fake DD Base");
+    assert.equal(ffb.status.state, "ready");
+    // the effect re-running reconnect() while ready keeps the session
+    assert.equal(await ffb.reconnect(), "Fake DD Base");
+    assert.equal(dev.opened, true);
+  });
+  await check("connect(): cancelling the picker keeps a wheel that is already running", async () => {
+    const dev = wheel();
+    const { api } = fakeHid([dev]);
+    const ffb = new WebHidFfb(api, new FakeClock().deps);
+    await ffb.connect();
+    api.requestDevice = async () => [];
+    assert.equal(await ffb.connect(), "Fake DD Base");
+    assert.equal(ffb.status.state, "ready");
+  });
+  await check("fatal statuses: Logitech / write failures are fatal, dispose() keeps the reason", async () => {
+    const g923 = wheel();
+    g923.vendorId = 0x046d;
+    const logi = new WebHidFfb(fakeHid([g923]).api, new FakeClock().deps);
+    await logi.connect();
+    assert.equal(isFatalHidStatus(logi.status), true);
+    await logi.dispose();
+    assert.match(logi.status.message ?? "", /Logitech/);
+
+    const dev = wheel();
+    const clock = new FakeClock();
+    const ffb = new WebHidFfb(fakeHid([dev]).api, clock.deps);
+    await ffb.connect();
+    dev.failSends = true;
+    for (let i = 0; i < 3; i++) {
+      clock.advance(10);
+      ffb.setForce(i % 2 === 0 ? 0.6 : -0.6);
+      await flush();
+      await flush();
+    }
+    assert.equal(ffb.status.state, "error");
+    assert.match(ffb.status.message ?? "", /Force feedback stopped/);
+    await ffb.dispose();
+    assert.equal(ffb.status.state, "error");
+    // a clean dispose of a ready wheel goes back to idle
+    const ok = new WebHidFfb(fakeHid([wheel()]).api, new FakeClock().deps);
+    await ok.connect();
+    await ok.dispose();
+    assert.equal(ok.status.state, "idle");
+    assert.equal(isFatalHidStatus({ state: "idle", device: null, message: PAIR_MESSAGE }), false);
   });
   await check("disconnect event for the open device -> idle, writes stop", async () => {
     const dev = wheel();

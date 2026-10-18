@@ -714,8 +714,15 @@ export interface WebHidFfbStatus {
   message: string | null;
 }
 
+/** A failure the driver will not recover from by itself: the force goes back to the bridge until the user reconnects */
+export function isFatalHidStatus(s: WebHidFfbStatus): boolean {
+  return s.state === "error" || s.state === "unsupported";
+}
+
 const REQUEST_FILTERS = [{ usagePage: 0x01, usage: 0x04 }, { usagePage: 0x01, usage: 0x05 }, { usagePage: 0x0f }];
 const UNSUPPORTED_BROWSER = "WebHID needs Chrome or Edge on https or localhost";
+/** Status message when the page loads with WebHID on but no wheel was granted to it yet (pairing needs a click) */
+export const PAIR_MESSAGE = "Click Connect to pair your wheel";
 const LOGITECH_MESSAGE =
   "Logitech G-series wheels use a proprietary force-feedback protocol, not HID PID, so the browser cannot drive them; use the native FFB bridge";
 
@@ -741,7 +748,9 @@ export class WebHidFfb {
   private session: PidSession | null = null;
   private device: HidDeviceLike | null = null;
   private busy: Promise<string | null> | null = null;
+  private busyClosing = false;
   private listening: HidApiLike | null = null;
+  private listeners = new Set<() => void>();
 
   /** `hid` and `deps` exist for tests; the app uses the defaults */
   constructor(
@@ -754,34 +763,49 @@ export class WebHidFfb {
   }
 
   /**
-   * Must be called from a user gesture (button click): asks the user to pick a wheel, opens it and sets the effect up.
-   * Resolves to the device name, or null when nothing was picked or setup failed (see `status`).
+   * Must be called straight from a user gesture (the click handler itself): requestDevice is called before anything
+   * is awaited, since the prompt needs the click's user activation. Opens the picked wheel and sets the effect up.
+   * Resolves to the device name, or null when nothing was picked or setup failed (see `status`). Cancelling the
+   * picker keeps a wheel that is already running.
    */
   connect(): Promise<string | null> {
+    const hid = this.hidApi();
+    if (!hid) return Promise.resolve(this.fail("unsupported", null, UNSUPPORTED_BROWSER));
+    let picking: Promise<{ device: HidDeviceLike | undefined } | { error: string }>;
+    try {
+      picking = hid.requestDevice({ filters: REQUEST_FILTERS }).then(
+        (d) => ({ device: d[0] }),
+        (e: unknown) => ({ error: errorMessage(e) })
+      );
+    } catch (e) {
+      picking = Promise.resolve({ error: errorMessage(e) });
+    }
+    // Queued behind any reconnect in flight rather than swallowed by it: the picker is already open
     return this.guard(async () => {
-      const hid = this.hidApi();
-      if (!hid) return this.fail("unsupported", null, UNSUPPORTED_BROWSER);
-      await this.release();
-      this.setStatus("connecting", null, null);
-      let picked: HidDeviceLike | undefined;
-      try {
-        picked = (await hid.requestDevice({ filters: REQUEST_FILTERS }))[0];
-      } catch (e) {
-        return this.fail("error", null, errorMessage(e));
+      const picked = await picking;
+      if ("error" in picked) {
+        await this.release();
+        return this.fail("error", null, picked.error);
       }
-      if (!picked) {
+      if (!picked.device) {
+        if (this.session && this.device) return deviceName(this.device);
         this.setStatus("idle", null, "No wheel was selected");
         return null;
       }
-      return this.attach(hid, picked);
-    });
+      await this.release();
+      return this.attach(hid, picked.device);
+    }, true);
   }
 
-  /** Re-opens a wheel the user granted earlier, without a prompt; null when there is none */
+  /**
+   * Re-opens a wheel the user granted earlier, without a prompt (page load); null when there is none, with the status
+   * asking for a Connect click ({@link PAIR_MESSAGE}). Never shows the picker. A running wheel is kept.
+   */
   reconnect(): Promise<string | null> {
     return this.guard(async () => {
       const hid = this.hidApi();
       if (!hid) return this.fail("unsupported", null, UNSUPPORTED_BROWSER);
+      if (this.session && this.device) return deviceName(this.device);
       let devices: HidDeviceLike[];
       try {
         devices = await hid.getDevices();
@@ -789,7 +813,10 @@ export class WebHidFfb {
         return this.fail("error", null, errorMessage(e));
       }
       const found = devices.find((d) => d.vendorId !== VENDOR_LOGITECH && parsePidLayout(d.collections) !== null);
-      if (!found) return null;
+      if (!found) {
+        this.setStatus("idle", null, PAIR_MESSAGE);
+        return null;
+      }
       await this.release();
       this.setStatus("connecting", deviceName(found), null);
       return this.attach(hid, found);
@@ -809,22 +836,43 @@ export class WebHidFfb {
     this.session?.writer.setForce(0, true);
   }
 
-  /** Stops all effects, disables actuators and closes the device */
+  /**
+   * Stops all effects, disables actuators and closes the device (after any connect in flight). An error status is
+   * kept, so the reason stays on screen once the driver is switched off because of it.
+   */
   async dispose(): Promise<void> {
-    await this.release();
-    if (this.status.state !== "unsupported") this.setStatus("idle", null, null);
+    await this.guard(async () => {
+      await this.release();
+      if (!isFatalHidStatus(this.status)) this.setStatus("idle", null, null);
+      return null;
+    }, true, true);
   }
+
+  /** useSyncExternalStore pair (bound, so they can be passed as they are) */
+  subscribe = (listener: () => void): (() => void) => {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  };
+
+  getStatus = (): WebHidFfbStatus => this.status;
 
   private hidApi(): HidApiLike | null {
     return this.hidOverride ?? nativeHid();
   }
 
-  private guard(fn: () => Promise<string | null>): Promise<string | null> {
-    if (this.busy) return this.busy;
-    const p = fn().finally(() => {
-      if (this.busy === p) this.busy = null;
+  /** One operation at a time; `queue` runs after the one in flight, otherwise the one in flight is the answer */
+  private guard(fn: () => Promise<string | null>, queue = false, closing = false): Promise<string | null> {
+    // A shutdown in flight never answers for a (re)connect: that queues behind it
+    if (this.busy && !queue && !this.busyClosing) return this.busy;
+    const prev = this.busy;
+    const p = (prev ? prev.then(fn, fn) : fn()).finally(() => {
+      if (this.busy === p) {
+        this.busy = null;
+        this.busyClosing = false;
+      }
     });
     this.busy = p;
+    this.busyClosing = closing;
     return p;
   }
 
@@ -900,5 +948,6 @@ export class WebHidFfb {
     if (s.state === state && s.device === device && s.message === message) return;
     this.status = { state, device, message };
     this.onStatus?.(this.status);
+    for (const l of this.listeners) l();
   }
 }

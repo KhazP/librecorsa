@@ -24,7 +24,8 @@ import {
   type WheelSettings,
   type WheelType,
 } from "@/lib/input/device-input";
-import { type FfbStatus, wheelFfb } from "@/lib/input/wheel-ffb";
+import { type FfbStatus, webHidFfb, wheelFfb } from "@/lib/input/wheel-ffb";
+import { isFatalHidStatus, type WebHidFfbStatus } from "@/lib/input/webhid-ffb";
 import { Choice, Toggle, TyreSlider } from "@/components/hud/PauseMenu";
 import { suspendMenuNav, useGamepads, type PadState } from "../useMenuNav";
 import { Card, CenterMeter, Meter, SectionLabel } from "../menu-ui";
@@ -249,6 +250,48 @@ function FfbBridgeStatus({ status }: { status: FfbStatus }) {
   );
 }
 
+const connectHidWheel = () => {
+  // requestDevice must run inside the click itself (it needs the click's user activation)
+  void webHidFfb.connect();
+};
+
+/** Where the WebHID driver stands: pairing, the wheel it drives, or why it stopped */
+function HidFfbStatusLine({ status, on }: { status: WebHidFfbStatus; on: boolean }) {
+  const fatal = isFatalHidStatus(status);
+  if (!on && !fatal) return null;
+  const browserUnsupported = status.state === "unsupported" && status.device === null;
+  const [color, text] =
+    status.state === "ready"
+      ? ["#22C55E", `Driving ${status.device ?? "the wheel"} over WebHID`]
+      : status.state === "connecting"
+        ? ["#A1A1AA", status.device ? `Connecting to ${status.device}…` : "Connecting…"]
+        : fatal
+          ? ["#FF2A3C", `${status.device ? `${status.device}: ` : ""}${status.message ?? "WebHID force feedback failed"}`]
+          : ["#FFD700", status.message ?? "No wheel paired yet: click Connect to pick it"];
+  const canConnect = !browserUnsupported && status.state !== "ready" && status.state !== "connecting";
+  return (
+    <div className="mt-1.5 px-1.5">
+      <p className="font-f1-mono text-[11px] leading-relaxed font-bold" style={{ color }}>
+        {text}
+      </p>
+      {fatal && !browserUnsupported ? (
+        <p className="font-f1-mono text-[11px] text-zinc-500">
+          WebHID switched off; force feedback goes through the bridge.{on ? "" : " Switch it on again to retry."}
+        </p>
+      ) : null}
+      {on && canConnect ? (
+        <button
+          type="button"
+          onClick={connectHidWheel}
+          className="mt-1.5 cursor-pointer rounded bg-[#CCFF00] px-2.5 py-1 font-f1-mono text-[11px] font-bold text-[#08090D] uppercase hover:bg-[#d9ff33]"
+        >
+          Connect wheel
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 /** Wheel: type, steering calibration and rotation, pedal calibration, button mapping */
 export const WheelStep: React.FC<SetupStepProps> = ({ settings, onChangeSettings }) => {
   const pads = useGamepads();
@@ -258,7 +301,11 @@ export const WheelStep: React.FC<SetupStepProps> = ({ settings, onChangeSettings
   const [capturing, setCapturing] = useState<PadAction | null>(null);
   const [customRotation, setCustomRotation] = useState(false);
   const ffb = useSyncExternalStore(wheelFfb.subscribe, wheelFfb.getStatus, wheelFfb.getStatus);
-  const ffbReady = ffb.connection === "connected" && ffb.device !== null && ffb.error === null;
+  const hid = useSyncExternalStore(webHidFfb.subscribe, webHidFfb.getStatus, webHidFfb.getStatus);
+  const hidBrowserUnsupported = hid.state === "unsupported" && hid.device === null;
+  // WebHID drives the wheel only while it is switched on and ready; otherwise the bridge does
+  const hidActive = w.hidFfb && hid.state === "ready";
+  const ffbReady = hidActive || (ffb.connection === "connected" && ffb.device !== null && ffb.error === null);
   // The port field edits as text: a half-typed number must not snap to the range's edge while typing
   const [portText, setPortText] = useState(String(w.telemetryPort));
 
@@ -413,7 +460,7 @@ export const WheelStep: React.FC<SetupStepProps> = ({ settings, onChangeSettings
         </div>
         {w.ffbEnabled ? (
           <>
-            <FfbBridgeStatus status={ffb} />
+            {hidActive ? null : <FfbBridgeStatus status={ffb} />}
             <TyreSlider
               label="Strength"
               value={Math.round(w.ffbGain * 100)}
@@ -481,6 +528,27 @@ export const WheelStep: React.FC<SetupStepProps> = ({ settings, onChangeSettings
                 {w.ffbInvert ? "Inverted" : "Invert"}
               </button>
             </div>
+            <div className="mt-3">
+              <Toggle
+                label="Experimental: browser force feedback over WebHID (HID PID direct-drive bases, no bridge)"
+                detail={
+                  hidBrowserUnsupported
+                    ? (hid.message ?? "WebHID is not available in this browser")
+                    : "Chrome/Edge only. Switching on asks you to pick the wheel. Falls back to the bridge when off."
+                }
+                checked={w.hidFfb && !hidBrowserUnsupported}
+                disabled={hidBrowserUnsupported}
+                onChange={() => {
+                  if (w.hidFfb) {
+                    setWheel({ hidFfb: false });
+                    return;
+                  }
+                  connectHidWheel();
+                  setWheel({ hidFfb: true });
+                }}
+              />
+              {hidBrowserUnsupported ? null : <HidFfbStatusLine status={hid} on={w.hidFfb} />}
+            </div>
             <p className="mt-2 font-f1-mono text-[11px] leading-relaxed text-zinc-500">
               Hold the rim and press Test: it should pull right for a second, then left. If it pulls left first,
               switch on Invert. The wheel&apos;s overall strength and damping stay in its own software (Moza Pit House, Fanatec
@@ -522,15 +590,6 @@ export const WheelStep: React.FC<SetupStepProps> = ({ settings, onChangeSettings
             />
           </div>
           <p className="mt-2 font-f1-mono text-[11px] text-zinc-500">Needs the bridge running: npm run ffb</p>
-        </div>
-
-        <div className="mt-3">
-          <Toggle
-            label="Experimental: browser force feedback over WebHID (HID PID direct-drive bases, no bridge)"
-            detail="Chrome/Edge only. You will be asked to pick the wheel. Falls back to the bridge when off."
-            checked={w.hidFfb}
-            onChange={() => setWheel({ hidFfb: !w.hidFfb })}
-          />
         </div>
       </Card>
 

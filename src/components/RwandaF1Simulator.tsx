@@ -52,7 +52,7 @@ import {
 } from "@/lib/net/leaderboard";
 import { buildTelemetryPacket } from "@/lib/input/telemetry-out";
 import { touchInput, isTouchDevice, resetTouchInput } from "@/lib/input/touch-input";
-import { WebHidFfb } from "@/lib/input/webhid-ffb";
+import { isFatalHidStatus } from "@/lib/input/webhid-ffb";
 import { applyGraphicsQuality } from "@/lib/render/golden-hour-environment";
 import { TURN_METADATA } from "@/lib/track-data";
 import { getTrackInfo } from "@/lib/track-registry";
@@ -66,7 +66,7 @@ import { FirstRunWizard, type WizardMode, type WizardStepId } from "@/components
 import { assetProgress } from "@/lib/loading/asset-progress";
 import { buildKeyLookup, keyLabel, padButtonLabel, type KeyAction } from "@/lib/input/bindings";
 import { connectedPads, DeviceInputReader } from "@/lib/input/device-input";
-import { wheelFfb } from "@/lib/input/wheel-ffb";
+import { webHidFfb, wheelFfb } from "@/lib/input/wheel-ffb";
 import { DEFAULT_GAMEPAD_ASSIST, type GamepadAssistSettings } from "@/lib/sim/gamepad-assist";
 import {
   clampFov,
@@ -2473,20 +2473,26 @@ export const RwandaF1Simulator: React.FC<RwandaF1SimulatorProps> = ({ trackId = 
     xr.isSessionSupported("immersive-vr").then(setVrSupported, () => setVrSupported(false));
   }, []);
 
-  // WebHID force feedback (HID PID wheels) instead of the native bridge, while switched on
+  // WebHID force feedback (HID PID wheels) instead of the native bridge, while switched on. Only a wheel granted
+  // before reopens here: pairing needs requestDevice inside a click, which the wheel setup's toggle / Connect does.
+  const hidFfbWanted = settings.wheel.ffbEnabled && settings.wheel.hidFfb;
   useEffect(() => {
-    if (!settings.wheel.hidFfb || !WebHidFfb.isSupported()) return;
-    const hid = new WebHidFfb();
-    hid.onStatus = (st) => {
-      wheelFfb.hidSink = st.state === "ready" ? (f) => hid.setForce(f) : null;
-    };
-    // A wheel granted before opens silently; otherwise ask (the toggle's click still counts as a gesture)
-    void hid.reconnect().then((name) => (name === null && hid.status.state === "idle" ? hid.connect() : name));
-    return () => {
-      wheelFfb.hidSink = null;
-      hid.dispose();
-    };
-  }, [settings.wheel.hidFfb]);
+    if (!hidFfbWanted) {
+      void webHidFfb.dispose();
+      return;
+    }
+    void webHidFfb.reconnect();
+  }, [hidFfbWanted]);
+  // A fatal driver error (unsupported wheel, failed setup, writes failing) switches WebHID off: the force goes back
+  // to the bridge and the wheel setup shows the reason under the toggle
+  useEffect(
+    () =>
+      webHidFfb.subscribe(() => {
+        if (!isFatalHidStatus(webHidFfb.status)) return;
+        setSettings((prev) => (prev.wheel.hidFfb ? { ...prev, wheel: { ...prev.wheel, hidFfb: false } } : prev));
+      }),
+    []
+  );
 
   /** The pause menu's controls list, from the player's bindings */
   const controlsCheatSheet = useMemo(() => {
