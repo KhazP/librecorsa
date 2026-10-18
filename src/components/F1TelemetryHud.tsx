@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import type {
   AeroSetupPreset,
   CameraMode,
@@ -37,6 +37,18 @@ import { getTrackInfo } from "@/lib/track-registry";
 import { useInputMode } from "./menu/input-mode";
 import { PadGlyph } from "./menu/menu-ui";
 import { ACTIVE_TRACK_ID } from "@/lib/track-data";
+import { BroadcastHud } from "./hud/styles/BroadcastHud";
+import { WheelDashHud } from "./hud/styles/WheelDashHud";
+import { TelemetryHud } from "./hud/styles/TelemetryHud";
+import { buildHudMap, revRangeOf, type HudDesignProps } from "./hud/styles/hud-style-parts";
+import type { HudPreset } from "@/lib/settings/player-settings";
+
+/** The full-screen HUD styles; Classic and Minimal use the corner panels below */
+const HUD_STYLES: Partial<Record<HudPreset, { component: React.FC<HudDesignProps>; bottomClearance: number }>> = {
+  broadcast: { component: BroadcastHud, bottomClearance: 128 },
+  dash: { component: WheelDashHud, bottomClearance: 252 },
+  telemetry: { component: TelemetryHud, bottomClearance: 252 },
+};
 
 interface F1TelemetryHudProps extends MultiplayerPanelProps {
   track: BuiltTrackData;
@@ -164,6 +176,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
   const race = telemetry.race;
   const f12026 = telemetry.f12026;
   const drsNotice = useDrsDetectionNotice(f12026?.drsDetection ?? null);
+  const hudMap = useMemo(() => buildHudMap(track), [track]);
 
   const cycleCamera = useCallback(() => {
     onChangeCameraMode(nextCameraMode(cameraMode));
@@ -197,14 +210,27 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
 
   const lightsPhase = race?.phase === "lights";
   const hud = props.hud;
-  const preset = hud?.preset ?? "full";
-  const showTyres = preset === "full" || preset === "engineer";
-  const showMap = preset !== "minimal";
-  const showChannels = preset === "full" || preset === "engineer";
-  const showKeyHints = preset === "full";
-  const showTrace = preset === "engineer" || hud?.inputTrace === true;
-  const showFfb = Boolean(props.ffbMeter) && (preset === "engineer" || preset === "full");
+  const preset = hud?.preset ?? "broadcast";
+  const style = HUD_STYLES[preset];
+  const classic = preset === "classic";
+  const showTyres = classic;
+  const showMap = classic;
+  const showChannels = classic;
+  const showKeyHints = preset !== "minimal" && preset !== "telemetry";
+  // Telemetry has its own trace and force meter
+  const showTrace = preset !== "telemetry" && hud?.inputTrace === true;
+  const showFfb = Boolean(props.ffbMeter) && classic;
   const scale = hud?.scale ?? 1;
+  const trackInfo = getTrackInfo(ACTIVE_TRACK_ID);
+  const menuButton = (
+    <button
+      type="button"
+      onClick={props.onTogglePause}
+      className="pointer-events-auto hud-panel hidden cursor-pointer rounded border-[#CCFF00]/50 px-4 py-2 font-f1-italic text-sm tracking-wider text-[#CCFF00] uppercase pointer-coarse:block"
+    >
+      Menu
+    </button>
+  );
   /** Scales a corner group of the HUD about that corner */
   const corner = (origin: string): React.CSSProperties | undefined =>
     scale === 1 ? undefined : { transform: `scale(${scale})`, transformOrigin: origin };
@@ -212,17 +238,33 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
 
   return (
     <div className="pointer-events-none fixed inset-0 z-20 select-none p-3 sm:p-4">
-      {/* Top-left: timing tower (race) and lap timing */}
-      <div className="absolute top-3 left-3 flex flex-col gap-2 sm:top-4 sm:left-4" style={corner("top left")}>
-        {race ? <TimingTower race={race} /> : null}
-        <LapPanel telemetry={telemetry} deltaS={deltaS} />
-      </div>
+      {/* Broadcast, Wheel Dash or Telemetry: one full-screen layer */}
+      {style ? (
+        <style.component
+          t={telemetry}
+          deltaS={deltaS}
+          map={hudMap}
+          compound={tireCompound}
+          revRange={revRangeOf(telemetry)}
+          scale={scale}
+          trackCode={trackInfo.country.slice(0, 3).toUpperCase()}
+          ffb={props.ffbMeter ? <FfbMeter {...props.ffbMeter} /> : null}
+        />
+      ) : (
+        /* Classic / Minimal top-left: timing tower (race) and lap timing */
+        <div className="absolute top-3 left-3 flex flex-col gap-2 sm:top-4 sm:left-4" style={corner("top left")}>
+          {race ? <TimingTower race={race} /> : null}
+          <LapPanel telemetry={telemetry} deltaS={deltaS} />
+        </div>
+      )}
 
       {/* Top-centre: start lights and race-control notifications */}
       <div className="absolute top-4 left-1/2 -translate-x-1/2">
       <div className="flex flex-col items-center gap-2" style={corner("top center")}>
+        {style ? menuButton : null}
         <StartLights race={race} />
-        {hud?.deltaBar && !lightsPhase ? <DeltaBar deltaS={deltaS} /> : null}
+        {/* The styles carry their own delta */}
+        {hud?.deltaBar && !style && !lightsPhase ? <DeltaBar deltaS={deltaS} /> : null}
         {telemetry.offTrack && !lightsPhase ? (
           <div
             className="hud-slant px-5 py-1.5 font-f1-italic text-sm tracking-wider text-white uppercase shadow-xl"
@@ -279,19 +321,15 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
       </div>
       </div>
 
-      {/* Top-right: circuit map, and on touch screens (no Esc key) a button for the pause menu */}
-      <div className="pointer-events-auto absolute top-3 right-3 flex flex-col items-end gap-2 sm:top-4 sm:right-4" style={corner("top right")}>
-        <button
-          type="button"
-          onClick={props.onTogglePause}
-          className="hud-panel hidden cursor-pointer rounded border-[#CCFF00]/50 px-4 py-2 font-f1-italic text-sm tracking-wider text-[#CCFF00] uppercase pointer-coarse:block"
-        >
-          Menu
-        </button>
-        <div className={showMap ? "hidden md:block" : "hidden"}>
-          <TrackMinimap track={track} telemetry={telemetry} onSelectTurn={props.onSelectTurn} />
+      {/* Classic / Minimal top-right: circuit map, and on touch screens (no Esc key) a button for the pause menu */}
+      {!style ? (
+        <div className="pointer-events-auto absolute top-3 right-3 flex flex-col items-end gap-2 sm:top-4 sm:right-4" style={corner("top right")}>
+          {menuButton}
+          <div className={showMap ? "hidden md:block" : "hidden"}>
+            <TrackMinimap track={track} telemetry={telemetry} onSelectTurn={props.onSelectTurn} />
+          </div>
         </div>
-      </div>
+      ) : null}
 
       {/* Bottom-left: 4-corner tyre matrix, LibreCorsa badge, and key hints */}
       <div className="absolute bottom-3 left-3 flex flex-col items-start gap-2 sm:bottom-4 sm:left-4" style={corner("bottom left")}>
@@ -321,8 +359,8 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
         </div>
       </div>
 
-      {/* Bottom-right: engineering channels (when active) and MoTeC speed cluster */}
-      <div className="absolute right-3 bottom-3 flex flex-col items-end gap-2 sm:right-4 sm:bottom-4" style={corner("bottom right")}>
+      {/* Classic / Minimal bottom-right: engineering channels (when active) and MoTeC speed cluster */}
+      <div className={`absolute right-3 bottom-3 flex-col items-end gap-2 sm:right-4 sm:bottom-4 ${style ? "hidden" : "flex"}`} style={corner("bottom right")}>
         {f12026 && showChannels ? (
           <div className="hidden sm:block">
             <F12026ChannelsPanel channels={f12026} />
@@ -336,8 +374,11 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
         />
       </div>
 
-      {/* Bottom-centre: input trace, and the lap summary after a lap */}
-      <div className="absolute bottom-3 left-1/2 -translate-x-1/2 sm:bottom-4">
+      {/* Bottom-centre: input trace, and the lap summary after a lap (above the style's strip or dash) */}
+      <div
+        className="absolute bottom-3 left-1/2 -translate-x-1/2 sm:bottom-4"
+        style={style ? { bottom: Math.round(style.bottomClearance * scale) } : undefined}
+      >
         <div className="flex flex-col items-center gap-2" style={corner("bottom center")}>
           {props.lapSummary ? (
             <div className="pointer-events-auto">
@@ -362,7 +403,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
         <div className="pointer-events-auto">
           <RaceResults
             race={race}
-            trackName={getTrackInfo(ACTIVE_TRACK_ID).name}
+            trackName={trackInfo.name}
             onClose={() => props.onCloseResults?.()}
             onRestart={props.onRestartRace}
             onBackToLobby={props.onBackToLobby}

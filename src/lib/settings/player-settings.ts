@@ -80,7 +80,12 @@ export interface KeyboardTuning {
   exitAssist: boolean;
 }
 
-export type HudPreset = "full" | "minimal" | "broadcast" | "engineer";
+/**
+ * In-race HUD style: Broadcast (TV graphics), Wheel Dash (steering-wheel screen), Telemetry (the dash
+ * plus tyres, channels and inputs), or the earlier Classic layout and its Minimal cut.
+ */
+export type HudPreset = "broadcast" | "dash" | "telemetry" | "classic" | "minimal";
+export const HUD_PRESETS: readonly HudPreset[] = ["broadcast", "dash", "telemetry", "classic", "minimal"];
 
 export interface HudSettings {
   preset: HudPreset;
@@ -141,7 +146,7 @@ export const DEFAULT_KEYBOARD_TUNING: KeyboardTuning = {
 };
 
 export const DEFAULT_HUD_SETTINGS: HudSettings = {
-  preset: "full",
+  preset: "broadcast",
   scale: 1,
   inputTrace: false,
   deltaBar: true,
@@ -315,7 +320,8 @@ function parseHud(v: unknown): HudSettings {
   const d = DEFAULT_HUD_SETTINGS;
   if (!isObj(v)) return d;
   return {
-    preset: oneOf(v.preset, ["full", "minimal", "broadcast", "engineer"] as const, d.preset),
+    // Older saves: "full" (the old default) moves to the new default, "engineer" to Telemetry
+    preset: v.preset === "engineer" ? "telemetry" : oneOf(v.preset, HUD_PRESETS, d.preset),
     scale: num(v.scale, 0.75, 1.5, d.scale),
     inputTrace: bool(v.inputTrace, d.inputTrace),
     deltaBar: bool(v.deltaBar, d.deltaBar),

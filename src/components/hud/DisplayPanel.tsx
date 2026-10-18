@@ -28,10 +28,11 @@ export interface DisplayPanelProps {
 const DRIVER_COLORS = ["#E10600", "#00D2BE", "#FF8700", "#0600EF", "#006F62", "#2B4562", "#B6BABD", "#CCFF00"] as const;
 
 const HUD_PRESETS: { id: HudPreset; title: string; detail: string }[] = [
-  { id: "full", title: "Full", detail: "Everything" },
+  { id: "broadcast", title: "Broadcast", detail: "TV graphics: tower, map, telemetry strip" },
+  { id: "dash", title: "Wheel Dash", detail: "Steering-wheel screen, low and centred" },
+  { id: "telemetry", title: "Telemetry", detail: "The dash plus tyres, G, power, inputs" },
+  { id: "classic", title: "Classic", detail: "The original corner panels" },
   { id: "minimal", title: "Minimal", detail: "Speed, gear and lap only" },
-  { id: "broadcast", title: "Broadcast", detail: "TV-style tower and timing" },
-  { id: "engineer", title: "Engineer", detail: "Full channels, tyres, inputs" },
 ];
 
 const QUALITY_CHOICES: { id: GraphicsQuality; title: string; detail: string }[] = [
@@ -210,7 +211,7 @@ export const DisplayPanel: React.FC<DisplayPanelProps> = ({ settings, onChangeSe
           />
           <Toggle
             label="Delta bar"
-            detail="Live gap against your best lap"
+            detail="Live gap bar in Classic and Minimal (the other styles show the delta)"
             checked={hud.deltaBar}
             onChange={() => setHud({ deltaBar: !hud.deltaBar })}
           />
