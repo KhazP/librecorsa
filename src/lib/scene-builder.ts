@@ -10,6 +10,7 @@ import {
 } from "@/lib/render/asphalt-sheen";
 import type { RacingLineId, RunoffStyle, TrackSamplePoint } from "@/types/f1";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.js";
 import { assetProgress } from "@/lib/loading/asset-progress";
 
 export interface BuiltRwandaScene {
@@ -101,7 +102,9 @@ function loadTrackGlb(
   // `?colliders=1`: draw the physics surfaces (by type) and barriers over the scan, to check them against it
   const showColliders = new URLSearchParams(window.location.search).get("colliders") === "1";
   assetProgress.begin("track");
+  // Circuit scans are meshopt-compressed (scripts/compress-track-glb.mjs)
   new GLTFLoader()
+    .setMeshoptDecoder(MeshoptDecoder)
     .loadAsync(withBasePath(url), (event) => assetProgress.progress("track", event))
     .then((gltf) => {
       const root = gltf.scene;

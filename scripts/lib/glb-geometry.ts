@@ -1,45 +1,70 @@
 /**
  * Minimal GLB reader for Node scripts: rebuilds the node graph (names, TRS, node extras → userData) with
- * position / index geometry only. No materials, textures or DOM, so it runs headless.
+ * position / index geometry only. No materials, textures or DOM, so it runs headless. Reads quantized
+ * (KHR_mesh_quantization) positions, and meshopt-compressed circuits via a decoded copy in the temp dir.
  */
 import * as THREE from 'three';
-import { readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { existsSync, readFileSync, statSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { basename, join } from 'node:path';
 
 
 interface GltfJson {
+  extensionsUsed?: string[];
   scenes: { nodes: number[] }[];
-  nodes: { name?: string; mesh?: number; children?: number[]; translation?: number[]; rotation?: number[]; scale?: number[]; extras?: Record<string, unknown> }[];
+  nodes: { name?: string; mesh?: number; children?: number[]; translation?: number[]; rotation?: number[]; scale?: number[]; matrix?: number[]; extras?: Record<string, unknown> }[];
   meshes: { primitives: { attributes: { POSITION: number }; indices?: number }[] }[];
-  accessors: { bufferView: number; byteOffset?: number; componentType: number; count: number; type: string }[];
+  accessors: { bufferView: number; byteOffset?: number; componentType: number; normalized?: boolean; count: number; type: string }[];
   bufferViews: { byteOffset?: number; byteLength: number; byteStride?: number }[];
 }
 
-export function loadGlbGeometry(path: string): THREE.Group {
+const parseJson = (buf: Buffer): GltfJson => JSON.parse(buf.subarray(20, 20 + buf.readUInt32LE(12)).toString('utf8')) as GltfJson;
+
+/** The GLB's bytes; a meshopt-compressed file is decoded once (scripts/compress-track-glb.mjs) and cached by mtime */
+function readGlb(path: string): Buffer {
   const buf = readFileSync(path);
+  if (!parseJson(buf).extensionsUsed?.includes('EXT_meshopt_compression')) return buf;
+  const { mtimeMs, size } = statSync(path);
+  const decoded = join(tmpdir(), `glb-geometry-${basename(path, '.glb')}-${Math.round(mtimeMs)}-${size}.glb`);
+  if (!existsSync(decoded)) {
+    // The meshopt decoder's WASM only starts asynchronously, so decode in a child process to keep this sync
+    execFileSync(process.execPath, [join(__dirname, 'decode-meshopt-glb.mjs'), path, decoded], { stdio: 'inherit' });
+  }
+  return readFileSync(decoded);
+}
+
+/** Byte size, reader and normalization divisor for each glTF component type */
+const COMPONENTS: Record<number, { size: number; read: (b: Buffer, o: number) => number; norm: number }> = {
+  5120: { size: 1, read: (b, o) => b.readInt8(o), norm: 127 },
+  5121: { size: 1, read: (b, o) => b.readUInt8(o), norm: 255 },
+  5122: { size: 2, read: (b, o) => b.readInt16LE(o), norm: 32767 },
+  5123: { size: 2, read: (b, o) => b.readUInt16LE(o), norm: 65535 },
+  5125: { size: 4, read: (b, o) => b.readUInt32LE(o), norm: 1 },
+  5126: { size: 4, read: (b, o) => b.readFloatLE(o), norm: 1 },
+};
+
+export function loadGlbGeometry(path: string): THREE.Group {
+  const buf = readGlb(path);
   const jsonLen = buf.readUInt32LE(12);
-  const gltf = JSON.parse(buf.subarray(20, 20 + jsonLen).toString('utf8')) as GltfJson;
+  const gltf = parseJson(buf);
   const binStart = 20 + jsonLen + 8;
   const bin = buf.subarray(binStart);
 
-  const readAccessor = (idx: number): Float32Array | Uint32Array => {
+  const readAccessor = (idx: number, asFloat: boolean): Float32Array | Uint32Array => {
     const acc = gltf.accessors[idx];
     const view = gltf.bufferViews[acc.bufferView];
     const comps = acc.type === 'VEC3' ? 3 : 1;
-    const elemSize = acc.componentType === 5126 || acc.componentType === 5125 ? 4 : acc.componentType === 5123 ? 2 : 1;
-    const stride = view.byteStride ?? comps * elemSize;
+    const comp = COMPONENTS[acc.componentType];
+    const stride = view.byteStride ?? comps * comp.size;
     const base = (view.byteOffset ?? 0) + (acc.byteOffset ?? 0);
-    const out = acc.componentType === 5126 ? new Float32Array(acc.count * comps) : new Uint32Array(acc.count * comps);
+    const out = asFloat ? new Float32Array(acc.count * comps) : new Uint32Array(acc.count * comps);
+    // Normalized integers map to [-1, 1] / [0, 1], clamped as the glTF spec requires
+    const norm = acc.normalized ? comp.norm : 1;
     for (let i = 0; i < acc.count; i++) {
       for (let c = 0; c < comps; c++) {
-        const o = base + i * stride + c * elemSize;
-        out[i * comps + c] =
-          acc.componentType === 5126
-            ? bin.readFloatLE(o)
-            : acc.componentType === 5125
-              ? bin.readUInt32LE(o)
-              : acc.componentType === 5123
-                ? bin.readUInt16LE(o)
-                : bin.readUInt8(o);
+        const v = comp.read(bin, base + i * stride + c * comp.size);
+        out[i * comps + c] = norm === 1 ? v : Math.max(v / norm, -1);
       }
     }
     return out;
@@ -51,8 +76,8 @@ export function loadGlbGeometry(path: string): THREE.Group {
     if (n.mesh !== undefined) {
       const prims = gltf.meshes[n.mesh].primitives.map((p) => {
         const g = new THREE.BufferGeometry();
-        g.setAttribute('position', new THREE.BufferAttribute(readAccessor(p.attributes.POSITION) as Float32Array, 3));
-        if (p.indices !== undefined) g.setIndex(new THREE.BufferAttribute(readAccessor(p.indices), 1));
+        g.setAttribute('position', new THREE.BufferAttribute(readAccessor(p.attributes.POSITION, true), 3));
+        if (p.indices !== undefined) g.setIndex(new THREE.BufferAttribute(readAccessor(p.indices, false), 1));
         return new THREE.Mesh(g);
       });
       if (prims.length === 1) obj = prims[0];
@@ -66,6 +91,7 @@ export function loadGlbGeometry(path: string): THREE.Group {
     if (n.translation) obj.position.fromArray(n.translation);
     if (n.rotation) obj.quaternion.fromArray(n.rotation);
     if (n.scale) obj.scale.fromArray(n.scale);
+    if (n.matrix) new THREE.Matrix4().fromArray(n.matrix).decompose(obj.position, obj.quaternion, obj.scale);
     for (const c of n.children ?? []) obj.add(build(c));
     return obj;
   };
