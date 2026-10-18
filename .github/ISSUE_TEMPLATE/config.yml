@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions, setups and ideas
+    url: https://github.com/KhazP/librecorsa/discussions
+    about: Ask how something works, share setups and lap times, or float an idea.
+  - name: Report a security problem
+    url: https://github.com/KhazP/librecorsa/security/advisories/new
+    about: Report vulnerabilities privately, not in a public issue.
+  - name: Play LibreCorsa
+    url: https://khazp.github.io/librecorsa/
+    about: The live sim in your browser.

@@ -36,3 +36,12 @@ Each model below is licensed under [Creative Commons Attribution 4.0 (CC BY 4.0)
 * **Framer Motion** — Motion Division (MIT)
 * **Lucide Icons** — Lucide Contributors (ISC)
 
+
+---
+
+## 4. Rights holders
+
+If you made a model, texture, sound or other asset used here and it is uncredited, credited wrongly, under the
+wrong license, or simply not meant to be in LibreCorsa, open a
+[rights / takedown request](https://github.com/KhazP/librecorsa/issues/new?template=takedown-request.yml).
+It will be fixed or removed from the live site, usually within 7 days.

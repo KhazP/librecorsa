@@ -1,0 +1,43 @@
+name: Rights / takedown request
+description: You own a model, texture, sound or name used in LibreCorsa and want it credited, corrected or removed
+title: "[Rights] "
+labels: ["rights-request"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        LibreCorsa is a non-commercial fan project and only wants to use assets with their owner's blessing.
+        Each asset's author, source and license is listed in
+        [CREDITS.md](https://github.com/KhazP/librecorsa/blob/main/CREDITS.md). If something of yours is
+        uncredited, wrongly licensed or not meant to be here, tell us and it will be fixed or removed,
+        usually within 7 days. Removal takes it off the live site; git history may still hold old copies.
+  - type: input
+    id: asset
+    attributes:
+      label: Which asset?
+      description: The car, track, sound or other item, as named in the game or in CREDITS.md.
+    validations:
+      required: true
+  - type: textarea
+    id: ownership
+    attributes:
+      label: What do you own?
+      description: Your role (author, rights holder, representative) and a link that shows it, such as the original upload or your profile.
+    validations:
+      required: true
+  - type: dropdown
+    id: request
+    attributes:
+      label: What would you like?
+      options:
+        - Remove it
+        - Fix the credit
+        - Correct the license
+        - Something else
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: Details
+      description: Anything else, such as how you'd like to be credited.

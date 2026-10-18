@@ -1,0 +1,88 @@
+name: Bug report
+description: Something broken, crashing or behaving wrong in the sim
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! The more exact the steps, the faster it gets fixed. For handling that feels off
+        (rather than broken), [Discussions](https://github.com/KhazP/librecorsa/discussions) is a good place too.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: And what did you expect instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Drive at Suzuka in the FA-26 Prototype
+        2. Brake hard into turn 1
+        3. …
+    validations:
+      required: true
+  - type: dropdown
+    id: circuit
+    attributes:
+      label: Circuit
+      options:
+        - Rwanda International Circuit
+        - Suzuka
+        - Shanghai
+        - Motegi
+        - Any / menus
+  - type: dropdown
+    id: car
+    attributes:
+      label: Car
+      options:
+        - FA-26 Prototype
+        - FA-26 Rigid-Body
+        - Mercedes-AMG GT3
+        - Any / not car related
+  - type: dropdown
+    id: input
+    attributes:
+      label: Input device
+      options:
+        - Keyboard
+        - Gamepad
+        - Touch screen
+        - Wheel (in the browser, WebHID)
+        - Wheel (through the FFB bridge)
+  - type: input
+    id: hardware
+    attributes:
+      label: Wheel or controller model
+      description: For example Moza R9, Logitech G29, Xbox Series pad. Leave empty for keyboard or touch.
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and system
+      placeholder: Chrome 140 on Windows 11, Safari on iPhone 15…
+    validations:
+      required: true
+  - type: dropdown
+    id: quality
+    attributes:
+      label: Graphics quality
+      options:
+        - Low
+        - Medium
+        - High
+        - Don't know
+  - type: textarea
+    id: console
+    attributes:
+      label: Console errors
+      description: If you can, open the browser console (F12) and paste any red errors.
+      render: shell
+  - type: textarea
+    id: media
+    attributes:
+      label: Screenshots or video
+      description: Drag files in here.
