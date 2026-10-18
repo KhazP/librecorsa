@@ -5,7 +5,7 @@ import { ExternalLink } from "lucide-react";
 import { Card, SectionLabel } from "./menu-ui";
 
 /** Requests become GitHub issues from the form in .github/ISSUE_TEMPLATE/content-request.yml */
-const REPO_URL = "https://github.com/KhazP/rwanda-f1-2026-sim";
+const REPO_URL = "https://github.com/KhazP/librecorsa";
 const TEMPLATE = "content-request.yml";
 
 // Sent as plain text: the issue form takes these in text fields, the only kind GitHub pre-fills

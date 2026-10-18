@@ -3,7 +3,7 @@
 <img src="docs/media/banner.png" alt="LibreCorsa: open-source 500 Hz motorsport sim" width="100%" />
 
 <p>
-  <a href="https://khazp.github.io/rwanda-f1-2026-sim/"><b>▶&nbsp; Play in your browser</b></a>
+  <a href="https://khazp.github.io/librecorsa/"><b>▶&nbsp; Play in your browser</b></a>
   &nbsp;·&nbsp;
   <a href="#features">Features</a>
   &nbsp;·&nbsp;
@@ -15,7 +15,7 @@
 </p>
 
 <p>
-  <a href="https://github.com/KhazP/rwanda-f1-2026-sim/actions/workflows/deploy-pages.yml"><img alt="Build and deploy" src="https://github.com/KhazP/rwanda-f1-2026-sim/actions/workflows/deploy-pages.yml/badge.svg" /></a>
+  <a href="https://github.com/KhazP/librecorsa/actions/workflows/deploy-pages.yml"><img alt="Build and deploy" src="https://github.com/KhazP/librecorsa/actions/workflows/deploy-pages.yml/badge.svg" /></a>
   <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/code-MIT-CCFF00?labelColor=08090D" /></a>
   <img alt="Next.js 15" src="https://img.shields.io/badge/Next.js-15-F5F7FA?labelColor=08090D&logo=nextdotjs&logoColor=white" />
   <img alt="Three.js" src="https://img.shields.io/badge/Three.js-WebGL2-00E5FF?labelColor=08090D&logo=threedotjs&logoColor=white" />
