@@ -271,7 +271,7 @@ function physicsLap(e: Float64Array): PhysicsLap {
     sim = vf26;
   }
   // From the grid, not a flying start: that drops the car 450 m before the line at 270 km/h, which on circuits
-  // whose last corner lies within those 450 m (Red Bull Ring, Suzuka) throws a GT3 into the run-off. The first lap
+  // whose last corner lies within those 450 m (Suzuka, for one) throws a GT3 into the run-off. The first lap
   // is the out-lap; the second, flying, lap is the one timed
   sim.resetToStartGrid(false);
   sim.aiAutopilot = true;

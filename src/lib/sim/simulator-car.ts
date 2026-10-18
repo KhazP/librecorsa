@@ -113,7 +113,7 @@ const FLYING_EXIT_ACCEL = 0.5 * 9.81;
 /**
  * Where a flying lap starts (`s`, m along the lap): 450 m before the line, or 20 m past the exit of the last
  * corner (`cornerS`: the last point of the speed profile under 200 km/h) where the final straight is shorter
- * (Shanghai, Red Bull Ring, Suzuka), so no car is dropped into a corner with no yaw rate. Never closer than 40 m to
+ * (Shanghai, Suzuka), so no car is dropped into a corner with no yaw rate. Never closer than 40 m to
  * the line. `cornerS` is null on a full-length run-up.
  */
 export function flyingStartPoint(track: {

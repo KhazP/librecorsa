@@ -207,7 +207,7 @@ const LapCard: React.FC<LapSummaryProps & { onCollapse: () => void }> = ({
     <div
       role="dialog"
       aria-label={`Lap ${s.lapNumber} summary`}
-      className="hud-panel f1-corner-tr w-full max-h-[calc(100dvh-9rem)] overflow-y-auto rounded-lg p-4 text-[#F5F7FA]"
+      className="hud-panel f1-corner-tr w-full max-h-[calc(100dvh-9rem)] overflow-y-auto pointer-coarse:max-h-[calc(100dvh-12rem)] rounded-lg p-4 text-[#F5F7FA]"
     >
       {/* Header: lap number, big lap time, status badge */}
       <div className="flex items-start justify-between gap-3">

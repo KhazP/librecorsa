@@ -8,7 +8,7 @@ import { Card, SectionLabel } from "./menu-ui";
 const REPO_URL = "https://github.com/KhazP/rwanda-f1-2026-sim";
 const TEMPLATE = "content-request.yml";
 
-// Dropdown values must match the issue form's options exactly to pre-fill
+// Sent as plain text: the issue form takes these in text fields, the only kind GitHub pre-fills
 const KINDS = ["Track", "Car"] as const;
 const LICENSES = ["CC BY / CC BY-SA", "CC0 / public domain", "CC BY-NC / CC BY-NC-SA", "Other license", "Don't know"] as const;
 const PERMISSIONS = [
