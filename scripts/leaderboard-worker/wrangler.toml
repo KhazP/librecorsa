@@ -1,0 +1,13 @@
+name = "librecorsa-leaderboard"
+main = "worker.ts"
+compatibility_date = "2025-01-01"
+
+# Create the namespace once with `npx wrangler kv namespace create LAPS`,
+# then replace the placeholder id below with the id it prints.
+[[kv_namespaces]]
+binding = "LAPS"
+id = "REPLACE_WITH_KV_NAMESPACE_ID"
+
+[vars]
+# Origin allowed to call the board, e.g. "https://your-sim.example"; "*" allows any site
+ALLOWED_ORIGIN = "*"
