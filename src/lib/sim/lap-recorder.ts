@@ -57,6 +57,8 @@ const MAX_LAP_MS = 900_000;
 const MAX_NUMBERS = 200_000;
 const VEHICLES: readonly VehicleModelId[] = ["vf26", "f12026-car", "amg-gt3"];
 const DRIVER_CODE_RE = /^[A-Z]{3}$/;
+/** The leaderboard's teleport check: consecutive samples (≥ 20 ms apart) may not imply more than this */
+const MAX_IMPLIED_KMH = 420;
 
 /** Rounds to `dp` decimals; non-finite input becomes 0 so stored samples are always finite */
 function round(v: number, dp: number): number {
@@ -141,6 +143,7 @@ export class LapRecorder {
   private sessionCornerBest: (number | null)[];
   private lastLapCount: number | null = null;
   private lastLapTimeSeen: number | null = null;
+  private lastLapClockMs = 0;
   /** True while the lap in progress was armed at its start */
   private recording = false;
   private valid = true;
@@ -196,8 +199,10 @@ export class LapRecorder {
     const t = input.telemetry;
     const prevCount = this.lastLapCount;
     const prevLapTimeMs = this.lastLapTimeSeen;
+    const prevClockMs = this.lastLapClockMs;
     this.lastLapCount = t.lapCount;
     this.lastLapTimeSeen = t.lastLapTimeMs;
+    this.lastLapClockMs = t.currentLapTimeMs;
 
     // First update since construction or reset: the lap is armed only if it is near its start
     if (prevCount === null) {
@@ -213,6 +218,11 @@ export class LapRecorder {
       return null;
     }
     if (step === 0) {
+      // The clock restarted without a lap: the first crossing after a (re)start ends the out-lap and starts timing
+      if (t.currentLapTimeMs < prevClockMs) {
+        if (t.currentLapTimeMs < START_GRACE_MS) this.beginLap();
+        else this.abandon();
+      }
       this.collect(input);
       return null;
     }
@@ -370,12 +380,16 @@ export class GhostPlayer {
     return this.recording.lapTimeMs / 1000;
   }
 
-  /** Interpolated sample at lap time tS (clamped to [0, lapTimeS]); null if the recording has < 2 samples */
+  /**
+   * Interpolated sample at lap time tS (clamped to [0, lapTimeS]); null if the recording has < 2 samples, or
+   * before its samples begin (a repaired lap whose first seconds were lost)
+   */
   sampleAt(tS: number): LapSample | null {
     const n = this.count;
     if (n < 2 || Number.isNaN(tS)) return null;
     const tc = Math.min(Math.max(tS, 0), this.lapTimeS);
     const timeAt = (i: number) => this.recording.data[i * LAP_SAMPLE_STRIDE];
+    if (tc < timeAt(0) - 0.25) return null;
     if (tc <= timeAt(0)) return lapSampleAt(this.recording, 0);
     if (tc >= timeAt(n - 1)) return lapSampleAt(this.recording, n - 1);
 
@@ -433,6 +447,25 @@ export function lapSampleAt(recording: LapRecording, i: number): LapSample {
   };
 }
 
+/**
+ * Laps recorded before the out-lap fix start with the out-lap's samples (up to the line, timed from the
+ * (re)start), then jump back to the start of the track once the lap clock passed the out-lap's length.
+ * Returns how many leading rows are out-lap, 0 when the recording has no such jump in its first half.
+ */
+function outLapPrefixRows(data: number[]): number {
+  const S = LAP_SAMPLE_STRIDE;
+  const n = data.length / S;
+  for (let i = 1; i <= n / 2; i++) {
+    const o = i * S;
+    const dt = data[o] - data[o - S];
+    if (dt < 0.02) continue;
+    const dist = Math.hypot(data[o + 2] - data[o - S + 2], data[o + 3] - data[o - S + 3], data[o + 4] - data[o - S + 4]);
+    // Distance along the lap falling back by over a kilometre: the car went from before the line to well past it
+    if ((dist / dt) * 3.6 > MAX_IMPLIED_KMH && data[o - S + 1] - data[o + 1] > 1000) return i;
+  }
+  return 0;
+}
+
 /** Strict validation of untrusted JSON (imported files, downloads): returns a clean copy or null */
 export function validateLapRecording(raw: unknown): LapRecording | null {
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return null;
@@ -468,10 +501,12 @@ export function validateLapRecording(raw: unknown): LapRecording | null {
     data.push(v);
   }
 
-  const samples = data.length / LAP_SAMPLE_STRIDE;
-  for (let i = 1; i < samples; i++) {
+  for (let i = 1; i < data.length / LAP_SAMPLE_STRIDE; i++) {
     if (data[i * LAP_SAMPLE_STRIDE] < data[(i - 1) * LAP_SAMPLE_STRIDE]) return null;
   }
+  data.splice(0, outLapPrefixRows(data) * LAP_SAMPLE_STRIDE);
+  const samples = data.length / LAP_SAMPLE_STRIDE;
+  if (samples < 2) return null;
   if (Math.abs(data[(samples - 1) * LAP_SAMPLE_STRIDE] - lapTimeMs / 1000) > 1.5) return null;
 
   const [sector1, sector2, sector3] = sectors;

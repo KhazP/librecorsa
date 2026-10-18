@@ -217,12 +217,12 @@ check('a car change clears session bests but keeps the personal best', () => {
 });
 
 console.log('Lap bookkeeping edge cases');
-const tele = (lapCount: number, currentLapTimeMs: number, lastLapTimeMs: number | null): LapRecorderInput => ({
+const tele = (lapCount: number, currentLapTimeMs: number, lastLapTimeMs: number | null, trackDistanceM = 0): LapRecorderInput => ({
   telemetry: {
     lapCount,
     currentLapTimeMs,
     lastLapTimeMs,
-    trackDistanceM: 0,
+    trackDistanceM,
     speedKmh: 200,
     throttle: 1,
     brake: 0,
@@ -258,6 +258,17 @@ check('reset() before a mid-lap start: the lap is not armed until the line is cr
   assert.equal(r.update(tele(5, 30_000, 61_000)), null); // not near the start: not armed
   assert.equal(r.update(tele(6, 5, 70_000)), null); // crossing from a mid-lap start is dropped
   assert.ok(r.update(tele(7, 5, 80_000)) !== null, 'the next lap is armed');
+});
+check('out-lap: the first crossing restarts the clock without a lap, and only the timed lap is recorded', () => {
+  // As the physics after a (re)start: the clock runs from 0 on the out-lap, restarts at the line, lap count unchanged
+  const r = makeRecorder();
+  for (let ms = 0; ms <= 6000; ms += 1000 / 60) r.update(tele(1, ms, null, 4900));
+  for (let ms = 5; ms < 60_000; ms += 1000 / 60) r.update(tele(1, ms, null, 100));
+  const done = r.update(tele(2, 5, 60_000, 100));
+  assert.ok(done, 'the timed lap is returned');
+  const data = done!.recording.data;
+  for (let i = 0; i < data.length / STRIDE; i++) assert.equal(data[i * STRIDE + 1], 100, `sample ${i} is from the out-lap`);
+  assert.ok(data[0] < 0.02, `first sample at ${data[0]} s`);
 });
 
 // ---- Ghost playback ----------------------------------------------------------------------------
@@ -347,6 +358,20 @@ check('tampered recordings are rejected', () => {
   assert.equal(validateLapRecording(withPatch({ data: new Array<number>(200_004).fill(0) })), null, 'too many numbers');
   assert.equal(validateLapRecording(null), null);
   assert.equal(validateLapRecording('lap'), null);
+});
+check('a lap saved with the out-lap at its start is repaired: out-lap rows dropped, ghost hidden until its data', () => {
+  // The old recorder's output: out-lap rows before the line timed from 0, then the lap once its clock passed them
+  const rows: number[][] = [];
+  for (let i = 0; i < lap1.recording.data.length / STRIDE; i++) rows.push(lap1.recording.data.slice(i * STRIDE, (i + 1) * STRIDE));
+  const outLap = rows.filter((r) => r[1] > TRACK_M - 400 && r[0] > 30).map((r, k) => [Math.round(k * 50) / 1000, ...r.slice(1)]);
+  const tOut = outLap[outLap.length - 1][0];
+  const kept = rows.filter((r) => r[0] >= tOut + 0.05);
+  const repaired = validateLapRecording(withPatch({ data: [...outLap, ...kept].flat() }));
+  assert.ok(repaired, 'accepted');
+  assert.deepEqual(repaired!.data, kept.flat());
+  const g = new GhostPlayer(repaired!);
+  assert.equal(g.sampleAt(1), null, 'no ghost before its first sample');
+  assert.ok(g.sampleAt(tOut + 1), 'ghost once its samples begin');
 });
 check('driver code is uppercased and the name is cleaned', () => {
   const valid = validateLapRecording(withPatch({ driverCode: 'tst', driverName: '  <b>Caglar\u0007 Cabaoglu long name</b>  ' }));
