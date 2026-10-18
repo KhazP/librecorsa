@@ -67,7 +67,9 @@ import { createWingRuntimes, VF26_CG_HEIGHT_M, type WingRuntime, wingAngleDeg } 
 import {
   coldPressureFor,
   computeTyreForces,
+  createContactPatchResult,
   createTyreRuntime,
+  sample5PointContactPatch,
   setTyreColdPressure,
   setTyreSpec,
   tyreBandSurfaceTempC,
@@ -76,7 +78,28 @@ import {
   tyreVerticalDeflection,
   updateTyreThermal,
 } from './sim/ac-tyre';
-import type { TyreVisualState } from './sim/simulator-car';
+import {
+  buildDoubleWishboneHardpoints,
+  type CornerKinematicsState,
+  createAxleKinematicsState,
+  type DoubleWishboneHardpoints,
+  solveAxleKinematics3D,
+} from './sim/suspension-kinematics';
+import {
+  computeDynamicBrakeMigration,
+  createBrakeDiscState,
+  resetBrakeDiscState,
+  stepBrakeDiscThermal,
+} from './sim/brake-physics';
+import {
+  type AeroWakeState,
+  CLEAN_AIR_WAKE_STATE,
+  computeRelativeAirspeed,
+  evaluateRollAeroFactor,
+  type RelativeAirspeed,
+} from './sim/aero-wake';
+import type { RealRoadSectorQuery } from './sim/real-road';
+import { flyingExitSpeedMs, flyingStartPoint, type TyreVisualState } from './sim/simulator-car';
 import type { VehicleWheelState, WheelCornerIndex } from './sim/vehicle-types';
 import {
   type AssettoCorsaGymObservation,
@@ -121,6 +144,9 @@ const WALL_FRICTION = 0.5;
 /** Deepest believable penetration past a wall segment, and the clearance a contact is resolved to (m) */
 const WALL_MAX_DEPTH_M = 1.2;
 const WALL_SKIN_M = 0.001;
+/** Height above the centreline road at which barrier segments are tested (m), and the tolerance either side */
+const WALL_CAR_Y_M = 0.4;
+const WALL_Y_SLACK_M = 2.0;
 /** Track-data barrier lines: least run-off before one (m past the track edge), and the line where the data has none */
 const WALL_LINE_MIN_RUNOFF_M = 2.5;
 const WALL_LINE_DEFAULT_RUNOFF_M = 5.8;
@@ -164,6 +190,7 @@ interface ErsControllerRuntime {
 
 interface AxleRuntime {
   spec: Vf26AxleSuspension;
+  hardpoints: DoubleWishboneHardpoints;
   rollCentreHeight: number;
   /** Static sprung load carried by each corner spring (N) */
   staticSpringForce: number;
@@ -269,6 +296,7 @@ export class F1Physics2026 {
   public steerAngleNorm = 0; // [-1..1], + = right
   public frontWheelAngleRad = 0; // + = right
   public ffbTorqueNorm = 0;
+  public readonly ffbSubframeSamples: number[] = [];
   public frontSlipRatioNorm = 0;
   public rearSlipRatioNorm = 0;
 
@@ -307,7 +335,7 @@ export class F1Physics2026 {
   private lastFyRear = 0;
   private lastFxTyres = 0;
 
-  // Aero results (outer step)
+  // Aero results (outer step) & wake / wind / RealRoad states
   private aeroDownforceN = 0;
   private aeroFrontDownforceN = 0;
   private aeroRearDownforceN = 0;
@@ -315,6 +343,17 @@ export class F1Physics2026 {
   private aeroSideCoef = 0;
   private aeroPitchMomentNm = 0;
   private groundEffectFactor = 1;
+  private aeroWakeState: AeroWakeState = { ...CLEAN_AIR_WAKE_STATE };
+  private realRoadSample: RealRoadSectorQuery = {
+    gripMultiplier: 1.0,
+    marbleLevel: 0,
+    rubberLevel: 0.65,
+    trackTempC: TRACK_SURFACE_C,
+  };
+  /** Wind velocity in the world (m/s, where the air moves to) */
+  public windWorldXMs = 0;
+  public windWorldZMs = 0;
+  private readonly relAir: RelativeAirspeed = { vxAirMs: 0, vyAirMs: 0, airspeedMs: 0, airspeedSq: 0, aeroBetaRad: 0 };
   /** Aero centre of pressure as the front share of downforce (%), and the floor stall factor (0.55–1) */
   public aeroCopFrontPct = 50;
   public floorStallFactor = 1;
@@ -323,6 +362,15 @@ export class F1Physics2026 {
 
   private readonly wings: WingRuntime[];
   private readonly axles: [AxleRuntime, AxleRuntime];
+  /** Live wishbone kinematics per axle (solved in place each step) and per corner, FR, FL, RR, RL */
+  private readonly frontKin = createAxleKinematicsState();
+  private readonly rearKin = createAxleKinematicsState();
+  public readonly lastKinematics: readonly [
+    CornerKinematicsState,
+    CornerKinematicsState,
+    CornerKinematicsState,
+    CornerKinematicsState,
+  ] = [this.frontKin.right, this.frontKin.left, this.rearKin.right, this.rearKin.left];
   private readonly torqueLut = new Lut(VF26_ENGINE.torqueCurve);
   private readonly coastLut = new Lut(VF26_ENGINE.coastCurve);
   private readonly boostLut = new Lut(VF26_ENGINE.boostCurve);
@@ -386,8 +434,17 @@ export class F1Physics2026 {
     this.ersControllers = { RAC: mkCtrl('RAC'), BAL: mkCtrl('BAL'), PSH: mkCtrl('PSH'), CHR: mkCtrl('CHR') };
 
     const tyres = VF26_TYRES[this.tireCompound];
-    const mkAxle = (spec: Vf26AxleSuspension, radius: number, rate: number, damp: number): AxleRuntime => ({
+    const mkAxle = (
+      spec: Vf26AxleSuspension,
+      radius: number,
+      rate: number,
+      damp: number,
+      isFront: boolean
+    ): AxleRuntime => ({
       spec,
+      hardpoints: buildDoubleWishboneHardpoints(spec.hardpoints, isFront, isFront ? 'pull_rod' : 'push_rod', {
+        staticCasterTrailM: VF26_CHASSIS.steering.mechanicalTrail,
+      }),
       rollCentreHeight: computeRollCentreHeight(spec, radius),
       staticSpringForce: 0,
       staticSpringDeflection: 0,
@@ -397,8 +454,8 @@ export class F1Physics2026 {
       camberDeg: spec.staticCamberDeg,
     });
     this.axles = [
-      mkAxle(VF26_CHASSIS.front, tyres.front.radius, tyres.front.rate, tyres.front.damp),
-      mkAxle(VF26_CHASSIS.rear, tyres.rear.radius, tyres.rear.rate, tyres.rear.damp),
+      mkAxle(VF26_CHASSIS.front, tyres.front.radius, tyres.front.rate, tyres.front.damp, true),
+      mkAxle(VF26_CHASSIS.rear, tyres.rear.radius, tyres.rear.rate, tyres.rear.damp, false),
     ];
 
     const a = this.cgToFrontAxleM;
@@ -440,7 +497,15 @@ export class F1Physics2026 {
         camberLeftRad: 0,
         brakeTorqueNm: 0,
         brakeTempC: INITIAL_BRAKE_TEMP_C,
+        brakeDisc: createBrakeDiscState(INITIAL_BRAKE_TEMP_C, 'carbon-ceramic'),
         tyre: createTyreRuntime(spec, INITIAL_TYRE_TEMP_C),
+        contactCentroidShiftInward: 0,
+        contactCentroidShiftLeftM: 0,
+        kinematicsCamberDeltaRad: 0,
+        kinematicsBumpSteerRad: 0,
+        casterTrailM: VF26_CHASSIS.steering.mechanicalTrail,
+        scrubRadiusM: isFront ? 0.018 : 0.012,
+        kpiRad: (isFront ? 11.5 : 8.0) * DEG2RAD,
       };
     };
     this.wheels = [mkWheel(0, a, -tf), mkWheel(1, a, tf), mkWheel(2, -b, -tr), mkWheel(3, -b, tr)];
@@ -463,6 +528,45 @@ export class F1Physics2026 {
 
   public setAssistPreset(preset: DriverAssistPreset): void {
     this.assistPreset = preset;
+  }
+
+  public setAeroWakeState(wake: AeroWakeState): void {
+    this.aeroWakeState = wake;
+  }
+
+  public setRealRoadSample(sample: RealRoadSectorQuery): void {
+    if (!Number.isFinite(sample.gripMultiplier) || !Number.isFinite(sample.trackTempC)) return;
+    this.realRoadSample = sample;
+  }
+
+  /** Car-to-car contact as world deltas (see `SimulatorCar.applyRigidBodyCollision` for the convention) */
+  public applyRigidBodyCollision(
+    posDeltaX: number,
+    posDeltaZ: number,
+    velDeltaX: number,
+    velDeltaZ: number,
+    yawRateDeltaRadS: number
+  ): void {
+    if (![posDeltaX, posDeltaZ, velDeltaX, velDeltaZ, yawRateDeltaRadS].every(Number.isFinite)) return;
+    // Move in the world, then re-project so the curvilinear pose (which step() trusts) agrees
+    this.worldX += posDeltaX;
+    this.worldZ += posDeltaZ;
+    const projected = this.track.projectWorldToTrack(this.worldX, this.worldZ, this.sMeters);
+    this.sMeters = projected.s;
+    this.lateralOffsetM = projected.lateralOffset;
+    const tangent = projected.sample.tangent;
+    const headingErr = Math.atan2(tangent.x, tangent.z) - this.worldYawRad;
+    this.headingErrorRad = Math.atan2(Math.sin(headingErr), Math.cos(headingErr));
+    this.lastSyncedSMeters = this.sMeters;
+    this.lastSyncedLateralOffsetM = this.lateralOffsetM;
+    this.lastSyncedHeadingErrorRad = this.headingErrorRad;
+    // World (X, Z) velocity into the body frame: forward (sin ψ, cos ψ), left (cos ψ, −sin ψ)
+    const sinYaw = Math.sin(this.worldYawRad);
+    const cosYaw = Math.cos(this.worldYawRad);
+    this.vxMs += velDeltaX * sinYaw + velDeltaZ * cosYaw;
+    this.vyMs += velDeltaX * cosYaw - velDeltaZ * sinYaw;
+    // yawRateRadS is + turning right, the delta + counter-clockwise (left)
+    this.yawRateRadS -= yawRateDeltaRadS;
   }
 
   /** Current tyre setup: cold pressures (psi) and static camber (deg) per axle */
@@ -505,10 +609,24 @@ export class F1Physics2026 {
    */
   public resetToStartGrid(flyingStart = false, gridSlot = 0): void {
     const lapLen = this.track.totalLengthM;
+    let flyingGear = 7;
     if (flyingStart) {
-      // Run-up from the second half of the main straight; timing starts at the line
-      const lateral = gridSlot === 0 ? 0 : gridSlot % 2 === 1 ? -2.6 : 2.6;
-      this.placeCar(lapLen - 450 - gridSlot * 28, 75, lateral);
+      // Run-up from the final straight (`flyingStartPoint`) on the racing line; timing starts at the line. It starts
+      // no faster than 90 % of the speed the circuit's braking profile allows there, nor than it carries out of the
+      // last corner, in the gear for that speed
+      const start = flyingStartPoint(this.track);
+      const s = (start.s - gridSlot * 28 + lapLen) % lapLen;
+      const smp = this.track.getSampleAtDistance(s);
+      const edge = Math.max(0, smp.width / 2 - 1.2);
+      const stagger = gridSlot === 0 ? 0 : gridSlot % 2 === 1 ? -2.6 : 2.6;
+      const lateral = THREE.MathUtils.clamp(aiLineOffsetM(smp) + stagger, -edge, edge);
+      let speed = Math.min(75, (0.9 * (smp.brakeLimitKmh ?? smp.optimalSpeedKmh)) / 3.6);
+      if (start.cornerS !== null) {
+        const corner = (0.9 * this.track.getSampleAtDistance(start.cornerS).optimalSpeedKmh) / 3.6;
+        speed = Math.min(speed, flyingExitSpeedMs(corner, (s - start.cornerS + lapLen) % lapLen));
+      }
+      this.placeCar(s, speed, lateral);
+      if (speed < 75) flyingGear = this.selectGearForSpeed(speed);
     } else {
       // Exported grid slot (behind the S/F line, staggered left / right)
       const grid = this.track.spawnGrid;
@@ -518,7 +636,7 @@ export class F1Physics2026 {
     this.activeAeroMode = flyingStart ? 'X_MODE' : 'Z_MODE';
     this.xModeBlend = flyingStart ? 1 : 0;
     this.drivetrain = this.createDrivetrain();
-    this.drivetrain.gear = flyingStart ? 7 : 1;
+    this.drivetrain.gear = flyingStart ? flyingGear : 1;
     this.drivetrain.shiftTarget = this.drivetrain.gear;
     this.syncDrivetrainToRoadSpeed();
     this.ersEnergyJ = this.drivetrain.ersEnergyJ;
@@ -618,6 +736,7 @@ export class F1Physics2026 {
     this.prevShiftUp = inputs.shiftUp;
     this.prevShiftDown = inputs.shiftDown;
 
+    this.ffbSubframeSamples.length = 0;
     let stepsRun = 0;
     while (this.timeAccumulator >= F1Physics2026.FIXED_DT && stepsRun < 30) {
       this.outerStep(F1Physics2026.FIXED_DT, inputs, stepsRun === 0 ? shiftReq : 0);
@@ -756,6 +875,8 @@ export class F1Physics2026 {
     this.frontWheelAngleRad = 0;
     this.steerRoadWheelRad = 0;
     this.ffbTorqueNorm = 0;
+    this.ffbSubframeSamples.length = 0;
+    this.aeroWakeState = { ...CLEAN_AIR_WAKE_STATE };
     this.pitchRad = 0;
     this.rollRad = 0;
     this.pitchVelRadS = 0;
@@ -778,12 +899,21 @@ export class F1Physics2026 {
       w.spinVel = speedMs / r;
       w.tyre.deflX = 0;
       w.tyre.deflY = 0;
+      w.tyre.flatSpotSeverity = 0;
+      w.tyre.flatSpotRadiusDropM = 0;
+      w.tyre.grainLevel = 0;
+      w.tyre.blisterLevel = 0;
+      w.tyre.dirtyLevel = 0;
+      w.tyre.circumferentialTempsC.fill(INITIAL_TYRE_TEMP_C);
+      w.tyre.circumferentialWear.fill(0);
       w.hubZ = 0;
       w.hubZVel = 0;
       w.slipRatio = 0;
       w.slipAngleRad = 0;
       w.combinedSlipNorm = 0;
       w.steerRad = 0;
+      w.brakeTempC = INITIAL_BRAKE_TEMP_C;
+      resetBrakeDiscState(w.brakeDisc, INITIAL_BRAKE_TEMP_C, 'carbon-ceramic');
     }
     this.recomputeMassProperties();
     this.syncCartesianFromCurvilinear();
@@ -933,12 +1063,18 @@ export class F1Physics2026 {
       throttle = ai.throttleCmd * this.aiThrottleTrim;
       // Brake only up to what the less-loaded front tyre can take (left/right torque is equal),
       // using the grip left over after its current cornering force
-      const frontTorqueAtFullPedal = VF26_BRAKES.maxTorqueNm * VF26_BRAKES.powerMult * VF26_BRAKES.frontBias;
+      // Front torque per wheel at pedal p is T·(bias + mig·p)·p with the migration, so the cap is the root of
+      // mig·p² + bias·p − τ/T = 0 for the torque τ the tyre can take
+      const brakeTorqueFull = VF26_BRAKES.maxTorqueNm * VF26_BRAKES.powerMult;
+      const bias0 = VF26_BRAKES.frontBias;
+      const mig = VF26_BRAKES.migrationAtFullPedal;
       let pedalCap = 1;
       for (let i = 0; i < 2; i++) {
         const w = this.wheels[i];
         const fxMax = Math.sqrt(Math.max(0, (1.06 * w.effectiveMu * w.fzN) ** 2 - w.fnN * w.fnN));
-        pedalCap = Math.min(pedalCap, (1.05 * fxMax * w.tyre.spec.radius) / frontTorqueAtFullPedal);
+        const share = (1.05 * fxMax * w.tyre.spec.radius) / brakeTorqueFull;
+        const cap = mig > 1e-6 ? (-bias0 + Math.sqrt(bias0 * bias0 + 4 * mig * share)) / (2 * mig) : share / bias0;
+        pedalCap = Math.min(pedalCap, cap);
       }
       brake = Math.min(ai.brakeCmd, Math.max(0.15, pedalCap)) * this.aiBrakeTrim;
       this.aiTargetSpeedKmh = ai.targetSpeedKmh;
@@ -1030,17 +1166,48 @@ export class F1Physics2026 {
       this.absFactor[i] += (want - this.absFactor[i]) * Math.min(1, (want < this.absFactor[i] ? 80 : 20) * dt);
     }
 
-    // ---- 3. Steering rack (hands have a finite speed; parallel steer + static toe) ----
+    // ---- 3. Steering rack & 3D Double-Wishbone + Tie-Rod Kinematics ----------------
     const targetRoad = -steerNorm * this.maxSteerAngleRad;
     const maxRate = (VF26_CHASSIS.steering.maxWheelSpeedDegS / VF26_CHASSIS.steering.ratio) * DEG2RAD;
     const dSteer = THREE.MathUtils.clamp(targetRoad - this.steerRoadWheelRad, -maxRate * dt, maxRate * dt);
     this.steerRoadWheelRad += dSteer;
+
+    const frontKin = solveAxleKinematics3D(
+      this.axles[0].hardpoints,
+      this.wheels[1].suspCompression,
+      this.wheels[0].suspCompression,
+      this.steerRoadWheelRad,
+      this.axles[0].spec.track,
+      this.wheels[1].tyre.spec.radius,
+      this.wheels[0].tyre.spec.radius,
+      this.frontKin
+    );
+    const rearKin = solveAxleKinematics3D(
+      this.axles[1].hardpoints,
+      this.wheels[3].suspCompression,
+      this.wheels[2].suspCompression,
+      0,
+      this.axles[1].spec.track,
+      this.wheels[3].tyre.spec.radius,
+      this.wheels[2].tyre.spec.radius,
+      this.rearKin
+    );
+
     const toeF = VF26_CHASSIS.front.staticToeDeg * DEG2RAD;
     const toeR = VF26_CHASSIS.rear.staticToeDeg * DEG2RAD;
-    this.wheels[0].steerRad = this.steerRoadWheelRad + toeF;
-    this.wheels[1].steerRad = this.steerRoadWheelRad - toeF;
-    this.wheels[2].steerRad = toeR;
-    this.wheels[3].steerRad = -toeR;
+    this.wheels[0].steerRad = this.steerRoadWheelRad + toeF + 0.12 * frontKin.right.bumpSteerToeInRad;
+    this.wheels[1].steerRad = this.steerRoadWheelRad - toeF - 0.12 * frontKin.left.bumpSteerToeInRad;
+    this.wheels[2].steerRad = toeR + 0.12 * rearKin.right.bumpSteerToeInRad;
+    this.wheels[3].steerRad = -toeR - 0.12 * rearKin.left.bumpSteerToeInRad;
+    for (let i = 0; i < 4; i++) {
+      const k = this.lastKinematics[i];
+      const w = this.wheels[i];
+      w.kinematicsCamberDeltaRad = k.dynamicCamberDeltaRad;
+      w.kinematicsBumpSteerRad = k.bumpSteerToeInRad;
+      w.casterTrailM = k.casterTrailM;
+      w.scrubRadiusM = k.scrubRadiusM;
+      w.kpiRad = k.kpiRad;
+    }
     this.frontWheelAngleRad = -this.steerRoadWheelRad;
     this.steerAngleNorm = THREE.MathUtils.clamp(this.frontWheelAngleRad / this.maxSteerAngleRad, -1, 1);
 
@@ -1062,9 +1229,10 @@ export class F1Physics2026 {
 
     // ---- 6. Power unit & brakes (controls for the sub-steps) ----------------------
     this.updatePowerUnitControls(dt, throttle, brake);
+    const effectiveFrontBias = computeDynamicBrakeMigration(VF26_BRAKES.frontBias, brake, VF26_BRAKES.migrationAtFullPedal);
     const brakeDemand = brake * VF26_BRAKES.maxTorqueNm * VF26_BRAKES.powerMult;
-    const frontPerWheel = brakeDemand * VF26_BRAKES.frontBias;
-    const rearPerWheelDemand = brakeDemand * (1 - VF26_BRAKES.frontBias);
+    const frontPerWheel = brakeDemand * effectiveFrontBias;
+    const rearPerWheelDemand = brakeDemand * (1 - effectiveFrontBias);
     // Brake-by-wire: MGU-K harvest replaces part of the rear hydraulic torque. The BBW keeps the
     // total rear torque at the (ABS-limited) demand, so harvest never adds to a locking axle.
     const rearAbs = Math.min(this.absFactor[2], this.absFactor[3]);
@@ -1077,10 +1245,14 @@ export class F1Physics2026 {
         ? (0.5 * Math.max(0, -this.coastLut.evaluate(drv.engineOmega * RADS2RPM)) * Math.abs(this.overallRatio(drv.gear)) * (1 - throttle)) /
           VF26_DRIVETRAIN.efficiency
         : 0;
-    this.wheels[0].brakeTorqueNm = frontPerWheel * this.absFactor[0];
-    this.wheels[1].brakeTorqueNm = frontPerWheel * this.absFactor[1];
-    this.wheels[2].brakeTorqueNm = Math.max(0, rearPerWheelDemand * this.absFactor[2] - harvestPerWheel - coastPerWheel);
-    this.wheels[3].brakeTorqueNm = Math.max(0, rearPerWheelDemand * this.absFactor[3] - harvestPerWheel - coastPerWheel);
+    this.wheels[0].brakeTorqueNm = frontPerWheel * this.absFactor[0] * this.wheels[0].brakeDisc.muFactor;
+    this.wheels[1].brakeTorqueNm = frontPerWheel * this.absFactor[1] * this.wheels[1].brakeDisc.muFactor;
+    this.wheels[2].brakeTorqueNm =
+      Math.max(0, rearPerWheelDemand * this.absFactor[2] - harvestPerWheel - coastPerWheel) *
+      this.wheels[2].brakeDisc.muFactor;
+    this.wheels[3].brakeTorqueNm =
+      Math.max(0, rearPerWheelDemand * this.absFactor[3] - harvestPerWheel - coastPerWheel) *
+      this.wheels[3].brakeDisc.muFactor;
 
     // ---- 7. 2 kHz sub-steps: tyres, wheels, drivetrain, chassis, suspension -------
     const h = dt / SUBSTEPS;
@@ -1098,15 +1270,35 @@ export class F1Physics2026 {
     this.lastAxMs2 += (sumAx / SUBSTEPS - this.lastAxMs2) * Math.min(1, 25 * dt);
     this.lastAyMs2 += (sumAy / SUBSTEPS - this.lastAyMs2) * Math.min(1, 25 * dt);
 
-    // ---- 8. Thermal models, fuel ---------------------------------------------------
+    // ---- 8. Thermal models (9-node + 16-sector tyre, 2-node carbon brake), fuel ----
     for (const w of this.wheels) {
-      const rollSpeed = w.spinVel * tyreRollingRadius(w.tyre, w.fzN);
-      const slipPower = Math.abs(w.ftN * (rollSpeed - this.wheelHubVx(w))) + Math.abs(w.fnN * this.wheelHubVy(w));
-      updateTyreThermal(w.tyre, slipPower, w.fzN, rollSpeed, AMBIENT_C, TRACK_SURFACE_C, dt, w.brakeTempC);
-      const brakePower = w.brakeTorqueNm * Math.abs(w.spinVel);
-      const cooling = (20 + 2.6 * Math.abs(this.vxMs)) * (w.brakeTempC - AMBIENT_C);
-      w.brakeTempC += ((brakePower * 0.92 - cooling) / 2100) * dt;
-      w.brakeTempC = Math.max(AMBIENT_C, Math.min(1250, w.brakeTempC));
+      const radius = tyreRollingRadius(w.tyre, w.fzN, w.spinVel);
+      const rollSpeed = w.spinVel * radius;
+      const hubVx = this.wheelHubVx(w);
+      const slipPower = Math.abs(w.ftN * (rollSpeed - hubVx)) + Math.abs(w.fnN * this.wheelHubVy(w));
+      stepBrakeDiscThermal(
+        w.brakeDisc,
+        w.brakeTorqueNm,
+        w.spinVel,
+        this.vxMs,
+        AMBIENT_C,
+        dt,
+        'carbon-ceramic'
+      );
+      w.brakeTempC = w.brakeDisc.surfaceTempC;
+      updateTyreThermal(
+        w.tyre,
+        slipPower,
+        w.fzN,
+        hubVx,
+        AMBIENT_C,
+        this.realRoadSample.trackTempC,
+        dt,
+        w.brakeTempC,
+        rollSpeed,
+        w.surfaceType,
+        this.realRoadSample.marbleLevel
+      );
     }
     if (throttle > 0.01 && drv.fuelKg > 0) {
       drv.fuelKg = Math.max(0, drv.fuelKg - VF26_CHASSIS.fuelFlowKgS * throttle * dt);
@@ -1116,7 +1308,7 @@ export class F1Physics2026 {
     // ---- 9. Barriers, project onto the track, timing ------------------------------
     this.postIntegrate(prevS, prevX, prevZ);
 
-    // ---- 10. Outputs ------------------------------------------------------------------
+    // ---- 10. Outputs & True 3D Steering Rack FFB ----------------------------------
     this.rpm = drv.engineOmega * RADS2RPM;
     this.gear = drv.gear;
     this.ersEnergyJ = drv.ersEnergyJ;
@@ -1125,11 +1317,38 @@ export class F1Physics2026 {
     this.frontSlipRatioNorm = Math.max(this.wheels[0].combinedSlipNorm, this.wheels[1].combinedSlipNorm);
     this.rearSlipRatioNorm = Math.max(this.wheels[2].combinedSlipNorm, this.wheels[3].combinedSlipNorm);
 
-    const alignFront =
-      this.wheels[0].torqueAlignNm +
-      this.wheels[1].torqueAlignNm -
-      VF26_CHASSIS.steering.mechanicalTrail * (this.wheels[0].fnN + this.wheels[1].fnN);
-    this.ffbTorqueNorm = THREE.MathUtils.clamp((-alignFront / 650) * VF26_CHASSIS.steering.ffbMult, -1, 1);
+    const wFR = this.wheels[0];
+    const wFL = this.wheels[1];
+    // 1. Pneumatic trail self-aligning torque Mz
+    const mzPneumatic = wFR.torqueAlignNm + wFL.torqueAlignNm;
+    // 2. Dynamic 3D caster trail lateral force moment
+    const casterTrailR = wFR.casterTrailM ?? VF26_CHASSIS.steering.mechanicalTrail;
+    const casterTrailL = wFL.casterTrailM ?? VF26_CHASSIS.steering.mechanicalTrail;
+    const mzCaster = -(casterTrailR * wFR.fnN + casterTrailL * wFL.fnN);
+    // 3. Scrub radius longitudinal force moment (cancels on symmetric straight braking, pulls on asymmetric lockup/kerb)
+    const scrubR = wFR.scrubRadiusM ?? 0.018;
+    const scrubL = wFL.scrubRadiusM ?? 0.018;
+    const mzScrub = scrubR * wFR.ftN - scrubL * wFL.ftN;
+    // 4. Kingpin inclination (KPI) vertical load jacking torque
+    const kpiSin = Math.sin(wFR.kpiRad ?? 0.2);
+    const mzKpi = -(wFR.fzN - wFL.fzN) * 0.016 * kpiSin * Math.sin(this.steerRoadWheelRad);
+    // 5. Tire gyroscopic precession torque (Iy * omega * dGamma/dt)
+    const mzGyro =
+      0.32 * wFR.tyre.spec.angularInertia * (wFR.spinVel + wFL.spinVel) * this.rollVelRadS;
+    // 6. Flat-spot harmonic vibration (the tyre model's, ≤ 16 Nm per wheel) + road micro-roughness suspension kick
+    const mzFlatSpot = (wFR.flatSpotVibrationNm ?? 0) + (wFL.flatSpotVibrationNm ?? 0);
+    const mzRoadTexture = (wFR.suspCompressionVel - wFL.suspCompressionVel) * 18;
+    // 7. Overturning moment of the shifted contact centroids (cancels left / right on a level road), as VehiclePhysics
+    const mzOverturn = 0.08 * ((wFR.overturningMomentNm ?? 0) + (wFL.overturningMomentNm ?? 0));
+
+    const totalKingpinTorqueNm =
+      mzPneumatic + mzCaster + mzScrub + mzKpi + mzGyro + mzFlatSpot + mzRoadTexture + mzOverturn;
+    this.ffbTorqueNorm = THREE.MathUtils.clamp(
+      (-totalKingpinTorqueNm / 650) * VF26_CHASSIS.steering.ffbMult,
+      -1,
+      1
+    );
+    this.ffbSubframeSamples.push(this.ffbTorqueNorm);
   }
 
   private wheelHubVx(w: VehicleWheelState): number {
@@ -1308,14 +1527,66 @@ export class F1Physics2026 {
   // Track contact, gravity & aero (outer step)
   // ---------------------------------------------------------------------------
 
+  /**
+   * Road height under a point of the current wheel's footprint, measured from the road plane through the contact
+   * point (grade along, bank across; see updateRoadContacts; one closure, reused). Camber is already relative to
+   * that plane, so only what departs from it (kerb lips, rumble strips, texture) may tilt the patch.
+   */
+  private patchWheel: VehicleWheelState | null = null;
+  private patchContact: ReturnType<typeof queryWheelGroundContact> | null = null;
+  private patchSample: ReturnType<BuiltTrackData['getSampleAtDistance']> | null = null;
+  private patchNearKerb = false;
+  private patchApproxS = 0;
+  private patchSpeed = 0;
+  private readonly patchOut = createContactPatchResult();
+  private readonly patchHeightAt = (x: number, z: number): number => {
+    const w = this.patchWheel!;
+    const contact = this.patchContact!;
+    if (!this.patchNearKerb) return contact.bumpM; // elsewhere the road is that plane
+    // Kerb edges and rumble strips vary across the tread: query the surface itself
+    const sample = this.patchSample!;
+    const dx = x - w.worldPos.x;
+    const dz = z - w.worldPos.z;
+    const dFwd = dx * sample.tangent.x + dz * sample.tangent.z;
+    const dRight = dx * sample.binormal.x + dz * sample.binormal.z;
+    const plane = contact.zRoad + dFwd * sample.slopeSin - dRight * Math.sin(contact.bankRad);
+    const c = queryWheelGroundContact(this.track, x, z, this.patchApproxS, this.patchSpeed);
+    return c.zRoad + c.bumpM - plane;
+  };
+
   private updateRoadContacts(sample: ReturnType<BuiltTrackData['getSampleAtDistance']>, reset: boolean): void {
     const speed = Math.abs(this.vxMs);
     for (const w of this.wheels) {
-      const contact = queryWheelGroundContact(this.track, w.worldPos.x, w.worldPos.z, this.sMeters + w.staticPos.x, speed);
+      const approxS = this.sMeters + w.staticPos.x;
+      const contact = queryWheelGroundContact(this.track, w.worldPos.x, w.worldPos.z, approxS, speed);
       w.zRoad = contact.zRoad;
       w.surfaceType = contact.surfaceType;
-      w.surfaceFrictionMult = contact.frictionMult * (sample.gripMultiplier ?? 1);
       w.surfaceBumpM = contact.bumpM;
+      const heading = this.worldYawRad + w.steerRad;
+      this.patchWheel = w;
+      this.patchContact = contact;
+      this.patchSample = sample;
+      this.patchNearKerb = Math.abs(contact.lateralOffsetM) > contact.halfWidthM - 0.65;
+      this.patchApproxS = approxS;
+      this.patchSpeed = speed;
+      const patch = sample5PointContactPatch(
+        w.worldPos.x,
+        w.worldPos.z,
+        Math.cos(heading),
+        Math.sin(heading),
+        w.isLeft ? -1 : 1,
+        w.camberLeftRad,
+        w.tyre.spec.width,
+        w.tyre.spec.radius,
+        Math.max(0.008, w.fzN / w.tyre.verticalRate),
+        this.patchHeightAt,
+        contact.surfaceType,
+        this.patchOut
+      );
+      w.contactCentroidShiftInward = patch.centroidShiftInwardNorm;
+      w.contactCentroidShiftLeftM = patch.centroidShiftLeftM;
+      w.surfaceFrictionMult =
+        contact.frictionMult * (sample.gripMultiplier ?? 1) * this.realRoadSample.gripMultiplier;
       w.roadOffsetPrev = reset ? contact.zRoad + contact.bumpM - w.worldPos.y : w.roadOffset;
       w.roadOffset = contact.zRoad + contact.bumpM - w.worldPos.y;
     }
@@ -1353,9 +1624,17 @@ export class F1Physics2026 {
 
   private updateAero(dt: number): void {
     void dt;
-    const v2 = this.vxMs * this.vxMs + this.vyMs * this.vyMs;
-    const q = 0.5 * this.airDensity * v2;
-    const beta = Math.abs(this.vxMs) > 1 ? Math.atan2(Math.abs(this.vyMs), Math.abs(this.vxMs)) : 0;
+    const air = computeRelativeAirspeed(
+      this.vxMs,
+      this.vyMs,
+      this.worldYawRad,
+      this.windWorldXMs,
+      this.windWorldZMs,
+      this.relAir
+    );
+    const q = 0.5 * this.airDensity * air.airspeedSq;
+    const beta = Math.abs(air.aeroBetaRad);
+    const rollAeroMult = evaluateRollAeroFactor(this.rollRad);
 
     // Road height under an element, interpolated between the axle contact patches
     const roadF = 0.5 * (this.wheels[0].roadOffset + this.wheels[1].roadOffset);
@@ -1399,7 +1678,7 @@ export class F1Physics2026 {
           floorCount++;
         }
       }
-      const stallCl = isFloor ? this.floorStallFactor : 1;
+      const stallCl = isFloor ? this.floorStallFactor * rollAeroMult : 1;
       const stallCd = isFloor ? 1 + FLOOR_STALL_DRAG_RISE * floorStallLoss : 1;
       const yawMult = Math.max(0, 1 + s.yawClGain * beta);
       const cl = wing.aoaCl.evaluate(angle) * s.clGain * ghCl * stallCl * yawMult;
@@ -1412,16 +1691,20 @@ export class F1Physics2026 {
       pitch += -fDown * z + fDrag * y;
     }
 
-    // The centre of pressure moves with attitude through the per-element ride-height maps above (front wing
-    // nearer the road under braking, diffuser further from it); no extra dive / squat shift on top of them, which
-    // double-counted that and unloaded the rear under trail braking.
+    // Apply slipstream & dirty-air vortex wake multipliers (1.0 in clean air)
+    const wake = this.aeroWakeState;
+    const rearRaw = down - front;
+    const frontWaked = front * wake.frontDownforceMultiplier;
+    const rearWaked = rearRaw * wake.rearDownforceMultiplier;
+    const downWaked = frontWaked + rearWaked;
+    const dragWaked = drag * wake.dragMultiplier;
 
-    this.aeroDownforceN = down;
-    this.aeroFrontDownforceN = front;
-    this.aeroRearDownforceN = down - front;
-    this.aeroCopFrontPct = down > 1 ? (100 * front) / down : 50;
-    this.aeroDragN = drag;
-    this.aeroPitchMomentNm = pitch;
+    this.aeroDownforceN = downWaked;
+    this.aeroFrontDownforceN = frontWaked;
+    this.aeroRearDownforceN = rearWaked;
+    this.aeroCopFrontPct = downWaked > 1 ? (100 * frontWaked) / downWaked : 50;
+    this.aeroDragN = dragWaked;
+    this.aeroPitchMomentNm = pitch * (down > 1 ? downWaked / down : 1);
     // Side force from the body/fin side area (Cy·A ≈ 1.6 m², centre of pressure 0.45 m behind CG)
     this.aeroSideCoef = 0.5 * this.airDensity * 1.6;
     this.groundEffectFactor = floorCount > 0 ? floorGh / floorCount : 1;
@@ -1435,7 +1718,6 @@ export class F1Physics2026 {
     void outerDt;
     const M = this.totalMassKg;
     const r = -this.yawRateRadS; // CCW yaw rate
-    const drv = this.drivetrain;
 
     let sumFx = 0;
     let sumFy = 0;
@@ -1464,12 +1746,14 @@ export class F1Physics2026 {
       const defl = road - w.hubZ + staticDefl;
       const fz = Math.max(0, tyreRate * defl + axle.tyreDamp * (roadVel - w.hubZVel));
       w.fzN = defl > 0 ? fz : 0;
-      const radius = tyreRollingRadius(w.tyre, w.fzN);
+      const radius = tyreRollingRadius(w.tyre, w.fzN, w.spinVel);
 
-      // Camber relative to the road (body roll + bump camber)
+      // Camber relative to the road (body roll + 3D wishbone bump camber)
       const sideSign = w.isLeft ? 1 : -1;
       const staticCamber = axle.camberDeg * DEG2RAD;
-      const bumpCamber = axle.spec.camberGainDegPerM * DEG2RAD * w.suspCompression;
+      const bumpCamber =
+        0.75 * axle.spec.camberGainDegPerM * DEG2RAD * w.suspCompression +
+        0.25 * (w.kinematicsCamberDeltaRad ?? 0);
       w.camberLeftRad = sideSign * (staticCamber + bumpCamber) - this.rollRad;
 
       const out = computeTyreForces(w.tyre, {
@@ -1480,6 +1764,8 @@ export class F1Physics2026 {
         camberLeftRad: w.camberLeftRad,
         surfaceGrip: w.surfaceFrictionMult,
         inwardSign: w.isLeft ? -1 : 1,
+        contactCentroidShiftInward: w.contactCentroidShiftInward,
+        contactCentroidShiftLeftM: w.contactCentroidShiftLeftM,
         dt: h,
       });
       w.ftN = out.fx;
@@ -1490,6 +1776,8 @@ export class F1Physics2026 {
       w.effectiveMu = out.mu;
       w.gripFactor = out.gripFactor;
       w.torqueAlignNm = out.mz;
+      w.overturningMomentNm = out.mx;
+      w.flatSpotVibrationNm = out.flatSpotVibrationNm;
 
       const fbx = out.fx * cs - out.fy * sn;
       const fby = out.fx * sn + out.fy * cs;
@@ -1788,7 +2076,14 @@ export class F1Physics2026 {
 
   private postIntegrate(prevS: number, prevX: number, prevZ: number): void {
     let projected = this.track.projectWorldToTrack(this.worldX, this.worldZ, prevS);
-    if (this.walls ? this.applyWallSegments(prevX, prevZ) : this.applyWallLines(projected)) {
+    // Barrier height test against the road under the car, so a bridge's parapets (Suzuka's crossover) or the
+    // barriers of a road passing below are not hit. The window spans both the centreline and the ground under the
+    // car: on a banked corner's wide run-off the barrier stands well above (outside) or below (inside) the centreline
+    const roadY = projected.sample.position.y;
+    const groundY = evaluateSampleLateralHeightM(projected.sample, projected.lateralOffset);
+    const carY = 0.5 * (roadY + groundY) + WALL_CAR_Y_M;
+    const ySlack = WALL_Y_SLACK_M + 0.5 * Math.abs(groundY - roadY);
+    if (this.walls ? this.applyWallSegments(prevX, prevZ, carY, ySlack) : this.applyWallLines(projected)) {
       projected = this.track.projectWorldToTrack(this.worldX, this.worldZ, prevS);
     }
     const nextSample = projected.sample;
@@ -1822,16 +2117,16 @@ export class F1Physics2026 {
 
   /**
    * Barriers on the track GLB's wall segments: the CG's path is swept so it never ends up behind a wall, then every
-   * outline point past one is pushed back out. No height test: the circuit never passes over itself. Returns whether
-   * the car was moved.
+   * outline point past one is pushed back out. Only segments spanning `carY` (± `ySlack`) count. Returns
+   * whether the car was moved.
    */
-  private applyWallSegments(prevX: number, prevZ: number): boolean {
+  private applyWallSegments(prevX: number, prevZ: number, carY: number, ySlack: number): boolean {
     const walls = this.walls!;
     const ids = this.wallIds;
     const n = walls.near(this.worldX, this.worldZ, this.wallQueryRadius + Math.hypot(this.worldX - prevX, this.worldZ - prevZ), ids);
     if (n === 0) return false;
     let moved = false;
-    if (wallSweep(walls, ids, n, prevX, prevZ, this.worldX, this.worldZ, Number.NaN, 0, _wallHit) >= 0) {
+    if (wallSweep(walls, ids, n, prevX, prevZ, this.worldX, this.worldZ, carY, ySlack, _wallHit) >= 0) {
       this.worldX += _wallHit.nx * (_wallHit.depth + WALL_SKIN_M);
       this.worldZ += _wallHit.nz * (_wallHit.depth + WALL_SKIN_M);
       this.wallImpulse(0, 0, _wallHit.nx, _wallHit.nz);
@@ -1843,7 +2138,7 @@ export class F1Physics2026 {
       // World offset of the point: left = (cos ψ, −sin ψ), forward = (sin ψ, cos ψ)
       const rx = cosYaw * left + sinYaw * fwd;
       const rz = -sinYaw * left + cosYaw * fwd;
-      const depth = wallPenetration(walls, ids, n, this.worldX + rx, Number.NaN, this.worldZ + rz, this.worldX, this.worldZ, WALL_MAX_DEPTH_M, 0, _wallHit);
+      const depth = wallPenetration(walls, ids, n, this.worldX + rx, carY, this.worldZ + rz, this.worldX, this.worldZ, WALL_MAX_DEPTH_M, ySlack, _wallHit);
       if (depth <= 0) continue;
       this.wallImpulse(rx, rz, _wallHit.nx, _wallHit.nz);
       this.worldX += _wallHit.nx * (depth + WALL_SKIN_M);
@@ -2064,13 +2359,22 @@ export class F1Physics2026 {
       suspensionTravelMm: [0, 0, 0, 0],
       tireTempsC: [INITIAL_TYRE_TEMP_C, INITIAL_TYRE_TEMP_C, INITIAL_TYRE_TEMP_C, INITIAL_TYRE_TEMP_C],
       tireWearPct: [0, 0, 0, 0],
+      tireFlatSpotSeverity: [0, 0, 0, 0],
+      tireGrainLevel: [0, 0, 0, 0],
+      tireBlisterLevel: [0, 0, 0, 0],
+      tireDirtyLevel: [0, 0, 0, 0],
       tireGripFactor: [1, 1, 1, 1],
       brakeTempsC: [INITIAL_BRAKE_TEMP_C, INITIAL_BRAKE_TEMP_C, INITIAL_BRAKE_TEMP_C, INITIAL_BRAKE_TEMP_C],
+      brakeCoreTempsC: [INITIAL_BRAKE_TEMP_C, INITIAL_BRAKE_TEMP_C, INITIAL_BRAKE_TEMP_C, INITIAL_BRAKE_TEMP_C],
+      brakePadMuFactor: [1, 1, 1, 1],
+      aeroWakeDragMult: 1,
+      aeroWakeDownforceMult: 1,
       wheelSurfaces: ['asphalt', 'asphalt', 'asphalt', 'asphalt'],
       frontSlipAngleDeg: 0,
       rearSlipAngleDeg: 0,
       ffbTorqueNorm: 0,
       ffbClipping: false,
+      ffbSubframeSamples: [],
       onKerbLeft: false,
       onKerbRight: false,
       offTrack: false,
@@ -2179,6 +2483,10 @@ export class F1Physics2026 {
     });
     t.tireTempsC = quad((w) => Math.round(0.6 * w.tyre.surfaceTempC + 0.4 * w.tyre.coreTempC));
     t.tireWearPct = quad((w) => Number((w.tyre.wear * 100).toFixed(1)));
+    t.tireFlatSpotSeverity = quad((w) => Number(w.tyre.flatSpotSeverity.toFixed(3)));
+    t.tireGrainLevel = quad((w) => Number(w.tyre.grainLevel.toFixed(3)));
+    t.tireBlisterLevel = quad((w) => Number(w.tyre.blisterLevel.toFixed(3)));
+    t.tireDirtyLevel = quad((w) => Number(w.tyre.dirtyLevel.toFixed(3)));
     t.tireBandTempsC = quad((w) => {
       // Inner / middle / outer surface temperatures, listed left to right as seen from behind
       const imo: [number, number, number] = [0, 1, 2].map((b) => Math.round(tyreBandSurfaceTempC(w.tyre, b))) as [
@@ -2191,12 +2499,19 @@ export class F1Physics2026 {
     t.tirePressuresPsi = quad((w) => Number(w.tyre.pressurePsi.toFixed(1)));
     t.tireGripFactor = quad((w) => Number(w.gripFactor.toFixed(2)));
     t.brakeTempsC = quad((w) => Math.round(w.brakeTempC));
+    t.brakeCoreTempsC = quad((w) => Math.round(w.brakeDisc.coreTempC));
+    t.brakePadMuFactor = quad((w) => Number(w.brakeDisc.muFactor.toFixed(3)));
+    t.aeroWakeDragMult = Number(this.aeroWakeState.dragMultiplier.toFixed(3));
+    t.aeroWakeDownforceMult = Number(
+      (0.5 * (this.aeroWakeState.frontDownforceMultiplier + this.aeroWakeState.rearDownforceMultiplier)).toFixed(3)
+    );
     t.wheelSurfaces = quad((w) => w.surfaceType);
 
     t.frontSlipAngleDeg = 0.5 * (t.wheelSlipAnglesDeg[0] + t.wheelSlipAnglesDeg[1]);
     t.rearSlipAngleDeg = 0.5 * (t.wheelSlipAnglesDeg[2] + t.wheelSlipAnglesDeg[3]);
     t.ffbTorqueNorm = this.ffbTorqueNorm;
     t.ffbClipping = Math.abs(this.ffbTorqueNorm) > 0.95;
+    t.ffbSubframeSamples = [...this.ffbSubframeSamples];
 
     t.onKerbLeft = onKerbLeft;
     t.onKerbRight = onKerbRight;

@@ -360,7 +360,7 @@ export const VF26_WINGS: ReadonlyArray<Vf26WingSpec> = [
 export const VF26_ACTIVE_AERO_TRANSITION_S = 0.2;
 
 // ---------------------------------------------------------------------------
-// Power unit  (`data/ks_ferrari_sf_26.carengine`, `*.turbo`, `data/kers/*`)
+// Power unit  (`data/vf26_ref.carengine`, `*.turbo`, `data/kers/*`)
 // ---------------------------------------------------------------------------
 
 export const VF26_ENGINE = {
@@ -464,7 +464,7 @@ export function mgukDeployCapW(speedKmh: number, overrideActive: boolean): numbe
 }
 
 // ---------------------------------------------------------------------------
-// Drivetrain  (`data/ks_ferrari_sf_26.gearbox|.clutch|.drivetrain`)
+// Drivetrain  (`data/vf26_ref.gearbox|.clutch|.drivetrain`)
 // ---------------------------------------------------------------------------
 
 export const VF26_DRIVETRAIN = {
@@ -499,7 +499,7 @@ export const VF26_DRIVETRAIN = {
 } as const;
 
 // ---------------------------------------------------------------------------
-// Brakes  (`data/ks_ferrari_sf_26.brakesystem`, setup)
+// Brakes  (`data/vf26_ref.brakesystem`, setup)
 // ---------------------------------------------------------------------------
 
 export const VF26_BRAKES = {
@@ -509,6 +509,11 @@ export const VF26_BRAKES = {
   frontBias: 0.56,
   /** Brake power [setup] */
   powerMult: 1.0,
+  /**
+   * Brake migration: front-share shift at full pedal, linear in the pedal [brakesystem presets Mig0–Mig8 =
+   * ebb_controller_migration_N.curve `0|0 1|N/100`; setup default Mig6]
+   */
+  migrationAtFullPedal: 0.06,
 } as const;
 
 /**

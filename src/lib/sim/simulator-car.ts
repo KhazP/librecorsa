@@ -41,6 +41,9 @@ export interface SimulatorCar {
   readonly tyreVisuals?: readonly [TyreVisualState, TyreVisualState, TyreVisualState, TyreVisualState];
   readonly wheelbaseM: number;
   readonly maxSteerAngleRad: number;
+  /** Mass (kg) and yaw inertia (kg·m²) for car-to-car contact (absent: an F1 car's) */
+  readonly contactMassKg?: number;
+  readonly contactYawInertiaKgM2?: number;
   /** The car's own braking guidance for the braking line (absent / null: the circuit's VF26 profile) */
   readonly brakingGuide?: BrakingGuide | null;
 
@@ -79,4 +82,55 @@ export interface SimulatorCar {
   getTyreSetup(): TyreSetup;
   setTyreSetup(setup: TyreSetup): void;
   activateBoostOverride(): boolean;
+
+  /** Apply trailing vortex wake / slipstream deficit from cars ahead */
+  setAeroWakeState?(wake: import('./aero-wake').AeroWakeState): void;
+  /** Apply RealRoad dynamic track evolution sample under the car */
+  setRealRoadSample?(sample: import('./real-road').RealRoadSectorQuery): void;
+  /**
+   * Apply a car-to-car contact resolved by `resolveCarToCarObbCollision` (Three.js world, Y up), as deltas:
+   * `posDeltaX/Z` move the car (m), `velDeltaX/Z` change its world horizontal velocity (m/s) and `yawRateDeltaRadS`
+   * its yaw rate about +Y (rad/s, + = counter-clockwise from above, i.e. turning left; note `yawRateRadS` is + right).
+   * The caller clamps the deltas per frame.
+   */
+  applyRigidBodyCollision?(
+    posDeltaX: number,
+    posDeltaZ: number,
+    velDeltaX: number,
+    velDeltaZ: number,
+    yawRateDeltaRadS: number
+  ): void;
+}
+
+/** A flying lap's run-up is this long where the final straight allows it (m) */
+const FLYING_RUN_UP_M = 450;
+/** Slower than this (the circuit's speed profile, km/h) a stretch counts as the last corner, not the straight */
+const FLYING_CORNER_KMH = 200;
+
+/** Acceleration a flying start assumes out of the last corner (m/s²) */
+const FLYING_EXIT_ACCEL = 0.5 * 9.81;
+
+/**
+ * Where a flying lap starts (`s`, m along the lap): 450 m before the line, or 20 m past the exit of the last
+ * corner (`cornerS`: the last point of the speed profile under 200 km/h) where the final straight is shorter
+ * (Shanghai, Red Bull Ring, Suzuka), so no car is dropped into a corner with no yaw rate. Never closer than 40 m to
+ * the line. `cornerS` is null on a full-length run-up.
+ */
+export function flyingStartPoint(track: {
+  totalLengthM: number;
+  getSampleAtDistance(s: number): { optimalSpeedKmh: number };
+}): { s: number; cornerS: number | null } {
+  const L = track.totalLengthM;
+  let straight = 0;
+  for (let d = 5; d <= FLYING_RUN_UP_M; d += 5) {
+    if (track.getSampleAtDistance(L - d).optimalSpeedKmh < FLYING_CORNER_KMH) break;
+    straight = d;
+  }
+  if (straight >= FLYING_RUN_UP_M) return { s: L - FLYING_RUN_UP_M, cornerS: null };
+  return { s: L - Math.max(40, straight - 20), cornerS: L - straight - 5 };
+}
+
+/** Speed (m/s) a car leaving the last corner at `exitMs` carries `distanceM` further on */
+export function flyingExitSpeedMs(exitMs: number, distanceM: number): number {
+  return Math.sqrt(exitMs * exitMs + 2 * FLYING_EXIT_ACCEL * Math.max(0, distanceM));
 }

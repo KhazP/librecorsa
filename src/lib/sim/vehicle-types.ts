@@ -57,10 +57,32 @@ export interface VehicleWheelState {
   hubZVel: number;
   /** Camber relative to the road, leaning toward +y (rad) */
   camberLeftRad: number;
+  /** Previous sub-step camber angle for gyroscopic precession dγ/dt (rad) */
+  prevCamberLeftRad?: number;
+  /** 5-point contact patch lateral pressure centroid shift toward inner shoulder (-1..+1) */
+  contactCentroidShiftInward?: number;
+  /** 5-point contact patch lateral centroid shift (+left, m) for overturning moment Mx */
+  contactCentroidShiftLeftM?: number;
+  /** Dynamic 3D kingpin mechanical caster trail (m) */
+  casterTrailM?: number;
+  /** Dynamic 3D kingpin scrub radius (m) */
+  scrubRadiusM?: number;
+  /** Dynamic 3D kingpin inclination (rad) */
+  kpiRad?: number;
+  /** Dynamic 3D double-wishbone camber change (rad) */
+  kinematicsCamberDeltaRad?: number;
+  /** Dynamic 3D tie-rod bump steer toe change (rad) */
+  kinematicsBumpSteerRad?: number;
+  /** Overturning moment Mx from the contact centroid shift (Nm), last sub-step */
+  overturningMomentNm?: number;
+  /** Harmonic flat-spot vibration torque at the kingpin (Nm), last sub-step */
+  flatSpotVibrationNm?: number;
   /** Brake torque currently applied (Nm) */
   brakeTorqueNm: number;
-  /** Brake disc temperature (°C) */
+  /** Brake disc surface temperature (°C) */
   brakeTempC: number;
+  /** 2-node physical brake disc state (surface, core, pad glazing, muFactor) */
+  brakeDisc: import('./brake-physics').BrakeDiscState;
   /** Tyre runtime (carcass deflection, temperatures, wear) */
   tyre: TyreRuntime;
 }

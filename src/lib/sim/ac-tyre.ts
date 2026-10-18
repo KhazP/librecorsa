@@ -27,12 +27,37 @@ import type { Vf26TyreSpec } from './vf26-data';
 
 /** Thermal node index: band (0 inner, 1 middle, 2 outer) × layer (0 surface, 1 bulk, 2 carcass) */
 export const TYRE_BANDS = 3;
+/** Circumferential sectors around the tyre perimeter for localized lockup heat and flat-spots */
+export const TYRE_CIRCUMFERENTIAL_SECTORS = 16;
+/** Centrifugal belt growth coefficient (m per rad/s of wheel spin: ≈2.4 mm at 330 km/h, ω ≈ 280 rad/s) */
+export const TYRE_CENTRIFUGAL_RADIUS_K = 8.6e-6;
 const node = (band: number, layer: number) => band * 3 + layer;
 
 export interface MagicFormulaShape {
   B: number;
   C: number;
   E: number;
+}
+
+export interface ContactPatch5PointResult {
+  /** Effective road height under the 5-point cambered footprint (m) */
+  effectiveHeightM: number;
+  /** Effective 3D contact normal (unit vector, world frame Y-up or Z-up depending on caller) */
+  nx: number;
+  ny: number;
+  nz: number;
+  /** Additional camber angle induced by lateral kerb/road slope across the tread (rad) */
+  kerbCamberRad: number;
+  /** Lateral shift of the vertical pressure centroid across the contact patch (-1..+1, + = inner band) */
+  centroidShiftInwardNorm: number;
+  /** Lateral shift of the vertical pressure centroid in metres (+ = left in wheel frame) */
+  centroidShiftLeftM: number;
+  /** Overturning moment Mx = Fz * centroidShiftLeftM (Nm) */
+  overturningMomentPerN: number;
+  /** High-frequency road micro-roughness height at patch center (m) */
+  microRoughnessM: number;
+  /** Whether the tyre deflection reached the rim bottoming stop */
+  rimBottomed: boolean;
 }
 
 export interface TyreRuntime {
@@ -45,6 +70,24 @@ export interface TyreRuntime {
   deflY: number;
   /** Thermal nodes (°C), see `node()` */
   nodes: Float64Array;
+  /** 16-sector circumferential surface temperature offset (°C) */
+  circumferentialTempsC: Float64Array;
+  /** 16-sector circumferential tread/cord wear (0..1) */
+  circumferentialWear: Float64Array;
+  /** Current wheel angular phase (rad, 0..2π) */
+  wheelAngleRad: number;
+  /** Current wheel angular velocity (rad/s) for centrifugal radius growth */
+  angularVelRadS: number;
+  /** Flat-spot severity (0 = round, 1 = severe cord flat-spot) */
+  flatSpotSeverity: number;
+  /** Instantaneous radius drop at current wheel angle from flat-spotting (m) */
+  flatSpotRadiusDropM: number;
+  /** Surface graining level (0..1) from cold-core high-slip tearing */
+  grainLevel: number;
+  /** Internal blistering level (0..1) from overheated core rubber boiling */
+  blisterLevel: number;
+  /** Off-track grass/gravel/marble surface contamination (0..1) */
+  dirtyLevel: number;
   /** Inflation gas temperature (°C) */
   gasTempC: number;
   /** Cold inflation pressure at COLD_REF_C (psi) */
@@ -76,6 +119,10 @@ export interface TyreForceInput {
   surfaceGrip: number;
   /** Which wheel-frame y direction points at the car's centreline (+1 = left, i.e. a right-hand wheel) */
   inwardSign?: 1 | -1;
+  /** Optional 5-point contact patch lateral centroid shift toward inner shoulder (-1..+1) */
+  contactCentroidShiftInward?: number;
+  /** Optional lateral centroid shift in metres (+left) for overturning moment Mx */
+  contactCentroidShiftLeftM?: number;
   dt: number;
 }
 
@@ -86,6 +133,10 @@ export interface TyreForceOutput {
   fy: number;
   /** Self-aligning moment about the vertical axis (Nm, + CCW from above) */
   mz: number;
+  /** Overturning moment about the longitudinal axis (Nm) from 5-point contact centroid shift */
+  mx: number;
+  /** Harmonic vertical/rack vibration torque from flat-spots (Nm) */
+  flatSpotVibrationNm: number;
   /** Signed longitudinal slip ratio (+ traction) */
   slipRatio: number;
   /** Slip angle (rad, + when the patch moves left) */
@@ -101,6 +152,7 @@ export interface TyreForceOutput {
 }
 
 const DEG2RAD = Math.PI / 180;
+const TWO_PI = Math.PI * 2;
 const KELVIN = 273.15;
 /** Maximum stored normalised slip — beyond this the patch is fully sliding */
 const MAX_NORM_SLIP = 5;
@@ -128,6 +180,134 @@ const BAND_CROWN = 2;
 const WEAR_GRIP_LINEAR = 0.06;
 const WEAR_GRIP_KNEE = 0.5;
 const WEAR_GRIP_QUAD = 0.5;
+
+/**
+ * Deterministic multi-octave ISO 8608 spatial road micro-roughness height (m).
+ * Synthesizes repeatable laser-scan-like road texture across wavelengths 0.22 m – 4.5 m.
+ */
+export function evaluateIso8608RoadRoughness(
+  worldX: number,
+  worldZ: number,
+  surface: 'asphalt' | 'road' | 'pitlane' | 'kerb' | 'runoff' | 'grass' | 'gravel' = 'asphalt'
+): number {
+  const w1 = Math.sin(worldX * 2.13 + worldZ * 1.79) * 0.45;
+  const w2 = Math.sin(worldX * 6.41 - worldZ * 5.87 + 1.1) * 0.30;
+  const w3 = Math.cos(worldX * 14.8 + worldZ * 13.2 - 0.7) * 0.17;
+  const w4 = Math.sin(worldX * 28.5 - worldZ * 26.1 + 2.3) * 0.08;
+  const raw = w1 + w2 + w3 + w4; // in [-1, 1]
+  if (surface === 'kerb') {
+    // Rumble strip sawtooth harmonic + micro-roughness
+    const rumble = Math.sin((worldX + worldZ) * 18.85) * 0.0022;
+    return raw * 0.0012 + rumble;
+  }
+  if (surface === 'grass' || surface === 'gravel' || surface === 'runoff') {
+    return raw * 0.0038;
+  }
+  // FIA Grade 1 asphalt micro-roughness (±0.55 mm)
+  return raw * 0.00055;
+}
+
+/**
+ * 5-point 3D cambered & steered contact patch sampler.
+ * Evaluates road height at Center, Front, Rear, Inner, and Outer tread points,
+ * returning the effective road height, 3D surface normal, kerb-induced camber angle,
+ * lateral pressure centroid shift, and overturning moment lever arm.
+ */
+export function sample5PointContactPatch(
+  centerX: number,
+  centerZ: number,
+  headingCos: number,
+  headingSin: number,
+  inwardSign: 1 | -1,
+  camberLeftRad: number,
+  tyreWidthM: number,
+  tyreRadiusM: number,
+  approxDeflectionM: number,
+  sampleHeightAt: (x: number, z: number) => number,
+  surfaceKind: 'asphalt' | 'road' | 'pitlane' | 'kerb' | 'runoff' | 'grass' | 'gravel' = 'asphalt',
+  out: ContactPatch5PointResult = createContactPatchResult()
+): ContactPatch5PointResult {
+  const halfLen = Math.max(0.045, Math.min(0.14, Math.sqrt(Math.max(1e-4, tyreRadiusM * Math.max(0.004, approxDeflectionM)))));
+  const halfWid = 0.42 * tyreWidthM;
+  // Left unit vector in horizontal plane (for Y-up Three.js or Z-up track coordinates):
+  // If forward is (headingSin, headingCos) in (X, Z), left is (headingCos, -headingSin).
+  const leftX = headingCos;
+  const leftZ = -headingSin;
+  const fwdX = headingSin;
+  const fwdZ = headingCos;
+
+  const microC = evaluateIso8608RoadRoughness(centerX, centerZ, surfaceKind);
+  const hC = sampleHeightAt(centerX, centerZ) + microC;
+  const hF = sampleHeightAt(centerX + fwdX * halfLen, centerZ + fwdZ * halfLen) +
+    evaluateIso8608RoadRoughness(centerX + fwdX * halfLen, centerZ + fwdZ * halfLen, surfaceKind);
+  const hR = sampleHeightAt(centerX - fwdX * halfLen, centerZ - fwdZ * halfLen) +
+    evaluateIso8608RoadRoughness(centerX - fwdX * halfLen, centerZ - fwdZ * halfLen, surfaceKind);
+
+  // Inner point is in direction `inwardSign * left`, Outer point is `-inwardSign * left`
+  const inX = centerX + inwardSign * leftX * halfWid;
+  const inZ = centerZ + inwardSign * leftZ * halfWid;
+  const outX = centerX - inwardSign * leftX * halfWid;
+  const outZ = centerZ - inwardSign * leftZ * halfWid;
+  const hI = sampleHeightAt(inX, inZ) + evaluateIso8608RoadRoughness(inX, inZ, surfaceKind);
+  const hO = sampleHeightAt(outX, outZ) + evaluateIso8608RoadRoughness(outX, outZ, surfaceKind);
+
+  // Camber tilt raises one shoulder and lowers the other relative to the wheel center:
+  // camberLeftRad > 0 means top leans left, so bottom (tread) is lower on the right (-left) and higher on the left
+  // (used for the footprint envelope only: the tyre model shifts the bands for camber itself)
+  const camberInRad = inwardSign * camberLeftRad;
+  const treadDropIn = halfWid * Math.sin(camberInRad);
+
+  // Effective contact height envelopes the 5 points
+  const effectiveHeightM = 0.40 * hC + 0.15 * hF + 0.15 * hR + 0.15 * Math.max(hC, hI + treadDropIn) + 0.15 * Math.max(hC, hO - treadDropIn);
+
+  // Longitudinal and lateral road slopes across the footprint
+  const slopeFwd = (hF - hR) / (2 * halfLen);
+  const slopeIn = (hI - hO) / (2 * halfWid);
+  const slopeLeft = inwardSign * slopeIn;
+
+  // Construct unit normal (nx, ny, nz) where ny is vertical up
+  const rawNx = -(fwdX * slopeFwd + leftX * slopeLeft);
+  const rawNz = -(fwdZ * slopeFwd + leftZ * slopeLeft);
+  const invLen = 1 / Math.hypot(rawNx, 1, rawNz);
+  const nx = rawNx * invLen;
+  const ny = invLen;
+  const nz = rawNz * invLen;
+
+  const kerbCamberRad = Math.atan(slopeLeft);
+  // Road (and micro-roughness) height difference across the tread only: camber is already a band shift in
+  // computeTyreForces (BAND_CAMBER_SHIFT), so counting the cambered tread drop here would apply it twice
+  const penDiffIn = (hI - hO) / Math.max(0.008, approxDeflectionM + 0.006);
+  const centroidShiftInwardNorm = Math.max(-0.85, Math.min(0.85, penDiffIn * 0.35));
+  const centroidShiftLeftM = inwardSign * centroidShiftInwardNorm * halfWid * 0.5;
+
+  out.effectiveHeightM = effectiveHeightM;
+  out.nx = nx;
+  out.ny = ny;
+  out.nz = nz;
+  out.kerbCamberRad = kerbCamberRad;
+  out.centroidShiftInwardNorm = centroidShiftInwardNorm;
+  out.centroidShiftLeftM = centroidShiftLeftM;
+  out.overturningMomentPerN = centroidShiftLeftM;
+  out.microRoughnessM = microC;
+  out.rimBottomed = false;
+  return out;
+}
+
+/** A zeroed patch result for `sample5PointContactPatch` to write into (avoids per-step allocation) */
+export function createContactPatchResult(): ContactPatch5PointResult {
+  return {
+    effectiveHeightM: 0,
+    nx: 0,
+    ny: 1,
+    nz: 0,
+    kerbCamberRad: 0,
+    centroidShiftInwardNorm: 0,
+    centroidShiftLeftM: 0,
+    overturningMomentPerN: 0,
+    microRoughnessM: 0,
+    rimBottomed: false,
+  };
+}
 
 /**
  * Grip multiplier from tread wear (0 = new, 1 = destroyed). Progressive: a worn-in tyre loses little
@@ -180,6 +360,15 @@ export function createTyreRuntime(spec: Vf26TyreSpec, initialTempC: number): Tyr
     deflX: 0,
     deflY: 0,
     nodes: new Float64Array(9),
+    circumferentialTempsC: new Float64Array(TYRE_CIRCUMFERENTIAL_SECTORS),
+    circumferentialWear: new Float64Array(TYRE_CIRCUMFERENTIAL_SECTORS),
+    wheelAngleRad: 0,
+    angularVelRadS: 0,
+    flatSpotSeverity: 0,
+    flatSpotRadiusDropM: 0,
+    grainLevel: 0,
+    blisterLevel: 0,
+    dirtyLevel: 0,
     gasTempC: initialTempC,
     coldPressurePsi: coldPressureFor(spec.pressureRefPsi),
     pressurePsi: spec.pressureRefPsi,
@@ -212,9 +401,18 @@ export function setTyreColdPressure(t: TyreRuntime, coldPsi: number): void {
   updateInflation(t);
 }
 
-/** Sets every node and the gas to one temperature (tyre blankets) */
+/** Sets every node and the gas to one temperature (tyre blankets) and resets surface degradation states */
 export function setTyreTemperature(t: TyreRuntime, tempC: number): void {
   t.nodes.fill(tempC);
+  t.circumferentialTempsC.fill(tempC);
+  t.circumferentialWear.fill(0);
+  t.wheelAngleRad = 0;
+  t.angularVelRadS = 0;
+  t.flatSpotSeverity = 0;
+  t.flatSpotRadiusDropM = 0;
+  t.grainLevel = 0;
+  t.blisterLevel = 0;
+  t.dirtyLevel = 0;
   t.gasTempC = tempC;
   t.surfaceTempC = tempC;
   t.coreTempC = tempC;
@@ -232,24 +430,28 @@ function updateInflation(t: TyreRuntime): void {
   t.verticalRate = t.spec.rate * (1 - RATE_PRESSURE_SHARE + RATE_PRESSURE_SHARE * rel);
 }
 
-/**
- * Effective rolling radius under load. The tyre squashes by δ = Fz / k; a radial tyre's rolling
- * radius drops by about δ/3. The mod radius is taken as the rolling radius at the reference load.
- */
-export function tyreRollingRadius(t: TyreRuntime, fz: number): number {
-  const spec = t.spec;
-  const delta = Math.min(0.06, Math.max(0, fz) / t.verticalRate);
-  const deltaRef = spec.fz0 / spec.rate;
-  return spec.radius - (delta - deltaRef) / 3;
+/** Centrifugal radial growth ΔR = k_ω · |ω| (m), capped at 4.5 mm */
+export function tyreCentrifugalGrowthM(omegaRadS: number): number {
+  return Math.min(0.0045, TYRE_CENTRIFUGAL_RADIUS_K * Math.abs(omegaRadS));
 }
 
 /**
- * Free (unloaded) radius (m). The rolling radius is R_unloaded − δ/3 (see `tyreRollingRadius`) and the mod
- * radius is the rolling radius at the reference load, so R_unloaded = spec.radius + (FZ0/rate)/3. This is the
- * nominal value; the geometry of the rendered tyre is taken from the mesh instead.
+ * Effective rolling radius under load. The tyre squashes by δ = Fz / k; a radial tyre's rolling
+ * radius drops by about δ/3 and grows centrifugally with wheel spin speed ω.
+ * When `omegaRadS` is omitted, uses `t.angularVelRadS` (0 at rest).
  */
-export function tyreUnloadedRadius(t: TyreRuntime): number {
-  return t.spec.radius + t.spec.fz0 / t.spec.rate / 3;
+export function tyreRollingRadius(t: TyreRuntime, fz: number, omegaRadS = t.angularVelRadS): number {
+  const spec = t.spec;
+  const delta = Math.min(0.06, Math.max(0, fz) / t.verticalRate);
+  const deltaRef = spec.fz0 / spec.rate;
+  return spec.radius - (delta - deltaRef) / 3 + tyreCentrifugalGrowthM(omegaRadS) - t.flatSpotRadiusDropM * 0.35;
+}
+
+/**
+ * Free (unloaded) radius (m), including centrifugal belt growth when spinning.
+ */
+export function tyreUnloadedRadius(t: TyreRuntime, omegaRadS = t.angularVelRadS): number {
+  return t.spec.radius + t.spec.fz0 / t.spec.rate / 3 + tyreCentrifugalGrowthM(omegaRadS);
 }
 
 /** Radial deflection δ (m) under vertical load `fz` = Fz / current radial rate, clamped to [0, 0.06] as above */
@@ -257,16 +459,32 @@ export function tyreVerticalDeflection(t: TyreRuntime, fz: number): number {
   return Math.min(0.06, Math.max(0, fz) / t.verticalRate);
 }
 
-/** Loaded radius (m) = R_unloaded − δ, where δ = Fz / radial rate (see `tyreVerticalDeflection`) */
-export function tyreLoadedRadius(t: TyreRuntime, fz: number): number {
-  return tyreUnloadedRadius(t) - tyreVerticalDeflection(t, fz);
+/** Loaded radius (m) = R_unloaded − δ − ΔR_flatSpot */
+export function tyreLoadedRadius(t: TyreRuntime, fz: number, omegaRadS = t.angularVelRadS): number {
+  return tyreUnloadedRadius(t, omegaRadS) - tyreVerticalDeflection(t, fz) - t.flatSpotRadiusDropM;
+}
+
+/** Harmonic flat-spot vibration torque (Nm) for a wheel with given flat-spot severity, rotation phase, angular speed, and vertical load */
+export function flatSpotVibrationNm(
+  flatSpotSeverity: number,
+  wheelAngleRad: number,
+  omegaRadS: number,
+  fz: number,
+  fz0 = 3500
+): number {
+  const absVx = Math.abs(omegaRadS) * 0.36;
+  if (flatSpotSeverity <= 0.005 || absVx <= 2 || fz <= 1) return 0;
+  return flatSpotSeverity * (fz / Math.max(500, fz0)) * Math.min(1, absVx / 35) * 16 * Math.sin(wheelAngleRad * 2);
 }
 
 /** Grip from temperature: the performance curve per band, weighted by each band's contact share */
-function thermalGrip(t: TyreRuntime): number {
+function thermalGrip(t: TyreRuntime, slideSpeedMs = 0): number {
+  // WLF (Williams-Landel-Ferry) viscoelastic frequency-temperature shift when sliding:
+  const logFreq = slideSpeedMs > 0.05 ? Math.log10(1 + slideSpeedMs * 0.12) : 0;
+  const wlfShiftC = -1.8 * (logFreq / (2.0 + logFreq));
   let g = 0;
   for (let b = 0; b < TYRE_BANDS; b++) {
-    const gripTemp = 0.6 * t.nodes[node(b, 0)] + 0.4 * t.nodes[node(b, 1)];
+    const gripTemp = 0.6 * t.nodes[node(b, 0)] + 0.4 * t.nodes[node(b, 1)] + wlfShiftC;
     g += t.bandLoad[b] * t.thermal.evaluate(gripTemp);
   }
   return g;
@@ -282,6 +500,18 @@ export function computeTyreForces(t: TyreRuntime, inp: TyreForceInput): TyreForc
   const absVx = Math.abs(inp.vx);
   const slipVelX = inp.rimSpeed - inp.vx; // + when the tyre is driving
   const slipVelY = inp.vy;
+
+  // Update wheel spin angular velocity and angular phase for centrifugal growth & flat-spot sector tracking
+  t.angularVelRadS = inp.rimSpeed / Math.max(0.2, spec.radius);
+  t.wheelAngleRad = (((t.wheelAngleRad + t.angularVelRadS * inp.dt) % TWO_PI) + TWO_PI) % TWO_PI;
+
+  const secIdx = Math.floor((t.wheelAngleRad / TWO_PI) * TYRE_CIRCUMFERENTIAL_SECTORS) % TYRE_CIRCUMFERENTIAL_SECTORS;
+  let minSecWear = t.circumferentialWear[0];
+  for (let i = 1; i < TYRE_CIRCUMFERENTIAL_SECTORS; i++) {
+    if (t.circumferentialWear[i] < minSecWear) minSecWear = t.circumferentialWear[i];
+  }
+  const localFlatWear = Math.max(0, t.circumferentialWear[secIdx] - minSecWear);
+  t.flatSpotRadiusDropM = Math.min(0.004, localFlatWear * 0.016);
 
   // Relaxation-length carcass dynamics, integrated exactly over dt:
   //   d(defl)/dt = slipVel − |vx|/σ · defl
@@ -304,7 +534,17 @@ export function computeTyreForces(t: TyreRuntime, inp: TyreForceInput): TyreForc
     t.deflX *= 0.5;
     t.deflY *= 0.5;
     return {
-      fx: 0, fy: 0, mz: 0, slipRatio: 0, slipAngle: 0, normSlip: 0, mu: 0, gripFactor: 1, slipPower: 0,
+      fx: 0,
+      fy: 0,
+      mz: 0,
+      mx: 0,
+      flatSpotVibrationNm: 0,
+      slipRatio: 0,
+      slipAngle: 0,
+      normSlip: 0,
+      mu: 0,
+      gripFactor: 1,
+      slipPower: 0,
     };
   }
 
@@ -326,11 +566,20 @@ export function computeTyreForces(t: TyreRuntime, inp: TyreForceInput): TyreForc
   let muY = spec.dyRef * Math.pow(loadRatio, spec.lsExpY - 1);
   let muX = spec.dxRef * Math.pow(loadRatio, spec.lsExpX - 1);
 
-  // Temperature (per band) and inflation pressure
-  const thermal = thermalGrip(t);
+  // Sliding-speed sensitivity
+  const slideSpeed = Math.hypot(slipVelX, slipVelY) * Math.min(1, Math.max(0, s - 0.6));
+  const speedSens = 1 / (1 + spec.speedSensitivity * slideSpeed);
+
+  // Temperature (per band with WLF shift), inflation pressure, wear, graining, blistering, dirt & flat-spot
+  const thermal = thermalGrip(t, slideSpeed);
   const pRel = t.pressurePsi / spec.pressureRefPsi - 1;
   const pressureGrip = Math.max(0.8, 1 - PRESSURE_GRIP_LOSS * pRel * pRel);
   const wearMult = wearGripMultiplier(t.wear);
+  const degradationMult =
+    (1 - 0.08 * t.grainLevel) *
+    (1 - 0.12 * t.blisterLevel) *
+    (1 - 0.18 * t.dirtyLevel) *
+    (1 - 0.05 * t.flatSpotSeverity);
 
   // Camber (γ positive when leaning into the lateral force direction)
   const dirY = s > 1e-9 ? -sa / s : 0;
@@ -338,11 +587,7 @@ export function computeTyreForces(t: TyreRuntime, inp: TyreForceInput): TyreForc
   const camberLat = 1 + spec.dcamber0 * gamma * Math.sign(dirY) * Math.min(1, Math.abs(dirY) * 4) + spec.dcamber1 * gamma * gamma;
   const camberLong = 1 + spec.dcamber1 * gamma * gamma;
 
-  // Sliding-speed sensitivity
-  const slideSpeed = Math.hypot(slipVelX, slipVelY) * Math.min(1, Math.max(0, s - 0.6));
-  const speedSens = 1 / (1 + spec.speedSensitivity * slideSpeed);
-
-  const common = thermal * pressureGrip * wearMult * speedSens * inp.surfaceGrip;
+  const common = thermal * pressureGrip * wearMult * degradationMult * speedSens * inp.surfaceGrip;
   muY *= common * Math.max(0.75, camberLat);
   muX *= common * Math.max(0.75, camberLong);
 
@@ -375,16 +620,28 @@ export function computeTyreForces(t: TyreRuntime, inp: TyreForceInput): TyreForc
   const mz = -trail * fy;
 
   // Contact pressure across the tread: camber leaning toward the car loads the inner shoulder,
-  // the lateral force rolls the patch onto the shoulder away from the force, over-inflation crowns it
+  // the lateral force rolls the patch onto the shoulder away from the force, 5-point kerb tilt shifts it,
+  // and over-inflation crowns the middle band
   const inward = inp.inwardSign ?? 1;
   const camberIn = inward * gamma;
   const fyIn = (inward * fy) / inp.fz;
-  const shift = Math.max(-0.85, Math.min(0.85, BAND_CAMBER_SHIFT * camberIn - BAND_LATERAL_SHIFT * fyIn));
+  const patchShiftIn = inp.contactCentroidShiftInward ?? 0;
+  const shift = Math.max(-0.85, Math.min(0.85, BAND_CAMBER_SHIFT * camberIn - BAND_LATERAL_SHIFT * fyIn + 0.45 * patchShiftIn));
   const crown = Math.max(0.6, Math.min(1.6, 1 + BAND_CROWN * pRel));
   const norm = 1 / (2 + crown);
   t.bandLoad[0] = (1 + shift) * norm;
   t.bandLoad[1] = crown * norm;
   t.bandLoad[2] = (1 - shift) * norm;
+
+  // Overturning moment Mx = Fz * Δy_cp
+  const centroidLeftM = inp.contactCentroidShiftLeftM ?? (-0.12 * spec.width * gamma);
+  const mx = inp.fz * centroidLeftM;
+
+  // Harmonic flat-spot vibration torque proportional to flat-spot severity, vertical load, and wheel rotation
+  const flatSpotVibrationNm =
+    t.flatSpotSeverity > 0.005 && absVx > 2
+      ? t.flatSpotSeverity * (inp.fz / spec.fz0) * Math.min(1, absVx / 35) * 16 * Math.sin(t.wheelAngleRad * 2)
+      : 0;
 
   const slipPower = Math.abs(fx * slipVelX) + Math.abs(fy * slipVelY);
 
@@ -392,13 +649,133 @@ export function computeTyreForces(t: TyreRuntime, inp: TyreForceInput): TyreForc
     fx,
     fy,
     mz,
+    mx,
+    flatSpotVibrationNm,
     slipRatio: (t.deflX / sigmaX),
     slipAngle: Math.atan(t.deflY / sigmaY),
     normSlip: s,
     mu: muY,
-    gripFactor: thermal * pressureGrip * wearMult * Math.max(0.75, camberLat),
+    gripFactor: thermal * pressureGrip * wearMult * degradationMult * Math.max(0.75, camberLat),
     slipPower,
   };
+}
+
+/**
+ * Updates the 16-sector circumferential wear and temperature grid (`stepFlatSpot`).
+ * Under wheel lockup (|ωR| << |vx|), sliding energy concentrates into the stationary grounded sector,
+ * creating a localized thermal spike and cord flat-spot.
+ */
+export function stepFlatSpot(
+  t: TyreRuntime,
+  slipPowerW: number,
+  rollSpeedMs: number,
+  rimSpeedMs: number,
+  dt: number
+): void {
+  const absVx = Math.abs(rollSpeedMs);
+  const absRim = Math.abs(rimSpeedMs);
+  const wearInc = slipPowerW * dt * t.spec.wearPerJ;
+  const sec = Math.floor((t.wheelAngleRad / TWO_PI) * TYRE_CIRCUMFERENTIAL_SECTORS) % TYRE_CIRCUMFERENTIAL_SECTORS;
+
+  if (absVx > 4.0 && absRim < 0.35 * absVx) {
+    // Locked / heavily dragging wheel: concentrate heat and abrasion on the grounded sector and its neighbors
+    const lockFrac = (0.35 * absVx - absRim) / (0.35 * absVx);
+    const prevSec = (sec + TYRE_CIRCUMFERENTIAL_SECTORS - 1) % TYRE_CIRCUMFERENTIAL_SECTORS;
+    const nextSec = (sec + 1) % TYRE_CIRCUMFERENTIAL_SECTORS;
+    const localizedWear = wearInc * (1 + 11 * lockFrac);
+    t.circumferentialWear[sec] = Math.min(1, t.circumferentialWear[sec] + localizedWear * 0.6);
+    t.circumferentialWear[prevSec] = Math.min(1, t.circumferentialWear[prevSec] + localizedWear * 0.2);
+    t.circumferentialWear[nextSec] = Math.min(1, t.circumferentialWear[nextSec] + localizedWear * 0.2);
+
+    const tempSpike = (0.45 * slipPowerW * dt * lockFrac) / (C_SURFACE / 4);
+    t.circumferentialTempsC[sec] = Math.min(260, t.circumferentialTempsC[sec] + tempSpike * 0.6);
+    t.circumferentialTempsC[prevSec] = Math.min(260, t.circumferentialTempsC[prevSec] + tempSpike * 0.2);
+    t.circumferentialTempsC[nextSec] = Math.min(260, t.circumferentialTempsC[nextSec] + tempSpike * 0.2);
+  } else {
+    // Normal rolling: distribute wear around all 16 sectors and equalize circumferential temperatures
+    for (let i = 0; i < TYRE_CIRCUMFERENTIAL_SECTORS; i++) {
+      t.circumferentialWear[i] = Math.min(1, t.circumferentialWear[i] + wearInc);
+      t.circumferentialTempsC[i] += (t.surfaceTempC - t.circumferentialTempsC[i]) * Math.min(1, dt * 3.5);
+    }
+  }
+
+  let minW = t.circumferentialWear[0];
+  let maxW = t.circumferentialWear[0];
+  for (let i = 1; i < TYRE_CIRCUMFERENTIAL_SECTORS; i++) {
+    const w = t.circumferentialWear[i];
+    if (w < minW) minW = w;
+    if (w > maxW) maxW = w;
+  }
+  t.flatSpotSeverity = Math.min(1, Math.max(0, (maxW - minW) * 18));
+}
+
+/**
+ * Advances surface graining (`grainLevel`) and internal blistering (`blisterLevel`).
+ * - Graining occurs when high sliding power shears a hot tread surface over a cold bulk/core (< 78 °C),
+ *   and slowly scrubs clean when rolling with the core inside its optimal window.
+ * - Blistering occurs when the internal bulk/core temperature exceeds 128 °C.
+ */
+export function stepGrainBlister(
+  t: TyreRuntime,
+  slipPowerW: number,
+  fz: number,
+  dt: number
+): void {
+  const surfCoreDelta = t.surfaceTempC - t.coreTempC;
+  if (t.coreTempC < 78 && surfCoreDelta > 10 && slipPowerW > 6000) {
+    const coldFactor = (78 - t.coreTempC) / 30;
+    const rate = (slipPowerW / 100000) * coldFactor * 0.25;
+    t.grainLevel = Math.min(1, t.grainLevel + rate * dt);
+  } else if (t.coreTempC >= 82 && t.coreTempC <= 120 && fz > 500 && slipPowerW < 25000) {
+    t.grainLevel = Math.max(0, t.grainLevel - 0.035 * dt);
+  }
+
+  if (t.coreTempC > 128) {
+    const overheat = t.coreTempC - 128;
+    t.blisterLevel = Math.min(1, t.blisterLevel + overheat * 0.0035 * dt);
+  }
+}
+
+/**
+ * Advances surface contamination (`dirtyLevel`) from off-track excursions (grass/runoff/gravel)
+ * or off-line rubber marbles, and cleans the tread via rolling contact and shear work on clean asphalt.
+ */
+export function stepDirtyLevel(
+  t: TyreRuntime,
+  surface: 'asphalt' | 'road' | 'pitlane' | 'kerb' | 'runoff' | 'grass' | 'gravel',
+  slipPowerW: number,
+  rollSpeedMs: number,
+  dt: number,
+  marbleLevel = 0
+): void {
+  t.dirtyLevel = advanceDirtyLevel(t.dirtyLevel, surface, slipPowerW, rollSpeedMs, dt, marbleLevel);
+}
+
+/**
+ * Next tread contamination level (0..1). Grass / gravel / run-off load the tread toward fully dirty; on asphalt it
+ * settles at a level set by the marbles under it (0.6 × marble density): it picks marbles up toward that level when
+ * cleaner, and rolling plus shear work scrub it progressively down to it when dirtier, so off-line marbles do
+ * accumulate while the racing line (no marbles, as at the start of a session) cleans the tyre.
+ */
+export function advanceDirtyLevel(
+  level: number,
+  surface: string,
+  slipPowerW: number,
+  rollSpeedMs: number,
+  dt: number,
+  marbleLevel = 0
+): number {
+  const v = Math.abs(rollSpeedMs);
+  const lv = Number.isFinite(level) ? level : 0;
+  if (surface === 'grass' || surface === 'gravel') return Math.min(1, lv + (0.18 + v * 0.045) * dt);
+  if (surface === 'runoff') return Math.min(1, lv + (0.05 + v * 0.015) * dt);
+  const target = 0.6 * Math.max(0, Math.min(1, Number.isFinite(marbleLevel) ? marbleLevel : 0));
+  if (lv < target) {
+    const pickup = (0.02 + (v / 35) * 0.25) * target;
+    return Math.min(target, lv + pickup * dt);
+  }
+  const clean = (v / 25) * 0.14 + (Math.max(0, slipPowerW) / 50000) * 0.45;
+  return Math.max(target, lv - clean * dt);
 }
 
 // Thermal network (per band; the totals match the earlier calibrated two-node model:
@@ -419,16 +796,8 @@ const G_RIM_GAS = 0.6;
 const heatFlow = new Float64Array(9);
 
 /**
- * 9-node tyre thermal model plus the inflation gas, with ideal-gas pressure.
- *
- * - Sliding friction heat (|Fx·vsx| + |Fy·vsy|) goes into the surface layer, and rolling hysteresis
- *   (∝ Fz·v) into the bulk and carcass, both spread over the bands by contact pressure.
- * - The surface is cooled by the air (speed-dependent convection) and the track, the carcass by the
- *   sidewalls (edge bands) and the gas. Heat conducts through the layers and across the bands.
- * - The gas follows the carcass and the brake-heated rim; its temperature sets the pressure.
- *
- * The coefficients are assumed (the mod's thermal block is in an undocumented format), calibrated on
- * AI laps at Rwanda: the soft compound settles in its 95–110 °C window over a stint.
+ * 9-node tyre thermal model plus the inflation gas, with ideal-gas pressure, 16-sector flat-spotting,
+ * graining, blistering, and dirt pickup.
  */
 export function updateTyreThermal(
   t: TyreRuntime,
@@ -438,7 +807,10 @@ export function updateTyreThermal(
   ambientC: number,
   trackC: number,
   dt: number,
-  brakeTempC: number = ambientC
+  brakeTempC: number = ambientC,
+  rimSpeedMs: number = rollSpeedMs,
+  surface: 'asphalt' | 'road' | 'pitlane' | 'kerb' | 'runoff' | 'grass' | 'gravel' = 'asphalt',
+  marbleLevel: number = 0
 ): void {
   const v = Math.abs(rollSpeedMs);
   const n = t.nodes;
@@ -504,4 +876,10 @@ export function updateTyreThermal(
 
   // Abrasive wear proportional to sliding energy (rate per compound, see the tyre spec)
   t.wear = Math.min(1, t.wear + slipPowerW * dt * t.spec.wearPerJ);
+
+  // Circumferential flat-spot grid, graining/blistering, and surface contamination
+  stepFlatSpot(t, slipPowerW, rollSpeedMs, rimSpeedMs, dt);
+  stepGrainBlister(t, slipPowerW, fz, dt);
+  stepDirtyLevel(t, surface, slipPowerW, rollSpeedMs, dt, marbleLevel);
 }
+

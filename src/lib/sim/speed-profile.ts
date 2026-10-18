@@ -9,7 +9,7 @@
  * braking-zone markers, ghost cars), so they all agree with what this car can actually do.
  */
 
-import type { AeroSetupPreset, TrackSamplePoint } from '@/types/f1';
+import type { AeroSetupPreset, RacingLineId, TrackSamplePoint } from '@/types/f1';
 import { estimateAeroCoefficients } from './vf26-aero';
 import { VF26_BRAKES, VF26_CHASSIS, VF26_TYRES } from './vf26-data';
 
@@ -62,8 +62,12 @@ export interface SpeedProfile {
  */
 export const AI_LINE_WIDTH_SCALE = 0.3;
 
-export function aiLineOffsetM(sample: Pick<TrackSamplePoint, 'racingLineOffset' | 'width'>): number {
-  return sample.racingLineOffset * sample.width * AI_LINE_WIDTH_SCALE;
+export function aiLineOffsetM(
+  sample: Pick<TrackSamplePoint, 'racingLineOffset' | 'racingLineOffsetGt3' | 'width'>,
+  line: RacingLineId = 'f1'
+): number {
+  const norm = line === 'gt3' ? (sample.racingLineOffsetGt3 ?? sample.racingLineOffset) : sample.racingLineOffset;
+  return norm * sample.width * AI_LINE_WIDTH_SCALE;
 }
 
 /** Air density at the circuit (Bugesera ≈ 1400 m ASL) used for nominal profiles */
@@ -104,7 +108,8 @@ export function createVf26ProfileCarModel(
 
 export function computeSpeedProfile(
   samples: ReadonlyArray<TrackSamplePoint>,
-  car: SpeedProfileCarModel
+  car: SpeedProfileCarModel,
+  line: RacingLineId = 'f1'
 ): SpeedProfile {
   const n = samples.length;
   const m = car.massKg;
@@ -113,7 +118,7 @@ export function computeSpeedProfile(
   const pz = new Float64Array(n);
   for (let i = 0; i < n; i++) {
     const sp = samples[i];
-    const lat = aiLineOffsetM(sp);
+    const lat = aiLineOffsetM(sp, line);
     lineOffsetM[i] = lat;
     px[i] = sp.position.x + sp.binormal.x * lat;
     pz[i] = sp.position.z + sp.binormal.z * lat;
@@ -214,10 +219,12 @@ export function brakingZoneLevel(speedMs: ArrayLike<number>, i: number): number 
 }
 
 /**
- * A car's own braking guidance along the AI line, per track sample: the braking line's colours, the braking
+ * A car's own braking guidance along its racing line, per track sample: the braking line's colours, the braking
  * urgency and the HUD target speed. Cars without one use the circuit's (the VF26 profile baked into the samples).
  */
 export interface BrakingGuide {
+  /** The racing line the guide (and the car) follows */
+  line: RacingLineId;
   /** Target speed (m/s) */
   speedMs: Float64Array;
   /** Braking envelope (m/s), see `SpeedProfile.brakeEnvelopeMs` */
@@ -236,13 +243,15 @@ const brakingGuides = new WeakMap<ReadonlyArray<TrackSamplePoint>, Map<string, B
 export function brakingGuideFor(
   samples: ReadonlyArray<TrackSamplePoint>,
   carId: string,
-  car: SpeedProfileCarModel
+  car: SpeedProfileCarModel,
+  line: RacingLineId = 'f1'
 ): BrakingGuide {
   let perCar = brakingGuides.get(samples);
   if (!perCar) brakingGuides.set(samples, (perCar = new Map()));
-  let guide = perCar.get(carId);
+  const key = `${carId}:${line}`;
+  let guide = perCar.get(key);
   if (!guide) {
-    const profile = computeSpeedProfile(samples, car);
+    const profile = computeSpeedProfile(samples, car, line);
     const n = samples.length;
     const brakingZone = new Float32Array(n);
     // The circuit's zones (`brakingZoneLevel`) are an absolute speed drop tuned to the VF26's ~4 g; for any car,
@@ -257,8 +266,8 @@ export function brakingGuideFor(
       const can = Math.min(grip, car.maxBrakeForceN / car.massKg) + (car.dragCoef * v * v) / car.massKg;
       brakingZone[i] = need > BRAKING_ZONE_RED * can ? 1.0 : need > BRAKING_ZONE_AMBER * can ? 0.5 : 0.0;
     }
-    guide = { speedMs: profile.speedMs, brakeEnvelopeMs: profile.brakeEnvelopeMs, brakingZone };
-    perCar.set(carId, guide);
+    guide = { line, speedMs: profile.speedMs, brakeEnvelopeMs: profile.brakeEnvelopeMs, brakingZone };
+    perCar.set(key, guide);
   }
   return guide;
 }
