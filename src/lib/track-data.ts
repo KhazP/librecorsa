@@ -9,11 +9,24 @@ import {
 import rawTrackJson from "../../public/tracks/rwanda/track_data.json";
 import { AI_LINE_WIDTH_SCALE, brakingZoneLevel, computeSpeedProfile, createVf26ProfileCarModel } from "./sim/speed-profile";
 
-export const BASE_ALTITUDE_M = 1385; // Bugesera baseline altitude (m ASL)
-export const RWANDA_BASE_ALTITUDE_M = BASE_ALTITUDE_M;
+/** Raw `track_data.json` layout shared by every circuit (Rwanda's file is the reference schema) */
+export type RawTrackJson = typeof rawTrackJson;
 
-export const TRACK_TOTAL_LENGTH_M = rawTrackJson.metadata.lengthMeters;
-export const RWANDA_TARGET_LENGTH_M = TRACK_TOTAL_LENGTH_M;
+/**
+ * The circuit everything below describes. Rwanda by default; `setActiveTrack` swaps in another layout before
+ * the simulator mounts. The exported constants are live bindings / arrays refilled in place, so modules that
+ * imported them (menus, F12026CarSim's DRS zones) follow the switch without changes.
+ */
+let activeRaw: RawTrackJson = rawTrackJson;
+export let ACTIVE_TRACK_ID = "rwanda";
+
+export const RWANDA_BASE_ALTITUDE_M = 1385; // Bugesera baseline altitude (m ASL)
+/** Altitude (m ASL) of world y = 0 on the active circuit (air density) */
+export let BASE_ALTITUDE_M = RWANDA_BASE_ALTITUDE_M;
+
+export const RWANDA_TARGET_LENGTH_M = rawTrackJson.metadata.lengthMeters;
+/** Lap length of the active circuit (m) */
+export let TRACK_TOTAL_LENGTH_M = rawTrackJson.metadata.lengthMeters;
 
 export interface DrsZoneDef {
   id: string;
@@ -34,7 +47,11 @@ export interface TracksideTvCameraDef {
 }
 
 export interface BuiltTrackData {
-  /** Start grid slots for this layout (behind the S/F line); a future second circuit brings its own */
+  /** Circuit id (`rwanda`, or a folder under public/tracks); absent on synthetic test tracks */
+  id?: string;
+  /** Circuit GLB (relative to the base path); absent on synthetic test tracks */
+  meshUrl?: string;
+  /** Start grid slots for this layout (behind the S/F line) */
   spawnGrid: GridSlotDef[];
   samples: TrackSamplePoint[];
   totalLengthM: number;
@@ -63,10 +80,10 @@ export interface BuiltTrackData {
 }
 
 export const RWANDA_TRACK_METADATA = rawTrackJson.metadata;
-export const RWANDA_DRS_ZONES: DrsZoneDef[] =
-  rawTrackJson.drsZones as DrsZoneDef[];
-export const RWANDA_TV_CAMERAS: TracksideTvCameraDef[] =
-  rawTrackJson.cameras as TracksideTvCameraDef[];
+/** DRS zones of the active circuit (the name predates other circuits) */
+export const RWANDA_DRS_ZONES: DrsZoneDef[] = [...(rawTrackJson.drsZones as DrsZoneDef[])];
+/** Broadcast cameras of the active circuit */
+export const RWANDA_TV_CAMERAS: TracksideTvCameraDef[] = [...(rawTrackJson.cameras as TracksideTvCameraDef[])];
 
 export interface GridSlotDef {
   slot: number;
@@ -78,7 +95,8 @@ export interface GridSlotDef {
   yawRad: number;
   forward: [number, number, number];
 }
-export const RWANDA_SPAWN_GRID: GridSlotDef[] = rawTrackJson.spawnGrid as GridSlotDef[];
+/** Grid slots of the active circuit */
+export const RWANDA_SPAWN_GRID: GridSlotDef[] = [...(rawTrackJson.spawnGrid as GridSlotDef[])];
 
 export const LIVERIES: LiveryConfig[] = [
   {
@@ -128,11 +146,12 @@ export const LIVERIES: LiveryConfig[] = [
   },
 ];
 
-/** Corners of the 2026 layout, detected from the centreline curvature and exported with the track */
-export const TURN_METADATA: TurnMetadata[] = (rawTrackJson.turns as TurnMetadata[]).map((t) => ({
-  ...t,
-  sector: t.sector as 1 | 2 | 3,
-}));
+function turnsOf(raw: RawTrackJson): TurnMetadata[] {
+  return (raw.turns as TurnMetadata[]).map((t) => ({ ...t, sector: t.sector as 1 | 2 | 3 }));
+}
+
+/** Corners of the active circuit, detected from the centreline curvature and exported with the track */
+export const TURN_METADATA: TurnMetadata[] = turnsOf(rawTrackJson);
 
 export const RWANDA_TURN_METADATA = TURN_METADATA;
 
@@ -148,18 +167,56 @@ function isInDrsZone(t: number): boolean {
   return false;
 }
 
-const LEFT_HAND_TURNS = new Set(
+let LEFT_HAND_TURNS = new Set(
   TURN_METADATA.filter((t) => t.direction === "left").map((t) => t.number)
 );
-const TURN_NAMES = new Map(TURN_METADATA.map((t) => [t.number, t.name]));
-const RAW_DS = rawTrackJson.metadata.lengthMeters / rawTrackJson.samples.length;
+let TURN_NAMES = new Map(TURN_METADATA.map((t) => [t.number, t.name]));
+let RAW_DS = rawTrackJson.metadata.lengthMeters / rawTrackJson.samples.length;
 
 type RawTrackSample = (typeof rawTrackJson.samples)[number];
 
 function rawSampleAtS(s: number): RawTrackSample {
-  const n = rawTrackJson.samples.length;
+  const n = activeRaw.samples.length;
   const i = ((Math.round(s / RAW_DS) % n) + n) % n;
-  return rawTrackJson.samples[i];
+  return activeRaw.samples[i];
+}
+
+/** Optional fields newer circuits add to the metadata block */
+export interface TrackMetaExtras {
+  shortName?: string;
+  baseAltitudeM?: number;
+  mesh?: { url?: string };
+  credit?: { title: string; author: string; url: string; short?: string; license: string; licenseUrl: string };
+}
+
+/** Metadata of the active circuit */
+export function getActiveTrackMetadata(): RawTrackJson["metadata"] & TrackMetaExtras {
+  return activeRaw.metadata as RawTrackJson["metadata"] & TrackMetaExtras;
+}
+
+function refill<T>(target: T[], items: T[]): void {
+  target.length = 0;
+  target.push(...items);
+}
+
+/**
+ * Makes `raw` (a `public/tracks/<id>/track_data.json`) the circuit every track query, menu and car uses.
+ * Call before the simulator mounts: built track data, physics and scenes made earlier keep the old layout.
+ */
+export function setActiveTrack(id: string, raw: RawTrackJson = rawTrackJson): void {
+  activeRaw = raw;
+  ACTIVE_TRACK_ID = id;
+  const meta = raw.metadata as RawTrackJson["metadata"] & TrackMetaExtras;
+  TRACK_TOTAL_LENGTH_M = meta.lengthMeters;
+  BASE_ALTITUDE_M = meta.baseAltitudeM ?? (id === "rwanda" ? RWANDA_BASE_ALTITUDE_M : 0);
+  refill(RWANDA_DRS_ZONES, raw.drsZones as DrsZoneDef[]);
+  refill(RWANDA_TV_CAMERAS, raw.cameras as TracksideTvCameraDef[]);
+  refill(RWANDA_SPAWN_GRID, raw.spawnGrid as GridSlotDef[]);
+  refill(TURN_METADATA, turnsOf(raw));
+  LEFT_HAND_TURNS = new Set(TURN_METADATA.filter((t) => t.direction === "left").map((t) => t.number));
+  TURN_NAMES = new Map(TURN_METADATA.map((t) => [t.number, t.name]));
+  RAW_DS = meta.lengthMeters / raw.samples.length;
+  cachedBuiltTrack = null;
 }
 
 function getTurnInfoAtS(
@@ -180,9 +237,11 @@ function getTurnInfoAtS(
     TURN_NAMES.get(turnNumber) ??
     (sector === 1
       ? "Start / Finish Straight"
-      : sector === 2
-        ? "Thousand Hills Straight"
-        : "Qatar Valley Straight");
+      : ACTIVE_TRACK_ID !== "rwanda"
+        ? `Sector ${sector}`
+        : sector === 2
+          ? "Thousand Hills Straight"
+          : "Qatar Valley Straight");
   return {
     sector,
     turnNumber,
@@ -270,14 +329,15 @@ export function catmullRomWeights(t: number): [number, number, number, number] {
   ];
 }
 
+/** Built data of the active circuit (Rwanda unless `setActiveTrack` chose another) */
 export function getRwandaTrackData(numSamples = 1200): BuiltTrackData {
-  if (cachedBuiltTrack && cachedBuiltTrack.samples.length === numSamples) {
+  if (cachedBuiltTrack && cachedBuiltTrack.samples.length === numSamples && cachedBuiltTrack.id === ACTIVE_TRACK_ID) {
     return cachedBuiltTrack;
   }
 
-  const rawSamples = rawTrackJson.samples;
+  const rawSamples = activeRaw.samples;
   const rawCount = rawSamples.length;
-  const totalLength = rawTrackJson.metadata.lengthMeters;
+  const totalLength = activeRaw.metadata.lengthMeters;
 
   const splinePts = rawSamples.map(
     (s) => new THREE.Vector3(s.p[0], s.p[1], s.p[2])
@@ -289,6 +349,7 @@ export function getRwandaTrackData(numSamples = 1200): BuiltTrackData {
 
   const positions: THREE.Vector3[] = [];
   const racingOffsetsM: number[] = [];
+  const gt3OffsetsM: number[] = [];
   const yProfs: number[][] = [];
   const widths: number[] = [];
   const bankings: number[] = [];
@@ -329,6 +390,9 @@ export function getRwandaTrackData(numSamples = 1200): BuiltTrackData {
     positions.push(new THREE.Vector3(cx, cy, cz));
     // Racing-line offset (m, + right): the one line the AI drives, the HUD draws and the speed profile uses
     racingOffsetsM.push(cubic(rm1.ro, r0.ro, r1.ro, r2.ro));
+    // The GT3's own lap-time line (`roGt3`); a track without one gives it the F1 line
+    const roGt3 = (r: typeof r0) => (r as { roGt3?: number }).roGt3 ?? r.ro;
+    gt3OffsetsM.push(cubic(roGt3(rm1), roGt3(r0), roGt3(r1), roGt3(r2)));
     widths.push(THREE.MathUtils.lerp(r0.w, r1.w, alpha));
 
     const meshBank = THREE.MathUtils.lerp(r0.b, r1.b, alpha);
@@ -445,6 +509,7 @@ export function getRwandaTrackData(numSamples = 1200): BuiltTrackData {
   const verticalCurvatures: number[] = [];
   const slopeSins: number[] = [];
   const racingOffsetsNorm: number[] = [];
+  const gt3OffsetsNorm: number[] = [];
 
   for (let i = 0; i < NUM_SAMPLES; i++) {
     const prev2 = positions[(i - 2 + NUM_SAMPLES) % NUM_SAMPLES];
@@ -522,6 +587,7 @@ export function getRwandaTrackData(numSamples = 1200): BuiltTrackData {
 
     // Normalised so that aiLineOffsetM(sample) returns the exported offset in metres
     racingOffsetsNorm.push(racingOffsetsM[i] / (widths[i] * AI_LINE_WIDTH_SCALE));
+    gt3OffsetsNorm.push(gt3OffsetsM[i] / (widths[i] * AI_LINE_WIDTH_SCALE));
   }
 
   const samples: TrackSamplePoint[] = [];
@@ -559,6 +625,7 @@ export function getRwandaTrackData(numSamples = 1200): BuiltTrackData {
       wallRightM: edges[i].wR,
       drsZone: isInDrsZone(t),
       racingLineOffset: racingOffsetsNorm[i],
+      racingLineOffsetGt3: gt3OffsetsNorm[i],
       optimalSpeedKmh: 0,
       brakingZone: 0,
       gripMultiplier: grips[i],
@@ -644,7 +711,8 @@ export function getRwandaTrackData(numSamples = 1200): BuiltTrackData {
 
   const getSampleAtDistance = (s: number): TrackSamplePoint => {
     const n = samples.length;
-    const wrappedS = ((s % totalLength) + totalLength) % totalLength;
+    // A non-finite s (a car state that already went NaN) would index samples[NaN] and throw
+    const wrappedS = Number.isFinite(s) ? ((s % totalLength) + totalLength) % totalLength : 0;
     const exactIdx = (wrappedS / totalLength) * n;
     const idx0 = Math.floor(exactIdx) % n;
     const idx1 = (idx0 + 1) % n;
@@ -695,6 +763,11 @@ export function getRwandaTrackData(numSamples = 1200): BuiltTrackData {
       racingLineOffset: THREE.MathUtils.lerp(
         s0.racingLineOffset,
         s1.racingLineOffset,
+        alpha
+      ),
+      racingLineOffsetGt3: THREE.MathUtils.lerp(
+        s0.racingLineOffsetGt3 ?? s0.racingLineOffset,
+        s1.racingLineOffsetGt3 ?? s1.racingLineOffset,
         alpha
       ),
       optimalSpeedKmh: THREE.MathUtils.lerp(
@@ -818,8 +891,9 @@ export function getRwandaTrackData(numSamples = 1200): BuiltTrackData {
       if (chosen && off === 0) break;
     }
     if (!chosen) {
-      chosen = solveSegment(worldX, worldZ, fallback!.i0);
-      chosen.t = THREE.MathUtils.clamp(chosen.t, 0, 1);
+      // No fallback only for a non-finite point (NaN t fails both tests): stay on the nearest sample
+      chosen = solveSegment(worldX, worldZ, fallback?.i0 ?? bestIdx);
+      chosen.t = Number.isFinite(chosen.t) ? THREE.MathUtils.clamp(chosen.t, 0, 1) : 0;
     }
     const s = ((((chosen.i0 + chosen.t) * ds) % totalLength) + totalLength) % totalLength;
     return { ...chosen, s };
@@ -844,7 +918,9 @@ export function getRwandaTrackData(numSamples = 1200): BuiltTrackData {
   };
 
   cachedBuiltTrack = {
-    spawnGrid: RWANDA_SPAWN_GRID,
+    id: ACTIVE_TRACK_ID,
+    meshUrl: getActiveTrackMetadata().mesh?.url ?? "/tracks/rwanda/rwanda_2026.glb",
+    spawnGrid: [...RWANDA_SPAWN_GRID],
     samples,
     totalLengthM: totalLength,
     totalLength,
@@ -856,6 +932,9 @@ export function getRwandaTrackData(numSamples = 1200): BuiltTrackData {
 
   return cachedBuiltTrack;
 }
+
+/** Same as `getRwandaTrackData`: the active circuit */
+export const getActiveTrackData = getRwandaTrackData;
 
 export function getTrackData(): BuiltTrackData {
   return getRwandaTrackData(1200);

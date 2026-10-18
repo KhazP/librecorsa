@@ -14,6 +14,10 @@ const JSON_PATH = resolve(process.cwd(), 'public/tracks/rwanda/track_data.json')
 
 const KERB_HINGE_M = 1.5;
 const RUNOFF_BANK_MAX = (2.0 * Math.PI) / 180;
+/** Designer-given corner banking as [s_m, cross slope %] knots (T2, Wurz: 12 % easing to 6 % and 4 %) */
+const BANK_PROFILES: [number, number][][] = [
+  [[560, 0], [625, 12.5], [690, 12.5], [722, 6], [752, 4], [795, 0]],
+];
 const KERB_PROF_Z = [0.0, 0.018, 0.032, 0.026, 0.0];
 
 function ss(e0: number, e1: number, v: number): number {
@@ -282,6 +286,27 @@ function main() {
     const magRad = (magDeg * Math.PI) / 180;
     const sg = kappa2[i] > 0 ? 1 : kappa2[i] < 0 ? -1 : 0;
     bankRaw[i] = magRad * turn * sg;
+  }
+  // Designer-given corner banking raises the generic camber inside its window (same sign as the corner's
+  // tightest point); mirrors BANK_PROFILES in scripts/rwanda-2026/build_track.py
+  for (const prof of BANK_PROFILES) {
+    const s0 = prof[0][0];
+    const s1 = prof[prof.length - 1][0];
+    let iMax = -1;
+    for (let i = 0; i < n2; i++) {
+      const s = i * ds2;
+      if (s >= s0 && s <= s1 && (iMax < 0 || Math.abs(kappa2[i]) > Math.abs(kappa2[iMax]))) iMax = i;
+    }
+    const sg = Math.sign(kappa2[iMax]);
+    for (let i = 0; i < n2; i++) {
+      const s = i * ds2;
+      if (s < s0 || s > s1) continue;
+      let k = 1;
+      while (prof[k][0] < s) k++;
+      const f = (s - prof[k - 1][0]) / (prof[k][0] - prof[k - 1][0]);
+      const pct = prof[k - 1][1] + (prof[k][1] - prof[k - 1][1]) * f;
+      bankRaw[i] = sg * Math.max(bankRaw[i] * sg, Math.atan(pct / 100));
+    }
   }
 
   let bankNew = gaussClosed(bankRaw, 14.0, ds2);
