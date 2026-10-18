@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 140" fill="none">
+  <defs>
+    <linearGradient id="lcb" x1="12" y1="6" x2="116" y2="122" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1A1E2B" />
+      <stop offset="1" stop-color="#07080C" />
+    </linearGradient>
+    <linearGradient id="lcv" x1="30" y1="24" x2="96" y2="102" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#E2FF4D" />
+      <stop offset="1" stop-color="#A6E000" />
+    </linearGradient>
+    <linearGradient id="lcs" x1="0" y1="0" x2="0" y2="128" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.16" />
+      <stop offset="0.5" stop-color="#FFFFFF" stop-opacity="0" />
+    </linearGradient>
+  </defs>
+
+  <!-- Emblem -->
+  <g transform="translate(6 6)">
+    <path d="M28 6H110Q122 6 122 18V98L98 122H18Q6 122 6 110V28Z" fill="url(#lcb)" />
+    <path d="M28 6H110Q122 6 122 18V98L98 122H18Q6 122 6 110V28Z" fill="url(#lcs)" />
+    <path d="M28 6H110Q122 6 122 18V98L98 122H18Q6 122 6 110V28Z" stroke="#2C3246" stroke-width="2" />
+    <path d="M101 117.5L117.5 101" stroke="#CCFF00" stroke-width="4" stroke-linecap="round" />
+    <g transform="translate(13 0) skewX(-12)">
+      <path d="M32 26H48V84H96V100H38Q32 100 32 94Z" fill="url(#lcv)" />
+      <path d="M92.32 44.14A20 20 0 1 0 92.32 69.86" stroke="#F5F7FA" stroke-width="12" />
+      <path d="M73.53 76.7A20 20 0 0 1 57.3 53.53" stroke="#FF2A3C" stroke-width="12" stroke-dasharray="5.2 4.2" />
+      <path d="M101 42H112" stroke="#00E5FF" stroke-width="4.5" stroke-linecap="round" />
+      <path d="M104 51H110" stroke="#00E5FF" stroke-opacity="0.45" stroke-width="3" stroke-linecap="round" />
+    </g>
+  </g>
+
+  <!-- Wordmark: LIBRE (pitboard white) + CORSA (volt) -->
+  <g transform="translate(156 0)">
+    <text x="0" y="80" fill="#F5F7FA" font-family="'Orbitron', 'Titillium Web', sans-serif" font-weight="900" font-style="italic" font-size="56" letter-spacing="3.4">LIBRE<tspan fill="#CCFF00">CORSA</tspan></text>
+    <polygon points="6,96 26,96 22,103 2,103" fill="#CCFF00" />
+    <polygon points="30,96 50,96 46,103 26,103" fill="#00E5FF" />
+    <polygon points="54,96 74,96 70,103 50,103" fill="#FF2A3C" />
+    <text x="84" y="104" fill="#8E96AA" font-family="'JetBrains Mono', 'Titillium Web', monospace" font-weight="700" font-size="12.5" letter-spacing="4.2">OPEN-SOURCE 500 HZ MOTORSPORT SIM</text>
+  </g>
+</svg>

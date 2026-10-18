@@ -12,10 +12,30 @@ import type {
   TyreSetup,
   VehicleModelId,
 } from "@/types/f1";
-import { LIVERIES, TRACK_TOTAL_LENGTH_M, TURN_METADATA } from "@/lib/track-data";
+import { ACTIVE_TRACK_ID, LIVERIES, TRACK_TOTAL_LENGTH_M, TURN_METADATA } from "@/lib/track-data";
+import { getTrackInfo } from "@/lib/track-registry";
 import { COCKPIT_FOV_MAX_DEG, COCKPIT_FOV_MIN_DEG } from "@/lib/settings/player-settings";
 import { MultiplayerPanel, type MultiplayerPanelProps } from "./MultiplayerPanel";
-import { useListNav } from "@/components/menu/useMenuNav";
+import { DisplayPanel, type DisplayPanelProps } from "./DisplayPanel";
+import { LeaderboardPanel, type LeaderboardPanelProps } from "./LeaderboardPanel";
+import { focusInZone, focusZone, useFocusNav } from "@/components/menu/useFocusNav";
+import { PromptBar, RailItem, TabStrip } from "@/components/menu/menu-ui";
+import {
+  CornerDownRight,
+  Gamepad2,
+  Gauge,
+  LogOut,
+  MonitorCog,
+  Pause,
+  Play,
+  RotateCcw,
+  SlidersHorizontal,
+  Timer,
+  Users,
+  Wrench,
+  type LucideIcon,
+} from "lucide-react";
+import { LibreCorsaLogo } from "@/components/ui/LibreCorsaLogo";
 
 export const CAMERA_LABELS: Record<CameraMode, string> = {
   chase: "Chase",
@@ -70,17 +90,29 @@ export const VEHICLE_CHOICES: {
   id: VehicleModelId;
   title: string;
   sub: string;
+  badge: string;
+  badgeColor: string;
 }[] = [
-  { id: "vf26", title: "VF26", sub: "Curvilinear 2026 model · active aero" },
+  {
+    id: "vf26",
+    title: "FA-26 Prototype",
+    sub: "Curvilinear 2026 model · active aero",
+    badge: "FA-26",
+    badgeColor: "#CCFF00",
+  },
   {
     id: "f12026-car",
-    title: "f12026-car",
+    title: "FA-26 Rigid-Body",
     sub: "6-DOF rigid-body · track colliders · DRS",
+    badge: "6-DOF",
+    badgeColor: "#CCFF00",
   },
   {
     id: "amg-gt3",
-    title: "AMG GT3",
-    sub: "Mercedes-AMG GT3 · 6.2L V8 · ABS / TC",
+    title: "Mercedes-AMG GT3",
+    sub: "GT3 Pro · 6.2L V8 · Multi-stage ABS / TC",
+    badge: "GT3 PRO",
+    badgeColor: "#00E5FF",
   },
 ];
 
@@ -132,9 +164,13 @@ export interface PauseMenuProps extends MultiplayerPanelProps {
   controlsCheatSheet?: readonly (readonly [string, string])[];
   /** Key names for the hints on the toggles (defaults: the original layout) */
   keyNames?: Partial<Record<"camera" | "racingLine" | "mute" | "mouseSteer" | "autopilot" | "restart", string>>;
+  /** HUD layout, graphics, touch controls and VR */
+  displayPanel?: DisplayPanelProps;
+  /** Lap times, ghosts and the online board */
+  leaderboardPanel?: LeaderboardPanelProps;
 }
 
-type Panel = "settings" | "setup" | "corners" | "multiplayer";
+type Panel = "settings" | "setup" | "corners" | "multiplayer" | "display" | "leaderboard";
 
 export const Toggle: React.FC<{
   label: string;
@@ -142,21 +178,21 @@ export const Toggle: React.FC<{
   checked: boolean;
   onChange: () => void;
 }> = ({ label, detail, checked, onChange }) => (
-  <label className="flex cursor-pointer items-center justify-between gap-4 rounded px-1 py-1.5 hover:bg-white/5">
+  <label className="flex cursor-pointer items-center justify-between gap-4 rounded px-1.5 py-1.5 transition-colors hover:bg-white/5">
     <span>
-      <span className="block font-f1-italic text-[15px] uppercase">{label}</span>
-      {detail ? <span className="block font-f1-mono text-[11px] text-zinc-500">{detail}</span> : null}
+      <span className="block font-f1-italic text-[15px] text-[#F5F7FA] uppercase">{label}</span>
+      {detail ? <span className="block font-f1-mono text-[11px] text-[#8E96AA]">{detail}</span> : null}
     </span>
     <input type="checkbox" checked={checked} onChange={onChange} className="peer sr-only" />
     <span
       aria-hidden
-      className={`relative h-6 w-11 shrink-0 rounded-full transition-colors peer-focus-visible:ring-2 peer-focus-visible:ring-white ${
-        checked ? "bg-[#00D26A]" : "bg-zinc-700"
+      className={`relative h-6 w-11 shrink-0 rounded-full border transition-colors peer-focus-visible:ring-2 peer-focus-visible:ring-[#CCFF00] ${
+        checked ? "border-[#CCFF00] bg-[#CCFF00]" : "border-[#262B3D] bg-[#08090D]"
       }`}
     >
       <span
-        className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform ${
-          checked ? "translate-x-[22px]" : "translate-x-0.5"
+        className={`absolute top-0.5 h-4.5 w-4.5 rounded-full transition-transform ${
+          checked ? "translate-x-[22px] bg-[#08090D]" : "translate-x-0.5 bg-[#8E96AA]"
         }`}
       />
     </span>
@@ -170,10 +206,10 @@ export const TyreSlider: React.FC<{
   format: (value: number) => string;
   onChange: (value: number) => void;
 }> = ({ label, value, limits, format, onChange }) => (
-  <label className="block rounded px-1 py-1.5 hover:bg-white/5">
+  <label className="block rounded px-1.5 py-1.5 hover:bg-white/5">
     <span className="flex items-center justify-between gap-3">
-      <span className="font-f1-italic text-[15px] uppercase">{label}</span>
-      <span className="font-f1-mono text-sm font-bold tabular-nums">{format(value)}</span>
+      <span className="font-f1-italic text-[15px] text-[#F5F7FA] uppercase">{label}</span>
+      <span className="font-f1-mono text-sm font-bold text-[#CCFF00] tabular-nums">{format(value)}</span>
     </span>
     <input
       type="range"
@@ -182,7 +218,7 @@ export const TyreSlider: React.FC<{
       step={limits.step}
       value={value}
       onChange={(e) => onChange(Number((Math.round(Number(e.target.value) / limits.step) * limits.step).toFixed(1)))}
-      className="mt-1 w-full cursor-pointer accent-[#E10600]"
+      className="mt-1 w-full cursor-pointer accent-[#CCFF00]"
     />
   </label>
 );
@@ -198,169 +234,207 @@ export const Choice: React.FC<{
   <button
     type="button"
     onClick={onClick}
-    className={`cursor-pointer rounded border px-2 py-2 text-left transition-colors ${
+    aria-pressed={active}
+    className={`min-h-[44px] cursor-pointer rounded border px-2.5 py-2 text-left transition-all ${
       active
-        ? "border-[#E10600] bg-[#E10600]/20 text-white"
-        : "border-white/10 bg-black/30 text-zinc-400 hover:bg-white/5"
+        ? "border-[#CCFF00] bg-[#CCFF00]/15 text-[#F5F7FA] shadow-[inset_0_0_12px_rgba(204,255,0,0.12)]"
+        : "border-[#262B3D] bg-[#08090D]/80 text-[#8E96AA] hover:border-[#8E96AA]/40 hover:bg-[#1B1F2B] hover:text-[#F5F7FA]"
     }`}
   >
     {children}
   </button>
 );
 
-/** Esc menu: race / session actions on the left, the selected panel on the right */
+/**
+ * Esc / Menu: race actions in a rail on the left, the session's panels as tabs on the right.
+ * A controller reaches every control; LB / RB switch tabs, Ⓑ steps back (panel → tabs → rail →
+ * resume) and Menu resumes from anywhere.
+ */
 export const PauseMenu: React.FC<PauseMenuProps> = (props) => {
-  const { telemetry, onTogglePause, onResetCar, aiOpponents, onOpenControls, onExitToTitle } = props;
+  const { telemetry, onTogglePause, onResetCar, aiOpponents, onOpenControls, onExitToTitle, displayPanel, leaderboardPanel } = props;
+  // In a multiplayer race only the host restarts it (for everyone); there is no flying lap
+  const mpRace = telemetry.race?.multiplayer === true;
+  const canRestart = !mpRace || props.isHost === true;
   const [panel, setPanel] = useState<Panel>(props.openMultiplayer ? "multiplayer" : "settings");
+  const rootRef = useRef<HTMLDivElement | null>(null);
   const panelRef = useRef<HTMLElement | null>(null);
-  // Below lg the panel sits under the rail, usually off-screen: render the one just opened and bring it into view
-  const openPanel = useCallback((next: Panel) => {
-    if (window.matchMedia("(min-width: 64rem)").matches) return setPanel(next);
-    flushSync(() => setPanel(next));
-    // Instant: the tap's own touch gesture would cancel a smooth scroll
-    panelRef.current?.scrollIntoView({ block: "start" });
-  }, []);
+  const trackInfo = getTrackInfo(ACTIVE_TRACK_ID);
 
-  const menuItems = useMemo(
-    () => [
-      {
-        id: "resume",
-        label: "Resume",
-        detail: "Back on track",
-        run: () => onTogglePause(),
-      },
-      {
-        id: "grid",
-        label: aiOpponents ? "Restart race" : "Grid start",
-        detail: aiOpponents ? "Line up on the grid behind the lights" : "Standing start from the grid",
-        run: () => {
-          onResetCar(false);
-          onTogglePause();
-        },
-      },
-      {
-        id: "flying",
-        label: aiOpponents ? "Rolling start" : "Flying lap",
-        detail: aiOpponents ? "Restart the race on the move" : "Timed lap from the main straight",
-        run: () => {
-          onResetCar(true);
-          onTogglePause();
-        },
-      },
-      {
-        id: "settings",
-        label: "Session",
-        detail: "AI opponents, assists, camera",
-        run: () => openPanel("settings"),
-      },
-      {
-        id: "setup",
-        label: "Car setup",
-        detail: "Aero, tyres, traction, livery",
-        run: () => openPanel("setup"),
-      },
-      {
-        id: "corners",
-        label: "Corners",
-        detail: `Practise any of the ${TURN_METADATA.length} turns`,
-        run: () => openPanel("corners"),
-      },
-      {
-        id: "multiplayer",
-        label: "Multiplayer",
-        detail: "Race friends peer-to-peer",
-        run: () => openPanel("multiplayer"),
-      },
-      ...(onOpenControls
-        ? [
-            {
-              id: "controls",
-              label: "Controls",
-              detail: "Keys, controller, wheel calibration",
-              run: onOpenControls,
-            },
-          ]
-        : []),
-      ...(onExitToTitle
-        ? [
-            {
-              id: "title",
-              label: "Main menu",
-              detail: "Leave the session",
-              run: onExitToTitle,
-            },
-          ]
-        : []),
-    ],
-    [aiOpponents, onResetCar, onTogglePause, onOpenControls, onExitToTitle, openPanel],
+  const tabs = useMemo(
+    () =>
+      [
+        { id: "settings" as const, label: "Session", icon: SlidersHorizontal },
+        { id: "setup" as const, label: "Car setup", icon: Wrench },
+        { id: "corners" as const, label: "Corners", icon: CornerDownRight },
+        { id: "multiplayer" as const, label: "Multiplayer", icon: Users },
+        ...(leaderboardPanel ? [{ id: "leaderboard" as const, label: "Lap times", icon: Timer }] : []),
+        ...(displayPanel ? [{ id: "display" as const, label: "Display", icon: MonitorCog }] : []),
+      ] satisfies { id: Panel; label: string; icon: LucideIcon }[],
+    [leaderboardPanel, displayPanel]
   );
 
-  // Esc is the simulator's pause toggle; on a controller B or Menu resumes
-  const [menuIndex, setMenuIndex] = useListNav(menuItems.length, {
-    onSelect: (i) => menuItems[i]?.run(),
-    onBack: onTogglePause,
+  const actions = useMemo(
+    () => [
+      { id: "resume", label: "Resume", detail: "Back on track", icon: Play, primary: true, run: () => onTogglePause() },
+      ...(canRestart
+        ? [
+            {
+              id: "grid",
+              label: aiOpponents || mpRace ? "Restart race" : "Grid start",
+              detail: mpRace
+                ? "Everyone back to the grid behind the lights"
+                : aiOpponents
+                  ? "Line up on the grid behind the lights"
+                  : "Standing start from the grid",
+              icon: RotateCcw,
+              run: () => {
+                onResetCar(false);
+                onTogglePause();
+              },
+            },
+          ]
+        : []),
+      ...(!mpRace
+        ? [
+            {
+              id: "flying",
+              label: aiOpponents ? "Rolling start" : "Flying lap",
+              detail: aiOpponents ? "Restart the race on the move" : "Timed lap from the main straight",
+              icon: Gauge,
+              run: () => {
+                onResetCar(true);
+                onTogglePause();
+              },
+            },
+          ]
+        : []),
+      ...(onOpenControls
+        ? [{ id: "controls", label: "Controls", detail: "Keys, controller, wheel calibration", icon: Gamepad2, run: onOpenControls }]
+        : []),
+      ...(onExitToTitle ? [{ id: "title", label: "Main menu", detail: "Leave the session", icon: LogOut, run: onExitToTitle }] : []),
+    ],
+    [aiOpponents, mpRace, canRestart, onResetCar, onTogglePause, onOpenControls, onExitToTitle]
+  );
+
+  const focusActiveTab = () =>
+    rootRef.current?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]')?.focus({ preventScroll: true });
+
+  const selectTab = useCallback((next: Panel) => {
+    setPanel(next);
+    // Below lg the panel sits under the rail: bring it into view
+    if (!window.matchMedia("(min-width: 64rem)").matches) {
+      requestAnimationFrame(() => panelRef.current?.scrollIntoView({ block: "start" }));
+    }
+  }, []);
+
+  const cycle = (step: number) => {
+    const i = tabs.findIndex((t) => t.id === panel);
+    const next = tabs[(i + step + tabs.length) % tabs.length];
+    flushSync(() => setPanel(next.id));
+    focusActiveTab();
+  };
+
+  const back = () => {
+    const root = rootRef.current;
+    if (focusInZone(root, "panel")) return void focusActiveTab();
+    if (focusInZone(root, "tabs")) return void focusZone(root, "rail");
+    onTogglePause();
+  };
+  // Esc is the simulator's pause toggle; Ⓑ steps back, Menu resumes
+  useFocusNav(rootRef, {
+    onBack: back,
     onStart: onTogglePause,
+    onPrevTab: () => cycle(-1),
+    onNextTab: () => cycle(1),
     keyboardBack: false,
   });
 
   const race = telemetry.race;
 
   return (
-    <div className="pointer-events-auto fixed inset-0 z-40 flex flex-col overflow-y-auto bg-[#07070c]/85 px-5 pt-7 pb-[max(1.75rem,env(safe-area-inset-bottom))] backdrop-blur-md sm:px-10 short:pt-4">
+    <div
+      ref={rootRef}
+      className="pointer-events-auto fixed inset-0 z-40 flex flex-col overflow-y-auto bg-[#08090D]/88 px-5 pt-6 pb-[max(1.25rem,env(safe-area-inset-bottom))] backdrop-blur-md sm:px-10 short:pt-3"
+    >
       <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col">
-        <div className="font-f1-mono text-xs font-black tracking-[0.22em] text-[#E10600]">PAUSED</div>
-        <h1 className="mt-1 font-f1-italic text-4xl uppercase leading-none tracking-wide text-white sm:text-6xl">
-          Rwanda Grand Prix
-        </h1>
-        <p className="mt-2 font-f1-mono text-xs font-bold tracking-wide text-zinc-400">
-          BUGESERA · LAP {Math.max(1, race?.lap ?? telemetry.lapCount)}
-          {race ? ` · P${race.position} OF ${race.fieldSize}` : ""} · FAN PROJECT
-        </p>
-
-        <div className="mt-8 grid flex-1 grid-cols-1 gap-4 lg:grid-cols-[minmax(240px,280px)_1fr] short:mt-4">
-          <nav className="flex flex-col gap-1.5">
-            {menuItems.map((item, index) => {
-              const active = index === menuIndex;
-              const open = item.id === panel;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onMouseEnter={() => setMenuIndex(index)}
-                  onClick={item.run}
-                  className={`flex cursor-pointer flex-col rounded-md border-l-4 px-3 py-2.5 text-left ${
-                    active ? "bg-white text-[#111]" : "bg-[#14141c] text-white hover:bg-[#1c1c26]"
-                  } ${open ? "border-[#E10600]" : "border-transparent"}`}
-                >
-                  <span className="font-f1-italic text-base uppercase">{item.label}</span>
-                  <span className={`font-f1-mono text-[11px] ${active ? "text-zinc-600" : "text-zinc-500"}`}>
-                    {item.detail}
-                  </span>
-                </button>
-              );
-            })}
-          </nav>
-
-          <section ref={panelRef} className="min-h-0 scroll-mt-4">
-            {panel === "settings" ? <SessionPanel {...props} /> : null}
-            {panel === "setup" ? <SetupPanel {...props} /> : null}
-            {panel === "corners" ? (
-              <CornersPanel
-                onSelect={(n) => {
-                  props.onSelectTurn(n);
-                  onTogglePause();
-                }}
-              />
-            ) : null}
-            {panel === "multiplayer" ? <MultiplayerPanel {...props} /> : null}
-          </section>
+        <div className="flex flex-wrap items-end justify-between gap-4 border-b border-[#262B3D] pb-4">
+          <div>
+            <div className="flex items-center gap-2 font-f1-mono text-xs font-black tracking-[0.22em] text-[#CCFF00]">
+              <Pause aria-hidden className="h-3.5 w-3.5" strokeWidth={3} />
+              PAUSED
+            </div>
+            <h1 className="mt-1 font-f1-italic text-3xl leading-none tracking-wide text-[#F5F7FA] uppercase sm:text-5xl">
+              {trackInfo.name}
+            </h1>
+            <div className="mt-2 flex flex-wrap gap-1.5 font-f1-mono text-[11px] font-bold tracking-wide uppercase">
+              <span className="rounded border border-[#262B3D] bg-[#11131A] px-2 py-0.5 text-[#8E96AA]">
+                {trackInfo.city}, {trackInfo.country}
+              </span>
+              <span className="rounded border border-[#262B3D] bg-[#11131A] px-2 py-0.5 text-[#F5F7FA]">
+                Lap {Math.max(1, race?.lap ?? telemetry.lapCount)}
+                {race?.totalLaps ? ` / ${race.totalLaps}` : ""}
+              </span>
+              {race ? (
+                <span className="rounded bg-[#CCFF00] px-2 py-0.5 text-[#08090D]">
+                  P{race.position} of {race.fieldSize}
+                </span>
+              ) : null}
+              {mpRace ? <span className="rounded bg-[#00E5FF] px-2 py-0.5 text-[#08090D]">Online race</span> : null}
+            </div>
+          </div>
+          <LibreCorsaLogo variant="compact" />
         </div>
 
-        <div className="mt-6 flex flex-wrap items-center justify-between gap-2 font-f1-mono text-[11px] font-bold tracking-wide text-zinc-500">
-          <span>
-            BUGESERA · {(TRACK_TOTAL_LENGTH_M / 1000).toFixed(2)} KM · {TURN_METADATA.length} TURNS · FAN PROJECT
+        <div className="mt-5 grid flex-1 grid-cols-1 gap-5 lg:grid-cols-[minmax(240px,280px)_1fr] short:mt-3">
+          <nav className="flex flex-col gap-1.5" data-nav-zone="rail" aria-label="Pause menu">
+            {actions.map((a) => (
+              <RailItem
+                key={a.id}
+                navId={a.id}
+                label={a.label}
+                detail={a.detail}
+                icon={a.icon}
+                primary={"primary" in a ? a.primary : undefined}
+                onClick={a.run}
+              />
+            ))}
+          </nav>
+
+          <div className="flex min-h-0 min-w-0 flex-col gap-3">
+            <TabStrip tabs={tabs} value={panel} onChange={selectTab} />
+            <section ref={panelRef} className="min-h-0 scroll-mt-4" data-nav-zone="panel">
+              <div key={panel} className="lc-panel-in">
+                {panel === "settings" ? <SessionPanel {...props} /> : null}
+                {panel === "setup" ? <SetupPanel {...props} /> : null}
+                {panel === "corners" ? (
+                  <CornersPanel
+                    onSelect={(n) => {
+                      props.onSelectTurn(n);
+                      onTogglePause();
+                    }}
+                  />
+                ) : null}
+                {panel === "multiplayer" ? <MultiplayerPanel {...props} /> : null}
+                {panel === "display" && displayPanel ? <DisplayPanel {...displayPanel} /> : null}
+                {panel === "leaderboard" && leaderboardPanel ? <LeaderboardPanel {...leaderboardPanel} /> : null}
+              </div>
+            </section>
+          </div>
+        </div>
+
+        <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-[#262B3D] pt-3">
+          <PromptBar
+            prompts={[
+              { action: "move", label: "Move" },
+              { action: "select", label: "Select" },
+              { action: "tabs", label: "Tabs" },
+              { action: "back", label: "Back", key: "⌫" },
+              { action: "start", label: "Resume", key: "Esc" },
+            ]}
+          />
+          <span className="hidden font-f1-mono text-[11px] font-bold tracking-wide text-[#8E96AA] md:inline">
+            {(TRACK_TOTAL_LENGTH_M / 1000).toFixed(2)} KM · {TURN_METADATA.length} TURNS · LIBRECORSA
           </span>
-          <span>↑↓ NAVIGATE · ENTER / Ⓐ SELECT · ESC / Ⓑ RESUME</span>
         </div>
       </div>
     </div>
@@ -378,8 +452,11 @@ export const SessionPanel: React.FC<PauseMenuProps> = (p) => {
   };
   return (
     <div className="grid gap-4 md:grid-cols-2">
-      <div className="rounded-md bg-[#14141c] p-4 text-white">
-        <div className="mb-2 font-f1-mono text-[11px] font-bold tracking-[0.16em] text-zinc-500">SESSION</div>
+      <div className="f1-panel f1-corner-tr rounded-lg border border-[#262B3D] bg-[#11131A] p-4 text-[#F5F7FA]">
+        <div className="mb-2.5 flex items-center gap-2 font-f1-mono text-[11px] font-bold tracking-[0.16em] text-[#8E96AA]">
+          <span className="h-2.5 w-1 rounded-full bg-[#CCFF00]" />
+          SESSION
+        </div>
         <Toggle
           label="AI opponents"
           detail="Race 5 AI cars from a standing start"
@@ -417,12 +494,12 @@ export const SessionPanel: React.FC<PauseMenuProps> = (p) => {
           checked={p.telemetry.aiAutopilot}
           onChange={p.onToggleAiAutopilot}
         />
-        <div className="mt-2 flex items-center justify-between px-1">
+        <div className="mt-2 flex items-center justify-between px-1.5">
           <span className="font-f1-italic text-[15px] uppercase">Camera</span>
           <button
             type="button"
             onClick={p.onCycleCamera}
-            className="cursor-pointer rounded bg-black/40 px-3 py-1.5 font-f1-mono text-xs font-bold uppercase"
+            className="cursor-pointer rounded border border-[#262B3D] bg-[#08090D] px-3 py-1.5 font-f1-mono text-xs font-bold text-[#CCFF00] uppercase hover:border-[#CCFF00]"
           >
             {CAMERA_LABELS[p.cameraMode]} · {k.camera}
           </button>
@@ -440,7 +517,7 @@ export const SessionPanel: React.FC<PauseMenuProps> = (p) => {
               <button
                 type="button"
                 onClick={() => p.onChangeCockpitFov?.(null)}
-                className="cursor-pointer px-1 font-f1-mono text-[11px] font-bold uppercase text-zinc-400 hover:text-white"
+                className="cursor-pointer px-1.5 font-f1-mono text-[11px] font-bold text-[#8E96AA] uppercase hover:text-[#CCFF00]"
               >
                 Car default{p.cockpitFovDefaultDeg ? ` (${p.cockpitFovDefaultDeg}°)` : ""}
               </button>
@@ -449,8 +526,11 @@ export const SessionPanel: React.FC<PauseMenuProps> = (p) => {
         ) : null}
       </div>
 
-      <div className="rounded-md bg-[#14141c] p-4 text-white">
-        <div className="mb-2 font-f1-mono text-[11px] font-bold tracking-[0.16em] text-zinc-500">CONTROLS</div>
+      <div className="f1-panel f1-corner-tr rounded-lg border border-[#262B3D] bg-[#11131A] p-4 text-[#F5F7FA]">
+        <div className="mb-2.5 flex items-center gap-2 font-f1-mono text-[11px] font-bold tracking-[0.16em] text-[#8E96AA]">
+          <span className="h-2.5 w-1 rounded-full bg-[#00E5FF]" />
+          CONTROLS
+        </div>
         <div className="flex flex-col gap-2 font-f1-mono text-[13px]">
           {(
             p.controlsCheatSheet ?? [
@@ -466,9 +546,9 @@ export const SessionPanel: React.FC<PauseMenuProps> = (p) => {
               ["Pad", "RT / LT · stick · A boost"],
             ]
           ).map(([label, keys]) => (
-            <div key={label} className="flex items-center justify-between gap-3 border-b border-white/5 pb-1.5">
-              <span className="text-zinc-300">{label}</span>
-              <span className="font-bold text-white">{keys}</span>
+            <div key={label} className="flex items-center justify-between gap-3 border-b border-[#262B3D]/60 pb-1.5">
+              <span className="text-[#8E96AA]">{label}</span>
+              <span className="font-bold text-[#F5F7FA]">{keys}</span>
             </div>
           ))}
         </div>
@@ -480,18 +560,32 @@ export const SessionPanel: React.FC<PauseMenuProps> = (p) => {
 export const SetupPanel: React.FC<PauseMenuProps> = (p) => {
   const limits = TYRE_SETUP_LIMITS[p.vehicleModel];
   return (
-    <div className="rounded-md bg-[#14141c] p-4 text-white">
-      <div className="mb-2 font-f1-mono text-[11px] font-bold tracking-[0.16em] text-zinc-500">CAR</div>
+    <div className="f1-panel f1-corner-tr rounded-lg border border-[#262B3D] bg-[#11131A] p-4 text-[#F5F7FA]">
+      <div className="mb-2 flex items-center gap-2 font-f1-mono text-[11px] font-bold tracking-[0.16em] text-[#8E96AA]">
+        <span className="h-2.5 w-1 rounded-full bg-[#CCFF00]" />
+        VEHICLE CLASS &amp; CHASSIS
+      </div>
       <div className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
         {VEHICLE_CHOICES.map((car) => (
           <Choice key={car.id} active={p.vehicleModel === car.id} onClick={() => p.onChangeVehicle(car.id)}>
-            <div className="font-f1-italic text-sm uppercase">{car.title}</div>
-            <div className="font-f1-mono text-[11px] opacity-75">{car.sub}</div>
+            <div className="mb-1 flex items-center justify-between">
+              <span className="font-f1-italic text-sm text-[#F5F7FA] uppercase">{car.title}</span>
+              <span
+                className="rounded-sm px-1.5 py-0.5 font-f1-display text-[8px] font-black italic"
+                style={{ backgroundColor: car.badgeColor, color: "#08090D" }}
+              >
+                {car.badge}
+              </span>
+            </div>
+            <div className="font-f1-mono text-[11px] opacity-80">{car.sub}</div>
           </Choice>
         ))}
       </div>
 
-      <div className="mb-2 font-f1-mono text-[11px] font-bold tracking-[0.16em] text-zinc-500">AERO PACKAGE</div>
+      <div className="mb-2 flex items-center gap-2 font-f1-mono text-[11px] font-bold tracking-[0.16em] text-[#8E96AA]">
+        <span className="h-2.5 w-1 rounded-full bg-[#00E5FF]" />
+        AERO PACKAGE
+      </div>
       <div className="grid grid-cols-3 gap-2">
         {(
           [
@@ -505,25 +599,25 @@ export const SetupPanel: React.FC<PauseMenuProps> = (p) => {
           ] as const
         ).map((item) => (
           <Choice key={item.id} active={p.aeroPreset === item.id} onClick={() => p.onChangeAeroPreset(item.id)}>
-            <div className="font-f1-italic text-sm uppercase">{item.title}</div>
-            <div className="font-f1-mono text-[11px] opacity-75">{item.sub}</div>
+            <div className="font-f1-italic text-sm text-[#F5F7FA] uppercase">{item.title}</div>
+            <div className="font-f1-mono text-[11px] opacity-80">{item.sub}</div>
           </Choice>
         ))}
       </div>
 
       <div className="mt-4 grid gap-4 md:grid-cols-2">
         <div>
-          <div className="mb-2 font-f1-mono text-[11px] font-bold tracking-[0.16em] text-zinc-500">TYRES</div>
+          <div className="mb-2 font-f1-mono text-[11px] font-bold tracking-[0.16em] text-[#8E96AA]">TYRES</div>
           <div className="grid grid-cols-3 gap-2">
             {(["soft", "medium", "hard"] as const).map((c) => (
               <Choice key={c} active={p.tireCompound === c} onClick={() => p.onChangeTireCompound(c)}>
-                <div className="text-center font-f1-italic text-sm uppercase">{c}</div>
+                <div className="text-center font-f1-italic text-sm text-[#F5F7FA] uppercase">{c}</div>
               </Choice>
             ))}
           </div>
         </div>
         <div>
-          <div className="mb-2 font-f1-mono text-[11px] font-bold tracking-[0.16em] text-zinc-500">TRACTION & ABS</div>
+          <div className="mb-2 font-f1-mono text-[11px] font-bold tracking-[0.16em] text-[#8E96AA]">TRACTION &amp; ABS</div>
           <div className="grid grid-cols-3 gap-2">
             {(
               [
@@ -533,7 +627,7 @@ export const SetupPanel: React.FC<PauseMenuProps> = (p) => {
               ] as const
             ).map((a) => (
               <Choice key={a.id} active={p.assistPreset === a.id} onClick={() => p.onChangeAssistPreset(a.id)}>
-                <div className="text-center font-f1-italic text-sm uppercase">{a.label}</div>
+                <div className="text-center font-f1-italic text-sm text-[#F5F7FA] uppercase">{a.label}</div>
               </Choice>
             ))}
           </div>
@@ -542,13 +636,13 @@ export const SetupPanel: React.FC<PauseMenuProps> = (p) => {
 
       <div className="mt-4">
         <div className="mb-2 flex items-center justify-between">
-          <span className="font-f1-mono text-[11px] font-bold tracking-[0.16em] text-zinc-500">
-            TYRES · PRESSURE & CAMBER
+          <span className="font-f1-mono text-[11px] font-bold tracking-[0.16em] text-[#8E96AA]">
+            TYRES · PRESSURE &amp; CAMBER
           </span>
           <button
             type="button"
             onClick={() => p.onChangeTyreSetup(p.defaultTyreSetup)}
-            className="cursor-pointer rounded bg-black/40 px-2 py-1 font-f1-mono text-[11px] font-bold uppercase text-zinc-300 hover:bg-white/10"
+            className="cursor-pointer rounded border border-[#262B3D] bg-[#08090D] px-2.5 py-1 font-f1-mono text-[11px] font-bold text-[#8E96AA] uppercase hover:border-[#CCFF00] hover:text-[#CCFF00]"
           >
             Reset
           </button>
@@ -603,12 +697,12 @@ export const SetupPanel: React.FC<PauseMenuProps> = (p) => {
             }
           />
         </div>
-        <p className="mt-1 font-f1-mono text-[11px] text-zinc-500">
+        <p className="mt-1 font-f1-mono text-[11px] text-[#8E96AA]">
           Read the tread temps on the tyre panel: inner hotter than outer by 5–10 °C is ideal.
         </p>
       </div>
 
-      <div className="mt-4 mb-2 font-f1-mono text-[11px] font-bold tracking-[0.16em] text-zinc-500">LIVERY</div>
+      <div className="mt-4 mb-2 font-f1-mono text-[11px] font-bold tracking-[0.16em] text-[#8E96AA]">LIVERY</div>
       <div className="grid grid-cols-5 gap-2">
         {LIVERIES.map((liv) => (
           <Choice key={liv.id} active={p.selectedLivery.id === liv.id} onClick={() => p.onChangeLivery(liv)}>
@@ -618,7 +712,7 @@ export const SetupPanel: React.FC<PauseMenuProps> = (p) => {
                 background: `linear-gradient(90deg, ${liv.primary} 50%, ${liv.secondary} 50%)`,
               }}
             />
-            <span className="block text-center font-f1-mono text-xs font-bold">#{liv.number}</span>
+            <span className="block text-center font-f1-mono text-xs font-bold text-[#F5F7FA]">#{liv.number}</span>
           </Choice>
         ))}
       </div>
@@ -627,8 +721,9 @@ export const SetupPanel: React.FC<PauseMenuProps> = (p) => {
 };
 
 const CornersPanel: React.FC<{ onSelect: (turn: number) => void }> = ({ onSelect }) => (
-  <div className="rounded-md bg-[#14141c] p-4 text-white">
-    <div className="mb-3 font-f1-mono text-[11px] font-bold tracking-[0.16em] text-zinc-500">
+  <div className="f1-panel f1-corner-tr rounded-lg border border-[#262B3D] bg-[#11131A] p-4 text-[#F5F7FA]">
+    <div className="mb-3 flex items-center gap-2 font-f1-mono text-[11px] font-bold tracking-[0.16em] text-[#8E96AA]">
+      <span className="h-2.5 w-1 rounded-full bg-[#CCFF00]" />
       JUMP TO A CORNER · APEX SPEED · GEAR
     </div>
     <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -637,17 +732,17 @@ const CornersPanel: React.FC<{ onSelect: (turn: number) => void }> = ({ onSelect
           key={t.number}
           type="button"
           onClick={() => onSelect(t.number)}
-          className="flex cursor-pointer items-center gap-3 rounded border border-white/10 bg-black/30 px-3 py-2 text-left hover:border-[#E10600] hover:bg-[#1c1c26]"
+          className="flex cursor-pointer items-center gap-3 rounded border border-[#262B3D] bg-[#08090D]/80 px-3 py-2 text-left transition-colors hover:border-[#CCFF00] hover:bg-[#1B1F2B]"
         >
-          <span className="hud-num w-9 text-[20px] text-[#E10600]">T{t.number}</span>
+          <span className="hud-num w-9 text-[20px] text-[#CCFF00]">T{t.number}</span>
           <span className="min-w-0 flex-1">
-            <span className="block truncate font-f1-italic text-sm uppercase">
+            <span className="block truncate font-f1-italic text-sm text-[#F5F7FA] uppercase">
               {t.name.replace(/^Turn \d+\s*[—-]\s*/, "")}
             </span>
-            <span className="block truncate font-f1-mono text-[11px] text-zinc-500">{t.complexName}</span>
+            <span className="block truncate font-f1-mono text-[11px] text-[#8E96AA]">{t.complexName}</span>
           </span>
-          <span className="hud-num text-[15px] text-white/85">{t.apexSpeedKmh}</span>
-          <span className="hud-num w-6 text-right text-[15px] text-[#FFD700]">{t.gear}</span>
+          <span className="hud-num text-[15px] text-[#F5F7FA]">{t.apexSpeedKmh}</span>
+          <span className="hud-num w-6 text-right text-[15px] text-[#00E5FF]">{t.gear}</span>
         </button>
       ))}
     </div>

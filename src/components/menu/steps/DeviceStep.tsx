@@ -3,7 +3,7 @@
 import React, { useEffect, useRef } from "react";
 import type { InputDevice } from "@/lib/input/device-input";
 import { isLikelyWheel, padDisplayName } from "@/lib/input/device-input";
-import { useGamepads, useMenuNav } from "../useMenuNav";
+import { useGamepads } from "../useMenuNav";
 import { Card, SectionLabel } from "../menu-ui";
 import type { SetupStepProps } from "./types";
 
@@ -31,14 +31,6 @@ export const DeviceStep: React.FC<SetupStepProps & { autoDetect: boolean }> = ({
     touched.current = true;
     choose(device);
   };
-  const idx = DEVICES.findIndex((d) => d.id === settings.device);
-  useMenuNav({
-    keyboardSelect: false,
-    onLeft: () => pick(DEVICES[(idx + DEVICES.length - 1) % DEVICES.length].id),
-    onRight: () => pick(DEVICES[(idx + 1) % DEVICES.length].id),
-    onUp: () => pick(DEVICES[(idx + DEVICES.length - 1) % DEVICES.length].id),
-    onDown: () => pick(DEVICES[(idx + 1) % DEVICES.length].id),
-  });
 
   return (
     <div className="flex flex-col gap-4">
@@ -50,17 +42,20 @@ export const DeviceStep: React.FC<SetupStepProps & { autoDetect: boolean }> = ({
               key={d.id}
               type="button"
               onClick={() => pick(d.id)}
-              className={`flex cursor-pointer flex-col items-start gap-1 rounded-md border-2 p-4 text-left transition-colors ${
-                active ? "border-[#E10600] bg-[#E10600]/15" : "border-white/10 bg-[#14141c] hover:bg-[#1c1c26]"
+              aria-pressed={active}
+              className={`flex cursor-pointer flex-col items-start gap-1 rounded-lg border-2 p-4 text-left transition-all ${
+                active
+                  ? "border-[#CCFF00] bg-[#CCFF00]/15 shadow-[inset_0_0_12px_rgba(204,255,0,0.12)]"
+                  : "border-[#262B3D] bg-[#11131A] hover:border-[#8E96AA]/40 hover:bg-[#1B1F2B]"
               }`}
             >
               <span className="text-2xl leading-none" aria-hidden>
                 {d.icon}
               </span>
-              <span className="font-f1-italic text-lg uppercase">{d.title}</span>
-              <span className="font-f1-mono text-[11px] leading-snug text-zinc-400">{d.detail}</span>
+              <span className="font-f1-italic text-lg text-[#F5F7FA] uppercase">{d.title}</span>
+              <span className="font-f1-mono text-[11px] leading-snug text-[#8E96AA]">{d.detail}</span>
               {detected === d.id ? (
-                <span className="mt-1 rounded-sm bg-[#00D26A] px-1.5 py-0.5 font-f1-mono text-[10px] font-black text-[#0B0B10]">
+                <span className="mt-1 rounded-sm bg-[#CCFF00] px-1.5 py-0.5 font-f1-mono text-[10px] font-black text-[#08090D]">
                   DETECTED
                 </span>
               ) : null}
@@ -72,7 +67,7 @@ export const DeviceStep: React.FC<SetupStepProps & { autoDetect: boolean }> = ({
       <Card>
         <SectionLabel>Connected devices</SectionLabel>
         {pads.length === 0 ? (
-          <p className="font-f1-mono text-[12px] text-zinc-400">
+          <p className="font-f1-mono text-[12px] text-[#8E96AA]">
             None yet. Browsers only show a controller or wheel after you press one of its buttons, so press any
             button now.
           </p>
@@ -80,11 +75,11 @@ export const DeviceStep: React.FC<SetupStepProps & { autoDetect: boolean }> = ({
           <ul className="flex flex-col gap-1.5">
             {pads.map((p) => (
               <li key={`${p.index}-${p.id}`} className="flex items-center justify-between gap-3 font-f1-mono text-[12px]">
-                <span className="truncate text-white">
-                  <span className="mr-2 text-[#00D26A]">●</span>
+                <span className="truncate text-[#F5F7FA]">
+                  <span className="mr-2 text-[#CCFF00]">●</span>
                   {padDisplayName(p.id)}
                 </span>
-                <span className="shrink-0 text-zinc-500">
+                <span className="shrink-0 text-[#8E96AA]">
                   {isLikelyWheel(p) ? "WHEEL / PEDALS" : "CONTROLLER"} · {p.axes.length} AXES · {p.buttons.length} BUTTONS
                 </span>
               </li>

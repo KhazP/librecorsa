@@ -25,9 +25,10 @@ import {
   type WheelType,
 } from "@/lib/input/device-input";
 import { type FfbStatus, wheelFfb } from "@/lib/input/wheel-ffb";
-import { Choice, TyreSlider } from "@/components/hud/PauseMenu";
+import { Choice, Toggle, TyreSlider } from "@/components/hud/PauseMenu";
 import { suspendMenuNav, useGamepads, type PadState } from "../useMenuNav";
 import { Card, CenterMeter, Meter, SectionLabel } from "../menu-ui";
+import { TuningSlider } from "./TuningSlider";
 import type { SetupStepProps } from "./types";
 
 type CalTarget = "steer" | "throttle" | "brake";
@@ -130,11 +131,11 @@ const AxisCalibrator: React.FC<{
   }, [stage, target, exclude, onSteer, onPedal]);
 
   return (
-    <div className="mt-2 rounded border border-[#E10600]/60 bg-[#E10600]/10 p-3">
-      <p className="font-f1-italic text-sm uppercase">{stage === "rest" ? PROMPTS[target].rest : PROMPTS[target].act}</p>
+    <div className="mt-2 rounded border border-[#CCFF00]/60 bg-[#CCFF00]/10 p-3">
+      <p className="font-f1-italic text-sm text-[#F5F7FA] uppercase">{stage === "rest" ? PROMPTS[target].rest : PROMPTS[target].act}</p>
       {stage === "act" ? (
-        <span className="mt-2 block h-1.5 overflow-hidden rounded bg-black/50">
-          <span className="block h-full bg-[#E10600] transition-[width]" style={{ width: `${Math.round(meter * 100)}%` }} />
+        <span className="mt-2 block h-1.5 overflow-hidden rounded bg-[#08090D]">
+          <span className="block h-full bg-[#CCFF00] transition-[width]" style={{ width: `${Math.round(meter * 100)}%` }} />
         </span>
       ) : null}
       <div className="mt-2 flex gap-2">
@@ -147,7 +148,7 @@ const AxisCalibrator: React.FC<{
               heldSince.current = 0;
               setStage("act");
             }}
-            className="cursor-pointer rounded bg-[#E10600] px-3 py-1 font-f1-mono text-[11px] font-bold uppercase text-white"
+            className="cursor-pointer rounded bg-[#CCFF00] px-3 py-1 font-f1-mono text-[11px] font-bold text-[#08090D] uppercase"
           >
             Continue
           </button>
@@ -155,7 +156,7 @@ const AxisCalibrator: React.FC<{
         <button
           type="button"
           onClick={onCancel}
-          className="cursor-pointer rounded bg-black/40 px-3 py-1 font-f1-mono text-[11px] font-bold uppercase text-zinc-300 hover:bg-white/10"
+          className="cursor-pointer rounded border border-[#262B3D] bg-[#08090D] px-3 py-1 font-f1-mono text-[11px] font-bold text-[#8E96AA] uppercase hover:text-[#F5F7FA]"
         >
           Cancel
         </button>
@@ -258,6 +259,8 @@ export const WheelStep: React.FC<SetupStepProps> = ({ settings, onChangeSettings
   const [customRotation, setCustomRotation] = useState(false);
   const ffb = useSyncExternalStore(wheelFfb.subscribe, wheelFfb.getStatus, wheelFfb.getStatus);
   const ffbReady = ffb.connection === "connected" && ffb.device !== null && ffb.error === null;
+  // The port field edits as text: a half-typed number must not snap to the range's edge while typing
+  const [portText, setPortText] = useState(String(w.telemetryPort));
 
   const setWheel = useCallback(
     (patch: Partial<WheelSettings>) => onChangeSettings((s) => ({ ...s, wheel: { ...s.wheel, ...patch } })),
@@ -439,6 +442,26 @@ export const WheelStep: React.FC<SetupStepProps> = ({ settings, onChangeSettings
               format={(v) => (v === 0 ? "Off" : `${v.toFixed(0)} %`)}
               onChange={(v) => setWheel({ ffbAbs: v / 100 })}
             />
+            <TuningSlider
+              label="Damping"
+              value={Math.round(w.ffbDamping * 100)}
+              min={0}
+              max={100}
+              step={1}
+              format={(v) => (v === 0 ? "Off" : `${v} %`)}
+              hint="Resists fast rim movement: calms a direct-drive base, adds weight to a belt wheel"
+              onChange={(v) => setWheel({ ffbDamping: v / 100 })}
+            />
+            <TuningSlider
+              label="Smoothing"
+              value={Math.round(w.ffbFilterS * 1000)}
+              min={0}
+              max={50}
+              step={1}
+              format={(v) => (v === 0 ? "0 = raw" : `${v} ms`)}
+              hint="Low-pass filter on the force. 0 = raw"
+              onChange={(v) => setWheel({ ffbFilterS: v / 1000 })}
+            />
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <button
                 type="button"
@@ -452,7 +475,7 @@ export const WheelStep: React.FC<SetupStepProps> = ({ settings, onChangeSettings
                 type="button"
                 onClick={() => setWheel({ ffbInvert: !w.ffbInvert })}
                 className={`cursor-pointer rounded px-2.5 py-1 font-f1-mono text-[11px] font-bold uppercase ${
-                  w.ffbInvert ? "bg-[#E10600] text-white" : "bg-white/10 text-zinc-300 hover:bg-white/15"
+                  w.ffbInvert ? "bg-[#CCFF00] text-[#08090D]" : "bg-white/10 text-zinc-300 hover:bg-white/15"
                 }`}
               >
                 {w.ffbInvert ? "Inverted" : "Invert"}
@@ -471,6 +494,44 @@ export const WheelStep: React.FC<SetupStepProps> = ({ settings, onChangeSettings
             (Moza Pit House, Fanatec control panel, Simucube Tuner…) so the wheel self-centres.
           </p>
         )}
+
+        <div className="mt-3 rounded border border-white/10 bg-black/30 p-3">
+          <div className="mb-1 font-f1-italic text-[14px] uppercase">Telemetry out</div>
+          <Toggle
+            label="Send UDP telemetry through the bridge (SimHub, dashboards, bass shakers)"
+            checked={w.telemetryOut}
+            onChange={() => setWheel({ telemetryOut: !w.telemetryOut })}
+          />
+          <div className={`mt-1 flex items-center justify-between gap-3 px-1.5 ${w.telemetryOut ? "" : "opacity-40"}`}>
+            <span className="font-f1-mono text-[12px] text-[#8E96AA]">UDP port</span>
+            <input
+              type="number"
+              inputMode="numeric"
+              min={1024}
+              max={65535}
+              step={1}
+              disabled={!w.telemetryOut}
+              value={portText}
+              onChange={(e) => {
+                setPortText(e.target.value);
+                const n = Number(e.target.value);
+                if (Number.isInteger(n) && n >= 1024 && n <= 65535) setWheel({ telemetryPort: n });
+              }}
+              onBlur={() => setPortText(String(w.telemetryPort))}
+              className="w-28 rounded border border-[#262B3D] bg-[#08090D] px-2 py-1 text-right font-f1-mono text-[12px] font-bold text-[#F5F7FA] tabular-nums disabled:cursor-not-allowed"
+            />
+          </div>
+          <p className="mt-2 font-f1-mono text-[11px] text-zinc-500">Needs the bridge running: npm run ffb</p>
+        </div>
+
+        <div className="mt-3">
+          <Toggle
+            label="Experimental: browser force feedback over WebHID (HID PID direct-drive bases, no bridge)"
+            detail="Chrome/Edge only. You will be asked to pick the wheel. Falls back to the bridge when off."
+            checked={w.hidFfb}
+            onChange={() => setWheel({ hidFfb: !w.hidFfb })}
+          />
+        </div>
       </Card>
 
       <Card>
@@ -482,7 +543,7 @@ export const WheelStep: React.FC<SetupStepProps> = ({ settings, onChangeSettings
               setCalAllSeq(true);
               setCalibrating("steer");
             }}
-            className="cursor-pointer rounded bg-[#E10600] px-2.5 py-1 font-f1-mono text-[11px] font-bold uppercase text-white hover:bg-[#ff1a14]"
+            className="cursor-pointer rounded bg-[#CCFF00] px-2.5 py-1 font-f1-mono text-[11px] font-bold text-[#08090D] uppercase hover:bg-[#d9ff33]"
           >
             Calibrate all
           </button>
@@ -568,7 +629,7 @@ export const WheelStep: React.FC<SetupStepProps> = ({ settings, onChangeSettings
           "brake",
           "Brake",
           w.brake,
-          brake !== null ? <Meter label="Brake" value={brake} color="#E10600" /> : <p className="font-f1-mono text-[11px] text-zinc-500">Device not connected</p>
+          brake !== null ? <Meter label="Brake" value={brake} color="#FF2A3C" /> : <p className="font-f1-mono text-[11px] text-zinc-500">Device not connected</p>
         )}
         <TyreSlider
           label="Brake curve"
@@ -605,7 +666,7 @@ export const WheelStep: React.FC<SetupStepProps> = ({ settings, onChangeSettings
                   onClick={() => setCapturing(listening ? null : id)}
                   className={`min-w-[5.5rem] cursor-pointer rounded px-2 py-1 font-f1-mono text-[11px] font-bold ${
                     listening
-                      ? "animate-pulse bg-[#E10600] text-white"
+                      ? "animate-pulse bg-[#CCFF00] text-[#08090D]"
                       : b
                         ? "bg-white/90 text-[#111] hover:bg-white"
                         : "bg-black/40 text-zinc-500 hover:bg-white/10"

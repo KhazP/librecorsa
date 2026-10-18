@@ -22,9 +22,12 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Rwanda Grand Prix — Fan Project",
+  title: "LibreCorsa — Open-Source 500Hz Motorsport Simulator",
   description:
-    "Fan-made browser F1 racing sim on a 2026 Rwanda Grand Prix circuit at Bugesera (5.30 km, 14 turns).",
+    "Open-source multi-class racing simulator with 500 Hz 6-DOF vehicle dynamics, active aero, GT3 & Formula cars, and WebRTC P2P multiplayer.",
+  icons: {
+    icon: "/branding/librecorsa-mark.svg",
+  },
 };
 
 export default function RootLayout({
@@ -37,7 +40,7 @@ export default function RootLayout({
       lang="en"
       className={`dark ${titillium.variable} ${orbitron.variable} ${jetbrainsMono.variable}`}
     >
-      <body className="antialiased selection:bg-[#E10600] selection:text-white">
+      <body className="antialiased bg-[#08090D] text-[#F5F7FA] selection:bg-[#CCFF00] selection:text-[#08090D]">
         {children}
       </body>
     </html>

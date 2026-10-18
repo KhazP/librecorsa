@@ -4,7 +4,6 @@ import React from "react";
 import type { AssistPreset } from "@/types/f1";
 import { Choice, Toggle } from "@/components/hud/PauseMenu";
 import { keyLabel } from "@/lib/input/bindings";
-import { useMenuNav } from "../useMenuNav";
 import { Card, SectionLabel } from "../menu-ui";
 import type { SetupStepProps } from "./types";
 
@@ -45,12 +44,6 @@ export const AssistsStep: React.FC<SetupStepProps> = (p) => {
     p.onSetRacingLine(l.racingLine);
     if (id === "beginner") p.onSetGamepadAssist(true);
   };
-  const idx = LEVELS.findIndex((l) => l.id === level);
-  useMenuNav({
-    keyboardSelect: false,
-    onLeft: () => apply(LEVELS[Math.max(0, idx - 1)].id),
-    onRight: () => apply(LEVELS[Math.min(LEVELS.length - 1, idx + 1)].id),
-  });
 
   return (
     <div className="flex flex-col gap-4">
@@ -62,12 +55,15 @@ export const AssistsStep: React.FC<SetupStepProps> = (p) => {
               key={l.id}
               type="button"
               onClick={() => apply(l.id)}
-              className={`flex cursor-pointer flex-col items-start gap-2 rounded-md border-2 p-4 text-left transition-colors ${
-                active ? "border-[#E10600] bg-[#E10600]/15" : "border-white/10 bg-[#14141c] hover:bg-[#1c1c26]"
+              aria-pressed={active}
+              className={`flex cursor-pointer flex-col items-start gap-2 rounded-lg border-2 p-4 text-left transition-all ${
+                active
+                  ? "border-[#CCFF00] bg-[#CCFF00]/15 shadow-[inset_0_0_12px_rgba(204,255,0,0.12)]"
+                  : "border-[#262B3D] bg-[#11131A] hover:border-[#8E96AA]/40 hover:bg-[#1B1F2B]"
               }`}
             >
-              <span className="font-f1-italic text-lg uppercase">{l.title}</span>
-              <ul className="flex flex-col gap-1 font-f1-mono text-[11px] leading-snug text-zinc-400">
+              <span className="font-f1-italic text-lg text-[#F5F7FA] uppercase">{l.title}</span>
+              <ul className="flex flex-col gap-1 font-f1-mono text-[11px] leading-snug text-[#8E96AA]">
                 {l.points.map((pt) => (
                   <li key={pt}>· {pt}</li>
                 ))}

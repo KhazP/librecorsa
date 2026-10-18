@@ -10,9 +10,11 @@
  */
 
 import * as THREE from 'three';
-import { createF1Car2026, F1CarRig2026 } from '@/lib/car-builder-2026';
+import { createF1Car2026, type SimCarRig } from '@/lib/car-builder-2026';
+import { createGt3CarRig } from '@/lib/gt3-car-model';
+import { AMR26_MODEL_URL, VF26_MODEL_URL } from '@/lib/vf26-car-model';
 import { LIVERIES } from '@/lib/track-data';
-import { CarTelemetry, LiveryConfig } from '@/types/f1';
+import { CarTelemetry, LiveryConfig, type VehicleModelId } from '@/types/f1';
 import type { SimulatorWheel as SimWheelState } from './simulator-car';
 import { InterpolatedPeerState } from './multiplayer-sync';
 
@@ -49,7 +51,7 @@ export class SimVisualFxManager {
   private dummy = new THREE.Object3D();
 
   // Multiplayer / AI Opponent 3D cars
-  private opponentCars = new Map<string, F1CarRig2026>();
+  private opponentCars = new Map<string, { rig: SimCarRig; vehicle: VehicleModelId | undefined }>();
 
   constructor() {
     // 1. Initialize Persistent Tire Skidmark Ribbon Mesh
@@ -361,17 +363,36 @@ export class SimVisualFxManager {
     return LIVERIES[0];
   }
 
+  /** The car the peer reports (AI and older clients: the AMR, which is what F1Physics2026 models) */
+  private createOpponentRig(peer: InterpolatedPeerState): SimCarRig {
+    const livery = this.mapDriverToLivery(peer.driverCode);
+    if (peer.vehicle === 'amg-gt3') {
+      const rig = createGt3CarRig();
+      rig.setLivery(livery);
+      return rig;
+    }
+    return createF1Car2026(livery, 'medium', peer.vehicle === 'f12026-car' ? VF26_MODEL_URL : AMR26_MODEL_URL);
+  }
+
   private updateOpponentCars(dt: number, peers: InterpolatedPeerState[]): void {
     const activeIds = new Set<string>();
 
     for (const peer of peers) {
       activeIds.add(peer.peerId);
-      let carRig = this.opponentCars.get(peer.peerId);
-      if (!carRig) {
-        carRig = createF1Car2026(this.mapDriverToLivery(peer.driverCode), 'medium');
-        this.opponentCars.set(peer.peerId, carRig);
-        this.group.add(carRig.root);
+      let entry = this.opponentCars.get(peer.peerId);
+      if (entry && entry.vehicle !== peer.vehicle) {
+        // The peer switched car: rebuild its rig
+        this.group.remove(entry.rig.root);
+        entry.rig.dispose();
+        entry = undefined;
       }
+      if (!entry) {
+        entry = { rig: this.createOpponentRig(peer), vehicle: peer.vehicle };
+        this.opponentCars.set(peer.peerId, entry);
+        this.group.add(entry.rig.root);
+      }
+      const carRig = entry.rig;
+      if (peer.ghost) ghostify(carRig.root);
 
       carRig.root.position.copy(peer.position);
       carRig.root.quaternion.copy(peer.quaternion);
@@ -459,11 +480,33 @@ export class SimVisualFxManager {
       carRig.updateFromTelemetry(syntheticTelemetry, pitchRad, rollRad, wheelRot);
     }
 
-    for (const [peerId, rig] of this.opponentCars.entries()) {
+    for (const [peerId, { rig }] of this.opponentCars.entries()) {
       if (!activeIds.has(peerId)) {
         this.group.remove(rig.root);
+        rig.dispose();
         this.opponentCars.delete(peerId);
       }
     }
   }
+}
+
+/** Makes a car translucent (the best-lap ghost); new meshes from a late model load are caught on later calls */
+function ghostify(root: THREE.Object3D): void {
+  root.traverse((obj) => {
+    const mesh = obj as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    mesh.castShadow = false;
+    const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    if (mats.every((m) => m.userData.ghost)) return;
+    const next = mats.map((m) => {
+      if (m.userData.ghost) return m;
+      const g = m.clone();
+      g.transparent = true;
+      g.opacity = 0.3;
+      g.depthWrite = false;
+      g.userData.ghost = true;
+      return g;
+    });
+    mesh.material = Array.isArray(mesh.material) ? next : next[0];
+  });
 }

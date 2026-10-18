@@ -19,8 +19,10 @@ import {
   type PadSensitivity,
 } from "@/lib/input/device-input";
 import { Choice, Toggle } from "@/components/hud/PauseMenu";
+import { DEFAULT_PAD_TUNING, type PadTuning } from "@/lib/settings/player-settings";
 import { suspendMenuNav, useGamepads } from "../useMenuNav";
 import { Card, CenterMeter, Meter, SectionLabel } from "../menu-ui";
+import { StickCurve, TriggerBars, TuningSlider } from "./TuningSlider";
 import type { SetupStepProps } from "./types";
 
 type VibratingPad = Gamepad & {
@@ -98,19 +100,34 @@ export const ControllerStep: React.FC<SetupStepProps> = ({
   const onCancel = React.useCallback(() => setCapturing(null), []);
   useButtonCapture(capturing !== null, onButton, onCancel);
 
+  const tuning = settings.padTuning;
+  const setTuning = (patch: Partial<PadTuning>) =>
+    onChangeSettings((prev) => ({ ...prev, padTuning: { ...prev.padTuning, ...patch } }));
+  // Back to the defaults, keeping the steering rate and dead zone of the chosen feel preset
+  const resetTuning = () =>
+    onChangeSettings((prev) => ({
+      ...prev,
+      padTuning: {
+        ...DEFAULT_PAD_TUNING,
+        steeringRate: PAD_SENSITIVITY[prev.padSensitivity].steeringRate,
+        deadzone: PAD_SENSITIVITY[prev.padSensitivity].deadzone,
+      },
+    }));
+  const curveLabel = (v: number) => (Math.abs(v - 1) < 0.025 ? "Linear" : v > 1 ? `Progressive ${v.toFixed(2)}` : `Aggressive ${v.toFixed(2)}`);
+
   return (
     <div className="flex flex-col gap-4">
       <Card>
         <SectionLabel>Input check</SectionLabel>
         {pad ? (
           <div className="flex flex-col gap-2">
-            <p className="mb-1 truncate font-f1-mono text-[12px] text-[#00D26A]">● {padDisplayName(pad.id)}</p>
+            <p className="mb-1 truncate font-f1-mono text-[12px] text-[#CCFF00]">● {padDisplayName(pad.id)}</p>
             <CenterMeter label="Steer" value={pad.axes[0] ?? 0} />
             <Meter label="Throttle" value={pad.buttons[PAD_THROTTLE_BUTTON]?.value ?? 0} detail="RT" />
-            <Meter label="Brake" value={pad.buttons[PAD_BRAKE_BUTTON]?.value ?? 0} color="#E10600" detail="LT" />
+            <Meter label="Brake" value={pad.buttons[PAD_BRAKE_BUTTON]?.value ?? 0} color="#FF2A3C" detail="LT" />
           </div>
         ) : (
-          <p className="font-f1-mono text-[12px] text-zinc-400">
+          <p className="font-f1-mono text-[12px] text-[#8E96AA]">
             No controller found. Connect it and press any button. Pads with a non-standard layout are set up on the
             Wheel screen.
           </p>
@@ -121,8 +138,18 @@ export const ControllerStep: React.FC<SetupStepProps> = ({
         <SectionLabel>Steering feel</SectionLabel>
         <div className="mb-3 grid grid-cols-3 gap-2">
           {(Object.keys(PAD_SENSITIVITY) as PadSensitivity[]).map((id) => (
-            <Choice key={id} active={settings.padSensitivity === id} onClick={() => onChangeSettings((s) => ({ ...s, padSensitivity: id }))}>
-              <div className="font-f1-italic text-sm uppercase">{PAD_SENSITIVITY[id].label}</div>
+            <Choice
+              key={id}
+              active={settings.padSensitivity === id}
+              onClick={() =>
+                onChangeSettings((s) => ({
+                  ...s,
+                  padSensitivity: id,
+                  padTuning: { ...s.padTuning, steeringRate: PAD_SENSITIVITY[id].steeringRate, deadzone: PAD_SENSITIVITY[id].deadzone },
+                }))
+              }
+            >
+              <div className="font-f1-italic text-sm text-[#F5F7FA] uppercase">{PAD_SENSITIVITY[id].label}</div>
               <div className="font-f1-mono text-[11px] opacity-75">{PAD_SENSITIVITY[id].detail}</div>
             </Choice>
           ))}
@@ -145,7 +172,7 @@ export const ControllerStep: React.FC<SetupStepProps> = ({
           <button
             type="button"
             onClick={testRumble}
-            className="cursor-pointer rounded bg-black/40 px-3 py-1.5 font-f1-mono text-[11px] font-bold uppercase text-zinc-300 hover:bg-white/10"
+            className="cursor-pointer rounded border border-[#262B3D] bg-[#08090D] px-3 py-1.5 font-f1-mono text-[11px] font-bold text-[#8E96AA] uppercase hover:border-[#CCFF00] hover:text-[#CCFF00]"
           >
             Test
           </button>
@@ -158,7 +185,7 @@ export const ControllerStep: React.FC<SetupStepProps> = ({
           <button
             type="button"
             onClick={() => onChangeSettings((s) => ({ ...s, padButtons: DEFAULT_PAD_BUTTONS }))}
-            className="cursor-pointer rounded bg-black/40 px-2 py-1 font-f1-mono text-[11px] font-bold uppercase text-zinc-300 hover:bg-white/10"
+            className="cursor-pointer rounded border border-[#262B3D] bg-[#08090D] px-2 py-1 font-f1-mono text-[11px] font-bold text-[#8E96AA] uppercase hover:border-[#CCFF00] hover:text-[#CCFF00]"
           >
             Reset
           </button>
@@ -167,13 +194,15 @@ export const ControllerStep: React.FC<SetupStepProps> = ({
           {PAD_ACTIONS.map(({ id, label }) => {
             const listening = capturing === id;
             return (
-              <div key={id} className="flex items-center justify-between gap-3 border-b border-white/5 py-1.5">
-                <span className="font-f1-italic text-[14px] uppercase">{label}</span>
+              <div key={id} className="flex items-center justify-between gap-3 border-b border-[#262B3D]/60 py-1.5">
+                <span className="font-f1-italic text-[14px] text-[#F5F7FA] uppercase">{label}</span>
                 <button
                   type="button"
                   onClick={() => setCapturing(listening ? null : id)}
-                  className={`min-w-[5rem] cursor-pointer rounded px-2 py-1 font-f1-mono text-[12px] font-bold ${
-                    listening ? "animate-pulse bg-[#E10600] text-white" : "bg-white/90 text-[#111] hover:bg-white"
+                  className={`min-w-[5rem] cursor-pointer rounded px-2 py-1 font-f1-mono text-[12px] font-bold transition-colors ${
+                    listening
+                      ? "animate-pulse bg-[#CCFF00] text-[#08090D]"
+                      : "bg-[#F5F7FA] text-[#08090D] hover:bg-[#CCFF00]"
                   }`}
                 >
                   {listening ? "PRESS…" : padButtonLabel(settings.padButtons[id])}
@@ -185,6 +214,95 @@ export const ControllerStep: React.FC<SetupStepProps> = ({
         <p className="mt-2 font-f1-mono text-[11px] text-zinc-500">
           {capturing ? "Press a controller button · Esc cancels" : "Click a button, then press the one you want."}
         </p>
+      </Card>
+
+      <Card>
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <SectionLabel className="!mb-0">Fine tuning</SectionLabel>
+          <button
+            type="button"
+            onClick={resetTuning}
+            className="cursor-pointer rounded border border-[#262B3D] bg-[#08090D] px-2 py-1 font-f1-mono text-[11px] font-bold text-[#8E96AA] uppercase hover:border-[#CCFF00] hover:text-[#CCFF00]"
+          >
+            Reset tuning
+          </button>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-[1fr_12rem]">
+          <div className="flex flex-col">
+            <TuningSlider
+              label="Steering speed"
+              value={tuning.steeringRate}
+              min={0.1}
+              max={1.5}
+              step={0.05}
+              format={(v) => `×${v.toFixed(2)}`}
+              hint="How quickly the stick turns the steering assist"
+              onChange={(v) => setTuning({ steeringRate: v })}
+            />
+            <TuningSlider
+              label="Inner dead zone"
+              value={tuning.deadzone}
+              min={0}
+              max={0.3}
+              step={0.01}
+              format={(v) => `${Math.round(v * 100)} %`}
+              hint="Stick travel ignored around centre"
+              onChange={(v) => setTuning({ deadzone: v })}
+            />
+            <TuningSlider
+              label="Outer dead zone"
+              value={tuning.outerDeadzone}
+              min={0}
+              max={0.3}
+              step={0.01}
+              format={(v) => `${Math.round(v * 100)} %`}
+              hint="Full lock is reached before the stick's physical stop"
+              onChange={(v) => setTuning({ outerDeadzone: v })}
+            />
+            <TuningSlider
+              label="Stick linearity"
+              value={tuning.linearity}
+              min={0.5}
+              max={3}
+              step={0.05}
+              format={(v) => (Math.abs(v - 1) < 0.025 ? "1.00 = linear" : v.toFixed(2))}
+              hint="Above 1 gives finer control near centre"
+              onChange={(v) => setTuning({ linearity: v })}
+            />
+            <TuningSlider
+              label="Throttle curve"
+              value={tuning.throttleGamma}
+              min={0.5}
+              max={3}
+              step={0.05}
+              format={curveLabel}
+              hint="Above 1 keeps light presses gentler"
+              onChange={(v) => setTuning({ throttleGamma: v })}
+            />
+            <TuningSlider
+              label="Brake curve"
+              value={tuning.brakeGamma}
+              min={0.5}
+              max={3}
+              step={0.05}
+              format={curveLabel}
+              hint="Above 1 gives finer brake control at light pressure"
+              onChange={(v) => setTuning({ brakeGamma: v })}
+            />
+          </div>
+          <div className="flex flex-col gap-3">
+            <StickCurve deadzone={tuning.deadzone} outerDeadzone={tuning.outerDeadzone} linearity={tuning.linearity} />
+            <TriggerBars throttleGamma={tuning.throttleGamma} brakeGamma={tuning.brakeGamma} />
+          </div>
+        </div>
+        <div className="mt-2">
+          <Toggle
+            label="Impulse-trigger rumble (Xbox)"
+            detail="ABS pulses in LT, wheelspin in RT"
+            checked={tuning.triggerRumble}
+            onChange={() => setTuning({ triggerRumble: !tuning.triggerRumble })}
+          />
+        </div>
       </Card>
     </div>
   );

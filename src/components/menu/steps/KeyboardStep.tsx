@@ -12,8 +12,10 @@ import {
   type KeyAction,
 } from "@/lib/input/bindings";
 import { Toggle } from "@/components/hud/PauseMenu";
+import { DEFAULT_KEYBOARD_TUNING, type KeyboardTuning } from "@/lib/settings/player-settings";
 import { suspendMenuNav } from "../useMenuNav";
 import { Card, SectionLabel } from "../menu-ui";
+import { TuningSlider } from "./TuningSlider";
 import type { SetupStepProps } from "./types";
 
 /** Keyboard rebinding: click a slot, press a key. Taking a key from another action swaps the two. */
@@ -49,6 +51,11 @@ export const KeyboardStep: React.FC<SetupStepProps> = ({ settings, onChangeSetti
     };
   }, [capture, settings.keys, onChangeSettings]);
 
+  const tuning = settings.keyboardTuning;
+  const setTuning = (patch: Partial<KeyboardTuning>) =>
+    onChangeSettings((prev) => ({ ...prev, keyboardTuning: { ...prev.keyboardTuning, ...patch } }));
+  const ms = (v: number) => `${Math.round(v * 1000)} ms`;
+
   return (
     <div className="flex flex-col gap-4">
       <Card>
@@ -81,12 +88,12 @@ export const KeyboardStep: React.FC<SetupStepProps> = ({ settings, onChangeSetti
                             setNotice(null);
                             setCapture({ action: id, slot: Math.min(slot, codes.length) });
                           }}
-                          className={`min-w-[4.5rem] cursor-pointer rounded px-2 py-1 font-f1-mono text-[12px] font-bold ${
+                          className={`min-w-[4.5rem] cursor-pointer rounded px-2 py-1 font-f1-mono text-[12px] font-bold transition-colors ${
                             listening
-                              ? "animate-pulse bg-[#E10600] text-white"
+                              ? "animate-pulse bg-[#CCFF00] text-[#08090D]"
                               : code
-                                ? "bg-white/90 text-[#111] hover:bg-white"
-                                : "bg-black/40 text-zinc-500 hover:bg-white/10"
+                                ? "bg-[#F5F7FA] text-[#08090D] hover:bg-[#CCFF00]"
+                                : "border border-[#262B3D] bg-[#08090D] text-[#8E96AA] hover:border-[#8E96AA]"
                           }`}
                         >
                           {listening ? "PRESS…" : code ? keyLabel(code) : "+"}
@@ -112,6 +119,76 @@ export const KeyboardStep: React.FC<SetupStepProps> = ({ settings, onChangeSetti
         <p className="mt-2 min-h-[1rem] font-f1-mono text-[11px] text-zinc-500">
           {capture ? "Press a key · Esc cancels" : (notice ?? "Esc always opens the menu.")}
         </p>
+      </Card>
+      <Card>
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <SectionLabel className="!mb-0">Keyboard feel</SectionLabel>
+          <button
+            type="button"
+            onClick={() => onChangeSettings((s) => ({ ...s, keyboardTuning: DEFAULT_KEYBOARD_TUNING }))}
+            className="cursor-pointer rounded bg-black/40 px-2 py-1 font-f1-mono text-[11px] font-bold uppercase text-zinc-300 hover:bg-white/10"
+          >
+            Reset
+          </button>
+        </div>
+        <TuningSlider
+          label="Throttle rise"
+          value={tuning.throttleRiseS}
+          min={0}
+          max={1}
+          step={0.01}
+          format={ms}
+          hint="Time for the throttle key to reach full throttle"
+          onChange={(v) => setTuning({ throttleRiseS: v })}
+        />
+        <TuningSlider
+          label="Brake rise"
+          value={tuning.brakeRiseS}
+          min={0}
+          max={1}
+          step={0.01}
+          format={ms}
+          hint="Time for the brake key to reach full brake"
+          onChange={(v) => setTuning({ brakeRiseS: v })}
+        />
+        <TuningSlider
+          label="Steering rise"
+          value={tuning.steerRiseS}
+          min={0.05}
+          max={1}
+          step={0.01}
+          format={ms}
+          hint="Time to steer from centre to the speed's lock"
+          onChange={(v) => setTuning({ steerRiseS: v })}
+        />
+        <TuningSlider
+          label="Steering return"
+          value={tuning.steerReturnS}
+          min={0.05}
+          max={1}
+          step={0.01}
+          format={ms}
+          hint="Time for the wheel to centre after the key is let go"
+          onChange={(v) => setTuning({ steerReturnS: v })}
+        />
+        <TuningSlider
+          label="Half throttle"
+          value={tuning.halfThrottle}
+          min={0.2}
+          max={0.9}
+          step={0.01}
+          format={(v) => `${Math.round(v * 100)} %`}
+          hint="Throttle while the Half throttle key is held with throttle"
+          onChange={(v) => setTuning({ halfThrottle: v })}
+        />
+        <div className="mt-1">
+          <Toggle
+            label="Corner-exit throttle assist"
+            detail="Eases the throttle in while the rear tyres are at their limit"
+            checked={tuning.exitAssist}
+            onChange={() => setTuning({ exitAssist: !tuning.exitAssist })}
+          />
+        </div>
       </Card>
       <Card>
         <Toggle

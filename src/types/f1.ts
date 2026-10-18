@@ -102,7 +102,10 @@ export interface TrackSamplePoint {
   kerbLeft: boolean;
   kerbRight: boolean;
   drsZone: boolean;
+  /** Lap-time line of the F1 cars (VF26, f12026-car), normalised: see `aiLineOffsetM` */
   racingLineOffset: number;
+  /** The GT3's own lap-time line, same scale (the F1 line where a track has none) */
+  racingLineOffsetGt3?: number;
   optimalSpeedKmh: number; // Computed physics target speed at this point
   /** Highest speed here from which the car can still brake for every corner ahead (km/h) */
   brakeLimitKmh?: number;
@@ -154,13 +157,47 @@ export interface RaceStandingEntry {
   lap: number;
   /** Time behind the leader at the same race distance (s) */
   gapToLeaderS: number;
+  /** Player name (multiplayer) */
+  name?: string;
+  /** Has taken the chequered flag */
+  finished?: boolean;
 }
 
-/** Race against the AI opponents: start procedure and live order */
+/** One line of the final classification */
+export interface RaceResultEntry {
+  position: number;
+  driverCode: string;
+  name: string;
+  teamColorHex: string;
+  isPlayer: boolean;
+  /** Race time at the flag (s); null when not (yet) finished */
+  finishTimeS: number | null;
+  /** Behind the winner (s); null for the winner and for cars still running */
+  gapS: number | null;
+  /** Laps behind the winner when lapped (0 otherwise) */
+  lapsDown: number;
+  lapsCompleted: number;
+  bestLapMs: number | null;
+  /** Still running when the classification closed */
+  dnf: boolean;
+}
+
+/** A race (AI opponents or multiplayer): start procedure, live order and the result */
 export interface RaceStatus {
-  phase: 'lights' | 'racing';
+  /** 'finished': the player has taken the flag */
+  phase: 'lights' | 'racing' | 'finished';
   /** Red start lights lit (0–5); 0 during the race */
   lightsOn: number;
+  /** Seconds until the light sequence starts (multiplayer countdown); absent otherwise */
+  countdownS?: number;
+  /** Race length (laps) */
+  totalLaps?: number;
+  /** Final classification once the player has finished */
+  results?: RaceResultEntry[];
+  /** True once the classification no longer changes */
+  resultsFinal?: boolean;
+  /** Multiplayer race (results come from every player's own timing) */
+  multiplayer?: boolean;
   /** Player's position (1 = leading) */
   position: number;
   fieldSize: number;
@@ -220,20 +257,36 @@ export interface CarTelemetry {
   tireBandTempsC?: [Band3, Band3, Band3, Band3];
   /** Hot inflation pressures (psi) */
   tirePressuresPsi?: [number, number, number, number];
+  /** Circumferential flat-spot severity per corner (0..1) */
+  tireFlatSpotSeverity?: [number, number, number, number];
+  /** Surface graining level per corner (0..1) */
+  tireGrainLevel?: [number, number, number, number];
+  /** Internal blistering level per corner (0..1) */
+  tireBlisterLevel?: [number, number, number, number];
+  /** Off-track dirt / gravel / marble contamination per corner (0..1) */
+  tireDirtyLevel?: [number, number, number, number];
   /** Aero centre of pressure as the front share of downforce (%) */
   aeroCopFrontPct?: number;
   /** Floor ground-effect stall factor: 1 = attached, down to 0.55 when the plank is within 4 mm of the road */
   floorStallFactor?: number;
+  /** Slipstream drag multiplier (1.0 in clean air, < 1 in tow) */
+  aeroWakeDragMult?: number;
+  /** Dirty-air downforce multiplier (1.0 in clean air, < 1 in wake) */
+  aeroWakeDownforceMult?: number;
   tireGripFactor: [number, number, number, number]; // FL, FR, RL, RR effective mu / nominal mu
   brakeTempsC: [number, number, number, number]; // FL, FR, RL, RR (°C)
+  brakeCoreTempsC?: [number, number, number, number]; // FL, FR, RL, RR internal vane core (°C)
+  brakePadMuFactor?: [number, number, number, number]; // FL, FR, RL, RR pad friction efficiency (0.55..1.0)
   wheelSurfaces: [SurfaceType, SurfaceType, SurfaceType, SurfaceType]; // FL, FR, RL, RR
   frontSlipAngleDeg?: number;
   rearSlipAngleDeg?: number;
   /**
-   * [-1..1] torque on the steering wheel from the front tyres (aligning moment + caster trail), + = turning the rim
-   * right: opposite to the steering in a normal corner, so it centres the wheel. Drives wheel FFB and pad rumble.
+   * [-1..1] torque on the steering wheel from the front tyres (aligning moment + caster trail + scrub radius + KPI + gyro),
+   * + = turning the rim right: opposite to the steering in a normal corner, so it centres the wheel.
    */
   ffbTorqueNorm?: number;
+  /** Sub-frame 500 Hz physical steering rack torque samples accumulated during the last frame */
+  ffbSubframeSamples?: number[];
   ffbClipping?: boolean; // True when |ffbTorqueNorm| > 0.95
   onKerbLeft: boolean;
   onKerbRight: boolean;
@@ -270,6 +323,9 @@ export interface CarTelemetry {
 
 /** Player car: the VF26 model (F1Physics2026), the 6-DOF f12026-car, or the Mercedes-AMG GT3 on the same vehicle model */
 export type VehicleModelId = "vf26" | "f12026-car" | "amg-gt3";
+
+/** Which lap-time racing line a car drives: the F1 cars share one, the GT3 has its own */
+export type RacingLineId = "f1" | "gt3";
 
 /**
  * f12026-car engineering telemetry channels. Wheel order LF, RF, LR, RR (= FL, FR, RL, RR).

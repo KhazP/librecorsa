@@ -8,9 +8,10 @@ import { F12026CarSim } from "@/lib/sim/f12026-car/F12026CarSim";
 import type { SimulatorCar } from "@/lib/sim/simulator-car";
 import { F1AudioEngine2026 } from "@/lib/f1-audio-2026";
 import { createF1Car2026, type SimCarRig } from "@/lib/car-builder-2026";
+import { AMR26_MODEL_URL, VF26_MODEL_URL } from "@/lib/vf26-car-model";
 import { createGt3CarRig } from "@/lib/gt3-car-model";
 import { AMG_GT3_SOUND, createAmgGt3Sim } from "@/lib/sim/gt3/AmgGt3Sim";
-import { VF26_SOUND, type CarSoundSource } from "@/lib/sim/CarAudio";
+import { AMR26_SOUND, VF26_SOUND, type CarSoundSource } from "@/lib/sim/CarAudio";
 import { buildRwandaCircuitScene } from "@/lib/scene-builder";
 import {
   configureRenderer,
@@ -22,20 +23,47 @@ import { WingMirrors } from "@/lib/render/wing-mirrors";
 import { CockpitMicroShake, TracksideBroadcastDirector } from "@/lib/render/camera-rig";
 import { LapDeltaTracker } from "@/components/hud/useLapDelta";
 import { SimVisualFxManager } from "@/lib/sim/visual-fx";
-import { AiOpponentField } from "@/lib/sim/ai-opponents";
+import { AiOpponentField, resolvePlayerVsRemoteCar } from "@/lib/sim/ai-opponents";
 import { GamepadHaptics } from "@/lib/sim/gamepad-haptics";
 import {
-  MultiplayerSyncManager,
+  getMultiplayerManager,
+  type CarClassRule,
+  type InterpolatedPeerState,
+  type LobbySettings,
+  type LobbyState,
+  type MultiplayerSyncManager,
   type P2PConnectionStatus,
+  type PeerNetStats,
+  type RaceStartInfo,
 } from "@/lib/sim/multiplayer-sync";
+import { MultiplayerRace } from "@/lib/sim/race-session";
+import { GhostPlayer, LapRecorder } from "@/lib/sim/lap-recorder";
+import { ReplayBuffer } from "@/lib/sim/replay-buffer";
+import type { LapRecording, LapSummaryData, LeaderboardEntry, ReplayCarState } from "@/lib/sim/lap-types";
+import { exportLapFile, importLapFile, loadBestLap, saveBestLapIfFaster } from "@/lib/sim/ghost-store";
+import {
+  fetchRemoteGhost,
+  fetchRemoteLeaderboard,
+  localLeaderboard,
+  remoteLeaderboardUrl,
+  submitLap,
+} from "@/lib/net/leaderboard";
+import { buildTelemetryPacket } from "@/lib/input/telemetry-out";
+import { touchInput, isTouchDevice, resetTouchInput } from "@/lib/input/touch-input";
+import { WebHidFfb } from "@/lib/input/webhid-ffb";
+import { applyGraphicsQuality } from "@/lib/render/golden-hour-environment";
+import { TURN_METADATA } from "@/lib/track-data";
+import { getTrackInfo } from "@/lib/track-registry";
+import { TouchControls } from "@/components/hud/TouchControls";
+import { ReplayBar } from "@/components/hud/ReplayBar";
 import { F1TelemetryHud, roomFromUrl } from "@/components/F1TelemetryHud";
-import { nextCameraMode, TYRE_SETUP_LIMITS } from "@/components/hud/PauseMenu";
+import { CAMERA_LABELS, nextCameraMode, TYRE_SETUP_LIMITS, VEHICLE_CHOICES } from "@/components/hud/PauseMenu";
 import { LoadingScreen } from "@/components/menu/LoadingScreen";
 import { TitleMenu } from "@/components/menu/TitleMenu";
 import { FirstRunWizard, type WizardMode, type WizardStepId } from "@/components/menu/FirstRunWizard";
 import { assetProgress } from "@/lib/loading/asset-progress";
 import { buildKeyLookup, keyLabel, padButtonLabel, type KeyAction } from "@/lib/input/bindings";
-import { connectedPads, DeviceInputReader, PAD_SENSITIVITY } from "@/lib/input/device-input";
+import { connectedPads, DeviceInputReader } from "@/lib/input/device-input";
 import { wheelFfb } from "@/lib/input/wheel-ffb";
 import { DEFAULT_GAMEPAD_ASSIST, type GamepadAssistSettings } from "@/lib/sim/gamepad-assist";
 import {
@@ -88,7 +116,24 @@ const KB_STEER_LIMIT_SLIP_RAD = 0.12;
 type AppPhase = "loading" | "title" | "wizard" | "driving";
 
 /** Key actions that act while held (the rest are one-shot toggles) */
-const HELD_KEY_ACTIONS: ReadonlySet<KeyAction> = new Set(["throttle", "brake", "steerLeft", "steerRight", "boostHold"]);
+const HELD_KEY_ACTIONS: ReadonlySet<KeyAction> = new Set(["throttle", "brake", "steerLeft", "steerRight", "boostHold", "throttleHalf"]);
+
+/** Rear slip ratio where the keyboard exit assist starts to hold the throttle back */
+const KB_EXIT_ASSIST_SLIP = 0.1;
+/** Telemetry-out rate (Hz) */
+const TELEMETRY_OUT_HZ = 60;
+/** Rev limit for the telemetry-out packet's rpm bar */
+const MAX_RPM: Record<VehicleModelId, number> = { vf26: 15000, "f12026-car": 15000, "amg-gt3": 8250 };
+const vehicleLabel = (id: string) => VEHICLE_CHOICES.find((v) => v.id === id)?.title ?? id;
+
+/** A race the host started on another circuit: picked up after the scene for that circuit has loaded */
+let pendingRaceStart: RaceStartInfo | null = null;
+
+/** Applies an outer dead zone and a response curve to a stick that already had its inner dead zone */
+function shapeStick(x: number, outerDeadzone: number, linearity: number): number {
+  const mag = Math.min(1, Math.abs(x) / Math.max(0.5, 1 - outerDeadzone));
+  return Math.sign(x) * Math.pow(mag, linearity);
+}
 
 /** A loading task with no progress for this long is given up on (the procedural stand-in stays) */
 const ASSET_STALL_MS = 25_000;
@@ -147,8 +192,9 @@ function saveTyreSetup(vehicle: VehicleModelId, setup: TyreSetup) {
   }
 }
 
-/** The sound bank each car plays (the VF26 and the f12026-car share the VF26's) */
-const soundFor = (vehicle: VehicleModelId): CarSoundSource => (vehicle === "amg-gt3" ? AMG_GT3_SOUND : VF26_SOUND);
+/** The sound bank each car plays: AMR uses the Red Bull v2 bank, f12026-car uses the VF26 bank, GT3 uses AMG GT3 */
+const soundFor = (vehicle: VehicleModelId): CarSoundSource =>
+  vehicle === "amg-gt3" ? AMG_GT3_SOUND : vehicle === "f12026-car" ? VF26_SOUND : AMR26_SOUND;
 
 const isVehicleModel = (value: unknown): value is VehicleModelId =>
   value === "vf26" || value === "f12026-car" || value === "amg-gt3";
@@ -190,7 +236,14 @@ function saveRumble(enabled: boolean) {
   }
 }
 
-export const RwandaF1Simulator: React.FC = () => {
+export interface RwandaF1SimulatorProps {
+  /** Active circuit (already set with `setActiveTrack`; the gate remounts this component on a change) */
+  trackId?: string;
+  /** Title menu circuit picker */
+  onSelectTrack?: (id: string) => void;
+}
+
+export const RwandaF1Simulator: React.FC<RwandaF1SimulatorProps> = ({ trackId = "rwanda", onSelectTrack }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   const track = useMemo(() => getRwandaTrackData(1200), []);
@@ -280,10 +333,10 @@ export const RwandaF1Simulator: React.FC = () => {
   assistSettingsRef.current = useMemo(
     () => ({
       ...DEFAULT_GAMEPAD_ASSIST,
-      steeringRate: PAD_SENSITIVITY[settings.padSensitivity].steeringRate,
-      deadzone: PAD_SENSITIVITY[settings.padSensitivity].deadzone,
+      steeringRate: settings.padTuning.steeringRate,
+      deadzone: settings.padTuning.deadzone,
     }),
-    [settings.padSensitivity]
+    [settings.padTuning.steeringRate, settings.padTuning.deadzone]
   );
   const [p2pStatus, setP2pStatus] = useState<P2PConnectionStatus>({
     mode: "local",
@@ -292,6 +345,54 @@ export const RwandaF1Simulator: React.FC = () => {
     connectedWebRtcPeers: 0,
     statusText: "BroadcastChannel Active (Same-Browser) • Ready for WebRTC P2P",
   });
+
+  // ---- Multiplayer lobby and races
+  const [lobby, setLobby] = useState<LobbyState | null>(null);
+  const [peerStats, setPeerStats] = useState<PeerNetStats[]>([]);
+  /** The multiplayer race in progress (this client's view of it) */
+  const mpRaceRef = useRef<MultiplayerRace | null>(null);
+  const [mpRaceRunning, setMpRaceRunning] = useState(false);
+  /** The results card was closed for this race */
+  const [resultsClosed, setResultsClosed] = useState(false);
+
+  // ---- Laps, ghosts, leaderboards
+  const lapRecorderRef = useRef<LapRecorder | null>(null);
+  const [lapSummary, setLapSummary] = useState<{ summary: LapSummaryData; recording: LapRecording } | null>(null);
+  const [submitState, setSubmitState] = useState<"idle" | "sending" | "sent" | "error">("idle");
+  const [submitRank, setSubmitRank] = useState<number | null>(null);
+  /** Ghost being raced: the personal best (default) or a downloaded / imported lap */
+  const ghostRef = useRef<GhostPlayer | null>(null);
+  const ghostSourceRef = useRef<"pb" | "other">("pb");
+  const [leaderboard, setLeaderboard] = useState<{ local: LeaderboardEntry[]; remote: LeaderboardEntry[]; loading: boolean }>({
+    local: [],
+    remote: [],
+    loading: false,
+  });
+
+  // ---- Instant replay
+  const replayRef = useRef({ buffer: new ReplayBuffer({ maxSeconds: 90, hz: 30 }), active: false, playing: true, timeS: 0, speed: 1 });
+  const [replayUi, setReplayUi] = useState<{ active: boolean; timeS: number; startS: number; endS: number; playing: boolean; speed: number }>({
+    active: false,
+    timeS: 0,
+    startS: 0,
+    endS: 0,
+    playing: true,
+    speed: 1,
+  });
+
+  // ---- VR, FFB meter
+  const [vrSupported, setVrSupported] = useState(false);
+  const [vrActive, setVrActive] = useState(false);
+  const enterVrRef = useRef<(() => void) | null>(null);
+  const [ffbMeter, setFfbMeter] = useState(wheelFfb.meter);
+  const [touchVisible, setTouchVisible] = useState(false);
+  const vrActiveRef = useRef(false);
+  vrActiveRef.current = vrActive;
+  /** Applies the graphics preset to the running renderer (set by the scene effect) */
+  const applyGraphicsRef = useRef<((quality: "low" | "medium" | "high", renderScale: number) => void) | null>(null);
+  /** Enters / leaves the instant replay (set by the scene effect) */
+  const toggleReplayRef = useRef<() => void>(() => {});
+  const exitReplayRef = useRef<() => void>(() => {});
 
   const cameraModeRef = useRef<CameraMode>("chase");
   cameraModeRef.current = cameraMode;
@@ -313,6 +414,7 @@ export const RwandaF1Simulator: React.FC = () => {
     shiftUp: boolean;
     shiftDown: boolean;
     toggleX: boolean;
+    half: boolean;
   }>({
     up: false,
     down: false,
@@ -322,6 +424,7 @@ export const RwandaF1Simulator: React.FC = () => {
     shiftUp: false,
     shiftDown: false,
     toggleX: false,
+    half: false,
   });
   /** Shaped keyboard inputs (pedals 0..1, steering -1..1, + = right) */
   const kbInputRef = useRef({ throttle: 0, brake: 0, steer: 0 });
@@ -462,8 +565,14 @@ export const RwandaF1Simulator: React.FC = () => {
   const handleResetCar = useCallback(
     (flyingStart: boolean) => {
       unlockAudio();
+      // In a multiplayer race only the host can restart it (for everyone); others keep their place
+      if (mpRaceRef.current) {
+        if (getMultiplayerManager().isHost && !flyingStart) getMultiplayerManager().startRace();
+        return;
+      }
       if (physicsRef.current) {
         physicsRef.current.aiAutopilot = false;
+        lapRecorderRef.current?.reset();
         if (aiFieldRef.current) aiFieldRef.current.startRace(!flyingStart);
         else physicsRef.current.resetToStartGrid(flyingStart);
       }
@@ -527,6 +636,19 @@ export const RwandaF1Simulator: React.FC = () => {
     return true;
   }, []);
 
+  const handleHostLocal = useCallback(() => getMultiplayerManager().hostLocal(), []);
+  const handleSetLobbySettings = useCallback((patch: Partial<LobbySettings>) => getMultiplayerManager().setLobbySettings(patch), []);
+  const handleSetReady = useCallback((ready: boolean) => getMultiplayerManager().setReady(ready), []);
+  const handleStartMpRace = useCallback(() => {
+    getMultiplayerManager().startRace();
+  }, []);
+  const handleAbortMpRace = useCallback(() => getMultiplayerManager().abortRace(), []);
+  const vehiclesForClass = useCallback(
+    (rule: CarClassRule): string[] =>
+      rule === "f1" ? ["vf26", "f12026-car"] : rule === "gt3" ? ["amg-gt3"] : ["vf26", "f12026-car", "amg-gt3"],
+    []
+  );
+
   /** Esc / pad Menu: open or close the pause menu, releasing every held key */
   const togglePause = useCallback(() => {
     setPaused((prev) => {
@@ -587,6 +709,8 @@ export const RwandaF1Simulator: React.FC = () => {
         }
       }
       setAiOpponents(race);
+      setResultsClosed(false);
+      lapRecorderRef.current?.reset();
       kbInputRef.current.throttle = 0;
       kbInputRef.current.brake = 0;
       kbInputRef.current.steer = 0;
@@ -597,6 +721,179 @@ export const RwandaF1Simulator: React.FC = () => {
     },
     [track, setPhase]
   );
+
+  /** A multiplayer race was started (by us as host, or by the host): line up in our grid slot behind the lights */
+  const startMpRace = useCallback(
+    (start: RaceStartInfo) => {
+      const mp = getMultiplayerManager();
+      // The class may rule out the current car: take the first allowed one
+      const allowed = vehiclesForClass(start.carClass) as VehicleModelId[];
+      if (!allowed.includes(vehicleModelRef.current)) handleChangeVehicle(allowed[0]);
+      exitReplayRef.current();
+      const physics = physicsRef.current;
+      const roster = mp.lobby?.players ?? [];
+      const profile = settingsRef.current.profile;
+      const race = new MultiplayerRace(start, track.totalLengthM, mp.localPeerId, profile, roster);
+      mpRaceRef.current = race;
+      aiFieldRef.current = null;
+      setAiOpponents(false);
+      if (physics) {
+        physics.aiAutopilot = false;
+        physics.resetToStartGrid(false, race.gridSlot);
+        race.lapClock.reset(physics.sMeters);
+      }
+      lapRecorderRef.current?.reset();
+      replayRef.current.buffer.clear();
+      kbInputRef.current.throttle = 0;
+      kbInputRef.current.brake = 0;
+      kbInputRef.current.steer = 0;
+      pausedRef.current = false;
+      setPaused(false);
+      setResultsClosed(false);
+      setMpRaceRunning(true);
+      setPhase("driving");
+    },
+    [track, setPhase, vehiclesForClass, handleChangeVehicle]
+  );
+  const startMpRaceRef = useRef(startMpRace);
+  startMpRaceRef.current = startMpRace;
+
+  const leaveMpRace = useCallback(() => {
+    mpRaceRef.current = null;
+    setMpRaceRunning(false);
+    setResultsClosed(false);
+  }, []);
+
+  // ---- Laps, ghosts, leaderboards
+  const refreshLeaderboard = useCallback(async () => {
+    setLeaderboard((l) => ({ ...l, loading: true }));
+    const vehicle = vehicleModelRef.current;
+    const [local, remote] = await Promise.all([
+      localLeaderboard(trackId, vehicle).catch((): LeaderboardEntry[] => []),
+      remoteLeaderboardUrl
+        ? fetchRemoteLeaderboard(trackId, vehicle).catch((): LeaderboardEntry[] => [])
+        : Promise.resolve<LeaderboardEntry[]>([]),
+    ]);
+    setLeaderboard({ local, remote, loading: false });
+  }, [trackId]);
+
+  /** Races the personal best of this car as the ghost (force: also when another lap was chosen) */
+  const loadPbGhost = useCallback(
+    async (force: boolean) => {
+      if (!force && ghostSourceRef.current !== "pb") return;
+      const rec = await loadBestLap(trackId, vehicleModelRef.current).catch(() => null);
+      ghostSourceRef.current = "pb";
+      ghostRef.current = rec ? new GhostPlayer(rec) : null;
+      lapRecorderRef.current?.setContext({ personalBestMs: rec?.lapTimeMs ?? null });
+    },
+    [trackId]
+  );
+
+  const onLapCompleted = useCallback(
+    (summary: LapSummaryData, recording: LapRecording) => {
+      if (settingsRef.current.hud.lapSummary) {
+        setLapSummary({ summary, recording });
+        setSubmitState("idle");
+        setSubmitRank(null);
+      }
+      if (!summary.valid) return;
+      void saveBestLapIfFaster(recording)
+        .then((saved) => {
+          if (!saved) return;
+          if (ghostSourceRef.current === "pb") ghostRef.current = new GhostPlayer(recording);
+          void refreshLeaderboard();
+        })
+        .catch(() => {});
+    },
+    [refreshLeaderboard]
+  );
+  const onLapCompletedRef = useRef(onLapCompleted);
+  onLapCompletedRef.current = onLapCompleted;
+
+  const handleSubmitLap = useCallback(async () => {
+    const rec = lapSummary?.recording;
+    if (!rec) return;
+    setSubmitState("sending");
+    const res = await submitLap(rec).catch(() => ({ ok: false, rank: undefined }));
+    setSubmitState(res.ok ? "sent" : "error");
+    setSubmitRank(res.ok ? (res.rank ?? null) : null);
+    if (res.ok) void refreshLeaderboard();
+  }, [lapSummary, refreshLeaderboard]);
+
+  /** Uses a lap from the leaderboard (or a file) as the ghost */
+  const raceGhost = useCallback((rec: LapRecording | null) => {
+    if (!rec) return;
+    ghostRef.current = new GhostPlayer(rec);
+    ghostSourceRef.current = "other";
+    setSettings((prev) => (prev.ghost ? prev : { ...prev, ghost: true }));
+  }, []);
+
+  const handleRaceGhostEntry = useCallback(
+    async (entry: LeaderboardEntry) => {
+      const rec =
+        entry.source === "remote" && entry.id
+          ? await fetchRemoteGhost(entry.id).catch(() => null)
+          : await loadBestLap(entry.trackId, entry.vehicle).catch(() => null);
+      raceGhost(rec);
+    },
+    [raceGhost]
+  );
+
+  const handleImportGhost = useCallback(
+    async (file: File) => {
+      const rec = await importLapFile(file).catch(() => null);
+      if (rec && rec.trackId === trackId) raceGhost(rec);
+    },
+    [raceGhost, trackId]
+  );
+
+  const handleExportBest = useCallback(async () => {
+    const rec = await loadBestLap(trackId, vehicleModelRef.current).catch(() => null);
+    if (rec) exportLapFile(rec);
+  }, [trackId]);
+
+  // ---- Instant replay transport
+  const handleReplayTogglePlay = useCallback(() => {
+    const rp = replayRef.current;
+    if (!rp.playing && rp.timeS >= rp.buffer.endS - 0.05) rp.timeS = rp.buffer.startS;
+    rp.playing = !rp.playing;
+    setReplayUi((u) => ({ ...u, playing: rp.playing, timeS: rp.timeS }));
+  }, []);
+  const handleReplaySeek = useCallback((tS: number) => {
+    replayRef.current.timeS = tS;
+    setReplayUi((u) => ({ ...u, timeS: tS }));
+  }, []);
+  const handleReplaySpeed = useCallback((speed: number) => {
+    replayRef.current.speed = speed;
+    setReplayUi((u) => ({ ...u, speed }));
+  }, []);
+
+  // ---- Wheel force meter
+  const handleApplySuggestedGain = useCallback(() => {
+    const gain = wheelFfb.meter.suggestedGain;
+    if (gain === null) return;
+    const vehicle = vehicleModelRef.current;
+    setSettings((prev) => ({
+      ...prev,
+      wheel: {
+        ...prev.wheel,
+        ffbPerCar: {
+          ...prev.wheel.ffbPerCar,
+          [vehicle]: { gain, minForce: prev.wheel.ffbPerCar?.[vehicle]?.minForce ?? prev.wheel.ffbMinForce },
+        },
+      },
+    }));
+    wheelFfb.resetMeter();
+  }, []);
+
+  const [localPeerId, setLocalPeerId] = useState("");
+  const [titleInitialPanel, setTitleInitialPanel] = useState<"multiplayer" | null>(null);
+  const handleBackToLobby = useCallback(() => {
+    leaveMpRace();
+    setTitleInitialPanel("multiplayer");
+    exitToTitleRef.current();
+  }, [leaveMpRace]);
+  const exitToTitleRef = useRef<() => void>(() => {});
 
   const openControls = useCallback(
     (from: "title" | "pause") => {
@@ -642,6 +939,9 @@ export const RwandaF1Simulator: React.FC = () => {
   }, []);
 
   const exitToTitle = useCallback(() => {
+    exitReplayRef.current();
+    mpRaceRef.current = null;
+    setMpRaceRunning(false);
     aiFieldRef.current = null;
     setAiOpponents(false);
     physicsRef.current?.resetToStartGrid(false);
@@ -649,6 +949,7 @@ export const RwandaF1Simulator: React.FC = () => {
     setPaused(false);
     setPhase("title");
   }, [setPhase]);
+  exitToTitleRef.current = exitToTitle;
 
   /** "Press any key" on the loading screen: the user gesture that unlocks audio */
   const handleLoadingStart = useCallback(() => {
@@ -733,6 +1034,8 @@ export const RwandaF1Simulator: React.FC = () => {
       kbInputRef.current.throttle = 0;
       kbInputRef.current.brake = 0;
       kbInputRef.current.steer = 0;
+      lapRecorderRef.current?.setContext({ vehicle });
+      lapRecorderRef.current?.reset();
       // A running race restarts from the lights with the new car
       if (aiFieldRef.current) {
         const field = new AiOpponentField(track, physics);
@@ -784,37 +1087,79 @@ export const RwandaF1Simulator: React.FC = () => {
       tvDirector.resolveOcclusion(root);
     });
 
-    /** The 3D car for a model: the GT3 has its own; the VF26 and the f12026-car share the F1 rig */
+    /** The 3D car for a model: AMR uses amr26.glb, f12026-car uses vf26.glb, GT3 uses gt3.glb */
     const isGt3Rig = (vehicle: VehicleModelId) => vehicle === "amg-gt3";
     const createCarRig = (vehicle: VehicleModelId): SimCarRig => {
-      const rig = isGt3Rig(vehicle) ? createGt3CarRig() : createF1Car2026(liveryRef.current, physics.tireCompound);
+      const f1ModelUrl = vehicle === "f12026-car" ? VF26_MODEL_URL : AMR26_MODEL_URL;
+      const rig = isGt3Rig(vehicle)
+        ? createGt3CarRig()
+        : createF1Car2026(liveryRef.current, physics.tireCompound, f1ModelUrl);
       rig.setLivery(liveryRef.current);
       scene.add(rig.root);
       carRigRef.current = rig;
       return rig;
     };
     let carRig = createCarRig(vehicleModelRef.current);
-    let carRigIsGt3 = isGt3Rig(vehicleModelRef.current);
+    let carRigVehicle: VehicleModelId = vehicleModelRef.current;
     const swapCarRig = (vehicle: VehicleModelId) => {
-      if (isGt3Rig(vehicle) === carRigIsGt3) return;
-      // The VF26 cockpit extras belong to the old body
+      if (vehicle === carRigVehicle) return;
+      // The cockpit extras belong to the old body
       wheelDisplay?.dispose();
       wheelDisplay = null;
       wingMirrors?.dispose();
       wingMirrors = null;
       carRig.dispose();
       carRig = createCarRig(vehicle);
-      carRigIsGt3 = isGt3Rig(vehicle);
+      carRigVehicle = vehicle;
     };
 
     // Persistent 4-Wheel Skidmarks, Instanced Tire Smoke/Gravel & Multiplayer/AI Opponent Renderer
     const visualFx = new SimVisualFxManager();
     scene.add(visualFx.group);
-    const multiplayerSync = new MultiplayerSyncManager();
+    // One connection for the page: it survives a circuit switch (which remounts this component)
+    const multiplayerSync = getMultiplayerManager();
     multiplayerSync.onStatusChange = (st) => {
       setP2pStatus(st);
     };
+    setP2pStatus(multiplayerSync.status);
     multiplayerRef.current = multiplayerSync;
+
+    // Lap recording for the summary card, the personal-best ghost and the leaderboards
+    const lapRecorder = new LapRecorder({
+      trackLengthM: track.totalLengthM,
+      turns: TURN_METADATA.map((t) => ({ number: t.number, name: t.name, sApprox: t.sApprox })),
+      trackId,
+      vehicle: vehicleModelRef.current,
+      driverName: settingsRef.current.profile.name,
+      driverCode: settingsRef.current.profile.code,
+    });
+    lapRecorderRef.current = lapRecorder;
+
+    applyGraphicsRef.current = (quality, renderScale) => {
+      applyGraphicsQuality(renderer, postFx, env, quality, renderScale);
+      postFx.setSize(container.clientWidth, container.clientHeight);
+    };
+    applyGraphicsRef.current(settingsRef.current.graphics.quality, settingsRef.current.graphics.renderScale);
+
+    // WebXR: the headset's pose is added to a rig placed at the driver's eye every frame
+    renderer.xr.enabled = true;
+    const xrRig = new THREE.Group();
+    const xrCamera = new THREE.PerspectiveCamera(70, 1, 0.05, 5500);
+    xrRig.add(xrCamera);
+    scene.add(xrRig);
+    enterVrRef.current = () => {
+      const xr = (navigator as Navigator & { xr?: { requestSession: (mode: string, init?: object) => Promise<XRSession> } }).xr;
+      if (!xr || renderer.xr.isPresenting) return;
+      void xr
+        .requestSession("immersive-vr", { optionalFeatures: ["local-floor"] })
+        .then(async (session) => {
+          renderer.xr.setReferenceSpaceType("local");
+          await renderer.xr.setSession(session);
+          setVrActive(true);
+          session.addEventListener("end", () => setVrActive(false));
+        })
+        .catch(() => setVrActive(false));
+    };
 
     // Underbody Titanium Skid-Block Sparks
     const sparkCount = 48;
@@ -929,6 +1274,13 @@ export const RwandaF1Simulator: React.FC = () => {
         case "boostHold":
           keysRef.current.boostHold = true;
           break;
+        case "throttleHalf":
+          keysRef.current.half = true;
+          if (physics.aiAutopilot) physics.aiAutopilot = false;
+          break;
+        case "replay":
+          toggleReplayRef.current();
+          break;
         case "boostLatch":
           setBoostLatch((prev) => !prev);
           break;
@@ -970,6 +1322,10 @@ export const RwandaF1Simulator: React.FC = () => {
     };
 
     const restartRun = () => {
+      // A multiplayer race is restarted by the host, from the pause menu
+      if (mpRaceRef.current) return;
+      if (replayRef.current.active) return;
+      lapRecorder.reset();
       physics.aiAutopilot = false;
       if (aiFieldRef.current) aiFieldRef.current.startRace(true);
       else physics.resetToStartGrid(true);
@@ -988,6 +1344,7 @@ export const RwandaF1Simulator: React.FC = () => {
       else if (action === "steerLeft") keysRef.current.left = false;
       else if (action === "steerRight") keysRef.current.right = false;
       else if (action === "boostHold") keysRef.current.boostHold = false;
+      else if (action === "throttleHalf") keysRef.current.half = false;
     };
 
     window.addEventListener("mousemove", onMouseMove);
@@ -1004,9 +1361,57 @@ export const RwandaF1Simulator: React.FC = () => {
     };
     window.addEventListener("resize", onResize);
 
-    let animFrameId = 0;
     let lastTimeMs = performance.now();
     let lastHudSyncMs = 0;
+    let lastTelemetryOutMs = 0;
+    // Instant replay: session clock while driving, and the live pose saved while a replay plays
+    let replayClockS = 0;
+    let lastReplayPushS = -1;
+    const replaySaved = { pos: new THREE.Vector3(), quat: new THREE.Quaternion(), vx: 0, s: 0 };
+    const replayPeerState = (car: ReplayCarState): InterpolatedPeerState => ({
+      peerId: car.id,
+      driverCode: replayNames.get(car.id)?.code ?? "",
+      teamColorHex: replayNames.get(car.id)?.color ?? "#9CA3AF",
+      vehicle: replayNames.get(car.id)?.vehicle,
+      position: new THREE.Vector3(car.x, car.y, car.z),
+      quaternion: new THREE.Quaternion(car.qx, car.qy, car.qz, car.qw),
+      linearVelocity: new THREE.Vector3(),
+      steerAngle: car.steer * 0.36,
+      wheelRPMs: [0, 0, 0, 0].map(() => (car.speedKmh / 3.6 / 0.36) * 9.549296) as [number, number, number, number],
+      throttle: car.throttle,
+      brake: car.brake,
+      trackS: 0,
+      speedKmh: car.speedKmh,
+      isAiPeer: true,
+    });
+    /** Look of every car seen in the replay window (the frames only hold poses) */
+    const replayNames = new Map<string, { code: string; color: string; vehicle?: VehicleModelId }>();
+    const exitReplay = () => {
+      const rp = replayRef.current;
+      if (!rp.active) return;
+      rp.active = false;
+      physics.worldPosition.copy(replaySaved.pos);
+      physics.worldQuaternion.copy(replaySaved.quat);
+      physics.vxMs = replaySaved.vx;
+      physics.sMeters = replaySaved.s;
+      setReplayUi((u) => ({ ...u, active: false }));
+    };
+    exitReplayRef.current = exitReplay;
+    toggleReplayRef.current = () => {
+      const rp = replayRef.current;
+      if (rp.active) return exitReplay();
+      // Not in a multiplayer race (the field keeps racing) and only with something recorded
+      if (mpRaceRef.current || rp.buffer.durationS < 1 || phaseRef.current !== "driving") return;
+      replaySaved.pos.copy(physics.worldPosition);
+      replaySaved.quat.copy(physics.worldQuaternion);
+      replaySaved.vx = physics.vxMs;
+      replaySaved.s = physics.sMeters;
+      rp.active = true;
+      rp.playing = true;
+      rp.speed = 1;
+      rp.timeS = Math.max(rp.buffer.startS, rp.buffer.endS - 20);
+      setReplayUi({ active: true, timeS: rp.timeS, startS: rp.buffer.startS, endS: rp.buffer.endS, playing: true, speed: 1 });
+    };
 
     // Horizon-Stabilized Sim Camera State
     let smoothedCamDist = 5.35;
@@ -1030,6 +1435,9 @@ export const RwandaF1Simulator: React.FC = () => {
     let frameIndex = 0;
     const deviceInput = new DeviceInputReader();
     let menuOrbitRad = 0.6;
+    const ghostPos = new THREE.Vector3();
+    const ghostQuat = new THREE.Quaternion();
+    const ghostVel = new THREE.Vector3();
     let menuViewOffset = false;
 
     // Loading: once both GLBs have settled (loaded or given up), compile every shader before the
@@ -1072,7 +1480,6 @@ export const RwandaF1Simulator: React.FC = () => {
     checkAssets();
 
     const animate = (nowMs: number) => {
-      animFrameId = requestAnimationFrame(animate);
       const dtSeconds = Math.min((nowMs - lastTimeMs) / 1000, 0.05);
       lastTimeMs = nowMs;
 
@@ -1085,11 +1492,19 @@ export const RwandaF1Simulator: React.FC = () => {
       const device = deviceInput.read(pads, settingsRef.current, dtSeconds);
       const appPhase = phaseRef.current;
       const inMenu = appPhase !== "driving";
-      const driving = !inMenu && !pausedRef.current;
-      const gamepadThrottle = driving ? device.throttle : 0;
-      const gamepadBrake = driving ? device.brake : 0;
+      const rp = replayRef.current;
+      if (rp.active && inMenu) exitReplay();
+      const replaying = rp.active;
+      const driving = !inMenu && !pausedRef.current && !replaying;
+      const settingsNow = settingsRef.current;
+      const padTuning = settingsNow.padTuning;
+      const kbTuning = settingsNow.keyboardTuning;
+      const isPad = device.source === "controller";
+      const gamepadThrottle = driving ? (isPad ? Math.pow(device.throttle, padTuning.throttleGamma) : device.throttle) : 0;
+      const gamepadBrake = driving ? (isPad ? Math.pow(device.brake, padTuning.brakeGamma) : device.brake) : 0;
       const gamepadSteer = device.analogSteer;
-      const gamepadStick = device.padSteer;
+      const gamepadStick =
+        device.padSteer === undefined ? undefined : shapeStick(device.padSteer, padTuning.outerDeadzone, padTuning.linearity);
       const gamepadBoost = driving && device.boostHeld;
       if (!inMenu) {
         for (const action of device.pressed) {
@@ -1113,15 +1528,26 @@ export const RwandaF1Simulator: React.FC = () => {
       // Wheel and mouse inputs are passed through untouched.
       const keys = keysRef.current;
       const kb = kbInputRef.current;
+      // Half-throttle key: a fixed part throttle for wet-like traction or slow corners
+      let kbThrottleTarget = keys.up ? 1 : keys.half ? kbTuning.halfThrottle : 0;
+      // Exit assist: hold the keyboard throttle back while the rear tyres spin up
+      if (kbThrottleTarget > 0 && kbTuning.exitAssist) {
+        const slip = physics.telemetry.wheelSlipRatios;
+        const rearSlip = Math.max(slip[2] ?? 0, slip[3] ?? 0);
+        if (rearSlip > KB_EXIT_ASSIST_SLIP) {
+          kbThrottleTarget *= Math.max(0.35, 1 - (rearSlip - KB_EXIT_ASSIST_SLIP) * 4);
+        }
+      }
+      const throttleRising = kbThrottleTarget > kb.throttle;
       kb.throttle = approach(
         kb.throttle,
-        keys.up ? 1 : 0,
-        dtSeconds / (keys.up ? KB_THROTTLE_RISE_S : KB_THROTTLE_FALL_S)
+        kbThrottleTarget,
+        dtSeconds / (throttleRising ? kbTuning.throttleRiseS || KB_THROTTLE_RISE_S : KB_THROTTLE_FALL_S)
       );
       kb.brake = approach(
         kb.brake,
         keys.down ? 1 : 0,
-        dtSeconds / (keys.down ? KB_BRAKE_RISE_S : KB_BRAKE_FALL_S)
+        dtSeconds / (keys.down ? kbTuning.brakeRiseS || KB_BRAKE_RISE_S : KB_BRAKE_FALL_S)
       );
       const vFwd = Math.max(0, physics.vxMs);
       const kbSteerLimit = Math.min(
@@ -1137,22 +1563,37 @@ export const RwandaF1Simulator: React.FC = () => {
       kb.steer = approach(
         kb.steer,
         kbSteerTarget,
-        (kbSteerLimit / (kbRecentring ? KB_STEER_RETURN_S : KB_STEER_RISE_S)) *
+        (kbSteerLimit /
+          (kbRecentring ? kbTuning.steerReturnS || KB_STEER_RETURN_S : kbTuning.steerRiseS || KB_STEER_RISE_S)) *
           dtSeconds
       );
       const kbSteerActive = keys.left || keys.right || Math.abs(kb.steer) > 1e-3;
+      // On-screen controls: pedals and a steering pad (or the tilt of the device)
+      const touch = touchInput.active && driving ? touchInput : null;
+      const touchSteerActive = touch !== null && Math.abs(touch.steer) > 0.01;
+      if (touchInput.active) {
+        if (driving) {
+          if (touchInput.shiftUp) keysRef.current.shiftUp = true;
+          if (touchInput.shiftDown) keysRef.current.shiftDown = true;
+          if (touchInput.aero) keysRef.current.toggleX = true;
+          if (touchInput.boost) setBoostLatch((prev) => !prev);
+        }
+        touchInput.shiftUp = touchInput.shiftDown = touchInput.aero = touchInput.boost = false;
+      }
       const activeAnalogSteer = mouseSteerEnabledRef.current
         ? mouseSteerValueRef.current
-        : gamepadSteer;
+        : touchSteerActive
+          ? touch.steer
+          : gamepadSteer;
 
       const inputs: ControlInputs = {
-        throttle: Math.max(kb.throttle, gamepadThrottle),
-        brake: Math.max(kb.brake, gamepadBrake),
+        throttle: Math.max(kb.throttle, gamepadThrottle, touch?.throttle ?? 0),
+        brake: Math.max(kb.brake, gamepadBrake, touch?.brake ?? 0),
         steerLeft: 0,
         steerRight: 0,
         analogSteer: kbSteerActive ? kb.steer : activeAnalogSteer,
         padSteer:
-          kbSteerActive || mouseSteerEnabledRef.current ? undefined : gamepadStick,
+          kbSteerActive || mouseSteerEnabledRef.current || touchSteerActive ? undefined : gamepadStick,
         manualOverride:
           keysRef.current.boostHold || boostLatchRef.current || gamepadBoost,
         toggleXMode: keysRef.current.toggleX,
@@ -1168,15 +1609,66 @@ export const RwandaF1Simulator: React.FC = () => {
       if (physics.gamepadAssist.settings !== assistSettingsRef.current) {
         physics.gamepadAssist.settings = assistSettingsRef.current;
       }
+      // A multiplayer race runs on the host's clock: the grid is held until the shared lights-out
+      const mpRace = mpRaceRef.current;
+      const mpFrame = mpRace ? mpRace.frame(multiplayerSync.hostNowMs(nowMs)) : null;
+      const mpFrozen = mpFrame !== null && mpFrame.phase !== "racing";
       if (driving) {
-        if (!aiField?.playerFrozen) physics.step(dtSeconds, inputs);
+        if (!aiField?.playerFrozen && !mpFrozen) physics.step(dtSeconds, inputs);
         aiField?.update(dtSeconds);
       }
-      haptics.update(physics.telemetry, dtSeconds, rumbleEnabledRef.current && driving);
+      if (mpRace && mpFrame && mpFrame.phase === "racing" && !pausedRef.current) {
+        mpRace.lapClock.update(physics.sMeters, mpFrame.raceTimeS, mpRace.start.laps);
+      }
+      haptics.update(physics.telemetry, dtSeconds, rumbleEnabledRef.current && driving, {
+        triggerRumble: padTuning.triggerRumble,
+      });
       // Forces only while driving with the wheel: on a pad or the keyboard a plugged-in wheel stays limp
-      wheelFfb.update(physics.telemetry, settingsRef.current.wheel, pads, nowMs, driving && settingsRef.current.device === "wheel");
-      physics.telemetry.race = aiField?.status();
-      builtCircuit.setStartLights(aiField?.phase === "lights" ? aiField.lightsOn : null);
+      wheelFfb.update(
+        physics.telemetry,
+        settingsNow.wheel,
+        pads,
+        nowMs,
+        driving && settingsNow.device === "wheel",
+        vehicleModelRef.current
+      );
+      physics.telemetry.race = mpRace && mpFrame ? mpRace.status(mpFrame, physics.vxMs) : aiField?.status();
+      builtCircuit.setStartLights(
+        mpFrame
+          ? mpFrame.phase === "lights"
+            ? mpFrame.lightsOn
+            : null
+          : aiField?.phase === "lights"
+            ? aiField.lightsOn
+            : null
+      );
+
+      // Laps: summary card, personal best (saved, and raced as the ghost) — practice only
+      if (driving && !aiField && !mpRace) {
+        const done = lapRecorder.update({
+          telemetry: physics.telemetry,
+          position: physics.worldPosition,
+          quaternion: physics.worldQuaternion,
+        });
+        if (done) onLapCompletedRef.current(done.summary, done.recording);
+      }
+
+      // Telemetry out (UDP via the bridge) for dashboards and motion rigs
+      if (settingsNow.wheel.telemetryOut && nowMs - lastTelemetryOutMs >= 1000 / TELEMETRY_OUT_HZ) {
+        lastTelemetryOutMs = nowMs;
+        wheelFfb.sendTelemetry(
+          settingsNow.wheel.telemetryPort,
+          buildTelemetryPacket(physics.telemetry, {
+            car: vehicleModelRef.current,
+            track: trackId,
+            maxRpm: MAX_RPM[vehicleModelRef.current],
+            yawRateRadS: physics.yawRateRadS,
+            pitchRad: physics.pitchRad,
+            rollRad: physics.rollRad,
+            nowMs,
+          })
+        );
+      }
 
       // Update 3D Dashed Dynamic Braking Line colors (green/yellow/red) ahead of the car (Reference Image 4)
       builtCircuit.updateDynamicRacingLine(physics.sMeters, physics.vxMs, physics.brakingGuide);
@@ -1190,8 +1682,12 @@ export const RwandaF1Simulator: React.FC = () => {
       const interpolatedPeers = multiplayerSync.update(
         nowMs,
         {
-          driverCode: "RWA",
-          teamColorHex: "#E10600",
+          driverCode: settingsNow.profile.code,
+          teamColorHex: settingsNow.profile.color,
+          name: settingsNow.profile.name,
+          race: mpRace?.progress(),
+          vehicle: vehicleModelRef.current,
+          trackId,
           pos: [
             physics.worldPosition.x,
             physics.worldPosition.y,
@@ -1219,9 +1715,115 @@ export const RwandaF1Simulator: React.FC = () => {
         }
       );
 
-      const renderPeers = aiField ? [...interpolatedPeers, ...aiField.peers()] : interpolatedPeers;
+      // A peer on another circuit has coordinates that mean nothing here
+      const samePeers = interpolatedPeers.filter((p) => !p.trackId || p.trackId === trackId);
+      if (mpRace && mpFrame) {
+        mpRace.ingestPeers(samePeers);
+        // Contact with the other players (one-sided: each client resolves its own car)
+        if (driving && mpRace.collisionsActive(mpFrame)) {
+          for (const p of samePeers) {
+            if (!p.isAiPeer && p.race?.id === mpRace.start.id) resolvePlayerVsRemoteCar(physics, p);
+          }
+        }
+      }
+      let renderPeers = aiField ? [...samePeers, ...aiField.peers()] : samePeers;
 
-      physics.telemetry.peers = renderPeers.map((p) => {
+      // Personal-best (or chosen) ghost, in practice only, timed against the lap in progress
+      const ghost = ghostRef.current;
+      if (ghost && settingsNow.ghost && !aiField && !mpRace && !replaying && !inMenu) {
+        const g = ghost.sampleAt(physics.telemetry.currentLapTimeMs / 1000);
+        if (g) {
+          const wheelRpm = (g.speedKmh / 3.6 / 0.36) * 9.549296;
+          renderPeers = [
+            ...renderPeers,
+            {
+              peerId: "ghost",
+              driverCode: ghost.recording.driverCode,
+              teamColorHex: "#9CA3AF",
+              vehicle: ghost.recording.vehicle,
+              position: ghostPos.set(g.x, g.y, g.z),
+              quaternion: ghostQuat.set(g.qx, g.qy, g.qz, g.qw),
+              linearVelocity: ghostVel,
+              steerAngle: g.steer * 0.36,
+              wheelRPMs: [wheelRpm, wheelRpm, wheelRpm, wheelRpm],
+              throttle: g.throttle,
+              brake: g.brake,
+              trackS: g.s,
+              speedKmh: g.speedKmh,
+              isAiPeer: true,
+              ghost: true,
+            },
+          ];
+        }
+      }
+
+      // Instant replay: record the field while driving, show the recorded poses while replaying
+      if (driving) {
+        replayClockS += dtSeconds;
+        if (replayClockS - lastReplayPushS >= 1 / 30) {
+          lastReplayPushS = replayClockS;
+          const cars: ReplayCarState[] = [
+            {
+              id: "player",
+              x: physics.worldPosition.x,
+              y: physics.worldPosition.y,
+              z: physics.worldPosition.z,
+              qx: physics.worldQuaternion.x,
+              qy: physics.worldQuaternion.y,
+              qz: physics.worldQuaternion.z,
+              qw: physics.worldQuaternion.w,
+              speedKmh: physics.telemetry.speedKmh,
+              steer: physics.steerAngleNorm,
+              throttle: physics.telemetry.throttle,
+              brake: physics.telemetry.brake,
+              gear: physics.telemetry.gear,
+              rpm: physics.telemetry.rpm,
+            },
+          ];
+          for (const p of renderPeers) {
+            if (p.ghost) continue;
+            replayNames.set(p.peerId, { code: p.driverCode, color: p.teamColorHex, vehicle: p.vehicle });
+            cars.push({
+              id: p.peerId,
+              x: p.position.x,
+              y: p.position.y,
+              z: p.position.z,
+              qx: p.quaternion.x,
+              qy: p.quaternion.y,
+              qz: p.quaternion.z,
+              qw: p.quaternion.w,
+              speedKmh: p.speedKmh,
+              steer: p.steerAngle / 0.36,
+              throttle: p.throttle,
+              brake: p.brake,
+              gear: 0,
+              rpm: 0,
+            });
+          }
+          rp.buffer.push(replayClockS, cars);
+        }
+      } else if (replaying) {
+        if (rp.playing && !pausedRef.current) {
+          rp.timeS = Math.min(rp.buffer.endS, rp.timeS + dtSeconds * rp.speed);
+          if (rp.timeS >= rp.buffer.endS) rp.playing = false;
+        }
+        const frame = rp.buffer.frameAt(rp.timeS);
+        if (frame) {
+          const peers: InterpolatedPeerState[] = [];
+          for (const car of frame.cars) {
+            if (car.id === "player") {
+              physics.worldPosition.set(car.x, car.y, car.z);
+              physics.worldQuaternion.set(car.qx, car.qy, car.qz, car.qw);
+              physics.vxMs = car.speedKmh / 3.6;
+            } else {
+              peers.push(replayPeerState(car));
+            }
+          }
+          renderPeers = peers;
+        }
+      }
+
+      physics.telemetry.peers = renderPeers.filter((p) => !p.ghost).map((p) => {
         let deltaS = p.trackS - physics.sMeters;
         if (deltaS > track.totalLengthM * 0.5) deltaS -= track.totalLengthM;
         if (deltaS < -track.totalLengthM * 0.5) deltaS += track.totalLengthM;
@@ -1250,7 +1852,8 @@ export const RwandaF1Simulator: React.FC = () => {
       }
 
       // The menus film the car from outside, whatever the player's camera is
-      const mode: CameraMode = inMenu ? "chase" : cameraModeRef.current;
+      const inVr = renderer.xr.isPresenting;
+      const mode: CameraMode = inMenu ? "chase" : inVr ? "cockpit" : cameraModeRef.current;
       const vf26Cams = carRig.getCameraAnchors();
       const carFovDeg = vf26Cams ? vf26Cams.cockpit.fovDeg : FALLBACK_COCKPIT_FOV_DEG;
       if (carFovDeg !== carCockpitFovRef.current) {
@@ -1302,7 +1905,7 @@ export const RwandaF1Simulator: React.FC = () => {
 
       // Titanium Floor Sparks
       if (
-        !carRigIsGt3 &&
+        !isGt3Rig(carRigVehicle) &&
         ((physics.telemetry.speedKmh > 280 &&
           (physics.telemetry.verticalG ?? 1.0) > 1.15) ||
           physics.telemetry.onKerbLeft ||
@@ -1671,8 +2274,15 @@ export const RwandaF1Simulator: React.FC = () => {
 
       env.update(physics.worldPosition, camera);
       // Rear view into the mirrors' render target (cockpit only, every 2nd frame), then the main frame
-      wingMirrors?.update(frameIndex++, mode === "cockpit", carRig.chassisGroup);
-      postFx.render(dtSeconds);
+      wingMirrors?.update(frameIndex++, mode === "cockpit" && !inVr, carRig.chassisGroup);
+      if (inVr) {
+        // The head pose is added on top of the driver's eye point (a "local" space starts at the head)
+        xrRig.position.copy(camera.position);
+        xrRig.quaternion.copy(camera.quaternion);
+        renderer.render(scene, xrCamera);
+      } else {
+        postFx.render(dtSeconds);
+      }
 
       if (nowMs - lastHudSyncMs > 33) {
         lastHudSyncMs = nowMs;
@@ -1690,17 +2300,34 @@ export const RwandaF1Simulator: React.FC = () => {
           wheelSurfaces: [...physics.telemetry.wheelSurfaces],
           peers: [...(physics.telemetry.peers ?? [])],
         });
+        if (replaying) {
+          setReplayUi({
+            active: true,
+            timeS: rp.timeS,
+            startS: rp.buffer.startS,
+            endS: rp.buffer.endS,
+            playing: rp.playing,
+            speed: rp.speed,
+          });
+        }
       }
     };
 
-    animFrameId = requestAnimationFrame(animate);
+    // setAnimationLoop runs on window rAF normally and on the headset's frame loop in VR
+    renderer.setAnimationLoop(animate);
 
     return () => {
       disposed = true;
       unsubscribeAssets();
       window.clearInterval(assetWatchdog);
       swapCarRef.current = null;
-      cancelAnimationFrame(animFrameId);
+      renderer.setAnimationLoop(null);
+      void renderer.xr.getSession()?.end();
+      enterVrRef.current = null;
+      applyGraphicsRef.current = null;
+      exitReplayRef.current = () => {};
+      toggleReplayRef.current = () => {};
+      lapRecorderRef.current = null;
       haptics.stop();
       hapticsRef.current = null;
       wheelFfb.dispose();
@@ -1708,7 +2335,8 @@ export const RwandaF1Simulator: React.FC = () => {
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
       window.removeEventListener("resize", onResize);
-      multiplayerSync.dispose();
+      // The shared connection stays up (a circuit switch remounts this component)
+      multiplayerSync.onStatusChange = undefined;
       wheelDisplay?.dispose();
       wingMirrors?.dispose();
       postFx.dispose();
@@ -1749,6 +2377,103 @@ export const RwandaF1Simulator: React.FC = () => {
     });
   }, [settingsHydrated, settings, assistPreset, showRacingLine, gamepadAssist, mouseSteerEnabled, selectedLivery, cameraMode]);
 
+  // Multiplayer: lobby, race start / abort from the host, link quality
+  useEffect(() => {
+    const mp = getMultiplayerManager();
+    setLocalPeerId(mp.localPeerId);
+    setLobby(mp.lobby);
+    mp.onLobbyChange = (l) => setLobby(l ? { ...l, players: [...l.players] } : null);
+    mp.onRaceStart = (start) => {
+      // A race on another circuit: switch to it, and pick the race up once that scene has loaded
+      if (start.trackId && start.trackId !== trackId && onSelectTrack) {
+        pendingRaceStart = start;
+        onSelectTrack(start.trackId);
+        return;
+      }
+      startMpRaceRef.current(start);
+    };
+    mp.onRaceAbort = (id) => {
+      if (mpRaceRef.current?.start.id === id) leaveMpRace();
+    };
+    const timer = window.setInterval(() => setPeerStats(mp.getPeerStats()), 1000);
+    return () => {
+      mp.onLobbyChange = undefined;
+      mp.onRaceStart = undefined;
+      mp.onRaceAbort = undefined;
+      window.clearInterval(timer);
+    };
+  }, [trackId, onSelectTrack, leaveMpRace]);
+
+  // The race the host started before this circuit loaded
+  useEffect(() => {
+    if (!assetsReady || !pendingRaceStart) return;
+    const start = pendingRaceStart;
+    pendingRaceStart = null;
+    if (start.trackId !== trackId) return;
+    unlockAudio();
+    setLoadingVisible(false);
+    startMpRaceRef.current(start);
+  }, [assetsReady, trackId, unlockAudio]);
+
+  // Name, code, colour and car as other players see them
+  useEffect(() => {
+    getMultiplayerManager().setIdentity(settings.profile, vehicleModel, trackId);
+    lapRecorderRef.current?.setContext({ driverName: settings.profile.name, driverCode: settings.profile.code });
+  }, [settings.profile, vehicleModel, trackId]);
+
+  // A car change brings back that car's personal-best ghost and leaderboard
+  useEffect(() => {
+    void loadPbGhost(true);
+    void refreshLeaderboard();
+    wheelFfb.resetMeter();
+  }, [vehicleModel, loadPbGhost, refreshLeaderboard]);
+
+  useEffect(() => {
+    applyGraphicsRef.current?.(settings.graphics.quality, settings.graphics.renderScale);
+  }, [settings.graphics.quality, settings.graphics.renderScale]);
+
+  // The lap card clears itself after a while (not while a submit is in flight)
+  useEffect(() => {
+    if (!lapSummary || submitState === "sending") return;
+    const id = window.setTimeout(() => setLapSummary(null), 15_000);
+    return () => window.clearTimeout(id);
+  }, [lapSummary, submitState]);
+
+  const ffbMeterOn = phase === "driving" && settings.device === "wheel" && settings.wheel.ffbEnabled;
+  useEffect(() => {
+    if (!ffbMeterOn) return;
+    const id = window.setInterval(() => setFfbMeter({ ...wheelFfb.meter }), 100);
+    return () => window.clearInterval(id);
+  }, [ffbMeterOn]);
+
+  useEffect(() => {
+    const mode = settings.touch.mode;
+    const visible = mode === "on" || (mode === "auto" && isTouchDevice());
+    setTouchVisible(visible);
+    if (!visible) resetTouchInput();
+  }, [settings.touch.mode]);
+
+  useEffect(() => {
+    const xr = (navigator as Navigator & { xr?: { isSessionSupported?: (mode: string) => Promise<boolean> } }).xr;
+    if (!xr?.isSessionSupported) return;
+    xr.isSessionSupported("immersive-vr").then(setVrSupported, () => setVrSupported(false));
+  }, []);
+
+  // WebHID force feedback (HID PID wheels) instead of the native bridge, while switched on
+  useEffect(() => {
+    if (!settings.wheel.hidFfb || !WebHidFfb.isSupported()) return;
+    const hid = new WebHidFfb();
+    hid.onStatus = (st) => {
+      wheelFfb.hidSink = st.state === "ready" ? (f) => hid.setForce(f) : null;
+    };
+    // A wheel granted before opens silently; otherwise ask (the toggle's click still counts as a gesture)
+    void hid.reconnect().then((name) => (name === null && hid.status.state === "idle" ? hid.connect() : name));
+    return () => {
+      wheelFfb.hidSink = null;
+      hid.dispose();
+    };
+  }, [settings.wheel.hidFfb]);
+
   /** The pause menu's controls list, from the player's bindings */
   const controlsCheatSheet = useMemo(() => {
     const keys = (codes: string[]) => codes.map(keyLabel).join(" · ") || "—";
@@ -1763,6 +2488,8 @@ export const RwandaF1Simulator: React.FC = () => {
       ["Cockpit FOV", "[ / ]"],
       ["Racing line", keys(k.racingLine)],
       ["Restart", keys(k.restart)],
+      ["Half throttle", keys(k.throttleHalf)],
+      ["Instant replay", keys(k.replay)],
     ];
     const pb = settings.padButtons;
     rows.push([
@@ -1831,6 +2558,42 @@ export const RwandaF1Simulator: React.FC = () => {
     onAcceptManualAnswer: handleAcceptManualAnswer,
     onTogglePause: togglePause,
     keyNames,
+    lobby,
+    localPeerId,
+    isHost: lobby !== null && lobby.hostId === localPeerId,
+    peerStats,
+    profile: settings.profile,
+    currentTrackId: trackId,
+    currentVehicle: vehicleModel,
+    vehicleLabel,
+    vehiclesForClass,
+    raceRunning: mpRaceRunning,
+    onHostLocal: handleHostLocal,
+    onSetLobbySettings: handleSetLobbySettings,
+    onSetReady: handleSetReady,
+    onStartRace: handleStartMpRace,
+    onAbortRace: handleAbortMpRace,
+    onSwitchTrack: onSelectTrack,
+    onSwitchVehicle: (v: string) => handleChangeVehicle(v as VehicleModelId),
+    displayPanel: {
+      settings,
+      onChangeSettings: handleChangeSettings,
+      vrSupported,
+      vrActive,
+      onEnterVr: () => enterVrRef.current?.(),
+    },
+    leaderboardPanel: {
+      trackName: getTrackInfo(trackId).name,
+      vehicleLabel,
+      local: leaderboard.local,
+      remote: leaderboard.remote,
+      remoteEnabled: remoteLeaderboardUrl !== null,
+      loading: leaderboard.loading,
+      onRefresh: () => void refreshLeaderboard(),
+      onRaceGhost: (entry: LeaderboardEntry) => void handleRaceGhostEntry(entry),
+      onImportGhost: (file: File) => void handleImportGhost(file),
+      onExportBest: () => void handleExportBest(),
+    },
   };
 
   return (
@@ -1862,6 +2625,65 @@ export const RwandaF1Simulator: React.FC = () => {
           onOpenControls={() => openControls("pause")}
           onExitToTitle={exitToTitle}
           controlsCheatSheet={controlsCheatSheet}
+          hud={settings.hud}
+          ffbMeter={
+            ffbMeterOn
+              ? {
+                  force: ffbMeter.force,
+                  clipping: ffbMeter.clipping,
+                  peak: ffbMeter.peak,
+                  suggestedGain: ffbMeter.suggestedGain,
+                  onApplySuggestedGain: handleApplySuggestedGain,
+                }
+              : null
+          }
+          lapSummary={
+            lapSummary
+              ? {
+                  summary: lapSummary.summary,
+                  onClose: () => setLapSummary(null),
+                  onSaveGhost: () => exportLapFile(lapSummary.recording),
+                  onSubmit:
+                    remoteLeaderboardUrl && lapSummary.summary.valid ? () => void handleSubmitLap() : undefined,
+                  submitState,
+                  submitRank,
+                }
+              : null
+          }
+          resultsClosed={resultsClosed}
+          onCloseResults={() => setResultsClosed(true)}
+          onRestartRace={
+            mpRaceRunning && !(lobby !== null && lobby.hostId === localPeerId) ? undefined : () => handleResetCar(false)
+          }
+          onBackToLobby={mpRaceRunning ? handleBackToLobby : undefined}
+          replay={
+            replayUi.active
+              ? {
+                  timeS: replayUi.timeS,
+                  startS: replayUi.startS,
+                  endS: replayUi.endS,
+                  playing: replayUi.playing,
+                  speed: replayUi.speed,
+                  cameraLabel: CAMERA_LABELS[cameraMode],
+                  onTogglePlay: handleReplayTogglePlay,
+                  onSeek: handleReplaySeek,
+                  onSpeed: handleReplaySpeed,
+                  onCycleCamera: () => setCameraMode(nextCameraMode(cameraMode)),
+                  onExit: () => exitReplayRef.current(),
+                  exitKeyLabel: settings.keys.replay[0] ? keyLabel(settings.keys.replay[0]) : "T",
+                }
+              : null
+          }
+          touchControls={
+            touchVisible && !vrActive
+              ? {
+                  tiltSteer: settings.touch.tiltSteer,
+                  tiltRangeDeg: settings.touch.tiltRangeDeg,
+                  onPause: togglePause,
+                  onCycleCamera: () => setCameraMode(nextCameraMode(cameraMode)),
+                }
+              : null
+          }
         />
       ) : null}
 
@@ -1870,11 +2692,13 @@ export const RwandaF1Simulator: React.FC = () => {
           {...menuProps}
           onCycleCamera={() => setCameraMode(nextCameraMode(cameraMode))}
           initialRoomCode={inviteRoom ?? ""}
-          initialPanel={inviteRoom ? "multiplayer" : null}
+          initialPanel={titleInitialPanel ?? (inviteRoom ? "multiplayer" : null)}
           firstRun={!onboarded}
           onDrive={() => handleTitleStart(false)}
           onRaceAi={() => handleTitleStart(true)}
           onControls={() => openControls("title")}
+          trackId={trackId}
+          onSelectTrack={onSelectTrack}
         />
       ) : null}
 

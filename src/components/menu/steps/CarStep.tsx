@@ -5,7 +5,6 @@ import type { CameraMode } from "@/types/f1";
 import { LIVERIES } from "@/lib/track-data";
 import { keyLabel } from "@/lib/input/bindings";
 import { Choice, VEHICLE_CHOICES } from "@/components/hud/PauseMenu";
-import { useMenuNav } from "../useMenuNav";
 import { Card, SectionLabel } from "../menu-ui";
 import type { SetupStepProps } from "./types";
 
@@ -19,15 +18,6 @@ const CAMERAS: { id: CameraMode; title: string; sub: string }[] = [
 
 /** Step 4: car, livery and starting camera, with the car on the turntable beside the panel */
 export const CarStep: React.FC<SetupStepProps> = (p) => {
-  const liveryIdx = Math.max(0, LIVERIES.findIndex((l) => l.id === p.selectedLivery.id));
-  const carIdx = CARS.findIndex((c) => c.id === p.vehicleModel);
-  useMenuNav({
-    keyboardSelect: false,
-    onLeft: () => p.onChangeLivery(LIVERIES[(liveryIdx + LIVERIES.length - 1) % LIVERIES.length]),
-    onRight: () => p.onChangeLivery(LIVERIES[(liveryIdx + 1) % LIVERIES.length]),
-    onUp: () => p.onChangeVehicle(CARS[(carIdx + CARS.length - 1) % CARS.length].id),
-    onDown: () => p.onChangeVehicle(CARS[(carIdx + 1) % CARS.length].id),
-  });
 
   return (
     <div className="flex flex-col gap-4">

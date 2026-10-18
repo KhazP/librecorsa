@@ -8,7 +8,7 @@ import {
   createRacingLineMask,
   type RacingLineMask,
 } from "@/lib/render/asphalt-sheen";
-import type { RunoffStyle, TrackSamplePoint } from "@/types/f1";
+import type { RacingLineId, RunoffStyle, TrackSamplePoint } from "@/types/f1";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { assetProgress } from "@/lib/loading/asset-progress";
 
@@ -32,7 +32,8 @@ export interface BuiltRwandaScene {
 // Rwanda 2026 circuit: one glTF exported from the Blender rebuild (public/tracks/rwanda/rwanda_2026.glb).
 // Node naming contract: Track_* (racing surfaces, barriers), Track_Collider_* (invisible physics proxies,
 // extras.collider = true), Terrain, Lake, Env_* (vegetation, canopies) and Prop_* (buildings, stands, gantry).
-const RWANDA_GLB_URL = "/tracks/rwanda/rwanda_2026.glb";
+// The other circuits (scripts/tracks/build_track.py) wrap a converted scan in `Track_Model` and append hidden
+// `Track_Collider_*` / `Track_Surface_*` physics meshes (extras.hidden = true); `track.meshUrl` names the file.
 
 // Flat overlays drawn on top of the asphalt / run-off; pulled towards the camera to avoid z-fighting.
 const DECAL_NODES: Record<string, number> = {
@@ -54,7 +55,40 @@ const SHADOW_RECEIVE_ONLY = new Set([
   "Track_Kerbs",
 ]);
 
-function loadRwanda2026Glb(
+const COLLIDER_DEBUG_COLOURS: Record<string, number> = {
+  Track_Surface_Road: 0x3b82f6,
+  Track_Surface_Kerb: 0xef4444,
+  Track_Surface_Runoff: 0xfacc15,
+  Track_Surface_Gravel: 0xf97316,
+  Track_Surface_Grass: 0x22c55e,
+  Track_Collider_Wall_Left: 0xd946ef,
+  Track_Collider_Wall_Right: 0xd946ef,
+};
+const colliderDebugMaterials = new Map<string, THREE.MeshBasicMaterial>();
+
+/** Translucent flat colour for a physics node in the `?colliders=1` view; null = keep it hidden */
+function colliderDebugMaterial(name: string): THREE.MeshBasicMaterial | null {
+  const colour = COLLIDER_DEBUG_COLOURS[name];
+  if (colour === undefined) return null;
+  let mat = colliderDebugMaterials.get(name);
+  if (!mat) {
+    mat = new THREE.MeshBasicMaterial({
+      color: colour,
+      transparent: true,
+      opacity: name.startsWith("Track_Collider_Wall") ? 0.55 : 0.4,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+      polygonOffset: true,
+      polygonOffsetFactor: -4,
+      polygonOffsetUnits: -4,
+    });
+    colliderDebugMaterials.set(name, mat);
+  }
+  return mat;
+}
+
+function loadTrackGlb(
+  url: string,
   glbGroup: THREE.Group,
   fallbackGroup: THREE.Group,
   onLoaded: (root: THREE.Object3D) => void,
@@ -64,31 +98,49 @@ function loadRwanda2026Glb(
     return;
   }
 
+  // `?colliders=1`: draw the physics surfaces (by type) and barriers over the scan, to check them against it
+  const showColliders = new URLSearchParams(window.location.search).get("colliders") === "1";
   assetProgress.begin("track");
   new GLTFLoader()
-    .loadAsync(withBasePath(RWANDA_GLB_URL), (event) => assetProgress.progress("track", event))
+    .loadAsync(withBasePath(url), (event) => assetProgress.progress("track", event))
     .then((gltf) => {
       const root = gltf.scene;
       root.name = "Rwanda2026Track";
+      const box = new THREE.Box3();
+      const size = new THREE.Vector3();
+      root.updateMatrixWorld(true);
       root.traverse((obj) => {
         // Exported node extras land on the node; the mesh child inherits nothing, so walk up.
         let node: THREE.Object3D | null = obj;
         let topName = obj.name;
         let isCollider = false;
         while (node && node !== root) {
-          if (node.userData?.collider) isCollider = true;
+          if (node.userData?.collider || node.userData?.hidden) isCollider = true;
           topName = node.name;
           node = node.parent;
         }
         if (isCollider) {
-          obj.visible = false;
+          const debug = showColliders && obj instanceof THREE.Mesh ? colliderDebugMaterial(topName) : null;
+          if (debug) {
+            (obj as THREE.Mesh).material = debug;
+            obj.renderOrder = 2;
+          } else {
+            obj.visible = false;
+          }
           return;
         }
         if (!(obj instanceof THREE.Mesh)) return;
 
         const receiveOnly = SHADOW_RECEIVE_ONLY.has(topName);
         obj.receiveShadow = true;
-        obj.castShadow = !receiveOnly && (topName.startsWith("Prop_") || topName.startsWith("Env_") || topName.startsWith("Track_"));
+        if (topName === "Track_Model") {
+          // Converted scans have no naming contract: only tall things (stands, buildings, trees, barriers) cast
+          obj.geometry.computeBoundingBox();
+          box.copy(obj.geometry.boundingBox!).applyMatrix4(obj.matrixWorld).getSize(size);
+          obj.castShadow = size.y > 1.2;
+        } else {
+          obj.castShadow = !receiveOnly && (topName.startsWith("Prop_") || topName.startsWith("Env_") || topName.startsWith("Track_"));
+        }
 
         const offset = DECAL_NODES[topName];
         const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
@@ -444,6 +496,8 @@ export function buildRwandaCircuitScene(
   track: BuiltTrackData
 ): BuiltRwandaScene {
   const sceneGroup = new THREE.Group();
+  /** Bugesera dressing (lake, airliner) only belongs on the Rwanda circuit */
+  const isRwanda = (track.id ?? "rwanda") === "rwanda";
   const glbGroup = new THREE.Group();
   glbGroup.name = "Rwanda2026GlbGroup";
   sceneGroup.add(glbGroup);
@@ -700,15 +754,14 @@ export function buildRwandaCircuitScene(
   const rlColors: number[] = [];
   const rlIndices: number[] = [];
 
-  // Build crisp 3D dashed rectangular marker segments along the exact fast_lane.ai racing line
-  let rlVertBase = 0;
-  for (let i = 0; i < n; i++) {
+  // Crisp 3D dashed rectangular marker segments along a car's racing line: the four corners of dash i
+  const dashCorners = (i: number, line: RacingLineId): number[] => {
     const s0 = samples[i];
     const s1 = samples[(i + 1) % n];
 
     // The exact line the AI drives and the speed profile / braking markers are computed on
-    const p0Base = s0.position.clone().addScaledVector(s0.binormal, aiLineOffsetM(s0));
-    const p1Base = s1.position.clone().addScaledVector(s1.binormal, aiLineOffsetM(s1));
+    const p0Base = s0.position.clone().addScaledVector(s0.binormal, aiLineOffsetM(s0, line));
+    const p1Base = s1.position.clone().addScaledVector(s1.binormal, aiLineOffsetM(s1, line));
 
     const pDashEnd = p0Base.clone().lerp(p1Base, 0.72);
     const nDashEnd = s0.normal.clone().lerp(s1.normal, 0.72).normalize();
@@ -725,22 +778,15 @@ export function buildRwandaCircuitScene(
     const l1 = c1.clone().addScaledVector(bDashEnd, -halfDashW);
     const r1 = c1.clone().addScaledVector(bDashEnd, halfDashW);
 
-    rlPositions.push(
-      l0.x,
-      l0.y,
-      l0.z,
-      r0.x,
-      r0.y,
-      r0.z,
-      l1.x,
-      l1.y,
-      l1.z,
-      r1.x,
-      r1.y,
-      r1.z
-    );
+    return [l0.x, l0.y, l0.z, r0.x, r0.y, r0.z, l1.x, l1.y, l1.z, r1.x, r1.y, r1.z];
+  };
 
-    const c = brakingZoneColor(s0.brakingZone);
+  // Drawn on the F1 line until a car with its own line hands its braking guide over
+  let rlVertBase = 0;
+  for (let i = 0; i < n; i++) {
+    rlPositions.push(...dashCorners(i, 'f1'));
+
+    const c = brakingZoneColor(samples[i].brakingZone);
     for (let k = 0; k < 4; k++) {
       rlColors.push(c.r, c.g, c.b);
     }
@@ -757,10 +803,8 @@ export function buildRwandaCircuitScene(
   }
 
   const rlColorAttr = new THREE.Float32BufferAttribute(rlColors, 3);
-  rlGeom.setAttribute(
-    "position",
-    new THREE.Float32BufferAttribute(rlPositions, 3)
-  );
+  const rlPositionAttr = new THREE.Float32BufferAttribute(rlPositions, 3);
+  rlGeom.setAttribute("position", rlPositionAttr);
   rlGeom.setAttribute("color", rlColorAttr);
   rlGeom.setIndex(rlIndices);
 
@@ -786,10 +830,18 @@ export function buildRwandaCircuitScene(
    * vs the physics-derived optimal corner speed profile.
    */
   let lineGuide: BrakingGuide | null = null;
+  let drawnLine: RacingLineId = 'f1';
   const updateDynamicRacingLine = (carS: number, carSpeedMs: number, guide: BrakingGuide | null = null) => {
-    // Another car's guidance: repaint the static braking zones from it
+    // Another car's guidance: repaint the static braking zones from it, on its own racing line
     if (guide !== lineGuide) {
       lineGuide = guide;
+      const line = guide?.line ?? 'f1';
+      if (line !== drawnLine) {
+        drawnLine = line;
+        for (let i = 0; i < n; i++) rlPositionAttr.array.set(dashCorners(i, line), i * 12);
+        rlPositionAttr.needsUpdate = true;
+        rlGeom.computeBoundingSphere();
+      }
       for (let i = 0; i < n; i++) {
         const c = brakingZoneColor(guide ? guide.brakingZone[i] : samples[i].brakingZone);
         for (let k = 0; k < 4; k++) rlColorAttr.setXYZ(i * 4 + k, c.r, c.g, c.b);
@@ -851,7 +903,7 @@ export function buildRwandaCircuitScene(
   });
   const waterMesh = new THREE.Mesh(waterGeom, waterMat);
   waterMesh.position.set(-1340, -18.0, -120);
-  fallbackGroup.add(waterMesh);
+  if (isRwanda) fallbackGroup.add(waterMesh);
 
   // F1 start lights: five pods over the first red-lamp row of the light assembly hung in the start gantry
   // (s = 14 m, right of the centreline). Until the circuit GLB is live (and headless) they hang at the same
@@ -1103,7 +1155,7 @@ export function buildRwandaCircuitScene(
   jetGroup.add(tailFin);
 
   jetGroup.position.set(-420, 210, -380);
-  sceneGroup.add(jetGroup);
+  if (isRwanda) sceneGroup.add(jetGroup);
 
   const updateEnvironment = (elapsedSeconds: number) => {
     waterMesh.position.y = -18.0 + Math.sin(elapsedSeconds * 1.4) * 0.08;
@@ -1143,7 +1195,8 @@ export function buildRwandaCircuitScene(
   // Asynchronously load the authored Rwanda 2026 circuit (browser only)
   let resolveTrackRoot: (root: THREE.Object3D) => void = () => {};
   const trackRoot = new Promise<THREE.Object3D>((resolve) => (resolveTrackRoot = resolve));
-  loadRwanda2026Glb(
+  loadTrackGlb(
+    track.meshUrl ?? "/tracks/rwanda/rwanda_2026.glb",
     glbGroup,
     fallbackGroup,
     (root) => {

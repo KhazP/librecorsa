@@ -36,6 +36,10 @@ export function suspendMenuNav(): () => void {
   };
 }
 
+/** True while a control is being captured for rebinding */
+export function isMenuNavSuspended(): boolean {
+  return suspended > 0;
+}
 const isTyping = (target: EventTarget | null) =>
   target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement;
 

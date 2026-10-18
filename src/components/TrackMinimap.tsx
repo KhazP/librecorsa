@@ -3,6 +3,8 @@
 import React, { useMemo } from "react";
 import type { CarTelemetry } from "@/types/f1";
 import { type BuiltTrackData, TURN_METADATA } from "@/lib/track-data";
+import { getTrackInfo } from "@/lib/track-registry";
+import { HUD_CYAN, HUD_RED, HUD_VOLT } from "./hud/hud-format";
 
 interface TrackMinimapProps {
   track: BuiltTrackData;
@@ -15,6 +17,8 @@ export const TrackMinimap: React.FC<TrackMinimapProps> = ({
   telemetry,
   onSelectTurn,
 }) => {
+  const trackInfo = getTrackInfo(track.id ?? "rwanda");
+
   const {
     svgData,
     carPoint,
@@ -70,18 +74,16 @@ export const TrackMinimap: React.FC<TrackMinimapProps> = ({
     const sfSample = track.getSampleAtDistance(0);
     const sfPt = toSvg(sfSample.position.x, sfSample.position.z);
 
-    const tPts = TURN_METADATA.map(
-      (tm) => {
-        const idx = samples.findIndex((s) => s.turnNumber === tm.number);
-        const s = idx >= 0 ? samples[idx] : track.getSampleAtDistance(tm.sApprox);
-        const pt = toSvg(s.position.x, s.position.z);
-        return {
-          ...tm,
-          x: pt.x,
-          y: pt.y,
-        };
-      }
-    );
+    const tPts = TURN_METADATA.map((tm) => {
+      const idx = samples.findIndex((s) => s.turnNumber === tm.number);
+      const s = idx >= 0 ? samples[idx] : track.getSampleAtDistance(tm.sApprox);
+      const pt = toSvg(s.position.x, s.position.z);
+      return {
+        ...tm,
+        x: pt.x,
+        y: pt.y,
+      };
+    });
 
     const elevW = 252;
     const elevH = 44;
@@ -135,54 +137,54 @@ export const TrackMinimap: React.FC<TrackMinimapProps> = ({
   const elevProgressY = elevation.toY(telemetry.trackElevationM);
 
   return (
-    <div className="f1-panel f1-corner-tr flex flex-col gap-2 rounded-tl-md rounded-bl-md rounded-br-md p-3 text-white w-[284px] select-none">
-      {/* Official F1.com Circuit Map Header */}
-      <div className="flex items-start justify-between border-b border-white/10 pb-1.5">
-        <div>
-          <div className="font-f1-italic text-[13px] tracking-wider text-white uppercase leading-none">
-            Bugesera
+    <div className="hud-panel f1-corner-tr flex w-[284px] flex-col gap-2 rounded-lg p-3 text-[#F5F7FA] select-none">
+      {/* LibreCorsa Circuit Map Header */}
+      <div className="flex items-start justify-between border-b border-[#262B3D] pb-1.5">
+        <div className="min-w-0 pr-2">
+          <div className="truncate font-f1-italic text-[14px] leading-none tracking-wider text-[#F5F7FA] uppercase">
+            {trackInfo.name}
           </div>
-          <p className="mt-1 font-f1-mono text-[9px] font-bold tracking-wide text-zinc-400">
-            {(track.totalLengthM / 1000).toFixed(2)} KM · {TURN_METADATA.length} TURNS
+          <p className="mt-1 font-f1-mono text-[9px] font-bold tracking-wide text-[#8E96AA] uppercase">
+            {trackInfo.country} · {(track.totalLengthM / 1000).toFixed(2)} KM · {TURN_METADATA.length} TURNS
           </p>
         </div>
-        <span className="rounded-sm bg-[#E10600] px-1.5 py-0.5 font-f1-display text-[8px] font-black uppercase tracking-wider text-white">
-          Fan
+        <span className="shrink-0 rounded-sm bg-[#CCFF00] px-1.5 py-0.5 font-f1-display text-[8px] font-black tracking-wider text-[#08090D] uppercase">
+          GPS
         </span>
       </div>
 
-      {/* 2D SVG Circuit Map with Official F1 Sector Colors (S1 Red, S2 Cyan, S3 Yellow) */}
-      <div className="relative h-[156px] w-full overflow-hidden rounded bg-[#0B0B10] border border-white/10">
+      {/* 2D SVG Circuit Map with LibreCorsa Sector Colors (S1 Monza Rosso, S2 Slipstream Cyan, S3 Corsa Volt) */}
+      <div className="relative h-[156px] w-full overflow-hidden rounded border border-[#262B3D] bg-[#08090D]">
         <svg viewBox="0 0 280 200" className="h-full w-full">
           {/* Track Outline Shadow */}
           <path
             d={`${svgData.s1} ${svgData.s2} ${svgData.s3}`}
             fill="none"
-            stroke="#272732"
+            stroke="#1B1F2B"
             strokeWidth="7.5"
             strokeLinecap="round"
           />
-          {/* Sector 1: F1 Red (#E10600) */}
+          {/* Sector 1: Monza Rosso (#FF2A3C) */}
           <path
             d={svgData.s1}
             fill="none"
-            stroke="#E10600"
+            stroke={HUD_RED}
             strokeWidth="3.6"
             strokeLinecap="round"
           />
-          {/* Sector 2: F1 Cyan (#00D2BE) */}
+          {/* Sector 2: Slipstream Cyan (#00E5FF) */}
           <path
             d={svgData.s2}
             fill="none"
-            stroke="#00D2BE"
+            stroke={HUD_CYAN}
             strokeWidth="3.6"
             strokeLinecap="round"
           />
-          {/* Sector 3: F1 Gold (#FFD700) */}
+          {/* Sector 3: Corsa Volt (#CCFF00) */}
           <path
             d={svgData.s3}
             fill="none"
-            stroke="#FFD700"
+            stroke={HUD_VOLT}
             strokeWidth="3.6"
             strokeLinecap="round"
           />
@@ -193,41 +195,40 @@ export const TrackMinimap: React.FC<TrackMinimapProps> = ({
             y1={startFinishPoint.y - 6}
             x2={startFinishPoint.x}
             y2={startFinishPoint.y + 6}
-            stroke="#ffffff"
+            stroke="#F5F7FA"
             strokeWidth="2.5"
           />
 
           {/* Interactive Turn Number Nodes */}
-          {turnPoints.map((tp) => (
-            <g
-              key={tp.number}
-              className="cursor-pointer hover:opacity-100 opacity-95"
-              onClick={() => onSelectTurn(tp.number)}
-            >
-              <circle
-                cx={tp.x}
-                cy={tp.y}
-                r="6.2"
-                fill="#15151E"
-                stroke={
-                  telemetry.currentTurnNumber === tp.number
-                    ? "#E10600"
-                    : "#ffffff"
-                }
-                strokeWidth="1.4"
-              />
-              <text
-                x={tp.x}
-                y={tp.y + 2.5}
-                textAnchor="middle"
-                fill="#ffffff"
-                fontSize="6.8"
-                fontWeight="800"
+          {turnPoints.map((tp) => {
+            const isCurrent = telemetry.currentTurnNumber === tp.number;
+            return (
+              <g
+                key={tp.number}
+                className="cursor-pointer opacity-95 hover:opacity-100"
+                onClick={() => onSelectTurn(tp.number)}
               >
-                {tp.number}
-              </text>
-            </g>
-          ))}
+                <circle
+                  cx={tp.x}
+                  cy={tp.y}
+                  r="6.2"
+                  fill={isCurrent ? HUD_VOLT : "#11131A"}
+                  stroke={isCurrent ? "#08090D" : "#8E96AA"}
+                  strokeWidth="1.4"
+                />
+                <text
+                  x={tp.x}
+                  y={tp.y + 2.5}
+                  textAnchor="middle"
+                  fill={isCurrent ? "#08090D" : "#F5F7FA"}
+                  fontSize="6.8"
+                  fontWeight="800"
+                >
+                  {tp.number}
+                </text>
+              </g>
+            );
+          })}
 
           {/* Opponent / Multiplayer Peer GPS Transponder Dots */}
           {(telemetry.peers ?? []).map((peer) => {
@@ -240,7 +241,7 @@ export const TrackMinimap: React.FC<TrackMinimapProps> = ({
                   cy={pSvg.y}
                   r="4.6"
                   fill={peer.teamColorHex}
-                  stroke="#0B0B10"
+                  stroke="#08090D"
                   strokeWidth="1.4"
                 />
                 <text
@@ -257,83 +258,83 @@ export const TrackMinimap: React.FC<TrackMinimapProps> = ({
             );
           })}
 
-          {/* Live Player Car GPS Transponder Dot */}
+          {/* Live Player Car GPS Transponder Dot (Corsa Volt with dark core) */}
           <circle
             cx={carSvg.x}
             cy={carSvg.y}
             r="6.5"
-            fill="#E10600"
-            stroke="#ffffff"
+            fill={HUD_VOLT}
+            stroke="#08090D"
             strokeWidth="2"
           />
         </svg>
 
         {/* Sector Legend */}
-        <div className="absolute bottom-1.5 left-2 right-2 flex items-center justify-between font-f1-mono text-[9px] font-bold text-zinc-300">
+        <div className="absolute right-2 bottom-1.5 left-2 flex items-center justify-between font-f1-mono text-[8.5px] font-bold text-[#8E96AA]">
           <span className="flex items-center gap-1">
-            <span className="h-2 w-2 bg-[#E10600]" />
-            S1 SLING/ARENA
+            <span className="h-2 w-2 rounded-[1px]" style={{ backgroundColor: HUD_RED }} />
+            SECTOR 1
           </span>
           <span className="flex items-center gap-1">
-            <span className="h-2 w-2 bg-[#00D2BE]" />
-            S2 HILLS
+            <span className="h-2 w-2 rounded-[1px]" style={{ backgroundColor: HUD_CYAN }} />
+            SECTOR 2
           </span>
           <span className="flex items-center gap-1">
-            <span className="h-2 w-2 bg-[#FFD700]" />
-            S3 LAKE
+            <span className="h-2 w-2 rounded-[1px]" style={{ backgroundColor: HUD_VOLT }} />
+            SECTOR 3
           </span>
         </div>
       </div>
 
       {/* Elevation Profile Telemetry */}
-      <div className="rounded bg-[#0B0B10] p-2 border border-white/10">
+      <div className="rounded border border-[#262B3D] bg-[#08090D] p-2">
         <div className="mb-1 flex items-center justify-between text-[10px]">
-          <span className="font-f1-mono text-[9px] font-bold uppercase tracking-wider text-zinc-400">
-            Elevation
+          <span className="font-f1-mono text-[9px] font-bold tracking-wider text-[#8E96AA] uppercase">
+            ELEVATION PROFILE
           </span>
-          <span className="font-f1-mono text-[11px] font-bold text-white">
+          <span className="font-f1-mono text-[11px] font-bold text-[#F5F7FA]">
             {telemetry.trackElevationM >= 0 ? "+" : ""}
-            {telemetry.trackElevationM.toFixed(1)}
-            <span className="ml-1 text-[9px] font-medium text-zinc-500">Δ {elevation.span} m</span>
+            {telemetry.trackElevationM.toFixed(1)}m
+            <span className="ml-1 text-[9px] font-medium text-[#8E96AA]">Δ {elevation.span}m</span>
           </span>
         </div>
-        <div className="mb-1 flex items-center justify-between font-f1-mono text-[8px] font-bold text-zinc-500">
-          <span>ALT {telemetry.altitudeM.toFixed(0)} m</span>
+        <div className="mb-1 flex items-center justify-between font-f1-mono text-[8px] font-bold text-[#8E96AA]">
+          <span>ALT {telemetry.altitudeM.toFixed(0)} M</span>
           <span>
-            GRADIENT {telemetry.slopePercent >= 0 ? "+" : ""}
+            GRADE {telemetry.slopePercent >= 0 ? "+" : ""}
             {telemetry.slopePercent.toFixed(1)}%
           </span>
         </div>
         <svg viewBox="0 0 252 44" className="h-10 w-full overflow-visible">
           <defs>
-            <linearGradient id="f1ElevGrad" x1="0" y1="0" x2="1" y2="0">
-              <stop offset="0%" stopColor="#E10600" stopOpacity="0.4" />
-              <stop offset="50%" stopColor="#00D2BE" stopOpacity="0.4" />
-              <stop offset="100%" stopColor="#FFD700" stopOpacity="0.4" />
+            <linearGradient id="lcElevGrad" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stopColor={HUD_RED} stopOpacity="0.38" />
+              <stop offset="50%" stopColor={HUD_CYAN} stopOpacity="0.38" />
+              <stop offset="100%" stopColor={HUD_VOLT} stopOpacity="0.38" />
             </linearGradient>
           </defs>
-          <path d={elevationAreaPath} fill="url(#f1ElevGrad)" />
+          <path d={elevationAreaPath} fill="url(#lcElevGrad)" />
           <path
             d={elevationPath}
             fill="none"
-            stroke="#ffffff"
-            strokeWidth="1.6"
+            stroke="#F5F7FA"
+            strokeWidth="1.5"
           />
-          <text x="4" y="13" fill="#a1a1aa" fontSize="6.5" fontWeight="700">
+          <text x="4" y="13" fill="#8E96AA" fontSize="6.5" fontWeight="700">
             {elevation.sfLabel}
           </text>
-          <text x={Math.min(elevation.low.x, 222)} y="41" fill="#a1a1aa" fontSize="6.5" fontWeight="700">
+          <text x={Math.min(elevation.low.x, 222)} y="41" fill="#8E96AA" fontSize="6.5" fontWeight="700">
             {elevation.low.label}
           </text>
-          <text x={Math.min(Math.max(elevation.high.x - 12, 40), 222)} y="9" fill="#FFD700" fontSize="6.5" fontWeight="700">
+          <text x={Math.min(Math.max(elevation.high.x - 12, 40), 222)} y="9" fill={HUD_VOLT} fontSize="6.5" fontWeight="700">
             {elevation.high.label}
           </text>
           <circle
             cx={elevProgressX}
             cy={elevProgressY}
             r="3.8"
-            fill="#E10600"
-            stroke="#ffffff"
+            fill={HUD_VOLT}
+            stroke="#08090D"
             strokeWidth="1.5"
           />
         </svg>

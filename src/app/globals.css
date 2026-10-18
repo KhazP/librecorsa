@@ -7,18 +7,37 @@
 
 :root {
   color-scheme: dark;
-  --f1-red: #e10600;
-  --f1-carbon: #15151e;
-  --f1-carbon-deep: #0b0b10;
-  --f1-purple: #b138ff;
-  --f1-green: #00d26a;
+
+  /* ---- LibreCorsa Brand & Telemetry Palette ---- */
+  --lc-volt: #ccff00;          /* Primary Brand: Endurance Pro-Class Acid Volt */
+  --lc-volt-dim: #99bf00;      /* Pressed / Secondary Volt */
+  --lc-crimson: #ff2a3c;       /* Secondary Brand: Monza Rosso / Braking Zone */
+  --lc-cyan: #00e5ff;          /* Engineering / Aero X-Mode / WebRTC Telemetry */
+  --lc-void: #08090d;          /* Deepest Asphalt Canvas */
+  --lc-carbon: #11131a;        /* Primary Autoclave Carbon Panel */
+  --lc-titanium: #1b1f2b;      /* Elevated Surface / Card Well */
+  --lc-border: #262b3d;        /* Precision Chassis Hairline */
+  --lc-slate: #8e96aa;         /* Alcantara Muted Telemetry Label */
+  --lc-white: #f5f7fa;         /* Pitboard High-Contrast White */
+
+  /* ---- Semantic Motorsport Telemetry ---- */
+  --lc-sector-purple: #b845ff; /* Overall Fastest Sector */
+  --lc-sector-green: #00e676;  /* Personal Best / Full Throttle */
+  --lc-sector-amber: #ffb300;  /* Caution / Lift & Coast */
+
+  /* Legacy aliases kept for backwards compatibility */
+  --f1-red: #ff2a3c;
+  --f1-carbon: #11131a;
+  --f1-carbon-deep: #08090d;
+  --f1-purple: #b845ff;
+  --f1-green: #00e676;
 }
 
 body {
   margin: 0;
   padding: 0;
-  background-color: #0b0b10;
-  color: #ffffff;
+  background-color: #08090d;
+  color: #f5f7fa;
   font-family: var(--font-titillium), ui-sans-serif, system-ui, sans-serif;
   overflow: hidden;
 }
@@ -41,28 +60,29 @@ body {
 }
 
 .f1-panel {
-  background: linear-gradient(180deg, rgba(21, 21, 30, 0.94) 0%, rgba(11, 11, 16, 0.96) 100%);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.75);
+  background: linear-gradient(165deg, rgba(17, 19, 26, 0.94) 0%, rgba(8, 9, 13, 0.97) 100%);
+  border: 1px solid #262b3d;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.78);
 }
 
 .f1-corner-tr {
-  border-top: 3px solid #e10600;
-  border-right: 3px solid #e10600;
-  border-top-right-radius: 14px;
+  border-top: 2px solid #ccff00;
+  border-right: 2px solid #ccff00;
+  border-top-right-radius: 10px;
 }
 
 .f1-clip-card {
   clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 0 100%);
 }
 
-
-/* ---- In-race HUD (F1 game style): high-contrast, translucent, large tabular numbers ---- */
+/* ---- LibreCorsa In-Race Telemetry HUD ---- */
 .hud-panel {
-  background: rgba(12, 12, 18, 0.78);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(6px);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  background: linear-gradient(165deg, rgba(17, 19, 26, 0.88) 0%, rgba(8, 9, 13, 0.93) 100%);
+  border: 1px solid rgba(38, 43, 61, 0.95);
+  backdrop-filter: blur(10px);
+  box-shadow:
+    0 12px 32px rgba(0, 0, 0, 0.65),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
 .hud-num {
@@ -74,12 +94,12 @@ body {
 }
 
 .hud-label {
-  font-family: var(--font-titillium), sans-serif;
+  font-family: var(--font-jetbrains), var(--font-titillium), monospace;
   font-weight: 700;
-  font-size: 11px;
+  font-size: 10px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.62);
+  color: #8e96aa;
 }
 
 .hud-slant {
@@ -105,4 +125,55 @@ body {
 
 .hud-fade-out {
   animation: hud-fade-out 2s ease-out forwards;
+}
+
+/* ---- Menu focus: a controller or the keyboard always sees where it is ----
+   In the base layer so components that paint their own focus (rail items, tabs) override it */
+@layer base {
+  :where(button, a, input, select, textarea, summary, [tabindex]):focus-visible {
+    outline: 2px solid var(--lc-volt);
+    outline-offset: 2px;
+  }
+  :where(html[data-input="pad"]) :where(button, a, input, select, textarea, summary, [tabindex]):focus {
+    outline: 2px solid var(--lc-volt);
+    outline-offset: 2px;
+    box-shadow:
+      0 0 0 5px rgba(204, 255, 0, 0.14),
+      0 0 22px rgba(204, 255, 0, 0.28);
+  }
+  /* Toggles and sliders hide their input inside a label: ring the whole row */
+  :where(label):has(:where(input):focus-visible),
+  :where(html[data-input="pad"]) :where(label):has(:where(input):focus) {
+    outline: 2px solid var(--lc-volt);
+    outline-offset: 1px;
+    border-radius: 6px;
+    background-color: rgba(204, 255, 0, 0.06);
+  }
+  :where(label) :where(input[type="range"]):focus-visible,
+  :where(html[data-input="pad"]) :where(label) :where(input[type="range"]):focus {
+    outline: none;
+    box-shadow: none;
+  }
+  input[type="range"] {
+    accent-color: var(--lc-volt);
+  }
+}
+
+@keyframes lc-panel-in {
+  from {
+    opacity: 0;
+    transform: translateX(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.lc-panel-in {
+  animation: lc-panel-in 180ms ease-out both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .lc-panel-in {
+    animation: none;
+  }
 }

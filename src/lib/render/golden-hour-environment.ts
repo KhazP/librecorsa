@@ -99,7 +99,27 @@ export interface PostFx {
   setSize(width: number, height: number): void;
   /** swap the camera used by the render pass (the sim uses a single camera, but keep it safe) */
   setCamera(camera: THREE.Camera): void;
+  /** Graphics preset: MSAA samples and bloom on / off */
+  setQuality(quality: "low" | "medium" | "high"): void;
   dispose(): void;
+}
+
+/**
+ * Applies a graphics preset to the running renderer: resolution (device pixel ratio x the player's render scale),
+ * the sun's shadow, MSAA and bloom. Cheap to call again; the caller re-sizes the composer afterwards.
+ */
+export function applyGraphicsQuality(
+  renderer: THREE.WebGLRenderer,
+  postFx: PostFx,
+  env: GoldenHourEnvironment,
+  quality: "low" | "medium" | "high",
+  renderScale: number
+): void {
+  const dprCap = quality === "low" ? 1 : 1.5;
+  renderer.setPixelRatio(Math.max(0.35, Math.min(window.devicePixelRatio, dprCap) * renderScale));
+  // Toggling the light's shadow recompiles the lit materials on their own (shadow count is part of the program key)
+  env.sunLight.castShadow = quality !== "low";
+  postFx.setQuality(quality);
 }
 
 // ---------------------------------------------------------------------------
@@ -334,6 +354,11 @@ export function createPostFx(
     setCamera(next: THREE.Camera): void {
       renderPass.mainCamera = next;
       effectPass.mainCamera = next;
+    },
+
+    setQuality(quality: "low" | "medium" | "high"): void {
+      composer.multisampling = quality === "high" ? 4 : quality === "medium" ? 2 : 0;
+      bloom.intensity = quality === "high" ? 0.4 : 0;
     },
 
     dispose(): void {
