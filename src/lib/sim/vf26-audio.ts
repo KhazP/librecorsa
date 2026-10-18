@@ -13,6 +13,7 @@
 import { withBasePath } from '@/lib/base-path';
 
 export const VF26_AUDIO_DIR = '/vf26/audio/';
+export const AMR26_AUDIO_DIR = '/amr26/audio/';
 
 interface LoopEntry {
   file: string;
@@ -89,6 +90,7 @@ class LoopVoice {
   private source: AudioBufferSourceNode | null = null;
   private readonly gain: GainNode;
   private silentFor = 0;
+  private wasActive = false;
 
   constructor(
     private readonly ctx: AudioContext,
@@ -103,7 +105,8 @@ class LoopVoice {
   /** Drive the voice; sources are started on demand and stopped after staying silent */
   public set(target: number, rate: number, now: number, dt: number, tau: number): void {
     if (!this.buffer) return;
-    if (target > 1e-4) {
+    const active = target > 1e-4;
+    if (active) {
       this.silentFor = 0;
       if (!this.source) {
         const src = this.ctx.createBufferSource();
@@ -114,6 +117,10 @@ class LoopVoice {
         // random start offset decorrelates neighbouring grid renders
         src.start(now, Math.random() * this.buffer.duration);
         this.source = src;
+      } else if (!this.wasActive) {
+        // Snap pitch immediately when waking a voice from silence so it never glides from a stale RPM
+        this.source.playbackRate.cancelScheduledValues(now);
+        this.source.playbackRate.setValueAtTime(rate, now);
       }
     } else if (this.source) {
       this.silentFor += dt;
@@ -122,8 +129,9 @@ class LoopVoice {
         return;
       }
     }
+    this.wasActive = active;
     if (this.source) {
-      this.source.playbackRate.setTargetAtTime(rate, now, 0.012);
+      this.source.playbackRate.setTargetAtTime(rate, now, 0.007);
       this.gain.gain.setTargetAtTime(target, now, tau);
     }
   }
@@ -139,6 +147,7 @@ class LoopVoice {
       this.source = null;
     }
     this.gain.gain.value = 0;
+    this.wasActive = false;
   }
 }
 
@@ -166,7 +175,13 @@ class LoopGrid {
     while (i < vs.length - 2 && x >= vs[i + 1].key) i++;
     const lo = vs[i];
     const hi = vs[Math.min(i + 1, vs.length - 1)];
-    const f = hi === lo ? 0 : Math.min(1, Math.max(0, (x - lo.key) / (hi.key - lo.key)));
+    const rawF = hi === lo ? 0 : Math.min(1, Math.max(0, (x - lo.key) / (hi.key - lo.key)));
+    // For wide-anchor pitched engine grids (e.g. the 4-anchor AMR26 bank), keep each anchor playing solo
+    // outside the transition window [0.18..0.52] so continuous RPM climbs and gear shifts stay on a single voice.
+    const f =
+      pitched && vs.length > 1 && vs.length <= 6
+        ? Math.min(1, Math.max(0, (rawF - 0.18) / 0.34))
+        : rawF;
     for (const v of vs) {
       let w = 0;
       if (v === lo) w = Math.cos(f * Math.PI * 0.5);
@@ -198,6 +213,8 @@ export class Vf26SoundBank {
   public ready = false;
   private manifest: Vf26AudioManifest | null = null;
   private readonly bus: GainNode;
+  private readonly engineFilter: BiquadFilterNode;
+  private readonly engineShelf: BiquadFilterNode;
   private readonly viewBus: Record<Vf26View, GainNode>;
   private readonly engine: Record<Vf26View, { on: LoopGrid; off: LoopGrid }> = {
     ext: { on: null as unknown as LoopGrid, off: null as unknown as LoopGrid },
@@ -215,9 +232,11 @@ export class Vf26SoundBank {
   private smoothThrottle = 0;
   private prevThrottle = 0;
   private prevGear = 0;
+  private audioRpm = 0;
+  private upshiftTimer = 0;
+  private downshiftTimer = 0;
   private liftTimer = 0;
   private popCooldown = 0;
-  private shiftDipTimer = 0;
   private limiterCooldown = 0;
   private viewMix = 0; // 0 = ext, 1 = int
   private rpmRange: [number, number] = [3500, 15500];
@@ -230,9 +249,24 @@ export class Vf26SoundBank {
     this.bus = ctx.createGain();
     this.bus.gain.value = 1.0;
     this.bus.connect(destination);
+
+    // Dynamic exhaust lowpass + high-shelf presence stage so engine timbre opens up progressively with RPM & load
+    this.engineFilter = ctx.createBiquadFilter();
+    this.engineFilter.type = 'lowpass';
+    this.engineFilter.frequency.value = 9000;
+    this.engineFilter.Q.value = 0.65;
+
+    this.engineShelf = ctx.createBiquadFilter();
+    this.engineShelf.type = 'highshelf';
+    this.engineShelf.frequency.value = 1650;
+    this.engineShelf.gain.value = 0;
+
+    this.engineFilter.connect(this.engineShelf);
+    this.engineShelf.connect(this.bus);
+
     this.viewBus = { ext: ctx.createGain(), int: ctx.createGain() };
-    this.viewBus.ext.connect(this.bus);
-    this.viewBus.int.connect(this.bus);
+    this.viewBus.ext.connect(this.engineFilter);
+    this.viewBus.int.connect(this.engineFilter);
     this.viewBus.int.gain.value = 0;
   }
 
@@ -249,9 +283,9 @@ export class Vf26SoundBank {
     if (!manifest.engine?.ext?.length || !manifest.engine?.int?.length) return false;
     this.manifest = manifest;
     const ctx = this.ctx;
-    // Engine loops cover the rendered rpm grid; outside it the end loops would pitch too far
+    // Engine loops pitch across 0.75x of the lowest anchor up to 1.35x of the highest anchor (covers idle to limiter)
     const rpms = [...manifest.engine.ext, ...manifest.engine.int].map((e) => e.rpm);
-    this.rpmRange = [Math.min(...rpms), Math.max(...rpms)];
+    this.rpmRange = [Math.min(...rpms) * 0.75, Math.max(...rpms) * 1.35];
 
     for (const view of ['ext', 'int'] as Vf26View[]) {
       const entries = manifest.engine[view];
@@ -401,51 +435,99 @@ export class Vf26SoundBank {
     const k = thr > this.smoothThrottle ? 18 : 10;
     this.smoothThrottle += (thr - this.smoothThrottle) * Math.min(1, dt * k);
 
-    // Gear change: brief ignition-cut dip + gearbox clunk (+ interior cut sample)
+    // Gear change: upshift ignition cut + pitch drop, or downshift ECU throttle blip + overrun bark
     if (inp.gear !== this.prevGear) {
       if (this.prevGear !== 0 && inp.gear > 0) {
         const up = inp.gear > this.prevGear;
-        this.shiftDipTimer = up ? 0.07 : 0.05;
-        this.playOneshot(up ? 'gear_up' : 'gear_down', 0.55);
-        if (up && inp.view === 'int') this.playOneshot('shift_cut', 0.35);
-        // Downshift blip on the overrun: the unburnt fuel bangs in the exhaust, and the overrun crackle carries on
-        const blipPop = m.lift?.downshiftPopChance ?? 0;
-        if (!up && blipPop > 0 && inp.throttle < 0.1 && inp.rpm > (m.lift?.popMinRpm ?? 8500)) {
-          this.liftTimer = Math.max(this.liftTimer, 0.6);
-          if (Math.random() < blipPop) {
-            this.playOneshot(inp.view === 'int' ? 'backfire_int' : 'pop_ext', 0.4, 0.04 + Math.random() * 0.05);
-            this.popCooldown = 0.12;
+        if (up) {
+          this.upshiftTimer = 0.075;
+          this.downshiftTimer = 0;
+          this.playOneshot('gear_up', 0.58);
+          this.playOneshot('shift_cut', inp.view === 'int' ? 0.42 : 0.28);
+        } else {
+          this.downshiftTimer = 0.085;
+          this.upshiftTimer = 0;
+          this.playOneshot('gear_down', 0.55);
+          // Downshift blip on the overrun: unburnt fuel bangs in the exhaust and overrun crackle carries on
+          const blipPop = m.lift?.downshiftPopChance ?? 0.5;
+          if (blipPop > 0 && inp.throttle < 0.2 && inp.rpm > (m.lift?.popMinRpm ?? 8200)) {
+            this.liftTimer = Math.max(this.liftTimer, 0.65);
+            if (Math.random() < blipPop) {
+              this.playOneshot(inp.view === 'int' ? 'backfire_int' : 'pop_ext', 0.42, 0.04 + Math.random() * 0.04);
+              this.popCooldown = 0.12;
+            }
           }
         }
       }
       this.prevGear = inp.gear;
     }
-    this.shiftDipTimer = Math.max(0, this.shiftDipTimer - dt);
-    const shiftDip = this.shiftDipTimer > 0 ? 0.45 : 1;
 
-    const rpm = Math.min(this.rpmRange[1], Math.max(this.rpmRange[0], inp.rpm));
+    this.upshiftTimer = Math.max(0, this.upshiftTimer - dt);
+    this.downshiftTimer = Math.max(0, this.downshiftTimer - dt);
+
+    // Continuous audio RPM tracking: slews across gear shifts over ~50ms so the ear hears the physical pitch drop/blip
+    const targetRpm = Math.min(this.rpmRange[1], Math.max(this.rpmRange[0], inp.rpm));
+    if (this.audioRpm === 0) {
+      this.audioRpm = targetRpm;
+    } else if (this.upshiftTimer > 0 || this.downshiftTimer > 0) {
+      const span = Math.max(4000, this.rpmRange[1] - this.rpmRange[0]);
+      const maxSlew = (this.upshiftTimer > 0 ? span * 4.2 : span * 4.8) * dt;
+      const diff = targetRpm - this.audioRpm;
+      this.audioRpm += Math.sign(diff) * Math.min(Math.abs(diff), maxSlew);
+    } else {
+      this.audioRpm += (targetRpm - this.audioRpm) * Math.min(1, dt / 0.008);
+    }
+    const rpm = this.audioRpm;
+
+    // Upshift cut & engagement envelope + downshift ECU auto-blip
+    let shiftOnScale = 1.0;
+    let shiftOffScale = 1.0;
+    if (this.upshiftTimer > 0) {
+      const p = 1 - this.upshiftTimer / 0.075; // 0 -> 1 across the 75ms shift
+      if (p < 0.45) {
+        shiftOnScale = 0.18;
+        shiftOffScale = 0.55;
+      } else {
+        const reg = (p - 0.45) / 0.55;
+        // Punch back into the next gear with a subtle 1.08x transient peak
+        shiftOnScale = 0.18 + 0.90 * Math.sin(reg * Math.PI * 0.5);
+        shiftOffScale = 0.55 + 0.45 * reg;
+      }
+    }
+    const blipThrottle =
+      this.downshiftTimer > 0 ? Math.sin((1 - this.downshiftTimer / 0.085) * Math.PI) * 0.78 : 0;
+    const effThrottle = Math.max(this.smoothThrottle, blipThrottle);
+
+    // Dynamic exhaust filter: opens up progressively with RPM and load so high revs scream cleanly
+    const rpmNorm = Math.min(1, Math.max(0, (rpm - this.rpmRange[0]) / Math.max(1000, this.rpmRange[1] - this.rpmRange[0])));
+    const cutoffHz = 3200 + rpmNorm * 6800 + effThrottle * 3800;
+    const shelfDb = -1.5 + rpmNorm * 5.0 * (0.4 + 0.6 * effThrottle);
+    this.engineFilter.frequency.setTargetAtTime(cutoffHz, now, 0.018);
+    this.engineShelf.gain.setTargetAtTime(shelfDb, now, 0.018);
+
+    const engineTau = this.upshiftTimer > 0 || this.downshiftTimer > 0 ? 0.012 : tau;
     for (const view of ['ext', 'int'] as Vf26View[]) {
-      const onness = lerpTable(m.throttleCurve[view], this.smoothThrottle);
-      const wOn = Math.sin(onness * Math.PI * 0.5) * shiftDip;
-      const wOff = Math.cos(onness * Math.PI * 0.5);
+      const onness = lerpTable(m.throttleCurve[view], effThrottle);
+      const wOn = Math.sin(onness * Math.PI * 0.5) * shiftOnScale;
+      const wOff = Math.cos(onness * Math.PI * 0.5) * shiftOffScale;
       const viewLevel = view === 'int' ? this.viewMix : 1 - this.viewMix;
       const active = viewLevel > 0.002;
-      this.engine[view].on.update(rpm, active ? wOn : 0, true, now, dt, tau);
-      this.engine[view].off.update(rpm, active ? wOff : 0, true, now, dt, tau);
+      this.engine[view].on.update(rpm, active ? wOn : 0, true, now, dt, engineTau);
+      this.engine[view].off.update(rpm, active ? wOff : 0, true, now, dt, engineTau);
     }
 
-    // Turbo (`boost` = gauge bar; independent of rpm)
-    const onnessExt = lerpTable(m.throttleCurve.ext, this.smoothThrottle);
+    // Turbo (`boost` = gauge bar; pitched subtly with boost so spool rises naturally)
+    const onnessExt = lerpTable(m.throttleCurve.ext, effThrottle);
     const boost = Math.max(0, inp.boostBarGauge);
-    const boostFade = Math.min(1, boost / 0.1);
+    const boostFade = Math.min(1, boost / 0.25) * (0.35 + 0.65 * Math.min(1, boost / 2.2));
     this.turboOn?.update(boost, boostFade * Math.sin(onnessExt * Math.PI * 0.5), false, now, dt, tau);
     this.turboOff?.update(boost, boostFade * Math.cos(onnessExt * Math.PI * 0.5), false, now, dt, tau);
 
     // Transmission whine (`drivetrain_speed`; taken as road speed in km/h, clamped to its 0..300 range)
     const ds = Math.min(300, Math.max(0, inp.speedKmh));
     const minDs = this.transOn?.voices[0]?.key ?? 20;
-    const dsFade = Math.min(1, ds / minDs);
-    const dsAxis = Math.max(minDs, ds);
+    const dsFade = Math.min(1, ds / Math.max(20, minDs * 0.45));
+    const dsAxis = Math.max(25, ds);
     this.transOn?.update(dsAxis, dsFade * Math.sin(onnessExt * Math.PI * 0.5), true, now, dt, tau);
     this.transOff?.update(dsAxis, dsFade * Math.cos(onnessExt * Math.PI * 0.5), true, now, dt, tau);
 
@@ -501,6 +583,8 @@ export class Vf26SoundBank {
     this.transOff?.stopAll();
     for (const v of Object.values(this.skidVoices)) v?.stop();
     this.tcVoice?.stop();
+    this.engineFilter.disconnect();
+    this.engineShelf.disconnect();
     this.bus.disconnect();
     this.ready = false;
   }

@@ -1,0 +1,475 @@
+{
+ "sampleRate": 48000,
+ "loopSeconds": 3.2,
+ "engine": {
+  "ext": [
+   {
+    "file": "engine_ext_off_4200.ogg",
+    "layer": "off",
+    "rpm": 4200,
+    "channels": 2,
+    "rms": 0.13
+   },
+   {
+    "file": "engine_ext_off_6200.ogg",
+    "layer": "off",
+    "rpm": 6200,
+    "channels": 2,
+    "rms": 0.145
+   },
+   {
+    "file": "engine_ext_off_8200.ogg",
+    "layer": "off",
+    "rpm": 8200,
+    "channels": 2,
+    "rms": 0.16
+   },
+   {
+    "file": "engine_ext_off_11200.ogg",
+    "layer": "off",
+    "rpm": 11200,
+    "channels": 2,
+    "rms": 0.175
+   },
+   {
+    "file": "engine_ext_on_4200.ogg",
+    "layer": "on",
+    "rpm": 4200,
+    "channels": 2,
+    "rms": 0.165
+   },
+   {
+    "file": "engine_ext_on_6200.ogg",
+    "layer": "on",
+    "rpm": 6200,
+    "channels": 2,
+    "rms": 0.185
+   },
+   {
+    "file": "engine_ext_on_8200.ogg",
+    "layer": "on",
+    "rpm": 8200,
+    "channels": 2,
+    "rms": 0.205
+   },
+   {
+    "file": "engine_ext_on_11200.ogg",
+    "layer": "on",
+    "rpm": 11200,
+    "channels": 2,
+    "rms": 0.23
+   }
+  ],
+  "int": [
+   {
+    "file": "engine_int_off_4200.ogg",
+    "layer": "off",
+    "rpm": 4200,
+    "channels": 2,
+    "rms": 0.13
+   },
+   {
+    "file": "engine_int_off_6200.ogg",
+    "layer": "off",
+    "rpm": 6200,
+    "channels": 2,
+    "rms": 0.145
+   },
+   {
+    "file": "engine_int_off_8200.ogg",
+    "layer": "off",
+    "rpm": 8200,
+    "channels": 2,
+    "rms": 0.16
+   },
+   {
+    "file": "engine_int_off_11200.ogg",
+    "layer": "off",
+    "rpm": 11200,
+    "channels": 2,
+    "rms": 0.175
+   },
+   {
+    "file": "engine_int_on_4200.ogg",
+    "layer": "on",
+    "rpm": 4200,
+    "channels": 2,
+    "rms": 0.165
+   },
+   {
+    "file": "engine_int_on_6200.ogg",
+    "layer": "on",
+    "rpm": 6200,
+    "channels": 2,
+    "rms": 0.185
+   },
+   {
+    "file": "engine_int_on_8200.ogg",
+    "layer": "on",
+    "rpm": 8200,
+    "channels": 2,
+    "rms": 0.205
+   },
+   {
+    "file": "engine_int_on_11200.ogg",
+    "layer": "on",
+    "rpm": 11200,
+    "channels": 2,
+    "rms": 0.23
+   }
+  ]
+ },
+ "turbo": [
+  {
+   "file": "turbo_on_1.5.ogg",
+   "layer": "on",
+   "boost": 1.5,
+   "channels": 1,
+   "rms": 0.032
+  },
+  {
+   "file": "turbo_off_1.5.ogg",
+   "layer": "off",
+   "boost": 1.5,
+   "channels": 1,
+   "rms": 0.016
+  }
+ ],
+ "transmission": [
+  {
+   "file": "transmission_on_160.ogg",
+   "layer": "on",
+   "drivetrainSpeed": 160,
+   "channels": 2,
+   "rms": 0.042
+  },
+  {
+   "file": "transmission_off_160.ogg",
+   "layer": "off",
+   "drivetrainSpeed": 160,
+   "channels": 2,
+   "rms": 0.028
+  }
+ ],
+ "oneshots": [
+  {
+   "file": "oneshot_500_backfire3.ogg",
+   "role": "backfire_int",
+   "channels": 1,
+   "seconds": 0.651,
+   "peak": 0.997
+  },
+  {
+   "file": "oneshot_500_backfire7.ogg",
+   "role": "backfire_int",
+   "channels": 1,
+   "seconds": 0.777,
+   "peak": 0.478
+  },
+  {
+   "file": "oneshot_backfireEXT_8.ogg",
+   "role": "backfire_ext",
+   "channels": 1,
+   "seconds": 0.377,
+   "peak": 1.0
+  },
+  {
+   "file": "oneshot_backfireEXT_9.ogg",
+   "role": "backfire_ext",
+   "channels": 1,
+   "seconds": 0.479,
+   "peak": 1.0
+  },
+  {
+   "file": "oneshot_500_backfire5.ogg",
+   "role": "backfire_int",
+   "channels": 1,
+   "seconds": 0.362,
+   "peak": 0.993
+  },
+  {
+   "file": "oneshot_backfireEXT_1.ogg",
+   "role": "backfire_ext",
+   "channels": 1,
+   "seconds": 1.292,
+   "peak": 1.0
+  },
+  {
+   "file": "oneshot_backfireEXT_7.ogg",
+   "role": "backfire_ext",
+   "channels": 1,
+   "seconds": 0.377,
+   "peak": 1.0
+  },
+  {
+   "file": "oneshot_backfireEXT_5.ogg",
+   "role": "backfire_ext",
+   "channels": 1,
+   "seconds": 0.891,
+   "peak": 1.0
+  },
+  {
+   "file": "oneshot_backfireEXT_3.ogg",
+   "role": "backfire_ext",
+   "channels": 1,
+   "seconds": 0.611,
+   "peak": 1.0
+  },
+  {
+   "file": "oneshot_missgear.ogg",
+   "role": "missgear",
+   "channels": 1,
+   "seconds": 2.528,
+   "peak": 0.596
+  },
+  {
+   "file": "oneshot_500_backfire6.ogg",
+   "role": "backfire_int",
+   "channels": 1,
+   "seconds": 0.397,
+   "peak": 0.994
+  },
+  {
+   "file": "oneshot_backfireEXT_6.ogg",
+   "role": "backfire_ext",
+   "channels": 1,
+   "seconds": 1.947,
+   "peak": 1.0
+  },
+  {
+   "file": "oneshot_backfireEXT_4.ogg",
+   "role": "backfire_ext",
+   "channels": 1,
+   "seconds": 1.306,
+   "peak": 1.0
+  },
+  {
+   "file": "oneshot_500_backfire4.ogg",
+   "role": "backfire_int",
+   "channels": 1,
+   "seconds": 0.595,
+   "peak": 0.989
+  },
+  {
+   "file": "oneshot_backfireEXT_2.ogg",
+   "role": "backfire_ext",
+   "channels": 1,
+   "seconds": 0.474,
+   "peak": 1.0
+  },
+  {
+   "file": "oneshot_turbo_blowoff.ogg",
+   "role": "blowoff",
+   "channels": 1,
+   "seconds": 0.65,
+   "peak": 0.785
+  },
+  {
+   "file": "oneshot_gearup_1.ogg",
+   "role": "gear_up",
+   "channels": 1,
+   "seconds": 0.14,
+   "peak": 0.78
+  },
+  {
+   "file": "oneshot_gearup_2.ogg",
+   "role": "gear_up",
+   "channels": 1,
+   "seconds": 0.14,
+   "peak": 0.78
+  },
+  {
+   "file": "oneshot_gearup_3.ogg",
+   "role": "gear_up",
+   "channels": 1,
+   "seconds": 0.14,
+   "peak": 0.78
+  },
+  {
+   "file": "oneshot_shift_cut_1.ogg",
+   "role": "shift_cut",
+   "channels": 1,
+   "seconds": 0.11,
+   "peak": 0.72
+  },
+  {
+   "file": "oneshot_shift_cut_2.ogg",
+   "role": "shift_cut",
+   "channels": 1,
+   "seconds": 0.11,
+   "peak": 0.72
+  },
+  {
+   "file": "oneshot_geardn_1.ogg",
+   "role": "gear_down",
+   "channels": 1,
+   "seconds": 0.16,
+   "peak": 0.75
+  },
+  {
+   "file": "oneshot_geardn_2.ogg",
+   "role": "gear_down",
+   "channels": 1,
+   "seconds": 0.16,
+   "peak": 0.75
+  },
+  {
+   "file": "oneshot_geardn_3.ogg",
+   "role": "gear_down",
+   "channels": 1,
+   "seconds": 0.16,
+   "peak": 0.75
+  },
+  {
+   "file": "oneshot_limiter.ogg",
+   "role": "limiter",
+   "channels": 1,
+   "seconds": 0.16,
+   "peak": 0.7
+  }
+ ],
+ "lift": {
+  "popMinRpm": 8200,
+  "crackleMinRpm": 8800,
+  "downshiftPopChance": 0.65
+ },
+ "limiterRetriggerS": 0.14,
+ "throttleCurve": {
+  "ext": [
+   [
+    0,
+    0.0
+   ],
+   [
+    0.05,
+    0.0
+   ],
+   [
+    0.1,
+    0.017
+   ],
+   [
+    0.15,
+    0.114
+   ],
+   [
+    0.2,
+    0.274
+   ],
+   [
+    0.25,
+    0.395
+   ],
+   [
+    0.3,
+    0.499
+   ],
+   [
+    0.4,
+    0.65
+   ],
+   [
+    0.5,
+    0.728
+   ],
+   [
+    0.6,
+    0.772
+   ],
+   [
+    0.7,
+    0.839
+   ],
+   [
+    0.8,
+    0.936
+   ],
+   [
+    0.9,
+    1.0
+   ],
+   [
+    1.0,
+    1.0
+   ]
+  ],
+  "int": [
+   [
+    0,
+    0.0
+   ],
+   [
+    0.05,
+    0.0
+   ],
+   [
+    0.1,
+    0.0
+   ],
+   [
+    0.15,
+    0.0
+   ],
+   [
+    0.2,
+    0.0
+   ],
+   [
+    0.25,
+    0.001
+   ],
+   [
+    0.3,
+    0.011
+   ],
+   [
+    0.4,
+    0.111
+   ],
+   [
+    0.5,
+    0.505
+   ],
+   [
+    0.6,
+    0.891
+   ],
+   [
+    0.7,
+    0.993
+   ],
+   [
+    0.8,
+    1.0
+   ],
+   [
+    0.9,
+    1.0
+   ],
+   [
+    1.0,
+    1.0
+   ]
+  ]
+ },
+ "skid": {
+  "int": {
+   "file": "skid_int.ogg",
+   "channels": 1,
+   "seconds": 2.957,
+   "rms": 0.2
+  },
+  "ext": {
+   "file": "skid_ext.ogg",
+   "channels": 1,
+   "seconds": 3.097,
+   "rms": 0.2
+  }
+ },
+ "tractionControl": {
+  "file": "tractionControl.ogg",
+  "channels": 1,
+  "seconds": 2.02,
+  "rms": 0.2
+ }
+}

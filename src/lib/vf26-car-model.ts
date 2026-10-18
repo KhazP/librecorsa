@@ -25,7 +25,8 @@ import { setVf26LiveryColours, upgradeVf26Materials } from "@/lib/render/car-mat
  * sidepods, mirrors, engine cover and rear wing, and an EXT_SKIN livery mask (root extras `liveryMask`) painted
  * with the selected LiveryConfig colours.
  */
-const MODEL_URL = "/vf26/model/vf26.glb";
+export const VF26_MODEL_URL = "/vf26/model/vf26.glb";
+export const AMR26_MODEL_URL = "/amr26/model/amr26.glb";
 
 export interface Vf26CameraAnchor {
   /** Rig-local position (m): +X left, +Y up, +Z forward */
@@ -61,15 +62,16 @@ interface TemplateAssets {
   animations: THREE.AnimationClip[];
 }
 
-let templatePromise: Promise<THREE.Group | null> | null = null;
+const templatePromises = new Map<string, Promise<THREE.Group | null>>();
 // Kept out of userData: Object3D.clone() JSON-serialises userData, which would encode every texture per car
 const templateAssets = new WeakMap<THREE.Object3D, TemplateAssets>();
 
-export function loadVf26Template(): Promise<THREE.Group | null> {
-  if (!templatePromise) {
-    templatePromise = (async () => {
+export function loadVf26Template(modelUrl: string = VF26_MODEL_URL): Promise<THREE.Group | null> {
+  let promise = templatePromises.get(modelUrl);
+  if (!promise) {
+    promise = (async () => {
       if (typeof window === "undefined") return null;
-      const url = withBasePath(MODEL_URL);
+      const url = withBasePath(modelUrl);
       assetProgress.begin("car");
       try {
         const head = await fetch(url, { method: "HEAD" });
@@ -112,8 +114,9 @@ export function loadVf26Template(): Promise<THREE.Group | null> {
         return null;
       }
     })();
+    templatePromises.set(modelUrl, promise);
   }
-  return templatePromise;
+  return promise;
 }
 
 const WHEELS = ["WHEEL_RF", "WHEEL_LF", "WHEEL_RR", "WHEEL_LR"] as const; // physics wheel order 0..3

@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import type { CarTelemetry, LiveryConfig, TireCompound } from "@/types/f1";
-import { attachVf26Model, loadVf26Template, type Vf26ModelInstance } from "@/lib/vf26-car-model";
+import { AMR26_MODEL_URL, attachVf26Model, loadVf26Template, type Vf26ModelInstance } from "@/lib/vf26-car-model";
 import type { TyreVisualState } from "@/lib/sim/simulator-car";
 
 /** What the simulator drives on any car rig (the F1 rig below, or the GT3's in gt3-car-model) */
@@ -825,7 +825,8 @@ function buildRoundedF1TireGeometry(
 
 export function createF1Car2026(
   initialLivery: LiveryConfig,
-  initialCompound: TireCompound = "soft"
+  initialCompound: TireCompound = "soft",
+  modelUrl: string = AMR26_MODEL_URL
 ): F1CarRig2026 {
   const root = new THREE.Group();
   const chassisGroup = new THREE.Group();
@@ -2700,10 +2701,10 @@ export function createF1Car2026(
     }
   };
 
-  // Swap in the VF26 mod model when it has been converted locally (public/vf26/model/vf26.glb)
+  // Swap in the 3D model when available (public/amr26/model/amr26.glb or public/vf26/model/vf26.glb)
   const proceduralParts = [...chassisGroup.children, ...root.children.filter((c) => c !== chassisGroup)];
   let rigDisposed = false;
-  void loadVf26Template().then((template) => {
+  void loadVf26Template(modelUrl).then((template) => {
     if (!template || rigDisposed) return;
     vf26 = attachVf26Model(template, root, chassisGroup);
     vf26.setTireCompound(currentCompound);

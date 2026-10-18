@@ -26,7 +26,7 @@
 import * as THREE from 'three';
 import { CameraMode, TelemetryData } from '@/types/f1';
 import { withBasePath } from '@/lib/base-path';
-import { VF26_AUDIO_DIR, Vf26SoundBank } from './vf26-audio';
+import { AMR26_AUDIO_DIR, VF26_AUDIO_DIR, Vf26SoundBank } from './vf26-audio';
 import { VF26_ENGINE } from './vf26-data';
 
 /** Where a car's converted sound bank lives, and its rev limiter (for the limiter bounce) */
@@ -36,6 +36,7 @@ export interface CarSoundSource {
   limiterRpm: number;
 }
 
+export const AMR26_SOUND: CarSoundSource = { id: 'amr26', assetDir: AMR26_AUDIO_DIR, limiterRpm: VF26_ENGINE.limiterRpm };
 export const VF26_SOUND: CarSoundSource = { id: 'vf26', assetDir: VF26_AUDIO_DIR, limiterRpm: VF26_ENGINE.limiterRpm };
 
 /** Cameras mounted on the car use the mod's interior engine event; the rest hear the exterior one */
