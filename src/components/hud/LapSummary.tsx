@@ -55,6 +55,8 @@ interface LapSummaryProps {
   onSubmit?: () => void;
   submitState?: "idle" | "sending" | "sent" | "error";
   submitRank?: number | null;
+  /** Why the board refused the last upload (e.g. the name is taken), shown under the buttons */
+  submitError?: string | null;
 }
 
 /** How long the collapsed toast stays up before it clears itself */
@@ -171,6 +173,7 @@ const LapCard: React.FC<LapSummaryProps & { onCollapse: () => void }> = ({
   onSubmit,
   submitState = "idle",
   submitRank = null,
+  submitError = null,
 }) => {
   let badge: React.ReactNode = null;
   if (!s.valid) {
@@ -344,6 +347,11 @@ const LapCard: React.FC<LapSummaryProps & { onCollapse: () => void }> = ({
           Close
         </button>
       </div>
+      {submitState === "error" && submitError ? (
+        <p className="mt-2 text-right font-f1-mono text-[11px] leading-snug" style={{ color: HUD_RED }}>
+          {submitError}
+        </p>
+      ) : null}
     </div>
   );
 };

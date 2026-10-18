@@ -55,6 +55,10 @@ export interface LeaderboardPanelProps {
   onRaceGhost?: (entry: LeaderboardEntry) => void;
   onImportGhost?: (file: File) => void;
   onExportBest?: () => void;
+  /** Driver key (claims the name on the online board): export to a file, import from one, and the last result */
+  onExportDriverKey?: () => void;
+  onImportDriverKey?: (file: File) => void;
+  driverKeyNotice?: string | null;
 }
 
 /** Personal bests and online times for one track, with refresh, ghost import / export and ghost racing */
@@ -69,8 +73,12 @@ export const LeaderboardPanel: React.FC<LeaderboardPanelProps> = ({
   onRaceGhost,
   onImportGhost,
   onExportBest,
+  onExportDriverKey,
+  onImportDriverKey,
+  driverKeyNotice = null,
 }) => {
   const fileRef = useRef<HTMLInputElement | null>(null);
+  const keyFileRef = useRef<HTMLInputElement | null>(null);
 
   // Fastest first, whatever order the caller passed
   const localSorted = useMemo(() => [...local].sort((a, b) => a.lapTimeMs - b.lapTimeMs), [local]);
@@ -81,6 +89,11 @@ export const LeaderboardPanel: React.FC<LeaderboardPanelProps> = ({
     // Clear so picking the same file again still fires onChange
     e.target.value = "";
     if (file && onImportGhost) onImportGhost(file);
+  };
+  const handleKeyFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (file && onImportDriverKey) onImportDriverKey(file);
   };
 
   return (
@@ -168,6 +181,37 @@ export const LeaderboardPanel: React.FC<LeaderboardPanelProps> = ({
               ))}
             </ol>
           )}
+          {remoteEnabled && (onExportDriverKey || onImportDriverKey) ? (
+            <div className="mt-3 border-t border-[#262B3D] pt-3 font-f1-mono text-[11px] leading-snug text-[#8E96AA]">
+              <p>
+                <span className="font-bold text-[#F5F7FA]">DRIVER KEY</span> · Your first upload claims your name, and
+                this browser keeps the key to it. Export the key to race under the same name on another browser or
+                device, and keep the file private.
+              </p>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                {onExportDriverKey ? (
+                  <button type="button" onClick={onExportDriverKey} className={BUTTON}>
+                    Export key
+                  </button>
+                ) : null}
+                {onImportDriverKey ? (
+                  <>
+                    <button type="button" onClick={() => keyFileRef.current?.click()} className={BUTTON}>
+                      Import key…
+                    </button>
+                    <input
+                      ref={keyFileRef}
+                      type="file"
+                      accept="application/json,.json"
+                      className="hidden"
+                      onChange={handleKeyFile}
+                    />
+                  </>
+                ) : null}
+                {driverKeyNotice ? <span className="text-[#F5F7FA]">{driverKeyNotice}</span> : null}
+              </div>
+            </div>
+          ) : null}
         </section>
       </div>
     </div>

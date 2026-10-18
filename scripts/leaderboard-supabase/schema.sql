@@ -1,10 +1,15 @@
 -- LibreCorsa online leaderboard on Supabase: the same rules as scripts/leaderboard-worker, as Postgres
 -- functions the browser calls through PostgREST with the project's publishable (anon) key.
---   POST /rest/v1/rpc/submit_lap   { "rec": LapRecording }               -> { ok, rank } | { ok: false, error }
---   GET  /rest/v1/rpc/leaderboard?track=&vehicle=&lim=                  -> { laps: [...] } (no samples)
---   GET  /rest/v1/rpc/get_lap?lap_id=                                     -> LapRecording | null
+--   POST /rest/v1/rpc/submit_lap   { "rec": LapRecording, "driver_key": string } -> { ok, rank } | { ok: false, error }
+--   GET  /rest/v1/rpc/leaderboard?track=&vehicle=&lim=                          -> { laps: [...] } (no samples)
+--   GET  /rest/v1/rpc/get_lap?lap_id=                                             -> LapRecording | null
 -- The tables are locked (RLS on, no policies); only these functions can read or write them.
 -- Validation and plausibility checks are heuristics, not cheat-proof. Safe to run again.
+--
+-- Driver names are claimed with a device key: a random secret the game keeps in the browser. The first upload
+-- under a name stores the key's SHA-256; later uploads under that name (any circuit or car, ignoring case and
+-- extra spaces) must bring the same key. A claim lapses after 6 months without an upload. The key itself is
+-- never stored or returned. To free a name by hand: delete from public.drivers where name_key = 'some name';
 
 create table if not exists public.laps (
   id uuid primary key default gen_random_uuid(),
@@ -28,9 +33,28 @@ create table if not exists public.lap_posts (
   primary key (client_hash, hour)
 );
 
+-- Claimed driver names: the normalized name and the SHA-256 (hex) of its owner's device key
+create table if not exists public.drivers (
+  name_key text primary key,
+  key_hash text not null,
+  claimed_at timestamptz not null default now(),
+  last_seen timestamptz not null default now()
+);
+
 alter table public.laps enable row level security;
 alter table public.lap_posts enable row level security;
-revoke all on public.laps, public.lap_posts from anon, authenticated;
+alter table public.drivers enable row level security;
+revoke all on public.laps, public.lap_posts, public.drivers from anon, authenticated;
+
+-- The claim key of a driver name: trimmed, lower case, runs of spaces as one
+create or replace function public.driver_name_key(name text)
+returns text
+language sql
+immutable
+set search_path = ''
+as $$
+  select lower(regexp_replace(btrim(name), '\s+', ' ', 'g'));
+$$;
 
 -- Shape and plausibility of an uploaded LapRecording; null when it is fine, else the reason
 create or replace function public.lap_problem(rec jsonb)
@@ -139,7 +163,10 @@ as $$
     'recordedAt', l.recorded_at);
 $$;
 
-create or replace function public.submit_lap(rec jsonb)
+-- The first version took no driver key; drop it so PostgREST sees a single submit_lap
+drop function if exists public.submit_lap(jsonb);
+
+create or replace function public.submit_lap(rec jsonb, driver_key text default null)
 returns jsonb
 language plpgsql
 volatile
@@ -149,7 +176,12 @@ as $$
 declare
   max_posts_per_hour constant int := 10;
   max_board constant int := 100;
+  claim_lapses constant interval := interval '6 months';
   problem text;
+  nk text;
+  kh text;
+  owner_hash text;
+  claimed boolean := false;
   headers json := nullif(current_setting('request.headers', true), '')::json;
   client text;
   hr bigint := floor(extract(epoch from now()) / 3600);
@@ -188,10 +220,31 @@ begin
   d_code := btrim(rec->>'driverCode');
   lap := (rec->>'lapTimeMs')::double precision;
 
-  -- One row per driver: a slower lap from the same name and code does not replace their best
-  select * into prev from public.laps
-    where track_id = t_id and vehicle = veh and driver_name = d_name and driver_code = d_code
-    order by lap_time_ms limit 1;
+  -- The name must be free, lapsed, or claimed with this device key
+  if driver_key is null or driver_key !~ '^[A-Za-z0-9_-]{32,128}$' then
+    return jsonb_build_object('ok', false, 'error', 'Missing driver key. Reload the game and try again');
+  end if;
+  kh := encode(sha256(convert_to(driver_key, 'UTF8')), 'hex');
+  nk := public.driver_name_key(d_name);
+  delete from public.drivers d where d.name_key = nk and d.last_seen < now() - claim_lapses;
+  insert into public.drivers as d (name_key, key_hash) values (nk, kh)
+    on conflict on constraint drivers_pkey do nothing
+    returning true into claimed;
+  select d.key_hash into owner_hash from public.drivers d where d.name_key = nk for update;
+  if owner_hash is distinct from kh then
+    return jsonb_build_object('ok', false, 'error',
+      'This name is taken. Import your driver key under Lap Times, or race under another name');
+  end if;
+  update public.drivers d set last_seen = now() where d.name_key = nk;
+  -- A fresh claim on a lapsed name starts clean: the laps left by its previous owner go
+  if claimed then
+    delete from public.laps l where public.driver_name_key(l.driver_name) = nk;
+  end if;
+
+  -- One row per driver and board: a slower lap does not replace their best
+  select * into prev from public.laps l
+    where l.track_id = t_id and l.vehicle = veh and public.driver_name_key(l.driver_name) = nk
+    order by l.lap_time_ms limit 1;
   if prev.id is not null and prev.lap_time_ms <= lap then
     return jsonb_build_object('ok', false, 'error', 'Not faster than your best lap on this board');
   end if;
@@ -202,7 +255,8 @@ begin
     return jsonb_build_object('ok', false, 'error', 'Lap is not fast enough for the top 100');
   end if;
 
-  delete from public.laps where track_id = t_id and vehicle = veh and driver_name = d_name and driver_code = d_code;
+  delete from public.laps l
+    where l.track_id = t_id and l.vehicle = veh and public.driver_name_key(l.driver_name) = nk;
   insert into public.laps (track_id, vehicle, driver_name, driver_code, lap_time_ms, sector_times_ms, recorded_at, rec)
     values (
       t_id, veh, d_name, d_code, lap,
@@ -249,7 +303,7 @@ as $$
   select rec from public.laps where id = lap_id;
 $$;
 
-revoke all on function public.lap_problem(jsonb), public.lap_entry(public.laps) from public, anon, authenticated;
-revoke all on function public.submit_lap(jsonb), public.leaderboard(text, text, int), public.get_lap(uuid) from public;
-grant execute on function public.submit_lap(jsonb), public.leaderboard(text, text, int), public.get_lap(uuid)
+revoke all on function public.lap_problem(jsonb), public.lap_entry(public.laps), public.driver_name_key(text) from public, anon, authenticated;
+revoke all on function public.submit_lap(jsonb, text), public.leaderboard(text, text, int), public.get_lap(uuid) from public;
+grant execute on function public.submit_lap(jsonb, text), public.leaderboard(text, text, int), public.get_lap(uuid)
   to anon, authenticated;

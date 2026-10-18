@@ -50,6 +50,7 @@ import {
   remoteLeaderboardEnabled,
   submitLap,
 } from "@/lib/net/leaderboard";
+import { exportDriverKeyFile, importDriverKeyFile } from "@/lib/net/driver-key";
 import { buildTelemetryPacket } from "@/lib/input/telemetry-out";
 import { touchInput, isTouchDevice, resetTouchInput } from "@/lib/input/touch-input";
 import { isFatalHidStatus } from "@/lib/input/webhid-ffb";
@@ -365,6 +366,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   const [lapSummary, setLapSummary] = useState<{ summary: LapSummaryData; recording: LapRecording } | null>(null);
   const [submitState, setSubmitState] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const [submitRank, setSubmitRank] = useState<number | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [driverKeyNotice, setDriverKeyNotice] = useState<string | null>(null);
   /** Ghost being raced: the personal best (default) or a downloaded / imported lap */
   const ghostRef = useRef<GhostPlayer | null>(null);
   const ghostSourceRef = useRef<"pb" | "other">("pb");
@@ -801,6 +804,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         setLapSummary({ summary, recording });
         setSubmitState("idle");
         setSubmitRank(null);
+        setSubmitError(null);
       }
       if (!summary.valid) return;
       void saveBestLapIfFaster(recording)
@@ -820,9 +824,10 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     const rec = lapSummary?.recording;
     if (!rec) return;
     setSubmitState("sending");
-    const res = await submitLap(rec).catch(() => ({ ok: false, rank: undefined }));
+    const res = await submitLap(rec).catch((): { ok: boolean; rank?: number; error?: string } => ({ ok: false }));
     setSubmitState(res.ok ? "sent" : "error");
     setSubmitRank(res.ok ? (res.rank ?? null) : null);
+    setSubmitError(res.ok ? null : (res.error ?? null));
     if (res.ok) void refreshLeaderboard();
   }, [lapSummary, refreshLeaderboard]);
 
@@ -852,6 +857,19 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     },
     [raceGhost, trackId]
   );
+
+  const handleExportDriverKey = useCallback(() => {
+    setDriverKeyNotice(
+      exportDriverKeyFile(settingsRef.current.profile.name)
+        ? "Key saved. Anyone with the file can post as you."
+        : "No key yet: your first upload creates it."
+    );
+  }, []);
+
+  const handleImportDriverKey = useCallback(async (file: File) => {
+    const res = await importDriverKeyFile(file);
+    setDriverKeyNotice(res.ok ? `Key imported${res.name ? ` for ${res.name}` : ""}. Uploads from here use it.` : res.error);
+  }, []);
 
   const handleExportBest = useCallback(async () => {
     const rec = await loadBestLap(trackId, vehicleModelRef.current).catch(() => null);
@@ -2606,6 +2624,9 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       onRaceGhost: (entry: LeaderboardEntry) => void handleRaceGhostEntry(entry),
       onImportGhost: (file: File) => void handleImportGhost(file),
       onExportBest: () => void handleExportBest(),
+      onExportDriverKey: handleExportDriverKey,
+      onImportDriverKey: (file: File) => void handleImportDriverKey(file),
+      driverKeyNotice,
     },
   };
 
@@ -2660,6 +2681,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
                     remoteLeaderboardEnabled && lapSummary.summary.valid ? () => void handleSubmitLap() : undefined,
                   submitState,
                   submitRank,
+                  submitError,
                 }
               : null
           }

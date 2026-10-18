@@ -9,6 +9,7 @@ import type { VehicleModelId } from "@/types/f1";
 import { listBestLaps } from "@/lib/sim/ghost-store";
 import { validateLapRecording } from "@/lib/sim/lap-recorder";
 import type { LapRecording, LeaderboardEntry } from "@/lib/sim/lap-types";
+import { getOrCreateDriverKey } from "./driver-key";
 
 const REQUEST_TIMEOUT_MS = 8000;
 const DEFAULT_LIMIT = 20;
@@ -209,7 +210,8 @@ export async function submitLap(rec: LapRecording): Promise<{ ok: boolean; rank?
   const res = await requestJson(remote.kind === "supabase" ? `${remote.url}/submit_lap` : `${remote.url}/laps`, {
     method: "POST",
     headers: remoteHeaders(true),
-    body: JSON.stringify(remote.kind === "supabase" ? { rec: payload } : payload),
+    // Supabase claims the driver's name with this browser's key; the Worker has no name claims
+    body: JSON.stringify(remote.kind === "supabase" ? { rec: payload, driver_key: getOrCreateDriverKey() } : payload),
   });
   if (!res) return { ok: false, error: "Could not reach the leaderboard" };
   const body: Record<string, unknown> = isRecord(res.body) ? res.body : {};
