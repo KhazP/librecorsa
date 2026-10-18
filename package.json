@@ -21,7 +21,7 @@
     "postprocessing": "^6.39.5",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
-    "three": "0.186.0"
+    "three": "0.186.1"
   },
   "devDependencies": {
     "@gltf-transform/core": "^4.5.1",
