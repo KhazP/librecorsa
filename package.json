@@ -1,6 +1,7 @@
 {
-  "name": "rwanda-gp-2026-f1-sim",
+  "name": "librecorsa",
   "version": "0.1.0",
+  "description": "Open-source, browser-based motorsport simulator with 500 Hz vehicle dynamics.",
   "private": true,
   "scripts": {
     "dev": "next dev",

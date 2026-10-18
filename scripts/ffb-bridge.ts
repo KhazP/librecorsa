@@ -247,7 +247,7 @@ function onMessage(text: string) {
 
 const server = createServer((_req, res) => {
   res.writeHead(200, { "Content-Type": "application/json" });
-  res.end(JSON.stringify({ bridge: "rwanda-f1-ffb", port: PORT, ...status }));
+  res.end(JSON.stringify({ bridge: "librecorsa-ffb", port: PORT, ...status }));
 });
 
 server.on("upgrade", (req: IncomingMessage, socket: Duplex) => {

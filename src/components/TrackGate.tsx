@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useState } from "react";
-import { RwandaF1Simulator } from "@/components/RwandaF1Simulator";
+import { LibreCorsaSimulator } from "@/components/LibreCorsaSimulator";
 import { activateTrack, loadStoredTrackId, RWANDA_TRACK_ID } from "@/lib/track-registry";
 
 /**
@@ -32,7 +32,7 @@ export const TrackGate: React.FC = () => {
   if (!trackId) return null;
   return (
     <>
-      <RwandaF1Simulator key={trackId} trackId={trackId} onSelectTrack={(id) => void select(id)} />
+      <LibreCorsaSimulator key={trackId} trackId={trackId} onSelectTrack={(id) => void select(id)} />
       {error ? (
         <div className="pointer-events-none fixed bottom-4 left-1/2 z-50 -translate-x-1/2 rounded bg-red-900/90 px-4 py-2 font-f1-mono text-[12px] text-white">
           {error}

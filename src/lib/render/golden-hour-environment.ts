@@ -10,7 +10,7 @@ import {
 } from "postprocessing";
 
 /*
- * Golden-hour lighting, sky/environment and post-processing for the Rwanda F1 sim.
+ * Golden-hour lighting, sky/environment and post-processing for LibreCorsa.
  *
  * Units: world metres. Track is ~1.5 km across at y~0.
  *

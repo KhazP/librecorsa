@@ -1,6 +1,6 @@
-# Credits & Licensing
+# LibreCorsa: credits & licensing
 
-This project is an independent, non-commercial open-source web simulation built with Next.js, React, Three.js, and the Web Audio API.
+LibreCorsa is an independent, non-commercial, open-source web simulator built with Next.js, React, Three.js, and the Web Audio API.
 
 ---
 

@@ -71,7 +71,7 @@ function assert(condition: boolean, message: string): void {
 }
 
 async function runVerification() {
-  console.log('=== RWANDA F1 2026 SIMULATOR (VF26) VERIFICATION SUITE ===\n');
+  console.log('=== LIBRECORSA SIMULATOR VERIFICATION SUITE (VF26, Rwanda circuit) ===\n');
   const track = getRwandaTrackData(1200);
   const flat = createFlatTestTrack(30_000);
 

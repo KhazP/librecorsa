@@ -238,14 +238,14 @@ function saveRumble(enabled: boolean) {
   }
 }
 
-export interface RwandaF1SimulatorProps {
+export interface LibreCorsaSimulatorProps {
   /** Active circuit (already set with `setActiveTrack`; the gate remounts this component on a change) */
   trackId?: string;
   /** Title menu circuit picker */
   onSelectTrack?: (id: string) => void;
 }
 
-export const RwandaF1Simulator: React.FC<RwandaF1SimulatorProps> = ({ trackId = "rwanda", onSelectTrack }) => {
+export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackId = "rwanda", onSelectTrack }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   const track = useMemo(() => getRwandaTrackData(1200), []);

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Titillium_Web, Orbitron, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
+import { withBasePath } from "@/lib/base-path";
 
 const titillium = Titillium_Web({
   subsets: ["latin"],
@@ -25,8 +26,13 @@ export const metadata: Metadata = {
   title: "LibreCorsa — Open-Source 500Hz Motorsport Simulator",
   description:
     "Open-source multi-class racing simulator with 500 Hz 6-DOF vehicle dynamics, active aero, GT3 & Formula cars, and WebRTC P2P multiplayer.",
+  applicationName: "LibreCorsa",
+  // Metadata URLs don't get the GitHub Pages base path on their own
   icons: {
-    icon: "/branding/librecorsa-mark.svg",
+    icon: [
+      { url: withBasePath("/branding/librecorsa-mark.svg"), type: "image/svg+xml" },
+      { url: withBasePath("/favicon.ico"), sizes: "16x16 32x32 48x48" },
+    ],
   },
 };
 
