@@ -12,7 +12,7 @@ import { FlatGroundQuery } from '../src/lib/sim/f12026-car/TrackColliderQuery';
 import { VehiclePhysics, type VehicleInputs } from '../src/lib/sim/f12026-car/VehiclePhysics';
 import { AMG_GT3_CONFIG } from '../src/lib/sim/gt3/AmgGt3Config';
 import { AMG_GT3_PROFILE_CAR, createAmgGt3Sim } from '../src/lib/sim/gt3/AmgGt3Sim';
-import { brakingGuideFor, computeSpeedProfile } from '../src/lib/sim/speed-profile';
+import { brakingGuideFor, computeSpeedProfile, createVf26ProfileCarModel } from '../src/lib/sim/speed-profile';
 import { F12026CarSim } from '../src/lib/sim/f12026-car/F12026CarSim';
 import { loadGlbGeometry } from './lib/glb-geometry';
 import { createFlatTestTrack } from './lib/flat-track';
@@ -190,8 +190,11 @@ console.log('\n== Autopilot on the Rwanda colliders');
     }
     return { done: sim.telemetry.lapCount === lap0 + 2, lapS: (sim.telemetry.lastLapTimeMs ?? 0) / 1000, beyond, maxSlip, top: sim.telemetry.allTimeTopSpeedKmh };
   };
-  // The GT3's braking line: longer braking zones and slower corners than the circuit's (VF26) line
+  // The GT3's braking line: longer braking zones and slower corners than the VF26 on the same (GT3) line, both
+  // graded against their own braking capability. Each car's lap-time line differs, so across lines either can
+  // have the slower hairpin.
   const guide = brakingGuideFor(track.samples, 'amg-gt3', AMG_GT3_PROFILE_CAR, 'gt3');
+  const vf26Guide = brakingGuideFor(track.samples, 'vf26', createVf26ProfileCarModel('balanced'), 'gt3');
   const n = track.samples.length;
   // Its own racing line (`roGt3`): the lap-time line for the GT3's grip, faster for it than the F1 line
   const modelLap = (line: 'f1' | 'gt3') => {
@@ -206,9 +209,9 @@ console.log('\n== Autopilot on the Rwanda colliders');
     `planning-model lap ${fmt(lapOwn, 2)} s on its line vs ${fmt(lapF1, 2)} s on the F1 line, lines up to ${fmt(lineGap, 1)} m apart`);
   const red = (zone: (i: number) => number) => Array.from({ length: n }, (_, i) => zone(i)).filter((z) => z >= 1).length * (track.totalLengthM / n);
   const redGt3 = red((i) => guide.brakingZone[i]);
-  const redVf26 = red((i) => track.samples[i].brakingZone);
+  const redVf26 = red((i) => vf26Guide.brakingZone[i]);
   const minGt3 = Math.min(...guide.speedMs) * 3.6;
-  const minVf26 = Math.min(...track.samples.map((s) => s.optimalSpeedKmh));
+  const minVf26 = Math.min(...vf26Guide.speedMs) * 3.6;
   check('GT3 braking line: longer braking, slower apexes than the VF26', redGt3 > redVf26 && minGt3 < minVf26,
     `${fmt(redGt3, 0)} m vs ${fmt(redVf26, 0)} m of red, slowest corner ${fmt(minGt3, 0)} vs ${fmt(minVf26, 0)} km/h`);
 

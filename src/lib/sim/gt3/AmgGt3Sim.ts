@@ -21,23 +21,22 @@ const C = AMG_GT3_CONFIG;
 const tyreRadius = (axle: 'front' | 'rear') => C.tyreCompounds[C.compoundSlots.soft][axle].radius;
 
 /**
- * The GT3's planning model for its braking line, braking urgency and HUD target speed. Measured on this car's
- * vehicle model at ρ 1.06 on the flat (scripts/verify-gt3.ts checks it). On reference GT3 grip a threshold stop from 250 km/h
- * averages ≈1.85 g, close to the 1.9 g the brakes can give, so the plan brakes on μ 1.3 under that cap (≈12 % longer);
- * corners use μ 1.33, below the ≈1.6 the tyres peak at, so the HUD's target speeds stay on the safe side for a
- * trail-braked entry; downforce ≈1.1 v² (1.3 at 100 km/h, 0.9 at 250 km/h as the car runs lower), drag 0.46 v² (CdA
- * 0.87 m²). Brake force and power at the wheels from the car's data.
+ * The GT3's planning model for its lap-time line, braking zones, braking urgency and HUD target speed: what this
+ * car's vehicle model does on warm tyres at ρ 1.06 on the flat (scripts/verify-gt3.ts checks it). Held corners
+ * pull μ ≈1.62 up to 190 km/h, easing to 1.5 at 250 km/h as the load rises; a threshold stop from 250 to 80 km/h
+ * takes ≈123 m, μ ≈1.39 on the full brake force. The plan corners on μ 1.6 and brakes on 1.38, so its braking
+ * points are where a driver at the limit brakes, not before. Downforce ≈1.17 v², drag 0.46 v² (CdA 0.87 m²);
+ * brake force and power at the wheels from the car's data.
  */
 export const AMG_GT3_PROFILE_CAR: SpeedProfileCarModel = {
   massKg: C.chassis.totalMassKg,
-  downforceCoef: 1.1,
+  downforceCoef: 1.17,
   dragCoef: 0.46,
   rearDownforceShare: 0.55,
   rearWeightFraction: 1 - C.chassis.frontWeightFraction,
-  muLat: 1.33,
-  muLong: 1.3,
+  muLat: 1.6,
+  muLong: 1.38,
   maxBrakeForceN:
-    0.92 *
     2 *
     C.brakes.maxTorqueNm *
     (C.brakes.front_bias / tyreRadius('front') + (1 - C.brakes.front_bias) / tyreRadius('rear')),
