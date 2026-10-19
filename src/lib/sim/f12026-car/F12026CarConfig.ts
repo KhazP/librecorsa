@@ -120,7 +120,7 @@ export interface ERSData {
   liftThrottle: number;
   /** Harvest power while lifting in top gear (W, before the mode scale) */
   topGearLiftHarvestW: number;
-  /** Deploy multiplier by gear (gear number → 0..1, AC's ers_gear.lut); default 1 in every gear */
+  /** Deploy multiplier by gear (gear number → 0..1, the source's per-gear table); default 1 in every gear */
   deployVsGear?: LutPoints;
 }
 
@@ -193,10 +193,20 @@ export interface DifferentialData {
   settings: DifferentialSettingsUnits;
   /** Electronic diff: the coast locking (same units as `coast`) while braking, i.e. on corner entry; default `coast` */
   coastBraking?: number;
+  /** 2026 3-Phase Active Electronic Differential (Entry braking <= -0.5G, Mid apex -0.5G..+0.5G, Exit/HiSpd > +0.5G or > 250 km/h) */
+  threePhase?: boolean;
+  /** Default Entry coast locking dial (1..12, where locking = (level - 1) / 11; default 3 -> 18.2%) */
+  diffEntryLevel?: number;
+  /** Default Mid-corner apex locking dial (1..12; default 5 -> 36.4%) */
+  diffMidLevel?: number;
+  /** Default Exit / High-Speed power locking dial (1..12; default 5 -> 36.4%) */
+  diffExitLevel?: number;
+  /** High-speed straight stability threshold where Exit/HiSpd lock engages regardless of G_long (km/h; default 250) */
+  hiSpdSwitchKmh?: number;
 }
 
 export interface BrakesData {
-  /** Brake torque at full pedal before the bias split (Nm per wheel pair-equivalent, AC convention) */
+  /** Brake torque at full pedal before the bias split (Nm per wheel pair-equivalent) */
   maxTorqueNm: number;
   /**
    * Rear brake-by-wire: rear friction yields to the engine / MGU-K braking already on the rear axle (F1).
@@ -288,6 +298,11 @@ export interface AxleSuspensionData {
   rollCentreHeight: number;
   /** Anti-roll bar rate at the wheel (`MechanicalBalanceUnits.arbs`, N/m) */
   arb: number;
+  /**
+   * 3D wishbone + steering link pickup coordinates `[x_inboard, y_up, z_fwd]` from the wheel center (m):
+   * `[WBCAR_TOP_FRONT, WBCAR_TOP_REAR, WBCAR_BOTTOM_FRONT, WBCAR_BOTTOM_REAR, WBTYRE_TOP, WBTYRE_BOTTOM, WBCAR_STEER?, WBTYRE_STEER?]`
+   */
+  hardpoints?: ReadonlyArray<readonly [number, number, number]>;
 }
 
 export interface SuspensionsData {
@@ -352,13 +367,13 @@ export interface AeroData {
   /** Air density (kg/m³) */
   airDensity: number;
   /**
-   * Ride-height aero map (CSP's MAP_CL_RH / MAP_CD_RH / MAP_BALANCE_RH): when present the body's downforce, drag and
+   * 2D ride-height aero map (`MAP_CL_RH` / `MAP_CD_RH` / `MAP_BALANCE_RH`): when present the body's downforce, drag and
    * balance come from it, and `wings` only add their angle-dependent offsets on top
    */
   rhMap?: AeroRideHeightMap;
 }
 
-/** CSP-style aero map: coefficients × area, scaled by 2D ride-height tables and by roll / yaw */
+/** 2D ride-height aero map: coefficients × area, scaled by 2D ride-height tables and by roll / yaw */
 export interface AeroRideHeightMap {
   /** CL·A and CD·A (m²) the tables multiply */
   clA: number;
@@ -459,12 +474,12 @@ export interface TyresModelData {
   /** Pneumatic trail at zero slip (m) */
   pneumaticTrail: number;
   /**
-   * AC's tabulated load sensitivity (DY_CURVE / DX_CURVE): vertical load (N) → peak μ. When set it replaces
+   * Tabulated load sensitivity (DY_CURVE / DX_CURVE): vertical load (N) → peak μ. When set it replaces
    * `Dy0`·(Fz/Fz0)^(lsExp−1) for that axis; Fz0 / lsExp then only matter to code that reads them directly
    */
   dyCurve?: LutPoints;
   dxCurve?: LutPoints;
-  /** AC's BRAKE_DX_MOD: longitudinal μ × (1 + brakeDxMod) while the tyre is braking (negative slip ratio) */
+  /** BRAKE_DX_MOD: longitudinal μ × (1 + brakeDxMod) while the tyre is braking (negative slip ratio) */
   brakeDxMod?: number;
 }
 
@@ -529,7 +544,7 @@ export interface TyresCompoundData {
   pressureData: TyresPressureData;
   camberData: TyresCamberData;
   /**
-   * The rear tyre's own values where it differs from the front (AC tyres.ini [REAR]); everything else is shared.
+   * The rear tyre's own values where it differs from the front (the source's [REAR] tyre data); everything else is shared.
    * A rear `Fz0` given here is used as is, instead of the front's scaled by section width
    */
   rearOverride?: {
@@ -572,10 +587,10 @@ export function compoundData(config: CarPhysicsConfig, compound: PhysicsTyreComp
 // ===========================================================================
 
 // The f12026-car runs on 2026 open-wheel reference specification data,
-// tagged [ref_<file>]: the mod's tables in our units. Where our model differs from AC's, the value is mapped and
+// tagged [ref_<file>]: the mod's tables in our units. Where our model differs from the source's, the value is mapped and
 // tagged [derived] or [est].
 
-/** Driveline efficiency: AC's power.lut is torque at the wheels, so the crank torque is the curve / this */
+/** Driveline efficiency: the source power curve is torque at the wheels, so the crank torque is the curve / this */
 const F12026_DRIVELINE_EFFICIENCY = 0.93;
 
 /** ICE torque at the wheels before the turbo (rpm → Nm) [ref_power.lut] */
@@ -604,7 +619,7 @@ const refBoost = (rpm: number) => Math.min(1.12, 1.12 * (rpm / 3700) ** 1.5);
 /**
  * ICE crank power (kW): ≈389 kW at 9570 rpm, ≈361 kW of it at the wheels [derived]. The 0 rpm row is left out: as
  * power it would be 0 kW, and a stalled engine could never pick up again; below 870 rpm the curve holds its first
- * value instead (AC reads the row as torque, which keeps it turning too).
+ * value instead (the source reads the row as torque, which keeps it turning too).
  */
 const ICE_POWER_CURVE: LutPoints = REF_WHEEL_TORQUE.filter(([rpm]) => rpm > 0).map(([rpm, nm]) => [
   rpm,
@@ -803,7 +818,7 @@ const F12026_CLUTCH: ClutchData = {
 
 /**
  * Electronic diff as the mod's script runs it: locking = preload + setting × input torque, setting (n − 1) / 11 of
- * full lock. Defaults Entry 3/12 on the brakes, Mid 5/12 on and off the power [ref_script.lua, setup.ini]
+ * full lock. Defaults Entry 3/12 on the brakes, Mid 5/12 at the apex, Exit 5/12 on power / >250 km/h [ref_script.lua, setup.ini]
  */
 const F12026_DIFFERENTIAL: DifferentialData = {
   type: 'LSD_Ramp',
@@ -816,6 +831,11 @@ const F12026_DIFFERENTIAL: DifferentialData = {
     coast_ramp_deg: 45,
   },
   coastBraking: 2 / 11,
+  threePhase: true,
+  diffEntryLevel: 3,
+  diffMidLevel: 5,
+  diffExitLevel: 5,
+  hiSpdSwitchKmh: 250,
 };
 
 /** MAX_TORQUE / FRONT_SHARE / ADJUST_STEP; migration +2 % from half pedal (BRAKE_MIGRATION, BMIG_RAMP) [ref_brakes.ini, setup.ini] */
@@ -835,9 +855,9 @@ const damper = (slow_bump: number, fast_bump: number, slow_rebound: number, fast
 const NO_DAMPER = damper(0, 0, 0, 0);
 
 /**
- * Double wishbones with heave springs [ref_suspensions.ini]. Packers (our free travel + rate + progression) are fits
- * to the mod's bump-rubber tables: bs_t1 on the corners (50 kN/m, stiffening from 15 mm in), bs_t3 on the heave
- * elements (≈105 kN/m, then much stiffer) [derived]
+ * Double wishbones with heave springs [spec]. Packers (free travel + rate + progression) are fits
+ * to the progressive bump-rubber tables: 50 kN/m stiffening from 15 mm in on corners, ≈105 kN/m on heave
+ * elements [derived].
  */
 const F12026_SUSPENSIONS: SuspensionsData = {
   front: {
@@ -851,6 +871,16 @@ const F12026_SUSPENSIONS: SuspensionsData = {
     droopTravel: 0.03,
     rollCentreHeight: 0.045,
     arb: 120_000,
+    hardpoints: [
+      [0.7198, 0.1858, 0.0],
+      [0.7198, 0.1828, -0.375],
+      [0.7500, -0.0273, 0.05],
+      [0.7500, -0.0229, -0.40],
+      [0.1749, 0.1925, -0.0356],
+      [0.1350, -0.0225, -0.0083],
+      [0.7198, 0.1883, 0.08],
+      [0.1749, 0.1925, 0.06],
+    ],
   },
   rear: {
     type: 'SuspensionType_DoubleWishbone',
@@ -863,8 +893,18 @@ const F12026_SUSPENSIONS: SuspensionsData = {
     droopTravel: 0.04,
     rollCentreHeight: 0.08,
     arb: 45_000,
+    hardpoints: [
+      [0.6847, 0.1297, 0.42],
+      [0.6847, 0.1418, -0.05],
+      [0.6887, -0.0186, 0.45],
+      [0.6887, -0.0127, -0.05],
+      [0.2483, 0.1925, 0.0],
+      [0.2299, 0.0175, 0.0],
+      [0.6847, 0.1423, -0.125],
+      [0.2483, 0.1925, -0.125],
+    ],
   },
-  // Corner and heave dampers, 0.05 m/s knees; the mod has no roll / pitch elements
+  // Corner and heave dampers, 0.05 m/s knees
   dampers_controller: {
     front: {
       base: damper(5000, 2500, 6000, 3000),
@@ -1084,9 +1124,9 @@ function f1Compound(
       lsExpX: 0.756,
       Fz0: 3460,
       friction_limit_angle: 6.137,
-      // AC derives it at run time; the mod's ABS / TC limits are 0.10 [ref_electronics.ini]
+      // The source derives it at run time; its ABS / TC limits are 0.10 [ref_electronics.ini]
       slip_ratio_limit: 0.1,
-      // AC's COMBINED_FACTOR 2.2 is not this model's cross-axis factor: the friction circle, as on the GT3 [est]
+      // The source's COMBINED_FACTOR 2.2 is not this model's cross-axis factor: the friction circle, as on the GT3 [est]
       combinedFactor: 1,
       new_combined: false,
       fx_shift_SA: 0,

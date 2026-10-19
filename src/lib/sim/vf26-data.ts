@@ -66,6 +66,27 @@ export interface Vf26TyreSpec {
   thermalCurve: LutPoints;
   /** Tread wear per joule of sliding friction energy in the contact patch (1/J) [assumed, per compound] */
   wearPerJ: number;
+  /** Extra longitudinal friction multiplier under braking (`BRAKE_DX_MOD`, default 0.05 = +5 %) */
+  brakeDxMod?: number;
+  /** Optional 16-point non-power-law lateral load-sensitivity LUT (Fz [N] → μ_y) */
+  dyCurve?: LutPoints;
+  /** Optional 16-point non-power-law longitudinal load-sensitivity LUT (Fz [N] → μ_x) */
+  dxCurve?: LutPoints;
+}
+
+/**
+ * Builds a 16-point non-power-law load-sensitivity LUT (Fz [N] → μ) for 2026 F1 front (305/720-18) and
+ * rear (405/720-18) slicks: matches D_REF · (Fz / Fz0)^(lsExp − 1) across nominal loads with realistic
+ * contact-patch shoulder saturation at extreme aero + curb loads (> 6.5 kN).
+ */
+function buildVf26LoadCurve(dRef: number, fz0: number, lsExp: number): LutPoints {
+  const loads = [0, 500, 1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 5000, 6000, 7000, 8000, 9000, 10500];
+  return loads.map((fz) => {
+    const ratio = Math.max(0.18, fz / fz0);
+    const baseMu = dRef * Math.pow(ratio, lsExp - 1);
+    const highLoadSaturation = fz > 6500 ? 1 - 0.01 * Math.pow((fz - 6500) / 3500, 1.3) : 1;
+    return [fz, Number((baseMu * highLoadSaturation).toFixed(4))] as [number, number];
+  });
 }
 
 /**
@@ -110,39 +131,115 @@ const FRONT_COMMON = {
   angularInertia: 1.15,
   relaxationLength: 0.12,
   pressureRefPsi: 23.5,
+  brakeDxMod: 0.05,
 } as const;
 
 const REAR_COMMON = {
   width: 0.405,
   radius: 0.3582,
   rimRadius: 0.2286,
-  lsExpY: 0.90323,
-  lsExpX: 0.93823,
+  // Wider 405/720-18 rear carcass has a flatter load-sensitivity curve than the 305 front so rear grip holds up
+  // under combined aero + longitudinal acceleration load transfer
+  lsExpY: 0.9125,
+  lsExpX: 0.9445,
   fz0: 4080,
   frictionLimitAngleDeg: 6.53704,
   peakSlipRatio: 0.10051,
   falloffSpeed: 2,
-  dcamber0: 1.2,
+  dcamber0: 1.32,
   dcamber1: -11,
   speedSensitivity: 0.002,
   rollingResistance: 0.011,
   angularInertia: 1.45,
   relaxationLength: 0.14,
   pressureRefPsi: 21.5,
+  brakeDxMod: 0.05,
 } as const;
 
 export const VF26_TYRES: Record<TireCompound, { front: Vf26TyreSpec; rear: Vf26TyreSpec }> = {
   soft: {
-    front: { ...FRONT_COMMON, name: 'Slick Soft (S)', rate: 332218, damp: 1367.08, dyRef: 1.85569, dxRef: 1.96326, falloffLevel: 0.81, thermalCurve: TCURVE_SOFT, wearPerJ: WEAR_PER_J.soft },
-    rear: { ...REAR_COMMON, name: 'Slick Soft (S)', rate: 364491, damp: 1499.88, dyRef: 1.93114, dxRef: 2.04199, falloffLevel: 0.81, thermalCurve: TCURVE_SOFT, wearPerJ: WEAR_PER_J.soft },
+    front: {
+      ...FRONT_COMMON,
+      name: 'Slick Soft (S)',
+      rate: 332218,
+      damp: 1367.08,
+      dyRef: 1.85569,
+      dxRef: 1.96326,
+      dyCurve: buildVf26LoadCurve(1.85569, FRONT_COMMON.fz0, FRONT_COMMON.lsExpY),
+      dxCurve: buildVf26LoadCurve(1.96326, FRONT_COMMON.fz0, FRONT_COMMON.lsExpX),
+      falloffLevel: 0.81,
+      thermalCurve: TCURVE_SOFT,
+      wearPerJ: WEAR_PER_J.soft,
+    },
+    rear: {
+      ...REAR_COMMON,
+      name: 'Slick Soft (S)',
+      rate: 364491,
+      damp: 1499.88,
+      dyRef: 1.93114,
+      dxRef: 2.04199,
+      dyCurve: buildVf26LoadCurve(1.93114, REAR_COMMON.fz0, REAR_COMMON.lsExpY),
+      dxCurve: buildVf26LoadCurve(2.04199, REAR_COMMON.fz0, REAR_COMMON.lsExpX),
+      falloffLevel: 0.81,
+      thermalCurve: TCURVE_SOFT,
+      wearPerJ: WEAR_PER_J.soft,
+    },
   },
   medium: {
-    front: { ...FRONT_COMMON, name: 'Slick Medium (M)', rate: 345507, damp: 1421.76, dyRef: 1.8115, dxRef: 1.91707, falloffLevel: 0.8, thermalCurve: TCURVE_MED, wearPerJ: WEAR_PER_J.medium },
-    rear: { ...REAR_COMMON, name: 'Slick Medium (M)', rate: 364491, damp: 1499.88, dyRef: 1.88516, dxRef: 1.99395, falloffLevel: 0.8, thermalCurve: TCURVE_MED, wearPerJ: WEAR_PER_J.medium },
+    front: {
+      ...FRONT_COMMON,
+      name: 'Slick Medium (M)',
+      rate: 345507,
+      damp: 1421.76,
+      dyRef: 1.8115,
+      dxRef: 1.91707,
+      dyCurve: buildVf26LoadCurve(1.8115, FRONT_COMMON.fz0, FRONT_COMMON.lsExpY),
+      dxCurve: buildVf26LoadCurve(1.91707, FRONT_COMMON.fz0, FRONT_COMMON.lsExpX),
+      falloffLevel: 0.8,
+      thermalCurve: TCURVE_MED,
+      wearPerJ: WEAR_PER_J.medium,
+    },
+    rear: {
+      ...REAR_COMMON,
+      name: 'Slick Medium (M)',
+      rate: 364491,
+      damp: 1499.88,
+      dyRef: 1.88516,
+      dxRef: 1.99395,
+      dyCurve: buildVf26LoadCurve(1.88516, REAR_COMMON.fz0, REAR_COMMON.lsExpY),
+      dxCurve: buildVf26LoadCurve(1.99395, REAR_COMMON.fz0, REAR_COMMON.lsExpX),
+      falloffLevel: 0.8,
+      thermalCurve: TCURVE_MED,
+      wearPerJ: WEAR_PER_J.medium,
+    },
   },
   hard: {
-    front: { ...FRONT_COMMON, name: 'Slick Hard (H)', rate: 345507, damp: 1421.76, dyRef: 1.76732, dxRef: 1.87087, falloffLevel: 0.79, thermalCurve: TCURVE_HARD, wearPerJ: WEAR_PER_J.hard },
-    rear: { ...REAR_COMMON, name: 'Slick Hard (H)', rate: 364491, damp: 1499.88, dyRef: 1.83918, dxRef: 1.9459, falloffLevel: 0.79, thermalCurve: TCURVE_HARD, wearPerJ: WEAR_PER_J.hard },
+    front: {
+      ...FRONT_COMMON,
+      name: 'Slick Hard (H)',
+      rate: 345507,
+      damp: 1421.76,
+      dyRef: 1.76732,
+      dxRef: 1.87087,
+      dyCurve: buildVf26LoadCurve(1.76732, FRONT_COMMON.fz0, FRONT_COMMON.lsExpY),
+      dxCurve: buildVf26LoadCurve(1.87087, FRONT_COMMON.fz0, FRONT_COMMON.lsExpX),
+      falloffLevel: 0.79,
+      thermalCurve: TCURVE_HARD,
+      wearPerJ: WEAR_PER_J.hard,
+    },
+    rear: {
+      ...REAR_COMMON,
+      name: 'Slick Hard (H)',
+      rate: 364491,
+      damp: 1499.88,
+      dyRef: 1.83918,
+      dxRef: 1.9459,
+      dyCurve: buildVf26LoadCurve(1.83918, REAR_COMMON.fz0, REAR_COMMON.lsExpY),
+      dxCurve: buildVf26LoadCurve(1.9459, REAR_COMMON.fz0, REAR_COMMON.lsExpX),
+      falloffLevel: 0.79,
+      thermalCurve: TCURVE_HARD,
+      wearPerJ: WEAR_PER_J.hard,
+    },
   },
 };
 
@@ -204,7 +301,7 @@ export interface Vf26AxleSuspension {
   /** Distance from CG to wheel center vertically (BASEY, m) [mod] */
   baseY: number;
   /**
-   * Double-wishbone hardpoints (AC convention: x inboard from wheel centre, y up from wheel centre, z forward)
+   * Double-wishbone hardpoints (x inboard from wheel centre, y up from wheel centre, z forward)
    * [carTopFront, carTopRear, carBottomFront, carBottomRear, tyreTop, tyreBottom] [mod]
    */
   hardpoints: ReadonlyArray<readonly [number, number, number]>;
@@ -300,7 +397,7 @@ export const VF26_CHASSIS = {
 
 // ---------------------------------------------------------------------------
 // Aerodynamics  (`data/cardata.car` section 12 + `data/aero/*.wing|*.curve`)
-// AC aero model: F = ½ρV² · chord·span · CL(AoA) · CL_GAIN · GH_CL(height)
+// Aero model: F = ½ρV² · chord·span · CL(AoA) · CL_GAIN · GH_CL(height)
 // ---------------------------------------------------------------------------
 
 export interface Vf26WingSpec {
@@ -411,12 +508,21 @@ export const VF26_ERS = {
    * full 350 kW coast harvest can't lock the rear wheels in low gears (≈0.3 g at the rear) [assumed]
    */
   coastHarvestMaxAxleTorqueNm: 900,
+  /** Per-gear MGU-K torque clipping ceiling (1st = 33.3 %, 2nd = 66.6 %, 3rd = 90.0 %, 4th–8th = 100 %) [ref_ers_gear.lut] */
+  deployVsGear: [
+    [0, 0],
+    [1, 0.333],
+    [2, 0.666],
+    [3, 0.9],
+    [4, 1],
+    [8, 1],
+  ] as LutPoints,
   /** Per-mode controller LUTs (throttle 0..1, speed km/h, gear, SoC 0..1) [mod: data/kers/<mode>/*.curve] */
   modes: {
     RAC: {
       throttle: [[0.02, 0], [0.2, 0], [1, 0.8]] as LutPoints,
       speed: [[0, 0], [100, 0], [120, 0.75], [160, 1], [260, 1], [270, 1], [300, 0.75], [310, 0.2], [320, 0], [340, 0]] as LutPoints,
-      gear: [[0, 0], [3, 0], [4, 0.75], [5, 1], [6, 1], [7, 0.8], [8, 0.5]] as LutPoints,
+      gear: [[0, 0], [1, 0.333], [2, 0.666], [3, 0.9], [4, 0.95], [5, 1], [6, 1], [7, 0.85], [8, 0.6]] as LutPoints,
       soc: [[0.15, 0], [0.2, 0.5], [0.3, 1], [1, 1]] as LutPoints,
       // The mod's RAC throttle_coast curve multiplies a zero throttle term, so RAC barely
       // harvests on lift-off (that is the LIC mode's job) [mod: race/ers_controller_throttle_coast_rac]
@@ -425,21 +531,21 @@ export const VF26_ERS = {
     BAL: {
       throttle: [[0, 0], [0.02, 0], [1, 2]] as LutPoints,
       speed: [[0, 0], [100, 0], [120, 0.5], [160, 1], [340, 1]] as LutPoints,
-      gear: [[0, 0], [1, 0], [2, 0.2], [3, 0.4], [4, 1], [8, 1]] as LutPoints,
+      gear: [[0, 0], [1, 0.333], [2, 0.666], [3, 0.9], [4, 1], [8, 1]] as LutPoints,
       soc: [[0.4, 1], [1, 1]] as LutPoints,
       coastHarvest: 0.035,
     },
     PSH: {
       throttle: [[0, 0], [0.02, 0], [0.4, -1], [0.6, 1], [1, 1]] as LutPoints,
       speed: [[0, 0], [100, 0], [120, 0.5], [160, 1], [290, 1], [310, 0.5], [320, 0.3], [330, 0.2], [340, 0.1]] as LutPoints,
-      gear: [[0, 0], [3, 0], [4, 0.5], [5, 0.6], [6, 0.8], [7, 0.9], [8, 1]] as LutPoints,
+      gear: [[0, 0], [1, 0.333], [2, 0.666], [3, 0.9], [4, 1], [5, 1], [6, 1], [7, 1], [8, 1]] as LutPoints,
       soc: [[0.4, 1], [1, 1]] as LutPoints,
       coastHarvest: 1,
     },
     CHR: {
       throttle: [[0, 0], [0.02, 0], [0.8, -1.5], [1, -0.7]] as LutPoints,
       speed: [[0, 0], [100, 0], [120, 0.5], [160, 1], [250, 1], [260, 0], [340, 0]] as LutPoints,
-      gear: [[0, 0], [2, 0], [3, 1], [8, 1]] as LutPoints,
+      gear: [[0, 0], [1, 0.333], [2, 0.666], [3, 0.9], [4, 1], [8, 1]] as LutPoints,
       soc: [[0.75, 1], [1, 1]] as LutPoints,
       coastHarvest: 1,
     },
@@ -503,7 +609,7 @@ export const VF26_DRIVETRAIN = {
 // ---------------------------------------------------------------------------
 
 export const VF26_BRAKES = {
-  /** Max brake torque per wheel scaled by share (AC MAX_TORQUE) (Nm) [mod] */
+  /** Max brake torque per wheel scaled by share (MAX_TORQUE) (Nm) [mod] */
   maxTorqueNm: 6500,
   /** Front brake share [setup: 56 %] */
   frontBias: 0.56,
@@ -530,7 +636,7 @@ export const VF26_AI_REFERENCE = {
 
 /**
  * Computes the kinematic roll-centre height (m above ground) of a double-wishbone axle
- * from its AC-style hardpoints (front view instant-centre construction).
+ * from its hardpoints (front view instant-centre construction).
  */
 export function computeRollCentreHeight(axle: Vf26AxleSuspension, tyreRadius: number): number {
   const hp = axle.hardpoints;

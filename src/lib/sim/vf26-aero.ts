@@ -6,14 +6,16 @@ import type { AeroSetupPreset } from '@/types/f1';
 import { Lut } from './lut';
 import { VF26_CHASSIS, VF26_TYRES, VF26_WINGS, type Vf26WingSpec } from './vf26-data';
 
-/** AC-style wing-angle setup offsets (deg) for the three aero packages */
+/** Wing-angle setup offsets (deg) for the three aero packages */
 export const AERO_PACKAGES: Record<AeroSetupPreset, { front: number; rear: number; flap: number }> = {
   low_downforce: { front: -1.5, rear: -3, flap: -4 },
   balanced: { front: 0, rear: 0, flap: 0 },
   high_downforce: { front: 2, rear: 3, flap: 0 },
 };
 
-/** CG height above the road (m): wheel radius + BASEY, averaged over the axles (AC convention) */
+const NO_TRIM = { front: 0, rear: 0 };
+
+/** CG height above the road (m): wheel radius + BASEY, averaged over the axles */
 export const VF26_CG_HEIGHT_M =
   0.5 * (VF26_TYRES.soft.front.radius + VF26_CHASSIS.front.baseY + VF26_TYRES.soft.rear.radius + VF26_CHASSIS.rear.baseY);
 
@@ -38,11 +40,17 @@ export function createWingRuntimes(): WingRuntime[] {
 }
 
 /** Element angle of attack (deg) for an aero package, blended toward the 2026 X-mode angle */
-export function wingAngleDeg(spec: Vf26WingSpec, preset: AeroSetupPreset, xModeBlend: number): number {
+export function wingAngleDeg(
+  spec: Vf26WingSpec,
+  preset: AeroSetupPreset,
+  xModeBlend: number,
+  /** Garage wing clicks on top of the package (deg) */
+  trim: { front: number; rear: number } = NO_TRIM
+): number {
   const pkg = AERO_PACKAGES[preset];
   let offset = 0;
-  if (spec.name.startsWith('FRONT')) offset = pkg.front;
-  else if (spec.name === 'REAR') offset = pkg.rear;
+  if (spec.name.startsWith('FRONT')) offset = pkg.front + trim.front;
+  else if (spec.name === 'REAR') offset = pkg.rear + trim.rear;
   else if (spec.name === 'DRS') offset = pkg.flap;
   const z = spec.angleDeg + offset;
   // Elements that move in X-mode open to a mechanical stop regardless of the setup offset (the

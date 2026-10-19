@@ -146,6 +146,7 @@ export class CarAudioEngine {
   private cameraMode: CameraMode = 'chase';
 
   private isMuted = false;
+  private isPaused = false;
   public isInitialized = false;
 
   // State variables ported from `CarSoundData.cpp`
@@ -175,7 +176,7 @@ export class CarAudioEngine {
     compressor.release.value = 0.12;
 
     const masterGain = ctx.createGain();
-    masterGain.gain.value = 0.36;
+    masterGain.gain.value = this.isMuted || this.isPaused ? 0 : 0.36;
     compressor.connect(masterGain);
     masterGain.connect(ctx.destination);
     this.masterGain = masterGain;
@@ -447,7 +448,7 @@ export class CarAudioEngine {
   public setMuted(muted: boolean): void {
     this.isMuted = muted;
     if (this.ctx && this.masterGain) {
-      this.masterGain.gain.setTargetAtTime(muted ? 0 : 0.36, this.ctx.currentTime, 0.04);
+      this.masterGain.gain.setTargetAtTime(this.isMuted || this.isPaused ? 0 : 0.36, this.ctx.currentTime, 0.04);
     }
   }
 
@@ -455,11 +456,67 @@ export class CarAudioEngine {
     return this.isMuted;
   }
 
+  public setPaused(paused: boolean): void {
+    if (this.isPaused === paused) return;
+    this.isPaused = paused;
+    if (this.ctx && this.masterGain) {
+      this.masterGain.gain.setTargetAtTime(this.isMuted || this.isPaused ? 0 : 0.36, this.ctx.currentTime, 0.025);
+    }
+  }
+
+  public getPaused(): boolean {
+    return this.isPaused;
+  }
+
+  /**
+   * Short cockpit tones over the engine, through the master gain (so mute and pause apply): a rising two-tone
+   * when DRS becomes available, a bright chime when the flap opens, and a short shift beep.
+   */
+  public cue(kind: 'drs_available' | 'drs_open' | 'shift'): void {
+    const ctx = this.ctx;
+    const out = this.masterGain;
+    if (!ctx || !out || this.isMuted || this.isPaused || ctx.state !== 'running') return;
+    const t0 = ctx.currentTime + 0.005;
+    const tone = (freq: number, start: number, dur: number, gain: number, type: OscillatorType = 'sine') => {
+      const osc = ctx.createOscillator();
+      const g = ctx.createGain();
+      osc.type = type;
+      osc.frequency.value = freq;
+      const a = t0 + start;
+      g.gain.setValueAtTime(0, a);
+      g.gain.linearRampToValueAtTime(gain, a + 0.006);
+      g.gain.setTargetAtTime(0, a + dur * 0.55, dur * 0.22);
+      osc.connect(g).connect(out);
+      osc.start(a);
+      osc.stop(a + dur + 0.25);
+      osc.onended = () => {
+        osc.disconnect();
+        g.disconnect();
+      };
+    };
+    switch (kind) {
+      case 'drs_available':
+        // Low-high pair (B5, E6)
+        tone(988, 0, 0.09, 0.42, 'triangle');
+        tone(1319, 0.11, 0.12, 0.42, 'triangle');
+        break;
+      case 'drs_open':
+        // Bell-like: fundamental, a fifth over it and a soft octave
+        tone(1568, 0, 0.42, 0.34);
+        tone(2349, 0, 0.32, 0.16);
+        tone(3136, 0, 0.22, 0.08);
+        break;
+      case 'shift':
+        tone(2600, 0, 0.055, 0.32, 'square');
+        break;
+    }
+  }
+
   /**
    * Per-frame audio synthesis update
    */
   public update(telemetry: TelemetryData, dtSeconds?: number): void {
-    if (!this.isInitialized || !this.ctx || this.isMuted) return;
+    if (!this.isInitialized || !this.ctx || this.isMuted || this.isPaused) return;
     if (this.ctx.state === 'suspended') return;
 
     const now = this.ctx.currentTime;

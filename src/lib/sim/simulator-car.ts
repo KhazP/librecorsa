@@ -2,6 +2,7 @@
  * What the simulator, the AI field and the renderer need from the player's car. Implemented by the VF26
  * model (`F1Physics2026`) and by the f12026-car adapter (`F12026CarSim`), so either can be driven.
  */
+import type { ChassisSetup } from './car-setup';
 import type * as THREE from 'three';
 import type {
   ActiveAeroMode,
@@ -9,6 +10,8 @@ import type {
   CarTelemetry,
   ControlInputs,
   DriverAssistPreset,
+  LiveTunerPatch,
+  LiveTunerState,
   TireCompound,
   TyreSetup,
 } from '@/types/f1';
@@ -65,7 +68,17 @@ export interface SimulatorCar {
   readonly wheelRotationRad: number;
   readonly ersEnergyJ: number;
 
+  /** Identifier of this vehicle model (derived from the car's profile) */
+  readonly vehicleId?: import('@/types/f1').VehicleModelId;
+  /** Racing line family used by this car ('f1' | 'gt3') */
+  readonly racingLineId?: 'f1' | 'gt3';
   aiAutopilot: boolean;
+  /** Fraction of the car's limit speed the autopilot runs at */
+  aiPaceScale?: number;
+  /** Traffic lateral offset bias from the racing line (m) */
+  aiLineBiasM?: number;
+  /** Traffic speed cap (m/s) */
+  aiSpeedCapMs?: number;
   aeroPreset: AeroSetupPreset;
   assistPreset: DriverAssistPreset;
   gamepadAssistEnabled: boolean;
@@ -78,15 +91,37 @@ export interface SimulatorCar {
   /** Advance by a render frame */
   step(dtSeconds: number, inputs: Partial<ControlInputs>): unknown;
   resetToStartGrid(flyingStart?: boolean, gridSlot?: number): void;
+  teleportToDistance(sMeters: number, speedMs?: number, lateral?: number): void;
   teleportToTurn(turnNumber: number): void;
+  /**
+   * Flashback: put the car back at a recorded pose (world x, z and heading, + yaw = atan2(forward.x, forward.z)),
+   * on the ground and rolling at `speedMs`, keeping the tyres' heat and wear. `s` is a hint for the track projection.
+   */
+  restorePose?(pose: { x: number; z: number; yawRad: number; speedMs: number; s?: number }): void;
   getTyreSetup(): TyreSetup;
   setTyreSetup(setup: TyreSetup): void;
   activateBoostOverride(): boolean;
+  /** Instantiate an AI opponent car of the exact same vehicle model & profile */
+  createAiPeerCar?(): SimulatorCar;
+  /** Attach loaded 3D track collider root */
+  attachTrackRoot?(root: THREE.Object3D): void;
+  /** Track limits: 'strict' (any excursion deletes the lap) or 'judged' by race control (`TrackLimitsMonitor`) */
+  trackLimitsMode?: 'strict' | 'judged';
+  /** Judged mode: an excursion is being judged; a lap completed meanwhile does not count */
+  trackLimitsHold?: boolean;
+  /** Race control deleted the running lap */
+  invalidateLap?(): void;
+  /** Garage chassis setup (wing trim, ride height, springs, bars, dampers) as offsets from the car's baseline */
+  getChassisSetup?(): ChassisSetup;
+  applyChassisSetup?(setup: ChassisSetup): void;
+  /** Read or update the live in-race MFD tuner state */
+  getLiveTunerState?(): LiveTunerState;
+  setLiveTuner?(patch: LiveTunerPatch): void;
 
   /** Apply trailing vortex wake / slipstream deficit from cars ahead */
   setAeroWakeState?(wake: import('./aero-wake').AeroWakeState): void;
-  /** Apply RealRoad dynamic track evolution sample under the car */
-  setRealRoadSample?(sample: import('./real-road').RealRoadSectorQuery): void;
+  /** Apply the dynamic track evolution sample under the car */
+  setTrackEvolutionSample?(sample: import('./track-evolution').TrackEvolutionSample): void;
   /**
    * Apply a car-to-car contact resolved by `resolveCarToCarObbCollision` (Three.js world, Y up), as deltas:
    * `posDeltaX/Z` move the car (m), `velDeltaX/Z` change its world horizontal velocity (m/s) and `yawRateDeltaRadS`

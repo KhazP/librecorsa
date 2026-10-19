@@ -63,6 +63,8 @@ export interface ContactPatch5PointResult {
 export interface TyreRuntime {
   spec: Vf26TyreSpec;
   thermal: Lut;
+  dyLut: Lut | null;
+  dxLut: Lut | null;
   tanPeakAngle: number;
   mf: MagicFormulaShape;
   /** Carcass deflection states (m) */
@@ -355,6 +357,8 @@ export function createTyreRuntime(spec: Vf26TyreSpec, initialTempC: number): Tyr
   const t: TyreRuntime = {
     spec,
     thermal: new Lut(spec.thermalCurve),
+    dyLut: spec.dyCurve ? new Lut(spec.dyCurve) : null,
+    dxLut: spec.dxCurve ? new Lut(spec.dxCurve) : null,
     tanPeakAngle: Math.tan(spec.frictionLimitAngleDeg * DEG2RAD),
     mf: fitMagicFormula(spec.falloffLevel),
     deflX: 0,
@@ -390,6 +394,8 @@ export function setTyreSpec(t: TyreRuntime, spec: Vf26TyreSpec): void {
   if (t.spec === spec) return;
   t.spec = spec;
   t.thermal = new Lut(spec.thermalCurve);
+  t.dyLut = spec.dyCurve ? new Lut(spec.dyCurve) : null;
+  t.dxLut = spec.dxCurve ? new Lut(spec.dxCurve) : null;
   t.tanPeakAngle = Math.tan(spec.frictionLimitAngleDeg * DEG2RAD);
   t.mf = fitMagicFormula(spec.falloffLevel);
   updateInflation(t);
@@ -561,10 +567,13 @@ export function computeTyreForces(t: TyreRuntime, inp: TyreForceInput): TyreForc
     s = MAX_NORM_SLIP;
   }
 
-  // Load sensitivity (AC: D = D_REF · (Fz/FZ0)^(LS_EXP − 1))
+  // Load sensitivity (16-point non-power-law DY_CURVE / DX_CURVE when available, else D = D_REF · (Fz/FZ0)^(LS_EXP − 1))
   const loadRatio = Math.max(0.15, inp.fz / spec.fz0);
-  let muY = spec.dyRef * Math.pow(loadRatio, spec.lsExpY - 1);
-  let muX = spec.dxRef * Math.pow(loadRatio, spec.lsExpX - 1);
+  let muY = t.dyLut ? t.dyLut.evaluate(inp.fz) : spec.dyRef * Math.pow(loadRatio, spec.lsExpY - 1);
+  let muX = t.dxLut ? t.dxLut.evaluate(inp.fz) : spec.dxRef * Math.pow(loadRatio, spec.lsExpX - 1);
+  if (sk < 0 && spec.brakeDxMod) {
+    muX *= 1 + spec.brakeDxMod;
+  }
 
   // Sliding-speed sensitivity
   const slideSpeed = Math.hypot(slipVelX, slipVelY) * Math.min(1, Math.max(0, s - 0.6));

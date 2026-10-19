@@ -10,7 +10,7 @@
  *   P4: 2-node physical brake disc thermals (T^4 radiation + speed convection), pad compound mu(T), glazing, & dynamic brake migration
  *   P5: Aerodynamic slipstream tow & dirty-air vortex wake + yaw/roll/wind aero sensitivities
  *   P6: True 3D steering rack FFB solver + 240/480 Hz subframe output & auto-configuration
- *   P7: 3D OBB SAT car-to-car rigid-body collisions, RealRoad dynamic track evolution (player car in every mode),
+ *   P7: 3D OBB SAT car-to-car rigid-body collisions, dynamic track evolution (player car in every mode),
  *       remote-peer aero wake, & EWMA clock-synced P2P netcode
  */
 import assert from 'node:assert/strict';
@@ -44,10 +44,10 @@ import {
   evaluateRollAeroFactor,
 } from '../src/lib/sim/aero-wake';
 import {
-  RealRoadState,
+  TrackEvolutionState,
   resolveCarToCarObbCollision,
   type RigidBodyCollisionCar,
-} from '../src/lib/sim/real-road';
+} from '../src/lib/sim/track-evolution';
 import {
   MultiplayerSyncManager,
   type InterpolatedPeerState,
@@ -55,7 +55,9 @@ import {
 } from '../src/lib/sim/multiplayer-sync';
 import { peerWakeEmitters, TrackEnvironment } from '../src/lib/sim/track-environment';
 import { AiOpponentField } from '../src/lib/sim/ai-opponents';
-import type { RealRoadSectorQuery } from '../src/lib/sim/real-road';
+import { createAmgGt3Sim } from '../src/lib/sim/gt3/AmgGt3Sim';
+import { CarAudioEngine } from '../src/lib/sim/CarAudio';
+import type { TrackEvolutionSample } from '../src/lib/sim/track-evolution';
 import type { AeroWakeState, WakeEmitterCar } from '../src/lib/sim/aero-wake';
 import { autoConfigureWheel, DEFAULT_WHEEL_SETTINGS } from '../src/lib/input/device-input';
 
@@ -276,9 +278,9 @@ check('autoConfigureWheel automatically enables ffbEnabled when a wheel base is 
 });
 
 // -----------------------------------------------------------------------------
-// P7: 3D OBB Collisions, RealRoad Evolution & EWMA Clock-Synced Netcode
+// P7: 3D OBB Collisions, Track Evolution & EWMA Clock-Synced Netcode
 // -----------------------------------------------------------------------------
-console.log('\nP7: 3D OBB Collisions, RealRoad Track Evolution & Clock-Synced Netcode');
+console.log('\nP7: 3D OBB Collisions, Track Evolution & Clock-Synced Netcode');
 
 check('3D OBB SAT collision solver computes off-center yaw rate impulse on rear-quarter contact', () => {
   const carA: RigidBodyCollisionCar = {
@@ -306,8 +308,8 @@ check('3D OBB SAT collision solver computes off-center yaw rate impulse on rear-
   assert.ok(Math.abs(hit.yawDeltaA) > 0.01, `Off-center contact must induce yaw rotation (${hit.yawDeltaA} rad/s)`);
 });
 
-check('RealRoad evolves racing-line rubber grip and off-line marbles as cars lap', () => {
-  const rr = new RealRoadState(track.totalLengthM);
+check('Track evolution builds racing-line rubber grip and off-line marbles as cars lap', () => {
+  const rr = new TrackEvolutionState(track.totalLengthM);
   rr.reset(0.35); // start on a green track
   const initialLine = rr.sample(200, 0, 0);
   for (let pass = 0; pass < 120; pass++) {
@@ -319,16 +321,16 @@ check('RealRoad evolves racing-line rubber grip and off-line marbles as cars lap
   assert.ok(offLineMarbles.marbleLevel > rubberedLine.marbleLevel, `Off-line marbles (${offLineMarbles.marbleLevel}) > racing line (${rubberedLine.marbleLevel})`);
 });
 
-check('Player car gets a RealRoad sample and remote-peer wake with no AI field; an AI field sharing the environment does not double-apply', () => {
+check('Player car gets a track evolution sample and remote-peer wake with no AI field; an AI field sharing the environment does not double-apply', () => {
   const env = new TrackEnvironment(track);
-  env.realRoad.reset(0.35); // green track, so the line visibly rubbers in
+  env.trackEvolution.reset(0.35); // green track, so the line visibly rubbers in
   const player = new F1Physics2026(track);
   player.teleportToDistance(200, 60);
-  const roadSamples: RealRoadSectorQuery[] = [];
+  const roadSamples: TrackEvolutionSample[] = [];
   const wakes: AeroWakeState[] = [];
-  const setRoad = player.setRealRoadSample.bind(player);
+  const setRoad = player.setTrackEvolutionSample.bind(player);
   const setWake = player.setAeroWakeState.bind(player);
-  player.setRealRoadSample = (rr) => {
+  player.setTrackEvolutionSample = (rr) => {
     roadSamples.push(rr);
     setRoad(rr);
   };
@@ -339,7 +341,7 @@ check('Player car gets a RealRoad sample and remote-peer wake with no AI field; 
 
   // Solo practice: no AI field, no peers
   for (let i = 0; i < 30; i++) env.update(1 / 60, [player]);
-  assert.equal(roadSamples.length, 30, `Solo player gets one RealRoad sample per frame (${roadSamples.length})`);
+  assert.equal(roadSamples.length, 30, `Solo player gets one track evolution sample per frame (${roadSamples.length})`);
   assert.ok(roadSamples.every((rr) => Number.isFinite(rr.gripMultiplier) && rr.gripMultiplier > 0.85));
   assert.equal(wakes.at(-1)!.wakeIntensity, 0, 'Clean air with nobody around');
 
@@ -446,7 +448,77 @@ check('Both F1Physics2026 and F12026CarSim populate all P0-P7 telemetry fields a
     assert.ok(t.ffbSubframeSamples && t.ffbSubframeSamples.length >= 4, `${name} ffbSubframeSamples`);
     assert.ok(Number.isFinite(t.ffbTorqueNorm) && Math.abs(t.ffbTorqueNorm!) > 0.005, `${name} ffbTorqueNorm=${t.ffbTorqueNorm}`);
     assert.ok(t.turboBoostBar >= 0, `${name} turboBoostBar=${t.turboBoostBar}`);
+    assert.ok(t.liveTuner !== undefined, `${name} populates liveTuner telemetry for MFD`);
   }
+});
+
+check('Front vs Rear Tire Load-Sensitivity Asymmetry (16-pt DY_CURVE/DX_CURVE), 3-Phase Diff, Per-Gear MGU-K Clipping & Live Tuner MFD API', () => {
+  // 1. Verify VF26 front vs rear 16-pt load-sensitivity asymmetry at heavy load (8 kN)
+  const frontTyre = createTyreRuntime(VF26_TYRES.soft.front, 95);
+  const rearTyre = createTyreRuntime(VF26_TYRES.soft.rear, 95);
+  assert.equal(VF26_TYRES.soft.front.dyCurve?.length, 16, 'VF26 front 16-point DY_CURVE');
+  assert.equal(VF26_TYRES.soft.rear.dyCurve?.length, 16, 'VF26 rear 16-point DY_CURVE');
+  assert.ok(
+    VF26_TYRES.soft.rear.lsExpY > VF26_TYRES.soft.front.lsExpY,
+    `Rear lsExpY (${VF26_TYRES.soft.rear.lsExpY}) > Front lsExpY (${VF26_TYRES.soft.front.lsExpY})`
+  );
+  const fOut = computeTyreForces(frontTyre, { fz: 8000, vx: 60, vy: 5, rimSpeed: 60, camberLeftRad: 0, surfaceGrip: 1, dt: 1 / 240 });
+  const rOut = computeTyreForces(rearTyre, { fz: 8000, vx: 60, vy: 5, rimSpeed: 60, camberLeftRad: 0, surfaceGrip: 1, dt: 1 / 240 });
+  assert.ok(rOut.mu > fOut.mu * 0.96, `Wider rear tire retains strong mu at 8kN load (rear=${rOut.mu.toFixed(3)}, front=${fOut.mu.toFixed(3)})`);
+
+  // 2. Verify Live Tuner MFD round-trip & 3-Phase Diff + Per-Gear MGU-K Clipping on F1Physics2026 & F12026CarSim
+  const vf26 = new F1Physics2026(track);
+  const f126 = new F12026CarSim(track);
+  for (const sim of [vf26, f126]) {
+    sim.setLiveTuner({
+      tcLevel: 9,
+      tc2Level: 7,
+      absLevel: 10,
+      brakeBiasPct: 57.5,
+      brakeMigrationPct: 2.5,
+      diffEntry: 4,
+      diffMid: 3,
+      diffExit: 8,
+      engineMap: 2,
+      ersMode: 'PSH',
+    });
+    const state = sim.getLiveTunerState();
+    assert.equal(state.tcLevel, 9);
+    assert.equal(state.tc2Level, 7);
+    assert.equal(state.absLevel, 10);
+    assert.equal(state.brakeBiasPct, 57.5);
+    assert.equal(state.brakeMigrationPct, 2.5);
+    assert.equal(state.diffEntry, 4);
+    assert.equal(state.diffMid, 3);
+    assert.equal(state.diffExit, 8);
+    assert.equal(state.engineMap, 2);
+    assert.equal(state.ersMode, 'PSH');
+    assert.ok(state.mgukGearClipFraction > 0 && state.mgukGearClipFraction <= 1);
+  }
+});
+
+check('AiOpponentField dynamically instantiates AI peers matching the player vehicle (vf26, f12026-car, amg-gt3) and CarAudioEngine silences when paused', () => {
+  for (const playerCar of [new F1Physics2026(track), new F12026CarSim(track), createAmgGt3Sim(track)]) {
+    const field = new AiOpponentField(track, playerCar);
+    field.startRace(false);
+    field.update(1 / 60);
+    const aiSims = field.aiSims();
+    assert.ok(aiSims.length > 0, `AI field created peers for ${playerCar.vehicleId}`);
+    for (const ai of aiSims) {
+      assert.equal(ai.vehicleId, playerCar.vehicleId, `AI sim vehicleId (${ai.vehicleId}) matches player (${playerCar.vehicleId})`);
+      assert.equal(ai.racingLineId, playerCar.racingLineId, `AI sim racingLineId (${ai.racingLineId}) matches player (${playerCar.racingLineId})`);
+    }
+    for (const peer of field.peers()) {
+      assert.equal(peer.vehicle, playerCar.vehicleId, `Peer render state vehicle (${peer.vehicle}) matches player (${playerCar.vehicleId})`);
+    }
+  }
+
+  const audio = new CarAudioEngine();
+  assert.equal(audio.getPaused(), false);
+  audio.setPaused(true);
+  assert.equal(audio.getPaused(), true);
+  audio.setPaused(false);
+  assert.equal(audio.getPaused(), false);
 });
 
 console.log(`\n=== Summary: ${passed} passed, ${failed} failed ===`);

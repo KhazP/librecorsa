@@ -140,6 +140,14 @@ export interface TurnMetadata {
   angleDeg?: number;
 }
 
+/** One car on the proximity radar */
+export interface RadarBlip {
+  x: number;
+  z: number;
+  yaw: number;
+  color: string;
+}
+
 export interface PeerTelemetrySummary {
   peerId: string;
   driverCode: string;
@@ -161,6 +169,18 @@ export interface RaceStandingEntry {
   name?: string;
   /** Has taken the chequered flag */
   finished?: boolean;
+  /** Time to the car directly ahead in the running order (s); absent for the leader */
+  intervalS?: number;
+  /** Fastest lap / last completed lap (ms) */
+  bestLapMs?: number | null;
+  lastLapMs?: number | null;
+  /** Position on the lap (track arc-length, m) and race distance from the start line, laps included (m) */
+  trackS?: number;
+  raceDistM?: number;
+  /** Tyre compound the car is running */
+  compound?: TireCompound;
+  /** Time penalties served at the flag (s) */
+  penaltyS?: number;
 }
 
 /** One line of the final classification */
@@ -180,6 +200,10 @@ export interface RaceResultEntry {
   bestLapMs: number | null;
   /** Still running when the classification closed */
   dnf: boolean;
+  /** Time penalties added to the race time (s), already included in `finishTimeS` and `gapS` */
+  penaltyS?: number;
+  /** Track-limits warnings received (the player's own) */
+  trackLimitWarnings?: number;
 }
 
 /** A race (AI opponents or multiplayer): start procedure, live order and the result */
@@ -315,11 +339,111 @@ export interface CarTelemetry {
   allTimeTopSpeedKmh: number;
   aiAutopilot: boolean;
   peers?: PeerTelemetrySummary[];
+  /** Cars within 30 m, in the player's frame: x metres to the right, z metres ahead, yaw relative to the player */
+  radar?: RadarBlip[];
   /** Present while racing the AI opponents */
   race?: RaceStatus;
   /** Live engineering telemetry channels, present while driving the f12026-car or GT3 */
   f12026?: F12026Channels;
+  /** Live in-race MFD tuner state (TC1/TC2, 4-ch ABS, Brake Bias/Migration, 3-Phase Diff, ERS/Engine Map) */
+  liveTuner?: LiveTunerState;
+  /** The physics' own verdict on the running lap (judged track limits): false once it has been cut */
+  lapInvalid?: boolean;
+  /** Verdict on the lap that was just completed (set together with `lapCount` / `lastLapTimeMs`) */
+  lastLapValid?: boolean;
+  /** Hot pressure at which each tyre grips best (psi) */
+  tireOptimalPsi?: [number, number, number, number];
+  /** The compound's working window of tread temperature (°C) */
+  tireOptimalTempC?: [number, number];
+  /** Track-limits judging: warnings, penalties and the excursion being judged */
+  trackLimits?: TrackLimitsStatus;
 }
+
+/** Why an excursion counted against the driver */
+export type TrackLimitsReason = "gained" | "corner_cut" | "not_lifted" | "illegal_overtake";
+
+/** The race-control state of the track-limits judging (see `TrackLimitsMonitor`) */
+export interface TrackLimitsStatus {
+  /** Warnings in the current strike cycle (0..strikesPerPenalty − 1) and the cycle length */
+  warnings: number;
+  strikesPerPenalty: number;
+  /** Every strike of the session / race */
+  totalStrikes: number;
+  /** Time penalties awarded (s) */
+  penaltyS: number;
+  /** An excursion in progress or being judged: what the driver must still give back */
+  pending: {
+    /** "off": still off the track; "judging": back on, settling; "give_back": must give the time / lift / position back */
+    stage: "off" | "judging" | "give_back";
+    /** Time gained over the reference lap through the excursion (s); null without a reference */
+    gainS: number | null;
+    /** Race position the driver must cede back to after an off-track overtake; null when no position was gained */
+    giveBackPosition?: number | null;
+    /** Give-back progress 0..1 and the time left to complete it (s) */
+    progress: number;
+    remainingS: number;
+  } | null;
+  /** The last race-control message, for the banner; `atMs` is the wall-clock time it was issued */
+  message: {
+    kind: "warning" | "penalty" | "cleared" | "lap_invalid" | "no_advantage";
+    text: string;
+    detail?: string;
+    atMs: number;
+  } | null;
+}
+
+export type DiffPhase = "ENTRY" | "MID" | "EXIT";
+
+export interface LiveTunerState {
+  /** Traction Control Stage 1: Slip threshold dial (0 = OFF, 1 = min intervention / max slip, 12 = max intervention / min slip) */
+  tcLevel: number;
+  /** Traction Control Stage 2: Torque cut depth / aggressiveness (1..12) */
+  tc2Level: number;
+  /** 4-Channel ABS dial (0 = OFF, 1 = min intervention, 12 = max stability) */
+  absLevel: number;
+  /** Front static brake balance (% front, e.g. 56.0 for F1, 61.0 for GT3) */
+  brakeBiasPct: number;
+  /** Dynamic forward brake migration at full pedal (% ramp, 0.0..5.0) */
+  brakeMigrationPct: number;
+  /** 3-Phase Electronic Differential Entry coast lock (1..12) */
+  diffEntry: number;
+  /** 3-Phase Electronic Differential Mid-corner apex lock (1..12) */
+  diffMid: number;
+  /** 3-Phase Electronic Differential Exit / High-Speed power lock (1..12) */
+  diffExit: number;
+  /** Active differential phase in real time */
+  diffActivePhase: DiffPhase;
+  /** Current LSD locking torque (Nm) */
+  diffLockingTorqueNm: number;
+  /** Engine / throttle torque map (1 = Quali/Max, 2 = Race, 3 = Smooth/Wet, 4 = Lean, 5 = Save) */
+  engineMap: number;
+  /** ERS deployment mode ('PSH' | 'RAC' | 'BAL' | 'LIC' | 'CHR') */
+  ersMode: string;
+  /** Whether the car has hybrid ERS */
+  hasErs: boolean;
+  /** Live TC throttle cut fraction (0 = no cut, 1 = full cut) */
+  tcCutFraction: number;
+  /** Live 4-wheel ABS pressure release fraction [FL, FR, RL, RR] (0 = no cut, 1 = full release) */
+  absCutPerWheel: [number, number, number, number];
+  /** Current MGU-K gear deployment ceiling fraction (0.333 in 1st, 0.666 in 2nd, 0.90 in 3rd, 1.0 in 4th+) */
+  mgukGearClipFraction: number;
+}
+
+export type LiveTunerPatch = Partial<
+  Pick<
+    LiveTunerState,
+    | "tcLevel"
+    | "tc2Level"
+    | "absLevel"
+    | "brakeBiasPct"
+    | "brakeMigrationPct"
+    | "diffEntry"
+    | "diffMid"
+    | "diffExit"
+    | "engineMap"
+    | "ersMode"
+  >
+>;
 
 /** Player car: the VF26 model (F1Physics2026), the 6-DOF f12026-car, or the Mercedes-AMG GT3 on the same vehicle model */
 export type VehicleModelId = "vf26" | "f12026-car" | "amg-gt3";
@@ -372,3 +496,4 @@ export interface F12026Channels {
 }
 
 export type TelemetryData = CarTelemetry;
+

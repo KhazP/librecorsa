@@ -60,6 +60,7 @@ export const AMG_GT3_SIM_PROFILE: CarSimProfile = {
   tcTarget: { pro: 0, semi_pro: E.tcDefault, assisted: E.tcLevels[0] },
   absTarget: { pro: 0, semi_pro: E.absDefault, assisted: E.absLevels[1] },
   tcMinSpeedMs: E.tcMinSpeedKmh / 3.6,
+  electronics: E,
   // Splitter goes 0–2° (default 2), rear wing 0–14° (default 6)
   aeroPackagesDeg: { low_downforce: [-2, -3], balanced: [0, 0], high_downforce: [0, 3] },
   padLateralMu: 1.5,

@@ -100,6 +100,7 @@ export function evaluateBrakePadMuFactor(
  * @param ambientC Ambient air temperature (°C)
  * @param dt Integration step (s)
  * @param compound Brake disc/pad material ('carbon-ceramic' | 'endurance-steel')
+ * @param coolingScale Brake duct opening: forced-air convection relative to the baseline duct (1)
  */
 export function stepBrakeDiscThermal(
   state: BrakeDiscState,
@@ -108,7 +109,8 @@ export function stepBrakeDiscThermal(
   carSpeedMs: number,
   ambientC: number,
   dt: number,
-  compound: BrakeCompoundKind = 'carbon-ceramic'
+  compound: BrakeCompoundKind = 'carbon-ceramic',
+  coolingScale = 1
 ): void {
   const isCarbon = compound === 'carbon-ceramic';
   // Heat capacities (J/K): carbon friction ring + pad face (~1150 J/K) and core vanes/bell (~1450 J/K)
@@ -121,8 +123,8 @@ export function stepBrakeDiscThermal(
 
   // Forced-air cooling duct convection (W/K). Carbon: ≈120 W/K in all at 300 km/h, a ≈22 s time constant with the
   // 2600 J/K of the two nodes, so a disc leaves a 15 s straight at ≈300 °C instead of going stone cold
-  const hSurf = isCarbon ? 6.0 + 0.55 * v : 10.0 + 1.35 * v;
-  const hCore = isCarbon ? 8.0 + 0.7 * v : 14.0 + 1.65 * v;
+  const hSurf = (isCarbon ? 6.0 + 0.55 * v : 10.0 + 1.35 * v) * coolingScale;
+  const hCore = (isCarbon ? 8.0 + 0.7 * v : 14.0 + 1.65 * v) * coolingScale;
 
   // Stefan-Boltzmann T^4 thermal radiation from glowing rotor faces
   const emissivity = isCarbon ? 0.88 : 0.78;
@@ -163,7 +165,7 @@ export function stepBrakeDiscThermal(
  * linearly forward to `base + migrationRange` at full pedal, so the bias comes back rearward as the driver releases
  * into the corner. The data do not label the sign; forward-at-high-pressure is the F1 convention. Continuous in the
  * pedal (no step as it leaves zero) and never rearward of the set bias. With `rampStart` the shift only begins past
- * that share of the travel (the RSS cars' BMIG_RAMP): base + (pedal - ramp) / (1 - ramp) x range above it.
+ * that share of the travel (`BMIG_RAMP`): base + (pedal - ramp) / (1 - ramp) x range above it.
  */
 export function computeDynamicBrakeMigration(
   baseFrontBias: number,

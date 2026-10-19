@@ -170,6 +170,16 @@ const SUSPENSIONS: SuspensionsData = {
     droopTravel: 0.06,
     rollCentreHeight: 0.05,
     arb: 80_000,
+    hardpoints: [
+      [0.440, 0.098, 0.197],
+      [0.440, 0.072, -0.145],
+      [0.487, -0.122, 0.215],
+      [0.487, -0.155, -0.155],
+      [0.128, 0.135, -0.025],
+      [0.098, -0.128, 0.017],
+      [0.447, -0.120, 0.160],
+      [0.110, -0.112, 0.140],
+    ],
   },
   rear: {
     type: 'SuspensionType_DoubleWishbone',
@@ -182,6 +192,16 @@ const SUSPENSIONS: SuspensionsData = {
     droopTravel: 0.055,
     rollCentreHeight: 0.065,
     arb: 38_650,
+    hardpoints: [
+      [0.440, 0.092, 0.251],
+      [0.440, 0.092, -0.123],
+      [0.520, -0.125, 0.160],
+      [0.520, -0.112, -0.221],
+      [0.128, 0.148, 0.052],
+      [0.110, -0.112, -0.055],
+      [0.505, -0.109, -0.250],
+      [0.110, -0.100, -0.165],
+    ],
   },
   dampers_controller: {
     front: {
@@ -203,21 +223,20 @@ const SUSPENSIONS: SuspensionsData = {
   },
 };
 
-/** The mod's wings all use chord 1 × span 2.1221 m as the reference area [mod aero.ini] */
+/** Reference wing area: chord 1 × span 2.1221 m [spec] */
 const WING_AREA = 2.1221;
 const FRONT_TARGET_HEIGHT = 0.055;
 const REAR_TARGET_HEIGHT = 0.07;
 const WHEELBASE = 2.65;
 /** Static rake (deg) [derived] */
 const STATIC_RAKE_DEG = (Math.asin((REAR_TARGET_HEIGHT - FRONT_TARGET_HEIGHT) / WHEELBASE) * 180) / Math.PI;
-/** The mod's diffuser sits at 2° + pitch; this model feeds the floor its rake, so its angle axis is shifted [derived] */
+/** Diffuser sits at 2° + pitch; this model feeds the floor its rake, so its angle axis is shifted [derived] */
 const DIFFUSER_ANGLE_DEG = 2;
 const toRake = (lut: LutPoints): LutPoints => lut.map(([aoa, v]) => [aoa - DIFFUSER_ANGLE_DEG + STATIC_RAKE_DEG, v]);
 
 /**
- * Splitter, diffuser and rear wing with the mod's angle-of-attack and ground-height maps; the body's drag is the
- * mod's body element at 0° (it has no lift). Left out: the mod's yaw and damage terms, and its below-60 km/h
- * diffuser controller. [mod aero.ini, wing_*.lut, height_*.lut]
+ * Splitter, diffuser and rear wing with angle-of-attack and ground-height maps; the body's drag is the
+ * body element at 0° (it has no lift). [spec]
  */
 const AERO: AeroData = {
   front_lift: 0,
@@ -376,10 +395,25 @@ const GT3_FRONT: TyreGeometry = { width: 0.315, radius: 0.34, rimRadius: 0.2413,
 const GT3_REAR: TyreGeometry = { width: 0.325, radius: 0.3525, rimRadius: 0.2413, verticalRateScale: 282_710 / 280_470 };
 
 /**
- * GT3 slick [spec]: the front's values, the rear's own Fz0, load sensitivity, peak
- * slip angle, relaxation length and camber thrust in `rearOverride` ([REAR]). Soft / medium / hard keep the grip
- * steps (DY_REF = DX_REF 1.58 / 1.56 / 1.54) scaled ×1.165 to reference GT3 grip [motec], and three temperature
- * curves.
+ * Builds a 16-point non-power-law load-sensitivity LUT (Fz [N] → μ) for the GT3 315/680-18 front and 325/705-18 rear
+ * slicks: follows D_REF · (Fz / Fz0)^(lsExp − 1) through the nominal working range with realistic contact-patch
+ * shoulder saturation above 7 kN under heavy aero + braking/kerb compression.
+ */
+function buildGt3LoadCurve(dRef: number, fz0: number, lsExp: number): LutPoints {
+  const loads = [0, 500, 1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 5000, 6000, 7500, 9000, 11000, 14000];
+  return loads.map((fz) => {
+    const ratio = Math.max(0.18, fz / fz0);
+    const baseMu = dRef * Math.pow(ratio, lsExp - 1);
+    const highLoadSaturation = fz > 6500 ? 1 - 0.012 * Math.pow((fz - 6500) / 4000, 1.35) : 1;
+    return [fz, Number((baseMu * highLoadSaturation).toFixed(4))] as [number, number];
+  });
+}
+
+/**
+ * GT3 slick [spec]: the front's values, the rear's own Fz0, load sensitivity, 16-point DY/DX curves, peak
+ * slip angle, relaxation length, pressure-spring rate, and camber thrust in `rearOverride` ([REAR]). Soft / medium / hard
+ * keep the grip steps (DY_REF = DX_REF 1.58 / 1.56 / 1.54) scaled ×1.165 to reference GT3 grip [motec], and three
+ * temperature curves.
  */
 function gt3Compound(
   tyre_compound: PhysicsTyreCompound,
@@ -390,6 +424,8 @@ function gt3Compound(
   thermalCurve: LutPoints,
   window: [number, number]
 ): TyresCompoundData {
+  // Wider 325/705-18 rear slick has ~1.2 % higher peak reference μ at Fz0 = 3910 N and flatter load sensitivity
+  const rearGripScale = Number((gripScale * 1.012).toFixed(4));
   return {
     name,
     shortName,
@@ -397,13 +433,14 @@ function gt3Compound(
     front: GT3_FRONT,
     rear: GT3_REAR,
     modelData: {
-      // D_REF of the load-sensitivity law μ = D_REF·(Fz/FZ0)^(LS_EXP−1), which is what VehiclePhysics evaluates:
-      // DY_REF × 1.165, so sustained lateral and braking g match reference GT3 telemetry by speed within ~±9 % [motec]
+      // D_REF of the load-sensitivity law μ = D_REF·(Fz/FZ0)^(LS_EXP−1), plus 16-point tabulated DY_CURVE / DX_CURVE
       Dy0: gripScale,
       Dx0: gripScale,
       lsExpY: 0.7917,
       lsExpX: 0.8017,
       Fz0: 3787,
+      dyCurve: buildGt3LoadCurve(gripScale, 3787, 0.7917),
+      dxCurve: buildGt3LoadCurve(gripScale, 3787, 0.8017),
       friction_limit_angle: 6.12,
       // Default TC (0.10) and ABS (0.09) limits sit around it [est]
       slip_ratio_limit: 0.1,
@@ -462,17 +499,38 @@ function gt3Compound(
       dcamber0_x: 0,
       dcamber1_x: -6,
     },
-    // The 325 rear [spec REAR / REAR_1 / REAR_2, the same for every compound]
+    // The 325/705-18 rear [spec REAR / REAR_1 / REAR_2, flatter load-sensitivity curve + 16-pt DY/DX tables + rear spring gain]
     rearOverride: {
       modelData: {
+        Dy0: rearGripScale,
+        Dx0: rearGripScale,
         Fz0: 3910,
         lsExpY: 0.8044,
         lsExpX: 0.8144,
+        dyCurve: buildGt3LoadCurve(rearGripScale, 3910, 0.8044),
+        dxCurve: buildGt3LoadCurve(rearGripScale, 3910, 0.8144),
         friction_limit_angle: 6.06,
         relaxationLengthX: 0.10173,
         relaxationLengthY: 0.10173,
       },
-      camberData: { camberGain: 0.149 },
+      pressureData: {
+        optimalPsi: 26,
+        // Rear RATE 282 710 N/m at 16 psi + 11 304 N/m per psi [spec REAR PRESSURE_SPRING_GAIN]
+        pressureSpringCurve: [
+          [16, 282_710],
+          [20, 327_926],
+          [26, 395_750],
+          [30, 440_966],
+          [34, 486_182],
+        ],
+        pressureGripSensitivity: 1.0,
+        coldRefC: 60,
+      },
+      camberData: {
+        camberGain: 0.149,
+        dcamber0: 1.72,
+        dcamber1: -13,
+      },
     },
   };
 }

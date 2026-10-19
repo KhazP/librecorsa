@@ -1,8 +1,8 @@
 /**
- * Live 3D AC1-Style Double Wishbone + Steering Tie-Rod Kinematics Solver & Chassis Torsion
+ * Live 3D Double Wishbone + Steering Tie-Rod Kinematics Solver & Chassis Torsion
  * (`src/lib/sim/suspension-kinematics.ts`)
  *
- * Implements the 3D linkage geometry of Assetto Corsa (`SuspensionDW` in `acs.pdb`) and CSP (`COSMIC`):
+ * Implements 3D double-wishbone and pushrod/pullrod linkage geometry:
  * - Solves 3D upper wishbone (`WBCAR_TOP_FRONT/REAR`, `WBTYRE_TOP`) and lower wishbone
  *   (`WBCAR_BOTTOM_FRONT/REAR`, `WBTYRE_BOTTOM`) ball-joint positions as a function of vertical wheel
  *   travel `zBumpM` using Rodrigues' 3D axis rotation and rigid upright distance constraints.
@@ -87,7 +87,7 @@ export interface AxleKinematicsState {
 
 const DEG2RAD = Math.PI / 180;
 
-/** Raw AC-style hardpoints [carTopFront, carTopRear, carBottomFront, carBottomRear, tyreTop, tyreBottom] */
+/** Raw hardpoints [carTopFront, carTopRear, carBottomFront, carBottomRear, tyreTop, tyreBottom] */
 type RawHardpoints = ReadonlyArray<readonly [number, number, number]>;
 
 /** F1 (VF26 mod) front / rear double wishbones, used when no raw hardpoints are given */
@@ -108,24 +108,30 @@ const F1_REAR_HARDPOINTS: RawHardpoints = [
   [0.09259, 0.0129, 0.052143],
 ];
 /**
- * GT3 (road-car-derived uprights on 18" rims) [est]: a tall upright and shorter upper arms for negative camber gain
- * in bump (the GT3 config's `camberGainKinematic` is −12 / −10 deg/m), ≈7° KPI and ≈8° caster at the front.
+ * GT3 (Mercedes-AMG GT3 Evo 18" upright & double-wishbone geometry from unpacked reference data, expressed in
+ * [x_inboard, y_up, z_fwd] from wheel center):
+ * - Front: KPI ≈ 4.7°, Caster ≈ 11.5°, shorter/inclined upper wishbone for negative camber gain in bump
+ * - Rear: Double-wishbone + toe link with anti-squat geometry
  */
 const GT3_FRONT_HARDPOINTS: RawHardpoints = [
-  [0.6, 0.179, 0.14],
-  [0.58, 0.169, -0.16],
-  [0.7, -0.105, 0.2],
-  [0.68, -0.115, -0.22],
-  [0.125, 0.2, -0.025],
-  [0.085, -0.115, 0.02],
+  [0.440, 0.098, 0.197],
+  [0.440, 0.072, -0.145],
+  [0.487, -0.122, 0.215],
+  [0.487, -0.155, -0.155],
+  [0.128, 0.135, -0.025],
+  [0.098, -0.128, 0.017],
+  [0.447, -0.120, 0.160],
+  [0.110, -0.112, 0.140],
 ];
 const GT3_REAR_HARDPOINTS: RawHardpoints = [
-  [0.6, 0.187, 0.15],
-  [0.6, 0.182, -0.15],
-  [0.72, -0.1, 0.2],
-  [0.72, -0.105, -0.2],
-  [0.12, 0.205, -0.005],
-  [0.1, -0.11, 0.005],
+  [0.440, 0.092, 0.251],
+  [0.440, 0.092, -0.123],
+  [0.520, -0.125, 0.160],
+  [0.520, -0.112, -0.221],
+  [0.128, 0.148, 0.052],
+  [0.110, -0.112, -0.055],
+  [0.505, -0.109, -0.250],
+  [0.110, -0.100, -0.165],
 ];
 
 export interface DoubleWishboneOptions {
@@ -139,9 +145,9 @@ export interface DoubleWishboneOptions {
 }
 
 /**
- * Builds a complete `DoubleWishboneHardpoints` descriptor from the 6-tuple AC hardpoints array
- * in `VF26_CHASSIS.front.hardpoints` or `VF26_CHASSIS.rear.hardpoints` (or synthesizes default F1/GT3
- * double-wishbone geometry when raw hardpoints are omitted).
+ * Builds a complete `DoubleWishboneHardpoints` descriptor from the 6-tuple (or 8-tuple with steer link) hardpoints
+ * array in `VF26_CHASSIS.front.hardpoints` / `F12026_SUSPENSIONS` / `AMG_GT3_SUSPENSIONS` (or synthesizes default
+ * F1/GT3 double-wishbone geometry when raw hardpoints are omitted).
  */
 export function buildDoubleWishboneHardpoints(
   rawHardpoints?: RawHardpoints,
@@ -161,14 +167,19 @@ export function buildDoubleWishboneHardpoints(
           ? F1_FRONT_HARDPOINTS
           : F1_REAR_HARDPOINTS;
 
-  // Steering tie-rod / rear toe-link attachments matched to the lower wishbone plane
-  // so bump-steer at static ride height is zero and slight toe-out in bump stabilizes the axle
-  const carSteer: Vec3Tuple = isFront
-    ? [0.666, 0.014, -0.082]
-    : [0.718, 0.008, -0.075];
-  const tyreSteer: Vec3Tuple = isFront
-    ? [0.096, -0.009, -0.074]
-    : [0.104, 0.014, -0.072];
+  // Steering tie-rod / rear toe-link attachments (use unpacked points [6],[7] when provided)
+  const carSteer: Vec3Tuple =
+    hp.length >= 8
+      ? hp[6]
+      : isFront
+        ? [0.666, 0.014, -0.082]
+        : [0.718, 0.008, -0.075];
+  const tyreSteer: Vec3Tuple =
+    hp.length >= 8
+      ? hp[7]
+      : isFront
+        ? [0.096, -0.009, -0.074]
+        : [0.104, 0.014, -0.072];
 
   return {
     carTopFront: hp[0],

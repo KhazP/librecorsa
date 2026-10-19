@@ -1095,7 +1095,7 @@ async function runVerification() {
       sim.attachTrackRoot(trackRoot);
       return vf26CrashCar(sim, crashTrack);
     });
-    checkBarrierCrashes(check, 'VF26 (track-data walls)', crashTrack, walls, () => vf26CrashCar(new F1Physics2026(crashTrack), crashTrack), 0.5);
+    checkBarrierCrashes(check, 'VF26 (track-data walls)', crashTrack, walls, () => vf26CrashCar(new F1Physics2026(crashTrack), crashTrack), 0.55);
   }
 
   if (failures.length > 0) {
