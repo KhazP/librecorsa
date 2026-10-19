@@ -1233,7 +1233,7 @@ export function createF1Car2026(
     intakeMouth.position.set(side * 0.5, 0.39, 0.57);
     chassisGroup.add(intakeMouth);
 
-    // Sidepod Shoulder Accent Flash (White/Yellow Ferrari SF-26 beltline)
+    // Sidepod Shoulder Accent Flash (White/Yellow beltline)
     const sideFlash = new THREE.Mesh(
       new THREE.BoxGeometry(0.03, 0.055, 1.32),
       secondaryPaintMat
@@ -1286,7 +1286,7 @@ export function createF1Car2026(
   tCamLed.position.set(0, 0.928, -0.19);
   chassisGroup.add(tCamLed);
 
-  // Dorsal Shark Fin with Ferrari White/Yellow Top Edge Trim
+  // Dorsal Shark Fin with White/Yellow Top Edge Trim
   const sharkFinShape = new THREE.Shape();
   sharkFinShape.moveTo(-0.28, 0.79);
   sharkFinShape.lineTo(-1.48, 0.65);

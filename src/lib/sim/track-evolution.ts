@@ -1,9 +1,9 @@
 /**
- * `RealRoad` / `LiveTrack` Dynamic Track Surface Evolution & 3D OBB Car-to-Car Rigid-Body Collision Solver
- * (`src/lib/sim/real-road.ts`)
+ * Dynamic Track Surface Evolution & 3D OBB Car-to-Car Rigid-Body Collision Solver
+ * (`src/lib/sim/track-evolution.ts`)
  *
  * Implements:
- * 1. `RealRoadState`: Per-sector dynamic track evolution (rFactor 2 `RealRoad` / PMR `LiveTrack` style):
+ * 1. `TrackEvolutionState`: Per-sector dynamic track evolution:
  *    - Racing-line rubber buildup (`racingLineRubber`) from tire shear work, increasing on-line grip.
  *    - Off-line rubber marble shedding (`offLineMarbles`) from tire wear in corners, reducing off-line
  *      grip and feeding `ac-tyre.ts` `stepDirtyLevel` marble pickup when driving off-line.
@@ -12,15 +12,15 @@
  *    collision detector and rigid-body linear + angular impulse (r × J) solver.
  */
 
-export const REAL_ROAD_SECTORS = 64;
+export const TRACK_EVOLUTION_SECTORS = 64;
 const BASELINE_RUBBER = 0.65;
 /** Base track surface temperature (°C): the cars' own default (F1Physics2026 / VehiclePhysics), so the field's samples
  * don't cool the track */
-export const REAL_ROAD_BASE_TRACK_C = 41;
+export const TRACK_EVOLUTION_BASE_C = 41;
 /** Rubber laid per second by a car on the line, before the slip-energy part (the base rate of a 60 Hz caller) */
 const RUBBER_BASE_RATE_PER_S = 9.0e-4;
 
-export interface RealRoadSectorQuery {
+export interface TrackEvolutionSample {
   /** Surface grip multiplier from rubber buildup vs off-line marbles (0.91..1.025) */
   gripMultiplier: number;
   /** Off-line marble density at the queried lateral offset (0..1) */
@@ -33,22 +33,22 @@ export interface RealRoadSectorQuery {
   trackSurfaceTempC?: number;
 }
 
-export const DEFAULT_REAL_ROAD_QUERY: RealRoadSectorQuery = {
+export const DEFAULT_TRACK_EVOLUTION_SAMPLE: TrackEvolutionSample = {
   gripMultiplier: 1,
   marbleLevel: 0,
   rubberLevel: BASELINE_RUBBER,
-  trackTempC: REAL_ROAD_BASE_TRACK_C,
-  trackSurfaceTempC: REAL_ROAD_BASE_TRACK_C,
+  trackTempC: TRACK_EVOLUTION_BASE_C,
+  trackSurfaceTempC: TRACK_EVOLUTION_BASE_C,
 };
 
-export class RealRoadState {
+export class TrackEvolutionState {
   public readonly trackLengthM: number;
-  public readonly racingLineRubber = new Float64Array(REAL_ROAD_SECTORS);
-  public readonly offLineMarbles = new Float64Array(REAL_ROAD_SECTORS);
-  public readonly sectorTempDeltaC = new Float64Array(REAL_ROAD_SECTORS);
+  public readonly racingLineRubber = new Float64Array(TRACK_EVOLUTION_SECTORS);
+  public readonly offLineMarbles = new Float64Array(TRACK_EVOLUTION_SECTORS);
+  public readonly sectorTempDeltaC = new Float64Array(TRACK_EVOLUTION_SECTORS);
   public baseTrackTempC: number;
 
-  constructor(trackLengthM: number, baseTrackTempC = REAL_ROAD_BASE_TRACK_C) {
+  constructor(trackLengthM: number, baseTrackTempC = TRACK_EVOLUTION_BASE_C) {
     this.trackLengthM = Math.max(100, trackLengthM);
     this.baseTrackTempC = baseTrackTempC;
     this.reset();
@@ -62,7 +62,7 @@ export class RealRoadState {
 
   private sectorIndex(sMeters: number): number {
     const u = (((sMeters / this.trackLengthM) % 1) + 1) % 1;
-    return Math.min(REAL_ROAD_SECTORS - 1, Math.floor(u * REAL_ROAD_SECTORS));
+    return Math.min(TRACK_EVOLUTION_SECTORS - 1, Math.floor(u * TRACK_EVOLUTION_SECTORS));
   }
 
   /**
@@ -105,12 +105,12 @@ export class RealRoadState {
   }
 
   /**
-   * Evaluates the RealRoad surface grip multiplier, marble level, and local track temperature at `(sMeters, lateralOffsetM)`.
+   * Evaluates the surface grip multiplier, marble level, and local track temperature at `(sMeters, lateralOffsetM)`.
    * At baseline (`racingLineRubber = 0.65`, `offLineMarbles = 0`), `gripMultiplier` is `1.00`.
    */
-  public sample(sMeters: number, lateralOffsetM: number, racingLineLatM: number): RealRoadSectorQuery {
+  public sample(sMeters: number, lateralOffsetM: number, racingLineLatM: number): TrackEvolutionSample {
     if (![sMeters, lateralOffsetM, racingLineLatM].every(Number.isFinite)) {
-      return { ...DEFAULT_REAL_ROAD_QUERY, trackTempC: this.baseTrackTempC, trackSurfaceTempC: this.baseTrackTempC };
+      return { ...DEFAULT_TRACK_EVOLUTION_SAMPLE, trackTempC: this.baseTrackTempC, trackSurfaceTempC: this.baseTrackTempC };
     }
     const idx = this.sectorIndex(sMeters);
     const rubber = this.racingLineRubber[idx];

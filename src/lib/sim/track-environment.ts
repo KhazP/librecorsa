@@ -1,5 +1,5 @@
 /**
- * The track as every car on it shares it: RealRoad rubber / marbles / surface temperature (`real-road.ts`) and the
+ * The track as every car on it shares it: rubber / marbles / surface temperature (`track-evolution.ts`) and the
  * slipstream / dirty-air wake each car sheds (`aero-wake.ts`).
  *
  * One instance per circuit, owned by the main sim loop so the player's car gets the evolving road and the wake of
@@ -8,7 +8,7 @@
  */
 import type { BuiltTrackData } from '@/lib/track-data';
 import { evaluateAeroWakeDeficit, type WakeEmitterCar } from '@/lib/sim/aero-wake';
-import { RealRoadState } from '@/lib/sim/real-road';
+import { TrackEvolutionState } from '@/lib/sim/track-evolution';
 import { aiLineOffsetM } from '@/lib/sim/speed-profile';
 import type { InterpolatedPeerState } from '@/lib/sim/multiplayer-sync';
 import type { SimulatorCar } from '@/lib/sim/simulator-car';
@@ -17,17 +17,17 @@ import type { SimulatorCar } from '@/lib/sim/simulator-car';
 const MIN_ROLLING_MS = 1;
 
 export class TrackEnvironment {
-  public readonly realRoad: RealRoadState;
+  public readonly trackEvolution: TrackEvolutionState;
   /** Every car's state before any is updated, simulated cars first (reused: no per-frame allocation) */
   private readonly emitters: WakeEmitterCar[] = [];
 
   constructor(private readonly track: BuiltTrackData) {
-    this.realRoad = new RealRoadState(track.totalLengthM);
+    this.trackEvolution = new TrackEvolutionState(track.totalLengthM);
   }
 
   /** A fresh session: back to the baseline rubber, no marbles */
   public reset(): void {
-    this.realRoad.reset();
+    this.trackEvolution.reset();
   }
 
   /**
@@ -65,9 +65,9 @@ export class TrackEnvironment {
       }
       // Only a rolling car lays rubber (one held on the grid behind the lights does not)
       if (Math.abs(sim.vxMs) > MIN_ROLLING_MS) {
-        this.realRoad.depositCarPass(sim.sMeters, sim.lateralOffsetM, racingLineLatM, slipPowerW, dt);
+        this.trackEvolution.depositCarPass(sim.sMeters, sim.lateralOffsetM, racingLineLatM, slipPowerW, dt);
       }
-      sim.setRealRoadSample?.(this.realRoad.sample(sim.sMeters, sim.lateralOffsetM, racingLineLatM));
+      sim.setTrackEvolutionSample?.(this.trackEvolution.sample(sim.sMeters, sim.lateralOffsetM, racingLineLatM));
 
       sim.setAeroWakeState?.(
         evaluateAeroWakeDeficit(sim.sMeters, sim.lateralOffsetM, sim.vxMs, emitters, L, sample.curvature, i)

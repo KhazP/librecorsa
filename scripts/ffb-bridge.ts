@@ -3,7 +3,7 @@
  *
  * A browser cannot play DirectInput force feedback, so the sim streams its steering torque here over a localhost
  * WebSocket and this script pipes it to FfbHelper.exe (scripts/ffb-bridge/FfbHelper.cs), a small DirectInput program
- * that plays a constant-force effect on the wheel, the mechanism native sims such as Assetto Corsa use. The helper
+ * that plays a constant-force effect on the wheel, the mechanism native PC sims use. The helper
  * is compiled on first run with the C# compiler that ships with Windows (.NET Framework 4.x): nothing is downloaded.
  *
  *   npm run ffb                     drive the first force-feedback wheel

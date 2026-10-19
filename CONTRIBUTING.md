@@ -47,8 +47,8 @@ racing-line optimiser.
 ## Cars, tracks and sounds
 
 LibreCorsa can only ship assets it may redistribute: an open license (CC BY, CC BY-SA, CC0) or written
-permission from the creator. Assets taken from other games (Assetto Corsa, ACC, iRacing, F1 games…) need the
-original creator's permission. Credit every asset in [CREDITS.md](CREDITS.md) with its author, link and
+permission from the creator. Assets taken from other games need the original
+creator's permission. Credit every asset in [CREDITS.md](CREDITS.md) with its author, link and
 license.
 
 - **Tracks** are converted with `scripts/tracks/build_track.py`, then compressed with

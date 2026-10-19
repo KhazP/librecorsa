@@ -15,7 +15,7 @@
 import * as THREE from 'three';
 import { ActiveAeroMode, ERSMode } from '@/types/f1';
 import { BuiltTrackData } from '@/lib/track-data';
-import { AssettoCorsaGymObservation } from './track-occupancy';
+import { RaceGymObservation } from './track-occupancy';
 import { sampleProfile, type SpeedProfile, type SpeedProfileCarModel } from './speed-profile';
 
 export interface AiControlOutput {
@@ -62,7 +62,7 @@ export class RacingLineDriver {
   }
 
   evaluate(
-    obs: AssettoCorsaGymObservation,
+    obs: RaceGymObservation,
     track: BuiltTrackData,
     currentS: number,
     profile: SpeedProfile,

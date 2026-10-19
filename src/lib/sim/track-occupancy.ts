@@ -18,7 +18,7 @@ export const CURV_LOOK_AHEAD_VECTOR_SIZE = 12; // 12 lookahead samples
 /**
  * Full vehicle and track-relative observation vector
  */
-export interface AssettoCorsaGymObservation {
+export interface RaceGymObservation {
   speedMs: number;
   localVelocityX: number;
   localVelocityY: number;

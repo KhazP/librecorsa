@@ -14,7 +14,7 @@ LibreCorsa is an independent, non-commercial, open-source web simulator built wi
 
 ## 2. 3D Models & Creative Commons Attribution
 
-* **F1 2026 3D Car Model**: `"AM26 - F1 25/F1 2026 DLC"` ([https://skfb.ly/pKNCK](https://skfb.ly/pKNCK)) by **DeX** is licensed under [Creative Commons Attribution 4.0 (CC BY 4.0)](http://creativecommons.org/licenses/by/4.0/).
+* **F1 2026 3D Car Model**: Formula car model ([https://skfb.ly/pKNCK](https://skfb.ly/pKNCK)) by **DeX** is licensed under [Creative Commons Attribution 4.0 (CC BY 4.0)](http://creativecommons.org/licenses/by/4.0/).
 * **GT3 3D Car Model**: `"2020 Mercedes-Benz AMG GT3"` ([https://skfb.ly/pOTPL](https://skfb.ly/pOTPL)) by **Ddiaz Design** is licensed under [Creative Commons Attribution-NonCommercial-ShareAlike 4.0 (CC BY-NC-SA 4.0)](http://creativecommons.org/licenses/by-nc-sa/4.0/).
 
 ### Optional circuits (`public/tracks/<id>/`)
