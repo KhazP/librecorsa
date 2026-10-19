@@ -117,6 +117,10 @@ export interface ReplayCarState {
   brake: number;
   gear: number;
   rpm: number;
+  /** Optional extended kinematic state for Instant Flashback resume */
+  s?: number;
+  vyMs?: number;
+  yawRateRadS?: number;
 }
 
 export interface ReplayFrame {

@@ -42,6 +42,10 @@ function blendCar(a: ReplayCarState, b: ReplayCarState, f: number): ReplayCarSta
     brake: lerp(a.brake, b.brake, f),
     gear: a.gear,
     rpm: lerp(a.rpm, b.rpm, f),
+    s: a.s !== undefined && b.s !== undefined ? lerp(a.s, b.s, f) : a.s,
+    vyMs: a.vyMs !== undefined && b.vyMs !== undefined ? lerp(a.vyMs, b.vyMs, f) : a.vyMs,
+    yawRateRadS:
+      a.yawRateRadS !== undefined && b.yawRateRadS !== undefined ? lerp(a.yawRateRadS, b.yawRateRadS, f) : a.yawRateRadS,
   };
 }
 
@@ -83,6 +87,15 @@ export class ReplayBuffer {
     this.slots.fill(undefined);
     this.head = 0;
     this.count = 0;
+  }
+
+  /** Drops all stored frames strictly newer than tS (used when resuming via Instant Flashback) */
+  truncateAfter(tS: number): void {
+    while (this.count > 0 && this.frame(this.count - 1).t > tS) {
+      const idx = (this.head + this.count - 1) % this.capacity;
+      this.slots[idx] = undefined;
+      this.count--;
+    }
   }
 
   /** Session time of the oldest frame (NaN when empty) */
