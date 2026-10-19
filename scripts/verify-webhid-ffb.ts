@@ -69,6 +69,7 @@ interface DescriptorOptions {
   /** Set Constant Force magnitude field */
   magnitude?: HidReportItemLike;
   duration?: HidReportItemLike;
+  triggerButton?: HidReportItemLike;
   /** Put the PID reports in a nested child collection instead of the top level one */
   nested?: boolean;
   noCreateNewEffect?: boolean;
@@ -86,7 +87,7 @@ function pidCollections(o: DescriptorOptions = {}): HidCollectionLike[] {
         variable([pid(0x54)], 16, 1, 0, 32767),
         variable([pid(0x51)], 16, 1, 0, 32767),
         variable([pid(0x52)], 8, 1, 0, 255),
-        variable([pid(0x53)], 8, 1, 0, 255),
+        o.triggerButton ?? variable([pid(0x53)], 8, 1, 0, 255),
         variable([X, Y], 1, 2, 0, 1), // Axes Enable: X, Y
         variable([pid(0x56)], 1, 1, 0, 1), // Direction Enable
         padding(5),
@@ -348,7 +349,7 @@ async function main() {
         data: [
           3, // block index from Block Load
           1, // constant force
-          0xff, 0x7f, // duration = field max (32767)
+          0xff, 0xff, // duration = 0xFFFF (infinite on 16-bit field, even when LogicalMax = 32767)
           0, 0, // trigger repeat
           0, 0, // sample period
           255, // gain
@@ -398,6 +399,20 @@ async function main() {
     const res = await setupPidDevice(dev, { deps: new FakeClock().deps });
     assert.ok(res.ok);
     assert.deepEqual(dev.forceWrites[0], { kind: "out", id: 5, data: [3, 128] });
+  });
+  await check("MOZA R9 Base descriptor (Trigger Button 1..8, Duration 0..32767) writes 0xFF (no trigger) and 0xFFFF (infinite)", async () => {
+    const cols = pidCollections({
+      triggerButton: variable([pid(0x53)], 8, 1, 1, 8),
+      duration: variable([pid(0x50)], 16, 1, 0, 32767),
+    });
+    const dev = new FakeHidDevice(cols, asLayout(cols).blockLoad);
+    const res = await setupPidDevice(dev, { deps: new FakeClock().deps });
+    assert.ok(res.ok);
+    const setEffect = dev.log.find((l) => l.kind === "out" && l.id === 1);
+    assert.ok(setEffect, "Set Effect report sent");
+    assert.equal(setEffect!.data[2], 0xff, "Duration low byte is 0xFF");
+    assert.equal(setEffect!.data[3], 0xff, "Duration high byte is 0xFF (0xFFFF = infinite, not 32767 ms)");
+    assert.equal(setEffect!.data[9], 255, "Trigger Button byte is 0xFF (DIEB_NOTRIGGER), not clamped to 1");
   });
 
   function fakeHid(devices: FakeHidDevice[], granted: FakeHidDevice[] = []) {

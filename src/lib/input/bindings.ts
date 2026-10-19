@@ -20,10 +20,22 @@ export type KeyAction =
   | "mouseSteer"
   | "restart"
   | "throttleHalf"
-  | "replay";
+  | "replay"
+  | "mfdPage";
 
 /** Actions a controller or wheel button can trigger */
-export type PadAction = "boost" | "aero" | "shiftUp" | "shiftDown" | "camera" | "racingLine" | "restart" | "pause";
+export type PadAction =
+  | "boost"
+  | "aero"
+  | "shiftUp"
+  | "shiftDown"
+  | "camera"
+  | "racingLine"
+  | "restart"
+  | "pause"
+  | "mfd"
+  | "mfdPage"
+  | "hud";
 
 export type KeyBindings = Record<KeyAction, string[]>;
 
@@ -48,6 +60,7 @@ export const KEY_ACTIONS: readonly { id: KeyAction; label: string }[] = [
   { id: "restart", label: "Restart" },
   { id: "throttleHalf", label: "Half throttle (hold)" },
   { id: "replay", label: "Instant replay" },
+  { id: "mfdPage", label: "Next MFD page" },
 ];
 
 export const PAD_ACTIONS: readonly { id: PadAction; label: string }[] = [
@@ -59,6 +72,9 @@ export const PAD_ACTIONS: readonly { id: PadAction; label: string }[] = [
   { id: "racingLine", label: "Racing line" },
   { id: "restart", label: "Restart" },
   { id: "pause", label: "Pause menu" },
+  { id: "mfd", label: "Open / close MFD" },
+  { id: "mfdPage", label: "Next MFD page" },
+  { id: "hud", label: "Show / hide HUD" },
 ];
 
 export const DEFAULT_KEY_BINDINGS: KeyBindings = {
@@ -79,6 +95,7 @@ export const DEFAULT_KEY_BINDINGS: KeyBindings = {
   restart: ["Backspace"],
   throttleHalf: ["KeyF"],
   replay: ["KeyT"],
+  mfdPage: ["Insert", "KeyI"],
 };
 
 /** Keys that cannot be bound: Esc opens the menu, "/" starts the /boost command */
@@ -96,7 +113,13 @@ export const DEFAULT_PAD_BUTTONS: PadButtonBindings = {
   racingLine: null,
   restart: 8, // View
   pause: 9, // Menu
+  mfd: 10, // LS click (L3)
+  mfdPage: 1, // B
+  hud: 11, // RS click (R3)
 };
+
+/** Window events the game loop fires for the HUD's own pad toggles (the MFD and the HUD listen for them) */
+export const HUD_TOGGLE_EVENT = { mfd: "lc:toggle-mfd", mfdPage: "lc:mfd-page", hud: "lc:toggle-hud" } as const;
 
 /** Fixed standard-mapping axes / buttons for the pedals and steering on a controller */
 export const PAD_THROTTLE_BUTTON = 7; // RT
@@ -157,6 +180,7 @@ export function keyLabel(code: string | undefined): string {
     Minus: "-",
     Equal: "=",
     Backquote: "`",
+    Insert: "Ins",
   };
   return named[code] ?? code;
 }

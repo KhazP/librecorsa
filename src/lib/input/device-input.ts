@@ -58,7 +58,7 @@ export interface WheelSettings {
   ffbEnabled: boolean;
   /** FFB strength 0..2 (1 = the physics' steering torque at full scale) */
   ffbGain: number;
-  /** Minimum force 0..0.2: lifts small torques over a belt / gear wheel's friction (AC's MIN_FF) */
+  /** Minimum force 0..0.2: lifts small torques over a belt / gear wheel's static friction */
   ffbMinForce: number;
   /** Kerb vibration 0..1 */
   ffbKerb: number;
@@ -81,8 +81,20 @@ export interface WheelSettings {
   buttons: Record<PadAction, ButtonBinding | null>;
 }
 
-/** Steering-wheel rotation of the cars, lock to lock (1:1 soft lock) */
+/** Default steering-wheel rotation of Formula cars, lock to lock (1:1 soft lock) */
 export const CAR_WHEEL_LOCK_DEG = 360;
+
+/** Per-car real steering-wheel rotation lock-to-lock (degrees): 360° for Formula cars, 640° for the GT3 (320° each way) */
+export const CAR_WHEEL_LOCKS_DEG: Readonly<Record<string, number>> = {
+  vf26: 360,
+  "f12026-car": 360,
+  "amg-gt3": 640,
+};
+
+/** Real steering-wheel lock-to-lock rotation (degrees) for a given vehicle model */
+export function carWheelLockDeg(vehicle?: string): number {
+  return (vehicle && CAR_WHEEL_LOCKS_DEG[vehicle]) || CAR_WHEEL_LOCK_DEG;
+}
 
 export const WHEEL_ROTATION_PRESETS = [360, 540, 900, 1080] as const;
 
@@ -111,7 +123,7 @@ export const DEFAULT_WHEEL_SETTINGS: WheelSettings = {
   ffbDamping: 0.1,
   ffbFilterS: 0,
   ffbPerCar: {},
-  hidFfb: false,
+  hidFfb: true,
   telemetryOut: false,
   telemetryPort: 20777,
   buttons: emptyWheelButtons(),
@@ -193,20 +205,24 @@ export function pedalValue(raw: number, binding: Pick<PedalBinding, "idle" | "fu
 
 /**
  * Wheel axis → rack command −1..1 (+ = right). The device angle maps 1:1 onto the car's steering
- * wheel (soft lock): a 900° wheel turned 180° gives full lock on a 360° car.
+ * wheel (soft lock): a 900° wheel turned 180° gives full lock on a 360° car, or 320° on a 640° GT3 car.
+ * When the base is set narrower than the car's lock (e.g. 540° on a 640° GT3), full base travel maps to full lock.
  */
 export function wheelSteerValue(
   raw: number,
   binding: Pick<AxisBinding, "center" | "invert">,
   rotationDeg: number,
-  deadzone = 0
+  deadzone = 0,
+  carLockDeg: number = CAR_WHEEL_LOCK_DEG
 ): number {
   let c = clamp((raw - binding.center) * (binding.invert ? -1 : 1), -1, 1);
   if (deadzone > 0) {
     const a = Math.abs(c);
     c = a <= deadzone ? 0 : (Math.sign(c) * (a - deadzone)) / (1 - deadzone);
   }
-  return clamp((c * rotationDeg) / CAR_WHEEL_LOCK_DEG, -1, 1);
+  const lock = carLockDeg > 0 ? carLockDeg : CAR_WHEEL_LOCK_DEG;
+  const effectiveLock = rotationDeg > 0 ? Math.min(rotationDeg, lock) : lock;
+  return clamp((c * rotationDeg) / effectiveLock, -1, 1);
 }
 
 /** Rim angle from centre (degrees, + = right) of a calibrated steering axis, before the car's lock clamps it */
@@ -224,7 +240,7 @@ export class DeviceInputReader {
   private prevHeld = new Set<PadAction>();
   private smoothedSteer = 0;
 
-  read(pads: readonly PadLike[], settings: DeviceInputSettings, dtSeconds: number): DeviceFrame {
+  read(pads: readonly PadLike[], settings: DeviceInputSettings, dtSeconds: number, vehicle?: string): DeviceFrame {
     const held = new Set<PadAction>();
     const frame: DeviceFrame = { throttle: 0, brake: 0, boostHeld: false, pressed: new Set(), source: null };
     const wheel = settings.wheel;
@@ -232,7 +248,13 @@ export class DeviceInputReader {
 
     if (wheel.steer && wheelPad) {
       frame.source = "wheel";
-      const target = wheelSteerValue(wheelPad.axes[wheel.steer.axis] ?? wheel.steer.center, wheel.steer, wheel.rotationDeg, wheel.steerDeadzone);
+      const target = wheelSteerValue(
+        wheelPad.axes[wheel.steer.axis] ?? wheel.steer.center,
+        wheel.steer,
+        wheel.rotationDeg,
+        wheel.steerDeadzone,
+        carWheelLockDeg(vehicle)
+      );
       if (wheel.steerSmoothingS > 0 && dtSeconds > 0) {
         this.smoothedSteer += (target - this.smoothedSteer) * (1 - Math.exp(-dtSeconds / wheel.steerSmoothingS));
       } else {
@@ -295,6 +317,8 @@ export class DeviceInputReader {
 
 /** Pedal sets, shifters and handbrakes share the wheel brands' names but never steer */
 const NOT_A_WHEEL_BASE = /pedal|srp|sr-p|handbrake|shifter|hgp|sequential/i;
+/** Virtual joysticks (vJoy / SimHub Control Mapper) mirror physical devices and should yield to real hardware */
+export const isVirtualPad = (padId: string): boolean => /vjoy|virtual joystick/i.test(padId);
 
 /**
  * Steering binding for a wheel recognised by name that has none yet: axis 0, centred where it rests, with the
@@ -303,7 +327,7 @@ const NOT_A_WHEEL_BASE = /pedal|srp|sr-p|handbrake|shifter|hgp|sequential/i;
  */
 export function autoConfigureWheel(pads: readonly PadLike[], current: WheelSettings): Partial<WheelSettings> | null {
   if (current.steer) return null;
-  const wheelPad = pads.find((p) => WHEEL_ID.test(p.id) && !NOT_A_WHEEL_BASE.test(p.id) && p.axes.length > 0);
+  const wheelPad = pads.find((p) => WHEEL_ID.test(p.id) && !NOT_A_WHEEL_BASE.test(p.id) && !isVirtualPad(p.id) && p.axes.length > 0);
   if (!wheelPad) return null;
   const type: WheelType = /g29|g920|g923|t150|t248|t300|tmx/i.test(wheelPad.id) ? "belt_gear" : "direct_drive";
   const rest = wheelPad.axes[0] ?? 0;
@@ -311,6 +335,7 @@ export function autoConfigureWheel(pads: readonly PadLike[], current: WheelSetti
     type,
     ...WHEEL_TYPE_DEFAULTS[type],
     ffbEnabled: true,
+    hidFfb: true,
     steer: { padId: wheelPad.id, axis: 0, center: Math.abs(rest) < 0.25 ? rest : 0, invert: false },
   };
 }
@@ -320,26 +345,51 @@ export function autoConfigureWheel(pads: readonly PadLike[], current: WheelSetti
 export type AxisSnapshot = Map<string, number[]>;
 
 export function snapshotAxes(pads: readonly PadLike[]): AxisSnapshot {
-  return new Map(pads.map((p) => [p.id, [...p.axes]]));
+  const m: AxisSnapshot = new Map();
+  for (const p of pads) {
+    if (!m.has(p.id) || (m.get(p.id)?.length === 0 && p.axes.length > 0)) {
+      m.set(p.id, [...p.axes]);
+    }
+  }
+  return m;
 }
 
-/** The axis that moved furthest from `baseline` (any device) */
+export interface AxisChange {
+  padId: string;
+  axis: number;
+  base: number;
+  value: number;
+  delta: number;
+}
+
+/**
+ * The axis that moved furthest from `baseline`, skipping `exclude`d axes. A real device wins over a virtual one
+ * (vJoy mirrors it) when it moved too; an axis that only exists on the virtual device is still found.
+ */
 export function strongestAxisChange(
   baseline: AxisSnapshot,
   pads: readonly PadLike[],
-  exclude?: { padId: string; axis: number } | null
-): { padId: string; axis: number; base: number; value: number; delta: number } | null {
-  let best: { padId: string; axis: number; base: number; value: number; delta: number } | null = null;
+  exclude?: (padId: string, axis: number) => boolean
+): AxisChange | null {
+  let bestPhysical: AxisChange | null = null;
+  let bestAny: AxisChange | null = null;
   for (const pad of pads) {
     const base = baseline.get(pad.id);
     if (!base) continue;
-    pad.axes.forEach((value, axis) => {
-      if (exclude && exclude.padId === pad.id && exclude.axis === axis) return;
-      const delta = value - (base[axis] ?? 0);
-      if (!best || Math.abs(delta) > Math.abs(best.delta)) best = { padId: pad.id, axis, base: base[axis] ?? 0, value, delta };
-    });
+    const virtual = isVirtualPad(pad.id);
+    for (let axis = 0; axis < pad.axes.length; axis++) {
+      if (exclude?.(pad.id, axis)) continue;
+      const value = pad.axes[axis] ?? 0;
+      const cand: AxisChange = { padId: pad.id, axis, base: base[axis] ?? 0, value, delta: value - (base[axis] ?? 0) };
+      if (!bestAny || Math.abs(cand.delta) > Math.abs(bestAny.delta)) bestAny = cand;
+      if (!virtual && (!bestPhysical || Math.abs(cand.delta) > Math.abs(bestPhysical.delta))) bestPhysical = cand;
+    }
   }
-  return best;
+  if (bestPhysical && bestAny) {
+    const moved = Math.abs(bestPhysical.delta);
+    if (moved >= 0.1 || moved >= Math.abs(bestAny.delta) * 0.8) return bestPhysical;
+  }
+  return bestAny;
 }
 
 export type ButtonSnapshot = Map<string, boolean[]>;

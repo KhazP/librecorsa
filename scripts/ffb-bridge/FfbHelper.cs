@@ -514,7 +514,9 @@ static class FfbHelper
             RunLoop(rateHz, delegate(double tSec)
             {
                 PumpMessages(hwnd);
-                int magnitude = (int)Math.Round(shaper.Next(tSec) * DI_FFNOMINALMAX);
+                // A DirectInput direction is where the force comes from: + magnitude along +X pushes the rim left. The
+                // sim's forces are + = right, so the sign flips here.
+                int magnitude = (int)Math.Round(-shaper.Next(tSec) * DI_FFNOMINALMAX);
                 if (lost)
                 {
                     if (Clock.ElapsedMilliseconds < retryAtMs) return;

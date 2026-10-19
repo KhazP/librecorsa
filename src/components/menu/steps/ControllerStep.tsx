@@ -21,9 +21,41 @@ import {
 import { Choice, Toggle } from "@/components/hud/PauseMenu";
 import { DEFAULT_PAD_TUNING, type PadTuning } from "@/lib/settings/player-settings";
 import { suspendMenuNav, useGamepads } from "../useMenuNav";
-import { Card, CenterMeter, Meter, SectionLabel } from "../menu-ui";
+import { padFamilyOf, useInputMode, type PadFamily } from "../input-mode";
 import { StickCurve, TriggerBars, TuningSlider } from "./TuningSlider";
+import { PadMap } from "./PadMap";
+import { AutoGrid, BindRow, bindKeyClass, ChoiceText, Hint, PillAction, SetupCard, StatusPill, TrackMeter } from "./setup-ui";
 import type { SetupStepProps } from "./types";
+
+/** Standard-mapping face buttons 0..3 (A B X Y / ✕ ○ □ △), drawn small inside a binding chip */
+const FACE: Record<PadFamily, { label: string; color: string }[]> = {
+  xbox: [
+    { label: "A", color: "#5DC21E" },
+    { label: "B", color: "#E5413A" },
+    { label: "X", color: "#2F8BE5" },
+    { label: "Y", color: "#F4C21B" },
+  ],
+  playstation: [
+    { label: "✕", color: "#7EA6E6" },
+    { label: "○", color: "#EE6A6A" },
+    { label: "□", color: "#D78DD6" },
+    { label: "△", color: "#45C9A6" },
+  ],
+};
+
+const FaceDot: React.FC<{ button: number; family: PadFamily }> = ({ button, family }) => {
+  const face = FACE[family][button];
+  if (!face) return null;
+  return (
+    <span
+      aria-hidden
+      className="inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border-2 bg-[#08090D] text-[10px] leading-none"
+      style={{ borderColor: face.color, color: face.color }}
+    >
+      {face.label}
+    </span>
+  );
+};
 
 type VibratingPad = Gamepad & {
   vibrationActuator?: { playEffect?: (type: string, params: Record<string, number>) => Promise<unknown> } | null;
@@ -86,8 +118,10 @@ export const ControllerStep: React.FC<SetupStepProps> = ({
   onToggleGamepadRumble,
 }) => {
   const pads = useGamepads();
+  const { family } = useInputMode();
   const pad = pads.find((p) => p.mapping === "standard") ?? null;
   const [capturing, setCapturing] = useState<PadAction | null>(null);
+  const [showMap, setShowMap] = useState(false);
 
   const onButton = React.useCallback(
     (button: number) => {
@@ -117,26 +151,42 @@ export const ControllerStep: React.FC<SetupStepProps> = ({
 
   return (
     <div className="flex flex-col gap-4">
-      <Card>
-        <SectionLabel>Input check</SectionLabel>
+      <SetupCard
+        label="Input check"
+        action={
+          pad ? (
+            <span className="flex min-w-0 items-center gap-2 font-f1-mono text-[12px] font-bold text-[#CCFF00]">
+              <span aria-hidden className="h-[7px] w-[7px] shrink-0 rounded-full bg-[#CCFF00] shadow-[0_0_8px_#CCFF00]" />
+              <span className="truncate">{padDisplayName(pad.id)}</span>
+            </span>
+          ) : undefined
+        }
+      >
         {pad ? (
-          <div className="flex flex-col gap-2">
-            <p className="mb-1 truncate font-f1-mono text-[12px] text-[#CCFF00]">● {padDisplayName(pad.id)}</p>
-            <CenterMeter label="Steer" value={pad.axes[0] ?? 0} />
-            <Meter label="Throttle" value={pad.buttons[PAD_THROTTLE_BUTTON]?.value ?? 0} detail="RT" />
-            <Meter label="Brake" value={pad.buttons[PAD_BRAKE_BUTTON]?.value ?? 0} color="#FF2A3C" detail="LT" />
+          <div className="flex flex-col gap-3.5">
+            <TrackMeter label="Steer" value={pad.axes[0] ?? 0} color="#00E5FF" centered />
+            <TrackMeter
+              label="Throttle"
+              value={pad.buttons[PAD_THROTTLE_BUTTON]?.value ?? 0}
+              detail={`RT · ${Math.round((pad.buttons[PAD_THROTTLE_BUTTON]?.value ?? 0) * 100)}%`}
+            />
+            <TrackMeter
+              label="Brake"
+              value={pad.buttons[PAD_BRAKE_BUTTON]?.value ?? 0}
+              color="#FF2A3C"
+              detail={`LT · ${Math.round((pad.buttons[PAD_BRAKE_BUTTON]?.value ?? 0) * 100)}%`}
+            />
           </div>
         ) : (
-          <p className="font-f1-mono text-[12px] text-[#8E96AA]">
+          <Hint className="text-[14px]!">
             No controller found. Connect it and press any button. Pads with a non-standard layout are set up on the
             Wheel screen.
-          </p>
+          </Hint>
         )}
-      </Card>
+      </SetupCard>
 
-      <Card>
-        <SectionLabel>Steering feel</SectionLabel>
-        <div className="mb-3 grid grid-cols-3 gap-2">
+      <SetupCard label="Steering feel">
+        <div className="grid grid-cols-3 gap-2">
           {(Object.keys(PAD_SENSITIVITY) as PadSensitivity[]).map((id) => (
             <Choice
               key={id}
@@ -149,86 +199,82 @@ export const ControllerStep: React.FC<SetupStepProps> = ({
                 }))
               }
             >
-              <div className="font-f1-italic text-sm text-[#F5F7FA] uppercase">{PAD_SENSITIVITY[id].label}</div>
-              <div className="font-f1-mono text-[11px] opacity-75">{PAD_SENSITIVITY[id].detail}</div>
+              <ChoiceText title={PAD_SENSITIVITY[id].label} detail={PAD_SENSITIVITY[id].detail} />
             </Choice>
           ))}
         </div>
-        <Toggle
-          label="Steering assist"
-          detail="The stick steers up to the front tyres' grip limit and helps catch slides"
-          checked={gamepadAssist}
-          onChange={() => onSetGamepadAssist(!gamepadAssist)}
-        />
-        <div className="flex items-center gap-2">
-          <div className="flex-1">
-            <Toggle
-              label="Rumble"
-              detail="Kerbs, lock-ups, wheelspin and grass"
-              checked={gamepadRumble}
-              onChange={onToggleGamepadRumble}
-            />
+        <div className="flex flex-col">
+          <Toggle
+            label="Steering assist"
+            detail="The stick steers up to the front tyres' grip limit and helps catch slides"
+            checked={gamepadAssist}
+            onChange={() => onSetGamepadAssist(!gamepadAssist)}
+          />
+          <div className="flex items-center gap-3">
+            <div className="min-w-0 flex-1">
+              <Toggle
+                label="Rumble"
+                detail="Kerbs, lock-ups, wheelspin and grass"
+                checked={gamepadRumble}
+                onChange={onToggleGamepadRumble}
+              />
+            </div>
+            <PillAction onClick={testRumble} className="h-[34px]!">
+              Test
+            </PillAction>
           </div>
-          <button
-            type="button"
-            onClick={testRumble}
-            className="cursor-pointer rounded border border-[#262B3D] bg-[#08090D] px-3 py-1.5 font-f1-mono text-[11px] font-bold text-[#8E96AA] uppercase hover:border-[#CCFF00] hover:text-[#CCFF00]"
-          >
-            Test
-          </button>
         </div>
-      </Card>
+      </SetupCard>
 
-      <Card>
-        <div className="mb-2 flex items-center justify-between">
-          <SectionLabel className="!mb-0">Buttons · RT throttle · LT brake · left stick steers</SectionLabel>
-          <button
-            type="button"
-            onClick={() => onChangeSettings((s) => ({ ...s, padButtons: DEFAULT_PAD_BUTTONS }))}
-            className="cursor-pointer rounded border border-[#262B3D] bg-[#08090D] px-2 py-1 font-f1-mono text-[11px] font-bold text-[#8E96AA] uppercase hover:border-[#CCFF00] hover:text-[#CCFF00]"
-          >
-            Reset
-          </button>
-        </div>
-        <div className="grid gap-x-6 sm:grid-cols-2">
+      <SetupCard
+        label="Buttons · RT throttle · LT brake · left stick steers"
+        action={
+          <span className="flex gap-2">
+            <PillAction onClick={() => setShowMap((v) => !v)}>{showMap ? "Hide map" : "Button map"}</PillAction>
+            <PillAction onClick={() => onChangeSettings((s) => ({ ...s, padButtons: DEFAULT_PAD_BUTTONS }))}>Reset</PillAction>
+          </span>
+        }
+      >
+        {showMap ? (
+          <div className="rounded-2xl border border-[#262B3D] bg-[#08090D] p-3">
+            <PadMap family={pad ? padFamilyOf(pad.id) : family} bindings={settings.padButtons} pad={pad} />
+          </div>
+        ) : null}
+        <AutoGrid min={300} className="gap-x-[18px] gap-y-0.5">
           {PAD_ACTIONS.map(({ id, label }) => {
             const listening = capturing === id;
+            const button = settings.padButtons[id];
+            const bound = button !== null && button !== undefined;
             return (
-              <div key={id} className="flex items-center justify-between gap-3 border-b border-[#262B3D]/60 py-1.5">
-                <span className="font-f1-italic text-[14px] text-[#F5F7FA] uppercase">{label}</span>
+              <BindRow key={id} label={label} listening={listening}>
                 <button
                   type="button"
                   onClick={() => setCapturing(listening ? null : id)}
-                  className={`min-w-[5rem] cursor-pointer rounded px-2 py-1 font-f1-mono text-[12px] font-bold transition-colors ${
-                    listening
-                      ? "animate-pulse bg-[#CCFF00] text-[#08090D]"
-                      : "bg-[#F5F7FA] text-[#08090D] hover:bg-[#CCFF00]"
-                  }`}
+                  className={bindKeyClass(listening ? "listening" : bound ? "bound" : "empty", "min-w-[76px]")}
                 >
-                  {listening ? "PRESS…" : padButtonLabel(settings.padButtons[id])}
+                  {listening ? (
+                    "PRESS…"
+                  ) : (
+                    <>
+                      {bound && button <= 3 ? <FaceDot button={button} family={family} /> : null}
+                      {padButtonLabel(button)}
+                    </>
+                  )}
                 </button>
-              </div>
+              </BindRow>
             );
           })}
-        </div>
-        <p className="mt-2 font-f1-mono text-[11px] text-zinc-500">
-          {capturing ? "Press a controller button · Esc cancels" : "Click a button, then press the one you want."}
-        </p>
-      </Card>
+        </AutoGrid>
+        {capturing ? (
+          <StatusPill tone="live">Press a controller button · Esc cancels</StatusPill>
+        ) : (
+          <Hint>Click a button, then press the one you want.</Hint>
+        )}
+      </SetupCard>
 
-      <Card>
-        <div className="mb-2 flex items-center justify-between gap-2">
-          <SectionLabel className="!mb-0">Fine tuning</SectionLabel>
-          <button
-            type="button"
-            onClick={resetTuning}
-            className="cursor-pointer rounded border border-[#262B3D] bg-[#08090D] px-2 py-1 font-f1-mono text-[11px] font-bold text-[#8E96AA] uppercase hover:border-[#CCFF00] hover:text-[#CCFF00]"
-          >
-            Reset tuning
-          </button>
-        </div>
-        <div className="grid gap-4 sm:grid-cols-[1fr_12rem]">
-          <div className="flex flex-col">
+      <SetupCard label="Fine tuning" action={<PillAction onClick={resetTuning}>Reset tuning</PillAction>}>
+        <div className="flex flex-wrap gap-[22px]">
+          <AutoGrid min={200} className="min-w-0 flex-[1_1_340px] gap-x-5 gap-y-2">
             <TuningSlider
               label="Steering speed"
               value={tuning.steeringRate}
@@ -289,13 +335,13 @@ export const ControllerStep: React.FC<SetupStepProps> = ({
               hint="Above 1 gives finer brake control at light pressure"
               onChange={(v) => setTuning({ brakeGamma: v })}
             />
-          </div>
-          <div className="flex flex-col gap-3">
+          </AutoGrid>
+          <div className="flex min-w-0 flex-[1_1_200px] flex-col gap-3 sm:max-w-[240px]">
             <StickCurve deadzone={tuning.deadzone} outerDeadzone={tuning.outerDeadzone} linearity={tuning.linearity} />
             <TriggerBars throttleGamma={tuning.throttleGamma} brakeGamma={tuning.brakeGamma} />
           </div>
         </div>
-        <div className="mt-2">
+        <div className="border-t border-[#262B3D] pt-2.5">
           <Toggle
             label="Impulse-trigger rumble (Xbox)"
             detail="ABS pulses in LT, wheelspin in RT"
@@ -303,7 +349,7 @@ export const ControllerStep: React.FC<SetupStepProps> = ({
             onChange={() => setTuning({ triggerRumble: !tuning.triggerRumble })}
           />
         </div>
-      </Card>
+      </SetupCard>
     </div>
   );
 };

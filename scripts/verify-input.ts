@@ -14,22 +14,33 @@ import {
 import {
   autoConfigureWheel,
   CAR_WHEEL_LOCK_DEG,
+  carWheelLockDeg,
   DEFAULT_WHEEL_SETTINGS,
   DeviceInputReader,
   pedalValue,
+  snapshotAxes,
+  strongestAxisChange,
   wheelSteerValue,
   type PadLike,
 } from '../src/lib/input/device-input';
 import {
   DIRECTION_TEST_S,
   directionTestForce,
+  HID_WATCHDOG_MS,
   linkHidSink,
   shapeFfbForce,
   softLockForce,
   WheelFfbClient,
 } from '../src/lib/input/wheel-ffb';
 import { PAIR_MESSAGE, WebHidFfb, type HidApiLike } from '../src/lib/input/webhid-ffb';
-import { DEFAULT_PLAYER_SETTINGS, parsePlayerSettings } from '../src/lib/settings/player-settings';
+import {
+  DEFAULT_PLAYER_SETTINGS,
+  FFB_POLARITY_V2_KEY,
+  loadPlayerSettings,
+  parsePlayerSettings,
+  savePlayerSettings,
+  SETTINGS_STORAGE_KEY,
+} from '../src/lib/settings/player-settings';
 
 let passed = 0;
 function check(name: string, fn: () => void) {
@@ -183,6 +194,43 @@ check('FFB soft lock pushes back past the car steering lock only', () => {
   assert.ok(softLockForce(-half - 2) > 0);
   near(softLockForce(half + 50), -1);
 });
+check('per-car steering lock: 360° for Formula cars, 640° for AMG GT3 (steering & soft lock)', () => {
+  assert.equal(carWheelLockDeg('vf26'), 360);
+  assert.equal(carWheelLockDeg('f12026-car'), 360);
+  assert.equal(carWheelLockDeg('amg-gt3'), 640);
+  const binding = { padId: 'Simucube 2 Pro', axis: 0, center: 0, invert: false };
+  // On a 900° wheel turned 180° right (raw = +0.4): full lock (+1.0) in F1, 180/320 = 0.5625 in AMG GT3
+  near(wheelSteerValue(0.4, binding, 900, 0, carWheelLockDeg('vf26')), 1);
+  near(wheelSteerValue(0.4, binding, 900, 0, carWheelLockDeg('amg-gt3')), 180 / 320);
+  // On a 540° wheel driving the 640° AMG GT3, full physical lock (raw = ±1) still reaches full rack travel (±1)
+  near(wheelSteerValue(1.0, binding, 540, 0, carWheelLockDeg('amg-gt3')), 1);
+  near(wheelSteerValue(-1.0, binding, 540, 0, carWheelLockDeg('amg-gt3')), -1);
+  // Soft lock at 250° right: past lock in F1 (< 0), still inside the 320° half-lock in AMG GT3 (0)
+  assert.ok(softLockForce(250, carWheelLockDeg('vf26')) < 0);
+  assert.equal(softLockForce(250, carWheelLockDeg('amg-gt3')), 0);
+  assert.ok(softLockForce(330, carWheelLockDeg('amg-gt3')) < 0);
+});
+check('speed-gated minimum force: zero at standstill (<= 1 km/h), full by 6 km/h', () => {
+  const w = { ffbGain: 1, ffbMinForce: 0.2 };
+  near(shapeFfbForce(0.05, w, 0), 0.05, 1e-6);
+  near(shapeFfbForce(0.05, w, 1), 0.05, 1e-6);
+  near(shapeFfbForce(0.05, w, 6), shapeFfbForce(0.05, w), 1e-6);
+});
+check('multi-device calibration prefers physical wheel over vJoy mirror, but binds vJoy-only axes when physical is at rest', () => {
+  const vjoy: PadLike = { id: 'vJoy - Virtual Joystick', index: 0, mapping: '', axes: [0], buttons: [] };
+  const sc2: PadLike = { id: 'Simucube 2 Pro', index: 1, mapping: '', axes: [0], buttons: [] };
+  const base = snapshotAxes([vjoy, sc2]);
+  // Both move together (vJoy mirroring physical wheel): physical wins
+  const movedVjoy: PadLike = { ...vjoy, axes: [0.6] };
+  const movedSc2: PadLike = { ...sc2, axes: [0.45] };
+  assert.equal(strongestAxisChange(base, [movedVjoy, movedSc2])?.padId, 'Simucube 2 Pro');
+  // vJoy-only pedal moves 0.8 while physical wheel has 0.01 resting noise: vJoy wins
+  const vjoyPedal: PadLike = { ...vjoy, axes: [0.8] };
+  const noisyWheel: PadLike = { ...sc2, axes: [0.01] };
+  const picked = strongestAxisChange(base, [vjoyPedal, noisyWheel]);
+  assert.equal(picked?.padId, 'vJoy - Virtual Joystick');
+  near(picked!.delta, 0.8);
+});
 
 console.log('Saved settings');
 check('corrupt or foreign saves fall back to the defaults', () => {
@@ -220,6 +268,34 @@ check('round trip through JSON', () => {
   s.wheel = { ...s.wheel, ffbEnabled: true, ffbGain: 0.8, ffbMinForce: 0.05, ffbKerb: 0.6, ffbAbs: 0, ffbInvert: true };
   assert.deepEqual(parsePlayerSettings(JSON.parse(JSON.stringify(s))), s);
 });
+check('pre-fix ffbInvert: true save is reset once on load; post-v2 ffbInvert: true is preserved', () => {
+  const store = new Map<string, string>();
+  const g = globalThis as unknown as { localStorage?: Storage };
+  const prevStorage = g.localStorage;
+  g.localStorage = {
+    getItem: (k: string) => store.get(k) ?? null,
+    setItem: (k: string, v: string) => void store.set(k, v),
+    removeItem: (k: string) => void store.delete(k),
+    clear: () => store.clear(),
+    key: () => null,
+    length: 0,
+  };
+  try {
+    const legacy = {
+      ...DEFAULT_PLAYER_SETTINGS,
+      wheel: { ...DEFAULT_WHEEL_SETTINGS, ffbInvert: true },
+    };
+    store.set(SETTINGS_STORAGE_KEY, JSON.stringify(legacy));
+    const migrated = loadPlayerSettings();
+    assert.equal(migrated.wheel.ffbInvert, false, 'pre-v2 ffbInvert reset to false');
+    assert.equal(store.get(FFB_POLARITY_V2_KEY), '1', 'polarity v2 flag stamped');
+    savePlayerSettings({ ...migrated, wheel: { ...migrated.wheel, ffbInvert: true } });
+    assert.equal(loadPlayerSettings().wheel.ffbInvert, true, 'post-v2 ffbInvert kept');
+  } finally {
+    if (prevStorage === undefined) delete g.localStorage;
+    else g.localStorage = prevStorage;
+  }
+});
 
 check('direction test: right then left (left first inverted), zero in the gap and after', () => {
   near(directionTestForce(0.5, false), 0.25);
@@ -246,6 +322,27 @@ check('direction test goes through the WebHID sink while it is the output, else 
   assert.equal(sent.at(-1), 0);
   client.update({ speedKmh: 0, ffbTorqueNorm: 0.5 } as never, wheel, [], 1016, true);
   near(sent.at(-1) as number, 0.5 * wheel.ffbGain, 1e-6);
+  client.stop();
+});
+check('linkHidSink flips sign from WheelFfbClient (+ = right) to WebHidFfb.setForce (- = right in USB PID)', () => {
+  const api: HidApiLike = {
+    requestDevice: async () => [],
+    getDevices: async () => [],
+    addEventListener: () => {},
+    removeEventListener: () => {},
+  };
+  const hid = new WebHidFfb(api);
+  const hidForces: number[] = [];
+  hid.setForce = (f: number) => {
+    hidForces.push(f);
+  };
+  hid.status = { state: 'ready', device: 'MOZA R9 Base', message: null };
+  const client = new WheelFfbClient();
+  const unlink = linkHidSink(client, hid);
+  assert.ok(client.hidSink, 'hidSink wired when ready');
+  client.hidSink!(0.5);
+  near(hidForces.at(-1) as number, -0.5, 1e-6);
+  unlink();
 });
 
 async function asyncChecks() {
@@ -272,6 +369,19 @@ async function asyncChecks() {
   unlink();
   passed++;
   console.log('  ok  load without a grant: no prompt, no WebHID sink, bridge fallback');
+
+  // WebHID 150ms watchdog zeroes force when updates stop arriving (e.g. hidden tab or stalled loop)
+  const watchdogClient = new WheelFfbClient();
+  const watchdogSent: number[] = [];
+  watchdogClient.hidSink = (f) => watchdogSent.push(f);
+  const wheel = { ...DEFAULT_WHEEL_SETTINGS, ffbEnabled: true, hidFfb: true, ffbMinForce: 0, ffbFilterS: 0 };
+  watchdogClient.update({ speedKmh: 50, ffbTorqueNorm: 0.6 } as never, wheel, [], 1000, true);
+  assert.ok((watchdogSent.at(-1) ?? 0) > 0, 'non-zero force sent');
+  await new Promise((r) => setTimeout(r, HID_WATCHDOG_MS + 40));
+  assert.equal(watchdogSent.at(-1), 0, 'watchdog zeroed WebHID force after updates stopped');
+  assert.equal(watchdogClient.force, 0);
+  passed++;
+  console.log('  ok  WebHID 150 ms watchdog zeroes force when frame updates stop');
   console.log(`\n${passed} checks passed`);
 }
 asyncChecks().catch((e) => {

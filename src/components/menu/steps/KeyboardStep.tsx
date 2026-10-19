@@ -14,8 +14,8 @@ import {
 import { Toggle } from "@/components/hud/PauseMenu";
 import { DEFAULT_KEYBOARD_TUNING, type KeyboardTuning } from "@/lib/settings/player-settings";
 import { suspendMenuNav } from "../useMenuNav";
-import { Card, SectionLabel } from "../menu-ui";
 import { TuningSlider } from "./TuningSlider";
+import { AutoGrid, BindRow, bindKeyClass, PillAction, SetupCard, StatusPill } from "./setup-ui";
 import type { SetupStepProps } from "./types";
 
 /** Keyboard rebinding: click a slot, press a key. Taking a key from another action swaps the two. */
@@ -58,25 +58,17 @@ export const KeyboardStep: React.FC<SetupStepProps> = ({ settings, onChangeSetti
 
   return (
     <div className="flex flex-col gap-4">
-      <Card>
-        <div className="mb-2 flex items-center justify-between">
-          <SectionLabel className="!mb-0">Key bindings</SectionLabel>
-          <button
-            type="button"
-            onClick={() => onChangeSettings((s) => ({ ...s, keys: DEFAULT_KEY_BINDINGS }))}
-            className="cursor-pointer rounded bg-black/40 px-2 py-1 font-f1-mono text-[11px] font-bold uppercase text-zinc-300 hover:bg-white/10"
-          >
-            Reset
-          </button>
-        </div>
-        <div className="flex flex-col">
+      <SetupCard
+        label="Key bindings"
+        action={<PillAction onClick={() => onChangeSettings((s) => ({ ...s, keys: DEFAULT_KEY_BINDINGS }))}>Reset</PillAction>}
+      >
+        <AutoGrid min={330} className="gap-x-[18px] gap-y-0.5">
           {KEY_ACTIONS.map(({ id, label }) => {
             const codes = settings.keys[id];
             const slots = Math.max(KEY_SLOTS, codes.length);
             return (
-              <div key={id} className="flex items-center justify-between gap-3 border-b border-white/5 py-1.5 last:border-0">
-                <span className="font-f1-italic text-[14px] uppercase">{label}</span>
-                <span className="flex gap-1.5">
+              <BindRow key={id} label={label} listening={capture?.action === id}>
+                <span className="flex shrink-0 flex-wrap justify-end gap-1.5">
                   {Array.from({ length: slots }, (_, slot) => {
                     const listening = capture?.action === id && capture.slot === slot;
                     const code = codes[slot];
@@ -84,17 +76,12 @@ export const KeyboardStep: React.FC<SetupStepProps> = ({ settings, onChangeSetti
                       <span key={slot} className="group relative">
                         <button
                           type="button"
+                          aria-label={code || listening ? undefined : `Add a key for ${label}`}
                           onClick={() => {
                             setNotice(null);
                             setCapture({ action: id, slot: Math.min(slot, codes.length) });
                           }}
-                          className={`min-w-[4.5rem] cursor-pointer rounded px-2 py-1 font-f1-mono text-[12px] font-bold transition-colors ${
-                            listening
-                              ? "animate-pulse bg-[#CCFF00] text-[#08090D]"
-                              : code
-                                ? "bg-[#F5F7FA] text-[#08090D] hover:bg-[#CCFF00]"
-                                : "border border-[#262B3D] bg-[#08090D] text-[#8E96AA] hover:border-[#8E96AA]"
-                          }`}
+                          className={bindKeyClass(listening ? "listening" : code ? "bound" : "empty")}
                         >
                           {listening ? "PRESS…" : code ? keyLabel(code) : "+"}
                         </button>
@@ -103,7 +90,7 @@ export const KeyboardStep: React.FC<SetupStepProps> = ({ settings, onChangeSetti
                             type="button"
                             aria-label={`Unbind ${keyLabel(code)}`}
                             onClick={() => onChangeSettings((s) => ({ ...s, keys: clearKey(s.keys, id, slot) }))}
-                            className="absolute -top-1.5 -right-1.5 hidden h-4 w-4 cursor-pointer items-center justify-center rounded-full bg-zinc-700 text-[10px] leading-none text-white group-hover:flex"
+                            className="absolute -top-1.5 -right-1.5 hidden h-[18px] w-[18px] cursor-pointer items-center justify-center rounded-full border border-[#08090D] bg-[#3A4157] text-[11px] leading-none text-[#F5F7FA] group-hover:flex hover:bg-[#FF2A3C]"
                           >
                             ×
                           </button>
@@ -112,76 +99,76 @@ export const KeyboardStep: React.FC<SetupStepProps> = ({ settings, onChangeSetti
                     );
                   })}
                 </span>
-              </div>
+              </BindRow>
             );
           })}
-        </div>
-        <p className="mt-2 min-h-[1rem] font-f1-mono text-[11px] text-zinc-500">
+        </AutoGrid>
+        <StatusPill tone={capture ? "live" : notice ? "info" : "idle"}>
           {capture ? "Press a key · Esc cancels" : (notice ?? "Esc always opens the menu.")}
-        </p>
-      </Card>
-      <Card>
-        <div className="mb-2 flex items-center justify-between gap-2">
-          <SectionLabel className="!mb-0">Keyboard feel</SectionLabel>
-          <button
-            type="button"
-            onClick={() => onChangeSettings((s) => ({ ...s, keyboardTuning: DEFAULT_KEYBOARD_TUNING }))}
-            className="cursor-pointer rounded bg-black/40 px-2 py-1 font-f1-mono text-[11px] font-bold uppercase text-zinc-300 hover:bg-white/10"
-          >
+        </StatusPill>
+      </SetupCard>
+
+      <SetupCard
+        label="Keyboard feel"
+        action={
+          <PillAction onClick={() => onChangeSettings((s) => ({ ...s, keyboardTuning: DEFAULT_KEYBOARD_TUNING }))}>
             Reset
-          </button>
-        </div>
-        <TuningSlider
-          label="Throttle rise"
-          value={tuning.throttleRiseS}
-          min={0}
-          max={1}
-          step={0.01}
-          format={ms}
-          hint="Time for the throttle key to reach full throttle"
-          onChange={(v) => setTuning({ throttleRiseS: v })}
-        />
-        <TuningSlider
-          label="Brake rise"
-          value={tuning.brakeRiseS}
-          min={0}
-          max={1}
-          step={0.01}
-          format={ms}
-          hint="Time for the brake key to reach full brake"
-          onChange={(v) => setTuning({ brakeRiseS: v })}
-        />
-        <TuningSlider
-          label="Steering rise"
-          value={tuning.steerRiseS}
-          min={0.05}
-          max={1}
-          step={0.01}
-          format={ms}
-          hint="Time to steer from centre to the speed's lock"
-          onChange={(v) => setTuning({ steerRiseS: v })}
-        />
-        <TuningSlider
-          label="Steering return"
-          value={tuning.steerReturnS}
-          min={0.05}
-          max={1}
-          step={0.01}
-          format={ms}
-          hint="Time for the wheel to centre after the key is let go"
-          onChange={(v) => setTuning({ steerReturnS: v })}
-        />
-        <TuningSlider
-          label="Half throttle"
-          value={tuning.halfThrottle}
-          min={0.2}
-          max={0.9}
-          step={0.01}
-          format={(v) => `${Math.round(v * 100)} %`}
-          hint="Throttle while the Half throttle key is held with throttle"
-          onChange={(v) => setTuning({ halfThrottle: v })}
-        />
-        <div className="mt-1">
+          </PillAction>
+        }
+      >
+        <AutoGrid min={220} className="gap-x-[22px] gap-y-3">
+          <TuningSlider
+            label="Throttle rise"
+            value={tuning.throttleRiseS}
+            min={0}
+            max={1}
+            step={0.01}
+            format={ms}
+            hint="Time for the throttle key to reach full throttle"
+            onChange={(v) => setTuning({ throttleRiseS: v })}
+          />
+          <TuningSlider
+            label="Brake rise"
+            value={tuning.brakeRiseS}
+            min={0}
+            max={1}
+            step={0.01}
+            format={ms}
+            hint="Time for the brake key to reach full brake"
+            onChange={(v) => setTuning({ brakeRiseS: v })}
+          />
+          <TuningSlider
+            label="Steering rise"
+            value={tuning.steerRiseS}
+            min={0.05}
+            max={1}
+            step={0.01}
+            format={ms}
+            hint="Time to steer from centre to the speed's lock"
+            onChange={(v) => setTuning({ steerRiseS: v })}
+          />
+          <TuningSlider
+            label="Steering return"
+            value={tuning.steerReturnS}
+            min={0.05}
+            max={1}
+            step={0.01}
+            format={ms}
+            hint="Time for the wheel to centre after the key is let go"
+            onChange={(v) => setTuning({ steerReturnS: v })}
+          />
+          <TuningSlider
+            label="Half throttle"
+            value={tuning.halfThrottle}
+            min={0.2}
+            max={0.9}
+            step={0.01}
+            format={(v) => `${Math.round(v * 100)} %`}
+            hint="Throttle while the Half throttle key is held with throttle"
+            onChange={(v) => setTuning({ halfThrottle: v })}
+          />
+        </AutoGrid>
+        <div className="border-t border-[#262B3D] pt-2.5">
           <Toggle
             label="Corner-exit throttle assist"
             detail="Eases the throttle in while the rear tyres are at their limit"
@@ -189,15 +176,16 @@ export const KeyboardStep: React.FC<SetupStepProps> = ({ settings, onChangeSetti
             onChange={() => setTuning({ exitAssist: !tuning.exitAssist })}
           />
         </div>
-      </Card>
-      <Card>
+      </SetupCard>
+
+      <SetupCard ariaLabel="Mouse steering">
         <Toggle
           label="Mouse steering"
           detail="Steer with the mouse across the screen; throttle and brake stay on the keys"
           checked={mouseSteerEnabled}
           onChange={() => onSetMouseSteer(!mouseSteerEnabled)}
         />
-      </Card>
+      </SetupCard>
     </div>
   );
 };

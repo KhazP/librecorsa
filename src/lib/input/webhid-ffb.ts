@@ -10,8 +10,9 @@
  * descriptor (`device.collections`), see {@link parsePidLayout}. Logitech G-series wheels do not speak HID PID
  * (proprietary protocol) and are reported as unsupported; use the native bridge (wheel-ffb.ts) for those.
  *
- * Sign convention: + force = rim pulled right = + magnitude along the X (steering) axis, which is what the PID spec
- * and most bases implement. A few firmwares are the other way round: the caller's invert setting covers that.
+ * Sign convention: `WebHidFfb.setForce` takes the raw PID magnitude, −1..1 over the field's logical range. A PID /
+ * DirectInput direction says where the force comes from, so + magnitude along +X (90°) pushes the rim left and − pushes
+ * it right. The game's forces are + = right; `linkHidSink` in wheel-ffb.ts flips the sign between the two.
  */
 
 /* ------------------------------------------------------------------------------------------------------------ */
@@ -348,9 +349,18 @@ const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v
 export function buildReport(layout: PidReportLayout, values: Record<number, number>): { reportId: number; data: Uint8Array } {
   const data = new Uint8Array(Math.ceil(layout.bitLength / 8));
   for (const [key, value] of Object.entries(values)) {
-    const f = getField(layout, Number(key));
+    const usage = Number(key);
+    const f = getField(layout, usage);
     if (!f || !Number.isFinite(value)) continue;
-    writeBits(data, f.bitOffset, f.bitSize, clamp(Math.round(value), f.min, f.max));
+    // PID Trigger Button (0xFF on 8-bit) and Duration (0xFFFF on 16-bit) use out-of-range sentinels ("no trigger" /
+    // "infinite duration") on descriptors whose LogicalMax stops at 8 or 32767 (e.g. MOZA R9 Base).
+    const rounded = Math.round(value);
+    const raw =
+      (usage === PID.TRIGGER_BUTTON && rounded === 255 && f.bitSize >= 8) ||
+      (usage === PID.DURATION && rounded === 0xffff && f.bitSize >= 16)
+        ? rounded
+        : clamp(rounded, f.min, f.max);
+    writeBits(data, f.bitOffset, f.bitSize, raw);
   }
   return { reportId: layout.reportId, data };
 }
@@ -648,13 +658,13 @@ function setEffectValues(set: PidReportLayout, blockIndex: number): Record<numbe
   const type = getField(set, PID.EFFECT_TYPE);
   v[PID.EFFECT_TYPE] = (type ? selectorValue(type, PID.ET_CONSTANT_FORCE) : null) ?? 1;
   const duration = getField(set, PID.DURATION);
-  // infinite: the field's maximum (0xFFFF on most devices; 32767 where the descriptor stops there)
-  if (duration) v[PID.DURATION] = duration.max;
+  // infinite: 0xFFFF on 16-bit fields (even where the descriptor stops at 32767, e.g. MOZA R9 Base); otherwise field max
+  if (duration) v[PID.DURATION] = duration.bitSize >= 16 ? 0xffff : duration.max;
   const gain = getField(set, PID.GAIN);
   if (gain) v[PID.GAIN] = gain.max;
   const trigger = getField(set, PID.TRIGGER_BUTTON);
-  // "no trigger" is 0xFF where the field is a full byte; otherwise 0 (clamped into range)
-  if (trigger) v[PID.TRIGGER_BUTTON] = trigger.max >= 255 ? 255 : 0;
+  // "no trigger" is 0xFF where the field is a full byte (even when LogicalMax < 255, e.g. MOZA R9 Base); otherwise 0
+  if (trigger) v[PID.TRIGGER_BUTTON] = trigger.bitSize >= 8 || trigger.max >= 255 ? 255 : 0;
   // Direction along +X (90 degrees: east) in case the firmware uses the angle...
   const dir = getField(set, ordinalUsage(1));
   if (dir) v[ordinalUsage(1)] = dir.min + (dir.max - dir.min) * DIRECTION_X_FRACTION;
@@ -824,8 +834,8 @@ export class WebHidFfb {
   }
 
   /**
-   * Rim force −1..1 (+ = pulled right; invert it in the caller when the wheel turns the other way). Cheap to call
-   * every frame: writes are spaced by at least 2 ms, one in flight at a time, always carrying the latest value.
+   * PID magnitude −1..1 (+ pushes the rim left, − right; see the sign convention above). Cheap to call every frame:
+   * writes are spaced by at least 2 ms, one in flight at a time, always carrying the latest value.
    */
   setForce(force: number): void {
     this.session?.writer.setForce(force);

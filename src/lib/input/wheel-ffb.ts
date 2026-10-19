@@ -9,14 +9,14 @@
  * when packets stop (paused tab, closed sim).
  */
 import type { CarTelemetry } from "@/types/f1";
-import { CAR_WHEEL_LOCK_DEG, findPad, type PadLike, wheelRimAngleDeg, type WheelSettings } from "./device-input";
+import { CAR_WHEEL_LOCK_DEG, carWheelLockDeg, findPad, type PadLike, wheelRimAngleDeg, type WheelSettings } from "./device-input";
 import { WebHidFfb } from "./webhid-ffb";
 
 export const FFB_BRIDGE_PORT = 18500;
 const BRIDGE_URL = `ws://127.0.0.1:${FFB_BRIDGE_PORT}`;
 const RECONNECT_MS = 5000;
 /** Degrees past the car's steering lock over which the soft-lock spring builds to full force */
-const SOFT_LOCK_RAMP_DEG = 8;
+const SOFT_LOCK_RAMP_DEG = 12;
 /** Below this the minimum force eases in, so the rim does not notch across the centre */
 const MIN_FORCE_EASE = 0.02;
 
@@ -31,18 +31,30 @@ export interface FfbStatus {
   error: string | null;
 }
 
-/** Steering torque → rim force (+ = right): gain, then AC-style minimum force */
-export function shapeFfbForce(torque: number, wheel: Pick<WheelSettings, "ffbGain" | "ffbMinForce">): number {
+/**
+ * Steering torque → rim force (+ = right): gain, then minimum force.
+ * When `speedKmh` is provided (live driving), minimum force is gated off at standstill (≤ 1 km/h) and ramps in up to
+ * 6 km/h (`clamp((speedKmh - 1) * 0.2, 0, 1)`) so a parked direct-drive wheel never jumps or oscillates at rest.
+ */
+export function shapeFfbForce(
+  torque: number,
+  wheel: Pick<WheelSettings, "ffbGain" | "ffbMinForce">,
+  speedKmh?: number
+): number {
   const f = torque * wheel.ffbGain;
   const a = Math.abs(f);
-  if (wheel.ffbMinForce <= 0 || a === 0) return f;
+  const speedGate =
+    speedKmh !== undefined && Number.isFinite(speedKmh) ? Math.max(0, Math.min(1, (speedKmh - 1.0) * 0.2)) : 1;
+  const minForce = wheel.ffbMinForce * speedGate;
+  if (minForce <= 0 || a === 0) return f;
   const u = Math.min(1, a / MIN_FORCE_EASE);
-  return Math.sign(f) * (wheel.ffbMinForce * u * u * (3 - 2 * u) + (1 - wheel.ffbMinForce) * a);
+  return Math.sign(f) * (minForce * u * u * (3 - 2 * u) + (1 - minForce) * a);
 }
 
 /** Soft-lock spring (+ = right) once the rim turns past the car's steering lock: the end stop a real rack has */
-export function softLockForce(rimDeg: number): number {
-  const over = Math.abs(rimDeg) - CAR_WHEEL_LOCK_DEG / 2;
+export function softLockForce(rimDeg: number, carLockDeg: number = CAR_WHEEL_LOCK_DEG): number {
+  const lock = carLockDeg > 0 ? carLockDeg : CAR_WHEEL_LOCK_DEG;
+  const over = Math.abs(rimDeg) - lock / 2;
   return over > 0 ? -Math.sign(rimDeg) * Math.min(1, over / SOFT_LOCK_RAMP_DEG) : 0;
 }
 
@@ -79,6 +91,8 @@ export function directionTestForce(tS: number, invert: boolean): number {
   return -sign * TEST_LEVEL * pull((tS - second) / TEST_PULL_S);
 }
 const TEST_STEP_MS = 10;
+/** If WebHID frame updates stop arriving (hidden tab, stalled loop), zero the wheel's constant-force effect after 150 ms */
+export const HID_WATCHDOG_MS = 150;
 
 /** Rim speed (deg/s) at which the damper reaches its full force */
 const DAMPING_FULL_DEG_S = 600;
@@ -111,6 +125,8 @@ export class WheelFfbClient {
   private hidTimeS = 0;
   /** WebHID direction test in progress: it owns the force until it ends */
   private hidTest: { timer: ReturnType<typeof setInterval> } | null = null;
+  /** Watchdog that zeroes WebHID force if frame updates stop while a non-zero force is active */
+  private hidWatchdog: ReturnType<typeof setTimeout> | null = null;
 
   private ws: WebSocket | null = null;
   private replaced = false;
@@ -149,15 +165,25 @@ export class WheelFfbClient {
         wheel.steer && steerPad
           ? wheelRimAngleDeg(steerPad.axes[wheel.steer.axis] ?? wheel.steer.center, wheel.steer, wheel.rotationDeg)
           : null;
-      const softLock = rimDeg !== null ? softLockForce(rimDeg) : 0;
-      // Damper: opposes rim speed (+ = right), so a direct-drive base does not oscillate when released
+      const carLockDeg = carWheelLockDeg(vehicle);
+      const softLock = rimDeg !== null ? softLockForce(rimDeg, carLockDeg) : 0;
+      // Damper: static wheel damper + speed-scaled gyroscopic self-aligning damper + cushioned soft-lock stop damper
       let damping = 0;
-      if (rimDeg !== null && this.lastRimDeg !== null && dtS > 0 && wheel.ffbDamping > 0) {
+      if (rimDeg !== null && this.lastRimDeg !== null && dtS > 0) {
         const rimSpeed = (rimDeg - this.lastRimDeg) / dtS;
-        damping = -wheel.ffbDamping * DAMPING_MAX_FORCE * Math.max(-1, Math.min(1, rimSpeed / DAMPING_FULL_DEG_S));
+        const speedKmh = Number.isFinite(telemetry.speedKmh) ? telemetry.speedKmh : 0;
+        const gyroFactor = Math.max(0, Math.min(1, (speedKmh - 10) / 180));
+        const baseDamp =
+          wheel.ffbDamping > 0
+            ? wheel.ffbDamping * DAMPING_MAX_FORCE + 0.12 * gyroFactor * Math.min(1, wheel.ffbDamping * 1.5)
+            : 0;
+        // Inside the soft-lock zone, damp motion pushing deeper into the stop so the rim never bounces off lock
+        const inSoftLock = Math.abs(rimDeg) > carLockDeg / 2 && rimSpeed * rimDeg > 0;
+        const lockDamp = inSoftLock ? 0.45 : 0;
+        damping = -(baseDamp + lockDamp) * Math.max(-1, Math.min(1, rimSpeed / DAMPING_FULL_DEG_S));
       }
       this.lastRimDeg = rimDeg;
-      let shaped = shapeFfbForce(torque, wheel);
+      let shaped = shapeFfbForce(torque, wheel, telemetry.speedKmh);
       // Optional smoothing of the physics torque (the soft lock and damper stay immediate)
       if (wheel.ffbFilterS > 0 && dtS > 0) {
         this.filtered += (shaped - this.filtered) * (1 - Math.exp(-dtS / wheel.ffbFilterS));
@@ -172,7 +198,7 @@ export class WheelFfbClient {
       const rawSub = telemetry.ffbSubframeSamples;
       if (rawSub && rawSub.length > 0) {
         subframes = rawSub.map((sample) => {
-          let sf = shapeFfbForce(Number.isFinite(sample) ? sample : 0, wheel) + softLock;
+          let sf = shapeFfbForce(Number.isFinite(sample) ? sample : 0, wheel, telemetry.speedKmh) + softLock + damping;
           if (wheel.ffbInvert) sf = -sf;
           return Math.round(sf * 1e4) / 1e4;
         });
@@ -199,9 +225,12 @@ export class WheelFfbClient {
       const buzz =
         0.12 * kerb * Math.sin(2 * Math.PI * 40 * this.hidTimeS) +
         0.1 * abs * Math.sign(Math.sin(2 * Math.PI * 25 * this.hidTimeS));
-      this.hidSink?.(Math.max(-1, Math.min(1, force + (force !== 0 ? buzz : 0))));
+      const out = Math.max(-1, Math.min(1, force + (force !== 0 ? buzz : 0)));
+      this.hidSink?.(out);
+      this.armHidWatchdog(out !== 0);
       return;
     }
+    this.armHidWatchdog(false);
     this.send(
       subframes && subframes.length > 0
         ? { t: "f", f: Math.round(force * 1e4) / 1e4, k: kerb, a: abs, s: subframes }
@@ -209,12 +238,29 @@ export class WheelFfbClient {
     );
   }
 
-  /** Zero the wheel now (pause menu opened) instead of waiting for the next frame */
+  /** Zero the wheel now (pause menu opened, hidden tab, blurred window) instead of waiting for the next frame */
   stop(): void {
     this.cancelHidTest();
+    this.armHidWatchdog(false);
     this.force = 0;
     this.hidSink?.(0);
     this.send({ t: "f", f: 0, k: 0, a: 0 });
+  }
+
+  private armHidWatchdog(active: boolean): void {
+    if (this.hidWatchdog !== null) {
+      clearTimeout(this.hidWatchdog);
+      this.hidWatchdog = null;
+    }
+    if (!active) return;
+    const timer = setTimeout(() => {
+      this.hidWatchdog = null;
+      if (this.hidTest) return;
+      this.force = 0;
+      this.hidSink?.(0);
+    }, HID_WATCHDOG_MS);
+    (timer as { unref?: () => void }).unref?.();
+    this.hidWatchdog = timer;
   }
 
   /** Forwards a telemetry packet to the bridge, which sends it as one UDP datagram to 127.0.0.1:<port> */
@@ -253,6 +299,7 @@ export class WheelFfbClient {
   test(invert: boolean): boolean {
     if (!this.hidSink) return this.send({ t: "test", inv: invert });
     this.cancelHidTest();
+    this.armHidWatchdog(false);
     const start = Date.now();
     const timer = setInterval(() => {
       const tS = (Date.now() - start) / 1000;
@@ -283,7 +330,7 @@ export class WheelFfbClient {
   getStatus = (): FfbStatus => this.status;
 
   dispose(): void {
-    this.cancelHidTest();
+    this.stop();
     this.keepConnection(false, 0);
   }
 
@@ -354,10 +401,13 @@ export const wheelFfb = new WheelFfbClient();
 export const webHidFfb = new WebHidFfb();
 linkHidSink(wheelFfb, webHidFfb);
 
-/** Keeps `client.hidSink` pointing at `hid` exactly while it is ready; returns the unsubscribe */
+/**
+ * Keeps `client.hidSink` pointing at `hid` exactly while it is ready; returns the unsubscribe. The client's forces are
+ * + = right, a PID magnitude along +X is + = left (the direction a force comes from), so the sign flips here.
+ */
 export function linkHidSink(client: WheelFfbClient, hid: WebHidFfb): () => void {
   const sync = () => {
-    client.hidSink = hid.status.state === "ready" ? (f) => hid.setForce(f) : null;
+    client.hidSink = hid.status.state === "ready" ? (f) => hid.setForce(-f) : null;
   };
   sync();
   return hid.subscribe(sync);
