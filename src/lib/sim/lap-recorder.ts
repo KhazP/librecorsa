@@ -17,7 +17,7 @@ export interface LapRecorderTurn {
 export interface LapRecorderInput {
   telemetry: Pick<
     CarTelemetry,
-    "lapCount" | "currentLapTimeMs" | "lastLapTimeMs" | "trackDistanceM" | "speedKmh" | "throttle" | "brake" | "steering" | "gear" | "offTrack" | "sectorTimesMs"
+    "lapCount" | "currentLapTimeMs" | "lastLapTimeMs" | "trackDistanceM" | "speedKmh" | "throttle" | "brake" | "steering" | "gear" | "offTrack" | "sectorTimesMs" | "lapInvalid" | "lastLapValid"
   >;
   position: { x: number; y: number; z: number };
   quaternion: { x: number; y: number; z: number; w: number };
@@ -259,7 +259,8 @@ export class LapRecorder {
   /** Adds this update to the lap in progress: validity and a sample when one is due */
   private collect(input: LapRecorderInput): void {
     if (!this.recording) return;
-    if (input.telemetry.offTrack) this.valid = false;
+    // The physics' own verdict when it judges track limits, else any moment off the track
+    if (input.telemetry.lapInvalid ?? input.telemetry.offTrack) this.valid = false;
     const tS = input.telemetry.currentLapTimeMs / 1000;
     if (!Number.isFinite(tS)) return;
     if (tS >= this.lastSampleT + this.period - 1e-9) {
@@ -281,7 +282,8 @@ export class LapRecorder {
     const endT = round(Math.max(lapMs / 1000, lastT), 3);
     this.rows.push(sampleRow(input, endT));
     const rows = this.rows;
-    const valid = this.valid;
+    // The physics rules out a lap that ended while an excursion was still being judged
+    const valid = this.valid && input.telemetry.lastLapValid !== false;
 
     // Personal best and delta, before this lap changes them
     const pbBefore = this.pb;

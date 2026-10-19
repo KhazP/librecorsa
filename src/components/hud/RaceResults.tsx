@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef } from "react";
+import { RotateCcw } from "lucide-react";
 import { useFocusNav } from "@/components/menu/useFocusNav";
 import { PromptBar } from "@/components/menu/menu-ui";
 import type { RaceResultEntry, RaceStatus } from "@/types/f1";
@@ -29,8 +30,89 @@ function timeOrGap(r: RaceResultEntry, resultsFinal: boolean): string {
   return formatRaceTime(r.finishTimeS);
 }
 
+/** Colour of the time / gap value */
+function timeColor(r: RaceResultEntry): string {
+  if (r.position === 1) return HUD_VOLT;
+  if (r.dnf) return HUD_RED;
+  if (r.finishTimeS === null) return HUD_CYAN;
+  if (r.lapsDown > 0) return "#C5CBD8";
+  return "#F5F7FA";
+}
+
+/** "+3s" pill: time penalties already added to the race time */
+const PenaltyBadge: React.FC<{ seconds: number; className?: string }> = ({ seconds, className = "mr-2" }) => (
+  <span
+    title={`${seconds.toFixed(1)} s of time penalties (track limits), included in the time`}
+    className={`inline-flex h-[18px] items-center rounded-full px-1.5 align-[1px] font-f1-mono text-[9px] font-extrabold tracking-[0.06em] ${className}`}
+    style={{ backgroundColor: HUD_RED, color: "#F5F7FA" }}
+  >
+    +{seconds % 1 === 0 ? seconds.toFixed(0) : seconds.toFixed(1)}s PEN
+  </span>
+);
+
 const BUTTON_BASE =
-  "rounded border px-3 py-1.5 font-f1-mono text-[12px] font-bold uppercase tracking-wider transition-colors";
+  "inline-flex h-[46px] cursor-pointer items-center gap-2 rounded-full px-5 text-[14px] font-bold transition-colors short:h-10";
+
+const TH = "px-2.5 pb-2 font-f1-mono text-[9px] font-extrabold tracking-[0.16em] text-[#8E96AA] uppercase";
+
+/** One podium step: P1 in the middle and tallest, the player in volt */
+const PodiumStep: React.FC<{
+  r: RaceResultEntry;
+  text: string;
+  fastest: boolean;
+}> = ({ r, text, fastest }) => {
+  const p1 = r.position === 1;
+  const look = r.isPlayer
+    ? {
+        background: "linear-gradient(180deg, rgba(204,255,0,0.16), rgba(204,255,0,0.05))",
+        border: "1.5px solid #CCFF00",
+        num: HUD_VOLT,
+      }
+    : p1
+      ? {
+          background: "linear-gradient(180deg, rgba(245,247,250,0.1), rgba(245,247,250,0.03))",
+          border: "1px solid rgba(245,247,250,0.25)",
+          num: "#F5F7FA",
+        }
+      : { background: "rgba(255,255,255,0.03)", border: "1px solid #262B3D", num: "#8E96AA" };
+  const height = p1 ? "h-[186px]" : r.position === 2 ? "h-[150px]" : "h-[128px]";
+  return (
+    <div
+      className={`lc-rise relative flex min-w-0 flex-col justify-end gap-1.5 rounded-t-[24px] rounded-b-[14px] p-4 ${height} compact:h-auto compact:min-h-[112px]`}
+      // P1 rises first, then P2, then P3
+      style={{ background: look.background, border: look.border, animationDelay: `${p1 ? 0 : r.position === 2 ? 100 : 200}ms` }}
+    >
+      <span
+        className={`lc-disp absolute top-3 right-4 ${p1 ? "text-[60px]" : r.position === 2 ? "text-[44px]" : "text-[40px]"} compact:text-[36px]`}
+        style={{ color: look.num }}
+      >
+        {r.position}
+      </span>
+      <span
+        className="lc-data inline-flex items-center gap-2 text-[13px] tracking-[0.12em]"
+        style={{ color: r.isPlayer ? HUD_VOLT : "#F5F7FA" }}
+      >
+        <span
+          aria-hidden
+          className="h-4 w-1 shrink-0 rounded-full"
+          style={{ backgroundColor: r.isPlayer ? HUD_VOLT : r.teamColorHex }}
+        />
+        {r.driverCode}
+      </span>
+      <span className={`truncate font-bold ${p1 ? "text-[19px]" : "text-[17px]"}`}>
+        {r.name}
+        {r.isPlayer ? <span className="text-[12px] text-[#CCFF00]"> · you</span> : null}
+      </span>
+      <span className={`lc-data ${p1 ? "text-[18px]" : "text-[15px]"}`} style={{ color: timeColor(r) }}>
+        {text}
+      </span>
+      <span className="lc-data text-[11px] text-[#8E96AA]">
+        BEST <span style={{ color: fastest ? HUD_PURPLE : undefined }}>{formatLapTime(r.bestLapMs)}</span>
+        {r.penaltyS ? <PenaltyBadge seconds={r.penaltyS} className="ml-2" /> : null}
+      </span>
+    </div>
+  );
+};
 
 /**
  * Final classification of a race (AI or multiplayer). Renders nothing until `race.results` is set.
@@ -42,7 +124,9 @@ export const RaceResults: React.FC<{
   onClose: () => void;
   onRestart?: () => void;
   onBackToLobby?: () => void;
-}> = ({ race, trackName, onClose, onRestart, onBackToLobby }) => {
+  /** The player's track-limits strikes this race */
+  trackLimitStrikes?: number;
+}> = ({ race, trackName, onClose, onRestart, onBackToLobby, trackLimitStrikes = 0 }) => {
   const results = race.results;
   const rootRef = useRef<HTMLDivElement | null>(null);
   // A controller closes the card with Ⓑ and reaches its buttons (Esc is handled below)
@@ -65,115 +149,121 @@ export const RaceResults: React.FC<{
     (best, r) => (r.bestLapMs !== null && (best === null || r.bestLapMs < best) ? r.bestLapMs : best),
     null,
   );
+  const isFastest = (r: RaceResultEntry) => r.bestLapMs !== null && r.bestLapMs === fastestMs;
+  // Podium order on screen: P2, P1, P3
+  const podium = [ordered[1], ordered[0], ordered[2]];
 
   return (
-    <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+    <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center bg-[#08090D]/55 p-4">
       <div
         ref={rootRef}
         role="dialog"
         aria-modal="true"
         aria-label="Race result"
-        className="hud-panel pointer-events-auto flex max-h-[88vh] w-full max-w-2xl flex-col overflow-hidden rounded-lg"
+        className="pointer-events-auto flex max-h-[calc(100dvh-2rem)] w-full max-w-[760px] flex-col gap-[18px] overflow-hidden rounded-[30px] border border-white/8 bg-[#0A0B10]/92 px-[26px] pt-6 pb-[22px] text-[#F5F7FA] shadow-[0_40px_100px_rgba(0,0,0,0.65)] backdrop-blur-[20px] short:gap-3 short:px-4 short:pt-4 short:pb-3"
       >
-        <div className="flex items-center justify-between gap-3 border-b border-[#262B3D] bg-[#11131A] px-4 py-2.5">
-          <div className="flex min-w-0 items-center gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-3">
             <span
-              className="h-4 w-1 shrink-0 rounded-full"
+              aria-hidden
+              className="h-[34px] w-1.5 shrink-0 rounded-full"
               style={{ backgroundColor: final ? HUD_VOLT : HUD_YELLOW }}
             />
-            <span className="hud-num truncate text-[18px] italic tracking-wider text-[#F5F7FA]">
-              RACE RESULT · {trackName}
-            </span>
+            <div className="flex min-w-0 flex-col gap-1">
+              <span className="lc-lbl !text-[9px] !font-extrabold !tracking-[0.18em]">
+                Race result{race.totalLaps ? ` · ${race.totalLaps} laps` : ""}
+              </span>
+              <h1 className="lc-disp m-0 truncate text-[24px] sm:text-[30px]">{trackName}</h1>
+            </div>
           </div>
+          <span className="flex shrink-0 items-center gap-2">
+          {trackLimitStrikes > 0 ? (
+            <span
+              className="lc-data inline-flex h-7 items-center rounded-full px-3 text-[11px] tracking-[0.1em]"
+              style={{ boxShadow: `inset 0 0 0 1px ${HUD_YELLOW}`, color: HUD_YELLOW }}
+              title="Track-limits strikes: every third is a time penalty"
+            >
+              TRACK LIMITS ×{trackLimitStrikes}
+            </span>
+          ) : null}
           <span
-            className="shrink-0 rounded-sm px-2 py-0.5 font-f1-mono text-[11px] font-black"
+            className="lc-data inline-flex h-7 shrink-0 items-center rounded-full px-3.5 text-[11px] tracking-[0.12em]"
             style={
               final
                 ? { backgroundColor: HUD_VOLT, color: "#08090D" }
-                : { border: `1px solid ${HUD_YELLOW}`, color: HUD_YELLOW }
+                : { boxShadow: `inset 0 0 0 1px ${HUD_YELLOW}`, color: HUD_YELLOW }
             }
           >
             {final ? "FINAL" : "PROVISIONAL"}
           </span>
+          </span>
         </div>
 
-        <div className="overflow-y-auto">
-          <table className="w-full border-collapse text-left">
-            <thead className="sticky top-0 bg-[#11131A]">
-              <tr className="hud-label !text-[9px]">
-                <th className="px-2 py-1.5 font-normal">Pos</th>
+        <div className="-mx-1 flex min-h-0 flex-col gap-[18px] overflow-y-auto px-1">
+          {/* Podium */}
+          <div className="grid grid-cols-[1fr_1.15fr_1fr] items-end gap-2.5 short:hidden">
+            {podium.map((r, i) =>
+              r ? (
+                <PodiumStep key={`${r.position}-${r.driverCode}`} r={r} text={timeOrGap(r, final)} fastest={isFastest(r)} />
+              ) : (
+                <span key={`empty-${i}`} aria-hidden />
+              ),
+            )}
+          </div>
+
+          <table className="w-full border-collapse text-left" aria-label="Full classification">
+            <thead className="sticky top-0 z-[1] bg-[#0A0B10]">
+              <tr>
+                <th className={`${TH} w-10`}>Pos</th>
                 <th className="w-2 p-0" />
-                <th className="px-2 py-1.5 font-normal">Code</th>
-                <th className="px-2 py-1.5 font-normal">Name</th>
-                <th className="px-2 py-1.5 text-right font-normal">Laps</th>
-                <th className="px-2 py-1.5 text-right font-normal">Time / Gap</th>
-                <th className="px-2 py-1.5 text-right font-normal">Best lap</th>
+                <th className={TH}>Code</th>
+                <th className={TH}>Name</th>
+                <th className={`${TH} text-right`}>Laps</th>
+                <th className={`${TH} text-right`}>Time / gap</th>
+                <th className={`${TH} text-right`}>Best lap</th>
               </tr>
             </thead>
             <tbody>
-              {ordered.map((r, i) => {
-                const text = timeOrGap(r, final);
-                const timeColor = r.position === 1
-                  ? HUD_VOLT
-                  : r.dnf
-                    ? HUD_RED
-                    : r.finishTimeS === null
-                      ? HUD_CYAN
-                      : "#F5F7FA";
-                const bestIsFastest = r.bestLapMs !== null && r.bestLapMs === fastestMs;
-                return (
-                  <tr
-                    key={`${r.position}-${r.driverCode}-${i}`}
-                    className={`h-8 border-t border-[#262B3D]/50 ${
-                      r.isPlayer ? "bg-[#CCFF00]/14" : i % 2 ? "bg-white/[0.02]" : ""
-                    }`}
+              {ordered.map((r, i) => (
+                <tr
+                  key={`${r.position}-${r.driverCode}-${i}`}
+                  className={`h-10 font-f1-mono text-[13px] font-extrabold tabular-nums short:h-8 ${
+                    r.isPlayer ? "bg-[#CCFF00]/10 shadow-[inset_3px_0_0_#CCFF00]" : i % 2 ? "bg-white/[0.02]" : ""
+                  }`}
+                >
+                  <td className="px-2.5" style={{ color: r.isPlayer ? HUD_VOLT : "#8E96AA" }}>
+                    {r.position}
+                  </td>
+                  <td className="p-0">
+                    <span
+                      className="block h-4 w-1 rounded-full"
+                      style={{ backgroundColor: r.isPlayer ? HUD_VOLT : r.teamColorHex }}
+                    />
+                  </td>
+                  <td className="px-2.5 tracking-[0.1em]" style={{ color: r.isPlayer ? HUD_VOLT : "#F5F7FA" }}>
+                    {r.driverCode}
+                  </td>
+                  <td
+                    className="px-2.5 text-[14px] font-semibold tracking-normal"
+                    style={{ fontFamily: "var(--font-titillium), sans-serif" }}
                   >
-                    <td
-                      className={`hud-num border-l-2 px-2 text-[14px] ${
-                        r.isPlayer ? "border-l-[#CCFF00] text-[#CCFF00]" : "border-l-transparent text-[#8E96AA]"
-                      }`}
-                    >
-                      {r.position}
-                    </td>
-                    <td className="p-0">
-                      <span
-                        className="block h-4 w-1 rounded-full"
-                        style={{ backgroundColor: r.isPlayer ? HUD_VOLT : r.teamColorHex }}
-                      />
-                    </td>
-                    <td
-                      className={`hud-num px-2 text-[14px] tracking-wider ${
-                        r.isPlayer ? "text-[#CCFF00]" : "text-[#F5F7FA]"
-                      }`}
-                    >
-                      {r.driverCode}
-                    </td>
-                    <td className="px-2 text-[13px] text-[#F5F7FA]/90">
-                      <span className="block max-w-[180px] truncate">{r.name}</span>
-                    </td>
-                    <td className="px-2 text-right font-f1-mono text-[12px] tabular-nums text-[#8E96AA]">
-                      {r.lapsCompleted}
-                    </td>
-                    <td
-                      className="hud-num whitespace-nowrap px-2 text-right text-[14px] tabular-nums"
-                      style={{ color: timeColor }}
-                    >
-                      {text}
-                    </td>
-                    <td
-                      className="px-2 text-right font-f1-mono text-[12px] font-bold tabular-nums"
-                      style={{ color: bestIsFastest ? HUD_PURPLE : "#F5F7FA" }}
-                    >
-                      {formatLapTime(r.bestLapMs)}
-                    </td>
-                  </tr>
-                );
-              })}
+                    <span className="block max-w-[180px] truncate">{r.name}</span>
+                  </td>
+                  <td className="px-2.5 text-right text-[#C5CBD8]">{r.lapsCompleted}</td>
+                  <td className="px-2.5 text-right whitespace-nowrap" style={{ color: timeColor(r) }}>
+                    {r.penaltyS ? <PenaltyBadge seconds={r.penaltyS} /> : null}
+                    {timeOrGap(r, final)}
+                  </td>
+                  <td className="px-2.5 text-right" style={{ color: isFastest(r) ? HUD_PURPLE : "#F5F7FA" }}>
+                    {formatLapTime(r.bestLapMs)}
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
 
-        <div className="flex flex-wrap items-center justify-end gap-2 border-t border-[#262B3D] bg-[#11131A] px-4 py-2.5">
+        <div className="flex flex-wrap items-center justify-end gap-3 border-t border-[#262B3D] pt-3.5">
           <PromptBar
             className="mr-auto"
             prompts={[
@@ -181,31 +271,34 @@ export const RaceResults: React.FC<{
               { action: "back", label: "Close" },
             ]}
           />
-          {onRestart ? (
+          <div className="flex flex-wrap gap-2">
+            {onRestart ? (
+              <button
+                type="button"
+                onClick={onRestart}
+                className={`${BUTTON_BASE} border-0 bg-[#CCFF00] text-[#08090D] hover:bg-[#d9ff33]`}
+              >
+                <RotateCcw className="h-4 w-4" strokeWidth={2.6} aria-hidden />
+                Restart race
+              </button>
+            ) : null}
+            {onBackToLobby ? (
+              <button
+                type="button"
+                onClick={onBackToLobby}
+                className={`${BUTTON_BASE} border border-[#00E5FF]/50 bg-[#00E5FF]/8 text-[#00E5FF] hover:bg-[#00E5FF]/15`}
+              >
+                Back to lobby
+              </button>
+            ) : null}
             <button
               type="button"
-              onClick={onRestart}
-              className={`${BUTTON_BASE} border-[#CCFF00] bg-[#CCFF00] text-[#08090D] hover:bg-[#99bf00]`}
+              onClick={onClose}
+              className={`${BUTTON_BASE} border border-[#262B3D] bg-[#1B1F2B] text-[#F5F7FA] hover:border-[#3A4157] hover:bg-[#262B3D]`}
             >
-              Restart race
+              Close
             </button>
-          ) : null}
-          {onBackToLobby ? (
-            <button
-              type="button"
-              onClick={onBackToLobby}
-              className={`${BUTTON_BASE} border-[#262B3D] bg-[#08090D] text-[#F5F7FA] hover:border-[#CCFF00] hover:text-[#CCFF00]`}
-            >
-              Back to lobby
-            </button>
-          ) : null}
-          <button
-            type="button"
-            onClick={onClose}
-            className={`${BUTTON_BASE} border-[#262B3D] bg-[#08090D] text-[#F5F7FA] hover:border-[#CCFF00] hover:text-[#CCFF00]`}
-          >
-            Close
-          </button>
+          </div>
         </div>
       </div>
     </div>

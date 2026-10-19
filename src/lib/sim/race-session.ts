@@ -3,7 +3,7 @@
  * the final classification. A multiplayer race also runs its start procedure here, on the host's clock, so every
  * client shows the same lights and has the same lights-out instant.
  */
-import type { RaceResultEntry, RaceStandingEntry, RaceStatus } from "@/types/f1";
+import type { RaceResultEntry, RaceStandingEntry, RaceStatus, TireCompound } from "@/types/f1";
 import type { InterpolatedPeerState, PeerRaceProgress, RaceStartInfo } from "@/lib/sim/multiplayer-sync";
 
 /** Gap timing resolution: the race time at which the first car reached each bucket of race distance */
@@ -27,7 +27,19 @@ export interface RacerProgress {
   speedMs: number;
   finishTimeS: number | null;
   bestLapMs: number | null;
+  /** Last completed lap (ms) */
+  lastLapMs?: number | null;
+  /** Time penalties to add at the flag (s) */
+  penaltyS?: number;
+  compound?: TireCompound;
 }
+
+/** Race time at the flag with the time penalties added (s); null while running */
+export const classifiedTimeS = (r: Pick<RacerProgress, "finishTimeS" | "penaltyS">): number | null =>
+  r.finishTimeS === null ? null : r.finishTimeS + (r.penaltyS ?? 0);
+
+/** Lap distance (m) of a race distance */
+export const lapPositionM = (distM: number, lapLengthM: number) => ((distM % lapLengthM) + lapLengthM) % lapLengthM;
 
 /** Interval timing from race distances: the time since the leader passed the same point */
 export class GapTimer {
@@ -59,10 +71,10 @@ export class GapTimer {
   }
 }
 
-/** Running order: finishers by time first, then everyone else by distance */
+/** Running order: finishers by time (penalties included) first, then everyone else by distance */
 export function raceOrder(racers: readonly RacerProgress[]): RacerProgress[] {
   return [...racers].sort((a, b) => {
-    if (a.finishTimeS !== null && b.finishTimeS !== null) return a.finishTimeS - b.finishTimeS;
+    if (a.finishTimeS !== null && b.finishTimeS !== null) return (classifiedTimeS(a) ?? 0) - (classifiedTimeS(b) ?? 0);
     if (a.finishTimeS !== null) return -1;
     if (b.finishTimeS !== null) return 1;
     return b.distM - a.distM;
@@ -77,7 +89,9 @@ export function classify(
   final: boolean
 ): RaceResultEntry[] {
   const winner = ordered[0];
+  const winnerTime = winner ? classifiedTimeS(winner) : null;
   return ordered.map((r, i) => {
+    const time = classifiedTimeS(r);
     const lapsCompleted = Math.max(0, Math.min(totalLaps, Math.floor(r.distM / lapLengthM)));
     const lapsDown = r.finishTimeS === null && winner ? Math.max(0, Math.floor((winner.distM - r.distM) / lapLengthM)) : 0;
     return {
@@ -86,15 +100,13 @@ export function classify(
       name: r.name,
       teamColorHex: r.color,
       isPlayer: r.isPlayer,
-      finishTimeS: r.finishTimeS,
-      gapS:
-        i > 0 && r.finishTimeS !== null && winner?.finishTimeS !== null && winner?.finishTimeS !== undefined
-          ? r.finishTimeS - winner.finishTimeS
-          : null,
+      finishTimeS: time,
+      gapS: i > 0 && time !== null && winnerTime !== null ? time - winnerTime : null,
       lapsDown,
       lapsCompleted,
       bestLapMs: r.bestLapMs,
       dnf: final && r.finishTimeS === null,
+      penaltyS: r.penaltyS ? r.penaltyS : undefined,
     };
   });
 }
@@ -111,6 +123,7 @@ export class LapClock {
   distM = 0;
   finishTimeS: number | null = null;
   bestLapMs: number | null = null;
+  lastLapMs: number | null = null;
   private prevS = 0;
   private lapsDone = 0;
   private lapStartS = 0;
@@ -124,6 +137,7 @@ export class LapClock {
     this.distM = sMeters > L / 2 ? sMeters - L : sMeters;
     this.finishTimeS = null;
     this.bestLapMs = null;
+    this.lastLapMs = null;
     this.lapsDone = 0;
     this.lapStartS = 0;
   }
@@ -138,6 +152,7 @@ export class LapClock {
       const lapMs = (raceTimeS - this.lapStartS) * 1000;
       // The first lap starts from the grid: still a lap, as on a timing screen
       if (lapMs > 1000 && (this.bestLapMs === null || lapMs < this.bestLapMs)) this.bestLapMs = Math.round(lapMs);
+      if (lapMs > 1000) this.lastLapMs = Math.round(lapMs);
       this.lapsDone = laps;
       this.lapStartS = raceTimeS;
       if (laps >= totalLaps) {
@@ -164,6 +179,9 @@ export class MultiplayerRace {
   private readonly lightsOutHostMs: number;
   /** Last known progress of every remote racer (kept when they disconnect) */
   private remote = new Map<string, RacerProgress>();
+  /** The player's own time penalties (s) and tyres, reported to everyone */
+  penaltyS = 0;
+  compound: TireCompound = "soft";
 
   constructor(
     readonly start: RaceStartInfo,
@@ -223,6 +241,9 @@ export class MultiplayerRace {
       dist: Math.round(this.lapClock.distM * 10) / 10,
       fin: this.lapClock.finishTimeS,
       best: this.lapClock.bestLapMs,
+      last: this.lapClock.lastLapMs,
+      pen: this.penaltyS || undefined,
+      cmp: this.compound,
     };
   }
 
@@ -241,6 +262,9 @@ export class MultiplayerRace {
         speedMs: p.speedKmh / 3.6,
         finishTimeS: p.race.fin,
         bestLapMs: p.race.best,
+        lastLapMs: p.race.last ?? null,
+        penaltyS: p.race.pen ?? 0,
+        compound: p.race.cmp,
       });
     }
   }
@@ -256,6 +280,9 @@ export class MultiplayerRace {
       speedMs: playerSpeedMs,
       finishTimeS: this.lapClock.finishTimeS,
       bestLapMs: this.lapClock.bestLapMs,
+      lastLapMs: this.lapClock.lastLapMs,
+      penaltyS: this.penaltyS,
+      compound: this.compound,
     };
     const field = [me, ...this.remote.values()];
     const L = this.lapLengthM;
@@ -263,23 +290,32 @@ export class MultiplayerRace {
     const ordered = raceOrder(field);
     const winner = ordered[0];
     let gapFloor = 0;
-    const standings: RaceStandingEntry[] = ordered.map((r) => {
+    let prevGap = 0;
+    const standings: RaceStandingEntry[] = ordered.map((r, i) => {
       let gap = 0;
       if (frame.phase === "racing") {
-        gap =
-          r.finishTimeS !== null && winner.finishTimeS !== null
-            ? r.finishTimeS - winner.finishTimeS
-            : this.gaps.gapS(frame.raceTimeS, r.distM, r.speedMs);
+        const rt = classifiedTimeS(r);
+        const wt = classifiedTimeS(winner);
+        gap = rt !== null && wt !== null ? rt - wt : this.gaps.gapS(frame.raceTimeS, r.distM, r.speedMs);
         gapFloor = Math.max(gapFloor, gap);
       }
+      const intervalS = i > 0 ? gapFloor - prevGap : undefined;
+      prevGap = gapFloor;
       return {
         driverCode: r.code,
         teamColorHex: r.color,
         isPlayer: r.isPlayer,
         lap: Math.max(1, Math.min(this.start.laps, Math.floor(r.distM / L) + 1)),
         gapToLeaderS: gapFloor,
+        intervalS,
         name: r.name,
         finished: r.finishTimeS !== null,
+        bestLapMs: r.bestLapMs,
+        lastLapMs: r.lastLapMs ?? null,
+        trackS: lapPositionM(r.distM, L),
+        raceDistM: r.distM,
+        compound: r.compound,
+        penaltyS: r.penaltyS || undefined,
       };
     });
     const playerFinished = me.finishTimeS !== null;

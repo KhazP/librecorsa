@@ -9,13 +9,13 @@
 import * as THREE from 'three';
 import { F1Physics2026 } from '@/lib/f1-physics-2026';
 import type { BuiltTrackData } from '@/lib/track-data';
-import { resolveCarToCarObbCollision, type RigidBodyCollisionCar } from '@/lib/sim/real-road';
+import { resolveCarToCarObbCollision, type RigidBodyCollisionCar } from '@/lib/sim/track-evolution';
 import { TrackEnvironment } from '@/lib/sim/track-environment';
 import { aiLineOffsetM } from '@/lib/sim/speed-profile';
 import type { InterpolatedPeerState } from '@/lib/sim/multiplayer-sync';
 import type { SimulatorCar } from '@/lib/sim/simulator-car';
 import type { RaceStatus } from '@/types/f1';
-import { classificationClosed, classify, raceOrder, type RacerProgress } from '@/lib/sim/race-session';
+import { classificationClosed, classifiedTimeS, classify, lapPositionM, raceOrder, type RacerProgress } from '@/lib/sim/race-session';
 
 export interface AiDriverDef {
   code: string;
@@ -51,7 +51,7 @@ interface FieldCar {
   isPlayer: boolean;
   sim: SimulatorCar;
   /** The AI car's physics (null for the player) */
-  ai: F1Physics2026 | null;
+  ai: SimulatorCar | null;
   pace: number;
   /** Race distance covered (m); negative on the grid behind the line */
   distM: number;
@@ -62,6 +62,7 @@ interface FieldCar {
   /** Race time at the chequered flag (s); null while running */
   finishTimeS: number | null;
   bestLapMs: number | null;
+  lastLapMs: number | null;
   lapsDone: number;
   lapStartS: number;
 }
@@ -166,7 +167,7 @@ export class AiOpponentField {
   /** Race length; the player's flag ends their race (the AI cars finish their own lap and keep circulating) */
   public raceLaps = 5;
   public lightsOn = 0;
-  /** RealRoad and aero wake shared by every car on the track */
+  /** Track evolution and aero wake shared by every car on the track */
   public readonly environment: TrackEnvironment;
   /** True when the field updates `environment` itself (none was given); otherwise its owner does, every car included */
   private readonly ownsEnvironment: boolean;
@@ -188,8 +189,8 @@ export class AiOpponentField {
     this.environment = environment ?? new TrackEnvironment(track);
     this.ownsEnvironment = !environment;
     for (const d of drivers) {
-      const sim = new F1Physics2026(track);
-      sim.setAssistPreset('pro');
+      const sim = player.createAiPeerCar ? player.createAiPeerCar() : new F1Physics2026(track);
+      sim.assistPreset = 'pro';
       sim.aiAutopilot = true;
       sim.aiPaceScale = d.pace;
       this.cars.push(this.makeCar(`ai_${d.code}`, d.code, d.teamColorHex, sim, sim, d.pace));
@@ -198,12 +199,18 @@ export class AiOpponentField {
     for (const car of this.cars) this.allSims.push(car.sim);
   }
 
+  public attachTrackRoot(root: THREE.Object3D): void {
+    for (const car of this.cars) {
+      car.ai?.attachTrackRoot?.(root);
+    }
+  }
+
   private makeCar(
     id: string,
     code: string,
     teamColorHex: string,
     sim: SimulatorCar,
-    ai: F1Physics2026 | null,
+    ai: SimulatorCar | null,
     pace: number
   ): FieldCar {
     return {
@@ -220,12 +227,14 @@ export class AiOpponentField {
       stuckS: 0,
       finishTimeS: null,
       bestLapMs: null,
+      lastLapMs: null,
       lapsDone: 0,
       lapStartS: 0,
       peer: {
         peerId: id,
         driverCode: code,
         teamColorHex,
+        vehicle: sim.vehicleId ?? this.player.vehicleId,
         position: sim.worldPosition.clone(),
         quaternion: sim.worldQuaternion.clone(),
         linearVelocity: new THREE.Vector3(),
@@ -263,6 +272,7 @@ export class AiOpponentField {
       car.stuckS = 0;
       car.finishTimeS = null;
       car.bestLapMs = null;
+      car.lastLapMs = null;
       car.lapsDone = 0;
       car.lapStartS = 0;
       car.prevS = car.sim.sMeters;
@@ -270,6 +280,7 @@ export class AiOpponentField {
       this.syncPeer(car);
     });
     this.player.aiAutopilot = false;
+    this.playerPenaltyS = 0;
     this.raceTimeS = 0;
     this.bucketTimes.clear();
     this.phase = standing ? 'lights' : 'racing';
@@ -316,7 +327,7 @@ export class AiOpponentField {
       const me = car.ai;
       if (!me) continue;
       const sample = this.track.getSampleAtDistance(me.sMeters);
-      const line = aiLineOffsetM(sample);
+      const line = aiLineOffsetM(sample, me.racingLineId);
       const half = sample.width / 2 - 1.2;
       let targetLat: number | null = null;
       let speedCap = Infinity;
@@ -433,8 +444,9 @@ export class AiOpponentField {
       if (car.stuckS > 4) {
         car.stuckS = 0;
         const sample = this.track.getSampleAtDistance(sim.sMeters);
-        sim.teleportToDistance(sim.sMeters, Math.min(25, sample.optimalSpeedKmh / 3.6));
-        sim.lateralOffsetM = aiLineOffsetM(sample);
+        const lineLat = aiLineOffsetM(sample, sim.racingLineId);
+        sim.teleportToDistance(sim.sMeters, Math.min(25, sample.optimalSpeedKmh / 3.6), lineLat);
+        sim.lateralOffsetM = lineLat;
         car.biasM = 0;
       }
     }
@@ -449,6 +461,7 @@ export class AiOpponentField {
     if (laps > car.lapsDone && car.finishTimeS === null) {
       const lapMs = (this.raceTimeS - car.lapStartS) * 1000;
       if (lapMs > 1000 && (car.bestLapMs === null || lapMs < car.bestLapMs)) car.bestLapMs = Math.round(lapMs);
+      if (lapMs > 1000) car.lastLapMs = Math.round(lapMs);
       car.lapsDone = laps;
       car.lapStartS = this.raceTimeS;
       if (laps >= this.raceLaps) {
@@ -480,7 +493,7 @@ export class AiOpponentField {
   }
 
   /** Physics of the AI cars, in grid order */
-  public aiSims(): F1Physics2026[] {
+  public aiSims(): SimulatorCar[] {
     return this.cars.flatMap((c) => (c.ai ? [c.ai] : []));
   }
 
@@ -504,6 +517,9 @@ export class AiOpponentField {
     return this.cars.filter((c) => !c.isPlayer).map((c) => c.peer);
   }
 
+  /** Time penalties the player serves at the flag (track limits), in seconds */
+  public playerPenaltyS = 0;
+
   public status(): RaceStatus {
     const L = this.track.totalLengthM;
     const progress = new Map<FieldCar, RacerProgress>();
@@ -518,6 +534,9 @@ export class AiOpponentField {
         speedMs: c.sim.vxMs,
         finishTimeS: c.finishTimeS,
         bestLapMs: c.bestLapMs,
+        lastLapMs: c.lastLapMs,
+        penaltyS: c.isPlayer ? this.playerPenaltyS : 0,
+        compound: c.sim.tireCompound,
       });
     }
     const orderedProgress = raceOrder([...progress.values()]);
@@ -539,6 +558,7 @@ export class AiOpponentField {
     };
     const leader = order[0];
     let gapFloor = 0;
+    let prevGap = 0;
     const playerIdx = order.findIndex((c) => c.isPlayer);
     const player = order[playerIdx];
     const playerFinished = player.finishTimeS !== null;
@@ -550,20 +570,31 @@ export class AiOpponentField {
       fieldSize: order.length,
       lap: Math.max(1, Math.min(this.raceLaps, Math.floor(player.distM / L) + 1)),
       totalLaps: this.raceLaps,
-      standings: order.map((c) => {
+      standings: order.map((c, i) => {
+        const p = progress.get(c) as RacerProgress;
         // Keep the gaps ordered like the positions (bucket timing is coarse at launch speeds)
         if (this.phase !== 'lights') {
-          const gap =
-            c.finishTimeS !== null && leader.finishTimeS !== null ? c.finishTimeS - leader.finishTimeS : gapTo(c);
+          const ct = classifiedTimeS(p);
+          const lt = classifiedTimeS(progress.get(leader) as RacerProgress);
+          const gap = ct !== null && lt !== null ? ct - lt : gapTo(c);
           gapFloor = Math.max(gapFloor, gap);
         }
+        const intervalS = i > 0 ? gapFloor - prevGap : undefined;
+        prevGap = gapFloor;
         return {
           driverCode: c.code,
           teamColorHex: c.teamColorHex,
           isPlayer: c.isPlayer,
           lap: Math.max(1, Math.min(this.raceLaps, Math.floor(c.distM / L) + 1)),
           gapToLeaderS: gapFloor,
+          intervalS,
           finished: c.finishTimeS !== null,
+          bestLapMs: c.bestLapMs,
+          lastLapMs: c.lastLapMs,
+          trackS: lapPositionM(c.distM, L),
+          raceDistM: c.distM,
+          compound: c.sim.tireCompound,
+          penaltyS: p.penaltyS || undefined,
         };
       }),
       results: playerFinished ? classify(orderedProgress, L, this.raceLaps, final) : undefined,

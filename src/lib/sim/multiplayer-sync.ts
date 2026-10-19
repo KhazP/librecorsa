@@ -71,6 +71,12 @@ export interface PeerRaceProgress {
   fin: number | null;
   /** Fastest lap of the race (ms); null before one */
   best: number | null;
+  /** Last completed lap (ms) */
+  last?: number | null;
+  /** Time penalties served at the flag (s) */
+  pen?: number;
+  /** Tyre compound: soft / medium / hard */
+  cmp?: 'soft' | 'medium' | 'hard';
 }
 
 export interface InterpolatedPeerState {
@@ -256,6 +262,9 @@ function sanitizeRace(v: unknown): PeerRaceProgress | undefined {
     dist,
     fin: finite(r.fin, 0, 1e6),
     best: finite(r.best, 0, 1e7),
+    last: finite(r.last, 0, 1e7),
+    pen: finite(r.pen, 0, 600) ?? undefined,
+    cmp: r.cmp === 'soft' || r.cmp === 'medium' || r.cmp === 'hard' ? r.cmp : undefined,
   };
 }
 
