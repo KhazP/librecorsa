@@ -35,6 +35,7 @@ Each model below is licensed under [Creative Commons Attribution 4.0 (CC BY 4.0)
 * **Tailwind CSS** — Tailwind Labs (MIT)
 * **Framer Motion** — Motion Division (MIT)
 * **Lucide Icons** — Lucide Contributors (ISC)
+* **global_racetrajectory_optimization** — TUM Institute of Automotive Technology (LGPL-3.0): minimum-time racing lines that seed each circuit's F1 and GT3 lines. Used offline only, not bundled.
 
 
 ---
