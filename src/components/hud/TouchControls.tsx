@@ -31,6 +31,14 @@ interface Visual {
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
+/** Steering knob diameter (px) */
+const KNOB = 52;
+/** Frosted card the steering / tilt controls sit on */
+const STICK_CARD =
+  "rounded-[32px] border border-white/8 bg-[#08090D]/55 backdrop-blur-[10px]";
+/** Small mono label (STEER, BRAKE…) */
+const LABEL = "font-f1-mono text-[10px] font-extrabold tracking-[0.16em] uppercase text-[#8E96AA]";
+
 /** Safe-area-aware offset from a viewport edge */
 const edge = (side: "top" | "right" | "bottom" | "left", px: number) =>
   `calc(env(safe-area-inset-${side}, 0px) + ${px}px)`;
@@ -80,7 +88,9 @@ const SteerPad: React.FC<SteerPadProps> = ({ value, onChange }) => {
     onChange(0);
   };
 
-  const knobLeft = `calc(20px + (100% - 40px) * ${((value + 1) / 2).toFixed(4)})`;
+  const frac = ((value + 1) / 2).toFixed(4);
+  const knobLeft = `calc(${KNOB / 2}px + (100% - ${KNOB}px) * ${frac})`;
+  const fillWidth = `calc((100% - ${KNOB}px) * ${(Math.abs(value) / 2).toFixed(4)})`;
 
   return (
     <div
@@ -89,35 +99,49 @@ const SteerPad: React.FC<SteerPadProps> = ({ value, onChange }) => {
       aria-valuemin={-100}
       aria-valuemax={100}
       aria-valuenow={Math.round(value * 100)}
-      className="hud-panel pointer-events-auto touch-none relative h-24 overflow-hidden rounded-lg"
-      style={{ width: "42vw", minWidth: 180, maxWidth: 360, touchAction: "none" }}
+      className={`${STICK_CARD} pointer-events-auto touch-none relative flex flex-col gap-2.5 overflow-hidden px-4 pt-3.5 pb-[18px] short:gap-1.5 short:pt-2.5 short:pb-3`}
+      style={{ width: "clamp(200px, 38vw, 400px)", touchAction: "none" }}
       onPointerDown={down}
       onPointerMove={move}
       onPointerUp={release}
       onPointerCancel={release}
       onLostPointerCapture={release}
     >
-      <span className="hud-label pointer-events-none absolute left-2.5 top-1.5 !text-[9px]">STEER</span>
-      <span
-        className="font-f1-mono pointer-events-none absolute right-2.5 top-1.5 text-[11px] font-bold tabular-nums"
-        style={{ color: HUD_VOLT }}
-      >
-        {Math.round(value * 100)}
-      </span>
-      {/* Centre reference */}
-      <div className="pointer-events-none absolute bottom-3 left-1/2 top-7 w-px -translate-x-1/2 bg-[#262B3D]" />
-      {/* Track */}
-      <div className="pointer-events-none absolute inset-x-5 bottom-[38px] h-px bg-[#262B3D]" />
-      {/* Knob */}
-      <div
-        className="pointer-events-none absolute top-[60%] h-7 w-7 -translate-x-1/2 -translate-y-1/2 rounded-full border-2"
-        style={{
-          left: knobLeft,
-          borderColor: HUD_VOLT,
-          backgroundColor: HUD_VOID,
-          boxShadow: `0 0 10px ${HUD_VOLT}66`,
-        }}
-      />
+      <div className="pointer-events-none flex items-center justify-between">
+        <span className={LABEL}>Steer</span>
+        <span className="font-f1-mono text-[14px] font-extrabold tabular-nums" style={{ color: HUD_VOLT }}>
+          {Math.round(value * 100)}
+        </span>
+      </div>
+      <div className="pointer-events-none relative h-14 short:h-11">
+        {/* Track */}
+        <span className="absolute inset-x-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-[#1B1F2B]" />
+        {/* Fill from the centre to the knob */}
+        <span
+          className="absolute top-1/2 h-1.5 -translate-y-1/2"
+          style={{
+            width: fillWidth,
+            backgroundColor: HUD_VOLT,
+            ...(value < 0
+              ? { right: "50%", borderRadius: "999px 0 0 999px" }
+              : { left: "50%", borderRadius: "0 999px 999px 0" }),
+          }}
+        />
+        {/* Centre reference */}
+        <span className="absolute inset-y-2 left-1/2 w-0.5 -translate-x-1/2 bg-[#F5F7FA]/40" />
+        {/* Knob */}
+        <span
+          className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border-[3px] short:scale-[0.85]"
+          style={{
+            left: knobLeft,
+            width: KNOB,
+            height: KNOB,
+            borderColor: HUD_VOLT,
+            backgroundColor: HUD_VOID,
+            boxShadow: `0 0 20px ${HUD_VOLT}73`,
+          }}
+        />
+      </div>
     </div>
   );
 };
@@ -143,26 +167,26 @@ const TiltIndicator: React.FC<TiltIndicatorProps> = ({ value, status, onRecentre
 
   return (
     <div
-      className="hud-panel pointer-events-auto touch-none flex flex-col gap-1.5 rounded-lg px-2.5 py-2"
-      style={{ width: "42vw", minWidth: 180, maxWidth: 360, touchAction: "none" }}
+      className={`${STICK_CARD} pointer-events-auto touch-none flex flex-col gap-2.5 px-4 pt-3.5 pb-4 short:gap-2 short:pt-2.5 short:pb-3`}
+      style={{ width: "clamp(200px, 38vw, 400px)", touchAction: "none" }}
     >
       <div className="flex items-center justify-between">
-        <span className="hud-label !text-[9px]">{TILT_LABEL[status]}</span>
-        <span className="font-f1-mono text-[11px] font-bold tabular-nums" style={{ color: HUD_VOLT }}>
+        <span className={LABEL}>{TILT_LABEL[status]}</span>
+        <span className="font-f1-mono text-[14px] font-extrabold tabular-nums" style={{ color: HUD_VOLT }}>
           {Math.round(value * 100)}
         </span>
       </div>
-      <div className="relative h-2.5 overflow-hidden rounded-sm border border-[#262B3D] bg-[#08090D]">
-        <div className="absolute inset-y-0 left-1/2 w-px bg-[#8E96AA]" />
+      <div className="relative h-1.5 overflow-hidden rounded-full bg-[#1B1F2B]">
         <div
-          className="absolute inset-y-0"
+          className="absolute inset-y-0 rounded-full"
           style={{ left: `${fillLeft}%`, width: `${half}%`, backgroundColor: HUD_VOLT }}
         />
+        <div className="absolute inset-y-0 left-1/2 w-0.5 -translate-x-1/2 bg-[#F5F7FA]/40" />
       </div>
       <button
         type="button"
         aria-label="Recentre tilt"
-        className="pointer-events-auto touch-none rounded border border-[#262B3D] bg-[#08090D] py-1 font-f1-mono text-[11px] font-bold tracking-wider active:scale-95"
+        className="pointer-events-auto touch-none h-11 rounded-full border border-[#262B3D] bg-[#11131A] text-[14px] font-bold active:scale-95 short:h-9"
         style={{ color: HUD_WHITE, touchAction: "none" }}
         onPointerDown={onRecentre}
       >
@@ -218,8 +242,12 @@ const Pedal: React.FC<PedalProps> = ({ label, color, value, onChange }) => {
       aria-valuemin={0}
       aria-valuemax={100}
       aria-valuenow={Math.round(value * 100)}
-      className="hud-panel pointer-events-auto touch-none relative overflow-hidden rounded-lg"
-      style={{ width: 96, height: 140, borderColor: color, touchAction: "none" }}
+      className="pointer-events-auto touch-none relative flex h-[150px] w-[100px] flex-col justify-between overflow-hidden rounded-[30px] border-2 bg-[#08090D]/60 p-3 backdrop-blur-[10px] short:h-[128px] short:w-[88px] short:rounded-[26px]"
+      style={{
+        borderColor: color,
+        boxShadow: value > 0 ? `0 0 30px ${color}59` : "none",
+        touchAction: "none",
+      }}
       onPointerDown={down}
       onPointerMove={move}
       onPointerUp={release}
@@ -228,18 +256,17 @@ const Pedal: React.FC<PedalProps> = ({ label, color, value, onChange }) => {
     >
       <div
         className="pointer-events-none absolute inset-x-0 bottom-0"
-        style={{
-          height: `${value * 100}%`,
-          backgroundColor: color,
-          boxShadow: value > 0 ? `0 0 14px ${color}` : "none",
-        }}
+        style={{ height: `${value * 100}%`, backgroundColor: color }}
       />
-      <span className="hud-label pointer-events-none absolute inset-x-0 top-2 text-center !text-[9px]">
+      <span
+        className={`${LABEL} pointer-events-none relative`}
+        style={{ color: value > 0.82 ? HUD_VOID : color }}
+      >
         {label}
       </span>
       <span
-        className="font-f1-mono pointer-events-none absolute inset-x-0 bottom-2 text-center text-[13px] font-extrabold tabular-nums"
-        style={{ color: value > 0.5 ? HUD_VOID : HUD_WHITE }}
+        className="font-f1-mono pointer-events-none relative text-[15px] font-extrabold tabular-nums"
+        style={{ color: value > 0.14 ? HUD_VOID : HUD_WHITE }}
       >
         {Math.round(value * 100)}
       </span>
@@ -250,25 +277,33 @@ const Pedal: React.FC<PedalProps> = ({ label, color, value, onChange }) => {
 interface TapButtonProps {
   label: string;
   ariaLabel?: string;
+  /** Ring colour (and text colour unless `textColor` is set) */
   color: string;
-  /** 64px wide instead of round 48px */
+  textColor?: string;
+  /** 84px wide pill instead of a round 56px button */
   wide?: boolean;
-  /** 36px tall instead of 48px */
+  /** Frosted text pill (Menu / Cam) instead of a coloured ring */
   small?: boolean;
+  /** Drawn instead of the label text (the label stays as the accessible name) */
+  icon?: React.ReactNode;
   onTap: () => void;
 }
 
 /** One-shot button: fires on pointer down */
-const TapButton: React.FC<TapButtonProps> = ({ label, ariaLabel, color, wide, small, onTap }) => (
+const TapButton: React.FC<TapButtonProps> = ({ label, ariaLabel, color, textColor, wide, small, icon, onTap }) => (
   <button
     type="button"
     aria-label={ariaLabel ?? label}
-    className="hud-panel pointer-events-auto touch-none flex items-center justify-center rounded-full border font-f1-mono text-[13px] font-extrabold tracking-wider active:scale-95"
+    className={`pointer-events-auto touch-none flex items-center justify-center rounded-full active:scale-95 ${
+      small
+        ? "h-11 min-w-[72px] border border-white/8 bg-[#08090D]/70 px-4 text-[14px] font-bold backdrop-blur-[14px] short:h-9 short:min-w-[64px]"
+        : `h-14 border-2 bg-[#08090D]/60 font-f1-mono text-[13px] font-extrabold backdrop-blur-[10px] short:h-12 ${
+            wide ? "w-[84px] short:w-[72px]" : "w-14 short:w-12"
+          }`
+    }`}
     style={{
-      width: wide ? 64 : 48,
-      height: small ? 36 : 48,
-      color,
-      borderColor: color,
+      color: small ? HUD_WHITE : (textColor ?? color),
+      borderColor: small ? undefined : color,
       touchAction: "none",
     }}
     onPointerDown={(e) => {
@@ -276,8 +311,15 @@ const TapButton: React.FC<TapButtonProps> = ({ label, ariaLabel, color, wide, sm
       onTap();
     }}
   >
-    {label}
+    {icon ?? label}
   </button>
+);
+
+/** Filled triangle for the shift buttons */
+const ShiftArrow: React.FC<{ up?: boolean }> = ({ up }) => (
+  <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden>
+    <path d={up ? "M12 6 4 18h16z" : "M12 18 4 6h16z"} />
+  </svg>
 );
 
 export interface TouchControlsProps {
@@ -407,14 +449,14 @@ export const TouchControls: React.FC<TouchControlsProps> = ({
       {/* Top-left: Menu and Cam */}
       <div
         className="absolute flex gap-2"
-        style={{ top: edge("top", 8), left: edge("left", 12) }}
+        style={{ top: edge("top", 12), left: edge("left", 16) }}
       >
-        <TapButton label="Menu" color={HUD_SLATE} wide small onTap={onPause} />
-        <TapButton label="Cam" color={HUD_SLATE} wide small onTap={onCycleCamera} />
+        <TapButton label="Menu" color={HUD_SLATE} small onTap={onPause} />
+        <TapButton label="Cam" color={HUD_SLATE} small onTap={onCycleCamera} />
       </div>
 
       {/* Bottom-left: steering */}
-      <div className="absolute" style={{ left: edge("left", 16), bottom: edge("bottom", 12) }}>
+      <div className="absolute" style={{ left: edge("left", 16), bottom: edge("bottom", 16) }}>
         {tiltSteer ? (
           <TiltIndicator value={vis.steer} status={tiltStatus} onRecentre={onRecentre} />
         ) : (
@@ -424,14 +466,15 @@ export const TouchControls: React.FC<TouchControlsProps> = ({
 
       {/* Bottom-right: shift / boost / aero buttons above the pedals */}
       <div
-        className="absolute flex flex-col items-end gap-2"
-        style={{ right: edge("right", 16), bottom: edge("bottom", 12) }}
+        className="absolute flex flex-col items-end gap-3 short:gap-2"
+        style={{ right: edge("right", 16), bottom: edge("bottom", 16) }}
       >
         <div className="flex gap-2">
           <TapButton
             label="▲"
             ariaLabel="Shift up"
             color={HUD_VOLT}
+            icon={<ShiftArrow up />}
             onTap={() => {
               touchInput.shiftUp = true;
             }}
@@ -440,6 +483,7 @@ export const TouchControls: React.FC<TouchControlsProps> = ({
             label="▼"
             ariaLabel="Shift down"
             color={HUD_VOLT}
+            icon={<ShiftArrow />}
             onTap={() => {
               touchInput.shiftDown = true;
             }}
@@ -447,6 +491,7 @@ export const TouchControls: React.FC<TouchControlsProps> = ({
           <TapButton
             label="BOOST"
             color={HUD_PURPLE}
+            textColor="#D99BFF"
             wide
             onTap={() => {
               touchInput.boost = true;
@@ -461,7 +506,7 @@ export const TouchControls: React.FC<TouchControlsProps> = ({
             }}
           />
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-3 short:gap-2">
           <Pedal label="BRAKE" color={HUD_RED} value={vis.brake} onChange={setBrake} />
           <Pedal label="THROTTLE" color={HUD_GREEN} value={vis.throttle} onChange={setThrottle} />
         </div>

@@ -4,7 +4,13 @@ import React, { useMemo } from "react";
 import type { CarTelemetry } from "@/types/f1";
 import { type BuiltTrackData, TURN_METADATA } from "@/lib/track-data";
 import { getTrackInfo } from "@/lib/track-registry";
-import { HUD_CYAN, HUD_RED, HUD_VOLT } from "./hud/hud-format";
+import { HUD_CYAN, HUD_GLASS, HUD_LBL, HUD_PINK, HUD_RED, HUD_VOLT, HUD_WELL } from "./hud/hud-format";
+
+const SECTOR_LEGEND = [
+  ["Sector 1", HUD_CYAN],
+  ["Sector 2", HUD_VOLT],
+  ["Sector 3", HUD_PINK],
+] as const;
 
 interface TrackMinimapProps {
   track: BuiltTrackData;
@@ -136,176 +142,141 @@ export const TrackMinimap: React.FC<TrackMinimapProps> = ({
   const elevProgressX = (telemetry.trackDistanceM / track.totalLengthM) * 252;
   const elevProgressY = elevation.toY(telemetry.trackElevationM);
 
+  // Elevation extremes, in lap order for the label row under the profile
+  const lowFirst = elevation.low.x <= elevation.high.x;
+  const lowMark = <span className={`${HUD_LBL} !text-[8px]`}>{elevation.low.label}</span>;
+  const highMark = (
+    <span className={`${HUD_LBL} !text-[8px]`} style={{ color: HUD_VOLT }}>
+      {elevation.high.label}
+    </span>
+  );
+
   return (
-    <div className="hud-panel f1-corner-tr flex w-[284px] flex-col gap-2 rounded-lg p-3 text-[#F5F7FA] select-none">
-      {/* LibreCorsa Circuit Map Header */}
-      <div className="flex items-start justify-between border-b border-[#262B3D] pb-1.5">
-        <div className="min-w-0 pr-2">
-          <div className="truncate font-f1-italic text-[14px] leading-none tracking-wider text-[#F5F7FA] uppercase">
-            {trackInfo.name}
-          </div>
-          <p className="mt-1 font-f1-mono text-[9px] font-bold tracking-wide text-[#8E96AA] uppercase">
-            {trackInfo.country} · {(track.totalLengthM / 1000).toFixed(2)} KM · {TURN_METADATA.length} TURNS
+    <section
+      aria-label="Circuit map"
+      className={`flex w-[290px] flex-col rounded-[22px] p-3.5 text-[#F5F7FA] select-none ${HUD_GLASS}`}
+    >
+      {/* Circuit name, country, length and turns */}
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="lc-title truncate text-[14px] leading-tight">{trackInfo.name}</div>
+          <p className={`${HUD_LBL} mt-0.5`}>
+            {trackInfo.country} · {(track.totalLengthM / 1000).toFixed(2)} km · {TURN_METADATA.length} turns
           </p>
         </div>
-        <span className="shrink-0 rounded-sm bg-[#CCFF00] px-1.5 py-0.5 font-f1-display text-[8px] font-black tracking-wider text-[#08090D] uppercase">
-          GPS
-        </span>
+        <span className="lc-data shrink-0 rounded-full bg-[#CCFF00] px-[7px] py-0.5 text-[9px] text-[#08090D]">GPS</span>
       </div>
 
-      {/* 2D SVG Circuit Map with LibreCorsa Sector Colors (S1 Monza Rosso, S2 Slipstream Cyan, S3 Corsa Volt) */}
-      <div className="relative h-[156px] w-full overflow-hidden rounded border border-[#262B3D] bg-[#08090D]">
-        <svg viewBox="0 0 280 200" className="h-full w-full">
-          {/* Track Outline Shadow */}
-          <path
-            d={`${svgData.s1} ${svgData.s2} ${svgData.s3}`}
-            fill="none"
-            stroke="#1B1F2B"
-            strokeWidth="7.5"
-            strokeLinecap="round"
-          />
-          {/* Sector 1: Monza Rosso (#FF2A3C) */}
-          <path
-            d={svgData.s1}
-            fill="none"
-            stroke={HUD_RED}
-            strokeWidth="3.6"
-            strokeLinecap="round"
-          />
-          {/* Sector 2: Slipstream Cyan (#00E5FF) */}
-          <path
-            d={svgData.s2}
-            fill="none"
-            stroke={HUD_CYAN}
-            strokeWidth="3.6"
-            strokeLinecap="round"
-          />
-          {/* Sector 3: Corsa Volt (#CCFF00) */}
-          <path
-            d={svgData.s3}
-            fill="none"
-            stroke={HUD_VOLT}
-            strokeWidth="3.6"
-            strokeLinecap="round"
-          />
+      {/* Circuit map: sector 1 cyan, sector 2 volt, sector 3 pink */}
+      <svg viewBox="0 0 280 200" className="mt-2 block h-[150px] w-full" role="img" aria-label={`Circuit map${telemetry.currentTurnNumber ? `; you are at turn ${telemetry.currentTurnNumber}` : ""}`}>
+        {/* Track ribbon */}
+        <path
+          d={`${svgData.s1} ${svgData.s2} ${svgData.s3}`}
+          fill="none"
+          stroke="#1B1F2B"
+          strokeWidth="11"
+          strokeLinecap="round"
+        />
+        <path d={svgData.s1} fill="none" stroke={HUD_CYAN} strokeWidth="3.6" strokeLinecap="round" />
+        <path d={svgData.s2} fill="none" stroke={HUD_VOLT} strokeWidth="3.6" strokeLinecap="round" />
+        <path d={svgData.s3} fill="none" stroke={HUD_PINK} strokeWidth="3.6" strokeLinecap="round" />
 
-          {/* Start/Finish Line Marker */}
-          <line
-            x1={startFinishPoint.x}
-            y1={startFinishPoint.y - 6}
-            x2={startFinishPoint.x}
-            y2={startFinishPoint.y + 6}
-            stroke="#F5F7FA"
-            strokeWidth="2.5"
-          />
+        {/* Start / finish line */}
+        <line
+          x1={startFinishPoint.x}
+          y1={startFinishPoint.y - 7}
+          x2={startFinishPoint.x}
+          y2={startFinishPoint.y + 7}
+          stroke="#F5F7FA"
+          strokeWidth="3"
+        />
 
-          {/* Interactive Turn Number Nodes */}
-          {turnPoints.map((tp) => {
-            const isCurrent = telemetry.currentTurnNumber === tp.number;
-            return (
-              <g
-                key={tp.number}
-                className="cursor-pointer opacity-95 hover:opacity-100"
-                onClick={() => onSelectTurn(tp.number)}
+        {/* Turn numbers: click to jump there */}
+        {turnPoints.map((tp) => {
+          const isCurrent = telemetry.currentTurnNumber === tp.number;
+          return (
+            <g
+              key={tp.number}
+              className="cursor-pointer opacity-95 hover:opacity-100"
+              onClick={() => onSelectTurn(tp.number)}
+            >
+              <circle
+                cx={tp.x}
+                cy={tp.y}
+                r={isCurrent ? 7.4 : 6.4}
+                fill={isCurrent ? HUD_VOLT : "#11131A"}
+                stroke={isCurrent ? "#08090D" : "#5B6275"}
+                strokeWidth={isCurrent ? 1.4 : 1}
+              />
+              <text
+                x={tp.x}
+                y={tp.y + 2.4}
+                textAnchor="middle"
+                fill={isCurrent ? "#08090D" : "#F5F7FA"}
+                fontSize="6.6"
+                fontWeight="800"
+                fontFamily="var(--font-jetbrains), ui-monospace, monospace"
               >
-                <circle
-                  cx={tp.x}
-                  cy={tp.y}
-                  r="6.2"
-                  fill={isCurrent ? HUD_VOLT : "#11131A"}
-                  stroke={isCurrent ? "#08090D" : "#8E96AA"}
-                  strokeWidth="1.4"
-                />
-                <text
-                  x={tp.x}
-                  y={tp.y + 2.5}
-                  textAnchor="middle"
-                  fill={isCurrent ? "#08090D" : "#F5F7FA"}
-                  fontSize="6.8"
-                  fontWeight="800"
-                >
-                  {tp.number}
-                </text>
-              </g>
-            );
-          })}
+                {tp.number}
+              </text>
+            </g>
+          );
+        })}
 
-          {/* Opponent / Multiplayer Peer GPS Transponder Dots */}
-          {(telemetry.peers ?? []).map((peer) => {
-            const pSample = track.getSampleAtDistance(peer.trackDistanceM);
-            const pSvg = carPoint(pSample.position.x, pSample.position.z);
-            return (
-              <g key={peer.peerId}>
-                <circle
-                  cx={pSvg.x}
-                  cy={pSvg.y}
-                  r="4.6"
-                  fill={peer.teamColorHex}
-                  stroke="#08090D"
-                  strokeWidth="1.4"
-                />
-                <text
-                  x={pSvg.x}
-                  y={pSvg.y - 6.5}
-                  textAnchor="middle"
-                  fill={peer.teamColorHex}
-                  fontSize="6.2"
-                  fontWeight="800"
-                >
-                  {peer.driverCode}
-                </text>
-              </g>
-            );
-          })}
+        {/* Opponents and multiplayer peers */}
+        {(telemetry.peers ?? []).map((peer) => {
+          const pSample = track.getSampleAtDistance(peer.trackDistanceM);
+          const pSvg = carPoint(pSample.position.x, pSample.position.z);
+          return (
+            <g key={peer.peerId}>
+              <circle cx={pSvg.x} cy={pSvg.y} r="4.6" fill={peer.teamColorHex} stroke="#08090D" strokeWidth="1.4" />
+              <text
+                x={pSvg.x}
+                y={pSvg.y - 6.5}
+                textAnchor="middle"
+                fill={peer.teamColorHex}
+                fontSize="6.2"
+                fontWeight="800"
+                fontFamily="var(--font-jetbrains), ui-monospace, monospace"
+              >
+                {peer.driverCode}
+              </text>
+            </g>
+          );
+        })}
 
-          {/* Live Player Car GPS Transponder Dot (Corsa Volt with dark core) */}
-          <circle
-            cx={carSvg.x}
-            cy={carSvg.y}
-            r="6.5"
-            fill={HUD_VOLT}
-            stroke="#08090D"
-            strokeWidth="2"
-          />
-        </svg>
+        {/* You */}
+        <circle cx={carSvg.x} cy={carSvg.y} r="6" fill={HUD_VOLT} stroke="#08090D" strokeWidth="2.4" />
+      </svg>
 
-        {/* Sector Legend */}
-        <div className="absolute right-2 bottom-1.5 left-2 flex items-center justify-between font-f1-mono text-[8.5px] font-bold text-[#8E96AA]">
-          <span className="flex items-center gap-1">
-            <span className="h-2 w-2 rounded-[1px]" style={{ backgroundColor: HUD_RED }} />
-            SECTOR 1
+      {/* Sector legend */}
+      <div className="mt-1.5 flex gap-3">
+        {SECTOR_LEGEND.map(([label, color]) => (
+          <span key={label} className={`${HUD_LBL} inline-flex items-center gap-[5px]`}>
+            <span className="h-2 w-2 rounded-[3px]" style={{ backgroundColor: color }} />
+            {label}
           </span>
-          <span className="flex items-center gap-1">
-            <span className="h-2 w-2 rounded-[1px]" style={{ backgroundColor: HUD_CYAN }} />
-            SECTOR 2
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="h-2 w-2 rounded-[1px]" style={{ backgroundColor: HUD_VOLT }} />
-            SECTOR 3
-          </span>
-        </div>
+        ))}
       </div>
 
-      {/* Elevation Profile Telemetry */}
-      <div className="rounded border border-[#262B3D] bg-[#08090D] p-2">
-        <div className="mb-1 flex items-center justify-between text-[10px]">
-          <span className="font-f1-mono text-[9px] font-bold tracking-wider text-[#8E96AA] uppercase">
-            ELEVATION PROFILE
-          </span>
-          <span className="font-f1-mono text-[11px] font-bold text-[#F5F7FA]">
+      {/* Elevation profile */}
+      <div className={`mt-2.5 rounded-[14px] p-2.5 ${HUD_WELL}`}>
+        <div className="flex items-center justify-between gap-2">
+          <span className={HUD_LBL}>Elevation profile</span>
+          <span className="lc-data text-[12px] text-[#F5F7FA]">
             {telemetry.trackElevationM >= 0 ? "+" : ""}
             {telemetry.trackElevationM.toFixed(1)}m
-            <span className="ml-1 text-[9px] font-medium text-[#8E96AA]">Δ {elevation.span}m</span>
+            <span className="ml-1 text-[#8E96AA]">Δ {elevation.span}m</span>
           </span>
         </div>
-        <div className="mb-1 flex items-center justify-between font-f1-mono text-[8px] font-bold text-[#8E96AA]">
-          <span>ALT {telemetry.altitudeM.toFixed(0)} M</span>
-          <span>
+        <div className="mt-0.5 flex items-center justify-between">
+          <span className={`${HUD_LBL} !text-[8px]`}>ALT {telemetry.altitudeM.toFixed(0)} M</span>
+          <span className={`${HUD_LBL} !text-[8px]`}>
             GRADE {telemetry.slopePercent >= 0 ? "+" : ""}
             {telemetry.slopePercent.toFixed(1)}%
           </span>
         </div>
-        <svg viewBox="0 0 252 44" className="h-10 w-full overflow-visible">
+        <svg viewBox="0 0 252 44" className="mt-1.5 block h-11 w-full overflow-visible" aria-hidden="true">
           <defs>
             <linearGradient id="lcElevGrad" x1="0" y1="0" x2="1" y2="0">
               <stop offset="0%" stopColor={HUD_RED} stopOpacity="0.38" />
@@ -314,31 +285,15 @@ export const TrackMinimap: React.FC<TrackMinimapProps> = ({
             </linearGradient>
           </defs>
           <path d={elevationAreaPath} fill="url(#lcElevGrad)" />
-          <path
-            d={elevationPath}
-            fill="none"
-            stroke="#F5F7FA"
-            strokeWidth="1.5"
-          />
-          <text x="4" y="13" fill="#8E96AA" fontSize="6.5" fontWeight="700">
-            {elevation.sfLabel}
-          </text>
-          <text x={Math.min(elevation.low.x, 222)} y="41" fill="#8E96AA" fontSize="6.5" fontWeight="700">
-            {elevation.low.label}
-          </text>
-          <text x={Math.min(Math.max(elevation.high.x - 12, 40), 222)} y="9" fill={HUD_VOLT} fontSize="6.5" fontWeight="700">
-            {elevation.high.label}
-          </text>
-          <circle
-            cx={elevProgressX}
-            cy={elevProgressY}
-            r="3.8"
-            fill={HUD_VOLT}
-            stroke="#08090D"
-            strokeWidth="1.5"
-          />
+          <path d={elevationPath} fill="none" stroke="#F5F7FA" strokeWidth="1.5" />
+          <circle cx={elevProgressX} cy={elevProgressY} r="4" fill={HUD_VOLT} />
         </svg>
+        <div className="mt-0.5 flex items-center justify-between">
+          <span className={`${HUD_LBL} !text-[8px]`}>{elevation.sfLabel}</span>
+          {lowFirst ? lowMark : highMark}
+          {lowFirst ? highMark : lowMark}
+        </div>
       </div>
-    </div>
+    </section>
   );
 };

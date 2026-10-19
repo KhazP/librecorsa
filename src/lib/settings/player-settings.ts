@@ -97,7 +97,25 @@ export interface HudSettings {
   deltaBar: boolean;
   /** Card with sectors, corner speeds and the theoretical best after every lap */
   lapSummary: boolean;
+  /** HUD rear-view mirror: auto = onboard views without wing mirrors on screen */
+  virtualMirror: VirtualMirrorMode;
+  /** Timing tower gaps: to the car ahead (interval) or to the leader */
+  towerGaps: "interval" | "leader";
+  /** Circuit map: the whole lap, or a zoomed heading-up map around the car */
+  mapMode: "full" | "local";
+  /** Proximity radar: fades in when a car is alongside or close behind */
+  radar: boolean;
+  /** The MFD folds to its status pill after a few seconds without input */
+  mfdAutoCollapse: boolean;
+  /** Cockpit beeps: DRS available (two tones) and DRS open (chime) */
+  drsBeep: boolean;
+  /** Short beep 150 rpm before the rev limiter */
+  shiftBeep: boolean;
+  /** Onboard camera turns gently into the car's direction of travel (feel the rear slide) */
+  neckFx: boolean;
 }
+
+export type VirtualMirrorMode = "auto" | "always" | "off";
 
 export type GraphicsQuality = "low" | "medium" | "high";
 
@@ -124,6 +142,8 @@ export interface DriverProfile {
   code: string;
   /** #RRGGBB */
   color: string;
+  /** The game picked the name (first run): the first leaderboard upload asks the player to keep or change it */
+  generated: boolean;
 }
 
 export const DEFAULT_PAD_TUNING: PadTuning = {
@@ -151,13 +171,41 @@ export const DEFAULT_HUD_SETTINGS: HudSettings = {
   inputTrace: false,
   deltaBar: true,
   lapSummary: true,
+  virtualMirror: "auto",
+  towerGaps: "interval",
+  mapMode: "full",
+  radar: true,
+  mfdAutoCollapse: true,
+  drsBeep: true,
+  shiftBeep: false,
+  neckFx: true,
 };
 
 export const DEFAULT_GRAPHICS_SETTINGS: GraphicsSettings = { quality: "high", renderScale: 1 };
 
 export const DEFAULT_TOUCH_SETTINGS: TouchSettings = { mode: "auto", tiltSteer: false, tiltRangeDeg: 30 };
 
-export const DEFAULT_DRIVER_PROFILE: DriverProfile = { name: "Driver", code: "DRV", color: "#E10600" };
+export const DEFAULT_DRIVER_PROFILE: DriverProfile = { name: "Driver", code: "DRV", color: "#E10600", generated: false };
+
+/** Words for generated names; any pair plus " 99" fits the 16-character name limit */
+const NAME_WORDS = [
+  ["Apex", "Late", "Slick", "Turbo", "Rapid", "Swift", "Bold", "Wild", "Lucky", "Iron", "Neon", "Volt", "Prime", "Sharp", "Clean", "Flat"],
+  ["Falcon", "Comet", "Viper", "Arrow", "Lynx", "Hornet", "Raven", "Mako", "Puma", "Bolt", "Racer", "Pilot", "Fox", "Hawk", "Orca", "Wasp"],
+] as const;
+
+/**
+ * A readable random driver ("Apex Falcon 27", code FAL) so new players never share the default
+ * "Driver" on the leaderboard, where a taken name is refused.
+ */
+export function randomDriverProfile(rand: () => number = Math.random): DriverProfile {
+  const pick = <T,>(list: readonly T[]) => list[Math.floor(rand() * list.length)];
+  const noun = pick(NAME_WORDS[1]);
+  const name = `${pick(NAME_WORDS[0])} ${noun} ${10 + Math.floor(rand() * 90)}`;
+  return { ...DEFAULT_DRIVER_PROFILE, name, code: sanitizeDriverCode(noun), generated: true };
+}
+
+/** Code for a name the player typed: its first three letters (or the default code's to fill in) */
+export const codeFromName = (name: string) => sanitizeDriverCode(name);
 
 /** Three upper-case letters from any input ("" → the default code) */
 export const sanitizeDriverCode = (v: string) => {
@@ -170,6 +218,8 @@ export const sanitizeDriverName = (v: string) =>
 export const sanitizeColor = (v: string) => (/^#[0-9a-fA-F]{6}$/.test(v) ? v.toUpperCase() : DEFAULT_DRIVER_PROFILE.color);
 
 export const SETTINGS_STORAGE_KEY = "bugesera.settings.v1";
+/** Set once the force direction was flipped to match DirectInput / PID: an older save's `ffbInvert: true` is reset once */
+export const FFB_POLARITY_V2_KEY = "bugesera.ffb_polarity_v2";
 
 /** Driver's-eye vertical FOV range (a calculated single-screen FOV is often near 30°) */
 export const COCKPIT_FOV_MIN_DEG = 25;
@@ -326,6 +376,14 @@ function parseHud(v: unknown): HudSettings {
     inputTrace: bool(v.inputTrace, d.inputTrace),
     deltaBar: bool(v.deltaBar, d.deltaBar),
     lapSummary: bool(v.lapSummary, d.lapSummary),
+    virtualMirror: oneOf(v.virtualMirror, ["auto", "always", "off"] as const, d.virtualMirror),
+    towerGaps: oneOf(v.towerGaps, ["interval", "leader"] as const, d.towerGaps),
+    mapMode: oneOf(v.mapMode, ["full", "local"] as const, d.mapMode),
+    radar: bool(v.radar, d.radar),
+    mfdAutoCollapse: bool(v.mfdAutoCollapse, d.mfdAutoCollapse),
+    drsBeep: bool(v.drsBeep, d.drsBeep),
+    shiftBeep: bool(v.shiftBeep, d.shiftBeep),
+    neckFx: bool(v.neckFx, d.neckFx),
   };
 }
 
@@ -354,6 +412,7 @@ function parseProfile(v: unknown): DriverProfile {
     name: sanitizeDriverName(isStr(v.name) ? v.name : ""),
     code: sanitizeDriverCode(isStr(v.code) ? v.code : ""),
     color: sanitizeColor(isStr(v.color) ? v.color : ""),
+    generated: bool(v.generated, false),
   };
 }
 
@@ -395,18 +454,41 @@ export function parsePlayerSettings(raw: unknown): PlayerSettings {
 }
 
 export function loadPlayerSettings(): PlayerSettings {
+  let settings = DEFAULT_PLAYER_SETTINGS;
+  let rawProfile: unknown = undefined;
   try {
     const raw = localStorage.getItem(SETTINGS_STORAGE_KEY);
-    return raw ? parsePlayerSettings(JSON.parse(raw)) : DEFAULT_PLAYER_SETTINGS;
+    const polarityV2 = localStorage.getItem(FFB_POLARITY_V2_KEY) === "1";
+    if (raw) {
+      const json: unknown = JSON.parse(raw);
+      rawProfile = isObj(json) ? json.profile : undefined;
+      settings = parsePlayerSettings(json);
+      if (!polarityV2 && settings.wheel.ffbInvert) {
+        settings = { ...settings, wheel: { ...settings.wheel, ffbInvert: false } };
+      }
+    }
+    if (!polarityV2) localStorage.setItem(FFB_POLARITY_V2_KEY, "1");
   } catch {
     // Storage unavailable or corrupt JSON: defaults
-    return DEFAULT_PLAYER_SETTINGS;
   }
+  // First run, or a save from before generated names that still has the shared default: a name of its own.
+  // A save that records `generated` keeps whatever it has, even a player who chose "Driver".
+  const untouched = !isObj(rawProfile) || (rawProfile.generated === undefined && settings.profile.name === DEFAULT_DRIVER_PROFILE.name);
+  if (untouched) {
+    const fresh = randomDriverProfile();
+    const p = settings.profile;
+    settings = {
+      ...settings,
+      profile: { ...fresh, code: p.code === DEFAULT_DRIVER_PROFILE.code ? fresh.code : p.code, color: p.color },
+    };
+  }
+  return settings;
 }
 
 export function savePlayerSettings(settings: PlayerSettings) {
   try {
     localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+    localStorage.setItem(FFB_POLARITY_V2_KEY, "1");
   } catch {
     // Storage unavailable: the settings last for this session only
   }

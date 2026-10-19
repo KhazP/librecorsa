@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useId, useRef, useState } from "react";
 import type { CarTelemetry, TireCompound } from "@/types/f1";
 import type { BuiltTrackData } from "@/lib/track-data";
 import { HUD_CYAN, HUD_GREEN, HUD_PURPLE, HUD_RED, HUD_VOLT, HUD_YELLOW } from "../hud-format";
@@ -12,6 +12,9 @@ export interface HudMap {
   points: [number, number][];
   path: string;
   sectorPaths: [string, string, string];
+  /** Lap length (m) and map units per metre, for placing cars by track distance and the zoomed local map */
+  lengthM: number;
+  unitsPerM: number;
 }
 
 export function buildHudMap(track: BuiltTrackData): HudMap {
@@ -40,6 +43,8 @@ export function buildHudMap(track: BuiltTrackData): HudMap {
     points,
     path: toPath(points, true),
     sectorPaths,
+    lengthM: track.totalLength,
+    unitsPerM: 1000 / span,
   };
 }
 
@@ -58,6 +63,16 @@ export interface HudDesignProps {
   trackCode?: string;
   /** Wheel force meter, when the in-race HUD has one */
   ffb?: React.ReactNode;
+  /** Live Tuner Multi-Function Display (MFD) */
+  mfd?: React.ReactNode;
+  /** The on-screen touch controls are up (their Menu / Cam sit top-left) */
+  touch?: boolean;
+  /** The running lap was cut (off the track at some point): its clock stays red until the next lap */
+  lapInvalid?: boolean;
+  /** Timing tower gaps: to the car ahead or to the leader */
+  towerGaps?: "interval" | "leader";
+  /** Circuit map: the whole lap, or zoomed in heading-up around the car */
+  mapMode?: "full" | "local";
 }
 
 /** Rev light range of the car (the same as the classic speed cluster's) */
@@ -68,6 +83,24 @@ export function revRangeOf(t: CarTelemetry): [number, number] {
 /** Scales a corner group of the HUD about that corner */
 export const anchor = (scale: number | undefined, origin: string): React.CSSProperties | undefined =>
   !scale || scale === 1 ? undefined : { transform: `scale(${scale})`, transformOrigin: origin };
+
+/** Racing Line frosted HUD sheet over the live scene; each panel adds its own radius and padding */
+export const HUD_GLASS =
+  "border border-white/[0.07] bg-[#08090D]/[0.74] shadow-[0_14px_40px_rgba(0,0,0,0.5)] backdrop-blur-[14px]";
+
+/** Racing Line HUD label: mono 800, tracked, slate */
+export const HUD_LBL = "font-f1-mono text-[9px] font-extrabold tracking-[0.18em] text-[#8E96AA] uppercase";
+
+/**
+ * Positions of `n` lights spread evenly along an arc (centre cx, cy; radius r; ±span/2 degrees
+ * from straight up). Call at module scope: the layout is fixed, only the lit count changes.
+ */
+export function arcPoints(n: number, cx: number, cy: number, r: number, spanDeg: number): [number, number][] {
+  return Array.from({ length: n }, (_, i) => {
+    const a = ((-spanDeg / 2 + (spanDeg * i) / Math.max(1, n - 1)) * Math.PI) / 180;
+    return [cx + r * Math.sin(a), cy - r * Math.cos(a)] as [number, number];
+  });
+}
 
 export const COMPOUND_COLORS: Record<TireCompound, string> = { soft: HUD_RED, medium: HUD_YELLOW, hard: "#F5F7FA" };
 
@@ -84,7 +117,19 @@ export function mapPoint(map: HudMap, progress: number): [number, number] {
   return [a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u];
 }
 
-/** Circuit outline with the car (and, in a race, the field placed by their gaps) */
+/** Radius of the zoomed local map (m) */
+const LOCAL_RADIUS_M = 360;
+
+/** Direction of travel on the map at a lap fraction (radians, SVG axes), smoothed over a short look-ahead */
+function mapHeading(map: HudMap, progress: number): number {
+  // ±40 m around the car
+  const look = 40 / Math.max(1, map.lengthM);
+  const [ax, ay] = mapPoint(map, progress - look);
+  const [bx, by] = mapPoint(map, progress + look);
+  return Math.atan2(by - ay, bx - ax);
+}
+
+/** Circuit outline with the car and, in a race, the field placed by their track position */
 export const MiniMap: React.FC<{
   map: HudMap;
   t: CarTelemetry;
@@ -94,42 +139,82 @@ export const MiniMap: React.FC<{
   stroke?: number;
   outline?: string;
   rivals?: boolean;
-}> = ({ map, t, className, sectors = false, stroke = 22, outline = "rgba(245,247,250,0.85)", rivals = true }) => {
+  /** Zoomed heading-up map around the car instead of the whole circuit */
+  local?: boolean;
+}> = ({ map, t, className, sectors = false, stroke = 22, outline = "rgba(245,247,250,0.85)", rivals = true, local = false }) => {
   const [cx, cy] = mapPoint(map, t.trackProgress);
   const [sx, sy] = mapPoint(map, 0);
   const pad = 60;
   const lapS = (t.bestLapTimeMs ?? t.lastLapTimeMs ?? 95_000) / 1000;
   const me = t.race?.standings.find((s) => s.isPlayer);
+  const clipId = `lc-map-${useId().replace(/:/g, "")}`;
+  const L = map.lengthM || 1;
+  const fullW = map.w + pad * 2;
+  const r = LOCAL_RADIUS_M * map.unitsPerM;
+  // Sizes are drawn for the full map; the zoomed one scales them so they read the same on screen
+  const k = local ? (2 * r) / fullW : 1;
+  const sw = local ? Math.max(stroke * k, 13 * map.unitsPerM) : stroke;
+  const viewBox = local ? `${cx - r} ${cy - r} ${2 * r} ${2 * r}` : `${-pad} ${-pad} ${fullW} ${map.h + pad * 2}`;
+  const rot = local ? -90 - (mapHeading(map, t.trackProgress) * 180) / Math.PI : 0;
+  const spots =
+    rivals && t.race && me
+      ? t.race.standings
+          .filter((e) => !e.isPlayer)
+          .map((e) => ({
+            key: e.driverCode,
+            color: e.teamColorHex,
+            p: e.trackS !== undefined ? e.trackS / L : t.trackProgress + (me.gapToLeaderS - e.gapToLeaderS) / lapS,
+          }))
+      : (t.peers ?? []).map((p) => ({ key: p.peerId, color: p.teamColorHex, p: p.trackDistanceM / L }));
   return (
-    <svg viewBox={`${-pad} ${-pad} ${map.w + pad * 2} ${map.h + pad * 2}`} className={className} aria-hidden>
-      <path d={map.path} fill="none" stroke="rgba(0,0,0,0.55)" strokeWidth={stroke + 16} strokeLinejoin="round" />
-      {sectors ? (
-        map.sectorPaths.map((d, i) => (
-          <path
-            key={i}
-            d={d}
-            fill="none"
-            stroke={SECTOR_COLORS[i]}
-            strokeOpacity={i + 1 === t.currentSector ? 1 : 0.45}
-            strokeWidth={stroke}
-            strokeLinejoin="round"
-            strokeLinecap="round"
-          />
-        ))
+    <svg viewBox={viewBox} className={className} aria-hidden>
+      {local ? (
+        <defs>
+          <clipPath id={clipId}>
+            <circle cx={cx} cy={cy} r={r * 0.98} />
+          </clipPath>
+        </defs>
+      ) : null}
+      <g clipPath={local ? `url(#${clipId})` : undefined}>
+        <g transform={local ? `rotate(${rot.toFixed(2)} ${cx} ${cy})` : undefined}>
+          <path d={map.path} fill="none" stroke="rgba(0,0,0,0.55)" strokeWidth={sw + 16 * k} strokeLinejoin="round" />
+          {sectors ? (
+            map.sectorPaths.map((d, i) => (
+              <path
+                key={i}
+                d={d}
+                fill="none"
+                stroke={SECTOR_COLORS[i]}
+                strokeOpacity={i + 1 === t.currentSector ? 1 : 0.45}
+                strokeWidth={sw}
+                strokeLinejoin="round"
+                strokeLinecap="round"
+              />
+            ))
+          ) : (
+            <path d={map.path} fill="none" stroke={outline} strokeWidth={sw} strokeLinejoin="round" />
+          )}
+          <rect x={sx - 6 * k} y={sy - 26 * k} width={12 * k} height={52 * k} fill="#F5F7FA" />
+          {spots.map((e) => {
+            const [x, y] = mapPoint(map, e.p);
+            return <circle key={e.key} cx={x} cy={y} r={20 * k} fill={e.color} stroke="#08090D" strokeWidth={7 * k} />;
+          })}
+        </g>
+      </g>
+      {local ? <circle cx={cx} cy={cy} r={r * 0.98} fill="none" stroke="rgba(245,247,250,0.12)" strokeWidth={4 * k} /> : null}
+      <circle cx={cx} cy={cy} r={46 * k} fill={HUD_VOLT} opacity={0.22} />
+      {local ? (
+        // Heading-up: the car is an arrow pointing up the screen
+        <path
+          d={`M ${cx} ${cy - 34 * k} L ${cx + 22 * k} ${cy + 24 * k} L ${cx} ${cy + 12 * k} L ${cx - 22 * k} ${cy + 24 * k} Z`}
+          fill={HUD_VOLT}
+          stroke="#08090D"
+          strokeWidth={6 * k}
+          strokeLinejoin="round"
+        />
       ) : (
-        <path d={map.path} fill="none" stroke={outline} strokeWidth={stroke} strokeLinejoin="round" />
+        <circle cx={cx} cy={cy} r={26} fill={HUD_VOLT} stroke="#08090D" strokeWidth={8} />
       )}
-      <rect x={sx - 6} y={sy - 26} width={12} height={52} fill="#F5F7FA" />
-      {rivals && t.race && me
-        ? t.race.standings
-            .filter((e) => !e.isPlayer)
-            .map((e) => {
-              const [x, y] = mapPoint(map, t.trackProgress + (me.gapToLeaderS - e.gapToLeaderS) / lapS);
-              return <circle key={e.driverCode} cx={x} cy={y} r={20} fill={e.teamColorHex} stroke="#08090D" strokeWidth={7} />;
-            })
-        : null}
-      <circle cx={cx} cy={cy} r={46} fill={HUD_VOLT} opacity={0.22} />
-      <circle cx={cx} cy={cy} r={26} fill={HUD_VOLT} stroke="#08090D" strokeWidth={8} />
     </svg>
   );
 };
@@ -142,6 +227,22 @@ export function sectorColor(ms: number, best: number | null): string {
 }
 
 /** The last completed sector, for a few seconds after it completes */
+/**
+ * True from the moment the car leaves the track until the next lap starts or the run restarts, like the
+ * physics' own lap-valid flag: the running clock stays red for the rest of a cut lap, not only while off.
+ */
+export function useLapInvalid(t: CarTelemetry): boolean {
+  // The lap and clock reading when the cut happened; a new lap or a clock that went back clears it
+  const [cut, setCut] = useState<{ lap: number; atMs: number } | null>(null);
+  const stale = cut !== null && (t.lapCount !== cut.lap || t.currentLapTimeMs < cut.atMs);
+  // A physics that judges its own track limits reports the verdict: only a cut that gained time deletes the lap
+  const judged = t.lapInvalid !== undefined && t.trackLimits !== undefined;
+  if (!judged && t.offTrack && (cut === null || stale)) setCut({ lap: t.lapCount, atMs: t.currentLapTimeMs });
+  else if (stale && !t.offTrack) setCut(null);
+  if (judged) return Boolean(t.lapInvalid);
+  return t.offTrack || (cut !== null && !stale);
+}
+
 export function useSectorFlash(t: CarTelemetry, holdMs = 3500): { sector: number; ms: number; color: string } | null {
   const [flash, setFlash] = useState<{ sector: number; ms: number; color: string } | null>(null);
   const prev = useRef({ sector: t.currentSector, lap: t.lapCount });
