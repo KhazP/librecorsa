@@ -12,7 +12,6 @@
 import * as THREE from 'three';
 import { createF1Car2026, type SimCarRig } from '@/lib/car-builder-2026';
 import { createGt3CarRig } from '@/lib/gt3-car-model';
-import { AMR26_MODEL_URL, VF26_MODEL_URL } from '@/lib/vf26-car-model';
 import { LIVERIES } from '@/lib/track-data';
 import { CarTelemetry, LiveryConfig, type VehicleModelId } from '@/types/f1';
 import type { SimulatorWheel as SimWheelState } from './simulator-car';
@@ -371,7 +370,7 @@ export class SimVisualFxManager {
       rig.setLivery(livery);
       return rig;
     }
-    return createF1Car2026(livery, 'medium', peer.vehicle === 'f12026-car' ? VF26_MODEL_URL : AMR26_MODEL_URL);
+    return createF1Car2026(livery, 'medium');
   }
 
   private updateOpponentCars(dt: number, peers: InterpolatedPeerState[]): void {

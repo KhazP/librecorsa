@@ -25,6 +25,7 @@ Thumbs.db
 # Python bytecode & local asset build pipelines
 __pycache__/
 /scripts/vf26/
+/public/vf26/
 /scripts/gt3/
 /scripts/rwanda-2026/
 /scripts/tracks/

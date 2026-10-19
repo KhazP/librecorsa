@@ -15,7 +15,7 @@ import { applyRearRainLight } from "@/lib/render/golden-hour-environment";
 import { setVf26LiveryColours, upgradeVf26Materials } from "@/lib/render/car-materials";
 
 /**
- * VF26 3D model (`public/vf26/model/vf26.glb`). On builds without the GLB `loadVf26Template()` resolves to null
+ * F1 3D model (`public/amr26/model/amr26.glb`). On builds without the GLB `loadVf26Template()` resolves to null
  * and the procedural car stays in place.
  *
  * Model space: +X left, +Y up, +Z forward, origin on the floor plane under the cockpit — the same axes as the
@@ -25,7 +25,6 @@ import { setVf26LiveryColours, upgradeVf26Materials } from "@/lib/render/car-mat
  * sidepods, mirrors, engine cover and rear wing, and an EXT_SKIN livery mask (root extras `liveryMask`) painted
  * with the selected LiveryConfig colours.
  */
-export const VF26_MODEL_URL = "/vf26/model/vf26.glb";
 export const AMR26_MODEL_URL = "/amr26/model/amr26.glb";
 
 export interface Vf26CameraAnchor {
@@ -66,7 +65,7 @@ const templatePromises = new Map<string, Promise<THREE.Group | null>>();
 // Kept out of userData: Object3D.clone() JSON-serialises userData, which would encode every texture per car
 const templateAssets = new WeakMap<THREE.Object3D, TemplateAssets>();
 
-export function loadVf26Template(modelUrl: string = VF26_MODEL_URL): Promise<THREE.Group | null> {
+export function loadVf26Template(modelUrl: string = AMR26_MODEL_URL): Promise<THREE.Group | null> {
   let promise = templatePromises.get(modelUrl);
   if (!promise) {
     promise = (async () => {

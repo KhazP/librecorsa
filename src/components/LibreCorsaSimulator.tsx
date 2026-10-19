@@ -8,10 +8,9 @@ import { F12026CarSim } from "@/lib/sim/f12026-car/F12026CarSim";
 import type { SimulatorCar } from "@/lib/sim/simulator-car";
 import { F1AudioEngine2026 } from "@/lib/f1-audio-2026";
 import { createF1Car2026, type SimCarRig } from "@/lib/car-builder-2026";
-import { AMR26_MODEL_URL, VF26_MODEL_URL } from "@/lib/vf26-car-model";
 import { createGt3CarRig } from "@/lib/gt3-car-model";
 import { AMG_GT3_SOUND, createAmgGt3Sim } from "@/lib/sim/gt3/AmgGt3Sim";
-import { AMR26_SOUND, VF26_SOUND, type CarSoundSource } from "@/lib/sim/CarAudio";
+import { AMR26_SOUND, type CarSoundSource } from "@/lib/sim/CarAudio";
 import { buildRwandaCircuitScene } from "@/lib/scene-builder";
 import {
   configureRenderer,
@@ -206,9 +205,9 @@ function saveTyreSetup(vehicle: VehicleModelId, setup: TyreSetup) {
   }
 }
 
-/** The sound bank each car plays: AMR uses the Red Bull v2 bank, f12026-car uses the VF26 bank, GT3 uses AMG GT3 */
+/** The sound bank each car plays: the F1 cars share the AMR26 bank, the GT3 has its own */
 const soundFor = (vehicle: VehicleModelId): CarSoundSource =>
-  vehicle === "amg-gt3" ? AMG_GT3_SOUND : vehicle === "f12026-car" ? VF26_SOUND : AMR26_SOUND;
+  vehicle === "amg-gt3" ? AMG_GT3_SOUND : AMR26_SOUND;
 
 const isVehicleModel = (value: unknown): value is VehicleModelId =>
   value === "vf26" || value === "f12026-car" || value === "amg-gt3";
@@ -1173,13 +1172,12 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       tvDirector.resolveOcclusion(root);
     });
 
-    /** The 3D car for a model: AMR uses amr26.glb, f12026-car uses vf26.glb, GT3 uses gt3.glb */
+    /** The 3D car for a model: the F1 cars use amr26.glb, the GT3 gt3.glb */
     const isGt3Rig = (vehicle: VehicleModelId) => vehicle === "amg-gt3";
     const createCarRig = (vehicle: VehicleModelId): SimCarRig => {
-      const f1ModelUrl = vehicle === "f12026-car" ? VF26_MODEL_URL : AMR26_MODEL_URL;
       const rig = isGt3Rig(vehicle)
         ? createGt3CarRig()
-        : createF1Car2026(liveryRef.current, physics.tireCompound, f1ModelUrl);
+        : createF1Car2026(liveryRef.current, physics.tireCompound);
       rig.setLivery(liveryRef.current);
       scene.add(rig.root);
       carRigRef.current = rig;

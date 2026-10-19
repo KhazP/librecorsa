@@ -2701,7 +2701,7 @@ export function createF1Car2026(
     }
   };
 
-  // Swap in the 3D model when available (public/amr26/model/amr26.glb or public/vf26/model/vf26.glb)
+  // Swap in the 3D model when available (public/amr26/model/amr26.glb)
   const proceduralParts = [...chassisGroup.children, ...root.children.filter((c) => c !== chassisGroup)];
   let rigDisposed = false;
   void loadVf26Template(modelUrl).then((template) => {

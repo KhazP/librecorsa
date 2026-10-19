@@ -17,7 +17,7 @@
  *      multiplied by vertical normal load `Fz` (`0.4 * s * Fz * 0.0002 - 0.1`)
  *    - Kerb rumble strip impact resonance and off-track grass/gravel skid layers.
  *
- * When a multi-grid sound bank is present (`public/vf26/audio/` or `public/gt3/audio/`, see `vf26-audio.ts`),
+ * When a multi-grid sound bank is present (`public/amr26/audio/` or `public/gt3/audio/`, see `vf26-audio.ts`),
  * engine, turbo, transmission, shifts and backfires come from the multi-layer bank instead of the
  * base samples / oscillators above; tyre, kerb, gravel and wind layers stay procedural unless the bank
  * includes dedicated skid loops.
@@ -26,7 +26,7 @@
 import * as THREE from 'three';
 import { CameraMode, TelemetryData } from '@/types/f1';
 import { withBasePath } from '@/lib/base-path';
-import { AMR26_AUDIO_DIR, VF26_AUDIO_DIR, Vf26SoundBank } from './vf26-audio';
+import { AMR26_AUDIO_DIR, Vf26SoundBank } from './vf26-audio';
 import { VF26_ENGINE } from './vf26-data';
 
 /** Where a car's converted sound bank lives, and its rev limiter (for the limiter bounce) */
@@ -37,7 +37,6 @@ export interface CarSoundSource {
 }
 
 export const AMR26_SOUND: CarSoundSource = { id: 'amr26', assetDir: AMR26_AUDIO_DIR, limiterRpm: VF26_ENGINE.limiterRpm };
-export const VF26_SOUND: CarSoundSource = { id: 'vf26', assetDir: VF26_AUDIO_DIR, limiterRpm: VF26_ENGINE.limiterRpm };
 
 /** Cameras mounted on the car use the mod's interior engine event; the rest hear the exterior one */
 const INTERIOR_CAMERAS: ReadonlySet<CameraMode> = new Set<CameraMode>(['cockpit', 'cockpit_shoulder', 'nose', 'tv_pod']);
@@ -136,9 +135,9 @@ export class CarAudioEngine {
   private samplesLoaded = false;
   private isLoadingSamples = false;
 
-  // VF26 mod sound bank (null until loaded; stays null when the converted assets are absent)
+  // Multi-grid sound bank (null until loaded; stays null when the assets are absent)
   private vf26: Vf26SoundBank | null = null;
-  private sound: CarSoundSource = VF26_SOUND;
+  private sound: CarSoundSource = AMR26_SOUND;
   private bankDestination: AudioNode | null = null;
   private fallbackDestination: AudioNode | null = null;
   /** Bumped per bank load so a slow load for a car that has since been swapped out is dropped */
