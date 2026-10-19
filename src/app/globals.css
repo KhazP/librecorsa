@@ -18,7 +18,14 @@
   --lc-titanium: #1b1f2b;      /* Elevated Surface / Card Well */
   --lc-border: #262b3d;        /* Precision Chassis Hairline */
   --lc-slate: #8e96aa;         /* Alcantara Muted Telemetry Label */
+  --lc-fog: #c5cbd8;           /* Body copy and secondary text on dark sheets */
+  --lc-keyline: #3a4157;       /* Key-cap and prompt outlines */
   --lc-white: #f5f7fa;         /* Pitboard High-Contrast White */
+
+  /* ---- Racing Line shape & motion ---- */
+  --lc-r-sheet: 26px;          /* Rounded sheets over the live 3D scene */
+  --lc-r-card: 18px;           /* Cards, choice tiles, menu entries */
+  --lc-ease: cubic-bezier(0.2, 0.8, 0.2, 1); /* Focus moves, 220 ms */
 
   /* ---- Semantic Motorsport Telemetry ---- */
   --lc-sector-purple: #b845ff; /* Overall Fastest Sector */
@@ -146,7 +153,7 @@ body {
   :where(html[data-input="pad"]) :where(label):has(:where(input):focus) {
     outline: 2px solid var(--lc-volt);
     outline-offset: 1px;
-    border-radius: 6px;
+    border-radius: 14px;
     background-color: rgba(204, 255, 0, 0.06);
   }
   :where(label) :where(input[type="range"]):focus-visible,
@@ -156,6 +163,252 @@ body {
   }
   input[type="range"] {
     accent-color: var(--lc-volt);
+  }
+}
+
+@layer components {
+  /* ---- Racing Line foundations ----
+     Display: Titillium Black Italic, uppercase. Label: JetBrains Mono 700, tracked. Data: JetBrains Mono 800. */
+  .lc-disp {
+    font-family: var(--font-titillium), "Segoe UI", system-ui, sans-serif;
+    font-weight: 900;
+    font-style: italic;
+    text-transform: uppercase;
+    line-height: 0.92;
+  }
+
+  .lc-title {
+    font-family: var(--font-titillium), "Segoe UI", system-ui, sans-serif;
+    font-weight: 700;
+    font-style: italic;
+    text-transform: uppercase;
+  }
+
+  .lc-lbl {
+    font-family: var(--font-jetbrains), ui-monospace, monospace;
+    font-weight: 700;
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: #8e96aa;
+  }
+
+  .lc-data {
+    font-family: var(--font-jetbrains), ui-monospace, monospace;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Frosted sheet floating over the live scene */
+  .lc-glass {
+    background: rgba(14, 16, 22, 0.72);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    backdrop-filter: blur(22px);
+    -webkit-backdrop-filter: blur(22px);
+    box-shadow:
+      0 30px 80px rgba(0, 0, 0, 0.45),
+      inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  }
+
+  /* Opaque sheet (menus over a dimmed scene, cards inside a sheet use .lc-card) */
+  .lc-sheet {
+    background: rgba(17, 19, 26, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: var(--lc-r-sheet);
+  }
+
+  .lc-card {
+    background: #11131a;
+    border: 1px solid #262b3d;
+    border-radius: var(--lc-r-card);
+  }
+
+  .lc-row {
+    transition: background-color 220ms var(--lc-ease);
+  }
+  .lc-row:hover {
+    background: rgba(255, 255, 255, 0.04);
+  }
+
+  /* Range sliders: volt fill drawn by the component (--lc-fill), round pitboard thumb with a volt ring */
+  .lc-range {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 6px;
+    margin: 0;
+    border-radius: 999px;
+    outline: none;
+    cursor: pointer;
+    background: linear-gradient(90deg, #ccff00 0 var(--lc-fill, 50%), #1b1f2b var(--lc-fill, 50%) 100%);
+  }
+  .lc-range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #f5f7fa;
+    border: 4px solid #ccff00;
+    box-shadow: 0 0 0 5px rgba(204, 255, 0, 0.14);
+  }
+  .lc-range::-moz-range-thumb {
+    width: 13px;
+    height: 13px;
+    border-radius: 50%;
+    background: #f5f7fa;
+    border: 4px solid #ccff00;
+  }
+  .lc-range:disabled {
+    cursor: not-allowed;
+    opacity: 0.4;
+  }
+
+  @keyframes lc-breathe {
+    0%,
+    100% {
+      opacity: 0.45;
+    }
+    50% {
+      opacity: 1;
+    }
+  }
+  @keyframes lc-flow {
+    to {
+      stroke-dashoffset: -80;
+    }
+  }
+  @keyframes lc-ping {
+    0% {
+      transform: scale(1);
+      opacity: 0.7;
+    }
+    100% {
+      transform: scale(2.8);
+      opacity: 0;
+    }
+  }
+  @keyframes lc-drift {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-6px);
+    }
+  }
+  .lc-breathe {
+    animation: lc-breathe 1.8s ease-in-out infinite;
+  }
+  .lc-flow {
+    animation: lc-flow 2.4s linear infinite;
+  }
+  .lc-ping {
+    animation: lc-ping 1.6s ease-out infinite;
+  }
+  .lc-drift {
+    animation: lc-drift 7s ease-in-out infinite;
+  }
+  /* Track-limits / warning pill: a crimson halo pulses out from the edge */
+  @keyframes lc-alert {
+    0%,
+    100% {
+      box-shadow:
+        0 0 0 0 rgba(255, 42, 60, 0.55),
+        0 12px 34px rgba(255, 42, 60, 0.35);
+    }
+    50% {
+      box-shadow:
+        0 0 0 10px rgba(255, 42, 60, 0),
+        0 12px 34px rgba(255, 42, 60, 0.35);
+    }
+  }
+  /* Waiting for an input (binding capture, calibration): a volt halo */
+  @keyframes lc-listen {
+    0%,
+    100% {
+      box-shadow: 0 0 0 0 rgba(204, 255, 0, 0.5);
+    }
+    50% {
+      box-shadow: 0 0 0 6px rgba(204, 255, 0, 0);
+    }
+  }
+  /* Flags */
+  @keyframes lc-wave {
+    0%,
+    100% {
+      transform: translateY(0) skewY(0);
+    }
+    50% {
+      transform: translateY(-6px) skewY(-2deg);
+    }
+  }
+  /* Lights-out ripple */
+  @keyframes lc-ripple {
+    0% {
+      transform: scale(0.6);
+      opacity: 0.9;
+    }
+    100% {
+      transform: scale(1.6);
+      opacity: 0;
+    }
+  }
+  /* Rev lights at the limiter */
+  @keyframes lc-rev {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.6;
+    }
+  }
+  /* Off-track edge vignette */
+  @keyframes lc-vign {
+    0%,
+    100% {
+      opacity: 0.55;
+    }
+    50% {
+      opacity: 1;
+    }
+  }
+  .lc-alert {
+    animation: lc-alert 1.4s ease-out infinite;
+  }
+  .lc-listen {
+    animation: lc-listen 1.4s ease-out infinite;
+  }
+  .lc-wave {
+    animation: lc-wave 4s ease-in-out infinite;
+  }
+  .lc-ripple {
+    animation: lc-ripple 1.6s ease-out infinite;
+  }
+  .lc-rev {
+    animation: lc-rev 0.25s steps(2) infinite;
+  }
+  .lc-vign {
+    animation: lc-vign 1.8s ease-in-out infinite;
+  }
+  /* TC / ABS intervention zone on the pedal bars: a fast strobe like a real ABS pump */
+  .lc-cut {
+    animation: lc-rev 0.16s steps(2) infinite;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .lc-breathe,
+    .lc-flow,
+    .lc-ping,
+    .lc-drift,
+    .lc-alert,
+    .lc-listen,
+    .lc-wave,
+    .lc-ripple,
+    .lc-rev,
+    .lc-cut,
+    .lc-vign {
+      animation: none;
+    }
   }
 }
 
@@ -174,6 +427,38 @@ body {
 }
 @media (prefers-reduced-motion: reduce) {
   .lc-panel-in {
+    animation: none;
+  }
+}
+
+/* Bars that grow up from their base: lap summary corner bars (grow), race podium steps (rise) */
+@keyframes lc-grow {
+  from {
+    transform: scaleY(0.2);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+@keyframes lc-rise {
+  from {
+    transform: scaleY(0.4);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+.lc-grow {
+  transform-origin: bottom;
+  animation: lc-grow 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.lc-rise {
+  transform-origin: bottom;
+  animation: lc-rise 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .lc-grow,
+  .lc-rise {
     animation: none;
   }
 }

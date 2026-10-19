@@ -2,9 +2,11 @@
 
 import React from "react";
 import type { AssistPreset } from "@/types/f1";
-import { Choice, Toggle } from "@/components/hud/PauseMenu";
+import { Toggle } from "@/components/hud/PauseMenu";
 import { keyLabel } from "@/lib/input/bindings";
-import { Card, SectionLabel } from "../menu-ui";
+import { Check } from "lucide-react";
+import { Segmented } from "../menu-ui";
+import { AutoGrid, Hint, SetupCard } from "./setup-ui";
 import type { SetupStepProps } from "./types";
 
 type Level = "beginner" | "intermediate" | "sim";
@@ -46,65 +48,87 @@ export const AssistsStep: React.FC<SetupStepProps> = (p) => {
   };
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="grid gap-2 sm:grid-cols-3">
-        {LEVELS.map((l) => {
+    <div className="flex flex-col gap-4 sm:gap-5">
+      <div className="grid gap-3 sm:grid-cols-3">
+        {LEVELS.map((l, index) => {
           const active = level === l.id;
+          const barColor = active ? "#CCFF00" : l.id === "sim" ? "#FF2A3C" : "#8E96AA";
           return (
             <button
               key={l.id}
               type="button"
               onClick={() => apply(l.id)}
               aria-pressed={active}
-              className={`flex cursor-pointer flex-col items-start gap-2 rounded-lg border-2 p-4 text-left transition-all ${
+              className={`lc-glass relative flex cursor-pointer flex-col items-start gap-3 rounded-[24px] p-5 text-left transition-[background-color,border-color,box-shadow] duration-200 short:gap-2 short:p-3.5 ${
                 active
-                  ? "border-[#CCFF00] bg-[#CCFF00]/15 shadow-[inset_0_0_12px_rgba(204,255,0,0.12)]"
-                  : "border-[#262B3D] bg-[#11131A] hover:border-[#8E96AA]/40 hover:bg-[#1B1F2B]"
+                  ? "border-[1.5px]! border-[#CCFF00]! bg-[#CCFF00]/[0.07]! shadow-[0_0_0_6px_rgba(204,255,0,0.08)]!"
+                  : "hover:border-[#3A4157]!"
               }`}
             >
-              <span className="font-f1-italic text-lg text-[#F5F7FA] uppercase">{l.title}</span>
-              <ul className="flex flex-col gap-1 font-f1-mono text-[11px] leading-snug text-[#8E96AA]">
+              <span aria-hidden className="flex items-end gap-1">
+                {[10, 16, 22].map((h, i) => (
+                  <span key={h} className="w-2 rounded-full" style={{ height: h, background: i <= index ? barColor : "#262B3D" }} />
+                ))}
+              </span>
+              <span className={`lc-disp text-[30px] short:text-[22px] ${active ? "text-[#F5F7FA]" : "text-[#C5CBD8]"}`}>{l.title}</span>
+              <ul
+                className={`m-0 flex list-none flex-col gap-1.5 p-0 text-[14px] leading-[1.4] short:hidden ${
+                  active ? "text-[#C5CBD8]" : "text-[#8E96AA]"
+                }`}
+              >
                 {l.points.map((pt) => (
-                  <li key={pt}>· {pt}</li>
+                  <li key={pt} className="flex gap-2">
+                    <span aria-hidden className="mt-2 h-[5px] w-[5px] shrink-0 rounded-full bg-[#3A4157]" />
+                    {pt}
+                  </li>
                 ))}
               </ul>
+              {active ? (
+                <span
+                  aria-hidden
+                  className="absolute top-4 right-4 inline-flex h-[26px] w-[26px] items-center justify-center rounded-full bg-[#CCFF00]"
+                >
+                  <Check className="h-[15px] w-[15px] text-[#08090D]" strokeWidth={3.2} />
+                </span>
+              ) : null}
             </button>
           );
         })}
       </div>
 
-      <Card>
-        <SectionLabel>Fine tune</SectionLabel>
-        <div className="mb-2 font-f1-italic text-[14px] uppercase">Traction control & ABS</div>
-        <div className="mb-3 grid grid-cols-3 gap-2">
-          {(
-            [
+      <SetupCard label="Fine tune" className="gap-3!">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <span className="lc-title text-[15px] text-[#F5F7FA]">Traction control &amp; ABS</span>
+          <Segmented
+            label="Traction control and ABS"
+            className="w-full sm:w-auto sm:flex-[0_1_380px]"
+            value={p.assistPreset}
+            onChange={(id) => p.onChangeAssistPreset(id)}
+            options={[
               { id: "pro", label: "Off" },
               { id: "semi_pro", label: "TC + ABS" },
               { id: "assisted", label: "Full" },
-            ] as const
-          ).map((a) => (
-            <Choice key={a.id} active={p.assistPreset === a.id} onClick={() => p.onChangeAssistPreset(a.id)}>
-              <div className="text-center font-f1-italic text-sm uppercase">{a.label}</div>
-            </Choice>
-          ))}
-        </div>
-        <Toggle
-          label="Racing line"
-          detail={`Green to red braking guide on the track (${keyLabel(p.settings.keys.racingLine[0])})`}
-          checked={p.showRacingLine}
-          onChange={() => p.onSetRacingLine(!p.showRacingLine)}
-        />
-        {p.settings.device === "controller" ? (
-          <Toggle
-            label="Controller steering assist"
-            detail="Keeps the front tyres at their grip limit"
-            checked={p.gamepadAssist}
-            onChange={() => p.onSetGamepadAssist(!p.gamepadAssist)}
+            ]}
           />
-        ) : null}
-        <p className="mt-2 font-f1-mono text-[11px] text-zinc-500">Change any of these later from the pause menu (Esc).</p>
-      </Card>
+        </div>
+        <AutoGrid min={300} className="gap-x-7 gap-y-1">
+          <Toggle
+            label="Racing line"
+            detail={`Green to red braking guide on the track (${keyLabel(p.settings.keys.racingLine[0])})`}
+            checked={p.showRacingLine}
+            onChange={() => p.onSetRacingLine(!p.showRacingLine)}
+          />
+          {p.settings.device === "controller" ? (
+            <Toggle
+              label="Controller steering assist"
+              detail="Keeps the front tyres at their grip limit"
+              checked={p.gamepadAssist}
+              onChange={() => p.onSetGamepadAssist(!p.gamepadAssist)}
+            />
+          ) : null}
+        </AutoGrid>
+        <Hint>Change any of these later from the pause menu (Esc).</Hint>
+      </SetupCard>
     </div>
   );
 };

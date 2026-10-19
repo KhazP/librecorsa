@@ -5,7 +5,7 @@ import type { CameraMode } from "@/types/f1";
 import { LIVERIES } from "@/lib/track-data";
 import { keyLabel } from "@/lib/input/bindings";
 import { Choice, VEHICLE_CHOICES } from "@/components/hud/PauseMenu";
-import { Card, SectionLabel } from "../menu-ui";
+import { AutoGrid, ChoiceText, SetupCard } from "./setup-ui";
 import type { SetupStepProps } from "./types";
 
 const CARS = VEHICLE_CHOICES;
@@ -20,50 +20,46 @@ const CAMERAS: { id: CameraMode; title: string; sub: string }[] = [
 export const CarStep: React.FC<SetupStepProps> = (p) => {
 
   return (
-    <div className="flex flex-col gap-4">
-      <Card>
-        <SectionLabel>Car</SectionLabel>
+    <div className="flex flex-col gap-3.5">
+      <SetupCard label="Car" className="gap-3!">
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
           {CARS.map((car) => (
             <Choice key={car.id} active={p.vehicleModel === car.id} onClick={() => p.onChangeVehicle(car.id)}>
-              <div className="font-f1-italic text-sm uppercase">{car.title}</div>
-              <div className="font-f1-mono text-[11px] opacity-75">{car.sub}</div>
+              <ChoiceText title={car.title} detail={car.sub} size={15} />
             </Choice>
           ))}
         </div>
-      </Card>
+      </SetupCard>
 
-      <Card>
-        <SectionLabel>Livery</SectionLabel>
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+      <SetupCard label="Livery" className="gap-3!">
+        <AutoGrid min={180} className="gap-2">
           {LIVERIES.map((liv) => (
             <Choice key={liv.id} active={p.selectedLivery.id === liv.id} onClick={() => p.onChangeLivery(liv)}>
               <span className="flex items-center gap-3">
                 <span
-                  className="h-8 w-8 shrink-0 rounded-sm"
+                  aria-hidden
+                  className="h-9 w-9 shrink-0 rounded-xl"
                   style={{ background: `linear-gradient(135deg, ${liv.primary} 0 55%, ${liv.accent} 55% 65%, ${liv.secondary} 65%)` }}
                 />
                 <span className="min-w-0">
-                  <span className="block truncate font-f1-italic text-sm uppercase">{liv.name}</span>
-                  <span className="block truncate font-f1-mono text-[11px] opacity-75">{liv.team}</span>
+                  <span className="lc-title block truncate text-[14px] leading-tight">{liv.name}</span>
+                  <span className="block truncate text-[12px] opacity-75">{liv.team}</span>
                 </span>
               </span>
             </Choice>
           ))}
-        </div>
-      </Card>
+        </AutoGrid>
+      </SetupCard>
 
-      <Card>
-        <SectionLabel>Starting camera · {keyLabel(p.settings.keys.camera[0])} cycles in the car</SectionLabel>
+      <SetupCard label={`Starting camera · ${keyLabel(p.settings.keys.camera[0])} cycles in the car`} className="gap-3!">
         <div className="grid grid-cols-3 gap-2">
           {CAMERAS.map((c) => (
             <Choice key={c.id} active={p.cameraMode === c.id} onClick={() => p.onChangeCameraMode(c.id)}>
-              <div className="font-f1-italic text-sm uppercase">{c.title}</div>
-              <div className="font-f1-mono text-[11px] opacity-75">{c.sub}</div>
+              <ChoiceText title={c.title} detail={c.sub} size={15} />
             </Choice>
           ))}
         </div>
-      </Card>
+      </SetupCard>
     </div>
   );
 };

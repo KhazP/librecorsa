@@ -15,12 +15,11 @@ export const TuningSlider: React.FC<{
   onChange: (value: number) => void;
   hint?: string;
 }> = ({ label, value, min, max, step, format, onChange, hint }) => (
-  <label className="block rounded px-1.5 py-1.5 hover:bg-white/5">
-    <span className="flex items-center justify-between gap-3">
-      <span className="font-f1-italic text-[15px] text-[#F5F7FA] uppercase">{label}</span>
-      <span className="font-f1-mono text-sm font-bold text-[#CCFF00] tabular-nums">{format(value)}</span>
+  <label className="flex flex-col gap-2 rounded-[14px] p-1.5 transition-colors duration-200 hover:bg-white/[0.03]">
+    <span className="flex items-center justify-between gap-2">
+      <span className="text-[15px] leading-tight font-bold text-[#F5F7FA]">{label}</span>
+      <span className="shrink-0 font-f1-mono text-[13px] font-extrabold text-[#CCFF00] tabular-nums">{format(value)}</span>
     </span>
-    {hint ? <span className="block font-f1-mono text-[11px] text-[#8E96AA]">{hint}</span> : null}
     <input
       type="range"
       min={min}
@@ -28,8 +27,10 @@ export const TuningSlider: React.FC<{
       step={step}
       value={value}
       onChange={(e) => onChange(Number(Number(e.target.value).toFixed(3)))}
-      className="mt-1 w-full cursor-pointer accent-[#CCFF00]"
+      className="lc-range"
+      style={{ "--lc-fill": `${((value - min) / (max - min || 1)) * 100}%` } as React.CSSProperties}
     />
+    {hint ? <span className="text-[12px] leading-[1.4] text-[#8E96AA]">{hint}</span> : null}
   </label>
 );
 
@@ -88,15 +89,15 @@ export const StickCurve: React.FC<{ deadzone: number; outerDeadzone: number; lin
   }
 
   return (
-    <div className="rounded border border-[#262B3D] bg-[#08090D] p-2">
-      <div className="mb-1 font-f1-mono text-[10px] font-bold text-[#8E96AA] uppercase">Stick response</div>
+    <div className="flex flex-col gap-2 rounded-[18px] border border-[#262B3D] bg-[#08090D] p-3.5">
+      <span className="lc-lbl text-[10px]!">Stick response</span>
       <svg viewBox="0 0 160 100" className="block h-auto w-full" role="img" aria-label="Stick response curve">
-        <rect x="10" y="10" width="140" height="80" fill="none" stroke="#262B3D" strokeWidth="1" />
-        <line x1="80" y1="10" x2="80" y2="90" stroke="#262B3D" strokeWidth="1" />
-        <line x1="10" y1="50" x2="150" y2="50" stroke="#262B3D" strokeWidth="1" />
-        <line x1="10" y1="90" x2="150" y2="10" stroke="#8E96AA" strokeWidth="0.75" strokeDasharray="3 3" opacity="0.5" />
-        <path d={points.join(" ")} fill="none" stroke="#CCFF00" strokeWidth="1.75" strokeLinejoin="round" />
-        <circle ref={dotRef} r="3.5" fill="#00E5FF" opacity="0" />
+        <rect x="6" y="6" width="148" height="88" rx="10" fill="none" stroke="#262B3D" strokeWidth="1" />
+        <line x1="80" y1="6" x2="80" y2="94" stroke="#262B3D" strokeWidth="1" />
+        <line x1="6" y1="50" x2="154" y2="50" stroke="#262B3D" strokeWidth="1" />
+        <line x1="10" y1="90" x2="150" y2="10" stroke="#5B6275" strokeWidth="1" strokeDasharray="3 3" />
+        <path d={points.join(" ")} fill="none" stroke="#CCFF00" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+        <circle ref={dotRef} r="4.5" fill="#00E5FF" opacity="0" style={{ filter: "drop-shadow(0 0 4px #00E5FF)" }} />
       </svg>
     </div>
   );
@@ -131,18 +132,18 @@ const TriggerRow: React.FC<{ label: string; button: number; gamma: number; color
   }, [button]);
 
   return (
-    <div>
-      <div className="mb-1 flex items-center justify-between font-f1-mono text-[10px] font-bold text-[#8E96AA] uppercase">
-        <span>{label}</span>
-        <span ref={readout} className="text-[#F5F7FA] tabular-nums">
+    <div className="flex flex-col gap-1.5">
+      <span className="flex items-center justify-between gap-2">
+        <span className="lc-lbl text-[10px]!">{label}</span>
+        <span ref={readout} className="font-f1-mono text-[11px] font-extrabold text-[#F5F7FA] tabular-nums">
           0% → 0%
         </span>
-      </div>
-      <span className="mb-1 block h-1.5 overflow-hidden rounded border border-[#262B3D] bg-[#08090D]">
-        <span ref={rawBar} className="block h-full bg-[#8E96AA]" style={{ width: "0%" }} />
       </span>
-      <span className="block h-1.5 overflow-hidden rounded border border-[#262B3D] bg-[#08090D]">
-        <span ref={shapedBar} className="block h-full" style={{ width: "0%", background: color }} />
+      <span className="block h-1 overflow-hidden rounded-full bg-[#1B1F2B]">
+        <span ref={rawBar} className="block h-full rounded-full bg-[#5B6275]" style={{ width: "0%" }} />
+      </span>
+      <span className="block h-1 overflow-hidden rounded-full bg-[#1B1F2B]">
+        <span ref={shapedBar} className="block h-full rounded-full" style={{ width: "0%", background: color }} />
       </span>
     </div>
   );
@@ -150,8 +151,8 @@ const TriggerRow: React.FC<{ label: string; button: number; gamma: number; color
 
 /** Live RT / LT readout with the throttle and brake curves applied (grey = raw travel, colour = shaped) */
 export const TriggerBars: React.FC<{ throttleGamma: number; brakeGamma: number }> = ({ throttleGamma, brakeGamma }) => (
-  <div className="flex flex-col gap-2 rounded border border-[#262B3D] bg-[#08090D] p-2">
-    <TriggerRow label="RT · throttle" button={PAD_THROTTLE_BUTTON} gamma={throttleGamma} color="#CCFF00" />
+  <div className="flex flex-col gap-3 rounded-[18px] border border-[#262B3D] bg-[#08090D] p-3.5">
+    <TriggerRow label="RT · throttle" button={PAD_THROTTLE_BUTTON} gamma={throttleGamma} color="#00E676" />
     <TriggerRow label="LT · brake" button={PAD_BRAKE_BUTTON} gamma={brakeGamma} color="#FF2A3C" />
   </div>
 );

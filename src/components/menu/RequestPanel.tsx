@@ -1,8 +1,8 @@
 "use client";
 
 import React, { useState } from "react";
-import { ExternalLink } from "lucide-react";
-import { Card, SectionLabel } from "./menu-ui";
+import { ChevronDown, ExternalLink } from "lucide-react";
+import { Segmented } from "./menu-ui";
 
 /** Requests become GitHub issues from the form in .github/ISSUE_TEMPLATE/content-request.yml */
 const REPO_URL = "https://github.com/KhazP/librecorsa";
@@ -20,15 +20,39 @@ const PERMISSIONS = [
 
 type Kind = (typeof KINDS)[number];
 
-const inputClass =
-  "w-full rounded border border-[#262B3D] bg-[#08090D] px-2.5 py-1.5 font-f1-mono text-[12px] text-[#F5F7FA] placeholder:text-[#8E96AA]/50 focus:border-[#CCFF00] focus:outline-none";
+const fieldClass =
+  "w-full min-w-0 rounded-[14px] border border-[#262B3D] bg-[#08090D] px-3.5 text-[15px] text-[#F5F7FA] placeholder:text-[#8E96AA]/60 focus:border-[#CCFF00] focus:shadow-[0_0_0_4px_rgba(204,255,0,0.12)] focus:outline-none";
+const inputClass = `${fieldClass} h-11`;
 
 const Field: React.FC<{ label: string; hint?: string; children: React.ReactNode }> = ({ label, hint, children }) => (
-  <label className="flex flex-col gap-1">
-    <span className="font-f1-mono text-[10px] font-bold tracking-[0.14em] text-[#8E96AA] uppercase">{label}</span>
+  <label className="flex min-w-0 flex-col gap-1.5">
+    <span className="lc-lbl text-[10px]">{label}</span>
     {children}
-    {hint ? <span className="font-f1-mono text-[10px] leading-snug text-[#8E96AA]/80">{hint}</span> : null}
+    {hint ? <span className="text-[12px] leading-snug text-[#8E96AA]">{hint}</span> : null}
   </label>
+);
+
+/** Native drop-down drawn as a field, with its own chevron */
+const Select: React.FC<{ value: string; onChange: (value: string) => void; options: readonly string[] }> = ({
+  value,
+  onChange,
+  options,
+}) => (
+  <span className="relative block">
+    <select value={value} onChange={(e) => onChange(e.target.value)} className={`${inputClass} cursor-pointer appearance-none pr-10`}>
+      <option value="">Choose…</option>
+      {options.map((o) => (
+        <option key={o} value={o}>
+          {o}
+        </option>
+      ))}
+    </select>
+    <ChevronDown
+      aria-hidden
+      className="pointer-events-none absolute top-3.5 right-3.5 h-4 w-4 text-[#8E96AA]"
+      strokeWidth={2.4}
+    />
+  </span>
 );
 
 /** The GitHub "new issue" URL with the request form filled in */
@@ -75,38 +99,40 @@ export const RequestPanel: React.FC = () => {
   };
 
   return (
-    <Card className="max-w-xl">
-      <SectionLabel>Request a car or track</SectionLabel>
-      <div className="flex flex-col gap-2 font-f1-mono text-[12px] leading-relaxed text-[#8E96AA]">
-        <p className="text-[#F5F7FA]">
+    <div className="grid grid-cols-[repeat(auto-fit,minmax(min(300px,100%),1fr))] gap-7 text-[#F5F7FA]">
+      <div className="flex min-w-0 flex-col gap-[18px]">
+        <div className="flex flex-col gap-2">
+          <span className="lc-lbl text-[#00E5FF]">Suggest new content</span>
+          <h2 className="lc-disp m-0 text-[34px] sm:text-[44px]">
+            Request a car
+            <br />
+            or track
+          </h2>
+        </div>
+        <p className="m-0 text-[17px] leading-snug font-semibold sm:text-[18px]">
           Missing your favourite circuit or car? Tell us what it is and where the 3D model comes from.
         </p>
-        <p>
-          LibreCorsa can only ship models it is allowed to share: ones under an open license (CC BY, CC BY-SA, CC0) or
-          with <span className="text-[#F5F7FA]">written permission from the creator</span>. Mods taken from other games
-          (Assetto Corsa, ACC, iRacing, F1 games…) can only be used if their original creator agrees.
+        <p className="m-0 text-[14px] leading-relaxed text-[#8E96AA]">
+          LibreCorsa can only ship models it is allowed to share: ones under an open license (CC BY, CC BY-SA, CC0) or with{" "}
+          <span className="text-[#F5F7FA]">written permission from the creator</span>. Mods taken from other games can only
+          be used if their original creator agrees.
         </p>
+        <div className="mt-auto flex items-start gap-3 rounded-[18px] border border-[#262B3D] bg-[#08090D]/60 px-4 py-3.5">
+          <ExternalLink aria-hidden className="mt-0.5 h-[18px] w-[18px] shrink-0 text-[#00E5FF]" strokeWidth={2} />
+          <span className="text-[13px] leading-normal text-[#C5CBD8]">
+            Opens a pre-filled request on GitHub (free account needed). Accepted requests are added in a pull request.
+          </span>
+        </div>
       </div>
 
-      <form onSubmit={submit} className="mt-4 flex flex-col gap-3">
-        <div className="flex gap-1.5" role="radiogroup" aria-label="Car or track">
-          {KINDS.map((k) => (
-            <button
-              key={k}
-              type="button"
-              role="radio"
-              aria-checked={kind === k}
-              onClick={() => setKind(k)}
-              className={`cursor-pointer rounded border px-4 py-1.5 font-f1-italic text-sm uppercase transition-colors ${
-                kind === k
-                  ? "border-[#CCFF00] bg-[#CCFF00]/15 text-[#CCFF00]"
-                  : "border-[#262B3D] bg-[#08090D] text-[#8E96AA] hover:border-[#8E96AA]/40"
-              }`}
-            >
-              {k}
-            </button>
-          ))}
-        </div>
+      <form onSubmit={submit} className="flex min-w-0 flex-col gap-3.5">
+        <Segmented
+          label="Car or track"
+          className="self-start [&_button]:min-w-[96px]"
+          options={KINDS.map((k) => ({ id: k, label: k }))}
+          value={kind}
+          onChange={setKind}
+        />
 
         <Field
           label={kind === "Track" ? "Which track?" : "Which car?"}
@@ -121,40 +147,27 @@ export const RequestPanel: React.FC = () => {
             value={link}
             onChange={(e) => setLink(e.target.value)}
             placeholder="https://"
-            className={`${inputClass} ${linkOk ? "" : "!border-[#FF2A3C]"}`}
+            aria-invalid={!linkOk}
+            className={`${inputClass} ${linkOk ? "" : "!border-[#FF2A3C] focus:!shadow-[0_0_0_4px_rgba(255,42,60,0.14)]"}`}
           />
         </Field>
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
           <Field label="Creator / modder">
             <input value={creator} onChange={(e) => setCreator(e.target.value)} maxLength={80} className={inputClass} />
           </Field>
           <Field label="License">
-            <select value={license} onChange={(e) => setLicense(e.target.value)} className={inputClass}>
-              <option value="">Choose…</option>
-              {LICENSES.map((l) => (
-                <option key={l} value={l}>
-                  {l}
-                </option>
-              ))}
-            </select>
+            <Select value={license} onChange={setLicense} options={LICENSES} />
           </Field>
         </div>
 
         <Field label="Do we have permission to use it?">
-          <select value={permission} onChange={(e) => setPermission(e.target.value)} className={inputClass}>
-            <option value="">Choose…</option>
-            {PERMISSIONS.map((p) => (
-              <option key={p} value={p}>
-                {p}
-              </option>
-            ))}
-          </select>
+          <Select value={permission} onChange={setPermission} options={PERMISSIONS} />
         </Field>
         {ripped ? (
-          <p className="-mt-1 rounded border border-[#FFD400]/30 bg-[#FFD400]/5 px-2.5 py-1.5 font-f1-mono text-[11px] leading-snug text-[#FFD400]">
-            Feel free to send it anyway. Asking the creator first (and linking their answer) makes it much more likely
-            to be added.
+          <p className="m-0 rounded-[14px] border border-[#FFD400]/35 bg-[#FFD400]/[0.08] px-3.5 py-3 text-[13px] leading-normal text-[#FFD400]">
+            Feel free to send it anyway. Asking the creator first (and linking their answer) makes it much more likely to be
+            added.
           </p>
         ) : null}
 
@@ -162,26 +175,22 @@ export const RequestPanel: React.FC = () => {
           <textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            rows={3}
+            rows={2}
             maxLength={1500}
             placeholder="Why it would be fun, a link to the creator's permission, reference photos…"
-            className={`${inputClass} resize-y`}
+            className={`${fieldClass} resize-y py-3`}
           />
         </Field>
 
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#262B3D] pt-3">
-          <span className="max-w-xs font-f1-mono text-[10px] leading-snug text-[#8E96AA]">
-            Opens a pre-filled request on GitHub (free account needed). Accepted requests are added in a pull request.
-          </span>
-          <button
-            type="submit"
-            disabled={!ready}
-            className="hud-slant inline-flex cursor-pointer items-center gap-2 bg-[#CCFF00] px-5 py-2 font-f1-italic text-sm uppercase tracking-wider text-[#08090D] transition-colors hover:bg-[#E2FF4D] disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            Send request <ExternalLink className="h-3.5 w-3.5" />
-          </button>
-        </div>
+        <button
+          type="submit"
+          disabled={!ready}
+          className="inline-flex h-[52px] cursor-pointer items-center gap-2.5 self-end rounded-full border-0 bg-[#CCFF00] px-6 text-[#08090D] shadow-[0_0_0_5px_rgba(204,255,0,0.12)] transition-colors hover:bg-[#d9ff33] disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
+        >
+          <span className="lc-disp text-[18px]">Send request</span>
+          <ExternalLink aria-hidden className="h-4 w-4" strokeWidth={2.4} />
+        </button>
       </form>
-    </Card>
+    </div>
   );
 };

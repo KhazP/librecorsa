@@ -34,7 +34,11 @@ export const TrackGate: React.FC = () => {
     <>
       <LibreCorsaSimulator key={trackId} trackId={trackId} onSelectTrack={(id) => void select(id)} />
       {error ? (
-        <div className="pointer-events-none fixed bottom-4 left-1/2 z-50 -translate-x-1/2 rounded bg-red-900/90 px-4 py-2 font-f1-mono text-[12px] text-white">
+        <div
+          role="alert"
+          className="pointer-events-none fixed bottom-4 left-1/2 z-50 inline-flex max-w-[calc(100vw-2rem)] -translate-x-1/2 items-center gap-2.5 rounded-full border border-[#FF2A3C]/45 bg-[#08090D]/85 px-4 py-2 font-f1-mono text-[12px] font-bold text-[#F5F7FA] shadow-[0_14px_40px_rgba(0,0,0,0.5)] backdrop-blur-md"
+        >
+          <span aria-hidden className="h-2 w-2 shrink-0 rounded-full bg-[#FF2A3C]" />
           {error}
         </div>
       ) : null}
