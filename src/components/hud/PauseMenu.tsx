@@ -17,6 +17,8 @@ import { ACTIVE_TRACK_ID, LIVERIES, TRACK_TOTAL_LENGTH_M, TURN_METADATA, getTrac
 import { getTrackInfo } from "@/lib/track-registry";
 import type { ChassisSetup } from "@/lib/sim/car-setup";
 import { EngineersGarage } from "@/components/menu/EngineersGarage";
+import { CarPicker } from "@/components/menu/CarPicker";
+import type { CarId } from "@/lib/cars/car-registry";
 import { COCKPIT_FOV_MAX_DEG, COCKPIT_FOV_MIN_DEG } from "@/lib/settings/player-settings";
 import { MultiplayerPanel, type MultiplayerPanelProps } from "./MultiplayerPanel";
 import { DisplayPanel, type DisplayPanelProps } from "./DisplayPanel";
@@ -94,37 +96,6 @@ export const TYRE_SETUP_LIMITS: Record<VehicleModelId, TyreSetupLimits> = {
   },
 };
 
-/** The cars in the picker (pause menu and the setup flow) */
-export const VEHICLE_CHOICES: {
-  id: VehicleModelId;
-  title: string;
-  sub: string;
-  badge: string;
-  badgeColor: string;
-}[] = [
-  {
-    id: "vf26",
-    title: "FA-26 Prototype",
-    sub: "Curvilinear 2026 model · active aero",
-    badge: "FA-26",
-    badgeColor: "#CCFF00",
-  },
-  {
-    id: "f12026-car",
-    title: "FA-26 Rigid-Body",
-    sub: "6-DOF rigid-body · track colliders · DRS",
-    badge: "6-DOF",
-    badgeColor: "#CCFF00",
-  },
-  {
-    id: "amg-gt3",
-    title: "Mercedes-AMG GT3",
-    sub: "GT3 Pro · 6.2L V8 · Multi-stage ABS / TC",
-    badge: "GT3 PRO",
-    badgeColor: "#00E5FF",
-  },
-];
-
 export interface PauseMenuProps extends MultiplayerPanelProps {
   telemetry: CarTelemetry;
   aeroPreset: AeroSetupPreset;
@@ -146,8 +117,10 @@ export interface PauseMenuProps extends MultiplayerPanelProps {
   gamepadAssist: boolean;
   gamepadRumble: boolean;
   aiOpponents: boolean;
+  /** The chosen car, and the vehicle model it drives on (setups and records are per vehicle model) */
+  carId: CarId;
   vehicleModel: VehicleModelId;
-  onChangeVehicle: (vehicle: VehicleModelId) => void;
+  onChangeCar: (car: CarId) => void;
   openMultiplayer?: boolean;
   onToggleAiOpponents: () => void;
   onToggleGamepadAssist?: () => void;
@@ -666,29 +639,7 @@ export const SetupPanel: React.FC<PauseMenuProps> = (p) => {
         <div className="flex min-w-0 flex-col gap-[18px]">
           <div className="flex flex-col gap-2.5">
             <PanelSection>Vehicle class &amp; chassis</PanelSection>
-            {VEHICLE_CHOICES.map((car) => {
-              const active = p.vehicleModel === car.id;
-              return (
-                <Choice key={car.id} active={active} onClick={() => p.onChangeVehicle(car.id)}>
-                  <span className="flex flex-col gap-[3px]">
-                    <span className="flex flex-wrap items-center gap-2.5">
-                      <span className="lc-title text-[17px] leading-tight">{car.title}</span>
-                      <span
-                        className="rounded-full px-[7px] py-0.5 font-f1-mono text-[9px] font-extrabold"
-                        style={
-                          active
-                            ? { backgroundColor: car.badgeColor, color: "#08090D" }
-                            : { boxShadow: `inset 0 0 0 1px ${car.badgeColor}`, color: car.badgeColor }
-                        }
-                      >
-                        {car.badge}
-                      </span>
-                    </span>
-                    <span className={`text-[13px] ${active ? "text-[#C5CBD8]" : "text-[#8E96AA]"}`}>{car.sub}</span>
-                  </span>
-                </Choice>
-              );
-            })}
+            <CarPicker carId={p.carId} onChangeCar={p.onChangeCar} />
           </div>
 
           <div className="flex flex-col gap-2.5">

@@ -16,6 +16,7 @@ import type { MultiplayerPanelProps } from "./hud/MultiplayerPanel";
 import type { HudSettings } from "@/lib/settings/player-settings";
 import type { DisplayPanelProps } from "./hud/DisplayPanel";
 import type { LeaderboardPanelProps } from "./hud/LeaderboardPanel";
+import type { CarId } from "@/lib/cars/car-registry";
 import { type BuiltTrackData } from "@/lib/track-data";
 import { HUD_TOGGLE_EVENT } from "@/lib/input/bindings";
 import { TrackMinimap } from "./TrackMinimap";
@@ -90,8 +91,9 @@ interface F1TelemetryHudProps extends MultiplayerPanelProps {
   gamepadRumble: boolean;
   aiOpponents: boolean;
   onToggleAiOpponents: () => void;
+  carId: CarId;
   vehicleModel: VehicleModelId;
-  onChangeVehicle: (vehicle: VehicleModelId) => void;
+  onChangeCar: (car: CarId) => void;
   onToggleGamepadAssist?: () => void;
   onToggleGamepadRumble: () => void;
   onChangeAeroPreset: (preset: AeroSetupPreset) => void;

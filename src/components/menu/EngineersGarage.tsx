@@ -4,7 +4,8 @@ import React, { useEffect, useMemo, useState } from "react";
 import type { LiveTunerPatch, LiveTunerState } from "@/types/f1";
 import { DEFAULT_CHASSIS_SETUP, loadGaragePresets, saveGaragePresets, type GaragePreset, type GarageTuner } from "@/lib/sim/car-setup";
 import { setupSheet, type SetupEffect, type SetupGroup, type SetupParam, type SetupState } from "@/lib/sim/setup-sheet";
-import { Choice, COMPOUNDS, PanelSection, TYRE_SETUP_LIMITS, VEHICLE_CHOICES, type PauseMenuProps } from "@/components/hud/PauseMenu";
+import { COMPOUNDS, PanelSection, TYRE_SETUP_LIMITS, type PauseMenuProps } from "@/components/hud/PauseMenu";
+import { CarPicker } from "./CarPicker";
 import { TyreBrakeGrid } from "@/components/hud/TyreBrakeWidget";
 import { LIVERIES } from "@/lib/track-data";
 
@@ -276,18 +277,7 @@ export const EngineersGarage: React.FC<PauseMenuProps> = (p) => {
     <div className="lc-glass flex flex-col gap-[18px] rounded-[28px] p-5 text-[#F5F7FA] sm:px-7 sm:pt-6 sm:pb-[26px] short:p-4 [.lc-title-frame_&]:border-0 [.lc-title-frame_&]:bg-transparent [.lc-title-frame_&]:p-0 [.lc-title-frame_&]:shadow-none [.lc-title-frame_&]:[backdrop-filter:none]">
       {/* Car and presets */}
       <div className="flex flex-col gap-3">
-        <div className="grid gap-2 sm:grid-cols-3">
-          {VEHICLE_CHOICES.map((car) => (
-            <Choice key={car.id} active={p.vehicleModel === car.id} onClick={() => p.onChangeVehicle(car.id)}>
-              <span className="flex flex-col gap-0.5">
-                <span className="lc-title text-[15px] leading-tight">{car.title}</span>
-                <span className="font-f1-mono text-[9px] font-extrabold tracking-[0.1em]" style={{ color: car.badgeColor }}>
-                  {car.badge}
-                </span>
-              </span>
-            </Choice>
-          ))}
-        </div>
+        <CarPicker carId={p.carId} onChangeCar={p.onChangeCar} compact />
         <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Livery">
           {LIVERIES.map((liv) => {
             const active = p.selectedLivery.id === liv.id;

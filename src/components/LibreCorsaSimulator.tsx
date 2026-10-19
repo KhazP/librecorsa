@@ -9,8 +9,12 @@ import type { SimulatorCar } from "@/lib/sim/simulator-car";
 import { F1AudioEngine2026 } from "@/lib/f1-audio-2026";
 import { createF1Car2026, type SimCarRig } from "@/lib/car-builder-2026";
 import { createGt3CarRig } from "@/lib/gt3-car-model";
-import { AMG_GT3_SOUND, createAmgGt3Sim } from "@/lib/sim/gt3/AmgGt3Sim";
-import { AMR26_SOUND, type CarSoundSource } from "@/lib/sim/CarAudio";
+import { createPortedCarRig } from "@/lib/ported-car-model";
+import { createAmgGt3Sim } from "@/lib/sim/gt3/AmgGt3Sim";
+import { AMG_GT3_CONFIG } from "@/lib/sim/gt3/AmgGt3Config";
+import { F12026_CAR_CONFIG } from "@/lib/sim/f12026-car/F12026CarConfig";
+import type { CarSoundSource } from "@/lib/sim/CarAudio";
+import { CARS, carById, carForVehicle, isCarId, type CarId } from "@/lib/cars/car-registry";
 import { buildRwandaCircuitScene } from "@/lib/scene-builder";
 import {
   configureRenderer,
@@ -62,13 +66,13 @@ import { getTrackInfo } from "@/lib/track-registry";
 import { TouchControls } from "@/components/hud/TouchControls";
 import { ReplayBar } from "@/components/hud/ReplayBar";
 import { F1TelemetryHud, roomFromUrl } from "@/components/F1TelemetryHud";
-import { CAMERA_LABELS, nextCameraMode, TYRE_SETUP_LIMITS, VEHICLE_CHOICES } from "@/components/hud/PauseMenu";
+import { CAMERA_LABELS, nextCameraMode, TYRE_SETUP_LIMITS } from "@/components/hud/PauseMenu";
 import { LoadingScreen } from "@/components/menu/LoadingScreen";
 import { TitleMenu } from "@/components/menu/TitleMenu";
 import { FirstRunWizard, type WizardMode, type WizardStepId } from "@/components/menu/FirstRunWizard";
 import { assetProgress } from "@/lib/loading/asset-progress";
 import { buildKeyLookup, HUD_TOGGLE_EVENT, keyLabel, padButtonLabel, type KeyAction } from "@/lib/input/bindings";
-import { connectedPads, DeviceInputReader } from "@/lib/input/device-input";
+import { carWheelLockDeg, connectedPads, DeviceInputReader } from "@/lib/input/device-input";
 import { webHidFfb, wheelFfb } from "@/lib/input/wheel-ffb";
 import { DEFAULT_GAMEPAD_ASSIST, type GamepadAssistSettings } from "@/lib/sim/gamepad-assist";
 import {
@@ -137,7 +141,8 @@ const TELEMETRY_OUT_HZ = 60;
 const MAX_RPM: Record<VehicleModelId, number> = { vf26: 15000, "f12026-car": 15000, "amg-gt3": 8250 };
 /** Rev limiter of each car (rpm): the shift beep sounds 150 rpm short of it */
 const LIMITER_RPM: Record<VehicleModelId, number> = { vf26: 12500, "f12026-car": 13050, "amg-gt3": 7900 };
-const vehicleLabel = (id: string) => VEHICLE_CHOICES.find((v) => v.id === id)?.title ?? id;
+/** A lap record's car: records are per vehicle model, named after its first car */
+const vehicleLabel = (id: string) => CARS.find((c) => c.physics === id)?.title ?? id;
 
 /** A race the host started on another circuit: picked up after the scene for that circuit has loaded */
 let pendingRaceStart: RaceStartInfo | null = null;
@@ -205,28 +210,24 @@ function saveTyreSetup(vehicle: VehicleModelId, setup: TyreSetup) {
   }
 }
 
-/** The sound bank each car plays: the F1 cars share the AMR26 bank, the GT3 has its own */
-const soundFor = (vehicle: VehicleModelId): CarSoundSource =>
-  vehicle === "amg-gt3" ? AMG_GT3_SOUND : AMR26_SOUND;
-
-const isVehicleModel = (value: unknown): value is VehicleModelId =>
-  value === "vf26" || value === "f12026-car" || value === "amg-gt3";
+/** The sound bank each car plays (the F1 cars share one bank) */
+const soundFor = (car: CarId): CarSoundSource => carById(car).sound;
 
 /** The car to drive: `?car=` in the URL, else the last choice, else the VF26 */
-function loadStoredVehicle(): VehicleModelId {
+function loadStoredCar(): CarId {
   try {
     const fromUrl = new URLSearchParams(window.location.search).get("car");
-    if (isVehicleModel(fromUrl)) return fromUrl;
+    if (isCarId(fromUrl)) return fromUrl;
     const saved = localStorage.getItem(VEHICLE_STORAGE_KEY);
-    return isVehicleModel(saved) ? saved : "vf26";
+    return isCarId(saved) ? saved : "vf26";
   } catch {
     return "vf26";
   }
 }
 
-function saveVehicle(vehicle: VehicleModelId) {
+function saveCar(car: CarId) {
   try {
-    localStorage.setItem(VEHICLE_STORAGE_KEY, vehicle);
+    localStorage.setItem(VEHICLE_STORAGE_KEY, car);
   } catch {
     // Storage unavailable: the choice lasts for this session only
   }
@@ -262,10 +263,13 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   const track = useMemo(() => getRwandaTrackData(1200), []);
   /** The player's car: the VF26 (F1Physics2026) or the f12026-car (F12026CarSim) */
   const physicsRef = useRef<SimulatorCar | null>(null);
-  const [vehicleModel, setVehicleModel] = useState<VehicleModelId>(loadStoredVehicle);
+  /** The chosen car, and the vehicle model it drives on */
+  const [carId, setCarId] = useState<CarId>(loadStoredCar);
+  const carIdRef = useRef(carId);
+  const [vehicleModel, setVehicleModel] = useState<VehicleModelId>(() => carById(carId).physics);
   const vehicleModelRef = useRef(vehicleModel);
   /** Swaps the player's car in the running scene (set by the scene effect) */
-  const swapCarRef = useRef<((vehicle: VehicleModelId) => void) | null>(null);
+  const swapCarRef = useRef<((car: CarId) => void) | null>(null);
   const audioRef = useRef<F1AudioEngine2026 | null>(null);
   const carRigRef = useRef<SimCarRig | null>(null);
   const liveryRef = useRef<LiveryConfig>(LIVERIES[0]);
@@ -456,7 +460,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   const unlockAudio = useCallback(() => {
     if (!audioRef.current) {
       audioRef.current = new F1AudioEngine2026();
-      audioRef.current.setCar(soundFor(vehicleModelRef.current));
+      audioRef.current.setCar(soundFor(carIdRef.current));
     }
     audioRef.current.setPaused(pausedRef.current || phaseRef.current !== "driving");
     if (!audioRef.current.isInitialized) {
@@ -517,13 +521,15 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     saveChassisSetup(vehicleModelRef.current, next);
   }, []);
 
-  const handleChangeVehicle = useCallback(
-    (next: VehicleModelId) => {
+  const handleChangeCar = useCallback(
+    (next: CarId) => {
       unlockAudio();
-      if (next === vehicleModelRef.current) return;
-      vehicleModelRef.current = next;
-      setVehicleModel(next);
-      saveVehicle(next);
+      if (next === carIdRef.current) return;
+      carIdRef.current = next;
+      setCarId(next);
+      vehicleModelRef.current = carById(next).physics;
+      setVehicleModel(vehicleModelRef.current);
+      saveCar(next);
       swapCarRef.current?.(next);
       audioRef.current?.setCar(soundFor(next));
     },
@@ -772,7 +778,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       const mp = getMultiplayerManager();
       // The class may rule out the current car: take the first allowed one
       const allowed = vehiclesForClass(start.carClass) as VehicleModelId[];
-      if (!allowed.includes(vehicleModelRef.current)) handleChangeVehicle(allowed[0]);
+      if (!allowed.includes(vehicleModelRef.current)) handleChangeCar(carForVehicle(allowed[0]).id);
       exitReplayRef.current();
       const physics = physicsRef.current;
       const roster = mp.lobby?.players ?? [];
@@ -799,7 +805,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       setMpRaceRunning(true);
       setPhase("driving");
     },
-    [track, getTrackEnv, setPhase, vehiclesForClass, handleChangeVehicle]
+    [track, getTrackEnv, setPhase, vehiclesForClass, handleChangeCar]
   );
   const startMpRaceRef = useRef(startMpRace);
   startMpRaceRef.current = startMpRace;
@@ -1108,10 +1114,11 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     let physics = createCar(vehicleModelRef.current, null);
     physicsRef.current = physics;
 
-    swapCarRef.current = (vehicle) => {
+    swapCarRef.current = (car) => {
+      const vehicle = carById(car).physics;
       physics = createCar(vehicle, physics);
       physicsRef.current = physics;
-      swapCarRig(vehicle);
+      swapCarRig(car);
       kbInputRef.current.throttle = 0;
       kbInputRef.current.brake = 0;
       kbInputRef.current.steer = 0;
@@ -1172,29 +1179,38 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       tvDirector.resolveOcclusion(root);
     });
 
-    /** The 3D car for a model: the F1 cars use amr26.glb, the GT3 gt3.glb */
-    const isGt3Rig = (vehicle: VehicleModelId) => vehicle === "amg-gt3";
-    const createCarRig = (vehicle: VehicleModelId): SimCarRig => {
-      const rig = isGt3Rig(vehicle)
-        ? createGt3CarRig()
-        : createF1Car2026(liveryRef.current, physics.tireCompound);
+    /**
+     * The 3D car: a ported car's own GLB on the generic rig, else the vehicle model's own car
+     */
+    const isGt3Rig = (car: CarId) => carById(car).physics === "amg-gt3";
+    const createCarRig = (car: CarId): SimCarRig => {
+      const def = carById(car);
+      const rig = def.modelUrl
+        ? createPortedCarRig({
+            url: def.modelUrl,
+            chassis: (def.physics === "amg-gt3" ? AMG_GT3_CONFIG : F12026_CAR_CONFIG).chassis,
+            steerLockDeg: carWheelLockDeg(def.physics) / 2,
+          })
+        : isGt3Rig(car)
+          ? createGt3CarRig()
+          : createF1Car2026(liveryRef.current, physics.tireCompound);
       rig.setLivery(liveryRef.current);
       scene.add(rig.root);
       carRigRef.current = rig;
       return rig;
     };
-    let carRig = createCarRig(vehicleModelRef.current);
-    let carRigVehicle: VehicleModelId = vehicleModelRef.current;
-    const swapCarRig = (vehicle: VehicleModelId) => {
-      if (vehicle === carRigVehicle) return;
+    let carRig = createCarRig(carIdRef.current);
+    let carRigCar: CarId = carIdRef.current;
+    const swapCarRig = (car: CarId) => {
+      if (car === carRigCar) return;
       // The cockpit extras belong to the old body
       wheelDisplay?.dispose();
       wheelDisplay = null;
       wingMirrors?.dispose();
       wingMirrors = null;
       carRig.dispose();
-      carRig = createCarRig(vehicle);
-      carRigVehicle = vehicle;
+      carRig = createCarRig(car);
+      carRigCar = car;
     };
 
     // Persistent 4-Wheel Skidmarks, Instanced Tire Smoke/Gravel & Multiplayer/AI Opponent Renderer
@@ -2117,7 +2133,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
 
       // Titanium Floor Sparks
       if (
-        !isGt3Rig(carRigVehicle) &&
+        !isGt3Rig(carRigCar) &&
         ((physics.telemetry.speedKmh > 280 &&
           (physics.telemetry.verticalG ?? 1.0) > 1.15) ||
           physics.telemetry.onKerbLeft ||
@@ -2863,8 +2879,9 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     gamepadRumble,
     aiOpponents,
     onToggleAiOpponents: handleToggleAiOpponents,
+    carId,
     vehicleModel,
-    onChangeVehicle: handleChangeVehicle,
+    onChangeCar: handleChangeCar,
     onToggleGamepadAssist: handleToggleGamepadAssist,
     onToggleGamepadRumble: handleToggleGamepadRumble,
     p2pStatus,
@@ -2907,7 +2924,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     onStartRace: handleStartMpRace,
     onAbortRace: handleAbortMpRace,
     onSwitchTrack: onSelectTrack,
-    onSwitchVehicle: (v: string) => handleChangeVehicle(v as VehicleModelId),
+    onSwitchVehicle: (v: string) => handleChangeCar(carForVehicle(v as VehicleModelId).id),
     displayPanel: {
       settings,
       onChangeSettings: handleChangeSettings,
@@ -3052,8 +3069,9 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
           mode={wizardMode}
           settings={settings}
           onChangeSettings={handleChangeSettings}
+          carId={carId}
           vehicleModel={vehicleModel}
-          onChangeVehicle={handleChangeVehicle}
+          onChangeCar={handleChangeCar}
           selectedLivery={selectedLivery}
           onChangeLivery={handleLiveryChange}
           assistPreset={assistPreset}

@@ -4,11 +4,10 @@ import React from "react";
 import type { CameraMode } from "@/types/f1";
 import { LIVERIES } from "@/lib/track-data";
 import { keyLabel } from "@/lib/input/bindings";
-import { Choice, VEHICLE_CHOICES } from "@/components/hud/PauseMenu";
+import { Choice } from "@/components/hud/PauseMenu";
+import { CarPicker } from "../CarPicker";
 import { AutoGrid, ChoiceText, SetupCard } from "./setup-ui";
 import type { SetupStepProps } from "./types";
-
-const CARS = VEHICLE_CHOICES;
 
 const CAMERAS: { id: CameraMode; title: string; sub: string }[] = [
   { id: "cockpit", title: "Cockpit", sub: "Driver's eye" },
@@ -22,13 +21,7 @@ export const CarStep: React.FC<SetupStepProps> = (p) => {
   return (
     <div className="flex flex-col gap-3.5">
       <SetupCard label="Car" className="gap-3!">
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-          {CARS.map((car) => (
-            <Choice key={car.id} active={p.vehicleModel === car.id} onClick={() => p.onChangeVehicle(car.id)}>
-              <ChoiceText title={car.title} detail={car.sub} size={15} />
-            </Choice>
-          ))}
-        </div>
+        <CarPicker carId={p.carId} onChangeCar={p.onChangeCar} />
       </SetupCard>
 
       <SetupCard label="Livery" className="gap-3!">

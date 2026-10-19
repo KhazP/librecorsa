@@ -2,7 +2,8 @@
 
 import React, { useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
-import { VEHICLE_CHOICES, type PauseMenuProps } from "@/components/hud/PauseMenu";
+import type { PauseMenuProps } from "@/components/hud/PauseMenu";
+import { carById, carClass } from "@/lib/cars/car-registry";
 import { EngineersGarage } from "./EngineersGarage";
 import { MultiplayerPanel } from "@/components/hud/MultiplayerPanel";
 import { DisplayPanel } from "@/components/hud/DisplayPanel";
@@ -632,7 +633,8 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
     request: { kicker: "Suggest new content" },
   };
 
-  const vehicle = VEHICLE_CHOICES.find((v) => v.id === props.vehicleModel);
+  const vehicle = carById(props.carId);
+  const vehicleColor = carClass(vehicle.classId).color;
   const livery = props.selectedLivery;
   const hudPreset = props.displayPanel?.settings.hud.preset;
   const kicker = `${track.name} · ${track.country} · ${km(track)} KM`;
@@ -789,7 +791,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
                     <dd className="m-0 flex min-w-0 items-center justify-end gap-2 text-[14px] font-semibold">
                       <span
                         className="shrink-0 rounded-full px-1.5 py-0.5 font-f1-mono text-[9px] font-extrabold text-[#08090D]"
-                        style={{ background: vehicle.badgeColor }}
+                        style={{ background: vehicleColor }}
                       >
                         {vehicle.badge}
                       </span>
