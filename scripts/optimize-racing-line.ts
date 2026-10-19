@@ -77,7 +77,7 @@ console.log(`${TRACK_ID}: ${LINE === 'f1' ? 'F1 line (VF26 / f12026-car)' : 'GT3
 const EDGE_MARGIN_M = Number(process.env.EDGE_M ?? 1.25);
 const KERB_MARGIN_M = Number(process.env.KERB_M ?? 0.7);
 /** Samples per B-spline control point (~26 m) */
-const K = 6;
+const K = Number(process.env.SPLINE_K ?? 6);
 /** Curvature-smoothness weight on the control-point second difference (s/m²) */
 const SMOOTH_W = Number(process.env.SMOOTH_W ?? 0.0015);
 /**
@@ -183,22 +183,34 @@ function cost(c: Float64Array): number {
   return evalLine(splineToLine(c, lineBuf), optCar).lap + 20 * boundViolation(c) + SMOOTH_W * smoothness(c);
 }
 
-// ---------- initial line: the track's current line of this class, fitted to the spline ----------
+// ---------- initial line: the track's current line of this class (or `--seed`), fitted to the spline ----------
 const e0 = new Float64Array(n);
 for (let i = 0; i < n; i++) e0[i] = Math.min(hi[i], Math.max(lo[i], aiLineOffsetM(samples[i], LINE)));
+/**
+ * `--seed <file>`: JSON array of lateral offsets (m, + = right) at the 1200 samples to start the search from, e.g. a
+ * min-time solver's line. The track's current line stays the baseline the result has to beat.
+ */
+const SEED = arg('--seed');
+let eSeed = e0;
+if (SEED) {
+  const raw: number[] = JSON.parse(fs.readFileSync(SEED, 'utf8'));
+  if (raw.length !== n) throw new Error(`--seed has ${raw.length} offsets, the track ${n} samples`);
+  eSeed = Float64Array.from(raw, (v, i) => Math.min(hi[i], Math.max(lo[i], v)));
+}
 const c = new Float64Array(m);
-for (let j = 0; j < m; j++) c[j] = e0[Math.round(j * kSpan) % n];
+for (let j = 0; j < m; j++) c[j] = eSeed[Math.round(j * kSpan) % n];
 for (let it = 0; it < 30; it++) {
   const cur = splineToLine(c, new Float64Array(n));
   for (let j = 0; j < m; j++) {
     const i = Math.round(j * kSpan) % n;
-    c[j] += 0.8 * (e0[i] - cur[i]);
+    c[j] += 0.8 * (eSeed[i] - cur[i]);
   }
 }
 
 const base = evalLine(e0);
 const lapStart = base.lap;
 console.log(`Starting line (track_data.json ${LINE === 'gt3' ? 'roGt3' : 'ro'}): model lap ${lapStart.toFixed(3)} s`);
+if (SEED) console.log(`Seed line (${path.basename(SEED)}): model lap ${evalLine(splineToLine(c, lineBuf)).lap.toFixed(3)} s`);
 
 // ---------- pattern search ----------
 const t0 = Date.now();
@@ -328,7 +340,10 @@ console.log(
 // about the line; for it the physics lap only has to stay on the road and in that window, and the model lap decides
 const physTolS = LINE === 'gt3' ? Number(process.env.GT3_LAP_TOL ?? 0.5) : 0.05;
 const optWins =
-  physOpt.lapS !== null && physOpt.offTrack === 0 && (physStart.lapS === null || physOpt.lapS < physStart.lapS + physTolS);
+  opt.lap < lapStart + 1e-3 &&
+  physOpt.lapS !== null &&
+  physOpt.offTrack === 0 &&
+  (physStart.lapS === null || physOpt.lapS < physStart.lapS + physTolS);
 // An optimised line the physics car could not hold (off the asphalt, or no lap) is re-optimised further from the
 // edges, up to twice, before falling back to the starting line
 const RETRY = Number(process.env.LINE_RETRY ?? 0);
@@ -341,6 +356,11 @@ if (!optWins && (physOpt.lapS === null || physOpt.offTrack > 0) && RETRY < 2) {
     env: { ...process.env, LINE_RETRY: String(RETRY + 1), EDGE_M: String(edge), KERB_M: String(kerb) },
   });
   process.exit(r.status ?? 1);
+}
+// A retry's starting line is the track's line clamped to the retry's wider margins: never write that back
+if (!optWins && RETRY > 0) {
+  console.log("No optimised line held: the track's line stays as it is.");
+  process.exit(0);
 }
 const eFinal = optWins ? eOpt : e0;
 const final = evalLine(eFinal);
@@ -433,7 +453,7 @@ if (LINE === 'gt3') {
   // The GT3's own line beside the F1 one; the samples' speeds and the turn data stay the F1 line's
   for (const js of json.samples) js.roGt3 = r3(atS(eFinal, js.s));
   json.metadata.racingLineGt3 = {
-    method: 'lap-time optimised (quasi-steady AMG GT3 model, B-spline pattern search), GT3-autopilot validated',
+    method: `lap-time optimised (quasi-steady AMG GT3 model, B-spline pattern search${SEED && optWins ? ' from a min-time seed' : ''}), GT3-autopilot validated`,
     modelLapS: Math.round(final.lap * 1000) / 1000,
     physicsLapS: phys.lapS !== null ? Math.round(phys.lapS * 1000) / 1000 : null,
     brakingZones: zoneJson,
@@ -477,7 +497,7 @@ if (LINE === 'gt3') {
   }
 
   json.metadata.racingLine = {
-    method: 'lap-time optimised (quasi-steady VF26 model, B-spline pattern search), physics-AI validated',
+    method: `lap-time optimised (quasi-steady VF26 model, B-spline pattern search${SEED && optWins ? ' from a min-time seed' : ''}), physics-AI validated`,
     modelLapS: Math.round(final.lap * 1000) / 1000,
     physicsAiLapS: phys.lapS !== null ? Math.round(phys.lapS * 1000) / 1000 : null,
     brakingZones: zoneJson,
