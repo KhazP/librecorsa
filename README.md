@@ -143,5 +143,6 @@ Every push to `main` runs typecheck and the verify suites, then builds and deplo
 - **3D models and audio** in `public/` are for non-commercial, personal and educational use. Each one keeps its own license.
 - **Cars**: the 2026 car model is by **DeX** ([CC BY 4.0](https://skfb.ly/pKNCK)), and the Mercedes-AMG GT3 by **Ddiaz Design** ([CC BY-NC-SA 4.0](https://skfb.ly/pOTPL)).
 - **Circuits**: the scans are by **Dave**, plus Motegi by **Kevin Love SketchFab**, all CC BY 4.0.
+- **Rights holders**: if you made a model, texture, sound or other asset used here and want it credited, corrected or removed, open a [**rights / takedown request**](https://github.com/KhazP/librecorsa/issues/new?template=takedown-request.yml) — it will be fixed or removed from the live site, usually within 7 days.
 
 Full attribution and links are in [CREDITS.md](CREDITS.md).

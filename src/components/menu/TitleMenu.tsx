@@ -20,6 +20,7 @@ import { KeyCap, PadGlyph, PromptBar } from "./menu-ui";
 import { RequestPanel } from "./RequestPanel";
 import { LibreCorsaLogo } from "@/components/ui/LibreCorsaLogo";
 import {
+  ExternalLink,
   Flag,
   Gamepad2,
   Info,
@@ -198,6 +199,8 @@ const CircuitPanel: React.FC<{ trackId: string; onSelect?: (id: string) => void;
   );
 };
 
+const TAKEDOWN_URL = "https://github.com/KhazP/librecorsa/issues/new?template=takedown-request.yml";
+
 const CreditRow: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
   <div className="flex flex-col gap-2 border-t border-[#262B3D] py-4">
     <span className="lc-title text-[16px] text-[#F5F7FA]">{title}</span>
@@ -258,6 +261,26 @@ const Credits: React.FC = () => (
           </CreditRow>
         ) : null}
       </div>
+    </div>
+
+    <div className="flex flex-wrap items-center justify-between gap-4 rounded-[20px] border border-[#262B3D] bg-[#08090D]/60 px-4 py-3.5 sm:px-5 sm:py-4">
+      <div className="flex max-w-[600px] min-w-0 flex-col gap-1">
+        <span className="lc-title text-[16px] text-[#F5F7FA]">Rights holders &amp; takedown</span>
+        <p className="m-0 text-[13px] leading-relaxed text-[#C5CBD8]">
+          If you made a model, texture, sound or other asset used here and it is uncredited, credited wrongly, under the
+          wrong license, or not meant to be in LibreCorsa, let us know — it will be fixed or removed, usually within 7 days.
+        </p>
+      </div>
+      <a
+        href={TAKEDOWN_URL}
+        target="_blank"
+        rel="noopener noreferrer"
+        onPointerEnter={focusOnHover}
+        className="inline-flex h-11 shrink-0 items-center gap-2 rounded-full border border-[#00E5FF]/45 bg-[#00E5FF]/10 px-4 text-[14px] font-bold text-[#F5F7FA] no-underline outline-none transition-[background-color,border-color,box-shadow,color] duration-200 hover:border-[#CCFF00] hover:bg-[#CCFF00] hover:text-[#08090D] focus:border-[#CCFF00] focus:bg-[#CCFF00] focus:text-[#08090D] focus:shadow-[0_0_0_5px_rgba(204,255,0,0.12)]"
+      >
+        <span>Rights / takedown request</span>
+        <ExternalLink aria-hidden className="h-4 w-4 shrink-0" strokeWidth={2.2} />
+      </a>
     </div>
 
     <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#262B3D] pt-3.5">
