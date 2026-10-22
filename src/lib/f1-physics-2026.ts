@@ -130,6 +130,7 @@ import {
   aiLineOffsetM,
   computeSpeedProfile,
   createVf26ProfileCarModel,
+  sampleProfile,
   type SpeedProfile,
   vf26FullBrakeForceN,
   withPlanningGrip,
@@ -953,9 +954,18 @@ export class F1Physics2026 {
   public teleportToTurn(turnNumber: number): void {
     const idx = this.track.samples.findIndex((s) => s.turnNumber === turnNumber);
     const target = idx >= 0 ? this.track.samples[(idx + 2) % this.track.samples.length] : this.track.samples[0];
-    const speedMs = Math.min(62, target.optimalSpeedKmh / 3.6);
+    const plan = this.getAiPlan().profile;
+    const L = this.track.totalLengthM;
+    const at = (values: Float64Array, s: number) => sampleProfile(values, s, L);
+    // A little under the braking-aware plan's speed there (the sample's corner speed ignores the braking already
+    // due): dropped in at the limit with no time to settle, the car runs wide at turn-in
+    const speedMs = Math.min(62, target.optimalSpeedKmh / 3.6, 0.92 * at(plan.speedMs, target.s));
     this.teleportToDistance(target.s, speedMs);
-    this.lateralOffsetM = aiLineOffsetM(target);
+    // On the line, heading along it and turning with it: square to the centreline where the line crosses the track
+    // (0.2 rad at Shanghai's T6), the car could not catch the corner and ran off
+    this.lateralOffsetM = at(plan.lineOffsetM, target.s);
+    this.headingErrorRad = Math.atan((at(plan.lineOffsetM, target.s + 2.5) - at(plan.lineOffsetM, target.s - 2.5)) / 5);
+    this.yawRateRadS = speedMs * at(plan.curvature, target.s);
     this.syncCartesianFromCurvilinear();
     this.syncWorldTransform();
   }

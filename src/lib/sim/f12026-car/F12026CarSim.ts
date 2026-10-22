@@ -1021,7 +1021,22 @@ export class F12026CarSim implements SimulatorCar {
     const samples = this.track.samples;
     const idx = samples.findIndex((s) => s.turnNumber === turnNumber);
     const target = idx >= 0 ? samples[(idx + 2) % samples.length] : samples[0];
-    this.teleportToDistance(target.s, Math.min(62, target.optimalSpeedKmh / 3.6), aiLineOffsetM(target, this.line));
+    // On the racing line heading along it, not along the centreline: where the line crosses the track the car
+    // could not catch the corner and ran off
+    const onLine = (s: number): [number, number] => {
+      const sm = this.track.getSampleAtDistance(wrap(s, this.track.totalLengthM));
+      const b = sm.binormal;
+      const bl = Math.hypot(b.x, b.z) || 1;
+      const lat = aiLineOffsetM(sm, this.line);
+      return [sm.position.x + (b.x / bl) * lat, sm.position.z + (b.z / bl) * lat];
+    };
+    const [x, z] = onLine(target.s);
+    const [xa, za] = onLine(target.s - 2.5);
+    const [xb, zb] = onLine(target.s + 2.5);
+    this.lineCrossingStartsLap = false;
+    this.progressHintS = this.poseHintS = target.s;
+    this.resetVehicle(x, z, Math.atan2(xb - xa, zb - za), Math.min(62, target.optimalSpeedKmh / 3.6));
+    this.afterPlacement();
   }
 
   public step(dtSeconds: number, raw: Partial<ControlInputs>): CarTelemetry {
