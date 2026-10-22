@@ -149,6 +149,8 @@ const INITIAL_TYRE_TEMP_C = 82;
 const INITIAL_BRAKE_TEMP_C = 380;
 /** Speed at which the autopilot's wet planning grip is taken (m/s): inters aquaplane above it in standing water */
 const AI_PLAN_WET_REF_MS = 50;
+/** Share of the wet grip the AI plan leaves in hand on a fully wet road */
+const AI_PLAN_WET_MARGIN = 0.15;
 const SURFACE_KIND: Record<SurfaceType, TrackSurfaceKind> = {
   asphalt: 'road',
   kerb: 'kerb',
@@ -1069,13 +1071,18 @@ export class F1Physics2026 {
     }
   }
 
-  /** Autopilot only: a car stopped for 3 s (beached, spun into the barrier) is put back on the AI line */
+  /**
+   * Autopilot only: a car stopped for 3 s (beached, spun into the barrier), or crawling the wrong way after a spin
+   * (the line follower cannot turn it round), is put back on the AI line
+   */
   private recoverStuckAi(dtSeconds: number): void {
     if (!this.aiAutopilot) {
       this.aiStuckS = 0;
       return;
     }
-    this.aiStuckS = Math.hypot(this.vxMs, this.vyMs) < 2 ? this.aiStuckS + Math.min(dtSeconds, 0.05) : 0;
+    const speed = Math.hypot(this.vxMs, this.vyMs);
+    const wrongWay = Math.abs(Math.atan2(Math.sin(this.headingErrorRad), Math.cos(this.headingErrorRad))) > 1.8;
+    this.aiStuckS = speed < 2 || (wrongWay && speed < 20) ? this.aiStuckS + Math.min(dtSeconds, 0.05) : 0;
     if (this.aiStuckS < 3) return;
     this.aiStuckS = 0;
     const sample = this.track.getSampleAtDistance(this.sMeters);
@@ -2643,7 +2650,10 @@ export class F1Physics2026 {
     if (this.weatherSample.waterMm <= 0) return 1;
     const traits = WET_TYRE_TRAITS[this.tireCompound];
     const grip = traits.dryGrip * wetGripFactor(traits, this.weatherSample.waterMm, AI_PLAN_WET_REF_MS, this.realism.wetSeverity);
-    return Math.max(0.25, Math.min(1, Math.round(grip * 20) / 20));
+    // Planned a little under the tyre's water grip: wet kerbs, the polished line and the front-limited braking on
+    // a wet road all take more than the film alone, and the plan at the full figure runs the car wide
+    const margin = AI_PLAN_WET_MARGIN * this.weatherSample.wetness;
+    return Math.max(0.25, Math.min(1, Math.round(grip * (1 - margin) * 20) / 20));
   }
 
   /** Target-speed profile for the AI, rebuilt when the aero package or the road's wet grip changes */
