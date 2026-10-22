@@ -22,6 +22,7 @@ import type {
   TyreGeometry,
   TyresCompoundData,
 } from '../f12026-car/F12026CarConfig';
+import { deriveRainCompound } from '../f12026-car/F12026CarConfig';
 
 /** Gearbox efficiency of this model; the wheel torque curve is divided by this for crank torque */
 const DRIVELINE_EFFICIENCY = 0.92;
@@ -603,6 +604,18 @@ const TYRES = {
   ),
 } satisfies Partial<Record<PhysicsTyreCompound, TyresCompoundData>>;
 
+/** The slicks plus rain tyres on the medium's carcass [est] */
+const TYRES_WITH_RAIN = {
+  ...TYRES,
+  PhysicsTyreCompound_GT3_Intermediate: deriveRainCompound(
+    TYRES.PhysicsTyreCompound_GT3_Medium,
+    'intermediate',
+    'PhysicsTyreCompound_GT3_Intermediate',
+    'GT3 Intermediate'
+  ),
+  PhysicsTyreCompound_GT3_Wet: deriveRainCompound(TYRES.PhysicsTyreCompound_GT3_Medium, 'wet', 'PhysicsTyreCompound_GT3_Wet', 'GT3 Wet'),
+} satisfies Partial<Record<PhysicsTyreCompound, TyresCompoundData>>;
+
 /** Box inertia from 1.75 × 1.05 × 4.10 m [spec INERTIA, derived] */
 const MASS = 1360;
 const box = (a: number, b: number) => (MASS / 12) * (a * a + b * b);
@@ -648,11 +661,13 @@ export const AMG_GT3_CONFIG = {
   brakes: { maxTorqueNm: 4750, front_bias: 0.71, ebbStep: 0.005, brakeByWire: false, discMaterial: 'endurance-steel' },
   suspensions: SUSPENSIONS,
   aero: AERO,
-  tyreCompounds: TYRES,
+  tyreCompounds: TYRES_WITH_RAIN,
   compoundSlots: {
     soft: 'PhysicsTyreCompound_GT3_Soft',
     medium: 'PhysicsTyreCompound_GT3_Medium',
     hard: 'PhysicsTyreCompound_GT3_Hard',
+    intermediate: 'PhysicsTyreCompound_GT3_Intermediate',
+    wet: 'PhysicsTyreCompound_GT3_Wet',
   },
 } satisfies CarPhysicsConfig;
 

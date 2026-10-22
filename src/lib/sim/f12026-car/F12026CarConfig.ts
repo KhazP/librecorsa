@@ -12,6 +12,7 @@
  */
 
 import type { LutPoints } from '../lut';
+import { WET_TYRE_TRAITS, type WetTyreTraits } from '../wet-tyres';
 
 // ---------------------------------------------------------------------------
 // Enums
@@ -27,17 +28,21 @@ export type SuspensionTypeEnum =
   | 'SuspensionType_MultilinkNew'
   | 'SuspensionType_StrutMultilink';
 
-/** `PhysicsTyreCompound`: dry F1 slicks, dry GT3 slicks */
+/** `PhysicsTyreCompound`: F1 and GT3 slicks, and their treaded rain tyres */
 export type PhysicsTyreCompound =
   | 'PhysicsTyreCompound_F1_Soft'
   | 'PhysicsTyreCompound_F1_Medium'
   | 'PhysicsTyreCompound_F1_Hard'
+  | 'PhysicsTyreCompound_F1_Intermediate'
+  | 'PhysicsTyreCompound_F1_Wet'
   | 'PhysicsTyreCompound_GT3_Soft'
   | 'PhysicsTyreCompound_GT3_Medium'
-  | 'PhysicsTyreCompound_GT3_Hard';
+  | 'PhysicsTyreCompound_GT3_Hard'
+  | 'PhysicsTyreCompound_GT3_Intermediate'
+  | 'PhysicsTyreCompound_GT3_Wet';
 
-/** The simulator's soft / medium / hard choice */
-export type CompoundSlot = 'soft' | 'medium' | 'hard';
+/** The simulator's compound choice: soft / medium / hard slicks, intermediate and full wet */
+export type CompoundSlot = 'soft' | 'medium' | 'hard' | 'intermediate' | 'wet';
 
 /** `PerformanceModeData.performance_mode_name` */
 export type PerformanceModeName = 'PSH' | 'RAC' | 'BAL' | 'LIC' | 'CHR';
@@ -535,8 +540,10 @@ export interface TyresCamberData {
 
 export interface TyresCompoundData {
   name: string;
-  shortName: 'S' | 'M' | 'H';
+  shortName: 'S' | 'M' | 'H' | 'I' | 'W';
   tyre_compound: PhysicsTyreCompound;
+  /** Behaviour on a wet road (`wet-tyres.ts`); absent = a slick */
+  wetTraits?: WetTyreTraits;
   front: TyreGeometry;
   rear: TyreGeometry;
   modelData: TyresModelData;
@@ -580,6 +587,66 @@ export function compoundData(config: CarPhysicsConfig, compound: PhysicsTyreComp
   const data = config.tyreCompounds[compound];
   if (!data) throw new Error(`${config.screenName} has no ${compound}`);
   return data;
+}
+
+/**
+ * A treaded rain tyre on a slick's carcass [est]: the grip (D, the load tables) scaled by the compound's dry grip, the
+ * temperature curve moved down to its cooler window and falling off twice as fast again above it (a rain tyre on a dry
+ * track overheats), cooler blankets, and a longer, softer tread (relaxation length, peak slip angle). The water
+ * response, and the extra heat and wear on a dry road, come from `wetTraits` at run time.
+ */
+export function deriveRainCompound(
+  base: TyresCompoundData,
+  kind: 'intermediate' | 'wet',
+  tyre_compound: PhysicsTyreCompound,
+  name: string
+): TyresCompoundData {
+  const traits = WET_TYRE_TRAITS[kind];
+  const k = traits.dryGrip;
+  const tread = kind === 'wet' ? 1.10 : 1.05;
+  const angle = kind === 'wet' ? 1.12 : 1.06;
+  const slipRatioScale = kind === 'wet' ? 1.12 : 1.06;
+  const scaleLut = (lut: LutPoints | undefined) => lut?.map(([fz, mu]) => [fz, Number((mu * k).toFixed(4))] as [number, number]);
+  const scaleModel = (m: Partial<TyresModelData> | undefined): Partial<TyresModelData> => {
+    if (!m) return {};
+    const out: Partial<TyresModelData> = { ...m };
+    if (m.Dy0 !== undefined) out.Dy0 = m.Dy0 * k;
+    if (m.Dx0 !== undefined) out.Dx0 = m.Dx0 * k;
+    if (m.dyCurve) out.dyCurve = scaleLut(m.dyCurve);
+    if (m.dxCurve) out.dxCurve = scaleLut(m.dxCurve);
+    if (m.relaxationLengthX !== undefined) out.relaxationLengthX = m.relaxationLengthX * tread;
+    if (m.relaxationLengthY !== undefined) out.relaxationLengthY = m.relaxationLengthY * tread;
+    if (m.friction_limit_angle) out.friction_limit_angle = m.friction_limit_angle * angle;
+    if (m.slip_ratio_limit) out.slip_ratio_limit = m.slip_ratio_limit * slipRatioScale;
+    return out;
+  };
+  const th = base.thermalData;
+  const peakC = 0.5 * (th.optimalTempC[0] + th.optimalTempC[1]);
+  const thermalPerformanceCurve: LutPoints = th.thermalPerformanceCurve.map(([t, g]) => {
+    const over = Math.max(0, t - peakC);
+    const loss = (1 - g) * (1 + 2 * Math.min(1, over / 40));
+    return [t + traits.tempShiftC, Number(Math.max(0.5, 1 - loss).toFixed(4))] as [number, number];
+  });
+  const model = { ...base.modelData, ...scaleModel(base.modelData) } as TyresModelData;
+  model.falloff_level = Math.min(0.95, base.modelData.falloff_level + (kind === 'wet' ? 0.06 : 0.04));
+  model.falloff_slope = kind === 'wet' ? 1.5 : 1.8;
+  return {
+    ...base,
+    name,
+    shortName: kind === 'wet' ? 'W' : 'I',
+    tyre_compound,
+    wetTraits: traits,
+    modelData: model,
+    thermalData: {
+      ...th,
+      thermalPerformanceCurve,
+      optimalTempC: [th.optimalTempC[0] + traits.tempShiftC, th.optimalTempC[1] + traits.tempShiftC],
+    },
+    pressureData: { ...base.pressureData, coldRefC: base.pressureData.coldRefC + 0.55 * traits.tempShiftC },
+    rearOverride: base.rearOverride
+      ? { ...base.rearOverride, modelData: scaleModel(base.rearOverride.modelData) }
+      : undefined,
+  };
 }
 
 // ===========================================================================
@@ -1126,8 +1193,8 @@ function f1Compound(
       friction_limit_angle: 6.137,
       // The source derives it at run time; its ABS / TC limits are 0.10 [ref_electronics.ini]
       slip_ratio_limit: 0.1,
-      // The source's COMBINED_FACTOR 2.2 is not this model's cross-axis factor: the friction circle, as on the GT3 [est]
-      combinedFactor: 1,
+      // The source's COMBINED_FACTOR 2.2 is not this model's cross-axis factor: slightly elliptical combined envelope [est]
+      combinedFactor: 0.94,
       new_combined: false,
       fx_shift_SA: 0,
       fx_scale_SA: 0,
@@ -1136,7 +1203,7 @@ function f1Compound(
       // FALLOFF_LEVEL / FALLOFF_SPEED
       use_slip_falloff: true,
       falloff_level: 0.85,
-      falloff_slope: 3,
+      falloff_slope: 2.1,
       relaxationLengthX: 0.1025,
       relaxationLengthY: 0.1025,
       rollingResistance: 0.012,
@@ -1237,10 +1304,14 @@ const C3_TEMP: LutPoints = [[0, 0.905], [55, 0.9506], [75, 0.9783], [85, 0.9897]
 const C2_TEMP: LutPoints = [[0, 0.9067], [60, 0.9571], [80, 0.9817], [90, 0.9914], [100, 0.9978], [105, 0.9994], [110, 1], [115, 0.9994], [120, 0.9978], [130, 0.9914], [140, 0.9817], [160, 0.9571]];
 const C1_TEMP: LutPoints = [[0, 0.9098], [65, 0.9645], [85, 0.9854], [95, 0.9932], [105, 0.9983], [110, 0.9996], [115, 1], [120, 0.9996], [125, 0.9983], [135, 0.9932], [145, 0.9854], [165, 0.9645]];
 
+const F1_MEDIUM = f1Compound('PhysicsTyreCompound_F1_Medium', 'Medium', 'M', C2_FRONT, C2_REAR, C2_TEMP, [100, 120]);
 const F12026_TYRES = {
   PhysicsTyreCompound_F1_Soft: f1Compound('PhysicsTyreCompound_F1_Soft', 'Soft', 'S', C3_FRONT, C3_REAR, C3_TEMP, [95, 115]),
-  PhysicsTyreCompound_F1_Medium: f1Compound('PhysicsTyreCompound_F1_Medium', 'Medium', 'M', C2_FRONT, C2_REAR, C2_TEMP, [100, 120]),
+  PhysicsTyreCompound_F1_Medium: F1_MEDIUM,
   PhysicsTyreCompound_F1_Hard: f1Compound('PhysicsTyreCompound_F1_Hard', 'Hard', 'H', C1_FRONT, C1_REAR, C1_TEMP, [105, 125]),
+  // Rain tyres on the medium's carcass [est]
+  PhysicsTyreCompound_F1_Intermediate: deriveRainCompound(F1_MEDIUM, 'intermediate', 'PhysicsTyreCompound_F1_Intermediate', 'Intermediate'),
+  PhysicsTyreCompound_F1_Wet: deriveRainCompound(F1_MEDIUM, 'wet', 'PhysicsTyreCompound_F1_Wet', 'Full Wet'),
 } satisfies Partial<Record<PhysicsTyreCompound, TyresCompoundData>>;
 
 const F12026_MASS = 769;
@@ -1281,5 +1352,7 @@ export const F12026_CAR_CONFIG = {
     soft: 'PhysicsTyreCompound_F1_Soft',
     medium: 'PhysicsTyreCompound_F1_Medium',
     hard: 'PhysicsTyreCompound_F1_Hard',
+    intermediate: 'PhysicsTyreCompound_F1_Intermediate',
+    wet: 'PhysicsTyreCompound_F1_Wet',
   },
 } satisfies CarPhysicsConfig;

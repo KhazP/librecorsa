@@ -14,6 +14,7 @@
 
 import type { TireCompound } from '@/types/f1';
 import type { LutPoints } from './lut';
+import { WET_TYRE_TRAITS, type WetTyreTraits } from './wet-tyres';
 
 // ---------------------------------------------------------------------------
 // Tyres  (`tyres/f1_2026/f12026_*_305_720_18.tyre` / `*_405_720_18.tyre`)
@@ -72,6 +73,8 @@ export interface Vf26TyreSpec {
   dyCurve?: LutPoints;
   /** Optional 16-point non-power-law longitudinal load-sensitivity LUT (Fz [N] → μ_x) */
   dxCurve?: LutPoints;
+  /** Behaviour on a wet road (`wet-tyres.ts`); absent = a slick */
+  wet?: WetTyreTraits;
 }
 
 /**
@@ -95,7 +98,7 @@ function buildVf26LoadCurve(dRef: number, fz0: number, lsExp: number): LutPoints
  * wear ratio [assumed]
  */
 const WEAR_PER_J_SOFT = 4.1e-8;
-const WEAR_PER_J: Record<TireCompound, number> = {
+const WEAR_PER_J: Record<'soft' | 'medium' | 'hard', number> = {
   soft: WEAR_PER_J_SOFT,
   medium: 0.65 * WEAR_PER_J_SOFT,
   hard: 0.45 * WEAR_PER_J_SOFT,
@@ -156,7 +159,7 @@ const REAR_COMMON = {
   brakeDxMod: 0.05,
 } as const;
 
-export const VF26_TYRES: Record<TireCompound, { front: Vf26TyreSpec; rear: Vf26TyreSpec }> = {
+const VF26_SLICKS: Record<'soft' | 'medium' | 'hard', { front: Vf26TyreSpec; rear: Vf26TyreSpec }> = {
   soft: {
     front: {
       ...FRONT_COMMON,
@@ -241,6 +244,52 @@ export const VF26_TYRES: Record<TireCompound, { front: Vf26TyreSpec; rear: Vf26T
       wearPerJ: WEAR_PER_J.hard,
     },
   },
+};
+
+/**
+ * A treaded rain tyre built on the medium slick's carcass [assumed]: the grip tables scaled by the compound's dry grip,
+ * the temperature curve moved down to its cooler window (and falling off faster above it, so a rain tyre on a dry
+ * track overheats), a longer, softer tread (relaxation length, peak slip angle) and the medium's wear rate. Its water
+ * behaviour, extra heat and wear on a dry road come from `wet` at run time
+ */
+function deriveVf26RainTyre(base: Vf26TyreSpec, kind: 'intermediate' | 'wet'): Vf26TyreSpec {
+  const traits = WET_TYRE_TRAITS[kind];
+  const k = traits.dryGrip;
+  const peakC = 102.5;
+  const thermalCurve: LutPoints = base.thermalCurve.map(([t, g]) => {
+    const shifted = t + traits.tempShiftC;
+    // Above the shifted peak the rubber goes off half as fast again as the slick's
+    const over = Math.max(0, t - peakC);
+    return [Math.max(-20, shifted), Number(Math.max(0.5, 1 - (1 - g) * (1 + 0.5 * Math.min(1, over / 40))).toFixed(4))] as [number, number];
+  });
+  return {
+    ...base,
+    name: kind === 'wet' ? 'Full Wet (W)' : 'Intermediate (I)',
+    dyRef: base.dyRef * k,
+    dxRef: base.dxRef * k,
+    dyCurve: base.dyCurve?.map(([fz, mu]) => [fz, Number((mu * k).toFixed(4))] as [number, number]),
+    dxCurve: base.dxCurve?.map(([fz, mu]) => [fz, Number((mu * k).toFixed(4))] as [number, number]),
+    frictionLimitAngleDeg: base.frictionLimitAngleDeg * (kind === 'wet' ? 1.12 : 1.06),
+    peakSlipRatio: base.peakSlipRatio * (kind === 'wet' ? 1.12 : 1.06),
+    relaxationLength: base.relaxationLength * (kind === 'wet' ? 1.10 : 1.05),
+    falloffLevel: Math.min(0.92, base.falloffLevel + (kind === 'wet' ? 0.06 : 0.04)),
+    thermalCurve,
+    wearPerJ: WEAR_PER_J.medium,
+    wet: traits,
+  };
+}
+
+export const VF26_TYRES: Record<TireCompound, { front: Vf26TyreSpec; rear: Vf26TyreSpec }> = {
+  ...VF26_SLICKS,
+  intermediate: {
+    front: deriveVf26RainTyre(VF26_SLICKS.medium.front, 'intermediate'),
+    rear: deriveVf26RainTyre(VF26_SLICKS.medium.rear, 'intermediate'),
+  },
+  wet: {
+    front: deriveVf26RainTyre(VF26_SLICKS.medium.front, 'wet'),
+    rear: deriveVf26RainTyre(VF26_SLICKS.medium.rear, 'wet'),
+  },
+
 };
 
 // ---------------------------------------------------------------------------

@@ -22,6 +22,18 @@
  *                              pressure (camber and lateral load move it across the tread).
  */
 
+import {
+  dynamicBristleRelaxationScale,
+  evaluateFlashTempAndWlfGrip,
+  rimWetEnvironmentCoolingWK,
+  SLICK_TRAITS,
+  wetExternalGasCoolingWK,
+  wetGripFactor,
+  wetHeatScale,
+  wetPneumaticTrailScale,
+  wetRoadCoolingWK,
+  wetWearScale,
+} from './wet-tyres';
 import { Lut } from './lut';
 import type { Vf26TyreSpec } from './vf26-data';
 
@@ -105,6 +117,13 @@ export interface TyreRuntime {
   coreTempC: number;
   /** Tread wear (0 = new, 1 = destroyed) */
   wear: number;
+  /** Water film under the tyre (mm) and how wet the road acts (0..1), set by the car from the weather */
+  waterMm: number;
+  wetness: number;
+  /** Realism: strength of the wet grip loss, tread wear multiplier and share of the temperature grip loss */
+  wetSeverity: number;
+  wearScale: number;
+  thermalGripScale: number;
 }
 
 export interface TyreForceInput {
@@ -381,6 +400,11 @@ export function createTyreRuntime(spec: Vf26TyreSpec, initialTempC: number): Tyr
     surfaceTempC: initialTempC,
     coreTempC: initialTempC,
     wear: 0,
+    waterMm: 0,
+    wetness: 0,
+    wetSeverity: 1,
+    wearScale: 1,
+    thermalGripScale: 1,
   };
   setTyreTemperature(t, initialTempC);
   return t;
@@ -430,9 +454,16 @@ export function tyreBandSurfaceTempC(t: TyreRuntime, band: number): number {
   return t.nodes[node(band, 0)];
 }
 
+function hotPressureRefPsi(spec: Vf26TyreSpec): number {
+  const shift = spec.wet?.tempShiftC ?? 0;
+  if (shift === 0) return spec.pressureRefPsi;
+  const refGasC = GAS_REF_C + 0.75 * shift;
+  return (spec.pressureRefPsi * (refGasC + KELVIN)) / (GAS_REF_C + KELVIN);
+}
+
 function updateInflation(t: TyreRuntime): void {
   t.pressurePsi = (t.coldPressurePsi * (t.gasTempC + KELVIN)) / (COLD_REF_C + KELVIN);
-  const rel = t.pressurePsi / t.spec.pressureRefPsi;
+  const rel = t.pressurePsi / hotPressureRefPsi(t.spec);
   t.verticalRate = t.spec.rate * (1 - RATE_PRESSURE_SHARE + RATE_PRESSURE_SHARE * rel);
 }
 
@@ -501,8 +532,9 @@ function thermalGrip(t: TyreRuntime, slideSpeedMs = 0): number {
  */
 export function computeTyreForces(t: TyreRuntime, inp: TyreForceInput): TyreForceOutput {
   const spec = t.spec;
-  const sigmaY = spec.relaxationLength;
-  const sigmaX = spec.relaxationLength * 0.7;
+  const bristleScale = dynamicBristleRelaxationScale(inp.fz, spec.fz0, t.wetness);
+  const sigmaY = spec.relaxationLength * bristleScale;
+  const sigmaX = spec.relaxationLength * 0.7 * bristleScale;
   const absVx = Math.abs(inp.vx);
   const slipVelX = inp.rimSpeed - inp.vx; // + when the tyre is driving
   const slipVelY = inp.vy;
@@ -521,13 +553,16 @@ export function computeTyreForces(t: TyreRuntime, inp: TyreForceInput): TyreForc
 
   // Relaxation-length carcass dynamics, integrated exactly over dt:
   //   d(defl)/dt = slipVel − |vx|/σ · defl
+  // At high slip, carcass relaxation rate tightens so countersteering and limit corrections respond crisply
+  const prevSlipSq = (t.deflX / sigmaX / spec.peakSlipRatio) ** 2 + (t.deflY / sigmaY / t.tanPeakAngle) ** 2;
+  const relaxRateMult = 1 / (0.68 + 0.32 / (1 + 0.65 * Math.min(25, prevSlipSq)));
   const decayX = absVx / sigmaX;
   const decayY = absVx / sigmaY;
   if (decayX > 1e-6) {
     const ssX = slipVelX / decayX;
     const ssY = slipVelY / decayY;
-    const ex = Math.exp(-decayX * inp.dt);
-    const ey = Math.exp(-decayY * inp.dt);
+    const ex = Math.exp(-decayX * relaxRateMult * inp.dt);
+    const ey = Math.exp(-decayY * relaxRateMult * inp.dt);
     t.deflX = ssX + (t.deflX - ssX) * ex;
     t.deflY = ssY + (t.deflY - ssY) * ey;
   } else {
@@ -580,8 +615,9 @@ export function computeTyreForces(t: TyreRuntime, inp: TyreForceInput): TyreForc
   const speedSens = 1 / (1 + spec.speedSensitivity * slideSpeed);
 
   // Temperature (per band with WLF shift), inflation pressure, wear, graining, blistering, dirt & flat-spot
-  const thermal = thermalGrip(t, slideSpeed);
-  const pRel = t.pressurePsi / spec.pressureRefPsi - 1;
+  // (the realism level may apply only part of the temperature loss)
+  const thermal = 1 - (1 - thermalGrip(t, slideSpeed)) * t.thermalGripScale;
+  const pRel = t.pressurePsi / hotPressureRefPsi(spec) - 1;
   const pressureGrip = Math.max(0.8, 1 - PRESSURE_GRIP_LOSS * pRel * pRel);
   const wearMult = wearGripMultiplier(t.wear);
   const degradationMult =
@@ -596,16 +632,25 @@ export function computeTyreForces(t: TyreRuntime, inp: TyreForceInput): TyreForc
   const camberLat = 1 + spec.dcamber0 * gamma * Math.sign(dirY) * Math.min(1, Math.abs(dirY) * 4) + spec.dcamber1 * gamma * gamma;
   const camberLong = 1 + spec.dcamber1 * gamma * gamma;
 
-  const common = thermal * pressureGrip * wearMult * degradationMult * speedSens * inp.surfaceGrip;
+  // Water on the road: the film's lubrication and, past what the tread clears at this speed, aquaplaning (worn tread clears less water)
+  const traits = spec.wet ?? SLICK_TRAITS;
+  const waterGrip = t.waterMm > 0 ? wetGripFactor(traits, t.waterMm, absVx, t.wetSeverity, t.wear) : 1;
+  const wlf = evaluateFlashTempAndWlfGrip(traits, t.surfaceTempC, Math.hypot(slipVelX, slipVelY), inp.fz, t.wetness);
+  const common =
+    thermal * wlf.viscoelasticMult * pressureGrip * wearMult * degradationMult * speedSens * inp.surfaceGrip * waterGrip;
   muY *= common * Math.max(0.75, camberLat);
   muX *= common * Math.max(0.75, camberLong);
 
-  const f = magicFormula(s, t.mf);
+  // Elliptical combined-slip coupling (k_xy = 0.94): smooths trail-braking and corner-exit power transitions
+  // while keeping pure longitudinal (sa = 0) and pure lateral (sk = 0) slip curves exact
+  const kComb = 0.94;
+  const sxComb = Math.hypot(sk, kComb * sa);
+  const syComb = Math.hypot(sa, kComb * sk);
   let fx = 0;
   let fy = 0;
   if (s > 1e-9) {
-    fx = (inp.fz * muX * f * sk) / s;
-    fy = (-inp.fz * muY * f * sa) / s;
+    fx = sxComb > 1e-9 ? (inp.fz * muX * magicFormula(sxComb, t.mf) * sk) / sxComb : 0;
+    fy = syComb > 1e-9 ? (-inp.fz * muY * magicFormula(syComb, t.mf) * sa) / syComb : 0;
   }
 
   // Low-speed carcass damping (prevents the deflection spring from ringing at standstill)
@@ -621,9 +666,10 @@ export function computeTyreForces(t: TyreRuntime, inp: TyreForceInput): TyreForc
   }
 
   // Self-aligning torque: pneumatic trail (≈ patch length / 6) collapses as the tyre reaches its
-  // peak, so the steering goes light at the limit
+  // peak and as a hydrodynamic water wedge lifts the leading edge in standing water
   const contactLength = 2 * Math.sqrt(Math.max(1e-4, spec.radius * (inp.fz / t.verticalRate)));
-  const trail0 = contactLength / 6;
+  const wetTrailMult = t.waterMm > 0 ? wetPneumaticTrailScale(traits, t.waterMm, absVx, t.wear) : 1;
+  const trail0 = (contactLength / 6) * wetTrailMult;
   const absSa = Math.abs(sa);
   const trail = absSa <= 1 ? trail0 * (1 - absSa) * (1 - Math.min(0.6, Math.abs(sk) * 0.3)) : -trail0 * 0.08 * Math.min(1, absSa - 1);
   const mz = -trail * fy;
@@ -664,7 +710,7 @@ export function computeTyreForces(t: TyreRuntime, inp: TyreForceInput): TyreForc
     slipAngle: Math.atan(t.deflY / sigmaY),
     normSlip: s,
     mu: muY,
-    gripFactor: thermal * pressureGrip * wearMult * degradationMult * Math.max(0.75, camberLat),
+    gripFactor: thermal * pressureGrip * wearMult * degradationMult * waterGrip * Math.max(0.75, camberLat),
     slipPower,
   };
 }
@@ -683,7 +729,7 @@ export function stepFlatSpot(
 ): void {
   const absVx = Math.abs(rollSpeedMs);
   const absRim = Math.abs(rimSpeedMs);
-  const wearInc = slipPowerW * dt * t.spec.wearPerJ;
+  const wearInc = slipPowerW * dt * t.spec.wearPerJ * t.wearScale;
   const sec = Math.floor((t.wheelAngleRad / TWO_PI) * TYRE_CIRCUMFERENTIAL_SECTORS) % TYRE_CIRCUMFERENTIAL_SECTORS;
 
   if (absVx > 4.0 && absRim < 0.35 * absVx) {
@@ -730,17 +776,20 @@ export function stepGrainBlister(
   fz: number,
   dt: number
 ): void {
+  // A rain tyre's thresholds sit lower with its working window
+  const shift = (t.spec.wet ?? SLICK_TRAITS).tempShiftC;
+  const core = t.coreTempC - shift;
   const surfCoreDelta = t.surfaceTempC - t.coreTempC;
-  if (t.coreTempC < 78 && surfCoreDelta > 10 && slipPowerW > 6000) {
-    const coldFactor = (78 - t.coreTempC) / 30;
+  if (core < 78 && surfCoreDelta > 10 && slipPowerW > 6000) {
+    const coldFactor = (78 - core) / 30;
     const rate = (slipPowerW / 100000) * coldFactor * 0.25;
     t.grainLevel = Math.min(1, t.grainLevel + rate * dt);
-  } else if (t.coreTempC >= 82 && t.coreTempC <= 120 && fz > 500 && slipPowerW < 25000) {
+  } else if (core >= 82 && core <= 120 && fz > 500 && slipPowerW < 25000) {
     t.grainLevel = Math.max(0, t.grainLevel - 0.035 * dt);
   }
 
-  if (t.coreTempC > 128) {
-    const overheat = t.coreTempC - 128;
+  if (core > 128) {
+    const overheat = core - 128;
     t.blisterLevel = Math.min(1, t.blisterLevel + overheat * 0.0035 * dt);
   }
 }
@@ -827,12 +876,18 @@ export function updateTyreThermal(
   q.fill(0);
   const loaded = fz > 1;
 
-  const slipHeat = 0.45 * slipPowerW;
-  const rollingHeat = 0.0105 * fz * v;
-  const airSurface = (4 + 0.9 * v) / 3;
-  const sidewall = 0.5 * (4 + 0.3 * v);
+  // A rain tyre on a dry road squirms its tread blocks and runs hot; water on the road cools every tread
+  const traits = t.spec.wet ?? SLICK_TRAITS;
+  const heatScale = wetHeatScale(traits, t.wetness);
+  const slipHeat = 0.45 * slipPowerW * heatScale;
+  const rollingHeat = 0.0105 * fz * v * heatScale;
+  const wetCool = loaded ? wetRoadCoolingWK(t.wetness, v) : 0;
+  const wetExtCool = wetExternalGasCoolingWK(t.wetness, v);
+  const wetRimGasCool = rimWetEnvironmentCoolingWK(t.wetness, v);
+  const airSurface = (4 + 0.9 * v + wetExtCool * 0.4) / 3;
+  const sidewall = 0.5 * (4 + 0.3 * v + wetExtCool);
 
-  let gasIn = G_RIM_GAS * (brakeTempC - t.gasTempC);
+  let gasIn = G_RIM_GAS * (brakeTempC - t.gasTempC) - wetRimGasCool * (t.gasTempC - ambientC);
   for (let b = 0; b < TYRE_BANDS; b++) {
     const w = t.bandLoad[b];
     const iS = node(b, 0);
@@ -844,7 +899,7 @@ export function updateTyreThermal(
     q[iC] += 0.3 * rollingHeat * w;
     // Surface: air, track contact, conduction into the bulk
     q[iS] -= airSurface * (n[iS] - ambientC);
-    if (loaded) q[iS] -= 12 * w * (n[iS] - trackC);
+    if (loaded) q[iS] -= (12 + wetCool) * w * (n[iS] - trackC);
     const sb = G_SURFACE_BULK * (n[iS] - n[iB]);
     q[iS] -= sb;
     q[iB] += sb;
@@ -884,7 +939,7 @@ export function updateTyreThermal(
   updateInflation(t);
 
   // Abrasive wear proportional to sliding energy (rate per compound, see the tyre spec)
-  t.wear = Math.min(1, t.wear + slipPowerW * dt * t.spec.wearPerJ);
+  t.wear = Math.min(1, t.wear + slipPowerW * dt * t.spec.wearPerJ * t.wearScale * wetWearScale(traits, t.wetness));
 
   // Circumferential flat-spot grid, graining/blistering, and surface contamination
   stepFlatSpot(t, slipPowerW, rollSpeedMs, rimSpeedMs, dt);

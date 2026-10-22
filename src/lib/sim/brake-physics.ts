@@ -110,7 +110,8 @@ export function stepBrakeDiscThermal(
   ambientC: number,
   dt: number,
   compound: BrakeCompoundKind = 'carbon-ceramic',
-  coolingScale = 1
+  coolingScale = 1,
+  wetness = 0
 ): void {
   const isCarbon = compound === 'carbon-ceramic';
   // Heat capacities (J/K): carbon friction ring + pad face (~1150 J/K) and core vanes/bell (~1450 J/K)
@@ -120,11 +121,12 @@ export function stepBrakeDiscThermal(
 
   const brakePowerW = Math.max(0, frictionTorqueNm) * Math.abs(wheelOmegaRadS);
   const v = Math.abs(carSpeedMs);
+  const wetSprayMult = 1 + 0.38 * Math.min(1, Math.max(0, wetness));
 
-  // Forced-air cooling duct convection (W/K). Carbon: ≈120 W/K in all at 300 km/h, a ≈22 s time constant with the
+  // Forced-air + wet-spray cooling duct convection (W/K). Carbon: ≈120 W/K in all at 300 km/h, a ≈22 s time constant with the
   // 2600 J/K of the two nodes, so a disc leaves a 15 s straight at ≈300 °C instead of going stone cold
-  const hSurf = (isCarbon ? 6.0 + 0.55 * v : 10.0 + 1.35 * v) * coolingScale;
-  const hCore = (isCarbon ? 8.0 + 0.7 * v : 14.0 + 1.65 * v) * coolingScale;
+  const hSurf = (isCarbon ? 6.0 + 0.55 * v : 10.0 + 1.35 * v) * coolingScale * wetSprayMult;
+  const hCore = (isCarbon ? 8.0 + 0.7 * v : 14.0 + 1.65 * v) * coolingScale * wetSprayMult;
 
   // Stefan-Boltzmann T^4 thermal radiation from glowing rotor faces
   const emissivity = isCarbon ? 0.88 : 0.78;
