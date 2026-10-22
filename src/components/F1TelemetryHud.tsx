@@ -35,6 +35,8 @@ import { PedalBars, pedalLayers } from "./hud/PedalBars";
 import { ProximityRadar } from "./hud/ProximityRadar";
 import { virtualMirrorRect } from "@/lib/render/virtual-mirror";
 import { DeltaBar } from "./hud/DeltaBar";
+import { SplitGaps } from "./hud/SplitGaps";
+import { WeatherBadge, type WeatherHudState } from "./hud/WeatherBadge";
 import { FfbMeter } from "./hud/FfbMeter";
 import { LapSummary } from "./hud/LapSummary";
 import { RaceResults } from "./hud/RaceResults";
@@ -91,6 +93,9 @@ interface F1TelemetryHudProps extends MultiplayerPanelProps {
   gamepadRumble: boolean;
   aiOpponents: boolean;
   onToggleAiOpponents: () => void;
+  /** AI opponents' skill 0..100 and its setter (pause menu) */
+  aiSkill?: number;
+  onChangeAiSkill?: (skill: number) => void;
   carId: CarId;
   vehicleModel: VehicleModelId;
   onChangeCar: (car: CarId) => void;
@@ -141,6 +146,8 @@ interface F1TelemetryHudProps extends MultiplayerPanelProps {
   touchControls?: TouchControlsProps | null;
   displayPanel?: DisplayPanelProps;
   leaderboardPanel?: LeaderboardPanelProps;
+  /** Air / track temperature and the track's wetness (weather.ts) */
+  weather?: WeatherHudState | null;
 }
 
 /** Normalises a ?room= invite link value to the bare room code, or null when it is not one */
@@ -351,6 +358,9 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
         <StartLights race={race} />
         {/* The ±1 s ribbon sits under every preset except the Phone HUD, whose speed pod owns this spot */}
         {hud?.deltaBar && !phone && !lightsPhase ? <DeltaBar deltaS={deltaS} /> : null}
+        {/* Split gaps to the cars directly ahead and behind (AI races and multiplayer) */}
+        {hud?.splitGaps !== false && !phone && !lightsPhase && race?.phase === "racing" ? <SplitGaps splits={race.splits} /> : null}
+        {props.weather && !phone && !minimal && !lightsPhase ? <WeatherBadge weather={props.weather} /> : null}
         {!lightsPhase ? (
           <RaceControlBanner status={telemetry.trackLimits} offTrack={telemetry.offTrack} race={Boolean(race)} />
         ) : null}

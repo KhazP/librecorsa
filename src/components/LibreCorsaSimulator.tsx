@@ -61,6 +61,18 @@ import { buildTelemetryPacket } from "@/lib/input/telemetry-out";
 import { touchInput, isTouchDevice, resetTouchInput } from "@/lib/input/touch-input";
 import { isFatalHidStatus } from "@/lib/input/webhid-ffb";
 import { applyGraphicsQuality } from "@/lib/render/golden-hour-environment";
+import { createRainFx } from "@/lib/render/rain-fx";
+import { setAsphaltWetness } from "@/lib/render/asphalt-sheen";
+import { SIM_REALISM_FLAGS, type SimRealism } from "@/lib/sim/sim-realism";
+import {
+  recommendedCompound,
+  SLICK_TRAITS,
+  WET_TYRE_TRAITS,
+  wetGripFactor,
+  wetnessFromWater,
+} from "@/lib/sim/wet-tyres";
+import type { SessionConditions } from "@/lib/sim/weather";
+import type { WeatherHudState } from "@/components/hud/WeatherBadge";
 import { TURN_METADATA } from "@/lib/track-data";
 import { getTrackInfo } from "@/lib/track-registry";
 import { TouchControls } from "@/components/hud/TouchControls";
@@ -279,7 +291,14 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   const aiFieldRef = useRef<AiOpponentField | null>(null);
   /** Track evolution and aero wake for every car on the circuit (the player's in every mode); an AI field shares it */
   const trackEnvRef = useRef<TrackEnvironment | null>(null);
-  const getTrackEnv = useCallback(() => (trackEnvRef.current ??= new TrackEnvironment(track)), [track]);
+  const getTrackEnv = useCallback(
+    () => (trackEnvRef.current ??= new TrackEnvironment(track, settingsRef.current.conditions)),
+    [track]
+  );
+  /** Air / track temperature and wetness for the HUD badge and the conditions panel (sampled twice a second) */
+  const [weatherHud, setWeatherHud] = useState<WeatherHudState | null>(null);
+  /** The player car's dry autopilot pace, which the weather scales each frame */
+  const autopilotPaceRef = useRef<{ car: unknown; pace: number }>({ car: null, pace: 1 });
 
   const [virtualMirrorOn, setVirtualMirrorOn] = useState(false);
   const [telemetry, setTelemetry] = useState<CarTelemetry>(() => {
@@ -637,7 +656,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       return;
     }
     physics.aiAutopilot = false;
-    const field = new AiOpponentField(track, physics, AI_DRIVERS, getTrackEnv());
+    const field = new AiOpponentField(track, physics, AI_DRIVERS, getTrackEnv(), { skill: settingsRef.current.aiSkill });
     field.startRace(true);
     aiFieldRef.current = field;
     setAiOpponents(true);
@@ -738,6 +757,38 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     setSettings((prev) => update(prev));
   }, []);
 
+  /** AI opponents' level: saved, and a running field drives to it at once */
+  const handleChangeAiSkill = useCallback((aiSkill: number) => {
+    setSettings((prev) => ({ ...prev, aiSkill }));
+    aiFieldRef.current?.setSkill(aiSkill);
+  }, []);
+
+  /** Weather and time of day: saved, and the session on track switches to them (the weather starts over) */
+  const handleChangeConditions = useCallback((conditions: SessionConditions) => {
+    setSettings((prev) => ({ ...prev, conditions }));
+  }, []);
+  /** Simulation realism: saved, and every car on track takes it on its next step */
+  const handleChangeRealism = useCallback((realism: SimRealism) => {
+    setSettings((prev) => ({ ...prev, realism }));
+  }, []);
+  const conditionsKey = JSON.stringify(settings.conditions);
+  useEffect(() => {
+    const env = getTrackEnv();
+    const next = settingsRef.current.conditions;
+    if (JSON.stringify(env.weather.conditions) !== JSON.stringify(next)) {
+      env.setConditions(next);
+      const autoCompound = recommendedCompound(env.weather.lineWaterMm, "soft");
+      if (physicsRef.current && physicsRef.current.tireCompound !== autoCompound) {
+        physicsRef.current.tireCompound = autoCompound;
+        setTireCompound(autoCompound);
+        carRigRef.current?.setTireCompound(autoCompound);
+      }
+    }
+  }, [conditionsKey, getTrackEnv]);
+  useEffect(() => {
+    getTrackEnv().setSimRealism(SIM_REALISM_FLAGS[settings.realism]);
+  }, [settings.realism, getTrackEnv]);
+
   /** null returns to the car's own FOV */
   const handleCockpitFovChange = useCallback((fovDeg: number | null) => {
     setSettings((prev) => ({ ...prev, cockpitFovDeg: fovDeg === null ? null : Math.round(clampFov(fovDeg)) }));
@@ -750,7 +801,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       if (physics) {
         physics.aiAutopilot = false;
         if (race) {
-          if (!aiFieldRef.current) aiFieldRef.current = new AiOpponentField(track, physics, AI_DRIVERS, getTrackEnv());
+          if (!aiFieldRef.current) aiFieldRef.current = new AiOpponentField(track, physics, AI_DRIVERS, getTrackEnv(), { skill: settingsRef.current.aiSkill });
           aiFieldRef.current.startRace(true);
         } else {
           aiFieldRef.current = null;
@@ -1095,6 +1146,10 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       if (prev) {
         car.gamepadAssistEnabled = prev.gamepadAssistEnabled;
         car.tireCompound = prev.tireCompound;
+      } else {
+        const autoCompound = recommendedCompound(getTrackEnv().weather.lineWaterMm, "soft");
+        car.tireCompound = autoCompound;
+        setTireCompound(autoCompound);
       }
       car.resetToStartGrid(false);
 
@@ -1126,7 +1181,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       lapRecorderRef.current?.reset();
       // A running race restarts from the lights with the new car
       if (aiFieldRef.current) {
-        const field = new AiOpponentField(track, physics, AI_DRIVERS, getTrackEnv());
+        const field = new AiOpponentField(track, physics, AI_DRIVERS, getTrackEnv(), { skill: settingsRef.current.aiSkill });
         field.startRace(true);
         aiFieldRef.current = field;
       }
@@ -1160,6 +1215,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
 
     // Golden-hour sky dome, its baked PMREM environment, horizon fog and the car-tracking sun shadow
     const env = createGoldenHourEnvironment(renderer, scene);
+    // Rain streaks around the camera (one GPU-animated draw, hidden in the dry)
+    const rainFx = createRainFx(scene);
     // Scene render + one merged effect pass (mipmap bloom, then AgX tone mapping)
     const postFx = createPostFx(renderer, scene, camera);
     // Top-centre virtual rear-view mirror for the views without wing mirrors in shot
@@ -1572,6 +1629,14 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     const deviceInput = new DeviceInputReader();
     let menuOrbitRad = 0.6;
     const trackEnv = getTrackEnv();
+    // Time of day / weather look: the sky follows the session's WeatherState at 10 Hz, the HUD badge at 2 Hz
+    let lastSkyMs = -Infinity;
+    let lastWeatherHudMs = -Infinity;
+    let weatherHudKey = "";
+    const skyConditions = { elevationDeg: 14, azimuthDeg: 127, cloud: 0, rain: 0 };
+    const rainCamPos = new THREE.Vector3();
+    const rainCamPrev = new THREE.Vector3();
+    const rainCamVel = new THREE.Vector3();
     const soloCars: SimulatorCar[] = [];
     const remoteWake: WakeEmitterCar[] = [];
     const ghostPos = new THREE.Vector3();
@@ -1708,9 +1773,25 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         dtSeconds / (keys.down ? kbTuning.brakeRiseS || KB_BRAKE_RISE_S : KB_BRAKE_FALL_S)
       );
       const vFwd = Math.max(0, physics.vxMs);
+      const lineWaterMm = getTrackEnv().weather.lineWaterMm;
+      const wetTraits =
+        physics.tireCompound === "wet" || physics.tireCompound === "intermediate"
+          ? WET_TYRE_TRAITS[physics.tireCompound]
+          : SLICK_TRAITS;
+      const wetGripScale =
+        lineWaterMm > 0
+          ? wetGripFactor(
+              wetTraits,
+              lineWaterMm,
+              vFwd,
+              SIM_REALISM_FLAGS[settingsRef.current.realism].wetSeverity
+            ) / wetTraits.dryGrip
+          : 1;
+      const speedAeroFrac = Math.min(1, (vFwd * vFwd) / (55 * 55));
+      const kbMaxLatAccel = (21 + (KB_STEER_LIMIT_ACCEL - 21) * speedAeroFrac) * wetGripScale;
       const kbSteerLimit = Math.min(
         1,
-        ((physics.wheelbaseM * KB_STEER_LIMIT_ACCEL) / Math.max(1, vFwd * vFwd) +
+        ((physics.wheelbaseM * kbMaxLatAccel) / Math.max(1, vFwd * vFwd) +
           KB_STEER_LIMIT_SLIP_RAD) /
           physics.maxSteerAngleRad
       );
@@ -1776,6 +1857,12 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         // with the remote players placed from last frame's interpolated poses
         soloCars[0] = physics;
         trackEnv.update(dtSeconds, aiField ? aiField.sims() : soloCars, remoteWake);
+        // The autopilot backs off for rain like the AI field does, from the car's own pace
+        if (physics.aiPaceScale !== undefined) {
+          const base = autopilotPaceRef.current;
+          if (base.car !== physics) autopilotPaceRef.current = { car: physics, pace: physics.aiPaceScale };
+          physics.aiPaceScale = autopilotPaceRef.current.pace * (physics.aiAutopilot ? trackEnv.weatherPaceScale(physics) : 1);
+        }
         if (!aiField?.playerFrozen && !mpFrozen) physics.step(dtSeconds, inputs);
         aiField?.update(dtSeconds);
       }
@@ -1932,7 +2019,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         // Contact with the other players (one-sided: each client resolves its own car)
         if (driving && mpRace.collisionsActive(mpFrame)) {
           for (const p of samePeers) {
-            if (!p.isAiPeer && p.race?.id === mpRace.start.id) resolvePlayerVsRemoteCar(physics, p);
+            if (!p.isAiPeer && p.race?.id === mpRace.start.id) resolvePlayerVsRemoteCar(physics, p, dtSeconds);
           }
         }
       }
@@ -2121,7 +2208,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       }
       const shake = cockpitShake.update(dtSeconds, physics.telemetry);
 
-      // Update persistent 4-wheel skidmark ribbons, tire smoke/gravel particles & opponent 3D cars
+      // Update persistent 4-wheel skidmark ribbons, tire smoke/gravel/rooster-tail particles & opponent 3D cars
       visualFx.update(
         dtSeconds,
         physics.worldQuaternion,
@@ -2602,6 +2689,50 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       // Nothing to draw behind the opaque loading screen (the shaders are compiled separately)
       if (appPhase === "loading") return;
 
+      // Weather: sun, sky, fill and fog, the wet look of the road, spray, and rain around the camera
+      const wx = trackEnv.weather;
+      if (nowMs - lastSkyMs > 100) {
+        lastSkyMs = nowMs;
+        const sun = wx.sun;
+        skyConditions.elevationDeg = sun.elevationDeg;
+        skyConditions.azimuthDeg = sun.azimuthDeg;
+        skyConditions.cloud = wx.cloudCover;
+        skyConditions.rain = wx.rainIntensity;
+        env.setConditions(skyConditions);
+        setAsphaltWetness(wetnessFromWater(wx.waterMm), wetnessFromWater(wx.lineWaterMm), wx.rainIntensity, 0.1);
+        visualFx.setWetness(wetnessFromWater(wx.lineWaterMm));
+      }
+      camera.getWorldPosition(rainCamPos);
+      if (dtSeconds > 0) rainCamVel.subVectors(rainCamPos, rainCamPrev).divideScalar(dtSeconds).clampLength(0, 110);
+      rainCamPrev.copy(rainCamPos);
+      const sprayWake =
+        (1 - (physics.telemetry.aeroWakeDownforceMult ?? 1)) * 3.2 * wetnessFromWater(wx.lineWaterMm);
+      rainFx.update(
+        dtSeconds,
+        wx.rainIntensity,
+        camera,
+        rainCamVel,
+        THREE.MathUtils.clamp((skyConditions.elevationDeg + 3) / 17, 0, 1) * (1 - 0.4 * wx.cloudCover),
+        wx.windVxMs,
+        wx.windVzMs,
+        THREE.MathUtils.clamp(sprayWake, 0, 1)
+      );
+      if (nowMs - lastWeatherHudMs > 500) {
+        lastWeatherHudMs = nowMs;
+        const next: WeatherHudState = {
+          airC: Math.round(wx.ambientC),
+          trackC: Math.round(wx.trackTempC),
+          waterMm: Math.round(wx.lineWaterMm * 100) / 100,
+          rain: Math.round(wx.rainIntensity * 20) / 20,
+          clockH: Math.round(wx.clockH * 60) / 60,
+          timeMoving: wx.conditions.timeScale > 0, humidityPct: Math.round(wx.humidityPct), windSpeedMs: Math.round((wx.windSpeedKmh / 3.6) * 10) / 10, windDirection: ["N", "NE", "E", "SE", "S", "SW", "W", "NW"][Math.round((((wx.windDirectionDeg % 360) + 360) % 360) / 45) % 8],
+        };
+        const key = JSON.stringify(next);
+        if (key !== weatherHudKey) {
+          weatherHudKey = key;
+          setWeatherHud(next);
+        }
+      }
       env.update(physics.worldPosition, camera);
       // Virtual mirror: on its own in the views whose wing mirrors are off screen (or that have none), and in the
       // chase view too when the player asked for it always
@@ -2687,6 +2818,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       wingMirrors?.dispose();
       postFx.dispose();
       env.dispose();
+      rainFx.dispose();
       virtualMirror.dispose();
       renderer.dispose();
       audioRef.current?.dispose();
@@ -2729,7 +2861,12 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     const mp = getMultiplayerManager();
     setLocalPeerId(mp.localPeerId);
     setLobby(mp.lobby);
-    mp.onLobbyChange = (l) => setLobby(l ? { ...l, players: [...l.players] } : null);
+    mp.onLobbyChange = (l) => {
+      setLobby(l ? { ...l, players: [...l.players] } : null);
+      // The host's weather and clock: a guest's session eases to them (a different preset restarts it)
+      if (l?.weather && l.hostId !== mp.localPeerId) trackEnvRef.current?.weather.applySync(l.weather);
+    };
+    mp.weatherProvider = () => trackEnvRef.current?.weather.snapshot() ?? null;
     mp.onRaceStart = (start) => {
       // A race on another circuit: switch to it, and pick the race up once that scene has loaded
       if (start.trackId && start.trackId !== trackId && onSelectTrack) {
@@ -2745,6 +2882,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     const timer = window.setInterval(() => setPeerStats(mp.getPeerStats()), 1000);
     return () => {
       mp.onLobbyChange = undefined;
+      mp.weatherProvider = undefined;
       mp.onRaceStart = undefined;
       mp.onRaceAbort = undefined;
       window.clearInterval(timer);
@@ -2879,6 +3017,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     gamepadRumble,
     aiOpponents,
     onToggleAiOpponents: handleToggleAiOpponents,
+    aiSkill: settings.aiSkill,
+    onChangeAiSkill: handleChangeAiSkill,
     carId,
     vehicleModel,
     onChangeCar: handleChangeCar,
@@ -2962,6 +3102,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         <F1TelemetryHud
           {...menuProps}
           track={track}
+          weather={weatherHud}
           boostLatch={boostLatch}
           showLaunchHint={launchHint}
           launchHintText={launchHintText}
@@ -3061,6 +3202,14 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
           onControls={() => openControls("title")}
           trackId={trackId}
           onSelectTrack={onSelectTrack}
+          conditionsPanel={{
+            conditions: settings.conditions,
+            realism: settings.realism,
+            onChangeConditions: handleChangeConditions,
+            onChangeRealism: handleChangeRealism,
+            hostControlled: lobby !== null && lobby.hostId !== localPeerId,
+            readout: weatherHud,
+          }}
         />
       ) : null}
 

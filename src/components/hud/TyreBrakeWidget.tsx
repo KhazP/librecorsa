@@ -10,6 +10,8 @@ const COMPOUND: Record<TireCompound, { letter: string; color: string }> = {
   soft: { letter: "S", color: HUD_RED },
   medium: { letter: "M", color: HUD_YELLOW },
   hard: { letter: "H", color: HUD_WHITE },
+  intermediate: { letter: "I", color: "#3CCB4A" },
+  wet: { letter: "W", color: "#2E7BFF" },
 };
 
 /** Damage / surface conditions shown as badges once they matter */

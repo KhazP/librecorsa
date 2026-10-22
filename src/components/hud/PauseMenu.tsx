@@ -42,6 +42,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { LibreCorsaLogo } from "@/components/ui/LibreCorsaLogo";
+import { AI_SKILL_DEFAULT, AI_SKILL_LEVELS, aiSkillLabel } from "@/lib/sim/ai-tuning";
 
 export const CAMERA_LABELS: Record<CameraMode, string> = {
   chase: "Chase",
@@ -117,6 +118,9 @@ export interface PauseMenuProps extends MultiplayerPanelProps {
   gamepadAssist: boolean;
   gamepadRumble: boolean;
   aiOpponents: boolean;
+  /** AI opponents' skill (0 Rookie … 100 Alien) and its setter */
+  aiSkill?: number;
+  onChangeAiSkill?: (skill: number) => void;
   /** The chosen car, and the vehicle model it drives on (setups and records are per vehicle model) */
   carId: CarId;
   vehicleModel: VehicleModelId;
@@ -225,6 +229,8 @@ export const COMPOUNDS: readonly { id: TireCompound; label: string; name: string
   { id: "soft", label: "Soft", name: "Soft tyres", ring: "#FF2A3C" },
   { id: "medium", label: "Med", name: "Medium tyres", ring: "#FFB300" },
   { id: "hard", label: "Hard", name: "Hard tyres", ring: "#F5F7FA" },
+  { id: "intermediate", label: "Inter", name: "Intermediate tyres (wet track)", ring: "#3CCB4A" },
+  { id: "wet", label: "Wet", name: "Full wet tyres (standing water)", ring: "#2E7BFF" },
 ];
 
 /** One option of a pill segmented row (aria-pressed, like Choice) */
@@ -578,6 +584,34 @@ export const SessionPanel: React.FC<PauseMenuProps> = (p) => {
             </button>
           </div>
         </div>
+        {p.onChangeAiSkill ? (
+          <div className="border-t border-[#262B3D] pt-1.5">
+            <TyreSlider
+              label="AI level"
+              value={p.aiSkill ?? AI_SKILL_DEFAULT}
+              limits={{ min: 0, max: 100, step: 5 }}
+              format={(v) => `${aiSkillLabel(v)} · ${Math.round(v)}`}
+              onChange={p.onChangeAiSkill}
+            />
+            <div className="flex flex-wrap gap-1.5 px-2 pb-1">
+              {AI_SKILL_LEVELS.map((l) => (
+                <button
+                  key={l.id}
+                  type="button"
+                  aria-pressed={Math.round(p.aiSkill ?? AI_SKILL_DEFAULT) === l.value}
+                  onClick={() => p.onChangeAiSkill?.(l.value)}
+                  className={`min-h-[32px] cursor-pointer rounded-full px-3 font-f1-mono text-[11px] font-extrabold tracking-[0.12em] uppercase transition-colors ${
+                    Math.round(p.aiSkill ?? AI_SKILL_DEFAULT) === l.value
+                      ? "bg-[#CCFF00] text-[#08090D]"
+                      : "border border-[#262B3D] text-[#8E96AA] hover:border-[#CCFF00] hover:text-[#CCFF00]"
+                  }`}
+                >
+                  {l.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
         {p.onChangeCockpitFov ? (
           <div className="border-t border-[#262B3D] pt-1.5">
             <TyreSlider

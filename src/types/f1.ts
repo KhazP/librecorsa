@@ -46,7 +46,8 @@ export type CameraMode =
   | "helicopter"
   | "tv_side";
 
-export type TireCompound = "soft" | "medium" | "hard";
+/** Dry slicks, then the treaded rain tyres: intermediate (damp / light rain) and full wet (standing water) */
+export type TireCompound = "soft" | "medium" | "hard" | "intermediate" | "wet";
 
 export type LiveryId =
   | "rwanda_2026"
@@ -227,6 +228,23 @@ export interface RaceStatus {
   fieldSize: number;
   lap: number;
   standings: RaceStandingEntry[];
+  /** Split gaps to the cars directly ahead and behind the player in the running order */
+  splits?: RaceSplits;
+}
+
+/** One split gap (time at the same point of the track) to a nearby car */
+export interface RaceSplit {
+  driverCode: string;
+  teamColorHex: string;
+  /** Time gap (s, ≥ 0) */
+  gapS: number;
+  /** How the gap moved over the last few seconds (s; + = growing); absent until known */
+  changeS?: number;
+}
+
+export interface RaceSplits {
+  ahead?: RaceSplit;
+  behind?: RaceSplit;
 }
 
 /** Driver-set tyre setup (front / rear axle). Camber in degrees, negative = top of the tyre leaning inward. */

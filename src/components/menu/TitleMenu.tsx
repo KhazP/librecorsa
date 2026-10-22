@@ -18,8 +18,12 @@ import { focusInZone, focusOnHover, useFocusNav } from "./useFocusNav";
 import { useInputMode } from "./input-mode";
 import { KeyCap, PadGlyph, PromptBar } from "./menu-ui";
 import { RequestPanel } from "./RequestPanel";
+import { ConditionsPanel, type ConditionsPanelProps } from "./ConditionsPanel";
+import { TIME_OF_DAY_LABELS, WEATHER_LABELS } from "@/lib/sim/weather";
 import { LibreCorsaLogo } from "@/components/ui/LibreCorsaLogo";
+import { AI_SKILL_DEFAULT, aiSkillLabel } from "@/lib/sim/ai-tuning";
 import {
+  CloudSun,
   ExternalLink,
   Flag,
   Gamepad2,
@@ -35,7 +39,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-type TitlePanel = "circuit" | "garage" | "multiplayer" | "leaderboard" | "display" | "credits" | "request";
+type TitlePanel = "circuit" | "conditions" | "garage" | "multiplayer" | "leaderboard" | "display" | "credits" | "request";
 
 export interface TitleMenuProps extends PauseMenuProps {
   firstRun: boolean;
@@ -47,6 +51,8 @@ export interface TitleMenuProps extends PauseMenuProps {
   trackId?: string;
   /** Switches circuit (reloads the scene) */
   onSelectTrack?: (id: string) => void;
+  /** Weather, time of day and simulation realism */
+  conditionsPanel?: ConditionsPanelProps;
 }
 
 const linkClass = "underline decoration-[#00E5FF]/40 underline-offset-2 text-[#00E5FF] hover:text-[#CCFF00]";
@@ -591,7 +597,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
       run: onDrive,
       primary: true,
     },
-    { id: "race", label: "Race AI", detail: "5 AI cars · standing start", icon: Flag, run: onRaceAi },
+    { id: "race", label: "Race AI", detail: `5 AI cars · ${aiSkillLabel(props.aiSkill ?? AI_SKILL_DEFAULT)} · standing start`, icon: Flag, run: onRaceAi },
     {
       id: "multiplayer",
       label: "Multiplayer",
@@ -609,6 +615,18 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
       panel: "circuit",
       run: () => openPanel("circuit"),
     },
+    ...(props.conditionsPanel
+      ? [
+          {
+            id: "conditions",
+            label: "Conditions",
+            detail: `${WEATHER_LABELS[props.conditionsPanel.conditions.weather].label} · ${TIME_OF_DAY_LABELS[props.conditionsPanel.conditions.timeOfDay]}`,
+            icon: CloudSun,
+            panel: "conditions" as const,
+            run: () => openPanel("conditions"),
+          },
+        ]
+      : []),
     { id: "garage", label: "Garage", detail: "Engineer's garage: car, setup and presets", icon: Wrench, panel: "garage", run: () => openPanel("garage") },
     ...(props.leaderboardPanel
       ? [{ id: "leaderboard", label: "Lap times", detail: "Leaderboard and ghosts", icon: Timer, panel: "leaderboard" as const, run: () => openPanel("leaderboard") }]
@@ -648,6 +666,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
   const panelTitle = items.find((i) => i.panel === panel)?.label;
   const frameHeading: Record<TitlePanel, { kicker: string; color?: string }> = {
     circuit: { kicker: "Circuit selection" },
+    conditions: { kicker: "Weather, time of day and realism", color: "#00E5FF" },
     garage: { kicker: "Engineer's garage · setup, presets and livery" },
     multiplayer: { kicker: "WebRTC peer-to-peer" },
     leaderboard: { kicker: `Leaderboard · ${props.leaderboardPanel?.trackName ?? track.name}`, color: "#CCFF00" },
@@ -730,7 +749,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
                 <CompactEntry key={item.id} item={item} open={item.panel === panel} />
               ))}
               <div aria-hidden className="mx-3.5 my-2 h-px bg-[#262B3D]" />
-              {byId(["circuit", "garage", "leaderboard", "display", "controls"]).map((item) => (
+              {byId(["circuit", "conditions", "garage", "leaderboard", "display", "controls"]).map((item) => (
                 <CompactEntry key={item.id} item={item} open={item.panel === panel} />
               ))}
               <div aria-hidden className="mx-3.5 my-2 h-px bg-[#262B3D]" />
@@ -748,6 +767,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
                   onClose={closePanel}
                 >
                   {panel === "circuit" ? <CircuitPanel trackId={trackId} onSelect={onSelectTrack} map={map} /> : null}
+                  {panel === "conditions" && props.conditionsPanel ? <ConditionsPanel {...props.conditionsPanel} /> : null}
                   {panel === "garage" ? <EngineersGarage {...props} /> : null}
                   {panel === "multiplayer" ? <MultiplayerPanel {...props} /> : null}
                   {panel === "leaderboard" && props.leaderboardPanel ? <LeaderboardPanel {...props.leaderboardPanel} /> : null}
@@ -773,7 +793,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
                 <span className="lc-lbl">Setup</span>
               </div>
               <div className="grid grid-cols-1 gap-1 min-[400px]:grid-cols-2">
-                {byId(["circuit", "garage", "controls", "display"]).map((item) => (
+                {byId(["circuit", "conditions", "garage", "controls", "display"]).map((item) => (
                   <GridEntry key={item.id} item={item} />
                 ))}
               </div>

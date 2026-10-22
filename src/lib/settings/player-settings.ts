@@ -21,6 +21,9 @@ import {
   type PedalBinding,
   type WheelSettings,
 } from "@/lib/input/device-input";
+import { AI_SKILL_DEFAULT } from "@/lib/sim/ai-tuning";
+import { SIM_REALISM_LEVELS, type SimRealism } from "@/lib/sim/sim-realism";
+import { DEFAULT_SESSION_CONDITIONS, sanitizeConditions, type SessionConditions } from "@/lib/sim/weather";
 
 export interface PlayerSettings {
   device: InputDevice;
@@ -49,6 +52,12 @@ export interface PlayerSettings {
   profile: DriverProfile;
   /** Race the ghost of the personal-best lap for this circuit and car */
   ghost: boolean;
+  /** AI opponents' skill, 0 (Rookie) to 100 (Alien); 70 = Pro */
+  aiSkill: number;
+  /** Simulation realism: tyre wear, temperature grip, fuel use and how hard rain bites (Full = the whole model) */
+  realism: SimRealism;
+  /** Weather, time of day and time multiplier for offline sessions (the host's apply online) */
+  conditions: SessionConditions;
 }
 
 export interface PadTuning {
@@ -105,6 +114,8 @@ export interface HudSettings {
   mapMode: "full" | "local";
   /** Proximity radar: fades in when a car is alongside or close behind */
   radar: boolean;
+  /** Race split gaps: time to the cars directly ahead and behind */
+  splitGaps: boolean;
   /** The MFD folds to its status pill after a few seconds without input */
   mfdAutoCollapse: boolean;
   /** Cockpit beeps: DRS available (two tones) and DRS open (chime) */
@@ -175,6 +186,7 @@ export const DEFAULT_HUD_SETTINGS: HudSettings = {
   towerGaps: "interval",
   mapMode: "full",
   radar: true,
+  splitGaps: true,
   mfdAutoCollapse: true,
   drsBeep: true,
   shiftBeep: false,
@@ -247,6 +259,9 @@ export const DEFAULT_PLAYER_SETTINGS: PlayerSettings = {
   touch: DEFAULT_TOUCH_SETTINGS,
   profile: DEFAULT_DRIVER_PROFILE,
   ghost: true,
+  aiSkill: AI_SKILL_DEFAULT,
+  realism: "full",
+  conditions: DEFAULT_SESSION_CONDITIONS,
 };
 
 const CAMERA_MODES: readonly CameraMode[] = ["chase", "tv_pod", "cockpit_shoulder", "cockpit", "nose", "helicopter", "tv_side"];
@@ -380,6 +395,7 @@ function parseHud(v: unknown): HudSettings {
     towerGaps: oneOf(v.towerGaps, ["interval", "leader"] as const, d.towerGaps),
     mapMode: oneOf(v.mapMode, ["full", "local"] as const, d.mapMode),
     radar: bool(v.radar, d.radar),
+    splitGaps: bool(v.splitGaps, d.splitGaps),
     mfdAutoCollapse: bool(v.mfdAutoCollapse, d.mfdAutoCollapse),
     drsBeep: bool(v.drsBeep, d.drsBeep),
     shiftBeep: bool(v.shiftBeep, d.shiftBeep),
@@ -450,6 +466,9 @@ export function parsePlayerSettings(raw: unknown): PlayerSettings {
     touch: parseTouch(raw.touch),
     profile: parseProfile(raw.profile),
     ghost: bool(raw.ghost, d.ghost),
+    aiSkill: Math.round(num(raw.aiSkill, 0, 100, d.aiSkill)),
+    realism: oneOf(raw.realism, SIM_REALISM_LEVELS, d.realism),
+    conditions: sanitizeConditions(raw.conditions),
   };
 }
 
