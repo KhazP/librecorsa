@@ -9,8 +9,9 @@
 
 import * as THREE from 'three';
 import { SurfaceType, TrackSamplePoint } from '@/types/f1';
-import { BuiltTrackData, catmullRomWeights, evaluateSampleLateralHeightM } from '@/lib/track-data';
+import { BuiltTrackData, catmullRomWeights, evaluateSampleLateralHeightM, getActiveSurfaceTable } from '@/lib/track-data';
 import { type BrakingGuide, sampleProfile } from './speed-profile';
+import { KERB_PROFILE_L, kerbProfileM, surfaceRippleM } from './track-surfaces';
 
 export const CURV_LOOK_AHEAD_DISTANCE = 300; // meters
 export const CURV_LOOK_AHEAD_VECTOR_SIZE = 12; // 12 lookahead samples
@@ -72,16 +73,8 @@ export interface WheelGroundContact {
   isOutOfTrack: boolean;
 }
 
-/** Kerb cross-section (m above the road) vs distance outward from the asphalt edge (scripts/rwanda-2026/build_surfaces.py) */
-const KERB_PROFILE_L = [-0.35, -0.3, 0.05, 0.45, 0.95, 1.35, 1.45];
-const KERB_PROFILE_Z = [0, 0.008, 0.03, 0.05, 0.045, 0.012, 0];
-function kerbProfileM(outwardM: number): number {
-  if (outwardM <= KERB_PROFILE_L[0] || outwardM >= KERB_PROFILE_L[KERB_PROFILE_L.length - 1]) return 0;
-  let i = 0;
-  while (outwardM > KERB_PROFILE_L[i + 1]) i++;
-  const f = (outwardM - KERB_PROFILE_L[i]) / (KERB_PROFILE_L[i + 1] - KERB_PROFILE_L[i]);
-  return KERB_PROFILE_Z[i] + (KERB_PROFILE_Z[i + 1] - KERB_PROFILE_Z[i]) * f;
-}
+const KERB_INNER_M = KERB_PROFILE_L[0];
+const KERB_OUTER_M = KERB_PROFILE_L[KERB_PROFILE_L.length - 1];
 
 /**
  * Queries the exact 3D road elevation, banking, longitudinal slope, and surface type
@@ -123,8 +116,8 @@ export function queryWheelGroundContact(
 
   // Classify surface under this specific wheel (asphalt, kerb, runoff, gravel -> grass class, grass).
   // Painted run-off and gravel widths come per side from the track export; older data falls back to 5.2 m.
-  const kerbInner = halfWidthM - 0.35;
-  const kerbOuter = halfWidthM + 1.45;
+  const kerbInner = halfWidthM + KERB_INNER_M;
+  const kerbOuter = halfWidthM + KERB_OUTER_M;
   const left = lateralOffsetM < 0;
   const lerpEdge = (a: number | undefined, b: number | undefined, fallback: number) =>
     a === undefined || b === undefined ? fallback : a + (b - a) * t;
@@ -149,9 +142,11 @@ export function queryWheelGroundContact(
   if (kerbRamp > 0 && absLat > kerbInner && absLat <= kerbOuter) {
     surfaceType = 'kerb';
     frictionMult = 0.89;
-    // The kerb's raised cross-section (same profile as the Track_Kerbs mesh) plus its serrated ridges every
-    // ~0.65 m along s
-    bumpM = kerbRamp * (kerbProfileM(absLat - halfWidthM) + Math.sin(sCoord * 9.6) * 0.004 * Math.min(1, carSpeedMs / 8));
+    // The kerb's raised cross-section (the shared profile of the kerb meshes) plus the surface table's serrations
+    // along s, faded in across the kerb as on the meshes
+    const across = (absLat - kerbInner) / (kerbOuter - kerbInner);
+    const ripple = surfaceRippleM(getActiveSurfaceTable().kerb, sCoord, Math.sin(Math.PI * across));
+    bumpM = kerbRamp * (kerbProfileM(absLat - halfWidthM) + ripple * Math.min(1, carSpeedMs / 8));
   } else if (absLat <= halfWidthM) {
     surfaceType = 'asphalt';
     frictionMult = 1.0;

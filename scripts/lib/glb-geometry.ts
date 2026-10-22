@@ -1,6 +1,6 @@
 /**
  * Minimal GLB reader for Node scripts: rebuilds the node graph (names, TRS, node extras → userData) with
- * position / index geometry only. No materials, textures or DOM, so it runs headless. Reads quantized
+ * position / index geometry (and the first UV set, which the kerb serration ripple reads) only. No materials, textures or DOM, so it runs headless. Reads quantized
  * (KHR_mesh_quantization) positions, and meshopt-compressed circuits via a decoded copy in the temp dir.
  */
 import * as THREE from 'three';
@@ -14,7 +14,7 @@ interface GltfJson {
   extensionsUsed?: string[];
   scenes: { nodes: number[] }[];
   nodes: { name?: string; mesh?: number; children?: number[]; translation?: number[]; rotation?: number[]; scale?: number[]; matrix?: number[]; extras?: Record<string, unknown> }[];
-  meshes: { primitives: { attributes: { POSITION: number }; indices?: number }[] }[];
+  meshes: { primitives: { attributes: { POSITION: number; TEXCOORD_0?: number }; indices?: number }[] }[];
   accessors: { bufferView: number; byteOffset?: number; componentType: number; normalized?: boolean; count: number; type: string }[];
   bufferViews: { byteOffset?: number; byteLength: number; byteStride?: number }[];
 }
@@ -54,7 +54,7 @@ export function loadGlbGeometry(path: string): THREE.Group {
   const readAccessor = (idx: number, asFloat: boolean): Float32Array | Uint32Array => {
     const acc = gltf.accessors[idx];
     const view = gltf.bufferViews[acc.bufferView];
-    const comps = acc.type === 'VEC3' ? 3 : 1;
+    const comps = acc.type === 'VEC3' ? 3 : acc.type === 'VEC2' ? 2 : 1;
     const comp = COMPONENTS[acc.componentType];
     const stride = view.byteStride ?? comps * comp.size;
     const base = (view.byteOffset ?? 0) + (acc.byteOffset ?? 0);
@@ -77,6 +77,7 @@ export function loadGlbGeometry(path: string): THREE.Group {
       const prims = gltf.meshes[n.mesh].primitives.map((p) => {
         const g = new THREE.BufferGeometry();
         g.setAttribute('position', new THREE.BufferAttribute(readAccessor(p.attributes.POSITION, true), 3));
+        if (p.attributes.TEXCOORD_0 !== undefined) g.setAttribute('uv', new THREE.BufferAttribute(readAccessor(p.attributes.TEXCOORD_0, true), 2));
         if (p.indices !== undefined) g.setIndex(new THREE.BufferAttribute(readAccessor(p.indices, false), 1));
         return new THREE.Mesh(g);
       });
