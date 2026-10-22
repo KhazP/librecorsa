@@ -12,7 +12,7 @@
  *    collision detector and rigid-body linear + angular impulse (r × J) solver.
  */
 
-import { marbleLoadEffect, wetGrooveGripEffect } from './wet-tyres';
+import { wetGrooveGripEffect } from './wet-tyres';
 
 export const TRACK_EVOLUTION_SECTORS = 64;
 const BASELINE_RUBBER = 0.65;
@@ -72,8 +72,6 @@ export interface TrackEvolutionSample {
   trackTempC: number;
   /** Optional alias for trackTempC (°C) */
   trackSurfaceTempC?: number;
-  /** Effective vertical contact load multiplier on loose marbles (0.935..1.0) */
-  effectiveLoadMultiplier?: number;
   /** Signed wet-groove grip penalty on the polished racing line when wet (<= 0) */
   grooveWetPenalty?: number;
 }
@@ -84,7 +82,6 @@ export const DEFAULT_TRACK_EVOLUTION_SAMPLE: TrackEvolutionSample = {
   rubberLevel: BASELINE_RUBBER,
   trackTempC: TRACK_EVOLUTION_BASE_C,
   trackSurfaceTempC: TRACK_EVOLUTION_BASE_C,
-  effectiveLoadMultiplier: 1,
   grooveWetPenalty: 0,
 };
 
@@ -224,7 +221,6 @@ export class TrackEvolutionState {
     // Off-line marble penalty (up to -7.5% grip when marbles accumulate outside the groove)
     const marbleLevel = offLineWeight * marbles;
     const marblePenalty = marbleLevel * 0.075;
-    const effectiveLoadMultiplier = marbleLoadEffect(marbleLevel);
 
     const gripMultiplier = Math.max(
       0.82,
@@ -238,7 +234,6 @@ export class TrackEvolutionState {
       rubberLevel: rubber,
       trackTempC,
       trackSurfaceTempC: trackTempC,
-      effectiveLoadMultiplier,
       grooveWetPenalty,
     };
   }

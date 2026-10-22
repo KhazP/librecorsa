@@ -204,9 +204,9 @@ export function evaluateFlashTempAndWlfGrip(
   // Master bell curve around optimal viscoelastic excitation frequency (logFreq0 ≈ -0.35)
   const dev = logFreq - -0.35;
   const wlfRaw = Math.exp(-0.028 * dev * dev);
-  // Blend WLF viscoelasticity with wetness / cold-tyre departure so calibrated dry steady-state tests stay exact
-  const coldDeparture = Math.max(0, (tRef - 12 - tEff) / 35);
-  const activeBlend = Math.min(1, w * 0.85 + Math.min(1, coldDeparture) * 0.45);
+  // Blended in with the water only: on a dry road the thermal grip curve already prices a cold tyre, and the
+  // calibrated dry tests stay exact
+  const activeBlend = Math.min(1, w * 0.85);
   const viscoelasticMult = 1 + (wlfRaw * (1 + 0.035 * (flashDeltaC / 12)) - 1) * activeBlend;
   return {
     flashDeltaC,
@@ -248,15 +248,6 @@ export function wetGrooveGripEffect(
   const linearLoss = -0.055 * r;
   const sqrdLoss = -0.03 * r * r;
   return (linearLoss + sqrdLoss) * transition * Math.min(1, Math.max(0, onLineWeight)) * Math.min(1, severity);
-}
-
-/**
- * Effective vertical contact load multiplier on loose off-line rubber marbles (`MarbleEffectOnEffectiveLoad`):
- * marbles act as bearing debris under the contact patch, reducing effective vertical load transmission.
- */
-export function marbleLoadEffect(marbleLevel: number): number {
-  const m = Math.min(1, Math.max(0, Number.isFinite(marbleLevel) ? marbleLevel : 0));
-  return 1 - 0.065 * m;
 }
 
 /** Surface multiplier at `wetness`: painted kerbs and grass get slicker than the asphalt in the same water */

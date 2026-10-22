@@ -1654,7 +1654,6 @@ export class VehiclePhysics {
               surfaceWetMultiplier(g.props.wetFriction, wWetness, severity)
             : 1;
         const wlf = evaluateFlashTempAndWlfGrip(traits, w.surfaceTempC, Math.hypot(vsx, vy), fz, wWetness);
-        const loadMult = this.trackEvolution.effectiveLoadMultiplier ?? 1;
         const base =
           thermal *
           wlf.viscoelasticMult *
@@ -1662,7 +1661,6 @@ export class VehiclePhysics {
           degradation *
           g.grip *
           this.trackEvolution.gripMultiplier *
-          loadMult *
           wet;
 
         // Camber grip: leaning into the force direction (force opposes the slip)

@@ -1926,9 +1926,8 @@ export class F1Physics2026 {
         wet > 0
           ? surfaceWetMultiplier(getActiveSurfaceTable()[SURFACE_KIND[contact.surfaceType] ?? 'road'].wetFriction, wet, this.realism.wetSeverity)
           : 1;
-      const marbleLoadMult = this.trackEvolutionSample.effectiveLoadMultiplier ?? 1;
       w.surfaceFrictionMult =
-        contact.frictionMult * (sample.gripMultiplier ?? 1) * this.trackEvolutionSample.gripMultiplier * marbleLoadMult * wetSurface;
+        contact.frictionMult * (sample.gripMultiplier ?? 1) * this.trackEvolutionSample.gripMultiplier * wetSurface;
       w.roadOffsetPrev = reset ? contact.zRoad + contact.bumpM - w.worldPos.y : w.roadOffset;
       w.roadOffset = contact.zRoad + contact.bumpM - w.worldPos.y;
     }
