@@ -417,6 +417,12 @@ export const DisplayPanel: React.FC<DisplayPanelProps> = ({ settings, onChangeSe
               onChange={() => setHud({ radar: !hud.radar })}
             />
             <Toggle
+              label="Race split gaps"
+              detail="Time to the cars directly ahead and behind, measured at the same point of the track"
+              checked={hud.splitGaps}
+              onChange={() => setHud({ splitGaps: !hud.splitGaps })}
+            />
+            <Toggle
               label="Auto-fold the MFD"
               detail="Folds to its status pill 3.5 s after the last D-pad press"
               checked={hud.mfdAutoCollapse}
