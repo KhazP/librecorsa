@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "verify": "node scripts/run-verify.mjs",
     "verify:laps": "node scripts/run-verify.mjs driver-laps",
+    "race:headless": "node --disable-warning=THREE_CJS_DEPRECATED --import tsx scripts/race-headless.ts",
     "ffb": "tsx scripts/ffb-bridge.ts",
     "compress-tracks": "node scripts/compress-track-glb.mjs --all"
   },

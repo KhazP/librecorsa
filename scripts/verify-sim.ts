@@ -311,6 +311,7 @@ async function runVerification() {
   // 7. Multiplayer: a remote peer's 25 Hz packets are interpolated through the jitter buffer
   console.log('\n7. Testing 25 Hz Multiplayer Sync & Cubic Hermite / Slerp Dead-Reckoning...');
   const mpSync = new MultiplayerSyncManager();
+  mpSync.predictRemotePlayers = false;
   const remote = new F1Physics2026(track);
   remote.setAssistPreset('pro');
   remote.resetToStartGrid(true);
@@ -353,13 +354,15 @@ async function runVerification() {
     peers.length === 1 && Number.isFinite(peers[0].position.x) && maxInterpErrM < 4.0,
     `Remote peer interpolated from 25 Hz packets (${peers.map((p) => `${p.driverCode}:${p.speedKmh.toFixed(0)}km/h`).join(', ')}, max error vs. 65 ms-delayed truth ${maxInterpErrM.toFixed(2)} m)`
   );
+  mpSync.predictRemotePlayers = true;
   mpSync.dispose();
 
   // 7b. AI opponents: standing start behind the lights, then a clean, close race
   console.log('\n7b. Testing AI Opponent Field (start lights, traffic, contact)...');
   const racer = new F1Physics2026(track);
   racer.setAssistPreset('pro');
-  const field = new AiOpponentField(track, racer);
+  // A fixed seed: the lap-to-lap errors and the start hold replay the same race on every run
+  const field = new AiOpponentField(track, racer, undefined, undefined, { seed: 1 });
   field.startRace(true);
   racer.aiAutopilot = true;
   racer.aiPaceScale = 0.99;
