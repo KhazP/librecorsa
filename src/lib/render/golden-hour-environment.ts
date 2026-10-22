@@ -43,6 +43,14 @@ import {
  *   - BloomEffect levels = 5 (default 8) to keep the mip chain cheap at 120 FPS.
  *   - Sky cloudCoverage = 0. The Sky shader skips its cloud fbm entirely when
  *     coverage is 0, which keeps the sky cheap and the sky clear.
+ *
+ * Time of day and weather (setConditions)
+ *   The sun, sky, fill, fog and exposure follow the session's sun position and
+ *   cloud / rain (src/lib/sim/weather.ts). Every curve passes exactly through
+ *   the values above at 14 deg / 127 deg with a clear sky, so the default
+ *   golden-hour look is unchanged. Lights and fog update every call (cheap);
+ *   the PMREM environment is re-baked only when the sky has changed visibly
+ *   (sun > 1 deg, cloud / rain > 0.05) and at most every 1.5 s.
  */
 
 // ---------------------------------------------------------------------------
@@ -70,6 +78,17 @@ const ENV_SIZE = 256;
 const FOG_COLOR = 0xe8c6a0;
 const FOG_DENSITY = 0.00035;
 
+const SUN_COLOR = 0xffebd6;
+const SUN_INTENSITY = 5.0;
+const FILL_SKY = 0xc4d8ee;
+const FILL_GROUND = 0x6b6a3a;
+const FILL_INTENSITY = 0.35;
+const EXPOSURE = 1.15;
+const SKY_TURBIDITY = 2.8;
+const SKY_RAYLEIGH = 1.8;
+/** Minimum time between environment re-bakes (s) */
+const REBAKE_MIN_S = 1.5;
+
 const REAR_RAIN_MATERIAL_NAME = "EXT_clearled_security";
 const REAR_RAIN_EMISSIVE = 0xff1100;
 const REAR_RAIN_EMISSIVE_INTENSITY = 10.0;
@@ -81,6 +100,26 @@ const WORLD_UP = new THREE.Vector3(0, 1, 0);
 // Public types
 // ---------------------------------------------------------------------------
 
+/** Sun position and sky state the lighting follows (from the session's WeatherState) */
+export interface SkyConditions {
+  /** Sun elevation above the horizon (deg) */
+  elevationDeg: number;
+  /** Sun azimuth, three.js Sky convention (deg, 0 = +Z, 90 = +X) */
+  azimuthDeg: number;
+  /** Cloud cover 0..1 */
+  cloud: number;
+  /** Rain intensity 0..1 */
+  rain: number;
+}
+
+/** The original look: clear sky, sun at 14 deg / 127 deg */
+export const GOLDEN_HOUR_SKY: Readonly<SkyConditions> = {
+  elevationDeg: SUN_ELEVATION_DEG,
+  azimuthDeg: SUN_AZIMUTH_DEG,
+  cloud: 0,
+  rain: 0,
+};
+
 export interface GoldenHourEnvironment {
   sunLight: THREE.DirectionalLight;
   /** unit vector from scene towards the sun */
@@ -90,6 +129,8 @@ export interface GoldenHourEnvironment {
   fillLight: THREE.HemisphereLight;
   /** Call once per frame before rendering: keeps the +/-55 m shadow frustum centred on the car (texel-snapped to avoid shimmering) and the sky dome centred on the camera */
   update(carWorldPos: THREE.Vector3, camera: THREE.Camera): void;
+  /** Time of day and weather: moves the sun and sets sky, fill, fog and exposure (cheap; re-bakes the environment only on a visible change) */
+  setConditions(conditions: SkyConditions): void;
   dispose(): void;
 }
 
@@ -128,7 +169,7 @@ export function applyGraphicsQuality(
 
 export function configureRenderer(renderer: THREE.WebGLRenderer): void {
   renderer.toneMapping = THREE.AgXToneMapping;
-  renderer.toneMappingExposure = 1.15;
+  renderer.toneMappingExposure = EXPOSURE;
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
   renderer.shadowMap.enabled = true;
   // PCFSoftShadowMap was removed in three r186; PCF + shadow.radius replaces it.
@@ -142,59 +183,144 @@ export function configureRenderer(renderer: THREE.WebGLRenderer): void {
 
 function configureSkyUniforms(sky: Sky, showSunDisc: boolean): void {
   const u = sky.material.uniforms;
-  u.turbidity.value = 2.8;
-  u.rayleigh.value = 1.8;
+  u.turbidity.value = SKY_TURBIDITY;
+  u.rayleigh.value = SKY_RAYLEIGH;
   u.mieCoefficient.value = 0.005;
   u.mieDirectionalG.value = 0.8;
   u.cloudCoverage.value = 0;
   u.showSunDisc.value = showSunDisc ? 1 : 0;
   (u.sunPosition.value as THREE.Vector3).copy(sunDirectionUnit());
+  u.skyRadianceScale = { value: SKY_RADIANCE_SCALE };
   // The Sky shader writes HDR values directly; it must not also get scene fog.
   sky.material.fog = false;
   // The stock disc reaches ~60000, which the mipmap bloom smears into a full-screen white haze. Capped, it
   // stays well above the 1.1 bloom threshold and blooms into a halo instead.
   // The stock sky is tuned for exposure ~0.5: at 14° its horizon toward the sun reaches ~29 linear, so a
   // quarter of the frame crossed the bloom threshold. Scaled, only the glow around the sun blooms.
-  sky.material.fragmentShader = sky.material.fragmentShader
+  sky.material.fragmentShader = ("uniform float skyRadianceScale;\n" + sky.material.fragmentShader)
     .replace(
       "vec3 sundiscColor = ( 760.0 * sundisc ) * min( vSunE * Fex, 80.0 );",
       "vec3 sundiscColor = min( ( 760.0 * sundisc ) * min( vSunE * Fex, 80.0 ), vec3( SUN_DISC_MAX ) );"
     )
     .replace(
       "gl_FragColor = vec4( texColor, 1.0 );",
-      "gl_FragColor = vec4( texColor * SKY_RADIANCE_SCALE, 1.0 );"
+      "gl_FragColor = vec4( texColor * skyRadianceScale, 1.0 );"
     );
   sky.material.defines = {
     ...sky.material.defines,
     SUN_DISC_MAX: SUN_DISC_MAX_RADIANCE.toFixed(1),
-    SKY_RADIANCE_SCALE: SKY_RADIANCE_SCALE.toFixed(3),
   };
 }
 
-// Returns a fresh unit vector for the sun. Only called at setup time.
-function sunDirectionUnit(): THREE.Vector3 {
-  const phi = THREE.MathUtils.degToRad(90 - SUN_ELEVATION_DEG);
-  const theta = THREE.MathUtils.degToRad(SUN_AZIMUTH_DEG);
+// Returns a fresh unit vector for the sun.
+function sunDirectionUnit(elevationDeg = SUN_ELEVATION_DEG, azimuthDeg = SUN_AZIMUTH_DEG): THREE.Vector3 {
+  const phi = THREE.MathUtils.degToRad(90 - elevationDeg);
+  const theta = THREE.MathUtils.degToRad(azimuthDeg);
   return new THREE.Vector3().setFromSphericalCoords(1, phi, theta);
 }
 
-/** Bake the Sky once into a 256x256 PMREM. The sun disc is hidden during the bake
+// ---------------------------------------------------------------------------
+// Time of day / weather look
+// ---------------------------------------------------------------------------
+
+type Key = readonly [number, number];
+
+/** Piecewise-linear curve through (x, y) keys sorted by x; flat outside them */
+function curve(keys: readonly Key[], x: number): number {
+  if (x <= keys[0][0]) return keys[0][1];
+  for (let i = 1; i < keys.length; i++) {
+    if (x <= keys[i][0]) {
+      const [x0, y0] = keys[i - 1];
+      const [x1, y1] = keys[i];
+      return y0 + ((y1 - y0) * (x - x0)) / (x1 - x0);
+    }
+  }
+  return keys[keys.length - 1][1];
+}
+
+const _ca = new THREE.Color();
+const _cb = new THREE.Color();
+/** Colour curve: (x, hex) keys, blended in linear space */
+function colorCurve(keys: readonly Key[], x: number, out: THREE.Color): THREE.Color {
+  if (x <= keys[0][0]) return out.setHex(keys[0][1]);
+  for (let i = 1; i < keys.length; i++) {
+    if (x <= keys[i][0]) {
+      const t = (x - keys[i - 1][0]) / (keys[i][0] - keys[i - 1][0]);
+      return out.copy(_ca.setHex(keys[i - 1][1])).lerp(_cb.setHex(keys[i][1]), t);
+    }
+  }
+  return out.setHex(keys[keys.length - 1][1]);
+}
+
+// Keys by sun elevation (deg). Each passes through the golden-hour constant at 14 deg.
+const SUN_COLOR_KEYS: readonly Key[] = [[-2, 0xff6a2a], [4, 0xffa262], [14, SUN_COLOR], [35, 0xfff4e8], [70, 0xfff8f2]];
+const SUN_INTENSITY_KEYS: readonly Key[] = [[-3, 0], [1, 0.8], [6, 3.0], [14, SUN_INTENSITY], [35, 5.8], [70, 6.2]];
+const FILL_INTENSITY_KEYS: readonly Key[] = [[-3, 0.12], [4, 0.26], [14, FILL_INTENSITY], [40, 0.45], [70, 0.5]];
+const FOG_COLOR_KEYS: readonly Key[] = [[-3, 0x5e5468], [4, 0xd49c7c], [14, FOG_COLOR], [35, 0xd8dade], [70, 0xc8d4e2]];
+const ENV_INTENSITY_KEYS: readonly Key[] = [[-3, 0.3], [4, 0.7], [14, 1], [70, 1.1]];
+const EXPOSURE_KEYS: readonly Key[] = [[-3, 1.5], [4, 1.32], [14, EXPOSURE], [35, 1.08], [70, 1.05]];
+const OVERCAST_SUN = 0xe6e8ea;
+const OVERCAST_FOG = 0xb2b6ba;
+const RAIN_FOG = 0x8c9297;
+const OVERCAST_FILL_SKY = 0xc6cad0;
+const WET_FILL_GROUND = 0x4c4c40;
+
+interface SkyLook {
+  turbidity: number;
+  rayleigh: number;
+  cloudCoverage: number;
+  cloudDensity: number;
+  radianceScale: number;
+}
+
+function skyLookFor(c: SkyConditions, out: SkyLook): SkyLook {
+  const cloud = THREE.MathUtils.clamp(c.cloud, 0, 1);
+  const rain = THREE.MathUtils.clamp(c.rain, 0, 1);
+  out.turbidity = SKY_TURBIDITY + 6 * cloud;
+  out.rayleigh = SKY_RAYLEIGH * (1 - 0.5 * cloud);
+  // 0 keeps the Sky shader's cloud pass off entirely on a clear day
+  out.cloudCoverage = cloud < 0.02 ? 0 : cloud;
+  out.cloudDensity = 0.4 + 0.45 * cloud + 0.15 * rain;
+  out.radianceScale = SKY_RADIANCE_SCALE * (1 - 0.35 * rain);
+  return out;
+}
+
+function applySkyLook(sky: Sky, sunDir: THREE.Vector3, look: SkyLook): void {
+  const u = sky.material.uniforms;
+  u.turbidity.value = look.turbidity;
+  u.rayleigh.value = look.rayleigh;
+  u.cloudCoverage.value = look.cloudCoverage;
+  u.cloudDensity.value = look.cloudDensity;
+  u.skyRadianceScale.value = look.radianceScale;
+  (u.sunPosition.value as THREE.Vector3).copy(sunDir);
+}
+
+/** Bakes the Sky into a 256x256 PMREM. The sun disc is hidden during the bake
  *  so its ~60000 radiance does not dominate the prefiltered environment. */
-function bakeSkyEnvironment(renderer: THREE.WebGLRenderer): THREE.WebGLRenderTarget {
-  const bakeScene = new THREE.Scene();
-  const bakeSky = new Sky();
-  bakeSky.scale.setScalar(1000);
-  configureSkyUniforms(bakeSky, false);
-  bakeScene.add(bakeSky);
+class SkyBaker {
+  private readonly scene = new THREE.Scene();
+  private readonly sky = new Sky();
+  private pmrem: THREE.PMREMGenerator | null;
 
-  const pmrem = new THREE.PMREMGenerator(renderer);
-  const target = pmrem.fromScene(bakeScene, 0, 0.1, 1000, { size: ENV_SIZE });
-  pmrem.dispose();
+  constructor(renderer: THREE.WebGLRenderer) {
+    this.sky.scale.setScalar(1000);
+    configureSkyUniforms(this.sky, false);
+    this.scene.add(this.sky);
+    this.pmrem = new THREE.PMREMGenerator(renderer);
+  }
 
-  bakeSky.geometry.dispose();
-  bakeSky.material.dispose();
-  bakeScene.clear();
-  return target;
+  bake(sunDir: THREE.Vector3, look: SkyLook): THREE.WebGLRenderTarget {
+    applySkyLook(this.sky, sunDir, look);
+    return this.pmrem!.fromScene(this.scene, 0, 0.1, 1000, { size: ENV_SIZE });
+  }
+
+  dispose(): void {
+    this.pmrem?.dispose();
+    this.pmrem = null;
+    this.sky.geometry.dispose();
+    this.sky.material.dispose();
+    this.scene.clear();
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -224,8 +350,14 @@ export function createGoldenHourEnvironment(
   configureSkyUniforms(sky, true);
   scene.add(sky);
 
-  // --- Environment map (PMREM, baked once) ----------------------------------
-  const envTarget = bakeSkyEnvironment(renderer);
+  // --- Environment map (PMREM, re-baked only when the sky changes visibly) ---
+  const baker = new SkyBaker(renderer);
+  const skyLook = skyLookFor(GOLDEN_HOUR_SKY, {} as SkyLook);
+  const skySunDir = sunDirection.clone();
+  let envTarget = baker.bake(skySunDir, skyLook);
+  let baked: SkyConditions = { ...GOLDEN_HOUR_SKY };
+  let lastBakeMs = -Infinity;
+  let pendingBake = false;
   scene.environment = envTarget.texture;
   scene.environmentIntensity = 1.0;
   scene.background = null;
@@ -234,11 +366,11 @@ export function createGoldenHourEnvironment(
   scene.fog = fog;
 
   // --- Weak fill ------------------------------------------------------------
-  const fillLight = new THREE.HemisphereLight(0xc4d8ee, 0x6b6a3a, 0.35);
+  const fillLight = new THREE.HemisphereLight(FILL_SKY, FILL_GROUND, FILL_INTENSITY);
   scene.add(fillLight);
 
   // --- Sun ------------------------------------------------------------------
-  const sunLight = new THREE.DirectionalLight(0xffebd6, 5.0);
+  const sunLight = new THREE.DirectionalLight(SUN_COLOR, SUN_INTENSITY);
   sunLight.castShadow = true;
   sunLight.shadow.mapSize.set(SHADOW_MAP_SIZE, SHADOW_MAP_SIZE);
 
@@ -261,6 +393,60 @@ export function createGoldenHourEnvironment(
   scene.add(sunLight.target);
 
   let disposed = false;
+  let current: SkyConditions = { ...GOLDEN_HOUR_SKY };
+  const tint = new THREE.Color();
+
+  const rebake = () => {
+    const next = baker.bake(skySunDir, skyLook);
+    if (scene.environment === envTarget.texture) scene.environment = next.texture;
+    envTarget.dispose();
+    envTarget = next;
+    baked = { ...current };
+    lastBakeMs = performance.now();
+    pendingBake = false;
+  };
+
+  const setConditions = (c: SkyConditions) => {
+    if (disposed) return;
+    const e = c.elevationDeg;
+    const cloud = THREE.MathUtils.clamp(c.cloud, 0, 1);
+    const rain = THREE.MathUtils.clamp(c.rain, 0, 1);
+    current = { elevationDeg: e, azimuthDeg: c.azimuthDeg, cloud, rain };
+
+    // Sun: the light never comes from below the horizon (shadows stay sane at dawn / dusk); the sky's sun does
+    sunDirection.copy(sunDirectionUnit(Math.max(1, e), c.azimuthDeg));
+    skySunDir.copy(sunDirectionUnit(e, c.azimuthDeg));
+    lightRight.crossVectors(WORLD_UP, sunDirection).normalize();
+    lightUp.crossVectors(sunDirection, lightRight).normalize();
+    colorCurve(SUN_COLOR_KEYS, e, sunLight.color).lerp(tint.setHex(OVERCAST_SUN), 0.6 * cloud);
+    // Cloud blocks most direct sun; an overcast sky still leaves faint, soft shadows
+    sunLight.intensity = curve(SUN_INTENSITY_KEYS, e) * (1 - 0.88 * Math.pow(cloud, 1.5));
+
+    // Fill: an overcast sky lights everything from above
+    fillLight.color.setHex(FILL_SKY).lerp(tint.setHex(OVERCAST_FILL_SKY), cloud);
+    fillLight.groundColor.setHex(FILL_GROUND).lerp(tint.setHex(WET_FILL_GROUND), rain);
+    fillLight.intensity = curve(FILL_INTENSITY_KEYS, e) * (1 + 1.1 * cloud);
+
+    colorCurve(FOG_COLOR_KEYS, e, fog.color)
+      .lerp(tint.setHex(OVERCAST_FOG), 0.8 * cloud)
+      .lerp(tint.setHex(RAIN_FOG), rain);
+    // A low sun dims the overcast / rain haze too
+    if (cloud > 0 && e < 14) fog.color.multiplyScalar(1 - cloud * (1 - curve(ENV_INTENSITY_KEYS, e)));
+    fog.density = FOG_DENSITY * (1 + 1.2 * cloud) + 0.0022 * Math.pow(rain, 1.2);
+
+    scene.environmentIntensity = curve(ENV_INTENSITY_KEYS, e) * (1 - 0.25 * rain);
+    renderer.toneMappingExposure = curve(EXPOSURE_KEYS, e) * (1 + 0.3 * cloud);
+
+    skyLookFor(current, skyLook);
+    applySkyLook(sky, skySunDir, skyLook);
+    const dElev = Math.abs(e - baked.elevationDeg);
+    const dCloud = Math.abs(cloud - baked.cloud);
+    const dRain = Math.abs(rain - baked.rain);
+    if (dElev > 1 || Math.abs(c.azimuthDeg - baked.azimuthDeg) > 2 || dCloud > 0.05 || dRain > 0.05) pendingBake = true;
+    // A big jump (a new session) re-bakes at once; a slow drift waits for the minimum interval
+    const big = dElev > 8 || dCloud > 0.3 || dRain > 0.3;
+    if (pendingBake && (big || performance.now() - lastBakeMs > REBAKE_MIN_S * 1000)) rebake();
+  };
 
   return {
     sunLight,
@@ -288,7 +474,12 @@ export function createGoldenHourEnvironment(
 
       camera.getWorldPosition(scratch);
       sky.position.copy(scratch);
+      // Drifting clouds (the Sky shader skips them at zero coverage)
+      if (sky.material.uniforms.cloudCoverage.value > 0) sky.material.uniforms.time.value = performance.now() / 1000;
+      if (pendingBake && performance.now() - lastBakeMs > REBAKE_MIN_S * 1000) rebake();
     },
+
+    setConditions,
 
     dispose(): void {
       if (disposed) return;
@@ -302,6 +493,7 @@ export function createGoldenHourEnvironment(
       sky.material.dispose();
       sunLight.shadow.dispose();
       envTarget.dispose();
+      baker.dispose();
     },
   };
 }

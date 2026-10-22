@@ -35,6 +35,7 @@ export interface BuiltRwandaScene {
 // extras.collider = true), Terrain, Lake, Env_* (vegetation, canopies) and Prop_* (buildings, stands, gantry).
 // The other circuits (scripts/tracks/build_track.py) wrap a converted scan in `Track_Model` and append hidden
 // `Track_Collider_*` / `Track_Surface_*` physics meshes (extras.hidden = true); `track.meshUrl` names the file.
+// They also carry `Track_Kerbs_Visual`: the physics kerbs (Track_Surface_Kerb) drawn in red / white paint over the scan.
 
 // Flat overlays drawn on top of the asphalt / run-off; pulled towards the camera to avoid z-fighting.
 const DECAL_NODES: Record<string, number> = {
@@ -42,6 +43,7 @@ const DECAL_NODES: Record<string, number> = {
   Track_Pit_Markings: -2,
   Track_Runoff_Decals: -2,
   Track_Kerbs: -1,
+  Track_Kerbs_Visual: -1,
   Track_Runoff_Paint: -1,
 };
 const SHADOW_RECEIVE_ONLY = new Set([
@@ -54,6 +56,7 @@ const SHADOW_RECEIVE_ONLY = new Set([
   "Track_Pit_Markings",
   "Track_Runoff_Decals",
   "Track_Kerbs",
+  "Track_Kerbs_Visual",
 ]);
 
 const COLLIDER_DEBUG_COLOURS: Record<string, number> = {

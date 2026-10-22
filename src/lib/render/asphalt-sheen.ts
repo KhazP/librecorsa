@@ -24,6 +24,36 @@ const AGGREGATE_NORMAL_SCALE = 0.3;
 
 const maskCache = new WeakMap<BuiltTrackData, Map<string, RacingLineMask>>();
 
+/**
+ * How wet the asphalt looks, shared by every sheen material (one uniform object, so a single write reaches them all).
+ * Off the line and on the rubbered line separately: the cars dry the line first.
+ */
+const wetUniforms = {
+  uWetness: { value: 0 },
+  uLineWetness: { value: 0 },
+  uRainIntensity: { value: 0 },
+  uWetTime: { value: 0 },
+};
+
+/**
+ * Wet look of the track surface (0 dry … 1 soaked): darker, glossier asphalt with standing-water puddles,
+ * grazing-angle Fresnel reflections, and animated raindrop splash ripples when raining.
+ */
+export function setAsphaltWetness(
+  offLine: number,
+  onLine: number = offLine,
+  rainIntensity: number = 0,
+  dt: number = 1 / 60
+): void {
+  wetUniforms.uWetness.value = Math.min(1, Math.max(0, offLine));
+  wetUniforms.uLineWetness.value = Math.min(1, Math.max(0, onLine));
+  const rain = Math.min(1, Math.max(0, rainIntensity));
+  wetUniforms.uRainIntensity.value = rain;
+  if (rain > 0.001 && Number.isFinite(dt) && dt > 0) {
+    wetUniforms.uWetTime.value = (wetUniforms.uWetTime.value + Math.min(0.1, dt)) % 3600;
+  }
+}
+
 /** Racing line in world XZ, using the same lateral convention as the drawn racing line in scene-builder */
 function racingLinePoints(track: BuiltTrackData): Array<{ x: number; z: number }> {
   return track.samples.map((s) => {
@@ -138,6 +168,7 @@ export function createRacingLineMask(
 /**
  * Patches a MeshStandardMaterial in place: rubber-dependent roughness (0.78 -> 0.32) and darkening (x0.85),
  * plus a world-space aggregate normal bump (3 cm + 12 cm value noise, faded by pixel footprint and distance).
+ * Rain (`setAsphaltWetness`) darkens the asphalt and drops its roughness towards a wet gloss, patchy at metre scale.
  * Idempotent per material: calling it again simply replaces the earlier patch.
  */
 export function applyAsphaltSheen(material: THREE.MeshStandardMaterial, mask: RacingLineMask): void {
@@ -146,6 +177,7 @@ export function applyAsphaltSheen(material: THREE.MeshStandardMaterial, mask: Ra
     uMaskMin: { value: mask.worldMin },
     uMaskSize: { value: mask.worldSize },
     uAggregateNormalScale: { value: AGGREGATE_NORMAL_SCALE },
+    ...wetUniforms,
   };
 
   material.onBeforeCompile = (shader) => {
@@ -153,7 +185,7 @@ export function applyAsphaltSheen(material: THREE.MeshStandardMaterial, mask: Ra
     shader.vertexShader = patch(shader.vertexShader, VERTEX_PATCHES, "asphalt");
     shader.fragmentShader = patch(shader.fragmentShader, FRAGMENT_PATCHES, "asphalt");
   };
-  material.customProgramCacheKey = () => "asphalt-sheen-v1";
+  material.customProgramCacheKey = () => "asphalt-sheen-v3";
   material.needsUpdate = true;
 }
 
@@ -187,6 +219,10 @@ uniform sampler2D uRubberMask;
 uniform vec2 uMaskMin;
 uniform vec2 uMaskSize;
 uniform float uAggregateNormalScale;
+uniform float uWetness;
+uniform float uLineWetness;
+uniform float uRainIntensity;
+uniform float uWetTime;
 varying vec3 vVf26WorldPos;
 
 float vf26Hash( vec2 p ) {
@@ -205,6 +241,20 @@ float vf26ValueNoise( vec2 p ) {
 	float c = vf26Hash( i + vec2( 0.0, 1.0 ) );
 	float d = vf26Hash( i + vec2( 1.0, 1.0 ) );
 	return mix( mix( a, b, u.x ), mix( c, d, u.x ), u.y ) * 2.0 - 1.0;
+}
+
+// Animated concentric raindrop splash ripple height in world XZ
+float vf26RainSplash( vec2 worldXZ, float time, float intensity ) {
+	vec2 cell = floor( worldXZ * 2.8 );
+	vec2 local = fract( worldXZ * 2.8 ) - 0.5;
+	float h = vf26Hash( cell );
+	float phase = fract( time * ( 1.6 + 0.8 * h ) + h * 6.28318 );
+	vec2 center = ( vec2( vf26Hash( cell + 7.1 ), vf26Hash( cell + 19.3 ) ) - 0.5 ) * 0.45;
+	float dist = length( local - center );
+	float radius = phase * 0.42;
+	float ring = exp( -90.0 * ( dist - radius ) * ( dist - radius ) ) * sin( ( dist - radius ) * 55.0 );
+	float envelope = ( 1.0 - phase ) * smoothstep( 0.0, 0.08, phase );
+	return ring * envelope * intensity;
 }
 
 vec3 vf26PerturbNormal( vec3 eyePos, vec3 surfNorm, vec2 dHdxy, float faceDir ) {
@@ -230,6 +280,27 @@ float roughnessFactor = mix( 0.78, 0.32, vf26Rubber );
 	roughnessFactor *= mix( 1.0, texture2D( roughnessMap, vRoughnessMapUv ).g, 0.35 );
 #endif
 diffuseColor.rgb *= mix( 1.0, 0.85, vf26Rubber );
+// Rain: water fills the macro-texture pores (WetAlbedoReduction = 0.25 base + puddle/groove darkening),
+// standing water puddles flatten roughness to mirror gloss, and grazing view angles boost Fresnel reflection.
+float vf26WetRaw = mix( uWetness, uLineWetness, vf26Rubber );
+float vf26PuddleMask = 0.0;
+if ( vf26WetRaw > 0.0 ) {
+	float vf26PatchNoise = vf26ValueNoise( vVf26WorldPos.xz / 2.2 ) * 0.5 + 0.5;
+	float vf26FinePatch = vf26ValueNoise( vVf26WorldPos.xz / 0.65 ) * 0.5 + 0.5;
+	float vf26Wet = vf26WetRaw * mix( 0.72, 1.08, 0.7 * vf26PatchNoise + 0.3 * vf26FinePatch );
+	vf26Wet = clamp( vf26Wet, 0.0, 1.0 );
+	// Standing water puddles pool in low-frequency depressions off the crowned racing line
+	vf26PuddleMask = smoothstep( 0.52, 0.86, vf26Wet * ( 1.0 - 0.35 * vf26Rubber ) * ( 0.65 + 0.35 * vf26PatchNoise ) );
+	// WetAlbedoReduction: 25% base porosity darkening + extra darkening in rubbered groove & standing puddles
+	float vf26AlbedoReduction = 0.25 * smoothstep( 0.0, 0.35, vf26Wet ) + 0.18 * vf26Wet + 0.08 * vf26PuddleMask;
+	diffuseColor.rgb *= 1.0 - vf26AlbedoReduction;
+	// Grazing-angle wet Fresnel specular boost
+	vec3 vf26ViewDir = normalize( vViewPosition );
+	float vf26NdotV = clamp( abs( vf26ViewDir.y ), 0.0, 1.0 );
+	float vf26WetFresnel = pow( 1.0 - vf26NdotV, 3.0 ) * vf26Wet;
+	float vf26WetRough = mix( 0.14, 0.025, vf26PuddleMask );
+	roughnessFactor = mix( roughnessFactor, vf26WetRough, clamp( vf26Wet + 0.35 * vf26WetFresnel, 0.0, 1.0 ) );
+}
 `,
 	],
 	[
@@ -237,8 +308,13 @@ diffuseColor.rgb *= mix( 1.0, 0.85, vf26Rubber );
 		/* glsl */ `
 #include <normal_fragment_maps>
 vec2 vf26AggP = vVf26WorldPos.xz;
-// Amplitude 8 mm: about 3 to 4 degrees of tilt once the 0.3 gradient scale is applied
+// Amplitude 8 mm: about 3 to 4 degrees of tilt once the 0.3 gradient scale is applied; submerged in puddles
 float vf26AggH = 0.008 * ( 0.6 * vf26ValueNoise( vf26AggP / 0.03 ) + 0.4 * vf26ValueNoise( vf26AggP / 0.12 ) );
+vf26AggH *= mix( 1.0, 0.12, vf26PuddleMask );
+if ( uRainIntensity > 0.02 && vf26WetRaw > 0.15 ) {
+	float vf26SplashFade = ( 1.0 - smoothstep( 12.0, 42.0, length( vViewPosition ) ) ) * clamp( vf26WetRaw, 0.0, 1.0 );
+	vf26AggH += 0.0035 * vf26RainSplash( vf26AggP, uWetTime, uRainIntensity ) * vf26SplashFade;
+}
 float vf26AggAa = 1.0 - smoothstep( 0.25, 0.5, max( fwidth( vf26AggP.x ), fwidth( vf26AggP.y ) ) / 0.03 );
 float vf26AggFade = vf26AggAa * ( 1.0 - smoothstep( 30.0, 90.0, length( vViewPosition ) ) );
 vec2 vf26AggGrad = vec2( dFdx( vf26AggH ), dFdy( vf26AggH ) ) * uAggregateNormalScale * vf26AggFade;

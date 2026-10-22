@@ -48,6 +48,8 @@ export class SimVisualFxManager {
   private particleCursor = 0;
   private emitTimer = 0;
   private dummy = new THREE.Object3D();
+  /** Road wetness under the player's car (0..1): rear-wheel spray at speed */
+  private wetness = 0;
 
   // Multiplayer / AI Opponent 3D cars
   private opponentCars = new Map<string, { rig: SimCarRig; vehicle: VehicleModelId | undefined }>();
@@ -130,6 +132,11 @@ export class SimVisualFxManager {
     this.group.add(this.particleMesh);
   }
 
+  /** Wetness of the road under the player's car (weather.ts): spray behind the rear wheels, no smoke */
+  public setWetness(wetness: number): void {
+    this.wetness = THREE.MathUtils.clamp(wetness, 0, 1);
+  }
+
   /**
    * Updates tire skidmarks, smoke/gravel particles, and opponent 3D cars each frame.
    */
@@ -187,6 +194,26 @@ export class SimVisualFxManager {
         const w = wheels[wIdx];
         if (w.fzN <= 100) continue;
 
+        // Spray: front and rear tyres + central diffuser throw a rooster-tail plume of water up behind the car
+        if (this.wetness > 0.14 && carSpeedMs > 12 && w.surfaceType !== 'grass') {
+          const isRear = wIdx >= 2;
+          const prob = this.wetness * Math.min(1, carSpeedMs / 42) * (isRear ? 1 : 0.45);
+          if (Math.random() < prob) {
+            this.spawnParticle(
+              w.worldPos.x - carForward.x * (isRear ? 0.45 : 0.25),
+              w.zRoad + (isRear ? 0.28 : 0.16),
+              w.worldPos.z - carForward.z * (isRear ? 0.45 : 0.25),
+              carForward,
+              carUp,
+              carSpeedMs * (isRear ? 1.65 : 1.15),
+              isRear ? 0.55 : 0.35,
+              isRear ? 3.8 : 2.1,
+              isRear ? 0.82 : 0.52,
+              0xd4dbe1
+            );
+          }
+          continue;
+        }
         if (w.combinedSlipNorm > 0.88 && w.surfaceType === 'asphalt') {
           this.spawnParticle(
             w.worldPos.x,
@@ -477,6 +504,28 @@ export class SimVisualFxManager {
       };
 
       carRig.updateFromTelemetry(syntheticTelemetry, pitchRad, rollRad, wheelRot);
+
+      // Opponent car rooster-tail water spray plume in wet conditions
+      if (this.wetness > 0.16 && !peer.ghost && peer.speedKmh > 55) {
+        const peerSpeedMs = peer.speedKmh / 3.6;
+        if (Math.random() < this.wetness * Math.min(1, peerSpeedMs / 48) * 0.65) {
+          const peerFwd = new THREE.Vector3(0, 0, 1).applyQuaternion(peer.quaternion);
+          const peerUp = new THREE.Vector3(0, 1, 0).applyQuaternion(peer.quaternion);
+          const sideJitter = (Math.random() - 0.5) * 1.3;
+          this.spawnParticle(
+            peer.position.x - peerFwd.x * 2.1 + peerFwd.z * sideJitter,
+            peer.position.y + 0.32,
+            peer.position.z - peerFwd.z * 2.1 - peerFwd.x * sideJitter,
+            peerFwd,
+            peerUp,
+            peerSpeedMs * 1.55,
+            0.6,
+            4.1,
+            0.85,
+            0xd4dbe1
+          );
+        }
+      }
     }
 
     for (const [peerId, { rig }] of this.opponentCars.entries()) {

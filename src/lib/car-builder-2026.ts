@@ -48,6 +48,8 @@ const TIRE_STRIPE_COLORS: Record<TireCompound, number> = {
   soft: 0xe10600, // Pirelli Soft Red
   medium: 0xffd700, // Pirelli Medium Yellow
   hard: 0xf8fafc, // Pirelli Hard White
+  intermediate: 0x3ccb4a, // Pirelli Intermediate Green
+  wet: 0x2e7bff, // Pirelli Full Wet Blue
 };
 
 function createCarbonWeaveTexture(): THREE.CanvasTexture {
