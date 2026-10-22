@@ -24,7 +24,7 @@
     "layout": "2018 layout",
     "country": "China",
     "city": "Shanghai",
-    "lengthM": 5401.32,
+    "lengthM": 5435.88,
     "turns": 11,
     "direction": "clockwise",
     "dataUrl": "/tracks/shanghai/track_data.json",
