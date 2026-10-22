@@ -927,6 +927,7 @@ export class F12026CarSim implements SimulatorCar {
     }
     v.wetness = Math.min(1, Math.max(0, sample.wetness));
     v.ambientC = sample.ambientC;
+    v.windWorld.set(Number.isFinite(sample.windVxMs) ? sample.windVxMs! : 0, 0, Number.isFinite(sample.windVzMs) ? sample.windVzMs! : 0);
     // Warmer air is thinner (ideal gas, about the 27 °C the cars are calibrated at)
     v.airDensity = AIR_DENSITY * ((AMBIENT_C + 273.15) / (sample.ambientC + 273.15));
   }

@@ -593,6 +593,7 @@ const _qd = new THREE.Quaternion();
 const _qi = new THREE.Quaternion();
 const _w2 = new THREE.Vector3();
 const _rxd = new THREE.Vector3();
+const _air = new THREE.Vector3();
 
 export class VehiclePhysics {
   public static readonly FIXED_DT = 0.002;
@@ -677,6 +678,8 @@ export class VehiclePhysics {
   public waterMm = 0;
   public wheelWaterMm: [number, number, number, number] = [0, 0, 0, 0];
   public wetness = 0;
+  /** Wind over the ground, world frame (m/s): the aero sees the velocity through the air */
+  public windWorld = new THREE.Vector3();
   /** Simulation realism (tyre wear, temperature grip, wet severity) */
   public realism: SimRealismFlags = { ...FULL_REALISM };
 
@@ -2168,7 +2171,8 @@ export class VehiclePhysics {
     const pitchDelta = rakeDeg - this.staticRakeDeg;
     const wake = this.aeroWake;
 
-    const vF = this.velocity.dot(_ez);
+    const air = _air.copy(this.velocity).sub(this.windWorld);
+    const vF = air.dot(_ez);
     const q = 0.5 * this.airDensity * vF * vF;
     let down = 0;
     let front = 0;
@@ -2211,9 +2215,9 @@ export class VehiclePhysics {
       this.addForceAt(_f, _p);
     }
 
-    const speed = this.velocity.length();
+    const speed = air.length();
     const dragN = 0.5 * this.airDensity * speed * speed * drag;
-    if (speed > 1e-3) this.force.addScaledVector(this.velocity, -dragN / speed);
+    if (speed > 1e-3) this.force.addScaledVector(air, -dragN / speed);
 
     this.aeroDownN = down;
     this.aeroFrontN = front;
@@ -2240,10 +2244,11 @@ export class VehiclePhysics {
     const pitchDelta = rakeDeg - this.staticRakeDeg;
     const wake = this.aeroWake;
 
-    const vF = this.velocity.dot(_ez);
+    const air = _air.copy(this.velocity).sub(this.windWorld);
+    const vF = air.dot(_ez);
     const q = 0.5 * this.airDensity * vF * vF;
     const rollDeg = Math.asin(THREE.MathUtils.clamp(_ex.y, -1, 1)) * RAD2DEG;
-    const yawDeg = Math.abs(vF) > 1 ? Math.atan2(this.velocity.dot(_ex), Math.abs(vF)) * RAD2DEG : 0;
+    const yawDeg = Math.abs(vF) > 1 ? Math.atan2(air.dot(_ex), Math.abs(vF)) * RAD2DEG : 0;
     const ml = this.mapLuts!;
     const clMult = rhTable(map, map.cl, this.rideFront, this.rideRear) * ml.rollCl.evaluate(rollDeg) * ml.yawCl.evaluate(yawDeg);
     const cdMult = rhTable(map, map.cd, this.rideFront, this.rideRear) * ml.rollCd.evaluate(rollDeg) * ml.yawCd.evaluate(yawDeg);
@@ -2270,7 +2275,7 @@ export class VehiclePhysics {
     }
     front *= wake.frontDownforceMultiplier;
     rear *= wake.rearDownforceMultiplier;
-    const speed = this.velocity.length();
+    const speed = air.length();
     const drag = 0.5 * this.airDensity * speed * speed * cdA * wake.dragMultiplier;
     const lag = (tau: number) => (tau > 0 ? Math.min(1, h / tau) : 1);
     this.mapAeroFrontN += (front - this.mapAeroFrontN) * lag(map.frontDelayS);
@@ -2285,7 +2290,7 @@ export class VehiclePhysics {
       _p.set(0, this.floorOffsetY, z).applyQuaternion(this.quaternion).add(this.position);
       this.addForceAt(_f, _p);
     }
-    if (speed > 1e-3) this.force.addScaledVector(this.velocity, -this.mapAeroDragN / speed);
+    if (speed > 1e-3) this.force.addScaledVector(air, -this.mapAeroDragN / speed);
     this.aeroDownN = this.mapAeroFrontN + this.mapAeroRearN;
     this.aeroFrontN = this.mapAeroFrontN;
     this.aeroDragN = this.mapAeroDragN;
