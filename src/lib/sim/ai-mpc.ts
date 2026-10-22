@@ -56,6 +56,13 @@ const wrapAngle = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
 
 export class RacingLineDriver {
   private yawRateInteg = 0;
+  /**
+   * AI tuning (`ai-tuning.ts`): a target speed along the lap (m/s, any uniform spacing) used instead of
+   * `profile.speedMs`, e.g. with earlier braking points or slower corners; null = the profile
+   */
+  public targetSpeedMs: Float64Array | null = null;
+  /** AI tuning: multiplier on the path-following bandwidth (1 = as tuned) */
+  public steerGain = 1;
 
   reset(): void {
     this.yawRateInteg = 0;
@@ -88,7 +95,7 @@ export class RacingLineDriver {
     const kappa = at(profile.curvature, currentS + Math.max(2, v * 0.12));
 
     // ë + 2ζω·ė + ω²·e = 0 with ė = v·sin(courseErr)  →  yaw-rate reference (+ = right)
-    const omega = THREE.MathUtils.clamp(2.0 - v * 0.011, 1.0, 1.8);
+    const omega = THREE.MathUtils.clamp(2.0 - v * 0.011, 1.0, 1.8) * this.steerGain;
     const zeta = 0.9;
     const eClamped = THREE.MathUtils.clamp(latErr, -3.5, 3.5);
     const courseClamped = THREE.MathUtils.clamp(courseErr, -0.35, 0.35);
@@ -122,8 +129,9 @@ export class RacingLineDriver {
       Math.abs(kappa) > 0.004 && Math.abs(latErr) > 1.5 ? Math.max(0.85, 1 - 0.03 * (Math.abs(latErr) - 1.5)) : 1;
     const pace = (params.paceScale ?? 1) * wideScale;
     const cap = params.speedCapMs ?? Infinity;
-    const vRef = Math.min(cap, at(profile.speedMs, sRef) * pace);
-    const vAhead = Math.min(cap, at(profile.speedMs, sRef + 4) * pace);
+    const speedMs = this.targetSpeedMs ?? profile.speedMs;
+    const vRef = Math.min(cap, at(speedMs, sRef) * pace);
+    const vAhead = Math.min(cap, at(speedMs, sRef + 4) * pace);
     const aFeedforward = (vAhead * vAhead - vRef * vRef) / 8;
     const aCmd = aFeedforward + 2.2 * (vRef - v);
 
@@ -148,7 +156,7 @@ export class RacingLineDriver {
     // ---- Active aero & ERS ------------------------------------------------------
     // X-mode only where allowed and while no braking is needed before the wing is closed again
     const closeDist = v * params.aeroTransitionS + 40;
-    const brakingAhead = at(profile.speedMs, currentS + closeDist) < v - 1.5;
+    const brakingAhead = at(speedMs, currentS + closeDist) < v - 1.5;
     const aeroMode: ActiveAeroMode =
       sample.drsZone && !brakingAhead && brakeCmd === 0 && Math.abs(kappa) < 0.0025 && Math.abs(steerCmd) < 0.12 && v > 42
         ? 'X_MODE'

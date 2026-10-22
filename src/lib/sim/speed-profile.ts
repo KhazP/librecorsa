@@ -70,6 +70,11 @@ export function aiLineOffsetM(
   return norm * sample.width * AI_LINE_WIDTH_SCALE;
 }
 
+/** The planning model on tyres that hold `grip` × its grip, e.g. rain tyres on a wet road */
+export function withPlanningGrip(car: SpeedProfileCarModel, grip: number): SpeedProfileCarModel {
+  return grip === 1 ? car : { ...car, muLat: car.muLat * grip, muLong: car.muLong * grip };
+}
+
 /** Air density at the circuit (Bugesera ≈ 1400 m ASL) used for nominal profiles */
 export const NOMINAL_AIR_DENSITY = 1.06;
 

@@ -16,9 +16,11 @@
  */
 
 import * as THREE from 'three';
-import type { VehicleModelId } from '@/types/f1';
+import type { TireCompound, VehicleModelId } from '@/types/f1';
+import { sanitizeWeatherSync, type WeatherSyncState } from './weather';
 
 const PEER_VEHICLES: readonly VehicleModelId[] = ['vf26', 'f12026-car', 'amg-gt3'];
+const PEER_COMPOUNDS: readonly TireCompound[] = ['soft', 'medium', 'hard', 'intermediate', 'wet'];
 /** Network input is untrusted: only a known model id is kept */
 const asPeerVehicle = (v: unknown): VehicleModelId | undefined =>
   PEER_VEHICLES.includes(v as VehicleModelId) ? (v as VehicleModelId) : undefined;
@@ -75,8 +77,8 @@ export interface PeerRaceProgress {
   last?: number | null;
   /** Time penalties served at the flag (s) */
   pen?: number;
-  /** Tyre compound: soft / medium / hard */
-  cmp?: 'soft' | 'medium' | 'hard';
+  /** Tyre compound: soft / medium / hard / intermediate / wet */
+  cmp?: TireCompound;
 }
 
 export interface InterpolatedPeerState {
@@ -102,6 +104,10 @@ export interface InterpolatedPeerState {
   race?: PeerRaceProgress;
   /** Drawn translucent and never collides (the personal-best ghost) */
   ghost?: boolean;
+  /** Yaw rate (rad/s, + turning right), for car-to-car contact */
+  yawRateRadS?: number;
+  /** False while the pose is a guess (packets stale, just appeared, just jumped): no contact then */
+  contactReady?: boolean;
 }
 
 export type CollisionMode = 'on' | 'ghost_lap1' | 'off';
@@ -131,6 +137,8 @@ export interface LobbyState {
   players: LobbyPlayer[];
   /** The race in progress, if any */
   race: RaceStartInfo | null;
+  /** The host's weather and clock (host-authoritative; guests ease theirs to it) */
+  weather?: WeatherSyncState;
 }
 
 /** Everything every client needs to run the same start: the lights are timed on the host's clock */
@@ -264,7 +272,7 @@ function sanitizeRace(v: unknown): PeerRaceProgress | undefined {
     best: finite(r.best, 0, 1e7),
     last: finite(r.last, 0, 1e7),
     pen: finite(r.pen, 0, 600) ?? undefined,
-    cmp: r.cmp === 'soft' || r.cmp === 'medium' || r.cmp === 'hard' ? r.cmp : undefined,
+    cmp: PEER_COMPOUNDS.includes(r.cmp as TireCompound) ? (r.cmp as TireCompound) : undefined,
   };
 }
 
@@ -295,6 +303,7 @@ function sanitizeLobby(v: unknown): LobbyState | null {
   if (typeof l.hostId !== 'string' || !Array.isArray(l.players)) return null;
   return {
     hostId: l.hostId.slice(0, 64),
+    weather: sanitizeWeatherSync(l.weather) ?? undefined,
     settings: {
       trackId: clampStr(st.trackId, 64, 'rwanda'),
       laps: Math.round(finite(st.laps, 1, 99) ?? 5),
@@ -388,6 +397,15 @@ interface PeerSnapshotBuffer {
   /** Newest sender timestamp accepted (ms, the sender's clock): older packets arrived out of order */
   lastSenderTimestampMs: number;
   renderedState: InterpolatedPeerState;
+  /** Present-time prediction (human peers): the blended-out correction, the newest snapshot used, the last frame */
+  predict: {
+    corrPos: THREE.Vector3;
+    corrQuat: THREE.Quaternion;
+    newestTs: number;
+    lastMs: number;
+    graceUntilMs: number;
+    primed: boolean;
+  };
 }
 
 interface WebRtcPeerEntry {
@@ -414,6 +432,19 @@ const GOOGLE_STUN_SERVERS: RTCIceServer[] = [
 const CLOCK_OFFSET_SNAP_MS = 250;
 /** A sender timestamp this far (ms) behind the newest accepted one is a restarted clock, not an out-of-order packet */
 const SENDER_CLOCK_RESTART_MS = 1000;
+/**
+ * Remote players are drawn and collided where they are now: the newest packet carried forward by its age plus the
+ * one-way latency, at most this far (s). Past it the packets are stale and the car can't be touched.
+ */
+const PREDICT_MAX_S = 0.3;
+/** A new packet's correction to the prediction blends out over this time constant (s) */
+const PREDICT_SMOOTH_S = 0.1;
+/** A correction this large (m) is a reset or teleport: snap to it, and hold contact off for PREDICT_GRACE_MS */
+const PREDICT_SNAP_M = 3;
+const PREDICT_GRACE_MS = 400;
+/** The acceleration the prediction carries forward is clamped to this (m/s²) */
+const PREDICT_MAX_ACCEL_MS2 = 60;
+const AXIS_Y = new THREE.Vector3(0, 1, 0);
 
 export class MultiplayerSyncManager {
   public readonly localPeerId: string;
@@ -443,6 +474,8 @@ export class MultiplayerSyncManager {
   public hostId: string | null = null;
   public lobby: LobbyState | null = null;
   public onLobbyChange?: (lobby: LobbyState | null) => void;
+  /** Host: the session's weather, sent with every lobby update so the guests drive in the same conditions */
+  public weatherProvider?: () => WeatherSyncState | null;
   public onRaceStart?: (start: RaceStartInfo) => void;
   public onRaceAbort?: (id: string) => void;
   private identity: DriverIdentity = { name: 'Driver', code: 'DRV', color: '#E10600' };
@@ -465,6 +498,14 @@ export class MultiplayerSyncManager {
   // Reusable math temporaries
   private tempQuat0 = new THREE.Quaternion();
   private tempQuat1 = new THREE.Quaternion();
+  private tempQuat2 = new THREE.Quaternion();
+  private tempVec0 = new THREE.Vector3();
+  private tempVec1 = new THREE.Vector3();
+  /**
+   * Human peers drawn where they are now (`predictPeer`) rather than interpolated 65 ms + latency in the past: at
+   * racing speed that is 5 m or more, so cars touched where the other car no longer was and missed where it was.
+   */
+  public predictRemotePlayers = true;
   private tempUp = new THREE.Vector3(0, 1, 0);
   private tempRight = new THREE.Vector3();
   private tempForward = new THREE.Vector3();
@@ -1005,6 +1046,7 @@ export class MultiplayerSyncManager {
       settings: { ...this.lobbySettings },
       players: this.lobbyPlayers(),
       race: this.activeRace,
+      weather: this.weatherProvider?.() ?? undefined,
     };
     this.setLobby(lobby);
     this.sendControl({ type: 'lobby', lobby });
@@ -1302,6 +1344,14 @@ export class MultiplayerSyncManager {
           speedKmh: pkt.speedKmh,
           isAiPeer,
         },
+        predict: {
+          corrPos: new THREE.Vector3(),
+          corrQuat: new THREE.Quaternion(),
+          newestTs: -Infinity,
+          lastMs: 0,
+          graceUntilMs: 0,
+          primed: false,
+        },
       };
       this.peers.set(pkt.peerId, buffer);
     }
@@ -1419,11 +1469,102 @@ export class MultiplayerSyncManager {
         this.peers.delete(peerId);
         continue;
       }
-      this.interpolatePeer(buf, renderTimeMs);
+      if (this.predictRemotePlayers && !buf.isAiPeer) this.predictPeer(buf, nowMs);
+      else this.interpolatePeer(buf, renderTimeMs);
       activeStates.push(buf.renderedState);
     }
 
     return activeStates;
+  }
+
+  /** Round-trip time to a peer (ms), for transports that don't ping (and tests); the pings overwrite it */
+  public setPeerRttMs(peerId: string, rttMs: number): void {
+    if (Number.isFinite(rttMs) && rttMs >= 0) this.rtts.set(peerId, rttMs);
+  }
+
+  /**
+   * A human peer where it is now: the newest snapshot carried forward by its age plus the one-way latency (half the
+   * measured round trip), at the acceleration between the last two snapshots, the heading turned at the yaw rate.
+   * What you see is then what you can touch. The jump a new packet makes in the prediction blends out over
+   * PREDICT_SMOOTH_S; a big one (a reset) snaps and holds contact off for a moment.
+   */
+  private predictPeer(buf: PeerSnapshotBuffer, nowMs: number): void {
+    const snaps = buf.snapshots;
+    const out = buf.renderedState;
+    const p = buf.predict;
+    if (snaps.length === 0) {
+      out.contactReady = false;
+      return;
+    }
+    const s1 = snaps[snaps.length - 1];
+    const s0 = snaps.length > 1 ? snaps[snaps.length - 2] : null;
+    const oneWayMs = (this.rtts.get(buf.peerId) ?? 0) / 2;
+    const ageS = (nowMs - s1.timestampMs + oneWayMs) / 1000;
+    const h = Math.min(PREDICT_MAX_S, Math.max(0, ageS));
+    let ax = 0;
+    let ay = 0;
+    let az = 0;
+    if (s0) {
+      const d = (s1.timestampMs - s0.timestampMs) / 1000;
+      if (d > 0.005 && d < 0.25) {
+        ax = (s1.linVel[0] - s0.linVel[0]) / d;
+        ay = (s1.linVel[1] - s0.linVel[1]) / d;
+        az = (s1.linVel[2] - s0.linVel[2]) / d;
+        const a = Math.hypot(ax, ay, az);
+        if (a > PREDICT_MAX_ACCEL_MS2) {
+          const k = PREDICT_MAX_ACCEL_MS2 / a;
+          ax *= k;
+          ay *= k;
+          az *= k;
+        }
+      }
+    }
+    const yawRate = Number.isFinite(s1.angVel?.[1]) ? s1.angVel[1] : 0;
+    // Raw prediction (a yaw rate + is turning right: clockwise about +Y)
+    const rawPos = this.tempVec0.set(
+      s1.pos[0] + s1.linVel[0] * h + 0.5 * ax * h * h,
+      s1.pos[1] + s1.linVel[1] * h + 0.5 * ay * h * h,
+      s1.pos[2] + s1.linVel[2] * h + 0.5 * az * h * h
+    );
+    const rawQuat = this.tempQuat0.setFromAxisAngle(AXIS_Y, -yawRate * h).multiply(this.tempQuat1.set(...s1.quat));
+
+    const frameS = p.lastMs > 0 ? Math.min(0.1, Math.max(0, (nowMs - p.lastMs) / 1000)) : 0;
+    if (!p.primed) {
+      p.corrPos.set(0, 0, 0);
+      p.corrQuat.identity();
+      p.graceUntilMs = nowMs + PREDICT_GRACE_MS;
+      p.primed = true;
+    } else if (s1.timestampMs !== p.newestTs) {
+      // A new packet: carry on from where the car was shown, moved on over this frame
+      const shown = this.tempVec1.copy(out.position).addScaledVector(out.linearVelocity, frameS);
+      p.corrPos.copy(shown).sub(rawPos);
+      if (p.corrPos.length() > PREDICT_SNAP_M) {
+        p.corrPos.set(0, 0, 0);
+        p.corrQuat.identity();
+        p.graceUntilMs = nowMs + PREDICT_GRACE_MS;
+      } else {
+        const shownQuat = this.tempQuat1.setFromAxisAngle(AXIS_Y, -(out.yawRateRadS ?? 0) * frameS).multiply(out.quaternion);
+        p.corrQuat.copy(shownQuat).multiply(this.tempQuat2.copy(rawQuat).invert());
+      }
+    } else {
+      const keep = Math.exp(-frameS / PREDICT_SMOOTH_S);
+      p.corrPos.multiplyScalar(keep);
+      p.corrQuat.slerp(this.tempQuat1.identity(), 1 - keep);
+    }
+    p.newestTs = s1.timestampMs;
+    p.lastMs = nowMs;
+
+    out.position.copy(rawPos).add(p.corrPos);
+    out.quaternion.copy(p.corrQuat).multiply(rawQuat);
+    out.linearVelocity.set(s1.linVel[0] + ax * h, s1.linVel[1] + ay * h, s1.linVel[2] + az * h);
+    out.yawRateRadS = yawRate;
+    out.steerAngle = s1.steerAngle;
+    out.wheelRPMs = [...s1.wheelRPMs];
+    out.throttle = s1.throttle;
+    out.brake = s1.brake;
+    out.trackS = s1.trackS;
+    out.speedKmh = s1.speedKmh;
+    out.contactReady = s0 !== null && ageS <= PREDICT_MAX_S && nowMs >= p.graceUntilMs;
   }
 
   /**

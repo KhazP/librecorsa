@@ -1,0 +1,15 @@
+{
+  "description": "AI defaults for the GT3 class (Mercedes-AMG GT3). Heavier cars on less downforce: a little more racing room accepted, a little more care over crests.",
+  "params": {
+    "pace": 1,
+    "brakeMargin": 0,
+    "apexSpeedScale": 1,
+    "intMarginM": 0,
+    "extMarginM": 0,
+    "steerGain": 1,
+    "overtakeCaution": 0.25,
+    "defend": 0.5,
+    "bumpCaution": 0.2,
+    "consistency": 0.88
+  }
+}

@@ -17,22 +17,32 @@
  *
  * Queries are vertical rays (the wheels probe straight down), answered from a uniform XZ grid of
  * world-space triangles, so a query costs a cell lookup plus a handful of 2D triangle tests.
+ *
+ * Each surface kind's physics comes from the track's surface table (track-surfaces.ts). Its ripple (kerb
+ * serrations, grass and gravel bumps) is added to the contact height analytically: along the surface from the
+ * mesh's `TEXCOORD_0` u (× `userData.uvScaleM` metres, default `DEFAULT_UV_SCALE_M`), faded in across it by
+ * sin(π·v), as the kerb's hump rises from both edges.
  */
 
 import * as THREE from 'three';
+import {
+  DEFAULT_SURFACE_TABLE,
+  isTrackSurfaceKind,
+  surfaceRippleM,
+  type SurfaceProps,
+  type SurfaceTable,
+  type TrackSurfaceKind,
+} from '../track-surfaces';
 
-export type TrackSurfaceKind = 'road' | 'kerb' | 'sausage' | 'runoff' | 'pitlane' | 'grass' | 'gravel';
+export type { TrackSurfaceKind, SurfaceProps } from '../track-surfaces';
 
 /** Grip when a node has `userData.surface` but no `userData.grip` */
-export const DEFAULT_SURFACE_GRIP: Record<TrackSurfaceKind, number> = {
-  road: 1,
-  kerb: 0.96,
-  sausage: 0.85,
-  runoff: 0.75,
-  pitlane: 0.97,
-  grass: 0.6,
-  gravel: 0.45,
-};
+export const DEFAULT_SURFACE_GRIP = Object.fromEntries(
+  Object.entries(DEFAULT_SURFACE_TABLE).map(([k, v]) => [k, v.friction])
+) as Record<TrackSurfaceKind, number>;
+
+/** Metres along a surface per unit of its texture u, when the node has no `userData.uvScaleM` (the kerb texture's repeat) */
+const DEFAULT_UV_SCALE_M = 6;
 
 /** Surfaces allowed to raise the contact above the road collider */
 const RAISED_SURFACES: ReadonlySet<TrackSurfaceKind> = new Set(['kerb', 'sausage']);
@@ -49,8 +59,10 @@ export interface GroundHit {
   ny: number;
   nz: number;
   surface: TrackSurfaceKind;
-  /** `userData.grip` of the surface (or its default) */
+  /** `userData.grip` of the surface (or its table friction) */
   grip: number;
+  /** The surface's entry in the track's surface table */
+  props: SurfaceProps;
   /** Name of the node the surface tags came from */
   source: string;
 }
@@ -66,8 +78,11 @@ interface Layer {
   isRoadCollider: boolean;
   surface: TrackSurfaceKind;
   grip: number;
+  props: SurfaceProps;
   /** Explicitly tagged with `userData.surface` */
   tagged: boolean;
+  /** Metres along the surface per texture u; 0 when the layer has no ripple */
+  uvScaleM: number;
 }
 
 export interface ColliderLayerSource {
@@ -79,13 +94,16 @@ export interface ColliderLayerSource {
 }
 
 function asSurface(v: unknown): TrackSurfaceKind | null {
-  return typeof v === 'string' && v in DEFAULT_SURFACE_GRIP ? (v as TrackSurfaceKind) : null;
+  return isTrackSurfaceKind(v) ? v : null;
 }
 
 export class TrackColliderQuery implements GroundQuery {
   /** Triangles: 9 floats each (a, b, c world positions) */
   private readonly tris: Float32Array;
   private readonly triLayer: Uint8Array;
+  /** Per triangle, its offset into `triUV` (6 floats: u, v of a, b, c), or −1 when its layer has no ripple or no UVs */
+  private readonly triUVAt: Int32Array;
+  private readonly triUV: Float32Array;
   /** Precomputed unit normals (3 floats each) */
   private readonly triNormal: Float32Array;
   /** Precomputed smooth vertex normals per triangle (9 floats each: n0, n1, n2) */
@@ -104,7 +122,7 @@ export class TrackColliderQuery implements GroundQuery {
    * Build from the loaded track root: `Track_Collider_Road` plus every node tagged `userData.surface`.
    * Throws when the road collider is missing.
    */
-  static fromTrackRoot(root: THREE.Object3D): TrackColliderQuery {
+  static fromTrackRoot(root: THREE.Object3D, table: SurfaceTable = DEFAULT_SURFACE_TABLE): TrackColliderQuery {
     root.updateMatrixWorld(true);
     const sources: ColliderLayerSource[] = [];
     const found: { road?: THREE.Object3D } = {};
@@ -114,13 +132,15 @@ export class TrackColliderQuery implements GroundQuery {
     });
     if (!found.road) throw new Error('TrackColliderQuery: Track_Collider_Road not found under the track root');
     sources.unshift({ object: found.road, isRoadCollider: true });
-    return new TrackColliderQuery(sources);
+    return new TrackColliderQuery(sources, table);
   }
 
-  constructor(sources: ColliderLayerSource[]) {
+  constructor(sources: ColliderLayerSource[], table: SurfaceTable = DEFAULT_SURFACE_TABLE) {
     this.layers = [];
     const tri: number[] = [];
     const layerOf: number[] = [];
+    const uvAt: number[] = [];
+    const uvs: number[] = [];
     const a = new THREE.Vector3();
     const b = new THREE.Vector3();
     const c = new THREE.Vector3();
@@ -130,10 +150,13 @@ export class TrackColliderQuery implements GroundQuery {
       const isRoadCollider = src.isRoadCollider ?? ud.collider === 'road';
       const tagged = asSurface(ud.surface);
       const surface = src.surface ?? tagged ?? 'road';
-      const grip = src.grip ?? (typeof ud.grip === 'number' ? ud.grip : DEFAULT_SURFACE_GRIP[surface]);
+      const props = table[surface];
+      const grip = src.grip ?? (typeof ud.grip === 'number' ? ud.grip : props.friction);
+      const ripple = !isRoadCollider && props.bumpHeightM > 0 && props.bumpLengthM > 0;
+      const uvScaleM = ripple ? (typeof ud.uvScaleM === 'number' ? ud.uvScaleM : DEFAULT_UV_SCALE_M) : 0;
       if (this.layers.length >= 255) throw new Error('TrackColliderQuery: too many layers');
       const li = this.layers.length;
-      this.layers.push({ name: src.object.name, isRoadCollider, surface, grip, tagged: !!(src.surface ?? tagged) });
+      this.layers.push({ name: src.object.name, isRoadCollider, surface, grip, props, tagged: !!(src.surface ?? tagged), uvScaleM });
 
       src.object.updateWorldMatrix(true, true);
       src.object.traverse((o) => {
@@ -144,6 +167,7 @@ export class TrackColliderQuery implements GroundQuery {
         const index = geom.getIndex();
         const n = index ? index.count : pos.count;
         const m = o.matrixWorld;
+        const uv = uvScaleM > 0 ? geom.getAttribute('uv') : undefined;
         for (let i = 0; i + 2 < n; i += 3) {
           const i0 = index ? index.getX(i) : i;
           const i1 = index ? index.getX(i + 1) : i + 1;
@@ -153,12 +177,20 @@ export class TrackColliderQuery implements GroundQuery {
           c.fromBufferAttribute(pos, i2).applyMatrix4(m);
           tri.push(a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z);
           layerOf.push(li);
+          if (uv) {
+            uvAt.push(uvs.length);
+            uvs.push(uv.getX(i0), uv.getY(i0), uv.getX(i1), uv.getY(i1), uv.getX(i2), uv.getY(i2));
+          } else {
+            uvAt.push(-1);
+          }
         }
       });
     }
 
     this.tris = Float32Array.from(tri);
     this.triLayer = Uint8Array.from(layerOf);
+    this.triUVAt = Int32Array.from(uvAt);
+    this.triUV = Float32Array.from(uvs);
     this.triangleCount = layerOf.length;
 
     // Normals (facing up); drop vertical / degenerate triangles from the grid (walls, skirts)
@@ -439,6 +471,17 @@ export class TrackColliderQuery implements GroundQuery {
     }
     const tagLayer = this.layers[this.triLayer[bestTagT >= 0 ? bestTagT : contactT]];
 
+    // Ripple of the surface the wheel stands on (kerb serrations, grass and gravel bumps)
+    const contactLayer = this.layers[this.triLayer[contactT]];
+    const uo = this.triUVAt[contactT];
+    if (contactLayer.uvScaleM > 0 && uo >= 0) {
+      const uv = this.triUV;
+      const bw = 1 - contactU - contactV;
+      const u = bw * uv[uo] + contactU * uv[uo + 2] + contactV * uv[uo + 4];
+      const v = bw * uv[uo + 1] + contactU * uv[uo + 3] + contactV * uv[uo + 5];
+      contactH += surfaceRippleM(contactLayer.props, u * contactLayer.uvScaleM, Math.sin(Math.PI * Math.min(1, Math.max(0, v))));
+    }
+
     const vo = contactT * 9;
     const vn = this.triVertNormal;
     const w = 1 - contactU - contactV;
@@ -453,6 +496,7 @@ export class TrackColliderQuery implements GroundQuery {
     out.nz = nz * invLen;
     out.surface = tagLayer.surface;
     out.grip = tagLayer.grip;
+    out.props = tagLayer.props;
     out.source = tagLayer.name;
     return true;
   }
@@ -466,7 +510,7 @@ export class FlatGroundQuery implements GroundQuery {
   constructor(
     private readonly height = 0,
     private readonly surface: TrackSurfaceKind = 'road',
-    private readonly grip = DEFAULT_SURFACE_GRIP[surface]
+    private readonly grip = DEFAULT_SURFACE_TABLE[surface].friction
   ) {}
 
   query(_x: number, _z: number, probeY: number, out: GroundHit): boolean {
@@ -477,13 +521,14 @@ export class FlatGroundQuery implements GroundQuery {
     out.nz = 0;
     out.surface = this.surface;
     out.grip = this.grip;
+    out.props = DEFAULT_SURFACE_TABLE[this.surface];
     out.source = 'flat';
     return true;
   }
 }
 
 export function createGroundHit(): GroundHit {
-  return { height: 0, nx: 0, ny: 1, nz: 0, surface: 'road', grip: 1, source: '' };
+  return { height: 0, nx: 0, ny: 1, nz: 0, surface: 'road', grip: 1, props: DEFAULT_SURFACE_TABLE.road, source: '' };
 }
 
 // ---------------------------------------------------------------------------

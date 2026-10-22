@@ -1,0 +1,7 @@
+{
+  "description": "Suzuka overrides for the GT3 class: careful through Degner (turns 8-9).",
+  "params": {},
+  "sections": [
+    { "label": "Degner 1-2", "turns": [8, 9], "leadInM": 120, "params": { "brakeMargin": 0.05, "extMarginM": 1.6 } }
+  ]
+}

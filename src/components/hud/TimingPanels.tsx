@@ -21,7 +21,13 @@ import { LibreCorsaMark } from "../ui/LibreCorsaLogo";
 /** Black / white chequer tile for finished-car markers */
 const CHEQUER_BG = "repeating-conic-gradient(#F5F7FA 0% 25%, #08090D 0% 50%) 0 0 / 6px 6px";
 
-const TOWER_COMPOUND: Record<TireCompound, string> = { soft: HUD_RED, medium: HUD_YELLOW, hard: "#F5F7FA" };
+const TOWER_COMPOUND: Record<TireCompound, string> = {
+  soft: HUD_RED,
+  medium: HUD_YELLOW,
+  hard: "#F5F7FA",
+  intermediate: "#3CCB4A",
+  wet: "#2E7BFF",
+};
 
 /**
  * The tower's lines: position, livery bar, driver code with the tyre, fastest-lap and penalty badges, the gap (to the

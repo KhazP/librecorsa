@@ -3,7 +3,7 @@
  * the final classification. A multiplayer race also runs its start procedure here, on the host's clock, so every
  * client shows the same lights and has the same lights-out instant.
  */
-import type { RaceResultEntry, RaceStandingEntry, RaceStatus, TireCompound } from "@/types/f1";
+import type { RaceResultEntry, RaceSplits, RaceStandingEntry, RaceStatus, TireCompound } from "@/types/f1";
 import type { InterpolatedPeerState, PeerRaceProgress, RaceStartInfo } from "@/lib/sim/multiplayer-sync";
 
 /** Gap timing resolution: the race time at which the first car reached each bucket of race distance */
@@ -70,6 +70,119 @@ export class GapTimer {
     return Math.max(0, raceTimeS - t - inBucketS);
   }
 }
+
+/**
+ * Split timing (Speed Dreams' "split differences to nearby opponents"): every car's race time at fixed points of race
+ * distance, so a gap is a time measured at the same point of the track (when the car ahead was where I am now, when I
+ * was where the car behind is now), not a distance divided by a speed.
+ */
+export class SplitTimer {
+  private readonly cars = new Map<string, { times: Map<number, number>; maxD: number; lastT: number }>();
+
+  constructor(
+    private readonly stepM = 10,
+    /** History kept behind each car (m) */
+    private readonly keepM = 15_000
+  ) {}
+
+  reset(): void {
+    this.cars.clear();
+  }
+
+  /** Call every frame (racing) with a car's race distance; crossing times are interpolated between frames */
+  record(id: string, raceTimeS: number, distM: number): void {
+    const step = this.stepM;
+    let c = this.cars.get(id);
+    if (!c) {
+      c = { times: new Map(), maxD: distM, lastT: raceTimeS };
+      this.cars.set(id, c);
+      return;
+    }
+    if (distM > c.maxD) {
+      const k0 = Math.floor(c.maxD / step) + 1;
+      const k1 = Math.floor(distM / step);
+      for (let k = k0; k <= k1; k++) {
+        const u = (k * step - c.maxD) / (distM - c.maxD);
+        c.times.set(k, c.lastT + (raceTimeS - c.lastT) * u);
+      }
+      c.maxD = distM;
+      if (c.times.size * step > this.keepM * 1.2) {
+        const floor = Math.floor((distM - this.keepM) / step);
+        for (const k of c.times.keys()) if (k < floor) c.times.delete(k);
+      }
+    }
+    c.lastT = raceTimeS;
+  }
+
+  /** Race time at which a car passed a race distance; null when it has not (or it is no longer kept) */
+  timeAt(id: string, distM: number): number | null {
+    const c = this.cars.get(id);
+    if (!c || distM > c.maxD) return null;
+    const step = this.stepM;
+    const k = Math.floor(distM / step);
+    const t0 = c.times.get(k);
+    const t1 = c.times.get(k + 1);
+    if (t0 === undefined) return t1 ?? null;
+    if (t1 === undefined) {
+      // Between the last checkpoint and the car's current distance
+      const u = (distM - k * step) / Math.max(1e-6, c.maxD - k * step);
+      return t0 + (c.lastT - t0) * Math.min(1, u);
+    }
+    return t0 + (t1 - t0) * ((distM - k * step) / step);
+  }
+
+  /** Time (s) since car `aheadId` passed the point where car `behindId` is now; null without timing there */
+  gapS(raceTimeS: number, aheadId: string, behindDistM: number): number | null {
+    const t = this.timeAt(aheadId, behindDistM);
+    return t === null ? null : Math.max(0, raceTimeS - t);
+  }
+}
+
+/**
+ * The split gaps from the player to the cars directly ahead and behind in the running order, with how each gap moved
+ * over the last few seconds
+ */
+export class PlayerSplits {
+  private history: { t: number; ahead: string | null; aheadS: number | null; behind: string | null; behindS: number | null }[] = [];
+
+  reset(): void {
+    this.history = [];
+  }
+
+  compute(
+    timer: SplitTimer,
+    raceTimeS: number,
+    ordered: readonly Pick<RacerProgress, "id" | "code" | "color" | "isPlayer" | "distM" | "speedMs" | "finishTimeS">[]
+  ): RaceSplits | undefined {
+    const i = ordered.findIndex((r) => r.isPlayer);
+    if (i < 0) return undefined;
+    const me = ordered[i];
+    if (me.finishTimeS !== null) return undefined;
+    const a = i > 0 ? ordered[i - 1] : null;
+    const b = i + 1 < ordered.length ? ordered[i + 1] : null;
+    // The fallbacks (no timing at that point yet, e.g. off the grid) use the distance over the chasing car's speed
+    const aheadS = a ? (timer.gapS(raceTimeS, a.id, me.distM) ?? (a.distM - me.distM) / Math.max(5, me.speedMs)) : null;
+    const behindS = b && b.finishTimeS === null ? (timer.gapS(raceTimeS, me.id, b.distM) ?? (me.distM - b.distM) / Math.max(5, b.speedMs)) : null;
+    this.history.push({ t: raceTimeS, ahead: a?.id ?? null, aheadS, behind: b?.id ?? null, behindS });
+    while (this.history.length > 2 && this.history[1].t < raceTimeS - SPLIT_TREND_S) this.history.shift();
+    const old = this.history[0];
+    const trend = (now: number | null, then: number | null, same: boolean) =>
+      now !== null && then !== null && same && raceTimeS - old.t > 1 ? now - then : undefined;
+    return {
+      ahead:
+        a && aheadS !== null
+          ? { driverCode: a.code, teamColorHex: a.color, gapS: aheadS, changeS: trend(aheadS, old.aheadS, old.ahead === a.id) }
+          : undefined,
+      behind:
+        b && behindS !== null
+          ? { driverCode: b.code, teamColorHex: b.color, gapS: behindS, changeS: trend(behindS, old.behindS, old.behind === b.id) }
+          : undefined,
+    };
+  }
+}
+
+/** How far back the split trend looks (s) */
+const SPLIT_TREND_S = 4;
 
 /** Running order: finishers by time (penalties included) first, then everyone else by distance */
 export function raceOrder(racers: readonly RacerProgress[]): RacerProgress[] {
@@ -176,6 +289,8 @@ export interface MultiplayerRaceFrame {
 export class MultiplayerRace {
   readonly lapClock: LapClock;
   private readonly gaps = new GapTimer();
+  private readonly splitTimer = new SplitTimer();
+  private readonly playerSplits = new PlayerSplits();
   private readonly lightsOutHostMs: number;
   /** Last known progress of every remote racer (kept when they disconnect) */
   private remote = new Map<string, RacerProgress>();
@@ -286,7 +401,10 @@ export class MultiplayerRace {
     };
     const field = [me, ...this.remote.values()];
     const L = this.lapLengthM;
-    if (frame.phase === "racing") this.gaps.record(frame.raceTimeS, field.map((r) => r.distM));
+    if (frame.phase === "racing") {
+      this.gaps.record(frame.raceTimeS, field.map((r) => r.distM));
+      for (const r of field) this.splitTimer.record(r.id, frame.raceTimeS, r.distM);
+    }
     const ordered = raceOrder(field);
     const winner = ordered[0];
     let gapFloor = 0;
@@ -332,6 +450,7 @@ export class MultiplayerRace {
       results: playerFinished ? classify(ordered, L, this.start.laps, final) : undefined,
       resultsFinal: final,
       multiplayer: true,
+      splits: frame.phase === "racing" ? this.playerSplits.compute(this.splitTimer, frame.raceTimeS, ordered) : undefined,
     };
   }
 }

@@ -8,6 +8,7 @@ import {
 } from "@/types/f1";
 import rawTrackJson from "../../public/tracks/rwanda/track_data.json";
 import { AI_LINE_WIDTH_SCALE, brakingZoneLevel, computeSpeedProfile, createVf26ProfileCarModel } from "./sim/speed-profile";
+import { resolveSurfaceTable, type SurfaceTable, type SurfaceTableOverrides } from "./sim/track-surfaces";
 
 /** Raw `track_data.json` layout shared by every circuit (Rwanda's file is the reference schema) */
 export type RawTrackJson = typeof rawTrackJson;
@@ -187,11 +188,21 @@ export interface TrackMetaExtras {
   baseAltitudeM?: number;
   mesh?: { url?: string };
   credit?: { title: string; author: string; url: string; short?: string; license: string; licenseUrl: string };
+  /** Per-kind overrides of the default surface table (track-surfaces.ts) */
+  surfaceTable?: SurfaceTableOverrides;
 }
 
 /** Metadata of the active circuit */
 export function getActiveTrackMetadata(): RawTrackJson["metadata"] & TrackMetaExtras {
   return activeRaw.metadata as RawTrackJson["metadata"] & TrackMetaExtras;
+}
+
+let cachedSurfaceTable: SurfaceTable | null = null;
+
+/** Surface physics of the active circuit: the default table with its `metadata.surfaceTable` overrides */
+export function getActiveSurfaceTable(): SurfaceTable {
+  cachedSurfaceTable ??= resolveSurfaceTable(getActiveTrackMetadata().surfaceTable);
+  return cachedSurfaceTable;
 }
 
 function refill<T>(target: T[], items: T[]): void {
@@ -217,6 +228,7 @@ export function setActiveTrack(id: string, raw: RawTrackJson = rawTrackJson): vo
   TURN_NAMES = new Map(TURN_METADATA.map((t) => [t.number, t.name]));
   RAW_DS = meta.lengthMeters / raw.samples.length;
   cachedBuiltTrack = null;
+  cachedSurfaceTable = null;
 }
 
 function getTurnInfoAtS(

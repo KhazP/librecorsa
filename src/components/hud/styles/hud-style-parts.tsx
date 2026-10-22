@@ -102,7 +102,13 @@ export function arcPoints(n: number, cx: number, cy: number, r: number, spanDeg:
   });
 }
 
-export const COMPOUND_COLORS: Record<TireCompound, string> = { soft: HUD_RED, medium: HUD_YELLOW, hard: "#F5F7FA" };
+export const COMPOUND_COLORS: Record<TireCompound, string> = {
+  soft: HUD_RED,
+  medium: HUD_YELLOW,
+  hard: "#F5F7FA",
+  intermediate: "#3CCB4A",
+  wet: "#2E7BFF",
+};
 
 export const SECTOR_COLORS = [HUD_CYAN, HUD_VOLT, "#FF6B8A"] as const;
 

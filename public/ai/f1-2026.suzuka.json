@@ -1,0 +1,7 @@
+{
+  "description": "Suzuka overrides for the F1 2026 class: Degner 1 and 2 (turns 8-9) punish a late brake with the gravel, so the AI brakes a touch earlier and keeps off the outside kerb there.",
+  "params": {},
+  "sections": [
+    { "label": "Degner 1-2", "turns": [8, 9], "leadInM": 120, "params": { "brakeMargin": 0.06, "extMarginM": 1.4 } }
+  ]
+}

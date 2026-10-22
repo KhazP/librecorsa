@@ -1,0 +1,18 @@
+{
+  "description": "AI defaults for the F1 2026 class (VF26 and f12026-car). Loaded by src/lib/sim/ai-tuning-data.ts; ranges in AI_PARAM_RANGES (src/lib/sim/ai-tuning.ts). Per-track files are public/ai/f1-2026.<track>.json.",
+  "params": {
+    "pace": 1,
+    "brakeMargin": 0,
+    "apexSpeedScale": 1,
+    "intMarginM": 0,
+    "extMarginM": 0,
+    "steerGain": 1,
+    "overtakeCaution": 0.3,
+    "defend": 0.4,
+    "bumpCaution": 0,
+    "consistency": 0.85
+  },
+  "vehicles": {
+    "f12026-car": {}
+  }
+}
