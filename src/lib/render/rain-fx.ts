@@ -168,6 +168,9 @@ export interface RainFx {
   dispose(): void;
 }
 
+/** Layer of the visor droplets: only a camera that enables it (the driver's eye) draws them, never the mirrors */
+export const RAIN_VISOR_LAYER = 7;
+
 export function createRainFx(scene: THREE.Scene): RainFx {
   const windscreenState: WindscreenWetState = {
     dropletDensity: 0,
@@ -238,6 +241,7 @@ export function createRainFx(scene: THREE.Scene): RainFx {
   visorMesh.frustumCulled = false;
   visorMesh.renderOrder = 1002;
   visorMesh.visible = false;
+  visorMesh.layers.set(RAIN_VISOR_LAYER);
   scene.add(visorMesh);
 
   const camPos = material.uniforms.uCamPos.value as THREE.Vector3;
@@ -257,6 +261,8 @@ export function createRainFx(scene: THREE.Scene): RainFx {
       const effectiveIntensity = Math.max(r, spray * 0.65);
       const carSpeedMs = cameraVelocity.length();
       stepWindscreenWipers(windscreenState, dt, r, spray, carSpeedMs, true);
+      // The clock runs while anything is drawn, so drops left on the visor keep running after the rain stops
+      time = (time + dt) % 3600;
 
       const showVisor = windscreenState.dropletDensity > 0.015 || spray > 0.02;
       visorMesh.visible = showVisor;
@@ -272,7 +278,6 @@ export function createRainFx(scene: THREE.Scene): RainFx {
       const count = Math.round(MAX_STREAKS * Math.pow(effectiveIntensity, 0.8));
       object.visible = count > 0;
       if (!object.visible) return;
-      time = (time + dt) % 3600;
       material.uniforms.uTime.value = time;
       camera.getWorldPosition(camPos);
       // Smooth the camera velocity so camera cuts do not flick the streaks

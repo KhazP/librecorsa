@@ -61,7 +61,7 @@ import { buildTelemetryPacket } from "@/lib/input/telemetry-out";
 import { touchInput, isTouchDevice, resetTouchInput } from "@/lib/input/touch-input";
 import { isFatalHidStatus } from "@/lib/input/webhid-ffb";
 import { applyGraphicsQuality } from "@/lib/render/golden-hour-environment";
-import { createRainFx } from "@/lib/render/rain-fx";
+import { createRainFx, RAIN_VISOR_LAYER } from "@/lib/render/rain-fx";
 import { setAsphaltWetness } from "@/lib/render/asphalt-sheen";
 import { SIM_REALISM_FLAGS, type SimRealism } from "@/lib/sim/sim-realism";
 import {
@@ -2706,13 +2706,17 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         skyConditions.rain = wx.rainIntensity;
         env.setConditions(skyConditions);
         setAsphaltWetness(wetnessFromWater(wx.waterMm), wetnessFromWater(wx.lineWaterMm), wx.rainIntensity, 0.1);
-        visualFx.setWetness(wetnessFromWater(wx.lineWaterMm));
+        // The water under the player's own wheels, not the lap's mean line water
+        visualFx.setWetness(trackEnv.weatherSampleFor(physics)?.wetness ?? wetnessFromWater(wx.lineWaterMm));
       }
       camera.getWorldPosition(rainCamPos);
       if (dtSeconds > 0) rainCamVel.subVectors(rainCamPos, rainCamPrev).divideScalar(dtSeconds).clampLength(0, 110);
       rainCamPrev.copy(rainCamPos);
-      const sprayWake =
-        (1 - (physics.telemetry.aeroWakeDownforceMult ?? 1)) * 3.2 * wetnessFromWater(wx.lineWaterMm);
+      // Spray thrown up by the cars ahead (the wake model's, from their speed, gap and the water)
+      const sprayWake = trackEnv.weatherSampleFor(physics)?.sprayIntensity ?? 0;
+      // Droplets on the visor only from the driver's eye (the mirrors render without this layer)
+      if (mode === "cockpit" && !inVr) camera.layers.enable(RAIN_VISOR_LAYER);
+      else camera.layers.disable(RAIN_VISOR_LAYER);
       rainFx.update(
         dtSeconds,
         wx.rainIntensity,

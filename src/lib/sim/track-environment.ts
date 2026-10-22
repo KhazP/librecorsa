@@ -101,6 +101,11 @@ export class TrackEnvironment {
     }
   }
 
+  /** What the last update found under `sim` (its water, wetness and spray), or null before its first update */
+  public weatherSampleFor(sim: SimulatorCar): Readonly<WeatherContactSample> | null {
+    return this.weatherSamples.get(sim) ?? null;
+  }
+
   /**
    * Pace multiplier for an AI car in the conditions (1 in the dry on slicks): its tyres' grip on the water of the
    * racing line here relative to dry slicks, with a little extra margin as the road gets wet. Corner speed goes
