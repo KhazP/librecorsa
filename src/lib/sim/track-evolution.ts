@@ -12,16 +12,57 @@
  *    collision detector and rigid-body linear + angular impulse (r × J) solver.
  */
 
+import { marbleLoadEffect, wetGrooveGripEffect } from './wet-tyres';
+
 export const TRACK_EVOLUTION_SECTORS = 64;
 const BASELINE_RUBBER = 0.65;
+
+export type SurfaceGripPresetId = 'green' | 'light' | 'medium' | 'natural' | 'heavy' | 'saturated';
+
+export const SURFACE_GRIP_PRESETS: readonly SurfaceGripPresetId[] = [
+  'green',
+  'light',
+  'medium',
+  'natural',
+  'heavy',
+  'saturated',
+];
+
+export const SURFACE_GRIP_PRESET_RUBBER: Record<SurfaceGripPresetId, number> = {
+  green: 0.08,
+  light: 0.30,
+  medium: 0.50,
+  natural: BASELINE_RUBBER,
+  heavy: 0.80,
+  saturated: 0.95,
+};
+
+export const SURFACE_GRIP_PRESET_LABELS: Record<SurfaceGripPresetId, { label: string; detail: string }> = {
+  green: { label: 'Green', detail: 'Freshly washed tarmac, minimal rubber' },
+  light: { label: 'Light', detail: 'Early weekend rubber buildup' },
+  medium: { label: 'Medium', detail: 'Moderate rubbered-in groove' },
+  natural: { label: 'Natural', detail: 'Standard race-ready rubber groove' },
+  heavy: { label: 'Heavy', detail: 'Well-rubbered endurance racing line' },
+  saturated: { label: 'Saturated', detail: 'Fully saturated dark rubber groove' },
+};
+
+/** Time-scale multipliers for dynamic road evolution (0 = static) */
+export const SURFACE_TIME_SCALES: readonly number[] = [0, 0.5, 1, 2, 5];
+
+/** Damping of groove accumulation in areas with loose dust/marbles */
+export const GROOVE_DUST_DAMPING = 0.25;
+
 /** Base track surface temperature (°C): the cars' own default (F1Physics2026 / VehiclePhysics), so the field's samples
  * don't cool the track */
 export const TRACK_EVOLUTION_BASE_C = 41;
 /** Rubber laid per second by a car on the line, before the slip-energy part (the base rate of a 60 Hz caller) */
 const RUBBER_BASE_RATE_PER_S = 9.0e-4;
+/** Heavy rain rinses the line toward this rubber level with a ~20 min time constant */
+const WASHED_RUBBER = 0.35;
+const WASH_RATE_PER_S = 1 / 1200;
 
 export interface TrackEvolutionSample {
-  /** Surface grip multiplier from rubber buildup vs off-line marbles (0.91..1.025) */
+  /** Surface grip multiplier from rubber buildup vs off-line marbles and wet groove inversion (0.82..1.03) */
   gripMultiplier: number;
   /** Off-line marble density at the queried lateral offset (0..1) */
   marbleLevel: number;
@@ -31,6 +72,10 @@ export interface TrackEvolutionSample {
   trackTempC: number;
   /** Optional alias for trackTempC (°C) */
   trackSurfaceTempC?: number;
+  /** Effective vertical contact load multiplier on loose marbles (0.935..1.0) */
+  effectiveLoadMultiplier?: number;
+  /** Signed wet-groove grip penalty on the polished racing line when wet (<= 0) */
+  grooveWetPenalty?: number;
 }
 
 export const DEFAULT_TRACK_EVOLUTION_SAMPLE: TrackEvolutionSample = {
@@ -39,7 +84,19 @@ export const DEFAULT_TRACK_EVOLUTION_SAMPLE: TrackEvolutionSample = {
   rubberLevel: BASELINE_RUBBER,
   trackTempC: TRACK_EVOLUTION_BASE_C,
   trackSurfaceTempC: TRACK_EVOLUTION_BASE_C,
+  effectiveLoadMultiplier: 1,
+  grooveWetPenalty: 0,
 };
+
+/** 4-channel per-sector surface state snapshot (groove, marbles, water depth, temperature delta) */
+export interface SurfaceStateSnapshot {
+  version: 1;
+  sectors: number;
+  groove: number[];
+  marbles: number[];
+  waterDepthMm: number[];
+  tempDeltaC: number[];
+}
 
 export class TrackEvolutionState {
   public readonly trackLengthM: number;
@@ -47,6 +104,8 @@ export class TrackEvolutionState {
   public readonly offLineMarbles = new Float64Array(TRACK_EVOLUTION_SECTORS);
   public readonly sectorTempDeltaC = new Float64Array(TRACK_EVOLUTION_SECTORS);
   public baseTrackTempC: number;
+  /** Dynamic road evolution rate scale (1 = normal, 0 = static) */
+  public timeScale = 1;
 
   constructor(trackLengthM: number, baseTrackTempC = TRACK_EVOLUTION_BASE_C) {
     this.trackLengthM = Math.max(100, trackLengthM);
@@ -54,8 +113,12 @@ export class TrackEvolutionState {
     this.reset();
   }
 
-  public reset(initialRubber = BASELINE_RUBBER): void {
-    this.racingLineRubber.fill(initialRubber);
+  public reset(initialRubber: number | SurfaceGripPresetId = BASELINE_RUBBER): void {
+    const r =
+      typeof initialRubber === 'string'
+        ? (SURFACE_GRIP_PRESET_RUBBER[initialRubber] ?? BASELINE_RUBBER)
+        : initialRubber;
+    this.racingLineRubber.fill(Math.min(1, Math.max(0, r)));
     this.offLineMarbles.fill(0);
     this.sectorTempDeltaC.fill(0);
   }
@@ -77,38 +140,66 @@ export class TrackEvolutionState {
   ): void {
     // A non-finite input (a car mid-reset) must not poison a sector for the rest of the session
     if (![sMeters, lateralOffsetM, racingLineLatM, slipPowerW, dt].every(Number.isFinite) || dt <= 0) return;
+    if (this.timeScale <= 0) return;
+    const scaledDt = dt * this.timeScale;
     const idx = this.sectorIndex(sMeters);
     const distFromLine = Math.abs(lateralOffsetM - racingLineLatM);
-    const energyJ = Math.max(0, slipPowerW) * dt;
+    const energyJ = Math.max(0, slipPowerW) * scaledDt;
 
     if (distFromLine <= 2.4) {
-      // On the racing line: lay down warm rubber and sweep away loose marbles
-      const rubberInc = (RUBBER_BASE_RATE_PER_S * dt + energyJ * 2.2e-9) * (1 - this.racingLineRubber[idx]);
+      // On the racing line: lay down warm rubber (dampened by existing dust/marbles) and sweep away loose marbles
+      const dustDamp = 1 - GROOVE_DUST_DAMPING * this.offLineMarbles[idx];
+      const rubberInc =
+        (RUBBER_BASE_RATE_PER_S * scaledDt + energyJ * 2.2e-9) *
+        dustDamp *
+        (1 - this.racingLineRubber[idx]);
       this.racingLineRubber[idx] = Math.min(1, this.racingLineRubber[idx] + rubberInc);
-      this.offLineMarbles[idx] = Math.max(0, this.offLineMarbles[idx] - 2.0e-5 * dt);
+      this.offLineMarbles[idx] = Math.max(0, this.offLineMarbles[idx] - 2.0e-5 * scaledDt);
     } else {
       // Driving off-line sweeps a small fraction of marbles off the line
-      this.offLineMarbles[idx] = Math.max(0, this.offLineMarbles[idx] - 1.2e-4 * dt);
+      this.offLineMarbles[idx] = Math.max(0, this.offLineMarbles[idx] - 1.2e-4 * scaledDt);
     }
 
     // High sliding power in corners sheds rubber marbles outward onto the off-line surface
     if (slipPowerW > 12_000) {
-      const marbleShed = (slipPowerW - 12_000) * dt * 1.4e-8;
+      const marbleShed = (slipPowerW - 12_000) * scaledDt * 1.4e-8;
       this.offLineMarbles[idx] = Math.min(1, this.offLineMarbles[idx] + marbleShed);
     }
 
     // Local asphalt frictional heating
     this.sectorTempDeltaC[idx] = Math.min(
       4.5,
-      Math.max(0, this.sectorTempDeltaC[idx] + energyJ * 4.0e-9 - 0.008 * dt * this.sectorTempDeltaC[idx])
+      Math.max(0, this.sectorTempDeltaC[idx] + energyJ * 4.0e-9 - 0.008 * scaledDt * this.sectorTempDeltaC[idx])
     );
   }
 
   /**
-   * Evaluates the surface grip multiplier, marble level, and local track temperature at `(sMeters, lateralOffsetM)`.
-   * At baseline (`racingLineRubber = 0.65`, `offLineMarbles = 0`), `gripMultiplier` is `1.00`.
+   * Rain washes the track: the rubber laid on the line is rinsed back toward a green track and the marbles off it are
+   * swept away, at a rate set by the rain intensity (0..1). After a shower the line has to rubber in again.
    */
-  public sample(sMeters: number, lateralOffsetM: number, racingLineLatM: number): TrackEvolutionSample {
+  public weatherWash(rainIntensity: number, dt: number): void {
+    if (!(rainIntensity > 0) || !(dt > 0) || !Number.isFinite(rainIntensity + dt)) return;
+    if (this.timeScale <= 0) return;
+    const k = 1 - Math.exp(-WASH_RATE_PER_S * Math.min(1, rainIntensity) * dt * this.timeScale);
+    for (let i = 0; i < TRACK_EVOLUTION_SECTORS; i++) {
+      this.racingLineRubber[i] += (WASHED_RUBBER - this.racingLineRubber[i]) * k;
+      this.offLineMarbles[i] *= Math.max(0, 1 - 3 * k);
+      this.sectorTempDeltaC[i] *= Math.max(0, 1 - 3 * k);
+    }
+  }
+
+  /**
+   * Evaluates the surface grip multiplier, marble level, and local track temperature at `(sMeters, lateralOffsetM)`.
+   * At baseline (`racingLineRubber = 0.65`, `offLineMarbles = 0`, `wetness = 0`), `gripMultiplier` is `1.00`.
+   * When `wetness > 0.18`, the rubbered-in dry racing line becomes slicker than unrubbered off-line tarmac.
+   */
+  public sample(
+    sMeters: number,
+    lateralOffsetM: number,
+    racingLineLatM: number,
+    wetness = 0,
+    wetSeverity = 1
+  ): TrackEvolutionSample {
     if (![sMeters, lateralOffsetM, racingLineLatM].every(Number.isFinite)) {
       return { ...DEFAULT_TRACK_EVOLUTION_SAMPLE, trackTempC: this.baseTrackTempC, trackSurfaceTempC: this.baseTrackTempC };
     }
@@ -121,13 +212,24 @@ export class TrackEvolutionState {
     const onLineWeight = Math.exp(-(distFromLine * distFromLine) / (2 * 2.1 * 2.1));
     const offLineWeight = 1 - onLineWeight;
 
-    // On-line grip bonus relative to baseline 0.65 rubber (+2.5% at 1.0 saturation, -3.5% on green track 0.0)
-    const rubberDeltaGrip = (rubber - BASELINE_RUBBER) * 0.07;
+    // Linear + quadratic groove grip curve (`RoadGrooveGripEffect` + `RoadGrooveSqrdGripEffect`):
+    // Zero at BASELINE_RUBBER (0.65), +2.3% at 1.0 saturation, -4.3% on green track (0.0)
+    const dr = rubber - BASELINE_RUBBER;
+    const dryGrooveDelta = 0.072 * dr - 0.015 * dr * Math.abs(dr);
+    // Fade the dry groove grip bonus as water fills the pores, then apply the wet-groove inversion penalty
+    const wet = Math.min(1, Math.max(0, Number.isFinite(wetness) ? wetness : 0));
+    const dryGrooveContribution = onLineWeight * dryGrooveDelta * (1 - 0.75 * wet);
+    const grooveWetPenalty = wetGrooveGripEffect(rubber, wet, onLineWeight, wetSeverity);
+
     // Off-line marble penalty (up to -7.5% grip when marbles accumulate outside the groove)
     const marbleLevel = offLineWeight * marbles;
     const marblePenalty = marbleLevel * 0.075;
+    const effectiveLoadMultiplier = marbleLoadEffect(marbleLevel);
 
-    const gripMultiplier = Math.max(0.88, Math.min(1.03, 1 + onLineWeight * rubberDeltaGrip - marblePenalty));
+    const gripMultiplier = Math.max(
+      0.82,
+      Math.min(1.03, 1 + dryGrooveContribution + grooveWetPenalty - marblePenalty)
+    );
 
     const trackTempC = this.baseTrackTempC + this.sectorTempDeltaC[idx];
     return {
@@ -136,7 +238,41 @@ export class TrackEvolutionState {
       rubberLevel: rubber,
       trackTempC,
       trackSurfaceTempC: trackTempC,
+      effectiveLoadMultiplier,
+      grooveWetPenalty,
     };
+  }
+
+  /** Exports the 4-property per-sector surface state (groove, marbles, water depth, temperature delta) */
+  public exportSurfaceState(lineWaterMm?: ArrayLike<number>): SurfaceStateSnapshot {
+    const water: number[] = [];
+    for (let i = 0; i < TRACK_EVOLUTION_SECTORS; i++) {
+      water.push(lineWaterMm && i < lineWaterMm.length ? Number(lineWaterMm[i]) : 0);
+    }
+    return {
+      version: 1,
+      sectors: TRACK_EVOLUTION_SECTORS,
+      groove: Array.from(this.racingLineRubber),
+      marbles: Array.from(this.offLineMarbles),
+      waterDepthMm: water,
+      tempDeltaC: Array.from(this.sectorTempDeltaC),
+    };
+  }
+
+  /** Imports a previously saved 4-property per-sector surface state */
+  public importSurfaceState(snapshot: SurfaceStateSnapshot): void {
+    if (!snapshot || snapshot.sectors !== TRACK_EVOLUTION_SECTORS) return;
+    for (let i = 0; i < TRACK_EVOLUTION_SECTORS; i++) {
+      if (Number.isFinite(snapshot.groove[i])) {
+        this.racingLineRubber[i] = Math.min(1, Math.max(0, snapshot.groove[i]));
+      }
+      if (Number.isFinite(snapshot.marbles[i])) {
+        this.offLineMarbles[i] = Math.min(1, Math.max(0, snapshot.marbles[i]));
+      }
+      if (Number.isFinite(snapshot.tempDeltaC[i])) {
+        this.sectorTempDeltaC[i] = Math.min(10, Math.max(-10, snapshot.tempDeltaC[i]));
+      }
+    }
   }
 }
 

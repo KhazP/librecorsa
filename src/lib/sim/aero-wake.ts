@@ -35,6 +35,8 @@ export interface AeroWakeState {
   copFrontShiftPct: number;
   /** Normalized wake intensity (0 = clean air, 1 = deep in core wake) */
   wakeIntensity: number;
+  /** Airborne rooster-tail water spray density lifted by leading cars on a wet track (0..1) */
+  sprayIntensity?: number;
 }
 
 export const CLEAN_AIR_WAKE_STATE: AeroWakeState = {
@@ -44,6 +46,7 @@ export const CLEAN_AIR_WAKE_STATE: AeroWakeState = {
   totalDownforceMultiplier: 1,
   copFrontShiftPct: 0,
   wakeIntensity: 0,
+  sprayIntensity: 0,
 };
 
 export const DEFAULT_AERO_WAKE: AeroWakeState = CLEAN_AIR_WAKE_STATE;
@@ -64,7 +67,8 @@ export function evaluateAeroWakeDeficit(
   emitters: ReadonlyArray<WakeEmitterCar>,
   trackLengthM: number,
   _localCurvature = 0,
-  skipIndex = -1
+  skipIndex = -1,
+  roadWetness = 0
 ): AeroWakeState {
   if (emitters.length === 0 || mySpeedMs < 8 || !(trackLengthM > 0)) {
     return CLEAN_AIR_WAKE_STATE;
@@ -74,6 +78,7 @@ export function evaluateAeroWakeDeficit(
   let totalFrontDfLoss = 0;
   let totalRearDfLoss = 0;
   let peakIntensity = 0;
+  let totalSpraySq = 0;
 
   for (let i = 0; i < emitters.length; i++) {
     if (i === skipIndex) continue;
@@ -99,20 +104,25 @@ export function evaluateAeroWakeDeficit(
     const nearEnvelope = Math.min(1, (ds - 1.5) / 4.5);
     const dragDecay = Math.exp(-Math.max(0, ds - 8) / 46);
     const dfDecay = Math.exp(-Math.max(0, ds - 8) / 56); // Dirty air vortices persist slightly longer than drag tow
+    const sprayDecay = Math.exp(-Math.max(0, ds - 6) / 68); // Diffuser rooster-tail spray hangs longer in the air
 
     const dragIntensity = nearEnvelope * dragDecay * latGaussian * speedScale;
     const dfIntensity = nearEnvelope * dfDecay * latGaussian * speedScale;
+    const sprayPlume = nearEnvelope * sprayDecay * latGaussian * Math.min(1.2, Math.max(0, (lead.speedMs - 12) / 42));
 
     // Accumulate deficits in quadrature so multiple cars ahead saturate smoothly
     totalDragLoss += (0.22 * dragIntensity) ** 2;
     totalFrontDfLoss += (0.28 * dfIntensity) ** 2;
     totalRearDfLoss += (0.16 * dfIntensity) ** 2;
+    totalSpraySq += sprayPlume * sprayPlume;
     if (dfIntensity > peakIntensity) peakIntensity = dfIntensity;
   }
 
   const dragDeficit = Math.min(0.26, Math.sqrt(totalDragLoss));
   const frontDfDeficit = Math.min(0.32, Math.sqrt(totalFrontDfLoss));
   const rearDfDeficit = Math.min(0.20, Math.sqrt(totalRearDfLoss));
+  const wet = Math.min(1, Math.max(0, Number.isFinite(roadWetness) ? roadWetness : 0));
+  const sprayIntensity = wet > 0 ? Math.min(1, Math.sqrt(totalSpraySq) * wet) : 0;
 
   const dragMultiplier = 1 - dragDeficit;
   const frontDownforceMultiplier = 1 - frontDfDeficit;
@@ -127,6 +137,7 @@ export function evaluateAeroWakeDeficit(
     totalDownforceMultiplier,
     copFrontShiftPct,
     wakeIntensity: Math.min(1, peakIntensity),
+    sprayIntensity,
   };
 }
 
