@@ -75,10 +75,18 @@ export interface SimulatorCar {
   aiAutopilot: boolean;
   /** Fraction of the car's limit speed the autopilot runs at */
   aiPaceScale?: number;
+  /** A car that plans its autopilot speeds on its tyres' grip on this road (0.05 steps); the weather pace then leaves it be */
+  aiPlanGrip?(): number;
   /** Traffic lateral offset bias from the racing line (m) */
   aiLineBiasM?: number;
   /** Traffic speed cap (m/s) */
   aiSpeedCapMs?: number;
+  /** AI tuning: target speed along the lap replacing the autopilot's own limit profile (m/s, uniform spacing) */
+  aiTargetSpeedMs?: Float64Array | null;
+  /** AI tuning: steering gain multiplier of the autopilot */
+  aiSteerGain?: number;
+  /** The autopilot's own limit speed along the lap (m/s, uniform spacing), which AI tuning scales */
+  aiBaseSpeedProfile?(): ArrayLike<number>;
   aeroPreset: AeroSetupPreset;
   assistPreset: DriverAssistPreset;
   gamepadAssistEnabled: boolean;
@@ -122,6 +130,12 @@ export interface SimulatorCar {
   setAeroWakeState?(wake: import('./aero-wake').AeroWakeState): void;
   /** Apply the dynamic track evolution sample under the car */
   setTrackEvolutionSample?(sample: import('./track-evolution').TrackEvolutionSample): void;
+  /** Apply the weather under the car: water on the road, air temperature (`weather.ts`) */
+  setWeatherSample?(sample: import('./weather').WeatherContactSample): void;
+  /** Simulation realism level's switches (tyre wear, temperature grip, fuel use, wet severity) */
+  setSimRealism?(flags: import('./sim-realism').SimRealismFlags): void;
+  /** An AI car that fits the tyres the weather calls for (`TrackEnvironment` swaps them) */
+  aiAutoTyres?: boolean;
   /**
    * Apply a car-to-car contact resolved by `resolveCarToCarObbCollision` (Three.js world, Y up), as deltas:
    * `posDeltaX/Z` move the car (m), `velDeltaX/Z` change its world horizontal velocity (m/s) and `yawRateDeltaRadS`

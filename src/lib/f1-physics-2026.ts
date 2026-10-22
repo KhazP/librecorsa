@@ -43,6 +43,7 @@ import {
   BASE_ALTITUDE_M,
   type BuiltTrackData,
   evaluateSampleLateralHeightM,
+  getActiveSurfaceTable,
   getRwandaTrackData,
 } from './track-data';
 import { Lut } from './sim/lut';
@@ -75,6 +76,7 @@ import {
   sample5PointContactPatch,
   setTyreColdPressure,
   setTyreSpec,
+  setTyreTemperature,
   tyreBandSurfaceTempC,
   tyreLoadedRadius,
   tyreRollingRadius,
@@ -102,6 +104,17 @@ import {
   type RelativeAirspeed,
 } from './sim/aero-wake';
 import type { TrackEvolutionSample } from './sim/track-evolution';
+import { DRY_WEATHER_SAMPLE, type WeatherContactSample } from './sim/weather';
+import { FULL_REALISM, type SimRealismFlags } from './sim/sim-realism';
+import {
+  hydrodynamicDragN,
+  isRearFlapAllowedInWet,
+  surfaceWetMultiplier,
+  WET_TYRE_TRAITS,
+  wetGripFactor,
+  wetnessFromWater,
+} from './sim/wet-tyres';
+import type { TrackSurfaceKind } from './sim/track-surfaces';
 import { BRAKE_DUCT_STEP, type ChassisSetup, clampChassisSetup, DEFAULT_CHASSIS_SETUP, pctScale, WING_CLICK_DEG } from './sim/car-setup';
 import { flyingExitSpeedMs, flyingStartPoint, type TyreVisualState } from './sim/simulator-car';
 import type { VehicleWheelState, WheelCornerIndex } from './sim/vehicle-types';
@@ -119,6 +132,7 @@ import {
   createVf26ProfileCarModel,
   type SpeedProfile,
   vf26FullBrakeForceN,
+  withPlanningGrip,
 } from './sim/speed-profile';
 
 export type { VehicleWheelState, WheelCornerIndex };
@@ -132,6 +146,14 @@ const TRACK_SURFACE_C = 41;
 const SUBSTEPS = 4;
 const INITIAL_TYRE_TEMP_C = 82;
 const INITIAL_BRAKE_TEMP_C = 380;
+/** Speed at which the autopilot's wet planning grip is taken (m/s): inters aquaplane above it in standing water */
+const AI_PLAN_WET_REF_MS = 50;
+const SURFACE_KIND: Record<SurfaceType, TrackSurfaceKind> = {
+  asphalt: 'road',
+  kerb: 'kerb',
+  runoff: 'runoff',
+  grass: 'grass',
+};
 /** Floor stall: plank clearance (m) where the floor starts to lose suction, and where it is fully stalled */
 const FLOOR_STALL_START_M = 0.006;
 const FLOOR_STALL_FULL_M = 0.004;
@@ -302,6 +324,11 @@ export class F1Physics2026 {
   public engineMap = 2;
   private userErsMode: ERSMode = 'BALANCED';
   public tireCompound: TireCompound = 'soft';
+  /** AI cars fit the tyre the weather calls for (set on cars made by `createAiPeerCar`) */
+  public aiAutoTyres = false;
+  /** Air temperature (°C) and road water film: the weather's, else the long-standing 27 °C dry baseline */
+  private weatherSample: WeatherContactSample = { ...DRY_WEATHER_SAMPLE };
+  private realism: SimRealismFlags = { ...FULL_REALISM };
   public autoGearbox = true;
   /** Gamepad steering assist for `ControlInputs.padSteer` (off = raw stick to the rack) */
   public gamepadAssistEnabled = true;
@@ -348,7 +375,7 @@ export class F1Physics2026 {
   private aiBrakeTrim = 1;
   private aiThrottleTrim = 1;
   private readonly aiDriver = new RacingLineDriver();
-  private aiProfile: { preset: AeroSetupPreset; profile: SpeedProfile; params: AiVehicleParams } | null = null;
+  private aiProfile: { preset: AeroSetupPreset; grip: number; profile: SpeedProfile; params: AiVehicleParams } | null = null;
   private aiTargetSpeedKmh = 0;
   /** Time the AI car has been (nearly) stationary — beached or spun off */
   private aiStuckS = 0;
@@ -580,6 +607,29 @@ export class F1Physics2026 {
   public setTrackEvolutionSample(sample: TrackEvolutionSample): void {
     if (!Number.isFinite(sample.gripMultiplier) || !Number.isFinite(sample.trackTempC)) return;
     this.trackEvolutionSample = sample;
+  }
+
+  /** The weather under the car: the water reaches each tyre, the air temperature the tyre and brake cooling */
+  public setWeatherSample(sample: WeatherContactSample): void {
+    if (![sample.waterMm, sample.wetness, sample.ambientC].every(Number.isFinite)) return;
+    this.weatherSample = sample;
+    if (Number.isFinite(sample.windVxMs)) this.windWorldXMs = sample.windVxMs!;
+    if (Number.isFinite(sample.windVzMs)) this.windWorldZMs = sample.windVzMs!;
+    for (const w of this.wheels) {
+      const wheelWater = sample.wheelWaterMm?.[w.index] ?? sample.waterMm;
+      w.tyre.waterMm = Math.max(0, Number.isFinite(wheelWater) ? wheelWater : sample.waterMm);
+      w.tyre.wetness = Math.min(1, Math.max(0, sample.wheelWaterMm ? wetnessFromWater(w.tyre.waterMm) : sample.wetness));
+    }
+  }
+
+  /** Simulation realism: tyre wear, temperature grip, fuel use and wet severity */
+  public setSimRealism(flags: SimRealismFlags): void {
+    this.realism = { ...flags };
+    for (const w of this.wheels) {
+      w.tyre.wetSeverity = flags.wetSeverity;
+      w.tyre.wearScale = flags.tyreWearScale;
+      w.tyre.thermalGripScale = flags.thermalGripScale;
+    }
   }
 
   /** Car-to-car contact as world deltas (see `SimulatorCar.applyRigidBodyCollision` for the convention) */
@@ -830,6 +880,7 @@ export class F1Physics2026 {
 
   public createAiPeerCar(): F1Physics2026 {
     const peer = new F1Physics2026(this.track);
+    peer.aiAutoTyres = true;
     if (this.walls) peer.setWalls(this.walls);
     return peer;
   }
@@ -1080,7 +1131,15 @@ export class F1Physics2026 {
   private applyCompound(): void {
     const set = VF26_TYRES[this.tireCompound];
     for (const w of this.wheels) {
-      setTyreSpec(w.tyre, w.isFront ? set.front : set.rear);
+      const targetSpec = w.isFront ? set.front : set.rear;
+      if (w.tyre.spec !== targetSpec) {
+        const oldShift = w.tyre.spec.wet?.tempShiftC ?? 0;
+        const newShift = targetSpec.wet?.tempShiftC ?? 0;
+        setTyreSpec(w.tyre, targetSpec);
+        if (oldShift !== newShift) {
+          setTyreTemperature(w.tyre, INITIAL_TYRE_TEMP_C + 0.55 * newShift);
+        }
+      }
     }
     this.applyColdPressures();
     this.axles[0].tyreRate = set.front.rate;
@@ -1133,16 +1192,11 @@ export class F1Physics2026 {
     this.applyCompound();
     for (const w of this.wheels) {
       const r = w.tyre.spec.radius;
+      const blanketTempC = INITIAL_TYRE_TEMP_C + 0.55 * (w.tyre.spec.wet?.tempShiftC ?? 0);
+      setTyreTemperature(w.tyre, blanketTempC);
       w.spinVel = speedMs / r;
       w.tyre.deflX = 0;
       w.tyre.deflY = 0;
-      w.tyre.flatSpotSeverity = 0;
-      w.tyre.flatSpotRadiusDropM = 0;
-      w.tyre.grainLevel = 0;
-      w.tyre.blisterLevel = 0;
-      w.tyre.dirtyLevel = 0;
-      w.tyre.circumferentialTempsC.fill(INITIAL_TYRE_TEMP_C);
-      w.tyre.circumferentialWear.fill(0);
       w.hubZ = 0;
       w.hubZVel = 0;
       w.slipRatio = 0;
@@ -1152,6 +1206,7 @@ export class F1Physics2026 {
       w.brakeTempC = INITIAL_BRAKE_TEMP_C;
       resetBrakeDiscState(w.brakeDisc, INITIAL_BRAKE_TEMP_C, 'carbon-ceramic');
     }
+    this.applyColdPressures();
     this.recomputeMassProperties();
     this.syncCartesianFromCurvilinear();
   }
@@ -1315,7 +1370,7 @@ export class F1Physics2026 {
       }
       brake = Math.min(ai.brakeCmd, Math.max(0.15, pedalCap)) * this.aiBrakeTrim;
       this.aiTargetSpeedKmh = ai.targetSpeedKmh;
-      this.activeAeroMode = ai.aeroMode;
+      this.activeAeroMode = isRearFlapAllowedInWet(this.weatherSample.wetness) ? ai.aeroMode : 'Z_MODE';
       if (drv.boostRemainingS <= 0) drv.ersMode = ai.ersMode;
     } else {
       if (inputs.padSteer !== undefined) {
@@ -1335,8 +1390,8 @@ export class F1Physics2026 {
                 maxSteerAngleRad: this.maxSteerAngleRad,
                 frontPeakSlipRad: VF26_TYRES[this.tireCompound].front.frictionLimitAngleDeg * DEG2RAD,
                 brake,
-                // Measured on the flat pad: ≈1.75 × (g + downforce / m) from 90 to 240 km/h
-                maxLateralAccel: 1.75 * (G + this.aeroDownforceN / this.massKg),
+                // Measured on the flat pad: ≈1.75 × (g + downforce / m) from 90 to 240 km/h, scaled by surface/wet grip
+                maxLateralAccel: 1.75 * this.aiPlanGrip() * (G + this.aeroDownforceN / this.massKg),
               },
               dt
             )
@@ -1354,7 +1409,12 @@ export class F1Physics2026 {
 
       if (this.autoXMode) {
         const canXMode =
-          sample.drsZone && brake < 0.05 && Math.abs(steerNorm) < 0.18 && this.vxMs > 38 && throttle > 0.6;
+          sample.drsZone &&
+          isRearFlapAllowedInWet(this.weatherSample.wetness) &&
+          brake < 0.05 &&
+          Math.abs(steerNorm) < 0.18 &&
+          this.vxMs > 38 &&
+          throttle > 0.6;
         this.activeAeroMode = canXMode ? 'X_MODE' : 'Z_MODE';
       }
     }
@@ -1513,20 +1573,23 @@ export class F1Physics2026 {
     this.lastAyMs2 += (sumAy / SUBSTEPS - this.lastAyMs2) * Math.min(1, 25 * dt);
 
     // ---- 8. Thermal models (9-node + 16-sector tyre, 2-node carbon brake), fuel ----
+    const ambC = this.weatherSample.ambientC;
     for (const w of this.wheels) {
       const radius = tyreRollingRadius(w.tyre, w.fzN, w.spinVel);
       const rollSpeed = w.spinVel * radius;
       const hubVx = this.wheelHubVx(w);
       const slipPower = Math.abs(w.ftN * (rollSpeed - hubVx)) + Math.abs(w.fnN * this.wheelHubVy(w));
+      const sprayBoost = this.weatherSample.sprayIntensity ?? this.aeroWakeState.sprayIntensity ?? 0;
       stepBrakeDiscThermal(
         w.brakeDisc,
         w.brakeTorqueNm,
         w.spinVel,
         this.vxMs,
-        AMBIENT_C,
+        ambC,
         dt,
         'carbon-ceramic',
-        w.isFront ? this.brakeDuctScale.front : this.brakeDuctScale.rear
+        w.isFront ? this.brakeDuctScale.front : this.brakeDuctScale.rear,
+        Math.min(1, w.tyre.wetness + 0.5 * sprayBoost)
       );
       w.brakeTempC = w.brakeDisc.surfaceTempC;
       updateTyreThermal(
@@ -1534,7 +1597,7 @@ export class F1Physics2026 {
         slipPower,
         w.fzN,
         hubVx,
-        AMBIENT_C,
+        ambC,
         this.trackEvolutionSample.trackTempC,
         dt,
         w.brakeTempC,
@@ -1543,7 +1606,7 @@ export class F1Physics2026 {
         this.trackEvolutionSample.marbleLevel
       );
     }
-    if (throttle > 0.01 && drv.fuelKg > 0) {
+    if (this.realism.fuelUse && throttle > 0.01 && drv.fuelKg > 0) {
       drv.fuelKg = Math.max(0, drv.fuelKg - VF26_CHASSIS.fuelFlowKgS * throttle * dt);
     }
     this.totalMassKg = VF26_CHASSIS.totalMassKg + drv.fuelKg;
@@ -1734,9 +1797,17 @@ export class F1Physics2026 {
       else if (throttle < 0.05) frac = ctrl.coastHarvest;
       if (frac > 0) {
         const ratio = Math.abs(this.overallRatio(drv.gear));
-        let harvestTorque = Math.min(kinetic, VF26_ERS.maxPowerW / omega) * frac;
+        const wetClip =
+          this.weatherSample.wetness > 0
+            ? Math.max(
+                0.35,
+                (1 - 0.32 * this.weatherSample.wetness) *
+                  (1 - 0.18 * Math.min(1.5, Math.abs(this.lastAyMs2) / G) * this.weatherSample.wetness)
+              )
+            : 1;
+        let harvestTorque = Math.min(kinetic, VF26_ERS.maxPowerW / omega) * frac * wetClip;
         if (brake <= 0.02 && ratio > 0) {
-          harvestTorque = Math.min(harvestTorque, VF26_ERS.coastHarvestMaxAxleTorqueNm / ratio);
+          harvestTorque = Math.min(harvestTorque, (VF26_ERS.coastHarvestMaxAxleTorqueNm * wetClip) / ratio);
         }
         harvestAxle = harvestTorque * ratio;
         mgukTorque = -harvestTorque;
@@ -1760,7 +1831,9 @@ export class F1Physics2026 {
     const rpm = omega * RADS2RPM;
     const coast = this.coastLut.evaluate(rpm) * this.engineBrakingScale;
     const mapIdx = THREE.MathUtils.clamp(this.engineMap, 1, 5);
-    const mapExponent = 0.88 + (mapIdx - 1) * 0.12;
+    const wetPedalBlend = Math.max(this.weatherSample.wetness, mapIdx >= 4 ? (mapIdx - 3) * 0.35 : 0);
+    const lowGearWetExp = drv.gear >= 1 && drv.gear <= 4 ? (5 - drv.gear) * 0.065 * wetPedalBlend : 0;
+    const mapExponent = 0.88 + (mapIdx - 1) * 0.12 + lowGearWetExp;
     const mapCeiling = mapIdx <= 2 ? 1.0 : 1.0 - (mapIdx - 2) * 0.04;
     const shapedThrottle = Math.pow(Math.max(0, throttle), mapExponent) * mapCeiling;
     let ice: number;
@@ -1837,8 +1910,15 @@ export class F1Physics2026 {
       );
       w.contactCentroidShiftInward = patch.centroidShiftInwardNorm;
       w.contactCentroidShiftLeftM = patch.centroidShiftLeftM;
+      // A wet road: painted kerbs and grass go slicker than the asphalt (the tyre's own water response is ac-tyre's)
+      const wet = this.weatherSample.wetness;
+      const wetSurface =
+        wet > 0
+          ? surfaceWetMultiplier(getActiveSurfaceTable()[SURFACE_KIND[contact.surfaceType] ?? 'road'].wetFriction, wet, this.realism.wetSeverity)
+          : 1;
+      const marbleLoadMult = this.trackEvolutionSample.effectiveLoadMultiplier ?? 1;
       w.surfaceFrictionMult =
-        contact.frictionMult * (sample.gripMultiplier ?? 1) * this.trackEvolutionSample.gripMultiplier;
+        contact.frictionMult * (sample.gripMultiplier ?? 1) * this.trackEvolutionSample.gripMultiplier * marbleLoadMult * wetSurface;
       w.roadOffsetPrev = reset ? contact.zRoad + contact.bumpM - w.worldPos.y : w.roadOffset;
       w.roadOffset = contact.zRoad + contact.bumpM - w.worldPos.y;
     }
@@ -2023,7 +2103,12 @@ export class F1Physics2026 {
         contactCentroidShiftLeftM: w.contactCentroidShiftLeftM,
         dt: h,
       });
-      w.ftN = out.fx;
+      const hydroDrag =
+        w.tyre.waterMm > 0 && vxw > 0.5
+          ? hydrodynamicDragN(w.tyre.waterMm, vxw, w.tyre.spec.width, w.fzN)
+          : 0;
+      const fxWheel = out.fx - hydroDrag;
+      w.ftN = fxWheel;
       w.fnN = out.fy;
       w.slipRatio = out.slipRatio;
       w.slipAngleRad = out.slipAngle;
@@ -2034,8 +2119,8 @@ export class F1Physics2026 {
       w.overturningMomentNm = out.mx;
       w.flatSpotVibrationNm = out.flatSpotVibrationNm;
 
-      const fbx = out.fx * cs - out.fy * sn;
-      const fby = out.fx * sn + out.fy * cs;
+      const fbx = fxWheel * cs - out.fy * sn;
+      const fby = fxWheel * sn + out.fy * cs;
       sumFx += fbx;
       sumFy += fby;
       sumMz += w.staticPos.x * fby - w.staticPos.y * fbx + out.mz;
@@ -2539,12 +2624,25 @@ export class F1Physics2026 {
     }
   }
 
-  /** Target-speed profile for the AI, rebuilt when the aero package changes */
+  /**
+   * Grip share (0.05 steps, 0.25..1) the autopilot plans its corner speeds and braking points with on a wet road,
+   * from the fitted compound's wet traits and the water under the car. 1 in the dry.
+   */
+  public aiPlanGrip(): number {
+    if (this.weatherSample.waterMm <= 0) return 1;
+    const traits = WET_TYRE_TRAITS[this.tireCompound];
+    const grip = traits.dryGrip * wetGripFactor(traits, this.weatherSample.waterMm, AI_PLAN_WET_REF_MS, this.realism.wetSeverity);
+    return Math.max(0.25, Math.min(1, Math.round(grip * 20) / 20));
+  }
+
+  /** Target-speed profile for the AI, rebuilt when the aero package or the road's wet grip changes */
   private getAiPlan(): { profile: SpeedProfile; params: AiVehicleParams } {
-    if (!this.aiProfile || this.aiProfile.preset !== this.aeroPreset) {
-      const car = createVf26ProfileCarModel(this.aeroPreset);
+    const grip = this.aiPlanGrip();
+    if (!this.aiProfile || this.aiProfile.preset !== this.aeroPreset || this.aiProfile.grip !== grip) {
+      const car = withPlanningGrip(createVf26ProfileCarModel(this.aeroPreset), grip);
       this.aiProfile = {
         preset: this.aeroPreset,
+        grip,
         profile: computeSpeedProfile(this.track.samples, car),
         params: {
           wheelbaseM: this.wheelbaseM,

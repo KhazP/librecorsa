@@ -37,11 +37,15 @@ import {
   BASE_ALTITUDE_M,
   type BuiltTrackData,
   evaluateSampleLateralHeightM,
+  getActiveSurfaceTable,
   RWANDA_DRS_ZONES,
 } from '@/lib/track-data';
 import { GamepadSteeringAssist } from '../gamepad-assist';
 import type { AeroWakeState } from '../aero-wake';
 import type { TrackEvolutionSample } from '../track-evolution';
+import type { WeatherContactSample } from '../weather';
+import { SLICK_TRAITS, wetGripFactor } from '../wet-tyres';
+import { FULL_REALISM, type SimRealismFlags } from '../sim-realism';
 import { flyingExitSpeedMs, flyingStartPoint, type SimulatorCar, type SimulatorWheel, type TyreVisualState } from '../simulator-car';
 import { aiLineOffsetM, type BrakingGuide, brakingGuideFor, sampleProfile, type SpeedProfileCarModel } from '../speed-profile';
 import { evaluateDynamicBrakingUrgency } from '../track-occupancy';
@@ -54,7 +58,6 @@ import {
   type TyresCompoundData,
 } from './F12026CarConfig';
 import {
-  DEFAULT_SURFACE_GRIP,
   type GroundHit,
   type GroundQuery,
   TrackColliderQuery,
@@ -62,6 +65,7 @@ import {
   TrackWallQuery,
 } from './TrackColliderQuery';
 import { type VehicleEvent, type VehicleInputs, VehiclePhysics } from './VehiclePhysics';
+import { KERB_PROFILE_L } from '../track-surfaces';
 
 const G = 9.81;
 const DEG2RAD = Math.PI / 180;
@@ -303,9 +307,19 @@ export class TrackSampleGroundQuery implements GroundQuery {
     const runoff = (left ? sample.runoffLeftM : sample.runoffRightM) ?? 3;
     const gravel = (left ? sample.gravelLeftM : sample.gravelRightM) ?? 0;
     const kind: TrackSurfaceKind =
-      edge <= 0 ? 'road' : kerb && edge < 1 ? 'kerb' : edge < runoff ? 'runoff' : edge < runoff + gravel ? 'gravel' : 'grass';
+      kerb && edge > KERB_PROFILE_L[0] && edge < KERB_PROFILE_L[KERB_PROFILE_L.length - 1]
+        ? 'kerb'
+        : edge <= 0
+          ? 'road'
+          : edge < runoff
+            ? 'runoff'
+            : edge < runoff + gravel
+              ? 'gravel'
+              : 'grass';
+    const props = getActiveSurfaceTable()[kind];
     out.surface = kind;
-    out.grip = DEFAULT_SURFACE_GRIP[kind];
+    out.grip = props.friction;
+    out.props = props;
     out.source = 'track-samples';
     return true;
   }
@@ -317,7 +331,10 @@ const colliderCache = new WeakMap<THREE.Object3D, { ground: TrackColliderQuery; 
 function collidersFor(root: THREE.Object3D) {
   if (!colliderCache.has(root)) {
     try {
-      colliderCache.set(root, { ground: TrackColliderQuery.fromTrackRoot(root), walls: TrackWallQuery.fromTrackRoot(root) });
+      colliderCache.set(root, {
+        ground: TrackColliderQuery.fromTrackRoot(root, getActiveSurfaceTable()),
+        walls: TrackWallQuery.fromTrackRoot(root),
+      });
     } catch (err) {
       console.warn('f12026-car: track colliders unavailable, staying on the sample ground', err);
       colliderCache.set(root, null);
@@ -384,6 +401,13 @@ export class F12026CarSim implements SimulatorCar {
   public aiLineBiasM = 0;
   /** Speed cap for AI traffic when following another car (m/s) */
   public aiSpeedCapMs = Infinity;
+  /**
+   * AI tuning (`ai-tuning.ts`): target speed along the lap (m/s, uniform spacing) used instead of this car's own
+   * limit profile (`aiBaseSpeedProfile`), e.g. with earlier braking points; null = the limit profile
+   */
+  public aiTargetSpeedMs: Float64Array | null = null;
+  /** AI tuning: multiplier on the autopilot's steering (shorter pursuit look-ahead when higher) */
+  public aiSteerGain = 1;
   private _assistPreset: DriverAssistPreset = 'semi_pro';
   /** Live MFD Stage-1 TC slip dial (0 = OFF, 1 = min intervention / max slip, 12 = max intervention / min slip) */
   public tcLevel = 5;
@@ -446,6 +470,9 @@ export class F12026CarSim implements SimulatorCar {
   };
   private aero: AeroSetupPreset = 'balanced';
   private compound: TireCompound = 'soft';
+  /** AI cars fit the tyre the weather calls for (set on cars made by `createAiPeerCar`) */
+  public aiAutoTyres = false;
+  private realism: SimRealismFlags = { ...FULL_REALISM };
   private coldPsi = { front: 0, rear: 0 };
   private onColliders = false;
   private progressHintS: number | undefined;
@@ -558,8 +585,15 @@ export class F12026CarSim implements SimulatorCar {
   // ===========================================================================
 
   /** Instantiate an AI opponent car with the exact same vehicle profile and track colliders */
+  /** The autopilot's own limit speed along the lap (m/s, every 5 m): what AI tuning scales */
+  public aiBaseSpeedProfile(): Float32Array {
+    return autopilotProfile(this.track, this.profile);
+  }
+
   public createAiPeerCar(): F12026CarSim {
-    return new F12026CarSim(this.track, this.trackRoot, this.profile);
+    const peer = new F12026CarSim(this.track, this.trackRoot, this.profile);
+    peer.aiAutoTyres = true;
+    return peer;
   }
 
   /** Switch to the GLB's road / surface colliders and barriers (no-op when they cannot be built) */
@@ -712,9 +746,24 @@ export class F12026CarSim implements SimulatorCar {
     return this.compound;
   }
 
+  private defaultColdPsiForCompound(): number {
+    const cd = this.compoundData;
+    const p = cd.pressureData;
+    const th = cd.thermalData;
+    const targetCoreC = 0.5 * (th.optimalTempC[0] + th.optimalTempC[1]);
+    return Math.round(((p.optimalPsi * (p.coldRefC + 273.15)) / (targetCoreC + 273.15)) * 10) / 10;
+  }
+
   set tireCompound(compound: TireCompound) {
+    const prevDefault = this.defaultColdPsiForCompound();
+    const frontDelta = this.coldPsi.front - prevDefault;
+    const rearDelta = this.coldPsi.rear - prevDefault;
     this.compound = compound;
     this.vehicle.setCompound(this.config.compoundSlots[compound]);
+    const nextDefault = this.defaultColdPsiForCompound();
+    const pr = this.profile;
+    this.coldPsi.front = Math.round(THREE.MathUtils.clamp(nextDefault + frontDelta, pr.coldPsiRange[0], pr.coldPsiRange[1]) * 10) / 10;
+    this.coldPsi.rear = Math.round(THREE.MathUtils.clamp(nextDefault + rearDelta, pr.coldPsiRange[0], pr.coldPsiRange[1]) * 10) / 10;
     this.applyColdPressures();
   }
 
@@ -862,6 +911,32 @@ export class F12026CarSim implements SimulatorCar {
     this.vehicle.setTrackEvolutionSample(sample);
   }
 
+  /** The weather under the car: water for the tyres, air temperature for tyre / brake cooling and the air density */
+  public setWeatherSample(sample: WeatherContactSample): void {
+    if (![sample.waterMm, sample.wetness, sample.ambientC].every(Number.isFinite)) return;
+    const v = this.vehicle;
+    v.waterMm = Math.max(0, sample.waterMm);
+    if (sample.wheelWaterMm) {
+      // sample.wheelWaterMm is [FR, FL, RR, RL]; v.wheelWaterMm is [LF, RF, LR, RR]
+      v.wheelWaterMm[0] = Math.max(0, sample.wheelWaterMm[1] ?? sample.waterMm);
+      v.wheelWaterMm[1] = Math.max(0, sample.wheelWaterMm[0] ?? sample.waterMm);
+      v.wheelWaterMm[2] = Math.max(0, sample.wheelWaterMm[3] ?? sample.waterMm);
+      v.wheelWaterMm[3] = Math.max(0, sample.wheelWaterMm[2] ?? sample.waterMm);
+    } else {
+      v.wheelWaterMm.fill(v.waterMm);
+    }
+    v.wetness = Math.min(1, Math.max(0, sample.wetness));
+    v.ambientC = sample.ambientC;
+    // Warmer air is thinner (ideal gas, about the 27 °C the cars are calibrated at)
+    v.airDensity = AIR_DENSITY * ((AMBIENT_C + 273.15) / (sample.ambientC + 273.15));
+  }
+
+  /** Simulation realism: tyre wear, temperature grip, fuel use and wet severity */
+  public setSimRealism(flags: SimRealismFlags): void {
+    this.realism = { ...flags };
+    this.vehicle.realism = { ...flags };
+  }
+
   /** Car-to-car contact as world deltas (see `SimulatorCar.applyRigidBodyCollision` for the convention) */
   public applyRigidBodyCollision(
     posDeltaX: number,
@@ -997,7 +1072,7 @@ export class F12026CarSim implements SimulatorCar {
       this.lastAxMs2 = dvx.dot(_ez.set(0, 0, 1).applyQuaternion(v.quaternion)) / h;
       this.lastAyMs2 = dvx.dot(_ex.set(1, 0, 0).applyQuaternion(v.quaternion)) / h;
     }
-    if (v.telemetry.throttle > 0.01 && this.fuelKg > 0) {
+    if (v.telemetry.throttle > 0.01 && this.fuelKg > 0 && this.realism.fuelUse) {
       const mapFlowMult = v.engineMap === 1 ? 1.04 : v.engineMap === 2 ? 1.0 : v.engineMap === 3 ? 0.96 : v.engineMap === 4 ? 0.90 : 0.85;
       const baseFlowKgS = this.profile.id === 'amg-gt3' ? 0.036 : 0.0278;
       this.fuelKg = Math.max(0, this.fuelKg - baseFlowKgS * mapFlowMult * v.telemetry.throttle * dtSeconds);
@@ -1027,6 +1102,16 @@ export class F12026CarSim implements SimulatorCar {
       if (!this.padSteerActive) this.gamepadAssist.reset();
       this.padSteerActive = true;
       const front = this.compoundData.modelData;
+      const wetMuScale =
+        this.vehicle.waterMm > 0
+          ? wetGripFactor(
+              this.compoundData.wetTraits ?? SLICK_TRAITS,
+              this.vehicle.waterMm,
+              this.vehicle.speedMs,
+              this.vehicle.realism.wetSeverity,
+              0.5 * (this.vehicle.wheels[0].wear + this.vehicle.wheels[1].wear)
+            ) / (this.compoundData.wetTraits?.dryGrip ?? 1)
+          : 1;
       steer = this.gamepadAssistEnabled
         ? this.gamepadAssist.update(
             inputs.padSteer,
@@ -1040,7 +1125,10 @@ export class F12026CarSim implements SimulatorCar {
               maxSteerAngleRad: this.maxSteerAngleRad,
               frontPeakSlipRad: (front.friction_limit_angle || DEFAULT_FRICTION_LIMIT_ANGLE_DEG) * DEG2RAD,
               brake: inputs.brake,
-              maxLateralAccel: this.profile.padLateralMu * (G + this.vehicle.telemetry.downforceN / this.vehicle.totalMassKg),
+              maxLateralAccel:
+                this.profile.padLateralMu *
+                wetMuScale *
+                (G + this.vehicle.telemetry.downforceN / this.vehicle.totalMassKg),
             },
             h
           )
@@ -1063,7 +1151,12 @@ export class F12026CarSim implements SimulatorCar {
     if (tcBaseTarget > 0 && speed > Math.max(this.profile.tcMinSpeedMs, tcMinSpeedMs)) {
       // Lateral-G slip target tightening: kappa_target(ay) = kappa_TC1 * max(0.45, 1.0 - 0.14 * (|ay|/g)^1.3)
       const gLat = Math.abs(this.lastAyMs2) / G;
-      const latFactor = Math.max(0.45, 1 - 0.14 * Math.pow(gLat, 1.3));
+      const saLimitRad = Math.max(0.05, (this.compoundData.modelData.friction_limit_angle || DEFAULT_FRICTION_LIMIT_ANGLE_DEG) * DEG2RAD);
+      const saRearNorm =
+        v.waterMm > 0
+          ? Math.max(Math.abs(W[2].slipAngleRad), Math.abs(W[3].slipAngleRad)) / saLimitRad
+          : 0;
+      const latFactor = Math.max(0.42, 1 - 0.14 * Math.pow(gLat, 1.3) - 0.22 * Math.max(0, saRearNorm - 0.45));
       const tcEffTarget = tcBaseTarget * latFactor;
       // Weighted rear axle slip: 0.65 * max(k_LR, k_RR) + 0.35 * mean(k_LR, k_RR)
       const kL = Math.max(0, W[2].slipRatio);
@@ -1127,7 +1220,7 @@ export class F12026CarSim implements SimulatorCar {
     const L = this.track.totalLengthM;
     const speed = v.speedMs;
     const p = this.track.projectWorldToTrack(v.position.x, v.position.z, this.poseHintS);
-    const look = this.track.getSampleAtDistance((p.s + Math.max(10, speed * 0.55)) % L);
+    const look = this.track.getSampleAtDistance((p.s + Math.max(10, (speed * 0.55) / this.aiSteerGain)) % L);
     // the racing line uses the kerbs; the autopilot keeps all four wheels on the asphalt
     const edge = look.width / 2 - autopilotEdgeMarginM(this.profile);
     const off = THREE.MathUtils.clamp(aiLineOffsetM(look, this.line) + this.aiLineBiasM, -edge, edge);
@@ -1160,7 +1253,8 @@ export class F12026CarSim implements SimulatorCar {
     let vTarget = this.aiSpeedCapMs;
     for (let d = 0; d <= 300; d += 5) {
       const smp = this.track.getSampleAtDistance((p.s + lead + d) % L);
-      const own = prof[Math.floor(((p.s + lead + d) % L) / (L / prof.length)) % prof.length];
+      const tab = this.aiTargetSpeedMs ?? prof;
+      const own = tab[Math.floor(((p.s + lead + d) % L) / (L / tab.length)) % tab.length];
       const vC = Math.min((smp.brakeLimitKmh ?? smp.optimalSpeedKmh) / 3.6, own) * this.aiPaceScale;
       if (vC >= vTarget) continue;
       const a = 0.5 * (autopilotDecel(b, vC) + autopilotDecel(b, Math.min(speed, Math.sqrt(vC * vC + 2 * autopilotDecel(b, vC) * d))));
@@ -1417,10 +1511,8 @@ export class F12026CarSim implements SimulatorCar {
     const surfaces = quad((w) => surfaceType(w.ground.surface));
     const onKerbLeft = surfaces[0] === 'kerb' || surfaces[2] === 'kerb';
     const onKerbRight = surfaces[1] === 'kerb' || surfaces[3] === 'kerb';
-    const offTrack = W.every((w) => {
-      const k = w.ground.surface;
-      return k === 'grass' || k === 'gravel' || k === 'runoff';
-    });
+    // All four wheels on surfaces the table does not count as the track (run-off, gravel, grass, sausage kerbs)
+    const offTrack = W.every((w) => !w.ground.props.validTrack);
     if (offTrack && this.trackLimitsMode === 'strict') this.lapValid = false;
     t.lapInvalid = !this.lapValid;
     let surface: SurfaceType = 'asphalt';

@@ -68,6 +68,23 @@ import {
   type TrackEvolutionSample,
 } from '../track-evolution';
 import {
+  dynamicBristleRelaxationScale,
+  evaluateFlashTempAndWlfGrip,
+  hydrodynamicDragN,
+  isRearFlapAllowedInWet,
+  rimWetEnvironmentCoolingWK,
+  SLICK_TRAITS,
+  surfaceWetMultiplier,
+  wetExternalGasCoolingWK,
+  wetGripFactor,
+  wetHeatScale,
+  wetnessFromWater,
+  wetPneumaticTrailScale,
+  wetRoadCoolingWK,
+  wetWearScale,
+} from '../wet-tyres';
+import { FULL_REALISM, realismThermalGrip, type SimRealismFlags } from '../sim-realism';
+import {
   type AeroRideHeightMap,
   type AxleSuspensionData,
   type CarPhysicsConfig,
@@ -656,6 +673,12 @@ export class VehiclePhysics {
   public trackProgress = Number.NaN;
   public aeroWake: AeroWakeState = { ...DEFAULT_AERO_WAKE };
   public trackEvolution: TrackEvolutionSample = { ...DEFAULT_TRACK_EVOLUTION_SAMPLE };
+  /** Water film under the car (mm), per-wheel water film [LF, RF, LR, RR] (mm), and how wet the road acts (0..1) */
+  public waterMm = 0;
+  public wheelWaterMm: [number, number, number, number] = [0, 0, 0, 0];
+  public wetness = 0;
+  /** Simulation realism (tyre wear, temperature grip, wet severity) */
+  public realism: SimRealismFlags = { ...FULL_REALISM };
 
   private ground: GroundQuery;
   private readonly axles: [AxleRuntime, AxleRuntime];
@@ -1372,11 +1395,12 @@ export class VehiclePhysics {
       inZone = zone !== undefined;
       armed = zone !== undefined && this.drsArmedZone === zone.id;
     }
+    const dryEnoughForDrs = isRearFlapAllowedInWet(this.wetness);
     this.telemetry.drsZone = inZone;
-    this.telemetry.drsAvailable = inZone && armed;
-    // Closes on the brake or a lift; the driver can press again while still in the zone
+    this.telemetry.drsAvailable = inZone && armed && dryEnoughForDrs;
+    // Closes on the brake, a lift, or when track wetness exceeds the rear flap threshold
     const lifted = inp.brake > 0.05 || inp.throttle < this.config.aero.drsCloseThrottle;
-    const open = this.drsRequested && inZone && armed && !lifted;
+    const open = this.drsRequested && inZone && armed && dryEnoughForDrs && !lifted;
     if (!open) this.drsRequested = false;
     if (open !== this.drsOpen) {
       this.drsOpen = open;
@@ -1580,9 +1604,14 @@ export class VehiclePhysics {
       const rim = w.omega * w.rollingRadius;
       const vsx = rim - vx;
       w.slipVelX = vsx;
+      const wWaterMm = this.wheelWaterMm[i] > 0 ? this.wheelWaterMm[i] : this.waterMm;
+      const wWetness = wWaterMm > 0 ? wetnessFromWater(wWaterMm) : this.wetness;
       if (fz > 0) {
-        w.slipRatio = (w.slipRatio + (h * vsx) / model.relaxationLengthX) / (1 + (h * absVx) / model.relaxationLengthX);
-        w.tanSlipAngle = (w.tanSlipAngle + (h * vy) / model.relaxationLengthY) / (1 + (h * absVx) / model.relaxationLengthY);
+        const bristleScale = dynamicBristleRelaxationScale(fz, tyre.fz0, wWetness);
+        const rx = model.relaxationLengthX * bristleScale;
+        const ry = model.relaxationLengthY * bristleScale;
+        w.slipRatio = (w.slipRatio + (h * vsx) / rx) / (1 + (h * absVx) / rx);
+        w.tanSlipAngle = (w.tanSlipAngle + (h * vy) / ry) / (1 + (h * absVx) / ry);
         w.slipRatio = THREE.MathUtils.clamp(w.slipRatio, -5, 5);
         w.tanSlipAngle = THREE.MathUtils.clamp(w.tanSlipAngle, -5, 5);
       } else {
@@ -1599,10 +1628,12 @@ export class VehiclePhysics {
         const loadRef = Math.max(0.05, fz / tyre.fz0);
         // Temperature grip per band (inner / middle / outer), weighted by each band's share of the contact pressure
         const sh = w.bandLoadShares;
-        const thermal =
+        const thermal = realismThermalGrip(
           sh[0] * tyre.thermal.evaluate(w.bandTempsC[0]) +
-          sh[1] * tyre.thermal.evaluate(w.bandTempsC[1]) +
-          sh[2] * tyre.thermal.evaluate(w.bandTempsC[2]);
+            sh[1] * tyre.thermal.evaluate(w.bandTempsC[1]) +
+            sh[2] * tyre.thermal.evaluate(w.bandTempsC[2]),
+          this.realism
+        );
         const dp = (w.pressurePsi - td.pressureData.optimalPsi) / td.pressureData.optimalPsi;
         const pressureGrip = Math.max(0.5, 1 - td.pressureData.pressureGripSensitivity * dp * dp);
         w.thermalGrip = thermal;
@@ -1613,7 +1644,26 @@ export class VehiclePhysics {
           (1 - 0.12 * w.blisterLevel) *
           (1 - 0.18 * w.dirtyLevel) *
           (1 - 0.05 * w.flatSpotSeverity);
-        const base = thermal * pressureGrip * degradation * g.grip * this.trackEvolution.gripMultiplier;
+        // Water: the tyre's response (film lubrication, aquaplaning past what its tread clears at this speed) and the
+        // surface's (painted kerbs and grass go slicker than the asphalt in the same water)
+        const severity = this.realism.wetSeverity;
+        const traits = td.wetTraits ?? SLICK_TRAITS;
+        const wet =
+          wWaterMm > 0
+            ? wetGripFactor(traits, wWaterMm, absVx, severity, w.wear) *
+              surfaceWetMultiplier(g.props.wetFriction, wWetness, severity)
+            : 1;
+        const wlf = evaluateFlashTempAndWlfGrip(traits, w.surfaceTempC, Math.hypot(vsx, vy), fz, wWetness);
+        const loadMult = this.trackEvolution.effectiveLoadMultiplier ?? 1;
+        const base =
+          thermal *
+          wlf.viscoelasticMult *
+          pressureGrip *
+          degradation *
+          g.grip *
+          this.trackEvolution.gripMultiplier *
+          loadMult *
+          wet;
 
         // Camber grip: leaning into the force direction (force opposes the slip)
         const forceSign = w.tanSlipAngle > 0 ? -1 : 1;
@@ -1661,8 +1711,12 @@ export class VehiclePhysics {
         // Telemetry only: share of the friction circle in use (> 1 when combinedFactor < 1 lets it exceed)
         w.circleFraction = Math.min(use, limit);
 
-        // Self-aligning moment: pneumatic trail collapsing toward the limit
-        w.mz = -fy * model.pneumaticTrail * Math.max(0, 1 - s);
+        // Self-aligning moment: pneumatic trail collapsing toward the limit and over standing water (hydroplaning wedge)
+        const wetTrailMult =
+          wWaterMm > 0
+            ? wetPneumaticTrailScale(td.wetTraits ?? SLICK_TRAITS, wWaterMm, absVx, w.wear)
+            : 1;
+        w.mz = -fy * model.pneumaticTrail * wetTrailMult * Math.max(0, 1 - s);
         const yCpShift = THREE.MathUtils.clamp(
           -0.35 * geo.width * Math.sin(w.camberLeftRad) + (fy / Math.max(500, fz)) * 0.018,
           -0.45 * geo.width,
@@ -1675,9 +1729,12 @@ export class VehiclePhysics {
         w.mz = 0;
         w.mx = 0;
       }
+      tyreTorque[i] = -fx * w.rollingRadius;
+      // Per-wheel hydrodynamic water-wedge drag: acts on the hub/chassis (pulling toward deeper puddles)
+      const hydroDrag = wWaterMm > 0 && vx > 0.5 ? hydrodynamicDragN(wWaterMm, absVx, geo.width, fz) : 0;
+      fx -= hydroDrag;
       w.fx = fx;
       w.fy = fy;
-      tyreTorque[i] = -fx * w.rollingRadius;
       // 3D Steering rack torque: pneumatic Mz + kinematic caster trail + scrub radius + overturning Mx + flat-spot + ISO road micro-roughness
       if (w.isFront) {
         const flatSpotVib = flatSpotVibrationNm(w.flatSpotSeverity, w.rotationRad, w.omega, fz);
@@ -1883,7 +1940,10 @@ export class VehiclePhysics {
     if (rpm >= gb.gears.redline_rpm) this.limiterTimer = eng.limiterCutS;
     const mapIdx = THREE.MathUtils.clamp(Math.round(this.engineMap), 1, 5);
     const engineMapTorqueScale = [1.0, 0.985, 0.96, 0.925, 0.87][mapIdx - 1] ?? 1.0;
-    const rawThrottle = mapIdx >= 3 ? Math.pow(inp.throttle, 1 + (mapIdx - 2) * 0.12) : inp.throttle;
+    const wetPedalBlend = Math.max(this.wetness, mapIdx >= 4 ? (mapIdx - 3) * 0.35 : 0);
+    const lowGearWetExp = this.gear >= 1 && this.gear <= 4 ? (5 - this.gear) * 0.065 * wetPedalBlend : 0;
+    const baseExp = (mapIdx >= 3 ? 1 + (mapIdx - 2) * 0.12 : 1) + lowGearWetExp;
+    const rawThrottle = baseExp > 1 ? Math.pow(inp.throttle, baseExp) : inp.throttle;
     let plate = this.luts.throttle.evaluate(rawThrottle);
     plate = Math.max(plate, THREE.MathUtils.clamp((eng.idleRpm + 200 - rpm) / 800, 0, 0.15));
     if (this.limiterTimer > 0) plate = 0;
@@ -1933,6 +1993,13 @@ export class VehiclePhysics {
           this.luts.deployVsSpeed[this.performanceMode].evaluate(speedKmh) *
           this.luts.deployVsGear.evaluate(this.gear) *
           inp.throttle;
+      }
+      if (pK < 0 && this.wetness > 0) {
+        const wetClip = Math.max(
+          0.35,
+          (1 - 0.32 * this.wetness) * (1 - 0.18 * Math.min(1.5, Math.abs(this.telemetry.latG)) * this.wetness)
+        );
+        pK *= wetClip;
       }
       if (pK < 0 && (soc >= 1 || this.lapHarvestJ >= ers.harvestPerLapJ)) pK = 0;
     }
@@ -2257,12 +2324,17 @@ export class VehiclePhysics {
       const td = this.tyres[w.isFront ? 0 : 1].data;
       const th = td.thermalData;
       const v = Math.abs(w.vx);
-      const slipPower = Math.abs(w.fx * w.slipVelX) + Math.abs(w.fy * w.vy);
-      const hyst = th.hysteresis * w.fz * v;
+      // A rain tyre on a dry road squirms and runs hot; water on the road cools every tread
+      const traits = td.wetTraits ?? SLICK_TRAITS;
+      const heatScale = wetHeatScale(traits, this.wetness);
+      const roadG = ROAD_CONDUCTANCE + wetRoadCoolingWK(this.wetness, v);
+      const extWetCool = wetExternalGasCoolingWK(this.wetness, v);
+      const slipPower = (Math.abs(w.fx * w.slipVelX) + Math.abs(w.fy * w.vy)) * heatScale;
+      const hyst = th.hysteresis * w.fz * v * heatScale;
       const toCore = th.surfaceToCore * (w.surfaceTempC - w.coreTempC);
       const surfCool = (th.surfaceCooling[0] + th.surfaceCooling[1] * v) * (w.surfaceTempC - this.ambientC);
-      const roadCool = w.fz > 0 ? ROAD_CONDUCTANCE * (w.surfaceTempC - this.trackTempC) : 0;
-      const coreCool = (th.coreCooling[0] + th.coreCooling[1] * v) * (w.coreTempC - this.ambientC);
+      const roadCool = w.fz > 0 ? roadG * (w.surfaceTempC - this.trackTempC) : 0;
+      const coreCool = (th.coreCooling[0] + th.coreCooling[1] * v + extWetCool) * (w.coreTempC - this.ambientC);
       w.surfaceTempC += ((th.slipHeatShare * slipPower - toCore - surfCool - roadCool) / th.surfaceHeatCapacity) * dt;
       w.coreTempC += ((hyst + toCore - coreCool) / th.coreHeatCapacity) * dt;
 
@@ -2285,8 +2357,8 @@ export class VehiclePhysics {
         const share = shares[b] * 3;
         const bToCore = th.surfaceToCore * (w.bandTempsC[b] - w.bandCoreTempsC[b]);
         const bSurfCool = (th.surfaceCooling[0] + th.surfaceCooling[1] * v) * (w.bandTempsC[b] - this.ambientC);
-        const bRoadCool = w.fz > 0 ? ROAD_CONDUCTANCE * (shares[b] * 3) * (w.bandTempsC[b] - this.trackTempC) : 0;
-        const bCoreCool = (th.coreCooling[0] + th.coreCooling[1] * v) * (w.bandCoreTempsC[b] - this.ambientC);
+        const bRoadCool = w.fz > 0 ? roadG * (shares[b] * 3) * (w.bandTempsC[b] - this.trackTempC) : 0;
+        const bCoreCool = (th.coreCooling[0] + th.coreCooling[1] * v + extWetCool) * (w.bandCoreTempsC[b] - this.ambientC);
         w.bandTempsC[b] += ((th.slipHeatShare * slipPower * share - bToCore - bSurfCool - bRoadCool) / th.surfaceHeatCapacity) * dt;
         w.bandCoreTempsC[b] += ((hyst * share + bToCore - bCoreCool) / th.coreHeatCapacity) * dt;
         w.bandCarcassTempsC[b] = 0.55 * w.bandTempsC[b] + 0.45 * w.bandCoreTempsC[b];
@@ -2299,7 +2371,8 @@ export class VehiclePhysics {
       w.bandTempsC[2] += d12;
 
       // Wear & 16-sector flat-spotting / graining / blistering / dirt pickup
-      const wearDelta = (slipPower * 1.4e-8 + w.fz * v * 2.5e-10) * dt;
+      const wearDelta =
+        (slipPower * 1.4e-8 + w.fz * v * 2.5e-10) * dt * this.realism.tyreWearScale * wetWearScale(traits, this.wetness);
       w.wear = Math.min(1, w.wear + wearDelta);
       const numSec = w.circumferentialWear.length;
       const rimSpeed = Math.abs(w.omega * w.rollingRadius);
@@ -2327,23 +2400,28 @@ export class VehiclePhysics {
       }
       w.flatSpotSeverity = Math.min(1, Math.max(0, (maxSecW - minSecW) * 18));
 
+      // Graining / blistering thresholds move down with a rain tyre's working window
+      const core = w.coreTempC - traits.tempShiftC;
       const surfCoreDelta = w.surfaceTempC - w.coreTempC;
-      if (w.coreTempC < 78 && surfCoreDelta > 10 && slipPower > 6000) {
-        w.grainLevel = Math.min(1, w.grainLevel + (slipPower / 100000) * ((78 - w.coreTempC) / 30) * 0.25 * dt);
-      } else if (w.coreTempC >= 82 && w.coreTempC <= 120 && w.fz > 500 && slipPower < 25000) {
+      if (core < 78 && surfCoreDelta > 10 && slipPower > 6000) {
+        w.grainLevel = Math.min(1, w.grainLevel + (slipPower / 100000) * ((78 - core) / 30) * 0.25 * dt);
+      } else if (core >= 82 && core <= 120 && w.fz > 500 && slipPower < 25000) {
         w.grainLevel = Math.max(0, w.grainLevel - 0.035 * dt);
       }
-      if (w.coreTempC > 128) {
-        w.blisterLevel = Math.min(1, w.blisterLevel + (w.coreTempC - 128) * 0.0035 * dt);
+      if (core > 128) {
+        w.blisterLevel = Math.min(1, w.blisterLevel + (core - 128) * 0.0035 * dt);
       }
 
       w.dirtyLevel = advanceDirtyLevel(w.dirtyLevel, w.ground.surface, slipPower, v, dt, this.trackEvolution.marbleLevel);
 
       const p = td.pressureData;
-      w.pressurePsi = (w.coldPressurePsi * (w.coreTempC + 273.15)) / (p.coldRefC + 273.15);
+      const rimWetDeltaC = rimWetEnvironmentCoolingWK(this.wetness, v) * 0.45 * Math.max(0, w.coreTempC - this.ambientC) * 0.02;
+      const effectiveGasTempC = Math.max(this.ambientC - 5, w.coreTempC - rimWetDeltaC);
+      w.pressurePsi = (w.coldPressurePsi * (effectiveGasTempC + 273.15)) / (p.coldRefC + 273.15);
 
       // 2-node physical brake disc thermal step
       const frictionTorqueNm = this.lastInputs.brake > 0.01 ? Math.abs(w.brakeTorqueNm) : 0;
+      const sprayBoost = this.aeroWake.sprayIntensity ?? 0;
       stepBrakeDiscThermal(
         w.brakeDisc,
         frictionTorqueNm,
@@ -2352,7 +2430,8 @@ export class VehiclePhysics {
         this.ambientC,
         dt,
         this.brakeCompound,
-        w.isFront ? this.brakeDuctScale.front : this.brakeDuctScale.rear
+        w.isFront ? this.brakeDuctScale.front : this.brakeDuctScale.rear,
+        Math.min(1, this.wetness + 0.5 * sprayBoost)
       );
     }
   }
