@@ -19,7 +19,7 @@ LibreCorsa is an independent, non-commercial, open-source web simulator built wi
 
 ### Optional circuits (`public/tracks/<id>/`)
 
-Each model below is licensed under [Creative Commons Attribution 4.0 (CC BY 4.0)](http://creativecommons.org/licenses/by/4.0/). Changes for the simulator: uniformly rescaled where needed to match the official lap length, recentred, far-away scenery dropped, textures re-encoded to WebP (max 2048 px), geometry quantised and meshopt-compressed, and hidden physics collider / surface meshes and track data (centreline, kerbs, run-off, barriers, corners) generated from the geometry.
+Each model below is licensed under [Creative Commons Attribution 4.0 (CC BY 4.0)](http://creativecommons.org/licenses/by/4.0/). Changes for the simulator: uniformly rescaled where needed to match the official lap length, recentred, far-away scenery dropped, textures re-encoded to WebP (max 2048 px), geometry quantised and meshopt-compressed, and hidden physics collider / surface meshes and track data (centreline, edges, kerbs, run-off, barriers, corners) generated from the geometry. Kerb meshes with a generated red-and-white texture are added on top of the scan.
 
 * `"Suzuka Circuit 2001 layout"` ([https://skfb.ly/pLorW](https://skfb.ly/pLorW)) by **Dave**
 * `"Shanghai International Circuit 2018 layout"` ([https://skfb.ly/pLqvL](https://skfb.ly/pLqvL)) by **Dave**
@@ -36,6 +36,8 @@ Each model below is licensed under [Creative Commons Attribution 4.0 (CC BY 4.0)
 * **Framer Motion** — Motion Division (MIT)
 * **Lucide Icons** — Lucide Contributors (ISC)
 * **global_racetrajectory_optimization** — TUM Institute of Automotive Technology (LGPL-3.0): minimum-time racing lines that seed each circuit's F1 and GT3 lines. Used offline only, not bundled.
+* **racetrack-database** — TUM Institute of Automotive Technology (LGPL-3.0): centrelines and track widths, used offline to cross-check the widths measured on the circuit scans. Not bundled.
+* **Design references** (no code or assets used): the kerb as a height ramp with a ripple, as in TORCS / Speed Dreams, and the per-surface table (friction, bump, vibration, valid track) as in Assetto Corsa's `surfaces.ini`.
 
 
 ---

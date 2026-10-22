@@ -51,11 +51,14 @@
 
 ### Physics
 - **500 Hz fixed-step integration** (4 × 2 kHz sub-steps): a 3D rigid body with each wheel riding the real track surface.
-- **Tyres**: a Pacejka-style slip curve with combined slip, load sensitivity, carcass relaxation and a load-dependent rolling radius. A 9-node thermal model (inner/middle/outer × surface/bulk/carcass) sets the grip window, ideal-gas pressure sets carcass stiffness, and the tyres wear. Soft, medium and hard compounds.
+- **Tyres**: a Pacejka-style slip curve with combined slip, load sensitivity, carcass relaxation and a load-dependent rolling radius. A 9-node thermal model (inner/middle/outer × surface/bulk/carcass) sets the grip window, ideal-gas pressure sets carcass stiffness, and the tyres wear. Soft, medium and hard slicks, plus intermediates and full wets that clear water up to a depth and aquaplane past it.
 - **Chassis**: double-wishbone kinematics with roll centres from the hardpoints, springs, dampers, bump stops, anti-roll bars and heave elements. There's a preload / power / coast limited-slip differential and thermal brakes whose pad friction changes with temperature.
 - **Aero**: ride-height-sensitive wings and floor, altitude-corrected air density, and dirty air behind other cars. 2026 active aero switches between Z-mode (cornering) and X-mode (straights).
+- **Surfaces**: one data table for road, kerb, sausage kerb, run-off, pit lane, grass and gravel, with dry and wet friction, rolling resistance, a bump ripple you feel through the wheel, vibration and whether it counts for track limits. A circuit can override it in its track data. Kerbs rise to a 32 mm crown with a 4 mm ripple.
+- **Weather and time of day**: clear, overcast, light rain, heavy rain, drying and dynamic weather. The water film builds and drains, and the cars dry the racing line first. Six times of day, and the clock can run at up to 60×.
 - **Evolving track**: the racing line rubbers in as you drive.
 - **Assists**: traction control on the friction circle, ABS, and a slip-angle-limited steering assist for gamepads. Each one can be switched off.
+- **Realism levels**: Casual (no tyre wear or fuel use, milder rain), Standard and Full.
 
 ### Cars
 | Car | Model | Notes |
@@ -71,15 +74,16 @@ Each car has its own cockpit, steering wheel and shift lights, plus a multi-laye
 | :-- | :-- | --: |
 | **Rwanda International Circuit** (fictional, default) | Rwanda | 5.30 km |
 | Suzuka Circuit | Japan | 5.83 km |
-| Shanghai International Circuit | China | 5.40 km |
+| Shanghai International Circuit | China | 5.44 km |
 | Mobility Resort Motegi | Japan | 4.78 km |
 
-The Rwanda circuit was built in Blender for this project: 14 corners, 52 m of elevation, 1,400 m above sea level. The others are CC BY 4.0 Sketchfab scans, converted by `scripts/tracks/build_track.py`. It traces the centreline, rescales each scan to the official lap length and detects kerbs, run-off, gravel, barriers, corners and DRS zones. Then `npm run compress-tracks` meshopt-compresses the meshes, and the hidden physics meshes stay bit-exact. Every circuit has a lap-time-optimal racing line for each car class. Open the sim with `?colliders=1` to see the physics surfaces drawn over the scan.
+The Rwanda circuit was built in Blender for this project: 14 corners, 52 m of elevation, 1,400 m above sea level. The others are CC BY 4.0 Sketchfab scans, converted by `scripts/tracks/build_track.py`. It traces the centreline, rescales each scan to the official lap length and detects run-off, gravel, barriers, corners and DRS zones. The track edges are measured on the scan mesh, and the widths agree with the [TUM racetrack-database](https://github.com/TUMFTM/racetrack-database). Kerbs come from the painted kerbs in the scan, and corners where the paint was missed get them by rule: inside at the apex, outside on the exit and at turn-in on the tighter ones. Where a scan paints every kerb (Shanghai), the paint alone is used: the road edge stops where the kerb starts, and the centreline sits midway between the measured edges. Each kerb is built as a visible textured mesh that matches the physics kerb. Then `npm run compress-tracks` meshopt-compresses the meshes, and the hidden physics meshes stay bit-exact. Every circuit has a lap-time-optimal racing line for each car class. Open the sim with `?colliders=1` to see the physics surfaces drawn over the scan.
 
 ### Racing
-- **Race the AI**: a 5-car field with a standing start behind the lights, traffic and side-by-side racing, and a results screen.
+- **Race the AI**: a 5-car field with a standing start behind the lights, traffic and side-by-side racing, and a results screen. The AI level runs from Rookie to Alien and can be changed from the pause menu. Each car class has a tuning file in [`public/ai`](public/ai), with per-circuit and per-section overrides. The AI learns braking points and apex speeds corner by corner. In the rain it fits intermediates or full wets and plans its corner speeds and braking on the wet grip.
+- **Split gaps**: the gap to the car ahead and behind at every sector split.
 - **Practice tools**: lap and sector timing, a live delta, a ghost of your best lap (saved in your browser, and it can be exported and imported), a 90-second instant replay with free cameras, and a lap summary.
-- **Multiplayer**: peer-to-peer over WebRTC. Use a 6-character room code, or a manual offer/answer copy-paste with no signalling server at all. Browser tabs on the same machine pair up automatically. Remote cars are interpolated at display rate.
+- **Multiplayer**: peer-to-peer over WebRTC. Use a 6-character room code, or a manual offer/answer copy-paste with no signalling server at all. Browser tabs on the same machine pair up automatically. Other players' cars are predicted to the present from their newest packet and the measured latency, so you touch a car where you see it; contact with them is soft and switches off while their packets are stale.
 - **Online leaderboard**: laps and their ghosts go to a free Supabase project ([`scripts/leaderboard-supabase`](scripts/leaderboard-supabase)). Without one configured, the board lists your own best laps. A Cloudflare Worker version is in [`scripts/leaderboard-worker`](scripts/leaderboard-worker).
 - **Cameras**: cockpit eye-point with live mirrors and the steering-wheel display, a broadcast T-cam, chase, and trackside TV cameras that pan, zoom and cut between corners.
 
@@ -125,8 +129,9 @@ npm run build            # static export into ./out
 | Script | What it does |
 | :-- | :-- |
 | `npm run typecheck` | `tsc --noEmit` over the whole project |
-| `npm run verify` | Every `scripts/verify-*.ts` suite (physics, f12026-car, GT3, input, lap tools, race session, realism, telemetry out, WebHID FFB) |
+| `npm run verify` | Every `scripts/verify-*.ts` suite (physics, f12026-car, GT3, input, lap tools, race session, realism, weather, AI tuning, telemetry out, WebHID FFB) |
 | `npm run verify:laps` | Slow: player-style laps for every car and assist preset at full pace |
+| `npm run race:headless` | A full-physics AI race without rendering, faster than real time, with a results table. `-- --track suzuka --car amg-gt3 --weather heavy_rain --sweep skill` |
 | `npm run compress-tracks` | Meshopt-compress the circuit GLBs and check the physics meshes are unchanged |
 | `npm run ffb` | Local force-feedback and telemetry bridge (Windows) |
 
