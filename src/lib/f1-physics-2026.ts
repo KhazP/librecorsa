@@ -1534,6 +1534,8 @@ export class F1Physics2026 {
     this.updateGravity(sample);
     const altitudeM = BASE_ALTITUDE_M + sample.position.y;
     this.airDensity = this.computeAirDensity(altitudeM);
+    // The rear flap stays shut on a wet road whoever asked for it (a manual toggle or a flying start included)
+    if (this.activeAeroMode === 'X_MODE' && !isRearFlapAllowedInWet(this.weatherSample.wetness)) this.activeAeroMode = 'Z_MODE';
     const xTarget = this.activeAeroMode === 'X_MODE' ? 1 : 0;
     const aeroRate = dt / VF26_ACTIVE_AERO_TRANSITION_S;
     this.xModeBlend += THREE.MathUtils.clamp(xTarget - this.xModeBlend, -aeroRate, aeroRate);

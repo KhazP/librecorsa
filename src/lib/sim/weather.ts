@@ -341,17 +341,20 @@ export function defaultWeatherNodesForPreset(
         makeNode('clear', 0, 45, 12, 3),
       ];
     case 'dynamic': {
-      const skies: SkyCoverId[] = [
-        'light_clouds',
-        'partially_cloudy',
-        'overcast',
-        'cloudy_light_rain',
-        'overcast_rain',
-        'overcast_heavy_rain',
-      ];
-      return WEATHER_NODE_FRACTIONS.map((_, idx) => {
-        const h = hash01(seed, idx + 11);
-        const sky = skies[Math.min(skies.length - 1, Math.floor(h * skies.length))];
+      // What the dynamic weather will actually do at each node over the default schedule, as the nearest sky
+      const skies = Object.keys(SKY_COVER_SPECS) as SkyCoverId[];
+      return WEATHER_NODE_FRACTIONS.map((f, idx) => {
+        const d = dynamicWeatherAt(seed, f * DEFAULT_WEATHER_DURATION_S);
+        let sky = skies[0];
+        let best = Infinity;
+        for (const id of skies) {
+          const sp = SKY_COVER_SPECS[id];
+          const e = (sp.cloud - d.cloud) ** 2 + 4 * (sp.rain - d.rain) ** 2;
+          if (e < best) {
+            best = e;
+            sky = id;
+          }
+        }
         const spec = SKY_COVER_SPECS[sky];
         const oct = (Math.floor(hash01(seed, idx + 31) * 8) % 8) as WindDirectionOctant;
         return makeNode(

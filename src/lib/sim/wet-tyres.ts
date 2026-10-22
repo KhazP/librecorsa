@@ -296,6 +296,11 @@ export function rimWetEnvironmentCoolingWK(wetness: number, speedMs: number): nu
   return transition * (0.45 + 0.035 * Math.abs(speedMs));
 }
 
+/** Intermediates and full wets (the rest are slicks) */
+export function isRainCompound(c: TireCompound): boolean {
+  return c === 'intermediate' || c === 'wet';
+}
+
 /** The compound to fit for a water film of `waterMm` on the racing line (AI tyre choice) */
 export function recommendedCompound(waterMm: number, dryChoice: TireCompound = 'medium'): TireCompound {
   if (waterMm > 1.1) return 'wet';

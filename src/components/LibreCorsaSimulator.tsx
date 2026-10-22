@@ -65,6 +65,7 @@ import { createRainFx } from "@/lib/render/rain-fx";
 import { setAsphaltWetness } from "@/lib/render/asphalt-sheen";
 import { SIM_REALISM_FLAGS, type SimRealism } from "@/lib/sim/sim-realism";
 import {
+  isRainCompound,
   recommendedCompound,
   SLICK_TRAITS,
   WET_TYRE_TRAITS,
@@ -777,7 +778,9 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     const next = settingsRef.current.conditions;
     if (JSON.stringify(env.weather.conditions) !== JSON.stringify(next)) {
       env.setConditions(next);
-      const autoCompound = recommendedCompound(env.weather.lineWaterMm, "soft");
+      // Slicks or rain tyres for the new water; a player already on slicks keeps their own slick
+      const current = physicsRef.current?.tireCompound;
+      const autoCompound = recommendedCompound(env.weather.lineWaterMm, current && !isRainCompound(current) ? current : "soft");
       if (physicsRef.current && physicsRef.current.tireCompound !== autoCompound) {
         physicsRef.current.tireCompound = autoCompound;
         setTireCompound(autoCompound);
@@ -1147,7 +1150,10 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         car.gamepadAssistEnabled = prev.gamepadAssistEnabled;
         car.tireCompound = prev.tireCompound;
       } else {
-        const autoCompound = recommendedCompound(getTrackEnv().weather.lineWaterMm, "soft");
+        const autoCompound = recommendedCompound(
+          getTrackEnv().weather.lineWaterMm,
+          isRainCompound(car.tireCompound) ? "soft" : car.tireCompound
+        );
         car.tireCompound = autoCompound;
         setTireCompound(autoCompound);
       }
@@ -1787,8 +1793,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
               SIM_REALISM_FLAGS[settingsRef.current.realism].wetSeverity
             ) / wetTraits.dryGrip
           : 1;
-      const speedAeroFrac = Math.min(1, (vFwd * vFwd) / (55 * 55));
-      const kbMaxLatAccel = (21 + (KB_STEER_LIMIT_ACCEL - 21) * speedAeroFrac) * wetGripScale;
+      // The dry limit, scaled by what the water leaves of the tyre's grip
+      const kbMaxLatAccel = KB_STEER_LIMIT_ACCEL * wetGripScale;
       const kbSteerLimit = Math.min(
         1,
         ((physics.wheelbaseM * kbMaxLatAccel) / Math.max(1, vFwd * vFwd) +
