@@ -150,4 +150,7 @@ Every push to `main` runs typecheck and the verify suites, then builds and deplo
 - **Circuits**: the scans are by **Dave**, plus Motegi by **Kevin Love SketchFab**, all CC BY 4.0.
 - **Rights holders**: if you made a model, texture, sound or other asset used here and want it credited, corrected or removed, open a [**rights / takedown request**](https://github.com/KhazP/librecorsa/issues/new?template=takedown-request.yml) — it will be fixed or removed from the live site, usually within 7 days.
 
+> [!CAUTION]
+> **No Official Cryptocurrency:** LibreCorsa has no official token or cryptocurrency, and is not related to any third-party actors trying to profit off of this repo. Any coin on crypto sites using the LibreCorsa name, logo, or repository link is unauthorized and unaffiliated with the developer.
+
 Full attribution and links are in [CREDITS.md](CREDITS.md).
