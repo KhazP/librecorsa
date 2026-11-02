@@ -12,6 +12,7 @@ import type { RacingLineId, RunoffStyle, TrackSamplePoint } from "@/types/f1";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.js";
 import { assetProgress } from "@/lib/loading/asset-progress";
+import { applySceneryDetail, prepareTreeGeometry, sceneryKind, setSceneryTime } from "@/lib/render/scenery-detail";
 
 export interface BuiltRwandaScene {
   sceneGroup: THREE.Group;
@@ -188,7 +189,19 @@ function loadTrackGlb(
         obj.material = Array.isArray(obj.material) ? obj.material.map(withRoughDiffuse) : withRoughDiffuse(obj.material);
         const offset = DECAL_NODES[topName];
         const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+        // Flat, untextured scenery (Rwanda's trees, roofs, spire, lake, paint): shader detail, and the trees'
+        // normals, tint and occlusion baked into their geometry (scenery-detail.ts)
+        let treeShading = false;
+        let baseY = 0;
+        if (mats.some((m) => sceneryKind(m) !== null)) {
+          if (mats.some((m) => m.name === "Tree_Trunk" || m.name === "Tree_Canopy")) {
+            treeShading = prepareTreeGeometry(obj.geometry, mats.some((m) => m.name === "Tree_Trunk") ? "trunk" : "canopy");
+          }
+          obj.geometry.computeBoundingBox();
+          baseY = box.copy(obj.geometry.boundingBox!).applyMatrix4(obj.matrixWorld).min.y;
+        }
         for (const mat of mats) {
+          applySceneryDetail(mat, { baseY, treeShading });
           if (!(mat instanceof THREE.MeshStandardMaterial)) continue;
           if (topName === "Track_Asphalt_Road") applyAsphaltSheen(mat, sheenMask);
           for (const tex of [mat.map, mat.roughnessMap, mat.metalnessMap, mat.normalMap]) {
@@ -1202,6 +1215,7 @@ export function buildRwandaCircuitScene(
   if (isRwanda) sceneGroup.add(jetGroup);
 
   const updateEnvironment = (elapsedSeconds: number) => {
+    setSceneryTime(elapsedSeconds);
     waterMesh.position.y = -18.0 + Math.sin(elapsedSeconds * 1.4) * 0.08;
     // Gently circle the RwandAir jetliner across the sky near Bugesera Airport
     const jetAngle = elapsedSeconds * 0.045;
