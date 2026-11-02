@@ -74,7 +74,8 @@ export interface TyreSetupLimits {
 }
 
 const F1_TYRE_SETUP_LIMITS: TyreSetupLimits = {
-  pressurePsi: { min: 17, max: 27, step: 0.5 },
+  // VF26 cold gauge pressures at 20 °C; includes the physical 15.7 / 14.1 psi defaults.
+  pressurePsi: { min: 14, max: 27, step: 0.5 },
   camberFrontDeg: { min: -4.5, max: -1.5, step: 0.1 },
   camberRearDeg: { min: -3, max: -0.5, step: 0.1 },
 };

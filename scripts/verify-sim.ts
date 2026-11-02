@@ -175,7 +175,7 @@ async function runVerification() {
       `Magic Formula slip curve (B=${tyre.mf.B.toFixed(3)} C=${tyre.mf.C.toFixed(3)} E=${tyre.mf.E.toFixed(3)}) peaks at x=${peakX.toFixed(3)} (1.0), slope ${slope0.toFixed(2)} (2.0), ${at3.toFixed(3)} at x=3 (falloff ${spec.falloffLevel})`
     );
   }
-  // Inflation: ideal gas, P/T constant; pressure stiffens the carcass; load shortens the rolling radius
+  // Inflation: ideal gas, P_absolute/T constant; pressure stiffens the carcass; load shortens the rolling radius
   {
     const spec = VF26_TYRES.soft.front;
     const tyre = createTyreRuntime(spec, 20);
@@ -183,7 +183,7 @@ async function runVerification() {
     setTyreTemperature(tyre, 95);
     const pHot = tyre.pressurePsi;
     const rateHot = tyre.verticalRate;
-    const ideal = (pCold * (95 + 273.15)) / (20 + 273.15);
+    const ideal = ((pCold + 14.6959) * (95 + 273.15)) / (20 + 273.15) - 14.6959;
     const rLight = tyreRollingRadius(tyre, 2000);
     const rHeavy = tyreRollingRadius(tyre, 12000);
     assert(
@@ -978,8 +978,8 @@ async function runVerification() {
       got.coldPressurePsi.rear === 19.1 &&
       got.camberDeg.front === -3.2 &&
       got.camberDeg.rear === -1.8;
-    // Hot pressure follows the ideal gas law from the new cold pressure
-    const hotPsi = (coldPsi: number, gasC: number) => (coldPsi * (gasC + 273.15)) / 293.15;
+    // Setup and output stay in psi gauge; the ideal gas law uses absolute pressure.
+    const hotPsi = (coldPsi: number, gasC: number) => ((coldPsi + 14.6959) * (gasC + 273.15)) / 293.15 - 14.6959;
     const hotOk =
       Math.abs(sim.wheels[0].tyre.pressurePsi - hotPsi(20.4, sim.wheels[0].tyre.gasTempC)) < 1e-9 &&
       Math.abs(sim.wheels[2].tyre.pressurePsi - hotPsi(19.1, sim.wheels[2].tyre.gasTempC)) < 1e-9;
@@ -1004,7 +1004,7 @@ async function runVerification() {
     const clamped = sim.getTyreSetup();
     assert(
       clamped.coldPressurePsi.front === 27 &&
-        clamped.coldPressurePsi.rear === 17 &&
+        clamped.coldPressurePsi.rear === 14 &&
         clamped.camberDeg.front === -4.5 &&
         clamped.camberDeg.rear === -0.5,
       `Tyre setup inputs are clamped (pressure ${clamped.coldPressurePsi.front}/${clamped.coldPressurePsi.rear} psi, camber ${clamped.camberDeg.front}°/${clamped.camberDeg.rear}°)`
