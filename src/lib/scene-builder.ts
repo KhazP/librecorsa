@@ -48,16 +48,16 @@ const DECAL_NODES: Record<string, number> = {
   Track_Runoff_Paint: -1,
 };
 /**
- * Diffuse roughness (EON diffuse BRDF, three r187+) for the circuits' rough ground by material name. Rough
- * surfaces back-scatter: with the low golden-hour sun behind the camera sunlit grass reads ~25% brighter, and
- * looking into the sun a little darker, where Lambert shading looks the same from every side. Only materials
- * named per surface match (Rwanda's Terrain_Grass / Pit_Apron_Concrete, Motegi's GRASS* / *CONCRETE*); the
- * scanned circuits share one atlas material and keep plain Lambert.
+ * Diffuse roughness (EON diffuse BRDF, three r187+) for the circuits' concrete by material name. Rough surfaces
+ * back-scatter: with the low golden-hour sun behind the camera sunlit concrete reads brighter, and looking into the
+ * sun a little darker, where Lambert shading looks the same from every side. Only materials named per surface
+ * match (Rwanda's Pit_Apron_Concrete, Motegi's *CONCRETE*); the scanned circuits share one atlas material and keep
+ * plain Lambert.
+ *
+ * The terrain grass stays Lambert on purpose: the rough lobe flattens the shading across slopes, so the ground's
+ * relief (the real elevation of the site) read differently from how it was modelled.
  */
-const ROUGH_DIFFUSE: readonly (readonly [RegExp, number])[] = [
-  [/grass/i, 1.0],
-  [/concrete/i, 0.5],
-];
+const ROUGH_DIFFUSE: readonly (readonly [RegExp, number])[] = [[/concrete/i, 0.5]];
 const roughDiffuseConversions = new WeakMap<THREE.Material, THREE.Material>();
 
 /** The material with its rough-diffuse lobe: physical materials in place, standard ones as a shared physical copy */
