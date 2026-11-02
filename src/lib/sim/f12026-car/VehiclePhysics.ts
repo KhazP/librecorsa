@@ -99,6 +99,7 @@ import {
   type SuspensionSettingUnits,
   suspensionSupportsHeave,
   type TyresCompoundData,
+  type TyresPressureData,
   type WingData,
   type ZoneData_DRSZone,
 } from './F12026CarConfig';
@@ -537,6 +538,25 @@ export function createTyreRuntime(compound: TyresCompoundData, rear = false): Ty
     dxCurve: model.dxCurve ? new Lut(model.dxCurve) : null,
     brakeDxMod: model.brakeDxMod ?? 0,
   };
+}
+
+/**
+ * Peak friction coefficient of a tyre at vertical load `fz` (N), lateral (`y`) or longitudinal (`x`): the compound's
+ * tabulated load-sensitivity curve, else the power law about Fz0. Before temperature, pressure, camber, wear and
+ * water scale it (the per-wheel force in `VehiclePhysics` multiplies those in).
+ */
+export function tyrePeakMu(t: Pick<TyreRuntime, 'data' | 'fz0' | 'dyCurve' | 'dxCurve'>, fz: number, axis: 'x' | 'y'): number {
+  const curve = axis === 'y' ? t.dyCurve : t.dxCurve;
+  if (curve) return curve.evaluate(fz);
+  const m = t.data.modelData;
+  const loadRef = Math.max(0.05, fz / t.fz0);
+  return axis === 'y' ? m.Dy0 * Math.pow(loadRef, m.lsExpY - 1) : m.Dx0 * Math.pow(loadRef, m.lsExpX - 1);
+}
+
+/** Grip at hot inflation pressure `psi` (gauge): a parabola about the optimum, floored at half grip */
+export function tyrePressureGrip(p: Pick<TyresPressureData, 'optimalPsi' | 'pressureGripSensitivity'>, psi: number): number {
+  const dp = (psi - p.optimalPsi) / p.optimalPsi;
+  return Math.max(0.5, 1 - p.pressureGripSensitivity * dp * dp);
 }
 
 /** Pure-slip force shape at normalised slip s ≥ 0 (1 at the peak, s = 1) */
@@ -1639,7 +1659,6 @@ export class VehiclePhysics {
       if (fz > 0) {
         const td = tyre.data;
         const cam = td.camberData;
-        const loadRef = Math.max(0.05, fz / tyre.fz0);
         // Temperature grip per band (inner / middle / outer), weighted by each band's share of the contact pressure
         const sh = w.bandLoadShares;
         const thermal = realismThermalGrip(
@@ -1648,8 +1667,7 @@ export class VehiclePhysics {
             sh[2] * tyre.thermal.evaluate(w.bandTempsC[2]),
           this.realism
         );
-        const dp = (w.pressurePsi - td.pressureData.optimalPsi) / td.pressureData.optimalPsi;
-        const pressureGrip = Math.max(0.5, 1 - td.pressureData.pressureGripSensitivity * dp * dp);
+        const pressureGrip = tyrePressureGrip(td.pressureData, w.pressurePsi);
         w.thermalGrip = thermal;
         // Wear, graining, blistering, dirt and flat-spots, as the VF26's tyre model (ac-tyre computeTyreForces)
         const degradation =
@@ -1685,8 +1703,8 @@ export class VehiclePhysics {
         const camberGripX = THREE.MathUtils.clamp(1 + cam.dcamber0_x * gAbs + cam.dcamber1_x * gAbs * gAbs, 0.7, 1.1);
         // Peak μ at this load: the compound's load tables, else the power law about Fz0. BRAKE_DX_MOD adds
         // longitudinal grip while the tyre is braking
-        const dY = tyre.dyCurve ? tyre.dyCurve.evaluate(fz) : model.Dy0 * Math.pow(loadRef, model.lsExpY - 1);
-        const dX = tyre.dxCurve ? tyre.dxCurve.evaluate(fz) : model.Dx0 * Math.pow(loadRef, model.lsExpX - 1);
+        const dY = tyrePeakMu(tyre, fz, 'y');
+        const dX = tyrePeakMu(tyre, fz, 'x');
         const brakeMod = w.slipRatio < 0 ? 1 + tyre.brakeDxMod : 1;
         const muY = dY * base * camberGrip;
         const muX = dX * brakeMod * base * camberGripX;
