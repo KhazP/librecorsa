@@ -126,6 +126,10 @@ const AUTO_BRAKE_DOWNSHIFT_PEDAL = 0.3;
 const AUTO_BRAKE_DOWNSHIFT_GAP_S = 0.25;
 /** Probe start above the suspension hardpoint (m) */
 const GROUND_PROBE_UP_M = 0.6;
+/** Placement: the ground under each tyre is looked for at most this far above the ground under the CG (m) */
+const ROAD_ATTITUDE_PROBE_UP_M = 1.5;
+/** Placement: steepest grade or camber the car is seated on (rad, ≈30 %) */
+const ROAD_ATTITUDE_MAX_RAD = 0.3;
 /** Least climb per step over an abrupt rise (m), so a car at rest still settles onto a raised surface */
 const STEP_CLIMB_MIN_M = 0.0005;
 /** Droop limiter stiffness / damping (N/m, Ns/m) */
@@ -1071,7 +1075,10 @@ export class VehiclePhysics {
     const hit = createGroundHit();
     const groundY = this.ground.query(x, z, probeY, hit) ? hit.height : 0;
     const pitch = Math.asin(this.staticPitchSin());
-    this.quaternion.setFromEuler(new THREE.Euler(pitch, yawRad, 0, 'YXZ'));
+    // Seated on the road's grade and camber, not level: level on a 10 % hill, one axle starts deep in its bump rubber
+    // and the other past its droop stop, and that spring torque pitches the car over before it is released
+    const road = this.roadAttitude(x, z, yawRad, groundY, hit);
+    this.quaternion.setFromEuler(new THREE.Euler(pitch - road.gradeRad, yawRad, road.bankRad, 'YXZ'));
     this.position.set(x, groundY + ch.cgHeight + this.rideHeightOffsetM, z);
     this.velocity.set(0, 0, 0);
     this.angularVelocity.set(0, 0, 0);
@@ -1132,7 +1139,9 @@ export class VehiclePhysics {
       this.updateBasis();
       this.velocity.x = speedMs * _ez.x;
       this.velocity.z = speedMs * _ez.z;
-      for (const w of this.wheels) w.omega = speedMs / Math.max(0.2, w.rollingRadius || 0.35);
+      // Free-rolling at the road speed under each tyre: held at speed / r, the tyres would drive (or brake) the
+      // pinned car through the whole settle, and on a grade that thrust pitches it up
+      for (const w of this.wheels) w.omega = (k === 0 ? speedMs : Math.max(0, w.vx)) / Math.max(0.2, w.rollingRadius || 0.35);
       if (rolling) this.engineOmega = 0.5 * (this.wheels[2].omega + this.wheels[3].omega) * this.totalRatio();
       this.substep(h, hold);
       this.position.x = x;
@@ -1154,7 +1163,9 @@ export class VehiclePhysics {
       const slope = (0.5 * (W[0].contactY + W[1].contactY) - 0.5 * (W[2].contactY + W[3].contactY)) / this.wheelbaseM;
       const n = Math.hypot(1, slope);
       this.velocity.set((speedMs * hx) / hl / n, (speedMs * slope) / n, (speedMs * hz) / hl / n);
+      this.angularVelocity.set(0, 0, 0);
       for (const w of this.wheels) {
+        w.omega = speedMs / Math.max(0.2, w.rollingRadius || 0.35);
         w.slipRatio = 0;
         w.tanSlipAngle = 0;
       }
@@ -1162,6 +1173,34 @@ export class VehiclePhysics {
     this.prevVelocity.copy(this.velocity);
     this.ffbSubframeSamples.length = 0;
     this.updateOutputs(0);
+  }
+
+  /**
+   * Grade along the heading (rad, + = uphill) and camber across it (rad, + = left side higher) of the ground under
+   * the four tyres of a car placed at (x, z) heading `yawRad`, for seating it on the road. A corner with no ground
+   * under it reads as `groundY`; a cliff edge or a wall face under one corner is clamped to a believable road.
+   */
+  private roadAttitude(x: number, z: number, yawRad: number, groundY: number, hit: GroundHit): { gradeRad: number; bankRad: number } {
+    const fx = Math.sin(yawRad);
+    const fz = Math.cos(yawRad);
+    const a = this.cgToFrontM;
+    const b = this.cgToRearM;
+    const tf = 0.5 * this.config.chassis.trackWidthFront;
+    const tr = 0.5 * this.config.chassis.trackWidthRear;
+    // Body +left = up × forward = (fz, 0, −fx)
+    const at = (along: number, left: number) => {
+      const px = x + fx * along + fz * left;
+      const pz = z + fz * along - fx * left;
+      return this.ground.query(px, pz, groundY + ROAD_ATTITUDE_PROBE_UP_M, hit) ? hit.height : groundY;
+    };
+    const fl = at(a, tf);
+    const fr = at(a, -tf);
+    const rl = at(-b, tr);
+    const rr = at(-b, -tr);
+    const gradeRad = Math.atan2(0.5 * (fl + fr) - 0.5 * (rl + rr), a + b);
+    const bankRad = Math.atan2(0.5 * (fl + rl) - 0.5 * (fr + rr), tf + tr);
+    const lim = ROAD_ATTITUDE_MAX_RAD;
+    return { gradeRad: THREE.MathUtils.clamp(gradeRad, -lim, lim), bankRad: THREE.MathUtils.clamp(bankRad, -lim, lim) };
   }
 
   /** Advance by a render frame (any dt); runs fixed 500 Hz steps */
