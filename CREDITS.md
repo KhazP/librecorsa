@@ -35,6 +35,10 @@ Each model below is licensed under [Creative Commons Attribution 4.0 (CC BY 4.0)
 * **Tailwind CSS** — Tailwind Labs (MIT)
 * **Framer Motion** — Motion Division (MIT)
 * **Lucide Icons** — Lucide Contributors (ISC)
+* **Fonts** (`src/app/fonts/`, Latin subsets as served by Google Fonts), each under the [SIL Open Font License 1.1](https://openfontlicense.org), licence text alongside:
+  * **Titillium Web** — Accademia di Belle Arti di Urbino
+  * **Orbitron** — The Orbitron Project Authors (The League of Moveable Type); Reserved Font Name "Orbitron"
+  * **JetBrains Mono** — The JetBrains Mono Project Authors
 * **global_racetrajectory_optimization** — TUM Institute of Automotive Technology (LGPL-3.0): minimum-time racing lines that seed each circuit's F1 and GT3 lines. Used offline only, not bundled.
 * **racetrack-database** — TUM Institute of Automotive Technology (LGPL-3.0): centrelines and track widths, used offline to cross-check the widths measured on the circuit scans. Not bundled.
 * **Design references** (no code or assets used): the kerb as a height ramp with a ripple, as in TORCS / Speed Dreams, and the per-surface table (friction, bump, vibration, valid track) as in Assetto Corsa's `surfaces.ini`.
