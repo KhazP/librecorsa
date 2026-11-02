@@ -14,6 +14,12 @@ import {
   setSceneryQuality,
   VERTEX_PATCHES,
 } from '../src/lib/render/scenery-detail';
+import { existsSync, readFileSync, statSync } from 'node:fs';
+import { NodeIO } from '@gltf-transform/core';
+import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
+import { SCENERY_CREDITS, type SceneryCredit } from '../src/lib/render/scenery-credits';
+import { attachSceneryInstances, resetSceneryInstances, setSceneryDensity } from '../src/lib/render/scenery-instances';
+import { type GroundHit, TrackColliderQuery } from '../src/lib/sim/f12026-car/TrackColliderQuery';
 import { loadGlbGeometry } from './lib/glb-geometry';
 
 let passed = 0;
@@ -145,4 +151,127 @@ console.log('Tree bake on the Rwanda GLB');
   check('a non-tree mesh is refused', !prepareTreeGeometry(new THREE.PlaneGeometry(10, 10, 1, 1), 'canopy'));
 }
 
-console.log(`\nAll ${passed} scenery checks passed.`);
+console.log('Instanced foliage (public/tracks/rwanda/scenery/foliage.glb)');
+void (async () => {
+  const FOLIAGE = 'public/tracks/rwanda/scenery/foliage.glb';
+  check('foliage GLB is there', existsSync(FOLIAGE));
+  const bytes = statSync(FOLIAGE).size;
+  check('foliage GLB stays small', bytes < 2.5e6, `${(bytes / 1e6).toFixed(2)} MB`);
+  const io = new NodeIO().registerExtensions(ALL_EXTENSIONS);
+  const doc = await io.read(FOLIAGE);
+  const rootNode = doc.getRoot().listScenes()[0]?.listChildren()[0];
+  const extras = (rootNode?.getExtras() ?? {}) as { replaces?: string[]; credits?: SceneryCredit[]; counts?: Record<string, number> };
+  check('it replaces Env_Trees and Env_Foliage', JSON.stringify(extras.replaces) === JSON.stringify(['Env_Trees', 'Env_Foliage']));
+  check('its credits match the in-app credits', JSON.stringify(extras.credits) === JSON.stringify(SCENERY_CREDITS));
+  const creditsMd = readFileSync('CREDITS.md', 'utf8');
+  check('CREDITS.md names every model and its source', SCENERY_CREDITS.every((c) => creditsMd.includes(c.url) && creditsMd.includes(c.author)));
+  check('every model is openly licensed (CC0 or CC BY)', SCENERY_CREDITS.every((c) => /^CC (0|BY 4\.0)$/.test(c.license)));
+
+  // Instances: count them per model and collect their base points
+  const bases: [number, number, number][] = [];
+  const perModel: Record<string, number> = {};
+  let tiles = 0;
+  for (const node of doc.getRoot().listNodes()) {
+    const inst = node.getExtension('EXT_mesh_gpu_instancing') as { getAttribute(n: string): { getCount(): number; getElement(i: number, out: number[]): number[] } | null } | null;
+    if (!inst) continue;
+    tiles++;
+    const t = inst.getAttribute('TRANSLATION')!;
+    const model = node.getMesh()!.getName();
+    perModel[model] = (perModel[model] ?? 0) + t.getCount();
+    const v = [0, 0, 0];
+    for (let i = 0; i < t.getCount(); i++) bases.push(t.getElement(i, v).slice() as [number, number, number]);
+  }
+  check('instances split into tiles (so they cull)', tiles > 20, `${tiles} tiles`);
+  check('instance counts match the file\'s own record', perModel.Acacia === extras.counts?.acacia && perModel.Shrub === extras.counts?.shrub, JSON.stringify(perModel));
+  // Every one of the 520 trees and 1,900 cards gets a stand-in (a tree, or two shrubs for a low bush card), except the
+  // few the circuit's own layout put on a driving surface
+  const skippedOnTrack = extras.counts?.skippedOnTrack ?? NaN;
+  const standIns = perModel.Acacia + perModel.Shrub / 2 + skippedOnTrack / 2;
+  check('every replaced tree and card has its stand-in', perModel.Acacia >= 1040 && Math.abs(standIns - (520 + 528 + 1372)) <= skippedOnTrack / 2 + 0.5, `${JSON.stringify(perModel)}, ${skippedOnTrack} skipped`);
+  check('only a handful were skipped for standing on a driving surface', skippedOnTrack <= 5, `${skippedOnTrack}`);
+
+  // Leaf cards: alpha-masked, and their normals baked to face out of the crown (shaded as one volume)
+  const leafPrims = doc.getRoot().listMeshes().flatMap((m) => m.listPrimitives()).filter((p) => p.getMaterial()?.getAlphaMode() === 'MASK');
+  check('both models have alpha-masked leaves', leafPrims.length === 2, `${leafPrims.length}`);
+  for (const prim of leafPrims) {
+    const pos = prim.getAttribute('POSITION')!;
+    const nor = prim.getAttribute('NORMAL')!;
+    const lo = pos.getMin([0, 0, 0]);
+    const hi = pos.getMax([0, 0, 0]);
+    const c = lo.map((l, k) => (l + hi[k]) / 2);
+    const p = [0, 0, 0];
+    const n = [0, 0, 0];
+    let out = 0;
+    for (let i = 0; i < pos.getCount(); i++) {
+      pos.getElement(i, p);
+      nor.getElement(i, n);
+      if (n[0] * (p[0] - c[0]) + n[1] * (p[1] - c[1]) + n[2] * (p[2] - c[2]) > 0) out++;
+    }
+    const share = out / pos.getCount();
+    check(`${prim.getMaterial()!.getName()}: leaf normals face out of the crown`, share > 0.97, `${(share * 100).toFixed(1)} %`);
+  }
+
+  // Nothing grows on the track: the ground under each trunk / shrub is not road, kerb or pit lane
+  const track = loadGlbGeometry('public/tracks/rwanda/rwanda_2026.glb');
+  const ground = TrackColliderQuery.fromTrackRoot(track);
+  const hit = {} as GroundHit;
+  let onTrack = 0;
+  let floating = 0;
+  let buried = 0;
+  for (const [x, y, z] of bases) {
+    if (!ground.query(x, z, y + 5, hit)) continue;
+    if (hit.surface === 'road' || hit.surface === 'kerb' || hit.surface === 'sausage' || hit.surface === 'pitlane') onTrack++;
+    if (y > hit.height + 0.05) floating++;
+    if (y < hit.height - 0.5) buried++;
+  }
+  check('no tree or shrub stands on the road, kerbs or pit lane', onTrack === 0, `${onTrack} of ${bases.length}`);
+  check('none floats above the ground', floating === 0, `${floating} of ${bases.length}`);
+  check('none is buried in it (bases sit just under the surface)', buried === 0, `${buried} of ${bases.length}`);
+
+  console.log('Instanced foliage at runtime (scenery-instances.ts)');
+  {
+    const trackRoot = new THREE.Group();
+    const oldTrees = Object.assign(new THREE.Group(), { name: 'Env_Trees' });
+    const oldCards = Object.assign(new THREE.Group(), { name: 'Env_Foliage' });
+    trackRoot.add(oldTrees, oldCards);
+    const leaves = new THREE.MeshStandardMaterial({ map: new THREE.Texture(), alphaTest: 0.45 });
+    const bark = new THREE.MeshStandardMaterial({ map: new THREE.Texture() });
+    const tile = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1), [bark, leaves], 40);
+    const scenery = new THREE.Group();
+    scenery.userData.replaces = ['Env_Trees', 'Env_Foliage'];
+    scenery.add(tile);
+    resetSceneryInstances();
+    setSceneryDensity('high');
+    attachSceneryInstances(trackRoot, scenery);
+    check('the replaced circuit nodes are hidden', !oldTrees.visible && !oldCards.visible);
+    check('the scenery hangs under the circuit', scenery.parent === trackRoot);
+    check('tiles cast and receive shadows, and cull', tile.castShadow && tile.receiveShadow && tile.frustumCulled && tile.boundingSphere !== null);
+    setSceneryDensity('low');
+    check('Low quality draws half of each tile', tile.count === 20, `${tile.count}`);
+    setSceneryDensity('medium');
+    check('Medium draws 80 %', tile.count === 32, `${tile.count}`);
+    setSceneryDensity('high');
+    check('High draws them all', tile.count === 40, `${tile.count}`);
+
+    check('only the alpha-tested leaves get the leaf shader', leaves.userData.leafShading === true && !bark.userData.leafShading);
+    // The patch is string replacement on three's chunks: if an upgrade renames one, these fail instead of the leaves
+    // silently losing their shading
+    const shader = {
+      uniforms: {} as Record<string, THREE.IUniform>,
+      vertexShader: THREE.ShaderLib.standard.vertexShader,
+      fragmentShader: THREE.ShaderLib.standard.fragmentShader,
+    } as unknown as THREE.WebGLProgramParametersWithUniforms;
+    leaves.onBeforeCompile(shader, undefined as unknown as THREE.WebGLRenderer);
+    const frag = shader.fragmentShader;
+    check('leaf coverage scales alpha by the mip level, before the alpha test', frag.includes('leafMip') && frag.indexOf('leafMip') < frag.indexOf('#include <alphatest_fragment>'));
+    check('a card seen from behind keeps its crown normal', !frag.includes('#include <normal_fragment_begin>') && !frag.includes('normal *= faceDirection;') && frag.includes('faceDirection'));
+    check('leaf specular is damped after the lighting setup', frag.indexOf('material.specularColorBlended *= 0.2;') > frag.indexOf('#include <lights_physical_fragment>'));
+    check('the leaf program has its own cache key', leaves.customProgramCacheKey() === 'scenery-leaf-v3');
+    resetSceneryInstances();
+  }
+
+  console.log(`\nAll ${passed} scenery checks passed.`);
+})().catch((err) => {
+  console.error('FAIL', err);
+  process.exit(1);
+});
