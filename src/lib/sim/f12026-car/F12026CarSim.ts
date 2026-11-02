@@ -1316,16 +1316,14 @@ export class F12026CarSim implements SimulatorCar {
   }
 
   /**
-   * The rigid body blew up (non-finite state) or the car fell through the world, e.g. launched over a barrier where
-   * there is no ground: put it back on the track, stopped, at the last good position. True if it did.
+   * The integration blew up (a non-finite or impossible state: see `VehiclePhysics.stateIsSane`) or the car fell
+   * through the world, e.g. launched over a barrier where there is no ground: put it back on the track, stopped, at
+   * the last good position. True if it did.
    */
   private recoverIfLost(): boolean {
     const v = this.vehicle;
-    const p = v.position;
-    const finite = Number.isFinite(p.x + p.y + p.z) && Number.isFinite(v.velocity.x + v.velocity.y + v.velocity.z)
-      && Number.isFinite(v.angularVelocity.x + v.angularVelocity.y + v.angularVelocity.z);
     const s = Number.isFinite(this.s) ? this.s : 0;
-    if (finite && p.y > this.track.getSampleAtDistance(s).position.y - LOST_BELOW_TRACK_M) return false;
+    if (v.stateIsSane() && v.position.y > this.track.getSampleAtDistance(s).position.y - LOST_BELOW_TRACK_M) return false;
     this.teleportToDistance(s, 0, 0);
     return true;
   }
