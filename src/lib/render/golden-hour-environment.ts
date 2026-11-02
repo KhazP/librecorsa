@@ -295,7 +295,7 @@ function applySkyLook(sky: Sky, sunDir: THREE.Vector3, look: SkyLook): void {
   (u.sunPosition.value as THREE.Vector3).copy(sunDir);
 }
 
-/** Bakes the Sky into a 256x256 PMREM. The sun disc is hidden during the bake
+/** Bakes the Sky into a 256 px PMREM cube (three r187+). The sun disc is hidden during the bake
  *  so its ~60000 radiance does not dominate the prefiltered environment. */
 class SkyBaker {
   private readonly scene = new THREE.Scene();
@@ -309,7 +309,7 @@ class SkyBaker {
     this.pmrem = new THREE.PMREMGenerator(renderer);
   }
 
-  bake(sunDir: THREE.Vector3, look: SkyLook): THREE.WebGLRenderTarget {
+  bake(sunDir: THREE.Vector3, look: SkyLook): THREE.WebGLCubeRenderTarget {
     applySkyLook(this.sky, sunDir, look);
     return this.pmrem!.fromScene(this.scene, 0, 0.1, 1000, { size: ENV_SIZE });
   }

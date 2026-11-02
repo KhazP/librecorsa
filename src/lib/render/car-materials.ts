@@ -276,7 +276,7 @@ float roughnessFactor = mix( roughness, 0.25, vf26Warm );
 #ifdef USE_CLEARCOAT
 	// Same clamps as the chunk above; the chunk has already run with the uniform values
 	material.clearcoat = saturate( vf26CoatAmount );
-	material.clearcoatRoughness = min( max( vf26CoatRoughness, 0.0525 ) + geometryRoughness, 1.0 );
+	material.clearcoatRoughness = min( max( vf26CoatRoughness, 0.045 ) + geometryRoughness, 1.0 );
 #endif
 `,
 	],
