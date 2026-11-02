@@ -1222,7 +1222,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     container.innerHTML = "";
     container.appendChild(renderer.domElement);
 
-    // Golden-hour sky dome, its baked PMREM environment, horizon fog and the car-tracking sun shadow
+    // Golden-hour sky dome, its baked PMREM environment, horizon fog and the cascaded sun shadow
     const env = createGoldenHourEnvironment(renderer, scene);
     // Rain streaks around the camera (one GPU-animated draw, hidden in the dry)
     const rainFx = createRainFx(scene);

@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { Sky } from "three/examples/jsm/objects/Sky.js";
+import { SunLight } from "three/examples/jsm/lights/SunLight.js";
 import {
   BloomEffect,
   EffectComposer,
@@ -61,10 +62,14 @@ const SUN_ELEVATION_DEG = 14;
 const SUN_AZIMUTH_DEG = 127;
 const SUN_DISTANCE_M = 220;
 
+/** Per cascade: the two cascades share one 2 x 1 atlas (4096 x 2048) */
 const SHADOW_MAP_SIZE = 2048;
-const SHADOW_HALF_SPAN_M = 55;
-const SHADOW_FRUSTUM_M = SHADOW_HALF_SPAN_M * 2;
-const SHADOW_TEXEL_M = SHADOW_FRUSTUM_M / SHADOW_MAP_SIZE;
+/**
+ * How far from the camera the sun's two shadow cascades reach. They split the range between the camera's
+ * near plane and this distance (half uniform, half logarithmic), so 250 m puts the split near 65 m: the near
+ * cascade keeps ~6 cm texels around the car, the far one covers grandstands, trees and barriers at ~20 cm.
+ */
+const SHADOW_DISTANCE_M = 250;
 
 const SKY_SCALE = 4500;
 /** Linear radiance cap for the visible sun disc (bloom threshold is 1.1) */
@@ -94,8 +99,6 @@ const REAR_RAIN_EMISSIVE = 0xff1100;
 const REAR_RAIN_EMISSIVE_INTENSITY = 10.0;
 const REAR_RAIN_BASE_COLOR = 0x2a0000;
 
-const WORLD_UP = new THREE.Vector3(0, 1, 0);
-
 // ---------------------------------------------------------------------------
 // Public types
 // ---------------------------------------------------------------------------
@@ -121,13 +124,13 @@ export const GOLDEN_HOUR_SKY: Readonly<SkyConditions> = {
 };
 
 export interface GoldenHourEnvironment {
-  sunLight: THREE.DirectionalLight;
+  sunLight: SunLight;
   /** unit vector from scene towards the sun */
   sunDirection: THREE.Vector3;
   sky: Sky;
   /** Weak warm-blue / olive fill; added to the scene by createGoldenHourEnvironment. */
   fillLight: THREE.HemisphereLight;
-  /** Call once per frame before rendering: keeps the +/-55 m shadow frustum centred on the car (texel-snapped to avoid shimmering) and the sky dome centred on the camera */
+  /** Call once per frame before rendering: keeps the sky dome centred on the camera (the shadow cascades fit the rendering camera on their own) */
   update(carWorldPos: THREE.Vector3, camera: THREE.Camera): void;
   /** Time of day and weather: moves the sun and sets sky, fill, fog and exposure (cheap; re-bakes the environment only on a visible change) */
   setConditions(conditions: SkyConditions): void;
@@ -344,11 +347,6 @@ export function createGoldenHourEnvironment(
 ): GoldenHourEnvironment {
   const sunDirection = sunDirectionUnit();
 
-  // Light basis matching DirectionalLightShadow's lookAt (eye = sun, up = +Y),
-  // used to snap the shadow frustum to texels in light space.
-  const lightRight = new THREE.Vector3().crossVectors(WORLD_UP, sunDirection).normalize();
-  const lightUp = new THREE.Vector3().crossVectors(sunDirection, lightRight).normalize();
-
   // Scratch vector, reused every frame so update() does not allocate.
   const scratch = new THREE.Vector3();
 
@@ -381,27 +379,23 @@ export function createGoldenHourEnvironment(
   scene.add(fillLight);
 
   // --- Sun ------------------------------------------------------------------
-  const sunLight = new THREE.DirectionalLight(SUN_COLOR, SUN_INTENSITY);
+  // Cascaded shadow maps: each frame the renderer fits two orthographic cascades to slices of the rendering
+  // camera's frustum (out to SHADOW_DISTANCE_M) and snaps them to whole texels, so shadows stay sharp near the
+  // car, reach the scenery behind it and do not crawl as the camera moves.
+  // A SunLight has no target: it shines from its position towards the origin.
+  const sunLight = new SunLight(SUN_COLOR, SUN_INTENSITY);
   sunLight.castShadow = true;
   sunLight.shadow.mapSize.set(SHADOW_MAP_SIZE, SHADOW_MAP_SIZE);
-
-  const shadowCam = sunLight.shadow.camera;
-  shadowCam.left = -SHADOW_HALF_SPAN_M;
-  shadowCam.right = SHADOW_HALF_SPAN_M;
-  shadowCam.top = SHADOW_HALF_SPAN_M;
-  shadowCam.bottom = -SHADOW_HALF_SPAN_M;
-  shadowCam.near = 1;
-  shadowCam.far = 500;
-  shadowCam.updateProjectionMatrix();
+  // near: margin in front of the casters nearest the sun; far: the cascades' reach from the camera
+  sunLight.shadow.camera.near = 1;
+  sunLight.shadow.camera.far = SHADOW_DISTANCE_M;
 
   sunLight.shadow.bias = -0.0004;
   sunLight.shadow.normalBias = 0.04;
   sunLight.shadow.radius = 2.5;
 
-  sunLight.target.position.set(0, 0, 0);
   sunLight.position.copy(sunDirection).multiplyScalar(SUN_DISTANCE_M);
   scene.add(sunLight);
-  scene.add(sunLight.target);
 
   let disposed = false;
   let current: SkyConditions = { ...GOLDEN_HOUR_SKY };
@@ -427,8 +421,7 @@ export function createGoldenHourEnvironment(
     // Sun: the light never comes from below the horizon (shadows stay sane at dawn / dusk); the sky's sun does
     sunDirection.copy(sunDirectionUnit(Math.max(1, e), c.azimuthDeg));
     skySunDir.copy(sunDirectionUnit(e, c.azimuthDeg));
-    lightRight.crossVectors(WORLD_UP, sunDirection).normalize();
-    lightUp.crossVectors(sunDirection, lightRight).normalize();
+    sunLight.position.copy(sunDirection).multiplyScalar(SUN_DISTANCE_M);
     colorCurve(SUN_COLOR_KEYS, e, sunLight.color).lerp(tint.setHex(OVERCAST_SUN), 0.6 * cloud);
     // Cloud blocks most direct sun; an overcast sky still leaves faint, soft shadows
     sunLight.intensity = curve(SUN_INTENSITY_KEYS, e) * (1 - 0.88 * Math.pow(cloud, 1.5));
@@ -465,23 +458,8 @@ export function createGoldenHourEnvironment(
     sky,
     fillLight,
 
-    update(carWorldPos: THREE.Vector3, camera: THREE.Camera): void {
+    update(_carWorldPos: THREE.Vector3, camera: THREE.Camera): void {
       if (disposed) return;
-
-      // Snap the shadow-frustum origin (car projected onto the light's right/up
-      // axes) to whole shadow texels so shadows do not crawl as the car moves.
-      const tx = carWorldPos.dot(lightRight);
-      const ty = carWorldPos.dot(lightUp);
-      const sx = Math.round(tx / SHADOW_TEXEL_M) * SHADOW_TEXEL_M;
-      const sy = Math.round(ty / SHADOW_TEXEL_M) * SHADOW_TEXEL_M;
-
-      scratch
-        .copy(carWorldPos)
-        .addScaledVector(lightRight, sx - tx)
-        .addScaledVector(lightUp, sy - ty);
-
-      sunLight.target.position.copy(scratch);
-      sunLight.position.copy(scratch).addScaledVector(sunDirection, SUN_DISTANCE_M);
 
       camera.getWorldPosition(scratch);
       sky.position.copy(scratch);
@@ -496,7 +474,7 @@ export function createGoldenHourEnvironment(
       if (disposed) return;
       disposed = true;
 
-      scene.remove(sky, fillLight, sunLight, sunLight.target);
+      scene.remove(sky, fillLight, sunLight);
       if (scene.environment === envTarget.texture) scene.environment = null;
       if (scene.fog === fog) scene.fog = null;
 
