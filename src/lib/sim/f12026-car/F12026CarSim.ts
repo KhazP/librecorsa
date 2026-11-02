@@ -92,7 +92,21 @@ export interface CarElectronicsProfile {
   tcDefault: number;
   tcRateHz: number;
   tcMinSpeedKmh: number;
+  /**
+   * TC1 slip target tightening with lateral g: target × max(`floor`, 1 − `gain`·(|a_y|/g)^`exponent` − rear-slide
+   * term in the wet). Default (an F1 calibration): gain 0.14, exponent 1.3, floor 0.42.
+   */
+  tcLateralTightening?: { gain: number; exponent: number; floor: number };
+  /**
+   * ABS rear channels: the lock target × max(`floor`, 1 − `gain`·(|slip angle| − `deadbandRad`)), so a trail-braked rear
+   * that already slides is held off the brakes. Default (an F1 calibration): gain 1.4, dead band 0.03 rad, floor 0.72.
+   * Gain 0 = the rears regulate slip ratio only.
+   */
+  absRearSlipAngleGuard?: { gain: number; deadbandRad: number; floor: number };
 }
+
+const DEFAULT_TC_LATERAL_TIGHTENING = { gain: 0.14, exponent: 1.3, floor: 0.42 } as const;
+const DEFAULT_ABS_REAR_GUARD = { gain: 1.4, deadbandRad: 0.03, floor: 0.72 } as const;
 
 export const F12026_ELECTRONICS: CarElectronicsProfile = {
   absLevels: [0.08, 0.09, 0.1, 0.11, 0.12, 0.13, 0.14, 0.15, 0.16, 0.17, 0.18, 0.19],
@@ -1166,14 +1180,15 @@ export class F12026CarSim implements SimulatorCar {
     const tcBaseTarget = tcLv > 0 ? elec.tcLevels[THREE.MathUtils.clamp(12 - tcLv, 0, elec.tcLevels.length - 1)] : 0;
     const tcMinSpeedMs = elec.tcMinSpeedKmh / 3.6;
     if (tcBaseTarget > 0 && speed > Math.max(this.profile.tcMinSpeedMs, tcMinSpeedMs)) {
-      // Lateral-G slip target tightening: kappa_target(ay) = kappa_TC1 * max(0.45, 1.0 - 0.14 * (|ay|/g)^1.3)
+      // Lateral-G slip target tightening: kappa_target(ay) = kappa_TC1 * max(floor, 1.0 - gain * (|ay|/g)^exponent)
+      const tight = elec.tcLateralTightening ?? DEFAULT_TC_LATERAL_TIGHTENING;
       const gLat = Math.abs(this.lastAyMs2) / G;
       const saLimitRad = Math.max(0.05, (this.compoundData.modelData.friction_limit_angle || DEFAULT_FRICTION_LIMIT_ANGLE_DEG) * DEG2RAD);
       const saRearNorm =
         v.waterMm > 0
           ? Math.max(Math.abs(W[2].slipAngleRad), Math.abs(W[3].slipAngleRad)) / saLimitRad
           : 0;
-      const latFactor = Math.max(0.42, 1 - 0.14 * Math.pow(gLat, 1.3) - 0.22 * Math.max(0, saRearNorm - 0.45));
+      const latFactor = Math.max(tight.floor, 1 - tight.gain * Math.pow(gLat, tight.exponent) - 0.22 * Math.max(0, saRearNorm - 0.45));
       const tcEffTarget = tcBaseTarget * latFactor;
       // Weighted rear axle slip: 0.65 * max(k_LR, k_RR) + 0.35 * mean(k_LR, k_RR)
       const kL = Math.max(0, W[2].slipRatio);
@@ -1204,6 +1219,7 @@ export class F12026CarSim implements SimulatorCar {
     if (this.absCut === 1) cut.fill(1);
     if (absBaseTarget > 0 && speed > 3 && brake > 0.01) {
       const absRate = elec.absRateHz;
+      const guard = elec.absRearSlipAngleGuard ?? DEFAULT_ABS_REAR_GUARD;
       let minCut = 1;
       for (let i = 0; i < 4; i++) {
         const w = W[i];
@@ -1211,7 +1227,7 @@ export class F12026CarSim implements SimulatorCar {
         const decelAnticipation = ((wheelDecel * w.rollingRadius) / Math.max(8, speed)) * 0.016;
         const lock = -w.slipRatio + decelAnticipation;
         // Rear channels tighten target under trail-braking slip angle to prevent rear axle step-out
-        const rearLatGuard = i >= 2 ? Math.max(0.72, 1 - 1.4 * Math.max(0, Math.abs(w.slipAngleRad) - 0.03)) : 1;
+        const rearLatGuard = i >= 2 ? Math.max(guard.floor, 1 - guard.gain * Math.max(0, Math.abs(w.slipAngleRad) - guard.deadbandRad)) : 1;
         const effAbsTarget = absBaseTarget * rearLatGuard;
         const want = lock > effAbsTarget ? Math.max(0.08, 1 - (lock - effAbsTarget) * 12.5) : 1;
         cut[i] += (want - cut[i]) * Math.min(1, (want < cut[i] ? absRate * 0.65 : absRate * 0.16) * h);
