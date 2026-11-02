@@ -1,8 +1,8 @@
 /**
  * Setup sheets: every F1 car gets the F1 sheet and every GT3 the GT3 sheet; each parameter's range
  * holds its baseline on a whole step, round-trips through the setup state, and never asks for more than the cars
- * take. Then the new setup channels move the cars: engine braking, brake power, brake ducts, toe, steering ratio
- * and diff preload.
+ * take. Then the new setup channels move the cars: engine braking, brake power, brake ducts, toe, steering ratio,
+ * diff preload and the dampers.
  * Run: npx tsx scripts/verify-setup-sheet.ts
  */
 import { DEFAULT_CHASSIS_SETUP, type ChassisSetup, type GarageTuner } from "../src/lib/sim/car-setup";
@@ -44,7 +44,7 @@ const defaultTyre = (v: VehicleModelId): TyreSetup => makers[v](flat).getTyreSet
 const sheets = Object.fromEntries(vehicles.map((v) => [v, setupSheet(v, TYRE_SETUP_LIMITS[v], defaultTyre(v))]));
 const groupIds = (v: VehicleModelId) => sheets[v].map((g) => g.id).join(",");
 check("the F1 cars share one sheet layout", groupIds("vf26") === groupIds("f12026-car"), groupIds("vf26"));
-check("F1 sheet: its pages in order", groupIds("vf26") === "aero,transmission,geometry,suspension,brakes,tyres,electronics");
+check("F1 sheet: its pages in order", groupIds("vf26") === "aero,transmission,geometry,suspension,dampers,brakes,tyres,electronics");
 check("GT3 sheet: its pages in order", groupIds("amg-gt3") === "tyres,electronics,mechanical,dampers,aero");
 const paramIds = (v: VehicleModelId) => sheets[v].flatMap((g) => g.params.map((q) => q.id));
 check("the F1 cars share the same parameters", paramIds("vf26").join() === paramIds("f12026-car").join());
@@ -52,6 +52,14 @@ for (const id of ["steerRatioDelta", "bumpStopRateFrontPct", "diffPreloadNm", "f
   check(`GT3 sheet has ${id}`, paramIds("amg-gt3").includes(id));
 for (const id of ["frontWingClicks", "diffExit", "diffEntry", "engineBrakingPct", "toeRearDeg", "brakePowerPct", "brakeMigrationPct"])
   check(`F1 sheet has ${id}`, paramIds("vf26").includes(id));
+const DAMPER_IDS: (keyof ChassisSetup)[] = [
+  "bumpFrontPct", "bumpRearPct", "fastBumpFrontPct", "fastBumpRearPct",
+  "reboundFrontPct", "reboundRearPct", "fastReboundFrontPct", "fastReboundRearPct",
+];
+for (const v of vehicles) {
+  const dampersPage = sheets[v].find((g) => g.id === "dampers");
+  check(`${v}: a dampers page with bump and rebound, slow and fast, front and rear`, dampersPage?.params.map((q) => q.id).join() === DAMPER_IDS.join());
+}
 
 for (const v of vehicles) {
   const tyre = defaultTyre(v);
@@ -159,6 +167,60 @@ for (const v of ["f12026-car", "amg-gt3"] as const) {
   const spec = (car as unknown as { axles: { spec: { staticToeDeg: number } }[] }).axles[1].spec.staticToeDeg;
   const base = (withSetup("vf26", {}) as unknown as { axles: { spec: { staticToeDeg: number } }[] }).axles[1].spec.staticToeDeg;
   check("vf26: rear toe adds to the car's static toe", Math.abs(spec - base - 0.2) < 1e-9, `${base} → ${spec}°`);
+}
+
+console.log("Dampers");
+{
+  // Each damper setting scales its own curve: +40 % on one channel is 1.4× that channel's baseline, the rest untouched
+  type Curve = { slow_bump: number; fast_bump: number; slow_rebound: number; fast_rebound: number };
+  type Vf26Damper = { bumpSlow: number; bumpFast: number; reboundSlow: number; reboundFast: number };
+  const rigid = (c: SimulatorCar) => (c as unknown as { config: { suspensions: { dampers_controller: { front: { base: Curve }; rear: { base: Curve } } } } }).config.suspensions.dampers_controller;
+  const vf26 = (c: SimulatorCar) => (c as unknown as { axles: { spec: { damper: Vf26Damper } }[] }).axles;
+  const curves = (v: VehicleModelId, c: SimulatorCar): number[] => {
+    if (v === "vf26") {
+      const [f, r] = vf26(c).map((a) => a.spec.damper);
+      return [f.bumpSlow, r.bumpSlow, f.bumpFast, r.bumpFast, f.reboundSlow, r.reboundSlow, f.reboundFast, r.reboundFast];
+    }
+    const { front: { base: f }, rear: { base: r } } = rigid(c);
+    return [f.slow_bump, r.slow_bump, f.fast_bump, r.fast_bump, f.slow_rebound, r.slow_rebound, f.fast_rebound, r.fast_rebound];
+  };
+  for (const v of vehicles) {
+    const base = curves(v, withSetup(v, {}));
+    const bad: string[] = [];
+    DAMPER_IDS.forEach((id, i) => {
+      const got = curves(v, withSetup(v, { [id]: 40 }));
+      got.forEach((x, j) => {
+        const want = base[j] * (j === i ? 1.4 : 1);
+        if (Math.abs(x - want) > 1e-6 * Math.max(1, want)) bad.push(`${id}→#${j}: ${x.toFixed(0)} not ${want.toFixed(0)}`);
+      });
+    });
+    check(`${v}: each damper setting scales only its own curve`, bad.length === 0, bad.slice(0, 3).join("; "));
+    // And it acts on the car: on a step steer at speed, stiffer dampers slow the body's roll in the first 0.1 s
+    // (roll is the corner dampers' alone; the VF26's heave damper would mask them in pitch)
+    const comp = (c: SimulatorCar): { comp: number; front: boolean; left: boolean }[] =>
+      v === "vf26"
+        ? (c as unknown as { wheels: { suspCompression: number; isFront: boolean; isLeft: boolean }[] }).wheels.map((w) => ({ comp: w.suspCompression, front: w.isFront, left: w.isLeft }))
+        : (c as unknown as { vehicle: { wheels: { compression: number; isFront: boolean; isLeft: boolean }[] } }).vehicle.wheels.map((w) => ({ comp: w.compression, front: w.isFront, left: w.isLeft }));
+    const frontRoll = (c: SimulatorCar) => {
+      const fr = comp(c).filter((w) => w.front);
+      return fr.find((w) => !w.left)!.comp - fr.find((w) => w.left)!.comp;
+    };
+    const rollShare = (pct: number) => {
+      const car = withSetup(v, Object.fromEntries(DAMPER_IDS.map((id) => [id, pct])));
+      car.resetToStartGrid(true);
+      for (let i = 0; i < 60; i++) car.step(1 / 120, { throttle: 0.25 });
+      const r0 = frontRoll(car);
+      let early = 0;
+      for (let i = 0; i < 120; i++) {
+        car.step(1 / 240, { throttle: 0.25, steerLeft: 0.5 });
+        if (i === 23) early = frontRoll(car) - r0;
+      }
+      return early / (frontRoll(car) - r0);
+    };
+    const soft = rollShare(-40);
+    const stiff = rollShare(40);
+    check(`${v}: stiffer dampers slow the body's roll on a step steer`, stiff < soft - 0.02, `${(soft * 100).toFixed(0)} % vs ${(stiff * 100).toFixed(0)} % of the roll after 0.1 s`);
+  }
 }
 
 console.log(`\nAll ${passed} setup sheet checks passed.`);
