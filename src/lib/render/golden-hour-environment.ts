@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { Sky } from "three/examples/jsm/objects/Sky.js";
 import { SunLight } from "three/examples/jsm/lights/SunLight.js";
+import { DRIVER_HEAD_LAYER } from "@/lib/render/layers";
 import {
   BloomEffect,
   EffectComposer,
@@ -389,6 +390,9 @@ export function createGoldenHourEnvironment(
   // near: margin in front of the casters nearest the sun; far: the cascades' reach from the camera
   sunLight.shadow.camera.near = 1;
   sunLight.shadow.camera.far = SHADOW_DISTANCE_M;
+  // With any layer besides 0 enabled, the shadow pass (three r187+) picks casters by the shadow camera's layers
+  // instead of the view camera's: the helmet keeps casting while the cockpit camera leaves it out.
+  sunLight.shadow.camera.layers.enable(DRIVER_HEAD_LAYER);
 
   sunLight.shadow.bias = -0.0004;
   sunLight.shadow.normalBias = 0.04;

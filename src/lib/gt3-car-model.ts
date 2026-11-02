@@ -419,7 +419,6 @@ export function createGt3CarRig(): SimCarRig {
     setTireCompound: () => {},
     getCameraAnchors: () => cameraAnchors,
     getVf26Body: () => null,
-    setCockpitView: () => {},
     updateFromTelemetry,
     dispose: () => {
       disposed = true;

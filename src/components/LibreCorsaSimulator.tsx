@@ -62,6 +62,7 @@ import { touchInput, isTouchDevice, resetTouchInput } from "@/lib/input/touch-in
 import { isFatalHidStatus } from "@/lib/input/webhid-ffb";
 import { applyGraphicsQuality } from "@/lib/render/golden-hour-environment";
 import { createRainFx, RAIN_VISOR_LAYER } from "@/lib/render/rain-fx";
+import { DRIVER_HEAD_LAYER } from "@/lib/render/layers";
 import { setAsphaltWetness } from "@/lib/render/asphalt-sheen";
 import { SIM_REALISM_FLAGS, type SimRealism } from "@/lib/sim/sim-realism";
 import {
@@ -2185,10 +2186,12 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         setCarCockpitFov(carFovDeg);
       }
       const onboardFovShift = cockpitFovRef.current === null ? 0 : cockpitFovRef.current - carFovDeg;
-      // Hide driver helmet mesh only when inside first-person cockpit view so it never clips the camera
-      // (the procedural driver is hidden entirely once the VF26 model has replaced the procedural car)
-      carRig.helmetGroup.visible = mode !== "cockpit" && !vf26Cams;
-      carRig.setCockpitView(mode === "cockpit");
+      // The procedural helmet goes once the VF26 model (with its own driver) has replaced the procedural car
+      carRig.helmetGroup.visible = !vf26Cams;
+      // From the driver's eye point the helmet would fill the view: the camera leaves its layer out, while the
+      // sun's shadow camera keeps it so the head still shadows the cockpit
+      if (mode === "cockpit") camera.layers.disable(DRIVER_HEAD_LAYER);
+      else camera.layers.enable(DRIVER_HEAD_LAYER);
 
       carRig.root.position.copy(physics.worldPosition);
       carRig.root.quaternion.copy(physics.worldQuaternion);
