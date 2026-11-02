@@ -406,6 +406,9 @@ interface WingRuntime {
   aoaCd: Lut;
   ghCl: Lut;
   ghCd: Lut;
+  /** Body yaw (|deg|) → CL / CD multipliers; null = insensitive */
+  yawCl: Lut | null;
+  yawCd: Lut | null;
 }
 
 export interface TyreRuntime {
@@ -744,6 +747,8 @@ export class VehiclePhysics {
   private aeroFrontN = 0;
   private aeroDownN = 0;
   private aeroDragN = 0;
+  /** Air slip angle the wing-element aero last saw (|deg|) */
+  public aeroYawDeg = 0;
   private rideFront = 0;
   private rideRear = 0;
   /** Lagged map-aero forces (N): front and rear downforce, drag */
@@ -803,6 +808,8 @@ export class VehiclePhysics {
       aoaCd: new Lut(spec.lutAOA_CD),
       ghCl: new Lut(spec.lutGH_CL_mult),
       ghCd: new Lut(spec.lutGH_CD_mult),
+      yawCl: spec.lutYaw_CL_mult ? new Lut(spec.lutYaw_CL_mult) : null,
+      yawCd: spec.lutYaw_CD_mult ? new Lut(spec.lutYaw_CD_mult) : null,
     }));
 
     const modes = cfg.performanceModes;
@@ -2153,7 +2160,7 @@ export class VehiclePhysics {
     }
   }
 
-  /** Front wing, venturi floor and rear wing on the current ride heights, with wake & roll sensitivity */
+  /** Front wing, venturi floor and rear wing on the current ride heights, with wake and body-yaw sensitivity */
   private applyAero(): void {
     const aero = this.config.aero;
     const W = this.wheels;
@@ -2178,6 +2185,9 @@ export class VehiclePhysics {
     const air = _air.copy(this.velocity).sub(this.windWorld);
     const vF = air.dot(_ez);
     const q = 0.5 * this.airDensity * vF * vF;
+    // Air slip angle in the body frame, as the map-aero path reads it
+    const yawDeg = Math.abs(vF) > 1 ? Math.abs(Math.atan2(air.dot(_ex), Math.abs(vF))) * RAD2DEG : 0;
+    this.aeroYawDeg = yawDeg;
     let down = 0;
     let front = 0;
     let drag = aero.drag * wake.dragMultiplier;
@@ -2188,6 +2198,8 @@ export class VehiclePhysics {
       const aoa = s.name === 'VENTURI_FLOOR' ? rakeDeg : s.angleDeg + pitchDelta;
       let cl = wing.aoaCl.evaluate(aoa) * wing.ghCl.evaluate(h);
       let cd = wing.aoaCd.evaluate(aoa) * wing.ghCd.evaluate(h);
+      if (wing.yawCl) cl *= wing.yawCl.evaluate(yawDeg);
+      if (wing.yawCd) cd *= wing.yawCd.evaluate(yawDeg);
       if (s.drs) {
         cl *= 1 + (s.drs.clMult - 1) * this.drsBlend;
         cd *= 1 + (s.drs.cdMult - 1) * this.drsBlend;
