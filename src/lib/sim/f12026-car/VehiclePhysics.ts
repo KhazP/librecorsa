@@ -37,6 +37,7 @@
 
 import * as THREE from 'three';
 import { Lut } from '../lut';
+import { tyreGaugePressureAtTemperature } from '../tyre-pressure';
 import {
   advanceDirtyLevel,
   evaluateIso8608RoadRoughness,
@@ -313,7 +314,9 @@ export interface WheelState {
   dirtyLevel: number;
   /** Physical 2-node brake disc thermal & pad state */
   brakeDisc: BrakeDiscState;
+  /** Setup inflation pressure at the compound's coldRefC blanket temperature (psi gauge) */
   coldPressurePsi: number;
+  /** Current inflation pressure (psi gauge) */
   pressurePsi: number;
   brakeTorqueNm: number;
   driveTorqueNm: number;
@@ -354,6 +357,7 @@ export interface VehicleTelemetry {
   camberDeg: [number, number, number, number];
   tyreSurfaceTempC: [number, number, number, number];
   tyreCoreTempC: [number, number, number, number];
+  /** Current inflation pressures (psi gauge), LF / RF / LR / RR */
   tyrePressurePsi: [number, number, number, number];
   /** Floor heights (m): mean, front axle, rear axle */
   AERO_HEIGHT: number;
@@ -962,7 +966,7 @@ export class VehiclePhysics {
     this.walls = walls;
   }
 
-  /** Optimum hot pressure (psi) and working tread window (°C) of the front (0) or rear (1) tyres */
+  /** Optimum hot pressure (psi gauge) and working tread window (°C) of the front (0) or rear (1) tyres */
   public tyreOptimum(axle: 0 | 1): { psi: number; tempC: [number, number] } {
     const d = this.tyres[axle].data;
     return { psi: d.pressureData.optimalPsi, tempC: d.thermalData.optimalTempC };
@@ -1185,7 +1189,7 @@ export class VehiclePhysics {
       const t = this.tyres[w.isFront ? 0 : 1].data;
       const p = t.pressureData;
       const targetCoreC = 0.5 * (t.thermalData.optimalTempC[0] + t.thermalData.optimalTempC[1]);
-      w.coldPressurePsi = Math.round(((p.optimalPsi * (p.coldRefC + 273.15)) / (targetCoreC + 273.15)) * 10) / 10;
+      w.coldPressurePsi = Math.round(tyreGaugePressureAtTemperature(p.optimalPsi, targetCoreC, p.coldRefC) * 10) / 10;
       w.surfaceTempC = p.coldRefC;
       w.coreTempC = p.coldRefC;
       w.bandTempsC = [p.coldRefC, p.coldRefC, p.coldRefC];
@@ -2420,7 +2424,7 @@ export class VehiclePhysics {
       const p = td.pressureData;
       const rimWetDeltaC = rimWetEnvironmentCoolingWK(this.wetness, v) * 0.45 * Math.max(0, w.coreTempC - this.ambientC) * 0.02;
       const effectiveGasTempC = Math.max(this.ambientC - 5, w.coreTempC - rimWetDeltaC);
-      w.pressurePsi = (w.coldPressurePsi * (effectiveGasTempC + 273.15)) / (p.coldRefC + 273.15);
+      w.pressurePsi = tyreGaugePressureAtTemperature(w.coldPressurePsi, p.coldRefC, effectiveGasTempC);
 
       // 2-node physical brake disc thermal step
       const frictionTorqueNm = this.lastInputs.brake > 0.01 ? Math.abs(w.brakeTorqueNm) : 0;

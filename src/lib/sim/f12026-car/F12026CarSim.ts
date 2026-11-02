@@ -45,6 +45,7 @@ import type { AeroWakeState } from '../aero-wake';
 import type { TrackEvolutionSample } from '../track-evolution';
 import type { WeatherContactSample } from '../weather';
 import { SLICK_TRAITS, wetGripFactor } from '../wet-tyres';
+import { tyreGaugePressureAtTemperature } from '../tyre-pressure';
 import { FULL_REALISM, type SimRealismFlags } from '../sim-realism';
 import { flyingExitSpeedMs, flyingStartPoint, type SimulatorCar, type SimulatorWheel, type TyreVisualState } from '../simulator-car';
 import { aiLineOffsetM, type BrakingGuide, brakingGuideFor, sampleProfile, type SpeedProfileCarModel } from '../speed-profile';
@@ -751,7 +752,7 @@ export class F12026CarSim implements SimulatorCar {
     const p = cd.pressureData;
     const th = cd.thermalData;
     const targetCoreC = 0.5 * (th.optimalTempC[0] + th.optimalTempC[1]);
-    return Math.round(((p.optimalPsi * (p.coldRefC + 273.15)) / (targetCoreC + 273.15)) * 10) / 10;
+    return Math.round(tyreGaugePressureAtTemperature(p.optimalPsi, targetCoreC, p.coldRefC) * 10) / 10;
   }
 
   set tireCompound(compound: TireCompound) {
@@ -882,7 +883,7 @@ export class F12026CarSim implements SimulatorCar {
     };
   }
 
-  /** Within the profile's limits (f12026-car: as the VF26, 17–27 psi to 0.1, front camber −4.5…−1.5°, rear −3.0…−0.5°) */
+  /** Clamps cold pressure (psi gauge, rounded to 0.1) and camber (degrees) to the active vehicle profile's limits. */
   public setTyreSetup(setup: TyreSetup): void {
     const pick = (v: number, [lo, hi]: [number, number], current: number) => (Number.isFinite(v) ? THREE.MathUtils.clamp(v, lo, hi) : current);
     const pr = this.profile;

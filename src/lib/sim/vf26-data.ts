@@ -61,7 +61,7 @@ export interface Vf26TyreSpec {
   angularInertia: number;
   /** Lateral relaxation length (m) [assumed] */
   relaxationLength: number;
-  /** Running (hot) inflation pressure at which grip peaks (psi) [assumed: 2026 Pirelli window] */
+  /** Running inflation pressure at 95 °C gas temperature (psi gauge); dry grip optimum [assumed: 2026 Pirelli window] */
   pressureRefPsi: number;
   /** Performance vs. temperature (°C → grip multiplier) [mod] */
   thermalCurve: LutPoints;

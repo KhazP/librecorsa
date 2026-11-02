@@ -513,9 +513,9 @@ export interface TyresThermalPatchData {
 
 /** `TyresPressureData` */
 export interface TyresPressureData {
-  /** Hot inflation pressure for peak grip (psi) */
+  /** Hot inflation pressure for peak grip (psi gauge) */
   optimalPsi: number;
-  /** Inflation pressure (psi) → radial stiffness (N/m) */
+  /** Inflation pressure (psi gauge) → radial stiffness (N/m) */
   pressureSpringCurve: LutPoints;
   /** Grip loss per (ΔP / P_opt)² */
   pressureGripSensitivity: number;
