@@ -1,7 +1,7 @@
 /**
  * Setup sheets per car class, laid out the way drivers expect: the F1 cars share one sheet (aerodynamics,
- * transmission, suspension geometry, suspension, brakes, tyres) and the GT3 cars another (tyres, electronics,
- * mechanical grip, dampers, aero). One sheet serves every car of its class; each car only brings its own baseline
+ * transmission, suspension geometry, suspension, dampers, brakes, tyres) and the GT3 cars another (tyres,
+ * electronics, mechanical grip, dampers, aero). One sheet serves every car of its class; each car only brings its own baseline
  * (ride heights, wheel rates, bump stops, preload, steering ratio, tyre ranges).
  *
  * A sheet is a view over the setup the cars already take: the chassis offsets (`ChassisSetup`), the tyre setup and
@@ -250,6 +250,25 @@ const FX = {
 
 export const ENGINE_MAP_LABELS = ["", "1 · Max", "2 · Race", "3 · Smooth", "4 · Lean", "5 · Save"];
 
+/**
+ * Bump and rebound, slow and fast, front and rear: clicks 0–16 with the baseline at 8, each click 5 % of the
+ * car's own baseline damping. Every car shares the page; the physics scales each car's damper curves.
+ */
+const dampers = (): SetupParam[] => {
+  const damper = (key: keyof ChassisSetup, label: string, fx: SetupEffect) =>
+    chassisParam(key, { label, base: 8, perUnit: 1 / 5, min: 0, max: 16, step: 1, format: int, fx });
+  return [
+    damper("bumpFrontPct", "Front bump", FX.bump),
+    damper("bumpRearPct", "Rear bump", FX.bump),
+    damper("fastBumpFrontPct", "Front fast bump", FX.fastBump),
+    damper("fastBumpRearPct", "Rear fast bump", FX.fastBump),
+    damper("reboundFrontPct", "Front rebound", FX.rebound),
+    damper("reboundRearPct", "Rear rebound", FX.rebound),
+    damper("fastReboundFrontPct", "Front fast rebound", FX.fastRebound),
+    damper("fastReboundRearPct", "Rear fast rebound", FX.fastRebound),
+  ];
+};
+
 /** The parameters every car shares on its electronics page */
 const electronics = (): SetupParam[] => [
   tunerParam("tcLevel", { label: "TC 1", base: 5, min: 0, max: 12, step: 1, format: (v) => (v === 0 ? "OFF" : int(v)), fx: FX.tc }),
@@ -316,6 +335,12 @@ function f1Sheet(b: CarBaseline, r: TyreRanges, d: TyreSetup): SetupGroup[] {
       ],
     },
     {
+      id: "dampers",
+      label: "Dampers",
+      short: "Dampers",
+      params: dampers(),
+    },
+    {
       id: "brakes",
       label: "Brakes",
       short: "Brakes",
@@ -344,9 +369,6 @@ function f1Sheet(b: CarBaseline, r: TyreRanges, d: TyreSetup): SetupGroup[] {
 
 /** The GT3 sheet: shared by every GT3 car */
 function gt3Sheet(b: CarBaseline, r: TyreRanges, d: TyreSetup): SetupGroup[] {
-  const damper = (key: keyof ChassisSetup, label: string, fx: SetupEffect) =>
-    // Clicks 0–16 with the baseline at 8: each click 5 % of the baseline damping
-    chassisParam(key, { label, base: 8, perUnit: 1 / 5, min: 0, max: 16, step: 1, format: int, fx });
   const rate = (key: keyof ChassisSetup, label: string, baseNmm: number, fx: SetupEffect) =>
     // The slider runs in % of the baseline; the readout is the rate itself
     chassisParam(key, { label, base: 0, min: -100, max: 100, step: CHASSIS_LIMITS[key].step, format: (v) => `${Math.round(baseNmm * (1 + v / 100))} N/mm`, fx });
@@ -393,16 +415,7 @@ function gt3Sheet(b: CarBaseline, r: TyreRanges, d: TyreSetup): SetupGroup[] {
       id: "dampers",
       label: "Dampers",
       short: "Dampers",
-      params: [
-        damper("bumpFrontPct", "Front bump", FX.bump),
-        damper("bumpRearPct", "Rear bump", FX.bump),
-        damper("fastBumpFrontPct", "Front fast bump", FX.fastBump),
-        damper("fastBumpRearPct", "Rear fast bump", FX.fastBump),
-        damper("reboundFrontPct", "Front rebound", FX.rebound),
-        damper("reboundRearPct", "Rear rebound", FX.rebound),
-        damper("fastReboundFrontPct", "Front fast rebound", FX.fastRebound),
-        damper("fastReboundRearPct", "Rear fast rebound", FX.fastRebound),
-      ],
+      params: dampers(),
     },
     {
       id: "aero",

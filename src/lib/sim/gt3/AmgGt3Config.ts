@@ -236,8 +236,18 @@ const DIFFUSER_ANGLE_DEG = 2;
 const toRake = (lut: LutPoints): LutPoints => lut.map(([aoa, v]) => [aoa - DIFFUSER_ANGLE_DEG + STATIC_RAKE_DEG, v]);
 
 /**
+ * Downforce lost to body yaw (|air slip angle| deg → CL multiplier) [est]. The splitter sits in clean air; the
+ * underbody's seal and the diffuser's expansion suffer more; the rear wing works in the cabin's wake, which swings
+ * across it as the car slides, so it loses most. A few degrees of cornering slip cost the rear 1–3 %, a 10° slide
+ * ≈16 % — the balance moves forward and a slide grows instead of settling.
+ */
+const YAW_CL_SPLITTER: LutPoints = [[0, 1], [2, 0.996], [5, 0.975], [10, 0.93], [20, 0.82], [30, 0.7]];
+const YAW_CL_FLOOR: LutPoints = [[0, 1], [2, 0.99], [5, 0.96], [10, 0.89], [20, 0.72], [30, 0.6]];
+const YAW_CL_REAR_WING: LutPoints = [[0, 1], [2, 0.985], [5, 0.94], [10, 0.84], [20, 0.66], [30, 0.5]];
+
+/**
  * Splitter, diffuser and rear wing with angle-of-attack and ground-height maps; the body's drag is the
- * body element at 0° (it has no lift). [spec]
+ * body element at 0° (it has no lift). [spec] Yaw sensitivity per element [est].
  */
 const AERO: AeroData = {
   front_lift: 0,
@@ -296,6 +306,7 @@ const AERO: AeroData = {
         [0.0884, 1.002],
         [0.09, 1.004],
       ],
+      lutYaw_CL_mult: YAW_CL_SPLITTER,
     },
     {
       name: 'VENTURI_FLOOR',
@@ -338,6 +349,7 @@ const AERO: AeroData = {
         [0, 1],
         [0.2, 1],
       ],
+      lutYaw_CL_mult: YAW_CL_FLOOR,
     },
     {
       name: 'REAR_WING',
@@ -379,6 +391,7 @@ const AERO: AeroData = {
         [0, 1],
         [0.3, 1],
       ],
+      lutYaw_CL_mult: YAW_CL_REAR_WING,
     },
   ],
   // Ground-height maps peak at 45–66 mm; 55 mm is minimum ride height [spec], rake [est]
@@ -658,7 +671,8 @@ export const AMG_GT3_CONFIG = {
   },
   // Iron discs: steel pad μ(T) curve and heat capacities
   // MAX_TORQUE 4750 / FRONT_SHARE 0.71, ADJUST_STEP 0.5 %
-  brakes: { maxTorqueNm: 4750, front_bias: 0.71, ebbStep: 0.005, brakeByWire: false, discMaterial: 'endurance-steel' },
+  // No brake-by-wire: the bias is the balance bar's, so it does not migrate with pedal travel [spec]
+  brakes: { maxTorqueNm: 4750, front_bias: 0.71, ebbStep: 0.005, brakeByWire: false, discMaterial: 'endurance-steel', migration: { amount: 0, rampStart: 0 } },
   suspensions: SUSPENSIONS,
   aero: AERO,
   tyreCompounds: TYRES_WITH_RAIN,
@@ -685,4 +699,7 @@ export const AMG_GT3_ELECTRONICS = {
   tcDefault: 0.1,
   tcRateHz: 130,
   tcMinSpeedKmh: 40,
+  // The TC lets the rears run p50 0.091 slip while it works [motec]; with the default 0.10 target that is a light
+  // tightening at the ≈1.5 g of a typical corner (0.10 × (1 − 0.055·1.5^1.3) ≈ 0.091), not the F1 sim's 0.074 at 1.6 g
+  tcLateralTightening: { gain: 0.055, exponent: 1.3, floor: 0.8 },
 };
