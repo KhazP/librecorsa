@@ -170,6 +170,81 @@ console.log('\n== Driver aids through the adapter (semi_pro vs pro)');
   check('ABS keeps the wheels turning on a stamp', abs.lock < 0.3 && abs.dist < locked.dist + 2, `max lock ${fmt(abs.lock, 2)} with ABS (${fmt(abs.dist, 0)} m), ${fmt(locked.lock, 2)} without (${fmt(locked.dist, 0)} m)`);
 }
 
+console.log("\n== The GT3's own handling, not the F1's");
+{
+  // No brake-by-wire: the balance bar's 71 % holds at full pedal (the F1 default migrated it to 72.5 %)
+  const car = makeCar();
+  car.reset(0, 0, 0, 40);
+  run(car, 0.25, () => ({ throttle: 0, brake: 1, steer: 0 }));
+  check('Brake bias stays at 71 % at full pedal', Math.abs(car.dynamicBrakeBias - 0.71) < 1e-6, `${fmt(car.dynamicBrakeBias * 100, 1)} %`);
+
+  // A sliding GT3 sheds rear downforce: the wing sits in the cabin's wake, the splitter in clean air
+  const aeroAtYaw = (deg: number) => {
+    const c = makeCar();
+    c.reset(0, 0, 0, 200 / 3.6);
+    run(c, 1, () => ({ throttle: 0.5, brake: 0, steer: 0 }));
+    const speed = c.velocity.length();
+    const fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(c.quaternion);
+    const side = new THREE.Vector3(1, 0, 0).applyQuaternion(c.quaternion);
+    const r = (deg * Math.PI) / 180;
+    c.velocity.copy(fwd.multiplyScalar(Math.cos(r) * speed).add(side.multiplyScalar(Math.sin(r) * speed)));
+    c.step(DT, { throttle: 0.5, brake: 0, steer: 0 });
+    const a = c as unknown as { aeroDownN: number; aeroFrontN: number };
+    return { front: a.aeroFrontN, rear: a.aeroDownN - a.aeroFrontN };
+  };
+  const straight = aeroAtYaw(0);
+  const slide = aeroAtYaw(10);
+  const rearLoss = 1 - slide.rear / straight.rear;
+  const frontLoss = 1 - slide.front / straight.front;
+  check('A 10° slide sheds rear downforce first', rearLoss > 0.1 && rearLoss < 0.25 && frontLoss < rearLoss * 0.6, `rear −${fmt(rearLoss * 100, 1)} %, front −${fmt(frontLoss * 100, 1)} % at 200 km/h`);
+
+  // Steady 80 km/h corner at ≈1.65 g, then full throttle: the TC lets the rear step out but catches it; off, it spins
+  const wide = createFlatTestTrack(40_000, 2000);
+  const H = 1 / 240;
+  const cornerAt = (preset: 'pro' | 'semi_pro', kmh: number, steer: number) => {
+    const sim = createAmgGt3Sim(wide);
+    sim.assistPreset = preset;
+    sim.resetToStartGrid(false);
+    sim.teleportToDistance(100, kmh / 3.6, 0);
+    let thr = 0.3;
+    for (let i = 0; i < 240 * 5; i++) {
+      thr = THREE.MathUtils.clamp(thr + (sim.telemetry.speedKmh < kmh ? 0.01 : -0.01), 0, 1);
+      sim.step(H, { throttle: thr, analogSteer: Math.min(1, i / 480) * steer });
+    }
+    return sim;
+  };
+  const betaDeg = (sim: F12026CarSim) => (Math.abs(Math.atan2(sim.vyMs, Math.max(1, Math.abs(sim.vxMs)))) * 180) / Math.PI;
+  const powerOn = (preset: 'pro' | 'semi_pro') => {
+    const sim = cornerAt(preset, 80, 0.35);
+    let peak = 0;
+    for (let i = 0; i < 240 * 1.5; i++) {
+      sim.step(H, { throttle: 1, analogSteer: 0.35 });
+      peak = Math.max(peak, betaDeg(sim));
+    }
+    return peak;
+  };
+  const withTc = powerOn('semi_pro');
+  const noTc = powerOn('pro');
+  check('TC lets a power-on exit slide but catches it', withTc > 4 && withTc < 25 && noTc > 45, `peak body slip ${fmt(withTc, 1)}° with TC, ${fmt(noTc, 1)}° without`);
+
+  // Light trail braking into a 160 km/h corner tightens the line (weight on the nose, rear still braking 29 %)
+  const curvature = (brake: number, steer: number) => {
+    const sim = createAmgGt3Sim(wide);
+    sim.assistPreset = 'semi_pro';
+    sim.resetToStartGrid(false);
+    sim.teleportToDistance(100, 160 / 3.6, 0);
+    for (let i = 0; i < 120; i++) sim.step(H, { throttle: 0.5 });
+    let k = 0;
+    for (let i = 0; i < 168; i++) {
+      sim.step(H, { throttle: brake > 0 ? 0 : 0.2, brake, analogSteer: Math.min(1, i / 96) * steer });
+      k = Math.max(k, Math.abs(sim.yawRateRadS) / Math.max(5, Math.hypot(sim.vxMs, sim.vyMs)));
+    }
+    return k;
+  };
+  const trail = curvature(0.4, 0.16) / curvature(0, 0.16);
+  check('Light trail braking tightens the line', trail > 1.05, `peak path curvature × ${fmt(trail, 3)} vs coasting in`);
+}
+
 console.log('\n== Autopilot on the Rwanda colliders');
 {
   const track = getRwandaTrackData();
