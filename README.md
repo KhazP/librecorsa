@@ -17,7 +17,7 @@
 <p>
   <a href="https://github.com/KhazP/librecorsa/actions/workflows/deploy-pages.yml"><img alt="Build and deploy" src="https://github.com/KhazP/librecorsa/actions/workflows/deploy-pages.yml/badge.svg" /></a>
   <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/code-MIT-CCFF00?labelColor=08090D" /></a>
-  <img alt="Next.js 15" src="https://img.shields.io/badge/Next.js-15-F5F7FA?labelColor=08090D&logo=nextdotjs&logoColor=white" />
+  <img alt="Next.js 16" src="https://img.shields.io/badge/Next.js-16-F5F7FA?labelColor=08090D&logo=nextdotjs&logoColor=white" />
   <img alt="Three.js" src="https://img.shields.io/badge/Three.js-WebGL2-00E5FF?labelColor=08090D&logo=threedotjs&logoColor=white" />
   <img alt="Physics at 500 Hz" src="https://img.shields.io/badge/physics-500%20Hz-FF2A3C?labelColor=08090D" />
 </p>
@@ -117,6 +117,22 @@ Drove one of these, or a wheel that isn't listed? A [wheel report](https://githu
 
 ---
 
+## Physics validation
+
+The physics is checked against data, not just tuned by feel, and the evidence is generated from the simulator's own code so anyone can reproduce it ([full page](docs/physics/README.md), `npm run physics:report`).
+
+- **The GT3 against a real car.** The Mercedes-AMG GT3 runs the same manoeuvres as reference GT3 Evo MoTeC logs: sustained cornering, braking and full-throttle g by speed, gearing and the understeer gradient. Every point sits within −10 % to +16 % of the logs, and `npm run verify` fails the build if one leaves its tolerance.
+- **Tyre curves for every car**: force against slip angle at four loads, grip against load, temperature and pressure.
+- **Honest gaps**: the VF26 reaches 6–18 % less cornering g than the cornering-limit table in its reference data, and the page says so.
+- **Frame-rate independence**: physics runs in fixed 2 ms steps (500 Hz, four 2 kHz substeps), so the same three-second launch ends within 0.3 km/h and 0.2 m at 30, 60, 144 or 240 fps.
+
+<p align="center">
+  <img src="docs/physics/gt3-lateral-g.svg" alt="GT3 sustained lateral g against speed: simulator line against MoTeC reference points, inside the shaded CI tolerance" width="49%" />
+  <img src="docs/physics/tyre-fy-vs-slip-gt3.svg" alt="GT3 tyre lateral force against slip angle at 2, 4, 6 and 8 kN, each peaking near 6 degrees" width="49%" />
+</p>
+
+---
+
 ## Controls
 
 | Input | Action |
@@ -152,11 +168,12 @@ npm run build            # static export into ./out
 | `npm run typecheck` | `tsc --noEmit` over the whole project |
 | `npm run verify` | Every `scripts/verify-*.ts` suite (physics, f12026-car, GT3, input, lap tools, race session, realism, weather, AI tuning, telemetry out, WebHID FFB) |
 | `npm run verify:laps` | Slow: player-style laps for every car and assist preset at full pace |
+| `npm run physics:report` | Regenerate the [physics validation page](docs/physics/README.md): tyre curves, the GT3 against MoTeC logs, frame-rate checks |
 | `npm run race:headless` | A full-physics AI race without rendering, faster than real time, with a results table. `-- --track suzuka --car amg-gt3 --weather heavy_rain --sweep skill` |
 | `npm run compress-tracks` | Meshopt-compress the circuit GLBs and check the physics meshes are unchanged |
 | `npm run ffb` | Local force-feedback and telemetry bridge (Windows) |
 
-The tech is **Next.js 15** (static export), **React 19**, **Three.js** (WebGL2, AgX tone mapping, PBR), the **Web Audio API**, **WebRTC**, **WebHID** and **Tailwind CSS 4**.
+The tech is **Next.js 16** (static export), **React 19**, **Three.js** (WebGL2, AgX tone mapping, PBR), the **Web Audio API**, **WebRTC**, **WebHID** and **Tailwind CSS 4**.
 
 ### Deployment
 Every push to `main` runs typecheck and the verify suites, then builds and deploys `./out` to GitHub Pages (`.github/workflows/deploy-pages.yml`). Hosting costs nothing.

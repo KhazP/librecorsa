@@ -1,0 +1,11 @@
+series,speed_kmh,g
+"Simulator",86.4,1.93794
+"Simulator",144,2.39625
+"Simulator",180,2.74912
+"Simulator",216,3.13304
+"Simulator",248.4,3.49811
+"Reference data",86.4,2.37513
+"Reference data",144,2.66055
+"Reference data",180,2.91539
+"Reference data",216,3.32314
+"Reference data",248.4,3.98573
