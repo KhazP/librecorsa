@@ -173,6 +173,14 @@ check('auto-setup leaves a bound wheel alone; belt wheels get their defaults', (
   assert.equal(g29?.rotationDeg, 900);
   assert.equal(g29?.steer?.center, 0, 'a rim held off-centre is not taken as the centre');
 });
+check('auto-setup: Logitech starts on the bridge, others on WebHID; CSL Elite is belt-driven, CSL DD direct', () => {
+  const g923 = autoConfigureWheel([pad('G923 Racing Wheel for Xbox One and PC (Vendor: 046d Product: c26e)', '', [0])], DEFAULT_WHEEL_SETTINGS);
+  assert.equal(g923?.hidFfb, false, 'WebHID refuses Logitech, so the bridge instructions should show from the start');
+  assert.equal(g923?.ffbEnabled, true);
+  assert.equal(autoConfigureWheel([pad(MOZA_BASE, '', [0])], DEFAULT_WHEEL_SETTINGS)?.hidFfb, true);
+  assert.equal(autoConfigureWheel([pad('FANATEC CSL Elite Wheel Base', '', [0])], DEFAULT_WHEEL_SETTINGS)?.type, 'belt_gear');
+  assert.equal(autoConfigureWheel([pad('FANATEC CSL DD', '', [0])], DEFAULT_WHEEL_SETTINGS)?.type, 'direct_drive');
+});
 check('FFB gain and minimum force: continuous through zero, monotonic, sign kept', () => {
   const w = { ffbGain: 1.5, ffbMinForce: 0.1 };
   near(shapeFfbForce(0, w), 0);
