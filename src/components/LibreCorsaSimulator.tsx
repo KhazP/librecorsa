@@ -1211,6 +1211,9 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       antialias: false,
       stencil: false,
       powerPreference: "high-performance",
+      // Float precision across the 0.12 m .. 5.5 km depth range (kerbs, lines and decals stop z-fighting at
+      // distance). three falls back to the standard buffer without EXT_clip_control; ?depth=standard forces it.
+      reversedDepthBuffer: new URLSearchParams(window.location.search).get("depth") !== "standard",
     });
     // AgX exposure, pixel ratio clamp and shadow type; set before the composer is created
     configureRenderer(renderer);

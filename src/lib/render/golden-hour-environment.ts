@@ -210,6 +210,17 @@ function configureSkyUniforms(sky: Sky, showSunDisc: boolean): void {
     ...sky.material.defines,
     SUN_DISC_MAX: SUN_DISC_MAX_RADIANCE.toFixed(1),
   };
+  // The stock vertex shader pins the dome to the far plane with z = w. Under a reversed depth buffer the far
+  // plane is depth 0, so z = w would put the sky on the near plane, in front of everything.
+  const pinFar = "gl_Position.z = gl_Position.w;";
+  if (sky.material.vertexShader.includes(pinFar)) {
+    sky.material.vertexShader = sky.material.vertexShader.replace(
+      pinFar,
+      "\n#ifdef USE_REVERSED_DEPTH_BUFFER\n\tgl_Position.z = 0.0;\n#else\n\tgl_Position.z = gl_Position.w;\n#endif\n"
+    );
+  } else {
+    console.warn("[golden-hour-environment] Sky far-plane anchor not found; the sky may hide the scene with reversed depth");
+  }
 }
 
 // Returns a fresh unit vector for the sun.
