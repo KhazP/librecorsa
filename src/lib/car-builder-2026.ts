@@ -2,6 +2,7 @@ import * as THREE from "three";
 import type { CarTelemetry, LiveryConfig, TireCompound } from "@/types/f1";
 import { AMR26_MODEL_URL, attachVf26Model, loadVf26Template, type Vf26ModelInstance } from "@/lib/vf26-car-model";
 import type { TyreVisualState } from "@/lib/sim/simulator-car";
+import { moveToDriverHeadLayer } from "@/lib/render/layers";
 
 /** What the simulator drives on any car rig (the F1 rig below, or the GT3's in gt3-car-model) */
 export interface SimCarRig {
@@ -14,8 +15,6 @@ export interface SimCarRig {
   getCameraAnchors: () => Vf26ModelInstance["cameraAnchors"] | null;
   /** The VF26 body / cockpit group once the model has replaced the procedural car (null until then) */
   getVf26Body: () => THREE.Group | null;
-  /** Hide the driver's helmet while the camera is at the eye point */
-  setCockpitView: (inCockpit: boolean) => void;
   updateFromTelemetry: (
     telemetry: CarTelemetry,
     pitchRad: number,
@@ -1610,6 +1609,11 @@ export function createF1Car2026(
   visorStrip.scale.set(0.95, 1.0, 1.08);
   helmetGroup.add(visorStrip);
 
+  // Shadows the cockpit even when the cockpit camera leaves the helmet out
+  helmetGroup.traverse((obj) => {
+    if ((obj as THREE.Mesh).isMesh) obj.castShadow = true;
+  });
+  moveToDriverHeadLayer(helmetGroup);
   chassisGroup.add(helmetGroup);
 
   // ============================================================================
@@ -2732,7 +2736,6 @@ export function createF1Car2026(
     setTireCompound,
     getCameraAnchors: () => vf26?.cameraAnchors ?? null,
     getVf26Body: () => vf26?.bodyGroup ?? null,
-    setCockpitView: (inCockpit: boolean) => vf26?.setHeadVisible(!inCockpit),
     updateFromTelemetry,
     dispose: () => {
       rigDisposed = true;

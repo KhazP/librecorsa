@@ -243,7 +243,6 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
     setTireCompound: () => {},
     getCameraAnchors: () => cameraAnchors,
     getVf26Body: () => null,
-    setCockpitView: () => {},
     updateFromTelemetry,
     dispose: () => {
       disposed = true;

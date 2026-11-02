@@ -46,6 +46,43 @@ const DECAL_NODES: Record<string, number> = {
   Track_Kerbs_Visual: -1,
   Track_Runoff_Paint: -1,
 };
+/**
+ * Diffuse roughness (EON diffuse BRDF, three r187+) for the circuits' rough ground by material name. Rough
+ * surfaces back-scatter: with the low golden-hour sun behind the camera sunlit grass reads ~25% brighter, and
+ * looking into the sun a little darker, where Lambert shading looks the same from every side. Only materials
+ * named per surface match (Rwanda's Terrain_Grass / Pit_Apron_Concrete, Motegi's GRASS* / *CONCRETE*); the
+ * scanned circuits share one atlas material and keep plain Lambert.
+ */
+const ROUGH_DIFFUSE: readonly (readonly [RegExp, number])[] = [
+  [/grass/i, 1.0],
+  [/concrete/i, 0.5],
+];
+const roughDiffuseConversions = new WeakMap<THREE.Material, THREE.Material>();
+
+/** The material with its rough-diffuse lobe: physical materials in place, standard ones as a shared physical copy */
+function withRoughDiffuse(mat: THREE.Material): THREE.Material {
+  const std = mat as THREE.MeshStandardMaterial;
+  if (!std.isMeshStandardMaterial) return mat;
+  const amount = ROUGH_DIFFUSE.find(([re]) => re.test(mat.name))?.[1];
+  if (amount === undefined) return mat;
+  const phys = mat as THREE.MeshPhysicalMaterial;
+  if (phys.isMeshPhysicalMaterial) {
+    phys.diffuseRoughness = amount;
+    return mat;
+  }
+  let out = roughDiffuseConversions.get(mat);
+  if (!out) {
+    const copy = new THREE.MeshPhysicalMaterial();
+    THREE.MeshStandardMaterial.prototype.copy.call(copy, std);
+    // MeshStandardMaterial.copy() resets the defines to STANDARD only
+    copy.defines = { STANDARD: "", PHYSICAL: "" };
+    copy.diffuseRoughness = amount;
+    roughDiffuseConversions.set(mat, copy);
+    out = copy;
+  }
+  return out;
+}
+
 const SHADOW_RECEIVE_ONLY = new Set([
   "Terrain",
   "Lake",
@@ -148,6 +185,7 @@ function loadTrackGlb(
           obj.castShadow = !receiveOnly && (topName.startsWith("Prop_") || topName.startsWith("Env_") || topName.startsWith("Track_"));
         }
 
+        obj.material = Array.isArray(obj.material) ? obj.material.map(withRoughDiffuse) : withRoughDiffuse(obj.material);
         const offset = DECAL_NODES[topName];
         const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
         for (const mat of mats) {

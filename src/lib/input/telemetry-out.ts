@@ -50,7 +50,7 @@ export interface TelemetryOutPacket {
   fuelKg: number;
   /** Tyre carcass temperatures, FL, FR, RL, RR (°C) */
   tyreTempC: [number, number, number, number];
-  /** Hot tyre pressures, FL, FR, RL, RR (psi); 0 when unknown */
+  /** Current tyre pressures, FL, FR, RL, RR (psi gauge); 0 when unknown */
   tyrePsi: [number, number, number, number];
   /** Tyre wear, FL, FR, RL, RR (%, 0..100) */
   tyreWearPct: [number, number, number, number];

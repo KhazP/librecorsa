@@ -13,7 +13,7 @@
  * - Contact patch:             radial deflection δ = Fz / k sets the patch length (pneumatic trail, which
  *                              collapses toward the limit so Mz = −Fy·tp lightens the steering) and the
  *                              effective rolling radius.
- * - Inflation:                 ideal-gas pressure P = P_cold · T_gas / T_cold. Pressure sets the radial
+ * - Inflation:                 ideal gas: (P_gauge + P_atm) / T_kelvin is constant. Pressure sets the radial
  *                              stiffness, crowns the tread (more load on the centre band) and moves grip
  *                              away from its optimum.
  * - Temperature:               9-node thermal model, inner / middle / outer bands × surface / bulk /
@@ -35,6 +35,7 @@ import {
   wetWearScale,
 } from './wet-tyres';
 import { Lut } from './lut';
+import { tyreGaugePressureAtTemperature } from './tyre-pressure';
 import type { Vf26TyreSpec } from './vf26-data';
 
 /** Thermal node index: band (0 inner, 1 middle, 2 outer) × layer (0 surface, 1 bulk, 2 carcass) */
@@ -104,9 +105,9 @@ export interface TyreRuntime {
   dirtyLevel: number;
   /** Inflation gas temperature (°C) */
   gasTempC: number;
-  /** Cold inflation pressure at COLD_REF_C (psi) */
+  /** Cold inflation pressure at COLD_REF_C (psi gauge) */
   coldPressurePsi: number;
-  /** Current inflation pressure (psi) */
+  /** Current inflation pressure (psi gauge) */
   pressurePsi: number;
   /** Radial stiffness at the current pressure (N/m) */
   verticalRate: number;
@@ -174,7 +175,6 @@ export interface TyreForceOutput {
 
 const DEG2RAD = Math.PI / 180;
 const TWO_PI = Math.PI * 2;
-const KELVIN = 273.15;
 /** Maximum stored normalised slip — beyond this the patch is fully sliding */
 const MAX_NORM_SLIP = 5;
 /** Below this speed the carcass damping term blends in */
@@ -367,9 +367,9 @@ export function fitMagicFormula(falloffLevel: number): MagicFormulaShape {
   return shape(0.5 * (lo + hi));
 }
 
-/** Cold pressure that reaches `refPsi` when the gas is at the reference running temperature */
+/** Cold pressure (psi gauge at COLD_REF_C) that reaches `refPsi` (psi gauge) at GAS_REF_C */
 export function coldPressureFor(refPsi: number): number {
-  return (refPsi * (COLD_REF_C + KELVIN)) / (GAS_REF_C + KELVIN);
+  return tyreGaugePressureAtTemperature(refPsi, GAS_REF_C, COLD_REF_C);
 }
 
 export function createTyreRuntime(spec: Vf26TyreSpec, initialTempC: number): TyreRuntime {
@@ -425,7 +425,7 @@ export function setTyreSpec(t: TyreRuntime, spec: Vf26TyreSpec): void {
   updateInflation(t);
 }
 
-/** Sets the cold inflation pressure (psi at COLD_REF_C) and updates the hot pressure and radial rate */
+/** Sets the cold inflation pressure (psi gauge at COLD_REF_C) and updates the hot pressure and radial rate */
 export function setTyreColdPressure(t: TyreRuntime, coldPsi: number): void {
   t.coldPressurePsi = coldPsi;
   updateInflation(t);
@@ -454,15 +454,16 @@ export function tyreBandSurfaceTempC(t: TyreRuntime, band: number): number {
   return t.nodes[node(band, 0)];
 }
 
+/** Optimum running pressure (psi gauge), shifted to the wet compound's gas temperature. */
 function hotPressureRefPsi(spec: Vf26TyreSpec): number {
   const shift = spec.wet?.tempShiftC ?? 0;
   if (shift === 0) return spec.pressureRefPsi;
   const refGasC = GAS_REF_C + 0.75 * shift;
-  return (spec.pressureRefPsi * (refGasC + KELVIN)) / (GAS_REF_C + KELVIN);
+  return tyreGaugePressureAtTemperature(spec.pressureRefPsi, GAS_REF_C, refGasC);
 }
 
 function updateInflation(t: TyreRuntime): void {
-  t.pressurePsi = (t.coldPressurePsi * (t.gasTempC + KELVIN)) / (COLD_REF_C + KELVIN);
+  t.pressurePsi = tyreGaugePressureAtTemperature(t.coldPressurePsi, COLD_REF_C, t.gasTempC);
   const rel = t.pressurePsi / hotPressureRefPsi(t.spec);
   t.verticalRate = t.spec.rate * (1 - RATE_PRESSURE_SHARE + RATE_PRESSURE_SHARE * rel);
 }

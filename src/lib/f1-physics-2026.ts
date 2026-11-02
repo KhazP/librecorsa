@@ -195,7 +195,7 @@ export function floorStallFactorForClearance(clearanceM: number): number {
   return 1 - (1 - FLOOR_STALL_MIN_FACTOR) * t * t * (3 - 2 * t);
 }
 
-/** Garage defaults: the cold pressure that reaches the reference (hot) pressure, to 0.1 psi, and the static camber */
+/** Garage defaults: cold gauge pressure reaching the hot gauge reference, to 0.1 psi, and static camber */
 function defaultTyreSetup(): TyreSetup {
   const round = (psi: number) => Math.round(psi * 10) / 10;
   return {
@@ -814,8 +814,8 @@ export class F1Physics2026 {
     const pick = (v: number, lo: number, hi: number, current: number) =>
       Number.isFinite(v) ? THREE.MathUtils.clamp(v, lo, hi) : current;
     const cp = this.tyreSetup.coldPressurePsi;
-    cp.front = Math.round(pick(setup.coldPressurePsi.front, 17, 27, cp.front) * 10) / 10;
-    cp.rear = Math.round(pick(setup.coldPressurePsi.rear, 17, 27, cp.rear) * 10) / 10;
+    cp.front = Math.round(pick(setup.coldPressurePsi.front, 14, 27, cp.front) * 10) / 10;
+    cp.rear = Math.round(pick(setup.coldPressurePsi.rear, 14, 27, cp.rear) * 10) / 10;
     this.axles[0].camberDeg = pick(setup.camberDeg.front, -4.5, -1.5, this.axles[0].camberDeg);
     this.axles[1].camberDeg = pick(setup.camberDeg.rear, -3.0, -0.5, this.axles[1].camberDeg);
     this.applyColdPressures();

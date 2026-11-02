@@ -249,6 +249,7 @@ export interface RaceSplits {
 
 /** Driver-set tyre setup (front / rear axle). Camber in degrees, negative = top of the tyre leaning inward. */
 export interface TyreSetup {
+  /** Psi gauge at the model's cold reference: VF26 20 °C; F12026/GT3 compound blanket temperature. */
   coldPressurePsi: { front: number; rear: number };
   camberDeg: { front: number; rear: number };
 }
@@ -297,7 +298,7 @@ export interface CarTelemetry {
   tireWearPct: [number, number, number, number]; // FL, FR, RL, RR (0..100% wear)
   /** Tread surface temperatures across each tyre, left → right as seen from behind (°C) */
   tireBandTempsC?: [Band3, Band3, Band3, Band3];
-  /** Hot inflation pressures (psi) */
+  /** Current inflation pressures (psi gauge) */
   tirePressuresPsi?: [number, number, number, number];
   /** Circumferential flat-spot severity per corner (0..1) */
   tireFlatSpotSeverity?: [number, number, number, number];
@@ -369,7 +370,7 @@ export interface CarTelemetry {
   lapInvalid?: boolean;
   /** Verdict on the lap that was just completed (set together with `lapCount` / `lastLapTimeMs`) */
   lastLapValid?: boolean;
-  /** Hot pressure at which each tyre grips best (psi) */
+  /** Reference hot pressure at which each tyre grips best (psi gauge) */
   tireOptimalPsi?: [number, number, number, number];
   /** The compound's working window of tread temperature (°C) */
   tireOptimalTempC?: [number, number];

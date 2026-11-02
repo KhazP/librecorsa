@@ -62,6 +62,7 @@ import { touchInput, isTouchDevice, resetTouchInput } from "@/lib/input/touch-in
 import { isFatalHidStatus } from "@/lib/input/webhid-ffb";
 import { applyGraphicsQuality } from "@/lib/render/golden-hour-environment";
 import { createRainFx, RAIN_VISOR_LAYER } from "@/lib/render/rain-fx";
+import { DRIVER_HEAD_LAYER } from "@/lib/render/layers";
 import { setAsphaltWetness } from "@/lib/render/asphalt-sheen";
 import { SIM_REALISM_FLAGS, type SimRealism } from "@/lib/sim/sim-realism";
 import {
@@ -1211,6 +1212,9 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       antialias: false,
       stencil: false,
       powerPreference: "high-performance",
+      // Float precision across the 0.12 m .. 5.5 km depth range (kerbs, lines and decals stop z-fighting at
+      // distance). three falls back to the standard buffer without EXT_clip_control; ?depth=standard forces it.
+      reversedDepthBuffer: new URLSearchParams(window.location.search).get("depth") !== "standard",
     });
     // AgX exposure, pixel ratio clamp and shadow type; set before the composer is created
     configureRenderer(renderer);
@@ -1219,7 +1223,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     container.innerHTML = "";
     container.appendChild(renderer.domElement);
 
-    // Golden-hour sky dome, its baked PMREM environment, horizon fog and the car-tracking sun shadow
+    // Golden-hour sky dome, its baked PMREM environment, horizon fog and the cascaded sun shadow
     const env = createGoldenHourEnvironment(renderer, scene);
     // Rain streaks around the camera (one GPU-animated draw, hidden in the dry)
     const rainFx = createRainFx(scene);
@@ -2182,10 +2186,12 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         setCarCockpitFov(carFovDeg);
       }
       const onboardFovShift = cockpitFovRef.current === null ? 0 : cockpitFovRef.current - carFovDeg;
-      // Hide driver helmet mesh only when inside first-person cockpit view so it never clips the camera
-      // (the procedural driver is hidden entirely once the VF26 model has replaced the procedural car)
-      carRig.helmetGroup.visible = mode !== "cockpit" && !vf26Cams;
-      carRig.setCockpitView(mode === "cockpit");
+      // The procedural helmet goes once the VF26 model (with its own driver) has replaced the procedural car
+      carRig.helmetGroup.visible = !vf26Cams;
+      // From the driver's eye point the helmet would fill the view: the camera leaves its layer out, while the
+      // sun's shadow camera keeps it so the head still shadows the cockpit
+      if (mode === "cockpit") camera.layers.disable(DRIVER_HEAD_LAYER);
+      else camera.layers.enable(DRIVER_HEAD_LAYER);
 
       carRig.root.position.copy(physics.worldPosition);
       carRig.root.quaternion.copy(physics.worldQuaternion);

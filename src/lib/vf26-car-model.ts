@@ -13,6 +13,7 @@ import {
 } from "@/lib/render/tyre-deformation";
 import { applyRearRainLight } from "@/lib/render/golden-hour-environment";
 import { setVf26LiveryColours, upgradeVf26Materials } from "@/lib/render/car-materials";
+import { moveToDriverHeadLayer } from "@/lib/render/layers";
 
 /**
  * F1 3D model (`public/amr26/model/amr26.glb`). On builds without the GLB `loadVf26Template()` resolves to null
@@ -51,8 +52,6 @@ export interface Vf26ModelInstance {
   setTireCompound: (compound: TireCompound) => void;
   /** Livery colours for the masked paint */
   setLivery: (livery: LiveryConfig) => void;
-  /** Hide the helmet while the camera sits at the driver's eye point */
-  setHeadVisible: (visible: boolean) => void;
   dispose: () => void;
 }
 
@@ -265,6 +264,9 @@ export function attachVf26Model(
 
   // Driver arms follow the wheel through the mod's driver_steer clip (time set from the wheel angle)
   const helmet = driver?.getObjectByName("HELMET") ?? null;
+  // The cockpit camera leaves this layer out (the eye point sits inside the helmet); the sun's shadow camera
+  // keeps it, so the head still shadows the cockpit
+  if (helmet) moveToDriverHeadLayer(helmet);
   const steerTable = extras.driver?.steerAngleDeg ?? [];
   const steerClip = assets.animations.find((a) => a.name === (extras.driver?.steerClip ?? "steer"));
   let driverMixer: THREE.AnimationMixer | null = null;
@@ -412,10 +414,6 @@ export function attachVf26Model(
     if (liveryMask) setVf26LiveryColours(livery.primary, livery.secondary, livery.accent);
   };
 
-  const setHeadVisible = (visible: boolean) => {
-    if (helmet) helmet.visible = visible;
-  };
-
   const dispose = () => {
     driverMixer?.stopAllAction();
     for (const h of liveTyreHandles) h.dispose();
@@ -423,5 +421,5 @@ export function attachVf26Model(
     for (const c of corners) c.steer.removeFromParent();
   };
 
-  return { bodyGroup, cameraAnchors, update, setTireCompound, setLivery, setHeadVisible, dispose };
+  return { bodyGroup, cameraAnchors, update, setTireCompound, setLivery, dispose };
 }
