@@ -88,11 +88,32 @@ The Rwanda circuit was built in Blender for this project: 14 corners, 52 m of el
 - **Cameras**: cockpit eye-point with live mirrors and the steering-wheel display, a broadcast T-cam, chase, and trackside TV cameras that pan, zoom and cut between corners.
 
 ### Hardware
-- **Wheels**: force feedback straight from the browser over WebHID, for direct-drive bases that use the standard HID PID protocol (Simagic, Moza, Simucube, VRS, OpenFFBoard and similar). Wheels that WebHID can't drive, Logitech included, use the local bridge (`npm run ffb`, Windows).
+- **Wheels**: steering, pedals and buttons through the browser for any wheel. Force feedback straight from the browser over WebHID for bases that use the standard HID PID protocol, or through a local bridge on Windows. See [Wheels and force feedback](#wheels-and-force-feedback) for what has been tested.
 - **Gamepads**: Xbox and PlayStation, with rumble and trigger rumble.
 - **Touch**: on-screen pedals and steering, or tilt to steer.
 - **Telemetry out**: 60 Hz UDP JSON through the bridge, for dashboards and motion rigs.
 - **Setup wizard**: picks your device and tunes steering, pedals and force feedback on first launch.
+
+### Wheels and force feedback
+
+Steering, pedals and buttons come through the browser's Gamepad API, so any wheel that Windows, macOS or Linux sees as a game controller can drive. Force feedback has two paths:
+
+- **In the browser (WebHID, Chrome or Edge)**: click **Connect wheel** in the wheel setup. It drives bases that expose the standard USB HID PID force-feedback reports, with nothing to install. Experimental.
+- **Local bridge (Windows)**: a small helper that talks DirectInput to any force-feedback wheel. It needs a copy of this repository and Node.js: run `npm install` once, then `npm run ffb` and keep it open. The game finds it on `127.0.0.1:18500`. For the hosted site, allow its origin when you start the bridge (origin only, no path):
+  - PowerShell: `$env:FFB_ALLOW_ORIGIN="https://khazp.github.io"; npm run ffb`
+  - cmd: `set "FFB_ALLOW_ORIGIN=https://khazp.github.io" && npm run ffb`
+
+Only what the maintainer has driven is marked tested. Everything else is what the code should do, not a promise:
+
+| Wheel | Browser (WebHID) | Bridge (Windows) | Status |
+| :-- | :-- | :-- | :-- |
+| MOZA R9 V2 + KS | Connects and steers | Expected | **Tested: connects. Force feedback not yet confirmed** |
+| Other MOZA bases, Simucube 2, VRS, OpenFFBoard, other HID PID bases | Expected | Expected | Untested |
+| Simagic, Cammus, Asetek, Fanatec DD (PC mode), Thrustmaster DD | Unknown: without HID PID force feedback the page switches to the bridge | Expected | Untested |
+| Logitech G29, G920, G923, G PRO | No: proprietary force feedback | Expected | Untested |
+| Thrustmaster T150, T248, T300, TMX; Fanatec CSL Elite | Unknown, likely not | Expected | Untested |
+
+Drove one of these, or a wheel that isn't listed? A [wheel report](https://github.com/KhazP/librecorsa/issues/new?template=wheel-report.yml) moves it into the table.
 
 ---
 
