@@ -13,6 +13,7 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.js";
 import { assetProgress } from "@/lib/loading/asset-progress";
 import { applySceneryDetail, prepareTreeGeometry, sceneryKind, setSceneryTime } from "@/lib/render/scenery-detail";
+import { attachSceneryInstances, loadSceneryInstances, resetSceneryInstances } from "@/lib/render/scenery-instances";
 
 export interface BuiltRwandaScene {
   sceneGroup: THREE.Group;
@@ -134,11 +135,15 @@ function loadTrackGlb(
   glbGroup: THREE.Group,
   fallbackGroup: THREE.Group,
   onLoaded: (root: THREE.Object3D) => void,
-  sheenMask: RacingLineMask
+  sheenMask: RacingLineMask,
+  /** Instanced foliage that replaces some of the circuit's own (scenery-instances.ts); loaded alongside */
+  sceneryUrl: string | null = null
 ): void {
   if (typeof window === "undefined" || typeof fetch === "undefined") {
     return;
   }
+  resetSceneryInstances();
+  const sceneryLoad = sceneryUrl ? loadSceneryInstances(sceneryUrl) : Promise.resolve(null);
 
   // `?colliders=1`: draw the physics surfaces (by type) and barriers over the scan, to check them against it
   const showColliders = new URLSearchParams(window.location.search).get("colliders") === "1";
@@ -215,6 +220,13 @@ function loadTrackGlb(
         }
         if (offset !== undefined) obj.renderOrder = 1;
       });
+      return sceneryLoad.then((scenery) => {
+        // Before onLoaded, so the camera occlusion pass and the shader warm-up see it
+        if (scenery) attachSceneryInstances(root, scenery);
+        return root;
+      });
+    })
+    .then((root) => {
       glbGroup.add(root);
       onLoaded(root);
 
@@ -1261,7 +1273,8 @@ export function buildRwandaCircuitScene(
       attachStartLightsToGantry(root);
       resolveTrackRoot(root);
     },
-    sheenMask
+    sheenMask,
+    isRwanda ? "/tracks/rwanda/scenery/foliage.glb" : null
   );
 
   return {

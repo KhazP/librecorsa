@@ -37,8 +37,8 @@ const HUD_PRESETS: { id: HudPreset; title: string; detail: string }[] = [
 ];
 
 const QUALITY_CHOICES: { id: GraphicsQuality; title: string; detail: string }[] = [
-  { id: "low", title: "Low", detail: "No shadows or bloom, lower resolution — for laptops and phones" },
-  { id: "medium", title: "Medium", detail: "Shadows, no bloom" },
+  { id: "low", title: "Low", detail: "No shadows or bloom, half the trees, lower resolution — for laptops and phones" },
+  { id: "medium", title: "Medium", detail: "Shadows, no bloom, fewer trees" },
   { id: "high", title: "High", detail: "Everything on" },
 ];
 
