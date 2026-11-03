@@ -14,6 +14,7 @@ import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.j
 import { assetProgress } from "@/lib/loading/asset-progress";
 import { applySceneryDetail, prepareTreeGeometry, sceneryKind, setSceneryTime } from "@/lib/render/scenery-detail";
 import { attachSceneryInstances, loadSceneryInstances, resetSceneryInstances } from "@/lib/render/scenery-instances";
+import { applySceneryTextures, loadSceneryTextures } from "@/lib/render/scenery-textures";
 
 export interface BuiltRwandaScene {
   sceneGroup: THREE.Group;
@@ -137,13 +138,16 @@ function loadTrackGlb(
   onLoaded: (root: THREE.Object3D) => void,
   sheenMask: RacingLineMask,
   /** Scenery files that replace some of the circuit's own (scenery-instances.ts); loaded alongside */
-  sceneryUrls: readonly string[] = []
+  sceneryUrls: readonly string[] = [],
+  /** A manifest of the circuit's own textures replacing a track pack's images (scenery-textures.ts) */
+  sceneryTexturesUrl: string | null = null
 ): void {
   if (typeof window === "undefined" || typeof fetch === "undefined") {
     return;
   }
   resetSceneryInstances();
   const sceneryLoad = Promise.all(sceneryUrls.map(loadSceneryInstances));
+  const texturesLoad = sceneryTexturesUrl ? loadSceneryTextures(sceneryTexturesUrl) : Promise.resolve(null);
 
   // `?colliders=1`: draw the physics surfaces (by type) and barriers over the scan, to check them against it
   const showColliders = new URLSearchParams(window.location.search).get("colliders") === "1";
@@ -220,7 +224,8 @@ function loadTrackGlb(
         }
         if (offset !== undefined) obj.renderOrder = 1;
       });
-      return sceneryLoad.then((files) => {
+      return Promise.all([sceneryLoad, texturesLoad]).then(([files, textures]) => {
+        if (textures) applySceneryTextures(root, textures);
         // Before onLoaded, so the camera occlusion pass and the shader warm-up see them
         for (const scenery of files) if (scenery) attachSceneryInstances(root, scenery);
         return root;
@@ -1274,7 +1279,8 @@ export function buildRwandaCircuitScene(
       resolveTrackRoot(root);
     },
     sheenMask,
-    isRwanda ? ["/tracks/rwanda/scenery/foliage.glb", "/tracks/rwanda/scenery/stands.glb", "/tracks/rwanda/scenery/props.glb"] : []
+    isRwanda ? ["/tracks/rwanda/scenery/foliage.glb", "/tracks/rwanda/scenery/stands.glb", "/tracks/rwanda/scenery/props.glb"] : [],
+    isRwanda ? "/tracks/rwanda/scenery/textures/textures.json" : null
   );
 
   return {
