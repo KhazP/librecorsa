@@ -129,8 +129,8 @@ const AUTO_BRAKE_DOWNSHIFT_GAP_S = 0.25;
 const GROUND_PROBE_UP_M = 0.6;
 /** Placement: the ground under each tyre is looked for at most this far above the ground under the CG (m) */
 const ROAD_ATTITUDE_PROBE_UP_M = 1.5;
-/** Placement: steepest grade or camber the car is seated on (rad, ≈30 %) */
-const ROAD_ATTITUDE_MAX_RAD = 0.3;
+/** Placement: steepest grade or camber the car is seated on (rad, ≈34°: Daytona's 31° turn banking) */
+const ROAD_ATTITUDE_MAX_RAD = 0.6;
 /**
  * Past these the integration has blown up rather than the car crashed: 200 m/s is 720 km/h, and 40 rad/s is over six
  * turns a second (a barrel roll or a spin at speed stays under ≈15 rad/s)
