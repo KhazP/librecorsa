@@ -19,6 +19,7 @@ import { NodeIO } from '@gltf-transform/core';
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
 import { SCENERY_CREDITS, type SceneryCredit } from '../src/lib/render/scenery-credits';
 import { attachSceneryInstances, resetSceneryInstances, setSceneryDensity } from '../src/lib/render/scenery-instances';
+import { SHADOW_PROXY_LAYER } from '../src/lib/render/layers';
 import { type GroundHit, TrackColliderQuery } from '../src/lib/sim/f12026-car/TrackColliderQuery';
 import { loadGlbGeometry } from './lib/glb-geometry';
 
@@ -167,13 +168,21 @@ void (async () => {
   check('CREDITS.md names every model and its source', SCENERY_CREDITS.every((c) => creditsMd.includes(c.url) && creditsMd.includes(c.author)));
   check('every model is openly licensed (CC0 or CC BY)', SCENERY_CREDITS.every((c) => /^CC (0|BY 4\.0)$/.test(c.license)));
 
-  // Instances: count them per model and collect their base points
+  // Instances: count them per model and collect their base points (each tile's level 0; the other levels share them)
   const bases: [number, number, number][] = [];
   const perModel: Record<string, number> = {};
   let tiles = 0;
+  type LevelExtras = { tile?: string; level?: number; from?: number; until?: number; shadow?: boolean; shadowFrom?: number };
+  const tileLevels = new Map<string, { level: number; extras: LevelExtras; mesh: string; translation: unknown }[]>();
   for (const node of doc.getRoot().listNodes()) {
     const inst = node.getExtension('EXT_mesh_gpu_instancing') as { getAttribute(n: string): { getCount(): number; getElement(i: number, out: number[]): number[] } | null } | null;
     if (!inst) continue;
+    const ex = node.getExtras() as LevelExtras;
+    if (typeof ex.tile === 'string') {
+      if (!tileLevels.has(ex.tile)) tileLevels.set(ex.tile, []);
+      tileLevels.get(ex.tile)!.push({ level: ex.level ?? -1, extras: ex, mesh: node.getMesh()!.getName(), translation: inst.getAttribute('TRANSLATION') });
+    }
+    if ((ex.level ?? 0) > 0) continue;
     tiles++;
     const t = inst.getAttribute('TRANSLATION')!;
     const model = node.getMesh()!.getName();
@@ -190,8 +199,50 @@ void (async () => {
   check('every replaced tree and card has its stand-in', perModel.Acacia >= 1040 && Math.abs(standIns - (520 + 528 + 1372)) <= skippedOnTrack / 2 + 0.5, `${JSON.stringify(perModel)}, ${skippedOnTrack} skipped`);
   check('only a handful were skipped for standing on a driving surface', skippedOnTrack <= 5, `${skippedOnTrack}`);
 
+  // Levels of detail: every tile has its lighter levels, sharing its instances; each lighter, with the same leaf area
+  const levelsOk = [...tileLevels.entries()].every(([tile, list]) => {
+    const want = tile.startsWith('acacia') ? [0, 1, 2] : [0, 1];
+    const got = list.map((l) => l.level).sort();
+    return JSON.stringify(got) === JSON.stringify(want) && list.every((l) => l.translation === list[0].translation);
+  });
+  check('every tile has its levels of detail, sharing its instances', tileLevels.size === tiles && levelsOk, `${tileLevels.size} tiles`);
+  const byMesh = Object.fromEntries(doc.getRoot().listMeshes().map((m) => [m.getName(), m]));
+  const tris = (name: string) => byMesh[name].listPrimitives().reduce((sum, p) => sum + p.getIndices()!.getCount() / 3, 0);
+  const leafArea = (name: string) => {
+    let area = 0;
+    for (const p of byMesh[name].listPrimitives()) {
+      if (p.getMaterial()?.getAlphaMode() !== 'MASK') continue;
+      const pos = p.getAttribute('POSITION')!;
+      const idx = p.getIndices()!;
+      const a = [0, 0, 0];
+      const b = [0, 0, 0];
+      const c = [0, 0, 0];
+      for (let t = 0; t < idx.getCount(); t += 3) {
+        pos.getElement(idx.getScalar(t), a);
+        pos.getElement(idx.getScalar(t + 1), b);
+        pos.getElement(idx.getScalar(t + 2), c);
+        const e1 = b.map((x, k) => x - a[k]);
+        const e2 = c.map((x, k) => x - a[k]);
+        area += 0.5 * Math.hypot(e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]);
+      }
+    }
+    return area;
+  };
+  check('acacia level 1 is at most 35 % of its triangles, level 2 at most 12 %', tris('Acacia_LOD1') <= 0.35 * tris('Acacia') && tris('Acacia_LOD2') <= 0.12 * tris('Acacia'), `${tris('Acacia')} / ${tris('Acacia_LOD1')} / ${tris('Acacia_LOD2')}`);
+  check('shrub level 1 is at most 41 % of its triangles', tris('Shrub_LOD1') <= 0.41 * tris('Shrub'), `${tris('Shrub')} / ${tris('Shrub_LOD1')}`);
+  const areaRatio = ['Acacia_LOD1', 'Acacia_LOD2', 'Shrub_LOD1'].map((m) => leafArea(m) / leafArea(m.replace(/_LOD\d$/, '')));
+  check('the lighter levels keep the crowns\' leaf area (±25 %)', areaRatio.every((r) => r > 0.75 && r < 1.25), areaRatio.map((r) => r.toFixed(2)).join(', '));
+  const sample = (prefix: string, level: number) => [...tileLevels.values()].flat().find((l) => l.mesh.startsWith(prefix) && l.level === level)?.extras;
+  check('levels switch at 80 / 520 m from a tile\'s trees, shrubs stop at 270 m', sample('Acacia', 1)?.from === 80 && sample('Acacia', 2)?.from === 520 && sample('Shrub', 1)?.from === 80 && sample('Shrub', 1)?.until === 270);
+  check('near trees cast in full, the middle distance through level 2\'s crowns, the furthest and far shrubs not at all', sample('Acacia', 0)?.shadow === true && sample('Acacia', 1)?.shadow === false && sample('Acacia', 1)?.shadowFrom === 2 && sample('Acacia', 2)?.shadow === false && !sample('Acacia', 2)?.shadowFrom && sample('Shrub', 1)?.shadow === false);
+
   // Leaf cards: alpha-masked, and their normals baked to face out of the crown (shaded as one volume)
-  const leafPrims = doc.getRoot().listMeshes().flatMap((m) => m.listPrimitives()).filter((p) => p.getMaterial()?.getAlphaMode() === 'MASK');
+  const leafPrims = doc
+    .getRoot()
+    .listMeshes()
+    .filter((m) => !/_LOD\d$/.test(m.getName()))
+    .flatMap((m) => m.listPrimitives())
+    .filter((p) => p.getMaterial()?.getAlphaMode() === 'MASK');
   check('both models have alpha-masked leaves', leafPrims.length === 2, `${leafPrims.length}`);
   for (const prim of leafPrims) {
     const pos = prim.getAttribute('POSITION')!;
@@ -367,6 +418,60 @@ void (async () => {
     check('a card seen from behind keeps its crown normal', !frag.includes('#include <normal_fragment_begin>') && !frag.includes('normal *= faceDirection;') && frag.includes('faceDirection'));
     check('leaf specular is damped after the lighting setup', frag.indexOf('material.specularColorBlended *= 0.2;') > frag.indexOf('#include <lights_physical_fragment>'));
     check('the leaf program has its own cache key', leaves.customProgramCacheKey() === 'scenery-leaf-v3');
+
+    // A tile with levels of detail: grouped under a LOD at the tile's centre, nothing moved
+    const lodTrack = new THREE.Group();
+    const lodScenery = new THREE.Group();
+    const near = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1), leaves, 10);
+    const far = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1), leaves, 10);
+    const m4 = new THREE.Matrix4();
+    for (let i = 0; i < 10; i++) {
+      m4.makeTranslation(500 + i * 10, 30, -200);
+      near.setMatrixAt(i, m4);
+      far.setMatrixAt(i, m4);
+    }
+    near.userData = { tile: 'acacia:2:-1', level: 0, from: 0, shadow: true };
+    far.userData = { tile: 'acacia:2:-1', level: 1, from: 80, shadow: false, shadowFrom: 2 };
+    const furthest = new THREE.Group();
+    const furthestLeaves = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1), leaves, 10);
+    furthestLeaves.instanceMatrix.copy(near.instanceMatrix);
+    furthest.add(furthestLeaves);
+    furthest.userData = { tile: 'acacia:2:-1', level: 2, from: 520, shadow: false };
+    lodScenery.add(near, far, furthest);
+    resetSceneryInstances();
+    attachSceneryInstances(lodTrack, lodScenery);
+    const lodObj = lodScenery.getObjectByName('Scenery_Tile_acacia:2:-1') as THREE.LOD | undefined;
+    check('a tile\'s levels go under one LOD', !!lodObj?.isLOD && near.parent === lodObj && far.parent === lodObj && lodObj.levels.map((l) => l.distance).join() === '0,80,520');
+    lodTrack.updateMatrixWorld(true);
+    const firstTree = new THREE.Vector3();
+    near.getMatrixAt(0, m4);
+    firstTree.setFromMatrixPosition(m4.premultiply(near.matrixWorld));
+    check('nothing moves when the levels are regrouped', firstTree.distanceTo(new THREE.Vector3(500, 30, -200)) < 1e-3, firstTree.toArray().map((v) => v.toFixed(2)).join(','));
+    check('only the levels marked so cast shadows', near.castShadow && !far.castShadow && !furthestLeaves.castShadow);
+    const proxy = far.children.find((c) => (c as THREE.InstancedMesh).isInstancedMesh) as THREE.InstancedMesh | undefined;
+    check('the middle level casts through a shadow-only copy of level 2', !!proxy && proxy.castShadow && proxy.geometry === furthestLeaves.geometry && proxy.instanceMatrix === furthestLeaves.instanceMatrix);
+    check('which only the sun\'s shadow camera draws', !!proxy && proxy.layers.mask === 1 << SHADOW_PROXY_LAYER && !proxy.layers.test(new THREE.Camera().layers));
+    const cam = new THREE.PerspectiveCamera();
+    cam.position.set(545, 32, -190);
+    cam.updateMatrixWorld();
+    lodObj!.update(cam);
+    const nearPick = near.visible && !far.visible;
+    cam.position.set(545, 32, -500);
+    cam.updateMatrixWorld();
+    lodObj!.update(cam);
+    const midPick = !near.visible && far.visible && !furthest.visible;
+    cam.position.set(545, 32, -800);
+    cam.updateMatrixWorld();
+    lodObj!.update(cam);
+    check('close to the tile\'s trees the full ones draw, 300 m out level 1, 600 m out level 2', nearPick && midPick && !near.visible && !far.visible && furthest.visible);
+    // Distance is to the trees, not the tile's centre: 50 m off its far end still draws them in full
+    cam.position.set(640, 32, -200);
+    cam.updateMatrixWorld();
+    lodObj!.update(cam);
+    check('the level is picked by distance to the nearest tree, not the tile centre', near.visible && !far.visible);
+    setSceneryDensity('low');
+    check('density reaches every level and the shadow copy', near.count === 5 && far.count === 5 && proxy?.count === 5, `${near.count}, ${far.count}, ${proxy?.count}`);
+    setSceneryDensity('high');
 
     // A generated stand: plain meshes; each gets its own patched copy of a flat scenery material, at its own foot
     const concrete = Object.assign(new THREE.MeshStandardMaterial(), { name: 'Building_White' });
