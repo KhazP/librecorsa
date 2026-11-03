@@ -22,6 +22,7 @@ import { attachSceneryInstances, resetSceneryInstances, setSceneryDensity } from
 import { SHADOW_PROXY_LAYER } from '../src/lib/render/layers';
 import { type GroundHit, TrackColliderQuery } from '../src/lib/sim/f12026-car/TrackColliderQuery';
 import { loadGlbGeometry } from './lib/glb-geometry';
+import { groundSampler } from './lib/rwanda-ground.mjs';
 
 let passed = 0;
 function check(name: string, cond: boolean, detail = ''): void {
@@ -163,7 +164,8 @@ void (async () => {
   const rootNode = doc.getRoot().listScenes()[0]?.listChildren()[0];
   const extras = (rootNode?.getExtras() ?? {}) as { replaces?: string[]; credits?: SceneryCredit[]; counts?: Record<string, number> };
   check('it replaces Env_Trees and Env_Foliage', JSON.stringify(extras.replaces) === JSON.stringify(['Env_Trees', 'Env_Foliage']));
-  check('its credits match the in-app credits', JSON.stringify(extras.credits) === JSON.stringify(SCENERY_CREDITS));
+  const ownCredits = (credits: SceneryCredit[] | undefined) => JSON.stringify(credits) === JSON.stringify(SCENERY_CREDITS.filter((c) => credits?.some((x) => x.id === c.id)));
+  check('its credits match the in-app credits', ownCredits(extras.credits) && (extras.credits?.length ?? 0) === 2);
   const creditsMd = readFileSync('CREDITS.md', 'utf8');
   check('CREDITS.md names every model and its source', SCENERY_CREDITS.every((c) => creditsMd.includes(c.url) && creditsMd.includes(c.author)));
   check('every model is openly licensed (CC0 or CC BY)', SCENERY_CREDITS.every((c) => /^CC (0|BY 4\.0)$/.test(c.license)));
@@ -377,6 +379,136 @@ void (async () => {
     check("no name from the track pack's models is left", packNames.length === 0, packNames.join(', '));
     const flat = sDoc.getRoot().listMaterials().filter((m) => !m.getBaseColorTexture()).map((m) => m.getName());
     check('concrete and roofs use the names scenery-detail weathers', flat.includes('Building_White') && flat.includes('Grandstand_Canopy'));
+  }
+
+  console.log('Generated props (public/tracks/rwanda/scenery/props.glb)');
+  {
+    const PROPS = 'public/tracks/rwanda/scenery/props.glb';
+    check('props GLB is there', existsSync(PROPS));
+    const pBytes = statSync(PROPS).size;
+    check('props GLB stays small', pBytes < 1e6, `${(pBytes / 1e6).toFixed(2)} MB`);
+    const pDoc = await io.read(PROPS);
+    const pRoot = pDoc.getRoot().listScenes()[0]?.listChildren()[0];
+    const pExtras = (pRoot?.getExtras() ?? {}) as { replaces?: string[]; counts?: Record<string, number>; credits?: SceneryCredit[] };
+    const PROP_NODES = ['Prop_Jumbotron_0', 'Prop_Jumbotron_1', 'Prop_Jumbotron_2', 'Prop_StartLights_0', 'Prop_PitExitLight', 'Prop_RadioMasts', 'Prop_Paddock_Tents', 'Prop_CameraPosts', 'Prop_Helicopter'];
+    check('it replaces the nine prop nodes', JSON.stringify(pExtras.replaces) === JSON.stringify(PROP_NODES) && PROP_NODES.every((n) => track.getObjectByName(n)));
+    check('3 jumbotrons, 2 masts, 29 tents, 7 camera platforms, the lights and the helicopter', JSON.stringify(pExtras.counts) === JSON.stringify({ jumbotron: 3, startLights: 1, pitExitLight: 1, radioMast: 2, tent: 29, cameraPlatform: 7, helicopter: 1 }), JSON.stringify(pExtras.counts));
+    check('its credits match the in-app credits', ownCredits(pExtras.credits) && pExtras.credits?.[0]?.id === 'helicopter');
+
+    const circuitDoc = await io.read('public/tracks/rwanda/rwanda_2026.glb');
+    const circuitNode = (name: string) => circuitDoc.getRoot().listNodes().find((n) => n.getName() === name)!;
+    const propNode = (name: string) => pRoot!.listChildren().find((n) => n.getName() === name);
+    const localBox = (node: { getMesh(): { listPrimitives(): { getAttribute(s: string): { getMin(o: number[]): number[]; getMax(o: number[]): number[] } | null }[] } | null }) => {
+      const lo = [Infinity, Infinity, Infinity];
+      const hi = [-Infinity, -Infinity, -Infinity];
+      for (const p of node.getMesh()!.listPrimitives()) {
+        const a = p.getAttribute('POSITION')!.getMin([0, 0, 0]);
+        const b = p.getAttribute('POSITION')!.getMax([0, 0, 0]);
+        for (let k = 0; k < 3; k++) {
+          lo[k] = Math.min(lo[k], a[k]);
+          hi[k] = Math.max(hi[k], b[k]);
+        }
+      }
+      return { lo, hi };
+    };
+    // The start lights: the game's pods snap to this box, so it must be the circuit's own (±2 cm) at its transform
+    const oldLights = localBox(circuitNode('Prop_StartLights_0'));
+    const newLightsNode = propNode('Scenery_StartLights_0')!;
+    const newLights = localBox(newLightsNode);
+    const boxDiff = Math.max(...[0, 1, 2].flatMap((k) => [Math.abs(oldLights.lo[k] - newLights.lo[k]), Math.abs(oldLights.hi[k] - newLights.hi[k])]));
+    check('the start lights keep the circuit assembly\'s box (the pods snap to it)', boxDiff < 0.02, `${(boxDiff * 100).toFixed(1)} cm`);
+    const sameTRS = (a: string, b: string) => {
+      const x = circuitNode(a);
+      const y = propNode(b);
+      return !!y && x.getTranslation().every((v, i) => Math.abs(v - y.getTranslation()[i]) < 1e-4) && x.getRotation().every((v, i) => Math.abs(v - y.getRotation()[i]) < 1e-6);
+    };
+    check('start lights, pit light and jumbotrons keep their circuit transforms', ['StartLights_0', 'PitExitLight', 'Jumbotron_0', 'Jumbotron_1', 'Jumbotron_2'].every((n) => sameTRS(`Prop_${n}`, `Scenery_${n}`)));
+    const lensRows = newLightsNode.getMesh()!.listPrimitives().map((p) => p.getMaterial()!.getName()).filter((n) => n.startsWith('Lens_')).sort();
+    check('the start lights have amber, green and red lenses', JSON.stringify(lensRows) === JSON.stringify(['Lens_Amber', 'Lens_Green', 'Lens_Red']));
+
+    // The owner's jumbotron screen, unchanged
+    const screenOwn = pDoc.getRoot().listTextures().find((t) => t.getName() === 'TX_screen');
+    const screenCircuit = circuitDoc.getRoot().listTextures().find((t) => t.getName() === 'TX_screen');
+    check('the jumbotron screen texture is the circuit\'s own, byte for byte', !!screenOwn && !!screenCircuit && Buffer.from(screenOwn.getImage()!).equals(Buffer.from(screenCircuit.getImage()!)));
+    const screenPrim = (doc0: typeof pDoc, nodeName: string) =>
+      doc0
+        .getRoot()
+        .listNodes()
+        .find((n) => n.getName() === nodeName)!
+        .getMesh()!
+        .listPrimitives()
+        .find((p) => p.getMaterial()?.getBaseColorTexture()?.getName() === 'TX_screen')!;
+    const so = screenPrim(circuitDoc, 'Prop_Jumbotron_0');
+    const sn = screenPrim(pDoc, 'Scenery_Jumbotron_0');
+    const sameArr = (a: ArrayLike<number> | null | undefined, b: ArrayLike<number> | null | undefined) => !!a && !!b && a.length === b.length && Array.from(a).every((v, i) => Math.abs(v - b[i]) < 1e-6);
+    check('and its screen quad is the circuit\'s, vertex for vertex (positions and UVs)', sameArr(so.getAttribute('POSITION')?.getArray(), sn.getAttribute('POSITION')?.getArray()) && sameArr(so.getAttribute('TEXCOORD_0')?.getArray(), sn.getAttribute('TEXCOORD_0')?.getArray()));
+
+    // Merged props: every vertex of the circuit's objects lies in a replacement's footprint
+    type Fp = { x: number; z: number; yaw: number; length: number; depth: number };
+    const fps = pRoot!.listChildren().map((n) => ({ kind: (n.getExtras() as { props: string }).props, fp: (n.getExtras() as { footprint?: Fp }).footprint }));
+    const insideFp = (f: Fp, x: number, z: number, m: number) => {
+      const dx = x - f.x;
+      const dz = z - f.z;
+      return Math.abs(dx * Math.cos(f.yaw) - dz * Math.sin(f.yaw)) <= f.length / 2 + m && Math.abs(dx * Math.sin(f.yaw) + dz * Math.cos(f.yaw)) <= f.depth / 2 + m;
+    };
+    for (const [name, kind] of [
+      ['Prop_RadioMasts', 'radioMast'],
+      ['Prop_Paddock_Tents', 'tent'],
+      ['Prop_CameraPosts', 'cameraPlatform'],
+    ] as const) {
+      let n = 0;
+      let inn = 0;
+      const v = new THREE.Vector3();
+      track.getObjectByName(name)!.traverse((o) => {
+        const m = o as THREE.Mesh;
+        if (!m.isMesh) return;
+        m.updateWorldMatrix(true, false);
+        const pos = m.geometry.getAttribute('position');
+        for (let i = 0; i < pos.count; i += 2) {
+          v.fromBufferAttribute(pos, i).applyMatrix4(m.matrixWorld);
+          n++;
+          if (fps.some((f) => f.kind === kind && f.fp && insideFp(f.fp, v.x, v.z, 0.5))) inn++;
+        }
+      });
+      check(`${kind}: the replacements cover the circuit's`, inn / n > 0.99, `${((100 * inn) / n).toFixed(1)} %`);
+    }
+
+    // Nothing over a driving surface, every foot on the ground. Feet are checked against the visible ground (the
+    // highest surface under them): in places a run-off collider runs under the hill's grass
+    const visibleGround = groundSampler(circuitDoc) as (x: number, z: number, probeY?: number) => { height: number; surface: string } | null;
+    const props = loadGlbGeometry(PROPS);
+    props.updateMatrixWorld(true);
+    let overTrack = 0;
+    let floatingFeet = 0;
+    let feet = 0;
+    const v = new THREE.Vector3();
+    props.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (!m.isMesh) return;
+      // The start lights hang over the grid from the gantry; the pit light stands at the pit exit
+      let top: THREE.Object3D | null = m;
+      while (top && top.parent && top.parent !== props && top.parent.name !== 'Scenery_Props') top = top.parent;
+      if (/StartLights|PitExitLight/.test(top?.name ?? '')) return;
+      const pos = m.geometry.getAttribute('position');
+      for (let i = 0; i < pos.count; i++) {
+        v.fromBufferAttribute(pos, i);
+        const isFoot = v.y < -0.3;
+        v.applyMatrix4(m.matrixWorld);
+        if (!ground.query(v.x, v.z, v.y + 40, hit)) continue;
+        if (hit.surface === 'road' || hit.surface === 'kerb' || hit.surface === 'sausage' || hit.surface === 'pitlane') overTrack++;
+        if (isFoot) {
+          feet++;
+          const g = visibleGround(v.x, v.z, v.y + 40);
+          if (g && v.y > g.height + 0.05) floatingFeet++;
+        }
+      }
+    });
+    check('no prop stands over the road, kerbs or pit lane', overTrack === 0, `${overTrack} vertices`);
+    check('every leg and footing reaches the ground', feet > 0 && floatingFeet === 0, `${floatingFeet} of ${feet} floating`);
+
+    const pNames = [...pDoc.getRoot().listMaterials(), ...pDoc.getRoot().listTextures(), ...pDoc.getRoot().listMeshes(), ...pDoc.getRoot().listNodes()].map((x) => x.getName());
+    const pack = pNames.filter((n) => /jumbotron_b|marquee|tower_radiomast|cameraman|helicopter_a|lg_pit|core_start|Leclerc|Wolf3D/i.test(n));
+    check("no name from the track pack's models (or the helicopter's figure) is left", pack.length === 0, pack.join(', '));
   }
 
   console.log('Instanced foliage at runtime (scenery-instances.ts)');
