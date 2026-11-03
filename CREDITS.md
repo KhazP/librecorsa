@@ -32,6 +32,10 @@ Each model below is licensed under [Creative Commons Attribution 4.0 (CC BY 4.0)
 * `"Acacia tree"` ([https://sketchfab.com/3d-models/acacia-tree-bb14c2bb679b4d0bb1c578a27e2ddabf](https://sketchfab.com/3d-models/acacia-tree-bb14c2bb679b4d0bb1c578a27e2ddabf)) by **evolveduk**; the bark is also simplified to 5 % of its triangles
 * `"Cliff Shrub For Terrain"` ([https://sketchfab.com/3d-models/cliff-shrub-for-terrain-7a0f2bf2982c4ff8bacc67856fdbfae2](https://sketchfab.com/3d-models/cliff-shrub-for-terrain-7a0f2bf2982c4ff8bacc67856fdbfae2)) by **Natural_Disbuster (lemedesign)**
 
+### Rwanda grandstands, open stands and media centre (`public/tracks/rwanda/scenery/stands.glb`)
+
+Made for this project: `scripts/rwanda-stands.mjs` generates them to the footprint, height and facing of the stands in the circuit, which came from a third-party track pack and are no longer shown. Their seat pattern is drawn by the script in the circuit's blue / yellow / green bands; the "Rwanda" roof lettering is the project's own texture, copied unchanged from the circuit.
+
 ---
 
 ## 3. Open Source Frameworks & Tools
