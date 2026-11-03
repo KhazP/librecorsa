@@ -64,10 +64,13 @@ export const AMG_GT3_SIM_PROFILE: CarSimProfile = {
   // Splitter goes 0–2° (default 2), rear wing 0–14° (default 6)
   aeroPackagesDeg: { low_downforce: [-2, -3], balanced: [0, 0], high_downforce: [0, 3] },
   padLateralMu: 1.5,
-  // ≈1.0 g at 100 km/h to ≈1.45 g past 250 km/h: below the car's grip and its rear-torque-limited threshold stop
-  // (1.3 g mean from 250 km/h on the 71 % front share), so the autopilot corners at about the same share of it as
-  // the f12026-car's does (a high-CG GT3 steps out on a trail-braked entry at the limit)
-  braking: { lowG: 1.05, aeroG: 0.4, refMs: 70 },
+  // The autopilot plans on 85 % of this: ≈1.45 g on the brakes at 100 km/h to ≈1.9 g past 250 km/h, and corners on
+  // 1.1 × that (≈1.6 g slow, ≈2.1 g fast, the car's own grip): it laps the circuits' GT3 speed profiles to within
+  // ≈1–5 % at the AI's 0.975 pace (scripts/race-headless.ts --car amg-gt3)
+  braking: { lowG: 1.7, aeroG: 0.55, refMs: 70 },
+  // ≈0.2° more front road-wheel angle per m/s² than the kinematic angle: the car's understeer, which the autopilot's
+  // yaw loop otherwise only caught up with by mid-corner at speed
+  understeerRadPerMs2: 0.0035,
   speedProfile: AMG_GT3_PROFILE_CAR,
   // its own lap-time line: lower grip and downforce than an F1 car move the apexes and braking points
   racingLine: 'gt3',
