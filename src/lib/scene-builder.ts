@@ -136,14 +136,14 @@ function loadTrackGlb(
   fallbackGroup: THREE.Group,
   onLoaded: (root: THREE.Object3D) => void,
   sheenMask: RacingLineMask,
-  /** Instanced foliage that replaces some of the circuit's own (scenery-instances.ts); loaded alongside */
-  sceneryUrl: string | null = null
+  /** Scenery files that replace some of the circuit's own (scenery-instances.ts); loaded alongside */
+  sceneryUrls: readonly string[] = []
 ): void {
   if (typeof window === "undefined" || typeof fetch === "undefined") {
     return;
   }
   resetSceneryInstances();
-  const sceneryLoad = sceneryUrl ? loadSceneryInstances(sceneryUrl) : Promise.resolve(null);
+  const sceneryLoad = Promise.all(sceneryUrls.map(loadSceneryInstances));
 
   // `?colliders=1`: draw the physics surfaces (by type) and barriers over the scan, to check them against it
   const showColliders = new URLSearchParams(window.location.search).get("colliders") === "1";
@@ -220,9 +220,9 @@ function loadTrackGlb(
         }
         if (offset !== undefined) obj.renderOrder = 1;
       });
-      return sceneryLoad.then((scenery) => {
-        // Before onLoaded, so the camera occlusion pass and the shader warm-up see it
-        if (scenery) attachSceneryInstances(root, scenery);
+      return sceneryLoad.then((files) => {
+        // Before onLoaded, so the camera occlusion pass and the shader warm-up see them
+        for (const scenery of files) if (scenery) attachSceneryInstances(root, scenery);
         return root;
       });
     })
@@ -1274,7 +1274,7 @@ export function buildRwandaCircuitScene(
       resolveTrackRoot(root);
     },
     sheenMask,
-    isRwanda ? "/tracks/rwanda/scenery/foliage.glb" : null
+    isRwanda ? ["/tracks/rwanda/scenery/foliage.glb", "/tracks/rwanda/scenery/stands.glb"] : []
   );
 
   return {

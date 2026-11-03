@@ -1,15 +1,17 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { withBasePath } from "@/lib/base-path";
+import { applySceneryDetail, sceneryKind } from "@/lib/render/scenery-detail";
 
 /**
- * Instanced trackside foliage (public/tracks/<id>/scenery/*.glb, built by scripts/rwanda-scenery.mjs): openly
- * licensed trees and shrubs, one EXT_mesh_gpu_instancing node per 250 m tile and model. The file's root lists in
- * `extras.replaces` the circuit nodes it stands in for; those are hidden once it is in, so if it fails to load
- * the circuit keeps its own.
- *
- * Instances inside a tile are stored in hash order, so drawing the first N of each tile thins it out evenly:
- * that is how Medium and Low quality draw fewer.
+ * Trackside scenery that replaces some of a circuit's own (public/tracks/<id>/scenery/*.glb). Each file's root
+ * lists in `extras.replaces` the circuit nodes it stands in for; those are hidden once it is in, so if it fails to
+ * load the circuit keeps its own.
+ *  - Instanced foliage (scripts/rwanda-scenery.mjs): openly licensed trees and shrubs, one EXT_mesh_gpu_instancing
+ *    node per 250 m tile and model. Instances inside a tile are stored in hash order, so drawing the first N of each
+ *    tile thins it out evenly: that is how Medium and Low quality draw fewer.
+ *  - Generated stands (scripts/rwanda-stands.mjs): plain meshes whose concrete and roof materials carry the circuit's
+ *    flat scenery names, so they get the same surface detail as its own buildings (scenery-detail.ts).
  */
 
 type Quality = "low" | "medium" | "high";
@@ -37,7 +39,7 @@ export async function loadSceneryInstances(url: string): Promise<THREE.Object3D 
     const gltf = await new GLTFLoader().loadAsync(withBasePath(url));
     return gltf.scene;
   } catch (err) {
-    console.warn(`[scenery] ${url} did not load; keeping the circuit's own trees:`, err);
+    console.warn(`[scenery] ${url} did not load; keeping the circuit's own scenery it replaces:`, err);
     return null;
   }
 }
@@ -45,17 +47,31 @@ export async function loadSceneryInstances(url: string): Promise<THREE.Object3D 
 /**
  * Adds the scenery under the circuit's root and hides what it replaces. Shadows and culling are set per tile:
  * each tile's bounding sphere covers only its own instances, so tiles out of view (or out of the sun's shadow
- * cascades) are skipped.
+ * cascades) are skipped. Plain meshes get one copy of each flat scenery material, patched with their own foot
+ * height (the stands stand between 20 and 90 m up the hill).
  */
 export function attachSceneryInstances(trackRoot: THREE.Object3D, scenery: THREE.Object3D): void {
   let replaces: string[] = [];
+  scenery.updateMatrixWorld(true);
+  const box = new THREE.Box3();
   scenery.traverse((obj) => {
     const r = obj.userData?.replaces;
     if (Array.isArray(r)) replaces = r.filter((x): x is string => typeof x === "string");
     const mesh = obj as THREE.InstancedMesh;
-    if (!mesh.isInstancedMesh) return;
+    if (!mesh.isMesh) return;
     mesh.castShadow = true;
     mesh.receiveShadow = true;
+    if (!mesh.isInstancedMesh) {
+      const baseY = box.setFromObject(mesh).min.y;
+      const detail = (mat: THREE.Material) => {
+        if (!sceneryKind(mat)) return mat;
+        const own = mat.clone();
+        applySceneryDetail(own, { baseY });
+        return own;
+      };
+      mesh.material = Array.isArray(mesh.material) ? mesh.material.map(detail) : detail(mesh.material);
+      return;
+    }
     mesh.frustumCulled = true;
     mesh.userData.sceneryFullCount = mesh.count;
     mesh.computeBoundingSphere();
