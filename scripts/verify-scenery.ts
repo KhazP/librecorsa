@@ -228,6 +228,106 @@ void (async () => {
   check('none floats above the ground', floating === 0, `${floating} of ${bases.length}`);
   check('none is buried in it (bases sit just under the surface)', buried === 0, `${buried} of ${bases.length}`);
 
+  console.log('Generated stands (public/tracks/rwanda/scenery/stands.glb)');
+  {
+    const STANDS = 'public/tracks/rwanda/scenery/stands.glb';
+    check('stands GLB is there', existsSync(STANDS));
+    const sBytes = statSync(STANDS).size;
+    check('stands GLB stays small', sBytes < 1.5e6, `${(sBytes / 1e6).toFixed(2)} MB`);
+    const sDoc = await io.read(STANDS);
+    const sRoot = sDoc.getRoot().listScenes()[0]?.listChildren()[0];
+    const sExtras = (sRoot?.getExtras() ?? {}) as { replaces?: string[]; counts?: Record<string, number> };
+    const REPLACED = ['Prop_Grandstand_01', 'Prop_Grandstand_02', 'Prop_Grandstand_04', 'Prop_Grandstand_05', 'Prop_Stands_Open', 'Prop_MediaCentre'];
+    check('it replaces the grandstands, open stands and media centre', JSON.stringify(sExtras.replaces) === JSON.stringify(REPLACED));
+    const standNodes = sRoot?.listChildren() ?? [];
+    const kinds = standNodes.map((n) => (n.getExtras() as { stands?: string }).stands);
+    check('4 roofed stands, 14 open ones and the media centre', kinds.filter((k) => k === 'roofed').length === 4 && kinds.filter((k) => k === 'open').length === 14 && kinds.filter((k) => k === 'media').length === 1, JSON.stringify(sExtras.counts));
+    check('every replaced node exists in the circuit', REPLACED.every((n) => track.getObjectByName(n)));
+
+    // The roofed ones sit exactly where the circuit's do
+    const circuitDoc = await io.read('public/tracks/rwanda/rwanda_2026.glb');
+    const circuitNode = (name: string) => circuitDoc.getRoot().listNodes().find((n) => n.getName() === name)!;
+    const sameTRS = ['01', '02', '04', '05'].every((id) => {
+      const a = circuitNode(`Prop_Grandstand_${id}`);
+      const b = standNodes.find((n) => n.getName() === `Scenery_Grandstand_${id}`);
+      return !!b && a.getTranslation().every((v, i) => Math.abs(v - b.getTranslation()[i]) < 1e-4) && a.getRotation().every((v, i) => Math.abs(v - b.getRotation()[i]) < 1e-6);
+    });
+    check('each roofed grandstand keeps its circuit transform', sameTRS);
+
+    // Footprints (from each node's extras) cover the stands they replace, and stand on nothing that is driven on
+    type Footprint = { x: number; z: number; yaw: number; length: number; depth: number; baseY: number };
+    const footprints = standNodes.map((n) => ({ kind: (n.getExtras() as { stands: string }).stands, ...(n.getExtras() as { footprint: Footprint }).footprint }));
+    const inside = (f: Footprint, x: number, z: number, margin: number) => {
+      const dx = x - f.x;
+      const dz = z - f.z;
+      const lx = dx * Math.cos(f.yaw) - dz * Math.sin(f.yaw);
+      const lz = dx * Math.sin(f.yaw) + dz * Math.cos(f.yaw);
+      return Math.abs(lx) <= f.length / 2 + margin && Math.abs(lz) <= f.depth / 2 + margin;
+    };
+    const covered = (name: string, kind: string) => {
+      let n = 0;
+      let inn = 0;
+      const v = new THREE.Vector3();
+      track.getObjectByName(name)!.traverse((o) => {
+        const m = o as THREE.Mesh;
+        if (!m.isMesh) return;
+        m.updateWorldMatrix(true, false);
+        const pos = m.geometry.getAttribute('position');
+        for (let i = 0; i < pos.count; i += 3) {
+          v.fromBufferAttribute(pos, i).applyMatrix4(m.matrixWorld);
+          n++;
+          if (footprints.some((f) => f.kind === kind && inside(f, v.x, v.z, 1.5))) inn++;
+        }
+      });
+      return inn / n;
+    };
+    const openCover = covered('Prop_Stands_Open', 'open');
+    check("the open stands cover the circuit's open stands", openCover > 0.99, `${(openCover * 100).toFixed(1)} % of their vertices`);
+    const mediaCover = covered('Prop_MediaCentre', 'media');
+    check("the media centre covers the circuit's", mediaCover > 0.99, `${(mediaCover * 100).toFixed(1)} %`);
+    const roofedCover = ['01', '02', '04', '05'].map((id) => covered(`Prop_Grandstand_${id}`, 'roofed'));
+    check("the roofed stands cover the circuit's", roofedCover.every((c) => c > 0.99), roofedCover.map((c) => `${(c * 100).toFixed(1)} %`).join(', '));
+
+    const stands = loadGlbGeometry(STANDS);
+    stands.updateMatrixWorld(true);
+    let onTrack = 0;
+    let floating = 0;
+    let verts = 0;
+    const v = new THREE.Vector3();
+    stands.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (!m.isMesh) return;
+      const pos = m.geometry.getAttribute('position');
+      for (let i = 0; i < pos.count; i++) {
+        v.fromBufferAttribute(pos, i);
+        // Legs, columns and walls reach below the stand's base (local y 0)
+        const isFoot = v.y < -0.3;
+        v.applyMatrix4(m.matrixWorld);
+        verts++;
+        if (!ground.query(v.x, v.z, v.y + 40, hit)) continue;
+        if (hit.surface === 'road' || hit.surface === 'kerb' || hit.surface === 'sausage' || hit.surface === 'pitlane') onTrack++;
+        if (isFoot && v.y > hit.height + 0.05) floating++;
+      }
+    });
+    check('no part of a stand stands over the road, kerbs or pit lane', onTrack === 0, `${onTrack} of ${verts} vertices`);
+    check('every foot reaches the ground', floating === 0, `${floating} floating`);
+
+    // The owner's lettering, unchanged; nothing left of the third-party pack
+    const ownTex = sDoc.getRoot().listTextures().find((t) => t.getName() === 'KN5_Rwanda text italics grandstand');
+    const circuitTex = circuitDoc.getRoot().listTextures().find((t) => t.getName() === 'KN5_Rwanda text italics grandstand');
+    check('the "Rwanda" roof lettering is the circuit\'s own, byte for byte', !!ownTex && !!circuitTex && Buffer.from(ownTex.getImage()!).equals(Buffer.from(circuitTex.getImage()!)));
+    const names = [
+      ...sDoc.getRoot().listMaterials(),
+      ...sDoc.getRoot().listTextures(),
+      ...sDoc.getRoot().listMeshes(),
+      ...sDoc.getRoot().listNodes(),
+    ].map((x) => x.getName());
+    const packNames = names.filter((n) => /bah_|gstand|structures-|rust-detail|media_center/i.test(n));
+    check("no name from the track pack's models is left", packNames.length === 0, packNames.join(', '));
+    const flat = sDoc.getRoot().listMaterials().filter((m) => !m.getBaseColorTexture()).map((m) => m.getName());
+    check('concrete and roofs use the names scenery-detail weathers', flat.includes('Building_White') && flat.includes('Grandstand_Canopy'));
+  }
+
   console.log('Instanced foliage at runtime (scenery-instances.ts)');
   {
     const trackRoot = new THREE.Group();
@@ -267,6 +367,34 @@ void (async () => {
     check('a card seen from behind keeps its crown normal', !frag.includes('#include <normal_fragment_begin>') && !frag.includes('normal *= faceDirection;') && frag.includes('faceDirection'));
     check('leaf specular is damped after the lighting setup', frag.indexOf('material.specularColorBlended *= 0.2;') > frag.indexOf('#include <lights_physical_fragment>'));
     check('the leaf program has its own cache key', leaves.customProgramCacheKey() === 'scenery-leaf-v3');
+
+    // A generated stand: plain meshes; each gets its own patched copy of a flat scenery material, at its own foot
+    const concrete = Object.assign(new THREE.MeshStandardMaterial(), { name: 'Building_White' });
+    const seats = Object.assign(new THREE.MeshStandardMaterial({ map: new THREE.Texture() }), { name: 'Stand_Seat_Blue' });
+    const standA = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 2), concrete);
+    const standB = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 2), concrete);
+    const seatRow = new THREE.Mesh(new THREE.BoxGeometry(2, 1, 1), seats);
+    standA.position.y = 21;
+    standB.position.y = 91;
+    const standsRoot = new THREE.Group();
+    standsRoot.userData.replaces = ['Prop_Stands_Open'];
+    standsRoot.add(standA, standB, seatRow);
+    const oldStands = Object.assign(new THREE.Group(), { name: 'Prop_Stands_Open' });
+    trackRoot.add(oldStands);
+    attachSceneryInstances(trackRoot, standsRoot);
+    const matA = standA.material as THREE.MeshStandardMaterial;
+    const matB = standB.material as THREE.MeshStandardMaterial;
+    check('a stand file hides what it replaces too', !oldStands.visible);
+    check('stands cast and receive shadows', standA.castShadow && standA.receiveShadow && seatRow.castShadow);
+    check('each stand gets its own copy of the concrete, the original untouched', matA !== concrete && matB !== concrete && matA !== matB && concrete.customProgramCacheKey() !== 'scenery-detail-v1');
+    check('the copies get the scenery detail', matA.customProgramCacheKey() === 'scenery-detail-v1' && matB.customProgramCacheKey() === 'scenery-detail-v1');
+    const footOf = (mat: THREE.MeshStandardMaterial) => {
+      const sh = { uniforms: {} as Record<string, THREE.IUniform>, vertexShader: THREE.ShaderLib.standard.vertexShader, fragmentShader: THREE.ShaderLib.standard.fragmentShader } as unknown as THREE.WebGLProgramParametersWithUniforms;
+      mat.onBeforeCompile(sh, undefined as unknown as THREE.WebGLRenderer);
+      return sh.uniforms.uSceneryBaseY.value as number;
+    };
+    check('each at its own foot height', footOf(matA) === 20 && footOf(matB) === 90, `${footOf(matA)}, ${footOf(matB)}`);
+    check('textured seats are left as they are', seatRow.material === seats);
     resetSceneryInstances();
   }
 
