@@ -272,6 +272,21 @@ function autopilotProfile(track: BuiltTrackData, profile: CarSimProfile): Float3
   return v;
 }
 
+/** TC / ABS / TC2 dial positions */
+interface AidDials {
+  tcLevel: number;
+  tc2Level: number;
+  absLevel: number;
+}
+
+/** The dial positions of a driver-assist preset */
+function assistPresetDials(profileId: string, preset: DriverAssistPreset): AidDials {
+  const isGt3 = profileId === 'amg-gt3';
+  if (preset === 'pro') return { tcLevel: 0, tc2Level: isGt3 ? 5 : 6, absLevel: 0 };
+  if (preset === 'semi_pro') return { tcLevel: isGt3 ? 10 : 5, tc2Level: 6, absLevel: isGt3 ? 9 : 5 };
+  return { tcLevel: isGt3 ? 12 : 8, tc2Level: 9, absLevel: isGt3 ? 11 : 9 };
+}
+
 /** Driver aids and the autopilot run on frame slices no longer than this (s) */
 const AID_SLICE_S = 1 / 240;
 const BOOST_S = 8;
@@ -812,20 +827,7 @@ export class F12026CarSim implements SimulatorCar {
   }
 
   private applyAssistPresetLevels(preset: DriverAssistPreset): void {
-    const isGt3 = this.profile.id === 'amg-gt3';
-    if (preset === 'pro') {
-      this.tcLevel = 0;
-      this.tc2Level = isGt3 ? 5 : 6;
-      this.absLevel = 0;
-    } else if (preset === 'semi_pro') {
-      this.tcLevel = isGt3 ? 10 : 5;
-      this.tc2Level = 6;
-      this.absLevel = isGt3 ? 9 : 5;
-    } else {
-      this.tcLevel = isGt3 ? 12 : 8;
-      this.tc2Level = 9;
-      this.absLevel = isGt3 ? 11 : 9;
-    }
+    Object.assign(this, assistPresetDials(this.profile.id, preset));
   }
 
   public getLiveTunerState(): LiveTunerState {
@@ -1189,14 +1191,24 @@ export class F12026CarSim implements SimulatorCar {
       steer = inputs.analogSteer !== undefined ? inputs.analogSteer : inputs.steerRight - inputs.steerLeft;
     }
 
+    return { ...this.electronicAids(inputs.throttle, inputs.brake, h, this), steer: THREE.MathUtils.clamp(steer, -1, 1), drs: false };
+  }
+
+  /** 130 Hz TC1/TC2 + 240 Hz 4-Ch ABS on the pedals, at the given dial positions (the driver's, or the autopilot's) */
+  private electronicAids(
+    throttleIn: number,
+    brake: number,
+    h: number,
+    dials: AidDials
+  ): { throttle: number; brake: number; brakeWheelScale: readonly [number, number, number, number] } {
     const v = this.vehicle;
     const W = v.wheels;
     const speed = v.speedMs;
     const elec = this.profile.electronics ?? F12026_ELECTRONICS;
 
     // 130 Hz 2-Stage Traction Control (TC1 slip target + Lateral-G compensation + TC2 spark/cylinder cut)
-    let throttle = inputs.throttle;
-    const tcLv = THREE.MathUtils.clamp(Math.round(this.tcLevel), 0, 12);
+    let throttle = throttleIn;
+    const tcLv = THREE.MathUtils.clamp(Math.round(dials.tcLevel), 0, 12);
     const tcBaseTarget = tcLv > 0 ? elec.tcLevels[THREE.MathUtils.clamp(12 - tcLv, 0, elec.tcLevels.length - 1)] : 0;
     const tcMinSpeedMs = elec.tcMinSpeedKmh / 3.6;
     if (tcBaseTarget > 0 && speed > Math.max(this.profile.tcMinSpeedMs, tcMinSpeedMs)) {
@@ -1215,7 +1227,7 @@ export class F12026CarSim implements SimulatorCar {
       const kR = Math.max(0, W[3].slipRatio);
       const kRear = 0.65 * Math.max(kL, kR) + 0.35 * (0.5 * (kL + kR));
       const eTc = Math.max(0, kRear - tcEffTarget);
-      const tc2 = THREE.MathUtils.clamp(this.tc2Level, 1, 12);
+      const tc2 = THREE.MathUtils.clamp(dials.tc2Level, 1, 12);
       const tc2Norm = (tc2 - 1) / 11;
       // Stage A (0 < eTc <= 0.03): smooth spark timing retard up to 25% cut
       const stageACut = Math.min(1, eTc / 0.03) * 0.25 * (0.55 + 0.45 * tc2Norm);
@@ -1232,8 +1244,7 @@ export class F12026CarSim implements SimulatorCar {
     }
 
     // 240 Hz 4-Channel Independent ABS (per-wheel slip + angular decel anticipation + rear yaw stability)
-    const brake = inputs.brake;
-    const absLv = THREE.MathUtils.clamp(Math.round(this.absLevel), 0, 12);
+    const absLv = THREE.MathUtils.clamp(Math.round(dials.absLevel), 0, 12);
     const absBaseTarget = absLv > 0 ? elec.absLevels[THREE.MathUtils.clamp(12 - absLv, 0, elec.absLevels.length - 1)] : 0;
     const cut = this.absWheelCut;
     if (this.absCut === 1) cut.fill(1);
@@ -1259,7 +1270,7 @@ export class F12026CarSim implements SimulatorCar {
       cut.fill(1);
     }
     for (let i = 0; i < 4; i++) this.prevWheelOmega[i] = W[i].omega;
-    return { throttle, brake, brakeWheelScale: cut, steer: THREE.MathUtils.clamp(steer, -1, 1), drs: false };
+    return { throttle, brake, brakeWheelScale: cut };
   }
 
   /**
