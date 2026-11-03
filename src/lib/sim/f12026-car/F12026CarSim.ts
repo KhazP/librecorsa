@@ -403,6 +403,9 @@ const AMBIENT_C = 27;
 const AP_LINE_KP = 2.25;
 const AP_LINE_KD = 2.1;
 const AP_LINE_MAX_MS2 = 3;
+/** Autopilot pedals ease off past this share of the rears' peak slip angle, by this much per share beyond it */
+const AP_REAR_GUARD = 0.9;
+const AP_REAR_GUARD_GAIN = 4;
 /** Autopilot pedal per m/s of speed error, on top of its integral */
 const AP_PEDAL_P = 0.5;
 /** Autopilot: stopped this long (s) → rejoin on the racing line, as the AI cars do */
@@ -1482,15 +1485,19 @@ export class F12026CarSim implements SimulatorCar {
     }
     const pedal = THREE.MathUtils.clamp(this.apPedal + pedalP, -1, 1);
     const W = v.wheels;
+    // The rear stepping out (on a trail-braked entry, or on the power): ease both pedals as the rears' slip angle
+    // passes AP_REAR_GUARD of their peak, so they regain grip to hold the car with rather than spinning it
+    const rearSlip = Math.max(Math.abs(W[2].slipAngleRad), Math.abs(W[3].slipAngleRad)) / peak;
+    const rearCut = THREE.MathUtils.clamp(1 - AP_REAR_GUARD_GAIN * (rearSlip - AP_REAR_GUARD), 0.15, 1);
     // squeezed on rather than stabbed: at most full throttle in 0.4 s
-    const throttle = Math.min(Math.max(0, pedal), this.apThrottle + 2.5 * h);
+    const throttle = Math.min(Math.max(0, pedal), this.apThrottle + 2.5 * h) * rearCut;
     this.apThrottle = throttle;
     // The car's own TC and per-wheel ABS: a lock-up of the unloaded inside front no longer takes the brakes off all
     // four wheels (the car then ran into the corner 20-25 km/h hot), nor inside-rear wheelspin the whole throttle
     const aids = this.electronicAids(
       throttle,
       // understeering on the brakes: ease off so the fronts have grip left to turn with
-      Math.max(0, -pedal) * (frontsSaturated ? 0.5 : 1),
+      Math.max(0, -pedal) * (frontsSaturated ? 0.5 : 1) * rearCut,
       h,
       assistPresetDials(this.profile.id, 'semi_pro')
     );
