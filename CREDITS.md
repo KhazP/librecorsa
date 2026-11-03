@@ -32,9 +32,19 @@ Each model below is licensed under [Creative Commons Attribution 4.0 (CC BY 4.0)
 * `"Acacia tree"` ([https://sketchfab.com/3d-models/acacia-tree-bb14c2bb679b4d0bb1c578a27e2ddabf](https://sketchfab.com/3d-models/acacia-tree-bb14c2bb679b4d0bb1c578a27e2ddabf)) by **evolveduk**; the bark is also simplified to 5 % of its triangles
 * `"Cliff Shrub For Terrain"` ([https://sketchfab.com/3d-models/cliff-shrub-for-terrain-7a0f2bf2982c4ff8bacc67856fdbfae2](https://sketchfab.com/3d-models/cliff-shrub-for-terrain-7a0f2bf2982c4ff8bacc67856fdbfae2)) by **Natural_Disbuster (lemedesign)**
 
+### Rwanda helicopter (`public/tracks/rwanda/scenery/props.glb`)
+
+Licensed under [Creative Commons Attribution 4.0 (CC BY 4.0)](https://creativecommons.org/licenses/by/4.0/). Changes for the simulator (`scripts/rwanda-props.mjs`): the helicopter only (the model's figure and its animation are left out), simplified to about 3,900 triangles, textures re-encoded to 512 px WebP, parked where the circuit's helicopter stood.
+
+* `"Cedric-EC135- Waving-190 Rotor"` ([https://sketchfab.com/3d-models/cedric-ec135-waving-190-rotor-09fbae3edc0a44bea7dbb7ed7644df6b](https://sketchfab.com/3d-models/cedric-ec135-waving-190-rotor-09fbae3edc0a44bea7dbb7ed7644df6b)) by **PatrickBiani**
+
 ### Rwanda grandstands, open stands and media centre (`public/tracks/rwanda/scenery/stands.glb`)
 
 Made for this project: `scripts/rwanda-stands.mjs` generates them to the footprint, height and facing of the stands in the circuit, which came from a third-party track pack and are no longer shown. Their seat pattern is drawn by the script in the circuit's blue / yellow / green bands; the "Rwanda" roof lettering is the project's own texture, copied unchanged from the circuit.
+
+### Rwanda trackside props (`public/tracks/rwanda/scenery/props.glb`)
+
+Made for this project: `scripts/rwanda-props.mjs` generates the jumbotrons, start lights, pit exit light, radio masts, paddock tents and TV camera platforms to the footprint and height of the ones in the circuit, which came from a third-party track pack and are no longer shown. The jumbotrons' circuit-map screen is the project's own texture, copied unchanged from the circuit.
 
 ---
 

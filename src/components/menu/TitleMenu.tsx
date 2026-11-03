@@ -267,7 +267,7 @@ const Credits: React.FC = () => (
             Converted for the simulator (rescaled, recentred, textures re-encoded, physics colliders added).
           </CreditRow>
         ) : null}
-        <CreditRow title="Trackside trees (Rwanda)">
+        <CreditRow title="Trackside scenery (Rwanda)">
           {SCENERY_CREDITS.map((c) => (
             <React.Fragment key={c.id}>
               &ldquo;{c.title}&rdquo; (
@@ -281,7 +281,8 @@ const Credits: React.FC = () => (
               <br />
             </React.Fragment>
           ))}
-          Simplified, textures re-encoded, instanced at the circuit&apos;s tree and bush spots.
+          Simplified, textures re-encoded, placed at the circuit&apos;s tree, bush and helicopter spots. The stands
+          and other props are the project&apos;s own.
         </CreditRow>
       </div>
     </div>

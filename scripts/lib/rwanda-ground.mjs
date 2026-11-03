@@ -116,3 +116,89 @@ export function groundSampler(doc) {
     return best;
   };
 }
+
+/** A point through a column-major 4×4 matrix */
+export const apply = (W, v) => [
+  W[0] * v[0] + W[4] * v[1] + W[8] * v[2] + W[12],
+  W[1] * v[0] + W[5] * v[1] + W[9] * v[2] + W[13],
+  W[2] * v[0] + W[6] * v[1] + W[10] * v[2] + W[14],
+];
+
+/** World positions of a node's vertices (every `step`th), with their material names */
+export function worldPoints(node, step = 1) {
+  const W = node.getWorldMatrix();
+  const out = [];
+  for (const prim of node.getMesh().listPrimitives()) {
+    const pos = prim.getAttribute('POSITION');
+    const mat = prim.getMaterial()?.getName() ?? '';
+    for (let i = 0; i < pos.getCount(); i += step) out.push({ p: apply(W, pos.getElement(i, [0, 0, 0])), mat });
+  }
+  return out;
+}
+
+/**
+ * The separate objects of a merged node, as lists of world points: vertices joined by shared positions and
+ * triangles into pieces, then pieces whose boxes come within `gap` metres (in plan) into one object.
+ */
+export function worldClusters(node, gap) {
+  const pts = worldPoints(node);
+  // Union vertices that share a position, then triangles' corners, then pieces whose boxes are within CLUSTER_GAP_M
+  const n = pts.length;
+  const parent = new Int32Array(n).map((_, i) => i);
+  const find = (i) => {
+    while (parent[i] !== i) i = parent[i] = parent[parent[i]];
+    return i;
+  };
+  const union = (a, b) => {
+    a = find(a);
+    b = find(b);
+    if (a !== b) parent[a] = b;
+  };
+  const seen = new Map();
+  pts.forEach(({ p }, i) => {
+    const k = p.map((v) => Math.round(v * 100)).join(',');
+    if (seen.has(k)) union(i, seen.get(k));
+    else seen.set(k, i);
+  });
+  let base = 0;
+  for (const prim of node.getMesh().listPrimitives()) {
+    const idx = prim.getIndices();
+    for (let t = 0; t < idx.getCount(); t += 3) {
+      union(base + idx.getScalar(t), base + idx.getScalar(t + 1));
+      union(base + idx.getScalar(t + 1), base + idx.getScalar(t + 2));
+    }
+    base += prim.getAttribute('POSITION').getCount();
+  }
+  const boxes = new Map();
+  pts.forEach(({ p }, i) => {
+    const r = find(i);
+    const b = boxes.get(r) ?? { lo: [Infinity, Infinity, Infinity], hi: [-Infinity, -Infinity, -Infinity], members: [] };
+    for (let k = 0; k < 3; k++) {
+      b.lo[k] = Math.min(b.lo[k], p[k]);
+      b.hi[k] = Math.max(b.hi[k], p[k]);
+    }
+    b.members.push(i);
+    boxes.set(r, b);
+  });
+  const list = [...boxes.values()];
+  const cp = list.map((_, i) => i);
+  const cf = (i) => {
+    while (cp[i] !== i) i = cp[i] = cp[cp[i]];
+    return i;
+  };
+  for (let i = 0; i < list.length; i++)
+    for (let j = i + 1; j < list.length; j++) {
+      const a = list[i];
+      const b = list[j];
+      const g = gap;
+      if (a.lo[0] - g <= b.hi[0] && b.lo[0] - g <= a.hi[0] && a.lo[2] - g <= b.hi[2] && b.lo[2] - g <= a.hi[2]) cp[cf(i)] = cf(j);
+    }
+  const clusters = new Map();
+  list.forEach((b, i) => {
+    const r = cf(i);
+    if (!clusters.has(r)) clusters.set(r, []);
+    clusters.get(r).push(...b.members.map((m) => pts[m].p));
+  });
+  return [...clusters.values()];
+
+}
