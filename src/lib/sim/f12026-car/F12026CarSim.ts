@@ -31,6 +31,7 @@ import type {
   RacingLineId,
   SurfaceType,
   TireCompound,
+  TrackSamplePoint,
   TyreSetup,
 } from '@/types/f1';
 import {
@@ -59,6 +60,7 @@ import {
   type TyresCompoundData,
 } from './F12026CarConfig';
 import {
+  createGroundHit,
   type GroundHit,
   type GroundQuery,
   TrackColliderQuery,
@@ -183,6 +185,97 @@ function autopilotEdgeMarginM(profile: CarSimProfile): number {
   return 0.5 * Math.max(ch.trackWidthFront, ch.trackWidthRear) + 0.4;
 }
 
+/** Height step (m) over one 0.1 m probe across the road that ends the asphalt the autopilot uses: a lip no tyre should meet */
+const AP_EDGE_STEP_M = 0.08;
+/** Probe spacing across the road (m) */
+const AP_EDGE_PROBE_M = 0.1;
+/** Clear ground the autopilot keeps between its usable road and a raised step out past it (m) */
+const AP_EDGE_APRON_M = 0.6;
+/** Road either side of the centreline the autopilot may use (m, every `AP_PROFILE_STEP_M`): - and + lateral sides */
+interface AutopilotEdges {
+  neg: Float32Array;
+  pos: Float32Array;
+}
+const apEdges = new WeakMap<GroundQuery, WeakMap<BuiltTrackData, AutopilotEdges>>();
+
+/**
+ * Where the road under the track's colliders really ends each side: probed out from the centreline to
+ * `AP_EDGE_APRON_M` past the track's width, the first rise of more than `AP_EDGE_STEP_M` beyond what the banking
+ * gives (a collider that does not meet the road surface, e.g. a 0.2–0.45 m lip along Suzuka's edges that launches a
+ * car onto it) leaves the road `AP_EDGE_APRON_M` short of it, never more than 1 m inside the track's own width. A drop
+ * (onto lower runoff) is no hazard. Each narrowing holds for ±10 m, since the car comes at a lip at an angle.
+ */
+function autopilotEdges(track: BuiltTrackData, ground: GroundQuery): AutopilotEdges {
+  let perTrack = apEdges.get(ground);
+  if (!perTrack) apEdges.set(ground, (perTrack = new WeakMap()));
+  const cached = perTrack.get(track);
+  if (cached) return cached;
+  const L = track.totalLengthM;
+  const n = Math.ceil(L / AP_PROFILE_STEP_M);
+  const raw = { neg: new Float32Array(n), pos: new Float32Array(n) };
+  const hit = createGroundHit();
+  for (let i = 0; i < n; i++) {
+    const smp = track.getSampleAtDistance((i * L) / n);
+    const half = smp.width / 2;
+    const b = smp.binormal;
+    for (const side of [-1, 1] as const) {
+      const at = (lat: number) =>
+        ground.query(smp.position.x + b.x * lat, smp.position.z + b.z * lat, smp.position.y + b.y * lat + 1.5, hit) ? hit.height : null;
+      let usable = half;
+      let prev = at(0);
+      for (let lat = AP_EDGE_PROBE_M; prev !== null && lat <= half + AP_EDGE_APRON_M + 1e-6; lat += AP_EDGE_PROBE_M) {
+        const h = at(side * lat);
+        if (h === null ? lat <= half : h - prev - b.y * side * AP_EDGE_PROBE_M > AP_EDGE_STEP_M) {
+          usable = Math.min(half, lat - AP_EDGE_PROBE_M - (h === null ? 0 : AP_EDGE_APRON_M));
+          break;
+        }
+        if (h === null) break;
+        prev = h;
+      }
+      // how far inside the track's width the road ends
+      (side < 0 ? raw.neg : raw.pos)[i] = Math.min(1, half - usable);
+    }
+  }
+  const hold = Math.round(10 / (L / n));
+  const out = { neg: new Float32Array(n), pos: new Float32Array(n) };
+  for (let i = 0; i < n; i++) {
+    let neg = 0;
+    let pos = 0;
+    for (let k = -hold; k <= hold; k++) {
+      const j = (i + k + n) % n;
+      neg = Math.max(neg, raw.neg[j]);
+      pos = Math.max(pos, raw.pos[j]);
+    }
+    const half = track.getSampleAtDistance((i * L) / n).width / 2;
+    out.neg[i] = half - neg;
+    out.pos[i] = half - pos;
+  }
+  perTrack.set(track, out);
+  return out;
+}
+
+/** The lateral range (m) the autopilot keeps its CG in at distance `s`: the usable road less its edge margin */
+function autopilotLateralRange(
+  track: BuiltTrackData,
+  sample: TrackSamplePoint,
+  s: number,
+  edges: AutopilotEdges | null,
+  profile: CarSimProfile
+): [number, number] {
+  const margin = autopilotEdgeMarginM(profile);
+  let neg = sample.width / 2;
+  let pos = neg;
+  if (edges) {
+    const n = edges.neg.length;
+    const i = Math.round((wrap(s, track.totalLengthM) / track.totalLengthM) * n) % n;
+    neg = Math.min(neg, edges.neg[i]);
+    pos = Math.min(pos, edges.pos[i]);
+  }
+  const lo = -(neg - margin);
+  const hi = pos - margin;
+  return lo <= hi ? [lo, hi] : [0.5 * (lo + hi), 0.5 * (lo + hi)];
+}
+
 /** Deceleration the autopilot plans with at a speed (m/s): 85 % of what the car pulls on the brakes */
 function autopilotDecel(b: BrakingEnvelope, speedMs: number): number {
   return 0.85 * 9.81 * (b.lowG + b.aeroG * Math.min(1, (speedMs / b.refMs) ** 2));
@@ -202,10 +295,11 @@ const apProfiles = new WeakMap<BuiltTrackData, Map<string, Float32Array>>();
  * friction circle, so no braking is planned that the tyres need for turning. The circuit's profile is the VF26's,
  * which corners and brakes harder than this car.
  */
-function autopilotProfile(track: BuiltTrackData, profile: CarSimProfile): Float32Array {
+function autopilotProfile(track: BuiltTrackData, profile: CarSimProfile, edges: AutopilotEdges | null): Float32Array {
   let perCar = apProfiles.get(track);
   if (!perCar) apProfiles.set(track, (perCar = new Map()));
-  const cached = perCar.get(profile.id);
+  const key = edges ? `${profile.id}:colliders` : profile.id;
+  const cached = perCar.get(key);
   if (cached) return cached;
   const b = profile.braking;
   const L = track.totalLengthM;
@@ -218,8 +312,8 @@ function autopilotProfile(track: BuiltTrackData, profile: CarSimProfile): Float3
   for (let i = 0; i < n; i++) {
     const smp = track.getSampleAtDistance(i * ds);
     bank[i] = smp.bankingRad;
-    const edge = smp.width / 2 - autopilotEdgeMarginM(profile);
-    offs[i] = THREE.MathUtils.clamp(aiLineOffsetM(smp, profile.racingLine), -edge, edge);
+    const [lo, hi] = autopilotLateralRange(track, smp, i * ds, edges, profile);
+    offs[i] = THREE.MathUtils.clamp(aiLineOffsetM(smp, profile.racingLine), lo, hi);
   }
   // The clamp kinks the path where the line meets it, and a kink read over ±10 m is a corner twice as tight as the
   // line (82 instead of ~120 km/h planned through Shanghai's turn 13): the path the car drives through it is the
@@ -276,7 +370,7 @@ function autopilotProfile(track: BuiltTrackData, profile: CarSimProfile): Float3
     const aLong = Math.sqrt(Math.max(0.15 * aDec * aDec, aDec * aDec - (aLat / AP_LATERAL_SHARE) ** 2));
     v[i] = Math.min(v[i], Math.sqrt(vj * vj + 2 * aLong * ds));
   }
-  perCar.set(profile.id, v);
+  perCar.set(key, v);
   return v;
 }
 
@@ -644,9 +738,15 @@ export class F12026CarSim implements SimulatorCar {
   // ===========================================================================
 
   /** Instantiate an AI opponent car with the exact same vehicle profile and track colliders */
+  /** Where the road under this car's track colliders really ends (null on the sample ground) */
+  private autopilotEdges(): AutopilotEdges | null {
+    const c = this.onColliders && this.trackRoot ? collidersFor(this.trackRoot) : null;
+    return c ? autopilotEdges(this.track, c.ground) : null;
+  }
+
   /** The autopilot's own limit speed along the lap (m/s, every 5 m): what AI tuning scales */
   public aiBaseSpeedProfile(): Float32Array {
-    return autopilotProfile(this.track, this.profile);
+    return autopilotProfile(this.track, this.profile, this.autopilotEdges());
   }
 
   public createAiPeerCar(): F12026CarSim {
@@ -1015,10 +1115,10 @@ export class F12026CarSim implements SimulatorCar {
       const start = flyingStartPoint(this.track);
       const s = wrap(start.s - gridSlot * 28, L);
       const smp = this.track.getSampleAtDistance(s);
-      const edge = Math.max(0, smp.width / 2 - autopilotEdgeMarginM(this.profile));
+      const [lo, hi] = autopilotLateralRange(this.track, smp, s, this.autopilotEdges(), this.profile);
       const stagger = gridSlot === 0 ? 0 : gridSlot % 2 === 1 ? -2.6 : 2.6;
-      const lateral = THREE.MathUtils.clamp(aiLineOffsetM(smp, this.line) + stagger, -edge, edge);
-      const prof = autopilotProfile(this.track, this.profile);
+      const lateral = THREE.MathUtils.clamp(aiLineOffsetM(smp, this.line) + stagger, Math.min(0, lo), Math.max(0, hi));
+      const prof = autopilotProfile(this.track, this.profile, this.autopilotEdges());
       const ownAt = (at: number) => prof[Math.floor(wrap(at, L) / (L / prof.length)) % prof.length];
       let speed = Math.min(75, 0.9 * Math.min(ownAt(s), (smp.brakeLimitKmh ?? smp.optimalSpeedKmh) / 3.6));
       if (start.cornerS !== null) {
@@ -1301,8 +1401,8 @@ export class F12026CarSim implements SimulatorCar {
     const p = this.track.projectWorldToTrack(v.position.x, v.position.z, this.poseHintS);
     const look = this.track.getSampleAtDistance((p.s + Math.max(10, (speed * 0.55) / this.aiSteerGain)) % L);
     // the racing line uses the kerbs; the autopilot keeps all four wheels on the asphalt
-    const edge = look.width / 2 - autopilotEdgeMarginM(this.profile);
-    const off = THREE.MathUtils.clamp(aiLineOffsetM(look, this.line) + this.aiLineBiasM, -edge, edge);
+    const [lookLo, lookHi] = autopilotLateralRange(this.track, look, look.s, this.autopilotEdges(), this.profile);
+    const off = THREE.MathUtils.clamp(aiLineOffsetM(look, this.line) + this.aiLineBiasM, lookLo, lookHi);
     _ex.set(1, 0, 0).applyQuaternion(v.quaternion);
     _ez.set(0, 0, 1).applyQuaternion(v.quaternion);
     const dx = look.position.x + look.binormal.x * off - v.position.x;
@@ -1327,7 +1427,7 @@ export class F12026CarSim implements SimulatorCar {
     // each reachable by braking at the f12026-car's own deceleration. Aimed a little ahead of the car to cover the
     // pedal's lag.
     const lead = Math.max(5, speed * 0.2);
-    const prof = autopilotProfile(this.track, this.profile);
+    const prof = autopilotProfile(this.track, this.profile, this.autopilotEdges());
     const b = this.profile.braking;
     let vTarget = this.aiSpeedCapMs;
     for (let d = 0; d <= 300; d += 5) {
