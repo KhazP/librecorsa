@@ -7,6 +7,12 @@ import type * as THREE from "three";
  */
 export const DRIVER_HEAD_LAYER = 8;
 
+/**
+ * Render layer of shadow-only stand-ins: geometry the sun's shadow camera draws and no view or mirror camera does
+ * (the instanced trees' middle distance casts with its lighter level's crowns; scenery-instances.ts).
+ */
+export const SHADOW_PROXY_LAYER = 9;
+
 /** Puts `root` and everything under it on the driver-head layer only (three's layers are not inherited) */
 export function moveToDriverHeadLayer(root: THREE.Object3D): void {
   root.traverse((obj) => obj.layers.set(DRIVER_HEAD_LAYER));

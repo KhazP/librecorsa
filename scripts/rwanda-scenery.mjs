@@ -69,6 +69,22 @@ const TEXTURE_PX = 1024;
 const SINK_M = 0.15;
 /** How far the leaf cards' normals turn towards the crown's outward normal (0 = as modelled, 1 = a smooth crown) */
 const CROWN_NORMALS = 0.75;
+/**
+ * Lighter versions drawn further away; the runtime picks one per tile by the camera's distance to the nearest point
+ * of the tile's trees (scenery-instances.ts). `from`: metres where a level takes over (level 0 within 80 m keeps
+ * every tree that close at full detail); `until`: nothing is drawn beyond (shrubs are a few pixels that far out);
+ * `cards`: share of leaf cards kept (largest first, scaled up to keep the crown's leaf area); `bark`: share of the
+ * bark's triangles; `shadow`: whether the level casts (the sun's shadows reach 250 m, so the furthest never needs
+ * to); `shadowFrom`: the level casts with that level's lighter geometry instead (a shadow-only stand-in), since a
+ * crown's shadow 100 m away needs its outline, not every card.
+ */
+const LODS = {
+  Acacia: [
+    { from: 80, cards: 0.35, bark: 0.25, shadow: false, shadowFrom: 2 },
+    { from: 520, cards: 0.12, bark: 0.08, shadow: false },
+  ],
+  Shrub: [{ from: 80, until: 270, cards: 0.4, shadow: false }],
+};
 
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS).registerDependencies({ 'meshopt.decoder': undefined });
 await MeshoptSimplifier.ready;
@@ -306,6 +322,100 @@ for (const proto of [acacia, shrub]) mergeDocuments(doc, proto.doc);
 for (const p of doc.getRoot().listNodes()) p.dispose();
 for (const p of doc.getRoot().listScenes()) p.dispose();
 const meshes = Object.fromEntries(doc.getRoot().listMeshes().map((m) => [m.getName(), m]));
+const buffer0 = doc.getRoot().listBuffers()[0] ?? doc.createBuffer();
+
+/** A copy of an attribute's or index list's accessor (simplification edits its primitive's accessors in place) */
+const copyAccessor = (a) => doc.createAccessor().setType(a.getType()).setArray(a.getArray().slice()).setNormalized(a.getNormalized()).setBuffer(buffer0);
+
+/**
+ * The leaf cards of a primitive (pieces joined by shared vertices): kept largest first up to `share` of them, each
+ * scaled about its centre so the kept cards add up to the full crown's leaf area (at most 2.6×).
+ */
+function fewerCards(prim, share) {
+  const pos = prim.getAttribute('POSITION');
+  const idx = prim.getIndices();
+  const n = pos.getCount();
+  const parent = new Int32Array(n).map((_, i) => i);
+  const find = (i) => {
+    while (parent[i] !== i) i = parent[i] = parent[parent[i]];
+    return i;
+  };
+  const tris = idx.getCount() / 3;
+  for (let t = 0; t < tris; t++) {
+    const [a, b, c] = [0, 1, 2].map((k) => find(idx.getScalar(3 * t + k)));
+    parent[a] = c;
+    parent[find(b)] = c;
+  }
+  const cards = new Map();
+  const P = (i) => pos.getElement(i, [0, 0, 0]);
+  for (let t = 0; t < tris; t++) {
+    const v = [0, 1, 2].map((k) => idx.getScalar(3 * t + k));
+    const [a, b, c] = v.map(P);
+    const e1 = b.map((x, k) => x - a[k]);
+    const e2 = c.map((x, k) => x - a[k]);
+    const area = 0.5 * Math.hypot(e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]);
+    const r = find(v[0]);
+    const card = cards.get(r) ?? { tris: [], area: 0, c: [0, 0, 0] };
+    card.tris.push(v);
+    card.area += area;
+    for (let k = 0; k < 3; k++) card.c[k] += (area * (a[k] + b[k] + c[k])) / 3;
+    cards.set(r, card);
+  }
+  const list = [...cards.values()].sort((a, b) => b.area - a.area);
+  const total = list.reduce((sum, c) => sum + c.area, 0);
+  const kept = list.slice(0, Math.max(1, Math.round(list.length * share)));
+  const keptArea = kept.reduce((sum, c) => sum + c.area, 0);
+  const scale = Math.min(2.6, Math.sqrt(total / keptArea));
+  const out = { pos: [], nor: [], uv: [], idx: [] };
+  const nor = prim.getAttribute('NORMAL');
+  const uv = prim.getAttribute('TEXCOORD_0');
+  for (const card of kept) {
+    const centre = card.c.map((x) => x / (card.area || 1));
+    const remap = new Map();
+    for (const tri of card.tris)
+      for (const i of tri) {
+        if (!remap.has(i)) {
+          remap.set(i, out.pos.length / 3);
+          out.pos.push(...P(i).map((x, k) => centre[k] + (x - centre[k]) * scale));
+          out.nor.push(...nor.getElement(i, [0, 0, 0]));
+          out.uv.push(...uv.getElement(i, [0, 0]));
+        }
+        out.idx.push(remap.get(i));
+      }
+  }
+  return doc
+    .createPrimitive()
+    .setMaterial(prim.getMaterial())
+    .setAttribute('POSITION', doc.createAccessor().setType('VEC3').setArray(new Float32Array(out.pos)).setBuffer(buffer0))
+    .setAttribute('NORMAL', doc.createAccessor().setType('VEC3').setArray(new Float32Array(out.nor)).setBuffer(buffer0))
+    .setAttribute('TEXCOORD_0', doc.createAccessor().setType('VEC2').setArray(new Float32Array(out.uv)).setBuffer(buffer0))
+    .setIndices(doc.createAccessor().setType('SCALAR').setArray(new Uint16Array(out.idx)).setBuffer(buffer0));
+}
+
+/** A lighter copy of a model's mesh: fewer, larger leaf cards and simpler bark */
+function lodMesh(base, level, { cards, bark }) {
+  const mesh = doc.createMesh(`${base.getName()}_LOD${level}`);
+  for (const prim of base.listPrimitives()) {
+    if (prim.getMaterial()?.getAlphaMode() === 'MASK') {
+      mesh.addPrimitive(fewerCards(prim, cards));
+      continue;
+    }
+    const copy = doc.createPrimitive().setMaterial(prim.getMaterial()).setIndices(copyAccessor(prim.getIndices()));
+    for (const sem of prim.listSemantics()) copy.setAttribute(sem, copyAccessor(prim.getAttribute(sem)));
+    simplifyPrimitive(copy, { simplifier: MeshoptSimplifier, ratio: bark, error: 0.05, lockBorder: false });
+    mesh.addPrimitive(copy);
+  }
+  return mesh;
+}
+const triCount = (mesh) => mesh.listPrimitives().reduce((sum, p) => sum + p.getIndices().getCount() / 3, 0);
+/** Per model, its mesh at each level with when it is drawn (level 0 is the model itself) */
+const levels = Object.fromEntries(
+  Object.entries(LODS).map(([name, lods]) => [
+    name,
+    [{ mesh: meshes[name], from: 0, shadow: true }, ...lods.map((lod, i) => ({ ...lod, mesh: lodMesh(meshes[name], i + 1, lod) }))],
+  ])
+);
+for (const [name, list] of Object.entries(levels)) console.log(`  ${name} levels: ${list.map((l) => triCount(l.mesh)).join(' / ')} triangles`);
 
 const instancing = doc.createExtension(EXTMeshGPUInstancing).setRequired(true);
 const buffer = doc.getRoot().listBuffers()[0] ?? doc.createBuffer();
@@ -343,15 +453,16 @@ for (const [key, list] of [...tiles.entries()].sort(([a], [b]) => (a < b ? -1 : 
     const drift = hash(p.z, p.x, 11) - 0.5;
     c.set([lum * (1 + 0.12 * drift), lum, lum * (1 - 0.1 * drift)], 3 * i);
   });
-  const batch = instancing
-    .createInstancedMesh()
-    .setAttribute('TRANSLATION', accessor('VEC3', t))
-    .setAttribute('ROTATION', accessor('VEC4', r))
-    .setAttribute('SCALE', accessor('VEC3', s))
-    .setAttribute('_COLOR_0', accessor('VEC3', c));
-  const node = doc.createNode(`Scenery_${key.replace(/:/g, '_')}`).setMesh(meshes[model === 'acacia' ? 'Acacia' : 'Shrub']);
-  node.setExtension('EXT_mesh_gpu_instancing', batch);
-  sceneryRoot.addChild(node);
+  // One node per level, all sharing the tile's instance attributes
+  const attrs = { TRANSLATION: accessor('VEC3', t), ROTATION: accessor('VEC4', r), SCALE: accessor('VEC3', s), _COLOR_0: accessor('VEC3', c) };
+  levels[model === 'acacia' ? 'Acacia' : 'Shrub'].forEach(({ mesh, from, until, shadow, shadowFrom }, level) => {
+    const batch = instancing.createInstancedMesh();
+    for (const [sem, a] of Object.entries(attrs)) batch.setAttribute(sem, a);
+    const name = `Scenery_${key.replace(/:/g, '_')}${level ? `_LOD${level}` : ''}`;
+    const node = doc.createNode(name).setMesh(mesh).setExtras({ tile: key, level, from, ...(until ? { until } : {}), shadow, ...(shadowFrom ? { shadowFrom } : {}) });
+    node.setExtension('EXT_mesh_gpu_instancing', batch);
+    sceneryRoot.addChild(node);
+  });
 }
 
 doc.getRoot().getAsset().copyright = CREDITS.map((cr) => `"${cr.title}" by ${cr.author} (${cr.url}), ${cr.license}; changes: ${cr.changes}`).join(' | ');

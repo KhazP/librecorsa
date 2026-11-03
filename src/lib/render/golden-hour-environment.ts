@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { Sky } from "three/examples/jsm/objects/Sky.js";
 import { SunLight } from "three/examples/jsm/lights/SunLight.js";
-import { DRIVER_HEAD_LAYER } from "@/lib/render/layers";
+import { DRIVER_HEAD_LAYER, SHADOW_PROXY_LAYER } from "@/lib/render/layers";
 import { setSceneryQuality } from "@/lib/render/scenery-detail";
 import { setSceneryDensity } from "@/lib/render/scenery-instances";
 import {
@@ -398,6 +398,8 @@ export function createGoldenHourEnvironment(
   // With any layer besides 0 enabled, the shadow pass (three r187+) picks casters by the shadow camera's layers
   // instead of the view camera's: the helmet keeps casting while the cockpit camera leaves it out.
   sunLight.shadow.camera.layers.enable(DRIVER_HEAD_LAYER);
+  // Shadow-only stand-ins (the middle-distance trees cast with lighter crowns)
+  sunLight.shadow.camera.layers.enable(SHADOW_PROXY_LAYER);
 
   sunLight.shadow.bias = -0.0004;
   sunLight.shadow.normalBias = 0.04;
