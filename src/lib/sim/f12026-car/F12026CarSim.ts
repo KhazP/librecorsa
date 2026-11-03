@@ -214,15 +214,23 @@ function autopilotProfile(track: BuiltTrackData, profile: CarSimProfile): Float3
   const px = new Float64Array(n);
   const pz = new Float64Array(n);
   const bank = new Float64Array(n);
+  const offs = new Float64Array(n);
   for (let i = 0; i < n; i++) {
     const smp = track.getSampleAtDistance(i * ds);
     bank[i] = smp.bankingRad;
     const edge = smp.width / 2 - autopilotEdgeMarginM(profile);
-    const off = THREE.MathUtils.clamp(aiLineOffsetM(smp, profile.racingLine), -edge, edge);
+    offs[i] = THREE.MathUtils.clamp(aiLineOffsetM(smp, profile.racingLine), -edge, edge);
+  }
+  // The clamp kinks the path where the line meets it, and a kink read over ±10 m is a corner twice as tight as the
+  // line (82 instead of ~120 km/h planned through Shanghai's turn 13): the path the car drives through it is the
+  // clamped line smoothed over ±10 m
+  for (let i = 0; i < n; i++) {
+    const smp = track.getSampleAtDistance(i * ds);
+    const off = (offs[(i - 2 + n) % n] + 2 * offs[(i - 1 + n) % n] + 3 * offs[i] + 2 * offs[(i + 1) % n] + offs[(i + 2) % n]) / 9;
     px[i] = smp.position.x + smp.binormal.x * off;
     pz[i] = smp.position.z + smp.binormal.z * off;
   }
-  // Path curvature over ±10 m (circumcircle of three points), the larger of two neighbouring spans; its sign (+ right)
+  // Path curvature over ±10 m (circumcircle of three points), averaged with its neighbours below; its sign (+ right)
   // says which way the banking leans relative to the turn
   const k = new Float64Array(n);
   const turnSign = new Float64Array(n);
@@ -253,7 +261,7 @@ function autopilotProfile(track: BuiltTrackData, profile: CarSimProfile): Float3
   // c (low cos θ + aero) above
   const c = AP_LATERAL_SHARE * 0.85 * 9.81;
   for (let i = 0; i < n; i++) {
-    const kk = Math.max(k[i], k[(i + 1) % n], k[(i - 1 + n) % n], 1e-5);
+    const kk = Math.max(1e-5, (k[(i - 1 + n) % n] + 2 * k[i] + k[(i + 1) % n]) / 4);
     const den = kk - (c * b.aeroG) / (b.refMs * b.refMs);
     const vLow = den > 0 ? Math.sqrt(Math.max(0, c * b.lowG * gN[i] + gT[i]) / den) : Infinity;
     v[i] = Math.min(110, vLow < b.refMs ? vLow : Math.sqrt(Math.max(0, c * (b.lowG * gN[i] + b.aeroG) + gT[i]) / kk));
