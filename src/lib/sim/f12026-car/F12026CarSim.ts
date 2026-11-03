@@ -154,6 +154,11 @@ export interface CarSimProfile {
   speedProfile?: SpeedProfileCarModel;
   /** The racing line this car drives, plans on and draws (default: the F1 line) */
   racingLine?: RacingLineId;
+  /**
+   * The car's understeer gradient (front road-wheel angle beyond the kinematic one, rad per m/s² of lateral
+   * acceleration) the autopilot steers in ahead of its yaw loop. Default 0: the loop's integrator finds it.
+   */
+  understeerRadPerMs2?: number;
 }
 
 export const F12026_SIM_PROFILE: CarSimProfile = {
@@ -394,6 +399,10 @@ const AID_SLICE_S = 1 / 240;
 const BOOST_S = 8;
 const BOOST_COOLDOWN_S = 4;
 const AMBIENT_C = 27;
+/** Autopilot line holding: lateral acceleration (m/s²) per m off its line and per m/s drifting off it, and its cap */
+const AP_LINE_KP = 2.25;
+const AP_LINE_KD = 2.1;
+const AP_LINE_MAX_MS2 = 3;
 /** Autopilot pedal per m/s of speed error, on top of its integral */
 const AP_PEDAL_P = 0.5;
 /** Autopilot: stopped this long (s) → rejoin on the racing line, as the AI cars do */
@@ -1412,14 +1421,36 @@ export class F12026CarSim implements SimulatorCar {
     const beta = Math.atan2(v.velocity.dot(_ex), Math.max(1, v.velocity.dot(_ez)));
     // Pure pursuit asks for a path curvature; yaw-rate PI makes the car actually turn at it, so its
     // understeer at speed does not carry it wide of the line
-    const kappa = (2 * Math.sin(alpha)) / Math.max(5, dl);
-    const yawErr = speed * kappa + this.bodyYawRate();
+    let kappa = (2 * Math.sin(alpha)) / Math.max(5, dl);
+    // ... plus a pull back onto the line here and now, on the error and its rate (the pursuit alone let the car run
+    // 2 m past its line and the edge on Daytona's banking exits and into Rwanda's turn 1), capped so a car well off
+    // the line rejoins it rather than asking the tyres for a second corner
+    {
+      const [lo, hi] = autopilotLateralRange(this.track, p.sample, p.s, this.autopilotEdges(), this.profile);
+      const lineNow = THREE.MathUtils.clamp(aiLineOffsetM(p.sample, this.line) + this.aiLineBiasM, lo, hi);
+      const b = p.sample.binormal;
+      const bl = Math.hypot(b.x, b.z) || 1;
+      // + lateral is this far to the car's left
+      const leftOf = (b.x * _ex.x + b.z * _ex.z) / bl;
+      const errLeft = (lineNow - p.lateralOffset) * leftOf;
+      const rateLeft = -((v.velocity.x * b.x + v.velocity.z * b.z) / bl) * leftOf;
+      const aLat = THREE.MathUtils.clamp(AP_LINE_KP * errLeft + AP_LINE_KD * rateLeft, -AP_LINE_MAX_MS2, AP_LINE_MAX_MS2);
+      kappa += aLat / Math.max(100, speed * speed);
+    }
+    // The path curvature is in the horizontal plane, so the yaw that follows it is about world up, not the body's
+    // (on Daytona's 31° banking the body's is cos 31° of it, and the integrator built up there sent the car off the
+    // banking wide)
+    const yawErr = speed * kappa - v.angularVelocity.y;
     const kYaw = v.wheelbaseM / Math.max(10, speed);
+    // past 65 m/s the yaw loop alone is too slow for the car's own response
+    const kYawP = 0.5 + 3 * THREE.MathUtils.clamp((speed - 65) / 30, 0, 1);
     // Never steer the fronts far past their peak slip angle: beyond it they only scrub and the car runs wide
     // (the integrator holds while the governor is on, so it cannot wind up)
     const peak = (this.compoundData.modelData.friction_limit_angle || DEFAULT_FRICTION_LIMIT_ANGLE_DEG) * DEG2RAD;
     const betaF = Math.atan2(v.velocity.dot(_ex) - this.bodyYawRate() * this.cgToFrontAxleM, Math.max(1, v.velocity.dot(_ez)));
-    const raw = Math.atan(v.wheelbaseM * kappa) + 0.8 * beta + 0.5 * kYaw * yawErr + this.apYawI;
+    // the car's understeer at the lateral acceleration asked for, steered in up front rather than left to the integrator
+    const understeer = (this.profile.understeerRadPerMs2 ?? 0) * speed * speed * kappa;
+    const raw = Math.atan(v.wheelbaseM * kappa) + understeer + 0.8 * beta + kYawP * kYaw * yawErr + this.apYawI;
     const delta = THREE.MathUtils.clamp(raw, betaF - 1.15 * peak, betaF + 1.15 * peak);
     const frontsSaturated = delta !== raw;
     if (!frontsSaturated) this.apYawI = THREE.MathUtils.clamp(this.apYawI + yawErr * kYaw * 2 * h, -0.05, 0.05);
