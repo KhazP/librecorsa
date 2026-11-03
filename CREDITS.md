@@ -42,6 +42,10 @@ Licensed under [Creative Commons Attribution 4.0 (CC BY 4.0)](https://creativeco
 
 Made for this project: `scripts/rwanda-stands.mjs` generates them to the footprint, height and facing of the stands in the circuit, which came from a third-party track pack and are no longer shown. Their seat pattern is drawn by the script in the circuit's blue / yellow / green bands; the "Rwanda" roof lettering is the project's own texture, copied unchanged from the circuit.
 
+### Rwanda barrier, fence, pit wall and gantry textures (`public/tracks/rwanda/scenery/textures/`)
+
+Made for this project: `scripts/rwanda-textures.mjs` draws them to the size and coarse layout of the track-pack images they replace on the circuit's own Armco, debris fence, pit wall and start gantry (the average colour of each row, the fence's rails and mesh coverage, the wall's panel joints); every detail is drawn by the script. They are swapped in at load, so the circuit file is unchanged.
+
 ### Rwanda trackside props (`public/tracks/rwanda/scenery/props.glb`)
 
 Made for this project: `scripts/rwanda-props.mjs` generates the jumbotrons, start lights, pit exit light, radio masts, paddock tents and TV camera platforms to the footprint and height of the ones in the circuit, which came from a third-party track pack and are no longer shown. The jumbotrons' circuit-map screen is the project's own texture, copied unchanged from the circuit.

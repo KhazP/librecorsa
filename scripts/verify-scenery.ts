@@ -19,6 +19,8 @@ import { NodeIO } from '@gltf-transform/core';
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
 import { SCENERY_CREDITS, type SceneryCredit } from '../src/lib/render/scenery-credits';
 import { attachSceneryInstances, resetSceneryInstances, setSceneryDensity } from '../src/lib/render/scenery-instances';
+import { applySceneryTextures } from '../src/lib/render/scenery-textures';
+import sharp from 'sharp';
 import { SHADOW_PROXY_LAYER } from '../src/lib/render/layers';
 import { type GroundHit, TrackColliderQuery } from '../src/lib/sim/f12026-car/TrackColliderQuery';
 import { loadGlbGeometry } from './lib/glb-geometry';
@@ -509,6 +511,54 @@ void (async () => {
     const pNames = [...pDoc.getRoot().listMaterials(), ...pDoc.getRoot().listTextures(), ...pDoc.getRoot().listMeshes(), ...pDoc.getRoot().listNodes()].map((x) => x.getName());
     const pack = pNames.filter((n) => /jumbotron_b|marquee|tower_radiomast|cameraman|helicopter_a|lg_pit|core_start|Leclerc|Wolf3D/i.test(n));
     check("no name from the track pack's models (or the helicopter's figure) is left", pack.length === 0, pack.join(', '));
+  }
+
+  console.log('Own textures on the circuit (public/tracks/rwanda/scenery/textures/)');
+  {
+    const DIR = 'public/tracks/rwanda/scenery/textures';
+    const manifest = JSON.parse(readFileSync(`${DIR}/textures.json`, 'utf8')) as { textures: { material: string; file: string; width: number; height: number; alpha: boolean; replaces: string }[] };
+    const want = ['Barrier_Armco', 'Fence_Debris', 'PitWall', 'KN5_Metal_D'];
+    check('the four pack-textured materials are listed', JSON.stringify(manifest.textures.map((t) => t.material)) === JSON.stringify(want));
+    const circuitDoc = await io.read('public/tracks/rwanda/rwanda_2026.glb');
+    const mats = Object.fromEntries(circuitDoc.getRoot().listMaterials().map((m) => [m.getName(), m]));
+    check('each is a textured material in the circuit', want.every((m) => mats[m]?.getBaseColorTexture()));
+    let total = 0;
+    for (const t of manifest.textures) {
+      const file = `${DIR}/${t.file}`;
+      total += statSync(file).size;
+      const meta = await sharp(file).metadata();
+      const orig = mats[t.material].getBaseColorTexture()!;
+      const [ow, oh] = orig.getSize()!;
+      check(`${t.material}: same size as the image it replaces (its UVs were made for it)`, meta.width === ow && meta.height === oh, `${meta.width}×${meta.height}`);
+      if (t.alpha) {
+        const cover = async (buf: Buffer) => {
+          const { data, info } = await sharp(buf).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+          let n = 0;
+          for (let i = 3; i < data.length; i += 4) n += data[i] > 128 ? 1 : 0;
+          return n / (info.width * info.height);
+        };
+        const a = await cover(readFileSync(file));
+        const b = await cover(Buffer.from(orig.getImage()!));
+        check(`${t.material}: the mesh covers as much as the original (±10 %)`, Math.abs(a / b - 1) < 0.1, `${(a * 100).toFixed(1)} % vs ${(b * 100).toFixed(1)} %`);
+      }
+    }
+    check('the textures stay small', total < 400e3, `${(total / 1024).toFixed(0)} KB`);
+    check("no file is named after the pack's images", manifest.textures.every((t) => !/guardrail|fences2|bah_|metal_d/i.test(t.file)));
+
+    // Runtime: only the listed materials change, keeping the old sampler settings
+    const oldMap = new THREE.Texture();
+    oldMap.flipY = false;
+    oldMap.colorSpace = THREE.SRGBColorSpace;
+    oldMap.wrapS = oldMap.wrapT = THREE.RepeatWrapping;
+    oldMap.repeat.set(3, 1);
+    const armco = Object.assign(new THREE.MeshStandardMaterial({ map: oldMap }), { name: 'Barrier_Armco' });
+    const other = Object.assign(new THREE.MeshStandardMaterial({ map: oldMap }), { name: 'Track_Asphalt' });
+    const troot = new THREE.Group();
+    troot.add(new THREE.Mesh(new THREE.PlaneGeometry(), armco), new THREE.Mesh(new THREE.PlaneGeometry(), armco), new THREE.Mesh(new THREE.PlaneGeometry(), other));
+    const fresh = new THREE.Texture();
+    const swapped = applySceneryTextures(troot, new Map([['Barrier_Armco', fresh]]));
+    check('the swap reaches the listed material once, and nothing else', swapped === 1 && armco.map !== oldMap && other.map === oldMap);
+    check('the new map keeps the old one\'s sampler (unflipped glTF UVs, wrap, repeat, sRGB)', !armco.map!.flipY && armco.map!.wrapS === THREE.RepeatWrapping && armco.map!.repeat.x === 3 && armco.map!.colorSpace === THREE.SRGBColorSpace);
   }
 
   console.log('Instanced foliage at runtime (scenery-instances.ts)');
