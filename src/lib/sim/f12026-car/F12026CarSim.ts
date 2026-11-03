@@ -292,6 +292,8 @@ const AID_SLICE_S = 1 / 240;
 const BOOST_S = 8;
 const BOOST_COOLDOWN_S = 4;
 const AMBIENT_C = 27;
+/** Autopilot pedal per m/s of speed error, on top of its integral */
+const AP_PEDAL_P = 0.5;
 /** Autopilot: stopped this long (s) → rejoin on the racing line, as the AI cars do */
 const AUTOPILOT_STUCK_S = 4;
 /** This far below the track's surface the car has fallen through the world */
@@ -553,9 +555,8 @@ export class F12026CarSim implements SimulatorCar {
   private readonly prevWheelOmega: [number, number, number, number] = [0, 0, 0, 0];
   private padSteerActive = false;
   private steerCmd = 0;
+  /** Autopilot pedal (−1 full brake … +1 full throttle): the integral of its speed error */
   private apPedal = 0;
-  private apTc = 1;
-  private apAbs = 1;
   private apThrottle = 0;
   /** Autopilot steer trim (rad) integrated from the yaw-rate shortfall, i.e. the car's understeer */
   private apYawI = 0;
@@ -1276,10 +1277,16 @@ export class F12026CarSim implements SimulatorCar {
   /**
    * Autopilot: pure pursuit on the racing line with countersteer on body slip, a target speed of
    * `aiPaceScale` × this car's limit speed just ahead (its own profile, never above the circuit's braking-limit
-   * speed), pedals feathered on wheelspin / lock-up.
+   * speed), the pedals through the car's own TC and 4-channel ABS at the semi-pro dials.
    * Opens DRS on full throttle when it is available.
    */
-  private autopilot(h: number): { throttle: number; brake: number; steer: number; drs: boolean } {
+  private autopilot(h: number): {
+    throttle: number;
+    brake: number;
+    brakeWheelScale: readonly [number, number, number, number];
+    steer: number;
+    drs: boolean;
+  } {
     const v = this.vehicle;
     const L = this.track.totalLengthM;
     const speed = v.speedMs;
@@ -1327,22 +1334,32 @@ export class F12026CarSim implements SimulatorCar {
     // Off the line the corner is tighter than planned: give speed away for it
     const lineErr = Math.abs(aiLineOffsetM(p.sample, this.line) + this.aiLineBiasM - p.lateralOffset);
     vTarget *= 1 - 0.04 * Math.min(5, Math.max(0, lineErr - 1));
-    this.apPedal = THREE.MathUtils.clamp(this.apPedal + (vTarget - speed) * 0.01 * (h * 120), -1, 1);
+    // PI on speed: the integral alone lags a falling target, so the car braked on past each apex speed it was given
+    const vErr = vTarget - speed;
+    const pedalP = AP_PEDAL_P * vErr;
+    // the integral does not wind on into a pedal already pinned that way
+    if (!(Math.abs(this.apPedal + pedalP) >= 1 && Math.sign(vErr) === Math.sign(this.apPedal + pedalP))) {
+      this.apPedal = THREE.MathUtils.clamp(this.apPedal + vErr * 0.01 * (h * 120), -1, 1);
+    }
+    const pedal = THREE.MathUtils.clamp(this.apPedal + pedalP, -1, 1);
     const W = v.wheels;
-    const spin = Math.max(W[2].slipRatio, W[3].slipRatio);
-    const lock = Math.min(W[0].slipRatio, W[1].slipRatio, W[2].slipRatio, W[3].slipRatio);
-    this.apTc = THREE.MathUtils.clamp(this.apTc + (0.06 - spin) * (spin > 0.06 ? 1.5 : 0.3) * (h * 120), 0.1, 1);
-    this.apAbs = THREE.MathUtils.clamp(this.apAbs + (lock < -0.12 ? -0.2 : 0.05) * (h * 120), 0.05, 1);
     // squeezed on rather than stabbed: at most full throttle in 0.4 s
-    const throttle = Math.min(Math.max(0, this.apPedal), this.apTc, this.apThrottle + 2.5 * h);
+    const throttle = Math.min(Math.max(0, pedal), this.apThrottle + 2.5 * h);
     this.apThrottle = throttle;
-    return {
+    // The car's own TC and per-wheel ABS: a lock-up of the unloaded inside front no longer takes the brakes off all
+    // four wheels (the car then ran into the corner 20-25 km/h hot), nor inside-rear wheelspin the whole throttle
+    const aids = this.electronicAids(
       throttle,
       // understeering on the brakes: ease off so the fronts have grip left to turn with
-      brake: Math.min(Math.max(0, -this.apPedal), this.apAbs) * (frontsSaturated ? 0.5 : 1),
+      Math.max(0, -pedal) * (frontsSaturated ? 0.5 : 1),
+      h,
+      assistPresetDials(this.profile.id, 'semi_pro')
+    );
+    return {
+      ...aids,
       // aimed at the road-wheel angle: the rack gives up `complianceRad` to the lateral force, so add it back
       steer: THREE.MathUtils.clamp(-(delta - 0.5 * (W[0].complianceRad + W[1].complianceRad)) / v.maxSteerRad, -1, 1),
-      drs: v.telemetry.drsAvailable && !v.drsOpen && throttle > 0.95,
+      drs: v.telemetry.drsAvailable && !v.drsOpen && aids.throttle > 0.95,
     };
   }
 
@@ -1428,7 +1445,7 @@ export class F12026CarSim implements SimulatorCar {
   private afterPlacement(): void {
     this.gamepadAssist.reset();
     this.padSteerActive = false;
-    this.tcCut = this.absCut = this.apTc = this.apAbs = 1;
+    this.tcCut = this.absCut = 1;
     this.absWheelCut.fill(1);
     for (let i = 0; i < 4; i++) this.prevWheelOmega[i] = this.vehicle.wheels[i].omega;
     this.apPedal = this.apYawI = this.apThrottle = 0;
