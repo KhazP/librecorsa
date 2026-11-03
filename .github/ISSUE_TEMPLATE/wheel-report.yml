@@ -1,0 +1,54 @@
+name: Wheel report
+description: Tell us how your wheel works with LibreCorsa (it moves the wheel into the README's tested list)
+title: "[Wheel] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks! Only wheels someone has actually driven are marked tested in the README's
+        "Wheels and force feedback" table. A report that it works is as useful as one that it doesn't.
+  - type: input
+    id: wheel
+    attributes:
+      label: Wheel base and rim
+      placeholder: MOZA R9 V2 + KS, Logitech G923, Simucube 2 Pro + …
+    validations:
+      required: true
+  - type: input
+    id: firmware
+    attributes:
+      label: Base firmware or driver version
+      description: From the vendor's software (Pit House, Fanatec control panel, True Drive…), if you know it.
+  - type: dropdown
+    id: path
+    attributes:
+      label: Force-feedback path
+      options:
+        - Browser (WebHID, Connect wheel)
+        - Local bridge (npm run ffb, Windows)
+        - Both
+        - Force feedback off / not tried
+    validations:
+      required: true
+  - type: input
+    id: system
+    attributes:
+      label: Browser and system
+      placeholder: Chrome 140 on Windows 11, Edge on macOS 15…
+    validations:
+      required: true
+  - type: checkboxes
+    id: works
+    attributes:
+      label: What worked
+      options:
+        - label: Steering (the car follows the rim, full lock is right)
+        - label: Pedals
+        - label: Buttons (shifting, menus)
+        - label: Force feedback (Test direction pulls right, then left; you feel the car)
+        - label: Kerb and ABS vibration
+  - type: textarea
+    id: notes
+    attributes:
+      label: Anything that didn't work, or felt off
+      description: Error messages from the wheel setup, the browser console (F12) or the bridge's terminal help a lot.

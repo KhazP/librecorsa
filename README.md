@@ -17,7 +17,7 @@
 <p>
   <a href="https://github.com/KhazP/librecorsa/actions/workflows/deploy-pages.yml"><img alt="Build and deploy" src="https://github.com/KhazP/librecorsa/actions/workflows/deploy-pages.yml/badge.svg" /></a>
   <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/code-MIT-CCFF00?labelColor=08090D" /></a>
-  <img alt="Next.js 15" src="https://img.shields.io/badge/Next.js-15-F5F7FA?labelColor=08090D&logo=nextdotjs&logoColor=white" />
+  <img alt="Next.js 16" src="https://img.shields.io/badge/Next.js-16-F5F7FA?labelColor=08090D&logo=nextdotjs&logoColor=white" />
   <img alt="Three.js" src="https://img.shields.io/badge/Three.js-WebGL2-00E5FF?labelColor=08090D&logo=threedotjs&logoColor=white" />
   <img alt="Physics at 500 Hz" src="https://img.shields.io/badge/physics-500%20Hz-FF2A3C?labelColor=08090D" />
 </p>
@@ -88,11 +88,48 @@ The Rwanda circuit was built in Blender for this project: 14 corners, 52 m of el
 - **Cameras**: cockpit eye-point with live mirrors and the steering-wheel display, a broadcast T-cam, chase, and trackside TV cameras that pan, zoom and cut between corners.
 
 ### Hardware
-- **Wheels**: force feedback straight from the browser over WebHID, for direct-drive bases that use the standard HID PID protocol (Simagic, Moza, Simucube, VRS, OpenFFBoard and similar). Wheels that WebHID can't drive, Logitech included, use the local bridge (`npm run ffb`, Windows).
+- **Wheels**: steering, pedals and buttons through the browser for any wheel. Force feedback straight from the browser over WebHID for bases that use the standard HID PID protocol, or through a local bridge on Windows. See [Wheels and force feedback](#wheels-and-force-feedback) for what has been tested.
 - **Gamepads**: Xbox and PlayStation, with rumble and trigger rumble.
 - **Touch**: on-screen pedals and steering, or tilt to steer.
 - **Telemetry out**: 60 Hz UDP JSON through the bridge, for dashboards and motion rigs.
 - **Setup wizard**: picks your device and tunes steering, pedals and force feedback on first launch.
+
+### Wheels and force feedback
+
+Steering, pedals and buttons come through the browser's Gamepad API, so any wheel that Windows, macOS or Linux sees as a game controller can drive. Force feedback has two paths:
+
+- **In the browser (WebHID, Chrome or Edge)**: click **Connect wheel** in the wheel setup. It drives bases that expose the standard USB HID PID force-feedback reports, with nothing to install. Experimental.
+- **Local bridge (Windows)**: a small helper that talks DirectInput to any force-feedback wheel. It needs a copy of this repository and Node.js: run `npm install` once, then `npm run ffb` and keep it open. The game finds it on `127.0.0.1:18500`. For the hosted site, allow its origin when you start the bridge (origin only, no path):
+  - PowerShell: `$env:FFB_ALLOW_ORIGIN="https://khazp.github.io"; npm run ffb`
+  - cmd: `set "FFB_ALLOW_ORIGIN=https://khazp.github.io" && npm run ffb`
+
+Only what the maintainer has driven is marked tested. Everything else is what the code should do, not a promise:
+
+| Wheel | Browser (WebHID) | Bridge (Windows) | Status |
+| :-- | :-- | :-- | :-- |
+| MOZA R9 V2 + KS | Connects and steers | Expected | **Tested: connects. Force feedback not yet confirmed** |
+| Other MOZA bases, Simucube 2, VRS, OpenFFBoard, other HID PID bases | Expected | Expected | Untested |
+| Simagic, Cammus, Asetek, Fanatec DD (PC mode), Thrustmaster DD | Unknown: without HID PID force feedback the page switches to the bridge | Expected | Untested |
+| Logitech G29, G920, G923, G PRO | No: proprietary force feedback | Expected | Untested |
+| Thrustmaster T150, T248, T300, TMX; Fanatec CSL Elite | Unknown, likely not | Expected | Untested |
+
+Drove one of these, or a wheel that isn't listed? A [wheel report](https://github.com/KhazP/librecorsa/issues/new?template=wheel-report.yml) moves it into the table.
+
+---
+
+## Physics validation
+
+The physics is checked against data, not just tuned by feel, and the evidence is generated from the simulator's own code so anyone can reproduce it ([full page](docs/physics/README.md), `npm run physics:report`).
+
+- **The GT3 against a real car.** The Mercedes-AMG GT3 runs the same manoeuvres as reference GT3 Evo MoTeC logs: sustained cornering, braking and full-throttle g by speed, gearing and the understeer gradient. Every point sits within −10 % to +16 % of the logs, and `npm run verify` fails the build if one leaves its tolerance.
+- **Tyre curves for every car**: force against slip angle at four loads, grip against load, temperature and pressure.
+- **Honest gaps**: the VF26 reaches 6–18 % less cornering g than the cornering-limit table in its reference data, and the page says so.
+- **Frame-rate independence**: physics runs in fixed 2 ms steps (500 Hz, four 2 kHz substeps), so the same three-second launch ends within 0.3 km/h and 0.2 m at 30, 60, 144 or 240 fps.
+
+<p align="center">
+  <img src="docs/physics/gt3-lateral-g.svg" alt="GT3 sustained lateral g against speed: simulator line against MoTeC reference points, inside the shaded CI tolerance" width="49%" />
+  <img src="docs/physics/tyre-fy-vs-slip-gt3.svg" alt="GT3 tyre lateral force against slip angle at 2, 4, 6 and 8 kN, each peaking near 6 degrees" width="49%" />
+</p>
 
 ---
 
@@ -131,11 +168,12 @@ npm run build            # static export into ./out
 | `npm run typecheck` | `tsc --noEmit` over the whole project |
 | `npm run verify` | Every `scripts/verify-*.ts` suite (physics, f12026-car, GT3, input, lap tools, race session, realism, weather, AI tuning, telemetry out, WebHID FFB) |
 | `npm run verify:laps` | Slow: player-style laps for every car and assist preset at full pace |
+| `npm run physics:report` | Regenerate the [physics validation page](docs/physics/README.md): tyre curves, the GT3 against MoTeC logs, frame-rate checks |
 | `npm run race:headless` | A full-physics AI race without rendering, faster than real time, with a results table. `-- --track suzuka --car amg-gt3 --weather heavy_rain --sweep skill` |
 | `npm run compress-tracks` | Meshopt-compress the circuit GLBs and check the physics meshes are unchanged |
 | `npm run ffb` | Local force-feedback and telemetry bridge (Windows) |
 
-The tech is **Next.js 15** (static export), **React 19**, **Three.js** (WebGL2, AgX tone mapping, PBR), the **Web Audio API**, **WebRTC**, **WebHID** and **Tailwind CSS 4**.
+The tech is **Next.js 16** (static export), **React 19**, **Three.js** (WebGL2, AgX tone mapping, PBR), the **Web Audio API**, **WebRTC**, **WebHID** and **Tailwind CSS 4**.
 
 ### Deployment
 Every push to `main` runs typecheck and the verify suites, then builds and deploys `./out` to GitHub Pages (`.github/workflows/deploy-pages.yml`). Hosting costs nothing.
@@ -148,6 +186,8 @@ Every push to `main` runs typecheck and the verify suites, then builds and deplo
 - **3D models and audio** in `public/` are for non-commercial, personal and educational use. Each one keeps its own license.
 - **Cars**: the 2026 car model is by **DeX** ([CC BY 4.0](https://skfb.ly/pKNCK)), and the Mercedes-AMG GT3 by **Ddiaz Design** ([CC BY-NC-SA 4.0](https://skfb.ly/pOTPL)).
 - **Circuits**: the scans are by **Dave**, plus Motegi by **Kevin Love SketchFab**, all CC BY 4.0.
+- **Rwanda trackside trees**: the acacia by **evolveduk** and the shrub by **Natural_Disbuster (lemedesign)**, both CC BY 4.0.
+- **Rwanda stands**: the grandstands, open stands and media centre are the project's own, generated by `scripts/rwanda-stands.mjs`.
 - **Rights holders**: if you made a model, texture, sound or other asset used here and want it credited, corrected or removed, open a [**rights / takedown request**](https://github.com/KhazP/librecorsa/issues/new?template=takedown-request.yml) — it will be fixed or removed from the live site, usually within 7 days.
 
 > [!CAUTION]

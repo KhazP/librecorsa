@@ -34,6 +34,8 @@ const wetUniforms = {
   uRainIntensity: { value: 0 },
   uWetTime: { value: 0 },
 };
+/** The same uniform objects, for other surfaces that get wet with the track (scenery-detail) */
+export const sharedWetUniforms: Readonly<typeof wetUniforms> = wetUniforms;
 
 /**
  * Wet look of the track surface (0 dry … 1 soaked): darker, glossier asphalt with standing-water puddles,
@@ -182,8 +184,8 @@ export function applyAsphaltSheen(material: THREE.MeshStandardMaterial, mask: Ra
 
   material.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, uniforms);
-    shader.vertexShader = patch(shader.vertexShader, VERTEX_PATCHES, "asphalt");
-    shader.fragmentShader = patch(shader.fragmentShader, FRAGMENT_PATCHES, "asphalt");
+    shader.vertexShader = patchShader(shader.vertexShader, VERTEX_PATCHES, "asphalt");
+    shader.fragmentShader = patchShader(shader.fragmentShader, FRAGMENT_PATCHES, "asphalt");
   };
   material.customProgramCacheKey = () => "asphalt-sheen-v3";
   material.needsUpdate = true;
@@ -191,12 +193,13 @@ export function applyAsphaltSheen(material: THREE.MeshStandardMaterial, mask: Ra
 
 type Patch = readonly [anchor: string, replacement: string];
 
-function patch(source: string, patches: readonly Patch[], label: string): string {
+/** Inserts each replacement at its anchor; an anchor that is missing or not unique is skipped with a warning */
+export function patchShader(source: string, patches: readonly Patch[], label: string): string {
   let out = source;
   for (const [anchor, replacement] of patches) {
     const parts = out.split(anchor);
     if (parts.length !== 2) {
-      console.warn(`[asphalt-sheen] ${label}: anchor "${anchor}" found ${parts.length - 1} times, skipped`);
+      console.warn(`[shader-patch] ${label}: anchor "${anchor}" found ${parts.length - 1} times, skipped`);
       continue;
     }
     out = parts[0] + replacement + parts[1];
@@ -214,17 +217,8 @@ const VERTEX_PATCHES: readonly Patch[] = [
 
 // Unnormalised-sigma bump (three's perturbNormalArb normalises the screen derivatives, which loses the metric
 // scale; here dH and dP are both metres per pixel, so the slope is a true world-space gradient).
-const FRAGMENT_HELPERS_GLSL = /* glsl */ `
-uniform sampler2D uRubberMask;
-uniform vec2 uMaskMin;
-uniform vec2 uMaskSize;
-uniform float uAggregateNormalScale;
-uniform float uWetness;
-uniform float uLineWetness;
-uniform float uRainIntensity;
-uniform float uWetTime;
-varying vec3 vVf26WorldPos;
-
+/** World-space noise helpers shared by the asphalt sheen and the scenery detail (no uniforms or varyings) */
+export const WORLD_NOISE_GLSL = /* glsl */ `
 float vf26Hash( vec2 p ) {
 	vec3 p3 = fract( vec3( p.xyx ) * 0.1031 );
 	p3 += dot( p3, p3.yzx + 33.33 );
@@ -267,6 +261,18 @@ vec3 vf26PerturbNormal( vec3 eyePos, vec3 surfNorm, vec2 dHdxy, float faceDir ) 
 	return normalize( abs( det ) * surfNorm - grad );
 }
 `;
+
+const FRAGMENT_HELPERS_GLSL = /* glsl */ `
+uniform sampler2D uRubberMask;
+uniform vec2 uMaskMin;
+uniform vec2 uMaskSize;
+uniform float uAggregateNormalScale;
+uniform float uWetness;
+uniform float uLineWetness;
+uniform float uRainIntensity;
+uniform float uWetTime;
+varying vec3 vVf26WorldPos;
+${WORLD_NOISE_GLSL}`;
 
 const FRAGMENT_PATCHES: readonly Patch[] = [
 	["#include <common>", "#include <common>\n" + FRAGMENT_HELPERS_GLSL],

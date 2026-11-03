@@ -26,6 +26,7 @@ import {
 } from "@/lib/input/device-input";
 import { type FfbStatus, webHidFfb, wheelFfb } from "@/lib/input/wheel-ffb";
 import { isFatalHidStatus, type WebHidFfbStatus } from "@/lib/input/webhid-ffb";
+import { SUPPORT_LABEL, type SupportLevel, WHEEL_SUPPORT, WHEEL_SUPPORT_SUMMARY } from "@/lib/input/wheel-support";
 import { Choice, Toggle, TyreSlider } from "@/components/hud/PauseMenu";
 import { suspendMenuNav, useGamepads, type PadState } from "../useMenuNav";
 import { TuningSlider } from "./TuningSlider";
@@ -209,8 +210,19 @@ function livePedal(pads: PadState[], b: PedalBinding | null, gamma = 1) {
   return pad ? pedalValue(pad.axes[b.axis] ?? b.idle, b, gamma) : null;
 }
 
+/** This page's origin when it is not served from this PC (the bridge only accepts other origins it is told about) */
+function useRemoteOrigin(): string | null {
+  const [origin, setOrigin] = useState<string | null>(null);
+  useEffect(() => {
+    const { hostname, origin: o } = window.location;
+    setOrigin(hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]" ? null : o);
+  }, []);
+  return origin;
+}
+
 /** Where the force-feedback bridge stands, and how to start it when it is not running */
 function FfbBridgeStatus({ status }: { status: FfbStatus }) {
+  const remoteOrigin = useRemoteOrigin();
   if (status.connection === "replaced") {
     return (
       <p role="status" className="m-0 rounded-[14px] bg-[#FFB300]/10 px-3.5 py-2.5 text-[13px] leading-relaxed text-[#FFB300]">
@@ -221,9 +233,19 @@ function FfbBridgeStatus({ status }: { status: FfbStatus }) {
   if (status.connection === "unreachable") {
     return (
       <p role="status" className="m-0 rounded-[14px] bg-[#FFB300]/10 px-3.5 py-2.5 text-[13px] leading-relaxed text-[#FFB300]">
-        Bridge not running. In a terminal in the project folder run{" "}
-        <code className="font-f1-mono text-[12px] font-bold text-[#F5F7FA]">npm run ffb</code> (Windows) and keep it open;
-        this page connects within a few seconds.
+        Bridge not running. It runs on Windows from a copy of the project: in a terminal in that folder run{" "}
+        <code className="font-f1-mono text-[12px] font-bold text-[#F5F7FA]">npm run ffb</code> and keep it open; this
+        page connects within a few seconds.
+        {remoteOrigin ? (
+          <>
+            {" "}
+            This page is not on this PC, so start the bridge with{" "}
+            <code className="font-f1-mono text-[12px] font-bold break-all text-[#F5F7FA]">
+              FFB_ALLOW_ORIGIN={remoteOrigin}
+            </code>{" "}
+            set, or it turns the page away and this message stays.
+          </>
+        ) : null}
       </p>
     );
   }
@@ -240,6 +262,51 @@ function FfbBridgeStatus({ status }: { status: FfbStatus }) {
       <span aria-hidden className="h-[7px] w-[7px] shrink-0 rounded-full" style={{ background: color, boxShadow: `0 0 8px ${color}` }} />
       {text}
     </p>
+  );
+}
+
+const SUPPORT_COLOR: Record<SupportLevel, string> = {
+  tested: "#22C55E",
+  expected: "#8E96AA",
+  unknown: "#FFB300",
+  no: "#FF2A3C",
+};
+
+function SupportCell({ path, level }: { path: string; level: SupportLevel }) {
+  const color = SUPPORT_COLOR[level];
+  return (
+    <span className="flex items-center gap-1.5 font-f1-mono text-[11px] font-bold" style={{ color }}>
+      <span aria-hidden className="h-[7px] w-[7px] shrink-0 rounded-full" style={{ background: color }} />
+      {path} · {SUPPORT_LABEL[level]}
+    </span>
+  );
+}
+
+/** What has actually been driven, and what each wheel family can expect from the two force-feedback paths */
+function SupportedWheels() {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="flex flex-col gap-2.5 rounded-[18px] border border-[#262B3D] bg-[#08090D] p-3.5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <SubHead>Supported wheels</SubHead>
+        <PillAction onClick={() => setOpen((v) => !v)}>{open ? "Hide list" : "Show list"}</PillAction>
+      </div>
+      <Hint>{WHEEL_SUPPORT_SUMMARY} Steering, pedals and buttons work through the browser for any wheel.</Hint>
+      {open ? (
+        <ul className="m-0 flex list-none flex-col gap-2.5 p-0">
+          {WHEEL_SUPPORT.map((row) => (
+            <li key={row.wheel} className="flex flex-col gap-1 border-t border-[#262B3D] pt-2.5">
+              <span className="text-[13px] font-bold text-[#F5F7FA]">{row.wheel}</span>
+              <span className="flex flex-wrap gap-x-4 gap-y-1">
+                <SupportCell path="Browser (WebHID)" level={row.webHid} />
+                <SupportCell path="Bridge (Windows)" level={row.bridge} />
+              </span>
+              <Hint>{row.note}</Hint>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
   );
 }
 
@@ -606,11 +673,11 @@ export const WheelStep: React.FC<SetupStepProps> = ({ settings, onChangeSettings
             <>
               <div className="rounded-[16px] border border-[#262B3D] bg-[#08090D] p-3">
                 <Toggle
-                  label="Browser force feedback over WebHID (USB HID PID direct-drive bases)"
+                  label="Browser force feedback over WebHID (experimental · USB HID PID bases)"
                   detail={
                     hidBrowserUnsupported
                       ? (hid.message ?? "WebHID is not available in this browser")
-                      : "Drives USB HID PID wheels directly from Chrome/Edge with no external helper. Falls back to the local bridge when off."
+                      : "Drives USB HID PID wheels directly from Chrome/Edge with no external helper. Not for Logitech. Falls back to the local bridge when off."
                   }
                   checked={w.hidFfb && !hidBrowserUnsupported}
                   disabled={hidBrowserUnsupported}
@@ -701,10 +768,12 @@ export const WheelStep: React.FC<SetupStepProps> = ({ settings, onChangeSettings
           ) : (
             <Hint className="text-[13px]!">
               Switch Force Feedback on and click <strong>Connect wheel</strong> to drive your wheel directly over WebHID
-              in Chrome/Edge (or run <code className="font-f1-mono text-[12px] font-bold text-[#F5F7FA]">npm run ffb</code>{" "}
-              for the local bridge).
+              in Chrome/Edge. Logitech wheels, and any wheel WebHID cannot drive, use the local bridge on Windows (
+              <code className="font-f1-mono text-[12px] font-bold text-[#F5F7FA]">npm run ffb</code>).
             </Hint>
           )}
+
+          <SupportedWheels />
 
           <div className="flex flex-col gap-2.5 rounded-[18px] border border-[#262B3D] bg-[#08090D] p-3.5">
             <SubHead>Telemetry out</SubHead>

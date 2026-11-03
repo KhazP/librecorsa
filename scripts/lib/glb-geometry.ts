@@ -1,6 +1,7 @@
 /**
  * Minimal GLB reader for Node scripts: rebuilds the node graph (names, TRS, node extras → userData) with
- * position / index geometry (and the first UV set, which the kerb serration ripple reads) only. No materials, textures or DOM, so it runs headless. Reads quantized
+ * position / index geometry (and the first UV set, which the kerb serration ripple reads) only, plus each primitive's
+ * material name in `userData.materialName`. No materials, textures or DOM, so it runs headless. Reads quantized
  * (KHR_mesh_quantization) positions, and meshopt-compressed circuits via a decoded copy in the temp dir.
  */
 import * as THREE from 'three';
@@ -14,7 +15,8 @@ interface GltfJson {
   extensionsUsed?: string[];
   scenes: { nodes: number[] }[];
   nodes: { name?: string; mesh?: number; children?: number[]; translation?: number[]; rotation?: number[]; scale?: number[]; matrix?: number[]; extras?: Record<string, unknown> }[];
-  meshes: { primitives: { attributes: { POSITION: number; TEXCOORD_0?: number }; indices?: number }[] }[];
+  meshes: { primitives: { attributes: { POSITION: number; TEXCOORD_0?: number }; indices?: number; material?: number }[] }[];
+  materials?: { name?: string }[];
   accessors: { bufferView: number; byteOffset?: number; componentType: number; normalized?: boolean; count: number; type: string }[];
   bufferViews: { byteOffset?: number; byteLength: number; byteStride?: number }[];
 }
@@ -79,7 +81,10 @@ export function loadGlbGeometry(path: string): THREE.Group {
         g.setAttribute('position', new THREE.BufferAttribute(readAccessor(p.attributes.POSITION, true), 3));
         if (p.attributes.TEXCOORD_0 !== undefined) g.setAttribute('uv', new THREE.BufferAttribute(readAccessor(p.attributes.TEXCOORD_0, true), 2));
         if (p.indices !== undefined) g.setIndex(new THREE.BufferAttribute(readAccessor(p.indices, false), 1));
-        return new THREE.Mesh(g);
+        const mesh = new THREE.Mesh(g);
+        // The material's name only (no material is built), for tests that pick primitives by it
+        if (p.material !== undefined) mesh.userData.materialName = gltf.materials?.[p.material]?.name ?? '';
+        return mesh;
       });
       if (prims.length === 1) obj = prims[0];
       else {

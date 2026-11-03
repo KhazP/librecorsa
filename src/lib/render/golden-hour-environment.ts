@@ -2,6 +2,8 @@ import * as THREE from "three";
 import { Sky } from "three/examples/jsm/objects/Sky.js";
 import { SunLight } from "three/examples/jsm/lights/SunLight.js";
 import { DRIVER_HEAD_LAYER } from "@/lib/render/layers";
+import { setSceneryQuality } from "@/lib/render/scenery-detail";
+import { setSceneryDensity } from "@/lib/render/scenery-instances";
 import {
   BloomEffect,
   EffectComposer,
@@ -165,6 +167,9 @@ export function applyGraphicsQuality(
   // Toggling the light's shadow recompiles the lit materials on their own (shadow count is part of the program key)
   env.sunLight.castShadow = quality !== "low";
   postFx.setQuality(quality);
+  // Scenery noise and bump off on Low (the baked tree shading stays); fewer instanced trees and shrubs below High
+  setSceneryQuality(quality);
+  setSceneryDensity(quality);
 }
 
 // ---------------------------------------------------------------------------

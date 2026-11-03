@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 420" width="720" height="420" role="img" aria-labelledby="t d">
+<title id="t">Peak friction coefficient vs vertical load</title>
+<desc id="d">Peak lateral friction coefficient of the soft front tyre of the GT3, the f12026-car and the VF26 from 0.5 to 10 kN. All three fall as the load rises, the property that makes weight transfer cost grip.</desc>
+<style>
+svg{--surface:#fcfcfb;--ink:#0b0b0b;--ink2:#52514e;--muted:#898781;--grid:#e1e0d9;--axis:#c3c2b7;--s1:#2a78d6;--s2:#eb6834;--s3:#1baf7a;--r1:#86b6ef;--r2:#3987e5;--r3:#1c5cab;--r4:#0d366b;--mutedSeries:#898781;font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
+@media (prefers-color-scheme: dark){svg{--surface:#1a1a19;--ink:#f0efec;--ink2:#c3c2b7;--muted:#898781;--grid:#2c2c2a;--axis:#383835;--s1:#3987e5;--s2:#d95926;--s3:#199e70;--r1:#1c5cab;--r2:#3987e5;--r3:#86b6ef;--r4:#cde2fb;--mutedSeries:#898781;}}
+.ttl{fill:var(--ink);font-size:15px;font-weight:600}.sub{fill:var(--ink2);font-size:12px}
+.tick{fill:var(--muted);font-size:11px;font-variant-numeric:tabular-nums}.axt{fill:var(--ink2);font-size:12px}
+.lbl{fill:var(--ink);font-size:11px}.leg{fill:var(--ink2);font-size:12px}
+.grid{stroke:var(--grid);stroke-width:1}.base{stroke:var(--axis);stroke-width:1}
+</style>
+<rect width="720" height="420" rx="8" fill="var(--surface)"/>
+<text class="ttl" x="64" y="28">Peak friction coefficient vs vertical load</text>
+<text class="sub" x="64" y="48">Soft front tyre of each car at its optimum; the drop with load is load sensitivity</text>
+<line x1="64" y1="70" x2="80" y2="70" stroke="var(--s1)" stroke-width="2" stroke-linecap="round"/>
+<text class="leg" x="86" y="74">GT3</text>
+<line x1="124.88" y1="70" x2="140.88" y2="70" stroke="var(--s2)" stroke-width="2" stroke-linecap="round"/>
+<text class="leg" x="146.88" y="74">f12026-car</text>
+<line x1="234.48" y1="70" x2="250.48" y2="70" stroke="var(--s3)" stroke-width="2" stroke-linecap="round"/>
+<text class="leg" x="256.48" y="74">VF26</text>
+<line class="base" x1="64" y1="364" x2="640.2" y2="364"/>
+<text class="tick" x="56" y="368" text-anchor="end">1.2</text>
+<line class="grid" x1="64" y1="324.9" x2="640.2" y2="324.9"/>
+<text class="tick" x="56" y="328.9" text-anchor="end">1.4</text>
+<line class="grid" x1="64" y1="285.7" x2="640.2" y2="285.7"/>
+<text class="tick" x="56" y="289.7" text-anchor="end">1.6</text>
+<line class="grid" x1="64" y1="246.6" x2="640.2" y2="246.6"/>
+<text class="tick" x="56" y="250.6" text-anchor="end">1.8</text>
+<line class="grid" x1="64" y1="207.4" x2="640.2" y2="207.4"/>
+<text class="tick" x="56" y="211.4" text-anchor="end">2</text>
+<line class="grid" x1="64" y1="168.3" x2="640.2" y2="168.3"/>
+<text class="tick" x="56" y="172.3" text-anchor="end">2.2</text>
+<line class="grid" x1="64" y1="129.1" x2="640.2" y2="129.1"/>
+<text class="tick" x="56" y="133.1" text-anchor="end">2.4</text>
+<line class="grid" x1="64" y1="90" x2="640.2" y2="90"/>
+<text class="tick" x="56" y="94" text-anchor="end">2.6</text>
+<line class="base" x1="64" y1="364" x2="64" y2="368"/>
+<text class="tick" x="64" y="382" text-anchor="middle">0</text>
+<line class="base" x1="179.2" y1="364" x2="179.2" y2="368"/>
+<text class="tick" x="179.2" y="382" text-anchor="middle">2</text>
+<line class="base" x1="294.5" y1="364" x2="294.5" y2="368"/>
+<text class="tick" x="294.5" y="382" text-anchor="middle">4</text>
+<line class="base" x1="409.7" y1="364" x2="409.7" y2="368"/>
+<text class="tick" x="409.7" y="382" text-anchor="middle">6</text>
+<line class="base" x1="525" y1="364" x2="525" y2="368"/>
+<text class="tick" x="525" y="382" text-anchor="middle">8</text>
+<line class="base" x1="640.2" y1="364" x2="640.2" y2="368"/>
+<text class="tick" x="640.2" y="382" text-anchor="middle">10</text>
+<text class="axt" x="352.1" y="406" text-anchor="middle">Vertical load (kN)</text>
+<text class="axt" transform="translate(16 227) rotate(-90)" text-anchor="middle">Peak lateral μ</text>
+<path d="M121.6,123.6L136,142.9L150.4,162.1L164.8,174.8L179.2,187.5L193.6,196.9L208.1,206.2L222.5,213.5L236.9,220.8L251.3,226.8L265.7,232.8L280.1,237.8L294.5,242.8L308.9,247.1L323.3,251.4L337.7,255.2L352.1,259L366.5,262.2L380.9,265.3L395.3,268.5L409.7,271.7L424.1,274.2L438.5,276.8L452.9,279.4L467.3,282L481.7,284.5L496.2,287.1L510.6,289.3L525,291.4L539.4,293.6L553.8,295.8L568.2,297.9L582.6,300.1L597,301.9L611.4,303.7L625.8,305.5L640.2,307.3" fill="none" stroke="var(--s1)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M121.6,172.2L136,177.8L150.4,183.5L164.8,189.1L179.2,194.7L193.6,200.4L208.1,206.1L222.5,211.7L236.9,217.4L251.3,223.1L265.7,228.8L280.1,234.4L294.5,240.1L308.9,245.6L323.3,251.1L337.7,256.6L352.1,262L366.5,267.3L380.9,272.5L395.3,277.7L409.7,283L424.1,288L438.5,293L452.9,297.9L467.3,302.9L481.7,307.5L496.2,312.1L510.6,316.7L525,321.3L539.4,325.5L553.8,329.7L568.2,333.8L582.6,338L597,341.6L611.4,345.3L625.8,349L640.2,352.6" fill="none" stroke="var(--s2)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M121.6,181.1L136,189.9L150.4,198.7L164.8,204.7L179.2,210.6L193.6,215.2L208.1,219.7L222.5,223.3L236.9,226.9L251.3,229.9L265.7,232.9L280.1,235.5L294.5,238.1L308.9,240.3L323.3,242.5L337.7,244.5L352.1,246.5L366.5,248.2L380.9,249.9L395.3,251.5L409.7,253.2L424.1,254.7L438.5,256.2L452.9,257.6L467.3,259.1L481.7,260.5L496.2,261.9L510.6,263.3L525,264.7L539.4,266L553.8,267.3L568.2,268.6L582.6,269.9L597,271L611.4,272.2L625.8,273.4L640.2,274.6" fill="none" stroke="var(--s3)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+<text class="lbl" x="648.2" y="278.6">VF26</text>
+<text class="lbl" x="648.2" y="311.3">GT3</text>
+<text class="lbl" x="648.2" y="356.6">f12026-car</text>
+</svg>

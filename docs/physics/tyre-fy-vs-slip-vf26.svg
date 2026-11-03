@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 420" width="720" height="420" role="img" aria-labelledby="t d">
+<title id="t">FA-26 Prototype (VF26): lateral force vs slip angle</title>
+<desc id="d">Steady-state lateral force of the soft front tyre of the FA-26 Prototype (VF26) against slip angle at 2, 4, 6 and 8 kN vertical load. Each curve rises to a peak near 6.7 degrees and falls off gently past it; heavier loads give more force but less per newton (load sensitivity).</desc>
+<style>
+svg{--surface:#fcfcfb;--ink:#0b0b0b;--ink2:#52514e;--muted:#898781;--grid:#e1e0d9;--axis:#c3c2b7;--s1:#2a78d6;--s2:#eb6834;--s3:#1baf7a;--r1:#86b6ef;--r2:#3987e5;--r3:#1c5cab;--r4:#0d366b;--mutedSeries:#898781;font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
+@media (prefers-color-scheme: dark){svg{--surface:#1a1a19;--ink:#f0efec;--ink2:#c3c2b7;--muted:#898781;--grid:#2c2c2a;--axis:#383835;--s1:#3987e5;--s2:#d95926;--s3:#199e70;--r1:#1c5cab;--r2:#3987e5;--r3:#86b6ef;--r4:#cde2fb;--mutedSeries:#898781;}}
+.ttl{fill:var(--ink);font-size:15px;font-weight:600}.sub{fill:var(--ink2);font-size:12px}
+.tick{fill:var(--muted);font-size:11px;font-variant-numeric:tabular-nums}.axt{fill:var(--ink2);font-size:12px}
+.lbl{fill:var(--ink);font-size:11px}.leg{fill:var(--ink2);font-size:12px}
+.grid{stroke:var(--grid);stroke-width:1}.base{stroke:var(--axis);stroke-width:1}
+</style>
+<rect width="720" height="420" rx="8" fill="var(--surface)"/>
+<text class="ttl" x="64" y="28">FA-26 Prototype (VF26): lateral force vs slip angle</text>
+<text class="sub" x="64" y="48">Soft front at its optimum temperature and pressure, no camber; dot = peak</text>
+<line x1="64" y1="70" x2="80" y2="70" stroke="var(--r1)" stroke-width="2" stroke-linecap="round"/>
+<text class="leg" x="86" y="74">2 kN</text>
+<line x1="131.84" y1="70" x2="147.84" y2="70" stroke="var(--r2)" stroke-width="2" stroke-linecap="round"/>
+<text class="leg" x="153.84" y="74">4 kN</text>
+<line x1="199.68" y1="70" x2="215.68" y2="70" stroke="var(--r3)" stroke-width="2" stroke-linecap="round"/>
+<text class="leg" x="221.68" y="74">6 kN</text>
+<line x1="267.52" y1="70" x2="283.52" y2="70" stroke="var(--r4)" stroke-width="2" stroke-linecap="round"/>
+<text class="leg" x="289.52" y="74">8 kN</text>
+<line class="base" x1="64" y1="364" x2="678.48" y2="364"/>
+<text class="tick" x="56" y="368" text-anchor="end">0</text>
+<line class="grid" x1="64" y1="327.5" x2="678.48" y2="327.5"/>
+<text class="tick" x="56" y="331.5" text-anchor="end">2</text>
+<line class="grid" x1="64" y1="290.9" x2="678.48" y2="290.9"/>
+<text class="tick" x="56" y="294.9" text-anchor="end">4</text>
+<line class="grid" x1="64" y1="254.4" x2="678.48" y2="254.4"/>
+<text class="tick" x="56" y="258.4" text-anchor="end">6</text>
+<line class="grid" x1="64" y1="217.9" x2="678.48" y2="217.9"/>
+<text class="tick" x="56" y="221.9" text-anchor="end">8</text>
+<line class="grid" x1="64" y1="181.3" x2="678.48" y2="181.3"/>
+<text class="tick" x="56" y="185.3" text-anchor="end">10</text>
+<line class="grid" x1="64" y1="144.8" x2="678.48" y2="144.8"/>
+<text class="tick" x="56" y="148.8" text-anchor="end">12</text>
+<line class="grid" x1="64" y1="108.3" x2="678.48" y2="108.3"/>
+<text class="tick" x="56" y="112.3" text-anchor="end">14</text>
+<line class="base" x1="64" y1="364" x2="64" y2="368"/>
+<text class="tick" x="64" y="382" text-anchor="middle">0</text>
+<line class="base" x1="186.9" y1="364" x2="186.9" y2="368"/>
+<text class="tick" x="186.9" y="382" text-anchor="middle">3</text>
+<line class="base" x1="309.8" y1="364" x2="309.8" y2="368"/>
+<text class="tick" x="309.8" y="382" text-anchor="middle">6</text>
+<line class="base" x1="432.7" y1="364" x2="432.7" y2="368"/>
+<text class="tick" x="432.7" y="382" text-anchor="middle">9</text>
+<line class="base" x1="555.6" y1="364" x2="555.6" y2="368"/>
+<text class="tick" x="555.6" y="382" text-anchor="middle">12</text>
+<line class="base" x1="678.5" y1="364" x2="678.5" y2="368"/>
+<text class="tick" x="678.5" y="382" text-anchor="middle">15</text>
+<text class="axt" x="371.24" y="406" text-anchor="middle">Slip angle (deg)</text>
+<text class="axt" transform="translate(16 227) rotate(-90)" text-anchor="middle">Lateral force (kN)</text>
+<path d="M64,364L74.2,358.6L84.5,353.2L94.7,348L105,342.8L115.2,337.7L125.4,332.9L135.7,328.2L145.9,323.8L156.2,319.7L166.4,315.8L176.7,312.2L186.9,309L197.1,306.1L207.4,303.5L217.6,301.2L227.9,299.2L238.1,297.5L248.3,296L258.6,294.9L268.8,293.9L279.1,293.1L289.3,292.5L299.6,292.1L309.8,291.8L320,291.6L330.3,291.5L340.5,291.5L350.8,291.6L361,291.8L371.2,292L381.5,292.3L391.7,292.6L402,292.9L412.2,293.3L422.4,293.6L432.7,294L442.9,294.4L453.2,294.8L463.4,295.3L473.7,295.7L483.9,296.1L494.1,296.6L504.4,297L514.6,297.4L524.9,297.7L535.1,298.1L545.3,298.5L555.6,298.9L565.8,299.2L576.1,299.6L586.3,299.9L596.5,300.3L606.8,300.6L617,300.9L627.3,301.2L637.5,301.6L647.8,301.9L658,302.2L668.2,302.5L678.5,302.8" fill="none" stroke="var(--r1)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M64,364L74.2,354L84.5,344L94.7,334.2L105,324.6L115.2,315.2L125.4,306.2L135.7,297.5L145.9,289.3L156.2,281.6L166.4,274.4L176.7,267.8L186.9,261.8L197.1,256.3L207.4,251.5L217.6,247.2L227.9,243.5L238.1,240.4L248.3,237.7L258.6,235.5L268.8,233.7L279.1,232.2L289.3,231.1L299.6,230.3L309.8,229.8L320,229.4L330.3,229.3L340.5,229.3L350.8,229.5L361,229.8L371.2,230.2L381.5,230.7L391.7,231.2L402,231.8L412.2,232.5L422.4,233.2L432.7,233.9L442.9,234.7L453.2,235.5L463.4,236.3L473.7,237.1L483.9,237.9L494.1,238.7L504.4,239.4L514.6,240.2L524.9,240.9L535.1,241.6L545.3,242.2L555.6,242.9L565.8,243.6L576.1,244.2L586.3,244.9L596.5,245.5L606.8,246.2L617,246.8L627.3,247.4L637.5,248L647.8,248.5L658,249.1L668.2,249.6L678.5,250.2" fill="none" stroke="var(--r2)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M64,364L74.2,349.6L84.5,335.3L94.7,321.2L105,307.3L115.2,293.9L125.4,280.9L135.7,268.4L145.9,256.6L156.2,245.6L166.4,235.2L176.7,225.7L186.9,217.1L197.1,209.3L207.4,202.3L217.6,196.2L227.9,190.9L238.1,186.3L248.3,182.5L258.6,179.3L268.8,176.7L279.1,174.6L289.3,173.1L299.6,171.9L309.8,171.1L320,170.6L330.3,170.4L340.5,170.5L350.8,170.7L361,171.1L371.2,171.7L381.5,172.4L391.7,173.2L402,174.1L412.2,175L422.4,176L432.7,177.1L442.9,178.2L453.2,179.3L463.4,180.4L473.7,181.6L483.9,182.7L494.1,183.9L504.4,185L514.6,186L524.9,187L535.1,188L545.3,189L555.6,190L565.8,191L576.1,191.9L586.3,192.8L596.5,193.7L606.8,194.6L617,195.5L627.3,196.4L637.5,197.2L647.8,198.1L658,198.9L668.2,199.7L678.5,200.4" fill="none" stroke="var(--r3)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M64,364L74.2,345.4L84.5,327L94.7,308.8L105,290.9L115.2,273.6L125.4,256.8L135.7,240.8L145.9,225.6L156.2,211.3L166.4,198L176.7,185.8L186.9,174.6L197.1,164.6L207.4,155.6L217.6,147.7L227.9,140.8L238.1,135L248.3,130L258.6,125.9L268.8,122.6L279.1,119.9L289.3,117.9L299.6,116.4L309.8,115.3L320,114.7L330.3,114.5L340.5,114.5L350.8,114.8L361,115.4L371.2,116.1L381.5,117L391.7,118L402,119.2L412.2,120.4L422.4,121.7L432.7,123.1L442.9,124.5L453.2,125.9L463.4,127.4L473.7,128.8L483.9,130.3L494.1,131.8L504.4,133.3L514.6,134.6L524.9,135.9L535.1,137.2L545.3,138.4L555.6,139.7L565.8,140.9L576.1,142.2L586.3,143.4L596.5,144.5L606.8,145.7L617,146.8L627.3,147.9L637.5,149L647.8,150.1L658,151.1L668.2,152.2L678.5,153.2" fill="none" stroke="var(--r4)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="330.3" cy="291.5" r="4" fill="var(--r1)" stroke="var(--surface)" stroke-width="2"/>
+<circle cx="330.3" cy="229.3" r="4" fill="var(--r2)" stroke="var(--surface)" stroke-width="2"/>
+<circle cx="330.3" cy="170.4" r="4" fill="var(--r3)" stroke="var(--surface)" stroke-width="2"/>
+<circle cx="330.3" cy="114.5" r="4" fill="var(--r4)" stroke="var(--surface)" stroke-width="2"/>
+<text class="lbl" x="686.48" y="157.2">8 kN</text>
+<text class="lbl" x="686.48" y="204.4">6 kN</text>
+<text class="lbl" x="686.48" y="254.2">4 kN</text>
+<text class="lbl" x="686.48" y="306.8">2 kN</text>
+</svg>

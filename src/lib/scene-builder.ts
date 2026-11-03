@@ -12,6 +12,8 @@ import type { RacingLineId, RunoffStyle, TrackSamplePoint } from "@/types/f1";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.js";
 import { assetProgress } from "@/lib/loading/asset-progress";
+import { applySceneryDetail, prepareTreeGeometry, sceneryKind, setSceneryTime } from "@/lib/render/scenery-detail";
+import { attachSceneryInstances, loadSceneryInstances, resetSceneryInstances } from "@/lib/render/scenery-instances";
 
 export interface BuiltRwandaScene {
   sceneGroup: THREE.Group;
@@ -47,16 +49,16 @@ const DECAL_NODES: Record<string, number> = {
   Track_Runoff_Paint: -1,
 };
 /**
- * Diffuse roughness (EON diffuse BRDF, three r187+) for the circuits' rough ground by material name. Rough
- * surfaces back-scatter: with the low golden-hour sun behind the camera sunlit grass reads ~25% brighter, and
- * looking into the sun a little darker, where Lambert shading looks the same from every side. Only materials
- * named per surface match (Rwanda's Terrain_Grass / Pit_Apron_Concrete, Motegi's GRASS* / *CONCRETE*); the
- * scanned circuits share one atlas material and keep plain Lambert.
+ * Diffuse roughness (EON diffuse BRDF, three r187+) for the circuits' concrete by material name. Rough surfaces
+ * back-scatter: with the low golden-hour sun behind the camera sunlit concrete reads brighter, and looking into the
+ * sun a little darker, where Lambert shading looks the same from every side. Only materials named per surface
+ * match (Rwanda's Pit_Apron_Concrete, Motegi's *CONCRETE*); the scanned circuits share one atlas material and keep
+ * plain Lambert.
+ *
+ * The terrain grass stays Lambert on purpose: the rough lobe flattens the shading across slopes, so the ground's
+ * relief (the real elevation of the site) read differently from how it was modelled.
  */
-const ROUGH_DIFFUSE: readonly (readonly [RegExp, number])[] = [
-  [/grass/i, 1.0],
-  [/concrete/i, 0.5],
-];
+const ROUGH_DIFFUSE: readonly (readonly [RegExp, number])[] = [[/concrete/i, 0.5]];
 const roughDiffuseConversions = new WeakMap<THREE.Material, THREE.Material>();
 
 /** The material with its rough-diffuse lobe: physical materials in place, standard ones as a shared physical copy */
@@ -133,11 +135,15 @@ function loadTrackGlb(
   glbGroup: THREE.Group,
   fallbackGroup: THREE.Group,
   onLoaded: (root: THREE.Object3D) => void,
-  sheenMask: RacingLineMask
+  sheenMask: RacingLineMask,
+  /** Scenery files that replace some of the circuit's own (scenery-instances.ts); loaded alongside */
+  sceneryUrls: readonly string[] = []
 ): void {
   if (typeof window === "undefined" || typeof fetch === "undefined") {
     return;
   }
+  resetSceneryInstances();
+  const sceneryLoad = Promise.all(sceneryUrls.map(loadSceneryInstances));
 
   // `?colliders=1`: draw the physics surfaces (by type) and barriers over the scan, to check them against it
   const showColliders = new URLSearchParams(window.location.search).get("colliders") === "1";
@@ -188,7 +194,19 @@ function loadTrackGlb(
         obj.material = Array.isArray(obj.material) ? obj.material.map(withRoughDiffuse) : withRoughDiffuse(obj.material);
         const offset = DECAL_NODES[topName];
         const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+        // Flat, untextured scenery (Rwanda's trees, roofs, spire, lake, paint): shader detail, and the trees'
+        // normals, tint and occlusion baked into their geometry (scenery-detail.ts)
+        let treeShading = false;
+        let baseY = 0;
+        if (mats.some((m) => sceneryKind(m) !== null)) {
+          if (mats.some((m) => m.name === "Tree_Trunk" || m.name === "Tree_Canopy")) {
+            treeShading = prepareTreeGeometry(obj.geometry, mats.some((m) => m.name === "Tree_Trunk") ? "trunk" : "canopy");
+          }
+          obj.geometry.computeBoundingBox();
+          baseY = box.copy(obj.geometry.boundingBox!).applyMatrix4(obj.matrixWorld).min.y;
+        }
         for (const mat of mats) {
+          applySceneryDetail(mat, { baseY, treeShading });
           if (!(mat instanceof THREE.MeshStandardMaterial)) continue;
           if (topName === "Track_Asphalt_Road") applyAsphaltSheen(mat, sheenMask);
           for (const tex of [mat.map, mat.roughnessMap, mat.metalnessMap, mat.normalMap]) {
@@ -202,6 +220,13 @@ function loadTrackGlb(
         }
         if (offset !== undefined) obj.renderOrder = 1;
       });
+      return sceneryLoad.then((files) => {
+        // Before onLoaded, so the camera occlusion pass and the shader warm-up see them
+        for (const scenery of files) if (scenery) attachSceneryInstances(root, scenery);
+        return root;
+      });
+    })
+    .then((root) => {
       glbGroup.add(root);
       onLoaded(root);
 
@@ -1202,6 +1227,7 @@ export function buildRwandaCircuitScene(
   if (isRwanda) sceneGroup.add(jetGroup);
 
   const updateEnvironment = (elapsedSeconds: number) => {
+    setSceneryTime(elapsedSeconds);
     waterMesh.position.y = -18.0 + Math.sin(elapsedSeconds * 1.4) * 0.08;
     // Gently circle the RwandAir jetliner across the sky near Bugesera Airport
     const jetAngle = elapsedSeconds * 0.045;
@@ -1247,7 +1273,8 @@ export function buildRwandaCircuitScene(
       attachStartLightsToGantry(root);
       resolveTrackRoot(root);
     },
-    sheenMask
+    sheenMask,
+    isRwanda ? ["/tracks/rwanda/scenery/foliage.glb", "/tracks/rwanda/scenery/stands.glb"] : []
   );
 
   return {

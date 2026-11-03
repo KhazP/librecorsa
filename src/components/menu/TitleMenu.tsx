@@ -11,6 +11,7 @@ import { LeaderboardPanel } from "@/components/hud/LeaderboardPanel";
 import { buildHudMap, mapPoint, SECTOR_COLORS, type HudMap } from "@/components/hud/styles/hud-style-parts";
 import { ACTIVE_TRACK_ID, BASE_ALTITUDE_M, getTrackData, TRACK_TOTAL_LENGTH_M, TURN_METADATA } from "@/lib/track-data";
 import { getTrackInfo, RWANDA_TRACK_ID, TRACKS, type TrackInfo } from "@/lib/track-registry";
+import { SCENERY_CREDITS } from "@/lib/render/scenery-credits";
 import { isLikelyWheel, padDisplayName } from "@/lib/input/device-input";
 import type { HudPreset } from "@/lib/settings/player-settings";
 import { useGamepads, type PadState } from "./useMenuNav";
@@ -257,8 +258,8 @@ const Credits: React.FC = () => (
                   {(t.credit!.short ?? t.credit!.url).replace(/^https?:\/\//, "")}
                 </a>
                 ) by {t.credit!.author} ·{" "}
-                <a href="http://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer" className={linkClass}>
-                  CC BY 4.0
+                <a href={t.credit!.licenseUrl} target="_blank" rel="noreferrer" className={linkClass}>
+                  {t.credit!.license}
                 </a>
                 <br />
               </React.Fragment>
@@ -266,6 +267,22 @@ const Credits: React.FC = () => (
             Converted for the simulator (rescaled, recentred, textures re-encoded, physics colliders added).
           </CreditRow>
         ) : null}
+        <CreditRow title="Trackside trees (Rwanda)">
+          {SCENERY_CREDITS.map((c) => (
+            <React.Fragment key={c.id}>
+              &ldquo;{c.title}&rdquo; (
+              <a href={c.url} target="_blank" rel="noreferrer" className={linkClass}>
+                sketchfab.com
+              </a>
+              ) by {c.author} ·{" "}
+              <a href={c.licenseUrl} target="_blank" rel="noreferrer" className={linkClass}>
+                {c.license}
+              </a>
+              <br />
+            </React.Fragment>
+          ))}
+          Simplified, textures re-encoded, instanced at the circuit&apos;s tree and bush spots.
+        </CreditRow>
       </div>
     </div>
 

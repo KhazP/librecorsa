@@ -315,6 +315,10 @@ export class DeviceInputReader {
   }
 }
 
+/** Belt / gear-driven bases (the rest are taken as direct drive); the CSL Elite is belt-driven, the CSL DD is not */
+const BELT_GEAR_ID = /g29|g920|g923|t150|t248|t300|tmx|csl elite/i;
+/** Logitech devices, by name or by the vendor id Chrome puts in Gamepad.id ("Vendor: 046d") */
+const LOGITECH_ID = /logitech|\b046d\b/i;
 /** Pedal sets, shifters and handbrakes share the wheel brands' names but never steer */
 const NOT_A_WHEEL_BASE = /pedal|srp|sr-p|handbrake|shifter|hgp|sequential/i;
 /** Virtual joysticks (vJoy / SimHub Control Mapper) mirror physical devices and should yield to real hardware */
@@ -329,13 +333,14 @@ export function autoConfigureWheel(pads: readonly PadLike[], current: WheelSetti
   if (current.steer) return null;
   const wheelPad = pads.find((p) => WHEEL_ID.test(p.id) && !NOT_A_WHEEL_BASE.test(p.id) && !isVirtualPad(p.id) && p.axes.length > 0);
   if (!wheelPad) return null;
-  const type: WheelType = /g29|g920|g923|t150|t248|t300|tmx/i.test(wheelPad.id) ? "belt_gear" : "direct_drive";
+  const type: WheelType = BELT_GEAR_ID.test(wheelPad.id) ? "belt_gear" : "direct_drive";
   const rest = wheelPad.axes[0] ?? 0;
   return {
     type,
     ...WHEEL_TYPE_DEFAULTS[type],
     ffbEnabled: true,
-    hidFfb: true,
+    // Logitech's force feedback is proprietary (WebHID refuses it), so it starts on the local bridge
+    hidFfb: !LOGITECH_ID.test(wheelPad.id),
     steer: { padId: wheelPad.id, axis: 0, center: Math.abs(rest) < 0.25 ? rest : 0, invert: false },
   };
 }
