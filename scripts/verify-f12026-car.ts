@@ -31,6 +31,7 @@ import { F12026CarSim } from '../src/lib/sim/f12026-car/F12026CarSim';
 import { loadGlbGeometry } from './lib/glb-geometry';
 import { createFlatTestTrack } from './lib/flat-track';
 import { checkBarrierCrashes, vehicleCrashCar } from './lib/barrier-crash';
+import { checkPlacementAndRecovery } from './lib/placement-recovery';
 
 const failures: string[] = [];
 const check = (name: string, ok: boolean, detail: string) => {
@@ -773,6 +774,10 @@ const crossesWall = (walls: WallQuery, ax: number, az: number, bx: number, bz: n
   // Missed braking points: flat out at 300 km/h into the outside barriers of Turns 1 and 2, then drive away
   checkBarrierCrashes(check, 'f12026-car', track, walls, () => vehicleCrashCar(new F12026CarSim(track, trackRoot)));
 }
+
+console.log('\n== Placement and blow-up recovery');
+// Rejoins (flashback, autopilot / AI rejoin, blow-up recovery) on Rwanda's hills, rolling at 260 km/h (issue #21)
+checkPlacementAndRecovery(check, 'f12026-car', track, () => new F12026CarSim(track, trackRoot));
 
 // ---------------------------------------------------------------------------
 // 11. Simulator adapter (F12026CarSim): track coordinates, autopilot laps on the colliders

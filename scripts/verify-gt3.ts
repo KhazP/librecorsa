@@ -17,6 +17,7 @@ import { F12026CarSim } from '../src/lib/sim/f12026-car/F12026CarSim';
 import { loadGlbGeometry } from './lib/glb-geometry';
 import { createFlatTestTrack } from './lib/flat-track';
 import { checkBarrierCrashes, vehicleCrashCar } from './lib/barrier-crash';
+import { checkPlacementAndRecovery } from './lib/placement-recovery';
 import { TrackWallQuery } from '../src/lib/sim/f12026-car/TrackColliderQuery';
 
 const failures: string[] = [];
@@ -300,6 +301,10 @@ console.log('\n== Autopilot on the Rwanda colliders');
 
   console.log('\n== Barrier hits (missed braking points, Track_Collider_Wall_*)');
   checkBarrierCrashes(check, 'GT3', track, TrackWallQuery.fromTrackRoot(root), () => vehicleCrashCar(createAmgGt3Sim(track, root)));
+
+  // Rejoins (flashback, autopilot / AI rejoin, blow-up recovery) on Rwanda's hills, rolling at 260 km/h (issue #21)
+  console.log('\n== Placement and blow-up recovery');
+  checkPlacementAndRecovery(check, 'GT3', track, () => createAmgGt3Sim(track, root));
 }
 
 console.log(failures.length ? `\n${failures.length} check(s) failed: ${failures.join(', ')}` : '\nAll GT3 checks passed.');

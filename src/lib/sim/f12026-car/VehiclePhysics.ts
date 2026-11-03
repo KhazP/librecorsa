@@ -126,6 +126,16 @@ const AUTO_BRAKE_DOWNSHIFT_PEDAL = 0.3;
 const AUTO_BRAKE_DOWNSHIFT_GAP_S = 0.25;
 /** Probe start above the suspension hardpoint (m) */
 const GROUND_PROBE_UP_M = 0.6;
+/** Placement: the ground under each tyre is looked for at most this far above the ground under the CG (m) */
+const ROAD_ATTITUDE_PROBE_UP_M = 1.5;
+/** Placement: steepest grade or camber the car is seated on (rad, ≈30 %) */
+const ROAD_ATTITUDE_MAX_RAD = 0.3;
+/**
+ * Past these the integration has blown up rather than the car crashed: 200 m/s is 720 km/h, and 40 rad/s is over six
+ * turns a second (a barrel roll or a spin at speed stays under ≈15 rad/s)
+ */
+const BLOWN_UP_SPEED_MS = 200;
+const BLOWN_UP_SPIN_RADS = 40;
 /** Least climb per step over an abrupt rise (m), so a car at rest still settles onto a raised surface */
 const STEP_CLIMB_MIN_M = 0.0005;
 /** Droop limiter stiffness / damping (N/m, Ns/m) */
@@ -1071,8 +1081,12 @@ export class VehiclePhysics {
     const hit = createGroundHit();
     const groundY = this.ground.query(x, z, probeY, hit) ? hit.height : 0;
     const pitch = Math.asin(this.staticPitchSin());
-    this.quaternion.setFromEuler(new THREE.Euler(pitch, yawRad, 0, 'YXZ'));
+    // Seated on the road's grade and camber, not level: level on a 10 % hill, one axle starts deep in its bump rubber
+    // and the other past its droop stop, and that spring torque pitches the car over before it is released
+    const road = this.roadAttitude(x, z, yawRad, groundY, hit);
+    this.quaternion.setFromEuler(new THREE.Euler(pitch - road.gradeRad, yawRad, road.bankRad, 'YXZ'));
     this.position.set(x, groundY + ch.cgHeight + this.rideHeightOffsetM, z);
+    this.clearDynamicState();
     this.velocity.set(0, 0, 0);
     this.angularVelocity.set(0, 0, 0);
     this.prevVelocity.set(0, 0, 0);
@@ -1095,7 +1109,8 @@ export class VehiclePhysics {
     this.mapAeroRearN = 0;
     this.mapAeroDragN = 0;
     this.wallPrevCg.copy(this.position);
-    if (!keepTyres) this.setTyreBlanketState();
+    // Tyres kept through a flashback are only worth keeping while their state is a number
+    if (!keepTyres || !this.tyreStateFinite()) this.setTyreBlanketState();
 
     // Hubs at their static height over the local ground
     this.updateBasis();
@@ -1132,7 +1147,9 @@ export class VehiclePhysics {
       this.updateBasis();
       this.velocity.x = speedMs * _ez.x;
       this.velocity.z = speedMs * _ez.z;
-      for (const w of this.wheels) w.omega = speedMs / Math.max(0.2, w.rollingRadius || 0.35);
+      // Free-rolling at the road speed under each tyre: held at speed / r, the tyres would drive (or brake) the
+      // pinned car through the whole settle, and on a grade that thrust pitches it up
+      for (const w of this.wheels) w.omega = (k === 0 ? speedMs : Math.max(0, w.vx)) / Math.max(0.2, w.rollingRadius || 0.35);
       if (rolling) this.engineOmega = 0.5 * (this.wheels[2].omega + this.wheels[3].omega) * this.totalRatio();
       this.substep(h, hold);
       this.position.x = x;
@@ -1154,7 +1171,9 @@ export class VehiclePhysics {
       const slope = (0.5 * (W[0].contactY + W[1].contactY) - 0.5 * (W[2].contactY + W[3].contactY)) / this.wheelbaseM;
       const n = Math.hypot(1, slope);
       this.velocity.set((speedMs * hx) / hl / n, (speedMs * slope) / n, (speedMs * hz) / hl / n);
+      this.angularVelocity.set(0, 0, 0);
       for (const w of this.wheels) {
+        w.omega = speedMs / Math.max(0.2, w.rollingRadius || 0.35);
         w.slipRatio = 0;
         w.tanSlipAngle = 0;
       }
@@ -1162,6 +1181,124 @@ export class VehiclePhysics {
     this.prevVelocity.copy(this.velocity);
     this.ffbSubframeSamples.length = 0;
     this.updateOutputs(0);
+  }
+
+  /**
+   * Grade along the heading (rad, + = uphill) and camber across it (rad, + = left side higher) of the ground under
+   * the four tyres of a car placed at (x, z) heading `yawRad`, for seating it on the road. A corner with no ground
+   * under it reads as `groundY`; a cliff edge or a wall face under one corner is clamped to a believable road.
+   */
+  private roadAttitude(x: number, z: number, yawRad: number, groundY: number, hit: GroundHit): { gradeRad: number; bankRad: number } {
+    const fx = Math.sin(yawRad);
+    const fz = Math.cos(yawRad);
+    const a = this.cgToFrontM;
+    const b = this.cgToRearM;
+    const tf = 0.5 * this.config.chassis.trackWidthFront;
+    const tr = 0.5 * this.config.chassis.trackWidthRear;
+    // Body +left = up × forward = (fz, 0, −fx)
+    const at = (along: number, left: number) => {
+      const px = x + fx * along + fz * left;
+      const pz = z + fz * along - fx * left;
+      return this.ground.query(px, pz, groundY + ROAD_ATTITUDE_PROBE_UP_M, hit) ? hit.height : groundY;
+    };
+    const fl = at(a, tf);
+    const fr = at(a, -tf);
+    const rl = at(-b, tr);
+    const rr = at(-b, -tr);
+    const gradeRad = Math.atan2(0.5 * (fl + fr) - 0.5 * (rl + rr), a + b);
+    const bankRad = Math.atan2(0.5 * (fl + rl) - 0.5 * (fr + rr), tf + tr);
+    const lim = ROAD_ATTITUDE_MAX_RAD;
+    return { gradeRad: THREE.MathUtils.clamp(gradeRad, -lim, lim), bankRad: THREE.MathUtils.clamp(bankRad, -lim, lim) };
+  }
+
+  /**
+   * Zero what the last run left in the body, wheels and drivetrain that `reset` does not set itself. After the state
+   * blew up (a non-finite number anywhere), any of these would carry the NaN straight into the settle and the car
+   * could never be put back on the track.
+   */
+  private clearDynamicState(): void {
+    for (const w of this.wheels) {
+      w.compression = 0;
+      w.compressionVel = 0;
+      w.suspensionForce = 0;
+      w.deflection = 0;
+      w.loadedRadius = 0;
+      w.rollingRadius = 0;
+      w.fz = 0;
+      w.fx = 0;
+      w.fy = 0;
+      w.mz = 0;
+      w.mx = 0;
+      w.vx = 0;
+      w.vy = 0;
+      w.slipVelX = 0;
+      w.slipAngleRad = 0;
+      w.combinedSlip = 0;
+      w.circleFraction = 0;
+      w.camberLeftRad = 0;
+      w.steerRad = 0;
+      w.toeRad = 0;
+      w.muX = 0;
+      w.muY = 0;
+      w.brakeTorqueNm = 0;
+      w.driveTorqueNm = 0;
+      if (!Number.isFinite(w.rotationRad)) w.rotationRad = 0;
+      if (!w.bandLoadShares.every(Number.isFinite)) w.bandLoadShares = [1 / 3, 1 / 3, 1 / 3];
+    }
+    this.clutchEngagement = 1;
+    this.lsdLockTorque = 0;
+    this.mgukTorque = 0;
+    this.aeroFrontN = 0;
+    this.aeroDownN = 0;
+    this.aeroDragN = 0;
+    this.rideFront = 0;
+    this.rideRear = 0;
+    this.turboTargetBar = 1;
+    this.ffbSum = 0;
+    this.ffbSamples = 0;
+    this.telemetry.ffbTorqueNorm = 0;
+    if (!Number.isFinite(this.ersEnergyJ)) this.ersEnergyJ = this.config.ers.ERS_MAX_CHARGE;
+  }
+
+  /** Tyre temperatures, wear and pressures, and the brake discs, are all finite */
+  private tyreStateFinite(): boolean {
+    const fin = Number.isFinite;
+    return this.wheels.every(
+      (w) =>
+        fin(w.surfaceTempC) &&
+        fin(w.coreTempC) &&
+        w.bandTempsC.every(fin) &&
+        w.bandCarcassTempsC.every(fin) &&
+        w.bandCoreTempsC.every(fin) &&
+        w.circumferentialTempsC.every(fin) &&
+        w.circumferentialWear.every(fin) &&
+        fin(w.wear) &&
+        fin(w.flatSpotSeverity) &&
+        fin(w.grainLevel) &&
+        fin(w.blisterLevel) &&
+        fin(w.dirtyLevel) &&
+        fin(w.pressurePsi) &&
+        fin(w.brakeDisc.surfaceTempC) &&
+        fin(w.brakeDisc.coreTempC) &&
+        fin(w.brakeDisc.muFactor)
+    );
+  }
+
+  /**
+   * The rigid body, wheels and engine hold numbers a car can have: all finite, under BLOWN_UP_SPEED_MS and spinning
+   * slower than BLOWN_UP_SPIN_RADS. False once the integration has blown up; the owner puts the car back with `reset`.
+   */
+  public stateIsSane(): boolean {
+    const p = this.position;
+    const v = this.velocity;
+    const w = this.angularVelocity;
+    const q = this.quaternion;
+    if (!Number.isFinite(p.x + p.y + p.z + v.x + v.y + v.z + w.x + w.y + w.z + q.x + q.y + q.z + q.w + this.engineOmega)) return false;
+    if (v.lengthSq() > BLOWN_UP_SPEED_MS * BLOWN_UP_SPEED_MS || w.lengthSq() > BLOWN_UP_SPIN_RADS * BLOWN_UP_SPIN_RADS) return false;
+    for (const wh of this.wheels) {
+      if (!Number.isFinite(wh.omega + wh.hubY + wh.hubVy + wh.slipRatio + wh.tanSlipAngle + wh.complianceRad)) return false;
+    }
+    return true;
   }
 
   /** Advance by a render frame (any dt); runs fixed 500 Hz steps */
