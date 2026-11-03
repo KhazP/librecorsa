@@ -74,5 +74,43 @@
       "license": "CC BY 4.0",
       "licenseUrl": "http://creativecommons.org/licenses/by/4.0/"
     }
+  },
+  {
+    "id": "daytona_oval",
+    "name": "Daytona International Speedway",
+    "layout": "Oval",
+    "country": "United States",
+    "city": "Daytona Beach, Florida",
+    "lengthM": 4047.14,
+    "turns": 7,
+    "direction": "anticlockwise",
+    "dataUrl": "/tracks/daytona_oval/track_data.json",
+    "credit": {
+      "title": "Daytona International Speedway 2007 layout",
+      "author": "Dave Love SketchFab",
+      "url": "https://sketchfab.com/3d-models/daytona-international-speedway-2007-layout-070db794e8ee46d399ee882f67e9a18d",
+      "short": null,
+      "license": "CC BY 4.0",
+      "licenseUrl": "http://creativecommons.org/licenses/by/4.0/"
+    }
+  },
+  {
+    "id": "daytona_road",
+    "name": "Daytona International Speedway",
+    "layout": "Road course",
+    "country": "United States",
+    "city": "Daytona Beach, Florida",
+    "lengthM": 5759.15,
+    "turns": 21,
+    "direction": "anticlockwise",
+    "dataUrl": "/tracks/daytona_road/track_data.json",
+    "credit": {
+      "title": "Daytona International Speedway 2007 layout",
+      "author": "Dave Love SketchFab",
+      "url": "https://sketchfab.com/3d-models/daytona-international-speedway-2007-layout-070db794e8ee46d399ee882f67e9a18d",
+      "short": null,
+      "license": "CC BY 4.0",
+      "licenseUrl": "http://creativecommons.org/licenses/by/4.0/"
+    }
   }
 ]
