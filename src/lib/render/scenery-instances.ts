@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { withBasePath } from "@/lib/base-path";
+import { SHADOW_PROXY_LAYER } from "@/lib/render/layers";
 import { applySceneryDetail, sceneryKind } from "@/lib/render/scenery-detail";
 
 /**
@@ -8,8 +9,10 @@ import { applySceneryDetail, sceneryKind } from "@/lib/render/scenery-detail";
  * lists in `extras.replaces` the circuit nodes it stands in for; those are hidden once it is in, so if it fails to
  * load the circuit keeps its own.
  *  - Instanced foliage (scripts/rwanda-scenery.mjs): openly licensed trees and shrubs, one EXT_mesh_gpu_instancing
- *    node per 250 m tile and model. Instances inside a tile are stored in hash order, so drawing the first N of each
- *    tile thins it out evenly: that is how Medium and Low quality draw fewer.
+ *    node per 250 m tile, model and level of detail. Each tile's levels go under a THREE.LOD at the tile's centre,
+ *    which the renderer switches per camera (main view and mirrors; the shadow pass reuses the main view's pick).
+ *    Instances inside a tile are stored in hash order, so drawing the first N of each tile thins it out evenly: that
+ *    is how Medium and Low quality draw fewer.
  *  - Generated stands (scripts/rwanda-stands.mjs): plain meshes whose concrete and roof materials carry the circuit's
  *    flat scenery names, so they get the same surface detail as its own buildings (scenery-detail.ts).
  */
@@ -54,7 +57,13 @@ export function attachSceneryInstances(trackRoot: THREE.Object3D, scenery: THREE
   let replaces: string[] = [];
   scenery.updateMatrixWorld(true);
   const box = new THREE.Box3();
+  const tiles = new Map<string, TileLevel[]>();
   scenery.traverse((obj) => {
+    const lod = obj.userData as Partial<TileLevel["extras"]>;
+    if (typeof lod.tile === "string" && typeof lod.level === "number") {
+      if (!tiles.has(lod.tile)) tiles.set(lod.tile, []);
+      tiles.get(lod.tile)!.push({ obj, extras: lod as TileLevel["extras"] });
+    }
     const r = obj.userData?.replaces;
     if (Array.isArray(r)) replaces = r.filter((x): x is string => typeof x === "string");
     const mesh = obj as THREE.InstancedMesh;
@@ -83,12 +92,127 @@ export function attachSceneryInstances(trackRoot: THREE.Object3D, scenery: THREE
     meshes.add(mesh);
     applyDensity(mesh);
   });
+  for (const levels of tiles.values()) groupTileLevels(levels);
   for (const name of replaces) {
     const node = trackRoot.getObjectByName(name);
     if (node) node.visible = false;
   }
   scenery.name = scenery.name || "Scenery_Instances";
   trackRoot.add(scenery);
+}
+
+/** One level of a foliage tile, with its node extras from scripts/rwanda-scenery.mjs */
+interface TileLevel {
+  obj: THREE.Object3D;
+  extras: { tile: string; level: number; from: number; until?: number; shadow: boolean; shadowFrom?: number };
+}
+
+/** Hysteresis on the switch distances, so a camera near one doesn't flicker between levels */
+const LOD_HYSTERESIS = 0.08;
+
+const _camPos = new THREE.Vector3();
+
+/**
+ * A THREE.LOD that measures from the camera to the nearest point of its tile's trees (their box), not to the tile's
+ * centre: in a 250 m tile a tree can stand 177 m from the centre, which would keep full detail far out to be sure
+ * of it close in. The level pick is THREE.LOD's own, with its hysteresis.
+ */
+class TileLod extends THREE.LOD {
+  readonly box = new THREE.Box3();
+
+  override update(camera: THREE.Camera): void {
+    const levels = this.levels;
+    if (levels.length <= 1) return;
+    _camPos.setFromMatrixPosition(camera.matrixWorld);
+    const distance = this.box.distanceToPoint(_camPos) / ((camera as THREE.PerspectiveCamera).zoom ?? 1);
+    levels[0].object.visible = true;
+    let i = 1;
+    for (; i < levels.length; i++) {
+      let levelDistance = levels[i].distance;
+      if (levels[i].object.visible) levelDistance -= levelDistance * levels[i].hysteresis;
+      if (distance < levelDistance) break;
+      levels[i - 1].object.visible = false;
+      levels[i].object.visible = true;
+    }
+    (this as unknown as { _currentLevel: number })._currentLevel = i - 1;
+    for (; i < levels.length; i++) levels[i].object.visible = false;
+  }
+}
+
+/**
+ * Puts a tile's levels under a TileLod at the tile's centre (each level offset back, so nothing moves): level 0
+ * near, the lighter ones from their `from` distance to the tile's trees, nothing past `until`. Only the levels
+ * marked so cast shadows; a level with `shadowFrom` casts through a shadow-only copy of that level's instances.
+ * Levels past 0 start hidden, so passes that run before the first frame (the TV cameras' occlusion rays) see the
+ * trees once, not once per level.
+ */
+function groupTileLevels(levels: TileLevel[]): void {
+  levels.sort((a, b) => a.extras.level - b.extras.level);
+  const first = levels[0].obj;
+  const parent = first.parent;
+  if (!parent) return;
+  const box = new THREE.Box3();
+  const part = new THREE.Box3();
+  first.traverse((o) => {
+    const m = o as THREE.InstancedMesh;
+    if (!m.isInstancedMesh) return;
+    m.computeBoundingBox();
+    box.union(part.copy(m.boundingBox!).applyMatrix4(m.matrixWorld));
+  });
+  if (box.isEmpty()) return;
+  const centre = box.getCenter(new THREE.Vector3());
+  const lod = new TileLod();
+  lod.box.copy(box);
+  lod.name = `Scenery_Tile_${levels[0].extras.tile}`;
+  lod.position.copy(centre);
+  parent.add(lod);
+  for (const { obj, extras } of levels) {
+    obj.position.sub(centre);
+    obj.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (m.isMesh) m.castShadow = extras.shadow !== false;
+    });
+    if (extras.level > 0) obj.visible = false;
+    lod.addLevel(obj, extras.from, LOD_HYSTERESIS);
+  }
+  for (const { obj, extras } of levels) {
+    const source = extras.shadowFrom === undefined ? undefined : levels.find((l) => l.extras.level === extras.shadowFrom);
+    if (source) addShadowProxies(obj, source.obj);
+  }
+  const last = levels[levels.length - 1].extras;
+  if (typeof last.until === "number") lod.addLevel(new THREE.Object3D(), last.until, LOD_HYSTERESIS);
+  lod.updateMatrixWorld(true);
+}
+
+/**
+ * Shadow-only copies of `source`'s instanced meshes, under `level` (so they show with it): same instances and
+ * materials, on the layer only the sun's shadow camera draws.
+ */
+function addShadowProxies(level: THREE.Object3D, source: THREE.Object3D): void {
+  const proxies: THREE.InstancedMesh[] = [];
+  source.traverse((o) => {
+    const m = o as THREE.InstancedMesh;
+    if (!m.isInstancedMesh) return;
+    const proxy = new THREE.InstancedMesh(m.geometry, m.material, m.instanceMatrix.count);
+    proxy.name = `${m.name}_ShadowProxy`;
+    proxy.instanceMatrix = m.instanceMatrix;
+    // Levels share one offset under their LOD: a mesh that is the level itself needs none of its own
+    if (m !== source) {
+      proxy.position.copy(m.position);
+      proxy.quaternion.copy(m.quaternion);
+      proxy.scale.copy(m.scale);
+    }
+    proxy.layers.set(SHADOW_PROXY_LAYER);
+    proxy.castShadow = true;
+    proxy.receiveShadow = false;
+    proxy.frustumCulled = true;
+    proxy.userData.sceneryFullCount = m.userData.sceneryFullCount;
+    proxy.computeBoundingSphere();
+    meshes.add(proxy);
+    applyDensity(proxy);
+    proxies.push(proxy);
+  });
+  for (const p of proxies) level.add(p);
 }
 
 /**
