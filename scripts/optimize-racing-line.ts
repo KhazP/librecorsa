@@ -212,6 +212,19 @@ const lapStart = base.lap;
 console.log(`Starting line (track_data.json ${LINE === 'gt3' ? 'roGt3' : 'ro'}): model lap ${lapStart.toFixed(3)} s`);
 if (SEED) console.log(`Seed line (${path.basename(SEED)}): model lap ${evalLine(splineToLine(c, lineBuf)).lap.toFixed(3)} s`);
 
+/**
+ * `--lock s0:s1[,s0:s1...]` (m along the lap): stretches where the line stays as seeded. The model's optimum can be a
+ * line no driver takes (a double apex through one corner, a hairpin hugged from turn-in), and `--seed` only moves the
+ * search's start, so lock the seeded shape there and optimise the rest of the lap around it.
+ */
+const LOCK = (arg('--lock') ?? '').split(',').filter(Boolean).map((r) => r.split(':').map(Number));
+const locked = new Uint8Array(m);
+for (let j = 0; j < m; j++) {
+  const sj = (Math.round(j * kSpan) / n) * track.totalLengthM;
+  locked[j] = LOCK.some(([a, b]) => sj >= a && sj <= b) ? 1 : 0;
+}
+if (LOCK.length) console.log(`Locked to the seed: ${LOCK.map(([a, b]) => `${a}-${b} m`).join(', ')} (${locked.reduce((x, y) => x + y, 0)} control points)`);
+
 // ---------- pattern search ----------
 const t0 = Date.now();
 let best = cost(c);
@@ -220,6 +233,7 @@ for (const delta of [0.8, 0.5, 0.3, 0.18, 0.1, 0.05]) {
   for (let sweep = 0; sweep < 4; sweep++) {
     let improved = 0;
     for (let j = 0; j < m; j++) {
+      if (locked[j]) continue;
       const orig = c[j];
       let accepted = false;
       for (const dir of [1, -1]) {
@@ -339,11 +353,13 @@ console.log(
 // The GT3 autopilot laps at 95 % pace from its own plan, so a few tenths either way over a 1.5-2.5 min lap say little
 // about the line; for it the physics lap only has to stay on the road and in that window, and the model lap decides
 const physTolS = LINE === 'gt3' ? Number(process.env.GT3_LAP_TOL ?? 0.5) : 0.05;
+// A line with `--lock` stretches is a deliberate shape (the real one where the model's optimum is not): it only has to
+// stay clean in the physics lap, whatever it costs against the starting line
 const optWins =
-  opt.lap < lapStart + 1e-3 &&
   physOpt.lapS !== null &&
   physOpt.offTrack === 0 &&
-  (physStart.lapS === null || physOpt.lapS < physStart.lapS + physTolS);
+  (LOCK.length > 0 ||
+    (opt.lap < lapStart + 1e-3 && (physStart.lapS === null || physOpt.lapS < physStart.lapS + physTolS)));
 // An optimised line the physics car could not hold (off the asphalt, or no lap) is re-optimised further from the
 // edges, up to twice, before falling back to the starting line
 const RETRY = Number(process.env.LINE_RETRY ?? 0);

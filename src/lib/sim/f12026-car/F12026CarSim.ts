@@ -192,6 +192,8 @@ function autopilotDecel(b: BrakingEnvelope, speedMs: number): number {
 const AP_PROFILE_STEP_M = 5;
 /** Lateral grip the autopilot plans corners with, as a fraction of its braking envelope */
 const AP_LATERAL_SHARE = 1.1;
+/** Banking the autopilot's plan ignores (rad, 4°): see `autopilotProfile` */
+const AP_BANK_DEADBAND_RAD = (4 * Math.PI) / 180;
 const apProfiles = new WeakMap<BuiltTrackData, Map<string, Float32Array>>();
 
 /**
@@ -211,39 +213,57 @@ function autopilotProfile(track: BuiltTrackData, profile: CarSimProfile): Float3
   const ds = L / n;
   const px = new Float64Array(n);
   const pz = new Float64Array(n);
+  const bank = new Float64Array(n);
   for (let i = 0; i < n; i++) {
     const smp = track.getSampleAtDistance(i * ds);
+    bank[i] = smp.bankingRad;
     const edge = smp.width / 2 - autopilotEdgeMarginM(profile);
     const off = THREE.MathUtils.clamp(aiLineOffsetM(smp, profile.racingLine), -edge, edge);
     px[i] = smp.position.x + smp.binormal.x * off;
     pz[i] = smp.position.z + smp.binormal.z * off;
   }
-  // Path curvature over ±10 m (circumcircle of three points), the larger of two neighbouring spans
+  // Path curvature over ±10 m (circumcircle of three points), the larger of two neighbouring spans; its sign (+ right)
+  // says which way the banking leans relative to the turn
   const k = new Float64Array(n);
+  const turnSign = new Float64Array(n);
   const span = Math.max(1, Math.round(10 / ds));
   for (let i = 0; i < n; i++) {
     const a = (i - span + n) % n;
     const c = (i + span) % n;
     const abx = px[i] - px[a], abz = pz[i] - pz[a], bcx = px[c] - px[i], bcz = pz[c] - pz[i];
     const acx = px[c] - px[a], acz = pz[c] - pz[a];
-    const cross = Math.abs(abx * bcz - abz * bcx);
-    k[i] = (2 * cross) / Math.max(1e-6, Math.hypot(abx, abz) * Math.hypot(bcx, bcz) * Math.hypot(acx, acz));
+    const cross = abx * bcz - abz * bcx;
+    turnSign[i] = Math.sign(cross) || 1;
+    k[i] = (2 * Math.abs(cross)) / Math.max(1e-6, Math.hypot(abx, abz) * Math.hypot(bcx, bcz) * Math.hypot(acx, acz));
+  }
+  // Banking into the turn (θ) as the circuit's speed profile has it: the tyres' share of the load is g cos θ and
+  // gravity carries g sin θ of the turn (Daytona's 31° turns are flat out; planned as flat corners they were not).
+  // The first AP_BANK_DEADBAND_RAD of it is left out: a road course's few degrees of camber, read off a scan, are
+  // drainage fall and noise, and the full-pace plan was tuned without them (Rwanda's lap then ran 0.2 m wide).
+  const gN = new Float64Array(n);
+  const gT = new Float64Array(n);
+  for (let i = 0; i < n; i++) {
+    const raw = bank[i] * turnSign[i];
+    const into = Math.sign(raw) * Math.max(0, Math.abs(raw) - AP_BANK_DEADBAND_RAD);
+    gN[i] = Math.cos(into);
+    gT[i] = 9.81 * Math.sin(into);
   }
   const v = new Float32Array(n);
-  // v²κ = share × decel(v), with decel(v) = c (low + aero (v / ref)²) up to ref and c (low + aero) above
+  // v²κ = share × decel(v) + g sin θ, with decel(v) = c (low cos θ + aero (v / ref)²) up to ref and
+  // c (low cos θ + aero) above
   const c = AP_LATERAL_SHARE * 0.85 * 9.81;
   for (let i = 0; i < n; i++) {
     const kk = Math.max(k[i], k[(i + 1) % n], k[(i - 1 + n) % n], 1e-5);
     const den = kk - (c * b.aeroG) / (b.refMs * b.refMs);
-    const vLow = den > 0 ? Math.sqrt((c * b.lowG) / den) : Infinity;
-    v[i] = Math.min(110, vLow < b.refMs ? vLow : Math.sqrt((c * (b.lowG + b.aeroG)) / kk));
+    const vLow = den > 0 ? Math.sqrt(Math.max(0, c * b.lowG * gN[i] + gT[i]) / den) : Infinity;
+    v[i] = Math.min(110, vLow < b.refMs ? vLow : Math.sqrt(Math.max(0, c * (b.lowG * gN[i] + b.aeroG) + gT[i]) / kk));
   }
   // Backward braking pass (twice round the lap so the wrap is consistent)
   for (let pass = 0; pass < 2 * n; pass++) {
     const i = (n - 1 - (pass % n) + n) % n;
     const j = (i + 1) % n;
     const vj = v[j];
-    const aLat = vj * vj * k[j];
+    const aLat = Math.max(0, vj * vj * k[j] - gT[j]);
     const aDec = autopilotDecel(b, vj);
     const aLong = Math.sqrt(Math.max(0.15 * aDec * aDec, aDec * aDec - (aLat / AP_LATERAL_SHARE) ** 2));
     v[i] = Math.min(v[i], Math.sqrt(vj * vj + 2 * aLong * ds));
