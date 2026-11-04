@@ -319,6 +319,40 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   /** The player car's dry autopilot pace, which the weather scales each frame */
   const autopilotPaceRef = useRef<{ car: unknown; pace: number }>({ car: null, pace: 1 });
 
+  /**
+   * An AI field built ahead, while the player is in the menus: building five AI cars (physics, autopilot plans) takes
+   * a few hundred ms, which would otherwise be the first frame of the race. Only valid for the car it was built against.
+   */
+  const aiFieldSpareRef = useRef<{ field: AiOpponentField; physics: SimulatorCar } | null>(null);
+  const prepareAiField = useCallback(() => {
+    const run = () => {
+      const physics = physicsRef.current;
+      // Never while driving: the build would be a hitch on track instead
+      if (!physics || phaseRef.current === "driving" || phaseRef.current === "loading") return;
+      if (aiFieldSpareRef.current?.physics === physics) return;
+      aiFieldSpareRef.current = {
+        field: new AiOpponentField(track, physics, AI_DRIVERS, getTrackEnv(), { skill: settingsRef.current.aiSkill }),
+        physics,
+      };
+    };
+    if (typeof window.requestIdleCallback === "function") window.requestIdleCallback(run, { timeout: 2000 });
+    else window.setTimeout(run, 200);
+  }, [track, getTrackEnv]);
+  /** The AI field for a race: the spare one when it was built for this car, else a new one */
+  const takeAiField = useCallback(
+    (physics: SimulatorCar) => {
+      const spare = aiFieldSpareRef.current;
+      aiFieldSpareRef.current = null;
+      const skill = settingsRef.current.aiSkill;
+      if (spare && spare.physics === physics) {
+        if (spare.field.skill !== skill) spare.field.setSkill(skill);
+        return spare.field;
+      }
+      return new AiOpponentField(track, physics, AI_DRIVERS, getTrackEnv(), { skill });
+    },
+    [track, getTrackEnv]
+  );
+
   const [virtualMirrorOn, setVirtualMirrorOn] = useState(false);
   const [telemetry, setTelemetry] = useState<CarTelemetry>(() => {
     const tempPhys = new F1Physics2026(track);
@@ -676,11 +710,11 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       return;
     }
     physics.aiAutopilot = false;
-    const field = new AiOpponentField(track, physics, AI_DRIVERS, getTrackEnv(), { skill: settingsRef.current.aiSkill });
+    const field = takeAiField(physics);
     field.startRace(true);
     aiFieldRef.current = field;
     setAiOpponents(true);
-  }, [track, getTrackEnv, unlockAudio]);
+  }, [takeAiField, unlockAudio]);
 
   const handleSelectTurn = useCallback(
     (turnNumber: number) => {
@@ -828,7 +862,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       if (physics) {
         physics.aiAutopilot = false;
         if (race) {
-          if (!aiFieldRef.current) aiFieldRef.current = new AiOpponentField(track, physics, AI_DRIVERS, getTrackEnv(), { skill: settingsRef.current.aiSkill });
+          if (!aiFieldRef.current) aiFieldRef.current = takeAiField(physics);
           aiFieldRef.current.startRace(true);
         } else {
           aiFieldRef.current = null;
@@ -847,8 +881,16 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       setLaunchHint(true);
       setPhase("driving");
     },
-    [track, getTrackEnv, setPhase]
+    [takeAiField, setPhase]
   );
+
+  // In the menus (after loading, after a race, after a car change): have the next race's AI field ready.
+  // The car swap replaces the physics in an effect; the timer lets it land first.
+  useEffect(() => {
+    if (phase === "loading" || phase === "driving" || !assetsReady) return;
+    const id = window.setTimeout(prepareAiField, 300);
+    return () => window.clearTimeout(id);
+  }, [phase, carId, assetsReady, prepareAiField]);
 
   /** A multiplayer race was started (by us as host, or by the host): line up in our grid slot behind the lights */
   const startMpRace = useCallback(

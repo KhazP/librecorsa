@@ -510,9 +510,15 @@ export class SimVisualFxManager {
         : loadVf26Template(AMR26_MODEL_URL, 'opponents');
     return template
       .then(() => {
-        // The rigs attach the cached template in their own `then`, registered before this one returns
-        for (const ghost of [false, true]) {
-          const rig = buildOpponentRig(vehicle, LIVERIES[0]);
+        // The rigs attach the cached template in their own `then`, registered before this one returns. One racing
+        // rig per AI driver, in its livery (a GT3 livery is a repainted texture: done here, not on lap one's first
+        // frame), and one ghost
+        const builds: { ghost: boolean; livery: LiveryConfig }[] = [
+          ...PREWARM_DRIVERS.map((code) => ({ ghost: false, livery: this.mapDriverToLivery(code) })),
+          { ghost: true, livery: LIVERIES[0] },
+        ];
+        for (const { ghost, livery } of builds) {
+          const rig = buildOpponentRig(vehicle, livery);
           rig.root.position.set(0, -500, 0);
           this.group.add(rig.root);
           const key = poolKey(vehicle, ghost);
@@ -676,6 +682,8 @@ export class SimVisualFxManager {
   }
 }
 
+/** The AI field's drivers (ai-opponents.ts AI_DRIVERS), whose liveries the pool is built in */
+const PREWARM_DRIVERS = ['KIG', 'MUS', 'NYA', 'RUB', 'HUY'] as const;
 const rigKind = (vehicle: VehicleModelId | undefined) => (vehicle === 'amg-gt3' ? 'gt3' : 'f1');
 const poolKey = (vehicle: VehicleModelId | undefined, ghost: boolean) => `${rigKind(vehicle)}${ghost ? ':ghost' : ''}`;
 
