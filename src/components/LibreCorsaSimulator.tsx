@@ -1714,6 +1714,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     // first frame is drawn, then let the loading screen offer to continue
     const loadStartMs = performance.now();
     let warmupStarted = false;
+    let loggedFirstFrame = false;
     const checkAssets = () => {
       if (warmupStarted || disposed) return;
       const tasks = assetProgress.get().tasks;
@@ -1726,16 +1727,55 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       // One frame later the car model has been swapped in by its own (earlier) listener
       requestAnimationFrame(() => {
         if (disposed) return;
-        renderer
-          .compileAsync(scene, camera)
-          .then(
-            () => assetProgress.done("shaders"),
-            () => assetProgress.fail("shaders")
-          )
+        // The scene is drawn into the composer's half-float target (no tone mapping, linear output), and three keys
+        // its programs on the bound target: compiled with none bound, every shader would be the wrong variant and
+        // recompile on the first frame after the player presses start. The program build runs synchronously inside
+        // compileAsync, so the target only has to be bound for the call itself.
+        const prevTarget = renderer.getRenderTarget();
+        renderer.setRenderTarget(postFx.composer.inputBuffer);
+        const compiled = renderer.compileAsync(scene, camera);
+        renderer.setRenderTarget(prevTarget);
+        compiled
+          .then(() => {
+            if (disposed) return;
+            warmUpGpu();
+            assetProgress.done("shaders");
+          }, () => assetProgress.fail("shaders"))
           .finally(() => {
             if (!disposed) setAssetsReady(true);
           });
       });
+    };
+    /**
+     * Behind the opaque loading screen: upload every texture, then draw one full frame through the composer with frustum
+     * culling off, so the shadow-map and post-processing programs and every vertex buffer are ready before the first
+     * visible frame instead of stalling it
+     */
+    const warmUpGpu = () => {
+      const t0 = performance.now();
+      const textures = new Set<THREE.Texture>();
+      const unculled: THREE.Object3D[] = [];
+      scene.traverse((o) => {
+        const mat = (o as THREE.Mesh).material as THREE.Material | THREE.Material[] | undefined;
+        for (const m of Array.isArray(mat) ? mat : mat ? [mat] : []) {
+          for (const v of Object.values(m)) if (v instanceof THREE.Texture) textures.add(v);
+        }
+        if (o.frustumCulled) {
+          o.frustumCulled = false;
+          unculled.push(o);
+        }
+      });
+      try {
+        for (const tex of textures) renderer.initTexture(tex);
+        postFx.render(0);
+      } catch (err) {
+        console.warn("GPU warm-up frame failed (the first frame will do it instead)", err);
+      } finally {
+        for (const o of unculled) o.frustumCulled = true;
+      }
+      if (process.env.NODE_ENV !== "production") {
+        console.info(`[load] GPU warm-up: ${textures.size} textures, ${(performance.now() - t0).toFixed(0)} ms`);
+      }
     };
     const unsubscribeAssets = assetProgress.subscribe(checkAssets);
     const assetWatchdog = window.setInterval(() => {
@@ -1750,6 +1790,10 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     checkAssets();
 
     const animate = (nowMs: number) => {
+      // Dev: a frame that took far longer than a frame is a stall worth knowing about (shader compiles, uploads, builds)
+      if (process.env.NODE_ENV !== "production" && lastTimeMs > 0 && nowMs - lastTimeMs > 120 && phaseRef.current !== "loading") {
+        console.info(`[load] long frame: ${(nowMs - lastTimeMs).toFixed(0)} ms (${phaseRef.current})`);
+      }
       const dtSeconds = Math.min((nowMs - lastTimeMs) / 1000, 0.05);
       lastTimeMs = nowMs;
 
@@ -2829,8 +2873,17 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         xrRig.quaternion.copy(camera.quaternion);
         renderer.render(scene, xrCamera);
       } else {
+        const t0 = loggedFirstFrame ? 0 : performance.now();
         postFx.render(dtSeconds);
         virtualMirror.draw();
+        if (!loggedFirstFrame) {
+          loggedFirstFrame = true;
+          if (process.env.NODE_ENV !== "production") {
+            // The frame right after the loading screen: it stalls when the warm-up missed something
+            renderer.getContext().finish();
+            console.info(`[load] first visible frame: ${(performance.now() - t0).toFixed(0)} ms`);
+          }
+        }
       }
 
       if (nowMs - lastHudSyncMs > 33) {
