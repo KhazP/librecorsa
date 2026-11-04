@@ -56,7 +56,7 @@
       "backfire_int": ["500_backfire3", "500_backfire4", "500_backfire5", "500_backfire6", "500_backfire7"],
       "backfire_ext": ["backfireEXT_1", "backfireEXT_3", "backfireEXT_5", "backfireEXT_7", "backfireEXT_9"]
     },
-    "shiftFallbackSample": "missgear",
+    "shiftFallbackSample": "backfireEXT_1",
     "throttleCurve": {
       "ext": [[0.0, 0.0], [0.1, 0.25], [0.25, 0.55], [0.5, 0.82], [0.75, 0.94], [1.0, 1.0]],
       "int": [[0.0, 0.0], [0.1, 0.28], [0.25, 0.58], [0.5, 0.84], [0.75, 0.95], [1.0, 1.0]]
@@ -123,7 +123,7 @@
       "backfire_int": ["500_backfire3", "500_backfire4", "500_backfire5", "500_backfire6", "500_backfire7"],
       "backfire_ext": ["backfireEXT_1", "backfireEXT_3", "backfireEXT_5", "backfireEXT_7", "backfireEXT_9"]
     },
-    "shiftFallbackSample": "missgear",
+    "shiftFallbackSample": "backfireEXT_1",
     "throttleCurve": {
       "ext": [[0.0, 0.0], [0.1, 0.25], [0.25, 0.55], [0.5, 0.82], [0.75, 0.94], [1.0, 1.0]],
       "int": [[0.0, 0.0], [0.1, 0.28], [0.25, 0.58], [0.5, 0.84], [0.75, 0.95], [1.0, 1.0]]
@@ -187,7 +187,7 @@
       "backfire_int": ["500_backfire3", "500_backfire4", "500_backfire5", "500_backfire6", "500_backfire7"],
       "backfire_ext": ["backfireEXT_1", "backfireEXT_3", "backfireEXT_5", "backfireEXT_7", "backfireEXT_9"]
     },
-    "shiftFallbackSample": "missgear",
+    "shiftFallbackSample": "backfireEXT_1",
     "throttleCurve": {
       "ext": [[0.0, 0.0], [0.1, 0.25], [0.25, 0.55], [0.5, 0.82], [0.75, 0.94], [1.0, 1.0]],
       "int": [[0.0, 0.0], [0.1, 0.28], [0.25, 0.58], [0.5, 0.84], [0.75, 0.95], [1.0, 1.0]]
@@ -251,7 +251,7 @@
       "backfire_int": ["500_backfire3", "500_backfire4", "500_backfire5", "500_backfire6", "500_backfire7"],
       "backfire_ext": ["backfireEXT_1", "backfireEXT_3", "backfireEXT_5", "backfireEXT_7", "backfireEXT_9"]
     },
-    "shiftFallbackSample": "missgear",
+    "shiftFallbackSample": "backfireEXT_1",
     "throttleCurve": {
       "ext": [[0.0, 0.0], [0.1, 0.25], [0.25, 0.55], [0.5, 0.82], [0.75, 0.94], [1.0, 1.0]],
       "int": [[0.0, 0.0], [0.1, 0.28], [0.25, 0.58], [0.5, 0.84], [0.75, 0.95], [1.0, 1.0]]
@@ -318,7 +318,7 @@
       "backfire_int": ["500_backfire3", "500_backfire4", "500_backfire5", "500_backfire6", "500_backfire7"],
       "backfire_ext": ["backfireEXT_1", "backfireEXT_3", "backfireEXT_5", "backfireEXT_7", "backfireEXT_9"]
     },
-    "shiftFallbackSample": "missgear#13",
+    "shiftFallbackSample": "backfireEXT_1",
     "throttleCurve": {
       "ext": [[0.0, 0.0], [0.1, 0.25], [0.25, 0.55], [0.5, 0.82], [0.75, 0.94], [1.0, 1.0]],
       "int": [[0.0, 0.0], [0.1, 0.28], [0.25, 0.58], [0.5, 0.84], [0.75, 0.95], [1.0, 1.0]]
@@ -381,7 +381,7 @@
       "backfire_int": ["500_backfire3", "500_backfire4", "500_backfire5", "500_backfire6", "500_backfire7"],
       "backfire_ext": ["backfireEXT_1", "backfireEXT_3", "backfireEXT_5", "backfireEXT_7", "backfireEXT_9"]
     },
-    "shiftFallbackSample": "missgear",
+    "shiftFallbackSample": "backfireEXT_1",
     "limiterFallbackSample": "LimiterIntOn1#12",
     "throttleCurve": {
       "ext": [[0.0, 0.0], [0.1, 0.3], [0.25, 0.6], [0.5, 0.85], [0.75, 0.95], [1.0, 1.0]],
@@ -445,7 +445,7 @@
       "backfire_int": ["500_backfire3", "500_backfire4", "500_backfire5", "500_backfire6", "500_backfire7"],
       "backfire_ext": ["backfireEXT_1", "backfireEXT_3", "backfireEXT_5", "backfireEXT_7", "backfireEXT_9"]
     },
-    "shiftFallbackSample": "missgear",
+    "shiftFallbackSample": "backfireEXT_1",
     "limiterFallbackSample": "LimiterIntOn1#1",
     "throttleCurve": {
       "ext": [[0.0, 0.0], [0.1, 0.3], [0.25, 0.6], [0.5, 0.85], [0.75, 0.95], [1.0, 1.0]],
@@ -510,7 +510,7 @@
       "backfire_int": ["500_backfire3", "500_backfire4", "500_backfire5", "500_backfire6", "500_backfire7"],
       "backfire_ext": ["backfireEXT_1", "backfireEXT_3", "backfireEXT_5", "backfireEXT_7", "backfireEXT_9"]
     },
-    "shiftFallbackSample": "missgear#13",
+    "shiftFallbackSample": "backfireEXT_1",
     "throttleCurve": {
       "ext": [[0.0, 0.0], [0.1, 0.28], [0.25, 0.58], [0.5, 0.84], [0.75, 0.95], [1.0, 1.0]],
       "int": [[0.0, 0.0], [0.1, 0.28], [0.25, 0.58], [0.5, 0.84], [0.75, 0.95], [1.0, 1.0]]

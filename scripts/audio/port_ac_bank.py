@@ -435,11 +435,24 @@ def derive_limiter_from_high_rpm(high_on_x: np.ndarray, freq_hz: float = 12.5, d
     return prepare_oneshot(seg, max_s=dur_s, target_peak=0.78)
 
 
+def from_onset(x: np.ndarray, pre_s: float = 0.004) -> np.ndarray:
+    """The clip from just before its first strong transient (a backfire recording starts with silence or a lead-in)."""
+    a = np.abs(x[:, 0]) if x.ndim == 2 else np.abs(x)
+    peak = float(a.max()) if len(a) else 0.0
+    if peak <= 1e-6:
+        return x
+    hit = int(np.argmax(a > 0.25 * peak))
+    return x[max(0, hit - int(pre_s * RATE)) :]
+
+
 def derive_shift_from_bank(
     base_x: np.ndarray, high_off_x: np.ndarray, role: str
 ) -> np.ndarray:
-    """Derive gear_up, gear_down, or shift_cut from bank transient (missgear/backfire) + engine bark."""
-    base_m = ensure_2d(base_x).mean(axis=1, keepdims=True)
+    """Derive gear_up, gear_down, or shift_cut from the bank's exhaust crack (a backfire) + engine bark.
+
+    A seamless-shift F1 upshift is an ignition cut: a short exhaust crack as the engine drops onto the next gear,
+    not a gearbox noise. The base is a backfire recording, taken from its onset."""
+    base_m = from_onset(ensure_2d(base_x).mean(axis=1, keepdims=True))
     off_m = pick_steady_window(high_off_x, int(0.25 * RATE)).mean(axis=1, keepdims=True)
     if role == "gear_up":
         dur = int(0.16 * RATE)
@@ -736,8 +749,14 @@ def port_car(car_id: str, cfg: dict[str, Any], ffmpeg: str) -> dict[str, Any]:
     _, ext_off_x = ext_bank.get(ext_off_spec)
 
     shift_source_name = cfg.get("shiftFallbackSample")
+    # AC's "missgear" is the missed-gear grind: never a shift sound
+    if shift_source_name and "missgear" in shift_source_name.lower():
+        raise SystemExit(f"{car_id}: shiftFallbackSample {shift_source_name!r} is the missed-gear grind; use a backfire")
     if shift_source_name:
-        _, shift_base_x = int_bank.get(shift_source_name)
+        try:
+            _, shift_base_x = int_bank.get(shift_source_name)
+        except KeyError:
+            _, shift_base_x = ext_bank.get(shift_source_name)
         used_samples.add(f"oneshot:{shift_source_name}")
     else:
         shift_base_x = high_off_x

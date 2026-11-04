@@ -182,6 +182,9 @@ for (const [bankId, { sound, maxIdleRpm }] of seenBanks) {
       o.seconds > 0.02 && o.seconds <= 4.0 && o.peak > 0.05 && o.peak <= 1.0 && (o.channels === 1 || o.channels === 2)
     );
   }
+  // AC's "missgear" is the missed-gear grind: a shift built from it sounds like a crunched gearbox on every change
+  const grind = (m.oneshots ?? []).filter((o) => /missgear/i.test(o.fsbName ?? ""));
+  check(`${bankId} no one-shot is cut from the missed-gear grind`, grind.length === 0, grind.map((o) => o.role).join(", "));
   const requiredRoles = ["gear_up", "gear_down", "backfire_int", "backfire_ext", "limiter"];
   if ((m.turbo ?? []).length > 0) requiredRoles.push("blowoff");
   check(

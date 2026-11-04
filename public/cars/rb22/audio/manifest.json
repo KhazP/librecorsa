@@ -277,7 +277,7 @@
     },
     {
       "file": "oneshot_gear_up.ogg",
-      "fsbName": "missgear",
+      "fsbName": "backfireEXT_1",
       "role": "gear_up",
       "channels": 1,
       "seconds": 0.148,
@@ -285,7 +285,7 @@
     },
     {
       "file": "oneshot_gear_down.ogg",
-      "fsbName": "missgear",
+      "fsbName": "backfireEXT_1",
       "role": "gear_down",
       "channels": 1,
       "seconds": 0.22,
@@ -293,7 +293,7 @@
     },
     {
       "file": "oneshot_shift_cut.ogg",
-      "fsbName": "missgear",
+      "fsbName": "backfireEXT_1",
       "role": "shift_cut",
       "channels": 1,
       "seconds": 0.13,
