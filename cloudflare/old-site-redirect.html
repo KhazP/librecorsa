@@ -1,0 +1,113 @@
+<!doctype html>
+<!--
+  Served at the old address, https://khazp.github.io/librecorsa/ (as index.html and 404.html), so every old link,
+  bookmark and article keeps working: /librecorsa/<path>?<query>#<hash> goes to https://librecorsa.org/<path>?<query>#<hash>.
+  The first time a player who has saved data comes through, it posts that data to librecorsa.org/__migrate
+  (cloudflare/worker.js), which imports it there. Deployed by .github/workflows/deploy.yml.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LibreCorsa has moved to librecorsa.org</title>
+<link rel="canonical" href="https://librecorsa.org/">
+<noscript><meta http-equiv="refresh" content="0; url=https://librecorsa.org/"></noscript>
+<style>
+  :root { color-scheme: dark; }
+  html, body { margin: 0; height: 100%; background: #07070c; color: #c9c9d4; font: 15px/1.5 system-ui, sans-serif; }
+  body { display: grid; place-items: center; text-align: center; padding: 0 16px; }
+  a { color: #fff; }
+</style>
+<script>
+(function () {
+  var NEW_ORIGIN = "https://librecorsa.org";
+  var OLD_BASE = "/librecorsa";
+  var KEY_PREFIXES = ["bugesera.", "lc.", "librecorsa."];
+  var SENT_FLAG = "librecorsa-moved-to-org"; // not under a migrated prefix
+
+  var path = location.pathname;
+  if (path === OLD_BASE || path.indexOf(OLD_BASE + "/") === 0) path = path.slice(OLD_BASE.length);
+  path = path.replace(/\/index\.html$/, "/") || "/";
+  if (path.charAt(0) !== "/") path = "/" + path;
+  var to = path + location.search + location.hash;
+
+  var left = false;
+  function plainRedirect() { if (!left) { left = true; location.replace(NEW_ORIGIN + to); } }
+
+  // Never leave a visitor waiting on storage: a fresh visitor (most people coming from a link) goes straight through
+  setTimeout(plainRedirect, 4000);
+
+  var local = {};
+  var count = 0;
+  try {
+    if (localStorage.getItem(SENT_FLAG)) return plainRedirect();
+    for (var i = 0; i < localStorage.length; i++) {
+      var key = localStorage.key(i);
+      for (var p = 0; p < KEY_PREFIXES.length; p++) {
+        if (key && key.indexOf(KEY_PREFIXES[p]) === 0) { local[key] = localStorage.getItem(key); count++; break; }
+      }
+    }
+  } catch (e) { return plainRedirect(); }
+
+  function send(laps) {
+    if (left) return;
+    if (!count && !laps.length) return plainRedirect();
+    var payload = JSON.stringify({ local: local, laps: laps });
+    if (payload.length > 50 * 1024 * 1024) payload = JSON.stringify({ local: local, laps: [] });
+    try { localStorage.setItem(SENT_FLAG, String(Date.now())); } catch (e) {}
+    left = true;
+    var form = document.createElement("form");
+    form.method = "POST";
+    form.enctype = "multipart/form-data";
+    form.action = NEW_ORIGIN + "/__migrate";
+    [["to", to], ["payload", payload]].forEach(function (f) {
+      var input = document.createElement("input");
+      input.type = "hidden";
+      input.name = f[0];
+      input.value = f[1];
+      form.appendChild(input);
+    });
+    document.documentElement.appendChild(form);
+    form.submit();
+  }
+
+  // Ghost laps live in IndexedDB (src/lib/sim/ghost-store.ts); only read them if that database exists
+  function readLaps(cb) {
+    try {
+      var open = function () {
+        var req = indexedDB.open("bugesera-laps");
+        req.onerror = function () { cb([]); };
+        req.onsuccess = function () {
+          var db = req.result;
+          if (!db.objectStoreNames.contains("bestLaps")) { db.close(); return cb([]); }
+          var store = db.transaction("bestLaps", "readonly").objectStore("bestLaps");
+          var keys = store.getAllKeys();
+          var values = store.getAll();
+          values.onsuccess = function () {
+            var laps = [];
+            for (var i = 0; i < values.result.length; i++) {
+              if (typeof keys.result[i] === "string") laps.push([keys.result[i], values.result[i]]);
+            }
+            db.close();
+            cb(laps);
+          };
+          values.onerror = function () { db.close(); cb([]); };
+        };
+      };
+      if (typeof indexedDB === "undefined") return cb([]);
+      if (indexedDB.databases) {
+        indexedDB.databases().then(function (dbs) {
+          if (dbs.some(function (d) { return d.name === "bugesera-laps"; })) open(); else cb([]);
+        }, function () { cb([]); });
+      } else open();
+    } catch (e) { cb([]); }
+  }
+
+  readLaps(send);
+})();
+</script>
+</head>
+<body>
+  <p>LibreCorsa has moved to <a href="https://librecorsa.org/">librecorsa.org</a>. Taking you there…</p>
+</body>
+</html>
