@@ -142,8 +142,11 @@ function loadTrackGlb(
   /** Scenery files that replace some of the circuit's own (scenery-instances.ts); loaded alongside */
   sceneryUrls: readonly string[] = [],
   /** A manifest of the circuit's own textures replacing a track pack's images (scenery-textures.ts) */
-  sceneryTexturesUrl: string | null = null
+  sceneryTexturesUrl: string | null = null,
+  /** The scan's racing-surface materials (track data `mesh.roadMaterials`): drawn with the asphalt shader */
+  roadMaterials: readonly string[] = []
 ): void {
+  const roadMaterialNames = new Set(roadMaterials);
   if (typeof window === "undefined" || typeof fetch === "undefined") {
     return;
   }
@@ -223,7 +226,9 @@ function loadTrackGlb(
         for (const mat of mats) {
           applySceneryDetail(mat, { baseY, treeShading });
           if (!(mat instanceof THREE.MeshStandardMaterial)) continue;
-          if (topName === "Track_Asphalt_Road") applyAsphaltSheen(mat, sheenMask);
+          if (topName === "Track_Asphalt_Road" || (topName === "Track_Model" && roadMaterialNames.has(mat.name))) {
+            applyAsphaltSheen(mat, sheenMask);
+          }
           for (const tex of [mat.map, mat.roughnessMap, mat.metalnessMap, mat.normalMap]) {
             if (tex) tex.anisotropy = 8;
           }
@@ -1291,7 +1296,8 @@ export function buildRwandaCircuitScene(
     },
     sheenMask,
     isRwanda ? ["/tracks/rwanda/scenery/foliage.glb", "/tracks/rwanda/scenery/stands.glb", "/tracks/rwanda/scenery/props.glb"] : [],
-    isRwanda ? "/tracks/rwanda/scenery/textures/textures.json" : null
+    isRwanda ? "/tracks/rwanda/scenery/textures/textures.json" : null,
+    track.roadMaterials ?? []
   );
 
   return {
