@@ -7,5 +7,5 @@ contact_links:
     url: https://github.com/KhazP/librecorsa/security/advisories/new
     about: Report vulnerabilities privately, not in a public issue.
   - name: Play LibreCorsa
-    url: https://khazp.github.io/librecorsa/
+    url: https://librecorsa.org/
     about: The live sim in your browser.

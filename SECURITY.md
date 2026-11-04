@@ -16,4 +16,4 @@ they were driven. Reports of a specific cheated entry can go in a normal issue.
 
 ## Supported versions
 
-Only the current `main` branch, which is what https://khazp.github.io/librecorsa/ runs.
+Only the current `main` branch, which is what https://librecorsa.org/ runs.
