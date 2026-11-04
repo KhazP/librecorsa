@@ -13,6 +13,7 @@ import {
 } from "@/lib/render/tyre-deformation";
 import { applyRearRainLight } from "@/lib/render/golden-hour-environment";
 import { setVf26LiveryColours, upgradeVf26Materials } from "@/lib/render/car-materials";
+import { applyLivery, collectPaintSlots, type PaintKeys } from "@/lib/render/livery-repaint";
 import { moveToDriverHeadLayer } from "@/lib/render/layers";
 
 /**
@@ -27,6 +28,16 @@ import { moveToDriverHeadLayer } from "@/lib/render/layers";
  * with the selected LiveryConfig colours.
  */
 export const AMR26_MODEL_URL = "/amr26/model/amr26.glb";
+
+/**
+ * Factory colours of the AMR26 EXT_SKIN artwork (teal body, black sidepods and pixel fade, lime fade and tips),
+ * repainted per livery when the GLB carries no livery mask
+ */
+const AMR26_PAINT_KEYS: PaintKeys = {
+  primary: ["#006563"],
+  secondary: ["#181818", "#101410"],
+  accent: ["#cee35a"],
+};
 
 export interface Vf26CameraAnchor {
   /** Rig-local position (m): +X left, +Y up, +Z forward */
@@ -410,8 +421,16 @@ export function attachVf26Model(
     }
   };
 
+  // Without a mask, the authored EXT_SKIN artwork (also sampled by EXT_DECALS) is repainted per livery
+  const paintSlots = liveryMask
+    ? []
+    : collectPaintSlots(
+        bodyGroup,
+        (m) => (m.name === "EXT_SKIN" || m.name === "EXT_DECALS") && !!(m as THREE.MeshStandardMaterial).map
+      );
   const setLivery = (livery: LiveryConfig) => {
     if (liveryMask) setVf26LiveryColours(livery.primary, livery.secondary, livery.accent);
+    else applyLivery(paintSlots, AMR26_PAINT_KEYS, livery);
   };
 
   const dispose = () => {
