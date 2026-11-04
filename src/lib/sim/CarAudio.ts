@@ -547,7 +547,9 @@ export class CarAudioEngine {
       vf26.update(
         {
           rpm: telemetry.rpm * rpmScale,
-          throttle: telemetry.throttle,
+          // The load the engine delivers: the pedal less the traction control's cut, so the cut is heard
+          throttle: telemetry.throttle * (1 - THREE.MathUtils.clamp(telemetry.liveTuner?.tcCutFraction ?? 0, 0, 1)),
+          pedal: telemetry.throttle,
           gear: telemetry.gear,
           speedKmh: telemetry.speedKmh,
           boostBarGauge: Math.max(0, telemetry.turboBoostBar - 1),
