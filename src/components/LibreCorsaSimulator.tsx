@@ -1688,6 +1688,9 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     const neckPitchQuat = new THREE.Quaternion();
     const neckRollQuat = new THREE.Quaternion();
     const neckLookDelta = new THREE.Vector3();
+    // The head's sense of "up": follows the car's up with a 0.4 s lag, so quick body pitch and roll are held off
+    const headUp = new THREE.Vector3(0, 1, 0);
+    const headCross = new THREE.Vector3();
     const radarRel = new THREE.Vector3();
     const radarFwd = new THREE.Vector3();
     const ghostQuat = new THREE.Quaternion();
@@ -2352,7 +2355,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         camera.quaternion
           .multiply(CAM_FORWARD_FLIP)
           .multiply(new THREE.Quaternion().setFromAxisAngle(CAM_X_AXIS, vf26Cam.pitchRad));
-        if (mode === "cockpit" || mode === "tv_pod") {
+        const headLocked = mode === "cockpit" && settingsNow.hud.headMovement === "static";
+        if ((mode === "cockpit" && !headLocked) || mode === "tv_pod") {
           // Micro-shake: pitch about the lens' X axis, roll about its view axis, heave along the car's up
           shakeEuler.set(shake.pitchRad, 0, shake.rollRad);
           camera.quaternion.multiply(shakeQuat.setFromEuler(shakeEuler));
@@ -2609,18 +2613,17 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         menuViewOffset = false;
       }
 
-      // Cockpit Neck FX: 4-part driver head orientation model (not active in VR where the headset tracks the player's head)
-      // 1. Velocity-vector slide alignment with driftState hysteresis
-      // 2. Steering-angle look-in attenuated by front wheelspin and slide state
-      // 3. 20 m track-spline apex lookahead (yaw into apexes, pitch into crests/dips)
-      // 4. 30% horizon roll stabilization against chassis banking
-      const neckOn = settingsNow.hud.neckFx && driving && !inVr && (mode === "cockpit" || mode === "cockpit_shoulder");
+      // Driver's head (not in VR, where the headset is the head). A neck holds the eyes steady against the
+      // chassis' suspension pitch and roll and turns them a little toward where the car is going; the road's own
+      // camber and gradient stay in view. "Locked" leaves the camera bolted to the chassis.
+      const neckOn =
+        settingsNow.hud.headMovement === "natural" && driving && !inVr && (mode === "cockpit" || mode === "cockpit_shoulder");
       let neckYawTarget = 0;
       let neckPitchTarget = 0;
       let neckRollTarget = 0;
       if (neckOn) {
         const speedMs = Math.hypot(physics.vxMs, physics.vyMs);
-        // 1. Velocity alignment (+X is carLeft, so +vyMs means sliding toward carLeft -> positive yaw around carUp)
+        // Look toward the direction of travel in a slide (+vyMs is toward carLeft: positive yaw about carUp)
         const sliding = speedMs > 3 ? physics.vyMs / Math.max(3, speedMs) : 0;
         const slidingMult = Math.min(Math.abs(sliding) * 0.8, 1);
         if (slidingMult > 0.2) {
@@ -2628,55 +2631,44 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         } else {
           neckDriftState = Math.min(1, neckDriftState + 0.25 * dtSeconds);
         }
-        const thMult = Math.max(slidingMult - 0.16 * neckDriftState, 0) * Math.sign(sliding);
-        const velYaw = THREE.MathUtils.clamp(thMult * 0.65, -0.45, 0.45);
+        const velYaw = THREE.MathUtils.clamp(Math.max(slidingMult - 0.2, 0) * Math.sign(sliding) * 0.35, -0.14, 0.14);
 
-        // 2. Steering look-in (+steerAngleNorm is right turn -> negative yaw around carUp)
-        const frontSpin = Math.max(
-          0,
-          physics.telemetry.wheelSlipRatios[0] ?? 0,
-          physics.telemetry.wheelSlipRatios[1] ?? 0
-        );
-        const steerFade =
-          (THREE.MathUtils.clamp(speedMs / 10 - 0.1, 0, 1) / (1 + frontSpin)) *
-          (neckDriftState * neckDriftState);
-        const steerYaw = THREE.MathUtils.clamp(
-          -physics.steerAngleNorm * physics.maxSteerAngleRad * 0.45 * steerFade,
-          -0.26,
-          0.26
-        );
-
-        // 3. 20 m track-spline apex lookahead
+        // Look toward the corner 25 m ahead: a few degrees, faded out off the road and at walking pace
         const aheadSample = track.getSampleAtDistance(
-          (physics.sMeters + 20) % Math.max(1, track.totalLengthM)
+          (physics.sMeters + 25) % Math.max(1, track.totalLengthM)
         );
         neckLookDelta.copy(aheadSample.position).sub(physics.worldPosition);
         const chordLen = neckLookDelta.length();
         let apexYaw = 0;
-        let apexPitch = 0;
         if (chordLen > 1) {
           const latDot = neckLookDelta.dot(carRight) / chordLen;
-          const vertDot = neckLookDelta.dot(carUp) / chordLen;
           const fwdDot = neckLookDelta.dot(carForward) / chordLen;
           const trackWeight =
             THREE.MathUtils.clamp((15 - Math.abs(physics.lateralOffsetM)) / 7, 0, 1) *
             THREE.MathUtils.clamp(fwdDot, 0, 1) *
-            (neckDriftState * neckDriftState) *
+            neckDriftState *
             THREE.MathUtils.clamp((speedMs - 4) / 12, 0, 1);
-          apexYaw = THREE.MathUtils.clamp(-latDot * 0.38, -0.26, 0.26) * trackWeight;
-          apexPitch = THREE.MathUtils.clamp(vertDot * 0.30, -0.14, 0.14) * trackWeight;
+          apexYaw = THREE.MathUtils.clamp(-latDot * 0.22, -0.1, 0.1) * trackWeight;
         }
 
-        neckYawTarget = THREE.MathUtils.clamp(velYaw + steerYaw + apexYaw, -0.52, 0.52);
-        neckPitchTarget = apexPitch;
-        // 4. Horizon roll lock (30% stabilization against chassis roll)
-        neckRollTarget = THREE.MathUtils.clamp(-physics.rollRad * 0.30, -0.18, 0.18);
+        neckYawTarget = THREE.MathUtils.clamp(velYaw + apexYaw, -0.17, 0.17);
+        // Hold the head against the body's quick pitch and roll. The VF26 reports its suspension pitch (about the
+        // car's +X, carLeft) and roll (about carForward) apart from its pose; the rigid-body cars carry theirs in
+        // the pose, which the lagging head-up takes out.
+        headUp.lerp(carUp, Math.min(1, dtSeconds * 2.5)).normalize();
+        headCross.crossVectors(carUp, headUp);
+        const bodyPitch = Math.atan2(headCross.dot(carRight), carUp.dot(headUp));
+        const bodyRoll = Math.atan2(headCross.dot(carForward), carUp.dot(headUp));
+        neckPitchTarget = THREE.MathUtils.clamp((physics.pitchRad + bodyPitch) * 0.6, -0.06, 0.06);
+        neckRollTarget = THREE.MathUtils.clamp((-physics.rollRad + bodyRoll) * 0.6, -0.08, 0.08);
       } else {
         neckDriftState = 1;
+        headUp.copy(carUp);
       }
-      neckYaw += (neckYawTarget - neckYaw) * Math.min(1, dtSeconds * 8);
-      neckPitch += (neckPitchTarget - neckPitch) * Math.min(1, dtSeconds * 8);
-      neckRoll += (neckRollTarget - neckRoll) * Math.min(1, dtSeconds * 12);
+      // The yaw eases in like a turn of the head; the stabilisation follows the chassis closely
+      neckYaw += (neckYawTarget - neckYaw) * Math.min(1, dtSeconds * 3);
+      neckPitch += (neckPitchTarget - neckPitch) * Math.min(1, dtSeconds * 14);
+      neckRoll += (neckRollTarget - neckRoll) * Math.min(1, dtSeconds * 14);
       if (
         (Math.abs(neckYaw) > 1e-4 || Math.abs(neckPitch) > 1e-4 || Math.abs(neckRoll) > 1e-4) &&
         (mode === "cockpit" || mode === "cockpit_shoulder")

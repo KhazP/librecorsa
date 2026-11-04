@@ -124,8 +124,11 @@ export interface HudSettings {
   drsBeep: boolean;
   /** Short beep 150 rpm before the rev limiter */
   shiftBeep: boolean;
-  /** Onboard camera turns gently into the car's direction of travel (feel the rear slide) */
-  neckFx: boolean;
+  /**
+   * Driver's-eye camera: "natural" holds the head against the chassis' suspension pitch and roll, the way a neck
+   * does, and turns it a little toward the corner; "static" bolts it to the car with no head motion or shake.
+   */
+  headMovement: "natural" | "static";
 }
 
 export type VirtualMirrorMode = "auto" | "always" | "off";
@@ -192,7 +195,7 @@ export const DEFAULT_HUD_SETTINGS: HudSettings = {
   mfdAutoCollapse: true,
   drsBeep: true,
   shiftBeep: false,
-  neckFx: true,
+  headMovement: "natural",
 };
 
 export const DEFAULT_GRAPHICS_SETTINGS: GraphicsSettings = { quality: "high", renderScale: 1 };
@@ -402,7 +405,8 @@ function parseHud(v: unknown): HudSettings {
     mfdAutoCollapse: bool(v.mfdAutoCollapse, d.mfdAutoCollapse),
     drsBeep: bool(v.drsBeep, d.drsBeep),
     shiftBeep: bool(v.shiftBeep, d.shiftBeep),
-    neckFx: bool(v.neckFx, d.neckFx),
+    // Older saves: Neck FX switched off asked for a still camera
+    headMovement: oneOf(v.headMovement, ["natural", "static"] as const, v.neckFx === false ? "static" : d.headMovement),
   };
 }
 
