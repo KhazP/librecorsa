@@ -1728,7 +1728,7 @@ export class F1Physics2026 {
         const rpmAfter = rearOmega * this.overallRatio(desired) * RADS2RPM;
         if (rpmAfter > VF26_ENGINE.maxRpm - 500) desired = drv.gear;
       }
-    } else if (this.autoGearbox && drv.gear >= 1 && drv.autoShiftCooldownS <= 0) {
+    } else if ((this.autoGearbox || this.aiAutopilot) && drv.gear >= 1 && drv.autoShiftCooldownS <= 0) {
       const rpm = drv.engineOmega * RADS2RPM;
       if (drv.gear < 8 && rpm > VF26_DRIVETRAIN.autoUpshiftRpm && drv.clutchLocked && brake < 0.1) {
         desired = drv.gear + 1;

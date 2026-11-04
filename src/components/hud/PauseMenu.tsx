@@ -117,6 +117,8 @@ export interface PauseMenuProps extends MultiplayerPanelProps {
   isMuted: boolean;
   mouseSteerEnabled: boolean;
   gamepadAssist: boolean;
+  autoGearbox?: boolean;
+  onSetAutoGearbox?: (enabled: boolean) => void;
   gamepadRumble: boolean;
   aiOpponents: boolean;
   /** AI opponents' skill (0 Rookie … 100 Alien) and its setter */
@@ -154,7 +156,7 @@ export interface PauseMenuProps extends MultiplayerPanelProps {
   /** Rows of the controls cheat-sheet, from the player's bindings */
   controlsCheatSheet?: readonly (readonly [string, string])[];
   /** Key names for the hints on the toggles (defaults: the original layout) */
-  keyNames?: Partial<Record<"camera" | "racingLine" | "mute" | "mouseSteer" | "autopilot" | "restart", string>>;
+  keyNames?: Partial<Record<"camera" | "racingLine" | "mute" | "mouseSteer" | "autopilot" | "restart" | "shiftUp" | "shiftDown", string>>;
   /** HUD layout, graphics, touch controls and VR */
   displayPanel?: DisplayPanelProps;
   /** Lap times, ghosts and the online board */
@@ -530,6 +532,8 @@ export const SessionPanel: React.FC<PauseMenuProps> = (p) => {
     mute: "M",
     mouseSteer: "V",
     autopilot: "P",
+    shiftUp: "E",
+    shiftDown: "Q",
     ...p.keyNames,
   };
   return (
@@ -550,6 +554,12 @@ export const SessionPanel: React.FC<PauseMenuProps> = (p) => {
             onChange={p.onToggleRacingLine}
           />
           <Toggle label="Engine sound" detail={k.mute} checked={!p.isMuted} onChange={p.onToggleMute} />
+          <Toggle
+            label="Automatic gearbox"
+            detail={`Off: shift yourself with Gear up / Gear down (${k.shiftUp} / ${k.shiftDown})`}
+            checked={p.autoGearbox ?? true}
+            onChange={() => p.onSetAutoGearbox?.(!(p.autoGearbox ?? true))}
+          />
           <Toggle
             label="Gamepad steering assist"
             detail="Stick steers up to the front-tyre grip limit"

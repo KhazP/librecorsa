@@ -90,6 +90,9 @@ interface F1TelemetryHudProps extends MultiplayerPanelProps {
   hudToggleButton?: string;
   mouseSteerEnabled?: boolean;
   gamepadAssist?: boolean;
+  /** Automatic gearbox (pause menu toggle) */
+  autoGearbox?: boolean;
+  onSetAutoGearbox?: (enabled: boolean) => void;
   gamepadRumble: boolean;
   aiOpponents: boolean;
   onToggleAiOpponents: () => void;
@@ -126,7 +129,7 @@ interface F1TelemetryHudProps extends MultiplayerPanelProps {
   onOpenControls?: () => void;
   onExitToTitle?: () => void;
   controlsCheatSheet?: readonly (readonly [string, string])[];
-  keyNames?: Partial<Record<"camera" | "racingLine" | "mute" | "mouseSteer" | "autopilot" | "restart", string>>;
+  keyNames?: Partial<Record<"camera" | "racingLine" | "mute" | "mouseSteer" | "autopilot" | "restart" | "shiftUp" | "shiftDown", string>>;
   /** HUD layout preset, size and optional widgets */
   hud?: HudSettings;
   /** The sim draws the virtual rear-view mirror at the top centre: the notifications there move under it */
