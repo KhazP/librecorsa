@@ -1449,7 +1449,11 @@ export class F12026CarSim implements SimulatorCar {
       const leftOf = (b.x * _ex.x + b.z * _ex.z) / bl;
       const errLeft = (lineNow - p.lateralOffset) * leftOf;
       const rateLeft = -((v.velocity.x * b.x + v.velocity.z * b.z) / bl) * leftOf;
-      const aLat = THREE.MathUtils.clamp(AP_LINE_KP * errLeft + AP_LINE_KD * rateLeft, -AP_LINE_MAX_MS2, AP_LINE_MAX_MS2);
+      const aLat = THREE.MathUtils.clamp(
+        (AP_LINE_KP * errLeft + AP_LINE_KD * rateLeft) * this.aiSteerGain,
+        -AP_LINE_MAX_MS2,
+        AP_LINE_MAX_MS2
+      );
       kappa += aLat / Math.max(100, speed * speed);
     }
     // The path curvature is in the horizontal plane, so the yaw that follows it is about world up, not the body's

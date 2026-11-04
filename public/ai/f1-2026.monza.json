@@ -1,0 +1,13 @@
+{
+  "description": "Monza overrides for the F1 2026 class: earlier braking into the Roggia (T4-5) chicane, controlled entry speed through Ascari (T8-10) and Parabolica (T11), and calmer straight-line steering on the high-speed straights.",
+  "params": {},
+  "sections": [
+    { "label": "Curva Grande to Roggia", "fromM": 1250, "toM": 1610, "params": { "steerGain": 0.85 } },
+    { "label": "Variante della Roggia", "turns": [4, 5], "leadInM": 140, "params": { "brakeMargin": 0.03, "overtakeCaution": 0.4 } },
+    { "label": "Lesmo 1-2", "turns": [6, 7], "leadInM": 100, "params": { "brakeMargin": 0.02, "extMarginM": 0.8 } },
+    { "label": "Serraglio Straight", "fromM": 2630, "toM": 3420, "params": { "steerGain": 0.82 } },
+    { "label": "Variante Ascari", "turns": [8, 9, 10], "leadInM": 140, "params": { "brakeMargin": 0.07, "apexSpeedScale": 0.96 } },
+    { "label": "Back Straight", "fromM": 3920, "toM": 4550, "params": { "steerGain": 0.88 } },
+    { "label": "Parabolica", "turns": [11], "leadInM": 140, "params": { "brakeMargin": 0.04, "apexSpeedScale": 0.985 } }
+  ]
+}

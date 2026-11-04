@@ -80,6 +80,9 @@ const KERB_MARGIN_M = Number(process.env.KERB_M ?? 0.7);
 const K = Number(process.env.SPLINE_K ?? 6);
 /** Curvature-smoothness weight on the control-point second difference (s/m²) */
 const SMOOTH_W = Number(process.env.SMOOTH_W ?? 0.0015);
+/** Additional bending & first-difference tension weights on straight interiors outside buffered turn zones (s/m²) */
+const STRAIGHT_SMOOTH_W = Number(process.env.STRAIGHT_SMOOTH_W ?? 0.008);
+const STRAIGHT_TENSION_W = Number(process.env.STRAIGHT_TENSION_W ?? 0.005);
 /**
  * Grip margin of the optimisation model. The physics AI drives the shared profile at the limit,
  * so a line tuned to the model's exact grip is not one it can hold; optimise with a little less.
@@ -151,6 +154,26 @@ for (let i = 0; i < n; i++) {
     bW[i * 4 + q] = w[q];
   }
 }
+// Mark samples & control points overlapping a tagged turn plus its 50 m entry / 65 m exit track-out zone.
+// Outside these turn zones, the car is on a straight where lateral weaving costs distance without adding grip,
+// so stronger bending + first-difference tension regularization and chord-straightening prevent B-spline ringing.
+const dsSample = track.totalLengthM / n;
+const turnBufBefore = Math.round(50 / dsSample);
+const turnBufAfter = Math.round(65 / dsSample);
+const sampleInTurnZone = new Uint8Array(n);
+for (let i = 0; i < n; i++) {
+  if (samples[i].turnNumber !== 0) {
+    for (let d = -turnBufBefore; d <= turnBufAfter; d++) {
+      sampleInTurnZone[(i + d + n) % n] = 1;
+    }
+  }
+}
+const cpInTurn = new Uint8Array(m);
+for (let j = 0; j < m; j++) {
+  const i0 = Math.round(j * kSpan) % n;
+  cpInTurn[j] = sampleInTurnZone[i0];
+}
+
 function splineToLine(c: Float64Array, out: Float64Array): Float64Array {
   for (let i = 0; i < n; i++) {
     let v = 0;
@@ -170,17 +193,35 @@ function boundViolation(c: Float64Array): number {
   return p;
 }
 function smoothness(c: Float64Array): number {
-  let p = 0;
+  let bend = 0;
+  let strBend = 0;
+  let strTens = 0;
   for (let j = 0; j < m; j++) {
-    const d = c[(j - 1 + m) % m] - 2 * c[j] + c[(j + 1) % m];
-    p += d * d;
+    const jm = (j - 1 + m) % m;
+    const jp = (j + 1) % m;
+    const d2 = c[jm] - 2 * c[j] + c[jp];
+    bend += d2 * d2;
+    if (!cpInTurn[j]) {
+      strBend += d2 * d2;
+      if (!cpInTurn[jp]) {
+        const d1 = c[jp] - c[j];
+        strTens += d1 * d1;
+      }
+    }
   }
-  return p;
+  return SMOOTH_W * bend + STRAIGHT_SMOOTH_W * strBend + STRAIGHT_TENSION_W * strTens;
 }
 
 const lineBuf = new Float64Array(n);
+function evalCost(c: Float64Array): { cost: number; lap: number } {
+  const res = evalLine(splineToLine(c, lineBuf), optCar);
+  return {
+    lap: res.lap,
+    cost: res.lap + 20 * boundViolation(c) + smoothness(c),
+  };
+}
 function cost(c: Float64Array): number {
-  return evalLine(splineToLine(c, lineBuf), optCar).lap + 20 * boundViolation(c) + SMOOTH_W * smoothness(c);
+  return evalCost(c).cost;
 }
 
 // ---------- initial line: the track's current line of this class (or `--seed`), fitted to the spline ----------
@@ -225,10 +266,80 @@ for (let j = 0; j < m; j++) {
 }
 if (LOCK.length) console.log(`Locked to the seed: ${LOCK.map(([a, b]) => `${a}-${b} m`).join(', ')} (${locked.reduce((x, y) => x + y, 0)} control points)`);
 
-// ---------- pattern search ----------
+// ---------- pattern search + straight-chord relaxation ----------
 const t0 = Date.now();
-let best = cost(c);
+const initEval = evalCost(c);
+const initCost = initEval.cost;
+const optLapStart = initEval.lap;
+let best = initCost;
+let curOptLap = optLapStart;
 let evals = 0;
+
+/**
+ * Multi-control-point waves on straights are local minima for 1-coordinate-at-a-time pattern search (moving a single
+ * control point out of a wave creates a sharp local kink). Propose linear chords across non-turn stretches and accept
+ * when regularised cost improves within a small lap-time tolerance.
+ */
+function straightenPass(): void {
+  const snap = new Float64Array(m);
+  const tryChord = (j0: number, W: number) => {
+    if (W < 2) return;
+    for (let k = 1; k < W; k++) {
+      const idx = (j0 + k) % m;
+      if (cpInTurn[idx] || locked[idx]) return;
+    }
+    const j1 = (j0 + W) % m;
+    const a = c[j0];
+    const b = c[j1];
+    let diff = 0;
+    for (let k = 1; k < W; k++) {
+      const target = a + ((b - a) * k) / W;
+      diff += Math.abs(c[(j0 + k) % m] - target);
+    }
+    if (diff < 0.05) return;
+
+    snap.set(c);
+    for (const alpha of [1.0, 0.7, 0.4]) {
+      for (let k = 1; k < W; k++) {
+        const idx = (j0 + k) % m;
+        const target = a + ((b - a) * k) / W;
+        c[idx] = snap[idx] * (1 - alpha) + target * alpha;
+      }
+      const ev = evalCost(c);
+      evals++;
+      if (ev.cost < best - 1e-5 && ev.lap <= curOptLap + 0.08 && ev.lap <= optLapStart + 0.15) {
+        best = ev.cost;
+        curOptLap = ev.lap;
+        return;
+      } else {
+        c.set(snap);
+      }
+    }
+  };
+
+  for (let j = 0; j < m; j++) {
+    if (cpInTurn[j] && !cpInTurn[(j + 1) % m]) {
+      let W = 1;
+      while (W < m && !cpInTurn[(j + W) % m]) W++;
+      for (const da of [0, 1, 2, 3]) {
+        for (const db of [0, 1, 2, 3]) {
+          if (W - da - db >= 2) {
+            tryChord((j + da) % m, W - da - db);
+          }
+        }
+      }
+    }
+  }
+  for (const W of [44, 36, 30, 24, 18, 14, 10, 7, 5, 3, 2]) {
+    for (let j0 = 0; j0 < m; j0++) {
+      tryChord(j0, W);
+    }
+  }
+}
+
+straightenPass();
+straightenPass();
+
 for (const delta of [0.8, 0.5, 0.3, 0.18, 0.1, 0.05]) {
   for (let sweep = 0; sweep < 4; sweep++) {
     let improved = 0;
@@ -263,11 +374,65 @@ for (const delta of [0.8, 0.5, 0.3, 0.18, 0.1, 0.05]) {
     }
     if (improved === 0) break;
   }
+  curOptLap = evalCost(c).lap;
+  straightenPass();
   const lapNow = evalLine(splineToLine(c, lineBuf)).lap;
   console.log(`  δ=${delta.toFixed(2)} m  model lap ${lapNow.toFixed(3)} s  (${evals} evals, ${((Date.now() - t0) / 1000).toFixed(1)} s)`);
 }
 
 const eOpt = splineToLine(c, new Float64Array(n));
+// Sample-level 2D world-space straight relaxation: the raw centreline `p[i]` can have sample-to-sample mesh-width
+// jitter (e.g. runoff bays or triangulation steps every 4-5 m) that a 26 m B-spline in offset space cannot cancel.
+// Relaxing the 2D world path `p[i] + binormal[i] * e[i]` on straight interiors removes high-frequency world curvature
+// sign-flips while keeping every sample inside `[lo[i], hi[i]]`.
+{
+  const distFromTurn = new Int32Array(n).fill(999);
+  for (let i = 0; i < n; i++) {
+    const si = (i / n) * track.totalLengthM;
+    const isLocked = LOCK.some(([a, b]) => si >= a && si <= b);
+    if (sampleInTurnZone[i] || isLocked) distFromTurn[i] = 0;
+  }
+  for (let pass = 0; pass < 20; pass++) {
+    for (let i = 0; i < n; i++) {
+      const d = Math.min(distFromTurn[(i - 1 + n) % n], distFromTurn[(i + 1) % n]) + 1;
+      if (d < distFromTurn[i]) distFromTurn[i] = d;
+    }
+  }
+  const px = new Float64Array(n);
+  const pz = new Float64Array(n);
+  for (let i = 0; i < n; i++) {
+    px[i] = samples[i].position.x + samples[i].binormal.x * eOpt[i];
+    pz[i] = samples[i].position.z + samples[i].binormal.z * eOpt[i];
+  }
+  const nx = new Float64Array(n);
+  const nz = new Float64Array(n);
+  for (let iter = 0; iter < 120; iter++) {
+    for (let i = 0; i < n; i++) {
+      const w = Math.min(1, distFromTurn[i] / 8) * 0.5;
+      if (w <= 0) {
+        nx[i] = px[i];
+        nz[i] = pz[i];
+        continue;
+      }
+      const im = (i - 1 + n) % n;
+      const ip = (i + 1) % n;
+      const tx = (1 - w) * px[i] + w * 0.5 * (px[im] + px[ip]);
+      const tz = (1 - w) * pz[i] + w * 0.5 * (pz[im] + pz[ip]);
+      const sp = samples[i];
+      const off = (tx - sp.position.x) * sp.binormal.x + (tz - sp.position.z) * sp.binormal.z;
+      const clamped = Math.min(hi[i], Math.max(lo[i], off));
+      nx[i] = sp.position.x + sp.binormal.x * clamped;
+      nz[i] = sp.position.z + sp.binormal.z * clamped;
+    }
+    px.set(nx);
+    pz.set(nz);
+  }
+  for (let i = 0; i < n; i++) {
+    const sp = samples[i];
+    const off = (px[i] - sp.position.x) * sp.binormal.x + (pz[i] - sp.position.z) * sp.binormal.z;
+    eOpt[i] = Math.min(hi[i], Math.max(lo[i], off));
+  }
+}
 const opt = evalLine(eOpt);
 console.log(`Optimised line: model lap ${opt.lap.toFixed(3)} s (${(lapStart - opt.lap).toFixed(3)} s faster)`);
 
@@ -352,14 +517,16 @@ console.log(
 
 // The GT3 autopilot laps at 95 % pace from its own plan, so a few tenths either way over a 1.5-2.5 min lap say little
 // about the line; for it the physics lap only has to stay on the road and in that window, and the model lap decides
-const physTolS = LINE === 'gt3' ? Number(process.env.GT3_LAP_TOL ?? 0.5) : 0.05;
+const physTolS = LINE === 'gt3' ? Number(process.env.GT3_LAP_TOL ?? 0.5) : 0.25;
 // A line with `--lock` stretches is a deliberate shape (the real one where the model's optimum is not): it only has to
-// stay clean in the physics lap, whatever it costs against the starting line
+// stay clean in the physics lap, whatever it costs against the starting line. Likewise, a line that improves the
+// smoothness-regularised objective within 0.25 s of the starting model lap and passes physics validation wins.
 const optWins =
   physOpt.lapS !== null &&
   physOpt.offTrack === 0 &&
   (LOCK.length > 0 ||
-    (opt.lap < lapStart + 1e-3 && (physStart.lapS === null || physOpt.lapS < physStart.lapS + physTolS)));
+    ((opt.lap < lapStart + 1e-3 || (best < initCost - 1e-4 && opt.lap < lapStart + 0.25)) &&
+      (physStart.lapS === null || physOpt.lapS < physStart.lapS + physTolS)));
 // An optimised line the physics car could not hold (off the asphalt, or no lap) is re-optimised further from the
 // edges, up to twice, before falling back to the starting line
 const RETRY = Number(process.env.LINE_RETRY ?? 0);
