@@ -864,14 +864,20 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
                   <>
                     <dt className="lc-lbl text-[10px]">Livery</dt>
                     <dd className="m-0 flex min-w-0 items-center justify-end gap-2 text-[14px] font-semibold">
-                      <span
-                        aria-hidden
-                        className="h-3 w-7 shrink-0 rounded-full"
-                        style={{
-                          background: `linear-gradient(135deg, ${livery.primary} 0 50%, ${livery.secondary} 50% 62%, ${livery.accent} 62% 100%)`,
-                        }}
-                      />
-                      <span className="truncate">{livery.name}</span>
+                      {vehicle.modelUrl ? (
+                        <span className="truncate">Factory</span>
+                      ) : (
+                        <>
+                          <span
+                            aria-hidden
+                            className="h-3 w-7 shrink-0 rounded-full"
+                            style={{
+                              background: `linear-gradient(135deg, ${livery.primary} 0 50%, ${livery.secondary} 50% 62%, ${livery.accent} 62% 100%)`,
+                            }}
+                          />
+                          <span className="truncate">{livery.name}</span>
+                        </>
+                      )}
                     </dd>
                   </>
                 ) : null}

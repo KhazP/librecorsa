@@ -10,7 +10,7 @@ body:
     attributes:
       value: |
         Thanks for the idea! LibreCorsa can only ship models it is allowed to redistribute: an open license
-        (CC BY, CC BY-SA, CC0…) or written permission from the creator. Models ripped from other games
+        (CC BY, CC BY-SA, CC0, or non-commercial CC BY-NC / CC BY-NC-SA) or written permission from the creator. Models ripped from other games
         (Assetto Corsa, ACC, iRacing, F1 games…) can't be used unless the original creator agrees.
   - type: input
     id: kind

@@ -75,6 +75,15 @@ export const carById = (id: CarId): CarDefinition => BY_ID.get(id) ?? CARS[0];
 
 export const carClass = (id: CarClassId): CarClass => CAR_CLASSES.find((c) => c.id === id) ?? CAR_CLASSES[0];
 
+/**
+ * Whether the livery picker repaints this car. Ported cars (`modelUrl`) keep the paint their GLB was authored
+ * with; the menus show "Factory livery" for them instead of the swatches.
+ */
+export const carTakesLivery = (id: CarId): boolean => !carById(id).modelUrl;
+
+/** Shown in place of the livery swatches for a car that keeps its own paint */
+export const FACTORY_LIVERY_NOTE = "Factory livery: this car keeps its original paint.";
+
 /** The classes that have cars, in picker order */
 export const carClassesInUse = (): CarClass[] => CAR_CLASSES.filter((k) => CARS.some((c) => c.classId === k.id));
 
