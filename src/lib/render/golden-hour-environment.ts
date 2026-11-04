@@ -6,8 +6,7 @@ import { setSceneryQuality } from "@/lib/render/scenery-detail";
 import { setSceneryDensity } from "@/lib/render/scenery-instances";
 import {
   BloomEffect,
-  BrightnessContrastEffect,
-  HueSaturationEffect,
+  Effect,
   EffectComposer,
   EffectPass,
   RenderPass,
@@ -94,7 +93,7 @@ const FILL_SKY = 0xc4d8ee;
 const FILL_GROUND = 0x6b6a3a;
 const FILL_INTENSITY = 0.35;
 const EXPOSURE = 1.15;
-/** Display-referred grade after AgX (postprocessing BrightnessContrast / HueSaturation, -1..1) */
+/** Display-referred grade after AgX (DisplayGradeEffect): contrast and saturation gain */
 const GRADE_CONTRAST = 0.12;
 const GRADE_SATURATION = 0.18;
 const SKY_TURBIDITY = 2.8;
@@ -507,6 +506,28 @@ export function createGoldenHourEnvironment(
 // Post-processing
 // ---------------------------------------------------------------------------
 
+/** Contrast about mid-grey and saturation about luma, on the tone-mapped image; alpha forced opaque */
+class DisplayGradeEffect extends Effect {
+  constructor(contrast: number, saturation: number) {
+    super(
+      "DisplayGradeEffect",
+      /* glsl */ `
+uniform float uContrast;
+uniform float uSaturation;
+void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor) {
+  // grade in a perceptual (gamma 2.2) space so the contrast pivots on mid-grey as seen, then back to linear
+  vec3 c = pow(clamp(inputColor.rgb, 0.0, 1.0), vec3(1.0 / 2.2));
+  c = (c - 0.5) * (1.0 + uContrast) + 0.5;
+  float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
+  c = mix(vec3(l), c, 1.0 + uSaturation);
+  outputColor = vec4(pow(clamp(c, 0.0, 1.0), vec3(2.2)), 1.0);
+}
+`,
+      { uniforms: new Map<string, THREE.Uniform>([["uContrast", new THREE.Uniform(contrast)], ["uSaturation", new THREE.Uniform(saturation)]]) }
+    );
+  }
+}
+
 export function createPostFx(
   renderer: THREE.WebGLRenderer,
   scene: THREE.Scene,
@@ -534,12 +555,15 @@ export function createPostFx(
   const toneMapping = new ToneMappingEffect({ mode: ToneMappingMode.AGX });
   // AgX keeps highlights but reads flat and grey on its own (the scanned circuits' bland, hazy look): a light
   // display-referred grade after it puts back some contrast and colour
-  const contrast = new BrightnessContrastEffect({ contrast: GRADE_CONTRAST });
-  const saturation = new HueSaturationEffect({ saturation: GRADE_SATURATION });
-  const effectPass = new EffectPass(camera, bloom, toneMapping, contrast, saturation);
+  const effectPass = new EffectPass(camera, bloom, toneMapping);
+  // Its own pass on the tone-mapped image, with alpha forced to 1 and the result clamped: postprocessing's stock
+  // BrightnessContrast / HueSaturation effects turned the low-alpha texels blended foliage, fences and decals leave
+  // in the buffer into white specks
+  const gradePass = new EffectPass(camera, new DisplayGradeEffect(GRADE_CONTRAST, GRADE_SATURATION));
 
   composer.addPass(renderPass);
   composer.addPass(effectPass);
+  composer.addPass(gradePass);
 
   return {
     composer,
@@ -555,6 +579,7 @@ export function createPostFx(
     setCamera(next: THREE.Camera): void {
       renderPass.mainCamera = next;
       effectPass.mainCamera = next;
+      gradePass.mainCamera = next;
     },
 
     setQuality(quality: "low" | "medium" | "high"): void {
@@ -567,6 +592,7 @@ export function createPostFx(
       composer.removeAllPasses();
       renderPass.dispose();
       effectPass.dispose();
+      gradePass.dispose();
       composer.dispose();
     },
   };
