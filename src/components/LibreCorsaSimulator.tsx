@@ -9,6 +9,7 @@ import type { SimulatorCar } from "@/lib/sim/simulator-car";
 import { F1AudioEngine2026 } from "@/lib/f1-audio-2026";
 import { createF1Car2026, type SimCarRig } from "@/lib/car-builder-2026";
 import { createGt3CarRig, gt3RigCameraAnchors } from "@/lib/gt3-car-model";
+import { GT3_DASH_MESH, GT3_WING_MIRROR_MATERIAL, Gt3DashDisplay } from "@/lib/render/gt3-dash-display";
 import { createPortedCarRig } from "@/lib/ported-car-model";
 import { createAmgGt3Sim } from "@/lib/sim/gt3/AmgGt3Sim";
 import { AMG_GT3_CONFIG } from "@/lib/sim/gt3/AmgGt3Config";
@@ -1298,6 +1299,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       wheelDisplay = null;
       wingMirrors?.dispose();
       wingMirrors = null;
+      gt3Dash?.dispose();
+      gt3Dash = null;
       carRig.dispose();
       carRig = createCarRig(car);
       carRigCar = car;
@@ -1645,6 +1648,9 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     // Cockpit extras, created once the VF26 model has loaded: the wheel's LCD and the live wing mirrors
     let wheelDisplay: SteeringWheelDisplay | null = null;
     let wingMirrors: WingMirrors | null = null;
+    // The AMG GT3's MoTeC dash and rear-view mirror, once its cockpit model has loaded
+    let gt3Dash: Gt3DashDisplay | null = null;
+    let cockpitProbeFrame = 0;
     const lapDelta = new LapDeltaTracker(track.totalLengthM);
     // Race control: judges every excursion past the track limits (see TrackLimitsMonitor)
     const trackLimits = new TrackLimitsMonitor();
@@ -2237,12 +2243,41 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         if (steerBase) wheelDisplay = new SteeringWheelDisplay(steerBase);
         wingMirrors = new WingMirrors(renderer, scene, vf26Body);
       }
+      if (!vf26Body && !gt3Dash && isGt3Rig(carRigCar) && cockpitProbeFrame++ % 30 === 0) {
+        const anchors = carRig.getCameraAnchors();
+        if (anchors && carRig.chassisGroup.getObjectByName(GT3_DASH_MESH)) {
+          gt3Dash = new Gt3DashDisplay(carRig.chassisGroup);
+          // The body's wing-mirror glass is a rear-facing patch of its trim material, one each side
+          const bodyFrame = carRig.chassisGroup.getObjectByName("BODY")?.parent ?? null;
+          wingMirrors = new WingMirrors(renderer, scene, carRig.chassisGroup, {
+            materials: ["MIRROR"],
+            eyeInModel: anchors.cockpit.pos,
+            coversSides: false,
+            upAxis: "z",
+            glassPatches: bodyFrame
+              ? [1, -1].map((side) => ({
+                  material: GT3_WING_MIRROR_MATERIAL,
+                  frame: bodyFrame,
+                  box: new THREE.Box3(
+                    new THREE.Vector3(side > 0 ? 0.8 : -1.04, 0.84, -0.03),
+                    new THREE.Vector3(side > 0 ? 1.04 : -0.8, 0.98, 0.15)
+                  ),
+                  facing: new THREE.Vector3(0, 0, -1),
+                }))
+              : undefined,
+          });
+        }
+      }
       lapDelta.update(physics.telemetry);
       // The wheel is only in shot from the onboard views; the display redraws itself at 30 Hz
       if (wheelDisplay && (mode === "cockpit" || mode === "tv_pod" || mode === "cockpit_shoulder")) {
         const delta = lapDelta.delta(physics.telemetry);
         displayExtra.deltaMs = delta === null ? null : delta * 1000;
         wheelDisplay.update(physics.telemetry, nowMs, displayExtra);
+      }
+      if (gt3Dash && (mode === "cockpit" || mode === "tv_pod" || mode === "cockpit_shoulder")) {
+        const delta = lapDelta.delta(physics.telemetry);
+        gt3Dash.update(physics.telemetry, nowMs, { deltaMs: delta === null ? null : delta * 1000 });
       }
       const shake = cockpitShake.update(dtSeconds, physics.telemetry);
 
@@ -2769,7 +2804,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       // chase view too when the player asked for it always
       const vmSetting = settingsNow.hud.virtualMirror;
       const vmView =
-        mode === "tv_pod" || mode === "nose" || mode === "cockpit_shoulder" || (mode === "cockpit" && !wingMirrors?.found);
+        mode === "tv_pod" || mode === "nose" || mode === "cockpit_shoulder" || (mode === "cockpit" && !(wingMirrors?.found && wingMirrors.coversSides));
       const vmOn =
         driving && !inVr && container.clientWidth >= 640 && vmSetting !== "off" && (vmView || (vmSetting === "always" && mode === "chase"));
       virtualMirror.update(frameIndex, vmOn, carRig.chassisGroup, carRig.root);
@@ -2847,6 +2882,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       multiplayerSync.onStatusChange = undefined;
       wheelDisplay?.dispose();
       wingMirrors?.dispose();
+      gt3Dash?.dispose();
       postFx.dispose();
       env.dispose();
       rainFx.dispose();
