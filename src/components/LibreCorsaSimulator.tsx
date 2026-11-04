@@ -8,7 +8,7 @@ import { F12026CarSim } from "@/lib/sim/f12026-car/F12026CarSim";
 import type { SimulatorCar } from "@/lib/sim/simulator-car";
 import { F1AudioEngine2026 } from "@/lib/f1-audio-2026";
 import { createF1Car2026, type SimCarRig } from "@/lib/car-builder-2026";
-import { createGt3CarRig } from "@/lib/gt3-car-model";
+import { createGt3CarRig, gt3RigCameraAnchors } from "@/lib/gt3-car-model";
 import { createPortedCarRig } from "@/lib/ported-car-model";
 import { createAmgGt3Sim } from "@/lib/sim/gt3/AmgGt3Sim";
 import { AMG_GT3_CONFIG } from "@/lib/sim/gt3/AmgGt3Config";
@@ -1257,6 +1257,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
             url: def.modelUrl,
             chassis: (def.physics === "amg-gt3" ? AMG_GT3_CONFIG : F12026_CAR_CONFIG).chassis,
             steerLockDeg: carWheelLockDeg(def.physics) / 2,
+            // every GT3 uses the AMG GT3's onboard and chase camera positions
+            cameraAnchors: def.physics === "amg-gt3" ? gt3RigCameraAnchors() : undefined,
           })
         : isGt3Rig(car)
           ? createGt3CarRig()

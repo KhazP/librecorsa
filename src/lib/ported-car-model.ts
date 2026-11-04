@@ -23,6 +23,8 @@ export interface PortedCarOptions {
   chassis: { wheelbase: number; frontWeightFraction: number; maxRoadWheelDeg: number };
   /** Steering wheel rotation each way at full lock (deg) */
   steerLockDeg: number;
+  /** Rig-space cameras to use instead of the GLB's own (e.g. the AMG GT3's for every car on the GT3 model) */
+  cameraAnchors?: Vf26ModelInstance["cameraAnchors"];
 }
 
 interface PortedExtras {
@@ -205,7 +207,7 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
       pitchRad: -8 * THREE.MathUtils.DEG2RAD,
       fovDeg: anchors.cockpit.fovDeg + 3,
     };
-    cameraAnchors = anchors;
+    cameraAnchors = options.cameraAnchors ?? anchors;
   });
 
   const updateFromTelemetry = (

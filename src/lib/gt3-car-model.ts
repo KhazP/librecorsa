@@ -211,6 +211,37 @@ const CAMERAS: Vf26ModelInstance["cameraAnchors"] = {
   farChase: anchor([0, 2.4, -7.5], -10, 60),
 };
 
+/** The AMG GT3 GLB's wheel centres and front tyre radius (its `GT3` node extras), for rigs that don't load it */
+const GT3_MODEL_WHEELS: Gt3Extras = {
+  wheelCentres: { WHEEL_LF: [0.8634, 0.342, 1.4], WHEEL_LR: [0.8656, 0.3557, -1.2285] },
+  tyreRadius: { LF: 0.34 },
+};
+
+/** Model → rig translation: the model's axle midpoint on the physics' (rig origin = CG on the ground), tyres on it */
+function gt3ModelOffset(extras: Gt3Extras): THREE.Vector3 {
+  const chassis = AMG_GT3_CONFIG.chassis;
+  const lf = extras.wheelCentres?.WHEEL_LF ?? GT3_MODEL_WHEELS.wheelCentres!.WHEEL_LF;
+  const lr = extras.wheelCentres?.WHEEL_LR ?? GT3_MODEL_WHEELS.wheelCentres!.WHEEL_LR;
+  const physicsMidZ = chassis.wheelbase * (0.5 - chassis.frontWeightFraction);
+  return new THREE.Vector3(0, (extras.tyreRadius?.LF ?? 0.34) - lf[1], physicsMidZ - 0.5 * (lf[2] + lr[2]));
+}
+
+function cameraAnchorsAt(offset: THREE.Vector3): Vf26ModelInstance["cameraAnchors"] {
+  const anchors = {} as Vf26ModelInstance["cameraAnchors"];
+  for (const [key, c] of Object.entries(CAMERAS) as [keyof typeof CAMERAS, Vf26CameraAnchor][]) {
+    anchors[key] = { pos: c.pos.clone().add(offset), pitchRad: c.pitchRad, fovDeg: c.fovDeg };
+  }
+  return anchors;
+}
+
+/**
+ * The AMG GT3's onboard and chase cameras in rig space (the frame every car on the GT3 vehicle model shares), so
+ * ported GT3s put the driver's eye, roof, bonnet and chase views exactly where the original car does.
+ */
+export function gt3RigCameraAnchors(): Vf26ModelInstance["cameraAnchors"] {
+  return cameraAnchorsAt(gt3ModelOffset(GT3_MODEL_WHEELS));
+}
+
 /** A box the size of the car, shown while (or instead of, when the GLB is missing) the model loads */
 function placeholderBody(): THREE.Mesh {
   const mesh = new THREE.Mesh(
@@ -272,12 +303,7 @@ export function createGt3CarRig(): SimCarRig {
     const extras = (gt3.userData ?? {}) as Gt3Extras;
     const find = (name: string) => model.getObjectByName(name);
 
-    // Axle midpoint on the physics' (rig origin = CG on the ground), tyres on the ground
-    const lf = extras.wheelCentres?.WHEEL_LF ?? [0.863, 0.342, 1.4];
-    const lr = extras.wheelCentres?.WHEEL_LR ?? [0.866, 0.356, -1.229];
-    const wb = chassis.wheelbase;
-    const physicsMidZ = wb * (0.5 - chassis.frontWeightFraction);
-    const offset = new THREE.Vector3(0, (extras.tyreRadius?.LF ?? 0.34) - lf[1], physicsMidZ - 0.5 * (lf[2] + lr[2]));
+    const offset = gt3ModelOffset(extras);
 
     const bodyGroup = new THREE.Group();
     bodyGroup.name = "GT3_BODY";
@@ -376,11 +402,7 @@ export function createGt3CarRig(): SimCarRig {
     (placeholder.material as THREE.Material).dispose();
     chassisGroup.add(bodyGroup);
 
-    const anchors = {} as Vf26ModelInstance["cameraAnchors"];
-    for (const [key, c] of Object.entries(CAMERAS) as [keyof typeof CAMERAS, Vf26CameraAnchor][]) {
-      anchors[key] = { pos: c.pos.clone().add(offset), pitchRad: c.pitchRad, fovDeg: c.fovDeg };
-    }
-    cameraAnchors = anchors;
+    cameraAnchors = cameraAnchorsAt(offset);
   });
 
   const updateFromTelemetry = (
