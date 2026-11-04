@@ -46,8 +46,9 @@ racing-line optimiser.
 
 ## Cars, tracks and sounds
 
-LibreCorsa can only ship assets it may redistribute: an open license (CC BY, CC BY-SA, CC0) or written
-permission from the creator. Assets taken from other games need the original
+LibreCorsa can only ship assets it may redistribute: an open license (CC BY, CC BY-SA, CC0), a
+non-commercial one (CC BY-NC, CC BY-NC-SA: LibreCorsa is non-profit, and these assets stay under their own
+terms, see the asset notice in CREDITS.md) or written permission from the creator. Assets taken from other games need the original
 creator's permission. Credit every asset in [CREDITS.md](CREDITS.md) with its author, link and
 license.
 

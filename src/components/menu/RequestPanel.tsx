@@ -113,7 +113,7 @@ export const RequestPanel: React.FC = () => {
           Missing your favourite circuit or car? Tell us what it is and where the 3D model comes from.
         </p>
         <p className="m-0 text-[14px] leading-relaxed text-[#8E96AA]">
-          LibreCorsa can only ship models it is allowed to share: ones under an open license (CC BY, CC BY-SA, CC0) or with{" "}
+          LibreCorsa can only ship models it is allowed to share: ones under an open or non-commercial license (CC BY, CC BY-SA, CC0, CC BY-NC, CC BY-NC-SA) or with{" "}
           <span className="text-[#F5F7FA]">written permission from the creator</span>. Mods taken from other games can only
           be used if their original creator agrees.
         </p>
