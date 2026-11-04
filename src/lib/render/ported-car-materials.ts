@@ -26,6 +26,41 @@ const METAL = /chrome|metal|allu|alu\b|alloy|exhaust|rim|hub|disc|disk|brake|cal
 const GLASS = /glass|windshield|windscreen|visor|clearled|led|lcd|light/i;
 
 const upgraded = new WeakMap<THREE.Material, THREE.Material>();
+const flatChannels = new WeakMap<THREE.Texture, { rough: boolean; metal: boolean }>();
+
+/**
+ * Whether a metal / roughness map is a flat placeholder per channel (G roughness, B metal at ~1 everywhere): the
+ * BMW's interior and exterior-detail maps are solid white, which makes the whole cockpit polished metal.
+ */
+function placeholderChannels(tex: THREE.Texture): { rough: boolean; metal: boolean } {
+  const cached = flatChannels.get(tex);
+  if (cached) return cached;
+  let out = { rough: false, metal: false };
+  const image = tex.image as (CanvasImageSource & { width?: number; height?: number }) | undefined;
+  if (typeof document !== "undefined" && image && image.width && image.height) {
+    try {
+      const size = 32;
+      const canvas = document.createElement("canvas");
+      canvas.width = canvas.height = size;
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
+      if (ctx) {
+        ctx.drawImage(image, 0, 0, size, size);
+        const px = ctx.getImageData(0, 0, size, size).data;
+        let gMin = 255;
+        let bMin = 255;
+        for (let i = 0; i < px.length; i += 4) {
+          gMin = Math.min(gMin, px[i + 1]);
+          bMin = Math.min(bMin, px[i + 2]);
+        }
+        out = { rough: gMin > 240, metal: bMin > 240 };
+      }
+    } catch {
+      // unreadable image: keep it
+    }
+  }
+  flatChannels.set(tex, out);
+  return out;
+}
 
 function toPhysical(src: THREE.MeshStandardMaterial): THREE.MeshPhysicalMaterial {
   if ((src as THREE.MeshPhysicalMaterial).isMeshPhysicalMaterial) return src as THREE.MeshPhysicalMaterial;
@@ -43,6 +78,16 @@ export function cleanPortedCarMaterial(mat: THREE.Material): THREE.Material {
   const std = mat as THREE.MeshStandardMaterial;
   if (!std.isMeshStandardMaterial) return mat;
   const name = mat.name ?? "";
+  // a solid-white placeholder map says nothing: drop it and fall back to the rules below
+  const mr = std.metalnessMap ?? std.roughnessMap;
+  if (mr) {
+    const flat = placeholderChannels(mr);
+    if (flat.metal && std.metalnessMap) {
+      std.metalnessMap = null;
+      std.metalness = 1;
+    }
+    if (flat.rough && std.roughnessMap) std.roughnessMap = null;
+  }
   const ownMetal = !!std.metalnessMap;
   const ownRough = !!std.roughnessMap;
   let out: THREE.Material = mat;
