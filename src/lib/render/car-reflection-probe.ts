@@ -14,6 +14,7 @@ import * as THREE from "three";
 export type ReflectionQuality = "off" | "medium" | "high";
 
 const CUBE_SIZE = 256;
+const PROBE_FAR_M = 8000;
 /**
  * Share of the filmed world's brightness the cars reflect. The probe sees the sunlit ground, grass and painted
  * markings at full strength from above the roof, which made the paint read as green-tinted chrome; at about half
@@ -43,7 +44,9 @@ export class CarReflectionProbe {
     private readonly scene: THREE.Scene
   ) {
     this.cubeTarget = new THREE.WebGLCubeRenderTarget(CUBE_SIZE, { type: THREE.HalfFloatType, generateMipmaps: false });
-    this.cubeCamera = new THREE.CubeCamera(0.3, 1200, this.cubeTarget);
+    // Far enough for the sky dome (a 4500 m box around the view camera): clipped, the sky filmed black and the cars
+    // reflected nothing but grass and painted markings
+    this.cubeCamera = new THREE.CubeCamera(0.3, PROBE_FAR_M, this.cubeTarget);
     this.pmrem = new THREE.PMREMGenerator(renderer);
   }
 
