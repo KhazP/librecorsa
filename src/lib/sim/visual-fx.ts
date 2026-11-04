@@ -14,6 +14,7 @@ import { createF1Car2026, type SimCarRig } from '@/lib/car-builder-2026';
 import { createGt3CarRig, loadGt3Cockpit, loadGt3Template } from '@/lib/gt3-car-model';
 import { AMR26_MODEL_URL, loadVf26Template } from '@/lib/vf26-car-model';
 import { assetProgress } from '@/lib/loading/asset-progress';
+import { addContactShadow } from '@/lib/render/contact-shadow';
 import { LIVERIES } from '@/lib/track-data';
 import { CarTelemetry, LiveryConfig, type VehicleModelId } from '@/types/f1';
 import type { SimulatorWheel as SimWheelState } from './simulator-car';
@@ -688,12 +689,15 @@ const rigKind = (vehicle: VehicleModelId | undefined) => (vehicle === 'amg-gt3' 
 const poolKey = (vehicle: VehicleModelId | undefined, ghost: boolean) => `${rigKind(vehicle)}${ghost ? ':ghost' : ''}`;
 
 function buildOpponentRig(vehicle: VehicleModelId | undefined, livery: LiveryConfig): SimCarRig {
+  let rig: SimCarRig;
   if (vehicle === 'amg-gt3') {
-    const rig = createGt3CarRig();
+    rig = createGt3CarRig();
     rig.setLivery(livery);
-    return rig;
+  } else {
+    rig = createF1Car2026(livery, 'medium');
   }
-  return createF1Car2026(livery, 'medium');
+  addContactShadow(rig.root, vehicle);
+  return rig;
 }
 
 /** Makes a car translucent (the best-lap ghost); new meshes from a late model load are caught on later calls */

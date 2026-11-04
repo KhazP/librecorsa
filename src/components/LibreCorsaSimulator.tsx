@@ -90,6 +90,7 @@ import { FirstRunWizard, type WizardMode, type WizardStepId } from "@/components
 import { assetProgress } from "@/lib/loading/asset-progress";
 import { prefetchSoundBank } from "@/lib/sim/vf26-audio";
 import { CarReflectionProbe } from "@/lib/render/car-reflection-probe";
+import { addContactShadow } from "@/lib/render/contact-shadow";
 import { buildKeyLookup, HUD_TOGGLE_EVENT, keyLabel, padButtonLabel, type KeyAction } from "@/lib/input/bindings";
 import { autoConfigureWheel, carWheelLockDeg, connectedPads, DeviceInputReader } from "@/lib/input/device-input";
 import { webHidFfb, wheelFfb } from "@/lib/input/wheel-ffb";
@@ -1356,6 +1357,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
           : createF1Car2026(liveryRef.current, physics.tireCompound);
       rig.setLivery(liveryRef.current);
       reflectionProbe.track(rig.root);
+      addContactShadow(rig.root, def.physics);
       scene.add(rig.root);
       carRigRef.current = rig;
       return rig;
