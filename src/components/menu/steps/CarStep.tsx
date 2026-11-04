@@ -3,6 +3,7 @@
 import React from "react";
 import type { CameraMode } from "@/types/f1";
 import { LIVERIES } from "@/lib/track-data";
+import { FACTORY_LIVERY_NOTE, carTakesLivery } from "@/lib/cars/car-registry";
 import { keyLabel } from "@/lib/input/bindings";
 import { Choice } from "@/components/hud/PauseMenu";
 import { CarPicker } from "../CarPicker";
@@ -25,23 +26,27 @@ export const CarStep: React.FC<SetupStepProps> = (p) => {
       </SetupCard>
 
       <SetupCard label="Livery" className="gap-3!">
-        <AutoGrid min={180} className="gap-2">
-          {LIVERIES.map((liv) => (
-            <Choice key={liv.id} active={p.selectedLivery.id === liv.id} onClick={() => p.onChangeLivery(liv)}>
-              <span className="flex items-center gap-3">
-                <span
-                  aria-hidden
-                  className="h-9 w-9 shrink-0 rounded-xl"
-                  style={{ background: `linear-gradient(135deg, ${liv.primary} 0 55%, ${liv.accent} 55% 65%, ${liv.secondary} 65%)` }}
-                />
-                <span className="min-w-0">
-                  <span className="lc-title block truncate text-[14px] leading-tight">{liv.name}</span>
-                  <span className="block truncate text-[12px] opacity-75">{liv.team}</span>
+        {!carTakesLivery(p.carId) ? (
+          <p className="m-0 text-[13px] opacity-75">{FACTORY_LIVERY_NOTE}</p>
+        ) : (
+          <AutoGrid min={180} className="gap-2">
+            {LIVERIES.map((liv) => (
+              <Choice key={liv.id} active={p.selectedLivery.id === liv.id} onClick={() => p.onChangeLivery(liv)}>
+                <span className="flex items-center gap-3">
+                  <span
+                    aria-hidden
+                    className="h-9 w-9 shrink-0 rounded-xl"
+                    style={{ background: `linear-gradient(135deg, ${liv.primary} 0 55%, ${liv.accent} 55% 65%, ${liv.secondary} 65%)` }}
+                  />
+                  <span className="min-w-0">
+                    <span className="lc-title block truncate text-[14px] leading-tight">{liv.name}</span>
+                    <span className="block truncate text-[12px] opacity-75">{liv.team}</span>
+                  </span>
                 </span>
-              </span>
-            </Choice>
-          ))}
-        </AutoGrid>
+              </Choice>
+            ))}
+          </AutoGrid>
+        )}
       </SetupCard>
 
       <SetupCard label={`Starting camera · ${keyLabel(p.settings.keys.camera[0])} cycles in the car`} className="gap-3!">

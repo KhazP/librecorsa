@@ -18,7 +18,7 @@ import { getTrackInfo } from "@/lib/track-registry";
 import type { ChassisSetup } from "@/lib/sim/car-setup";
 import { EngineersGarage } from "@/components/menu/EngineersGarage";
 import { CarPicker } from "@/components/menu/CarPicker";
-import type { CarId } from "@/lib/cars/car-registry";
+import { FACTORY_LIVERY_NOTE, carTakesLivery, type CarId } from "@/lib/cars/car-registry";
 import { COCKPIT_FOV_MAX_DEG, COCKPIT_FOV_MIN_DEG } from "@/lib/settings/player-settings";
 import { MultiplayerPanel, type MultiplayerPanelProps } from "./MultiplayerPanel";
 import { DisplayPanel, type DisplayPanelProps } from "./DisplayPanel";
@@ -841,35 +841,39 @@ export const SetupPanel: React.FC<PauseMenuProps> = (p) => {
 
           <div className="flex flex-col gap-2.5">
             <PanelSection>Livery</PanelSection>
-            <div className="grid grid-cols-5 gap-2">
-              {LIVERIES.map((liv) => {
-                const active = p.selectedLivery.id === liv.id;
-                return (
-                  <button
-                    key={liv.id}
-                    type="button"
-                    aria-pressed={active}
-                    aria-label={liv.name}
-                    title={`${liv.name} · ${liv.team}`}
-                    onClick={() => p.onChangeLivery(liv)}
-                    className={`flex min-h-[44px] min-w-0 cursor-pointer flex-col gap-2 rounded-2xl p-2 text-left transition-[background-color,border-color,color] duration-200 ${
-                      active
-                        ? "border-[1.5px] border-[#CCFF00] bg-[#CCFF00]/[0.07] text-[#F5F7FA]"
-                        : "border border-[#262B3D] bg-[#08090D]/50 text-[#C5CBD8] hover:border-[#3A4157] hover:bg-[#1B1F2B] hover:text-[#F5F7FA]"
-                    }`}
-                  >
-                    <span
-                      aria-hidden
-                      className="block h-[26px] w-full rounded-[10px]"
-                      style={{
-                        background: `linear-gradient(135deg, ${liv.primary} 0 55%, ${liv.accent} 55% 65%, ${liv.secondary} 65% 100%)`,
-                      }}
-                    />
-                    <span className="truncate text-[11px] font-bold">{liv.name}</span>
-                  </button>
-                );
-              })}
-            </div>
+            {!carTakesLivery(p.carId) ? (
+              <p className="m-0 text-[12px] text-[#8E96AA]">{FACTORY_LIVERY_NOTE}</p>
+            ) : (
+              <div className="grid grid-cols-5 gap-2">
+                {LIVERIES.map((liv) => {
+                  const active = p.selectedLivery.id === liv.id;
+                  return (
+                    <button
+                      key={liv.id}
+                      type="button"
+                      aria-pressed={active}
+                      aria-label={liv.name}
+                      title={`${liv.name} · ${liv.team}`}
+                      onClick={() => p.onChangeLivery(liv)}
+                      className={`flex min-h-[44px] min-w-0 cursor-pointer flex-col gap-2 rounded-2xl p-2 text-left transition-[background-color,border-color,color] duration-200 ${
+                        active
+                          ? "border-[1.5px] border-[#CCFF00] bg-[#CCFF00]/[0.07] text-[#F5F7FA]"
+                          : "border border-[#262B3D] bg-[#08090D]/50 text-[#C5CBD8] hover:border-[#3A4157] hover:bg-[#1B1F2B] hover:text-[#F5F7FA]"
+                      }`}
+                    >
+                      <span
+                        aria-hidden
+                        className="block h-[26px] w-full rounded-[10px]"
+                        style={{
+                          background: `linear-gradient(135deg, ${liv.primary} 0 55%, ${liv.accent} 55% 65%, ${liv.secondary} 65% 100%)`,
+                        }}
+                      />
+                      <span className="truncate text-[11px] font-bold">{liv.name}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
       </div>
