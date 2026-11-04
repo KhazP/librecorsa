@@ -15,6 +15,7 @@ import { assetProgress } from "@/lib/loading/asset-progress";
 import { applySceneryDetail, prepareTreeGeometry, sceneryKind, setSceneryTime } from "@/lib/render/scenery-detail";
 import { attachSceneryInstances, loadSceneryInstances, resetSceneryInstances } from "@/lib/render/scenery-instances";
 import { applySceneryTextures, loadSceneryTextures } from "@/lib/render/scenery-textures";
+import { cleanScanMaterial } from "@/lib/render/scan-materials";
 
 export interface BuiltRwandaScene {
   sceneGroup: THREE.Group;
@@ -195,6 +196,9 @@ function loadTrackGlb(
           obj.castShadow = !receiveOnly && (topName.startsWith("Prop_") || topName.startsWith("Env_") || topName.startsWith("Track_"));
         }
 
+        if (topName === "Track_Model") {
+          for (const m of Array.isArray(obj.material) ? obj.material : [obj.material]) cleanScanMaterial(m);
+        }
         obj.material = Array.isArray(obj.material) ? obj.material.map(withRoughDiffuse) : withRoughDiffuse(obj.material);
         const offset = DECAL_NODES[topName];
         const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
