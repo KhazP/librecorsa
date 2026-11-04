@@ -245,6 +245,8 @@ interface DrivetrainRuntime {
   clutchEngagement: number;
   /** Throttle pedal before traction control (sets the auto-clutch launch window) */
   launchPedal: number;
+  /** Seconds the auto-clutch has been slipping with the car rolling (lets the launch window down) */
+  launchSlipS: number;
   boostBar: number;
   iceTorqueNm: number;
   mgukTorqueNm: number;
@@ -1109,6 +1111,7 @@ export class F1Physics2026 {
       clutchLocked: false,
       clutchEngagement: 0,
       launchPedal: 0,
+      launchSlipS: 0,
       boostBar: 0,
       iceTorqueNm: 0,
       mgukTorqueNm: 0,
@@ -2262,9 +2265,12 @@ export class F1Physics2026 {
       const rpm = drv.engineOmega * RADS2RPM;
       const window = VF26_DRIVETRAIN.autoClutchFullRpm - VF26_DRIVETRAIN.autoClutchStartRpm;
       const launch = THREE.MathUtils.clamp((drv.launchPedal - 0.2) / 0.6, 0, 1);
+      // Once the car rolls, the launch window comes down to the anti-stall one over launchReleaseS
+      drv.launchSlipS = launch > 0 && ratio !== 0 && omegaAxle * Math.sign(ratio) > 1 ? drv.launchSlipS + h : 0;
+      const hold = Math.max(0, 1 - drv.launchSlipS / VF26_DRIVETRAIN.launchReleaseS);
       const startRpm =
         VF26_DRIVETRAIN.autoClutchStartRpm +
-        launch * Math.max(0, VF26_DRIVETRAIN.launchRpm - window - VF26_DRIVETRAIN.autoClutchStartRpm);
+        launch * hold * Math.max(0, VF26_DRIVETRAIN.launchRpm - window - VF26_DRIVETRAIN.autoClutchStartRpm);
       const engage = THREE.MathUtils.clamp((rpm - startRpm) / window, 0, 1);
       drv.clutchEngagement = engage * engage * (3 - 2 * engage);
       const slip = drv.engineOmega - omegaAxle * ratio;
@@ -2284,6 +2290,7 @@ export class F1Physics2026 {
       if (ratio !== 0 && Math.abs(slipAfter) < 8 && capacity >= Math.abs(tEngine) * 0.9 && capacity > 50) {
         drv.clutchLocked = true;
         drv.engineOmega = omegaAxle * ratio;
+        drv.launchSlipS = 0;
       }
     }
 

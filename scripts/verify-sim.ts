@@ -104,11 +104,13 @@ async function runVerification() {
   let accelOk = true;
   let tAccel = 0;
   let t100: number | null = null;
+  let clutchLock: { t: number; kmh: number } | null = null;
   for (const [tRef] of VF26_AI_REFERENCE.accel) {
     while (tAccel < tRef) {
       simStraight.step(1 / 120, { throttle: 1 });
       tAccel += 1 / 120;
       if (t100 === null && simStraight.vxMs * 3.6 >= 100) t100 = tAccel;
+      if (clutchLock === null && simStraight.drivetrain.clutchLocked) clutchLock = { t: tAccel, kmh: simStraight.vxMs * 3.6 };
     }
     const ref = accelRef.evaluate(tRef);
     accelChecks.push(`${tRef.toFixed(1)}s: ${simStraight.vxMs.toFixed(1)} vs ${ref.toFixed(1)} m/s`);
@@ -118,6 +120,11 @@ async function runVerification() {
   assert(
     t100 !== null && t100 > 2.2 && t100 < 3.2,
     `0-100 km/h launch time is in the F1 range (${t100?.toFixed(2)} s within [2.2, 3.2] s)`
+  );
+  // The auto-clutch lets the launch rpm down as the car rolls instead of slipping through all of first gear
+  assert(
+    clutchLock !== null && clutchLock.t < 1.6 && clutchLock.kmh < 60,
+    `Launch clutch locks early (${clutchLock ? `${clutchLock.t.toFixed(2)} s at ${clutchLock.kmh.toFixed(0)} km/h` : 'never'}; < 1.6 s, < 60 km/h)`
   );
   assert(
     Math.abs(simStraight.lateralOffsetM) < 0.05 && Math.abs(simStraight.headingErrorRad) < 0.002,
