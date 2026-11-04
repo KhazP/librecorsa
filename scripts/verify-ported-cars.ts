@@ -8,6 +8,7 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { carById, CARS, isCarId, type CarId } from "../src/lib/cars/car-registry";
+import { carPhysics, carTakesPhysicsSwitch } from "../src/lib/cars/f1-mod-physics";
 
 let passed = 0;
 function check(name: string, cond: boolean, detail = ""): void {
@@ -133,12 +134,22 @@ const creditsMd = readFileSync("CREDITS.md", "utf8");
 check("CREDITS.md credits Dave Love SketchFab under CC BY 4.0", creditsMd.includes("Dave Love SketchFab") && creditsMd.includes("http://creativecommons.org/licenses/by/4.0/"));
 
 const f1Cars = CARS.filter((c) => c.classId === "f1-2026");
+for (const native of ["vf26", "f12026-car", "amg-gt3", "amg-gt3-evo", "bmw-m4-gt3"] as const) {
+  check(
+    `${native}: physics switch leaves it on its own model`,
+    !carTakesPhysicsSwitch(native) && carPhysics(native, "vf26") === carById(native).physics && carPhysics(native, "f12026-car") === carById(native).physics
+  );
+}
 check("f1-2026 class has 2 native + 7 ported cars", f1Cars.length === 9, `${f1Cars.length} cars`);
 
 for (const exp of EXPECTED_CARS) {
   check(`${exp.id}: isCarId`, isCarId(exp.id));
   const def = carById(exp.id);
-  check(`${exp.id}: registered with vf26 physics and modelUrl`, def.id === exp.id && def.classId === "f1-2026" && def.physics === "vf26" && def.modelUrl === `/cars/${exp.id}/model/${exp.id}.glb`);
+  check(`${exp.id}: registered with f12026-car physics and modelUrl`, def.id === exp.id && def.classId === "f1-2026" && def.physics === "f12026-car" && def.modelUrl === `/cars/${exp.id}/model/${exp.id}.glb`);
+  check(
+    `${exp.id}: physics switch picks rigid-body by default and FA-26 on request`,
+    carTakesPhysicsSwitch(exp.id) && carPhysics(exp.id) === "f12026-car" && carPhysics(exp.id, "vf26") === "vf26"
+  );
   check(`${exp.id}: exact model title "${exp.title}"`, def.title === exp.title, def.title);
   check(
     `${exp.id}: no team names in UI text (title/sub/badge)`,

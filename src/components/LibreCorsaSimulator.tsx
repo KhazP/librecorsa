@@ -18,6 +18,7 @@ import { AMG_GT3_CONFIG } from "@/lib/sim/gt3/AmgGt3Config";
 import { F12026_CAR_CONFIG } from "@/lib/sim/f12026-car/F12026CarConfig";
 import type { CarSoundSource } from "@/lib/sim/CarAudio";
 import { CARS, carById, carForVehicle, isCarId, type CarId } from "@/lib/cars/car-registry";
+import { carPhysics, carTakesPhysicsSwitch, subscribeF1ModPhysics } from "@/lib/cars/f1-mod-physics";
 import { buildRwandaCircuitScene } from "@/lib/scene-builder";
 import {
   configureRenderer,
@@ -305,7 +306,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   /** The chosen car, and the vehicle model it drives on */
   const [carId, setCarId] = useState<CarId>(loadStoredCar);
   const carIdRef = useRef(carId);
-  const [vehicleModel, setVehicleModel] = useState<VehicleModelId>(() => carById(carId).physics);
+  const [vehicleModel, setVehicleModel] = useState<VehicleModelId>(() => carPhysics(carId));
   const vehicleModelRef = useRef(vehicleModel);
   /** Swaps the player's car in the running scene (set by the scene effect) */
   const swapCarRef = useRef<((car: CarId) => void) | null>(null);
@@ -607,13 +608,28 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       if (next === carIdRef.current) return;
       carIdRef.current = next;
       setCarId(next);
-      vehicleModelRef.current = carById(next).physics;
+      vehicleModelRef.current = carPhysics(next);
       setVehicleModel(vehicleModelRef.current);
       saveCar(next);
       swapCarRef.current?.(next);
       audioRef.current?.setCar(soundFor(next));
     },
     [unlockAudio]
+  );
+
+  // The car picker's physics switch: a ported F1 car moves onto the other vehicle model, in place (body kept)
+  useEffect(
+    () =>
+      subscribeF1ModPhysics(() => {
+        const car = carIdRef.current;
+        if (!carTakesPhysicsSwitch(car)) return;
+        const vehicle = carPhysics(car);
+        if (vehicle === vehicleModelRef.current) return;
+        vehicleModelRef.current = vehicle;
+        setVehicleModel(vehicle);
+        swapCarRef.current?.(car);
+      }),
+    []
   );
 
   const handleLiveryChange = useCallback((livery: LiveryConfig) => {
@@ -1254,7 +1270,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     physicsRef.current = physics;
 
     swapCarRef.current = (car) => {
-      const vehicle = carById(car).physics;
+      const vehicle = carPhysics(car);
       physics = createCar(vehicle, physics);
       physicsRef.current = physics;
       swapCarRig(car);
@@ -1389,7 +1405,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       carRig = createCarRig(car);
       carRigCar = car;
       // A different model for the opponents and the ghost: build and compile them now, not at the next race start
-      void visualFx.prewarm(carById(car).physics).then(() => {
+      void visualFx.prewarm(carPhysics(car)).then(() => {
         if (disposed) return;
         void compileForComposer().finally(() => visualFx.hidePrewarmed());
       });
@@ -1400,7 +1416,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     scene.add(visualFx.group);
     // The opponents and the ghost reflect the world too
     reflectionProbe.track(visualFx.group);
-    void visualFx.prewarm(carById(carIdRef.current).physics);
+    void visualFx.prewarm(carPhysics(carIdRef.current));
     // One connection for the page: it survives a circuit switch (which remounts this component)
     const multiplayerSync = getMultiplayerManager();
     multiplayerSync.onStatusChange = (st) => {
