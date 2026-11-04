@@ -330,6 +330,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   const [boostLatch, setBoostLatch] = useState(false);
   const [mouseSteerEnabled, setMouseSteerEnabled] = useState(false);
   const [gamepadAssist, setGamepadAssist] = useState(true);
+  const [autoGearbox, setAutoGearboxState] = useState(true);
   const [gamepadRumble, setGamepadRumble] = useState<boolean>(loadStoredRumble);
   const rumbleEnabledRef = useRef(gamepadRumble);
   rumbleEnabledRef.current = gamepadRumble;
@@ -750,6 +751,11 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     if (physicsRef.current) physicsRef.current.gamepadAssistEnabled = enabled;
   }, []);
 
+  const setAutoGearbox = useCallback((enabled: boolean) => {
+    setAutoGearboxState(enabled);
+    if (physicsRef.current) physicsRef.current.autoGearbox = enabled;
+  }, []);
+
   const setMouseSteer = useCallback((enabled: boolean) => {
     setMouseSteerEnabled(enabled);
     if (!enabled) mouseSteerValueRef.current = 0;
@@ -1149,6 +1155,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       car.aeroPreset = prev?.aeroPreset ?? DEFAULT_AERO_PRESET;
       if (prev) {
         car.gamepadAssistEnabled = prev.gamepadAssistEnabled;
+        car.autoGearbox = prev.autoGearbox;
         car.tireCompound = prev.tireCompound;
       } else {
         const autoCompound = recommendedCompound(
@@ -2851,13 +2858,14 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     handleAssistPresetChange(saved.assistPreset);
     setRacingLineVisible(saved.racingLine);
     setGamepadAssistEnabled(saved.gamepadAssist);
+    setAutoGearbox(saved.autoGearbox);
     setMouseSteer(saved.mouseSteer);
     const livery = LIVERIES.find((l) => l.id === saved.liveryId);
     if (livery) handleLiveryChange(livery);
     if (saved.camera) setCameraMode(saved.camera);
     setInviteRoom(roomFromUrl());
     setSettingsHydrated(true);
-  }, [handleAssistPresetChange, setRacingLineVisible, setGamepadAssistEnabled, setMouseSteer, handleLiveryChange]);
+  }, [handleAssistPresetChange, setRacingLineVisible, setGamepadAssistEnabled, setAutoGearbox, setMouseSteer, handleLiveryChange]);
 
   useEffect(() => {
     if (!settingsHydrated) return;
@@ -2866,11 +2874,12 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       assistPreset,
       racingLine: showRacingLine,
       gamepadAssist,
+      autoGearbox,
       mouseSteer: mouseSteerEnabled,
       liveryId: selectedLivery.id,
       camera: cameraMode,
     });
-  }, [settingsHydrated, settings, assistPreset, showRacingLine, gamepadAssist, mouseSteerEnabled, selectedLivery, cameraMode]);
+  }, [settingsHydrated, settings, assistPreset, showRacingLine, gamepadAssist, autoGearbox, mouseSteerEnabled, selectedLivery, cameraMode]);
 
   // Multiplayer: lobby, race start / abort from the host, link quality
   useEffect(() => {
@@ -3009,6 +3018,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       mouseSteer: first(k.mouseSteer),
       autopilot: first(k.autopilot),
       restart: first(k.restart),
+      shiftUp: first(k.shiftUp),
+      shiftDown: first(k.shiftDown),
     };
   }, [settings.keys]);
 
@@ -3030,6 +3041,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     isMuted,
     mouseSteerEnabled,
     gamepadAssist,
+    autoGearbox,
+    onSetAutoGearbox: setAutoGearbox,
     gamepadRumble,
     aiOpponents,
     onToggleAiOpponents: handleToggleAiOpponents,
@@ -3245,6 +3258,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
           onSetRacingLine={setRacingLineVisible}
           gamepadAssist={gamepadAssist}
           onSetGamepadAssist={setGamepadAssistEnabled}
+          autoGearbox={autoGearbox}
+          onSetAutoGearbox={setAutoGearbox}
           gamepadRumble={gamepadRumble}
           onToggleGamepadRumble={handleToggleGamepadRumble}
           mouseSteerEnabled={mouseSteerEnabled}

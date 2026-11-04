@@ -584,6 +584,8 @@ export class F12026CarSim implements SimulatorCar {
   /** User-selected ERS deployment mode in MFD (overridden to 'PSH' while manual override / boost is held) */
   private userErsMode: PerformanceModeName = 'RAC';
   public gamepadAssistEnabled = true;
+  /** Automatic gear changes; off = the driver shifts. The autopilot always shifts for itself (VehiclePhysics.autoShift) */
+  public autoGearbox = true;
   public readonly gamepadAssist = new GamepadSteeringAssist();
   /** DRS is driver-operated on the f12026-car (and absent on a GT3) */
   public autoXMode = false;
@@ -1227,6 +1229,7 @@ export class F12026CarSim implements SimulatorCar {
     const slices = Math.max(1, Math.ceil(dtSeconds / AID_SLICE_S - 1e-9));
     const h = dtSeconds / slices;
     let first = true;
+    this.vehicle.autoShift = this.autoGearbox || this.aiAutopilot;
     for (let k = 0; k < slices; k++) {
       const cmd: { throttle: number; brake: number; brakeWheelScale?: readonly [number, number, number, number]; steer: number; drs: boolean } =
         this.aiAutopilot ? this.autopilot(h) : this.driverCommand(inputs, h);

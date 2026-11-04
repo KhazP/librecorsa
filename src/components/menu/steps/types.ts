@@ -17,6 +17,8 @@ export interface SetupStepProps {
   onSetRacingLine: (visible: boolean) => void;
   gamepadAssist: boolean;
   onSetGamepadAssist: (enabled: boolean) => void;
+  autoGearbox: boolean;
+  onSetAutoGearbox: (enabled: boolean) => void;
   gamepadRumble: boolean;
   onToggleGamepadRumble: () => void;
   mouseSteerEnabled: boolean;

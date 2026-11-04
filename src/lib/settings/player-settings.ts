@@ -34,6 +34,8 @@ export interface PlayerSettings {
   assistPreset: AssistPreset;
   racingLine: boolean;
   gamepadAssist: boolean;
+  /** Automatic gearbox; off = shift with Gear up / Gear down */
+  autoGearbox: boolean;
   mouseSteer: boolean;
   liveryId: string | null;
   camera: CameraMode | null;
@@ -248,6 +250,7 @@ export const DEFAULT_PLAYER_SETTINGS: PlayerSettings = {
   assistPreset: "semi_pro",
   racingLine: true,
   gamepadAssist: true,
+  autoGearbox: true,
   mouseSteer: false,
   liveryId: null,
   camera: null,
@@ -445,6 +448,7 @@ export function parsePlayerSettings(raw: unknown): PlayerSettings {
     assistPreset: oneOf(raw.assistPreset, ["pro", "semi_pro", "assisted"] as const, d.assistPreset),
     racingLine: bool(raw.racingLine, d.racingLine),
     gamepadAssist: bool(raw.gamepadAssist, d.gamepadAssist),
+    autoGearbox: bool(raw.autoGearbox, d.autoGearbox),
     mouseSteer: bool(raw.mouseSteer, d.mouseSteer),
     liveryId: isStr(raw.liveryId) ? raw.liveryId : null,
     camera: CAMERA_MODES.includes(raw.camera as CameraMode) ? (raw.camera as CameraMode) : null,
