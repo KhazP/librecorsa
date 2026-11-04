@@ -1,0 +1,11 @@
+// Sends www.librecorsa.org to the bare domain. Deploy: npx wrangler deploy -c cloudflare/www/wrangler.jsonc
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "librecorsa-www",
+  "account_id": "e8e4c67fe1996448b0e6ab6238f31867",
+  "main": "worker.js",
+  "compatibility_date": "2026-10-01",
+  "routes": [{ "pattern": "www.librecorsa.org", "custom_domain": true }],
+  "workers_dev": false,
+  "preview_urls": false
+}
