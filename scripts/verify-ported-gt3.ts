@@ -8,6 +8,7 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 import * as THREE from "three";
 import { CARS, carById, carsInClass, isCarId, type CarId } from "../src/lib/cars/car-registry";
+import { BMW_M4_GT3_SOUND } from "../src/lib/sim/CarAudio";
 import { AMG_GT3_SOUND } from "../src/lib/sim/gt3/AmgGt3Sim";
 import { loadGlbGeometry } from "./lib/glb-geometry";
 
@@ -79,9 +80,10 @@ console.log("\n=== 1. Car Registry & Credits ===");
       `${spec.id} UI text contains no team/sponsor "Red Bull"`,
       !/red\s*bull/i.test(`${def.title} ${def.sub} ${def.badge}`)
     );
+    const expectedSound = spec.id === "bmw-m4-gt3" ? BMW_M4_GT3_SOUND : AMG_GT3_SOUND;
     check(
-      `${spec.id} uses amg-gt3 physics and AMG_GT3_SOUND`,
-      def.classId === "gt3" && def.physics === "amg-gt3" && def.sound === AMG_GT3_SOUND
+      `${spec.id} uses amg-gt3 physics and expected sound bank`,
+      def.classId === "gt3" && def.physics === "amg-gt3" && def.sound === expectedSound
     );
     const expectedUrl = `/cars/${spec.id}/model/${spec.id}.glb`;
     check(`${spec.id} modelUrl is ${expectedUrl}`, def.modelUrl === expectedUrl, def.modelUrl);

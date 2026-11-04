@@ -31,6 +31,21 @@ Each model below is by **Dave Love SketchFab** ([https://sketchfab.com/Tyler_Dav
 * `"2005 Renault R25"` ([https://sketchfab.com/3d-models/2005-renault-r25-0d58fe125f5b41a2b8482576723120c4](https://sketchfab.com/3d-models/2005-renault-r25-0d58fe125f5b41a2b8482576723120c4)) by **Dave Love SketchFab** (`r25`)
 * `"2004 Ferrari F2004"` ([https://sketchfab.com/3d-models/2004-ferrari-f2004-bedade52e6f4415e90e656817c5701f8](https://sketchfab.com/3d-models/2004-ferrari-f2004-bedade52e6f4415e90e656817c5701f8)) by **Dave Love SketchFab** (`f2004`)
 
+### Car sounds (`public/cars/<id>/audio/`)
+
+Ported from Assetto Corsa FMOD Studio `.bank` (`FSB5`) sound mods into LibreCorsa's Web Audio multi-grid sample format (`scripts/audio/port_ac_bank.py`):
+
+* **FA-26 (`vf26`, `f12026-car` → `public/cars/fa26/audio/`)**: Ported from **F1 2026 Sound Pack** (`formula ultra/aston/formula_ultra_26.bank`; author not listed in archive or bank metadata).
+* **SF-26 (`sf26` → `public/cars/sf26/audio/`)**: Ported from **F1 2026 Sound Pack** (`formula ultra/ferrari v3/formula_ultra_26.bank`; author not listed in archive or bank metadata).
+* **W17 (`w17` → `public/cars/w17/audio/`)**: Ported from **Mercedes W17 Sound Mod** (`Driver Mix` interior and `Broadcast mix` exterior `content/cars/formula_ultra_26/sfx/formula_ultra_26.bank`; author not listed in archive or bank metadata).
+* **RB22 (`rb22` → `public/cars/rb22/audio/`)**: Ported from **Red Bull RB22 Sound Mod** (`Driver Mix` interior and `Broadcast Mix` exterior `content/cars/formula_ultra_26/sfx/formula_ultra_26.bank`; author not listed in archive or bank metadata).
+* **SF71H (`sf71h` → `public/cars/sf71h/audio/`)**: Ported from **Ferrari SF71H Sound Mod** (`content/cars/sf71h/sfx/sf71h.bank`; author not listed in archive or bank metadata).
+* **RB8 (`rb8` → `public/cars/rb8/audio/`)**: Ported from **rb8** (`assettocorsa/content/cars/cim_2012_redbull/sfx/cim_2012_redbull.bank`, CIM 2012 Red Bull RB8 package; author not listed in archive or bank metadata).
+* **R25 (`r25` → `public/cars/r25/audio/`)**: Ported from **r25** (`content/cars/r25/sfx/r25.bank`, FMOD bank `r25_base`; author not listed in archive or bank metadata).
+* **F2004 (`f2004` → `public/cars/f2004/audio/`)**: Ported from **f2004_sound** (`content/cars/f2004/sfx/f2004.bank`, FMOD bank `r25_base` / `f2004`; author not listed in archive or bank metadata).
+* **BMW M4 GT3 Evo (`bmw-m4-gt3` → `public/cars/bmw-m4-gt3/audio/`)**: Ported from **m4gt3** (`content/cars/urd_bayro_gt3/sfx/urd_bayro_gt3.bank`) by **corsamode** (`GENERAL INFO.txt`).
+* **Mercedes-AMG GT3 & GT3 Evo (`amg-gt3`, `amg-gt3-evo` → `public/gt3/audio/`)**: the existing GT3 bank, ported from TRR's "Mercedes-AMG GT3 EVO" Assetto Corsa mod with the author's permission (`scripts/gt3/port_sounds.py`).
+
 ### Optional circuits (`public/tracks/<id>/`)
 
 Each model below is licensed under [Creative Commons Attribution 4.0 (CC BY 4.0)](http://creativecommons.org/licenses/by/4.0/). Changes for the simulator: uniformly rescaled where needed to match the official lap length, recentred, far-away scenery dropped, textures re-encoded to WebP (max 2048 px), geometry quantised and meshopt-compressed, and hidden physics collider / surface meshes and track data (centreline, edges, kerbs, run-off, barriers, corners) generated from the geometry. Kerb meshes with a generated red-and-white texture are added on top of the scan.

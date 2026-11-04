@@ -1,5 +1,16 @@
 import type { VehicleModelId } from "@/types/f1";
-import { AMR26_SOUND, type CarSoundSource } from "@/lib/sim/CarAudio";
+import {
+  BMW_M4_GT3_SOUND,
+  F2004_SOUND,
+  FA26_SOUND,
+  R25_SOUND,
+  RB8_SOUND,
+  RB22_SOUND,
+  SF26_SOUND,
+  SF71H_SOUND,
+  W17_SOUND,
+  type CarSoundSource,
+} from "@/lib/sim/CarAudio";
 import { AMG_GT3_SOUND } from "@/lib/sim/gt3/AmgGt3Sim";
 
 /**
@@ -57,7 +68,7 @@ export const CARS: readonly CarDefinition[] = [
     sub: "Curvilinear 2026 model · active aero",
     badge: "FA-26",
     physics: "vf26",
-    sound: AMR26_SOUND,
+    sound: FA26_SOUND,
   },
   {
     id: "f12026-car",
@@ -66,7 +77,7 @@ export const CARS: readonly CarDefinition[] = [
     sub: "6-DOF rigid-body · track colliders · DRS",
     badge: "6-DOF",
     physics: "f12026-car",
-    sound: AMR26_SOUND,
+    sound: FA26_SOUND,
   },
   {
     id: "sf26",
@@ -76,7 +87,7 @@ export const CARS: readonly CarDefinition[] = [
     badge: "SF-26",
     physics: "vf26",
     modelUrl: "/cars/sf26/model/sf26.glb",
-    sound: AMR26_SOUND,
+    sound: SF26_SOUND,
   },
   {
     id: "w17",
@@ -86,7 +97,7 @@ export const CARS: readonly CarDefinition[] = [
     badge: "W17",
     physics: "vf26",
     modelUrl: "/cars/w17/model/w17.glb",
-    sound: AMR26_SOUND,
+    sound: W17_SOUND,
   },
   {
     id: "rb22",
@@ -96,7 +107,7 @@ export const CARS: readonly CarDefinition[] = [
     badge: "RB22",
     physics: "vf26",
     modelUrl: "/cars/rb22/model/rb22.glb",
-    sound: AMR26_SOUND,
+    sound: RB22_SOUND,
   },
   {
     id: "sf71h",
@@ -106,7 +117,7 @@ export const CARS: readonly CarDefinition[] = [
     badge: "SF71H",
     physics: "vf26",
     modelUrl: "/cars/sf71h/model/sf71h.glb",
-    sound: AMR26_SOUND,
+    sound: SF71H_SOUND,
   },
   {
     id: "rb8",
@@ -116,7 +127,7 @@ export const CARS: readonly CarDefinition[] = [
     badge: "RB8",
     physics: "vf26",
     modelUrl: "/cars/rb8/model/rb8.glb",
-    sound: AMR26_SOUND,
+    sound: RB8_SOUND,
   },
   {
     id: "r25",
@@ -126,7 +137,7 @@ export const CARS: readonly CarDefinition[] = [
     badge: "R25",
     physics: "vf26",
     modelUrl: "/cars/r25/model/r25.glb",
-    sound: AMR26_SOUND,
+    sound: R25_SOUND,
   },
   {
     id: "f2004",
@@ -136,7 +147,7 @@ export const CARS: readonly CarDefinition[] = [
     badge: "F2004",
     physics: "vf26",
     modelUrl: "/cars/f2004/model/f2004.glb",
-    sound: AMR26_SOUND,
+    sound: F2004_SOUND,
   },
   {
     id: "amg-gt3",
@@ -165,7 +176,7 @@ export const CARS: readonly CarDefinition[] = [
     badge: "M4 GT3",
     physics: "amg-gt3",
     modelUrl: "/cars/bmw-m4-gt3/model/bmw-m4-gt3.glb",
-    sound: AMG_GT3_SOUND,
+    sound: BMW_M4_GT3_SOUND,
   },
 ];
 
