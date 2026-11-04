@@ -138,7 +138,7 @@
     "layout": "2020 layout",
     "country": "Italy",
     "city": "Monza",
-    "lengthM": 5757.69,
+    "lengthM": 5785.63,
     "turns": 11,
     "direction": "clockwise",
     "dataUrl": "/tracks/monza/track_data.json",
