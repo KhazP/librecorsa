@@ -85,6 +85,7 @@ import {
   wetWearScale,
 } from '../wet-tyres';
 import { FULL_REALISM, realismThermalGrip, type SimRealismFlags } from '../sim-realism';
+import { surfaceDragN } from '../track-surfaces';
 import {
   type AeroRideHeightMap,
   type AxleSuspensionData,
@@ -1923,8 +1924,19 @@ export class VehiclePhysics {
           roadTexNm;
       }
 
+      // Loose ground (gravel, grass) ploughs against the contact patch's motion, sliding or rolling, outside the
+      // tyre's friction circle (and so outside the wheel spin, the rack and the tyre telemetry)
+      let dragX = 0;
+      let dragY = 0;
+      const patchSpeed = Math.hypot(vx, vy);
+      const dragN = surfaceDragN(g.props?.rollingResistance ?? 0, fz, patchSpeed);
+      if (dragN > 0) {
+        dragX = (-dragN * vx) / patchSpeed;
+        dragY = (-dragN * vy) / patchSpeed;
+      }
+
       // Tyre forces reach the body at the dynamic 3D roll centre; the normal's horizontal part holds it on slopes
-      _f.copy(_fw).multiplyScalar(fx).addScaledVector(_lw, fy);
+      _f.copy(_fw).multiplyScalar(fx + dragX).addScaledVector(_lw, fy + dragY);
       _f.x += fz * g.nx;
       _f.z += fz * g.nz;
       const kinRcHeight = w.isFront ? frontKin.rollCentreHeightM : rearKin.rollCentreHeightM;
