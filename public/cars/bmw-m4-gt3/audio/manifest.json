@@ -1,0 +1,457 @@
+{
+  "source": "BMW M4 GT3 Sound Mod by corsamode - content/cars/urd_bayro_gt3/sfx/urd_bayro_gt3.bank",
+  "sampleRate": 48000,
+  "loopSeconds": 2.4,
+  "engine": {
+    "ext": [
+      {
+        "file": "engine_ext_on_1500.ogg",
+        "layer": "on",
+        "rpm": 1500,
+        "channels": 2,
+        "rms": 0.165
+      },
+      {
+        "file": "engine_ext_on_2620.ogg",
+        "layer": "on",
+        "rpm": 2620,
+        "channels": 2,
+        "rms": 0.176
+      },
+      {
+        "file": "engine_ext_on_3650.ogg",
+        "layer": "on",
+        "rpm": 3650,
+        "channels": 2,
+        "rms": 0.187
+      },
+      {
+        "file": "engine_ext_on_4650.ogg",
+        "layer": "on",
+        "rpm": 4650,
+        "channels": 2,
+        "rms": 0.198
+      },
+      {
+        "file": "engine_ext_on_5750.ogg",
+        "layer": "on",
+        "rpm": 5750,
+        "channels": 2,
+        "rms": 0.209
+      },
+      {
+        "file": "engine_ext_on_7000.ogg",
+        "layer": "on",
+        "rpm": 7000,
+        "channels": 2,
+        "rms": 0.22
+      },
+      {
+        "file": "engine_ext_off_1500.ogg",
+        "layer": "off",
+        "rpm": 1500,
+        "channels": 2,
+        "rms": 0.125
+      },
+      {
+        "file": "engine_ext_off_2720.ogg",
+        "layer": "off",
+        "rpm": 2720,
+        "channels": 2,
+        "rms": 0.135
+      },
+      {
+        "file": "engine_ext_off_3740.ogg",
+        "layer": "off",
+        "rpm": 3740,
+        "channels": 2,
+        "rms": 0.145
+      },
+      {
+        "file": "engine_ext_off_4730.ogg",
+        "layer": "off",
+        "rpm": 4730,
+        "channels": 2,
+        "rms": 0.155
+      },
+      {
+        "file": "engine_ext_off_5800.ogg",
+        "layer": "off",
+        "rpm": 5800,
+        "channels": 2,
+        "rms": 0.165
+      },
+      {
+        "file": "engine_ext_off_7000.ogg",
+        "layer": "off",
+        "rpm": 7000,
+        "channels": 2,
+        "rms": 0.175
+      }
+    ],
+    "int": [
+      {
+        "file": "engine_int_on_1500.ogg",
+        "layer": "on",
+        "rpm": 1500,
+        "channels": 2,
+        "rms": 0.165
+      },
+      {
+        "file": "engine_int_on_2500.ogg",
+        "layer": "on",
+        "rpm": 2500,
+        "channels": 2,
+        "rms": 0.1742
+      },
+      {
+        "file": "engine_int_on_3320.ogg",
+        "layer": "on",
+        "rpm": 3320,
+        "channels": 2,
+        "rms": 0.1833
+      },
+      {
+        "file": "engine_int_on_4000.ogg",
+        "layer": "on",
+        "rpm": 4000,
+        "channels": 2,
+        "rms": 0.1925
+      },
+      {
+        "file": "engine_int_on_4800.ogg",
+        "layer": "on",
+        "rpm": 4800,
+        "channels": 2,
+        "rms": 0.2017
+      },
+      {
+        "file": "engine_int_on_5800.ogg",
+        "layer": "on",
+        "rpm": 5800,
+        "channels": 2,
+        "rms": 0.2108
+      },
+      {
+        "file": "engine_int_on_7000.ogg",
+        "layer": "on",
+        "rpm": 7000,
+        "channels": 2,
+        "rms": 0.22
+      },
+      {
+        "file": "engine_int_off_1500.ogg",
+        "layer": "off",
+        "rpm": 1500,
+        "channels": 2,
+        "rms": 0.125
+      },
+      {
+        "file": "engine_int_off_2800.ogg",
+        "layer": "off",
+        "rpm": 2800,
+        "channels": 2,
+        "rms": 0.135
+      },
+      {
+        "file": "engine_int_off_3740.ogg",
+        "layer": "off",
+        "rpm": 3740,
+        "channels": 2,
+        "rms": 0.145
+      },
+      {
+        "file": "engine_int_off_4730.ogg",
+        "layer": "off",
+        "rpm": 4730,
+        "channels": 2,
+        "rms": 0.155
+      },
+      {
+        "file": "engine_int_off_5800.ogg",
+        "layer": "off",
+        "rpm": 5800,
+        "channels": 2,
+        "rms": 0.165
+      },
+      {
+        "file": "engine_int_off_7000.ogg",
+        "layer": "off",
+        "rpm": 7000,
+        "channels": 2,
+        "rms": 0.175
+      }
+    ]
+  },
+  "turbo": [
+    {
+      "file": "turbo_on_15.ogg",
+      "layer": "on",
+      "boost": 1.5,
+      "channels": 1,
+      "rms": 0.09
+    },
+    {
+      "file": "turbo_off_15.ogg",
+      "layer": "off",
+      "boost": 1.5,
+      "channels": 1,
+      "rms": 0.065
+    }
+  ],
+  "transmission": [
+    {
+      "file": "trans_on_160.ogg",
+      "layer": "on",
+      "drivetrainSpeed": 160,
+      "channels": 1,
+      "rms": 0.11
+    },
+    {
+      "file": "trans_off_160.ogg",
+      "layer": "off",
+      "drivetrainSpeed": 160,
+      "channels": 1,
+      "rms": 0.085
+    }
+  ],
+  "oneshots": [
+    {
+      "file": "oneshot_gear_up_1.ogg",
+      "fsbName": "M4GT3_Up 1",
+      "role": "gear_up",
+      "channels": 1,
+      "seconds": 0.39,
+      "peak": 0.78
+    },
+    {
+      "file": "oneshot_gear_up_2.ogg",
+      "fsbName": "M4GT3_Up 9",
+      "role": "gear_up",
+      "channels": 1,
+      "seconds": 0.228,
+      "peak": 0.78
+    },
+    {
+      "file": "oneshot_gear_up_3.ogg",
+      "fsbName": "M4GT3_Up 10",
+      "role": "gear_up",
+      "channels": 1,
+      "seconds": 0.245,
+      "peak": 0.78
+    },
+    {
+      "file": "oneshot_gear_up_4.ogg",
+      "fsbName": "M4GT3Ex_L2 Up 3",
+      "role": "gear_up",
+      "channels": 1,
+      "seconds": 0.654,
+      "peak": 0.78
+    },
+    {
+      "file": "oneshot_gear_down_1.ogg",
+      "fsbName": "M4GT3 FC1 Down",
+      "role": "gear_down",
+      "channels": 1,
+      "seconds": 0.502,
+      "peak": 0.78
+    },
+    {
+      "file": "oneshot_gear_down_2.ogg",
+      "fsbName": "M4GT3Ex_Blip 1",
+      "role": "gear_down",
+      "channels": 1,
+      "seconds": 0.605,
+      "peak": 0.78
+    },
+    {
+      "file": "oneshot_gear_down_3.ogg",
+      "fsbName": "M4GT3Ex_Blip 2",
+      "role": "gear_down",
+      "channels": 1,
+      "seconds": 0.741,
+      "peak": 0.78
+    },
+    {
+      "file": "oneshot_gear_down_4.ogg",
+      "fsbName": "M4GT3Ex_Blip 3",
+      "role": "gear_down",
+      "channels": 1,
+      "seconds": 0.818,
+      "peak": 0.78
+    },
+    {
+      "file": "oneshot_shift_cut_1.ogg",
+      "fsbName": "M4GT3_Up 5",
+      "role": "shift_cut",
+      "channels": 1,
+      "seconds": 0.08,
+      "peak": 0.78
+    },
+    {
+      "file": "oneshot_shift_cut_2.ogg",
+      "fsbName": "M4GT3_Up 8",
+      "role": "shift_cut",
+      "channels": 1,
+      "seconds": 0.215,
+      "peak": 0.78
+    },
+    {
+      "file": "oneshot_backfire_int_1.ogg",
+      "fsbName": "M4GT3_OT 1",
+      "role": "backfire_int",
+      "channels": 1,
+      "seconds": 0.294,
+      "peak": 0.78
+    },
+    {
+      "file": "oneshot_backfire_int_2.ogg",
+      "fsbName": "M4GT3_OT 2",
+      "role": "backfire_int",
+      "channels": 1,
+      "seconds": 0.275,
+      "peak": 0.78
+    },
+    {
+      "file": "oneshot_backfire_int_3.ogg",
+      "fsbName": "GTRGT3_OT High",
+      "role": "backfire_int",
+      "channels": 1,
+      "seconds": 0.341,
+      "peak": 0.78
+    },
+    {
+      "file": "oneshot_backfire_int_4.ogg",
+      "fsbName": "GTRGT3_OT Mid",
+      "role": "backfire_int",
+      "channels": 1,
+      "seconds": 0.394,
+      "peak": 0.78
+    },
+    {
+      "file": "oneshot_backfire_ext_1.ogg",
+      "fsbName": "M4GT3Ex_OT 3",
+      "role": "backfire_ext",
+      "channels": 1,
+      "seconds": 0.426,
+      "peak": 0.78
+    },
+    {
+      "file": "oneshot_backfire_ext_2.ogg",
+      "fsbName": "M4GT3Ex_OT 4",
+      "role": "backfire_ext",
+      "channels": 1,
+      "seconds": 0.445,
+      "peak": 0.78
+    },
+    {
+      "file": "oneshot_backfire_ext_3.ogg",
+      "fsbName": "M4GT3Ex_OT 5",
+      "role": "backfire_ext",
+      "channels": 1,
+      "seconds": 0.421,
+      "peak": 0.78
+    },
+    {
+      "file": "oneshot_blowoff_1.ogg",
+      "fsbName": "Turbobov",
+      "role": "blowoff",
+      "channels": 1,
+      "seconds": 0.756,
+      "peak": 0.78
+    },
+    {
+      "file": "oneshot_blowoff_2.ogg",
+      "fsbName": "Turbobov IN",
+      "role": "blowoff",
+      "channels": 1,
+      "seconds": 1.35,
+      "peak": 0.78
+    },
+    {
+      "file": "oneshot_limiter.ogg",
+      "fsbName": "M4GT3_LimC",
+      "role": "limiter",
+      "channels": 1,
+      "seconds": 0.88,
+      "peak": 0.78
+    }
+  ],
+  "throttleCurve": {
+    "ext": [
+      [
+        0.0,
+        0.0
+      ],
+      [
+        0.1,
+        0.25
+      ],
+      [
+        0.25,
+        0.55
+      ],
+      [
+        0.5,
+        0.8
+      ],
+      [
+        0.75,
+        0.94
+      ],
+      [
+        1.0,
+        1.0
+      ]
+    ],
+    "int": [
+      [
+        0.0,
+        0.0
+      ],
+      [
+        0.1,
+        0.28
+      ],
+      [
+        0.25,
+        0.58
+      ],
+      [
+        0.5,
+        0.82
+      ],
+      [
+        0.75,
+        0.95
+      ],
+      [
+        1.0,
+        1.0
+      ]
+    ]
+  },
+  "lift": {
+    "popMinRpm": 4200,
+    "crackleMinRpm": 4600,
+    "downshiftPopChance": 0.65
+  },
+  "limiterRetriggerS": 0.85,
+  "skid": {
+    "int": {
+      "file": "skid_int.ogg",
+      "channels": 1,
+      "rms": 0.16
+    },
+    "ext": {
+      "file": "skid_ext.ogg",
+      "channels": 1,
+      "rms": 0.16
+    }
+  },
+  "tractionControl": {
+    "file": "tc.ogg",
+    "channels": 1,
+    "rms": 0.16
+  }
+}

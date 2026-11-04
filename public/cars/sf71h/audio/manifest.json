@@ -1,0 +1,390 @@
+{
+  "source": "Ferrari SF71H Sound Mod - content/cars/sf71h/sfx/sf71h.bank",
+  "sampleRate": 48000,
+  "loopSeconds": 2.4,
+  "engine": {
+    "ext": [
+      {
+        "file": "engine_ext_on_4040.ogg",
+        "layer": "on",
+        "rpm": 4040,
+        "channels": 2,
+        "rms": 0.165
+      },
+      {
+        "file": "engine_ext_on_5600.ogg",
+        "layer": "on",
+        "rpm": 5600,
+        "channels": 2,
+        "rms": 0.1787
+      },
+      {
+        "file": "engine_ext_on_8000.ogg",
+        "layer": "on",
+        "rpm": 8000,
+        "channels": 2,
+        "rms": 0.1925
+      },
+      {
+        "file": "engine_ext_on_10200.ogg",
+        "layer": "on",
+        "rpm": 10200,
+        "channels": 2,
+        "rms": 0.2062
+      },
+      {
+        "file": "engine_ext_on_12500.ogg",
+        "layer": "on",
+        "rpm": 12500,
+        "channels": 2,
+        "rms": 0.22
+      },
+      {
+        "file": "engine_ext_off_4040.ogg",
+        "layer": "off",
+        "rpm": 4040,
+        "channels": 2,
+        "rms": 0.125
+      },
+      {
+        "file": "engine_ext_off_5600.ogg",
+        "layer": "off",
+        "rpm": 5600,
+        "channels": 1,
+        "rms": 0.1375
+      },
+      {
+        "file": "engine_ext_off_8140.ogg",
+        "layer": "off",
+        "rpm": 8140,
+        "channels": 2,
+        "rms": 0.15
+      },
+      {
+        "file": "engine_ext_off_10400.ogg",
+        "layer": "off",
+        "rpm": 10400,
+        "channels": 2,
+        "rms": 0.1625
+      },
+      {
+        "file": "engine_ext_off_12500.ogg",
+        "layer": "off",
+        "rpm": 12500,
+        "channels": 1,
+        "rms": 0.175
+      }
+    ],
+    "int": [
+      {
+        "file": "engine_int_on_3860.ogg",
+        "layer": "on",
+        "rpm": 3860,
+        "channels": 2,
+        "rms": 0.165
+      },
+      {
+        "file": "engine_int_on_5500.ogg",
+        "layer": "on",
+        "rpm": 5500,
+        "channels": 2,
+        "rms": 0.1787
+      },
+      {
+        "file": "engine_int_on_7200.ogg",
+        "layer": "on",
+        "rpm": 7200,
+        "channels": 2,
+        "rms": 0.1925
+      },
+      {
+        "file": "engine_int_on_10000.ogg",
+        "layer": "on",
+        "rpm": 10000,
+        "channels": 2,
+        "rms": 0.2062
+      },
+      {
+        "file": "engine_int_on_12500.ogg",
+        "layer": "on",
+        "rpm": 12500,
+        "channels": 2,
+        "rms": 0.22
+      },
+      {
+        "file": "engine_int_off_3860.ogg",
+        "layer": "off",
+        "rpm": 3860,
+        "channels": 2,
+        "rms": 0.125
+      },
+      {
+        "file": "engine_int_off_5600.ogg",
+        "layer": "off",
+        "rpm": 5600,
+        "channels": 2,
+        "rms": 0.1375
+      },
+      {
+        "file": "engine_int_off_8200.ogg",
+        "layer": "off",
+        "rpm": 8200,
+        "channels": 2,
+        "rms": 0.15
+      },
+      {
+        "file": "engine_int_off_10400.ogg",
+        "layer": "off",
+        "rpm": 10400,
+        "channels": 2,
+        "rms": 0.1625
+      },
+      {
+        "file": "engine_int_off_12500.ogg",
+        "layer": "off",
+        "rpm": 12500,
+        "channels": 2,
+        "rms": 0.175
+      }
+    ]
+  },
+  "turbo": [
+    {
+      "file": "turbo_on_16.ogg",
+      "layer": "on",
+      "boost": 1.6,
+      "channels": 1,
+      "rms": 0.085
+    },
+    {
+      "file": "turbo_off_16.ogg",
+      "layer": "off",
+      "boost": 1.6,
+      "channels": 1,
+      "rms": 0.06
+    }
+  ],
+  "transmission": [
+    {
+      "file": "trans_on_200.ogg",
+      "layer": "on",
+      "drivetrainSpeed": 200,
+      "channels": 1,
+      "rms": 0.11
+    },
+    {
+      "file": "trans_off_200.ogg",
+      "layer": "off",
+      "drivetrainSpeed": 200,
+      "channels": 1,
+      "rms": 0.085
+    }
+  ],
+  "oneshots": [
+    {
+      "file": "oneshot_gear_up_1.ogg",
+      "fsbName": "gearup",
+      "role": "gear_up",
+      "channels": 1,
+      "seconds": 0.296,
+      "peak": 0.78
+    },
+    {
+      "file": "oneshot_gear_up_2.ogg",
+      "fsbName": "gearupEXT",
+      "role": "gear_up",
+      "channels": 1,
+      "seconds": 0.194,
+      "peak": 0.78
+    },
+    {
+      "file": "oneshot_gear_down.ogg",
+      "fsbName": "geardnEXT",
+      "role": "gear_down",
+      "channels": 1,
+      "seconds": 0.194,
+      "peak": 0.78
+    },
+    {
+      "file": "oneshot_limiter.ogg",
+      "fsbName": "500_limiter",
+      "role": "limiter",
+      "channels": 1,
+      "seconds": 0.181,
+      "peak": 0.78
+    },
+    {
+      "file": "oneshot_backfire_int_1.ogg",
+      "fsbName": "500_backfire3",
+      "role": "backfire_int",
+      "channels": 1,
+      "seconds": 0.325,
+      "peak": 0.78
+    },
+    {
+      "file": "oneshot_backfire_int_2.ogg",
+      "fsbName": "500_backfire4",
+      "role": "backfire_int",
+      "channels": 1,
+      "seconds": 0.297,
+      "peak": 0.78
+    },
+    {
+      "file": "oneshot_backfire_int_3.ogg",
+      "fsbName": "500_backfire5",
+      "role": "backfire_int",
+      "channels": 1,
+      "seconds": 0.181,
+      "peak": 0.78
+    },
+    {
+      "file": "oneshot_backfire_int_4.ogg",
+      "fsbName": "500_backfire6",
+      "role": "backfire_int",
+      "channels": 1,
+      "seconds": 0.198,
+      "peak": 0.78
+    },
+    {
+      "file": "oneshot_backfire_int_5.ogg",
+      "fsbName": "500_backfire7",
+      "role": "backfire_int",
+      "channels": 1,
+      "seconds": 0.388,
+      "peak": 0.78
+    },
+    {
+      "file": "oneshot_backfire_ext_1.ogg",
+      "fsbName": "backfireEXT_1",
+      "role": "backfire_ext",
+      "channels": 1,
+      "seconds": 1.28,
+      "peak": 0.78
+    },
+    {
+      "file": "oneshot_backfire_ext_2.ogg",
+      "fsbName": "backfireEXT_3",
+      "role": "backfire_ext",
+      "channels": 1,
+      "seconds": 0.611,
+      "peak": 0.78
+    },
+    {
+      "file": "oneshot_backfire_ext_3.ogg",
+      "fsbName": "backfireEXT_5",
+      "role": "backfire_ext",
+      "channels": 1,
+      "seconds": 0.877,
+      "peak": 0.78
+    },
+    {
+      "file": "oneshot_backfire_ext_4.ogg",
+      "fsbName": "backfireEXT_7",
+      "role": "backfire_ext",
+      "channels": 1,
+      "seconds": 0.377,
+      "peak": 0.78
+    },
+    {
+      "file": "oneshot_backfire_ext_5.ogg",
+      "fsbName": "backfireEXT_9",
+      "role": "backfire_ext",
+      "channels": 1,
+      "seconds": 0.479,
+      "peak": 0.78
+    },
+    {
+      "file": "oneshot_shift_cut.ogg",
+      "fsbName": "missgear#13",
+      "role": "shift_cut",
+      "channels": 1,
+      "seconds": 0.13,
+      "peak": 0.75
+    },
+    {
+      "file": "oneshot_blowoff.ogg",
+      "fsbName": "turbo",
+      "role": "blowoff",
+      "channels": 1,
+      "seconds": 0.32,
+      "peak": 0.68
+    }
+  ],
+  "throttleCurve": {
+    "ext": [
+      [
+        0.0,
+        0.0
+      ],
+      [
+        0.1,
+        0.25
+      ],
+      [
+        0.25,
+        0.55
+      ],
+      [
+        0.5,
+        0.82
+      ],
+      [
+        0.75,
+        0.94
+      ],
+      [
+        1.0,
+        1.0
+      ]
+    ],
+    "int": [
+      [
+        0.0,
+        0.0
+      ],
+      [
+        0.1,
+        0.28
+      ],
+      [
+        0.25,
+        0.58
+      ],
+      [
+        0.5,
+        0.84
+      ],
+      [
+        0.75,
+        0.95
+      ],
+      [
+        1.0,
+        1.0
+      ]
+    ]
+  },
+  "lift": {
+    "popMinRpm": 8500,
+    "crackleMinRpm": 9000,
+    "downshiftPopChance": 0.55
+  },
+  "limiterRetriggerS": 0.85,
+  "skid": {
+    "int": {
+      "file": "skid_int.ogg",
+      "channels": 1,
+      "rms": 0.16
+    },
+    "ext": {
+      "file": "skid_ext.ogg",
+      "channels": 1,
+      "rms": 0.16
+    }
+  },
+  "tractionControl": {
+    "file": "tc.ogg",
+    "channels": 1,
+    "rms": 0.16
+  }
+}
