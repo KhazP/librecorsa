@@ -14,6 +14,12 @@ import * as THREE from "three";
 export type ReflectionQuality = "off" | "medium" | "high";
 
 const CUBE_SIZE = 256;
+/**
+ * Share of the filmed world's brightness the cars reflect. The probe sees the sunlit ground, grass and painted
+ * markings at full strength from above the roof, which made the paint read as green-tinted chrome; at about half
+ * it sits with the sky reflection the cars had before, now with the circuit in it
+ */
+const PROBE_INTENSITY = 0.55;
 /** Above the car's roof: what a glossy body sees of its surroundings */
 const PROBE_HEIGHT_M = 1.1;
 
@@ -29,6 +35,8 @@ export class CarReflectionProbe {
   private readonly roots = new Set<THREE.Object3D>();
   private readonly assigned = new WeakSet<THREE.Material>();
   private primed = false;
+  /** The visible sky's sun-disc switch: hidden while the probe films (as the sky's own environment bake does) */
+  private sunDisc: { value: number } | null = null;
 
   constructor(
     private readonly renderer: THREE.WebGLRenderer,
@@ -37,6 +45,14 @@ export class CarReflectionProbe {
     this.cubeTarget = new THREE.WebGLCubeRenderTarget(CUBE_SIZE, { type: THREE.HalfFloatType, generateMipmaps: false });
     this.cubeCamera = new THREE.CubeCamera(0.3, 1200, this.cubeTarget);
     this.pmrem = new THREE.PMREMGenerator(renderer);
+  }
+
+  /**
+   * The sky dome whose sun disc to hide during the probe's renders: its capped HDR disc, prefiltered, spreads into a
+   * bright blob that makes every car look polished chrome
+   */
+  setSky(sky: { material: { uniforms: Record<string, { value: unknown }> } }): void {
+    this.sunDisc = (sky.material.uniforms.showSunDisc as { value: number } | undefined) ?? null;
   }
 
   /** The prefiltered reflection map (null until the first full turn, or when off) */
@@ -79,6 +95,8 @@ export class CarReflectionProbe {
     if (hide) hide.visible = false;
     r.shadowMap.autoUpdate = false;
     r.xr.enabled = false;
+    const disc = this.sunDisc?.value ?? 0;
+    if (this.sunDisc) this.sunDisc.value = 0;
     let filtered = false;
     try {
       if (!this.primed) {
@@ -102,10 +120,11 @@ export class CarReflectionProbe {
       r.setRenderTarget(prevTarget);
       r.shadowMap.autoUpdate = prevAutoUpdate;
       r.xr.enabled = prevXr;
+      if (this.sunDisc) this.sunDisc.value = disc;
       if (hide) hide.visible = hidden;
     }
     // New materials (a model that swapped in, a new opponent) are caught within half a second
-    if (filtered || this.frame % 30 === 0) this.applyTo(this.envTarget?.texture ?? null, envIntensity);
+    if (filtered || this.frame % 30 === 0) this.applyTo(this.envTarget?.texture ?? null, envIntensity * PROBE_INTENSITY);
   }
 
   private filter(): void {

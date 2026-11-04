@@ -121,7 +121,7 @@ export function cleanPortedCarMaterial(mat: THREE.Material): THREE.Material {
     if (!ownRough) p.roughness = Math.min(Math.max(p.roughness, 0.3), 0.45);
     fullReflectance(p);
     p.clearcoat = 1;
-    p.clearcoatRoughness = 0.04;
+    p.clearcoatRoughness = 0.07;
     out = p;
   } else if (CARBON.test(name)) {
     const p = toPhysical(std);
@@ -158,7 +158,7 @@ export function cleanGt3Material(mat: THREE.Material): void {
   fullReflectance(p);
   if (/Paint_/i.test(name)) {
     p.clearcoat = 1;
-    p.clearcoatRoughness = 0.04;
+    p.clearcoatRoughness = 0.07;
   }
   p.needsUpdate = true;
 }
