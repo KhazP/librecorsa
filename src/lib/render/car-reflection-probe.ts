@@ -94,10 +94,15 @@ export class CarReflectionProbe {
     const prevTarget = r.getRenderTarget();
     const prevAutoUpdate = r.shadowMap.autoUpdate;
     const prevXr = r.xr.enabled;
+    const prevAutoClear = r.autoClear;
     const hidden = hide?.visible ?? false;
     if (hide) hide.visible = false;
     r.shadowMap.autoUpdate = false;
     r.xr.enabled = false;
+    // The post-processing chain turns the renderer's autoClear off. Uncleared, each face kept the depth of what it
+    // filmed a turn earlier, the sky (drawn last, at the far plane) failed the depth test there, and the old grass
+    // and trees stayed smeared across the sky: the cars reflected a green sky.
+    r.autoClear = true;
     const disc = this.sunDisc?.value ?? 0;
     if (this.sunDisc) this.sunDisc.value = 0;
     let filtered = false;
@@ -123,6 +128,7 @@ export class CarReflectionProbe {
       r.setRenderTarget(prevTarget);
       r.shadowMap.autoUpdate = prevAutoUpdate;
       r.xr.enabled = prevXr;
+      r.autoClear = prevAutoClear;
       if (this.sunDisc) this.sunDisc.value = disc;
       if (hide) hide.visible = hidden;
     }
