@@ -970,12 +970,12 @@ async function runVerification() {
     const sim = new F1Physics2026(track);
     sim.resetToStartGrid(false);
     const hotBefore = sim.wheels[0].tyre.pressurePsi;
-    const setup = { coldPressurePsi: { front: 20.4, rear: 19.1 }, camberDeg: { front: -3.2, rear: -1.8 } };
+    const setup = { coldPressurePsi: { fl: 20.4, fr: 20.4, rl: 19.1, rr: 19.1 }, camberDeg: { front: -3.2, rear: -1.8 } };
     sim.setTyreSetup(setup);
     const got = sim.getTyreSetup();
     const roundTrip =
-      got.coldPressurePsi.front === 20.4 &&
-      got.coldPressurePsi.rear === 19.1 &&
+      got.coldPressurePsi.fl === 20.4 &&
+      got.coldPressurePsi.rl === 19.1 &&
       got.camberDeg.front === -3.2 &&
       got.camberDeg.rear === -1.8;
     // Setup and output stay in psi gauge; the ideal gas law uses absolute pressure.
@@ -1000,14 +1000,14 @@ async function runVerification() {
       kept.camberDeg.rear === -1.8;
     assert(surviveOk, 'Tyre setup survives a grid reset and a compound change (cold pressure and camber kept)');
 
-    sim.setTyreSetup({ coldPressurePsi: { front: 40, rear: 5 }, camberDeg: { front: -9, rear: 0 } });
+    sim.setTyreSetup({ coldPressurePsi: { fl: 40, fr: 40, rl: 5, rr: 5 }, camberDeg: { front: -9, rear: 0 } });
     const clamped = sim.getTyreSetup();
     assert(
-      clamped.coldPressurePsi.front === 27 &&
-        clamped.coldPressurePsi.rear === 14 &&
+      clamped.coldPressurePsi.fl === 27 &&
+        clamped.coldPressurePsi.rr === 14 &&
         clamped.camberDeg.front === -4.5 &&
         clamped.camberDeg.rear === -0.5,
-      `Tyre setup inputs are clamped (pressure ${clamped.coldPressurePsi.front}/${clamped.coldPressurePsi.rear} psi, camber ${clamped.camberDeg.front}°/${clamped.camberDeg.rear}°)`
+      `Tyre setup inputs are clamped (pressure ${clamped.coldPressurePsi.fl}/${clamped.coldPressurePsi.rr} psi, camber ${clamped.camberDeg.front}°/${clamped.camberDeg.rear}°)`
     );
   }
 

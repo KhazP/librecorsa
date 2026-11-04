@@ -795,30 +795,28 @@ export const SetupPanel: React.FC<PauseMenuProps> = (p) => {
               </button>
             </div>
             <div className="grid gap-x-5 gap-y-1 sm:grid-cols-2">
-              <TyreSlider
-                label="Front cold pressure"
-                value={p.tyreSetup.coldPressurePsi.front}
-                limits={limits.pressurePsi}
-                format={formatPsi}
-                onChange={(v) =>
-                  p.onChangeTyreSetup({
-                    ...p.tyreSetup,
-                    coldPressurePsi: { ...p.tyreSetup.coldPressurePsi, front: v },
-                  })
-                }
-              />
-              <TyreSlider
-                label="Rear cold pressure"
-                value={p.tyreSetup.coldPressurePsi.rear}
-                limits={limits.pressurePsi}
-                format={formatPsi}
-                onChange={(v) =>
-                  p.onChangeTyreSetup({
-                    ...p.tyreSetup,
-                    coldPressurePsi: { ...p.tyreSetup.coldPressurePsi, rear: v },
-                  })
-                }
-              />
+              {(
+                [
+                  ["fl", "Front-left cold pressure"],
+                  ["fr", "Front-right cold pressure"],
+                  ["rl", "Rear-left cold pressure"],
+                  ["rr", "Rear-right cold pressure"],
+                ] as const
+              ).map(([k, label]) => (
+                <TyreSlider
+                  key={k}
+                  label={label}
+                  value={p.tyreSetup.coldPressurePsi[k]}
+                  limits={limits.pressurePsi}
+                  format={formatPsi}
+                  onChange={(v) =>
+                    p.onChangeTyreSetup({
+                      ...p.tyreSetup,
+                      coldPressurePsi: { ...p.tyreSetup.coldPressurePsi, [k]: v },
+                    })
+                  }
+                />
+              ))}
               <TyreSlider
                 label="Front camber"
                 value={p.tyreSetup.camberDeg.front}

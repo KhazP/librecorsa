@@ -37,7 +37,9 @@ import type {
   SurfaceType,
   TireCompound,
   TyreSetup,
+  WheelPressures,
 } from '@/types/f1';
+import { axlePressures, pressureAt } from '@/types/f1';
 export type { ControlInputs };
 import {
   BASE_ALTITUDE_M,
@@ -199,10 +201,10 @@ export function floorStallFactorForClearance(clearanceM: number): number {
 function defaultTyreSetup(): TyreSetup {
   const round = (psi: number) => Math.round(psi * 10) / 10;
   return {
-    coldPressurePsi: {
-      front: round(coldPressureFor(VF26_TYRES.soft.front.pressureRefPsi)),
-      rear: round(coldPressureFor(VF26_TYRES.soft.rear.pressureRefPsi)),
-    },
+    coldPressurePsi: axlePressures(
+      round(coldPressureFor(VF26_TYRES.soft.front.pressureRefPsi)),
+      round(coldPressureFor(VF26_TYRES.soft.rear.pressureRefPsi))
+    ),
     camberDeg: { front: VF26_CHASSIS.front.staticCamberDeg, rear: VF26_CHASSIS.rear.staticCamberDeg },
   };
 }
@@ -814,8 +816,9 @@ export class F1Physics2026 {
     const pick = (v: number, lo: number, hi: number, current: number) =>
       Number.isFinite(v) ? THREE.MathUtils.clamp(v, lo, hi) : current;
     const cp = this.tyreSetup.coldPressurePsi;
-    cp.front = Math.round(pick(setup.coldPressurePsi.front, 14, 27, cp.front) * 10) / 10;
-    cp.rear = Math.round(pick(setup.coldPressurePsi.rear, 14, 27, cp.rear) * 10) / 10;
+    for (const k of ["fl", "fr", "rl", "rr"] as const) {
+      cp[k] = Math.round(pick(setup.coldPressurePsi[k], 14, 27, cp[k]) * 10) / 10;
+    }
     this.axles[0].camberDeg = pick(setup.camberDeg.front, -4.5, -1.5, this.axles[0].camberDeg);
     this.axles[1].camberDeg = pick(setup.camberDeg.rear, -3.0, -0.5, this.axles[1].camberDeg);
     this.applyColdPressures();
@@ -1168,7 +1171,7 @@ export class F1Physics2026 {
   /** Pushes the setup's cold pressures into each tyre (the hot pressure follows the ideal gas law) */
   private applyColdPressures(): void {
     for (const w of this.wheels) {
-      const psi = w.isFront ? this.tyreSetup.coldPressurePsi.front : this.tyreSetup.coldPressurePsi.rear;
+      const psi = pressureAt(this.tyreSetup.coldPressurePsi, w.isFront, w.isLeft);
       if (w.tyre.coldPressurePsi !== psi) setTyreColdPressure(w.tyre, psi);
     }
   }

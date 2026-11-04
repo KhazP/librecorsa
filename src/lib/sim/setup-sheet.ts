@@ -277,10 +277,18 @@ const electronics = (): SetupParam[] => [
   tunerParam("engineMap", { label: "Engine map", base: 2, min: 1, max: 5, step: 1, format: (v) => ENGINE_MAP_LABELS[v] ?? int(v), fx: FX.map }),
 ];
 
-const tyrePressures = (r: TyreRanges, d: TyreSetup): SetupParam[] => [
-  tyreParam("psiFront", "Front pressure", r.pressurePsi, d.coldPressurePsi.front, (t) => t.coldPressurePsi.front, (t, v) => ({ ...t, coldPressurePsi: { ...t.coldPressurePsi, front: v } }), psi, FX.coldPsi),
-  tyreParam("psiRear", "Rear pressure", r.pressurePsi, d.coldPressurePsi.rear, (t) => t.coldPressurePsi.rear, (t, v) => ({ ...t, coldPressurePsi: { ...t.coldPressurePsi, rear: v } }), psi, FX.coldPsi),
-];
+/** One cold pressure per tyre (a real car's pressures are set wheel by wheel) */
+const tyrePressures = (r: TyreRanges, d: TyreSetup): SetupParam[] =>
+  (
+    [
+      ["fl", "psiFL", "Front-left pressure"],
+      ["fr", "psiFR", "Front-right pressure"],
+      ["rl", "psiRL", "Rear-left pressure"],
+      ["rr", "psiRR", "Rear-right pressure"],
+    ] as const
+  ).map(([k, key, label]) =>
+    tyreParam(key, label, r.pressurePsi, d.coldPressurePsi[k], (t) => t.coldPressurePsi[k], (t, v) => ({ ...t, coldPressurePsi: { ...t.coldPressurePsi, [k]: v } }), psi, FX.coldPsi)
+  );
 
 const cambers = (r: TyreRanges, d: TyreSetup): SetupParam[] => [
   tyreParam("camberFront", "Front camber", r.camberFrontDeg, d.camberDeg.front, (t) => t.camberDeg.front, (t, v) => ({ ...t, camberDeg: { ...t.camberDeg, front: v } }), camber, FX.camberFront, true),

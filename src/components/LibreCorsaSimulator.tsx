@@ -111,7 +111,9 @@ import type {
   TireCompound,
   TyreSetup,
   VehicleModelId,
+  WheelPressures,
 } from "@/types/f1";
+import { axlePressures } from "@/types/f1";
 
 /** Matches the aero package the track's target speeds / braking markers are computed for */
 const DEFAULT_AERO_PRESET: AeroSetupPreset = "balanced";
@@ -200,6 +202,18 @@ function readAxlePair(
   };
 }
 
+/** Saved cold pressures: per wheel, or the older per-axle `{ front, rear }` spread to both tyres of each axle */
+function readWheelPressures(value: unknown, range: { min: number; max: number }): WheelPressures | null {
+  if (!value || typeof value !== "object") return null;
+  const v = value as Record<string, unknown>;
+  const clamp = (x: number) => Math.min(range.max, Math.max(range.min, x));
+  if ([v.fl, v.fr, v.rl, v.rr].every(isFiniteNumber)) {
+    return { fl: clamp(v.fl as number), fr: clamp(v.fr as number), rl: clamp(v.rl as number), rr: clamp(v.rr as number) };
+  }
+  const axle = readAxlePair(value, range, range);
+  return axle ? axlePressures(axle.front, axle.rear) : null;
+}
+
 /** The tyre setup saved from an earlier session, or null when none is saved or it is unusable */
 function loadStoredTyreSetup(vehicle: VehicleModelId): TyreSetup | null {
   try {
@@ -207,7 +221,7 @@ function loadStoredTyreSetup(vehicle: VehicleModelId): TyreSetup | null {
     if (!raw) return null;
     const saved = JSON.parse(raw) as { coldPressurePsi?: unknown; camberDeg?: unknown } | null;
     const limits = TYRE_SETUP_LIMITS[vehicle];
-    const coldPressurePsi = readAxlePair(saved?.coldPressurePsi, limits.pressurePsi, limits.pressurePsi);
+    const coldPressurePsi = readWheelPressures(saved?.coldPressurePsi, limits.pressurePsi);
     const camberDeg = readAxlePair(saved?.camberDeg, limits.camberFrontDeg, limits.camberRearDeg);
     return coldPressurePsi && camberDeg ? { coldPressurePsi, camberDeg } : null;
   } catch {

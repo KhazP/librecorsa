@@ -5,6 +5,7 @@
  */
 
 import type { AeroSetupPreset, LiveTunerPatch, TireCompound, TyreSetup, VehicleModelId } from "@/types/f1";
+import { axlePressures } from "@/types/f1";
 
 export interface ChassisSetup {
   /** Wing steps from the baseline (see WING_CLICK_DEG for a step's size on each car) */
@@ -194,6 +195,13 @@ export function saveChassisSetup(vehicle: VehicleModelId, setup: ChassisSetup): 
   }
 }
 
+/** Presets saved before pressures were per wheel carry `{ front, rear }`: spread each to both tyres of its axle */
+function perWheelTyreSetup(tyre: TyreSetup): TyreSetup {
+  const cp = tyre?.coldPressurePsi as unknown as Record<string, number> | undefined;
+  if (!cp || typeof cp.fl === "number") return tyre;
+  return { ...tyre, coldPressurePsi: axlePressures(cp.front, cp.rear) };
+}
+
 export function loadGaragePresets(vehicle: VehicleModelId): GaragePreset[] {
   try {
     const raw = window.localStorage.getItem(presetsKey(vehicle));
@@ -201,7 +209,7 @@ export function loadGaragePresets(vehicle: VehicleModelId): GaragePreset[] {
     if (!Array.isArray(list)) return [];
     return list
       .filter((p): p is GaragePreset => Boolean(p) && typeof p === "object" && typeof (p as GaragePreset).name === "string")
-      .map((p) => ({ ...p, vehicle, chassis: clampChassisSetup(p.chassis) }));
+      .map((p) => ({ ...p, vehicle, chassis: clampChassisSetup(p.chassis), tyre: perWheelTyreSetup(p.tyre) }));
   } catch {
     return [];
   }
