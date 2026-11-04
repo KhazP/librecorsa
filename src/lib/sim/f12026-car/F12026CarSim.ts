@@ -493,6 +493,11 @@ export class TrackSampleGroundQuery implements GroundQuery {
   }
 }
 
+/** The drivable-surface query of a loaded track root (shared with the cars), or null when it has no colliders */
+export function trackGroundQuery(root: THREE.Object3D): TrackColliderQuery | null {
+  return collidersFor(root)?.ground ?? null;
+}
+
 /** Colliders built once per loaded track root and shared by every f12026-car */
 const colliderCache = new WeakMap<THREE.Object3D, { ground: TrackColliderQuery; walls: TrackWallQuery } | null>();
 

@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import * as THREE from "three";
 import { getRwandaTrackData, LIVERIES } from "@/lib/track-data";
 import { F1Physics2026, type ControlInputs } from "@/lib/f1-physics-2026";
-import { F12026CarSim } from "@/lib/sim/f12026-car/F12026CarSim";
+import { F12026CarSim, trackGroundQuery } from "@/lib/sim/f12026-car/F12026CarSim";
 import type { SimulatorCar } from "@/lib/sim/simulator-car";
 import { F1AudioEngine2026 } from "@/lib/f1-audio-2026";
 import { createF1Car2026, type SimCarRig } from "@/lib/car-builder-2026";
@@ -1267,6 +1267,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       aiFieldRef.current?.attachTrackRoot(root);
       // Move broadcast cameras that would film the inside of a grandstand
       tvDirector.resolveOcclusion(root);
+      const ground = trackGroundQuery(root);
+      if (ground) builtCircuit.seatRacingLine(ground);
     });
 
     /**

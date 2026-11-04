@@ -16,6 +16,10 @@ import { applySceneryDetail, prepareTreeGeometry, sceneryKind, setSceneryTime } 
 import { attachSceneryInstances, loadSceneryInstances, resetSceneryInstances } from "@/lib/render/scenery-instances";
 import { applySceneryTextures, loadSceneryTextures } from "@/lib/render/scenery-textures";
 import { cleanScanMaterial } from "@/lib/render/scan-materials";
+import { createGroundHit, type GroundQuery } from "@/lib/sim/f12026-car/TrackColliderQuery";
+
+/** Height of a racing-line dash over the driving surface: clear of its ripple, low enough to read as paint */
+const DASH_SEAT_LIFT_M = 0.035;
 
 export interface BuiltRwandaScene {
   sceneGroup: THREE.Group;
@@ -25,6 +29,11 @@ export interface BuiltRwandaScene {
   updateEnvironment: (elapsedSeconds: number) => void;
   /** Recolours the braking line ahead of the car; `guide` = the car's own braking guide (else the circuit's) */
   updateDynamicRacingLine: (carS: number, carSpeedMs: number, guide?: BrakingGuide | null) => void;
+  /**
+   * Sits the racing-line dashes on the real driving surface (the centreline profile misses the road's crown and
+   * camber away from the centre, so off-centre dashes sank into or floated over it)
+   */
+  seatRacingLine: (ground: GroundQuery) => void;
   /** Start gantry: null = idle (green), 0..5 = number of red lights lit */
   setStartLights: (redCount: number | null) => void;
   /**
@@ -844,6 +853,9 @@ export function buildRwandaCircuitScene(
   const rlColors: number[] = [];
   const rlIndices: number[] = [];
 
+  // The driving surface the dashes sit on, once the track's colliders are in
+  let dashGround: GroundQuery | null = null;
+  const dashHit = createGroundHit();
   // Crisp 3D dashed rectangular marker segments along a car's racing line: the four corners of dash i
   const dashCorners = (i: number, line: RacingLineId): number[] => {
     const s0 = samples[i];
@@ -868,7 +880,13 @@ export function buildRwandaCircuitScene(
     const l1 = c1.clone().addScaledVector(bDashEnd, -halfDashW);
     const r1 = c1.clone().addScaledVector(bDashEnd, halfDashW);
 
-    return [l0.x, l0.y, l0.z, r0.x, r0.y, r0.z, l1.x, l1.y, l1.z, r1.x, r1.y, r1.z];
+    const out = [l0.x, l0.y, l0.z, r0.x, r0.y, r0.z, l1.x, l1.y, l1.z, r1.x, r1.y, r1.z];
+    if (dashGround) {
+      for (let k = 0; k < 12; k += 3) {
+        if (dashGround.query(out[k], out[k + 2], out[k + 1] + 1.5, dashHit)) out[k + 1] = dashHit.height + DASH_SEAT_LIFT_M;
+      }
+    }
+    return out;
   };
 
   // Drawn on the F1 line until a car with its own line hands its braking guide over
@@ -921,6 +939,12 @@ export function buildRwandaCircuitScene(
    */
   let lineGuide: BrakingGuide | null = null;
   let drawnLine: RacingLineId = 'f1';
+  const seatRacingLine = (ground: GroundQuery) => {
+    dashGround = ground;
+    for (let i = 0; i < n; i++) rlPositionAttr.array.set(dashCorners(i, drawnLine), i * 12);
+    rlPositionAttr.needsUpdate = true;
+    rlGeom.computeBoundingSphere();
+  };
   const updateDynamicRacingLine = (carS: number, carSpeedMs: number, guide: BrakingGuide | null = null) => {
     // Another car's guidance: repaint the static braking zones from it, on its own racing line
     if (guide !== lineGuide) {
@@ -1303,6 +1327,7 @@ export function buildRwandaCircuitScene(
   return {
     sceneGroup,
     racingLineMesh,
+    seatRacingLine,
     waterMesh,
     startLightMeshes,
     updateEnvironment,
