@@ -92,6 +92,9 @@ const SUN_INTENSITY = 5.0;
 const FILL_SKY = 0xc4d8ee;
 const FILL_GROUND = 0x6b6a3a;
 const FILL_INTENSITY = 0.13;
+/** Albedo of the stand-in ground in the sky's environment bake, and the sky light it gets at least */
+const GROUND_ALBEDO = 0x3a3833;
+const GROUND_SKY_LIGHT = 0.6;
 const EXPOSURE = 1.15;
 /** Display-referred grade after AgX (DisplayGradeEffect): contrast and saturation gain */
 const GRADE_CONTRAST = 0.12;
@@ -322,21 +325,43 @@ function applySkyLook(sky: Sky, sunDir: THREE.Vector3, look: SkyLook): void {
 }
 
 /** Bakes the Sky into a 256 px PMREM cube (three r187+). The sun disc is hidden during the bake
- *  so its ~60000 radiance does not dominate the prefiltered environment. */
+ *  so its ~60000 radiance does not dominate the prefiltered environment. Below the horizon a dark, sunlit ground
+ *  stands in for the circuit: the Sky shader carries its horizon colour all the way down, which lit undersides and
+ *  sills from below as brightly as the horizon and made reflections of the ground glow. */
+interface GroundLight {
+  color: THREE.Color;
+  intensity: number;
+}
+
 class SkyBaker {
   private readonly scene = new THREE.Scene();
   private readonly sky = new Sky();
+  private readonly ground: THREE.Mesh<THREE.CircleGeometry, THREE.MeshLambertMaterial>;
+  private readonly groundSun = new THREE.DirectionalLight();
+  private readonly groundFill = new THREE.HemisphereLight();
   private pmrem: THREE.PMREMGenerator | null;
 
   constructor(renderer: THREE.WebGLRenderer) {
     this.sky.scale.setScalar(1000);
     configureSkyUniforms(this.sky, false);
     this.scene.add(this.sky);
+    // Tarmac, grass and run-off seen from a car: a dark, slightly warm grey
+    this.ground = new THREE.Mesh(new THREE.CircleGeometry(900, 48), new THREE.MeshLambertMaterial({ color: GROUND_ALBEDO }));
+    this.ground.rotation.x = -Math.PI / 2;
+    this.ground.position.y = -1.5;
+    this.scene.add(this.ground, this.groundSun, this.groundFill);
     this.pmrem = new THREE.PMREMGenerator(renderer);
   }
 
-  bake(sunDir: THREE.Vector3, look: SkyLook): THREE.WebGLCubeRenderTarget {
+  bake(sunDir: THREE.Vector3, look: SkyLook, sun: GroundLight, fill: THREE.HemisphereLight): THREE.WebGLCubeRenderTarget {
     applySkyLook(this.sky, sunDir, look);
+    // The ground takes the scene's own sun and sky light, so it sits at the brightness the real circuit has
+    this.groundSun.color.copy(sun.color);
+    this.groundSun.intensity = sun.intensity;
+    this.groundSun.position.copy(sunDir).multiplyScalar(100);
+    this.groundFill.color.copy(fill.color);
+    this.groundFill.groundColor.copy(fill.groundColor);
+    this.groundFill.intensity = Math.max(fill.intensity, GROUND_SKY_LIGHT);
     return this.pmrem!.fromScene(this.scene, 0, 0.1, 1000, { size: ENV_SIZE });
   }
 
@@ -345,6 +370,8 @@ class SkyBaker {
     this.pmrem = null;
     this.sky.geometry.dispose();
     this.sky.material.dispose();
+    this.ground.geometry.dispose();
+    this.ground.material.dispose();
     this.scene.clear();
   }
 }
@@ -375,7 +402,13 @@ export function createGoldenHourEnvironment(
   const baker = new SkyBaker(renderer);
   const skyLook = skyLookFor(GOLDEN_HOUR_SKY, {} as SkyLook);
   const skySunDir = sunDirection.clone();
-  let envTarget = baker.bake(skySunDir, skyLook);
+  // The first bake, before the scene's lights exist: their starting values
+  let envTarget = baker.bake(
+    skySunDir,
+    skyLook,
+    { color: new THREE.Color(SUN_COLOR), intensity: SUN_INTENSITY },
+    new THREE.HemisphereLight(FILL_SKY, FILL_GROUND, FILL_INTENSITY)
+  );
   let baked: SkyConditions = { ...GOLDEN_HOUR_SKY };
   let lastBakeMs = -Infinity;
   let pendingBake = false;
@@ -419,7 +452,7 @@ export function createGoldenHourEnvironment(
   const tint = new THREE.Color();
 
   const rebake = () => {
-    const next = baker.bake(skySunDir, skyLook);
+    const next = baker.bake(skySunDir, skyLook, sunLight, fillLight);
     if (scene.environment === envTarget.texture) scene.environment = next.texture;
     envTarget.dispose();
     envTarget = next;
