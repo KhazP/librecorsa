@@ -8,7 +8,17 @@ import { AMG_GT3_SOUND } from "@/lib/sim/gt3/AmgGt3Sim";
  * needs its GLB (`public/cars/<id>/model/`), its sound bank (`public/cars/<id>/audio/`) and an entry here.
  * The first car of each vehicle model keeps the model's id, so saved choices and `?car=` links still resolve.
  */
-export type CarId = "vf26" | "f12026-car" | "amg-gt3";
+export type CarId =
+  | "vf26"
+  | "f12026-car"
+  | "sf26"
+  | "w17"
+  | "rb22"
+  | "sf71h"
+  | "rb8"
+  | "r25"
+  | "f2004"
+  | "amg-gt3";
 
 export type CarClassId = "f1-2026" | "gt3";
 
@@ -54,6 +64,76 @@ export const CARS: readonly CarDefinition[] = [
     sub: "6-DOF rigid-body · track colliders · DRS",
     badge: "6-DOF",
     physics: "f12026-car",
+    sound: AMR26_SOUND,
+  },
+  {
+    id: "sf26",
+    classId: "f1-2026",
+    title: "SF-26",
+    sub: "2026 car · FA-26 physics",
+    badge: "SF-26",
+    physics: "vf26",
+    modelUrl: "/cars/sf26/model/sf26.glb",
+    sound: AMR26_SOUND,
+  },
+  {
+    id: "w17",
+    classId: "f1-2026",
+    title: "W17",
+    sub: "2026 car · FA-26 physics",
+    badge: "W17",
+    physics: "vf26",
+    modelUrl: "/cars/w17/model/w17.glb",
+    sound: AMR26_SOUND,
+  },
+  {
+    id: "rb22",
+    classId: "f1-2026",
+    title: "RB22",
+    sub: "2026 car · FA-26 physics",
+    badge: "RB22",
+    physics: "vf26",
+    modelUrl: "/cars/rb22/model/rb22.glb",
+    sound: AMR26_SOUND,
+  },
+  {
+    id: "sf71h",
+    classId: "f1-2026",
+    title: "SF71H",
+    sub: "2018 car · FA-26 physics",
+    badge: "SF71H",
+    physics: "vf26",
+    modelUrl: "/cars/sf71h/model/sf71h.glb",
+    sound: AMR26_SOUND,
+  },
+  {
+    id: "rb8",
+    classId: "f1-2026",
+    title: "RB8",
+    sub: "2012 car · FA-26 physics",
+    badge: "RB8",
+    physics: "vf26",
+    modelUrl: "/cars/rb8/model/rb8.glb",
+    sound: AMR26_SOUND,
+  },
+  {
+    id: "r25",
+    classId: "f1-2026",
+    title: "R25",
+    sub: "2005 car · FA-26 physics",
+    badge: "R25",
+    physics: "vf26",
+    modelUrl: "/cars/r25/model/r25.glb",
+    sound: AMR26_SOUND,
+  },
+  {
+    id: "f2004",
+    classId: "f1-2026",
+    title: "F2004",
+    sub: "2004 car · FA-26 physics",
+    badge: "F2004",
+    physics: "vf26",
+    modelUrl: "/cars/f2004/model/f2004.glb",
     sound: AMR26_SOUND,
   },
   {
