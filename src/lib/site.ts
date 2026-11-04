@@ -1,0 +1,8 @@
+/** Public address of the hosted game, for canonical URLs, the sitemap and share cards */
+export const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL || "https://librecorsa.org").replace(/\/+$/, "");
+
+export const SITE_NAME = "LibreCorsa";
+export const SITE_TITLE = "LibreCorsa: free open-source racing simulator in your browser";
+export const SITE_DESCRIPTION =
+  "Free, open-source sim racing in your browser: 500 Hz physics, open-wheelers and a GT3, AI races, multiplayer and wheel force feedback. Nothing to install.";
+export const REPO_URL = "https://github.com/KhazP/librecorsa";

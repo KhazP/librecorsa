@@ -1,7 +1,8 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
 import { withBasePath } from "@/lib/base-path";
+import { REPO_URL, SITE_DESCRIPTION, SITE_NAME, SITE_TITLE, SITE_URL } from "@/lib/site";
 
 /*
  * The UI fonts ship with the app (Latin subsets, as Google Fonts serves them; SIL OFL 1.1, licences in ./fonts).
@@ -38,17 +39,74 @@ const jetbrainsMono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "LibreCorsa — Open-Source 500Hz Motorsport Simulator",
-  description:
-    "Open-source multi-class racing simulator with 500 Hz 6-DOF vehicle dynamics, active aero, GT3 & Formula cars, and WebRTC P2P multiplayer.",
-  applicationName: "LibreCorsa",
-  // Metadata URLs don't get the GitHub Pages base path on their own
+  metadataBase: new URL(SITE_URL),
+  title: { default: SITE_TITLE, template: `%s | ${SITE_NAME}` },
+  description: SITE_DESCRIPTION,
+  applicationName: SITE_NAME,
+  keywords: [
+    "sim racing",
+    "racing simulator",
+    "browser racing game",
+    "free racing game",
+    "open source racing game",
+    "motorsport simulator",
+    "formula car",
+    "GT3",
+    "force feedback",
+    "WebGL",
+  ],
+  authors: [{ name: "KhazP", url: "https://github.com/KhazP" }],
+  creator: "KhazP",
+  category: "games",
+  alternates: { canonical: "/" },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: { index: true, follow: true, "max-image-preview": "large", "max-snippet": -1, "max-video-preview": -1 },
+  },
+  openGraph: {
+    type: "website",
+    url: "/",
+    siteName: SITE_NAME,
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
+    locale: "en_US",
+  },
+  twitter: { card: "summary_large_image", title: SITE_TITLE, description: SITE_DESCRIPTION },
+  // Metadata URLs don't get a base path on their own
   icons: {
     icon: [
       { url: withBasePath("/branding/librecorsa-mark.svg"), type: "image/svg+xml" },
       { url: withBasePath("/favicon.ico"), sizes: "16x16 32x32 48x48" },
     ],
+    apple: [{ url: withBasePath("/branding/apple-touch-icon.png"), sizes: "180x180" }],
   },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#08090D",
+  colorScheme: "dark",
+};
+
+// schema.org description of the game for search results
+const jsonLd = {
+  "@context": "https://schema.org",
+  "@type": ["VideoGame", "WebApplication"],
+  name: SITE_NAME,
+  url: `${SITE_URL}/`,
+  description: SITE_DESCRIPTION,
+  image: `${SITE_URL}/opengraph-image.jpg`,
+  applicationCategory: "GameApplication",
+  genre: ["Racing", "Simulation", "Sim racing"],
+  gamePlatform: "Web browser",
+  operatingSystem: "Any (runs in a WebGL2 browser)",
+  playMode: ["SinglePlayer", "MultiPlayer"],
+  isAccessibleForFree: true,
+  offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
+  license: "https://opensource.org/licenses/MIT",
+  codeRepository: REPO_URL,
+  sameAs: [REPO_URL],
+  author: { "@type": "Person", name: "KhazP", url: "https://github.com/KhazP" },
 };
 
 export default function RootLayout({
@@ -62,6 +120,11 @@ export default function RootLayout({
       className={`dark ${titillium.variable} ${orbitron.variable} ${jetbrainsMono.variable}`}
     >
       <body className="antialiased bg-[#08090D] text-[#F5F7FA] selection:bg-[#CCFF00] selection:text-[#08090D]">
+        <script
+          type="application/ld+json"
+          // Static data, escaped so it can't close the script element
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }}
+        />
         {children}
       </body>
     </html>
