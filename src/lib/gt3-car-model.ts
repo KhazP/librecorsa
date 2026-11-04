@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { createGltfLoader } from "@/lib/render/gltf-loader";
+import { cleanGt3Material, sharpenCarMaps } from "@/lib/render/ported-car-materials";
 import { assetProgress, type AssetTaskId } from "@/lib/loading/asset-progress";
 import { withBasePath } from "@/lib/base-path";
 import { AMG_GT3_CONFIG } from "@/lib/sim/gt3/AmgGt3Config";
@@ -163,7 +164,8 @@ export function loadGt3Template(task: AssetTaskId = "car"): Promise<THREE.Group 
           const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
           for (const m of mats) {
             const std = m as THREE.MeshStandardMaterial;
-            if (std.map) std.map.anisotropy = 8;
+            cleanGt3Material(m);
+            sharpenCarMaps(m);
             if (std.transparent) std.depthWrite = false;
           }
         });

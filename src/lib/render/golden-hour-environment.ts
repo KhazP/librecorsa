@@ -91,7 +91,7 @@ const SUN_COLOR = 0xffebd6;
 const SUN_INTENSITY = 5.0;
 const FILL_SKY = 0xc4d8ee;
 const FILL_GROUND = 0x6b6a3a;
-const FILL_INTENSITY = 0.35;
+const FILL_INTENSITY = 0.13;
 const EXPOSURE = 1.15;
 /** Display-referred grade after AgX (DisplayGradeEffect): contrast and saturation gain */
 const GRADE_CONTRAST = 0.12;
@@ -279,7 +279,9 @@ function colorCurve(keys: readonly Key[], x: number, out: THREE.Color): THREE.Co
 // Keys by sun elevation (deg). Each passes through the golden-hour constant at 14 deg.
 const SUN_COLOR_KEYS: readonly Key[] = [[-2, 0xff6a2a], [4, 0xffa262], [14, SUN_COLOR], [35, 0xfff4e8], [70, 0xfff8f2]];
 const SUN_INTENSITY_KEYS: readonly Key[] = [[-3, 0], [1, 0.8], [6, 3.0], [14, SUN_INTENSITY], [35, 5.8], [70, 6.2]];
-const FILL_INTENSITY_KEYS: readonly Key[] = [[-3, 0.12], [4, 0.26], [14, FILL_INTENSITY], [40, 0.45], [70, 0.5]];
+// The sky's prefiltered environment already lights everything from the sky dome; this flat fill on top of it only
+// washes out shading and reflections (cars read as matte plastic), so it is kept to a trace
+const FILL_INTENSITY_KEYS: readonly Key[] = [[-3, 0.05], [4, 0.1], [14, FILL_INTENSITY], [40, 0.17], [70, 0.19]];
 const FOG_COLOR_KEYS: readonly Key[] = [[-3, 0x5e5468], [4, 0xd49c7c], [14, FOG_COLOR], [35, 0xd8dade], [70, 0xc8d4e2]];
 const ENV_INTENSITY_KEYS: readonly Key[] = [[-3, 0.3], [4, 0.7], [14, 1], [70, 1.1]];
 const EXPOSURE_KEYS: readonly Key[] = [[-3, 1.5], [4, 1.32], [14, EXPOSURE], [35, 1.08], [70, 1.05]];

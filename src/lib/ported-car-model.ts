@@ -7,7 +7,7 @@ import type { TyreVisualState } from "@/lib/sim/simulator-car";
 import type { SimCarRig } from "@/lib/car-builder-2026";
 import type { Vf26ModelInstance } from "@/lib/vf26-car-model";
 import { installTyreDeformation, type TyreDeformationHandle } from "@/lib/render/tyre-deformation";
-import { cleanPortedCarMaterial } from "@/lib/render/ported-car-materials";
+import { cleanPortedCarMaterial, sharpenCarMaps } from "@/lib/render/ported-car-materials";
 
 /**
  * Cars ported to one GLB each (a registry car's `modelUrl`), on any vehicle model. Node layout:
@@ -60,7 +60,7 @@ function loadTemplate(url: string): Promise<THREE.Group | null> {
           const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
           for (const m of mats) {
             const std = m as THREE.MeshStandardMaterial;
-            if (std.map) std.map.anisotropy = 8;
+            sharpenCarMaps(m);
             if (std.transparent) std.depthWrite = false;
           }
         });

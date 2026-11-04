@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { createGltfLoader } from "@/lib/render/gltf-loader";
+import { sharpenCarMaps } from "@/lib/render/ported-car-materials";
 import { assetProgress, type AssetTaskId } from "@/lib/loading/asset-progress";
 import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js";
 import { withBasePath } from "@/lib/base-path";
@@ -106,7 +107,7 @@ export function loadVf26Template(modelUrl: string = AMR26_MODEL_URL, task: Asset
           const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
           for (const m of mats) {
             const std = m as THREE.MeshStandardMaterial;
-            if (std.map) std.map.anisotropy = 8;
+            sharpenCarMaps(m);
             if (std.transparent) std.depthWrite = false;
           }
         });

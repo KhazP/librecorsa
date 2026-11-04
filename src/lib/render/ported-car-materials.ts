@@ -9,7 +9,8 @@ import * as THREE from "three";
  *
  * Classes by material name (the exports keep descriptive names: `sf25_paints`, `mercedes_paint`, `WCCARBODY`,
  * `Carpaint`, `Body`, `*_tread`, `*carbon*`); a channel with its own texture keeps its authored values:
- * - paint: dielectric base under a glossy clearcoat, like a race car's lacquer;
+ * - paint: dielectric base under a glossy clearcoat, like a race car's lacquer, at full Fresnel reflectance (the
+ *   exports' KHR_materials_specular values of 0.17-0.4 left the paint reflecting a third of what lacquer does);
  * - tyres: rubber, never metallic, rough;
  * - carbon: dielectric weave under a lighter clearcoat;
  * - real metal (chrome, alloy, rims, discs, exhaust, mirrors): keeps its metalness, roughness at least 0.15
@@ -71,6 +72,22 @@ function toPhysical(src: THREE.MeshStandardMaterial): THREE.MeshPhysicalMaterial
   return dst;
 }
 
+/** Dielectric F0 of 4 % (specular 1, white): what lacquer and resin reflect, unless a map says otherwise */
+export function fullReflectance(p: THREE.MeshPhysicalMaterial): void {
+  if (!p.specularIntensityMap) p.specularIntensity = 1;
+  if (!p.specularColorMap) p.specularColor.setRGB(1, 1, 1);
+}
+
+/** Anisotropic filtering on every map of a material, not only the colour map: normal and roughness detail stays sharp at grazing angles */
+export function sharpenCarMaps(mat: THREE.Material, anisotropy = 8): void {
+  for (const v of Object.values(mat)) {
+    if (v instanceof THREE.Texture && v.anisotropy < anisotropy) {
+      v.anisotropy = anisotropy;
+      v.needsUpdate = true;
+    }
+  }
+}
+
 /** The cleaned-up material (shared: a source material used by several meshes maps to one result) */
 export function cleanPortedCarMaterial(mat: THREE.Material): THREE.Material {
   const done = upgraded.get(mat);
@@ -102,13 +119,15 @@ export function cleanPortedCarMaterial(mat: THREE.Material): THREE.Material {
     const p = toPhysical(std);
     if (!ownMetal) p.metalness = Math.min(p.metalness, 0.15);
     if (!ownRough) p.roughness = Math.min(Math.max(p.roughness, 0.3), 0.45);
+    fullReflectance(p);
     p.clearcoat = 1;
-    p.clearcoatRoughness = 0.06;
+    p.clearcoatRoughness = 0.04;
     out = p;
   } else if (CARBON.test(name)) {
     const p = toPhysical(std);
     if (!ownMetal) p.metalness = 0;
     if (!ownRough) p.roughness = Math.max(p.roughness, 0.35);
+    fullReflectance(p);
     p.clearcoat = INTERIOR.test(name) ? 0.2 : 0.6;
     p.clearcoatRoughness = 0.12;
     out = p;
@@ -120,7 +139,26 @@ export function cleanPortedCarMaterial(mat: THREE.Material): THREE.Material {
     if (!ownMetal) std.metalness = std.metalness > 0.99 ? 0 : Math.min(std.metalness, 0.2);
     if (!ownRough) std.roughness = Math.max(std.roughness, 0.3);
   }
+  // The exports' KHR_materials_specular dims every dielectric part to a fraction of a real F0; glass keeps its own
+  if ((out as THREE.MeshPhysicalMaterial).isMeshPhysicalMaterial && !GLASS.test(name)) fullReflectance(out as THREE.MeshPhysicalMaterial);
   out.needsUpdate = true;
   upgraded.set(mat, out);
   return out;
+}
+
+/**
+ * The stock AMG GT3 model's materials, which skip the name rules above (they would flatten its metal grilles): every
+ * part but the glass at full reflectance, and the paint under a glossy clearcoat
+ */
+export function cleanGt3Material(mat: THREE.Material): void {
+  const p = mat as THREE.MeshPhysicalMaterial;
+  if (!p.isMeshPhysicalMaterial) return;
+  const name = mat.name ?? "";
+  if (GLASS.test(name) || /glass|glaaass|glss|window/i.test(name)) return;
+  fullReflectance(p);
+  if (/Paint_/i.test(name)) {
+    p.clearcoat = 1;
+    p.clearcoatRoughness = 0.04;
+  }
+  p.needsUpdate = true;
 }
