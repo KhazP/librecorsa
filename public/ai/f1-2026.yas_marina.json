@@ -1,0 +1,16 @@
+{
+  "description": "Yas Marina overrides for the F1 2026 class: controlled speed and outside margin through the fast T2-3 sweeps, earlier braking into the North Hairpin (T4-6), back-straight chicane (T7-8) and Marsa (T9-12), disciplined entry through the Hotel section (T13-17), and calmer steering along the two back straights.",
+  "params": {},
+  "sections": [
+    { "label": "Turn 1", "turns": [1], "leadInM": 110, "params": { "brakeMargin": 0.04, "apexSpeedScale": 0.985, "extMarginM": 1.2 } },
+    { "label": "Turns 2-3 Sweeps", "turns": [2, 3], "leadInM": 120, "params": { "brakeMargin": 0.09, "apexSpeedScale": 0.915, "extMarginM": 1.6, "bumpCaution": 0.35 } },
+    { "label": "North Hairpin Complex", "turns": [4, 5, 6], "leadInM": 140, "params": { "brakeMargin": 0.05, "apexSpeedScale": 0.985, "extMarginM": 1.2, "bumpCaution": 0.4 } },
+    { "label": "Back Straight 1", "fromM": 1420, "toM": 2320, "params": { "steerGain": 0.75 } },
+    { "label": "Back Straight Chicane", "turns": [7, 8], "leadInM": 160, "params": { "brakeMargin": 0.05, "apexSpeedScale": 0.985, "extMarginM": 1.2, "bumpCaution": 0.35 } },
+    { "label": "Back Straight 2", "fromM": 2660, "toM": 3310, "params": { "steerGain": 0.75 } },
+    { "label": "Marsa Complex", "turns": [9, 10, 11, 12], "leadInM": 150, "params": { "brakeMargin": 0.04, "apexSpeedScale": 0.99, "extMarginM": 1.2 } },
+    { "label": "Hotel Approach", "turns": [13, 14], "leadInM": 130, "params": { "brakeMargin": 0.12, "apexSpeedScale": 0.91, "extMarginM": 1.6 } },
+    { "label": "Hotel Underpass", "turns": [15, 16, 17], "leadInM": 90, "params": { "brakeMargin": 0.05, "apexSpeedScale": 0.98, "extMarginM": 1.2 } },
+    { "label": "Final Corners", "turns": [18, 19], "leadInM": 110, "params": { "brakeMargin": 0.03, "extMarginM": 1.2, "bumpCaution": 0.3 } }
+  ]
+}
