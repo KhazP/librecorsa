@@ -112,5 +112,24 @@
       "license": "CC BY 4.0",
       "licenseUrl": "http://creativecommons.org/licenses/by/4.0/"
     }
+  },
+  {
+    "id": "yas_marina",
+    "name": "Yas Marina Circuit",
+    "layout": "2021 layout",
+    "country": "United Arab Emirates",
+    "city": "Abu Dhabi",
+    "lengthM": 5280.06,
+    "turns": 19,
+    "direction": "anticlockwise",
+    "dataUrl": "/tracks/yas_marina/track_data.json",
+    "credit": {
+      "title": "Yas Marina Circuit Abu Dhabi 2021 layout",
+      "author": "Dave Love SketchFab",
+      "url": "https://sketchfab.com/3d-models/yas-marina-circuit-abu-dhabi-2021-layout-c41b4e19912b4d79886bcd8d7d2536af",
+      "short": null,
+      "license": "CC BY 4.0",
+      "licenseUrl": "http://creativecommons.org/licenses/by/4.0/"
+    }
   }
 ]
