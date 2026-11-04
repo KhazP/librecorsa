@@ -1,6 +1,7 @@
 // LibreCorsa on Cloudflare: the static export in ./out served from librecorsa.org.
-// Static files are served straight from Cloudflare's asset store; the Worker script only runs for /__migrate,
-// which carries a player's saved data over from the old GitHub Pages address (see cloudflare/worker.js).
+// Static files are served straight from Cloudflare's asset store. The Worker script (cloudflare/worker.js) only runs
+// for /__migrate, which carries a player's saved data over from the old GitHub Pages address, and for paths with no
+// static file: those are looked up in the librecorsa-assets R2 bucket, where CI puts files over the 25 MiB asset limit.
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "librecorsa",
@@ -10,9 +11,10 @@
   "assets": {
     "directory": "./out",
     "binding": "ASSETS",
-    "not_found_handling": "404-page",
+    "not_found_handling": "none",
     "run_worker_first": ["/__migrate"]
   },
+  "r2_buckets": [{ "binding": "LARGE_ASSETS", "bucket_name": "librecorsa-assets" }],
   "routes": [{ "pattern": "librecorsa.org", "custom_domain": true }],
   "workers_dev": false,
   "preview_urls": false

@@ -1,5 +1,10 @@
 /**
- * librecorsa.org Worker. Everything is a static file from ./out except POST /__migrate.
+ * librecorsa.org Worker. Static files from ./out are served before this runs; it only sees POST /__migrate and
+ * requests with no static file behind them.
+ *
+ * Cloudflare's asset store takes files up to 25 MiB. CI moves anything bigger (large circuit GLBs) into the
+ * librecorsa-assets R2 bucket under the same path, and this serves it from there, so the game fetches it
+ * from the usual same-origin URL. Anything not in the bucket either gets the site's 404 page.
  *
  * The game used to live at https://khazp.github.io/librecorsa/, and browsers keep saved data per origin, so
  * settings, garage setups, ghost laps and the leaderboard driver key stayed behind there. The redirect page
@@ -20,9 +25,59 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (url.pathname === "/__migrate") return migrate(request);
-    return env.ASSETS.fetch(request);
+    if (request.method === "GET" || request.method === "HEAD") {
+      const large = await fromBucket(request, env, url);
+      if (large) return large;
+    }
+    return notFound(env, url);
   },
 };
+
+async function notFound(env, url) {
+  const page = await env.ASSETS.fetch(new URL("/404.html", url));
+  return new Response(page.body, { status: 404, headers: page.headers });
+}
+
+/** A file CI moved to R2, with ETag revalidation and byte ranges; null when the bucket has no such file */
+async function fromBucket(request, env, url) {
+  let key;
+  try {
+    key = decodeURIComponent(url.pathname).replace(/^\/+/, "");
+  } catch {
+    return null;
+  }
+  if (!key || key.endsWith("/")) return null;
+
+  const object =
+    request.method === "HEAD"
+      ? await env.LARGE_ASSETS.head(key)
+      : await env.LARGE_ASSETS.get(key, { range: request.headers, onlyIf: request.headers });
+  if (!object) return null;
+
+  const headers = new Headers();
+  object.writeHttpMetadata(headers);
+  headers.set("ETag", object.httpEtag);
+  headers.set("Accept-Ranges", "bytes");
+  // Same policy as the static files: cache, but check the ETag before reuse, so a re-uploaded file shows up at once
+  headers.set("Cache-Control", "public, max-age=0, must-revalidate");
+
+  if (request.method === "HEAD") {
+    headers.set("Content-Length", String(object.size));
+    return new Response(null, { headers });
+  }
+  // A failed precondition (If-None-Match matched) comes back without a body
+  if (!("body" in object) || !object.body) return new Response(null, { status: 304, headers });
+
+  if (object.range && request.headers.has("Range")) {
+    const offset = object.range.offset ?? (object.range.suffix != null ? object.size - object.range.suffix : 0);
+    const length = object.range.length ?? object.size - offset;
+    headers.set("Content-Range", `bytes ${offset}-${offset + length - 1}/${object.size}`);
+    headers.set("Content-Length", String(length));
+    return new Response(object.body, { status: 206, headers });
+  }
+  headers.set("Content-Length", String(object.size));
+  return new Response(object.body, { headers });
+}
 
 function home(to = "/") {
   return new Response(null, { status: 303, headers: { Location: to, "Cache-Control": "no-store" } });
