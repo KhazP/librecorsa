@@ -76,6 +76,8 @@ const CAR_WID_M = 1.95;
 const PASS_SPACING_M = 2.5;
 /** Rate at which an AI moves off / back onto its line (m/s) */
 const BIAS_RATE_MS = 2.2;
+/** Off the start an AI keeps its grid lane until a corner comes into view, or this far into the race at most (m) */
+const START_LANE_MAX_M = 900;
 const LIGHT_INTERVAL_S = 1.0;
 const GAP_BUCKET_M = 10;
 /** The overtake caution the passing rules below were written for (the shipped default): no change at this value */
@@ -212,6 +214,8 @@ interface FieldCar {
   contact: boolean;
   /** Covering the inside against a car behind */
   defending: boolean;
+  /** Lateral offset of its grid slot (m), held off the start until the first corner; null once it races its line */
+  startLaneM: number | null;
   /** Race distance covered (m); negative on the grid behind the line */
   distM: number;
   prevS: number;
@@ -558,6 +562,7 @@ export class AiOpponentField {
       inWallHit: false,
       contact: false,
       defending: false,
+      startLaneM: null,
       distM: 0,
       prevS: 0,
       biasM: 0,
@@ -622,7 +627,10 @@ export class AiOpponentField {
           : null;
         this.newLap(car);
       }
-      car.biasM = 0;
+      // Start from the grid slot's lane, not the racing line, so the field does not file onto the line off the grid
+      car.startLaneM = car.ai ? car.sim.lateralOffsetM : null;
+      car.biasM = car.ai ? THREE.MathUtils.clamp(car.sim.lateralOffsetM - aiLineOffsetM(this.track.getSampleAtDistance(car.sim.sMeters), car.ai.racingLineId), -6, 6) : 0;
+      if (car.ai) car.ai.aiLineBiasM = car.biasM;
       car.stuckS = 0;
       car.finishTimeS = null;
       car.bestLapMs = null;
@@ -801,6 +809,11 @@ export class AiOpponentField {
         }
       }
       const maxBias = kAbs > 0.012 ? 1.2 : kAbs > 0.006 ? 2.5 : 6;
+      // Off the start: run down the grid lane, side by side, until the first corner comes into view
+      if (car.startLaneM !== null) {
+        if (kAbs > 0.006 || car.distM > START_LANE_MAX_M) car.startLaneM = null;
+        else if (targetLat === null) targetLat = car.startLaneM;
+      }
       // Two cars can't take one corner side by side: still behind on the way in, give the place up and tuck in behind
       if (alongsideAhead && kAbs > 0.006) speedCap = Math.min(speedCap, alongsideAhead.sim.vxMs - 1.5);
       if (squeezedBy) speedCap = Math.min(speedCap, squeezedBy.sim.vxMs - 2);
