@@ -243,6 +243,11 @@ function saveTyreSetup(vehicle: VehicleModelId, setup: TyreSetup) {
 
 /** The sound bank each car plays (the F1 cars share one bank) */
 const soundFor = (car: CarId): CarSoundSource => carById(car).sound;
+/** Runs `fn` when the browser is idle (Safari has no requestIdleCallback: a short timer instead) */
+const scheduleIdle = (fn: (deadline?: IdleDeadline) => void) => {
+  if (typeof window.requestIdleCallback === "function") window.requestIdleCallback(fn, { timeout: 500 });
+  else window.setTimeout(() => fn(), 16);
+};
 
 /** The car to drive: `?car=` in the URL, else the last choice, else the VF26 */
 function loadStoredCar(): CarId {
@@ -335,8 +340,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         physics,
       };
     };
-    if (typeof window.requestIdleCallback === "function") window.requestIdleCallback(run, { timeout: 2000 });
-    else window.setTimeout(run, 200);
+    scheduleIdle(run);
   }, [track, getTrackEnv]);
   /** The AI field for a race: the spare one when it was built for this car, else a new one */
   const takeAiField = useCallback(
@@ -1310,8 +1314,17 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       trackRoot = root;
       physics.attachTrackRoot?.(root);
       aiFieldRef.current?.attachTrackRoot(root);
-      // Move broadcast cameras that would film the inside of a grandstand
-      tvDirector.resolveOcclusion(root);
+      // Move broadcast cameras that would film the inside of a grandstand: about a second of raycasts on a scan,
+      // spread over idle slices so neither the loading screen nor the menus freeze (until done, the TV view uses
+      // the stations as built)
+      const occlusion = tvDirector.occlusionSteps(root);
+      const occlusionSlice = (deadline?: IdleDeadline) => {
+        if (disposed) return;
+        const until = performance.now() + Math.max(4, Math.min(12, deadline?.timeRemaining() ?? 8));
+        while (performance.now() < until) if (occlusion.next().done) return;
+        scheduleIdle(occlusionSlice);
+      };
+      scheduleIdle(occlusionSlice);
       const ground = trackGroundQuery(root);
       if (ground) builtCircuit.seatRacingLine(ground);
     });

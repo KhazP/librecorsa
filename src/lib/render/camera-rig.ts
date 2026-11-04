@@ -354,6 +354,16 @@ export class TracksideBroadcastDirector {
    * first clear alternative (the other side, closer in, higher up). Run once, when the circuit has loaded.
    */
   resolveOcclusion(trackRoot: THREE.Object3D): number {
+    let moved = 0;
+    for (const m of this.occlusionSteps(trackRoot)) moved = m;
+    return moved;
+  }
+
+  /**
+   * `resolveOcclusion` one station at a time (each step yields the stations moved so far), so a caller can spread its
+   * raycasts (about a second on a scanned circuit) over idle time instead of freezing the page
+   */
+  *occlusionSteps(trackRoot: THREE.Object3D): Generator<number, void, void> {
     const occluders: THREE.Object3D[] = [];
     trackRoot.traverseVisible((obj) => {
       if ((obj as THREE.Mesh).isMesh) occluders.push(obj);
@@ -382,19 +392,20 @@ export class TracksideBroadcastDirector {
     let moved = 0;
     for (let k = 0; k < this.stationCount; k++) {
       const centre = this.centreS[k];
-      if (clear(this.curves[k], centre)) continue;
-      const side = this.stationSide[k];
-      const height = HEIGHTS_M[k % HEIGHTS_M.length];
-      for (const [sideMul, offset, extraH] of OCCLUSION_ALTERNATIVES) {
-        const curve = this.buildDolly(centre, side * sideMul, offset, height + extraH);
-        if (clear(curve, centre)) {
-          this.curves[k] = curve;
-          moved++;
-          break;
+      if (!clear(this.curves[k], centre)) {
+        const side = this.stationSide[k];
+        const height = HEIGHTS_M[k % HEIGHTS_M.length];
+        for (const [sideMul, offset, extraH] of OCCLUSION_ALTERNATIVES) {
+          const curve = this.buildDolly(centre, side * sideMul, offset, height + extraH);
+          if (clear(curve, centre)) {
+            this.curves[k] = curve;
+            moved++;
+            break;
+          }
         }
       }
+      yield moved;
     }
-    return moved;
   }
 
   /** Number of automatic stations built for this lap */
