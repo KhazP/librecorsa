@@ -122,19 +122,16 @@ void tyreDeform(in vec3 pos, in vec3 nrm, out vec3 outPos, out vec3 outNrm) {
 function injectDeform(vertexShader: string, withNormal: boolean): string {
   let out = vertexShader.replace('#include <common>', `#include <common>\n${DEFORM_GLSL}`);
   if (withNormal) {
-    out = out
-      .replace(
-        '#include <beginnormal_vertex>',
-        '#include <beginnormal_vertex>\n\tvec3 tyrePos;\n\ttyreDeform(position, normal, tyrePos, objectNormal);'
-      )
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\n\ttransformed = tyrePos;');
-  } else {
+    // Unlit materials only reach beginnormal_vertex under #ifdef, so the position is deformed on its own below
     out = out.replace(
-      '#include <begin_vertex>',
-      '#include <begin_vertex>\n\tvec3 tyreNrm;\n\ttyreDeform(position, normal, transformed, tyreNrm);'
+      '#include <beginnormal_vertex>',
+      '#include <beginnormal_vertex>\n\tvec3 tyrePosN;\n\ttyreDeform(position, normal, tyrePosN, objectNormal);'
     );
   }
-  return out;
+  return out.replace(
+    '#include <begin_vertex>',
+    '#include <begin_vertex>\n\tvec3 tyreNrm;\n\ttyreDeform(position, normal, transformed, tyreNrm);'
+  );
 }
 
 /**

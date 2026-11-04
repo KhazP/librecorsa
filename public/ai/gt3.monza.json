@@ -1,0 +1,15 @@
+{
+  "description": "Monza overrides for the GT3 class: earlier braking into the Rettifilo (T1-2) and Roggia (T4-5) chicanes, tidy exit margins through Lesmo, Ascari and Parabolica, and relaxed straight-line steering gain.",
+  "params": {},
+  "sections": [
+    { "label": "Variante del Rettifilo", "turns": [1, 2], "leadInM": 150, "params": { "brakeMargin": 0.03, "apexSpeedScale": 0.99, "overtakeCaution": 0.4 } },
+    { "label": "Curva Grande to Roggia", "fromM": 1250, "toM": 1610, "params": { "steerGain": 0.78 } },
+    { "label": "Variante della Roggia", "turns": [4, 5], "leadInM": 130, "params": { "brakeMargin": 0.03, "overtakeCaution": 0.35 } },
+    { "label": "Lesmo 1-2", "turns": [6, 7], "leadInM": 90, "params": { "brakeMargin": 0.02, "extMarginM": 0.8 } },
+    { "label": "Serraglio Straight", "fromM": 2630, "toM": 3420, "params": { "steerGain": 0.75 } },
+    { "label": "Variante Ascari", "turns": [8, 9, 10], "leadInM": 120, "params": { "brakeMargin": 0.03, "apexSpeedScale": 0.99 } },
+    { "label": "Back Straight", "fromM": 3880, "toM": 4600, "params": { "steerGain": 0.75 } },
+    { "label": "Parabolica", "turns": [11], "leadInM": 120, "params": { "brakeMargin": 0.03, "extMarginM": 0.9 } },
+    { "label": "Main Straight", "fromM": 5130, "toM": 380, "params": { "steerGain": 0.75 } }
+  ]
+}

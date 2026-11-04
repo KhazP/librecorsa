@@ -114,7 +114,7 @@ const track = createFlatTestTrack();
 check('VF26: physical defaults fit garage/save limits and survive setup reset/reload', () => {
   const sim = new F1Physics2026(track);
   const defaults = sim.getTyreSetup();
-  assert.deepEqual(defaults.coldPressurePsi, { front: 15.7, rear: 14.1 });
+  assert.deepEqual(defaults.coldPressurePsi, { fl: 15.7, fr: 15.7, rl: 14.1, rr: 14.1 });
   const range = TYRE_SETUP_LIMITS.vf26.pressurePsi;
   for (const psi of Object.values(defaults.coldPressurePsi)) assert.ok(psi >= range.min && psi <= range.max);
   sim.setTyreSetup(JSON.parse(JSON.stringify(defaults)));
@@ -131,17 +131,17 @@ for (const [name, sim, config] of [
   check(`${name} adapter: compound default conversion and gauge setup round-trip`, () => {
     // Preserve a driver's front-pressure offset as the adapter recalculates compound defaults.
     const initial = sim.getTyreSetup();
-    sim.setTyreSetup({ ...initial, coldPressurePsi: { ...initial.coldPressurePsi, front: initial.coldPressurePsi.front - 1 } });
+    sim.setTyreSetup({ ...initial, coldPressurePsi: { ...initial.coldPressurePsi, fl: initial.coldPressurePsi.fl - 1 } });
     sim.tireCompound = 'wet';
     const td = compoundData(config, config.compoundSlots.wet);
     const targetC = (td.thermalData.optimalTempC[0] + td.thermalData.optimalTempC[1]) / 2;
     const setup = sim.getTyreSetup();
-    near(gasInvariant(setup.coldPressurePsi.front + 1, td.pressureData.coldRefC), gasInvariant(td.pressureData.optimalPsi, targetC), 0.0500001 / (td.pressureData.coldRefC + K));
-    sim.setTyreSetup({ ...setup, coldPressurePsi: { front: 20, rear: 19 } });
-    assert.deepEqual(sim.getTyreSetup().coldPressurePsi, { front: 20, rear: 19 });
+    near(gasInvariant(setup.coldPressurePsi.fl + 1, td.pressureData.coldRefC), gasInvariant(td.pressureData.optimalPsi, targetC), 0.0500001 / (td.pressureData.coldRefC + K));
+    sim.setTyreSetup({ ...setup, coldPressurePsi: { fl: 20, fr: 20.5, rl: 19, rr: 19.5 } });
+    assert.deepEqual(sim.getTyreSetup().coldPressurePsi, { fl: 20, fr: 20.5, rl: 19, rr: 19.5 });
     sim.resetToStartGrid(false);
     sim.step(0.002, {});
-    assert.deepEqual(sim.getTyreSetup().coldPressurePsi, { front: 20, rear: 19 });
+    assert.deepEqual(sim.getTyreSetup().coldPressurePsi, { fl: 20, fr: 20.5, rl: 19, rr: 19.5 });
     assert.ok(sim.telemetry.tirePressuresPsi?.every(Number.isFinite));
   });
 }

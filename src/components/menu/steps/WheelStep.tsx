@@ -13,6 +13,7 @@ import {
   pedalValue,
   snapshotAxes,
   snapshotButtons,
+  STEER_LOCK_MIN_DEG,
   strongestAxisChange,
   WHEEL_ROTATION_PRESETS,
   WHEEL_TYPE_DEFAULTS,
@@ -191,6 +192,12 @@ function useAnyButtonCapture(active: boolean, onButton: (b: ButtonBinding) => vo
     };
   }, [active, onButton, onCancel]);
 }
+
+/** Cars that share a steering lock in the wheel setup */
+const STEER_LOCK_CLASSES = [
+  { label: "Formula cars", models: ["vf26", "f12026-car"] },
+  { label: "GT3", models: ["amg-gt3"] },
+] as const;
 
 const shortPad = (padId: string) => padDisplayName(padId).slice(0, 18);
 
@@ -586,6 +593,37 @@ export const WheelStep: React.FC<SetupStepProps> = ({ settings, onChangeSettings
             <Hint>
               Match your wheel driver&apos;s rotation. Steering is 1:1 up to the car&apos;s lock ({CAR_WHEEL_LOCKS_DEG.vf26}°
               F1, {CAR_WHEEL_LOCKS_DEG["amg-gt3"]}° GT3); a base with less rotation still reaches full lock.
+            </Hint>
+          </div>
+          <div className="flex flex-col gap-2.5 border-t border-[#262B3D] pt-3">
+            <SubHead>Steering lock · per car</SubHead>
+            <AutoGrid min={180} className="gap-x-4 gap-y-1">
+              {STEER_LOCK_CLASSES.map((c) => {
+                const real = CAR_WHEEL_LOCKS_DEG[c.models[0]];
+                const own = w.steerLockPerCar?.[c.models[0]];
+                const value = typeof own === "number" && own < real ? own : real;
+                return (
+                  <TyreSlider
+                    key={c.label}
+                    label={c.label}
+                    value={value}
+                    limits={{ min: STEER_LOCK_MIN_DEG, max: real, step: 20 }}
+                    format={(v) => (v >= real ? `${v.toFixed(0)}° real` : `${v.toFixed(0)}°`)}
+                    onChange={(v) => {
+                      const next = { ...w.steerLockPerCar };
+                      for (const m of c.models) {
+                        if (v >= real) delete next[m];
+                        else next[m] = v;
+                      }
+                      setWheel({ steerLockPerCar: next });
+                    }}
+                  />
+                );
+              })}
+            </AutoGrid>
+            <Hint>
+              How far round the rim full lock is. The real car&apos;s lock is the most realistic; a smaller one gives a
+              quicker rack, which suits a wheel without force feedback, above all in the GT3.
             </Hint>
           </div>
           <AutoGrid min={180} className="gap-x-4 gap-y-1">

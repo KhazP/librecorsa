@@ -14,6 +14,7 @@ import {
 import {
   DEFAULT_WHEEL_SETTINGS,
   PAD_SENSITIVITY,
+  STEER_LOCK_MIN_DEG,
   type AxisBinding,
   type ButtonBinding,
   type InputDevice,
@@ -124,8 +125,11 @@ export interface HudSettings {
   drsBeep: boolean;
   /** Short beep 150 rpm before the rev limiter */
   shiftBeep: boolean;
-  /** Onboard camera turns gently into the car's direction of travel (feel the rear slide) */
-  neckFx: boolean;
+  /**
+   * Driver's-eye camera: "natural" holds the head against the chassis' suspension pitch and roll, the way a neck
+   * does, and turns it a little toward the corner; "static" bolts it to the car with no head motion or shake.
+   */
+  headMovement: "natural" | "static";
 }
 
 export type VirtualMirrorMode = "auto" | "always" | "off";
@@ -189,10 +193,11 @@ export const DEFAULT_HUD_SETTINGS: HudSettings = {
   mapMode: "full",
   radar: true,
   splitGaps: true,
-  mfdAutoCollapse: true,
+  // Off: a wheel button that opens the MFD would otherwise see it vanish 3.5 s later, which reads as a glitch
+  mfdAutoCollapse: false,
   drsBeep: true,
   shiftBeep: false,
-  neckFx: true,
+  headMovement: "natural",
 };
 
 export const DEFAULT_GRAPHICS_SETTINGS: GraphicsSettings = { quality: "high", renderScale: 1 };
@@ -339,11 +344,21 @@ function parseWheel(v: unknown): WheelSettings {
     ffbDamping: num(v.ffbDamping, 0, 1, d.ffbDamping),
     ffbFilterS: num(v.ffbFilterS, 0, 0.05, d.ffbFilterS),
     ffbPerCar: parsePerCarFfb(v.ffbPerCar),
+    steerLockPerCar: parsePerCarLock(v.steerLockPerCar),
     hidFfb: bool(v.hidFfb, d.hidFfb),
     telemetryOut: bool(v.telemetryOut, d.telemetryOut),
     telemetryPort: Math.round(num(v.telemetryPort, 1024, 65535, d.telemetryPort)),
     buttons,
   };
+}
+
+function parsePerCarLock(v: unknown): WheelSettings["steerLockPerCar"] {
+  const out: WheelSettings["steerLockPerCar"] = {};
+  if (!isObj(v)) return out;
+  for (const [car, lock] of Object.entries(v).slice(0, 16)) {
+    if (isNum(lock)) out[car.slice(0, 32)] = Math.round(num(lock, STEER_LOCK_MIN_DEG, 2520, STEER_LOCK_MIN_DEG));
+  }
+  return out;
 }
 
 function parsePerCarFfb(v: unknown): WheelSettings["ffbPerCar"] {
@@ -402,7 +417,8 @@ function parseHud(v: unknown): HudSettings {
     mfdAutoCollapse: bool(v.mfdAutoCollapse, d.mfdAutoCollapse),
     drsBeep: bool(v.drsBeep, d.drsBeep),
     shiftBeep: bool(v.shiftBeep, d.shiftBeep),
-    neckFx: bool(v.neckFx, d.neckFx),
+    // Older saves: Neck FX switched off asked for a still camera
+    headMovement: oneOf(v.headMovement, ["natural", "static"] as const, v.neckFx === false ? "static" : d.headMovement),
   };
 }
 

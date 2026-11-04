@@ -1,6 +1,7 @@
 import * as THREE from "three";
-import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
-import { assetProgress } from "@/lib/loading/asset-progress";
+import { createGltfLoader } from "@/lib/render/gltf-loader";
+import { cleanGt3Material, sharpenCarMaps } from "@/lib/render/ported-car-materials";
+import { assetProgress, type AssetTaskId } from "@/lib/loading/asset-progress";
 import { withBasePath } from "@/lib/base-path";
 import { AMG_GT3_CONFIG } from "@/lib/sim/gt3/AmgGt3Config";
 import type { CarTelemetry, LiveryConfig } from "@/types/f1";
@@ -66,7 +67,7 @@ export function loadGt3Cockpit(): Promise<THREE.Group | null> {
       try {
         const head = await fetch(url, { method: "HEAD" });
         if (!head.ok) return null;
-        const scene = (await new GLTFLoader().loadAsync(url)).scene;
+        const scene = (await createGltfLoader().loadAsync(url)).scene;
         scene.traverse((obj) => {
           const mesh = obj as THREE.Mesh;
           if (!mesh.isMesh) return;
@@ -143,19 +144,15 @@ function rebaseWheels(scene: THREE.Group, extras: Gt3Extras): void {
   });
 }
 
-export function loadGt3Template(): Promise<THREE.Group | null> {
+/** `task`: the loading-screen task its download counts toward (the player's car, or the opponents' when it differs) */
+export function loadGt3Template(task: AssetTaskId = "car"): Promise<THREE.Group | null> {
   if (!templatePromise) {
     templatePromise = (async () => {
       if (typeof window === "undefined") return null;
       const url = withBasePath(MODEL_URL);
-      assetProgress.begin("car");
+      assetProgress.begin(task);
       try {
-        const head = await fetch(url, { method: "HEAD" });
-        if (!head.ok) {
-          assetProgress.fail("car");
-          return null;
-        }
-        const gltf = await new GLTFLoader().loadAsync(url, (event) => assetProgress.progress("car", event));
+        const gltf = await createGltfLoader().loadAsync(url, (event) => assetProgress.progress(task, event));
         const scene = gltf.scene;
         const extras = (scene.getObjectByName("GT3")?.userData ?? {}) as Gt3Extras;
         rebaseWheels(scene, extras);
@@ -167,16 +164,17 @@ export function loadGt3Template(): Promise<THREE.Group | null> {
           const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
           for (const m of mats) {
             const std = m as THREE.MeshStandardMaterial;
-            if (std.map) std.map.anisotropy = 8;
+            cleanGt3Material(m);
+            sharpenCarMaps(m);
             if (std.transparent) std.depthWrite = false;
           }
         });
         scene.updateMatrixWorld(true);
-        assetProgress.done("car");
+        assetProgress.done(task);
         return scene;
       } catch (err) {
         console.warn("GT3 model not loaded, using the placeholder body", err);
-        assetProgress.fail("car");
+        assetProgress.fail(task);
         return null;
       }
     })();
@@ -210,6 +208,67 @@ const CAMERAS: Vf26ModelInstance["cameraAnchors"] = {
   nearChase: anchor([0, 1.9, -5.5], -10, 60),
   farChase: anchor([0, 2.4, -7.5], -10, 60),
 };
+
+/** The AMG GT3 GLB's wheel centres and front tyre radius (its `GT3` node extras), for rigs that don't load it */
+const GT3_MODEL_WHEELS: Gt3Extras = {
+  wheelCentres: { WHEEL_LF: [0.8634, 0.342, 1.4], WHEEL_LR: [0.8656, 0.3557, -1.2285] },
+  tyreRadius: { LF: 0.34 },
+};
+
+/** Model → rig translation: the model's axle midpoint on the physics' (rig origin = CG on the ground), tyres on it */
+function gt3ModelOffset(extras: Gt3Extras): THREE.Vector3 {
+  const chassis = AMG_GT3_CONFIG.chassis;
+  const lf = extras.wheelCentres?.WHEEL_LF ?? GT3_MODEL_WHEELS.wheelCentres!.WHEEL_LF;
+  const lr = extras.wheelCentres?.WHEEL_LR ?? GT3_MODEL_WHEELS.wheelCentres!.WHEEL_LR;
+  const physicsMidZ = chassis.wheelbase * (0.5 - chassis.frontWeightFraction);
+  return new THREE.Vector3(0, (extras.tyreRadius?.LF ?? 0.34) - lf[1], physicsMidZ - 0.5 * (lf[2] + lr[2]));
+}
+
+function cameraAnchorsAt(offset: THREE.Vector3): Vf26ModelInstance["cameraAnchors"] {
+  const anchors = {} as Vf26ModelInstance["cameraAnchors"];
+  for (const [key, c] of Object.entries(CAMERAS) as [keyof typeof CAMERAS, Vf26CameraAnchor][]) {
+    anchors[key] = { pos: c.pos.clone().add(offset), pitchRad: c.pitchRad, fovDeg: c.fovDeg };
+  }
+  return anchors;
+}
+
+/** Centre of the AMG GT3 cockpit's steering wheel (its `STEER` meshes' box) in model space */
+const GT3_STEER_CENTRE: [number, number, number] = [0.403, 0.729, -0.04];
+
+/** Where a ported GT3's driver and nose sit, in rig space: what its cameras are placed against */
+export interface Gt3CameraFit {
+  /** Centre of the car's steering wheel (null: the model has none) */
+  steerCentre: THREE.Vector3 | null;
+  /** Front axle line (z) */
+  frontAxleZ: number;
+}
+
+/** Cameras that ride with the driver (eye point, shoulder, dash, roof pod) rather than with the nose */
+const DRIVER_CAMERAS = new Set<string>(["cockpit", "shoulder", "dash", "tcam"]);
+
+/**
+ * The AMG GT3's onboard and chase cameras in rig space (the frame every car on the GT3 vehicle model shares). Given a
+ * ported GT3's `fit`, its views are framed as the original car's: the eye point, shoulder, dash and roof cameras keep
+ * their place relative to that car's own steering wheel (the roof pod stays on the centre line), the bonnet camera
+ * its place behind the front axle, and the chase cameras stay put. Without, the AMG's positions as they are.
+ */
+export function gt3RigCameraAnchors(fit?: Gt3CameraFit): Vf26ModelInstance["cameraAnchors"] {
+  const offset = gt3ModelOffset(GT3_MODEL_WHEELS);
+  const anchors = cameraAnchorsAt(offset);
+  if (!fit) return anchors;
+  const driverShift = fit.steerCentre
+    ? fit.steerCentre.clone().sub(new THREE.Vector3(...GT3_STEER_CENTRE).add(offset))
+    : new THREE.Vector3();
+  const noseShift = fit.frontAxleZ - (GT3_MODEL_WHEELS.wheelCentres!.WHEEL_LF[2] + offset.z);
+  for (const [key, a] of Object.entries(anchors)) {
+    if (DRIVER_CAMERAS.has(key)) {
+      a.pos.add(key === "tcam" ? new THREE.Vector3(0, driverShift.y, driverShift.z) : driverShift);
+    } else if (key === "bumper") {
+      a.pos.z += noseShift;
+    }
+  }
+  return anchors;
+}
 
 /** A box the size of the car, shown while (or instead of, when the GLB is missing) the model loads */
 function placeholderBody(): THREE.Mesh {
@@ -272,12 +331,7 @@ export function createGt3CarRig(): SimCarRig {
     const extras = (gt3.userData ?? {}) as Gt3Extras;
     const find = (name: string) => model.getObjectByName(name);
 
-    // Axle midpoint on the physics' (rig origin = CG on the ground), tyres on the ground
-    const lf = extras.wheelCentres?.WHEEL_LF ?? [0.863, 0.342, 1.4];
-    const lr = extras.wheelCentres?.WHEEL_LR ?? [0.866, 0.356, -1.229];
-    const wb = chassis.wheelbase;
-    const physicsMidZ = wb * (0.5 - chassis.frontWeightFraction);
-    const offset = new THREE.Vector3(0, (extras.tyreRadius?.LF ?? 0.34) - lf[1], physicsMidZ - 0.5 * (lf[2] + lr[2]));
+    const offset = gt3ModelOffset(extras);
 
     const bodyGroup = new THREE.Group();
     bodyGroup.name = "GT3_BODY";
@@ -376,11 +430,7 @@ export function createGt3CarRig(): SimCarRig {
     (placeholder.material as THREE.Material).dispose();
     chassisGroup.add(bodyGroup);
 
-    const anchors = {} as Vf26ModelInstance["cameraAnchors"];
-    for (const [key, c] of Object.entries(CAMERAS) as [keyof typeof CAMERAS, Vf26CameraAnchor][]) {
-      anchors[key] = { pos: c.pos.clone().add(offset), pitchRad: c.pitchRad, fovDeg: c.fovDeg };
-    }
-    cameraAnchors = anchors;
+    cameraAnchors = cameraAnchorsAt(offset);
   });
 
   const updateFromTelemetry = (

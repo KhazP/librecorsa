@@ -6,6 +6,7 @@ import { setSceneryQuality } from "@/lib/render/scenery-detail";
 import { setSceneryDensity } from "@/lib/render/scenery-instances";
 import {
   BloomEffect,
+  Effect,
   EffectComposer,
   EffectPass,
   RenderPass,
@@ -90,8 +91,14 @@ const SUN_COLOR = 0xffebd6;
 const SUN_INTENSITY = 5.0;
 const FILL_SKY = 0xc4d8ee;
 const FILL_GROUND = 0x6b6a3a;
-const FILL_INTENSITY = 0.35;
+const FILL_INTENSITY = 0.13;
+/** Albedo of the stand-in ground in the sky's environment bake, and the sky light it gets at least */
+const GROUND_ALBEDO = 0x3a3833;
+const GROUND_SKY_LIGHT = 0.6;
 const EXPOSURE = 1.15;
+/** Display-referred grade after AgX (DisplayGradeEffect): contrast and saturation gain */
+const GRADE_CONTRAST = 0.12;
+const GRADE_SATURATION = 0.18;
 const SKY_TURBIDITY = 2.8;
 const SKY_RAYLEIGH = 1.8;
 /** Minimum time between environment re-bakes (s) */
@@ -275,7 +282,9 @@ function colorCurve(keys: readonly Key[], x: number, out: THREE.Color): THREE.Co
 // Keys by sun elevation (deg). Each passes through the golden-hour constant at 14 deg.
 const SUN_COLOR_KEYS: readonly Key[] = [[-2, 0xff6a2a], [4, 0xffa262], [14, SUN_COLOR], [35, 0xfff4e8], [70, 0xfff8f2]];
 const SUN_INTENSITY_KEYS: readonly Key[] = [[-3, 0], [1, 0.8], [6, 3.0], [14, SUN_INTENSITY], [35, 5.8], [70, 6.2]];
-const FILL_INTENSITY_KEYS: readonly Key[] = [[-3, 0.12], [4, 0.26], [14, FILL_INTENSITY], [40, 0.45], [70, 0.5]];
+// The sky's prefiltered environment already lights everything from the sky dome; this flat fill on top of it only
+// washes out shading and reflections (cars read as matte plastic), so it is kept to a trace
+const FILL_INTENSITY_KEYS: readonly Key[] = [[-3, 0.05], [4, 0.1], [14, FILL_INTENSITY], [40, 0.17], [70, 0.19]];
 const FOG_COLOR_KEYS: readonly Key[] = [[-3, 0x5e5468], [4, 0xd49c7c], [14, FOG_COLOR], [35, 0xd8dade], [70, 0xc8d4e2]];
 const ENV_INTENSITY_KEYS: readonly Key[] = [[-3, 0.3], [4, 0.7], [14, 1], [70, 1.1]];
 const EXPOSURE_KEYS: readonly Key[] = [[-3, 1.5], [4, 1.32], [14, EXPOSURE], [35, 1.08], [70, 1.05]];
@@ -316,21 +325,43 @@ function applySkyLook(sky: Sky, sunDir: THREE.Vector3, look: SkyLook): void {
 }
 
 /** Bakes the Sky into a 256 px PMREM cube (three r187+). The sun disc is hidden during the bake
- *  so its ~60000 radiance does not dominate the prefiltered environment. */
+ *  so its ~60000 radiance does not dominate the prefiltered environment. Below the horizon a dark, sunlit ground
+ *  stands in for the circuit: the Sky shader carries its horizon colour all the way down, which lit undersides and
+ *  sills from below as brightly as the horizon and made reflections of the ground glow. */
+interface GroundLight {
+  color: THREE.Color;
+  intensity: number;
+}
+
 class SkyBaker {
   private readonly scene = new THREE.Scene();
   private readonly sky = new Sky();
+  private readonly ground: THREE.Mesh<THREE.CircleGeometry, THREE.MeshLambertMaterial>;
+  private readonly groundSun = new THREE.DirectionalLight();
+  private readonly groundFill = new THREE.HemisphereLight();
   private pmrem: THREE.PMREMGenerator | null;
 
   constructor(renderer: THREE.WebGLRenderer) {
     this.sky.scale.setScalar(1000);
     configureSkyUniforms(this.sky, false);
     this.scene.add(this.sky);
+    // Tarmac, grass and run-off seen from a car: a dark, slightly warm grey
+    this.ground = new THREE.Mesh(new THREE.CircleGeometry(900, 48), new THREE.MeshLambertMaterial({ color: GROUND_ALBEDO }));
+    this.ground.rotation.x = -Math.PI / 2;
+    this.ground.position.y = -1.5;
+    this.scene.add(this.ground, this.groundSun, this.groundFill);
     this.pmrem = new THREE.PMREMGenerator(renderer);
   }
 
-  bake(sunDir: THREE.Vector3, look: SkyLook): THREE.WebGLCubeRenderTarget {
+  bake(sunDir: THREE.Vector3, look: SkyLook, sun: GroundLight, fill: THREE.HemisphereLight): THREE.WebGLCubeRenderTarget {
     applySkyLook(this.sky, sunDir, look);
+    // The ground takes the scene's own sun and sky light, so it sits at the brightness the real circuit has
+    this.groundSun.color.copy(sun.color);
+    this.groundSun.intensity = sun.intensity;
+    this.groundSun.position.copy(sunDir).multiplyScalar(100);
+    this.groundFill.color.copy(fill.color);
+    this.groundFill.groundColor.copy(fill.groundColor);
+    this.groundFill.intensity = Math.max(fill.intensity, GROUND_SKY_LIGHT);
     return this.pmrem!.fromScene(this.scene, 0, 0.1, 1000, { size: ENV_SIZE });
   }
 
@@ -339,6 +370,8 @@ class SkyBaker {
     this.pmrem = null;
     this.sky.geometry.dispose();
     this.sky.material.dispose();
+    this.ground.geometry.dispose();
+    this.ground.material.dispose();
     this.scene.clear();
   }
 }
@@ -369,7 +402,13 @@ export function createGoldenHourEnvironment(
   const baker = new SkyBaker(renderer);
   const skyLook = skyLookFor(GOLDEN_HOUR_SKY, {} as SkyLook);
   const skySunDir = sunDirection.clone();
-  let envTarget = baker.bake(skySunDir, skyLook);
+  // The first bake, before the scene's lights exist: their starting values
+  let envTarget = baker.bake(
+    skySunDir,
+    skyLook,
+    { color: new THREE.Color(SUN_COLOR), intensity: SUN_INTENSITY },
+    new THREE.HemisphereLight(FILL_SKY, FILL_GROUND, FILL_INTENSITY)
+  );
   let baked: SkyConditions = { ...GOLDEN_HOUR_SKY };
   let lastBakeMs = -Infinity;
   let pendingBake = false;
@@ -413,7 +452,7 @@ export function createGoldenHourEnvironment(
   const tint = new THREE.Color();
 
   const rebake = () => {
-    const next = baker.bake(skySunDir, skyLook);
+    const next = baker.bake(skySunDir, skyLook, sunLight, fillLight);
     if (scene.environment === envTarget.texture) scene.environment = next.texture;
     envTarget.dispose();
     envTarget = next;
@@ -502,6 +541,28 @@ export function createGoldenHourEnvironment(
 // Post-processing
 // ---------------------------------------------------------------------------
 
+/** Contrast about mid-grey and saturation about luma, on the tone-mapped image; alpha forced opaque */
+class DisplayGradeEffect extends Effect {
+  constructor(contrast: number, saturation: number) {
+    super(
+      "DisplayGradeEffect",
+      /* glsl */ `
+uniform float uContrast;
+uniform float uSaturation;
+void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor) {
+  // grade in a perceptual (gamma 2.2) space so the contrast pivots on mid-grey as seen, then back to linear
+  vec3 c = pow(clamp(inputColor.rgb, 0.0, 1.0), vec3(1.0 / 2.2));
+  c = (c - 0.5) * (1.0 + uContrast) + 0.5;
+  float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
+  c = mix(vec3(l), c, 1.0 + uSaturation);
+  outputColor = vec4(pow(clamp(c, 0.0, 1.0), vec3(2.2)), 1.0);
+}
+`,
+      { uniforms: new Map<string, THREE.Uniform>([["uContrast", new THREE.Uniform(contrast)], ["uSaturation", new THREE.Uniform(saturation)]]) }
+    );
+  }
+}
+
 export function createPostFx(
   renderer: THREE.WebGLRenderer,
   scene: THREE.Scene,
@@ -527,10 +588,17 @@ export function createPostFx(
   // Single merged pass: bloom runs on linear HDR, then AgX as the last effect.
   // AgX is applied here because EffectPass ignores renderer.toneMapping.
   const toneMapping = new ToneMappingEffect({ mode: ToneMappingMode.AGX });
+  // AgX keeps highlights but reads flat and grey on its own (the scanned circuits' bland, hazy look): a light
+  // display-referred grade after it puts back some contrast and colour
   const effectPass = new EffectPass(camera, bloom, toneMapping);
+  // Its own pass on the tone-mapped image, with alpha forced to 1 and the result clamped: postprocessing's stock
+  // BrightnessContrast / HueSaturation effects turned the low-alpha texels blended foliage, fences and decals leave
+  // in the buffer into white specks
+  const gradePass = new EffectPass(camera, new DisplayGradeEffect(GRADE_CONTRAST, GRADE_SATURATION));
 
   composer.addPass(renderPass);
   composer.addPass(effectPass);
+  composer.addPass(gradePass);
 
   return {
     composer,
@@ -546,6 +614,7 @@ export function createPostFx(
     setCamera(next: THREE.Camera): void {
       renderPass.mainCamera = next;
       effectPass.mainCamera = next;
+      gradePass.mainCamera = next;
     },
 
     setQuality(quality: "low" | "medium" | "high"): void {
@@ -558,6 +627,7 @@ export function createPostFx(
       composer.removeAllPasses();
       renderPass.dispose();
       effectPass.dispose();
+      gradePass.dispose();
       composer.dispose();
     },
   };

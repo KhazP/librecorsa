@@ -165,7 +165,7 @@ export class WheelFfbClient {
         wheel.steer && steerPad
           ? wheelRimAngleDeg(steerPad.axes[wheel.steer.axis] ?? wheel.steer.center, wheel.steer, wheel.rotationDeg)
           : null;
-      const carLockDeg = carWheelLockDeg(vehicle);
+      const carLockDeg = carWheelLockDeg(vehicle, wheel.steerLockPerCar);
       const softLock = rimDeg !== null ? softLockForce(rimDeg, carLockDeg) : 0;
       // Damper: static wheel damper + speed-scaled gyroscopic self-aligning damper + cushioned soft-lock stop damper
       let damping = 0;

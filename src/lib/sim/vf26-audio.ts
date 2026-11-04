@@ -69,6 +69,8 @@ export interface Vf26AudioManifest {
 export type Vf26View = 'ext' | 'int';
 
 export interface Vf26AudioInputs {
+  /** The driver's pedal, when `throttle` is the engine's delivered load (lift-off pops follow the foot) */
+  pedal?: number;
   rpm: number;
   throttle: number; // 0..1
   gear: number;
@@ -102,7 +104,8 @@ class LoopVoice {
   }
 
   /** Drive the voice; sources are started on demand and stopped after staying silent */
-  public set(target: number, rate: number, now: number, dt: number, tau: number): void {
+  /** `pitchTau`: time constant of the pitch glide (s); longer than a frame, so the pitch moves smoothly, not in 60 Hz steps */
+  public set(target: number, rate: number, now: number, dt: number, tau: number, pitchTau = 0.02): void {
     if (!this.buffer) return;
     const active = target > 1e-4;
     if (active) {
@@ -130,7 +133,7 @@ class LoopVoice {
     }
     this.wasActive = active;
     if (this.source) {
-      this.source.playbackRate.setTargetAtTime(rate, now, 0.007);
+      this.source.playbackRate.setTargetAtTime(rate, now, pitchTau);
       this.gain.gain.setTargetAtTime(target, now, tau);
     }
   }
@@ -150,6 +153,9 @@ class LoopVoice {
   }
 }
 
+/** Length of the upshift's ignition-cut envelope (s) */
+const UPSHIFT_S = 0.06;
+
 /** A 1-D grid of loops (rpm, boost or speed) crossfaded between neighbours with equal-power weights */
 class LoopGrid {
   public readonly voices: LoopVoice[];
@@ -167,7 +173,7 @@ class LoopGrid {
    * @param level    overall gain
    * @param pitched  playbackRate = x / key (pitch tracks the axis) when true, 1 otherwise
    */
-  public update(x: number, level: number, pitched: boolean, now: number, dt: number, tau: number): void {
+  public update(x: number, level: number, pitched: boolean, now: number, dt: number, tau: number, pitchTau = 0.02): void {
     const vs = this.voices;
     if (vs.length === 0) return;
     let i = 0;
@@ -175,18 +181,19 @@ class LoopGrid {
     const lo = vs[i];
     const hi = vs[Math.min(i + 1, vs.length - 1)];
     const rawF = hi === lo ? 0 : Math.min(1, Math.max(0, (x - lo.key) / (hi.key - lo.key)));
-    // For wide-anchor pitched engine grids (e.g. the 4-anchor AMR26 bank), keep each anchor playing solo
-    // outside the transition window [0.18..0.52] so continuous RPM climbs and gear shifts stay on a single voice.
+    // Wide-anchor pitched engine grids (the 4-6 anchor F1 banks) hold each anchor alone only near it and blend over
+    // the middle 80 % of an interval: a narrow window swapped recordings within a frame or two on every upshift's
+    // rpm drop, which the ear hears as a change of engine
     const f =
       pitched && vs.length > 1 && vs.length <= 6
-        ? Math.min(1, Math.max(0, (rawF - 0.18) / 0.34))
+        ? Math.min(1, Math.max(0, (rawF - 0.1) / 0.8))
         : rawF;
     for (const v of vs) {
       let w = 0;
       if (v === lo) w = Math.cos(f * Math.PI * 0.5);
       else if (v === hi) w = Math.sin(f * Math.PI * 0.5);
       const rate = pitched ? Math.min(4, Math.max(0.25, x / v.key)) : 1;
-      v.set(w * level, rate, now, dt, tau);
+      v.set(w * level, rate, now, dt, tau, pitchTau);
     }
   }
 
@@ -273,7 +280,7 @@ export class Vf26SoundBank {
   public async load(initialView: Vf26View = 'ext'): Promise<boolean> {
     let manifest: Vf26AudioManifest;
     try {
-      const res = await fetch(withBasePath(`${this.assetDir}manifest.json`));
+      const res = await fetchBankFile(withBasePath(`${this.assetDir}manifest.json`));
       if (!res.ok) return false;
       manifest = (await res.json()) as Vf26AudioManifest;
     } catch {
@@ -363,7 +370,7 @@ export class Vf26SoundBank {
 
     const fetchDecode = async (job: Job): Promise<boolean> => {
       try {
-        const res = await fetch(withBasePath(this.assetDir + job.file));
+        const res = await fetchBankFile(withBasePath(this.assetDir + job.file));
         if (!res.ok) return false;
         job.assign(await ctx.decodeAudioData(await res.arrayBuffer()));
         return true;
@@ -439,7 +446,7 @@ export class Vf26SoundBank {
       if (this.prevGear !== 0 && inp.gear > 0) {
         const up = inp.gear > this.prevGear;
         if (up) {
-          this.upshiftTimer = 0.075;
+          this.upshiftTimer = UPSHIFT_S;
           this.downshiftTimer = 0;
           this.playOneshot('gear_up', 0.58);
           this.playOneshot('shift_cut', inp.view === 'int' ? 0.42 : 0.28);
@@ -464,33 +471,37 @@ export class Vf26SoundBank {
     this.upshiftTimer = Math.max(0, this.upshiftTimer - dt);
     this.downshiftTimer = Math.max(0, this.downshiftTimer - dt);
 
-    // Continuous audio RPM tracking: slews across gear shifts over ~50ms so the ear hears the physical pitch drop/blip
+    // Audio RPM: a seamless upshift drops the revs in ~20 ms (a fast slew, under the cut's dip); elsewhere a ~25 ms
+    // smoothing takes the physics' frame steps out of the pitch
     const targetRpm = Math.min(this.rpmRange[1], Math.max(this.rpmRange[0], inp.rpm));
+    const shifting = this.upshiftTimer > 0 || this.downshiftTimer > 0;
     if (this.audioRpm === 0) {
       this.audioRpm = targetRpm;
-    } else if (this.upshiftTimer > 0 || this.downshiftTimer > 0) {
+    } else if (shifting) {
       const span = Math.max(4000, this.rpmRange[1] - this.rpmRange[0]);
-      const maxSlew = (this.upshiftTimer > 0 ? span * 4.2 : span * 4.8) * dt;
+      const maxSlew = span * 12 * dt;
       const diff = targetRpm - this.audioRpm;
       this.audioRpm += Math.sign(diff) * Math.min(Math.abs(diff), maxSlew);
     } else {
-      this.audioRpm += (targetRpm - this.audioRpm) * Math.min(1, dt / 0.008);
+      this.audioRpm += (targetRpm - this.audioRpm) * Math.min(1, dt / 0.025);
     }
     const rpm = this.audioRpm;
+    const pitchTau = shifting ? 0.006 : 0.02;
 
     // Upshift cut & engagement envelope + downshift ECU auto-blip
     let shiftOnScale = 1.0;
     let shiftOffScale = 1.0;
     if (this.upshiftTimer > 0) {
-      const p = 1 - this.upshiftTimer / 0.075; // 0 -> 1 across the 75ms shift
-      if (p < 0.45) {
-        shiftOnScale = 0.18;
-        shiftOffScale = 0.55;
+      // The ignition cut: a short dip (not a hole: the engine never stops sounding through a seamless shift), then
+      // back onto the next gear with a slight punch
+      const p = 1 - this.upshiftTimer / UPSHIFT_S;
+      if (p < 0.4) {
+        shiftOnScale = 0.55;
+        shiftOffScale = 0.75;
       } else {
-        const reg = (p - 0.45) / 0.55;
-        // Punch back into the next gear with a subtle 1.08x transient peak
-        shiftOnScale = 0.18 + 0.90 * Math.sin(reg * Math.PI * 0.5);
-        shiftOffScale = 0.55 + 0.45 * reg;
+        const reg = (p - 0.4) / 0.6;
+        shiftOnScale = 0.55 + 0.5 * Math.sin(reg * Math.PI * 0.5);
+        shiftOffScale = 0.75 + 0.25 * reg;
       }
     }
     const blipThrottle =
@@ -511,8 +522,8 @@ export class Vf26SoundBank {
       const wOff = Math.cos(onness * Math.PI * 0.5) * shiftOffScale;
       const viewLevel = view === 'int' ? this.viewMix : 1 - this.viewMix;
       const active = viewLevel > 0.002;
-      this.engine[view].on.update(rpm, active ? wOn : 0, true, now, dt, engineTau);
-      this.engine[view].off.update(rpm, active ? wOff : 0, true, now, dt, engineTau);
+      this.engine[view].on.update(rpm, active ? wOn : 0, true, now, dt, engineTau, pitchTau);
+      this.engine[view].off.update(rpm, active ? wOff : 0, true, now, dt, engineTau, pitchTau);
     }
 
     // Turbo (`boost` = gauge bar; pitched subtly with boost so spool rises naturally)
@@ -532,7 +543,8 @@ export class Vf26SoundBank {
 
     // Lift-off: blow-off valve + overrun backfires / pops
     this.popCooldown = Math.max(0, this.popCooldown - dt);
-    const lifted = this.prevThrottle > 0.55 && thr < 0.15;
+    const foot = Math.min(1, Math.max(0, inp.pedal ?? thr));
+    const lifted = this.prevThrottle > 0.55 && foot < 0.15;
     if (lifted) {
       this.liftTimer = 0.9;
       if (boost > 0.8) this.playOneshot('blowoff', 0.35 * Math.min(1, boost / 2));
@@ -545,11 +557,11 @@ export class Vf26SoundBank {
     }
     this.liftTimer = Math.max(0, this.liftTimer - dt);
     const crackleMinRpm = m.lift?.crackleMinRpm ?? 9000;
-    if (this.liftTimer > 0 && thr < 0.1 && rpm > crackleMinRpm && this.popCooldown === 0 && Math.random() < dt * 3.5) {
+    if (this.liftTimer > 0 && foot < 0.1 && rpm > crackleMinRpm && this.popCooldown === 0 && Math.random() < dt * 3.5) {
       this.playOneshot(inp.view === 'int' ? 'backfire_int' : 'pop_ext', 0.28);
       this.popCooldown = 0.12;
     }
-    this.prevThrottle = thr;
+    this.prevThrottle = foot;
 
     // Tyre skid (the bank's own recordings, per view) and the traction-control cut
     for (const view of ['ext', 'int'] as Vf26View[]) {
@@ -587,4 +599,47 @@ export class Vf26SoundBank {
     this.bus.disconnect();
     this.ready = false;
   }
+}
+
+/** Responses fetched ahead (during loading) by `prefetchSoundBank`, each handed out once */
+const prefetched = new Map<string, Promise<Response>>();
+
+function fetchBankFile(url: string): Promise<Response> {
+  const early = prefetched.get(url);
+  if (early) {
+    prefetched.delete(url);
+    return early.then((r) => r, () => fetch(url));
+  }
+  return fetch(url);
+}
+
+/**
+ * Starts downloading a car's sound bank (manifest and every file) at low priority while the loading screen is up, so
+ * the sound is there as soon as the audio unlocks on the first key press. Decoding still waits for the AudioContext.
+ */
+export function prefetchSoundBank(assetDir: string): void {
+  if (typeof window === 'undefined') return;
+  const manifestUrl = withBasePath(`${assetDir}manifest.json`);
+  if (prefetched.has(manifestUrl)) return;
+  const init = { priority: 'low' } as RequestInit;
+  const manifest = fetch(manifestUrl, init);
+  prefetched.set(manifestUrl, manifest.then((r) => r.clone()));
+  void manifest
+    .then((r) => (r.ok ? (r.json() as Promise<Vf26AudioManifest>) : null))
+    .then((m) => {
+      if (!m) return;
+      const files = new Set<string>([
+        ...Object.values(m.engine ?? {}).flat().map((e) => e.file),
+        ...(m.transmission ?? []).map((e) => e.file),
+        ...(m.turbo ?? []).map((e) => e.file),
+        ...(m.oneshots ?? []).map((e) => e.file),
+        ...Object.values(m.skid ?? {}).filter(Boolean).map((e) => (e as { file: string }).file),
+        ...(m.tractionControl ? [m.tractionControl.file] : []),
+      ]);
+      for (const f of files) {
+        const url = withBasePath(assetDir + f);
+        if (!prefetched.has(url)) prefetched.set(url, fetch(url, init));
+      }
+    })
+    .catch(() => {});
 }

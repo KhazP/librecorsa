@@ -52,6 +52,8 @@ export interface BuiltTrackData {
   id?: string;
   /** Circuit GLB (relative to the base path); absent on synthetic test tracks */
   meshUrl?: string;
+  /** Materials of the circuit GLB's scan that are the racing surface (asphalt shader); none for Rwanda */
+  roadMaterials?: string[];
   /** Start grid slots for this layout (behind the S/F line) */
   spawnGrid: GridSlotDef[];
   samples: TrackSamplePoint[];
@@ -186,7 +188,8 @@ function rawSampleAtS(s: number): RawTrackSample {
 export interface TrackMetaExtras {
   shortName?: string;
   baseAltitudeM?: number;
-  mesh?: { url?: string };
+  /** `roadMaterials`: the scan's racing-surface materials (build_track.py), drawn with the asphalt shader */
+  mesh?: { url?: string; roadMaterials?: string[] };
   credit?: { title: string; author: string; url: string; short?: string; license: string; licenseUrl: string };
   /** Per-kind overrides of the default surface table (track-surfaces.ts) */
   surfaceTable?: SurfaceTableOverrides;
@@ -932,6 +935,7 @@ export function getRwandaTrackData(numSamples = 1200): BuiltTrackData {
   cachedBuiltTrack = {
     id: ACTIVE_TRACK_ID,
     meshUrl: getActiveTrackMetadata().mesh?.url ?? "/tracks/rwanda/rwanda_2026.glb",
+    roadMaterials: getActiveTrackMetadata().mesh?.roadMaterials,
     spawnGrid: [...RWANDA_SPAWN_GRID],
     samples,
     totalLengthM: totalLength,

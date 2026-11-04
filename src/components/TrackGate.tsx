@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { LibreCorsaSimulator } from "@/components/LibreCorsaSimulator";
 import { activateTrack, loadStoredTrackId, RWANDA_TRACK_ID } from "@/lib/track-registry";
+import { registerAssetCache } from "@/lib/service-worker";
 
 /**
  * Activates the chosen circuit before the simulator mounts, and remounts it (fresh scene, physics and
@@ -26,6 +27,7 @@ export const TrackGate: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    registerAssetCache();
     void select(loadStoredTrackId());
   }, [select]);
 

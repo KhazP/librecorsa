@@ -33,7 +33,9 @@ import type {
   TireCompound,
   TrackSamplePoint,
   TyreSetup,
+  WheelPressures,
 } from '@/types/f1';
+import { axlePressures, pressureAt } from '@/types/f1';
 import {
   BASE_ALTITUDE_M,
   type BuiltTrackData,
@@ -491,6 +493,11 @@ export class TrackSampleGroundQuery implements GroundQuery {
   }
 }
 
+/** The drivable-surface query of a loaded track root (shared with the cars), or null when it has no colliders */
+export function trackGroundQuery(root: THREE.Object3D): TrackColliderQuery | null {
+  return collidersFor(root)?.ground ?? null;
+}
+
 /** Colliders built once per loaded track root and shared by every f12026-car */
 const colliderCache = new WeakMap<THREE.Object3D, { ground: TrackColliderQuery; walls: TrackWallQuery } | null>();
 
@@ -641,7 +648,7 @@ export class F12026CarSim implements SimulatorCar {
   /** AI cars fit the tyre the weather calls for (set on cars made by `createAiPeerCar`) */
   public aiAutoTyres = false;
   private realism: SimRealismFlags = { ...FULL_REALISM };
-  private coldPsi = { front: 0, rear: 0 };
+  private coldPsi: WheelPressures = axlePressures(0, 0);
   private onColliders = false;
   private progressHintS: number | undefined;
   private poseHintS: number | undefined;
@@ -742,7 +749,7 @@ export class F12026CarSim implements SimulatorCar {
     this.channels.carId = profile.id;
     this.channels.hasErs = profile.hasErs;
     this.channels.hasDrs = profile.hasDrs;
-    this.coldPsi = { front: v.wheels[0].coldPressurePsi, rear: v.wheels[2].coldPressurePsi };
+    this.coldPsi = axlePressures(v.wheels[0].coldPressurePsi, v.wheels[2].coldPressurePsi);
     if (root) this.attachTrackRoot(root);
     this.resetToStartGrid(false);
   }
@@ -929,14 +936,15 @@ export class F12026CarSim implements SimulatorCar {
 
   set tireCompound(compound: TireCompound) {
     const prevDefault = this.defaultColdPsiForCompound();
-    const frontDelta = this.coldPsi.front - prevDefault;
-    const rearDelta = this.coldPsi.rear - prevDefault;
+    const deltas = { ...this.coldPsi };
+    for (const k of ["fl", "fr", "rl", "rr"] as const) deltas[k] -= prevDefault;
     this.compound = compound;
     this.vehicle.setCompound(this.config.compoundSlots[compound]);
     const nextDefault = this.defaultColdPsiForCompound();
     const pr = this.profile;
-    this.coldPsi.front = Math.round(THREE.MathUtils.clamp(nextDefault + frontDelta, pr.coldPsiRange[0], pr.coldPsiRange[1]) * 10) / 10;
-    this.coldPsi.rear = Math.round(THREE.MathUtils.clamp(nextDefault + rearDelta, pr.coldPsiRange[0], pr.coldPsiRange[1]) * 10) / 10;
+    for (const k of ["fl", "fr", "rl", "rr"] as const) {
+      this.coldPsi[k] = Math.round(THREE.MathUtils.clamp(nextDefault + deltas[k], pr.coldPsiRange[0], pr.coldPsiRange[1]) * 10) / 10;
+    }
     this.applyColdPressures();
   }
 
@@ -1046,8 +1054,9 @@ export class F12026CarSim implements SimulatorCar {
   public setTyreSetup(setup: TyreSetup): void {
     const pick = (v: number, [lo, hi]: [number, number], current: number) => (Number.isFinite(v) ? THREE.MathUtils.clamp(v, lo, hi) : current);
     const pr = this.profile;
-    this.coldPsi.front = Math.round(pick(setup.coldPressurePsi.front, pr.coldPsiRange, this.coldPsi.front) * 10) / 10;
-    this.coldPsi.rear = Math.round(pick(setup.coldPressurePsi.rear, pr.coldPsiRange, this.coldPsi.rear) * 10) / 10;
+    for (const k of ["fl", "fr", "rl", "rr"] as const) {
+      this.coldPsi[k] = Math.round(pick(setup.coldPressurePsi[k], pr.coldPsiRange, this.coldPsi[k]) * 10) / 10;
+    }
     const s = this.config.suspensions;
     s.front.staticCamber = pick(setup.camberDeg.front, pr.frontCamberRange, s.front.staticCamber);
     s.rear.staticCamber = pick(setup.camberDeg.rear, pr.rearCamberRange, s.rear.staticCamber);
@@ -1440,7 +1449,11 @@ export class F12026CarSim implements SimulatorCar {
       const leftOf = (b.x * _ex.x + b.z * _ex.z) / bl;
       const errLeft = (lineNow - p.lateralOffset) * leftOf;
       const rateLeft = -((v.velocity.x * b.x + v.velocity.z * b.z) / bl) * leftOf;
-      const aLat = THREE.MathUtils.clamp(AP_LINE_KP * errLeft + AP_LINE_KD * rateLeft, -AP_LINE_MAX_MS2, AP_LINE_MAX_MS2);
+      const aLat = THREE.MathUtils.clamp(
+        (AP_LINE_KP * errLeft + AP_LINE_KD * rateLeft) * this.aiSteerGain,
+        -AP_LINE_MAX_MS2,
+        AP_LINE_MAX_MS2
+      );
       kappa += aLat / Math.max(100, speed * speed);
     }
     // The path curvature is in the horizontal plane, so the yaw that follows it is about world up, not the body's
@@ -1615,7 +1628,7 @@ export class F12026CarSim implements SimulatorCar {
 
   private applyColdPressures(): void {
     for (const w of this.vehicle.wheels) {
-      w.coldPressurePsi = w.isFront ? this.coldPsi.front : this.coldPsi.rear;
+      w.coldPressurePsi = pressureAt(this.coldPsi, w.isFront, w.isLeft);
       w.pressurePsi = w.coldPressurePsi;
     }
   }

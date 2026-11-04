@@ -6,7 +6,9 @@
  *  - `wetFriction`: extra multiplier at full wetness, relative to asphalt in the same water (painted kerbs and
  *    grass go far slicker than the tarmac). The tyre's own wet behaviour is the tyre model's business.
  *  - `rollingResistance`: drag per newton of load on top of the tyre's own (TORCS `rolling resistance`):
- *    grass and above all gravel slow a car that is not braking.
+ *    grass and above all gravel slow a car that is not braking. The tyres plough the loose surface whichever way
+ *    they move, so it acts against the contact patch's whole velocity (sliding sideways too), outside the tyre's
+ *    friction circle, and builds with speed (see `surfaceDragN`).
  *  - `bumpHeightM` / `bumpLengthM`: a sinusoidal ripple along the surface (AC `SIN_HEIGHT` / `SIN_LENGTH`, TORCS
  *    `roughness` / `roughness wavelength`, but as a true wavelength in metres). Kerb serrations live here, so they
  *    are felt whatever the mesh density.
@@ -41,9 +43,22 @@ export const DEFAULT_SURFACE_TABLE: Readonly<SurfaceTable> = {
   pitlane: { friction: 0.97, wetFriction: 0.95, rollingResistance: 0, bumpHeightM: 0, bumpLengthM: 0, vibration: 0, validTrack: true },
   // Soft and uneven, and very slippery once wet
   grass: { friction: 0.6, wetFriction: 0.55, rollingResistance: 0.04, bumpHeightM: 0.01, bumpLengthM: 2.4, vibration: 0.5, validTrack: false },
-  // Loose stones: little grip, and the car ploughs in
-  gravel: { friction: 0.45, wetFriction: 0.9, rollingResistance: 0.16, bumpHeightM: 0.008, bumpLengthM: 1.1, vibration: 0.8, validTrack: false },
+  // Loose stones: little grip, and the car ploughs in: about 0.5 g of drag at speed on top of what the tyres give
+  gravel: { friction: 0.45, wetFriction: 0.9, rollingResistance: 0.5, bumpHeightM: 0.008, bumpLengthM: 1.1, vibration: 0.8, validTrack: false },
 };
+
+/** Contact-patch speed (m/s) at which a surface's plough drag is fully built: a crawling car can still drive out */
+export const SURFACE_DRAG_FULL_SPEED_MS = 20;
+
+/**
+ * Plough drag of a loose surface on one tyre (N, ≥ 0), to apply against the contact patch's velocity over the
+ * ground: `rollingResistance` × load, eased in from a standstill up to `SURFACE_DRAG_FULL_SPEED_MS`.
+ */
+export function surfaceDragN(rollingResistance: number, fzN: number, patchSpeedMs: number): number {
+  if (!(rollingResistance > 0) || !(fzN > 0) || !(patchSpeedMs > 0)) return 0;
+  const x = Math.min(1, patchSpeedMs / SURFACE_DRAG_FULL_SPEED_MS);
+  return rollingResistance * fzN * x * x * (3 - 2 * x);
+}
 
 export function isTrackSurfaceKind(v: unknown): v is TrackSurfaceKind {
   return typeof v === 'string' && v in DEFAULT_SURFACE_TABLE;

@@ -1,0 +1,25 @@
+{
+  "description": "Spa-Francorchamps overrides for the GT3 class: crest care at La Source (T1) and Raidillon (T2-4), outside margin through Pouhon (T10-11) and Stavelot (T14-15), earlier braking for the Bus Stop (T18-19), and damped steering gain on the Kemmel and Blanchimont straights.",
+  "params": {
+    "bumpCaution": 0.25,
+    "overtakeCaution": 0.3
+  },
+  "sections": [
+    { "label": "La Source", "turns": [1], "leadInM": 120, "params": { "brakeMargin": 0.04, "apexSpeedScale": 0.985, "bumpCaution": 0.4, "overtakeCaution": 0.45 } },
+    { "label": "Eau Rouge Approach", "fromM": 330, "toM": 780, "params": { "steerGain": 0.58 } },
+    { "label": "Eau Rouge - Raidillon", "turns": [2, 3, 4], "leadInM": 80, "params": { "bumpCaution": 0.5, "extMarginM": 0.9, "overtakeCaution": 0.5 } },
+    { "label": "Kemmel Straight", "fromM": 1200, "toM": 2050, "params": { "steerGain": 0.55, "apexSpeedScale": 1.15 } },
+    { "label": "Les Combes - Malmedy", "turns": [5, 6, 7], "leadInM": 130, "params": { "brakeMargin": 0.04, "extMarginM": 0.9 } },
+    { "label": "Malmedy to Bruxelles", "fromM": 2570, "toM": 2700, "params": { "steerGain": 0.65 } },
+    { "label": "Bruxelles - Speakers", "turns": [8, 9], "leadInM": 100, "params": { "brakeMargin": 0.03, "extMarginM": 0.9 } },
+    { "label": "Bruxelles to Pouhon", "fromM": 3240, "toM": 3490, "params": { "steerGain": 0.58 } },
+    { "label": "Pouhon", "turns": [10, 11], "leadInM": 110, "params": { "brakeMargin": 0.04, "apexSpeedScale": 0.98, "extMarginM": 1.1 } },
+    { "label": "Pouhon to Fagnes", "fromM": 4020, "toM": 4170, "params": { "steerGain": 0.65 } },
+    { "label": "Fagnes - Campus - Stavelot", "turns": [12, 13, 14, 15], "leadInM": 100, "params": { "brakeMargin": 0.03, "extMarginM": 0.9 } },
+    { "label": "Stavelot to Paul Frere", "fromM": 5130, "toM": 5620, "params": { "steerGain": 0.58 } },
+    { "label": "Blanchimont", "turns": [17], "leadInM": 80, "params": { "extMarginM": 1.0 } },
+    { "label": "Blanchimont to Bus Stop", "fromM": 6130, "toM": 6400, "params": { "steerGain": 0.58 } },
+    { "label": "Bus Stop Chicane", "turns": [18, 19], "leadInM": 140, "params": { "brakeMargin": 0.04, "apexSpeedScale": 0.99, "overtakeCaution": 0.45 } },
+    { "label": "Pit Straight", "fromM": 6720, "toM": 80, "params": { "steerGain": 0.62 } }
+  ]
+}

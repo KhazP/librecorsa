@@ -34,9 +34,26 @@ export interface CarSoundSource {
   id: string;
   assetDir: string;
   limiterRpm: number;
+  /**
+   * The limiter of the vehicle model driving this sound, when it differs from the recording's: the engine rpm is
+   * scaled by limiterRpm / physicsLimiterRpm so a V10 recorded to 19 000 rpm sweeps its whole range (and hits its
+   * limiter) on the FA-26 physics' 12 500 rpm, and the BMW's 7 000 rpm bank on the AMG GT3 model's 7 900
+   */
+  physicsLimiterRpm?: number;
 }
 
 export const AMR26_SOUND: CarSoundSource = { id: 'amr26', assetDir: AMR26_AUDIO_DIR, limiterRpm: VF26_ENGINE.limiterRpm };
+export const FA26_SOUND: CarSoundSource = { id: 'fa26', assetDir: '/cars/fa26/audio/', limiterRpm: 12500 };
+export const SF26_SOUND: CarSoundSource = { id: 'sf26', assetDir: '/cars/sf26/audio/', limiterRpm: 12500 };
+export const W17_SOUND: CarSoundSource = { id: 'w17', assetDir: '/cars/w17/audio/', limiterRpm: 12500 };
+export const RB22_SOUND: CarSoundSource = { id: 'rb22', assetDir: '/cars/rb22/audio/', limiterRpm: 12500 };
+export const SF71H_SOUND: CarSoundSource = { id: 'sf71h', assetDir: '/cars/sf71h/audio/', limiterRpm: 12500 };
+export const RB8_SOUND: CarSoundSource = { id: 'rb8', assetDir: '/cars/rb8/audio/', limiterRpm: 18000, physicsLimiterRpm: VF26_ENGINE.limiterRpm };
+export const R25_SOUND: CarSoundSource = { id: 'r25', assetDir: '/cars/r25/audio/', limiterRpm: 19000, physicsLimiterRpm: VF26_ENGINE.limiterRpm };
+export const F2004_SOUND: CarSoundSource = { id: 'f2004', assetDir: '/cars/f2004/audio/', limiterRpm: 19000, physicsLimiterRpm: VF26_ENGINE.limiterRpm };
+/** The AMG GT3 vehicle model's limiter (AmgGt3Config gearbox redline) */
+const AMG_GT3_LIMITER_RPM = 7900;
+export const BMW_M4_GT3_SOUND: CarSoundSource = { id: 'bmw-m4-gt3', assetDir: '/cars/bmw-m4-gt3/audio/', limiterRpm: 7000, physicsLimiterRpm: AMG_GT3_LIMITER_RPM };
 
 /** Cameras mounted on the car use the mod's interior engine event; the rest hear the exterior one */
 const INTERIOR_CAMERAS: ReadonlySet<CameraMode> = new Set<CameraMode>(['cockpit', 'cockpit_shoulder', 'nose', 'tv_pod']);
@@ -526,10 +543,13 @@ export class CarAudioEngine {
     // A bank with its own skid recordings plays them in place of the synthesised squeal and scrub
     const bankSkid = vf26?.hasSkid === true;
     if (vf26) {
+      const rpmScale = this.sound.physicsLimiterRpm ? this.sound.limiterRpm / this.sound.physicsLimiterRpm : 1;
       vf26.update(
         {
-          rpm: telemetry.rpm,
-          throttle: telemetry.throttle,
+          rpm: telemetry.rpm * rpmScale,
+          // The load the engine delivers: the pedal less the traction control's cut, so the cut is heard
+          throttle: telemetry.throttle * (1 - THREE.MathUtils.clamp(telemetry.liveTuner?.tcCutFraction ?? 0, 0, 1)),
+          pedal: telemetry.throttle,
           gear: telemetry.gear,
           speedKmh: telemetry.speedKmh,
           boostBarGauge: Math.max(0, telemetry.turboBoostBar - 1),

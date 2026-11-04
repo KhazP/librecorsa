@@ -15,6 +15,11 @@ import { assetProgress } from "@/lib/loading/asset-progress";
 import { applySceneryDetail, prepareTreeGeometry, sceneryKind, setSceneryTime } from "@/lib/render/scenery-detail";
 import { attachSceneryInstances, loadSceneryInstances, resetSceneryInstances } from "@/lib/render/scenery-instances";
 import { applySceneryTextures, loadSceneryTextures } from "@/lib/render/scenery-textures";
+import { cleanScanMaterial } from "@/lib/render/scan-materials";
+import { createGroundHit, type GroundQuery } from "@/lib/sim/f12026-car/TrackColliderQuery";
+
+/** Height of a racing-line dash over the driving surface: clear of its ripple, low enough to read as paint */
+const DASH_SEAT_LIFT_M = 0.035;
 
 export interface BuiltRwandaScene {
   sceneGroup: THREE.Group;
@@ -24,6 +29,11 @@ export interface BuiltRwandaScene {
   updateEnvironment: (elapsedSeconds: number) => void;
   /** Recolours the braking line ahead of the car; `guide` = the car's own braking guide (else the circuit's) */
   updateDynamicRacingLine: (carS: number, carSpeedMs: number, guide?: BrakingGuide | null) => void;
+  /**
+   * Sits the racing-line dashes on the real driving surface (the centreline profile misses the road's crown and
+   * camber away from the centre, so off-centre dashes sank into or floated over it)
+   */
+  seatRacingLine: (ground: GroundQuery) => void;
   /** Start gantry: null = idle (green), 0..5 = number of red lights lit */
   setStartLights: (redCount: number | null) => void;
   /**
@@ -38,7 +48,8 @@ export interface BuiltRwandaScene {
 // extras.collider = true), Terrain, Lake, Env_* (vegetation, canopies) and Prop_* (buildings, stands, gantry).
 // The other circuits (scripts/tracks/build_track.py) wrap a converted scan in `Track_Model` and append hidden
 // `Track_Collider_*` / `Track_Surface_*` physics meshes (extras.hidden = true); `track.meshUrl` names the file.
-// They also carry `Track_Kerbs_Visual`: the physics kerbs (Track_Surface_Kerb) drawn in red / white paint over the scan.
+// Older builds also carry `Track_Kerbs_Visual` (the physics kerbs in red / white paint over the scan): hidden, the scan
+// shows its own kerbs.
 
 // Flat overlays drawn on top of the asphalt / run-off; pulled towards the camera to avoid z-fighting.
 const DECAL_NODES: Record<string, number> = {
@@ -140,8 +151,11 @@ function loadTrackGlb(
   /** Scenery files that replace some of the circuit's own (scenery-instances.ts); loaded alongside */
   sceneryUrls: readonly string[] = [],
   /** A manifest of the circuit's own textures replacing a track pack's images (scenery-textures.ts) */
-  sceneryTexturesUrl: string | null = null
+  sceneryTexturesUrl: string | null = null,
+  /** The scan's racing-surface materials (track data `mesh.roadMaterials`): drawn with the asphalt shader */
+  roadMaterials: readonly string[] = []
 ): void {
+  const roadMaterialNames = new Set(roadMaterials);
   if (typeof window === "undefined" || typeof fetch === "undefined") {
     return;
   }
@@ -183,6 +197,12 @@ function loadTrackGlb(
           return;
         }
         if (!(obj instanceof THREE.Mesh)) return;
+        // The scans show their own kerbs: the generated red / white overlay older builds drew over them stays hidden
+        // (its physics twin, Track_Surface_Kerb, is a collider and unaffected)
+        if (topName === "Track_Kerbs_Visual") {
+          obj.visible = false;
+          return;
+        }
 
         const receiveOnly = SHADOW_RECEIVE_ONLY.has(topName);
         obj.receiveShadow = true;
@@ -195,6 +215,9 @@ function loadTrackGlb(
           obj.castShadow = !receiveOnly && (topName.startsWith("Prop_") || topName.startsWith("Env_") || topName.startsWith("Track_"));
         }
 
+        if (topName === "Track_Model") {
+          for (const m of Array.isArray(obj.material) ? obj.material : [obj.material]) cleanScanMaterial(m);
+        }
         obj.material = Array.isArray(obj.material) ? obj.material.map(withRoughDiffuse) : withRoughDiffuse(obj.material);
         const offset = DECAL_NODES[topName];
         const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
@@ -212,7 +235,9 @@ function loadTrackGlb(
         for (const mat of mats) {
           applySceneryDetail(mat, { baseY, treeShading });
           if (!(mat instanceof THREE.MeshStandardMaterial)) continue;
-          if (topName === "Track_Asphalt_Road") applyAsphaltSheen(mat, sheenMask);
+          if (topName === "Track_Asphalt_Road" || (topName === "Track_Model" && roadMaterialNames.has(mat.name))) {
+            applyAsphaltSheen(mat, sheenMask);
+          }
           for (const tex of [mat.map, mat.roughnessMap, mat.metalnessMap, mat.normalMap]) {
             if (tex) tex.anisotropy = 8;
           }
@@ -828,6 +853,9 @@ export function buildRwandaCircuitScene(
   const rlColors: number[] = [];
   const rlIndices: number[] = [];
 
+  // The driving surface the dashes sit on, once the track's colliders are in
+  let dashGround: GroundQuery | null = null;
+  const dashHit = createGroundHit();
   // Crisp 3D dashed rectangular marker segments along a car's racing line: the four corners of dash i
   const dashCorners = (i: number, line: RacingLineId): number[] => {
     const s0 = samples[i];
@@ -852,7 +880,13 @@ export function buildRwandaCircuitScene(
     const l1 = c1.clone().addScaledVector(bDashEnd, -halfDashW);
     const r1 = c1.clone().addScaledVector(bDashEnd, halfDashW);
 
-    return [l0.x, l0.y, l0.z, r0.x, r0.y, r0.z, l1.x, l1.y, l1.z, r1.x, r1.y, r1.z];
+    const out = [l0.x, l0.y, l0.z, r0.x, r0.y, r0.z, l1.x, l1.y, l1.z, r1.x, r1.y, r1.z];
+    if (dashGround) {
+      for (let k = 0; k < 12; k += 3) {
+        if (dashGround.query(out[k], out[k + 2], out[k + 1] + 1.5, dashHit)) out[k + 1] = dashHit.height + DASH_SEAT_LIFT_M;
+      }
+    }
+    return out;
   };
 
   // Drawn on the F1 line until a car with its own line hands its braking guide over
@@ -905,6 +939,12 @@ export function buildRwandaCircuitScene(
    */
   let lineGuide: BrakingGuide | null = null;
   let drawnLine: RacingLineId = 'f1';
+  const seatRacingLine = (ground: GroundQuery) => {
+    dashGround = ground;
+    for (let i = 0; i < n; i++) rlPositionAttr.array.set(dashCorners(i, drawnLine), i * 12);
+    rlPositionAttr.needsUpdate = true;
+    rlGeom.computeBoundingSphere();
+  };
   const updateDynamicRacingLine = (carS: number, carSpeedMs: number, guide: BrakingGuide | null = null) => {
     // Another car's guidance: repaint the static braking zones from it, on its own racing line
     if (guide !== lineGuide) {
@@ -1280,12 +1320,14 @@ export function buildRwandaCircuitScene(
     },
     sheenMask,
     isRwanda ? ["/tracks/rwanda/scenery/foliage.glb", "/tracks/rwanda/scenery/stands.glb", "/tracks/rwanda/scenery/props.glb"] : [],
-    isRwanda ? "/tracks/rwanda/scenery/textures/textures.json" : null
+    isRwanda ? "/tracks/rwanda/scenery/textures/textures.json" : null,
+    track.roadMaterials ?? []
   );
 
   return {
     sceneGroup,
     racingLineMesh,
+    seatRacingLine,
     waterMesh,
     startLightMeshes,
     updateEnvironment,

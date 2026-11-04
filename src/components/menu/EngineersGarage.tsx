@@ -8,6 +8,7 @@ import { COMPOUNDS, PanelSection, TYRE_SETUP_LIMITS, type PauseMenuProps } from 
 import { CarPicker } from "./CarPicker";
 import { TyreBrakeGrid } from "@/components/hud/TyreBrakeWidget";
 import { LIVERIES } from "@/lib/track-data";
+import { FACTORY_LIVERY_NOTE, carTakesLivery } from "@/lib/cars/car-registry";
 
 const FALLBACK_TUNER: Pick<
   LiveTunerState,
@@ -278,23 +279,27 @@ export const EngineersGarage: React.FC<PauseMenuProps> = (p) => {
       {/* Car and presets */}
       <div className="flex flex-col gap-3">
         <CarPicker carId={p.carId} onChangeCar={p.onChangeCar} compact />
-        <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Livery">
-          {LIVERIES.map((liv) => {
-            const active = p.selectedLivery.id === liv.id;
-            return (
-              <button
-                key={liv.id}
-                type="button"
-                aria-pressed={active}
-                aria-label={liv.name}
-                title={`${liv.name} · ${liv.team}`}
-                onClick={() => p.onChangeLivery(liv)}
-                className={`h-7 w-12 cursor-pointer rounded-[9px] transition-[box-shadow] ${active ? "shadow-[0_0_0_2px_#CCFF00]" : "shadow-[0_0_0_1px_#262B3D] hover:shadow-[0_0_0_1px_#8E96AA]"}`}
-                style={{ background: `linear-gradient(135deg, ${liv.primary} 0 55%, ${liv.accent} 55% 65%, ${liv.secondary} 65% 100%)` }}
-              />
-            );
-          })}
-        </div>
+        {!carTakesLivery(p.carId) ? (
+          <p className="m-0 text-[12px] text-[#8E96AA]">{FACTORY_LIVERY_NOTE}</p>
+        ) : (
+          <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Livery">
+            {LIVERIES.map((liv) => {
+              const active = p.selectedLivery.id === liv.id;
+              return (
+                <button
+                  key={liv.id}
+                  type="button"
+                  aria-pressed={active}
+                  aria-label={liv.name}
+                  title={`${liv.name} · ${liv.team}`}
+                  onClick={() => p.onChangeLivery(liv)}
+                  className={`h-7 w-12 cursor-pointer rounded-[9px] transition-[box-shadow] ${active ? "shadow-[0_0_0_2px_#CCFF00]" : "shadow-[0_0_0_1px_#262B3D] hover:shadow-[0_0_0_1px_#8E96AA]"}`}
+                  style={{ background: `linear-gradient(135deg, ${liv.primary} 0 55%, ${liv.accent} 55% 65%, ${liv.secondary} 65% 100%)` }}
+                />
+              );
+            })}
+          </div>
+        )}
         <div className="flex flex-wrap items-center gap-2 rounded-[18px] border border-[#262B3D] bg-[#08090D]/55 p-2">
           <span className="px-1.5 font-f1-mono text-[10px] font-extrabold tracking-[0.14em] text-[#8E96AA] uppercase">Presets</span>
           <input

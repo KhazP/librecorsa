@@ -1,6 +1,7 @@
 import * as THREE from "three";
-import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
-import { assetProgress } from "@/lib/loading/asset-progress";
+import { createGltfLoader } from "@/lib/render/gltf-loader";
+import { sharpenCarMaps } from "@/lib/render/ported-car-materials";
+import { assetProgress, type AssetTaskId } from "@/lib/loading/asset-progress";
 import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js";
 import { withBasePath } from "@/lib/base-path";
 import { VF26_CHASSIS } from "@/lib/sim/vf26-data";
@@ -75,20 +76,16 @@ const templatePromises = new Map<string, Promise<THREE.Group | null>>();
 // Kept out of userData: Object3D.clone() JSON-serialises userData, which would encode every texture per car
 const templateAssets = new WeakMap<THREE.Object3D, TemplateAssets>();
 
-export function loadVf26Template(modelUrl: string = AMR26_MODEL_URL): Promise<THREE.Group | null> {
+/** `task`: the loading-screen task its download counts toward (the player's car, or the opponents' when it differs) */
+export function loadVf26Template(modelUrl: string = AMR26_MODEL_URL, task: AssetTaskId = "car"): Promise<THREE.Group | null> {
   let promise = templatePromises.get(modelUrl);
   if (!promise) {
     promise = (async () => {
       if (typeof window === "undefined") return null;
       const url = withBasePath(modelUrl);
-      assetProgress.begin("car");
+      assetProgress.begin(task);
       try {
-        const head = await fetch(url, { method: "HEAD" });
-        if (!head.ok) {
-          assetProgress.fail("car");
-          return null;
-        }
-        const gltf = await new GLTFLoader().loadAsync(url, (event) => assetProgress.progress("car", event));
+        const gltf = await createGltfLoader().loadAsync(url, (event) => assetProgress.progress(task, event));
         const scene = gltf.scene;
         // Per-compound tyre maps are stored as extra textures (index list in the root node extras)
         const tyreIdx = (scene.getObjectByName("VF26")?.userData?.tyreMaps ?? {}) as Record<string, number>;
@@ -110,16 +107,16 @@ export function loadVf26Template(modelUrl: string = AMR26_MODEL_URL): Promise<TH
           const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
           for (const m of mats) {
             const std = m as THREE.MeshStandardMaterial;
-            if (std.map) std.map.anisotropy = 8;
+            sharpenCarMaps(m);
             if (std.transparent) std.depthWrite = false;
           }
         });
         scene.updateMatrixWorld(true);
-        assetProgress.done("car");
+        assetProgress.done(task);
         return scene;
       } catch (err) {
         console.warn("VF26 model not loaded, using the procedural car", err);
-        assetProgress.fail("car");
+        assetProgress.fail(task);
         return null;
       }
     })();

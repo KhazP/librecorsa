@@ -247,10 +247,25 @@ export interface RaceSplits {
   behind?: RaceSplit;
 }
 
-/** Driver-set tyre setup (front / rear axle). Camber in degrees, negative = top of the tyre leaning inward. */
+/** Cold pressure per tyre (psi gauge): front-left, front-right, rear-left, rear-right */
+export interface WheelPressures {
+  fl: number;
+  fr: number;
+  rl: number;
+  rr: number;
+}
+
+/** The pressure of one tyre by its corner */
+export const pressureAt = (p: WheelPressures, isFront: boolean, isLeft: boolean): number =>
+  isFront ? (isLeft ? p.fl : p.fr) : isLeft ? p.rl : p.rr;
+
+/** Both tyres of each axle at one pressure */
+export const axlePressures = (front: number, rear: number): WheelPressures => ({ fl: front, fr: front, rl: rear, rr: rear });
+
+/** Driver-set tyre setup. Camber in degrees per axle, negative = top of the tyre leaning inward. */
 export interface TyreSetup {
-  /** Psi gauge at the model's cold reference: VF26 20 °C; F12026/GT3 compound blanket temperature. */
-  coldPressurePsi: { front: number; rear: number };
+  /** Psi gauge per tyre at the model's cold reference: VF26 20 °C; F12026/GT3 compound blanket temperature. */
+  coldPressurePsi: WheelPressures;
   camberDeg: { front: number; rear: number };
 }
 

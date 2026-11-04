@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { createGltfLoader } from "@/lib/render/gltf-loader";
 import { assetProgress } from "@/lib/loading/asset-progress";
 import { withBasePath } from "@/lib/base-path";
 import type { CarTelemetry } from "@/types/f1";
@@ -7,6 +7,7 @@ import type { TyreVisualState } from "@/lib/sim/simulator-car";
 import type { SimCarRig } from "@/lib/car-builder-2026";
 import type { Vf26ModelInstance } from "@/lib/vf26-car-model";
 import { installTyreDeformation, type TyreDeformationHandle } from "@/lib/render/tyre-deformation";
+import { cleanPortedCarMaterial, sharpenCarMaps } from "@/lib/render/ported-car-materials";
 
 /**
  * Cars ported to one GLB each (a registry car's `modelUrl`), on any vehicle model. Node layout:
@@ -22,6 +23,19 @@ export interface PortedCarOptions {
   chassis: { wheelbase: number; frontWeightFraction: number; maxRoadWheelDeg: number };
   /** Steering wheel rotation each way at full lock (deg) */
   steerLockDeg: number;
+  /**
+   * Rig-space cameras to use instead of the GLB's own (e.g. the AMG GT3's for every car on the GT3 model), built from
+   * where this model's steering wheel and front axle landed in rig space
+   */
+  cameraAnchors?: (fit: PortedCameraFit) => Vf26ModelInstance["cameraAnchors"];
+}
+
+/** A ported model's driver and nose in rig space, once loaded */
+export interface PortedCameraFit {
+  /** Centre of the steering wheel's meshes (null: no `STEER` node) */
+  steerCentre: THREE.Vector3 | null;
+  /** Front axle line (z) */
+  frontAxleZ: number;
 }
 
 interface PortedExtras {
@@ -45,24 +59,23 @@ function loadTemplate(url: string): Promise<THREE.Group | null> {
       const full = withBasePath(url);
       assetProgress.begin("car");
       try {
-        const head = await fetch(full, { method: "HEAD" });
-        if (!head.ok) {
-          assetProgress.fail("car");
-          return null;
-        }
-        const scene = (await new GLTFLoader().loadAsync(full, (event) => assetProgress.progress("car", event))).scene;
+        const scene = (await createGltfLoader().loadAsync(full, (event) => assetProgress.progress("car", event))).scene;
         scene.traverse((obj) => {
           const mesh = obj as THREE.Mesh;
           if (!mesh.isMesh) return;
           mesh.castShadow = true;
           mesh.receiveShadow = true;
+          mesh.material = Array.isArray(mesh.material)
+            ? mesh.material.map(cleanPortedCarMaterial)
+            : cleanPortedCarMaterial(mesh.material);
           const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
           for (const m of mats) {
             const std = m as THREE.MeshStandardMaterial;
-            if (std.map) std.map.anisotropy = 8;
+            sharpenCarMaps(m);
             if (std.transparent) std.depthWrite = false;
           }
         });
+        alignWheelAxles(scene);
         scene.updateMatrixWorld(true);
         assetProgress.done("car");
         return scene;
@@ -75,6 +88,68 @@ function loadTemplate(url: string): Promise<THREE.Group | null> {
     templates.set(url, template);
   }
   return template;
+}
+
+/**
+ * Re-bases each wheel so it spins about its own axle. Some exports bake 2-3 degrees of toe or camber into the wheel
+ * geometry (SF-26 and W17 fronts, all four BMW M4 GT3 wheels), so spinning about the wheel node's X axis wobbled.
+ * The axle is the tyre's least-spread direction; the geometry is turned to put it on X and the node takes the
+ * inverse turn, so the wheel looks the same at rest and spins true. Done once on the template.
+ */
+function alignWheelAxles(scene: THREE.Object3D): void {
+  for (const name of WHEELS) {
+    const wheel = scene.getObjectByName(name);
+    if (!wheel) continue;
+    wheel.updateMatrixWorld(true);
+    const toWheel = wheel.matrixWorld.clone().invert();
+    const meshes: THREE.Mesh[] = [];
+    wheel.traverse((obj) => {
+      if ((obj as THREE.Mesh).isMesh && obj !== wheel) meshes.push(obj as THREE.Mesh);
+    });
+    const tyre = meshes.find((m) => m.name.endsWith("_TYRE"));
+    if (!tyre) continue;
+    // Tyre vertices in the wheel's frame
+    const local = toWheel.clone().multiply(tyre.matrixWorld);
+    const pos = tyre.geometry.getAttribute("position");
+    const v = new THREE.Vector3();
+    const mean = new THREE.Vector3();
+    const pts: THREE.Vector3[] = [];
+    const step = Math.max(1, Math.floor(pos.count / 4000));
+    for (let i = 0; i < pos.count; i += step) {
+      v.fromBufferAttribute(pos, i).applyMatrix4(local);
+      pts.push(v.clone());
+      mean.add(v);
+    }
+    mean.multiplyScalar(1 / pts.length);
+    // Covariance and its smallest eigenvector (power iteration on the shifted matrix)
+    const c = [0, 0, 0, 0, 0, 0]; // xx xy xz yy yz zz
+    for (const p of pts) {
+      const x = p.x - mean.x, y = p.y - mean.y, z = p.z - mean.z;
+      c[0] += x * x; c[1] += x * y; c[2] += x * z; c[3] += y * y; c[4] += y * z; c[5] += z * z;
+    }
+    const tr = c[0] + c[3] + c[5];
+    const m = new THREE.Matrix3().set(tr - c[0], -c[1], -c[2], -c[1], tr - c[3], -c[4], -c[2], -c[4], tr - c[5]);
+    const axle = new THREE.Vector3(1, 0, 0);
+    for (let k = 0; k < 64; k++) axle.applyMatrix3(m).normalize();
+    if (axle.x < 0) axle.negate();
+    const tiltDeg = THREE.MathUtils.radToDeg(axle.angleTo(new THREE.Vector3(1, 0, 0)));
+    if (tiltDeg < 0.25) continue;
+    const align = new THREE.Quaternion().setFromUnitVectors(axle, new THREE.Vector3(1, 0, 0));
+    const R = new THREE.Matrix4().makeRotationFromQuaternion(align);
+    for (const mesh of meshes) {
+      // bake the mesh's own transform relative to the wheel, then turn it onto the axle
+      const meshLocal = toWheel.clone().multiply(mesh.matrixWorld);
+      mesh.geometry = mesh.geometry.clone();
+      mesh.geometry.applyMatrix4(R.clone().multiply(meshLocal));
+      mesh.removeFromParent();
+      wheel.add(mesh);
+      mesh.position.set(0, 0, 0);
+      mesh.quaternion.identity();
+      mesh.scale.set(1, 1, 1);
+    }
+    wheel.quaternion.multiply(align.clone().invert());
+    wheel.updateMatrixWorld(true);
+  }
 }
 
 /** Matrix of `obj` relative to `ancestor` (both inside the same, already updated, hierarchy). */
@@ -141,6 +216,15 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
     bodyGroup.name = "PORTED_BODY";
     bodyGroup.position.copy(offset);
 
+    // The steering wheel's centre in rig space, read before the nodes move (the model is at its bind pose here)
+    const steerSource = find("STEER");
+    const steerBox = steerSource ? new THREE.Box3().setFromObject(steerSource, true) : null;
+    const steerCentre =
+      steerBox && !steerBox.isEmpty()
+        ? steerBox.getCenter(new THREE.Vector3()).applyMatrix4(car.matrixWorld.clone().invert()).add(offset)
+        : null;
+    const cameraFit: PortedCameraFit = { steerCentre, frontAxleZ: lf[2] + offset.z };
+
     WHEELS.forEach((wheelName, i) => {
       const wheel = find(wheelName);
       if (!wheel) return;
@@ -201,7 +285,7 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
       pitchRad: -8 * THREE.MathUtils.DEG2RAD,
       fovDeg: anchors.cockpit.fovDeg + 3,
     };
-    cameraAnchors = anchors;
+    cameraAnchors = options.cameraAnchors?.(cameraFit) ?? anchors;
   });
 
   const updateFromTelemetry = (

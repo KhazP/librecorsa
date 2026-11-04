@@ -440,12 +440,17 @@ export const DisplayPanel: React.FC<DisplayPanelProps> = ({ settings, onChangeSe
               checked={hud.shiftBeep}
               onChange={() => setHud({ shiftBeep: !hud.shiftBeep })}
             />
-            <Toggle
-              label="Neck FX"
-              detail="Onboard views turn gently into the slide, so you feel the rear step out"
-              checked={hud.neckFx}
-              onChange={() => setHud({ neckFx: !hud.neckFx })}
-            />
+            <div className="pt-2">
+              <Segmented
+                label="Cockpit head movement"
+                value={hud.headMovement}
+                options={[
+                  { id: "natural", label: "Natural" },
+                  { id: "static", label: "Locked" },
+                ]}
+                onChange={(headMovement) => setHud({ headMovement })}
+              />
+            </div>
           </div>
         </div>
       </div>

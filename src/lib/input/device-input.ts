@@ -72,6 +72,11 @@ export interface WheelSettings {
   ffbFilterS: number;
   /** Strength per car (gain, minimum force) set from the FFB panel; a car without one uses ffbGain / ffbMinForce */
   ffbPerCar: Partial<Record<string, { gain: number; minForce: number }>>;
+  /**
+   * Steering-wheel lock to lock (deg) per vehicle model, for a quicker rack than the real car's: full lock comes this
+   * far round the rim. A car without one steers 1:1 with its real lock (`CAR_WHEEL_LOCKS_DEG`)
+   */
+  steerLockPerCar: Partial<Record<string, number>>;
   /** Experimental: drive a HID PID (direct-drive) wheel straight from the browser over WebHID, no bridge */
   hidFfb: boolean;
   /** Stream telemetry over UDP through the bridge (SimHub, bass shakers, dashboards) */
@@ -91,9 +96,17 @@ export const CAR_WHEEL_LOCKS_DEG: Readonly<Record<string, number>> = {
   "amg-gt3": 640,
 };
 
-/** Real steering-wheel lock-to-lock rotation (degrees) for a given vehicle model */
-export function carWheelLockDeg(vehicle?: string): number {
-  return (vehicle && CAR_WHEEL_LOCKS_DEG[vehicle]) || CAR_WHEEL_LOCK_DEG;
+/** Range of a player-set steering lock (deg, lock to lock): never slower than the real car's */
+export const STEER_LOCK_MIN_DEG = 180;
+
+/**
+ * Steering-wheel lock-to-lock rotation (degrees) for a vehicle model: the player's own lock for it when set (and
+ * quicker than the real car's), else the real car's
+ */
+export function carWheelLockDeg(vehicle?: string, playerLocks?: WheelSettings["steerLockPerCar"]): number {
+  const real = (vehicle && CAR_WHEEL_LOCKS_DEG[vehicle]) || CAR_WHEEL_LOCK_DEG;
+  const own = vehicle ? playerLocks?.[vehicle] : undefined;
+  return typeof own === "number" && Number.isFinite(own) && own >= STEER_LOCK_MIN_DEG && own < real ? own : real;
 }
 
 export const WHEEL_ROTATION_PRESETS = [360, 540, 900, 1080] as const;
@@ -123,6 +136,7 @@ export const DEFAULT_WHEEL_SETTINGS: WheelSettings = {
   ffbDamping: 0.1,
   ffbFilterS: 0,
   ffbPerCar: {},
+  steerLockPerCar: {},
   hidFfb: true,
   telemetryOut: false,
   telemetryPort: 20777,
@@ -253,7 +267,7 @@ export class DeviceInputReader {
         wheel.steer,
         wheel.rotationDeg,
         wheel.steerDeadzone,
-        carWheelLockDeg(vehicle)
+        carWheelLockDeg(vehicle, wheel.steerLockPerCar)
       );
       if (wheel.steerSmoothingS > 0 && dtSeconds > 0) {
         this.smoothedSteer += (target - this.smoothedSteer) * (1 - Math.exp(-dtSeconds / wheel.steerSmoothingS));
