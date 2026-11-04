@@ -88,6 +88,7 @@ import { LoadingScreen } from "@/components/menu/LoadingScreen";
 import { TitleMenu } from "@/components/menu/TitleMenu";
 import { FirstRunWizard, type WizardMode, type WizardStepId } from "@/components/menu/FirstRunWizard";
 import { assetProgress } from "@/lib/loading/asset-progress";
+import { prefetchSoundBank } from "@/lib/sim/vf26-audio";
 import { buildKeyLookup, HUD_TOGGLE_EVENT, keyLabel, padButtonLabel, type KeyAction } from "@/lib/input/bindings";
 import { autoConfigureWheel, carWheelLockDeg, connectedPads, DeviceInputReader } from "@/lib/input/device-input";
 import { webHidFfb, wheelFfb } from "@/lib/input/wheel-ffb";
@@ -1191,6 +1192,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     let disposed = false;
     // A circuit switch remounts this component: its track and warm-up load again (the car models stay cached)
     assetProgress.reset(["track", "opponents", "shaders"]);
+    // The engine sound downloads alongside (decoded once the first key press unlocks audio)
+    prefetchSoundBank(soundFor(carIdRef.current).assetDir);
     /** The authored track once the GLB is loaded: the f12026-car drives on its Track_Collider_* meshes */
     let trackRoot: THREE.Object3D | null = null;
 
@@ -1253,6 +1256,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       physics = createCar(vehicle, physics);
       physicsRef.current = physics;
       swapCarRig(car);
+      prefetchSoundBank(soundFor(car).assetDir);
       kbInputRef.current.throttle = 0;
       kbInputRef.current.brake = 0;
       kbInputRef.current.steer = 0;

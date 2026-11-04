@@ -273,7 +273,7 @@ export class Vf26SoundBank {
   public async load(initialView: Vf26View = 'ext'): Promise<boolean> {
     let manifest: Vf26AudioManifest;
     try {
-      const res = await fetch(withBasePath(`${this.assetDir}manifest.json`));
+      const res = await fetchBankFile(withBasePath(`${this.assetDir}manifest.json`));
       if (!res.ok) return false;
       manifest = (await res.json()) as Vf26AudioManifest;
     } catch {
@@ -363,7 +363,7 @@ export class Vf26SoundBank {
 
     const fetchDecode = async (job: Job): Promise<boolean> => {
       try {
-        const res = await fetch(withBasePath(this.assetDir + job.file));
+        const res = await fetchBankFile(withBasePath(this.assetDir + job.file));
         if (!res.ok) return false;
         job.assign(await ctx.decodeAudioData(await res.arrayBuffer()));
         return true;
@@ -587,4 +587,47 @@ export class Vf26SoundBank {
     this.bus.disconnect();
     this.ready = false;
   }
+}
+
+/** Responses fetched ahead (during loading) by `prefetchSoundBank`, each handed out once */
+const prefetched = new Map<string, Promise<Response>>();
+
+function fetchBankFile(url: string): Promise<Response> {
+  const early = prefetched.get(url);
+  if (early) {
+    prefetched.delete(url);
+    return early.then((r) => r, () => fetch(url));
+  }
+  return fetch(url);
+}
+
+/**
+ * Starts downloading a car's sound bank (manifest and every file) at low priority while the loading screen is up, so
+ * the sound is there as soon as the audio unlocks on the first key press. Decoding still waits for the AudioContext.
+ */
+export function prefetchSoundBank(assetDir: string): void {
+  if (typeof window === 'undefined') return;
+  const manifestUrl = withBasePath(`${assetDir}manifest.json`);
+  if (prefetched.has(manifestUrl)) return;
+  const init = { priority: 'low' } as RequestInit;
+  const manifest = fetch(manifestUrl, init);
+  prefetched.set(manifestUrl, manifest.then((r) => r.clone()));
+  void manifest
+    .then((r) => (r.ok ? (r.json() as Promise<Vf26AudioManifest>) : null))
+    .then((m) => {
+      if (!m) return;
+      const files = new Set<string>([
+        ...Object.values(m.engine ?? {}).flat().map((e) => e.file),
+        ...(m.transmission ?? []).map((e) => e.file),
+        ...(m.turbo ?? []).map((e) => e.file),
+        ...(m.oneshots ?? []).map((e) => e.file),
+        ...Object.values(m.skid ?? {}).filter(Boolean).map((e) => (e as { file: string }).file),
+        ...(m.tractionControl ? [m.tractionControl.file] : []),
+      ]);
+      for (const f of files) {
+        const url = withBasePath(assetDir + f);
+        if (!prefetched.has(url)) prefetched.set(url, fetch(url, init));
+      }
+    })
+    .catch(() => {});
 }
