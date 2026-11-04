@@ -17,6 +17,18 @@ LibreCorsa is an independent, non-commercial, open-source web simulator built wi
 * **F1 2026 3D Car Model**: Formula car model ([https://skfb.ly/pKNCK](https://skfb.ly/pKNCK)) by **DeX** is licensed under [Creative Commons Attribution 4.0 (CC BY 4.0)](http://creativecommons.org/licenses/by/4.0/).
 * **GT3 3D Car Model**: `"2020 Mercedes-Benz AMG GT3"` ([https://skfb.ly/pOTPL](https://skfb.ly/pOTPL)) by **Ddiaz Design** is licensed under [Creative Commons Attribution-NonCommercial-ShareAlike 4.0 (CC BY-NC-SA 4.0)](http://creativecommons.org/licenses/by-nc-sa/4.0/).
 
+### Ported F1 car models (`public/cars/<id>/model/`)
+
+Each model below is by **Dave Love SketchFab** ([https://sketchfab.com/Tyler_Dave](https://sketchfab.com/Tyler_Dave)) and is licensed under [Creative Commons Attribution 4.0 (CC BY 4.0)](http://creativecommons.org/licenses/by/4.0/). Changes for the simulator (`scripts/cars/port_sketchfab_f1.py`): node transforms baked to metre scale (`+Z` forward, `+X` left, floor `y = 0`), wheel rims and tyres split into per-corner `WHEEL_RF`/`LF`/`RR`/`LR` pivot hierarchies, steering wheel separated into a `STEER` pivot, zero-scale normal maps removed, and textures re-encoded to JPEG/PNG (max 2048 px).
+
+* `"2026 Ferrari SF-26"` ([https://sketchfab.com/3d-models/2026-ferrari-sf-26-e5ca6cecdc42449283f4bed27360f2a7](https://sketchfab.com/3d-models/2026-ferrari-sf-26-e5ca6cecdc42449283f4bed27360f2a7)) by **Dave Love SketchFab** (`sf26`)
+* `"2026 Mercedes W17"` ([https://sketchfab.com/3d-models/2026-mercedes-w17-b806f1e70aa343219e7158169549b97b](https://sketchfab.com/3d-models/2026-mercedes-w17-b806f1e70aa343219e7158169549b97b)) by **Dave Love SketchFab** (`w17`)
+* `"2026 Redbull RB22"` ([https://sketchfab.com/3d-models/2026-redbull-rb22-0a3d24a58e0549d591a5a48c22eec383](https://sketchfab.com/3d-models/2026-redbull-rb22-0a3d24a58e0549d591a5a48c22eec383)) by **Dave Love SketchFab** (`rb22`)
+* `"2018 Ferrari SF71H"` ([https://sketchfab.com/3d-models/2018-ferrari-sf71h-e54b896bd21f478f8309eecf3726700e](https://sketchfab.com/3d-models/2018-ferrari-sf71h-e54b896bd21f478f8309eecf3726700e)) by **Dave Love SketchFab** (`sf71h`)
+* `"2012 Red Bull RB8"` ([https://sketchfab.com/3d-models/2012-red-bull-rb8-b74446dcd93a49879546d756e3093b3f](https://sketchfab.com/3d-models/2012-red-bull-rb8-b74446dcd93a49879546d756e3093b3f)) by **Dave Love SketchFab** (`rb8`)
+* `"2005 Renault R25"` ([https://sketchfab.com/3d-models/2005-renault-r25-0d58fe125f5b41a2b8482576723120c4](https://sketchfab.com/3d-models/2005-renault-r25-0d58fe125f5b41a2b8482576723120c4)) by **Dave Love SketchFab** (`r25`)
+* `"2004 Ferrari F2004"` ([https://sketchfab.com/3d-models/2004-ferrari-f2004-bedade52e6f4415e90e656817c5701f8](https://sketchfab.com/3d-models/2004-ferrari-f2004-bedade52e6f4415e90e656817c5701f8)) by **Dave Love SketchFab** (`f2004`)
+
 ### Optional circuits (`public/tracks/<id>/`)
 
 Each model below is licensed under [Creative Commons Attribution 4.0 (CC BY 4.0)](http://creativecommons.org/licenses/by/4.0/). Changes for the simulator: uniformly rescaled where needed to match the official lap length, recentred, far-away scenery dropped, textures re-encoded to WebP (max 2048 px), geometry quantised and meshopt-compressed, and hidden physics collider / surface meshes and track data (centreline, edges, kerbs, run-off, barriers, corners) generated from the geometry. Kerb meshes with a generated red-and-white texture are added on top of the scan.
