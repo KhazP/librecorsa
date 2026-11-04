@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
-import { assetProgress } from "@/lib/loading/asset-progress";
+import { assetProgress, type AssetTaskId } from "@/lib/loading/asset-progress";
 import { withBasePath } from "@/lib/base-path";
 import { AMG_GT3_CONFIG } from "@/lib/sim/gt3/AmgGt3Config";
 import type { CarTelemetry, LiveryConfig } from "@/types/f1";
@@ -143,19 +143,15 @@ function rebaseWheels(scene: THREE.Group, extras: Gt3Extras): void {
   });
 }
 
-export function loadGt3Template(): Promise<THREE.Group | null> {
+/** `task`: the loading-screen task its download counts toward (the player's car, or the opponents' when it differs) */
+export function loadGt3Template(task: AssetTaskId = "car"): Promise<THREE.Group | null> {
   if (!templatePromise) {
     templatePromise = (async () => {
       if (typeof window === "undefined") return null;
       const url = withBasePath(MODEL_URL);
-      assetProgress.begin("car");
+      assetProgress.begin(task);
       try {
-        const head = await fetch(url, { method: "HEAD" });
-        if (!head.ok) {
-          assetProgress.fail("car");
-          return null;
-        }
-        const gltf = await new GLTFLoader().loadAsync(url, (event) => assetProgress.progress("car", event));
+        const gltf = await new GLTFLoader().loadAsync(url, (event) => assetProgress.progress(task, event));
         const scene = gltf.scene;
         const extras = (scene.getObjectByName("GT3")?.userData ?? {}) as Gt3Extras;
         rebaseWheels(scene, extras);
@@ -172,11 +168,11 @@ export function loadGt3Template(): Promise<THREE.Group | null> {
           }
         });
         scene.updateMatrixWorld(true);
-        assetProgress.done("car");
+        assetProgress.done(task);
         return scene;
       } catch (err) {
         console.warn("GT3 model not loaded, using the placeholder body", err);
-        assetProgress.fail("car");
+        assetProgress.fail(task);
         return null;
       }
     })();

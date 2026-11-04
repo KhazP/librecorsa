@@ -11,7 +11,9 @@
 
 import * as THREE from 'three';
 import { createF1Car2026, type SimCarRig } from '@/lib/car-builder-2026';
-import { createGt3CarRig } from '@/lib/gt3-car-model';
+import { createGt3CarRig, loadGt3Cockpit, loadGt3Template } from '@/lib/gt3-car-model';
+import { AMR26_MODEL_URL, loadVf26Template } from '@/lib/vf26-car-model';
+import { assetProgress } from '@/lib/loading/asset-progress';
 import { LIVERIES } from '@/lib/track-data';
 import { CarTelemetry, LiveryConfig, type VehicleModelId } from '@/types/f1';
 import type { SimulatorWheel as SimWheelState } from './simulator-car';
@@ -110,6 +112,12 @@ export class SimVisualFxManager {
 
   // Multiplayer / AI Opponent 3D cars
   private opponentCars = new Map<string, { rig: SimCarRig; vehicle: VehicleModelId | undefined }>();
+  /**
+   * Rigs built during loading (one racing car and one ghost per opponent model) so the shader warm-up covers them;
+   * handed out to the first peers that need that model instead of being built on the first frame of a race
+   */
+  private pool = new Map<string, SimCarRig[]>();
+  private prewarmedKinds = new Set<string>();
 
   constructor() {
     // 1. Initialize Persistent Tire Skidmark Ribbon Mesh
@@ -475,12 +483,57 @@ export class SimVisualFxManager {
   /** The car the peer reports (AI and older clients: the AMR, which is what F1Physics2026 models) */
   private createOpponentRig(peer: InterpolatedPeerState): SimCarRig {
     const livery = this.mapDriverToLivery(peer.driverCode);
-    if (peer.vehicle === 'amg-gt3') {
-      const rig = createGt3CarRig();
-      rig.setLivery(livery);
-      return rig;
+    const pooled = this.pool.get(poolKey(peer.vehicle, Boolean(peer.ghost)))?.pop();
+    if (pooled) {
+      pooled.root.visible = true;
+      if (!peer.ghost) pooled.setLivery(livery);
+      return pooled;
     }
-    return createF1Car2026(livery, 'medium');
+    return buildOpponentRig(peer.vehicle, livery);
+  }
+
+  /**
+   * During loading: fetch the opponents' model and build one racing and one ghost rig of it, parked out of sight but
+   * visible so the loading screen's shader warm-up compiles them (and the ghost's translucent variants). Reports to the
+   * loading screen's "opponents" task. Call `hidePrewarmed()` once the warm-up has drawn them.
+   */
+  public prewarm(vehicle: VehicleModelId | undefined): Promise<void> {
+    const kind = rigKind(vehicle);
+    if (this.prewarmedKinds.has(kind)) {
+      assetProgress.done('opponents');
+      return Promise.resolve();
+    }
+    this.prewarmedKinds.add(kind);
+    const template: Promise<unknown> =
+      kind === 'gt3'
+        ? Promise.all([loadGt3Template('opponents'), loadGt3Cockpit()])
+        : loadVf26Template(AMR26_MODEL_URL, 'opponents');
+    return template
+      .then(() => {
+        // The rigs attach the cached template in their own `then`, registered before this one returns
+        for (const ghost of [false, true]) {
+          const rig = buildOpponentRig(vehicle, LIVERIES[0]);
+          rig.root.position.set(0, -500, 0);
+          this.group.add(rig.root);
+          const key = poolKey(vehicle, ghost);
+          this.pool.set(key, [...(this.pool.get(key) ?? []), rig]);
+        }
+        // A task later the rigs have attached the cached models (each in its own promise callback)
+        return new Promise<void>((resolve) => setTimeout(resolve, 0));
+      })
+      .then(() => {
+        for (const rig of this.pool.get(poolKey(vehicle, true)) ?? []) ghostify(rig.root);
+        assetProgress.done('opponents');
+      })
+      .catch((err) => {
+        console.warn('Opponent cars not pre-warmed', err);
+        assetProgress.fail('opponents');
+      });
+  }
+
+  /** Parks the pooled rigs out of the render once the warm-up has compiled them */
+  public hidePrewarmed(): void {
+    for (const rigs of this.pool.values()) for (const rig of rigs) rig.root.visible = false;
   }
 
   private updateOpponentCars(dt: number, peers: InterpolatedPeerState[]): void {
@@ -621,6 +674,18 @@ export class SimVisualFxManager {
       }
     }
   }
+}
+
+const rigKind = (vehicle: VehicleModelId | undefined) => (vehicle === 'amg-gt3' ? 'gt3' : 'f1');
+const poolKey = (vehicle: VehicleModelId | undefined, ghost: boolean) => `${rigKind(vehicle)}${ghost ? ':ghost' : ''}`;
+
+function buildOpponentRig(vehicle: VehicleModelId | undefined, livery: LiveryConfig): SimCarRig {
+  if (vehicle === 'amg-gt3') {
+    const rig = createGt3CarRig();
+    rig.setLivery(livery);
+    return rig;
+  }
+  return createF1Car2026(livery, 'medium');
 }
 
 /** Makes a car translucent (the best-lap ghost); new meshes from a late model load are caught on later calls */

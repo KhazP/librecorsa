@@ -4,7 +4,7 @@
  */
 import { useSyncExternalStore } from "react";
 
-export type AssetTaskId = "track" | "car" | "shaders";
+export type AssetTaskId = "track" | "car" | "opponents" | "shaders";
 export type AssetTaskStatus = "pending" | "loading" | "done" | "failed";
 
 export interface AssetTask {
@@ -32,16 +32,19 @@ export interface AssetProgressSnapshot {
 const KNOWN_BYTES: Record<AssetTaskId, number> = {
   track: 20_225_944,
   car: 15_297_076,
+  opponents: 15_297_076,
   shaders: 0,
 };
 
 const INITIAL: Record<AssetTaskId, Omit<AssetTask, "lastProgressMs">> = {
-  track: { id: "track", label: "Circuit", weight: 0.55, loadedBytes: 0, totalBytes: KNOWN_BYTES.track, status: "pending" },
-  car: { id: "car", label: "Car", weight: 0.35, loadedBytes: 0, totalBytes: KNOWN_BYTES.car, status: "pending" },
+  track: { id: "track", label: "Circuit", weight: 0.5, loadedBytes: 0, totalBytes: KNOWN_BYTES.track, status: "pending" },
+  car: { id: "car", label: "Car", weight: 0.3, loadedBytes: 0, totalBytes: KNOWN_BYTES.car, status: "pending" },
+  // The opponents' and ghost's car (its own download only when the player drives a different model)
+  opponents: { id: "opponents", label: "Opponents", weight: 0.1, loadedBytes: 0, totalBytes: KNOWN_BYTES.opponents, status: "pending" },
   shaders: { id: "shaders", label: "Shaders", weight: 0.1, loadedBytes: 0, totalBytes: 0, status: "pending" },
 };
 
-const ORDER: readonly AssetTaskId[] = ["track", "car", "shaders"];
+const ORDER: readonly AssetTaskId[] = ["track", "car", "opponents", "shaders"];
 
 const now = () => (typeof performance !== "undefined" ? performance.now() : 0);
 
@@ -82,6 +85,15 @@ function update(id: AssetTaskId, patch: Partial<AssetTask>) {
 }
 
 export const assetProgress = {
+  /**
+   * Back to pending, for a simulator that mounts again (a circuit switch): the track and the warm-up run anew. The car
+   * models are cached across mounts, so their tasks keep what they reached
+   */
+  reset(ids: readonly AssetTaskId[]) {
+    for (const id of ids) tasks = { ...tasks, [id]: { ...INITIAL[id], lastProgressMs: 0 } };
+    snapshot = buildSnapshot();
+    for (const l of listeners) l();
+  },
   begin(id: AssetTaskId) {
     update(id, { status: "loading", lastProgressMs: now() });
   },

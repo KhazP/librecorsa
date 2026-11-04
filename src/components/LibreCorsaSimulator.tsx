@@ -1143,6 +1143,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     if (!container) return;
 
     let disposed = false;
+    // A circuit switch remounts this component: its track and warm-up load again (the car models stay cached)
+    assetProgress.reset(["track", "opponents", "shaders"]);
     /** The authored track once the GLB is loaded: the f12026-car drives on its Track_Collider_* meshes */
     let trackRoot: THREE.Object3D | null = null;
 
@@ -1311,11 +1313,17 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       disposeTree(carRig.root);
       carRig = createCarRig(car);
       carRigCar = car;
+      // A different model for the opponents and the ghost: build and compile them now, not at the next race start
+      void visualFx.prewarm(carById(car).physics).then(() => {
+        if (disposed) return;
+        void compileForComposer().finally(() => visualFx.hidePrewarmed());
+      });
     };
 
     // Persistent 4-Wheel Skidmarks, Instanced Tire Smoke/Gravel & Multiplayer/AI Opponent Renderer
     const visualFx = new SimVisualFxManager();
     scene.add(visualFx.group);
+    void visualFx.prewarm(carById(carIdRef.current).physics);
     // One connection for the page: it survives a circuit switch (which remounts this component)
     const multiplayerSync = getMultiplayerManager();
     multiplayerSync.onStatusChange = (st) => {
@@ -1731,14 +1739,11 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         // its programs on the bound target: compiled with none bound, every shader would be the wrong variant and
         // recompile on the first frame after the player presses start. The program build runs synchronously inside
         // compileAsync, so the target only has to be bound for the call itself.
-        const prevTarget = renderer.getRenderTarget();
-        renderer.setRenderTarget(postFx.composer.inputBuffer);
-        const compiled = renderer.compileAsync(scene, camera);
-        renderer.setRenderTarget(prevTarget);
-        compiled
+        compileForComposer()
           .then(() => {
             if (disposed) return;
             warmUpGpu();
+            visualFx.hidePrewarmed();
             assetProgress.done("shaders");
           }, () => assetProgress.fail("shaders"))
           .finally(() => {
@@ -1746,6 +1751,15 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
           });
       });
     };
+    function compileForComposer(): Promise<THREE.Object3D> {
+      const prevTarget = renderer.getRenderTarget();
+      renderer.setRenderTarget(postFx.composer.inputBuffer);
+      try {
+        return renderer.compileAsync(scene, camera);
+      } finally {
+        renderer.setRenderTarget(prevTarget);
+      }
+    }
     /**
      * Behind the opaque loading screen: upload every texture, then draw one full frame through the composer with frustum
      * culling off, so the shadow-map and post-processing programs and every vertex buffer are ready before the first

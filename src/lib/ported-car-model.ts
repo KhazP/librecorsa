@@ -48,11 +48,6 @@ function loadTemplate(url: string): Promise<THREE.Group | null> {
       const full = withBasePath(url);
       assetProgress.begin("car");
       try {
-        const head = await fetch(full, { method: "HEAD" });
-        if (!head.ok) {
-          assetProgress.fail("car");
-          return null;
-        }
         const scene = (await new GLTFLoader().loadAsync(full, (event) => assetProgress.progress("car", event))).scene;
         scene.traverse((obj) => {
           const mesh = obj as THREE.Mesh;
