@@ -3,11 +3,19 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { assetProgress } from "@/lib/loading/asset-progress";
 import { withBasePath } from "@/lib/base-path";
 import { AMG_GT3_CONFIG } from "@/lib/sim/gt3/AmgGt3Config";
-import type { CarTelemetry } from "@/types/f1";
+import type { CarTelemetry, LiveryConfig } from "@/types/f1";
 import type { TyreVisualState } from "@/lib/sim/simulator-car";
 import type { SimCarRig } from "@/lib/car-builder-2026";
 import type { Vf26CameraAnchor, Vf26ModelInstance } from "@/lib/vf26-car-model";
 import { installTyreDeformation, type TyreDeformationHandle } from "@/lib/render/tyre-deformation";
+import { applyLivery, collectPaintSlots, type PaintKeys, type PaintSlot } from "@/lib/render/livery-repaint";
+
+/** Body paint material of the GT3 GLB and its factory colours (orange body, black graphics) */
+const GT3_PAINT_MATERIAL = "amgMercedesAMG_GT3_2020Paint_Material1";
+const GT3_PAINT_KEYS: PaintKeys = {
+  primary: ["#ff6700"],
+  secondary: ["#0d0d0d"],
+};
 
 /**
  * Mercedes-AMG GT3 3D model (`public/gt3/model/amg_gt3.glb`) and cockpit (`public/gt3/model/amg_gt3_cockpit.glb`).
@@ -252,6 +260,9 @@ export function createGt3CarRig(): SimCarRig {
   const leds: Led[] = [];
   let ledBlinkRpm = Infinity;
   const indicators: Partial<Record<"abs" | "tc" | "tcLed" | "limiter", THREE.Object3D>> = {};
+  // Livery: asked for before the model loads, applied once it is in
+  let currentLivery: LiveryConfig | null = null;
+  let paintSlots: PaintSlot[] = [];
 
   void Promise.all([loadGt3Template(), loadGt3Cockpit()]).then(([template, cockpitTemplate]) => {
     if (!template || disposed) return;
@@ -312,6 +323,8 @@ export function createGt3CarRig(): SimCarRig {
 
     const body = find("BODY");
     if (body) bodyGroup.add(body);
+    paintSlots = collectPaintSlots(bodyGroup, (m) => m.name === GT3_PAINT_MATERIAL);
+    if (currentLivery) applyLivery(paintSlots, GT3_PAINT_KEYS, currentLivery);
 
     if (cockpitTemplate) {
       const cockpit = cockpitTemplate.clone(true);
@@ -414,8 +427,11 @@ export function createGt3CarRig(): SimCarRig {
     root,
     chassisGroup,
     helmetGroup: new THREE.Group(),
-    // The model keeps its own paint and tyres
-    setLivery: () => {},
+    setLivery: (livery: LiveryConfig) => {
+      currentLivery = livery;
+      applyLivery(paintSlots, GT3_PAINT_KEYS, livery);
+    },
+    // The model keeps its own tyres
     setTireCompound: () => {},
     getCameraAnchors: () => cameraAnchors,
     getVf26Body: () => null,
