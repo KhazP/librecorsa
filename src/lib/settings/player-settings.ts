@@ -192,7 +192,8 @@ export const DEFAULT_HUD_SETTINGS: HudSettings = {
   mapMode: "full",
   radar: true,
   splitGaps: true,
-  mfdAutoCollapse: true,
+  // Off: a wheel button that opens the MFD would otherwise see it vanish 3.5 s later, which reads as a glitch
+  mfdAutoCollapse: false,
   drsBeep: true,
   shiftBeep: false,
   headMovement: "natural",

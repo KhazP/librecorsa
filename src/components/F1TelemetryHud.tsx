@@ -302,8 +302,8 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
         tracker={lapTracker}
         trackLengthM={track.totalLength}
         compound={tireCompound}
-        autoFold={hud?.mfdAutoCollapse ?? true}
-        defaultFolded={(hud?.mfdAutoCollapse ?? true) || classic || preset === "telemetry" || (preset === "broadcast" && window.innerWidth < 1280)}
+        autoFold={hud?.mfdAutoCollapse ?? false}
+        defaultFolded={(hud?.mfdAutoCollapse ?? false) || classic || preset === "telemetry" || (preset === "broadcast" && window.innerWidth < 1280)}
       />
     </div>
   );
