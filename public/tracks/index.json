@@ -188,5 +188,24 @@
       "license": "CC BY 4.0",
       "licenseUrl": "http://creativecommons.org/licenses/by/4.0/"
     }
+  },
+  {
+    "id": "spa",
+    "name": "Circuit de Spa-Francorchamps",
+    "layout": "2022 layout",
+    "country": "Belgium",
+    "city": "Stavelot",
+    "lengthM": 6986.66,
+    "turns": 19,
+    "direction": "clockwise",
+    "dataUrl": "/tracks/spa/track_data.json",
+    "credit": {
+      "title": "Circuit de Spa-Francorchamps 2022 layout",
+      "author": "Dave Love SketchFab",
+      "url": "https://sketchfab.com/3d-models/circuit-de-spa-francorchamps-2022-layout-ac681fbf548144498c130c3aa0adeb54",
+      "short": null,
+      "license": "CC BY 4.0",
+      "licenseUrl": "http://creativecommons.org/licenses/by/4.0/"
+    }
   }
 ]

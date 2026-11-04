@@ -44,6 +44,7 @@ Each model below is licensed under [Creative Commons Attribution 4.0 (CC BY 4.0)
 * `"Autodromo Nazionale Monza Circuit 2020 layout"` ([https://sketchfab.com/3d-models/autodromo-nazionale-monza-circuit-2020-layout-25ed955115094de382935aa6d1a1e9c6](https://sketchfab.com/3d-models/autodromo-nazionale-monza-circuit-2020-layout-25ed955115094de382935aa6d1a1e9c6)) by **Dave Love SketchFab**
 * `"Yas Marina Circuit Abu Dhabi 2021 layout"` ([https://sketchfab.com/3d-models/yas-marina-circuit-abu-dhabi-2021-layout-c41b4e19912b4d79886bcd8d7d2536af](https://sketchfab.com/3d-models/yas-marina-circuit-abu-dhabi-2021-layout-c41b4e19912b4d79886bcd8d7d2536af)) by **Dave Love SketchFab**
 * `"Silverstone Circuit 2024 layout"` ([https://sketchfab.com/3d-models/silverstone-circuit-2024-layout-bbaf4b12d5244c76998fd44f771fc0b3](https://sketchfab.com/3d-models/silverstone-circuit-2024-layout-bbaf4b12d5244c76998fd44f771fc0b3)) by **Dave Love SketchFab**
+* `"Circuit de Spa-Francorchamps 2022 layout"` ([https://sketchfab.com/3d-models/circuit-de-spa-francorchamps-2022-layout-ac681fbf548144498c130c3aa0adeb54](https://sketchfab.com/3d-models/circuit-de-spa-francorchamps-2022-layout-ac681fbf548144498c130c3aa0adeb54)) by **Dave Love SketchFab**
 
 ### Rwanda trackside trees (`public/tracks/rwanda/scenery/`)
 
