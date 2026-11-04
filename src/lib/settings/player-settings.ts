@@ -14,6 +14,7 @@ import {
 import {
   DEFAULT_WHEEL_SETTINGS,
   PAD_SENSITIVITY,
+  STEER_LOCK_MIN_DEG,
   type AxisBinding,
   type ButtonBinding,
   type InputDevice,
@@ -343,11 +344,21 @@ function parseWheel(v: unknown): WheelSettings {
     ffbDamping: num(v.ffbDamping, 0, 1, d.ffbDamping),
     ffbFilterS: num(v.ffbFilterS, 0, 0.05, d.ffbFilterS),
     ffbPerCar: parsePerCarFfb(v.ffbPerCar),
+    steerLockPerCar: parsePerCarLock(v.steerLockPerCar),
     hidFfb: bool(v.hidFfb, d.hidFfb),
     telemetryOut: bool(v.telemetryOut, d.telemetryOut),
     telemetryPort: Math.round(num(v.telemetryPort, 1024, 65535, d.telemetryPort)),
     buttons,
   };
+}
+
+function parsePerCarLock(v: unknown): WheelSettings["steerLockPerCar"] {
+  const out: WheelSettings["steerLockPerCar"] = {};
+  if (!isObj(v)) return out;
+  for (const [car, lock] of Object.entries(v).slice(0, 16)) {
+    if (isNum(lock)) out[car.slice(0, 32)] = Math.round(num(lock, STEER_LOCK_MIN_DEG, 2520, STEER_LOCK_MIN_DEG));
+  }
+  return out;
 }
 
 function parsePerCarFfb(v: unknown): WheelSettings["ffbPerCar"] {

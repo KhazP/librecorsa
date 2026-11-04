@@ -218,6 +218,20 @@ check('per-car steering lock: 360° for Formula cars, 640° for AMG GT3 (steerin
   assert.equal(softLockForce(250, carWheelLockDeg('amg-gt3')), 0);
   assert.ok(softLockForce(330, carWheelLockDeg('amg-gt3')) < 0);
 });
+check("a player's steering lock quickens the rack, never slows it, and loads from saved settings", () => {
+  const binding = { padId: 'Simucube 2 Pro', axis: 0, center: 0, invert: false };
+  const locks = { 'amg-gt3': 400 };
+  assert.equal(carWheelLockDeg('amg-gt3', locks), 400);
+  assert.equal(carWheelLockDeg('vf26', locks), 360);
+  assert.equal(carWheelLockDeg('amg-gt3', { 'amg-gt3': 800 }), 640, 'slower than the real car: ignored');
+  assert.equal(carWheelLockDeg('amg-gt3', { 'amg-gt3': 90 }), 640, 'below the minimum: ignored');
+  // 200° right on a 900° wheel (raw 0.4444): full lock on the 400° GT3 rack, 200/320 on the real one
+  near(wheelSteerValue(200 / 450, binding, 900, 0, carWheelLockDeg('amg-gt3', locks)), 1);
+  near(wheelSteerValue(100 / 450, binding, 900, 0, carWheelLockDeg('amg-gt3', locks)), 0.5);
+  const parsed = parsePlayerSettings({ wheel: { steerLockPerCar: { 'amg-gt3': 401, bogus: 'x' } } });
+  assert.deepEqual(parsed.wheel.steerLockPerCar, { 'amg-gt3': 401 });
+  assert.deepEqual(parsePlayerSettings({ wheel: {} }).wheel.steerLockPerCar, {});
+});
 check('speed-gated minimum force: zero at standstill (<= 1 km/h), full by 6 km/h', () => {
   const w = { ffbGain: 1, ffbMinForce: 0.2 };
   near(shapeFfbForce(0.05, w, 0), 0.05, 1e-6);
