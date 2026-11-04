@@ -3,7 +3,7 @@
 <img src="docs/media/banner.png" alt="LibreCorsa: open-source 500 Hz motorsport sim" width="100%" />
 
 <p>
-  <a href="https://khazp.github.io/librecorsa/"><b>▶&nbsp; Play in your browser</b></a>
+  <a href="https://librecorsa.org/"><b>▶&nbsp; Play in your browser</b></a>
   &nbsp;·&nbsp;
   <a href="#features">Features</a>
   &nbsp;·&nbsp;
@@ -100,8 +100,8 @@ Steering, pedals and buttons come through the browser's Gamepad API, so any whee
 
 - **In the browser (WebHID, Chrome or Edge)**: click **Connect wheel** in the wheel setup. It drives bases that expose the standard USB HID PID force-feedback reports, with nothing to install. Experimental.
 - **Local bridge (Windows)**: a small helper that talks DirectInput to any force-feedback wheel. It needs a copy of this repository and Node.js: run `npm install` once, then `npm run ffb` and keep it open. The game finds it on `127.0.0.1:18500`. For the hosted site, allow its origin when you start the bridge (origin only, no path):
-  - PowerShell: `$env:FFB_ALLOW_ORIGIN="https://khazp.github.io"; npm run ffb`
-  - cmd: `set "FFB_ALLOW_ORIGIN=https://khazp.github.io" && npm run ffb`
+  - PowerShell: `$env:FFB_ALLOW_ORIGIN="https://librecorsa.org"; npm run ffb`
+  - cmd: `set "FFB_ALLOW_ORIGIN=https://librecorsa.org" && npm run ffb`
 
 Only what the maintainer has driven is marked tested. Everything else is what the code should do, not a promise:
 
@@ -176,7 +176,7 @@ npm run build            # static export into ./out
 The tech is **Next.js 16** (static export), **React 19**, **Three.js** (WebGL2, AgX tone mapping, PBR), the **Web Audio API**, **WebRTC**, **WebHID** and **Tailwind CSS 4**.
 
 ### Deployment
-Every push to `main` runs typecheck and the verify suites, then builds and deploys `./out` to GitHub Pages (`.github/workflows/deploy-pages.yml`). Hosting costs nothing.
+Every push to `main` runs typecheck and the verify suites, then builds `./out` and deploys it to Cloudflare at [librecorsa.org](https://librecorsa.org/) (`.github/workflows/deploy-pages.yml`, `wrangler.jsonc`). The old GitHub Pages address, `khazp.github.io/librecorsa/`, serves a redirect page that keeps old links working and carries a returning player's saved settings, setups and ghost laps over (`cloudflare/old-site-redirect.html`, `cloudflare/worker.js`). Cloudflare's asset store takes files up to 25 MiB, so CI moves anything bigger into the `librecorsa-assets` R2 bucket and the Worker serves it from there at the same URL. Hosting costs nothing.
 
 ---
 

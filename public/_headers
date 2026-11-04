@@ -1,0 +1,4 @@
+# Cloudflare static-asset headers (copied into ./out by the Next export; ignored by other hosts)
+# Next's build output is content-hashed, so it never changes under the same name
+/_next/static/*
+  Cache-Control: public, max-age=31536000, immutable
