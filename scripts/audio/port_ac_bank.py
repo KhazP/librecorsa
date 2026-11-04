@@ -506,7 +506,7 @@ def derive_transmission_from_engine(mid_on_x: np.ndarray, is_on: bool = True) ->
     b, a = signal.butter(2, band, btype="band")
     whine = signal.lfilter(b, a, seg, axis=0).astype(np.float32)
     loop = make_seamless_loop(whine, LOOP_S, XFADE_S, RATE)
-    return level_signal(loop, 0.085 if is_on else 0.065)
+    return level_signal(loop, 0.042 if is_on else 0.028)
 
 
 class LazyBank:
@@ -641,7 +641,8 @@ def port_car(car_id: str, cfg: dict[str, Any], ffmpeg: str) -> dict[str, Any]:
             if "pitchRatio" in tr_item:
                 raw_x = pitch_resample(raw_x, float(tr_item["pitchRatio"]), 1.0)
             loop = make_seamless_loop(raw_x, LOOP_S, XFADE_S, RATE)
-            loop = level_signal(loop, float(tr_item.get("rms", 0.11 if layer == "on" else 0.085)))
+            # whine sits well under the engine, at the level of the original FA-26 and GT3 banks
+            loop = level_signal(loop, float(tr_item.get("rms", 0.042 if layer == "on" else 0.028)))
             fn = f"trans_{layer}_{speed}.ogg"
             ch = encode_ogg(ffmpeg, loop, out_dir / fn, force_mono=True, quality=4)
             manifest["transmission"].append(
