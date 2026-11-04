@@ -112,5 +112,24 @@
       "license": "CC BY 4.0",
       "licenseUrl": "http://creativecommons.org/licenses/by/4.0/"
     }
+  },
+  {
+    "id": "marina_bay",
+    "name": "Marina Bay Street Circuit",
+    "layout": "2018–2022 layout",
+    "country": "Singapore",
+    "city": "Singapore",
+    "lengthM": 5043.45,
+    "turns": 23,
+    "direction": "anticlockwise",
+    "dataUrl": "/tracks/marina_bay/track_data.json",
+    "credit": {
+      "title": "Marina Bay Street Circuit",
+      "author": "Dave Love SketchFab",
+      "url": "https://sketchfab.com/3d-models/marina-bay-street-circuit-e665d831c57546609d4c15287a6107b7",
+      "short": null,
+      "license": "CC BY 4.0",
+      "licenseUrl": "http://creativecommons.org/licenses/by/4.0/"
+    }
   }
 ]
