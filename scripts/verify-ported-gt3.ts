@@ -11,6 +11,7 @@ import { CARS, carById, carsInClass, isCarId, type CarId } from "../src/lib/cars
 import { BMW_M4_GT3_SOUND } from "../src/lib/sim/CarAudio";
 import { AMG_GT3_SOUND } from "../src/lib/sim/gt3/AmgGt3Sim";
 import { loadGlbGeometry } from "./lib/glb-geometry";
+import { gt3RigCameraAnchors } from "../src/lib/gt3-car-model";
 
 let passed = 0;
 let failed = 0;
@@ -272,6 +273,27 @@ for (const spec of PORTED_GT3_SPEC) {
       carSize.z < 5.2,
     `W=${carSize.x.toFixed(3)} m, H=${carSize.y.toFixed(3)} m, L=${carSize.z.toFixed(3)} m`
   );
+}
+
+// Ported GT3s keep the AMG GT3's views relative to their own driver and nose
+{
+  const amg = gt3RigCameraAnchors();
+  // The AMG's own steering wheel and front axle in rig space give back its cameras unchanged
+  const amgFit = gt3RigCameraAnchors({
+    steerCentre: amg.cockpit.pos.clone().add(new THREE.Vector3(0, 0.729 - 0.955, -0.04 + 0.58)),
+    frontAxleZ: amg.bumper.pos.z + (1.4 - 0.95),
+  });
+  const same = (Object.keys(amg) as (keyof typeof amg)[]).every((k) => amg[k].pos.distanceTo(amgFit[k].pos) < 1e-6);
+  check("GT3 camera fit: the AMG's own fit leaves its cameras where they are", same);
+  const shift = new THREE.Vector3(-0.09, 0.02, 0.07);
+  const moved = gt3RigCameraAnchors({
+    steerCentre: amg.cockpit.pos.clone().add(new THREE.Vector3(0, 0.729 - 0.955, -0.04 + 0.58)).add(shift),
+    frontAxleZ: amg.bumper.pos.z + (1.4 - 0.95) + 0.14,
+  });
+  check("GT3 camera fit: eye point follows the steering wheel", moved.cockpit.pos.clone().sub(amg.cockpit.pos).distanceTo(shift) < 1e-6);
+  check("GT3 camera fit: roof pod stays on the centre line", Math.abs(moved.tcam.pos.x - amg.tcam.pos.x) < 1e-6 && Math.abs(moved.tcam.pos.z - amg.tcam.pos.z - 0.07) < 1e-6);
+  check("GT3 camera fit: bonnet camera follows the front axle", Math.abs(moved.bumper.pos.z - amg.bumper.pos.z - 0.14) < 1e-6);
+  check("GT3 camera fit: chase cameras stay put", moved.nearChase.pos.distanceTo(amg.nearChase.pos) < 1e-6 && moved.farChase.pos.distanceTo(amg.farChase.pos) < 1e-6);
 }
 
 console.log(`\n========================================`);

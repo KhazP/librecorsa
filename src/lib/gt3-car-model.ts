@@ -232,12 +232,42 @@ function cameraAnchorsAt(offset: THREE.Vector3): Vf26ModelInstance["cameraAnchor
   return anchors;
 }
 
+/** Centre of the AMG GT3 cockpit's steering wheel (its `STEER` meshes' box) in model space */
+const GT3_STEER_CENTRE: [number, number, number] = [0.403, 0.729, -0.04];
+
+/** Where a ported GT3's driver and nose sit, in rig space: what its cameras are placed against */
+export interface Gt3CameraFit {
+  /** Centre of the car's steering wheel (null: the model has none) */
+  steerCentre: THREE.Vector3 | null;
+  /** Front axle line (z) */
+  frontAxleZ: number;
+}
+
+/** Cameras that ride with the driver (eye point, shoulder, dash, roof pod) rather than with the nose */
+const DRIVER_CAMERAS = new Set<string>(["cockpit", "shoulder", "dash", "tcam"]);
+
 /**
- * The AMG GT3's onboard and chase cameras in rig space (the frame every car on the GT3 vehicle model shares), so
- * ported GT3s put the driver's eye, roof, bonnet and chase views exactly where the original car does.
+ * The AMG GT3's onboard and chase cameras in rig space (the frame every car on the GT3 vehicle model shares). Given a
+ * ported GT3's `fit`, its views are framed as the original car's: the eye point, shoulder, dash and roof cameras keep
+ * their place relative to that car's own steering wheel (the roof pod stays on the centre line), the bonnet camera
+ * its place behind the front axle, and the chase cameras stay put. Without, the AMG's positions as they are.
  */
-export function gt3RigCameraAnchors(): Vf26ModelInstance["cameraAnchors"] {
-  return cameraAnchorsAt(gt3ModelOffset(GT3_MODEL_WHEELS));
+export function gt3RigCameraAnchors(fit?: Gt3CameraFit): Vf26ModelInstance["cameraAnchors"] {
+  const offset = gt3ModelOffset(GT3_MODEL_WHEELS);
+  const anchors = cameraAnchorsAt(offset);
+  if (!fit) return anchors;
+  const driverShift = fit.steerCentre
+    ? fit.steerCentre.clone().sub(new THREE.Vector3(...GT3_STEER_CENTRE).add(offset))
+    : new THREE.Vector3();
+  const noseShift = fit.frontAxleZ - (GT3_MODEL_WHEELS.wheelCentres!.WHEEL_LF[2] + offset.z);
+  for (const [key, a] of Object.entries(anchors)) {
+    if (DRIVER_CAMERAS.has(key)) {
+      a.pos.add(key === "tcam" ? new THREE.Vector3(0, driverShift.y, driverShift.z) : driverShift);
+    } else if (key === "bumper") {
+      a.pos.z += noseShift;
+    }
+  }
+  return anchors;
 }
 
 /** A box the size of the car, shown while (or instead of, when the GLB is missing) the model loads */

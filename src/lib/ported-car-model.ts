@@ -23,8 +23,19 @@ export interface PortedCarOptions {
   chassis: { wheelbase: number; frontWeightFraction: number; maxRoadWheelDeg: number };
   /** Steering wheel rotation each way at full lock (deg) */
   steerLockDeg: number;
-  /** Rig-space cameras to use instead of the GLB's own (e.g. the AMG GT3's for every car on the GT3 model) */
-  cameraAnchors?: Vf26ModelInstance["cameraAnchors"];
+  /**
+   * Rig-space cameras to use instead of the GLB's own (e.g. the AMG GT3's for every car on the GT3 model), built from
+   * where this model's steering wheel and front axle landed in rig space
+   */
+  cameraAnchors?: (fit: PortedCameraFit) => Vf26ModelInstance["cameraAnchors"];
+}
+
+/** A ported model's driver and nose in rig space, once loaded */
+export interface PortedCameraFit {
+  /** Centre of the steering wheel's meshes (null: no `STEER` node) */
+  steerCentre: THREE.Vector3 | null;
+  /** Front axle line (z) */
+  frontAxleZ: number;
 }
 
 interface PortedExtras {
@@ -205,6 +216,15 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
     bodyGroup.name = "PORTED_BODY";
     bodyGroup.position.copy(offset);
 
+    // The steering wheel's centre in rig space, read before the nodes move (the model is at its bind pose here)
+    const steerSource = find("STEER");
+    const steerBox = steerSource ? new THREE.Box3().setFromObject(steerSource, true) : null;
+    const steerCentre =
+      steerBox && !steerBox.isEmpty()
+        ? steerBox.getCenter(new THREE.Vector3()).applyMatrix4(car.matrixWorld.clone().invert()).add(offset)
+        : null;
+    const cameraFit: PortedCameraFit = { steerCentre, frontAxleZ: lf[2] + offset.z };
+
     WHEELS.forEach((wheelName, i) => {
       const wheel = find(wheelName);
       if (!wheel) return;
@@ -265,7 +285,7 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
       pitchRad: -8 * THREE.MathUtils.DEG2RAD,
       fovDeg: anchors.cockpit.fovDeg + 3,
     };
-    cameraAnchors = options.cameraAnchors ?? anchors;
+    cameraAnchors = options.cameraAnchors?.(cameraFit) ?? anchors;
   });
 
   const updateFromTelemetry = (
