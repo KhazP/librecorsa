@@ -39,7 +39,8 @@ export interface BuiltRwandaScene {
 // extras.collider = true), Terrain, Lake, Env_* (vegetation, canopies) and Prop_* (buildings, stands, gantry).
 // The other circuits (scripts/tracks/build_track.py) wrap a converted scan in `Track_Model` and append hidden
 // `Track_Collider_*` / `Track_Surface_*` physics meshes (extras.hidden = true); `track.meshUrl` names the file.
-// They also carry `Track_Kerbs_Visual`: the physics kerbs (Track_Surface_Kerb) drawn in red / white paint over the scan.
+// Older builds also carry `Track_Kerbs_Visual` (the physics kerbs in red / white paint over the scan): hidden, the scan
+// shows its own kerbs.
 
 // Flat overlays drawn on top of the asphalt / run-off; pulled towards the camera to avoid z-fighting.
 const DECAL_NODES: Record<string, number> = {
@@ -184,6 +185,12 @@ function loadTrackGlb(
           return;
         }
         if (!(obj instanceof THREE.Mesh)) return;
+        // The scans show their own kerbs: the generated red / white overlay older builds drew over them stays hidden
+        // (its physics twin, Track_Surface_Kerb, is a collider and unaffected)
+        if (topName === "Track_Kerbs_Visual") {
+          obj.visible = false;
+          return;
+        }
 
         const receiveOnly = SHADOW_RECEIVE_ONLY.has(topName);
         obj.receiveShadow = true;
