@@ -1329,9 +1329,17 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       const occlusion = tvDirector.occlusionSteps(root);
       const occlusionSlice = (deadline?: IdleDeadline) => {
         if (disposed) return;
-        const until = performance.now() + Math.max(4, Math.min(12, deadline?.timeRemaining() ?? 8));
-        while (performance.now() < until) if (occlusion.next().done) return;
-        scheduleIdle(occlusionSlice);
+        // On track only true idle time counts: a slice the browser forces after its timeout would be a hitch
+        const driving = phaseRef.current === "driving";
+        const idleMs = deadline?.timeRemaining() ?? 8;
+        if (!driving || idleMs >= 3) {
+          const until = performance.now() + (driving ? Math.min(idleMs, 6) : Math.max(4, Math.min(12, idleMs)));
+          do {
+            if (occlusion.next().done) return;
+          } while (performance.now() < until);
+        }
+        if (driving && typeof window.requestIdleCallback === "function") window.requestIdleCallback(occlusionSlice);
+        else scheduleIdle(occlusionSlice);
       };
       scheduleIdle(occlusionSlice);
       const ground = trackGroundQuery(root);

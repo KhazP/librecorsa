@@ -360,8 +360,9 @@ export class TracksideBroadcastDirector {
   }
 
   /**
-   * `resolveOcclusion` one station at a time (each step yields the stations moved so far), so a caller can spread its
-   * raycasts (about a second on a scanned circuit) over idle time instead of freezing the page
+   * `resolveOcclusion` one raycast at a time (each step yields the stations moved so far), so a caller can spread its
+   * raycasts (about a second on a scanned circuit, several on a slow CPU) over idle time instead of freezing the page.
+   * A single raycast can take milliseconds (every track mesh, no BVH), so a station is never one indivisible step.
    */
   *occlusionSteps(trackRoot: THREE.Object3D): Generator<number, void, void> {
     const occluders: THREE.Object3D[] = [];
@@ -372,12 +373,16 @@ export class TracksideBroadcastDirector {
     const target = new THREE.Vector3();
     const dir = new THREE.Vector3();
     const hits: THREE.Intersection[] = [];
-    const clear = (curve: THREE.CatmullRomCurve3, centre: number): boolean => {
+    let moved = 0;
+    // eslint-disable-next-line @typescript-eslint/no-this-alias -- the nested generator needs the director
+    const self = this;
+    /** Whether every sight line of a dolly is clear; yields after each raycast */
+    function* clear(curve: THREE.CatmullRomCurve3, centre: number): Generator<number, boolean, void> {
       for (let j = 0; j < DOLLY_POINTS; j++) {
         const from = curve.points[j];
         // Sight line to where the car is when the camera is at this point (it is ahead of the camera on the
         // approach and behind it on the way out)
-        const sample = this.sampleAt(centre + (this.dollyS(centre, j) - centre) / DOLLY_RATIO);
+        const sample = self.sampleAt(centre + (self.dollyS(centre, j) - centre) / DOLLY_RATIO);
         target.copy(sample.position);
         target.y += LOOK_HEIGHT_M;
         dir.subVectors(target, from);
@@ -385,27 +390,28 @@ export class TracksideBroadcastDirector {
         ray.set(from, dir.divideScalar(dist));
         ray.far = dist - OCCLUSION_MARGIN_M;
         hits.length = 0;
-        if (ray.intersectObjects(occluders, false, hits).length > 0) return false;
+        const blocked = ray.intersectObjects(occluders, false, hits).length > 0;
+        yield moved;
+        if (blocked) return false;
       }
       return true;
-    };
-    let moved = 0;
+    }
     for (let k = 0; k < this.stationCount; k++) {
       const centre = this.centreS[k];
-      if (!clear(this.curves[k], centre)) {
+      if (!(yield* clear(this.curves[k], centre))) {
         const side = this.stationSide[k];
         const height = HEIGHTS_M[k % HEIGHTS_M.length];
         for (const [sideMul, offset, extraH] of OCCLUSION_ALTERNATIVES) {
           const curve = this.buildDolly(centre, side * sideMul, offset, height + extraH);
-          if (clear(curve, centre)) {
+          if (yield* clear(curve, centre)) {
             this.curves[k] = curve;
             moved++;
             break;
           }
         }
       }
-      yield moved;
     }
+    yield moved;
   }
 
   /** Number of automatic stations built for this lap */
