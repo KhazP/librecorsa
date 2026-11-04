@@ -2779,12 +2779,14 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       // Droplets on the visor only from the driver's eye (the mirrors render without this layer)
       if (mode === "cockpit" && !inVr) camera.layers.enable(RAIN_VISOR_LAYER);
       else camera.layers.disable(RAIN_VISOR_LAYER);
+      const skyLight = THREE.MathUtils.clamp((skyConditions.elevationDeg + 3) / 17, 0, 1) * (1 - 0.4 * wx.cloudCover);
+      visualFx.setLightLevel(skyLight);
       rainFx.update(
         dtSeconds,
         wx.rainIntensity,
         camera,
         rainCamVel,
-        THREE.MathUtils.clamp((skyConditions.elevationDeg + 3) / 17, 0, 1) * (1 - 0.4 * wx.cloudCover),
+        skyLight,
         wx.windVxMs,
         wx.windVzMs,
         THREE.MathUtils.clamp(sprayWake, 0, 1)
