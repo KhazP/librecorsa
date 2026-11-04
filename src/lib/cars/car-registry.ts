@@ -18,7 +18,9 @@ export type CarId =
   | "rb8"
   | "r25"
   | "f2004"
-  | "amg-gt3";
+  | "amg-gt3"
+  | "amg-gt3-evo"
+  | "bmw-m4-gt3";
 
 export type CarClassId = "f1-2026" | "gt3";
 
@@ -143,6 +145,26 @@ export const CARS: readonly CarDefinition[] = [
     sub: "GT3 Pro · 6.2L V8 · Multi-stage ABS / TC",
     badge: "GT3 PRO",
     physics: "amg-gt3",
+    sound: AMG_GT3_SOUND,
+  },
+  {
+    id: "amg-gt3-evo",
+    classId: "gt3",
+    title: "Mercedes-AMG GT3 Evo",
+    sub: "GT3 Evo · AMG GT3 physics · ABS / TC",
+    badge: "GT3 EVO",
+    physics: "amg-gt3",
+    modelUrl: "/cars/amg-gt3-evo/model/amg-gt3-evo.glb",
+    sound: AMG_GT3_SOUND,
+  },
+  {
+    id: "bmw-m4-gt3",
+    classId: "gt3",
+    title: "BMW M4 GT3 Evo",
+    sub: "G82 GT3 Evo · AMG GT3 physics · ABS / TC",
+    badge: "M4 GT3",
+    physics: "amg-gt3",
+    modelUrl: "/cars/bmw-m4-gt3/model/bmw-m4-gt3.glb",
     sound: AMG_GT3_SOUND,
   },
 ];
