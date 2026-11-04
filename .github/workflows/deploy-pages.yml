@@ -57,12 +57,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # Cloudflare serves files up to 25 MiB; fail here with the file names rather than halfway through the upload
-      - name: Check file sizes
-        run: |
-          big=$(find public -type f -size +26214400c)
-          if [ -n "$big" ]; then echo "Over Cloudflare's 25 MiB per-file limit:"; ls -l $big; exit 1; fi
-
       - name: Build static export
         env:
           NEXT_PUBLIC_BASE_PATH: ""
@@ -70,6 +64,20 @@ jobs:
           NEXT_PUBLIC_SUPABASE_URL: ${{ vars.SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY }}
         run: npm run build
+
+      # Cloudflare's asset store takes files up to 25 MiB. Bigger ones (large circuit GLBs) go to the
+      # librecorsa-assets R2 bucket under the same path, and cloudflare/worker.js serves them from there.
+      - name: Move files over 25 MiB to R2
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          find out -type f -size +26214400c | while read -r f; do
+            key="${f#out/}"
+            case "$f" in *.glb) type=model/gltf-binary ;; *) type=$(file -b --mime-type "$f") ;; esac
+            echo "R2: $key ($(stat -c %s "$f") bytes, $type)"
+            npx wrangler r2 object put "librecorsa-assets/$key" --file "$f" --content-type "$type" --remote < /dev/null
+            rm "$f"
+          done
 
       - name: Deploy to Cloudflare
         env:
