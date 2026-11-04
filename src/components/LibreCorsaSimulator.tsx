@@ -89,6 +89,7 @@ import { TitleMenu } from "@/components/menu/TitleMenu";
 import { FirstRunWizard, type WizardMode, type WizardStepId } from "@/components/menu/FirstRunWizard";
 import { assetProgress } from "@/lib/loading/asset-progress";
 import { prefetchSoundBank } from "@/lib/sim/vf26-audio";
+import { CarReflectionProbe } from "@/lib/render/car-reflection-probe";
 import { buildKeyLookup, HUD_TOGGLE_EVENT, keyLabel, padButtonLabel, type KeyAction } from "@/lib/input/bindings";
 import { autoConfigureWheel, carWheelLockDeg, connectedPads, DeviceInputReader } from "@/lib/input/device-input";
 import { webHidFfb, wheelFfb } from "@/lib/input/wheel-ffb";
@@ -1305,6 +1306,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     const rainFx = createRainFx(scene);
     // Scene render + one merged effect pass (mipmap bloom, then AgX tone mapping)
     const postFx = createPostFx(renderer, scene, camera);
+    // Live reflections of the world on the cars (High / Medium); Low keeps the sky's
+    const reflectionProbe = new CarReflectionProbe(renderer, scene);
     // Top-centre virtual rear-view mirror for the views without wing mirrors in shot
     const virtualMirror = new VirtualMirror(renderer, scene);
     let virtualMirrorShown = false;
@@ -1352,6 +1355,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
           ? createGt3CarRig()
           : createF1Car2026(liveryRef.current, physics.tireCompound);
       rig.setLivery(liveryRef.current);
+      reflectionProbe.track(rig.root);
       scene.add(rig.root);
       carRigRef.current = rig;
       return rig;
@@ -1367,6 +1371,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       wingMirrors = null;
       gt3Dash?.dispose();
       gt3Dash = null;
+      reflectionProbe.untrack(carRig.root);
       carRig.dispose();
       // Free the old car's GPU memory: switching cars otherwise stacks every model's textures on the GPU
       disposeTree(carRig.root);
@@ -1382,6 +1387,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     // Persistent 4-Wheel Skidmarks, Instanced Tire Smoke/Gravel & Multiplayer/AI Opponent Renderer
     const visualFx = new SimVisualFxManager();
     scene.add(visualFx.group);
+    // The opponents and the ghost reflect the world too
+    reflectionProbe.track(visualFx.group);
     void visualFx.prewarm(carById(carIdRef.current).physics);
     // One connection for the page: it survives a circuit switch (which remounts this component)
     const multiplayerSync = getMultiplayerManager();
@@ -1404,6 +1411,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
 
     applyGraphicsRef.current = (quality, renderScale) => {
       applyGraphicsQuality(renderer, postFx, env, quality, renderScale);
+      reflectionProbe.setQuality(quality === "low" ? "off" : quality);
       postFx.setSize(container.clientWidth, container.clientHeight);
     };
     applyGraphicsRef.current(settingsRef.current.graphics.quality, settingsRef.current.graphics.renderScale);
@@ -1840,6 +1848,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       });
       try {
         for (const tex of textures) renderer.initTexture(tex);
+        // The reflection probe's first full turn and prefilter (their shaders compile here, not on lap one)
+        reflectionProbe.update(physics.worldPosition, carRig.root, scene.environmentIntensity);
         postFx.render(0);
       } catch (err) {
         console.warn("GPU warm-up frame failed (the first frame will do it instead)", err);
@@ -2926,6 +2936,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         }
       }
       env.update(physics.worldPosition, camera);
+      reflectionProbe.update(physics.worldPosition, carRig.root, scene.environmentIntensity);
       // Virtual mirror: on its own in the views whose wing mirrors are off screen (or that have none), and in the
       // chase view too when the player asked for it always
       const vmSetting = settingsNow.hud.virtualMirror;
@@ -3019,6 +3030,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       wingMirrors?.dispose();
       gt3Dash?.dispose();
       postFx.dispose();
+      reflectionProbe.dispose();
       env.dispose();
       rainFx.dispose();
       virtualMirror.dispose();
