@@ -6,6 +6,8 @@ import { setSceneryQuality } from "@/lib/render/scenery-detail";
 import { setSceneryDensity } from "@/lib/render/scenery-instances";
 import {
   BloomEffect,
+  BrightnessContrastEffect,
+  HueSaturationEffect,
   EffectComposer,
   EffectPass,
   RenderPass,
@@ -92,6 +94,9 @@ const FILL_SKY = 0xc4d8ee;
 const FILL_GROUND = 0x6b6a3a;
 const FILL_INTENSITY = 0.35;
 const EXPOSURE = 1.15;
+/** Display-referred grade after AgX (postprocessing BrightnessContrast / HueSaturation, -1..1) */
+const GRADE_CONTRAST = 0.12;
+const GRADE_SATURATION = 0.18;
 const SKY_TURBIDITY = 2.8;
 const SKY_RAYLEIGH = 1.8;
 /** Minimum time between environment re-bakes (s) */
@@ -527,7 +532,11 @@ export function createPostFx(
   // Single merged pass: bloom runs on linear HDR, then AgX as the last effect.
   // AgX is applied here because EffectPass ignores renderer.toneMapping.
   const toneMapping = new ToneMappingEffect({ mode: ToneMappingMode.AGX });
-  const effectPass = new EffectPass(camera, bloom, toneMapping);
+  // AgX keeps highlights but reads flat and grey on its own (the scanned circuits' bland, hazy look): a light
+  // display-referred grade after it puts back some contrast and colour
+  const contrast = new BrightnessContrastEffect({ contrast: GRADE_CONTRAST });
+  const saturation = new HueSaturationEffect({ saturation: GRADE_SATURATION });
+  const effectPass = new EffectPass(camera, bloom, toneMapping, contrast, saturation);
 
   composer.addPass(renderPass);
   composer.addPass(effectPass);
