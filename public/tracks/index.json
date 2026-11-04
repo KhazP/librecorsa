@@ -131,5 +131,24 @@
       "license": "CC BY 4.0",
       "licenseUrl": "http://creativecommons.org/licenses/by/4.0/"
     }
+  },
+  {
+    "id": "monza",
+    "name": "Autodromo Nazionale Monza",
+    "layout": "2020 layout",
+    "country": "Italy",
+    "city": "Monza",
+    "lengthM": 5757.69,
+    "turns": 11,
+    "direction": "clockwise",
+    "dataUrl": "/tracks/monza/track_data.json",
+    "credit": {
+      "title": "Autodromo Nazionale Monza Circuit 2020 layout",
+      "author": "Dave Love SketchFab",
+      "url": "https://sketchfab.com/3d-models/autodromo-nazionale-monza-circuit-2020-layout-25ed955115094de382935aa6d1a1e9c6",
+      "short": null,
+      "license": "CC BY 4.0",
+      "licenseUrl": "http://creativecommons.org/licenses/by/4.0/"
+    }
   }
 ]

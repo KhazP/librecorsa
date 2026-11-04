@@ -39,6 +39,7 @@ Each model below is licensed under [Creative Commons Attribution 4.0 (CC BY 4.0)
 * `"Sepang International Circuit 2025 layout"` ([https://sketchfab.com/3d-models/sepang-international-circuit-2025-layout-590bf243480e43f18e588a3908daa4df](https://sketchfab.com/3d-models/sepang-international-circuit-2025-layout-590bf243480e43f18e588a3908daa4df)) by **Dave Love SketchFab**
 * `"Daytona International Speedway 2007 layout"` ([https://sketchfab.com/3d-models/daytona-international-speedway-2007-layout-070db794e8ee46d399ee882f67e9a18d](https://sketchfab.com/3d-models/daytona-international-speedway-2007-layout-070db794e8ee46d399ee882f67e9a18d)) by **Dave Love SketchFab**, used for both the oval (`daytona_oval`) and the road course (`daytona_road`)
 * `"Marina Bay Street Circuit"` ([https://sketchfab.com/3d-models/marina-bay-street-circuit-e665d831c57546609d4c15287a6107b7](https://sketchfab.com/3d-models/marina-bay-street-circuit-e665d831c57546609d4c15287a6107b7)) by **Dave Love SketchFab**
+* `"Autodromo Nazionale Monza Circuit 2020 layout"` ([https://sketchfab.com/3d-models/autodromo-nazionale-monza-circuit-2020-layout-25ed955115094de382935aa6d1a1e9c6](https://sketchfab.com/3d-models/autodromo-nazionale-monza-circuit-2020-layout-25ed955115094de382935aa6d1a1e9c6)) by **Dave Love SketchFab**
 
 ### Rwanda trackside trees (`public/tracks/rwanda/scenery/`)
 
