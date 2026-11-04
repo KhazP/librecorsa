@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { createGltfLoader } from "@/lib/render/gltf-loader";
 import { assetProgress } from "@/lib/loading/asset-progress";
 import { withBasePath } from "@/lib/base-path";
 import type { CarTelemetry } from "@/types/f1";
@@ -48,7 +48,7 @@ function loadTemplate(url: string): Promise<THREE.Group | null> {
       const full = withBasePath(url);
       assetProgress.begin("car");
       try {
-        const scene = (await new GLTFLoader().loadAsync(full, (event) => assetProgress.progress("car", event))).scene;
+        const scene = (await createGltfLoader().loadAsync(full, (event) => assetProgress.progress("car", event))).scene;
         scene.traverse((obj) => {
           const mesh = obj as THREE.Mesh;
           if (!mesh.isMesh) return;

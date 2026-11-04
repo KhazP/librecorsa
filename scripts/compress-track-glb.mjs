@@ -9,7 +9,8 @@
  * and node transforms, and the script re-reads its output and fails unless every physics vertex is unchanged.
  * Already compressed files are skipped. The browser decodes with three's MeshoptDecoder (src/lib/gltf-loader.ts),
  * the Node scripts with scripts/lib/glb-geometry.ts. Run it after scripts/tracks/build_track.py rebuilds a circuit.
- * The Rwanda GLB is left uncompressed: scripts/smooth-rwanda-track.ts edits it in place.
+ * The Rwanda GLB stays uncompressed in the repository (scripts/smooth-rwanda-track.ts and the rwanda-*.mjs tools
+ * edit or read it raw); the Pages deploy compresses it before the build (.github/workflows/deploy-pages.yml).
  */
 import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";

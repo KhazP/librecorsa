@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { createGltfLoader } from "@/lib/render/gltf-loader";
 import { assetProgress, type AssetTaskId } from "@/lib/loading/asset-progress";
 import { withBasePath } from "@/lib/base-path";
 import { AMG_GT3_CONFIG } from "@/lib/sim/gt3/AmgGt3Config";
@@ -66,7 +66,7 @@ export function loadGt3Cockpit(): Promise<THREE.Group | null> {
       try {
         const head = await fetch(url, { method: "HEAD" });
         if (!head.ok) return null;
-        const scene = (await new GLTFLoader().loadAsync(url)).scene;
+        const scene = (await createGltfLoader().loadAsync(url)).scene;
         scene.traverse((obj) => {
           const mesh = obj as THREE.Mesh;
           if (!mesh.isMesh) return;
@@ -151,7 +151,7 @@ export function loadGt3Template(task: AssetTaskId = "car"): Promise<THREE.Group 
       const url = withBasePath(MODEL_URL);
       assetProgress.begin(task);
       try {
-        const gltf = await new GLTFLoader().loadAsync(url, (event) => assetProgress.progress(task, event));
+        const gltf = await createGltfLoader().loadAsync(url, (event) => assetProgress.progress(task, event));
         const scene = gltf.scene;
         const extras = (scene.getObjectByName("GT3")?.userData ?? {}) as Gt3Extras;
         rebaseWheels(scene, extras);

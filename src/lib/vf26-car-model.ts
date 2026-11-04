@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { createGltfLoader } from "@/lib/render/gltf-loader";
 import { assetProgress, type AssetTaskId } from "@/lib/loading/asset-progress";
 import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js";
 import { withBasePath } from "@/lib/base-path";
@@ -84,7 +84,7 @@ export function loadVf26Template(modelUrl: string = AMR26_MODEL_URL, task: Asset
       const url = withBasePath(modelUrl);
       assetProgress.begin(task);
       try {
-        const gltf = await new GLTFLoader().loadAsync(url, (event) => assetProgress.progress(task, event));
+        const gltf = await createGltfLoader().loadAsync(url, (event) => assetProgress.progress(task, event));
         const scene = gltf.scene;
         // Per-compound tyre maps are stored as extra textures (index list in the root node extras)
         const tyreIdx = (scene.getObjectByName("VF26")?.userData?.tyreMaps ?? {}) as Record<string, number>;
