@@ -169,5 +169,24 @@
       "license": "CC BY 4.0",
       "licenseUrl": "http://creativecommons.org/licenses/by/4.0/"
     }
+  },
+  {
+    "id": "silverstone",
+    "name": "Silverstone Circuit",
+    "layout": "2024 layout",
+    "country": "United Kingdom",
+    "city": "Silverstone",
+    "lengthM": 5865.13,
+    "turns": 18,
+    "direction": "clockwise",
+    "dataUrl": "/tracks/silverstone/track_data.json",
+    "credit": {
+      "title": "Silverstone Circuit 2024 layout",
+      "author": "Dave Love SketchFab",
+      "url": "https://sketchfab.com/3d-models/silverstone-circuit-2024-layout-bbaf4b12d5244c76998fd44f771fc0b3",
+      "short": null,
+      "license": "CC BY 4.0",
+      "licenseUrl": "http://creativecommons.org/licenses/by/4.0/"
+    }
   }
 ]

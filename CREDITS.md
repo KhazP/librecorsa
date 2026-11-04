@@ -43,6 +43,7 @@ Each model below is licensed under [Creative Commons Attribution 4.0 (CC BY 4.0)
 * `"Marina Bay Street Circuit"` ([https://sketchfab.com/3d-models/marina-bay-street-circuit-e665d831c57546609d4c15287a6107b7](https://sketchfab.com/3d-models/marina-bay-street-circuit-e665d831c57546609d4c15287a6107b7)) by **Dave Love SketchFab**
 * `"Autodromo Nazionale Monza Circuit 2020 layout"` ([https://sketchfab.com/3d-models/autodromo-nazionale-monza-circuit-2020-layout-25ed955115094de382935aa6d1a1e9c6](https://sketchfab.com/3d-models/autodromo-nazionale-monza-circuit-2020-layout-25ed955115094de382935aa6d1a1e9c6)) by **Dave Love SketchFab**
 * `"Yas Marina Circuit Abu Dhabi 2021 layout"` ([https://sketchfab.com/3d-models/yas-marina-circuit-abu-dhabi-2021-layout-c41b4e19912b4d79886bcd8d7d2536af](https://sketchfab.com/3d-models/yas-marina-circuit-abu-dhabi-2021-layout-c41b4e19912b4d79886bcd8d7d2536af)) by **Dave Love SketchFab**
+* `"Silverstone Circuit 2024 layout"` ([https://sketchfab.com/3d-models/silverstone-circuit-2024-layout-bbaf4b12d5244c76998fd44f771fc0b3](https://sketchfab.com/3d-models/silverstone-circuit-2024-layout-bbaf4b12d5244c76998fd44f771fc0b3)) by **Dave Love SketchFab**
 
 ### Rwanda trackside trees (`public/tracks/rwanda/scenery/`)
 
