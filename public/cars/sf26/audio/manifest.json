@@ -170,14 +170,14 @@
       "layer": "on",
       "drivetrainSpeed": 170,
       "channels": 1,
-      "rms": 0.11
+      "rms": 0.042
     },
     {
       "file": "trans_off_162.ogg",
       "layer": "off",
       "drivetrainSpeed": 162,
       "channels": 1,
-      "rms": 0.085
+      "rms": 0.028
     }
   ],
   "oneshots": [
