@@ -10,6 +10,7 @@ import { F1AudioEngine2026 } from "@/lib/f1-audio-2026";
 import { createF1Car2026, type SimCarRig } from "@/lib/car-builder-2026";
 import { createGt3CarRig, gt3RigCameraAnchors } from "@/lib/gt3-car-model";
 import { disposeTree } from "@/lib/render/dispose-tree";
+import { FfbPairPrompt } from "@/components/hud/FfbPairPrompt";
 import { GT3_DASH_MESH, GT3_WING_MIRROR_MATERIAL, Gt3DashDisplay } from "@/lib/render/gt3-dash-display";
 import { createPortedCarRig } from "@/lib/ported-car-model";
 import { createAmgGt3Sim } from "@/lib/sim/gt3/AmgGt3Sim";
@@ -88,7 +89,7 @@ import { TitleMenu } from "@/components/menu/TitleMenu";
 import { FirstRunWizard, type WizardMode, type WizardStepId } from "@/components/menu/FirstRunWizard";
 import { assetProgress } from "@/lib/loading/asset-progress";
 import { buildKeyLookup, HUD_TOGGLE_EVENT, keyLabel, padButtonLabel, type KeyAction } from "@/lib/input/bindings";
-import { carWheelLockDeg, connectedPads, DeviceInputReader } from "@/lib/input/device-input";
+import { autoConfigureWheel, carWheelLockDeg, connectedPads, DeviceInputReader } from "@/lib/input/device-input";
 import { webHidFfb, wheelFfb } from "@/lib/input/wheel-ffb";
 import { DEFAULT_GAMEPAD_ASSIST, type GamepadAssistSettings } from "@/lib/sim/gamepad-assist";
 import {
@@ -3021,6 +3022,19 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     }
     void webHidFfb.reconnect();
   }, [hidFfbWanted]);
+  // A recognised wheel with no steering bound (the wizard's wheel step skipped, or plugged in later) is set up as a
+  // wheel straight away; otherwise it drives as a gamepad, through the stick steering assist
+  useEffect(() => {
+    const bindWheel = () =>
+      setSettings((prev) => {
+        if (prev.wheel.steer) return prev;
+        const patch = autoConfigureWheel(connectedPads(), prev.wheel);
+        return patch ? { ...prev, wheel: { ...prev.wheel, ...patch } } : prev;
+      });
+    bindWheel();
+    window.addEventListener("gamepadconnected", bindWheel);
+    return () => window.removeEventListener("gamepadconnected", bindWheel);
+  }, []);
   // A fatal driver error (unsupported wheel, failed setup, writes failing) switches WebHID off: the force goes back
   // to the bridge and the wheel setup shows the reason under the toggle
   useEffect(
@@ -3321,6 +3335,9 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
           onStepChange={handleWizardStep}
         />
       ) : null}
+
+      {/* Wheel force feedback over WebHID waits for one pairing click: offered on the menus, never mid-lap */}
+      <FfbPairPrompt wanted={hidFfbWanted && settings.wheel.steer !== null && (phase === "title" || paused)} />
 
       {loadingVisible ? (
         <LoadingScreen track={track} ready={assetsReady} onStart={handleLoadingStart} onDone={handleLoadingDone} />
