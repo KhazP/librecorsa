@@ -9,6 +9,7 @@ import type { SimulatorCar } from "@/lib/sim/simulator-car";
 import { F1AudioEngine2026 } from "@/lib/f1-audio-2026";
 import { createF1Car2026, type SimCarRig } from "@/lib/car-builder-2026";
 import { createGt3CarRig, gt3RigCameraAnchors } from "@/lib/gt3-car-model";
+import { disposeTree } from "@/lib/render/dispose-tree";
 import { GT3_DASH_MESH, GT3_WING_MIRROR_MATERIAL, Gt3DashDisplay } from "@/lib/render/gt3-dash-display";
 import { createPortedCarRig } from "@/lib/ported-car-model";
 import { createAmgGt3Sim } from "@/lib/sim/gt3/AmgGt3Sim";
@@ -1302,6 +1303,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       gt3Dash?.dispose();
       gt3Dash = null;
       carRig.dispose();
+      // Free the old car's GPU memory: switching cars otherwise stacks every model's textures on the GPU
+      disposeTree(carRig.root);
       carRig = createCarRig(car);
       carRigCar = car;
     };
