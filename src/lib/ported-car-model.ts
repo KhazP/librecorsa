@@ -69,6 +69,7 @@ function loadTemplate(url: string): Promise<THREE.Group | null> {
             if (std.transparent) std.depthWrite = false;
           }
         });
+        alignWheelAxles(scene);
         scene.updateMatrixWorld(true);
         assetProgress.done("car");
         return scene;
@@ -81,6 +82,68 @@ function loadTemplate(url: string): Promise<THREE.Group | null> {
     templates.set(url, template);
   }
   return template;
+}
+
+/**
+ * Re-bases each wheel so it spins about its own axle. Some exports bake 2-3 degrees of toe or camber into the wheel
+ * geometry (SF-26 and W17 fronts, all four BMW M4 GT3 wheels), so spinning about the wheel node's X axis wobbled.
+ * The axle is the tyre's least-spread direction; the geometry is turned to put it on X and the node takes the
+ * inverse turn, so the wheel looks the same at rest and spins true. Done once on the template.
+ */
+function alignWheelAxles(scene: THREE.Object3D): void {
+  for (const name of WHEELS) {
+    const wheel = scene.getObjectByName(name);
+    if (!wheel) continue;
+    wheel.updateMatrixWorld(true);
+    const toWheel = wheel.matrixWorld.clone().invert();
+    const meshes: THREE.Mesh[] = [];
+    wheel.traverse((obj) => {
+      if ((obj as THREE.Mesh).isMesh && obj !== wheel) meshes.push(obj as THREE.Mesh);
+    });
+    const tyre = meshes.find((m) => m.name.endsWith("_TYRE"));
+    if (!tyre) continue;
+    // Tyre vertices in the wheel's frame
+    const local = toWheel.clone().multiply(tyre.matrixWorld);
+    const pos = tyre.geometry.getAttribute("position");
+    const v = new THREE.Vector3();
+    const mean = new THREE.Vector3();
+    const pts: THREE.Vector3[] = [];
+    const step = Math.max(1, Math.floor(pos.count / 4000));
+    for (let i = 0; i < pos.count; i += step) {
+      v.fromBufferAttribute(pos, i).applyMatrix4(local);
+      pts.push(v.clone());
+      mean.add(v);
+    }
+    mean.multiplyScalar(1 / pts.length);
+    // Covariance and its smallest eigenvector (power iteration on the shifted matrix)
+    const c = [0, 0, 0, 0, 0, 0]; // xx xy xz yy yz zz
+    for (const p of pts) {
+      const x = p.x - mean.x, y = p.y - mean.y, z = p.z - mean.z;
+      c[0] += x * x; c[1] += x * y; c[2] += x * z; c[3] += y * y; c[4] += y * z; c[5] += z * z;
+    }
+    const tr = c[0] + c[3] + c[5];
+    const m = new THREE.Matrix3().set(tr - c[0], -c[1], -c[2], -c[1], tr - c[3], -c[4], -c[2], -c[4], tr - c[5]);
+    const axle = new THREE.Vector3(1, 0, 0);
+    for (let k = 0; k < 64; k++) axle.applyMatrix3(m).normalize();
+    if (axle.x < 0) axle.negate();
+    const tiltDeg = THREE.MathUtils.radToDeg(axle.angleTo(new THREE.Vector3(1, 0, 0)));
+    if (tiltDeg < 0.25) continue;
+    const align = new THREE.Quaternion().setFromUnitVectors(axle, new THREE.Vector3(1, 0, 0));
+    const R = new THREE.Matrix4().makeRotationFromQuaternion(align);
+    for (const mesh of meshes) {
+      // bake the mesh's own transform relative to the wheel, then turn it onto the axle
+      const meshLocal = toWheel.clone().multiply(mesh.matrixWorld);
+      mesh.geometry = mesh.geometry.clone();
+      mesh.geometry.applyMatrix4(R.clone().multiply(meshLocal));
+      mesh.removeFromParent();
+      wheel.add(mesh);
+      mesh.position.set(0, 0, 0);
+      mesh.quaternion.identity();
+      mesh.scale.set(1, 1, 1);
+    }
+    wheel.quaternion.multiply(align.clone().invert());
+    wheel.updateMatrixWorld(true);
+  }
 }
 
 /** Matrix of `obj` relative to `ancestor` (both inside the same, already updated, hierarchy). */
