@@ -20,6 +20,7 @@
   <img alt="Next.js 16" src="https://img.shields.io/badge/Next.js-16-F5F7FA?labelColor=08090D&logo=nextdotjs&logoColor=white" />
   <img alt="Three.js" src="https://img.shields.io/badge/Three.js-WebGL2-00E5FF?labelColor=08090D&logo=threedotjs&logoColor=white" />
   <img alt="Physics at 500 Hz" src="https://img.shields.io/badge/physics-500%20Hz-FF2A3C?labelColor=08090D" />
+  <a href="https://buymeacoffee.com/alpyalayg"><img alt="Buy me a coffee" src="https://img.shields.io/badge/buy%20me%20a%20coffee-alpyalayg-FFDD00?labelColor=08090D&logo=buymeacoffee&logoColor=white" /></a>
 </p>
 
 </div>
