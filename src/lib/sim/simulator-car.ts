@@ -90,6 +90,8 @@ export interface SimulatorCar {
   aeroPreset: AeroSetupPreset;
   assistPreset: DriverAssistPreset;
   gamepadAssistEnabled: boolean;
+  /** Automatic gear changes; off = the driver shifts with Gear up / Gear down (AI cars keep it on) */
+  autoGearbox: boolean;
   /** Controller steering assist; its settings follow the player's sensitivity choice */
   readonly gamepadAssist: { settings: GamepadAssistSettings };
   autoXMode: boolean;

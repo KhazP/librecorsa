@@ -118,6 +118,12 @@ export const AssistsStep: React.FC<SetupStepProps> = (p) => {
             checked={p.showRacingLine}
             onChange={() => p.onSetRacingLine(!p.showRacingLine)}
           />
+          <Toggle
+            label="Automatic gearbox"
+            detail={`Off: shift yourself (${keyLabel(p.settings.keys.shiftUp[0])} / ${keyLabel(p.settings.keys.shiftDown[0])})`}
+            checked={p.autoGearbox}
+            onChange={() => p.onSetAutoGearbox(!p.autoGearbox)}
+          />
           {p.settings.device === "controller" ? (
             <Toggle
               label="Controller steering assist"
