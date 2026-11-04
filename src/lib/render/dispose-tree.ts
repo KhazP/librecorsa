@@ -22,5 +22,7 @@ export function disposeTree(root: THREE.Object3D): void {
     m.dispose();
   }
   for (const g of geometries) g.dispose();
-  for (const t of textures) t.dispose();
+  // A render target's own texture (the cars' live reflection map) belongs to its target: disposing it here would
+  // delete the GL texture the target keeps rendering into
+  for (const t of textures) if (!(t as THREE.Texture & { isRenderTargetTexture?: boolean }).isRenderTargetTexture) t.dispose();
 }
