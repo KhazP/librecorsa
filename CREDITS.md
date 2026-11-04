@@ -26,6 +26,7 @@ Each model below is licensed under [Creative Commons Attribution 4.0 (CC BY 4.0)
 * `"Mobility Resort Motegi (Twin Ring)"` ([https://skfb.ly/pMIoS](https://skfb.ly/pMIoS)) by **Kevin Love SketchFab**
 * `"Sepang International Circuit 2025 layout"` ([https://sketchfab.com/3d-models/sepang-international-circuit-2025-layout-590bf243480e43f18e588a3908daa4df](https://sketchfab.com/3d-models/sepang-international-circuit-2025-layout-590bf243480e43f18e588a3908daa4df)) by **Dave Love SketchFab**
 * `"Daytona International Speedway 2007 layout"` ([https://sketchfab.com/3d-models/daytona-international-speedway-2007-layout-070db794e8ee46d399ee882f67e9a18d](https://sketchfab.com/3d-models/daytona-international-speedway-2007-layout-070db794e8ee46d399ee882f67e9a18d)) by **Dave Love SketchFab**, used for both the oval (`daytona_oval`) and the road course (`daytona_road`)
+* `"Silverstone Circuit 2024 layout"` ([https://sketchfab.com/3d-models/silverstone-circuit-2024-layout-bbaf4b12d5244c76998fd44f771fc0b3](https://sketchfab.com/3d-models/silverstone-circuit-2024-layout-bbaf4b12d5244c76998fd44f771fc0b3)) by **Dave Love SketchFab**
 
 ### Rwanda trackside trees (`public/tracks/rwanda/scenery/`)
 
