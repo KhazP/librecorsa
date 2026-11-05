@@ -154,6 +154,13 @@ export class TrackEnvironment {
     this.freshSession = false;
     const calledFor = recommendedCompound(weather.lineWaterMm);
 
+    // Cars driven elsewhere (remote players) sweep the racing line dry here too, as they do on their own clients
+    for (const o of others) {
+      if (o.speedMs <= MIN_ROLLING_MS) continue;
+      const lineLatM = aiLineOffsetM(this.track.getSampleAtDistance(o.sMeters));
+      weather.depositCarPass(o.sMeters, o.lateralOffsetM - lineLatM, o.speedMs, dt);
+    }
+
     for (let i = 0; i < cars.length; i++) {
       const sim = cars[i];
       const sample = this.track.getSampleAtDistance(sim.sMeters);
