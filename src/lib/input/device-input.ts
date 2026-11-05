@@ -323,7 +323,10 @@ export class DeviceInputReader {
           frame.brake = pad.buttons[PAD_BRAKE_BUTTON]?.value ?? 0;
         } else {
           frame.source = "legacy";
-          if (Math.abs(rawStickX) > 0.04) frame.analogSteer = rawStickX;
+          // 4 % dead zone, then a short ramp that rejoins the raw value at 8 %: the output no longer jumps from 0 to
+          // 0.04 at the edge, and past the ramp the axis stays 1:1 (this path is often an uncalibrated wheel)
+          const a = Math.abs(rawStickX);
+          if (a > 0.04) frame.analogSteer = Math.sign(rawStickX) * (a >= 0.08 ? a : (a - 0.04) * 2);
           const tPad = wheel.throttle ? findPad(pads, wheel.throttle.padId) : undefined;
           const bPad = wheel.brake ? findPad(pads, wheel.brake.padId) : undefined;
           frame.throttle =
