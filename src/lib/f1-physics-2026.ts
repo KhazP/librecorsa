@@ -117,7 +117,7 @@ import {
   wetnessFromWater,
 } from './sim/wet-tyres';
 import type { TrackSurfaceKind } from './sim/track-surfaces';
-import { BRAKE_DUCT_STEP, type ChassisSetup, clampChassisSetup, DEFAULT_CHASSIS_SETUP, pctScale, WING_CLICK_DEG } from './sim/car-setup';
+import { BRAKE_DUCT_STEP, type ChassisSetup, clampChassisSetup, DEFAULT_CHASSIS_SETUP, pctScale, startingFuelKg, WING_CLICK_DEG } from './sim/car-setup';
 import { flyingExitSpeedMs, flyingStartPoint, type TyreVisualState } from './sim/simulator-car';
 import type { VehicleWheelState, WheelCornerIndex } from './sim/vehicle-types';
 import {
@@ -791,6 +791,11 @@ export class F1Physics2026 {
   /** Garage chassis setup, as offsets from the VF26 baseline; springs, bars, dampers and ride height act at once */
   public applyChassisSetup(setup: ChassisSetup): void {
     const s = clampChassisSetup(setup);
+    // A new fuel load is put in the car now (and at every restart); other changes leave the fuel burnt so far
+    if (s.fuelDeltaKg !== this.chassis.fuelDeltaKg) {
+      this.drivetrain.fuelKg = startingFuelKg('vf26', s);
+      this.telemetry.fuelKg = this.drivetrain.fuelKg;
+    }
     this.chassis = s;
     this.wingTrimDeg = { front: s.frontWingClicks * WING_CLICK_DEG.vf26.front, rear: s.rearWingClicks * WING_CLICK_DEG.vf26.rear };
     const bases = [VF26_CHASSIS.front, VF26_CHASSIS.rear] as const;
@@ -870,6 +875,9 @@ export class F1Physics2026 {
     this.activeAeroMode = flyingStart ? 'X_MODE' : 'Z_MODE';
     this.xModeBlend = flyingStart ? 1 : 0;
     this.drivetrain = this.createDrivetrain();
+    // A fresh tank of the garage's fuel load: its mass and readout from the first frame
+    this.recomputeMassProperties();
+    this.telemetry.fuelKg = this.drivetrain.fuelKg;
     this.drivetrain.gear = flyingStart ? flyingGear : 1;
     this.drivetrain.shiftTarget = this.drivetrain.gear;
     this.syncDrivetrainToRoadSpeed();
@@ -1118,7 +1126,7 @@ export class F1Physics2026 {
       mgukPowerW: 0,
       harvestAxleTorqueNm: 0,
       limiterCut: false,
-      fuelKg: VF26_CHASSIS.fuelKg,
+      fuelKg: startingFuelKg('vf26', this.chassis),
       ersMode: 'BALANCED',
       ersEnergyJ: VF26_ERS.batteryJ,
       boostRemainingS: 0,
@@ -2764,7 +2772,7 @@ export class F1Physics2026 {
       manualOverrideActive: false,
       boostRemainingS: 0,
       turboBoostBar: 1.0,
-      fuelKg: VF26_CHASSIS.fuelKg,
+      fuelKg: startingFuelKg('vf26', this.chassis),
       tireSlipRatio: [0, 0, 0, 0],
       wheelSlipRatios: [0, 0, 0, 0],
       wheelSlipAnglesDeg: [0, 0, 0, 0],

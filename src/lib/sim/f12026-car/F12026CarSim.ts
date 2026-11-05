@@ -15,6 +15,7 @@ import {
   clampChassisSetup,
   DEFAULT_CHASSIS_SETUP,
   pctScale,
+  startingFuelKg,
   STEER_RATIO_BASE,
   WING_CLICK_DEG,
 } from '../car-setup';
@@ -546,10 +547,11 @@ export class F12026CarSim implements SimulatorCar {
   }
   /** Car-to-car contact uses this car's own mass and yaw inertia (a GT3 is ~1.75× an F1 car's mass) */
   public get contactMassKg(): number {
-    return this.config.chassis.totalMassKg;
+    return this.vehicle.totalMassKg;
   }
   public get contactYawInertiaKgM2(): number {
-    return this.config.chassis.inertia.yaw;
+    const ch = this.config.chassis;
+    return (ch.inertia.yaw * this.vehicle.totalMassKg) / ch.totalMassKg;
   }
   public readonly cgToFrontAxleM: number;
   public readonly cgToRearAxleM: number;
@@ -670,7 +672,8 @@ export class F12026CarSim implements SimulatorCar {
   private drsPressPending = false;
   private boostRemainingS = 0;
   private boostCooldownS = 0;
-  private fuelKg = 35;
+  /** Fuel on board (kg): the garage's starting load at each restart (`fillFuel`) */
+  private fuelKg = 0;
   private tcCut = 1;
   private absCut = 1;
   /** Per-wheel ABS pressure share (LF, RF, LR, RR); `absCut` is their minimum */
@@ -873,14 +876,35 @@ export class F12026CarSim implements SimulatorCar {
     return { ...this.chassis };
   }
 
+  /** The vehicle model whose setup limits, wing steps and fuel this car takes */
+  private get setupCar(): 'amg-gt3' | 'f12026-car' {
+    return this.profile.id === 'amg-gt3' ? 'amg-gt3' : 'f12026-car';
+  }
+
+  /** The garage's starting fuel into the car, with the spring preloads set for that load */
+  private fillFuel(): void {
+    this.fuelKg = startingFuelKg(this.setupCar, this.chassis);
+    this.vehicle.setFuelMass(this.fuelKg);
+    this.vehicle.refreshStaticGeometry();
+    this.telemetry.fuelKg = Number(this.fuelKg.toFixed(2));
+  }
+
   /**
    * Garage chassis setup as offsets from the car's baseline. Springs, bars, dampers and wings are read live by
    * VehiclePhysics; a ride-height change re-derives the spring preloads, so the car settles at the new height.
    */
   public applyChassisSetup(setup: ChassisSetup): void {
     const s = clampChassisSetup(setup);
+    const refuel = s.fuelDeltaKg !== this.chassis.fuelDeltaKg;
     this.chassis = s;
-    const car = this.profile.id === 'amg-gt3' ? 'amg-gt3' : 'f12026-car';
+    const car = this.setupCar;
+    // A new fuel load is put in the car now (and at every restart); other changes leave the fuel burnt so far.
+    // The spring preloads below are set for the load on board.
+    if (refuel) {
+      this.fuelKg = startingFuelKg(car, s);
+      this.vehicle.setFuelMass(this.fuelKg);
+      this.telemetry.fuelKg = Number(this.fuelKg.toFixed(2));
+    }
     const click = WING_CLICK_DEG[car];
     this.wingTrimDeg = { front: s.frontWingClicks * click.front, rear: s.rearWingClicks * click.rear };
     this.aeroPreset = this.aero;
@@ -1131,6 +1155,8 @@ export class F12026CarSim implements SimulatorCar {
    * straight (further slots queue 28 m apart, alternating sides), as the VF26 does.
    */
   public resetToStartGrid(flyingStart = false, gridSlot = 0): void {
+    // Fuelled before it is seated, so it settles at the ride height of that load
+    this.fillFuel();
     const L = this.track.totalLengthM;
     if (flyingStart) {
       // From the final straight (`flyingStartPoint`), on this car's line, kept on the asphalt, and no faster than
@@ -1162,8 +1188,6 @@ export class F12026CarSim implements SimulatorCar {
     this.afterPlacement();
     this.vehicle.ersEnergyJ = this.config.ers.ERS_MAX_CHARGE;
     this.vehicle.resetLapEnergy();
-    this.fuelKg = this.profile.id === 'amg-gt3' ? 50 : 35;
-    this.telemetry.fuelKg = this.fuelKg;
     this.simTimeMs = 0;
     this.lapStartMs = 0;
     this.sectorStartMs = 0;
@@ -1262,6 +1286,7 @@ export class F12026CarSim implements SimulatorCar {
       const mapFlowMult = v.engineMap === 1 ? 1.04 : v.engineMap === 2 ? 1.0 : v.engineMap === 3 ? 0.96 : v.engineMap === 4 ? 0.90 : 0.85;
       const baseFlowKgS = this.profile.id === 'amg-gt3' ? 0.036 : 0.0278;
       this.fuelKg = Math.max(0, this.fuelKg - baseFlowKgS * mapFlowMult * v.telemetry.throttle * dtSeconds);
+      v.setFuelMass(this.fuelKg);
     }
     this.simTimeMs += dtSeconds * 1000;
     if (this.recoverIfLost()) return this.telemetry;
