@@ -21,6 +21,7 @@ import { createGroundHit, type GroundQuery } from "@/lib/sim/f12026-car/TrackCol
 /** Height of a racing-line dash over the driving surface: clear of its ripple, low enough to read as paint */
 const DASH_SEAT_LIFT_M = 0.035;
 
+/** The built scene of the active circuit, whichever it is (the name predates the other tracks) */
 export interface BuiltRwandaScene {
   sceneGroup: THREE.Group;
   racingLineMesh: THREE.Mesh;
@@ -599,6 +600,10 @@ function brakingZoneColor(level: number): THREE.Color {
   return new THREE.Color(0.98, 0.12, 0.18); // Heavy Braking Zone Red
 }
 
+/**
+ * Builds the scene of any circuit (the name predates the other tracks): the Rwanda-only dressing (lake, airliner,
+ * stands, tents, scenery packs) is gated on the track id inside
+ */
 export function buildRwandaCircuitScene(
   track: BuiltTrackData
 ): BuiltRwandaScene {
