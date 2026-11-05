@@ -23,25 +23,39 @@ export const HUD_WELL = "border border-[#1B1F2B] bg-[#050608]";
 /** Small tracked mono label used across the HUD panels */
 export const HUD_LBL = "font-f1-mono text-[9px] font-extrabold tracking-[0.18em] text-[#8E96AA] uppercase";
 
-/** m:ss.mmm, or dashes when there is no time yet */
+/** m:ss.mmm (h:mm:ss.mmm from an hour on), or dashes when there is no time yet (or it is not a finite number) */
 export function formatLapTime(ms: number | null | undefined): string {
-  if (ms === null || ms === undefined || ms <= 0) return "-:--.---";
-  const totalSec = Math.floor(ms / 1000);
-  const mins = Math.floor(totalSec / 60);
+  if (ms === null || ms === undefined || !Number.isFinite(ms) || ms <= 0) return "-:--.---";
+  const whole = Math.floor(ms);
+  const totalSec = Math.floor(whole / 1000);
+  const totalMin = Math.floor(totalSec / 60);
+  const hours = Math.floor(totalMin / 60);
   const secs = totalSec % 60;
-  const millis = Math.floor(ms % 1000);
-  return `${mins}:${secs.toString().padStart(2, "0")}.${millis.toString().padStart(3, "0")}`;
+  const millis = whole % 1000;
+  const rest = `${secs.toString().padStart(2, "0")}.${millis.toString().padStart(3, "0")}`;
+  return hours > 0 ? `${hours}:${(totalMin % 60).toString().padStart(2, "0")}:${rest}` : `${totalMin}:${rest}`;
 }
 
 /** ss.mmm for sector times */
 export function formatSectorTime(ms: number | null | undefined): string {
-  if (ms === null || ms === undefined || ms <= 0) return "--.---";
+  if (ms === null || ms === undefined || !Number.isFinite(ms) || ms <= 0) return "--.---";
   return (ms / 1000).toFixed(3);
 }
 
-/** Signed delta in seconds: "-0.234" / "+1.020" */
+/** Signed delta in seconds: "−0.234" / "+1.020"; a delta that rounds to zero has no sign */
 export function formatDelta(seconds: number): string {
-  return `${seconds < 0 ? "−" : "+"}${Math.abs(seconds).toFixed(3)}`;
+  if (!Number.isFinite(seconds)) return "--.---";
+  const text = Math.abs(seconds).toFixed(3);
+  if (Number(text) === 0) return text;
+  return `${seconds < 0 ? "−" : "+"}${text}`;
+}
+
+/**
+ * Colour of a completed sector (or lap) time against the best: purple when it matches or beats it (or there is no
+ * best yet), yellow when slower. One rule for every HUD style, the lap card and the timing tower.
+ */
+export function sectorTimeColor(ms: number, best: number | null | undefined): string {
+  return !best || ms <= best + 0.5 ? HUD_PURPLE : HUD_YELLOW;
 }
 
 /** Tyre surface temperature colour: cold blue → slipstream cyan → working green (85–105 °C) → caution amber → overheating rosso (> 115 °C) */

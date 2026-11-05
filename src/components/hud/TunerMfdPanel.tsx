@@ -228,7 +228,8 @@ export const TunerMfdPanel: React.FC<TunerMfdPanelProps> = ({
       }
       setCollapsed(false);
       interactRef.current?.();
-      setDialIdx((prev) => (prev + delta + dials.length) % dials.length);
+      // From the dial on screen: dialIdx can sit past the end after the list shrank (a car without ERS)
+      setDialIdx((prev) => (Math.min(prev, dials.length - 1) + delta + dials.length) % dials.length);
       triggerFlash(delta < 0 ? "left" : "right");
     },
     [dials.length, triggerFlash]

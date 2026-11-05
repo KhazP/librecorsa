@@ -15,6 +15,7 @@ import {
   formatDelta,
   formatLapTime,
   formatSectorTime,
+  sectorTimeColor,
 } from "./hud-format";
 import { LibreCorsaMark } from "../ui/LibreCorsaLogo";
 
@@ -49,7 +50,10 @@ export const TowerRows: React.FC<{ race: RaceStatus; gaps?: "interval" | "leader
           : e.lastLapMs && me?.lastLapMs
             ? (e.lastLapMs - me.lastLapMs) / 1000
             : null;
-        const lastColor = lastD === null ? HUD_SLATE : e.isPlayer ? (lastD <= 0.0005 ? HUD_PURPLE : HUD_YELLOW) : lastD < 0 ? HUD_RED : HUD_GREEN;
+        // A rival's gap that rounds to 0.00 is a tie: neutral, and shown without a sign
+        const tie = lastD !== null && Math.abs(lastD) < 0.005;
+        const lastColor =
+          lastD === null ? HUD_SLATE : e.isPlayer ? (lastD <= 0.0005 ? HUD_PURPLE : HUD_YELLOW) : tie ? HUD_SLATE : lastD < 0 ? HUD_RED : HUD_GREEN;
         const purple = fastest !== null && e.bestLapMs === fastest;
         return (
           <li
@@ -90,7 +94,13 @@ export const TowerRows: React.FC<{ race: RaceStatus; gaps?: "interval" | "leader
               style={{ color: e.isPlayer && lastD !== null ? "#08090D" : lastColor, opacity: lastD === null ? 0.5 : 1 }}
               title={e.isPlayer ? "Last lap against your best" : "Their last lap against yours"}
             >
-              {lastD === null ? "" : e.isPlayer && lastD <= 0.0005 ? "PB" : `${lastD > 0 ? "+" : "−"}${Math.abs(lastD).toFixed(2)}`}
+              {lastD === null
+                ? ""
+                : e.isPlayer && lastD <= 0.0005
+                  ? "PB"
+                  : tie
+                    ? "0.00"
+                    : `${lastD > 0 ? "+" : "−"}${Math.abs(lastD).toFixed(2)}`}
             </span>
           </li>
         );
@@ -141,8 +151,8 @@ function sectorCells(telemetry: CarTelemetry) {
       ? active
         ? HUD_CYAN
         : "rgba(255,255,255,0.12)"
-      : best !== null && t !== null && t <= best
-        ? HUD_PURPLE
+      : t !== null
+        ? sectorTimeColor(t, best)
         : HUD_YELLOW;
     return { sec, t, color, done, active };
   });

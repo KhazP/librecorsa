@@ -3,7 +3,7 @@
 import React, { useEffect, useId, useRef, useState } from "react";
 import type { CarTelemetry, TireCompound } from "@/types/f1";
 import type { BuiltTrackData } from "@/lib/track-data";
-import { HUD_CYAN, HUD_GREEN, HUD_PURPLE, HUD_RED, HUD_VOLT, HUD_YELLOW } from "../hud-format";
+import { HUD_CYAN, HUD_GREEN, HUD_PURPLE, HUD_RED, HUD_VOLT, HUD_YELLOW, sectorTimeColor } from "../hud-format";
 
 /** Circuit outline for the HUD maps, in a 0..1000 box (aspect kept) */
 export interface HudMap {
@@ -225,12 +225,8 @@ export const MiniMap: React.FC<{
   );
 };
 
-/** Sector time colour: purple personal best, green faster than last best, yellow slower */
-export function sectorColor(ms: number, best: number | null): string {
-  if (!best || ms <= best + 0.5) return HUD_PURPLE;
-  if (ms <= best + 150) return HUD_GREEN;
-  return HUD_YELLOW;
-}
+/** Sector time colour (see sectorTimeColor): purple at or inside the best, yellow slower */
+export const sectorColor = sectorTimeColor;
 
 /** The last completed sector, for a few seconds after it completes */
 /**

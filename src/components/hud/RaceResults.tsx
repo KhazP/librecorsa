@@ -5,20 +5,13 @@ import { RotateCcw } from "lucide-react";
 import { useFocusNav } from "@/components/menu/useFocusNav";
 import { PromptBar } from "@/components/menu/menu-ui";
 import type { RaceResultEntry, RaceStatus } from "@/types/f1";
+import { STRIKES_PER_PENALTY } from "@/lib/sim/track-limits";
 import { HUD_CYAN, HUD_PURPLE, HUD_RED, HUD_VOLT, HUD_YELLOW, formatLapTime } from "./hud-format";
 
+const ordinal = (n: number) => (n === 2 ? "second" : n === 3 ? "third" : n === 4 ? "fourth" : `${n}th`);
+
 /** Race time at the flag: m:ss.mmm, or h:mm:ss.mmm past one hour */
-function formatRaceTime(totalS: number): string {
-  const totalMs = Math.round(totalS * 1000);
-  const ms = totalMs % 1000;
-  const totalSec = Math.floor(totalMs / 1000);
-  const sec = totalSec % 60;
-  const totalMin = Math.floor(totalSec / 60);
-  const min = totalMin % 60;
-  const hr = Math.floor(totalMin / 60);
-  const rest = `${sec.toString().padStart(2, "0")}.${ms.toString().padStart(3, "0")}`;
-  return hr > 0 ? `${hr}:${min.toString().padStart(2, "0")}:${rest}` : `${min}:${rest}`;
-}
+const formatRaceTime = (totalS: number): string => formatLapTime(Math.round(totalS * 1000));
 
 /** Time / gap column: winner's total time, "+12.345", "+1 LAP" / "+n LAPS", RUNNING or DNF */
 function timeOrGap(r: RaceResultEntry, resultsFinal: boolean): string {
@@ -181,7 +174,7 @@ export const RaceResults: React.FC<{
             <span
               className="lc-data inline-flex h-7 items-center rounded-full px-3 text-[11px] tracking-[0.1em]"
               style={{ boxShadow: `inset 0 0 0 1px ${HUD_YELLOW}`, color: HUD_YELLOW }}
-              title="Track-limits strikes: every third is a time penalty"
+              title={`Track-limits strikes: every ${ordinal(STRIKES_PER_PENALTY)} is a time penalty`}
             >
               TRACK LIMITS ×{trackLimitStrikes}
             </span>

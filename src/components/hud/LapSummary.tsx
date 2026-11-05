@@ -14,6 +14,7 @@ import {
   formatDelta,
   formatLapTime,
   formatSectorTime,
+  sectorTimeColor,
 } from "./hud-format";
 
 const EMPTY = "—";
@@ -48,10 +49,7 @@ function cornerDelta(c: CornerStat): { text: string; color: string; bar: string 
     : { text: `${MINUS}${Math.abs(d).toFixed(1)}`, color: HUD_YELLOW, bar: HUD_YELLOW };
 }
 
-/** Purple when at or inside the session best (or no best yet), yellow when slower */
-function sectorColor(time: number, best: number | null): string {
-  return best === null || time <= best ? HUD_PURPLE : HUD_YELLOW;
-}
+const sectorColor = sectorTimeColor;
 
 /** Sheet border / ring tint for the lap's status */
 function statusTint(s: LapSummaryData): { border: string; ring: string } {
