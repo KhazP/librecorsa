@@ -421,6 +421,8 @@ export class F1Physics2026 {
   private gravityBody = { x: 0, y: 0, n: G };
   private verticalCurvature = 0;
   private lastFxTyres = 0;
+  /** ABS release wanted per channel this step (scratch) */
+  private readonly absWant = [1, 1, 1, 1];
 
   // Aero results (outer step) & wake / wind / track evolution states
   private aeroDownforceN = 0;
@@ -1519,17 +1521,27 @@ export class F1Physics2026 {
     // 12-stage 4-channel 240 Hz ABS (Level 5 = 1.10 semi_pro, Level 9 = 0.92 assisted)
     const absLv = THREE.MathUtils.clamp(Math.round(this.absLevel), 0, 12);
     const absTarget = absLv > 0 ? 1.32 - absLv * 0.044 : 0;
+    const absWant = this.absWant;
     for (let i = 0; i < 4; i++) {
       let want = 1;
       if (absTarget > 0 && this.vxMs > 3 && brake > 0.01) {
         const w = this.wheels[i];
         const sk = -w.slipRatio / w.tyre.spec.peakSlipRatio;
-        // Fronts ignore their slip angle on purpose: releasing front brake mid-corner shifts the balance rearward
-        // and spins the car on trail-braking (verify-driver-laps: assisted / semi-pro VF26 at Rwanda's T13)
-        const sa = w.isFront ? 0 : Math.abs(Math.tan(w.slipAngleRad)) / w.tyre.tanPeakAngle;
+        // Every channel shares its tyre's grip with the cornering force: the longitudinal slip allowed shrinks with
+        // the slip angle (friction circle), fronts included
+        const sa = Math.abs(Math.tan(w.slipAngleRad)) / w.tyre.tanPeakAngle;
         const skAllowed = Math.sqrt(Math.max(0.35 * 0.35, absTarget * absTarget - sa * sa));
         if (sk > skAllowed) want = Math.max(0.1, 1 - (sk - skAllowed) * 3.2);
       }
+      absWant[i] = want;
+    }
+    // Electronic brake distribution: a rear channel never brakes harder, relative to its share, than the more
+    // released front, so freeing a front mid-corner does not move the balance rearward and spin the car
+    const frontWant = Math.min(absWant[0], absWant[1]);
+    absWant[2] = Math.min(absWant[2], frontWant);
+    absWant[3] = Math.min(absWant[3], frontWant);
+    for (let i = 0; i < 4; i++) {
+      const want = absWant[i];
       this.absFactor[i] += (want - this.absFactor[i]) * Math.min(1, (want < this.absFactor[i] ? 160 : 38) * dt);
     }
 
