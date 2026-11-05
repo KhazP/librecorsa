@@ -189,10 +189,14 @@ export function computeSpeedProfile(
       const j = (i + 1) % n;
       const vn = v[j];
       const grip = car.muLong * (G + (car.downforceCoef * vn * vn) / m);
-      // The friction-circle share is taken at the downstream speed vn, which understates the lateral load at a
-      // faster corner entry. Kept on purpose: the planning μ margins and the drivers' braking points are tuned
-      // against this form, and taking it at the entry speed puts the VF26 wide at Rwanda's T13 (verify-driver-laps)
-      const decel = Math.min(grip, car.maxBrakeForceN / m) * longShare(i, vn) + (car.dragCoef * vn * vn) / m;
+      const brake = Math.min(grip, car.maxBrakeForceN / m);
+      const drag = (car.dragCoef * vn * vn) / m;
+      // The lateral load while braking across this segment is set by the speed across it, which runs from the entry
+      // speed down to vn: estimate the entry speed with the share at vn, then take the share at the segment's
+      // midpoint speed. (At vn alone the lateral demand was understated and braking into corners overstated; at the
+      // entry speed alone it is overstated the other way and the drivers' calibrated braking points run wide.)
+      const vEst = Math.min(v[i], Math.sqrt(vn * vn + 2 * (brake * longShare(i, vn) + drag) * segLenM[i]));
+      const decel = brake * longShare(i, 0.5 * (vn + vEst)) + drag;
       v[i] = Math.min(v[i], Math.sqrt(vn * vn + 2 * decel * segLenM[i]));
     }
   };
