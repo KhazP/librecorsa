@@ -58,10 +58,13 @@ jobs:
         run: npm ci
 
       # The repository keeps the raw GLBs the authoring scripts edit; the site ships them meshopt-compressed
-      # (Rwanda 20 → 6 MB, the default car 16 → 6 MB). Physics meshes stay bit-exact (the track script checks).
+      # (Rwanda 20 → 6 MB, its props and stands 1.7 → 0.6 MB, the default car 16 → 6 MB). Physics meshes stay
+      # bit-exact (the track script checks). Rwanda's foliage stays raw: it is instance transforms and textures,
+      # which meshopt makes bigger, not smaller.
       - name: Compress models for the download
         run: |
           node scripts/compress-track-glb.mjs public/tracks/rwanda/rwanda_2026.glb
+          node scripts/compress-track-glb.mjs public/tracks/rwanda/scenery/props.glb public/tracks/rwanda/scenery/stands.glb
           node scripts/compress-car-glb.mjs --all
 
       - name: Build static export
