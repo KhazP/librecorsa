@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { patchShader, type ShaderPatch } from "./shader-patch";
+import { toPhysical } from "./to-physical";
 
 /**
  * PBR upgrades for the VF26 GLB materials (see vf26-car-model.ts; the GLB itself is not edited).
@@ -97,59 +98,6 @@ function upgradeOne(m: THREE.Material, liveryMask: boolean): THREE.Material {
   return out;
 }
 
-/** Copies everything a GLB material carries that we keep; the caller then sets the PBR targets. */
-function toPhysical(src: THREE.MeshStandardMaterial): THREE.MeshPhysicalMaterial {
-  const dst = new THREE.MeshPhysicalMaterial();
-  dst.name = src.name;
-  dst.userData = { ...src.userData };
-
-  dst.color.copy(src.color);
-  dst.map = src.map;
-  dst.alphaMap = src.alphaMap;
-  dst.alphaTest = src.alphaTest;
-  dst.alphaHash = src.alphaHash;
-  dst.opacity = src.opacity;
-  dst.transparent = src.transparent;
-  dst.side = src.side;
-  dst.depthWrite = src.depthWrite;
-  dst.depthTest = src.depthTest;
-  dst.blending = src.blending;
-  dst.visible = src.visible;
-  dst.vertexColors = src.vertexColors;
-  dst.flatShading = src.flatShading;
-  dst.toneMapped = src.toneMapped;
-  dst.wireframe = src.wireframe;
-  dst.polygonOffset = src.polygonOffset;
-  dst.polygonOffsetFactor = src.polygonOffsetFactor;
-  dst.polygonOffsetUnits = src.polygonOffsetUnits;
-
-  dst.emissive.copy(src.emissive);
-  dst.emissiveMap = src.emissiveMap;
-  dst.emissiveIntensity = src.emissiveIntensity;
-
-  dst.normalMap = src.normalMap;
-  dst.normalScale.copy(src.normalScale);
-  dst.aoMap = src.aoMap;
-  dst.aoMapIntensity = src.aoMapIntensity;
-  dst.lightMap = src.lightMap;
-  dst.lightMapIntensity = src.lightMapIntensity;
-  dst.envMap = src.envMap;
-  dst.envMapIntensity = src.envMapIntensity;
-
-  // Kept as-is; the caller decides whether the MR maps survive (EXT_SKIN drops them)
-  dst.roughnessMap = src.roughnessMap;
-  dst.metalnessMap = src.metalnessMap;
-  dst.roughness = src.roughness;
-  dst.metalness = src.metalness;
-
-  const phys = src as Partial<THREE.MeshPhysicalMaterial>;
-  if (phys.isMeshPhysicalMaterial) {
-    dst.clearcoatMap = phys.clearcoatMap ?? null;
-    dst.clearcoatRoughnessMap = phys.clearcoatRoughnessMap ?? null;
-    dst.clearcoatNormalMap = phys.clearcoatNormalMap ?? null;
-  }
-  return dst;
-}
 
 function configure(
   out: THREE.MeshPhysicalMaterial,

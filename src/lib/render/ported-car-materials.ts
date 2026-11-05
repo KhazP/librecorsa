@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { toPhysical } from "./to-physical";
 
 /**
  * Shading clean-up for ported Sketchfab cars (`ported-car-model.ts`).
@@ -61,15 +62,6 @@ function placeholderChannels(tex: THREE.Texture): { rough: boolean; metal: boole
   }
   flatChannels.set(tex, out);
   return out;
-}
-
-function toPhysical(src: THREE.MeshStandardMaterial): THREE.MeshPhysicalMaterial {
-  if ((src as THREE.MeshPhysicalMaterial).isMeshPhysicalMaterial) return src as THREE.MeshPhysicalMaterial;
-  const dst = new THREE.MeshPhysicalMaterial();
-  THREE.MeshStandardMaterial.prototype.copy.call(dst, src);
-  // MeshStandardMaterial.copy() resets the defines to STANDARD only
-  dst.defines = { STANDARD: "", PHYSICAL: "" };
-  return dst;
 }
 
 /** Dielectric F0 of 4 % (specular 1, white): what lacquer and resin reflect, unless a map says otherwise */
