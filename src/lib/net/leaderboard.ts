@@ -108,11 +108,15 @@ export function boardLabel(c: Pick<LapConditions, "assists" | "realism" | "surfa
   return `${ASSIST_LABEL[c.assists]} · ${REALISM_LABEL[c.realism]} · ${c.surface === "wet" ? "Wet" : "Dry"}`;
 }
 
-/** Local personal bests for this circuit (all cars, or one car), fastest first */
-export async function localLeaderboard(trackId: string, vehicle?: VehicleModelId): Promise<LeaderboardEntry[]> {
+/**
+ * Local personal bests for this circuit (all cars, or one car), fastest first; with a board class, only laps on that
+ * board (and older ones saved before boards were split, whose class is unknown)
+ */
+export async function localLeaderboard(trackId: string, vehicle?: VehicleModelId, board?: string): Promise<LeaderboardEntry[]> {
   const laps = await listBestLaps();
   return laps
     .filter((lap) => lap.trackId === trackId && (vehicle === undefined || lap.vehicle === vehicle))
+    .filter((lap) => board === undefined || !lap.conditions || lapBoardClass(lap.conditions) === board)
     .map((lap) => lapToEntry(lap, "local"))
     .sort((a, b) => a.lapTimeMs - b.lapTimeMs);
 }

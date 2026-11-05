@@ -982,29 +982,32 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   }, []);
 
   // ---- Laps, ghosts, leaderboards
-  const refreshLeaderboard = useCallback(async () => {
-    // Several refreshes can overlap (car change, realism change, a saved lap): only the latest may land
-    const req = ++leaderboardReqRef.current;
-    setLeaderboard((l) => ({ ...l, loading: true }));
-    const vehicle = vehicleModelRef.current;
-    // The online board for what the player drives with now: their assists and realism, today's surface, this
-    // physics revision
-    const board: LapConditions = {
+  /** The board for what the player drives with now: their assists and realism, today's surface, this physics revision */
+  const currentBoard = useCallback(
+    (): LapConditions => ({
       assists: physicsRef.current?.assistPreset ?? DEFAULT_ASSIST_PRESET,
       compound: physicsRef.current?.tireCompound ?? "soft",
       surface: getTrackEnv().weather.lineWaterMm >= WET_LAP_WATER_MM ? "wet" : "dry",
       realism: settingsRef.current.realism,
       physicsVersion: PHYSICS_VERSION,
-    };
+    }),
+    [getTrackEnv]
+  );
+  const refreshLeaderboard = useCallback(async () => {
+    // Several refreshes can overlap (car change, realism change, a saved lap): only the latest may land
+    const req = ++leaderboardReqRef.current;
+    setLeaderboard((l) => ({ ...l, loading: true }));
+    const vehicle = vehicleModelRef.current;
+    const board = currentBoard();
     const [local, remote] = await Promise.all([
-      localLeaderboard(trackId, vehicle).catch((): LeaderboardEntry[] => []),
+      localLeaderboard(trackId, vehicle, lapBoardClass(board)).catch((): LeaderboardEntry[] => []),
       remoteLeaderboardEnabled
         ? fetchRemoteLeaderboard(trackId, vehicle, lapBoardClass(board)).catch((): LeaderboardEntry[] => [])
         : Promise.resolve<LeaderboardEntry[]>([]),
     ]);
     if (req !== leaderboardReqRef.current) return;
     setLeaderboard({ local, remote, loading: false, boardLabel: boardLabel(board) });
-  }, [trackId, getTrackEnv]);
+  }, [trackId, currentBoard]);
   // Another realism level ranks on another board (the first fetch comes from the car effect below)
   const realismSeenRef = useRef(settings.realism);
   useEffect(() => {
@@ -1017,12 +1020,13 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   const loadPbGhost = useCallback(async () => {
     // A ghost picked (or another car's PB requested) while this one loads wins over it
     const req = ++ghostReqRef.current;
-    const rec = await loadBestLap(trackId, vehicleModelRef.current).catch(() => null);
+    // The best on the board the player is driving now (an assisted best is not their pro reference)
+    const rec = await loadBestLap(trackId, vehicleModelRef.current, lapBoardClass(currentBoard())).catch(() => null);
     if (req !== ghostReqRef.current) return;
     ghostSourceRef.current = "pb";
     ghostRef.current = rec ? new GhostPlayer(rec) : null;
     lapRecorderRef.current?.setContext({ personalBestMs: rec?.lapTimeMs ?? null });
-  }, [trackId]);
+  }, [trackId, currentBoard]);
 
   const onLapCompleted = useCallback(
     (summary: LapSummaryData, recording: LapRecording) => {
@@ -1084,7 +1088,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       const rec =
         entry.source === "remote" && entry.id
           ? await fetchRemoteGhost(entry.id).catch(() => null)
-          : await loadBestLap(entry.trackId, entry.vehicle).catch(() => null);
+          : await loadBestLap(entry.trackId, entry.vehicle, entry.conditions ? lapBoardClass(entry.conditions) : null).catch(() => null);
       raceGhost(rec);
     },
     [raceGhost]
@@ -1112,9 +1116,9 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   }, []);
 
   const handleExportBest = useCallback(async () => {
-    const rec = await loadBestLap(trackId, vehicleModelRef.current).catch(() => null);
+    const rec = await loadBestLap(trackId, vehicleModelRef.current, lapBoardClass(currentBoard())).catch(() => null);
     if (rec) exportLapFile(rec);
-  }, [trackId]);
+  }, [trackId, currentBoard]);
 
   // ---- Instant replay transport
   const handleReplayTogglePlay = useCallback(() => {

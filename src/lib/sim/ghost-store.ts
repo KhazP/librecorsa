@@ -5,7 +5,7 @@
  */
 import type { VehicleModelId } from "@/types/f1";
 import { validateLapRecording } from "@/lib/sim/lap-recorder";
-import type { LapRecording } from "@/lib/sim/lap-types";
+import { lapBoardClass, type LapRecording } from "@/lib/sim/lap-types";
 
 const DB_NAME = "bugesera-laps";
 const DB_VERSION = 1;
@@ -14,9 +14,16 @@ const MAX_IMPORT_BYTES = 5 * 1024 * 1024;
 
 let dbPromise: Promise<IDBDatabase | null> | null = null;
 
-function lapKey(trackId: string, vehicle: VehicleModelId): string {
-  return `${trackId}|${vehicle}`;
+/**
+ * Store key of a personal best: one per circuit, car and board class (assists, realism, surface, physics revision),
+ * as the online boards split them, so an assisted lap never replaces the pro best. Laps saved before the split (no
+ * conditions) keep the old circuit|car key.
+ */
+function lapKey(trackId: string, vehicle: VehicleModelId, board: string | null = null): string {
+  return board ? `${trackId}|${vehicle}|${board}` : `${trackId}|${vehicle}`;
 }
+
+const boardOf = (lap: LapRecording): string | null => (lap.conditions ? lapBoardClass(lap.conditions) : null);
 
 /** Opens the lap database once; resolves null when IndexedDB is unavailable */
 function openDb(): Promise<IDBDatabase | null> {
@@ -80,12 +87,23 @@ function runRequest<T>(
   );
 }
 
-/** Personal-best lap for a circuit and car, or null */
-export async function loadBestLap(trackId: string, vehicle: VehicleModelId): Promise<LapRecording | null> {
-  const raw = await runRequest("readonly", (store) => store.get(lapKey(trackId, vehicle)));
-  if (raw === null || raw === undefined) return null;
-  const lap = validateLapRecording(raw);
-  return lap && lap.trackId === trackId && lap.vehicle === vehicle ? lap : null;
+/**
+ * Personal-best lap for a circuit and car on a board class, or null. Without a class (or with no lap on it yet) a
+ * best saved before boards were split is used, being of unknown class.
+ */
+export async function loadBestLap(trackId: string, vehicle: VehicleModelId, board: string | null = null): Promise<LapRecording | null> {
+  const read = async (key: string) => {
+    const raw = await runRequest("readonly", (store) => store.get(key));
+    if (raw === null || raw === undefined) return null;
+    const lap = validateLapRecording(raw);
+    return lap && lap.trackId === trackId && lap.vehicle === vehicle ? lap : null;
+  };
+  if (board) {
+    const lap = await read(lapKey(trackId, vehicle, board));
+    if (lap) return lap;
+  }
+  const legacy = await read(lapKey(trackId, vehicle));
+  return legacy && (!board || boardOf(legacy) === null || boardOf(legacy) === board) ? legacy : null;
 }
 
 /** Stores the lap if it is faster than the stored one (or none is stored); resolves true when stored */
@@ -94,7 +112,7 @@ export async function saveBestLapIfFaster(rec: LapRecording): Promise<boolean> {
   if (!lap) return false;
   const db = await openDb();
   if (!db) return false;
-  const key = lapKey(lap.trackId, lap.vehicle);
+  const key = lapKey(lap.trackId, lap.vehicle, boardOf(lap));
   return new Promise<boolean>((resolve) => {
     try {
       // Read and write in one transaction so two laps cannot race each other
@@ -128,9 +146,9 @@ export async function listBestLaps(): Promise<LapRecording[]> {
   return laps.sort((a, b) => a.lapTimeMs - b.lapTimeMs);
 }
 
-/** Removes the stored personal best for a circuit and car */
-export async function deleteBestLap(trackId: string, vehicle: VehicleModelId): Promise<void> {
-  await runRequest("readwrite", (store) => store.delete(lapKey(trackId, vehicle)));
+/** Removes the stored personal best for a circuit and car (on one board class; without one, the unsplit best) */
+export async function deleteBestLap(trackId: string, vehicle: VehicleModelId, board: string | null = null): Promise<void> {
+  await runRequest("readwrite", (store) => store.delete(lapKey(trackId, vehicle, board)));
 }
 
 /** m.ss.mmm, e.g. 1.23.456 for 83456 ms */
