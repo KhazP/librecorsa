@@ -2263,7 +2263,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       const samePeers = interpolatedPeers.filter((p) => !p.trackId || p.trackId === trackId);
       peerWakeEmitters(track, samePeers, remoteWake);
       if (mpRace && mpFrame) {
-        mpRace.ingestPeers(samePeers);
+        mpRace.ingestPeers(samePeers, mpFrame.phase === "racing" ? mpFrame.raceTimeS : 0);
         // Contact with the other players (one-sided: each client resolves its own car)
         if (driving && mpRace.collisionsActive(mpFrame)) {
           for (const p of samePeers) {

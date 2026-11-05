@@ -11,6 +11,8 @@ const GAP_BUCKET_M = 25;
 const LIGHT_INTERVAL_MS = 1000;
 /** After the winner finishes, the classification closes once everyone is in or after this long */
 const CLASSIFICATION_CLOSE_S = 90;
+/** A multiplayer car that has sent nothing for this race for this long (never started, or dropped): DNF */
+const NO_SHOW_DNF_S = 30;
 
 const wrapHalf = (d: number, L: number) => ((((d + L / 2) % L) + L) % L) - L / 2;
 
@@ -26,14 +28,21 @@ export interface RacerProgress {
   /** Speed for the in-bucket gap correction (m/s) */
   speedMs: number;
   finishTimeS: number | null;
-  /** Laps completed at the flag: fewer than the race's for a lapped car (absent: the full distance) */
-  finishLaps?: number;
   bestLapMs: number | null;
   /** Last completed lap (ms) */
   lastLapMs?: number | null;
   /** Time penalties to add at the flag (s) */
   penaltyS?: number;
   compound?: TireCompound;
+  /**
+   * Laps completed when the car took the flag. After the winner finishes, every car finishes on its next line
+   * crossing, so a lapped car finishes a lap (or more) short; absent on a finisher = the full race distance
+   */
+  finishLaps?: number;
+  /** Grid slot (0 = pole), the last tie-break; absent = behind everyone with one */
+  grid?: number;
+  /** Retired (a multiplayer car whose peer dropped before the flag): classified DNF, behind every runner */
+  dnf?: boolean;
 }
 
 /** Race time at the flag with the time penalties added (s); null while running */
@@ -186,25 +195,46 @@ export class PlayerSplits {
 /** How far back the split trend looks (s) */
 const SPLIT_TREND_S = 4;
 
-/** Laps a finisher completed (a finisher that doesn't say ran the full distance) */
-const lapsAtFlag = (r: Pick<RacerProgress, "finishLaps">) => r.finishLaps ?? Number.MAX_SAFE_INTEGER;
+const gridOf = (r: RacerProgress) => r.grid ?? Number.MAX_SAFE_INTEGER;
+/** Laps a finisher is classified on */
+const lapsAtFlag = (r: RacerProgress, totalLaps: number) => r.finishLaps ?? totalLaps;
 
 /**
- * Running order: finishers first, by laps completed and then time (penalties included); then everyone else by
- * distance. A lapped car that takes the flag soon after the winner stays behind every car on the lead lap.
+ * Running order, as a timing screen classifies it: finishers on laps completed, then race time (penalties included);
+ * a car still running sits where its distance puts it against the line each finisher crossed (so a lead-lap car on
+ * its last lap is ahead of a lapped finisher); retired cars last. Ties go to whoever got there first (the earlier
+ * line crossing for finishers), then the grid. Without the lap length, finishers simply lead the runners.
  */
-export function raceOrder(racers: readonly RacerProgress[]): RacerProgress[] {
+export function raceOrder(racers: readonly RacerProgress[], lapLengthM?: number): RacerProgress[] {
   return [...racers].sort((a, b) => {
-    if (a.finishTimeS !== null && b.finishTimeS !== null) {
-      return lapsAtFlag(b) - lapsAtFlag(a) || (classifiedTimeS(a) ?? 0) - (classifiedTimeS(b) ?? 0);
+    if (!!a.dnf !== !!b.dnf) return a.dnf ? 1 : -1;
+    const aFin = a.finishTimeS !== null && !a.dnf;
+    const bFin = b.finishTimeS !== null && !b.dnf;
+    if (aFin && bFin) {
+      // A finisher without a lap count ran the full distance: at least as many laps as any lapped finisher
+      const la = a.finishLaps ?? Infinity;
+      const lb = b.finishLaps ?? Infinity;
+      if (la !== lb) return lb - la;
+      return (
+        (classifiedTimeS(a) as number) - (classifiedTimeS(b) as number) ||
+        (a.finishTimeS as number) - (b.finishTimeS as number) ||
+        gridOf(a) - gridOf(b)
+      );
     }
-    if (a.finishTimeS !== null) return -1;
-    if (b.finishTimeS !== null) return 1;
-    return b.distM - a.distM;
+    if (aFin !== bFin) {
+      if (lapLengthM === undefined) return aFin ? -1 : 1;
+      const fin = aFin ? a : b;
+      const run = aFin ? b : a;
+      // A full-distance finisher (no lap count) is at the line no runner can pass without finishing
+      const line = fin.finishLaps === undefined ? Infinity : fin.finishLaps * lapLengthM;
+      const runnerAhead = run.distM > line;
+      return runnerAhead === aFin ? 1 : -1;
+    }
+    return b.distM - a.distM || gridOf(a) - gridOf(b);
   });
 }
 
-/** Final classification of an ordered field */
+/** Final classification of an ordered field (`raceOrder`) */
 export function classify(
   ordered: readonly RacerProgress[],
   lapLengthM: number,
@@ -213,50 +243,49 @@ export function classify(
 ): RaceResultEntry[] {
   const winner = ordered[0];
   const winnerTime = winner ? classifiedTimeS(winner) : null;
-  const lapsRun = (r: RacerProgress) =>
-    r.finishTimeS !== null && r.finishLaps !== undefined
-      ? r.finishLaps
-      : Math.max(0, Math.min(totalLaps, Math.floor(r.distM / lapLengthM)));
-  const winnerLaps = winner ? lapsRun(winner) : totalLaps;
+  const winnerLaps = winner && winner.finishTimeS !== null && !winner.dnf ? lapsAtFlag(winner, totalLaps) : null;
   return ordered.map((r, i) => {
     const time = classifiedTimeS(r);
-    const lapsCompleted = lapsRun(r);
-    // A finisher is down on the laps it ran; a car still running, on the distance it trails the winner by
+    const finished = r.finishTimeS !== null && !r.dnf;
+    const lapsCompleted = finished
+      ? Math.min(totalLaps, lapsAtFlag(r, totalLaps))
+      : Math.max(0, Math.min(totalLaps, Math.floor(r.distM / lapLengthM)));
+    // Laps behind the winner: a finisher by laps completed; a car still running by the line it has yet to reach
     const lapsDown =
-      !winner || r === winner
+      winnerLaps === null || i === 0
         ? 0
-        : r.finishTimeS !== null
+        : finished
           ? Math.max(0, winnerLaps - lapsCompleted)
-          : Math.max(0, Math.floor((winner.distM - r.distM) / lapLengthM));
+          : Math.max(0, Math.floor((winnerLaps * lapLengthM - r.distM) / lapLengthM));
     return {
       position: i + 1,
       driverCode: r.code,
       name: r.name,
       teamColorHex: r.color,
       isPlayer: r.isPlayer,
-      finishTimeS: time,
-      gapS: i > 0 && time !== null && winnerTime !== null ? time - winnerTime : null,
+      finishTimeS: finished ? time : null,
+      gapS: i > 0 && finished && lapsDown === 0 && time !== null && winnerTime !== null ? time - winnerTime : null,
       lapsDown,
       lapsCompleted,
       bestLapMs: r.bestLapMs,
-      dnf: final && r.finishTimeS === null,
+      dnf: !!r.dnf || (final && !finished),
       penaltyS: r.penaltyS ? r.penaltyS : undefined,
     };
   });
 }
 
-/** True once everyone has finished, or the winner finished long enough ago */
+/** True once everyone has finished or retired, or the winner finished long enough ago */
 export function classificationClosed(ordered: readonly RacerProgress[], raceTimeS: number): boolean {
   const winner = ordered[0];
-  if (!winner || winner.finishTimeS === null) return false;
-  return ordered.every((r) => r.finishTimeS !== null) || raceTimeS - winner.finishTimeS > CLASSIFICATION_CLOSE_S;
+  if (!winner || winner.finishTimeS === null || winner.dnf) return false;
+  return ordered.every((r) => r.finishTimeS !== null || r.dnf) || raceTimeS - winner.finishTimeS > CLASSIFICATION_CLOSE_S;
 }
 
 /** Lap counting from the race distance of one car (the player's own) */
 export class LapClock {
   distM = 0;
   finishTimeS: number | null = null;
-  /** Laps completed at the flag (null while racing) */
+  /** Laps completed when the car took the flag; null while running */
   finishLaps: number | null = null;
   bestLapMs: number | null = null;
   lastLapMs: number | null = null;
@@ -280,8 +309,8 @@ export class LapClock {
   }
 
   /**
-   * Call every frame once the race runs; returns true on the frame the car takes the flag: at the end of the last lap,
-   * or (`flagOut`: the winner has finished) at the next crossing of the line, a lap or more down
+   * Call every frame once the race runs; returns true on the frame the car takes the flag: at the race distance, or
+   * on its first line crossing once the chequered flag is out (`flagOut`: someone has finished), as a lapped car does
    */
   update(sMeters: number, raceTimeS: number, totalLaps: number, flagOut = false): boolean {
     const L = this.lapLengthM;
@@ -322,6 +351,8 @@ export class MultiplayerRace {
   private readonly lightsOutHostMs: number;
   /** Last known progress of every remote racer (kept when they disconnect) */
   private remote = new Map<string, RacerProgress>();
+  /** Race time each remote racer last reported progress for this race (s) */
+  private lastSeenS = new Map<string, number>();
   /** The player's own time penalties (s) and tyres, reported to everyone */
   penaltyS = 0;
   compound: TireCompound = "soft";
@@ -347,13 +378,22 @@ export class MultiplayerRace {
         speedMs: 0,
         finishTimeS: null,
         bestLapMs: null,
+        grid: start.grid.indexOf(p.peerId),
       });
     }
   }
 
-  /** The player's grid slot (0 = pole) */
+  /** The player's grid slot (0 = pole); a player missing from the grid starts at the back, not on pole */
   get gridSlot(): number {
-    return Math.max(0, this.start.grid.indexOf(this.localPeerId));
+    const slot = this.start.grid.indexOf(this.localPeerId);
+    return slot >= 0 ? slot : this.start.grid.length;
+  }
+
+  /** Someone has taken the chequered flag: every car still running finishes on its next line crossing */
+  get flagOut(): boolean {
+    if (this.lapClock.finishTimeS !== null) return true;
+    for (const r of this.remote.values()) if (r.finishTimeS !== null && !r.dnf) return true;
+    return false;
   }
 
   frame(hostNowMs: number): MultiplayerRaceFrame {
@@ -377,12 +417,6 @@ export class MultiplayerRace {
     return true;
   }
 
-  /** True once anyone (another player) has taken the chequered flag: this car finishes at its next crossing */
-  get flagOut(): boolean {
-    for (const r of this.remote.values()) if (r.finishTimeS !== null) return true;
-    return this.lapClock.finishTimeS !== null;
-  }
-
   /** What this client reports with its state packets */
   progress(): PeerRaceProgress {
     return {
@@ -397,11 +431,12 @@ export class MultiplayerRace {
     };
   }
 
-  /** Takes the remote racers' latest reported progress (only for this race) */
-  ingestPeers(peers: readonly InterpolatedPeerState[]): void {
+  /** Takes the remote racers' latest reported progress (only for this race) at race time `raceTimeS` */
+  ingestPeers(peers: readonly InterpolatedPeerState[], raceTimeS = 0): void {
     for (const p of peers) {
       if (!p.race || p.race.id !== this.start.id) continue;
       const existing = this.remote.get(p.peerId);
+      this.lastSeenS.set(p.peerId, raceTimeS);
       this.remote.set(p.peerId, {
         id: p.peerId,
         code: p.driverCode,
@@ -412,6 +447,7 @@ export class MultiplayerRace {
         speedMs: p.speedKmh / 3.6,
         finishTimeS: p.race.fin,
         finishLaps: p.race.fin !== null ? p.race.laps : undefined,
+        grid: existing?.grid ?? this.start.grid.indexOf(p.peerId),
         bestLapMs: p.race.best,
         lastLapMs: p.race.last ?? null,
         penaltyS: p.race.pen ?? 0,
@@ -430,19 +466,27 @@ export class MultiplayerRace {
       distM: this.lapClock.distM,
       speedMs: playerSpeedMs,
       finishTimeS: this.lapClock.finishTimeS,
-      finishLaps: this.lapClock.finishLaps ?? undefined,
       bestLapMs: this.lapClock.bestLapMs,
       lastLapMs: this.lapClock.lastLapMs,
       penaltyS: this.penaltyS,
       compound: this.compound,
+      finishLaps: this.lapClock.finishLaps ?? undefined,
+      grid: this.gridSlot,
     };
-    const field = [me, ...this.remote.values()];
+    // A remote car that has sent nothing for this race for a while (it never started, or its player dropped) is out
+    // unless it already finished; it comes back if its packets do
+    const remote = [...this.remote.values()].map((r) =>
+      frame.phase === "racing" && r.finishTimeS === null && frame.raceTimeS - (this.lastSeenS.get(r.id) ?? 0) > NO_SHOW_DNF_S
+        ? { ...r, dnf: true }
+        : r
+    );
+    const field = [me, ...remote];
     const L = this.lapLengthM;
     if (frame.phase === "racing") {
       this.gaps.record(frame.raceTimeS, field.map((r) => r.distM));
       for (const r of field) this.splitTimer.record(r.id, frame.raceTimeS, r.distM);
     }
-    const ordered = raceOrder(field);
+    const ordered = raceOrder(field, L);
     const winner = ordered[0];
     let gapFloor = 0;
     let prevGap = 0;

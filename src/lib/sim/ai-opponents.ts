@@ -977,7 +977,7 @@ export class AiOpponentField {
 
   /** Running position of a car now (1 = leading) */
   private positionOf(car: FieldCar): number {
-    const ordered = raceOrder(this.cars.map((c) => this.progressOf(c)));
+    const ordered = raceOrder(this.cars.map((c) => this.progressOf(c)), this.track.totalLengthM);
     return ordered.findIndex((p) => p.id === car.id) + 1;
   }
 
@@ -992,6 +992,7 @@ export class AiOpponentField {
       speedMs: c.sim.vxMs,
       finishTimeS: c.finishTimeS,
       finishLaps: c.finishLaps ?? undefined,
+      grid: this.cars.indexOf(c),
       bestLapMs: c.bestLapMs,
       lastLapMs: c.lastLapMs,
       penaltyS: c.isPlayer ? this.playerPenaltyS : 0,
@@ -1006,7 +1007,7 @@ export class AiOpponentField {
 
   /** Everything a headless race reports: running order, laps, incidents and what each car learnt (grid order) */
   public report(): AiFieldReport {
-    const ordered = raceOrder(this.cars.map((c) => this.progressOf(c)));
+    const ordered = raceOrder(this.cars.map((c) => this.progressOf(c)), this.track.totalLengthM);
     return {
       seed: this.seed,
       skill: this.skillLevel,
@@ -1083,7 +1084,7 @@ export class AiOpponentField {
     const L = this.track.totalLengthM;
     const progress = new Map<FieldCar, RacerProgress>();
     for (const c of this.cars) progress.set(c, this.progressOf(c));
-    const orderedProgress = raceOrder([...progress.values()]);
+    const orderedProgress = raceOrder([...progress.values()], L);
     const byId = new Map(this.cars.map((c) => [c.id, c]));
     const order = orderedProgress.map((p) => byId.get(p.id) as FieldCar);
     // Prune gap buckets nobody can still need
