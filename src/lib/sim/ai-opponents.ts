@@ -318,7 +318,8 @@ export function resolvePlayerVsRemoteCar(player: SimulatorCar, remote: Interpola
   const dx = remote.position.x - player.worldPosition.x;
   const dz = remote.position.z - player.worldPosition.z;
   const dy = remote.position.y - player.worldPosition.y;
-  if (dx * dx + dz * dz > CAR_LEN_M * CAR_LEN_M || Math.abs(dy) > 2) return false;
+  // Broad phase: two boxes can still overlap with their centres a full diagonal apart, not just a length
+  if (dx * dx + dz * dz > CAR_LEN_M * CAR_LEN_M + CAR_WID_M * CAR_WID_M || Math.abs(dy) > 2) return false;
   fillObb(player, _obbA);
   const q = remote.quaternion;
   let fx = 2 * (q.x * q.z + q.w * q.y);
@@ -493,8 +494,9 @@ export class AiOpponentField {
     for (let k = 0; k < car.cornerBrakeErr.length; k++) {
       car.cornerBrakeErr[k] = Math.max(0, gaussian(car.rng) * m.cornerBrakeSigma * spread);
     }
-    // A proper mistake (into one corner too hot); its chance is rated at the default consistency 0.85
-    const mistake = car.rng() < m.mistakesPerLap * (spread / 0.15);
+    // A proper mistake (into one corner too hot); its chance is rated at the default consistency 0.85. None on the
+    // in-lap after the flag, which would otherwise still count in the race's mistake stats
+    const mistake = car.finishTimeS === null && car.rng() < m.mistakesPerLap * (spread / 0.15);
     car.mistakeCorner = mistake && this.corners.length ? Math.floor(car.rng() * this.corners.length) : -1;
     if (car.mistakeCorner >= 0) car.stats.mistakes++;
     this.rebuildTarget(car);
@@ -513,7 +515,8 @@ export class AiOpponentField {
       (s) => {
         const k = this.cornerIndex(s);
         const learnt = learner ? learner.offsetsAt(s) : null;
-        const err = k >= 0 ? car.cornerBrakeErr[k] : 0;
+        // Empty until startRace sizes it (setSkill can rebuild the target before that): no error rather than NaN
+        const err = k >= 0 ? (car.cornerBrakeErr[k] ?? 0) : 0;
         const hot = k >= 0 && k === car.mistakeCorner ? MISTAKE_APEX_SCALE : 1;
         return {
           brakeMargin: T.at('brakeMargin', s) + m.brakeMarginAdd + (learnt?.brakeMargin ?? 0) + err,
@@ -621,6 +624,7 @@ export class AiOpponentField {
         car.prevVx = 0;
         car.contact = false;
         car.defending = false;
+        car.inWallHit = false;
         car.learner = this.learning
           ? new AiSectionLearner(
               this.corners,
@@ -628,7 +632,6 @@ export class AiOpponentField {
               this.persistLearning ? loadLearnedCorners(this.trackId, this.classId, car.code, this.corners.length) : undefined
             )
           : null;
-        this.newLap(car);
       }
       // Start from the grid slot's lane, not the racing line, so the field does not file onto the line off the grid
       car.startLaneM = car.ai ? car.sim.lateralOffsetM : null;
@@ -643,6 +646,8 @@ export class AiOpponentField {
       car.lapStartS = 0;
       car.prevS = car.sim.sMeters;
       car.distM = car.sim.sMeters > L / 2 ? car.sim.sMeters - L : car.sim.sMeters;
+      // After the per-race state above is cleared (newLap reads finishTimeS)
+      if (car.ai) this.newLap(car);
       this.syncPeer(car);
     });
     this.player.aiAutopilot = false;
