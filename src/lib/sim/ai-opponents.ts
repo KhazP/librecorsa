@@ -224,6 +224,8 @@ interface FieldCar {
   peer: InterpolatedPeerState;
   /** Race time at the chequered flag (s); null while running */
   finishTimeS: number | null;
+  /** Laps completed at the flag (fewer than the race's when lapped) */
+  finishLaps: number | null;
   bestLapMs: number | null;
   lastLapMs: number | null;
   lapsDone: number;
@@ -568,6 +570,7 @@ export class AiOpponentField {
       biasM: 0,
       stuckS: 0,
       finishTimeS: null,
+      finishLaps: null,
       bestLapMs: null,
       lastLapMs: null,
       lapsDone: 0,
@@ -633,6 +636,7 @@ export class AiOpponentField {
       if (car.ai) car.ai.aiLineBiasM = car.biasM;
       car.stuckS = 0;
       car.finishTimeS = null;
+      car.finishLaps = null;
       car.bestLapMs = null;
       car.lastLapMs = null;
       car.lapsDone = 0;
@@ -956,8 +960,10 @@ export class AiOpponentField {
         car.stats.lapTimesMs.push(Math.round(lapMs));
         car.stats.lapPositions.push(this.positionOf(car));
       }
-      if (laps >= this.raceLaps) {
+      // The last lap done, or the winner already in: the flag is out, and every car finishes at its next crossing
+      if (laps >= this.raceLaps || this.cars.some((c) => c.finishTimeS !== null)) {
         car.finishTimeS = this.raceTimeS;
+        car.finishLaps = Math.min(laps, this.raceLaps);
         if (car.isPlayer) this.phase = 'finished';
         if (car.ai && this.persistLearning && car.learner) saveLearnedCorners(this.trackId, this.classId, car.code, car.learner.snapshot());
         if (this.spectate && this.cars.every((c) => c.finishTimeS !== null)) this.phase = 'finished';
@@ -985,6 +991,7 @@ export class AiOpponentField {
       distM: c.distM,
       speedMs: c.sim.vxMs,
       finishTimeS: c.finishTimeS,
+      finishLaps: c.finishLaps ?? undefined,
       bestLapMs: c.bestLapMs,
       lastLapMs: c.lastLapMs,
       penaltyS: c.isPlayer ? this.playerPenaltyS : 0,

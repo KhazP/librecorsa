@@ -2100,7 +2100,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         aiField?.update(dtSeconds);
       }
       if (mpRace && mpFrame && mpFrame.phase === "racing" && !pausedRef.current) {
-        mpRace.lapClock.update(physics.sMeters, mpFrame.raceTimeS, mpRace.start.laps);
+        mpRace.lapClock.update(physics.sMeters, mpFrame.raceTimeS, mpRace.start.laps, mpRace.flagOut);
       }
       haptics.update(physics.telemetry, dtSeconds, rumbleEnabledRef.current && driving, {
         triggerRumble: padTuning.triggerRumble,

@@ -4,7 +4,7 @@
  * Run: npx tsx scripts/verify-race-session.ts
  */
 import * as THREE from "three";
-import { GapTimer, LapClock, MultiplayerRace, classificationClosed, raceOrder, type RacerProgress } from "../src/lib/sim/race-session";
+import { GapTimer, LapClock, MultiplayerRace, classificationClosed, classify, raceOrder, type RacerProgress } from "../src/lib/sim/race-session";
 import type { InterpolatedPeerState, RaceStartInfo } from "../src/lib/sim/multiplayer-sync";
 
 let passed = 0;
@@ -97,6 +97,31 @@ const racers: RacerProgress[] = [
 const ordered = raceOrder(racers);
 check("classification stays open while someone races", !classificationClosed(ordered, 150));
 check("closes 90 s after the winner", classificationClosed(ordered, 191));
+
+console.log("Lapped cars at the flag");
+{
+  // Short lap, 3 laps: A wins at 150 s; C, a lap down, crosses the line 20 s later and takes the flag there; B, on
+  // the lead lap, finishes 30 s after A
+  const lap = 1000;
+  const c = new LapClock(lap);
+  c.reset(0);
+  // 20 m/s; the winner is in at 75 s (C at 1.5 laps): C's next crossing, at 2 laps, is its finish
+  for (let i = 1; i < 400 && c.finishTimeS === null; i++) c.update((i * 10) % lap, i * 0.5, 3, i * 0.5 >= 75);
+  check("a lapped car finishes at its next crossing once the flag is out", c.finishTimeS !== null && c.finishLaps === 2, `laps ${c.finishLaps}`);
+  const field: RacerProgress[] = [
+    { id: "a", code: "AAA", name: "A", color: "", isPlayer: false, distM: 3050, speedMs: 0, finishTimeS: 150, finishLaps: 3, bestLapMs: null },
+    { id: "c", code: "CCC", name: "C", color: "", isPlayer: true, distM: 2100, speedMs: 0, finishTimeS: 170, finishLaps: 2, bestLapMs: null },
+    { id: "b", code: "BBB", name: "B", color: "", isPlayer: false, distM: 3020, speedMs: 0, finishTimeS: 180, finishLaps: 3, bestLapMs: null },
+  ];
+  const order = raceOrder(field);
+  check("finishers on the lead lap rank ahead of a lapped one that finished sooner", order.map((r) => r.id).join("") === "abc", order.map((r) => r.id).join(""));
+  const res = classify(order, lap, 3, true);
+  check("the lapped finisher is +1 LAP, not a time gap", res[2].lapsDown === 1 && res[2].lapsCompleted === 2, JSON.stringify(res[2]));
+  check("the lead-lap finisher has a time gap", res[1].lapsDown === 0 && Math.abs((res[1].gapS ?? 0) - 30) < 1e-9);
+  // An older client that doesn't report its laps at the flag is taken to have run the full distance
+  const legacy = classify(raceOrder([field[0], { ...field[2], finishLaps: undefined }]), lap, 3, true);
+  check("a finisher without lap count counts as on the lead lap", legacy[1].lapsDown === 0);
+}
 
 const gaps = new GapTimer();
 gaps.record(10, [100]);

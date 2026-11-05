@@ -71,6 +71,8 @@ export interface PeerRaceProgress {
   dist: number;
   /** Race time (s, from lights out) at the finish; null while still racing */
   fin: number | null;
+  /** Laps completed at the finish: fewer than the race's when lapped (absent from older clients) */
+  laps?: number;
   /** Fastest lap of the race (ms); null before one */
   best: number | null;
   /** Last completed lap (ms) */
@@ -269,6 +271,7 @@ function sanitizeRace(v: unknown): PeerRaceProgress | undefined {
     id: r.id.slice(0, 32),
     dist,
     fin: finite(r.fin, 0, 1e6),
+    laps: typeof r.laps === 'number' && Number.isInteger(r.laps) && r.laps >= 0 && r.laps <= 99 ? r.laps : undefined,
     best: finite(r.best, 0, 1e7),
     last: finite(r.last, 0, 1e7),
     pen: finite(r.pen, 0, 600) ?? undefined,
