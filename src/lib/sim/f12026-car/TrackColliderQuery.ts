@@ -97,6 +97,46 @@ function asSurface(v: unknown): TrackSurfaceKind | null {
   return isTrackSurfaceKind(v) ? v : null;
 }
 
+/** Cell of coordinate `v` on a grid axis starting at `min` with `n` cells of CELL_SIZE_M, clamped to the grid */
+function gridCell(v: number, min: number, n: number): number {
+  return Math.min(n - 1, Math.max(0, Math.floor((v - min) / CELL_SIZE_M)));
+}
+
+/**
+ * Uniform XZ grid over [minX, maxX] × [minZ, maxZ] in CELL_SIZE_M cells, as CSR: cell c holds
+ * items[cellStart[c] .. cellStart[c + 1]). Each of `count` items is listed in every cell its box overlaps;
+ * `boxOf` fills [x0, z0, x1, z1] and returns false to leave an item out.
+ */
+function buildCsrGrid(
+  minX: number,
+  minZ: number,
+  maxX: number,
+  maxZ: number,
+  count: number,
+  boxOf: (i: number, box: Float64Array) => boolean
+): { nx: number; nz: number; cellStart: Uint32Array; items: Uint32Array } {
+  const nx = Math.max(1, Math.ceil((maxX - minX) / CELL_SIZE_M));
+  const nz = Math.max(1, Math.ceil((maxZ - minZ) / CELL_SIZE_M));
+  const cellCount = nx * nz;
+  const box = new Float64Array(4);
+  const forEachCell = (i: number, fn: (cell: number) => void) => {
+    if (!boxOf(i, box)) return;
+    const cx0 = gridCell(box[0], minX, nx);
+    const cx1 = gridCell(box[2], minX, nx);
+    const cz0 = gridCell(box[1], minZ, nz);
+    const cz1 = gridCell(box[3], minZ, nz);
+    for (let cz = cz0; cz <= cz1; cz++) for (let cx = cx0; cx <= cx1; cx++) fn(cz * nx + cx);
+  };
+  // Two passes: count, then fill
+  const cellStart = new Uint32Array(cellCount + 1);
+  for (let i = 0; i < count; i++) forEachCell(i, (cell) => cellStart[cell + 1]++);
+  for (let c = 0; c < cellCount; c++) cellStart[c + 1] += cellStart[c];
+  const items = new Uint32Array(cellStart[cellCount]);
+  const fill = cellStart.slice(0, cellCount);
+  for (let i = 0; i < count; i++) forEachCell(i, (cell) => (items[fill[cell]++] = i));
+  return { nx, nz, cellStart, items };
+}
+
 export class TrackColliderQuery implements GroundQuery {
   /** Triangles: 9 floats each (a, b, c world positions) */
   private readonly tris: Float32Array;
@@ -307,40 +347,21 @@ export class TrackColliderQuery implements GroundQuery {
       }
     }
 
+    const grid = buildCsrGrid(minX, minZ, maxX, maxZ, this.triangleCount, (t, box) => {
+      if (!keep[t]) return false;
+      const o = t * 9;
+      box[0] = Math.min(tri[o], tri[o + 3], tri[o + 6]);
+      box[1] = Math.min(tri[o + 2], tri[o + 5], tri[o + 8]);
+      box[2] = Math.max(tri[o], tri[o + 3], tri[o + 6]);
+      box[3] = Math.max(tri[o + 2], tri[o + 5], tri[o + 8]);
+      return true;
+    });
     this.minX = minX;
     this.minZ = minZ;
-    this.nx = Math.max(1, Math.ceil((maxX - minX) / CELL_SIZE_M));
-    this.nz = Math.max(1, Math.ceil((maxZ - minZ) / CELL_SIZE_M));
-
-    // Two passes: count, then fill (CSR)
-    const cellCount = this.nx * this.nz;
-    const counts = new Uint32Array(cellCount + 1);
-    const forEachCell = (t: number, fn: (cell: number) => void) => {
-      const o = t * 9;
-      const x0 = Math.min(tri[o], tri[o + 3], tri[o + 6]);
-      const x1 = Math.max(tri[o], tri[o + 3], tri[o + 6]);
-      const z0 = Math.min(tri[o + 2], tri[o + 5], tri[o + 8]);
-      const z1 = Math.max(tri[o + 2], tri[o + 5], tri[o + 8]);
-      const cx0 = this.cellX(x0);
-      const cx1 = this.cellX(x1);
-      const cz0 = this.cellZ(z0);
-      const cz1 = this.cellZ(z1);
-      for (let cz = cz0; cz <= cz1; cz++) for (let cx = cx0; cx <= cx1; cx++) fn(cz * this.nx + cx);
-    };
-    for (let t = 0; t < this.triangleCount; t++) if (keep[t]) forEachCell(t, (cell) => counts[cell + 1]++);
-    for (let i = 0; i < cellCount; i++) counts[i + 1] += counts[i];
-    this.cellStart = counts;
-    this.cellTris = new Uint32Array(counts[cellCount]);
-    const fill = counts.slice(0, cellCount);
-    for (let t = 0; t < this.triangleCount; t++) if (keep[t]) forEachCell(t, (cell) => (this.cellTris[fill[cell]++] = t));
-  }
-
-  private cellX(x: number): number {
-    return Math.min(this.nx - 1, Math.max(0, Math.floor((x - this.minX) / CELL_SIZE_M)));
-  }
-
-  private cellZ(z: number): number {
-    return Math.min(this.nz - 1, Math.max(0, Math.floor((z - this.minZ) / CELL_SIZE_M)));
+    this.nx = grid.nx;
+    this.nz = grid.nz;
+    this.cellStart = grid.cellStart;
+    this.cellTris = grid.items;
   }
 
   /**
@@ -641,35 +662,28 @@ export class TrackWallQuery implements WallQuery {
       minX = minZ = 0;
       maxX = maxZ = 1;
     }
+    const grid = buildCsrGrid(minX, minZ, maxX, maxZ, this.segmentCount, (i, box) => {
+      const o = i * WALL_SEGMENT_STRIDE;
+      box[0] = Math.min(segs[o], segs[o + 2]);
+      box[1] = Math.min(segs[o + 1], segs[o + 3]);
+      box[2] = Math.max(segs[o], segs[o + 2]);
+      box[3] = Math.max(segs[o + 1], segs[o + 3]);
+      return true;
+    });
     this.minX = minX;
     this.minZ = minZ;
-    this.nx = Math.max(1, Math.ceil((maxX - minX) / CELL_SIZE_M));
-    this.nz = Math.max(1, Math.ceil((maxZ - minZ) / CELL_SIZE_M));
-
-    const cellCount = this.nx * this.nz;
-    const counts = new Uint32Array(cellCount + 1);
-    const forEachCell = (i: number, fn: (cell: number) => void) => {
-      const o = i * WALL_SEGMENT_STRIDE;
-      const cx0 = this.cellX(Math.min(segs[o], segs[o + 2]));
-      const cx1 = this.cellX(Math.max(segs[o], segs[o + 2]));
-      const cz0 = this.cellZ(Math.min(segs[o + 1], segs[o + 3]));
-      const cz1 = this.cellZ(Math.max(segs[o + 1], segs[o + 3]));
-      for (let cz = cz0; cz <= cz1; cz++) for (let cx = cx0; cx <= cx1; cx++) fn(cz * this.nx + cx);
-    };
-    for (let i = 0; i < this.segmentCount; i++) forEachCell(i, (cell) => counts[cell + 1]++);
-    for (let i = 0; i < cellCount; i++) counts[i + 1] += counts[i];
-    this.cellStart = counts;
-    this.cellSegs = new Uint32Array(counts[cellCount]);
-    const fill = counts.slice(0, cellCount);
-    for (let i = 0; i < this.segmentCount; i++) forEachCell(i, (cell) => (this.cellSegs[fill[cell]++] = i));
+    this.nx = grid.nx;
+    this.nz = grid.nz;
+    this.cellStart = grid.cellStart;
+    this.cellSegs = grid.items;
   }
 
   private cellX(x: number): number {
-    return Math.min(this.nx - 1, Math.max(0, Math.floor((x - this.minX) / CELL_SIZE_M)));
+    return gridCell(x, this.minX, this.nx);
   }
 
   private cellZ(z: number): number {
-    return Math.min(this.nz - 1, Math.max(0, Math.floor((z - this.minZ) / CELL_SIZE_M)));
+    return gridCell(z, this.minZ, this.nz);
   }
 
   near(x: number, z: number, radius: number, out: Int32Array): number {
