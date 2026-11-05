@@ -390,6 +390,14 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   const [boostLatch, setBoostLatch] = useState(false);
   const [mouseSteerEnabled, setMouseSteerEnabled] = useState(false);
   const [gamepadAssist, setGamepadAssist] = useState(true);
+  // Current values for the toggle handlers, and the setters they call (defined further down)
+  const gamepadAssistRef = useRef(gamepadAssist);
+  gamepadAssistRef.current = gamepadAssist;
+  const showRacingLineRef = useRef(showRacingLine);
+  showRacingLineRef.current = showRacingLine;
+  const setGamepadAssistEnabledRef = useRef<(enabled: boolean) => void>(() => {});
+  const setRacingLineVisibleRef = useRef<(visible: boolean) => void>(() => {});
+  const setMouseSteerRef = useRef<(enabled: boolean) => void>(() => {});
   const [autoGearbox, setAutoGearboxState] = useState(true);
   const [gamepadRumble, setGamepadRumble] = useState<boolean>(loadStoredRumble);
   const rumbleEnabledRef = useRef(gamepadRumble);
@@ -588,14 +596,10 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     }
   }, []);
 
+  // The toggles read the current value from a ref and apply their effects in the handler, not inside a state
+  // updater (React may run those twice, or after the call)
   const handleToggleGamepadAssist = useCallback(() => {
-    setGamepadAssist((prev) => {
-      const next = !prev;
-      if (physicsRef.current) {
-        physicsRef.current.gamepadAssistEnabled = next;
-      }
-      return next;
-    });
+    setGamepadAssistEnabledRef.current(!gamepadAssistRef.current);
   }, []);
 
   const handleToggleGamepadRumble = useCallback(() => {
@@ -661,22 +665,15 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   }, []);
 
   const handleToggleRacingLine = useCallback(() => {
-    setShowRacingLine((prev) => {
-      const next = !prev;
-      if (racingLineMeshRef.current) {
-        racingLineMeshRef.current.visible = next;
-      }
-      return next;
-    });
+    setRacingLineVisibleRef.current(!showRacingLineRef.current);
   }, []);
 
   const handleToggleMute = useCallback(() => {
     unlockAudio();
-    setIsMuted((prev) => {
-      const next = !prev;
-      audioRef.current?.setMuted(next);
-      return next;
-    });
+    const next = !isMutedRef.current;
+    isMutedRef.current = next;
+    setIsMuted(next);
+    audioRef.current?.setMuted(next);
   }, [unlockAudio]);
 
   const handleToggleAiAutopilot = useCallback(() => {
@@ -718,13 +715,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
 
   const handleToggleMouseSteer = useCallback(() => {
     unlockAudio();
-    setMouseSteerEnabled((prev) => {
-      const next = !prev;
-      if (!next) {
-        mouseSteerValueRef.current = 0;
-      }
-      return next;
-    });
+    setMouseSteerRef.current(!mouseSteerEnabledRef.current);
   }, [unlockAudio]);
 
   const handleResetCar = useCallback(
@@ -832,14 +823,18 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   togglePauseRef.current = togglePause;
 
   const setRacingLineVisible = useCallback((visible: boolean) => {
+    showRacingLineRef.current = visible;
     setShowRacingLine(visible);
     if (racingLineMeshRef.current) racingLineMeshRef.current.visible = visible;
   }, []);
+  setRacingLineVisibleRef.current = setRacingLineVisible;
 
   const setGamepadAssistEnabled = useCallback((enabled: boolean) => {
+    gamepadAssistRef.current = enabled;
     setGamepadAssist(enabled);
     if (physicsRef.current) physicsRef.current.gamepadAssistEnabled = enabled;
   }, []);
+  setGamepadAssistEnabledRef.current = setGamepadAssistEnabled;
 
   const setAutoGearbox = useCallback((enabled: boolean) => {
     setAutoGearboxState(enabled);
@@ -847,9 +842,11 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   }, []);
 
   const setMouseSteer = useCallback((enabled: boolean) => {
+    mouseSteerEnabledRef.current = enabled;
     setMouseSteerEnabled(enabled);
     if (!enabled) mouseSteerValueRef.current = 0;
   }, []);
+  setMouseSteerRef.current = setMouseSteer;
 
   const handleChangeSettings = useCallback((update: (prev: PlayerSettings) => PlayerSettings) => {
     setSettings((prev) => update(prev));
@@ -1638,11 +1635,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
           setBoostLatch((prev) => !prev);
           break;
         case "mouseSteer":
-          setMouseSteerEnabled((prev) => {
-            const next = !prev;
-            if (!next) mouseSteerValueRef.current = 0;
-            return next;
-          });
+          setMouseSteerRef.current(!mouseSteerEnabledRef.current);
           break;
         case "aero":
           keysRef.current.toggleX = true;
