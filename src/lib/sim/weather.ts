@@ -620,11 +620,6 @@ export class WeatherState {
     return wetnessFromWater(this.waterMm);
   }
 
-  /** Off-path wetness (0..1) away from the dried racing line */
-  get offPathWetness(): number {
-    return wetnessFromWater(this.waterMm);
-  }
-
   /** Minimum racing-line wetness across all track sectors (0..1) (`mMinPathWetness`) */
   get minPathWetness(): number {
     if (!(this.waterMm > 0)) return 0;
