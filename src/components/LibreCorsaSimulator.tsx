@@ -548,6 +548,14 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   });
   /** Shaped keyboard inputs (pedals 0..1, steering -1..1, + = right) */
   const kbInputRef = useRef({ throttle: 0, brake: 0, steer: 0 });
+  /** Lets go of every held driving key: on pause, and when the window loses focus (its keyups never arrive) */
+  const releaseHeldKeys = useCallback(() => {
+    const k = keysRef.current;
+    k.up = k.down = k.left = k.right = k.boostHold = k.half = false;
+    kbInputRef.current.throttle = 0;
+    kbInputRef.current.brake = 0;
+    kbInputRef.current.steer = 0;
+  }, []);
 
   // Read through a ref so unlockAudio stays stable: the scene effect depends on it and must not rebuild on mute
   const isMutedRef = useRef(isMuted);
@@ -815,18 +823,11 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       if (!next) setPauseNotice(null);
       if (next) {
         wheelFfb.stop();
-        keysRef.current.up = false;
-        keysRef.current.down = false;
-        keysRef.current.left = false;
-        keysRef.current.right = false;
-        keysRef.current.boostHold = false;
-        kbInputRef.current.throttle = 0;
-        kbInputRef.current.brake = 0;
-        kbInputRef.current.steer = 0;
+        releaseHeldKeys();
       }
       return next;
     });
-  }, []);
+  }, [releaseHeldKeys]);
   const togglePauseRef = useRef(togglePause);
   togglePauseRef.current = togglePause;
 
@@ -1696,11 +1697,16 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
 
     // A hidden tab stops the frame loop: zero the wheel rather than leave it holding the last force
     const onVisibilityChange = () => {
-      if (document.hidden) wheelFfb.stop();
+      if (!document.hidden) return;
+      wheelFfb.stop();
+      releaseHeldKeys();
     };
     const onPageHide = () => wheelFfb.stop();
+    // Keys held while focus leaves the window (Cmd-Tab, a system dialog) never get their keyup
+    const onWindowBlur = () => releaseHeldKeys();
     document.addEventListener("visibilitychange", onVisibilityChange);
     window.addEventListener("pagehide", onPageHide);
+    window.addEventListener("blur", onWindowBlur);
 
     let lastTimeMs = performance.now();
     let lastHudSyncMs = 0;
@@ -3114,6 +3120,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       wheelFfb.dispose();
       document.removeEventListener("visibilitychange", onVisibilityChange);
       window.removeEventListener("pagehide", onPageHide);
+      window.removeEventListener("blur", onWindowBlur);
       window.removeEventListener("mousemove", onMouseMove);
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
@@ -3131,7 +3138,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       renderer.dispose();
       audioRef.current?.dispose();
     };
-  }, [track, getTrackEnv, unlockAudio, handleToggleMute, handleToggleRacingLine]);
+  }, [track, getTrackEnv, unlockAudio, handleToggleMute, handleToggleRacingLine, releaseHeldKeys]);
 
   // Saved settings and the first-run flag are read after mount (the page is prerendered without
   // storage), once the scene effect above has created the car they apply to
