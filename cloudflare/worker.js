@@ -86,8 +86,17 @@ function home(to = "/") {
 /** A same-site path to continue to; anything else (absolute or protocol-relative URLs) falls back to the home page */
 function safePath(value) {
   if (typeof value !== "string" || value.length > 4096) return "/";
-  if (!value.startsWith("/") || value.startsWith("//") || value.startsWith("/\\")) return "/";
-  return value;
+  // Resolve it the way a browser would (the URL parser drops tabs and newlines, and reads "\\" as "/"), and keep it
+  // only if it stays on this origin: "/\t/evil.example" would otherwise pass a prefix check and land off-site
+  const base = "https://same-origin.invalid";
+  let url;
+  try {
+    url = new URL(value, base);
+  } catch {
+    return "/";
+  }
+  if (url.origin !== base || !value.startsWith("/")) return "/";
+  return url.pathname + url.search + url.hash;
 }
 
 /** The parts of the posted payload worth importing: string values under the game's keys and keyed lap records */
@@ -127,8 +136,9 @@ async function migrate(request) {
   } catch {
     return home();
   }
+  // Only the old site may hand over a destination; anything else goes home
+  if (request.headers.get("Origin") !== OLD_ORIGIN) return home();
   const to = safePath(form.get("to"));
-  if (request.headers.get("Origin") !== OLD_ORIGIN) return home(to);
   const payload = cleanPayload(form.get("payload"));
 
   const html = `<!doctype html>
