@@ -75,6 +75,8 @@ import { createWingRuntimes, VF26_CG_HEIGHT_M, type WingRuntime, wingAngleDeg } 
 import {
   coldPressureFor,
   computeTyreForces,
+  type TyreForceInput,
+  type TyreForceOutput,
   createContactPatchResult,
   createTyreRuntime,
   sample5PointContactPatch,
@@ -189,6 +191,20 @@ type TrackProjection = ReturnType<BuiltTrackData['projectWorldToTrack']>;
 /** Barrier walls built once per loaded track root and shared by every VF26 */
 const wallCache = new WeakMap<THREE.Object3D, WallQuery>();
 const _wallHit = createWallHit();
+// Scratch reused by the 500 Hz / 2 kHz steps instead of allocating (single-threaded; read, never kept)
+const _rightFlat = new THREE.Vector3();
+const _roadUp = new THREE.Vector3();
+const _fwd = new THREE.Vector3();
+const _right = new THREE.Vector3();
+const _basis = new THREE.Matrix4();
+const _roadTorque = new Float64Array(4);
+const _dF = new Float64Array(4);
+const _comp = new Float64Array(4);
+const _compVel = new Float64Array(4);
+const _plank = new Float64Array(4);
+const _subStepAcc = { ax: 0, ay: 0 };
+const _tyreIn: TyreForceInput = { fz: 0, vx: 0, vy: 0, rimSpeed: 0, camberLeftRad: 0, surfaceGrip: 1, dt: 0 };
+const _tyreOut = {} as TyreForceOutput;
 
 /**
  * Floor suction factor for the lowest corner's plank clearance (m): 1 above 6 mm, smoothstep down to
@@ -1982,10 +1998,13 @@ export class F1Physics2026 {
     return Math.atan2(yLeft - yRight, 1.6);
   }
 
-  /** Road-plane normal under the car (filtered cross-slope; identical frame used for rendering) */
+  /**
+   * Road-plane normal under the car (filtered cross-slope; identical frame used for rendering). Returns a shared
+   * scratch vector, valid until the next call: read it, don't keep it.
+   */
   private localRoadUp(sample: ReturnType<BuiltTrackData['getSampleAtDistance']>): THREE.Vector3 {
-    const rightFlat = new THREE.Vector3(-sample.tangent.z, 0, sample.tangent.x).normalize();
-    const upFlat = new THREE.Vector3().crossVectors(rightFlat, sample.tangent).normalize();
+    const rightFlat = _rightFlat.set(-sample.tangent.z, 0, sample.tangent.x).normalize();
+    const upFlat = _roadUp.crossVectors(rightFlat, sample.tangent).normalize();
     return upFlat.applyAxisAngle(sample.tangent, this.planeBankRad).normalize();
   }
 
@@ -1994,8 +2013,8 @@ export class F1Physics2026 {
     const hx = Math.sin(this.worldYawRad);
     const hz = Math.cos(this.worldYawRad);
     const fy = Math.abs(up.y) > 1e-4 ? -(hx * up.x + hz * up.z) / up.y : 0;
-    const fwd = new THREE.Vector3(hx, fy, hz).normalize();
-    const right = new THREE.Vector3().crossVectors(fwd, up).normalize();
+    const fwd = _fwd.set(hx, fy, hz).normalize();
+    const right = _right.crossVectors(fwd, up).normalize();
     // Gravity (0, −g, 0) expressed in the body frame on the road plane
     this.gravityBody.x = -G * fwd.y;
     this.gravityBody.y = G * right.y; // left = −right
@@ -2111,7 +2130,7 @@ export class F1Physics2026 {
     let fyFront = 0;
     let fyRear = 0;
     let fxTyres = 0;
-    const roadTorque: [number, number, number, number] = [0, 0, 0, 0];
+    const roadTorque = _roadTorque.fill(0);
 
     // ---- Tyre forces ----
     for (const w of this.wheels) {
@@ -2142,18 +2161,18 @@ export class F1Physics2026 {
         0.25 * (w.kinematicsCamberDeltaRad ?? 0);
       w.camberLeftRad = sideSign * (staticCamber + bumpCamber) - this.rollRad;
 
-      const out = computeTyreForces(w.tyre, {
-        fz: w.fzN,
-        vx: vxw,
-        vy: vyw,
-        rimSpeed: w.spinVel * radius,
-        camberLeftRad: w.camberLeftRad,
-        surfaceGrip: w.surfaceFrictionMult,
-        inwardSign: w.isLeft ? -1 : 1,
-        contactCentroidShiftInward: w.contactCentroidShiftInward,
-        contactCentroidShiftLeftM: w.contactCentroidShiftLeftM,
-        dt: h,
-      });
+      const tin = _tyreIn;
+      tin.fz = w.fzN;
+      tin.vx = vxw;
+      tin.vy = vyw;
+      tin.rimSpeed = w.spinVel * radius;
+      tin.camberLeftRad = w.camberLeftRad;
+      tin.surfaceGrip = w.surfaceFrictionMult;
+      tin.inwardSign = w.isLeft ? -1 : 1;
+      tin.contactCentroidShiftInward = w.contactCentroidShiftInward;
+      tin.contactCentroidShiftLeftM = w.contactCentroidShiftLeftM;
+      tin.dt = h;
+      const out = computeTyreForces(w.tyre, tin, _tyreOut);
       const hydroDrag =
         w.tyre.waterMm > 0 && vxw > 0.5
           ? hydrodynamicDragN(w.tyre.waterMm, vxw, w.tyre.spec.width, w.fzN)
@@ -2239,7 +2258,9 @@ export class F1Physics2026 {
     this.worldX += (this.vxMs * sinYaw + this.vyMs * cosYaw) * h;
     this.worldZ += (this.vxMs * cosYaw - this.vyMs * sinYaw) * h;
 
-    return { ax, ay };
+    _subStepAcc.ax = ax;
+    _subStepAcc.ay = ay;
+    return _subStepAcc;
   }
 
   /** Coulomb brake friction that can stop, but never reverse, a wheel within one step */
@@ -2381,9 +2402,9 @@ export class F1Physics2026 {
     const sprungShare = ms / M;
     const hcg = this.cgHeightM;
 
-    const dF: [number, number, number, number] = [0, 0, 0, 0];
-    const comp: [number, number, number, number] = [0, 0, 0, 0];
-    const compVel: [number, number, number, number] = [0, 0, 0, 0];
+    const dF = _dF.fill(0);
+    const comp = _comp.fill(0);
+    const compVel = _compVel.fill(0);
 
     for (const w of this.wheels) {
       const zc = this.heaveM + w.staticPos.x * this.pitchRad + w.staticPos.y * this.rollRad;
@@ -2444,7 +2465,7 @@ export class F1Physics2026 {
     }
 
     // Floor plank contact supports the body if it bottoms out
-    const plank: [number, number, number, number] = [0, 0, 0, 0];
+    const plank = _plank.fill(0);
     for (const w of this.wheels) {
       const axle = w.isFront ? this.axles[0] : this.axles[1];
       const zc = this.heaveM + w.staticPos.x * this.pitchRad + w.staticPos.y * this.rollRad;
@@ -3032,9 +3053,9 @@ export class F1Physics2026 {
     const hx = Math.sin(this.worldYawRad);
     const hz = Math.cos(this.worldYawRad);
     const fy = Math.abs(carUp.y) > 1e-4 ? -(hx * carUp.x + hz * carUp.z) / carUp.y : 0;
-    const carForward = new THREE.Vector3(hx, fy, hz).normalize();
-    const carLeft = new THREE.Vector3().crossVectors(carUp, carForward).normalize();
-    const basis = new THREE.Matrix4().makeBasis(carLeft, carUp, carForward);
+    const carForward = _fwd.set(hx, fy, hz).normalize();
+    const carLeft = _right.crossVectors(carUp, carForward).normalize();
+    const basis = _basis.makeBasis(carLeft, carUp, carForward);
     this.worldQuaternion.setFromRotationMatrix(basis);
   }
 }

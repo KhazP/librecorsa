@@ -531,7 +531,8 @@ function thermalGrip(t: TyreRuntime, slideSpeedMs = 0): number {
 /**
  * Advances the carcass deflection states and returns the contact forces.
  */
-export function computeTyreForces(t: TyreRuntime, inp: TyreForceInput): TyreForceOutput {
+/** `out`, when given, is filled and returned instead of a new object (the physics' per-sub-step call passes one) */
+export function computeTyreForces(t: TyreRuntime, inp: TyreForceInput, out?: TyreForceOutput): TyreForceOutput {
   const spec = t.spec;
   const bristleScale = dynamicBristleRelaxationScale(inp.fz, spec.fz0, t.wetness);
   const sigmaY = spec.relaxationLength * bristleScale;
@@ -701,19 +702,19 @@ export function computeTyreForces(t: TyreRuntime, inp: TyreForceInput): TyreForc
 
   const slipPower = Math.abs(fx * slipVelX) + Math.abs(fy * slipVelY);
 
-  return {
-    fx,
-    fy,
-    mz,
-    mx,
-    flatSpotVibrationNm,
-    slipRatio: (t.deflX / sigmaX),
-    slipAngle: Math.atan(t.deflY / sigmaY),
-    normSlip: s,
-    mu: muY,
-    gripFactor: thermal * pressureGrip * wearMult * degradationMult * waterGrip * Math.max(0.75, camberLat),
-    slipPower,
-  };
+  const res = out ?? ({} as TyreForceOutput);
+  res.fx = fx;
+  res.fy = fy;
+  res.mz = mz;
+  res.mx = mx;
+  res.flatSpotVibrationNm = flatSpotVibrationNm;
+  res.slipRatio = t.deflX / sigmaX;
+  res.slipAngle = Math.atan(t.deflY / sigmaY);
+  res.normSlip = s;
+  res.mu = muY;
+  res.gripFactor = thermal * pressureGrip * wearMult * degradationMult * waterGrip * Math.max(0.75, camberLat);
+  res.slipPower = slipPower;
+  return res;
 }
 
 /**
@@ -844,6 +845,8 @@ export function advanceDirtyLevel(
 const C_SURFACE = 2600 / 3;
 const C_BULK = 14000 / 3;
 const C_CARCASS = 7000 / 3;
+/** Heat capacity per node layer (surface, bulk, carcass) */
+const LAYER_CAPS = [C_SURFACE, C_BULK, C_CARCASS] as const;
 /** Inflation gas (≈0.1 kg of air) */
 const C_GAS = 80;
 const G_SURFACE_BULK = 95 / 3;
@@ -927,7 +930,7 @@ export function updateTyreThermal(
     }
   }
 
-  const caps = [C_SURFACE, C_BULK, C_CARCASS];
+  const caps = LAYER_CAPS;
   let sumS = 0;
   let sumB = 0;
   for (let i = 0; i < 9; i++) {
