@@ -7,7 +7,9 @@ import type { CarTelemetry } from "@/types/f1";
  * motor carries the heavier cues.
  *
  * Effects are short (90 ms) and re-sent only when they change, so a stationary car does not flood
- * the device with commands.
+ * the device with commands. The kerb, ABS and TC pulses are the exception: each on / off edge is sent when it
+ * happens, with an effect that lasts one half-period, so the 12–25 Hz pulses are felt at their rate rather than
+ * aliased by the 60 ms send gate.
  */
 
 /** Gamepad Haptics API surface used here (the DOM lib types vibrationActuator only loosely) */
@@ -42,6 +44,10 @@ interface PadOutput {
   strong: number;
   /** Last impulse-trigger magnitudes sent (0 when the pad has no trigger motors) */
   left: number;
+  /** Pulse state (bitmask of active pulses and their phases) the last effect was sent for */
+  pulseKey: number;
+  /** Duration of the last effect sent (s) */
+  durationS: number;
   right: number;
 }
 
@@ -62,6 +68,28 @@ const smoothstep = (edge0: number, edge1: number, x: number) => {
   const t = clamp01((x - edge0) / (edge1 - edge0));
   return t * t * (3 - 2 * t);
 };
+
+/**
+ * Which pulses are running and in which half of their cycle (a bitmask that changes on every pulse edge), and the
+ * shortest running half-period (s; 0 with no pulse)
+ */
+function pulseState(t: CarTelemetry, timeS: number, triggers: boolean): { key: number; halfS: number } {
+  let key = 0;
+  let halfS = 0;
+  const add = (bit: number, hz: number) => {
+    key |= 1 << (2 * bit);
+    if ((timeS * hz) % 1 < 0.5) key |= 1 << (2 * bit + 1);
+    const h = 0.5 / hz;
+    halfS = halfS === 0 ? h : Math.min(halfS, h);
+  };
+  if (t.onKerbLeft || t.onKerbRight) add(0, KERB_PULSE_HZ);
+  if (triggers) {
+    const minSlip = Math.min(...t.wheelSlipRatios);
+    if (t.brake > 0.05 && (t.f12026?.absActive === true || (t.speedKmh > 30 && minSlip < -0.12))) add(1, ABS_PULSE_HZ);
+    if (t.throttle > 0.1 && t.f12026?.tcActive === true) add(2, TC_PULSE_HZ);
+  }
+  return { key, halfS };
+}
 
 /** Motor magnitudes (0..1) for the current car state; `timeS` drives the kerb pulse */
 function hapticMagnitudes(t: CarTelemetry, timeS: number): { weak: number; strong: number } {
@@ -140,11 +168,11 @@ function send(call: () => Promise<unknown> | undefined) {
   }
 }
 
-function playDualRumble(actuator: VibrationActuatorLike, weak: number, strong: number) {
+function playDualRumble(actuator: VibrationActuatorLike, weak: number, strong: number, durationMs = EFFECT_DURATION_MS) {
   send(() =>
     actuator.playEffect("dual-rumble", {
       startDelay: 0,
-      duration: EFFECT_DURATION_MS,
+      duration: durationMs,
       weakMagnitude: weak,
       strongMagnitude: strong,
     })
@@ -157,11 +185,18 @@ function supportsTriggerRumble(actuator: VibrationActuatorLike): boolean {
 }
 
 /** Body motors and both impulse triggers in one effect */
-function playTriggerRumble(actuator: VibrationActuatorLike, weak: number, strong: number, left: number, right: number) {
+function playTriggerRumble(
+  actuator: VibrationActuatorLike,
+  weak: number,
+  strong: number,
+  left: number,
+  right: number,
+  durationMs = EFFECT_DURATION_MS
+) {
   send(() =>
     actuator.playEffect("trigger-rumble", {
       startDelay: 0,
-      duration: EFFECT_DURATION_MS,
+      duration: durationMs,
       weakMagnitude: weak,
       strongMagnitude: strong,
       leftTrigger: left,
@@ -191,13 +226,24 @@ export class GamepadHaptics {
     const wantTriggers = options?.triggerRumble === true;
     const trig = wantTriggers ? triggerMagnitudes(t, this.timeS) : { left: 0, right: 0 };
     for (const { key, actuator } of connectedPads()) {
-      const out = this.outputs.get(key) ?? { lastSentS: -Infinity, weak: 0, strong: 0, left: 0, right: 0 };
+      const out = this.outputs.get(key) ?? {
+        lastSentS: -Infinity,
+        weak: 0,
+        strong: 0,
+        left: 0,
+        right: 0,
+        pulseKey: 0,
+        durationS: EFFECT_DURATION_MS / 1000,
+      };
       this.outputs.set(key, out);
 
-      const sinceS = this.timeS - out.lastSentS;
-      if (sinceS < SEND_INTERVAL_S) continue;
-
       const useTriggers = wantTriggers && supportsTriggerRumble(actuator);
+      const pulse = pulseState(t, this.timeS, useTriggers);
+      // A pulse edge goes out when it happens: the gate below would otherwise alias 12-25 Hz pulses
+      const edge = pulse.key !== out.pulseKey;
+      const sinceS = this.timeS - out.lastSentS;
+      if (sinceS < SEND_INTERVAL_S && !edge) continue;
+
       const left = useTriggers ? trig.left : 0;
       const right = useTriggers ? trig.right : 0;
       const changed =
@@ -205,14 +251,18 @@ export class GamepadHaptics {
         Math.abs(strong - out.strong) >= MAGNITUDE_EPS ||
         Math.abs(left - out.left) >= MAGNITUDE_EPS ||
         Math.abs(right - out.right) >= MAGNITUDE_EPS;
-      const running = sinceS < EFFECT_DURATION_MS / 1000;
-      if (!changed && running) continue;
+      const running = sinceS < out.durationS;
+      if (!changed && running && !edge) continue;
       // Nothing to feel and the motors are already off: no need to send zeros
       if (weak === 0 && strong === 0 && left === 0 && right === 0 && out.weak === 0 && out.strong === 0 && out.left === 0 && out.right === 0) continue;
 
-      if (useTriggers) playTriggerRumble(actuator, weak, strong, left, right);
-      else playDualRumble(actuator, weak, strong);
+      // While a pulse runs, each effect lasts one half-period, so the motors stop at the off edge by themselves
+      const durationMs = pulse.halfS > 0 ? Math.round(pulse.halfS * 1000) : EFFECT_DURATION_MS;
+      if (useTriggers) playTriggerRumble(actuator, weak, strong, left, right, durationMs);
+      else playDualRumble(actuator, weak, strong, durationMs);
       out.lastSentS = this.timeS;
+      out.pulseKey = pulse.key;
+      out.durationS = durationMs / 1000;
       out.weak = weak;
       out.strong = strong;
       out.left = left;
