@@ -614,9 +614,13 @@ export async function setupPidDevice(device: HidDeviceLike, options: PidSetupOpt
     return { ok: false, unsupported: true, message: "The wheel's force-feedback reports are not usable (no magnitude or start command)" };
   }
 
+  // What a failure part-way through has to undo
+  let actuatorsOn = false;
+  let allocated: number | null = null;
   try {
     if (!device.opened) await device.open();
     if (await deviceControl(device, layout, PID.DC_DEVICE_RESET)) await deps.sleep(60);
+    actuatorsOn = true;
     await deviceControl(device, layout, PID.DC_ENABLE_ACTUATORS);
 
     if (layout.deviceGain) {
@@ -625,6 +629,7 @@ export async function setupPidDevice(device: HidDeviceLike, options: PidSetupOpt
     }
 
     const blockIndex = await allocateConstantForce(device, layout, deps);
+    allocated = blockIndex;
 
     const set = layout.setEffect;
     if (set) await sendOutput(device, set, setEffectValues(set, blockIndex));
@@ -648,6 +653,22 @@ export async function setupPidDevice(device: HidDeviceLike, options: PidSetupOpt
     );
     return { ok: true, session: { device, layout, blockIndex, writer } };
   } catch (e) {
+    // Best effort, as in teardownPidSession: never leave the motor armed or an effect block held after a failed setup
+    const attempt = async (fn: () => Promise<unknown>) => {
+      try {
+        await fn();
+      } catch {
+        // device may already be gone
+      }
+    };
+    if (allocated !== null && layout.blockFree) {
+      const block = allocated;
+      await attempt(() => sendOutput(device, layout.blockFree as PidReportLayout, { [PID.EFFECT_BLOCK_INDEX]: block }));
+    }
+    if (actuatorsOn) {
+      await attempt(() => deviceControl(device, layout, PID.DC_STOP_ALL_EFFECTS));
+      await attempt(() => deviceControl(device, layout, PID.DC_DISABLE_ACTUATORS));
+    }
     return { ok: false, unsupported: false, message: errorMessage(e) };
   }
 }
