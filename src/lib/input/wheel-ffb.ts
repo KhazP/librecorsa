@@ -113,6 +113,8 @@ const DAMPING_FULL_DEG_S = 600;
 const DAMPING_MAX_FORCE = 0.35;
 /** Force history for the gain suggestion: about a lap at 60 fps */
 const METER_WINDOW = 4800;
+/** Histogram bins for the meter's percentile: 0.01 wide, the last one catching everything from 2 up */
+const METER_BINS = 201;
 
 export interface FfbMeterState {
   /** Force sent this frame, before the bridge's clip (+ = right) */
@@ -132,6 +134,7 @@ export class WheelFfbClient {
   private lastUpdateMs = 0;
   private filtered = 0;
   private history = new Float32Array(METER_WINDOW);
+  private meterBins = new Uint32Array(METER_BINS);
   private historyCount = 0;
   private historyIdx = 0;
   private lastSuggestMs = 0;
@@ -345,8 +348,14 @@ export class WheelFfbClient {
     this.historyCount = Math.min(METER_WINDOW, this.historyCount + 1);
     if (nowMs - this.lastSuggestMs < 1000 || this.historyCount < 600 || gain <= 0) return;
     this.lastSuggestMs = nowMs;
-    const sorted = Array.from(this.history.subarray(0, this.historyCount)).sort((a, b) => a - b);
-    const p98 = sorted[Math.floor(sorted.length * 0.98)];
+    // 98th percentile of |force| from a histogram (0.01 bins up to 2): no copy and sort of the 4800-sample window
+    const bins = this.meterBins.fill(0);
+    for (let i = 0; i < this.historyCount; i++) bins[Math.min(METER_BINS - 1, Math.floor(this.history[i] * 100))]++;
+    const rank = Math.floor(this.historyCount * 0.98);
+    let seen = 0;
+    let bin = 0;
+    while (bin < METER_BINS - 1 && seen + bins[bin] <= rank) seen += bins[bin++];
+    const p98 = (bin + 0.5) / 100;
     let suggested: number | null = null;
     if (p98 > 0.02 && (p98 > 1 || p98 < 0.55)) {
       suggested = Math.round(Math.min(2, Math.max(0.1, (gain * 0.9) / p98)) * 20) / 20;

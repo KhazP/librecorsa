@@ -53,9 +53,12 @@ export const WHEEL_SUPPORT: readonly WheelSupportRow[] = [
   },
 ];
 
-/** The line the wheel setup shows above the list */
-export const WHEEL_SUPPORT_SUMMARY =
-  "Tested: MOZA R9 V2 + KS connects over WebHID; its force feedback is not confirmed yet. Other wheels are untested.";
+/** The line the wheel setup shows above the list, built from the table so it follows the rows as they change */
+export const WHEEL_SUPPORT_SUMMARY = (() => {
+  const tested = WHEEL_SUPPORT.filter((r) => r.webHid === "tested" || r.bridge === "tested");
+  if (tested.length === 0) return "No wheel has been tested yet.";
+  return `Tested: ${tested.map((r) => `${r.wheel} (${r.note.charAt(0).toLowerCase()}${r.note.slice(1)})`).join("; ")}. Other wheels are untested.`;
+})();
 
 export const SUPPORT_LABEL: Record<SupportLevel, string> = {
   tested: "Tested",
