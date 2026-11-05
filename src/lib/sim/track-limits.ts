@@ -106,6 +106,8 @@ export class TrackLimitsMonitor {
   private warnings = 0;
   private totalStrikes = 0;
   private penalties = 0;
+  /** Track-limits penalties alone (an illegal-overtake penalty does not make the next one a repeat) */
+  private limitPenalties = 0;
   private penaltyS = 0;
   private lastOnTrackPosition: number | null = null;
   private exc: Excursion | null = null;
@@ -125,6 +127,7 @@ export class TrackLimitsMonitor {
     this.warnings = 0;
     this.totalStrikes = 0;
     this.penalties = 0;
+    this.limitPenalties = 0;
     this.penaltyS = 0;
     this.lastOnTrackPosition = null;
     this.exc = null;
@@ -354,7 +357,8 @@ export class TrackLimitsMonitor {
     }
     this.warnings++;
     if (this.warnings >= STRIKES_PER_PENALTY) {
-      const seconds = this.penalties === 0 ? FIRST_PENALTY_S : REPEAT_PENALTY_S;
+      const seconds = this.limitPenalties === 0 ? FIRST_PENALTY_S : REPEAT_PENALTY_S;
+      this.limitPenalties++;
       this.penalties++;
       this.penaltyS += seconds;
       this.warnings = 0;
