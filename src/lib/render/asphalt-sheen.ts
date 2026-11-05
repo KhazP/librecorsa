@@ -41,17 +41,15 @@ export const sharedWetUniforms: Readonly<typeof wetUniforms> = wetUniforms;
  * Wet look of the track surface (0 dry … 1 soaked): darker, glossier asphalt with standing-water puddles,
  * grazing-angle Fresnel reflections, and animated raindrop splash ripples when raining.
  */
-export function setAsphaltWetness(
-  offLine: number,
-  onLine: number = offLine,
-  rainIntensity: number = 0,
-  dt: number = 1 / 60
-): void {
+export function setAsphaltWetness(offLine: number, onLine: number = offLine, rainIntensity: number = 0): void {
   wetUniforms.uWetness.value = Math.min(1, Math.max(0, offLine));
   wetUniforms.uLineWetness.value = Math.min(1, Math.max(0, onLine));
-  const rain = Math.min(1, Math.max(0, rainIntensity));
-  wetUniforms.uRainIntensity.value = rain;
-  if (rain > 0.001 && Number.isFinite(dt) && dt > 0) {
+  wetUniforms.uRainIntensity.value = Math.min(1, Math.max(0, rainIntensity));
+}
+
+/** Runs the raindrop ripples' clock; call every frame with the frame time (s), so they animate at frame rate */
+export function advanceAsphaltRain(dt: number): void {
+  if (wetUniforms.uRainIntensity.value > 0.001 && Number.isFinite(dt) && dt > 0) {
     wetUniforms.uWetTime.value = (wetUniforms.uWetTime.value + Math.min(0.1, dt)) % 3600;
   }
 }

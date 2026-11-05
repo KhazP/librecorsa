@@ -69,7 +69,7 @@ import { isFatalHidStatus } from "@/lib/input/webhid-ffb";
 import { applyGraphicsQuality } from "@/lib/render/golden-hour-environment";
 import { createRainFx, RAIN_VISOR_LAYER } from "@/lib/render/rain-fx";
 import { DRIVER_HEAD_LAYER } from "@/lib/render/layers";
-import { setAsphaltWetness } from "@/lib/render/asphalt-sheen";
+import { advanceAsphaltRain, setAsphaltWetness } from "@/lib/render/asphalt-sheen";
 import { SIM_REALISM_FLAGS, type SimRealism } from "@/lib/sim/sim-realism";
 import {
   isRainCompound,
@@ -1441,6 +1441,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       wheelDisplay = null;
       wingMirrors?.dispose();
       wingMirrors = null;
+      vf26ExtrasFor = null;
       gt3Dash?.dispose();
       gt3Dash = null;
       reflectionProbe.untrack(carRig.root);
@@ -1814,6 +1815,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     // Cockpit extras, created once the VF26 model has loaded: the wheel's LCD and the live wing mirrors
     let wheelDisplay: SteeringWheelDisplay | null = null;
     let wingMirrors: WingMirrors | null = null;
+    /** The VF26 body the wheel display and mirrors above were built for */
+    let vf26ExtrasFor: THREE.Object3D | null = null;
     // The AMG GT3's MoTeC dash and rear-view mirror, once its cockpit model has loaded
     let gt3Dash: Gt3DashDisplay | null = null;
     let cockpitProbeFrame = 0;
@@ -2482,7 +2485,10 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       );
 
       const vf26Body = carRig.getVf26Body();
-      if (vf26Body && !wheelDisplay) {
+      // Built once per body (keyed on the body, not on the wheel display: a body without STEER_BASE has no display,
+      // and keying on it rebuilt the mirrors' render target every frame)
+      if (vf26Body && vf26ExtrasFor !== vf26Body) {
+        vf26ExtrasFor = vf26Body;
         const steerBase = vf26Body.getObjectByName("STEER_BASE");
         if (steerBase) wheelDisplay = new SteeringWheelDisplay(steerBase);
         wingMirrors = new WingMirrors(renderer, scene, vf26Body);
@@ -2514,14 +2520,15 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       }
       lapDelta.update(physics.telemetry);
       // The wheel is only in shot from the onboard views; the display redraws itself at 30 Hz
-      if (wheelDisplay && (mode === "cockpit" || mode === "tv_pod" || mode === "cockpit_shoulder")) {
+      const onboard = mode === "cockpit" || mode === "tv_pod" || mode === "cockpit_shoulder";
+      if (onboard && (wheelDisplay || gt3Dash)) {
         const delta = lapDelta.delta(physics.telemetry);
-        displayExtra.deltaMs = delta === null ? null : delta * 1000;
-        wheelDisplay.update(physics.telemetry, nowMs, displayExtra);
-      }
-      if (gt3Dash && (mode === "cockpit" || mode === "tv_pod" || mode === "cockpit_shoulder")) {
-        const delta = lapDelta.delta(physics.telemetry);
-        gt3Dash.update(physics.telemetry, nowMs, { deltaMs: delta === null ? null : delta * 1000 });
+        const deltaMs = delta === null ? null : delta * 1000;
+        if (wheelDisplay) {
+          displayExtra.deltaMs = deltaMs;
+          wheelDisplay.update(physics.telemetry, nowMs, displayExtra);
+        }
+        gt3Dash?.update(physics.telemetry, nowMs, { deltaMs });
       }
       const shake = cockpitShake.update(dtSeconds, physics.telemetry);
 
@@ -3000,6 +3007,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
 
       // Weather: sun, sky, fill and fog, the wet look of the road, spray, and rain around the camera
       const wx = trackEnv.weather;
+      // The ripples' clock runs every frame with the real frame time; the rest of the sky updates at 10 Hz below
+      advanceAsphaltRain(dtSeconds);
       if (nowMs - lastSkyMs > 100) {
         lastSkyMs = nowMs;
         const sun = wx.sun;
@@ -3008,7 +3017,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         skyConditions.cloud = wx.cloudCover;
         skyConditions.rain = wx.rainIntensity;
         env.setConditions(skyConditions);
-        setAsphaltWetness(wetnessFromWater(wx.waterMm), wetnessFromWater(wx.lineWaterMm), wx.rainIntensity, 0.1);
+        setAsphaltWetness(wetnessFromWater(wx.waterMm), wetnessFromWater(wx.lineWaterMm), wx.rainIntensity);
         // The water under the player's own wheels, not the lap's mean line water
         visualFx.setWetness(trackEnv.weatherSampleFor(physics)?.wetness ?? wetnessFromWater(wx.lineWaterMm));
       }
@@ -3063,7 +3072,10 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         setVirtualMirrorOn(vmOn);
       }
       // Rear view into the mirrors' render target (cockpit only, every 2nd frame), then the main frame
-      wingMirrors?.update(frameIndex++, mode === "cockpit" && !inVr, carRig.chassisGroup);
+      wingMirrors?.update(frameIndex, mode === "cockpit" && !inVr, carRig.chassisGroup);
+      // Counted here, not inside the optional call above: without wing mirrors it never advanced, which also
+      // disabled the virtual mirror's every-other-frame throttle
+      frameIndex++;
       if (inVr) {
         // The head pose is added on top of the driver's eye point (a "local" space starts at the head)
         xrRig.position.copy(camera.position);

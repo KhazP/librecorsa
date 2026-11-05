@@ -15,6 +15,7 @@ import { createGt3CarRig, loadGt3Cockpit, loadGt3Template } from '@/lib/gt3-car-
 import { AMR26_MODEL_URL, loadVf26Template } from '@/lib/vf26-car-model';
 import { assetProgress } from '@/lib/loading/asset-progress';
 import { addContactShadow } from '@/lib/render/contact-shadow';
+import { disposeTree } from '@/lib/render/dispose-tree';
 import { LIVERIES } from '@/lib/track-data';
 import { CarTelemetry, LiveryConfig, type VehicleModelId } from '@/types/f1';
 import type { SimulatorWheel as SimWheelState } from './simulator-car';
@@ -573,6 +574,7 @@ export class SimVisualFxManager {
         // The peer switched car: rebuild its rig
         this.group.remove(entry.rig.root);
         entry.rig.dispose();
+        disposeTree(entry.rig.root);
         entry = undefined;
       }
       if (!entry) {
@@ -696,7 +698,10 @@ export class SimVisualFxManager {
     for (const [peerId, { rig }] of this.opponentCars.entries()) {
       if (!activeIds.has(peerId)) {
         this.group.remove(rig.root);
+        // The rig's own dispose() only stops its updates: its canvases, geometry and materials (and the contact
+        // shadow) would otherwise stay on the GPU for every car that ever left
         rig.dispose();
+        disposeTree(rig.root);
         this.opponentCars.delete(peerId);
       }
     }
