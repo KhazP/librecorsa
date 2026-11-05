@@ -93,10 +93,12 @@ export function vf26FullBrakeForceN(): number {
  */
 export function createVf26ProfileCarModel(
   preset: AeroSetupPreset = 'balanced',
-  airDensity = NOMINAL_AIR_DENSITY
+  airDensity = NOMINAL_AIR_DENSITY,
+  /** Garage wing trim (deg); the AI field drives the untrimmed package */
+  wingTrimDeg?: { front: number; rear: number }
 ): SpeedProfileCarModel {
   // Typical at-speed attitude: ~17 mm lower than static, slight nose-up rake change
-  const aero = estimateAeroCoefficients(preset, airDensity, -0.017, 0.0015);
+  const aero = estimateAeroCoefficients(preset, airDensity, -0.017, 0.0015, 0, undefined, wingTrimDeg);
   return {
     massKg: VF26_CHASSIS.totalMassKg + VF26_CHASSIS.fuelKg,
     downforceCoef: aero.downforceCoef,
@@ -187,7 +189,12 @@ export function computeSpeedProfile(
       const j = (i + 1) % n;
       const vn = v[j];
       const grip = car.muLong * (G + (car.downforceCoef * vn * vn) / m);
-      const decel = Math.min(grip, car.maxBrakeForceN / m) * longShare(i, vn) + (car.dragCoef * vn * vn) / m;
+      const brake = Math.min(grip, car.maxBrakeForceN / m);
+      const drag = (car.dragCoef * vn * vn) / m;
+      // The car arrives at sample i faster than vn, so its lateral demand there (and the grip it leaves for braking)
+      // is set by that speed: estimate it at vn, then take the friction-circle share again at the estimate
+      const vEst = Math.min(v[i], Math.sqrt(vn * vn + 2 * (brake * longShare(i, vn) + drag) * segLenM[i]));
+      const decel = brake * longShare(i, vEst) + drag;
       v[i] = Math.min(v[i], Math.sqrt(vn * vn + 2 * decel * segLenM[i]));
     }
   };

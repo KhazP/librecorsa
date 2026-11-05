@@ -70,7 +70,9 @@ export function estimateAeroCoefficients(
   heaveM: number,
   pitchRad: number,
   xModeBlend = 0,
-  wings: WingRuntime[] = createWingRuntimes()
+  wings: WingRuntime[] = createWingRuntimes(),
+  /** Garage wing clicks on top of the package (deg), as the car itself flies them */
+  trim: { front: number; rear: number } = NO_TRIM
 ): { downforceCoef: number; dragCoef: number; frontShare: number } {
   let down = 0;
   let drag = 0;
@@ -79,7 +81,7 @@ export function estimateAeroCoefficients(
   const b = L * VF26_CHASSIS.frontWeightFraction;
   for (const w of wings) {
     const s = w.spec;
-    const angle = wingAngleDeg(s, preset, xModeBlend);
+    const angle = wingAngleDeg(s, preset, xModeBlend, trim);
     const h = Math.max(0, VF26_CG_HEIGHT_M + s.position[1] + heaveM + s.position[2] * pitchRad);
     const ghCl = w.ghCl ? w.ghCl.evaluate(h) : 1;
     const ghCd = w.ghCd ? w.ghCd.evaluate(h) : 1;

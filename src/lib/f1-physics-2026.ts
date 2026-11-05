@@ -387,7 +387,13 @@ export class F1Physics2026 {
   private aiBrakeTrim = 1;
   private aiThrottleTrim = 1;
   private readonly aiDriver = new RacingLineDriver();
-  private aiProfile: { preset: AeroSetupPreset; grip: number; profile: SpeedProfile; params: AiVehicleParams } | null = null;
+  private aiProfile: {
+    preset: AeroSetupPreset;
+    grip: number;
+    trim: { front: number; rear: number };
+    profile: SpeedProfile;
+    params: AiVehicleParams;
+  } | null = null;
   private aiTargetSpeedKmh = 0;
   /** Time the AI car has been (nearly) stationary — beached or spun off */
   private aiStuckS = 0;
@@ -2692,11 +2698,14 @@ export class F1Physics2026 {
   /** Target-speed profile for the AI, rebuilt when the aero package or the road's wet grip changes */
   private getAiPlan(): { profile: SpeedProfile; params: AiVehicleParams } {
     const grip = this.aiPlanGrip();
-    if (!this.aiProfile || this.aiProfile.preset !== this.aeroPreset || this.aiProfile.grip !== grip) {
-      const car = withPlanningGrip(createVf26ProfileCarModel(this.aeroPreset), grip);
+    // Planned on the wings the car actually runs, garage clicks included
+    const trim = this.wingTrimDeg;
+    if (!this.aiProfile || this.aiProfile.preset !== this.aeroPreset || this.aiProfile.grip !== grip || this.aiProfile.trim !== trim) {
+      const car = withPlanningGrip(createVf26ProfileCarModel(this.aeroPreset, undefined, trim), grip);
       this.aiProfile = {
         preset: this.aeroPreset,
         grip,
+        trim,
         profile: computeSpeedProfile(this.track.samples, car),
         params: {
           wheelbaseM: this.wheelbaseM,
