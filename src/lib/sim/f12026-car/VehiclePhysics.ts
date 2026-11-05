@@ -638,8 +638,9 @@ export class VehiclePhysics {
   public static readonly SUBSTEPS = 4;
 
   public readonly config: CarPhysicsConfig;
-  public readonly totalMassKg: number;
-  public readonly sprungMassKg: number;
+  /** Car, driver and fuel (kg): see setFuelMass */
+  public totalMassKg: number;
+  public sprungMassKg: number;
   /** CG → front / rear axle (m) */
   public readonly cgToFrontM: number;
   public readonly cgToRearM: number;
@@ -732,6 +733,9 @@ export class VehiclePhysics {
   private tyres: [TyreRuntime, TyreRuntime];
   private readonly tyreByCompound = new Map<PhysicsTyreCompound, [TyreRuntime, TyreRuntime]>();
   private readonly inertiaBody: THREE.Vector3;
+  /** Body inertia without fuel (the config's, for its fuel-less mass) */
+  private readonly dryInertiaBody: THREE.Vector3;
+  private fuelKg = 0;
   private readonly floorOffsetY: number;
   private readonly staticRakeDeg: number;
   private readonly luts: {
@@ -818,7 +822,8 @@ export class VehiclePhysics {
     this.ffbMechanicalTrailM = ch.ffbMechanicalTrailM ?? DEFAULT_FFB_MECHANICAL_TRAIL_M;
     this.brakeCompound = cfg.brakes.discMaterial ?? 'carbon-ceramic';
     // Body axes: X = left (pitch), Y = up (yaw), Z = forward (roll)
-    this.inertiaBody = new THREE.Vector3(ch.inertia.pitch, ch.inertia.yaw, ch.inertia.roll);
+    this.dryInertiaBody = new THREE.Vector3(ch.inertia.pitch, ch.inertia.yaw, ch.inertia.roll);
+    this.inertiaBody = this.dryInertiaBody.clone();
     this.floorOffsetY = cfg.aero.floorOffsetY;
     this.staticRakeDeg = Math.asin((cfg.aero.rear_target_height - cfg.aero.front_target_height) / ch.wheelbase) * RAD2DEG;
 
@@ -1372,9 +1377,30 @@ export class VehiclePhysics {
     }
   }
 
+  /** Fuel on board (kg) */
+  public get fuelMassKg(): number {
+    return this.fuelKg;
+  }
+
+  /**
+   * Fuel on board (kg): its mass sits at the CG (the tank is behind the driver, between the axles), so the weight
+   * split stays and the moments of inertia grow with the mass, as the VF26's uniform-box body does. The spring
+   * preloads keep the load they were last set for (`refreshStaticGeometry` sets them for this load), so a car
+   * that burns fuel rises on its springs.
+   */
+  public setFuelMass(kg: number): void {
+    const fuel = Number.isFinite(kg) ? Math.max(0, kg) : 0;
+    if (fuel === this.fuelKg) return;
+    const ch = this.config.chassis;
+    this.fuelKg = fuel;
+    this.totalMassKg = ch.totalMassKg + fuel;
+    this.sprungMassKg = this.totalMassKg - 2 * ch.unsprungMassFront - 2 * ch.unsprungMassRear;
+    this.inertiaBody.copy(this.dryInertiaBody).multiplyScalar(this.totalMassKg / ch.totalMassKg);
+  }
+
   private staticCornerLoad(front: boolean): number {
     const ch = this.config.chassis;
-    return 0.5 * ch.totalMassKg * G * (front ? ch.frontWeightFraction : 1 - ch.frontWeightFraction);
+    return 0.5 * this.totalMassKg * G * (front ? ch.frontWeightFraction : 1 - ch.frontWeightFraction);
   }
 
   /**
