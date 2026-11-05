@@ -2490,6 +2490,8 @@ export class VehiclePhysics {
     const vF = air.dot(_ez);
     const q = 0.5 * this.airDensity * vF * vF;
     const rollDeg = Math.asin(THREE.MathUtils.clamp(_ex.y, -1, 1)) * RAD2DEG;
+    // Signed here (the map's yaw tables span ±, and its balance shift may be odd in yaw); the wing path above reads
+    // the magnitude, its per-wing yaw tables being one-sided
     const yawDeg = Math.abs(vF) > 1 ? Math.atan2(air.dot(_ex), Math.abs(vF)) * RAD2DEG : 0;
     const ml = this.mapLuts!;
     const clMult = rhTable(map, map.cl, this.rideFront, this.rideRear) * ml.rollCl.evaluate(rollDeg) * ml.yawCl.evaluate(yawDeg);

@@ -14,7 +14,8 @@ const CLASSIFICATION_CLOSE_S = 90;
 /** A multiplayer car that has sent nothing for this race for this long (never started, or dropped): DNF */
 const NO_SHOW_DNF_S = 30;
 
-const wrapHalf = (d: number, L: number) => ((((d + L / 2) % L) + L) % L) - L / 2;
+/** A distance difference wrapped into [−L/2, L/2) on a lap of length L */
+export const wrapHalf = (d: number, L: number) => ((((d + L / 2) % L) + L) % L) - L / 2;
 
 /** One car in the classification */
 export interface RacerProgress {

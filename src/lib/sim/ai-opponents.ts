@@ -46,6 +46,7 @@ import {
   raceOrder,
   SplitTimer,
   type RacerProgress,
+  wrapHalf,
 } from '@/lib/sim/race-session';
 
 export interface AiDriverDef {
@@ -232,7 +233,7 @@ interface FieldCar {
   lapStartS: number;
 }
 
-const wrapHalf = (d: number, L: number) => ((((d + L / 2) % L) + L) % L) - L / 2;
+
 
 /** Contact mass properties (an F1 car with driver and fuel) and the per-frame limits on what a contact may do */
 const CONTACT_MASS_KG = 778;
