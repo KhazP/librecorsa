@@ -240,7 +240,11 @@ export class LapRecorder {
     // Line crossed: close the lap in progress, then start the next one armed
     let completed: CompletedLap | null = null;
     const lapMs = t.lastLapTimeMs;
-    if (this.recording && lapMs !== null && Number.isFinite(lapMs) && lapMs > 0 && lapMs !== prevLapTimeMs) {
+    // The physics leaves lastLapTimeMs alone for a lap it does not time (too short to be real), so an unchanged value
+    // usually means a stale one. A lap timed to the same millisecond as the previous is still new, though: the lap
+    // clock read just before the line then agrees with it
+    const fresh = lapMs !== prevLapTimeMs || (lapMs !== null && Math.abs(lapMs - prevClockMs) < 250);
+    if (this.recording && lapMs !== null && Number.isFinite(lapMs) && lapMs > 0 && fresh) {
       completed = this.finishLap(input, lapMs, prevCount);
     }
     this.beginLap();

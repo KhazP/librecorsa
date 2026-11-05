@@ -46,6 +46,10 @@ function openDb(): Promise<IDBDatabase | null> {
       } catch {
         resolve(null);
       }
+    }).then((db) => {
+      // A failed open is not cached: a transient error (or storage freed later) gets another try on the next call
+      if (!db) dbPromise = null;
+      return db;
     });
   }
   return dbPromise;
