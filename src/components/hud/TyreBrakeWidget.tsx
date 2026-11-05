@@ -2,16 +2,16 @@
 
 import React from "react";
 import type { CarTelemetry, TireCompound } from "@/types/f1";
-import { brakeGlowColor, HUD_CYAN, HUD_GREEN, HUD_LBL, HUD_RED, HUD_WHITE, HUD_YELLOW, tyreHeatColor } from "./hud-format";
+import { brakeGlowColor, COMPOUND_COLORS, TYRE_CONDITION_SHOW, HUD_CYAN, HUD_GREEN, HUD_LBL, HUD_RED, HUD_WHITE, HUD_YELLOW, tyreHeatColor } from "./hud-format";
 
 export const CORNERS = ["FL", "FR", "RL", "RR"] as const;
 
 const COMPOUND: Record<TireCompound, { letter: string; color: string }> = {
-  soft: { letter: "S", color: HUD_RED },
-  medium: { letter: "M", color: HUD_YELLOW },
-  hard: { letter: "H", color: HUD_WHITE },
-  intermediate: { letter: "I", color: "#3CCB4A" },
-  wet: { letter: "W", color: "#2E7BFF" },
+  soft: { letter: "S", color: COMPOUND_COLORS.soft },
+  medium: { letter: "M", color: COMPOUND_COLORS.medium },
+  hard: { letter: "H", color: COMPOUND_COLORS.hard },
+  intermediate: { letter: "I", color: COMPOUND_COLORS.intermediate },
+  wet: { letter: "W", color: COMPOUND_COLORS.wet },
 };
 
 /** Damage / surface conditions shown as badges once they matter */
@@ -23,7 +23,7 @@ const CONDITIONS = [
 ] as const;
 
 /** Level from which a condition shows its badge */
-const CONDITION_SHOW = 0.12;
+const CONDITION_SHOW = TYRE_CONDITION_SHOW;
 
 export interface CornerData {
   /** Bands left → right as seen from behind, the overall tread temperature, carcass/core */

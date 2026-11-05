@@ -1,3 +1,5 @@
+import type { TireCompound } from "@/types/f1";
+
 /** Shared formatting and colour rules of the LibreCorsa in-race telemetry HUD */
 
 export const HUD_VOLT = "#CCFF00";
@@ -58,14 +60,22 @@ export function sectorTimeColor(ms: number, best: number | null | undefined): st
   return !best || ms <= best + 0.5 ? HUD_PURPLE : HUD_YELLOW;
 }
 
-/** Tyre surface temperature colour: cold blue → slipstream cyan → working green (85–105 °C) → caution amber → overheating rosso (> 115 °C) */
-export function tyreTempColor(tempC: number): string {
-  if (tempC < 70) return "#38BDF8";
-  if (tempC < 85) return HUD_CYAN;
-  if (tempC <= 105) return HUD_GREEN;
-  if (tempC <= 115) return HUD_YELLOW;
-  return HUD_RED;
+/** Rev-light range per car: first LED and all-lit rpm (the Formula cars by default; the GT3's 7500 rpm shift point) */
+export function revRangeFor(carId: string | undefined): [number, number] {
+  return carId === "amg-gt3" ? [6200, 7500] : [10_800, 14_600];
 }
+
+/** A tyre condition (graining, blistering, flat spot, dirt) is flagged on the HUD from this level (0..1) */
+export const TYRE_CONDITION_SHOW = 0.12;
+
+/** Tyre compound colours (sidewall stripe): one table for the tower, the tyre widget, the MFD and the HUD styles */
+export const COMPOUND_COLORS: Record<TireCompound, string> = {
+  soft: HUD_RED,
+  medium: HUD_YELLOW,
+  hard: HUD_WHITE,
+  intermediate: "#3CCB4A",
+  wet: "#2E7BFF",
+};
 
 type Rgb = [number, number, number];
 const hexRgb = (h: string): Rgb => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];

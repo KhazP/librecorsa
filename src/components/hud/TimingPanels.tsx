@@ -16,19 +16,13 @@ import {
   formatLapTime,
   formatSectorTime,
   sectorTimeColor,
+  COMPOUND_COLORS,
 } from "./hud-format";
 import { LibreCorsaMark } from "../ui/LibreCorsaLogo";
 
 /** Black / white chequer tile for finished-car markers */
 const CHEQUER_BG = "repeating-conic-gradient(#F5F7FA 0% 25%, #08090D 0% 50%) 0 0 / 6px 6px";
 
-const TOWER_COMPOUND: Record<TireCompound, string> = {
-  soft: HUD_RED,
-  medium: HUD_YELLOW,
-  hard: "#F5F7FA",
-  intermediate: "#3CCB4A",
-  wet: "#2E7BFF",
-};
 
 /**
  * The tower's lines: position, livery bar, driver code with the tyre, fastest-lap and penalty badges, the gap (to the
@@ -70,7 +64,7 @@ export const TowerRows: React.FC<{ race: RaceStatus; gaps?: "interval" | "leader
               {e.compound ? (
                 <span
                   className="inline-flex h-[14px] w-[14px] shrink-0 items-center justify-center rounded-full border-[2px] text-[7px] leading-none tracking-normal"
-                  style={{ borderColor: TOWER_COMPOUND[e.compound], backgroundColor: e.isPlayer ? "#08090D" : "transparent", color: "#F5F7FA" }}
+                  style={{ borderColor: COMPOUND_COLORS[e.compound], backgroundColor: e.isPlayer ? "#08090D" : "transparent", color: "#F5F7FA" }}
                   aria-label={`${e.compound} tyres`}
                 >
                   {e.compound[0].toUpperCase()}

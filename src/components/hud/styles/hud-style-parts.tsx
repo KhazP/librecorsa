@@ -3,7 +3,7 @@
 import React, { useEffect, useId, useRef, useState } from "react";
 import type { CarTelemetry, TireCompound } from "@/types/f1";
 import type { BuiltTrackData } from "@/lib/track-data";
-import { HUD_CYAN, HUD_GREEN, HUD_PURPLE, HUD_RED, HUD_VOLT, HUD_YELLOW, sectorTimeColor } from "../hud-format";
+import { HUD_CYAN, HUD_GREEN, HUD_PURPLE, HUD_RED, HUD_VOLT, HUD_YELLOW, revRangeFor, sectorTimeColor } from "../hud-format";
 
 /** Circuit outline for the HUD maps, in a 0..1000 box (aspect kept) */
 export interface HudMap {
@@ -77,7 +77,7 @@ export interface HudDesignProps {
 
 /** Rev light range of the car (the same as the classic speed cluster's) */
 export function revRangeOf(t: CarTelemetry): [number, number] {
-  return t.f12026?.carId === "amg-gt3" ? [6200, 7500] : [10_800, 14_600];
+  return revRangeFor(t.f12026?.carId);
 }
 
 /** Scales a corner group of the HUD about that corner */
@@ -102,13 +102,7 @@ export function arcPoints(n: number, cx: number, cy: number, r: number, spanDeg:
   });
 }
 
-export const COMPOUND_COLORS: Record<TireCompound, string> = {
-  soft: HUD_RED,
-  medium: HUD_YELLOW,
-  hard: "#F5F7FA",
-  intermediate: "#3CCB4A",
-  wet: "#2E7BFF",
-};
+export { COMPOUND_COLORS } from "../hud-format";
 
 export const SECTOR_COLORS = [HUD_CYAN, HUD_VOLT, "#FF6B8A"] as const;
 

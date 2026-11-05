@@ -3,6 +3,7 @@
 import React from "react";
 import type { CarTelemetry } from "@/types/f1";
 import {
+  revRangeFor,
   HUD_CYAN,
   HUD_GLASS,
   HUD_GREEN,
@@ -17,9 +18,6 @@ import { AidLamp } from "./F12026ChannelsPanel";
 
 /** Rev lights: 15 LEDs over the top end of the rev range (Emerald → Corsa Volt → Monza Rosso → Cyan flash) */
 const REV_LEDS = 15;
-/** First LED and all-lit rpm per car (the Formula cars by default; the GT3's 7500 rpm shift point) */
-const REV_RANGE: Record<string, [number, number]> = { "amg-gt3": [6200, 7500] };
-const F1_REV_RANGE: [number, number] = [10_800, 14_600];
 const LED_INDEXES = Array.from({ length: REV_LEDS }, (_, i) => i);
 
 const ledColor = (i: number) =>
@@ -63,7 +61,7 @@ export const SpeedCluster: React.FC<SpeedClusterProps> = ({
 }) => {
   const channels = telemetry.f12026;
   const isGt3 = channels?.carId === "amg-gt3";
-  const [revStart, revFull] = (channels && REV_RANGE[channels.carId]) ?? F1_REV_RANGE;
+  const [revStart, revFull] = revRangeFor(channels?.carId);
   const hasErs = channels?.hasErs ?? true;
   const lit = Math.round(((telemetry.rpm - revStart) / (revFull - revStart)) * REV_LEDS);
   const flash = telemetry.rpm > revFull;

@@ -18,8 +18,3 @@ export function useLapDeltaTracker(telemetry: CarTelemetry, trackLengthM: number
 
   return { tracker, deltaS: tracker.delta(telemetry) };
 }
-
-/** `LapDeltaTracker` for the HUD: the delta in seconds, or null until a complete lap has been timed */
-export function useLapDelta(telemetry: CarTelemetry, trackLengthM: number): number | null {
-  return useLapDeltaTracker(telemetry, trackLengthM).deltaS;
-}

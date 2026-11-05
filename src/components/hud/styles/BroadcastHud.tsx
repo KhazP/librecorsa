@@ -3,7 +3,7 @@
 import React from "react";
 import { Fuel, Zap } from "lucide-react";
 import type { CarTelemetry, TireCompound } from "@/types/f1";
-import { formatDelta, formatLapTime, formatSectorTime, HUD_RED, tyreHeatColor } from "../hud-format";
+import { formatDelta, formatLapTime, formatSectorTime, HUD_RED, TYRE_CONDITION_SHOW, tyreHeatColor } from "../hud-format";
 import { LibreCorsaMark } from "../../ui/LibreCorsaLogo";
 import { anchor, COMPOUND_COLORS, gearLabel, HUD_GLASS, MiniMap, sectorColor, type HudDesignProps } from "./hud-style-parts";
 import { PedalBars } from "../PedalBars";
@@ -165,7 +165,10 @@ export const BroadcastHud: React.FC<HudDesignProps> = ({ t, deltaS, map, compoun
               <span className="grid grid-cols-[repeat(2,15px)] gap-[3px]" aria-label="Tyre temperatures, inner / middle / outer">
                 {t.tireTempsC.map((c, i) => {
                   const bands = t.tireBandTempsC?.[i] ?? [c, c, c];
-                  const flagged = (t.tireGrainLevel?.[i] ?? 0) > 0.12 || (t.tireBlisterLevel?.[i] ?? 0) > 0.12 || (t.tireFlatSpotSeverity?.[i] ?? 0) > 0.12;
+                  const flagged =
+                    (t.tireGrainLevel?.[i] ?? 0) >= TYRE_CONDITION_SHOW ||
+                    (t.tireBlisterLevel?.[i] ?? 0) >= TYRE_CONDITION_SHOW ||
+                    (t.tireFlatSpotSeverity?.[i] ?? 0) >= TYRE_CONDITION_SHOW;
                   return (
                     <span
                       key={i}
