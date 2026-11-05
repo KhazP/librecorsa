@@ -459,7 +459,7 @@ function getRunoffAtlasUVRange(style: RunoffStyle): [number, number] {
 
 /**
  * Builds a realistic sloped stadium grandstand group facing the track.
- * In local track frame, -X is left (+binormal) and +X is right (-binormal).
+ * In the local track frame +X is left (−binormal) and −X is right (+binormal).
  * When placed on `side` (-1 = left of track, +1 = right of track), the sloped seating bowl
  * faces inward toward the track centerline (`x = 0`).
  */
@@ -491,11 +491,8 @@ function buildSlopedGrandstandGroup(
     new THREE.BoxGeometry(1.6, height, length),
     concreteMat
   );
-  // In getTrackFrameQuaternion, local +X is `left = normal x tangent = -binormal`.
-  // Wait: let's check getTrackFrameQuaternion:
-  // `left = normal x tangent`. Since `binormal = tangent x normal = -left`,
-  // a point shifted by `side * dist` along `binormal` has local X = `-side * dist`!
-  // So toward the track centerline from `side * dist` along `binormal` is local X = `+side`!
+  // Track frame (getTrackFrameQuaternion): local +X = left = normal × tangent = −binormal. A stand placed `side * dist`
+  // along the binormal therefore sits at local X = −side·dist, so the direction back toward the centreline is +side
   const frontSign = side; // local X direction pointing BACK toward the track centerline
   backWall.position.set(-frontSign * (depth * 0.5 - 0.8), height * 0.5, 0);
   group.add(backWall);
@@ -1071,7 +1068,9 @@ export function buildRwandaCircuitScene(
     const size = box.getSize(new THREE.Vector3());
     // Four lamps per column (amber, green, red, red): sit on the first red row, 1/8 of the height below centre
     center.y -= size.y * 0.125;
-    const depth = Math.abs(size.dot(startFwd));
+    // Extent of the box along the start direction: |sx·fx| + |sz·fz| (as for the width), not |size·fwd|, whose
+    // terms cancel on a diagonal straight
+    const depth = Math.abs(size.x * startFwd.x) + Math.abs(size.y * startFwd.y) + Math.abs(size.z * startFwd.z);
     const width = Math.abs(size.x * startRight.x) + Math.abs(size.z * startRight.z);
     placePods(center, depth * 0.5, width / 5);
   };
@@ -1155,7 +1154,8 @@ export function buildRwandaCircuitScene(
     { sDist: 4920, side: -1, length: 68 },
   ];
 
-  for (const sg of sectorGrandstands) {
+  // The stands, camera towers and tents below are laid out for Rwanda (distances along its lap)
+  for (const sg of isRwanda ? sectorGrandstands : []) {
     const sp = track.getSampleAtDistance(sg.sDist);
     const safeGs = findSafeTracksidePosition(
       sp,
@@ -1180,7 +1180,7 @@ export function buildRwandaCircuitScene(
   }
 
   // Trackside TV Broadcast Camera Scaffold Towers
-  for (const camDist of [410, 890, 1890, 3150, 4410]) {
+  for (const camDist of isRwanda ? [410, 890, 1890, 3150, 4410] : []) {
     const sp = track.getSampleAtDistance(camDist);
     const safeCam = findSafeTracksidePosition(sp, -1, 4.0, 4.0, 38, 30.0);
     if (safeCam) {
@@ -1208,7 +1208,8 @@ export function buildRwandaCircuitScene(
     roughness: 0.55,
   });
 
-  for (const sDist of [4140, 4210, 4280, 4350, 4490, 4570, 4650]) {
+  // Placed at Bugesera distances: on another circuit they would wrap round to arbitrary spots
+  for (const sDist of isRwanda ? [4140, 4210, 4280, 4350, 4490, 4570, 4650] : []) {
     const sp = track.getSampleAtDistance(sDist);
     const safeTent = findSafeTracksidePosition(sp, -1, 12.0, 12.0, 46, 32.0);
     if (!safeTent) continue;
