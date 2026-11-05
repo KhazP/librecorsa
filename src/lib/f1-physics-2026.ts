@@ -1537,7 +1537,7 @@ export class F1Physics2026 {
     }
     // Electronic brake distribution: a rear channel never brakes harder, relative to its share, than the more
     // released front, so freeing a front mid-corner does not move the balance rearward and spin the car
-    const frontWant = Math.min(absWant[0], absWant[1]);
+    const frontWant = 0.5 * (absWant[0] + absWant[1]);
     absWant[2] = Math.min(absWant[2], frontWant);
     absWant[3] = Math.min(absWant[3], frontWant);
     for (let i = 0; i < 4; i++) {
