@@ -1327,15 +1327,37 @@ export class VehiclePhysics {
     return true;
   }
 
+  /** Simulated time the last step() call actually advanced (whole fixed steps; s) */
+  public lastStepTimeS = 0;
+
   /** Advance by a render frame (any dt); runs fixed 500 Hz steps */
   public step(dtSeconds: number, inputs: VehicleInputs): void {
     const inp = this.sanitizeInputs(inputs);
     this.handleEdges(inp);
     this.timeAccumulator = Math.min(this.timeAccumulator + dtSeconds, 0.1);
+    let steps = 0;
     while (this.timeAccumulator >= VehiclePhysics.FIXED_DT) {
       this.timeAccumulator -= VehiclePhysics.FIXED_DT;
       this.outerStep(inp);
+      steps++;
     }
+    this.lastStepTimeS = steps * VehiclePhysics.FIXED_DT;
+  }
+
+  /**
+   * Ground height under a wheel for the ride-height reads. A wheel in the air keeps its last contact in `ground`
+   * (the probe only reaches 0.6 m), which after a crest is above the real road: the road is at least as low as the
+   * bottom of the tyre, so the aero sees its ride height grow instead of the take-off value.
+   */
+  private groundYUnder(w: WheelState): number {
+    if (w.grounded) return w.ground.height;
+    return Math.min(w.ground.height, w.hubY - this.tyreRadiusOf(w));
+  }
+
+  /** Unloaded radius of a wheel's tyre (m) */
+  private tyreRadiusOf(w: WheelState): number {
+    const tyre = this.tyres[w.isFront ? 0 : 1];
+    return (w.isFront ? tyre.data.front : tyre.data.rear).radius;
   }
 
   // ===========================================================================
@@ -2349,7 +2371,8 @@ export class VehiclePhysics {
     } else if (pMech < 0) {
       const e = -pMech * ers.harvestEfficiency * h;
       this.ersEnergyJ = Math.min(ers.ERS_MAX_CHARGE, this.ersEnergyJ + e);
-      this.lapHarvestJ += -pMech * h;
+      // Counted on the store's side of the MGU-K, as deploy is, so both per-lap limits measure the same thing
+      this.lapHarvestJ += e;
     }
   }
 
@@ -2366,8 +2389,8 @@ export class VehiclePhysics {
     const fy = _p.y;
     _p.set(0, this.floorOffsetY, -b).applyQuaternion(this.quaternion).add(this.position);
     const ry = _p.y;
-    const gF = 0.5 * (W[0].ground.height + W[1].ground.height);
-    const gR = 0.5 * (W[2].ground.height + W[3].ground.height);
+    const gF = 0.5 * (this.groundYUnder(W[0]) + this.groundYUnder(W[1]));
+    const gR = 0.5 * (this.groundYUnder(W[2]) + this.groundYUnder(W[3]));
     this.rideFront = fy - gF;
     this.rideRear = ry - gR;
     const hMean = 0.5 * (this.rideFront + this.rideRear);
@@ -2447,8 +2470,8 @@ export class VehiclePhysics {
     const fy = _p.y;
     _p.set(0, map.rearPickupY, -b).applyQuaternion(this.quaternion).add(this.position);
     const ry = _p.y;
-    this.rideFront = fy - 0.5 * (W[0].ground.height + W[1].ground.height);
-    this.rideRear = ry - 0.5 * (W[2].ground.height + W[3].ground.height);
+    this.rideFront = fy - 0.5 * (this.groundYUnder(W[0]) + this.groundYUnder(W[1]));
+    this.rideRear = ry - 0.5 * (this.groundYUnder(W[2]) + this.groundYUnder(W[3]));
     const rakeDeg = Math.atan2(this.rideRear - this.rideFront, L) * RAD2DEG;
     const pitchDelta = rakeDeg - this.staticRakeDeg;
     const wake = this.aeroWake;

@@ -848,8 +848,14 @@ export class F12026CarSim implements SimulatorCar {
     } else {
       _ez.set(0, 0, 1).applyQuaternion(v.quaternion);
       v.velocity.addScaledVector(_ez, value - vx);
-      const scale = Math.abs(vx) > 1 ? value / vx : 1;
-      for (const w of v.wheels) w.omega *= scale;
+      // Wheel spin follows the new speed; through a change of direction (or near rest) it is set from the speed
+      // instead, since scaling by a negative ratio would spin the wheels backwards against the car's travel
+      if (Math.abs(vx) > 1 && Math.sign(value) === Math.sign(vx)) {
+        const scale = value / vx;
+        for (const w of v.wheels) w.omega *= scale;
+      } else {
+        for (const w of v.wheels) w.omega = value / Math.max(0.2, w.rollingRadius || 0.35);
+      }
     }
     this.syncPose();
   }
@@ -1278,9 +1284,13 @@ export class F12026CarSim implements SimulatorCar {
       _v.copy(v.velocity);
       v.step(h, vin);
       this.updateBrakes(h);
-      const dvx = _v.subVectors(v.velocity, _v);
-      this.lastAxMs2 = dvx.dot(_ez.set(0, 0, 1).applyQuaternion(v.quaternion)) / h;
-      this.lastAyMs2 = dvx.dot(_ex.set(1, 0, 0).applyQuaternion(v.quaternion)) / h;
+      // Divided by the time the fixed steps actually covered: a slice runs a whole number of 2 ms steps, not h
+      const stepS = v.lastStepTimeS;
+      if (stepS > 0) {
+        const dvx = _v.subVectors(v.velocity, _v);
+        this.lastAxMs2 = dvx.dot(_ez.set(0, 0, 1).applyQuaternion(v.quaternion)) / stepS;
+        this.lastAyMs2 = dvx.dot(_ex.set(1, 0, 0).applyQuaternion(v.quaternion)) / stepS;
+      }
     }
     if (v.telemetry.throttle > 0.01 && this.fuelKg > 0 && this.realism.fuelUse) {
       const mapFlowMult = v.engineMap === 1 ? 1.04 : v.engineMap === 2 ? 1.0 : v.engineMap === 3 ? 0.96 : v.engineMap === 4 ? 0.90 : 0.85;
