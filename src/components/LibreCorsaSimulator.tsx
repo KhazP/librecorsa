@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
-import { getRwandaTrackData, LIVERIES } from "@/lib/track-data";
+import { getActiveTrackData, LIVERIES } from "@/lib/track-data";
 import { F1Physics2026, type ControlInputs } from "@/lib/f1-physics-2026";
 import { F12026CarSim, trackGroundQuery } from "@/lib/sim/f12026-car/F12026CarSim";
 import type { SimulatorCar } from "@/lib/sim/simulator-car";
@@ -20,7 +20,7 @@ import type { CarSoundSource } from "@/lib/sim/CarAudio";
 import { OpponentAudio } from "@/lib/sim/opponent-audio";
 import { CARS, carById, carForVehicle, isCarId, type CarId } from "@/lib/cars/car-registry";
 import { carPhysics, carTakesPhysicsSwitch, subscribeF1ModPhysics } from "@/lib/cars/f1-mod-physics";
-import { buildRwandaCircuitScene } from "@/lib/scene-builder";
+import { buildCircuitScene } from "@/lib/scene-builder";
 import {
   configureRenderer,
   createGoldenHourEnvironment,
@@ -301,7 +301,7 @@ export interface LibreCorsaSimulatorProps {
 export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackId = "rwanda", onSelectTrack }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
 
-  const track = useMemo(() => getRwandaTrackData(1200), []);
+  const track = useMemo(() => getActiveTrackData(1200), []);
   /** The player's car: the VF26 (F1Physics2026) or the f12026-car (F12026CarSim) */
   const physicsRef = useRef<SimulatorCar | null>(null);
   /** The chosen car, and the vehicle model it drives on */
@@ -1372,7 +1372,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     const virtualMirror = new VirtualMirror(renderer, scene);
     let virtualMirrorShown = false;
 
-    const builtCircuit = buildRwandaCircuitScene(track);
+    const builtCircuit = buildCircuitScene(track);
     scene.add(builtCircuit.sceneGroup);
     racingLineMeshRef.current = builtCircuit.racingLineMesh;
     // Track_Collider_Road / surface colliders and Track_Collider_Wall_* barriers for the f12026-car

@@ -11,14 +11,14 @@
  * DBG=<s> prints a trace of the 120 m from s.
  */
 import * as THREE from 'three';
-import { getRwandaTrackData } from '../src/lib/track-data';
+import { getActiveTrackData } from '../src/lib/track-data';
 import { F1Physics2026 } from '../src/lib/f1-physics-2026';
 import { F12026CarSim } from '../src/lib/sim/f12026-car/F12026CarSim';
 import { aiLineOffsetM } from '../src/lib/sim/speed-profile';
 import type { DriverAssistPreset } from '../src/types/f1';
 import { loadGlbGeometry } from './lib/glb-geometry';
 
-const track = getRwandaTrackData(1200);
+const track = getActiveTrackData(1200);
 const root = loadGlbGeometry('public/tracks/rwanda/rwanda_2026.glb');
 const L = track.totalLengthM;
 const wrap = (s: number) => ((s % L) + L) % L;

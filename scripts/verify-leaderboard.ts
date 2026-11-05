@@ -5,7 +5,7 @@
  *
  *   npx tsx scripts/verify-leaderboard.ts
  */
-import { getRwandaTrackData } from '../src/lib/track-data';
+import { getActiveTrackData } from '../src/lib/track-data';
 import { F1Physics2026 } from '../src/lib/f1-physics-2026';
 import { LapRecorder, validateLapRecording, type CompletedLap } from '../src/lib/sim/lap-recorder';
 import { lapPlausibilityProblem } from '../src/lib/sim/lap-plausibility';
@@ -19,7 +19,7 @@ const check = (name: string, ok: boolean, detail = '') => {
 };
 
 // A real lap: the VF26 on autopilot round Rwanda, recorded as the game records it (the second lap, a flying one)
-const track = getRwandaTrackData();
+const track = getActiveTrackData();
 const car = new F1Physics2026(track);
 car.aiAutopilot = true;
 const recorder = new LapRecorder({

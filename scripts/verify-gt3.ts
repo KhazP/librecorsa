@@ -7,7 +7,7 @@
  * on the real Rwanda colliders. The ranges are what a GT3 car does, not tuned to these numbers (see `AmgGt3Config`).
  */
 import * as THREE from 'three';
-import { getRwandaTrackData } from '../src/lib/track-data';
+import { getActiveTrackData } from '../src/lib/track-data';
 import { FlatGroundQuery } from '../src/lib/sim/f12026-car/TrackColliderQuery';
 import { VehiclePhysics, type VehicleInputs } from '../src/lib/sim/f12026-car/VehiclePhysics';
 import { AMG_GT3_CONFIG } from '../src/lib/sim/gt3/AmgGt3Config';
@@ -248,7 +248,7 @@ console.log("\n== The GT3's own handling, not the F1's");
 
 console.log('\n== Autopilot on the Rwanda colliders');
 {
-  const track = getRwandaTrackData();
+  const track = getActiveTrackData();
   const root = loadGlbGeometry('public/tracks/rwanda/rwanda_2026.glb');
   const lap = (sim: F12026CarSim, pace: number) => {
     sim.resetToStartGrid(true);

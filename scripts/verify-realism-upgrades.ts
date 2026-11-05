@@ -15,7 +15,7 @@
  */
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { getRwandaTrackData } from '../src/lib/track-data';
+import { getActiveTrackData } from '../src/lib/track-data';
 import { F1Physics2026 } from '../src/lib/f1-physics-2026';
 import { F12026CarSim } from '../src/lib/sim/f12026-car/F12026CarSim';
 import { VF26_CHASSIS, VF26_TYRES } from '../src/lib/sim/vf26-data';
@@ -77,7 +77,7 @@ function check(name: string, fn: () => void) {
 
 console.log('=== Verifying Sim Racing Realism Upgrades (P0 - P7) ===\n');
 
-const track = getRwandaTrackData();
+const track = getActiveTrackData();
 
 // -----------------------------------------------------------------------------
 // P1: 5-Point 3D Cambered Contact Patch & ISO 8608 Spatial Road Micro-Roughness

@@ -12,7 +12,7 @@
  * The same seed replays the same race.
  */
 import { readFileSync } from 'node:fs';
-import { getRwandaTrackData, setActiveTrack, type BuiltTrackData, type RawTrackJson } from '../src/lib/track-data';
+import { getActiveTrackData, setActiveTrack, type BuiltTrackData, type RawTrackJson } from '../src/lib/track-data';
 import { F1Physics2026 } from '../src/lib/f1-physics-2026';
 import { F12026CarSim } from '../src/lib/sim/f12026-car/F12026CarSim';
 import { createAmgGt3Sim } from '../src/lib/sim/gt3/AmgGt3Sim';
@@ -55,7 +55,7 @@ if (!['vf26', 'f12026-car', 'amg-gt3'].includes(carKind)) {
 
 // ---- Track and colliders
 if (trackId !== 'rwanda') setActiveTrack(trackId, JSON.parse(readFileSync(`public/tracks/${trackId}/track_data.json`, 'utf8')) as RawTrackJson);
-const track: BuiltTrackData = getRwandaTrackData(1200);
+const track: BuiltTrackData = getActiveTrackData(1200);
 const root = carKind === 'vf26' ? null : loadGlbGeometry(`public${track.meshUrl ?? '/tracks/rwanda/rwanda_2026.glb'}`);
 
 function makeTemplate(): SimulatorCar {

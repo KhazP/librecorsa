@@ -16,7 +16,7 @@ import type { TyreSetup, VehicleModelId } from "../src/types/f1";
 import { F12026CarSim } from "../src/lib/sim/f12026-car/F12026CarSim";
 import { createAmgGt3Sim } from "../src/lib/sim/gt3/AmgGt3Sim";
 import { F1Physics2026 } from "../src/lib/f1-physics-2026";
-import { getRwandaTrackData } from "../src/lib/track-data";
+import { getActiveTrackData } from "../src/lib/track-data";
 import { createFlatTestTrack } from "./lib/flat-track";
 
 let passed = 0;
@@ -30,7 +30,7 @@ function check(name: string, cond: boolean, detail = ""): void {
 }
 
 const flat = createFlatTestTrack();
-const track = getRwandaTrackData();
+const track = getActiveTrackData();
 const makers: Record<VehicleModelId, (t: typeof track) => SimulatorCar> = {
   vf26: (t) => new F1Physics2026(t),
   "f12026-car": (t) => new F12026CarSim(t),

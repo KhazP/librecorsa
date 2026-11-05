@@ -323,7 +323,7 @@ export function catmullRomWeights(t: number): [number, number, number, number] {
 }
 
 /** Built data of the active circuit (Rwanda unless `setActiveTrack` chose another) */
-export function getRwandaTrackData(numSamples = 1200): BuiltTrackData {
+export function getActiveTrackData(numSamples = 1200): BuiltTrackData {
   if (cachedBuiltTrack && cachedBuiltTrack.samples.length === numSamples && cachedBuiltTrack.id === ACTIVE_TRACK_ID) {
     return cachedBuiltTrack;
   }
@@ -934,15 +934,12 @@ export function getRwandaTrackData(numSamples = 1200): BuiltTrackData {
   return cachedBuiltTrack;
 }
 
-/** Same as `getRwandaTrackData`: the active circuit */
-export const getActiveTrackData = getRwandaTrackData;
-
 export function getTrackData(): BuiltTrackData {
-  return getRwandaTrackData(1200);
+  return getActiveTrackData(1200);
 }
 
 export function sampleTrackAtDistance(s: number): TrackSamplePoint {
-  return getRwandaTrackData(1200).getSampleAtDistance(s);
+  return getActiveTrackData(1200).getSampleAtDistance(s);
 }
 
 export function projectWorldToTrack(
@@ -950,7 +947,7 @@ export function projectWorldToTrack(
   worldZ: number,
   hintS?: number
 ) {
-  return getRwandaTrackData(1200).projectWorldToTrack(worldX, worldZ, hintS);
+  return getActiveTrackData(1200).projectWorldToTrack(worldX, worldZ, hintS);
 }
 
 export function findClosestTrackSample(

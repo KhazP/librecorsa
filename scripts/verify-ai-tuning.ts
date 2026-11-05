@@ -4,7 +4,7 @@
  * randomness, and the split timer behind the HUD's gaps to the cars ahead and behind.
  * Run: npx tsx scripts/verify-ai-tuning.ts
  */
-import { getRwandaTrackData } from '../src/lib/track-data';
+import { getActiveTrackData } from '../src/lib/track-data';
 import { computeSpeedProfile, createVf26ProfileCarModel } from '../src/lib/sim/speed-profile';
 import {
   AI_SKILL_DEFAULT,
@@ -39,7 +39,7 @@ function check(name: string, cond: boolean, detail = ''): void {
 }
 const near = (a: number, b: number, tol = 1e-9) => Math.abs(a - b) <= tol;
 
-const track = getRwandaTrackData(1200);
+const track = getActiveTrackData(1200);
 const L = track.totalLengthM;
 
 console.log('Resolution: defaults → class → vehicle → track → sections');

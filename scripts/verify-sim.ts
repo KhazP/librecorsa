@@ -1,4 +1,4 @@
-import { getRwandaTrackData, TURN_METADATA } from '../src/lib/track-data';
+import { getActiveTrackData, TURN_METADATA } from '../src/lib/track-data';
 import { F1Physics2026, floorStallFactorForClearance } from '../src/lib/f1-physics-2026';
 import {
   computeTyreForces,
@@ -13,7 +13,7 @@ import { estimateAeroCoefficients } from '../src/lib/sim/vf26-aero';
 import { NOMINAL_AIR_DENSITY } from '../src/lib/sim/speed-profile';
 import { Lut } from '../src/lib/sim/lut';
 import { mgukDeployCapW, VF26_AI_REFERENCE, VF26_CHASSIS, VF26_TYRES } from '../src/lib/sim/vf26-data';
-import { buildRwandaCircuitScene } from '../src/lib/scene-builder';
+import { buildCircuitScene } from '../src/lib/scene-builder';
 import { MultiplayerSyncManager } from '../src/lib/sim/multiplayer-sync';
 import { AiOpponentField } from '../src/lib/sim/ai-opponents';
 import { createFlatTestTrack } from './lib/flat-track';
@@ -72,7 +72,7 @@ function assert(condition: boolean, message: string): void {
 
 async function runVerification() {
   console.log('=== LIBRECORSA SIMULATOR VERIFICATION SUITE (VF26, Rwanda circuit) ===\n');
-  const track = getRwandaTrackData(1200);
+  const track = getActiveTrackData(1200);
   const flat = createFlatTestTrack(30_000);
 
   // 1. Stationary steering: the wheels turn, the car does not move
@@ -269,7 +269,7 @@ async function runVerification() {
 
   // 6. Grandstand & Structure Track Clearance Verification (User bug: "there are some grandstands right on the track")
   console.log('\n6. Testing Grandstand & Trackside Structure Clearance Against All 1,200 Track Samples...');
-  const builtScene = buildRwandaCircuitScene(track);
+  const builtScene = buildCircuitScene(track);
   builtScene.sceneGroup.updateMatrixWorld(true);
   let checkedStructureGroups = 0;
   let checkedMeshes = 0;
@@ -1096,7 +1096,7 @@ async function runVerification() {
   // ~0.5 m past it where those lines sit outside the modelled barrier.
   {
     console.log('\n12. Barrier hits (missed braking points)...');
-    const crashTrack = getRwandaTrackData();
+    const crashTrack = getActiveTrackData();
     const trackRoot = loadGlbGeometry('public/tracks/rwanda/rwanda_2026.glb');
     const walls = TrackWallQuery.fromTrackRoot(trackRoot);
     const check = (name: string, ok: boolean, detail: string) => assert(ok, `${name} (${detail})`);

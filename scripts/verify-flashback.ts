@@ -3,7 +3,7 @@
  * and wear, and drives on from it on the road, not under it. Every car model, on the Rwanda circuit (with elevation).
  */
 import * as THREE from "three";
-import { evaluateSampleLateralHeightM, getRwandaTrackData } from "../src/lib/track-data";
+import { evaluateSampleLateralHeightM, getActiveTrackData } from "../src/lib/track-data";
 import type { SimulatorCar } from "../src/lib/sim/simulator-car";
 import { F12026CarSim } from "../src/lib/sim/f12026-car/F12026CarSim";
 import { createAmgGt3Sim } from "../src/lib/sim/gt3/AmgGt3Sim";
@@ -15,7 +15,7 @@ const check = (ok: boolean, msg: string) => {
   if (!ok) failures++;
 };
 
-const track = getRwandaTrackData();
+const track = getActiveTrackData();
 const fwd = new THREE.Vector3();
 const yawOf = (q: THREE.Quaternion) => {
   fwd.set(0, 0, 1).applyQuaternion(q);

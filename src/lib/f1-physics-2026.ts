@@ -48,7 +48,7 @@ import {
   type BuiltTrackData,
   evaluateSampleLateralHeightM,
   getActiveSurfaceTable,
-  getRwandaTrackData,
+  getActiveTrackData,
 } from './track-data';
 import { Lut } from './sim/lut';
 import {
@@ -519,7 +519,7 @@ export class F1Physics2026 {
 
   public telemetry: CarTelemetry;
 
-  constructor(track: BuiltTrackData = getRwandaTrackData()) {
+  constructor(track: BuiltTrackData = getActiveTrackData()) {
     this.track = track;
 
     this.wings = createWingRuntimes();

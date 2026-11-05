@@ -25,7 +25,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { spawnSync } from 'child_process';
-import { getRwandaTrackData, setActiveTrack, type RawTrackJson } from '../src/lib/track-data';
+import { getActiveTrackData, setActiveTrack, type RawTrackJson } from '../src/lib/track-data';
 import { F1Physics2026 } from '../src/lib/f1-physics-2026';
 import { AMG_GT3_PROFILE_CAR, AMG_GT3_SIM_PROFILE } from '../src/lib/sim/gt3/AmgGt3Sim';
 import { F12026CarSim } from '../src/lib/sim/f12026-car/F12026CarSim';
@@ -89,7 +89,7 @@ const STRAIGHT_TENSION_W = Number(process.env.STRAIGHT_TENSION_W ?? 0.005);
  */
 const OPT_MU_SCALE = Number(process.env.OPT_MU ?? 0.95);
 
-const track = getRwandaTrackData(1200);
+const track = getActiveTrackData(1200);
 const samples = track.samples;
 const n = samples.length;
 const car = LINE === 'gt3' ? AMG_GT3_PROFILE_CAR : createVf26ProfileCarModel('balanced');
