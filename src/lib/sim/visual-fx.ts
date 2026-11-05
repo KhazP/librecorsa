@@ -215,17 +215,40 @@ export class SimVisualFxManager {
 
   /**
    * Updates tire skidmarks, smoke/gravel particles, and opponent 3D cars each frame.
+   * `emit` is false while the player's car is not being simulated (paused, menus, replay): its wheel state is then
+   * frozen, so nothing new is laid down or spawned, but particles in flight and the opponents keep updating.
    */
   public update(
     dt: number,
     carWorldQuat: THREE.Quaternion,
     carSpeedMs: number,
     wheels: readonly [SimWheelState, SimWheelState, SimWheelState, SimWheelState],
-    peers: InterpolatedPeerState[]
+    peers: InterpolatedPeerState[],
+    emit = true
   ): void {
-    const carRight = new THREE.Vector3(1, 0, 0).applyQuaternion(carWorldQuat);
-    const carUp = new THREE.Vector3(0, 1, 0).applyQuaternion(carWorldQuat);
-    const carForward = new THREE.Vector3(0, 0, 1).applyQuaternion(carWorldQuat);
+    if (emit) this.emitFromCar(dt, carWorldQuat, carSpeedMs, wheels);
+    else {
+      this.emitTimer = 0;
+      this.lastWheelSkidPos.fill(null);
+    }
+    this.stepParticles(dt);
+    this.updateOpponentCars(dt, peers);
+  }
+
+  private readonly carRight = new THREE.Vector3();
+  private readonly carUp = new THREE.Vector3();
+  private readonly carForward = new THREE.Vector3();
+
+  /** Skidmarks and smoke / gravel / spray from the player's four wheels */
+  private emitFromCar(
+    dt: number,
+    carWorldQuat: THREE.Quaternion,
+    carSpeedMs: number,
+    wheels: readonly [SimWheelState, SimWheelState, SimWheelState, SimWheelState]
+  ): void {
+    const carRight = this.carRight.set(1, 0, 0).applyQuaternion(carWorldQuat);
+    const carUp = this.carUp.set(0, 1, 0).applyQuaternion(carWorldQuat);
+    const carForward = this.carForward.set(0, 0, 1).applyQuaternion(carWorldQuat);
 
     // 1. Record tire skidmarks when combined slip exceeds threshold (`> 0.68`)
     for (let wIdx = 0; wIdx < 4; wIdx++) {
@@ -324,9 +347,6 @@ export class SimVisualFxManager {
         }
       }
     }
-
-    this.stepParticles(dt);
-    this.updateOpponentCars(dt, peers);
   }
 
   private appendSkidQuad(

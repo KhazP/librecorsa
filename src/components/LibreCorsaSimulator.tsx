@@ -1518,6 +1518,11 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     );
     scene.add(sparkPoints);
     let nextSparkIdx = 0;
+    /** Sparks owed to the emitter, so the rate is per second rather than per rendered frame */
+    let sparkEmitAcc = 0;
+    const SPARKS_PER_S = 120;
+    const sparkFwd = new THREE.Vector3();
+    const sparkRight = new THREE.Vector3();
 
     const onMouseMove = (e: MouseEvent) => {
       if (!mouseSteerEnabledRef.current) return;
@@ -2505,54 +2510,47 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       const shake = cockpitShake.update(dtSeconds, physics.telemetry);
 
       // Update persistent 4-wheel skidmark ribbons, tire smoke/gravel/rooster-tail particles & opponent 3D cars
+      // The player's car only lays skidmarks and throws smoke / spray while it is simulated: paused, in menus or in a
+      // replay its wheel state is the last driven frame, which would keep emitting on the spot
       visualFx.update(
         dtSeconds,
         physics.worldQuaternion,
         physics.vxMs,
         physics.wheels,
-        renderPeers
+        renderPeers,
+        driving
       );
 
 
       // Titanium Floor Sparks
       if (
+        driving &&
         !isGt3Rig(carRigCar) &&
         ((physics.telemetry.speedKmh > 280 &&
           (physics.telemetry.verticalG ?? 1.0) > 1.15) ||
           physics.telemetry.onKerbLeft ||
           physics.telemetry.onKerbRight)
       ) {
-        const carForward = new THREE.Vector3(0, 0, 1).applyQuaternion(
-          physics.worldQuaternion
-        );
-        const carRight = new THREE.Vector3(-1, 0, 0).applyQuaternion(
-          physics.worldQuaternion
-        );
-        for (let s = 0; s < 2; s++) {
+        const carForward = sparkFwd.set(0, 0, 1).applyQuaternion(physics.worldQuaternion);
+        const carRight = sparkRight.set(-1, 0, 0).applyQuaternion(physics.worldQuaternion);
+        sparkEmitAcc = Math.min(sparkCount, sparkEmitAcc + dtSeconds * SPARKS_PER_S);
+        for (; sparkEmitAcc >= 1; sparkEmitAcc--) {
           const idx = nextSparkIdx % sparkCount;
           nextSparkIdx++;
-          const spawnPos = physics.worldPosition
-            .clone()
-            .addScaledVector(carForward, -1.9)
-            .addScaledVector(carRight, (Math.random() - 0.5) * 0.7)
-            .add(new THREE.Vector3(0, 0.08, 0));
+          const side = (Math.random() - 0.5) * 0.7;
+          const p = physics.worldPosition;
+          sparkPositions[idx * 3] = p.x - carForward.x * 1.9 + carRight.x * side;
+          sparkPositions[idx * 3 + 1] = p.y - carForward.y * 1.9 + carRight.y * side + 0.08;
+          sparkPositions[idx * 3 + 2] = p.z - carForward.z * 1.9 + carRight.z * side;
 
-          sparkPositions[idx * 3] = spawnPos.x;
-          sparkPositions[idx * 3 + 1] = spawnPos.y;
-          sparkPositions[idx * 3 + 2] = spawnPos.z;
-
-          sparkVelocities[idx]
-            .copy(carForward)
-            .multiplyScalar(-physics.vxMs * 0.35)
-            .add(
-              new THREE.Vector3(
-                (Math.random() - 0.5) * 6,
-                1.8 + Math.random() * 3.5,
-                (Math.random() - 0.5) * 6
-              )
-            );
+          const v = sparkVelocities[idx].copy(carForward).multiplyScalar(-physics.vxMs * 0.35);
+          v.x += (Math.random() - 0.5) * 6;
+          v.y += 1.8 + Math.random() * 3.5;
+          v.z += (Math.random() - 0.5) * 6;
           sparkLives[idx] = 0.25 + Math.random() * 0.2;
         }
+      } else {
+        sparkEmitAcc = 0;
       }
 
       for (let i = 0; i < sparkCount; i++) {
