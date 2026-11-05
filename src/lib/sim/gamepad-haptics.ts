@@ -30,7 +30,8 @@ interface VibrationActuatorLike {
 }
 
 interface ConnectedPad {
-  index: number;
+  /** Slot and device id together: a different pad reconnecting into the same slot must not inherit its state */
+  key: string;
   actuator: VibrationActuatorLike;
 }
 
@@ -125,7 +126,7 @@ function connectedPads(): ConnectedPad[] {
   const pads: ConnectedPad[] = [];
   navigator.getGamepads().forEach((pad, index) => {
     const actuator = (pad as { vibrationActuator?: VibrationActuatorLike | null } | null)?.vibrationActuator;
-    if (actuator && typeof actuator.playEffect === "function") pads.push({ index, actuator });
+    if (actuator && typeof actuator.playEffect === "function") pads.push({ key: `${index}|${pad?.id ?? ""}`, actuator });
   });
   return pads;
 }
@@ -172,7 +173,7 @@ function playTriggerRumble(actuator: VibrationActuatorLike, weak: number, strong
 export class GamepadHaptics {
   private timeS = 0;
   private active = false;
-  private outputs = new Map<number, PadOutput>();
+  private outputs = new Map<string, PadOutput>();
 
   /**
    * Call once per frame after the physics step; `enabled` is false while paused or when the toggle is off.
@@ -189,9 +190,9 @@ export class GamepadHaptics {
     const { weak, strong } = hapticMagnitudes(t, this.timeS);
     const wantTriggers = options?.triggerRumble === true;
     const trig = wantTriggers ? triggerMagnitudes(t, this.timeS) : { left: 0, right: 0 };
-    for (const { index, actuator } of connectedPads()) {
-      const out = this.outputs.get(index) ?? { lastSentS: -Infinity, weak: 0, strong: 0, left: 0, right: 0 };
-      this.outputs.set(index, out);
+    for (const { key, actuator } of connectedPads()) {
+      const out = this.outputs.get(key) ?? { lastSentS: -Infinity, weak: 0, strong: 0, left: 0, right: 0 };
+      this.outputs.set(key, out);
 
       const sinceS = this.timeS - out.lastSentS;
       if (sinceS < SEND_INTERVAL_S) continue;
@@ -222,8 +223,8 @@ export class GamepadHaptics {
   /** Silences every pad this instance has been driving (pause, toggle off, unmount) */
   stop(): void {
     this.active = false;
-    for (const { index, actuator } of connectedPads()) {
-      if (!this.outputs.has(index)) continue;
+    for (const { key, actuator } of connectedPads()) {
+      if (!this.outputs.has(key)) continue;
       if (actuator.reset) send(() => actuator.reset?.());
       else if (supportsTriggerRumble(actuator)) playTriggerRumble(actuator, 0, 0, 0, 0);
       else playDualRumble(actuator, 0, 0);
