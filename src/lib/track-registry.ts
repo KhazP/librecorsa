@@ -75,16 +75,24 @@ function storeTrackId(id: string): void {
   }
 }
 
-/** Fetches (when needed) and activates a circuit; resolves once `setActiveTrack` has run */
+let activateGen = 0;
+
+/**
+ * Fetches (when needed) and activates a circuit; resolves once `setActiveTrack` has run. A call overtaken by a later
+ * one rejects instead of activating: the active track is global, and a slow fetch must not replace a newer choice.
+ */
 export async function activateTrack(id: string): Promise<TrackInfo> {
   if (!TRACKS.some((t) => t.id === id)) throw new Error(`Unknown circuit "${id}"`);
+  const gen = ++activateGen;
   const info = getTrackInfo(id);
   if (!info.dataUrl) {
     setActiveTrack(RWANDA_TRACK_ID);
   } else {
     const res = await fetch(withBasePath(info.dataUrl));
     if (!res.ok) throw new Error(`Track data ${info.dataUrl}: HTTP ${res.status}`);
-    setActiveTrack(info.id, (await res.json()) as RawTrackJson);
+    const raw = (await res.json()) as RawTrackJson;
+    if (gen !== activateGen) throw new Error(`Circuit "${id}" was superseded by a later choice`);
+    setActiveTrack(info.id, raw);
   }
   storeTrackId(info.id);
   return info;

@@ -142,6 +142,10 @@ function colliderDebugMaterial(name: string): THREE.MeshBasicMaterial | null {
   return mat;
 }
 
+/** Bumped by every loadTrackGlb call; only the latest call's result is used */
+let trackLoadGen = 0;
+class SupersededLoad extends Error {}
+
 function loadTrackGlb(
   url: string,
   glbGroup: THREE.Group,
@@ -159,6 +163,10 @@ function loadTrackGlb(
   if (typeof window === "undefined" || typeof fetch === "undefined") {
     return;
   }
+  // A newer circuit load (the simulator remounted on another track) supersedes this one: its late result must not
+  // mark the new track's progress done or register its scenery instances
+  const gen = ++trackLoadGen;
+  const current = () => gen === trackLoadGen;
   resetSceneryInstances();
   const sceneryLoad = Promise.all(sceneryUrls.map(loadSceneryInstances));
   const texturesLoad = sceneryTexturesUrl ? loadSceneryTextures(sceneryTexturesUrl) : Promise.resolve(null);
@@ -250,6 +258,7 @@ function loadTrackGlb(
         if (offset !== undefined) obj.renderOrder = 1;
       });
       return Promise.all([sceneryLoad, texturesLoad]).then(([files, textures]) => {
+        if (!current()) throw new SupersededLoad();
         if (textures) applySceneryTextures(root, textures);
         // Before onLoaded, so the camera occlusion pass and the shader warm-up see them
         for (const scenery of files) if (scenery) attachSceneryInstances(root, scenery);
@@ -257,6 +266,7 @@ function loadTrackGlb(
       });
     })
     .then((root) => {
+      if (!current()) return;
       glbGroup.add(root);
       onLoaded(root);
 
@@ -265,6 +275,7 @@ function loadTrackGlb(
       assetProgress.done("track");
     })
     .catch((err) => {
+      if (err instanceof SupersededLoad || !current()) return;
       console.warn("Using fallback procedural track geometry:", err);
       assetProgress.fail("track");
     });
