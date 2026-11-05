@@ -8,7 +8,7 @@ import type { AssistPreset, TireCompound, VehicleModelId } from "@/types/f1";
  * Revision of the vehicle physics. Bump it whenever a physics change makes earlier lap times incomparable: laps
  * recorded under another revision then go on another leaderboard.
  */
-export const PHYSICS_VERSION = 1;
+export const PHYSICS_VERSION = 2;
 
 /** What a lap was driven with. Laps are only ranked against laps driven under the same class (`lapBoardClass`) */
 export interface LapConditions {
