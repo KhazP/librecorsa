@@ -57,16 +57,22 @@ export const lapPositionM = (distM: number, lapLengthM: number) => ((distM % lap
 export class GapTimer {
   private bucketTimes = new Map<number, number>();
 
+  /** `bucketM`: distance resolution of the recorded crossing times (m) */
+  constructor(private readonly bucketM = GAP_BUCKET_M) {}
+
   reset(): void {
     this.bucketTimes.clear();
   }
 
   /** Call every frame with every car's distance */
   record(raceTimeS: number, distances: Iterable<number>): void {
-    for (const d of distances) {
-      const bucket = Math.floor(d / GAP_BUCKET_M);
-      if (!this.bucketTimes.has(bucket)) this.bucketTimes.set(bucket, raceTimeS);
-    }
+    for (const d of distances) this.recordOne(raceTimeS, d);
+  }
+
+  /** One car's distance this frame; the first car to reach each bucket sets its time */
+  recordOne(raceTimeS: number, distM: number): void {
+    const bucket = Math.floor(distM / this.bucketM);
+    if (!this.bucketTimes.has(bucket)) this.bucketTimes.set(bucket, raceTimeS);
     // Over the cap, drop the oldest bucket: the first inserted (Map order), which is the field's earliest, lowest
     // distance; no scan of all 4000 keys every frame
     while (this.bucketTimes.size > 4000) {
@@ -76,11 +82,12 @@ export class GapTimer {
     }
   }
 
+  /** Time since the first car reached `distM` (bucket entry time, minus the time spent inside the bucket) */
   gapS(raceTimeS: number, distM: number, speedMs: number): number {
-    const bucket = Math.floor(distM / GAP_BUCKET_M);
+    const bucket = Math.floor(distM / this.bucketM);
     const t = this.bucketTimes.get(bucket);
     if (t === undefined) return 0;
-    const inBucketS = (distM - bucket * GAP_BUCKET_M) / Math.max(5, speedMs);
+    const inBucketS = (distM - bucket * this.bucketM) / Math.max(5, speedMs);
     return Math.max(0, raceTimeS - t - inBucketS);
   }
 }
@@ -295,8 +302,11 @@ export class LapClock {
   finishLaps: number | null = null;
   bestLapMs: number | null = null;
   lastLapMs: number | null = null;
+  /** Laps completed so far (line crossings counted from the grid) */
+  lapsDone = 0;
+  /** Time of the lap just completed, also when too short to count as a lap time (ms); null before the first */
+  lastCrossingLapMs: number | null = null;
   private prevS = 0;
-  private lapsDone = 0;
   private lapStartS = 0;
 
   constructor(private readonly lapLengthM: number) {}
@@ -310,6 +320,7 @@ export class LapClock {
     this.finishLaps = null;
     this.bestLapMs = null;
     this.lastLapMs = null;
+    this.lastCrossingLapMs = null;
     this.lapsDone = 0;
     this.lapStartS = 0;
   }
@@ -325,6 +336,7 @@ export class LapClock {
     const laps = Math.floor(this.distM / L);
     if (laps > this.lapsDone && this.finishTimeS === null) {
       const lapMs = (raceTimeS - this.lapStartS) * 1000;
+      this.lastCrossingLapMs = lapMs;
       // The first lap starts from the grid: still a lap, as on a timing screen
       if (lapMs > 1000 && (this.bestLapMs === null || lapMs < this.bestLapMs)) this.bestLapMs = Math.round(lapMs);
       if (lapMs > 1000) this.lastLapMs = Math.round(lapMs);
