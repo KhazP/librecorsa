@@ -1516,8 +1516,9 @@ export class F1Physics2026 {
       if (absTarget > 0 && this.vxMs > 3 && brake > 0.01) {
         const w = this.wheels[i];
         const sk = -w.slipRatio / w.tyre.spec.peakSlipRatio;
-        // Lateral slip uses up grip on every axle: a cornering front must not keep the full longitudinal allowance
-        const sa = Math.abs(Math.tan(w.slipAngleRad)) / w.tyre.tanPeakAngle;
+        // Fronts ignore their slip angle on purpose: releasing front brake mid-corner shifts the balance rearward
+        // and spins the car on trail-braking (verify-driver-laps: assisted / semi-pro VF26 at Rwanda's T13)
+        const sa = w.isFront ? 0 : Math.abs(Math.tan(w.slipAngleRad)) / w.tyre.tanPeakAngle;
         const skAllowed = Math.sqrt(Math.max(0.35 * 0.35, absTarget * absTarget - sa * sa));
         if (sk > skAllowed) want = Math.max(0.1, 1 - (sk - skAllowed) * 3.2);
       }
