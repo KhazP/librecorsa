@@ -51,9 +51,10 @@ import {
 import { MultiplayerRace } from "@/lib/sim/race-session";
 import { GhostPlayer, LapRecorder } from "@/lib/sim/lap-recorder";
 import { ReplayBuffer } from "@/lib/sim/replay-buffer";
-import type { LapRecording, LapSummaryData, LeaderboardEntry, ReplayCarState } from "@/lib/sim/lap-types";
+import { PHYSICS_VERSION, lapBoardClass, type LapConditions, type LapRecording, type LapSummaryData, type LeaderboardEntry, type ReplayCarState } from "@/lib/sim/lap-types";
 import { exportLapFile, importLapFile, loadBestLap, saveBestLapIfFaster } from "@/lib/sim/ghost-store";
 import {
+  boardLabel,
   fetchRemoteGhost,
   fetchRemoteLeaderboard,
   localLeaderboard,
@@ -125,6 +126,8 @@ import { axlePressures } from "@/types/f1";
 /** Matches the aero package the track's target speeds / braking markers are computed for */
 const DEFAULT_AERO_PRESET: AeroSetupPreset = "balanced";
 const DEFAULT_ASSIST_PRESET: AssistPreset = "semi_pro";
+/** Mean water on the racing line (mm) from which a lap counts as wet, for the leaderboard */
+const WET_LAP_WATER_MM = 0.05;
 
 // Keyboard-only input shaping: a key press becomes a pedal squeeze, not a step
 /** A replay / flashback opens this far before the present, paused (s) */
@@ -468,7 +471,13 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   /** Ghost being raced: the personal best (default) or a downloaded / imported lap */
   const ghostRef = useRef<GhostPlayer | null>(null);
   const ghostSourceRef = useRef<"pb" | "other">("pb");
-  const [leaderboard, setLeaderboard] = useState<{ local: LeaderboardEntry[]; remote: LeaderboardEntry[]; loading: boolean }>({
+  const [leaderboard, setLeaderboard] = useState<{
+    local: LeaderboardEntry[];
+    remote: LeaderboardEntry[];
+    loading: boolean;
+    /** Label of the online board shown: the assists and surface it ranks */
+    boardLabel?: string;
+  }>({
     local: [],
     remote: [],
     loading: false,
@@ -963,14 +972,21 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   const refreshLeaderboard = useCallback(async () => {
     setLeaderboard((l) => ({ ...l, loading: true }));
     const vehicle = vehicleModelRef.current;
+    // The online board for what the player drives with now: their assists, today's surface, this physics revision
+    const board: LapConditions = {
+      assists: physicsRef.current?.assistPreset ?? DEFAULT_ASSIST_PRESET,
+      compound: physicsRef.current?.tireCompound ?? "soft",
+      surface: getTrackEnv().weather.lineWaterMm >= WET_LAP_WATER_MM ? "wet" : "dry",
+      physicsVersion: PHYSICS_VERSION,
+    };
     const [local, remote] = await Promise.all([
       localLeaderboard(trackId, vehicle).catch((): LeaderboardEntry[] => []),
       remoteLeaderboardEnabled
-        ? fetchRemoteLeaderboard(trackId, vehicle).catch((): LeaderboardEntry[] => [])
+        ? fetchRemoteLeaderboard(trackId, vehicle, lapBoardClass(board)).catch((): LeaderboardEntry[] => [])
         : Promise.resolve<LeaderboardEntry[]>([]),
     ]);
-    setLeaderboard({ local, remote, loading: false });
-  }, [trackId]);
+    setLeaderboard({ local, remote, loading: false, boardLabel: boardLabel(board) });
+  }, [trackId, getTrackEnv]);
 
   /** Races the personal best of this car as the ghost (force: also when another lap was chosen) */
   const loadPbGhost = useCallback(
@@ -2148,6 +2164,12 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
           telemetry: physics.telemetry,
           position: physics.worldPosition,
           quaternion: physics.worldQuaternion,
+          // Laps are ranked only against laps driven with the same assists, surface and physics revision
+          conditions: {
+            assists: physics.assistPreset,
+            compound: physics.tireCompound,
+            wet: trackEnv.weather.lineWaterMm >= WET_LAP_WATER_MM,
+          },
         });
         if (done) onLapCompletedRef.current(done.summary, done.recording);
       }
@@ -3338,6 +3360,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       local: leaderboard.local,
       remote: leaderboard.remote,
       remoteEnabled: remoteLeaderboardEnabled,
+      remoteBoardLabel: leaderboard.boardLabel,
       loading: leaderboard.loading,
       onRefresh: () => void refreshLeaderboard(),
       onRaceGhost: (entry: LeaderboardEntry) => void handleRaceGhostEntry(entry),

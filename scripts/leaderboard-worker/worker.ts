@@ -1,6 +1,7 @@
 /**
  * Reference leaderboard backend for the simulator: a Cloudflare Worker storing laps in KV.
- * Routes: POST /laps, GET /laps?track=&vehicle=&limit=, GET /laps/:id.
+ * Routes: POST /laps, GET /laps?track=&vehicle=&board=&limit=, GET /laps/:id.
+ * `board` is the lap's class (physics revision, assists, surface: "p1-pro-dry"); laps are ranked only within it.
  * Validation and plausibility checks are heuristics, not cheat-proof.
  * Self-contained: the minimal KV and Env types are declared here, no workers-types dependency.
  */
@@ -16,6 +17,14 @@ interface Env {
   ALLOWED_ORIGIN?: string;
 }
 
+/** Mirrors LapConditions in src/lib/sim/lap-types.ts */
+interface LapConditions {
+  assists: string;
+  compound: string;
+  surface: "dry" | "wet";
+  physicsVersion: number;
+}
+
 /** Mirrors LapRecording in src/lib/sim/lap-types.ts */
 interface LapRecording {
   version: 1;
@@ -28,6 +37,7 @@ interface LapRecording {
   recordedAt: number;
   sampleHz: number;
   data: number[];
+  conditions: LapConditions;
 }
 
 /** One row of a board: a lap without its samples */
@@ -40,6 +50,7 @@ interface BoardEntry {
   vehicle: string;
   trackId: string;
   recordedAt: number;
+  conditions: LapConditions;
 }
 
 type Parsed = { ok: true; rec: LapRecording } | { ok: false; error: string };
@@ -59,6 +70,15 @@ const MAX_SAMPLES = 20000;
 /** Number of values per sample: t, s, x, y, z, qx, qy, qz, qw, speedKmh, throttle, brake, steer, gear */
 const SAMPLE_STRIDE = 14;
 const VEHICLES = ["vf26", "f12026-car", "amg-gt3"];
+const ASSISTS = ["pro", "semi_pro", "assisted"];
+const COMPOUNDS = ["soft", "medium", "hard", "intermediate", "wet"];
+const BOARD_PATTERN = /^p\d{1,4}-(pro|semi_pro|assisted)-(dry|wet)$/;
+// Sample consistency, as src/lib/sim/lap-plausibility.ts (keep the two in step)
+const MAX_LAP_GAP_M = 150;
+const MAX_SPEED_PATH_MISMATCH = 0.03;
+const SPEED_PATH_MARGIN_M = 50;
+const MAX_TRACK_PATH_MISMATCH = 0.06;
+const TRACK_PATH_MARGIN_M = 100;
 const TRACK_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -90,6 +110,47 @@ function isFiniteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
 }
 
+function parseConditions(raw: unknown): LapConditions | null {
+  if (!isRecord(raw)) return null;
+  if (typeof raw.assists !== "string" || !ASSISTS.includes(raw.assists)) return null;
+  if (typeof raw.compound !== "string" || !COMPOUNDS.includes(raw.compound)) return null;
+  if (raw.surface !== "dry" && raw.surface !== "wet") return null;
+  const v = raw.physicsVersion;
+  if (typeof v !== "number" || !Number.isInteger(v) || v < 1 || v > 1000) return null;
+  return { assists: raw.assists, compound: raw.compound, surface: raw.surface, physicsVersion: v };
+}
+
+/** The board a lap is ranked on within its circuit and car, as lapBoardClass in src/lib/sim/lap-types.ts */
+function boardClass(c: LapConditions): string {
+  return `p${c.physicsVersion}-${c.assists}-${c.surface}`;
+}
+
+/** The samples agree with each other: the lap closes, and speed, positions and track distance match */
+function plausibilityProblem(samples: number[], count: number): string | null {
+  const S = SAMPLE_STRIDE;
+  const last = (count - 1) * S;
+  const gap = Math.hypot(samples[last + 2] - samples[2], samples[last + 3] - samples[3], samples[last + 4] - samples[4]);
+  if (gap > MAX_LAP_GAP_M) return "The lap does not end where it started";
+  let path = 0;
+  let speedPath = 0;
+  let maxS = 0;
+  for (let i = 0; i < count; i++) {
+    const o = i * S;
+    maxS = Math.max(maxS, samples[o + 1]);
+    if (i === 0) continue;
+    const p = o - S;
+    path += Math.hypot(samples[o + 2] - samples[p + 2], samples[o + 3] - samples[p + 3], samples[o + 4] - samples[p + 4]);
+    speedPath += ((samples[o + 9] + samples[p + 9]) / 2 / 3.6) * (samples[o] - samples[p]);
+  }
+  if (Math.abs(path - speedPath) > MAX_SPEED_PATH_MISMATCH * path + SPEED_PATH_MARGIN_M) {
+    return "Recorded speeds do not match the distance driven";
+  }
+  if (Math.abs(path - maxS) > MAX_TRACK_PATH_MISMATCH * path + TRACK_PATH_MARGIN_M) {
+    return "Distance driven does not match the lap length";
+  }
+  return null;
+}
+
 function clampLimit(raw: string | null): number {
   const n = Number(raw ?? DEFAULT_LIMIT);
   return Number.isFinite(n) ? Math.min(MAX_LIMIT, Math.max(1, Math.floor(n))) : DEFAULT_LIMIT;
@@ -100,6 +161,9 @@ function parseRecording(raw: unknown): Parsed {
   const bad = (error: string): Parsed => ({ ok: false, error });
   if (!isRecord(raw)) return bad("Recording must be an object");
   if (raw.version !== 1) return bad("Unsupported version");
+  // Assists, tyre, surface and physics revision decide the board; laps without them come from an outdated game
+  const conditions = parseConditions(raw.conditions);
+  if (!conditions) return bad("Missing lap conditions. Update the game and try again");
 
   const trackId = raw.trackId;
   if (typeof trackId !== "string" || !TRACK_PATTERN.test(trackId)) return bad("Invalid trackId");
@@ -172,6 +236,8 @@ function parseRecording(raw: unknown): Parsed {
     );
     if ((distance / dt) * 3.6 > MAX_SPEED_KMH) return bad("Positions imply a speed above 420 km/h");
   }
+  const problem = plausibilityProblem(samples, count);
+  if (problem) return bad(problem);
 
   const rec: LapRecording = {
     version: 1,
@@ -184,6 +250,7 @@ function parseRecording(raw: unknown): Parsed {
     recordedAt,
     sampleHz,
     data: samples,
+    conditions,
   };
   return { ok: true, rec };
 }
@@ -235,7 +302,7 @@ async function handlePost(request: Request, env: Env): Promise<Response> {
   if (!parsed.ok) return fail(env, parsed.error);
   const rec = parsed.rec;
 
-  const boardKey = `board:${rec.trackId}|${rec.vehicle}`;
+  const boardKey = `board:${rec.trackId}|${rec.vehicle}|${boardClass(rec.conditions)}`;
   const board = await readBoard(env, boardKey);
   // One row per driver: a slower lap from the same name and code does not replace their best
   const previous = board.find((e) => e.code === rec.driverCode && e.name === rec.driverName);
@@ -253,6 +320,7 @@ async function handlePost(request: Request, env: Env): Promise<Response> {
     vehicle: rec.vehicle,
     trackId: rec.trackId,
     recordedAt: rec.recordedAt,
+    conditions: rec.conditions,
   };
   const next = board.filter((e) => e !== previous);
   const insertAt = next.findIndex((e) => e.lapTimeMs > entry.lapTimeMs);
@@ -277,10 +345,11 @@ async function handlePost(request: Request, env: Env): Promise<Response> {
 async function handleList(url: URL, env: Env): Promise<Response> {
   const track = url.searchParams.get("track") ?? "";
   const vehicle = url.searchParams.get("vehicle") ?? "";
-  if (!TRACK_PATTERN.test(track) || !VEHICLES.includes(vehicle)) {
-    return fail(env, "track and vehicle are required");
+  const cls = url.searchParams.get("board") ?? "";
+  if (!TRACK_PATTERN.test(track) || !VEHICLES.includes(vehicle) || !BOARD_PATTERN.test(cls)) {
+    return fail(env, "track, vehicle and board are required");
   }
-  const board = await readBoard(env, `board:${track}|${vehicle}`);
+  const board = await readBoard(env, `board:${track}|${vehicle}|${cls}`);
   return jsonResponse(env, { laps: board.slice(0, clampLimit(url.searchParams.get("limit"))) });
 }
 
