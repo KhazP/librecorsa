@@ -301,6 +301,12 @@ function applyObbDeltas(sim: SimulatorCar, pos: readonly [number, number], vel: 
  */
 const REMOTE_SEP_RATE_MS = 1.5;
 const REMOTE_SLOP_M = 0.02;
+/**
+ * Overlap of the predicted boxes below which there is no contact (m): above the separation slop, as the remote pose
+ * is a prediction off by ~0.1 m on average, yet low enough that a hit is still met before it digs in (at 5 cm the
+ * contact came late and hard enough to spin the side-by-side duel in verify-multiplayer-contact)
+ */
+const REMOTE_CONTACT_SLOP_M = 0.03;
 const REMOTE_RESTITUTION = 0.1;
 
 /** Contact mass and yaw inertia of another player's car, from the model it drives */
@@ -343,9 +349,9 @@ export function resolvePlayerVsRemoteCar(player: SimulatorCar, remote: Interpola
   _obbB.halfWidthM = CAR_WID_M * 0.5;
   [_obbB.massKg, _obbB.yawInertiaKgM2] = remoteContactMass(remote.vehicle);
   const hit = resolveCarToCarObbCollision(_obbA, _obbB, REMOTE_RESTITUTION);
-  // The remote box is a prediction, good to a few centimetres: an overlap within that slop is not contact. This,
+  // The remote box is a prediction, good to about a decimetre: an overlap within the slop is not contact. This,
   // not a tight broad phase, is what keeps prediction error from turning grazes into phantom hits
-  if (!hit.collided || hit.penetrationM <= REMOTE_SLOP_M) return false;
+  if (!hit.collided || hit.penetrationM <= REMOTE_CONTACT_SLOP_M) return false;
   // This car's half of the overlap, paced so a few frames of it never snap the car sideways
   const sep = Math.min(Math.max(0, 0.5 * hit.penetrationM - REMOTE_SLOP_M), REMOTE_SEP_RATE_MS * Math.max(0, dt));
   _sep[0] = -hit.nx * sep;
