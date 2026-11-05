@@ -195,9 +195,29 @@ export interface DeviceFrame {
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
+/**
+ * Connected Gamepad API devices. Two identical devices (two of the same pedal set or button box) report the same
+ * Gamepad.id, and bindings and calibration are keyed by id: the second and later ones get " #2", " #3" … appended
+ * (in slot order), so each can be bound on its own. A lone device keeps its plain id, as saved bindings expect.
+ */
 export function connectedPads(): PadLike[] {
   if (typeof navigator === "undefined" || typeof navigator.getGamepads !== "function") return [];
-  return navigator.getGamepads().filter((p): p is Gamepad => Boolean(p && p.connected !== false));
+  const pads = navigator.getGamepads().filter((p): p is Gamepad => Boolean(p && p.connected !== false));
+  const seen = new Map<string, number>();
+  return pads.map((p) => {
+    const n = (seen.get(p.id) ?? 0) + 1;
+    seen.set(p.id, n);
+    if (n === 1) return p;
+    return {
+      id: `${p.id} #${n}`,
+      index: p.index,
+      mapping: p.mapping,
+      connected: p.connected,
+      axes: p.axes,
+      buttons: p.buttons,
+      vibrationActuator: (p as { vibrationActuator?: unknown }).vibrationActuator,
+    } as PadLike;
+  });
 }
 
 export function findPad(pads: readonly PadLike[], padId: string): PadLike | undefined {
