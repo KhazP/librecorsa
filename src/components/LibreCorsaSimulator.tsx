@@ -816,17 +816,17 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
 
   /** Esc / pad Menu: open or close the pause menu, releasing every held key */
   const togglePause = useCallback(() => {
-    setPaused((prev) => {
-      const next = !prev;
-      pausedRef.current = next;
-      audioRef.current?.setPaused(next);
-      if (!next) setPauseNotice(null);
-      if (next) {
-        wheelFfb.stop();
-        releaseHeldKeys();
-      }
-      return next;
-    });
+    // From the ref the frame loop reads, with the side effects here rather than inside a state updater (which React
+    // may run twice, or later than this call)
+    const next = !pausedRef.current;
+    pausedRef.current = next;
+    setPaused(next);
+    audioRef.current?.setPaused(next);
+    if (!next) setPauseNotice(null);
+    if (next) {
+      wheelFfb.stop();
+      releaseHeldKeys();
+    }
   }, [releaseHeldKeys]);
   const togglePauseRef = useRef(togglePause);
   togglePauseRef.current = togglePause;
