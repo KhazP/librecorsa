@@ -119,7 +119,8 @@ export class TrackEnvironment {
     const traits = WET_TYRE_TRAITS[sim.tireCompound];
     const grip = traits.dryGrip * wetGripFactor(traits, water, AI_PACE_REF_MS, this.realism.wetSeverity);
     // A car planning on its wet grip already corners and brakes for it
-    if (sim.aiPlanGrip) return 1 - 0.03 * wetnessFromWater(water);
+    // (A car that has the method plans on its own wet grip, whatever it returns right now)
+    if (typeof sim.aiPlanGrip === 'function') return 1 - 0.03 * wetnessFromWater(water);
     return Math.min(1, Math.pow(Math.max(0.1, grip), 0.65) * (1 - 0.03 * wetnessFromWater(water)));
   }
 

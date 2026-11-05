@@ -61,7 +61,8 @@ export function surfaceDragN(rollingResistance: number, fzN: number, patchSpeedM
 }
 
 export function isTrackSurfaceKind(v: unknown): v is TrackSurfaceKind {
-  return typeof v === 'string' && v in DEFAULT_SURFACE_TABLE;
+  // Own keys only: `in` also accepts prototype names ("constructor", "toString")
+  return typeof v === 'string' && Object.prototype.hasOwnProperty.call(DEFAULT_SURFACE_TABLE, v);
 }
 
 /** The default table with a track's overrides applied (unknown kinds and non-matching field types are ignored) */
