@@ -492,12 +492,3 @@ export function buildTargetSpeedProfile(
   }
   return v;
 }
-
-/** Linear interpolation of a per-point array at track distance s */
-export function sampleArray(values: ArrayLike<number>, s: number, L: number): number {
-  const n = values.length;
-  const x = (wrapS(s, L) / L) * n;
-  const i0 = Math.floor(x) % n;
-  const t = x - Math.floor(x);
-  return values[i0] + (values[(i0 + 1) % n] - values[i0]) * t;
-}
