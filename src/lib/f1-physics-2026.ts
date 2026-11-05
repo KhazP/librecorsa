@@ -2008,12 +2008,20 @@ export class F1Physics2026 {
     return upFlat.applyAxisAngle(sample.tangent, this.planeBankRad).normalize();
   }
 
-  private updateGravity(sample: ReturnType<BuiltTrackData['getSampleAtDistance']>): void {
-    const up = this.localRoadUp(sample);
+  /**
+   * The car's heading laid onto the road plane with normal `up`: the one forward axis gravity, the wheel positions
+   * and the render pose all use. Returns a shared scratch vector (read it, don't keep it).
+   */
+  private headingOnRoad(up: THREE.Vector3): THREE.Vector3 {
     const hx = Math.sin(this.worldYawRad);
     const hz = Math.cos(this.worldYawRad);
     const fy = Math.abs(up.y) > 1e-4 ? -(hx * up.x + hz * up.z) / up.y : 0;
-    const fwd = _fwd.set(hx, fy, hz).normalize();
+    return _fwd.set(hx, fy, hz).normalize();
+  }
+
+  private updateGravity(sample: ReturnType<BuiltTrackData['getSampleAtDistance']>): void {
+    const up = this.localRoadUp(sample);
+    const fwd = this.headingOnRoad(up);
     const right = _right.crossVectors(fwd, up).normalize();
     // Gravity (0, −g, 0) expressed in the body frame on the road plane
     this.gravityBody.x = -G * fwd.y;
@@ -2675,25 +2683,12 @@ export class F1Physics2026 {
   private updateWheelWorldPositions(sample: ReturnType<BuiltTrackData['getSampleAtDistance']>): void {
     const carGroundY = evaluateSampleLateralHeightM(sample, this.lateralOffsetM);
     const carUp = this.localRoadUp(sample);
-    const hx = Math.sin(this.worldYawRad);
-    const hz = Math.cos(this.worldYawRad);
-    const fy = Math.abs(carUp.y) > 1e-4 ? -(hx * carUp.x + hz * carUp.z) / carUp.y : 0;
-    const fLen = Math.hypot(hx, fy, hz);
-    const fx = hx / fLen;
-    const fyN = fy / fLen;
-    const fz = hz / fLen;
-    // right = forward × up
-    let rx = fyN * carUp.z - fz * carUp.y;
-    let ry = fz * carUp.x - fx * carUp.z;
-    let rz = fx * carUp.y - fyN * carUp.x;
-    const rLen = Math.hypot(rx, ry, rz) || 1;
-    rx /= rLen;
-    ry /= rLen;
-    rz /= rLen;
+    const f = this.headingOnRoad(carUp);
+    const r = _right.crossVectors(f, carUp).normalize();
     for (const w of this.wheels) {
-      w.worldPos.x = this.worldX + fx * w.staticPos.x - rx * w.staticPos.y;
-      w.worldPos.y = carGroundY + fyN * w.staticPos.x - ry * w.staticPos.y;
-      w.worldPos.z = this.worldZ + fz * w.staticPos.x - rz * w.staticPos.y;
+      w.worldPos.x = this.worldX + f.x * w.staticPos.x - r.x * w.staticPos.y;
+      w.worldPos.y = carGroundY + f.y * w.staticPos.x - r.y * w.staticPos.y;
+      w.worldPos.z = this.worldZ + f.z * w.staticPos.x - r.z * w.staticPos.y;
     }
   }
 
@@ -3046,11 +3041,7 @@ export class F1Physics2026 {
     this.worldPosition.set(this.worldX, exactGroundY, this.worldZ);
 
     const carUp = this.localRoadUp(sample);
-
-    const hx = Math.sin(this.worldYawRad);
-    const hz = Math.cos(this.worldYawRad);
-    const fy = Math.abs(carUp.y) > 1e-4 ? -(hx * carUp.x + hz * carUp.z) / carUp.y : 0;
-    const carForward = _fwd.set(hx, fy, hz).normalize();
+    const carForward = this.headingOnRoad(carUp);
     const carLeft = _right.crossVectors(carUp, carForward).normalize();
     const basis = _basis.makeBasis(carLeft, carUp, carForward);
     this.worldQuaternion.setFromRotationMatrix(basis);
