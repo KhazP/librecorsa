@@ -128,6 +128,8 @@ const DEFAULT_AERO_PRESET: AeroSetupPreset = "balanced";
 const DEFAULT_ASSIST_PRESET: AssistPreset = "semi_pro";
 /** Mean water on the racing line (mm) from which a lap counts as wet, for the leaderboard */
 const WET_LAP_WATER_MM = 0.05;
+/** Longest frame (s) simulated in full; must not exceed the physics' own F1Physics2026.MAX_CATCH_UP_S */
+const MAX_FRAME_CATCH_UP_S = F1Physics2026.MAX_CATCH_UP_S;
 
 // Keyboard-only input shaping: a key press becomes a pedal squeeze, not a step
 /** A replay / flashback opens this far before the present, paused (s) */
@@ -1768,6 +1770,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     const smoothedChaseDir = new THREE.Vector3(0, 0, 1);
     const chaseCross = new THREE.Vector3();
     const smoothedCamUp = new THREE.Vector3(0, 1, 0);
+    /** The player car drawn at the frame time (its physics pose carried forward by the unstepped remainder) */
+    const renderCarPos = new THREE.Vector3();
     const smoothedHeliPos = new THREE.Vector3();
     const smoothedHeliLook = new THREE.Vector3();
     // Cockpit extras, created once the VF26 model has loaded: the wheel's LCD and the live wing mirrors
@@ -1920,7 +1924,9 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       if (process.env.NODE_ENV !== "production" && lastTimeMs > 0 && nowMs - lastTimeMs > 120 && phaseRef.current !== "loading") {
         console.info(`[load] long frame: ${(nowMs - lastTimeMs).toFixed(0)} ms (${phaseRef.current})`);
       }
-      const dtSeconds = Math.min((nowMs - lastTimeMs) / 1000, 0.05);
+      // A hitch (GC, shader compile, a slow commit) is caught up in full, up to a quarter second, so the car never
+      // drops into slow motion; a longer stall (hidden tab, debugger) is not
+      const dtSeconds = Math.min((nowMs - lastTimeMs) / 1000, MAX_FRAME_CATCH_UP_S);
       lastTimeMs = nowMs;
 
       // Optional Gamepad / Sim Racing Wheel Polling. Controllers with the standard mapping (Xbox,
@@ -2408,7 +2414,14 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       if (mode === "cockpit") camera.layers.disable(DRIVER_HEAD_LAYER);
       else camera.layers.enable(DRIVER_HEAD_LAYER);
 
-      carRig.root.position.copy(physics.worldPosition);
+      // The fixed-step physics leaves up to 2 ms unstepped each frame: draw the car (and the cameras on it) where it
+      // is at the frame's time, the pose carried forward by its velocity over that remainder
+      renderCarPos
+        .set(physics.vyMs, 0, physics.vxMs)
+        .applyQuaternion(physics.worldQuaternion)
+        .multiplyScalar(physics.renderLeadS ?? 0)
+        .add(physics.worldPosition);
+      carRig.root.position.copy(renderCarPos);
       carRig.root.quaternion.copy(physics.worldQuaternion);
       carRig.chassisGroup.position.y = physics.rideHeightOffsetM;
       carRig.updateFromTelemetry(
@@ -2628,7 +2641,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         );
 
         camera.position
-          .copy(physics.worldPosition)
+          .copy(renderCarPos)
           .addScaledVector(smoothedChaseDir, -smoothedCamDist)
           .addScaledVector(
             carUp,
@@ -2655,7 +2668,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         );
 
         const lookDir = smoothedChaseDir.clone().lerp(carForward, 0.62).normalize();
-        const lookPoint = physics.worldPosition
+        const lookPoint = renderCarPos
           .clone()
           .addScaledVector(lookDir, 14.5)
           .addScaledVector(carRight, -smoothedApexLookYaw)
@@ -2675,7 +2688,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       } else if (mode === "tv_pod") {
         // Broadcast Roll-Hoop T-Cam mounted at front lens of T-Cam pod looking down over painted helmet #16, butterfly wheel + gloved hand, Halo arch, mirrors, wheel brows & nose cone
         camera.position
-          .copy(physics.worldPosition)
+          .copy(renderCarPos)
           .addScaledVector(carForward, -0.06)
           .addScaledVector(carRight, -0.02 - physics.rollRad * 0.3)
           .addScaledVector(
@@ -2687,7 +2700,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
           .addScaledVector(carRight, -physics.rollRad * 0.25)
           .normalize();
         camera.lookAt(
-          physics.worldPosition
+          renderCarPos
             .clone()
             .addScaledVector(carForward, 3.6)
             .addScaledVector(carRight, -physics.yawRateRadS * 0.12)
@@ -2701,7 +2714,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       } else if (mode === "cockpit_shoulder") {
         // Reference Image 2: Left Over-the-Shoulder Cockpit Bolster Camera showing helmet on right, yellow gloved hand on butterfly steering wheel, Halo arch & left mirror/wheel brow
         camera.position
-          .copy(physics.worldPosition)
+          .copy(renderCarPos)
           .addScaledVector(carForward, 0.06)
           .addScaledVector(carRight, -0.24 - physics.rollRad * 0.22)
           .addScaledVector(
@@ -2713,7 +2726,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
           .addScaledVector(carRight, -physics.rollRad * 0.22)
           .normalize();
         camera.lookAt(
-          physics.worldPosition
+          renderCarPos
             .clone()
             .addScaledVector(carForward, 5.5)
             .addScaledVector(carRight, 0.13 - physics.yawRateRadS * 0.25)
@@ -2727,7 +2740,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       } else if (mode === "cockpit") {
         // Reference Image 3: Driver Eye-Point Camera inside cockpit framing full Butterfly Steering Wheel OLED, Labeled Buttons, Rotary Dials, 3D Gloved Hands, Wing Mirrors & Wheel Brows under Halo
         camera.position
-          .copy(physics.worldPosition)
+          .copy(renderCarPos)
           .addScaledVector(carForward, 0.21 - physics.pitchRad * 0.2)
           .addScaledVector(carRight, -physics.rollRad * 0.22)
           .addScaledVector(
@@ -2739,7 +2752,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
           .addScaledVector(carRight, -physics.rollRad * 0.2)
           .normalize();
         camera.lookAt(
-          physics.worldPosition
+          renderCarPos
             .clone()
             .addScaledVector(carForward, 8.0)
             .addScaledVector(
@@ -2753,7 +2766,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       } else if (mode === "nose") {
         // Reference Image 4: Forward Nose-Cone Camera showing narrow Nose Tip, delicate Y-Pitot Probe, curved vertical Front Wing Endplates at bottom corners & 3D Dashed Braking Line
         camera.position
-          .copy(physics.worldPosition)
+          .copy(renderCarPos)
           .addScaledVector(carForward, 1.66)
           .addScaledVector(
             carUp,
@@ -2761,7 +2774,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
           );
         camera.up.copy(carUp);
         camera.lookAt(
-          physics.worldPosition
+          renderCarPos
             .clone()
             .addScaledVector(carForward, 18.0)
             .addScaledVector(carUp, 0.25 - physics.pitchRad * 5.0)
@@ -2769,18 +2782,18 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         camera.fov = 64 + speedNorm * 4;
         camera.updateProjectionMatrix();
       } else if (mode === "helicopter") {
-        const heliTarget = physics.worldPosition
+        const heliTarget = renderCarPos
           .clone()
           .addScaledVector(carForward, -28)
           .add(new THREE.Vector3(14, 24, 14));
         if (smoothedHeliPos.distanceTo(heliTarget) > 80) {
           smoothedHeliPos.copy(heliTarget);
-          smoothedHeliLook.copy(physics.worldPosition);
+          smoothedHeliLook.copy(renderCarPos);
         } else {
           smoothedHeliPos.lerp(heliTarget, Math.min(1, dtSeconds * 6));
         }
         smoothedHeliLook.lerp(
-          physics.worldPosition.clone().addScaledVector(carForward, 14),
+          renderCarPos.clone().addScaledVector(carForward, 14),
           Math.min(1, dtSeconds * 12)
         );
         camera.position.copy(smoothedHeliPos);
@@ -2792,7 +2805,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         // Trackside broadcast: telephoto spline cameras that pan with the car and zoom in over kerbs
         const tv = tvDirector.update(
           dtSeconds,
-          physics.worldPosition,
+          renderCarPos,
           physics.sMeters,
           carVelocityWorld,
           physics.telemetry.onKerbLeft || physics.telemetry.onKerbRight
@@ -2809,7 +2822,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         const close = appPhase === "wizard" && wizardStepRef.current === "car";
         menuOrbitRad += dtSeconds * (close ? 0.2 : 0.08);
         const radius = close ? 6.2 : 9.5;
-        const p = physics.worldPosition;
+        const p = renderCarPos;
         camera.position.set(
           p.x + Math.sin(menuOrbitRad) * radius,
           p.y + (close ? 1.35 : 2.2),

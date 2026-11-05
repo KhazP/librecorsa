@@ -277,6 +277,9 @@ function thermalWindowC(curve: ReadonlyArray<readonly [number, number]>): [numbe
 export class F1Physics2026 {
   /** Fixed 500 Hz simulation step decoupled from render FPS */
   public static readonly FIXED_DT = 0.002;
+  /** Longest frame (s) whose time is simulated in full */
+  public static readonly MAX_CATCH_UP_S = 0.25;
+  private static readonly MAX_STEPS_PER_CALL = Math.ceil(F1Physics2026.MAX_CATCH_UP_S / F1Physics2026.FIXED_DT) + 1;
 
   private track: BuiltTrackData;
   private timeAccumulator = 0;
@@ -669,6 +672,14 @@ export class F1Physics2026 {
     this.yawRateRadS -= yawRateDeltaRadS;
   }
 
+  /**
+   * Simulated time not yet stepped (s, under one 2 ms step). The pose is that far behind the frame: the renderer
+   * carries it forward by this much so the car doesn't judder when the display rate isn't a multiple of 500 Hz.
+   */
+  get renderLeadS(): number {
+    return this.timeAccumulator;
+  }
+
   get assistPreset(): DriverAssistPreset {
     return this._assistPreset;
   }
@@ -1012,7 +1023,9 @@ export class F1Physics2026 {
 
     this.applyCompound();
 
-    this.timeAccumulator += Math.min(dtSeconds, 0.05);
+    // A hitch up to MAX_CATCH_UP_S is caught up in full (the car must not drop into slow motion); longer stalls
+    // (a hidden tab, a debugger) are not
+    this.timeAccumulator += Math.min(dtSeconds, F1Physics2026.MAX_CATCH_UP_S);
 
     const inputs: ControlInputs = {
       throttle: THREE.MathUtils.clamp(rawInputs.throttle ?? 0, 0, 1),
@@ -1043,7 +1056,7 @@ export class F1Physics2026 {
 
     this.ffbSubframeSamples.length = 0;
     let stepsRun = 0;
-    while (this.timeAccumulator >= F1Physics2026.FIXED_DT && stepsRun < 30) {
+    while (this.timeAccumulator >= F1Physics2026.FIXED_DT && stepsRun < F1Physics2026.MAX_STEPS_PER_CALL) {
       this.outerStep(F1Physics2026.FIXED_DT, inputs, stepsRun === 0 ? shiftReq : 0);
       this.timeAccumulator -= F1Physics2026.FIXED_DT;
       this.simTimeMs += F1Physics2026.FIXED_DT * 1000;
