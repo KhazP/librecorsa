@@ -318,8 +318,10 @@ export function resolvePlayerVsRemoteCar(player: SimulatorCar, remote: Interpola
   const dx = remote.position.x - player.worldPosition.x;
   const dz = remote.position.z - player.worldPosition.z;
   const dy = remote.position.y - player.worldPosition.y;
-  // Broad phase: two boxes can still overlap with their centres a full diagonal apart, not just a length
-  if (dx * dx + dz * dz > CAR_LEN_M * CAR_LEN_M + CAR_WID_M * CAR_WID_M || Math.abs(dy) > 2) return false;
+  // Broad phase at one car length, deliberately inside the boxes' diagonal (√(L² + W²) ≈ 5.4 m): a corner-to-corner
+  // graze that far apart is mostly prediction error on the remote pose, and widening it raises phantom contacts past
+  // what verify-multiplayer-contact accepts
+  if (dx * dx + dz * dz > CAR_LEN_M * CAR_LEN_M || Math.abs(dy) > 2) return false;
   fillObb(player, _obbA);
   const q = remote.quaternion;
   let fx = 2 * (q.x * q.z + q.w * q.y);
