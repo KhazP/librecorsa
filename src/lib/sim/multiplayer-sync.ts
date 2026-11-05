@@ -503,6 +503,8 @@ const MAX_CONTROL_MESSAGES_PER_S = 20;
 const RELAYED_CONTROL: ReadonlySet<ControlMessage['type']> = new Set(['hello', 'ready', 'ping', 'pong']);
 /** A guest follows a different host only after its own has sent no lobby for this long (ms) */
 const HOST_SILENT_MS = 8000;
+/** How long a WebRTC connection may sit in `disconnected` (often a brief ICE blip) before the peer is dropped */
+const DISCONNECT_GRACE_MS = 5000;
 
 const STATE_CHANNEL = 'f1-telemetry';
 const CONTROL_CHANNEL = 'f1-control';
@@ -887,28 +889,50 @@ export class MultiplayerSyncManager {
       }
     };
 
+    // `disconnected` is often a short ICE blip that recovers by itself (same pc, same channels): give it a grace
+    // period before giving up on the peer, rather than dropping it on the first wobble
+    let graceTimer: ReturnType<typeof setTimeout> | null = null;
+    const clearGrace = () => {
+      if (graceTimer !== null) clearTimeout(graceTimer);
+      graceTimer = null;
+    };
+    const lose = () => {
+      clearGrace();
+      const entry = this.rtcPeers.get(remoteId);
+      if (!entry || entry.pc !== pc) return;
+      const neverOpened = !entry.dc || entry.dc.readyState !== 'open';
+      this.rtcPeers.delete(remoteId);
+      if (entry.gamePeerId) this.dropMember(entry.gamePeerId);
+      if (pc.connectionState === 'disconnected') {
+        pc.onconnectionstatechange = null;
+        try {
+          pc.close();
+        } catch {
+          // Ignore close error
+        }
+      }
+      const strictNat = pc.connectionState === 'failed' && neverOpened;
+      this.emitStatus({
+        state: this.rtcPeers.size > 0 ? 'connected' : strictNat ? 'error' : 'signaling',
+        statusText:
+          this.rtcPeers.size > 0
+            ? `WebRTC P2P Connected (${this.rtcPeers.size} peer)`
+            : strictNat
+              ? hasTurnServer()
+                ? 'Could not connect, even through the TURN relay. Check the TURN details, or try the same Wi-Fi.'
+                : 'Could not connect directly (strict NAT / mobile network). Add a TURN relay under Advanced, or use the same Wi-Fi.'
+              : 'Peer Disconnected • Waiting for Reconnection',
+      });
+    };
     pc.onconnectionstatechange = () => {
-      if (
-        pc.connectionState === 'disconnected' ||
-        pc.connectionState === 'failed' ||
-        pc.connectionState === 'closed'
-      ) {
-        const entry = this.rtcPeers.get(remoteId);
-        const neverOpened = !entry?.dc || entry.dc.readyState !== 'open';
-        this.rtcPeers.delete(remoteId);
-        if (entry?.gamePeerId) this.dropMember(entry.gamePeerId);
-        const strictNat = pc.connectionState === 'failed' && neverOpened;
-        this.emitStatus({
-          state: this.rtcPeers.size > 0 ? 'connected' : strictNat ? 'error' : 'signaling',
-          statusText:
-            this.rtcPeers.size > 0
-              ? `WebRTC P2P Connected (${this.rtcPeers.size} peer)`
-              : strictNat
-                ? hasTurnServer()
-                  ? 'Could not connect, even through the TURN relay. Check the TURN details, or try the same Wi-Fi.'
-                  : 'Could not connect directly (strict NAT / mobile network). Add a TURN relay under Advanced, or use the same Wi-Fi.'
-                : 'Peer Disconnected • Waiting for Reconnection',
-        });
+      const state = pc.connectionState;
+      if (state === 'connected') clearGrace();
+      else if (state === 'failed' || state === 'closed') lose();
+      else if (state === 'disconnected' && graceTimer === null) {
+        graceTimer = setTimeout(() => {
+          graceTimer = null;
+          if (pc.connectionState === 'disconnected') lose();
+        }, DISCONNECT_GRACE_MS);
       }
     };
 
@@ -1257,7 +1281,8 @@ export class MultiplayerSyncManager {
         this.rtts.set(from, prev === undefined ? rtt : prev + (rtt - prev) * 0.25);
         // Clock sync against the host (NTP-style, keeping the lowest-latency measurement; slowly forgets it)
         if (!this.isHost && from === this.hostId) {
-          this.bestClockRttMs = Math.min(this.bestClockRttMs * 1.02 + 0.5, Infinity);
+          // Slowly forget the best sample, so a route that got slower is eventually re-measured
+          this.bestClockRttMs = this.bestClockRttMs * 1.02 + 0.5;
           if (rtt <= this.bestClockRttMs) {
             this.bestClockRttMs = rtt;
             this.clockOffsetMs = msg.now + rtt / 2 - t1;
@@ -1303,7 +1328,8 @@ export class MultiplayerSyncManager {
   private tickControl(nowMs: number): void {
     if (nowMs - this.lastPingMs > (this.clockSynced ? 2000 : 400)) {
       this.lastPingMs = nowMs;
-      if (this.hostId || this.peers.size > 0) this.sendControl({ type: 'ping', t0: nowMs });
+      // Stamped at send time on the same clock as the pong's arrival (nowMs is the frame's start, earlier than this)
+      if (this.hostId || this.peers.size > 0) this.sendControl({ type: 'ping', t0: performance.now() });
     }
     if (this.isHost) {
       for (const [id, seen] of this.memberSeenMs) {
@@ -1324,6 +1350,8 @@ export class MultiplayerSyncManager {
     }
     const remoteId = `manual_${Math.random().toString(36).slice(2, 7)}`;
     this.becomeHost();
+    // A new offer replaces one still waiting for its answer: close that one rather than leave it in rtcPeers forever
+    if (this.manualPendingPc) this.closeManualPeer(this.manualPendingPc);
     const pc = new RTCPeerConnection({ iceServers: iceServers() });
     this.manualPendingPc = pc;
 
@@ -1364,17 +1392,24 @@ export class MultiplayerSyncManager {
       return '';
     }
     const remoteId = `manual_host_${Math.random().toString(36).slice(2, 7)}`;
+    // Parsed before anything is set up: a mangled token throws here without leaving a half-built peer behind
+    const offerDesc = JSON.parse(atob(offerToken.trim()));
     this.becomeGuest();
     const pc = new RTCPeerConnection({ iceServers: iceServers() });
     const entry: WebRtcPeerEntry = { remoteId, pc, dc: null };
     this.rtcPeers.set(remoteId, entry);
     pc.ondatachannel = (ev) => this.acceptChannel(entry, ev.channel);
 
-    const offerDesc = JSON.parse(atob(offerToken.trim()));
-    await pc.setRemoteDescription(new RTCSessionDescription(offerDesc));
-    const answer = await pc.createAnswer();
-    await pc.setLocalDescription(answer);
-    await this.waitForIceGathering(pc, 1800);
+    try {
+      await pc.setRemoteDescription(new RTCSessionDescription(offerDesc));
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      await this.waitForIceGathering(pc, 1800);
+    } catch (err) {
+      // A dead entry would keep rtcPeers non-empty, which makes this tab ignore same-browser lobbies
+      this.closeManualPeer(pc);
+      throw err;
+    }
 
     const answerToken = btoa(JSON.stringify(pc.localDescription));
     this.emitStatus({
@@ -1792,6 +1827,22 @@ export class MultiplayerSyncManager {
       out.brake = s1.brake;
       out.trackS = s1.trackS;
       out.speedKmh = s1.speedKmh;
+    }
+  }
+
+  /** Closes one manual-SDP connection and forgets its entry */
+  private closeManualPeer(pc: RTCPeerConnection): void {
+    for (const [id, entry] of this.rtcPeers) {
+      if (entry.pc !== pc) continue;
+      this.rtcPeers.delete(id);
+      entry.dc?.close();
+      entry.ctl?.close();
+    }
+    if (this.manualPendingPc === pc) this.manualPendingPc = null;
+    try {
+      pc.close();
+    } catch {
+      // Ignore close error
     }
   }
 
