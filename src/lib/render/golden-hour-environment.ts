@@ -13,6 +13,7 @@ import {
   ToneMappingEffect,
   ToneMappingMode,
 } from "postprocessing";
+import { patchShader } from "./shader-patch";
 
 /*
  * Golden-hour lighting, sky/environment and post-processing for LibreCorsa.
@@ -213,15 +214,17 @@ function configureSkyUniforms(sky: Sky, showSunDisc: boolean): void {
   // stays well above the 1.1 bloom threshold and blooms into a halo instead.
   // The stock sky is tuned for exposure ~0.5: at 14° its horizon toward the sun reaches ~29 linear, so a
   // quarter of the frame crossed the bloom threshold. Scaled, only the glow around the sun blooms.
-  sky.material.fragmentShader = ("uniform float skyRadianceScale;\n" + sky.material.fragmentShader)
-    .replace(
-      "vec3 sundiscColor = ( 760.0 * sundisc ) * min( vSunE * Fex, 80.0 );",
-      "vec3 sundiscColor = min( ( 760.0 * sundisc ) * min( vSunE * Fex, 80.0 ), vec3( SUN_DISC_MAX ) );"
-    )
-    .replace(
-      "gl_FragColor = vec4( texColor, 1.0 );",
-      "gl_FragColor = vec4( texColor * skyRadianceScale, 1.0 );"
-    );
+  sky.material.fragmentShader = patchShader(
+    "uniform float skyRadianceScale;\n" + sky.material.fragmentShader,
+    [
+      [
+        "vec3 sundiscColor = ( 760.0 * sundisc ) * min( vSunE * Fex, 80.0 );",
+        "vec3 sundiscColor = min( ( 760.0 * sundisc ) * min( vSunE * Fex, 80.0 ), vec3( SUN_DISC_MAX ) );",
+      ],
+      ["gl_FragColor = vec4( texColor, 1.0 );", "gl_FragColor = vec4( texColor * skyRadianceScale, 1.0 );"],
+    ],
+    "sky"
+  );
   sky.material.defines = {
     ...sky.material.defines,
     SUN_DISC_MAX: SUN_DISC_MAX_RADIANCE.toFixed(1),

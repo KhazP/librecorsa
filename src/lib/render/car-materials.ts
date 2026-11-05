@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { patchShader, type ShaderPatch } from "./shader-patch";
 
 /**
  * PBR upgrades for the VF26 GLB materials (see vf26-car-model.ts; the GLB itself is not edited).
@@ -219,25 +220,8 @@ function configure(
   }
 }
 
-type Patch = readonly [anchor: string, replacement: string];
-
-/**
- * Replaces each anchor (an unresolved `#include <...>` line of the three.js physical shader) exactly once.
- * A missing or duplicated anchor is reported, and that patch is skipped so the material falls back to its
- * uniform values instead of failing to compile.
- */
-function patch(source: string, patches: readonly Patch[], label: string): string {
-  let out = source;
-  for (const [anchor, replacement] of patches) {
-    const parts = out.split(anchor);
-    if (parts.length !== 2) {
-      console.warn(`[car-materials] ${label}: anchor "${anchor}" found ${parts.length - 1} times, skipped`);
-      continue;
-    }
-    out = parts[0] + replacement + parts[1];
-  }
-  return out;
-}
+type Patch = ShaderPatch;
+const patch = patchShader;
 
 // ---------------------------------------------------------------------------------------------------------------
 // EXT_SKIN: warm accent mask from the base colour

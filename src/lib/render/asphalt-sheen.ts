@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import type { BuiltTrackData } from "@/lib/track-data";
 import { aiLineOffsetM } from "@/lib/sim/speed-profile";
+import { patchShader, type ShaderPatch } from "./shader-patch";
 
 /**
  * Rubbered-in racing line on the asphalt: a top-down world-XZ mask (white = rubber) drives roughness, a slight
@@ -189,21 +190,7 @@ export function applyAsphaltSheen(material: THREE.MeshStandardMaterial, mask: Ra
   material.needsUpdate = true;
 }
 
-type Patch = readonly [anchor: string, replacement: string];
-
-/** Inserts each replacement at its anchor; an anchor that is missing or not unique is skipped with a warning */
-export function patchShader(source: string, patches: readonly Patch[], label: string): string {
-  let out = source;
-  for (const [anchor, replacement] of patches) {
-    const parts = out.split(anchor);
-    if (parts.length !== 2) {
-      console.warn(`[shader-patch] ${label}: anchor "${anchor}" found ${parts.length - 1} times, skipped`);
-      continue;
-    }
-    out = parts[0] + replacement + parts[1];
-  }
-  return out;
-}
+type Patch = ShaderPatch;
 
 const VERTEX_PATCHES: readonly Patch[] = [
   ["#include <common>", "#include <common>\nvarying vec3 vVf26WorldPos;"],

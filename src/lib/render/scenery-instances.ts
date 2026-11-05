@@ -3,6 +3,7 @@ import { withBasePath } from "@/lib/base-path";
 import { createGltfLoader } from "@/lib/render/gltf-loader";
 import { SHADOW_PROXY_LAYER } from "@/lib/render/layers";
 import { applySceneryDetail, sceneryKind } from "@/lib/render/scenery-detail";
+import { patchShader } from "./shader-patch";
 
 /**
  * Trackside scenery that replaces some of a circuit's own (public/tracks/<id>/scenery/*.glb). Each file's root
@@ -234,13 +235,16 @@ function leafShading(mat: THREE.Material): void {
   if (!std.isMeshStandardMaterial || !std.map || !(std.alphaTest > 0) || std.userData.leafShading) return;
   std.userData.leafShading = true;
   std.onBeforeCompile = (shader) => {
-    shader.fragmentShader = shader.fragmentShader
-      .replace("#include <normal_fragment_begin>", THREE.ShaderChunk.normal_fragment_begin.replace("normal *= faceDirection;", ""))
-      .replace(
+    shader.fragmentShader = patchShader(shader.fragmentShader, [
+      [
+        "#include <normal_fragment_begin>",
+        patchShader(THREE.ShaderChunk.normal_fragment_begin, [["normal *= faceDirection;", ""]], "leaf normal chunk"),
+      ],
+      [
         "#include <lights_physical_fragment>",
-        "#include <lights_physical_fragment>\n\tmaterial.specularColor *= 0.2;\n\tmaterial.specularColorBlended *= 0.2;\n\tmaterial.specularF90 *= 0.2;"
-      )
-      .replace(
+        "#include <lights_physical_fragment>\n\tmaterial.specularColor *= 0.2;\n\tmaterial.specularColorBlended *= 0.2;\n\tmaterial.specularF90 *= 0.2;",
+      ],
+      [
         "#include <alphatest_fragment>",
         /* glsl */ `
 #ifdef USE_MAP
@@ -250,8 +254,9 @@ function leafShading(mat: THREE.Material): void {
 	float leafMip = max( 0.0, 0.5 * log2( max( dot( leafDx, leafDx ), dot( leafDy, leafDy ) ) ) );
 	diffuseColor.a *= 1.0 + leafMip * 0.6;
 #endif
-#include <alphatest_fragment>`
-      );
+#include <alphatest_fragment>`,
+      ],
+    ], "scenery leaves");
   };
   std.customProgramCacheKey = () => "scenery-leaf-v3";
   std.needsUpdate = true;

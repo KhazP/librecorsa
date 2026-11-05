@@ -1,5 +1,6 @@
 import * as THREE from "three";
-import { patchShader, sharedWetUniforms, WORLD_NOISE_GLSL } from "@/lib/render/asphalt-sheen";
+import { sharedWetUniforms, WORLD_NOISE_GLSL } from "@/lib/render/asphalt-sheen";
+import { patchShader, type ShaderPatch } from "@/lib/render/shader-patch";
 
 /**
  * Surface detail for trackside scenery that ships as flat-colour, UV-less geometry (Rwanda's trees, grandstand
@@ -216,7 +217,7 @@ function hash2(x: number, z: number): number {
 // Shader patches
 // ---------------------------------------------------------------------------
 
-type Patch = readonly [anchor: string, replacement: string];
+type Patch = ShaderPatch;
 
 export const VERTEX_PATCHES: readonly Patch[] = [
   [
