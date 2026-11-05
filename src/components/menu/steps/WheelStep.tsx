@@ -8,11 +8,9 @@ import {
   connectedPads,
   emptyWheelButtons,
   findPad,
-  newlyPressedButton,
   padDisplayName,
   pedalValue,
   snapshotAxes,
-  snapshotButtons,
   CLAIMED_TELEMETRY_PORTS,
   DEFAULT_TELEMETRY_PORT,
   STEER_LOCK_MIN_DEG,
@@ -31,7 +29,8 @@ import { type FfbStatus, webHidFfb, wheelFfb } from "@/lib/input/wheel-ffb";
 import { isFatalHidStatus, type WebHidFfbStatus } from "@/lib/input/webhid-ffb";
 import { SUPPORT_LABEL, type SupportLevel, WHEEL_SUPPORT, WHEEL_SUPPORT_SUMMARY } from "@/lib/input/wheel-support";
 import { Choice, Toggle, TyreSlider } from "@/components/hud/PauseMenu";
-import { suspendMenuNav, useGamepads, type PadState } from "../useMenuNav";
+import { useGamepads, type PadState } from "../useMenuNav";
+import { useButtonCapture } from "./button-capture";
 import { TuningSlider } from "./TuningSlider";
 import { AutoGrid, BindRow, bindKeyClass, ChoiceText, Hint, PillAction, SetupCard, SolidPill, StatusPill, SubHead, TrackMeter } from "./setup-ui";
 import type { SetupStepProps } from "./types";
@@ -161,39 +160,6 @@ const AxisCalibrator: React.FC<{
   );
 };
 
-/** Next button press on any device (wheel rim, button box, shifter) */
-function useAnyButtonCapture(active: boolean, onButton: (b: ButtonBinding) => void, onCancel: () => void) {
-  useEffect(() => {
-    if (!active) return;
-    const resume = suspendMenuNav();
-    let prev = snapshotButtons(connectedPads());
-    let raf = 0;
-    const poll = () => {
-      raf = requestAnimationFrame(poll);
-      const pads = connectedPads();
-      const hit = newlyPressedButton(prev, pads);
-      prev = snapshotButtons(pads);
-      if (hit) onButton(hit);
-    };
-    raf = requestAnimationFrame(poll);
-    const onKey = (e: KeyboardEvent) => {
-      if (e.code !== "Escape") return;
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      onCancel();
-    };
-    window.addEventListener("keydown", onKey, { capture: true });
-    return () => {
-      cancelAnimationFrame(raf);
-      window.removeEventListener("keydown", onKey, { capture: true });
-      const wait = () => {
-        if (connectedPads().some((p) => p.buttons.some((b) => b.pressed))) requestAnimationFrame(wait);
-        else resume();
-      };
-      wait();
-    };
-  }, [active, onButton, onCancel]);
-}
 
 /** Cars that share a steering lock in the wheel setup */
 const STEER_LOCK_CLASSES = [
@@ -441,7 +407,7 @@ export const WheelStep: React.FC<SetupStepProps> = ({ settings, onChangeSettings
     [capturing, onChangeSettings]
   );
   const onCancelCapture = useCallback(() => setCapturing(null), []);
-  useAnyButtonCapture(capturing !== null, onButton, onCancelCapture);
+  useButtonCapture(capturing !== null, onButton, onCancelCapture);
 
   // Axes already taken, so the next calibration ignores them
   const excludeFor = useCallback(
