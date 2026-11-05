@@ -554,6 +554,8 @@ export class F12026CarSim implements SimulatorCar {
   public readonly pitchRad = 0;
   public readonly rollRad = 0;
   public readonly rideHeightOffsetM = 0;
+  /** Off-track verdict of the last frame with a wheel on the ground */
+  private wasOffTrack = false;
   public wheelRotationRad = 0;
   public vyMs = 0;
   public yawRateRadS = 0;
@@ -1780,7 +1782,17 @@ export class F12026CarSim implements SimulatorCar {
     const onKerbLeft = surfaces[0] === 'kerb' || surfaces[2] === 'kerb';
     const onKerbRight = surfaces[1] === 'kerb' || surfaces[3] === 'kerb';
     // All four wheels on surfaces the table does not count as the track (run-off, gravel, grass, sausage kerbs)
-    const offTrack = W.every((w) => !w.ground.props.validTrack);
+    // Judged on the wheels touching the road: an airborne wheel's ground is its last contact (the probe only reaches
+    // 0.6 m), so a jump keeps the verdict it took off with rather than reading stale surfaces
+    let anyGrounded = false;
+    let allOff = true;
+    for (const w of W) {
+      if (!w.grounded) continue;
+      anyGrounded = true;
+      if (w.ground.props.validTrack) allOff = false;
+    }
+    const offTrack = anyGrounded ? allOff : this.wasOffTrack;
+    this.wasOffTrack = offTrack;
     if (offTrack && this.trackLimitsMode === 'strict') this.lapValid = false;
     t.lapInvalid = !this.lapValid;
     let surface: SurfaceType = 'asphalt';

@@ -2725,8 +2725,9 @@ export class VehiclePhysics {
       const w = W[i];
       t.tyreLoadN[i] = w.fz;
       t.circleFraction[i] = w.circleFraction;
+      // The surface last touched; no grip while the wheel is in the air
       t.surface[i] = w.ground.surface;
-      t.surfaceGrip[i] = w.ground.grip;
+      t.surfaceGrip[i] = w.grounded ? w.ground.grip : 0;
       t.camberDeg[i] = w.camberLeftRad * RAD2DEG * (w.isLeft ? 1 : -1);
       t.tyreSurfaceTempC[i] = w.surfaceTempC;
       t.tyreCoreTempC[i] = w.coreTempC;
