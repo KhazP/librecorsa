@@ -169,7 +169,9 @@ function configure(
         out.metalnessMap = null;
         out.clearcoat = 0.35;
         out.clearcoatRoughness = 0.15;
-        // The mask holds weights, not colour: no sRGB decode
+        // The mask holds weights, not colour: no sRGB decode. On a copy: toPhysical shares the source's texture
+        // object, and another material still sampling it as colour must keep its sRGB decode
+        out.map = out.map.clone();
         out.map.colorSpace = THREE.NoColorSpace;
         out.map.needsUpdate = true;
         out.customProgramCacheKey = () => "vf26-skin-livery-mask-v1";

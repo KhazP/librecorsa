@@ -137,12 +137,16 @@ export class VirtualMirror {
     const visible = hide.visible;
     hide.visible = false;
     r.shadowMap.autoUpdate = false;
-    r.setRenderTarget(this.rt);
-    r.clear();
-    r.render(this.scene, this.cam);
-    r.setRenderTarget(prevTarget);
-    r.shadowMap.autoUpdate = prevAutoUpdate;
-    hide.visible = visible;
+    // Restored even if the render throws, or the player's car would stay hidden
+    try {
+      r.setRenderTarget(this.rt);
+      r.clear();
+      r.render(this.scene, this.cam);
+    } finally {
+      r.setRenderTarget(prevTarget);
+      r.shadowMap.autoUpdate = prevAutoUpdate;
+      hide.visible = visible;
+    }
   }
 
   /** After the main render: draw the mirror over the frame (default framebuffer) */

@@ -96,15 +96,13 @@ export function cleanPortedCarMaterial(mat: THREE.Material): THREE.Material {
   if (!std.isMeshStandardMaterial) return mat;
   const name = mat.name ?? "";
   // a solid-white placeholder map says nothing: drop it and fall back to the rules below
-  const mr = std.metalnessMap ?? std.roughnessMap;
-  if (mr) {
-    const flat = placeholderChannels(mr);
-    if (flat.metal && std.metalnessMap) {
-      std.metalnessMap = null;
-      std.metalness = 1;
-    }
-    if (flat.rough && std.roughnessMap) std.roughnessMap = null;
+  // Each map judged on its own channel (B for metal, G for roughness): glTF shares one texture between the two
+  // slots, but a model with separate maps must not have its roughness decided by the metal map
+  if (std.metalnessMap && placeholderChannels(std.metalnessMap).metal) {
+    std.metalnessMap = null;
+    std.metalness = 1;
   }
+  if (std.roughnessMap && placeholderChannels(std.roughnessMap).rough) std.roughnessMap = null;
   const ownMetal = !!std.metalnessMap;
   const ownRough = !!std.roughnessMap;
   let out: THREE.Material = mat;

@@ -318,14 +318,17 @@ export class WingMirrors {
 
     this.carModelRoot.visible = false;
     r.shadowMap.autoUpdate = false;
-    r.setRenderTarget(rt);
-    // The post-processing chain turns the renderer's autoClear off: without this the depth stays 0 and nothing draws
-    r.clear();
-    r.render(this.scene, this.cam);
-    r.setRenderTarget(prevTarget);
-
-    this.carModelRoot.visible = carVisible;
-    r.shadowMap.autoUpdate = prevAutoUpdate;
+    // Restored even if the render throws, or the player's car would stay hidden
+    try {
+      r.setRenderTarget(rt);
+      // The post-processing chain turns the renderer's autoClear off: without this the depth stays 0 and nothing draws
+      r.clear();
+      r.render(this.scene, this.cam);
+    } finally {
+      r.setRenderTarget(prevTarget);
+      this.carModelRoot.visible = carVisible;
+      r.shadowMap.autoUpdate = prevAutoUpdate;
+    }
   }
 
   /**
