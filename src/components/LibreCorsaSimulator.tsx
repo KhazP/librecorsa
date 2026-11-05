@@ -977,11 +977,13 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   const refreshLeaderboard = useCallback(async () => {
     setLeaderboard((l) => ({ ...l, loading: true }));
     const vehicle = vehicleModelRef.current;
-    // The online board for what the player drives with now: their assists, today's surface, this physics revision
+    // The online board for what the player drives with now: their assists and realism, today's surface, this
+    // physics revision
     const board: LapConditions = {
       assists: physicsRef.current?.assistPreset ?? DEFAULT_ASSIST_PRESET,
       compound: physicsRef.current?.tireCompound ?? "soft",
       surface: getTrackEnv().weather.lineWaterMm >= WET_LAP_WATER_MM ? "wet" : "dry",
+      realism: settingsRef.current.realism,
       physicsVersion: PHYSICS_VERSION,
     };
     const [local, remote] = await Promise.all([
@@ -992,6 +994,10 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     ]);
     setLeaderboard({ local, remote, loading: false, boardLabel: boardLabel(board) });
   }, [trackId, getTrackEnv]);
+  // Another realism level ranks on another board
+  useEffect(() => {
+    void refreshLeaderboard();
+  }, [settings.realism, refreshLeaderboard]);
 
   /** Races the personal best of this car as the ghost (force: also when another lap was chosen) */
   const loadPbGhost = useCallback(
@@ -1013,7 +1019,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         setSubmitRank(null);
         setSubmitError(null);
       }
-      if (!summary.valid) return;
+      if (!summary.valid || summary.autopilot) return;
       void saveBestLapIfFaster(recording)
         .then((saved) => {
           if (!saved) return;
@@ -2178,11 +2184,14 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
           telemetry: physics.telemetry,
           position: physics.worldPosition,
           quaternion: physics.worldQuaternion,
-          // Laps are ranked only against laps driven with the same assists, surface and physics revision
+          // Laps are ranked only against laps driven with the same assists, realism, surface and physics revision;
+          // an autopilot lap never ranks
           conditions: {
             assists: physics.assistPreset,
             compound: physics.tireCompound,
             wet: trackEnv.weather.lineWaterMm >= WET_LAP_WATER_MM,
+            realism: settingsNow.realism,
+            autopilot: physics.aiAutopilot,
           },
         });
         if (done) onLapCompletedRef.current(done.summary, done.recording);
@@ -3446,7 +3455,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
                   onClose: () => setLapSummary(null),
                   onSaveGhost: () => exportLapFile(lapSummary.recording),
                   onSubmit:
-                    remoteLeaderboardEnabled && lapSummary.summary.valid
+                    remoteLeaderboardEnabled && lapSummary.summary.valid && !lapSummary.summary.autopilot
                       ? (name?: string) => void handleSubmitLap(name)
                       : undefined,
                   driverName: settings.profile.name,

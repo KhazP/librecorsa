@@ -5,6 +5,7 @@
  */
 import type { AssistPreset, CarTelemetry, TireCompound, VehicleModelId } from "@/types/f1";
 import { ASSIST_PRESETS, LAP_SAMPLE_STRIDE, PHYSICS_VERSION, parseLapConditions } from "./lap-types";
+import { SIM_REALISM_LEVELS, type SimRealism } from "./sim-realism";
 import type { CornerStat, LapConditions, LapRecording, LapSample, LapSummaryData } from "./lap-types";
 
 export interface LapRecorderTurn {
@@ -21,8 +22,11 @@ export interface LapRecorderInput {
   >;
   position: { x: number; y: number; z: number };
   quaternion: { x: number; y: number; z: number; w: number };
-  /** What the car is driven with right now; the lap keeps the most-aided preset and any wet seen */
-  conditions?: { assists: AssistPreset; compound: TireCompound; wet: boolean };
+  /**
+   * What the car is driven with right now; the lap keeps the most-aided preset, the least realistic level, any wet
+   * seen and whether the autopilot ever drove
+   */
+  conditions?: { assists: AssistPreset; compound: TireCompound; wet: boolean; realism: SimRealism; autopilot: boolean };
 }
 
 export interface CompletedLap {
@@ -153,6 +157,8 @@ export class LapRecorder {
   private rows: number[][] = [];
   /** Conditions over the lap in progress (null until reported) */
   private lapConditions: LapConditions | null = null;
+  /** The autopilot drove at some point of the lap in progress */
+  private autopilotUsed = false;
 
   constructor(opts: LapRecorderOptions) {
     this.trackLengthM = opts.trackLengthM;
@@ -252,6 +258,7 @@ export class LapRecorder {
     this.lastSampleT = -Infinity;
     this.rows = [];
     this.lapConditions = null;
+    this.autopilotUsed = false;
   }
 
   private abandon(): void {
@@ -260,18 +267,22 @@ export class LapRecorder {
     this.lastSampleT = -Infinity;
     this.rows = [];
     this.lapConditions = null;
+    this.autopilotUsed = false;
   }
 
-  /** Folds this moment's assists, tyre and surface into the lap's conditions */
+  /** Folds this moment's assists, realism, tyre and surface into the lap's conditions */
   private noteConditions(input: LapRecorderInput): void {
     const c = input.conditions;
     if (!c) return;
     const prev = this.lapConditions;
     const aid = (a: AssistPreset) => ASSIST_PRESETS.indexOf(a);
+    const real = (r: SimRealism) => SIM_REALISM_LEVELS.indexOf(r);
+    if (c.autopilot) this.autopilotUsed = true;
     this.lapConditions = {
       assists: prev && aid(prev.assists) > aid(c.assists) ? prev.assists : c.assists,
       compound: c.compound,
       surface: c.wet || prev?.surface === "wet" ? "wet" : "dry",
+      realism: prev && real(prev.realism) < real(c.realism) ? prev.realism : c.realism,
       physicsVersion: PHYSICS_VERSION,
     };
   }
@@ -306,16 +317,19 @@ export class LapRecorder {
     const rows = this.rows;
     // The physics rules out a lap that ended while an excursion was still being judged
     const valid = this.valid && input.telemetry.lastLapValid !== false;
+    // An autopilot lap is shown but never ranks: no best, no session bests
+    const autopilot = this.autopilotUsed;
+    const ranks = valid && !autopilot;
 
     // Personal best and delta, before this lap changes them
     const pbBefore = this.pb;
     const deltaToBestMs = pbBefore === null ? null : lapMs - pbBefore;
-    const isPersonalBest = valid && (pbBefore === null || lapMs < pbBefore);
+    const isPersonalBest = ranks && (pbBefore === null || lapMs < pbBefore);
     if (isPersonalBest) this.pb = lapMs;
 
     // Sector bests: the session best before this lap, then fold this lap in if valid
     const bestSectorTimesMs: [number | null, number | null, number | null] = [...this.sessionSectorBest];
-    if (valid) {
+    if (ranks) {
       for (let i = 0; i < 3; i++) {
         const best = this.sessionSectorBest[i];
         if (best === null || sectors[i] < best) this.sessionSectorBest[i] = sectors[i];
@@ -351,7 +365,7 @@ export class LapRecorder {
         minSpeedKmh: minSpeed,
         bestMinSpeedKmh: bestBefore,
       });
-      if (valid && (bestBefore === null || minSpeed > bestBefore)) this.sessionCornerBest[k] = minSpeed;
+      if (ranks && (bestBefore === null || minSpeed > bestBefore)) this.sessionCornerBest[k] = minSpeed;
     });
 
     const recording: LapRecording = {
@@ -375,6 +389,7 @@ export class LapRecorder {
       lapNumber,
       lapTimeMs: lapMs,
       valid,
+      autopilot,
       deltaToBestMs,
       isPersonalBest,
       sectorTimesMs: sectors,

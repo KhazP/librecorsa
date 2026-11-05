@@ -277,6 +277,8 @@ const LapCard: React.FC<LapSummaryProps & { onCollapse: () => void }> = ({
   let badge: React.ReactNode = null;
   if (!s.valid) {
     badge = <Pill color={HUD_RED} textColor="#F5F7FA">INVALID · TRACK LIMITS</Pill>;
+  } else if (s.autopilot) {
+    badge = <Pill color={HUD_YELLOW}>AUTOPILOT · NOT RANKED</Pill>;
   } else if (s.isPersonalBest) {
     badge = <Pill color={HUD_PURPLE} textColor="#F5F7FA">PERSONAL BEST</Pill>;
   } else if (s.deltaToBestMs !== null) {
@@ -296,7 +298,7 @@ const LapCard: React.FC<LapSummaryProps & { onCollapse: () => void }> = ({
         : submitState === "error"
           ? "Failed — retry"
           : "Submit to leaderboard";
-  const submitDisabled = !s.valid || submitState === "sending" || submitState === "sent";
+  const submitDisabled = !s.valid || s.autopilot || submitState === "sending" || submitState === "sent";
 
   const stats: { label: string; value: string }[] = [
     { label: "TOP KM/H", value: `${Math.round(s.topSpeedKmh)}` },

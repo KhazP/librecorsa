@@ -101,10 +101,11 @@ export function lapToEntry(rec: LapRecording, source: "local" | "remote", id?: s
 }
 
 const ASSIST_LABEL: Record<LapConditions["assists"], string> = { pro: "No assists", semi_pro: "Some assists", assisted: "Assisted" };
+const REALISM_LABEL: Record<LapConditions["realism"], string> = { casual: "Casual", standard: "Standard", full: "Full" };
 
-/** "No assists · Dry" for a board class's conditions */
-export function boardLabel(c: Pick<LapConditions, "assists" | "surface">): string {
-  return `${ASSIST_LABEL[c.assists]} · ${c.surface === "wet" ? "Wet" : "Dry"}`;
+/** "No assists · Full · Dry" for a board class's conditions */
+export function boardLabel(c: Pick<LapConditions, "assists" | "realism" | "surface">): string {
+  return `${ASSIST_LABEL[c.assists]} · ${REALISM_LABEL[c.realism]} · ${c.surface === "wet" ? "Wet" : "Dry"}`;
 }
 
 /** Local personal bests for this circuit (all cars, or one car), fastest first */
@@ -134,7 +135,7 @@ function parseRemoteEntry(raw: unknown, trackId: string, vehicle: VehicleModelId
   // Rows for another circuit or car do not belong on this board
   if (entryTrack !== trackId || raw.vehicle !== vehicle || !isVehicleId(raw.vehicle)) return null;
   if (raw.id !== undefined && cappedString(raw.id, MAX_ID_LENGTH) === null) return null;
-  // Rows driven under other assists, surface or physics belong on another board
+  // Rows driven under other assists, realism, surface or physics belong on another board
   const conditions = parseLapConditions(raw.conditions);
   if (!conditions || lapBoardClass(conditions) !== board) return null;
 
@@ -174,7 +175,7 @@ async function requestJson(url: string, init: RequestInit): Promise<{ status: nu
 }
 
 /**
- * Remote top laps of one board (`lapBoardClass`: physics revision, assists, surface); [] when no URL is configured or
+ * Remote top laps of one board (`lapBoardClass`: physics revision, assists, realism, surface); [] when no URL is configured or
  * on any network / parse error
  */
 export async function fetchRemoteLeaderboard(
@@ -224,7 +225,7 @@ export async function submitLap(rec: LapRecording): Promise<{ ok: boolean; rank?
   if (!remote) return { ok: false, error: "No online leaderboard is configured" };
   const valid = validateLapRecording(rec);
   if (!valid) return { ok: false, error: "The lap recording is invalid" };
-  // Without its assists, surface and physics revision a lap can't be put on a fair board
+  // Without its assists, realism, surface and physics revision a lap can't be put on a fair board
   if (!valid.conditions) return { ok: false, error: "This lap was recorded by an older version of the game" };
   // The boards refuse a lap whose samples don't agree with each other; say so before uploading
   const problem = lapPlausibilityProblem(valid.data);

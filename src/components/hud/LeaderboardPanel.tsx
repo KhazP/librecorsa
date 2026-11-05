@@ -66,7 +66,7 @@ export interface LeaderboardPanelProps {
   local: LeaderboardEntry[];
   remote: LeaderboardEntry[];
   remoteEnabled: boolean;
-  /** Assists and surface of the online board shown ("No assists · Dry") */
+  /** Assists, realism and surface of the online board shown ("No assists · Full · Dry") */
   remoteBoardLabel?: string;
   loading: boolean;
   onRefresh: () => void;
@@ -164,7 +164,7 @@ export const LeaderboardPanel: React.FC<LeaderboardPanelProps> = ({
         <section className={CARD} aria-label="Online">
           <CardHeader label="Online" color="#00E5FF">
             {remoteEnabled && remoteBoardLabel ? (
-              <span className="truncate text-[12px] text-[#8E96AA]" title="Laps are ranked against laps driven with the same assists and surface">
+              <span className="truncate text-[12px] text-[#8E96AA]" title="Laps are ranked against laps driven with the same assists, realism and surface">
                 {remoteBoardLabel}
               </span>
             ) : null}
