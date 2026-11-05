@@ -10,13 +10,14 @@ import { toPhysical } from "./to-physical";
  *
  * Classes by material name (the exports keep descriptive names: `sf25_paints`, `mercedes_paint`, `WCCARBODY`,
  * `Carpaint`, `Body`, `*_tread`, `*carbon*`); a channel with its own texture keeps its authored values:
- * - paint: dielectric base under a glossy clearcoat, like a race car's lacquer, at full Fresnel reflectance (the
- *   exports' KHR_materials_specular values of 0.17-0.4 left the paint reflecting a third of what lacquer does);
+ * - paint: dielectric base (metalness 0) under a glossy clearcoat, like a race car's lacquer, at full Fresnel
+ *   reflectance (the exports' KHR_materials_specular values of 0.17-0.4 left the paint reflecting a third of what
+ *   lacquer does);
  * - tyres: rubber, never metallic, rough;
  * - carbon: dielectric weave under a lighter clearcoat;
  * - real metal (chrome, alloy, rims, discs, exhaust, mirrors): keeps its metalness, roughness at least 0.15
  *   except mirrors;
- * - everything else: dielectric, roughness at least 0.3.
+ * - everything else: dielectric (metalness 0), roughness at least 0.3.
  */
 
 const PAINT = /paint|carbody|body|livery|skin/i;
@@ -107,7 +108,10 @@ export function cleanPortedCarMaterial(mat: THREE.Material): THREE.Material {
     if (!ownRough) std.roughness = Math.max(std.roughness, 0.75);
   } else if (PAINT.test(name) && !INTERIOR.test(name)) {
     const p = toPhysical(std);
-    if (!ownMetal) p.metalness = Math.min(p.metalness, 0.15);
+    // Lacquered paint is a dielectric: any metalness tints its reflections with the base colour and takes the same
+    // share off its diffuse colour, which read as a silver cast over the livery (issues #53, #54) and left the car
+    // darker than the track in shade
+    if (!ownMetal) p.metalness = 0;
     if (!ownRough) p.roughness = Math.min(Math.max(p.roughness, 0.3), 0.45);
     fullReflectance(p);
     p.clearcoat = 1;
@@ -126,7 +130,9 @@ export function cleanPortedCarMaterial(mat: THREE.Material): THREE.Material {
   } else if (METAL.test(name)) {
     if (!ownRough) std.roughness = Math.max(std.roughness, 0.15);
   } else {
-    if (!ownMetal) std.metalness = std.metalness > 0.99 ? 0 : Math.min(std.metalness, 0.2);
+    // Not named as metal: decals, colour layers, plastics and fabric are dielectrics (the exports' 0.5-0.8 left the
+    // sponsor colours greyed and silvery)
+    if (!ownMetal) std.metalness = 0;
     if (!ownRough) std.roughness = Math.max(std.roughness, 0.3);
   }
   // The exports' KHR_materials_specular dims every dielectric part to a fraction of a real F0; glass keeps its own
