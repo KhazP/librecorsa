@@ -476,6 +476,10 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   /** Ghost being raced: the personal best (default) or a downloaded / imported lap */
   const ghostRef = useRef<GhostPlayer | null>(null);
   const ghostSourceRef = useRef<"pb" | "other">("pb");
+  /** Bumped by every ghost choice, so a slower PB load cannot replace a ghost picked after it started */
+  const ghostReqRef = useRef(0);
+  /** Bumped by every leaderboard refresh; only the latest one updates the panel */
+  const leaderboardReqRef = useRef(0);
   const [leaderboard, setLeaderboard] = useState<{
     local: LeaderboardEntry[];
     remote: LeaderboardEntry[];
@@ -911,6 +915,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       setAiOpponents(race);
       setResultsClosed(false);
       lapRecorderRef.current?.reset();
+      // A new session: the instant replay (and flashback) must not reach back into the previous one
+      replayRef.current.buffer.clear();
       kbInputRef.current.throttle = 0;
       kbInputRef.current.brake = 0;
       kbInputRef.current.steer = 0;
@@ -977,6 +983,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
 
   // ---- Laps, ghosts, leaderboards
   const refreshLeaderboard = useCallback(async () => {
+    // Several refreshes can overlap (car change, realism change, a saved lap): only the latest may land
+    const req = ++leaderboardReqRef.current;
     setLeaderboard((l) => ({ ...l, loading: true }));
     const vehicle = vehicleModelRef.current;
     // The online board for what the player drives with now: their assists and realism, today's surface, this
@@ -994,24 +1002,27 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         ? fetchRemoteLeaderboard(trackId, vehicle, lapBoardClass(board)).catch((): LeaderboardEntry[] => [])
         : Promise.resolve<LeaderboardEntry[]>([]),
     ]);
+    if (req !== leaderboardReqRef.current) return;
     setLeaderboard({ local, remote, loading: false, boardLabel: boardLabel(board) });
   }, [trackId, getTrackEnv]);
-  // Another realism level ranks on another board
+  // Another realism level ranks on another board (the first fetch comes from the car effect below)
+  const realismSeenRef = useRef(settings.realism);
   useEffect(() => {
+    if (realismSeenRef.current === settings.realism) return;
+    realismSeenRef.current = settings.realism;
     void refreshLeaderboard();
   }, [settings.realism, refreshLeaderboard]);
 
-  /** Races the personal best of this car as the ghost (force: also when another lap was chosen) */
-  const loadPbGhost = useCallback(
-    async (force: boolean) => {
-      if (!force && ghostSourceRef.current !== "pb") return;
-      const rec = await loadBestLap(trackId, vehicleModelRef.current).catch(() => null);
-      ghostSourceRef.current = "pb";
-      ghostRef.current = rec ? new GhostPlayer(rec) : null;
-      lapRecorderRef.current?.setContext({ personalBestMs: rec?.lapTimeMs ?? null });
-    },
-    [trackId]
-  );
+  /** Races the personal best of this car as the ghost, replacing whichever lap was chosen */
+  const loadPbGhost = useCallback(async () => {
+    // A ghost picked (or another car's PB requested) while this one loads wins over it
+    const req = ++ghostReqRef.current;
+    const rec = await loadBestLap(trackId, vehicleModelRef.current).catch(() => null);
+    if (req !== ghostReqRef.current) return;
+    ghostSourceRef.current = "pb";
+    ghostRef.current = rec ? new GhostPlayer(rec) : null;
+    lapRecorderRef.current?.setContext({ personalBestMs: rec?.lapTimeMs ?? null });
+  }, [trackId]);
 
   const onLapCompleted = useCallback(
     (summary: LapSummaryData, recording: LapRecording) => {
@@ -1062,6 +1073,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   /** Uses a lap from the leaderboard (or a file) as the ghost */
   const raceGhost = useCallback((rec: LapRecording | null) => {
     if (!rec) return;
+    ghostReqRef.current++;
     ghostRef.current = new GhostPlayer(rec);
     ghostSourceRef.current = "other";
     setSettings((prev) => (prev.ghost ? prev : { ...prev, ghost: true }));
@@ -1197,6 +1209,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     aiFieldRef.current = null;
     setAiOpponents(false);
     physicsRef.current?.resetToStartGrid(false);
+    replayRef.current.buffer.clear();
     pausedRef.current = false;
     setPaused(false);
     audioRef.current?.setPaused(true);
@@ -1309,6 +1322,9 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       kbInputRef.current.steer = 0;
       lapRecorderRef.current?.setContext({ vehicle });
       lapRecorderRef.current?.reset();
+      // The live delta and the replay belong to the previous car
+      lapDelta.reset();
+      replayRef.current.buffer.clear();
       // A running race restarts from the lights with the new car
       if (aiFieldRef.current) {
         const field = new AiOpponentField(track, physics, AI_DRIVERS, getTrackEnv(), { skill: settingsRef.current.aiSkill });
@@ -3223,7 +3239,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
 
   // A car change brings back that car's personal-best ghost and leaderboard
   useEffect(() => {
-    void loadPbGhost(true);
+    void loadPbGhost();
     void refreshLeaderboard();
     wheelFfb.resetMeter();
   }, [vehicleModel, loadPbGhost, refreshLeaderboard]);
