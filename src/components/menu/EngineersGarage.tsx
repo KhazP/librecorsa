@@ -1,13 +1,16 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import type { LiveTunerPatch, LiveTunerState } from "@/types/f1";
+import type { AeroSetupPreset, LiveTunerPatch, LiveTunerState, TireCompound } from "@/types/f1";
 import { DEFAULT_CHASSIS_SETUP, loadGaragePresets, saveGaragePresets, type GaragePreset, type GarageTuner } from "@/lib/sim/car-setup";
 import { setupSheet, type SetupEffect, type SetupGroup, type SetupParam, type SetupState } from "@/lib/sim/setup-sheet";
 import { COMPOUNDS, PanelSection, TYRE_SETUP_LIMITS, type PauseMenuProps } from "@/components/hud/PauseMenu";
 import { CarPicker } from "./CarPicker";
 import { TyreBrakeGrid } from "@/components/hud/TyreBrakeWidget";
 import { LIVERIES } from "@/lib/track-data";
+
+const TIRE_COMPOUNDS: readonly TireCompound[] = ["soft", "medium", "hard", "intermediate", "wet"];
+const AERO_PRESETS: readonly AeroSetupPreset[] = ["low_downforce", "balanced", "high_downforce"];
 import { FACTORY_LIVERY_NOTE, carTakesLivery } from "@/lib/cars/car-registry";
 
 const FALLBACK_TUNER: Pick<
@@ -204,11 +207,25 @@ export const EngineersGarage: React.FC<PauseMenuProps> = (p) => {
     setNote(saveGaragePresets(p.vehicleModel, next) ? `Saved “${preset.name}”` : "Could not save: storage is blocked");
   };
   const loadPreset = (x: GaragePreset) => {
-    p.onChangeChassisSetup?.(x.chassis);
-    p.onChangeTyreSetup(x.tyre);
-    p.onChangeTireCompound(x.compound);
-    p.onChangeAeroPreset(x.aero);
-    p.onChangeLiveTuner?.(x.tuner);
+    // Saved presets come from storage: every value goes back through the sheet's own range (as the sliders would),
+    // so a hand-edited or older preset cannot hand the car a value no slider can produce
+    let loaded: SetupState = {
+      chassis: x.chassis ?? chassis,
+      tyre: x.tyre ?? p.tyreSetup,
+      tuner: { ...currentTuner, ...(x.tuner ?? {}) },
+    };
+    for (const group of sheet) {
+      for (const param of group.params) {
+        const v = param.get(loaded);
+        const safe = Number.isFinite(v) ? Math.min(param.max, Math.max(param.min, v)) : param.base;
+        if (safe !== v) loaded = param.set(loaded, safe);
+      }
+    }
+    p.onChangeChassisSetup?.(loaded.chassis);
+    p.onChangeTyreSetup(loaded.tyre);
+    if (TIRE_COMPOUNDS.includes(x.compound)) p.onChangeTireCompound(x.compound);
+    if (AERO_PRESETS.includes(x.aero)) p.onChangeAeroPreset(x.aero);
+    p.onChangeLiveTuner?.(loaded.tuner);
     setNote(`Loaded “${x.name}”`);
   };
   const deletePreset = (x: GaragePreset) => {

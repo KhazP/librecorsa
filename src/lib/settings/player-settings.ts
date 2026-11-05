@@ -8,6 +8,7 @@ import {
   DEFAULT_PAD_BUTTONS,
   KEY_ACTIONS,
   PAD_ACTIONS,
+  RESERVED_CODES,
   type KeyBindings,
   type PadButtonBindings,
 } from "@/lib/input/bindings";
@@ -285,21 +286,41 @@ const num = (v: unknown, lo: number, hi: number, fallback: number) => (isNum(v) 
 const index = (v: unknown) => isNum(v) && Number.isInteger(v) && v >= 0 && v < 64;
 
 function parseKeys(v: unknown): KeyBindings {
-  if (!isObj(v)) return DEFAULT_KEY_BINDINGS;
+  if (!isObj(v)) return { ...DEFAULT_KEY_BINDINGS };
   const out = { ...DEFAULT_KEY_BINDINGS };
+  // The player's own bindings first; reserved keys (rebindKey refuses them) are dropped
+  const claimed = new Set<string>();
+  const saved = new Set<string>();
   for (const { id } of KEY_ACTIONS) {
     const codes = v[id];
-    if (Array.isArray(codes)) out[id] = codes.filter(isStr).slice(0, 4);
+    if (!Array.isArray(codes)) continue;
+    out[id] = codes.filter((c): c is string => isStr(c) && !RESERVED_CODES.has(c)).slice(0, 4);
+    out[id].forEach((c) => claimed.add(c));
+    saved.add(id);
+  }
+  // An action the save predates gets its default keys, minus any the player already uses for something else
+  for (const { id } of KEY_ACTIONS) {
+    if (!saved.has(id)) out[id] = DEFAULT_KEY_BINDINGS[id].filter((c) => !claimed.has(c));
   }
   return out;
 }
 
 function parsePadButtons(v: unknown): PadButtonBindings {
-  if (!isObj(v)) return DEFAULT_PAD_BUTTONS;
+  if (!isObj(v)) return { ...DEFAULT_PAD_BUTTONS };
   const out = { ...DEFAULT_PAD_BUTTONS };
+  const claimed = new Set<number>();
+  const saved = new Set<string>();
   for (const { id } of PAD_ACTIONS) {
     if (v[id] === null) out[id] = null;
     else if (index(v[id])) out[id] = v[id] as number;
+    else continue;
+    saved.add(id);
+    if (out[id] !== null) claimed.add(out[id] as number);
+  }
+  // Same for the controller: a default button the player has given to another action stays unbound here
+  for (const { id } of PAD_ACTIONS) {
+    const d = DEFAULT_PAD_BUTTONS[id];
+    if (!saved.has(id) && d !== null && claimed.has(d)) out[id] = null;
   }
   return out;
 }
@@ -321,7 +342,7 @@ function parseButton(v: unknown): ButtonBinding | null {
 
 function parseWheel(v: unknown): WheelSettings {
   const d = DEFAULT_WHEEL_SETTINGS;
-  if (!isObj(v)) return d;
+  if (!isObj(v)) return structuredClone(d);
   const buttons = { ...d.buttons };
   if (isObj(v.buttons)) {
     for (const { id } of PAD_ACTIONS) buttons[id] = parseButton(v.buttons[id]);
@@ -375,7 +396,7 @@ function parsePerCarFfb(v: unknown): WheelSettings["ffbPerCar"] {
 
 function parsePadTuning(v: unknown): PadTuning {
   const d = DEFAULT_PAD_TUNING;
-  if (!isObj(v)) return d;
+  if (!isObj(v)) return structuredClone(d);
   return {
     steeringRate: num(v.steeringRate, 0.1, 1.5, d.steeringRate),
     deadzone: num(v.deadzone, 0, 0.3, d.deadzone),
@@ -389,7 +410,7 @@ function parsePadTuning(v: unknown): PadTuning {
 
 function parseKeyboardTuning(v: unknown): KeyboardTuning {
   const d = DEFAULT_KEYBOARD_TUNING;
-  if (!isObj(v)) return d;
+  if (!isObj(v)) return structuredClone(d);
   return {
     throttleRiseS: num(v.throttleRiseS, 0, 1, d.throttleRiseS),
     brakeRiseS: num(v.brakeRiseS, 0, 1, d.brakeRiseS),
@@ -402,7 +423,7 @@ function parseKeyboardTuning(v: unknown): KeyboardTuning {
 
 function parseHud(v: unknown): HudSettings {
   const d = DEFAULT_HUD_SETTINGS;
-  if (!isObj(v)) return d;
+  if (!isObj(v)) return structuredClone(d);
   return {
     // Older saves: "full" (the old default) moves to the new default, "engineer" to Telemetry
     preset: v.preset === "engineer" ? "telemetry" : oneOf(v.preset, HUD_PRESETS, d.preset),
@@ -425,7 +446,7 @@ function parseHud(v: unknown): HudSettings {
 
 function parseGraphics(v: unknown): GraphicsSettings {
   const d = DEFAULT_GRAPHICS_SETTINGS;
-  if (!isObj(v)) return d;
+  if (!isObj(v)) return structuredClone(d);
   return {
     quality: oneOf(v.quality, ["low", "medium", "high"] as const, d.quality),
     renderScale: num(v.renderScale, 0.5, 1.5, d.renderScale),
@@ -434,7 +455,7 @@ function parseGraphics(v: unknown): GraphicsSettings {
 
 function parseTouch(v: unknown): TouchSettings {
   const d = DEFAULT_TOUCH_SETTINGS;
-  if (!isObj(v)) return d;
+  if (!isObj(v)) return structuredClone(d);
   return {
     mode: oneOf(v.mode, ["auto", "on", "off"] as const, d.mode),
     tiltSteer: bool(v.tiltSteer, d.tiltSteer),
@@ -443,7 +464,7 @@ function parseTouch(v: unknown): TouchSettings {
 }
 
 function parseProfile(v: unknown): DriverProfile {
-  if (!isObj(v)) return DEFAULT_DRIVER_PROFILE;
+  if (!isObj(v)) return { ...DEFAULT_DRIVER_PROFILE };
   return {
     name: sanitizeDriverName(isStr(v.name) ? v.name : ""),
     code: sanitizeDriverCode(isStr(v.code) ? v.code : ""),
@@ -455,7 +476,8 @@ function parseProfile(v: unknown): DriverProfile {
 /** Validates a parsed save; unknown or invalid fields take their defaults */
 export function parsePlayerSettings(raw: unknown): PlayerSettings {
   const d = DEFAULT_PLAYER_SETTINGS;
-  if (!isObj(raw)) return d;
+  // A copy: handing out the shared defaults would let any in-place edit corrupt them for the rest of the session
+  if (!isObj(raw)) return structuredClone(d);
   return {
     device: oneOf(raw.device, ["keyboard", "controller", "wheel"] as const, d.device),
     keys: parseKeys(raw.keys),
