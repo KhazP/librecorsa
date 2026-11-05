@@ -89,8 +89,10 @@ function driveLap(car: 'vf26' | 'f12026', preset: DriverAssistPreset, pace: numb
     const thrCap = THREE.MathUtils.clamp(1.15 - 5 * Math.abs(steer), 0.25, 1) * (Math.abs(beta) > 0.06 ? 0.4 : 1);
     thr = Math.min(thrCap, e >= 0 ? Math.min(thr + 2.5 * DT, 0.3 + e * 0.5) : 0);
     if (rearSpin > 0.12) thr = Math.max(0, thr - 6 * DT);
-    // feels the lock-up and comes off the pedal, then squeezes back on
-    brakeCap = THREE.MathUtils.clamp(brakeCap + (lock < -0.14 ? -8 : 4) * DT, 0.1, 1);
+    // feels the lock-up and comes off the pedal, then squeezes back on. Modulating, not letting go: without ABS a
+    // player keeps about a quarter of the pedal on while a saturated inside front chirps, rather than dropping to
+    // nothing (at 10 % the car could not slow for T13 and ran wide with the pedal pinned at the floor)
+    brakeCap = THREE.MathUtils.clamp(brakeCap + (lock < -0.14 ? -8 : 4) * DT, 0.25, 1);
     const brake = e < 0 ? Math.min(brakeCap, THREE.MathUtils.clamp(-e * 0.25, 0, 1)) : 0;
     c.step(DT, e >= 0 ? { throttle: thr, analogSteer: steer } : { brake, analogSteer: steer });
     t += DT;
