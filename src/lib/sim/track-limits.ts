@@ -255,6 +255,8 @@ export class TrackLimitsMonitor {
   private whileJudging(e: Excursion, f: TrackLimitsFrame): TrackLimitsEvent | null {
     e.settleS += f.dtS;
     if (e.settleS < SETTLE_S) return null;
+    // Judged afresh: an earlier verdict on this excursion (it went off again while giving back) no longer applies
+    e.giveBackPosition = null;
 
     // Off-track overtake check: if the player gained a race position during the excursion, require handing the position back
     if (e.entryPosition !== null && f.racePosition !== undefined && f.racePosition < e.entryPosition) {

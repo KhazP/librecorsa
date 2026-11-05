@@ -88,7 +88,8 @@ export class GapTimer {
  * was where the car behind is now), not a distance divided by a speed.
  */
 export class SplitTimer {
-  private readonly cars = new Map<string, { times: Map<number, number>; maxD: number; lastT: number }>();
+  /** maxT: when the car reached maxD (lastT, the latest call, keeps counting while it sits there) */
+  private readonly cars = new Map<string, { times: Map<number, number>; maxD: number; maxT: number; lastT: number }>();
 
   constructor(
     private readonly stepM = 10,
@@ -105,7 +106,7 @@ export class SplitTimer {
     const step = this.stepM;
     let c = this.cars.get(id);
     if (!c) {
-      c = { times: new Map(), maxD: distM, lastT: raceTimeS };
+      c = { times: new Map(), maxD: distM, maxT: raceTimeS, lastT: raceTimeS };
       this.cars.set(id, c);
       return;
     }
@@ -117,6 +118,7 @@ export class SplitTimer {
         c.times.set(k, c.lastT + (raceTimeS - c.lastT) * u);
       }
       c.maxD = distM;
+      c.maxT = raceTimeS;
       if (c.times.size * step > this.keepM * 1.2) {
         const floor = Math.floor((distM - this.keepM) / step);
         for (const k of c.times.keys()) if (k < floor) c.times.delete(k);
@@ -135,9 +137,10 @@ export class SplitTimer {
     const t1 = c.times.get(k + 1);
     if (t0 === undefined) return t1 ?? null;
     if (t1 === undefined) {
-      // Between the last checkpoint and the car's current distance
+      // Between the last checkpoint and the furthest the car has got (reached at maxT, not now: a stopped car
+      // would otherwise drag the interpolated time along with the clock)
       const u = (distM - k * step) / Math.max(1e-6, c.maxD - k * step);
-      return t0 + (c.lastT - t0) * Math.min(1, u);
+      return t0 + (c.maxT - t0) * Math.min(1, u);
     }
     return t0 + (t1 - t0) * ((distM - k * step) / step);
   }
