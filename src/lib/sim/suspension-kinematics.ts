@@ -62,7 +62,10 @@ export interface CornerKinematicsState {
   /** Mechanical caster trail at the ground plane (m, + = kingpin pierces ground ahead of contact patch): the static
    * trail plus the hardpoints' kinematic change with travel */
   casterTrailM: number;
-  /** Kingpin scrub radius at the ground plane (m, + = kingpin pierces ground inboard of contact patch center) */
+  /**
+   * Kingpin scrub radius at the ground plane (m, + = inboard of the contact patch centre): a 22 mm base plus 35 % of
+   * the kingpin's ground offset from the hardpoints, held within 8–42 mm (not the raw geometric offset)
+   */
   scrubRadiusM: number;
   /** Instantaneous pushrod/pullrod rocker motion ratio (normalized to 1.0 at static ride height) */
   motionRatioNorm: number;
@@ -376,8 +379,8 @@ export function solveCornerKinematics3D(
   const sGround = (wheelCenterY - radius - botY) / Math.max(0.05, ky);
   const kpGroundX = botX + sGround * kx;
 
-  // Scrub radius (inboard offset of kingpin ground intersection from contact patch center x=0)
-  // Clamped to realistic F1/GT3 physical bounds [8 mm .. 42 mm]
+  // Scrub radius: a 22 mm base plus 35 % of the kingpin's ground offset (contact patch centre at x = 0), held within
+  // realistic F1/GT3 bounds [8 mm .. 42 mm]
   const scrubRadiusM = Math.max(0.008, Math.min(0.042, 0.022 + kpGroundX * 0.35));
   // Mechanical caster trail: the car's static trail plus the kinematic change with travel (the hardpoints' own
   // ground trail is not the car's: the steering offset and hub geometry are not in them)

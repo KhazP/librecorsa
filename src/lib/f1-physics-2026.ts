@@ -231,7 +231,6 @@ interface AxleRuntime {
   staticSpringDeflection: number;
   /** Static tyre load per wheel (N) */
   staticTyreLoad: number;
-  tyreRate: number;
   tyreDamp: number;
   /** Static camber the tyres run at (deg, negative = top in); from the driver's tyre setup */
   camberDeg: number;
@@ -405,8 +404,6 @@ export class F1Physics2026 {
   private airDensity = 1.06;
   private gravityBody = { x: 0, y: 0, n: G };
   private verticalCurvature = 0;
-  private lastFyFront = 0;
-  private lastFyRear = 0;
   private lastFxTyres = 0;
 
   // Aero results (outer step) & wake / wind / track evolution states
@@ -536,7 +533,6 @@ export class F1Physics2026 {
       staticSpringForce: 0,
       staticSpringDeflection: 0,
       staticTyreLoad: 0,
-      tyreRate: rate,
       tyreDamp: damp,
       camberDeg: spec.staticCamberDeg,
     });
@@ -799,10 +795,6 @@ export class F1Physics2026 {
     };
   }
 
-  /**
-   * Sets the tyre setup. Cold pressures are clamped to 17–27 psi (to 0.1 psi), front camber to
-   * −4.5…−1.5° and rear camber to −3.0…−0.5°. A non-finite value keeps the current setting.
-   */
   public getChassisSetup(): ChassisSetup {
     return { ...this.chassis };
   }
@@ -838,6 +830,10 @@ export class F1Physics2026 {
     this.recomputeMassProperties();
   }
 
+  /**
+   * Sets the tyre setup. Cold pressures are clamped to 14–27 psi (to 0.1 psi), front camber to
+   * −4.5…−1.5° and rear camber to −3.0…−0.5°. A non-finite value keeps the current setting.
+   */
   public setTyreSetup(setup: TyreSetup): void {
     const pick = (v: number, lo: number, hi: number, current: number) =>
       Number.isFinite(v) ? THREE.MathUtils.clamp(v, lo, hi) : current;
@@ -1196,9 +1192,7 @@ export class F1Physics2026 {
       }
     }
     this.applyColdPressures();
-    this.axles[0].tyreRate = set.front.rate;
     this.axles[0].tyreDamp = set.front.damp;
-    this.axles[1].tyreRate = set.rear.rate;
     this.axles[1].tyreDamp = set.rear.damp;
   }
 
@@ -1240,8 +1234,6 @@ export class F1Physics2026 {
     this.aiFrontCourseRad = 0;
     this.aiBrakeTrim = 1;
     this.aiThrottleTrim = 1;
-    this.lastFyFront = 0;
-    this.lastFyRear = 0;
     this.lastFxTyres = 0;
     this.applyCompound();
     for (const w of this.wheels) {
@@ -1478,7 +1470,7 @@ export class F1Physics2026 {
 
     // ---- 2. Driver aids (12-stage 130 Hz TC1/TC2 + Lateral-G & 12-stage 240 Hz 4-channel ABS) ----
     const tcLv = THREE.MathUtils.clamp(Math.round(this.tcLevel), 0, 12);
-    // Level 5 = 1.00 (semi_pro), Level 8 = 0.90 (assisted), Level 1 = 1.24 (min), Level 12 = 0.76 (max)
+    // Level 1 = 1.235 (least intrusive), Level 5 = 1.055 (semi_pro), Level 8 = 0.92 (assisted), Level 12 = 0.74
     const tcBaseTarget = tcLv > 0 ? 1.28 - tcLv * 0.045 : 0;
     if (tcBaseTarget > 0 && this.vxMs > 2) {
       const gLat = Math.abs(this.lastAyMs2) / G;
@@ -1508,7 +1500,7 @@ export class F1Physics2026 {
       this.tcCut = 1;
     }
 
-    // 12-stage 4-channel 240 Hz ABS (Level 5 = 1.10 semi_pro, Level 9 = 0.94 assisted)
+    // 12-stage 4-channel 240 Hz ABS (Level 5 = 1.10 semi_pro, Level 9 = 0.92 assisted)
     const absLv = THREE.MathUtils.clamp(Math.round(this.absLevel), 0, 12);
     const absTarget = absLv > 0 ? 1.32 - absLv * 0.044 : 0;
     for (let i = 0; i < 4; i++) {
@@ -2235,8 +2227,6 @@ export class F1Physics2026 {
     const rNew = r + (sumMz / this.yawInertiaKgM2) * h;
     this.yawRateRadS = -rNew;
 
-    this.lastFyFront = fyFront;
-    this.lastFyRear = fyRear;
     this.lastFxTyres = fxTyres;
 
     // ---- Vertical dynamics ----

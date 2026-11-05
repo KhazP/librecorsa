@@ -14,7 +14,7 @@
  *    - Velocity-squared aerodynamic wind noise (`aero.a = min(u2 * 0.0001 + 0.1, 1.0) * 0.6`)
  * 3. `calculateTyreSound`:
  *    - Per-wheel (`i = 0..3`) tire squeal & scrub driven by combined slip `s = hypot(sx, sy)`
- *      multiplied by vertical normal load `Fz` (`0.4 * s * Fz * 0.0002 - 0.1`)
+ *      multiplied by vertical normal load `Fz` (AC's `0.4 * s * Fz * 0.0002 - 0.1`, here with s × 4.5 and −0.12)
  *    - Kerb rumble strip impact resonance and off-track grass/gravel skid layers.
  *
  * When a multi-grid sound bank is present (`public/amr26/audio/` or `public/gt3/audio/`, see `vf26-audio.ts`),
@@ -754,8 +754,8 @@ export class CarAudioEngine {
     for (let i = 0; i < 4; i++) {
       const s = wheelSlipNorms[i];
       const fz = wheelLoads[i];
-      // From CarSoundData.cpp line 272:
-      // a = max(min(0.4 * s * reaction_force * 0.0002 - 0.1, 1.0), 0.0) * min(u * 0.1, 1.0)
+      // After CarSoundData.cpp line 272, a = max(min(0.4 * s * reaction_force * 0.0002 - 0.1, 1.0), 0.0) * min(u * 0.1,
+      // 1.0), retuned here: s is scaled ×4.5 (our normalised slip peaks lower), the offset is −0.12 and the speed ramp 0.08
       const squealRaw =
         Math.max(0, Math.min(1.0, 0.4 * (s * 4.5) * fz * 0.0002 - 0.12)) *
         Math.min(1.0, speedMs * 0.08);

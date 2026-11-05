@@ -138,9 +138,6 @@ export interface CarSimProfile {
   coldPsiRange: [number, number];
   frontCamberRange: [number, number];
   rearCamberRange: [number, number];
-  /** Traction control: allowed rear slip ratio; ABS: allowed lock-up slip ratio (0 = off) */
-  tcTarget: Record<DriverAssistPreset, number>;
-  absTarget: Record<DriverAssistPreset, number>;
   /** Traction control works above this speed (m/s) */
   tcMinSpeedMs: number;
   /** Optional 12-stage TC / 4-channel ABS electronics calibration */
@@ -174,9 +171,6 @@ export const F12026_SIM_PROFILE: CarSimProfile = {
   coldPsiRange: [15, 25],
   frontCamberRange: [-3.6, 0],
   rearCamberRange: [-2.0, 0],
-  // 1.0 / 0.85 × the 0.1 peak slip ratio of every f12026-car compound
-  tcTarget: { pro: 0, semi_pro: 0.1, assisted: 0.085 },
-  absTarget: { pro: 0, semi_pro: 0.15, assisted: 0.11 },
   tcMinSpeedMs: 2,
   electronics: F12026_ELECTRONICS,
   // Wing offsets: front 10–30° (set 25), rear 0–20° (set 15)
@@ -555,6 +549,8 @@ export class F12026CarSim implements SimulatorCar {
   }
   public readonly cgToFrontAxleM: number;
   public readonly cgToRearAxleM: number;
+  // The rig's extra pitch / roll / heave (SimulatorCar): none, since the rigid body's pose already carries them.
+  // Not the setup's ride height, which lives on `this.vehicle.rideHeightOffsetM` and is part of that pose
   public readonly pitchRad = 0;
   public readonly rollRad = 0;
   public readonly rideHeightOffsetM = 0;
@@ -761,7 +757,6 @@ export class F12026CarSim implements SimulatorCar {
   // Track
   // ===========================================================================
 
-  /** Instantiate an AI opponent car with the exact same vehicle profile and track colliders */
   /** Where the road under this car's track colliders really ends (null on the sample ground) */
   private autopilotEdges(): AutopilotEdges | null {
     const c = this.onColliders && this.trackRoot ? collidersFor(this.trackRoot) : null;
@@ -773,6 +768,7 @@ export class F12026CarSim implements SimulatorCar {
     return autopilotProfile(this.track, this.profile, this.autopilotEdges());
   }
 
+  /** Instantiate an AI opponent car with the exact same vehicle profile and track colliders */
   public createAiPeerCar(): F12026CarSim {
     const peer = new F12026CarSim(this.track, this.trackRoot, this.profile);
     peer.aiAutoTyres = true;
@@ -1676,10 +1672,6 @@ export class F12026CarSim implements SimulatorCar {
       const vf = this.wheels[VF_ORDER.indexOf(i as 0 | 1 | 2 | 3)];
       vf.brakeTempC = w.brakeDisc.surfaceTempC;
     }
-  }
-
-  private get lastBrake(): number {
-    return this.vehicle.telemetry.brake;
   }
 
   /** Render pose, track coordinates and the VF-order wheels from the rigid body */
