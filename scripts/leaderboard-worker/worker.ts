@@ -1,7 +1,7 @@
 /**
  * Reference leaderboard backend for the simulator: a Cloudflare Worker storing laps in KV.
  * Routes: POST /laps, GET /laps?track=&vehicle=&board=&limit=, GET /laps/:id.
- * `board` is the lap's class (physics revision, assists, surface: "p1-pro-dry"); laps are ranked only within it.
+ * `board` is the lap's class (physics revision, assists, realism, surface: "p2-pro-full-dry"); laps are ranked only within it.
  * Validation and plausibility checks are heuristics, not cheat-proof.
  * Self-contained: the minimal KV and Env types are declared here, no workers-types dependency.
  */
@@ -22,6 +22,7 @@ interface LapConditions {
   assists: string;
   compound: string;
   surface: "dry" | "wet";
+  realism: "casual" | "standard" | "full";
   physicsVersion: number;
 }
 
@@ -72,7 +73,7 @@ const SAMPLE_STRIDE = 14;
 const VEHICLES = ["vf26", "f12026-car", "amg-gt3"];
 const ASSISTS = ["pro", "semi_pro", "assisted"];
 const COMPOUNDS = ["soft", "medium", "hard", "intermediate", "wet"];
-const BOARD_PATTERN = /^p\d{1,4}-(pro|semi_pro|assisted)-(dry|wet)$/;
+const BOARD_PATTERN = /^p\d{1,4}-(pro|semi_pro|assisted)-(casual|standard|full)-(dry|wet)$/;
 // Sample consistency, as src/lib/sim/lap-plausibility.ts (keep the two in step)
 const MAX_LAP_GAP_M = 150;
 const MAX_SPEED_PATH_MISMATCH = 0.03;
@@ -115,14 +116,15 @@ function parseConditions(raw: unknown): LapConditions | null {
   if (typeof raw.assists !== "string" || !ASSISTS.includes(raw.assists)) return null;
   if (typeof raw.compound !== "string" || !COMPOUNDS.includes(raw.compound)) return null;
   if (raw.surface !== "dry" && raw.surface !== "wet") return null;
+  if (raw.realism !== "casual" && raw.realism !== "standard" && raw.realism !== "full") return null;
   const v = raw.physicsVersion;
   if (typeof v !== "number" || !Number.isInteger(v) || v < 1 || v > 1000) return null;
-  return { assists: raw.assists, compound: raw.compound, surface: raw.surface, physicsVersion: v };
+  return { assists: raw.assists, compound: raw.compound, surface: raw.surface, realism: raw.realism, physicsVersion: v };
 }
 
 /** The board a lap is ranked on within its circuit and car, as lapBoardClass in src/lib/sim/lap-types.ts */
 function boardClass(c: LapConditions): string {
-  return `p${c.physicsVersion}-${c.assists}-${c.surface}`;
+  return `p${c.physicsVersion}-${c.assists}-${c.realism}-${c.surface}`;
 }
 
 /** The samples agree with each other: the lap closes, and speed, positions and track distance match */
@@ -161,7 +163,7 @@ function parseRecording(raw: unknown): Parsed {
   const bad = (error: string): Parsed => ({ ok: false, error });
   if (!isRecord(raw)) return bad("Recording must be an object");
   if (raw.version !== 1) return bad("Unsupported version");
-  // Assists, tyre, surface and physics revision decide the board; laps without them come from an outdated game
+  // Assists, realism, tyre, surface and physics revision decide the board; laps without them come from an outdated game
   const conditions = parseConditions(raw.conditions);
   if (!conditions) return bad("Missing lap conditions. Update the game and try again");
 

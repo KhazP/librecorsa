@@ -7,7 +7,7 @@
  */
 import { getRwandaTrackData } from '../src/lib/track-data';
 import { F1Physics2026 } from '../src/lib/f1-physics-2026';
-import { LapRecorder, validateLapRecording } from '../src/lib/sim/lap-recorder';
+import { LapRecorder, validateLapRecording, type CompletedLap } from '../src/lib/sim/lap-recorder';
 import { lapPlausibilityProblem } from '../src/lib/sim/lap-plausibility';
 import { LAP_SAMPLE_STRIDE, PHYSICS_VERSION, lapBoardClass, type LapRecording } from '../src/lib/sim/lap-types';
 import worker from './leaderboard-worker/worker';
@@ -31,18 +31,29 @@ const recorder = new LapRecorder({
   driverCode: 'TST',
 });
 let lap: LapRecording | null = null;
+let autopilotLap: CompletedLap | null = null;
 let laps = 0;
-for (let f = 0; f < 60 * 400 && !lap; f++) {
+for (let f = 0; f < 60 * 600 && !autopilotLap; f++) {
   const t = car.step(1 / 60, {});
-  // Assisted for a moment mid-lap: the lap keeps the most-aided preset
-  const assists = laps === 1 && t.currentLapTimeMs > 30_000 && t.currentLapTimeMs < 30_100 ? 'assisted' : 'pro';
+  // Lap 2 is assisted and on Casual for a moment mid-lap: the lap keeps the most-aided preset and the least
+  // realistic level. Lap 3 has the autopilot report driving for a moment.
+  const moment = t.currentLapTimeMs > 30_000 && t.currentLapTimeMs < 30_100;
   const done = recorder.update({
     telemetry: t,
     position: car.worldPosition,
     quaternion: car.worldQuaternion,
-    conditions: { assists, compound: 'medium', wet: false },
+    conditions: {
+      assists: laps === 1 && moment ? 'assisted' : 'pro',
+      compound: 'medium',
+      wet: false,
+      realism: laps === 1 && moment ? 'casual' : 'full',
+      autopilot: laps === 2 && moment,
+    },
   });
-  if (done && ++laps === 2) lap = done.recording;
+  if (!done) continue;
+  laps++;
+  if (laps === 2) lap = done.recording;
+  if (laps === 3) autopilotLap = done;
 }
 if (!lap) {
   console.error('No lap completed');
@@ -53,7 +64,14 @@ const real = lap;
 // 1. Conditions --------------------------------------------------------------------------------------------------------
 check('the lap carries its conditions', real.conditions?.compound === 'medium' && real.conditions.physicsVersion === PHYSICS_VERSION);
 check('a moment on assists makes it an assisted lap', real.conditions?.assists === 'assisted', real.conditions?.assists);
-check('board class', real.conditions !== undefined && lapBoardClass(real.conditions) === `p${PHYSICS_VERSION}-assisted-dry`);
+check('a moment on Casual makes it a Casual lap', real.conditions?.realism === 'casual', real.conditions?.realism);
+check('board class', real.conditions !== undefined && lapBoardClass(real.conditions) === `p${PHYSICS_VERSION}-assisted-casual-dry`);
+check('a recording without its realism level is refused', validateLapRecording({ ...real, conditions: { ...real.conditions, realism: undefined } }) === null);
+check(
+  'an autopilot lap is shown but never ranks',
+  autopilotLap !== null && autopilotLap.summary.autopilot && !autopilotLap.summary.isPersonalBest && autopilotLap.recording.conditions?.realism === 'full',
+  autopilotLap ? `valid ${autopilotLap.summary.valid}, PB ${autopilotLap.summary.isPersonalBest}` : 'no third lap'
+);
 check('validation keeps the conditions', validateLapRecording(JSON.parse(JSON.stringify(real)))?.conditions?.assists === 'assisted');
 check('malformed conditions are refused', validateLapRecording({ ...real, conditions: { ...real.conditions, surface: 'snow' } }) === null);
 const { conditions: _dropped, ...older } = real;
@@ -118,7 +136,7 @@ async function main(): Promise<void> {
   {
     const rows = ((await (await list(board)).json()) as { laps: { conditions?: unknown }[] }).laps;
     check('worker: the lap is on its own board, with its conditions', rows.length === 1 && rows[0].conditions !== undefined);
-    const other = ((await (await list(`p${PHYSICS_VERSION}-pro-dry`)).json()) as { laps: unknown[] }).laps;
+    const other = ((await (await list(`p${PHYSICS_VERSION}-pro-full-dry`)).json()) as { laps: unknown[] }).laps;
     check('worker: and on no other board', other.length === 0);
     check('worker: listing without a board is refused', (await list(null)).status === 400);
   }

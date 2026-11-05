@@ -7,7 +7,7 @@
 -- Validation and plausibility checks are heuristics, not cheat-proof. Safe to run again.
 --
 -- Boards: a lap is ranked against laps on the same circuit, in the same car, and on the same board: the physics
--- revision, assist preset and surface it was driven with ("p1-pro-dry", from rec.conditions; lapBoardClass in
+-- revision, assist preset, realism level and surface it was driven with ("p2-pro-full-dry", from rec.conditions; lapBoardClass in
 -- src/lib/sim/lap-types.ts). Laps stored before boards existed are on board 'legacy', which the game doesn't show.
 --
 -- Driver names are claimed with a device key: a random secret the game keeps in the browser. The first upload
@@ -31,7 +31,7 @@ alter table public.laps add column if not exists board text not null default 'le
 drop index if exists public.laps_board_idx;
 create index if not exists laps_board_class_idx on public.laps (track_id, vehicle, board, lap_time_ms, created_at);
 
--- The board of a lap's conditions ("p1-pro-dry"), or null when they are missing or malformed
+-- The board of a lap's conditions ("p2-pro-full-dry"), or null when they are missing or malformed
 create or replace function public.lap_board(c jsonb)
 returns text
 language plpgsql
@@ -43,12 +43,13 @@ begin
      or coalesce(c->>'assists', '') not in ('pro', 'semi_pro', 'assisted')
      or coalesce(c->>'compound', '') not in ('soft', 'medium', 'hard', 'intermediate', 'wet')
      or coalesce(c->>'surface', '') not in ('dry', 'wet')
+     or coalesce(c->>'realism', '') not in ('casual', 'standard', 'full')
      or jsonb_typeof(c->'physicsVersion') <> 'number'
      or (c->>'physicsVersion') !~ '^[0-9]{1,4}$'
      or (c->>'physicsVersion')::int < 1 then
     return null;
   end if;
-  return 'p' || (c->>'physicsVersion')::int || '-' || (c->>'assists') || '-' || (c->>'surface');
+  return 'p' || (c->>'physicsVersion')::int || '-' || (c->>'assists') || '-' || (c->>'realism') || '-' || (c->>'surface');
 end;
 $$;
 
@@ -327,7 +328,7 @@ begin
         'sampleHz', rec->'sampleHz', 'data', rec->'data',
         'conditions', jsonb_build_object(
           'assists', rec->'conditions'->'assists', 'compound', rec->'conditions'->'compound',
-          'surface', rec->'conditions'->'surface', 'physicsVersion', rec->'conditions'->'physicsVersion')))
+          'surface', rec->'conditions'->'surface', 'realism', rec->'conditions'->'realism', 'physicsVersion', rec->'conditions'->'physicsVersion')))
     returning id into new_id;
 
   -- Keep the board at its top 100

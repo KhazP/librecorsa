@@ -31,9 +31,9 @@ Without the variable the simulator only shows the local board.
 - `GET /laps?track=<id>&vehicle=<id>&board=<class>&limit=<n>` returns `{ laps: [...] }`, fastest first (limit 1-100, default 20).
 - `GET /laps/<id>` returns the stored lap recording (ghost) or 404.
 
-Every lap carries its `conditions` (assist preset, tyre, dry or wet, physics revision) and is ranked only against
-laps on the same **board**: same circuit, car, physics revision, assists and surface. The board class reads like
-`p1-pro-dry` (`lapBoardClass` in `src/lib/sim/lap-types.ts`). Laps without conditions come from an older game and
+Every lap carries its `conditions` (assist preset, realism level, tyre, dry or wet, physics revision) and is ranked only against
+laps on the same **board**: same circuit, car, physics revision, assists, realism and surface. The board class reads like
+`p2-pro-full-dry` (`lapBoardClass` in `src/lib/sim/lap-types.ts`). Laps without conditions come from an older game and
 are refused.
 
 Each driver (code and name) holds one row per board; a slower lap does not replace their best.
