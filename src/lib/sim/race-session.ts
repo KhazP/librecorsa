@@ -66,10 +66,12 @@ export class GapTimer {
       const bucket = Math.floor(d / GAP_BUCKET_M);
       if (!this.bucketTimes.has(bucket)) this.bucketTimes.set(bucket, raceTimeS);
     }
-    if (this.bucketTimes.size > 4000) {
-      let min = Infinity;
-      for (const k of this.bucketTimes.keys()) min = Math.min(min, k);
-      this.bucketTimes.delete(min);
+    // Over the cap, drop the oldest bucket: the first inserted (Map order), which is the field's earliest, lowest
+    // distance; no scan of all 4000 keys every frame
+    while (this.bucketTimes.size > 4000) {
+      const oldest = this.bucketTimes.keys().next().value;
+      if (oldest === undefined) break;
+      this.bucketTimes.delete(oldest);
     }
   }
 

@@ -414,7 +414,8 @@ export class AiOpponentField {
   private readonly persistLearning: boolean;
   private readonly spectate: boolean;
   /** Last contact time per car pair (a touch is counted once) */
-  private readonly contactAt = new Map<string, number>();
+  /** Last contact time per pair of field slots (key: lower slot × 256 + higher slot) */
+  private readonly contactAt = new Map<number, number>();
   private readonly rng: () => number;
 
   constructor(
@@ -893,7 +894,7 @@ export class AiOpponentField {
         fillObb(A, _obbA);
         fillObb(B, _obbB);
         const hit = resolveCarToCarObbCollision(_obbA, _obbB);
-        this.noteContact(this.cars[a], this.cars[b]);
+        this.noteContact(a, b);
         if (hit.collided && A.applyRigidBodyCollision && B.applyRigidBodyCollision) {
           applyObbDeltas(A, hit.posDeltaA, hit.velDeltaA, hit.yawDeltaA);
           applyObbDeltas(B, hit.posDeltaB, hit.velDeltaB, hit.yawDeltaB);
@@ -921,9 +922,12 @@ export class AiOpponentField {
   }
 
   /** Counts a touch between two cars once (a new one after 1 s apart) */
-  private noteContact(a: FieldCar, b: FieldCar): void {
+  private noteContact(ia: number, ib: number): void {
+    const a = this.cars[ia];
+    const b = this.cars[ib];
     a.contact = b.contact = true;
-    const key = a.id < b.id ? `${a.id}|${b.id}` : `${b.id}|${a.id}`;
+    // A number, not a string built per overlapping pair per frame
+    const key = Math.min(ia, ib) * 256 + Math.max(ia, ib);
     const last = this.contactAt.get(key);
     if (last === undefined || this.raceTimeS - last > 1) {
       a.stats.contacts++;
@@ -1098,7 +1102,8 @@ export class AiOpponentField {
     const byId = new Map(this.cars.map((c) => [c.id, c]));
     const order = orderedProgress.map((p) => byId.get(p.id) as FieldCar);
     // Prune gap buckets nobody can still need
-    const minDist = Math.min(...this.cars.map((c) => c.distM));
+    let minDist = Infinity;
+    for (const c of this.cars) minDist = Math.min(minDist, c.distM);
     if (this.bucketTimes.size > 4000) {
       for (const k of this.bucketTimes.keys()) if (k * GAP_BUCKET_M < minDist - 100) this.bucketTimes.delete(k);
     }
