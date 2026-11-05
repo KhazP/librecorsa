@@ -321,10 +321,8 @@ export function resolvePlayerVsRemoteCar(player: SimulatorCar, remote: Interpola
   const dx = remote.position.x - player.worldPosition.x;
   const dz = remote.position.z - player.worldPosition.z;
   const dy = remote.position.y - player.worldPosition.y;
-  // Broad phase at one car length, deliberately inside the boxes' diagonal (√(L² + W²) ≈ 5.4 m): a corner-to-corner
-  // graze that far apart is mostly prediction error on the remote pose, and widening it raises phantom contacts past
-  // what verify-multiplayer-contact accepts
-  if (dx * dx + dz * dz > CAR_LEN_M * CAR_LEN_M || Math.abs(dy) > 2) return false;
+  // Broad phase: two boxes can overlap with their centres up to a full diagonal apart (√(L² + W²) ≈ 5.4 m)
+  if (dx * dx + dz * dz > CAR_LEN_M * CAR_LEN_M + CAR_WID_M * CAR_WID_M || Math.abs(dy) > 2) return false;
   fillObb(player, _obbA);
   const q = remote.quaternion;
   let fx = 2 * (q.x * q.z + q.w * q.y);
@@ -345,7 +343,9 @@ export function resolvePlayerVsRemoteCar(player: SimulatorCar, remote: Interpola
   _obbB.halfWidthM = CAR_WID_M * 0.5;
   [_obbB.massKg, _obbB.yawInertiaKgM2] = remoteContactMass(remote.vehicle);
   const hit = resolveCarToCarObbCollision(_obbA, _obbB, REMOTE_RESTITUTION);
-  if (!hit.collided) return false;
+  // The remote box is a prediction, good to a few centimetres: an overlap within that slop is not contact. This,
+  // not a tight broad phase, is what keeps prediction error from turning grazes into phantom hits
+  if (!hit.collided || hit.penetrationM <= REMOTE_SLOP_M) return false;
   // This car's half of the overlap, paced so a few frames of it never snap the car sideways
   const sep = Math.min(Math.max(0, 0.5 * hit.penetrationM - REMOTE_SLOP_M), REMOTE_SEP_RATE_MS * Math.max(0, dt));
   _sep[0] = -hit.nx * sep;
