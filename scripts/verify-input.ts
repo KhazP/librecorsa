@@ -161,6 +161,18 @@ check('an unplugged wheel is reported once (the game pauses), not silently hande
   assert.equal(lost.wheelLost, true);
   assert.equal(reader.read([xbox], settings, 1 / 60).wheelLost, undefined, 'only on the frame it went');
   assert.equal(new DeviceInputReader().read([xbox], settings, 1 / 60).wheelLost, undefined, 'no wheel to begin with: nothing lost');
+  // Separate pedals unplugged while the base stays: also lost
+  const pedalled = {
+    wheel: {
+      ...wheel,
+      throttle: { padId: 'Pedals', axis: 1, idle: -1, full: 1 },
+      brake: { padId: 'Pedals', axis: 2, idle: 1, full: -1 },
+    },
+    padButtons: DEFAULT_PAD_BUTTONS,
+  };
+  const r2 = new DeviceInputReader();
+  assert.equal(r2.read([pad('DD base', '', [0.1]), pad('Pedals', '', [0, 1, 1])], pedalled, 1 / 60).wheelLost, undefined);
+  assert.equal(r2.read([pad('DD base', '', [0.1])], pedalled, 1 / 60).wheelLost, true, 'pedals unplugged');
 });
 
 console.log('Wheel detection and force feedback');

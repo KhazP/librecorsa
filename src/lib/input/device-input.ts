@@ -186,7 +186,10 @@ export interface DeviceFrame {
   /** Button actions pressed this frame (rising edges) */
   pressed: Set<PadAction>;
   source: "wheel" | "controller" | "legacy" | null;
-  /** The bound steering wheel was there last frame and is gone now (unplugged, asleep): pause, don't hand over */
+  /**
+   * The bound steering wheel, or a separate pedal set bound to it, was there last frame and is gone now (unplugged,
+   * asleep): pause, don't hand over
+   */
   wheelLost?: boolean;
 }
 
@@ -270,8 +273,13 @@ export class DeviceInputReader {
     const frame: DeviceFrame = { throttle: 0, brake: 0, boostHeld: false, pressed: new Set(), source: null };
     const wheel = settings.wheel;
     const wheelPad = wheel.steer ? findPad(pads, wheel.steer.padId) : undefined;
-    if (this.wheelPresent && !wheelPad) frame.wheelLost = true;
-    this.wheelPresent = wheelPad !== undefined;
+    // Pedals on their own USB device count too: losing the brake pedal silently is worse than losing the wheel
+    const present =
+      wheelPad !== undefined &&
+      (!wheel.throttle || findPad(pads, wheel.throttle.padId) !== undefined) &&
+      (!wheel.brake || findPad(pads, wheel.brake.padId) !== undefined);
+    if (this.wheelPresent && !present) frame.wheelLost = true;
+    this.wheelPresent = present;
 
     if (wheel.steer && wheelPad) {
       frame.source = "wheel";
