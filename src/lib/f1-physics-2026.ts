@@ -1079,9 +1079,11 @@ export class F1Physics2026 {
       stepsRun++;
     }
     if (stepsRun === 0 && dtSeconds < F1Physics2026.FIXED_DT) {
-      this.outerStep(dtSeconds, inputs, shiftReq);
+      // A frame shorter than one step: simulate everything owed, the remainder left by earlier frames included
+      const h = this.timeAccumulator;
+      this.outerStep(h, inputs, shiftReq);
+      this.simTimeMs += h * 1000;
       this.timeAccumulator = 0;
-      this.simTimeMs += dtSeconds * 1000;
     }
 
     this.syncWorldTransform();
@@ -1185,12 +1187,12 @@ export class F1Physics2026 {
     for (const w of this.wheels) {
       const targetSpec = w.isFront ? set.front : set.rear;
       if (w.tyre.spec !== targetSpec) {
-        const oldShift = w.tyre.spec.wet?.tempShiftC ?? 0;
         const newShift = targetSpec.wet?.tempShiftC ?? 0;
         setTyreSpec(w.tyre, targetSpec);
-        if (oldShift !== newShift) {
-          setTyreTemperature(w.tyre, INITIAL_TYRE_TEMP_C + 0.55 * newShift);
-        }
+        // Another compound is a new set off the blankets: no wear, flat spots or graining carried over from the
+        // old one (that used to depend on whether the wet temperature shift happened to change)
+        setTyreTemperature(w.tyre, INITIAL_TYRE_TEMP_C + 0.55 * newShift);
+        w.tyre.wear = 0;
       }
     }
     this.applyColdPressures();
@@ -1410,8 +1412,9 @@ export class F1Physics2026 {
       // Front torque per wheel at pedal p is T·(bias + mig·p)·p with the migration, so the cap is the root of
       // mig·p² + bias·p − τ/T = 0 for the torque τ the tyre can take
       const brakeTorqueFull = VF26_BRAKES.maxTorqueNm * VF26_BRAKES.powerMult * this.brakePowerScale;
-      const bias0 = VF26_BRAKES.frontBias;
-      const mig = VF26_BRAKES.migrationAtFullPedal;
+      // The live bias and migration (the tuner can move them), as the brake distribution itself uses
+      const bias0 = this.liveBrakeBias;
+      const mig = this.liveBrakeMigration;
       let pedalCap = 1;
       for (let i = 0; i < 2; i++) {
         const w = this.wheels[i];
@@ -1513,7 +1516,8 @@ export class F1Physics2026 {
       if (absTarget > 0 && this.vxMs > 3 && brake > 0.01) {
         const w = this.wheels[i];
         const sk = -w.slipRatio / w.tyre.spec.peakSlipRatio;
-        const sa = w.isFront ? 0 : Math.abs(Math.tan(w.slipAngleRad)) / w.tyre.tanPeakAngle;
+        // Lateral slip uses up grip on every axle: a cornering front must not keep the full longitudinal allowance
+        const sa = Math.abs(Math.tan(w.slipAngleRad)) / w.tyre.tanPeakAngle;
         const skAllowed = Math.sqrt(Math.max(0.35 * 0.35, absTarget * absTarget - sa * sa));
         if (sk > skAllowed) want = Math.max(0.1, 1 - (sk - skAllowed) * 3.2);
       }
@@ -1803,7 +1807,8 @@ export class F1Physics2026 {
     if (drv.boostRemainingS > 0) {
       drv.boostRemainingS = Math.max(0, drv.boostRemainingS - dt);
       if (drv.boostRemainingS === 0) {
-        if (drv.ersMode === 'OVERRIDE') drv.ersMode = 'BALANCED';
+        // Back to the mode the driver chose (as the override-release path in outerStep does), not a fixed one
+        if (drv.ersMode === 'OVERRIDE') drv.ersMode = this.userErsMode;
         drv.boostCooldownS = 4;
       }
     }
@@ -2310,7 +2315,9 @@ export class F1Physics2026 {
       if (drv.engineOmega < idle) drv.engineOmega = idle; // idle governor
       if (drv.engineOmega > maxOmega) drv.engineOmega = maxOmega;
 
-      tIn = ratio * tClutch * eta;
+      // Losses work against the flow of power, as on the locked path: engine braking arrives at the wheels
+      // with the loss added, not taken off
+      tIn = ratio * tClutch * (tClutch >= 0 ? eta : 1 / eta);
       const J = 2 * Iw + Igb * ratio * ratio;
       const free = omegaAxle + ((tIn - roadTqLeft - roadTqRight) / J) * h;
       omegaAxle = this.applyBrakeFriction(free, ((brakeL + brakeR) / J) * h);

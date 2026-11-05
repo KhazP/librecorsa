@@ -726,11 +726,13 @@ export function stepFlatSpot(
   slipPowerW: number,
   rollSpeedMs: number,
   rimSpeedMs: number,
-  dt: number
+  dt: number,
+  /** The wet/dry wear factor the tread wear uses (an intermediate on a dry road wears faster here too) */
+  wetWear = 1
 ): void {
   const absVx = Math.abs(rollSpeedMs);
   const absRim = Math.abs(rimSpeedMs);
-  const wearInc = slipPowerW * dt * t.spec.wearPerJ * t.wearScale;
+  const wearInc = slipPowerW * dt * t.spec.wearPerJ * t.wearScale * wetWear;
   const sec = Math.floor((t.wheelAngleRad / TWO_PI) * TYRE_CIRCUMFERENTIAL_SECTORS) % TYRE_CIRCUMFERENTIAL_SECTORS;
 
   if (absVx > 4.0 && absRim < 0.35 * absVx) {
@@ -940,10 +942,11 @@ export function updateTyreThermal(
   updateInflation(t);
 
   // Abrasive wear proportional to sliding energy (rate per compound, see the tyre spec)
-  t.wear = Math.min(1, t.wear + slipPowerW * dt * t.spec.wearPerJ * t.wearScale * wetWearScale(traits, t.wetness));
+  const wetWear = wetWearScale(traits, t.wetness);
+  t.wear = Math.min(1, t.wear + slipPowerW * dt * t.spec.wearPerJ * t.wearScale * wetWear);
 
   // Circumferential flat-spot grid, graining/blistering, and surface contamination
-  stepFlatSpot(t, slipPowerW, rollSpeedMs, rimSpeedMs, dt);
+  stepFlatSpot(t, slipPowerW, rollSpeedMs, rimSpeedMs, dt, wetWear);
   stepGrainBlister(t, slipPowerW, fz, dt);
   stepDirtyLevel(t, surface, slipPowerW, rollSpeedMs, dt, marbleLevel);
 }
