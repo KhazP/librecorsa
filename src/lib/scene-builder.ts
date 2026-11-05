@@ -17,6 +17,7 @@ import { attachSceneryInstances, loadSceneryInstances, resetSceneryInstances } f
 import { applySceneryTextures, loadSceneryTextures } from "@/lib/render/scenery-textures";
 import { cleanScanMaterial } from "@/lib/render/scan-materials";
 import { createGroundHit, type GroundQuery } from "@/lib/sim/f12026-car/TrackColliderQuery";
+import { OVERLAY_LAYER } from "@/lib/render/layers";
 
 /** Height of a racing-line dash over the driving surface: clear of its ripple, low enough to read as paint */
 const DASH_SEAT_LIFT_M = 0.035;
@@ -943,6 +944,8 @@ export function buildCircuitScene(
     })
   );
   racingLineMesh.renderOrder = 2;
+  // A driving aid, not part of the world: only the view camera sees it, not the reflection probe or the mirrors
+  racingLineMesh.layers.set(OVERLAY_LAYER);
   sceneGroup.add(racingLineMesh);
 
   /**

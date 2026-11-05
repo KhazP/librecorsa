@@ -68,7 +68,7 @@ import { touchInput, isTouchDevice, resetTouchInput } from "@/lib/input/touch-in
 import { isFatalHidStatus } from "@/lib/input/webhid-ffb";
 import { applyGraphicsQuality } from "@/lib/render/golden-hour-environment";
 import { createRainFx, RAIN_VISOR_LAYER } from "@/lib/render/rain-fx";
-import { DRIVER_HEAD_LAYER } from "@/lib/render/layers";
+import { DRIVER_HEAD_LAYER, OVERLAY_LAYER } from "@/lib/render/layers";
 import { shapeStick } from "@/lib/input/stick-shape";
 import { advanceAsphaltRain, setAsphaltWetness } from "@/lib/render/asphalt-sheen";
 import { SIM_REALISM_FLAGS, type SimRealism } from "@/lib/sim/sim-realism";
@@ -1342,6 +1342,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       0.12,
       5500
     );
+    // The view camera also draws the driving aids (the racing line), which the probe and mirrors leave out
+    camera.layers.enable(OVERLAY_LAYER);
 
     const renderer = new THREE.WebGLRenderer({
       // MSAA happens in the post-processing composer's half-float target instead
@@ -1490,6 +1492,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     renderer.xr.enabled = true;
     const xrRig = new THREE.Group();
     const xrCamera = new THREE.PerspectiveCamera(70, 1, 0.05, 5500);
+    xrCamera.layers.enable(OVERLAY_LAYER);
     xrRig.add(xrCamera);
     scene.add(xrRig);
     enterVrRef.current = () => {
