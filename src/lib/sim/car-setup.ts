@@ -6,6 +6,7 @@
 
 import type { AeroSetupPreset, LiveTunerPatch, TireCompound, TyreSetup, VehicleModelId } from "@/types/f1";
 import { axlePressures } from "@/types/f1";
+import { VF26_CHASSIS } from "./vf26-data";
 
 export interface ChassisSetup {
   /** Wing steps from the baseline (see WING_CLICK_DEG for a step's size on each car) */
@@ -47,6 +48,8 @@ export interface ChassisSetup {
   /** Brake duct openings from the baseline (steps of a 0–6 scale) */
   brakeDuctFront: number;
   brakeDuctRear: number;
+  /** Starting fuel load from the car's default (kg, see FUEL_LOAD) */
+  fuelDeltaKg: number;
 }
 
 export const DEFAULT_CHASSIS_SETUP: ChassisSetup = {
@@ -78,6 +81,7 @@ export const DEFAULT_CHASSIS_SETUP: ChassisSetup = {
   diffPreloadNm: 0,
   brakeDuctFront: 0,
   brakeDuctRear: 0,
+  fuelDeltaKg: 0,
 };
 
 export interface SetupRange {
@@ -116,6 +120,7 @@ export const CHASSIS_LIMITS: Record<keyof ChassisSetup, SetupRange> = {
   diffPreloadNm: { min: -80, max: 200, step: 10 },
   brakeDuctFront: { min: -3, max: 3, step: 1 },
   brakeDuctRear: { min: -3, max: 3, step: 1 },
+  fuelDeltaKg: { min: -50, max: 80, step: 1 },
 };
 
 /** Element angle one wing step adds (deg): F1 cars on a 0–50 scale, the GT3 rear wing in its own clicks */
@@ -124,6 +129,26 @@ export const WING_CLICK_DEG: Record<VehicleModelId, { front: number; rear: numbe
   "f12026-car": { front: 0.2, rear: 0.2 },
   "amg-gt3": { front: 0.4, rear: 0.6 },
 };
+
+/**
+ * Fuel each car can leave the garage with (kg): the default it has always started on, the lightest load the garage
+ * allows and the tank. The GT3's tank is 120 L of race fuel at 0.74 kg/L.
+ */
+export const FUEL_LOAD: Record<VehicleModelId, { defaultKg: number; minKg: number; maxKg: number }> = {
+  vf26: { defaultKg: VF26_CHASSIS.fuelKg, minKg: 5, maxKg: VF26_CHASSIS.fuelTankKg },
+  "f12026-car": { defaultKg: 35, minKg: 5, maxKg: 110 },
+  "amg-gt3": { defaultKg: 50, minKg: 5, maxKg: 89 },
+};
+
+/** Race fuel density (kg per litre), for the litre readouts */
+export const FUEL_KG_PER_L = 0.74;
+
+/** The fuel a car starts a run with under a garage setup (kg) */
+export function startingFuelKg(vehicle: VehicleModelId, setup: Pick<ChassisSetup, "fuelDeltaKg">): number {
+  const f = FUEL_LOAD[vehicle];
+  const delta = Number.isFinite(setup.fuelDeltaKg) ? setup.fuelDeltaKg : 0;
+  return Math.max(f.minKg, Math.min(f.maxKg, f.defaultKg + delta));
+}
 
 /** Brake cooling of a duct step (fraction of the baseline's airflow) */
 export const BRAKE_DUCT_STEP = 0.18;
