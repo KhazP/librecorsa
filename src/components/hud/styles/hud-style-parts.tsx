@@ -43,7 +43,7 @@ export function buildHudMap(track: BuiltTrackData): HudMap {
     points,
     path: toPath(points, true),
     sectorPaths,
-    lengthM: track.totalLength,
+    lengthM: track.totalLengthM,
     unitsPerM: 1000 / span,
   };
 }

@@ -4,6 +4,10 @@ import React, { useMemo } from "react";
 import type { CarTelemetry } from "@/types/f1";
 import { type BuiltTrackData, TURN_METADATA } from "@/lib/track-data";
 import { getTrackInfo } from "@/lib/track-registry";
+
+/** Elevation profile size (SVG units): the profile, its viewBox and the progress dot all use it */
+const ELEV_W = 252;
+const ELEV_H = 44;
 import { HUD_CYAN, HUD_GLASS, HUD_LBL, HUD_PINK, HUD_RED, HUD_VOLT, HUD_WELL } from "./hud/hud-format";
 
 const SECTOR_LEGEND = [
@@ -91,8 +95,8 @@ export const TrackMinimap: React.FC<TrackMinimapProps> = ({
       };
     });
 
-    const elevW = 252;
-    const elevH = 44;
+    const elevW = ELEV_W;
+    const elevH = ELEV_H;
     let low = samples[0];
     let high = samples[0];
     for (const s of samples) {
@@ -139,7 +143,7 @@ export const TrackMinimap: React.FC<TrackMinimapProps> = ({
 
   const currentSample = track.getSampleAtDistance(telemetry.trackDistanceM);
   const carSvg = carPoint(currentSample.position.x, currentSample.position.z);
-  const elevProgressX = (telemetry.trackDistanceM / track.totalLengthM) * 252;
+  const elevProgressX = (telemetry.trackDistanceM / track.totalLengthM) * ELEV_W;
   const elevProgressY = elevation.toY(telemetry.trackElevationM);
 
   // Elevation extremes, in lap order for the label row under the profile
@@ -276,7 +280,7 @@ export const TrackMinimap: React.FC<TrackMinimapProps> = ({
             {telemetry.slopePercent.toFixed(1)}%
           </span>
         </div>
-        <svg viewBox="0 0 252 44" className="mt-1.5 block h-11 w-full overflow-visible" aria-hidden="true">
+        <svg viewBox={`0 0 ${ELEV_W} ${ELEV_H}`} className="mt-1.5 block h-11 w-full overflow-visible" aria-hidden="true">
           <defs>
             <linearGradient id="lcElevGrad" x1="0" y1="0" x2="1" y2="0">
               <stop offset="0%" stopColor={HUD_RED} stopOpacity="0.38" />

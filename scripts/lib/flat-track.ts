@@ -60,7 +60,6 @@ export function createFlatTestTrack(lengthM = 20_000, widthM = 600, numSamples =
   return {
     samples,
     totalLengthM: lengthM,
-    totalLength: lengthM,
     spline: new THREE.CatmullRomCurve3([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, lengthM)]),
     getSampleAtDistance,
     projectWorldToTrack: (worldX: number, worldZ: number) => {

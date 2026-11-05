@@ -2,7 +2,6 @@ import * as THREE from "three";
 import {
   LiveryConfig,
   RunoffStyle,
-  TrackControlPoint,
   TrackSamplePoint,
   TurnMetadata,
 } from "@/types/f1";
@@ -58,7 +57,6 @@ export interface BuiltTrackData {
   spawnGrid: GridSlotDef[];
   samples: TrackSamplePoint[];
   totalLengthM: number;
-  totalLength: number;
   spline: THREE.CatmullRomCurve3;
   getSampleAtDistance: (s: number) => TrackSamplePoint;
   projectWorldToTrack: (
@@ -82,7 +80,6 @@ export interface BuiltTrackData {
   ) => { i0: number; i1: number; t: number; s: number; lateralH: number };
 }
 
-export const RWANDA_TRACK_METADATA = rawTrackJson.metadata;
 /** DRS zones of the active circuit (the name predates other circuits) */
 export const RWANDA_DRS_ZONES: DrsZoneDef[] = [...(rawTrackJson.drsZones as DrsZoneDef[])];
 /** Broadcast cameras of the active circuit */
@@ -269,28 +266,6 @@ function getTurnInfoAtS(
   };
 }
 
-export const RWANDA_CONTROL_POINTS: TrackControlPoint[] = rawTrackJson.samples
-  .filter((_, idx) => idx % 24 === 0)
-  .map((raw) => {
-    const totalLen = rawTrackJson.metadata.lengthMeters;
-    const t = raw.s / totalLen;
-    const info = getTurnInfoAtS(raw.s, totalLen);
-    return {
-      x: raw.p[0],
-      y: raw.p[1],
-      z: raw.p[2],
-      bankingDeg: THREE.MathUtils.radToDeg(raw.b),
-      width: raw.w,
-      sector: info.sector,
-      turnNumber: info.turnNumber,
-      turnName: info.turnName,
-      runoffStyle: info.runoffStyle,
-      kerbLeft: raw.kL === 1,
-      kerbRight: raw.kR === 1,
-      drsZone: isInDrsZone(t),
-      racingLineOffset: raw.ro / (raw.w * AI_LINE_WIDTH_SCALE),
-    };
-  });
 
 let cachedBuiltTrack: BuiltTrackData | null = null;
 
@@ -950,7 +925,6 @@ export function getRwandaTrackData(numSamples = 1200): BuiltTrackData {
     spawnGrid: [...RWANDA_SPAWN_GRID],
     samples,
     totalLengthM: totalLength,
-    totalLength,
     spline,
     getSampleAtDistance,
     projectWorldToTrack: projectWorldToTrackFn,

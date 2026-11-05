@@ -199,7 +199,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
 
   const [inviteRoom] = useState(roomFromUrl);
   const { mode: inputMode, family: padFamily } = useInputMode();
-  const { tracker: lapTracker, deltaS } = useLapDeltaTracker(telemetry, track.totalLength);
+  const { tracker: lapTracker, deltaS } = useLapDeltaTracker(telemetry, track.totalLengthM);
   const race = telemetry.race;
   const f12026 = telemetry.f12026;
   const drsNotice = useDrsDetectionNotice(f12026?.drsDetection ?? null);
@@ -300,7 +300,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
         telemetry={telemetry}
         onChangeTuner={props.onChangeLiveTuner}
         tracker={lapTracker}
-        trackLengthM={track.totalLength}
+        trackLengthM={track.totalLengthM}
         compound={tireCompound}
         autoFold={hud?.mfdAutoCollapse ?? false}
         defaultFolded={(hud?.mfdAutoCollapse ?? false) || classic || preset === "telemetry" || (preset === "broadcast" && window.innerWidth < 1280)}
