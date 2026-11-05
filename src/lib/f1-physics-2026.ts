@@ -2013,6 +2013,15 @@ export class F1Physics2026 {
   }
 
   /**
+   * Roll-centre height of an axle (m): the static design value, moved a quarter of the way to where the 3D wishbone
+   * solver puts it now (it migrates with roll and heave), as the f12026 model blends them
+   */
+  private rollCentreOf(axleIndex: 0 | 1): number {
+    const kin = axleIndex === 0 ? this.frontKin : this.rearKin;
+    return 0.75 * this.axles[axleIndex].rollCentreHeight + 0.25 * kin.rollCentreHeightM;
+  }
+
+  /**
    * The car's heading laid onto the road plane with normal `up`: the one forward axis gravity, the wheel positions
    * and the render pose all use. Returns a shared scratch vector (read it, don't keep it).
    */
@@ -2491,7 +2500,7 @@ export class F1Physics2026 {
     let fz = -this.aeroDownforceN - ms * gExtra;
     let mPitch = this.aeroPitchMomentNm + (settling ? 0 : this.lastFxTyres * sprungShare * hcg);
     let mRoll =
-      settling ? 0 : (fyFront * (hcg - this.axles[0].rollCentreHeight) + fyRear * (hcg - this.axles[1].rollCentreHeight)) * sprungShare;
+      settling ? 0 : (fyFront * (hcg - this.rollCentreOf(0)) + fyRear * (hcg - this.rollCentreOf(1))) * sprungShare;
     for (const w of this.wheels) {
       const f = dF[w.index] + plank[w.index];
       fz += f;
@@ -2516,7 +2525,7 @@ export class F1Physics2026 {
       const defl = road - w.hubZ + staticDefl;
       const ft = defl > 0 ? Math.max(0, tyreRate * defl + axle.tyreDamp * (roadVel - w.hubZVel)) : 0;
       const fyAxle = settling ? 0 : w.isFront ? fyFront : fyRear;
-      const fGeo = (fyAxle * axle.rollCentreHeight) / axle.spec.track;
+      const fGeo = (fyAxle * this.rollCentreOf(axle === this.axles[0] ? 0 : 1)) / axle.spec.track;
       const geo = w.isLeft ? -fGeo : fGeo;
       const mu = axle.spec.unsprungMassKg;
       const acc = (ft - axle.staticTyreLoad - dF[w.index] - geo) / mu - gExtra;
