@@ -50,8 +50,14 @@ export function setAsphaltWetness(offLine: number, onLine: number = offLine, rai
 
 /** Runs the raindrop ripples' clock; call every frame with the frame time (s), so they animate at frame rate */
 export function advanceAsphaltRain(dt: number): void {
-  if (wetUniforms.uRainIntensity.value > 0.001 && Number.isFinite(dt) && dt > 0) {
-    wetUniforms.uWetTime.value = (wetUniforms.uWetTime.value + Math.min(0.1, dt)) % 3600;
+  if (!(Number.isFinite(dt) && dt > 0)) return;
+  if (wetUniforms.uRainIntensity.value > 0.001) {
+    // Not wrapped while the ripples show: their phase is time × a per-drop rate, so a wrap jumps them all at once
+    wetUniforms.uWetTime.value += Math.min(0.1, dt);
+    if (wetUniforms.uWetTime.value > 4 * 3600) wetUniforms.uWetTime.value = 0;
+  } else {
+    // No rain, no ripples drawn: the moment to bring the clock back to zero
+    wetUniforms.uWetTime.value = 0;
   }
 }
 
