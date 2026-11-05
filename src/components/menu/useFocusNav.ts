@@ -184,6 +184,21 @@ export function useFocusNav(rootRef: React.RefObject<HTMLElement | null>, option
   useEffect(() => {
     if (!enabled) return;
     const root = () => rootRef.current;
+    /**
+     * Esc / Ⓑ in a text field: stop typing and move the cursor to the next control (else the previous one). Focusing
+     * the field itself again, as this used to, puts the caret straight back and the key does nothing.
+     */
+    const leaveTextField = (field: HTMLElement) => {
+      field.blur();
+      const r = root();
+      if (!r) return;
+      const list = focusables(r);
+      const at = list.findIndex((x) => x === field || x.contains(field) || field.contains(x));
+      const after = list.slice(at + 1).find((x) => !isTextEntry(x));
+      const before = list.slice(0, Math.max(0, at)).reverse().find((x) => !isTextEntry(x));
+      const next = after ?? before;
+      if (next) focusEl(next);
+    };
 
     const remember = (e: FocusEvent) => {
       const r = root();
@@ -266,13 +281,7 @@ export function useFocusNav(rootRef: React.RefObject<HTMLElement | null>, option
         case "Escape":
           if (o.keyboardBack === false) return;
           if (isTextEntry(target)) {
-            (target as HTMLElement).blur();
-            const r = root();
-            if (r && target) {
-              const el = target.closest("label") ?? target;
-              const f = focusables(r).find((x) => x === target || el.contains(x));
-              if (f) focusEl(f);
-            }
+            leaveTextField(target as HTMLElement);
             e.preventDefault();
             return;
           }
@@ -331,8 +340,7 @@ export function useFocusNav(rootRef: React.RefObject<HTMLElement | null>, option
           // Ⓑ in a text field just leaves the field
           const a = document.activeElement;
           if (isTextEntry(a)) {
-            (a as HTMLElement).blur();
-            focusEl(a as HTMLElement);
+            leaveTextField(a as HTMLElement);
             return;
           }
           o.onBack?.();

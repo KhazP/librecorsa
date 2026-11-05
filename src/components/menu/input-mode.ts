@@ -54,11 +54,17 @@ function start(): void {
   window.addEventListener("keydown", onKey, true);
   window.addEventListener("pointermove", onPointer, true);
   window.addEventListener("pointerdown", onPointer, true);
+  // Edges only: a stick resting past the threshold (drift) or a button held down must not keep pulling the prompts
+  // back to the controller while the player types
+  const wasActive = new Map<string, boolean>();
   const poll = () => {
     raf = requestAnimationFrame(poll);
     for (const p of connectedPads()) {
       if (p.mapping !== "standard") continue;
-      if (p.buttons.some((b) => b.pressed) || p.axes.some((a) => Math.abs(a) > 0.5)) {
+      const active = p.buttons.some((b) => b.pressed) || p.axes.some((a) => Math.abs(a) > 0.5);
+      const was = wasActive.get(p.id) ?? false;
+      wasActive.set(p.id, active);
+      if (active && !was) {
         notePadInput(p.id);
         return;
       }

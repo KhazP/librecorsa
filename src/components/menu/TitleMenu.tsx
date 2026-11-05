@@ -674,7 +674,9 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
   // LB / RB: the neighbouring panel, with the focus on its rail entry
   const cycle = (step: number) => {
     const i = panelItems.findIndex((p) => p.panel === panel);
-    const next = panelItems[(i + step + panelItems.length) % panelItems.length] ?? panelItems[0];
+    // No panel open: RB starts at the first, LB at the last (from -1, a step back would land on the one before last)
+    const from = i >= 0 ? i : step > 0 ? -1 : 0;
+    const next = panelItems[(from + step + panelItems.length) % panelItems.length] ?? panelItems[0];
     if (!next?.panel) return;
     flushSync(() => setPanel(next.panel!));
     focusRail(next.id);

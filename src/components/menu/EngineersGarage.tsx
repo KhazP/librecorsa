@@ -188,7 +188,15 @@ export const EngineersGarage: React.FC<PauseMenuProps> = (p) => {
   };
 
   const savePreset = () => {
-    const label = name.trim() || `Setup ${presets.length + 1}`;
+    // An unnamed save gets the first free "Setup N": counting the list could land on a name already taken (after a
+    // delete), and a matching name below means overwrite
+    let label = name.trim();
+    if (!label) {
+      const taken = new Set(presets.map((x) => x.name.toLowerCase()));
+      let n = presets.length + 1;
+      while (taken.has(`setup ${n}`)) n++;
+      label = `Setup ${n}`;
+    }
     const existing = presets.find((x) => x.name.toLowerCase() === label.toLowerCase());
     const preset: GaragePreset = {
       id: existing?.id ?? `${Date.now().toString(36)}`,

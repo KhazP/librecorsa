@@ -44,7 +44,9 @@ export const AssistsStep: React.FC<SetupStepProps> = (p) => {
     const l = LEVELS.find((x) => x.id === id)!;
     p.onChangeAssistPreset(l.preset);
     p.onSetRacingLine(l.racingLine);
-    if (id === "beginner") p.onSetGamepadAssist(true);
+    // Only for a controller: that is the only device whose switch this step shows, so on a keyboard or wheel it
+    // would change a setting the player cannot see here
+    if (id === "beginner" && p.settings.device === "controller") p.onSetGamepadAssist(true);
   };
 
   return (

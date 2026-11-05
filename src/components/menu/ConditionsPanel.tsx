@@ -140,7 +140,10 @@ export const ConditionsPanel: React.FC<ConditionsPanelProps> = ({
                 key={id}
                 active={conditions.weather === id}
                 disabled={locked}
-                onClick={() => set({ weather: id, seed: id === "dynamic" ? 1 + Math.floor(Math.random() * 9999) : conditions.seed })}
+                // A preset replaces any custom forecast (the sim prefers weatherNodes over the preset when both exist)
+                onClick={() =>
+                  set({ weather: id, weatherNodes: undefined, seed: id === "dynamic" ? 1 + Math.floor(Math.random() * 9999) : conditions.seed })
+                }
                 icon={WEATHER_ICONS[id]}
                 title={WEATHER_LABELS[id].label}
                 sub={WEATHER_LABELS[id].detail}

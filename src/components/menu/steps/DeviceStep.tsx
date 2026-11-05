@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import type { InputDevice } from "@/lib/input/device-input";
 import { isLikelyWheel, padDisplayName } from "@/lib/input/device-input";
 import { useGamepads } from "../useMenuNav";
@@ -40,10 +40,17 @@ const DEVICES: {
 ];
 
 /** Step 1: how the player drives. A connected controller or wheel is detected and preselected. */
-export const DeviceStep: React.FC<SetupStepProps & { autoDetect: boolean }> = ({ settings, onChangeSettings, autoDetect }) => {
+export const DeviceStep: React.FC<
+  SetupStepProps & {
+    autoDetect: boolean;
+    /** Set once the player picks a device; owned by the wizard, so it survives this step unmounting (Next, Back) */
+    pickedRef: React.MutableRefObject<boolean>;
+  }
+> = ({ settings, onChangeSettings, autoDetect, pickedRef }) => {
   const pads = useGamepads();
   const choose = (device: InputDevice) => onChangeSettings((s) => ({ ...s, device }));
-  const touched = useRef(!autoDetect);
+  if (!autoDetect) pickedRef.current = true;
+  const touched = pickedRef;
   // The controller whose button map is open (by pad id), if any
   const [mapFor, setMapFor] = useState<string | null>(null);
 
