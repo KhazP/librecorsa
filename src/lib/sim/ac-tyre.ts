@@ -717,6 +717,14 @@ export function computeTyreForces(t: TyreRuntime, inp: TyreForceInput, out?: Tyr
   return res;
 }
 
+// Thermal network (per band; the totals match the earlier calibrated two-node model:
+// surface 2600 J/K, core = bulk + carcass 21000 J/K, surface → core 95 W/K)
+const C_SURFACE = 2600 / 3;
+const C_BULK = 14000 / 3;
+const C_CARCASS = 7000 / 3;
+/** Heat capacity per node layer (surface, bulk, carcass) */
+const LAYER_CAPS = [C_SURFACE, C_BULK, C_CARCASS] as const;
+
 /**
  * Updates the 16-sector circumferential wear and temperature grid (`stepFlatSpot`).
  * Under wheel lockup (|ωR| << |vx|), sliding energy concentrates into the stationary grounded sector,
@@ -840,13 +848,6 @@ export function advanceDirtyLevel(
   return Math.max(target, lv - clean * dt);
 }
 
-// Thermal network (per band; the totals match the earlier calibrated two-node model:
-// surface 2600 J/K, core = bulk + carcass 21000 J/K, surface → core 95 W/K)
-const C_SURFACE = 2600 / 3;
-const C_BULK = 14000 / 3;
-const C_CARCASS = 7000 / 3;
-/** Heat capacity per node layer (surface, bulk, carcass) */
-const LAYER_CAPS = [C_SURFACE, C_BULK, C_CARCASS] as const;
 /** Inflation gas (≈0.1 kg of air) */
 const C_GAS = 80;
 const G_SURFACE_BULK = 95 / 3;

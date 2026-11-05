@@ -1335,8 +1335,8 @@ export class F1Physics2026 {
     this.updateRoadContacts(sample, true);
     this.updateGravity(sample);
     for (let i = 0; i < 600; i++) {
-      this.updateAero(F1Physics2026.FIXED_DT / SUBSTEPS);
-      this.integrateVertical(F1Physics2026.FIXED_DT / SUBSTEPS, 1, 0, 0, 0, true);
+      this.updateAero();
+      this.integrateVertical(F1Physics2026.FIXED_DT / SUBSTEPS, 1, 0, 0, true);
     }
     for (const w of this.wheels) w.roadOffsetPrev = w.roadOffset;
   }
@@ -1594,7 +1594,7 @@ export class F1Physics2026 {
     const xTarget = this.activeAeroMode === 'X_MODE' ? 1 : 0;
     const aeroRate = dt / VF26_ACTIVE_AERO_TRANSITION_S;
     this.xModeBlend += THREE.MathUtils.clamp(xTarget - this.xModeBlend, -aeroRate, aeroRate);
-    this.updateAero(dt);
+    this.updateAero();
 
     // ---- 6. Power unit & brakes (controls for the sub-steps) ----------------------
     this.updatePowerUnitControls(dt, throttle, brake);
@@ -1632,7 +1632,7 @@ export class F1Physics2026 {
     let sumAy = 0;
     for (let k = 0; k < SUBSTEPS; k++) {
       const roadFrac = (k + 1) / SUBSTEPS;
-      const acc = this.subStep(h, throttle, roadFrac, dt);
+      const acc = this.subStep(h, throttle, roadFrac);
       sumAx += acc.ax;
       sumAy += acc.ay;
     }
@@ -2024,8 +2024,7 @@ export class F1Physics2026 {
     this.verticalCurvature = THREE.MathUtils.clamp(sample.verticalCurvature * rel * rel, -0.03, 0.03);
   }
 
-  private updateAero(dt: number): void {
-    void dt;
+  private updateAero(): void {
     const air = computeRelativeAirspeed(
       this.vxMs,
       this.vyMs,
@@ -2119,8 +2118,7 @@ export class F1Physics2026 {
   // 2 kHz sub-step
   // ---------------------------------------------------------------------------
 
-  private subStep(h: number, throttle: number, roadFrac: number, outerDt: number): { ax: number; ay: number } {
-    void outerDt;
+  private subStep(h: number, throttle: number, roadFrac: number): { ax: number; ay: number } {
     const M = this.totalMassKg;
     const r = -this.yawRateRadS; // CCW yaw rate
 
@@ -2249,7 +2247,7 @@ export class F1Physics2026 {
     this.lastFxTyres = fxTyres;
 
     // ---- Vertical dynamics ----
-    this.integrateVertical(h, roadFrac, ax, fyFront, fyRear, false);
+    this.integrateVertical(h, roadFrac, fyFront, fyRear, false);
 
     // ---- World pose ----
     this.worldYawRad = Math.atan2(Math.sin(this.worldYawRad + rNew * h), Math.cos(this.worldYawRad + rNew * h));
@@ -2395,7 +2393,7 @@ export class F1Physics2026 {
   // Suspension: sprung heave / pitch / roll + 4 unsprung hubs
   // ---------------------------------------------------------------------------
 
-  private integrateVertical(h: number, roadFrac: number, axBody: number, fyFront: number, fyRear: number, settling: boolean): void {
+  private integrateVertical(h: number, roadFrac: number, fyFront: number, fyRear: number, settling: boolean): void {
     const ms = this.sprungMassKg;
     const M = this.totalMassKg;
     const gExtra = this.gravityBody.n - G + this.vxMs * this.vxMs * this.verticalCurvature;
@@ -2488,7 +2486,6 @@ export class F1Physics2026 {
       mPitch += f * w.staticPos.x;
       mRoll += f * w.staticPos.y;
     }
-    void axBody;
 
     this.heaveVelMs += (fz / ms) * h;
     this.pitchVelRadS += (mPitch / this.pitchInertiaKgM2) * h;
