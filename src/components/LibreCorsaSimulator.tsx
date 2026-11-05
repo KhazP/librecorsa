@@ -17,6 +17,7 @@ import { createAmgGt3Sim } from "@/lib/sim/gt3/AmgGt3Sim";
 import { AMG_GT3_CONFIG } from "@/lib/sim/gt3/AmgGt3Config";
 import { F12026_CAR_CONFIG } from "@/lib/sim/f12026-car/F12026CarConfig";
 import type { CarSoundSource } from "@/lib/sim/CarAudio";
+import { OpponentAudio } from "@/lib/sim/opponent-audio";
 import { CARS, carById, carForVehicle, isCarId, type CarId } from "@/lib/cars/car-registry";
 import { carPhysics, carTakesPhysicsSwitch, subscribeF1ModPhysics } from "@/lib/cars/f1-mod-physics";
 import { buildRwandaCircuitScene } from "@/lib/scene-builder";
@@ -1804,6 +1805,9 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     const tvDirector = new TracksideBroadcastDirector(track);
     let frameIndex = 0;
     const deviceInput = new DeviceInputReader();
+    // The other cars, heard where they are from the active camera
+    const opponentAudio = new OpponentAudio();
+    const opponentSound = (p: InterpolatedPeerState): CarSoundSource => carForVehicle(p.vehicle ?? "vf26").sound;
     let menuOrbitRad = 0.6;
     const trackEnv = getTrackEnv();
     // Time of day / weather look: the sky follows the session's WeatherState at 10 Hz, the HUD badge at 2 Hz
@@ -2933,6 +2937,16 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       }
 
       builtCircuit.updateEnvironment(nowMs * 0.001);
+      opponentAudio.update({
+        context: audioRef.current?.context ?? null,
+        output: audioRef.current?.output ?? null,
+        active: driving,
+        camera,
+        cameraMode: mode,
+        peers: renderPeers,
+        soundFor: opponentSound,
+        dt: dtSeconds,
+      });
       audioRef.current?.setCameraMode(mode);
       audioRef.current?.setPaused(!driving);
       if (driving) {
@@ -3095,6 +3109,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       toggleReplayRef.current = () => {};
       lapRecorderRef.current = null;
       haptics.stop();
+      opponentAudio.dispose();
       hapticsRef.current = null;
       wheelFfb.dispose();
       document.removeEventListener("visibilitychange", onVisibilityChange);
