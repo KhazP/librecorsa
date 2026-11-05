@@ -18,6 +18,7 @@ import { applySceneryTextures, loadSceneryTextures } from "@/lib/render/scenery-
 import { cleanScanMaterial } from "@/lib/render/scan-materials";
 import { createGroundHit, type GroundQuery } from "@/lib/sim/f12026-car/TrackColliderQuery";
 import { OVERLAY_LAYER } from "@/lib/render/layers";
+import { cutSceneryBoxes, isCutMaterialMesh, type SceneryCutBox } from "@/lib/scenery-cuts";
 
 /** Height of a racing-line dash over the driving surface: clear of its ripple, low enough to read as paint */
 const DASH_SEAT_LIFT_M = 0.035;
@@ -159,8 +160,13 @@ function loadTrackGlb(
   /** A manifest of the circuit's own textures replacing a track pack's images (scenery-textures.ts) */
   sceneryTexturesUrl: string | null = null,
   /** The scan's racing-surface materials (track data `mesh.roadMaterials`): drawn with the asphalt shader */
-  roadMaterials: readonly string[] = []
+  roadMaterials: readonly string[] = [],
+  /** World boxes of the scan to leave out (track data `mesh.cutBoxes`) */
+  cutBoxes: readonly SceneryCutBox[] = [],
+  /** Scan materials whose meshes are left out (track data `mesh.cutMaterials`) */
+  cutMaterials: readonly string[] = []
 ): void {
+  const cutMaterialNames = new Set(cutMaterials);
   const roadMaterialNames = new Set(roadMaterials);
   if (typeof window === "undefined" || typeof fetch === "undefined") {
     return;
@@ -207,6 +213,11 @@ function loadTrackGlb(
           return;
         }
         if (!(obj instanceof THREE.Mesh)) return;
+        if (topName === "Track_Model" && isCutMaterialMesh(obj, cutMaterialNames)) {
+          obj.visible = false;
+          return;
+        }
+        if (topName === "Track_Model" && cutBoxes.length) cutSceneryBoxes(obj, cutBoxes);
         // The scans show their own kerbs: the generated red / white overlay older builds drew over them stays hidden
         // (its physics twin, Track_Surface_Kerb, is a collider and unaffected)
         if (topName === "Track_Kerbs_Visual") {
@@ -1341,7 +1352,9 @@ export function buildCircuitScene(
     sheenMask,
     isRwanda ? ["/tracks/rwanda/scenery/foliage.glb", "/tracks/rwanda/scenery/stands.glb", "/tracks/rwanda/scenery/props.glb"] : [],
     isRwanda ? "/tracks/rwanda/scenery/textures/textures.json" : null,
-    track.roadMaterials ?? []
+    track.roadMaterials ?? [],
+    track.sceneryCuts ?? [],
+    track.sceneryCutMaterials ?? []
   );
 
   return {

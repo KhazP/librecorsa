@@ -8,6 +8,7 @@ import {
 import rawTrackJson from "../../public/tracks/rwanda/track_data.json";
 import { AI_LINE_WIDTH_SCALE, brakingZoneLevel, computeSpeedProfile, createVf26ProfileCarModel } from "./sim/speed-profile";
 import { resolveSurfaceTable, type SurfaceTable, type SurfaceTableOverrides } from "./sim/track-surfaces";
+import type { SceneryCutBox } from "./scenery-cuts";
 
 /** Raw `track_data.json` layout shared by every circuit (Rwanda's file is the reference schema) */
 export type RawTrackJson = typeof rawTrackJson;
@@ -53,6 +54,10 @@ export interface BuiltTrackData {
   meshUrl?: string;
   /** Materials of the circuit GLB's scan that are the racing surface (asphalt shader); none for Rwanda */
   roadMaterials?: string[];
+  /** World-space boxes of the scan's geometry to leave out (scenery-cuts.ts) */
+  sceneryCuts?: SceneryCutBox[];
+  /** Scan materials whose meshes are left out (scenery-cuts.ts) */
+  sceneryCutMaterials?: string[];
   /** Start grid slots for this layout (behind the S/F line) */
   spawnGrid: GridSlotDef[];
   samples: TrackSamplePoint[];
@@ -185,8 +190,11 @@ function rawSampleAtS(s: number): RawTrackSample {
 export interface TrackMetaExtras {
   shortName?: string;
   baseAltitudeM?: number;
-  /** `roadMaterials`: the scan's racing-surface materials (build_track.py), drawn with the asphalt shader */
-  mesh?: { url?: string; roadMaterials?: string[] };
+  /**
+   * `roadMaterials`: the scan's racing-surface materials (build_track.py), drawn with the asphalt shader;
+   * `cutBoxes` / `cutMaterials`: scan geometry standing on the racing line, left out at load (scenery-cuts.ts)
+   */
+  mesh?: { url?: string; roadMaterials?: string[]; cutBoxes?: SceneryCutBox[]; cutMaterials?: string[] };
   credit?: { title: string; author: string; url: string; short?: string; license: string; licenseUrl: string };
   /** Per-kind overrides of the default surface table (track-surfaces.ts) */
   surfaceTable?: SurfaceTableOverrides;
@@ -922,6 +930,8 @@ export function getActiveTrackData(numSamples = 1200): BuiltTrackData {
     id: ACTIVE_TRACK_ID,
     meshUrl: meshUrl ?? "/tracks/rwanda/rwanda_2026.glb",
     roadMaterials: getActiveTrackMetadata().mesh?.roadMaterials,
+    sceneryCuts: getActiveTrackMetadata().mesh?.cutBoxes,
+    sceneryCutMaterials: getActiveTrackMetadata().mesh?.cutMaterials,
     spawnGrid: [...RWANDA_SPAWN_GRID],
     samples,
     totalLengthM: totalLength,
