@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { planarUvGeometry } from "./planar-uv";
 
 /**
  * Wing mirrors for the VF26 GLB (`mirror_1` = left, +X; `mirror_2` = right, -X).
@@ -120,59 +121,20 @@ interface MirrorSlot {
 }
 
 /**
- * Builds a geometry that shares the source's attribute and index buffers but carries its own planar UV set.
- * The GLB's BODY primitives share one vertex buffer, so the source is never modified; only referenced vertices
- * are mapped (from the index buffer, per mirror).
+ * The mirror glass with its own planar UVs: the image across the mesh's X, up along its Y, or its Z for a node
+ * turned 90 degrees about X (the GT3's mirror), cropped to the patch's aspect instead of stretched
  */
 function buildMirrorGeometry(src: THREE.BufferGeometry, upZ: boolean): THREE.BufferGeometry | null {
-  const pos = src.getAttribute("position") as THREE.BufferAttribute | undefined;
-  const index = src.index;
-  if (!pos || !index) return null;
-  const count = pos.count;
-  const used = new Uint8Array(count);
-  for (let i = 0; i < index.count; i++) used[index.getX(i)] = 1;
-
-  // Image across the mesh's X, up along its Y, or its Z for a node turned 90 degrees about X (the GT3's mirror)
-  let xMin = Infinity, xMax = -Infinity, yMin = Infinity, yMax = -Infinity, zMin = Infinity, zMax = -Infinity;
-  for (let v = 0; v < count; v++) {
-    if (!used[v]) continue;
-    const x = pos.getX(v), y = pos.getY(v), z = pos.getZ(v);
-    if (x < xMin) xMin = x;
-    if (x > xMax) xMax = x;
-    if (y < yMin) yMin = y;
-    if (y > yMax) yMax = y;
-    if (z < zMin) zMin = z;
-    if (z > zMax) zMax = z;
-  }
-  if (upZ) {
-    yMin = zMin;
-    yMax = zMax;
-  }
-  const w = xMax - xMin;
-  const h = yMax - yMin;
-  if (!(w > 0) || !(h > 0)) return null;
-
-  // Crop the image to the patch's aspect instead of stretching it
-  const aspect = w / h;
-  const fx = aspect > RT_ASPECT ? 1 : aspect / RT_ASPECT;
-  const fy = aspect > RT_ASPECT ? RT_ASPECT / aspect : 1;
-
-  const uv = new Float32Array(count * 2);
-  for (let v = 0; v < count; v++) {
-    if (!used[v]) continue;
-    const u = (pos.getX(v) - xMin) / w;
-    const t = ((upZ ? pos.getZ(v) : pos.getY(v)) - yMin) / h;
-    uv[v * 2] = 0.5 + (u - 0.5) * fx;
-    uv[v * 2 + 1] = 0.5 + (t - 0.5) * fy;
-  }
-
-  const geo = new THREE.BufferGeometry();
-  for (const name in src.attributes) {
-    if (name !== "uv") geo.setAttribute(name, src.getAttribute(name));
-  }
-  geo.setIndex(index);
-  geo.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
-  return geo;
+  return planarUvGeometry(src, {
+    vAxis: upZ ? "z" : "y",
+    requireIndex: true,
+    map: (u, t, w, h) => {
+      const aspect = w / h;
+      const fx = aspect > RT_ASPECT ? 1 : aspect / RT_ASPECT;
+      const fy = aspect > RT_ASPECT ? RT_ASPECT / aspect : 1;
+      return [0.5 + (u - 0.5) * fx, 0.5 + (t - 0.5) * fy];
+    },
+  });
 }
 
 export class WingMirrors {

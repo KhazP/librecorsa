@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import type { CarTelemetry } from "@/types/f1";
+import { planarUvGeometry } from "./planar-uv";
 
 /**
  * Steering-wheel screen for the VF26 GLB.
@@ -90,51 +91,9 @@ function formatLap(ms: number): string {
   return `${min}:${sec < 10 ? "0" : ""}${sec}.${milli < 100 ? (milli < 10 ? "00" : "0") : ""}${milli}`;
 }
 
-/**
- * Builds a geometry that shares the source's attribute buffers but carries its own UV set. Only the vertices
- * referenced by the index buffer are mapped; the shared position buffer is never copied or modified.
- */
+/** The display mesh with its own UVs onto the canvas' display box (driver's left is model +X: u runs from xMax) */
 function buildDisplayGeometry(src: THREE.BufferGeometry): THREE.BufferGeometry | null {
-  const pos = src.getAttribute("position") as THREE.BufferAttribute | undefined;
-  if (!pos) return null;
-  const count = pos.count;
-  const used = new Uint8Array(count);
-  const index = src.index;
-  if (index) {
-    for (let i = 0; i < index.count; i++) used[index.getX(i)] = 1;
-  } else {
-    used.fill(1);
-  }
-  let xMin = Infinity, xMax = -Infinity, yMin = Infinity, yMax = -Infinity;
-  for (let v = 0; v < count; v++) {
-    if (!used[v]) continue;
-    const x = pos.getX(v), y = pos.getY(v);
-    if (x < xMin) xMin = x;
-    if (x > xMax) xMax = x;
-    if (y < yMin) yMin = y;
-    if (y > yMax) yMax = y;
-  }
-  const w = xMax - xMin;
-  const h = yMax - yMin;
-  if (!(w > 0) || !(h > 0)) return null;
-
-  const uv = new Float32Array(count * 2);
-  for (let v = 0; v < count; v++) {
-    if (!used[v]) continue;
-    // Driver's left is model +X, so the left edge of the canvas sits at xMax
-    const tx = (xMax - pos.getX(v)) / w;
-    const ty = (pos.getY(v) - yMin) / h;
-    uv[v * 2] = (BOX_X + tx * BOX_W) / CANVAS_W;
-    uv[v * 2 + 1] = ty;
-  }
-
-  const geo = new THREE.BufferGeometry();
-  for (const name in src.attributes) {
-    if (name !== "uv") geo.setAttribute(name, src.getAttribute(name));
-  }
-  if (index) geo.setIndex(index);
-  geo.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
-  return geo;
+  return planarUvGeometry(src, { flipX: true, map: (u, v) => [(BOX_X + u * BOX_W) / CANVAS_W, v] });
 }
 
 /**
