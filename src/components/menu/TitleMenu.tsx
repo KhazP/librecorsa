@@ -848,20 +848,18 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
               </div>
               <div className="h-px bg-[#262B3D]" />
               <dl className="m-0 grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-4 gap-y-2.5">
-                {vehicle ? (
-                  <>
-                    <dt className="lc-lbl text-[10px]">Car</dt>
-                    <dd className="m-0 flex min-w-0 items-center justify-end gap-2 text-[14px] font-semibold">
-                      <span
-                        className="shrink-0 rounded-full px-1.5 py-0.5 font-f1-mono text-[9px] font-extrabold text-[#08090D]"
-                        style={{ background: vehicleColor }}
-                      >
-                        {vehicle.badge}
-                      </span>
-                      <span className="truncate">{vehicle.title}</span>
-                    </dd>
-                  </>
-                ) : null}
+                <>
+                  <dt className="lc-lbl text-[10px]">Car</dt>
+                  <dd className="m-0 flex min-w-0 items-center justify-end gap-2 text-[14px] font-semibold">
+                    <span
+                      className="shrink-0 rounded-full px-1.5 py-0.5 font-f1-mono text-[9px] font-extrabold text-[#08090D]"
+                      style={{ background: vehicleColor }}
+                    >
+                      {vehicle.badge}
+                    </span>
+                    <span className="truncate">{vehicle.title}</span>
+                  </dd>
+                </>
                 {livery ? (
                   <>
                     <dt className="lc-lbl text-[10px]">Livery</dt>

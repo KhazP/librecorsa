@@ -3,7 +3,7 @@
 import React from "react";
 import { ChevronRight, type LucideIcon } from "lucide-react";
 import { LibreCorsaLogo } from "@/components/ui/LibreCorsaLogo";
-import { useInputMode, type PadFamily } from "./input-mode";
+import { FACE_BUTTONS, useInputMode, type PadFamily } from "./input-mode";
 import { focusOnHover } from "./useFocusNav";
 
 /** Shared building blocks of the LibreCorsa loading screen, title menu and setup wizard */
@@ -237,23 +237,12 @@ export function TabStrip<T extends string>({
 
 export type PadButtonName = "a" | "b" | "x" | "y" | "lb" | "rb" | "menu" | "view" | "dpad";
 
-const XBOX_FACE: Record<"a" | "b" | "x" | "y", { label: string; color: string }> = {
-  a: { label: "A", color: "#5DC21E" },
-  b: { label: "B", color: "#E5413A" },
-  x: { label: "X", color: "#2F8BE5" },
-  y: { label: "Y", color: "#F4C21B" },
-};
-const PS_FACE: Record<"a" | "b" | "x" | "y", { label: string; color: string }> = {
-  a: { label: "✕", color: "#7EA6E6" },
-  b: { label: "○", color: "#EE6A6A" },
-  x: { label: "□", color: "#D78DD6" },
-  y: { label: "△", color: "#45C9A6" },
-};
+const FACE_INDEX = { a: 0, b: 1, x: 2, y: 3 } as const;
 
 /** A controller button as printed on the pad (Xbox or PlayStation layout) */
 export const PadGlyph: React.FC<{ button: PadButtonName; family?: PadFamily }> = ({ button, family = "xbox" }) => {
   if (button === "a" || button === "b" || button === "x" || button === "y") {
-    const face = (family === "playstation" ? PS_FACE : XBOX_FACE)[button];
+    const face = FACE_BUTTONS[family][FACE_INDEX[button]];
     return (
       <span
         className="inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full border-2 bg-[#08090D] font-f1-mono text-[11px] leading-none font-extrabold"

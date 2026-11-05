@@ -21,7 +21,7 @@ const FALLBACK_TUNER: Pick<
 /** Changed from the car's baseline (the electronics have no fixed baseline: each car and assist level brings its own) */
 const isChanged = (q: SetupParam, st: SetupState) => q.writes !== "tuner" && Math.abs(q.get(st) - q.base) > 1e-6;
 
-const Segmented: React.FC<{ items: readonly { id: string; label: React.ReactNode }[]; active: string; onPick: (id: string) => void }> = ({ items, active, onPick }) => (
+const GarageSegmented: React.FC<{ items: readonly { id: string; label: React.ReactNode }[]; active: string; onPick: (id: string) => void }> = ({ items, active, onPick }) => (
   <div className="flex rounded-full border border-[#262B3D] bg-[#08090D] p-1">
     {items.map((it) => (
       <button
@@ -102,7 +102,7 @@ const SetupRow: React.FC<{
   );
 };
 
-const Card: React.FC<{ title: string; color?: string; children: React.ReactNode; aside?: React.ReactNode }> = ({ title, color, children, aside }) => (
+const GarageCard: React.FC<{ title: string; color?: string; children: React.ReactNode; aside?: React.ReactNode }> = ({ title, color, children, aside }) => (
   <div className="flex min-w-0 flex-col gap-2 rounded-[20px] border border-[#262B3D] bg-[#08090D]/55 p-4">
     <div className="flex items-center justify-between gap-3">
       <PanelSection color={color}>{title}</PanelSection>
@@ -255,7 +255,7 @@ export const EngineersGarage: React.FC<PauseMenuProps> = (p) => {
   const extra = (x: string) => {
     if (x === "compound")
       return (
-        <Segmented
+        <GarageSegmented
           key={x}
           active={p.tireCompound}
           onPick={(id) => p.onChangeTireCompound(id as typeof p.tireCompound)}
@@ -272,7 +272,7 @@ export const EngineersGarage: React.FC<PauseMenuProps> = (p) => {
       );
     if (x === "aeroPackage")
       return (
-        <Segmented
+        <GarageSegmented
           key={x}
           active={p.aeroPreset}
           onPick={(id) => p.onChangeAeroPreset(id as typeof p.aeroPreset)}
@@ -285,7 +285,7 @@ export const EngineersGarage: React.FC<PauseMenuProps> = (p) => {
       );
     if (x === "assists")
       return (
-        <Segmented
+        <GarageSegmented
           key={x}
           active={p.assistPreset}
           onPick={(id) => p.onChangeAssistPreset(id as typeof p.assistPreset)}
@@ -391,7 +391,7 @@ export const EngineersGarage: React.FC<PauseMenuProps> = (p) => {
       </div>
 
       <div className={`grid gap-3.5 ${live ? "lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]" : ""}`}>
-        <Card
+        <GarageCard
           title={group.label}
           aside={
             groupChanged ? (
@@ -420,11 +420,11 @@ export const EngineersGarage: React.FC<PauseMenuProps> = (p) => {
               />
             ))}
           </div>
-        </Card>
+        </GarageCard>
         {live ? (
-          <Card title="Current tyres & brakes" color="#00E5FF">
+          <GarageCard title="Current tyres & brakes" color="#00E5FF">
             <TyreBrakeGrid t={p.telemetry} compound={p.tireCompound} dense />
-          </Card>
+          </GarageCard>
         ) : null}
       </div>
     </div>

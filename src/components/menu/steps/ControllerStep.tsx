@@ -20,27 +20,14 @@ import { Choice, Toggle } from "@/components/hud/PauseMenu";
 import { DEFAULT_PAD_TUNING, type PadTuning } from "@/lib/settings/player-settings";
 import { useGamepads } from "../useMenuNav";
 import { useButtonCapture } from "./button-capture";
-import { padFamilyOf, useInputMode, type PadFamily } from "../input-mode";
+import { FACE_BUTTONS, padFamilyOf, useInputMode, type PadFamily } from "../input-mode";
 import { StickCurve, TriggerBars, TuningSlider } from "./TuningSlider";
 import { PadMap } from "./PadMap";
 import { AutoGrid, BindRow, bindKeyClass, ChoiceText, Hint, PillAction, SetupCard, StatusPill, TrackMeter } from "./setup-ui";
 import type { SetupStepProps } from "./types";
 
-/** Standard-mapping face buttons 0..3 (A B X Y / ✕ ○ □ △), drawn small inside a binding chip */
-const FACE: Record<PadFamily, { label: string; color: string }[]> = {
-  xbox: [
-    { label: "A", color: "#5DC21E" },
-    { label: "B", color: "#E5413A" },
-    { label: "X", color: "#2F8BE5" },
-    { label: "Y", color: "#F4C21B" },
-  ],
-  playstation: [
-    { label: "✕", color: "#7EA6E6" },
-    { label: "○", color: "#EE6A6A" },
-    { label: "□", color: "#D78DD6" },
-    { label: "△", color: "#45C9A6" },
-  ],
-};
+/** Standard-mapping face buttons 0..3, drawn small inside a binding chip */
+const FACE = FACE_BUTTONS;
 
 const FaceDot: React.FC<{ button: number; family: PadFamily }> = ({ button, family }) => {
   const face = FACE[family][button];
