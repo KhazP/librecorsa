@@ -184,7 +184,13 @@ const BY_ID = new Map<string, CarDefinition>(CARS.map((c) => [c.id, c]));
 
 export const isCarId = (value: unknown): value is CarId => typeof value === "string" && BY_ID.has(value);
 
-export const carById = (id: CarId): CarDefinition => BY_ID.get(id) ?? CARS[0];
+export const carById = (id: CarId): CarDefinition => {
+  const car = BY_ID.get(id);
+  if (car) return car;
+  // Typed ids make this a stale save or a removed car; say so rather than quietly driving another one
+  console.warn(`Unknown car "${id}", using ${CARS[0].id}`);
+  return CARS[0];
+};
 
 export const carClass = (id: CarClassId): CarClass => CAR_CLASSES.find((c) => c.id === id) ?? CAR_CLASSES[0];
 

@@ -50,7 +50,10 @@ export const TRACKS: TrackInfo[] = [
 const TRACK_STORAGE_KEY = "bugesera.track";
 
 export function getTrackInfo(id: string): TrackInfo {
-  return TRACKS.find((t) => t.id === id) ?? TRACKS[0];
+  const info = TRACKS.find((t) => t.id === id);
+  if (info) return info;
+  console.warn(`Unknown circuit "${id}", using ${TRACKS[0].id}`);
+  return TRACKS[0];
 }
 
 /** The circuit picked last time (or Rwanda) */
@@ -74,6 +77,7 @@ function storeTrackId(id: string): void {
 
 /** Fetches (when needed) and activates a circuit; resolves once `setActiveTrack` has run */
 export async function activateTrack(id: string): Promise<TrackInfo> {
+  if (!TRACKS.some((t) => t.id === id)) throw new Error(`Unknown circuit "${id}"`);
   const info = getTrackInfo(id);
   if (!info.dataUrl) {
     setActiveTrack(RWANDA_TRACK_ID);

@@ -207,6 +207,9 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
     const find = (name: string) => model.getObjectByName(name);
 
     // Axle midpoint on the physics' (rig origin = CG on the ground), tyres on the ground
+    if (!extras.wheelCentres?.WHEEL_LF || !extras.wheelCentres?.WHEEL_LR) {
+      console.warn("Ported car model has no wheelCentres: axles placed at nominal positions");
+    }
     const lf = extras.wheelCentres?.WHEEL_LF ?? [0.8, 0.35, 1.5];
     const lr = extras.wheelCentres?.WHEEL_LR ?? [0.8, 0.35, -1.5];
     const physicsMidZ = chassis.wheelbase * (0.5 - chassis.frontWeightFraction);
