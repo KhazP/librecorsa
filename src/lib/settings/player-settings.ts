@@ -347,7 +347,8 @@ function parseWheel(v: unknown): WheelSettings {
     steerLockPerCar: parsePerCarLock(v.steerLockPerCar),
     hidFfb: bool(v.hidFfb, d.hidFfb),
     telemetryOut: bool(v.telemetryOut, d.telemetryOut),
-    telemetryPort: Math.round(num(v.telemetryPort, 1024, 65535, d.telemetryPort)),
+    // 20777 was the default once; it is the F1 games' port, so a saved 20777 moves to the new default
+    telemetryPort: v.telemetryPort === 20777 ? d.telemetryPort : Math.round(num(v.telemetryPort, 1024, 65535, d.telemetryPort)),
     buttons,
   };
 }

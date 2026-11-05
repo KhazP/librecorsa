@@ -13,6 +13,8 @@ import {
   pedalValue,
   snapshotAxes,
   snapshotButtons,
+  CLAIMED_TELEMETRY_PORTS,
+  DEFAULT_TELEMETRY_PORT,
   STEER_LOCK_MIN_DEG,
   strongestAxisChange,
   WHEEL_ROTATION_PRESETS,
@@ -842,6 +844,12 @@ export const WheelStep: React.FC<SetupStepProps> = ({ settings, onChangeSettings
             <Hint>
               Needs the bridge running: <span className="font-f1-mono text-[#F5F7FA]">npm run ffb</span>
             </Hint>
+            {CLAIMED_TELEMETRY_PORTS[w.telemetryPort] ? (
+              <Hint>
+                Port {w.telemetryPort} is {CLAIMED_TELEMETRY_PORTS[w.telemetryPort]}: tools listening there will misread
+                this JSON. The default is {DEFAULT_TELEMETRY_PORT}.
+              </Hint>
+            ) : null}
           </div>
         </SetupCard>
 

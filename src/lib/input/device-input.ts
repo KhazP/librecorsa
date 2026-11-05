@@ -120,6 +120,14 @@ export const WHEEL_TYPE_DEFAULTS: Record<WheelType, Pick<WheelSettings, "steerDe
 export const emptyWheelButtons = (): Record<PadAction, ButtonBinding | null> =>
   Object.fromEntries(PAD_ACTIONS.map((a) => [a.id, null])) as Record<PadAction, ButtonBinding | null>;
 
+/**
+ * Default UDP port of telemetry out. Not 20777: that is the F1 games' binary telemetry port, and tools listening there
+ * (SimHub's F1 plugin, dashboards) would try to parse our JSON as F1 packets.
+ */
+export const DEFAULT_TELEMETRY_PORT = 20790;
+/** Telemetry-out ports another sim's tools listen on, with what they expect there */
+export const CLAIMED_TELEMETRY_PORTS: Readonly<Record<number, string>> = { 20777: "the F1 games' telemetry" };
+
 export const DEFAULT_WHEEL_SETTINGS: WheelSettings = {
   type: "direct_drive",
   ...WHEEL_TYPE_DEFAULTS.direct_drive,
@@ -139,7 +147,7 @@ export const DEFAULT_WHEEL_SETTINGS: WheelSettings = {
   steerLockPerCar: {},
   hidFfb: true,
   telemetryOut: false,
-  telemetryPort: 20777,
+  telemetryPort: DEFAULT_TELEMETRY_PORT,
   buttons: emptyWheelButtons(),
 };
 
