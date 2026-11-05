@@ -151,6 +151,8 @@ export class CarAudioEngine {
   private sampleNodes: ActiveSampleNode[] = [];
   private samplesLoaded = false;
   private isLoadingSamples = false;
+  /** Bumped by dispose(): a sample load still in flight from the closed context is then thrown away */
+  private sampleGen = 0;
 
   // Multi-grid sound bank (null until loaded; stays null when the assets are absent)
   private vf26: Vf26SoundBank | null = null;
@@ -431,6 +433,7 @@ export class CarAudioEngine {
   private async loadRealSamples(ctx: AudioContext, destination: AudioNode): Promise<void> {
     if (this.samplesLoaded || this.isLoadingSamples) return;
     this.isLoadingSamples = true;
+    const gen = this.sampleGen;
 
     try {
       const loaded: ActiveSampleNode[] = [];
@@ -451,6 +454,17 @@ export class CarAudioEngine {
         source.start(0, 0);
         loaded.push({ def, source, gain });
       }
+      if (gen !== this.sampleGen) {
+        // Disposed meanwhile: these nodes belong to a closed context
+        for (const l of loaded) {
+          try {
+            l.source.stop();
+          } catch {
+            // Ignore
+          }
+        }
+        return;
+      }
       if (loaded.length > 0) {
         this.sampleNodes = loaded;
         this.samplesLoaded = true;
@@ -458,7 +472,7 @@ export class CarAudioEngine {
     } catch {
       // Fallback to warm sub-harmonic synthesis if network sample load fails
     } finally {
-      this.isLoadingSamples = false;
+      if (gen === this.sampleGen) this.isLoadingSamples = false;
     }
   }
 
@@ -574,8 +588,11 @@ export class CarAudioEngine {
       );
     }
 
+    // The smoothing constants below were tuned per 60 Hz frame; scale them to the real frame time
+    const legacyDt = THREE.MathUtils.clamp(dtSeconds ?? 1 / 60, 0, 0.1);
+    const per60 = (k: number) => 1 - Math.pow(1 - k, legacyDt * 60);
     const rawRpm = THREE.MathUtils.clamp(telemetry.rpm, 4000, 15000);
-    this.smoothedRpm += (rawRpm - this.smoothedRpm) * 0.28;
+    this.smoothedRpm += (rawRpm - this.smoothedRpm) * per60(0.28);
     const rpm = this.smoothedRpm;
     const redlineRpm = 13200;
 
@@ -586,7 +603,7 @@ export class CarAudioEngine {
 
     // smooth_accel = smooth_accel * 0.5 + 0.5 * (accelCmd * 0.99 + 0.01)
     const accelCmd = THREE.MathUtils.clamp(telemetry.throttle, 0, 1);
-    this.smoothAccel = this.smoothAccel * 0.82 + 0.18 * (accelCmd * 0.99 + 0.01);
+    this.smoothAccel += (accelCmd * 0.99 + 0.01 - this.smoothAccel) * per60(0.18);
 
     // engine.lp = (0.75 * rev_cor^2 + 0.25) * smooth_accel + (1 - smooth_accel) * 0.25 * rev_cor^2
     const engineLp =
@@ -599,7 +616,7 @@ export class CarAudioEngine {
       this.shiftCutTimer = 0.065; // 65ms seamless shift ignition cut
     }
     if (this.shiftCutTimer > 0) {
-      this.shiftCutTimer = Math.max(0, this.shiftCutTimer - 0.016);
+      this.shiftCutTimer = Math.max(0, this.shiftCutTimer - legacyDt);
     }
     const shiftDip = this.shiftCutTimer > 0 ? 0.52 : 1.0;
 
@@ -645,7 +662,7 @@ export class CarAudioEngine {
     }
 
     // Turbo lag model (`turbo_lag`, `turbo_ilag` in `CarSoundData.cpp` lines 163-168)
-    this.turboLag = 0.9 * this.turboLag + 0.1 * this.smoothAccel;
+    this.turboLag += (this.smoothAccel - this.turboLag) * per60(0.1);
     const turboIlag = Math.exp(-3.0 * this.turboLag);
     if (!vf26 && this.turboOsc && this.turboGain) {
       const turboFreq = 1650 + (1.0 - turboIlag) * 2400 + mp * 850;
@@ -759,6 +776,10 @@ export class CarAudioEngine {
       }
     }
     this.sampleNodes = [];
+    // The next init() builds a new context: the loops have to be fetched and decoded into it again
+    this.samplesLoaded = false;
+    this.isLoadingSamples = false;
+    this.sampleGen++;
     this.vf26?.dispose();
     this.vf26 = null;
     if (this.ctx) {

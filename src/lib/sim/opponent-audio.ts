@@ -47,7 +47,6 @@ const RPM_TO_RADS = (2 * Math.PI) / 60;
 /** The exterior engine grid (and skid loop) of one bank, decoded once per audio context */
 interface SharedBank {
   ready: boolean;
-  failed: boolean;
   onKeys: number[];
   onBuffers: AudioBuffer[];
   offKeys: number[];
@@ -88,7 +87,7 @@ async function loadSharedBank(ctx: AudioContext, assetDir: string, bank: SharedB
     bank.rpmMax = Math.max(...rpms) * 1.35;
     bank.ready = true;
   } catch {
-    bank.failed = true;
+    // Stays not ready: its voices keep to the synthetic skid and stay silent otherwise
   }
 }
 
@@ -114,6 +113,8 @@ class OpponentVoice {
   public sound: CarSoundSource | null = null;
   public rank = OPPONENT_VOICES;
   private bank: SharedBank | null = null;
+  /** Whether the grids were built from the bank after it finished loading (built before that, they are empty) */
+  private boundReady = false;
   private onGrid: LoopGrid | null = null;
   private offGrid: LoopGrid | null = null;
   private readonly input: GainNode;
@@ -169,7 +170,9 @@ class OpponentVoice {
   public assign(peerId: string | null): void {
     this.peerId = peerId;
     this.throttle = 0;
-    this.rpm = 0;
+    // A freed voice keeps its last rpm so the fading loops hold their pitch (silence() plays them at this.rpm);
+    // a new car starts from 0, which snaps to its first target
+    if (peerId !== null) this.rpm = 0;
     this.estGear = 1;
     this.prevGear = 0;
     this.shiftTimer = 0;
@@ -181,9 +184,11 @@ class OpponentVoice {
 
   /** The bank this voice plays; rebuilds its grids when it changes (car swap, another player's car) */
   public bind(sound: CarSoundSource, bank: SharedBank): void {
-    if (this.bank === bank) return;
+    // Also rebuilt once a bank bound while loading becomes ready: its keys and buffers were empty at the first bind
+    if (this.bank === bank && this.boundReady === bank.ready) return;
     this.sound = sound;
     this.bank = bank;
+    this.boundReady = bank.ready;
     this.onGrid?.dispose();
     this.offGrid?.dispose();
     this.skidVoice?.dispose();
@@ -291,9 +296,9 @@ class OpponentVoice {
     // A far voice plays the on-load grid only, held up a little off throttle so a lift does not drop it out
     const wOn = (full ? Math.sin(onness * Math.PI * 0.5) : Math.max(0.6, Math.sin(onness * Math.PI * 0.5))) * cut01;
     const wOff = full ? Math.cos(onness * Math.PI * 0.5) * (this.shiftTimer > 0 ? 0.75 : 1) : 0;
-    const level = dist > CULL_DISTANCE_M ? 0 : 1;
-    this.onGrid.update(this.rpm, wOn * level, true, now, dt, 0.03, 0.02, this.doppler);
-    this.offGrid.update(this.rpm, wOff * level, true, now, dt, 0.03, 0.02, this.doppler);
+    // (Cars past CULL_DISTANCE_M never get a voice: they are dropped when the candidates are gathered)
+    this.onGrid.update(this.rpm, wOn, true, now, dt, 0.03, 0.02, this.doppler);
+    this.offGrid.update(this.rpm, wOff, true, now, dt, 0.03, 0.02, this.doppler);
 
     // Tyres: slip angle between heading and travel, and the wheels against the road (wheelspin, lock-ups)
     let skidTarget = 0;
@@ -314,7 +319,7 @@ class OpponentVoice {
       ) * Math.min(1, v / 15);
     }
     this.skid += (skidTarget - this.skid) * Math.min(1, dt / (skidTarget > this.skid ? 0.04 : 0.12));
-    const skidLevel = (bank.skid ? 0.5 : 0.9) * Math.sqrt(this.skid) * level;
+    const skidLevel = (bank.skid ? 0.5 : 0.9) * Math.sqrt(this.skid);
     this.skidVoice?.set(full ? skidLevel : 0, (0.9 + 0.2 * this.skid) * this.doppler, now, dt, 0.05);
 
     // Contact scrape on the first frame of a touch
@@ -595,7 +600,6 @@ export class OpponentAudio {
     if (!bank) {
       bank = {
         ready: false,
-        failed: false,
         onKeys: [],
         onBuffers: [],
         offKeys: [],
