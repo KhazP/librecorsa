@@ -1,7 +1,7 @@
 /**
  * 2026 Formula 1 vehicle dynamics — VF26 physics (`f1-physics-2026.ts`)
  *
- * A clean, assist-free rigid-body vehicle model driven by the VF26 parameter set
+ * An assist-free vehicle model driven by the VF26 parameter set
  * (see `src/lib/sim/vf26-data.ts`).
  *
  * Model overview (fixed 500 Hz outer step, 4 × 2 kHz inner sub-steps):
@@ -12,15 +12,17 @@
  *                 roll centres computed from double-wishbone hardpoints.
  * - Unsprung:     4 hub masses on radial tyre springs/dampers (kerb strikes, wheel lift).
  * - Tyres:        load-sensitive combined-slip model with falloff, camber, thermal curve,
- *                 relaxation-length carcass (no low-speed hacks needed).
+ *                 relaxation-length carcass. Below 3 m/s a carcass damper is blended in (ac-tyre.ts,
+ *                 LOW_SPEED_BLEND_MS) so the deflection spring doesn't ring at standstill.
  * - Aero:         11 wing elements (AoA & ground-height LUTs, yaw sensitivity) incl. 2026 X/Z-mode.
  * - Power unit:   ICE torque × (1 + turbo boost), MGU-K deploy/harvest with ERS controller
  *                 curves, 4 MJ store, 350 kW limit, brake-by-wire blending on the rear axle.
  * - Drivetrain:   seamless 8-speed, auto-clutch launch, limited-slip differential, engine inertia.
  * - Brakes:       max-torque / bias model with disc thermal state.
  *
- * Nothing in here steers, stabilises or damps the car artificially. Driver aids (TC / ABS) only exist
- * when the player selects them and they act like real ECU aids — on pedal inputs.
+ * Nothing in here steers or stabilises the car. Driver aids (TC / ABS) only exist when the player selects them,
+ * and they act like real ECU aids, on pedal inputs. Two low-speed blends exist for numerical reasons, not for
+ * handling: the tyre carcass damper above, and the steering-rack torque fading out below 4 km/h (FFB only).
  */
 
 import * as THREE from 'three';

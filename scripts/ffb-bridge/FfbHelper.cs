@@ -3,7 +3,7 @@
 // A browser cannot play DirectInput force feedback, so scripts/ffb-bridge.ts receives the sim's steering torque
 // over a localhost WebSocket and pipes it here. This program owns the wheel's force feedback the way a native
 // sim does (exclusive background access, autocentre spring off, one constant-force effect whose magnitude is
-// updated ~333 times a second), following Microsoft's FFConst sample and SDL's DirectInput haptic backend.
+// updated 500 times a second by default, see --rate), following Microsoft's FFConst sample and SDL's DirectInput haptic backend.
 // Built by the bridge with the .NET Framework's csc.exe (C# 5, no packages).
 //
 // Usage:  FfbHelper [--device <name part>] [--max 0..1] [--rate <Hz>] [--direction 1|0]
