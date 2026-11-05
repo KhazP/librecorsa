@@ -178,6 +178,8 @@ export interface DeviceFrame {
   /** Button actions pressed this frame (rising edges) */
   pressed: Set<PadAction>;
   source: "wheel" | "controller" | "legacy" | null;
+  /** The bound steering wheel was there last frame and is gone now (unplugged, asleep): pause, don't hand over */
+  wheelLost?: boolean;
 }
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
@@ -253,12 +255,15 @@ const buttonDown = (pad: PadLike | undefined, button: number) => {
 export class DeviceInputReader {
   private prevHeld = new Set<PadAction>();
   private smoothedSteer = 0;
+  private wheelPresent = false;
 
   read(pads: readonly PadLike[], settings: DeviceInputSettings, dtSeconds: number, vehicle?: string): DeviceFrame {
     const held = new Set<PadAction>();
     const frame: DeviceFrame = { throttle: 0, brake: 0, boostHeld: false, pressed: new Set(), source: null };
     const wheel = settings.wheel;
     const wheelPad = wheel.steer ? findPad(pads, wheel.steer.padId) : undefined;
+    if (this.wheelPresent && !wheelPad) frame.wheelLost = true;
+    this.wheelPresent = wheelPad !== undefined;
 
     if (wheel.steer && wheelPad) {
       frame.source = "wheel";

@@ -402,6 +402,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   const hapticsRef = useRef<GamepadHaptics | null>(null);
   const [aiOpponents, setAiOpponents] = useState(false);
   const [paused, setPaused] = useState(false);
+  /** Why the game paused itself (shown in the pause menu); cleared on resume */
+  const [pauseNotice, setPauseNotice] = useState<string | null>(null);
   const pausedRef = useRef(false);
   pausedRef.current = paused;
 
@@ -809,6 +811,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       const next = !prev;
       pausedRef.current = next;
       audioRef.current?.setPaused(next);
+      if (!next) setPauseNotice(null);
       if (next) {
         wheelFfb.stop();
         keysRef.current.up = false;
@@ -1941,7 +1944,12 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       const rp = replayRef.current;
       if (rp.active && inMenu) exitReplay();
       const replaying = rp.active;
-      const driving = !inMenu && !pausedRef.current && !replaying;
+      // The wheel unplugged mid-session: pause rather than hand the car to whatever pad is left (no input this frame)
+      if (device.wheelLost && !inMenu && !replaying) {
+        if (!pausedRef.current) togglePauseRef.current();
+        setPauseNotice("Steering wheel disconnected. Reconnect it, or resume to drive with what's left.");
+      }
+      const driving = !inMenu && !pausedRef.current && !replaying && !device.wheelLost;
       const settingsNow = settingsRef.current;
       const padTuning = settingsNow.padTuning;
       const kbTuning = settingsNow.keyboardTuning;
@@ -3298,6 +3306,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
 
   const menuProps = {
     telemetry,
+    pauseNotice,
     aeroPreset,
     assistPreset,
     cameraMode,

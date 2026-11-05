@@ -129,6 +129,8 @@ export interface PauseMenuProps extends MultiplayerPanelProps {
   vehicleModel: VehicleModelId;
   onChangeCar: (car: CarId) => void;
   openMultiplayer?: boolean;
+  /** Why the game paused itself (a wheel unplugged), shown under the heading */
+  pauseNotice?: string | null;
   onToggleAiOpponents: () => void;
   onToggleGamepadAssist?: () => void;
   onToggleGamepadRumble: () => void;
@@ -447,6 +449,11 @@ export const PauseMenu: React.FC<PauseMenuProps> = (props) => {
             <h1 className="lc-disp m-0 text-[clamp(32px,4.2vw,60px)] text-[#F5F7FA] short:text-[28px]">
               {trackInfo.name}
             </h1>
+            {props.pauseNotice ? (
+              <p role="alert" className="m-0 text-[14px] font-semibold text-[#FFB020]">
+                {props.pauseNotice}
+              </p>
+            ) : null}
             <div className="flex flex-wrap gap-2">
               <span className={`${HEADER_CHIP} border border-[#262B3D] bg-[#11131A] text-[#8E96AA]`}>
                 {trackInfo.city}, {trackInfo.country}

@@ -151,6 +151,17 @@ check('calibrated wheel with pedals and paddles on separate devices', () => {
   near(f.brake, 1);
   assert.ok(f.pressed.has('shiftUp'));
 });
+check('an unplugged wheel is reported once (the game pauses), not silently handed to a pad', () => {
+  const reader = new DeviceInputReader();
+  const wheel = { ...DEFAULT_WHEEL_SETTINGS, steer: { padId: 'DD base', axis: 0, center: 0, invert: false } };
+  const xbox = pad('Xbox', 'standard', [0.5, 0], [0, 5], { 7: 0.9 });
+  const settings = { wheel, padButtons: DEFAULT_PAD_BUTTONS };
+  assert.equal(reader.read([pad('DD base', '', [0.1]), xbox], settings, 1 / 60).wheelLost, undefined);
+  const lost = reader.read([xbox], settings, 1 / 60);
+  assert.equal(lost.wheelLost, true);
+  assert.equal(reader.read([xbox], settings, 1 / 60).wheelLost, undefined, 'only on the frame it went');
+  assert.equal(new DeviceInputReader().read([xbox], settings, 1 / 60).wheelLost, undefined, 'no wheel to begin with: nothing lost');
+});
 
 console.log('Wheel detection and force feedback');
 const MOZA_BASE = 'MOZA R9 Base (Vendor: 346e Product: 0002)';
