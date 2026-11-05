@@ -1476,6 +1476,7 @@ export class MultiplayerSyncManager {
    * `receiveClockMs` is the arrival time on the clock `update()` is given (default `performance.now()`, the clock of
    * requestAnimationFrame's timestamp); pass it when driving `update()` from another clock.
    */
+  /** `pkt` must come from sanitizePacket (or be built by trusted code, like the AI field's): it is not re-checked */
   public ingestPacket(pkt: NetworkVehiclePacket, isAiPeer = false, receiveClockMs?: number): void {
     const now =
       receiveClockMs !== undefined && Number.isFinite(receiveClockMs)
@@ -1565,16 +1566,18 @@ export class MultiplayerSyncManager {
     buffer.jitterMs += (Math.abs(interval - this.broadcastIntervalMs) - buffer.jitterMs) * 0.1;
     buffer.lastArrivalMs = now;
     buffer.lastReceivedMs = now;
+    // Every caller passes a packet sanitizePacket already cleaned, so its fields are used as they are (checking them
+    // again here was a second copy of the rules that could drift from the first)
     // Identity can change mid-session (profile edit)
-    if (typeof pkt.driverCode === 'string') buffer.driverCode = asCode(pkt.driverCode);
-    if (typeof pkt.teamColorHex === 'string') buffer.teamColorHex = asColor(pkt.teamColorHex);
+    buffer.driverCode = pkt.driverCode;
+    buffer.teamColorHex = pkt.teamColorHex;
     buffer.renderedState.driverCode = buffer.driverCode;
     buffer.renderedState.teamColorHex = buffer.teamColorHex;
-    buffer.renderedState.name = typeof pkt.name === 'string' ? clampStr(pkt.name, 16, buffer.driverCode) : undefined;
-    buffer.renderedState.race = sanitizeRace(pkt.race);
+    buffer.renderedState.name = pkt.name;
+    buffer.renderedState.race = pkt.race;
     // The sender may switch car or circuit mid-session
-    buffer.renderedState.vehicle = asPeerVehicle(pkt.vehicle);
-    buffer.renderedState.trackId = typeof pkt.trackId === 'string' ? pkt.trackId.slice(0, 64) : undefined;
+    buffer.renderedState.vehicle = pkt.vehicle;
+    buffer.renderedState.trackId = pkt.trackId;
 
     const localPacket: NetworkVehiclePacket = {
       ...pkt,
