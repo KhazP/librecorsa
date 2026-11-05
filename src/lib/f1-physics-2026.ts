@@ -1562,8 +1562,12 @@ export class F1Physics2026 {
 
     const toeF = this.axles[0].spec.staticToeDeg * DEG2RAD;
     const toeR = this.axles[1].spec.staticToeDeg * DEG2RAD;
-    this.wheels[0].steerRad = this.steerRoadWheelRad + toeF + 0.12 * frontKin.right.bumpSteerToeInRad;
-    this.wheels[1].steerRad = this.steerRoadWheelRad - toeF - 0.12 * frontKin.left.bumpSteerToeInRad;
+    // Each front wheel's own road angle from the steering geometry (Ackermann: the inside wheel turns more); the
+    // solver's roadSteerRad also holds its full bump steer, taken out here for the scaled term below
+    const ackRight = frontKin.right.roadSteerRad - frontKin.right.bumpSteerToeInRad;
+    const ackLeft = frontKin.left.roadSteerRad + frontKin.left.bumpSteerToeInRad;
+    this.wheels[0].steerRad = ackRight + toeF + 0.12 * frontKin.right.bumpSteerToeInRad;
+    this.wheels[1].steerRad = ackLeft - toeF - 0.12 * frontKin.left.bumpSteerToeInRad;
     this.wheels[2].steerRad = toeR + 0.12 * rearKin.right.bumpSteerToeInRad;
     this.wheels[3].steerRad = -toeR - 0.12 * rearKin.left.bumpSteerToeInRad;
     for (let i = 0; i < 4; i++) {
