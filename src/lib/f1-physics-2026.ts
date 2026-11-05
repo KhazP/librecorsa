@@ -2010,7 +2010,7 @@ export class F1Physics2026 {
     this.gravityBody.n = G * up.y;
     const heading = Math.atan2(sample.tangent.x, sample.tangent.z);
     const rel = Math.cos(this.worldYawRad - heading);
-    this.verticalCurvature = THREE.MathUtils.clamp(sample.verticalCurvature * 2 * rel * rel, -0.03, 0.03);
+    this.verticalCurvature = THREE.MathUtils.clamp(sample.verticalCurvature * rel * rel, -0.03, 0.03);
   }
 
   private updateAero(dt: number): void {

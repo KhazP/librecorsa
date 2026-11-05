@@ -473,7 +473,8 @@ export function buildTargetSpeedProfile(
     const braking = base[(i + 1) % n] <= b + 0.05 || Math.abs(smp.curvature) > 0.004;
     let x = braking ? b * t.apexScale : b;
     if (t.bumpCaution > 0 && smp.verticalCurvature < 0) {
-      x *= 1 - 0.08 * t.bumpCaution * clamp((-smp.verticalCurvature * b * b) / G, 0, 1);
+      // Scaled by 2G: verticalCurvature is now the true 1/m value (it used to be half of it); same caution as before
+      x *= 1 - 0.08 * t.bumpCaution * clamp((-smp.verticalCurvature * b * b) / (2 * G), 0, 1);
     }
     v[i] = Math.max(6, x);
     margin[i] = clamp(t.brakeMargin, 0, 0.9);

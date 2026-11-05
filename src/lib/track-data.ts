@@ -222,6 +222,9 @@ export function setActiveTrack(id: string, raw: RawTrackJson = rawTrackJson): vo
   ACTIVE_TRACK_ID = id;
   const meta = raw.metadata as RawTrackJson["metadata"] & TrackMetaExtras;
   TRACK_TOTAL_LENGTH_M = meta.lengthMeters;
+  if (meta.baseAltitudeM === undefined && id !== "rwanda") {
+    console.warn(`Circuit "${id}" has no baseAltitudeM: air density as at sea level`);
+  }
   BASE_ALTITUDE_M = meta.baseAltitudeM ?? (id === "rwanda" ? RWANDA_BASE_ALTITUDE_M : 0);
   refill(RWANDA_DRS_ZONES, raw.drsZones as DrsZoneDef[]);
   refill(RWANDA_TV_CAMERAS, raw.cameras as TracksideTvCameraDef[]);
@@ -488,7 +491,10 @@ export function getRwandaTrackData(numSamples = 1200): BuiltTrackData {
   for (let i = 0; snapStraight && i < NUM_SAMPLES; i++) {
     const s = i * ds;
     if (s <= 230) {
-      const blend = s <= 195 ? 1.0 : 1.0 - THREE.MathUtils.smoothstep(s, 195, 230);
+      // Eased in over the first 15 m too: collinearity is only checked from 15 m, and pulling the line itself (s = 0)
+      // onto the chord left a lateral step against the last samples of the lap, which are not snapped
+      const blend =
+        s < 15 ? THREE.MathUtils.smoothstep(s, 0, 15) : s <= 195 ? 1.0 : 1.0 - THREE.MathUtils.smoothstep(s, 195, 230);
       const dx = positions[i].x - pStart.x;
       const dz = positions[i].z - pStart.z;
       const projDist = dx * ux + dz * uz;
@@ -598,7 +604,8 @@ export function getRwandaTrackData(numSamples = 1200): BuiltTrackData {
       (curr.y - prev2.y) / Math.max(0.5, prev2.distanceTo(curr));
     const nextSlope =
       (next2.y - curr.y) / Math.max(0.5, curr.distanceTo(next2));
-    verticalCurvatures.push((nextSlope - prevSlope) / (4 * ds));
+    // The two slopes are centred on samples i−1 and i+1, 2·ds apart
+    verticalCurvatures.push((nextSlope - prevSlope) / (2 * ds));
 
     // Normalised so that aiLineOffsetM(sample) returns the exported offset in metres
     racingOffsetsNorm.push(racingOffsetsM[i] / (widths[i] * AI_LINE_WIDTH_SCALE));
@@ -932,9 +939,13 @@ export function getRwandaTrackData(numSamples = 1200): BuiltTrackData {
     };
   };
 
+  const meshUrl = getActiveTrackMetadata().mesh?.url;
+  if (!meshUrl && ACTIVE_TRACK_ID !== "rwanda") {
+    console.warn(`Circuit "${ACTIVE_TRACK_ID}" has no mesh url: drawing Rwanda's road instead`);
+  }
   cachedBuiltTrack = {
     id: ACTIVE_TRACK_ID,
-    meshUrl: getActiveTrackMetadata().mesh?.url ?? "/tracks/rwanda/rwanda_2026.glb",
+    meshUrl: meshUrl ?? "/tracks/rwanda/rwanda_2026.glb",
     roadMaterials: getActiveTrackMetadata().mesh?.roadMaterials,
     spawnGrid: [...RWANDA_SPAWN_GRID],
     samples,
