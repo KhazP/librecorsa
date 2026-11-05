@@ -613,6 +613,10 @@ const _comb = { fx: 0, fy: 0, sx: 0, sy: 0 };
 
 // Scratch (single-threaded, never escapes a call)
 const _m = new THREE.Matrix4();
+const _tyreTorque = new Float64Array(4);
+const _wheelInertia = new Float64Array(4);
+const _wheelOmega = new Float64Array(4);
+const _brakeImpulse = new Float64Array(4);
 const _ex = new THREE.Vector3();
 const _ey = new THREE.Vector3();
 const _ez = new THREE.Vector3();
@@ -1724,7 +1728,8 @@ export class VehiclePhysics {
       const reboundKnee = d.fastReboundThresholdMs ?? knee;
       const L = this.wheels[ai * 2];
       const R = this.wheels[ai * 2 + 1];
-      for (const w of [L, R]) {
+      for (let side = 0; side < 2; side++) {
+        const w = side === 0 ? L : R;
         let f = springForce(w.springPreload + w.compression, s.springs);
         const intoRubber = w.compression - s.bumpStop.range;
         if (intoRubber > 0) f += s.bumpStop.rate * intoRubber + s.bumpStop.progression * intoRubber * intoRubber;
@@ -1754,7 +1759,8 @@ export class VehiclePhysics {
     }
 
     // ---- tyres: vertical, hubs, horizontal forces
-    const tyreTorque = [0, 0, 0, 0];
+    // Scratch arrays (module level) reused every 2 kHz sub-step instead of allocated
+    const tyreTorque = _tyreTorque.fill(0);
     let ffbMz = 0;
     for (let i = 0; i < 4; i++) {
       const w = this.wheels[i];
@@ -2152,7 +2158,7 @@ export class VehiclePhysics {
    * Engine, clutch, ramp LSD and brakes as velocity constraints (sequential impulses, accumulated and
    * clamped to each element's torque capacity).
    */
-  private solveDrivetrain(h: number, inp: VehicleInputs, tyreTorque: number[]): void {
+  private solveDrivetrain(h: number, inp: VehicleInputs, tyreTorque: Float64Array): void {
     const cfg = this.config;
     const eng = cfg.engine;
     const gb = cfg.gearbox;
@@ -2269,12 +2275,16 @@ export class VehiclePhysics {
 
     // ---- predicted velocities from the free torques
     const Ie = eng.inertia;
-    const Iw = W.map((w) => this.axles[w.isFront ? 0 : 1].wheelInertia);
+    const Iw = _wheelInertia;
+    const wW = _wheelOmega;
+    for (let i = 0; i < 4; i++) {
+      Iw[i] = this.axles[W[i].isFront ? 0 : 1].wheelInertia;
+      wW[i] = W[i].omega + (tyreTorque[i] / Iw[i]) * h;
+    }
     let wE = this.engineOmega + ((tIce + tK) / Ie) * h;
-    const wW = W.map((w, i) => w.omega + (tyreTorque[i] / Iw[i]) * h);
 
     // ---- sequential impulses & 3-Phase Electronic Differential (Entry / Mid / Exit-HiSpd)
-    const accB = [0, 0, 0, 0];
+    const accB = _brakeImpulse.fill(0);
     let accC = 0;
     let accD = 0;
     const half = 0.5 * ratio;
