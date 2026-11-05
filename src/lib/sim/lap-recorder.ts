@@ -3,9 +3,9 @@
  * summary (deltas, sector and corner bests) and plays recorded laps back as ghosts.
  * Also validates untrusted recordings (imported files, downloads) before they are used.
  */
-import type { CarTelemetry, VehicleModelId } from "@/types/f1";
-import { LAP_SAMPLE_STRIDE } from "./lap-types";
-import type { CornerStat, LapRecording, LapSample, LapSummaryData } from "./lap-types";
+import type { AssistPreset, CarTelemetry, TireCompound, VehicleModelId } from "@/types/f1";
+import { ASSIST_PRESETS, LAP_SAMPLE_STRIDE, PHYSICS_VERSION, parseLapConditions } from "./lap-types";
+import type { CornerStat, LapConditions, LapRecording, LapSample, LapSummaryData } from "./lap-types";
 
 export interface LapRecorderTurn {
   number: number;
@@ -21,6 +21,8 @@ export interface LapRecorderInput {
   >;
   position: { x: number; y: number; z: number };
   quaternion: { x: number; y: number; z: number; w: number };
+  /** What the car is driven with right now; the lap keeps the most-aided preset and any wet seen */
+  conditions?: { assists: AssistPreset; compound: TireCompound; wet: boolean };
 }
 
 export interface CompletedLap {
@@ -149,6 +151,8 @@ export class LapRecorder {
   private valid = true;
   private lastSampleT = -Infinity;
   private rows: number[][] = [];
+  /** Conditions over the lap in progress (null until reported) */
+  private lapConditions: LapConditions | null = null;
 
   constructor(opts: LapRecorderOptions) {
     this.trackLengthM = opts.trackLengthM;
@@ -247,6 +251,7 @@ export class LapRecorder {
     this.valid = true;
     this.lastSampleT = -Infinity;
     this.rows = [];
+    this.lapConditions = null;
   }
 
   private abandon(): void {
@@ -254,11 +259,27 @@ export class LapRecorder {
     this.valid = true;
     this.lastSampleT = -Infinity;
     this.rows = [];
+    this.lapConditions = null;
+  }
+
+  /** Folds this moment's assists, tyre and surface into the lap's conditions */
+  private noteConditions(input: LapRecorderInput): void {
+    const c = input.conditions;
+    if (!c) return;
+    const prev = this.lapConditions;
+    const aid = (a: AssistPreset) => ASSIST_PRESETS.indexOf(a);
+    this.lapConditions = {
+      assists: prev && aid(prev.assists) > aid(c.assists) ? prev.assists : c.assists,
+      compound: c.compound,
+      surface: c.wet || prev?.surface === "wet" ? "wet" : "dry",
+      physicsVersion: PHYSICS_VERSION,
+    };
   }
 
   /** Adds this update to the lap in progress: validity and a sample when one is due */
   private collect(input: LapRecorderInput): void {
     if (!this.recording) return;
+    this.noteConditions(input);
     // The physics' own verdict when it judges track limits, else any moment off the track
     if (input.telemetry.lapInvalid ?? input.telemetry.offTrack) this.valid = false;
     const tS = input.telemetry.currentLapTimeMs / 1000;
@@ -276,6 +297,7 @@ export class LapRecorder {
     const sectors: [number, number, number] = [Math.round(rawSectors[0]), Math.round(rawSectors[1]), Math.round(rawSectors[2])];
     if (!sectors.every((v) => Number.isFinite(v) && v > 0)) return null;
     if (this.rows.length < 1) return null;
+    this.noteConditions(input);
 
     // Closing sample at the lap time, never before the last recorded sample
     const lastT = this.rows[this.rows.length - 1][0];
@@ -347,6 +369,7 @@ export class LapRecorder {
         return acc;
       }, []),
     };
+    if (this.lapConditions) recording.conditions = { ...this.lapConditions };
 
     const summary: LapSummaryData = {
       lapNumber,
@@ -511,8 +534,12 @@ export function validateLapRecording(raw: unknown): LapRecording | null {
   if (samples < 2) return null;
   if (Math.abs(data[(samples - 1) * LAP_SAMPLE_STRIDE] - lapTimeMs / 1000) > 1.5) return null;
 
+  // Conditions are optional (older laps lack them), but when present they must be well-formed
+  const conditions = r.conditions === undefined ? null : parseLapConditions(r.conditions);
+  if (r.conditions !== undefined && !conditions) return null;
+
   const [sector1, sector2, sector3] = sectors;
-  return {
+  const out: LapRecording = {
     version: 1,
     trackId,
     vehicle: vehicle as VehicleModelId,
@@ -524,4 +551,6 @@ export function validateLapRecording(raw: unknown): LapRecording | null {
     sampleHz,
     data,
   };
+  if (conditions) out.conditions = conditions;
+  return out;
 }
