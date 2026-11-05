@@ -113,7 +113,8 @@ export class SimVisualFxManager {
   private wetness = 0;
 
   // Multiplayer / AI Opponent 3D cars
-  private opponentCars = new Map<string, { rig: SimCarRig; vehicle: VehicleModelId | undefined }>();
+  /** wheelRot: the wheels' spin angle (rad), integrated from their speed each frame */
+  private opponentCars = new Map<string, { rig: SimCarRig; vehicle: VehicleModelId | undefined; wheelRot: number }>();
   /**
    * Rigs built during loading (one racing car and one ghost per opponent model) so the shader warm-up covers them;
    * handed out to the first peers that need that model instead of being built on the first frame of a race
@@ -578,7 +579,7 @@ export class SimVisualFxManager {
         entry = undefined;
       }
       if (!entry) {
-        entry = { rig: this.createOpponentRig(peer), vehicle: peer.vehicle };
+        entry = { rig: this.createOpponentRig(peer), vehicle: peer.vehicle, wheelRot: 0 };
         this.opponentCars.set(peer.peerId, entry);
         this.group.add(entry.rig.root);
       }
@@ -588,8 +589,11 @@ export class SimVisualFxManager {
       carRig.root.position.copy(peer.position);
       carRig.root.quaternion.copy(peer.quaternion);
 
-      const spinRad = ((peer.wheelRPMs[0] * 2 * Math.PI) / 60) * dt * 15;
-      const wheelRot = (performance.now() * 0.001 * (peer.speedKmh / 3.6)) / 0.348 + spinRad;
+      // Integrated, so the spokes turn smoothly with frame-time jitter and stop when the car does (paused, replay)
+      const rpm = peer.wheelRPMs[0];
+      const spinRadS = Number.isFinite(rpm) && rpm !== 0 ? (rpm * 2 * Math.PI) / 60 : peer.speedKmh / 3.6 / 0.348;
+      entry.wheelRot = (entry.wheelRot + spinRadS * dt) % (2 * Math.PI);
+      const wheelRot = entry.wheelRot;
       const pitchRad = peer.brake > 0.2 ? 0.012 : -peer.throttle * 0.008;
       const rollRad = peer.steerAngle * 0.04;
 
