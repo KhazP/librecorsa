@@ -1039,6 +1039,9 @@ export class AiOpponentField {
     p.brake = sim.telemetry.brake;
     p.trackS = sim.sMeters;
     p.speedKmh = sim.telemetry.speedKmh;
+    p.rpm = sim.telemetry.rpm;
+    p.gear = sim.telemetry.gear;
+    p.contact = car.contact;
   }
 
   /** Physics of every car in the field, AI cars in grid order then the player (for the shared track environment) */

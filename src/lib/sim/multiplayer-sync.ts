@@ -110,6 +110,11 @@ export interface InterpolatedPeerState {
   yawRateRadS?: number;
   /** False while the pose is a guess (packets stale, just appeared, just jumped): no contact then */
   contactReady?: boolean;
+  /** Engine rpm and gear, when the car reports them (the AI field; remote players' are estimated from wheel speed) */
+  rpm?: number;
+  gear?: number;
+  /** Touched another car this frame (the AI field's contact solver) */
+  contact?: boolean;
 }
 
 export type CollisionMode = 'on' | 'ghost_lap1' | 'off';
