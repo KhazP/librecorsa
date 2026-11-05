@@ -69,6 +69,7 @@ import { isFatalHidStatus } from "@/lib/input/webhid-ffb";
 import { applyGraphicsQuality } from "@/lib/render/golden-hour-environment";
 import { createRainFx, RAIN_VISOR_LAYER } from "@/lib/render/rain-fx";
 import { DRIVER_HEAD_LAYER } from "@/lib/render/layers";
+import { shapeStick } from "@/lib/input/stick-shape";
 import { advanceAsphaltRain, setAsphaltWetness } from "@/lib/render/asphalt-sheen";
 import { SIM_REALISM_FLAGS, type SimRealism } from "@/lib/sim/sim-realism";
 import {
@@ -175,12 +176,6 @@ const vehicleLabel = (id: string) => CARS.find((c) => c.physics === id)?.title ?
 
 /** A race the host started on another circuit: picked up after the scene for that circuit has loaded */
 let pendingRaceStart: RaceStartInfo | null = null;
-
-/** Applies an outer dead zone and a response curve to a stick that already had its inner dead zone */
-function shapeStick(x: number, outerDeadzone: number, linearity: number): number {
-  const mag = Math.min(1, Math.abs(x) / Math.max(0.5, 1 - outerDeadzone));
-  return Math.sign(x) * Math.pow(mag, linearity);
-}
 
 /** A loading task with no progress for this long is given up on (the procedural stand-in stays) */
 const ASSET_STALL_MS = 25_000;
@@ -445,9 +440,10 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     () => ({
       ...DEFAULT_GAMEPAD_ASSIST,
       steeringRate: settings.padTuning.steeringRate,
-      deadzone: settings.padTuning.deadzone,
+      // The stick reaches the assist already shaped, inner dead zone included (shapeStick below)
+      deadzone: 0,
     }),
-    [settings.padTuning.steeringRate, settings.padTuning.deadzone]
+    [settings.padTuning.steeringRate]
   );
   const [p2pStatus, setP2pStatus] = useState<P2PConnectionStatus>({
     mode: "local",
@@ -2001,8 +1997,12 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       const gamepadThrottle = driving ? (isPad ? Math.pow(device.throttle, padTuning.throttleGamma) : device.throttle) : 0;
       const gamepadBrake = driving ? (isPad ? Math.pow(device.brake, padTuning.brakeGamma) : device.brake) : 0;
       const gamepadSteer = device.analogSteer;
+      // The whole curve the setup screen previews (inner and outer dead zone, then linearity), here once: the assist
+      // used to apply the inner dead zone after the curve, and without the assist it was never applied
       const gamepadStick =
-        device.padSteer === undefined ? undefined : shapeStick(device.padSteer, padTuning.outerDeadzone, padTuning.linearity);
+        device.padSteer === undefined
+          ? undefined
+          : shapeStick(device.padSteer, padTuning.deadzone, padTuning.outerDeadzone, padTuning.linearity);
       const gamepadBoost = driving && device.boostHeld;
       if (!inMenu) {
         for (const action of device.pressed) {
