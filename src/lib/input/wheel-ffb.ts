@@ -202,26 +202,31 @@ export class WheelFfbClient {
         damping = -(baseDamp + lockDamp) * Math.max(-1, Math.min(1, rimSpeed / DAMPING_FULL_DEG_S));
       }
       this.lastRimDeg = rimDeg;
-      let shaped = shapeFfbForce(torque, wheel, telemetry.speedKmh);
-      // Optional smoothing of the physics torque (the soft lock and damper stay immediate)
-      if (wheel.ffbFilterS > 0 && dtS > 0) {
-        this.filtered += (shaped - this.filtered) * (1 - Math.exp(-dtS / wheel.ffbFilterS));
-        shaped = this.filtered;
+      // Optional smoothing of the physics torque (the soft lock and damper stay immediate). It has to run over the
+      // 500 Hz subframes too, since those (not `force`) are what the wheel plays whenever the physics supplies them
+      const filterS = wheel.ffbFilterS > 0 && dtS > 0 ? wheel.ffbFilterS : 0;
+      const smooth = (x: number, h: number): number => {
+        if (filterS > 0) this.filtered += (x - this.filtered) * (1 - Math.exp(-h / filterS));
+        else this.filtered = x;
+        return this.filtered;
+      };
+      const rawSub = telemetry.ffbSubframeSamples;
+      let shaped: number;
+      if (rawSub && rawSub.length > 0) {
+        const h = dtS / rawSub.length;
+        subframes = rawSub.map((sample) => {
+          let sf = smooth(shapeFfbForce(Number.isFinite(sample) ? sample : 0, wheel, telemetry.speedKmh), h) + softLock + damping;
+          if (wheel.ffbInvert) sf = -sf;
+          return Math.round(sf * 1e4) / 1e4;
+        });
+        // The held value once the subframes run out: the filtered end of this frame (unfiltered, the frame's torque)
+        shaped = filterS > 0 ? this.filtered : smooth(shapeFfbForce(torque, wheel, telemetry.speedKmh), dtS);
       } else {
-        this.filtered = shaped;
+        shaped = smooth(shapeFfbForce(torque, wheel, telemetry.speedKmh), dtS);
       }
       this.recordMeter(shaped, wheel.ffbGain, nowMs);
       force = shaped + softLock + damping;
       if (wheel.ffbInvert) force = -force;
-
-      const rawSub = telemetry.ffbSubframeSamples;
-      if (rawSub && rawSub.length > 0) {
-        subframes = rawSub.map((sample) => {
-          let sf = shapeFfbForce(Number.isFinite(sample) ? sample : 0, wheel, telemetry.speedKmh) + softLock + damping;
-          if (wheel.ffbInvert) sf = -sf;
-          return Math.round(sf * 1e4) / 1e4;
-        });
-      }
 
       const fronts = telemetry.wheelSurfaces;
       if (telemetry.speedKmh > 15 && fronts && (fronts[0] === "kerb" || fronts[1] === "kerb")) kerb = wheel.ffbKerb;
