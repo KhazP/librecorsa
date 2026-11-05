@@ -16,14 +16,13 @@
  */
 
 import * as THREE from 'three';
-import type { TireCompound, VehicleModelId } from '@/types/f1';
+import { isVehicleModelId, type TireCompound, type VehicleModelId } from '@/types/f1';
 import { sanitizeWeatherSync, type WeatherSyncState } from './weather';
 
-const PEER_VEHICLES: readonly VehicleModelId[] = ['vf26', 'f12026-car', 'amg-gt3'];
 const PEER_COMPOUNDS: readonly TireCompound[] = ['soft', 'medium', 'hard', 'intermediate', 'wet'];
 /** Network input is untrusted: only a known model id is kept */
 const asPeerVehicle = (v: unknown): VehicleModelId | undefined =>
-  PEER_VEHICLES.includes(v as VehicleModelId) ? (v as VehicleModelId) : undefined;
+  isVehicleModelId(v) ? v : undefined;
 
 export interface NetworkVehiclePacket {
   peerId: string;

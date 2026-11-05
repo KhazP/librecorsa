@@ -3,7 +3,7 @@
  * summary (deltas, sector and corner bests) and plays recorded laps back as ghosts.
  * Also validates untrusted recordings (imported files, downloads) before they are used.
  */
-import type { AssistPreset, CarTelemetry, TireCompound, VehicleModelId } from "@/types/f1";
+import { isVehicleModelId, type AssistPreset, type CarTelemetry, type TireCompound, type VehicleModelId } from "@/types/f1";
 import { ASSIST_PRESETS, LAP_SAMPLE_STRIDE, PHYSICS_VERSION, parseLapConditions } from "./lap-types";
 import { SIM_REALISM_LEVELS, type SimRealism } from "./sim-realism";
 import type { CornerStat, LapConditions, LapRecording, LapSample, LapSummaryData } from "./lap-types";
@@ -39,8 +39,9 @@ export interface LapRecorderOptions {
   turns: LapRecorderTurn[];
   trackId: string;
   vehicle: VehicleModelId;
-  /** Shown on the leaderboard: letters, 3 characters A-Z */
+  /** Shown on the leaderboard (up to 16 characters, see cleanDriverName) */
   driverName: string;
+  /** Three letters A-Z */
   driverCode: string;
   sampleHz?: number;
   personalBestMs?: number | null;
@@ -60,8 +61,8 @@ const START_GRACE_MS = 250;
 const CORNER_HALF_WINDOW_M = 150;
 const MIN_LAP_MS = 20_000;
 const MAX_LAP_MS = 900_000;
-const MAX_NUMBERS = 200_000;
-const VEHICLES: readonly VehicleModelId[] = ["vf26", "f12026-car", "amg-gt3"];
+/** Values in a lap's samples: the leaderboard's 20 000-sample cap (MAX_SAMPLES in the Worker); 900 s at 20 Hz fits */
+const MAX_NUMBERS = 20_000 * LAP_SAMPLE_STRIDE;
 const DRIVER_CODE_RE = /^[A-Z]{3}$/;
 /** The leaderboard's teleport check: consecutive samples (≥ 20 ms apart) may not imply more than this */
 const MAX_IMPLIED_KMH = 420;
@@ -519,7 +520,7 @@ export function validateLapRecording(raw: unknown): LapRecording | null {
   if (r.version !== 1) return null;
   const { trackId, vehicle, driverName, driverCode, lapTimeMs, recordedAt, sampleHz } = r;
   if (typeof trackId !== "string" || trackId.length > 64) return null;
-  if (typeof vehicle !== "string" || !VEHICLES.includes(vehicle as VehicleModelId)) return null;
+  if (!isVehicleModelId(vehicle)) return null;
   if (typeof driverName !== "string") return null;
   if (typeof driverCode !== "string") return null;
   const code = driverCode.toUpperCase();

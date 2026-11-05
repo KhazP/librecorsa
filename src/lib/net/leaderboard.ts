@@ -5,7 +5,7 @@
  * scripts/leaderboard-worker (NEXT_PUBLIC_LEADERBOARD_URL). Both take the same LapRecording and answer in
  * the same shapes. Only the LapRecording itself is ever sent; remote responses are validated before use.
  */
-import type { VehicleModelId } from "@/types/f1";
+import { isVehicleModelId, type VehicleModelId } from "@/types/f1";
 import { listBestLaps } from "@/lib/sim/ghost-store";
 import { lapPlausibilityProblem } from "@/lib/sim/lap-plausibility";
 import { validateLapRecording } from "@/lib/sim/lap-recorder";
@@ -21,12 +21,6 @@ const MAX_CODE_LENGTH = 16;
 const MAX_TRACK_ID_LENGTH = 64;
 const MAX_ERROR_LENGTH = 200;
 
-/** Typed as a Record over VehicleModelId so adding a car fails to compile until it is listed here */
-const VEHICLE_IDS: Record<VehicleModelId, true> = {
-  vf26: true,
-  "f12026-car": true,
-  "amg-gt3": true,
-};
 
 /** A configured http(s) base URL without its trailing slash, or null */
 function baseUrl(raw: string | undefined): string | null {
@@ -66,9 +60,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function isVehicleId(value: unknown): value is VehicleModelId {
-  return typeof value === "string" && Object.prototype.hasOwnProperty.call(VEHICLE_IDS, value);
-}
+const isVehicleId = isVehicleModelId;
 
 /** A non-empty string no longer than max, or null */
 function cappedString(value: unknown, max: number): string | null {
