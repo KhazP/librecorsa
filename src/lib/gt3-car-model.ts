@@ -467,7 +467,7 @@ export function createGt3CarRig(): SimCarRig {
       c.spin.rotation.x = wheelRotationRad;
       const state = tyres?.[i];
       if (c.tyre && state) {
-        c.tyre.update(state, wheelRotationRad, c.isLeft);
+        c.tyre.update(state, wheelRotationRad);
         c.steer.position.y = c.restY - c.tyre.axleDropM;
       }
     });

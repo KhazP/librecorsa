@@ -32,10 +32,10 @@ export interface TyreDeformationHandle {
   material: THREE.MeshPhysicalMaterial | THREE.MeshStandardMaterial;
   /**
    * Writes the uniforms for this frame. Allocation-free.
-   * `spinAngleRad` is the spin group's rotation.x (= the physics wheelRotationRad for this corner).
-   * `isLeft` is true for the car's left-side corners (FL, RL).
+   * `spinAngleRad` is the spin group's rotation.x (= the physics wheelRotationRad for this corner). The sidewall
+   * bulge takes its side from the vertex's own x, so the corner's side is not needed.
    */
-  update(state: TyreVisualState, spinAngleRad: number, isLeft: boolean): void;
+  update(state: TyreVisualState, spinAngleRad: number): void;
   /** How far (m) the axle should drop so the flattened patch touches the ground (the steer pivot's y is lowered by this) */
   axleDropM: number;
   dispose(): void;
@@ -70,7 +70,6 @@ uniform float uCamber;
 uniform float uUnloadedRadius;
 uniform float uHalfWidth;
 uniform float uGain;
-uniform float uSideSign;
 
 void tyreDeform(in vec3 pos, in vec3 nrm, out vec3 outPos, out vec3 outNrm) {
   float c = cos(uSpinAngle);
@@ -158,7 +157,6 @@ export function installTyreDeformation(
     uUnloadedRadius: { value: unloaded },
     uHalfWidth: { value: opts.halfWidthM },
     uGain: { value: gain },
-    uSideSign: { value: 1 },
   };
 
   material.onBeforeCompile = (shader) => {
@@ -187,7 +185,7 @@ export function installTyreDeformation(
   const handle: TyreDeformationHandle = {
     material,
     axleDropM: 0,
-    update(state, spinAngleRad, isLeft) {
+    update(state, spinAngleRad) {
       // Physical deflection and the visually exaggerated one (both m, both >= 0)
       const delta = Math.max(0, state.verticalDeflectionM);
       const visual = delta * gain;
@@ -200,7 +198,6 @@ export function installTyreDeformation(
         SHEAR_LIMIT_M
       );
       uniforms.uCamber.value = state.camberRad - bakedCamber;
-      uniforms.uSideSign.value = isLeft ? 1 : -1;
       handle.axleDropM = visual;
     },
     dispose() {

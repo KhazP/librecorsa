@@ -393,7 +393,7 @@ export function attachVf26Model(
       const handle = tyreHandles[i];
       const state = tyres?.[i];
       if (!handle || !state) return;
-      handle.update(state, wheelRotationRad, c.isLeft);
+      handle.update(state, wheelRotationRad);
       c.steer.position.y = c.restY - handle.axleDropM;
     });
     if (steerBase) steerBase.rotation.z = t.steering * lockRad;

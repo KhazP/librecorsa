@@ -41,10 +41,6 @@ const CARBON_RELIEF_M = 0.0003;
 const upgradedMaterials = new WeakSet<THREE.Material>();
 const conversions = new WeakMap<THREE.Material, THREE.Material>();
 
-export function isUpgradedMaterial(m: THREE.Material): boolean {
-  return upgradedMaterials.has(m);
-}
-
 /**
  * Walks `root` and replaces the target GLB materials with MeshPhysicalMaterial upgrades.
  * Idempotent: already-upgraded materials are left alone, and a source material shared by several meshes is
