@@ -56,7 +56,7 @@ const AMG_GT3_LIMITER_RPM = 7900;
 export const BMW_M4_GT3_SOUND: CarSoundSource = { id: 'bmw-m4-gt3', assetDir: '/cars/bmw-m4-gt3/audio/', limiterRpm: 7000, physicsLimiterRpm: AMG_GT3_LIMITER_RPM };
 
 /** Cameras mounted on the car use the mod's interior engine event; the rest hear the exterior one */
-const INTERIOR_CAMERAS: ReadonlySet<CameraMode> = new Set<CameraMode>(['cockpit', 'cockpit_shoulder', 'nose', 'tv_pod']);
+export const INTERIOR_CAMERAS: ReadonlySet<CameraMode> = new Set<CameraMode>(['cockpit', 'cockpit_shoulder', 'nose', 'tv_pod']);
 
 
 interface SampleLayerDef {
@@ -392,6 +392,16 @@ export class CarAudioEngine {
   /** Current camera, used to pick the interior or exterior engine sound */
   public setCameraMode(mode: CameraMode): void {
     this.cameraMode = mode;
+  }
+
+  /** The audio context, once `init` has run (other sound sources, e.g. the opponent cars, share it) */
+  public get context(): AudioContext | null {
+    return this.ctx;
+  }
+
+  /** The master gain (mute and pause): other sound sources connect here so the same switches apply to them */
+  public get output(): AudioNode | null {
+    return this.masterGain;
   }
 
   /** True when the VF26 mod sound bank is playing instead of the bundled samples */
