@@ -1,6 +1,6 @@
 import * as THREE from "three";
-import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { withBasePath } from "@/lib/base-path";
+import { createGltfLoader } from "@/lib/render/gltf-loader";
 import { SHADOW_PROXY_LAYER } from "@/lib/render/layers";
 import { applySceneryDetail, sceneryKind } from "@/lib/render/scenery-detail";
 
@@ -36,10 +36,13 @@ export function setSceneryDensity(q: Quality): void {
   for (const m of meshes) applyDensity(m);
 }
 
-/** The scenery GLB's root, or null when it is missing or fails to load (the circuit's own scenery stays) */
+/**
+ * The scenery GLB's root, or null when it is missing or fails to load (the circuit's own scenery stays). The deploy
+ * meshopt-compresses the props and stands (scripts/compress-track-glb.mjs), so the loader takes both kinds.
+ */
 export async function loadSceneryInstances(url: string): Promise<THREE.Object3D | null> {
   try {
-    const gltf = await new GLTFLoader().loadAsync(withBasePath(url));
+    const gltf = await createGltfLoader().loadAsync(withBasePath(url));
     return gltf.scene;
   } catch (err) {
     console.warn(`[scenery] ${url} did not load; keeping the circuit's own scenery it replaces:`, err);
