@@ -404,6 +404,46 @@ async function asyncChecks() {
   assert.equal(watchdogClient.force, 0);
   passed++;
   console.log('  ok  WebHID 150 ms watchdog zeroes force when frame updates stop');
+
+  // WebHID plays the frame's 500 Hz physics samples out over the next frame, not one value per frame
+  {
+    const c = new WheelFfbClient();
+    const out: number[] = [];
+    c.hidSink = (f) => out.push(f);
+    const w = { ...wheel, ffbGain: 1, ffbDamping: 0 };
+    const samples = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8];
+    c.update({ speedKmh: 50, ffbTorqueNorm: 0.8, ffbSubframeSamples: samples } as never, w, [], 1000, true);
+    near(out[0], 0.1, 1e-4);
+    await new Promise((r) => setTimeout(r, 30));
+    c.stop();
+    const played = out.slice(0, -1); // the stop's zero last
+    assert.ok(played.length >= 4, `samples played out over time (${played.length} writes)`);
+    near(played.at(-1) as number, 0.8, 1e-4);
+    for (let i = 1; i < played.length; i++) assert.ok(played[i] >= played[i - 1] - 1e-9, 'played in order');
+    passed++;
+    console.log(`  ok  WebHID plays the 500 Hz samples out over the frame (${played.length} writes in 30 ms)`);
+  }
+
+  // The kerb buzz is made on the playback clock: 40 Hz on the wheel, not aliased by the 60 Hz frame rate
+  {
+    const c = new WheelFfbClient();
+    const out: { t: number; f: number }[] = [];
+    c.hidSink = (f) => out.push({ t: performance.now(), f });
+    const w = { ...wheel, ffbGain: 1, ffbDamping: 0, ffbKerb: 1 };
+    const t0 = performance.now();
+    while (performance.now() - t0 < 600) {
+      c.update({ speedKmh: 100, ffbTorqueNorm: 0.3, wheelSurfaces: ['kerb', 'kerb', 'asphalt', 'asphalt'] } as never, w, [], performance.now(), true);
+      await new Promise((r) => setTimeout(r, 16));
+    }
+    c.stop();
+    const v = out.slice(0, -1).filter((s) => s.t - t0 > 100);
+    let crossings = 0;
+    for (let i = 1; i < v.length; i++) if ((v[i].f - 0.3) * (v[i - 1].f - 0.3) < 0) crossings++;
+    const hz = crossings / 2 / ((v.at(-1)!.t - v[0].t) / 1000);
+    assert.ok(hz > 30 && hz < 50, `kerb buzz at ${hz.toFixed(1)} Hz`);
+    passed++;
+    console.log(`  ok  WebHID kerb buzz plays at ${hz.toFixed(1)} Hz (40 Hz synthesised), not aliased to the frame rate`);
+  }
   console.log(`\n${passed} checks passed`);
 }
 asyncChecks().catch((e) => {

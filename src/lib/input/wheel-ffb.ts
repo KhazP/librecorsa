@@ -4,9 +4,13 @@
  * A browser cannot play DirectInput force feedback, so `npm run ffb` runs a small bridge on the PC
  * (scripts/ffb-bridge.ts → FfbHelper.exe) that owns the wheel's constant-force effect, as a native sim does. This
  * client streams one packet per frame over a localhost WebSocket: the shaped rim force (the physics' steering torque
- * with the player's gain, minimum force and the soft lock past the car's steering lock) plus kerb / ABS vibration
- * levels. The helper upsamples to ~333 Hz, synthesises the vibrations, rate-limits, and fades to zero by itself
- * when packets stop (paused tab, closed sim).
+ * with the player's gain, minimum force and the soft lock past the car's steering lock), the frame's 500 Hz physics
+ * samples, plus kerb / ABS vibration levels. The helper plays the samples out at 500 Hz, synthesises the vibrations,
+ * rate-limits, and fades to zero by itself when packets stop (paused tab, closed sim).
+ *
+ * In-browser WebHID force feedback does the same here: each frame's samples are played out to the wheel over the next
+ * frame on a 2 ms timer (as fast as the browser's timers and the wheel's writes allow), with the vibrations
+ * synthesised on that clock rather than at the frame rate.
  */
 import type { CarTelemetry } from "@/types/f1";
 import { CAR_WHEEL_LOCK_DEG, carWheelLockDeg, findPad, type PadLike, wheelRimAngleDeg, type WheelSettings } from "./device-input";
@@ -93,6 +97,15 @@ export function directionTestForce(tS: number, invert: boolean): number {
 const TEST_STEP_MS = 10;
 /** If WebHID frame updates stop arriving (hidden tab, stalled loop), zero the wheel's constant-force effect after 150 ms */
 export const HID_WATCHDOG_MS = 150;
+/** WebHID playback timer (ms); the physics samples it plays are 2 ms apart */
+const HID_TICK_MS = 2;
+const PHYSICS_SAMPLE_MS = 2;
+/** Vibrations mixed into the WebHID force (no separate channel): kerb buzz and ABS pulse, Hz and share of full force */
+const HID_KERB_HZ = 40;
+const HID_KERB_AMPLITUDE = 0.12;
+const HID_ABS_HZ = 25;
+const HID_ABS_AMPLITUDE = 0.1;
+const clockMs = () => (typeof performance !== "undefined" ? performance.now() : Date.now());
 
 /** Rim speed (deg/s) at which the damper reaches its full force */
 const DAMPING_FULL_DEG_S = 600;
@@ -122,11 +135,17 @@ export class WheelFfbClient {
   private historyCount = 0;
   private historyIdx = 0;
   private lastSuggestMs = 0;
-  private hidTimeS = 0;
+  /** WebHID playback: the frame's samples still to play, the force held once they run out, vibration levels */
+  private hidQueue: number[] = [];
+  private hidHold = 0;
+  private hidKerb = 0;
+  private hidAbs = 0;
+  private hidPlayer: ReturnType<typeof setInterval> | null = null;
+  /** Clock (ms) of the last played sample slot and of the last frame update */
+  private hidSlotMs = 0;
+  private hidPushMs = 0;
   /** WebHID direction test in progress: it owns the force until it ends */
   private hidTest: { timer: ReturnType<typeof setInterval> } | null = null;
-  /** Watchdog that zeroes WebHID force if frame updates stop while a non-zero force is active */
-  private hidWatchdog: ReturnType<typeof setTimeout> | null = null;
 
   private ws: WebSocket | null = null;
   private replaced = false;
@@ -220,17 +239,10 @@ export class WheelFfbClient {
     };
     if (useHid) {
       if (this.hidTest) return;
-      // WebHID has no vibration channel: kerbs and ABS are mixed into the force as a 40 Hz / 25 Hz buzz
-      this.hidTimeS += dtS;
-      const buzz =
-        0.12 * kerb * Math.sin(2 * Math.PI * 40 * this.hidTimeS) +
-        0.1 * abs * Math.sign(Math.sin(2 * Math.PI * 25 * this.hidTimeS));
-      const out = Math.max(-1, Math.min(1, force + (force !== 0 ? buzz : 0)));
-      this.hidSink?.(out);
-      this.armHidWatchdog(out !== 0);
+      this.hidPlay(subframes, force, kerb, abs);
       return;
     }
-    this.armHidWatchdog(false);
+    this.hidStopPlayer();
     this.send(
       subframes && subframes.length > 0
         ? { t: "f", f: Math.round(force * 1e4) / 1e4, k: kerb, a: abs, s: subframes }
@@ -238,29 +250,75 @@ export class WheelFfbClient {
     );
   }
 
+  /**
+   * WebHID: queues this frame's 500 Hz samples (or just its force) and plays the first at once; the timer plays the
+   * rest over the next frame, one per 2 ms slot, as the bridge helper does
+   */
+  private hidPlay(samples: number[] | undefined, force: number, kerb: number, abs: number): void {
+    const now = clockMs();
+    this.hidQueue = samples && samples.length > 0 ? samples.slice() : [];
+    this.hidHold = this.hidQueue.length > 0 ? this.hidQueue[this.hidQueue.length - 1] : force;
+    this.hidKerb = kerb;
+    this.hidAbs = abs;
+    this.hidPushMs = now;
+    this.hidSlotMs = now;
+    this.hidEmit(now, 1);
+    const active = this.force !== 0 || this.hidQueue.length > 0;
+    if (active && this.hidPlayer === null) {
+      const timer = setInterval(() => this.hidTick(), HID_TICK_MS);
+      (timer as { unref?: () => void }).unref?.();
+      this.hidPlayer = timer;
+    } else if (!active) {
+      this.hidStopPlayer();
+    }
+  }
+
+  /** Timer: plays the samples due since the last tick (the latest of them), or zeroes the wheel once frames stop */
+  private hidTick(): void {
+    const now = clockMs();
+    if (now - this.hidPushMs > HID_WATCHDOG_MS) {
+      // Frame updates stopped (hidden tab, stalled loop): let go of the wheel
+      this.hidStopPlayer();
+      this.force = 0;
+      this.hidSink?.(0);
+      return;
+    }
+    const slots = Math.floor((now - this.hidSlotMs) / PHYSICS_SAMPLE_MS);
+    if (slots < 1) return;
+    this.hidSlotMs += slots * PHYSICS_SAMPLE_MS;
+    this.hidEmit(now, slots);
+  }
+
+  /** Advances `slots` samples and sends the force with the vibrations, synthesised on the real clock */
+  private hidEmit(nowMs: number, slots: number): void {
+    let f = this.hidHold;
+    if (this.hidQueue.length > 0) {
+      const take = Math.min(slots, this.hidQueue.length);
+      f = this.hidQueue[take - 1];
+      this.hidQueue.splice(0, take);
+    }
+    const t = nowMs / 1000;
+    const buzz =
+      HID_KERB_AMPLITUDE * this.hidKerb * Math.sin(2 * Math.PI * HID_KERB_HZ * t) +
+      HID_ABS_AMPLITUDE * this.hidAbs * Math.sign(Math.sin(2 * Math.PI * HID_ABS_HZ * t));
+    this.hidSink?.(Math.max(-1, Math.min(1, f + (f !== 0 ? buzz : 0))));
+  }
+
+  private hidStopPlayer(): void {
+    if (this.hidPlayer !== null) {
+      clearInterval(this.hidPlayer);
+      this.hidPlayer = null;
+    }
+    this.hidQueue = [];
+  }
+
   /** Zero the wheel now (pause menu opened, hidden tab, blurred window) instead of waiting for the next frame */
   stop(): void {
     this.cancelHidTest();
-    this.armHidWatchdog(false);
+    this.hidStopPlayer();
     this.force = 0;
     this.hidSink?.(0);
     this.send({ t: "f", f: 0, k: 0, a: 0 });
-  }
-
-  private armHidWatchdog(active: boolean): void {
-    if (this.hidWatchdog !== null) {
-      clearTimeout(this.hidWatchdog);
-      this.hidWatchdog = null;
-    }
-    if (!active) return;
-    const timer = setTimeout(() => {
-      this.hidWatchdog = null;
-      if (this.hidTest) return;
-      this.force = 0;
-      this.hidSink?.(0);
-    }, HID_WATCHDOG_MS);
-    (timer as { unref?: () => void }).unref?.();
-    this.hidWatchdog = timer;
   }
 
   /** Forwards a telemetry packet to the bridge, which sends it as one UDP datagram to 127.0.0.1:<port> */
@@ -299,7 +357,7 @@ export class WheelFfbClient {
   test(invert: boolean): boolean {
     if (!this.hidSink) return this.send({ t: "test", inv: invert });
     this.cancelHidTest();
-    this.armHidWatchdog(false);
+    this.hidStopPlayer();
     const start = Date.now();
     const timer = setInterval(() => {
       const tS = (Date.now() - start) / 1000;
