@@ -127,6 +127,8 @@ export function loadVf26Template(modelUrl: string = AMR26_MODEL_URL, task: Asset
 
 const WHEELS = ["WHEEL_RF", "WHEEL_LF", "WHEEL_RR", "WHEEL_LR"] as const; // physics wheel order 0..3
 const SIDE = ["RF", "LF", "RR", "LR"] as const;
+/** Index into a CarTelemetry [FL, FR, RL, RR] array for each physics wheel (FR, FL, RR, RL) */
+const PHYSICS_TO_TELEMETRY = [1, 0, 3, 2] as const;
 
 /** Matrix of `obj` relative to `ancestor` (both inside the same, already updated, hierarchy). */
 function relativeMatrix(obj: THREE.Object3D, ancestor: THREE.Object3D): THREE.Matrix4 {
@@ -409,7 +411,8 @@ export function attachVf26Model(
 
     corners.forEach((c, i) => {
       if (!c.discMat) return;
-      const temp = t.brakeTempsC?.[i] ?? 300;
+      // `corners` follow the physics wheel order (FR, FL, RR, RL); telemetry arrays are [FL, FR, RL, RR]
+      const temp = t.brakeTempsC?.[PHYSICS_TO_TELEMETRY[i]] ?? 300;
       c.discMat.emissiveIntensity = THREE.MathUtils.clamp((temp - 520) / 480, 0, 1) * 3.5;
     });
     if (ledMats.length) {

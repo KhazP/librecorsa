@@ -240,7 +240,9 @@ function createLiveSteeringOled(): {
     const tFR = Math.round(t.tireTempsC?.[1] ?? 91);
     const tRL = Math.round(t.tireTempsC?.[2] ?? 92);
     const tRR = Math.round(t.tireTempsC?.[3] ?? 92);
-    const key = `${t.gear}_${Math.floor(speedInt / 2)}_${socInt}_${t.activeAeroMode}_${t.manualOverrideActive}_${tFL}_${tRL}_${Math.floor(lapSec * 2)}`;
+    // Race position when racing, else the lap number (CarTelemetry carries no position outside a race)
+    const slot = t.race ? `P${Math.max(1, t.race.position)}` : `L${Math.max(1, t.lapCount || 1)}`;
+    const key = `${t.gear}_${Math.floor(speedInt / 2)}_${socInt}_${t.activeAeroMode}_${t.manualOverrideActive}_${tFL}_${tRL}_${Math.floor(lapSec * 2)}_${slot}`;
     if (key === lastKey) return;
     lastKey = key;
 
@@ -280,7 +282,7 @@ function createLiveSteeringOled(): {
     ctx.font = "900 23px monospace";
     ctx.fillText(`${(socInt / 10).toFixed(1)}`, 439, 34);
     ctx.font = "bold 18px monospace";
-    ctx.fillText("(+3.31)", 439, 58);
+    ctx.fillText("SOC %", 439, 58);
 
     // Middle Row: Left Status (`V1` + Tire Temps `91°C / 92°C`), Center Gear Box, Right Status (`P5` + `91°C / 92°C`)
     ctx.fillStyle = "#111827";
@@ -289,7 +291,7 @@ function createLiveSteeringOled(): {
     ctx.fillStyle = "#f8fafc";
     ctx.font = "900 24px Arial, sans-serif";
     ctx.fillText("V1", 65, 100);
-    ctx.fillText(`P${Math.max(1, t.lapCount || 1)}`, 447, 100);
+    ctx.fillText(slot, 447, 100);
 
     // Small brake disc / caliper icon cells flanking center gear
     ctx.fillStyle = "#1e293b";
