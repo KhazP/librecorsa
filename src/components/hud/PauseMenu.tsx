@@ -572,7 +572,7 @@ export const SessionPanel: React.FC<PauseMenuProps> = (p) => {
           />
           <Toggle
             label="Gamepad steering assist"
-            detail="Stick steers up to the front-tyre grip limit"
+            detail="Stick steers up to the front-tyre grip limit (the keyboard always does)"
             checked={p.gamepadAssist}
             onChange={() => p.onToggleGamepadAssist?.()}
           />

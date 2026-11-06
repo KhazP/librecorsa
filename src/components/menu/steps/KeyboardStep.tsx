@@ -144,7 +144,7 @@ export const KeyboardStep: React.FC<SetupStepProps> = ({ settings, onChangeSetti
             max={1}
             step={0.01}
             format={ms}
-            hint="Time to steer from centre to the speed's lock"
+            hint="How quickly a held key steers in to the tyres' grip limit (shorter = sharper)"
             onChange={(v) => setTuning({ steerRiseS: v })}
           />
           <TuningSlider
@@ -154,8 +154,18 @@ export const KeyboardStep: React.FC<SetupStepProps> = ({ settings, onChangeSetti
             max={1}
             step={0.01}
             format={ms}
-            hint="Time for the wheel to centre after the key is let go"
+            hint="How quickly the steering lets go when the key is released (shorter = sharper)"
             onChange={(v) => setTuning({ steerReturnS: v })}
+          />
+          <TuningSlider
+            label="Steering assistance"
+            value={settings.steerAssistLevel}
+            min={0}
+            max={1}
+            step={0.05}
+            format={(v) => `${Math.round(v * 100)} %`}
+            hint="More: stronger self-aligning, gentler countersteer, calmer at speed (controller too)"
+            onChange={(v) => onChangeSettings((s) => ({ ...s, steerAssistLevel: v }))}
           />
           <TuningSlider
             label="Half throttle"
@@ -170,10 +180,16 @@ export const KeyboardStep: React.FC<SetupStepProps> = ({ settings, onChangeSetti
         </AutoGrid>
         <div className="border-t border-[#262B3D] pt-2.5">
           <Toggle
-            label="Corner-exit throttle assist"
-            detail="Eases the throttle in while the rear tyres are at their limit"
+            label="Throttle help"
+            detail="With traction control off, eases the throttle key back while the rear tyres pass their grip"
             checked={tuning.exitAssist}
             onChange={() => setTuning({ exitAssist: !tuning.exitAssist })}
+          />
+          <Toggle
+            label="Brake help"
+            detail="With ABS off, eases the brake key back while the tyres pass their grip"
+            checked={tuning.brakeAssist}
+            onChange={() => setTuning({ brakeAssist: !tuning.brakeAssist })}
           />
         </div>
       </SetupCard>

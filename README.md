@@ -58,7 +58,7 @@
 - **Surfaces**: one data table for road, kerb, sausage kerb, run-off, pit lane, grass and gravel, with dry and wet friction, rolling resistance, a bump ripple you feel through the wheel, vibration and whether it counts for track limits. A circuit can override it in its track data. Kerbs rise to a 32 mm crown with a 4 mm ripple.
 - **Weather and time of day**: clear, overcast, light rain, heavy rain, drying and dynamic weather. The water film builds and drains, and the cars dry the racing line first. Six times of day, and the clock can run at up to 60×.
 - **Evolving track**: the racing line rubbers in as you drive.
-- **Assists**: traction control on the friction circle, ABS, and a slip-angle-limited steering assist for gamepads. Each one can be switched off.
+- **Assists**: traction control on the friction circle, ABS, and a slip-angle-limited steering assist for keyboards and gamepads (S-curve key ramp, self-aligning, slide catch) with pedal slip help for the keys. Each can be tuned, and all but the keyboard's steering assist switched off.
 - **Realism levels**: Casual (no tyre wear or fuel use, milder rain), Standard and Full.
 
 ### Cars

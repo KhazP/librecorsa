@@ -24,6 +24,7 @@ import {
   type WheelSettings,
 } from "@/lib/input/device-input";
 import { AI_SKILL_DEFAULT } from "@/lib/sim/ai-tuning";
+import { DEFAULT_STEERING_ASSIST_LEVEL } from "@/lib/sim/steering-assist";
 import { SIM_REALISM_LEVELS, type SimRealism } from "@/lib/sim/sim-realism";
 import { DEFAULT_SESSION_CONDITIONS, sanitizeConditions, type SessionConditions } from "@/lib/sim/weather";
 
@@ -36,6 +37,11 @@ export interface PlayerSettings {
   assistPreset: AssistPreset;
   racingLine: boolean;
   gamepadAssist: boolean;
+  /**
+   * How much the keyboard and controller steering assist helps, 0..1: more = a stronger self-aligning and stabilising
+   * force, a gentler countersteer and calmer steering at speed (0.5 = the default)
+   */
+  steerAssistLevel: number;
   /** Automatic gearbox; off = shift with Gear up / Gear down */
   autoGearbox: boolean;
   mouseSteer: boolean;
@@ -103,8 +109,10 @@ export interface KeyboardTuning {
   steerReturnS: number;
   /** Throttle while the half-throttle key is held with throttle (0.2..0.9) */
   halfThrottle: number;
-  /** Eases the throttle in on corner exit while the rear tyres are near their slip limit */
+  /** With traction control off, eases the throttle key back while the rear tyres pass their grip */
   exitAssist: boolean;
+  /** With ABS off, eases the brake key back while the tyres pass their grip */
+  brakeAssist: boolean;
 }
 
 /**
@@ -195,6 +203,7 @@ export const DEFAULT_KEYBOARD_TUNING: KeyboardTuning = {
   steerReturnS: 0.14,
   halfThrottle: 0.5,
   exitAssist: true,
+  brakeAssist: true,
 };
 
 export const DEFAULT_HUD_SETTINGS: HudSettings = {
@@ -279,6 +288,7 @@ export const DEFAULT_PLAYER_SETTINGS: PlayerSettings = {
   assistPreset: "semi_pro",
   racingLine: true,
   gamepadAssist: true,
+  steerAssistLevel: DEFAULT_STEERING_ASSIST_LEVEL,
   autoGearbox: true,
   mouseSteer: false,
   liveryId: null,
@@ -442,6 +452,7 @@ function parseKeyboardTuning(v: unknown): KeyboardTuning {
     steerReturnS: num(v.steerReturnS, 0.05, 1, d.steerReturnS),
     halfThrottle: num(v.halfThrottle, 0.2, 0.9, d.halfThrottle),
     exitAssist: bool(v.exitAssist, d.exitAssist),
+    brakeAssist: bool(v.brakeAssist, d.brakeAssist),
   };
 }
 
@@ -553,6 +564,7 @@ export function parsePlayerSettings(raw: unknown): PlayerSettings {
     assistPreset: oneOf(raw.assistPreset, ["pro", "semi_pro", "assisted"] as const, d.assistPreset),
     racingLine: bool(raw.racingLine, d.racingLine),
     gamepadAssist: bool(raw.gamepadAssist, d.gamepadAssist),
+    steerAssistLevel: num(raw.steerAssistLevel, 0, 1, d.steerAssistLevel),
     autoGearbox: bool(raw.autoGearbox, d.autoGearbox),
     mouseSteer: bool(raw.mouseSteer, d.mouseSteer),
     liveryId: isStr(raw.liveryId) ? raw.liveryId : null,

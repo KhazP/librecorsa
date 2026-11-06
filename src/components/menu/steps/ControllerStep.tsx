@@ -158,7 +158,7 @@ export const ControllerStep: React.FC<SetupStepProps> = ({
         <div className="flex flex-col">
           <Toggle
             label="Steering assist"
-            detail="The stick steers up to the front tyres' grip limit and helps catch slides"
+            detail="The stick steers up to the front tyres' grip limit, self-aligns and helps catch slides"
             checked={gamepadAssist}
             onChange={() => onSetGamepadAssist(!gamepadAssist)}
           />
@@ -236,6 +236,16 @@ export const ControllerStep: React.FC<SetupStepProps> = ({
               format={(v) => `×${v.toFixed(2)}`}
               hint="How quickly the stick turns the steering assist"
               onChange={(v) => setTuning({ steeringRate: v })}
+            />
+            <TuningSlider
+              label="Steering assistance"
+              value={settings.steerAssistLevel}
+              min={0}
+              max={1}
+              step={0.05}
+              format={(v) => `${Math.round(v * 100)} %`}
+              hint="More: stronger self-aligning, gentler countersteer, calmer at speed (keyboard too)"
+              onChange={(v) => onChangeSettings((s) => ({ ...s, steerAssistLevel: v }))}
             />
             <TuningSlider
               label="Inner dead zone"

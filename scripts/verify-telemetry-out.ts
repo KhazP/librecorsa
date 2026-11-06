@@ -185,6 +185,19 @@ check('traction control: right trigger pulses at 25 Hz', () => {
   near(triggerMagnitudes(tc, 0.01).right, 0.25 + 0.45 * 0.2); // 0.34 on the pulse
   assert.equal(triggerMagnitudes(tc, 0.03).right, 0, 'off half of the 25 Hz cycle');
 });
+check('aids off: the trigger buzzes lightly as the tyres approach their grip, firming up toward the peak', () => {
+  const live = (absLevel: number, tcLevel: number) => ({ absLevel, tcLevel }) as CarTelemetry['liveTuner'];
+  const nearLimit = (nd: number, absLevel: number) =>
+    tel({ speedKmh: 120, throttle: 0, brake: 0.6, wheelSlipRatios: [-0.02, -0.02, 0, 0], tireSlipRatio: [nd, nd, nd, nd], liveTuner: live(absLevel, 5) });
+  assert.equal(triggerMagnitudes(nearLimit(0.2, 0), 0).left, 0, 'far from the grip: nothing');
+  const light = triggerMagnitudes(nearLimit(0.5, 0), 0).left;
+  const firm = triggerMagnitudes(nearLimit(0.85, 0), 0).left;
+  assert.ok(light > 0 && firm > light && firm <= 0.4, `buzz ${light.toFixed(3)} → ${firm.toFixed(3)}`);
+  assert.equal(triggerMagnitudes(nearLimit(0.85, 5), 0).left, 0, 'ABS on: the ABS pulse speaks for itself');
+  const spinning = tel({ speedKmh: 90, throttle: 0.7, brake: 0, wheelSlipRatios: [0, 0, 0.06, 0.06], tireSlipRatio: [0.3, 0.3, 1.1, 1.1], liveTuner: live(5, 0) });
+  const t2 = triggerMagnitudes(spinning, 0);
+  assert.ok(t2.right > 0 && t2.left === 0, 'wheelspin with TC off buzzes the throttle trigger only');
+});
 check('idle: both triggers are 0', () => {
   assert.deepEqual(triggerMagnitudes(tel({ speedKmh: 0, throttle: 0, brake: 0, wheelSlipRatios: [0, 0, 0, 0] }), 1.234), { left: 0, right: 0 });
   assert.deepEqual(triggerMagnitudes(tel({ speedKmh: 120, throttle: 0.05, brake: 0.02, wheelSlipRatios: [0.05, 0.05, 0.05, 0.05] }), 0.5), { left: 0, right: 0 });

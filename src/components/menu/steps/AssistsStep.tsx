@@ -17,7 +17,7 @@ const LEVELS: { id: Level; title: string; preset: AssistPreset; racingLine: bool
     title: "Beginner",
     preset: "assisted",
     racingLine: true,
-    points: ["Full traction control and ABS", "Racing line with braking zones", "Steering assist on a controller"],
+    points: ["Full traction control and ABS", "Racing line with braking zones", "Grip-limited steering on keys and pad"],
   },
   {
     id: "intermediate",

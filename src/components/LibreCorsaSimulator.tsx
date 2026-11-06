@@ -69,16 +69,14 @@ import { isFatalHidStatus } from "@/lib/input/webhid-ffb";
 import { applyGraphicsQuality } from "@/lib/render/golden-hour-environment";
 import { createRainFx, RAIN_VISOR_LAYER } from "@/lib/render/rain-fx";
 import { DRIVER_HEAD_LAYER, OVERLAY_LAYER } from "@/lib/render/layers";
-import { KB_STEER_RETURN_S, KB_STEER_RISE_S, keyboardSteerLimit, stepKeyboardSteer } from "@/lib/input/keyboard-steer";
+import { keyboardRampScales } from "@/lib/input/keyboard-steer";
+import { KeyboardPedalAssist } from "@/lib/input/keyboard-pedals";
 import { shapeStick } from "@/lib/input/stick-shape";
 import { advanceAsphaltRain, setAsphaltWetness } from "@/lib/render/asphalt-sheen";
 import { SIM_REALISM_FLAGS, type SimRealism } from "@/lib/sim/sim-realism";
 import {
   isRainCompound,
   recommendedCompound,
-  SLICK_TRAITS,
-  WET_TYRE_TRAITS,
-  wetGripFactor,
   wetnessFromWater,
 } from "@/lib/sim/wet-tyres";
 import type { SessionConditions } from "@/lib/sim/weather";
@@ -100,7 +98,13 @@ import { addContactShadow } from "@/lib/render/contact-shadow";
 import { buildKeyLookup, HUD_TOGGLE_EVENT, keyLabel, padButtonLabel, type KeyAction } from "@/lib/input/bindings";
 import { autoConfigureWheel, carWheelLockDeg, connectedPads, DeviceInputReader } from "@/lib/input/device-input";
 import { webHidFfb, wheelFfb } from "@/lib/input/wheel-ffb";
-import { DEFAULT_GAMEPAD_ASSIST, type GamepadAssistSettings } from "@/lib/sim/gamepad-assist";
+import {
+  axleSlipFromTelemetry,
+  createAxleSlipSample,
+  DEFAULT_STEERING_ASSIST,
+  type SteeringAssistSettings,
+  steeringAssistTuning,
+} from "@/lib/sim/steering-assist";
 import {
   clampFov,
   codeFromName,
@@ -162,8 +166,6 @@ type AppPhase = "loading" | "title" | "wizard" | "driving";
 /** Key actions that act while held (the rest are one-shot toggles) */
 const HELD_KEY_ACTIONS: ReadonlySet<KeyAction> = new Set(["throttle", "brake", "steerLeft", "steerRight", "boostHold", "throttleHalf"]);
 
-/** Rear slip ratio where the keyboard exit assist starts to hold the throttle back */
-const KB_EXIT_ASSIST_SLIP = 0.1;
 /** Telemetry-out rate (Hz) */
 const TELEMETRY_OUT_HZ = 60;
 /** Rev limit for the telemetry-out packet's rpm bar */
@@ -442,15 +444,17 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   const [inviteRoom, setInviteRoom] = useState<string | null>(null);
   const keyLookupRef = useRef(buildKeyLookup(settings.keys));
   keyLookupRef.current = useMemo(() => buildKeyLookup(settings.keys), [settings.keys]);
-  const assistSettingsRef = useRef<GamepadAssistSettings>(DEFAULT_GAMEPAD_ASSIST);
+  const assistSettingsRef = useRef<SteeringAssistSettings>(DEFAULT_STEERING_ASSIST);
   assistSettingsRef.current = useMemo(
     () => ({
-      ...DEFAULT_GAMEPAD_ASSIST,
+      ...DEFAULT_STEERING_ASSIST,
+      ...steeringAssistTuning(settings.steerAssistLevel),
+      ...keyboardRampScales(settings.keyboardTuning.steerRiseS, settings.keyboardTuning.steerReturnS),
       steeringRate: settings.padTuning.steeringRate,
       // The stick reaches the assist already shaped, inner dead zone included (shapeStick below)
       deadzone: 0,
     }),
-    [settings.padTuning.steeringRate]
+    [settings.steerAssistLevel, settings.keyboardTuning.steerRiseS, settings.keyboardTuning.steerReturnS, settings.padTuning.steeringRate]
   );
   const [p2pStatus, setP2pStatus] = useState<P2PConnectionStatus>({
     mode: "local",
@@ -553,15 +557,17 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     toggleX: false,
     half: false,
   });
-  /** Shaped keyboard inputs (pedals 0..1, steering -1..1, + = right) */
-  const kbInputRef = useRef({ throttle: 0, brake: 0, steer: 0 });
+  /** Ramped keyboard pedals 0..1 (the steering keys are shaped by the car's steering assist) */
+  const kbInputRef = useRef({ throttle: 0, brake: 0 });
+  /** Slip help on the keyboard's pedals while the car's ABS / traction control is off */
+  const kbPedalAssistRef = useRef(new KeyboardPedalAssist());
   /** Lets go of every held driving key: on pause, and when the window loses focus (its keyups never arrive) */
   const releaseHeldKeys = useCallback(() => {
     const k = keysRef.current;
     k.up = k.down = k.left = k.right = k.boostHold = k.half = false;
     kbInputRef.current.throttle = 0;
     kbInputRef.current.brake = 0;
-    kbInputRef.current.steer = 0;
+    kbPedalAssistRef.current.reset();
   }, []);
 
   // Read through a ref so unlockAudio stays stable: the scene effect depends on it and must not rebuild on mute
@@ -917,7 +923,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       replayRef.current.buffer.clear();
       kbInputRef.current.throttle = 0;
       kbInputRef.current.brake = 0;
-      kbInputRef.current.steer = 0;
+      kbPedalAssistRef.current.reset();
       pausedRef.current = false;
       setPaused(false);
       audioRef.current?.setPaused(false);
@@ -960,7 +966,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       replayRef.current.buffer.clear();
       kbInputRef.current.throttle = 0;
       kbInputRef.current.brake = 0;
-      kbInputRef.current.steer = 0;
+      kbPedalAssistRef.current.reset();
       pausedRef.current = false;
       setPaused(false);
       audioRef.current?.setPaused(false);
@@ -1321,7 +1327,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       prefetchSoundBank(soundFor(car).assetDir);
       kbInputRef.current.throttle = 0;
       kbInputRef.current.brake = 0;
-      kbInputRef.current.steer = 0;
+      kbPedalAssistRef.current.reset();
       lapRecorderRef.current?.setContext({ vehicle });
       lapRecorderRef.current?.reset();
       // The live delta and the replay belong to the previous car
@@ -1846,6 +1852,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     const tvDirector = new TracksideBroadcastDirector(track);
     let frameIndex = 0;
     const deviceInput = new DeviceInputReader();
+    /** Per-axle tyre slip read from the car's telemetry each frame, for the keyboard pedal help */
+    const kbAxleSlip = createAxleSlipSample();
     // The other cars, heard where they are from the active camera
     const opponentAudio = new OpponentAudio();
     const opponentSound = (p: InterpolatedPeerState): CarSoundSource => carForVehicle(p.vehicle ?? "vf26").sound;
@@ -2035,21 +2043,14 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         }
       }
 
-      // Keyboard-only input shaping: keys become ramped pedals and a rate- and speed-limited
-      // steering angle (about what keeps the front tyres near peak slip at this speed).
+      // Keyboard-only input shaping: keys become ramped pedals, eased back while the tyres pass their grip when the
+      // car's ABS / traction control is off. The steering keys' direction goes to the car's steering assist, which
+      // ramps it to the front tyres' grip limit, self-aligns the car when they are let go and caps a countersteer.
       // Wheel and mouse inputs are passed through untouched.
       const keys = keysRef.current;
       const kb = kbInputRef.current;
       // Half-throttle key: a fixed part throttle for wet-like traction or slow corners
-      let kbThrottleTarget = keys.up ? 1 : keys.half ? kbTuning.halfThrottle : 0;
-      // Exit assist: hold the keyboard throttle back while the rear tyres spin up
-      if (kbThrottleTarget > 0 && kbTuning.exitAssist) {
-        const slip = physics.telemetry.wheelSlipRatios;
-        const rearSlip = Math.max(slip[2] ?? 0, slip[3] ?? 0);
-        if (rearSlip > KB_EXIT_ASSIST_SLIP) {
-          kbThrottleTarget *= Math.max(0.35, 1 - (rearSlip - KB_EXIT_ASSIST_SLIP) * 4);
-        }
-      }
+      const kbThrottleTarget = keys.up ? 1 : keys.half ? kbTuning.halfThrottle : 0;
       const throttleRising = kbThrottleTarget > kb.throttle;
       kb.throttle = approach(
         kb.throttle,
@@ -2061,31 +2062,20 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         keys.down ? 1 : 0,
         dtSeconds / (keys.down ? kbTuning.brakeRiseS || KB_BRAKE_RISE_S : KB_BRAKE_FALL_S)
       );
-      const vFwd = Math.max(0, physics.vxMs);
-      const lineWaterMm = getTrackEnv().weather.lineWaterMm;
-      const wetTraits =
-        physics.tireCompound === "wet" || physics.tireCompound === "intermediate"
-          ? WET_TYRE_TRAITS[physics.tireCompound]
-          : SLICK_TRAITS;
-      const wetGripScale =
-        lineWaterMm > 0
-          ? wetGripFactor(
-              wetTraits,
-              lineWaterMm,
-              vFwd,
-              SIM_REALISM_FLAGS[settingsRef.current.realism].wetSeverity
-            ) / wetTraits.dryGrip
-          : 1;
-      // The car's own grip limit (keyboard-steer.ts), scaled by what the water leaves of the tyre's grip
-      kb.steer = stepKeyboardSteer(
-        kb.steer,
-        (keys.right ? 1 : 0) - (keys.left ? 1 : 0),
-        keyboardSteerLimit(physics, vFwd, wetGripScale),
+      const carAids = physics.telemetry.liveTuner;
+      const tyreSlip = axleSlipFromTelemetry(physics.telemetry, kbAxleSlip);
+      const kbBrakeScale = kbPedalAssistRef.current.brakeScale(
+        tyreSlip.totalNdSlip,
         dtSeconds,
-        kbTuning.steerRiseS || KB_STEER_RISE_S,
-        kbTuning.steerReturnS || KB_STEER_RETURN_S
+        driving && kbTuning.brakeAssist && carAids?.absLevel === 0
       );
-      const kbSteerActive = keys.left || keys.right || Math.abs(kb.steer) > 1e-3;
+      const kbThrottleScale = kbPedalAssistRef.current.throttleScale(
+        tyreSlip.rearNdSlip,
+        Math.max(0, physics.vxMs),
+        dtSeconds,
+        driving && kbTuning.exitAssist && carAids?.tcLevel === 0
+      );
+      const kbSteerDir = (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
       // On-screen controls: pedals and a steering pad (or the tilt of the device)
       const touch = touchInput.active && driving ? touchInput : null;
       const touchSteerActive = touch !== null && Math.abs(touch.steer) > 0.01;
@@ -2103,15 +2093,19 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         : touchSteerActive
           ? touch.steer
           : gamepadSteer;
+      // The keys steer (through the car's assist) while held or settling back to centre, and whenever no wheel, mouse
+      // or touch steering is in use, so the assist's self-aligning force keeps working with the keys let go
+      const kbSteerActive = kbSteerDir !== 0 || physics.steeringAssist.keyboardEngaged || activeAnalogSteer === undefined;
 
       const inputs: ControlInputs = {
-        throttle: Math.max(kb.throttle, gamepadThrottle, touch?.throttle ?? 0),
-        brake: Math.max(kb.brake, gamepadBrake, touch?.brake ?? 0),
+        throttle: Math.max(kb.throttle * kbThrottleScale, gamepadThrottle, touch?.throttle ?? 0),
+        brake: Math.max(kb.brake * kbBrakeScale, gamepadBrake, touch?.brake ?? 0),
         steerLeft: 0,
         steerRight: 0,
-        analogSteer: kbSteerActive ? kb.steer : activeAnalogSteer,
+        analogSteer: kbSteerActive ? undefined : activeAnalogSteer,
+        kbSteer: kbSteerActive ? kbSteerDir : undefined,
         padSteer:
-          kbSteerActive || mouseSteerEnabledRef.current || touchSteerActive ? undefined : gamepadStick,
+          kbSteerActive && !mouseSteerEnabledRef.current && !touchSteerActive ? gamepadStick : undefined,
         manualOverride:
           keysRef.current.boostHold || boostLatchRef.current || gamepadBoost,
         toggleXMode: keysRef.current.toggleX,
@@ -2124,8 +2118,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
 
       // The AI field holds the player on the grid until the lights go out, then runs its cars
       const aiField = aiFieldRef.current;
-      if (physics.gamepadAssist.settings !== assistSettingsRef.current) {
-        physics.gamepadAssist.settings = assistSettingsRef.current;
+      if (physics.steeringAssist.settings !== assistSettingsRef.current) {
+        physics.steeringAssist.settings = assistSettingsRef.current;
       }
       // A multiplayer race runs on the host's clock: the grid is held until the shared lights-out
       const mpRace = mpRaceRef.current;
@@ -2447,7 +2441,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       // Keep mouseSteerValueRef synchronized with actual steering angle while keyboard A/D override is held
       // so releasing A/D mid-corner at 300+ km/h transitions seamlessly without a step jump
       if (mouseSteerEnabledRef.current && kbSteerActive) {
-        mouseSteerValueRef.current = kb.steer;
+        mouseSteerValueRef.current = physics.steerAngleNorm;
       }
 
       // Auto-disengage latched /boost if ERS battery is completely depleted
