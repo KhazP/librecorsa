@@ -28,6 +28,11 @@ const ChequerStrip: React.FC<{ patternId: string; defs?: boolean }> = ({ pattern
 export const StartLights: React.FC<{ race: RaceStatus | undefined }> = ({ race }) => {
   const [starts, setStarts] = useState(0);
   const [flags, setFlags] = useState(0);
+  // Which banner has finished fading: it is then removed, so it stops holding space above the delta bar
+  const [faded, setFaded] = useState<string | null>(null);
+  const fadeEnd = (id: string) => (e: React.AnimationEvent) => {
+    if (e.target === e.currentTarget) setFaded(id);
+  };
   const prevPhase = useRef(race?.phase);
   const patternId = `lc-chk-${useId().replace(/:/g, "")}`;
 
@@ -80,8 +85,9 @@ export const StartLights: React.FC<{ race: RaceStatus | undefined }> = ({ race }
     );
   }
   if (starts > 0 && race?.phase === "racing") {
+    if (faded === `go${starts}`) return null;
     return (
-      <div key={starts} className="hud-fade-out relative flex items-center justify-center">
+      <div key={starts} onAnimationEnd={fadeEnd(`go${starts}`)} className="hud-fade-out relative flex items-center justify-center">
         {/* Ripples leaving the banner */}
         <span className="lc-ripple absolute inset-0 rounded-full border-2 border-[#CCFF00]/60" aria-hidden="true" />
         <div className="relative flex flex-col items-center gap-3 rounded-full border-2 border-[#CCFF00] bg-[#08090D]/[0.82] px-8 py-4 shadow-[0_0_60px_rgba(204,255,0,0.35)] sm:gap-4 sm:px-14 sm:py-6">
@@ -101,8 +107,9 @@ export const StartLights: React.FC<{ race: RaceStatus | undefined }> = ({ race }
     );
   }
   if (flags > 0 && race?.phase === "finished") {
+    if (faded === `flag${flags}`) return null;
     return (
-      <div key={flags} className="hud-fade-out flex flex-col items-center gap-3.5">
+      <div key={flags} onAnimationEnd={fadeEnd(`flag${flags}`)} className="hud-fade-out flex flex-col items-center gap-3.5">
         <ChequerStrip patternId={patternId} defs />
         <div className="rounded-full border-2 border-[#F5F7FA]/45 bg-[#08090D]/[0.84] px-8 py-4 sm:px-[52px] sm:py-[22px]">
           <span className="lc-disp block text-center text-[36px] whitespace-nowrap text-[#F5F7FA] sm:text-[66px]">
