@@ -4,6 +4,9 @@
  * tyres pass their grip and let it back up as they recover, steering by the tyres' normalised slip (1 = the peak) and
  * where it is heading (a short look-ahead on its rate of change). They are no ABS or traction control, only a stand-in
  * for the feel an analogue pedal would give, so they are meant for when those aids are off.
+ *
+ * Adapted from AC-Advanced-Gamepad-Assist v1.5.5 by Adam D. (https://github.com/adam10603/AC-Advanced-Gamepad-Assist),
+ * MIT License — see CREDITS.md.
  */
 
 /** How far ahead the slip is extrapolated from its rate of change (s) */

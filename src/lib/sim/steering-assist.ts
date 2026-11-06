@@ -31,6 +31,9 @@
  *
  * Conventions: steering + = right (same as `ControlInputs.analogSteer`), yaw rate + = right, body lateral velocity
  * + = left (F1Physics2026).
+ *
+ * Adapted from AC-Advanced-Gamepad-Assist v1.5.5 by Adam D. (https://github.com/adam10603/AC-Advanced-Gamepad-Assist),
+ * MIT License — see CREDITS.md.
  */
 
 /** What the front and rear tyres are doing, load-weighted per axle (from the car's telemetry) */

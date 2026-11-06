@@ -122,7 +122,7 @@ Made for this project: `scripts/rwanda-props.mjs` generates the jumbotrons, star
 
 ### Third-party code
 
-* **Keyboard and controller steering assist, keyboard pedal help** (`src/lib/sim/steering-assist.ts`, `src/lib/input/keyboard-pedals.ts`, the grip-limit trigger feedback in `src/lib/sim/gamepad-haptics.ts`): adapted from MIT-licensed work, reproduced under its notice:
+* **Keyboard and controller steering assist, keyboard pedal help** (`src/lib/sim/steering-assist.ts`, `src/lib/input/keyboard-pedals.ts`, the grip-limit trigger feedback in `src/lib/sim/gamepad-haptics.ts`): adapted from [**AC-Advanced-Gamepad-Assist**](https://github.com/adam10603/AC-Advanced-Gamepad-Assist) (v1.5.5) by **Adam D.** (`@adam10603`), licensed under the MIT License:
 
   > Copyright (c) 2023 Adam D.
   >
