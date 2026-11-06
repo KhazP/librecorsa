@@ -17,7 +17,13 @@ export interface HudMap {
   unitsPerM: number;
 }
 
-export function buildHudMap(track: BuiltTrackData): HudMap {
+/** What an outline needs: the centreline samples (x / z, sector) and the lap length. A built track has them; so does a raw `track_data.json` mapped over */
+export interface HudMapSource {
+  samples: readonly { position: { x: number; z: number }; sector: number }[];
+  totalLengthM: BuiltTrackData["totalLengthM"];
+}
+
+export function buildHudMap(track: HudMapSource): HudMap {
   const samples = track.samples;
   const n = samples.length;
   let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;

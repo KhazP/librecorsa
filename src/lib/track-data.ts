@@ -13,6 +13,9 @@ import type { SceneryCutBox } from "./scenery-cuts";
 /** Raw `track_data.json` layout shared by every circuit (Rwanda's file is the reference schema) */
 export type RawTrackJson = typeof rawTrackJson;
 
+/** Rwanda's track data as bundled (its outline in the circuit browser while another circuit is loaded) */
+export const RWANDA_TRACK_JSON: RawTrackJson = rawTrackJson;
+
 /**
  * The circuit everything below describes. Rwanda by default; `setActiveTrack` swaps in another layout before
  * the simulator mounts. The exported constants are live bindings / arrays refilled in place, so modules that
