@@ -238,7 +238,7 @@ export const RaceResults: React.FC<{
                   </td>
                   <td
                     className="px-2.5 text-[14px] font-semibold tracking-normal"
-                    style={{ fontFamily: "var(--font-titillium), sans-serif" }}
+                    style={{ fontFamily: "var(--font-geist), sans-serif" }}
                   >
                     <span className="block max-w-[180px] truncate">{r.name}</span>
                   </td>
