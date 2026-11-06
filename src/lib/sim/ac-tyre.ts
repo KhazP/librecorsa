@@ -560,9 +560,22 @@ export function computeTyreForces(t: TyreRuntime, inp: TyreForceInput, out?: Tyr
     (1 - 0.18 * t.dirtyLevel) *
     (1 - 0.05 * t.flatSpotSeverity);
 
-  // Camber (γ positive when leaning into the lateral force direction)
-  const dirY = s > 1e-9 ? -sa / s : 0;
+  // Camber thrust: a rolling tyre leaning toward +left (γ > 0) pushes toward +left even at zero slip angle.
+  // CAMBER_GAIN · (c1·γ − c2·γ³) of the load, entered as an equivalent slip-angle shift on the curve's linear
+  // slope (μ·MF_SLOPE per unit normalised slip), so it adds to the slip force near zero slip, moves the peak to a
+  // smaller slip angle on the side the tyre leans toward, and saturates with it. Scaled by the grip state below
+  // (wet, cold, worn) because the shift is taken against the clean load-sensitive μ. Fades in over the low-speed
+  // band: the thrust comes from the patch's curved path while rolling, a parked tyre makes none.
   const gamma = inp.camberLeftRad;
+  const gLim = spec.contactCamberC2 > 0 ? Math.sqrt(spec.contactCamberC1 / (3 * spec.contactCamberC2)) : Infinity;
+  const gc = Math.max(-gLim, Math.min(gLim, gamma));
+  const thrust = spec.camberGain * (spec.contactCamberC1 * gc - spec.contactCamberC2 * gc * gc * gc);
+  const rollFade = Math.min(1, absVx / LOW_SPEED_BLEND_MS);
+  sa -= (rollFade * thrust) / Math.max(1e-3, muY * MF_SLOPE);
+  s = Math.hypot(sk, sa);
+
+  // Camber grip (γ positive when leaning into the lateral force direction)
+  const dirY = s > 1e-9 ? -sa / s : 0;
   const camberLat = 1 + spec.dcamber0 * gamma * Math.sign(dirY) * Math.min(1, Math.abs(dirY) * 4) + spec.dcamber1 * gamma * gamma;
   const camberLong = 1 + spec.dcamber1 * gamma * gamma;
 
