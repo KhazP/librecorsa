@@ -49,6 +49,9 @@ export function notePadInput(padId: string): void {
 }
 
 export function padFamilyOf(id: string): PadFamily {
+  // Chrome names the Xbox pad "Xbox Wireless Controller (… Vendor: 045e …)": check Microsoft first, since
+  // "wireless controller" alone also matches Sony's "Wireless Controller" / "DualSense Wireless Controller"
+  if (/045e|xbox|xinput/i.test(id)) return "xbox";
   return /054c|playstation|dualsense|dualshock|wireless controller/i.test(id) ? "playstation" : "xbox";
 }
 
