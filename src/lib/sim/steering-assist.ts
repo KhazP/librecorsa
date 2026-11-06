@@ -126,6 +126,73 @@ export const DEFAULT_DEVICE_ASSIST_TUNING: DeviceAssistTuning = {
   maxSelfSteerAngleDeg: 25,
 };
 
+export type AssistPresetKey = "balanced" | "stable" | "loose" | "drift" | "calm";
+
+export interface AssistPresetInfo {
+  id: AssistPresetKey;
+  label: string;
+  detail: string;
+  tuning: DeviceAssistTuning;
+}
+
+/** One-click factory assist presets (adapted from AC-Advanced-Gamepad-Assist's factory presets) */
+export const ASSIST_PRESETS: readonly AssistPresetInfo[] = [
+  {
+    id: "balanced",
+    label: "Balanced",
+    detail: "Default self-steer, yaw damping & 95 % slip limit",
+    tuning: { ...DEFAULT_DEVICE_ASSIST_TUNING },
+  },
+  {
+    id: "stable",
+    label: "Stable",
+    detail: "Strong self-steer & damping, safer 91 % slip limit",
+    tuning: {
+      selfSteerStrength: 0.85,
+      dampingStrength: 0.9,
+      speedSensitivity: 0.65,
+      slipLimitMargin: -0.04,
+      maxSelfSteerAngleDeg: 30,
+    },
+  },
+  {
+    id: "loose",
+    label: "Loose",
+    detail: "Light self-steer, 8° countersteer cap & 100 % slip",
+    tuning: {
+      selfSteerStrength: 0.3,
+      dampingStrength: 0.3,
+      speedSensitivity: 0.25,
+      slipLimitMargin: 0.05,
+      maxSelfSteerAngleDeg: 8,
+    },
+  },
+  {
+    id: "drift",
+    label: "Drift",
+    detail: "Full countersteer lock, high yaw damping & 100 % slip",
+    tuning: {
+      selfSteerStrength: 0.45,
+      dampingStrength: 0.65,
+      speedSensitivity: 0.2,
+      slipLimitMargin: 0.05,
+      maxSelfSteerAngleDeg: 30,
+    },
+  },
+  {
+    id: "calm",
+    label: "Calm at speed",
+    detail: "Extra high-speed damping for fast aero corners",
+    tuning: {
+      selfSteerStrength: 0.48,
+      dampingStrength: 0.58,
+      speedSensitivity: 0.85,
+      slipLimitMargin: 0,
+      maxSelfSteerAngleDeg: 25,
+    },
+  },
+];
+
 /** Converts a device's user-facing assist sliders into internal `SteeringAssist` coefficients */
 export function deviceAssistTuning(
   tuning: DeviceAssistTuning
@@ -376,6 +443,19 @@ export function steeringRateMult(speedMs: number, lockDeg: number, rate: number,
   return Math.pow(speedAdjusted, rateIncreaseWithSpeed) * rate;
 }
 
+/**
+ * Evaluates the steady-state self-steer road-wheel angle (deg) for a given rear axle slide angle (deg) and assist
+ * tuning, used by the UI curve preview (`Advanced Gamepad Assist Config.lua:selfSteerCurveCallback`).
+ */
+export function evaluateSelfSteerDeg(rearAngleDeg: number, tuning: DeviceAssistTuning, lockDeg = 25): number {
+  const resolved = deviceAssistTuning(tuning);
+  const exponent = 1 + (1 - Math.log10(10 * (resolved.selfSteerResponse * 0.9 + 0.1)));
+  const correctionDeg = signedPow(clamp(rearAngleDeg / 72, -1, 1), exponent) * 72;
+  const capDeg = Math.min(lockDeg, resolved.maxSelfSteerAngleDeg);
+  const window = Math.min(1, 4 / (2 * Math.max(1e-6, capDeg / lockDeg)));
+  return clampEased(correctionDeg, -capDeg, capDeg, window);
+}
+
 export class SteeringAssist {
   settings: SteeringAssistSettings;
 
@@ -384,6 +464,7 @@ export class SteeringAssist {
   private readonly absSteering = new SmoothTowards(7, 0.13, -1, 1, 0);
   private readonly selfSteer = new SmoothTowards(7, 0.13, -1, 1, 0);
   private readonly limit = new SmoothTowards(11, 0.01, 0, 32, 32);
+  private readonly grounded = new SmoothTowards(4, 1, 0, 1, 1);
   private readonly counterIndicator = new SmoothTowards(12, 1, 0, 1, 0);
   private readonly slideCatch = new SmoothTowards(12, 1, 0, 1, 0);
   /** The fronts' peak slip angle, learned while cornering; kept across resets (it belongs to the tyres) */
@@ -404,6 +485,7 @@ export class SteeringAssist {
     this.absSteering.reset();
     this.selfSteer.reset();
     this.limit.reset();
+    this.grounded.reset();
     this.counterIndicator.reset();
     this.slideCatch.reset();
   }
@@ -460,13 +542,15 @@ export class SteeringAssist {
 
     // Self-steer: wheels follow the rear axle's direction of travel, plus yaw damping
     const active = keyboardActive && cfg.keyboardAssist ? cfg.keyboardAssist : cfg;
+    const frontGrounded = this.grounded.get(car.slip?.frontGrounded === false ? 0 : 1, dt);
+    const selfSteerStrength = Math.max(0.25, frontGrounded) * assistFadeIn;
     const exponent = 1 + (1 - Math.log10(10 * (active.selfSteerResponse * 0.9 + 0.1)));
     const correction = (signedPow(clamp(rearAngle / 72, -1, 1), exponent) * 72) / lockDeg;
     const selfSteerCap = clamp01(active.maxSelfSteerAngleDeg / lockDeg);
     const selfSteerCapWindow = Math.min(1, 4 / (2 * Math.max(1e-6, selfSteerCap)));
     const damping = -car.yawRateRadS * active.dampingStrength * 0.15 * (30 / lockDeg);
     const rawSelfSteer = clampEased(correction, -selfSteerCap, selfSteerCap, selfSteerCapWindow) + damping;
-    const selfSteer = clamp(this.selfSteer.get(rawSelfSteer, dt), -2, 2) * assistFadeIn;
+    const selfSteer = clamp(this.selfSteer.get(rawSelfSteer, dt), -2, 2) * selfSteerStrength;
 
     // Steering limit that keeps the front tyres just under their peak slip angle
     const targetSlipDeg = peakDeg * active.targetSlip;

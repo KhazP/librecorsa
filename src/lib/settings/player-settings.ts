@@ -102,6 +102,8 @@ export interface PadTuning extends DeviceAssistTuning {
   brakeGamma: number;
   /** Impulse-trigger rumble (Xbox): ABS in LT, wheelspin in RT */
   triggerRumble: boolean;
+  /** Buzz LT/RT as tyres approach peak slip even when ABS / TC are enabled */
+  triggerSlipAlwaysOn: boolean;
 }
 
 export interface KeyboardTuning extends DeviceAssistTuning {
@@ -200,6 +202,7 @@ export const DEFAULT_PAD_TUNING: PadTuning = {
   throttleGamma: 1,
   brakeGamma: 1,
   triggerRumble: true,
+  triggerSlipAlwaysOn: true,
   ...DEFAULT_DEVICE_ASSIST_TUNING,
 };
 
@@ -455,6 +458,7 @@ function parsePadTuning(v: unknown, fallbackLevel: number = DEFAULT_STEERING_ASS
     throttleGamma: num(v.throttleGamma, 0.5, 3, d.throttleGamma),
     brakeGamma: num(v.brakeGamma, 0.5, 3, d.brakeGamma),
     triggerRumble: bool(v.triggerRumble, d.triggerRumble),
+    triggerSlipAlwaysOn: bool(v.triggerSlipAlwaysOn, d.triggerSlipAlwaysOn),
     selfSteerStrength: num(v.selfSteerStrength, 0, 1, fallbackLevel),
     dampingStrength: num(v.dampingStrength, 0, 1, fallbackLevel),
     speedSensitivity: num(v.speedSensitivity, 0, 1, fallbackLevel),

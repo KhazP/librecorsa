@@ -133,7 +133,11 @@ const _triggerSlip = createAxleSlipSample();
  * so the player feels the limit coming before a lock-up or a spin; only one trigger buzzes at a time. Zero when there
  * is nothing to feel.
  */
-export function triggerMagnitudes(t: CarTelemetry, timeS: number): { left: number; right: number } {
+export function triggerMagnitudes(
+  t: CarTelemetry,
+  timeS: number,
+  options?: { triggerSlipAlwaysOn?: boolean }
+): { left: number; right: number } {
   // Left trigger: a locked or ABS-releasing front axle pushes back through the brake
   let left = 0;
   if (t.brake > 0.05) {
@@ -158,13 +162,16 @@ export function triggerMagnitudes(t: CarTelemetry, timeS: number): { left: numbe
     }
   }
 
-  // Approaching the grip limit with the aid off
+  // Approaching the grip limit (with the aid off, or always when `triggerSlipAlwaysOn` is enabled)
   const aids = t.liveTuner;
-  if (aids && (aids.absLevel === 0 || aids.tcLevel === 0) && t.speedKmh > 2) {
+  const alwaysOn = options?.triggerSlipAlwaysOn === true;
+  if ((alwaysOn || (aids && (aids.absLevel === 0 || aids.tcLevel === 0))) && t.speedKmh > 2) {
     const slip = axleSlipFromTelemetry(t, _triggerSlip);
     const wheelspin = Math.max(t.wheelSlipRatios[2], t.wheelSlipRatios[3]) > 0.02;
-    if (left === 0 && aids.absLevel === 0 && t.brake > 0.2 && !wheelspin) left = limitBuzz(slip.totalNdSlip + 0.15);
-    if (right === 0 && aids.tcLevel === 0 && t.throttle > 0.2 && wheelspin) {
+    if (left === 0 && (alwaysOn || aids?.absLevel === 0) && t.brake > 0.2 && !wheelspin) {
+      left = limitBuzz(slip.totalNdSlip + 0.15);
+    }
+    if (right === 0 && (alwaysOn || aids?.tcLevel === 0) && t.throttle > 0.2 && wheelspin) {
       right = limitBuzz(slip.rearNdSlip - throttleSlipAllowance(t.speedKmh));
     }
   }
@@ -238,7 +245,12 @@ export class GamepadHaptics {
    * Call once per frame after the physics step; `enabled` is false while paused or when the toggle is off.
    * `options.triggerRumble` also drives the Xbox impulse triggers on pads that support them (default off).
    */
-  update(t: CarTelemetry, dtSeconds: number, enabled: boolean, options?: { triggerRumble?: boolean }): void {
+  update(
+    t: CarTelemetry,
+    dtSeconds: number,
+    enabled: boolean,
+    options?: { triggerRumble?: boolean; triggerSlipAlwaysOn?: boolean }
+  ): void {
     this.timeS += dtSeconds;
     if (!enabled) {
       if (this.active) this.stop();
@@ -248,7 +260,7 @@ export class GamepadHaptics {
 
     const { weak, strong } = hapticMagnitudes(t, this.timeS);
     const wantTriggers = options?.triggerRumble === true;
-    const trig = wantTriggers ? triggerMagnitudes(t, this.timeS) : { left: 0, right: 0 };
+    const trig = wantTriggers ? triggerMagnitudes(t, this.timeS, options) : { left: 0, right: 0 };
     for (const { key, actuator } of connectedPads()) {
       const out = this.outputs.get(key) ?? {
         lastSentS: -Infinity,
