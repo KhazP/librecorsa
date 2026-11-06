@@ -15,7 +15,7 @@ import { Toggle } from "@/components/hud/PauseMenu";
 import { DEFAULT_KEYBOARD_TUNING, type KeyboardTuning } from "@/lib/settings/player-settings";
 import { suspendMenuNav } from "../useMenuNav";
 import { TuningSlider } from "./TuningSlider";
-import { AutoGrid, BindRow, bindKeyClass, PillAction, SetupCard, StatusPill } from "./setup-ui";
+import { AssistCurve, AssistPresetBar, AutoGrid, BindRow, bindKeyClass, PillAction, SetupCard, StatusPill } from "./setup-ui";
 import type { SetupStepProps } from "./types";
 
 /** Keyboard rebinding: click a slot, press a key. Taking a key from another action swaps the two. */
@@ -201,68 +201,74 @@ export const KeyboardStep: React.FC<SetupStepProps> = ({ settings, onChangeSetti
           </PillAction>
         }
       >
-        <AutoGrid min={220} className="gap-x-[22px] gap-y-3">
-          <TuningSlider
-            label="Self-steer & countersteer"
-            value={tuning.selfSteerStrength}
-            min={0}
-            max={1}
-            step={0.05}
-            format={(v) => `${Math.round(v * 100)} %`}
-            hint="How strongly the wheels follow the car's travel direction and catch rear slides"
-            onChange={(v) => setTuning({ selfSteerStrength: v })}
-          />
-          <TuningSlider
-            label="Yaw damping"
-            value={tuning.dampingStrength}
-            min={0}
-            max={1}
-            step={0.05}
-            format={(v) => `${Math.round(v * 100)} %`}
-            hint="Calms snap-back and pendulum oscillations when recovering from a slide"
-            onChange={(v) => setTuning({ dampingStrength: v })}
-          />
-          <TuningSlider
-            label="High-speed calm"
-            value={tuning.speedSensitivity}
-            min={0}
-            max={1}
-            step={0.05}
-            format={(v) => `${Math.round(v * 100)} %`}
-            hint="How much WASD steering slows down at high speed so quick taps stay gentle"
-            onChange={(v) => setTuning({ speedSensitivity: v })}
-          />
-          <TuningSlider
-            label="Tyre slip margin"
-            value={tuning.slipLimitMargin}
-            min={-0.25}
-            max={0.25}
-            step={0.01}
-            format={(v) => `${v > 0 ? "+" : ""}${Math.round(v * 100)} %`}
-            hint="Negative: safer understeer cushion · Positive: lets you push past peak slip"
-            onChange={(v) => setTuning({ slipLimitMargin: v })}
-          />
-          <TuningSlider
-            label="Max countersteer lock"
-            value={tuning.maxSelfSteerAngleDeg}
-            min={5}
-            max={30}
-            step={1}
-            format={(v) => `${Math.round(v)}°`}
-            hint="Maximum road-wheel angle the assist holds automatically when catching a slide"
-            onChange={(v) => setTuning({ maxSelfSteerAngleDeg: v })}
-          />
-          <TuningSlider
-            label="Pedal assist strength"
-            value={tuning.pedalAssistStrength}
-            min={0}
-            max={1}
-            step={0.05}
-            format={(v) => `${Math.round(v * 100)} %`}
-            hint="How early and deeply Throttle help and Brake help trim wheelspin and lock-ups"
-            onChange={(v) => setTuning({ pedalAssistStrength: v })}
-          />
-        </AutoGrid>
+        <AssistPresetBar tuning={tuning} onSelect={(preset) => setTuning(preset)} />
+        <div className="flex flex-wrap gap-[22px] border-t border-[#262B3D] pt-3">
+          <AutoGrid min={200} className="min-w-0 flex-[1_1_340px] gap-x-5 gap-y-3">
+            <TuningSlider
+              label="Self-steer & countersteer"
+              value={tuning.selfSteerStrength}
+              min={0}
+              max={1}
+              step={0.05}
+              format={(v) => `${Math.round(v * 100)} %`}
+              hint="How strongly the wheels follow the car's travel direction and catch rear slides"
+              onChange={(v) => setTuning({ selfSteerStrength: v })}
+            />
+            <TuningSlider
+              label="Yaw damping"
+              value={tuning.dampingStrength}
+              min={0}
+              max={1}
+              step={0.05}
+              format={(v) => `${Math.round(v * 100)} %`}
+              hint="Calms snap-back and pendulum oscillations when recovering from a slide"
+              onChange={(v) => setTuning({ dampingStrength: v })}
+            />
+            <TuningSlider
+              label="High-speed calm"
+              value={tuning.speedSensitivity}
+              min={0}
+              max={1}
+              step={0.05}
+              format={(v) => `${Math.round(v * 100)} %`}
+              hint="How much WASD steering slows down at high speed so quick taps stay gentle"
+              onChange={(v) => setTuning({ speedSensitivity: v })}
+            />
+            <TuningSlider
+              label="Tyre slip margin"
+              value={tuning.slipLimitMargin}
+              min={-0.25}
+              max={0.25}
+              step={0.01}
+              format={(v) => `${v > 0 ? "+" : ""}${Math.round(v * 100)} %`}
+              hint="Negative: safer understeer cushion · Positive: lets you push past peak slip"
+              onChange={(v) => setTuning({ slipLimitMargin: v })}
+            />
+            <TuningSlider
+              label="Max countersteer lock"
+              value={tuning.maxSelfSteerAngleDeg}
+              min={5}
+              max={30}
+              step={1}
+              format={(v) => `${Math.round(v)}°`}
+              hint="Maximum road-wheel angle the assist holds automatically when catching a slide"
+              onChange={(v) => setTuning({ maxSelfSteerAngleDeg: v })}
+            />
+            <TuningSlider
+              label="Pedal assist strength"
+              value={tuning.pedalAssistStrength}
+              min={0}
+              max={1}
+              step={0.05}
+              format={(v) => `${Math.round(v * 100)} %`}
+              hint="How early and deeply Throttle help and Brake help trim wheelspin and lock-ups"
+              onChange={(v) => setTuning({ pedalAssistStrength: v })}
+            />
+          </AutoGrid>
+          <div className="flex min-w-0 flex-[1_1_200px] flex-col gap-3 sm:max-w-[240px]">
+            <AssistCurve tuning={tuning} />
+          </div>
+        </div>
         <div className="border-t border-[#262B3D] pt-2.5">
           <Toggle
             label="Throttle help"

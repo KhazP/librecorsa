@@ -22,7 +22,9 @@
 import { F1Physics2026 } from '../src/lib/f1-physics-2026';
 import { KeyboardPedalAssist } from '../src/lib/input/keyboard-pedals';
 import { F12026CarSim } from '../src/lib/sim/f12026-car/F12026CarSim';
+import { triggerMagnitudes } from '../src/lib/sim/gamepad-haptics';
 import { createAmgGt3Sim } from '../src/lib/sim/gt3/AmgGt3Sim';
+import { ASSIST_PRESETS, evaluateSelfSteerDeg } from '../src/lib/sim/steering-assist';
 import { VF26_TYRES } from '../src/lib/sim/vf26-data';
 import { createFlatTestTrack } from './lib/flat-track';
 
@@ -219,6 +221,64 @@ for (const cc of CARS) {
     minBrake < 0.6 && minBrake >= 0.3 && recovered > 0.99 && off === 1 && minThrottle < 0.9 && minThrottle >= 0.6,
     `Keyboard pedal help: brake key eased to ${f2(minBrake)} past the grip and back to ${f2(recovered)} after; ` +
       `${off} with ABS on; throttle key eased to ${f2(minThrottle)} in wheelspin`
+  );
+}
+
+// Assist presets & self-steer curve evaluator
+{
+  const loose = ASSIST_PRESETS.find((p) => p.id === 'loose')!;
+  const drift = ASSIST_PRESETS.find((p) => p.id === 'drift')!;
+  const looseAt40 = evaluateSelfSteerDeg(40, loose.tuning, 25);
+  const driftAt40 = evaluateSelfSteerDeg(40, drift.tuning, 25);
+  check(
+    ASSIST_PRESETS.length === 5 && Math.abs(looseAt40 - 8) < 0.2 && driftAt40 > 18 && driftAt40 <= 25,
+    `Assist presets (${ASSIST_PRESETS.map((p) => p.label).join(', ')}): Loose caps at ${looseAt40.toFixed(1)}°, Drift reaches ${driftAt40.toFixed(1)}° at 40° slide`
+  );
+}
+
+// Always-on trigger slip feedback (works even with ABS & TC enabled)
+{
+  const sim = createAmgGt3Sim(pad);
+  sim.assistPreset = 'semi_pro';
+  const tel = {
+    ...sim.telemetry,
+    speedKmh: 140,
+    brake: 0.7,
+    throttle: 0.7,
+    tireSlipRatio: [1.05, 1.05, 1.35, 1.35] as [number, number, number, number],
+    wheelSlipAnglesDeg: [8, 8, 8, 8] as [number, number, number, number],
+    wheelLoadsN: [3500, 3500, 4000, 4000] as [number, number, number, number],
+    wheelSlipRatios: [-0.05, -0.05, 0.06, 0.06] as [number, number, number, number],
+  };
+  const withAlwaysOnBrake = triggerMagnitudes({ ...tel, wheelSlipRatios: [-0.05, -0.05, 0, 0] }, 0.1, { triggerSlipAlwaysOn: true });
+  const withoutAlwaysOnBrake = triggerMagnitudes({ ...tel, wheelSlipRatios: [-0.05, -0.05, 0, 0] }, 0.1, { triggerSlipAlwaysOn: false });
+  const withAlwaysOnThrottle = triggerMagnitudes({ ...tel, brake: 0 }, 0.1, { triggerSlipAlwaysOn: true });
+  const withoutAlwaysOnThrottle = triggerMagnitudes({ ...tel, brake: 0 }, 0.1, { triggerSlipAlwaysOn: false });
+  check(
+    withAlwaysOnBrake.left > 0.1 &&
+      withAlwaysOnThrottle.right > 0.1 &&
+      withoutAlwaysOnBrake.left === 0 &&
+      withoutAlwaysOnThrottle.right === 0,
+    `Trigger slip always-on: LT=${f2(withAlwaysOnBrake.left)} RT=${f2(withAlwaysOnThrottle.right)} with ABS/TC on vs ${withoutAlwaysOnBrake.left}/${withoutAlwaysOnThrottle.right} when disabled`
+  );
+}
+
+// Smart Auto-Gearbox: manual short-shift override (1.0 s cooldown + downshift protection while accelerating)
+{
+  const sim = createAmgGt3Sim(pad);
+  sim.autoGearbox = true;
+  sim.teleportToDistance(1500, 95 / 3.6);
+  for (let t = 0; t < 0.5; t += DT) sim.step(DT, { throttle: 0.6, analogSteer: 0 });
+  const gearBefore = sim.telemetry.gear as number;
+  // Short-shift up manually while in Auto Gearbox
+  sim.step(DT, { throttle: 0.6, shiftUp: true, analogSteer: 0 });
+  const gearAfterShift = sim.telemetry.gear as number;
+  // Hold throttle for 1.8 s (past the 1.0 s manual override timer): downshiftProtectedGear keeps the short-shifted gear
+  for (let t = 0; t < 1.8; t += DT) sim.step(DT, { throttle: 0.6, analogSteer: 0 });
+  const gearHeld = sim.telemetry.gear as number;
+  check(
+    gearAfterShift === gearBefore + 1 && gearHeld >= gearAfterShift,
+    `Smart Auto-Gearbox: manual short-shift ${gearBefore} → ${gearAfterShift} held at gear ${gearHeld} under throttle`
   );
 }
 

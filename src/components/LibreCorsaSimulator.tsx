@@ -2168,6 +2168,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       }
       haptics.update(physics.telemetry, dtSeconds, rumbleEnabledRef.current && driving, {
         triggerRumble: padTuning.triggerRumble,
+        triggerSlipAlwaysOn: padTuning.triggerSlipAlwaysOn,
       });
       // Forces only while driving with the wheel: on a pad or the keyboard a plugged-in wheel stays limp
       wheelFfb.update(

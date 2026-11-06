@@ -19,6 +19,7 @@ import type { ChassisSetup } from "@/lib/sim/car-setup";
 import { EngineersGarage } from "@/components/menu/EngineersGarage";
 import { CarPicker } from "@/components/menu/CarPicker";
 import type { LibraryProps } from "@/components/menu/ContentBrowser";
+import { AssistPresetBar } from "@/components/menu/steps/setup-ui";
 import { FACTORY_LIVERY_NOTE, carTakesLivery, type CarId } from "@/lib/cars/car-registry";
 import {
   COCKPIT_FOV_MAX_DEG,
@@ -589,7 +590,7 @@ export const SessionPanel: React.FC<PauseMenuProps> = (p) => {
           <Toggle label="Engine sound" detail={k.mute} checked={!p.isMuted} onChange={p.onToggleMute} />
           <Toggle
             label="Automatic gearbox"
-            detail={`Off: shift yourself with Gear up / Gear down (${k.shiftUp} / ${k.shiftDown})`}
+            detail={`Auto-shifts with 1 s manual override (${k.shiftUp} / ${k.shiftDown}) · Off: full manual`}
             checked={p.autoGearbox ?? true}
             onChange={() => p.onSetAutoGearbox?.(!(p.autoGearbox ?? true))}
           />
@@ -711,6 +712,8 @@ export const SessionPanel: React.FC<PauseMenuProps> = (p) => {
                         })
                       : setPad({
                           steeringRate: DEFAULT_PAD_TUNING.steeringRate,
+                          triggerRumble: DEFAULT_PAD_TUNING.triggerRumble,
+                          triggerSlipAlwaysOn: DEFAULT_PAD_TUNING.triggerSlipAlwaysOn,
                           selfSteerStrength: DEFAULT_PAD_TUNING.selfSteerStrength,
                           dampingStrength: DEFAULT_PAD_TUNING.dampingStrength,
                           speedSensitivity: DEFAULT_PAD_TUNING.speedSensitivity,
@@ -723,6 +726,13 @@ export const SessionPanel: React.FC<PauseMenuProps> = (p) => {
                   Reset
                 </button>
               </div>
+            </div>
+            <div className="px-2">
+              <AssistPresetBar
+                compact
+                tuning={assistTab === "keyboard" ? kb : pad}
+                onSelect={(preset) => (assistTab === "keyboard" ? setKb(preset) : setPad(preset))}
+              />
             </div>
             {assistTab === "keyboard" ? (
               <div className="flex flex-col gap-1">
@@ -814,6 +824,14 @@ export const SessionPanel: React.FC<PauseMenuProps> = (p) => {
                     checked={pad.triggerRumble}
                     onChange={() => setPad({ triggerRumble: !pad.triggerRumble })}
                   />
+                  {pad.triggerRumble ? (
+                    <Toggle
+                      label="Trigger slip with ABS & TC"
+                      detail="LT / RT slip buzz even with ABS & TC on"
+                      checked={pad.triggerSlipAlwaysOn}
+                      onChange={() => setPad({ triggerSlipAlwaysOn: !pad.triggerSlipAlwaysOn })}
+                    />
+                  ) : null}
                 </div>
                 <div className="grid gap-x-4 gap-y-0.5 border-t border-[#262B3D] pt-1 sm:grid-cols-2">
                   <TyreSlider

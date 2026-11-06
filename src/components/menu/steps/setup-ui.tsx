@@ -1,6 +1,13 @@
 "use client";
 
 import React from "react";
+import {
+  ASSIST_PRESETS,
+  deviceAssistTuning,
+  evaluateSelfSteerDeg,
+  type AssistPresetInfo,
+  type DeviceAssistTuning,
+} from "@/lib/sim/steering-assist";
 
 /** Setup-wizard building blocks (Racing Line): frosted section cards, small pill actions, binding rows, live meters */
 
@@ -197,3 +204,131 @@ export const AutoGrid: React.FC<{ min: number; children: React.ReactNode; classN
     {children}
   </div>
 );
+
+function matchesAssistPreset(tuning: DeviceAssistTuning, preset: AssistPresetInfo): boolean {
+  const t = preset.tuning;
+  return (
+    Math.abs(tuning.selfSteerStrength - t.selfSteerStrength) < 0.008 &&
+    Math.abs(tuning.dampingStrength - t.dampingStrength) < 0.008 &&
+    Math.abs(tuning.speedSensitivity - t.speedSensitivity) < 0.008 &&
+    Math.abs(tuning.slipLimitMargin - t.slipLimitMargin) < 0.005 &&
+    Math.abs(tuning.maxSelfSteerAngleDeg - t.maxSelfSteerAngleDeg) < 0.5
+  );
+}
+
+/** One-click factory assist presets (Balanced, Stable, Loose, Drift, Calm at speed) */
+export const AssistPresetBar: React.FC<{
+  tuning: DeviceAssistTuning;
+  onSelect: (presetTuning: DeviceAssistTuning) => void;
+  compact?: boolean;
+}> = ({ tuning, onSelect, compact }) => {
+  const activePreset = ASSIST_PRESETS.find((p) => matchesAssistPreset(tuning, p));
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Assist presets">
+        <span className="mr-1 font-f1-mono text-[10px] font-extrabold tracking-[0.12em] text-[#8E96AA] uppercase">
+          Presets
+        </span>
+        {ASSIST_PRESETS.map((preset) => {
+          const active = activePreset?.id === preset.id;
+          return (
+            <button
+              key={preset.id}
+              type="button"
+              aria-pressed={active}
+              title={preset.detail}
+              onClick={() => onSelect({ ...preset.tuning })}
+              className={`inline-flex h-[30px] cursor-pointer items-center justify-center rounded-full px-3 font-f1-mono text-[11px] font-extrabold tracking-[0.1em] uppercase transition-colors duration-200 ${
+                active
+                  ? "border border-[#CCFF00] bg-[#CCFF00] text-[#08090D]"
+                  : "border border-[#262B3D] bg-[#08090D]/60 text-[#C5CBD8] hover:border-[#CCFF00] hover:text-[#CCFF00]"
+              }`}
+            >
+              {preset.label}
+            </button>
+          );
+        })}
+      </div>
+      {!compact ? (
+        <span className="text-[12px] text-[#8E96AA]">
+          {activePreset ? `${activePreset.label}: ${activePreset.detail}` : "Custom tuning"}
+        </span>
+      ) : null}
+    </div>
+  );
+};
+
+/**
+ * Self-steer & slip-limit curve preview: plots automatic countersteer road-wheel angle (0..25°) against rear slide
+ * angle (0..45°), showing the nonlinear self-steer exponent, the soft-clamped `maxSelfSteerAngleDeg` cap, and the
+ * target front peak-slip percentage (`95 % + slipLimitMargin`).
+ */
+export const AssistCurve: React.FC<{ tuning: DeviceAssistTuning; lockDeg?: number }> = ({ tuning, lockDeg = 25 }) => {
+  const maxRearDeg = 45;
+  const x0 = 12;
+  const x1 = 148;
+  const y0 = 86;
+  const y1 = 14;
+  const toX = (rearDeg: number) => x0 + (rearDeg / maxRearDeg) * (x1 - x0);
+  const toY = (steerDeg: number) => y0 - (Math.min(lockDeg, Math.max(0, steerDeg)) / lockDeg) * (y0 - y1);
+
+  const points: string[] = [];
+  for (let i = 0; i <= 45; i++) {
+    const rearDeg = i;
+    const steerDeg = evaluateSelfSteerDeg(rearDeg, tuning, lockDeg);
+    points.push(`${i === 0 ? "M" : "L"}${toX(rearDeg).toFixed(1)} ${toY(steerDeg).toFixed(1)}`);
+  }
+
+  const capDeg = Math.min(lockDeg, tuning.maxSelfSteerAngleDeg);
+  const capY = toY(capDeg);
+  const targetSlipPct = Math.round(deviceAssistTuning(tuning).targetSlip * 100);
+
+  return (
+    <div className="flex flex-col gap-2 rounded-[18px] border border-[#262B3D] bg-[#08090D] p-3.5">
+      <div className="flex items-center justify-between gap-2">
+        <span className="lc-lbl text-[10px]!">Self-steer curve</span>
+        <span className="font-f1-mono text-[11px] font-extrabold text-[#CCFF00] tabular-nums">
+          {targetSlipPct}% grip · {Math.round(capDeg)}° cap
+        </span>
+      </div>
+      <svg viewBox="0 0 160 100" className="block h-auto w-full" role="img" aria-label="Self-steer response curve">
+        <rect x="6" y="6" width="148" height="88" rx="10" fill="none" stroke="#262B3D" strokeWidth="1" />
+        {/* 1:1 reference line (rear slide angle = road-wheel angle up to full lock) */}
+        <line
+          x1={toX(0).toFixed(1)}
+          y1={toY(0).toFixed(1)}
+          x2={toX(lockDeg).toFixed(1)}
+          y2={toY(lockDeg).toFixed(1)}
+          stroke="#5B6275"
+          strokeWidth="1"
+          strokeDasharray="3 3"
+        />
+        {/* Countersteer cap reference line */}
+        <line
+          x1={x0}
+          y1={capY.toFixed(1)}
+          x2={x1}
+          y2={capY.toFixed(1)}
+          stroke="#00E5FF"
+          strokeOpacity="0.45"
+          strokeWidth="1"
+          strokeDasharray="2 3"
+        />
+        <path
+          d={points.join(" ")}
+          fill="none"
+          stroke="#CCFF00"
+          strokeWidth="2.6"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <text x="14" y="91" fill="#8E96AA" fontSize="8" fontFamily="monospace">
+          0° slide
+        </text>
+        <text x="146" y="91" fill="#8E96AA" fontSize="8" fontFamily="monospace" textAnchor="end">
+          45° slide
+        </text>
+      </svg>
+    </div>
+  );
+};
