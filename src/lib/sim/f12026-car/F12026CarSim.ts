@@ -45,6 +45,7 @@ import {
   RWANDA_DRS_ZONES,
 } from '@/lib/track-data';
 import { GamepadSteeringAssist } from '../gamepad-assist';
+import type { SteeringEnvelope } from '../../input/keyboard-steer';
 import type { AeroWakeState } from '../aero-wake';
 import type { TrackEvolutionSample } from '../track-evolution';
 import type { WeatherContactSample } from '../weather';
@@ -75,6 +76,8 @@ import { KERB_PROFILE_L } from '../track-surfaces';
 
 const G = 9.81;
 const DEG2RAD = Math.PI / 180;
+/** Share of the fronts' peak slip angle a held steering key adds to the path's angle (CarSimProfile.keyboardSlipShare) */
+const DEFAULT_KEYBOARD_SLIP_SHARE = 0.8;
 const RAD2DEG = 180 / Math.PI;
 /** Rwanda (≈1400 m ASL) air density */
 const AIR_DENSITY = 1.06;
@@ -146,6 +149,11 @@ export interface CarSimProfile {
   aeroPackagesDeg: Record<AeroSetupPreset, [number, number]>;
   /** Lateral grip the pad steering assist assumes, per g of (weight + downforce) */
   padLateralMu: number;
+  /**
+   * Share of the fronts' peak slip angle a held steering key adds to the path's angle (default 0.8): with the rear's
+   * slip on top the fronts sit near their peak. Less for a car whose rear slips more (the GT3: 0.6).
+   */
+  keyboardSlipShare?: number;
   braking: BrakingEnvelope;
   /**
    * Planning model of this car for its braking line, braking urgency and HUD target speed (`brakingGuideFor`).
@@ -519,6 +527,7 @@ const _ex = new THREE.Vector3();
 const _ey = new THREE.Vector3();
 const _ez = new THREE.Vector3();
 const _v = new THREE.Vector3();
+const _qInv = new THREE.Quaternion();
 
 export class F12026CarSim implements SimulatorCar {
   public readonly vehicle: VehiclePhysics;
@@ -535,6 +544,28 @@ export class F12026CarSim implements SimulatorCar {
   /** The racing line this car follows (`CarSimProfile.racingLine`) */
   private readonly line: RacingLineId;
   public readonly wheelbaseM: number;
+  /**
+   * What this car corners on, for the keyboard's steering limit (keyboard-steer.ts): the lateral grip the pad assist
+   * plans on at this speed, and the share of the fronts' peak slip angle the steering may add to the path's angle (the
+   * rear axle's own slip angle adds the rest). The VF26's fixed 3.9 g / 0.12 rad held a GT3's fronts at 2-3× their 6°
+   * peak, so a held key scrubbed and cooked them (#64).
+   */
+  public steeringEnvelope(): SteeringEnvelope {
+    const v = this.vehicle;
+    const peakSlipRad = (this.compoundData.modelData.friction_limit_angle || DEFAULT_FRICTION_LIMIT_ANGLE_DEG) * DEG2RAD;
+    return {
+      maxLateralAccelMs2: this.profile.padLateralMu * (G + v.telemetry.downforceN / v.totalMassKg),
+      frontSlipRad: (this.profile.keyboardSlipShare ?? DEFAULT_KEYBOARD_SLIP_SHARE) * peakSlipRad,
+    };
+  }
+
+  /**
+   * Simulated time not yet stepped (s, under one 2 ms step). The renderer carries the pose forward by it: without it
+   * a 60 Hz display drew 8, 8, then 9 steps' worth of motion, a 14 cm lurch every third frame at 250 km/h (#65)
+   */
+  public get renderLeadS(): number {
+    return this.vehicle.unsteppedS;
+  }
   /** Road-wheel angle at full lock (rad), after the garage's steering ratio */
   public get maxSteerAngleRad(): number {
     return this.vehicle.maxSteerRad;
@@ -698,7 +729,13 @@ export class F12026CarSim implements SimulatorCar {
     this.config = structuredClone(profile.config);
     // Unloaded radii, used until the first step
     const geo = compoundData(this.config, this.config.compoundSlots.soft);
-    const vis = (radius: number): TyreVisualState => ({ loadedRadiusM: radius, verticalDeflectionM: 0, lateralForceN: 0, camberRad: 0 });
+    const vis = (radius: number): TyreVisualState => ({
+      loadedRadiusM: radius,
+      verticalDeflectionM: 0,
+      lateralForceN: 0,
+      camberRad: 0,
+      contactInCar: { x: 0, y: 0, z: 0 },
+    });
     this.tyreVisuals = [vis(geo.front.radius), vis(geo.front.radius), vis(geo.rear.radius), vis(geo.rear.radius)];
     this.baseWingDeg = this.config.aero.wings.map((w) => w.angleDeg);
     const sp = this.config.suspensions;
@@ -1683,6 +1720,7 @@ export class F12026CarSim implements SimulatorCar {
     _ey.set(0, 1, 0).applyQuaternion(q);
     this.worldPosition.copy(v.position).addScaledVector(_ey, -this.config.chassis.cgHeight);
     this.worldQuaternion.copy(q);
+    _qInv.copy(q).invert();
     const p = this.track.projectWorldToTrack(this.worldPosition.x, this.worldPosition.z, this.poseHintS);
     this.poseHintS = p.s;
     this.s = p.s;
@@ -1707,6 +1745,15 @@ export class F12026CarSim implements SimulatorCar {
       vis.verticalDeflectionM = w.deflection;
       vis.lateralForceN = w.fy;
       vis.camberRad = w.camberLeftRad;
+      // The bottom of the tyre in the car frame, under the corner's hardpoint at the current pose: the car frame rides
+      // on the sprung body, so this is where the rigs put the unsprung wheel
+      _v.copy(w.hardpoint).applyQuaternion(q).add(v.position);
+      _v.y = v.tyreBottomY(w);
+      _v.sub(this.worldPosition).applyQuaternion(_qInv);
+      const c = vis.contactInCar!;
+      c.x = _v.x;
+      c.y = _v.y;
+      c.z = _v.z;
     }
   }
 

@@ -119,7 +119,15 @@ export class CarReflectionProbe {
       } else {
         const cams = this.cubeCamera.children as THREE.PerspectiveCamera[];
         r.setRenderTarget(this.cubeTarget, this.face);
-        r.render(this.scene, cams[this.face]);
+        // The main render updates the scene's matrices this frame anyway: the face films last frame's poses rather
+        // than walking the whole scene graph a second time
+        const autoMatrices = this.scene.matrixWorldAutoUpdate;
+        this.scene.matrixWorldAutoUpdate = false;
+        try {
+          r.render(this.scene, cams[this.face]);
+        } finally {
+          this.scene.matrixWorldAutoUpdate = autoMatrices;
+        }
         this.face = (this.face + 1) % 6;
         if (this.face === 0) {
           this.filter();

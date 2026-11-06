@@ -197,14 +197,16 @@ export const PositionTag: React.FC<{ t: HudDesignProps["t"] }> = ({ t }) => {
  * Shift lights across the top, the gear dead centre, delta and pace to the right, energy and
  * tyres below. Everything the engineer would show you in one place, nothing in the corners.
  */
-export const WheelDashHud: React.FC<HudDesignProps> = ({ t, deltaS, map, revRange, scale, mfd, lapInvalid, mapMode }) => (
+export const WheelDashHud: React.FC<HudDesignProps> = ({ t, deltaS, map, revRange, scale, mfd, lapInvalid, mapMode, leftExtra, rightExtra }) => (
   <div className="pointer-events-none absolute inset-0 select-none">
-    <div className="absolute top-[clamp(14px,2.2vw,24px)] left-[clamp(14px,2.2vw,24px)]" style={anchor(scale, "top left")}>
+    <div className="absolute top-[clamp(14px,2.2vw,24px)] left-[clamp(14px,2.2vw,24px)] flex flex-col items-start gap-2" style={anchor(scale, "top left")}>
       <PositionTag t={t} />
+      {leftExtra ? <div className="w-[264px]">{leftExtra}</div> : null}
     </div>
 
     <div className="absolute top-[clamp(14px,2.2vw,24px)] right-[clamp(14px,2.2vw,24px)] hidden w-[180px] md:block" style={anchor(scale, "top right")}>
       <MiniMap map={map} t={t} local={mapMode === "local"} className="block h-[130px] w-full drop-shadow-[0_2px_6px_rgba(0,0,0,0.9)]" stroke={18} />
+      {rightExtra ? <div className="mt-2">{rightExtra}</div> : null}
     </div>
 
     {mfd ? (

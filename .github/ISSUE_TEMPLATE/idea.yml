@@ -1,0 +1,27 @@
+# Opened pre-filled from the in-game Feedback panel (Idea): src/components/menu/RequestPanel.tsx fills these ids.
+name: Idea or feedback
+description: Suggest a feature or tell us what would make LibreCorsa better
+title: "[Idea] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks! For a car or circuit use the Car or track request form; for something broken, the Bug report.
+  - type: input
+    id: area
+    attributes:
+      label: Area
+      placeholder: Menus, HUD, physics, AI, multiplayer, wheel, sound, graphics…
+  - type: textarea
+    id: idea
+    attributes:
+      label: Your idea
+      description: What would you like, and how would it work?
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why it matters
+      description: What it would fix or make more fun. Other games that do it well are useful references.

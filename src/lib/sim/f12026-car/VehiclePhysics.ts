@@ -1334,6 +1334,11 @@ export class VehiclePhysics {
   /** Simulated time the last step() call actually advanced (whole fixed steps; s) */
   public lastStepTimeS = 0;
 
+  /** Time handed to step() but not yet simulated (s, under one fixed step): the pose is that far behind the frame */
+  public get unsteppedS(): number {
+    return this.timeAccumulator;
+  }
+
   /** Advance by a render frame (any dt); runs fixed 500 Hz steps */
   public step(dtSeconds: number, inputs: VehicleInputs): void {
     const inp = this.sanitizeInputs(inputs);
@@ -1356,6 +1361,14 @@ export class VehiclePhysics {
   private groundYUnder(w: WheelState): number {
     if (w.grounded) return w.ground.height;
     return Math.min(w.ground.height, w.hubY - this.tyreRadiusOf(w));
+  }
+
+  /**
+   * World height of the bottom of a wheel's tyre: the road (the climbed contact height) under a loaded tyre, the hub
+   * less the unloaded radius for one off the ground (in the air, or above a road the probe still reaches)
+   */
+  public tyreBottomY(w: WheelState): number {
+    return w.grounded && w.deflection > 0 ? w.ground.height : w.hubY - this.tyreRadiusOf(w);
   }
 
   /** Unloaded radius of a wheel's tyre (m) */

@@ -56,6 +56,10 @@ export function buildHudMap(track: HudMapSource): HudMap {
 
 /** Everything a HUD style gets each frame */
 export interface HudDesignProps {
+  /** Shown under the top-left group (split gaps): keeps the middle of the screen clear */
+  leftExtra?: React.ReactNode;
+  /** Shown under the top-right group (weather) */
+  rightExtra?: React.ReactNode;
   t: CarTelemetry;
   /** Live delta to the best lap (s, − = faster); null without a best lap */
   deltaS: number | null;

@@ -69,6 +69,7 @@ import { isFatalHidStatus } from "@/lib/input/webhid-ffb";
 import { applyGraphicsQuality } from "@/lib/render/golden-hour-environment";
 import { createRainFx, RAIN_VISOR_LAYER } from "@/lib/render/rain-fx";
 import { DRIVER_HEAD_LAYER, OVERLAY_LAYER } from "@/lib/render/layers";
+import { KB_STEER_RETURN_S, KB_STEER_RISE_S, keyboardSteerLimit, stepKeyboardSteer } from "@/lib/input/keyboard-steer";
 import { shapeStick } from "@/lib/input/stick-shape";
 import { advanceAsphaltRain, setAsphaltWetness } from "@/lib/render/asphalt-sheen";
 import { SIM_REALISM_FLAGS, type SimRealism } from "@/lib/sim/sim-realism";
@@ -94,6 +95,7 @@ import { FirstRunWizard, type WizardMode, type WizardStepId } from "@/components
 import { assetProgress } from "@/lib/loading/asset-progress";
 import { prefetchSoundBank } from "@/lib/sim/vf26-audio";
 import { CarReflectionProbe } from "@/lib/render/car-reflection-probe";
+import { StartupMonitor } from "@/lib/render/startup-monitor";
 import { addContactShadow } from "@/lib/render/contact-shadow";
 import { buildKeyLookup, HUD_TOGGLE_EVENT, keyLabel, padButtonLabel, type KeyAction } from "@/lib/input/bindings";
 import { autoConfigureWheel, carWheelLockDeg, connectedPads, DeviceInputReader } from "@/lib/input/device-input";
@@ -143,7 +145,6 @@ const KB_THROTTLE_RISE_S = 0.25;
 const KB_THROTTLE_FALL_S = 0.1;
 const KB_BRAKE_RISE_S = 0.17;
 const KB_BRAKE_FALL_S = 0.08;
-/** Time for keyboard steering to reach its speed-dependent limit, and to recentre */
 // Rotates a camera (which looks down -Z) to look along the car's +Z forward axis
 const CAM_FORWARD_FLIP = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI);
 const CAM_X_AXIS = new THREE.Vector3(1, 0, 0);
@@ -151,11 +152,6 @@ const CAM_X_AXIS = new THREE.Vector3(1, 0, 0);
 const FALLBACK_COCKPIT_FOV_DEG = 62;
 /** Most the chase camera's boom may trail the car's nose (rad): a spin swings the camera round instead of leaving it side-on */
 const CHASE_MAX_LAG_RAD = 0.35;
-const KB_STEER_RISE_S = 0.22;
-const KB_STEER_RETURN_S = 0.14;
-/** Keyboard steering limit: road-wheel angle for this lateral acceleration (m/s²) plus a peak slip allowance (rad) */
-const KB_STEER_LIMIT_ACCEL = 38;
-const KB_STEER_LIMIT_SLIP_RAD = 0.12;
 
 /**
  * Session flow: assets loading → "press any key" → title menu → (first-run / controls setup) → driving.
@@ -1344,6 +1340,9 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     hapticsRef.current = haptics;
 
     const scene = new THREE.Scene();
+    // The scene root never moves: left to update its own matrix, it forced every object's world matrix to be
+    // recomputed on every render call (static-scene.ts freezes the circuit itself)
+    scene.matrixAutoUpdate = false;
 
     const camera = new THREE.PerspectiveCamera(
       62,
@@ -1378,6 +1377,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     const postFx = createPostFx(renderer, scene, camera);
     // Live reflections of the world on the cars (High / Medium); Low keeps the sky's
     const reflectionProbe = new CarReflectionProbe(renderer, scene);
+    // `?perf=1`: a report of the first 30 s on track (startup-monitor.ts)
+    const startupMonitor = StartupMonitor.requested() ? new StartupMonitor(renderer) : null;
     reflectionProbe.setSky(env.sky);
     // Top-centre virtual rear-view mirror for the views without wing mirrors in shot
     const virtualMirror = new VirtualMirror(renderer, scene);
@@ -1403,9 +1404,14 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         const idleMs = deadline?.timeRemaining() ?? 8;
         if (!driving || idleMs >= 3) {
           const until = performance.now() + (driving ? Math.min(idleMs, 6) : Math.max(4, Math.min(12, idleMs)));
-          do {
-            if (occlusion.next().done) return;
-          } while (performance.now() < until);
+          startupMonitor?.begin();
+          try {
+            do {
+              if (occlusion.next().done) return;
+            } while (performance.now() < until);
+          } finally {
+            startupMonitor?.end("idle");
+          }
         }
         if (driving && typeof window.requestIdleCallback === "function") window.requestIdleCallback(occlusionSlice);
         else scheduleIdle(occlusionSlice);
@@ -1976,6 +1982,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       // drops into slow motion; a longer stall (hidden tab, debugger) is not
       const dtSeconds = Math.min((nowMs - lastTimeMs) / 1000, MAX_FRAME_CATCH_UP_S);
       lastTimeMs = nowMs;
+      if (phaseRef.current === "driving") startupMonitor?.frame(nowMs);
 
       // Optional Gamepad / Sim Racing Wheel Polling. Controllers with the standard mapping (Xbox,
       // DualShock, DualSense …) send the raw thumbstick through the physics' gamepad steering
@@ -2069,24 +2076,14 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
               SIM_REALISM_FLAGS[settingsRef.current.realism].wetSeverity
             ) / wetTraits.dryGrip
           : 1;
-      // The dry limit, scaled by what the water leaves of the tyre's grip
-      const kbMaxLatAccel = KB_STEER_LIMIT_ACCEL * wetGripScale;
-      const kbSteerLimit = Math.min(
-        1,
-        ((physics.wheelbaseM * kbMaxLatAccel) / Math.max(1, vFwd * vFwd) +
-          KB_STEER_LIMIT_SLIP_RAD) /
-          physics.maxSteerAngleRad
-      );
-      const kbSteerTarget =
-        ((keys.right ? 1 : 0) - (keys.left ? 1 : 0)) * kbSteerLimit;
-      const kbRecentring =
-        kbSteerTarget === 0 || kbSteerTarget * kb.steer < 0;
-      kb.steer = approach(
+      // The car's own grip limit (keyboard-steer.ts), scaled by what the water leaves of the tyre's grip
+      kb.steer = stepKeyboardSteer(
         kb.steer,
-        kbSteerTarget,
-        (kbSteerLimit /
-          (kbRecentring ? kbTuning.steerReturnS || KB_STEER_RETURN_S : kbTuning.steerRiseS || KB_STEER_RISE_S)) *
-          dtSeconds
+        (keys.right ? 1 : 0) - (keys.left ? 1 : 0),
+        keyboardSteerLimit(physics, vFwd, wetGripScale),
+        dtSeconds,
+        kbTuning.steerRiseS || KB_STEER_RISE_S,
+        kbTuning.steerReturnS || KB_STEER_RETURN_S
       );
       const kbSteerActive = keys.left || keys.right || Math.abs(kb.steer) > 1e-3;
       // On-screen controls: pedals and a steering pad (or the tilt of the device)
@@ -2145,8 +2142,10 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
           if (base.car !== physics) autopilotPaceRef.current = { car: physics, pace: physics.aiPaceScale };
           physics.aiPaceScale = autopilotPaceRef.current.pace * (physics.aiAutopilot ? trackEnv.weatherPaceScale(physics) : 1);
         }
+        startupMonitor?.begin();
         if (!aiField?.playerFrozen && !mpFrozen) physics.step(dtSeconds, inputs);
         aiField?.update(dtSeconds);
+        startupMonitor?.end("sim");
       }
       if (mpRace && mpFrame && mpFrame.phase === "racing" && !pausedRef.current) {
         mpRace.lapClock.update(physics.sMeters, mpFrame.raceTimeS, mpRace.start.laps, mpRace.flagOut);
@@ -3067,7 +3066,9 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         }
       }
       env.update(physics.worldPosition, camera);
+      startupMonitor?.begin();
       reflectionProbe.update(physics.worldPosition, carRig.root, scene.environmentIntensity);
+      startupMonitor?.end("probe");
       // Virtual mirror: on its own in the views whose wing mirrors are off screen (or that have none), and in the
       // chase view too when the player asked for it always
       const vmSetting = settingsNow.hud.virtualMirror;
@@ -3092,8 +3093,10 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         renderer.render(scene, xrCamera);
       } else {
         const t0 = loggedFirstFrame ? 0 : performance.now();
+        startupMonitor?.begin();
         postFx.render(dtSeconds);
         virtualMirror.draw();
+        startupMonitor?.end("render");
         if (!loggedFirstFrame) {
           loggedFirstFrame = true;
           if (process.env.NODE_ENV !== "production") {

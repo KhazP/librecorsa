@@ -97,7 +97,7 @@ const ledColor = (i: number) => (i < 8 ? "#00E676" : i < 14 ? HUD_RED : "#2F8BE5
  * and one telemetry pod along the bottom, a strip of rev lights over speed, gear, energy and the
  * delta: everything reads at a glance from the sofa, nothing covers the racing line.
  */
-export const BroadcastHud: React.FC<HudDesignProps> = ({ t, deltaS, map, compound = "soft", revRange, scale, trackCode, mfd, lapInvalid, towerGaps, mapMode }) => {
+export const BroadcastHud: React.FC<HudDesignProps> = ({ t, deltaS, map, compound = "soft", revRange, scale, trackCode, mfd, lapInvalid, towerGaps, mapMode, leftExtra, rightExtra }) => {
   const race = t.race;
   const [revStart, revFull] = revRange;
   const lit = Math.round(Math.min(1, Math.max(0, (t.rpm - revStart) / (revFull - revStart))) * LEDS);
@@ -108,12 +108,14 @@ export const BroadcastHud: React.FC<HudDesignProps> = ({ t, deltaS, map, compoun
 
   return (
     <div className="pointer-events-none absolute inset-0 select-none">
-      <div className="absolute top-[clamp(14px,2.2vw,24px)] left-[clamp(14px,2.2vw,24px)] w-[264px]" style={anchor(scale, "top left")}>
+      <div className="absolute top-[clamp(14px,2.2vw,24px)] left-[clamp(14px,2.2vw,24px)] flex w-[264px] flex-col gap-2" style={anchor(scale, "top left")}>
         <BroadcastTower t={t} trackCode={trackCode} lapInvalid={lapInvalid} gaps={towerGaps} />
+        {leftExtra}
       </div>
 
       <div className="absolute top-[clamp(14px,2.2vw,24px)] right-[clamp(14px,2.2vw,24px)] hidden w-[236px] md:block" style={anchor(scale, "top right")}>
         <BroadcastMap t={t} map={map} mapMode={mapMode} />
+        {rightExtra ? <div className="mt-2">{rightExtra}</div> : null}
       </div>
 
       {mfd ? (

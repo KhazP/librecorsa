@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { SegmentOccluder } from "./segment-occluder";
 import type { CarTelemetry, TrackSamplePoint } from "@/types/f1";
 import type { BuiltTrackData } from "@/lib/track-data";
 
@@ -351,20 +352,22 @@ export class TracksideBroadcastDirector {
   /**
    * Moves stations whose view of the track is blocked (grandstands, buildings, trees, terrain): each dolly is
    * checked with rays from its points to the car's height on the centreline below them, and replaced by the
-   * first clear alternative (the other side, closer in, higher up). Run once, when the circuit has loaded,
-   * one raycast at a time (each step yields the stations moved so far), so a caller can spread its
-   * raycasts (about a second on a scanned circuit, several on a slow CPU) over idle time instead of freezing the page.
-   * A single raycast can take milliseconds (every track mesh, no BVH), so a station is never one indivisible step.
+   * first clear alternative (the other side, closer in, higher up). Run once, when the circuit has loaded, in steps
+   * (each yields the stations moved so far) that a caller spreads over idle time: the scan is indexed a few thousand
+   * triangles at a time (segment-occluder.ts), then one sight line per step. Three's Raycaster tested every triangle
+   * of the scan per ray, ~100 ms on Firefox, which stalled the first 15 s of driving on the Sketchfab circuits.
    */
   *occlusionSteps(trackRoot: THREE.Object3D): Generator<number, void, void> {
     const occluders: THREE.Object3D[] = [];
     trackRoot.traverseVisible((obj) => {
       if ((obj as THREE.Mesh).isMesh) occluders.push(obj);
     });
-    const ray = new THREE.Raycaster();
+    // Indexed once, in slices (a scan is up to 1.4 M triangles); each sight line then tests only what it crosses
+    const occluder = new SegmentOccluder();
+    const build = occluder.build(occluders);
+    while (!build.next().done) yield 0;
     const target = new THREE.Vector3();
     const dir = new THREE.Vector3();
-    const hits: THREE.Intersection[] = [];
     let moved = 0;
     // eslint-disable-next-line @typescript-eslint/no-this-alias -- the nested generator needs the director
     const self = this;
@@ -379,10 +382,7 @@ export class TracksideBroadcastDirector {
         target.y += LOOK_HEIGHT_M;
         dir.subVectors(target, from);
         const dist = dir.length();
-        ray.set(from, dir.divideScalar(dist));
-        ray.far = dist - OCCLUSION_MARGIN_M;
-        hits.length = 0;
-        const blocked = ray.intersectObjects(occluders, false, hits).length > 0;
+        const blocked = occluder.blocked(from, dir.divideScalar(dist), dist - OCCLUSION_MARGIN_M);
         yield moved;
         if (blocked) return false;
       }

@@ -113,10 +113,11 @@ const TyreDetail: React.FC<{ t: CarTelemetry; compound: TireCompound }> = ({ t, 
  * the car's channels, wheel force and the tuner bottom-right. The side panels give way on small
  * screens, leaving the dash.
  */
-export const TelemetryHud: React.FC<HudDesignProps> = ({ t, deltaS, map, compound = "soft", revRange, scale, trackCode, ffb, mfd, lapInvalid, towerGaps, mapMode }) => (
+export const TelemetryHud: React.FC<HudDesignProps> = ({ t, deltaS, map, compound = "soft", revRange, scale, trackCode, ffb, mfd, lapInvalid, towerGaps, mapMode, leftExtra, rightExtra }) => (
   <div className="pointer-events-none absolute inset-0 select-none">
     <div className="absolute top-5 left-5 flex w-[252px] flex-col gap-2" style={anchor(scale, "top left")}>
       <BroadcastTower t={t} trackCode={trackCode} lapInvalid={lapInvalid} gaps={towerGaps} />
+      {leftExtra}
       <div className="compact:hidden">
         <LapAnalysis t={t} />
       </div>
@@ -124,6 +125,7 @@ export const TelemetryHud: React.FC<HudDesignProps> = ({ t, deltaS, map, compoun
 
     <div className="absolute top-5 right-5 hidden w-[252px] flex-col items-end gap-2 md:flex" style={anchor(scale, "top right")}>
       <BroadcastMap t={t} map={map} mapMode={mapMode} />
+      {rightExtra}
       <div className="flex w-full flex-col items-end gap-2 compact:hidden">
         <GPowerCard t={t} />
       </div>

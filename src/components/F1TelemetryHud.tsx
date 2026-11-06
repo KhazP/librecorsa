@@ -207,10 +207,9 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
   const phone = usePhoneLayout();
   const lapInvalid = useLapInvalid(telemetry);
   // Under the virtual mirror's strip (its rect is shared with the renderer), with a little air
-  const mirrorTop = props.virtualMirror && !phone && typeof window !== "undefined" ? (() => {
-    const r = virtualMirrorRect(window.innerWidth, window.innerHeight);
-    return r.y + r.h + 8;
-  })() : null;
+  // The renderer draws the mirror into this rect; the HUD frames it and starts the top-centre column under it
+  const mirrorRect = props.virtualMirror && !phone && typeof window !== "undefined" ? virtualMirrorRect(window.innerWidth, window.innerHeight) : null;
+  const mirrorTop = mirrorRect ? mirrorRect.y + mirrorRect.h + 10 : null;
   // The HUD pad button (R3 by default) clears every panel off the screen; start lights and alerts stay
   const [hudHidden, setHudHidden] = useState(false);
   const [hiddenNote, setHiddenNote] = useState(false);
@@ -270,6 +269,11 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
   const style = phone ? PHONE_STYLE : HUD_STYLES[preset];
   const classic = !phone && preset === "classic";
   const minimal = !phone && preset === "minimal";
+  // Split gaps (AI races, multiplayer) and weather sit under the top corner groups, not in the middle of the screen
+  const gapsNode =
+    hud?.splitGaps !== false && !phone && !lightsPhase && race?.phase === "racing" ? <SplitGaps splits={race.splits} variant="panel" /> : null;
+  const weatherNode = props.weather && !phone && !minimal && !lightsPhase ? <WeatherBadge weather={props.weather} variant="panel" /> : null;
+
   const showTyres = classic;
   const showMap = classic;
   const showChannels = classic;
@@ -340,15 +344,27 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
           lapInvalid={lapInvalid}
           towerGaps={hud?.towerGaps}
           mapMode={hud?.mapMode}
+          leftExtra={gapsNode}
+          rightExtra={weatherNode}
         />
       ) : (
         /* Classic / Minimal top-left: timing tower (race) and lap timing */
         <div className="absolute top-3 left-3 flex flex-col gap-2 sm:top-4 sm:left-4" style={corner("top left")}>
           {race ? <TimingTower race={race} trackCode={trackInfo.country.slice(0, 3).toUpperCase()} gaps={hud?.towerGaps} /> : null}
           <LapPanel telemetry={telemetry} deltaS={deltaS} variant={minimal ? "minimal" : "full"} lapInvalid={lapInvalid} />
+          {gapsNode}
+          {weatherNode}
         </div>
       )}
 
+      {/* A frame round the virtual mirror, so its sky never reads as the real one */}
+      {mirrorRect && !hudHidden ? (
+        <div
+          aria-hidden
+          className="absolute rounded-[6px] shadow-[0_0_0_3px_#08090D,0_0_0_4px_rgba(255,255,255,0.14),0_14px_40px_rgba(0,0,0,0.5)]"
+          style={{ left: mirrorRect.x, top: mirrorRect.y, width: mirrorRect.w, height: mirrorRect.h }}
+        />
+      ) : null}
       {/* Top-centre: start lights and race-control notifications (under the Phone HUD's speed pod) */}
       <div
         className={`absolute left-1/2 -translate-x-1/2 ${
@@ -361,9 +377,6 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
         <StartLights race={race} />
         {/* The ±1 s ribbon sits under every preset except the Phone HUD, whose speed pod owns this spot */}
         {hud?.deltaBar && !phone && !lightsPhase ? <DeltaBar deltaS={deltaS} /> : null}
-        {/* Split gaps to the cars directly ahead and behind (AI races and multiplayer) */}
-        {hud?.splitGaps !== false && !phone && !lightsPhase && race?.phase === "racing" ? <SplitGaps splits={race.splits} /> : null}
-        {props.weather && !phone && !minimal && !lightsPhase ? <WeatherBadge weather={props.weather} /> : null}
         {!lightsPhase ? (
           <RaceControlBanner status={telemetry.trackLimits} offTrack={telemetry.offTrack} race={Boolean(race)} />
         ) : null}
@@ -459,7 +472,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
           </div>
         ) : null}
         <div
-          className={`${showKeyHints ? (style ? "xl:flex" : "sm:flex") : ""} hidden flex-wrap items-center gap-x-3 gap-y-2 rounded-full py-2 pr-3.5 pl-2 text-[12px] font-bold text-[#F5F7FA] ${HUD_GLASS}`}
+          className={`${showKeyHints ? (style ? "2xl:flex" : "sm:flex") : ""} hidden flex-wrap items-center gap-x-3 gap-y-2 rounded-full py-2 pr-3.5 pl-2 text-[12px] font-bold text-[#F5F7FA] ${HUD_GLASS}`}
         >
           <LibreCorsaLogo variant="mark" className="h-[22px] w-[22px]" />
           {inputMode === "pad" ? (

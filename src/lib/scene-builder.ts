@@ -19,6 +19,7 @@ import { cleanScanMaterial } from "@/lib/render/scan-materials";
 import { createGroundHit, type GroundQuery } from "@/lib/sim/f12026-car/TrackColliderQuery";
 import { OVERLAY_LAYER } from "@/lib/render/layers";
 import { cutSceneryBoxes, isCutMaterialMesh, type SceneryCutBox } from "@/lib/scenery-cuts";
+import { freezeStaticTransforms, singlePassTransparency } from "@/lib/render/static-scene";
 
 /** Height of a racing-line dash over the driving surface: clear of its ripple, low enough to read as paint */
 const DASH_SEAT_LIFT_M = 0.035;
@@ -254,6 +255,7 @@ function loadTrackGlb(
           baseY = box.copy(obj.geometry.boundingBox!).applyMatrix4(obj.matrixWorld).min.y;
         }
         for (const mat of mats) {
+          singlePassTransparency(mat);
           applySceneryDetail(mat, { baseY, treeShading });
           if (!(mat instanceof THREE.MeshStandardMaterial)) continue;
           if (topName === "Track_Asphalt_Road" || (topName === "Track_Model" && roadMaterialNames.has(mat.name))) {
@@ -282,6 +284,8 @@ function loadTrackGlb(
       if (!current()) return;
       glbGroup.add(root);
       onLoaded(root);
+      // The circuit never moves: its transforms are fixed from here (static-scene.ts)
+      freezeStaticTransforms(glbGroup);
 
       // Hide the procedural stand-in geometry once the authored circuit is live
       fallbackGroup.visible = false;
@@ -620,6 +624,8 @@ export function buildCircuitScene(
   track: BuiltTrackData
 ): BuiltCircuitScene {
   const sceneGroup = new THREE.Group();
+  // Never moves: its children update their own transforms, but it no longer forces all of theirs every frame
+  sceneGroup.matrixAutoUpdate = false;
   /** Bugesera dressing (lake, airliner) only belongs on the Rwanda circuit */
   const isRwanda = (track.id ?? "rwanda") === "rwanda";
   const glbGroup = new THREE.Group();
@@ -1356,6 +1362,9 @@ export function buildCircuitScene(
     track.sceneryCuts ?? [],
     track.sceneryCutMaterials ?? []
   );
+
+  // The procedural stand-in and trackside structures are placed once
+  freezeStaticTransforms(fallbackGroup);
 
   return {
     sceneGroup,

@@ -1,7 +1,8 @@
 /**
  * Ported F1 cars (`public/cars/<id>/model/<id>.glb`, `src/lib/cars/car-registry.ts`, `src/lib/ported-car-model.ts`):
  * checks registry entries, UI naming rules, CREDITS.md attribution, GLB byte budgets, node hierarchy,
- * single-primitive tyre meshes, wheel symmetry, floor level, and camera extras for all seven ported F1 cars.
+ * single-primitive tyre meshes, wheel symmetry, floor level, and camera extras for all seven ported F1 cars, and
+ * that their wheels stay on the road (neither sunk nor floating) while the rigid-body model drives them.
  *
  *   npx tsx scripts/verify-ported-cars.ts
  */
@@ -9,6 +10,16 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { carById, CARS, isCarId, type CarId } from "../src/lib/cars/car-registry";
 import { carPhysics, carTakesPhysicsSwitch } from "../src/lib/cars/f1-mod-physics";
+import { getActiveTrackData } from "../src/lib/track-data";
+import { F12026CarSim, trackGroundQuery } from "../src/lib/sim/f12026-car/F12026CarSim";
+import { F12026_CAR_CONFIG } from "../src/lib/sim/f12026-car/F12026CarConfig";
+import { loadGlbGeometry } from "./lib/glb-geometry";
+import {
+  measurePortedWheelContact,
+  WHEEL_CONTACT_RUN_S,
+  WHEEL_ON_ROAD_TOLERANCE_MM,
+  type PortedWheelExtras,
+} from "./lib/ported-wheel-contact";
 
 let passed = 0;
 function check(name: string, cond: boolean, detail = ""): void {
@@ -163,6 +174,7 @@ for (const exp of EXPECTED_CARS) {
 }
 
 console.log("\nPorted GLB hierarchy, extras & geometry checks");
+const wheelExtras: Record<string, PortedWheelExtras> = {};
 for (const exp of EXPECTED_CARS) {
   const relPath = join("public", "cars", exp.id, "model", `${exp.id}.glb`);
   check(`${exp.id}: GLB exists at ${relPath}`, existsSync(relPath));
@@ -289,6 +301,33 @@ for (const exp of EXPECTED_CARS) {
     );
   });
   check(`${exp.id}: all 6 camera presets populated`, allCamsOk);
+  wheelExtras[exp.id] = { wheelCentres: wc, tyreRadius: tr, tyreHalfWidth: thw };
+}
+
+console.log("\nWheels on the road while driving (rigid-body model, Rwanda colliders)");
+{
+  const track = getActiveTrackData(1200);
+  const trackRoot = loadGlbGeometry(`public${track.meshUrl ?? "/tracks/rwanda/rwanda_2026.glb"}`);
+  const ground = trackGroundQuery(trackRoot);
+  check("Rwanda track colliders load", !!ground);
+  const contact = measurePortedWheelContact(
+    new F12026CarSim(track, trackRoot),
+    ground!,
+    wheelExtras,
+    F12026_CAR_CONFIG.chassis,
+    WHEEL_CONTACT_RUN_S
+  );
+  for (const exp of EXPECTED_CARS) {
+    const r = contact[exp.id];
+    check(
+      `${exp.id}: loaded tyres sit on the road within ±${WHEEL_ON_ROAD_TOLERANCE_MM} mm up to ${r.topSpeedKmh.toFixed(0)} km/h`,
+      r.samples > 10_000 &&
+        r.topSpeedKmh > 220 &&
+        r.minMm > -WHEEL_ON_ROAD_TOLERANCE_MM &&
+        r.maxMm < WHEEL_ON_ROAD_TOLERANCE_MM,
+      `${r.minMm.toFixed(1)}..${r.maxMm.toFixed(1)} mm (carried by the body: ${r.bodyFrameMinMm.toFixed(1)}..${r.bodyFrameMaxMm.toFixed(1)} mm)`,
+    );
+  }
 }
 
 console.log(`\nPorted F1 cars: all ${passed} checks passed.`);
