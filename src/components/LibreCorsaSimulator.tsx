@@ -1339,6 +1339,9 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     hapticsRef.current = haptics;
 
     const scene = new THREE.Scene();
+    // The scene root never moves: left to update its own matrix, it forced every object's world matrix to be
+    // recomputed on every render call (static-scene.ts freezes the circuit itself)
+    scene.matrixAutoUpdate = false;
 
     const camera = new THREE.PerspectiveCamera(
       62,
