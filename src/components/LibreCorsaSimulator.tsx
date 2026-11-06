@@ -30,7 +30,7 @@ import { SteeringWheelDisplay } from "@/lib/render/steering-display";
 import { WingMirrors } from "@/lib/render/wing-mirrors";
 import { VirtualMirror } from "@/lib/render/virtual-mirror";
 import { type ChassisSetup, DEFAULT_CHASSIS_SETUP, loadChassisSetup, saveChassisSetup } from "@/lib/sim/car-setup";
-import { CockpitMicroShake, TracksideBroadcastDirector } from "@/lib/render/camera-rig";
+import { CockpitMicroShake, DynamicChaseCamera, TracksideBroadcastDirector, type ChaseCameraInput } from "@/lib/render/camera-rig";
 import { LapDeltaTracker } from "@/lib/sim/lap-delta";
 import { TrackLimitsMonitor } from "@/lib/sim/track-limits";
 import { SimVisualFxManager } from "@/lib/sim/visual-fx";
@@ -154,8 +154,6 @@ const CAM_FORWARD_FLIP = new THREE.Quaternion().setFromAxisAngle(new THREE.Vecto
 const CAM_X_AXIS = new THREE.Vector3(1, 0, 0);
 /** Driver's-eye FOV of the procedural car (no model camera anchors); the FOV setting shifts every onboard camera from it */
 const FALLBACK_COCKPIT_FOV_DEG = 62;
-/** Most the chase camera's boom may trail the car's nose (rad): a spin swings the camera round instead of leaving it side-on */
-const CHASE_MAX_LAG_RAD = 0.35;
 
 /**
  * Session flow: assets loading → "press any key" → title menu → (first-run / controls setup) → driving.
@@ -527,6 +525,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   const toggleReplayRef = useRef<() => void>(() => {});
   const exitReplayRef = useRef<() => void>(() => {});
   const flashbackReplayRef = useRef<() => void>(() => {});
+  const resetCameraRigRef = useRef<() => void>(() => {});
 
   const cameraModeRef = useRef<CameraMode>("chase");
   cameraModeRef.current = cameraMode;
@@ -739,6 +738,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         lapRecorderRef.current?.reset();
         if (aiFieldRef.current) aiFieldRef.current.startRace(!flyingStart);
         else physicsRef.current.resetToStartGrid(flyingStart);
+        resetCameraRigRef.current();
       }
     },
     [unlockAudio]
@@ -758,6 +758,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     field.startRace(true);
     aiFieldRef.current = field;
     setAiOpponents(true);
+    resetCameraRigRef.current();
   }, [takeAiField, unlockAudio]);
 
   const handleSelectTurn = useCallback(
@@ -771,6 +772,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       if (physicsRef.current) {
         physicsRef.current.aiAutopilot = false;
         physicsRef.current.teleportToTurn(turnNumber);
+        resetCameraRigRef.current();
       }
     },
     [unlockAudio]
@@ -922,6 +924,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       setAiOpponents(race);
       setResultsClosed(false);
       lapRecorderRef.current?.reset();
+      resetCameraRigRef.current();
       // A new session: the instant replay (and flashback) must not reach back into the previous one
       replayRef.current.buffer.clear();
       kbInputRef.current.throttle = 0;
@@ -966,6 +969,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         race.lapClock.reset(physics.sMeters);
       }
       lapRecorderRef.current?.reset();
+      resetCameraRigRef.current();
       replayRef.current.buffer.clear();
       kbInputRef.current.throttle = 0;
       kbInputRef.current.brake = 0;
@@ -1220,6 +1224,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     aiFieldRef.current = null;
     setAiOpponents(false);
     physicsRef.current?.resetToStartGrid(false);
+    resetCameraRigRef.current();
     replayRef.current.buffer.clear();
     pausedRef.current = false;
     setPaused(false);
@@ -1335,6 +1340,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       lapRecorderRef.current?.reset();
       // The live delta and the replay belong to the previous car
       lapDelta.reset();
+      resetCameraRigRef.current();
       replayRef.current.buffer.clear();
       // A running race restarts from the lights with the new car
       if (aiFieldRef.current) {
@@ -1705,6 +1711,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       physics.aiAutopilot = false;
       if (aiFieldRef.current) aiFieldRef.current.startRace(true);
       else physics.resetToStartGrid(true);
+      resetCameraRigRef.current();
     };
 
     const onKeyUp = (e: KeyboardEvent) => {
@@ -1784,6 +1791,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       // The replay only moved the drawn car (the physics never left the live pose): put the drawing back
       physics.worldPosition.copy(replaySaved.pos);
       physics.worldQuaternion.copy(replaySaved.quat);
+      resetCameraRigRef.current();
       setReplayUi((u) => ({ ...u, active: false }));
     };
     const flashbackReplay = () => {
@@ -1803,6 +1811,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       replayClockS = rp.timeS;
       lastReplayPushS = rp.timeS;
       rp.active = false;
+      resetCameraRigRef.current();
       setReplayUi((u) => ({ ...u, active: false }));
     };
     exitReplayRef.current = exitReplay;
@@ -1823,11 +1832,6 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     };
 
     // Horizon-Stabilized Sim Camera State
-    let smoothedCamDist = 5.35;
-    let smoothedApexLookYaw = 0;
-    const smoothedChaseDir = new THREE.Vector3(0, 0, 1);
-    const chaseCross = new THREE.Vector3();
-    const smoothedCamUp = new THREE.Vector3(0, 1, 0);
     /** The player car drawn at the frame time (its physics pose carried forward by the unstepped remainder) */
     const renderCarPos = new THREE.Vector3();
     const smoothedHeliPos = new THREE.Vector3();
@@ -1851,8 +1855,21 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     const cockpitShake = new CockpitMicroShake();
     const shakeQuat = new THREE.Quaternion();
     const shakeEuler = new THREE.Euler();
+    // Velocity-trailing dynamic chase camera rig with dual-rate G-force smoothing
+    const chaseCamera = new DynamicChaseCamera();
+    const chaseInput: ChaseCameraInput = {
+      carPos: renderCarPos,
+      longitudinalG: 0,
+      lateralG: 0,
+      verticalG: 1,
+    };
     // Automatic trackside broadcast cameras on dolly splines (telephoto, zooming in over kerbs)
     const tvDirector = new TracksideBroadcastDirector(track);
+    resetCameraRigRef.current = () => {
+      cockpitShake.reset();
+      chaseCamera.reset();
+      tvDirector.reset();
+    };
     let frameIndex = 0;
     const deviceInput = new DeviceInputReader();
     /** Per-axle tyre slip read from the car's telemetry each frame, for the keyboard pedal help */
@@ -2656,89 +2673,24 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
           camera.updateProjectionMatrix();
         }
       } else if (mode === "chase") {
-        // World-space trajectory-following Chase Rig:
-        // smoothedChaseDir trails the car's velocity + heading in world space so that when the driver
-        // steers into a corner, the car visibly rotates (yaws) inside the camera frame rather than
-        // appearing locked to the screen axis ("strafing").
-        const velHoriz = new THREE.Vector3(carVelocityWorld.x, 0, carVelocityWorld.z);
-        const velSpeed = velHoriz.length();
-        const targetBoomDir =
-          velSpeed > 4
-            ? velHoriz.multiplyScalar(1 / velSpeed).lerp(carForward, 0.38).normalize()
-            : carForward.clone();
-        if (smoothedChaseDir.lengthSq() < 0.01) smoothedChaseDir.copy(carForward);
-        smoothedChaseDir.lerp(targetBoomDir, Math.min(1, dtSeconds * 6.8));
-        // Bound the lag about the car's up: the boom stays behind the car through a spin or a respawn, no snap
-        const lagRad = Math.atan2(
-          chaseCross.crossVectors(carForward, smoothedChaseDir).dot(carUp),
-          smoothedChaseDir.dot(carForward)
-        );
-        if (!(Math.abs(lagRad) <= CHASE_MAX_LAG_RAD)) {
-          smoothedChaseDir
-            .copy(carForward)
-            .applyAxisAngle(carUp, Number.isFinite(lagRad) ? Math.sign(lagRad) * CHASE_MAX_LAG_RAD : 0);
-        }
-        smoothedChaseDir.normalize();
-
-        const boostExtraDist = physics.telemetry.manualOverrideActive ? 0.24 : 0;
-        const targetDist =
-          5.25 +
-          THREE.MathUtils.clamp(
-            physics.telemetry.longitudinalG * 0.11,
-            -0.22,
-            0.26
-          ) +
-          boostExtraDist;
-        smoothedCamDist = THREE.MathUtils.lerp(
-          smoothedCamDist,
-          targetDist,
-          Math.min(1, dtSeconds * 12)
-        );
-
-        camera.position
-          .copy(renderCarPos)
-          .addScaledVector(smoothedChaseDir, -smoothedCamDist)
-          .addScaledVector(
-            carUp,
-            1.78 + physics.rideHeightOffsetM * 0.5 + kerbShake
-          );
-
-        const horizonBlendedUp = new THREE.Vector3(0, 1, 0)
-          .lerp(carUp, 0.55)
-          .normalize();
-        smoothedCamUp
-          .lerp(horizonBlendedUp, Math.min(1, dtSeconds * 14))
-          .normalize();
-        camera.up.copy(smoothedCamUp);
-
-        const targetApexLook = THREE.MathUtils.clamp(
-          physics.yawRateRadS * 0.35,
-          -0.45,
-          0.45
-        );
-        smoothedApexLookYaw = THREE.MathUtils.lerp(
-          smoothedApexLookYaw,
-          targetApexLook,
-          Math.min(1, dtSeconds * 8)
-        );
-
-        const lookDir = smoothedChaseDir.clone().lerp(carForward, 0.62).normalize();
-        const lookPoint = renderCarPos
-          .clone()
-          .addScaledVector(lookDir, 14.5)
-          .addScaledVector(carRight, -smoothedApexLookYaw)
-          .addScaledVector(
-            carUp,
-            0.52 - physics.pitchRad * 3.2 + highSpeedBuffet
-          );
-        camera.lookAt(lookPoint);
-
-        const boostFovKick = physics.telemetry.manualOverrideActive ? 3.5 : 0;
-        camera.fov = THREE.MathUtils.lerp(
-          camera.fov,
-          56 + speedNorm * 11 + boostFovKick,
-          Math.min(1, dtSeconds * 10)
-        );
+        chaseInput.carPos = renderCarPos;
+        chaseInput.carForward = carForward;
+        chaseInput.carUp = carUp;
+        chaseInput.carRight = carRight;
+        chaseInput.carVelocity = carVelocityWorld;
+        chaseInput.longitudinalG = physics.telemetry.longitudinalG;
+        chaseInput.lateralG = physics.telemetry.lateralG;
+        chaseInput.verticalG = physics.telemetry.verticalG;
+        chaseInput.wheelbaseM = physics.wheelbaseM;
+        chaseInput.cgHeightM = isGt3Rig(carRigCar) ? AMG_GT3_CONFIG.chassis.cgHeight : F12026_CAR_CONFIG.chassis.cgHeight;
+        chaseInput.rideHeightOffsetM = physics.rideHeightOffsetM;
+        chaseInput.kerbShakeM = kerbShake;
+        chaseInput.manualOverrideActive = physics.telemetry.manualOverrideActive;
+        const chase = chaseCamera.update(dtSeconds, chaseInput);
+        camera.position.copy(chase.position);
+        camera.up.copy(chase.up);
+        camera.lookAt(chase.lookAt);
+        camera.fov = chase.fovDeg;
         camera.updateProjectionMatrix();
       } else if (mode === "tv_pod") {
         // Broadcast Roll-Hoop T-Cam mounted at front lens of T-Cam pod looking down over painted helmet #16, butterfly wheel + gloved hand, Halo arch, mirrors, wheel brows & nose cone
