@@ -71,8 +71,6 @@ export const WET_TYRE_TRAITS: Record<TireCompound, WetTyreTraits> = {
   },
 };
 
-export const isWetCompound = (c: TireCompound): boolean => c === 'intermediate' || c === 'wet';
-
 /** Water film depth (mm) at which the road counts as damp, wet and flooded, for labels */
 export const DAMP_MM = 0.08;
 export const WET_MM = 0.5;
@@ -102,17 +100,6 @@ const smoothstep = (a: number, b: number, x: number) => {
 
 /** Speed at which `clearMm` is quoted (m/s, 200 km/h) */
 const CLEAR_REF_MS = 55.6;
-
-/**
- * Thin-film boundary dampness lubrication factor (1 = dry, < 1 = damp micro-asperity film loss)
- * before bulk standing-water hydroplaning begins.
- */
-export function dampnessGripEffect(traits: WetTyreTraits, waterMm: number): number {
-  if (!(waterMm > 0)) return 1;
-  const damp = 1 - Math.exp(-waterMm / DAMP_MM);
-  const maxDampLoss = (1 - traits.wetGrip) * 0.22;
-  return 1 - maxDampLoss * damp;
-}
 
 /** Remaining tread groove depth (mm) for a tyre with normalized `wear` (0 = new, 1 = worn to cords) */
 export function remainingTreadDepthMm(traits: WetTyreTraits, wear = 0): number {
@@ -216,7 +203,7 @@ export function evaluateFlashTempAndWlfGrip(
 
 /**
  * 2D bristle/brush contact-patch relaxation length multiplier (`dynamicBristleRelaxationScale`):
- * Contact patch half-length grows with vertical load (`(Fz / Fz0)^0.18`), lengthening bristle relaxation at high load,
+ * Contact patch half-length grows with vertical load (`(Fz / Fz0)^0.16`), lengthening bristle relaxation at high load,
  * while water lubrication shortens the adhesive zone of the brush footprint (`1 - 0.14 * wetness`).
  */
 export function dynamicBristleRelaxationScale(fzN: number, fzRefN: number, wetness: number): number {

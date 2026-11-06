@@ -12,36 +12,22 @@ import {
 } from "@/lib/input/bindings";
 import {
   connectedPads,
-  newlyPressedButton,
   PAD_SENSITIVITY,
   padDisplayName,
-  snapshotButtons,
   type PadSensitivity,
 } from "@/lib/input/device-input";
 import { Choice, Toggle } from "@/components/hud/PauseMenu";
 import { DEFAULT_PAD_TUNING, type PadTuning } from "@/lib/settings/player-settings";
-import { suspendMenuNav, useGamepads } from "../useMenuNav";
-import { padFamilyOf, useInputMode, type PadFamily } from "../input-mode";
+import { useGamepads } from "../useMenuNav";
+import { useButtonCapture } from "./button-capture";
+import { FACE_BUTTONS, padFamilyOf, useInputMode, type PadFamily } from "../input-mode";
 import { StickCurve, TriggerBars, TuningSlider } from "./TuningSlider";
 import { PadMap } from "./PadMap";
 import { AutoGrid, BindRow, bindKeyClass, ChoiceText, Hint, PillAction, SetupCard, StatusPill, TrackMeter } from "./setup-ui";
 import type { SetupStepProps } from "./types";
 
-/** Standard-mapping face buttons 0..3 (A B X Y / ✕ ○ □ △), drawn small inside a binding chip */
-const FACE: Record<PadFamily, { label: string; color: string }[]> = {
-  xbox: [
-    { label: "A", color: "#5DC21E" },
-    { label: "B", color: "#E5413A" },
-    { label: "X", color: "#2F8BE5" },
-    { label: "Y", color: "#F4C21B" },
-  ],
-  playstation: [
-    { label: "✕", color: "#7EA6E6" },
-    { label: "○", color: "#EE6A6A" },
-    { label: "□", color: "#D78DD6" },
-    { label: "△", color: "#45C9A6" },
-  ],
-};
+/** Standard-mapping face buttons 0..3, drawn small inside a binding chip */
+const FACE = FACE_BUTTONS;
 
 const FaceDot: React.FC<{ button: number; family: PadFamily }> = ({ button, family }) => {
   const face = FACE[family][button];
@@ -73,40 +59,6 @@ function testRumble() {
   }
 }
 
-/** Waits for the next button press on a standard controller and reports its index */
-function useButtonCapture(active: boolean, onButton: (button: number) => void, onCancel: () => void) {
-  useEffect(() => {
-    if (!active) return;
-    const resume = suspendMenuNav();
-    let prev = snapshotButtons(connectedPads());
-    let raf = 0;
-    const poll = () => {
-      raf = requestAnimationFrame(poll);
-      const pads = connectedPads().filter((p) => p.mapping === "standard");
-      const hit = newlyPressedButton(prev, pads);
-      prev = snapshotButtons(connectedPads());
-      if (hit) onButton(hit.button);
-    };
-    raf = requestAnimationFrame(poll);
-    const onKey = (e: KeyboardEvent) => {
-      if (e.code !== "Escape") return;
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      onCancel();
-    };
-    window.addEventListener("keydown", onKey, { capture: true });
-    return () => {
-      cancelAnimationFrame(raf);
-      window.removeEventListener("keydown", onKey, { capture: true });
-      // Hold the menus until the captured button is released
-      const wait = () => {
-        if (connectedPads().some((p) => p.buttons.some((b) => b.pressed))) requestAnimationFrame(wait);
-        else resume();
-      };
-      wait();
-    };
-  }, [active, onButton, onCancel]);
-}
 
 /** Controller: live input check, steering feel, rumble and button layout */
 export const ControllerStep: React.FC<SetupStepProps> = ({
@@ -132,7 +84,7 @@ export const ControllerStep: React.FC<SetupStepProps> = ({
     [capturing, onChangeSettings]
   );
   const onCancel = React.useCallback(() => setCapturing(null), []);
-  useButtonCapture(capturing !== null, onButton, onCancel);
+  useButtonCapture(capturing !== null, (b) => onButton(b.button), onCancel, { standardOnly: true });
 
   const tuning = settings.padTuning;
   const setTuning = (patch: Partial<PadTuning>) =>

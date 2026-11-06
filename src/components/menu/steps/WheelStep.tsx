@@ -8,11 +8,11 @@ import {
   connectedPads,
   emptyWheelButtons,
   findPad,
-  newlyPressedButton,
   padDisplayName,
   pedalValue,
   snapshotAxes,
-  snapshotButtons,
+  CLAIMED_TELEMETRY_PORTS,
+  DEFAULT_TELEMETRY_PORT,
   STEER_LOCK_MIN_DEG,
   strongestAxisChange,
   WHEEL_ROTATION_PRESETS,
@@ -29,7 +29,8 @@ import { type FfbStatus, webHidFfb, wheelFfb } from "@/lib/input/wheel-ffb";
 import { isFatalHidStatus, type WebHidFfbStatus } from "@/lib/input/webhid-ffb";
 import { SUPPORT_LABEL, type SupportLevel, WHEEL_SUPPORT, WHEEL_SUPPORT_SUMMARY } from "@/lib/input/wheel-support";
 import { Choice, Toggle, TyreSlider } from "@/components/hud/PauseMenu";
-import { suspendMenuNav, useGamepads, type PadState } from "../useMenuNav";
+import { useGamepads, type PadState } from "../useMenuNav";
+import { useButtonCapture } from "./button-capture";
 import { TuningSlider } from "./TuningSlider";
 import { AutoGrid, BindRow, bindKeyClass, ChoiceText, Hint, PillAction, SetupCard, SolidPill, StatusPill, SubHead, TrackMeter } from "./setup-ui";
 import type { SetupStepProps } from "./types";
@@ -159,39 +160,6 @@ const AxisCalibrator: React.FC<{
   );
 };
 
-/** Next button press on any device (wheel rim, button box, shifter) */
-function useAnyButtonCapture(active: boolean, onButton: (b: ButtonBinding) => void, onCancel: () => void) {
-  useEffect(() => {
-    if (!active) return;
-    const resume = suspendMenuNav();
-    let prev = snapshotButtons(connectedPads());
-    let raf = 0;
-    const poll = () => {
-      raf = requestAnimationFrame(poll);
-      const pads = connectedPads();
-      const hit = newlyPressedButton(prev, pads);
-      prev = snapshotButtons(pads);
-      if (hit) onButton(hit);
-    };
-    raf = requestAnimationFrame(poll);
-    const onKey = (e: KeyboardEvent) => {
-      if (e.code !== "Escape") return;
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      onCancel();
-    };
-    window.addEventListener("keydown", onKey, { capture: true });
-    return () => {
-      cancelAnimationFrame(raf);
-      window.removeEventListener("keydown", onKey, { capture: true });
-      const wait = () => {
-        if (connectedPads().some((p) => p.buttons.some((b) => b.pressed))) requestAnimationFrame(wait);
-        else resume();
-      };
-      wait();
-    };
-  }, [active, onButton, onCancel]);
-}
 
 /** Cars that share a steering lock in the wheel setup */
 const STEER_LOCK_CLASSES = [
@@ -262,7 +230,7 @@ function FfbBridgeStatus({ status }: { status: FfbStatus }) {
       : status.error
         ? ["#FFB300", status.error]
         : status.device
-          ? ["#22C55E", `Driving ${status.device}`]
+          ? ["#00E676", `Driving ${status.device}`]
           : ["#8E96AA", "Bridge connected · waiting for the wheel…"];
   return (
     <p role="status" className="m-0 flex items-center gap-2 font-f1-mono text-[12px] font-bold" style={{ color }}>
@@ -273,7 +241,7 @@ function FfbBridgeStatus({ status }: { status: FfbStatus }) {
 }
 
 const SUPPORT_COLOR: Record<SupportLevel, string> = {
-  tested: "#22C55E",
+  tested: "#00E676",
   expected: "#8E96AA",
   unknown: "#FFB300",
   no: "#FF2A3C",
@@ -329,7 +297,7 @@ function HidFfbStatusLine({ status, on }: { status: WebHidFfbStatus; on: boolean
   const browserUnsupported = status.state === "unsupported" && status.device === null;
   const [color, text] =
     status.state === "ready"
-      ? ["#22C55E", `Driving ${status.device ?? "the wheel"} over WebHID`]
+      ? ["#00E676", `Driving ${status.device ?? "the wheel"} over WebHID`]
       : status.state === "connecting"
         ? ["#8E96AA", status.device ? `Connecting to ${status.device}…` : "Connecting…"]
         : fatal
@@ -439,7 +407,7 @@ export const WheelStep: React.FC<SetupStepProps> = ({ settings, onChangeSettings
     [capturing, onChangeSettings]
   );
   const onCancelCapture = useCallback(() => setCapturing(null), []);
-  useAnyButtonCapture(capturing !== null, onButton, onCancelCapture);
+  useButtonCapture(capturing !== null, onButton, onCancelCapture);
 
   // Axes already taken, so the next calibration ignores them
   const excludeFor = useCallback(
@@ -685,7 +653,7 @@ export const WheelStep: React.FC<SetupStepProps> = ({ settings, onChangeSettings
               aria-label="Force feedback"
               onClick={() => setWheel({ ffbEnabled: !w.ffbEnabled })}
               className={`relative h-[30px] w-16 shrink-0 cursor-pointer rounded-full border-0 transition-colors duration-200 ${
-                w.ffbEnabled ? "bg-[#22C55E]" : "bg-[#1B1F2B] shadow-[inset_0_0_0_1px_#262B3D]"
+                w.ffbEnabled ? "bg-[#CCFF00]" : "bg-[#1B1F2B] shadow-[inset_0_0_0_1px_#262B3D]"
               }`}
             >
               <span
@@ -842,6 +810,12 @@ export const WheelStep: React.FC<SetupStepProps> = ({ settings, onChangeSettings
             <Hint>
               Needs the bridge running: <span className="font-f1-mono text-[#F5F7FA]">npm run ffb</span>
             </Hint>
+            {CLAIMED_TELEMETRY_PORTS[w.telemetryPort] ? (
+              <Hint>
+                Port {w.telemetryPort} is {CLAIMED_TELEMETRY_PORTS[w.telemetryPort]}: tools listening there will misread
+                this JSON. The default is {DEFAULT_TELEMETRY_PORT}.
+              </Hint>
+            ) : null}
           </div>
         </SetupCard>
 

@@ -12,7 +12,7 @@
  *  3. The remote pose: predicted to the present, a jump holds contact off, stale packets turn it off
  */
 import * as THREE from 'three';
-import { getRwandaTrackData } from '../src/lib/track-data';
+import { getActiveTrackData } from '../src/lib/track-data';
 import { F1Physics2026 } from '../src/lib/f1-physics-2026';
 import { MultiplayerSyncManager, type NetworkVehiclePacket } from '../src/lib/sim/multiplayer-sync';
 import { resolvePlayerVsRemoteCar } from '../src/lib/sim/ai-opponents';
@@ -25,7 +25,7 @@ const check = (name: string, ok: boolean, detail: string) => {
 };
 const fmt = (v: number, d = 2) => v.toFixed(d);
 
-const track = getRwandaTrackData();
+const track = getActiveTrackData();
 const LATENCY_MS = 40;
 const JITTER_MS = 15;
 const FPS = 60;

@@ -162,7 +162,7 @@ export function useLapHistory(t: CarTelemetry): LapRecord[] {
 }
 
 export interface FuelStrategy {
-  /** The car carries fuel at all (the f12026-car and GT3 run without a fuel model) */
+  /** Fuel left on board (every car starts on its garage fuel load; at 0 the fuel figures are hidden) */
   hasFuel: boolean;
   fuelKg: number;
   /** Rolling mean over the last three timed laps (kg, battery points, tread %); null before the first one */

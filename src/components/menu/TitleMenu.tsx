@@ -8,8 +8,8 @@ import { EngineersGarage } from "./EngineersGarage";
 import { MultiplayerPanel } from "@/components/hud/MultiplayerPanel";
 import { DisplayPanel } from "@/components/hud/DisplayPanel";
 import { LeaderboardPanel } from "@/components/hud/LeaderboardPanel";
-import { buildHudMap, mapPoint, SECTOR_COLORS, type HudMap } from "@/components/hud/styles/hud-style-parts";
-import { ACTIVE_TRACK_ID, BASE_ALTITUDE_M, getTrackData, TRACK_TOTAL_LENGTH_M, TURN_METADATA } from "@/lib/track-data";
+import { buildHudMap } from "@/components/hud/styles/hud-style-parts";
+import { ACTIVE_TRACK_ID, getTrackData, TRACK_TOTAL_LENGTH_M, TURN_METADATA } from "@/lib/track-data";
 import { getTrackInfo, RWANDA_TRACK_ID, TRACKS, type TrackInfo } from "@/lib/track-registry";
 import { SCENERY_CREDITS } from "@/lib/render/scenery-credits";
 import { isLikelyWheel, padDisplayName } from "@/lib/input/device-input";
@@ -19,6 +19,8 @@ import { focusInZone, focusOnHover, useFocusNav } from "./useFocusNav";
 import { useInputMode } from "./input-mode";
 import { KeyCap, PadGlyph, PromptBar } from "./menu-ui";
 import { RequestPanel } from "./RequestPanel";
+import { CircuitBrowser } from "./CircuitBrowser";
+import { TrackOutline } from "./circuit-outline";
 import { ConditionsPanel, type ConditionsPanelProps } from "./ConditionsPanel";
 import { TIME_OF_DAY_LABELS, WEATHER_LABELS } from "@/lib/sim/weather";
 import { LibreCorsaLogo } from "@/components/ui/LibreCorsaLogo";
@@ -74,138 +76,6 @@ const HUD_LABELS: Record<HudPreset, string> = {
 
 const km = (t: TrackInfo) => (t.lengthM / 1000).toFixed(2);
 
-/** Circuit outline from the active track's centreline: a volt thumbnail, or coloured by sector with the flow dashes */
-const TrackOutline: React.FC<{ map: HudMap; sectors?: boolean; className?: string; label?: string }> = ({
-  map,
-  sectors = false,
-  className,
-  label,
-}) => {
-  const pad = 60;
-  const [sx, sy] = mapPoint(map, 0);
-  return (
-    <svg
-      viewBox={`${-pad} ${-pad} ${map.w + pad * 2} ${map.h + pad * 2}`}
-      className={className}
-      role={label ? "img" : undefined}
-      aria-label={label}
-      aria-hidden={label ? undefined : true}
-    >
-      <path d={map.path} fill="none" stroke={sectors ? "#141822" : "#1B1F2B"} strokeWidth={sectors ? 52 : 56} strokeLinejoin="round" />
-      {sectors ? (
-        map.sectorPaths.map((d, i) => (
-          <path key={i} d={d} fill="none" stroke={SECTOR_COLORS[i]} strokeWidth={16} strokeLinejoin="round" strokeLinecap="round" />
-        ))
-      ) : (
-        <path d={map.path} fill="none" stroke="#CCFF00" strokeWidth={22} strokeLinejoin="round" />
-      )}
-      {sectors ? (
-        <path
-          d={map.path}
-          fill="none"
-          stroke="#F5F7FA"
-          strokeOpacity={0.7}
-          strokeWidth={4}
-          strokeDasharray="3 37"
-          className="lc-flow"
-        />
-      ) : null}
-      <rect x={sx - 6} y={sy - 28} width={12} height={56} rx={3} fill="#F5F7FA" />
-    </svg>
-  );
-};
-
-const CircuitPanel: React.FC<{ trackId: string; onSelect?: (id: string) => void; map: HudMap | null }> = ({
-  trackId,
-  onSelect,
-  map,
-}) => {
-  const active = getTrackInfo(trackId);
-  const stats: [string, string][] = [
-    ["Length", `${km(active)} km`],
-    ["Turns", String(active.turns)],
-    ["Direction", /counter|anti/i.test(active.direction) ? "CCW" : /clock/i.test(active.direction) ? "CW" : active.direction],
-    ...(map && BASE_ALTITUDE_M > 0 ? [["Altitude", `${Math.round(BASE_ALTITUDE_M).toLocaleString("en-US")} m`] as [string, string]] : []),
-  ];
-  return (
-    <div className="grid grid-cols-[repeat(auto-fit,minmax(min(300px,100%),1fr))] gap-5">
-      <div className="flex min-w-0 flex-col gap-2.5">
-        {TRACKS.map((t) => {
-          const isActive = t.id === trackId;
-          return (
-            <button
-              key={t.id}
-              type="button"
-              aria-pressed={isActive}
-              disabled={!onSelect}
-              onClick={() => !isActive && onSelect?.(t.id)}
-              onPointerEnter={focusOnHover}
-              className={`flex cursor-pointer items-center gap-4 rounded-[20px] px-4 py-3.5 text-left transition-[background-color,border-color] duration-200 disabled:cursor-not-allowed ${
-                isActive
-                  ? "border-[1.5px] border-[#CCFF00] bg-[#CCFF00]/[0.07] shadow-[0_0_0_5px_rgba(204,255,0,0.08)]"
-                  : "border border-[#262B3D] bg-[#08090D]/55 hover:border-[#3A4157] hover:bg-[#1B1F2B]"
-              }`}
-            >
-              <span className="flex min-w-0 flex-1 flex-col gap-[3px]">
-                <span className="flex flex-wrap items-center gap-2">
-                  <span className="lc-title text-[18px] leading-[1.1] text-[#F5F7FA]">{t.name}</span>
-                  {t.id === RWANDA_TRACK_ID ? (
-                    <span className="rounded-full bg-[#CCFF00] px-[7px] py-0.5 font-f1-mono text-[9px] font-extrabold tracking-[0.08em] text-[#08090D]">
-                      ORIGINAL
-                    </span>
-                  ) : null}
-                </span>
-                <span className="text-[13px] text-[#8E96AA]">
-                  {t.layout} · {t.city}, {t.country}
-                </span>
-                <span className={`font-f1-mono text-[11px] font-extrabold ${isActive ? "text-[#CCFF00]" : "text-[#8E96AA]"}`}>
-                  {km(t)} KM · {t.turns} TURNS{isActive ? " · ACTIVE" : ""}
-                </span>
-              </span>
-            </button>
-          );
-        })}
-        <p className="m-0 mx-1 mt-1.5 text-[13px] leading-relaxed text-[#8E96AA]">
-          Real-world circuits are converted from community scans (see Credits). Corners, kerbs, run-off and barriers are
-          detected automatically, so details can differ from the real venue.
-        </p>
-      </div>
-
-      <div className="flex min-w-0 flex-col gap-3.5 self-start rounded-[22px] border border-[#262B3D] bg-[#08090D]/60 p-5">
-        <div className="flex items-center justify-between gap-3">
-          <span className="lc-lbl">Preview</span>
-          {map ? (
-            <span className="flex gap-3">
-              {SECTOR_COLORS.map((c, i) => (
-                <span key={c} className="inline-flex items-center gap-1.5 font-f1-mono text-[10px] font-extrabold" style={{ color: c }}>
-                  <span className="h-1 w-2.5 rounded-full" style={{ background: c }} />S{i + 1}
-                </span>
-              ))}
-            </span>
-          ) : null}
-        </div>
-        {map ? (
-          <TrackOutline map={map} sectors className="h-auto max-h-[340px] w-full" label={`${active.name} layout by sector`} />
-        ) : (
-          <span className="lc-title text-[18px] leading-tight">{active.name}</span>
-        )}
-        <dl className="m-0 grid grid-cols-2 gap-3 min-[420px]:grid-cols-4">
-          {stats.map(([k, v]) => (
-            <div key={k} className="flex min-w-0 flex-col gap-1">
-              <dt className="lc-lbl text-[10px]">{k}</dt>
-              <dd className="lc-data m-0 truncate text-[18px] text-[#F5F7FA]">{v}</dd>
-            </div>
-          ))}
-        </dl>
-        <p className="m-0 flex items-start gap-2.5 text-[13px] leading-normal text-[#C5CBD8]">
-          <Info aria-hidden className="mt-0.5 h-4 w-4 shrink-0 text-[#00E5FF]" strokeWidth={2} />
-          Switching reloads the scene; multiplayer peers must pick the same circuit.
-        </p>
-      </div>
-    </div>
-  );
-};
-
 const TAKEDOWN_URL = "https://github.com/KhazP/librecorsa/issues/new?template=takedown-request.yml";
 
 const CreditRow: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
@@ -255,7 +125,7 @@ const Credits: React.FC = () => (
               <React.Fragment key={t.id}>
                 &ldquo;{t.credit!.title}&rdquo; (
                 <a href={t.credit!.short ?? t.credit!.url} target="_blank" rel="noreferrer" className={linkClass}>
-                  {(t.credit!.short ?? t.credit!.url).replace(/^https?:\/\//, "")}
+                  {t.credit!.short ? t.credit!.short.replace(/^https?:\/\//, "") : t.credit!.url.replace(/^https?:\/\/(www\.)?([^/]+).*$/, "$2")}
                 </a>
                 ) by {t.credit!.author} ·{" "}
                 <a href={t.credit!.licenseUrl} target="_blank" rel="noreferrer" className={linkClass}>
@@ -371,6 +241,8 @@ interface MenuItem {
   panel?: TitlePanel;
   primary?: boolean;
   badge?: string;
+  /** Label for the slim rail beside an open panel, where the full one would be cut */
+  short?: string;
 }
 
 /** Shared by every menu entry: the highlight follows the focus (controller, arrows, or the hovering mouse) */
@@ -520,7 +392,7 @@ const CompactEntry: React.FC<{ item: MenuItem; open: boolean; quiet?: boolean }>
       <span
         className={`lc-title min-w-0 flex-1 truncate text-[15px] tracking-[0.02em] ${quiet && !open ? "text-[#C5CBD8] group-focus:text-[#08090D]" : ""}`}
       >
-        {item.label}
+        {item.short ?? item.label}
       </span>
       {item.badge ? <Badge small>{item.badge}</Badge> : null}
       {open ? (
@@ -657,6 +529,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
     {
       id: "request",
       label: "Request a car or track",
+      short: "Request content",
       detail: "Suggest new content",
       icon: MessageSquarePlus,
       panel: "request",
@@ -674,7 +547,9 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
   // LB / RB: the neighbouring panel, with the focus on its rail entry
   const cycle = (step: number) => {
     const i = panelItems.findIndex((p) => p.panel === panel);
-    const next = panelItems[(i + step + panelItems.length) % panelItems.length] ?? panelItems[0];
+    // No panel open: RB starts at the first, LB at the last (from -1, a step back would land on the one before last)
+    const from = i >= 0 ? i : step > 0 ? -1 : 0;
+    const next = panelItems[(from + step + panelItems.length) % panelItems.length] ?? panelItems[0];
     if (!next?.panel) return;
     flushSync(() => setPanel(next.panel!));
     focusRail(next.id);
@@ -784,7 +659,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
                   title={panel === "request" ? undefined : panelTitle}
                   onClose={closePanel}
                 >
-                  {panel === "circuit" ? <CircuitPanel trackId={trackId} onSelect={onSelectTrack} map={map} /> : null}
+                  {panel === "circuit" ? <CircuitBrowser trackId={trackId} onSelect={onSelectTrack} library={props.library} /> : null}
                   {panel === "conditions" && props.conditionsPanel ? <ConditionsPanel {...props.conditionsPanel} /> : null}
                   {panel === "garage" ? <EngineersGarage {...props} /> : null}
                   {panel === "multiplayer" ? <MultiplayerPanel {...props} /> : null}
@@ -799,7 +674,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
         ) : (
           /* Title screen: the menu bottom-left, what Drive launches bottom-right */
           <main className="flex flex-1 flex-wrap items-end justify-between gap-8 compact:items-start short:gap-5">
-            <nav className="flex w-full max-w-[460px] flex-col gap-1.5" data-nav-zone="rail" aria-label="Main menu">
+            <nav className="flex w-full max-w-[460px] flex-col gap-1.5 xl:max-w-[520px]" data-nav-zone="rail" aria-label="Main menu">
               {byId(["drive"]).map((item) => (
                 <DriveHero key={item.id} item={item} pad={mode === "pad"} family={family} />
               ))}
@@ -846,20 +721,18 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
               </div>
               <div className="h-px bg-[#262B3D]" />
               <dl className="m-0 grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-4 gap-y-2.5">
-                {vehicle ? (
-                  <>
-                    <dt className="lc-lbl text-[10px]">Car</dt>
-                    <dd className="m-0 flex min-w-0 items-center justify-end gap-2 text-[14px] font-semibold">
-                      <span
-                        className="shrink-0 rounded-full px-1.5 py-0.5 font-f1-mono text-[9px] font-extrabold text-[#08090D]"
-                        style={{ background: vehicleColor }}
-                      >
-                        {vehicle.badge}
-                      </span>
-                      <span className="truncate">{vehicle.title}</span>
-                    </dd>
-                  </>
-                ) : null}
+                <>
+                  <dt className="lc-lbl text-[10px]">Car</dt>
+                  <dd className="m-0 flex min-w-0 items-center justify-end gap-2 text-[14px] font-semibold">
+                    <span
+                      className="shrink-0 rounded-full px-1.5 py-0.5 font-f1-mono text-[9px] font-extrabold text-[#08090D]"
+                      style={{ background: vehicleColor }}
+                    >
+                      {vehicle.badge}
+                    </span>
+                    <span className="truncate">{vehicle.title}</span>
+                  </dd>
+                </>
                 {livery ? (
                   <>
                     <dt className="lc-lbl text-[10px]">Livery</dt>

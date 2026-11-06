@@ -8,6 +8,7 @@ import {
   DEFAULT_PAD_BUTTONS,
   KEY_ACTIONS,
   PAD_ACTIONS,
+  RESERVED_CODES,
   type KeyBindings,
   type PadButtonBindings,
 } from "@/lib/input/bindings";
@@ -61,6 +62,20 @@ export interface PlayerSettings {
   realism: SimRealism;
   /** Weather, time of day and time multiplier for offline sessions (the host's apply online) */
   conditions: SessionConditions;
+  /** Starred and recently chosen cars and circuits (the car and circuit browsers) */
+  library: ContentLibrary;
+}
+
+export type LibraryKind = "cars" | "circuits";
+
+/**
+ * Favourites and recents, by car id and circuit (layout) id. Ids are kept even when their content is gone from this
+ * build: the browsers only show ids they know, and a car that comes back keeps its star.
+ */
+export interface ContentLibrary {
+  favorites: Record<LibraryKind, string[]>;
+  /** Most recent first */
+  recent: Record<LibraryKind, string[]>;
 }
 
 export interface PadTuning {
@@ -200,6 +215,15 @@ export const DEFAULT_HUD_SETTINGS: HudSettings = {
   headMovement: "natural",
 };
 
+export const DEFAULT_CONTENT_LIBRARY: ContentLibrary = {
+  favorites: { cars: [], circuits: [] },
+  recent: { cars: [], circuits: [] },
+};
+/** Longest lists kept: favourites can grow with the content, recents are a short history */
+export const LIBRARY_FAVORITES_MAX = 256;
+export const LIBRARY_RECENT_MAX = 12;
+const LIBRARY_ID_MAX_LENGTH = 64;
+
 export const DEFAULT_GRAPHICS_SETTINGS: GraphicsSettings = { quality: "high", renderScale: 1 };
 
 export const DEFAULT_TOUCH_SETTINGS: TouchSettings = { mode: "auto", tiltSteer: false, tiltRangeDeg: 30 };
@@ -270,6 +294,7 @@ export const DEFAULT_PLAYER_SETTINGS: PlayerSettings = {
   aiSkill: AI_SKILL_DEFAULT,
   realism: "full",
   conditions: DEFAULT_SESSION_CONDITIONS,
+  library: DEFAULT_CONTENT_LIBRARY,
 };
 
 const CAMERA_MODES: readonly CameraMode[] = ["chase", "tv_pod", "cockpit_shoulder", "cockpit", "nose", "helicopter", "tv_side"];
@@ -285,21 +310,41 @@ const num = (v: unknown, lo: number, hi: number, fallback: number) => (isNum(v) 
 const index = (v: unknown) => isNum(v) && Number.isInteger(v) && v >= 0 && v < 64;
 
 function parseKeys(v: unknown): KeyBindings {
-  if (!isObj(v)) return DEFAULT_KEY_BINDINGS;
+  if (!isObj(v)) return { ...DEFAULT_KEY_BINDINGS };
   const out = { ...DEFAULT_KEY_BINDINGS };
+  // The player's own bindings first; reserved keys (rebindKey refuses them) are dropped
+  const claimed = new Set<string>();
+  const saved = new Set<string>();
   for (const { id } of KEY_ACTIONS) {
     const codes = v[id];
-    if (Array.isArray(codes)) out[id] = codes.filter(isStr).slice(0, 4);
+    if (!Array.isArray(codes)) continue;
+    out[id] = codes.filter((c): c is string => isStr(c) && !RESERVED_CODES.has(c)).slice(0, 4);
+    out[id].forEach((c) => claimed.add(c));
+    saved.add(id);
+  }
+  // An action the save predates gets its default keys, minus any the player already uses for something else
+  for (const { id } of KEY_ACTIONS) {
+    if (!saved.has(id)) out[id] = DEFAULT_KEY_BINDINGS[id].filter((c) => !claimed.has(c));
   }
   return out;
 }
 
 function parsePadButtons(v: unknown): PadButtonBindings {
-  if (!isObj(v)) return DEFAULT_PAD_BUTTONS;
+  if (!isObj(v)) return { ...DEFAULT_PAD_BUTTONS };
   const out = { ...DEFAULT_PAD_BUTTONS };
+  const claimed = new Set<number>();
+  const saved = new Set<string>();
   for (const { id } of PAD_ACTIONS) {
     if (v[id] === null) out[id] = null;
     else if (index(v[id])) out[id] = v[id] as number;
+    else continue;
+    saved.add(id);
+    if (out[id] !== null) claimed.add(out[id] as number);
+  }
+  // Same for the controller: a default button the player has given to another action stays unbound here
+  for (const { id } of PAD_ACTIONS) {
+    const d = DEFAULT_PAD_BUTTONS[id];
+    if (!saved.has(id) && d !== null && claimed.has(d)) out[id] = null;
   }
   return out;
 }
@@ -321,7 +366,7 @@ function parseButton(v: unknown): ButtonBinding | null {
 
 function parseWheel(v: unknown): WheelSettings {
   const d = DEFAULT_WHEEL_SETTINGS;
-  if (!isObj(v)) return d;
+  if (!isObj(v)) return structuredClone(d);
   const buttons = { ...d.buttons };
   if (isObj(v.buttons)) {
     for (const { id } of PAD_ACTIONS) buttons[id] = parseButton(v.buttons[id]);
@@ -347,7 +392,8 @@ function parseWheel(v: unknown): WheelSettings {
     steerLockPerCar: parsePerCarLock(v.steerLockPerCar),
     hidFfb: bool(v.hidFfb, d.hidFfb),
     telemetryOut: bool(v.telemetryOut, d.telemetryOut),
-    telemetryPort: Math.round(num(v.telemetryPort, 1024, 65535, d.telemetryPort)),
+    // 20777 was the default once; it is the F1 games' port, so a saved 20777 moves to the new default
+    telemetryPort: v.telemetryPort === 20777 ? d.telemetryPort : Math.round(num(v.telemetryPort, 1024, 65535, d.telemetryPort)),
     buttons,
   };
 }
@@ -374,7 +420,7 @@ function parsePerCarFfb(v: unknown): WheelSettings["ffbPerCar"] {
 
 function parsePadTuning(v: unknown): PadTuning {
   const d = DEFAULT_PAD_TUNING;
-  if (!isObj(v)) return d;
+  if (!isObj(v)) return structuredClone(d);
   return {
     steeringRate: num(v.steeringRate, 0.1, 1.5, d.steeringRate),
     deadzone: num(v.deadzone, 0, 0.3, d.deadzone),
@@ -388,7 +434,7 @@ function parsePadTuning(v: unknown): PadTuning {
 
 function parseKeyboardTuning(v: unknown): KeyboardTuning {
   const d = DEFAULT_KEYBOARD_TUNING;
-  if (!isObj(v)) return d;
+  if (!isObj(v)) return structuredClone(d);
   return {
     throttleRiseS: num(v.throttleRiseS, 0, 1, d.throttleRiseS),
     brakeRiseS: num(v.brakeRiseS, 0, 1, d.brakeRiseS),
@@ -401,7 +447,7 @@ function parseKeyboardTuning(v: unknown): KeyboardTuning {
 
 function parseHud(v: unknown): HudSettings {
   const d = DEFAULT_HUD_SETTINGS;
-  if (!isObj(v)) return d;
+  if (!isObj(v)) return structuredClone(d);
   return {
     // Older saves: "full" (the old default) moves to the new default, "engineer" to Telemetry
     preset: v.preset === "engineer" ? "telemetry" : oneOf(v.preset, HUD_PRESETS, d.preset),
@@ -424,7 +470,7 @@ function parseHud(v: unknown): HudSettings {
 
 function parseGraphics(v: unknown): GraphicsSettings {
   const d = DEFAULT_GRAPHICS_SETTINGS;
-  if (!isObj(v)) return d;
+  if (!isObj(v)) return structuredClone(d);
   return {
     quality: oneOf(v.quality, ["low", "medium", "high"] as const, d.quality),
     renderScale: num(v.renderScale, 0.5, 1.5, d.renderScale),
@@ -433,7 +479,7 @@ function parseGraphics(v: unknown): GraphicsSettings {
 
 function parseTouch(v: unknown): TouchSettings {
   const d = DEFAULT_TOUCH_SETTINGS;
-  if (!isObj(v)) return d;
+  if (!isObj(v)) return structuredClone(d);
   return {
     mode: oneOf(v.mode, ["auto", "on", "off"] as const, d.mode),
     tiltSteer: bool(v.tiltSteer, d.tiltSteer),
@@ -442,7 +488,7 @@ function parseTouch(v: unknown): TouchSettings {
 }
 
 function parseProfile(v: unknown): DriverProfile {
-  if (!isObj(v)) return DEFAULT_DRIVER_PROFILE;
+  if (!isObj(v)) return { ...DEFAULT_DRIVER_PROFILE };
   return {
     name: sanitizeDriverName(isStr(v.name) ? v.name : ""),
     code: sanitizeDriverCode(isStr(v.code) ? v.code : ""),
@@ -451,10 +497,53 @@ function parseProfile(v: unknown): DriverProfile {
   };
 }
 
+/** Unique, printable ids of sane length, at most `max` of them; anything else is dropped */
+function parseIdList(v: unknown, max: number): string[] {
+  if (!Array.isArray(v)) return [];
+  const out: string[] = [];
+  for (const id of v) {
+    if (out.length >= max) break;
+    if (!isStr(id) || !id || id.length > LIBRARY_ID_MAX_LENGTH || !/^[\w.-]+$/.test(id) || out.includes(id)) continue;
+    out.push(id);
+  }
+  return out;
+}
+
+function parseLibrary(v: unknown): ContentLibrary {
+  if (!isObj(v)) return structuredClone(DEFAULT_CONTENT_LIBRARY);
+  const fav = isObj(v.favorites) ? v.favorites : {};
+  const recent = isObj(v.recent) ? v.recent : {};
+  return {
+    favorites: { cars: parseIdList(fav.cars, LIBRARY_FAVORITES_MAX), circuits: parseIdList(fav.circuits, LIBRARY_FAVORITES_MAX) },
+    recent: { cars: parseIdList(recent.cars, LIBRARY_RECENT_MAX), circuits: parseIdList(recent.circuits, LIBRARY_RECENT_MAX) },
+  };
+}
+
+/**
+ * Stars or unstars: `ids` are the entry's ids (a circuit venue passes every layout's). Starring adds the first one;
+ * unstarring removes them all, so a venue starred through any of its layouts comes off in one press.
+ */
+export function toggleLibraryFavorite(lib: ContentLibrary, kind: LibraryKind, ids: readonly string[]): ContentLibrary {
+  if (!ids.length) return lib;
+  const list = lib.favorites[kind];
+  const starred = ids.some((id) => list.includes(id));
+  const next = starred ? list.filter((id) => !ids.includes(id)) : [...list, ids[0]].slice(-LIBRARY_FAVORITES_MAX);
+  return { ...lib, favorites: { ...lib.favorites, [kind]: next } };
+}
+
+/** Moves an id to the front of the recents; returns the same object when it already is first (no re-render) */
+export function pushLibraryRecent(lib: ContentLibrary, kind: LibraryKind, id: string): ContentLibrary {
+  const list = lib.recent[kind];
+  if (list[0] === id) return lib;
+  const next = [id, ...list.filter((x) => x !== id)].slice(0, LIBRARY_RECENT_MAX);
+  return { ...lib, recent: { ...lib.recent, [kind]: next } };
+}
+
 /** Validates a parsed save; unknown or invalid fields take their defaults */
 export function parsePlayerSettings(raw: unknown): PlayerSettings {
   const d = DEFAULT_PLAYER_SETTINGS;
-  if (!isObj(raw)) return d;
+  // A copy: handing out the shared defaults would let any in-place edit corrupt them for the rest of the session
+  if (!isObj(raw)) return structuredClone(d);
   return {
     device: oneOf(raw.device, ["keyboard", "controller", "wheel"] as const, d.device),
     keys: parseKeys(raw.keys),
@@ -489,6 +578,7 @@ export function parsePlayerSettings(raw: unknown): PlayerSettings {
     aiSkill: Math.round(num(raw.aiSkill, 0, 100, d.aiSkill)),
     realism: oneOf(raw.realism, SIM_REALISM_LEVELS, d.realism),
     conditions: sanitizeConditions(raw.conditions),
+    library: parseLibrary(raw.library),
   };
 }
 

@@ -29,6 +29,74 @@ export interface TrackInfo {
   dataUrl?: string;
   /** Model attribution (CC BY 4.0 scans) */
   credit?: TrackCredit;
+  /** Kind of venue, when the index states it; otherwise `circuitType` reads it from the name and layout */
+  type?: CircuitType;
+}
+
+export type CircuitType = "permanent" | "street" | "oval";
+export const CIRCUIT_TYPE_LABELS: Record<CircuitType, string> = { permanent: "Permanent", street: "Street", oval: "Oval" };
+
+/** Where a circuit is, for the circuit browser's region filter (from its country) */
+export type CircuitRegion = "Africa" | "Americas" | "Asia" | "Europe" | "Middle East" | "Oceania" | "Other";
+export const CIRCUIT_REGIONS: readonly CircuitRegion[] = ["Africa", "Americas", "Asia", "Europe", "Middle East", "Oceania", "Other"];
+
+const COUNTRY_REGION: Record<string, CircuitRegion> = {
+  Rwanda: "Africa",
+  "South Africa": "Africa",
+  Morocco: "Africa",
+  Kenya: "Africa",
+  "United States": "Americas",
+  Canada: "Americas",
+  Mexico: "Americas",
+  Brazil: "Americas",
+  Argentina: "Americas",
+  Japan: "Asia",
+  China: "Asia",
+  Malaysia: "Asia",
+  Singapore: "Asia",
+  "South Korea": "Asia",
+  India: "Asia",
+  Indonesia: "Asia",
+  Thailand: "Asia",
+  Vietnam: "Asia",
+  Azerbaijan: "Asia",
+  "United Arab Emirates": "Middle East",
+  Bahrain: "Middle East",
+  "Saudi Arabia": "Middle East",
+  Qatar: "Middle East",
+  Turkey: "Europe",
+  "United Kingdom": "Europe",
+  Italy: "Europe",
+  Belgium: "Europe",
+  Germany: "Europe",
+  France: "Europe",
+  Spain: "Europe",
+  Portugal: "Europe",
+  Monaco: "Europe",
+  Austria: "Europe",
+  Hungary: "Europe",
+  Netherlands: "Europe",
+  Russia: "Europe",
+  Australia: "Oceania",
+  "New Zealand": "Oceania",
+};
+
+/** A circuit's region; a country missing from the map lands in "Other" until it is added */
+export const circuitRegion = (t: Pick<TrackInfo, "country">): CircuitRegion => COUNTRY_REGION[t.country] ?? "Other";
+
+/** Permanent, street or oval: the index's own field, else an oval or street layout named as such */
+export const circuitType = (t: TrackInfo): CircuitType =>
+  t.type ?? (/\boval\b/i.test(t.layout) ? "oval" : /\bstreet\b/i.test(`${t.name} ${t.layout}`) ? "street" : "permanent");
+
+/** One venue in the circuit browser: its layouts (Daytona's oval and road course) share a card */
+export interface CircuitVenue {
+  /** The first layout's id */
+  id: string;
+  name: string;
+  country: string;
+  city: string;
+  region: CircuitRegion;
+  layouts: TrackInfo[];
 }
 
 export const RWANDA_TRACK_ID = "rwanda";
@@ -47,10 +115,23 @@ export const TRACKS: TrackInfo[] = [
   ...(trackIndex as TrackInfo[]),
 ];
 
+/** The circuits grouped by venue (same name and country), in index order */
+export const CIRCUIT_VENUES: readonly CircuitVenue[] = TRACKS.reduce<CircuitVenue[]>((venues, t) => {
+  const venue = venues.find((v) => v.name === t.name && v.country === t.country);
+  if (venue) venue.layouts.push(t);
+  else venues.push({ id: t.id, name: t.name, country: t.country, city: t.city, region: circuitRegion(t), layouts: [t] });
+  return venues;
+}, []);
+
+export const venueOf = (trackId: string): CircuitVenue | undefined => CIRCUIT_VENUES.find((v) => v.layouts.some((l) => l.id === trackId));
+
 const TRACK_STORAGE_KEY = "bugesera.track";
 
 export function getTrackInfo(id: string): TrackInfo {
-  return TRACKS.find((t) => t.id === id) ?? TRACKS[0];
+  const info = TRACKS.find((t) => t.id === id);
+  if (info) return info;
+  console.warn(`Unknown circuit "${id}", using ${TRACKS[0].id}`);
+  return TRACKS[0];
 }
 
 /** The circuit picked last time (or Rwanda) */
@@ -72,15 +153,24 @@ function storeTrackId(id: string): void {
   }
 }
 
-/** Fetches (when needed) and activates a circuit; resolves once `setActiveTrack` has run */
+let activateGen = 0;
+
+/**
+ * Fetches (when needed) and activates a circuit; resolves once `setActiveTrack` has run. A call overtaken by a later
+ * one rejects instead of activating: the active track is global, and a slow fetch must not replace a newer choice.
+ */
 export async function activateTrack(id: string): Promise<TrackInfo> {
+  if (!TRACKS.some((t) => t.id === id)) throw new Error(`Unknown circuit "${id}"`);
+  const gen = ++activateGen;
   const info = getTrackInfo(id);
   if (!info.dataUrl) {
     setActiveTrack(RWANDA_TRACK_ID);
   } else {
     const res = await fetch(withBasePath(info.dataUrl));
     if (!res.ok) throw new Error(`Track data ${info.dataUrl}: HTTP ${res.status}`);
-    setActiveTrack(info.id, (await res.json()) as RawTrackJson);
+    const raw = (await res.json()) as RawTrackJson;
+    if (gen !== activateGen) throw new Error(`Circuit "${id}" was superseded by a later choice`);
+    setActiveTrack(info.id, raw);
   }
   storeTrackId(info.id);
   return info;

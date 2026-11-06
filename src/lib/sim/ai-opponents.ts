@@ -41,11 +41,14 @@ import {
   classificationClosed,
   classifiedTimeS,
   classify,
+  GapTimer,
+  LapClock,
   lapPositionM,
   PlayerSplits,
   raceOrder,
   SplitTimer,
   type RacerProgress,
+  wrapHalf,
 } from '@/lib/sim/race-session';
 
 export interface AiDriverDef {
@@ -216,21 +219,23 @@ interface FieldCar {
   defending: boolean;
   /** Lateral offset of its grid slot (m), held off the start until the first corner; null once it races its line */
   startLaneM: number | null;
+  /** Laps, distance and flag of this car (the same clock a multiplayer race keeps) */
+  readonly clock: LapClock;
   /** Race distance covered (m); negative on the grid behind the line */
-  distM: number;
+  readonly distM: number;
   prevS: number;
   biasM: number;
   stuckS: number;
   peer: InterpolatedPeerState;
   /** Race time at the chequered flag (s); null while running */
-  finishTimeS: number | null;
-  bestLapMs: number | null;
-  lastLapMs: number | null;
-  lapsDone: number;
-  lapStartS: number;
+  readonly finishTimeS: number | null;
+  /** Laps completed at the flag (fewer than the race's when lapped) */
+  readonly finishLaps: number | null;
+  readonly bestLapMs: number | null;
+  readonly lastLapMs: number | null;
 }
 
-const wrapHalf = (d: number, L: number) => ((((d + L / 2) % L) + L) % L) - L / 2;
+
 
 /** Contact mass properties (an F1 car with driver and fuel) and the per-frame limits on what a contact may do */
 const CONTACT_MASS_KG = 778;
@@ -296,6 +301,12 @@ function applyObbDeltas(sim: SimulatorCar, pos: readonly [number, number], vel: 
  */
 const REMOTE_SEP_RATE_MS = 1.5;
 const REMOTE_SLOP_M = 0.02;
+/**
+ * Overlap of the predicted boxes below which there is no contact (m): above the separation slop, as the remote pose
+ * is a prediction off by ~0.1 m on average, yet low enough that a hit is still met before it digs in (at 5 cm the
+ * contact came late and hard enough to spin the side-by-side duel in verify-multiplayer-contact)
+ */
+const REMOTE_CONTACT_SLOP_M = 0.03;
 const REMOTE_RESTITUTION = 0.1;
 
 /** Contact mass and yaw inertia of another player's car, from the model it drives */
@@ -316,7 +327,8 @@ export function resolvePlayerVsRemoteCar(player: SimulatorCar, remote: Interpola
   const dx = remote.position.x - player.worldPosition.x;
   const dz = remote.position.z - player.worldPosition.z;
   const dy = remote.position.y - player.worldPosition.y;
-  if (dx * dx + dz * dz > CAR_LEN_M * CAR_LEN_M || Math.abs(dy) > 2) return false;
+  // Broad phase: two boxes can overlap with their centres up to a full diagonal apart (√(L² + W²) ≈ 5.4 m)
+  if (dx * dx + dz * dz > CAR_LEN_M * CAR_LEN_M + CAR_WID_M * CAR_WID_M || Math.abs(dy) > 2) return false;
   fillObb(player, _obbA);
   const q = remote.quaternion;
   let fx = 2 * (q.x * q.z + q.w * q.y);
@@ -337,7 +349,9 @@ export function resolvePlayerVsRemoteCar(player: SimulatorCar, remote: Interpola
   _obbB.halfWidthM = CAR_WID_M * 0.5;
   [_obbB.massKg, _obbB.yawInertiaKgM2] = remoteContactMass(remote.vehicle);
   const hit = resolveCarToCarObbCollision(_obbA, _obbB, REMOTE_RESTITUTION);
-  if (!hit.collided) return false;
+  // The remote box is a prediction, good to about a decimetre: an overlap within the slop is not contact. This,
+  // not a tight broad phase, is what keeps prediction error from turning grazes into phantom hits
+  if (!hit.collided || hit.penetrationM <= REMOTE_CONTACT_SLOP_M) return false;
   // This car's half of the overlap, paced so a few frames of it never snap the car sideways
   const sep = Math.min(Math.max(0, 0.5 * hit.penetrationM - REMOTE_SLOP_M), REMOTE_SEP_RATE_MS * Math.max(0, dt));
   _sep[0] = -hit.nx * sep;
@@ -390,7 +404,8 @@ export class AiOpponentField {
   private holdS = 0;
   private raceTimeS = 0;
   /** Race time at which the first car reached each distance bucket (gap timing) */
-  private bucketTimes = new Map<number, number>();
+  /** Time gaps to the leader at the same point of the track (finer buckets than a multiplayer race's) */
+  private readonly gapTimer = new GapTimer(GAP_BUCKET_M);
   /** Every car's time at points of race distance (split gaps to the player's neighbours, DRS gaps) */
   private readonly splitTimer = new SplitTimer();
   private readonly playerSplits = new PlayerSplits();
@@ -409,7 +424,8 @@ export class AiOpponentField {
   private readonly persistLearning: boolean;
   private readonly spectate: boolean;
   /** Last contact time per car pair (a touch is counted once) */
-  private readonly contactAt = new Map<string, number>();
+  /** Last contact time per pair of field slots (key: lower slot × 256 + higher slot) */
+  private readonly contactAt = new Map<number, number>();
   private readonly rng: () => number;
 
   constructor(
@@ -491,8 +507,9 @@ export class AiOpponentField {
     for (let k = 0; k < car.cornerBrakeErr.length; k++) {
       car.cornerBrakeErr[k] = Math.max(0, gaussian(car.rng) * m.cornerBrakeSigma * spread);
     }
-    // A proper mistake (into one corner too hot); its chance is rated at the default consistency 0.85
-    const mistake = car.rng() < m.mistakesPerLap * (spread / 0.15);
+    // A proper mistake (into one corner too hot); its chance is rated at the default consistency 0.85. None on the
+    // in-lap after the flag, which would otherwise still count in the race's mistake stats
+    const mistake = car.finishTimeS === null && car.rng() < m.mistakesPerLap * (spread / 0.15);
     car.mistakeCorner = mistake && this.corners.length ? Math.floor(car.rng() * this.corners.length) : -1;
     if (car.mistakeCorner >= 0) car.stats.mistakes++;
     this.rebuildTarget(car);
@@ -511,7 +528,8 @@ export class AiOpponentField {
       (s) => {
         const k = this.cornerIndex(s);
         const learnt = learner ? learner.offsetsAt(s) : null;
-        const err = k >= 0 ? car.cornerBrakeErr[k] : 0;
+        // Empty until startRace sizes it (setSkill can rebuild the target before that): no error rather than NaN
+        const err = k >= 0 ? (car.cornerBrakeErr[k] ?? 0) : 0;
         const hot = k >= 0 && k === car.mistakeCorner ? MISTAKE_APEX_SCALE : 1;
         return {
           brakeMargin: T.at('brakeMargin', s) + m.brakeMarginAdd + (learnt?.brakeMargin ?? 0) + err,
@@ -538,7 +556,24 @@ export class AiOpponentField {
     ai: SimulatorCar | null,
     pace: number
   ): FieldCar {
+    const clock = new LapClock(this.track.totalLengthM);
     return {
+      clock,
+      get distM() {
+        return clock.distM;
+      },
+      get finishTimeS() {
+        return clock.finishTimeS;
+      },
+      get finishLaps() {
+        return clock.finishLaps;
+      },
+      get bestLapMs() {
+        return clock.bestLapMs;
+      },
+      get lastLapMs() {
+        return clock.lastLapMs;
+      },
       id,
       code,
       teamColorHex,
@@ -563,15 +598,9 @@ export class AiOpponentField {
       contact: false,
       defending: false,
       startLaneM: null,
-      distM: 0,
       prevS: 0,
       biasM: 0,
       stuckS: 0,
-      finishTimeS: null,
-      bestLapMs: null,
-      lastLapMs: null,
-      lapsDone: 0,
-      lapStartS: 0,
       peer: {
         peerId: id,
         driverCode: code,
@@ -618,6 +647,7 @@ export class AiOpponentField {
         car.prevVx = 0;
         car.contact = false;
         car.defending = false;
+        car.inWallHit = false;
         car.learner = this.learning
           ? new AiSectionLearner(
               this.corners,
@@ -625,26 +655,22 @@ export class AiOpponentField {
               this.persistLearning ? loadLearnedCorners(this.trackId, this.classId, car.code, this.corners.length) : undefined
             )
           : null;
-        this.newLap(car);
       }
       // Start from the grid slot's lane, not the racing line, so the field does not file onto the line off the grid
       car.startLaneM = car.ai ? car.sim.lateralOffsetM : null;
       car.biasM = car.ai ? THREE.MathUtils.clamp(car.sim.lateralOffsetM - aiLineOffsetM(this.track.getSampleAtDistance(car.sim.sMeters), car.ai.racingLineId), -6, 6) : 0;
       if (car.ai) car.ai.aiLineBiasM = car.biasM;
       car.stuckS = 0;
-      car.finishTimeS = null;
-      car.bestLapMs = null;
-      car.lastLapMs = null;
-      car.lapsDone = 0;
-      car.lapStartS = 0;
       car.prevS = car.sim.sMeters;
-      car.distM = car.sim.sMeters > L / 2 ? car.sim.sMeters - L : car.sim.sMeters;
+      car.clock.reset(car.sim.sMeters);
+      // After the per-race state above is cleared (newLap reads finishTimeS)
+      if (car.ai) this.newLap(car);
       this.syncPeer(car);
     });
     this.player.aiAutopilot = false;
     this.playerPenaltyS = 0;
     this.raceTimeS = 0;
-    this.bucketTimes.clear();
+    this.gapTimer.reset();
     this.splitTimer.reset();
     this.playerSplits.reset();
     this.contactAt.clear();
@@ -882,7 +908,7 @@ export class AiOpponentField {
         fillObb(A, _obbA);
         fillObb(B, _obbB);
         const hit = resolveCarToCarObbCollision(_obbA, _obbB);
-        this.noteContact(this.cars[a], this.cars[b]);
+        this.noteContact(a, b);
         if (hit.collided && A.applyRigidBodyCollision && B.applyRigidBodyCollision) {
           applyObbDeltas(A, hit.posDeltaA, hit.velDeltaA, hit.yawDeltaA);
           applyObbDeltas(B, hit.posDeltaB, hit.velDeltaB, hit.yawDeltaB);
@@ -910,9 +936,12 @@ export class AiOpponentField {
   }
 
   /** Counts a touch between two cars once (a new one after 1 s apart) */
-  private noteContact(a: FieldCar, b: FieldCar): void {
+  private noteContact(ia: number, ib: number): void {
+    const a = this.cars[ia];
+    const b = this.cars[ib];
     a.contact = b.contact = true;
-    const key = a.id < b.id ? `${a.id}|${b.id}` : `${b.id}|${a.id}`;
+    // A number, not a string built per overlapping pair per frame
+    const key = Math.min(ia, ib) * 256 + Math.max(ia, ib);
     const last = this.contactAt.get(key);
     if (last === undefined || this.raceTimeS - last > 1) {
       a.stats.contacts++;
@@ -941,23 +970,20 @@ export class AiOpponentField {
   }
 
   private trackDistance(car: FieldCar): void {
-    const L = this.track.totalLengthM;
     const s = car.sim.sMeters;
-    car.distM += wrapHalf(s - car.prevS, L);
     car.prevS = s;
-    const laps = Math.floor(car.distM / L);
-    if (laps > car.lapsDone && car.finishTimeS === null) {
-      const lapMs = (this.raceTimeS - car.lapStartS) * 1000;
-      if (lapMs > 1000 && (car.bestLapMs === null || lapMs < car.bestLapMs)) car.bestLapMs = Math.round(lapMs);
-      if (lapMs > 1000) car.lastLapMs = Math.round(lapMs);
-      car.lapsDone = laps;
-      car.lapStartS = this.raceTimeS;
+    const clock = car.clock;
+    const lapsBefore = clock.lapsDone;
+    const running = clock.finishTimeS === null;
+    // The last lap done, or the winner already in: the flag is out, and every car finishes at its next crossing
+    const flagOut = running && this.cars.some((c) => c.finishTimeS !== null);
+    const finished = clock.update(s, this.raceTimeS, this.raceLaps, flagOut);
+    if (running && clock.lapsDone > lapsBefore) {
       if (car.ai) {
-        car.stats.lapTimesMs.push(Math.round(lapMs));
+        car.stats.lapTimesMs.push(Math.round(clock.lastCrossingLapMs ?? 0));
         car.stats.lapPositions.push(this.positionOf(car));
       }
-      if (laps >= this.raceLaps) {
-        car.finishTimeS = this.raceTimeS;
+      if (finished) {
         if (car.isPlayer) this.phase = 'finished';
         if (car.ai && this.persistLearning && car.learner) saveLearnedCorners(this.trackId, this.classId, car.code, car.learner.snapshot());
         if (this.spectate && this.cars.every((c) => c.finishTimeS !== null)) this.phase = 'finished';
@@ -965,13 +991,12 @@ export class AiOpponentField {
       if (car.ai) this.newLap(car);
     }
     this.splitTimer.record(car.id, this.raceTimeS, car.distM);
-    const bucket = Math.floor(car.distM / GAP_BUCKET_M);
-    if (!this.bucketTimes.has(bucket)) this.bucketTimes.set(bucket, this.raceTimeS);
+    this.gapTimer.recordOne(this.raceTimeS, car.distM);
   }
 
   /** Running position of a car now (1 = leading) */
   private positionOf(car: FieldCar): number {
-    const ordered = raceOrder(this.cars.map((c) => this.progressOf(c)));
+    const ordered = raceOrder(this.cars.map((c) => this.progressOf(c)), this.track.totalLengthM);
     return ordered.findIndex((p) => p.id === car.id) + 1;
   }
 
@@ -985,6 +1010,8 @@ export class AiOpponentField {
       distM: c.distM,
       speedMs: c.sim.vxMs,
       finishTimeS: c.finishTimeS,
+      finishLaps: c.finishLaps ?? undefined,
+      grid: this.cars.indexOf(c),
       bestLapMs: c.bestLapMs,
       lastLapMs: c.lastLapMs,
       penaltyS: c.isPlayer ? this.playerPenaltyS : 0,
@@ -999,7 +1026,7 @@ export class AiOpponentField {
 
   /** Everything a headless race reports: running order, laps, incidents and what each car learnt (grid order) */
   public report(): AiFieldReport {
-    const ordered = raceOrder(this.cars.map((c) => this.progressOf(c)));
+    const ordered = raceOrder(this.cars.map((c) => this.progressOf(c)), this.track.totalLengthM);
     return {
       seed: this.seed,
       skill: this.skillLevel,
@@ -1031,6 +1058,9 @@ export class AiOpponentField {
     p.brake = sim.telemetry.brake;
     p.trackS = sim.sMeters;
     p.speedKmh = sim.telemetry.speedKmh;
+    p.rpm = sim.telemetry.rpm;
+    p.gear = sim.telemetry.gear;
+    p.contact = car.contact;
   }
 
   /** Physics of every car in the field, AI cars in grid order then the player (for the shared track environment) */
@@ -1076,23 +1106,11 @@ export class AiOpponentField {
     const L = this.track.totalLengthM;
     const progress = new Map<FieldCar, RacerProgress>();
     for (const c of this.cars) progress.set(c, this.progressOf(c));
-    const orderedProgress = raceOrder([...progress.values()]);
+    const orderedProgress = raceOrder([...progress.values()], L);
     const byId = new Map(this.cars.map((c) => [c.id, c]));
     const order = orderedProgress.map((p) => byId.get(p.id) as FieldCar);
-    // Prune gap buckets nobody can still need
-    const minDist = Math.min(...this.cars.map((c) => c.distM));
-    if (this.bucketTimes.size > 4000) {
-      for (const k of this.bucketTimes.keys()) if (k * GAP_BUCKET_M < minDist - 100) this.bucketTimes.delete(k);
-    }
-    // Time since the first car reached this car's distance (bucket entry time, minus the time this
-    // car has spent inside the bucket)
-    const gapTo = (car: FieldCar) => {
-      const bucket = Math.floor(car.distM / GAP_BUCKET_M);
-      const t = this.bucketTimes.get(bucket);
-      if (t === undefined) return 0;
-      const inBucketS = (car.distM - bucket * GAP_BUCKET_M) / Math.max(5, car.sim.vxMs);
-      return Math.max(0, this.raceTimeS - t - inBucketS);
-    };
+    // Time since the first car reached this car's distance
+    const gapTo = (car: FieldCar) => this.gapTimer.gapS(this.raceTimeS, car.distM, car.sim.vxMs);
     const leader = order[0];
     let gapFloor = 0;
     let prevGap = 0;

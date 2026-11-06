@@ -12,6 +12,9 @@ const MAX_STREAKS = 6000;
 const BOX = new THREE.Vector3(44, 22, 44);
 const FALL_MS = 9;
 
+/** Longest the rain clock runs before it must wrap (s): float32 time keeps sub-millisecond steps up to here */
+const RAIN_CLOCK_MAX_S = 4 * 3600;
+
 const VERT = /* glsl */ `
 attribute vec4 aSeed;
 uniform float uTime;
@@ -262,9 +265,14 @@ export function createRainFx(scene: THREE.Scene): RainFx {
       const carSpeedMs = cameraVelocity.length();
       stepWindscreenWipers(windscreenState, dt, r, spray, carSpeedMs, true);
       // The clock runs while anything is drawn, so drops left on the visor keep running after the rain stops
-      time = (time + dt) % 3600;
+      time += dt;
 
       const showVisor = windscreenState.dropletDensity > 0.015 || spray > 0.02;
+      const streaksShown = Math.round(MAX_STREAKS * Math.pow(effectiveIntensity, 0.8)) > 0;
+      // The streak phase is time × a per-drop speed, so wrapping the clock moves every drop at once. Wrap it only
+      // while nothing is drawn; the hard limit (float precision in the shader) is only reached by four hours of
+      // unbroken rain
+      if ((!showVisor && !streaksShown && time > 60) || time > RAIN_CLOCK_MAX_S) time = 0;
       visorMesh.visible = showVisor;
       if (showVisor) {
         visorMat.uniforms.uTime.value = time;

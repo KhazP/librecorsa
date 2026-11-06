@@ -62,7 +62,10 @@ export interface CornerKinematicsState {
   /** Mechanical caster trail at the ground plane (m, + = kingpin pierces ground ahead of contact patch): the static
    * trail plus the hardpoints' kinematic change with travel */
   casterTrailM: number;
-  /** Kingpin scrub radius at the ground plane (m, + = kingpin pierces ground inboard of contact patch center) */
+  /**
+   * Kingpin scrub radius at the ground plane (m, + = inboard of the contact patch centre): a 22 mm base plus 35 % of
+   * the kingpin's ground offset from the hardpoints, held within 8–42 mm (not the raw geometric offset)
+   */
   scrubRadiusM: number;
   /** Instantaneous pushrod/pullrod rocker motion ratio (normalized to 1.0 at static ride height) */
   motionRatioNorm: number;
@@ -85,28 +88,16 @@ export interface AxleKinematicsState {
   antiPitchFraction: number;
 }
 
+import { VF26_CHASSIS } from './vf26-data';
+
 const DEG2RAD = Math.PI / 180;
 
 /** Raw hardpoints [carTopFront, carTopRear, carBottomFront, carBottomRear, tyreTop, tyreBottom] */
 type RawHardpoints = ReadonlyArray<readonly [number, number, number]>;
 
-/** F1 (VF26 mod) front / rear double wishbones, used when no raw hardpoints are given */
-const F1_FRONT_HARDPOINTS: RawHardpoints = [
-  [0.68522, 0.223332, -0.0138],
-  [0.64544, 0.157367, -0.3252],
-  [0.6874, 0.021199, 0.0715],
-  [0.64544, -0.017681, -0.3252],
-  [0.12506, 0.17361, -0.0138],
-  [0.0725, -0.025136, 0.0185],
-];
-const F1_REAR_HARDPOINTS: RawHardpoints = [
-  [0.66332, 0.103062, 0.342009],
-  [0.738479, 0.182562, 0.079167],
-  [0.69821, 0.025027, 0.052143],
-  [0.74228, -0.01693, -0.212241],
-  [0.119245, 0.196534, 0.06647],
-  [0.09259, 0.0129, 0.052143],
-];
+/** F1 (VF26 mod) front / rear double wishbones, used when no raw hardpoints are given (the car's own data) */
+const F1_FRONT_HARDPOINTS: RawHardpoints = VF26_CHASSIS.front.hardpoints;
+const F1_REAR_HARDPOINTS: RawHardpoints = VF26_CHASSIS.rear.hardpoints;
 /**
  * GT3 (Mercedes-AMG GT3 Evo 18" upright & double-wishbone geometry from unpacked reference data, expressed in
  * [x_inboard, y_up, z_fwd] from wheel center):
@@ -376,8 +367,8 @@ export function solveCornerKinematics3D(
   const sGround = (wheelCenterY - radius - botY) / Math.max(0.05, ky);
   const kpGroundX = botX + sGround * kx;
 
-  // Scrub radius (inboard offset of kingpin ground intersection from contact patch center x=0)
-  // Clamped to realistic F1/GT3 physical bounds [8 mm .. 42 mm]
+  // Scrub radius: a 22 mm base plus 35 % of the kingpin's ground offset (contact patch centre at x = 0), held within
+  // realistic F1/GT3 bounds [8 mm .. 42 mm]
   const scrubRadiusM = Math.max(0.008, Math.min(0.042, 0.022 + kpGroundX * 0.35));
   // Mechanical caster trail: the car's static trail plus the kinematic change with travel (the hardpoints' own
   // ground trail is not the car's: the steering offset and hub geometry are not in them)

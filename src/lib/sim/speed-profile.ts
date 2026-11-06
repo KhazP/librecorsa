@@ -93,10 +93,12 @@ export function vf26FullBrakeForceN(): number {
  */
 export function createVf26ProfileCarModel(
   preset: AeroSetupPreset = 'balanced',
-  airDensity = NOMINAL_AIR_DENSITY
+  airDensity = NOMINAL_AIR_DENSITY,
+  /** Garage wing trim (deg); the AI field drives the untrimmed package */
+  wingTrimDeg?: { front: number; rear: number }
 ): SpeedProfileCarModel {
   // Typical at-speed attitude: ~17 mm lower than static, slight nose-up rake change
-  const aero = estimateAeroCoefficients(preset, airDensity, -0.017, 0.0015);
+  const aero = estimateAeroCoefficients(preset, airDensity, -0.017, 0.0015, 0, undefined, wingTrimDeg);
   return {
     massKg: VF26_CHASSIS.totalMassKg + VF26_CHASSIS.fuelKg,
     downforceCoef: aero.downforceCoef,
@@ -182,12 +184,20 @@ export function computeSpeedProfile(
   };
 
   const backwardPass = (v: Float64Array) => {
+    // Deceleration available braking at speed u through sample i: tyre grip with u's downforce, the share of it the
+    // cornering at u leaves (friction circle), and u's drag
+    const decelAt = (i: number, u: number) =>
+      Math.min(car.muLong * (G + (car.downforceCoef * u * u) / m), car.maxBrakeForceN / m) * longShare(i, u) +
+      (car.dragCoef * u * u) / m;
     for (let step = 0; step < n; step++) {
       const i = n - 1 - step;
       const j = (i + 1) % n;
       const vn = v[j];
-      const grip = car.muLong * (G + (car.downforceCoef * vn * vn) / m);
-      const decel = Math.min(grip, car.maxBrakeForceN / m) * longShare(i, vn) + (car.dragCoef * vn * vn) / m;
+      // Across the segment the speed runs from the entry speed down to vn: estimate the entry speed at vn, then take
+      // every speed-dependent term (downforce grip, the cornering's share of it, drag) at the segment's midpoint
+      // speed. Taking only the friction share at a higher speed, and the downforce at vn, understated the braking
+      const vEst = Math.min(v[i], Math.sqrt(vn * vn + 2 * decelAt(i, vn) * segLenM[i]));
+      const decel = decelAt(i, 0.5 * (vn + vEst));
       v[i] = Math.min(v[i], Math.sqrt(vn * vn + 2 * decel * segLenM[i]));
     }
   };

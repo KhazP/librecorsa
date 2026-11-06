@@ -12,6 +12,22 @@ export type InputMode = "keyboard" | "pointer" | "pad";
 /** Face-button labels to show: Xbox (A B X Y) or PlayStation (✕ ○ □ △) */
 export type PadFamily = "xbox" | "playstation";
 
+/** Standard-mapping face buttons 0..3 as printed on each pad family (A B X Y / ✕ ○ □ △), with their colours */
+export const FACE_BUTTONS: Record<PadFamily, readonly { label: string; color: string }[]> = {
+  xbox: [
+    { label: "A", color: "#5DC21E" },
+    { label: "B", color: "#E5413A" },
+    { label: "X", color: "#2F8BE5" },
+    { label: "Y", color: "#F4C21B" },
+  ],
+  playstation: [
+    { label: "✕", color: "#7EA6E6" },
+    { label: "○", color: "#EE6A6A" },
+    { label: "□", color: "#D78DD6" },
+    { label: "△", color: "#45C9A6" },
+  ],
+};
+
 let mode: InputMode = "pointer";
 let family: PadFamily = "xbox";
 const listeners = new Set<() => void>();
@@ -33,6 +49,9 @@ export function notePadInput(padId: string): void {
 }
 
 export function padFamilyOf(id: string): PadFamily {
+  // Chrome names the Xbox pad "Xbox Wireless Controller (… Vendor: 045e …)": check Microsoft first, since
+  // "wireless controller" alone also matches Sony's "Wireless Controller" / "DualSense Wireless Controller"
+  if (/045e|xbox|xinput/i.test(id)) return "xbox";
   return /054c|playstation|dualsense|dualshock|wireless controller/i.test(id) ? "playstation" : "xbox";
 }
 
@@ -54,11 +73,17 @@ function start(): void {
   window.addEventListener("keydown", onKey, true);
   window.addEventListener("pointermove", onPointer, true);
   window.addEventListener("pointerdown", onPointer, true);
+  // Edges only: a stick resting past the threshold (drift) or a button held down must not keep pulling the prompts
+  // back to the controller while the player types
+  const wasActive = new Map<string, boolean>();
   const poll = () => {
     raf = requestAnimationFrame(poll);
     for (const p of connectedPads()) {
       if (p.mapping !== "standard") continue;
-      if (p.buttons.some((b) => b.pressed) || p.axes.some((a) => Math.abs(a) > 0.5)) {
+      const active = p.buttons.some((b) => b.pressed) || p.axes.some((a) => Math.abs(a) > 0.5);
+      const was = wasActive.get(p.id) ?? false;
+      wasActive.set(p.id, active);
+      if (active && !was) {
         notePadInput(p.id);
         return;
       }

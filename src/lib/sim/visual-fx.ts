@@ -15,6 +15,7 @@ import { createGt3CarRig, loadGt3Cockpit, loadGt3Template } from '@/lib/gt3-car-
 import { AMR26_MODEL_URL, loadVf26Template } from '@/lib/vf26-car-model';
 import { assetProgress } from '@/lib/loading/asset-progress';
 import { addContactShadow } from '@/lib/render/contact-shadow';
+import { disposeTree } from '@/lib/render/dispose-tree';
 import { LIVERIES } from '@/lib/track-data';
 import { CarTelemetry, LiveryConfig, type VehicleModelId } from '@/types/f1';
 import type { SimulatorWheel as SimWheelState } from './simulator-car';
@@ -112,7 +113,11 @@ export class SimVisualFxManager {
   private wetness = 0;
 
   // Multiplayer / AI Opponent 3D cars
-  private opponentCars = new Map<string, { rig: SimCarRig; vehicle: VehicleModelId | undefined }>();
+  /** wheelRot: the wheels' spin angle (rad), integrated from their speed each frame */
+  private opponentCars = new Map<
+    string,
+    { rig: SimCarRig; vehicle: VehicleModelId | undefined; wheelRot: number; telemetry?: CarTelemetry; ghostCheckS?: number }
+  >();
   /**
    * Rigs built during loading (one racing car and one ghost per opponent model) so the shader warm-up covers them;
    * handed out to the first peers that need that model instead of being built on the first frame of a race
@@ -215,17 +220,40 @@ export class SimVisualFxManager {
 
   /**
    * Updates tire skidmarks, smoke/gravel particles, and opponent 3D cars each frame.
+   * `emit` is false while the player's car is not being simulated (paused, menus, replay): its wheel state is then
+   * frozen, so nothing new is laid down or spawned, but particles in flight and the opponents keep updating.
    */
   public update(
     dt: number,
     carWorldQuat: THREE.Quaternion,
     carSpeedMs: number,
     wheels: readonly [SimWheelState, SimWheelState, SimWheelState, SimWheelState],
-    peers: InterpolatedPeerState[]
+    peers: InterpolatedPeerState[],
+    emit = true
   ): void {
-    const carRight = new THREE.Vector3(1, 0, 0).applyQuaternion(carWorldQuat);
-    const carUp = new THREE.Vector3(0, 1, 0).applyQuaternion(carWorldQuat);
-    const carForward = new THREE.Vector3(0, 0, 1).applyQuaternion(carWorldQuat);
+    if (emit) this.emitFromCar(dt, carWorldQuat, carSpeedMs, wheels);
+    else {
+      this.emitTimer = 0;
+      this.lastWheelSkidPos.fill(null);
+    }
+    this.stepParticles(dt);
+    this.updateOpponentCars(dt, peers);
+  }
+
+  private readonly carRight = new THREE.Vector3();
+  private readonly carUp = new THREE.Vector3();
+  private readonly carForward = new THREE.Vector3();
+
+  /** Skidmarks and smoke / gravel / spray from the player's four wheels */
+  private emitFromCar(
+    dt: number,
+    carWorldQuat: THREE.Quaternion,
+    carSpeedMs: number,
+    wheels: readonly [SimWheelState, SimWheelState, SimWheelState, SimWheelState]
+  ): void {
+    const carRight = this.carRight.set(1, 0, 0).applyQuaternion(carWorldQuat);
+    const carUp = this.carUp.set(0, 1, 0).applyQuaternion(carWorldQuat);
+    const carForward = this.carForward.set(0, 0, 1).applyQuaternion(carWorldQuat);
 
     // 1. Record tire skidmarks when combined slip exceeds threshold (`> 0.68`)
     for (let wIdx = 0; wIdx < 4; wIdx++) {
@@ -324,9 +352,6 @@ export class SimVisualFxManager {
         }
       }
     }
-
-    this.stepParticles(dt);
-    this.updateOpponentCars(dt, peers);
   }
 
   private appendSkidQuad(
@@ -553,98 +578,52 @@ export class SimVisualFxManager {
         // The peer switched car: rebuild its rig
         this.group.remove(entry.rig.root);
         entry.rig.dispose();
+        disposeTree(entry.rig.root);
         entry = undefined;
       }
       if (!entry) {
-        entry = { rig: this.createOpponentRig(peer), vehicle: peer.vehicle };
+        entry = { rig: this.createOpponentRig(peer), vehicle: peer.vehicle, wheelRot: 0 };
         this.opponentCars.set(peer.peerId, entry);
         this.group.add(entry.rig.root);
       }
       const carRig = entry.rig;
-      if (peer.ghost) ghostify(carRig.root);
+      // A late model load adds meshes to a ghost: look for them twice a second, not by walking the rig every frame
+      if (peer.ghost && (entry.ghostCheckS = (entry.ghostCheckS ?? 0) - dt) <= 0) {
+        ghostify(carRig.root);
+        entry.ghostCheckS = 0.5;
+      }
 
       carRig.root.position.copy(peer.position);
       carRig.root.quaternion.copy(peer.quaternion);
 
-      const spinRad = ((peer.wheelRPMs[0] * 2 * Math.PI) / 60) * dt * 15;
-      const wheelRot = (performance.now() * 0.001 * (peer.speedKmh / 3.6)) / 0.348 + spinRad;
+      // Integrated, so the spokes turn smoothly with frame-time jitter and stop when the car does (paused, replay)
+      const rpm = peer.wheelRPMs[0];
+      const spinRadS = Number.isFinite(rpm) && rpm !== 0 ? (rpm * 2 * Math.PI) / 60 : peer.speedKmh / 3.6 / 0.348;
+      entry.wheelRot = (entry.wheelRot + spinRadS * dt) % (2 * Math.PI);
+      const wheelRot = entry.wheelRot;
       const pitchRad = peer.brake > 0.2 ? 0.012 : -peer.throttle * 0.008;
       const rollRad = peer.steerAngle * 0.04;
 
-      const syntheticTelemetry: CarTelemetry = {
-        speedKmh: peer.speedKmh,
-        speedMs: peer.speedKmh / 3.6,
-        rpm: 8500 + (peer.speedKmh % 45) * 95,
-        gear: Math.max(1, Math.min(8, Math.ceil(peer.speedKmh / 42))),
-        throttle: peer.throttle,
-        brake: peer.brake,
-        clutch: 1,
-        steering: THREE.MathUtils.clamp(peer.steerAngle / 0.36, -1, 1),
-        longitudinalG: 0,
-        lateralG: 0,
-        verticalG: 1,
-        altitudeM: 1400,
-        trackElevationM: 15,
-        airDensityKgM3: 1.045,
-        activeAeroMode: peer.speedKmh > 250 && Math.abs(peer.steerAngle) < 0.05 ? 'X_MODE' : 'Z_MODE',
-        autoXMode: true,
-        downforceN: 10800,
-        downforceKgf: 1100,
-        frontDownforceN: 4500,
-        rearDownforceN: 6300,
-        groundEffectFactor: 1.3,
-        dragN: 1800,
-        icePowerKw: 400 * peer.throttle,
-        mgukPowerKw: peer.throttle > 0.5 ? 250 : -80,
-        totalPowerKw: 650 * peer.throttle,
-        ersBatteryPercent: 75,
-        manualOverrideActive: false,
-        boostRemainingS: 0,
-        turboBoostBar: 2.2,
-        fuelKg: 35,
-        tireSlipRatio: [0, 0, 0, 0],
-        wheelSlipRatios: [0, 0, 0, 0],
-        wheelSlipAnglesDeg: [0, 0, 0, 0],
-        wheelLoadsN: [3500, 3500, 4200, 4200],
-        wheelRideHeightsMm: [28, 28, 38, 38],
-        suspensionTravelMm: [14, 14, 18, 18],
-        tireTempsC: [94, 94, 96, 96],
-        tireWearPct: [2, 2, 3, 3],
-        tireGripFactor: [1, 1, 1, 1],
-        brakeTempsC: [
-          peer.brake > 0.2 ? 780 : 340,
-          peer.brake > 0.2 ? 780 : 340,
-          peer.brake > 0.2 ? 720 : 320,
-          peer.brake > 0.2 ? 720 : 320,
-        ],
-        wheelSurfaces: ['asphalt', 'asphalt', 'asphalt', 'asphalt'],
-        onKerbLeft: false,
-        onKerbRight: false,
-        offTrack: false,
-        surface: 'asphalt',
-        trackDistanceM: peer.trackS,
-        trackProgress: 0,
-        lateralOffsetM: 0,
-        gapToRacingLineM: 0,
-        headingErrorRad: 0,
-        targetCornerSpeedKmh: 260,
-        brakingUrgency: 0,
-        currentSector: 1,
-        currentTurnNumber: 0,
-        currentTurnName: 'Main Straight',
-        bankingDeg: 0,
-        slopePercent: 0,
-        lapCount: 1,
-        currentLapTimeMs: 42500,
-        lastLapTimeMs: null,
-        bestLapTimeMs: null,
-        sectorTimesMs: [0, 0, 0],
-        bestSectorTimesMs: [null, null, null],
-        topSpeedThisLapKmh: 310,
-        allTimeTopSpeedKmh: 330,
-        aiAutopilot: true,
-        peers: [],
-      };
+      // One telemetry object per opponent, refreshed in place (it was a ~70-field literal per car per frame)
+      const syntheticTelemetry = (entry.telemetry ??= createPeerTelemetry());
+      const speedMs = peer.speedKmh / 3.6;
+      syntheticTelemetry.speedKmh = peer.speedKmh;
+      syntheticTelemetry.speedMs = speedMs;
+      // The car's own rpm and gear when it reports them (the AI field), else an estimate from its speed
+      syntheticTelemetry.gear = peer.gear ?? Math.max(1, Math.min(8, Math.ceil(peer.speedKmh / 42)));
+      syntheticTelemetry.rpm = peer.rpm ?? 8500 + (peer.speedKmh % 45) * 95;
+      syntheticTelemetry.throttle = peer.throttle;
+      syntheticTelemetry.brake = peer.brake;
+      syntheticTelemetry.steering = THREE.MathUtils.clamp(peer.steerAngle / 0.36, -1, 1);
+      syntheticTelemetry.activeAeroMode = peer.speedKmh > 250 && Math.abs(peer.steerAngle) < 0.05 ? 'X_MODE' : 'Z_MODE';
+      syntheticTelemetry.icePowerKw = 400 * peer.throttle;
+      syntheticTelemetry.mgukPowerKw = peer.throttle > 0.5 ? 250 : -80;
+      syntheticTelemetry.totalPowerKw = 650 * peer.throttle;
+      const braking = peer.brake > 0.2;
+      const bt = syntheticTelemetry.brakeTempsC;
+      bt[0] = bt[1] = braking ? 780 : 340;
+      bt[2] = bt[3] = braking ? 720 : 320;
+      syntheticTelemetry.trackDistanceM = peer.trackS;
 
       carRig.updateFromTelemetry(syntheticTelemetry, pitchRad, rollRad, wheelRot);
 
@@ -676,11 +655,87 @@ export class SimVisualFxManager {
     for (const [peerId, { rig }] of this.opponentCars.entries()) {
       if (!activeIds.has(peerId)) {
         this.group.remove(rig.root);
+        // The rig's own dispose() only stops its updates: its canvases, geometry and materials (and the contact
+        // shadow) would otherwise stay on the GPU for every car that ever left
         rig.dispose();
+        disposeTree(rig.root);
         this.opponentCars.delete(peerId);
       }
     }
   }
+}
+
+/** Telemetry stand-in for an opponent's rig; the per-frame fields are refreshed in updateOpponentCars */
+function createPeerTelemetry(): CarTelemetry {
+  return {
+    speedKmh: 0,
+    speedMs: 0,
+    rpm: 8500,
+    gear: 1,
+    throttle: 0,
+    brake: 0,
+    clutch: 1,
+    steering: 0,
+    longitudinalG: 0,
+    lateralG: 0,
+    verticalG: 1,
+    altitudeM: 1400,
+    trackElevationM: 15,
+    airDensityKgM3: 1.045,
+    activeAeroMode: 'Z_MODE',
+    autoXMode: true,
+    downforceN: 10800,
+    downforceKgf: 1100,
+    frontDownforceN: 4500,
+    rearDownforceN: 6300,
+    groundEffectFactor: 1.3,
+    dragN: 1800,
+    icePowerKw: 0,
+    mgukPowerKw: -80,
+    totalPowerKw: 0,
+    ersBatteryPercent: 75,
+    manualOverrideActive: false,
+    boostRemainingS: 0,
+    turboBoostBar: 2.2,
+    fuelKg: 35,
+    tireSlipRatio: [0, 0, 0, 0],
+    wheelSlipRatios: [0, 0, 0, 0],
+    wheelSlipAnglesDeg: [0, 0, 0, 0],
+    wheelLoadsN: [3500, 3500, 4200, 4200],
+    wheelRideHeightsMm: [28, 28, 38, 38],
+    suspensionTravelMm: [14, 14, 18, 18],
+    tireTempsC: [94, 94, 96, 96],
+    tireWearPct: [2, 2, 3, 3],
+    tireGripFactor: [1, 1, 1, 1],
+    brakeTempsC: [340, 340, 320, 320],
+    wheelSurfaces: ['asphalt', 'asphalt', 'asphalt', 'asphalt'],
+    onKerbLeft: false,
+    onKerbRight: false,
+    offTrack: false,
+    surface: 'asphalt',
+    trackDistanceM: 0,
+    trackProgress: 0,
+    lateralOffsetM: 0,
+    gapToRacingLineM: 0,
+    headingErrorRad: 0,
+    targetCornerSpeedKmh: 260,
+    brakingUrgency: 0,
+    currentSector: 1,
+    currentTurnNumber: 0,
+    currentTurnName: 'Main Straight',
+    bankingDeg: 0,
+    slopePercent: 0,
+    lapCount: 1,
+    currentLapTimeMs: 42500,
+    lastLapTimeMs: null,
+    bestLapTimeMs: null,
+    sectorTimesMs: [0, 0, 0],
+    bestSectorTimesMs: [null, null, null],
+    topSpeedThisLapKmh: 310,
+    allTimeTopSpeedKmh: 330,
+    aiAutopilot: true,
+    peers: [],
+  };
 }
 
 /** The AI field's drivers (ai-opponents.ts AI_DRIVERS), whose liveries the pool is built in */

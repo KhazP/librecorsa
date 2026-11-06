@@ -3,7 +3,7 @@
  *
  *   npx tsx scripts/tyre-stint-report.ts [laps=5] [compound=soft]
  */
-import { getRwandaTrackData } from '../src/lib/track-data';
+import { getActiveTrackData } from '../src/lib/track-data';
 import { F1Physics2026 } from '../src/lib/f1-physics-2026';
 import { tyreBandSurfaceTempC } from '../src/lib/sim/ac-tyre';
 import type { TireCompound } from '../src/types/f1';
@@ -11,7 +11,7 @@ import type { TireCompound } from '../src/types/f1';
 const laps = Number(process.argv[2] ?? 5);
 const compound = (process.argv[3] ?? 'soft') as TireCompound;
 
-const track = getRwandaTrackData(1200);
+const track = getActiveTrackData(1200);
 const car = new F1Physics2026(track);
 car.setAssistPreset('pro');
 car.tireCompound = compound;

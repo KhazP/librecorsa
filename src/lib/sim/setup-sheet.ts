@@ -1,7 +1,7 @@
 /**
  * Setup sheets per car class, laid out the way drivers expect: the F1 cars share one sheet (aerodynamics,
- * transmission, suspension geometry, suspension, dampers, brakes, tyres) and the GT3 cars another (tyres,
- * electronics, mechanical grip, dampers, aero). One sheet serves every car of its class; each car only brings its own baseline
+ * transmission, suspension geometry, suspension, dampers, brakes, tyres, fuel) and the GT3 cars another (tyres,
+ * electronics, mechanical grip, dampers, aero, fuel). One sheet serves every car of its class; each car only brings its own baseline
  * (ride heights, wheel rates, bump stops, preload, steering ratio, tyre ranges).
  *
  * A sheet is a view over the setup the cars already take: the chassis offsets (`ChassisSetup`), the tyre setup and
@@ -9,7 +9,7 @@
  */
 
 import type { TyreSetup, VehicleModelId } from "@/types/f1";
-import { type ChassisSetup, CHASSIS_LIMITS, type GarageTuner, STEER_RATIO_BASE } from "./car-setup";
+import { type ChassisSetup, CHASSIS_LIMITS, FUEL_KG_PER_L, FUEL_LOAD, type GarageTuner, STEER_RATIO_BASE } from "./car-setup";
 import { VF26_CHASSIS } from "./vf26-data";
 import { F12026_CAR_CONFIG } from "./f12026-car/F12026CarConfig";
 import { AMG_GT3_CONFIG } from "./gt3/AmgGt3Config";
@@ -246,6 +246,7 @@ const FX = {
   fastRebound: { more: "Wheel stays down slower after kerbs", less: "Wheel drops back quickly" },
   ductFront: { more: "Cooler front brakes, more drag", less: "Hotter front brakes, less drag" },
   ductRear: { more: "Cooler rear brakes, more drag", less: "Hotter rear brakes, less drag" },
+  fuel: { more: "Longer stint, heavier and slower", less: "Lighter and quicker, shorter stint" },
 } satisfies Record<string, SetupEffect>;
 
 export const ENGINE_MAP_LABELS = ["", "1 · Max", "2 · Race", "3 · Smooth", "4 · Lean", "5 · Save"];
@@ -295,8 +296,21 @@ const cambers = (r: TyreRanges, d: TyreSetup): SetupParam[] => [
   tyreParam("camberRear", "Rear camber", r.camberRearDeg, d.camberDeg.rear, (t) => t.camberDeg.rear, (t, v) => ({ ...t, camberDeg: { ...t.camberDeg, rear: v } }), camber, FX.camberRear, true),
 ];
 
+/** Starting fuel (kg on the F1 cars, litres beside it on the GT3s, which are fuelled by the litre) */
+const fuelGroup = (vehicle: VehicleModelId): SetupGroup => {
+  const f = FUEL_LOAD[vehicle];
+  const litres = SETUP_CLASS[vehicle] === "gt3";
+  const format = (v: number) => (litres ? `${Math.round(v / FUEL_KG_PER_L)} L · ${Math.round(v)} kg` : `${Math.round(v)} kg`);
+  return {
+    id: "fuel",
+    label: "Fuel",
+    short: "Fuel",
+    params: [chassisParam("fuelDeltaKg", { label: "Starting fuel", base: f.defaultKg, min: f.minKg, max: f.maxKg, step: 1, format, fx: FX.fuel })],
+  };
+};
+
 /** The F1 sheet: shared by every F1 car */
-function f1Sheet(b: CarBaseline, r: TyreRanges, d: TyreSetup): SetupGroup[] {
+function f1Sheet(vehicle: VehicleModelId, b: CarBaseline, r: TyreRanges, d: TyreSetup): SetupGroup[] {
   return [
     {
       id: "aero",
@@ -372,11 +386,12 @@ function f1Sheet(b: CarBaseline, r: TyreRanges, d: TyreSetup): SetupGroup[] {
       extras: ["assists"],
       params: electronics(),
     },
+    fuelGroup(vehicle),
   ];
 }
 
 /** The GT3 sheet: shared by every GT3 car */
-function gt3Sheet(b: CarBaseline, r: TyreRanges, d: TyreSetup): SetupGroup[] {
+function gt3Sheet(vehicle: VehicleModelId, b: CarBaseline, r: TyreRanges, d: TyreSetup): SetupGroup[] {
   const rate = (key: keyof ChassisSetup, label: string, baseNmm: number, fx: SetupEffect) =>
     // The slider runs in % of the baseline; the readout is the rate itself
     chassisParam(key, { label, base: 0, min: -100, max: 100, step: CHASSIS_LIMITS[key].step, format: (v) => `${Math.round(baseNmm * (1 + v / 100))} N/mm`, fx });
@@ -438,11 +453,12 @@ function gt3Sheet(b: CarBaseline, r: TyreRanges, d: TyreSetup): SetupGroup[] {
         chassisParam("brakeDuctRear", { label: "Rear brake ducts", base: 3, min: 0, max: 6, step: 1, format: int, fx: FX.ductRear }),
       ],
     },
+    fuelGroup(vehicle),
   ];
 }
 
 /** The setup sheet of a car: its class's parameters on that car's baseline */
 export function setupSheet(vehicle: VehicleModelId, tyreRanges: TyreRanges, tyreDefaults: TyreSetup): SetupGroup[] {
   const b = BASELINES[vehicle];
-  return SETUP_CLASS[vehicle] === "gt3" ? gt3Sheet(b, tyreRanges, tyreDefaults) : f1Sheet(b, tyreRanges, tyreDefaults);
+  return SETUP_CLASS[vehicle] === "gt3" ? gt3Sheet(vehicle, b, tyreRanges, tyreDefaults) : f1Sheet(vehicle, b, tyreRanges, tyreDefaults);
 }

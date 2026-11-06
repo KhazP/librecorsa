@@ -52,25 +52,15 @@ export interface MagicFormulaShape {
   E: number;
 }
 
+/**
+ * What the physics takes from the footprint: where the vertical load centres across the tread (the overturning
+ * moment is Fz × centroidShiftLeftM, worked out in computeTyreForces)
+ */
 export interface ContactPatch5PointResult {
-  /** Effective road height under the 5-point cambered footprint (m) */
-  effectiveHeightM: number;
-  /** Effective 3D contact normal (unit vector, world frame Y-up or Z-up depending on caller) */
-  nx: number;
-  ny: number;
-  nz: number;
-  /** Additional camber angle induced by lateral kerb/road slope across the tread (rad) */
-  kerbCamberRad: number;
   /** Lateral shift of the vertical pressure centroid across the contact patch (-1..+1, + = inner band) */
   centroidShiftInwardNorm: number;
   /** Lateral shift of the vertical pressure centroid in metres (+ = left in wheel frame) */
   centroidShiftLeftM: number;
-  /** Overturning moment Mx = Fz * centroidShiftLeftM (Nm) */
-  overturningMomentPerN: number;
-  /** High-frequency road micro-roughness height at patch center (m) */
-  microRoughnessM: number;
-  /** Whether the tyre deflection reached the rim bottoming stop */
-  rimBottomed: boolean;
 }
 
 export interface TyreRuntime {
@@ -240,94 +230,36 @@ export function sample5PointContactPatch(
   headingCos: number,
   headingSin: number,
   inwardSign: 1 | -1,
-  camberLeftRad: number,
   tyreWidthM: number,
-  tyreRadiusM: number,
   approxDeflectionM: number,
   sampleHeightAt: (x: number, z: number) => number,
   surfaceKind: 'asphalt' | 'road' | 'pitlane' | 'kerb' | 'runoff' | 'grass' | 'gravel' = 'asphalt',
   out: ContactPatch5PointResult = createContactPatchResult()
 ): ContactPatch5PointResult {
-  const halfLen = Math.max(0.045, Math.min(0.14, Math.sqrt(Math.max(1e-4, tyreRadiusM * Math.max(0.004, approxDeflectionM)))));
   const halfWid = 0.42 * tyreWidthM;
-  // Left unit vector in horizontal plane (for Y-up Three.js or Z-up track coordinates):
-  // If forward is (headingSin, headingCos) in (X, Z), left is (headingCos, -headingSin).
+  // Left unit vector in the horizontal plane: forward is (headingSin, headingCos) in (X, Z), left (headingCos, -headingSin)
   const leftX = headingCos;
   const leftZ = -headingSin;
-  const fwdX = headingSin;
-  const fwdZ = headingCos;
 
-  const microC = evaluateIso8608RoadRoughness(centerX, centerZ, surfaceKind);
-  const hC = sampleHeightAt(centerX, centerZ) + microC;
-  const hF = sampleHeightAt(centerX + fwdX * halfLen, centerZ + fwdZ * halfLen) +
-    evaluateIso8608RoadRoughness(centerX + fwdX * halfLen, centerZ + fwdZ * halfLen, surfaceKind);
-  const hR = sampleHeightAt(centerX - fwdX * halfLen, centerZ - fwdZ * halfLen) +
-    evaluateIso8608RoadRoughness(centerX - fwdX * halfLen, centerZ - fwdZ * halfLen, surfaceKind);
-
-  // Inner point is in direction `inwardSign * left`, Outer point is `-inwardSign * left`
+  // Height across the tread at its inner and outer edges (the road and its micro-roughness): the difference shifts
+  // the pressure centroid toward the higher side. Camber is not counted here: it is already a band shift in
+  // computeTyreForces (BAND_CAMBER_SHIFT), and counting the cambered tread drop too would apply it twice
   const inX = centerX + inwardSign * leftX * halfWid;
   const inZ = centerZ + inwardSign * leftZ * halfWid;
   const outX = centerX - inwardSign * leftX * halfWid;
   const outZ = centerZ - inwardSign * leftZ * halfWid;
   const hI = sampleHeightAt(inX, inZ) + evaluateIso8608RoadRoughness(inX, inZ, surfaceKind);
   const hO = sampleHeightAt(outX, outZ) + evaluateIso8608RoadRoughness(outX, outZ, surfaceKind);
-
-  // Camber tilt raises one shoulder and lowers the other relative to the wheel center:
-  // camberLeftRad > 0 means top leans left, so bottom (tread) is lower on the right (-left) and higher on the left
-  // (used for the footprint envelope only: the tyre model shifts the bands for camber itself)
-  const camberInRad = inwardSign * camberLeftRad;
-  const treadDropIn = halfWid * Math.sin(camberInRad);
-
-  // Effective contact height envelopes the 5 points
-  const effectiveHeightM = 0.40 * hC + 0.15 * hF + 0.15 * hR + 0.15 * Math.max(hC, hI + treadDropIn) + 0.15 * Math.max(hC, hO - treadDropIn);
-
-  // Longitudinal and lateral road slopes across the footprint
-  const slopeFwd = (hF - hR) / (2 * halfLen);
-  const slopeIn = (hI - hO) / (2 * halfWid);
-  const slopeLeft = inwardSign * slopeIn;
-
-  // Construct unit normal (nx, ny, nz) where ny is vertical up
-  const rawNx = -(fwdX * slopeFwd + leftX * slopeLeft);
-  const rawNz = -(fwdZ * slopeFwd + leftZ * slopeLeft);
-  const invLen = 1 / Math.hypot(rawNx, 1, rawNz);
-  const nx = rawNx * invLen;
-  const ny = invLen;
-  const nz = rawNz * invLen;
-
-  const kerbCamberRad = Math.atan(slopeLeft);
-  // Road (and micro-roughness) height difference across the tread only: camber is already a band shift in
-  // computeTyreForces (BAND_CAMBER_SHIFT), so counting the cambered tread drop here would apply it twice
   const penDiffIn = (hI - hO) / Math.max(0.008, approxDeflectionM + 0.006);
   const centroidShiftInwardNorm = Math.max(-0.85, Math.min(0.85, penDiffIn * 0.35));
-  const centroidShiftLeftM = inwardSign * centroidShiftInwardNorm * halfWid * 0.5;
-
-  out.effectiveHeightM = effectiveHeightM;
-  out.nx = nx;
-  out.ny = ny;
-  out.nz = nz;
-  out.kerbCamberRad = kerbCamberRad;
   out.centroidShiftInwardNorm = centroidShiftInwardNorm;
-  out.centroidShiftLeftM = centroidShiftLeftM;
-  out.overturningMomentPerN = centroidShiftLeftM;
-  out.microRoughnessM = microC;
-  out.rimBottomed = false;
+  out.centroidShiftLeftM = inwardSign * centroidShiftInwardNorm * halfWid * 0.5;
   return out;
 }
 
 /** A zeroed patch result for `sample5PointContactPatch` to write into (avoids per-step allocation) */
 export function createContactPatchResult(): ContactPatch5PointResult {
-  return {
-    effectiveHeightM: 0,
-    nx: 0,
-    ny: 1,
-    nz: 0,
-    kerbCamberRad: 0,
-    centroidShiftInwardNorm: 0,
-    centroidShiftLeftM: 0,
-    overturningMomentPerN: 0,
-    microRoughnessM: 0,
-    rimBottomed: false,
-  };
+  return { centroidShiftInwardNorm: 0, centroidShiftLeftM: 0 };
 }
 
 /**
@@ -531,7 +463,8 @@ function thermalGrip(t: TyreRuntime, slideSpeedMs = 0): number {
 /**
  * Advances the carcass deflection states and returns the contact forces.
  */
-export function computeTyreForces(t: TyreRuntime, inp: TyreForceInput): TyreForceOutput {
+/** `out`, when given, is filled and returned instead of a new object (the physics' per-sub-step call passes one) */
+export function computeTyreForces(t: TyreRuntime, inp: TyreForceInput, out?: TyreForceOutput): TyreForceOutput {
   const spec = t.spec;
   const bristleScale = dynamicBristleRelaxationScale(inp.fz, spec.fz0, t.wetness);
   const sigmaY = spec.relaxationLength * bristleScale;
@@ -701,20 +634,28 @@ export function computeTyreForces(t: TyreRuntime, inp: TyreForceInput): TyreForc
 
   const slipPower = Math.abs(fx * slipVelX) + Math.abs(fy * slipVelY);
 
-  return {
-    fx,
-    fy,
-    mz,
-    mx,
-    flatSpotVibrationNm,
-    slipRatio: (t.deflX / sigmaX),
-    slipAngle: Math.atan(t.deflY / sigmaY),
-    normSlip: s,
-    mu: muY,
-    gripFactor: thermal * pressureGrip * wearMult * degradationMult * waterGrip * Math.max(0.75, camberLat),
-    slipPower,
-  };
+  const res = out ?? ({} as TyreForceOutput);
+  res.fx = fx;
+  res.fy = fy;
+  res.mz = mz;
+  res.mx = mx;
+  res.flatSpotVibrationNm = flatSpotVibrationNm;
+  res.slipRatio = t.deflX / sigmaX;
+  res.slipAngle = Math.atan(t.deflY / sigmaY);
+  res.normSlip = s;
+  res.mu = muY;
+  res.gripFactor = thermal * pressureGrip * wearMult * degradationMult * waterGrip * Math.max(0.75, camberLat);
+  res.slipPower = slipPower;
+  return res;
 }
+
+// Thermal network (per band; the totals match the earlier calibrated two-node model:
+// surface 2600 J/K, core = bulk + carcass 21000 J/K, surface → core 95 W/K)
+const C_SURFACE = 2600 / 3;
+const C_BULK = 14000 / 3;
+const C_CARCASS = 7000 / 3;
+/** Heat capacity per node layer (surface, bulk, carcass) */
+const LAYER_CAPS = [C_SURFACE, C_BULK, C_CARCASS] as const;
 
 /**
  * Updates the 16-sector circumferential wear and temperature grid (`stepFlatSpot`).
@@ -726,11 +667,13 @@ export function stepFlatSpot(
   slipPowerW: number,
   rollSpeedMs: number,
   rimSpeedMs: number,
-  dt: number
+  dt: number,
+  /** The wet/dry wear factor the tread wear uses (an intermediate on a dry road wears faster here too) */
+  wetWear = 1
 ): void {
   const absVx = Math.abs(rollSpeedMs);
   const absRim = Math.abs(rimSpeedMs);
-  const wearInc = slipPowerW * dt * t.spec.wearPerJ * t.wearScale;
+  const wearInc = slipPowerW * dt * t.spec.wearPerJ * t.wearScale * wetWear;
   const sec = Math.floor((t.wheelAngleRad / TWO_PI) * TYRE_CIRCUMFERENTIAL_SECTORS) % TYRE_CIRCUMFERENTIAL_SECTORS;
 
   if (absVx > 4.0 && absRim < 0.35 * absVx) {
@@ -837,11 +780,6 @@ export function advanceDirtyLevel(
   return Math.max(target, lv - clean * dt);
 }
 
-// Thermal network (per band; the totals match the earlier calibrated two-node model:
-// surface 2600 J/K, core = bulk + carcass 21000 J/K, surface → core 95 W/K)
-const C_SURFACE = 2600 / 3;
-const C_BULK = 14000 / 3;
-const C_CARCASS = 7000 / 3;
 /** Inflation gas (≈0.1 kg of air) */
 const C_GAS = 80;
 const G_SURFACE_BULK = 95 / 3;
@@ -925,7 +863,7 @@ export function updateTyreThermal(
     }
   }
 
-  const caps = [C_SURFACE, C_BULK, C_CARCASS];
+  const caps = LAYER_CAPS;
   let sumS = 0;
   let sumB = 0;
   for (let i = 0; i < 9; i++) {
@@ -940,10 +878,11 @@ export function updateTyreThermal(
   updateInflation(t);
 
   // Abrasive wear proportional to sliding energy (rate per compound, see the tyre spec)
-  t.wear = Math.min(1, t.wear + slipPowerW * dt * t.spec.wearPerJ * t.wearScale * wetWearScale(traits, t.wetness));
+  const wetWear = wetWearScale(traits, t.wetness);
+  t.wear = Math.min(1, t.wear + slipPowerW * dt * t.spec.wearPerJ * t.wearScale * wetWear);
 
   // Circumferential flat-spot grid, graining/blistering, and surface contamination
-  stepFlatSpot(t, slipPowerW, rollSpeedMs, rimSpeedMs, dt);
+  stepFlatSpot(t, slipPowerW, rollSpeedMs, rimSpeedMs, dt, wetWear);
   stepGrainBlister(t, slipPowerW, fz, dt);
   stepDirtyLevel(t, surface, slipPowerW, rollSpeedMs, dt, marbleLevel);
 }

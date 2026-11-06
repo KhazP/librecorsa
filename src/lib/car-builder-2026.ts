@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import type { CarTelemetry, LiveryConfig, TireCompound } from "@/types/f1";
+import { SATIN_PAINT } from "@/lib/render/paint-finish";
 import { AMR26_MODEL_URL, attachVf26Model, loadVf26Template, type Vf26ModelInstance } from "@/lib/vf26-car-model";
 import type { TyreVisualState } from "@/lib/sim/simulator-car";
 import { moveToDriverHeadLayer } from "@/lib/render/layers";
@@ -240,7 +241,9 @@ function createLiveSteeringOled(): {
     const tFR = Math.round(t.tireTempsC?.[1] ?? 91);
     const tRL = Math.round(t.tireTempsC?.[2] ?? 92);
     const tRR = Math.round(t.tireTempsC?.[3] ?? 92);
-    const key = `${t.gear}_${Math.floor(speedInt / 2)}_${socInt}_${t.activeAeroMode}_${t.manualOverrideActive}_${tFL}_${tRL}_${Math.floor(lapSec * 2)}`;
+    // Race position when racing, else the lap number (CarTelemetry carries no position outside a race)
+    const slot = t.race ? `P${Math.max(1, t.race.position)}` : `L${Math.max(1, t.lapCount || 1)}`;
+    const key = `${t.gear}_${Math.floor(speedInt / 2)}_${socInt}_${t.activeAeroMode}_${t.manualOverrideActive}_${tFL}_${tRL}_${Math.floor(lapSec * 2)}_${slot}`;
     if (key === lastKey) return;
     lastKey = key;
 
@@ -280,7 +283,7 @@ function createLiveSteeringOled(): {
     ctx.font = "900 23px monospace";
     ctx.fillText(`${(socInt / 10).toFixed(1)}`, 439, 34);
     ctx.font = "bold 18px monospace";
-    ctx.fillText("(+3.31)", 439, 58);
+    ctx.fillText("SOC %", 439, 58);
 
     // Middle Row: Left Status (`V1` + Tire Temps `91°C / 92°C`), Center Gear Box, Right Status (`P5` + `91°C / 92°C`)
     ctx.fillStyle = "#111827";
@@ -289,7 +292,7 @@ function createLiveSteeringOled(): {
     ctx.fillStyle = "#f8fafc";
     ctx.font = "900 24px Arial, sans-serif";
     ctx.fillText("V1", 65, 100);
-    ctx.fillText(`P${Math.max(1, t.lapCount || 1)}`, 447, 100);
+    ctx.fillText(slot, 447, 100);
 
     // Small brake disc / caliper icon cells flanking center gear
     ctx.fillStyle = "#1e293b";
@@ -837,29 +840,10 @@ export function createF1Car2026(
 
   const carbonTex = createCarbonWeaveTexture();
 
-  // Glossy Automotive Clearcoat Materials (2026 F1 Showcar finish)
-  const primaryPaintMat = new THREE.MeshPhysicalMaterial({
-    color: initialLivery.primary,
-    roughness: 0.14,
-    metalness: 0.28,
-    clearcoat: 1.0,
-    clearcoatRoughness: 0.06,
-  });
-
-  const secondaryPaintMat = new THREE.MeshPhysicalMaterial({
-    color: initialLivery.secondary,
-    roughness: 0.18,
-    metalness: 0.25,
-    clearcoat: 0.9,
-    clearcoatRoughness: 0.08,
-  });
-
-  const accentPaintMat = new THREE.MeshPhysicalMaterial({
-    color: initialLivery.accent,
-    roughness: 0.2,
-    metalness: 0.22,
-    clearcoat: 0.85,
-  });
+  // Satin race livery (paint-finish.ts), as on the loaded model
+  const primaryPaintMat = new THREE.MeshPhysicalMaterial({ color: initialLivery.primary, ...SATIN_PAINT });
+  const secondaryPaintMat = new THREE.MeshPhysicalMaterial({ color: initialLivery.secondary, ...SATIN_PAINT });
+  const accentPaintMat = new THREE.MeshPhysicalMaterial({ color: initialLivery.accent, ...SATIN_PAINT });
 
   const carbonMat = new THREE.MeshPhysicalMaterial({
     color: 0x181b22,

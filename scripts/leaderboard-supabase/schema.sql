@@ -1,10 +1,14 @@
 -- LibreCorsa online leaderboard on Supabase: the same rules as scripts/leaderboard-worker, as Postgres
 -- functions the browser calls through PostgREST with the project's publishable (anon) key.
 --   POST /rest/v1/rpc/submit_lap   { "rec": LapRecording, "driver_key": string } -> { ok, rank } | { ok: false, error }
---   GET  /rest/v1/rpc/leaderboard?track=&vehicle=&lim=                          -> { laps: [...] } (no samples)
+--   GET  /rest/v1/rpc/leaderboard?track=&vehicle=&board=&lim=                  -> { laps: [...] } (no samples)
 --   GET  /rest/v1/rpc/get_lap?lap_id=                                             -> LapRecording | null
 -- The tables are locked (RLS on, no policies); only these functions can read or write them.
 -- Validation and plausibility checks are heuristics, not cheat-proof. Safe to run again.
+--
+-- Boards: a lap is ranked against laps on the same circuit, in the same car, and on the same board: the physics
+-- revision, assist preset, realism level and surface it was driven with ("p2-pro-full-dry", from rec.conditions; lapBoardClass in
+-- src/lib/sim/lap-types.ts). Laps stored before boards existed are on board 'legacy', which the game doesn't show.
 --
 -- Driver names are claimed with a device key: a random secret the game keeps in the browser. The first upload
 -- under a name stores the key's SHA-256; later uploads under that name (any circuit or car, ignoring case and
@@ -23,7 +27,31 @@ create table if not exists public.laps (
   rec jsonb not null,
   created_at timestamptz not null default now()
 );
-create index if not exists laps_board_idx on public.laps (track_id, vehicle, lap_time_ms, created_at);
+alter table public.laps add column if not exists board text not null default 'legacy';
+drop index if exists public.laps_board_idx;
+create index if not exists laps_board_class_idx on public.laps (track_id, vehicle, board, lap_time_ms, created_at);
+
+-- The board of a lap's conditions ("p2-pro-full-dry"), or null when they are missing or malformed
+create or replace function public.lap_board(c jsonb)
+returns text
+language plpgsql
+immutable
+set search_path = ''
+as $$
+begin
+  if jsonb_typeof(c) <> 'object'
+     or coalesce(c->>'assists', '') not in ('pro', 'semi_pro', 'assisted')
+     or coalesce(c->>'compound', '') not in ('soft', 'medium', 'hard', 'intermediate', 'wet')
+     or coalesce(c->>'surface', '') not in ('dry', 'wet')
+     or coalesce(c->>'realism', '') not in ('casual', 'standard', 'full')
+     or jsonb_typeof(c->'physicsVersion') <> 'number'
+     or (c->>'physicsVersion') !~ '^[0-9]{1,4}$'
+     or (c->>'physicsVersion')::int < 1 then
+    return null;
+  end if;
+  return 'p' || (c->>'physicsVersion')::int || '-' || (c->>'assists') || '-' || (c->>'realism') || '-' || (c->>'surface');
+end;
+$$;
 
 -- Uploads per client per hour (the client address is stored hashed)
 create table if not exists public.lap_posts (
@@ -66,6 +94,15 @@ as $$
 declare
   stride constant int := 14; -- t, s, x, y, z, qx, qy, qz, qw, speedKmh, throttle, brake, steer, gear
   max_speed constant double precision := 420;
+  -- Sample consistency, as src/lib/sim/lap-plausibility.ts (keep the two in step)
+  max_lap_gap constant double precision := 150;
+  max_speed_path_mismatch constant double precision := 0.03;
+  speed_path_margin constant double precision := 50;
+  max_track_path_mismatch constant double precision := 0.06;
+  track_path_margin constant double precision := 100;
+  path double precision := 0;
+  speed_path double precision := 0;
+  max_s double precision := 0;
   data jsonb;
   n int;
   cnt int;
@@ -81,6 +118,9 @@ declare
 begin
   if jsonb_typeof(rec) <> 'object' then return 'Recording must be an object'; end if;
   if rec->'version' is distinct from '1'::jsonb then return 'Unsupported version'; end if;
+  if public.lap_board(rec->'conditions') is null then
+    return 'Missing lap conditions. Update the game and try again';
+  end if;
   if jsonb_typeof(rec->'trackId') <> 'string' or (rec->>'trackId') !~ '^[A-Za-z0-9_-]{1,64}$' then
     return 'Invalid trackId';
   end if;
@@ -125,27 +165,44 @@ begin
     if t < prev_t then return 'Sample times must not go backwards'; end if;
     v := (data->>(o + 9))::double precision;
     if v < 0 or v > max_speed then return 'Sample speed out of range'; end if;
+    max_s := greatest(max_s, (data->>(o + 1))::double precision);
     if (data->>(o + 10))::double precision not between 0 and 1 or (data->>(o + 11))::double precision not between 0 and 1 then
       return 'Pedal value out of range';
     end if;
     if (data->>(o + 12))::double precision not between -1 and 1 then return 'Steering value out of range'; end if;
     v := (data->>(o + 13))::double precision;
     if v <> trunc(v) or v < -1 or v > 8 then return 'Gear out of range'; end if;
-    -- Consecutive positions must not imply a teleport
+    -- Consecutive positions must not imply a teleport; sum the distance driven, by position and by speed
     if i > 0 then
       dt := t - prev_t;
-      if dt >= 0.02 then
-        dist := sqrt(
-          ((data->>(o + 2))::double precision - (data->>(o - stride + 2))::double precision) ^ 2 +
-          ((data->>(o + 3))::double precision - (data->>(o - stride + 3))::double precision) ^ 2 +
-          ((data->>(o + 4))::double precision - (data->>(o - stride + 4))::double precision) ^ 2);
-        if dist / dt * 3.6 > max_speed then return 'Positions imply a speed above 420 km/h'; end if;
-      end if;
+      dist := sqrt(
+        ((data->>(o + 2))::double precision - (data->>(o - stride + 2))::double precision) ^ 2 +
+        ((data->>(o + 3))::double precision - (data->>(o - stride + 3))::double precision) ^ 2 +
+        ((data->>(o + 4))::double precision - (data->>(o - stride + 4))::double precision) ^ 2);
+      if dt >= 0.02 and dist / dt * 3.6 > max_speed then return 'Positions imply a speed above 420 km/h'; end if;
+      path := path + dist;
+      speed_path := speed_path
+        + ((data->>(o + 9))::double precision + (data->>(o - stride + 9))::double precision) / 2 / 3.6 * dt;
     end if;
     prev_t := t;
   end loop;
 
   if abs(lap / 1000 - prev_t) > 1.5 then return 'Lap time does not match the samples'; end if;
+
+  -- The lap closes on itself, and speed, positions and track distance agree
+  o := (cnt - 1) * stride;
+  if sqrt(
+       ((data->>(o + 2))::double precision - (data->>2)::double precision) ^ 2 +
+       ((data->>(o + 3))::double precision - (data->>3)::double precision) ^ 2 +
+       ((data->>(o + 4))::double precision - (data->>4)::double precision) ^ 2) > max_lap_gap then
+    return 'The lap does not end where it started';
+  end if;
+  if abs(path - speed_path) > max_speed_path_mismatch * path + speed_path_margin then
+    return 'Recorded speeds do not match the distance driven';
+  end if;
+  if abs(path - max_s) > max_track_path_mismatch * path + track_path_margin then
+    return 'Distance driven does not match the lap length';
+  end if;
   return null;
 end;
 $$;
@@ -160,7 +217,7 @@ as $$
   select jsonb_build_object(
     'id', l.id, 'name', l.driver_name, 'code', l.driver_code, 'lapTimeMs', l.lap_time_ms,
     'sectorTimesMs', to_jsonb(l.sector_times_ms), 'vehicle', l.vehicle, 'trackId', l.track_id,
-    'recordedAt', l.recorded_at);
+    'recordedAt', l.recorded_at, 'conditions', l.rec->'conditions');
 $$;
 
 -- The first version took no driver key; drop it so PostgREST sees a single submit_lap
@@ -188,6 +245,7 @@ declare
   used int;
   t_id text;
   veh text;
+  brd text;
   d_name text;
   d_code text;
   lap double precision;
@@ -216,6 +274,7 @@ begin
 
   t_id := rec->>'trackId';
   veh := rec->>'vehicle';
+  brd := public.lap_board(rec->'conditions');
   d_name := btrim(rec->>'driverName');
   d_code := btrim(rec->>'driverCode');
   lap := (rec->>'lapTimeMs')::double precision;
@@ -243,41 +302,47 @@ begin
 
   -- One row per driver and board: a slower lap does not replace their best
   select * into prev from public.laps l
-    where l.track_id = t_id and l.vehicle = veh and public.driver_name_key(l.driver_name) = nk
+    where l.track_id = t_id and l.vehicle = veh and l.board = brd and public.driver_name_key(l.driver_name) = nk
     order by l.lap_time_ms limit 1;
   if prev.id is not null and prev.lap_time_ms <= lap then
     return jsonb_build_object('ok', false, 'error', 'Not faster than your best lap on this board');
   end if;
 
   select count(*) + 1 into rnk from public.laps
-    where track_id = t_id and vehicle = veh and lap_time_ms <= lap and id is distinct from prev.id;
+    where track_id = t_id and vehicle = veh and board = brd and lap_time_ms <= lap and id is distinct from prev.id;
   if rnk > max_board then
     return jsonb_build_object('ok', false, 'error', 'Lap is not fast enough for the top 100');
   end if;
 
   delete from public.laps l
-    where l.track_id = t_id and l.vehicle = veh and public.driver_name_key(l.driver_name) = nk;
-  insert into public.laps (track_id, vehicle, driver_name, driver_code, lap_time_ms, sector_times_ms, recorded_at, rec)
+    where l.track_id = t_id and l.vehicle = veh and l.board = brd and public.driver_name_key(l.driver_name) = nk;
+  insert into public.laps (track_id, vehicle, board, driver_name, driver_code, lap_time_ms, sector_times_ms, recorded_at, rec)
     values (
-      t_id, veh, d_name, d_code, lap,
+      t_id, veh, brd, d_name, d_code, lap,
       array[(rec->'sectorTimesMs'->>0)::double precision, (rec->'sectorTimesMs'->>1)::double precision,
             (rec->'sectorTimesMs'->>2)::double precision],
       (rec->>'recordedAt')::double precision,
       jsonb_build_object(
         'version', 1, 'trackId', t_id, 'vehicle', veh, 'driverName', d_name, 'driverCode', d_code,
         'lapTimeMs', rec->'lapTimeMs', 'sectorTimesMs', rec->'sectorTimesMs', 'recordedAt', rec->'recordedAt',
-        'sampleHz', rec->'sampleHz', 'data', rec->'data'))
+        'sampleHz', rec->'sampleHz', 'data', rec->'data',
+        'conditions', jsonb_build_object(
+          'assists', rec->'conditions'->'assists', 'compound', rec->'conditions'->'compound',
+          'surface', rec->'conditions'->'surface', 'realism', rec->'conditions'->'realism', 'physicsVersion', rec->'conditions'->'physicsVersion')))
     returning id into new_id;
 
   -- Keep the board at its top 100
   delete from public.laps where id in (
-    select id from public.laps where track_id = t_id and vehicle = veh
+    select id from public.laps where track_id = t_id and vehicle = veh and board = brd
     order by lap_time_ms, created_at offset max_board);
   return jsonb_build_object('ok', true, 'rank', rnk);
 end;
 $$;
 
-create or replace function public.leaderboard(track text, vehicle text, lim int default 20)
+-- The first version had no board; drop it so PostgREST sees a single leaderboard
+drop function if exists public.leaderboard(text, text, int);
+
+create or replace function public.leaderboard(track text, vehicle text, board text, lim int default 20)
 returns jsonb
 language sql
 stable
@@ -287,7 +352,7 @@ as $$
   select jsonb_build_object('laps', coalesce(jsonb_agg(public.lap_entry(b) order by b.lap_time_ms, b.created_at), '[]'::jsonb))
   from (
     select * from public.laps l
-    where l.track_id = leaderboard.track and l.vehicle = leaderboard.vehicle
+    where l.track_id = leaderboard.track and l.vehicle = leaderboard.vehicle and l.board = leaderboard.board
     order by l.lap_time_ms, l.created_at
     limit least(greatest(coalesce(lim, 20), 1), 100)
   ) b;
@@ -303,7 +368,8 @@ as $$
   select rec from public.laps where id = lap_id;
 $$;
 
-revoke all on function public.lap_problem(jsonb), public.lap_entry(public.laps), public.driver_name_key(text) from public, anon, authenticated;
-revoke all on function public.submit_lap(jsonb, text), public.leaderboard(text, text, int), public.get_lap(uuid) from public;
-grant execute on function public.submit_lap(jsonb, text), public.leaderboard(text, text, int), public.get_lap(uuid)
+revoke all on function public.lap_problem(jsonb), public.lap_entry(public.laps), public.driver_name_key(text),
+  public.lap_board(jsonb) from public, anon, authenticated;
+revoke all on function public.submit_lap(jsonb, text), public.leaderboard(text, text, text, int), public.get_lap(uuid) from public;
+grant execute on function public.submit_lap(jsonb, text), public.leaderboard(text, text, text, int), public.get_lap(uuid)
   to anon, authenticated;

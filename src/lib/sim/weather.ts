@@ -491,6 +491,8 @@ export interface WeatherSyncState {
   rain: number;
   waterMm: number;
   trackTempC: number;
+  /** Share of the water left on the racing line per sector (WEATHER_SECTORS values, 0..1); absent from older hosts */
+  lineWater?: number[];
 }
 
 export class WeatherState {
@@ -615,11 +617,6 @@ export class WeatherState {
 
   /** How wet the road acts away from the line (0..1) (`OffpathWetness`) */
   get wetness(): number {
-    return wetnessFromWater(this.waterMm);
-  }
-
-  /** Off-path wetness (0..1) away from the dried racing line */
-  get offPathWetness(): number {
     return wetnessFromWater(this.waterMm);
   }
 
@@ -781,6 +778,8 @@ export class WeatherState {
       rain: this.rainIntensity,
       waterMm: this.waterMm,
       trackTempC: this.trackTempC,
+      // Rounded: 64 small numbers in a lobby message every few seconds
+      lineWater: Array.from(this.lineWater, (v) => Math.round(v * 100) / 100),
     };
   }
 
@@ -803,6 +802,10 @@ export class WeatherState {
     this.rainIntensity += (s.rain - this.rainIntensity) * k;
     this.waterMm += (s.waterMm - this.waterMm) * k;
     this.trackTempC += (s.trackTempC - this.trackTempC) * k;
+    // The dry line too: each client sweeps it with the cars it sees, which differ from the host's
+    if (s.lineWater && s.lineWater.length === WEATHER_SECTORS) {
+      for (let i = 0; i < WEATHER_SECTORS; i++) this.lineWater[i] += (s.lineWater[i] - this.lineWater[i]) * k;
+    }
   }
 }
 
@@ -905,6 +908,10 @@ export function sanitizeWeatherSync(v: unknown): WeatherSyncState | null {
     rain: clamp(o.rain, 0, 1),
     waterMm: clamp(o.waterMm, 0, 10),
     trackTempC: clamp(o.trackTempC, -20, 80),
+    lineWater:
+      Array.isArray(o.lineWater) && o.lineWater.length === WEATHER_SECTORS && o.lineWater.every(isNum)
+        ? o.lineWater.map((x) => clamp(x, 0, 1))
+        : undefined,
   };
 }
 

@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef } from "react";
 import { PAD_BRAKE_BUTTON, PAD_THROTTLE_BUTTON } from "@/lib/input/bindings";
+import { shapeStick } from "@/lib/input/stick-shape";
 import { connectedPads } from "@/lib/input/device-input";
 
 /** Labelled slider in the setup screens' look: volt thumb, mono readout, optional one-line hint */
@@ -34,17 +35,6 @@ export const TuningSlider: React.FC<{
   </label>
 );
 
-/**
- * Controller stick response: input −1..1 (+ = right) to output −1..1.
- * Inside the inner dead zone the output is 0; the outer dead zone reads full deflection a little before the stop;
- * linearity 1 is linear, above 1 finer near centre.
- */
-export function shapeStick(x: number, deadzone: number, outer: number, linearity: number): number {
-  const a = Math.abs(x);
-  if (a <= deadzone) return 0;
-  const u = Math.min(1, (a - deadzone) / Math.max(0.01, 1 - deadzone - outer));
-  return Math.sign(x) * Math.pow(u, linearity);
-}
 
 // Plot geometry (viewBox 0 0 160 100): input x maps to 10..150, output y to 90..10
 const toX = (x: number) => 80 + x * 70;

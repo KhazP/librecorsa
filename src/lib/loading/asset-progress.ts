@@ -29,6 +29,9 @@ export interface AssetProgressSnapshot {
 }
 
 /** Fallback sizes when the response carries no Content-Length (e.g. gzip on GitHub Pages) */
+/** Tasks that never call progress(): only begin() and done() */
+const NO_BYTE_PROGRESS: ReadonlySet<AssetTaskId> = new Set(["shaders"]);
+
 const KNOWN_BYTES: Record<AssetTaskId, number> = {
   track: 20_225_944,
   car: 15_297_076,
@@ -100,8 +103,11 @@ export const assetProgress = {
   /** Byte progress from a loader's ProgressEvent */
   progress(id: AssetTaskId, event: { loaded: number; total: number; lengthComputable?: boolean }) {
     if (tasks[id].status !== "loading") return;
-    const total = event.lengthComputable !== false && event.total > 0 ? event.total : KNOWN_BYTES[id];
-    update(id, { loadedBytes: event.loaded, totalBytes: Math.max(total, event.loaded), lastProgressMs: now() });
+    const known = event.lengthComputable !== false && event.total > 0;
+    // Without a Content-Length the size is a guess: keep the row short of full until done() says it is, rather than
+    // pinning it at 100 % the moment the download passes the guess
+    const total = known ? Math.max(event.total, event.loaded) : Math.max(KNOWN_BYTES[id], event.loaded / 0.95);
+    update(id, { loadedBytes: event.loaded, totalBytes: total, lastProgressMs: now() });
   },
   done(id: AssetTaskId) {
     const t = tasks[id];
@@ -117,7 +123,11 @@ export const assetProgress = {
     let any = false;
     for (const id of ORDER) {
       const task = tasks[id];
-      if (task.status === "loading" && t - task.lastProgressMs > stallMs) {
+      // The shader warm-up reports no byte progress, so silence there is not a stall: a slow GPU can compile for
+      // longer than a download may sit idle. It still gets a (much longer) limit, so a hung compile cannot hold the
+      // loading screen forever
+      const limitMs = NO_BYTE_PROGRESS.has(id) ? stallMs * 4 : stallMs;
+      if (task.status === "loading" && t - task.lastProgressMs > limitMs) {
         this.fail(id);
         any = true;
       }

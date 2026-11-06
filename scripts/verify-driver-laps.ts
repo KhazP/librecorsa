@@ -11,14 +11,14 @@
  * DBG=<s> prints a trace of the 120 m from s.
  */
 import * as THREE from 'three';
-import { getRwandaTrackData } from '../src/lib/track-data';
+import { getActiveTrackData } from '../src/lib/track-data';
 import { F1Physics2026 } from '../src/lib/f1-physics-2026';
 import { F12026CarSim } from '../src/lib/sim/f12026-car/F12026CarSim';
 import { aiLineOffsetM } from '../src/lib/sim/speed-profile';
 import type { DriverAssistPreset } from '../src/types/f1';
 import { loadGlbGeometry } from './lib/glb-geometry';
 
-const track = getRwandaTrackData(1200);
+const track = getActiveTrackData(1200);
 const root = loadGlbGeometry('public/tracks/rwanda/rwanda_2026.glb');
 const L = track.totalLengthM;
 const wrap = (s: number) => ((s % L) + L) % L;
@@ -89,8 +89,10 @@ function driveLap(car: 'vf26' | 'f12026', preset: DriverAssistPreset, pace: numb
     const thrCap = THREE.MathUtils.clamp(1.15 - 5 * Math.abs(steer), 0.25, 1) * (Math.abs(beta) > 0.06 ? 0.4 : 1);
     thr = Math.min(thrCap, e >= 0 ? Math.min(thr + 2.5 * DT, 0.3 + e * 0.5) : 0);
     if (rearSpin > 0.12) thr = Math.max(0, thr - 6 * DT);
-    // feels the lock-up and comes off the pedal, then squeezes back on
-    brakeCap = THREE.MathUtils.clamp(brakeCap + (lock < -0.14 ? -8 : 4) * DT, 0.1, 1);
+    // feels the lock-up and comes off the pedal, then squeezes back on. Modulating, not letting go: without ABS a
+    // player keeps about a quarter of the pedal on while a saturated inside front chirps, rather than dropping to
+    // nothing (at 10 % the car could not slow for T13 and ran wide with the pedal pinned at the floor)
+    brakeCap = THREE.MathUtils.clamp(brakeCap + (lock < -0.14 ? -8 : 4) * DT, 0.25, 1);
     const brake = e < 0 ? Math.min(brakeCap, THREE.MathUtils.clamp(-e * 0.25, 0, 1)) : 0;
     c.step(DT, e >= 0 ? { throttle: thr, analogSteer: steer } : { brake, analogSteer: steer });
     t += DT;

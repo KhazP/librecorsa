@@ -37,9 +37,13 @@ import {
   DEFAULT_PLAYER_SETTINGS,
   FFB_POLARITY_V2_KEY,
   loadPlayerSettings,
+  LIBRARY_FAVORITES_MAX,
+  LIBRARY_RECENT_MAX,
   parsePlayerSettings,
+  pushLibraryRecent,
   savePlayerSettings,
   SETTINGS_STORAGE_KEY,
+  toggleLibraryFavorite,
 } from '../src/lib/settings/player-settings';
 
 let passed = 0;
@@ -150,6 +154,29 @@ check('calibrated wheel with pedals and paddles on separate devices', () => {
   near(f.throttle, 1);
   near(f.brake, 1);
   assert.ok(f.pressed.has('shiftUp'));
+});
+check('an unplugged wheel is reported once (the game pauses), not silently handed to a pad', () => {
+  const reader = new DeviceInputReader();
+  const wheel = { ...DEFAULT_WHEEL_SETTINGS, steer: { padId: 'DD base', axis: 0, center: 0, invert: false } };
+  const xbox = pad('Xbox', 'standard', [0.5, 0], [0, 5], { 7: 0.9 });
+  const settings = { wheel, padButtons: DEFAULT_PAD_BUTTONS };
+  assert.equal(reader.read([pad('DD base', '', [0.1]), xbox], settings, 1 / 60).wheelLost, undefined);
+  const lost = reader.read([xbox], settings, 1 / 60);
+  assert.equal(lost.wheelLost, true);
+  assert.equal(reader.read([xbox], settings, 1 / 60).wheelLost, undefined, 'only on the frame it went');
+  assert.equal(new DeviceInputReader().read([xbox], settings, 1 / 60).wheelLost, undefined, 'no wheel to begin with: nothing lost');
+  // Separate pedals unplugged while the base stays: also lost
+  const pedalled = {
+    wheel: {
+      ...wheel,
+      throttle: { padId: 'Pedals', axis: 1, idle: -1, full: 1 },
+      brake: { padId: 'Pedals', axis: 2, idle: 1, full: -1 },
+    },
+    padButtons: DEFAULT_PAD_BUTTONS,
+  };
+  const r2 = new DeviceInputReader();
+  assert.equal(r2.read([pad('DD base', '', [0.1]), pad('Pedals', '', [0, 1, 1])], pedalled, 1 / 60).wheelLost, undefined);
+  assert.equal(r2.read([pad('DD base', '', [0.1])], pedalled, 1 / 60).wheelLost, true, 'pedals unplugged');
 });
 
 console.log('Wheel detection and force feedback');
@@ -290,6 +317,34 @@ check('round trip through JSON', () => {
   s.wheel = { ...s.wheel, ffbEnabled: true, ffbGain: 0.8, ffbMinForce: 0.05, ffbKerb: 0.6, ffbAbs: 0, ffbInvert: true };
   assert.deepEqual(parsePlayerSettings(JSON.parse(JSON.stringify(s))), s);
 });
+check('browser library: favourites / recents validated, de-duplicated and capped; older saves get empty lists', () => {
+  assert.deepEqual(parsePlayerSettings({}).library, { favorites: { cars: [], circuits: [] }, recent: { cars: [], circuits: [] } });
+  assert.deepEqual(parsePlayerSettings({ library: 'x' }).library, DEFAULT_PLAYER_SETTINGS.library);
+  const lib = parsePlayerSettings({
+    library: {
+      favorites: { cars: ['w17', 'w17', 7, '', 'bad id', '<x>', 'a'.repeat(65), 'sf26'], circuits: 'spa' },
+      recent: { cars: Array.from({ length: 40 }, (_, i) => `car${i}`), circuits: ['daytona_oval', null] },
+    },
+  }).library;
+  assert.deepEqual(lib.favorites, { cars: ['w17', 'sf26'], circuits: [] });
+  assert.equal(lib.recent.cars.length, LIBRARY_RECENT_MAX);
+  assert.deepEqual(lib.recent.circuits, ['daytona_oval']);
+  const many = parsePlayerSettings({ library: { favorites: { cars: Array.from({ length: 999 }, (_, i) => `c${i}`) } } }).library;
+  assert.equal(many.favorites.cars.length, LIBRARY_FAVORITES_MAX);
+  // A venue starred through one layout comes off through any of them
+  let l = toggleLibraryFavorite(DEFAULT_PLAYER_SETTINGS.library, 'circuits', ['daytona_road', 'daytona_oval']);
+  assert.deepEqual(l.favorites.circuits, ['daytona_road']);
+  l = toggleLibraryFavorite(l, 'circuits', ['daytona_oval', 'daytona_road']);
+  assert.deepEqual(l.favorites.circuits, []);
+  // Recents: newest first, no repeats, same object when nothing changes
+  let r = pushLibraryRecent(DEFAULT_PLAYER_SETTINGS.library, 'cars', 'w17');
+  r = pushLibraryRecent(r, 'cars', 'sf26');
+  r = pushLibraryRecent(r, 'cars', 'w17');
+  assert.deepEqual(r.recent.cars, ['w17', 'sf26']);
+  assert.equal(pushLibraryRecent(r, 'cars', 'w17'), r);
+  const s = { ...DEFAULT_PLAYER_SETTINGS, library: r };
+  assert.deepEqual(parsePlayerSettings(JSON.parse(JSON.stringify(s))), s);
+});
 check('pre-fix ffbInvert: true save is reset once on load; post-v2 ffbInvert: true is preserved', () => {
   const store = new Map<string, string>();
   const g = globalThis as unknown as { localStorage?: Storage };
@@ -404,6 +459,46 @@ async function asyncChecks() {
   assert.equal(watchdogClient.force, 0);
   passed++;
   console.log('  ok  WebHID 150 ms watchdog zeroes force when frame updates stop');
+
+  // WebHID plays the frame's 500 Hz physics samples out over the next frame, not one value per frame
+  {
+    const c = new WheelFfbClient();
+    const out: number[] = [];
+    c.hidSink = (f) => out.push(f);
+    const w = { ...wheel, ffbGain: 1, ffbDamping: 0 };
+    const samples = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8];
+    c.update({ speedKmh: 50, ffbTorqueNorm: 0.8, ffbSubframeSamples: samples } as never, w, [], 1000, true);
+    near(out[0], 0.1, 1e-4);
+    await new Promise((r) => setTimeout(r, 30));
+    c.stop();
+    const played = out.slice(0, -1); // the stop's zero last
+    assert.ok(played.length >= 4, `samples played out over time (${played.length} writes)`);
+    near(played.at(-1) as number, 0.8, 1e-4);
+    for (let i = 1; i < played.length; i++) assert.ok(played[i] >= played[i - 1] - 1e-9, 'played in order');
+    passed++;
+    console.log(`  ok  WebHID plays the 500 Hz samples out over the frame (${played.length} writes in 30 ms)`);
+  }
+
+  // The kerb buzz is made on the playback clock: 40 Hz on the wheel, not aliased by the 60 Hz frame rate
+  {
+    const c = new WheelFfbClient();
+    const out: { t: number; f: number }[] = [];
+    c.hidSink = (f) => out.push({ t: performance.now(), f });
+    const w = { ...wheel, ffbGain: 1, ffbDamping: 0, ffbKerb: 1 };
+    const t0 = performance.now();
+    while (performance.now() - t0 < 600) {
+      c.update({ speedKmh: 100, ffbTorqueNorm: 0.3, wheelSurfaces: ['kerb', 'kerb', 'asphalt', 'asphalt'] } as never, w, [], performance.now(), true);
+      await new Promise((r) => setTimeout(r, 16));
+    }
+    c.stop();
+    const v = out.slice(0, -1).filter((s) => s.t - t0 > 100);
+    let crossings = 0;
+    for (let i = 1; i < v.length; i++) if ((v[i].f - 0.3) * (v[i - 1].f - 0.3) < 0) crossings++;
+    const hz = crossings / 2 / ((v.at(-1)!.t - v[0].t) / 1000);
+    assert.ok(hz > 30 && hz < 50, `kerb buzz at ${hz.toFixed(1)} Hz`);
+    passed++;
+    console.log(`  ok  WebHID kerb buzz plays at ${hz.toFixed(1)} Hz (40 Hz synthesised), not aliased to the frame rate`);
+  }
   console.log(`\n${passed} checks passed`);
 }
 asyncChecks().catch((e) => {

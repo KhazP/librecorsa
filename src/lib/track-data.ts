@@ -2,16 +2,19 @@ import * as THREE from "three";
 import {
   LiveryConfig,
   RunoffStyle,
-  TrackControlPoint,
   TrackSamplePoint,
   TurnMetadata,
 } from "@/types/f1";
 import rawTrackJson from "../../public/tracks/rwanda/track_data.json";
 import { AI_LINE_WIDTH_SCALE, brakingZoneLevel, computeSpeedProfile, createVf26ProfileCarModel } from "./sim/speed-profile";
 import { resolveSurfaceTable, type SurfaceTable, type SurfaceTableOverrides } from "./sim/track-surfaces";
+import type { SceneryCutBox } from "./scenery-cuts";
 
 /** Raw `track_data.json` layout shared by every circuit (Rwanda's file is the reference schema) */
 export type RawTrackJson = typeof rawTrackJson;
+
+/** Rwanda's track data as bundled (its outline in the circuit browser while another circuit is loaded) */
+export const RWANDA_TRACK_JSON: RawTrackJson = rawTrackJson;
 
 /**
  * The circuit everything below describes. Rwanda by default; `setActiveTrack` swaps in another layout before
@@ -54,11 +57,14 @@ export interface BuiltTrackData {
   meshUrl?: string;
   /** Materials of the circuit GLB's scan that are the racing surface (asphalt shader); none for Rwanda */
   roadMaterials?: string[];
+  /** World-space boxes of the scan's geometry to leave out (scenery-cuts.ts) */
+  sceneryCuts?: SceneryCutBox[];
+  /** Scan materials whose meshes are left out (scenery-cuts.ts) */
+  sceneryCutMaterials?: string[];
   /** Start grid slots for this layout (behind the S/F line) */
   spawnGrid: GridSlotDef[];
   samples: TrackSamplePoint[];
   totalLengthM: number;
-  totalLength: number;
   spline: THREE.CatmullRomCurve3;
   getSampleAtDistance: (s: number) => TrackSamplePoint;
   projectWorldToTrack: (
@@ -82,7 +88,6 @@ export interface BuiltTrackData {
   ) => { i0: number; i1: number; t: number; s: number; lateralH: number };
 }
 
-export const RWANDA_TRACK_METADATA = rawTrackJson.metadata;
 /** DRS zones of the active circuit (the name predates other circuits) */
 export const RWANDA_DRS_ZONES: DrsZoneDef[] = [...(rawTrackJson.drsZones as DrsZoneDef[])];
 /** Broadcast cameras of the active circuit */
@@ -188,8 +193,11 @@ function rawSampleAtS(s: number): RawTrackSample {
 export interface TrackMetaExtras {
   shortName?: string;
   baseAltitudeM?: number;
-  /** `roadMaterials`: the scan's racing-surface materials (build_track.py), drawn with the asphalt shader */
-  mesh?: { url?: string; roadMaterials?: string[] };
+  /**
+   * `roadMaterials`: the scan's racing-surface materials (build_track.py), drawn with the asphalt shader;
+   * `cutBoxes` / `cutMaterials`: scan geometry standing on the racing line, left out at load (scenery-cuts.ts)
+   */
+  mesh?: { url?: string; roadMaterials?: string[]; cutBoxes?: SceneryCutBox[]; cutMaterials?: string[] };
   credit?: { title: string; author: string; url: string; short?: string; license: string; licenseUrl: string };
   /** Per-kind overrides of the default surface table (track-surfaces.ts) */
   surfaceTable?: SurfaceTableOverrides;
@@ -222,6 +230,9 @@ export function setActiveTrack(id: string, raw: RawTrackJson = rawTrackJson): vo
   ACTIVE_TRACK_ID = id;
   const meta = raw.metadata as RawTrackJson["metadata"] & TrackMetaExtras;
   TRACK_TOTAL_LENGTH_M = meta.lengthMeters;
+  if (meta.baseAltitudeM === undefined && id !== "rwanda") {
+    console.warn(`Circuit "${id}" has no baseAltitudeM: air density as at sea level`);
+  }
   BASE_ALTITUDE_M = meta.baseAltitudeM ?? (id === "rwanda" ? RWANDA_BASE_ALTITUDE_M : 0);
   refill(RWANDA_DRS_ZONES, raw.drsZones as DrsZoneDef[]);
   refill(RWANDA_TV_CAMERAS, raw.cameras as TracksideTvCameraDef[]);
@@ -266,28 +277,6 @@ function getTurnInfoAtS(
   };
 }
 
-export const RWANDA_CONTROL_POINTS: TrackControlPoint[] = rawTrackJson.samples
-  .filter((_, idx) => idx % 24 === 0)
-  .map((raw) => {
-    const totalLen = rawTrackJson.metadata.lengthMeters;
-    const t = raw.s / totalLen;
-    const info = getTurnInfoAtS(raw.s, totalLen);
-    return {
-      x: raw.p[0],
-      y: raw.p[1],
-      z: raw.p[2],
-      bankingDeg: THREE.MathUtils.radToDeg(raw.b),
-      width: raw.w,
-      sector: info.sector,
-      turnNumber: info.turnNumber,
-      turnName: info.turnName,
-      runoffStyle: info.runoffStyle,
-      kerbLeft: raw.kL === 1,
-      kerbRight: raw.kR === 1,
-      drsZone: isInDrsZone(t),
-      racingLineOffset: raw.ro / (raw.w * AI_LINE_WIDTH_SCALE),
-    };
-  });
 
 let cachedBuiltTrack: BuiltTrackData | null = null;
 
@@ -345,7 +334,7 @@ export function catmullRomWeights(t: number): [number, number, number, number] {
 }
 
 /** Built data of the active circuit (Rwanda unless `setActiveTrack` chose another) */
-export function getRwandaTrackData(numSamples = 1200): BuiltTrackData {
+export function getActiveTrackData(numSamples = 1200): BuiltTrackData {
   if (cachedBuiltTrack && cachedBuiltTrack.samples.length === numSamples && cachedBuiltTrack.id === ACTIVE_TRACK_ID) {
     return cachedBuiltTrack;
   }
@@ -488,7 +477,10 @@ export function getRwandaTrackData(numSamples = 1200): BuiltTrackData {
   for (let i = 0; snapStraight && i < NUM_SAMPLES; i++) {
     const s = i * ds;
     if (s <= 230) {
-      const blend = s <= 195 ? 1.0 : 1.0 - THREE.MathUtils.smoothstep(s, 195, 230);
+      // Eased in over the first 15 m too: collinearity is only checked from 15 m, and pulling the line itself (s = 0)
+      // onto the chord left a lateral step against the last samples of the lap, which are not snapped
+      const blend =
+        s < 15 ? THREE.MathUtils.smoothstep(s, 0, 15) : s <= 195 ? 1.0 : 1.0 - THREE.MathUtils.smoothstep(s, 195, 230);
       const dx = positions[i].x - pStart.x;
       const dz = positions[i].z - pStart.z;
       const projDist = dx * ux + dz * uz;
@@ -598,7 +590,8 @@ export function getRwandaTrackData(numSamples = 1200): BuiltTrackData {
       (curr.y - prev2.y) / Math.max(0.5, prev2.distanceTo(curr));
     const nextSlope =
       (next2.y - curr.y) / Math.max(0.5, curr.distanceTo(next2));
-    verticalCurvatures.push((nextSlope - prevSlope) / (4 * ds));
+    // The two slopes are centred on samples i−1 and i+1, 2·ds apart
+    verticalCurvatures.push((nextSlope - prevSlope) / (2 * ds));
 
     // Normalised so that aiLineOffsetM(sample) returns the exported offset in metres
     racingOffsetsNorm.push(racingOffsetsM[i] / (widths[i] * AI_LINE_WIDTH_SCALE));
@@ -932,14 +925,19 @@ export function getRwandaTrackData(numSamples = 1200): BuiltTrackData {
     };
   };
 
+  const meshUrl = getActiveTrackMetadata().mesh?.url;
+  if (!meshUrl && ACTIVE_TRACK_ID !== "rwanda") {
+    console.warn(`Circuit "${ACTIVE_TRACK_ID}" has no mesh url: drawing Rwanda's road instead`);
+  }
   cachedBuiltTrack = {
     id: ACTIVE_TRACK_ID,
-    meshUrl: getActiveTrackMetadata().mesh?.url ?? "/tracks/rwanda/rwanda_2026.glb",
+    meshUrl: meshUrl ?? "/tracks/rwanda/rwanda_2026.glb",
     roadMaterials: getActiveTrackMetadata().mesh?.roadMaterials,
+    sceneryCuts: getActiveTrackMetadata().mesh?.cutBoxes,
+    sceneryCutMaterials: getActiveTrackMetadata().mesh?.cutMaterials,
     spawnGrid: [...RWANDA_SPAWN_GRID],
     samples,
     totalLengthM: totalLength,
-    totalLength,
     spline,
     getSampleAtDistance,
     projectWorldToTrack: projectWorldToTrackFn,
@@ -949,15 +947,12 @@ export function getRwandaTrackData(numSamples = 1200): BuiltTrackData {
   return cachedBuiltTrack;
 }
 
-/** Same as `getRwandaTrackData`: the active circuit */
-export const getActiveTrackData = getRwandaTrackData;
-
 export function getTrackData(): BuiltTrackData {
-  return getRwandaTrackData(1200);
+  return getActiveTrackData(1200);
 }
 
 export function sampleTrackAtDistance(s: number): TrackSamplePoint {
-  return getRwandaTrackData(1200).getSampleAtDistance(s);
+  return getActiveTrackData(1200).getSampleAtDistance(s);
 }
 
 export function projectWorldToTrack(
@@ -965,7 +960,7 @@ export function projectWorldToTrack(
   worldZ: number,
   hintS?: number
 ) {
-  return getRwandaTrackData(1200).projectWorldToTrack(worldX, worldZ, hintS);
+  return getActiveTrackData(1200).projectWorldToTrack(worldX, worldZ, hintS);
 }
 
 export function findClosestTrackSample(

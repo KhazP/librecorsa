@@ -6,12 +6,27 @@ Postgres functions through Supabase's REST API.
 | Call | What it does |
 | :-- | :-- |
 | `POST /rest/v1/rpc/submit_lap` `{ "rec": LapRecording, "driver_key": string }` | Checks the name claim and the lap (shape, sector sum, speeds, no teleporting), keeps each driver's best, returns `{ ok, rank }` |
-| `GET /rest/v1/rpc/leaderboard?track=&vehicle=&lim=` | Top laps for a circuit and car, without the samples |
+| `GET /rest/v1/rpc/leaderboard?track=&vehicle=&board=&lim=` | Top laps of one board, without the samples |
 | `GET /rest/v1/rpc/get_lap?lap_id=` | One lap with its ghost samples |
 
 The rules match the Cloudflare Worker in [`../leaderboard-worker`](../leaderboard-worker): 10 uploads an hour per
 client, one row per driver, top 100 per board. The tables have row-level security on with no policies, so
-only those functions can touch them. The checks are heuristics, not cheat-proof.
+only those functions can touch them. The checks are heuristics, not cheat-proof: besides the shape and the
+ranges, the samples must agree with each other (the lap closes, and speeds, positions and track distance match;
+see `src/lib/sim/lap-plausibility.ts`).
+
+## Boards
+
+A lap is ranked only against laps on the same circuit, in the same car, under the same **board**: the physics
+revision, assist preset, realism level (casual, standard or full) and surface (dry or wet) it was driven with,
+sent in the lap's `conditions` (`p2-pro-full-dry`). The game shows the board for the assists and realism the player
+drives with now. Laps where the autopilot drove are never uploaded. Laps uploaded before boards
+existed stay in the table on board `legacy`, which the game doesn't show; uploads without conditions are refused.
+When a physics change makes old times incomparable, bump `PHYSICS_VERSION` in `src/lib/sim/lap-types.ts`: new laps
+then start fresh boards.
+
+**Upgrading**: run the new `schema.sql` in the SQL Editor *before* deploying a game build that uses boards. Until
+then that build finds no online times.
 
 ## Driver names
 

@@ -3,9 +3,10 @@
  * summary (deltas, sector and corner bests) and plays recorded laps back as ghosts.
  * Also validates untrusted recordings (imported files, downloads) before they are used.
  */
-import type { CarTelemetry, VehicleModelId } from "@/types/f1";
-import { LAP_SAMPLE_STRIDE } from "./lap-types";
-import type { CornerStat, LapRecording, LapSample, LapSummaryData } from "./lap-types";
+import { isVehicleModelId, type AssistPreset, type CarTelemetry, type TireCompound, type VehicleModelId } from "@/types/f1";
+import { ASSIST_PRESETS, LAP_SAMPLE_STRIDE, PHYSICS_VERSION, parseLapConditions } from "./lap-types";
+import { SIM_REALISM_LEVELS, type SimRealism } from "./sim-realism";
+import type { CornerStat, LapConditions, LapRecording, LapSample, LapSummaryData } from "./lap-types";
 
 export interface LapRecorderTurn {
   number: number;
@@ -21,6 +22,11 @@ export interface LapRecorderInput {
   >;
   position: { x: number; y: number; z: number };
   quaternion: { x: number; y: number; z: number; w: number };
+  /**
+   * What the car is driven with right now; the lap keeps the most-aided preset, the least realistic level, any wet
+   * seen and whether the autopilot ever drove
+   */
+  conditions?: { assists: AssistPreset; compound: TireCompound; wet: boolean; realism: SimRealism; autopilot: boolean };
 }
 
 export interface CompletedLap {
@@ -33,8 +39,9 @@ export interface LapRecorderOptions {
   turns: LapRecorderTurn[];
   trackId: string;
   vehicle: VehicleModelId;
-  /** Shown on the leaderboard: letters, 3 characters A-Z */
+  /** Shown on the leaderboard (up to 16 characters, see cleanDriverName) */
   driverName: string;
+  /** Three letters A-Z */
   driverCode: string;
   sampleHz?: number;
   personalBestMs?: number | null;
@@ -54,8 +61,8 @@ const START_GRACE_MS = 250;
 const CORNER_HALF_WINDOW_M = 150;
 const MIN_LAP_MS = 20_000;
 const MAX_LAP_MS = 900_000;
-const MAX_NUMBERS = 200_000;
-const VEHICLES: readonly VehicleModelId[] = ["vf26", "f12026-car", "amg-gt3"];
+/** Values in a lap's samples: the leaderboard's 20 000-sample cap (MAX_SAMPLES in the Worker); 900 s at 20 Hz fits */
+const MAX_NUMBERS = 20_000 * LAP_SAMPLE_STRIDE;
 const DRIVER_CODE_RE = /^[A-Z]{3}$/;
 /** The leaderboard's teleport check: consecutive samples (≥ 20 ms apart) may not imply more than this */
 const MAX_IMPLIED_KMH = 420;
@@ -149,6 +156,10 @@ export class LapRecorder {
   private valid = true;
   private lastSampleT = -Infinity;
   private rows: number[][] = [];
+  /** Conditions over the lap in progress (null until reported) */
+  private lapConditions: LapConditions | null = null;
+  /** The autopilot drove at some point of the lap in progress */
+  private autopilotUsed = false;
 
   constructor(opts: LapRecorderOptions) {
     this.trackLengthM = opts.trackLengthM;
@@ -230,7 +241,11 @@ export class LapRecorder {
     // Line crossed: close the lap in progress, then start the next one armed
     let completed: CompletedLap | null = null;
     const lapMs = t.lastLapTimeMs;
-    if (this.recording && lapMs !== null && Number.isFinite(lapMs) && lapMs > 0 && lapMs !== prevLapTimeMs) {
+    // The physics leaves lastLapTimeMs alone for a lap it does not time (too short to be real), so an unchanged value
+    // usually means a stale one. A lap timed to the same millisecond as the previous is still new, though: the lap
+    // clock read just before the line then agrees with it
+    const fresh = lapMs !== prevLapTimeMs || (lapMs !== null && Math.abs(lapMs - prevClockMs) < 250);
+    if (this.recording && lapMs !== null && Number.isFinite(lapMs) && lapMs > 0 && fresh) {
       completed = this.finishLap(input, lapMs, prevCount);
     }
     this.beginLap();
@@ -247,6 +262,8 @@ export class LapRecorder {
     this.valid = true;
     this.lastSampleT = -Infinity;
     this.rows = [];
+    this.lapConditions = null;
+    this.autopilotUsed = false;
   }
 
   private abandon(): void {
@@ -254,11 +271,31 @@ export class LapRecorder {
     this.valid = true;
     this.lastSampleT = -Infinity;
     this.rows = [];
+    this.lapConditions = null;
+    this.autopilotUsed = false;
+  }
+
+  /** Folds this moment's assists, realism, tyre and surface into the lap's conditions */
+  private noteConditions(input: LapRecorderInput): void {
+    const c = input.conditions;
+    if (!c) return;
+    const prev = this.lapConditions;
+    const aid = (a: AssistPreset) => ASSIST_PRESETS.indexOf(a);
+    const real = (r: SimRealism) => SIM_REALISM_LEVELS.indexOf(r);
+    if (c.autopilot) this.autopilotUsed = true;
+    this.lapConditions = {
+      assists: prev && aid(prev.assists) > aid(c.assists) ? prev.assists : c.assists,
+      compound: c.compound,
+      surface: c.wet || prev?.surface === "wet" ? "wet" : "dry",
+      realism: prev && real(prev.realism) < real(c.realism) ? prev.realism : c.realism,
+      physicsVersion: PHYSICS_VERSION,
+    };
   }
 
   /** Adds this update to the lap in progress: validity and a sample when one is due */
   private collect(input: LapRecorderInput): void {
     if (!this.recording) return;
+    this.noteConditions(input);
     // The physics' own verdict when it judges track limits, else any moment off the track
     if (input.telemetry.lapInvalid ?? input.telemetry.offTrack) this.valid = false;
     const tS = input.telemetry.currentLapTimeMs / 1000;
@@ -276,6 +313,7 @@ export class LapRecorder {
     const sectors: [number, number, number] = [Math.round(rawSectors[0]), Math.round(rawSectors[1]), Math.round(rawSectors[2])];
     if (!sectors.every((v) => Number.isFinite(v) && v > 0)) return null;
     if (this.rows.length < 1) return null;
+    this.noteConditions(input);
 
     // Closing sample at the lap time, never before the last recorded sample
     const lastT = this.rows[this.rows.length - 1][0];
@@ -284,16 +322,19 @@ export class LapRecorder {
     const rows = this.rows;
     // The physics rules out a lap that ended while an excursion was still being judged
     const valid = this.valid && input.telemetry.lastLapValid !== false;
+    // An autopilot lap is shown but never ranks: no best, no session bests
+    const autopilot = this.autopilotUsed;
+    const ranks = valid && !autopilot;
 
     // Personal best and delta, before this lap changes them
     const pbBefore = this.pb;
     const deltaToBestMs = pbBefore === null ? null : lapMs - pbBefore;
-    const isPersonalBest = valid && (pbBefore === null || lapMs < pbBefore);
+    const isPersonalBest = ranks && (pbBefore === null || lapMs < pbBefore);
     if (isPersonalBest) this.pb = lapMs;
 
     // Sector bests: the session best before this lap, then fold this lap in if valid
     const bestSectorTimesMs: [number | null, number | null, number | null] = [...this.sessionSectorBest];
-    if (valid) {
+    if (ranks) {
       for (let i = 0; i < 3; i++) {
         const best = this.sessionSectorBest[i];
         if (best === null || sectors[i] < best) this.sessionSectorBest[i] = sectors[i];
@@ -329,7 +370,7 @@ export class LapRecorder {
         minSpeedKmh: minSpeed,
         bestMinSpeedKmh: bestBefore,
       });
-      if (valid && (bestBefore === null || minSpeed > bestBefore)) this.sessionCornerBest[k] = minSpeed;
+      if (ranks && (bestBefore === null || minSpeed > bestBefore)) this.sessionCornerBest[k] = minSpeed;
     });
 
     const recording: LapRecording = {
@@ -347,11 +388,13 @@ export class LapRecorder {
         return acc;
       }, []),
     };
+    if (this.lapConditions) recording.conditions = { ...this.lapConditions };
 
     const summary: LapSummaryData = {
       lapNumber,
       lapTimeMs: lapMs,
       valid,
+      autopilot,
       deltaToBestMs,
       isPersonalBest,
       sectorTimesMs: sectors,
@@ -477,7 +520,7 @@ export function validateLapRecording(raw: unknown): LapRecording | null {
   if (r.version !== 1) return null;
   const { trackId, vehicle, driverName, driverCode, lapTimeMs, recordedAt, sampleHz } = r;
   if (typeof trackId !== "string" || trackId.length > 64) return null;
-  if (typeof vehicle !== "string" || !VEHICLES.includes(vehicle as VehicleModelId)) return null;
+  if (!isVehicleModelId(vehicle)) return null;
   if (typeof driverName !== "string") return null;
   if (typeof driverCode !== "string") return null;
   const code = driverCode.toUpperCase();
@@ -511,8 +554,12 @@ export function validateLapRecording(raw: unknown): LapRecording | null {
   if (samples < 2) return null;
   if (Math.abs(data[(samples - 1) * LAP_SAMPLE_STRIDE] - lapTimeMs / 1000) > 1.5) return null;
 
+  // Conditions are optional (older laps lack them), but when present they must be well-formed
+  const conditions = r.conditions === undefined ? null : parseLapConditions(r.conditions);
+  if (r.conditions !== undefined && !conditions) return null;
+
   const [sector1, sector2, sector3] = sectors;
-  return {
+  const out: LapRecording = {
     version: 1,
     trackId,
     vehicle: vehicle as VehicleModelId,
@@ -524,4 +571,6 @@ export function validateLapRecording(raw: unknown): LapRecording | null {
     sampleHz,
     data,
   };
+  if (conditions) out.conditions = conditions;
+  return out;
 }

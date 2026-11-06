@@ -10,6 +10,7 @@ import type { SimCarRig } from "@/lib/car-builder-2026";
 import type { Vf26CameraAnchor, Vf26ModelInstance } from "@/lib/vf26-car-model";
 import { installTyreDeformation, type TyreDeformationHandle } from "@/lib/render/tyre-deformation";
 import { applyLivery, collectPaintSlots, type PaintKeys, type PaintSlot } from "@/lib/render/livery-repaint";
+import { bakedCamberOf, relativeMatrix, updateCorners, WHEEL_NODES, WHEEL_SIDES, type RigCorner } from "@/lib/render/corner-rig";
 
 /** Body paint material of the GT3 GLB and its factory colours (orange body, black graphics) */
 const GT3_PAINT_MATERIAL = "amgMercedesAMG_GT3_2020Paint_Material1";
@@ -46,8 +47,8 @@ interface CockpitExtras {
   steerLockDeg?: number;
 }
 
-const WHEELS = ["WHEEL_RF", "WHEEL_LF", "WHEEL_RR", "WHEEL_LR"] as const; // physics wheel order 0..3
-const SIDE = ["RF", "LF", "RR", "LR"] as const;
+const WHEELS = WHEEL_NODES;
+const SIDE = WHEEL_SIDES;
 
 interface Gt3Extras {
   wheelCentres?: Record<string, [number, number, number]>;
@@ -182,10 +183,6 @@ export function loadGt3Template(task: AssetTaskId = "car"): Promise<THREE.Group 
   return templatePromise;
 }
 
-/** Matrix of `obj` relative to `ancestor` (both inside the same, already updated, hierarchy). */
-function relativeMatrix(obj: THREE.Object3D, ancestor: THREE.Object3D): THREE.Matrix4 {
-  return new THREE.Matrix4().copy(ancestor.matrixWorld).invert().multiply(obj.matrixWorld);
-}
 
 const anchor = (pos: [number, number, number], pitchDeg: number, fovDeg: number): Vf26CameraAnchor => ({
   pos: new THREE.Vector3(...pos),
@@ -297,15 +294,7 @@ export function createGt3CarRig(): SimCarRig {
   const maxRoadWheelRad = chassis.maxRoadWheelDeg * THREE.MathUtils.DEG2RAD;
   let cameraAnchors: Vf26ModelInstance["cameraAnchors"] | null = null;
 
-  interface Corner {
-    steer: THREE.Group;
-    spin: THREE.Group;
-    isFront: boolean;
-    isLeft: boolean;
-    restY: number;
-    tyre: TyreDeformationHandle | null;
-  }
-  const corners: Corner[] = [];
+  const corners: RigCorner[] = [];
   let disposed = false;
 
   // Cockpit parts driven from the telemetry (set once the cockpit model is attached)
@@ -363,7 +352,7 @@ export function createGt3CarRig(): SimCarRig {
 
       const isLeft = i % 2 === 1;
       // A rotation a about the forward (Z) axis moves the top of the wheel toward -X for a > 0
-      const bakedCamberRad = -new THREE.Euler().setFromQuaternion(wheel.quaternion, "ZYX").z;
+      const bakedCamberRad = bakedCamberOf(wheel);
       const tyreMesh = spin.getObjectByName(`${wheelName}_TYRE`) as THREE.Mesh | undefined;
       const tyre = tyreMesh?.isMesh
         ? installTyreDeformation(tyreMesh, {
@@ -458,19 +447,7 @@ export function createGt3CarRig(): SimCarRig {
     if (indicators.tc) indicators.tc.visible = aids?.tcActive ?? false;
     if (indicators.tcLed) indicators.tcLed.visible = aids?.tcActive ?? false;
     if (indicators.limiter) indicators.limiter.visible = t.rpm >= ledBlinkRpm;
-    corners.forEach((c, i) => {
-      if (c.isFront) {
-        // Ackermann: the inside wheel turns a little more
-        const inside = (roadWheel > 0) === c.isLeft;
-        c.steer.rotation.y = roadWheel * (inside ? 1.06 : 0.94);
-      }
-      c.spin.rotation.x = wheelRotationRad;
-      const state = tyres?.[i];
-      if (c.tyre && state) {
-        c.tyre.update(state, wheelRotationRad, c.isLeft);
-        c.steer.position.y = c.restY - c.tyre.axleDropM;
-      }
-    });
+    updateCorners(corners, roadWheel, wheelRotationRad, tyres);
   };
 
   return {

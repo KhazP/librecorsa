@@ -16,14 +16,13 @@
  */
 
 import * as THREE from 'three';
-import type { TireCompound, VehicleModelId } from '@/types/f1';
+import { isVehicleModelId, type TireCompound, type VehicleModelId } from '@/types/f1';
 import { sanitizeWeatherSync, type WeatherSyncState } from './weather';
 
-const PEER_VEHICLES: readonly VehicleModelId[] = ['vf26', 'f12026-car', 'amg-gt3'];
 const PEER_COMPOUNDS: readonly TireCompound[] = ['soft', 'medium', 'hard', 'intermediate', 'wet'];
 /** Network input is untrusted: only a known model id is kept */
 const asPeerVehicle = (v: unknown): VehicleModelId | undefined =>
-  PEER_VEHICLES.includes(v as VehicleModelId) ? (v as VehicleModelId) : undefined;
+  isVehicleModelId(v) ? v : undefined;
 
 export interface NetworkVehiclePacket {
   peerId: string;
@@ -71,6 +70,8 @@ export interface PeerRaceProgress {
   dist: number;
   /** Race time (s, from lights out) at the finish; null while still racing */
   fin: number | null;
+  /** Laps completed at the finish: fewer than the race's when lapped (absent from older clients) */
+  laps?: number;
   /** Fastest lap of the race (ms); null before one */
   best: number | null;
   /** Last completed lap (ms) */
@@ -108,6 +109,11 @@ export interface InterpolatedPeerState {
   yawRateRadS?: number;
   /** False while the pose is a guess (packets stale, just appeared, just jumped): no contact then */
   contactReady?: boolean;
+  /** Engine rpm and gear, when the car reports them (the AI field; remote players' are estimated from wheel speed) */
+  rpm?: number;
+  gear?: number;
+  /** Touched another car this frame (the AI field's contact solver) */
+  contact?: boolean;
 }
 
 export type CollisionMode = 'on' | 'ghost_lap1' | 'off';
@@ -269,6 +275,7 @@ function sanitizeRace(v: unknown): PeerRaceProgress | undefined {
     id: r.id.slice(0, 32),
     dist,
     fin: finite(r.fin, 0, 1e6),
+    laps: typeof r.laps === 'number' && Number.isInteger(r.laps) && r.laps >= 0 && r.laps <= 99 ? r.laps : undefined,
     best: finite(r.best, 0, 1e7),
     last: finite(r.last, 0, 1e7),
     pen: finite(r.pen, 0, 600) ?? undefined,
@@ -328,6 +335,70 @@ function sanitizeLobby(v: unknown): LobbyState | null {
       ];
     }),
     race: l.race ? sanitizeStart(l.race) : null,
+  };
+}
+
+/** Peer ids are generated as `peer_xxxxxxx`; anything else from the network is refused */
+const PEER_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
+
+/** `n` finite numbers, each clamped to ±`lim`; null when the shape or a value is wrong */
+function finiteVec(v: unknown, n: number, lim: number): number[] | null {
+  if (!Array.isArray(v) || v.length !== n) return null;
+  const out = new Array<number>(n);
+  for (let i = 0; i < n; i++) {
+    const x = v[i];
+    if (typeof x !== 'number' || !Number.isFinite(x)) return null;
+    out[i] = Math.max(-lim, Math.min(lim, x));
+  }
+  return out;
+}
+
+const clampNum = (v: unknown, lo: number, hi: number, fallback: number): number =>
+  typeof v === 'number' && Number.isFinite(v) ? Math.max(lo, Math.min(hi, v)) : fallback;
+
+/** World coordinates beyond this (m) are not on any circuit */
+const MAX_WORLD_COORD_M = 100_000;
+
+/**
+ * Validates a vehicle state packet from the network: every number finite and in range, arrays the right length, the
+ * quaternion normalised, strings cleaned. Null when the packet is unusable. A bad value would otherwise reach the
+ * prediction, contact and rendering of every client (the host relays what it accepts).
+ */
+export function sanitizePacket(v: unknown): NetworkVehiclePacket | null {
+  if (!v || typeof v !== 'object') return null;
+  const p = v as Record<string, unknown>;
+  if (typeof p.peerId !== 'string' || !PEER_ID_RE.test(p.peerId)) return null;
+  const timestampMs = finite(p.timestampMs, -1e15, 1e15);
+  const pos = finiteVec(p.pos, 3, Infinity);
+  const quat = finiteVec(p.quat, 4, 2);
+  const linVel = finiteVec(p.linVel, 3, 150);
+  const angVel = finiteVec(p.angVel, 3, 30);
+  const wheelRPMs = finiteVec(p.wheelRPMs, 4, 10_000);
+  if (timestampMs === null || !pos || !quat || !linVel || !angVel || !wheelRPMs) return null;
+  if (pos.some((c) => Math.abs(c) > MAX_WORLD_COORD_M)) return null;
+  const qLen = Math.hypot(quat[0], quat[1], quat[2], quat[3]);
+  if (qLen < 1e-6) return null;
+  const seq = typeof p.seq === 'number' && Number.isInteger(p.seq) && p.seq >= 0 ? p.seq : undefined;
+  return {
+    peerId: p.peerId,
+    driverCode: asCode(p.driverCode),
+    teamColorHex: asColor(p.teamColorHex),
+    vehicle: asPeerVehicle(p.vehicle),
+    trackId: typeof p.trackId === 'string' ? p.trackId.slice(0, 64) : undefined,
+    timestampMs,
+    pos: pos as [number, number, number],
+    quat: quat.map((c) => c / qLen) as [number, number, number, number],
+    linVel: linVel as [number, number, number],
+    angVel: angVel as [number, number, number],
+    steerAngle: clampNum(p.steerAngle, -1, 1, 0),
+    wheelRPMs: wheelRPMs as [number, number, number, number],
+    throttle: clampNum(p.throttle, 0, 1, 0),
+    brake: clampNum(p.brake, 0, 1, 0),
+    trackS: clampNum(p.trackS, -10_000, 10_000_000, 0),
+    speedKmh: clampNum(p.speedKmh, 0, 600, 0),
+    seq,
+    name: typeof p.name === 'string' ? clampStr(p.name, 16, 'Driver') : undefined,
+    race: sanitizeRace(p.race),
   };
 }
 
@@ -415,9 +486,24 @@ interface WebRtcPeerEntry {
   dc: RTCDataChannel | null;
   /** Reliable, ordered control channel (lobby, start, pings); absent with older clients */
   ctl?: RTCDataChannel | null;
-  /** Game peer id behind this connection, once a message from it arrives */
+  /**
+   * Game peer id behind this connection. On the host: bound by the guest's first message, and every later message on
+   * the connection must carry it. On a guest (whose one connection is the host): the host's id, once its lobby arrives.
+   */
   gamePeerId?: string;
+  /** Host: messages accepted from this guest in the current one-second window (flood limit) */
+  rate?: { windowStartMs: number; state: number; control: number };
 }
+
+/** Host: a guest sending more than this per second is flooding; the excess is dropped, not ingested or relayed */
+const MAX_STATE_PACKETS_PER_S = 60;
+const MAX_CONTROL_MESSAGES_PER_S = 20;
+/** Only these control messages are passed between guests; the lobby, start and abort come from the host alone */
+const RELAYED_CONTROL: ReadonlySet<ControlMessage['type']> = new Set(['hello', 'ready', 'ping', 'pong']);
+/** A guest follows a different host only after its own has sent no lobby for this long (ms) */
+const HOST_SILENT_MS = 8000;
+/** How long a WebRTC connection may sit in `disconnected` (often a brief ICE blip) before the peer is dropped */
+const DISCONNECT_GRACE_MS = 5000;
 
 const STATE_CHANNEL = 'f1-telemetry';
 const CONTROL_CHANNEL = 'f1-control';
@@ -494,6 +580,8 @@ export class MultiplayerSyncManager {
   private seq = 0;
   private lastPingMs = 0;
   private lastLobbyMs = 0;
+  /** Guest: when the host's last lobby arrived (performance.now ms) */
+  private lastHostLobbyMs = 0;
 
   // Reusable math temporaries
   private tempQuat0 = new THREE.Quaternion();
@@ -542,8 +630,9 @@ export class MultiplayerSyncManager {
           if (!data || typeof data !== 'object') return;
           if (data.ctl) {
             this.handleEnvelope(data as ControlEnvelope, null);
-          } else if (data.peerId && data.peerId !== this.localPeerId) {
-            this.ingestPacket(data as NetworkVehiclePacket, false);
+          } else {
+            const pkt = sanitizePacket(data);
+            if (pkt && pkt.peerId !== this.localPeerId) this.ingestPacket(pkt, false);
           }
         };
       } catch {
@@ -557,8 +646,9 @@ export class MultiplayerSyncManager {
         this.ws = new WebSocket(wsUrl);
         this.ws.onmessage = (ev) => {
           try {
-            const pkt = JSON.parse(ev.data) as NetworkVehiclePacket;
-            if (pkt && pkt.peerId && pkt.peerId !== this.localPeerId) {
+            if (typeof ev.data !== 'string' || ev.data.length > 16384) return;
+            const pkt = sanitizePacket(JSON.parse(ev.data));
+            if (pkt && pkt.peerId !== this.localPeerId) {
               this.ingestPacket(pkt, false);
             }
           } catch {
@@ -798,28 +888,50 @@ export class MultiplayerSyncManager {
       }
     };
 
+    // `disconnected` is often a short ICE blip that recovers by itself (same pc, same channels): give it a grace
+    // period before giving up on the peer, rather than dropping it on the first wobble
+    let graceTimer: ReturnType<typeof setTimeout> | null = null;
+    const clearGrace = () => {
+      if (graceTimer !== null) clearTimeout(graceTimer);
+      graceTimer = null;
+    };
+    const lose = () => {
+      clearGrace();
+      const entry = this.rtcPeers.get(remoteId);
+      if (!entry || entry.pc !== pc) return;
+      const neverOpened = !entry.dc || entry.dc.readyState !== 'open';
+      this.rtcPeers.delete(remoteId);
+      if (entry.gamePeerId) this.dropMember(entry.gamePeerId);
+      if (pc.connectionState === 'disconnected') {
+        pc.onconnectionstatechange = null;
+        try {
+          pc.close();
+        } catch {
+          // Ignore close error
+        }
+      }
+      const strictNat = pc.connectionState === 'failed' && neverOpened;
+      this.emitStatus({
+        state: this.rtcPeers.size > 0 ? 'connected' : strictNat ? 'error' : 'signaling',
+        statusText:
+          this.rtcPeers.size > 0
+            ? `WebRTC P2P Connected (${this.rtcPeers.size} peer)`
+            : strictNat
+              ? hasTurnServer()
+                ? 'Could not connect, even through the TURN relay. Check the TURN details, or try the same Wi-Fi.'
+                : 'Could not connect directly (strict NAT / mobile network). Add a TURN relay under Advanced, or use the same Wi-Fi.'
+              : 'Peer Disconnected • Waiting for Reconnection',
+      });
+    };
     pc.onconnectionstatechange = () => {
-      if (
-        pc.connectionState === 'disconnected' ||
-        pc.connectionState === 'failed' ||
-        pc.connectionState === 'closed'
-      ) {
-        const entry = this.rtcPeers.get(remoteId);
-        const neverOpened = !entry?.dc || entry.dc.readyState !== 'open';
-        this.rtcPeers.delete(remoteId);
-        if (entry?.gamePeerId) this.dropMember(entry.gamePeerId);
-        const strictNat = pc.connectionState === 'failed' && neverOpened;
-        this.emitStatus({
-          state: this.rtcPeers.size > 0 ? 'connected' : strictNat ? 'error' : 'signaling',
-          statusText:
-            this.rtcPeers.size > 0
-              ? `WebRTC P2P Connected (${this.rtcPeers.size} peer)`
-              : strictNat
-                ? hasTurnServer()
-                  ? 'Could not connect, even through the TURN relay. Check the TURN details, or try the same Wi-Fi.'
-                  : 'Could not connect directly (strict NAT / mobile network). Add a TURN relay under Advanced, or use the same Wi-Fi.'
-                : 'Peer Disconnected • Waiting for Reconnection',
-        });
+      const state = pc.connectionState;
+      if (state === 'connected') clearGrace();
+      else if (state === 'failed' || state === 'closed') lose();
+      else if (state === 'disconnected' && graceTimer === null) {
+        graceTimer = setTimeout(() => {
+          graceTimer = null;
+          if (pc.connectionState === 'disconnected') lose();
+        }, DISCONNECT_GRACE_MS);
       }
     };
 
@@ -847,14 +959,41 @@ export class MultiplayerSyncManager {
       if (typeof ev.data !== 'string' || ev.data.length > 65536) return;
       try {
         const env = JSON.parse(ev.data) as ControlEnvelope;
-        if (env && typeof env.from === 'string') {
-          entry.gamePeerId ??= env.from;
-          this.handleEnvelope(env, entry);
-        }
+        if (!env || typeof env.from !== 'string') return;
+        // The host holds each guest to the id it first spoke with, so no guest can speak as another (or as the host)
+        if (this.isHost && (!this.bindGuest(entry, env.from) || !this.withinRate(entry, 'control'))) return;
+        this.handleEnvelope(env, entry);
       } catch {
         // Ignore malformed control message
       }
     };
+  }
+
+  /**
+   * Host: ties a guest connection to the game peer id it claims. The first claim binds it, unless the id is the host's
+   * own or another connection's; later messages must repeat it. False: drop the message.
+   */
+  private bindGuest(entry: WebRtcPeerEntry, claimedId: string): boolean {
+    if (entry.gamePeerId !== undefined) return entry.gamePeerId === claimedId;
+    if (!PEER_ID_RE.test(claimedId) || claimedId === this.localPeerId) return false;
+    for (const other of this.rtcPeers.values()) {
+      if (other !== entry && other.gamePeerId === claimedId) return false;
+    }
+    entry.gamePeerId = claimedId;
+    return true;
+  }
+
+  /** Host: counts a guest's message against its per-second budget; false once the guest is flooding */
+  private withinRate(entry: WebRtcPeerEntry, kind: 'state' | 'control'): boolean {
+    const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    const r = (entry.rate ??= { windowStartMs: now, state: 0, control: 0 });
+    if (now - r.windowStartMs >= 1000) {
+      r.windowStartMs = now;
+      r.state = 0;
+      r.control = 0;
+    }
+    r[kind]++;
+    return r[kind] <= (kind === 'state' ? MAX_STATE_PACKETS_PER_S : MAX_CONTROL_MESSAGES_PER_S);
   }
 
   private bindDataChannel(remoteId: string, dc: RTCDataChannel): void {
@@ -875,24 +1014,28 @@ export class MultiplayerSyncManager {
     dc.onmessage = (ev) => {
       if (typeof ev.data !== 'string' || ev.data.length > 16384) return;
       try {
-        const pkt = JSON.parse(ev.data) as NetworkVehiclePacket;
-        if (pkt && typeof pkt.peerId === 'string' && pkt.peerId !== this.localPeerId) {
+        const pkt = sanitizePacket(JSON.parse(ev.data));
+        if (!pkt || pkt.peerId === this.localPeerId) return;
+        if (this.isHost) {
+          // A guest may only send its own car, and not too often
           const entry = this.rtcPeers.get(remoteId);
-          if (entry && !entry.gamePeerId) entry.gamePeerId = pkt.peerId;
-          this.ingestPacket(pkt, false);
-          // The host relays every guest's state to the other guests (star topology: guests only connect to it)
-          if (this.isHost) this.relay(ev.data, remoteId, 'state');
+          if (!entry || !this.bindGuest(entry, pkt.peerId) || !this.withinRate(entry, 'state')) return;
         }
+        this.ingestPacket(pkt, false);
+        // The host relays every guest's state to the other guests (star topology: guests only connect to it). The
+        // cleaned packet goes on, never the raw text
+        if (this.isHost) this.relay(JSON.stringify(pkt), remoteId, 'state');
       } catch {
         // Ignore malformed packet
       }
     };
   }
 
-  /** Host: forwards a guest's message to every other guest */
-  private relay(serialized: string, fromRemoteId: string, channel: 'state' | 'control'): void {
+  /** Host: forwards a guest's message to every other guest (only to `toPeerId` when it is addressed) */
+  private relay(serialized: string, fromRemoteId: string, channel: 'state' | 'control', toPeerId?: string): void {
     for (const entry of this.rtcPeers.values()) {
       if (entry.remoteId === fromRemoteId) continue;
+      if (toPeerId !== undefined && entry.gamePeerId !== toPeerId) continue;
       const ch = channel === 'state' ? entry.dc : entry.ctl;
       if (ch && ch.readyState === 'open') {
         try {
@@ -938,8 +1081,11 @@ export class MultiplayerSyncManager {
   }
 
   private becomeGuest(): void {
+    // A guest has one connection, to its host: close any left from hosting or from an earlier room
+    this.closePeers();
     this.isHost = false;
     this.hostId = null;
+    this.lastHostLobbyMs = 0;
     this.members.clear();
     this.bestClockRttMs = Infinity;
     this.setLobby(null);
@@ -1091,9 +1237,12 @@ export class MultiplayerSyncManager {
     const from = env.from.slice(0, 64);
     const msg = sanitizeControl(env.ctl);
     if (!msg) return;
-    // The host passes guests' messages on to the other guests
-    if (this.isHost && via) this.relay(JSON.stringify({ ctl: msg, from, to: env.to }), via.remoteId, 'control');
-    if (env.to && env.to !== this.localPeerId) return;
+    const to = typeof env.to === 'string' ? env.to.slice(0, 64) : undefined;
+    // The host passes guests' messages on to the other guests: never one only a host may send
+    if (this.isHost && via && RELAYED_CONTROL.has(msg.type)) {
+      this.relay(JSON.stringify(to ? { ctl: msg, from, to } : { ctl: msg, from }), via.remoteId, 'control', to);
+    }
+    if (to && to !== this.localPeerId) return;
 
     switch (msg.type) {
       case 'hello':
@@ -1131,7 +1280,8 @@ export class MultiplayerSyncManager {
         this.rtts.set(from, prev === undefined ? rtt : prev + (rtt - prev) * 0.25);
         // Clock sync against the host (NTP-style, keeping the lowest-latency measurement; slowly forgets it)
         if (!this.isHost && from === this.hostId) {
-          this.bestClockRttMs = Math.min(this.bestClockRttMs * 1.02 + 0.5, Infinity);
+          // Slowly forget the best sample, so a route that got slower is eventually re-measured
+          this.bestClockRttMs = this.bestClockRttMs * 1.02 + 0.5;
           if (rtt <= this.bestClockRttMs) {
             this.bestClockRttMs = rtt;
             this.clockOffsetMs = msg.now + rtt / 2 - t1;
@@ -1139,8 +1289,17 @@ export class MultiplayerSyncManager {
         }
         break;
       }
-      case 'lobby':
+      case 'lobby': {
         if (this.isHost) break;
+        // Only a host sends the lobby, under its own id. Connected to a host over WebRTC, a guest takes the lobby from
+        // that connection alone (the host never relays one), not from another tab; and it sticks with its host while
+        // that host keeps sending
+        if (from !== msg.lobby.hostId) break;
+        if (!via && this.rtcPeers.size > 0) break;
+        const nowMs = performance.now();
+        if (this.hostId !== null && from !== this.hostId && nowMs - this.lastHostLobbyMs < HOST_SILENT_MS) break;
+        this.lastHostLobbyMs = nowMs;
+        if (via) via.gamePeerId = from;
         if (this.hostId !== msg.lobby.hostId) {
           this.hostId = msg.lobby.hostId;
           this.bestClockRttMs = Infinity;
@@ -1149,6 +1308,7 @@ export class MultiplayerSyncManager {
         }
         this.setLobby(msg.lobby);
         break;
+      }
       case 'start':
         if (this.isHost || from !== this.hostId) break;
         if (this.activeRace?.id === msg.start.id) break;
@@ -1167,7 +1327,8 @@ export class MultiplayerSyncManager {
   private tickControl(nowMs: number): void {
     if (nowMs - this.lastPingMs > (this.clockSynced ? 2000 : 400)) {
       this.lastPingMs = nowMs;
-      if (this.hostId || this.peers.size > 0) this.sendControl({ type: 'ping', t0: nowMs });
+      // Stamped at send time on the same clock as the pong's arrival (nowMs is the frame's start, earlier than this)
+      if (this.hostId || this.peers.size > 0) this.sendControl({ type: 'ping', t0: performance.now() });
     }
     if (this.isHost) {
       for (const [id, seen] of this.memberSeenMs) {
@@ -1188,6 +1349,8 @@ export class MultiplayerSyncManager {
     }
     const remoteId = `manual_${Math.random().toString(36).slice(2, 7)}`;
     this.becomeHost();
+    // A new offer replaces one still waiting for its answer: close that one rather than leave it in rtcPeers forever
+    if (this.manualPendingPc) this.closeManualPeer(this.manualPendingPc);
     const pc = new RTCPeerConnection({ iceServers: iceServers() });
     this.manualPendingPc = pc;
 
@@ -1228,17 +1391,24 @@ export class MultiplayerSyncManager {
       return '';
     }
     const remoteId = `manual_host_${Math.random().toString(36).slice(2, 7)}`;
+    // Parsed before anything is set up: a mangled token throws here without leaving a half-built peer behind
+    const offerDesc = JSON.parse(atob(offerToken.trim()));
     this.becomeGuest();
     const pc = new RTCPeerConnection({ iceServers: iceServers() });
     const entry: WebRtcPeerEntry = { remoteId, pc, dc: null };
     this.rtcPeers.set(remoteId, entry);
     pc.ondatachannel = (ev) => this.acceptChannel(entry, ev.channel);
 
-    const offerDesc = JSON.parse(atob(offerToken.trim()));
-    await pc.setRemoteDescription(new RTCSessionDescription(offerDesc));
-    const answer = await pc.createAnswer();
-    await pc.setLocalDescription(answer);
-    await this.waitForIceGathering(pc, 1800);
+    try {
+      await pc.setRemoteDescription(new RTCSessionDescription(offerDesc));
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      await this.waitForIceGathering(pc, 1800);
+    } catch (err) {
+      // A dead entry would keep rtcPeers non-empty, which makes this tab ignore same-browser lobbies
+      this.closeManualPeer(pc);
+      throw err;
+    }
 
     const answerToken = btoa(JSON.stringify(pc.localDescription));
     this.emitStatus({
@@ -1306,6 +1476,7 @@ export class MultiplayerSyncManager {
    * `receiveClockMs` is the arrival time on the clock `update()` is given (default `performance.now()`, the clock of
    * requestAnimationFrame's timestamp); pass it when driving `update()` from another clock.
    */
+  /** `pkt` must come from sanitizePacket (or be built by trusted code, like the AI field's): it is not re-checked */
   public ingestPacket(pkt: NetworkVehiclePacket, isAiPeer = false, receiveClockMs?: number): void {
     const now =
       receiveClockMs !== undefined && Number.isFinite(receiveClockMs)
@@ -1395,16 +1566,18 @@ export class MultiplayerSyncManager {
     buffer.jitterMs += (Math.abs(interval - this.broadcastIntervalMs) - buffer.jitterMs) * 0.1;
     buffer.lastArrivalMs = now;
     buffer.lastReceivedMs = now;
+    // Every caller passes a packet sanitizePacket already cleaned, so its fields are used as they are (checking them
+    // again here was a second copy of the rules that could drift from the first)
     // Identity can change mid-session (profile edit)
-    if (typeof pkt.driverCode === 'string') buffer.driverCode = asCode(pkt.driverCode);
-    if (typeof pkt.teamColorHex === 'string') buffer.teamColorHex = asColor(pkt.teamColorHex);
+    buffer.driverCode = pkt.driverCode;
+    buffer.teamColorHex = pkt.teamColorHex;
     buffer.renderedState.driverCode = buffer.driverCode;
     buffer.renderedState.teamColorHex = buffer.teamColorHex;
-    buffer.renderedState.name = typeof pkt.name === 'string' ? clampStr(pkt.name, 16, buffer.driverCode) : undefined;
-    buffer.renderedState.race = sanitizeRace(pkt.race);
+    buffer.renderedState.name = pkt.name;
+    buffer.renderedState.race = pkt.race;
     // The sender may switch car or circuit mid-session
-    buffer.renderedState.vehicle = asPeerVehicle(pkt.vehicle);
-    buffer.renderedState.trackId = typeof pkt.trackId === 'string' ? pkt.trackId.slice(0, 64) : undefined;
+    buffer.renderedState.vehicle = pkt.vehicle;
+    buffer.renderedState.trackId = pkt.trackId;
 
     const localPacket: NetworkVehiclePacket = {
       ...pkt,
@@ -1659,17 +1832,44 @@ export class MultiplayerSyncManager {
     }
   }
 
-  public dispose(): void {
-    this.closeSignaling();
-    for (const entry of this.rtcPeers.values()) {
+  /** Closes one manual-SDP connection and forgets its entry */
+  private closeManualPeer(pc: RTCPeerConnection): void {
+    for (const [id, entry] of this.rtcPeers) {
+      if (entry.pc !== pc) continue;
+      this.rtcPeers.delete(id);
+      entry.dc?.close();
+      entry.ctl?.close();
+    }
+    if (this.manualPendingPc === pc) this.manualPendingPc = null;
+    try {
+      pc.close();
+    } catch {
+      // Ignore close error
+    }
+  }
+
+  private closePeers(): void {
+    const entries = [...this.rtcPeers.values()];
+    this.rtcPeers.clear();
+    for (const entry of entries) {
+      // Silenced first: a late close event must not report the new connection's status as lost
+      entry.pc.onconnectionstatechange = null;
+      if (entry.dc) entry.dc.onclose = null;
+      if (entry.ctl) entry.ctl.onclose = null;
       try {
         entry.dc?.close();
+        entry.ctl?.close();
         entry.pc.close();
       } catch {
         // Ignore close error
       }
     }
-    this.rtcPeers.clear();
+    this.manualPendingPc = null;
+  }
+
+  public dispose(): void {
+    this.closeSignaling();
+    this.closePeers();
     if (this.channel) {
       this.channel.close();
       this.channel = null;

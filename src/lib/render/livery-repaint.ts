@@ -39,7 +39,8 @@ interface PaintAnalysis {
   residual: Int16Array;
 }
 
-const analyses = new WeakMap<THREE.Texture, PaintAnalysis | null>();
+/** Per texture, per key set: the analysis depends on which paint colours are being looked for */
+const analyses = new WeakMap<THREE.Texture, Map<PaintKeys, PaintAnalysis | null>>();
 const repainted = new WeakMap<THREE.Texture, Map<string, THREE.Texture>>();
 const materials = new WeakMap<THREE.Material, Map<string, THREE.Material>>();
 
@@ -67,10 +68,12 @@ function readPixels(image: unknown): { width: number; height: number; pixels: Ui
 }
 
 function analyse(texture: THREE.Texture, keys: PaintKeys): PaintAnalysis | null {
-  if (analyses.has(texture)) return analyses.get(texture) ?? null;
+  let byKeys = analyses.get(texture);
+  if (!byKeys) analyses.set(texture, (byKeys = new Map()));
+  if (byKeys.has(keys)) return byKeys.get(keys) ?? null;
   const read = readPixels(texture.image);
   if (!read) {
-    analyses.set(texture, null);
+    byKeys.set(keys, null);
     return null;
   }
   const keyColours: { rgb: [number, number, number]; slot: number }[] = [];
@@ -121,7 +124,7 @@ function analyse(texture: THREE.Texture, keys: PaintKeys): PaintAnalysis | null 
     residual[p * 3 + 2] = b - Math.round(ka.rgb[2] + (kb.rgb[2] - ka.rgb[2]) * bestT);
   }
   const out: PaintAnalysis = { width, height, pixels, slotA, slotB, blend, residual };
-  analyses.set(texture, out);
+  byKeys.set(keys, out);
   return out;
 }
 
@@ -177,7 +180,25 @@ export function repaintTexture(texture: THREE.Texture, keys: PaintKeys, livery: 
     repainted.set(texture, cache);
   }
   cache.set(key, out);
+  evictOldest(cache, (t) => t.dispose());
   return out;
+}
+
+/**
+ * Most repaints kept per source (and liveried materials per base). Each is a full-size texture: cycling through
+ * colours in a picker would otherwise keep every one on the GPU for the session. An evicted one still on a car is
+ * uploaded again from its canvas on the next draw.
+ */
+const MAX_CACHED_LIVERIES = 8;
+
+function evictOldest<V>(cache: Map<string, V>, dispose: (v: V) => void): void {
+  while (cache.size > MAX_CACHED_LIVERIES) {
+    const oldest = cache.keys().next().value;
+    if (oldest === undefined) break;
+    const v = cache.get(oldest);
+    cache.delete(oldest);
+    if (v !== undefined) dispose(v);
+  }
 }
 
 /**
@@ -206,6 +227,7 @@ export function liveryMaterial<M extends THREE.Material & { map: THREE.Texture |
     materials.set(base, cache);
   }
   cache.set(key, out);
+  evictOldest(cache, (m) => m.dispose());
   return out;
 }
 

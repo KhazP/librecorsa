@@ -613,6 +613,10 @@ const _comb = { fx: 0, fy: 0, sx: 0, sy: 0 };
 
 // Scratch (single-threaded, never escapes a call)
 const _m = new THREE.Matrix4();
+const _tyreTorque = new Float64Array(4);
+const _wheelInertia = new Float64Array(4);
+const _wheelOmega = new Float64Array(4);
+const _brakeImpulse = new Float64Array(4);
 const _ex = new THREE.Vector3();
 const _ey = new THREE.Vector3();
 const _ez = new THREE.Vector3();
@@ -638,8 +642,9 @@ export class VehiclePhysics {
   public static readonly SUBSTEPS = 4;
 
   public readonly config: CarPhysicsConfig;
-  public readonly totalMassKg: number;
-  public readonly sprungMassKg: number;
+  /** Car, driver and fuel (kg): see setFuelMass */
+  public totalMassKg: number;
+  public sprungMassKg: number;
   /** CG → front / rear axle (m) */
   public readonly cgToFrontM: number;
   public readonly cgToRearM: number;
@@ -732,6 +737,9 @@ export class VehiclePhysics {
   private tyres: [TyreRuntime, TyreRuntime];
   private readonly tyreByCompound = new Map<PhysicsTyreCompound, [TyreRuntime, TyreRuntime]>();
   private readonly inertiaBody: THREE.Vector3;
+  /** Body inertia without fuel (the config's, for its fuel-less mass) */
+  private readonly dryInertiaBody: THREE.Vector3;
+  private fuelKg = 0;
   private readonly floorOffsetY: number;
   private readonly staticRakeDeg: number;
   private readonly luts: {
@@ -818,7 +826,8 @@ export class VehiclePhysics {
     this.ffbMechanicalTrailM = ch.ffbMechanicalTrailM ?? DEFAULT_FFB_MECHANICAL_TRAIL_M;
     this.brakeCompound = cfg.brakes.discMaterial ?? 'carbon-ceramic';
     // Body axes: X = left (pitch), Y = up (yaw), Z = forward (roll)
-    this.inertiaBody = new THREE.Vector3(ch.inertia.pitch, ch.inertia.yaw, ch.inertia.roll);
+    this.dryInertiaBody = new THREE.Vector3(ch.inertia.pitch, ch.inertia.yaw, ch.inertia.roll);
+    this.inertiaBody = this.dryInertiaBody.clone();
     this.floorOffsetY = cfg.aero.floorOffsetY;
     this.staticRakeDeg = Math.asin((cfg.aero.rear_target_height - cfg.aero.front_target_height) / ch.wheelbase) * RAD2DEG;
 
@@ -1322,15 +1331,37 @@ export class VehiclePhysics {
     return true;
   }
 
+  /** Simulated time the last step() call actually advanced (whole fixed steps; s) */
+  public lastStepTimeS = 0;
+
   /** Advance by a render frame (any dt); runs fixed 500 Hz steps */
   public step(dtSeconds: number, inputs: VehicleInputs): void {
     const inp = this.sanitizeInputs(inputs);
     this.handleEdges(inp);
     this.timeAccumulator = Math.min(this.timeAccumulator + dtSeconds, 0.1);
+    let steps = 0;
     while (this.timeAccumulator >= VehiclePhysics.FIXED_DT) {
       this.timeAccumulator -= VehiclePhysics.FIXED_DT;
       this.outerStep(inp);
+      steps++;
     }
+    this.lastStepTimeS = steps * VehiclePhysics.FIXED_DT;
+  }
+
+  /**
+   * Ground height under a wheel for the ride-height reads. A wheel in the air keeps its last contact in `ground`
+   * (the probe only reaches 0.6 m), which after a crest is above the real road: the road is at least as low as the
+   * bottom of the tyre, so the aero sees its ride height grow instead of the take-off value.
+   */
+  private groundYUnder(w: WheelState): number {
+    if (w.grounded) return w.ground.height;
+    return Math.min(w.ground.height, w.hubY - this.tyreRadiusOf(w));
+  }
+
+  /** Unloaded radius of a wheel's tyre (m) */
+  private tyreRadiusOf(w: WheelState): number {
+    const tyre = this.tyres[w.isFront ? 0 : 1];
+    return (w.isFront ? tyre.data.front : tyre.data.rear).radius;
   }
 
   // ===========================================================================
@@ -1372,9 +1403,30 @@ export class VehiclePhysics {
     }
   }
 
+  /** Fuel on board (kg) */
+  public get fuelMassKg(): number {
+    return this.fuelKg;
+  }
+
+  /**
+   * Fuel on board (kg): its mass sits at the CG (the tank is behind the driver, between the axles), so the weight
+   * split stays and the moments of inertia grow with the mass, as the VF26's uniform-box body does. The spring
+   * preloads keep the load they were last set for (`refreshStaticGeometry` sets them for this load), so a car
+   * that burns fuel rises on its springs.
+   */
+  public setFuelMass(kg: number): void {
+    const fuel = Number.isFinite(kg) ? Math.max(0, kg) : 0;
+    if (fuel === this.fuelKg) return;
+    const ch = this.config.chassis;
+    this.fuelKg = fuel;
+    this.totalMassKg = ch.totalMassKg + fuel;
+    this.sprungMassKg = this.totalMassKg - 2 * ch.unsprungMassFront - 2 * ch.unsprungMassRear;
+    this.inertiaBody.copy(this.dryInertiaBody).multiplyScalar(this.totalMassKg / ch.totalMassKg);
+  }
+
   private staticCornerLoad(front: boolean): number {
     const ch = this.config.chassis;
-    return 0.5 * ch.totalMassKg * G * (front ? ch.frontWeightFraction : 1 - ch.frontWeightFraction);
+    return 0.5 * this.totalMassKg * G * (front ? ch.frontWeightFraction : 1 - ch.frontWeightFraction);
   }
 
   /**
@@ -1676,7 +1728,8 @@ export class VehiclePhysics {
       const reboundKnee = d.fastReboundThresholdMs ?? knee;
       const L = this.wheels[ai * 2];
       const R = this.wheels[ai * 2 + 1];
-      for (const w of [L, R]) {
+      for (let side = 0; side < 2; side++) {
+        const w = side === 0 ? L : R;
         let f = springForce(w.springPreload + w.compression, s.springs);
         const intoRubber = w.compression - s.bumpStop.range;
         if (intoRubber > 0) f += s.bumpStop.rate * intoRubber + s.bumpStop.progression * intoRubber * intoRubber;
@@ -1706,7 +1759,8 @@ export class VehiclePhysics {
     }
 
     // ---- tyres: vertical, hubs, horizontal forces
-    const tyreTorque = [0, 0, 0, 0];
+    // Scratch arrays (module level) reused every 2 kHz sub-step instead of allocated
+    const tyreTorque = _tyreTorque.fill(0);
     let ffbMz = 0;
     for (let i = 0; i < 4; i++) {
       const w = this.wheels[i];
@@ -2104,7 +2158,7 @@ export class VehiclePhysics {
    * Engine, clutch, ramp LSD and brakes as velocity constraints (sequential impulses, accumulated and
    * clamped to each element's torque capacity).
    */
-  private solveDrivetrain(h: number, inp: VehicleInputs, tyreTorque: number[]): void {
+  private solveDrivetrain(h: number, inp: VehicleInputs, tyreTorque: Float64Array): void {
     const cfg = this.config;
     const eng = cfg.engine;
     const gb = cfg.gearbox;
@@ -2221,12 +2275,16 @@ export class VehiclePhysics {
 
     // ---- predicted velocities from the free torques
     const Ie = eng.inertia;
-    const Iw = W.map((w) => this.axles[w.isFront ? 0 : 1].wheelInertia);
+    const Iw = _wheelInertia;
+    const wW = _wheelOmega;
+    for (let i = 0; i < 4; i++) {
+      Iw[i] = this.axles[W[i].isFront ? 0 : 1].wheelInertia;
+      wW[i] = W[i].omega + (tyreTorque[i] / Iw[i]) * h;
+    }
     let wE = this.engineOmega + ((tIce + tK) / Ie) * h;
-    const wW = W.map((w, i) => w.omega + (tyreTorque[i] / Iw[i]) * h);
 
     // ---- sequential impulses & 3-Phase Electronic Differential (Entry / Mid / Exit-HiSpd)
-    const accB = [0, 0, 0, 0];
+    const accB = _brakeImpulse.fill(0);
     let accC = 0;
     let accD = 0;
     const half = 0.5 * ratio;
@@ -2323,7 +2381,8 @@ export class VehiclePhysics {
     } else if (pMech < 0) {
       const e = -pMech * ers.harvestEfficiency * h;
       this.ersEnergyJ = Math.min(ers.ERS_MAX_CHARGE, this.ersEnergyJ + e);
-      this.lapHarvestJ += -pMech * h;
+      // Counted on the store's side of the MGU-K, as deploy is, so both per-lap limits measure the same thing
+      this.lapHarvestJ += e;
     }
   }
 
@@ -2340,8 +2399,8 @@ export class VehiclePhysics {
     const fy = _p.y;
     _p.set(0, this.floorOffsetY, -b).applyQuaternion(this.quaternion).add(this.position);
     const ry = _p.y;
-    const gF = 0.5 * (W[0].ground.height + W[1].ground.height);
-    const gR = 0.5 * (W[2].ground.height + W[3].ground.height);
+    const gF = 0.5 * (this.groundYUnder(W[0]) + this.groundYUnder(W[1]));
+    const gR = 0.5 * (this.groundYUnder(W[2]) + this.groundYUnder(W[3]));
     this.rideFront = fy - gF;
     this.rideRear = ry - gR;
     const hMean = 0.5 * (this.rideFront + this.rideRear);
@@ -2421,8 +2480,8 @@ export class VehiclePhysics {
     const fy = _p.y;
     _p.set(0, map.rearPickupY, -b).applyQuaternion(this.quaternion).add(this.position);
     const ry = _p.y;
-    this.rideFront = fy - 0.5 * (W[0].ground.height + W[1].ground.height);
-    this.rideRear = ry - 0.5 * (W[2].ground.height + W[3].ground.height);
+    this.rideFront = fy - 0.5 * (this.groundYUnder(W[0]) + this.groundYUnder(W[1]));
+    this.rideRear = ry - 0.5 * (this.groundYUnder(W[2]) + this.groundYUnder(W[3]));
     const rakeDeg = Math.atan2(this.rideRear - this.rideFront, L) * RAD2DEG;
     const pitchDelta = rakeDeg - this.staticRakeDeg;
     const wake = this.aeroWake;
@@ -2431,6 +2490,8 @@ export class VehiclePhysics {
     const vF = air.dot(_ez);
     const q = 0.5 * this.airDensity * vF * vF;
     const rollDeg = Math.asin(THREE.MathUtils.clamp(_ex.y, -1, 1)) * RAD2DEG;
+    // Signed here (the map's yaw tables span ±, and its balance shift may be odd in yaw); the wing path above reads
+    // the magnitude, its per-wing yaw tables being one-sided
     const yawDeg = Math.abs(vF) > 1 ? Math.atan2(air.dot(_ex), Math.abs(vF)) * RAD2DEG : 0;
     const ml = this.mapLuts!;
     const clMult = rhTable(map, map.cl, this.rideFront, this.rideRear) * ml.rollCl.evaluate(rollDeg) * ml.yawCl.evaluate(yawDeg);
@@ -2664,8 +2725,9 @@ export class VehiclePhysics {
       const w = W[i];
       t.tyreLoadN[i] = w.fz;
       t.circleFraction[i] = w.circleFraction;
+      // The surface last touched; no grip while the wheel is in the air
       t.surface[i] = w.ground.surface;
-      t.surfaceGrip[i] = w.ground.grip;
+      t.surfaceGrip[i] = w.grounded ? w.ground.grip : 0;
       t.camberDeg[i] = w.camberLeftRad * RAD2DEG * (w.isLeft ? 1 : -1);
       t.tyreSurfaceTempC[i] = w.surfaceTempC;
       t.tyreCoreTempC[i] = w.coreTempC;

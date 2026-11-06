@@ -15,7 +15,7 @@
  */
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { getRwandaTrackData } from '../src/lib/track-data';
+import { getActiveTrackData } from '../src/lib/track-data';
 import { F1Physics2026 } from '../src/lib/f1-physics-2026';
 import { F12026CarSim } from '../src/lib/sim/f12026-car/F12026CarSim';
 import { VF26_CHASSIS, VF26_TYRES } from '../src/lib/sim/vf26-data';
@@ -77,14 +77,14 @@ function check(name: string, fn: () => void) {
 
 console.log('=== Verifying Sim Racing Realism Upgrades (P0 - P7) ===\n');
 
-const track = getRwandaTrackData();
+const track = getActiveTrackData();
 
 // -----------------------------------------------------------------------------
 // P1: 5-Point 3D Cambered Contact Patch & ISO 8608 Spatial Road Micro-Roughness
 // -----------------------------------------------------------------------------
 console.log('P1: 5-Point 3D Cambered Contact Patch & ISO 8608 Road Roughness');
 
-check('5-point cambered contact patch sampler detects kerb slope, shifts load centroid, and computes overturning moment Mx', () => {
+check('contact patch sampler shifts the load centroid toward a kerb rising across the tread, giving an overturning moment Mx', () => {
   // Simulate a right-hand kerb rising on the outer edge (x > 0)
   const patch = sample5PointContactPatch(
     0,
@@ -92,15 +92,11 @@ check('5-point cambered contact patch sampler detects kerb slope, shifts load ce
     1,
     0,
     -1, // left wheel: inward is -left (+x)
-    -0.055, // -3.15 deg negative camber
     0.305,
-    0.36,
     0.015,
     (x, _z) => (x < 0 ? -0.085 * x : 0),
     'kerb'
   );
-  assert.ok(Number.isFinite(patch.effectiveHeightM) && patch.ny > 0.9);
-  assert.ok(Math.abs(patch.kerbCamberRad) > 0.005, `Expected non-zero kerb camber tilt: ${patch.kerbCamberRad}`);
   assert.ok(Math.abs(patch.centroidShiftInwardNorm) > 0.01, `Expected lateral centroid shift: ${patch.centroidShiftInwardNorm}`);
 
   const tyre = createTyreRuntime(VF26_TYRES.soft.front, 95);
@@ -109,7 +105,7 @@ check('5-point cambered contact patch sampler detects kerb slope, shifts load ce
     vx: 55,
     vy: 2.5,
     rimSpeed: 55,
-    camberLeftRad: -0.055 + patch.kerbCamberRad,
+    camberLeftRad: -0.055, // -3.15 deg negative camber
     surfaceGrip: 1.0,
     inwardSign: -1,
     contactCentroidShiftInward: patch.centroidShiftInwardNorm,

@@ -39,7 +39,8 @@ export interface AeroWakeState {
   sprayIntensity?: number;
 }
 
-export const CLEAN_AIR_WAKE_STATE: AeroWakeState = {
+/** Shared and returned by reference for every car in clean air: frozen, so no caller can change it for the others */
+export const CLEAN_AIR_WAKE_STATE: Readonly<AeroWakeState> = Object.freeze({
   dragMultiplier: 1,
   frontDownforceMultiplier: 1,
   rearDownforceMultiplier: 1,
@@ -47,9 +48,9 @@ export const CLEAN_AIR_WAKE_STATE: AeroWakeState = {
   copFrontShiftPct: 0,
   wakeIntensity: 0,
   sprayIntensity: 0,
-};
+});
 
-export const DEFAULT_AERO_WAKE: AeroWakeState = CLEAN_AIR_WAKE_STATE;
+export const DEFAULT_AERO_WAKE: Readonly<AeroWakeState> = CLEAN_AIR_WAKE_STATE;
 
 /**
  * Evaluates the cumulative aerodynamic slipstream (drag reduction) and dirty-air downforce loss
@@ -69,7 +70,7 @@ export function evaluateAeroWakeDeficit(
   _localCurvature = 0,
   skipIndex = -1,
   roadWetness = 0
-): AeroWakeState {
+): Readonly<AeroWakeState> {
   if (emitters.length === 0 || mySpeedMs < 8 || !(trackLengthM > 0)) {
     return CLEAN_AIR_WAKE_STATE;
   }
@@ -152,7 +153,8 @@ export function evaluateRollAeroFactor(rollRad: number): number {
 }
 
 export interface RelativeAirspeed {
-  /** Air velocity relative to the car along its forward / left axes (m/s) */
+  /** The car's velocity relative to the air (car minus wind) along its forward / left axes (m/s); the airflow over
+   * the car is the opposite of this */
   vxAirMs: number;
   vyAirMs: number;
   airspeedMs: number;

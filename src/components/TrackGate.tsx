@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { LibreCorsaSimulator } from "@/components/LibreCorsaSimulator";
 import { activateTrack, loadStoredTrackId, RWANDA_TRACK_ID } from "@/lib/track-registry";
 import { registerAssetCache } from "@/lib/service-worker";
@@ -13,15 +13,26 @@ export const TrackGate: React.FC = () => {
   const [trackId, setTrackId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Only the latest pick counts: a slower load of a circuit picked earlier must not land after it
+  const requestRef = useRef(0);
   const select = useCallback(async (id: string) => {
+    const req = ++requestRef.current;
     try {
       const info = await activateTrack(id);
+      if (req !== requestRef.current) return;
       setError(null);
       setTrackId(info.id);
     } catch (err) {
+      if (req !== requestRef.current) return;
       console.warn("Track switch failed, staying on Rwanda:", err);
       setError(`Could not load that circuit (${String(err)})`);
-      await activateTrack(RWANDA_TRACK_ID);
+      try {
+        await activateTrack(RWANDA_TRACK_ID);
+      } catch (fallbackErr) {
+        // Rwanda ships with the bundle; this only fails if that is broken too
+        console.error("Rwanda fallback failed:", fallbackErr);
+      }
+      if (req !== requestRef.current) return;
       setTrackId(RWANDA_TRACK_ID);
     }
   }, []);

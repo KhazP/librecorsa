@@ -310,6 +310,15 @@ console.log("Track limits · illegal overtake position hand-back");
     kept.length === 1 && kept[0].kind === "penalty" && kept[0].reason === "illegal_overtake" && kept[0].penaltyS === 5,
     JSON.stringify(kept)
   );
+
+  // The overtake penalty is its own: the first track-limits penalty after it is still +3 s
+  const strike = () => [...wide(m, 0.6, 0, -0.3), ...drive(m, 6.5, { deltaS: -0.3 })];
+  const limits = [strike(), strike(), strike()].flat().filter((e) => e.kind === "penalty");
+  check(
+    "after an overtake penalty, the first track-limits penalty is +3 s",
+    limits.length === 1 && limits[0].penaltyS === 3 && m.penaltyTotalS === 8,
+    JSON.stringify(limits)
+  );
 }
 
 console.log(`\n${passed} checks passed`);

@@ -66,6 +66,8 @@ export interface LeaderboardPanelProps {
   local: LeaderboardEntry[];
   remote: LeaderboardEntry[];
   remoteEnabled: boolean;
+  /** Assists, realism and surface of the online board shown ("No assists · Full · Dry") */
+  remoteBoardLabel?: string;
   loading: boolean;
   onRefresh: () => void;
   onRaceGhost?: (entry: LeaderboardEntry) => void;
@@ -84,6 +86,7 @@ export const LeaderboardPanel: React.FC<LeaderboardPanelProps> = ({
   local,
   remote,
   remoteEnabled,
+  remoteBoardLabel,
   loading,
   onRefresh,
   onRaceGhost,
@@ -160,6 +163,11 @@ export const LeaderboardPanel: React.FC<LeaderboardPanelProps> = ({
         {/* Online times */}
         <section className={CARD} aria-label="Online">
           <CardHeader label="Online" color="#00E5FF">
+            {remoteEnabled && remoteBoardLabel ? (
+              <span className="truncate text-[12px] text-[#8E96AA]" title="Laps are ranked against laps driven with the same assists, realism and surface">
+                {remoteBoardLabel}
+              </span>
+            ) : null}
             {loading && remoteEnabled ? (
               <span className="lc-breathe ml-auto font-f1-mono text-[10px] font-extrabold tracking-[0.12em] text-[#00E5FF]">
                 LOADING…

@@ -8,6 +8,7 @@ import type { SimCarRig } from "@/lib/car-builder-2026";
 import type { Vf26ModelInstance } from "@/lib/vf26-car-model";
 import { installTyreDeformation, type TyreDeformationHandle } from "@/lib/render/tyre-deformation";
 import { cleanPortedCarMaterial, sharpenCarMaps } from "@/lib/render/ported-car-materials";
+import { relativeMatrix, updateCorners, WHEEL_NODES, WHEEL_SIDES, type RigCorner } from "@/lib/render/corner-rig";
 
 /**
  * Cars ported to one GLB each (a registry car's `modelUrl`), on any vehicle model. Node layout:
@@ -45,8 +46,8 @@ interface PortedExtras {
   cameras?: Partial<Record<string, { pos: [number, number, number]; pitchDeg: number; fov: number }>>;
 }
 
-const WHEELS = ["WHEEL_RF", "WHEEL_LF", "WHEEL_RR", "WHEEL_LR"] as const; // physics wheel order 0..3
-const SIDE = ["RF", "LF", "RR", "LR"] as const;
+const WHEELS = WHEEL_NODES;
+const SIDE = WHEEL_SIDES;
 const CAMERA_KEYS = ["cockpit", "tcam", "dash", "bumper", "nearChase", "farChase"] as const;
 
 const templates = new Map<string, Promise<THREE.Group | null>>();
@@ -152,10 +153,6 @@ function alignWheelAxles(scene: THREE.Object3D): void {
   }
 }
 
-/** Matrix of `obj` relative to `ancestor` (both inside the same, already updated, hierarchy). */
-function relativeMatrix(obj: THREE.Object3D, ancestor: THREE.Object3D): THREE.Matrix4 {
-  return new THREE.Matrix4().copy(ancestor.matrixWorld).invert().multiply(obj.matrixWorld);
-}
 
 /** A box the size of a car, shown while (or instead of, when the GLB is missing) the model loads */
 function placeholderBody(): THREE.Mesh {
@@ -185,15 +182,7 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
   const steerLockRad = options.steerLockDeg * THREE.MathUtils.DEG2RAD;
   let cameraAnchors: Vf26ModelInstance["cameraAnchors"] | null = null;
 
-  interface Corner {
-    steer: THREE.Group;
-    spin: THREE.Group;
-    isFront: boolean;
-    isLeft: boolean;
-    restY: number;
-    tyre: TyreDeformationHandle | null;
-  }
-  const corners: Corner[] = [];
+  const corners: RigCorner[] = [];
   let steerPivot: THREE.Object3D | null = null;
   const steerRest = new THREE.Quaternion();
   let disposed = false;
@@ -207,6 +196,9 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
     const find = (name: string) => model.getObjectByName(name);
 
     // Axle midpoint on the physics' (rig origin = CG on the ground), tyres on the ground
+    if (!extras.wheelCentres?.WHEEL_LF || !extras.wheelCentres?.WHEEL_LR) {
+      console.warn("Ported car model has no wheelCentres: axles placed at nominal positions");
+    }
     const lf = extras.wheelCentres?.WHEEL_LF ?? [0.8, 0.35, 1.5];
     const lr = extras.wheelCentres?.WHEEL_LR ?? [0.8, 0.35, -1.5];
     const physicsMidZ = chassis.wheelbase * (0.5 - chassis.frontWeightFraction);
@@ -250,6 +242,7 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
         ? installTyreDeformation(tyreMesh, {
             unloadedRadiusM: extras.tyreRadius?.[SIDE[i]] ?? 0.34,
             halfWidthM: extras.tyreHalfWidth?.[SIDE[i]] ?? 0.16,
+            // The re-based wheel (alignWheelAxles) carries no camber of its own
             bakedCamberRad: 0,
           })
         : null;
@@ -303,19 +296,7 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
       steerPivot.quaternion.copy(steerRest);
       steerPivot.rotateZ(t.steering * steerLockRad);
     }
-    corners.forEach((c, i) => {
-      if (c.isFront) {
-        // Ackermann: the inside wheel turns a little more
-        const inside = (roadWheel > 0) === c.isLeft;
-        c.steer.rotation.y = roadWheel * (inside ? 1.06 : 0.94);
-      }
-      c.spin.rotation.x = wheelRotationRad;
-      const state = tyres?.[i];
-      if (c.tyre && state) {
-        c.tyre.update(state, wheelRotationRad, c.isLeft);
-        c.steer.position.y = c.restY - c.tyre.axleDropM;
-      }
-    });
+    updateCorners(corners, roadWheel, wheelRotationRad, tyres);
   };
 
   return {

@@ -1,8 +1,9 @@
 import * as THREE from "three";
-import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { withBasePath } from "@/lib/base-path";
+import { createGltfLoader } from "@/lib/render/gltf-loader";
 import { SHADOW_PROXY_LAYER } from "@/lib/render/layers";
 import { applySceneryDetail, sceneryKind } from "@/lib/render/scenery-detail";
+import { patchShader } from "./shader-patch";
 
 /**
  * Trackside scenery that replaces some of a circuit's own (public/tracks/<id>/scenery/*.glb). Each file's root
@@ -36,10 +37,13 @@ export function setSceneryDensity(q: Quality): void {
   for (const m of meshes) applyDensity(m);
 }
 
-/** The scenery GLB's root, or null when it is missing or fails to load (the circuit's own scenery stays) */
+/**
+ * The scenery GLB's root, or null when it is missing or fails to load (the circuit's own scenery stays). The deploy
+ * meshopt-compresses the props and stands (scripts/compress-track-glb.mjs), so the loader takes both kinds.
+ */
 export async function loadSceneryInstances(url: string): Promise<THREE.Object3D | null> {
   try {
-    const gltf = await new GLTFLoader().loadAsync(withBasePath(url));
+    const gltf = await createGltfLoader().loadAsync(withBasePath(url));
     return gltf.scene;
   } catch (err) {
     console.warn(`[scenery] ${url} did not load; keeping the circuit's own scenery it replaces:`, err);
@@ -231,13 +235,16 @@ function leafShading(mat: THREE.Material): void {
   if (!std.isMeshStandardMaterial || !std.map || !(std.alphaTest > 0) || std.userData.leafShading) return;
   std.userData.leafShading = true;
   std.onBeforeCompile = (shader) => {
-    shader.fragmentShader = shader.fragmentShader
-      .replace("#include <normal_fragment_begin>", THREE.ShaderChunk.normal_fragment_begin.replace("normal *= faceDirection;", ""))
-      .replace(
+    shader.fragmentShader = patchShader(shader.fragmentShader, [
+      [
+        "#include <normal_fragment_begin>",
+        patchShader(THREE.ShaderChunk.normal_fragment_begin, [["normal *= faceDirection;", ""]], "leaf normal chunk"),
+      ],
+      [
         "#include <lights_physical_fragment>",
-        "#include <lights_physical_fragment>\n\tmaterial.specularColor *= 0.2;\n\tmaterial.specularColorBlended *= 0.2;\n\tmaterial.specularF90 *= 0.2;"
-      )
-      .replace(
+        "#include <lights_physical_fragment>\n\tmaterial.specularColor *= 0.2;\n\tmaterial.specularColorBlended *= 0.2;\n\tmaterial.specularF90 *= 0.2;",
+      ],
+      [
         "#include <alphatest_fragment>",
         /* glsl */ `
 #ifdef USE_MAP
@@ -247,8 +254,9 @@ function leafShading(mat: THREE.Material): void {
 	float leafMip = max( 0.0, 0.5 * log2( max( dot( leafDx, leafDx ), dot( leafDy, leafDy ) ) ) );
 	diffuseColor.a *= 1.0 + leafMip * 0.6;
 #endif
-#include <alphatest_fragment>`
-      );
+#include <alphatest_fragment>`,
+      ],
+    ], "scenery leaves");
   };
   std.customProgramCacheKey = () => "scenery-leaf-v3";
   std.needsUpdate = true;

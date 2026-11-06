@@ -120,6 +120,14 @@ export const WHEEL_TYPE_DEFAULTS: Record<WheelType, Pick<WheelSettings, "steerDe
 export const emptyWheelButtons = (): Record<PadAction, ButtonBinding | null> =>
   Object.fromEntries(PAD_ACTIONS.map((a) => [a.id, null])) as Record<PadAction, ButtonBinding | null>;
 
+/**
+ * Default UDP port of telemetry out. Not 20777: that is the F1 games' binary telemetry port, and tools listening there
+ * (SimHub's F1 plugin, dashboards) would try to parse our JSON as F1 packets.
+ */
+export const DEFAULT_TELEMETRY_PORT = 20790;
+/** Telemetry-out ports another sim's tools listen on, with what they expect there */
+export const CLAIMED_TELEMETRY_PORTS: Readonly<Record<number, string>> = { 20777: "the F1 games' telemetry" };
+
 export const DEFAULT_WHEEL_SETTINGS: WheelSettings = {
   type: "direct_drive",
   ...WHEEL_TYPE_DEFAULTS.direct_drive,
@@ -139,7 +147,7 @@ export const DEFAULT_WHEEL_SETTINGS: WheelSettings = {
   steerLockPerCar: {},
   hidFfb: true,
   telemetryOut: false,
-  telemetryPort: 20777,
+  telemetryPort: DEFAULT_TELEMETRY_PORT,
   buttons: emptyWheelButtons(),
 };
 
@@ -178,13 +186,38 @@ export interface DeviceFrame {
   /** Button actions pressed this frame (rising edges) */
   pressed: Set<PadAction>;
   source: "wheel" | "controller" | "legacy" | null;
+  /**
+   * The bound steering wheel, or a separate pedal set bound to it, was there last frame and is gone now (unplugged,
+   * asleep): pause, don't hand over
+   */
+  wheelLost?: boolean;
 }
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
+/**
+ * Connected Gamepad API devices. Two identical devices (two of the same pedal set or button box) report the same
+ * Gamepad.id, and bindings and calibration are keyed by id: the second and later ones get " #2", " #3" … appended
+ * (in slot order), so each can be bound on its own. A lone device keeps its plain id, as saved bindings expect.
+ */
 export function connectedPads(): PadLike[] {
   if (typeof navigator === "undefined" || typeof navigator.getGamepads !== "function") return [];
-  return navigator.getGamepads().filter((p): p is Gamepad => Boolean(p && p.connected !== false));
+  const pads = navigator.getGamepads().filter((p): p is Gamepad => Boolean(p && p.connected !== false));
+  const seen = new Map<string, number>();
+  return pads.map((p) => {
+    const n = (seen.get(p.id) ?? 0) + 1;
+    seen.set(p.id, n);
+    if (n === 1) return p;
+    return {
+      id: `${p.id} #${n}`,
+      index: p.index,
+      mapping: p.mapping,
+      connected: p.connected,
+      axes: p.axes,
+      buttons: p.buttons,
+      vibrationActuator: (p as { vibrationActuator?: unknown }).vibrationActuator,
+    } as PadLike;
+  });
 }
 
 export function findPad(pads: readonly PadLike[], padId: string): PadLike | undefined {
@@ -253,12 +286,20 @@ const buttonDown = (pad: PadLike | undefined, button: number) => {
 export class DeviceInputReader {
   private prevHeld = new Set<PadAction>();
   private smoothedSteer = 0;
+  private wheelPresent = false;
 
   read(pads: readonly PadLike[], settings: DeviceInputSettings, dtSeconds: number, vehicle?: string): DeviceFrame {
     const held = new Set<PadAction>();
     const frame: DeviceFrame = { throttle: 0, brake: 0, boostHeld: false, pressed: new Set(), source: null };
     const wheel = settings.wheel;
     const wheelPad = wheel.steer ? findPad(pads, wheel.steer.padId) : undefined;
+    // Pedals on their own USB device count too: losing the brake pedal silently is worse than losing the wheel
+    const present =
+      wheelPad !== undefined &&
+      (!wheel.throttle || findPad(pads, wheel.throttle.padId) !== undefined) &&
+      (!wheel.brake || findPad(pads, wheel.brake.padId) !== undefined);
+    if (this.wheelPresent && !present) frame.wheelLost = true;
+    this.wheelPresent = present;
 
     if (wheel.steer && wheelPad) {
       frame.source = "wheel";
@@ -302,7 +343,10 @@ export class DeviceInputReader {
           frame.brake = pad.buttons[PAD_BRAKE_BUTTON]?.value ?? 0;
         } else {
           frame.source = "legacy";
-          if (Math.abs(rawStickX) > 0.04) frame.analogSteer = rawStickX;
+          // 4 % dead zone, then a short ramp that rejoins the raw value at 8 %: the output no longer jumps from 0 to
+          // 0.04 at the edge, and past the ramp the axis stays 1:1 (this path is often an uncalibrated wheel)
+          const a = Math.abs(rawStickX);
+          if (a > 0.04) frame.analogSteer = Math.sign(rawStickX) * (a >= 0.08 ? a : (a - 0.04) * 2);
           const tPad = wheel.throttle ? findPad(pads, wheel.throttle.padId) : undefined;
           const bPad = wheel.brake ? findPad(pads, wheel.brake.padId) : undefined;
           frame.throttle =

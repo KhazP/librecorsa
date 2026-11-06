@@ -57,14 +57,12 @@ export const AMG_GT3_SIM_PROFILE: CarSimProfile = {
   coldPsiRange: [15, 30],
   frontCamberRange: [-4.0, 0],
   rearCamberRange: [-3.0, 0.5],
-  tcTarget: { pro: 0, semi_pro: E.tcDefault, assisted: E.tcLevels[0] },
-  absTarget: { pro: 0, semi_pro: E.absDefault, assisted: E.absLevels[1] },
   tcMinSpeedMs: E.tcMinSpeedKmh / 3.6,
   electronics: E,
   // Splitter goes 0–2° (default 2), rear wing 0–14° (default 6)
   aeroPackagesDeg: { low_downforce: [-2, -3], balanced: [0, 0], high_downforce: [0, 3] },
   padLateralMu: 1.5,
-  // The autopilot plans on 85 % of this: ≈1.45 g on the brakes at 100 km/h to ≈1.9 g past 250 km/h, and corners on
+  // The autopilot plans on 85 % of this: ≈1.5 g on the brakes at 100 km/h to ≈1.9 g past 250 km/h, and corners on
   // 1.1 × that (≈1.6 g slow, ≈2.1 g fast, the car's own grip): it laps the circuits' GT3 speed profiles to within
   // ≈1–5 % at the AI's 0.975 pace (scripts/race-headless.ts --car amg-gt3)
   braking: { lowG: 1.7, aeroG: 0.55, refMs: 70 },

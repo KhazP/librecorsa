@@ -2,7 +2,53 @@
  * Shared shapes for lap recording, ghosts, the lap summary, replays and leaderboards.
  * Plain JSON-friendly data so recordings can be stored (IndexedDB), exported as files and uploaded.
  */
-import type { VehicleModelId } from "@/types/f1";
+import type { AssistPreset, TireCompound, VehicleModelId } from "@/types/f1";
+import { SIM_REALISM_LEVELS, type SimRealism } from "./sim-realism";
+
+/**
+ * Revision of the vehicle physics. Bump it whenever a physics change makes earlier lap times incomparable: laps
+ * recorded under another revision then go on another leaderboard.
+ */
+export const PHYSICS_VERSION = 2;
+
+/** What a lap was driven with. Laps are only ranked against laps driven under the same class (`lapBoardClass`) */
+export interface LapConditions {
+  /** The most-aided assist preset in force at any point of the lap */
+  assists: AssistPreset;
+  /** Tyre compound at the line */
+  compound: TireCompound;
+  /** "wet" when the racing line held standing water at any point of the lap */
+  surface: "dry" | "wet";
+  /** The least realistic simulation level in force at any point of the lap (Casual forgives tyre temperatures) */
+  realism: SimRealism;
+  /** PHYSICS_VERSION the lap was driven under */
+  physicsVersion: number;
+}
+
+/** Assist presets from the least to the most aided */
+export const ASSIST_PRESETS: readonly AssistPreset[] = ["pro", "semi_pro", "assisted"];
+export const TYRE_COMPOUNDS: readonly TireCompound[] = ["soft", "medium", "hard", "intermediate", "wet"];
+
+/**
+ * Board a lap is ranked on (with its circuit and car): physics revision, assists, realism and surface, e.g.
+ * "p2-pro-full-dry"
+ */
+export function lapBoardClass(c: LapConditions): string {
+  return `p${c.physicsVersion}-${c.assists}-${c.realism}-${c.surface}`;
+}
+
+/** Validates untrusted conditions; null when absent or malformed */
+export function parseLapConditions(raw: unknown): LapConditions | null {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return null;
+  const r = raw as Record<string, unknown>;
+  if (!ASSIST_PRESETS.includes(r.assists as AssistPreset)) return null;
+  if (!TYRE_COMPOUNDS.includes(r.compound as TireCompound)) return null;
+  if (r.surface !== "dry" && r.surface !== "wet") return null;
+  if (!SIM_REALISM_LEVELS.includes(r.realism as SimRealism)) return null;
+  const v = r.physicsVersion;
+  if (typeof v !== "number" || !Number.isInteger(v) || v < 1 || v > 1000) return null;
+  return { assists: r.assists as AssistPreset, compound: r.compound as TireCompound, surface: r.surface, realism: r.realism as SimRealism, physicsVersion: v };
+}
 
 /** Fields of one recorded sample, in order; a recording stores samples flattened with this stride */
 export const LAP_SAMPLE_FIELDS = [
@@ -55,6 +101,8 @@ export interface LapRecording {
   sampleHz: number;
   /** Flattened samples, LAP_SAMPLE_STRIDE numbers each, in LAP_SAMPLE_FIELDS order */
   data: number[];
+  /** Assists, tyre, surface and physics revision; absent on laps recorded before they were kept */
+  conditions?: LapConditions;
 }
 
 /** A corner of the lap: the lowest speed through it, and the best seen on earlier laps */
@@ -72,6 +120,8 @@ export interface LapSummaryData {
   lapTimeMs: number;
   /** False when the lap left the track limits */
   valid: boolean;
+  /** The racing-line autopilot drove at some point: the card shows it, but it is never a best, a ghost or uploaded */
+  autopilot: boolean;
   /** Against the personal best before this lap (ms, negative = faster); null without one */
   deltaToBestMs: number | null;
   isPersonalBest: boolean;
@@ -97,6 +147,7 @@ export interface LeaderboardEntry {
   trackId: string;
   recordedAt: number;
   source: "local" | "remote";
+  conditions?: LapConditions;
   /** Remote entries can carry an id to download their ghost */
   id?: string;
 }

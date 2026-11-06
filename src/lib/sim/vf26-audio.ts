@@ -85,8 +85,8 @@ export interface Vf26AudioInputs {
   tcActive?: boolean;
 }
 
-/** One looping grid point (buffer + lazily created voice) */
-class LoopVoice {
+/** One looping grid point (buffer + lazily created voice); also used by the opponent voices (`opponent-audio.ts`) */
+export class LoopVoice {
   public buffer: AudioBuffer | null = null;
   private source: AudioBufferSourceNode | null = null;
   private readonly gain: GainNode;
@@ -151,13 +151,19 @@ class LoopVoice {
     this.gain.gain.value = 0;
     this.wasActive = false;
   }
+
+  /** Stops the source and detaches the voice from its destination for good */
+  public dispose(): void {
+    this.stop();
+    this.gain.disconnect();
+  }
 }
 
 /** Length of the upshift's ignition-cut envelope (s) */
 const UPSHIFT_S = 0.06;
 
 /** A 1-D grid of loops (rpm, boost or speed) crossfaded between neighbours with equal-power weights */
-class LoopGrid {
+export class LoopGrid {
   public readonly voices: LoopVoice[];
 
   constructor(ctx: AudioContext, destination: AudioNode, keys: number[]) {
@@ -172,8 +178,18 @@ class LoopGrid {
    * @param x        position on the grid axis
    * @param level    overall gain
    * @param pitched  playbackRate = x / key (pitch tracks the axis) when true, 1 otherwise
+   * @param rateScale multiplies every playbackRate (the Doppler shift of a car heard from outside)
    */
-  public update(x: number, level: number, pitched: boolean, now: number, dt: number, tau: number, pitchTau = 0.02): void {
+  public update(
+    x: number,
+    level: number,
+    pitched: boolean,
+    now: number,
+    dt: number,
+    tau: number,
+    pitchTau = 0.02,
+    rateScale = 1
+  ): void {
     const vs = this.voices;
     if (vs.length === 0) return;
     let i = 0;
@@ -192,7 +208,7 @@ class LoopGrid {
       let w = 0;
       if (v === lo) w = Math.cos(f * Math.PI * 0.5);
       else if (v === hi) w = Math.sin(f * Math.PI * 0.5);
-      const rate = pitched ? Math.min(4, Math.max(0.25, x / v.key)) : 1;
+      const rate = (pitched ? Math.min(4, Math.max(0.25, x / v.key)) : 1) * rateScale;
       v.set(w * level, rate, now, dt, tau, pitchTau);
     }
   }
@@ -200,9 +216,13 @@ class LoopGrid {
   public stopAll(): void {
     for (const v of this.voices) v.stop();
   }
+
+  public dispose(): void {
+    for (const v of this.voices) v.dispose();
+  }
 }
 
-const lerpTable = (table: [number, number][], x: number): number => {
+export const lerpTable = (table: [number, number][], x: number): number => {
   if (table.length === 0) return x;
   if (x <= table[0][0]) return table[0][1];
   for (let i = 1; i < table.length; i++) {
@@ -277,6 +297,8 @@ export class Vf26SoundBank {
   }
 
   /** Fetch the manifest and decode every buffer; resolves false when the converted assets are absent */
+  private disposed = false;
+
   public async load(initialView: Vf26View = 'ext'): Promise<boolean> {
     let manifest: Vf26AudioManifest;
     try {
@@ -287,6 +309,11 @@ export class Vf26SoundBank {
       return false;
     }
     if (!manifest.engine?.ext?.length || !manifest.engine?.int?.length) return false;
+    // Optional sections an older bank may lack: update() reads them every frame and must not throw
+    manifest.throttleCurve = { ext: manifest.throttleCurve?.ext ?? [], int: manifest.throttleCurve?.int ?? [] };
+    manifest.turbo ??= [];
+    manifest.transmission ??= [];
+    manifest.oneshots ??= [];
     this.manifest = manifest;
     const ctx = this.ctx;
     // Engine loops pitch across 0.75x of the lowest anchor up to 1.35x of the highest anchor (covers idle to limiter)
@@ -395,6 +422,8 @@ export class Vf26SoundBank {
     // Engine loops of the initial view must all decode before taking over from the fallback engine;
     // turbo, transmission, one-shots and the other view follow in the background.
     if ((await runPool(engineJobs(initialView), 6)) > 0) return false;
+    // Disposed while decoding: stay down rather than start playing (and fetching) into a dead graph
+    if (this.disposed) return false;
     this.ready = true;
     void runPool(rest, 4);
     return true;
@@ -598,6 +627,7 @@ export class Vf26SoundBank {
     this.engineShelf.disconnect();
     this.bus.disconnect();
     this.ready = false;
+    this.disposed = true;
   }
 }
 
@@ -613,6 +643,20 @@ function fetchBankFile(url: string): Promise<Response> {
   return fetch(url);
 }
 
+/** Most prefetched responses kept waiting at once; the oldest are dropped past this (a car never loaded) */
+const MAX_PREFETCHED = 400;
+
+function rememberPrefetch(url: string, response: Promise<Response>): void {
+  // Handled here so a failed early fetch is not an unhandled rejection; fetchBankFile retries it
+  response.catch(() => {});
+  prefetched.set(url, response);
+  while (prefetched.size > MAX_PREFETCHED) {
+    const oldest = prefetched.keys().next().value;
+    if (oldest === undefined) break;
+    prefetched.delete(oldest);
+  }
+}
+
 /**
  * Starts downloading a car's sound bank (manifest and every file) at low priority while the loading screen is up, so
  * the sound is there as soon as the audio unlocks on the first key press. Decoding still waits for the AudioContext.
@@ -623,7 +667,7 @@ export function prefetchSoundBank(assetDir: string): void {
   if (prefetched.has(manifestUrl)) return;
   const init = { priority: 'low' } as RequestInit;
   const manifest = fetch(manifestUrl, init);
-  prefetched.set(manifestUrl, manifest.then((r) => r.clone()));
+  rememberPrefetch(manifestUrl, manifest.then((r) => r.clone()));
   void manifest
     .then((r) => (r.ok ? (r.json() as Promise<Vf26AudioManifest>) : null))
     .then((m) => {
@@ -638,7 +682,7 @@ export function prefetchSoundBank(assetDir: string): void {
       ]);
       for (const f of files) {
         const url = withBasePath(assetDir + f);
-        if (!prefetched.has(url)) prefetched.set(url, fetch(url, init));
+        if (!prefetched.has(url)) rememberPrefetch(url, fetch(url, init));
       }
     })
     .catch(() => {});

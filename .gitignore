@@ -39,3 +39,6 @@ acevo_physics_strings.txt
 
 # Wrangler local state
 .wrangler/
+
+# Private scratch reports (audits)
+AUDIT-*.md

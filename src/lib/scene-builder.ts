@@ -17,11 +17,14 @@ import { attachSceneryInstances, loadSceneryInstances, resetSceneryInstances } f
 import { applySceneryTextures, loadSceneryTextures } from "@/lib/render/scenery-textures";
 import { cleanScanMaterial } from "@/lib/render/scan-materials";
 import { createGroundHit, type GroundQuery } from "@/lib/sim/f12026-car/TrackColliderQuery";
+import { OVERLAY_LAYER } from "@/lib/render/layers";
+import { cutSceneryBoxes, isCutMaterialMesh, type SceneryCutBox } from "@/lib/scenery-cuts";
 
 /** Height of a racing-line dash over the driving surface: clear of its ripple, low enough to read as paint */
 const DASH_SEAT_LIFT_M = 0.035;
 
-export interface BuiltRwandaScene {
+/** The built scene of the active circuit */
+export interface BuiltCircuitScene {
   sceneGroup: THREE.Group;
   racingLineMesh: THREE.Mesh;
   waterMesh: THREE.Mesh;
@@ -142,6 +145,10 @@ function colliderDebugMaterial(name: string): THREE.MeshBasicMaterial | null {
   return mat;
 }
 
+/** Bumped by every loadTrackGlb call; only the latest call's result is used */
+let trackLoadGen = 0;
+class SupersededLoad extends Error {}
+
 function loadTrackGlb(
   url: string,
   glbGroup: THREE.Group,
@@ -153,12 +160,21 @@ function loadTrackGlb(
   /** A manifest of the circuit's own textures replacing a track pack's images (scenery-textures.ts) */
   sceneryTexturesUrl: string | null = null,
   /** The scan's racing-surface materials (track data `mesh.roadMaterials`): drawn with the asphalt shader */
-  roadMaterials: readonly string[] = []
+  roadMaterials: readonly string[] = [],
+  /** World boxes of the scan to leave out (track data `mesh.cutBoxes`) */
+  cutBoxes: readonly SceneryCutBox[] = [],
+  /** Scan materials whose meshes are left out (track data `mesh.cutMaterials`) */
+  cutMaterials: readonly string[] = []
 ): void {
+  const cutMaterialNames = new Set(cutMaterials);
   const roadMaterialNames = new Set(roadMaterials);
   if (typeof window === "undefined" || typeof fetch === "undefined") {
     return;
   }
+  // A newer circuit load (the simulator remounted on another track) supersedes this one: its late result must not
+  // mark the new track's progress done or register its scenery instances
+  const gen = ++trackLoadGen;
+  const current = () => gen === trackLoadGen;
   resetSceneryInstances();
   const sceneryLoad = Promise.all(sceneryUrls.map(loadSceneryInstances));
   const texturesLoad = sceneryTexturesUrl ? loadSceneryTextures(sceneryTexturesUrl) : Promise.resolve(null);
@@ -197,6 +213,11 @@ function loadTrackGlb(
           return;
         }
         if (!(obj instanceof THREE.Mesh)) return;
+        if (topName === "Track_Model" && isCutMaterialMesh(obj, cutMaterialNames)) {
+          obj.visible = false;
+          return;
+        }
+        if (topName === "Track_Model" && cutBoxes.length) cutSceneryBoxes(obj, cutBoxes);
         // The scans show their own kerbs: the generated red / white overlay older builds drew over them stays hidden
         // (its physics twin, Track_Surface_Kerb, is a collider and unaffected)
         if (topName === "Track_Kerbs_Visual") {
@@ -250,6 +271,7 @@ function loadTrackGlb(
         if (offset !== undefined) obj.renderOrder = 1;
       });
       return Promise.all([sceneryLoad, texturesLoad]).then(([files, textures]) => {
+        if (!current()) throw new SupersededLoad();
         if (textures) applySceneryTextures(root, textures);
         // Before onLoaded, so the camera occlusion pass and the shader warm-up see them
         for (const scenery of files) if (scenery) attachSceneryInstances(root, scenery);
@@ -257,6 +279,7 @@ function loadTrackGlb(
       });
     })
     .then((root) => {
+      if (!current()) return;
       glbGroup.add(root);
       onLoaded(root);
 
@@ -265,6 +288,7 @@ function loadTrackGlb(
       assetProgress.done("track");
     })
     .catch((err) => {
+      if (err instanceof SupersededLoad || !current()) return;
       console.warn("Using fallback procedural track geometry:", err);
       assetProgress.fail("track");
     });
@@ -459,7 +483,7 @@ function getRunoffAtlasUVRange(style: RunoffStyle): [number, number] {
 
 /**
  * Builds a realistic sloped stadium grandstand group facing the track.
- * In local track frame, -X is left (+binormal) and +X is right (-binormal).
+ * In the local track frame +X is left (−binormal) and −X is right (+binormal).
  * When placed on `side` (-1 = left of track, +1 = right of track), the sloped seating bowl
  * faces inward toward the track centerline (`x = 0`).
  */
@@ -491,11 +515,8 @@ function buildSlopedGrandstandGroup(
     new THREE.BoxGeometry(1.6, height, length),
     concreteMat
   );
-  // In getTrackFrameQuaternion, local +X is `left = normal x tangent = -binormal`.
-  // Wait: let's check getTrackFrameQuaternion:
-  // `left = normal x tangent`. Since `binormal = tangent x normal = -left`,
-  // a point shifted by `side * dist` along `binormal` has local X = `-side * dist`!
-  // So toward the track centerline from `side * dist` along `binormal` is local X = `+side`!
+  // Track frame (getTrackFrameQuaternion): local +X = left = normal × tangent = −binormal. A stand placed `side * dist`
+  // along the binormal therefore sits at local X = −side·dist, so the direction back toward the centreline is +side
   const frontSign = side; // local X direction pointing BACK toward the track centerline
   backWall.position.set(-frontSign * (depth * 0.5 - 0.8), height * 0.5, 0);
   group.add(backWall);
@@ -591,9 +612,13 @@ function brakingZoneColor(level: number): THREE.Color {
   return new THREE.Color(0.98, 0.12, 0.18); // Heavy Braking Zone Red
 }
 
-export function buildRwandaCircuitScene(
+/**
+ * Builds the scene of the active circuit; the Rwanda-only dressing (lake, airliner, stands, tents, scenery packs) is
+ * gated on the track id inside
+ */
+export function buildCircuitScene(
   track: BuiltTrackData
-): BuiltRwandaScene {
+): BuiltCircuitScene {
   const sceneGroup = new THREE.Group();
   /** Bugesera dressing (lake, airliner) only belongs on the Rwanda circuit */
   const isRwanda = (track.id ?? "rwanda") === "rwanda";
@@ -930,6 +955,8 @@ export function buildRwandaCircuitScene(
     })
   );
   racingLineMesh.renderOrder = 2;
+  // A driving aid, not part of the world: only the view camera sees it, not the reflection probe or the mirrors
+  racingLineMesh.layers.set(OVERLAY_LAYER);
   sceneGroup.add(racingLineMesh);
 
   /**
@@ -1071,7 +1098,9 @@ export function buildRwandaCircuitScene(
     const size = box.getSize(new THREE.Vector3());
     // Four lamps per column (amber, green, red, red): sit on the first red row, 1/8 of the height below centre
     center.y -= size.y * 0.125;
-    const depth = Math.abs(size.dot(startFwd));
+    // Extent of the box along the start direction: |sx·fx| + |sz·fz| (as for the width), not |size·fwd|, whose
+    // terms cancel on a diagonal straight
+    const depth = Math.abs(size.x * startFwd.x) + Math.abs(size.y * startFwd.y) + Math.abs(size.z * startFwd.z);
     const width = Math.abs(size.x * startRight.x) + Math.abs(size.z * startRight.z);
     placePods(center, depth * 0.5, width / 5);
   };
@@ -1155,7 +1184,8 @@ export function buildRwandaCircuitScene(
     { sDist: 4920, side: -1, length: 68 },
   ];
 
-  for (const sg of sectorGrandstands) {
+  // The stands, camera towers and tents below are laid out for Rwanda (distances along its lap)
+  for (const sg of isRwanda ? sectorGrandstands : []) {
     const sp = track.getSampleAtDistance(sg.sDist);
     const safeGs = findSafeTracksidePosition(
       sp,
@@ -1180,7 +1210,7 @@ export function buildRwandaCircuitScene(
   }
 
   // Trackside TV Broadcast Camera Scaffold Towers
-  for (const camDist of [410, 890, 1890, 3150, 4410]) {
+  for (const camDist of isRwanda ? [410, 890, 1890, 3150, 4410] : []) {
     const sp = track.getSampleAtDistance(camDist);
     const safeCam = findSafeTracksidePosition(sp, -1, 4.0, 4.0, 38, 30.0);
     if (safeCam) {
@@ -1208,7 +1238,8 @@ export function buildRwandaCircuitScene(
     roughness: 0.55,
   });
 
-  for (const sDist of [4140, 4210, 4280, 4350, 4490, 4570, 4650]) {
+  // Placed at Bugesera distances: on another circuit they would wrap round to arbitrary spots
+  for (const sDist of isRwanda ? [4140, 4210, 4280, 4350, 4490, 4570, 4650] : []) {
     const sp = track.getSampleAtDistance(sDist);
     const safeTent = findSafeTracksidePosition(sp, -1, 12.0, 12.0, 46, 32.0);
     if (!safeTent) continue;
@@ -1321,7 +1352,9 @@ export function buildRwandaCircuitScene(
     sheenMask,
     isRwanda ? ["/tracks/rwanda/scenery/foliage.glb", "/tracks/rwanda/scenery/stands.glb", "/tracks/rwanda/scenery/props.glb"] : [],
     isRwanda ? "/tracks/rwanda/scenery/textures/textures.json" : null,
-    track.roadMaterials ?? []
+    track.roadMaterials ?? [],
+    track.sceneryCuts ?? [],
+    track.sceneryCutMaterials ?? []
   );
 
   return {

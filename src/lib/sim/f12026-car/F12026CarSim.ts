@@ -15,6 +15,7 @@ import {
   clampChassisSetup,
   DEFAULT_CHASSIS_SETUP,
   pctScale,
+  startingFuelKg,
   STEER_RATIO_BASE,
   WING_CLICK_DEG,
 } from '../car-setup';
@@ -137,9 +138,6 @@ export interface CarSimProfile {
   coldPsiRange: [number, number];
   frontCamberRange: [number, number];
   rearCamberRange: [number, number];
-  /** Traction control: allowed rear slip ratio; ABS: allowed lock-up slip ratio (0 = off) */
-  tcTarget: Record<DriverAssistPreset, number>;
-  absTarget: Record<DriverAssistPreset, number>;
   /** Traction control works above this speed (m/s) */
   tcMinSpeedMs: number;
   /** Optional 12-stage TC / 4-channel ABS electronics calibration */
@@ -173,9 +171,6 @@ export const F12026_SIM_PROFILE: CarSimProfile = {
   coldPsiRange: [15, 25],
   frontCamberRange: [-3.6, 0],
   rearCamberRange: [-2.0, 0],
-  // 1.0 / 0.85 × the 0.1 peak slip ratio of every f12026-car compound
-  tcTarget: { pro: 0, semi_pro: 0.1, assisted: 0.085 },
-  absTarget: { pro: 0, semi_pro: 0.15, assisted: 0.11 },
   tcMinSpeedMs: 2,
   electronics: F12026_ELECTRONICS,
   // Wing offsets: front 10–30° (set 25), rear 0–20° (set 15)
@@ -546,16 +541,21 @@ export class F12026CarSim implements SimulatorCar {
   }
   /** Car-to-car contact uses this car's own mass and yaw inertia (a GT3 is ~1.75× an F1 car's mass) */
   public get contactMassKg(): number {
-    return this.config.chassis.totalMassKg;
+    return this.vehicle.totalMassKg;
   }
   public get contactYawInertiaKgM2(): number {
-    return this.config.chassis.inertia.yaw;
+    const ch = this.config.chassis;
+    return (ch.inertia.yaw * this.vehicle.totalMassKg) / ch.totalMassKg;
   }
   public readonly cgToFrontAxleM: number;
   public readonly cgToRearAxleM: number;
+  // The rig's extra pitch / roll / heave (SimulatorCar): none, since the rigid body's pose already carries them.
+  // Not the setup's ride height, which lives on `this.vehicle.rideHeightOffsetM` and is part of that pose
   public readonly pitchRad = 0;
   public readonly rollRad = 0;
   public readonly rideHeightOffsetM = 0;
+  /** Off-track verdict of the last frame with a wheel on the ground */
+  private wasOffTrack = false;
   public wheelRotationRad = 0;
   public vyMs = 0;
   public yawRateRadS = 0;
@@ -670,7 +670,8 @@ export class F12026CarSim implements SimulatorCar {
   private drsPressPending = false;
   private boostRemainingS = 0;
   private boostCooldownS = 0;
-  private fuelKg = 35;
+  /** Fuel on board (kg): the garage's starting load at each restart (`fillFuel`) */
+  private fuelKg = 0;
   private tcCut = 1;
   private absCut = 1;
   /** Per-wheel ABS pressure share (LF, RF, LR, RR); `absCut` is their minimum */
@@ -758,7 +759,6 @@ export class F12026CarSim implements SimulatorCar {
   // Track
   // ===========================================================================
 
-  /** Instantiate an AI opponent car with the exact same vehicle profile and track colliders */
   /** Where the road under this car's track colliders really ends (null on the sample ground) */
   private autopilotEdges(): AutopilotEdges | null {
     const c = this.onColliders && this.trackRoot ? collidersFor(this.trackRoot) : null;
@@ -770,6 +770,7 @@ export class F12026CarSim implements SimulatorCar {
     return autopilotProfile(this.track, this.profile, this.autopilotEdges());
   }
 
+  /** Instantiate an AI opponent car with the exact same vehicle profile and track colliders */
   public createAiPeerCar(): F12026CarSim {
     const peer = new F12026CarSim(this.track, this.trackRoot, this.profile);
     peer.aiAutoTyres = true;
@@ -845,8 +846,14 @@ export class F12026CarSim implements SimulatorCar {
     } else {
       _ez.set(0, 0, 1).applyQuaternion(v.quaternion);
       v.velocity.addScaledVector(_ez, value - vx);
-      const scale = Math.abs(vx) > 1 ? value / vx : 1;
-      for (const w of v.wheels) w.omega *= scale;
+      // Wheel spin follows the new speed; through a change of direction (or near rest) it is set from the speed
+      // instead, since scaling by a negative ratio would spin the wheels backwards against the car's travel
+      if (Math.abs(vx) > 1 && Math.sign(value) === Math.sign(vx)) {
+        const scale = value / vx;
+        for (const w of v.wheels) w.omega *= scale;
+      } else {
+        for (const w of v.wheels) w.omega = value / Math.max(0.2, w.rollingRadius || 0.35);
+      }
     }
     this.syncPose();
   }
@@ -873,14 +880,35 @@ export class F12026CarSim implements SimulatorCar {
     return { ...this.chassis };
   }
 
+  /** The vehicle model whose setup limits, wing steps and fuel this car takes */
+  private get setupCar(): 'amg-gt3' | 'f12026-car' {
+    return this.profile.id === 'amg-gt3' ? 'amg-gt3' : 'f12026-car';
+  }
+
+  /** The garage's starting fuel into the car, with the spring preloads set for that load */
+  private fillFuel(): void {
+    this.fuelKg = startingFuelKg(this.setupCar, this.chassis);
+    this.vehicle.setFuelMass(this.fuelKg);
+    this.vehicle.refreshStaticGeometry();
+    this.telemetry.fuelKg = Number(this.fuelKg.toFixed(2));
+  }
+
   /**
    * Garage chassis setup as offsets from the car's baseline. Springs, bars, dampers and wings are read live by
    * VehiclePhysics; a ride-height change re-derives the spring preloads, so the car settles at the new height.
    */
   public applyChassisSetup(setup: ChassisSetup): void {
     const s = clampChassisSetup(setup);
+    const refuel = s.fuelDeltaKg !== this.chassis.fuelDeltaKg;
     this.chassis = s;
-    const car = this.profile.id === 'amg-gt3' ? 'amg-gt3' : 'f12026-car';
+    const car = this.setupCar;
+    // A new fuel load is put in the car now (and at every restart); other changes leave the fuel burnt so far.
+    // The spring preloads below are set for the load on board.
+    if (refuel) {
+      this.fuelKg = startingFuelKg(car, s);
+      this.vehicle.setFuelMass(this.fuelKg);
+      this.telemetry.fuelKg = Number(this.fuelKg.toFixed(2));
+    }
     const click = WING_CLICK_DEG[car];
     this.wingTrimDeg = { front: s.frontWingClicks * click.front, rear: s.rearWingClicks * click.rear };
     this.aeroPreset = this.aero;
@@ -1131,6 +1159,8 @@ export class F12026CarSim implements SimulatorCar {
    * straight (further slots queue 28 m apart, alternating sides), as the VF26 does.
    */
   public resetToStartGrid(flyingStart = false, gridSlot = 0): void {
+    // Fuelled before it is seated, so it settles at the ride height of that load
+    this.fillFuel();
     const L = this.track.totalLengthM;
     if (flyingStart) {
       // From the final straight (`flyingStartPoint`), on this car's line, kept on the asphalt, and no faster than
@@ -1162,8 +1192,6 @@ export class F12026CarSim implements SimulatorCar {
     this.afterPlacement();
     this.vehicle.ersEnergyJ = this.config.ers.ERS_MAX_CHARGE;
     this.vehicle.resetLapEnergy();
-    this.fuelKg = this.profile.id === 'amg-gt3' ? 50 : 35;
-    this.telemetry.fuelKg = this.fuelKg;
     this.simTimeMs = 0;
     this.lapStartMs = 0;
     this.sectorStartMs = 0;
@@ -1254,14 +1282,19 @@ export class F12026CarSim implements SimulatorCar {
       _v.copy(v.velocity);
       v.step(h, vin);
       this.updateBrakes(h);
-      const dvx = _v.subVectors(v.velocity, _v);
-      this.lastAxMs2 = dvx.dot(_ez.set(0, 0, 1).applyQuaternion(v.quaternion)) / h;
-      this.lastAyMs2 = dvx.dot(_ex.set(1, 0, 0).applyQuaternion(v.quaternion)) / h;
+      // Divided by the time the fixed steps actually covered: a slice runs a whole number of 2 ms steps, not h
+      const stepS = v.lastStepTimeS;
+      if (stepS > 0) {
+        const dvx = _v.subVectors(v.velocity, _v);
+        this.lastAxMs2 = dvx.dot(_ez.set(0, 0, 1).applyQuaternion(v.quaternion)) / stepS;
+        this.lastAyMs2 = dvx.dot(_ex.set(1, 0, 0).applyQuaternion(v.quaternion)) / stepS;
+      }
     }
     if (v.telemetry.throttle > 0.01 && this.fuelKg > 0 && this.realism.fuelUse) {
       const mapFlowMult = v.engineMap === 1 ? 1.04 : v.engineMap === 2 ? 1.0 : v.engineMap === 3 ? 0.96 : v.engineMap === 4 ? 0.90 : 0.85;
       const baseFlowKgS = this.profile.id === 'amg-gt3' ? 0.036 : 0.0278;
       this.fuelKg = Math.max(0, this.fuelKg - baseFlowKgS * mapFlowMult * v.telemetry.throttle * dtSeconds);
+      v.setFuelMass(this.fuelKg);
     }
     this.simTimeMs += dtSeconds * 1000;
     if (this.recoverIfLost()) return this.telemetry;
@@ -1643,10 +1676,6 @@ export class F12026CarSim implements SimulatorCar {
     }
   }
 
-  private get lastBrake(): number {
-    return this.vehicle.telemetry.brake;
-  }
-
   /** Render pose, track coordinates and the VF-order wheels from the rigid body */
   private syncPose(): void {
     const v = this.vehicle;
@@ -1753,7 +1782,17 @@ export class F12026CarSim implements SimulatorCar {
     const onKerbLeft = surfaces[0] === 'kerb' || surfaces[2] === 'kerb';
     const onKerbRight = surfaces[1] === 'kerb' || surfaces[3] === 'kerb';
     // All four wheels on surfaces the table does not count as the track (run-off, gravel, grass, sausage kerbs)
-    const offTrack = W.every((w) => !w.ground.props.validTrack);
+    // Judged on the wheels touching the road: an airborne wheel's ground is its last contact (the probe only reaches
+    // 0.6 m), so a jump keeps the verdict it took off with rather than reading stale surfaces
+    let anyGrounded = false;
+    let allOff = true;
+    for (const w of W) {
+      if (!w.grounded) continue;
+      anyGrounded = true;
+      if (w.ground.props.validTrack) allOff = false;
+    }
+    const offTrack = anyGrounded ? allOff : this.wasOffTrack;
+    this.wasOffTrack = offTrack;
     if (offTrack && this.trackLimitsMode === 'strict') this.lapValid = false;
     t.lapInvalid = !this.lapValid;
     let surface: SurfaceType = 'asphalt';

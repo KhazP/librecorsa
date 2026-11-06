@@ -8,7 +8,7 @@
  * full-lap checks.
  */
 import * as THREE from 'three';
-import { getRwandaTrackData, RWANDA_DRS_ZONES, RWANDA_SPAWN_GRID } from '../src/lib/track-data';
+import { getActiveTrackData, RWANDA_DRS_ZONES, RWANDA_SPAWN_GRID } from '../src/lib/track-data';
 import { Lut } from '../src/lib/sim/lut';
 import { F12026_CAR_CONFIG, type CarPhysicsConfig } from '../src/lib/sim/f12026-car/F12026CarConfig';
 import {
@@ -132,7 +132,7 @@ const trackRoot = loadGlbGeometry('public/tracks/rwanda/rwanda_2026.glb');
 const t0 = performance.now();
 const colliders = TrackColliderQuery.fromTrackRoot(trackRoot);
 console.log(`      built ${colliders.triangleCount} triangles in ${fmt(performance.now() - t0, 0)} ms`);
-const track = getRwandaTrackData();
+const track = getActiveTrackData();
 {
   const hit = createGroundHit();
   const slot = RWANDA_SPAWN_GRID[0];

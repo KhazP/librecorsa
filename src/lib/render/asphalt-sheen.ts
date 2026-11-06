@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import type { BuiltTrackData } from "@/lib/track-data";
 import { aiLineOffsetM } from "@/lib/sim/speed-profile";
+import { patchShader, type ShaderPatch } from "./shader-patch";
 
 /**
  * Rubbered-in racing line on the asphalt: a top-down world-XZ mask (white = rubber) drives roughness, a slight
@@ -41,18 +42,22 @@ export const sharedWetUniforms: Readonly<typeof wetUniforms> = wetUniforms;
  * Wet look of the track surface (0 dry … 1 soaked): darker, glossier asphalt with standing-water puddles,
  * grazing-angle Fresnel reflections, and animated raindrop splash ripples when raining.
  */
-export function setAsphaltWetness(
-  offLine: number,
-  onLine: number = offLine,
-  rainIntensity: number = 0,
-  dt: number = 1 / 60
-): void {
+export function setAsphaltWetness(offLine: number, onLine: number = offLine, rainIntensity: number = 0): void {
   wetUniforms.uWetness.value = Math.min(1, Math.max(0, offLine));
   wetUniforms.uLineWetness.value = Math.min(1, Math.max(0, onLine));
-  const rain = Math.min(1, Math.max(0, rainIntensity));
-  wetUniforms.uRainIntensity.value = rain;
-  if (rain > 0.001 && Number.isFinite(dt) && dt > 0) {
-    wetUniforms.uWetTime.value = (wetUniforms.uWetTime.value + Math.min(0.1, dt)) % 3600;
+  wetUniforms.uRainIntensity.value = Math.min(1, Math.max(0, rainIntensity));
+}
+
+/** Runs the raindrop ripples' clock; call every frame with the frame time (s), so they animate at frame rate */
+export function advanceAsphaltRain(dt: number): void {
+  if (!(Number.isFinite(dt) && dt > 0)) return;
+  if (wetUniforms.uRainIntensity.value > 0.001) {
+    // Not wrapped while the ripples show: their phase is time × a per-drop rate, so a wrap jumps them all at once
+    wetUniforms.uWetTime.value += Math.min(0.1, dt);
+    if (wetUniforms.uWetTime.value > 4 * 3600) wetUniforms.uWetTime.value = 0;
+  } else {
+    // No rain, no ripples drawn: the moment to bring the clock back to zero
+    wetUniforms.uWetTime.value = 0;
   }
 }
 
@@ -191,21 +196,7 @@ export function applyAsphaltSheen(material: THREE.MeshStandardMaterial, mask: Ra
   material.needsUpdate = true;
 }
 
-type Patch = readonly [anchor: string, replacement: string];
-
-/** Inserts each replacement at its anchor; an anchor that is missing or not unique is skipped with a warning */
-export function patchShader(source: string, patches: readonly Patch[], label: string): string {
-  let out = source;
-  for (const [anchor, replacement] of patches) {
-    const parts = out.split(anchor);
-    if (parts.length !== 2) {
-      console.warn(`[shader-patch] ${label}: anchor "${anchor}" found ${parts.length - 1} times, skipped`);
-      continue;
-    }
-    out = parts[0] + replacement + parts[1];
-  }
-  return out;
-}
+type Patch = ShaderPatch;
 
 const VERTEX_PATCHES: readonly Patch[] = [
   ["#include <common>", "#include <common>\nvarying vec3 vVf26WorldPos;"],

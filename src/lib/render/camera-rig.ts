@@ -351,16 +351,8 @@ export class TracksideBroadcastDirector {
   /**
    * Moves stations whose view of the track is blocked (grandstands, buildings, trees, terrain): each dolly is
    * checked with rays from its points to the car's height on the centreline below them, and replaced by the
-   * first clear alternative (the other side, closer in, higher up). Run once, when the circuit has loaded.
-   */
-  resolveOcclusion(trackRoot: THREE.Object3D): number {
-    let moved = 0;
-    for (const m of this.occlusionSteps(trackRoot)) moved = m;
-    return moved;
-  }
-
-  /**
-   * `resolveOcclusion` one raycast at a time (each step yields the stations moved so far), so a caller can spread its
+   * first clear alternative (the other side, closer in, higher up). Run once, when the circuit has loaded,
+   * one raycast at a time (each step yields the stations moved so far), so a caller can spread its
    * raycasts (about a second on a scanned circuit, several on a slow CPU) over idle time instead of freezing the page.
    * A single raycast can take milliseconds (every track mesh, no BVH), so a station is never one indivisible step.
    */
@@ -412,11 +404,6 @@ export class TracksideBroadcastDirector {
       }
     }
     yield moved;
-  }
-
-  /** Number of automatic stations built for this lap */
-  get stations(): number {
-    return this.stationCount;
   }
 
   update(dt: number, carPos: THREE.Vector3, carS: number, carVel: THREE.Vector3, onKerb: boolean): BroadcastCameraOutput {

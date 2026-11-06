@@ -12,7 +12,7 @@
  *  6. AI: weather pace and tyre call
  */
 import * as THREE from 'three';
-import { getRwandaTrackData } from '../src/lib/track-data';
+import { getActiveTrackData } from '../src/lib/track-data';
 import { FlatGroundQuery } from '../src/lib/sim/f12026-car/TrackColliderQuery';
 import { F12026_CAR_CONFIG } from '../src/lib/sim/f12026-car/F12026CarConfig';
 import { AMG_GT3_CONFIG } from '../src/lib/sim/gt3/AmgGt3Config';
@@ -252,7 +252,7 @@ console.log('\n== Simulation realism');
   for (let i = 0; i < 2000; i++) updateTyreThermal(full, 30000, 4000, 55, 27, 41, 1 / 200);
   check('Casual: no tyre wear', t.wear === 0 && full.wear > 0, `casual ${t.wear}, full ${fmt(full.wear * 100, 3)} %`);
 
-  const track = getRwandaTrackData();
+  const track = getActiveTrackData();
   const fuel = (level: 'casual' | 'full') => {
     const sim = new F1Physics2026(track);
     sim.setSimRealism(SIM_REALISM_FLAGS[level]);
@@ -271,7 +271,7 @@ console.log('\n== Simulation realism');
 // ---------------------------------------------------------------------------
 console.log('\n== AI in the wet');
 {
-  const track = getRwandaTrackData();
+  const track = getActiveTrackData();
   const env = new TrackEnvironment(track, { ...DEFAULT_SESSION_CONDITIONS, weather: 'heavy_rain' });
   const ai = new F1Physics2026(track).createAiPeerCar();
   ai.aiAutopilot = true;

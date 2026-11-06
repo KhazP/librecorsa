@@ -199,7 +199,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
 
   const [inviteRoom] = useState(roomFromUrl);
   const { mode: inputMode, family: padFamily } = useInputMode();
-  const { tracker: lapTracker, deltaS } = useLapDeltaTracker(telemetry, track.totalLength);
+  const { tracker: lapTracker, deltaS } = useLapDeltaTracker(telemetry, track.totalLengthM);
   const race = telemetry.race;
   const f12026 = telemetry.f12026;
   const drsNotice = useDrsDetectionNotice(f12026?.drsDetection ?? null);
@@ -300,7 +300,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
         telemetry={telemetry}
         onChangeTuner={props.onChangeLiveTuner}
         tracker={lapTracker}
-        trackLengthM={track.totalLength}
+        trackLengthM={track.totalLengthM}
         compound={tireCompound}
         autoFold={hud?.mfdAutoCollapse ?? false}
         defaultFolded={(hud?.mfdAutoCollapse ?? false) || classic || preset === "telemetry" || (preset === "broadcast" && window.innerWidth < 1280)}
@@ -472,7 +472,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
             ["ESC", "Menu"],
             [props.keyNames?.camera ?? "C", "Camera"],
             [props.keyNames?.racingLine ?? "R", "Line"],
-            [props.keyNames?.restart ?? "⌫", "Restart"],
+            [props.keyNames?.restart ?? "Bksp", "Restart"],
           ]).map(([k, label]) => (
             <span key={k} className="inline-flex items-center gap-1.5">
               <span className="lc-data inline-flex h-[22px] min-w-[22px] items-center justify-center rounded-full bg-[#CCFF00] px-1.5 text-[10px] text-[#08090D]">

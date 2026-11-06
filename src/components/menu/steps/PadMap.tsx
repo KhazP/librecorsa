@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { PAD_ACTIONS, PAD_BRAKE_BUTTON, PAD_THROTTLE_BUTTON, type PadButtonBindings } from "@/lib/input/bindings";
-import type { PadFamily } from "../input-mode";
+import { FACE_BUTTONS, type PadFamily } from "../input-mode";
 import type { PadState } from "../useMenuNav";
 
 /** Standard-mapping button names per pad family */
@@ -12,10 +12,10 @@ const NAMES: Record<PadFamily, Record<number, string>> = {
 };
 
 /** Face button colours (A B X Y / ✕ ○ □ △) */
-const FACE_COLOR: Record<PadFamily, string[]> = {
-  xbox: ["#5DC21E", "#E5413A", "#2F8BE5", "#F4C21B"],
-  playstation: ["#7EA6E6", "#EE6A6A", "#D78DD6", "#45C9A6"],
-};
+const FACE_COLOR = {
+  xbox: FACE_BUTTONS.xbox.map((f) => f.color),
+  playstation: FACE_BUTTONS.playstation.map((f) => f.color),
+} satisfies Record<PadFamily, string[]>;
 
 type Row = { key: string; buttons: number[]; chip: (f: PadFamily) => string; action: (b: PadButtonBindings) => string | null };
 

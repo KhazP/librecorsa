@@ -53,6 +53,8 @@ export const FirstRunWizard: React.FC<FirstRunWizardProps> = (props) => {
   const last = stepIndex === steps.length - 1;
   const bodyRef = useRef<HTMLDivElement | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
+  /** The player chose a device on the first step: auto-detect must not override it when they come back to it */
+  const devicePickedRef = useRef(false);
   const { mode: inputMode, family } = useInputMode();
   const pad = inputMode === "pad";
 
@@ -77,7 +79,8 @@ export const FirstRunWizard: React.FC<FirstRunWizardProps> = (props) => {
   useFocusNav(rootRef, { onBack: back, onStart: next, onPrevTab: back, onNextTab: next, autoFocus: false });
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.code !== "Enter" && e.code !== "NumpadEnter") return;
+      // useFocusNav runs first and marks the keys it handled
+      if (e.defaultPrevented || (e.code !== "Enter" && e.code !== "NumpadEnter")) return;
       const el = document.activeElement;
       if (el instanceof HTMLButtonElement || el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) return;
       e.preventDefault();
@@ -197,7 +200,7 @@ export const FirstRunWizard: React.FC<FirstRunWizardProps> = (props) => {
               ref={bodyRef}
               className="-mx-1.5 mt-4 min-h-0 flex-1 overflow-y-auto px-1.5 pt-1 pb-2 not-compact:mt-6 short:mt-2"
             >
-              {step === "device" ? <DeviceStep {...props} autoDetect={mode === "first-run"} /> : null}
+              {step === "device" ? <DeviceStep {...props} autoDetect={mode === "first-run"} pickedRef={devicePickedRef} /> : null}
               {step === "setup" && props.settings.device === "keyboard" ? <KeyboardStep {...props} /> : null}
               {step === "setup" && props.settings.device === "controller" ? <ControllerStep {...props} /> : null}
               {step === "setup" && props.settings.device === "wheel" ? <WheelStep {...props} /> : null}

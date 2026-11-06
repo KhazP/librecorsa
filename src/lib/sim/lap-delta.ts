@@ -73,6 +73,14 @@ export class LapDeltaTracker {
     return d / 1000;
   }
 
+  /** Forgets the reference and the lap in progress (another car: its laps are not comparable) */
+  reset(): void {
+    this.best = null;
+    this.lap = null;
+    this.lastBucket = -1;
+    this.current.fill(Number.NaN);
+  }
+
   get hasReference(): boolean {
     return this.best !== null;
   }

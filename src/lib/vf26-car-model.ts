@@ -16,6 +16,7 @@ import { applyRearRainLight } from "@/lib/render/golden-hour-environment";
 import { setVf26LiveryColours, upgradeVf26Materials } from "@/lib/render/car-materials";
 import { applyLivery, collectPaintSlots, type PaintKeys } from "@/lib/render/livery-repaint";
 import { moveToDriverHeadLayer } from "@/lib/render/layers";
+import { bakedCamberOf, relativeMatrix, updateCorners, WHEEL_NODES, WHEEL_SIDES, type RigCorner } from "@/lib/render/corner-rig";
 
 /**
  * F1 3D model (`public/amr26/model/amr26.glb`). On builds without the GLB `loadVf26Template()` resolves to null
@@ -125,13 +126,11 @@ export function loadVf26Template(modelUrl: string = AMR26_MODEL_URL, task: Asset
   return promise;
 }
 
-const WHEELS = ["WHEEL_RF", "WHEEL_LF", "WHEEL_RR", "WHEEL_LR"] as const; // physics wheel order 0..3
-const SIDE = ["RF", "LF", "RR", "LR"] as const;
+const WHEELS = WHEEL_NODES;
+const SIDE = WHEEL_SIDES;
+/** Index into a CarTelemetry [FL, FR, RL, RR] array for each physics wheel (FR, FL, RR, RL) */
+const PHYSICS_TO_TELEMETRY = [1, 0, 3, 2] as const;
 
-/** Matrix of `obj` relative to `ancestor` (both inside the same, already updated, hierarchy). */
-function relativeMatrix(obj: THREE.Object3D, ancestor: THREE.Object3D): THREE.Matrix4 {
-  return new THREE.Matrix4().copy(ancestor.matrixWorld).invert().multiply(obj.matrixWorld);
-}
 
 function setFromMatrix(obj: THREE.Object3D, m: THREE.Matrix4): void {
   m.decompose(obj.position, obj.quaternion, obj.scale);
@@ -194,14 +193,8 @@ export function attachVf26Model(
   bodyGroup.position.copy(offset);
 
   // Per-corner pivots. Built before re-parenting so the bind matrices can be read from the clone.
-  interface Corner {
-    steer: THREE.Group;
-    spin: THREE.Group;
-    isFront: boolean;
-    isLeft: boolean;
+  interface Corner extends RigCorner {
     discMat: THREE.MeshStandardMaterial | null;
-    /** Steer pivot height at rest; lowered by the tyre's visual squash so the flat patch stays on the road */
-    restY: number;
     /** Static camber baked into the wheel node, in the physics' camberLeftRad sense (+ = top toward +X) */
     bakedCamberRad: number;
   }
@@ -248,8 +241,7 @@ export function attachVf26Model(
     steer.add(wheel);
     setFromMatrix(wheel, wheelLocal);
     root.add(steer);
-    // A rotation a about the forward (Z) axis moves the top of the wheel toward -X for a > 0
-    const bakedCamberRad = -new THREE.Euler().setFromQuaternion(wheel.quaternion, "ZYX").z;
+    const bakedCamberRad = bakedCamberOf(wheel);
     corners.push({
       steer,
       spin,
@@ -258,6 +250,7 @@ export function attachVf26Model(
       discMat,
       restY: steer.position.y,
       bakedCamberRad,
+      tyre: null,
     });
   });
 
@@ -342,6 +335,7 @@ export function attachVf26Model(
       bakedCamberRad: c.bakedCamberRad,
     });
   });
+  corners.forEach((c, i) => (c.tyre = tyreHandles[i]));
   const liveTyreHandles = tyreHandles.filter((h): h is TyreDeformationHandle => h !== null);
   const setTireCompound = (compound: TireCompound) => {
     const map = tyreMaps[compound];
@@ -379,21 +373,7 @@ export function attachVf26Model(
   ) => {
     // Front wheels: telemetry.steering = road-wheel angle / max angle, + = right. rotation.y + = left.
     const roadWheel = -t.steering * maxRoadWheelRad;
-    for (const c of corners) {
-      if (c.isFront) {
-        // Ackermann: the inside wheel turns a little more
-        const inside = (roadWheel > 0) === c.isLeft;
-        c.steer.rotation.y = roadWheel * (inside ? 1.06 : 0.94);
-      }
-      c.spin.rotation.x = wheelRotationRad;
-    }
-    corners.forEach((c, i) => {
-      const handle = tyreHandles[i];
-      const state = tyres?.[i];
-      if (!handle || !state) return;
-      handle.update(state, wheelRotationRad, c.isLeft);
-      c.steer.position.y = c.restY - handle.axleDropM;
-    });
+    updateCorners(corners, roadWheel, wheelRotationRad, tyres);
     if (steerBase) steerBase.rotation.z = t.steering * lockRad;
     if (driverMixer && steerAction) {
       steerAction.time = steerFrame(steerTable, t.steering * VF26_CHASSIS.steering.lockDeg) / driverFps;
@@ -409,7 +389,8 @@ export function attachVf26Model(
 
     corners.forEach((c, i) => {
       if (!c.discMat) return;
-      const temp = t.brakeTempsC?.[i] ?? 300;
+      // `corners` follow the physics wheel order (FR, FL, RR, RL); telemetry arrays are [FL, FR, RL, RR]
+      const temp = t.brakeTempsC?.[PHYSICS_TO_TELEMETRY[i]] ?? 300;
       c.discMat.emissiveIntensity = THREE.MathUtils.clamp((temp - 520) / 480, 0, 1) * 3.5;
     });
     if (ledMats.length) {

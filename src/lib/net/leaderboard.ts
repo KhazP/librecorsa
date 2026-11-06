@@ -5,10 +5,11 @@
  * scripts/leaderboard-worker (NEXT_PUBLIC_LEADERBOARD_URL). Both take the same LapRecording and answer in
  * the same shapes. Only the LapRecording itself is ever sent; remote responses are validated before use.
  */
-import type { VehicleModelId } from "@/types/f1";
+import { isVehicleModelId, type VehicleModelId } from "@/types/f1";
 import { listBestLaps } from "@/lib/sim/ghost-store";
+import { lapPlausibilityProblem } from "@/lib/sim/lap-plausibility";
 import { validateLapRecording } from "@/lib/sim/lap-recorder";
-import type { LapRecording, LeaderboardEntry } from "@/lib/sim/lap-types";
+import { lapBoardClass, parseLapConditions, type LapConditions, type LapRecording, type LeaderboardEntry } from "@/lib/sim/lap-types";
 import { getOrCreateDriverKey } from "./driver-key";
 
 const REQUEST_TIMEOUT_MS = 8000;
@@ -20,12 +21,6 @@ const MAX_CODE_LENGTH = 16;
 const MAX_TRACK_ID_LENGTH = 64;
 const MAX_ERROR_LENGTH = 200;
 
-/** Typed as a Record over VehicleModelId so adding a car fails to compile until it is listed here */
-const VEHICLE_IDS: Record<VehicleModelId, true> = {
-  vf26: true,
-  "f12026-car": true,
-  "amg-gt3": true,
-};
 
 /** A configured http(s) base URL without its trailing slash, or null */
 function baseUrl(raw: string | undefined): string | null {
@@ -65,9 +60,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function isVehicleId(value: unknown): value is VehicleModelId {
-  return typeof value === "string" && Object.prototype.hasOwnProperty.call(VEHICLE_IDS, value);
-}
+const isVehicleId = isVehicleModelId;
 
 /** A non-empty string no longer than max, or null */
 function cappedString(value: unknown, max: number): string | null {
@@ -94,21 +87,34 @@ export function lapToEntry(rec: LapRecording, source: "local" | "remote", id?: s
     recordedAt: rec.recordedAt,
     source,
   };
+  if (rec.conditions) entry.conditions = { ...rec.conditions };
   if (id !== undefined) entry.id = id;
   return entry;
 }
 
-/** Local personal bests for this circuit (all cars, or one car), fastest first */
-export async function localLeaderboard(trackId: string, vehicle?: VehicleModelId): Promise<LeaderboardEntry[]> {
+const ASSIST_LABEL: Record<LapConditions["assists"], string> = { pro: "No assists", semi_pro: "Some assists", assisted: "Assisted" };
+const REALISM_LABEL: Record<LapConditions["realism"], string> = { casual: "Casual", standard: "Standard", full: "Full" };
+
+/** "No assists · Full · Dry" for a board class's conditions */
+export function boardLabel(c: Pick<LapConditions, "assists" | "realism" | "surface">): string {
+  return `${ASSIST_LABEL[c.assists]} · ${REALISM_LABEL[c.realism]} · ${c.surface === "wet" ? "Wet" : "Dry"}`;
+}
+
+/**
+ * Local personal bests for this circuit (all cars, or one car), fastest first; with a board class, only laps on that
+ * board (and older ones saved before boards were split, whose class is unknown)
+ */
+export async function localLeaderboard(trackId: string, vehicle?: VehicleModelId, board?: string): Promise<LeaderboardEntry[]> {
   const laps = await listBestLaps();
   return laps
     .filter((lap) => lap.trackId === trackId && (vehicle === undefined || lap.vehicle === vehicle))
+    .filter((lap) => board === undefined || !lap.conditions || lapBoardClass(lap.conditions) === board)
     .map((lap) => lapToEntry(lap, "local"))
     .sort((a, b) => a.lapTimeMs - b.lapTimeMs);
 }
 
 /** Validates one remote board row; null when any field is missing or malformed */
-function parseRemoteEntry(raw: unknown, trackId: string, vehicle: VehicleModelId): LeaderboardEntry | null {
+function parseRemoteEntry(raw: unknown, trackId: string, vehicle: VehicleModelId, board: string): LeaderboardEntry | null {
   if (!isRecord(raw)) return null;
   const name = cappedString(raw.name, MAX_NAME_LENGTH);
   const code = cappedString(raw.code, MAX_CODE_LENGTH);
@@ -125,6 +131,9 @@ function parseRemoteEntry(raw: unknown, trackId: string, vehicle: VehicleModelId
   // Rows for another circuit or car do not belong on this board
   if (entryTrack !== trackId || raw.vehicle !== vehicle || !isVehicleId(raw.vehicle)) return null;
   if (raw.id !== undefined && cappedString(raw.id, MAX_ID_LENGTH) === null) return null;
+  // Rows driven under other assists, realism, surface or physics belong on another board
+  const conditions = parseLapConditions(raw.conditions);
+  if (!conditions || lapBoardClass(conditions) !== board) return null;
 
   const entry: LeaderboardEntry = {
     name,
@@ -135,6 +144,7 @@ function parseRemoteEntry(raw: unknown, trackId: string, vehicle: VehicleModelId
     trackId: entryTrack,
     recordedAt,
     source: "remote",
+    conditions,
   };
   if (typeof raw.id === "string") entry.id = raw.id;
   return entry;
@@ -160,15 +170,19 @@ async function requestJson(url: string, init: RequestInit): Promise<{ status: nu
   }
 }
 
-/** Remote top laps; [] when no URL is configured or on any network / parse error */
+/**
+ * Remote top laps of one board (`lapBoardClass`: physics revision, assists, realism, surface); [] when no URL is configured or
+ * on any network / parse error
+ */
 export async function fetchRemoteLeaderboard(
   trackId: string,
   vehicle: VehicleModelId,
+  board: string,
   limit: number = DEFAULT_LIMIT,
 ): Promise<LeaderboardEntry[]> {
   if (!remote) return [];
   const count = clampLimit(limit);
-  const query = `track=${encodeURIComponent(trackId)}&vehicle=${encodeURIComponent(vehicle)}`;
+  const query = `track=${encodeURIComponent(trackId)}&vehicle=${encodeURIComponent(vehicle)}&board=${encodeURIComponent(board)}`;
   const url =
     remote.kind === "supabase"
       ? `${remote.url}/leaderboard?${query}&lim=${count}`
@@ -179,14 +193,14 @@ export async function fetchRemoteLeaderboard(
   if (!Array.isArray(rows)) return [];
   const entries: LeaderboardEntry[] = [];
   for (const row of rows.slice(0, count)) {
-    const entry = parseRemoteEntry(row, trackId, vehicle);
+    const entry = parseRemoteEntry(row, trackId, vehicle, board);
     if (entry) entries.push(entry);
   }
   return entries.sort((a, b) => a.lapTimeMs - b.lapTimeMs);
 }
 
 /** The wire form of a lap: exactly the LapRecording fields and nothing else */
-function toWirePayload(rec: LapRecording): LapRecording {
+function toWirePayload(rec: LapRecording & { conditions: LapConditions }): LapRecording {
   return {
     version: rec.version,
     trackId: rec.trackId,
@@ -198,6 +212,7 @@ function toWirePayload(rec: LapRecording): LapRecording {
     recordedAt: rec.recordedAt,
     sampleHz: rec.sampleHz,
     data: rec.data,
+    conditions: { ...rec.conditions },
   };
 }
 
@@ -206,7 +221,12 @@ export async function submitLap(rec: LapRecording): Promise<{ ok: boolean; rank?
   if (!remote) return { ok: false, error: "No online leaderboard is configured" };
   const valid = validateLapRecording(rec);
   if (!valid) return { ok: false, error: "The lap recording is invalid" };
-  const payload = toWirePayload(valid);
+  // Without its assists, realism, surface and physics revision a lap can't be put on a fair board
+  if (!valid.conditions) return { ok: false, error: "This lap was recorded by an older version of the game" };
+  // The boards refuse a lap whose samples don't agree with each other; say so before uploading
+  const problem = lapPlausibilityProblem(valid.data);
+  if (problem) return { ok: false, error: problem };
+  const payload = toWirePayload({ ...valid, conditions: valid.conditions });
   const res = await requestJson(remote.kind === "supabase" ? `${remote.url}/submit_lap` : `${remote.url}/laps`, {
     method: "POST",
     headers: remoteHeaders(true),

@@ -13,6 +13,12 @@ export const DRIVER_HEAD_LAYER = 8;
  */
 export const SHADOW_PROXY_LAYER = 9;
 
+/**
+ * Render layer of driving aids drawn on the world (the racing line): the view camera draws them, the cars' reflection
+ * probe and the mirrors do not, so the bright line is never reflected in the bodywork
+ */
+export const OVERLAY_LAYER = 10;
+
 /** Puts `root` and everything under it on the driver-head layer only (three's layers are not inherited) */
 export function moveToDriverHeadLayer(root: THREE.Object3D): void {
   root.traverse((obj) => obj.layers.set(DRIVER_HEAD_LAYER));

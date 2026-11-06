@@ -16,11 +16,13 @@ export type ReflectionQuality = "off" | "medium" | "high";
 const CUBE_SIZE = 256;
 const PROBE_FAR_M = 8000;
 /**
- * Share of the filmed world's brightness the cars reflect. The probe sees the sunlit ground, grass and painted
- * markings at full strength from above the roof, which made the paint read as green-tinted chrome; at about half
- * it sits with the sky reflection the cars had before, now with the circuit in it
+ * Share of the filmed world's brightness the cars take from the probe. three.js scales a material's whole
+ * environment light by it, the diffuse ambient as well as the reflections, so anything under 1 lights the cars
+ * dimmer than the track around them: at 0.55 they went near black in shade (issues #53, #54). The green-chrome
+ * look that cut was made for came from the probe filming the sun disc (now hidden while it films) and from
+ * metallic paint (now a dielectric under its clearcoat), so the world is reflected at its own strength
  */
-const PROBE_INTENSITY = 0.55;
+const PROBE_INTENSITY = 1;
 /** Above the car's roof: what a glossy body sees of its surroundings */
 const PROBE_HEIGHT_M = 1.1;
 

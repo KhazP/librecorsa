@@ -61,6 +61,7 @@ export const ReplayBar: React.FC<{
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       if (e.code === "Space" || e.key === " ") {
         e.preventDefault();
+        spaceHandled = true;
         onTogglePlay();
       } else if (e.key === "ArrowLeft") {
         e.preventDefault();
@@ -73,8 +74,20 @@ export const ReplayBar: React.FC<{
         onFlashback();
       }
     };
+    // A focused button clicks itself on Space's keyup: the key already toggled play, so that click must not toggle
+    // it back (or press whichever other control has focus)
+    let spaceHandled = false;
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (!spaceHandled || (e.code !== "Space" && e.key !== " ")) return;
+      spaceHandled = false;
+      e.preventDefault();
+    };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener("keyup", onKeyUp, true);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("keyup", onKeyUp, true);
+    };
   }, [timeS, startS, endS, onTogglePlay, onSeek, onFlashback]);
 
   const rel = shown - endS;

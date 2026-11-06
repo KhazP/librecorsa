@@ -2,10 +2,13 @@
  * Setup sheets: every F1 car gets the F1 sheet and every GT3 the GT3 sheet; each parameter's range
  * holds its baseline on a whole step, round-trips through the setup state, and never asks for more than the cars
  * take. Then the new setup channels move the cars: engine braking, brake power, brake ducts, toe, steering ratio,
- * diff preload and the dampers.
+ * diff preload and the dampers. Last the fuel load: the default is the load each car always started on, old saves
+ * without it still load, more fuel is more mass and a slower lap, the car lightens as it burns, and Casual keeps the
+ * mass without the burn.
  * Run: npx tsx scripts/verify-setup-sheet.ts
  */
-import { DEFAULT_CHASSIS_SETUP, type ChassisSetup, type GarageTuner } from "../src/lib/sim/car-setup";
+import { clampChassisSetup, DEFAULT_CHASSIS_SETUP, FUEL_LOAD, startingFuelKg, type ChassisSetup, type GarageTuner } from "../src/lib/sim/car-setup";
+import { SIM_REALISM_FLAGS } from "../src/lib/sim/sim-realism";
 import { SETUP_CLASS, setupSheet, type SetupState } from "../src/lib/sim/setup-sheet";
 import { TYRE_SETUP_LIMITS } from "../src/components/hud/PauseMenu";
 import type { SimulatorCar } from "../src/lib/sim/simulator-car";
@@ -13,7 +16,7 @@ import type { TyreSetup, VehicleModelId } from "../src/types/f1";
 import { F12026CarSim } from "../src/lib/sim/f12026-car/F12026CarSim";
 import { createAmgGt3Sim } from "../src/lib/sim/gt3/AmgGt3Sim";
 import { F1Physics2026 } from "../src/lib/f1-physics-2026";
-import { getRwandaTrackData } from "../src/lib/track-data";
+import { getActiveTrackData } from "../src/lib/track-data";
 import { createFlatTestTrack } from "./lib/flat-track";
 
 let passed = 0;
@@ -27,7 +30,7 @@ function check(name: string, cond: boolean, detail = ""): void {
 }
 
 const flat = createFlatTestTrack();
-const track = getRwandaTrackData();
+const track = getActiveTrackData();
 const makers: Record<VehicleModelId, (t: typeof track) => SimulatorCar> = {
   vf26: (t) => new F1Physics2026(t),
   "f12026-car": (t) => new F12026CarSim(t),
@@ -44,8 +47,8 @@ const defaultTyre = (v: VehicleModelId): TyreSetup => makers[v](flat).getTyreSet
 const sheets = Object.fromEntries(vehicles.map((v) => [v, setupSheet(v, TYRE_SETUP_LIMITS[v], defaultTyre(v))]));
 const groupIds = (v: VehicleModelId) => sheets[v].map((g) => g.id).join(",");
 check("the F1 cars share one sheet layout", groupIds("vf26") === groupIds("f12026-car"), groupIds("vf26"));
-check("F1 sheet: its pages in order", groupIds("vf26") === "aero,transmission,geometry,suspension,dampers,brakes,tyres,electronics");
-check("GT3 sheet: its pages in order", groupIds("amg-gt3") === "tyres,electronics,mechanical,dampers,aero");
+check("F1 sheet: its pages in order", groupIds("vf26") === "aero,transmission,geometry,suspension,dampers,brakes,tyres,electronics,fuel");
+check("GT3 sheet: its pages in order", groupIds("amg-gt3") === "tyres,electronics,mechanical,dampers,aero,fuel");
 const paramIds = (v: VehicleModelId) => sheets[v].flatMap((g) => g.params.map((q) => q.id));
 check("the F1 cars share the same parameters", paramIds("vf26").join() === paramIds("f12026-car").join());
 for (const id of ["steerRatioDelta", "bumpStopRateFrontPct", "diffPreloadNm", "fastBumpFrontPct", "brakeDuctFront", "toeFrontDeg"])
@@ -221,6 +224,82 @@ console.log("Dampers");
     const stiff = rollShare(40);
     check(`${v}: stiffer dampers slow the body's roll on a step steer`, stiff < soft - 0.02, `${(soft * 100).toFixed(0)} % vs ${(stiff * 100).toFixed(0)} % of the roll after 0.1 s`);
   }
+}
+
+console.log("Fuel load");
+{
+  // What every car started on before the garage had a fuel setting
+  const LEGACY_FUEL_KG: Record<VehicleModelId, number> = { vf26: 40, "f12026-car": 35, "amg-gt3": 50 };
+  // A setup saved before the fuel setting: no fuel field at all
+  const { fuelDeltaKg: _drop, ...modern } = DEFAULT_CHASSIS_SETUP;
+  void _drop;
+  const legacy = clampChassisSetup({ ...modern, springFrontPct: 6 });
+  check("an old save without a fuel field loads on the default fuel", legacy.fuelDeltaKg === 0 && legacy.springFrontPct === 6);
+  check("a junk fuel field falls back to the default", clampChassisSetup({ fuelDeltaKg: "lots" }).fuelDeltaKg === 0 && clampChassisSetup({ fuelDeltaKg: Number.NaN }).fuelDeltaKg === 0);
+
+  type Massy = SimulatorCar & { contactMassKg?: number; totalMassKg?: number; setSimRealism?: (f: (typeof SIM_REALISM_FLAGS)["full"]) => void };
+  const massOf = (c: SimulatorCar) => (c as Massy).contactMassKg ?? (c as Massy).totalMassKg ?? Number.NaN;
+  for (const v of vehicles) {
+    const f = FUEL_LOAD[v];
+    const fresh = makers[v](flat);
+    check(`${v}: the default load is the ${LEGACY_FUEL_KG[v]} kg it always started on`, f.defaultKg === LEGACY_FUEL_KG[v] && Math.abs(fresh.telemetry.fuelKg - LEGACY_FUEL_KG[v]) < 1e-6, `${fresh.telemetry.fuelKg} kg`);
+    const old = withSetup(v, legacy);
+    old.resetToStartGrid(false);
+    check(`${v}: an old save starts on the default load`, Math.abs(old.telemetry.fuelKg - f.defaultKg) < 1e-6);
+
+    const light = withSetup(v, { fuelDeltaKg: f.minKg - f.defaultKg });
+    const heavy = withSetup(v, { fuelDeltaKg: f.maxKg - f.defaultKg });
+    const dm = massOf(heavy) - massOf(light);
+    check(`${v}: the fuel load sets the starting fuel and the mass`, Math.abs(light.telemetry.fuelKg - f.minKg) < 1e-6 && Math.abs(heavy.telemetry.fuelKg - f.maxKg) < 1e-6 && Math.abs(dm - (f.maxKg - f.minKg)) < 1e-6, `${f.minKg}–${f.maxKg} kg, +${dm.toFixed(1)} kg`);
+    check(`${v}: the load holds through a restart`, (heavy.resetToStartGrid(true), Math.abs(heavy.telemetry.fuelKg - f.maxKg) < 1e-6));
+    const sameFuel = withSetup(v, { fuelDeltaKg: 10 });
+    for (let i = 0; i < 120; i++) sameFuel.step(DT, { throttle: 1 });
+    const burnt = sameFuel.telemetry.fuelKg;
+    sameFuel.applyChassisSetup?.({ ...DEFAULT_CHASSIS_SETUP, fuelDeltaKg: 10, springFrontPct: 6 });
+    check(`${v}: changing another setting keeps the fuel burnt so far`, burnt < f.defaultKg + 10 && sameFuel.telemetry.fuelKg === burnt);
+
+    // Full realism burns it and the car lightens; Casual keeps the load (and its mass) all run
+    const burn = (level: "full" | "casual") => {
+      const car = withSetup(v, { fuelDeltaKg: 20 });
+      (car as Massy).setSimRealism?.(SIM_REALISM_FLAGS[level]);
+      car.resetToStartGrid(true);
+      const m0 = massOf(car);
+      for (let i = 0; i < 600; i++) car.step(DT, { throttle: 1 });
+      return { fuel: car.telemetry.fuelKg, dm: massOf(car) - m0 };
+    };
+    const full = burn("full");
+    const casual = burn("casual");
+    const start = f.defaultKg + 20;
+    check(`${v}: Full burns the fuel and the car lightens`, full.fuel < start - 0.05 && Math.abs(full.dm + (start - full.fuel)) < 0.006 /* the readout is to 0.01 kg */, `${(start - full.fuel).toFixed(2)} kg in 10 s`);
+    check(`${v}: Casual keeps the load and its mass`, casual.fuel === start && casual.dm === 0);
+  }
+
+  // A flying lap of Kigali on the autopilot, light and full: the extra mass costs time
+  console.log("Fuel load: lap time");
+  const lapS = (v: VehicleModelId, fuelKg: number) => {
+    const car = withSetup(v, { fuelDeltaKg: fuelKg - FUEL_LOAD[v].defaultKg }, track);
+    (car as Massy).setSimRealism?.(SIM_REALISM_FLAGS.casual);
+    car.resetToStartGrid(true);
+    car.aiAutopilot = true;
+    const lap0 = car.telemetry.lapCount;
+    for (let t = 0; t < 240 && car.telemetry.lapCount < lap0 + 1; t += DT) car.step(DT, {});
+    return car.telemetry.lapCount === lap0 + 1 && car.telemetry.lastLapTimeMs !== null ? car.telemetry.lastLapTimeMs / 1000 : Number.NaN;
+  };
+  for (const v of vehicles) {
+    const f = FUEL_LOAD[v];
+    const light = lapS(v, f.minKg);
+    const base = lapS(v, f.defaultKg);
+    const heavy = lapS(v, f.maxKg);
+    const per10 = ((heavy - light) / (f.maxKg - f.minKg)) * 10;
+    check(
+      `${v}: more fuel, slower lap`,
+      // The VF26's autopilot drives the track's fixed speed profile, so a light car can't corner faster on it and
+      // only gains on the exits: there it has to be no slower than the default, not strictly quicker
+      (v === "vf26" ? light <= base + 0.1 : light < base) && base < heavy && per10 > 0.05 && per10 < 1,
+      `${light.toFixed(3)} / ${base.toFixed(3)} / ${heavy.toFixed(3)} s at ${f.minKg} / ${f.defaultKg} / ${f.maxKg} kg, ${per10.toFixed(3)} s per 10 kg`
+    );
+  }
+  check("startingFuelKg keeps to each car's range", startingFuelKg("amg-gt3", { fuelDeltaKg: 80 }) === FUEL_LOAD["amg-gt3"].maxKg && startingFuelKg("vf26", { fuelDeltaKg: -50 }) === FUEL_LOAD.vf26.minKg);
 }
 
 console.log(`\nAll ${passed} setup sheet checks passed.`);

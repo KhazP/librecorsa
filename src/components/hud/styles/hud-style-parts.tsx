@@ -3,7 +3,7 @@
 import React, { useEffect, useId, useRef, useState } from "react";
 import type { CarTelemetry, TireCompound } from "@/types/f1";
 import type { BuiltTrackData } from "@/lib/track-data";
-import { HUD_CYAN, HUD_GREEN, HUD_PURPLE, HUD_RED, HUD_VOLT, HUD_YELLOW } from "../hud-format";
+import { HUD_CYAN, HUD_GREEN, HUD_PURPLE, HUD_RED, HUD_VOLT, HUD_YELLOW, revRangeFor, sectorTimeColor } from "../hud-format";
 
 /** Circuit outline for the HUD maps, in a 0..1000 box (aspect kept) */
 export interface HudMap {
@@ -17,7 +17,13 @@ export interface HudMap {
   unitsPerM: number;
 }
 
-export function buildHudMap(track: BuiltTrackData): HudMap {
+/** What an outline needs: the centreline samples (x / z, sector) and the lap length. A built track has them; so does a raw `track_data.json` mapped over */
+export interface HudMapSource {
+  samples: readonly { position: { x: number; z: number }; sector: number }[];
+  totalLengthM: BuiltTrackData["totalLengthM"];
+}
+
+export function buildHudMap(track: HudMapSource): HudMap {
   const samples = track.samples;
   const n = samples.length;
   let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
@@ -43,7 +49,7 @@ export function buildHudMap(track: BuiltTrackData): HudMap {
     points,
     path: toPath(points, true),
     sectorPaths,
-    lengthM: track.totalLength,
+    lengthM: track.totalLengthM,
     unitsPerM: 1000 / span,
   };
 }
@@ -77,7 +83,7 @@ export interface HudDesignProps {
 
 /** Rev light range of the car (the same as the classic speed cluster's) */
 export function revRangeOf(t: CarTelemetry): [number, number] {
-  return t.f12026?.carId === "amg-gt3" ? [6200, 7500] : [10_800, 14_600];
+  return revRangeFor(t.f12026?.carId);
 }
 
 /** Scales a corner group of the HUD about that corner */
@@ -102,13 +108,7 @@ export function arcPoints(n: number, cx: number, cy: number, r: number, spanDeg:
   });
 }
 
-export const COMPOUND_COLORS: Record<TireCompound, string> = {
-  soft: HUD_RED,
-  medium: HUD_YELLOW,
-  hard: "#F5F7FA",
-  intermediate: "#3CCB4A",
-  wet: "#2E7BFF",
-};
+export { COMPOUND_COLORS } from "../hud-format";
 
 export const SECTOR_COLORS = [HUD_CYAN, HUD_VOLT, "#FF6B8A"] as const;
 
@@ -225,12 +225,8 @@ export const MiniMap: React.FC<{
   );
 };
 
-/** Sector time colour: purple personal best, green faster than last best, yellow slower */
-export function sectorColor(ms: number, best: number | null): string {
-  if (!best || ms <= best + 0.5) return HUD_PURPLE;
-  if (ms <= best + 150) return HUD_GREEN;
-  return HUD_YELLOW;
-}
+/** Sector time colour (see sectorTimeColor): purple at or inside the best, yellow slower */
+export const sectorColor = sectorTimeColor;
 
 /** The last completed sector, for a few seconds after it completes */
 /**

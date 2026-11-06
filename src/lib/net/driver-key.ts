@@ -36,16 +36,21 @@ function saveDriverKey(key: string): boolean {
 
 /** The saved key, or a new random one (32 bytes) saved for next time */
 export function getOrCreateDriverKey(): string {
-  const existing = loadDriverKey();
+  const existing = loadDriverKey() ?? sessionKey;
   if (existing) return existing;
   const key = base64Url(crypto.getRandomValues(new Uint8Array(32)));
-  saveDriverKey(key);
+  // Storage blocked: keep it for this session at least, or every upload would mint a new key and the player's own
+  // name would read as taken on the second one
+  if (!saveDriverKey(key)) sessionKey = key;
   return key;
 }
 
+/** The key minted while storage is blocked; lost with the page */
+let sessionKey: string | null = null;
+
 /** Downloads the key as librecorsa-driver-key.json; false when this browser has no key yet */
 export function exportDriverKeyFile(driverName: string): boolean {
-  const key = loadDriverKey();
+  const key = loadDriverKey() ?? sessionKey;
   if (!key) return false;
   try {
     const body = { type: FILE_TYPE, version: 1, name: driverName, key };
