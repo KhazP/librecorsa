@@ -18,7 +18,7 @@ import { useGamepads, type PadState } from "./useMenuNav";
 import { focusInZone, focusOnHover, useFocusNav } from "./useFocusNav";
 import { useInputMode } from "./input-mode";
 import { KeyCap, PadGlyph, PromptBar } from "./menu-ui";
-import { RequestPanel } from "./RequestPanel";
+import { RequestPanel, type FeedbackContext } from "./RequestPanel";
 import { CircuitBrowser } from "./CircuitBrowser";
 import { TrackOutline } from "./circuit-outline";
 import { ConditionsPanel, type ConditionsPanelProps } from "./ConditionsPanel";
@@ -528,9 +528,9 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
     { id: "credits", label: "Credits", detail: "Open-source sim · asset sources", icon: Info, panel: "credits", run: () => openPanel("credits") },
     {
       id: "request",
-      label: "Request a car or track",
-      short: "Request content",
-      detail: "Suggest new content",
+      label: "Feedback & requests",
+      short: "Feedback",
+      detail: "Bugs, ideas, cars and tracks",
       icon: MessageSquarePlus,
       panel: "request",
       run: () => openPanel("request"),
@@ -565,7 +565,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
     leaderboard: { kicker: `Leaderboard · ${props.leaderboardPanel?.trackName ?? track.name}`, color: "#CCFF00" },
     display: { kicker: "HUD, graphics, touch, VR" },
     credits: { kicker: "About LibreCorsa & credits" },
-    request: { kicker: "Suggest new content" },
+    request: { kicker: "Bugs, ideas, cars and tracks" },
   };
 
   const vehicle = carById(props.carId);
@@ -573,6 +573,16 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
   const livery = props.selectedLivery;
   const hudPreset = props.displayPanel?.settings.hud.preset;
   const kicker = `${track.name} · ${track.country} · ${km(track)} KM`;
+  // What a bug report gets without the player typing it
+  const playerSettings = props.displayPanel?.settings;
+  const feedbackContext: FeedbackContext = {
+    circuit: `${track.name}${track.layout ? `, ${track.layout}` : ""}`,
+    car: vehicle.title,
+    device: playerSettings ? { keyboard: "Keyboard", controller: "Controller", wheel: "Wheel" }[playerSettings.device] : "Unknown",
+    graphics: playerSettings
+      ? `${playerSettings.graphics.quality[0].toUpperCase()}${playerSettings.graphics.quality.slice(1)} · render ${Math.round(playerSettings.graphics.renderScale * 100)}%`
+      : "Unknown",
+  };
 
   return (
     <div
@@ -666,7 +676,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
                   {panel === "leaderboard" && props.leaderboardPanel ? <LeaderboardPanel {...props.leaderboardPanel} /> : null}
                   {panel === "display" && props.displayPanel ? <DisplayPanel {...props.displayPanel} /> : null}
                   {panel === "credits" ? <Credits /> : null}
-                  {panel === "request" ? <RequestPanel /> : null}
+                  {panel === "request" ? <RequestPanel context={feedbackContext} /> : null}
                 </PanelFrame>
               </div>
             </section>
