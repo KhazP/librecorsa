@@ -71,7 +71,16 @@ export interface SteeringAssistCarState {
   slip?: AxleSlipSample;
 }
 
-export interface SteeringAssistSettings {
+export interface DeviceAssistResolved {
+  selfSteerResponse: number;
+  dampingStrength: number;
+  maxSelfSteerAngleDeg: number;
+  maxDynamicLimitReduction: number;
+  countersteerResponse: number;
+  targetSlip: number;
+}
+
+export interface SteeringAssistSettings extends DeviceAssistResolved {
   /** Stick dead zone (rescaled) */
   deadzone: number;
   /** Controller smoothing rate multiplier (higher = quicker steering) */
@@ -88,18 +97,50 @@ export interface SteeringAssistSettings {
    * more slowly and a tap stays a nudge, while it stays quick in slow corners
    */
   keyboardRateIncreaseWithSpeed: number;
-  /** Fraction of the front peak slip angle used as the steering limit */
-  targetSlip: number;
-  /** Strength of the self-aligning (countersteer) force */
-  selfSteerResponse: number;
-  /** Yaw-rate damping of the self-steer force */
+  /** Optional separate assist tuning applied when the keyboard is steering (falls back to the top-level fields) */
+  keyboardAssist?: DeviceAssistResolved;
+}
+
+/** Per-device steering assist sliders exposed in the Keyboard and Controller settings */
+export interface DeviceAssistTuning {
+  /** Self-aligning & countersteer strength, 0..1 (0.5 = default) */
+  selfSteerStrength: number;
+  /** Yaw-rate damping strength, 0..1 (0.5 = default) */
   dampingStrength: number;
-  /** Largest road-wheel angle the self-steer force may apply (deg) */
+  /** High-speed steering rate calm, 0..1 (0.5 = default) */
+  speedSensitivity: number;
+  /** Front peak slip limit offset, −0.25..0.25 (0 = default; negative = safer margin, positive = sharper bite) */
+  slipLimitMargin: number;
+  /** Maximum automatic countersteer road-wheel angle (deg, 5..30, default 25) */
   maxSelfSteerAngleDeg: number;
-  /** How far past the rear axle's travel angle a manual countersteer may go */
-  countersteerResponse: number;
-  /** How much the limit may shrink while the car is rotating away from the steering (0..10) */
-  maxDynamicLimitReduction: number;
+}
+
+export const DEFAULT_DEVICE_ASSIST_TUNING: DeviceAssistTuning = {
+  selfSteerStrength: 0.5,
+  dampingStrength: 0.5,
+  speedSensitivity: 0.5,
+  slipLimitMargin: 0,
+  maxSelfSteerAngleDeg: 25,
+};
+
+/** Converts a device's user-facing assist sliders into internal `SteeringAssist` coefficients */
+export function deviceAssistTuning(
+  tuning: DeviceAssistTuning
+): DeviceAssistResolved & Pick<SteeringAssistSettings, "rateIncreaseWithSpeed" | "keyboardRateIncreaseWithSpeed"> {
+  const s = Math.min(1, Math.max(0, tuning.selfSteerStrength));
+  const d = Math.min(1, Math.max(0, tuning.dampingStrength));
+  const spd = Math.min(1, Math.max(0, tuning.speedSensitivity));
+  const margin = Math.min(0.25, Math.max(-0.25, tuning.slipLimitMargin));
+  return {
+    rateIncreaseWithSpeed: (1 - spd) * 0.2 - 0.1,
+    keyboardRateIncreaseWithSpeed: (1 - spd) * 0.2 - 0.35,
+    selfSteerResponse: s * 0.5 + 0.12,
+    dampingStrength: d * 0.5 + 0.12,
+    maxSelfSteerAngleDeg: Math.min(90, Math.max(5, tuning.maxSelfSteerAngleDeg)),
+    maxDynamicLimitReduction: 3 * s + 3.5,
+    countersteerResponse: (1 - s) * 0.2 + 0.1,
+    targetSlip: Math.min(1.25, Math.max(0.65, 0.95 - (s - 0.5) * 0.04 + margin)),
+  };
 }
 
 /** Default "Steering assistance" level (0 = least processing, 1 = most) */
@@ -123,17 +164,13 @@ export function steeringAssistTuning(
   | 'targetSlip'
 > {
   const f = Math.min(1, Math.max(0, level));
-  const selfSteerResponse = f * 0.5 + 0.12;
-  return {
-    rateIncreaseWithSpeed: (1 - f) * 0.2 - 0.1,
-    keyboardRateIncreaseWithSpeed: (1 - f) * 0.2 - 0.35,
-    selfSteerResponse,
-    dampingStrength: selfSteerResponse,
+  return deviceAssistTuning({
+    selfSteerStrength: f,
+    dampingStrength: f,
+    speedSensitivity: f,
+    slipLimitMargin: 0,
     maxSelfSteerAngleDeg: 90,
-    maxDynamicLimitReduction: 3 * f + 3.5,
-    countersteerResponse: (1 - f) * 0.2 + 0.1,
-    targetSlip: 0.95 - (f - 0.5) * 0.04,
-  };
+  });
 }
 
 /** Defaults: the middle "Steering assistance" level */
@@ -419,17 +456,18 @@ export class SteeringAssist {
     const peakDeg = this.peakSlip.update(car.frontPeakSlipRad * RAD2DEG, car.slip, initial, Math.max(0, car.vxMs), dt);
 
     // Self-steer: wheels follow the rear axle's direction of travel, plus yaw damping
-    const exponent = 1 + (1 - Math.log10(10 * (cfg.selfSteerResponse * 0.9 + 0.1)));
+    const active = keyboardActive && cfg.keyboardAssist ? cfg.keyboardAssist : cfg;
+    const exponent = 1 + (1 - Math.log10(10 * (active.selfSteerResponse * 0.9 + 0.1)));
     const correction = (signedPow(clamp(rearAngle / 72, -1, 1), exponent) * 72) / lockDeg;
-    const selfSteerCap = clamp01(cfg.maxSelfSteerAngleDeg / lockDeg);
+    const selfSteerCap = clamp01(active.maxSelfSteerAngleDeg / lockDeg);
     const selfSteerCapWindow = Math.min(1, 4 / (2 * Math.max(1e-6, selfSteerCap)));
-    const damping = -car.yawRateRadS * cfg.dampingStrength * 0.15 * (30 / lockDeg);
+    const damping = -car.yawRateRadS * active.dampingStrength * 0.15 * (30 / lockDeg);
     const rawSelfSteer = clampEased(correction, -selfSteerCap, selfSteerCap, selfSteerCapWindow) + damping;
     const selfSteer = clamp(this.selfSteer.get(rawSelfSteer, dt), -2, 2) * assistFadeIn;
 
     // Steering limit that keeps the front tyres just under their peak slip angle
-    const targetSlipDeg = peakDeg * cfg.targetSlip;
-    const maxLimitReduction = lerp(targetSlipDeg * 0.4, targetSlipDeg * 0.75, clamp01(cfg.maxDynamicLimitReduction / 10));
+    const targetSlipDeg = peakDeg * active.targetSlip;
+    const maxLimitReduction = lerp(targetSlipDeg * 0.4, targetSlipDeg * 0.75, clamp01(active.maxDynamicLimitReduction / 10));
     const angleSubLimit = lerp(maxLimitReduction, maxLimitReduction * 0.9, car.brake);
     // Front axle travel angle *away* from the steering direction (outward = positive)
     const frontAway = clampEased(
@@ -448,7 +486,7 @@ export class SteeringAssist {
       this.counterIndicator.get(rawCounter, dt, rawCounter < this.counterIndicator.state ? returnRate : 1) * midSpeedFade;
 
     const rearToward = inputSign * rearAngle; // rear axle travel angle on the steering side
-    const counterMult = lerp(lerpInvSat(rearToward, 0, 30) / 3 + 2 / 3, 1, cfg.countersteerResponse);
+    const counterMult = lerp(lerpInvSat(rearToward, 0, 30) / 3 + 2 / 3, 1, active.countersteerResponse);
     // Yaw-rate guard: shrink the limit by the steering that the excess rotation corresponds to
     const yawTowardSteer = inputSign * car.yawRateRadS;
     const maxYawRate = (1.1 * car.maxLateralAccel) / Math.max(5, speed);
@@ -458,7 +496,7 @@ export class SteeringAssist {
     // peak — on a quick left-right flick the rear still slides from the previous turn and would
     // otherwise read as a slide to catch, allowing far more lock than the front can use.
     const targetCounter = Math.min(
-      targetSlipDeg * (cfg.countersteerResponse * counterMult * 0.7 + 0.1) + rearToward,
+      targetSlipDeg * (active.countersteerResponse * counterMult * 0.7 + 0.1) + rearToward,
       targetInward
     );
     const targetAngle = lerp(clamp(targetInward, 0, lockDeg), clamp(targetCounter, 0, lockDeg), counter);
