@@ -535,6 +535,13 @@ export class F12026CarSim implements SimulatorCar {
   /** The racing line this car follows (`CarSimProfile.racingLine`) */
   private readonly line: RacingLineId;
   public readonly wheelbaseM: number;
+  /**
+   * Simulated time not yet stepped (s, under one 2 ms step). The renderer carries the pose forward by it: without it
+   * a 60 Hz display drew 8, 8, then 9 steps' worth of motion, a 14 cm lurch every third frame at 250 km/h (#65)
+   */
+  public get renderLeadS(): number {
+    return this.vehicle.unsteppedS;
+  }
   /** Road-wheel angle at full lock (rad), after the garage's steering ratio */
   public get maxSteerAngleRad(): number {
     return this.vehicle.maxSteerRad;

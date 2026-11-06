@@ -1334,6 +1334,11 @@ export class VehiclePhysics {
   /** Simulated time the last step() call actually advanced (whole fixed steps; s) */
   public lastStepTimeS = 0;
 
+  /** Time handed to step() but not yet simulated (s, under one fixed step): the pose is that far behind the frame */
+  public get unsteppedS(): number {
+    return this.timeAccumulator;
+  }
+
   /** Advance by a render frame (any dt); runs fixed 500 Hz steps */
   public step(dtSeconds: number, inputs: VehicleInputs): void {
     const inp = this.sanitizeInputs(inputs);
