@@ -5,6 +5,7 @@
 import assert from "node:assert/strict";
 import {
   buildReport,
+  buildSetEffectReport,
   forceToRaw,
   ForceWriter,
   isFatalHidStatus,
@@ -13,6 +14,7 @@ import {
   parsePidLayout,
   PID,
   selectorValue,
+  setupLogitechDevice,
   setupPidDevice,
   teardownPidSession,
   unpackReport,
@@ -329,7 +331,7 @@ async function main() {
   });
 
   console.log("Setup sequence");
-  await check("reset, enable, gain, create effect (block from Block Load), set effect, zero force, start", async () => {
+  await check("reset, stop all, enable, gain, create effect (block from Block Load), set effect, zero force, start", async () => {
     const cols = pidCollections();
     const dev = new FakeHidDevice(cols, asLayout(cols).blockLoad);
     const clock = new FakeClock();
@@ -340,6 +342,7 @@ async function main() {
     assert.equal(res.session.blockIndex, 3);
     assert.deepEqual(dev.log, [
       { kind: "out", id: 12, data: [4] }, // device reset
+      { kind: "out", id: 12, data: [3] }, // stop all effects
       { kind: "out", id: 12, data: [1] }, // enable actuators
       { kind: "out", id: 13, data: [255] }, // device gain 100 %
       { kind: "feature", id: 17, data: [1, 0, 0] }, // create: constant force, byte count 0
@@ -353,14 +356,14 @@ async function main() {
           0, 0, // trigger repeat
           0, 0, // sample period
           255, // gain
-          255, // trigger button: none
-          0b001, // X enabled, Y not, Direction Enable cleared
+          0, // trigger button: 0 (no trigger button in USB HID PID)
+          0b101, // X enabled, Y not, Direction Enable = 1
           64, 0, // direction ordinal 1 = 90 degrees (X), ordinal 2 = 0
           0, 0, // start delay
         ],
       },
       { kind: "out", id: 5, data: [3, 0, 0] }, // zero force
-      { kind: "out", id: 10, data: [3, 1, 255] }, // Op Effect Start, loop 255
+      { kind: "out", id: 10, data: [3, 1, 1] }, // Op Effect Start, loop 1
     ]);
   });
   await check("no Create New Effect report: block index 1", async () => {
@@ -370,7 +373,7 @@ async function main() {
     assert.ok(res.ok);
     if (res.ok) assert.equal(res.session.blockIndex, 1);
     assert.ok(!dev.log.some((l) => l.kind === "feature"));
-    assert.deepEqual(dev.log.at(-1), { kind: "out", id: 10, data: [1, 1, 255] });
+    assert.deepEqual(dev.log.at(-1), { kind: "out", id: 10, data: [1, 1, 1] });
   });
   await check("Block Load 'full' / 'error' fail the setup with a message", async () => {
     for (const [status, text] of [[2, /no free effect memory/], [3, /refused/]] as const) {
@@ -400,7 +403,7 @@ async function main() {
     assert.ok(res.ok);
     assert.deepEqual(dev.forceWrites[0], { kind: "out", id: 5, data: [3, 128] });
   });
-  await check("MOZA R9 Base descriptor (Trigger Button 1..8, Duration 0..32767) writes 0xFF (no trigger) and 0xFFFF (infinite)", async () => {
+  await check("MOZA R9 / PXN V99 descriptor (Trigger Button 1..8, Duration 0..32767) writes 0 (no trigger) and 0xFFFF (infinite)", async () => {
     const cols = pidCollections({
       triggerButton: variable([pid(0x53)], 8, 1, 1, 8),
       duration: variable([pid(0x50)], 16, 1, 0, 32767),
@@ -412,7 +415,100 @@ async function main() {
     assert.ok(setEffect, "Set Effect report sent");
     assert.equal(setEffect!.data[2], 0xff, "Duration low byte is 0xFF");
     assert.equal(setEffect!.data[3], 0xff, "Duration high byte is 0xFF (0xFFFF = infinite, not 32767 ms)");
-    assert.equal(setEffect!.data[9], 255, "Trigger Button byte is 0xFF (DIEB_NOTRIGGER), not clamped to 1");
+    assert.equal(setEffect!.data[9], 0, "Trigger Button byte is 0 (no trigger button in USB HID PID), not clamped to 1");
+    assert.equal(setEffect!.data[10], 0b101, "X axis enabled and Direction Enable = 1");
+  });
+  await check("duplicate Generic Desktop X/Y usages in Set Effect (1-bit Axes Enable + 8-bit Direction) do not collide", () => {
+    const cols: HidCollectionLike[] = [
+      {
+        usagePage: 0x0f,
+        usage: 0x92,
+        outputReports: [
+          {
+            reportId: 1,
+            items: [
+              variable([pid(0x22)], 8, 1, 1, 40),
+              selector(ET_LIST),
+              variable([pid(0x50)], 16, 1, 0, 65535),
+              variable([pid(0x52)], 8, 1, 0, 255),
+              variable([X, Y], 1, 2, 0, 1), // 1-bit X, Y in Axes Enable
+              variable([pid(0x56)], 1, 1, 0, 1), // Direction Enable
+              padding(5),
+              variable([X, Y], 8, 2, 0, 255), // 8-bit X, Y in Direction (same usages!)
+            ],
+          },
+          { reportId: 5, items: [variable([pid(0x22)], 8, 1, 1, 40), variable([pid(0x70)], 16, 1, -10000, 10000)] },
+          { reportId: 10, items: [variable([pid(0x22)], 8, 1, 1, 40), selector(OP_LIST), variable([pid(0x7c)], 8, 1, 0, 255)] },
+        ],
+      },
+    ];
+    const layout = asLayout(cols);
+    assert.ok(layout.setEffect?.fieldList && layout.setEffect.fieldList.length >= 8);
+    const rep = buildSetEffectReport(layout.setEffect!, 2, PID.ET_CONSTANT_FORCE);
+    // Byte 0: block 2, Byte 1: ET 1, Bytes 2-3: 0xFFFF, Byte 4: gain 255, Byte 5: bits X=1, Y=0, DirEn=1 -> 0b101, Byte 6: DirX=64, Byte 7: DirY=0
+    assert.deepEqual([...rep.data], [2, 1, 0xff, 0xff, 255, 0b101, 64, 0]);
+  });
+  await check("hardware PID Damper (0x41) via Set Condition: allocates, starts at 0, updates when coeff changes >= 0.025", async () => {
+    const etWithDamper = [0x26, 0x40, 0x41].map(pid);
+    const index = variable([pid(0x22)], 8, 1, 1, 40);
+    const baseCols = pidCollections();
+    const pidNode = baseCols[1] as HidCollectionLike;
+    const cols: HidCollectionLike[] = [
+      baseCols[0]!,
+      {
+        ...pidNode,
+        outputReports: [
+          {
+            reportId: 1,
+            items: [
+              index,
+              selector(etWithDamper),
+              variable([pid(0x50)], 16, 1, 0, 65535),
+              variable([pid(0x52)], 8, 1, 0, 255),
+              variable([X, Y], 1, 2, 0, 1),
+              variable([pid(0x56)], 1, 1, 0, 1),
+              padding(5),
+              variable([ordinalUsage(1), ordinalUsage(2)], 8, 2, 0, 255),
+            ],
+          },
+          {
+            reportId: 3, // Set Condition
+            items: [
+              index,
+              variable([pid(0x23)], 8, 1, 0, 1), // Parameter Block Offset
+              variable([pid(0x60)], 16, 1, -10000, 10000), // CP Offset
+              variable([pid(0x61)], 16, 1, -10000, 10000), // Positive Coefficient
+              variable([pid(0x62)], 16, 1, -10000, 10000), // Negative Coefficient
+              variable([pid(0x63)], 16, 1, 0, 10000), // Positive Saturation
+              variable([pid(0x64)], 16, 1, 0, 10000), // Negative Saturation
+              variable([pid(0x65)], 16, 1, 0, 10000), // Dead Band
+            ],
+          },
+          ...(pidNode.outputReports ?? []).slice(1),
+        ],
+        featureReports: [
+          { reportId: 17, items: [selector(etWithDamper), variable([pid(0xac)], 16, 1, 0, 511)] },
+          { reportId: 18, items: [index, selector(BL_LIST), variable([pid(0xad)], 16, 1, 0, 65535)] },
+        ],
+      },
+    ];
+    const layout = asLayout(cols);
+    assert.equal(layout.hasDamper, true);
+    assert.equal(layout.setCondition?.reportId, 3);
+    const dev = new FakeHidDevice(cols, layout.blockLoad);
+    const res = await setupPidDevice(dev, { deps: new FakeClock().deps });
+    assert.ok(res.ok);
+    if (!res.ok) return;
+    assert.equal(res.session.hasHardwareDamper, true);
+    const condWrites = () => dev.log.filter((l) => l.kind === "out" && l.id === 3);
+    assert.equal(condWrites().length, 1, "initial Set Condition (0 coeff) sent during setup");
+    res.session.setDamper(0.01); // < 0.025 change: skipped
+    await flush();
+    assert.equal(condWrites().length, 1);
+    res.session.setDamper(0.5); // >= 0.025 change: sent (posCoeff = negCoeff = 5000 = 0x1388)
+    await flush();
+    assert.equal(condWrites().length, 2);
+    assert.deepEqual(condWrites()[1]?.data.slice(4, 8), [0x88, 0x13, 0x88, 0x13]);
   });
 
   function fakeHid(devices: FakeHidDevice[], granted: FakeHidDevice[] = []) {
@@ -608,16 +704,52 @@ async function main() {
     assert.equal(ffb.status.state, "idle");
     assert.match(ffb.status.message ?? "", /No wheel/);
   });
-  await check("connect(): Logitech is unsupported with a clear message and is not opened", async () => {
-    const dev = wheel();
-    dev.vendorId = 0x046d;
-    dev.productName = "G923";
-    const ffb = new WebHidFfb(fakeHid([dev]).api, new FakeClock().deps);
-    assert.equal(await ffb.connect(), null);
-    assert.equal(ffb.status.state, "unsupported");
-    assert.equal(ffb.status.device, "G923");
-    assert.match(ffb.status.message ?? "", /Logitech.*proprietary/);
-    assert.equal(dev.opened, false);
+  await check("connect(): classic Logitech (no PID) uses 7-byte Logitech protocol, PID Logitech (G923) uses PID", async () => {
+    const g29 = new FakeHidDevice([{ usagePage: 0x01, usage: 0x04, outputReports: [{ reportId: 0, items: [] }] }]);
+    g29.vendorId = 0x046d;
+    g29.productName = "Logitech G29";
+    const clock = new FakeClock();
+    const ffb = new WebHidFfb(fakeHid([g29]).api, clock.deps);
+    assert.equal(await ffb.connect(), "Logitech G29");
+    assert.equal(ffb.status.state, "ready");
+    assert.equal(g29.opened, true);
+    assert.deepEqual(g29.log, [
+      { kind: "out", id: 0, data: [0xf5, 0, 0, 0, 0, 0, 0] }, // disable autocenter
+      { kind: "out", id: 0, data: [0xf8, 0x81, 900 & 0xff, 900 >> 8, 0, 0, 0] }, // 900 deg mode
+      { kind: "out", id: 0, data: [0x11, 0x00, 0x80, 0, 0, 0, 0] }, // neutral constant force (128)
+    ]);
+    clock.advance(5);
+    ffb.setForce(1); // max right/left -> 255
+    await flush();
+    assert.deepEqual(g29.log.at(-1), { kind: "out", id: 0, data: [0x11, 0x00, 255, 0, 0, 0, 0] });
+    await ffb.dispose();
+    assert.deepEqual(g29.log.slice(-2), [
+      { kind: "out", id: 0, data: [0xf3, 0, 0, 0, 0, 0, 0] },
+      { kind: "out", id: 0, data: [0xf5, 0, 0, 0, 0, 0, 0] },
+    ]);
+
+    // G923 with PID descriptor uses standard PID protocol
+    const g923 = wheel();
+    g923.vendorId = 0x046d;
+    g923.productName = "G923 PID";
+    const ffbPid = new WebHidFfb(fakeHid([g923]).api, new FakeClock().deps);
+    assert.equal(await ffbPid.connect(), "G923 PID");
+    assert.equal(ffbPid.status.state, "ready");
+    assert.ok(g923.log.some((l) => l.kind === "out" && l.id === 5), "sent PID Constant Force report");
+  });
+  await check("connect() & reconnect(): multi-interface wheel (e.g. PXN V99) skips input-only interface and picks PID interface", async () => {
+    const inputOnly = new FakeHidDevice([{ usagePage: 0x01, usage: 0x04, inputReports: [{ reportId: 1, items: [variable([X], 16, 1, 0, 65535)] }] }]);
+    inputOnly.productName = "PXN V99 Input";
+    const pidInterface = wheel();
+    pidInterface.productName = "PXN V99 FFB";
+    const ffb = new WebHidFfb(fakeHid([inputOnly, pidInterface]).api, new FakeClock().deps);
+    assert.equal(await ffb.connect(), "PXN V99 FFB");
+    assert.equal(inputOnly.opened, false);
+    assert.equal(pidInterface.opened, true);
+
+    const reconn = new WebHidFfb(fakeHid([], [inputOnly, pidInterface]).api, new FakeClock().deps);
+    assert.equal(await reconn.reconnect(), "PXN V99 FFB");
+    assert.equal(reconn.status.state, "ready");
   });
   await check("connect(): a non-PID pick (plain gamepad) is unsupported", async () => {
     const dev = new FakeHidDevice([{ usagePage: 0x01, usage: 0x05 }]);
@@ -670,13 +802,6 @@ async function main() {
     assert.equal(isFatalHidStatus(ffb.getStatus()), false);
     assert.equal(notified, 1);
     unsubscribe();
-    // a granted Logitech wheel is not reopened either (it has no PID): same pairing prompt, no error
-    const g923 = wheel();
-    g923.vendorId = 0x046d;
-    const logi = new WebHidFfb(fakeHid([], [g923]).api, new FakeClock().deps);
-    assert.equal(await logi.reconnect(), null);
-    assert.equal(logi.status.message, PAIR_MESSAGE);
-    assert.equal(g923.opened, false);
   });
   await check("connect(): requestDevice runs synchronously inside the call (the click's user activation)", async () => {
     let prompted = false;
@@ -716,14 +841,14 @@ async function main() {
     assert.equal(await ffb.connect(), "Fake DD Base");
     assert.equal(ffb.status.state, "ready");
   });
-  await check("fatal statuses: Logitech / write failures are fatal, dispose() keeps the reason", async () => {
-    const g923 = wheel();
-    g923.vendorId = 0x046d;
-    const logi = new WebHidFfb(fakeHid([g923]).api, new FakeClock().deps);
-    await logi.connect();
-    assert.equal(isFatalHidStatus(logi.status), true);
-    await logi.dispose();
-    assert.match(logi.status.message ?? "", /Logitech/);
+  await check("fatal statuses: unsupported / write failures are fatal, dispose() keeps the reason", async () => {
+    const nonFfb = new FakeHidDevice([{ usagePage: 0x01, usage: 0x05 }]);
+    nonFfb.productName = "Gamepad";
+    const unsupportedFfb = new WebHidFfb(fakeHid([nonFfb]).api, new FakeClock().deps);
+    await unsupportedFfb.connect();
+    assert.equal(isFatalHidStatus(unsupportedFfb.status), true);
+    await unsupportedFfb.dispose();
+    assert.match(unsupportedFfb.status.message ?? "", /HID PID/);
 
     const dev = wheel();
     const clock = new FakeClock();
