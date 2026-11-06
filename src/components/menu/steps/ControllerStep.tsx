@@ -238,16 +238,6 @@ export const ControllerStep: React.FC<SetupStepProps> = ({
               onChange={(v) => setTuning({ steeringRate: v })}
             />
             <TuningSlider
-              label="Steering assistance"
-              value={settings.steerAssistLevel}
-              min={0}
-              max={1}
-              step={0.05}
-              format={(v) => `${Math.round(v * 100)} %`}
-              hint="More: stronger self-aligning, gentler countersteer, calmer at speed (keyboard too)"
-              onChange={(v) => onChangeSettings((s) => ({ ...s, steerAssistLevel: v }))}
-            />
-            <TuningSlider
               label="Inner dead zone"
               value={tuning.deadzone}
               min={0}
@@ -306,11 +296,89 @@ export const ControllerStep: React.FC<SetupStepProps> = ({
         <div className="border-t border-[#262B3D] pt-2.5">
           <Toggle
             label="Impulse-trigger rumble (Xbox)"
-            detail="ABS pulses in LT, wheelspin in RT"
+            detail="Slip & ABS pulses in LT, wheelspin in RT"
             checked={tuning.triggerRumble}
             onChange={() => setTuning({ triggerRumble: !tuning.triggerRumble })}
           />
         </div>
+      </SetupCard>
+
+      <SetupCard
+        label="Controller assist options"
+        action={
+          <PillAction
+            onClick={() =>
+              setTuning({
+                selfSteerStrength: DEFAULT_PAD_TUNING.selfSteerStrength,
+                dampingStrength: DEFAULT_PAD_TUNING.dampingStrength,
+                speedSensitivity: DEFAULT_PAD_TUNING.speedSensitivity,
+                slipLimitMargin: DEFAULT_PAD_TUNING.slipLimitMargin,
+                maxSelfSteerAngleDeg: DEFAULT_PAD_TUNING.maxSelfSteerAngleDeg,
+              })
+            }
+          >
+            Reset assist
+          </PillAction>
+        }
+      >
+        <Toggle
+          label="Controller steering assist"
+          detail="The stick steers up to the front tyres' grip limit, self-aligns and helps catch slides"
+          checked={gamepadAssist}
+          onChange={() => onSetGamepadAssist(!gamepadAssist)}
+        />
+        <AutoGrid min={220} className="gap-x-[22px] gap-y-3 border-t border-[#262B3D] pt-3">
+          <TuningSlider
+            label="Self-steer & countersteer"
+            value={tuning.selfSteerStrength}
+            min={0}
+            max={1}
+            step={0.05}
+            format={(v) => `${Math.round(v * 100)} %`}
+            hint="How strongly the wheels follow the car's travel direction and catch rear slides"
+            onChange={(v) => setTuning({ selfSteerStrength: v })}
+          />
+          <TuningSlider
+            label="Yaw damping"
+            value={tuning.dampingStrength}
+            min={0}
+            max={1}
+            step={0.05}
+            format={(v) => `${Math.round(v * 100)} %`}
+            hint="Calms snap-back and pendulum oscillations when recovering from a slide"
+            onChange={(v) => setTuning({ dampingStrength: v })}
+          />
+          <TuningSlider
+            label="High-speed calm"
+            value={tuning.speedSensitivity}
+            min={0}
+            max={1}
+            step={0.05}
+            format={(v) => `${Math.round(v * 100)} %`}
+            hint="How much stick steering slows down at high speed to prevent twitchiness"
+            onChange={(v) => setTuning({ speedSensitivity: v })}
+          />
+          <TuningSlider
+            label="Tyre slip margin"
+            value={tuning.slipLimitMargin}
+            min={-0.25}
+            max={0.25}
+            step={0.01}
+            format={(v) => `${v > 0 ? "+" : ""}${Math.round(v * 100)} %`}
+            hint="Negative: safer understeer cushion · Positive: lets you push past peak slip"
+            onChange={(v) => setTuning({ slipLimitMargin: v })}
+          />
+          <TuningSlider
+            label="Max countersteer lock"
+            value={tuning.maxSelfSteerAngleDeg}
+            min={5}
+            max={30}
+            step={1}
+            format={(v) => `${Math.round(v)}°`}
+            hint="Maximum road-wheel angle the assist holds automatically when catching a slide"
+            onChange={(v) => setTuning({ maxSelfSteerAngleDeg: v })}
+          />
+        </AutoGrid>
       </SetupCard>
     </div>
   );

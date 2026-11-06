@@ -3,7 +3,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Check } from "lucide-react";
 import { useFocusNav } from "./useFocusNav";
-import { PadGlyph, PrimaryButton, PromptBar } from "./menu-ui";
+import { PadGlyph, PrimaryButton, PromptBar, Segmented } from "./menu-ui";
 import { useInputMode } from "./input-mode";
 import { DeviceStep } from "./steps/DeviceStep";
 import { KeyboardStep } from "./steps/KeyboardStep";
@@ -12,6 +12,7 @@ import { WheelStep } from "./steps/WheelStep";
 import { AssistsStep } from "./steps/AssistsStep";
 import { CarStep } from "./steps/CarStep";
 import type { SetupStepProps } from "./steps/types";
+import type { InputDevice } from "@/lib/input/device-input";
 import { LibreCorsaLogo } from "@/components/ui/LibreCorsaLogo";
 
 export type WizardStepId = "device" | "setup" | "assists" | "car";
@@ -19,9 +20,10 @@ export type WizardMode = "first-run" | "controls";
 
 const STEPS: Record<WizardMode, readonly WizardStepId[]> = {
   "first-run": ["device", "setup", "assists", "car"],
-  controls: ["device", "setup"],
+  controls: ["setup"],
 };
 
+const DEVICES: readonly InputDevice[] = ["keyboard", "controller", "wheel"];
 const SETUP_TITLES = { keyboard: "Keyboard", controller: "Controller", wheel: "Wheel & pedals" } as const;
 
 const STEP_INFO: Record<Exclude<WizardStepId, "setup">, { title: string; detail: string }> = {
@@ -74,9 +76,23 @@ export const FirstRunWizard: React.FC<FirstRunWizardProps> = (props) => {
 
   const next = () => (last ? onFinish() : setStepIndex((i) => i + 1));
   const back = () => (stepIndex === 0 ? onExit() : setStepIndex((i) => i - 1));
+  const selectDevice = (device: InputDevice) => {
+    devicePickedRef.current = true;
+    props.onChangeSettings((s) => ({ ...s, device }));
+  };
+  const cycleDevice = (dir: -1 | 1) => {
+    const idx = DEVICES.indexOf(props.settings.device);
+    selectDevice(DEVICES[(idx + dir + DEVICES.length) % DEVICES.length]);
+  };
 
-  // Ⓑ / Esc back, Menu next, LB / RB (Q / E) step back / next; Enter continues unless a control has focus
-  useFocusNav(rootRef, { onBack: back, onStart: next, onPrevTab: back, onNextTab: next, autoFocus: false });
+  // Ⓑ / Esc back, Menu next, LB / RB (Q / E) step back / next (or switch device in Controls); Enter continues unless a control has focus
+  useFocusNav(rootRef, {
+    onBack: back,
+    onStart: next,
+    onPrevTab: mode === "controls" ? () => cycleDevice(-1) : back,
+    onNextTab: mode === "controls" ? () => cycleDevice(1) : next,
+    autoFocus: false,
+  });
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       // useFocusNav runs first and marks the keys it handled
@@ -129,55 +145,95 @@ export const FirstRunWizard: React.FC<FirstRunWizardProps> = (props) => {
           <aside className="hidden w-[230px] shrink-0 flex-col gap-9 not-compact:flex">
             <LibreCorsaLogo variant="compact" size="sm" />
             <nav aria-label="Setup steps" className="flex flex-col">
-              <span className="lc-lbl mb-3.5">{mode === "first-run" ? "First-time setup" : "Controls"}</span>
-              {steps.map((s, i) => {
-                const done = i < stepIndex;
-                const current = i === stepIndex;
-                return (
-                  <React.Fragment key={s}>
-                    {i > 0 ? (
-                      <span
-                        aria-hidden
-                        className={`ml-3.5 h-[26px] w-0.5 rounded-sm transition-colors duration-200 ${
-                          i <= stepIndex ? "bg-[#00E5FF]" : "bg-[#262B3D]"
-                        }`}
-                      />
-                    ) : null}
-                    <div aria-current={current ? "step" : undefined} className="flex min-h-[44px] items-center gap-3.5">
-                      <span
-                        className={`inline-flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full font-f1-mono text-[12px] font-extrabold ${
-                          current
-                            ? "bg-[#CCFF00] text-[#08090D] shadow-[0_0_0_5px_rgba(204,255,0,0.15)]"
-                            : done
-                              ? "bg-[#00E5FF] text-[#08090D]"
-                              : "border-2 border-[#262B3D] text-[#8E96AA]"
+              <span className="lc-lbl mb-3.5">{mode === "first-run" ? "First-time setup" : "Input device"}</span>
+              {mode === "controls" ? (
+                <div className="flex flex-col gap-1.5">
+                  {DEVICES.map((dev) => {
+                    const active = props.settings.device === dev;
+                    return (
+                      <button
+                        key={dev}
+                        type="button"
+                        aria-pressed={active}
+                        onClick={() => selectDevice(dev)}
+                        className={`flex min-h-[44px] cursor-pointer items-center gap-3 rounded-2xl px-3.5 py-2 text-left text-[15px] font-bold transition-colors ${
+                          active
+                            ? "border-[1.5px] border-[#CCFF00] bg-[#CCFF00]/[0.08] text-[#F5F7FA]"
+                            : "border border-[#262B3D] bg-[#08090D]/50 text-[#8E96AA] hover:border-[#3A4157] hover:text-[#F5F7FA]"
                         }`}
                       >
-                        {done ? <Check aria-label="Done" className="h-[15px] w-[15px]" strokeWidth={3.2} /> : i + 1}
-                      </span>
-                      <span
-                        className={`text-[16px] leading-tight ${
-                          current ? "font-bold text-[#F5F7FA]" : done ? "font-semibold text-[#C5CBD8]" : "font-semibold text-[#8E96AA]"
-                        }`}
-                      >
-                        {stepTitle(s)}
-                      </span>
-                    </div>
-                  </React.Fragment>
-                );
-              })}
+                        <span
+                          aria-hidden
+                          className={`h-2.5 w-2.5 shrink-0 rounded-full ${active ? "bg-[#CCFF00]" : "bg-[#262B3D]"}`}
+                        />
+                        {SETUP_TITLES[dev]}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                steps.map((s, i) => {
+                  const done = i < stepIndex;
+                  const current = i === stepIndex;
+                  return (
+                    <React.Fragment key={s}>
+                      {i > 0 ? (
+                        <span
+                          aria-hidden
+                          className={`ml-3.5 h-[26px] w-0.5 rounded-sm transition-colors duration-200 ${
+                            i <= stepIndex ? "bg-[#00E5FF]" : "bg-[#262B3D]"
+                          }`}
+                        />
+                      ) : null}
+                      <div aria-current={current ? "step" : undefined} className="flex min-h-[44px] items-center gap-3.5">
+                        <span
+                          className={`inline-flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full font-f1-mono text-[12px] font-extrabold ${
+                            current
+                              ? "bg-[#CCFF00] text-[#08090D] shadow-[0_0_0_5px_rgba(204,255,0,0.15)]"
+                              : done
+                                ? "bg-[#00E5FF] text-[#08090D]"
+                                : "border-2 border-[#262B3D] text-[#8E96AA]"
+                          }`}
+                        >
+                          {done ? <Check aria-label="Done" className="h-[15px] w-[15px]" strokeWidth={3.2} /> : i + 1}
+                        </span>
+                        <span
+                          className={`text-[16px] leading-tight ${
+                            current ? "font-bold text-[#F5F7FA]" : done ? "font-semibold text-[#C5CBD8]" : "font-semibold text-[#8E96AA]"
+                          }`}
+                        >
+                          {stepTitle(s)}
+                        </span>
+                      </div>
+                    </React.Fragment>
+                  );
+                })
+              )}
             </nav>
           </aside>
 
           <div className={`flex min-w-0 flex-1 flex-col ${mainWidth}`}>
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-2 font-f1-mono text-[11px] font-extrabold tracking-[0.18em] text-[#CCFF00] uppercase">
                 <span aria-hidden className="h-[7px] w-[7px] shrink-0 rounded-full bg-[#CCFF00]" />
-                {mode === "first-run" ? "First-time setup" : "Controls"} · Step {stepIndex + 1} of {steps.length}
+                {mode === "first-run" ? `First-time setup · Step ${stepIndex + 1} of ${steps.length}` : "Controls & input assists"}
               </div>
-              <span className="not-compact:hidden">
-                <LibreCorsaLogo variant="compact" className="hidden sm:inline-flex" />
-              </span>
+              {mode === "controls" ? (
+                <Segmented
+                  label="Input device"
+                  value={props.settings.device}
+                  onChange={selectDevice}
+                  options={[
+                    { id: "keyboard", label: "Keyboard" },
+                    { id: "controller", label: "Controller" },
+                    { id: "wheel", label: "Wheel & pedals" },
+                  ]}
+                />
+              ) : (
+                <span className="not-compact:hidden">
+                  <LibreCorsaLogo variant="compact" className="hidden sm:inline-flex" />
+                </span>
+              )}
             </div>
             <h1 className="lc-disp mt-3 text-[clamp(30px,min(5.4vw,9vh),76px)] text-[#F5F7FA] short:mt-1 short:text-[26px]">
               {info.title}
@@ -185,16 +241,18 @@ export const FirstRunWizard: React.FC<FirstRunWizardProps> = (props) => {
             <p className="mt-3 text-[15px] leading-snug text-[#C5CBD8] sm:text-[17px] short:hidden">{info.detail}</p>
 
             {/* Progress rail (phones and short windows, where the step rail is hidden) */}
-            <div className="mt-4 flex gap-1.5 not-compact:hidden short:mt-2">
-              {steps.map((s, i) => (
-                <span
-                  key={s}
-                  className={`h-1.5 flex-1 rounded-full transition-colors ${
-                    i < stepIndex ? "bg-[#00E5FF]" : i === stepIndex ? "bg-[#CCFF00]" : "bg-[#262B3D]"
-                  }`}
-                />
-              ))}
-            </div>
+            {mode === "first-run" ? (
+              <div className="mt-4 flex gap-1.5 not-compact:hidden short:mt-2">
+                {steps.map((s, i) => (
+                  <span
+                    key={s}
+                    className={`h-1.5 flex-1 rounded-full transition-colors ${
+                      i < stepIndex ? "bg-[#00E5FF]" : i === stepIndex ? "bg-[#CCFF00]" : "bg-[#262B3D]"
+                    }`}
+                  />
+                ))}
+              </div>
+            ) : null}
 
             <div
               ref={bodyRef}

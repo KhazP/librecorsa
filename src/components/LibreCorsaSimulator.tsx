@@ -102,8 +102,8 @@ import {
   axleSlipFromTelemetry,
   createAxleSlipSample,
   DEFAULT_STEERING_ASSIST,
+  deviceAssistTuning,
   type SteeringAssistSettings,
-  steeringAssistTuning,
 } from "@/lib/sim/steering-assist";
 import {
   clampFov,
@@ -445,17 +445,20 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   const keyLookupRef = useRef(buildKeyLookup(settings.keys));
   keyLookupRef.current = useMemo(() => buildKeyLookup(settings.keys), [settings.keys]);
   const assistSettingsRef = useRef<SteeringAssistSettings>(DEFAULT_STEERING_ASSIST);
-  assistSettingsRef.current = useMemo(
-    () => ({
+  assistSettingsRef.current = useMemo(() => {
+    const padAssist = deviceAssistTuning(settings.padTuning);
+    const kbAssist = deviceAssistTuning(settings.keyboardTuning);
+    return {
       ...DEFAULT_STEERING_ASSIST,
-      ...steeringAssistTuning(settings.steerAssistLevel),
+      ...padAssist,
+      keyboardRateIncreaseWithSpeed: kbAssist.keyboardRateIncreaseWithSpeed,
+      keyboardAssist: kbAssist,
       ...keyboardRampScales(settings.keyboardTuning.steerRiseS, settings.keyboardTuning.steerReturnS),
       steeringRate: settings.padTuning.steeringRate,
       // The stick reaches the assist already shaped, inner dead zone included (shapeStick below)
       deadzone: 0,
-    }),
-    [settings.steerAssistLevel, settings.keyboardTuning.steerRiseS, settings.keyboardTuning.steerReturnS, settings.padTuning.steeringRate]
-  );
+    };
+  }, [settings.padTuning, settings.keyboardTuning]);
   const [p2pStatus, setP2pStatus] = useState<P2PConnectionStatus>({
     mode: "local",
     roomCode: "",
@@ -2067,13 +2070,15 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       const kbBrakeScale = kbPedalAssistRef.current.brakeScale(
         tyreSlip.totalNdSlip,
         dtSeconds,
-        driving && kbTuning.brakeAssist && carAids?.absLevel === 0
+        driving && kbTuning.brakeAssist && carAids?.absLevel === 0,
+        kbTuning.pedalAssistStrength
       );
       const kbThrottleScale = kbPedalAssistRef.current.throttleScale(
         tyreSlip.rearNdSlip,
         Math.max(0, physics.vxMs),
         dtSeconds,
-        driving && kbTuning.exitAssist && carAids?.tcLevel === 0
+        driving && kbTuning.exitAssist && carAids?.tcLevel === 0,
+        kbTuning.pedalAssistStrength
       );
       const kbSteerDir = (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
       // On-screen controls: pedals and a steering pad (or the tilt of the device)
@@ -3378,6 +3383,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
 
   const menuProps = {
     telemetry,
+    settings,
+    onChangeSettings: handleChangeSettings,
     pauseNotice,
     aeroPreset,
     assistPreset,
