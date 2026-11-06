@@ -127,3 +127,7 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v5
+        with:
+          # Pages can stay queued for several minutes even with a valid artifact; avoid failing at the
+          # default 10-minute action timeout while waiting for the deployment slot.
+          timeout: "1800000"
