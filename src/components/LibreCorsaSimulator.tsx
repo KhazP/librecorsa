@@ -69,6 +69,7 @@ import { isFatalHidStatus } from "@/lib/input/webhid-ffb";
 import { applyGraphicsQuality } from "@/lib/render/golden-hour-environment";
 import { createRainFx, RAIN_VISOR_LAYER } from "@/lib/render/rain-fx";
 import { DRIVER_HEAD_LAYER, OVERLAY_LAYER } from "@/lib/render/layers";
+import { KB_STEER_RETURN_S, KB_STEER_RISE_S, keyboardSteerLimit, stepKeyboardSteer } from "@/lib/input/keyboard-steer";
 import { shapeStick } from "@/lib/input/stick-shape";
 import { advanceAsphaltRain, setAsphaltWetness } from "@/lib/render/asphalt-sheen";
 import { SIM_REALISM_FLAGS, type SimRealism } from "@/lib/sim/sim-realism";
@@ -143,7 +144,6 @@ const KB_THROTTLE_RISE_S = 0.25;
 const KB_THROTTLE_FALL_S = 0.1;
 const KB_BRAKE_RISE_S = 0.17;
 const KB_BRAKE_FALL_S = 0.08;
-/** Time for keyboard steering to reach its speed-dependent limit, and to recentre */
 // Rotates a camera (which looks down -Z) to look along the car's +Z forward axis
 const CAM_FORWARD_FLIP = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI);
 const CAM_X_AXIS = new THREE.Vector3(1, 0, 0);
@@ -151,11 +151,6 @@ const CAM_X_AXIS = new THREE.Vector3(1, 0, 0);
 const FALLBACK_COCKPIT_FOV_DEG = 62;
 /** Most the chase camera's boom may trail the car's nose (rad): a spin swings the camera round instead of leaving it side-on */
 const CHASE_MAX_LAG_RAD = 0.35;
-const KB_STEER_RISE_S = 0.22;
-const KB_STEER_RETURN_S = 0.14;
-/** Keyboard steering limit: road-wheel angle for this lateral acceleration (m/s²) plus a peak slip allowance (rad) */
-const KB_STEER_LIMIT_ACCEL = 38;
-const KB_STEER_LIMIT_SLIP_RAD = 0.12;
 
 /**
  * Session flow: assets loading → "press any key" → title menu → (first-run / controls setup) → driving.
@@ -2069,24 +2064,14 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
               SIM_REALISM_FLAGS[settingsRef.current.realism].wetSeverity
             ) / wetTraits.dryGrip
           : 1;
-      // The dry limit, scaled by what the water leaves of the tyre's grip
-      const kbMaxLatAccel = KB_STEER_LIMIT_ACCEL * wetGripScale;
-      const kbSteerLimit = Math.min(
-        1,
-        ((physics.wheelbaseM * kbMaxLatAccel) / Math.max(1, vFwd * vFwd) +
-          KB_STEER_LIMIT_SLIP_RAD) /
-          physics.maxSteerAngleRad
-      );
-      const kbSteerTarget =
-        ((keys.right ? 1 : 0) - (keys.left ? 1 : 0)) * kbSteerLimit;
-      const kbRecentring =
-        kbSteerTarget === 0 || kbSteerTarget * kb.steer < 0;
-      kb.steer = approach(
+      // The car's own grip limit (keyboard-steer.ts), scaled by what the water leaves of the tyre's grip
+      kb.steer = stepKeyboardSteer(
         kb.steer,
-        kbSteerTarget,
-        (kbSteerLimit /
-          (kbRecentring ? kbTuning.steerReturnS || KB_STEER_RETURN_S : kbTuning.steerRiseS || KB_STEER_RISE_S)) *
-          dtSeconds
+        (keys.right ? 1 : 0) - (keys.left ? 1 : 0),
+        keyboardSteerLimit(physics, vFwd, wetGripScale),
+        dtSeconds,
+        kbTuning.steerRiseS || KB_STEER_RISE_S,
+        kbTuning.steerReturnS || KB_STEER_RETURN_S
       );
       const kbSteerActive = keys.left || keys.right || Math.abs(kb.steer) > 1e-3;
       // On-screen controls: pedals and a steering pad (or the tilt of the device)

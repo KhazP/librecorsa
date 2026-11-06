@@ -46,6 +46,8 @@ export interface SimulatorCar {
   readonly tyreVisuals?: readonly [TyreVisualState, TyreVisualState, TyreVisualState, TyreVisualState];
   readonly wheelbaseM: number;
   readonly maxSteerAngleRad: number;
+  /** What the car corners on, for the keyboard's steering limit (absent: the VF26's, keyboard-steer.ts) */
+  steeringEnvelope?(): import('@/lib/input/keyboard-steer').SteeringEnvelope;
   /** Mass (kg) and yaw inertia (kg·m²) for car-to-car contact (absent: an F1 car's) */
   readonly contactMassKg?: number;
   readonly contactYawInertiaKgM2?: number;

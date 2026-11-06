@@ -45,6 +45,7 @@ import {
   RWANDA_DRS_ZONES,
 } from '@/lib/track-data';
 import { GamepadSteeringAssist } from '../gamepad-assist';
+import type { SteeringEnvelope } from '../../input/keyboard-steer';
 import type { AeroWakeState } from '../aero-wake';
 import type { TrackEvolutionSample } from '../track-evolution';
 import type { WeatherContactSample } from '../weather';
@@ -75,6 +76,8 @@ import { KERB_PROFILE_L } from '../track-surfaces';
 
 const G = 9.81;
 const DEG2RAD = Math.PI / 180;
+/** Share of the fronts' peak slip angle a held steering key adds to the path's angle (CarSimProfile.keyboardSlipShare) */
+const DEFAULT_KEYBOARD_SLIP_SHARE = 0.8;
 const RAD2DEG = 180 / Math.PI;
 /** Rwanda (≈1400 m ASL) air density */
 const AIR_DENSITY = 1.06;
@@ -146,6 +149,11 @@ export interface CarSimProfile {
   aeroPackagesDeg: Record<AeroSetupPreset, [number, number]>;
   /** Lateral grip the pad steering assist assumes, per g of (weight + downforce) */
   padLateralMu: number;
+  /**
+   * Share of the fronts' peak slip angle a held steering key adds to the path's angle (default 0.8): with the rear's
+   * slip on top the fronts sit near their peak. Less for a car whose rear slips more (the GT3: 0.6).
+   */
+  keyboardSlipShare?: number;
   braking: BrakingEnvelope;
   /**
    * Planning model of this car for its braking line, braking urgency and HUD target speed (`brakingGuideFor`).
@@ -535,6 +543,21 @@ export class F12026CarSim implements SimulatorCar {
   /** The racing line this car follows (`CarSimProfile.racingLine`) */
   private readonly line: RacingLineId;
   public readonly wheelbaseM: number;
+  /**
+   * What this car corners on, for the keyboard's steering limit (keyboard-steer.ts): the lateral grip the pad assist
+   * plans on at this speed, and the share of the fronts' peak slip angle the steering may add to the path's angle (the
+   * rear axle's own slip angle adds the rest). The VF26's fixed 3.9 g / 0.12 rad held a GT3's fronts at 2-3× their 6°
+   * peak, so a held key scrubbed and cooked them (#64).
+   */
+  public steeringEnvelope(): SteeringEnvelope {
+    const v = this.vehicle;
+    const peakSlipRad = (this.compoundData.modelData.friction_limit_angle || DEFAULT_FRICTION_LIMIT_ANGLE_DEG) * DEG2RAD;
+    return {
+      maxLateralAccelMs2: this.profile.padLateralMu * (G + v.telemetry.downforceN / v.totalMassKg),
+      frontSlipRad: (this.profile.keyboardSlipShare ?? DEFAULT_KEYBOARD_SLIP_SHARE) * peakSlipRad,
+    };
+  }
+
   /**
    * Simulated time not yet stepped (s, under one 2 ms step). The renderer carries the pose forward by it: without it
    * a 60 Hz display drew 8, 8, then 9 steps' worth of motion, a 14 cm lurch every third frame at 250 km/h (#65)
