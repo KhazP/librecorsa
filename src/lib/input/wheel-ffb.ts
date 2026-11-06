@@ -100,11 +100,17 @@ export const HID_WATCHDOG_MS = 150;
 /** WebHID playback timer (ms); the physics samples it plays are 2 ms apart */
 const HID_TICK_MS = 2;
 const PHYSICS_SAMPLE_MS = 2;
-/** Vibrations mixed into the WebHID force (no separate channel): kerb buzz and ABS pulse, Hz and share of full force */
+/** Vibrations mixed into the WebHID force (no separate channel): kerb buzz, ABS pulse, tyre slide, grass/gravel rumble, road bumps */
 const HID_KERB_HZ = 40;
 const HID_KERB_AMPLITUDE = 0.12;
 const HID_ABS_HZ = 25;
 const HID_ABS_AMPLITUDE = 0.1;
+const HID_SLIDE_HZ = 27;
+const HID_SLIDE_AMPLITUDE = 0.08;
+const HID_ROUGH_HZ = 18;
+const HID_ROUGH_AMPLITUDE = 0.12;
+const HID_BUMP_HZ = 22;
+const HID_BUMP_AMPLITUDE = 0.1;
 const clockMs = () => (typeof performance !== "undefined" ? performance.now() : Date.now());
 
 /** Rim speed (deg/s) at which the damper reaches its full force */
@@ -129,8 +135,11 @@ export interface FfbMeterState {
 export class WheelFfbClient {
   /** Alternative force output (the WebHID driver); when set and WebHID FFB is on, forces go there instead of the bridge */
   hidSink: ((force: number) => void) | null = null;
+  /** Linked WebHID driver (for hardware damper forwarding) */
+  hidDriver: WebHidFfb | null = null;
   meter: FfbMeterState = { force: 0, clipping: false, peak: 0, suggestedGain: null };
   private lastRimDeg: number | null = null;
+  private lastFrontSuspMm: [number, number] | null = null;
   private lastUpdateMs = 0;
   private filtered = 0;
   private history = new Float32Array(METER_WINDOW);
@@ -141,8 +150,13 @@ export class WheelFfbClient {
   /** WebHID playback: the frame's samples still to play, the force held once they run out, vibration levels */
   private hidQueue: number[] = [];
   private hidHold = 0;
+  private hidActiveDriving = false;
   private hidKerb = 0;
   private hidAbs = 0;
+  private hidSlide = 0;
+  private hidRough = 0;
+  private hidBump = 0;
+  private hidNoise = 0;
   private hidPlayer: ReturnType<typeof setInterval> | null = null;
   /** Clock (ms) of the last played sample slot and of the last frame update */
   private hidSlotMs = 0;
@@ -176,12 +190,22 @@ export class WheelFfbClient {
     const wheel: WheelSettings = { ...wheelSettings, ...ffbStrengthFor(wheelSettings, vehicle) };
     const dtS = this.lastUpdateMs > 0 ? Math.min(0.1, Math.max(0, (nowMs - this.lastUpdateMs) / 1000)) : 0;
     this.lastUpdateMs = nowMs;
+    const activeHid = this.hidDriver ?? (webHidFfb.status.state === "ready" ? webHidFfb : null);
+    const hwDamper = useHid && activeHid !== null && activeHid.hasHardwareDamper();
     let force = 0;
     let kerb = 0;
     let abs = 0;
+    let slide = 0;
+    let rough = 0;
+    let bump = 0;
     let subframes: number[] | undefined;
     if (driving && wheel.ffbEnabled) {
       const torque = Number.isFinite(telemetry.ffbTorqueNorm) ? (telemetry.ffbTorqueNorm as number) : 0;
+      const speedKmh = Number.isFinite(telemetry.speedKmh) ? telemetry.speedKmh : 0;
+      const gyroFactor = Math.max(0, Math.min(1, (speedKmh - 10) / 180));
+      if (hwDamper) {
+        activeHid.setDamper(wheel.ffbDamping * (0.4 + 0.6 * gyroFactor));
+      }
       const steerPad = wheel.steer ? findPad(pads, wheel.steer.padId) : undefined;
       const rimDeg =
         wheel.steer && steerPad
@@ -193,12 +217,12 @@ export class WheelFfbClient {
       let damping = 0;
       if (rimDeg !== null && this.lastRimDeg !== null && dtS > 0) {
         const rimSpeed = (rimDeg - this.lastRimDeg) / dtS;
-        const speedKmh = Number.isFinite(telemetry.speedKmh) ? telemetry.speedKmh : 0;
-        const gyroFactor = Math.max(0, Math.min(1, (speedKmh - 10) / 180));
-        const baseDamp =
+        const rawBaseDamp =
           wheel.ffbDamping > 0
             ? wheel.ffbDamping * DAMPING_MAX_FORCE + 0.12 * gyroFactor * Math.min(1, wheel.ffbDamping * 1.5)
             : 0;
+        // When the wheel's 1 kHz hardware PID damper is active, reduce software gamepad-axis differentiated damping by 70%
+        const baseDamp = hwDamper ? rawBaseDamp * 0.3 : rawBaseDamp;
         // Inside the soft-lock zone, damp motion pushing deeper into the stop so the rim never bounces off lock
         const inSoftLock = Math.abs(rimDeg) > carLockDeg / 2 && rimSpeed * rimDeg > 0;
         const lockDamp = inSoftLock ? 0.45 : 0;
@@ -232,10 +256,59 @@ export class WheelFfbClient {
       if (wheel.ffbInvert) force = -force;
 
       const fronts = telemetry.wheelSurfaces;
-      if (telemetry.speedKmh > 15 && fronts && (fronts[0] === "kerb" || fronts[1] === "kerb")) kerb = wheel.ffbKerb;
-      if (telemetry.speedKmh > 5 && telemetry.f12026?.absActive) abs = wheel.ffbAbs;
+      if (speedKmh > 15 && fronts && (fronts[0] === "kerb" || fronts[1] === "kerb")) kerb = wheel.ffbKerb;
+      if (speedKmh > 5 && telemetry.f12026?.absActive) abs = wheel.ffbAbs;
+      if (
+        speedKmh > 10 &&
+        fronts &&
+        (fronts[0] === "grass" ||
+          fronts[1] === "grass" ||
+          (fronts[0] as string) === "gravel" ||
+          (fronts[1] as string) === "gravel")
+      ) {
+        rough = Math.max(0.2, Math.min(1, (speedKmh - 10) / 80)) * Math.max(0.4, wheel.ffbKerb);
+      }
+      if (speedKmh > 15) {
+        const extraTel = telemetry as CarTelemetry & { frontSlipRatio?: number; ndSlip?: number };
+        const frontSlipRatio = Math.max(
+          Math.abs(telemetry.wheelSlipRatios?.[0] ?? 0),
+          Math.abs(telemetry.wheelSlipRatios?.[1] ?? 0),
+          Math.abs(extraTel.frontSlipRatio ?? 0)
+        );
+        const ndSlip = Math.max(
+          telemetry.tireSlipRatio?.[0] ?? 0,
+          telemetry.tireSlipRatio?.[1] ?? 0,
+          extraTel.ndSlip ?? 0
+        );
+        if (frontSlipRatio > 0.12 || ndSlip > 1.15) {
+          const slipExcess = Math.max(
+            frontSlipRatio > 0.12 ? (frontSlipRatio - 0.12) / 0.35 : 0,
+            ndSlip > 1.15 ? (ndSlip - 1.15) / 1.2 : 0
+          );
+          slide = Math.max(0, Math.min(1, slipExcess));
+        }
+      }
+      const susp = telemetry.suspensionTravelMm;
+      this.hidBump = dtS > 0 ? this.hidBump * Math.exp(-dtS * 14) : 0;
+      if (susp && Number.isFinite(susp[0]) && Number.isFinite(susp[1])) {
+        if (this.lastFrontSuspMm !== null && dtS > 0) {
+          const v0 = Math.abs(susp[0] - this.lastFrontSuspMm[0]) / dtS;
+          const v1 = Math.abs(susp[1] - this.lastFrontSuspMm[1]) / dtS;
+          const maxVelMmS = Math.max(v0, v1);
+          if (maxVelMmS > 120) {
+            this.hidBump = Math.max(this.hidBump, Math.min(1, (maxVelMmS - 120) / 1000));
+          }
+        }
+        this.lastFrontSuspMm = [susp[0], susp[1]];
+      } else {
+        this.lastFrontSuspMm = null;
+      }
+      if (this.hidBump > 0.01) bump = this.hidBump;
     } else {
+      if (hwDamper) activeHid.setDamper(0);
       this.lastRimDeg = null;
+      this.lastFrontSuspMm = null;
+      this.hidBump = 0;
       this.filtered = 0;
     }
     this.force = force;
@@ -247,7 +320,7 @@ export class WheelFfbClient {
     };
     if (useHid) {
       if (this.hidTest) return;
-      this.hidPlay(subframes, force, kerb, abs);
+      this.hidPlay(subframes, force, driving && wheel.ffbEnabled, kerb, abs, slide, rough, bump);
       return;
     }
     this.hidStopPlayer();
@@ -262,16 +335,30 @@ export class WheelFfbClient {
    * WebHID: queues this frame's 500 Hz samples (or just its force) and plays the first at once; the timer plays the
    * rest over the next frame, one per 2 ms slot, as the bridge helper does
    */
-  private hidPlay(samples: number[] | undefined, force: number, kerb: number, abs: number): void {
+  private hidPlay(
+    samples: number[] | undefined,
+    force: number,
+    activeDriving: boolean,
+    kerb: number,
+    abs: number,
+    slide = 0,
+    rough = 0,
+    bump = 0
+  ): void {
     const now = clockMs();
     this.hidQueue = samples && samples.length > 0 ? samples.slice() : [];
     this.hidHold = this.hidQueue.length > 0 ? this.hidQueue[this.hidQueue.length - 1] : force;
+    this.hidActiveDriving = activeDriving;
     this.hidKerb = kerb;
     this.hidAbs = abs;
+    this.hidSlide = slide;
+    this.hidRough = rough;
+    this.hidBump = bump;
     this.hidPushMs = now;
     this.hidSlotMs = now;
     this.hidEmit(now, 1);
-    const active = this.force !== 0 || this.hidQueue.length > 0;
+    const hasBuzz = kerb > 0 || abs > 0 || slide > 0 || rough > 0 || bump > 0;
+    const active = activeDriving && (this.force !== 0 || this.hidQueue.length > 0 || hasBuzz);
     if (active && this.hidPlayer === null) {
       const timer = setInterval(() => this.hidTick(), HID_TICK_MS);
       (timer as { unref?: () => void }).unref?.();
@@ -306,10 +393,18 @@ export class WheelFfbClient {
       this.hidQueue.splice(0, take);
     }
     const t = nowMs / 1000;
+    if (this.hidRough > 0) {
+      this.hidNoise += (Math.random() * 2 - 1 - this.hidNoise) * 0.18;
+    } else {
+      this.hidNoise = 0;
+    }
     const buzz =
       HID_KERB_AMPLITUDE * this.hidKerb * Math.sin(2 * Math.PI * HID_KERB_HZ * t) +
-      HID_ABS_AMPLITUDE * this.hidAbs * Math.sign(Math.sin(2 * Math.PI * HID_ABS_HZ * t));
-    this.hidSink?.(Math.max(-1, Math.min(1, f + (f !== 0 ? buzz : 0))));
+      HID_ABS_AMPLITUDE * this.hidAbs * Math.sign(Math.sin(2 * Math.PI * HID_ABS_HZ * t)) +
+      HID_SLIDE_AMPLITUDE * this.hidSlide * Math.sin(2 * Math.PI * HID_SLIDE_HZ * t) +
+      HID_ROUGH_AMPLITUDE * this.hidRough * (0.65 * Math.sin(2 * Math.PI * HID_ROUGH_HZ * t) + 0.35 * this.hidNoise) +
+      HID_BUMP_AMPLITUDE * this.hidBump * Math.sin(2 * Math.PI * HID_BUMP_HZ * t);
+    this.hidSink?.(Math.max(-1, Math.min(1, f + (this.hidActiveDriving ? buzz : 0))));
   }
 
   private hidStopPlayer(): void {
@@ -318,12 +413,15 @@ export class WheelFfbClient {
       this.hidPlayer = null;
     }
     this.hidQueue = [];
+    this.hidActiveDriving = false;
   }
 
   /** Zero the wheel now (pause menu opened, hidden tab, blurred window) instead of waiting for the next frame */
   stop(): void {
     this.cancelHidTest();
     this.hidStopPlayer();
+    this.lastFrontSuspMm = null;
+    this.hidBump = 0;
     this.force = 0;
     this.hidSink?.(0);
     this.send({ t: "f", f: 0, k: 0, a: 0 });
@@ -479,7 +577,9 @@ linkHidSink(wheelFfb, webHidFfb);
  */
 export function linkHidSink(client: WheelFfbClient, hid: WebHidFfb): () => void {
   const sync = () => {
-    client.hidSink = hid.status.state === "ready" ? (f) => hid.setForce(-f) : null;
+    const ready = hid.status.state === "ready";
+    client.hidDriver = ready ? hid : null;
+    client.hidSink = ready ? (f) => hid.setForce(-f) : null;
   };
   sync();
   return hid.subscribe(sync);
