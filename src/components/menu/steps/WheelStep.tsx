@@ -230,7 +230,7 @@ function FfbBridgeStatus({ status }: { status: FfbStatus }) {
       : status.error
         ? ["#FFB300", status.error]
         : status.device
-          ? ["#22C55E", `Driving ${status.device}`]
+          ? ["#00E676", `Driving ${status.device}`]
           : ["#8E96AA", "Bridge connected · waiting for the wheel…"];
   return (
     <p role="status" className="m-0 flex items-center gap-2 font-f1-mono text-[12px] font-bold" style={{ color }}>
@@ -241,7 +241,7 @@ function FfbBridgeStatus({ status }: { status: FfbStatus }) {
 }
 
 const SUPPORT_COLOR: Record<SupportLevel, string> = {
-  tested: "#22C55E",
+  tested: "#00E676",
   expected: "#8E96AA",
   unknown: "#FFB300",
   no: "#FF2A3C",
@@ -297,7 +297,7 @@ function HidFfbStatusLine({ status, on }: { status: WebHidFfbStatus; on: boolean
   const browserUnsupported = status.state === "unsupported" && status.device === null;
   const [color, text] =
     status.state === "ready"
-      ? ["#22C55E", `Driving ${status.device ?? "the wheel"} over WebHID`]
+      ? ["#00E676", `Driving ${status.device ?? "the wheel"} over WebHID`]
       : status.state === "connecting"
         ? ["#8E96AA", status.device ? `Connecting to ${status.device}…` : "Connecting…"]
         : fatal
@@ -653,7 +653,7 @@ export const WheelStep: React.FC<SetupStepProps> = ({ settings, onChangeSettings
               aria-label="Force feedback"
               onClick={() => setWheel({ ffbEnabled: !w.ffbEnabled })}
               className={`relative h-[30px] w-16 shrink-0 cursor-pointer rounded-full border-0 transition-colors duration-200 ${
-                w.ffbEnabled ? "bg-[#22C55E]" : "bg-[#1B1F2B] shadow-[inset_0_0_0_1px_#262B3D]"
+                w.ffbEnabled ? "bg-[#CCFF00]" : "bg-[#1B1F2B] shadow-[inset_0_0_0_1px_#262B3D]"
               }`}
             >
               <span
