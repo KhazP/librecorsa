@@ -1378,7 +1378,6 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     const postFx = createPostFx(renderer, scene, camera);
     // Live reflections of the world on the cars (High / Medium); Low keeps the sky's
     const reflectionProbe = new CarReflectionProbe(renderer, scene);
-    (window as unknown as { __lcDebug: unknown }).__lcDebug = { scene, renderer }; // TEMP-DEBUG
     reflectionProbe.setSky(env.sky);
     // Top-centre virtual rear-view mirror for the views without wing mirrors in shot
     const virtualMirror = new VirtualMirror(renderer, scene);
