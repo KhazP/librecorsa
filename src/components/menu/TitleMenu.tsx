@@ -121,7 +121,7 @@ const Credits: React.FC = () => (
         </CreditRow>
         {TRACKS.some((t) => t.credit) ? (
           <CreditRow title="Circuits">
-            {TRACKS.filter((t) => t.credit).map((t) => (
+            {TRACKS.filter((t, i, arr) => t.credit && arr.findIndex((o) => o.credit?.url === t.credit?.url) === i).map((t) => (
               <React.Fragment key={t.id}>
                 &ldquo;{t.credit!.title}&rdquo; (
                 <a href={t.credit!.short ?? t.credit!.url} target="_blank" rel="noreferrer" className={linkClass}>

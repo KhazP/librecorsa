@@ -11,6 +11,7 @@ LibreCorsa is an independent, non-commercial, open-source web simulator built wi
   | Asset | Licence |
   | :--- | :--- |
   | Circuit scans, F1 2026 (FA-26) model, ported F1 car models | CC BY 4.0 |
+  | Chang, Okayama, Spielberg (Red Bull Ring) and Monaco circuits | By **Mitja Bonca** (Used with permission) |
   | Mercedes-AMG GT3, Mercedes-AMG GT3 Evo and BMW M4 GT3 Evo models | CC BY-NC-SA 4.0 (non-commercial, share-alike) |
   | Car sounds ported from Assetto Corsa mods | The mod authors' terms; used non-commercially (see *Car sounds*) |
   | Fonts | SIL Open Font License 1.1 (see *Fonts*) |
@@ -68,7 +69,7 @@ Latin subsets as served by Google Fonts, each under the [SIL Open Font License 1
 
 ### Optional circuits (`public/tracks/<id>/`)
 
-Each model below is licensed under [Creative Commons Attribution 4.0 (CC BY 4.0)](http://creativecommons.org/licenses/by/4.0/). Changes for the simulator: uniformly rescaled where needed to match the official lap length, recentred, far-away scenery dropped, textures re-encoded to WebP (max 2048 px), geometry quantised and meshopt-compressed, and hidden physics collider / surface meshes and track data (centreline, edges, kerbs, run-off, barriers, corners) generated from the geometry. Kerb meshes with a generated red-and-white texture are added on top of the scan.
+Each Sketchfab circuit model below is licensed under [Creative Commons Attribution 4.0 (CC BY 4.0)](http://creativecommons.org/licenses/by/4.0/). Changes for the simulator: uniformly rescaled where needed to match the official lap length, recentred, far-away scenery dropped, textures re-encoded to WebP (max 2048 px), geometry quantised and meshopt-compressed, and hidden physics collider / surface meshes and track data (centreline, edges, kerbs, run-off, barriers, corners) generated from the geometry. Kerb meshes with a generated red-and-white texture are added on top of the scan.
 
 * `"Suzuka Circuit 2001 layout"` ([https://skfb.ly/pLorW](https://skfb.ly/pLorW)) by **Dave**
 * `"Shanghai International Circuit 2018 layout"` ([https://skfb.ly/pLqvL](https://skfb.ly/pLqvL)) by **Dave**
@@ -80,6 +81,15 @@ Each model below is licensed under [Creative Commons Attribution 4.0 (CC BY 4.0)
 * `"Yas Marina Circuit Abu Dhabi 2021 layout"` ([https://sketchfab.com/3d-models/yas-marina-circuit-abu-dhabi-2021-layout-c41b4e19912b4d79886bcd8d7d2536af](https://sketchfab.com/3d-models/yas-marina-circuit-abu-dhabi-2021-layout-c41b4e19912b4d79886bcd8d7d2536af)) by **Dave Love SketchFab**
 * `"Silverstone Circuit 2024 layout"` ([https://sketchfab.com/3d-models/silverstone-circuit-2024-layout-bbaf4b12d5244c76998fd44f771fc0b3](https://sketchfab.com/3d-models/silverstone-circuit-2024-layout-bbaf4b12d5244c76998fd44f771fc0b3)) by **Dave Love SketchFab**
 * `"Circuit de Spa-Francorchamps 2022 layout"` ([https://sketchfab.com/3d-models/circuit-de-spa-francorchamps-2022-layout-ac681fbf548144498c130c3aa0adeb54](https://sketchfab.com/3d-models/circuit-de-spa-francorchamps-2022-layout-ac681fbf548144498c130c3aa0adeb54)) by **Dave Love SketchFab**
+
+#### Assetto Corsa circuits by Mitja Bonca (`public/tracks/<id>/`)
+
+Each circuit below is created by **Mitja Bonca** and used with the author's permission (`scripts/tracks/port_ac_track.py`). Changes for the simulator: KN5 visual and physical meshes converted to meshopt-compressed glTF 2.0 (`.glb`) with WebP textures, 3D and 2D trees (`ksTree`), dynamic tyre grooves (`groove.ini`), skidmarks/brakemarks, starting lights and trackside semaphores (`AC_SEMAPHORE_*`), AI fast lanes and pit lanes (`fast_lane.ai`, `pit_lane.ai`), F1 and GT3 lap-time-optimised racing lines, kerbs and surface physics (`surfaces.ini`), section/turn names (`sections.ini`), DRS zones (`drs_zones.ini`), and TV cameras (`cameras.ini`).
+
+* `"Chang International Circuit"` ([https://www.overtake.gg/downloads/chang-international-circuit.20997/](https://www.overtake.gg/downloads/chang-international-circuit.20997/)) by **Mitja Bonca** (`chang`) — Used with permission
+* `"Okayama International Circuit"` ([https://www.overtake.gg/downloads/okayama-international-circuit.15846/](https://www.overtake.gg/downloads/okayama-international-circuit.15846/)) by **Mitja Bonca**, used for the Grand Prix layout (`okayama`), Piper course (`okayama_piper`), and Formula Drift layout (`okayama_drift`) — Used with permission
+* `"Spielberg (Red Bull Ring)"` ([https://www.overtake.gg/downloads/spielberg.6437/](https://www.overtake.gg/downloads/spielberg.6437/)) by **Mitja Bonca**, used for the Grand Prix layout (`spielberg`), South course (`spielberg_south`), and Inner skill course (`spielberg_inner`) — Used with permission
+* `"Monaco"` ([https://www.overtake.gg/downloads/monaco.3340/](https://www.overtake.gg/downloads/monaco.3340/)) by **Mitja Bonca** (`monaco`) — Used with permission
 
 ### Rwanda trackside trees (`public/tracks/rwanda/scenery/`)
 
