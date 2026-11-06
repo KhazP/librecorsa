@@ -282,6 +282,8 @@ export interface Prompt {
   label: string;
   /** Key shown for the keyboard (defaults per action) */
   key?: string;
+  /** Controller button shown instead of the action's own (e.g. Ⓧ for Favourite) */
+  pad?: PadButtonName;
 }
 
 const KEY_FOR: Record<PromptAction, string> = {
@@ -305,7 +307,9 @@ export const PromptBar: React.FC<{ prompts: readonly Prompt[]; className?: strin
           className="inline-flex items-center gap-2 text-[13px] font-semibold text-[#C5CBD8]"
         >
           {pad ? (
-            p.action === "select" ? (
+            p.pad ? (
+              <PadGlyph button={p.pad} family={family} />
+            ) : p.action === "select" ? (
               <PadGlyph button="a" family={family} />
             ) : p.action === "back" ? (
               <PadGlyph button="b" family={family} />

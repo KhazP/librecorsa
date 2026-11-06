@@ -105,7 +105,10 @@ import {
   DEFAULT_PLAYER_SETTINGS,
   loadOnboarded,
   loadPlayerSettings,
+  pushLibraryRecent,
   saveOnboarded,
+  toggleLibraryFavorite,
+  type LibraryKind,
   sanitizeDriverName,
   savePlayerSettings,
   type PlayerSettings,
@@ -852,6 +855,12 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     setSettings((prev) => update(prev));
   }, []);
 
+  /** Car and circuit browsers: stars, saved with the settings */
+  const handleToggleFavorite = useCallback((kind: LibraryKind, ids: readonly string[]) => {
+    setSettings((prev) => ({ ...prev, library: toggleLibraryFavorite(prev.library, kind, ids) }));
+  }, []);
+  const library = useMemo(() => ({ library: settings.library, onToggleFavorite: handleToggleFavorite }), [settings.library, handleToggleFavorite]);
+
   /** AI opponents' level: saved, and a running field drives to it at once */
   const handleChangeAiSkill = useCallback((aiSkill: number) => {
     setSettings((prev) => ({ ...prev, aiSkill }));
@@ -1369,6 +1378,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     const postFx = createPostFx(renderer, scene, camera);
     // Live reflections of the world on the cars (High / Medium); Low keeps the sky's
     const reflectionProbe = new CarReflectionProbe(renderer, scene);
+    (window as unknown as { __lcDebug: unknown }).__lcDebug = { scene, renderer }; // TEMP-DEBUG
     reflectionProbe.setSky(env.sky);
     // Top-centre virtual rear-view mirror for the views without wing mirrors in shot
     const virtualMirror = new VirtualMirror(renderer, scene);
@@ -3199,6 +3209,15 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     });
   }, [settingsHydrated, settings, assistPreset, showRacingLine, gamepadAssist, autoGearbox, mouseSteerEnabled, selectedLivery, cameraMode]);
 
+  // Recently driven / raced, for the browsers: the car and circuit in use once the save is read, then every change
+  useEffect(() => {
+    if (!settingsHydrated) return;
+    setSettings((prev) => {
+      const next = pushLibraryRecent(pushLibraryRecent(prev.library, "cars", carId), "circuits", trackId);
+      return next === prev.library ? prev : { ...prev, library: next };
+    });
+  }, [settingsHydrated, carId, trackId]);
+
   // Multiplayer: lobby, race start / abort from the host, link quality
   useEffect(() => {
     const mp = getMultiplayerManager();
@@ -3433,6 +3452,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       vrActive,
       onEnterVr: () => enterVrRef.current?.(),
     },
+    library,
     leaderboardPanel: {
       trackName: getTrackInfo(trackId).name,
       vehicleLabel,

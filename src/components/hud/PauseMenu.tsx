@@ -18,6 +18,7 @@ import { getTrackInfo } from "@/lib/track-registry";
 import type { ChassisSetup } from "@/lib/sim/car-setup";
 import { EngineersGarage } from "@/components/menu/EngineersGarage";
 import { CarPicker } from "@/components/menu/CarPicker";
+import type { LibraryProps } from "@/components/menu/ContentBrowser";
 import { FACTORY_LIVERY_NOTE, carTakesLivery, type CarId } from "@/lib/cars/car-registry";
 import { COCKPIT_FOV_MAX_DEG, COCKPIT_FOV_MIN_DEG } from "@/lib/settings/player-settings";
 import { MultiplayerPanel, type MultiplayerPanelProps } from "./MultiplayerPanel";
@@ -163,6 +164,8 @@ export interface PauseMenuProps extends MultiplayerPanelProps {
   displayPanel?: DisplayPanelProps;
   /** Lap times, ghosts and the online board */
   leaderboardPanel?: LeaderboardPanelProps;
+  /** Favourite and recent cars / circuits for the content browsers */
+  library?: LibraryProps;
 }
 
 type Panel = "settings" | "setup" | "corners" | "multiplayer" | "display" | "leaderboard";
@@ -519,7 +522,7 @@ export const PauseMenu: React.FC<PauseMenuProps> = (props) => {
               { action: "move", label: "Move" },
               { action: "select", label: panel === "corners" ? "Jump there" : "Select" },
               { action: "tabs", label: "Tabs" },
-              { action: "back", label: "Back", key: "⌫" },
+              { action: "back", label: "Back", key: "Bksp" },
               { action: "start", label: "Resume", key: "Esc" },
             ]}
           />

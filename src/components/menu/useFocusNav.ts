@@ -32,7 +32,7 @@ export interface FocusNavOptions {
   autoFocus?: boolean;
 }
 
-type Dir = "up" | "down" | "left" | "right";
+export type Dir = "up" | "down" | "left" | "right";
 
 const FOCUSABLE =
   'button:not([disabled]), a[href], input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -42,6 +42,53 @@ const REPEAT_DELAY_MS = 360;
 const REPEAT_RATE_MS = 110;
 
 const lastInZone = new WeakMap<Element, HTMLElement>();
+
+/**
+ * Back steps owned by a part of a screen (a browser's detail pane → its grid → closing it), asked before the screen's
+ * own onBack: the newest first, and the first that returns true has handled Ⓑ / Esc. Each checks where the focus is
+ * itself, so one only acts while the player is inside it.
+ */
+const backHandlers: (() => boolean)[] = [];
+
+function interceptBack(): boolean {
+  for (let i = backHandlers.length - 1; i >= 0; i--) if (backHandlers[i]()) return true;
+  return false;
+}
+
+/**
+ * Moves owned by a part of a screen that knows its own layout better than the nearest-box search (a card grid walks
+ * row by row). Asked newest first before the spatial move; true = handled. Each checks the focus is its own.
+ */
+const moveHandlers: ((dir: Dir) => boolean)[] = [];
+
+/** Registers a move override (see `moveHandlers`) while mounted */
+export function useMoveHandler(handler: (dir: Dir) => boolean): void {
+  const ref = useRef(handler);
+  ref.current = handler;
+  useEffect(() => {
+    const fn = (dir: Dir) => ref.current(dir);
+    moveHandlers.push(fn);
+    return () => {
+      const i = moveHandlers.lastIndexOf(fn);
+      if (i >= 0) moveHandlers.splice(i, 1);
+    };
+  }, []);
+}
+
+/** Registers a back step (see `backHandlers`) while mounted and `enabled` */
+export function useBackHandler(handler: () => boolean, enabled = true): void {
+  const ref = useRef(handler);
+  ref.current = handler;
+  useEffect(() => {
+    if (!enabled) return;
+    const fn = () => ref.current();
+    backHandlers.push(fn);
+    return () => {
+      const i = backHandlers.lastIndexOf(fn);
+      if (i >= 0) backHandlers.splice(i, 1);
+    };
+  }, [enabled]);
+}
 
 const isTextEntry = (el: Element | null): el is HTMLInputElement | HTMLTextAreaElement =>
   el instanceof HTMLTextAreaElement ||
@@ -107,6 +154,18 @@ export function focusZone(root: Element | null, name: string): boolean {
 export function focusInZone(root: Element | null, name: string): boolean {
   const zone = root?.querySelector(`[data-nav-zone="${name}"]`);
   return Boolean(zone && document.activeElement && zone.contains(document.activeElement));
+}
+
+/**
+ * A control scrolled wholly out of its `data-nav-scroll` box (a card grid that scrolls on its own) is no target from
+ * outside that box: it would be picked for its hidden position, behind the header above the grid.
+ */
+function scrolledAway(el: HTMLElement, from: Element): boolean {
+  const box = el.closest("[data-nav-scroll]");
+  if (!box || box.contains(from)) return false;
+  const b = boxOf(el);
+  const c = box.getBoundingClientRect();
+  return b.bottom <= c.top || b.top >= c.bottom || b.right <= c.left || b.left >= c.right;
 }
 
 /** Nearest control from `from` in a direction: gap along the direction plus twice the sideways miss */
@@ -223,7 +282,8 @@ export function useFocusNav(rootRef: React.RefObject<HTMLElement | null>, option
         return;
       }
       if (adjust(active, dir, big)) return;
-      const items = focusables(r);
+      for (let i = moveHandlers.length - 1; i >= 0; i--) if (moveHandlers[i](dir)) return;
+      const items = focusables(r).filter((el) => !scrolledAway(el, active));
       const target = nearest(active, items, dir);
       if (!target) return;
       // Entering another zone resumes where that zone was left
@@ -251,9 +311,14 @@ export function useFocusNav(rootRef: React.RefObject<HTMLElement | null>, option
       active.click();
     };
 
+    const goBack = () => {
+      if (!interceptBack()) ref.current.onBack?.();
+    };
+
     const onKey = (e: KeyboardEvent) => {
       if (isMenuNavSuspended() || e.defaultPrevented) return;
       const o = ref.current;
+      const back = o.onBack || backHandlers.length ? goBack : undefined;
       const target = e.target as Element | null;
       const typing = isTextEntry(target) || target instanceof HTMLSelectElement;
       const call = (fn?: () => void) => {
@@ -285,10 +350,10 @@ export function useFocusNav(rootRef: React.RefObject<HTMLElement | null>, option
             e.preventDefault();
             return;
           }
-          return call(o.onBack);
+          return call(back);
         case "Backspace":
           if (typing) return;
-          return call(o.onBack);
+          return call(back);
         case "KeyQ":
           if (typing || e.repeat) return;
           return call(o.onPrevTab);
@@ -343,7 +408,7 @@ export function useFocusNav(rootRef: React.RefObject<HTMLElement | null>, option
             leaveTextField(a as HTMLElement);
             return;
           }
-          o.onBack?.();
+          goBack();
         },
         () => o.onStart?.(),
         () => o.onPrevTab?.(),

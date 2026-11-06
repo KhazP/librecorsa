@@ -1,17 +1,24 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
+import { ChevronLeft, LayoutGrid } from "lucide-react";
 import type { AeroSetupPreset, LiveTunerPatch, LiveTunerState, TireCompound } from "@/types/f1";
 import { DEFAULT_CHASSIS_SETUP, loadGaragePresets, saveGaragePresets, type GaragePreset, type GarageTuner } from "@/lib/sim/car-setup";
 import { setupSheet, type SetupEffect, type SetupGroup, type SetupParam, type SetupState } from "@/lib/sim/setup-sheet";
 import { COMPOUNDS, PanelSection, TYRE_SETUP_LIMITS, type PauseMenuProps } from "@/components/hud/PauseMenu";
-import { CarPicker } from "./CarPicker";
+import { CarPhysicsSwitch } from "./CarPicker";
+import { CarBrowser } from "./CarBrowser";
+import { Chip, PadGlyph } from "./menu-ui";
+import { currentInputMode, useInputMode } from "./input-mode";
+import { focusOnHover } from "./useFocusNav";
+import { carTakesPhysicsSwitch } from "@/lib/cars/f1-mod-physics";
 import { TyreBrakeGrid } from "@/components/hud/TyreBrakeWidget";
 import { LIVERIES } from "@/lib/track-data";
 
 const TIRE_COMPOUNDS: readonly TireCompound[] = ["soft", "medium", "hard", "intermediate", "wet"];
 const AERO_PRESETS: readonly AeroSetupPreset[] = ["low_downforce", "balanced", "high_downforce"];
-import { FACTORY_LIVERY_NOTE, carTakesLivery } from "@/lib/cars/car-registry";
+import { CARS, FACTORY_LIVERY_NOTE, carById, carClass, carTakesLivery } from "@/lib/cars/car-registry";
 
 const FALLBACK_TUNER: Pick<
   LiveTunerState,
@@ -30,7 +37,7 @@ const GarageSegmented: React.FC<{ items: readonly { id: string; label: React.Rea
         aria-pressed={active === it.id}
         onClick={() => onPick(it.id)}
         className={`inline-flex min-h-[38px] flex-1 cursor-pointer items-center justify-center gap-2 rounded-full text-[13px] font-bold ${
-          active === it.id ? "bg-[#1B1F2B] text-[#F5F7FA] shadow-[inset_0_0_0_1px_#3A4157]" : "text-[#8E96AA] hover:text-[#F5F7FA]"
+          active === it.id ? "bg-[#CCFF00] text-[#08090D]" : "text-[#8E96AA] hover:text-[#F5F7FA]"
         }`}
       >
         {it.label}
@@ -71,7 +78,7 @@ const SetupRow: React.FC<{
     <label className={`flex flex-col gap-2 rounded-[14px] px-2 py-2 hover:bg-white/[0.04] ${disabled ? "opacity-45" : ""}`} title={fx ? `▲ ${fx.more}\n▼ ${fx.less}` : undefined}>
       <span className="flex items-center justify-between gap-3">
         <span className="flex min-w-0 items-center gap-1.5">
-          <span className="truncate text-[14px] font-bold text-[#F5F7FA]">{label}</span>
+          <span className="min-w-0 text-[14px] leading-tight font-bold text-[#F5F7FA]">{label}</span>
           {fx ? (
             <span aria-hidden className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-[#3A4157] font-f1-mono text-[9px] font-extrabold text-[#8E96AA]">
               i
@@ -97,7 +104,7 @@ const SetupRow: React.FC<{
           <span aria-hidden className="pointer-events-none absolute top-1/2 h-3 w-0.5 -translate-y-1/2 rounded-full bg-[#F5F7FA]/40" style={{ left: `${basePct}%` }} />
         ) : null}
       </span>
-      {text ? <span className={`text-[12px] leading-[1.4] ${dir === 0 ? "text-[#5B6275]" : "text-[#C5CBD8]"}`}>{text}</span> : null}
+      {text ? <span className={`text-[12px] leading-[1.4] ${dir === 0 ? "text-[#8E96AA]/70" : "text-[#C5CBD8]"}`}>{text}</span> : null}
     </label>
   );
 };
@@ -124,7 +131,7 @@ const SmallButton: React.FC<{ onClick: () => void; children: React.ReactNode; to
     onClick={onClick}
     disabled={disabled}
     title={title}
-    className={`inline-flex h-[30px] shrink-0 cursor-pointer items-center rounded-full px-3 font-f1-mono text-[10px] font-extrabold tracking-[0.12em] uppercase transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+    className={`inline-flex h-9 shrink-0 cursor-pointer items-center rounded-full px-3.5 font-f1-mono text-[11px] font-extrabold tracking-[0.12em] uppercase transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
       tone === "volt"
         ? "bg-[#CCFF00] text-[#08090D] hover:bg-[#D9FF40]"
         : tone === "danger"
@@ -248,6 +255,24 @@ export const EngineersGarage: React.FC<PauseMenuProps> = (p) => {
     setNote("Back to the baseline setup");
   };
 
+  // The car browser takes the garage's place while it is open; Ⓑ / Esc (or Garage) comes back to the Change car button
+  const [browsing, setBrowsing] = useState(false);
+  const browseRef = useRef<HTMLButtonElement | null>(null);
+  const { mode, family } = useInputMode();
+  const openBrowser = () => {
+    flushSync(() => setBrowsing(true));
+    if (currentInputMode() === "pointer") return;
+    const card = document.querySelector<HTMLElement>(`[data-browser-item="${CSS.escape(p.carId)}"]`);
+    card?.focus({ preventScroll: true });
+    card?.scrollIntoView({ block: "nearest" });
+  };
+  const closeBrowser = () => {
+    flushSync(() => setBrowsing(false));
+    if (currentInputMode() !== "pointer") browseRef.current?.focus({ preventScroll: true });
+  };
+  const car = carById(p.carId);
+  const carKind = carClass(car.classId);
+
   const changedIn = (g: SetupGroup) => g.params.filter((q) => isChanged(q, st)).length;
   const groupChanged = changedIn(group);
   const live = Boolean(group.extras?.includes("liveTyres"));
@@ -263,7 +288,7 @@ export const EngineersGarage: React.FC<PauseMenuProps> = (p) => {
             id: c.id,
             label: (
               <>
-                <span aria-hidden className="h-3 w-3 rounded-full border-[3px]" style={{ borderColor: c.ring }} />
+                <span aria-hidden className="h-3.5 w-3.5 rounded-full border-[3px] bg-[#08090D]" style={{ borderColor: c.ring }} />
                 {c.label}
               </>
             ),
@@ -299,15 +324,72 @@ export const EngineersGarage: React.FC<PauseMenuProps> = (p) => {
     return null;
   };
 
+  const sheetClass =
+    "lc-glass flex flex-col gap-[18px] rounded-[28px] p-5 text-[#F5F7FA] sm:px-7 sm:pt-6 sm:pb-[26px] short:p-4 [.lc-title-frame_&]:border-0 [.lc-title-frame_&]:bg-transparent [.lc-title-frame_&]:p-0 [.lc-title-frame_&]:shadow-none [.lc-title-frame_&]:[backdrop-filter:none]";
+
+  if (browsing) {
+    return (
+      <div className={sheetClass}>
+        <CarBrowser
+          carId={p.carId}
+          onChangeCar={p.onChangeCar}
+          selectedLivery={p.selectedLivery}
+          onChangeLivery={p.onChangeLivery}
+          library={p.library}
+          onClose={closeBrowser}
+          toolbar={
+            /* A pointer / touch affordance: a controller steps back with Ⓑ, so the focus skips it */
+            <button
+              type="button"
+              data-nav-skip
+              onClick={closeBrowser}
+              aria-label="Back to the garage"
+              className="inline-flex h-11 shrink-0 cursor-pointer items-center gap-2 rounded-full border border-[#262B3D] bg-[#08090D]/60 pr-4 pl-2.5 text-[13px] font-bold text-[#C5CBD8] transition-colors hover:border-[#3A4157] hover:text-[#F5F7FA]"
+            >
+              {mode === "pad" ? <PadGlyph button="b" family={family} /> : <ChevronLeft aria-hidden className="h-4 w-4" strokeWidth={2.4} />}
+              Garage
+            </button>
+          }
+        />
+      </div>
+    );
+  }
+
   return (
-    <div className="lc-glass flex flex-col gap-[18px] rounded-[28px] p-5 text-[#F5F7FA] sm:px-7 sm:pt-6 sm:pb-[26px] short:p-4 [.lc-title-frame_&]:border-0 [.lc-title-frame_&]:bg-transparent [.lc-title-frame_&]:p-0 [.lc-title-frame_&]:shadow-none [.lc-title-frame_&]:[backdrop-filter:none]">
+    <div className={sheetClass}>
       {/* Car and presets */}
       <div className="flex flex-col gap-3">
-        <CarPicker carId={p.carId} onChangeCar={p.onChangeCar} compact />
+        {/* The current car; the whole row opens the car browser (so the d-pad finds it from anywhere on its row) */}
+        <button
+          ref={browseRef}
+          type="button"
+          onClick={openBrowser}
+          onPointerEnter={focusOnHover}
+          aria-label={`Change car: ${car.title}`}
+          className="group flex w-full cursor-pointer flex-wrap items-center gap-3 rounded-[18px] border border-[#262B3D] bg-[#08090D]/55 py-3 pr-3 pl-4 text-left text-[#F5F7FA] outline-none transition-[border-color,box-shadow,background-color] duration-200 hover:border-[#3A4157] focus:border-[#CCFF00] focus:shadow-[0_0_0_5px_rgba(204,255,0,0.12)]"
+        >
+          <span className="flex min-w-0 flex-1 flex-col gap-1">
+            <span className="flex items-center gap-2">
+              <Chip className="h-[22px] px-2 text-[10px]">{carKind.title}</Chip>
+              <span className="lc-data text-[11px] tracking-[0.12em] text-[#C5CBD8]">{car.badge}</span>
+            </span>
+            <span className="lc-disp text-[22px] leading-[1.05]">{car.title}</span>
+            <span className="truncate text-[12px] text-[#8E96AA]">{car.sub}</span>
+          </span>
+          <span className="inline-flex h-11 shrink-0 items-center gap-2.5 rounded-full border border-[#262B3D] bg-[#1B1F2B]/80 px-4 transition-colors group-hover:border-[#3A4157] group-focus:border-transparent group-focus:bg-[#CCFF00] group-focus:text-[#08090D]">
+            <LayoutGrid aria-hidden className="h-4 w-4" strokeWidth={2.4} />
+            <span className="lc-title text-[15px]">Change car</span>
+            <span className="lc-data text-[11px] opacity-70">{CARS.length}</span>
+          </span>
+        </button>
+        {carTakesPhysicsSwitch(p.carId) ? <CarPhysicsSwitch color="#CCFF00" /> : null}
+        <div className="flex min-h-[54px] flex-wrap items-center gap-x-3 gap-y-2 rounded-[18px] border border-[#262B3D] bg-[#08090D]/55 px-3 py-2">
+          <span className="lc-lbl w-[68px] shrink-0 text-[10px]">Livery</span>
         {!carTakesLivery(p.carId) ? (
-          <p className="m-0 text-[12px] text-[#8E96AA]">{FACTORY_LIVERY_NOTE}</p>
+          <p className="m-0 text-[13px] text-[#8E96AA]">{FACTORY_LIVERY_NOTE}</p>
         ) : (
-          <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Livery">
+          <>
+          <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Livery">
             {LIVERIES.map((liv) => {
               const active = p.selectedLivery.id === liv.id;
               return (
@@ -318,15 +400,18 @@ export const EngineersGarage: React.FC<PauseMenuProps> = (p) => {
                   aria-label={liv.name}
                   title={`${liv.name} · ${liv.team}`}
                   onClick={() => p.onChangeLivery(liv)}
-                  className={`h-7 w-12 cursor-pointer rounded-[9px] transition-[box-shadow] ${active ? "shadow-[0_0_0_2px_#CCFF00]" : "shadow-[0_0_0_1px_#262B3D] hover:shadow-[0_0_0_1px_#8E96AA]"}`}
+                  className={`h-7 w-12 cursor-pointer rounded-full transition-[box-shadow] ${active ? "shadow-[0_0_0_2px_#08090D,0_0_0_4px_#CCFF00]" : "shadow-[inset_0_0_0_1px_rgba(255,255,255,0.15)] hover:shadow-[0_0_0_1px_#8E96AA]"}`}
                   style={{ background: `linear-gradient(135deg, ${liv.primary} 0 55%, ${liv.accent} 55% 65%, ${liv.secondary} 65% 100%)` }}
                 />
               );
             })}
           </div>
+          <span className="min-w-0 truncate text-[13px] font-semibold text-[#C5CBD8]">{p.selectedLivery.name}</span>
+          </>
         )}
-        <div className="flex flex-wrap items-center gap-2 rounded-[18px] border border-[#262B3D] bg-[#08090D]/55 p-2">
-          <span className="px-1.5 font-f1-mono text-[10px] font-extrabold tracking-[0.14em] text-[#8E96AA] uppercase">Presets</span>
+        </div>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-[18px] border border-[#262B3D] bg-[#08090D]/55 px-3 py-2">
+          <span className="lc-lbl w-[68px] shrink-0 text-[10px]">Presets</span>
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -335,7 +420,7 @@ export const EngineersGarage: React.FC<PauseMenuProps> = (p) => {
             }}
             placeholder="Name this setup"
             maxLength={32}
-            className="h-[30px] min-w-0 flex-1 rounded-full border border-[#262B3D] bg-[#050608] px-3 text-[13px] text-[#F5F7FA] outline-none placeholder:text-[#5B6275] focus:border-[#CCFF00]"
+            className="h-9 min-w-[160px] flex-1 rounded-full border border-[#262B3D] bg-[#08090D] px-3.5 text-[13px] text-[#F5F7FA] outline-none placeholder:text-[#8E96AA] focus:border-[#CCFF00]"
           />
           <SmallButton tone="volt" onClick={savePreset}>
             Save
@@ -368,7 +453,7 @@ export const EngineersGarage: React.FC<PauseMenuProps> = (p) => {
 
 
       {/* Sheet pages */}
-      <div role="tablist" aria-label="Setup" className="flex gap-0.5 overflow-x-auto rounded-full border border-[#262B3D] bg-[#08090D] p-1">
+      <div role="tablist" aria-label="Setup" className="flex gap-0.5 overflow-x-auto rounded-full border border-[#262B3D] bg-[#08090D] p-1 [scrollbar-width:none]">
         {sheet.map((g) => {
           const n = changedIn(g);
           return (
@@ -378,19 +463,21 @@ export const EngineersGarage: React.FC<PauseMenuProps> = (p) => {
               role="tab"
               aria-selected={group.id === g.id}
               onClick={() => setTab(g.id)}
-              className={`inline-flex min-h-[40px] min-w-0 flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-full px-2.5 text-[13px] font-bold whitespace-nowrap transition-colors ${
+              title={g.label}
+              className={`inline-flex min-h-[40px] flex-[1_0_auto] cursor-pointer items-center justify-center gap-1.5 rounded-full px-3 text-[13px] font-bold whitespace-nowrap transition-colors ${
                 group.id === g.id ? "bg-[#CCFF00] text-[#08090D]" : "text-[#8E96AA] hover:text-[#F5F7FA]"
               }`}
             >
-              <span className="hidden xl:inline">{g.label}</span>
-              <span className="xl:hidden">{g.short}</span>
+              {/* A short sheet (the GT3s' six pages) always fits its full names; the F1 sheet's nine only on wide screens */}
+              <span className={sheet.length <= 6 ? "hidden lg:inline" : "hidden min-[1800px]:inline"}>{g.label}</span>
+              <span className={sheet.length <= 6 ? "lg:hidden" : "min-[1800px]:hidden"}>{g.short}</span>
               {n ? <span aria-label={`${n} changed`} className={`h-1.5 w-1.5 rounded-full ${group.id === g.id ? "bg-[#08090D]" : "bg-[#CCFF00]"}`} /> : null}
             </button>
           );
         })}
       </div>
 
-      <div className={`grid gap-3.5 ${live ? "lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]" : ""}`}>
+      <div className={`grid items-start gap-3.5 ${live ? "lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]" : ""}`}>
         <GarageCard
           title={group.label}
           aside={
@@ -402,7 +489,7 @@ export const EngineersGarage: React.FC<PauseMenuProps> = (p) => {
           }
         >
           {group.extras?.map(extra)}
-          <div className={`grid gap-x-4 ${live ? "2xl:grid-cols-2" : "md:grid-cols-2 2xl:grid-cols-3"}`}>
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(min(220px,100%),1fr))] gap-x-5">
             {group.params.map((q) => (
               <SetupRow
                 key={q.id}
