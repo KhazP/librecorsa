@@ -1,3 +1,5 @@
+# Opened pre-filled from the in-game Feedback panel (src/components/menu/RequestPanel.tsx): GitHub only pre-fills
+# text fields from the URL, so circuit, car, input and graphics are plain inputs the game fills in for the player.
 name: Bug report
 description: Something broken, crashing or behaving wrong in the sim
 title: "[Bug] "
@@ -25,35 +27,21 @@ body:
         3. …
     validations:
       required: true
-  - type: dropdown
+  - type: input
     id: circuit
     attributes:
       label: Circuit
-      options:
-        - Rwanda International Circuit
-        - Suzuka
-        - Shanghai
-        - Motegi
-        - Any / menus
-  - type: dropdown
+      description: Filled in when you report from the game. "Any / menus" if it isn't on track.
+  - type: input
     id: car
     attributes:
       label: Car
-      options:
-        - FA-26 Prototype
-        - FA-26 Rigid-Body
-        - Mercedes-AMG GT3
-        - Any / not car related
-  - type: dropdown
+      description: Filled in when you report from the game. "Any" if it isn't car related.
+  - type: input
     id: input
     attributes:
       label: Input device
-      options:
-        - Keyboard
-        - Gamepad
-        - Touch screen
-        - Wheel (in the browser, WebHID)
-        - Wheel (through the FFB bridge)
+      placeholder: Keyboard, gamepad, touch screen, wheel (WebHID) or wheel (FFB bridge)
   - type: input
     id: hardware
     attributes:
@@ -66,15 +54,11 @@ body:
       placeholder: Chrome 140 on Windows 11, Safari on iPhone 15…
     validations:
       required: true
-  - type: dropdown
+  - type: input
     id: quality
     attributes:
-      label: Graphics quality
-      options:
-        - Low
-        - Medium
-        - High
-        - Don't know
+      label: Graphics
+      placeholder: Low, Medium or High, plus render resolution
   - type: textarea
     id: console
     attributes:
