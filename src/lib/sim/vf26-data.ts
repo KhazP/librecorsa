@@ -53,6 +53,14 @@ export interface Vf26TyreSpec {
   /** Camber grip polynomial: 1 + DCAMBER_0*γ + DCAMBER_1*γ² (γ in rad) [mod] */
   dcamber0: number;
   dcamber1: number;
+  /**
+   * Camber thrust: lateral force toward the side the tyre leans, as a fraction of Fz,
+   * CAMBER_GAIN · (c1·γ − c2·γ³) (γ in rad, saturating at γ = √(c1 / 3c2) ≈ 4.9°). It enters the slip curve as an
+   * equivalent slip-angle shift [mod: f12026 CAMBER_GAIN / contact_camber_c1, c2; per-compound split assumed]
+   */
+  camberGain: number;
+  contactCamberC1: number;
+  contactCamberC2: number;
   /** Grip loss per m/s of sliding speed (SPEED_SENSITIVITY) [mod] */
   speedSensitivity: number;
   /** Rolling resistance coefficient [mod] */
@@ -104,6 +112,17 @@ const WEAR_PER_J: Record<'soft' | 'medium' | 'hard', number> = {
   hard: 0.45 * WEAR_PER_J_SOFT,
 };
 
+/**
+ * Camber thrust gain per compound. The soft (the mod's default C3) carries the mod's CAMBER_GAIN (front 0.136,
+ * rear 0.159); the harder compounds scale with their lateral grip (DY_REF), since camber thrust and cornering stiffness
+ * both come from the same tread shear stiffness [assumed]
+ */
+const CAMBER_GAIN = {
+  soft: { front: 0.136, rear: 0.159 },
+  medium: { front: 0.136 * (1.8115 / 1.85569), rear: 0.159 * (1.88516 / 1.93114) },
+  hard: { front: 0.136 * (1.76732 / 1.85569), rear: 0.159 * (1.83918 / 1.93114) },
+} as const;
+
 const TCURVE_SOFT: LutPoints = [
   [0, 0.75], [20, 0.8], [40, 0.85], [60, 0.9], [90, 0.995], [95, 1], [110, 1],
   [115, 0.995], [140, 0.96], [180, 0.94], [240, 0.88], [300, 0.6],
@@ -129,6 +148,8 @@ const FRONT_COMMON = {
   falloffSpeed: 2,
   dcamber0: 1.2,
   dcamber1: -11,
+  contactCamberC1: 1,
+  contactCamberC2: 45,
   speedSensitivity: 0.002,
   rollingResistance: 0.011,
   angularInertia: 1.15,
@@ -151,6 +172,8 @@ const REAR_COMMON = {
   falloffSpeed: 2,
   dcamber0: 1.32,
   dcamber1: -11,
+  contactCamberC1: 1,
+  contactCamberC2: 45,
   speedSensitivity: 0.002,
   rollingResistance: 0.011,
   angularInertia: 1.45,
@@ -171,6 +194,7 @@ const VF26_SLICKS: Record<'soft' | 'medium' | 'hard', { front: Vf26TyreSpec; rea
       dyCurve: buildVf26LoadCurve(1.85569, FRONT_COMMON.fz0, FRONT_COMMON.lsExpY),
       dxCurve: buildVf26LoadCurve(1.96326, FRONT_COMMON.fz0, FRONT_COMMON.lsExpX),
       falloffLevel: 0.81,
+      camberGain: CAMBER_GAIN.soft.front,
       thermalCurve: TCURVE_SOFT,
       wearPerJ: WEAR_PER_J.soft,
     },
@@ -184,6 +208,7 @@ const VF26_SLICKS: Record<'soft' | 'medium' | 'hard', { front: Vf26TyreSpec; rea
       dyCurve: buildVf26LoadCurve(1.93114, REAR_COMMON.fz0, REAR_COMMON.lsExpY),
       dxCurve: buildVf26LoadCurve(2.04199, REAR_COMMON.fz0, REAR_COMMON.lsExpX),
       falloffLevel: 0.81,
+      camberGain: CAMBER_GAIN.soft.rear,
       thermalCurve: TCURVE_SOFT,
       wearPerJ: WEAR_PER_J.soft,
     },
@@ -199,6 +224,7 @@ const VF26_SLICKS: Record<'soft' | 'medium' | 'hard', { front: Vf26TyreSpec; rea
       dyCurve: buildVf26LoadCurve(1.8115, FRONT_COMMON.fz0, FRONT_COMMON.lsExpY),
       dxCurve: buildVf26LoadCurve(1.91707, FRONT_COMMON.fz0, FRONT_COMMON.lsExpX),
       falloffLevel: 0.8,
+      camberGain: CAMBER_GAIN.medium.front,
       thermalCurve: TCURVE_MED,
       wearPerJ: WEAR_PER_J.medium,
     },
@@ -212,6 +238,7 @@ const VF26_SLICKS: Record<'soft' | 'medium' | 'hard', { front: Vf26TyreSpec; rea
       dyCurve: buildVf26LoadCurve(1.88516, REAR_COMMON.fz0, REAR_COMMON.lsExpY),
       dxCurve: buildVf26LoadCurve(1.99395, REAR_COMMON.fz0, REAR_COMMON.lsExpX),
       falloffLevel: 0.8,
+      camberGain: CAMBER_GAIN.medium.rear,
       thermalCurve: TCURVE_MED,
       wearPerJ: WEAR_PER_J.medium,
     },
@@ -227,6 +254,7 @@ const VF26_SLICKS: Record<'soft' | 'medium' | 'hard', { front: Vf26TyreSpec; rea
       dyCurve: buildVf26LoadCurve(1.76732, FRONT_COMMON.fz0, FRONT_COMMON.lsExpY),
       dxCurve: buildVf26LoadCurve(1.87087, FRONT_COMMON.fz0, FRONT_COMMON.lsExpX),
       falloffLevel: 0.79,
+      camberGain: CAMBER_GAIN.hard.front,
       thermalCurve: TCURVE_HARD,
       wearPerJ: WEAR_PER_J.hard,
     },
@@ -240,6 +268,7 @@ const VF26_SLICKS: Record<'soft' | 'medium' | 'hard', { front: Vf26TyreSpec; rea
       dyCurve: buildVf26LoadCurve(1.83918, REAR_COMMON.fz0, REAR_COMMON.lsExpY),
       dxCurve: buildVf26LoadCurve(1.9459, REAR_COMMON.fz0, REAR_COMMON.lsExpX),
       falloffLevel: 0.79,
+      camberGain: CAMBER_GAIN.hard.rear,
       thermalCurve: TCURVE_HARD,
       wearPerJ: WEAR_PER_J.hard,
     },
