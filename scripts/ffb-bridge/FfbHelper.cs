@@ -428,17 +428,23 @@ static class FfbHelper
 
     static int Drive(IntPtr di, string deviceFilter, double max, int rateHz, int direction)
     {
+        // Every matching force-feedback device, wheels first. One wheel can show up more than once (a Fanatec
+        // CSL Elite PS4 base is two game controllers, and only one of them takes effects), so each is tried in turn
         List<DeviceInfo> ffDevices = Enumerate(di, DIEDFL_ATTACHEDONLY | DIEDFL_FORCEFEEDBACK);
-        DeviceInfo pick = null;
+        List<DeviceInfo> candidates = new List<DeviceInfo>();
         foreach (DeviceInfo d in ffDevices)
         {
             bool match = deviceFilter == null ||
                 d.Name.IndexOf(deviceFilter, StringComparison.OrdinalIgnoreCase) >= 0 ||
                 d.Product.IndexOf(deviceFilter, StringComparison.OrdinalIgnoreCase) >= 0;
-            if (!match) continue;
-            if (pick == null || (d.IsWheel && !pick.IsWheel)) pick = d;
+            if (match) candidates.Add(d);
         }
-        if (pick == null)
+        candidates.Sort(delegate(DeviceInfo a, DeviceInfo b)
+        {
+            int byWheel = (b.IsWheel ? 1 : 0) - (a.IsWheel ? 1 : 0);
+            return byWheel != 0 ? byWheel : ffDevices.IndexOf(a) - ffDevices.IndexOf(b);
+        });
+        if (candidates.Count == 0)
         {
             Status(false, null, 0, deviceFilter == null
                 ? "No force-feedback wheel found (is it switched on and plugged in?)"
@@ -449,52 +455,44 @@ static class FfbHelper
         {
             List<string> names = new List<string>();
             foreach (DeviceInfo d in ffDevices) names.Add(d.Name);
-            Log("Force-feedback devices: " + string.Join(", ", names.ToArray()) + ". Using " + pick.Name + " (pick another with --device).");
+            Log("Force-feedback devices: " + string.Join(", ", names.ToArray()) + ". Trying " +
+                (candidates.Count > 1 ? "them in turn" : candidates[0].Name) + " (pick one with --device).");
         }
 
         // Top-level WS_POPUP window (never HWND_MESSAGE, which DirectInput8 FFB drivers reject on SetCooperativeLevel)
         IntPtr hwnd = CreateWindowExW(0, "STATIC", "FfbHelper", WS_POPUP, 0, 0, 1, 1, IntPtr.Zero, IntPtr.Zero, GetModuleHandleW(IntPtr.Zero), IntPtr.Zero);
-        IntPtr dev = IntPtr.Zero, effect = IntPtr.Zero, format = IntPtr.Zero;
+        IntPtr dev = IntPtr.Zero, effect = IntPtr.Zero;
         IntPtr axes = Marshal.AllocHGlobal(4), dir = Marshal.AllocHGlobal(4), constant = Marshal.AllocHGlobal(4);
+        DeviceInfo pick = null;
         timeBeginPeriod(1);
         try
         {
-            Guid g = pick.Instance;
-            Check(Method<CreateDeviceFn>(di, DI_CreateDevice)(di, ref g, out dev, IntPtr.Zero), "CreateDevice");
-            format = BuildJoystickFormat();
-            Check(Method<PtrArgFn>(dev, DEV_SetDataFormat)(dev, format), "SetDataFormat");
-            Check(Method<SetCooperativeLevelFn>(dev, DEV_SetCooperativeLevel)(dev, hwnd, DISCL_EXCLUSIVE | DISCL_BACKGROUND), "SetCooperativeLevel");
-            List<uint> ffAxes = FfAxisOffsets(dev);
-            if (ffAxes.Count == 0) throw new Exception(pick.Name + " reports no force-feedback axis");
-
-            SetDword(dev, DIPROP_AUTOCENTER, 0);
-            int hr = Method<NoArgsFn>(dev, DEV_Acquire)(dev);
-            if (hr == DIERR_OTHERAPPHASPRIO) throw new Exception("Another program has the wheel's force feedback (close the other sim, then restart the bridge)");
-            Check(hr, "Acquire");
-            Method<UIntArgFn>(dev, DEV_SendForceFeedbackCommand)(dev, DISFFC_RESET);
-            Method<UIntArgFn>(dev, DEV_SendForceFeedbackCommand)(dev, DISFFC_SETACTUATORSON);
-            // The reset restores the driver's defaults: the centring spring goes off again, full device gain
-            SetDword(dev, DIPROP_AUTOCENTER, 0);
-            SetDword(dev, DIPROP_FFGAIN, DI_FFNOMINALMAX);
-
-            // One constant force on the steering axis; with a single axis the magnitude's sign is the direction
-            Marshal.WriteInt32(axes, (int)PickSteeringAxis(ffAxes));
-            Marshal.WriteInt32(dir, direction);
-            Marshal.WriteInt32(constant, 0);
             DIEFFECT eff = new DIEFFECT();
-            eff.dwSize = (uint)Marshal.SizeOf(typeof(DIEFFECT));
-            eff.dwFlags = DIEFF_CARTESIAN | DIEFF_OBJECTOFFSETS;
-            eff.dwDuration = INFINITE;
-            eff.dwGain = DI_FFNOMINALMAX;
-            eff.dwTriggerButton = DIEB_NOTRIGGER;
-            eff.cAxes = 1;
-            eff.rgdwAxes = axes;
-            eff.rglDirection = dir;
-            eff.cbTypeSpecificParams = 4; // DICONSTANTFORCE
-            eff.lpvTypeSpecificParams = constant;
-            Guid cf = GUID_ConstantForce;
-            Check(Method<CreateEffectFn>(dev, DEV_CreateEffect)(dev, ref cf, ref eff, out effect, IntPtr.Zero), "CreateEffect (constant force)");
-            Check(Method<StartFn>(effect, EFF_Start)(effect, 1, 0), "Start effect");
+            List<uint> ffAxes = null;
+            List<string> refusals = new List<string>();
+            for (int k = 0; k < candidates.Count && pick == null; k++)
+            {
+                DeviceInfo d = candidates[k];
+                string label = candidates.Count > 1 ? string.Format("{0} (#{1})", d.Name, k + 1) : d.Name;
+                try
+                {
+                    ffAxes = OpenConstantForce(di, d, hwnd, direction, axes, dir, constant, ref dev, ref effect, ref eff);
+                    pick = d;
+                }
+                catch (Exception e)
+                {
+                    refusals.Add(label + ": " + e.Message);
+                    if (k + 1 < candidates.Count) Log(label + " refused force feedback (" + e.Message + "); trying the next one");
+                    CloseDevice(ref dev, ref effect);
+                }
+            }
+            if (pick == null)
+            {
+                Status(false, candidates[0].Name, 0, "No device took a force-feedback effect (" + string.Join("; ", refusals.ToArray()) +
+                    "). Check the wheel is in PC mode with its own driver installed (Fanatec: PC mode, Fanatec driver and " +
+                    "firmware), and close any other program using it (FanaLab, Steam Input, another sim).");
+                return 1;
+            }
 
             Status(true, pick.Name, ffAxes.Count, null);
             Log(string.Format(CultureInfo.InvariantCulture, "Driving {0} at {1} Hz, output cap {2:0}%. Ctrl+C to stop.", pick.Name, rateHz, max * 100));
@@ -511,6 +509,7 @@ static class FfbHelper
             int lastMagnitude = 0;
             bool lost = false;
             long retryAtMs = 0;
+            IntPtr devLoop = dev, effectLoop = effect;
             RunLoop(rateHz, delegate(double tSec)
             {
                 PumpMessages(hwnd);
@@ -521,17 +520,17 @@ static class FfbHelper
                 {
                     if (Clock.ElapsedMilliseconds < retryAtMs) return;
                     retryAtMs = Clock.ElapsedMilliseconds + 500;
-                    if (acquire(dev) < 0 || start(effect, 1, 0) < 0) return;
+                    if (acquire(devLoop) < 0 || start(effectLoop, 1, 0) < 0) return;
                     lost = false;
                     lastMagnitude = int.MinValue;
                     Status(true, pick.Name, ffAxes.Count, null);
                 }
-                poll(dev);
+                poll(devLoop);
                 if (magnitude == lastMagnitude) return;
                 Marshal.WriteInt32(constant, magnitude);
                 // Magnitude only: DIEP_START here would restart the effect on every update (at the loop rate); the
                 // effect is started once at creation and again after a re-acquire
-                if (setParameters(effect, ref eff, DIEP_TYPESPECIFICPARAMS) < 0)
+                if (setParameters(effectLoop, ref eff, DIEP_TYPESPECIFICPARAMS) < 0)
                 {
                     lost = true;
                     retryAtMs = Clock.ElapsedMilliseconds + 500;
@@ -548,28 +547,82 @@ static class FfbHelper
         }
         catch (Exception e)
         {
-            Status(false, pick.Name, 0, e.Message);
+            Status(false, pick != null ? pick.Name : candidates[0].Name, 0, e.Message);
             return 1;
         }
         finally
         {
-            if (effect != IntPtr.Zero)
-            {
-                Method<NoArgsFn>(effect, EFF_Stop)(effect);
-                Method<NoArgsFn>(effect, EFF_Unload)(effect);
-                Release(effect);
-            }
-            if (dev != IntPtr.Zero)
-            {
-                Method<NoArgsFn>(dev, DEV_Unacquire)(dev);
-                Release(dev);
-            }
+            CloseDevice(ref dev, ref effect);
             timeEndPeriod(1);
             if (hwnd != IntPtr.Zero) DestroyWindow(hwnd);
             Marshal.FreeHGlobal(axes);
             Marshal.FreeHGlobal(dir);
             Marshal.FreeHGlobal(constant);
-            // format (and its GUIDs) stays allocated: the device may still reference it until the process ends
+        }
+    }
+
+    /**
+     * Opens one device for force feedback: exclusive background access, centring spring off, one started constant-force
+     * effect on the steering axis (magnitude in `constant`). Throws on the first call the device refuses; `dev` and
+     * `effect` hold whatever was created, for CloseDevice.
+     */
+    static List<uint> OpenConstantForce(IntPtr di, DeviceInfo d, IntPtr hwnd, int direction, IntPtr axes, IntPtr dir, IntPtr constant,
+        ref IntPtr dev, ref IntPtr effect, ref DIEFFECT eff)
+    {
+        Guid g = d.Instance;
+        Check(Method<CreateDeviceFn>(di, DI_CreateDevice)(di, ref g, out dev, IntPtr.Zero), "CreateDevice");
+        // The format (and its GUIDs) stays allocated: the device may still reference it until the process ends
+        Check(Method<PtrArgFn>(dev, DEV_SetDataFormat)(dev, BuildJoystickFormat()), "SetDataFormat");
+        Check(Method<SetCooperativeLevelFn>(dev, DEV_SetCooperativeLevel)(dev, hwnd, DISCL_EXCLUSIVE | DISCL_BACKGROUND), "SetCooperativeLevel");
+        List<uint> ffAxes = FfAxisOffsets(dev);
+        if (ffAxes.Count == 0) throw new Exception(d.Name + " reports no force-feedback axis");
+
+        SetDword(dev, DIPROP_AUTOCENTER, 0);
+        int hr = Method<NoArgsFn>(dev, DEV_Acquire)(dev);
+        if (hr == DIERR_OTHERAPPHASPRIO) throw new Exception("another program has the wheel's force feedback (close the other sim, then restart the bridge)");
+        Check(hr, "Acquire");
+        Method<UIntArgFn>(dev, DEV_SendForceFeedbackCommand)(dev, DISFFC_RESET);
+        Method<UIntArgFn>(dev, DEV_SendForceFeedbackCommand)(dev, DISFFC_SETACTUATORSON);
+        // The reset restores the driver's defaults: the centring spring goes off again, full device gain
+        SetDword(dev, DIPROP_AUTOCENTER, 0);
+        SetDword(dev, DIPROP_FFGAIN, DI_FFNOMINALMAX);
+
+        // One constant force on the steering axis; with a single axis the magnitude's sign is the direction
+        Marshal.WriteInt32(axes, (int)PickSteeringAxis(ffAxes));
+        Marshal.WriteInt32(dir, direction);
+        Marshal.WriteInt32(constant, 0);
+        eff = new DIEFFECT();
+        eff.dwSize = (uint)Marshal.SizeOf(typeof(DIEFFECT));
+        eff.dwFlags = DIEFF_CARTESIAN | DIEFF_OBJECTOFFSETS;
+        eff.dwDuration = INFINITE;
+        eff.dwGain = DI_FFNOMINALMAX;
+        eff.dwTriggerButton = DIEB_NOTRIGGER;
+        eff.cAxes = 1;
+        eff.rgdwAxes = axes;
+        eff.rglDirection = dir;
+        eff.cbTypeSpecificParams = 4; // DICONSTANTFORCE
+        eff.lpvTypeSpecificParams = constant;
+        Guid cf = GUID_ConstantForce;
+        Check(Method<CreateEffectFn>(dev, DEV_CreateEffect)(dev, ref cf, ref eff, out effect, IntPtr.Zero), "CreateEffect (constant force)");
+        Check(Method<StartFn>(effect, EFF_Start)(effect, 1, 0), "Start effect");
+        return ffAxes;
+    }
+
+    /** Stops and releases an effect and its device (either may be unset) */
+    static void CloseDevice(ref IntPtr dev, ref IntPtr effect)
+    {
+        if (effect != IntPtr.Zero)
+        {
+            Method<NoArgsFn>(effect, EFF_Stop)(effect);
+            Method<NoArgsFn>(effect, EFF_Unload)(effect);
+            Release(effect);
+            effect = IntPtr.Zero;
+        }
+        if (dev != IntPtr.Zero)
+        {
+            Method<NoArgsFn>(dev, DEV_Unacquire)(dev);
+            Release(dev);
+            dev = IntPtr.Zero;
         }
     }
 
