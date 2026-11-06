@@ -200,10 +200,13 @@ check('auto-setup leaves a bound wheel alone; belt wheels get their defaults', (
   assert.equal(g29?.rotationDeg, 900);
   assert.equal(g29?.steer?.center, 0, 'a rim held off-centre is not taken as the centre');
 });
-check('auto-setup: Logitech starts on the bridge, others on WebHID; CSL Elite is belt-driven, CSL DD direct', () => {
+check('auto-setup: all wheels (including Logitech and PXN) start on WebHID; CSL Elite is belt-driven, CSL DD direct', () => {
   const g923 = autoConfigureWheel([pad('G923 Racing Wheel for Xbox One and PC (Vendor: 046d Product: c26e)', '', [0])], DEFAULT_WHEEL_SETTINGS);
-  assert.equal(g923?.hidFfb, false, 'WebHID refuses Logitech, so the bridge instructions should show from the start');
+  assert.equal(g923?.hidFfb, true, 'WebHID drives both PID and classic Logitech wheels');
   assert.equal(g923?.ffbEnabled, true);
+  const pxn = autoConfigureWheel([pad('PXN-V99 Wheel (Vendor: 11ff Product: 3245)', '', [0])], DEFAULT_WHEEL_SETTINGS);
+  assert.equal(pxn?.hidFfb, true);
+  assert.equal(pxn?.type, 'belt_gear');
   assert.equal(autoConfigureWheel([pad(MOZA_BASE, '', [0])], DEFAULT_WHEEL_SETTINGS)?.hidFfb, true);
   assert.equal(autoConfigureWheel([pad('FANATEC CSL Elite Wheel Base', '', [0])], DEFAULT_WHEEL_SETTINGS)?.type, 'belt_gear');
   assert.equal(autoConfigureWheel([pad('FANATEC CSL DD', '', [0])], DEFAULT_WHEEL_SETTINGS)?.type, 'direct_drive');
@@ -498,6 +501,90 @@ async function asyncChecks() {
     assert.ok(hz > 30 && hz < 50, `kerb buzz at ${hz.toFixed(1)} Hz`);
     passed++;
     console.log(`  ok  WebHID kerb buzz plays at ${hz.toFixed(1)} Hz (40 Hz synthesised), not aliased to the frame rate`);
+  }
+
+  // Tactile synthesis plays on a straight when f === 0, and covers front slip scrub, grass/gravel, and suspension bump kicks
+  {
+    const c = new WheelFfbClient();
+    const out: number[] = [];
+    c.hidSink = (f) => out.push(f);
+    const w = { ...wheel, ffbGain: 1, ffbDamping: 0, ffbKerb: 0.5, ffbAbs: 0.5 };
+    c.update(
+      {
+        speedKmh: 80,
+        ffbTorqueNorm: 0,
+        wheelSurfaces: ['grass', 'asphalt', 'asphalt', 'asphalt'],
+        tireSlipRatio: [1.6, 1.5, 0.2, 0.2],
+        suspensionTravelMm: [10, 10, 15, 15],
+      } as never,
+      w,
+      [],
+      1000,
+      true
+    );
+    await new Promise((r) => setTimeout(r, 20));
+    c.update(
+      {
+        speedKmh: 80,
+        ffbTorqueNorm: 0,
+        wheelSurfaces: ['grass', 'asphalt', 'asphalt', 'asphalt'],
+        tireSlipRatio: [1.6, 1.5, 0.2, 0.2],
+        suspensionTravelMm: [25, 10, 15, 15],
+      } as never,
+      w,
+      [],
+      1020,
+      true
+    );
+    await new Promise((r) => setTimeout(r, 20));
+    c.stop();
+    const nonZero = out.slice(0, -1).some((v) => Math.abs(v) > 0.005);
+    assert.ok(nonZero, 'tactile vibrations play even when steering rack torque f === 0');
+    passed++;
+    console.log('  ok  WebHID tactile synthesis plays on a straight (f === 0) for slip scrub, grass/gravel, and road bumps');
+  }
+
+  // Hardware damper integration forwards speed-scaled damper and reduces software damping by 70%
+  {
+    const fakeApi: HidApiLike = {
+      requestDevice: async () => [],
+      getDevices: async () => [],
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    };
+    const hwHid = new WebHidFfb(fakeApi);
+    let lastHwDamper = -1;
+    hwHid.hasHardwareDamper = () => true;
+    hwHid.setDamper = (coeff: number) => {
+      lastHwDamper = coeff;
+    };
+    hwHid.status = { state: 'ready', device: 'PID Wheel', message: null };
+
+    const cHw = new WheelFfbClient();
+    const unlink = linkHidSink(cHw, hwHid);
+    const cSoft = new WheelFfbClient();
+    cSoft.hidSink = () => {};
+
+    const wDamp = {
+      ...wheel,
+      ffbGain: 1,
+      ffbDamping: 0.5,
+      rotationDeg: 900,
+      steer: { padId: 'Wheel', axis: 0, center: 0, invert: false },
+    };
+    cHw.update({ speedKmh: 100, ffbTorqueNorm: 0 } as never, wDamp, [pad('Wheel', '', [0])], 1000, true);
+    cSoft.update({ speedKmh: 100, ffbTorqueNorm: 0 } as never, wDamp, [pad('Wheel', '', [0])], 1000, true);
+    cHw.update({ speedKmh: 100, ffbTorqueNorm: 0 } as never, wDamp, [pad('Wheel', '', [0.1])], 1020, true);
+    cSoft.update({ speedKmh: 100, ffbTorqueNorm: 0 } as never, wDamp, [pad('Wheel', '', [0.1])], 1020, true);
+
+    // At 100 km/h, gyroFactor = (100 - 10) / 180 = 0.5 -> damper = 0.5 * (0.4 + 0.6 * 0.5) = 0.35
+    near(lastHwDamper, 0.35, 1e-6);
+    near(Math.abs(cHw.force), Math.abs(cSoft.force) * 0.3, 1e-6);
+    cHw.stop();
+    cSoft.stop();
+    unlink();
+    passed++;
+    console.log('  ok  WebHID hardware damper forwards speed-scaled coefficient and reduces software damping by 70%');
   }
   console.log(`\n${passed} checks passed`);
 }

@@ -679,11 +679,11 @@ export const WheelStep: React.FC<SetupStepProps> = ({ settings, onChangeSettings
             <>
               <div className="rounded-[16px] border border-[#262B3D] bg-[#08090D] p-3">
                 <Toggle
-                  label="Browser force feedback over WebHID (experimental · USB HID PID bases)"
+                  label="Browser force feedback over WebHID (experimental · USB HID PID & Logitech)"
                   detail={
                     hidBrowserUnsupported
                       ? (hid.message ?? "WebHID is not available in this browser")
-                      : "Drives USB HID PID wheels directly from Chrome/Edge with no external helper. Not for Logitech. Falls back to the local bridge when off."
+                      : "Drives USB HID PID and Logitech wheels directly from Chrome/Edge with no external helper. Falls back to the local bridge when off."
                   }
                   checked={w.hidFfb && !hidBrowserUnsupported}
                   disabled={hidBrowserUnsupported}
@@ -773,8 +773,8 @@ export const WheelStep: React.FC<SetupStepProps> = ({ settings, onChangeSettings
             </>
           ) : (
             <Hint className="text-[13px]!">
-              Switch Force Feedback on and click <strong>Connect wheel</strong> to drive your wheel directly over WebHID
-              in Chrome/Edge. Logitech wheels, and any wheel WebHID cannot drive, use the local bridge on Windows (
+              Switch Force Feedback on and click <strong>Connect wheel</strong> to drive USB HID PID and Logitech wheels
+              directly over WebHID in Chrome/Edge, or use the local bridge on Windows (
               <code className="font-f1-mono text-[12px] font-bold text-[#F5F7FA]">npm run ffb</code>).
             </Hint>
           )}

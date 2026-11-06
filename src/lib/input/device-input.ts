@@ -224,7 +224,7 @@ export function findPad(pads: readonly PadLike[], padId: string): PadLike | unde
   return pads.find((p) => p.id === padId);
 }
 
-const WHEEL_ID = /wheel|fanatec|moza|simucube|simagic|thrustmaster|logitech g(2|9)|g29|g920|g923|g pro|t300|t150|t248|tmx|csl|podium|clubsport|asetek|cammus|accuforce|vrs/i;
+const WHEEL_ID = /wheel|pxn|v99|fanatec|moza|simucube|simagic|thrustmaster|logitech g(2|9)|g29|g920|g923|g pro|t300|t150|t248|tmx|csl|podium|clubsport|asetek|cammus|accuforce|vrs/i;
 
 /** Sim wheels rarely report the standard mapping; names give the rest away */
 export function isLikelyWheel(pad: Pick<PadLike, "id" | "mapping">): boolean {
@@ -374,9 +374,7 @@ export class DeviceInputReader {
 }
 
 /** Belt / gear-driven bases (the rest are taken as direct drive); the CSL Elite is belt-driven, the CSL DD is not */
-const BELT_GEAR_ID = /g29|g920|g923|t150|t248|t300|tmx|csl elite/i;
-/** Logitech devices, by name or by the vendor id Chrome puts in Gamepad.id ("Vendor: 046d") */
-const LOGITECH_ID = /logitech|\b046d\b/i;
+const BELT_GEAR_ID = /pxn|v99|g25|g27|g29|g920|g923|t150|t248|t300|tmx|csl elite/i;
 /** Pedal sets, shifters and handbrakes share the wheel brands' names but never steer */
 const NOT_A_WHEEL_BASE = /pedal|srp|sr-p|handbrake|shifter|hgp|sequential/i;
 /** Virtual joysticks (vJoy / SimHub Control Mapper) mirror physical devices and should yield to real hardware */
@@ -397,8 +395,7 @@ export function autoConfigureWheel(pads: readonly PadLike[], current: WheelSetti
     type,
     ...WHEEL_TYPE_DEFAULTS[type],
     ffbEnabled: true,
-    // Logitech's force feedback is proprietary (WebHID refuses it), so it starts on the local bridge
-    hidFfb: !LOGITECH_ID.test(wheelPad.id),
+    hidFfb: true,
     steer: { padId: wheelPad.id, axis: 0, center: Math.abs(rest) < 0.25 ? rest : 0, invert: false },
   };
 }
