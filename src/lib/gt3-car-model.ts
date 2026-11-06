@@ -11,6 +11,7 @@ import type { Vf26CameraAnchor, Vf26ModelInstance } from "@/lib/vf26-car-model";
 import { installTyreDeformation, type TyreDeformationHandle } from "@/lib/render/tyre-deformation";
 import { applyLivery, collectPaintSlots, type PaintKeys, type PaintSlot } from "@/lib/render/livery-repaint";
 import { bakedCamberOf, relativeMatrix, updateCorners, WHEEL_NODES, WHEEL_SIDES, type RigCorner } from "@/lib/render/corner-rig";
+import { singlePassTransparency } from "@/lib/render/static-scene";
 
 /** Body paint material of the GT3 GLB and its factory colours (orange body, black graphics) */
 const GT3_PAINT_MATERIAL = "amgMercedesAMG_GT3_2020Paint_Material1";
@@ -77,6 +78,7 @@ export function loadGt3Cockpit(): Promise<THREE.Group | null> {
           const std = mesh.material as THREE.MeshStandardMaterial;
           if (std.map) std.map.anisotropy = 8;
           if (std.transparent) std.depthWrite = false;
+          singlePassTransparency(std);
         });
         scene.updateMatrixWorld(true);
         return scene;
@@ -168,6 +170,7 @@ export function loadGt3Template(task: AssetTaskId = "car"): Promise<THREE.Group 
             cleanGt3Material(m);
             sharpenCarMaps(m);
             if (std.transparent) std.depthWrite = false;
+            singlePassTransparency(std);
           }
         });
         scene.updateMatrixWorld(true);

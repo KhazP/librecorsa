@@ -9,6 +9,7 @@ import type { Vf26ModelInstance } from "@/lib/vf26-car-model";
 import { installTyreDeformation, type TyreDeformationHandle } from "@/lib/render/tyre-deformation";
 import { cleanPortedCarMaterial, sharpenCarMaps } from "@/lib/render/ported-car-materials";
 import { relativeMatrix, updateCorners, WHEEL_NODES, WHEEL_SIDES, type RigCorner } from "@/lib/render/corner-rig";
+import { singlePassTransparency } from "@/lib/render/static-scene";
 
 /**
  * Cars ported to one GLB each (a registry car's `modelUrl`), on any vehicle model. Node layout:
@@ -74,6 +75,7 @@ function loadTemplate(url: string): Promise<THREE.Group | null> {
             const std = m as THREE.MeshStandardMaterial;
             sharpenCarMaps(m);
             if (std.transparent) std.depthWrite = false;
+            singlePassTransparency(std);
           }
         });
         alignWheelAxles(scene);

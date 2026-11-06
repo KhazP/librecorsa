@@ -17,6 +17,7 @@ import { setVf26LiveryColours, upgradeVf26Materials } from "@/lib/render/car-mat
 import { applyLivery, collectPaintSlots, type PaintKeys } from "@/lib/render/livery-repaint";
 import { moveToDriverHeadLayer } from "@/lib/render/layers";
 import { bakedCamberOf, relativeMatrix, updateCorners, WHEEL_NODES, WHEEL_SIDES, type RigCorner } from "@/lib/render/corner-rig";
+import { singlePassTransparency } from "@/lib/render/static-scene";
 
 /**
  * F1 3D model (`public/amr26/model/amr26.glb`). On builds without the GLB `loadVf26Template()` resolves to null
@@ -110,6 +111,7 @@ export function loadVf26Template(modelUrl: string = AMR26_MODEL_URL, task: Asset
             const std = m as THREE.MeshStandardMaterial;
             sharpenCarMaps(m);
             if (std.transparent) std.depthWrite = false;
+            singlePassTransparency(std);
           }
         });
         scene.updateMatrixWorld(true);
