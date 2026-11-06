@@ -16,7 +16,7 @@ import type {
   TyreSetup,
 } from '@/types/f1';
 import type { VehicleWheelState } from './vehicle-types';
-import type { GamepadAssistSettings } from './gamepad-assist';
+import type { SteeringAssistSettings } from './steering-assist';
 import type { BrakingGuide } from './speed-profile';
 
 /** Per-wheel state used by the skid marks / smoke, multiplayer and AI peers. Order FR, FL, RR, RL. */
@@ -53,8 +53,6 @@ export interface SimulatorCar {
   readonly tyreVisuals?: readonly [TyreVisualState, TyreVisualState, TyreVisualState, TyreVisualState];
   readonly wheelbaseM: number;
   readonly maxSteerAngleRad: number;
-  /** What the car corners on, for the keyboard's steering limit (absent: the VF26's, keyboard-steer.ts) */
-  steeringEnvelope?(): import('@/lib/input/keyboard-steer').SteeringEnvelope;
   /** Mass (kg) and yaw inertia (kg·m²) for car-to-car contact (absent: an F1 car's) */
   readonly contactMassKg?: number;
   readonly contactYawInertiaKgM2?: number;
@@ -100,11 +98,12 @@ export interface SimulatorCar {
   aiBaseSpeedProfile?(): ArrayLike<number>;
   aeroPreset: AeroSetupPreset;
   assistPreset: DriverAssistPreset;
+  /** The controller's stick goes through the steering assist (off = raw stick to the rack); the keyboard always does */
   gamepadAssistEnabled: boolean;
   /** Automatic gear changes; off = the driver shifts with Gear up / Gear down (AI cars keep it on) */
   autoGearbox: boolean;
-  /** Controller steering assist; its settings follow the player's sensitivity choice */
-  readonly gamepadAssist: { settings: GamepadAssistSettings };
+  /** Keyboard and controller steering assist; its settings follow the player's steering choices */
+  readonly steeringAssist: { settings: SteeringAssistSettings; readonly keyboardEngaged: boolean };
   autoXMode: boolean;
   activeAeroMode: ActiveAeroMode;
   tireCompound: TireCompound;

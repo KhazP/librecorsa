@@ -29,7 +29,8 @@ export interface ControlInputs {
   steerLeft: number;
   steerRight: number;
   analogSteer?: number; // Optional continuous [-1..1] mouse/wheel steer (+ = right), sent to the rack as is
-  padSteer?: number; // Optional raw gamepad thumbstick [-1..1] (+ = right), run through the gamepad steering assist
+  padSteer?: number; // Optional raw gamepad thumbstick [-1..1] (+ = right), run through the steering assist
+  kbSteer?: number; // Optional keyboard steering direction (-1 left, 0, +1 right), always run through the steering assist
   clutch?: number; // Optional manual clutch [0..1]
   manualOverride: boolean;
   toggleXMode: boolean;

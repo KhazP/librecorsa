@@ -1,4 +1,6 @@
 import type { CarTelemetry } from "@/types/f1";
+import { throttleSlipAllowance } from "@/lib/input/keyboard-pedals";
+import { axleSlipFromTelemetry, createAxleSlipSample } from "./steering-assist";
 
 /**
  * Gamepad rumble for the car: the pad's two motors are driven from the physics so the player
@@ -116,9 +118,20 @@ function hapticMagnitudes(t: CarTelemetry, timeS: number): { weak: number; stron
   return { weak, strong };
 }
 
+/** Trigger buzz while the tyres approach their grip with the aid off: none under half the peak, firming up to it */
+function limitBuzz(ndSlip: number): number {
+  if (!(ndSlip > 0.5)) return 0;
+  return (Math.pow(clamp01((ndSlip - 0.5) / 0.5), 4) * 0.95 + 0.05) * 0.4;
+}
+
+const _triggerSlip = createAxleSlipSample();
+
 /**
  * Impulse-trigger magnitudes (0..1) for the car: the left trigger (brake) feels ABS / lock-up as a 20 Hz pulse,
- * the right trigger (throttle) feels wheelspin, and traction control as a 25 Hz pulse. Zero when there is nothing to feel.
+ * the right trigger (throttle) feels wheelspin, and traction control as a 25 Hz pulse. With ABS (traction control)
+ * off, the brake (throttle) trigger also buzzes lightly as the tyres approach their grip, firming up toward the peak,
+ * so the player feels the limit coming before a lock-up or a spin; only one trigger buzzes at a time. Zero when there
+ * is nothing to feel.
  */
 export function triggerMagnitudes(t: CarTelemetry, timeS: number): { left: number; right: number } {
   // Left trigger: a locked or ABS-releasing front axle pushes back through the brake
@@ -142,6 +155,17 @@ export function triggerMagnitudes(t: CarTelemetry, timeS: number): { left: numbe
       const spinScale = clamp01(rearSlip / 0.5);
       const pulseOn = t.f12026?.tcActive === true ? (timeS * TC_PULSE_HZ) % 1 < 0.5 : true;
       right = pulseOn ? 0.25 + 0.45 * spinScale : 0;
+    }
+  }
+
+  // Approaching the grip limit with the aid off
+  const aids = t.liveTuner;
+  if (aids && (aids.absLevel === 0 || aids.tcLevel === 0) && t.speedKmh > 2) {
+    const slip = axleSlipFromTelemetry(t, _triggerSlip);
+    const wheelspin = Math.max(t.wheelSlipRatios[2], t.wheelSlipRatios[3]) > 0.02;
+    if (left === 0 && aids.absLevel === 0 && t.brake > 0.2 && !wheelspin) left = limitBuzz(slip.totalNdSlip + 0.15);
+    if (right === 0 && aids.tcLevel === 0 && t.throttle > 0.2 && wheelspin) {
+      right = limitBuzz(slip.rearNdSlip - throttleSlipAllowance(t.speedKmh));
     }
   }
 

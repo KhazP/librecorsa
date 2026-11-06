@@ -44,8 +44,13 @@ import {
   getActiveSurfaceTable,
   RWANDA_DRS_ZONES,
 } from '@/lib/track-data';
-import { GamepadSteeringAssist } from '../gamepad-assist';
-import type { SteeringEnvelope } from '../../input/keyboard-steer';
+import {
+  type AxleSlipSample,
+  axleSlip,
+  createAxleSlipSample,
+  createWheelSlip,
+  SteeringAssist,
+} from '../steering-assist';
 import type { AeroWakeState } from '../aero-wake';
 import type { TrackEvolutionSample } from '../track-evolution';
 import type { WeatherContactSample } from '../weather';
@@ -76,8 +81,6 @@ import { KERB_PROFILE_L } from '../track-surfaces';
 
 const G = 9.81;
 const DEG2RAD = Math.PI / 180;
-/** Share of the fronts' peak slip angle a held steering key adds to the path's angle (CarSimProfile.keyboardSlipShare) */
-const DEFAULT_KEYBOARD_SLIP_SHARE = 0.8;
 const RAD2DEG = 180 / Math.PI;
 /** Rwanda (≈1400 m ASL) air density */
 const AIR_DENSITY = 1.06;
@@ -147,13 +150,8 @@ export interface CarSimProfile {
   electronics?: CarElectronicsProfile;
   /** Wing angle offsets per aero package (deg): front, rear */
   aeroPackagesDeg: Record<AeroSetupPreset, [number, number]>;
-  /** Lateral grip the pad steering assist assumes, per g of (weight + downforce) */
+  /** Lateral grip the steering assist assumes, per g of (weight + downforce) */
   padLateralMu: number;
-  /**
-   * Share of the fronts' peak slip angle a held steering key adds to the path's angle (default 0.8): with the rear's
-   * slip on top the fronts sit near their peak. Less for a car whose rear slips more (the GT3: 0.6).
-   */
-  keyboardSlipShare?: number;
   braking: BrakingEnvelope;
   /**
    * Planning model of this car for its braking line, braking urgency and HUD target speed (`brakingGuideFor`).
@@ -544,20 +542,6 @@ export class F12026CarSim implements SimulatorCar {
   /** The racing line this car follows (`CarSimProfile.racingLine`) */
   private readonly line: RacingLineId;
   public readonly wheelbaseM: number;
-  /**
-   * What this car corners on, for the keyboard's steering limit (keyboard-steer.ts): the lateral grip the pad assist
-   * plans on at this speed, and the share of the fronts' peak slip angle the steering may add to the path's angle (the
-   * rear axle's own slip angle adds the rest). The VF26's fixed 3.9 g / 0.12 rad held a GT3's fronts at 2-3× their 6°
-   * peak, so a held key scrubbed and cooked them (#64).
-   */
-  public steeringEnvelope(): SteeringEnvelope {
-    const v = this.vehicle;
-    const peakSlipRad = (this.compoundData.modelData.friction_limit_angle || DEFAULT_FRICTION_LIMIT_ANGLE_DEG) * DEG2RAD;
-    return {
-      maxLateralAccelMs2: this.profile.padLateralMu * (G + v.telemetry.downforceN / v.totalMassKg),
-      frontSlipRad: (this.profile.keyboardSlipShare ?? DEFAULT_KEYBOARD_SLIP_SHARE) * peakSlipRad,
-    };
-  }
 
   /**
    * Simulated time not yet stepped (s, under one 2 ms step). The renderer carries the pose forward by it: without it
@@ -624,7 +608,8 @@ export class F12026CarSim implements SimulatorCar {
   public gamepadAssistEnabled = true;
   /** Automatic gear changes; off = the driver shifts. The autopilot always shifts for itself (VehiclePhysics.autoShift) */
   public autoGearbox = true;
-  public readonly gamepadAssist = new GamepadSteeringAssist();
+  /** Keyboard and controller steering assist */
+  public readonly steeringAssist = new SteeringAssist();
   /** DRS is driver-operated on the f12026-car (and absent on a GT3) */
   public autoXMode = false;
   /** Asked at each DRS detection point (e.g. within 1 s of the car ahead); null = always eligible */
@@ -708,7 +693,10 @@ export class F12026CarSim implements SimulatorCar {
   /** Per-wheel ABS pressure share (LF, RF, LR, RR); `absCut` is their minimum */
   private readonly absWheelCut: [number, number, number, number] = [1, 1, 1, 1];
   private readonly prevWheelOmega: [number, number, number, number] = [0, 0, 0, 0];
-  private padSteerActive = false;
+  /** The steering assist drove the last step (it starts from a clean state when it takes over) */
+  private assistActive = false;
+  private readonly wheelSlipScratch = [createWheelSlip(), createWheelSlip(), createWheelSlip(), createWheelSlip()] as const;
+  private readonly axleSlipScratch = createAxleSlipSample();
   private steerCmd = 0;
   /** Autopilot pedal (−1 full brake … +1 full throttle): the integral of its speed error */
   private apPedal = 0;
@@ -1284,6 +1272,7 @@ export class F12026CarSim implements SimulatorCar {
       steerRight: raw.steerRight ?? 0,
       analogSteer: raw.analogSteer,
       padSteer: raw.padSteer !== undefined ? THREE.MathUtils.clamp(raw.padSteer, -1, 1) : undefined,
+      kbSteer: raw.kbSteer !== undefined ? Math.sign(raw.kbSteer) : undefined,
       manualOverride: raw.manualOverride ?? false,
       toggleXMode: raw.toggleXMode ?? false,
       shiftUp: raw.shiftUp ?? false,
@@ -1348,15 +1337,27 @@ export class F12026CarSim implements SimulatorCar {
   // Inputs
   // ===========================================================================
 
-  /** Steering (keyboard / wheel / mouse straight, pad through the steering assist) and 130 Hz TC1/TC2 + 240 Hz 4-Ch ABS */
+  /**
+   * Steering (wheel / mouse straight to the rack; keyboard, and the controller unless its assist is off, through the
+   * steering assist) and 130 Hz TC1/TC2 + 240 Hz 4-Ch ABS
+   */
   private driverCommand(
     inputs: ControlInputs,
     h: number
   ): { throttle: number; brake: number; brakeWheelScale?: readonly [number, number, number, number]; steer: number; drs: boolean } {
     let steer: number;
-    if (inputs.padSteer !== undefined) {
-      if (!this.padSteerActive) this.gamepadAssist.reset();
-      this.padSteerActive = true;
+    const keys = inputs.kbSteer ?? 0;
+    const keyboardSteering = keys !== 0 || this.steeringAssist.keyboardEngaged;
+    if (inputs.padSteer === undefined && inputs.kbSteer === undefined) {
+      this.assistActive = false;
+      steer = inputs.analogSteer !== undefined ? inputs.analogSteer : inputs.steerRight - inputs.steerLeft;
+    } else if (inputs.padSteer !== undefined && !this.gamepadAssistEnabled && !keyboardSteering) {
+      this.assistActive = false;
+      steer = inputs.padSteer;
+    } else {
+      // Start from a clean state when the assist takes over from the wheel, mouse or raw stick
+      if (!this.assistActive) this.steeringAssist.reset();
+      this.assistActive = true;
       const front = this.compoundData.modelData;
       const wetMuScale =
         this.vehicle.waterMm > 0
@@ -1368,33 +1369,46 @@ export class F12026CarSim implements SimulatorCar {
               0.5 * (this.vehicle.wheels[0].wear + this.vehicle.wheels[1].wear)
             ) / (this.compoundData.wetTraits?.dryGrip ?? 1)
           : 1;
-      steer = this.gamepadAssistEnabled
-        ? this.gamepadAssist.update(
-            inputs.padSteer,
-            {
-              vxMs: this.vxMs,
-              vyMs: this.bodyVy(),
-              yawRateRadS: this.bodyYawRate(),
-              cgToFrontAxleM: this.cgToFrontAxleM,
-              cgToRearAxleM: this.cgToRearAxleM,
-              wheelbaseM: this.wheelbaseM,
-              maxSteerAngleRad: this.maxSteerAngleRad,
-              frontPeakSlipRad: (front.friction_limit_angle || DEFAULT_FRICTION_LIMIT_ANGLE_DEG) * DEG2RAD,
-              brake: inputs.brake,
-              maxLateralAccel:
-                this.profile.padLateralMu *
-                wetMuScale *
-                (G + this.vehicle.telemetry.downforceN / this.vehicle.totalMassKg),
-            },
-            h
-          )
-        : inputs.padSteer;
-    } else {
-      this.padSteerActive = false;
-      steer = inputs.analogSteer !== undefined ? inputs.analogSteer : inputs.steerRight - inputs.steerLeft;
+      steer = this.steeringAssist.update(
+        inputs.padSteer ?? 0,
+        keys,
+        {
+          vxMs: this.vxMs,
+          vyMs: this.bodyVy(),
+          yawRateRadS: this.bodyYawRate(),
+          cgToFrontAxleM: this.cgToFrontAxleM,
+          cgToRearAxleM: this.cgToRearAxleM,
+          wheelbaseM: this.wheelbaseM,
+          maxSteerAngleRad: this.maxSteerAngleRad,
+          frontPeakSlipRad: (front.friction_limit_angle || DEFAULT_FRICTION_LIMIT_ANGLE_DEG) * DEG2RAD,
+          brake: inputs.brake,
+          maxLateralAccel:
+            this.profile.padLateralMu *
+            wetMuScale *
+            (G + this.vehicle.telemetry.downforceN / this.vehicle.totalMassKg),
+          slip: this.axleSlipSample(),
+        },
+        h
+      );
     }
 
     return { ...this.electronicAids(inputs.throttle, inputs.brake, h, this), steer: THREE.MathUtils.clamp(steer, -1, 1), drs: false };
+  }
+
+  /** The tyres' live slip per axle, for the steering assist's learned peak slip angle */
+  private axleSlipSample(): AxleSlipSample {
+    const W = this.vehicle.wheels;
+    for (let i = 0; i < 4; i++) {
+      const w = W[i];
+      const o = this.wheelSlipScratch[i];
+      o.loadN = w.grounded ? w.fz : 0;
+      o.slipAngleRad = w.slipAngleRad;
+      o.ndSlip = w.combinedSlip;
+      o.slipRatio = w.slipRatio;
+      o.onRoad = w.ground.surface === 'road' || w.ground.surface === 'pitlane';
+    }
+    const [fl, fr, rl, rr] = this.wheelSlipScratch;
+    return axleSlip(fl, fr, rl, rr, this.axleSlipScratch);
   }
 
   /** 130 Hz TC1/TC2 + 240 Hz 4-Ch ABS on the pedals, at the given dial positions (the driver's, or the autopilot's) */
@@ -1675,8 +1689,8 @@ export class F12026CarSim implements SimulatorCar {
   }
 
   private afterPlacement(): void {
-    this.gamepadAssist.reset();
-    this.padSteerActive = false;
+    this.steeringAssist.reset();
+    this.assistActive = false;
     this.tcCut = this.absCut = 1;
     this.absWheelCut.fill(1);
     for (let i = 0; i < 4; i++) this.prevWheelOmega[i] = this.vehicle.wheels[i].omega;
