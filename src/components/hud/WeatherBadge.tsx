@@ -27,7 +27,7 @@ export interface WeatherHudState {
 function surface(waterMm: number): { label: string; color: string } {
   if (waterMm < 0.03) return { label: "Dry", color: "#F5F7FA" };
   if (waterMm < 0.14) return { label: "Damp", color: HUD_YELLOW };
-  if (waterMm < 1.1) return { label: "Wet", color: "#3CCB4A" };
+  if (waterMm < 1.1) return { label: "Wet", color: "#00E676" };
   return { label: "Flooded", color: "#2E7BFF" };
 }
 
@@ -37,10 +37,14 @@ const clock = (h: number) => {
 };
 
 /** Small pill: air / track temperature, the track's state and rain */
-export const WeatherBadge: React.FC<{ weather: WeatherHudState }> = ({ weather }) => {
+export const WeatherBadge: React.FC<{ weather: WeatherHudState; variant?: "pill" | "panel" }> = ({ weather, variant = "pill" }) => {
   const s = surface(weather.waterMm);
+  const shape =
+    variant === "panel"
+      ? "flex w-full flex-wrap items-center gap-x-3 gap-y-1.5 rounded-[18px] px-3.5 py-2.5" // under the circuit map
+      : "inline-flex h-8 items-center gap-3 rounded-full py-1 pr-3.5 pl-3.5";
   return (
-    <div className={`inline-flex h-8 items-center gap-3 rounded-full py-1 pr-3.5 pl-3.5 ${HUD_GLASS}`} role="status" aria-label="Weather">
+    <div className={`${shape} ${HUD_GLASS}`} role="status" aria-label="Weather">
       {weather.timeMoving ? <span className="lc-data text-[11px] tabular-nums text-[#F5F7FA]">{clock(weather.clockH)}</span> : null}
       <span className="flex items-center gap-1.5">
         <span className={HUD_LBL}>Air</span>
