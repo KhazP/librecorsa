@@ -166,7 +166,8 @@ export function keyLabel(code: string | undefined): string {
     ControlRight: "R-Ctrl",
     AltLeft: "L-Alt",
     AltRight: "R-Alt",
-    Backspace: "⌫",
+    // Geist Mono has no ⌫: the word, so the key cap never falls back to another font
+    Backspace: "Bksp",
     Enter: "Enter",
     Tab: "Tab",
     CapsLock: "Caps",

@@ -448,8 +448,9 @@ export const MultiPageMfd: React.FC<MultiPageMfdProps> = ({
 
   return (
     <div
-      className={`pointer-events-auto select-none overflow-hidden border border-white/[0.08] bg-[#0A0B10]/92 shadow-[0_20px_50px_rgba(0,0,0,0.55)] backdrop-blur-md w-[300px] ${
-        folded ? "rounded-full p-1.5" : "flex flex-col gap-2 rounded-[24px] p-2.5"
+      className={`pointer-events-auto select-none overflow-hidden border border-white/[0.08] bg-[#0A0B10]/92 shadow-[0_20px_50px_rgba(0,0,0,0.55)] backdrop-blur-md ${
+        // Folded, the pill takes its summary's width (Geist Mono chips run past 300 px), never narrower than the panel
+        folded ? "w-max min-w-[300px] rounded-full p-1.5" : "flex w-[300px] flex-col gap-2 rounded-[24px] p-2.5"
       }`}
       aria-label={`MFD · ${meta.title}`}
     >

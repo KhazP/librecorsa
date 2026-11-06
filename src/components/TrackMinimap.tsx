@@ -163,7 +163,7 @@ export const TrackMinimap: React.FC<TrackMinimapProps> = ({
       {/* Circuit name, country, length and turns */}
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <div className="lc-title truncate text-[14px] leading-tight">{trackInfo.name}</div>
+          <div className="lc-title line-clamp-2 text-[14px] leading-tight">{trackInfo.name}</div>
           <p className={`${HUD_LBL} mt-0.5`}>
             {trackInfo.country} · {(track.totalLengthM / 1000).toFixed(2)} km · {TURN_METADATA.length} turns
           </p>
@@ -219,7 +219,7 @@ export const TrackMinimap: React.FC<TrackMinimapProps> = ({
                 fill={isCurrent ? "#08090D" : "#F5F7FA"}
                 fontSize="6.6"
                 fontWeight="800"
-                fontFamily="var(--font-jetbrains), ui-monospace, monospace"
+                fontFamily="var(--font-geist-mono), ui-monospace, monospace"
               >
                 {tp.number}
               </text>
@@ -241,7 +241,7 @@ export const TrackMinimap: React.FC<TrackMinimapProps> = ({
                 fill={peer.teamColorHex}
                 fontSize="6.2"
                 fontWeight="800"
-                fontFamily="var(--font-jetbrains), ui-monospace, monospace"
+                fontFamily="var(--font-geist-mono), ui-monospace, monospace"
               >
                 {peer.driverCode}
               </text>

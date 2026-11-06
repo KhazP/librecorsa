@@ -472,7 +472,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
             ["ESC", "Menu"],
             [props.keyNames?.camera ?? "C", "Camera"],
             [props.keyNames?.racingLine ?? "R", "Line"],
-            [props.keyNames?.restart ?? "⌫", "Restart"],
+            [props.keyNames?.restart ?? "Bksp", "Restart"],
           ]).map(([k, label]) => (
             <span key={k} className="inline-flex items-center gap-1.5">
               <span className="lc-data inline-flex h-[22px] min-w-[22px] items-center justify-center rounded-full bg-[#CCFF00] px-1.5 text-[10px] text-[#08090D]">

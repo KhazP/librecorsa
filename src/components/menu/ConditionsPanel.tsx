@@ -161,7 +161,7 @@ export const ConditionsPanel: React.FC<ConditionsPanelProps> = ({
                     className="flex flex-col gap-0.5 rounded-[12px] border border-[#262B3D] bg-[#08090D]/60 px-2 py-1.5 text-center"
                   >
                     <span className="lc-lbl text-[8px] text-[#8E96AA]">{WEATHER_NODE_LABELS[idx]}</span>
-                    <span className="truncate text-[11px] font-bold text-[#F5F7FA]">{sky.label}</span>
+                    <span className="text-[11px] leading-tight font-bold text-[#F5F7FA]">{sky.label}</span>
                     <span className="font-f1-mono text-[10px] text-[#00E5FF]">
                       {node.rainChance > 0 ? `${Math.round(node.rainChance)}% rain` : `${node.temperatureC.toFixed(0)}°C`}
                     </span>
@@ -200,9 +200,10 @@ export const ConditionsPanel: React.FC<ConditionsPanelProps> = ({
 
       <div className="flex min-w-0 flex-col gap-4">
         <div className={CARD}>
-          <CardHeader label="Track surface rubber" color="#3CCB4A" />
+          <CardHeader label="Track surface rubber" color="#00E676" />
           <Segmented
             label="Track surface rubber"
+            className="[&>button]:px-1.5 [&>button]:text-[13px]"
             value={conditions.surfacePreset ?? "natural"}
             onChange={(v) => !locked && set({ surfacePreset: v as SurfaceGripPresetId })}
             options={SURFACE_GRIP_PRESETS.map((id) => ({
@@ -242,7 +243,7 @@ export const ConditionsPanel: React.FC<ConditionsPanelProps> = ({
 
         {readout ? (
           <div className={CARD}>
-            <CardHeader label="Now on track" color="#3CCB4A" />
+            <CardHeader label="Now on track" color="#00E676" />
             <dl className="m-0 grid grid-cols-2 gap-x-4 gap-y-2.5 sm:grid-cols-4">
               {[
                 ["Clock", clock(readout.clockH)],

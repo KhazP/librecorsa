@@ -165,10 +165,11 @@ export const TyreCornerCard: React.FC<{ t: CarTelemetry; i: number; dense?: bool
           {Math.round(c.temp)}°
         </span>
         {c.psi !== null ? (
-          <span className="lc-data text-[10px] whitespace-nowrap text-[#C7CCD8]">
+          // The delta wraps under the pressure as one piece where the card is narrow (the compact HUD panel)
+          <span className="lc-data text-[10px] text-[#C7CCD8]">
             {c.psi.toFixed(1)}
             {c.psiDelta !== null ? (
-              <span className="ml-1" style={{ color: psiDeltaColor(c.psiDelta) }}>
+              <span className="ml-1 inline-block whitespace-nowrap" style={{ color: psiDeltaColor(c.psiDelta) }}>
                 ({signed(c.psiDelta)})
               </span>
             ) : (
@@ -222,15 +223,16 @@ export const TyreBrakeGrid: React.FC<{ t: CarTelemetry; compound?: TireCompound;
 }) => {
   const w = t.tireOptimalTempC ?? [85, 105];
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className="@container flex flex-col gap-1.5">
       {header ? (
         <div className="flex items-center justify-between gap-2">
-          <span className="lc-data inline-flex items-center gap-2 text-[10px] tracking-[0.12em] text-[#F5F7FA]">
-            <span className="h-1.5 w-1.5 rounded-full bg-[#CCFF00]" />
-            TYRES · O/M/I · BRAKES
+          <span className="lc-data inline-flex min-w-0 items-center gap-2 text-[10px] tracking-[0.12em] whitespace-nowrap text-[#F5F7FA]">
+            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#CCFF00]" />
+            {/* Geist Mono is wide: the legend's O/M/I only where the panel has room */}
+            <span className="truncate">TYRES<span className="hidden @[300px]:inline"> · O/M/I</span> · BRAKES</span>
           </span>
-          <span className="flex items-center gap-2">
-            <span className="font-f1-mono text-[9px] font-extrabold tracking-[0.1em] text-[#8E96AA]" title="Working window of the tread">
+          <span className="flex shrink-0 items-center gap-2">
+            <span className="font-f1-mono text-[9px] font-extrabold tracking-[0.1em] whitespace-nowrap text-[#8E96AA]" title="Working window of the tread">
               <span style={{ color: HUD_CYAN }}>◂</span>
               <span style={{ color: HUD_GREEN }}>
                 {Math.round(w[0])}–{Math.round(w[1])}°
