@@ -207,5 +207,158 @@
       "license": "CC BY 4.0",
       "licenseUrl": "http://creativecommons.org/licenses/by/4.0/"
     }
+  },
+  {
+    "id": "chang",
+    "name": "Chang International Circuit",
+    "layout": "Grand Prix layout",
+    "country": "Thailand",
+    "city": "Buriram",
+    "lengthM": 4568.0,
+    "turns": 10,
+    "direction": "clockwise",
+    "dataUrl": "/tracks/chang/track_data.json",
+    "credit": {
+      "title": "Chang International Circuit",
+      "author": "Mitja Bonca",
+      "url": "https://www.overtake.gg/downloads/chang-international-circuit.20997/",
+      "short": null,
+      "license": "Used with permission",
+      "licenseUrl": "https://www.overtake.gg/downloads/chang-international-circuit.20997/"
+    }
+  },
+  {
+    "id": "okayama",
+    "name": "Okayama International Circuit",
+    "layout": "Grand Prix layout",
+    "country": "Japan",
+    "city": "Mimasaka, Okayama",
+    "lengthM": 3711.82,
+    "turns": 12,
+    "direction": "clockwise",
+    "dataUrl": "/tracks/okayama/track_data.json",
+    "credit": {
+      "title": "Okayama International Circuit",
+      "author": "Mitja Bonca",
+      "url": "https://www.overtake.gg/downloads/okayama-international-circuit.15846/",
+      "short": null,
+      "license": "Used with permission",
+      "licenseUrl": "https://www.overtake.gg/downloads/okayama-international-circuit.15846/"
+    }
+  },
+  {
+    "id": "okayama_piper",
+    "name": "Okayama International Circuit",
+    "layout": "Piper course",
+    "country": "Japan",
+    "city": "Mimasaka, Okayama",
+    "lengthM": 1965.9,
+    "turns": 7,
+    "direction": "clockwise",
+    "dataUrl": "/tracks/okayama_piper/track_data.json",
+    "credit": {
+      "title": "Okayama International Circuit",
+      "author": "Mitja Bonca",
+      "url": "https://www.overtake.gg/downloads/okayama-international-circuit.15846/",
+      "short": null,
+      "license": "Used with permission",
+      "licenseUrl": "https://www.overtake.gg/downloads/okayama-international-circuit.15846/"
+    }
+  },
+  {
+    "id": "okayama_drift",
+    "name": "Okayama International Circuit",
+    "layout": "Formula Drift layout",
+    "country": "Japan",
+    "city": "Mimasaka, Okayama",
+    "lengthM": 1965.23,
+    "turns": 7,
+    "direction": "clockwise",
+    "dataUrl": "/tracks/okayama_drift/track_data.json",
+    "credit": {
+      "title": "Okayama International Circuit",
+      "author": "Mitja Bonca",
+      "url": "https://www.overtake.gg/downloads/okayama-international-circuit.15846/",
+      "short": null,
+      "license": "Used with permission",
+      "licenseUrl": "https://www.overtake.gg/downloads/okayama-international-circuit.15846/"
+    }
+  },
+  {
+    "id": "spielberg",
+    "name": "Red Bull Ring",
+    "layout": "Grand Prix layout",
+    "country": "Austria",
+    "city": "Spielberg, Styria",
+    "lengthM": 4311.95,
+    "turns": 8,
+    "direction": "clockwise",
+    "dataUrl": "/tracks/spielberg/track_data.json",
+    "credit": {
+      "title": "Spielberg (Red Bull Ring)",
+      "author": "Mitja Bonca",
+      "url": "https://www.overtake.gg/downloads/spielberg.6437/",
+      "short": null,
+      "license": "Used with permission",
+      "licenseUrl": "https://www.overtake.gg/downloads/spielberg.6437/"
+    }
+  },
+  {
+    "id": "spielberg_south",
+    "name": "Red Bull Ring",
+    "layout": "South course",
+    "country": "Austria",
+    "city": "Spielberg, Styria",
+    "lengthM": 2334.83,
+    "turns": 6,
+    "direction": "clockwise",
+    "dataUrl": "/tracks/spielberg_south/track_data.json",
+    "credit": {
+      "title": "Spielberg (Red Bull Ring)",
+      "author": "Mitja Bonca",
+      "url": "https://www.overtake.gg/downloads/spielberg.6437/",
+      "short": null,
+      "license": "Used with permission",
+      "licenseUrl": "https://www.overtake.gg/downloads/spielberg.6437/"
+    }
+  },
+  {
+    "id": "spielberg_inner",
+    "name": "Red Bull Ring",
+    "layout": "Inner skill course",
+    "country": "Austria",
+    "city": "Spielberg, Styria",
+    "lengthM": 931.91,
+    "turns": 13,
+    "direction": "clockwise",
+    "dataUrl": "/tracks/spielberg_inner/track_data.json",
+    "credit": {
+      "title": "Spielberg (Red Bull Ring)",
+      "author": "Mitja Bonca",
+      "url": "https://www.overtake.gg/downloads/spielberg.6437/",
+      "short": null,
+      "license": "Used with permission",
+      "licenseUrl": "https://www.overtake.gg/downloads/spielberg.6437/"
+    }
+  },
+  {
+    "id": "monaco",
+    "name": "Circuit de Monaco",
+    "layout": "Grand Prix layout",
+    "country": "Monaco",
+    "city": "Monte Carlo",
+    "lengthM": 3301.39,
+    "turns": 15,
+    "direction": "clockwise",
+    "dataUrl": "/tracks/monaco/track_data.json",
+    "credit": {
+      "title": "Monaco",
+      "author": "Mitja Bonca",
+      "url": "https://www.overtake.gg/downloads/monaco.3340/",
+      "short": null,
+      "license": "Used with permission",
+      "licenseUrl": "https://www.overtake.gg/downloads/monaco.3340/"
+    },
+    "type": "street"
   }
 ]
