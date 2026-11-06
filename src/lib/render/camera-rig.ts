@@ -505,6 +505,419 @@ function clampRange(x: number, lo: number, hi: number): number {
   return x < lo ? lo : x > hi ? hi : x;
 }
 
+function smootherstep(x: number): number {
+  const r = clamp01(x);
+  return r * r * r * (r * (r * 6 - 15) + 10);
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Dynamic chase camera
+// ---------------------------------------------------------------------------------------------------------------
+
+const CHASE_BASE_DISTANCE_M = 3.0;
+const CHASE_BASE_HEIGHT_M = 1.24;
+const CHASE_PITCH_DEG = -4.0;
+const CHASE_PITCH_RAD = CHASE_PITCH_DEG * DEG2RAD;
+const CHASE_BASE_FOV_DEG = 60;
+const CHASE_SPEED_FOV_ADD_DEG = 8;
+const CHASE_BOOST_FOV_ADD_DEG = 3.5;
+const CHASE_BOOST_EXTRA_DIST_M = 0.24;
+/** High-pass cutoff (Hz) on verticalG so steady-state aerodynamic downforce at speed never sinks the camera */
+const CHASE_VERT_G_HPF_HZ = 1.2;
+const CHASE_VERT_G_HPF_RC = 1 / (TWO_PI * CHASE_VERT_G_HPF_HZ);
+const CHASE_VERT_FX_LIMIT_M = 0.18;
+/** Maximum horizontal yaw lag of the chase boom behind the car's nose (rad) */
+export const CHASE_MAX_LAG_RAD = 0.35;
+/** Maximum banking roll angle for camera height compensation (rad, ~pi/4) */
+const CHASE_ROLL_LIMIT_RAD = 0.785;
+/** Maximum per-frame position delta before clamping as a teleport/discontinuity (m) */
+const CHASE_MAX_DELTA_M = 5;
+const WORLD_UP = new THREE.Vector3(0, 1, 0);
+
+export interface ChaseCameraInput {
+  /** Car world position on the ground reference plane (m) */
+  carPos: THREE.Vector3;
+  /** Car orientation in world space (used when carForward / carUp / carRight are omitted) */
+  carQuaternion?: THREE.Quaternion;
+  /** Optional car forward unit vector (+Z in car frame) */
+  carForward?: THREE.Vector3;
+  /** Optional car up unit vector (+Y in car frame) */
+  carUp?: THREE.Vector3;
+  /** Optional car right unit vector (-X in car frame) */
+  carRight?: THREE.Vector3;
+  /** Optional 3D world velocity of the car (m/s) */
+  carVelocity?: THREE.Vector3;
+  /** Longitudinal acceleration in G (+ = forward acceleration, - = braking) */
+  longitudinalG: number;
+  /** Lateral acceleration in G (+ = right turn, - = left turn) */
+  lateralG: number;
+  /** Vertical load in G (1.0 at rest on flat ground) */
+  verticalG: number;
+  /** Car wheelbase (m); defaults to 3.5 */
+  wheelbaseM?: number;
+  /** Static CG height above ground (m); defaults to 0.30 */
+  cgHeightM?: number;
+  /** Dynamic ride height / heave offset (m); defaults to 0 */
+  rideHeightOffsetM?: number;
+  /** High-frequency kerb shake vertical offset (m); defaults to 0 */
+  kerbShakeM?: number;
+  /** Whether manual-override / push boost is active */
+  manualOverrideActive?: boolean;
+  /** Optional look-around yaw (-2 = look back, +1 = look left, -1 = look right, 0 = forward) */
+  lookYaw?: number;
+  /** Optional look-around pitch (-1..1, scaled by pi/4) */
+  lookPitch?: number;
+}
+
+export interface ChaseCameraOutput {
+  position: THREE.Vector3;
+  direction: THREE.Vector3;
+  lookAt: THREE.Vector3;
+  up: THREE.Vector3;
+  fovDeg: number;
+  /** Instantaneous longitudinal boom distance (m) */
+  fxDistanceM: number;
+  /** Banking roll height compensation along carUp (m) */
+  rollAddM: number;
+  /** Vertical G heave offset along carUp (m) */
+  vertFxM: number;
+}
+
+/**
+ * Velocity-trailing dynamic chase camera rig with dual-rate 3D G-force smoothing, wheelbase-scaled boom geometry,
+ * longitudinal G surge, lateral G cornering sway, vertical G heave + pitch compensation, quintic smootherstep
+ * banking height compensation, and subtle horizon roll tilt. Allocation-free: returns the same output instance on
+ * every call.
+ */
+export class DynamicChaseCamera {
+  private readonly out: ChaseCameraOutput = {
+    position: new THREE.Vector3(),
+    direction: new THREE.Vector3(0, 0, 1),
+    lookAt: new THREE.Vector3(0, 0, 15),
+    up: new THREE.Vector3(0, 1, 0),
+    fovDeg: CHASE_BASE_FOV_DEG,
+    fxDistanceM: CHASE_BASE_DISTANCE_M + 1.75,
+    rollAddM: 0,
+    vertFxM: 0,
+  };
+
+  private readonly carVelocity = new THREE.Vector3();
+  private readonly carVelocityRaw = new THREE.Vector3();
+  private readonly carAccel = new THREE.Vector3();
+  private readonly carAccelFx = new THREE.Vector3();
+  private readonly carAccelFy = new THREE.Vector3();
+  private readonly gForce = new THREE.Vector3();
+  private readonly camDirLowSpeed = new THREE.Vector3(0, 0, 1);
+  private readonly lastCarPos = new THREE.Vector3();
+
+  // Scratch vectors to keep update() allocation-free
+  private readonly carForward = new THREE.Vector3(0, 0, 1);
+  private readonly carUp = new THREE.Vector3(0, 1, 0);
+  private readonly carRight = new THREE.Vector3(-1, 0, 0);
+  private readonly carDirFlat = new THREE.Vector3(0, 0, 1);
+  private readonly carRightFlat = new THREE.Vector3(-1, 0, 0);
+  private readonly cameraDir = new THREE.Vector3(0, 0, 1);
+  private readonly cameraUp = new THREE.Vector3(0, 1, 0);
+  private readonly cameraRight = new THREE.Vector3(-1, 0, 0);
+  private readonly delta = new THREE.Vector3();
+  private readonly lowSpeedTarget = new THREE.Vector3();
+  private readonly velHoriz = new THREE.Vector3();
+  private readonly scratchCross = new THREE.Vector3();
+
+  private camPitch = 0;
+  private carSpeedSmooth = 0;
+  private lookDirection = 0;
+  private lookPitch = 0;
+  private rollAdd = 0;
+  private boostExtraDist = 0;
+  private fovDeg = CHASE_BASE_FOV_DEG;
+  private prevRawVertG = 0;
+  private hpfVertG = 0;
+  private initialised = false;
+
+  update(dt: number, input: ChaseCameraInput): ChaseCameraOutput {
+    const out = this.out;
+    const h = dt > 0 && Number.isFinite(dt) ? Math.min(dt, 0.05) : 0;
+
+    if (input.carForward && input.carUp && input.carRight) {
+      this.carForward.copy(input.carForward);
+      this.carUp.copy(input.carUp);
+      this.carRight.copy(input.carRight);
+    } else if (input.carQuaternion) {
+      this.carRight.set(-1, 0, 0).applyQuaternion(input.carQuaternion);
+      this.carUp.set(0, 1, 0).applyQuaternion(input.carQuaternion);
+      this.carForward.set(0, 0, 1).applyQuaternion(input.carQuaternion);
+    } else {
+      this.carForward.set(0, 0, 1);
+      this.carUp.set(0, 1, 0);
+      this.carRight.set(-1, 0, 0);
+    }
+    if (this.carForward.lengthSq() > 1e-8) this.carForward.normalize();
+    else this.carForward.set(0, 0, 1);
+    if (this.carUp.lengthSq() > 1e-8) this.carUp.normalize();
+    else this.carUp.set(0, 1, 0);
+    if (this.carRight.lengthSq() > 1e-8) this.carRight.normalize();
+    else this.carRight.crossVectors(this.carForward, this.carUp).normalize();
+
+    this.carDirFlat.set(this.carForward.x, 0, this.carForward.z);
+    if (this.carDirFlat.lengthSq() > 1e-8) this.carDirFlat.normalize();
+    else this.carDirFlat.set(0, 0, 1);
+
+    this.carRightFlat.set(this.carRight.x, 0, this.carRight.z);
+    if (this.carRightFlat.lengthSq() > 1e-8) this.carRightFlat.normalize();
+    else this.carRightFlat.set(-this.carDirFlat.z, 0, this.carDirFlat.x);
+
+    const wheelbaseM =
+      input.wheelbaseM !== undefined && Number.isFinite(input.wheelbaseM) && input.wheelbaseM > 0
+        ? input.wheelbaseM
+        : 3.5;
+    const halfWheelbaseM = wheelbaseM * 0.5;
+    const cgHeightM =
+      input.cgHeightM !== undefined && Number.isFinite(input.cgHeightM) ? input.cgHeightM : 0.3;
+    const rideHeightOffsetM =
+      input.rideHeightOffsetM !== undefined && Number.isFinite(input.rideHeightOffsetM) ? input.rideHeightOffsetM : 0;
+    const kerbShakeM =
+      input.kerbShakeM !== undefined && Number.isFinite(input.kerbShakeM) ? input.kerbShakeM : 0;
+    const distance = CHASE_BASE_DISTANCE_M + halfWheelbaseM;
+
+    const lonG = Number.isFinite(input.longitudinalG) ? input.longitudinalG : 0;
+    const latG = Number.isFinite(input.lateralG) ? input.lateralG : 0;
+    const rawVertG = (Number.isFinite(input.verticalG) ? input.verticalG : 1) - 1;
+
+    if (!this.initialised) {
+      this.lastCarPos.copy(input.carPos);
+      if (input.carVelocity && Number.isFinite(input.carVelocity.x)) {
+        this.carVelocityRaw.copy(input.carVelocity);
+      } else {
+        this.carVelocityRaw.set(0, 0, 0);
+      }
+      this.carVelocity.copy(this.carVelocityRaw);
+      this.carSpeedSmooth = this.carVelocityRaw.length();
+      this.camPitch = Math.asin(clampRange(this.carForward.y, -1, 1));
+      this.camDirLowSpeed.copy(this.carDirFlat);
+      this.lookDirection = input.lookYaw ?? 0;
+      this.lookPitch = (input.lookPitch ?? 0) * (Math.PI * 0.25);
+      this.boostExtraDist = input.manualOverrideActive ? CHASE_BOOST_EXTRA_DIST_M : 0;
+      this.fovDeg = CHASE_BASE_FOV_DEG;
+      this.prevRawVertG = rawVertG;
+      this.hpfVertG = 0;
+      this.initialised = true;
+    }
+
+    if (h > 0) {
+      // High-pass verticalG: telemetry.verticalG includes steady-state aerodynamic downforce (up to ~3.5 G at 320 km/h),
+      // which would otherwise sink the camera into the road and pitch it upward at speed. Only transient crests/dips pass.
+      const aHp = CHASE_VERT_G_HPF_RC / (CHASE_VERT_G_HPF_RC + h);
+      this.hpfVertG = aHp * (this.hpfVertG + rawVertG - this.prevRawVertG);
+      this.prevRawVertG = rawVertG;
+      this.gForce.set(latG, this.hpfVertG, lonG);
+
+      // Dual-rate G-force smoothing: low-pass sustained load (dt * 2) and fast road vibration (dt * 30)
+      this.carAccel.lerp(this.gForce, Math.min(1, h * 2));
+      this.carAccelFx.lerp(this.gForce, Math.min(1, h * 30));
+      this.carAccelFy.lerp(this.gForce, Math.min(1, h * 2));
+
+      // 3D world velocity with > 5 m teleport clamping
+      this.delta.subVectors(input.carPos, this.lastCarPos);
+      const deltaLen = this.delta.length();
+      this.lastCarPos.copy(input.carPos);
+
+      if (deltaLen > CHASE_MAX_DELTA_M) {
+        // Discontinuity / teleport: clamp delta so velocity never spikes
+        if (input.carVelocity && Number.isFinite(input.carVelocity.x)) {
+          this.carVelocityRaw.copy(input.carVelocity);
+          const vLen = this.carVelocityRaw.length();
+          if (vLen > CHASE_MAX_DELTA_M / h) {
+            this.carVelocityRaw.multiplyScalar(CHASE_MAX_DELTA_M / h / vLen);
+          }
+        } else {
+          this.delta.multiplyScalar((CHASE_MAX_DELTA_M * h) / deltaLen);
+          this.carVelocityRaw.copy(this.delta).divideScalar(h);
+        }
+        this.camDirLowSpeed.copy(this.carDirFlat);
+      } else if (deltaLen > 1e-6) {
+        this.carVelocityRaw.copy(this.delta).divideScalar(h);
+      } else if (input.carVelocity && Number.isFinite(input.carVelocity.x)) {
+        this.carVelocityRaw.copy(input.carVelocity);
+      } else {
+        this.carVelocityRaw.set(0, 0, 0);
+      }
+
+      this.carVelocity.lerp(this.carVelocityRaw, Math.min(1, h * 8));
+      const carSpeed = this.carVelocityRaw.length();
+      this.carSpeedSmooth += (carSpeed - this.carSpeedSmooth) * Math.min(1, h * 32);
+    }
+
+    // Low-speed heading blend and velocity climb/dive pitch tracking
+    const speedGate = clamp01(this.carSpeedSmooth - 1);
+    const carPitch = Math.asin(clampRange(this.carForward.y, -1, 1));
+    const velLen = this.carVelocity.length();
+    const velDirY = velLen > 1e-5 ? this.carVelocity.y / velLen : this.carForward.y;
+    const velPitchTarget = Math.asin(clampRange(velDirY, -1, 1));
+    const pitchTarget = carPitch + (velPitchTarget - carPitch) * speedGate;
+    if (h > 0) {
+      this.camPitch += (pitchTarget - this.camPitch) * Math.min(1, h * 2);
+    } else {
+      this.camPitch = pitchTarget;
+    }
+
+    const rawSpeed = Math.max(1, this.carVelocityRaw.length());
+    this.lowSpeedTarget.copy(this.carDirFlat).multiplyScalar(rawSpeed);
+    this.velHoriz.set(this.carVelocity.x, 0, this.carVelocity.z);
+    if (this.velHoriz.lengthSq() < 1e-6) {
+      this.velHoriz.copy(this.carDirFlat).multiplyScalar(rawSpeed);
+    }
+    this.lowSpeedTarget.lerp(this.velHoriz, speedGate);
+    if (h > 0) {
+      this.camDirLowSpeed.lerp(this.lowSpeedTarget, Math.min(1, h));
+    } else {
+      this.camDirLowSpeed.copy(this.lowSpeedTarget);
+    }
+    this.camDirLowSpeed.y = 0;
+    if (this.camDirLowSpeed.lengthSq() > 1e-8) {
+      this.camDirLowSpeed.normalize();
+    } else {
+      this.camDirLowSpeed.copy(this.carDirFlat);
+    }
+
+    // Bound horizontal yaw lag relative to carForward so full spins or respawns never invert the boom
+    const lagRad = Math.atan2(
+      this.scratchCross.crossVectors(this.carDirFlat, this.camDirLowSpeed).y,
+      this.camDirLowSpeed.dot(this.carDirFlat)
+    );
+    if (!(Math.abs(lagRad) <= CHASE_MAX_LAG_RAD)) {
+      this.camDirLowSpeed
+        .copy(this.carDirFlat)
+        .applyAxisAngle(WORLD_UP, Number.isFinite(lagRad) ? Math.sign(lagRad) * CHASE_MAX_LAG_RAD : 0)
+        .normalize();
+    }
+
+    this.cameraDir.copy(this.camDirLowSpeed);
+    const upDotRightFlat = this.carUp.dot(this.carRightFlat);
+    this.cameraUp.copy(this.carUp).addScaledVector(this.carRightFlat, -upDotRightFlat);
+    if (this.cameraUp.lengthSq() < 1e-8) this.cameraUp.set(0, 1, 0);
+
+    this.cameraRight.crossVectors(this.cameraDir, this.cameraUp);
+    if (this.cameraRight.lengthSq() > 1e-8) this.cameraRight.normalize();
+    else this.cameraRight.copy(this.carRightFlat);
+
+    this.cameraDir.applyAxisAngle(this.cameraRight, this.camPitch).normalize();
+    this.cameraRight.crossVectors(this.cameraDir, this.cameraUp);
+    if (this.cameraRight.lengthSq() > 1e-8) this.cameraRight.normalize();
+    else this.cameraRight.copy(this.carRightFlat);
+
+    // Look-around yaw / pitch
+    const lookYawTarget = input.lookYaw !== undefined && Number.isFinite(input.lookYaw) ? input.lookYaw : 0;
+    const lookPitchTarget =
+      (input.lookPitch !== undefined && Number.isFinite(input.lookPitch) ? input.lookPitch : 0) * (Math.PI * 0.25);
+    const lookLerp = h > 0 ? Math.min(1, h * 10) : 1;
+    this.lookDirection += (lookYawTarget - this.lookDirection) * lookLerp;
+    this.lookPitch += (lookPitchTarget - this.lookPitch) * lookLerp;
+    if (Math.abs(this.lookDirection) > 1e-5) {
+      this.cameraDir.applyAxisAngle(WORLD_UP, this.lookDirection * (Math.PI * 0.5));
+    }
+    if (Math.abs(this.lookPitch) > 1e-5) {
+      this.cameraDir.applyAxisAngle(this.cameraRight, this.lookPitch);
+    }
+    this.cameraDir.normalize();
+    this.cameraRight.crossVectors(this.cameraDir, this.cameraUp);
+    if (this.cameraRight.lengthSq() > 1e-8) this.cameraRight.normalize();
+    else this.cameraRight.copy(this.carRightFlat);
+
+    // Longitudinal G surge, pitch-angle height compensation, vertical G heave, and banking roll compensation
+    const boostTarget = input.manualOverrideActive ? CHASE_BOOST_EXTRA_DIST_M : 0;
+    this.boostExtraDist += (boostTarget - this.boostExtraDist) * (h > 0 ? Math.min(1, h * 8) : 1);
+    const fxDistance =
+      distance + (Math.sin(Math.atan(1.5 * this.carAccel.z - 0.258)) + 0.25) * 0.35 + this.boostExtraDist;
+    const height = CHASE_BASE_HEIGHT_M + fxDistance * Math.tan(-CHASE_PITCH_RAD);
+
+    const vertFx = clampAbs(
+      Math.sin(Math.atan(-this.carAccelFy.y)) * 0.32 +
+        Math.sin(Math.atan(-this.carAccelFx.y)) * 0.08 * (this.carSpeedSmooth / 30),
+      CHASE_VERT_FX_LIMIT_M
+    );
+
+    const rollAngle = -Math.atan2(
+      this.scratchCross.crossVectors(this.carRight, this.carRightFlat).dot(this.carForward),
+      this.carRight.dot(this.carRightFlat)
+    );
+    const rollClamped = clampRange(Math.abs(rollAngle), 0, CHASE_ROLL_LIMIT_RAD);
+    const rollRange = rollClamped / CHASE_ROLL_LIMIT_RAD;
+    const rollSmooth = smootherstep(rollRange);
+    const rollTarget = height * 0.65 * Math.tan(rollSmooth * CHASE_ROLL_LIMIT_RAD);
+    if (h > 0) {
+      this.rollAdd += (rollTarget - this.rollAdd) * Math.min(1, h);
+    } else {
+      this.rollAdd = rollTarget;
+    }
+
+    const carAngle = Math.atan2(this.carForward.z, this.carForward.x);
+    const velocityAngle = Math.atan2(this.cameraDir.z, this.cameraDir.x);
+    const velocityPitch = Math.asin(clampRange(-this.cameraDir.y, -1, 1));
+    const diffAngle = velocityAngle - carAngle;
+    const cosVelPitch = Math.cos(velocityPitch);
+    // Swing camera toward the outside of the turn (-carRight for right turn where lateralG > 0)
+    const lateralSwayM = -Math.sin(Math.atan(this.carAccel.x)) * (wheelbaseM / 8);
+
+    out.position
+      .copy(input.carPos)
+      .addScaledVector(this.carRightFlat, Math.sin(diffAngle) * cosVelPitch * -fxDistance)
+      .addScaledVector(this.carDirFlat, Math.cos(diffAngle) * cosVelPitch * -fxDistance)
+      .addScaledVector(WORLD_UP, Math.sin(velocityPitch) * fxDistance)
+      .addScaledVector(this.cameraUp, height + cgHeightM + rideHeightOffsetM * 0.5)
+      .addScaledVector(this.carUp, this.rollAdd + vertFx + kerbShakeM)
+      .addScaledVector(this.carRight, lateralSwayM);
+
+    const heavePitchRad = -Math.atan(vertFx / Math.max(0.5, fxDistance + halfWheelbaseM));
+    this.cameraDir.applyAxisAngle(this.cameraRight, heavePitchRad + CHASE_PITCH_RAD).normalize();
+    out.direction.copy(this.cameraDir);
+    out.lookAt.copy(out.position).addScaledVector(this.cameraDir, 15);
+
+    // Horizon roll tilt (~1 deg under sustained lateral G, plus partial banking blend on heavily banked turns)
+    const horizonRollRad = -DEG2RAD * Math.sin(Math.atan(2 * this.carAccel.x));
+    out.up.copy(WORLD_UP).applyAxisAngle(this.carDirFlat, horizonRollRad);
+    if (rollSmooth > 1e-4) {
+      out.up.lerp(this.carUp, rollSmooth * 0.35);
+    }
+    out.up.normalize();
+
+    const speedNorm = clamp01((this.carSpeedSmooth * 3.6) / 350);
+    const boostFovKick = input.manualOverrideActive ? CHASE_BOOST_FOV_ADD_DEG : 0;
+    const fovTarget = CHASE_BASE_FOV_DEG + speedNorm * CHASE_SPEED_FOV_ADD_DEG + boostFovKick;
+    if (h > 0) {
+      this.fovDeg += (fovTarget - this.fovDeg) * Math.min(1, h * 10);
+    } else {
+      this.fovDeg = fovTarget;
+    }
+    out.fovDeg = this.fovDeg;
+    out.fxDistanceM = fxDistance;
+    out.rollAddM = this.rollAdd;
+    out.vertFxM = vertFx;
+    return out;
+  }
+
+  reset(): void {
+    this.carVelocity.set(0, 0, 0);
+    this.carVelocityRaw.set(0, 0, 0);
+    this.carAccel.set(0, 0, 0);
+    this.carAccelFx.set(0, 0, 0);
+    this.carAccelFy.set(0, 0, 0);
+    this.gForce.set(0, 0, 0);
+    this.camDirLowSpeed.set(0, 0, 1);
+    this.lastCarPos.set(0, 0, 0);
+    this.camPitch = 0;
+    this.carSpeedSmooth = 0;
+    this.lookDirection = 0;
+    this.lookPitch = 0;
+    this.rollAdd = 0;
+    this.boostExtraDist = 0;
+    this.fovDeg = CHASE_BASE_FOV_DEG;
+    this.prevRawVertG = 0;
+    this.hpfVertG = 0;
+    this.initialised = false;
+  }
+}
+
 /** Unity-style critically damped smoothing of a vector toward `target`, in place, no allocation */
 function smoothDamp3(cur: THREE.Vector3, target: THREE.Vector3, vel: THREE.Vector3, smoothTime: number, h: number): void {
   const omega = 2 / smoothTime;
