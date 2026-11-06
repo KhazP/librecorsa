@@ -263,6 +263,7 @@ interface DrivetrainRuntime {
   shiftTarget: number;
   shiftTimerS: number;
   autoShiftCooldownS: number;
+  downshiftProtectedGear: number;
   engineOmega: number;
   clutchLocked: boolean;
   clutchEngagement: number;
@@ -1163,6 +1164,7 @@ export class F1Physics2026 {
       shiftTarget: 1,
       shiftTimerS: 0,
       autoShiftCooldownS: 0,
+      downshiftProtectedGear: 0,
       engineOmega: VF26_ENGINE.idleRpm * RPM2RADS,
       clutchLocked: false,
       clutchEngagement: 0,
@@ -1825,18 +1827,37 @@ export class F1Physics2026 {
         const rpmAfter = rearOmega * this.overallRatio(desired) * RADS2RPM;
         if (rpmAfter > VF26_ENGINE.maxRpm - 500) desired = drv.gear;
       }
+      if (desired !== drv.gear) {
+        // Manual override holds for 1.0 s; a manual short-shift up stays protected from auto-downshift while accelerating
+        drv.autoShiftCooldownS = 1.0;
+        drv.downshiftProtectedGear = desired > drv.gear ? desired : 0;
+      }
     } else if ((this.autoGearbox || this.aiAutopilot) && drv.gear >= 1 && drv.autoShiftCooldownS <= 0) {
+      if (drv.downshiftProtectedGear !== drv.gear || brake > 0.05 || throttle < 0.02) {
+        drv.downshiftProtectedGear = 0;
+      }
       const rpm = drv.engineOmega * RADS2RPM;
-      if (drv.gear < 8 && rpm > VF26_DRIVETRAIN.autoUpshiftRpm && drv.clutchLocked && brake < 0.1) {
+      const roadOmega = Math.max(0, this.vxMs) / this.wheels[2].tyre.spec.radius;
+      const rpmRoad = roadOmega * this.overallRatio(drv.gear) * RADS2RPM;
+      const rearGrounded = this.wheels[2].fzN > 1 || this.wheels[3].fzN > 1;
+      const rearSpinning = Math.max(this.wheels[2].slipRatio, this.wheels[3].slipRatio) > 0.14;
+      if (
+        drv.gear < 8 &&
+        rpm > VF26_DRIVETRAIN.autoUpshiftRpm &&
+        drv.clutchLocked &&
+        brake < 0.1 &&
+        rearGrounded &&
+        (!rearSpinning || rpmRoad > VF26_DRIVETRAIN.autoUpshiftRpm)
+      ) {
         desired = drv.gear + 1;
       } else if (drv.gear > 1) {
         // Downshift decisions use road speed so a locking / spinning rear axle can't trigger
-        // a cascade of downshifts
-        const roadOmega = Math.max(0, this.vxMs) / this.wheels[2].tyre.spec.radius;
-        const rpmRoad = roadOmega * this.overallRatio(drv.gear) * RADS2RPM;
+        // a cascade of downshifts; manually short-shifted gears stay protected while accelerating
         const rpmLower = Math.max(rearOmega, roadOmega) * this.overallRatio(drv.gear - 1) * RADS2RPM;
+        const protectedShortShift = drv.downshiftProtectedGear === drv.gear && rpmRoad > 5500;
         const wantsDown =
-          (rpmRoad < VF26_DRIVETRAIN.autoDownshiftRpm && (brake > 0.05 || throttle < 0.6)) || rpmRoad < 6200;
+          !protectedShortShift &&
+          ((rpmRoad < VF26_DRIVETRAIN.autoDownshiftRpm && (brake > 0.05 || throttle < 0.6)) || rpmRoad < 6200);
         if (wantsDown && rpmLower < VF26_DRIVETRAIN.autoUpshiftRpm - 600) desired = drv.gear - 1;
       }
       if (desired !== drv.gear) drv.autoShiftCooldownS = 0.12;
