@@ -62,6 +62,20 @@ export interface PlayerSettings {
   realism: SimRealism;
   /** Weather, time of day and time multiplier for offline sessions (the host's apply online) */
   conditions: SessionConditions;
+  /** Starred and recently chosen cars and circuits (the car and circuit browsers) */
+  library: ContentLibrary;
+}
+
+export type LibraryKind = "cars" | "circuits";
+
+/**
+ * Favourites and recents, by car id and circuit (layout) id. Ids are kept even when their content is gone from this
+ * build: the browsers only show ids they know, and a car that comes back keeps its star.
+ */
+export interface ContentLibrary {
+  favorites: Record<LibraryKind, string[]>;
+  /** Most recent first */
+  recent: Record<LibraryKind, string[]>;
 }
 
 export interface PadTuning {
@@ -201,6 +215,15 @@ export const DEFAULT_HUD_SETTINGS: HudSettings = {
   headMovement: "natural",
 };
 
+export const DEFAULT_CONTENT_LIBRARY: ContentLibrary = {
+  favorites: { cars: [], circuits: [] },
+  recent: { cars: [], circuits: [] },
+};
+/** Longest lists kept: favourites can grow with the content, recents are a short history */
+export const LIBRARY_FAVORITES_MAX = 256;
+export const LIBRARY_RECENT_MAX = 12;
+const LIBRARY_ID_MAX_LENGTH = 64;
+
 export const DEFAULT_GRAPHICS_SETTINGS: GraphicsSettings = { quality: "high", renderScale: 1 };
 
 export const DEFAULT_TOUCH_SETTINGS: TouchSettings = { mode: "auto", tiltSteer: false, tiltRangeDeg: 30 };
@@ -271,6 +294,7 @@ export const DEFAULT_PLAYER_SETTINGS: PlayerSettings = {
   aiSkill: AI_SKILL_DEFAULT,
   realism: "full",
   conditions: DEFAULT_SESSION_CONDITIONS,
+  library: DEFAULT_CONTENT_LIBRARY,
 };
 
 const CAMERA_MODES: readonly CameraMode[] = ["chase", "tv_pod", "cockpit_shoulder", "cockpit", "nose", "helicopter", "tv_side"];
@@ -473,6 +497,48 @@ function parseProfile(v: unknown): DriverProfile {
   };
 }
 
+/** Unique, printable ids of sane length, at most `max` of them; anything else is dropped */
+function parseIdList(v: unknown, max: number): string[] {
+  if (!Array.isArray(v)) return [];
+  const out: string[] = [];
+  for (const id of v) {
+    if (out.length >= max) break;
+    if (!isStr(id) || !id || id.length > LIBRARY_ID_MAX_LENGTH || !/^[\w.-]+$/.test(id) || out.includes(id)) continue;
+    out.push(id);
+  }
+  return out;
+}
+
+function parseLibrary(v: unknown): ContentLibrary {
+  if (!isObj(v)) return structuredClone(DEFAULT_CONTENT_LIBRARY);
+  const fav = isObj(v.favorites) ? v.favorites : {};
+  const recent = isObj(v.recent) ? v.recent : {};
+  return {
+    favorites: { cars: parseIdList(fav.cars, LIBRARY_FAVORITES_MAX), circuits: parseIdList(fav.circuits, LIBRARY_FAVORITES_MAX) },
+    recent: { cars: parseIdList(recent.cars, LIBRARY_RECENT_MAX), circuits: parseIdList(recent.circuits, LIBRARY_RECENT_MAX) },
+  };
+}
+
+/**
+ * Stars or unstars: `ids` are the entry's ids (a circuit venue passes every layout's). Starring adds the first one;
+ * unstarring removes them all, so a venue starred through any of its layouts comes off in one press.
+ */
+export function toggleLibraryFavorite(lib: ContentLibrary, kind: LibraryKind, ids: readonly string[]): ContentLibrary {
+  if (!ids.length) return lib;
+  const list = lib.favorites[kind];
+  const starred = ids.some((id) => list.includes(id));
+  const next = starred ? list.filter((id) => !ids.includes(id)) : [...list, ids[0]].slice(-LIBRARY_FAVORITES_MAX);
+  return { ...lib, favorites: { ...lib.favorites, [kind]: next } };
+}
+
+/** Moves an id to the front of the recents; returns the same object when it already is first (no re-render) */
+export function pushLibraryRecent(lib: ContentLibrary, kind: LibraryKind, id: string): ContentLibrary {
+  const list = lib.recent[kind];
+  if (list[0] === id) return lib;
+  const next = [id, ...list.filter((x) => x !== id)].slice(0, LIBRARY_RECENT_MAX);
+  return { ...lib, recent: { ...lib.recent, [kind]: next } };
+}
+
 /** Validates a parsed save; unknown or invalid fields take their defaults */
 export function parsePlayerSettings(raw: unknown): PlayerSettings {
   const d = DEFAULT_PLAYER_SETTINGS;
@@ -512,6 +578,7 @@ export function parsePlayerSettings(raw: unknown): PlayerSettings {
     aiSkill: Math.round(num(raw.aiSkill, 0, 100, d.aiSkill)),
     realism: oneOf(raw.realism, SIM_REALISM_LEVELS, d.realism),
     conditions: sanitizeConditions(raw.conditions),
+    library: parseLibrary(raw.library),
   };
 }
 

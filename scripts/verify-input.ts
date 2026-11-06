@@ -37,9 +37,13 @@ import {
   DEFAULT_PLAYER_SETTINGS,
   FFB_POLARITY_V2_KEY,
   loadPlayerSettings,
+  LIBRARY_FAVORITES_MAX,
+  LIBRARY_RECENT_MAX,
   parsePlayerSettings,
+  pushLibraryRecent,
   savePlayerSettings,
   SETTINGS_STORAGE_KEY,
+  toggleLibraryFavorite,
 } from '../src/lib/settings/player-settings';
 
 let passed = 0;
@@ -311,6 +315,34 @@ check('round trip through JSON', () => {
     cockpitFovDeg: 48,
   };
   s.wheel = { ...s.wheel, ffbEnabled: true, ffbGain: 0.8, ffbMinForce: 0.05, ffbKerb: 0.6, ffbAbs: 0, ffbInvert: true };
+  assert.deepEqual(parsePlayerSettings(JSON.parse(JSON.stringify(s))), s);
+});
+check('browser library: favourites / recents validated, de-duplicated and capped; older saves get empty lists', () => {
+  assert.deepEqual(parsePlayerSettings({}).library, { favorites: { cars: [], circuits: [] }, recent: { cars: [], circuits: [] } });
+  assert.deepEqual(parsePlayerSettings({ library: 'x' }).library, DEFAULT_PLAYER_SETTINGS.library);
+  const lib = parsePlayerSettings({
+    library: {
+      favorites: { cars: ['w17', 'w17', 7, '', 'bad id', '<x>', 'a'.repeat(65), 'sf26'], circuits: 'spa' },
+      recent: { cars: Array.from({ length: 40 }, (_, i) => `car${i}`), circuits: ['daytona_oval', null] },
+    },
+  }).library;
+  assert.deepEqual(lib.favorites, { cars: ['w17', 'sf26'], circuits: [] });
+  assert.equal(lib.recent.cars.length, LIBRARY_RECENT_MAX);
+  assert.deepEqual(lib.recent.circuits, ['daytona_oval']);
+  const many = parsePlayerSettings({ library: { favorites: { cars: Array.from({ length: 999 }, (_, i) => `c${i}`) } } }).library;
+  assert.equal(many.favorites.cars.length, LIBRARY_FAVORITES_MAX);
+  // A venue starred through one layout comes off through any of them
+  let l = toggleLibraryFavorite(DEFAULT_PLAYER_SETTINGS.library, 'circuits', ['daytona_road', 'daytona_oval']);
+  assert.deepEqual(l.favorites.circuits, ['daytona_road']);
+  l = toggleLibraryFavorite(l, 'circuits', ['daytona_oval', 'daytona_road']);
+  assert.deepEqual(l.favorites.circuits, []);
+  // Recents: newest first, no repeats, same object when nothing changes
+  let r = pushLibraryRecent(DEFAULT_PLAYER_SETTINGS.library, 'cars', 'w17');
+  r = pushLibraryRecent(r, 'cars', 'sf26');
+  r = pushLibraryRecent(r, 'cars', 'w17');
+  assert.deepEqual(r.recent.cars, ['w17', 'sf26']);
+  assert.equal(pushLibraryRecent(r, 'cars', 'w17'), r);
+  const s = { ...DEFAULT_PLAYER_SETTINGS, library: r };
   assert.deepEqual(parsePlayerSettings(JSON.parse(JSON.stringify(s))), s);
 });
 check('pre-fix ffbInvert: true save is reset once on load; post-v2 ffbInvert: true is preserved', () => {
