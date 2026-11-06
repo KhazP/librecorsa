@@ -198,8 +198,10 @@ function loadTrackGlb(
         let node: THREE.Object3D | null = obj;
         let topName = obj.name;
         let isCollider = false;
+        let isDecal = false;
         while (node && node !== root) {
           if (node.userData?.collider || node.userData?.hidden) isCollider = true;
+          if (node.userData?.decal) isDecal = true;
           topName = node.name;
           node = node.parent;
         }
@@ -226,13 +228,13 @@ function loadTrackGlb(
           return;
         }
 
-        const receiveOnly = SHADOW_RECEIVE_ONLY.has(topName);
+        const receiveOnly = SHADOW_RECEIVE_ONLY.has(topName) || isDecal;
         obj.receiveShadow = true;
         if (topName === "Track_Model") {
           // Converted scans have no naming contract: only tall things (stands, buildings, trees, barriers) cast
           obj.geometry.computeBoundingBox();
           box.copy(obj.geometry.boundingBox!).applyMatrix4(obj.matrixWorld).getSize(size);
-          obj.castShadow = size.y > 1.2;
+          obj.castShadow = !isDecal && size.y > 1.2;
         } else {
           obj.castShadow = !receiveOnly && (topName.startsWith("Prop_") || topName.startsWith("Env_") || topName.startsWith("Track_"));
         }
@@ -241,7 +243,7 @@ function loadTrackGlb(
           for (const m of Array.isArray(obj.material) ? obj.material : [obj.material]) cleanScanMaterial(m);
         }
         obj.material = Array.isArray(obj.material) ? obj.material.map(withRoughDiffuse) : withRoughDiffuse(obj.material);
-        const offset = DECAL_NODES[topName];
+        const offset = DECAL_NODES[topName] ?? (isDecal ? -2 : undefined);
         const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
         // Flat, untextured scenery (Rwanda's trees, roofs, spire, lake, paint): shader detail, and the trees'
         // normals, tint and occlusion baked into their geometry (scenery-detail.ts)
@@ -268,6 +270,7 @@ function loadTrackGlb(
             mat.polygonOffset = true;
             mat.polygonOffsetFactor = offset;
             mat.polygonOffsetUnits = offset;
+            if (isDecal) mat.depthWrite = false;
           }
         }
         if (offset !== undefined) obj.renderOrder = 1;
@@ -1095,20 +1098,89 @@ export function buildCircuitScene(
     0.59
   );
 
+  const acRedSemaphores: THREE.MeshStandardMaterial[][] = [[], [], [], [], []];
+  const acGreenSemaphores: THREE.MeshStandardMaterial[] = [];
+  const grooveMeshes: { mat: THREE.MeshStandardMaterial; min: number; max: number; mult: number }[] = [];
+  let startLightState: number | null | undefined;
+
+  const applySemaphoreMaterials = (redCount: number | null) => {
+    for (let i = 0; i < 5; i++) {
+      const lit = redCount !== null && i < redCount;
+      for (const m of acRedSemaphores[i]) {
+        m.emissive.setHex(lit ? 0xff1a0a : 0x000000);
+        m.emissiveIntensity = lit ? 3.2 : 0;
+      }
+    }
+    const greenLit = redCount === null;
+    for (const m of acGreenSemaphores) {
+      m.emissive.setHex(greenLit ? 0x22c55e : 0x000000);
+      m.emissiveIntensity = greenLit ? 2.4 : 0;
+    }
+  };
+
   const attachStartLightsToGantry = (root: THREE.Object3D) => {
     root.updateMatrixWorld(true);
-    const assembly = root.getObjectByName("Prop_StartLights_0");
-    if (!assembly) return;
-    const box = new THREE.Box3().setFromObject(assembly);
-    const center = box.getCenter(new THREE.Vector3());
-    const size = box.getSize(new THREE.Vector3());
-    // Four lamps per column (amber, green, red, red): sit on the first red row, 1/8 of the height below centre
-    center.y -= size.y * 0.125;
-    // Extent of the box along the start direction: |sx·fx| + |sz·fz| (as for the width), not |size·fwd|, whose
-    // terms cancel on a diagonal straight
-    const depth = Math.abs(size.x * startFwd.x) + Math.abs(size.y * startFwd.y) + Math.abs(size.z * startFwd.z);
-    const width = Math.abs(size.x * startRight.x) + Math.abs(size.z * startRight.z);
-    placePods(center, depth * 0.5, width / 5);
+    // Collect dynamic tyre groove meshes (`groove.ini`) and AC semaphore meshes (`AC_SEMAPHORE_*`)
+    const semBox = new THREE.Box3();
+    let hasSemBox = false;
+    root.traverse((obj) => {
+      let gCfg: { min?: number; max?: number; mult?: number } | undefined = obj.userData?.groove;
+      if (!gCfg && obj.parent?.userData?.groove) gCfg = obj.parent.userData.groove;
+      if (gCfg && obj instanceof THREE.Mesh) {
+        const cloned = (Array.isArray(obj.material) ? obj.material : [obj.material]).map((m) => m.clone());
+        obj.material = Array.isArray(obj.material) ? cloned : cloned[0];
+        for (const m of cloned) {
+          if (m instanceof THREE.MeshStandardMaterial) {
+            m.transparent = true;
+            m.opacity = THREE.MathUtils.clamp(Number(gCfg.min ?? 0.25), 0.1, 1.0);
+            grooveMeshes.push({
+              mat: m,
+              min: Number(gCfg.min ?? 0.25),
+              max: Number(gCfg.max ?? 0.9),
+              mult: Number(gCfg.mult ?? 1.0),
+            });
+          }
+        }
+      }
+      const nm = obj.name || obj.parent?.name || "";
+      const redMatch = /^AC_SEMAPHORE_RED0?([1-5])$/i.exec(nm);
+      const greenMatch = /^AC_SEMAPHORE_GREEN/i.test(nm);
+      if ((redMatch || greenMatch) && obj instanceof THREE.Mesh) {
+        const cloned = (Array.isArray(obj.material) ? obj.material : [obj.material]).map((m) => m.clone());
+        obj.material = Array.isArray(obj.material) ? cloned : cloned[0];
+        for (const m of cloned) {
+          if (m instanceof THREE.MeshStandardMaterial) {
+            if (redMatch) acRedSemaphores[ Number(redMatch[1]) - 1 ].push(m);
+            if (greenMatch) acGreenSemaphores.push(m);
+          }
+        }
+        if (redMatch) {
+          semBox.expandByObject(obj);
+          hasSemBox = true;
+        }
+      }
+    });
+    if (startLightState !== undefined) applySemaphoreMaterials(startLightState);
+
+    const assembly = root.getObjectByName("Prop_StartLights_0") ?? root.getObjectByName("startlight_SUB1");
+    if (assembly) {
+      const box = new THREE.Box3().setFromObject(assembly);
+      const center = box.getCenter(new THREE.Vector3());
+      const size = box.getSize(new THREE.Vector3());
+      // Four lamps per column (amber, green, red, red): sit on the first red row, 1/8 of the height below centre
+      center.y -= size.y * 0.125;
+      // Extent of the box along the start direction: |sx·fx| + |sz·fz| (as for the width), not |size·fwd|, whose
+      // terms cancel on a diagonal straight
+      const depth = Math.abs(size.x * startFwd.x) + Math.abs(size.y * startFwd.y) + Math.abs(size.z * startFwd.z);
+      const width = Math.abs(size.x * startRight.x) + Math.abs(size.z * startRight.z);
+      placePods(center, depth * 0.5, Math.max(0.28, width / 5));
+    } else if (hasSemBox) {
+      const center = semBox.getCenter(new THREE.Vector3());
+      const size = semBox.getSize(new THREE.Vector3());
+      const depth = Math.abs(size.x * startFwd.x) + Math.abs(size.y * startFwd.y) + Math.abs(size.z * startFwd.z);
+      const width = Math.abs(size.x * startRight.x) + Math.abs(size.z * startRight.z);
+      placePods(center, depth * 0.5, Math.max(0.32, width / 5));
+    }
   };
 
   // ============================================================================
@@ -1320,9 +1392,19 @@ export function buildCircuitScene(
     );
     jetGroup.rotation.y = -jetAngle;
     jetGroup.rotation.z = 0.14;
+    if (grooveMeshes.length) {
+      // Dynamic tyre groove rubbering-in over session time (0 -> 1 over ~6 minutes, scaled by groove.mult)
+      const prog = Math.min(1, elapsedSeconds / 360);
+      for (const g of grooveMeshes) {
+        g.mat.opacity = THREE.MathUtils.clamp(
+          THREE.MathUtils.lerp(g.min, g.max, Math.min(1, prog * g.mult)),
+          0.1,
+          1.0
+        );
+      }
+    }
   };
 
-  let startLightState: number | null | undefined;
   const setStartLights = (redCount: number | null) => {
     if (redCount === startLightState) return;
     startLightState = redCount;
@@ -1342,6 +1424,7 @@ export function buildCircuitScene(
         mat.emissiveIntensity = 0;
       }
     });
+    applySemaphoreMaterials(redCount);
   };
 
   // Asynchronously load the authored Rwanda 2026 circuit (browser only)
