@@ -1746,10 +1746,12 @@ export class F1Physics2026 {
     const lowSpeedScale = THREE.MathUtils.lerp(0.03, 1.0, THREE.MathUtils.smoothstep(speedKmhNow, 0.5, 4.0));
     // 1. Pneumatic trail self-aligning torque Mz
     const mzPneumatic = (wFR.torqueAlignNm + wFL.torqueAlignNm) * lowSpeedScale;
-    // 2. Dynamic 3D caster trail lateral force moment
+    // 2. Dynamic 3D caster trail lateral force moment (attenuates as front tyres slide past peak grip in understeer)
     const casterTrailR = wFR.casterTrailM ?? VF26_CHASSIS.steering.mechanicalTrail;
     const casterTrailL = wFL.casterTrailM ?? VF26_CHASSIS.steering.mechanicalTrail;
-    const mzCaster = -(casterTrailR * wFR.fnN + casterTrailL * wFL.fnN) * lowSpeedScale;
+    const trailCollapseR = THREE.MathUtils.clamp(1 - ((wFR.combinedSlipNorm ?? 0) - 0.85) / 1.35, 0.18, 1);
+    const trailCollapseL = THREE.MathUtils.clamp(1 - ((wFL.combinedSlipNorm ?? 0) - 0.85) / 1.35, 0.18, 1);
+    const mzCaster = -(casterTrailR * trailCollapseR * wFR.fnN + casterTrailL * trailCollapseL * wFL.fnN) * lowSpeedScale;
     // 3. Scrub radius longitudinal force moment (cancels on symmetric straight braking, pulls on asymmetric lockup/kerb)
     const scrubR = wFR.scrubRadiusM ?? 0.018;
     const scrubL = wFL.scrubRadiusM ?? 0.018;
