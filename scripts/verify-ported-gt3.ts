@@ -12,6 +12,16 @@ import { BMW_M4_GT3_SOUND } from "../src/lib/sim/CarAudio";
 import { AMG_GT3_SOUND } from "../src/lib/sim/gt3/AmgGt3Sim";
 import { loadGlbGeometry } from "./lib/glb-geometry";
 import { gt3RigCameraAnchors } from "../src/lib/gt3-car-model";
+import { getActiveTrackData } from "../src/lib/track-data";
+import { trackGroundQuery } from "../src/lib/sim/f12026-car/F12026CarSim";
+import { createAmgGt3Sim } from "../src/lib/sim/gt3/AmgGt3Sim";
+import { AMG_GT3_CONFIG } from "../src/lib/sim/gt3/AmgGt3Config";
+import {
+  measurePortedWheelContact,
+  WHEEL_CONTACT_RUN_S,
+  WHEEL_ON_ROAD_TOLERANCE_MM,
+  type PortedWheelExtras,
+} from "./lib/ported-wheel-contact";
 
 let passed = 0;
 let failed = 0;
@@ -106,6 +116,7 @@ console.log("\n=== 1. Car Registry & Credits ===");
 // ---------------------------------------------------------------------------
 // 2. Ported GLB node layout, geometry & extras checks
 // ---------------------------------------------------------------------------
+const wheelExtras: Record<string, PortedWheelExtras> = {};
 for (const spec of PORTED_GT3_SPEC) {
   console.log(`\n=== 2. Ported GLB: ${spec.id} (${spec.title}) ===`);
   const glbPath = resolve(process.cwd(), `public/cars/${spec.id}/model/${spec.id}.glb`);
@@ -157,6 +168,9 @@ for (const spec of PORTED_GT3_SPEC) {
   check(`${spec.id} CAR.extras has wheelCentres, tyreRadius, tyreHalfWidth, cameras`, Boolean(
     extras.wheelCentres && extras.tyreRadius && extras.tyreHalfWidth && extras.cameras
   ));
+  if (extras.wheelCentres && extras.tyreRadius) {
+    wheelExtras[spec.id] = { wheelCentres: extras.wheelCentres, tyreRadius: extras.tyreRadius, tyreHalfWidth: extras.tyreHalfWidth };
+  }
 
   for (const c of CORNERS) {
     const wName = `WHEEL_${c}`;
@@ -273,6 +287,32 @@ for (const spec of PORTED_GT3_SPEC) {
       carSize.z < 5.2,
     `W=${carSize.x.toFixed(3)} m, H=${carSize.y.toFixed(3)} m, L=${carSize.z.toFixed(3)} m`
   );
+}
+
+// The wheels stay on the road (neither sunk nor floating) while the AMG GT3 model drives them
+{
+  console.log(`\n=== 3. Wheels on the road while driving (AMG GT3 model, Rwanda colliders) ===`);
+  const track = getActiveTrackData(1200);
+  const trackRoot = loadGlbGeometry(resolve(process.cwd(), `public${track.meshUrl ?? "/tracks/rwanda/rwanda_2026.glb"}`));
+  const ground = trackGroundQuery(trackRoot);
+  check("Rwanda track colliders load", Boolean(ground));
+  if (ground) {
+    const contact = measurePortedWheelContact(createAmgGt3Sim(track, trackRoot), ground, wheelExtras, AMG_GT3_CONFIG.chassis, WHEEL_CONTACT_RUN_S);
+    for (const spec of PORTED_GT3_SPEC) {
+      const r = contact[spec.id];
+      check(
+        `${spec.id} loaded tyres sit on the road within ±${WHEEL_ON_ROAD_TOLERANCE_MM} mm`,
+        Boolean(r) &&
+          r.samples > 10_000 &&
+          r.topSpeedKmh > 200 &&
+          r.minMm > -WHEEL_ON_ROAD_TOLERANCE_MM &&
+          r.maxMm < WHEEL_ON_ROAD_TOLERANCE_MM,
+        r
+          ? `${r.minMm.toFixed(1)}..${r.maxMm.toFixed(1)} mm up to ${r.topSpeedKmh.toFixed(0)} km/h (carried by the body: ${r.bodyFrameMinMm.toFixed(1)}..${r.bodyFrameMaxMm.toFixed(1)} mm)`
+          : "no extras"
+      );
+    }
+  }
 }
 
 // Ported GT3s keep the AMG GT3's views relative to their own driver and nose

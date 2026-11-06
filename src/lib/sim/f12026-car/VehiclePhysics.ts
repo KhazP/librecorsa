@@ -1363,6 +1363,14 @@ export class VehiclePhysics {
     return Math.min(w.ground.height, w.hubY - this.tyreRadiusOf(w));
   }
 
+  /**
+   * World height of the bottom of a wheel's tyre: the road (the climbed contact height) under a loaded tyre, the hub
+   * less the unloaded radius for one off the ground (in the air, or above a road the probe still reaches)
+   */
+  public tyreBottomY(w: WheelState): number {
+    return w.grounded && w.deflection > 0 ? w.ground.height : w.hubY - this.tyreRadiusOf(w);
+  }
+
   /** Unloaded radius of a wheel's tyre (m) */
   private tyreRadiusOf(w: WheelState): number {
     const tyre = this.tyres[w.isFront ? 0 : 1];

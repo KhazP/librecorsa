@@ -527,6 +527,7 @@ const _ex = new THREE.Vector3();
 const _ey = new THREE.Vector3();
 const _ez = new THREE.Vector3();
 const _v = new THREE.Vector3();
+const _qInv = new THREE.Quaternion();
 
 export class F12026CarSim implements SimulatorCar {
   public readonly vehicle: VehiclePhysics;
@@ -728,7 +729,13 @@ export class F12026CarSim implements SimulatorCar {
     this.config = structuredClone(profile.config);
     // Unloaded radii, used until the first step
     const geo = compoundData(this.config, this.config.compoundSlots.soft);
-    const vis = (radius: number): TyreVisualState => ({ loadedRadiusM: radius, verticalDeflectionM: 0, lateralForceN: 0, camberRad: 0 });
+    const vis = (radius: number): TyreVisualState => ({
+      loadedRadiusM: radius,
+      verticalDeflectionM: 0,
+      lateralForceN: 0,
+      camberRad: 0,
+      contactInCar: { x: 0, y: 0, z: 0 },
+    });
     this.tyreVisuals = [vis(geo.front.radius), vis(geo.front.radius), vis(geo.rear.radius), vis(geo.rear.radius)];
     this.baseWingDeg = this.config.aero.wings.map((w) => w.angleDeg);
     const sp = this.config.suspensions;
@@ -1713,6 +1720,7 @@ export class F12026CarSim implements SimulatorCar {
     _ey.set(0, 1, 0).applyQuaternion(q);
     this.worldPosition.copy(v.position).addScaledVector(_ey, -this.config.chassis.cgHeight);
     this.worldQuaternion.copy(q);
+    _qInv.copy(q).invert();
     const p = this.track.projectWorldToTrack(this.worldPosition.x, this.worldPosition.z, this.poseHintS);
     this.poseHintS = p.s;
     this.s = p.s;
@@ -1737,6 +1745,15 @@ export class F12026CarSim implements SimulatorCar {
       vis.verticalDeflectionM = w.deflection;
       vis.lateralForceN = w.fy;
       vis.camberRad = w.camberLeftRad;
+      // The bottom of the tyre in the car frame, under the corner's hardpoint at the current pose: the car frame rides
+      // on the sprung body, so this is where the rigs put the unsprung wheel
+      _v.copy(w.hardpoint).applyQuaternion(q).add(v.position);
+      _v.y = v.tyreBottomY(w);
+      _v.sub(this.worldPosition).applyQuaternion(_qInv);
+      const c = vis.contactInCar!;
+      c.x = _v.x;
+      c.y = _v.y;
+      c.z = _v.z;
     }
   }
 

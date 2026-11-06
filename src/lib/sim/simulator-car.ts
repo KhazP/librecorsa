@@ -32,6 +32,13 @@ export interface TyreVisualState {
   lateralForceN: number;
   /** Camber leaning toward +left relative to the road (rad) */
   camberRad: number;
+  /**
+   * Bottom of the tyre in the car frame (`worldPosition` / `worldQuaternion`, m): the road under a loaded tyre, the
+   * hub less the unloaded radius for a tyre off the ground. Set by models whose car frame rides on the sprung body
+   * (the rigid-body model), so the rigs put the unsprung wheels on the road rather than carrying them with the body's
+   * heave, pitch and roll. Absent: the car frame's origin plane is the road under the wheels.
+   */
+  contactInCar?: { x: number; y: number; z: number };
 }
 
 export interface SimulatorCar {

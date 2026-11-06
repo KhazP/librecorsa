@@ -35,8 +35,26 @@ export interface RigCorner {
 }
 
 /**
- * Per frame, for every car model: steers the fronts (`roadWheelRad`, + = left, with Ackermann), spins every wheel and
- * applies the tyres' visual deformation (corners and `tyres` in physics wheel order)
+ * Height of the road under a rig corner in the car frame (m), from the physics' tyre contacts (`contactInCar`, tyres in
+ * physics wheel order FR, FL, RR, RL): along the line through that side's front and rear contacts, at the corner's own
+ * z, so a model whose wheelbase differs from the vehicle model's still sits on the road when the body pitches.
+ * 0 (the car frame's origin plane) when the vehicle model gives no contacts.
+ */
+export function cornerRoadHeight(corner: RigCorner, tyres?: readonly TyreVisualState[]): number {
+  const front = tyres?.[corner.isLeft ? 1 : 0]?.contactInCar;
+  const rear = tyres?.[corner.isLeft ? 3 : 2]?.contactInCar;
+  if (!front || !rear) return 0;
+  const span = front.z - rear.z;
+  if (!(Math.abs(span) > 0.5)) return corner.isFront ? front.y : rear.y;
+  return front.y + ((corner.steer.position.z - front.z) * (front.y - rear.y)) / span;
+}
+
+/**
+ * Per frame, for every car model: steers the fronts (`roadWheelRad`, + = left, with Ackermann), spins every wheel,
+ * applies the tyres' visual deformation and puts each wheel on the road under it (corners and `tyres` in physics wheel
+ * order). The steer pivot rests at `restY` (tyre bottom on the car frame's origin plane), drops by the tyre's visual
+ * squash so the flattened patch stays where the bottom was, and follows the road under the corner in the car frame:
+ * the wheels are unsprung, so they do not move with the body's heave, pitch and roll on the rigid-body model.
  */
 export function updateCorners(
   corners: readonly RigCorner[],
@@ -51,9 +69,12 @@ export function updateCorners(
     }
     c.spin.rotation.x = wheelRotationRad;
     const state = tyres?.[i];
-    if (c.tyre && state) {
+    if (!state) return;
+    let squash = 0;
+    if (c.tyre) {
       c.tyre.update(state, wheelRotationRad);
-      c.steer.position.y = c.restY - c.tyre.axleDropM;
+      squash = c.tyre.axleDropM;
     }
+    c.steer.position.y = c.restY - squash + cornerRoadHeight(c, tyres);
   });
 }
