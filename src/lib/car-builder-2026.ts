@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import type { CarTelemetry, LiveryConfig, TireCompound } from "@/types/f1";
+import { SATIN_PAINT } from "@/lib/render/paint-finish";
 import { AMR26_MODEL_URL, attachVf26Model, loadVf26Template, type Vf26ModelInstance } from "@/lib/vf26-car-model";
 import type { TyreVisualState } from "@/lib/sim/simulator-car";
 import { moveToDriverHeadLayer } from "@/lib/render/layers";
@@ -839,29 +840,10 @@ export function createF1Car2026(
 
   const carbonTex = createCarbonWeaveTexture();
 
-  // Glossy Automotive Clearcoat Materials (2026 F1 Showcar finish)
-  const primaryPaintMat = new THREE.MeshPhysicalMaterial({
-    color: initialLivery.primary,
-    roughness: 0.14,
-    metalness: 0.28,
-    clearcoat: 1.0,
-    clearcoatRoughness: 0.06,
-  });
-
-  const secondaryPaintMat = new THREE.MeshPhysicalMaterial({
-    color: initialLivery.secondary,
-    roughness: 0.18,
-    metalness: 0.25,
-    clearcoat: 0.9,
-    clearcoatRoughness: 0.08,
-  });
-
-  const accentPaintMat = new THREE.MeshPhysicalMaterial({
-    color: initialLivery.accent,
-    roughness: 0.2,
-    metalness: 0.22,
-    clearcoat: 0.85,
-  });
+  // Satin race livery (paint-finish.ts), as on the loaded model
+  const primaryPaintMat = new THREE.MeshPhysicalMaterial({ color: initialLivery.primary, ...SATIN_PAINT });
+  const secondaryPaintMat = new THREE.MeshPhysicalMaterial({ color: initialLivery.secondary, ...SATIN_PAINT });
+  const accentPaintMat = new THREE.MeshPhysicalMaterial({ color: initialLivery.accent, ...SATIN_PAINT });
 
   const carbonMat = new THREE.MeshPhysicalMaterial({
     color: 0x181b22,

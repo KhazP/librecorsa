@@ -1,19 +1,17 @@
 import * as THREE from "three";
 import { patchShader, type ShaderPatch } from "./shader-patch";
 import { toPhysical } from "./to-physical";
+import { applyPaintFinish, SATIN_PAINT } from "./paint-finish";
 
 /**
  * PBR upgrades for the VF26 GLB materials (see vf26-car-model.ts; the GLB itself is not edited).
  *
  * - EXT_SKIN with a livery mask (restyled GLB, root extras `liveryMask`, see scripts/vf26/livery_vf26.py): the
  *   texture holds primary / secondary / accent weights in R / G / B and the shader mixes the selected livery's
- *   colours (`setVf26LiveryColours`). Primary and secondary are satin; the accent gets the gloss coat below.
- * - EXT_SKIN with the mod's authored colour texture: two-tone livery in one material. Navy/satin areas keep roughness 0.48 + clearcoat 0.35; warm
- *   yellow/red accents (detected per fragment from the sampled base colour) switch to a glossy coat
- *   (roughness 0.25, clearcoat 1.0, clearcoat roughness 0.04). The authored metallicRoughness map is dropped:
- *   its G channel is ~0.65 roughness on navy and ~0.22 on the yellow/red accents with B (metal) = 0 everywhere,
- *   so the colour mask reproduces the same regions with the target values and one 4K texture sample is saved.
- * - EXT_DECALS: clearcoat 1.0 / clearcoat roughness 0.04, nothing else changed.
+ *   colours (`setVf26LiveryColours`).
+ * - EXT_SKIN with the mod's authored colour texture: two-tone livery in one material.
+ *   Both are satin all over (paint-finish.ts), like a race livery; the authored metallicRoughness map is dropped.
+ * - EXT_DECALS: the same satin finish.
  * - Carbon: procedural 2x2 twill weave (object-space triplanar, ~5 mm tow pitch, object units assumed metres)
  *   driving a height bump, a roughness of 0.32 +-0.06 between tows and a slight diffuse modulation. The weave
  *   fades out by pixel footprint (sub-pixel tows average to flat) and by distance, so it does not shimmer.
@@ -107,41 +105,25 @@ function configure(
 ): void {
   switch (target) {
     case "skin": {
+      out.roughnessMap = null;
+      out.metalnessMap = null;
+      applyPaintFinish(out, SATIN_PAINT);
       if (liveryMask && out.map) {
-        out.roughness = 0.48;
-        out.metalness = 0.15;
-        out.roughnessMap = null;
-        out.metalnessMap = null;
-        out.clearcoat = 0.35;
-        out.clearcoatRoughness = 0.15;
         // The mask holds weights, not colour: no sRGB decode. On a copy: toPhysical shares the source's texture
         // object, and another material still sampling it as colour must keep its sRGB decode
         out.map = out.map.clone();
         out.map.colorSpace = THREE.NoColorSpace;
         out.map.needsUpdate = true;
-        out.customProgramCacheKey = () => "vf26-skin-livery-mask-v1";
+        out.customProgramCacheKey = () => "vf26-skin-livery-mask-v2";
         out.onBeforeCompile = (shader) => {
           Object.assign(shader.uniforms, liveryUniforms);
           shader.fragmentShader = patch(shader.fragmentShader, SKIN_MASK_FRAGMENT_PATCHES, out.name);
         };
-        break;
       }
-      // Uniform values are the navy/satin look; the shader moves warm accents to the gloss values.
-      out.roughness = 0.48;
-      out.metalness = 0.15;
-      out.roughnessMap = null;
-      out.metalnessMap = null;
-      out.clearcoat = 0.35;
-      out.clearcoatRoughness = 0.15;
-      out.customProgramCacheKey = () => "vf26-skin-paint-v1";
-      out.onBeforeCompile = (shader) => {
-        shader.fragmentShader = patch(shader.fragmentShader, SKIN_FRAGMENT_PATCHES, out.name);
-      };
       break;
     }
     case "decal": {
-      out.clearcoat = 1.0;
-      out.clearcoatRoughness = 0.04;
+      applyPaintFinish(out, SATIN_PAINT);
       break;
     }
     case "carbon": {
@@ -172,47 +154,10 @@ type Patch = ShaderPatch;
 const patch = patchShader;
 
 // ---------------------------------------------------------------------------------------------------------------
-// EXT_SKIN: warm accent mask from the base colour
+// EXT_SKIN: livery mask colours
 // ---------------------------------------------------------------------------------------------------------------
 
-const WARM_MASK_GLSL = /* glsl */ `
-// 1 for saturated red..yellow (linear rgb), 0 for navy, blue flakes, black, white and grey
-float vf26WarmMask( vec3 c ) {
-	float mx = max( max( c.r, c.g ), c.b );
-	float mn = min( min( c.r, c.g ), c.b );
-	float sat = ( mx - mn ) / max( mx, 1e-4 );
-	float warmHue = smoothstep( 0.02, 0.15, c.r - c.b );
-	return smoothstep( 0.02, 0.07, mx ) * smoothstep( 0.45, 0.75, sat ) * warmHue;
-}
-`;
-
-const SKIN_FRAGMENT_PATCHES: readonly Patch[] = [
-	["#include <common>", "#include <common>\n" + WARM_MASK_GLSL],
-	[
-		"#include <roughnessmap_fragment>",
-		/* glsl */ `
-float vf26Warm = vf26WarmMask( diffuseColor.rgb );
-float roughnessFactor = mix( roughness, 0.25, vf26Warm );
-#ifdef USE_CLEARCOAT
-	float vf26CoatAmount = mix( clearcoat, 1.0, vf26Warm );
-	float vf26CoatRoughness = mix( clearcoatRoughness, 0.04, vf26Warm );
-#endif
-`,
-	],
-	[
-		"#include <lights_physical_fragment>",
-		/* glsl */ `
-#include <lights_physical_fragment>
-#ifdef USE_CLEARCOAT
-	// Same clamps as the chunk above; the chunk has already run with the uniform values
-	material.clearcoat = saturate( vf26CoatAmount );
-	material.clearcoatRoughness = min( max( vf26CoatRoughness, 0.045 ) + geometryRoughness, 1.0 );
-#endif
-`,
-	],
-];
-
-// EXT_SKIN with the livery mask: R / G / B = primary / secondary / accent weights; the accent is the gloss coat
+// EXT_SKIN with the livery mask: R / G / B = primary / secondary / accent weights
 const SKIN_MASK_FRAGMENT_PATCHES: readonly Patch[] = [
 	["#include <common>", "#include <common>\nuniform vec3 vf26Primary;\nuniform vec3 vf26Secondary;\nuniform vec3 vf26Accent;"],
 	[
@@ -222,23 +167,9 @@ const SKIN_MASK_FRAGMENT_PATCHES: readonly Patch[] = [
 	vec3 vf26Mix = texture2D( map, vMapUv ).rgb;
 	vf26Mix /= max( vf26Mix.r + vf26Mix.g + vf26Mix.b, 1e-3 );
 	diffuseColor.rgb *= vf26Mix.r * vf26Primary + vf26Mix.g * vf26Secondary + vf26Mix.b * vf26Accent;
-	float vf26Gloss = vf26Mix.b;
-#else
-	float vf26Gloss = 0.0;
 #endif
 `,
 	],
-	[
-		"#include <roughnessmap_fragment>",
-		/* glsl */ `
-float roughnessFactor = mix( roughness, 0.25, vf26Gloss );
-#ifdef USE_CLEARCOAT
-	float vf26CoatAmount = mix( clearcoat, 1.0, vf26Gloss );
-	float vf26CoatRoughness = mix( clearcoatRoughness, 0.04, vf26Gloss );
-#endif
-`,
-	],
-	SKIN_FRAGMENT_PATCHES[2],
 ];
 
 // ---------------------------------------------------------------------------------------------------------------
