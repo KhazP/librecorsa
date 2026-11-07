@@ -274,7 +274,12 @@ export function runBarrierCrash(track: BuiltTrackData, walls: WallQuery, car: Cr
       inputs = { throttle: 0, brake: 1, steer: 0, shiftUp: p.speedMs < 1 && pulse };
       if (car.gear() >= 1) mode = 'drive';
     } else {
-      inputs = { throttle: 0.35, brake: 0, steer };
+      // Still quick and pointing well away from the road: brake with little lock first, as a driver would, instead of
+      // full lock with throttle (which spins a car that came off the wall fast)
+      inputs =
+        p.speedMs > 15 && Math.abs(alpha) > 0.5
+          ? { throttle: 0, brake: 0.6, steer: Math.max(-0.6, Math.min(0.6, steer)) }
+          : { throttle: 0.35, brake: 0, steer };
     }
     car.step(dt, inputs);
     tr += dt;

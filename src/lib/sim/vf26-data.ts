@@ -395,8 +395,14 @@ export const VF26_CHASSIS = {
   fuelTankKg: 110,
   /** Fuel use at full throttle (kg/s) — 2026 energy-flow limit (≈ 70 kg/h) [assumed] */
   fuelFlowKgS: 0.0194,
-  /** Uniform-box dimensions W×H×L (m) used to compute principal chassis moments of inertia */
-  inertiaBox: { width: 1.93, height: 0.82, length: 5.0 },
+  /**
+   * Equivalent uniform-box dimensions W×H×L (m) for the principal chassis moments of inertia. Not the car's outside
+   * size: the mass sits in the tub, power unit, gearbox and wheels, well inside the 1.9 × 5.6 m envelope, so the box that
+   * gives the right moments is much smaller. ≈ 930 kg·m² in yaw and 900 in pitch at race weight, the range of a modern
+   * F1 car and of a 2026 reference car model; the full envelope gave twice that and made the car slow to rotate.
+   * [derived]
+   */
+  inertiaBox: { width: 0.9, height: 0.62, length: 3.6 },
   /** Wheelbase (m) [mod] */
   wheelbase: 3.4,
   /** Static fraction of weight on the front axle (CG_LOCATION) [mod] */
