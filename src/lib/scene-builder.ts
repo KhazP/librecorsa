@@ -244,6 +244,17 @@ function loadTrackGlb(
         }
         obj.material = Array.isArray(obj.material) ? obj.material.map(withRoughDiffuse) : withRoughDiffuse(obj.material);
         const offset = DECAL_NODES[topName] ?? (isDecal ? -2 : undefined);
+        if (offset !== undefined) {
+          const cloneForDecal = (m: THREE.Material): THREE.Material => {
+            const key = `${offset}:${isDecal ? 1 : 0}`;
+            const cached = (m.userData.__decalClones as Record<string, THREE.Material> | undefined)?.[key];
+            if (cached) return cached;
+            const c = m.clone();
+            m.userData.__decalClones = { ...(m.userData.__decalClones as Record<string, THREE.Material> | undefined), [key]: c };
+            return c;
+          };
+          obj.material = Array.isArray(obj.material) ? obj.material.map(cloneForDecal) : cloneForDecal(obj.material);
+        }
         const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
         // Flat, untextured scenery (Rwanda's trees, roofs, spire, lake, paint): shader detail, and the trees'
         // normals, tint and occlusion baked into their geometry (scenery-detail.ts)
@@ -260,7 +271,7 @@ function loadTrackGlb(
           singlePassTransparency(mat);
           applySceneryDetail(mat, { baseY, treeShading });
           if (!(mat instanceof THREE.MeshStandardMaterial)) continue;
-          if (topName === "Track_Asphalt_Road" || (topName === "Track_Model" && roadMaterialNames.has(mat.name))) {
+          if (!isDecal && !mat.transparent && (topName === "Track_Asphalt_Road" || (topName === "Track_Model" && roadMaterialNames.has(mat.name)))) {
             applyAsphaltSheen(mat, sheenMask);
           }
           for (const tex of [mat.map, mat.roughnessMap, mat.metalnessMap, mat.normalMap]) {
