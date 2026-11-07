@@ -2129,7 +2129,7 @@ export class VehiclePhysics {
     }
     const travel = Math.hypot(w.hardpointVel.x, w.hardpointVel.z) * h;
     const d = Math.min(rise, R0);
-    const allowed = Math.max(travel * Math.sqrt(d / (2 * R0)), STEP_CLIMB_MIN_M);
+    const allowed = Math.max(travel * 0.25, travel * Math.sqrt(d / (2 * R0)), STEP_CLIMB_MIN_M);
     w.contactY = rise > allowed ? w.contactY + allowed : g.height;
     g.height = w.contactY;
   }

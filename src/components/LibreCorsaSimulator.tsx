@@ -1410,6 +1410,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       trackRoot = root;
       physics.attachTrackRoot?.(root);
       aiFieldRef.current?.attachTrackRoot(root);
+      aiFieldSpareRef.current?.field.attachTrackRoot(root);
       // Move broadcast cameras that would film the inside of a grandstand: about a second of raycasts on a scan,
       // spread over idle slices so neither the loading screen nor the menus freeze (until done, the TV view uses
       // the stations as built)
@@ -2662,8 +2663,10 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         camera.quaternion
           .multiply(CAM_FORWARD_FLIP)
           .multiply(new THREE.Quaternion().setFromAxisAngle(CAM_X_AXIS, vf26Cam.pitchRad));
-        const headLocked = mode === "cockpit" && settingsNow.hud.headMovement === "static";
-        if ((mode === "cockpit" && !headLocked) || mode === "tv_pod") {
+        const headLocked =
+          (mode === "cockpit" || mode === "cockpit_shoulder") &&
+          settingsNow.hud.headMovement === "static";
+        if (!headLocked) {
           // Micro-shake: pitch about the lens' X axis, roll about its view axis, heave along the car's up
           shakeEuler.set(shake.pitchRad, 0, shake.rollRad);
           camera.quaternion.multiply(shakeQuat.setFromEuler(shakeEuler));

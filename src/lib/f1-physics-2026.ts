@@ -82,6 +82,7 @@ import {
   type TyreForceOutput,
   createContactPatchResult,
   createTyreRuntime,
+  evaluateIso8608RoadRoughness,
   sample5PointContactPatch,
   setTyreColdPressure,
   setTyreSpec,
@@ -950,6 +951,7 @@ export class F1Physics2026 {
     const peer = new F1Physics2026(this.track);
     peer.aiAutoTyres = true;
     if (this.walls) peer.setWalls(this.walls);
+    if (this.ground) peer.ground = this.ground;
     return peer;
   }
 
@@ -1783,9 +1785,13 @@ export class F1Physics2026 {
     // 5. Tire gyroscopic precession torque (Iy * omega * dGamma/dt)
     const mzGyro =
       0.32 * wFR.tyre.spec.angularInertia * (wFR.spinVel + wFL.spinVel) * this.rollVelRadS;
-    // 6. Flat-spot harmonic vibration (the tyre model's, ≤ 16 Nm per wheel) + road micro-roughness suspension kick
+    // 6. Flat-spot harmonic vibration (the tyre model's, ≤ 16 Nm per wheel) + road/kerb micro-roughness suspension kick
     const mzFlatSpot = (wFR.flatSpotVibrationNm ?? 0) + (wFL.flatSpotVibrationNm ?? 0);
-    const mzRoadTexture = (wFR.suspCompressionVel - wFL.suspCompressionVel) * 18 * lowSpeedScale;
+    const speedGate = THREE.MathUtils.clamp(Math.abs(this.vxMs) / 5, 0, 1);
+    const isoR = evaluateIso8608RoadRoughness(wFR.worldPos.x, wFR.worldPos.z, wFR.surfaceType === 'kerb' ? 'kerb' : 'asphalt');
+    const isoL = evaluateIso8608RoadRoughness(wFL.worldPos.x, wFL.worldPos.z, wFL.surfaceType === 'kerb' ? 'kerb' : 'asphalt');
+    const mzIsoRough = (isoL * wFL.tyre.verticalRate - isoR * wFR.tyre.verticalRate) * 0.006 * speedGate;
+    const mzRoadTexture = (wFR.suspCompressionVel - wFL.suspCompressionVel) * 18 * lowSpeedScale + mzIsoRough;
     // 7. Overturning moment of the shifted contact centroids (cancels left / right on a level road), as VehiclePhysics
     const mzOverturn = 0.08 * ((wFR.overturningMomentNm ?? 0) + (wFL.overturningMomentNm ?? 0)) * lowSpeedScale;
 
@@ -2035,9 +2041,8 @@ export class F1Physics2026 {
     const c = queryWheelGroundContact(this.track, x, z, this.patchApproxS, this.patchSpeed);
     if (this.ground && c.surfaceType !== 'kerb') {
       if (this.ground.query(x, z, c.zRoad + 0.6, _groundHit) && _groundHit.surface === 'kerb') {
-        const step = Math.max(0.014, Math.min(0.035, _groundHit.height - c.zRoad));
-        const ripple = surfaceRippleM(_groundHit.props, this.patchApproxS, 1.0);
-        c.bumpM = Math.max(c.bumpM, step + ripple * Math.min(1, this.patchSpeed / 8));
+        const ripple = surfaceRippleM(_groundHit.props, this.patchApproxS + dFwd, 1.0);
+        c.bumpM = Math.max(c.bumpM, 0.018 + ripple * Math.min(1, this.patchSpeed / 8));
       }
     }
     return c.zRoad + c.bumpM - plane;
@@ -2048,13 +2053,12 @@ export class F1Physics2026 {
     for (const w of this.wheels) {
       const approxS = this.sMeters + w.staticPos.x;
       const contact = queryWheelGroundContact(this.track, w.worldPos.x, w.worldPos.z, approxS, speed);
-      if (this.ground && Math.abs(contact.lateralOffsetM) > contact.halfWidthM - 3.2) {
+      if (this.ground) {
         if (this.ground.query(w.worldPos.x, w.worldPos.z, contact.zRoad + 0.6, _groundHit) && _groundHit.surface === 'kerb') {
           contact.surfaceType = 'kerb';
           contact.frictionMult = _groundHit.grip;
-          const step = Math.max(0.014, Math.min(0.035, _groundHit.height - contact.zRoad));
           const ripple = surfaceRippleM(_groundHit.props, approxS, 1.0);
-          contact.bumpM = Math.max(contact.bumpM, step + ripple * Math.min(1, speed / 8));
+          contact.bumpM = Math.max(contact.bumpM, 0.018 + ripple * Math.min(1, speed / 8));
         }
       }
       w.zRoad = contact.zRoad;
@@ -2065,7 +2069,7 @@ export class F1Physics2026 {
       this.patchContact = contact;
       this.patchSample = sample;
       this.patchNearKerb =
-        contact.surfaceType === 'kerb' || Math.abs(contact.lateralOffsetM) > contact.halfWidthM - (this.ground ? 3.2 : 0.65);
+        contact.surfaceType === 'kerb' || Math.abs(contact.lateralOffsetM) > contact.halfWidthM - 1.5;
       this.patchApproxS = approxS;
       this.patchSpeed = speed;
       const patch = sample5PointContactPatch(
@@ -2999,9 +3003,9 @@ export class F1Physics2026 {
     t.lapInvalid = !this.lapValid;
 
     let dominantSurface: SurfaceType = 'asphalt';
-    if (W[0].surfaceType === 'grass' || W[1].surfaceType === 'grass') dominantSurface = 'grass';
+    if (onKerbLeft || onKerbRight) dominantSurface = 'kerb';
+    else if (W[0].surfaceType === 'grass' || W[1].surfaceType === 'grass') dominantSurface = 'grass';
     else if (W[0].surfaceType === 'runoff' || W[1].surfaceType === 'runoff') dominantSurface = 'runoff';
-    else if (onKerbLeft || onKerbRight) dominantSurface = 'kerb';
 
     const markerS = (this.sMeters + 25) % this.track.totalLengthM;
     const brakingUrgency = evaluateDynamicBrakingUrgency(this.track, this.sMeters, this.vxMs, markerS);

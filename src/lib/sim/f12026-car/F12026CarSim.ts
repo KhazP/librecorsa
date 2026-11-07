@@ -77,7 +77,7 @@ import {
   TrackWallQuery,
 } from './TrackColliderQuery';
 import { type VehicleEvent, type VehicleInputs, VehiclePhysics } from './VehiclePhysics';
-import { KERB_PROFILE_L } from '../track-surfaces';
+import { KERB_PROFILE_L, kerbProfileM, surfaceRippleM } from '../track-surfaces';
 
 const G = 9.81;
 const DEG2RAD = Math.PI / 180;
@@ -486,6 +486,13 @@ export class TrackSampleGroundQuery implements GroundQuery {
               ? 'gravel'
               : 'grass';
     const props = getActiveSurfaceTable()[kind];
+    if (kind === 'kerb') {
+      const wSpan = KERB_PROFILE_L[KERB_PROFILE_L.length - 1] - KERB_PROFILE_L[0];
+      const across = Math.sin(Math.PI * Math.min(1, Math.max(0, (edge - KERB_PROFILE_L[0]) / wSpan)));
+      out.height += kerbProfileM(edge) + surfaceRippleM(props, p.s, across);
+    } else if (kind === 'gravel' || kind === 'grass') {
+      out.height += surfaceRippleM(props, p.s, 1);
+    }
     out.surface = kind;
     out.grip = props.friction;
     out.props = props;
@@ -1859,9 +1866,9 @@ export class F12026CarSim implements SimulatorCar {
     if (offTrack && this.trackLimitsMode === 'strict') this.lapValid = false;
     t.lapInvalid = !this.lapValid;
     let surface: SurfaceType = 'asphalt';
-    if (surfaces[0] === 'grass' || surfaces[1] === 'grass') surface = 'grass';
+    if (onKerbLeft || onKerbRight) surface = 'kerb';
+    else if (surfaces[0] === 'grass' || surfaces[1] === 'grass') surface = 'grass';
     else if (surfaces[0] === 'runoff' || surfaces[1] === 'runoff') surface = 'runoff';
-    else if (onKerbLeft || onKerbRight) surface = 'kerb';
 
     const mgukKw = vt.MGUK_POWER / 1000;
     let wheelKw = 0;

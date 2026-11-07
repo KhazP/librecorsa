@@ -456,10 +456,17 @@ export class TrackColliderQuery implements GroundQuery {
     let contactU: number;
     let contactV: number;
     if (driveT >= 0) {
-      contactT = driveT;
-      contactH = driveH;
-      contactU = driveU;
-      contactV = driveV;
+      if (raisedT >= 0 && raisedH >= driveH - SURFACE_MATCH_M) {
+        contactT = raisedT;
+        contactH = Math.max(driveH, raisedH);
+        contactU = raisedU;
+        contactV = raisedV;
+      } else {
+        contactT = driveT;
+        contactH = driveH;
+        contactU = driveU;
+        contactV = driveV;
+      }
     } else if (roadT >= 0) {
       if (raisedT >= 0 && raisedH > roadH) {
         contactT = raisedT;
@@ -481,13 +488,18 @@ export class TrackColliderQuery implements GroundQuery {
       return false;
     }
 
-    // Classify: top-most tagged surface near the contact height, else the contact layer itself
+    // Classify: top-most tagged surface near the contact height (preferring raised kerb/sausage layers), else the contact layer itself
     let bestTagT = -1;
     let bestTagH = -Infinity;
+    let bestTagRaised = false;
     for (let i = 0; i < tagCount; i++) {
-      if (Math.abs(tagH[i] - contactH) <= SURFACE_MATCH_M && tagH[i] > bestTagH) {
-        bestTagH = tagH[i];
-        bestTagT = tagT[i];
+      if (Math.abs(tagH[i] - contactH) <= SURFACE_MATCH_M) {
+        const isRaised = RAISED_SURFACES.has(this.layers[this.triLayer[tagT[i]]].surface);
+        if ((isRaised && !bestTagRaised) || (isRaised === bestTagRaised && tagH[i] > bestTagH)) {
+          bestTagH = tagH[i];
+          bestTagT = tagT[i];
+          bestTagRaised = isRaised;
+        }
       }
     }
     const tagLayer = this.layers[this.triLayer[bestTagT >= 0 ? bestTagT : contactT]];
