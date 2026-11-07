@@ -1,7 +1,7 @@
 /**
  * Verification suite for the dual-Pacejka Steering Rack Self-Aligning Torque (SAT),
  * Axle Vertical Shock Load (Delta Fz), 6-tap FIR smoothing filter, and >10g High-Impact
- * Crash Torque Suppression:
+ * detection (the client's collision protection is covered by verify-ffb-toolbox.ts):
  *   npx tsx scripts/verify-rack-sat-ffb.ts
  */
 import assert from "node:assert/strict";
@@ -13,7 +13,6 @@ import {
   RACK_SAT_EMA_ALPHA,
   RACK_SAT_FIR_TAPS,
   RACK_SAT_FZ_NOM_N,
-  RACK_SAT_HIGH_IMPACT_ATTEN,
   RACK_SAT_HIGH_IMPACT_G,
   RACK_SAT_OVERSTEER_OFFSET_RAD,
   RACK_SAT_OVERSTEER_SOFT_RAMP_RAD,
@@ -211,7 +210,7 @@ check("extreme shock velocities above 2.5 m/s are hyperbolically attenuated", ()
 
 console.log("5. >10G High-Impact Crash Suppression & 6-Tap FIR Convergence");
 
-check("resultant horizontal acceleration > 10g zeroes bump torque, zeroes shakers, and attenuates SAT to 0.25x", () => {
+check("resultant horizontal acceleration > 10g zeroes bump torque and shakers, leaving the SAT to the collision guard", () => {
   const normal = stepRackSat({
     speedMs: 45,
     shockVelMs: [1.2, 1.2, 1.0, 1.0],
@@ -236,7 +235,7 @@ check("resultant horizontal acceleration > 10g zeroes bump torque, zeroes shaker
   assert.equal(crash.bumpTorque, 0, "bump amplification zeroed on >10g impact");
   assert.equal(crash.oversteerIntensityPct, 0, "oversteer shaker zeroed on >10g impact");
   assert.equal(crash.understeerIntensityPct, 0, "understeer shaker zeroed on >10g impact");
-  // With dfz=0 on crash, check that filteredSatTorque is 0.25x of an un-bumped normal step
+  // With dfz=0 on crash, the SAT matches an un-bumped normal step: no flat attenuation of its own
   const unbumpedNormal = stepRackSat({
     speedMs: 45,
     bumpsGain: 0,
@@ -244,7 +243,7 @@ check("resultant horizontal acceleration > 10g zeroes bump torque, zeroes shaker
     lateralG: 2.0,
     longitudinalG: 1.0,
   });
-  near(crash.filteredSatTorque, unbumpedNormal.filteredSatTorque * RACK_SAT_HIGH_IMPACT_ATTEN, 1e-6);
+  near(crash.filteredSatTorque, unbumpedNormal.filteredSatTorque, 1e-6);
 });
 
 check("6-tap FIR filter converges to exact steady-state SAT after 6 identical steps", () => {
@@ -261,7 +260,7 @@ check("6-tap FIR filter converges to exact steady-state SAT after 6 identical st
 
 console.log("6. WheelFfbClient, TelemetryOutPacket & GamepadHaptics Integration");
 
-check("WheelFfbClient layers SAT into frame force and 500 Hz subframes and suppresses >10g impacts", () => {
+check("WheelFfbClient layers SAT into frame force and 500 Hz subframes and holds back a >10g impact spike", () => {
   const client = new WheelFfbClient();
   const wheel = { ...DEFAULT_WHEEL_SETTINGS, ffbEnabled: true, ffbGain: 1.0, ffbMinForce: 0, ffbFilterS: 0 };
 
@@ -282,15 +281,25 @@ check("WheelFfbClient layers SAT into frame force and 500 Hz subframes and suppr
   assert.ok((client.meter.oversteerIntensityPct ?? 0) > 0);
   assert.equal(client.meter.highImpactActive, false);
 
+  // The hit throws the kingpin torque to near full scale for the frame
   const crashTel = {
     ...slideTel,
+    ffbTorqueNorm: 0.95,
+    ffbSubframeSamples: [0.95, 0.95, 0.95],
     lateralG: 9.0,
     longitudinalG: 6.5, // hypot = 11.1g > 10g
   } as unknown as CarTelemetry;
   client.update(crashTel, wheel, [], 1016, true, "f12026-car");
   assert.equal(client.meter.highImpactActive, true);
   assert.equal(client.meter.oversteerIntensityPct, 0);
-  assert.ok(client.force < normalForce * 0.4, `crash force attenuated (${client.force} vs ${normalForce})`);
+  const raw = new WheelFfbClient();
+  const unguarded = { ...wheel, ffbCollisionGuard: false };
+  raw.update(slideTel, unguarded, [], 1000, true, "f12026-car");
+  raw.update(crashTel, unguarded, [], 1016, true, "f12026-car");
+  assert.ok(
+    client.force - normalForce < 0.25 * (raw.force - normalForce),
+    `crash spike held back (${normalForce} → ${client.force}; unprotected ${raw.force})`
+  );
 });
 
 check("TelemetryOutPacket and GamepadHaptics expose oversteer/understeer shaker cues and zero on >10g crash", () => {

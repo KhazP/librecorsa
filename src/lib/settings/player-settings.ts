@@ -411,6 +411,7 @@ function parseWheel(v: unknown): WheelSettings {
     ffbDamping: num(v.ffbDamping, 0, 1, d.ffbDamping),
     ffbFilterS: num(v.ffbFilterS, 0, 0.05, d.ffbFilterS),
     ffbDownforceComp: num(v.ffbDownforceComp, 0, 1, d.ffbDownforceComp),
+    ffbCollisionGuard: bool(v.ffbCollisionGuard, d.ffbCollisionGuard),
     ffbPerCar: parsePerCarFfb(v.ffbPerCar),
     steerLockPerCar: parsePerCarLock(v.steerLockPerCar),
     hidFfb: bool(v.hidFfb, d.hidFfb),

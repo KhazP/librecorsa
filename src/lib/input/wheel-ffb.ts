@@ -14,7 +14,7 @@
  */
 import type { CarTelemetry } from "@/types/f1";
 import { CAR_WHEEL_LOCK_DEG, carWheelLockDeg, findPad, type PadLike, wheelRimAngleDeg, type WheelSettings } from "./device-input";
-import { DownforceCompensator } from "./ffb-toolbox";
+import { CollisionGuard, DownforceCompensator } from "./ffb-toolbox";
 import { WebHidFfb } from "./webhid-ffb";
 
 export const FFB_BRIDGE_PORT = 18500;
@@ -114,6 +114,8 @@ const HID_BUMP_HZ = 22;
 const HID_BUMP_AMPLITUDE = 0.1;
 const clockMs = () => (typeof performance !== "undefined" ? performance.now() : Date.now());
 
+/** A wheel below this load (N) while moving is off the ground: it keeps a running collision protection on */
+const COLLISION_AIRBORNE_N = 50;
 /** Rim speed (deg/s) at which the damper reaches its full force */
 const DAMPING_FULL_DEG_S = 600;
 /** Share of full force the damper may add at most */
@@ -161,10 +163,11 @@ export const RACK_SAT_UNDERSTEER_YAW_GATE_RAD_S = 0.1;
 export const RACK_SAT_UNDERSTEER_SCALE = 0.65;
 /** Symmetric saturation clamp for combined self-aligning torque before FIR filtering */
 export const RACK_SAT_MAX_TORQUE = 0.5;
-/** Resultant horizontal acceleration threshold above which crash torque suppression engages (g) */
+/**
+ * Resultant horizontal acceleration above which a hit counts as a crash (g): the bump torque and shaker cues go quiet
+ * and the client's collision protection engages
+ */
 export const RACK_SAT_HIGH_IMPACT_G = 10.0;
-/** Multiplier applied to steering rack SAT torque during >10g high-impact collisions */
-export const RACK_SAT_HIGH_IMPACT_ATTEN = 0.25;
 /** Reference SAT torque corresponding to 100% shaker intensity */
 export const RACK_SAT_SHAKER_REF_TORQUE = 0.8;
 /** Default kinematic wheelbase used when not specified by the vehicle telemetry (m) */
@@ -272,9 +275,9 @@ export interface RackSatStepOutput {
   oversteerTorque: number;
   /** Shaped front understeer counter-torque tau_under */
   understeerTorque: number;
-  /** Combined clamped SAT torque tau_sat = clamp(tau_over - tau_under, -0.5, 0.5), attenuated on >10g impact */
+  /** Combined clamped SAT torque tau_sat = clamp(tau_over - tau_under, -0.5, 0.5) */
   rawSatTorque: number;
-  /** 6-tap FIR filtered SAT torque, attenuated on >10g impact */
+  /** 6-tap FIR filtered SAT torque */
   filteredSatTorque: number;
   /** Alias for `filteredSatTorque` */
   satTorque: number;
@@ -359,7 +362,8 @@ export function createRackSatOutput(): RackSatStepOutput {
 
 /**
  * Pure step evaluation for the dual-Pacejka steering rack self-aligning torque (SAT), axle vertical shock load
- * modulation, 6-tap FIR smoothing filter, and >10g high-impact crash torque suppression.
+ * modulation and 6-tap FIR smoothing filter. On a >10g hit the bump torque and shaker cues are zeroed; the SAT itself
+ * is left to the client's collision protection, which limits the whole force rather than this one term.
  */
 export function stepRackSat(
   input: RackSatStepInput,
@@ -585,7 +589,7 @@ export function stepRackSat(
     }
   }
 
-  // Push un-attenuated combined SAT into the 6-tap FIR ring buffer and apply high-impact 0.25x attenuation
+  // Push the combined SAT into the 6-tap FIR ring buffer
   const tapCount = RACK_SAT_FIR_TAPS.length;
   const writeIdx = state.firIndex;
   state.firHistory[writeIdx] = combinedSat;
@@ -597,9 +601,8 @@ export function stepRackSat(
     firSum += RACK_SAT_FIR_TAPS[i] * state.firHistory[histIdx];
   }
 
-  const impactMult = highImpactActive ? RACK_SAT_HIGH_IMPACT_ATTEN : 1.0;
-  const rawSatTorque = combinedSat * impactMult;
-  const filteredSatTorque = firSum * impactMult;
+  const rawSatTorque = combinedSat;
+  const filteredSatTorque = firSum;
   const totalAddedTorque = filteredSatTorque + bumpTorque;
 
   out.filteredVelFrontMs = state.filteredVelFrontMs;
@@ -631,7 +634,7 @@ export function stepRackSat(
 
 /**
  * Zero-allocation synthesizer for dual-Pacejka self-aligning torque (oversteer + understeer), axle vertical shock
- * velocity load modulation, 6-tap FIR filtering, and >10g high-impact crash suppression.
+ * velocity load modulation, 6-tap FIR filtering, and >10g high-impact detection.
  */
 export class RackSatSynthesizer {
   readonly state: RackSatState = createRackSatState();
@@ -711,6 +714,8 @@ export interface FfbMeterState {
   understeerIntensityPct?: number;
   /** True when horizontal resultant acceleration exceeds the 10g high-impact suppression threshold */
   highImpactActive?: boolean;
+  /** Collision protection strength on the force (0 = off, 1 = full) */
+  collisionGuard?: number;
   /** Downforce compensation multiplier on the physics torque (1 = none) */
   downforceMult?: number;
 }
@@ -724,6 +729,10 @@ export class WheelFfbClient {
   readonly rackSat = new RackSatSynthesizer();
   /** Takes the front aero load back out of the physics torque (`ffbDownforceComp`) */
   readonly downforceComp = new DownforceCompensator();
+  /** Slew-limits the force through a collision (`ffbCollisionGuard`) */
+  readonly collisionGuard = new CollisionGuard();
+  /** Sim time of the last barrier impact seen; undefined until the first frame after a reset */
+  private lastWallImpactAtMs: number | null | undefined = undefined;
   meter: FfbMeterState = {
     force: 0,
     clipping: false,
@@ -804,6 +813,7 @@ export class WheelFfbClient {
     let understeerIntensityPct = 0;
     let highImpactActive = false;
     let downforceMult = 1;
+    let collisionGuard = 0;
     let subframes: number[] | undefined;
     if (driving && wheel.ffbEnabled) {
       const satTel = telemetry as CarTelemetry & RackSatStepInput;
@@ -842,14 +852,27 @@ export class WheelFfbClient {
       understeerIntensityPct = satOut.understeerIntensityPct;
       highImpactActive = satOut.highImpactActive;
       const addedSatTorque = hasSatTelemetry ? satOut.totalAddedTorque : 0;
-      const impactScale = highImpactActive ? RACK_SAT_HIGH_IMPACT_ATTEN : 1.0;
       // The physics torque (and the SAT on it) only: the soft lock, damper and vibrations keep their strength
       downforceMult = this.downforceComp.step(telemetry.wheelLoadsN, telemetry.frontDownforceN, dtS, wheel.ffbDownforceComp);
-      const torqueScale = impactScale * downforceMult;
+      const torqueScale = downforceMult;
 
       const baseTorque = Number.isFinite(telemetry.ffbTorqueNorm) ? (telemetry.ffbTorqueNorm as number) : 0;
       const torque = (baseTorque + addedSatTorque) * torqueScale;
       const speedKmh = Number.isFinite(telemetry.speedKmh) ? telemetry.speedKmh : 0;
+      // Collision protection: a barrier touch, a new barrier impact or a >10 g hit arms it; airborne after the hit
+      // (a wheel unloaded while still moving) keeps it on until the car lands
+      const guard = wheel.ffbCollisionGuard ? this.collisionGuard : null;
+      const wallImpactAtMs = telemetry.f12026?.wallImpact?.atMs ?? null;
+      const newWallImpact =
+        this.lastWallImpactAtMs !== undefined && wallImpactAtMs !== null && wallImpactAtMs !== this.lastWallImpactAtMs;
+      this.lastWallImpactAtMs = wallImpactAtMs;
+      if (!guard) {
+        this.collisionGuard.reset();
+      } else if (highImpactActive || telemetry.f12026?.wallContact === true || newWallImpact) {
+        guard.trigger();
+      } else if (speedKmh > 12 && telemetry.wheelLoadsN?.some((n) => Number.isFinite(n) && n < COLLISION_AIRBORNE_N)) {
+        guard.sustain();
+      }
       const gyroFactor = Math.max(0, Math.min(1, (speedKmh - 10) / 180));
       if (hwDamper) {
         activeHid.setDamper(wheel.ffbDamping * (0.4 + 0.6 * gyroFactor));
@@ -885,21 +908,26 @@ export class WheelFfbClient {
         else this.filtered = x;
         return this.filtered;
       };
+      // Collision protection runs on the same samples, after the filter: it limits what the wheel actually plays
+      const protect = (x: number, h: number): number => (guard ? guard.step(x, h) : x);
       const rawSub = telemetry.ffbSubframeSamples;
       let shaped: number;
       if (rawSub && rawSub.length > 0) {
         const h = dtS / rawSub.length;
+        let last = 0;
         subframes = rawSub.map((sample) => {
           const sampleTorque = ((Number.isFinite(sample) ? sample : 0) + addedSatTorque) * torqueScale;
-          let sf = smooth(shapeFfbForce(sampleTorque, wheel, telemetry.speedKmh), h) + softLock + damping;
+          last = protect(smooth(shapeFfbForce(sampleTorque, wheel, telemetry.speedKmh), h), h);
+          let sf = last + softLock + damping;
           if (wheel.ffbInvert) sf = -sf;
           return Math.round(sf * 1e4) / 1e4;
         });
-        // The held value once the subframes run out: the filtered end of this frame (unfiltered, the frame's torque)
-        shaped = filterS > 0 ? this.filtered : smooth(shapeFfbForce(torque, wheel, telemetry.speedKmh), dtS);
+        // The held value once the subframes run out: the (filtered, protected) end of this frame
+        shaped = last;
       } else {
-        shaped = smooth(shapeFfbForce(torque, wheel, telemetry.speedKmh), dtS);
+        shaped = protect(smooth(shapeFfbForce(torque, wheel, telemetry.speedKmh), dtS), dtS);
       }
+      collisionGuard = guard ? guard.blend : 0;
       this.recordMeter(shaped, wheel.ffbGain, nowMs);
       force = shaped + softLock + damping;
       if (wheel.ffbInvert) force = -force;
@@ -958,6 +986,8 @@ export class WheelFfbClient {
       if (hwDamper) activeHid.setDamper(0);
       this.rackSat.reset();
       this.downforceComp.reset();
+      this.collisionGuard.reset();
+      this.lastWallImpactAtMs = undefined;
       this.lastRimDeg = null;
       this.lastFrontSuspMm = null;
       this.hidBump = 0;
@@ -973,6 +1003,7 @@ export class WheelFfbClient {
       understeerIntensityPct,
       highImpactActive,
       downforceMult,
+      collisionGuard,
     };
     if (useHid) {
       if (this.hidTest) return;
@@ -1078,6 +1109,8 @@ export class WheelFfbClient {
     this.hidStopPlayer();
     this.rackSat.reset();
     this.downforceComp.reset();
+    this.collisionGuard.reset();
+    this.lastWallImpactAtMs = undefined;
     this.lastFrontSuspMm = null;
     this.hidBump = 0;
     this.force = 0;
@@ -1096,6 +1129,7 @@ export class WheelFfbClient {
     this.historyIdx = 0;
     this.rackSat.reset();
     this.downforceComp.reset();
+    this.collisionGuard.reset();
     this.meter = {
       force: 0,
       clipping: false,

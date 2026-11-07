@@ -5,6 +5,9 @@
  *
  * - Downforce compensation: the kingpin torque grows with the front axle load, so at speed the aero load makes an F1
  *   wheel far heavier than at a hairpin. Scaling by the aero-free share of that load takes the downforce back out.
+ * - Collision protection: a hit throws a torque spike at the rim. Rather than scaling the force down, a slew limiter
+ *   starts from the calmest of the last few samples and lets the force drift only slowly from there, inside an eased
+ *   band, so the spike never reaches the hands while a falling force still falls fast.
  */
 
 const finite = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
@@ -87,5 +90,113 @@ export class DownforceCompensator {
     this.currentFrontN = 0;
     this.staticFrontN = 0;
     this.mult = 1;
+  }
+}
+
+// ---- Collision protection ----
+
+/** How long one contact keeps the protection on (s) */
+export const COLLISION_HOLD_S = 1.0;
+/** The protection fades out over the last part of the hold (s) */
+export const COLLISION_FADE_S = 0.5;
+/** Time constant of the slew limiter at full protection (s) */
+export const COLLISION_SLEW_TAU_S = 0.22;
+/** While the force is falling the limiter follows at least this fast (share of full protection) */
+export const COLLISION_RELEASE_BLEND = 0.1;
+/** Half-width of the band the force may stray from the slewed value (share of full force) */
+export const COLLISION_BAND = 0.075;
+/** Share of the band over which the clamp eases in */
+export const COLLISION_EASE = 0.5;
+/** Inputs remembered before a contact; the one nearest zero seeds the limiter */
+export const COLLISION_SEED_SAMPLES = 3;
+
+const smoothstep01 = (x: number) => {
+  const u = Math.max(0, Math.min(1, x));
+  return u * u * (3 - 2 * u);
+};
+
+/**
+ * Clamp to [lo, hi] with a quadratic shoulder: identity inside, easing into each limit over `ease` × (hi − lo)
+ * centred on it, so the clamped force has no corner
+ */
+export function clampEased(v: number, lo: number, hi: number, ease: number): number {
+  const w = Math.max(0, ease) * (hi - lo);
+  if (!(w > 0)) return Math.max(lo, Math.min(hi, v));
+  const half = w * 0.5;
+  if (v <= lo - half) return lo;
+  if (v >= hi + half) return hi;
+  if (v < lo + half) {
+    const t = (v - (lo - half)) / w;
+    return lo + t * t * half;
+  }
+  if (v > hi - half) {
+    const t = (hi + half - v) / w;
+    return hi - t * t * half;
+  }
+  return v;
+}
+
+/**
+ * Collision protection for one force stream, run per sample. Idle (no contact for {@link COLLISION_HOLD_S}) it is
+ * the identity. {@link trigger} on a contact: a fresh one restarts the limiter from the recent sample nearest zero.
+ */
+export class CollisionGuard {
+  /** Protection strength of the last sample (0 = off, 1 = full) */
+  blend = 0;
+  private held = 0;
+  private timerS = 0;
+  private readonly recent = new Float64Array(COLLISION_SEED_SAMPLES);
+  private recentCount = 0;
+  private recentIdx = 0;
+
+  /** The protection is on (or fading out) */
+  get active(): boolean {
+    return this.timerS > 0;
+  }
+
+  /** A contact this frame (barrier touch, impact): holds the protection for {@link COLLISION_HOLD_S} */
+  trigger(): void {
+    // A contact still being held keeps its limiter; a new one starts it from the calmest force before the hit
+    if (this.timerS < COLLISION_FADE_S * 0.5 && this.recentCount > 0) {
+      let seed = this.recent[0];
+      for (let i = 1; i < this.recentCount; i++) if (Math.abs(this.recent[i]) < Math.abs(seed)) seed = this.recent[i];
+      this.held = seed;
+    }
+    this.timerS = COLLISION_HOLD_S;
+  }
+
+  /** Keeps a running protection from fading (the car is airborne after the hit); never starts one */
+  sustain(): void {
+    if (this.timerS > 0) this.timerS = COLLISION_HOLD_S;
+  }
+
+  /** One force sample `x` (gained, 1 = full force) `hS` seconds after the last → the protected force */
+  step(x: number, hS: number): number {
+    let blend = smoothstep01(this.timerS / COLLISION_FADE_S);
+    let out = x;
+    if (blend > 1e-6) {
+      // A falling force is let down quickly so a high value is never held
+      if (Math.abs(x) < Math.abs(this.held) * 0.999) blend = Math.min(blend, COLLISION_RELEASE_BLEND);
+      if (hS > 0) this.held += (x - this.held) * (1 - Math.exp(-hS / (COLLISION_SLEW_TAU_S * blend)));
+      out = clampEased(x, this.held - COLLISION_BAND, this.held + COLLISION_BAND, COLLISION_EASE);
+    } else {
+      blend = 0;
+      this.held = x;
+    }
+    this.blend = blend;
+    if (hS > 0) this.timerS = Math.max(0, this.timerS - hS);
+    this.recent[this.recentIdx] = x;
+    this.recentIdx = (this.recentIdx + 1) % COLLISION_SEED_SAMPLES;
+    this.recentCount = Math.min(COLLISION_SEED_SAMPLES, this.recentCount + 1);
+    return out;
+  }
+
+  reset(): void {
+    this.blend = 0;
+    this.held = 0;
+    this.timerS = 0;
+    this.recent.fill(0);
+    this.recentCount = 0;
+    this.recentIdx = 0;
   }
 }

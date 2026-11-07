@@ -75,6 +75,8 @@ export interface WheelSettings {
    * so the aero load at speed does not make the rim heavier. 0 = off, 1 = the full aero share taken out
    */
   ffbDownforceComp: number;
+  /** Collision protection: slew-limits the force through a hit so its spike never reaches the rim */
+  ffbCollisionGuard: boolean;
   /** Strength per car (gain, minimum force) set from the FFB panel; a car without one uses ffbGain / ffbMinForce */
   ffbPerCar: Partial<Record<string, { gain: number; minForce: number }>>;
   /**
@@ -149,6 +151,7 @@ export const DEFAULT_WHEEL_SETTINGS: WheelSettings = {
   ffbDamping: 0.1,
   ffbFilterS: 0,
   ffbDownforceComp: 0,
+  ffbCollisionGuard: true,
   ffbPerCar: {},
   steerLockPerCar: {},
   hidFfb: true,
