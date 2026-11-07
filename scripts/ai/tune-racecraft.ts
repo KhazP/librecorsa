@@ -3,20 +3,24 @@
  * Gaussian over the normalised knobs, refitted to the best candidates each generation).
  *
  *   npx tsx scripts/ai/tune-racecraft.ts [--gens 40] [--pop 12] [--workers 10] [--tracks spielberg,okayama]
- *       [--planner on|off] [--laps 3] [--cars 8]
+ *       [--planner on|off] [--laps 3] [--cars 8] [--car vf26|f12026-car|amg-gt3] [--seeds 1]
  *
- * Each candidate races every track (same seeds within a generation: common random numbers), and is scored on what a
+ * Each candidate races every track `--seeds` times (the same seeds for every candidate in a generation: common random
+ * numbers; one race each is noisy, the same knobs scoring from −25 to −35 between generations), and is scored on what a
  * good race looks like, in the spirit of GT Sophy's reward terms: places won on the road, against spins, contacts,
  * offs and retirements, with a small weight on pace. Results go to $REALISM_REF/reports/race-ai/tuning/ (local): the
  * per-generation log and the best knobs found, to review before they become the defaults.
  *
- * Worker mode (one race, JSON out): --eval '<params json>' --track <id> --seed <n> --planner on|off
+ * Worker mode (one race, JSON out): --eval '<params json>' --track <id> --seed <n> --planner on|off --car <id>
  */
 import { spawn } from 'node:child_process';
 import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { getActiveTrackData, setActiveTrack, type RawTrackJson } from '../../src/lib/track-data';
 import { F12026CarSim } from '../../src/lib/sim/f12026-car/F12026CarSim';
+import { createAmgGt3Sim } from '../../src/lib/sim/gt3/AmgGt3Sim';
+import { F1Physics2026 } from '../../src/lib/f1-physics-2026';
+import type { SimulatorCar } from '../../src/lib/sim/simulator-car';
 import { AI_DRIVERS, AI_RESERVE_DRIVERS, AiOpponentField, DEFAULT_RACECRAFT, type RacecraftParams } from '../../src/lib/sim/ai-opponents';
 import { loadGlbGeometry } from '../lib/glb-geometry';
 import { REALISM_REF } from './lib/references';
@@ -48,7 +52,13 @@ if (argv.includes('--eval')) {
   const cars = Number(opt('cars', '8'));
   setActiveTrack(trackId, JSON.parse(readFileSync(`public/tracks/${trackId}/track_data.json`, 'utf8')) as RawTrackJson);
   const track = getActiveTrackData(1200);
-  const tmpl = new F12026CarSim(track, loadGlbGeometry(`public${track.meshUrl}`));
+  const carId = opt('car', 'f12026-car');
+  const tmpl: SimulatorCar =
+    carId === 'vf26'
+      ? (new F1Physics2026(track) as unknown as SimulatorCar)
+      : carId === 'amg-gt3'
+        ? createAmgGt3Sim(track, loadGlbGeometry(`public${track.meshUrl}`))
+        : new F12026CarSim(track, loadGlbGeometry(`public${track.meshUrl}`));
   const field = new AiOpponentField(track, tmpl, [...AI_DRIVERS, ...AI_RESERVE_DRIVERS].slice(0, cars), undefined, {
     seed,
     spectate: true,
@@ -112,10 +122,12 @@ const workers = Number(opt('workers', '10'));
 const tracks = opt('tracks', 'spielberg,okayama').split(',');
 const laps = opt('laps', '3');
 const cars = opt('cars', '8');
+const carId = opt('car', 'f12026-car');
+const seeds = Number(opt('seeds', '1'));
 const outDir = join(REALISM_REF, 'reports/race-ai/tuning');
 mkdirSync(outDir, { recursive: true });
 const logPath = join(outDir, `racecraft-${planner}.log`);
-writeFileSync(logPath, `tuning ${keys.join(', ')} on ${tracks.join(', ')} · planner ${planner}\n`);
+writeFileSync(logPath, `tuning ${keys.join(', ')} on ${tracks.join(', ')} · ${carId} · ${seeds} seed(s) · planner ${planner}\n`);
 const log = (m: string) => {
   console.log(m);
   appendFileSync(logPath, m + '\n');
@@ -144,7 +156,7 @@ function runRace(params: Partial<RacecraftParams>, track: string, seed: number):
   return new Promise((resolve) => {
     const child = spawn(
       process.execPath,
-      ['--disable-warning=THREE_CJS_DEPRECATED', '--import', 'tsx', __filename, '--eval', JSON.stringify(params), '--track', track, '--seed', String(seed), '--planner', planner, '--laps', laps, '--cars', cars],
+      ['--disable-warning=THREE_CJS_DEPRECATED', '--import', 'tsx', __filename, '--eval', JSON.stringify(params), '--track', track, '--seed', String(seed), '--planner', planner, '--laps', laps, '--cars', cars, '--car', carId],
       { stdio: ['ignore', 'pipe', 'ignore'] }
     );
     let out = '';
@@ -183,13 +195,14 @@ async function main(): Promise<void> {
     const cands: number[][] = [mean.slice()];
     while (cands.length < pop + 1) cands.push(mean.map((m, i) => Math.min(1, Math.max(0, m + std[i] * gauss()))));
     const jobs: (() => Promise<RaceScore | null>)[] = [];
-    for (const c of cands) for (const tr of tracks) jobs.push(() => runRace(toParams(c), tr, seed));
+    const per = tracks.length * seeds;
+    for (const c of cands) for (const tr of tracks) for (let k = 0; k < seeds; k++) jobs.push(() => runRace(toParams(c), tr, seed + k));
     const started = Date.now();
     const results = await pool(jobs, workers);
     const scored = cands.map((c, ci) => {
-      const rs = results.slice(ci * tracks.length, (ci + 1) * tracks.length);
+      const rs = results.slice(ci * per, (ci + 1) * per);
       const ok = rs.filter((r): r is RaceScore => r !== null);
-      const score = ok.length === tracks.length ? ok.reduce((a, r) => a + r.score, 0) / ok.length : -Infinity;
+      const score = ok.length === per ? ok.reduce((a, r) => a + r.score, 0) / ok.length : -Infinity;
       const detail = ok.map((r) => `p${r.passes} s${r.spins} c${r.contacts.toFixed(0)} o${r.offs} d${r.dnf} ${r.meanLapS.toFixed(1)}s`).join(' | ');
       return { c, score, detail };
     });
