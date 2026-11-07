@@ -50,6 +50,9 @@ import {
   RacecraftMemory,
 } from '@/lib/sim/ai-racecraft';
 import { RaceIncidents } from '@/lib/sim/race-incidents';
+import { aiTrackFor, type AiTrack } from '@/lib/sim/ai/ai-track';
+import { carLimitsFor } from '@/lib/sim/ai/ggv';
+import { makeDrivePlan } from '@/lib/sim/ai/drive-plan';
 import type { AiGridOrder, PlayerGridSlot } from '@/lib/sim/race-setup';
 import { F12026_CAR_CONFIG } from '@/lib/sim/f12026-car/F12026CarConfig';
 import { AMG_GT3_CONFIG } from '@/lib/sim/gt3/AmgGt3Config';
@@ -136,6 +139,13 @@ function followCapMs(ahead: SimulatorCar, gapM: number): number {
   const margin = 2.5 + (decelAhead > 5 ? 0.12 * vAhead : 0);
   return Math.max(0, vAhead - 0.2 * decelAhead) + Math.sqrt(2 * 6 * Math.max(0, gapM - margin));
 }
+
+/**
+ * Planned grip of an AI car at pace 1: the share of its measured limits the plan uses. A driver's pace (skill, the
+ * lap's form, the weather) scales it as pace² (corner speed goes with √grip), so slower drivers are slower through
+ * the corners and on the brakes, not down the straights
+ */
+const PLAN_GRIP = 0.97;
 
 /** What a headless race reports per car */
 export interface AiCarStats {
@@ -293,6 +303,8 @@ interface FieldCar {
   craft: RacecraftMemory;
   /** Grid slot of this race (0 = pole) */
   gridSlot: number;
+  /** Grip its current drive plan was built on (the plan is rebuilt when it moves) */
+  planGrip: number;
   /** Covering the inside against a car behind */
   defending: boolean;
   /** Lateral offset of its grid slot (m), held off the start until the first corner; null once it races its line */
@@ -634,7 +646,10 @@ export class AiOpponentField {
     this.skillLevel = THREE.MathUtils.clamp(skill, 0, 100);
     this.mods = aiSkillModifiers(this.skillLevel);
     this.applySkill();
-    for (const car of this.cars) if (car.ai) this.rebuildTarget(car);
+    for (const car of this.cars) if (car.ai) {
+      this.rebuildTarget(car);
+      this.refreshPlan(car);
+    }
   }
 
   private applySkill(): void {
@@ -665,6 +680,7 @@ export class AiOpponentField {
     car.mistakeCorner = mistake && this.corners.length ? Math.floor(car.rng() * this.corners.length) : -1;
     if (car.mistakeCorner >= 0) car.stats.mistakes++;
     this.rebuildTarget(car);
+    this.refreshPlan(car);
   }
 
   /** An AI car's target speed: its limit profile with the tuning, the skill, what it learnt and this lap's errors */
@@ -692,6 +708,38 @@ export class AiOpponentField {
       hooks.env
     );
     hooks.setTarget(target);
+  }
+
+  /** The AI grid and the racing line per class, built on first use */
+  private aiTrack: AiTrack | null = null;
+  private readonly classLines = new Map<string, Float64Array>();
+
+  /** Whether a car's autopilot tracks drive plans (the rigid-body cars; the VF26 model keeps its own driver) */
+  private static tracksPlans(sim: SimulatorCar): boolean {
+    return 'aiPlan' in sim && sim.vehicleId !== 'vf26';
+  }
+
+  /**
+   * A car's drive plan: its class's racing line with the speeds its own limits allow at its grip, which is the plan
+   * grip times its pace² (skill, this lap's form) and the weather's grip. Rebuilt when that grip moves.
+   */
+  private refreshPlan(car: FieldCar): void {
+    const sim = car.ai;
+    if (!sim || !AiOpponentField.tracksPlans(sim)) return;
+    const weather = this.environment.weatherPaceScale(sim);
+    const grip = Math.round(PLAN_GRIP * car.pace * car.pace * weather * weather * 200) / 200;
+    if (sim.aiPlan && grip === car.planGrip) return;
+    this.aiTrack ??= aiTrackFor(this.track);
+    const t = this.aiTrack;
+    const lineId = sim.racingLineId ?? 'f1';
+    let line = this.classLines.get(lineId);
+    if (!line) {
+      line = new Float64Array(t.n);
+      for (let i = 0; i < t.n; i++) line[i] = aiLineOffsetM(this.track.getSampleAtDistance(i * t.ds), lineId);
+      this.classLines.set(lineId, line);
+    }
+    sim.aiPlan = makeDrivePlan(t, line, carLimitsFor(sim.vehicleId, grip));
+    car.planGrip = grip;
   }
 
   public attachTrackRoot(root: THREE.Object3D): void {
@@ -756,6 +804,7 @@ export class AiOpponentField {
       lastWallDamageMs: 0,
       craft: new RacecraftMemory(),
       gridSlot: 0,
+      planGrip: 0,
       defending: false,
       startLaneM: null,
       prevS: 0,
@@ -1337,7 +1386,10 @@ export class AiOpponentField {
       // Making a pass stick: a little more into the corner (a later brake, more speed) once alongside
       const passing = craft.passTargetId !== null && ahead !== null && aheadGap < CAR_LEN_M * 1.2;
       const attackPush = passing ? 1 + 0.012 * (1 + Math.max(0, car.aggression)) : 1;
-      me.aiPaceScale = Math.min(0.999, car.pace * attackPush) * (1 - 0.012 * Math.abs(car.biasM)) * dirtyAirPenalty * weatherPace * yellowLift * blueLift;
+      // A car on a drive plan has its pace and the weather in the plan's grip already
+      this.refreshPlan(car);
+      const planned = me.aiPlan ? 1 : car.pace * weatherPace;
+      me.aiPaceScale = Math.min(me.aiPlan ? 1.03 : 0.999, planned * attackPush) * (1 - 0.012 * Math.abs(car.biasM)) * dirtyAirPenalty * yellowLift * blueLift;
       me.aiSpeedCapMs = speedCap;
       car.hooks?.setSteerGain(T.at('steerGain', me.sMeters));
       // Rain changed the grip the car plans on: new corner speeds and braking points
