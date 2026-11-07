@@ -102,7 +102,7 @@ export interface PadTuning extends DeviceAssistTuning {
   brakeGamma: number;
   /** Impulse-trigger rumble (Xbox): ABS in LT, wheelspin in RT */
   triggerRumble: boolean;
-  /** Buzz LT/RT as tyres approach peak slip even when ABS / TC are enabled */
+  /** Buzz LT / RT as the tyres near their peak slip with ABS / traction control on too (off: only with them off) */
   triggerSlipAlwaysOn: boolean;
 }
 
@@ -202,7 +202,7 @@ export const DEFAULT_PAD_TUNING: PadTuning = {
   throttleGamma: 1,
   brakeGamma: 1,
   triggerRumble: true,
-  triggerSlipAlwaysOn: true,
+  triggerSlipAlwaysOn: false,
   ...DEFAULT_DEVICE_ASSIST_TUNING,
 };
 
