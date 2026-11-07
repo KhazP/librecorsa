@@ -8,6 +8,11 @@
  */
 
 const RAD2DEG = 180 / Math.PI;
+/**
+ * tan(peak slip angle) / peak slip ratio of the tyres, to split a tyre's normalised slip into its longitudinal and
+ * lateral parts from the raw slip ratio and angle (VF26 slicks: tan 6.7° / 0.1005 ≈ 1.17)
+ */
+const PEAK_ANGLE_OVER_RATIO = 1.2;
 
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
@@ -21,6 +26,11 @@ export interface AxleSlipSample {
   rearNdSlip: number;
   /** Load-weighted normalised slip of all four tyres */
   totalNdSlip: number;
+  /**
+   * Load-weighted braking part of the four tyres' normalised slip: the share of each tyre's slip that is along the
+   * wheel and braking (slip ratio < 0), so cornering slip does not count
+   */
+  brakeNdSlip: number;
   /** Larger front longitudinal slip ratio magnitude */
   frontSlipRatioAbs: number;
   /** The fronts are on the road surface (not a kerb, grass or run-off) */
@@ -50,6 +60,7 @@ export const createAxleSlipSample = (): AxleSlipSample => ({
   frontNdSlip: 0,
   rearNdSlip: 0,
   totalNdSlip: 0,
+  brakeNdSlip: 0,
   frontSlipRatioAbs: 0,
   frontOnRoad: true,
   frontGrounded: true,
@@ -59,6 +70,19 @@ export const createAxleSlipSample = (): AxleSlipSample => ({
 function weighted(a: number, b: number, wa: number, wb: number): number {
   const w = wa + wb;
   return w > 1e-6 ? (a * wa + b * wb) / w : 0.5 * (a + b);
+}
+
+/**
+ * The braking part of one tyre's normalised slip (after a7-impulse, which projects `ndSlip` onto the tyre force's
+ * longitudinal direction through the friction ellipse: `ndSlip·cos θ·r(θ)/dx`). With the normalised slip
+ * `hypot(κ/κ_peak, tanα/tanα_peak)` that projection is just `κ/κ_peak`, read here as the slip ratio's share of the
+ * slip vector. A tyre with no slip vector to go by (neither slip ratio nor angle reported) keeps its whole slip.
+ */
+function brakingNdSlip(w: WheelSlip): number {
+  const lateral = Math.tan(w.slipAngleRad) / PEAK_ANGLE_OVER_RATIO;
+  const len = Math.hypot(w.slipRatio, lateral);
+  if (!(len > 1e-9)) return w.ndSlip;
+  return (w.ndSlip * Math.max(0, -w.slipRatio)) / len;
 }
 
 /** Per-axle slip of the four tyres (front left, front right, rear left, rear right), written into `out` */
@@ -75,6 +99,11 @@ export function axleSlip(fl: WheelSlip, fr: WheelSlip, rl: WheelSlip, rr: WheelS
     total > 1e-6
       ? (fl.ndSlip * lfl + fr.ndSlip * lfr + rl.ndSlip * lrl + rr.ndSlip * lrr) / total
       : 0.25 * (fl.ndSlip + fr.ndSlip + rl.ndSlip + rr.ndSlip);
+  const bfl = brakingNdSlip(fl);
+  const bfr = brakingNdSlip(fr);
+  const brl = brakingNdSlip(rl);
+  const brr = brakingNdSlip(rr);
+  out.brakeNdSlip = total > 1e-6 ? (bfl * lfl + bfr * lfr + brl * lrl + brr * lrr) / total : 0.25 * (bfl + bfr + brl + brr);
   out.frontSlipRatioAbs = Math.max(Math.abs(fl.slipRatio), Math.abs(fr.slipRatio));
   out.frontOnRoad = fl.onRoad && fr.onRoad;
   out.frontGrounded = lfl > 1 || lfr > 1;
