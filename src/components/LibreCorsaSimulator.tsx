@@ -3252,9 +3252,12 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     xr.isSessionSupported("immersive-vr").then(setVrSupported, () => setVrSupported(false));
   }, []);
 
-  // WebHID force feedback (HID PID wheels) instead of the native bridge, while switched on. Only a wheel granted
-  // before reopens here: pairing needs requestDevice inside a click, which the wheel setup's toggle / Connect does.
+  // WebHID force feedback (HID PID wheels, listed Logitech wheels) instead of the bridge, while switched on. Only a
+  // wheel granted before reopens here: pairing needs requestDevice inside a click, which the wheel setup's toggle /
+  // Connect does.
   const hidFfbWanted = settings.wheel.ffbEnabled && settings.wheel.hidFfb;
+  // Before the reconnect below: a classic Logitech wheel is set to this rotation as it connects
+  useEffect(() => webHidFfb.setRotationDeg(settings.wheel.rotationDeg), [settings.wheel.rotationDeg]);
   useEffect(() => {
     if (!hidFfbWanted) {
       void webHidFfb.dispose();
