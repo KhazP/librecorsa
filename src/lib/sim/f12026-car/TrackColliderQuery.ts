@@ -935,60 +935,6 @@ export class TrackColliderQuery implements GroundQuery {
     return true;
   }
 
-  /**
-   * Conforms `Track_Model` visual road/kerb/runoff vertices near the physics surface so the rendered road
-   * matches the smoothed `Track_Surface_Road` collider across crests and compressions.
-   */
-  public conformVisualRoad(root: THREE.Object3D): void {
-    if (root.userData?.__visualRoadConformed) return;
-    if (root.userData) root.userData.__visualRoadConformed = true;
-    const tm = root.getObjectByName('Track_Model');
-    if (!tm) return;
-    const hit = createGroundHit();
-    const mInv = new THREE.Matrix4();
-    const seen = new Set<THREE.BufferGeometry>();
-    tm.traverse((o) => {
-      if (!(o instanceof THREE.Mesh) || !o.geometry || seen.has(o.geometry)) return;
-      seen.add(o.geometry);
-      const pos = o.geometry.getAttribute('position');
-      if (!pos) return;
-      const isOverlay = Boolean(
-        o.userData?.decal || o.userData?.groove || o.parent?.userData?.decal || o.parent?.userData?.groove
-      );
-      const lift = isOverlay ? 0.002 : 0;
-      const e = o.matrixWorld.elements;
-      const m0 = e[0], m1 = e[1], m2 = e[2];
-      const m4 = e[4], m5 = e[5], m6 = e[6];
-      const m8 = e[8], m9 = e[9], m10 = e[10];
-      const m12 = e[12], m13 = e[13], m14 = e[14];
-      const ie = mInv.copy(o.matrixWorld).invert().elements;
-      const i0 = ie[0], i1 = ie[1], i2 = ie[2];
-      const i4 = ie[4], i5 = ie[5], i6 = ie[6];
-      const i8 = ie[8], i9 = ie[9], i10 = ie[10];
-      const i12 = ie[12], i13 = ie[13], i14 = ie[14];
-      let dirty = false;
-      for (let i = 0; i < pos.count; i++) {
-        const lx = pos.getX(i);
-        const ly = pos.getY(i);
-        const lz = pos.getZ(i);
-        const wx = m0 * lx + m4 * ly + m8 * lz + m12;
-        const wy = m1 * lx + m5 * ly + m9 * lz + m13;
-        const wz = m2 * lx + m6 * ly + m10 * lz + m14;
-        if (this.query(wx, wz, wy + 0.32, hit) && hit.surface !== 'grass' && Math.abs(wy - hit.height) < 0.32) {
-          const ny = hit.height + lift;
-          pos.setXYZ(
-            i,
-            i0 * wx + i4 * ny + i8 * wz + i12,
-            i1 * wx + i5 * ny + i9 * wz + i13,
-            i2 * wx + i6 * ny + i10 * wz + i14
-          );
-          dirty = true;
-        }
-      }
-      if (dirty) pos.needsUpdate = true;
-    });
-  }
-
   private readonly scratchH = new Float64Array(32);
   private readonly scratchT = new Int32Array(32);
 }

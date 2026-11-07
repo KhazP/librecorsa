@@ -17,6 +17,7 @@ import { attachSceneryInstances, loadSceneryInstances, resetSceneryInstances } f
 import { applySceneryTextures, loadSceneryTextures } from "@/lib/render/scenery-textures";
 import { cleanScanMaterial } from "@/lib/render/scan-materials";
 import { trackColliders } from "@/lib/sim/track-colliders";
+import { fitVisualRoad, inheritedTag } from "@/lib/render/fit-visual-road";
 import { createGroundHit, type GroundQuery } from "@/lib/sim/f12026-car/TrackColliderQuery";
 import { OVERLAY_LAYER } from "@/lib/render/layers";
 import { cutSceneryBoxes, isCutMaterialMesh, type SceneryCutBox } from "@/lib/scenery-cuts";
@@ -197,7 +198,7 @@ function loadTrackGlb(
       const size = new THREE.Vector3();
       root.updateMatrixWorld(true);
       const colliders = trackColliders(root);
-      if (colliders.conformSurfaces) colliders.ground?.conformVisualRoad(root);
+      if (colliders.conformSurfaces && colliders.ground) fitVisualRoad(root, colliders.ground);
       root.traverse((obj) => {
         // Exported node extras land on the node; the mesh child inherits nothing, so walk up.
         let node: THREE.Object3D | null = obj;
@@ -1140,8 +1141,7 @@ export function buildCircuitScene(
     const semBox = new THREE.Box3();
     let hasSemBox = false;
     root.traverse((obj) => {
-      let gCfg: { min?: number; max?: number; mult?: number } | undefined = obj.userData?.groove;
-      if (!gCfg && obj.parent?.userData?.groove) gCfg = obj.parent.userData.groove;
+      const gCfg = inheritedTag<{ min?: number; max?: number; mult?: number }>(obj, "groove", root);
       if (gCfg && obj instanceof THREE.Mesh) {
         const cloned = (Array.isArray(obj.material) ? obj.material : [obj.material]).map((m) => m.clone());
         obj.material = Array.isArray(obj.material) ? cloned : cloned[0];
