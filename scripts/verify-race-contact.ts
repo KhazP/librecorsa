@@ -112,8 +112,9 @@ function run(setup: Setup) {
 
 // ---- 2 + 3. Rear-quarter hits, then the spun car's rejoin
 {
-  // 3.5 s: the player's fixed throttle runs it into the first chicane after that
-  const tap = run({ player: [300, -1.5, 63], ai: [304.4, 0, 59], inputs: (i) => ({ throttle: 0.5, analogSteer: i < 20 ? 0.12 : 0 }), frames: 60 * 3.5 });
+  // A tap: 8 frames of steering into the rear quarter (held longer it is a spin-out move, and spins the car). 3.5 s:
+  // the player's fixed throttle runs it into the first chicane after that
+  const tap = run({ player: [300, -1.5, 63], ai: [304.4, 0, 59], inputs: (i) => ({ throttle: 0.5, analogSteer: i < 8 ? 0.12 : 0 }), frames: 60 * 3.5 });
   const tapInfo = tap.field.carInfo('AIC')!;
   check('Light tap: the AI car is knocked out of shape', tap.modes.has('startled') && tap.maxHeadingDeg > 5, `heading off the road by ${f(tap.maxHeadingDeg, 0)}°, modes ${[...tap.modes].join(' → ')}`);
   check('Light tap: ... and gathers it up', tapInfo.stats.spins === 0, `${tapInfo.stats.spins} spins`);
@@ -124,7 +125,8 @@ function run(setup: Setup) {
   const backFrame = hit.trace.findIndex((t, i) => stopFrame >= 0 && i > stopFrame && t.mode === 'racing');
   check('Rejoin: the spun car comes to a stop first', stopFrame >= 0, `stopped at ${f(stopFrame / 60)} s`);
   // (the stuck-recovery count also catches the set-up teleport on the first frame, so the jumps are looked for here)
-  const jumps = hit.trace.filter((t, i) => i > 1 && Math.abs(t.aiS - hit.trace[i - 1].aiS) > 15).length;
+  const L = track.totalLengthM;
+  const jumps = hit.trace.filter((t, i) => i > 1 && Math.abs(((t.aiS - hit.trace[i - 1].aiS + 1.5 * L) % L) - L / 2) > 15).length;
   check('Rejoin: then races again by driving, no teleport', backFrame > 0 && info.stats.marshalRecoveries === 0 && jumps === 0, `racing again at ${f(backFrame / 60)} s, ${info.stats.marshalRecoveries} marshal moves, ${jumps} jumps`);
   const late = Math.max(...hit.trace.slice(-60 * 15).map((t) => t.aiVx));
   check('Rejoin: back up to racing speed', late > 50 || info.retired, `${f(late)} m/s top speed over the last 15 s${info.retired ? ' (retired)' : ''}`);

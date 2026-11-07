@@ -61,6 +61,8 @@ const WRONG_WAY_RAD = 1.22;
 const TURN_CAP_MS = 6;
 /** Not moving / not turned round after this long: the marshals step in (s) */
 const MARSHAL_AFTER_S = 9;
+/** A driver who has just gathered the car up is already reacting: no new startle for this long (s) */
+const RESETTLE_S = 0.4;
 
 export class AiCarControl {
   public mode: AiControlMode = 'racing';
@@ -75,6 +77,8 @@ export class AiCarControl {
   public needsMarshal = false;
   /** Spins since the start */
   public spins = 0;
+  /** Seconds since the driver last took the car back (a new knock within the settle time doesn't startle again) */
+  private sinceRecoveredS = Infinity;
   private readonly out: AiControlOutput = { autopilot: true, inputs: {}, speedCapMs: Infinity };
 
   constructor(
@@ -90,6 +94,7 @@ export class AiCarControl {
     this.stuckS = 0;
     this.needsMarshal = false;
     this.spins = 0;
+    this.sinceRecoveredS = Infinity;
   }
 
   /** In the race, not out of it */
@@ -102,9 +107,10 @@ export class AiCarControl {
     return this.mode === 'spinning' || this.mode === 'stopped' || (this.mode === 'rejoining' && this.timerS < 2);
   }
 
-  /** A knock: a contact or a barrier hit. Starts the reaction time if the driver is racing */
-  public knock(state: AiControlCarState): void {
-    if (this.mode !== 'racing') return;
+  /** A knock: a contact or a barrier hit. Starts the reaction time if the driver is racing; `strong`: a big one */
+  public knock(state: AiControlCarState, strong = false): void {
+    // Just after gathering the car up the driver is already reacting: only a strong knock startles again
+    if (this.mode !== 'racing' || (this.sinceRecoveredS < RESETTLE_S && !strong)) return;
     this.mode = 'startled';
     this.timerS = this.reactionS;
     this.heldSteer = state.steer;
@@ -146,6 +152,7 @@ export class AiCarControl {
     const slip = speed > 5 ? Math.abs(Math.atan2(s.vyMs, Math.max(0.1, Math.abs(s.vxMs)))) + (s.vxMs < 0 ? Math.PI / 2 : 0) : 0;
     const yawErr = Math.abs(s.yawRateRadS - s.roadYawRateRadS);
 
+    this.sinceRecoveredS += dt;
     switch (this.mode) {
       case 'racing':
         // A slide no driver catches, knocked or not (the autopilot alone would gather up anything)
@@ -154,8 +161,10 @@ export class AiCarControl {
       case 'startled':
         this.timerS -= dt;
         if (this.timerS <= 0) {
-          if (slip < this.catchSlipRad && yawErr < 0.9 * SPIN_YAW_ERR_RADS) this.mode = 'racing';
-          else this.startSpin();
+          if (slip < this.catchSlipRad && yawErr < 0.9 * SPIN_YAW_ERR_RADS) {
+            this.mode = 'racing';
+            this.sinceRecoveredS = 0;
+          } else this.startSpin();
         } else if (slip > SPIN_SLIP_RAD * 1.3) {
           this.startSpin();
         }

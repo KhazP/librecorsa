@@ -961,7 +961,15 @@ export class AiOpponentField {
       if (!sim || car.removed) continue;
       const ctl = car.control as AiCarControl;
       const wasSpinning = ctl.mode === 'spinning';
+      const wasDriving = ctl.mode === 'racing' || ctl.mode === 'rejoining';
       const out = ctl.update(dt, this.controlState(car), this.clearBehind(car));
+      // Back on the autopilot after a knock or a spin: its line starts where the car is and eases back (the traffic
+      // bias is rate-limited), rather than the tracker snatching it back across metres of road
+      if (!wasDriving && (ctl.mode === 'racing' || ctl.mode === 'rejoining')) {
+        const line = aiLineOffsetM(this.track.getSampleAtDistance(sim.sMeters), sim.racingLineId);
+        car.biasM = THREE.MathUtils.clamp(sim.lateralOffsetM - line, -8, 8);
+        sim.aiLineBiasM = car.biasM;
+      }
       if (!wasSpinning && ctl.mode === 'spinning') {
         car.stats.spins++;
         car.learner?.interrupt();
@@ -1531,7 +1539,9 @@ export class AiOpponentField {
     if (car.control && before) {
       // The lateral part of the speed change, in the car's own frame (left = (fwdZ, −fwdX))
       const dvLat = Math.abs(_applied.dvx * box.fwdZ - _applied.dvz * box.fwdX);
-      if (Math.abs(_applied.dyaw) > KNOCK_YAW_RADS || dvLat > KNOCK_LATERAL_MS || impactMs > 3) car.control.knock(before);
+      if (Math.abs(_applied.dyaw) > KNOCK_YAW_RADS || dvLat > KNOCK_LATERAL_MS || impactMs > 3) {
+        car.control.knock(before, Math.abs(_applied.dyaw) > 2 * KNOCK_YAW_RADS || dvLat > 2 * KNOCK_LATERAL_MS || impactMs > 4);
+      }
     }
     // A contact the driver feels (the pad's impact pulse)
     if (car.isPlayer && impactMs > 1.5) {
