@@ -79,9 +79,16 @@ export const TowerRows: React.FC<{ race: RaceStatus; gaps?: "interval" | "leader
                 <span className="shrink-0 rounded-[4px] bg-[#FF2A3C] px-1 text-[8px] leading-[14px] tracking-normal text-[#F5F7FA]">+{e.penaltyS.toFixed(0)}s</span>
               ) : null}
               {e.finished ? <span className="h-2.5 w-2.5 shrink-0 rounded-[2px]" style={{ background: CHEQUER_BG }} /> : null}
+              {!e.retired && e.damage !== undefined && e.damage >= 0.15 ? (
+                <span
+                  className="h-2 w-2 shrink-0 rounded-full"
+                  style={{ backgroundColor: e.damage >= 0.6 ? "#FF2A3C" : "#FFB300" }}
+                  title={`Damaged (${Math.round(e.damage * 100)}%)`}
+                />
+              ) : null}
             </span>
-            <span className={`text-[12px] ${e.isPlayer ? "" : i === 0 ? "text-[#CCFF00]" : "text-[#8E96AA]"}`}>
-              {gap === null ? (gaps === "leader" ? "Leader" : "Lead") : `+${gap.toFixed(1)}`}
+            <span className={`text-[12px] ${e.retired ? "text-[#FF2A3C]" : e.isPlayer ? "" : i === 0 ? "text-[#CCFF00]" : "text-[#8E96AA]"}`}>
+              {e.retired ? "OUT" : gap === null ? (gaps === "leader" ? "Leader" : "Lead") : `+${gap.toFixed(1)}`}
             </span>
             <span
               className="text-right text-[10px]"
