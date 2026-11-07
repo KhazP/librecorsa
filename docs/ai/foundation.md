@@ -1,6 +1,33 @@
-# Race AI foundation: design (draft for approval)
+# Race AI foundation: design and status
 
-**Status:** proposal, 2026-11-07. Nothing in this file is built yet.
+**Status (2026-11-07, branch `claude/race-ai`):** phases 0–2 built, phase 4's planner built but off by default,
+phase 5's tuner running. Approved decisions: §8.
+
+## Where it stands
+
+| Piece | State | Measured |
+|---|---|---|
+| D8 tooling | `scripts/ai/line-report.ts` (per corner, vs OpenF1 and `fast_lane.ai`), `measure-ggv.ts`, `check-lines.ts` | OpenF1 fit at Spielberg 3.2 m rms |
+| D2 AI grid | `src/lib/sim/ai/ai-track.ts` | 2 m spacing, 3D (slope, crests, banking) |
+| g-g-v | `src/lib/sim/ai/ggv.ts`, measured per car on its own physics | compression grip per car (VF26 0.15: its floor stalls), steering-lock curvature |
+| D1 tracker | pure pursuit + integral on the plan, in the f12026-car / GT3 autopilot; the VF26's driver takes the plan as its profile | physics lap within ~0.1 s of plan on most circuits (f12026-car, GT3); VF26 2–6 % under plan |
+| D3 lines | lap-time optimised on the car's limits, bounded by its usable road, the steering lock and barrier clearance, accepted only on a clean physics lap | Spielberg F1 75.3 → 70.1 s physics; line 2.3 m from the real 2026 line, corner speeds 6 % low |
+| Line check | `metadata.aiPlans` per car and circuit; the field drives plans only where it passed | 51 of 60 pass (20 circuits × 3 cars). Fails: Monaco and Spielberg inner (all cars), Silverstone and Yas Marina (f12026-car), Daytona road (GT3) |
+| VF26 field on plans | 8-car headless races | Rwanda best 1:33.2 → 1:31.9, Spielberg 1:13.7 → 1:12.3, same or fewer incidents |
+| D4 planner | `src/lib/sim/ai/local-planner.ts`, Frenet quintics, cars ahead as hard obstacles | more passes, more incidents: off by default |
+| D7 tuning | `scripts/ai/tune-racecraft.ts`, cross-entropy over the racecraft knobs | running; one race per candidate per track is noisy, so results need a multi-seed A/B before they become defaults |
+
+**Open problems**
+
+- **Monaco:** every car hits the barriers on the plan even at 80 % grip: slow corners cut ~0.5–1 m inside the
+  line and the nose finds the apex walls, and fast sweeps (the swimming pool) run wide. The field keeps its own
+  drivers there.
+- **Spielberg inner:** no line is trackable yet.
+- **Lap-1 contact:** cars a few metres ahead follow the line across into a car overlapping them (Okayama turn 1).
+  Holding a car's width regardless of the line made it worse (cars pushed each other off), so I reverted that. It
+  needs corner ownership on the way in.
+- **Late apex** at Spielberg s ≈ 2624 is 38 m early against the real line.
+- **GT3** has no real reference data.
 
 The four research reports behind it are kept locally, not in the repo, in
 `~/Documents/GitHub/_realism-ref/reports/race-ai/`:
