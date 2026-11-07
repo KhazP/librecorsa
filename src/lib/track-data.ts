@@ -65,6 +65,8 @@ export interface BuiltTrackData {
   spawnGrid: GridSlotDef[];
   samples: TrackSamplePoint[];
   totalLengthM: number;
+  /** Altitude (m ASL) of world y = 0 on this track, for the air density; absent: the active circuit's */
+  baseAltitudeM?: number;
   spline: THREE.CatmullRomCurve3;
   getSampleAtDistance: (s: number) => TrackSamplePoint;
   projectWorldToTrack: (

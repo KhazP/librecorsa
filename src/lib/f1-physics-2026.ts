@@ -1722,7 +1722,7 @@ export class F1Physics2026 {
     this.updateWheelWorldPositions(sample);
     this.updateRoadContacts(sample, false);
     this.updateGravity(sample);
-    const altitudeM = BASE_ALTITUDE_M + sample.position.y;
+    const altitudeM = (this.track.baseAltitudeM ?? BASE_ALTITUDE_M) + sample.position.y;
     this.airDensity = this.computeAirDensity(altitudeM);
     // The flaps stay shut on a wet road whoever asked for it (a manual toggle or a flying start included), and
     // Straight Mode only opens inside a DRS zone
