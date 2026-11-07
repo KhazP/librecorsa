@@ -18,6 +18,9 @@ import { F12026CarSim } from '../../src/lib/sim/f12026-car/F12026CarSim';
 import type { SimulatorCar } from '../../src/lib/sim/simulator-car';
 import { loadGlbGeometry } from '../lib/glb-geometry';
 import { loadFastLane, loadOpenF1, REALISM_REF, type RefLine } from './lib/references';
+import { aiTrackFor } from '../../src/lib/sim/ai/ai-track';
+import { carLimitsFor } from '../../src/lib/sim/ai/ggv';
+import { makeDrivePlan } from '../../src/lib/sim/ai/drive-plan';
 
 const argv = process.argv.slice(2);
 const opt = (name: string, fallback: string) => {
@@ -27,7 +30,9 @@ const opt = (name: string, fallback: string) => {
 const trackId = opt('track', 'spielberg');
 const line = opt('car', 'f1') as 'f1' | 'gt3';
 const label = opt('label', 'current');
-const physics = argv.includes('--physics');
+const tracker = argv.includes('--tracker');
+const physics = argv.includes('--physics') || tracker;
+const gripScale = Number(opt('grip', '0.97'));
 const DS = 2;
 
 // --file: another copy of the track data (e.g. the committed line, from `git show HEAD:...`)
@@ -72,14 +77,23 @@ for (let i = 0; i < N; i++) {
 }
 
 // ---- The AI car's own flying lap on the full physics (lap 2 from a flying start)
-let phys: { n: Float64Array; v: Float64Array; lapS: number; offTrackFrames: number } | null = null;
+let phys: { n: Float64Array; v: Float64Array; lapS: number; offTrackFrames: number; planLapS?: number; maxTrackErrM?: number } | null = null;
 if (physics) {
   const root = loadGlbGeometry(`public${track.meshUrl ?? '/tracks/rwanda/rwanda_2026.glb'}`);
   const car: SimulatorCar = line === 'gt3' ? createAmgGt3Sim(track, root) : new F12026CarSim(track, root);
   car.assistPreset = 'pro';
   car.aiAutopilot = true;
   car.aiPaceScale = 1;
+  let plan: ReturnType<typeof makeDrivePlan> | null = null;
+  if (tracker) {
+    const at = aiTrackFor(track);
+    const offs = new Float64Array(at.n);
+    for (let i = 0; i < at.n; i++) offs[i] = aiLineOffsetM(track.getSampleAtDistance(i * at.ds), line);
+    plan = makeDrivePlan(at, offs, carLimitsFor(line === 'gt3' ? 'amg-gt3' : 'f12026-car', gripScale));
+    car.aiPlan = plan;
+  }
   car.resetToStartGrid(true, 0);
+  let maxErr = 0;
   const pn = new Float64Array(N).fill(NaN), pv = new Float64Array(N).fill(NaN);
   let laps = 0, prev = car.sMeters, lapStart = 0, t = 0, off = 0;
   const dt = 1 / 120;
@@ -97,9 +111,10 @@ if (physics) {
       pn[i] = car.lateralOffsetM;
       pv[i] = car.vxMs;
       if (car.telemetry.offTrack) off++;
+      if (plan) maxErr = Math.max(maxErr, Math.abs(car.lateralOffsetM - plan.n[((Math.round(s / plan.track.ds) % plan.track.n) + plan.track.n) % plan.track.n]));
     }
   }
-  phys = { n: pn, v: pv, lapS: t - lapStart, offTrackFrames: off };
+  phys = { n: pn, v: pv, lapS: t - lapStart, offTrackFrames: off, planLapS: plan?.lapS, maxTrackErrM: plan ? maxErr : undefined };
 }
 
 // ---- References
@@ -181,7 +196,10 @@ function cornerRow(ref: RefLine, a: number): Row {
 const f = (v: number | null, d = 1) => (v === null || !Number.isFinite(v) ? '   -' : v.toFixed(d));
 const mean = (a: number[]) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : NaN);
 const out: Record<string, unknown> = { track: trackId, line, label, lengthM: L, physicsLapS: phys?.lapS ?? null, physicsOffTrackFrames: phys?.offTrackFrames ?? null, refs: {} };
-console.log(`\n${trackId} · ${line} line · ${label}${phys ? ` · physics AI lap ${phys.lapS.toFixed(3)} s (${phys.offTrackFrames} off-track frames)` : ''}`);
+console.log(
+  `\n${trackId} · ${line} line · ${label}${phys ? ` · physics AI lap ${phys.lapS.toFixed(3)} s (${phys.offTrackFrames} off-track frames)` : ''}` +
+    (phys?.planLapS ? ` · tracker: plan ${phys.planLapS.toFixed(3)} s, worst path error ${phys.maxTrackErrM?.toFixed(2)} m` : '')
+);
 if (!refs.length) console.log('  no reference data for this track');
 for (const ref of refs) {
   const rows = apexIdx.map((a) => cornerRow(ref, a));
