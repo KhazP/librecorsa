@@ -3087,7 +3087,9 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         }
       }
 
-      if (nowMs - lastHudSyncMs > 33) {
+      // Paused, the car is frozen but the pause menu (and the HUD under it) would still re-render at 30 Hz for nothing;
+      // 4 Hz keeps what can still move there (remote players) current
+      if (nowMs - lastHudSyncMs > (pausedRef.current ? 250 : 33)) {
         lastHudSyncMs = nowMs;
         setTelemetry({
           ...physics.telemetry,
