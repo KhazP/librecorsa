@@ -1513,6 +1513,8 @@ export class F1Physics2026 {
     let steerNorm: number; // + = right
 
     if (this.aiAutopilot) {
+      // The player's steering assist holds nothing while the autopilot drives, so a hand-back starts from centre
+      this.steeringAssist.reset();
       this.lastObservation = this.buildObservation(sample);
       const plan = this.getAiPlan();
       plan.params.paceScale = this.aiPaceScale;

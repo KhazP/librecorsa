@@ -1500,6 +1500,8 @@ export class F12026CarSim implements SimulatorCar {
     steer: number;
     drs: boolean;
   } {
+    // The player's steering assist holds nothing while the autopilot drives, so a hand-back starts from centre
+    this.steeringAssist.reset();
     const v = this.vehicle;
     const L = this.track.totalLengthM;
     const speed = v.speedMs;
