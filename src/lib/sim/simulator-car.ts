@@ -161,6 +161,10 @@ export interface SimulatorCar {
   getLiveTunerState?(): LiveTunerState;
   setLiveTuner?(patch: LiveTunerPatch): void;
 
+  /** Apply the car's damage (`car-damage.ts`): aero, per-wheel grip and toe, engine; null = undamaged */
+  setDamageEffects?(effects: Readonly<import('./car-damage').CarDamageEffects> | null): void;
+  /** The car puts itself back on the line when stuck on autopilot (default true; a race field rejoins its own cars) */
+  aiSelfRecovery?: boolean;
   /** Apply trailing vortex wake / slipstream deficit from cars ahead */
   setAeroWakeState?(wake: import('./aero-wake').AeroWakeState): void;
   /** Apply the dynamic track evolution sample under the car */

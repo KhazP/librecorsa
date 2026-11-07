@@ -183,6 +183,10 @@ export interface RaceStandingEntry {
   compound?: TireCompound;
   /** Time penalties served at the flag (s) */
   penaltyS?: number;
+  /** Out of the race (terminal damage) */
+  retired?: boolean;
+  /** Damage 0..1 (absent: none) */
+  damage?: number;
 }
 
 /** One line of the final classification */
@@ -542,7 +546,8 @@ export interface F12026Channels {
   absActive: boolean;
   /** Touching a barrier this frame / last impact speed into the wall (m/s) and its sim time (ms) */
   wallContact: boolean;
-  wallImpact: { speedMs: number; atMs: number } | null;
+  /** Last barrier impact: into-wall speed, when, and where on the car (m, + left / + forward) */
+  wallImpact: { speedMs: number; atMs: number; localX?: number; localZ?: number } | null;
 }
 
 export type TelemetryData = CarTelemetry;

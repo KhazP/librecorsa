@@ -50,6 +50,7 @@ import { SteeringAssist, type SteeringAssistCarState } from '../steering-assist'
 import { type OvertakingRaceControl, type OvertakingRules, OvertakeGrant } from '../overtaking-rules';
 import { AxleSlipScratch } from '../tyre-slip';
 import type { AeroWakeState } from '../aero-wake';
+import { type CarDamageEffects, withDamage } from '../car-damage';
 import type { TrackEvolutionSample } from '../track-evolution';
 import type { WeatherContactSample } from '../weather';
 import { SLICK_TRAITS, wetGripFactor } from '../wet-tyres';
@@ -582,6 +583,10 @@ export class F12026CarSim implements SimulatorCar {
     return this.line;
   }
   public aiAutopilot = false;
+  /** The car puts itself back on the line when stuck (off in a race: the field rejoins its cars, `ai-car-control.ts`) */
+  public aiSelfRecovery = true;
+  private lastWake: AeroWakeState | null = null;
+  private damage: Readonly<CarDamageEffects> | null = null;
   /** Fraction of the car's own limit speed (see `autopilotProfile`) the autopilot drives at */
   public aiPaceScale = 0.8;
   /** Lateral offset bias from the racing line for AI traffic / passing (m) */
@@ -1156,7 +1161,22 @@ export class F12026CarSim implements SimulatorCar {
   }
 
   public setAeroWakeState(wake: AeroWakeState | null): void {
-    this.vehicle.setAeroWakeState(wake);
+    this.lastWake = wake;
+    this.vehicle.setAeroWakeState(withDamage(wake, this.damage));
+  }
+
+  /** Damage from contact and barriers (car-damage.ts): aero through the wake multipliers, grip and toe per wheel */
+  public setDamageEffects(effects: Readonly<CarDamageEffects> | null): void {
+    this.damage = effects;
+    const v = this.vehicle;
+    // Damage wheels are FR, FL, RR, RL; the vehicle's LF, RF, LR, RR
+    const map = [1, 0, 3, 2];
+    for (let i = 0; i < 4; i++) {
+      v.damageGrip[i] = effects ? effects.wheelGripMult[map[i]] : 1;
+      v.damageToeRad[i] = effects ? effects.wheelToeRad[map[i]] : 0;
+    }
+    v.damagePowerMult = effects ? effects.powerMult : 1;
+    v.setAeroWakeState(withDamage(this.lastWake, effects));
   }
 
   public setTrackEvolutionSample(sample: TrackEvolutionSample | null): void {
@@ -1369,7 +1389,7 @@ export class F12026CarSim implements SimulatorCar {
     }
     this.simTimeMs += dtSeconds * 1000;
     if (this.recoverIfLost()) return this.telemetry;
-    if (this.aiAutopilot) this.recoverIfStuck(dtSeconds);
+    if (this.aiAutopilot && this.aiSelfRecovery) this.recoverIfStuck(dtSeconds);
     else this.stuckS = 0;
     this.wheelRotationRad = (this.wheelRotationRad + 0.5 * (v.wheels[2].omega + v.wheels[3].omega) * dtSeconds) % (Math.PI * 2);
     this.syncPose();
@@ -1673,7 +1693,7 @@ export class F12026CarSim implements SimulatorCar {
         c.drsDetection = { zone: e.zone, eligible: e.eligible, atMs: this.simTimeMs };
         break;
       case 'WALL_IMPACT':
-        c.wallImpact = { speedMs: e.speedMs, atMs: this.simTimeMs };
+        c.wallImpact = { speedMs: e.speedMs, atMs: this.simTimeMs, localX: e.localX, localZ: e.localZ };
         break;
       case 'CHANGED_PERFORMANCE_MODE':
         c.performanceMode = e.mode;

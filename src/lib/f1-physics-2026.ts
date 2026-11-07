@@ -114,6 +114,7 @@ import {
   evaluateRollAeroFactor,
   type RelativeAirspeed,
 } from './sim/aero-wake';
+import { type CarDamageEffects, withDamage } from './sim/car-damage';
 import type { TrackEvolutionSample } from './sim/track-evolution';
 import { DRY_WEATHER_SAMPLE, type WeatherContactSample } from './sim/weather';
 import { FULL_REALISM, type SimRealismFlags } from './sim/sim-realism';
@@ -701,8 +702,19 @@ export class F1Physics2026 {
   }
 
   public setAeroWakeState(wake: AeroWakeState): void {
-    this.aeroWakeState = wake;
+    this.lastWake = wake;
+    this.aeroWakeState = withDamage(wake, this.damage) ?? wake;
   }
+
+  /** Damage (car-damage.ts): on the VF26 model the aero loss only, through the wake multipliers */
+  public setDamageEffects(effects: Readonly<CarDamageEffects> | null): void {
+    this.damage = effects;
+    if (this.lastWake) this.aeroWakeState = withDamage(this.lastWake, effects) ?? this.lastWake;
+  }
+  private lastWake: AeroWakeState | null = null;
+  private damage: Readonly<CarDamageEffects> | null = null;
+  /** The car puts itself back on the line when stuck (off in a race: the field rejoins its cars) */
+  public aiSelfRecovery = true;
 
   public setTrackEvolutionSample(sample: TrackEvolutionSample): void {
     if (!Number.isFinite(sample.gripMultiplier) || !Number.isFinite(sample.trackTempC)) return;
@@ -1235,7 +1247,7 @@ export class F1Physics2026 {
    * (the line follower cannot turn it round), is put back on the AI line
    */
   private recoverStuckAi(dtSeconds: number): void {
-    if (!this.aiAutopilot) {
+    if (!this.aiAutopilot || !this.aiSelfRecovery) {
       this.aiStuckS = 0;
       return;
     }
