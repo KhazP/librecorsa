@@ -17,13 +17,13 @@ import {
   type PadSensitivity,
 } from "@/lib/input/device-input";
 import { Choice, Toggle } from "@/components/hud/PauseMenu";
-import { DEFAULT_PAD_TUNING, type PadTuning } from "@/lib/settings/player-settings";
+import { PAD_FINE_TUNING_FIELDS, resetPadTuning, type PadTuning } from "@/lib/settings/player-settings";
 import { useGamepads } from "../useMenuNav";
 import { useButtonCapture } from "./button-capture";
 import { FACE_BUTTONS, padFamilyOf, useInputMode, type PadFamily } from "../input-mode";
 import { StickCurve, TriggerBars, TuningSlider } from "./TuningSlider";
 import { PadMap } from "./PadMap";
-import { AssistCurve, AssistPresetBar, AutoGrid, BindRow, bindKeyClass, ChoiceText, Hint, PillAction, SetupCard, StatusPill, TrackMeter } from "./setup-ui";
+import { AssistTuningCard, AutoGrid, BindRow, bindKeyClass, ChoiceText, Hint, PillAction, SetupCard, StatusPill, TrackMeter } from "./setup-ui";
 import type { SetupStepProps } from "./types";
 
 /** Standard-mapping face buttons 0..3, drawn small inside a binding chip */
@@ -61,13 +61,14 @@ function testRumble() {
 
 
 /** Controller: live input check, steering feel, rumble and button layout */
-export const ControllerStep: React.FC<SetupStepProps> = ({
+export const ControllerStep: React.FC<SetupStepProps & { steerLockDeg?: number }> = ({
   settings,
   onChangeSettings,
   gamepadAssist,
   onSetGamepadAssist,
   gamepadRumble,
   onToggleGamepadRumble,
+  steerLockDeg,
 }) => {
   const pads = useGamepads();
   const { family } = useInputMode();
@@ -89,15 +90,10 @@ export const ControllerStep: React.FC<SetupStepProps> = ({
   const tuning = settings.padTuning;
   const setTuning = (patch: Partial<PadTuning>) =>
     onChangeSettings((prev) => ({ ...prev, padTuning: { ...prev.padTuning, ...patch } }));
-  // Back to the defaults, keeping the steering rate and dead zone of the chosen feel preset
   const resetTuning = () =>
     onChangeSettings((prev) => ({
       ...prev,
-      padTuning: {
-        ...DEFAULT_PAD_TUNING,
-        steeringRate: PAD_SENSITIVITY[prev.padSensitivity].steeringRate,
-        deadzone: PAD_SENSITIVITY[prev.padSensitivity].deadzone,
-      },
+      padTuning: resetPadTuning(prev.padTuning, PAD_FINE_TUNING_FIELDS, prev.padSensitivity),
     }));
   const curveLabel = (v: number) => (Math.abs(v - 1) < 0.025 ? "Linear" : v > 1 ? `Progressive ${v.toFixed(2)}` : `Aggressive ${v.toFixed(2)}`);
 
@@ -311,91 +307,13 @@ export const ControllerStep: React.FC<SetupStepProps> = ({
         </div>
       </SetupCard>
 
-      <SetupCard
-        label="Controller assist options"
-        action={
-          <PillAction
-            onClick={() =>
-              setTuning({
-                selfSteerStrength: DEFAULT_PAD_TUNING.selfSteerStrength,
-                dampingStrength: DEFAULT_PAD_TUNING.dampingStrength,
-                speedSensitivity: DEFAULT_PAD_TUNING.speedSensitivity,
-                slipLimitMargin: DEFAULT_PAD_TUNING.slipLimitMargin,
-                maxSelfSteerAngleDeg: DEFAULT_PAD_TUNING.maxSelfSteerAngleDeg,
-              })
-            }
-          >
-            Reset assist
-          </PillAction>
-        }
-      >
-        <Toggle
-          label="Controller steering assist"
-          detail="The stick steers up to the front tyres' grip limit, self-aligns and helps catch slides"
-          checked={gamepadAssist}
-          onChange={() => onSetGamepadAssist(!gamepadAssist)}
-        />
-        <div className="border-t border-[#262B3D] pt-3">
-          <AssistPresetBar tuning={tuning} onSelect={(preset) => setTuning(preset)} />
-        </div>
-        <div className="flex flex-wrap gap-[22px] border-t border-[#262B3D] pt-3">
-          <AutoGrid min={200} className="min-w-0 flex-[1_1_340px] gap-x-5 gap-y-3">
-            <TuningSlider
-              label="Self-steer & countersteer"
-              value={tuning.selfSteerStrength}
-              min={0}
-              max={1}
-              step={0.05}
-              format={(v) => `${Math.round(v * 100)} %`}
-              hint="How strongly the wheels follow the car's travel direction and catch rear slides"
-              onChange={(v) => setTuning({ selfSteerStrength: v })}
-            />
-            <TuningSlider
-              label="Yaw damping"
-              value={tuning.dampingStrength}
-              min={0}
-              max={1}
-              step={0.05}
-              format={(v) => `${Math.round(v * 100)} %`}
-              hint="Calms snap-back and pendulum oscillations when recovering from a slide"
-              onChange={(v) => setTuning({ dampingStrength: v })}
-            />
-            <TuningSlider
-              label="High-speed calm"
-              value={tuning.speedSensitivity}
-              min={0}
-              max={1}
-              step={0.05}
-              format={(v) => `${Math.round(v * 100)} %`}
-              hint="How much stick steering slows down at high speed to prevent twitchiness"
-              onChange={(v) => setTuning({ speedSensitivity: v })}
-            />
-            <TuningSlider
-              label="Tyre slip margin"
-              value={tuning.slipLimitMargin}
-              min={-0.25}
-              max={0.25}
-              step={0.01}
-              format={(v) => `${v > 0 ? "+" : ""}${Math.round(v * 100)} %`}
-              hint="Negative: safer understeer cushion · Positive: lets you push past peak slip"
-              onChange={(v) => setTuning({ slipLimitMargin: v })}
-            />
-            <TuningSlider
-              label="Max countersteer lock"
-              value={tuning.maxSelfSteerAngleDeg}
-              min={5}
-              max={30}
-              step={1}
-              format={(v) => `${Math.round(v)}°`}
-              hint="Maximum road-wheel angle the assist holds automatically when catching a slide"
-              onChange={(v) => setTuning({ maxSelfSteerAngleDeg: v })}
-            />
-          </AutoGrid>
-          <div className="flex min-w-0 flex-[1_1_200px] flex-col gap-3 sm:max-w-[240px]">
-            <AssistCurve tuning={tuning} />
-          </div>
-        </div>
-      </SetupCard>
+      <AssistTuningCard
+        device="controller"
+        label="Steering assist tuning"
+        tuning={tuning}
+        onChange={setTuning}
+        lockDeg={steerLockDeg}
+      />
     </div>
   );
 };

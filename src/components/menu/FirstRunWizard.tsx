@@ -34,6 +34,8 @@ const STEP_INFO: Record<Exclude<WizardStepId, "setup">, { title: string; detail:
 
 export interface FirstRunWizardProps extends SetupStepProps {
   mode: WizardMode;
+  /** The current car's steering lock (road-wheel degrees), for the countersteer sliders */
+  steerLockDeg?: number;
   /** Finished (first run: start driving; controls: return) */
   onFinish: () => void;
   /** Left via Back on the first step */

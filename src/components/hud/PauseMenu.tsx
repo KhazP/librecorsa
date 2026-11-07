@@ -19,13 +19,18 @@ import type { ChassisSetup } from "@/lib/sim/car-setup";
 import { EngineersGarage } from "@/components/menu/EngineersGarage";
 import { CarPicker } from "@/components/menu/CarPicker";
 import type { LibraryProps } from "@/components/menu/ContentBrowser";
-import { AssistPresetBar } from "@/components/menu/steps/setup-ui";
+import { AssistTuningCard } from "@/components/menu/steps/setup-ui";
+import { TuningSlider } from "@/components/menu/steps/TuningSlider";
+import { keyLabel } from "@/lib/input/bindings";
+import type { SteeringDevice } from "@/lib/sim/steering-assist";
 import { FACTORY_LIVERY_NOTE, carTakesLivery, type CarId } from "@/lib/cars/car-registry";
 import {
   COCKPIT_FOV_MAX_DEG,
   COCKPIT_FOV_MIN_DEG,
-  DEFAULT_KEYBOARD_TUNING,
-  DEFAULT_PAD_TUNING,
+  PAUSE_KEYBOARD_FIELDS,
+  PAUSE_PAD_FIELDS,
+  resetKeyboardTuning,
+  resetPadTuning,
   type KeyboardTuning,
   type PadTuning,
   type PlayerSettings,
@@ -112,6 +117,8 @@ export interface PauseMenuProps extends MultiplayerPanelProps {
   telemetry: CarTelemetry;
   settings?: PlayerSettings;
   onChangeSettings?: (update: (prev: PlayerSettings) => PlayerSettings) => void;
+  /** The current car's steering lock (road-wheel degrees), for the countersteer slider */
+  steerLockDeg?: number;
   aeroPreset: AeroSetupPreset;
   assistPreset: DriverAssistPreset;
   cameraMode: CameraMode;
@@ -547,10 +554,140 @@ export const PauseMenu: React.FC<PauseMenuProps> = (props) => {
   );
 };
 
-export const SessionPanel: React.FC<PauseMenuProps> = (p) => {
-  const [assistTab, setAssistTab] = useState<"keyboard" | "controller">(
-    p.settings?.device === "controller" ? "controller" : "keyboard"
+/**
+ * The pause menu's input assists for the keyboard or the controller (the player's device first): the steering assist
+ * card the setup screens show, and below it the device's own rows with their reset
+ */
+const InputAssistPanel: React.FC<{
+  settings: PlayerSettings;
+  onChangeSettings: (update: (prev: PlayerSettings) => PlayerSettings) => void;
+  lockDeg?: number;
+}> = ({ settings, onChangeSettings, lockDeg }) => {
+  const [device, setDevice] = useState<SteeringDevice>(settings.device === "controller" ? "controller" : "keyboard");
+  const kb = settings.keyboardTuning;
+  const pad = settings.padTuning;
+  const setKb = (patch: Partial<KeyboardTuning>) =>
+    onChangeSettings((s) => ({ ...s, keyboardTuning: { ...s.keyboardTuning, ...patch } }));
+  const setPad = (patch: Partial<PadTuning>) => onChangeSettings((s) => ({ ...s, padTuning: { ...s.padTuning, ...patch } }));
+  const resetRows = () =>
+    onChangeSettings((s) =>
+      device === "keyboard"
+        ? { ...s, keyboardTuning: resetKeyboardTuning(s.keyboardTuning, PAUSE_KEYBOARD_FIELDS) }
+        : { ...s, padTuning: resetPadTuning(s.padTuning, PAUSE_PAD_FIELDS, s.padSensitivity) }
+    );
+  const pct = (v: number) => `${Math.round(v * 100)} %`;
+  const ms = (v: number) => `${Math.round(v * 1000)} ms`;
+  return (
+    <section className={PANEL_CARD} aria-label="Steering and pedal assist">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <PanelSection color="#CCFF00">Input assist options</PanelSection>
+        <Segmented
+          label="Assist device"
+          value={device}
+          onChange={setDevice}
+          options={[
+            { id: "keyboard", label: "Keyboard" },
+            { id: "controller", label: "Controller" },
+          ]}
+        />
+      </div>
+      <AssistTuningCard
+        compact
+        device={device}
+        tuning={device === "keyboard" ? kb : pad}
+        onChange={device === "keyboard" ? setKb : setPad}
+        lockDeg={lockDeg}
+      />
+      <div className="flex items-center justify-between gap-2 px-2 pt-1">
+        <span className="lc-lbl">{device === "keyboard" ? "Keys" : "Stick & triggers"}</span>
+        <button
+          type="button"
+          onClick={resetRows}
+          className="inline-flex h-[30px] shrink-0 cursor-pointer items-center rounded-full border border-[#262B3D] px-3 font-f1-mono text-[10px] font-extrabold tracking-[0.12em] text-[#8E96AA] uppercase transition-colors hover:border-[#CCFF00] hover:text-[#CCFF00]"
+        >
+          Reset
+        </button>
+      </div>
+      {device === "keyboard" ? (
+        <div className="flex flex-col gap-1">
+          <div className="grid gap-x-4 gap-y-0.5 sm:grid-cols-2">
+            <TuningSlider
+              label="Steering rise"
+              value={kb.steerRiseS}
+              min={0.05}
+              max={1}
+              step={0.01}
+              format={ms}
+              onChange={(v) => setKb({ steerRiseS: v })}
+            />
+            <TuningSlider
+              label="Steering return"
+              value={kb.steerReturnS}
+              min={0.05}
+              max={1}
+              step={0.01}
+              format={ms}
+              onChange={(v) => setKb({ steerReturnS: v })}
+            />
+            <TuningSlider
+              label="Pedal help strength"
+              value={kb.pedalAssistStrength}
+              min={0}
+              max={1}
+              step={0.05}
+              format={pct}
+              onChange={(v) => setKb({ pedalAssistStrength: v })}
+            />
+          </div>
+          <div className="grid gap-x-4 border-t border-[#262B3D] pt-1 sm:grid-cols-2">
+            <Toggle
+              label="Throttle help"
+              detail={`Eases ${keyLabel(settings.keys.throttle[0])} while the rears spin (TC off)`}
+              checked={kb.exitAssist}
+              onChange={() => setKb({ exitAssist: !kb.exitAssist })}
+            />
+            <Toggle
+              label="Brake help"
+              detail={`Eases ${keyLabel(settings.keys.brake[0])} while the tyres lock (ABS off)`}
+              checked={kb.brakeAssist}
+              onChange={() => setKb({ brakeAssist: !kb.brakeAssist })}
+            />
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-1">
+          <TuningSlider
+            label="Steering speed"
+            value={pad.steeringRate}
+            min={0.1}
+            max={1.5}
+            step={0.05}
+            format={(v) => `×${v.toFixed(2)}`}
+            onChange={(v) => setPad({ steeringRate: v })}
+          />
+          <div className="grid gap-x-4 border-t border-[#262B3D] pt-1 sm:grid-cols-2">
+            <Toggle
+              label="Impulse-trigger rumble"
+              detail="Slip, ABS & wheelspin in LT / RT"
+              checked={pad.triggerRumble}
+              onChange={() => setPad({ triggerRumble: !pad.triggerRumble })}
+            />
+            {pad.triggerRumble ? (
+              <Toggle
+                label="Trigger slip with ABS & TC"
+                detail="LT / RT slip buzz even with ABS & TC on"
+                checked={pad.triggerSlipAlwaysOn}
+                onChange={() => setPad({ triggerSlipAlwaysOn: !pad.triggerSlipAlwaysOn })}
+              />
+            ) : null}
+          </div>
+        </div>
+      )}
+    </section>
   );
+};
+
+export const SessionPanel: React.FC<PauseMenuProps> = (p) => {
   const k = {
     camera: "C",
     racingLine: "R",
@@ -561,16 +698,6 @@ export const SessionPanel: React.FC<PauseMenuProps> = (p) => {
     shiftDown: "Q",
     ...p.keyNames,
   };
-  const kb = p.settings?.keyboardTuning ?? DEFAULT_KEYBOARD_TUNING;
-  const pad = p.settings?.padTuning ?? DEFAULT_PAD_TUNING;
-  const setKb = (patch: Partial<KeyboardTuning>) =>
-    p.onChangeSettings?.((s) => ({ ...s, keyboardTuning: { ...s.keyboardTuning, ...patch } }));
-  const setPad = (patch: Partial<PadTuning>) =>
-    p.onChangeSettings?.((s) => ({ ...s, padTuning: { ...s.padTuning, ...patch } }));
-  const pct = (v: number) => `${Math.round(v * 100)} %`;
-  const signedPct = (v: number) => `${v > 0 ? "+" : ""}${Math.round(v * 100)} %`;
-  const ms = (v: number) => `${Math.round(v * 1000)} ms`;
-
   return (
     <div className="grid items-start gap-3.5 xl:grid-cols-[1.35fr_1.1fr]">
       <section className={PANEL_CARD} aria-label="Session">
@@ -591,7 +718,7 @@ export const SessionPanel: React.FC<PauseMenuProps> = (p) => {
           <Toggle label="Engine sound" detail={k.mute} checked={!p.isMuted} onChange={p.onToggleMute} />
           <Toggle
             label="Automatic gearbox"
-            detail={`Auto-shifts with 1 s manual override (${k.shiftUp} / ${k.shiftDown}) · Off: full manual`}
+            detail={`Shifts for you and keeps your own shifts (${k.shiftUp} / ${k.shiftDown}) · Off: full manual`}
             checked={p.autoGearbox ?? true}
             onChange={() => p.onSetAutoGearbox?.(!(p.autoGearbox ?? true))}
           />
@@ -682,205 +809,7 @@ export const SessionPanel: React.FC<PauseMenuProps> = (p) => {
 
       <div className="flex flex-col gap-3.5">
         {p.settings && p.onChangeSettings ? (
-          <section className={PANEL_CARD} aria-label="Steering and pedal assist">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <PanelSection color="#CCFF00">Input assist options</PanelSection>
-              <div className="flex items-center gap-2">
-                <Segmented
-                  label="Assist device"
-                  value={assistTab}
-                  onChange={setAssistTab}
-                  options={[
-                    { id: "keyboard", label: "Keyboard" },
-                    { id: "controller", label: "Controller" },
-                  ]}
-                />
-                <button
-                  type="button"
-                  onClick={() =>
-                    assistTab === "keyboard"
-                      ? setKb({
-                          steerRiseS: DEFAULT_KEYBOARD_TUNING.steerRiseS,
-                          steerReturnS: DEFAULT_KEYBOARD_TUNING.steerReturnS,
-                          selfSteerStrength: DEFAULT_KEYBOARD_TUNING.selfSteerStrength,
-                          dampingStrength: DEFAULT_KEYBOARD_TUNING.dampingStrength,
-                          speedSensitivity: DEFAULT_KEYBOARD_TUNING.speedSensitivity,
-                          slipLimitMargin: DEFAULT_KEYBOARD_TUNING.slipLimitMargin,
-                          maxSelfSteerAngleDeg: DEFAULT_KEYBOARD_TUNING.maxSelfSteerAngleDeg,
-                          pedalAssistStrength: DEFAULT_KEYBOARD_TUNING.pedalAssistStrength,
-                          exitAssist: DEFAULT_KEYBOARD_TUNING.exitAssist,
-                          brakeAssist: DEFAULT_KEYBOARD_TUNING.brakeAssist,
-                        })
-                      : setPad({
-                          steeringRate: DEFAULT_PAD_TUNING.steeringRate,
-                          triggerRumble: DEFAULT_PAD_TUNING.triggerRumble,
-                          triggerSlipAlwaysOn: DEFAULT_PAD_TUNING.triggerSlipAlwaysOn,
-                          selfSteerStrength: DEFAULT_PAD_TUNING.selfSteerStrength,
-                          dampingStrength: DEFAULT_PAD_TUNING.dampingStrength,
-                          speedSensitivity: DEFAULT_PAD_TUNING.speedSensitivity,
-                          slipLimitMargin: DEFAULT_PAD_TUNING.slipLimitMargin,
-                          maxSelfSteerAngleDeg: DEFAULT_PAD_TUNING.maxSelfSteerAngleDeg,
-                        })
-                  }
-                  className="inline-flex h-[30px] shrink-0 cursor-pointer items-center rounded-full border border-[#262B3D] px-3 font-f1-mono text-[10px] font-extrabold tracking-[0.12em] text-[#8E96AA] uppercase transition-colors hover:border-[#CCFF00] hover:text-[#CCFF00]"
-                >
-                  Reset
-                </button>
-              </div>
-            </div>
-            <div className="px-2">
-              <AssistPresetBar
-                compact
-                tuning={assistTab === "keyboard" ? kb : pad}
-                onSelect={(preset) => (assistTab === "keyboard" ? setKb(preset) : setPad(preset))}
-              />
-            </div>
-            {assistTab === "keyboard" ? (
-              <div className="flex flex-col gap-1">
-                <div className="grid gap-x-4 gap-y-0.5 sm:grid-cols-2">
-                  <TyreSlider
-                    label="Steering rise"
-                    value={kb.steerRiseS}
-                    limits={{ min: 0.05, max: 1, step: 0.01 }}
-                    format={ms}
-                    onChange={(v) => setKb({ steerRiseS: v })}
-                  />
-                  <TyreSlider
-                    label="Steering return"
-                    value={kb.steerReturnS}
-                    limits={{ min: 0.05, max: 1, step: 0.01 }}
-                    format={ms}
-                    onChange={(v) => setKb({ steerReturnS: v })}
-                  />
-                  <TyreSlider
-                    label="Self-steer & countersteer"
-                    value={kb.selfSteerStrength}
-                    limits={{ min: 0, max: 1, step: 0.05 }}
-                    format={pct}
-                    onChange={(v) => setKb({ selfSteerStrength: v })}
-                  />
-                  <TyreSlider
-                    label="Yaw damping"
-                    value={kb.dampingStrength}
-                    limits={{ min: 0, max: 1, step: 0.05 }}
-                    format={pct}
-                    onChange={(v) => setKb({ dampingStrength: v })}
-                  />
-                  <TyreSlider
-                    label="High-speed calm"
-                    value={kb.speedSensitivity}
-                    limits={{ min: 0, max: 1, step: 0.05 }}
-                    format={pct}
-                    onChange={(v) => setKb({ speedSensitivity: v })}
-                  />
-                  <TyreSlider
-                    label="Tyre slip margin"
-                    value={kb.slipLimitMargin}
-                    limits={{ min: -0.25, max: 0.25, step: 0.01 }}
-                    format={signedPct}
-                    onChange={(v) => setKb({ slipLimitMargin: v })}
-                  />
-                  <TyreSlider
-                    label="Max countersteer lock"
-                    value={kb.maxSelfSteerAngleDeg}
-                    limits={{ min: 5, max: 30, step: 1 }}
-                    format={(v) => `${Math.round(v)}°`}
-                    onChange={(v) => setKb({ maxSelfSteerAngleDeg: v })}
-                  />
-                  <TyreSlider
-                    label="Pedal assist strength"
-                    value={kb.pedalAssistStrength}
-                    limits={{ min: 0, max: 1, step: 0.05 }}
-                    format={pct}
-                    onChange={(v) => setKb({ pedalAssistStrength: v })}
-                  />
-                </div>
-                <div className="grid gap-x-4 border-t border-[#262B3D] pt-1 sm:grid-cols-2">
-                  <Toggle
-                    label="Throttle help"
-                    detail="Eases W when rear tyres spin (TC off)"
-                    checked={kb.exitAssist}
-                    onChange={() => setKb({ exitAssist: !kb.exitAssist })}
-                  />
-                  <Toggle
-                    label="Brake help"
-                    detail="Eases S when tyres lock (ABS off)"
-                    checked={kb.brakeAssist}
-                    onChange={() => setKb({ brakeAssist: !kb.brakeAssist })}
-                  />
-                </div>
-              </div>
-            ) : (
-              <div className="flex flex-col gap-1">
-                <div className="grid gap-x-4 sm:grid-cols-2">
-                  <Toggle
-                    label="Controller steering assist"
-                    detail="Grip-limited steering & self-steer"
-                    checked={p.gamepadAssist}
-                    onChange={() => p.onToggleGamepadAssist?.()}
-                  />
-                  <Toggle
-                    label="Impulse-trigger rumble"
-                    detail="Slip, ABS & wheelspin in LT / RT"
-                    checked={pad.triggerRumble}
-                    onChange={() => setPad({ triggerRumble: !pad.triggerRumble })}
-                  />
-                  {pad.triggerRumble ? (
-                    <Toggle
-                      label="Trigger slip with ABS & TC"
-                      detail="LT / RT slip buzz even with ABS & TC on"
-                      checked={pad.triggerSlipAlwaysOn}
-                      onChange={() => setPad({ triggerSlipAlwaysOn: !pad.triggerSlipAlwaysOn })}
-                    />
-                  ) : null}
-                </div>
-                <div className="grid gap-x-4 gap-y-0.5 border-t border-[#262B3D] pt-1 sm:grid-cols-2">
-                  <TyreSlider
-                    label="Steering speed"
-                    value={pad.steeringRate}
-                    limits={{ min: 0.1, max: 1.5, step: 0.05 }}
-                    format={(v) => `×${v.toFixed(2)}`}
-                    onChange={(v) => setPad({ steeringRate: v })}
-                  />
-                  <TyreSlider
-                    label="Self-steer & countersteer"
-                    value={pad.selfSteerStrength}
-                    limits={{ min: 0, max: 1, step: 0.05 }}
-                    format={pct}
-                    onChange={(v) => setPad({ selfSteerStrength: v })}
-                  />
-                  <TyreSlider
-                    label="Yaw damping"
-                    value={pad.dampingStrength}
-                    limits={{ min: 0, max: 1, step: 0.05 }}
-                    format={pct}
-                    onChange={(v) => setPad({ dampingStrength: v })}
-                  />
-                  <TyreSlider
-                    label="High-speed calm"
-                    value={pad.speedSensitivity}
-                    limits={{ min: 0, max: 1, step: 0.05 }}
-                    format={pct}
-                    onChange={(v) => setPad({ speedSensitivity: v })}
-                  />
-                  <TyreSlider
-                    label="Tyre slip margin"
-                    value={pad.slipLimitMargin}
-                    limits={{ min: -0.25, max: 0.25, step: 0.01 }}
-                    format={signedPct}
-                    onChange={(v) => setPad({ slipLimitMargin: v })}
-                  />
-                  <TyreSlider
-                    label="Max countersteer lock"
-                    value={pad.maxSelfSteerAngleDeg}
-                    limits={{ min: 5, max: 30, step: 1 }}
-                    format={(v) => `${Math.round(v)}°`}
-                    onChange={(v) => setPad({ maxSelfSteerAngleDeg: v })}
-                  />
-                </div>
-              </div>
-            )}
-          </section>
+          <InputAssistPanel settings={p.settings} onChangeSettings={p.onChangeSettings} lockDeg={p.steerLockDeg} />
         ) : null}
 
         <section className={PANEL_CARD} aria-label="Controls">

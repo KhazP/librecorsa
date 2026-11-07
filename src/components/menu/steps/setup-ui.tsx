@@ -3,11 +3,16 @@
 import React from "react";
 import {
   ASSIST_PRESETS,
+  ASSIST_SLIDERS,
+  assistPresetDetail,
+  DEFAULT_DEVICE_ASSIST_TUNING,
   deviceAssistTuning,
+  matchingAssistPreset,
   selfSteerDeg,
-  type AssistPresetInfo,
   type DeviceAssistTuning,
+  type SteeringDevice,
 } from "@/lib/sim/steering-assist";
+import { TuningSlider } from "./TuningSlider";
 
 /** Setup-wizard building blocks (Racing Line): frosted section cards, small pill actions, binding rows, live meters */
 
@@ -205,24 +210,14 @@ export const AutoGrid: React.FC<{ min: number; children: React.ReactNode; classN
   </div>
 );
 
-function matchesAssistPreset(tuning: DeviceAssistTuning, preset: AssistPresetInfo): boolean {
-  const t = preset.tuning;
-  return (
-    Math.abs(tuning.selfSteerStrength - t.selfSteerStrength) < 0.008 &&
-    Math.abs(tuning.dampingStrength - t.dampingStrength) < 0.008 &&
-    Math.abs(tuning.speedSensitivity - t.speedSensitivity) < 0.008 &&
-    Math.abs(tuning.slipLimitMargin - t.slipLimitMargin) < 0.005 &&
-    Math.abs(tuning.maxSelfSteerAngleDeg - t.maxSelfSteerAngleDeg) < 0.5
-  );
-}
-
 /** One-click factory assist presets (Balanced, Stable, Loose, Drift, Calm at speed) */
 export const AssistPresetBar: React.FC<{
   tuning: DeviceAssistTuning;
   onSelect: (presetTuning: DeviceAssistTuning) => void;
+  lockDeg?: number;
   compact?: boolean;
-}> = ({ tuning, onSelect, compact }) => {
-  const activePreset = ASSIST_PRESETS.find((p) => matchesAssistPreset(tuning, p));
+}> = ({ tuning, onSelect, lockDeg, compact }) => {
+  const activePreset = matchingAssistPreset(tuning);
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Assist presets">
@@ -236,7 +231,7 @@ export const AssistPresetBar: React.FC<{
               key={preset.id}
               type="button"
               aria-pressed={active}
-              title={preset.detail}
+              title={assistPresetDetail(preset.tuning, lockDeg)}
               onClick={() => onSelect({ ...preset.tuning })}
               className={`inline-flex h-[30px] cursor-pointer items-center justify-center rounded-full px-3 font-f1-mono text-[11px] font-extrabold tracking-[0.1em] uppercase transition-colors duration-200 ${
                 active
@@ -251,7 +246,7 @@ export const AssistPresetBar: React.FC<{
       </div>
       {!compact ? (
         <span className="text-[12px] text-[#8E96AA]">
-          {activePreset ? `${activePreset.label}: ${activePreset.detail}` : "Custom tuning"}
+          {activePreset ? `${activePreset.label}: ${assistPresetDetail(activePreset.tuning, lockDeg)}` : "Custom tuning"}
         </span>
       ) : null}
     </div>
@@ -259,11 +254,15 @@ export const AssistPresetBar: React.FC<{
 };
 
 /**
- * Self-steer & slip-limit curve preview: plots automatic countersteer road-wheel angle (0..25°) against rear slide
- * angle (0..45°), showing the nonlinear self-steer exponent, the soft-clamped `maxSelfSteerAngleDeg` cap, and the
- * target front peak-slip percentage (`95 % + slipLimitMargin`).
+ * Self-steer curve preview: the road-wheel angle the assist countersteers to (up to the car's lock, `lockDeg`) against
+ * the rear's slide angle (0..45°), drawn from the curve the assist steers by (`selfSteerDeg`, before yaw damping), with
+ * the countersteer cap and the grip target.
  */
-export const AssistCurve: React.FC<{ tuning: DeviceAssistTuning; lockDeg?: number }> = ({ tuning, lockDeg = 25 }) => {
+export const AssistCurve: React.FC<{ tuning: DeviceAssistTuning; device: SteeringDevice; lockDeg: number }> = ({
+  tuning,
+  device,
+  lockDeg,
+}) => {
   const maxRearDeg = 45;
   const x0 = 12;
   const x1 = 148;
@@ -272,38 +271,37 @@ export const AssistCurve: React.FC<{ tuning: DeviceAssistTuning; lockDeg?: numbe
   const toX = (rearDeg: number) => x0 + (rearDeg / maxRearDeg) * (x1 - x0);
   const toY = (steerDeg: number) => y0 - (Math.min(lockDeg, Math.max(0, steerDeg)) / lockDeg) * (y0 - y1);
 
+  const resolved = deviceAssistTuning(tuning, device);
   const points: string[] = [];
-  for (let i = 0; i <= 45; i++) {
-    const rearDeg = i;
-    const steerDeg = selfSteerDeg(rearDeg, deviceAssistTuning(tuning, "controller"), lockDeg);
-    points.push(`${i === 0 ? "M" : "L"}${toX(rearDeg).toFixed(1)} ${toY(steerDeg).toFixed(1)}`);
+  for (let rearDeg = 0; rearDeg <= maxRearDeg; rearDeg++) {
+    const steerDeg = selfSteerDeg(rearDeg, resolved, lockDeg);
+    points.push(`${rearDeg === 0 ? "M" : "L"}${toX(rearDeg).toFixed(1)} ${toY(steerDeg).toFixed(1)}`);
   }
 
-  const capDeg = Math.min(lockDeg, tuning.maxSelfSteerAngleDeg);
+  const capDeg = Math.min(lockDeg, resolved.maxSelfSteerAngleDeg);
   const capY = toY(capDeg);
-  const targetSlipPct = Math.round(deviceAssistTuning(tuning, "controller").targetSlip * 100);
+  const capLabel = capDeg >= lockDeg - 0.5 ? "full lock" : `${Math.round(capDeg)}° cap`;
 
   return (
     <div className="flex flex-col gap-2 rounded-[18px] border border-[#262B3D] bg-[#08090D] p-3.5">
       <div className="flex items-center justify-between gap-2">
         <span className="lc-lbl text-[10px]!">Self-steer curve</span>
         <span className="font-f1-mono text-[11px] font-extrabold text-[#CCFF00] tabular-nums">
-          {targetSlipPct}% grip · {Math.round(capDeg)}° cap
+          {Math.round(resolved.targetSlip * 100)}% grip · {capLabel}
         </span>
       </div>
       <svg viewBox="0 0 160 100" className="block h-auto w-full" role="img" aria-label="Self-steer response curve">
         <rect x="6" y="6" width="148" height="88" rx="10" fill="none" stroke="#262B3D" strokeWidth="1" />
-        {/* 1:1 reference line (rear slide angle = road-wheel angle up to full lock) */}
+        {/* Steering that matches the rear's slide one to one, up to full lock */}
         <line
           x1={toX(0).toFixed(1)}
           y1={toY(0).toFixed(1)}
-          x2={toX(lockDeg).toFixed(1)}
+          x2={toX(Math.min(maxRearDeg, lockDeg)).toFixed(1)}
           y2={toY(lockDeg).toFixed(1)}
           stroke="#5B6275"
           strokeWidth="1"
           strokeDasharray="3 3"
         />
-        {/* Countersteer cap reference line */}
         <line
           x1={x0}
           y1={capY.toFixed(1)}
@@ -330,5 +328,58 @@ export const AssistCurve: React.FC<{ tuning: DeviceAssistTuning; lockDeg?: numbe
         </text>
       </svg>
     </div>
+  );
+};
+
+/** The countersteer slider's top (deg): the curve's lock where the car's is not known */
+const COUNTERSTEER_TOP_DEG = ASSIST_SLIDERS.find((s) => s.key === "maxSelfSteerAngleDeg")?.max ?? 30;
+
+/**
+ * A device's steering assist tuning, the one card of the Keyboard and Controller setups and the pause menu: the
+ * presets, the sliders of ASSIST_SLIDERS and the self-steer curve; Reset restores exactly these sliders. The
+ * countersteer slider stops at the current car's lock (`lockDeg`, road-wheel degrees; a larger saved cap is full lock
+ * there); without it, at the slider's own top.
+ */
+export const AssistTuningCard: React.FC<{
+  device: SteeringDevice;
+  tuning: DeviceAssistTuning;
+  onChange: (patch: Partial<DeviceAssistTuning>) => void;
+  lockDeg?: number;
+  label?: string;
+  /** No hints and no preset line (the pause menu) */
+  compact?: boolean;
+}> = ({ device, tuning, onChange, lockDeg, label = "Steering assist", compact }) => {
+  const sliders = ASSIST_SLIDERS.map((s) => {
+    if (s.key !== "maxSelfSteerAngleDeg" || lockDeg === undefined) {
+      return { spec: s, max: s.max, value: tuning[s.key], format: s.format };
+    }
+    const max = Math.max(s.min, Math.min(s.max, Math.floor(lockDeg)));
+    const format = (v: number) => (v >= max ? `${s.format(v)} · full lock` : s.format(v));
+    return { spec: s, max, value: Math.min(tuning[s.key], max), format };
+  });
+  return (
+    <SetupCard label={label} action={<PillAction onClick={() => onChange({ ...DEFAULT_DEVICE_ASSIST_TUNING })}>Reset</PillAction>}>
+      <AssistPresetBar tuning={tuning} onSelect={onChange} lockDeg={lockDeg} compact={compact} />
+      <div className="flex flex-wrap gap-[22px] border-t border-[#262B3D] pt-3">
+        <AutoGrid min={200} className="min-w-0 flex-[1_1_340px] gap-x-5 gap-y-3">
+          {sliders.map(({ spec, max, value, format }) => (
+            <TuningSlider
+              key={spec.key}
+              label={spec.label}
+              value={value}
+              min={spec.min}
+              max={max}
+              step={spec.step}
+              format={format}
+              hint={compact ? undefined : spec.hint}
+              onChange={(v) => onChange({ [spec.key]: v })}
+            />
+          ))}
+        </AutoGrid>
+        <div className="flex min-w-0 flex-[1_1_200px] flex-col gap-3 sm:max-w-[240px]">
+          <AssistCurve tuning={tuning} device={device} lockDeg={lockDeg ?? COUNTERSTEER_TOP_DEG} />
+        </div>
+      </div>
+    </SetupCard>
   );
 };

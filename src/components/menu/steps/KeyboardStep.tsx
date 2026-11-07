@@ -12,14 +12,25 @@ import {
   type KeyAction,
 } from "@/lib/input/bindings";
 import { Toggle } from "@/components/hud/PauseMenu";
-import { DEFAULT_KEYBOARD_TUNING, type KeyboardTuning } from "@/lib/settings/player-settings";
+import {
+  KEYBOARD_FEEL_FIELDS,
+  KEYBOARD_PEDAL_HELP_FIELDS,
+  resetKeyboardTuning,
+  type KeyboardTuning,
+} from "@/lib/settings/player-settings";
 import { suspendMenuNav } from "../useMenuNav";
 import { TuningSlider } from "./TuningSlider";
-import { AssistCurve, AssistPresetBar, AutoGrid, BindRow, bindKeyClass, PillAction, SetupCard, StatusPill } from "./setup-ui";
+import { AssistTuningCard, AutoGrid, BindRow, bindKeyClass, PillAction, SetupCard, StatusPill } from "./setup-ui";
 import type { SetupStepProps } from "./types";
 
 /** Keyboard rebinding: click a slot, press a key. Taking a key from another action swaps the two. */
-export const KeyboardStep: React.FC<SetupStepProps> = ({ settings, onChangeSettings, mouseSteerEnabled, onSetMouseSteer }) => {
+export const KeyboardStep: React.FC<SetupStepProps & { steerLockDeg?: number }> = ({
+  settings,
+  onChangeSettings,
+  mouseSteerEnabled,
+  onSetMouseSteer,
+  steerLockDeg,
+}) => {
   const [capture, setCapture] = useState<{ action: KeyAction; slot: number } | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -54,6 +65,8 @@ export const KeyboardStep: React.FC<SetupStepProps> = ({ settings, onChangeSetti
   const tuning = settings.keyboardTuning;
   const setTuning = (patch: Partial<KeyboardTuning>) =>
     onChangeSettings((prev) => ({ ...prev, keyboardTuning: { ...prev.keyboardTuning, ...patch } }));
+  const reset = (fields: readonly (keyof KeyboardTuning)[]) =>
+    onChangeSettings((prev) => ({ ...prev, keyboardTuning: resetKeyboardTuning(prev.keyboardTuning, fields) }));
   const ms = (v: number) => `${Math.round(v * 1000)} ms`;
 
   return (
@@ -110,21 +123,7 @@ export const KeyboardStep: React.FC<SetupStepProps> = ({ settings, onChangeSetti
 
       <SetupCard
         label="Keyboard feel"
-        action={
-          <PillAction
-            onClick={() =>
-              setTuning({
-                throttleRiseS: DEFAULT_KEYBOARD_TUNING.throttleRiseS,
-                brakeRiseS: DEFAULT_KEYBOARD_TUNING.brakeRiseS,
-                steerRiseS: DEFAULT_KEYBOARD_TUNING.steerRiseS,
-                steerReturnS: DEFAULT_KEYBOARD_TUNING.steerReturnS,
-                halfThrottle: DEFAULT_KEYBOARD_TUNING.halfThrottle,
-              })
-            }
-          >
-            Reset
-          </PillAction>
-        }
+        action={<PillAction onClick={() => reset(KEYBOARD_FEEL_FIELDS)}>Reset</PillAction>}
       >
         <AutoGrid min={220} className="gap-x-[22px] gap-y-3">
           <TuningSlider
@@ -180,95 +179,22 @@ export const KeyboardStep: React.FC<SetupStepProps> = ({ settings, onChangeSetti
         </AutoGrid>
       </SetupCard>
 
+      <AssistTuningCard device="keyboard" tuning={tuning} onChange={setTuning} lockDeg={steerLockDeg} />
+
       <SetupCard
-        label="Keyboard assist options"
-        action={
-          <PillAction
-            onClick={() =>
-              setTuning({
-                selfSteerStrength: DEFAULT_KEYBOARD_TUNING.selfSteerStrength,
-                dampingStrength: DEFAULT_KEYBOARD_TUNING.dampingStrength,
-                speedSensitivity: DEFAULT_KEYBOARD_TUNING.speedSensitivity,
-                slipLimitMargin: DEFAULT_KEYBOARD_TUNING.slipLimitMargin,
-                maxSelfSteerAngleDeg: DEFAULT_KEYBOARD_TUNING.maxSelfSteerAngleDeg,
-                pedalAssistStrength: DEFAULT_KEYBOARD_TUNING.pedalAssistStrength,
-                exitAssist: DEFAULT_KEYBOARD_TUNING.exitAssist,
-                brakeAssist: DEFAULT_KEYBOARD_TUNING.brakeAssist,
-              })
-            }
-          >
-            Reset assist
-          </PillAction>
-        }
+        label="Pedal help"
+        action={<PillAction onClick={() => reset(KEYBOARD_PEDAL_HELP_FIELDS)}>Reset</PillAction>}
       >
-        <AssistPresetBar tuning={tuning} onSelect={(preset) => setTuning(preset)} />
-        <div className="flex flex-wrap gap-[22px] border-t border-[#262B3D] pt-3">
-          <AutoGrid min={200} className="min-w-0 flex-[1_1_340px] gap-x-5 gap-y-3">
-            <TuningSlider
-              label="Self-steer & countersteer"
-              value={tuning.selfSteerStrength}
-              min={0}
-              max={1}
-              step={0.05}
-              format={(v) => `${Math.round(v * 100)} %`}
-              hint="How strongly the wheels follow the car's travel direction and catch rear slides"
-              onChange={(v) => setTuning({ selfSteerStrength: v })}
-            />
-            <TuningSlider
-              label="Yaw damping"
-              value={tuning.dampingStrength}
-              min={0}
-              max={1}
-              step={0.05}
-              format={(v) => `${Math.round(v * 100)} %`}
-              hint="Calms snap-back and pendulum oscillations when recovering from a slide"
-              onChange={(v) => setTuning({ dampingStrength: v })}
-            />
-            <TuningSlider
-              label="High-speed calm"
-              value={tuning.speedSensitivity}
-              min={0}
-              max={1}
-              step={0.05}
-              format={(v) => `${Math.round(v * 100)} %`}
-              hint="How much WASD steering slows down at high speed so quick taps stay gentle"
-              onChange={(v) => setTuning({ speedSensitivity: v })}
-            />
-            <TuningSlider
-              label="Tyre slip margin"
-              value={tuning.slipLimitMargin}
-              min={-0.25}
-              max={0.25}
-              step={0.01}
-              format={(v) => `${v > 0 ? "+" : ""}${Math.round(v * 100)} %`}
-              hint="Negative: safer understeer cushion · Positive: lets you push past peak slip"
-              onChange={(v) => setTuning({ slipLimitMargin: v })}
-            />
-            <TuningSlider
-              label="Max countersteer lock"
-              value={tuning.maxSelfSteerAngleDeg}
-              min={5}
-              max={30}
-              step={1}
-              format={(v) => `${Math.round(v)}°`}
-              hint="Maximum road-wheel angle the assist holds automatically when catching a slide"
-              onChange={(v) => setTuning({ maxSelfSteerAngleDeg: v })}
-            />
-            <TuningSlider
-              label="Pedal assist strength"
-              value={tuning.pedalAssistStrength}
-              min={0}
-              max={1}
-              step={0.05}
-              format={(v) => `${Math.round(v * 100)} %`}
-              hint="How early and deeply Throttle help and Brake help trim wheelspin and lock-ups"
-              onChange={(v) => setTuning({ pedalAssistStrength: v })}
-            />
-          </AutoGrid>
-          <div className="flex min-w-0 flex-[1_1_200px] flex-col gap-3 sm:max-w-[240px]">
-            <AssistCurve tuning={tuning} />
-          </div>
-        </div>
+        <TuningSlider
+          label="Pedal help strength"
+          value={tuning.pedalAssistStrength}
+          min={0}
+          max={1}
+          step={0.05}
+          format={(v) => `${Math.round(v * 100)} %`}
+          hint="How early and how far Throttle help and Brake help ease the keys back"
+          onChange={(v) => setTuning({ pedalAssistStrength: v })}
+        />
         <div className="border-t border-[#262B3D] pt-2.5">
           <Toggle
             label="Throttle help"

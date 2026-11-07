@@ -445,6 +445,9 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     () => steeringAssistSettings(settings.padTuning, settings.keyboardTuning),
     [settings.padTuning, settings.keyboardTuning]
   );
+  /** The car's steering lock (road-wheel degrees, after the garage's ratio), for the assist menus' countersteer slider */
+  const [steerLockDeg, setSteerLockDeg] = useState<number | undefined>(undefined);
+  const steerLockDegRef = useRef(steerLockDeg);
   const [p2pStatus, setP2pStatus] = useState<P2PConnectionStatus>({
     mode: "local",
     roomCode: "",
@@ -2136,6 +2139,11 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       if (physics.steeringAssist.settings !== assistSettingsRef.current) {
         physics.steeringAssist.settings = assistSettingsRef.current;
       }
+      const lockDeg = Math.round(physics.maxSteerAngleRad * (1800 / Math.PI)) / 10;
+      if (lockDeg !== steerLockDegRef.current) {
+        steerLockDegRef.current = lockDeg;
+        setSteerLockDeg(lockDeg);
+      }
       // A multiplayer race runs on the host's clock: the grid is held until the shared lights-out
       const mpRace = mpRaceRef.current;
       const mpFrame = mpRace ? mpRace.frame(multiplayerSync.hostNowMs(nowMs)) : null;
@@ -3341,6 +3349,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     telemetry,
     settings,
     onChangeSettings: handleChangeSettings,
+    steerLockDeg,
     pauseNotice,
     aeroPreset,
     assistPreset,
@@ -3559,6 +3568,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
           mode={wizardMode}
           settings={settings}
           onChangeSettings={handleChangeSettings}
+          steerLockDeg={steerLockDeg}
           carId={carId}
           vehicleModel={vehicleModel}
           onChangeCar={handleChangeCar}

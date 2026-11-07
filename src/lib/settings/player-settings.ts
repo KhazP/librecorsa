@@ -23,12 +23,9 @@ import {
   type PedalBinding,
   type WheelSettings,
 } from "@/lib/input/device-input";
+import { KB_STEER_RETURN_S, KB_STEER_RISE_S } from "@/lib/input/keyboard-steer";
 import { AI_SKILL_DEFAULT } from "@/lib/sim/ai-tuning";
-import {
-  DEFAULT_DEVICE_ASSIST_TUNING,
-  DEFAULT_STEERING_ASSIST_LEVEL,
-  type DeviceAssistTuning,
-} from "@/lib/sim/steering-assist";
+import { DEFAULT_DEVICE_ASSIST_TUNING, sanitizeAssistTuning, type DeviceAssistTuning } from "@/lib/sim/steering-assist";
 import { SIM_REALISM_LEVELS, type SimRealism } from "@/lib/sim/sim-realism";
 import { DEFAULT_SESSION_CONDITIONS, sanitizeConditions, type SessionConditions } from "@/lib/sim/weather";
 
@@ -41,11 +38,6 @@ export interface PlayerSettings {
   assistPreset: AssistPreset;
   racingLine: boolean;
   gamepadAssist: boolean;
-  /**
-   * How much the keyboard and controller steering assist helps, 0..1: more = a stronger self-aligning and stabilising
-   * force, a gentler countersteer and calmer steering at speed (0.5 = the default)
-   */
-  steerAssistLevel: number;
   /** Automatic gearbox; off = shift with Gear up / Gear down */
   autoGearbox: boolean;
   mouseSteer: boolean;
@@ -209,14 +201,53 @@ export const DEFAULT_PAD_TUNING: PadTuning = {
 export const DEFAULT_KEYBOARD_TUNING: KeyboardTuning = {
   throttleRiseS: 0.25,
   brakeRiseS: 0.17,
-  steerRiseS: 0.22,
-  steerReturnS: 0.14,
+  steerRiseS: KB_STEER_RISE_S,
+  steerReturnS: KB_STEER_RETURN_S,
   halfThrottle: 0.5,
   exitAssist: true,
   brakeAssist: true,
   pedalAssistStrength: 0.5,
   ...DEFAULT_DEVICE_ASSIST_TUNING,
 };
+
+/** The fields each settings card shows: its Reset restores exactly these (the steering assist card's: ASSIST_SLIDERS) */
+export const PAD_FINE_TUNING_FIELDS = [
+  "steeringRate",
+  "deadzone",
+  "outerDeadzone",
+  "linearity",
+  "throttleGamma",
+  "brakeGamma",
+  "triggerRumble",
+  "triggerSlipAlwaysOn",
+] as const satisfies readonly (keyof PadTuning)[];
+export const KEYBOARD_FEEL_FIELDS = [
+  "throttleRiseS",
+  "brakeRiseS",
+  "steerRiseS",
+  "steerReturnS",
+  "halfThrottle",
+] as const satisfies readonly (keyof KeyboardTuning)[];
+export const KEYBOARD_PEDAL_HELP_FIELDS = ["pedalAssistStrength", "exitAssist", "brakeAssist"] as const satisfies readonly (keyof KeyboardTuning)[];
+/** The pause menu's rows under its steering assist card */
+export const PAUSE_KEYBOARD_FIELDS = ["steerRiseS", "steerReturnS", ...KEYBOARD_PEDAL_HELP_FIELDS] as const;
+export const PAUSE_PAD_FIELDS = ["steeringRate", "triggerRumble", "triggerSlipAlwaysOn"] as const satisfies readonly (keyof PadTuning)[];
+
+function withDefaults<T extends object>(tuning: T, defaults: T, fields: readonly (keyof T)[]): T {
+  const out = { ...tuning };
+  for (const f of fields) out[f] = defaults[f];
+  return out;
+}
+
+/** `tuning` with `fields` back at their defaults; the steering rate and dead zone at the chosen feel preset's */
+export function resetPadTuning(tuning: PadTuning, fields: readonly (keyof PadTuning)[], feel: PadSensitivity): PadTuning {
+  const { steeringRate, deadzone } = PAD_SENSITIVITY[feel];
+  return withDefaults(tuning, { ...DEFAULT_PAD_TUNING, steeringRate, deadzone }, fields);
+}
+
+/** `tuning` with `fields` back at their defaults */
+export const resetKeyboardTuning = (tuning: KeyboardTuning, fields: readonly (keyof KeyboardTuning)[]): KeyboardTuning =>
+  withDefaults(tuning, DEFAULT_KEYBOARD_TUNING, fields);
 
 export const DEFAULT_HUD_SETTINGS: HudSettings = {
   preset: "broadcast",
@@ -300,7 +331,6 @@ export const DEFAULT_PLAYER_SETTINGS: PlayerSettings = {
   assistPreset: "semi_pro",
   racingLine: true,
   gamepadAssist: true,
-  steerAssistLevel: DEFAULT_STEERING_ASSIST_LEVEL,
   autoGearbox: true,
   mouseSteer: false,
   liveryId: null,
@@ -440,16 +470,9 @@ function parsePerCarFfb(v: unknown): WheelSettings["ffbPerCar"] {
   return out;
 }
 
-function parsePadTuning(v: unknown, fallbackLevel: number = DEFAULT_STEERING_ASSIST_LEVEL): PadTuning {
+function parsePadTuning(v: unknown): PadTuning {
   const d = DEFAULT_PAD_TUNING;
-  if (!isObj(v)) {
-    return {
-      ...structuredClone(d),
-      selfSteerStrength: fallbackLevel,
-      dampingStrength: fallbackLevel,
-      speedSensitivity: fallbackLevel,
-    };
-  }
+  if (!isObj(v)) return structuredClone(d);
   return {
     steeringRate: num(v.steeringRate, 0.1, 1.5, d.steeringRate),
     deadzone: num(v.deadzone, 0, 0.3, d.deadzone),
@@ -459,24 +482,13 @@ function parsePadTuning(v: unknown, fallbackLevel: number = DEFAULT_STEERING_ASS
     brakeGamma: num(v.brakeGamma, 0.5, 3, d.brakeGamma),
     triggerRumble: bool(v.triggerRumble, d.triggerRumble),
     triggerSlipAlwaysOn: bool(v.triggerSlipAlwaysOn, d.triggerSlipAlwaysOn),
-    selfSteerStrength: num(v.selfSteerStrength, 0, 1, fallbackLevel),
-    dampingStrength: num(v.dampingStrength, 0, 1, fallbackLevel),
-    speedSensitivity: num(v.speedSensitivity, 0, 1, fallbackLevel),
-    slipLimitMargin: num(v.slipLimitMargin, -0.25, 0.25, d.slipLimitMargin),
-    maxSelfSteerAngleDeg: num(v.maxSelfSteerAngleDeg, 5, 30, d.maxSelfSteerAngleDeg),
+    ...sanitizeAssistTuning(v),
   };
 }
 
-function parseKeyboardTuning(v: unknown, fallbackLevel: number = DEFAULT_STEERING_ASSIST_LEVEL): KeyboardTuning {
+function parseKeyboardTuning(v: unknown): KeyboardTuning {
   const d = DEFAULT_KEYBOARD_TUNING;
-  if (!isObj(v)) {
-    return {
-      ...structuredClone(d),
-      selfSteerStrength: fallbackLevel,
-      dampingStrength: fallbackLevel,
-      speedSensitivity: fallbackLevel,
-    };
-  }
+  if (!isObj(v)) return structuredClone(d);
   return {
     throttleRiseS: num(v.throttleRiseS, 0, 1, d.throttleRiseS),
     brakeRiseS: num(v.brakeRiseS, 0, 1, d.brakeRiseS),
@@ -486,11 +498,7 @@ function parseKeyboardTuning(v: unknown, fallbackLevel: number = DEFAULT_STEERIN
     exitAssist: bool(v.exitAssist, d.exitAssist),
     brakeAssist: bool(v.brakeAssist, d.brakeAssist),
     pedalAssistStrength: num(v.pedalAssistStrength, 0, 1, d.pedalAssistStrength),
-    selfSteerStrength: num(v.selfSteerStrength, 0, 1, fallbackLevel),
-    dampingStrength: num(v.dampingStrength, 0, 1, fallbackLevel),
-    speedSensitivity: num(v.speedSensitivity, 0, 1, fallbackLevel),
-    slipLimitMargin: num(v.slipLimitMargin, -0.25, 0.25, d.slipLimitMargin),
-    maxSelfSteerAngleDeg: num(v.maxSelfSteerAngleDeg, 5, 30, d.maxSelfSteerAngleDeg),
+    ...sanitizeAssistTuning(v),
   };
 }
 
@@ -593,7 +601,6 @@ export function parsePlayerSettings(raw: unknown): PlayerSettings {
   const d = DEFAULT_PLAYER_SETTINGS;
   // A copy: handing out the shared defaults would let any in-place edit corrupt them for the rest of the session
   if (!isObj(raw)) return structuredClone(d);
-  const steerAssistLevel = num(raw.steerAssistLevel, 0, 1, d.steerAssistLevel);
   return {
     device: oneOf(raw.device, ["keyboard", "controller", "wheel"] as const, d.device),
     keys: parseKeys(raw.keys),
@@ -603,7 +610,6 @@ export function parsePlayerSettings(raw: unknown): PlayerSettings {
     assistPreset: oneOf(raw.assistPreset, ["pro", "semi_pro", "assisted"] as const, d.assistPreset),
     racingLine: bool(raw.racingLine, d.racingLine),
     gamepadAssist: bool(raw.gamepadAssist, d.gamepadAssist),
-    steerAssistLevel,
     autoGearbox: bool(raw.autoGearbox, d.autoGearbox),
     mouseSteer: bool(raw.mouseSteer, d.mouseSteer),
     liveryId: isStr(raw.liveryId) ? raw.liveryId : null,
@@ -613,14 +619,14 @@ export function parsePlayerSettings(raw: unknown): PlayerSettings {
         ? Math.round(clampFov(raw.cockpitFovDeg))
         : null,
     padTuning: isObj(raw.padTuning)
-      ? parsePadTuning(raw.padTuning, steerAssistLevel)
+      ? parsePadTuning(raw.padTuning)
       : // Older saves only have the preset: start the tuning from it
         {
-          ...parsePadTuning(undefined, steerAssistLevel),
+          ...parsePadTuning(undefined),
           steeringRate: PAD_SENSITIVITY[oneOf(raw.padSensitivity, Object.keys(PAD_SENSITIVITY) as PadSensitivity[], d.padSensitivity)].steeringRate,
           deadzone: PAD_SENSITIVITY[oneOf(raw.padSensitivity, Object.keys(PAD_SENSITIVITY) as PadSensitivity[], d.padSensitivity)].deadzone,
         },
-    keyboardTuning: parseKeyboardTuning(raw.keyboardTuning, steerAssistLevel),
+    keyboardTuning: parseKeyboardTuning(raw.keyboardTuning),
     hud: parseHud(raw.hud),
     graphics: parseGraphics(raw.graphics),
     touch: parseTouch(raw.touch),

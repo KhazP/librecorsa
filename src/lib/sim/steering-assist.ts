@@ -92,114 +92,165 @@ export interface SteeringAssistSettings {
   };
 }
 
-/** Per-device steering assist sliders exposed in the Keyboard and Controller settings */
+/** One device's steering assist sliders (PlayerSettings.padTuning / keyboardTuning): see ASSIST_SLIDERS */
 export interface DeviceAssistTuning {
-  /** Self-aligning & countersteer strength, 0..1 (0.5 = default) */
   selfSteerStrength: number;
-  /** Yaw-rate damping strength, 0..1 (0.5 = default) */
   dampingStrength: number;
-  /** High-speed steering rate calm, 0..1 (0.5 = default) */
   speedSensitivity: number;
-  /** Front peak slip limit offset, −0.25..0.25 (0 = default; negative = safer margin, positive = sharper bite) */
+  /** Offset of the front tyres' grip target from 95 % of their peak slip (negative = a safer margin) */
   slipLimitMargin: number;
-  /** Most road-wheel angle the self-steer turns to by itself (deg, 5..30, default 25; at most the car's lock) */
+  /** Most road-wheel angle the self-steer turns to by itself (deg; at most the car's lock) */
   maxSelfSteerAngleDeg: number;
 }
 
-export const DEFAULT_DEVICE_ASSIST_TUNING: DeviceAssistTuning = {
-  selfSteerStrength: 0.5,
-  dampingStrength: 0.5,
-  speedSensitivity: 0.5,
-  slipLimitMargin: 0,
-  maxSelfSteerAngleDeg: 25,
+/** One steering assist slider: what it is called, its range and default, and how its value reads */
+export interface AssistSliderSpec {
+  key: keyof DeviceAssistTuning;
+  label: string;
+  hint: string;
+  min: number;
+  max: number;
+  step: number;
+  default: number;
+  format: (value: number) => string;
+}
+
+const pct = (v: number) => `${Math.round(v * 100)} %`;
+
+const SLIDERS: { readonly [K in keyof DeviceAssistTuning]: Omit<AssistSliderSpec, "key"> } = {
+  selfSteerStrength: {
+    label: "Self-steer & countersteer",
+    hint: "How strongly the wheels follow the car's travel direction and catch rear slides",
+    min: 0,
+    max: 1,
+    step: 0.05,
+    default: 0.5,
+    format: pct,
+  },
+  dampingStrength: {
+    label: "Yaw damping",
+    hint: "Calms snap-back and pendulum swings as a slide recovers",
+    min: 0,
+    max: 1,
+    step: 0.05,
+    default: 0.5,
+    format: pct,
+  },
+  speedSensitivity: {
+    label: "High-speed calm",
+    hint: "How much the steering slows down at speed, so small inputs stay gentle",
+    min: 0,
+    max: 1,
+    step: 0.05,
+    default: 0.5,
+    format: pct,
+  },
+  slipLimitMargin: {
+    label: "Tyre slip margin",
+    hint: "Negative: a safer understeer cushion · Positive: lets the fronts past their peak slip",
+    min: -0.25,
+    max: 0.25,
+    step: 0.01,
+    default: 0,
+    format: (v) => `${v > 0 ? "+" : ""}${Math.round(v * 100)} %`,
+  },
+  maxSelfSteerAngleDeg: {
+    label: "Max countersteer lock",
+    hint: "Most road-wheel angle the assist turns to by itself to catch a slide",
+    min: 5,
+    max: 30,
+    step: 1,
+    default: 25,
+    format: (v) => `${Math.round(v)}°`,
+  },
 };
 
-export type AssistPresetKey = "balanced" | "stable" | "loose" | "drift" | "calm";
+/**
+ * The steering assist's sliders, the same for the keyboard and the controller: the setup screens and the pause menu
+ * draw them, the saved settings are clamped to their ranges and the presets are matched on their steps.
+ */
+export const ASSIST_SLIDERS: readonly AssistSliderSpec[] = (Object.keys(SLIDERS) as (keyof DeviceAssistTuning)[]).map(
+  (key) => ({ key, ...SLIDERS[key] })
+);
+
+function fromSliders(value: (s: AssistSliderSpec) => number): DeviceAssistTuning {
+  const out = {} as DeviceAssistTuning;
+  for (const s of ASSIST_SLIDERS) out[s.key] = value(s);
+  return out;
+}
+
+export const DEFAULT_DEVICE_ASSIST_TUNING: DeviceAssistTuning = fromSliders((s) => s.default);
+
+/** Each slider of a saved tuning in its range; a missing or broken one takes its default */
+export function sanitizeAssistTuning(v: Partial<Record<keyof DeviceAssistTuning, unknown>>): DeviceAssistTuning {
+  return fromSliders((s) => {
+    const x = v[s.key];
+    return typeof x === "number" && Number.isFinite(x) ? Math.min(s.max, Math.max(s.min, x)) : s.default;
+  });
+}
 
 export interface AssistPresetInfo {
-  id: AssistPresetKey;
+  id: "balanced" | "stable" | "loose" | "drift" | "calm";
   label: string;
-  detail: string;
   tuning: DeviceAssistTuning;
 }
 
 /** One-click factory assist presets (adapted from AC-Advanced-Gamepad-Assist's factory presets) */
 export const ASSIST_PRESETS: readonly AssistPresetInfo[] = [
-  {
-    id: "balanced",
-    label: "Balanced",
-    detail: "Default self-steer, yaw damping & 95 % slip limit",
-    tuning: { ...DEFAULT_DEVICE_ASSIST_TUNING },
-  },
+  { id: "balanced", label: "Balanced", tuning: { ...DEFAULT_DEVICE_ASSIST_TUNING } },
   {
     id: "stable",
     label: "Stable",
-    detail: "Strong self-steer & damping, safer 91 % slip limit",
-    tuning: {
-      selfSteerStrength: 0.85,
-      dampingStrength: 0.9,
-      speedSensitivity: 0.65,
-      slipLimitMargin: -0.04,
-      maxSelfSteerAngleDeg: 30,
-    },
+    tuning: { selfSteerStrength: 0.85, dampingStrength: 0.9, speedSensitivity: 0.65, slipLimitMargin: -0.04, maxSelfSteerAngleDeg: 30 },
   },
   {
     id: "loose",
     label: "Loose",
-    detail: "Light self-steer, 8° countersteer cap & 100 % slip",
-    tuning: {
-      selfSteerStrength: 0.3,
-      dampingStrength: 0.3,
-      speedSensitivity: 0.25,
-      slipLimitMargin: 0.05,
-      maxSelfSteerAngleDeg: 8,
-    },
+    tuning: { selfSteerStrength: 0.3, dampingStrength: 0.3, speedSensitivity: 0.25, slipLimitMargin: 0.05, maxSelfSteerAngleDeg: 8 },
   },
   {
     id: "drift",
     label: "Drift",
-    detail: "Full countersteer lock, high yaw damping & 100 % slip",
-    tuning: {
-      selfSteerStrength: 0.45,
-      dampingStrength: 0.65,
-      speedSensitivity: 0.2,
-      slipLimitMargin: 0.05,
-      maxSelfSteerAngleDeg: 30,
-    },
+    tuning: { selfSteerStrength: 0.45, dampingStrength: 0.65, speedSensitivity: 0.2, slipLimitMargin: 0.05, maxSelfSteerAngleDeg: 30 },
   },
   {
     id: "calm",
     label: "Calm at speed",
-    detail: "Extra high-speed damping for fast aero corners",
-    tuning: {
-      selfSteerStrength: 0.48,
-      dampingStrength: 0.58,
-      speedSensitivity: 0.85,
-      slipLimitMargin: 0,
-      maxSelfSteerAngleDeg: 25,
-    },
+    tuning: { selfSteerStrength: 0.48, dampingStrength: 0.58, speedSensitivity: 0.85, slipLimitMargin: 0, maxSelfSteerAngleDeg: 25 },
   },
 ];
 
-/** Default "Steering assistance" level (0 = least processing, 1 = most) */
-export const DEFAULT_STEERING_ASSIST_LEVEL = 0.5;
+/** The preset `tuning` is (every slider within half a step of it), if any */
+export function matchingAssistPreset(tuning: DeviceAssistTuning): AssistPresetInfo | undefined {
+  return ASSIST_PRESETS.find((p) => ASSIST_SLIDERS.every((s) => Math.abs(tuning[s.key] - p.tuning[s.key]) < s.step / 2));
+}
+
+/** What a tuning does, in a line: its sliders and the grip target they make (countersteer: "full lock" at `lockDeg`) */
+export function assistPresetDetail(tuning: DeviceAssistTuning, lockDeg?: number): string {
+  const t = sanitizeAssistTuning(tuning);
+  const grip = Math.round(deviceAssistTuning(t, "controller").targetSlip * 100);
+  const cap =
+    lockDeg !== undefined && t.maxSelfSteerAngleDeg >= lockDeg ? "full lock" : SLIDERS.maxSelfSteerAngleDeg.format(t.maxSelfSteerAngleDeg);
+  return (
+    `self-steer ${pct(t.selfSteerStrength)}, yaw damping ${pct(t.dampingStrength)}, high-speed calm ` +
+    `${pct(t.speedSensitivity)}, fronts at ${grip} % of their peak slip, countersteer up to ${cap}`
+  );
+}
 
 /** A device's assist sliders as the assist's coefficients */
 export function deviceAssistTuning(tuning: DeviceAssistTuning, device: SteeringDevice): DeviceAssistResolved {
-  const s = Math.min(1, Math.max(0, tuning.selfSteerStrength));
-  const d = Math.min(1, Math.max(0, tuning.dampingStrength));
-  const spd = Math.min(1, Math.max(0, tuning.speedSensitivity));
-  const margin = Math.min(0.25, Math.max(-0.25, tuning.slipLimitMargin));
+  const { selfSteerStrength: s, dampingStrength: d, speedSensitivity: spd, slipLimitMargin, maxSelfSteerAngleDeg } =
+    sanitizeAssistTuning(tuning);
   return {
     // Lower for the keyboard: a key cannot steer by degrees, so at speed it steers in more slowly and a tap stays a
     // nudge, while it stays quick in slow corners
     rateIncreaseWithSpeed: (1 - spd) * 0.2 - (device === "keyboard" ? 0.35 : 0.1),
     selfSteerResponse: s * 0.5 + 0.12,
     dampingStrength: d * 0.5 + 0.12,
-    maxSelfSteerAngleDeg: Math.min(30, Math.max(5, tuning.maxSelfSteerAngleDeg)),
+    maxSelfSteerAngleDeg,
     maxDynamicLimitReduction: 3 * s + 3.5,
     countersteerResponse: (1 - s) * 0.2 + 0.1,
-    targetSlip: Math.min(1.25, Math.max(0.65, 0.95 - (s - 0.5) * 0.04 + margin)),
+    targetSlip: 0.95 - (s - 0.5) * 0.04 + slipLimitMargin,
   };
 }
 
@@ -295,11 +346,6 @@ export class PeakSlipEstimator {
   private readonly smoother = new SmoothTowards(0.12, 0.05, 0, 15, 0);
   private baseDeg = Number.NaN;
   private fastLearningS = 0;
-
-  /** Learned peak slip angle (deg) */
-  get deg(): number {
-    return this.smoother.state;
-  }
 
   update(baseDeg: number, slip: AxleSlipSample | undefined, initialSteering: number, fwdVelMs: number, dt: number): number {
     if (!(Math.abs(baseDeg - this.baseDeg) < 1e-6)) {
