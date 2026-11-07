@@ -14,7 +14,7 @@ export const KB_STEER_RISE_S = 0.22;
 export const KB_STEER_RETURN_S = 0.14;
 
 /** The assist's keyboard ramp speeds for the player's ramp times (1 = the defaults; a shorter time = quicker) */
-export function keyboardRampScales(riseS: number, returnS: number): { keyboardRiseScale: number; keyboardReturnScale: number } {
+export function keyboardRampScales(riseS: number, returnS: number): { riseScale: number; returnScale: number } {
   const scale = (def: number, s: number) => (Number.isFinite(s) && s > 0 ? def / s : 1);
-  return { keyboardRiseScale: scale(KB_STEER_RISE_S, riseS), keyboardReturnScale: scale(KB_STEER_RETURN_S, returnS) };
+  return { riseScale: scale(KB_STEER_RISE_S, riseS), returnScale: scale(KB_STEER_RETURN_S, returnS) };
 }

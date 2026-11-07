@@ -36,6 +36,8 @@
  * MIT License — see CREDITS.md.
  */
 
+import { PAD_SENSITIVITY } from "@/lib/input/device-input";
+import { KB_STEER_RETURN_S, KB_STEER_RISE_S, keyboardRampScales } from "@/lib/input/keyboard-steer";
 import type { AxleSlipSample } from "./tyre-slip";
 
 export interface SteeringAssistCarState {
@@ -59,6 +61,9 @@ export interface SteeringAssistCarState {
   slip?: AxleSlipSample;
 }
 
+export type SteeringDevice = "keyboard" | "controller";
+
+/** One device's assist sliders as the assist uses them (`deviceAssistTuning`) */
 export interface DeviceAssistResolved {
   selfSteerResponse: number;
   dampingStrength: number;
@@ -66,27 +71,21 @@ export interface DeviceAssistResolved {
   maxDynamicLimitReduction: number;
   countersteerResponse: number;
   targetSlip: number;
+  /** Change of the smoothing rate with speed: + quicker, − slower at speed */
+  rateIncreaseWithSpeed: number;
 }
 
-export interface SteeringAssistSettings extends DeviceAssistResolved {
-  /** Stick dead zone (rescaled) */
-  deadzone: number;
-  /** Controller smoothing rate multiplier (higher = quicker steering) */
-  steeringRate: number;
-  /** Smoothing rate multiplier while the keyboard steers */
-  keyboardRate: number;
-  /** Keyboard ramp speed out of centre / back to centre, relative to the defaults (higher = quicker) */
-  keyboardRiseScale: number;
-  keyboardReturnScale: number;
-  /** Change of the controller's smoothing rate with speed: + quicker, − slower at speed (−0.5..0.5) */
-  rateIncreaseWithSpeed: number;
-  /**
-   * The same for the keyboard. Lower than the controller's: a key cannot steer by degrees, so at speed it steers in
-   * more slowly and a tap stays a nudge, while it stays quick in slow corners
-   */
-  keyboardRateIncreaseWithSpeed: number;
-  /** Optional separate assist tuning applied when the keyboard is steering (falls back to the top-level fields) */
-  keyboardAssist?: DeviceAssistResolved;
+/** The assist's tuning for each steering device; the device that steers picks its own (`SteeringAssist.source`) */
+export interface SteeringAssistSettings {
+  controller: DeviceAssistResolved & {
+    /** Stick smoothing rate multiplier (higher = quicker steering) */
+    steeringRate: number;
+  };
+  keyboard: DeviceAssistResolved & {
+    /** Key ramp speed out of centre / back to centre, relative to the defaults (higher = quicker) */
+    riseScale: number;
+    returnScale: number;
+  };
 }
 
 /** Per-device steering assist sliders exposed in the Keyboard and Controller settings */
@@ -178,17 +177,19 @@ export const ASSIST_PRESETS: readonly AssistPresetInfo[] = [
   },
 ];
 
-/** Converts a device's user-facing assist sliders into internal `SteeringAssist` coefficients */
-export function deviceAssistTuning(
-  tuning: DeviceAssistTuning
-): DeviceAssistResolved & Pick<SteeringAssistSettings, "rateIncreaseWithSpeed" | "keyboardRateIncreaseWithSpeed"> {
+/** Default "Steering assistance" level (0 = least processing, 1 = most) */
+export const DEFAULT_STEERING_ASSIST_LEVEL = 0.5;
+
+/** A device's assist sliders as the assist's coefficients */
+export function deviceAssistTuning(tuning: DeviceAssistTuning, device: SteeringDevice): DeviceAssistResolved {
   const s = Math.min(1, Math.max(0, tuning.selfSteerStrength));
   const d = Math.min(1, Math.max(0, tuning.dampingStrength));
   const spd = Math.min(1, Math.max(0, tuning.speedSensitivity));
   const margin = Math.min(0.25, Math.max(-0.25, tuning.slipLimitMargin));
   return {
-    rateIncreaseWithSpeed: (1 - spd) * 0.2 - 0.1,
-    keyboardRateIncreaseWithSpeed: (1 - spd) * 0.2 - 0.35,
+    // Lower for the keyboard: a key cannot steer by degrees, so at speed it steers in more slowly and a tap stays a
+    // nudge, while it stays quick in slow corners
+    rateIncreaseWithSpeed: (1 - spd) * 0.2 - (device === "keyboard" ? 0.35 : 0.1),
     selfSteerResponse: s * 0.5 + 0.12,
     dampingStrength: d * 0.5 + 0.12,
     maxSelfSteerAngleDeg: Math.min(90, Math.max(5, tuning.maxSelfSteerAngleDeg)),
@@ -198,45 +199,28 @@ export function deviceAssistTuning(
   };
 }
 
-/** Default "Steering assistance" level (0 = least processing, 1 = most) */
-export const DEFAULT_STEERING_ASSIST_LEVEL = 0.5;
-
 /**
- * The tuning a single "Steering assistance" level stands for: more assistance = a stronger self-steer and damping,
- * more limit reduction when the car oversteers, a gentler countersteer and slower steering at speed.
+ * The assist's settings for the player's controller and keyboard tuning (PlayerSettings.padTuning / keyboardTuning).
+ * The game and the tests build them here, so both drive the same assist.
  */
-export function steeringAssistTuning(
-  level: number
-): Pick<
-  SteeringAssistSettings,
-  | 'rateIncreaseWithSpeed'
-  | 'keyboardRateIncreaseWithSpeed'
-  | 'selfSteerResponse'
-  | 'dampingStrength'
-  | 'maxSelfSteerAngleDeg'
-  | 'maxDynamicLimitReduction'
-  | 'countersteerResponse'
-  | 'targetSlip'
-> {
-  const f = Math.min(1, Math.max(0, level));
-  return deviceAssistTuning({
-    selfSteerStrength: f,
-    dampingStrength: f,
-    speedSensitivity: f,
-    slipLimitMargin: 0,
-    maxSelfSteerAngleDeg: 90,
-  });
+export function steeringAssistSettings(
+  controller: DeviceAssistTuning & { steeringRate: number },
+  keyboard: DeviceAssistTuning & { steerRiseS: number; steerReturnS: number }
+): SteeringAssistSettings {
+  return {
+    controller: { ...deviceAssistTuning(controller, "controller"), steeringRate: controller.steeringRate },
+    keyboard: { ...deviceAssistTuning(keyboard, "keyboard"), ...keyboardRampScales(keyboard.steerRiseS, keyboard.steerReturnS) },
+  };
 }
 
-/** Defaults: the middle "Steering assistance" level */
-export const DEFAULT_STEERING_ASSIST: SteeringAssistSettings = {
-  deadzone: 0.05,
-  steeringRate: 0.5,
-  keyboardRate: 0.5,
-  keyboardRiseScale: 1,
-  keyboardReturnScale: 1,
-  ...steeringAssistTuning(DEFAULT_STEERING_ASSIST_LEVEL),
-};
+/** The settings of the default controller and keyboard tuning */
+export const DEFAULT_STEERING_ASSIST: SteeringAssistSettings = steeringAssistSettings(
+  { ...DEFAULT_DEVICE_ASSIST_TUNING, steeringRate: PAD_SENSITIVITY.default.steeringRate },
+  { ...DEFAULT_DEVICE_ASSIST_TUNING, steerRiseS: KB_STEER_RISE_S, steerReturnS: KB_STEER_RETURN_S }
+);
+
+/** Smoothing rate multiplier while the keyboard steers */
+const KEYBOARD_RATE = 0.5;
 
 const RAD2DEG = 180 / Math.PI;
 
@@ -358,7 +342,7 @@ export function steeringRateMult(speedMs: number, lockDeg: number, rate: number,
  * tuning, used by the UI curve preview (`Advanced Gamepad Assist Config.lua:selfSteerCurveCallback`).
  */
 export function evaluateSelfSteerDeg(rearAngleDeg: number, tuning: DeviceAssistTuning, lockDeg = 25): number {
-  const resolved = deviceAssistTuning(tuning);
+  const resolved = deviceAssistTuning(tuning, "controller");
   const exponent = 1 + (1 - Math.log10(10 * (resolved.selfSteerResponse * 0.9 + 0.1)));
   const correctionDeg = signedPow(clamp(rearAngleDeg / 72, -1, 1), exponent) * 72;
   const capDeg = Math.min(lockDeg, resolved.maxSelfSteerAngleDeg);
@@ -404,27 +388,25 @@ export class SteeringAssist {
    * Stick (−1 left .. +1 right, 0 without a controller) and keys (−1 left, 0, +1 right) → steering command
    * (−1..1, + = right)
    */
-  update(rawStick: number, keys: number, car: SteeringAssistCarState, dt: number): number {
-    const cfg = this.settings;
+  update(stick: number, keys: number, car: SteeringAssistCarState, dt: number): number {
+    const { controller, keyboard } = this.settings;
     const lockDeg = car.maxSteerAngleRad * RAD2DEG;
     const wbFactor = car.wheelbaseM / 2.5;
     const speed = Math.hypot(car.vxMs, car.vyMs);
 
-    // Dead zone (rescaled so the response starts at zero)
-    const mag = Math.abs(rawStick);
-    const stick = mag <= cfg.deadzone ? 0 : (Math.sign(rawStick) * Math.min(1, mag - cfg.deadzone)) / (1 - cfg.deadzone);
-
     // Keyboard: a linear ramp first, quicker back to centre (and through it) than out of it
     const kbDir = Math.sign(keys);
-    const kbRateMult = steeringRateMult(speed, lockDeg, cfg.keyboardRate, cfg.keyboardRateIncreaseWithSpeed);
+    const kbRateMult = steeringRateMult(speed, lockDeg, KEYBOARD_RATE, keyboard.rateIncreaseWithSpeed);
     const kbState = this.keyboard.state;
     const kbCentring = Math.abs(kbState) - Math.sign(kbState) * kbDir > 0;
-    const kb = this.keyboard.get(kbDir, dt, kbRateMult * (kbCentring ? 1.5 * cfg.keyboardReturnScale : cfg.keyboardRiseScale));
+    const kb = this.keyboard.get(kbDir, dt, kbRateMult * (kbCentring ? 1.5 * keyboard.returnScale : keyboard.riseScale));
     const keyboardActive = kbDir !== 0 || Math.abs(kb) > 1e-4;
 
     // Then the rounded smoother both inputs share
     const raw = clamp(stick + kb, -1, 1);
-    const rateMult = keyboardActive ? kbRateMult : steeringRateMult(speed, lockDeg, cfg.steeringRate, cfg.rateIncreaseWithSpeed);
+    const rateMult = keyboardActive
+      ? kbRateMult
+      : steeringRateMult(speed, lockDeg, controller.steeringRate, controller.rateIncreaseWithSpeed);
     // Under half rate the return to centre stays at least as quick as at half rate
     let centringRate = 1;
     if (rateMult > 0 && rateMult < 0.5) {
@@ -451,7 +433,7 @@ export class SteeringAssist {
     const peakDeg = this.peakSlip.update(car.frontPeakSlipRad * RAD2DEG, car.slip, initial, Math.max(0, car.vxMs), dt);
 
     // Self-steer: wheels follow the rear axle's direction of travel, plus yaw damping
-    const active = keyboardActive && cfg.keyboardAssist ? cfg.keyboardAssist : cfg;
+    const active = keyboardActive ? keyboard : controller;
     const frontGrounded = this.grounded.get(car.slip?.frontGrounded === false ? 0 : 1, dt);
     const selfSteerStrength = Math.max(0.25, frontGrounded) * assistFadeIn;
     const exponent = 1 + (1 - Math.log10(10 * (active.selfSteerResponse * 0.9 + 0.1)));

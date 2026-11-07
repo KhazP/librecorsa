@@ -281,7 +281,7 @@ export const AssistCurve: React.FC<{ tuning: DeviceAssistTuning; lockDeg?: numbe
 
   const capDeg = Math.min(lockDeg, tuning.maxSelfSteerAngleDeg);
   const capY = toY(capDeg);
-  const targetSlipPct = Math.round(deviceAssistTuning(tuning).targetSlip * 100);
+  const targetSlipPct = Math.round(deviceAssistTuning(tuning, "controller").targetSlip * 100);
 
   return (
     <div className="flex flex-col gap-2 rounded-[18px] border border-[#262B3D] bg-[#08090D] p-3.5">

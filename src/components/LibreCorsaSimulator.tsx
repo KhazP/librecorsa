@@ -73,7 +73,6 @@ import { isFatalHidStatus } from "@/lib/input/webhid-ffb";
 import { applyGraphicsQuality } from "@/lib/render/golden-hour-environment";
 import { createRainFx, RAIN_VISOR_LAYER } from "@/lib/render/rain-fx";
 import { DRIVER_HEAD_LAYER, OVERLAY_LAYER } from "@/lib/render/layers";
-import { keyboardRampScales } from "@/lib/input/keyboard-steer";
 import { KeyboardPedalAssist } from "@/lib/input/keyboard-pedals";
 import { shapeStick } from "@/lib/input/stick-shape";
 import { advanceAsphaltRain, setAsphaltWetness } from "@/lib/render/asphalt-sheen";
@@ -102,7 +101,7 @@ import { addContactShadow } from "@/lib/render/contact-shadow";
 import { buildKeyLookup, HUD_TOGGLE_EVENT, keyLabel, padButtonLabel, type KeyAction } from "@/lib/input/bindings";
 import { autoConfigureWheel, carWheelLockDeg, connectedPads, DeviceInputReader } from "@/lib/input/device-input";
 import { webHidFfb, wheelFfb } from "@/lib/input/wheel-ffb";
-import { DEFAULT_STEERING_ASSIST, deviceAssistTuning, type SteeringAssistSettings } from "@/lib/sim/steering-assist";
+import { DEFAULT_STEERING_ASSIST, steeringAssistSettings, type SteeringAssistSettings } from "@/lib/sim/steering-assist";
 import { axleSlipFromTelemetry, createAxleSlipSample } from "@/lib/sim/tyre-slip";
 import {
   clampFov,
@@ -442,20 +441,10 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   const keyLookupRef = useRef(buildKeyLookup(settings.keys));
   keyLookupRef.current = useMemo(() => buildKeyLookup(settings.keys), [settings.keys]);
   const assistSettingsRef = useRef<SteeringAssistSettings>(DEFAULT_STEERING_ASSIST);
-  assistSettingsRef.current = useMemo(() => {
-    const padAssist = deviceAssistTuning(settings.padTuning);
-    const kbAssist = deviceAssistTuning(settings.keyboardTuning);
-    return {
-      ...DEFAULT_STEERING_ASSIST,
-      ...padAssist,
-      keyboardRateIncreaseWithSpeed: kbAssist.keyboardRateIncreaseWithSpeed,
-      keyboardAssist: kbAssist,
-      ...keyboardRampScales(settings.keyboardTuning.steerRiseS, settings.keyboardTuning.steerReturnS),
-      steeringRate: settings.padTuning.steeringRate,
-      // The stick reaches the assist already shaped, inner dead zone included (shapeStick below)
-      deadzone: 0,
-    };
-  }, [settings.padTuning, settings.keyboardTuning]);
+  assistSettingsRef.current = useMemo(
+    () => steeringAssistSettings(settings.padTuning, settings.keyboardTuning),
+    [settings.padTuning, settings.keyboardTuning]
+  );
   const [p2pStatus, setP2pStatus] = useState<P2PConnectionStatus>({
     mode: "local",
     roomCode: "",
