@@ -296,6 +296,7 @@ async function main() {
         [PID.EFFECT_BLOCK_INDEX]: { bitOffset: 0, bitSize: 6, min: 0, max: 63, signed: false },
         [PID.MAGNITUDE]: { bitOffset: 6, bitSize: 12, min: -2047, max: 2047, signed: true },
       },
+      fieldList: [],
     };
     const r = buildReport(layout, { [PID.EFFECT_BLOCK_INDEX]: 0b101011, [PID.MAGNITUDE]: -3 });
     // -3 in 12 bits = 0xFFD = 1111 1111 1101; bits 6.. of the stream: low 2 bits (01) land in byte 0 bits 6-7
@@ -331,7 +332,7 @@ async function main() {
   });
 
   console.log("Setup sequence");
-  await check("reset, stop all, enable, gain, create effect (block from Block Load), set effect, zero force, start", async () => {
+  await check("reset, enable, gain, create effect (block from Block Load), set effect, zero force, start", async () => {
     const cols = pidCollections();
     const dev = new FakeHidDevice(cols, asLayout(cols).blockLoad);
     const clock = new FakeClock();
@@ -342,7 +343,6 @@ async function main() {
     assert.equal(res.session.blockIndex, 3);
     assert.deepEqual(dev.log, [
       { kind: "out", id: 12, data: [4] }, // device reset
-      { kind: "out", id: 12, data: [3] }, // stop all effects
       { kind: "out", id: 12, data: [1] }, // enable actuators
       { kind: "out", id: 13, data: [255] }, // device gain 100 %
       { kind: "feature", id: 17, data: [1, 0, 0] }, // create: constant force, byte count 0
@@ -356,14 +356,14 @@ async function main() {
           0, 0, // trigger repeat
           0, 0, // sample period
           255, // gain
-          0, // trigger button: 0 (no trigger button in USB HID PID)
-          0b101, // X enabled, Y not, Direction Enable = 1
+          255, // trigger button: none
+          0b001, // X enabled, Y not, Direction Enable cleared
           64, 0, // direction ordinal 1 = 90 degrees (X), ordinal 2 = 0
           0, 0, // start delay
         ],
       },
       { kind: "out", id: 5, data: [3, 0, 0] }, // zero force
-      { kind: "out", id: 10, data: [3, 1, 1] }, // Op Effect Start, loop 1
+      { kind: "out", id: 10, data: [3, 1, 255] }, // Op Effect Start, loop 255
     ]);
   });
   await check("no Create New Effect report: block index 1", async () => {
@@ -373,7 +373,7 @@ async function main() {
     assert.ok(res.ok);
     if (res.ok) assert.equal(res.session.blockIndex, 1);
     assert.ok(!dev.log.some((l) => l.kind === "feature"));
-    assert.deepEqual(dev.log.at(-1), { kind: "out", id: 10, data: [1, 1, 1] });
+    assert.deepEqual(dev.log.at(-1), { kind: "out", id: 10, data: [1, 1, 255] });
   });
   await check("Block Load 'full' / 'error' fail the setup with a message", async () => {
     for (const [status, text] of [[2, /no free effect memory/], [3, /refused/]] as const) {
@@ -403,7 +403,7 @@ async function main() {
     assert.ok(res.ok);
     assert.deepEqual(dev.forceWrites[0], { kind: "out", id: 5, data: [3, 128] });
   });
-  await check("MOZA R9 / PXN V99 descriptor (Trigger Button 1..8, Duration 0..32767) writes 0 (no trigger) and 0xFFFF (infinite)", async () => {
+  await check("MOZA R9 Base descriptor (Trigger Button 1..8, Duration 0..32767) writes 0xFF (no trigger) and 0xFFFF (infinite)", async () => {
     const cols = pidCollections({
       triggerButton: variable([pid(0x53)], 8, 1, 1, 8),
       duration: variable([pid(0x50)], 16, 1, 0, 32767),
@@ -415,8 +415,7 @@ async function main() {
     assert.ok(setEffect, "Set Effect report sent");
     assert.equal(setEffect!.data[2], 0xff, "Duration low byte is 0xFF");
     assert.equal(setEffect!.data[3], 0xff, "Duration high byte is 0xFF (0xFFFF = infinite, not 32767 ms)");
-    assert.equal(setEffect!.data[9], 0, "Trigger Button byte is 0 (no trigger button in USB HID PID), not clamped to 1");
-    assert.equal(setEffect!.data[10], 0b101, "X axis enabled and Direction Enable = 1");
+    assert.equal(setEffect!.data[9], 255, "Trigger Button byte is 0xFF (DIEB_NOTRIGGER), not clamped to 1");
   });
   await check("duplicate Generic Desktop X/Y usages in Set Effect (1-bit Axes Enable + 8-bit Direction) do not collide", () => {
     const cols: HidCollectionLike[] = [
@@ -443,10 +442,9 @@ async function main() {
       },
     ];
     const layout = asLayout(cols);
-    assert.ok(layout.setEffect?.fieldList && layout.setEffect.fieldList.length >= 8);
     const rep = buildSetEffectReport(layout.setEffect!, 2, PID.ET_CONSTANT_FORCE);
-    // Byte 0: block 2, Byte 1: ET 1, Bytes 2-3: 0xFFFF, Byte 4: gain 255, Byte 5: bits X=1, Y=0, DirEn=1 -> 0b101, Byte 6: DirX=64, Byte 7: DirY=0
-    assert.deepEqual([...rep.data], [2, 1, 0xff, 0xff, 255, 0b101, 64, 0]);
+    // block 2, constant force, duration 0xFFFF, gain 255, Axes Enable X=1 Y=0 with Direction Enable cleared, Direction X=90° Y=0
+    assert.deepEqual([...rep.data], [2, 1, 0xff, 0xff, 255, 0b001, 64, 0]);
   });
   await check("hardware PID Damper (0x41) via Set Condition: allocates, starts at 0, updates when coeff changes >= 0.025", async () => {
     const etWithDamper = [0x26, 0x40, 0x41].map(pid);

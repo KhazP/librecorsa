@@ -87,7 +87,6 @@ export const PID = {
   PARAMETER_BLOCK_OFFSET: pidUsage(0x23),
   EFFECT_TYPE: pidUsage(0x25),
   ET_CONSTANT_FORCE: pidUsage(0x26),
-  POOL_BYTE_COUNT: pidUsage(0x2b),
   ET_SPRING: pidUsage(0x40),
   ET_DAMPER: pidUsage(0x41),
   DURATION: pidUsage(0x50),
@@ -126,12 +125,6 @@ export const PID = {
   BYTE_COUNT: pidUsage(0xac),
 } as const;
 
-/** Generic Desktop X, the steering axis */
-const AXIS_X = (PAGE_DESKTOP << 16) | 0x30;
-const AXIS_Y = (PAGE_DESKTOP << 16) | 0x31;
-const AXIS_Z = (PAGE_DESKTOP << 16) | 0x32;
-/** Generic Desktop Byte Count (0x01:0x3b), used by some PID descriptors in Create New Effect */
-const DESKTOP_BYTE_COUNT = (PAGE_DESKTOP << 16) | 0x3b;
 /** Ordinal usage n (Direction is one Ordinal-usage field per axis: ordinal 1 = X) */
 export const ordinalUsage = (n: number) => (PAGE_ORDINAL << 16) | n;
 
@@ -169,7 +162,6 @@ export interface PidFieldLayout {
 
 export interface PidFieldEntry extends PidFieldLayout {
   usage: number;
-  isArray?: boolean;
 }
 
 export interface PidReportLayout {
@@ -177,10 +169,13 @@ export interface PidReportLayout {
   reportId: number;
   /** Total data bits including padding; sendReport needs exactly ceil(bitLength / 8) bytes */
   bitLength: number;
-  /** Field per full usage ((page << 16) | id); selectors are keyed by their parent usage (PID.EFFECT_TYPE, …) */
+  /** First field per full usage ((page << 16) | id); selectors are keyed by their parent usage (PID.EFFECT_TYPE, …) */
   fields: Record<number, PidFieldLayout>;
-  /** Ordered list of all non-constant fields in the report (preserves duplicate usages such as X in Axes Enable and Direction) */
-  fieldList?: PidFieldEntry[];
+  /**
+   * Every field in report order, repeated usages included: some Set Effect descriptors name Generic Desktop X / Y
+   * twice, as 1-bit Axes Enable flags and again as the multi-bit Direction
+   */
+  fieldList: PidFieldEntry[];
 }
 
 export interface PidLayout {
@@ -237,9 +232,9 @@ function parseReport(reportId: number, items: readonly HidReportItemLike[]): Pid
   const fields: Record<number, PidFieldLayout> = {};
   const fieldList: PidFieldEntry[] = [];
   let offset = 0;
-  const add = (key: number, f: PidFieldLayout, isArray = false) => {
+  const add = (key: number, f: PidFieldLayout) => {
     if (!(key in fields)) fields[key] = f;
-    fieldList.push({ ...f, usage: key, isArray });
+    fieldList.push({ ...f, usage: key });
   };
   for (const item of items) {
     const size = Math.max(0, Math.floor(item.reportSize ?? 0));
@@ -250,13 +245,13 @@ function parseReport(reportId: number, items: readonly HidReportItemLike[]): Pid
       const signed = range.min < 0;
       if (item.isArray) {
         const sel = detectSelector(usages);
-        if (sel) add(sel.key, { bitOffset: offset, bitSize: size, ...range, signed, usages: sel.usages }, true);
-        else if (usages.length > 0) add(usages[0] as number, { bitOffset: offset, bitSize: size, ...range, signed, usages }, true);
+        if (sel) add(sel.key, { bitOffset: offset, bitSize: size, ...range, signed, usages: sel.usages });
+        else if (usages.length > 0) add(usages[0] as number, { bitOffset: offset, bitSize: size, ...range, signed, usages });
       } else if (usages.length > 0) {
         // fewer usages than count: the last usage applies to the remaining fields (HID rule)
         for (let k = 0; k < count; k++) {
           const u = usages[Math.min(k, usages.length - 1)] as number;
-          add(u, { bitOffset: offset + k * size, bitSize: size, ...range, signed }, false);
+          add(u, { bitOffset: offset + k * size, bitSize: size, ...range, signed });
         }
       }
     }
@@ -271,7 +266,7 @@ function parseReport(reportId: number, items: readonly HidReportItemLike[]): Pid
  */
 function gatherReports(
   collections: readonly HidCollectionLike[],
-  kind: "inputReports" | "outputReports" | "featureReports",
+  kind: "outputReports" | "featureReports",
   out = new Map<number, { items: readonly HidReportItemLike[]; bits: number }>()
 ) {
   for (const c of collections) {
@@ -293,10 +288,10 @@ function gatherReports(
  * Reports are recognised by their contents (the descriptor does not carry the usage of the logical collection that
  * names them): Set Constant Force = block index + Magnitude without the periodic/condition fields; Effect Operation
  * = the Op Effect Start/Solo/Stop selector; Device Control = the DC_* selector; Set Effect = output report with the
- * Effect Type selector and Duration/Gain; Set Condition = output report with CP Offset and Positive Coefficient;
- * Create New Effect = the Effect Type selector in a feature report; Block Load = the Block Load Status selector
- * (feature or input). Bit offsets are summed over the items in order (size x count, constant items are padding),
- * report ids are never hard-coded. Returns null without a usable Set Constant Force + Effect Operation.
+ * Effect Type selector; Set Condition = output report with CP Offset and Positive Coefficient; Create New Effect =
+ * the Effect Type selector in a feature report; Block Load = the Block Load Status selector (feature: it is read back
+ * with receiveFeatureReport). Bit offsets are summed over the items in order (size x count, constant items are
+ * padding), report ids are never hard-coded. Returns null without a usable Set Constant Force + Effect Operation.
  */
 export function parsePidLayout(collections: readonly HidCollectionLike[]): PidLayout | null {
   let constantForce: PidReportLayout | null = null;
@@ -312,7 +307,7 @@ export function parsePidLayout(collections: readonly HidCollectionLike[]): PidLa
   for (const [id, raw] of gatherReports(collections, "outputReports")) {
     const l = parseReport(id, raw.items);
     const keys = Object.keys(l.fields).length;
-    if (hasField(l, PID.EFFECT_TYPE) && (hasField(l, PID.DURATION) || hasField(l, PID.GAIN))) {
+    if (hasField(l, PID.EFFECT_TYPE)) {
       if (!setEffect) setEffect = l;
     } else if (hasField(l, PID.CP_OFFSET) && hasField(l, PID.POSITIVE_COEFFICIENT)) {
       if (!setCondition) setCondition = l;
@@ -337,15 +332,6 @@ export function parsePidLayout(collections: readonly HidCollectionLike[]): PidLa
       if (!createNewEffect) createNewEffect = l;
     } else if (hasField(l, PID.BLOCK_LOAD_STATUS)) {
       if (!blockLoad) blockLoad = l;
-    }
-  }
-  if (!blockLoad) {
-    for (const [id, raw] of gatherReports(collections, "inputReports")) {
-      const l = parseReport(id, raw.items);
-      if (hasField(l, PID.BLOCK_LOAD_STATUS)) {
-        blockLoad = l;
-        break;
-      }
     }
   }
 
@@ -403,19 +389,9 @@ const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v
 export function buildReport(layout: PidReportLayout, values: Record<number, number>): { reportId: number; data: Uint8Array } {
   const data = new Uint8Array(Math.ceil(layout.bitLength / 8));
   for (const [key, value] of Object.entries(values)) {
-    const usage = Number(key);
-    const f = getField(layout, usage);
+    const f = getField(layout, Number(key));
     if (!f || !Number.isFinite(value)) continue;
-    // PID Trigger Button (0 = no trigger button in USB HID PID, even when LogicalMin = 1) and Duration (all-1s =
-    // infinite duration, e.g. 0xFFFF on 16-bit even when LogicalMax = 32767) use out-of-range sentinels.
-    const rounded = Math.round(value);
-    const allOnes = f.bitSize >= 32 ? 0xffffffff : (1 << f.bitSize) - 1;
-    const raw =
-      (usage === PID.TRIGGER_BUTTON && (rounded === 0 || (rounded === 255 && f.bitSize >= 8))) ||
-      (usage === PID.DURATION && rounded === allOnes)
-        ? rounded
-        : clamp(rounded, f.min, f.max);
-    writeBits(data, f.bitOffset, f.bitSize, raw);
+    writeBits(data, f.bitOffset, f.bitSize, clamp(Math.round(value), f.min, f.max));
   }
   return { reportId: layout.reportId, data };
 }
@@ -609,6 +585,67 @@ export interface PidSetupOptions {
   onFail?: (message: string, fatal: boolean) => void;
 }
 
+/* ------------------------------------------------------------------------------------------------------------ */
+/* Firmware profiles                                                                                             */
+/* ------------------------------------------------------------------------------------------------------------ */
+
+/**
+ * The setup values HID PID firmwares are known to disagree on. No wheel has confirmed either choice on this code yet:
+ * the generic profile keeps what the driver sent before 2ef8324, and a wheel that needs otherwise gets an entry in
+ * {@link PID_QUIRKS}. Linux mainline hid-pidff.c is one outside reference; where it differs it is named below.
+ */
+export interface PidProfile {
+  /**
+   * Set Effect Trigger Button meaning "none". 0xFF on a byte-wide field (DirectInput's DIEB_NOTRIGGER is all-ones),
+   * written past a LogicalMax of 8 (MOZA R9 Base); 0 is "no button" in USB PID numbering, where buttons are 1-based,
+   * and is what hid-pidff sends (pidff_set_effect_report)
+   */
+  noTriggerButton: 0xff | 0;
+  /**
+   * Set Effect Direction Enable. "unless-axes": cleared when the report has an Axes Enable mask, so the mask (X alone)
+   * picks the axis and the angle only counts without one. "always": set, as hid-pidff does (pidff_set_effect_direction)
+   */
+  directionEnable: "unless-axes" | "always";
+  /**
+   * Effect Operation loop count on start. "max" (at most 255) keeps the effect playing for 255 x Duration should a
+   * firmware read Duration 0xFFFF as 65.535 s rather than infinite; 1 stops after one Duration in that case
+   */
+  loopCount: "max" | 1;
+  /** Pause after Device Reset (ms) */
+  resetSleepMs: number;
+  /** Device Control Stop All Effects between the reset and Enable Actuators, as hid-pidff's pidff_reset does */
+  stopAllAfterReset: boolean;
+  /** Pause between Create New Effect and the first PID Block Load read (ms) */
+  createSettleMs: number;
+}
+
+export const GENERIC_PID_PROFILE: PidProfile = {
+  noTriggerButton: 0xff,
+  directionEnable: "unless-axes",
+  loopCount: "max",
+  resetSleepMs: 60,
+  stopAllAfterReset: false,
+  createSettleMs: 0,
+};
+
+/**
+ * Wheels with their own profile, by USB vendor / product id. PXN V99: the values 2ef8324 made the default for every
+ * wheel while it targeted this one. The ids come from a Gamepad.id in that change's tests, not from a device; if they
+ * are wrong the entry never matches and the wheel gets the generic profile.
+ */
+export const PID_QUIRKS: readonly { vendorId: number; productId: number; name: string; profile: PidProfile }[] = [
+  {
+    vendorId: 0x11ff,
+    productId: 0x3245,
+    name: "PXN V99",
+    profile: { noTriggerButton: 0, directionEnable: "always", loopCount: 1, resetSleepMs: 30, stopAllAfterReset: true, createSettleMs: 20 },
+  },
+];
+
+export function pidProfileFor(device: Pick<HidDeviceLike, "vendorId" | "productId">): PidProfile {
+  return PID_QUIRKS.find((q) => q.vendorId === device.vendorId && q.productId === device.productId)?.profile ?? GENERIC_PID_PROFILE;
+}
+
 function sendOutput(device: HidDeviceLike, layout: PidReportLayout, values: Record<number, number>): Promise<void> {
   const r = buildReport(layout, values);
   return device.sendReport(r.reportId, r.data);
@@ -629,6 +666,7 @@ async function allocateEffect(
   device: HidDeviceLike,
   layout: PidLayout,
   deps: FfbDeps,
+  profile: PidProfile,
   effectTypeUsage: number = PID.ET_CONSTANT_FORCE,
   fallbackBlock = 1
 ): Promise<number> {
@@ -638,14 +676,9 @@ async function allocateEffect(
   const type = getField(create, PID.EFFECT_TYPE);
   const typeValue = type ? selectorValue(type, effectTypeUsage) : null;
   if (typeValue === null) return fallbackBlock;
-  const c = buildReport(create, {
-    [PID.EFFECT_TYPE]: typeValue,
-    [PID.BYTE_COUNT]: 0,
-    [PID.POOL_BYTE_COUNT]: 0,
-    [DESKTOP_BYTE_COUNT]: 0,
-  });
+  const c = buildReport(create, { [PID.EFFECT_TYPE]: typeValue, [PID.BYTE_COUNT]: 0 });
   await device.sendFeatureReport(c.reportId, c.data);
-  await deps.sleep(20);
+  if (profile.createSettleMs > 0) await deps.sleep(profile.createSettleMs);
 
   for (let attempt = 0; attempt < 3; attempt++) {
     const view = await device.receiveFeatureReport(load.reportId);
@@ -693,54 +726,64 @@ export function conditionReportValues(
   return v;
 }
 
+/** A 1-bit Generic Desktop field (X, Y, Z…) is an Axes Enable flag; a wider one is a Direction */
+const isAxisFlag = (f: PidFieldEntry) => f.usage >>> 16 === PAGE_DESKTOP && f.bitSize === 1;
+
 /**
- * Builds the `Set Effect` output report for an infinite, full-gain effect along +X (90 degrees).
- * Iterates over `set.fieldList` so descriptors that reuse `Generic Desktop X` (once as 1-bit in Axes Enable and again
- * as multi-bit in Direction) or repeat `PID.DIRECTION` for X and Y pack every field without usage collisions.
+ * Set Effect for an infinite, full-gain effect along +X: Duration 0xFFFF (infinite on a 16-bit field even where
+ * LogicalMax stops at 32767, as on the MOZA R9 Base; the field's max on a narrower one), Gain max, no trigger button,
+ * X alone in the Axes Enable mask, the first Direction field at 90° (east, +X) and any further one at its minimum.
+ * Walks `fieldList`, so a usage the report names twice (X as an Axes Enable flag and again as a Direction) gets both.
  */
 export function buildSetEffectReport(
   set: PidReportLayout,
   blockIndex: number,
-  effectTypeUsage: number = PID.ET_CONSTANT_FORCE
+  effectTypeUsage: number = PID.ET_CONSTANT_FORCE,
+  profile: PidProfile = GENERIC_PID_PROFILE
 ): { reportId: number; data: Uint8Array } {
-  const r = buildReport(set, setEffectValues(set, blockIndex, effectTypeUsage));
-  if (set.fieldList && set.fieldList.length > 0) {
-    let axes = 0;
-    let dirs = 0;
-    for (const f of set.fieldList) {
-      if (f.isArray) continue;
-      const page = f.usage >>> 16;
-      const id = f.usage & 0xffff;
-      if (page === PAGE_DESKTOP && f.bitSize === 1) {
-        writeBits(r.data, f.bitOffset, 1, axes === 0 ? 1 : 0);
-        axes++;
-        continue;
-      }
-      const isDirection =
-        page === PAGE_ORDINAL ||
-        (page === PAGE_PID && (id === 0x01 || id === 0x02 || id === 0x57)) ||
-        (page === PAGE_DESKTOP && f.bitSize > 1);
-      if (isDirection) {
-        const val = dirs === 0 ? Math.round(f.min + (f.max - f.min) * DIRECTION_X_FRACTION) : f.min;
-        writeBits(r.data, f.bitOffset, f.bitSize, clamp(val, f.min, f.max));
-        dirs++;
-        continue;
-      }
-      if (f.usage === PID.DIRECTION_ENABLE) {
-        writeBits(r.data, f.bitOffset, f.bitSize, 1);
-      }
+  const data = new Uint8Array(Math.ceil(set.bitLength / 8));
+  const put = (f: PidFieldLayout, v: number) => writeBits(data, f.bitOffset, f.bitSize, clamp(Math.round(v), f.min, f.max));
+  // Duration and Trigger Button sentinels sit outside some descriptors' logical ranges, so they skip the clamp
+  const putRaw = (f: PidFieldLayout, v: number) => writeBits(data, f.bitOffset, f.bitSize, v);
+  const hasAxesMask = hasField(set, PID.AXES_ENABLE) || set.fieldList.some(isAxisFlag);
+  let axisFlags = 0;
+  let directions = 0;
+  for (const f of set.fieldList) {
+    const page = f.usage >>> 16;
+    if (f.usage === PID.EFFECT_BLOCK_INDEX) put(f, blockIndex);
+    else if (f.usage === PID.EFFECT_TYPE) put(f, selectorValue(f, effectTypeUsage) ?? 1);
+    else if (f.usage === PID.DURATION) putRaw(f, f.bitSize >= 16 ? 0xffff : f.max);
+    else if (f.usage === PID.GAIN) put(f, f.max);
+    else if (f.usage === PID.TRIGGER_BUTTON) {
+      if (profile.noTriggerButton === 0) putRaw(f, 0);
+      else if (f.bitSize >= 8) putRaw(f, 0xff);
+      else put(f, f.max >= 255 ? 255 : 0);
+    } else if (f.usage === PID.AXES_ENABLE) put(f, 1);
+    else if (f.usage === PID.DIRECTION_ENABLE) put(f, profile.directionEnable === "always" || !hasAxesMask ? 1 : 0);
+    else if (isAxisFlag(f)) put(f, axisFlags++ === 0 ? 1 : 0);
+    else if (page === PAGE_ORDINAL || page === PAGE_DESKTOP || f.usage === PID.DIRECTION) {
+      put(f, directions++ === 0 ? f.min + (f.max - f.min) * DIRECTION_X_FRACTION : f.min);
     }
   }
-  return r;
+  return { reportId: set.reportId, data };
+}
+
+/** Effect Operation loop count on start */
+function startLoopCount(layout: PidLayout, profile: PidProfile): number {
+  const loops = getField(layout.effectOperation, PID.LOOP_COUNT);
+  if (!loops) return 0;
+  return profile.loopCount === "max" ? Math.min(255, loops.max) : clamp(1, loops.min, loops.max);
 }
 
 /**
  * The connect-time setup for an already granted device (factored out of {@link WebHidFfb.connect} so it can be tested
- * without navigator.hid): open, parse the PID layout, reset + stop all + enable actuators, device gain 100 %, create
- * Constant Force effect (and optional hardware Damper condition effect), configure and start them.
+ * without navigator.hid): open, parse the PID layout, reset + enable actuators, device gain 100 %, create one Constant
+ * Force effect, configure it (see {@link buildSetEffectReport}), start it at zero force; then the optional hardware
+ * Damper condition effect. The wheel's {@link PidProfile} decides the values firmwares disagree on.
  */
 export async function setupPidDevice(device: HidDeviceLike, options: PidSetupOptions = {}): Promise<PidSetupResult> {
   const deps = options.deps ?? defaultFfbDeps;
+  const profile = pidProfileFor(device);
   const layout = parsePidLayout(device.collections);
   if (!layout) {
     return {
@@ -762,8 +805,8 @@ export async function setupPidDevice(device: HidDeviceLike, options: PidSetupOpt
   let damperBlockIndex: number | null = null;
   try {
     if (!device.opened) await device.open();
-    if (await deviceControl(device, layout, PID.DC_DEVICE_RESET)) await deps.sleep(30);
-    await deviceControl(device, layout, PID.DC_STOP_ALL_EFFECTS);
+    if (await deviceControl(device, layout, PID.DC_DEVICE_RESET)) await deps.sleep(profile.resetSleepMs);
+    if (profile.stopAllAfterReset) await deviceControl(device, layout, PID.DC_STOP_ALL_EFFECTS);
     actuatorsOn = true;
     await deviceControl(device, layout, PID.DC_ENABLE_ACTUATORS);
 
@@ -772,21 +815,20 @@ export async function setupPidDevice(device: HidDeviceLike, options: PidSetupOpt
       if (g) await sendOutput(device, layout.deviceGain, { [PID.DEVICE_GAIN]: g.max });
     }
 
-    const blockIndex = await allocateEffect(device, layout, deps, PID.ET_CONSTANT_FORCE, 1);
+    const blockIndex = await allocateEffect(device, layout, deps, profile, PID.ET_CONSTANT_FORCE, 1);
     allocated = blockIndex;
 
     const set = layout.setEffect;
     if (set) {
-      const setRep = buildSetEffectReport(set, blockIndex, PID.ET_CONSTANT_FORCE);
-      await device.sendReport(setRep.reportId, setRep.data);
+      const r = buildSetEffectReport(set, blockIndex, PID.ET_CONSTANT_FORCE, profile);
+      await device.sendReport(r.reportId, r.data);
     }
 
     await sendOutput(device, layout.constantForce, {
       [PID.EFFECT_BLOCK_INDEX]: blockIndex,
       [PID.MAGNITUDE]: forceToRaw(forceField, 0),
     });
-    const loops = getField(layout.effectOperation, PID.LOOP_COUNT);
-    const loopCount = loops ? clamp(1, loops.min, Math.max(1, loops.max)) : 1;
+    const loopCount = startLoopCount(layout, profile);
     await sendOutput(device, layout.effectOperation, {
       [PID.EFFECT_BLOCK_INDEX]: blockIndex,
       [PID.EFFECT_OPERATION]: start,
@@ -795,10 +837,10 @@ export async function setupPidDevice(device: HidDeviceLike, options: PidSetupOpt
 
     if (layout.hasDamper && layout.setCondition) {
       try {
-        const dBlock = await allocateEffect(device, layout, deps, PID.ET_DAMPER, blockIndex + 1);
+        const dBlock = await allocateEffect(device, layout, deps, profile, PID.ET_DAMPER, blockIndex + 1);
         if (set) {
-          const setDamperRep = buildSetEffectReport(set, dBlock, PID.ET_DAMPER);
-          await device.sendReport(setDamperRep.reportId, setDamperRep.data);
+          const r = buildSetEffectReport(set, dBlock, PID.ET_DAMPER, profile);
+          await device.sendReport(r.reportId, r.data);
         }
         await sendOutput(device, layout.setCondition, conditionReportValues(layout.setCondition, dBlock, 0, 1));
         await sendOutput(device, layout.effectOperation, {
@@ -862,52 +904,12 @@ export async function setupPidDevice(device: HidDeviceLike, options: PidSetupOpt
   }
 }
 
-/** Set Effect values for an infinite, full-gain effect along +X */
-function setEffectValues(
-  set: PidReportLayout,
-  blockIndex: number,
-  effectTypeUsage: number = PID.ET_CONSTANT_FORCE
-): Record<number, number> {
-  const v: Record<number, number> = { [PID.EFFECT_BLOCK_INDEX]: blockIndex };
-  const type = getField(set, PID.EFFECT_TYPE);
-  v[PID.EFFECT_TYPE] = (type ? selectorValue(type, effectTypeUsage) : null) ?? 1;
-  const duration = getField(set, PID.DURATION);
-  // infinite: all-1s (0xFFFF on 16-bit fields, even where LogicalMax stops at 32767)
-  if (duration) v[PID.DURATION] = duration.bitSize >= 32 ? 0xffffffff : (1 << duration.bitSize) - 1;
-  if (hasField(set, PID.TRIGGER_REPEAT_INTERVAL)) v[PID.TRIGGER_REPEAT_INTERVAL] = 0;
-  if (hasField(set, PID.SAMPLE_PERIOD)) v[PID.SAMPLE_PERIOD] = 0;
-  const gain = getField(set, PID.GAIN);
-  if (gain) v[PID.GAIN] = gain.max;
-  // In USB HID PID, buttons are 1..N and 0 means "no trigger button"
-  if (hasField(set, PID.TRIGGER_BUTTON)) v[PID.TRIGGER_BUTTON] = 0;
-  if (hasField(set, PID.START_DELAY)) v[PID.START_DELAY] = 0;
-  // Direction along +X (90 degrees: east)
-  const dir = getField(set, ordinalUsage(1));
-  if (dir) v[ordinalUsage(1)] = dir.min + (dir.max - dir.min) * DIRECTION_X_FRACTION;
-  const dir2 = getField(set, ordinalUsage(2));
-  if (dir2) v[ordinalUsage(2)] = dir2.min;
-  const dirGeneric = getField(set, PID.DIRECTION);
-  if (dirGeneric) v[PID.DIRECTION] = dirGeneric.min + (dirGeneric.max - dirGeneric.min) * DIRECTION_X_FRACTION;
-  // Enable X in the axes mask AND always set Direction Enable to 1 (required by PXN V99 and other PID firmwares)
-  if (hasField(set, AXIS_X)) {
-    const fX = getField(set, AXIS_X);
-    if (fX && fX.bitSize === 1) {
-      v[AXIS_X] = 1;
-      if (hasField(set, AXIS_Y)) v[AXIS_Y] = 0;
-      if (hasField(set, AXIS_Z)) v[AXIS_Z] = 0;
-    }
-  }
-  if (hasField(set, PID.AXES_ENABLE)) v[PID.AXES_ENABLE] = 1;
-  if (hasField(set, PID.DIRECTION_ENABLE)) v[PID.DIRECTION_ENABLE] = 1;
-  return v;
-}
-
 const LOGITECH_FORCE_FIELD: PidFieldLayout = { bitOffset: 16, bitSize: 8, min: 0, max: 255, signed: false };
 const LOGITECH_REPORT_LAYOUT: PidReportLayout = {
   reportId: 0,
   bitLength: 56,
   fields: { [PID.MAGNITUDE]: LOGITECH_FORCE_FIELD },
-  fieldList: [{ ...LOGITECH_FORCE_FIELD, usage: PID.MAGNITUDE, isArray: false }],
+  fieldList: [{ ...LOGITECH_FORCE_FIELD, usage: PID.MAGNITUDE }],
 };
 
 function sendLogitechReport(device: HidDeviceLike, bytes: readonly number[]): Promise<void> {
