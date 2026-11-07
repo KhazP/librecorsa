@@ -1085,6 +1085,9 @@ export function buildCircuitScene(
   startLightGroup.name = "StartLightPods";
   sceneGroup.add(startLightGroup);
 
+  /** Lamp states (emissive colour and intensity) shared by the LibreCorsa pods and a converted circuit's own lamps */
+  const LAMP_RED = { hex: 0xff1a0a, intensity: 3.2 };
+  const LAMP_GREEN = { hex: 0x22c55e, intensity: 2.4 };
   const startLightMeshes: THREE.Mesh[] = [];
   const podGeom = new THREE.CylinderGeometry(0.17, 0.17, 0.12, 16);
   podGeom.rotateX(Math.PI * 0.5);
@@ -1093,8 +1096,8 @@ export function buildCircuitScene(
       podGeom,
       new THREE.MeshStandardMaterial({
         color: 0x16a34a,
-        emissive: 0x22c55e,
-        emissiveIntensity: 2.4,
+        emissive: LAMP_GREEN.hex,
+        emissiveIntensity: LAMP_GREEN.intensity,
       })
     );
     pod.name = `StartLight_${i}`;
@@ -1126,65 +1129,65 @@ export function buildCircuitScene(
     for (let i = 0; i < 5; i++) {
       const lit = redCount !== null && i < redCount;
       for (const m of acRedSemaphores[i]) {
-        m.emissive.setHex(lit ? 0xff1a0a : 0x000000);
-        m.emissiveIntensity = lit ? 3.2 : 0;
+        m.emissive.setHex(lit ? LAMP_RED.hex : 0x000000);
+        m.emissiveIntensity = lit ? LAMP_RED.intensity : 0;
       }
     }
     const greenLit = redCount === null;
     for (const m of acGreenSemaphores) {
-      m.emissive.setHex(greenLit ? 0x22c55e : 0x000000);
-      m.emissiveIntensity = greenLit ? 2.4 : 0;
+      m.emissive.setHex(greenLit ? LAMP_GREEN.hex : 0x000000);
+      m.emissiveIntensity = greenLit ? LAMP_GREEN.intensity : 0;
     }
   };
 
+  /** A converted circuit's tyre-groove meshes (AC `groove.ini`), each with its own material to fade */
+  const collectGrooves = (root: THREE.Object3D) => {
+    root.traverse((obj) => {
+      const cfg = inheritedTag<{ min?: number; max?: number; mult?: number }>(obj, "groove", root);
+      if (!cfg || !(obj instanceof THREE.Mesh)) return;
+      const cloned = (Array.isArray(obj.material) ? obj.material : [obj.material]).map((m) => m.clone());
+      obj.material = Array.isArray(obj.material) ? cloned : cloned[0];
+      for (const m of cloned) {
+        if (!(m instanceof THREE.MeshStandardMaterial)) continue;
+        m.transparent = true;
+        grooveMeshes.push({ mat: m, min: Number(cfg.min ?? 0.25), max: Number(cfg.max ?? 0.9), mult: Number(cfg.mult ?? 1.0) });
+      }
+    });
+    setGrooveRubber(0);
+  };
+
+  /**
+   * The start lights on the circuit: the LibreCorsa pods on its gantry model, or a converted circuit's own lamps
+   * (`AC_SEMAPHORE_RED01..05`, `AC_SEMAPHORE_GREEN*`), which then light in the pods' place
+   */
   const attachStartLightsToGantry = (root: THREE.Object3D) => {
     root.updateMatrixWorld(true);
-    // Collect dynamic tyre groove meshes (`groove.ini`) and AC semaphore meshes (`AC_SEMAPHORE_*`)
-    const semBox = new THREE.Box3();
-    let hasSemBox = false;
+    let ownLamps = false;
     root.traverse((obj) => {
-      const gCfg = inheritedTag<{ min?: number; max?: number; mult?: number }>(obj, "groove", root);
-      if (gCfg && obj instanceof THREE.Mesh) {
-        const cloned = (Array.isArray(obj.material) ? obj.material : [obj.material]).map((m) => m.clone());
-        obj.material = Array.isArray(obj.material) ? cloned : cloned[0];
-        for (const m of cloned) {
-          if (m instanceof THREE.MeshStandardMaterial) {
-            m.transparent = true;
-            m.opacity = THREE.MathUtils.clamp(Number(gCfg.min ?? 0.25), 0.1, 1.0);
-            grooveMeshes.push({
-              mat: m,
-              min: Number(gCfg.min ?? 0.25),
-              max: Number(gCfg.max ?? 0.9),
-              mult: Number(gCfg.mult ?? 1.0),
-            });
-          }
-        }
+      if (!(obj instanceof THREE.Mesh)) return;
+      // The glTF's own node name: the loader renames repeated names (a second `AC_SEMAPHORE_RED01` becomes `..._1`)
+      const nm = inheritedTag<string>(obj, "name", root) ?? obj.name;
+      const red = /^AC_SEMAPHORE_RED0?([1-5])$/i.exec(nm);
+      const green = /^AC_SEMAPHORE_GREEN/i.test(nm);
+      if (!red && !green) return;
+      const cloned = (Array.isArray(obj.material) ? obj.material : [obj.material]).map((m) => m.clone());
+      obj.material = Array.isArray(obj.material) ? cloned : cloned[0];
+      for (const m of cloned) {
+        if (!(m instanceof THREE.MeshStandardMaterial)) continue;
+        if (red) acRedSemaphores[Number(red[1]) - 1].push(m);
+        else acGreenSemaphores.push(m);
       }
-      const nm = obj.name || obj.parent?.name || "";
-      const redMatch = /^AC_SEMAPHORE_RED0?([1-5])$/i.exec(nm);
-      const greenMatch = /^AC_SEMAPHORE_GREEN/i.test(nm);
-      if ((redMatch || greenMatch) && obj instanceof THREE.Mesh) {
-        const cloned = (Array.isArray(obj.material) ? obj.material : [obj.material]).map((m) => m.clone());
-        obj.material = Array.isArray(obj.material) ? cloned : cloned[0];
-        for (const m of cloned) {
-          if (m instanceof THREE.MeshStandardMaterial) {
-            if (redMatch) acRedSemaphores[ Number(redMatch[1]) - 1 ].push(m);
-            if (greenMatch) acGreenSemaphores.push(m);
-          }
-        }
-        if (redMatch) {
-          semBox.expandByObject(obj);
-          hasSemBox = true;
-        }
-      }
+      if (red) ownLamps = true;
     });
     if (startLightState !== undefined) applySemaphoreMaterials(startLightState);
 
-    /** The pods across the front of a lamp box, `rowDrop` of its height below centre, at least `minSpacing` apart */
-    const placePodsOnBox = (box: THREE.Box3, rowDrop: number, minSpacing: number) => {
+    /** The pods across the front of a gantry model, on its first red row, at least `minSpacing` apart */
+    const placePodsOn = (gantry: THREE.Object3D, minSpacing: number) => {
+      const box = new THREE.Box3().setFromObject(gantry);
       const center = box.getCenter(new THREE.Vector3());
       const size = box.getSize(new THREE.Vector3());
-      center.y -= size.y * rowDrop;
+      // Four lamps per column (amber, green, red, red): sit on the first red row, 1/8 of the height below centre
+      center.y -= size.y * 0.125;
       // Extent of the box along the start direction: |sx·fx| + |sz·fz| (as for the width), not |size·fwd|, whose
       // terms cancel on a diagonal straight
       const depth = Math.abs(size.x * startFwd.x) + Math.abs(size.y * startFwd.y) + Math.abs(size.z * startFwd.z);
@@ -1193,11 +1196,9 @@ export function buildCircuitScene(
     };
     const gantry = root.getObjectByName("Prop_StartLights_0");
     const acGantry = root.getObjectByName("startlight_SUB1");
-    // Four lamps per column (amber, green, red, red): sit on the first red row, 1/8 of the height below centre
-    if (gantry) placePodsOnBox(new THREE.Box3().setFromObject(gantry), 0.125, 0);
-    else if (acGantry) placePodsOnBox(new THREE.Box3().setFromObject(acGantry), 0.125, 0.28);
-    // The converted circuits' own red lamps, when they have no gantry model
-    else if (hasSemBox) placePodsOnBox(semBox, 0, 0.32);
+    if (gantry) placePodsOn(gantry, 0);
+    else if (acGantry) placePodsOn(acGantry, 0.28);
+    else if (ownLamps) startLightGroup.visible = false;
   };
 
   // ============================================================================
@@ -1424,12 +1425,12 @@ export function buildCircuitScene(
       const mat = pod.material as THREE.MeshStandardMaterial;
       if (redCount === null) {
         mat.color.setHex(0x16a34a);
-        mat.emissive.setHex(0x22c55e);
-        mat.emissiveIntensity = 2.4;
+        mat.emissive.setHex(LAMP_GREEN.hex);
+        mat.emissiveIntensity = LAMP_GREEN.intensity;
       } else if (i < redCount) {
         mat.color.setHex(0xdc2626);
-        mat.emissive.setHex(0xff1a0a);
-        mat.emissiveIntensity = 3.2;
+        mat.emissive.setHex(LAMP_RED.hex);
+        mat.emissiveIntensity = LAMP_RED.intensity;
       } else {
         mat.color.setHex(0x1a0505);
         mat.emissive.setHex(0x000000);
@@ -1448,6 +1449,7 @@ export function buildCircuitScene(
     fallbackGroup,
     (root) => {
       attachStartLightsToGantry(root);
+      collectGrooves(root);
       resolveTrackRoot(root);
     },
     sheenMask,
