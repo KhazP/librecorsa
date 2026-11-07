@@ -2012,10 +2012,9 @@ export class VehiclePhysics {
           g.surface === 'kerb' || g.surface === 'sausage' ? 'kerb' : 'asphalt'
         );
         const roadTexNm = isoRough * w.verticalRate * 0.006 * speedGate * (w.isLeft ? 1 : -1);
-        const trailCollapse = THREE.MathUtils.clamp(1 - (w.combinedSlip - 0.85) / 1.35, 0.18, 1);
         ffbMz +=
           (w.mz -
-            fy * w.casterTrailM * trailCollapse -
+            fy * w.casterTrailM -
             fx * (w.isLeft ? w.scrubRadiusM : -w.scrubRadiusM) * 0.15 +
             0.08 * w.mx) *
             lowSpeedScale +
