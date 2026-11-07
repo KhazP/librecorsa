@@ -1126,6 +1126,8 @@ export class WheelFfbClient {
     this.hidShift = 0;
     this.force = 0;
     this.hidSink?.(0);
+    // Straight to the wheel, past the writer's 2 ms spacing and any older queued value
+    this.hidDriver?.stop();
     this.send({ t: "f", f: 0, k: 0, a: 0 });
   }
 

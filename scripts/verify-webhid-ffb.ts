@@ -1047,6 +1047,45 @@ async function main() {
     assert.equal(ffb.status.state, "idle");
     assert.equal(clock.timers.length, 0);
   });
+  await check("emergencyStop() (page unload): zero and Stop All go out synchronously, nothing after; resume() sets it up again", async () => {
+    const dev = wheel();
+    const clock = new FakeClock();
+    const ffb = new WebHidFfb(fakeHid([dev], [dev]).api, clock.deps);
+    await ffb.connect();
+    clock.advance(5);
+    ffb.setForce(0.7);
+    await flush();
+    dev.log.length = 0;
+    ffb.emergencyStop(); // no await: the page may not get another turn
+    assert.deepEqual(dev.log, [
+      { kind: "out", id: 5, data: [3, 0, 0] }, // zero force on the effect's block
+      { kind: "out", id: 12, data: [3] }, // stop all effects
+    ]);
+    clock.advance(5);
+    ffb.setForce(0.9);
+    await flush();
+    assert.equal(dev.log.length, 2, "the writer is dead: nothing after the stop");
+    assert.equal(ffb.status.state, "idle");
+    ffb.emergencyStop(); // twice is harmless
+    assert.equal(dev.log.length, 2);
+    // Back from the back/forward cache
+    assert.equal(await ffb.resume(), "Fake DD Base");
+    assert.equal(ffb.status.state, "ready");
+    // A Logitech classic wheel gets its neutral force and 0xf3
+    const g29 = new FakeHidDevice([{ usagePage: 0x01, usage: 0x04, outputReports: [{ reportId: 0, items: [] }] }]);
+    g29.vendorId = 0x046d;
+    const lg = new WebHidFfb(fakeHid([g29]).api, new FakeClock().deps);
+    await lg.connect();
+    g29.log.length = 0;
+    lg.emergencyStop();
+    assert.deepEqual(g29.log, [
+      { kind: "out", id: 0, data: [0x11, 0x00, 0x80, 0, 0, 0, 0] },
+      { kind: "out", id: 0, data: [0xf3, 0, 0, 0, 0, 0, 0] },
+    ]);
+    // Disposed, a page coming back does not reopen the wheel
+    await lg.dispose();
+    assert.equal(await lg.resume(), null);
+  });
   await check("dispose(): zero force, stop effect, free block, stop all, disable actuators, close", async () => {
     const dev = wheel();
     const ffb = new WebHidFfb(fakeHid([dev]).api, new FakeClock().deps);

@@ -1219,6 +1219,47 @@ export class WebHidFfb {
   }
 
   /**
+   * The page is going away (pagehide): zero the force and stop every effect at once, without waiting for anything,
+   * since no later promise may get to run. The session is dropped (the device stays referenced, so the next release
+   * closes it); {@link resume} sets the wheel up again if the page comes back from the back/forward cache.
+   */
+  emergencyStop(): void {
+    const session = this.session;
+    if (!session) return;
+    this.session = null;
+    session.writer.kill();
+    const { device, layout, blockIndex } = session;
+    const fire = (send: () => Promise<void>) => {
+      try {
+        send().catch(() => {});
+      } catch {
+        // device already gone
+      }
+    };
+    if (session.driver === "logitech") {
+      fire(() => sendLogitechReport(device, [0x11, 0x00, 0x80, 0, 0, 0, 0]));
+      fire(() => sendLogitechReport(device, [0xf3, 0, 0, 0, 0, 0, 0]));
+    } else {
+      const mag = getField(layout.constantForce, PID.MAGNITUDE);
+      if (mag) {
+        fire(() =>
+          sendOutput(device, layout.constantForce, { [PID.EFFECT_BLOCK_INDEX]: blockIndex, [PID.MAGNITUDE]: forceToRaw(mag, 0) })
+        );
+      }
+      const dc = layout.deviceControl;
+      const dcField = dc ? getField(dc, PID.DEVICE_CONTROL) : undefined;
+      const stopAll = dcField ? selectorValue(dcField, PID.DC_STOP_ALL_EFFECTS) : null;
+      if (dc && stopAll !== null) fire(() => sendOutput(device, dc, { [PID.DEVICE_CONTROL]: stopAll }));
+    }
+    this.setStatus("idle", null, null);
+  }
+
+  /** The page came back from the back/forward cache: set the wheel up again if the driver is still wanted */
+  resume(): Promise<string | null> {
+    return this.wanted ? this.reconnect() : Promise.resolve(null);
+  }
+
+  /**
    * Stops all effects, disables actuators and closes the device (after any connect in flight). An error status is
    * kept, so the reason stays on screen once the driver is switched off because of it.
    */
