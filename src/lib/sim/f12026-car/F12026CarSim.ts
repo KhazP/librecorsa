@@ -79,8 +79,12 @@ const DEG2RAD = Math.PI / 180;
  */
 const leastBent = (left: number, right: number) => (Math.abs(left) < Math.abs(right) ? left : right);
 const RAD2DEG = 180 / Math.PI;
-/** Rwanda (≈1400 m ASL) air density */
+/** Rwanda (≈1400 m ASL) air density: what the braking envelopes below are planned at */
 const AIR_DENSITY = 1.06;
+/** Standard-atmosphere air density at an altitude (as the VF26's): 1.07 at Rwanda, 1.21 at Silverstone */
+const airDensityAt = (altitudeM: number) => 1.225 * Math.pow(1 - 2.25577e-5 * altitudeM, 4.25588);
+/** A braking envelope at a circuit's air: the aero part grows with the density it was planned at (1.06) */
+const envelopeAt = (b: BrakingEnvelope, rho: number): BrakingEnvelope => ({ ...b, aeroG: (b.aeroG * rho) / AIR_DENSITY });
 
 /** Braking envelope (g) a car pulls at a speed: `lowG` + `aeroG` × min(1, (v / `refMs`)²) */
 export interface BrakingEnvelope {
@@ -306,7 +310,7 @@ function autopilotProfile(track: BuiltTrackData, profile: CarSimProfile, edges: 
   const key = edges ? `${profile.id}:colliders` : profile.id;
   const cached = perCar.get(key);
   if (cached) return cached;
-  const b = profile.braking;
+  const b = envelopeAt(profile.braking, airDensityAt(track.baseAltitudeM ?? BASE_ALTITUDE_M));
   const L = track.totalLengthM;
   const n = Math.ceil(L / AP_PROFILE_STEP_M);
   const ds = L / n;
@@ -730,7 +734,7 @@ export class F12026CarSim implements SimulatorCar {
       ground: new TrackSampleGroundQuery(track),
       config: this.config,
       compound: this.config.compoundSlots[this.compound],
-      airDensity: AIR_DENSITY,
+      airDensity: airDensityAt(track.baseAltitudeM ?? BASE_ALTITUDE_M),
       ambientC: AMBIENT_C,
       drsZones: profile.hasDrs ? RWANDA_DRS_ZONES : [],
       locateProgress: (x, z) => {
@@ -1160,8 +1164,13 @@ export class F12026CarSim implements SimulatorCar {
     v.wetness = Math.min(1, Math.max(0, sample.wetness));
     v.ambientC = sample.ambientC;
     v.windWorld.set(Number.isFinite(sample.windVxMs) ? sample.windVxMs! : 0, 0, Number.isFinite(sample.windVzMs) ? sample.windVzMs! : 0);
-    // Warmer air is thinner (ideal gas, about the 27 °C the cars are calibrated at)
-    v.airDensity = AIR_DENSITY * ((AMBIENT_C + 273.15) / (sample.ambientC + 273.15));
+    // The circuit's altitude, and warmer air is thinner (ideal gas, about the 27 °C the cars are calibrated at)
+    v.airDensity = this.circuitAirDensity() * ((AMBIENT_C + 273.15) / (sample.ambientC + 273.15));
+  }
+
+  /** Air density at this circuit's altitude (standard atmosphere): 1.07 at Rwanda, 1.21 at a sea-level track */
+  private circuitAirDensity(): number {
+    return airDensityAt(this.track.baseAltitudeM ?? BASE_ALTITUDE_M);
   }
 
   /** Simulation realism: tyre wear, temperature grip, fuel use and wet severity */
@@ -1561,7 +1570,7 @@ export class F12026CarSim implements SimulatorCar {
     // pedal's lag.
     const lead = Math.max(5, speed * 0.2);
     const prof = autopilotProfile(this.track, this.profile, this.autopilotEdges());
-    const b = this.profile.braking;
+    const b = envelopeAt(this.profile.braking, this.circuitAirDensity());
     let vTarget = this.aiSpeedCapMs;
     for (let d = 0; d <= 300; d += 5) {
       const smp = this.track.getSampleAtDistance((p.s + lead + d) % L);
