@@ -44,7 +44,7 @@ export const F12026ChannelsPanel: React.FC<{ channels: F12026Channels }> = ({ ch
             style={{ backgroundColor: c.carId === "amg-gt3" ? HUD_CYAN : HUD_VOLT }}
           />
           <span className="lc-data text-[11px] tracking-[0.12em] text-[#F5F7FA]">
-            {c.carId === "amg-gt3" ? "AMG GT3 · CHANNELS" : "FA-26 · CHANNELS"}
+            {c.carId === "amg-gt3" ? "AMG GT3 · CHANNELS" : "F1 2026 · CHANNELS"}
           </span>
         </div>
         <span className="lc-data rounded-full bg-[#1B1F2B] px-2 py-0.5 text-[9px] uppercase text-[#CCFF00]">

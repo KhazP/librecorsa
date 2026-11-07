@@ -40,13 +40,13 @@ export interface CarSoundSource {
   /**
    * The limiter of the vehicle model driving this sound, when it differs from the recording's: the engine rpm is
    * scaled by limiterRpm / physicsLimiterRpm so a V10 recorded to 19 000 rpm sweeps its whole range (and hits its
-   * limiter) on the FA-26 physics' 12 500 rpm, and the BMW's 7 000 rpm bank on the AMG GT3 model's 7 900
+   * limiter) on the F1 2026 physics' 12 500 rpm, and the BMW's 7 000 rpm bank on the AMG GT3 model's 7 900
    */
   physicsLimiterRpm?: number;
 }
 
 export const AMR26_SOUND: CarSoundSource = { id: 'amr26', assetDir: AMR26_AUDIO_DIR, limiterRpm: VF26_ENGINE.limiterRpm };
-export const FA26_SOUND: CarSoundSource = { id: 'fa26', assetDir: '/cars/fa26/audio/', limiterRpm: 12500 };
+export const F1_2026_SOUND: CarSoundSource = { id: 'f12026', assetDir: '/cars/f12026/audio/', limiterRpm: 12500 };
 export const SF26_SOUND: CarSoundSource = { id: 'sf26', assetDir: '/cars/sf26/audio/', limiterRpm: 12500 };
 export const W17_SOUND: CarSoundSource = { id: 'w17', assetDir: '/cars/w17/audio/', limiterRpm: 12500 };
 export const RB22_SOUND: CarSoundSource = { id: 'rb22', assetDir: '/cars/rb22/audio/', limiterRpm: 12500 };

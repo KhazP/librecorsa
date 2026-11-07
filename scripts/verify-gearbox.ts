@@ -1,6 +1,6 @@
 /**
  * The automatic gearbox and its manual override (src/lib/sim/auto-gearbox.ts), on both gearbox models: the VF26's
- * (F1Physics2026) and VehiclePhysics' (FA-26 Rigid-Body, AMG GT3).
+ * (F1Physics2026) and VehiclePhysics' (F1 2026 Rigid-Body, AMG GT3).
  *
  * 1. The schedule and the override on their own: an auto shift the driver's paddle shift would undo is held, one the
  *    engine needs (limiter, lugging, the brakes) never is, and a shift the same way as the driver's goes through.
@@ -132,7 +132,7 @@ interface Model {
 
 const MODELS: Model[] = [
   {
-    name: 'FA-26 Prototype (F1Physics2026)',
+    name: 'F1 2026 Prototype (F1Physics2026)',
     make: () => new F1Physics2026(pad),
     upshiftRpm: VF26_DRIVETRAIN.autoUpshiftRpm,
     limiterRpm: VF26_ENGINE.limiterRpm,
@@ -141,7 +141,7 @@ const MODELS: Model[] = [
     placement: { dir: 1, fromKmh: 110, toKmh: 150 },
   },
   {
-    name: 'FA-26 Rigid-Body (VehiclePhysics)',
+    name: 'F1 2026 Rigid-Body (VehiclePhysics)',
     make: () => new F12026CarSim(pad),
     upshiftRpm: F12026_CAR_CONFIG.gearbox.gears.upshift_rpm,
     limiterRpm: F12026_CAR_CONFIG.gearbox.gears.redline_rpm,

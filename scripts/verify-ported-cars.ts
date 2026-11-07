@@ -159,7 +159,7 @@ for (const exp of EXPECTED_CARS) {
   const def = carById(exp.id);
   check(`${exp.id}: registered with f12026-car physics and modelUrl`, def.id === exp.id && def.classId === "f1-2026" && def.physics === "f12026-car" && def.modelUrl === `/cars/${exp.id}/model/${exp.id}.glb`);
   check(
-    `${exp.id}: physics switch picks rigid-body by default and FA-26 on request`,
+    `${exp.id}: physics switch picks rigid-body by default and F1 2026 on request`,
     carTakesPhysicsSwitch(exp.id) && carPhysics(exp.id) === "f12026-car" && carPhysics(exp.id, "vf26") === "vf26"
   );
   check(`${exp.id}: exact model title "${exp.title}"`, def.title === exp.title, def.title);

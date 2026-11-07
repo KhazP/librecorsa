@@ -15,7 +15,7 @@ const TIPS = [
   "The racing line turns Monza Rosso where you need to brake. Press R to hide it once you know the track.",
   "On a controller, the slip-angle steering assist keeps the front tyres at their grip limit.",
   "Hold OVR Boost on the straights; the hybrid battery recharges under braking.",
-  "Switch between FA-26 Formula prototypes and the Mercedes-AMG GT3 from the Garage menu.",
+  "Switch between F1 2026 Formula prototypes and the Mercedes-AMG GT3 from the Garage menu.",
 ];
 
 const LIGHTS = 5;

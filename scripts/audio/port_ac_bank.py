@@ -654,7 +654,7 @@ def port_car(car_id: str, cfg: dict[str, Any], ffmpeg: str) -> dict[str, Any]:
             if "pitchRatio" in tr_item:
                 raw_x = pitch_resample(raw_x, float(tr_item["pitchRatio"]), 1.0)
             loop = make_seamless_loop(raw_x, LOOP_S, XFADE_S, RATE)
-            # whine sits well under the engine, at the level of the original FA-26 and GT3 banks
+            # whine sits well under the engine, at the level of the original F1 2026 and GT3 banks
             loop = level_signal(loop, float(tr_item.get("rms", 0.042 if layer == "on" else 0.028)))
             fn = f"trans_{layer}_{speed}.ogg"
             ch = encode_ogg(ffmpeg, loop, out_dir / fn, force_mono=True, quality=4)

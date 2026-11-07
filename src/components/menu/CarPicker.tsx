@@ -75,7 +75,7 @@ export const CarPicker: React.FC<{ carId: CarId; onChangeCar: (car: CarId) => vo
   );
 };
 
-/** The ported F1 cars' physics switch (FA-26 / Rigid-body); one choice shared by every ported F1 car */
+/** The ported F1 cars' physics switch (F1 2026 / Rigid-body); one choice shared by every ported F1 car */
 export const CarPhysicsSwitch: React.FC<{ color: string }> = ({ color }) => {
   const modPhysics = useF1ModPhysics();
   return (

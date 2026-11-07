@@ -186,9 +186,9 @@ console.log('\n== Car adapters (override = Overtake Mode on a 2026 car)');
   const legacy = new F1Physics2026(track);
   legacy.raceControl = notEarned;
   legacy.step(1 / 60, { throttle: 1 });
-  check('FA-26 Prototype in a race, not earned: override locked', !legacy.activateBoostOverride() && legacy.telemetry.overtakeAvailable === false);
+  check('F1 2026 Prototype in a race, not earned: override locked', !legacy.activateBoostOverride() && legacy.telemetry.overtakeAvailable === false);
   legacy.raceControl = null;
-  check('FA-26 Prototype in practice: override free', legacy.activateBoostOverride());
+  check('F1 2026 Prototype in practice: override free', legacy.activateBoostOverride());
 }
 
 console.log(failures.length ? `\n${failures.length} check(s) failed: ${failures.join(', ')}` : '\nAll overtaking-rules checks passed.');

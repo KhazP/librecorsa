@@ -3,7 +3,7 @@
  * are built from the player's settings by `steeringAssistSettings`, as LibreCorsaSimulator builds them, and the keys
  * reach the cars the way the game sends them (`kbSteer`, with `padSteer` only when a controller is connected).
  *
- * On every vehicle model (AMG GT3, FA-26 Rigid-Body, FA-26 Prototype), on a flat pad:
+ * On every vehicle model (AMG GT3, F1 2026 Rigid-Body, F1 2026 Prototype), on a flat pad:
  *
  * 1. D held for 3 s at a steady speed: the fronts stay near their peak slip on turn-in (first second) and when settled
  *    (last second), the car does not spin, and it corners at least as hard as the old open-loop keyboard steering did
@@ -71,13 +71,13 @@ const CARS: CarCase[] = [
     minSettledSlip: 0.9,
   },
   {
-    name: 'FA-26 Rigid-Body',
+    name: 'F1 2026 Rigid-Body',
     make: () => new F12026CarSim(pad),
     peakDeg: rigidBodyPeak(F12026_CAR_CONFIG),
     minSettledSlip: 0.84,
   },
   {
-    name: 'FA-26 Prototype',
+    name: 'F1 2026 Prototype',
     make: () => new F1Physics2026(pad),
     peakDeg: (c) => VF26_TYRES[c.tireCompound].front.frictionLimitAngleDeg,
     minSettledSlip: 0.84,

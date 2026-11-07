@@ -119,8 +119,8 @@ function fySeries(fy: (fz: number, a: number) => number): ChartSeries[] {
 
 const tyreCars = [
   { id: 'gt3', label: 'Mercedes-AMG GT3', tyre: 'GT3 soft front', fy: (fz: number, a: number) => gt3Front.fy(fz, a) },
-  { id: 'f12026', label: 'FA-26 Rigid-Body (f12026-car)', tyre: 'soft (C3) front', fy: (fz: number, a: number) => f1Front.fy(fz, a) },
-  { id: 'vf26', label: 'FA-26 Prototype (VF26)', tyre: 'soft front', fy: (fz: number, a: number) => vf26Front.fy(fz, a) },
+  { id: 'f12026', label: 'F1 2026 Rigid-Body (f12026-car)', tyre: 'soft (C3) front', fy: (fz: number, a: number) => f1Front.fy(fz, a) },
+  { id: 'vf26', label: 'F1 2026 Prototype (VF26)', tyre: 'soft front', fy: (fz: number, a: number) => vf26Front.fy(fz, a) },
 ];
 const fyMd: string[] = [];
 for (const c of tyreCars) {
