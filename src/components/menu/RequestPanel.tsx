@@ -69,9 +69,10 @@ const inputClass = `${fieldClass} h-11`;
 const areaClass = `${fieldClass} resize-y py-3`;
 const badClass = "!border-[#FF2A3C] focus:!shadow-[0_0_0_4px_rgba(255,42,60,0.14)]";
 
-const Field: React.FC<{ label: string; hint?: string; required?: boolean; children: React.ReactNode }> = ({
+const Field: React.FC<{ label: string; hint?: string; caution?: string; required?: boolean; children: React.ReactNode }> = ({
   label,
   hint,
+  caution,
   required,
   children,
 }) => (
@@ -82,6 +83,7 @@ const Field: React.FC<{ label: string; hint?: string; required?: boolean; childr
     </span>
     {children}
     {hint ? <span className="text-[12px] leading-snug text-[#8E96AA]">{hint}</span> : null}
+    {caution ? <span className="text-[12px] leading-snug text-[#FFB300]">{caution}</span> : null}
   </label>
 );
 
@@ -250,9 +252,13 @@ export const RequestPanel: React.FC<{ context?: FeedbackContext }> = ({ context 
   const content = kind === "Car" || kind === "Track";
   const mainOk = main.trim().length >= (content ? 2 : 6);
   const secondOk = kind === "Bug" ? second.trim().length >= 3 : content ? isUrl(second) : true;
-  const ready = mainOk && secondOk;
-  const openLicense = license === LICENSES[0] || license === LICENSES[1];
-  const ripped = content && !openLicense && (permission === "Not asked yet" || permission === "Don't know");
+  // A model can only be added under a known license that allows it, or with its creator's written permission
+  const openLicense = license === LICENSES[0] || license === LICENSES[1] || license === LICENSES[2];
+  const writtenPermission = permission === PERMISSIONS[1];
+  const permitted =
+    !content || writtenPermission || (license !== "Don't know" && (openLicense || permission === PERMISSIONS[0]));
+  const ripped = content && !permitted && (permission !== "" || license === "Don't know");
+  const ready = mainOk && secondOk && permitted;
   const copy = COPY[kind];
 
   const pickKind = (k: FeedbackKind) => {
@@ -434,6 +440,7 @@ export const RequestPanel: React.FC<{ context?: FeedbackContext }> = ({ context 
               label="Model link"
               required
               hint="The page of the 3D model: Sketchfab, a mod site or a scan. Requests without a model can't be built."
+              caution="Heads-up: models from Sketchfab and similar 3D sites are usually low quality (lower FPS, no real kerbs, tarmac or run-off). A sim mod (e.g. Assetto Corsa) is far better, but only with its creator's permission: ask them first."
             >
               <input
                 type="url"
@@ -452,12 +459,14 @@ export const RequestPanel: React.FC<{ context?: FeedbackContext }> = ({ context 
                 <Select value={license} onChange={setLicense} options={LICENSES} />
               </Field>
             </div>
-            <Field label="Do we have permission to use it?">
+            <Field label="Permission to use it" required>
               <Select value={permission} onChange={setPermission} options={PERMISSIONS} />
             </Field>
             {ripped ? (
               <p className="m-0 rounded-[14px] border border-[#FFB300]/35 bg-[#FFB300]/[0.08] px-3.5 py-3 text-[13px] leading-normal text-[#FFB300]">
-                Feel free to send it anyway. Asking the creator first (and linking their answer) makes it much more likely to be added.
+                {license === "Don't know" && !writtenPermission
+                  ? "Find out the model's license, or ask the creator for written permission: without either it can't be added."
+                  : "Ask the creator first, and link their answer under Anything else. Without an open license or their permission it can't be added."}
               </p>
             ) : null}
             <Field label="Anything else?">
@@ -475,12 +484,21 @@ export const RequestPanel: React.FC<{ context?: FeedbackContext }> = ({ context 
 
         {tried && !ready ? (
           <p role="alert" className="m-0 text-[13px] text-[#FF2A3C]">
-            {content && !secondOk ? "Add a link to the 3D model (starting with https://)." : "Fill in the fields marked *."}
+            {content && !secondOk
+              ? "Add a link to the 3D model (starting with https://)."
+              : !permitted
+                ? "It needs an open license or the creator's written permission first."
+                : "Fill in the fields marked *."}
           </p>
         ) : null}
         <button
           type="submit"
-          className="inline-flex h-[52px] cursor-pointer items-center gap-2.5 self-end rounded-full border-0 bg-[#CCFF00] px-6 text-[#08090D] shadow-[0_0_0_5px_rgba(204,255,0,0.12)] transition-colors hover:bg-[#d9ff33]"
+          disabled={!permitted}
+          className={`inline-flex h-[52px] items-center gap-2.5 self-end rounded-full border-0 px-6 transition-colors ${
+            permitted
+              ? "cursor-pointer bg-[#CCFF00] text-[#08090D] shadow-[0_0_0_5px_rgba(204,255,0,0.12)] hover:bg-[#d9ff33]"
+              : "cursor-not-allowed bg-[#262B3D] text-[#8E96AA]"
+          }`}
         >
           <span className="lc-disp text-[18px]">{copy.send}</span>
           <ExternalLink aria-hidden className="h-4 w-4" strokeWidth={2.4} />
