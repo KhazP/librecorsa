@@ -31,7 +31,8 @@ import { SteeringWheelDisplay } from "@/lib/render/steering-display";
 import { WingMirrors } from "@/lib/render/wing-mirrors";
 import { VirtualMirror } from "@/lib/render/virtual-mirror";
 import { type ChassisSetup, DEFAULT_CHASSIS_SETUP, loadChassisSetup, saveChassisSetup } from "@/lib/sim/car-setup";
-import { CockpitMicroShake, DynamicChaseCamera, TracksideBroadcastDirector, type ChaseCameraInput } from "@/lib/render/camera-rig";
+import { CockpitMicroShake, TracksideBroadcastDirector } from "@/lib/render/camera-rig";
+import { type ChaseCameraInput, DynamicChaseCamera } from "@/lib/render/chase-camera";
 import { LapDeltaTracker } from "@/lib/sim/lap-delta";
 import { TrackLimitsMonitor } from "@/lib/sim/track-limits";
 import { SimVisualFxManager } from "@/lib/sim/visual-fx";
@@ -521,7 +522,6 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   const toggleReplayRef = useRef<() => void>(() => {});
   const exitReplayRef = useRef<() => void>(() => {});
   const flashbackReplayRef = useRef<() => void>(() => {});
-  const resetCameraRigRef = useRef<() => void>(() => {});
 
   const cameraModeRef = useRef<CameraMode>("chase");
   cameraModeRef.current = cameraMode;
@@ -734,7 +734,6 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         lapRecorderRef.current?.reset();
         if (aiFieldRef.current) aiFieldRef.current.startRace(!flyingStart);
         else physicsRef.current.resetToStartGrid(flyingStart);
-        resetCameraRigRef.current();
       }
     },
     [unlockAudio]
@@ -754,7 +753,6 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     field.startRace(true);
     aiFieldRef.current = field;
     setAiOpponents(true);
-    resetCameraRigRef.current();
   }, [takeAiField, unlockAudio]);
 
   const handleSelectTurn = useCallback(
@@ -768,7 +766,6 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       if (physicsRef.current) {
         physicsRef.current.aiAutopilot = false;
         physicsRef.current.teleportToTurn(turnNumber);
-        resetCameraRigRef.current();
       }
     },
     [unlockAudio]
@@ -920,7 +917,6 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       setAiOpponents(race);
       setResultsClosed(false);
       lapRecorderRef.current?.reset();
-      resetCameraRigRef.current();
       // A new session: the instant replay (and flashback) must not reach back into the previous one
       replayRef.current.buffer.clear();
       kbInputRef.current.throttle = 0;
@@ -965,7 +961,6 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         race.lapClock.reset(physics.sMeters);
       }
       lapRecorderRef.current?.reset();
-      resetCameraRigRef.current();
       replayRef.current.buffer.clear();
       kbInputRef.current.throttle = 0;
       kbInputRef.current.brake = 0;
@@ -1220,7 +1215,6 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     aiFieldRef.current = null;
     setAiOpponents(false);
     physicsRef.current?.resetToStartGrid(false);
-    resetCameraRigRef.current();
     replayRef.current.buffer.clear();
     pausedRef.current = false;
     setPaused(false);
@@ -1337,7 +1331,6 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       lapRecorderRef.current?.reset();
       // The live delta and the replay belong to the previous car
       lapDelta.reset();
-      resetCameraRigRef.current();
       replayRef.current.buffer.clear();
       // A running race restarts from the lights with the new car
       if (aiFieldRef.current) {
@@ -1710,7 +1703,6 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       physics.aiAutopilot = false;
       if (aiFieldRef.current) aiFieldRef.current.startRace(true);
       else physics.resetToStartGrid(true);
-      resetCameraRigRef.current();
     };
 
     const onKeyUp = (e: KeyboardEvent) => {
@@ -1790,7 +1782,6 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       // The replay only moved the drawn car (the physics never left the live pose): put the drawing back
       physics.worldPosition.copy(replaySaved.pos);
       physics.worldQuaternion.copy(replaySaved.quat);
-      resetCameraRigRef.current();
       setReplayUi((u) => ({ ...u, active: false }));
     };
     const flashbackReplay = () => {
@@ -1810,7 +1801,6 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       replayClockS = rp.timeS;
       lastReplayPushS = rp.timeS;
       rp.active = false;
-      resetCameraRigRef.current();
       setReplayUi((u) => ({ ...u, active: false }));
     };
     exitReplayRef.current = exitReplay;
@@ -1854,21 +1844,24 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     const cockpitShake = new CockpitMicroShake();
     const shakeQuat = new THREE.Quaternion();
     const shakeEuler = new THREE.Euler();
-    // Velocity-trailing dynamic chase camera rig with dual-rate G-force smoothing
     const chaseCamera = new DynamicChaseCamera();
     const chaseInput: ChaseCameraInput = {
       carPos: renderCarPos,
+      carQuaternion: new THREE.Quaternion(),
+      carVelocity: new THREE.Vector3(),
       longitudinalG: 0,
       lateralG: 0,
       verticalG: 1,
+      wheelbaseM: 0,
+      cgHeightM: 0,
+      rideHeightOffsetM: 0,
+      kerbShakeM: 0,
+      manualOverrideActive: false,
     };
     // Automatic trackside broadcast cameras on dolly splines (telephoto, zooming in over kerbs)
     const tvDirector = new TracksideBroadcastDirector(track);
-    resetCameraRigRef.current = () => {
-      cockpitShake.reset();
-      chaseCamera.reset();
-      tvDirector.reset();
-    };
+    /** Where the cameras last saw the car: a jump further than it can drive (a teleport, a restart, a replay's end) starts them over */
+    const cameraCarPos = new THREE.Vector3();
     let frameIndex = 0;
     const deviceInput = new DeviceInputReader();
     /** Per-axle tyre slip read from the car's telemetry each frame, for the keyboard pedal help */
@@ -2497,6 +2490,12 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         .copy(carVelocityWorld)
         .multiplyScalar(physics.renderLeadS ?? 0)
         .add(physics.worldPosition);
+      if (cameraCarPos.distanceTo(renderCarPos) > Math.max(5, 2 * carVelocityWorld.length() * dtSeconds)) {
+        cockpitShake.reset();
+        chaseCamera.reset();
+        tvDirector.reset();
+      }
+      cameraCarPos.copy(renderCarPos);
       carRig.root.position.copy(renderCarPos);
       carRig.root.quaternion.copy(physics.worldQuaternion);
       carRig.chassisGroup.position.y = physics.rideHeightOffsetM;
@@ -2676,16 +2675,13 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
           camera.updateProjectionMatrix();
         }
       } else if (mode === "chase") {
-        chaseInput.carPos = renderCarPos;
-        chaseInput.carForward = carForward;
-        chaseInput.carUp = carUp;
-        chaseInput.carRight = carRight;
+        chaseInput.carQuaternion = physics.worldQuaternion;
         chaseInput.carVelocity = carVelocityWorld;
         chaseInput.longitudinalG = physics.telemetry.longitudinalG;
         chaseInput.lateralG = physics.telemetry.lateralG;
         chaseInput.verticalG = physics.telemetry.verticalG;
         chaseInput.wheelbaseM = physics.wheelbaseM;
-        chaseInput.cgHeightM = isGt3Rig(carRigCar) ? AMG_GT3_CONFIG.chassis.cgHeight : F12026_CAR_CONFIG.chassis.cgHeight;
+        chaseInput.cgHeightM = physics.cgHeightM;
         chaseInput.rideHeightOffsetM = physics.rideHeightOffsetM;
         chaseInput.kerbShakeM = kerbShake;
         chaseInput.manualOverrideActive = physics.telemetry.manualOverrideActive;
