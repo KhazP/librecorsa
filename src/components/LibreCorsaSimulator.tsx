@@ -98,7 +98,7 @@ import { assetProgress } from "@/lib/loading/asset-progress";
 import { prefetchSoundBank } from "@/lib/sim/vf26-audio";
 import { CarReflectionProbe } from "@/lib/render/car-reflection-probe";
 import { StartupMonitor } from "@/lib/render/startup-monitor";
-import { addContactShadow } from "@/lib/render/contact-shadow";
+import { addContactShadow, seatContactShadow } from "@/lib/render/contact-shadow";
 import { buildKeyLookup, HUD_TOGGLE_EVENT, keyLabel, padButtonLabel, type KeyAction } from "@/lib/input/bindings";
 import { autoConfigureWheel, carWheelLockDeg, connectedPads, DeviceInputReader } from "@/lib/input/device-input";
 import { webHidFfb, wheelFfb } from "@/lib/input/wheel-ffb";
@@ -2536,6 +2536,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         dtSeconds,
         physics.tyreVisuals ? playerWheels : undefined
       );
+      seatContactShadow(carRig.root, physics.tyreVisuals ? playerWheels : undefined);
 
       const vf26Body = carRig.getVf26Body();
       // Built once per body (keyed on the body, not on the wheel display: a body without STEER_BASE has no display,

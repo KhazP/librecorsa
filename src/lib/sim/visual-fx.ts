@@ -15,7 +15,7 @@ import type { WheelSeating } from '@/lib/render/corner-rig';
 import { createGt3CarRig, loadGt3Cockpit, loadGt3Template } from '@/lib/gt3-car-model';
 import { AMR26_MODEL_URL, loadVf26Template } from '@/lib/vf26-car-model';
 import { assetProgress } from '@/lib/loading/asset-progress';
-import { addContactShadow } from '@/lib/render/contact-shadow';
+import { addContactShadow, seatContactShadow } from '@/lib/render/contact-shadow';
 import { disposeTree } from '@/lib/render/dispose-tree';
 import { LIVERIES } from '@/lib/track-data';
 import { CarTelemetry, LiveryConfig, type VehicleModelId } from '@/types/f1';
@@ -662,6 +662,7 @@ export class SimVisualFxManager {
         wheels.quaternion = peer.quaternion;
       }
       carRig.updateFromTelemetry(syntheticTelemetry, pitchRad, rollRad, wheelRot, dt, wheels);
+      seatContactShadow(carRig.root, wheels);
 
       // Opponent car rooster-tail water spray plume in wet conditions
       if (this.wetness > 0.16 && !peer.ghost && peer.speedKmh > 55) {

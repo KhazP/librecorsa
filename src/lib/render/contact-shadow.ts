@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import type { VehicleModelId } from "@/types/f1";
+import { seatCorner, type WheelSeating } from "./corner-rig";
 
 /**
  * A soft dark footprint under a car, on every graphics preset: the sun's shadow map is too coarse to darken the road
@@ -47,9 +48,12 @@ let material: THREE.MeshBasicMaterial | null = null;
 /** Footprint (length, width in m) of each car model, a little larger than its floor */
 const FOOTPRINT: Record<"f1" | "gt3", [number, number]> = { f1: [6.4, 2.6], gt3: [5.6, 2.7] };
 
+/** The shadow sits this far above the road under the car (m), clear of its z-fighting */
+const LIFT_M = 0.012;
+
 /**
- * Adds the contact shadow under a car rig whose root sits at ground level (`SimulatorCar.worldPosition`), facing
- * along its +Z. Returns the shadow mesh (removed with the rig).
+ * Adds the contact shadow under a car rig, facing along its +Z, on the rig root's origin plane until
+ * `seatContactShadow` puts it on the road. Returns the shadow mesh (removed with the rig).
  */
 export function addContactShadow(root: THREE.Object3D, vehicle: VehicleModelId | undefined): THREE.Mesh | null {
   const map = shadowTexture();
@@ -76,10 +80,37 @@ export function addContactShadow(root: THREE.Object3D, vehicle: VehicleModelId |
   const mesh = new THREE.Mesh(geometry, material);
   mesh.name = "ContactShadow";
   mesh.rotation.x = -Math.PI / 2;
-  mesh.position.y = 0.012;
+  mesh.position.y = LIFT_M;
   mesh.renderOrder = -1;
   mesh.castShadow = false;
   mesh.receiveShadow = false;
   root.add(mesh);
+  root.userData.contactShadow = mesh;
   return mesh;
+}
+
+/**
+ * Per frame: puts a rig's contact shadow on the road under the car's centre, as `updateCorners` does its wheels. The
+ * rig root is the car frame, which on the rigid-body model rides on the sprung body (its CG less the static CG
+ * height): it sinks 20-35 mm under the road with downforce and rises over kerbs, and a shadow left on it went under
+ * the asphalt, so the car looked like it hovered. The physics' tyre contacts give the first estimate (their mean
+ * height in the car frame), the car's ground the road itself. Without `wheels` (a remote player, the ghost) the
+ * shadow stays on the root's origin plane.
+ */
+export function seatContactShadow(root: THREE.Object3D, wheels?: WheelSeating): void {
+  const mesh = root.userData.contactShadow as THREE.Mesh | undefined;
+  if (!mesh) return;
+  let contactY = 0;
+  const tyres = wheels?.tyres;
+  if (tyres?.length) {
+    let n = 0;
+    for (const t of tyres) {
+      if (!t.contactInCar) continue;
+      contactY += t.contactInCar.y;
+      n++;
+    }
+    if (n) contactY /= n;
+  }
+  const roadY = wheels ? seatCorner(wheels.ground, wheels.position, wheels.quaternion, 0, 0, contactY, true) : 0;
+  mesh.position.y = roadY + LIFT_M;
 }
