@@ -53,6 +53,7 @@ import { RaceIncidents } from '@/lib/sim/race-incidents';
 import { aiTrackFor, type AiTrack } from '@/lib/sim/ai/ai-track';
 import { carLimitsFor } from '@/lib/sim/ai/ggv';
 import { makeDrivePlan } from '@/lib/sim/ai/drive-plan';
+import { DEFAULT_PLANNER_WEIGHTS, PLAN_DT, PLAN_STEPS, planLocal, type PlannerResult, type PredictedCar } from '@/lib/sim/ai/local-planner';
 import type { AiGridOrder, PlayerGridSlot } from '@/lib/sim/race-setup';
 import { F12026_CAR_CONFIG } from '@/lib/sim/f12026-car/F12026CarConfig';
 import { AMG_GT3_CONFIG } from '@/lib/sim/gt3/AmgGt3Config';
@@ -135,9 +136,11 @@ const MISTAKE_APEX_SCALE = 1.06;
 function followCapMs(ahead: SimulatorCar, gapM: number): number {
   const decelAhead = Math.max(0, -(ahead.telemetry.longitudinalG ?? 0) * 9.81);
   const vAhead = Math.max(0, ahead.vxMs);
-  // Into a braking zone (the car ahead on the brakes) the gap grows with the speed: ~0.12 s of it on top
-  const margin = 2.5 + (decelAhead > 5 ? 0.12 * vAhead : 0);
-  return Math.max(0, vAhead - 0.2 * decelAhead) + Math.sqrt(2 * 6 * Math.max(0, gapM - margin));
+  // The lead for the car ahead's braking and the extra gap into a braking zone matter close up; 25 m back they held a
+  // quicker car off a slower one that braked early, and it never got close enough to try a pass
+  const close = Math.max(0, Math.min(1, (25 - gapM) / 20));
+  const margin = 2.5 + (decelAhead > 5 ? 0.12 * vAhead * close : 0);
+  return Math.max(0, vAhead - 0.2 * decelAhead * close) + Math.sqrt(2 * 6 * Math.max(0, gapM - margin));
 }
 
 /**
@@ -254,6 +257,11 @@ export interface AiFieldOptions {
   gridOrder?: AiGridOrder;
   /** The player's grid slot (default 'back') */
   playerGrid?: PlayerGridSlot;
+  /**
+   * The local planner chooses how cars on drive plans approach and pass the cars ahead (default false: the racecraft
+   * rules on the drive plans race cleaner until its weights are tuned)
+   */
+  localPlanner?: boolean;
 }
 
 export type { AiGridOrder, PlayerGridSlot } from '@/lib/sim/race-setup';
@@ -305,6 +313,11 @@ interface FieldCar {
   gridSlot: number;
   /** Grip its current drive plan was built on (the plan is rebuilt when it moves) */
   planGrip: number;
+  /** The local planner's last choice, and the race time it was made */
+  local: PlannerResult | null;
+  /** What the racecraft rules asked the planner for last (end offset from the line; null: race the line) */
+  intentD: number | null;
+  localAtS: number;
   /** Covering the inside against a car behind */
   defending: boolean;
   /** Lateral offset of its grid slot (m), held off the start until the first corner; null once it races its line */
@@ -578,6 +591,8 @@ export class AiOpponentField {
   public readonly incidents: FieldIncident[] = [];
   /** Races started on this field (each one rolls its own damage dice) */
   private raceCount = 0;
+  /** The local planner is on (cars on drive plans) */
+  public localPlanner: boolean;
   /** Grid of the next race */
   public gridOrder: AiGridOrder;
   public playerGrid: PlayerGridSlot;
@@ -592,6 +607,7 @@ export class AiOpponentField {
     options: AiFieldOptions = {}
   ) {
     this.damageLevel = options.damage ?? 'reduced';
+    this.localPlanner = options.localPlanner ?? false;
     this.gridOrder = options.gridOrder ?? 'pace';
     this.playerGrid = options.playerGrid ?? 'back';
     this.environment = environment ?? new TrackEnvironment(track);
@@ -805,6 +821,9 @@ export class AiOpponentField {
       craft: new RacecraftMemory(),
       gridSlot: 0,
       planGrip: 0,
+      local: null,
+      localAtS: -Infinity,
+      intentD: null,
       defending: false,
       startLaneM: null,
       prevS: 0,
@@ -1145,7 +1164,9 @@ export class AiOpponentField {
     const L = this.track.totalLengthM;
     const decel = this.classId === 'gt3' ? 16 : 32;
     this.capPlayerAutopilot(L);
-    for (const car of this.cars) {
+    // Leader first: each follower then plans against the paths the cars ahead have just chosen
+    const order = [...this.cars].sort((a, b) => b.distM - a.distM);
+    for (const car of order) {
       const me = car.ai;
       if (!me || car.removed) continue;
       const craft = car.craft;
@@ -1381,12 +1402,26 @@ export class AiOpponentField {
         }
       }
       const biasTarget = pos === null ? 0 : THREE.MathUtils.clamp(pos - line, -maxBias, maxBias);
-      car.biasM += THREE.MathUtils.clamp(biasTarget - car.biasM, -biasRate * dt, biasRate * dt);
+      if (this.localPlanner && me.aiPlan && car.control?.racing !== false && this.trafficNear(car)) {
+        // The local planner chooses the path among the cars around: the behaviour above is its intent
+        car.intentD = pos === null && !hazard ? null : biasTarget;
+        const capped = this.planAround(car, car.intentD, speedCap);
+        speedCap = Math.min(speedCap, capped);
+        // The planner says where to be; the bias moves there at the usual rate (quicker for a hazard). Handing over the
+        // planned offset a moment ahead instead never converged: a smooth move starts slowly, so each replan from the
+        // car's own position left it where it was
+        const goal = car.local ? car.local.endD : biasTarget;
+        car.biasM += THREE.MathUtils.clamp(goal - car.biasM, -biasRate * dt, biasRate * dt);
+      } else {
+        car.local = null;
+        car.biasM += THREE.MathUtils.clamp(biasTarget - car.biasM, -biasRate * dt, biasRate * dt);
+      }
       me.aiLineBiasM = car.biasM;
       // Off-line and in dirty air the corner is tighter than planned: give a little speed away for it
       const wakeFrontMult = me.telemetry.aeroWakeDownforceMult ?? 1;
-      // (the physics already lose the downforce; this is only the driver's margin for it)
-      const dirtyAirPenalty = 1 - 0.05 * Math.max(0, 1 - wakeFrontMult);
+      // (the physics lose the downforce; this is the driver's margin for it: a car on a drive plan runs at its real limit
+      // and spun in the wake at a smaller one)
+      const dirtyAirPenalty = 1 - (me.aiPlan ? 0.12 : 0.05) * Math.max(0, 1 - wakeFrontMult);
       // Rain: the pace the tyres' grip on this much water allows (weather.ts / track-environment.ts)
       const weatherPace = this.environment.weatherPaceScale(me);
       // Yellow flag: lift through the zone
@@ -1397,7 +1432,9 @@ export class AiOpponentField {
       // A car on a drive plan has its pace and the weather in the plan's grip already
       this.refreshPlan(car);
       const planned = me.aiPlan ? 1 : car.pace * weatherPace;
-      me.aiPaceScale = Math.min(me.aiPlan ? 1.03 : 0.999, planned * attackPush) * (1 - 0.012 * Math.abs(car.biasM)) * dirtyAirPenalty * yellowLift * blueLift;
+      // (a planned car's speed off the line is the planner's, from its path: no blanket slow-down per metre)
+      const offLine = me.aiPlan ? 1 : 1 - 0.012 * Math.abs(car.biasM);
+      me.aiPaceScale = Math.min(me.aiPlan ? 1.03 : 0.999, planned * attackPush) * offLine * dirtyAirPenalty * yellowLift * blueLift;
       me.aiSpeedCapMs = speedCap;
       car.hooks?.setSteerGain(T.at('steerGain', me.sMeters));
       // Rain changed the grip the car plans on: new corner speeds and braking points
@@ -1426,6 +1463,123 @@ export class AiOpponentField {
       }
     }
     sim.aiSpeedCapMs = cap;
+  }
+
+  /** Usable offsets per AI grid point for each racing line class (from a car's own usable road), built once */
+  private readonly classBounds = new Map<string, { lo: Float64Array; hi: Float64Array }>();
+
+  private boundsFor(sim: SimulatorCar): { lo: Float64Array; hi: Float64Array } {
+    const id = sim.racingLineId ?? 'f1';
+    let b = this.classBounds.get(id);
+    if (b) return b;
+    const t = (this.aiTrack ??= aiTrackFor(this.track));
+    const rangeAt = (sim as unknown as { lateralRangeAt?: (s: number) => [number, number] }).lateralRangeAt?.bind(sim);
+    const lo = new Float64Array(t.n), hi = new Float64Array(t.n);
+    for (let i = 0; i < t.n; i++) {
+      const [a, c] = rangeAt ? rangeAt(i * t.ds) : [-(t.width[i] / 2 - 1.2), t.width[i] / 2 - 1.2];
+      lo[i] = a;
+      hi[i] = c;
+    }
+    b = { lo, hi };
+    this.classBounds.set(id, b);
+    return b;
+  }
+
+  /**
+   * Whether the local planner runs: a car (or a hazard) ahead within 120 m, and nobody alongside. Side by side the
+   * car keeps to the racecraft rules (a car's width of room, yielding a corner it doesn't own), which hold the space
+   * the other driver is owed; the planner chooses how to approach and pass the cars ahead
+   */
+  private trafficNear(car: FieldCar): boolean {
+    const L = this.track.totalLengthM;
+    const me = car.sim;
+    let ahead = false;
+    for (const o of this.cars) {
+      if (o === car || o.removed) continue;
+      const ds = wrapHalf(o.sim.sMeters - me.sMeters, L);
+      if (Math.abs(ds) < CAR_LEN_M + 1.5 && Math.abs(o.sim.lateralOffsetM - me.lateralOffsetM) < 4.5) return false;
+      if (ds >= CAR_LEN_M + 1.5 && ds < 120) ahead = true;
+    }
+    return ahead;
+  }
+
+  /** Where another car will be over the planner's horizon: its own fresh plan if it has one, else steady as it goes */
+  private predict(other: FieldCar): PredictedCar {
+    const s = new Float64Array(PLAN_STEPS), n = new Float64Array(PLAN_STEPS);
+    const o = other.sim;
+    const loc = other.local;
+    const age = this.raceTimeS - other.localAtS;
+    if (loc && age < 0.35 && other.control?.racing !== false) {
+      for (let k = 1; k <= PLAN_STEPS; k++) {
+        const x = Math.min(PLAN_STEPS, Math.max(1, k + age / PLAN_DT)) - 1;
+        const i0 = Math.floor(x), i1 = Math.min(PLAN_STEPS - 1, i0 + 1), f = x - i0;
+        s[k - 1] = loc.s[i0] + (loc.s[i1] - loc.s[i0]) * f;
+        n[k - 1] = loc.n[i0] + (loc.n[i1] - loc.n[i0]) * f;
+      }
+    } else {
+      const v = Math.max(0, o.vxMs);
+      for (let k = 1; k <= PLAN_STEPS; k++) {
+        s[k - 1] = o.sMeters + v * k * PLAN_DT;
+        n[k - 1] = o.lateralOffsetM;
+      }
+    }
+    const haz = this.isHazard(other);
+    // A car sideways across the road is wider than its width
+    return { s, n, halfLenM: CAR_LEN_M / 2, halfWidM: haz ? hazardHalfWidthM(this.headingErr(o), CAR_LEN_M, CAR_WID_M) : CAR_WID_M / 2, hazard: haz };
+  }
+
+  /**
+   * Runs the local planner for a car (every 0.1 s; in between, the last plan is followed) and hands its path to the
+   * tracker as the line bias a little ahead. Returns the speed cap the plan asks for (Infinity: none beyond the
+   * path's limit)
+   */
+  private planAround(car: FieldCar, intentD: number | null, speedCap: number): number {
+    const me = car.ai as SimulatorCar;
+    const plan = me.aiPlan;
+    if (!plan) return Infinity;
+    const L = this.track.totalLengthM;
+    if (!car.local || this.raceTimeS - car.localAtS >= 0.1) {
+      const others: PredictedCar[] = [];
+      for (const o of this.cars) {
+        if (o === car || o.removed) continue;
+        const ds = wrapHalf(o.sim.sMeters - me.sMeters, L);
+        if (ds > -40 && ds < 220) others.push(this.predict(o));
+      }
+      const smp = this.track.getSampleAtDistance(me.sMeters);
+      const vel = me.worldVelocity;
+      const bl = Math.hypot(smp.binormal.x, smp.binormal.z) || 1;
+      const nDot = vel ? (vel.x * smp.binormal.x + vel.z * smp.binormal.z) / bl : 0;
+      const b = this.boundsFor(me);
+      car.local = planLocal({
+        track: plan.track,
+        line: plan.n,
+        lineKappa: plan.kappa,
+        vLimit: plan.v,
+        limits: plan.limits,
+        lo: b.lo,
+        hi: b.hi,
+        s: me.sMeters,
+        n: me.lateralOffsetM,
+        nDot,
+        v: Math.max(1, me.vxMs),
+        halfLenM: CAR_LEN_M / 2,
+        halfWidM: CAR_WID_M / 2,
+        others,
+        intentD,
+        speedCapMs: speedCap,
+        // With no intent, the line is home: leaving it has to buy real progress
+        weights: intentD === null ? { ...DEFAULT_PLANNER_WEIGHTS, line: 0.15 } : DEFAULT_PLANNER_WEIGHTS,
+        prevEndD: car.local?.endD ?? car.biasM,
+      });
+      car.localAtS = this.raceTimeS;
+    }
+    const loc = car.local;
+    const tAhead = this.raceTimeS - car.localAtS + 0.3;
+    const i1 = Math.min(PLAN_STEPS - 1, Math.ceil(Math.max(1, tAhead / PLAN_DT)) - 1);
+    // The path's own aim a little ahead: its corner limit off the line, a slower version's scale, a boxed-in car's
+    // braking (on the line at full scale this is the line's envelope, which the tracker follows anyway)
+    const aim = loc.vAim[Math.min(PLAN_STEPS - 1, i1)] + 0.5;
+    return Math.abs(loc.endD) > 0.4 || loc.speedScale < 1 || loc.boxedIn ? aim : Infinity;
   }
 
   /** A car the others treat as an obstacle: spinning, stopped or crawling, or retired and not yet taken away */
