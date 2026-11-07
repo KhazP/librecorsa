@@ -122,7 +122,6 @@ export class CarAudioEngine {
   private engineExhaustFilter: BiquadFilterNode | null = null;
   private engineSampleBus: GainNode | null = null;
 
-  // Warm low-frequency sub-harmonic reinforcement (heavily low-passed, zero harsh buzz)
   private subHarmonicOsc: OscillatorNode | null = null;
   private subHarmonicFilter: BiquadFilterNode | null = null;
   private subHarmonicGain: GainNode | null = null;
@@ -133,7 +132,6 @@ export class CarAudioEngine {
   private axleOsc: OscillatorNode | null = null;
   private axleGain: GainNode | null = null;
 
-  // Per-wheel & aggregate tire squeal + scrub + kerb + off-track gravel/grass + aero wind
   private tyreSquealOsc: OscillatorNode | null = null;
   private tyreSquealFilter: BiquadFilterNode | null = null;
   private tyreSquealGain: GainNode | null = null;
@@ -189,7 +187,6 @@ export class CarAudioEngine {
     const ctx = new AudioCtx();
     this.ctx = ctx;
 
-    // Master output with gentle studio limiter (no harsh waveshaper distortion!)
     const compressor = ctx.createDynamicsCompressor();
     compressor.threshold.value = -8;
     compressor.knee.value = 12;
@@ -216,7 +213,7 @@ export class CarAudioEngine {
     engineSampleBus.connect(engineExhaustFilter);
     this.engineSampleBus = engineSampleBus;
 
-    // Warm low-end V6 firing cadence reinforcement (strictly low-passed below 260 Hz for chest punch)
+    // Half the V6's firing frequency under the engine samples, low-passed
     const subOsc = ctx.createOscillator();
     subOsc.type = 'sine';
     subOsc.frequency.value = 105;
@@ -560,9 +557,7 @@ export class CarAudioEngine {
     }
   }
 
-  /**
-   * Per-frame audio synthesis update
-   */
+  /** One frame of the player's car; `dtSeconds` is the frame time */
   public update(telemetry: TelemetryData, dtSeconds?: number): void {
     if (!this.isInitialized || !this.ctx || this.isMuted || this.isPaused) return;
     if (this.ctx.state === 'suspended') {
@@ -669,7 +664,7 @@ export class CarAudioEngine {
       }
     }
 
-    // Subtle low-end V6 3rd-order firing frequency reinforcement (only low-passed warmth)
+    // A four-stroke V6 fires three times per revolution
     const f0 = (rpm / 60) * 3.0;
     if (!vf26 && this.subHarmonicOsc && this.subHarmonicGain && this.subHarmonicFilter) {
       this.subHarmonicOsc.frequency.setTargetAtTime(f0 * 0.5, now, tau);
