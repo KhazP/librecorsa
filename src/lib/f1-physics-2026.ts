@@ -115,6 +115,8 @@ import {
   type RelativeAirspeed,
 } from './sim/aero-wake';
 import { type CarDamageEffects, withDamage } from './sim/car-damage';
+import type { AiDrivePlan } from './sim/ai/drive-plan';
+import { sampleGrid } from './sim/ai/ai-track';
 import type { TrackEvolutionSample } from './sim/track-evolution';
 import { DRY_WEATHER_SAMPLE, type WeatherContactSample } from './sim/weather';
 import { FULL_REALISM, type SimRealismFlags } from './sim/sim-realism';
@@ -524,6 +526,12 @@ export class F1Physics2026 {
   public aiPaceScale = 1;
   public aiLineBiasM = 0;
   public aiSpeedCapMs = Infinity;
+  /**
+   * A plan to drive (`sim/ai/drive-plan.ts`): its line and its cornering-and-braking limit, handed to the racing line
+   * driver as its profile instead of the one it builds itself; null keeps its own
+   */
+  public aiPlan: AiDrivePlan | null = null;
+  private planProfileCache: { plan: AiDrivePlan; profile: SpeedProfile } | null = null;
 
   // Three.js world transform outputs
   public worldPosition = new THREE.Vector3();
@@ -1531,7 +1539,8 @@ export class F1Physics2026 {
       // The player's steering assist holds nothing while the autopilot drives, so a hand-back starts from centre
       this.steeringAssist.reset();
       this.lastObservation = this.buildObservation(sample);
-      const plan = this.getAiPlan();
+      const own = this.getAiPlan();
+      const plan = this.aiPlan ? { profile: this.planProfile(this.aiPlan), params: own.params } : own;
       plan.params.paceScale = this.aiPaceScale;
       plan.params.lineBiasM = this.aiLineBiasM;
       plan.params.speedCapMs = this.aiSpeedCapMs;
@@ -2892,6 +2901,34 @@ export class F1Physics2026 {
   }
 
   /** Target-speed profile for the AI, rebuilt when the aero package or the road's wet grip changes */
+  /** A drive plan as the racing line driver's profile, on the track samples it reads (built once per plan) */
+  private planProfile(plan: AiDrivePlan): SpeedProfile {
+    const c = this.planProfileCache;
+    if (c && c.plan === plan) return c.profile;
+    const samples = this.track.samples;
+    const n = samples.length;
+    const ds = plan.track.ds;
+    const lineOffsetM = new Float64Array(n), curvature = new Float64Array(n), speedMs = new Float64Array(n);
+    const pointX = new Float64Array(n), pointZ = new Float64Array(n), segLenM = new Float64Array(n);
+    for (let i = 0; i < n; i++) {
+      const smp = samples[i];
+      const off = sampleGrid(plan.n, smp.s, ds);
+      lineOffsetM[i] = off;
+      curvature[i] = sampleGrid(plan.kappa, smp.s, ds);
+      speedMs[i] = sampleGrid(plan.v, smp.s, ds);
+      const bl = Math.hypot(smp.binormal.x, smp.binormal.z) || 1;
+      pointX[i] = smp.position.x + (smp.binormal.x / bl) * off;
+      pointZ[i] = smp.position.z + (smp.binormal.z / bl) * off;
+    }
+    for (let i = 0; i < n; i++) {
+      const j = (i + 1) % n;
+      segLenM[i] = Math.max(0.1, Math.hypot(pointX[j] - pointX[i], pointZ[j] - pointZ[i]));
+    }
+    const profile = { lineOffsetM, curvature, speedMs, brakeEnvelopeMs: speedMs, segLenM, pointX, pointZ } as unknown as SpeedProfile;
+    this.planProfileCache = { plan, profile };
+    return profile;
+  }
+
   private getAiPlan(): { profile: SpeedProfile; params: AiVehicleParams } {
     const grip = this.aiPlanGrip();
     // Planned on the wings the car actually runs, garage clicks included

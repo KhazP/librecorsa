@@ -772,6 +772,7 @@ export class AiOpponentField {
       },
       hooks.env
     );
+    if (car.ai?.vehicleId === 'vf26' && car.ai.aiPlan) return;
     hooks.setTarget(target);
   }
 
@@ -779,9 +780,9 @@ export class AiOpponentField {
   private aiTrack: AiTrack | null = null;
   private readonly classLines = new Map<string, Float64Array>();
 
-  /** Whether a car's autopilot tracks drive plans (the rigid-body cars; the VF26 model keeps its own driver) */
+  /** Whether a car's autopilot tracks drive plans */
   private static tracksPlans(sim: SimulatorCar): boolean {
-    return 'aiPlan' in sim && sim.vehicleId !== 'vf26';
+    return 'aiPlan' in sim;
   }
 
   /**
@@ -807,6 +808,8 @@ export class AiOpponentField {
     }
     sim.aiPlan = makeDrivePlan(t, line, carLimitsFor(sim.vehicleId, grip));
     car.planGrip = grip;
+    // The VF26's driver takes a tuning target in place of its profile's speeds: with a plan, the plan's speeds rule
+    if (sim.vehicleId === 'vf26') car.hooks?.setTarget(null);
   }
 
   public attachTrackRoot(root: THREE.Object3D): void {
