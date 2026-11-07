@@ -2,6 +2,9 @@
  * The tyres' slip as the driver aids and cues read it: each tyre's slip angle, slip ratio and normalised combined slip
  * (1 = the tyre's peak), load-weighted per axle. One sample serves the steering assist, the keyboard pedal help and
  * the controller's trigger cues, so they all agree on when a tyre is at its limit.
+ *
+ * The pedals' slip margins are adapted from AC-Advanced-Gamepad-Assist v1.5.5 by Adam D.
+ * (https://github.com/adam10603/AC-Advanced-Gamepad-Assist), MIT License — see CREDITS.md.
  */
 
 const RAD2DEG = 180 / Math.PI;
@@ -101,5 +104,15 @@ export function axleSlipFromTelemetry(t: AxleSlipTelemetry, out: AxleSlipSample 
   return axleSlip(_telemetryWheels[0], _telemetryWheels[1], _telemetryWheels[2], _telemetryWheels[3], out);
 }
 
-/** Normalised slip the driven tyres may carry under power before it counts as wheelspin, by speed (km/h) */
-export const throttleSlipAllowance = (speedKmh: number) => lerp(0.25, 0.35, clamp01((speedKmh - 40) / 120));
+/**
+ * Normalised slip the driven tyres may carry under power before it counts as wheelspin, by speed (km/h). `strength`
+ * (0..1) is the keyboard pedal help's: stronger help backs off earlier.
+ */
+export const throttleSlipAllowance = (speedKmh: number, strength = 0.5) =>
+  lerp(0.25, 0.35, clamp01((speedKmh - 40) / 120)) + (0.5 - clamp01(strength)) * 0.4;
+
+/**
+ * Normalised slip added to the tyres' before the brakes count as at their limit: the brake pedal help and the brake
+ * trigger cue back off from (slip + this) = 1, so ahead of the peak. `strength` (0..1) is the pedal help's.
+ */
+export const brakeSlipMargin = (strength = 0.5) => lerp(-0.05, 0.35, clamp01(strength));

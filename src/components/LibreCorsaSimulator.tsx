@@ -2086,12 +2086,16 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       const carAids = physics.telemetry.liveTuner;
       const tyreSlip = axleSlipFromTelemetry(physics.telemetry, kbAxleSlip);
       const kbBrakeScale = kbPedalAssistRef.current.brakeScale(
+        keys.down,
+        kb.brake,
         tyreSlip.totalNdSlip,
         dtSeconds,
         driving && kbTuning.brakeAssist && carAids?.absLevel === 0,
         kbTuning.pedalAssistStrength
       );
       const kbThrottleScale = kbPedalAssistRef.current.throttleScale(
+        kbThrottleTarget > 0,
+        kb.throttle,
         tyreSlip.rearNdSlip,
         Math.max(0, physics.vxMs),
         dtSeconds,

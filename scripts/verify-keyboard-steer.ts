@@ -211,12 +211,12 @@ for (const cc of CARS) {
 {
   const help = new KeyboardPedalAssist();
   let minBrake = 1;
-  for (let t = 0; t < 0.5; t += DT) minBrake = Math.min(minBrake, help.brakeScale(Math.min(1.3, 0.6 + t * 2), DT, true));
+  for (let t = 0; t < 0.5; t += DT) minBrake = Math.min(minBrake, help.brakeScale(true, 1, Math.min(1.3, 0.6 + t * 2), DT, true));
   let recovered = minBrake;
-  for (let t = 0; t < 1; t += DT) recovered = help.brakeScale(0.4, DT, true);
-  const off = help.brakeScale(1.5, DT, false);
+  for (let t = 0; t < 1; t += DT) recovered = help.brakeScale(true, 1, 0.4, DT, true);
+  const off = help.brakeScale(true, 1, 1.5, DT, false);
   let minThrottle = 1;
-  for (let t = 0; t < 0.5; t += DT) minThrottle = Math.min(minThrottle, help.throttleScale(1.6, 30, DT, true));
+  for (let t = 0; t < 0.5; t += DT) minThrottle = Math.min(minThrottle, help.throttleScale(true, 1, 1.6, 30, DT, true));
   check(
     minBrake < 0.6 && minBrake >= 0.3 && recovered > 0.99 && off === 1 && minThrottle < 0.9 && minThrottle >= 0.6,
     `Keyboard pedal help: brake key eased to ${f2(minBrake)} past the grip and back to ${f2(recovered)} after; ` +

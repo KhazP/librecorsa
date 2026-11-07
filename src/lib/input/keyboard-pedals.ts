@@ -9,7 +9,7 @@
  * MIT License — see CREDITS.md.
  */
 
-import { throttleSlipAllowance } from "@/lib/sim/tyre-slip";
+import { brakeSlipMargin, throttleSlipAllowance } from "@/lib/sim/tyre-slip";
 
 /** How far ahead the slip is extrapolated from its rate of change (s) */
 const SLIP_LOOKAHEAD_S = 0.045;
@@ -20,12 +20,21 @@ const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v
 const clamp01 = (v: number) => clamp(v, 0, 1);
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
-/** One pedal's scale: rises while the extrapolated slip is under 1, falls (3× as fast) above it, held in [min, 1] */
+/**
+ * One key's pedal scale, held in [min, 1]: while the key is down it rises with the extrapolated slip under 1 and falls
+ * (3× as fast) above it. It only follows the tyres while the key is down: let go, it holds while the key's pedal falls
+ * back (a scale back at 1 would push the falling pedal up again) and is 1 again once the pedal is fully released.
+ */
 class SlipLimitedPedal {
   scale = 1;
   private prevSlip = Number.NaN;
 
-  update(slip: number, minScale: number, dt: number): number {
+  update(held: boolean, pedal: number, slip: number, minScale: number, dt: number): number {
+    if (!held) {
+      this.prevSlip = Number.NaN;
+      if (pedal <= 0) this.scale = 1;
+      return this.scale;
+    }
     const rate = Number.isFinite(this.prevSlip) && dt > 0 ? (slip - this.prevSlip) / dt : 0;
     this.prevSlip = slip;
     const ahead = clamp(slip + SLIP_LOOKAHEAD_S * rate, 0, 2);
@@ -45,36 +54,41 @@ export class KeyboardPedalAssist {
   private readonly throttle = new SlipLimitedPedal();
 
   /**
-   * Scale (0.1..1) for the brake key from the four tyres' load-weighted normalised slip; 1 when `active` is false
-   * (the car's ABS is on, or the help is switched off). `strength` (0..1, default 0.5) shifts how early and deeply
-   * the key backs off.
+   * Scale for the brake key's pedal (`pedal`, 0..1, the key `held`) from the four tyres' load-weighted normalised slip:
+   * down to 0.5 at `strength` 0 … 0.1 at 1 (default 0.5, which also backs off earlier). 1 when `active` is false (the
+   * car's ABS is on, or the help is switched off).
    */
-  brakeScale(totalNdSlip: number, dt: number, active: boolean, strength = 0.5): number {
+  brakeScale(held: boolean, pedal: number, totalNdSlip: number, dt: number, active: boolean, strength = 0.5): number {
     if (!active) {
       this.brake.reset();
       return 1;
     }
     const s = clamp01(strength);
-    const margin = lerp(-0.05, 0.35, s);
-    const minScale = lerp(0.5, 0.1, s);
-    return this.brake.update(totalNdSlip + margin, minScale, dt);
+    return this.brake.update(held, pedal, totalNdSlip + brakeSlipMargin(s), lerp(0.5, 0.1, s), dt);
   }
 
   /**
-   * Scale (0.4..0.9 up to 1) for the throttle key from the driven tyres' normalised slip; 1 when `active` is false
-   * (the car's traction control is on, or the help is switched off). `strength` (0..1, default 0.5) shifts how early
-   * and deeply the key backs off.
+   * Scale for the throttle key's pedal (`pedal`, 0..1, the key `held`) from the driven tyres' normalised slip: down to
+   * 0.6 slow … 0.8 past 160 km/h at the default `strength` 0.5 (±0.125 for 0 / 1, at most 0.9). 1 when `active` is
+   * false (the car's traction control is on, or the help is switched off).
    */
-  throttleScale(drivenNdSlip: number, speedMs: number, dt: number, active: boolean, strength = 0.5): number {
+  throttleScale(
+    held: boolean,
+    pedal: number,
+    drivenNdSlip: number,
+    speedMs: number,
+    dt: number,
+    active: boolean,
+    strength = 0.5
+  ): number {
     if (!active) {
       this.throttle.reset();
       return 1;
     }
     const s = clamp01(strength);
     const kmh = speedMs * 3.6;
-    const allowance = throttleSlipAllowance(kmh) + (0.5 - s) * 0.4;
-    const minScale = clamp(lerp(0.6, 0.8, clamp01((kmh - 40) / 120)) - (s - 0.5) * 0.25, 0.35, 0.9);
-    return this.throttle.update(drivenNdSlip - allowance, minScale, dt);
+    const minScale = Math.min(0.9, lerp(0.6, 0.8, clamp01((kmh - 40) / 120)) - (s - 0.5) * 0.25);
+    return this.throttle.update(held, pedal, drivenNdSlip - throttleSlipAllowance(kmh, s), minScale, dt);
   }
 
   reset(): void {
