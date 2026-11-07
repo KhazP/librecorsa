@@ -248,6 +248,8 @@ check('a hit goes out at once past the send gate, with the trigger cues beside i
     assert.equal(calls.length, 1);
     h.update(cruise(), DT / 4, true, { triggerRumble: true });
     assert.equal(calls.length, 1, 'nothing new inside the send interval');
+    h.update(cruise({ wheelSlipRatios: [-0.45, -0.45, 0, 0] }), DT / 4, true, { triggerRumble: true });
+    assert.equal(calls.length, 1, 'a lock-up onset waits for the gate: only a hit skips it');
     h.update(cruise({ lateralG: 15 }), DT / 4, true, { triggerRumble: true });
     assert.equal(calls.length, 2, 'the hit is not held back by the gate');
     assert.ok(calls[1].p.strongMagnitude >= 0.6);

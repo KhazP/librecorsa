@@ -56,6 +56,8 @@ interface PadOutput {
   left: number;
   /** Pulse state (bitmask of active pulses and their phases) the last effect was sent for */
   pulseKey: number;
+  /** Impact envelope the last effect was sent with */
+  impact: number;
   /** Duration of the last effect sent (s) */
   durationS: number;
   right: number;
@@ -103,8 +105,8 @@ const IMPACT_CRASH_FLOOR = 0.6;
 const IMPACT_DECAY_S = 0.1;
 /** Time constant (s) of the running estimate of the car's weight from its tyre loads */
 const WEIGHT_TAU_S = 2;
-/** Rise of the strong motor that goes out at once, past the send gate */
-const STRONG_ONSET_EDGE = 0.2;
+/** Rise of the impact envelope that goes out at once, past the send gate */
+const IMPACT_ONSET_EDGE = 0.2;
 /** Above this gap between frames (s, a pause or a dropped tab) the held envelopes start again */
 const MAX_MIX_DT_S = 0.25;
 
@@ -198,13 +200,21 @@ function bodyHeaveG(t: CarTelemetry, mix: RumbleMixState | undefined, dt: number
  * high-impact threshold) sets the level, which then rings out with `IMPACT_DECAY_S`. The raw spike lasts a frame or
  * two; the envelope makes it land. With `mix` the envelope carries over; without it only this frame's hit counts.
  */
-function impactPulse(t: CarTelemetry, horizontalG: number, highImpact: boolean, mix: RumbleMixState | undefined, dt: number): number {
+function impactPulse(
+  t: CarTelemetry,
+  horizontalG: number,
+  highImpact: boolean,
+  mix: RumbleMixState | undefined,
+  dt: number
+): number {
   const heaveG = bodyHeaveG(t, mix, dt);
-  let hit =
-    t.speedKmh > IMPACT_MIN_SPEED_KMH ? clamp01((heaveG - IMPACT_HEAVE_FLOOR_G) / (IMPACT_HEAVE_FULL_G - IMPACT_HEAVE_FLOOR_G)) : 0;
+  let hit = 0;
+  if (t.speedKmh > IMPACT_MIN_SPEED_KMH) {
+    hit = clamp01((heaveG - IMPACT_HEAVE_FLOOR_G) / (IMPACT_HEAVE_FULL_G - IMPACT_HEAVE_FLOOR_G));
+  }
   if (highImpact) {
-    const crash = IMPACT_CRASH_FLOOR + (1 - IMPACT_CRASH_FLOOR) * clamp01((horizontalG - RACK_SAT_HIGH_IMPACT_G) / RACK_SAT_HIGH_IMPACT_G);
-    hit = Math.max(hit, crash);
+    const over = clamp01((horizontalG - RACK_SAT_HIGH_IMPACT_G) / RACK_SAT_HIGH_IMPACT_G);
+    hit = Math.max(hit, IMPACT_CRASH_FLOOR + (1 - IMPACT_CRASH_FLOOR) * over);
   }
   if (!mix) return hit;
   const decay = dt > 0 ? Math.exp(-dt / IMPACT_DECAY_S) : 0;
@@ -478,6 +488,7 @@ export class GamepadHaptics {
         left: 0,
         right: 0,
         pulseKey: 0,
+        impact: 0,
         durationS: EFFECT_DURATION_MS / 1000,
       };
       this.outputs.set(key, out);
@@ -486,7 +497,8 @@ export class GamepadHaptics {
       const pulse = pulseState(t, this.timeS, useTriggers);
       // A pulse edge or a hit goes out when it happens: the gate below would otherwise alias 12-25 Hz pulses and
       // hold a hit back by up to a send interval
-      const edge = pulse.key !== out.pulseKey || strong - out.strong >= STRONG_ONSET_EDGE;
+      const impact = this.mix.impactEnvelope;
+      const edge = pulse.key !== out.pulseKey || impact - out.impact >= IMPACT_ONSET_EDGE;
       const sinceS = this.timeS - out.lastSentS;
       if (sinceS < SEND_INTERVAL_S && !edge) continue;
 
@@ -508,6 +520,7 @@ export class GamepadHaptics {
       else playDualRumble(actuator, weak, strong, durationMs);
       out.lastSentS = this.timeS;
       out.pulseKey = pulse.key;
+      out.impact = impact;
       out.durationS = durationMs / 1000;
       out.weak = weak;
       out.strong = strong;
