@@ -310,6 +310,7 @@ export interface CarTelemetry {
   wheelLoadsN: [number, number, number, number]; // FL, FR, RL, RR vertical contact load Fz (N)
   wheelRideHeightsMm: [number, number, number, number]; // FL, FR, RL, RR dynamic ride height (mm)
   suspensionTravelMm: [number, number, number, number]; // FL, FR, RL, RR suspension compression (mm)
+  suspensionVelocityMs: [number, number, number, number]; // FL, FR, RL, RR shock velocity (m/s, + = compressing), from the last physics step
   tireTempsC: [number, number, number, number]; // FL, FR, RL, RR (°C)
   tireWearPct: [number, number, number, number]; // FL, FR, RL, RR (0..100% wear)
   /** Tread surface temperatures across each tyre, left → right as seen from behind (°C) */

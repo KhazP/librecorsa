@@ -704,6 +704,7 @@ function createPeerTelemetry(): CarTelemetry {
     wheelLoadsN: [3500, 3500, 4200, 4200],
     wheelRideHeightsMm: [28, 28, 38, 38],
     suspensionTravelMm: [14, 14, 18, 18],
+    suspensionVelocityMs: [0, 0, 0, 0],
     tireTempsC: [94, 94, 96, 96],
     tireWearPct: [2, 2, 3, 3],
     tireGripFactor: [1, 1, 1, 1],

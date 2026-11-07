@@ -2993,6 +2993,7 @@ export class F1Physics2026 {
       wheelLoadsN: [0, 0, 0, 0],
       wheelRideHeightsMm: [44, 44, 60, 60],
       suspensionTravelMm: [0, 0, 0, 0],
+      suspensionVelocityMs: [0, 0, 0, 0],
       tireTempsC: [INITIAL_TYRE_TEMP_C, INITIAL_TYRE_TEMP_C, INITIAL_TYRE_TEMP_C, INITIAL_TYRE_TEMP_C],
       tireWearPct: [0, 0, 0, 0],
       tireFlatSpotSeverity: [0, 0, 0, 0],
@@ -3118,6 +3119,7 @@ export class F1Physics2026 {
       const ax = w.isFront ? this.axles[0] : this.axles[1];
       return Number(((ax.staticSpringDeflection + w.suspCompression) * 1000).toFixed(2));
     });
+    t.suspensionVelocityMs = quad((w) => w.suspCompressionVel);
     t.tireTempsC = quad((w) => Math.round(0.6 * w.tyre.surfaceTempC + 0.4 * w.tyre.coreTempC));
     t.tireWearPct = quad((w) => Number((w.tyre.wear * 100).toFixed(1)));
     t.tireFlatSpotSeverity = quad((w) => Number(w.tyre.flatSpotSeverity.toFixed(3)));

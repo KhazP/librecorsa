@@ -1943,6 +1943,7 @@ export class F12026CarSim implements SimulatorCar {
     t.wheelLoadsN = quad((w) => Math.round(w.fz));
     t.wheelRideHeightsMm = quad((w) => Math.round((w.isFront ? vt.aeroHeightFront : vt.aeroHeightRear) * 1000));
     t.suspensionTravelMm = quad((w) => Number((w.compression * 1000).toFixed(2)));
+    t.suspensionVelocityMs = quad((w) => w.compressionVel);
     t.tireTempsC = quad((w) => Math.round(0.6 * w.surfaceTempC + 0.4 * w.coreTempC));
     t.tireWearPct = quad((w) => Math.round(w.wear * 100));
     t.tireBandTempsC = quad((w) => [
@@ -2064,6 +2065,7 @@ export class F12026CarSim implements SimulatorCar {
       wheelLoadsN: four(0),
       wheelRideHeightsMm: four(0),
       suspensionTravelMm: four(0),
+      suspensionVelocityMs: four(0),
       tireTempsC: four(70),
       tireWearPct: four(0),
       tireBandTempsC: [
