@@ -78,10 +78,7 @@ export const FirstRunWizard: React.FC<FirstRunWizardProps> = (props) => {
 
   const next = () => (last ? onFinish() : setStepIndex((i) => i + 1));
   const back = () => (stepIndex === 0 ? onExit() : setStepIndex((i) => i - 1));
-  const selectDevice = (device: InputDevice) => {
-    devicePickedRef.current = true;
-    props.onChangeSettings((s) => ({ ...s, device }));
-  };
+  const selectDevice = (device: InputDevice) => props.onChangeSettings((s) => ({ ...s, device }));
   const cycleDevice = (dir: -1 | 1) => {
     const idx = DEVICES.indexOf(props.settings.device);
     selectDevice(DEVICES[(idx + dir + DEVICES.length) % DEVICES.length]);
@@ -147,70 +144,43 @@ export const FirstRunWizard: React.FC<FirstRunWizardProps> = (props) => {
           <aside className="hidden w-[230px] shrink-0 flex-col gap-9 not-compact:flex">
             <LibreCorsaLogo variant="compact" size="sm" />
             <nav aria-label="Setup steps" className="flex flex-col">
-              <span className="lc-lbl mb-3.5">{mode === "first-run" ? "First-time setup" : "Input device"}</span>
-              {mode === "controls" ? (
-                <div className="flex flex-col gap-1.5">
-                  {DEVICES.map((dev) => {
-                    const active = props.settings.device === dev;
-                    return (
-                      <button
-                        key={dev}
-                        type="button"
-                        aria-pressed={active}
-                        onClick={() => selectDevice(dev)}
-                        className={`flex min-h-[44px] cursor-pointer items-center gap-3 rounded-2xl px-3.5 py-2 text-left text-[15px] font-bold transition-colors ${
-                          active
-                            ? "border-[1.5px] border-[#CCFF00] bg-[#CCFF00]/[0.08] text-[#F5F7FA]"
-                            : "border border-[#262B3D] bg-[#08090D]/50 text-[#8E96AA] hover:border-[#3A4157] hover:text-[#F5F7FA]"
+              <span className="lc-lbl mb-3.5">{mode === "first-run" ? "First-time setup" : "Controls"}</span>
+              {steps.map((s, i) => {
+                const done = i < stepIndex;
+                const current = i === stepIndex;
+                return (
+                  <React.Fragment key={s}>
+                    {i > 0 ? (
+                      <span
+                        aria-hidden
+                        className={`ml-3.5 h-[26px] w-0.5 rounded-sm transition-colors duration-200 ${
+                          i <= stepIndex ? "bg-[#00E5FF]" : "bg-[#262B3D]"
+                        }`}
+                      />
+                    ) : null}
+                    <div aria-current={current ? "step" : undefined} className="flex min-h-[44px] items-center gap-3.5">
+                      <span
+                        className={`inline-flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full font-f1-mono text-[12px] font-extrabold ${
+                          current
+                            ? "bg-[#CCFF00] text-[#08090D] shadow-[0_0_0_5px_rgba(204,255,0,0.15)]"
+                            : done
+                              ? "bg-[#00E5FF] text-[#08090D]"
+                              : "border-2 border-[#262B3D] text-[#8E96AA]"
                         }`}
                       >
-                        <span
-                          aria-hidden
-                          className={`h-2.5 w-2.5 shrink-0 rounded-full ${active ? "bg-[#CCFF00]" : "bg-[#262B3D]"}`}
-                        />
-                        {SETUP_TITLES[dev]}
-                      </button>
-                    );
-                  })}
-                </div>
-              ) : (
-                steps.map((s, i) => {
-                  const done = i < stepIndex;
-                  const current = i === stepIndex;
-                  return (
-                    <React.Fragment key={s}>
-                      {i > 0 ? (
-                        <span
-                          aria-hidden
-                          className={`ml-3.5 h-[26px] w-0.5 rounded-sm transition-colors duration-200 ${
-                            i <= stepIndex ? "bg-[#00E5FF]" : "bg-[#262B3D]"
-                          }`}
-                        />
-                      ) : null}
-                      <div aria-current={current ? "step" : undefined} className="flex min-h-[44px] items-center gap-3.5">
-                        <span
-                          className={`inline-flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full font-f1-mono text-[12px] font-extrabold ${
-                            current
-                              ? "bg-[#CCFF00] text-[#08090D] shadow-[0_0_0_5px_rgba(204,255,0,0.15)]"
-                              : done
-                                ? "bg-[#00E5FF] text-[#08090D]"
-                                : "border-2 border-[#262B3D] text-[#8E96AA]"
-                          }`}
-                        >
-                          {done ? <Check aria-label="Done" className="h-[15px] w-[15px]" strokeWidth={3.2} /> : i + 1}
-                        </span>
-                        <span
-                          className={`text-[16px] leading-tight ${
-                            current ? "font-bold text-[#F5F7FA]" : done ? "font-semibold text-[#C5CBD8]" : "font-semibold text-[#8E96AA]"
-                          }`}
-                        >
-                          {stepTitle(s)}
-                        </span>
-                      </div>
-                    </React.Fragment>
-                  );
-                })
-              )}
+                        {done ? <Check aria-label="Done" className="h-[15px] w-[15px]" strokeWidth={3.2} /> : i + 1}
+                      </span>
+                      <span
+                        className={`text-[16px] leading-tight ${
+                          current ? "font-bold text-[#F5F7FA]" : done ? "font-semibold text-[#C5CBD8]" : "font-semibold text-[#8E96AA]"
+                        }`}
+                      >
+                        {stepTitle(s)}
+                      </span>
+                    </div>
+                  </React.Fragment>
+                );
+              })}
             </nav>
           </aside>
 
@@ -225,11 +195,7 @@ export const FirstRunWizard: React.FC<FirstRunWizardProps> = (props) => {
                   label="Input device"
                   value={props.settings.device}
                   onChange={selectDevice}
-                  options={[
-                    { id: "keyboard", label: "Keyboard" },
-                    { id: "controller", label: "Controller" },
-                    { id: "wheel", label: "Wheel & pedals" },
-                  ]}
+                  options={DEVICES.map((id) => ({ id, label: SETUP_TITLES[id] }))}
                 />
               ) : (
                 <span className="not-compact:hidden">
@@ -260,7 +226,7 @@ export const FirstRunWizard: React.FC<FirstRunWizardProps> = (props) => {
               ref={bodyRef}
               className="-mx-1.5 mt-4 min-h-0 flex-1 overflow-y-auto px-1.5 pt-1 pb-2 not-compact:mt-6 short:mt-2"
             >
-              {step === "device" ? <DeviceStep {...props} autoDetect={mode === "first-run"} pickedRef={devicePickedRef} /> : null}
+              {step === "device" ? <DeviceStep {...props} autoDetect pickedRef={devicePickedRef} /> : null}
               {step === "setup" && props.settings.device === "keyboard" ? <KeyboardStep {...props} /> : null}
               {step === "setup" && props.settings.device === "controller" ? <ControllerStep {...props} /> : null}
               {step === "setup" && props.settings.device === "wheel" ? <WheelStep {...props} /> : null}
