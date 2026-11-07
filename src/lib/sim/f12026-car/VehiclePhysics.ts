@@ -1645,7 +1645,8 @@ export class VehiclePhysics {
         let d = p - prev;
         if (d > 0.5) d -= 1;
         else if (d < -0.5) d += 1;
-        if (d > 0 && d < 0.05) {
+        // A car without DRS (a pre-2011 season) is never judged at the detection points: no "DRS enabled" call
+        if (d > 0 && d < 0.05 && this.drsFitted) {
           for (const zone of this.drsZones) {
             const ahead = (((zone.detection - prev) % 1) + 1) % 1;
             if (ahead > 0 && ahead <= d) {
