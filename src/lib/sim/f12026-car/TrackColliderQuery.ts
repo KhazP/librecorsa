@@ -46,9 +46,12 @@ const DEFAULT_UV_SCALE_M = 6;
 
 /** Surfaces allowed to raise the contact above the road collider */
 const RAISED_SURFACES: ReadonlySet<TrackSurfaceKind> = new Set(['kerb', 'sausage']);
-/** Swept visual surfaces a car drives on (everything tagged but terrain grass) */
+/** Swept visual surfaces a car drives on (everything tagged but coarse terrain grass) */
 const DRIVABLE_SURFACES: ReadonlySet<TrackSurfaceKind> = new Set(['road', 'kerb', 'sausage', 'runoff', 'pitlane', 'gravel']);
 const SURFACE_MATCH_M = 0.05;
+/** Maximum physical step height of a standard kerb / sausage kerb above the underlying road/verge surface (m) */
+const MAX_KERB_RISE_M = 0.026;
+const MAX_SAUSAGE_RISE_M = 0.068;
 const CELL_SIZE_M = 4;
 
 export interface GroundHit {
@@ -81,6 +84,8 @@ interface Layer {
   props: SurfaceProps;
   /** Explicitly tagged with `userData.surface` */
   tagged: boolean;
+  /** Swept drivable surface (road, runoff, pitlane, gravel, or Track_Surface_Grass verge, excluding coarse Terrain) */
+  drivable: boolean;
   /** Metres along the surface per texture u; 0 when the layer has no ripple */
   uvScaleM: number;
 }
@@ -137,6 +142,342 @@ function buildCsrGrid(
   return { nx, nz, cellStart, items };
 }
 
+/** Closest point in XZ on triangle (a, b, c) to (px, pz), writing the interpolated 3D point and squared XZ distance */
+function closestPointOnTriXZ(
+  px: number,
+  pz: number,
+  ax: number,
+  ay: number,
+  az: number,
+  bx: number,
+  by: number,
+  bz: number,
+  cx: number,
+  cy: number,
+  cz: number,
+  out: { x: number; y: number; z: number; d2: number }
+): void {
+  const abx = bx - ax;
+  const abz = bz - az;
+  const acx = cx - ax;
+  const acz = cz - az;
+  const apx = px - ax;
+  const apz = pz - az;
+  const d1 = abx * apx + abz * apz;
+  const d2 = acx * apx + acz * apz;
+  if (d1 <= 0 && d2 <= 0) {
+    out.x = ax;
+    out.y = ay;
+    out.z = az;
+    out.d2 = apx * apx + apz * apz;
+    return;
+  }
+  const bpx = px - bx;
+  const bpz = pz - bz;
+  const d3 = abx * bpx + abz * bpz;
+  const d4 = acx * bpx + acz * bpz;
+  if (d3 >= 0 && d4 <= d3) {
+    out.x = bx;
+    out.y = by;
+    out.z = bz;
+    out.d2 = bpx * bpx + bpz * bpz;
+    return;
+  }
+  const vc = d1 * d4 - d3 * d2;
+  if (vc <= 0 && d1 >= 0 && d3 <= 0) {
+    const v = d1 / (d1 - d3);
+    out.x = ax + v * abx;
+    out.y = ay + v * (by - ay);
+    out.z = az + v * abz;
+    const dx = px - out.x;
+    const dz = pz - out.z;
+    out.d2 = dx * dx + dz * dz;
+    return;
+  }
+  const cpx = px - cx;
+  const cpz = pz - cz;
+  const d5 = abx * cpx + abz * cpz;
+  const d6 = acx * cpx + acz * cpz;
+  if (d6 >= 0 && d5 <= d6) {
+    out.x = cx;
+    out.y = cy;
+    out.z = cz;
+    out.d2 = cpx * cpx + cpz * cpz;
+    return;
+  }
+  const vb = d5 * d2 - d1 * d6;
+  if (vb <= 0 && d2 >= 0 && d6 <= 0) {
+    const w = d2 / (d2 - d6);
+    out.x = ax + w * acx;
+    out.y = ay + w * (cy - ay);
+    out.z = az + w * acz;
+    const dx = px - out.x;
+    const dz = pz - out.z;
+    out.d2 = dx * dx + dz * dz;
+    return;
+  }
+  const va = d3 * d6 - d5 * d4;
+  if (va <= 0 && d4 - d3 >= 0 && d5 - d6 >= 0) {
+    const w = (d4 - d3) / (d4 - d3 + (d5 - d6));
+    out.x = bx + w * (cx - bx);
+    out.y = by + w * (cy - by);
+    out.z = bz + w * (cz - bz);
+    const dx = px - out.x;
+    const dz = pz - out.z;
+    out.d2 = dx * dx + dz * dz;
+    return;
+  }
+  const denom = 1 / (va + vb + vc);
+  const v = vb * denom;
+  const w = vc * denom;
+  out.x = ax + abx * v + acx * w;
+  out.y = ay + (by - ay) * v + (cy - ay) * w;
+  out.z = az + abz * v + acz * w;
+  const dx = px - out.x;
+  const dz = pz - out.z;
+  out.d2 = dx * dx + dz * dz;
+}
+
+/**
+ * Conforms `Track_Collider_Road`, `Track_Surface_Runoff`, `Track_Surface_Gravel`, and `Track_Surface_Grass`
+ * vertices near `Track_Surface_Road` so off-road bands and 3-column road colliders meet the smoothed road edge
+ * without vertical steps or wall-foot spikes.
+ */
+export function conformTrackSurfaceColliders(root: THREE.Object3D): void {
+  if (root.userData?.__collidersConformed) return;
+  root.updateMatrixWorld(true);
+  const roadMeshes: THREE.Mesh[] = [];
+  const offroadMeshes: { mesh: THREE.Mesh; kind: string }[] = [];
+  root.traverse((o) => {
+    if (!(o instanceof THREE.Mesh)) return;
+    if (o.name === 'Track_Surface_Road' || o.name === 'Track_Surface_Apron') {
+      roadMeshes.push(o);
+    } else if (
+      o.name === 'Track_Collider_Road' ||
+      o.name === 'Track_Surface_Runoff' ||
+      o.name === 'Track_Surface_Gravel' ||
+      o.name === 'Track_Surface_Grass'
+    ) {
+      offroadMeshes.push({ mesh: o, kind: o.name });
+    }
+  });
+  if (roadMeshes.length === 0 || offroadMeshes.length === 0) {
+    root.userData = { ...root.userData, __collidersConformed: true };
+    return;
+  }
+
+  const rTris: number[] = [];
+  const rNorms: number[] = [];
+  const vA = new THREE.Vector3();
+  const vB = new THREE.Vector3();
+  const vC = new THREE.Vector3();
+  let minX = Infinity;
+  let minZ = Infinity;
+  let maxX = -Infinity;
+  let maxZ = -Infinity;
+  for (const rm of roadMeshes) {
+    const geom = rm.geometry as THREE.BufferGeometry;
+    const pos = geom.getAttribute('position');
+    if (!pos) continue;
+    const idx = geom.getIndex();
+    const n = idx ? idx.count : pos.count;
+    const m = rm.matrixWorld;
+    for (let i = 0; i + 2 < n; i += 3) {
+      const i0 = idx ? idx.getX(i) : i;
+      const i1 = idx ? idx.getX(i + 1) : i + 1;
+      const i2 = idx ? idx.getX(i + 2) : i + 2;
+      vA.fromBufferAttribute(pos, i0).applyMatrix4(m);
+      vB.fromBufferAttribute(pos, i1).applyMatrix4(m);
+      vC.fromBufferAttribute(pos, i2).applyMatrix4(m);
+      const e1x = vB.x - vA.x;
+      const e1y = vB.y - vA.y;
+      const e1z = vB.z - vA.z;
+      const e2x = vC.x - vA.x;
+      const e2y = vC.y - vA.y;
+      const e2z = vC.z - vA.z;
+      let nx = e1y * e2z - e1z * e2y;
+      let ny = e1z * e2x - e1x * e2z;
+      let nz = e1x * e2y - e1y * e2x;
+      const len = Math.hypot(nx, ny, nz);
+      if (len < 1e-6) continue;
+      if (ny < 0) {
+        nx = -nx;
+        ny = -ny;
+        nz = -nz;
+      }
+      nx /= len;
+      ny /= len;
+      nz /= len;
+      if (ny < 0.5) continue;
+      rTris.push(vA.x, vA.y, vA.z, vB.x, vB.y, vB.z, vC.x, vC.y, vC.z);
+      rNorms.push(nx, ny, nz);
+      minX = Math.min(minX, vA.x, vB.x, vC.x);
+      maxX = Math.max(maxX, vA.x, vB.x, vC.x);
+      minZ = Math.min(minZ, vA.z, vB.z, vC.z);
+      maxZ = Math.max(maxZ, vA.z, vB.z, vC.z);
+    }
+  }
+  const numT = rTris.length / 9;
+  if (numT === 0) {
+    root.userData = { ...root.userData, __collidersConformed: true };
+    return;
+  }
+
+  const CELL = 12;
+  const nx = Math.max(1, Math.ceil((maxX - minX) / CELL));
+  const nz = Math.max(1, Math.ceil((maxZ - minZ) / CELL));
+  const buckets: number[][] = Array.from({ length: nx * nz }, () => []);
+  for (let t = 0; t < numT; t++) {
+    const o = t * 9;
+    const x0 = Math.max(0, Math.floor((Math.min(rTris[o], rTris[o + 3], rTris[o + 6]) - minX) / CELL));
+    const x1 = Math.min(nx - 1, Math.floor((Math.max(rTris[o], rTris[o + 3], rTris[o + 6]) - minX) / CELL));
+    const z0 = Math.max(0, Math.floor((Math.min(rTris[o + 2], rTris[o + 5], rTris[o + 8]) - minZ) / CELL));
+    const z1 = Math.min(nz - 1, Math.floor((Math.max(rTris[o + 2], rTris[o + 5], rTris[o + 8]) - minZ) / CELL));
+    for (let cz = z0; cz <= z1; cz++) {
+      for (let cx = x0; cx <= x1; cx++) buckets[cz * nx + cx].push(t);
+    }
+  }
+
+  const vNormMap = new Map<string, [number, number, number]>();
+  for (let t = 0; t < numT; t++) {
+    const o = t * 9;
+    const no = t * 3;
+    const tnx = rNorms[no];
+    const tny = rNorms[no + 1];
+    const tnz = rNorms[no + 2];
+    for (let k = 0; k < 3; k++) {
+      const key = `${Math.round(rTris[o + k * 3] * 10)},${Math.round(rTris[o + k * 3 + 1] * 5)},${Math.round(rTris[o + k * 3 + 2] * 10)}`;
+      const acc = vNormMap.get(key);
+      if (acc) {
+        acc[0] += tnx;
+        acc[1] += tny;
+        acc[2] += tnz;
+      } else {
+        vNormMap.set(key, [tnx, tny, tnz]);
+      }
+    }
+  }
+  for (let t = 0; t < numT; t++) {
+    const o = t * 9;
+    const no = t * 3;
+    let sx = 0;
+    let sy = 0;
+    let sz = 0;
+    for (let k = 0; k < 3; k++) {
+      const key = `${Math.round(rTris[o + k * 3] * 10)},${Math.round(rTris[o + k * 3 + 1] * 5)},${Math.round(rTris[o + k * 3 + 2] * 10)}`;
+      const acc = vNormMap.get(key)!;
+      sx += acc[0];
+      sy += acc[1];
+      sz += acc[2];
+    }
+    const l = Math.hypot(sx, sy, sz) || 1;
+    rNorms[no] = sx / l;
+    rNorms[no + 1] = sy / l;
+    rNorms[no + 2] = sz / l;
+  }
+
+  const cp = { x: 0, y: 0, z: 0, d2: 0 };
+  const evalRoad = (
+    x: number,
+    y: number,
+    z: number
+  ): { yPlane: number; dOut: number; edgeX: number; edgeY: number; edgeZ: number; bnx: number; bny: number; bnz: number } | null => {
+    const cx0 = Math.floor((x - minX) / CELL);
+    const cz0 = Math.floor((z - minZ) / CELL);
+    let bestD2 = Infinity;
+    let bestX = 0;
+    let bestY = 0;
+    let bestZ = 0;
+    let bestT = -1;
+    for (let dz = -1; dz <= 1; dz++) {
+      const cz = cz0 + dz;
+      if (cz < 0 || cz >= nz) continue;
+      for (let dx = -1; dx <= 1; dx++) {
+        const cx = cx0 + dx;
+        if (cx < 0 || cx >= nx) continue;
+        const b = buckets[cz * nx + cx];
+        for (let k = 0; k < b.length; k++) {
+          const t = b[k];
+          const o = t * 9;
+          if (Math.abs(rTris[o + 1] - y) > 4.0) continue;
+          closestPointOnTriXZ(
+            x,
+            z,
+            rTris[o],
+            rTris[o + 1],
+            rTris[o + 2],
+            rTris[o + 3],
+            rTris[o + 4],
+            rTris[o + 5],
+            rTris[o + 6],
+            rTris[o + 7],
+            rTris[o + 8],
+            cp
+          );
+          if (cp.d2 < bestD2 && Math.abs(cp.y - y) < 3.5) {
+            bestD2 = cp.d2;
+            bestX = cp.x;
+            bestY = cp.y;
+            bestZ = cp.z;
+            bestT = t;
+          }
+        }
+      }
+    }
+    if (bestT < 0) return null;
+    const dOut = Math.sqrt(bestD2);
+    const no = bestT * 3;
+    const bnx = rNorms[no];
+    const bny = rNorms[no + 1];
+    const bnz = rNorms[no + 2];
+    const dySlope = THREE.MathUtils.clamp(-(bnx * (x - bestX) + bnz * (z - bestZ)) / Math.max(0.5, bny), -0.65 * dOut, 0.65 * dOut);
+    return { yPlane: bestY + dySlope, dOut, edgeX: bestX, edgeY: bestY, edgeZ: bestZ, bnx, bny, bnz };
+  };
+
+  const cache = new Map<
+    string,
+    { yPlane: number; dOut: number; edgeX: number; edgeY: number; edgeZ: number; bnx: number; bny: number; bnz: number } | null
+  >();
+  for (const { mesh, kind } of offroadMeshes) {
+    const geom = mesh.geometry as THREE.BufferGeometry;
+    const pos = geom.getAttribute('position') as THREE.BufferAttribute;
+    if (!pos) continue;
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i);
+      const y = pos.getY(i);
+      const z = pos.getZ(i);
+      const key = `${Math.round(x * 20)},${Math.round(y * 5)},${Math.round(z * 20)}`;
+      let r = cache.get(key);
+      if (r === undefined) {
+        r = evalRoad(x, y, z);
+        cache.set(key, r);
+      }
+      if (!r || r.dOut > 10.0 || Math.abs(y - r.yPlane) > 3.5) continue;
+      if (kind === 'Track_Collider_Road') {
+        if (r.dOut > 0.8 && r.dOut < 2.2) {
+          const scale = 1.95;
+          const nx = r.edgeX + (x - r.edgeX) * scale;
+          const nz = r.edgeZ + (z - r.edgeZ) * scale;
+          const dOutExt = r.dOut * scale;
+          const dyExt = THREE.MathUtils.clamp(
+            -(r.bnx * (nx - r.edgeX) + r.bnz * (nz - r.edgeZ)) / Math.max(0.5, r.bny),
+            -0.65 * dOutExt,
+            0.65 * dOutExt
+          );
+          pos.setXYZ(i, nx, r.edgeY + dyExt, nz);
+        } else {
+          pos.setY(i, r.yPlane);
+        }
+      } else {
+        const maxDev = r.dOut <= 0.35 ? 0.002 : Math.min(0.08, 0.015 * (r.dOut - 0.35));
+        pos.setY(i, THREE.MathUtils.clamp(y, r.yPlane - maxDev, r.yPlane + maxDev));
+      }
+    }
+    pos.needsUpdate = true;
+  }
+  root.userData = { ...root.userData, __collidersConformed: true };
+}
+
 export class TrackColliderQuery implements GroundQuery {
   /** Triangles: 9 floats each (a, b, c world positions) */
   private readonly tris: Float32Array;
@@ -163,6 +504,7 @@ export class TrackColliderQuery implements GroundQuery {
    * Throws when the road collider is missing.
    */
   static fromTrackRoot(root: THREE.Object3D, table: SurfaceTable = DEFAULT_SURFACE_TABLE): TrackColliderQuery {
+    conformTrackSurfaceColliders(root);
     root.updateMatrixWorld(true);
     const sources: ColliderLayerSource[] = [];
     const found: { road?: THREE.Object3D } = {};
@@ -172,7 +514,9 @@ export class TrackColliderQuery implements GroundQuery {
     });
     if (!found.road) throw new Error('TrackColliderQuery: Track_Collider_Road not found under the track root');
     sources.unshift({ object: found.road, isRoadCollider: true });
-    return new TrackColliderQuery(sources, table);
+    const out = new TrackColliderQuery(sources, table);
+    out.conformVisualRoad(root);
+    return out;
   }
 
   constructor(sources: ColliderLayerSource[], table: SurfaceTable = DEFAULT_SURFACE_TABLE) {
@@ -196,7 +540,12 @@ export class TrackColliderQuery implements GroundQuery {
       const uvScaleM = ripple ? (typeof ud.uvScaleM === 'number' ? ud.uvScaleM : DEFAULT_UV_SCALE_M) : 0;
       if (this.layers.length >= 255) throw new Error('TrackColliderQuery: too many layers');
       const li = this.layers.length;
-      this.layers.push({ name: src.object.name, isRoadCollider, surface, grip, props, tagged: !!(src.surface ?? tagged), uvScaleM });
+      const isTagged = !!(src.surface ?? tagged);
+      const drivable =
+        isTagged &&
+        !RAISED_SURFACES.has(surface) &&
+        (DRIVABLE_SURFACES.has(surface) || (surface === 'grass' && src.object.name !== 'Terrain'));
+      this.layers.push({ name: src.object.name, isRoadCollider, surface, grip, props, tagged: isTagged, drivable, uvScaleM });
 
       src.object.updateWorldMatrix(true, true);
       src.object.traverse((o) => {
@@ -437,7 +786,7 @@ export class TrackColliderQuery implements GroundQuery {
           anyU = u;
           anyV = v;
         }
-        if (layer.tagged && DRIVABLE_SURFACES.has(layer.surface) && h > driveH) {
+        if (layer.drivable && h > driveH) {
           driveH = h;
           driveT = t;
           driveU = u;
@@ -451,39 +800,71 @@ export class TrackColliderQuery implements GroundQuery {
       }
     }
 
+    let baseT = -1;
+    let baseH = -Infinity;
+    let baseU = 0;
+    let baseV = 0;
+    if (driveT >= 0 && (roadT < 0 || driveH >= roadH - 0.5)) {
+      baseT = driveT;
+      baseH = driveH;
+      baseU = driveU;
+      baseV = driveV;
+    } else if (roadT >= 0) {
+      baseT = roadT;
+      baseH = roadH;
+      baseU = roadU;
+      baseV = roadV;
+    }
+
     let contactT: number;
     let contactH: number;
     let contactU: number;
     let contactV: number;
-    if (driveT >= 0) {
-      if (raisedT >= 0 && raisedH >= driveH - SURFACE_MATCH_M) {
+    let normalT: number;
+    let normalU: number;
+    let normalV: number;
+    if (baseT >= 0) {
+      if (raisedT >= 0 && raisedH >= baseH - SURFACE_MATCH_M && raisedH <= baseH + 0.6) {
+        const raisedLayer = this.layers[this.triLayer[raisedT]];
+        const maxRise = raisedLayer.surface === 'sausage' ? MAX_SAUSAGE_RISE_M : MAX_KERB_RISE_M;
         contactT = raisedT;
-        contactH = Math.max(driveH, raisedH);
+        contactH = Math.min(Math.max(baseH, raisedH), baseH + maxRise);
         contactU = raisedU;
         contactV = raisedV;
+        if (raisedH > baseH + maxRise + 0.01) {
+          normalT = baseT;
+          normalU = baseU;
+          normalV = baseV;
+        } else {
+          normalT = raisedT;
+          normalU = raisedU;
+          normalV = raisedV;
+        }
       } else {
-        contactT = driveT;
-        contactH = driveH;
-        contactU = driveU;
-        contactV = driveV;
+        contactT = baseT;
+        contactH = baseH;
+        contactU = baseU;
+        contactV = baseV;
+        normalT = baseT;
+        normalU = baseU;
+        normalV = baseV;
       }
-    } else if (roadT >= 0) {
-      if (raisedT >= 0 && raisedH > roadH) {
-        contactT = raisedT;
-        contactH = raisedH;
-        contactU = raisedU;
-        contactV = raisedV;
-      } else {
-        contactT = roadT;
-        contactH = roadH;
-        contactU = roadU;
-        contactV = roadV;
-      }
+    } else if (raisedT >= 0) {
+      contactT = raisedT;
+      contactH = raisedH;
+      contactU = raisedU;
+      contactV = raisedV;
+      normalT = raisedT;
+      normalU = raisedU;
+      normalV = raisedV;
     } else if (anyT >= 0) {
       contactT = anyT;
       contactH = anyH;
       contactU = anyU;
       contactV = anyV;
+      normalT = anyT;
+      normalU = anyU;
+      normalV = anyV;
     } else {
       return false;
     }
@@ -492,13 +873,19 @@ export class TrackColliderQuery implements GroundQuery {
     let bestTagT = -1;
     let bestTagH = -Infinity;
     let bestTagRaised = false;
-    for (let i = 0; i < tagCount; i++) {
-      if (Math.abs(tagH[i] - contactH) <= SURFACE_MATCH_M) {
-        const isRaised = RAISED_SURFACES.has(this.layers[this.triLayer[tagT[i]]].surface);
-        if ((isRaised && !bestTagRaised) || (isRaised === bestTagRaised && tagH[i] > bestTagH)) {
-          bestTagH = tagH[i];
-          bestTagT = tagT[i];
-          bestTagRaised = isRaised;
+    if (RAISED_SURFACES.has(this.layers[this.triLayer[contactT]].surface)) {
+      bestTagT = contactT;
+      bestTagH = contactH;
+      bestTagRaised = true;
+    } else {
+      for (let i = 0; i < tagCount; i++) {
+        if (Math.abs(tagH[i] - contactH) <= SURFACE_MATCH_M) {
+          const isRaised = RAISED_SURFACES.has(this.layers[this.triLayer[tagT[i]]].surface);
+          if ((isRaised && !bestTagRaised) || (isRaised === bestTagRaised && tagH[i] > bestTagH)) {
+            bestTagH = tagH[i];
+            bestTagT = tagT[i];
+            bestTagRaised = isRaised;
+          }
         }
       }
     }
@@ -515,12 +902,12 @@ export class TrackColliderQuery implements GroundQuery {
       contactH += surfaceRippleM(contactLayer.props, u * contactLayer.uvScaleM, Math.sin(Math.PI * Math.min(1, Math.max(0, v))));
     }
 
-    const vo = contactT * 9;
+    const vo = normalT * 9;
     const vn = this.triVertNormal;
-    const w = 1 - contactU - contactV;
-    const nx = w * vn[vo] + contactU * vn[vo + 3] + contactV * vn[vo + 6];
-    const ny = w * vn[vo + 1] + contactU * vn[vo + 4] + contactV * vn[vo + 7];
-    const nz = w * vn[vo + 2] + contactU * vn[vo + 5] + contactV * vn[vo + 8];
+    const w = 1 - normalU - normalV;
+    const nx = w * vn[vo] + normalU * vn[vo + 3] + normalV * vn[vo + 6];
+    const ny = w * vn[vo + 1] + normalU * vn[vo + 4] + normalV * vn[vo + 7];
+    const nz = w * vn[vo + 2] + normalU * vn[vo + 5] + normalV * vn[vo + 8];
     const invLen = 1 / (Math.hypot(nx, ny, nz) || 1);
 
     out.height = contactH;
@@ -532,6 +919,60 @@ export class TrackColliderQuery implements GroundQuery {
     out.props = tagLayer.props;
     out.source = tagLayer.name;
     return true;
+  }
+
+  /**
+   * Conforms `Track_Model` visual road/kerb/runoff vertices near the physics surface so the rendered road
+   * matches the smoothed `Track_Surface_Road` collider across crests and compressions.
+   */
+  public conformVisualRoad(root: THREE.Object3D): void {
+    if (root.userData?.__visualRoadConformed) return;
+    if (root.userData) root.userData.__visualRoadConformed = true;
+    const tm = root.getObjectByName('Track_Model');
+    if (!tm) return;
+    const hit = createGroundHit();
+    const mInv = new THREE.Matrix4();
+    const seen = new Set<THREE.BufferGeometry>();
+    tm.traverse((o) => {
+      if (!(o instanceof THREE.Mesh) || !o.geometry || seen.has(o.geometry)) return;
+      seen.add(o.geometry);
+      const pos = o.geometry.getAttribute('position');
+      if (!pos) return;
+      const isOverlay = Boolean(
+        o.userData?.decal || o.userData?.groove || o.parent?.userData?.decal || o.parent?.userData?.groove
+      );
+      const lift = isOverlay ? 0.002 : 0;
+      const e = o.matrixWorld.elements;
+      const m0 = e[0], m1 = e[1], m2 = e[2];
+      const m4 = e[4], m5 = e[5], m6 = e[6];
+      const m8 = e[8], m9 = e[9], m10 = e[10];
+      const m12 = e[12], m13 = e[13], m14 = e[14];
+      const ie = mInv.copy(o.matrixWorld).invert().elements;
+      const i0 = ie[0], i1 = ie[1], i2 = ie[2];
+      const i4 = ie[4], i5 = ie[5], i6 = ie[6];
+      const i8 = ie[8], i9 = ie[9], i10 = ie[10];
+      const i12 = ie[12], i13 = ie[13], i14 = ie[14];
+      let dirty = false;
+      for (let i = 0; i < pos.count; i++) {
+        const lx = pos.getX(i);
+        const ly = pos.getY(i);
+        const lz = pos.getZ(i);
+        const wx = m0 * lx + m4 * ly + m8 * lz + m12;
+        const wy = m1 * lx + m5 * ly + m9 * lz + m13;
+        const wz = m2 * lx + m6 * ly + m10 * lz + m14;
+        if (this.query(wx, wz, wy + 0.32, hit) && hit.surface !== 'grass' && Math.abs(wy - hit.height) < 0.32) {
+          const ny = hit.height + lift;
+          pos.setXYZ(
+            i,
+            i0 * wx + i4 * ny + i8 * wz + i12,
+            i1 * wx + i5 * ny + i9 * wz + i13,
+            i2 * wx + i6 * ny + i10 * wz + i14
+          );
+          dirty = true;
+        }
+      }
+      if (dirty) pos.needsUpdate = true;
+    });
   }
 
   private readonly scratchH = new Float64Array(32);

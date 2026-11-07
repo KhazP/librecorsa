@@ -2589,12 +2589,28 @@ export class VehiclePhysics {
   private applyPlankContact(): void {
     const pl = this.config.aero.plank;
     const y = pl ? pl.y : this.floorOffsetY;
-    for (const z of pl ? [pl.frontZ, pl.rearZ] : [this.cgToFrontM, -this.cgToRearM]) {
+    const W = this.wheels;
+    for (const [z, wL, wR] of pl
+      ? ([
+          [pl.frontZ, W[0], W[1]],
+          [pl.rearZ, W[2], W[3]],
+        ] as const)
+      : ([
+          [this.cgToFrontM, W[0], W[1]],
+          [-this.cgToRearM, W[2], W[3]],
+        ] as const)) {
       _p.set(0, y, z).applyQuaternion(this.quaternion).add(this.position);
       // The ground under the plank itself, probed from just above it: a ledge overhead (the body has dropped
       // off an edge the wheels still stand on) is not a surface the plank is pressed into
       if (!this.ground.query(_p.x, _p.z, _p.y + PLANK_PROBE_UP_M, _plankHit)) continue;
-      const pen = _plankHit.height - _p.y;
+      // Reference against the axle's climbed wheel plane so straddling a kerb or seam cannot hit the skid block
+      // with an un-ramped vertical step spike
+      let groundH = _plankHit.height;
+      if (wL.grounded || wR.grounded) {
+        const axlePlaneY = 0.5 * (this.groundYUnder(wL) + this.groundYUnder(wR));
+        groundH = Math.min(groundH, axlePlaneY + 0.014);
+      }
+      const pen = Math.min(groundH - _p.y, 0.015);
       if (pen <= 0) continue;
       _n.set(_plankHit.nx, _plankHit.ny, _plankHit.nz);
       _r.subVectors(_p, this.position);
