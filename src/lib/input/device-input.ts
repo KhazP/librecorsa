@@ -15,6 +15,7 @@ import {
   type PadAction,
   type PadButtonBindings,
 } from "./bindings";
+import { logitechClassicModel } from "./wheel-support";
 
 export type InputDevice = "keyboard" | "controller" | "wheel";
 export type WheelType = "direct_drive" | "belt_gear";
@@ -77,7 +78,11 @@ export interface WheelSettings {
    * far round the rim. A car without one steers 1:1 with its real lock (`CAR_WHEEL_LOCKS_DEG`)
    */
   steerLockPerCar: Partial<Record<string, number>>;
-  /** Experimental: drive a HID PID (direct-drive) wheel straight from the browser over WebHID, no bridge */
+  /**
+   * Experimental: force feedback straight from the browser over WebHID, no bridge. Drives HID PID bases, and the
+   * Logitech G25 / G27 / G29 / Driving Force GT with the classic Logitech commands (webhid-ffb.ts). Logitech wheels
+   * start on the bridge (see autoConfigureWheel) and use WebHID only when switched on
+   */
   hidFfb: boolean;
   /** Stream telemetry over UDP through the bridge (SimHub, bass shakers, dashboards) */
   telemetryOut: boolean;
@@ -226,9 +231,23 @@ export function findPad(pads: readonly PadLike[], padId: string): PadLike | unde
 
 const WHEEL_ID = /wheel|pxn|v99|fanatec|moza|simucube|simagic|thrustmaster|logitech g(2|9)|g29|g920|g923|g pro|t300|t150|t248|tmx|csl|podium|clubsport|asetek|cammus|accuforce|vrs/i;
 
-/** Sim wheels rarely report the standard mapping; names give the rest away */
+/** USB ids in a Gamepad.id: Chrome appends "(… Vendor: 046d Product: c29a)", Firefox starts with "046d-c29a-" */
+function padUsbIds(id: string): { vendorId: number; productId: number } | null {
+  const m = /vendor:\s*([0-9a-f]{4})\b.*?product:\s*([0-9a-f]{4})\b/i.exec(id) ?? /^([0-9a-f]{4})-([0-9a-f]{4})-/i.exec(id);
+  return m ? { vendorId: parseInt(m[1] as string, 16), productId: parseInt(m[2] as string, 16) } : null;
+}
+
+/** One of the gear-driven Logitech wheels in LOGITECH_CLASSIC_WHEELS (wheel-support.ts), by its USB ids */
+function isLogitechClassicPad(id: string): boolean {
+  const ids = padUsbIds(id);
+  return ids !== null && logitechClassicModel(ids.vendorId, ids.productId) !== null;
+}
+
+const isWheelId = (id: string) => WHEEL_ID.test(id) || isLogitechClassicPad(id);
+
+/** Sim wheels rarely report the standard mapping; names (or a listed Logitech's USB ids) give the rest away */
 export function isLikelyWheel(pad: Pick<PadLike, "id" | "mapping">): boolean {
-  return WHEEL_ID.test(pad.id) || pad.mapping !== "standard";
+  return isWheelId(pad.id) || pad.mapping !== "standard";
 }
 
 /** Short readable device name from a Gamepad.id ("Xbox Wireless Controller (STANDARD GAMEPAD …)") */
@@ -375,27 +394,30 @@ export class DeviceInputReader {
 
 /** Belt / gear-driven bases (the rest are taken as direct drive); the CSL Elite is belt-driven, the CSL DD is not */
 const BELT_GEAR_ID = /pxn|v99|g25|g27|g29|g920|g923|t150|t248|t300|tmx|csl elite/i;
+/** Logitech devices, by name or by the vendor id Chrome puts in Gamepad.id ("Vendor: 046d") */
+const LOGITECH_ID = /logitech|\b046d\b/i;
 /** Pedal sets, shifters and handbrakes share the wheel brands' names but never steer */
 const NOT_A_WHEEL_BASE = /pedal|srp|sr-p|handbrake|shifter|hgp|sequential/i;
 /** Virtual joysticks (vJoy / SimHub Control Mapper) mirror physical devices and should yield to real hardware */
 export const isVirtualPad = (padId: string): boolean => /vjoy|virtual joystick/i.test(padId);
 
 /**
- * Steering binding for a wheel recognised by name that has none yet: axis 0, centred where it rests, with the
- * base type's rotation / filter defaults. Null when there is nothing to bind (already bound, or no named wheel:
- * an unknown non-standard device may be pedals or a button box, so it is never bound blindly).
+ * Steering binding for a wheel recognised by name (or a listed Logitech by its USB ids) that has none yet: axis 0,
+ * centred where it rests, with the base type's rotation / filter defaults. Null when there is nothing to bind (already
+ * bound, or no named wheel: an unknown non-standard device may be pedals or a button box, so it is never bound blindly).
  */
 export function autoConfigureWheel(pads: readonly PadLike[], current: WheelSettings): Partial<WheelSettings> | null {
   if (current.steer) return null;
-  const wheelPad = pads.find((p) => WHEEL_ID.test(p.id) && !NOT_A_WHEEL_BASE.test(p.id) && !isVirtualPad(p.id) && p.axes.length > 0);
+  const wheelPad = pads.find((p) => isWheelId(p.id) && !NOT_A_WHEEL_BASE.test(p.id) && !isVirtualPad(p.id) && p.axes.length > 0);
   if (!wheelPad) return null;
-  const type: WheelType = BELT_GEAR_ID.test(wheelPad.id) ? "belt_gear" : "direct_drive";
+  const type: WheelType = BELT_GEAR_ID.test(wheelPad.id) || isLogitechClassicPad(wheelPad.id) ? "belt_gear" : "direct_drive";
   const rest = wheelPad.axes[0] ?? 0;
   return {
     type,
     ...WHEEL_TYPE_DEFAULTS[type],
     ffbEnabled: true,
-    hidFfb: true,
+    // Logitech starts on the local bridge, even a wheel WebHID can drive: that path is opt-in and untested
+    hidFfb: !LOGITECH_ID.test(wheelPad.id),
     steer: { padId: wheelPad.id, axis: 0, center: Math.abs(rest) < 0.25 ? rest : 0, invert: false },
   };
 }

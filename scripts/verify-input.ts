@@ -200,16 +200,27 @@ check('auto-setup leaves a bound wheel alone; belt wheels get their defaults', (
   assert.equal(g29?.rotationDeg, 900);
   assert.equal(g29?.steer?.center, 0, 'a rim held off-centre is not taken as the centre');
 });
-check('auto-setup: all wheels (including Logitech and PXN) start on WebHID; CSL Elite is belt-driven, CSL DD direct', () => {
+check('auto-setup: Logitech starts on the bridge, others on WebHID; CSL Elite is belt-driven, CSL DD direct', () => {
   const g923 = autoConfigureWheel([pad('G923 Racing Wheel for Xbox One and PC (Vendor: 046d Product: c26e)', '', [0])], DEFAULT_WHEEL_SETTINGS);
-  assert.equal(g923?.hidFfb, true, 'WebHID drives both PID and classic Logitech wheels');
+  assert.equal(g923?.hidFfb, false, 'a HID++ wheel WebHID refuses: the bridge instructions show from the start');
   assert.equal(g923?.ffbEnabled, true);
+  const g29 = autoConfigureWheel([pad('Logitech G29 Driving Force Racing Wheel (Vendor: 046d Product: c24f)', '', [0])], DEFAULT_WHEEL_SETTINGS);
+  assert.equal(g29?.hidFfb, false, 'a wheel WebHID can drive still starts on the bridge (opt-in)');
   const pxn = autoConfigureWheel([pad('PXN-V99 Wheel (Vendor: 11ff Product: 3245)', '', [0])], DEFAULT_WHEEL_SETTINGS);
   assert.equal(pxn?.hidFfb, true);
   assert.equal(pxn?.type, 'belt_gear');
   assert.equal(autoConfigureWheel([pad(MOZA_BASE, '', [0])], DEFAULT_WHEEL_SETTINGS)?.hidFfb, true);
   assert.equal(autoConfigureWheel([pad('FANATEC CSL Elite Wheel Base', '', [0])], DEFAULT_WHEEL_SETTINGS)?.type, 'belt_gear');
   assert.equal(autoConfigureWheel([pad('FANATEC CSL DD', '', [0])], DEFAULT_WHEEL_SETTINGS)?.type, 'direct_drive');
+});
+check('a listed Logitech wheel without "wheel" in its name is recognised by its USB ids (Chrome and Firefox ids)', () => {
+  for (const id of ['Driving Force GT (Vendor: 046d Product: c29a)', '046d-c29a-Driving Force GT']) {
+    const dfgt = autoConfigureWheel([pad(id, '', [0])], DEFAULT_WHEEL_SETTINGS);
+    assert.equal(dfgt?.steer?.padId, id);
+    assert.equal(dfgt?.type, 'belt_gear');
+    assert.equal(dfgt?.hidFfb, false);
+  }
+  assert.equal(autoConfigureWheel([pad('Logitech Dual Action (Vendor: 046d Product: c216)', '', [0])], DEFAULT_WHEEL_SETTINGS), null, 'a Logitech gamepad is not a wheel');
 });
 check('FFB gain and minimum force: continuous through zero, monotonic, sign kept', () => {
   const w = { ffbGain: 1.5, ffbMinForce: 0.1 };
