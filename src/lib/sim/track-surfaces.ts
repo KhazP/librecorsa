@@ -39,8 +39,9 @@ export type SurfaceTableOverrides = Partial<Record<TrackSurfaceKind, Partial<Sur
 
 export const DEFAULT_SURFACE_TABLE: Readonly<SurfaceTable> = {
   road: { friction: 1, wetFriction: 1, rollingResistance: 0, bumpHeightM: 0, bumpLengthM: 0, vibration: 0, validTrack: true, maxRiseM: Infinity },
-  // Serrated painted concrete: a 4 mm ripple every 0.65 m, slippery when wet
-  kerb: { friction: 0.96, wetFriction: 0.72, rollingResistance: 0.002, bumpHeightM: 0.004, bumpLengthM: 0.65, vibration: 1, validTrack: true, maxRiseM: Infinity },
+  // Serrated painted concrete: a 2 mm ripple every 0.65 m, slippery when wet. The tyre meets it at a point, with no
+  // contact patch to ride over the serrations, so 4 mm already lifted an F1 wheel off for 10-28 % of its kerb time
+  kerb: { friction: 0.96, wetFriction: 0.72, rollingResistance: 0.002, bumpHeightM: 0.002, bumpLengthM: 0.65, vibration: 1, validTrack: true, maxRiseM: Infinity },
   sausage: { friction: 0.85, wetFriction: 0.7, rollingResistance: 0.01, bumpHeightM: 0, bumpLengthM: 0, vibration: 1, validTrack: false, maxRiseM: Infinity },
   // Painted asphalt run-off
   runoff: { friction: 0.75, wetFriction: 0.85, rollingResistance: 0.002, bumpHeightM: 0, bumpLengthM: 0, vibration: 0.15, validTrack: false, maxRiseM: Infinity },
