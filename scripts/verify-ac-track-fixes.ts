@@ -1,8 +1,9 @@
 /**
- * Verification suite for the 3 user-reported AC circuit issues:
+ * The converted AC circuits:
  * 1. Okayama (and all AC tracks) road material depthWrite & decal isolation (preventing 100% reflective tarmac)
  * 2. Monaco barrier hitboxes (3D wall extraction, TrackWallQuery segment density, and collision response for all 3 cars)
- * 3. Kerb feel and sound across chang, okayama, spielberg, and monaco for all 3 car physics models
+ * 3. Kerb coverage and feel across chang, okayama, spielberg, and monaco for all 3 car physics models
+ * 4. Kerb / edge step continuity of the fitted surfaces, and ported F1 wheel seating
  */
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -96,7 +97,7 @@ async function verifyMonacoBarrierHitboxes() {
   console.log('\n=== 2. Verifying Monaco Barrier Hitboxes across all 3 Car Physics Models ===');
   const { raw, track, root } = loadTrack('monaco');
   const walls = TrackWallQuery.fromTrackRoot(root);
-  assert.ok(walls.segments.length >= 1300, `Expected >= 1300 wall segments in Monaco, got ${walls.segments.length}`);
+  assert.ok(walls.segmentCount >= 1300, `Expected >= 1300 wall segments in Monaco, got ${walls.segmentCount}`);
 
   // Verify 100% water-tight lateral raycast coverage across all 660 samples (0 open holes or 5m step holes)
   const n = raw.samples.length;
@@ -151,7 +152,7 @@ async function verifyMonacoBarrierHitboxes() {
   const closeRatio = closeWalls / raw.samples.length;
   assert.ok(closeRatio > 0.70, `Expected > 70% of Monaco samples to have close Armco walls, got ${(closeRatio * 100).toFixed(1)}%`);
   console.log(
-    `PASS  [monaco] ${walls.segments.length} 3D wall collider segments, 0/1320 sample/midpoint raycast holes, ${(closeRatio * 100).toFixed(1)}% tight Armco coverage`
+    `PASS  [monaco] ${walls.segmentCount} 3D wall collider segments, 0/1320 sample/midpoint raycast holes, ${(closeRatio * 100).toFixed(1)}% tight Armco coverage`
   );
 
   // Include standard Armco stations AND stepping runoff stations (S/F s=2m, Sainte Devote s=205m, Nouvelle Chicane s=2095m, Piscine s=2710m, Rascasse s=2955m)
@@ -286,67 +287,43 @@ async function verifyKerbsFeelAndSound() {
     for (const carKind of ['vf26', 'f12026', 'gt3'] as const) {
       const dt = 1 / 120;
       const side = Math.sign(targetLat);
-      const carLat = targetLat - side * 0.82;
-      let kerbFrames = 0;
-      let peakKerbAmp = 0;
-      let peakSuspVel = 0;
-      let prevRideMm: [number, number, number, number] | null = null;
-
-      const car =
-        carKind === 'vf26'
-          ? (() => {
-              const c = new F1Physics2026(track);
-              c.attachTrackRoot(root);
-              return c;
-            })()
-          : carKind === 'f12026'
-          ? new F12026CarSim(track, root)
-          : createAmgGt3Sim(track, root);
-
-      car.teleportToDistance(Math.max(5, targetS - 6), 135 / 3.6, carLat);
-
-      for (let step = 0; step < 90; step++) {
-        const latErr = carLat - car.lateralOffsetM;
-        const steerCmd = Math.max(-0.25, Math.min(0.25, latErr * 0.35));
-        const tel = car.step(dt, { throttle: 0.45, brake: 0, analogSteer: steerCmd });
-        const speedMs = Math.max(0, tel.speedKmh / 3.6);
-        const onKerb = tel.surface === 'kerb' || Boolean(tel.wheelSurfaces?.includes('kerb'));
-
-        if (onKerb) {
-          kerbFrames++;
-          if (speedMs > 4) {
-            const kerbAmp = Math.min(0.085, Math.max(0.02, speedMs * 0.0018));
-            peakKerbAmp = Math.max(peakKerbAmp, kerbAmp);
+      /** 90 frames along the kerb run at `lat`: the frames on a kerb, and the four corners' RMS shock velocity on them (m/s) */
+      const run = (lat: number) => {
+        const car =
+          carKind === 'vf26'
+            ? (() => {
+                const c = new F1Physics2026(track);
+                c.attachTrackRoot(root);
+                return c;
+              })()
+            : carKind === 'f12026'
+            ? new F12026CarSim(track, root)
+            : createAmgGt3Sim(track, root);
+        car.teleportToDistance(Math.max(5, targetS - 6), 135 / 3.6, lat);
+        let frames = 0;
+        let sumSq = 0;
+        let n = 0;
+        for (let step = 0; step < 90; step++) {
+          const steerCmd = Math.max(-0.25, Math.min(0.25, (lat - car.lateralOffsetM) * 0.35));
+          const tel = car.step(dt, { throttle: 0.45, brake: 0, analogSteer: steerCmd });
+          const onKerb = tel.surface === 'kerb' || tel.wheelSurfaces.includes('kerb');
+          if (onKerb) frames++;
+          if (step >= 12 && onKerb) {
+            for (const v of tel.suspensionVelocityMs) sumSq += v * v;
+            n += 4;
           }
         }
-        if (tel.wheelRideHeightsMm) {
-          if (prevRideMm) {
-            for (let w = 0; w < 4; w++) {
-              peakSuspVel = Math.max(peakSuspVel, (Math.abs(tel.wheelRideHeightsMm[w] - prevRideMm[w]) * 1e-3) / dt);
-            }
-          }
-          prevRideMm = [
-            tel.wheelRideHeightsMm[0],
-            tel.wheelRideHeightsMm[1],
-            tel.wheelRideHeightsMm[2],
-            tel.wheelRideHeightsMm[3],
-          ];
-        }
-      }
-
-      assert.ok(kerbFrames > 0, `[${tid}/${carKind}] Expected car to register surface='kerb' on kerb at s=${targetS.toFixed(1)}m`);
+        return { frames, shockMs: n > 0 ? Math.sqrt(sumSq / n) : 0 };
+      };
+      const kerb = run(targetLat - side * 0.82);
+      assert.ok(kerb.frames > 0, `[${tid}/${carKind}] Expected car to register surface='kerb' on kerb at s=${targetS.toFixed(1)}m`);
+      // The serrations keep the dampers working: on smooth asphalt the corners move at a few cm/s
       assert.ok(
-        peakKerbAmp > 0.04,
-        `[${tid}/${carKind}] Expected audible kerb rumble gain > 0.04 on kerb, got ${peakKerbAmp.toFixed(3)}`
-      );
-      assert.ok(
-        peakSuspVel > 0.05,
-        `[${tid}/${carKind}] Expected physical suspension stroke velocity > 0.05 m/s on kerb, got ${peakSuspVel.toFixed(4)} m/s`
+        kerb.shockMs > 0.08,
+        `[${tid}/${carKind}] Expected the kerb to work the suspension (RMS shock velocity > 0.08 m/s), got ${kerb.shockMs.toFixed(3)} m/s`
       );
       console.log(
-        `PASS  [${tid}/${carKind}] s=${targetS.toFixed(0)}m kerbFrames=${kerbFrames}, peakKerbAmp=${peakKerbAmp.toFixed(
-          3
-        )}, peakSuspVel=${peakSuspVel.toFixed(3)} m/s`
+        `PASS  [${tid}/${carKind}] s=${targetS.toFixed(0)}m kerbFrames=${kerb.frames}, RMS shock velocity ${kerb.shockMs.toFixed(3)} m/s on the kerb`
       );
     }
   }
