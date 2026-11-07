@@ -1017,6 +1017,198 @@ export async function teardownPidSession(session: PidSession): Promise<void> {
 }
 
 /* ------------------------------------------------------------------------------------------------------------ */
+/* Diagnostics                                                                                                   */
+/* ------------------------------------------------------------------------------------------------------------ */
+
+/** Setup / teardown traffic remembered for {@link WebHidFfb.diagnose} */
+export const HID_TRACE_SIZE = 60;
+
+const hex = (n: number, width = 2) => n.toString(16).padStart(width, "0");
+const hexBytes = (bytes: ArrayLike<number>, max = 64) => {
+  const out: string[] = [];
+  for (let i = 0; i < Math.min(bytes.length, max); i++) out.push(hex(bytes[i] as number));
+  return out.join(" ") + (bytes.length > max ? ` … (${bytes.length} bytes)` : "");
+};
+
+/**
+ * The last {@link HID_TRACE_SIZE} reports written to (and Block Load replies read from) the wheel while `recording`,
+ * which the driver switches on for setup and teardown only: the 500 Hz force stream is never kept
+ */
+export class HidTrace {
+  recording = false;
+  private readonly lines: string[] = [];
+  private readonly t0: number;
+
+  constructor(private readonly now: () => number = defaultFfbDeps.now) {
+    this.t0 = now();
+  }
+
+  /** A line of the trace, prefixed with the time since the driver started (ms) */
+  note(text: string): void {
+    if (this.lines.length >= HID_TRACE_SIZE) this.lines.shift();
+    this.lines.push(`${(this.now() - this.t0).toFixed(0).padStart(7)} ms  ${text}`);
+  }
+
+  report(kind: string, reportId: number, bytes: ArrayLike<number>): void {
+    if (this.recording) this.note(`${kind.padEnd(11)} id ${String(reportId).padStart(3)}  ${hexBytes(bytes)}`);
+  }
+
+  entries(): readonly string[] {
+    return this.lines;
+  }
+}
+
+/** `device` with every report it sends (and every feature report read back) written to `trace` while it records */
+export function tracedDevice(device: HidDeviceLike, trace: HidTrace): HidDeviceLike {
+  const failed = (kind: string, id: number) => (e: unknown) => {
+    if (trace.recording) trace.note(`${kind} id ${id} FAILED: ${errorMessage(e)}`);
+    throw e;
+  };
+  return {
+    get opened() {
+      return device.opened;
+    },
+    vendorId: device.vendorId,
+    productId: device.productId,
+    productName: device.productName,
+    collections: device.collections,
+    open: () => device.open(),
+    close: () => device.close(),
+    sendReport: (id, data) => {
+      trace.report("out", id, data);
+      return device.sendReport(id, data).catch(failed("out", id));
+    },
+    sendFeatureReport: (id, data) => {
+      trace.report("feature out", id, data);
+      return device.sendFeatureReport(id, data).catch(failed("feature out", id));
+    },
+    receiveFeatureReport: (id) =>
+      device.receiveFeatureReport(id).then((view) => {
+        trace.report("feature in", id, new Uint8Array(view.buffer, view.byteOffset, view.byteLength));
+        return view;
+      }, failed("feature in", id)),
+  };
+}
+
+/** Names for the usages the driver knows; anything else is shown as page:id */
+const USAGE_NAMES: ReadonlyMap<number, string> = new Map<number, string>([
+  ...Object.entries(PID).map(([name, usage]) => [usage, name] as [number, string]),
+  [AXIS_X, "X"],
+  [AXIS_Y, "Y"],
+  [AXIS_Z, "Z"],
+  [DESKTOP_BYTE_COUNT, "DESKTOP_BYTE_COUNT"],
+  [pidUsage(0x01), "PID_PHYSICAL_INTERFACE"],
+  [pidUsage(0x02), "PID_NORMAL"],
+  [pidUsage(0x21), "SET_EFFECT_REPORT"],
+  [pidUsage(0x27), "ET_RAMP"],
+  [pidUsage(0x28), "ET_CUSTOM_FORCE_DATA"],
+  [pidUsage(0x30), "ET_SQUARE"],
+  [pidUsage(0x31), "ET_SINE"],
+  [pidUsage(0x32), "ET_TRIANGLE"],
+  [pidUsage(0x33), "ET_SAWTOOTH_UP"],
+  [pidUsage(0x34), "ET_SAWTOOTH_DOWN"],
+  [pidUsage(0x42), "ET_INERTIA"],
+  [pidUsage(0x43), "ET_FRICTION"],
+  [pidUsage(0x6f), "OFFSET"],
+  [pidUsage(0x71), "PHASE"],
+  [pidUsage(0x72), "PERIOD"],
+  [pidUsage(0xad), "RAM_POOL_AVAILABLE"],
+]);
+
+function usageName(usage: number): string {
+  const page = usage >>> 16;
+  const id = usage & 0xffff;
+  const known = USAGE_NAMES.get(usage);
+  if (known) return known;
+  if (page === PAGE_ORDINAL) return `ORDINAL_${id}`;
+  return `${hex(page, 4)}:${hex(id, 4)}`;
+}
+
+function describeItem(item: HidReportItemLike): string {
+  const usages = expandUsages(item);
+  const list =
+    item.isRange && typeof item.usageMinimum === "number" && typeof item.usageMaximum === "number"
+      ? `${usageName(item.usageMinimum)}..${usageName(item.usageMaximum)}`
+      : usages.length > 6
+        ? `${usages.slice(0, 6).map(usageName).join(", ")}, … (${usages.length})`
+        : usages.map(usageName).join(", ") || "(no usage)";
+  const kind = item.isConstant ? "constant" : item.isArray ? "array" : "variable";
+  return `${item.reportSize ?? 0} bit x ${item.reportCount ?? 0}, ${kind}, logical ${item.logicalMinimum ?? "?"}..${item.logicalMaximum ?? "?"}: ${list}`;
+}
+
+function describeCollections(collections: readonly HidCollectionLike[], depth: number, out: string[]): void {
+  const pad = "  ".repeat(depth);
+  for (const c of collections) {
+    out.push(`${pad}collection ${hex(c.usagePage ?? 0, 4)}:${hex(c.usage ?? 0, 4)} type ${c.type ?? "?"}`);
+    for (const [kind, reports] of [
+      ["input", c.inputReports],
+      ["output", c.outputReports],
+      ["feature", c.featureReports],
+    ] as const) {
+      for (const r of reports ?? []) {
+        const items = r.items ?? [];
+        const bits = items.reduce((sum, i) => sum + Math.max(0, i.reportSize ?? 0) * Math.max(0, i.reportCount ?? 0), 0);
+        out.push(`${pad}  ${kind} report ${r.reportId ?? 0} (${bits} bits)`);
+        for (const item of items) out.push(`${pad}    ${describeItem(item)}`);
+      }
+    }
+    describeCollections(c.children ?? [], depth + 1, out);
+  }
+}
+
+const PID_REPORT_NAMES: readonly [keyof PidLayout, string][] = [
+  ["setEffect", "Set Effect"],
+  ["constantForce", "Set Constant Force"],
+  ["effectOperation", "Effect Operation"],
+  ["setCondition", "Set Condition"],
+  ["blockFree", "PID Block Free"],
+  ["deviceControl", "PID Device Control"],
+  ["deviceGain", "Device Gain"],
+  ["createNewEffect", "Create New Effect"],
+  ["blockLoad", "PID Block Load"],
+];
+
+function describeField(f: PidFieldEntry): string {
+  const range = `${f.min}..${f.max}${f.signed ? " signed" : ""}`;
+  const selects = f.usages && f.isArray ? ` selects ${f.usages.map(usageName).join(", ")}` : "";
+  return `${usageName(f.usage).padEnd(24)} bit ${String(f.bitOffset).padStart(3)}, ${f.bitSize} bits, ${range}${selects}`;
+}
+
+/**
+ * Everything the driver knows about a device, as text for a bug report: ids and name, the raw report descriptor
+ * (collections, reports, items), then the HID PID reports as {@link parsePidLayout} reads them (or why it found none)
+ */
+export function describeHidDevice(device: HidDeviceLike): string {
+  const out: string[] = [];
+  out.push(`${deviceName(device)}  [${hex(device.vendorId, 4)}:${hex(device.productId, 4)}]${device.opened ? "  (open)" : ""}`);
+  out.push("Report descriptor:");
+  describeCollections(device.collections, 1, out);
+  const layout = parsePidLayout(device.collections);
+  if (!layout) {
+    out.push(
+      device.vendorId === VENDOR_LOGITECH
+        ? "HID PID: none (a Logitech wheel without PID is driven with the classic 7-byte protocol)"
+        : "HID PID: no usable Set Constant Force + Effect Operation report"
+    );
+    return out.join("\n");
+  }
+  out.push("HID PID reports:");
+  for (const [key, name] of PID_REPORT_NAMES) {
+    const r = layout[key] as PidReportLayout | null | undefined;
+    if (!r) {
+      out.push(`  ${name}: MISSING`);
+      continue;
+    }
+    out.push(`  ${name}: report ${r.reportId}, ${r.bitLength} bits`);
+    for (const f of r.fieldList ?? []) out.push(`    ${describeField(f)}`);
+  }
+  const types = layout.setEffect ? (getField(layout.setEffect, PID.EFFECT_TYPE)?.usages ?? []) : [];
+  out.push(`Effect types: ${types.length > 0 ? types.map(usageName).join(", ") : "(no Set Effect type list)"}`);
+  out.push(`Hardware spring: ${layout.hasSpring ? "yes" : "no"}, hardware damper: ${layout.hasDamper ? "yes" : "no"}`);
+  return out.join("\n");
+}
+
+/* ------------------------------------------------------------------------------------------------------------ */
 /* Public driver                                                                                                 */
 /* ------------------------------------------------------------------------------------------------------------ */
 
@@ -1100,6 +1292,10 @@ export class WebHidFfb {
   private hotplugTimer: unknown = null;
   /** Ends the wait between setup attempts early (dispose) */
   private wakeRetry: (() => void) | null = null;
+  /** Setup / teardown traffic and status changes, for {@link diagnose} */
+  private readonly trace: HidTrace;
+  /** The device last set up (or tried), kept after a failure so diagnose() can describe it */
+  private lastDevice: HidDeviceLike | null = null;
 
   /** `hid` and `deps` exist for tests; the app uses the defaults */
   constructor(
@@ -1109,6 +1305,7 @@ export class WebHidFfb {
     this.status = this.hidApi()
       ? { state: "idle", device: null, message: null }
       : { state: "unsupported", device: null, message: UNSUPPORTED_BROWSER };
+    this.trace = new HidTrace(deps.now);
   }
 
   /**
@@ -1228,6 +1425,8 @@ export class WebHidFfb {
     if (!session) return;
     this.session = null;
     session.writer.kill();
+    this.trace.note("page hidden: emergency stop");
+    this.trace.recording = true;
     const { device, layout, blockIndex } = session;
     const fire = (send: () => Promise<void>) => {
       try {
@@ -1251,12 +1450,53 @@ export class WebHidFfb {
       const stopAll = dcField ? selectorValue(dcField, PID.DC_STOP_ALL_EFFECTS) : null;
       if (dc && stopAll !== null) fire(() => sendOutput(device, dc, { [PID.DEVICE_CONTROL]: stopAll }));
     }
+    this.trace.recording = false;
     this.setStatus("idle", null, null);
   }
 
   /** The page came back from the back/forward cache: set the wheel up again if the driver is still wanted */
   resume(): Promise<string | null> {
     return this.wanted ? this.reconnect() : Promise.resolve(null);
+  }
+
+  /**
+   * A plain-text report for a bug report about a wheel: browser, driver status and session, every granted HID device
+   * described in full ({@link describeHidDevice}), and the last setup / teardown reports sent ({@link HidTrace}).
+   */
+  async diagnose(): Promise<string> {
+    const out: string[] = ["LibreCorsa WebHID force-feedback diagnostics", `Time: ${new Date().toISOString()}`];
+    if (typeof navigator !== "undefined" && typeof navigator.userAgent === "string") out.push(`Browser: ${navigator.userAgent}`);
+    const hid = this.hidApi();
+    out.push(`WebHID: ${hid ? "available" : `unavailable (${UNSUPPORTED_BROWSER})`}`);
+    const s = this.status;
+    out.push(`Status: ${s.state}${s.device ? ` | ${s.device}` : ""}${s.message ? ` | ${s.message}` : ""}`);
+    const ses = this.session;
+    out.push(
+      ses
+        ? `Session: ${ses.driver ?? "pid"} driver, constant force on effect block ${ses.blockIndex}, ` +
+            `hardware damper ${ses.damperBlockIndex ? `on block ${ses.damperBlockIndex}` : "none"}`
+        : "Session: none"
+    );
+    let devices: HidDeviceLike[] = [];
+    if (hid) {
+      try {
+        devices = await hid.getDevices();
+      } catch (e) {
+        out.push(`getDevices() failed: ${errorMessage(e)}`);
+      }
+    }
+    const current = this.device ?? this.lastDevice;
+    if (current && !devices.includes(current)) devices = [current, ...devices];
+    const pick = pickFfbDevice(devices, false);
+    out.push(`Granted devices: ${devices.length}${devices.length === 0 ? " (pair the wheel with Connect first)" : ""}`);
+    for (const d of devices) {
+      const tags = [d === current ? (ses ? "in use" : "last tried") : "", d === pick ? "the one reconnect picks" : ""].filter(Boolean);
+      out.push("", `--- ${deviceName(d)}${tags.length > 0 ? ` (${tags.join(", ")})` : ""}`, describeHidDevice(d));
+    }
+    const lines = this.trace.entries();
+    out.push("", `Setup and teardown traffic (last ${HID_TRACE_SIZE} lines; the force stream is not recorded):`);
+    out.push(...(lines.length > 0 ? lines.map((l) => `  ${l}`) : ["  (none yet)"]));
+    return out.join("\n");
   }
 
   /**
@@ -1315,16 +1555,25 @@ export class WebHidFfb {
     if (this.status.state !== "connecting" || this.status.device !== name) this.setStatus("connecting", name, null);
     const isClassicLogitech = device.vendorId === VENDOR_LOGITECH && parsePidLayout(device.collections) === null;
     const setupFn = isClassicLogitech ? setupLogitechDevice : setupPidDevice;
-    const result = await setupFn(device, {
-      deps: this.deps,
-      onFail: (message, fatal) => {
-        if (fatal && this.device === device) {
-          this.session?.writer.kill();
-          this.setStatus("error", name, `Force feedback stopped: ${message}`);
-        }
-      },
-    });
+    this.lastDevice = device;
+    this.trace.note(`setup ${name} [${hex(device.vendorId, 4)}:${hex(device.productId, 4)}] with the ${isClassicLogitech ? "Logitech classic" : "HID PID"} driver`);
+    this.trace.recording = true;
+    let result: PidSetupResult;
+    try {
+      result = await setupFn(tracedDevice(device, this.trace), {
+        deps: this.deps,
+        onFail: (message, fatal) => {
+          if (fatal && this.device === device) {
+            this.session?.writer.kill();
+            this.setStatus("error", name, `Force feedback stopped: ${message}`);
+          }
+        },
+      });
+    } finally {
+      this.trace.recording = false;
+    }
     if (!result.ok) {
+      this.trace.note(`setup failed${result.unsupported ? " (unsupported)" : ""}: ${result.message}`);
       try {
         if (device.opened) await device.close();
       } catch {
@@ -1332,6 +1581,10 @@ export class WebHidFfb {
       }
       return { ok: false, name, unsupported: result.unsupported, message: result.message };
     }
+    const ses = result.session;
+    this.trace.note(
+      `setup ok: effect block ${ses.blockIndex}, hardware damper ${ses.damperBlockIndex ? `block ${ses.damperBlockIndex}` : "none"}`
+    );
     this.session = result.session;
     this.device = device;
     if (this.listening !== hid) {
@@ -1365,6 +1618,7 @@ export class WebHidFfb {
   /** A granted force-feedback device appeared (the wheel switched back on): re-open it once it has settled */
   private onConnect = (e: { device: HidDeviceLike }) => {
     if (!this.wanted || this.session || !pickFfbDevice([e.device], false)) return;
+    this.trace.note(`connect event: ${deviceName(e.device)}; re-opening in ${HOTPLUG_DELAY_MS} ms`);
     if (this.hotplugTimer !== null) this.deps.clearTimer(this.hotplugTimer);
     this.hotplugTimer = this.deps.setTimer(() => {
       this.hotplugTimer = null;
@@ -1389,6 +1643,7 @@ export class WebHidFfb {
     if (!d) return;
     const same = e.device === d || (e.device.vendorId === d.vendorId && e.device.productId === d.productId);
     if (!same) return;
+    this.trace.note(`disconnect event: ${deviceName(e.device)}`);
     this.session?.writer.kill();
     this.session = null;
     this.device = null;
@@ -1405,7 +1660,12 @@ export class WebHidFfb {
       this.listening.removeEventListener("disconnect", this.onDisconnect);
       this.listening = null;
     }
-    if (session) await teardownPidSession(session);
+    if (session) {
+      this.trace.note("teardown");
+      this.trace.recording = true;
+      await teardownPidSession(session);
+      this.trace.recording = false;
+    }
     if (device) {
       try {
         if (device.opened) await device.close();
@@ -1424,6 +1684,7 @@ export class WebHidFfb {
     const s = this.status;
     if (s.state === state && s.device === device && s.message === message) return;
     this.status = { state, device, message };
+    this.trace.note(`status ${state}${device ? ` | ${device}` : ""}${message ? ` | ${message}` : ""}`);
     this.onStatus?.(this.status);
     for (const l of this.listeners) l();
   }

@@ -7,6 +7,8 @@ import {
   buildReport,
   buildSetEffectReport,
   conditionReportValues,
+  describeHidDevice,
+  HID_TRACE_SIZE,
   forceToRaw,
   FORCE_KEEPALIVE_MS,
   ForceWriter,
@@ -1110,6 +1112,69 @@ async function main() {
     if (!res.ok) return;
     dev.failSends = true;
     await teardownPidSession(res.session); // must not throw
+  });
+  console.log("Diagnostics");
+  await check("describeHidDevice: ids, raw descriptor, each PID report with its fields, what is missing", () => {
+    const text = describeHidDevice(wheel());
+    assert.match(text, /Fake DD Base/);
+    assert.match(text, /output report 5 \(24 bits\)/, "raw descriptor");
+    assert.match(text, /Set Constant Force: report 5, 24 bits/);
+    assert.match(text, /MAGNITUDE\s+bit\s+8, 16 bits, -10000\.\.10000 signed/);
+    assert.match(text, /PID Block Load: report 18/);
+    assert.match(text, /Set Condition: MISSING/);
+    assert.match(text, /Effect types: ET_CONSTANT_FORCE/);
+    const pad = new FakeHidDevice([{ usagePage: 0x01, usage: 0x05 }]);
+    assert.match(describeHidDevice(pad), /HID PID: no usable Set Constant Force/);
+  });
+  await check("diagnose(): status, session, granted devices, setup traffic; the force stream stays out of it", async () => {
+    const dev = wheel();
+    const clock = new FakeClock();
+    const pad = new FakeHidDevice([{ usagePage: 0x01, usage: 0x05 }]);
+    pad.productName = "Button box";
+    const ffb = new WebHidFfb(fakeHid([dev], [pad, dev]).api, clock.deps);
+    await ffb.connect();
+    const report = await ffb.diagnose();
+    assert.match(report, /Status: ready \| Fake DD Base/);
+    assert.match(report, /Session: pid driver, constant force on effect block 3/);
+    assert.match(report, /Granted devices: 2/);
+    assert.match(report, /--- Fake DD Base \(in use, the one reconnect picks\)/);
+    assert.match(report, /--- Button box\n/);
+    assert.match(report, /feature out id\s+17/, "Create New Effect");
+    assert.match(report, /feature in\s+id\s+18\s+03 01/, "Block Load reply: block 3, success");
+    assert.match(report, /out\s+id\s+12\s+04/, "device reset");
+    assert.match(report, /setup ok: effect block 3/);
+    const traffic = (r: string) => r.split("\n").filter((l) => /\b(out|feature (in|out))\s+id/.test(l)).length;
+    const before = traffic(report);
+    for (let i = 0; i < 300; i++) {
+      clock.advance(3);
+      ffb.setForce(Math.sin(i / 10));
+      await flush();
+    }
+    assert.ok(dev.forceWrites.length > 100, "the stream did play");
+    assert.equal(traffic(await ffb.diagnose()), before, "no force writes in the trace");
+    await ffb.dispose();
+    assert.match(await ffb.diagnose(), /teardown[\s\S]*out\s+id\s+12\s+02/, "teardown traffic (disable actuators)");
+  });
+  await check(`the trace keeps the last ${HID_TRACE_SIZE} lines, and a failed setup is still described`, async () => {
+    const dev = wheel();
+    const clock = new FakeClock();
+    const ffb = new WebHidFfb(fakeHid([dev], [dev]).api, clock.deps);
+    for (let i = 0; i < 6; i++) {
+      await ffb.connect();
+      await ffb.dispose();
+    }
+    const lines = (await ffb.diagnose()).split("\n");
+    const start = lines.findIndex((l) => l.startsWith("Setup and teardown traffic"));
+    assert.equal(lines.length - start - 1, HID_TRACE_SIZE);
+    const broken = wheel();
+    broken.blockStatus = 2; // effect memory full
+    const f2 = new WebHidFfb(fakeHid([broken]).api, new FakeClock().deps);
+    assert.equal(await f2.connect(), null);
+    const r2 = await f2.diagnose();
+    assert.match(r2, /Status: error/);
+    assert.match(r2, /--- Fake DD Base \(last tried/);
+    assert.match(r2, /setup failed: The wheel has no free effect memory/);
+    assert.match(r2, /Set Constant Force: report 5/);
   });
   await check("isSupported(): false without navigator.hid (Node)", () => {
     assert.equal(WebHidFfb.isSupported(), false);
