@@ -1,11 +1,12 @@
 /**
  * The overtaking aids by era, as race control runs them.
  *
+ * - Before 2011 (`none`): no DRS; the car keeps its flaps shut.
  * - 2026 on (`straight-mode-2026`): both wings' flaps open (Straight Mode) in every DRS zone for every car, with no gap
  *   rule. The 1 s gap instead earns Overtake Mode: a car within 1 s of the car ahead at the detection point (nominally
  *   the last corner) gets the override deployment and 0.5 MJ of extra electrical energy for the following lap. Not on
  *   the first lap until the leader has passed the detection point.
- * - Up to 2025 (`drs-rear`): only the rear flap opens (DRS), only in a zone, and in a race only for a car within 1 s of
+ * - 2011 to 2025 (`drs-rear`): only the rear flap opens (DRS), only in a zone, and in a race only for a car within 1 s of
  *   the car ahead (lapped cars included) at that zone's detection point, from the moment the leader has completed two
  *   laps. Free use in practice.
  *
@@ -14,7 +15,7 @@
  */
 import type { DrsZoneDef } from '@/lib/track-data';
 
-export type OvertakingRules = 'straight-mode-2026' | 'drs-rear';
+export type OvertakingRules = 'straight-mode-2026' | 'drs-rear' | 'none';
 
 /** Gap to the car ahead at a detection point that earns the aid (s) */
 export const DETECTION_GAP_S = 1;
@@ -23,8 +24,12 @@ export const DRS_ENABLED_AFTER_LEADER_LAPS = 2;
 /** Overtake Mode's extra electrical energy for the lap it is earned for (J) */
 export const OVERTAKE_EXTRA_DEPLOY_J = 500_000;
 
-/** The aids of a car's season: Straight Mode + Overtake from 2026, rear-flap DRS before */
-export const overtakingRulesForSeason = (season: number): OvertakingRules => (season >= 2026 ? 'straight-mode-2026' : 'drs-rear');
+/** DRS arrived in 2011 */
+export const DRS_FIRST_SEASON = 2011;
+
+/** The aids of a car's season: Straight Mode + Overtake from 2026, rear-flap DRS from 2011, none before */
+export const overtakingRulesForSeason = (season: number): OvertakingRules =>
+  season >= 2026 ? 'straight-mode-2026' : season >= DRS_FIRST_SEASON ? 'drs-rear' : 'none';
 
 /**
  * Race control for one car's overtaking aids. Absent (or `racing` false): practice, the aids are free to use.

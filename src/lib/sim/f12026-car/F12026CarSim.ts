@@ -789,14 +789,19 @@ export class F12026CarSim implements SimulatorCar {
   }
 
   get overtakingRules(): OvertakingRules | undefined {
-    return this.profile.hasDrs ? this.rules : undefined;
+    return this.profile.hasDrs && this.rules !== 'none' ? this.rules : undefined;
   }
 
-  /** The overtaking aids of the car's era: both flaps in every zone + Overtake (2026), or the rear flap by the 1 s rule */
+  /**
+   * The overtaking aids of the car's era: both flaps in every zone + Overtake (2026), the rear flap by the 1 s rule
+   * (2011-2025), or none at all (before 2011)
+   */
   public setOvertakingRules(rules: OvertakingRules): void {
     this.rules = rules;
+    this.vehicle.drsFitted = rules !== 'none';
     this.vehicle.drsFlaps = rules === 'drs-rear' ? 'rear' : 'front-rear';
     this.vehicle.drsGatedByDetection = rules === 'drs-rear';
+    this.channels.hasDrs = this.profile.hasDrs && rules !== 'none';
     this.overtake.reset();
   }
 
@@ -1938,7 +1943,7 @@ export class F12026CarSim implements SimulatorCar {
     t.ersBatteryPercent = vt.ERS_CHARGE * 100;
     t.manualOverrideActive = v.performanceMode === 'PSH';
     t.boostRemainingS = this.boostRemainingS;
-    t.overtakingRules = this.overtakingRules;
+    t.overtakingRules = this.profile.hasDrs ? this.rules : undefined;
     t.overtakeAvailable = this.profile.hasErs && this.overtakeAvailable;
     t.turboBoostBar = this.profile.turbo ? Number(v.turboBoostBar.toFixed(2)) : 1;
     t.fuelKg = Number(this.fuelKg.toFixed(2));

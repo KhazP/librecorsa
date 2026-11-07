@@ -301,7 +301,7 @@ export interface CarTelemetry {
   ersBatteryPercent: number; // 0..100
   manualOverrideActive: boolean; // 2026 MOM 350kW boost
   boostRemainingS: number;
-  /** The car's overtaking aids (`overtaking-rules.ts`): 2026 Straight Mode + Overtake, or rear-flap DRS; absent = none */
+  /** The car's overtaking aids (`overtaking-rules.ts`): 2026 Straight Mode + Overtake, rear-flap DRS, or none (pre-2011) */
   overtakingRules?: import('@/lib/sim/overtaking-rules').OvertakingRules;
   /** The override (Overtake Mode on a 2026 car) may be used now: in a race only once earned within 1 s */
   overtakeAvailable?: boolean;

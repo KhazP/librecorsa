@@ -723,6 +723,8 @@ export class VehiclePhysics {
    * Off: every zone opens for every car (2026 Straight Mode); the detection points are still reported.
    */
   public drsGatedByDetection = true;
+  /** The car has a DRS flap at all (off: a car from before 2011, whose flaps never open) */
+  public drsFitted = true;
   /** Extra MGU-K deploy allowance this lap on top of `deployPerLapJ` (J): 2026 Overtake Mode */
   public extraDeployJ = 0;
   /** Lap progress from `locateProgress` (NaN without it) */
@@ -1673,6 +1675,7 @@ export class VehiclePhysics {
       inZone = zone !== undefined;
       armed = zone !== undefined && (!this.drsGatedByDetection || this.drsArmedZone === zone.id);
     }
+    if (!this.drsFitted) inZone = armed = false;
     const dryEnoughForDrs = isRearFlapAllowedInWet(this.wetness);
     this.telemetry.drsZone = inZone;
     this.telemetry.drsAvailable = inZone && armed && dryEnoughForDrs;

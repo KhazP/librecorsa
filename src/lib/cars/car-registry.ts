@@ -52,7 +52,8 @@ export interface CarDefinition {
   physics: VehicleModelId;
   /**
    * The season the car raced in, which sets its overtaking aids (`overtakingRulesForSeason`): 2026 on, Straight Mode
-   * in every DRS zone plus Overtake Mode; earlier, rear-flap DRS by the 1 s rule. Absent: no DRS (a GT3)
+   * in every DRS zone plus Overtake Mode; 2011 to 2025, rear-flap DRS by the 1 s rule; before 2011, no DRS.
+   * Absent: no DRS (a GT3)
    */
   season?: number;
   /** A ported GLB on the generic rig (`ported-car-model.ts`); absent: the vehicle model's own car */

@@ -33,7 +33,8 @@ const fmt = (v: number, d = 2) => v.toFixed(d);
 // ---------------------------------------------------------------------------
 console.log('== Rules by season');
 check('2026 cars: Straight Mode + Overtake', overtakingRulesForSeason(2026) === 'straight-mode-2026');
-check('2025 and earlier: rear-flap DRS', overtakingRulesForSeason(2025) === 'drs-rear' && overtakingRulesForSeason(2004) === 'drs-rear');
+check('2011 to 2025: rear-flap DRS', overtakingRulesForSeason(2025) === 'drs-rear' && overtakingRulesForSeason(2011) === 'drs-rear');
+check('Before 2011: no DRS', overtakingRulesForSeason(2010) === 'none' && overtakingRulesForSeason(2004) === 'none');
 const f1Cars = CARS.filter((c) => c.classId === 'f1-2026');
 check(
   'Every F1 car has a season, no GT3 does',
@@ -108,7 +109,7 @@ console.log('\n== Flaps (f12026-car model, flat ground)');
 const DT = 1 / 120;
 const full: VehicleInputs = { throttle: 1, brake: 0, steer: 0 };
 /** A car on a flat "lap" inside one long zone (detection at 0.05), DRS pressed at full throttle */
-const flapRun = (opts: { flaps: 'front-rear' | 'rear'; gated: boolean; eligible: boolean; press: boolean }) => {
+const flapRun = (opts: { flaps: 'front-rear' | 'rear'; gated: boolean; eligible: boolean; press: boolean; fitted?: boolean }) => {
   const car = new VehiclePhysics({
     ground: new FlatGroundQuery(0),
     airDensity: 1.06,
@@ -119,6 +120,7 @@ const flapRun = (opts: { flaps: 'front-rear' | 'rear'; gated: boolean; eligible:
   });
   car.drsFlaps = opts.flaps;
   car.drsGatedByDetection = opts.gated;
+  car.drsFitted = opts.fitted ?? true;
   car.reset(0, 0, 0, 260 / 3.6);
   for (let t = 0; t < 1.5; t += DT) car.step(DT, full);
   if (opts.press) {
@@ -136,6 +138,7 @@ const straight = flapRun({ flaps: 'front-rear', gated: false, eligible: false, p
 check('DRS (gated): shut when not earned at detection', !gatedNo.open);
 check('DRS (gated): opens when earned', gatedYes.open);
 check('Straight Mode (ungated): opens in the zone without the gap', straight.open);
+check('No DRS fitted (pre-2011): never opens', !flapRun({ flaps: 'rear', gated: false, eligible: true, press: true, fitted: false }).open);
 const fullDrop = shut.cd - straight.cd;
 const rearDrop = shut.cd - gatedYes.cd;
 check(
@@ -171,6 +174,13 @@ console.log('\n== Car adapters (override = Overtake Mode on a 2026 car)');
   old.setOvertakingRules('drs-rear');
   old.raceControl = notEarned;
   check('Pre-2026 car: its boost is not Overtake Mode, stays free', old.activateBoostOverride());
+  const vintage = new F12026CarSim(track, null);
+  vintage.setOvertakingRules('none');
+  vintage.step(1 / 60, { throttle: 1, toggleXMode: true });
+  check(
+    'Pre-2011 car: no DRS at all, no race rules',
+    vintage.overtakingRules === undefined && vintage.telemetry.f12026?.hasDrs === false && vintage.telemetry.overtakingRules === 'none' && vintage.createAiPeerCar().telemetry.f12026?.hasDrs === false
+  );
   const peer = old.createAiPeerCar();
   check('AI cars get the player car\'s era', peer.overtakingRules === 'drs-rear' && old.overtakingRules === 'drs-rear');
   const legacy = new F1Physics2026(track);
