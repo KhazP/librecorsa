@@ -2095,10 +2095,11 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         kbTuning.pedalAssistStrength
       );
       const kbSteerDir = (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
-      // On-screen controls: pedals and a steering pad (or the tilt of the device). Without a controller the touch
-      // steering is always the steering, centred too; with one, the stick steers while the touch steering is centred
+      // On-screen controls: pedals and a steering pad (or the tilt of the device). With no wheel or controller the touch
+      // steering is always the steering, centred too; with one, that device steers while the touch steering is centred
       const touch = touchInput.active && driving ? touchInput : null;
-      const touchSteering = touch !== null && (gamepadStick === undefined || Math.abs(touch.steer) > 0.01);
+      const touchSteering =
+        touch !== null && ((gamepadStick === undefined && gamepadSteer === undefined) || Math.abs(touch.steer) > 0.01);
       if (touchInput.active) {
         if (driving) {
           if (touchInput.shiftUp) keysRef.current.shiftUp = true;
