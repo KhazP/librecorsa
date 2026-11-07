@@ -644,6 +644,8 @@ export class AiOpponentField {
   /** Grid of the next race */
   public gridOrder: AiGridOrder;
   public playerGrid: PlayerGridSlot;
+  /** Added to every driver's temperament (`RACE_AGGRESSION_OFFSET`): the race setup's clean / normal / hard */
+  public aggressionAdd = 0;
   /** Race control: contacts judged, penalties, yellow flags, the messages for the HUD */
   public readonly raceControl = new RaceIncidents(PLAYER_CODE);
 
@@ -779,6 +781,11 @@ export class AiOpponentField {
   /** The AI grid and the racing line per class, built on first use */
   private aiTrack: AiTrack | null = null;
   private readonly classLines = new Map<string, Float64Array>();
+
+  /** A driver's temperament in this race: its own, moved by the race setup's aggression */
+  private aggressionOf(car: FieldCar): number {
+    return THREE.MathUtils.clamp(car.aggression + this.aggressionAdd, -1, 1);
+  }
 
   /**
    * Whether a car's autopilot tracks drive plans: where the circuit's line check (scripts/ai/check-lines.ts) found this
@@ -1242,7 +1249,7 @@ export class AiOpponentField {
       const T = this.tuning;
       const yellow = this.underYellow(me.sMeters);
       const caution = THREE.MathUtils.clamp(
-        T.at('overtakeCaution', me.sMeters) + this.mods.cautionAdd - 0.25 * car.aggression + this.raceControl.cautionOf(car.code, this.raceTimeS),
+        T.at('overtakeCaution', me.sMeters) + this.mods.cautionAdd - 0.25 * this.aggressionOf(car) + this.raceControl.cautionOf(car.code, this.raceTimeS),
         0,
         1
       );
@@ -1250,7 +1257,7 @@ export class AiOpponentField {
       let passSpacing = this.rc.passSpacingM * (1 + 0.5 * dc);
       let minClosing = -1 + 3 * dc;
       const followGap = 12 + 10 * dc;
-      const defend = THREE.MathUtils.clamp(T.params.defend * this.mods.defendMult + 0.2 * car.aggression, 0, 1);
+      const defend = THREE.MathUtils.clamp(T.params.defend * this.mods.defendMult + 0.2 * this.aggressionOf(car), 0, 1);
 
       let ahead: FieldCar | null = null;
       let aheadGap = Infinity;
@@ -1360,7 +1367,7 @@ export class AiOpponentField {
               distToCornerM: distToCorner,
               brakingZoneM: brakingDistanceM(me.vxMs, cornerV, decel),
               // A bold driver will finish the pass deeper into the braking zone
-              brakingShare: 0.35 + 0.3 * Math.max(0, car.aggression),
+              brakingShare: 0.35 + 0.3 * Math.max(0, this.aggressionOf(car)),
             });
           // Holding a pass already under way needs less than starting one: the tow is gone once out of it
           const holding = craft.passTargetId === ahead.id;
@@ -1493,7 +1500,7 @@ export class AiOpponentField {
       const yellowLift = yellow ? 0.93 : 1;
       // Making a pass stick: a little more into the corner (a later brake, more speed) once alongside
       const passing = craft.passTargetId !== null && ahead !== null && aheadGap < CAR_LEN_M * 1.2;
-      const attackPush = passing ? 1 + this.rc.attackPush * (1 + Math.max(0, car.aggression)) : 1;
+      const attackPush = passing ? 1 + this.rc.attackPush * (1 + Math.max(0, this.aggressionOf(car))) : 1;
       // A car on a drive plan has its pace and the weather in the plan's grip already
       this.refreshPlan(car);
       const planned = me.aiPlan ? 1 : car.pace * weatherPace;

@@ -64,6 +64,7 @@ import {
   PLAYER_GRID_LABELS,
   RACE_LAP_OPTIONS,
   RACE_OPPONENT_OPTIONS,
+  RACE_AGGRESSION_LABELS,
   RACE_START_LABELS,
   type RaceSetup,
 } from "@/lib/sim/race-setup";
@@ -846,6 +847,7 @@ export const SessionPanel: React.FC<PauseMenuProps> = (p) => {
                   <SetupChips label="AI grid" value={r.aiGrid} options={["qualifying", "pace", "reversed"] as const} format={(v) => AI_GRID_LABELS[v]} onChange={(aiGrid) => set({ aiGrid })} />
                   <SetupChips label="Damage" value={r.damage} options={DAMAGE_LEVELS} format={(v) => DAMAGE_LEVEL_LABELS[v]} onChange={(damage) => set({ damage })} />
                   <SetupChips label="Start" value={r.start} options={["standing", "rolling"] as const} format={(v) => RACE_START_LABELS[v]} onChange={(start) => set({ start })} />
+                  <SetupChips label="Racing" value={r.aggression} options={["clean", "normal", "hard"] as const} format={(v) => RACE_AGGRESSION_LABELS[v]} onChange={(aggression) => set({ aggression })} />
                 </>
               );
             })()}

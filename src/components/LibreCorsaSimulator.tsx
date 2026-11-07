@@ -40,7 +40,7 @@ import { LapDeltaTracker } from "@/lib/sim/lap-delta";
 import { TrackLimitsMonitor } from "@/lib/sim/track-limits";
 import { SimVisualFxManager } from "@/lib/sim/visual-fx";
 import { AiOpponentField, aiDriversFor, resolvePlayerVsRemoteCar } from "@/lib/sim/ai-opponents";
-import type { RaceSetup } from "@/lib/sim/race-setup";
+import { RACE_AGGRESSION_OFFSET, type RaceSetup } from "@/lib/sim/race-setup";
 import { peerWakeEmitters, TrackEnvironment } from "@/lib/sim/track-environment";
 import type { WakeEmitterCar } from "@/lib/sim/aero-wake";
 import { GamepadHaptics } from "@/lib/sim/gamepad-haptics";
@@ -304,6 +304,7 @@ function startAiRace(field: AiOpponentField, setup: RaceSetup, standing = setup.
   field.gridOrder = setup.aiGrid;
   field.playerGrid = setup.grid;
   field.damageLevel = setup.damage;
+  field.aggressionAdd = RACE_AGGRESSION_OFFSET[setup.aggression];
   field.startRace(standing);
 }
 

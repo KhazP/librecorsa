@@ -1,5 +1,5 @@
 /**
- * How an AI race is set up: length, field, grid, damage and the start. Saved with the player's settings and read when
+ * How an AI race is set up: length, field, grid, racecraft, damage and the start. Saved with the player's settings and read when
  * a race is started (changes apply from the next start).
  */
 import type { DamageLevel } from './car-damage';
@@ -7,6 +7,8 @@ import type { DamageLevel } from './car-damage';
 export type PlayerGridSlot = 'back' | 'middle' | 'front' | 'random';
 export type AiGridOrder = 'pace' | 'qualifying' | 'reversed';
 export type RaceStartKind = 'standing' | 'rolling';
+/** How hard the field races: added to each driver's own temperament */
+export type RaceAggression = 'clean' | 'normal' | 'hard';
 
 export interface RaceSetup {
   laps: number;
@@ -18,6 +20,7 @@ export interface RaceSetup {
   aiGrid: AiGridOrder;
   damage: DamageLevel;
   start: RaceStartKind;
+  aggression: RaceAggression;
 }
 
 export const DEFAULT_RACE_SETUP: RaceSetup = {
@@ -27,6 +30,7 @@ export const DEFAULT_RACE_SETUP: RaceSetup = {
   aiGrid: 'qualifying',
   damage: 'reduced',
   start: 'standing',
+  aggression: 'normal',
 };
 
 export const RACE_LAP_OPTIONS = [3, 5, 10, 20] as const;
@@ -37,6 +41,12 @@ export const MAX_RACE_OPPONENTS = 11;
 export const PLAYER_GRID_LABELS: Record<PlayerGridSlot, string> = { back: 'Back', middle: 'Middle', front: 'Pole', random: 'Random' };
 export const AI_GRID_LABELS: Record<AiGridOrder, string> = { pace: 'By pace', qualifying: 'Qualifying', reversed: 'Reversed' };
 export const RACE_START_LABELS: Record<RaceStartKind, string> = { standing: 'Standing', rolling: 'Rolling' };
+export const RACE_AGGRESSION_LABELS: Record<RaceAggression, string> = { clean: 'Clean', normal: 'Normal', hard: 'Hard' };
+/**
+ * Added to each driver's temperament (−1 waits for a clear gap and rarely defends … +1 late lunges, covers every
+ * inside): clean racing gives more room and passes less, hard racing dives later and defends more
+ */
+export const RACE_AGGRESSION_OFFSET: Record<RaceAggression, number> = { clean: -0.5, normal: 0, hard: 0.4 };
 
 const pick = <T extends string>(v: unknown, options: readonly T[], fallback: T): T =>
   typeof v === 'string' && (options as readonly string[]).includes(v) ? (v as T) : fallback;
@@ -54,5 +64,6 @@ export function parseRaceSetup(raw: unknown): RaceSetup {
     aiGrid: pick(r.aiGrid, ['pace', 'qualifying', 'reversed'] as const, d.aiGrid),
     damage: pick(r.damage, ['off', 'reduced', 'full'] as const, d.damage),
     start: pick(r.start, ['standing', 'rolling'] as const, d.start),
+    aggression: pick(r.aggression, ['clean', 'normal', 'hard'] as const, d.aggression),
   };
 }
