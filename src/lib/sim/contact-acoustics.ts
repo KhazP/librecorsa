@@ -66,7 +66,7 @@ export class ContactAcousticsRig {
     this.out.Q.value = 0.7;
     this.out.connect(destination);
 
-    // Each loop starts at its own point of the buffer CarAudio's scrub, gravel and wind also loop from the start:
+    // CarAudio's scrub, gravel and wind loop this buffer from its start; these loops start elsewhere in it, since
     // sample-aligned copies of one noise add up coherently wherever their bands overlap (the roar's and the wind's)
     const noiseVoice = (hz: number, q: number, startAt: number): [BiquadFilterNode, GainNode] => {
       const source = ctx.createBufferSource();
@@ -136,7 +136,9 @@ export class ContactAcousticsRig {
     // Frames skipped (paused, muted) or a jump along the track (teleport, restart; the lap line too, harmlessly):
     // the history is another moment's, so start from this frame instead of differentiating across the gap
     const fresh =
-      this.fresh || now - this.lastTime > dt + 0.1 || Math.abs(t.trackDistanceM - this.lastDistanceM) > 5 + 2 * speed * dt;
+      this.fresh ||
+      now - this.lastTime > dt + 0.1 ||
+      Math.abs(t.trackDistanceM - this.lastDistanceM) > 5 + 2 * speed * dt;
     this.fresh = false;
     this.lastTime = now;
     this.lastDistanceM = t.trackDistanceM;
@@ -159,7 +161,8 @@ export class ContactAcousticsRig {
       this.roarFade[i] += ((onAsphalt ? 1 : 0) - this.roarFade[i]) * ease(onAsphalt ? 1 / 6 : 1 / 3);
       const roll = (Math.max(speed, tread) * 0.015) ** 1.1;
       const slide = ramp(num(t.tireSlipRatio[i]), 0, 5);
-      roar += (0.2 + 0.2 * ramp(num(t.wheelLoadsN[i]), 0, 13000)) * (1 - 0.33 * slide * slide) * roll * this.roarFade[i];
+      const load = 0.2 + 0.2 * ramp(num(t.wheelLoadsN[i]), 0, 13000);
+      roar += load * (1 - 0.33 * slide * slide) * roll * this.roarFade[i];
       roarTone += Math.min(1, roll ** 1.2);
 
       // Damper thump and chassis rattle
@@ -181,11 +184,12 @@ export class ContactAcousticsRig {
       // Brake squeal: a disc rings under light to moderate pressure, not clamped hard, and only within a band of
       // disc temperature
       const temp = num(t.brakeTempsC[i]);
-      const tempGate = temp > 180 && temp < 750 ? Math.min(0.25 + 0.75 * ramp(temp, 180, 250), 1 - 0.75 * ramp(temp, 650, 750)) : 0;
+      const tempGate =
+        temp > 180 && temp < 750 ? Math.min(0.25 + 0.75 * ramp(temp, 180, 250), 1 - 0.75 * ramp(temp, 650, 750)) : 0;
       const rolling = ramp(tread, 0, 2.4);
-      const window = ((gt ? 2 : 0.8) * rolling * (1 - ramp(pedal, 0.2, 0.6))) ** 0.8 * ramp(pedal, 0.05, 0.2);
+      const pedalWindow = ((gt ? 2 : 0.8) * rolling * (1 - ramp(pedal, 0.2, 0.6))) ** 0.8 * ramp(pedal, 0.05, 0.2);
       const share = i < 2 ? frontBias : 1 - frontBias;
-      const target = pedal * share * window * tempGate;
+      const target = pedal * share * pedalWindow * tempGate;
       this.brakeLevel[i] = Math.min(1, Math.max(0, this.brakeLevel[i] + (target - this.brakeLevel[i]) * ease(1 / 6)));
       const level = this.brakeLevel[i];
       // Off the pedal the ring dies with the square of the level rather than hanging on
