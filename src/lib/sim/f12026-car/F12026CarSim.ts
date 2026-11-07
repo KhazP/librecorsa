@@ -118,6 +118,10 @@ export interface CarElectronicsProfile {
 }
 
 const DEFAULT_TC_LATERAL_TIGHTENING = { gain: 0.14, exponent: 1.3, floor: 0.42 } as const;
+/** Fastest a driver turns the steering wheel (deg/s at the rim), and the rim angle per road-wheel angle (the cars' lock is
+ * given as rim lock / 12.6) */
+const DRIVER_RIM_SPEED_DEG_S = 900;
+const RIM_PER_ROAD_WHEEL = 12.6;
 const DEFAULT_ABS_REAR_GUARD = { gain: 1.4, deadbandRad: 0.03, floor: 0.72 } as const;
 
 export const F12026_ELECTRONICS: CarElectronicsProfile = {
@@ -1374,8 +1378,12 @@ export class F12026CarSim implements SimulatorCar {
     inputs: ControlInputs,
     h: number
   ): { throttle: number; brake: number; brakeWheelScale?: readonly [number, number, number, number]; steer: number; drs: boolean } {
-    const steer = this.steeringAssist.steer(inputs, this.gamepadAssistEnabled, this.steeringAssistState, h);
-    return { ...this.electronicAids(inputs.throttle, inputs.brake, h, this), steer: THREE.MathUtils.clamp(steer, -1, 1), drs: false };
+    const want = THREE.MathUtils.clamp(this.steeringAssist.steer(inputs, this.gamepadAssistEnabled, this.steeringAssistState, h), -1, 1);
+    // The rack turns no faster than hands turn a wheel (900°/s at the rim, as the VF26's): a stick flick or a phone tilt
+    // otherwise reached the tyres as an instant step, which snaps a car at speed
+    const maxStep = (DRIVER_RIM_SPEED_DEG_S / (this.config.chassis.maxRoadWheelDeg * RIM_PER_ROAD_WHEEL)) * h;
+    const steer = this.steerCmd + THREE.MathUtils.clamp(want - this.steerCmd, -maxStep, maxStep);
+    return { ...this.electronicAids(inputs.throttle, inputs.brake, h, this), steer, drs: false };
   }
 
   /** The car as the steering assist reads it */
