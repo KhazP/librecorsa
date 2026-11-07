@@ -24,7 +24,7 @@ import { KeyboardPedalAssist } from '../src/lib/input/keyboard-pedals';
 import { F12026CarSim } from '../src/lib/sim/f12026-car/F12026CarSim';
 import { triggerMagnitudes } from '../src/lib/sim/gamepad-haptics';
 import { createAmgGt3Sim } from '../src/lib/sim/gt3/AmgGt3Sim';
-import { ASSIST_PRESETS, evaluateSelfSteerDeg } from '../src/lib/sim/steering-assist';
+import { ASSIST_PRESETS, deviceAssistTuning, selfSteerDeg } from '../src/lib/sim/steering-assist';
 import { VF26_TYRES } from '../src/lib/sim/vf26-data';
 import { createFlatTestTrack } from './lib/flat-track';
 
@@ -228,8 +228,8 @@ for (const cc of CARS) {
 {
   const loose = ASSIST_PRESETS.find((p) => p.id === 'loose')!;
   const drift = ASSIST_PRESETS.find((p) => p.id === 'drift')!;
-  const looseAt40 = evaluateSelfSteerDeg(40, loose.tuning, 25);
-  const driftAt40 = evaluateSelfSteerDeg(40, drift.tuning, 25);
+  const looseAt40 = selfSteerDeg(40, deviceAssistTuning(loose.tuning, 'controller'), 25);
+  const driftAt40 = selfSteerDeg(40, deviceAssistTuning(drift.tuning, 'controller'), 25);
   check(
     ASSIST_PRESETS.length === 5 && Math.abs(looseAt40 - 8) < 0.2 && driftAt40 > 18 && driftAt40 <= 25,
     `Assist presets (${ASSIST_PRESETS.map((p) => p.label).join(', ')}): Loose caps at ${looseAt40.toFixed(1)}°, Drift reaches ${driftAt40.toFixed(1)}° at 40° slide`

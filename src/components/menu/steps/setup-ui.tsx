@@ -4,7 +4,7 @@ import React from "react";
 import {
   ASSIST_PRESETS,
   deviceAssistTuning,
-  evaluateSelfSteerDeg,
+  selfSteerDeg,
   type AssistPresetInfo,
   type DeviceAssistTuning,
 } from "@/lib/sim/steering-assist";
@@ -275,7 +275,7 @@ export const AssistCurve: React.FC<{ tuning: DeviceAssistTuning; lockDeg?: numbe
   const points: string[] = [];
   for (let i = 0; i <= 45; i++) {
     const rearDeg = i;
-    const steerDeg = evaluateSelfSteerDeg(rearDeg, tuning, lockDeg);
+    const steerDeg = selfSteerDeg(rearDeg, deviceAssistTuning(tuning, "controller"), lockDeg);
     points.push(`${i === 0 ? "M" : "L"}${toX(rearDeg).toFixed(1)} ${toY(steerDeg).toFixed(1)}`);
   }
 

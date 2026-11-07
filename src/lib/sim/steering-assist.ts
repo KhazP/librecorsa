@@ -102,7 +102,7 @@ export interface DeviceAssistTuning {
   speedSensitivity: number;
   /** Front peak slip limit offset, −0.25..0.25 (0 = default; negative = safer margin, positive = sharper bite) */
   slipLimitMargin: number;
-  /** Maximum automatic countersteer road-wheel angle (deg, 5..30, default 25) */
+  /** Most road-wheel angle the self-steer turns to by itself (deg, 5..30, default 25; at most the car's lock) */
   maxSelfSteerAngleDeg: number;
 }
 
@@ -196,7 +196,7 @@ export function deviceAssistTuning(tuning: DeviceAssistTuning, device: SteeringD
     rateIncreaseWithSpeed: (1 - spd) * 0.2 - (device === "keyboard" ? 0.35 : 0.1),
     selfSteerResponse: s * 0.5 + 0.12,
     dampingStrength: d * 0.5 + 0.12,
-    maxSelfSteerAngleDeg: Math.min(90, Math.max(5, tuning.maxSelfSteerAngleDeg)),
+    maxSelfSteerAngleDeg: Math.min(30, Math.max(5, tuning.maxSelfSteerAngleDeg)),
     maxDynamicLimitReduction: 3 * s + 3.5,
     countersteerResponse: (1 - s) * 0.2 + 0.1,
     targetSlip: Math.min(1.25, Math.max(0.65, 0.95 - (s - 0.5) * 0.04 + margin)),
@@ -342,16 +342,19 @@ export function steeringRateMult(speedMs: number, lockDeg: number, rate: number,
 }
 
 /**
- * Evaluates the steady-state self-steer road-wheel angle (deg) for a given rear axle slide angle (deg) and assist
- * tuning, used by the UI curve preview (`Advanced Gamepad Assist Config.lua:selfSteerCurveCallback`).
+ * The self-steer curve: road-wheel angle (deg, toward the side the rear slides to) for the rear axle travelling
+ * `rearAngleDeg` off the car's heading, before yaw damping, eased into the countersteer cap (at most the car's lock,
+ * `lockDeg`). The assist steers by it and the setup screens draw it (AGA's `selfSteerCurveCallback`).
  */
-export function evaluateSelfSteerDeg(rearAngleDeg: number, tuning: DeviceAssistTuning, lockDeg = 25): number {
-  const resolved = deviceAssistTuning(tuning, "controller");
-  const exponent = 1 + (1 - Math.log10(10 * (resolved.selfSteerResponse * 0.9 + 0.1)));
+export function selfSteerDeg(
+  rearAngleDeg: number,
+  tuning: Pick<DeviceAssistResolved, "selfSteerResponse" | "maxSelfSteerAngleDeg">,
+  lockDeg: number
+): number {
+  const exponent = 1 + (1 - Math.log10(10 * (tuning.selfSteerResponse * 0.9 + 0.1)));
   const correctionDeg = signedPow(clamp(rearAngleDeg / 72, -1, 1), exponent) * 72;
-  const capDeg = Math.min(lockDeg, resolved.maxSelfSteerAngleDeg);
-  const window = Math.min(1, 4 / (2 * Math.max(1e-6, capDeg / lockDeg)));
-  return clampEased(correctionDeg, -capDeg, capDeg, window);
+  const capDeg = Math.min(lockDeg, tuning.maxSelfSteerAngleDeg);
+  return clampEased(correctionDeg, -capDeg, capDeg, 1);
 }
 
 /** What steers the car: the keys or the stick through the assist, or a wheel, mouse or touch straight to the rack */
@@ -491,12 +494,8 @@ export class SteeringAssist {
     const active = keyboardSteers ? keyboard : controller;
     const frontGrounded = this.grounded.get(car.slip?.frontGrounded === false ? 0 : 1, dt);
     const selfSteerStrength = Math.max(0.25, frontGrounded) * assistFadeIn;
-    const exponent = 1 + (1 - Math.log10(10 * (active.selfSteerResponse * 0.9 + 0.1)));
-    const correction = (signedPow(clamp(rearAngle / 72, -1, 1), exponent) * 72) / lockDeg;
-    const selfSteerCap = clamp01(active.maxSelfSteerAngleDeg / lockDeg);
-    const selfSteerCapWindow = Math.min(1, 4 / (2 * Math.max(1e-6, selfSteerCap)));
     const damping = -car.yawRateRadS * active.dampingStrength * 0.15 * (30 / lockDeg);
-    const rawSelfSteer = clampEased(correction, -selfSteerCap, selfSteerCap, selfSteerCapWindow) + damping;
+    const rawSelfSteer = selfSteerDeg(rearAngle, active, lockDeg) / lockDeg + damping;
     const selfSteer = clamp(this.selfSteer.get(rawSelfSteer, dt), -2, 2) * selfSteerStrength;
 
     // Steering limit that keeps the front tyres just under their peak slip angle
