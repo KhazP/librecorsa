@@ -8,6 +8,7 @@ import { LibreCorsaMark } from "../../ui/LibreCorsaLogo";
 import { anchor, COMPOUND_COLORS, gearLabel, HUD_GLASS, MiniMap, sectorColor, type HudDesignProps } from "./hud-style-parts";
 import { PedalBars } from "../PedalBars";
 import { TowerRows } from "../TimingPanels";
+import { aeroModeLabel } from "../aero-label";
 
 /** Timing tower in a race, the session card (lap time, sectors, best / last) in practice. Fills its parent's width. */
 export const BroadcastTower: React.FC<{
@@ -225,7 +226,7 @@ export const BroadcastHud: React.FC<HudDesignProps> = ({ t, deltaS, map, compoun
                       t.activeAeroMode === "X_MODE" ? "bg-[#CCFF00] text-[#08090D]" : "bg-[#1B1F2B] text-[#8E96AA]"
                     }`}
                   >
-                    {t.activeAeroMode === "X_MODE" ? "X-MODE" : "Z-MODE"}
+                    {aeroModeLabel(t)}
                   </span>
                 </>
               ) : t.fuelKg > 0 ? (

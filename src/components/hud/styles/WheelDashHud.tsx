@@ -5,6 +5,7 @@ import { formatDelta, formatLapTime, formatSectorTime } from "../hud-format";
 import { TyreMini } from "../TyreBrakeWidget";
 import { anchor, arcPoints, deltaColor, gearLabel, HUD_GLASS, HUD_LBL, MiniMap, raceNeighbours, useSectorFlash, type HudDesignProps } from "./hud-style-parts";
 import { PedalBars } from "../PedalBars";
+import { aeroModeLabel } from "../aero-label";
 
 const LEDS = 15;
 const LED_COLORS = [...Array(5).fill("#00E676"), ...Array(5).fill("#FF2A3C"), ...Array(5).fill("#2F8BE5")] as string[];
@@ -113,7 +114,7 @@ export const WheelDash: React.FC<Pick<HudDesignProps, "t" | "deltaS" | "revRange
                 t.activeAeroMode === "X_MODE" ? "bg-[#CCFF00] text-[#08090D]" : "bg-[#1B1F2B] text-[#8E96AA]"
               }`}
             >
-              {t.activeAeroMode === "X_MODE" ? "X-MODE" : "Z-MODE"}
+              {aeroModeLabel(t)}
             </span>
           ) : (
             <span className="lc-data text-[10px] text-[#8E96AA]">{Math.round(t.rpm)}</span>

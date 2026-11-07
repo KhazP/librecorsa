@@ -67,10 +67,14 @@ export const SpeedCluster: React.FC<SpeedClusterProps> = ({
   const flash = telemetry.rpm > revFull;
   const gear = telemetry.gear === 0 ? "N" : telemetry.gear < 0 ? "R" : String(telemetry.gear);
   const xMode = telemetry.activeAeroMode === "X_MODE";
+  // A 2026 car opens both flaps in every zone (X-mode) and earns Overtake; an older one has the rear-flap DRS
+  const straightMode = telemetry.overtakingRules === "straight-mode-2026";
   const drs = channels?.hasDrs ? channels : null;
   const hasAero = !channels || channels.hasDrs;
 
   const boost = telemetry.manualOverrideActive || boostLatch;
+  /** In a race a 2026 car's override (Overtake Mode) is only there once earned within 1 s at the detection point */
+  const overtakeLocked = straightMode && telemetry.overtakeAvailable === false;
   const ers = Math.max(0, Math.min(100, telemetry.ersBatteryPercent));
   const deploying = telemetry.mgukPowerKw > 5;
   const harvesting = telemetry.mgukPowerKw < -5;
@@ -81,7 +85,18 @@ export const SpeedCluster: React.FC<SpeedClusterProps> = ({
   const aeroOn = (drs && (xMode || drs.drsAvailable)) || (!drs && xMode);
   const aeroBg = xMode ? HUD_CYAN : drs?.drsAvailable ? HUD_VOLT : "#1B1F2B";
   const aeroTextColor = aeroOn ? "#08090D" : HUD_SLATE;
-  const aeroLabel = drs ? (xMode ? "DRS OPEN" : drs.drsAvailable ? "DRS ARMED" : "DRS") : xMode ? "X-MODE" : "Z-MODE";
+  const aeroLabel =
+    drs && !straightMode
+      ? xMode
+        ? "DRS OPEN"
+        : drs.drsAvailable
+          ? "DRS ARMED"
+          : "DRS"
+      : xMode
+        ? "X-MODE"
+        : drs?.drsAvailable
+          ? "X ARMED"
+          : "Z-MODE";
   const ersColor = boost ? HUD_PURPLE : deploying ? HUD_VOLT : harvesting ? HUD_GREEN : HUD_WHITE;
   const ersLabel = harvesting ? "Harvest" : deploying ? "Deploy" : "ERS SOC";
 
@@ -115,7 +130,11 @@ export const SpeedCluster: React.FC<SpeedClusterProps> = ({
           onClick={onToggleXMode}
           className="lc-data pointer-events-auto cursor-pointer rounded-full px-2.5 py-1 text-[11px] transition-colors"
           style={{ backgroundColor: aeroBg, color: aeroTextColor }}
-          title={drs ? "DRS (X): opens in a DRS zone once its detection point is crossed" : "Active aero (X)"}
+          title={
+            drs && !straightMode
+              ? "DRS (X): rear flap, in a DRS zone; in a race only within 1 s of the car ahead at the detection point, from lap 3"
+              : "Straight Mode (X): both flaps open in any DRS zone"
+          }
         >
           {aeroLabel}
         </button>
@@ -129,10 +148,17 @@ export const SpeedCluster: React.FC<SpeedClusterProps> = ({
             backgroundColor: boost ? HUD_PURPLE : "#1B1F2B",
             color: boost ? HUD_WHITE : HUD_SLATE,
             boxShadow: boost ? `0 0 12px ${HUD_PURPLE}66` : "none",
+            opacity: overtakeLocked ? 0.4 : 1,
           }}
-          title="Manual override boost (Space / B)"
+          title={
+            straightMode
+              ? overtakeLocked
+                ? "Overtake Mode (Space / B): earned within 1 s of the car ahead at the detection point, for the next lap"
+                : "Overtake Mode (Space / B)"
+              : "Manual override boost (Space / B)"
+          }
         >
-          OVR BOOST
+          {straightMode ? "OVERTAKE" : "OVR BOOST"}
         </button>
       ) : null}
     </>
