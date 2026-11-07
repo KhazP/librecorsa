@@ -14,7 +14,6 @@ import {
   parsePidLayout,
   PID,
   selectorValue,
-  setupLogitechDevice,
   setupPidDevice,
   teardownPidSession,
   unpackReport,
@@ -683,7 +682,126 @@ async function main() {
     assert.deepEqual(sent, [191, 192]);
   });
 
+  console.log("Classic Logitech wheels (hid-lg4ff commands)");
+  /**
+   * Reference commands written by hand from Linux drivers/hid/hid-lg4ff.c, not from this driver's output. All 7-byte
+   * writes to the first output report (report id 0 on these wheels).
+   */
+  const LG4FF = {
+    /** lg4ff_set_autocenter_default(dev, 0): "De-activate Auto-Center" */
+    springOff: [0xf5, 0, 0, 0, 0, 0, 0],
+    /** lg4ff_set_range_g25: f8 81, range low byte, high byte. 540 = 0x021c, 900 = 0x0384 */
+    range540: [0xf8, 0x81, 0x1c, 0x02, 0, 0, 0],
+    range900: [0xf8, 0x81, 0x84, 0x03, 0, 0, 0],
+    /** lg4ff_play, FF_CONSTANT: x = level + 0x80; x == 0x80 de-activates slot 1, otherwise 11 08 x 80 */
+    forceOff: [0x13, 0, 0, 0, 0, 0, 0],
+    forceMax: [0x11, 0x08, 0xff, 0x80, 0, 0, 0],
+    forceMin: [0x11, 0x08, 0x00, 0x80, 0, 0, 0],
+    /**
+     * lg4ff_set_autocenter_default(dev, 0xffff) on a non-MOMO wheel: expand_a = (0x0c * 0xaaaa + 0x06 * 0x5555) >> 1
+     * = 327675, / 0xaaaa = 7; expand_b = 0x80 * 0xaaaa + 0xff * 0x5555 = 11162795, / 0xaaaa = 255; then "Activate"
+     */
+    springParamsFull: [0xfe, 0x0d, 0x07, 0x07, 0xff, 0, 0],
+    springOn: [0x14, 0, 0, 0, 0, 0, 0],
+  };
+  /** A wheel's HID interface with lg4ff's output report: no report id, 7 one-byte values */
+  const logitech = (productId: number, name: string) => {
+    const dev = new FakeHidDevice([
+      {
+        usagePage: 0x01,
+        usage: 0x04,
+        inputReports: [{ reportId: 0, items: [variable([X], 16, 1, 0, 65535)] }],
+        outputReports: [{ reportId: 0, items: [variable([(0xff00 << 16) | 1], 8, 7, 0, 255)] }],
+      },
+    ]);
+    dev.vendorId = 0x046d;
+    dev.productId = productId;
+    dev.productName = name;
+    return dev;
+  };
+  const writes = (dev: FakeHidDevice) => dev.log.map((l) => (l.kind === "out" && l.id === 0 ? l.data : ["other", l.kind, l.id]));
+
+  await check("G29: connect = spring off then the wheel rotation (lg4ff_init order); no force until the game sends one", async () => {
+    const g29 = logitech(0xc24f, "Logitech G29 Driving Force Racing Wheel");
+    const ffb = new WebHidFfb(fakeHid([g29]).api, new FakeClock().deps);
+    ffb.setRotationDeg(540);
+    assert.equal(await ffb.connect(), "Logitech G29 Driving Force Racing Wheel");
+    assert.equal(ffb.status.state, "ready");
+    assert.deepEqual(writes(g29), [LG4FF.springOff, LG4FF.range540]);
+    assert.equal(ffb.hasHardwareDamper(), false);
+  });
+  await check("G29: force bytes follow lg4ff_play; zero switches slot 1 off", async () => {
+    const g29 = logitech(0xc24f, "G29");
+    const clock = new FakeClock();
+    const ffb = new WebHidFfb(fakeHid([g29]).api, clock.deps);
+    await ffb.connect();
+    g29.log.length = 0;
+    for (const f of [1, -1, 0]) {
+      ffb.setForce(f);
+      await flush();
+      clock.advance(5);
+      await flush();
+    }
+    assert.deepEqual(writes(g29), [LG4FF.forceMax, LG4FF.forceMin, LG4FF.forceOff]);
+  });
+  await check("G27: a rotation change while running is sent; dispose puts 900° and the full centring spring back", async () => {
+    const g27 = logitech(0xc29b, "G27");
+    const clock = new FakeClock();
+    const ffb = new WebHidFfb(fakeHid([g27]).api, clock.deps);
+    ffb.setRotationDeg(1080); // outside 40..900: lg4ff_range_store ignores it, the wheel keeps its own range
+    await ffb.connect();
+    assert.deepEqual(writes(g27), [LG4FF.springOff]);
+    ffb.setRotationDeg(540);
+    await flush();
+    assert.deepEqual(writes(g27).at(-1), LG4FF.range540);
+    g27.log.length = 0;
+    await ffb.dispose();
+    assert.deepEqual(writes(g27), [LG4FF.forceOff, LG4FF.range900, LG4FF.springParamsFull, LG4FF.springOn]);
+    assert.equal(g27.opened, false);
+  });
+  await check("Driving Force GT: the range is never restored when it was never set", async () => {
+    const dfgt = logitech(0xc29a, "Driving Force GT");
+    const ffb = new WebHidFfb(fakeHid([dfgt]).api, new FakeClock().deps);
+    await ffb.connect();
+    dfgt.log.length = 0;
+    await ffb.dispose();
+    assert.deepEqual(writes(dfgt), [LG4FF.forceOff, LG4FF.springParamsFull, LG4FF.springOn]);
+  });
+  await check("G920 / G923 Xbox (HID++), a Logitech gamepad and the DFP are refused and never opened", async () => {
+    for (const [productId, name] of [
+      [0xc262, "G920"],
+      [0xc26e, "G923 Racing Wheel for Xbox One and PC"],
+      [0xc216, "Logitech Dual Action"],
+      [0xc298, "Driving Force Pro"],
+    ] as const) {
+      const dev = logitech(productId, name);
+      const ffb = new WebHidFfb(fakeHid([dev]).api, new FakeClock().deps);
+      assert.equal(await ffb.connect(), null, name);
+      assert.equal(ffb.status.state, "unsupported", name);
+      assert.match(ffb.status.message ?? "", /bridge/, name);
+      assert.equal(dev.opened, false, name);
+      assert.equal(dev.log.length, 0, name);
+    }
+  });
+  await check("a listed wheel's interface without lg4ff's 7-byte output report is refused", async () => {
+    const g29 = logitech(0xc24f, "G29");
+    g29.collections = [{ usagePage: 0x01, usage: 0x04, outputReports: [{ reportId: 0, items: [variable([(0xff00 << 16) | 1], 8, 2, 0, 255)] }] }];
+    const ffb = new WebHidFfb(fakeHid([g29]).api, new FakeClock().deps);
+    assert.equal(await ffb.connect(), null);
+    assert.equal(ffb.status.state, "unsupported");
+    assert.equal(g29.opened, false);
+  });
+  await check("a Logitech device with a HID PID descriptor takes the PID path", async () => {
+    const dev = wheel();
+    dev.vendorId = 0x046d;
+    dev.productName = "Logitech PID";
+    const ffb = new WebHidFfb(fakeHid([dev]).api, new FakeClock().deps);
+    assert.equal(await ffb.connect(), "Logitech PID");
+    assert.ok(dev.forceWrites.length > 0, "PID Set Constant Force sent");
+  });
+
   console.log("WebHidFfb driver");
+
   await check("connect(): picks, sets up, reports ready with the device name", async () => {
     const dev = wheel();
     const { api, listeners } = fakeHid([dev]);
@@ -706,39 +824,6 @@ async function main() {
     assert.equal(await ffb.connect(), null);
     assert.equal(ffb.status.state, "idle");
     assert.match(ffb.status.message ?? "", /No wheel/);
-  });
-  await check("connect(): classic Logitech (no PID) uses 7-byte Logitech protocol, PID Logitech (G923) uses PID", async () => {
-    const g29 = new FakeHidDevice([{ usagePage: 0x01, usage: 0x04, outputReports: [{ reportId: 0, items: [] }] }]);
-    g29.vendorId = 0x046d;
-    g29.productName = "Logitech G29";
-    const clock = new FakeClock();
-    const ffb = new WebHidFfb(fakeHid([g29]).api, clock.deps);
-    assert.equal(await ffb.connect(), "Logitech G29");
-    assert.equal(ffb.status.state, "ready");
-    assert.equal(g29.opened, true);
-    assert.deepEqual(g29.log, [
-      { kind: "out", id: 0, data: [0xf5, 0, 0, 0, 0, 0, 0] }, // disable autocenter
-      { kind: "out", id: 0, data: [0xf8, 0x81, 900 & 0xff, 900 >> 8, 0, 0, 0] }, // 900 deg mode
-      { kind: "out", id: 0, data: [0x11, 0x00, 0x80, 0, 0, 0, 0] }, // neutral constant force (128)
-    ]);
-    clock.advance(5);
-    ffb.setForce(1); // max right/left -> 255
-    await flush();
-    assert.deepEqual(g29.log.at(-1), { kind: "out", id: 0, data: [0x11, 0x00, 255, 0, 0, 0, 0] });
-    await ffb.dispose();
-    assert.deepEqual(g29.log.slice(-2), [
-      { kind: "out", id: 0, data: [0xf3, 0, 0, 0, 0, 0, 0] },
-      { kind: "out", id: 0, data: [0xf5, 0, 0, 0, 0, 0, 0] },
-    ]);
-
-    // G923 with PID descriptor uses standard PID protocol
-    const g923 = wheel();
-    g923.vendorId = 0x046d;
-    g923.productName = "G923 PID";
-    const ffbPid = new WebHidFfb(fakeHid([g923]).api, new FakeClock().deps);
-    assert.equal(await ffbPid.connect(), "G923 PID");
-    assert.equal(ffbPid.status.state, "ready");
-    assert.ok(g923.log.some((l) => l.kind === "out" && l.id === 5), "sent PID Constant Force report");
   });
   await check("connect() & reconnect(): multi-interface wheel (e.g. PXN V99) skips input-only interface and picks PID interface", async () => {
     const inputOnly = new FakeHidDevice([{ usagePage: 0x01, usage: 0x04, inputReports: [{ reportId: 1, items: [variable([X], 16, 1, 0, 65535)] }] }]);

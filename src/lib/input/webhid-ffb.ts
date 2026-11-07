@@ -6,15 +6,25 @@
  * WebHID can write those same reports, so no native bridge is needed. This driver keeps ONE Constant Force effect
  * alive on the wheel and streams its magnitude (the shaped rim force) with Set Constant Force reports.
  *
- * Nothing here is hard-coded per device for PID wheels: report ids, field order and bit sizes come from the parsed
- * report descriptor (`device.collections`), see {@link parsePidLayout}. Classic Logitech G-series wheels (G25, G27,
- * G29, Driving Force GT/Pro) that do not expose HID PID are driven via the classic 7-byte Logitech HID protocol
- * ({@link setupLogitechDevice}), while PID-capable Logitech wheels (such as G923 in PID mode) use the standard PID path.
+ * Report ids, field order and bit sizes come from the parsed report descriptor (`device.collections`), see
+ * {@link parsePidLayout}. The few values firmwares disagree on are a {@link PidProfile}, chosen per wheel by USB id.
+ *
+ * Logitech wheels do not speak HID PID. The G25, G27, Driving Force GT and G29 (LOGITECH_CLASSIC_WHEELS in
+ * wheel-support.ts) take the classic Logitech commands, sent as Linux hid-lg4ff sends them
+ * ({@link setupLogitechClassicDevice}); any other Logitech wheel is refused and stays on the bridge.
  *
  * Sign convention: `WebHidFfb.setForce` takes the raw PID magnitude, −1..1 over the field's logical range. A PID /
  * DirectInput direction says where the force comes from, so + magnitude along +X (90°) pushes the rim left and − pushes
  * it right. The game's forces are + = right; `linkHidSink` in wheel-ffb.ts flips the sign between the two.
  */
+
+import {
+  LG4FF_MAX_RANGE_DEG,
+  LG4FF_MIN_RANGE_DEG,
+  LOGITECH_VENDOR_ID,
+  logitechClassicModel,
+  type LogitechClassicModel,
+} from "./wheel-support";
 
 /* ------------------------------------------------------------------------------------------------------------ */
 /* Minimal WebHID types (the @types package is not installed)                                                    */
@@ -135,7 +145,6 @@ const SELECTORS: readonly { key: number; lo: number; hi: number }[] = [
   { key: PID.BLOCK_LOAD_STATUS, lo: 0x8c, hi: 0x8e },
 ];
 
-const VENDOR_LOGITECH = 0x046d;
 const MIN_WRITE_INTERVAL_MS = 2;
 /** Consecutive failed writes after which the driver gives up and reports an error */
 const MAX_WRITE_FAILURES = 3;
@@ -463,11 +472,13 @@ interface ChannelState extends WriterChannel {
  * Streams values to the wheel: at most one sendReport in flight for the device, at least 2 ms between writes, only the
  * latest value of each stream is kept (intermediate ones are dropped) and changes below a stream's threshold are
  * skipped (for the force: 1/1000 of the field's range). The force is the first stream; {@link addChannel} adds others
- * (the hardware damper, the Logitech range) that share the write slot, the spacing and the failure count, with the
- * force sent first when several are waiting.
+ * (the hardware damper, the Logitech range) that share the write slot, the spacing and the failure count, taking turns
+ * when several are waiting.
  */
 export class ForceWriter {
   private readonly channels: ChannelState[] = [];
+  /** Index of the stream written last; the force (0) is first when nothing was written yet */
+  private lastChannel = -1;
   private current: Promise<void> | null = null;
   private lastSendMs = -Infinity;
   private timer: unknown = null;
@@ -540,9 +551,21 @@ export class ForceWriter {
     this.pump();
   }
 
+  /** An urgent value first, else the next waiting stream after the one sent last, so a 500 Hz force cannot starve the rest */
+  private next(): ChannelState | undefined {
+    const urgent = this.channels.find((x) => x.pending !== null && x.urgent);
+    if (urgent) return urgent;
+    const n = this.channels.length;
+    for (let k = 1; k <= n; k++) {
+      const c = this.channels[(this.lastChannel + k) % n] as ChannelState;
+      if (c.pending !== null) return c;
+    }
+    return undefined;
+  }
+
   private pump(): void {
     if (this.dead || this.current !== null) return;
-    const c = this.channels.find((x) => x.pending !== null && x.urgent) ?? this.channels.find((x) => x.pending !== null);
+    const c = this.next();
     if (!c || c.pending === null) return;
     const wait = c.urgent ? 0 : this.lastSendMs + MIN_WRITE_INTERVAL_MS - this.deps.now();
     if (wait > 0) {
@@ -558,6 +581,7 @@ export class ForceWriter {
     c.pending = null;
     c.urgent = false;
     c.lastRaw = raw;
+    this.lastChannel = this.channels.indexOf(c);
     this.lastSendMs = this.deps.now();
     this.current = c
       .send(raw)
@@ -589,22 +613,40 @@ function errorMessage(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
-export interface PidSession {
+interface SessionBase {
   device: HidDeviceLike;
-  driver?: "pid" | "logitech";
+  /** Every write to the wheel goes through it: the force, and any other stream the session adds */
+  writer: ForceWriter;
+  /** Hardware damper coefficient 0..1, a stream of `writer`; absent without a hardware damper */
+  setDamper?: (coeff: number, urgent?: boolean) => void;
+}
+
+export interface PidSession extends SessionBase {
+  kind: "pid";
   layout: PidLayout;
   /** Effect block holding the Constant Force effect */
   blockIndex: number;
   /** Effect block holding the hardware Damper condition effect; null when the wheel runs none */
   damperBlockIndex: number | null;
-  writer: ForceWriter;
-  /** Hardware Damper coefficient 0..1, a stream of `writer`; absent without a hardware damper */
-  setDamper?: (coeff: number, urgent?: boolean) => void;
 }
 
-export type PidSetupResult =
-  | { ok: true; session: PidSession }
-  | { ok: false; /** the device has no usable HID PID force feedback (as opposed to a transient failure) */ unsupported: boolean; message: string };
+export interface LogitechClassicSession extends SessionBase {
+  kind: "logitech-classic";
+  model: LogitechClassicModel;
+  /** Writes one 7-byte lg4ff command straight to the wheel (setup and teardown, outside `writer`) */
+  send: (bytes: readonly number[]) => Promise<void>;
+  /** Rotation lock to lock (deg), a stream of `writer`; values outside 40..900 are ignored, as lg4ff_range_store does */
+  setRange: (deg: number) => void;
+  /** A range command went out, so teardown puts the 900° that lg4ff_init starts with back */
+  rangeChanged: boolean;
+}
+
+export type FfbSession = PidSession | LogitechClassicSession;
+
+export type SetupResult<S> =
+  | { ok: true; session: S }
+  | { ok: false; /** the device has no force feedback this driver can use (as opposed to a transient failure) */ unsupported: boolean; message: string };
+export type PidSetupResult = SetupResult<PidSession>;
 
 export interface PidSetupOptions {
   deps?: FfbDeps;
@@ -923,7 +965,7 @@ export async function setupPidDevice(device: HidDeviceLike, options: PidSetupOpt
       deps,
       options.onFail
     );
-    const session: PidSession = { device, driver: "pid", layout, blockIndex, damperBlockIndex, writer };
+    const session: PidSession = { kind: "pid", device, layout, blockIndex, damperBlockIndex, writer };
     if (damperBlockIndex !== null && cond) {
       session.setDamper = writer.addChannel({
         toRaw: (c) => Math.round(clamp(Number.isFinite(c) ? c : 0, 0, 1) * 1000),
@@ -948,63 +990,149 @@ export async function setupPidDevice(device: HidDeviceLike, options: PidSetupOpt
   }
 }
 
-const LOGITECH_FORCE_FIELD: PidFieldLayout = { bitOffset: 16, bitSize: 8, min: 0, max: 255, signed: false };
-const LOGITECH_REPORT_LAYOUT: PidReportLayout = {
-  reportId: 0,
-  bitLength: 56,
-  fields: { [PID.MAGNITUDE]: LOGITECH_FORCE_FIELD },
-  fieldList: [{ ...LOGITECH_FORCE_FIELD, usage: PID.MAGNITUDE }],
-};
+/* ------------------------------------------------------------------------------------------------------------ */
+/* Classic Logitech wheels                                                                                       */
+/* ------------------------------------------------------------------------------------------------------------ */
 
-function sendLogitechReport(device: HidDeviceLike, bytes: readonly number[]): Promise<void> {
-  const data = new Uint8Array(7);
-  for (let i = 0; i < bytes.length && i < 7; i++) data[i] = bytes[i] & 0xff;
-  return device.sendReport(0, data);
+/*
+ * The commands are those of Linux drivers/hid/hid-lg4ff.c, the outside source for every byte below; the function
+ * named on each one is the kernel function that sends the same bytes. None of it has been checked on a wheel.
+ */
+
+/** lg4ff_play, FF_CONSTANT: level 0x80 is no force and switches slot 1 off; any other level plays in slot 1 */
+function lg4ffConstantForce(level: number): number[] {
+  return level === 0x80 ? [0x13, 0, 0, 0, 0, 0, 0] : [0x11, 0x08, level, 0x80, 0, 0, 0];
+}
+
+/** lg4ff_set_range_g25 (G25, G27, DFGT, G29) */
+function lg4ffRange(deg: number): number[] {
+  return [0xf8, 0x81, deg & 0xff, (deg >> 8) & 0xff, 0, 0, 0];
+}
+
+/** lg4ff_set_autocenter_default for a non-MOMO wheel: 0 switches the centring spring off, else its parameters then on */
+function lg4ffAutocenter(magnitude: number): number[][] {
+  if (magnitude === 0) return [[0xf5, 0, 0, 0, 0, 0, 0]];
+  let a: number;
+  let b: number;
+  if (magnitude <= 0xaaaa) {
+    a = 0x0c * magnitude;
+    b = 0x80 * magnitude;
+  } else {
+    a = 0x0c * 0xaaaa + 0x06 * (magnitude - 0xaaaa);
+    b = 0x80 * 0xaaaa + 0xff * (magnitude - 0xaaaa);
+  }
+  a >>= 1;
+  const k = Math.floor(a / 0xaaaa) & 0xff;
+  return [
+    [0xfe, 0x0d, k, k, Math.floor(b / 0xaaaa) & 0xff, 0, 0],
+    [0x14, 0, 0, 0, 0, 0, 0],
+  ];
 }
 
 /**
- * Classic Logitech 7-byte WebHID session (G25, G27, G29, Driving Force GT/Pro):
- * disables the autocenter spring, switches to native 900° mode, and streams slot-1 constant force on reportId 0.
+ * Centring spring strength (FF_AUTOCENTER magnitude, 0..0xffff) put back when the page lets go of the wheel, so it is
+ * not left limp. Full strength; whether that matches the spring the wheel powers up with is not known.
  */
-export async function setupLogitechDevice(device: HidDeviceLike, options: PidSetupOptions = {}): Promise<PidSetupResult> {
+const LG4FF_AUTOCENTER_ON_RELEASE = 0xffff;
+
+/**
+ * Force level byte: −1..1 over 0..255, 0 → 0x80. Sign: `setForce` takes a PID magnitude along +X (90°). Linux plays
+ * such an effect on these wheels as + level (ml_combine_effects in ff-memless.c: sin(direction) x level, + at 0x4000)
+ * and lg4ff_play adds 0x80, while hid-pidff hands the same direction to a PID wheel unchanged
+ * (pidff_set_effect_direction); so + force → level above 0x80 here. Unverified on a wheel: Test direction / Invert.
+ */
+const LG4FF_FORCE_FIELD: PidFieldLayout = { bitOffset: 0, bitSize: 8, min: 0, max: 255, signed: false };
+
+/**
+ * The output report lg4ff writes: the device's first one, which must carry 7 values (lg4ff_init checks it with
+ * hid_validate_values(hid, HID_OUTPUT_REPORT, 0, 0, 7)). Null on an interface without it.
+ */
+function lg4ffOutputReport(collections: readonly HidCollectionLike[]): { reportId: number; bytes: number } | null {
+  const first = gatherReports(collections, "outputReports").entries().next();
+  if (first.done) return null;
+  const [reportId, { bits }] = first.value;
+  return bits >= 7 * 8 ? { reportId, bytes: Math.ceil(bits / 8) } : null;
+}
+
+/** A range lg4ff_range_store would apply; null for anything else (the wheel keeps its own range) */
+function lg4ffRangeDeg(deg: number | null | undefined): number | null {
+  if (typeof deg !== "number" || !Number.isFinite(deg)) return null;
+  const r = Math.round(deg);
+  return r >= LG4FF_MIN_RANGE_DEG && r <= LG4FF_MAX_RANGE_DEG ? r : null;
+}
+
+export interface LogitechClassicSetupOptions extends PidSetupOptions {
+  /** Rotation to set, lock to lock (deg); null or outside 40..900 leaves the wheel's own range */
+  rotationDeg?: number | null;
+}
+
+/**
+ * Connect-time setup of a listed classic Logitech wheel, in lg4ff_init's order: centring spring off
+ * (lg4ff_set_autocenter_default with 0), then the range. No force is sent until the game sends one.
+ */
+export async function setupLogitechClassicDevice(
+  device: HidDeviceLike,
+  model: LogitechClassicModel,
+  options: LogitechClassicSetupOptions = {}
+): Promise<SetupResult<LogitechClassicSession>> {
   const deps = options.deps ?? defaultFfbDeps;
+  const report = lg4ffOutputReport(device.collections);
+  if (!report) {
+    return { ok: false, unsupported: true, message: `This ${model.name} interface has no 7-byte output report for force feedback` };
+  }
+  const send = (bytes: readonly number[]) => {
+    const data = new Uint8Array(report.bytes);
+    for (let i = 0; i < bytes.length && i < data.length; i++) data[i] = (bytes[i] as number) & 0xff;
+    return device.sendReport(report.reportId, data);
+  };
+  let springOff = false;
   try {
     if (!device.opened) await device.open();
-    await sendLogitechReport(device, [0xf5, 0, 0, 0, 0, 0, 0]);
-    await sendLogitechReport(device, [0xf8, 0x81, 900 & 0xff, (900 >> 8) & 0xff, 0, 0, 0]);
-    await sendLogitechReport(device, [0x11, 0x00, 0x80, 0, 0, 0, 0]);
-    const writer = new ForceWriter(
-      LOGITECH_FORCE_FIELD,
-      (raw) => sendLogitechReport(device, [0x11, 0x00, raw & 0xff, 0, 0, 0, 0]),
-      deps,
-      options.onFail
-    );
-    const layout: PidLayout = {
-      constantForce: LOGITECH_REPORT_LAYOUT,
-      effectOperation: LOGITECH_REPORT_LAYOUT,
-      setEffect: null,
-      setCondition: null,
-      deviceControl: null,
-      deviceGain: null,
-      blockFree: null,
-      createNewEffect: null,
-      blockLoad: null,
-      hasDamper: false,
+    for (const r of lg4ffAutocenter(0)) await send(r);
+    springOff = true;
+    const range = lg4ffRangeDeg(options.rotationDeg);
+    if (range !== null) await send(lg4ffRange(range));
+    const writer = new ForceWriter(LG4FF_FORCE_FIELD, (level) => send(lg4ffConstantForce(level)), deps, options.onFail);
+    const session: LogitechClassicSession = {
+      kind: "logitech-classic",
+      device,
+      model,
+      writer,
+      send,
+      rangeChanged: range !== null,
+      setRange: () => {},
     };
-    return {
-      ok: true,
-      session: {
-        device,
-        driver: "logitech",
-        layout,
-        blockIndex: 1,
-        damperBlockIndex: null,
-        writer,
+    const queueRange = writer.addChannel({
+      toRaw: (deg) => deg,
+      threshold: 1,
+      initialRaw: range,
+      send: (deg) => {
+        session.rangeChanged = true;
+        return send(lg4ffRange(deg));
       },
+    });
+    session.setRange = (deg) => {
+      const r = lg4ffRangeDeg(deg);
+      if (r !== null) queueRange(r);
     };
+    return { ok: true, session };
   } catch (e) {
+    if (springOff) for (const r of lg4ffAutocenter(LG4FF_AUTOCENTER_ON_RELEASE)) await bestEffort(() => send(r));
     return { ok: false, unsupported: false, message: errorMessage(e) };
   }
+}
+
+/** Best-effort shutdown: force off, the range back to 900° if it was changed, centring spring on. Never throws. */
+export async function teardownLogitechClassicSession(session: LogitechClassicSession): Promise<void> {
+  await session.writer.close();
+  const { send } = session;
+  await bestEffort(() => send(lg4ffConstantForce(0x80)));
+  if (session.rangeChanged) await bestEffort(() => send(lg4ffRange(LG4FF_MAX_RANGE_DEG)));
+  for (const r of lg4ffAutocenter(LG4FF_AUTOCENTER_ON_RELEASE)) await bestEffort(() => send(r));
+}
+
+export function teardownSession(session: FfbSession): Promise<void> {
+  return session.kind === "pid" ? teardownPidSession(session) : teardownLogitechClassicSession(session);
 }
 
 /** Best-effort shutdown: zero force, stop the effects, free them, stop all, disable actuators. Never throws. */
@@ -1012,11 +1140,6 @@ export async function teardownPidSession(session: PidSession): Promise<void> {
   await session.writer.close();
   const { device, layout, blockIndex, damperBlockIndex } = session;
   const attempt = bestEffort;
-  if (session.driver === "logitech") {
-    await attempt(() => sendLogitechReport(device, [0xf3, 0, 0, 0, 0, 0, 0]));
-    await attempt(() => sendLogitechReport(device, [0xf5, 0, 0, 0, 0, 0, 0]));
-    return;
-  }
   const mag = getField(layout.constantForce, PID.MAGNITUDE);
   if (mag) {
     await attempt(() =>
@@ -1068,6 +1191,8 @@ const REQUEST_FILTERS = [
 const UNSUPPORTED_BROWSER = "WebHID needs Chrome or Edge on https or localhost";
 /** Status message when the page loads with WebHID on but no wheel was granted to it yet (pairing needs a click) */
 export const PAIR_MESSAGE = "Click Connect to pair your wheel";
+const LOGITECH_MESSAGE =
+  "Only the Logitech G25, G27, G29 and Driving Force GT take force feedback from the browser; use the native FFB bridge for this wheel";
 /**
  * With no setForce / setDamper call for this long (hidden tab, stalled loop, the app's own stop) the driver zeroes the
  * force and the hardware damper itself. wheel-ffb.ts zeroes the force after 150 ms (HID_WATCHDOG_MS) but cannot reach
@@ -1091,7 +1216,7 @@ function pickFfbDevice(devices: readonly HidDeviceLike[], allowFallback: boolean
   return (
     devices.find((d) => parsePidLayout(d.collections) !== null) ??
     devices.find((d) => hasOutputReports(d.collections)) ??
-    devices.find((d) => d.vendorId === VENDOR_LOGITECH) ??
+    devices.find((d) => d.vendorId === LOGITECH_VENDOR_ID) ??
     (allowFallback ? devices[0] : undefined)
   );
 }
@@ -1115,7 +1240,7 @@ export class WebHidFfb {
   status: WebHidFfbStatus;
   onStatus?: (s: WebHidFfbStatus) => void;
 
-  private session: PidSession | null = null;
+  private session: FfbSession | null = null;
   private device: HidDeviceLike | null = null;
   private busy: Promise<string | null> | null = null;
   private busyClosing = false;
@@ -1123,6 +1248,7 @@ export class WebHidFfb {
   private listeners = new Set<() => void>();
   private lastDriveMs = 0;
   private idleTimer: unknown = null;
+  private rotationDeg: number | null = null;
 
   /** `hid` and `deps` exist for tests; the app uses the defaults */
   constructor(
@@ -1215,6 +1341,15 @@ export class WebHidFfb {
     this.noteDrive();
   }
 
+  /**
+   * The wheel rotation setting, lock to lock (deg). A classic Logitech wheel is set to it when it connects and when it
+   * changes (40..900°; anything else leaves the wheel's own range); a PID wheel ignores it.
+   */
+  setRotationDeg(deg: number): void {
+    this.rotationDeg = Number.isFinite(deg) ? deg : null;
+    if (this.session?.kind === "logitech-classic" && this.rotationDeg !== null) this.session.setRange(this.rotationDeg);
+  }
+
   /** Zero force and hardware damper now (pause menu) */
   stop(): void {
     this.session?.writer.setForce(0, true);
@@ -1264,17 +1399,23 @@ export class WebHidFfb {
   private async attach(hid: HidApiLike, device: HidDeviceLike): Promise<string | null> {
     const name = deviceName(device);
     this.setStatus("connecting", name, null);
-    const isClassicLogitech = device.vendorId === VENDOR_LOGITECH && parsePidLayout(device.collections) === null;
-    const setupFn = isClassicLogitech ? setupLogitechDevice : setupPidDevice;
-    const result = await setupFn(device, {
+    const options: LogitechClassicSetupOptions = {
       deps: this.deps,
+      rotationDeg: this.rotationDeg,
       onFail: (message, fatal) => {
         if (fatal && this.device === device) {
           this.session?.writer.kill();
           this.setStatus("error", name, `Force feedback stopped: ${message}`);
         }
       },
-    });
+    };
+    const pid = parsePidLayout(device.collections) !== null;
+    const model = pid ? null : logitechClassicModel(device.vendorId, device.productId);
+    const result: SetupResult<FfbSession> = model
+      ? await setupLogitechClassicDevice(device, model, options)
+      : !pid && device.vendorId === LOGITECH_VENDOR_ID
+        ? { ok: false, unsupported: true, message: LOGITECH_MESSAGE }
+        : await setupPidDevice(device, options);
     if (!result.ok) {
       try {
         if (device.opened) await device.close();
@@ -1339,7 +1480,7 @@ export class WebHidFfb {
       this.listening.removeEventListener("disconnect", this.onDisconnect);
       this.listening = null;
     }
-    if (session) await teardownPidSession(session);
+    if (session) await teardownSession(session);
     if (device) {
       try {
         if (device.opened) await device.close();

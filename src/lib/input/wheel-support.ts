@@ -7,6 +7,37 @@
  * "Wheels and force feedback", issue template "Wheel report").
  */
 
+export const LOGITECH_VENDOR_ID = 0x046d;
+
+export interface LogitechClassicModel {
+  productId: number;
+  name: string;
+}
+
+/**
+ * Logitech wheels driven over WebHID with the classic Logitech commands, as Linux drivers/hid/hid-lg4ff.c drives them
+ * (its lg4ff_devices table). All four take lg4ff_set_range_g25, from 40 to 900°.
+ *
+ * Left out, so they stay on the bridge: the Driving Force Pro (c298), whose firmware keeps reporting the steering axis
+ * over its full range after a range change (hid-lg4ff rescales it in the driver, lg4ff_adjust_dfp_x_axis, which the
+ * Gamepad API cannot); a wheel in a compatibility mode (c294 "Driving Force EX", which a G29 can enumerate as);
+ * the G920 (c262) and the G923 for Xbox (c26e), which speak HID++ (hid-logitech-hidpp); the PlayStation G923 and the
+ * G PRO, which hid-lg4ff does not list.
+ */
+export const LOGITECH_CLASSIC_WHEELS: readonly LogitechClassicModel[] = [
+  { productId: 0xc299, name: "G25" },
+  { productId: 0xc29b, name: "G27" },
+  { productId: 0xc29a, name: "Driving Force GT" },
+  { productId: 0xc24f, name: "G29" },
+];
+export const LG4FF_MIN_RANGE_DEG = 40;
+export const LG4FF_MAX_RANGE_DEG = 900;
+
+export function logitechClassicModel(vendorId: number, productId: number): LogitechClassicModel | null {
+  if (vendorId !== LOGITECH_VENDOR_ID) return null;
+  return LOGITECH_CLASSIC_WHEELS.find((m) => m.productId === productId) ?? null;
+}
+
 /** tested: driven by the maintainer; expected: the code path fits, untested; unknown: may not work; no: refused */
 export type SupportLevel = "tested" | "expected" | "unknown" | "no";
 
