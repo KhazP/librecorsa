@@ -49,12 +49,12 @@ svg{--surface:#fcfcfb;--ink:#0b0b0b;--ink2:#52514e;--muted:#898781;--grid:#e1e0d
 <text class="axt" x="380" y="406" text-anchor="middle">Speed (km/h)</text>
 <text class="axt" transform="translate(16 227) rotate(-90)" text-anchor="middle">Lateral acceleration (g)</text>
 <path d="M70.3,226.2L184.1,206.5L297.8,206.5L525.4,132L639.1,158.3L639.1,252.7L525.4,232L297.8,290.6L184.1,290.6L70.3,306.1Z" fill="var(--s2)" fill-opacity="0.14"/>
-<path d="M70.3,271.2L184.1,259.4L297.8,246.4L525.4,222.3L639.1,211.6" fill="none" stroke="var(--s1)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-<circle cx="70.3" cy="271.2" r="4" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"/>
-<circle cx="184.1" cy="259.4" r="4" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"/>
-<circle cx="297.8" cy="246.4" r="4" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"/>
+<path d="M70.3,273.8L184.1,262.7L297.8,249.5L525.4,222.3L639.1,210.2" fill="none" stroke="var(--s1)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="70.3" cy="273.8" r="4" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"/>
+<circle cx="184.1" cy="262.7" r="4" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"/>
+<circle cx="297.8" cy="249.5" r="4" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"/>
 <circle cx="525.4" cy="222.3" r="4" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"/>
-<circle cx="639.1" cy="211.6" r="4" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"/>
+<circle cx="639.1" cy="210.2" r="4" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"/>
 <circle cx="70.3" cy="266.1" r="4" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"/>
 <circle cx="184.1" cy="248.5" r="4" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"/>
 <circle cx="297.8" cy="248.5" r="4" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"/>

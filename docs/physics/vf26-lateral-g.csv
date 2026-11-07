@@ -1,9 +1,9 @@
 series,speed_kmh,g
-"Simulator",86.4,1.93794
-"Simulator",144,2.39625
-"Simulator",180,2.74912
-"Simulator",216,3.13304
-"Simulator",248.4,3.49811
+"Simulator",86.4,2.03388
+"Simulator",144,2.77101
+"Simulator",180,3.32823
+"Simulator",216,3.90188
+"Simulator",248.4,4.27164
 "Reference data",86.4,2.37513
 "Reference data",144,2.66055
 "Reference data",180,2.91539

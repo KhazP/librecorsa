@@ -438,7 +438,7 @@ md.push(
   '',
   `The VF26's tyre, aero and chassis values come from reference data from a community car package, which also ships the cornering-limit table plotted here. The simulator is never given that table: it reaches its own limit from its tyres, aero and suspension.`,
   '',
-  `It stays ${vfGapMin}–${vfGapMax} % below the table, most at the low-speed end. There the car runs out of front grip: the peak comes at about half lock and more steering adds nothing. Because the table comes from the same package, this gap is a known difference to look into, not a pass.`,
+  `Measured at sea level, it runs ${vfGaps[0].toFixed(0)} % below the table at the lowest speed, where the car runs out of front grip (the peak comes at about half lock and more steering adds nothing), and up to ${(-Math.min(...vfGaps)).toFixed(0)} % above it at speed, where the floor's ground effect now works at its ride height. Real 2026 cars corner harder than the table at speed (≈ 3.7–4 g from 140 km/h up, from their position traces), so the table is a lower reference there, not a target.`,
   '',
   vfChart,
   '',
