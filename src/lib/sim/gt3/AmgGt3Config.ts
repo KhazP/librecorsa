@@ -6,6 +6,9 @@
  *  - [est]      engineering estimate where a runtime value is inferred
  *  - [derived]  computed from other values in this file
  *  - [motec]    fit to reference GT3 Evo MoTeC telemetry logs (Valencia, ~24 min); see scripts/compare-gt3-telemetry.ts
+ *  - [ref]      a second GT3 reference data set, used where the first left the car's transient behaviour wrong (platform,
+ *               dampers, diff, camber, aero ride-height range); checked against the [motec] bands and the handling
+ *               scorecard (scripts/handling-report.ts)
  *
  * No hybrid, DRS or heave spring: the ERS is zeroed, every performance mode is the same map, the heave element
  * has no rate, and the brakes are conventional hydraulics (no brake-by-wire).
@@ -165,12 +168,14 @@ const SUSPENSIONS: SuspensionsData = {
     actuation: 'push_rod',
     staticCamber: -3.5,
     camberGainKinematic: -12,
-    springs: { wheel_rate: 90_000, helper_rate: 0, helper_range: 0 },
+    // Front-stiff platform: ride 3.2 Hz, so the nose holds its height under braking instead of diving onto the stop [ref]
+    springs: { wheel_rate: 171_000, helper_rate: 0, helper_range: 0 },
     heave: { rate: 0, gap: 1, packerGap: 1, packerRate: 0 },
-    bumpStop: { range: 0.02, rate: 135_000, progression: 5_000_000 },
+    // Long, soft, progressive rubber: the outside front no longer lands on a stiff stop mid-corner [ref]
+    bumpStop: { range: 0.0425, rate: 10_000, progression: 1_900_000 },
     droopTravel: 0.06,
     rollCentreHeight: 0.05,
-    arb: 80_000,
+    arb: 68_400, // [ref] front roll share 60 %
     hardpoints: [
       [0.440, 0.098, 0.197],
       [0.440, 0.072, -0.145],
@@ -187,12 +192,12 @@ const SUSPENSIONS: SuspensionsData = {
     actuation: 'push_rod',
     staticCamber: -2.5,
     camberGainKinematic: -10,
-    springs: { wheel_rate: 130_000, helper_rate: 0, helper_range: 0 },
+    springs: { wheel_rate: 127_000, helper_rate: 0, helper_range: 0 }, // [ref]
     heave: { rate: 0, gap: 1, packerGap: 1, packerRate: 0 },
-    bumpStop: { range: 0.025, rate: 130_000, progression: 5_000_000 },
+    bumpStop: { range: 0.056, rate: 9_000, progression: 1_700_000 }, // [ref]
     droopTravel: 0.055,
     rollCentreHeight: 0.065,
-    arb: 38_650,
+    arb: 40_200, // [ref]
     hardpoints: [
       [0.440, 0.092, 0.251],
       [0.440, 0.092, -0.123],
@@ -206,20 +211,22 @@ const SUSPENSIONS: SuspensionsData = {
   },
   dampers_controller: {
     front: {
-      base: damper(10_600, 3800, 12_375, 5485),
+      // Matched to the stiffer front spring (bump ζ ≈ 0.86) [ref]
+      base: damper(12_080, 5000, 15_880, 10_600),
       heave: NO_DAMPER,
       roll: NO_DAMPER,
       pitch: NO_DAMPER,
-      fastThresholdMs: 0.06,
-      fastReboundThresholdMs: 0.12,
+      fastThresholdMs: 0.0575,
+      fastReboundThresholdMs: 0.04,
     },
     rear: {
-      base: damper(6017, 3875, 10_770, 4600),
+      // Rear bump ζ 0.48 → 0.81: the rear settles instead of bobbing after a load change [ref]
+      base: damper(9990, 4400, 11_840, 8140),
       heave: NO_DAMPER,
       roll: NO_DAMPER,
       pitch: NO_DAMPER,
-      fastThresholdMs: 0.06,
-      fastReboundThresholdMs: 0.12,
+      fastThresholdMs: 0.055,
+      fastReboundThresholdMs: 0.04,
     },
   },
 };
@@ -281,11 +288,12 @@ const AERO: AeroData = {
         [10, 0.0125],
         [12, 0.015],
       ],
+      // Stall flank 20 mm below where it was: it used to start 7–10 mm under the 55 mm static ride, so the splitter lost
+      // most of its load at speed and under braking (front aero share 0.48 → 0.12 braking from 250 km/h) [ref]
       lutGH_CL_mult: [
         [0, 0],
-        [0.01, 0.02],
-        [0.038, 0.2],
-        [0.045, 1.07],
+        [0.018, 0.2],
+        [0.025, 1.07],
         [0.05, 1.06],
         [0.06, 1.04],
         [0.065, 1.02],
@@ -329,12 +337,12 @@ const AERO: AeroData = {
         [-10, 0],
         [30, 0],
       ]),
+      // Stall flank moved 20 mm lower with the splitter's [ref]
       lutGH_CL_mult: [
         [0, 0],
-        [0.01, 0],
-        [0.039, 0.02],
-        [0.045, 0.3],
-        [0.048, 1],
+        [0.019, 0.02],
+        [0.025, 0.3],
+        [0.028, 1],
         [0.055, 1.02],
         [0.0664, 1.01],
         [0.0754, 0.97],
@@ -467,14 +475,15 @@ function gt3Compound(
       // [spec FALLOFF_LEVEL / FALLOFF_SPEED]
       use_slip_falloff: true,
       falloff_level: 0.85,
-      falloff_slope: 3,
+      falloff_slope: 5, // [ref]
       relaxationLengthX: 0.09883,
       relaxationLengthY: 0.09883,
       rollingResistance: 0.012,
       verticalDamping: 500,
       pneumaticTrail: 0.04,
-      // +9 % longitudinal grip under braking [spec BRAKE_DX_MOD]
-      brakeDxMod: 0.09,
+      // +3 % longitudinal grip under braking. It was +9 %, which stood in for the front downforce the splitter stall used to
+      // lose under braking; with the stall gone the braking fit holds on less [motec, ref]
+      brakeDxMod: 0.03,
     },
     thermalData: {
       thermalPerformanceCurve: thermalCurve,
@@ -508,8 +517,9 @@ function gt3Compound(
       camberGain: 0.134,
       contact_camber_c1: 1,
       contact_camber_c2: 40,
-      dcamber0: 1.65,
-      dcamber1: -13,
+      // Flatter camber curve (peak near 5°, ~3× less curvature): grip changes less with roll and over kerbs [ref]
+      dcamber0: 0.802,
+      dcamber1: -4.595,
       dcamber0_x: 0,
       dcamber1_x: -6,
     },
@@ -542,8 +552,8 @@ function gt3Compound(
       },
       camberData: {
         camberGain: 0.149,
-        dcamber0: 1.72,
-        dcamber1: -13,
+        dcamber0: 0.688, // [ref]
+        dcamber1: -3.942,
       },
     },
   };
@@ -629,7 +639,7 @@ const TYRES_WITH_RAIN = {
   PhysicsTyreCompound_GT3_Wet: deriveRainCompound(TYRES.PhysicsTyreCompound_GT3_Medium, 'wet', 'PhysicsTyreCompound_GT3_Wet', 'GT3 Wet'),
 } satisfies Partial<Record<PhysicsTyreCompound, TyresCompoundData>>;
 
-/** Box inertia from 1.75 × 1.05 × 4.10 m [spec INERTIA, derived] */
+/** Equivalent-box inertia from 1.78 × 0.99 × 3.85 m: yaw ≈ 2040 kg·m² [ref INERTIA, derived] */
 const MASS = 1360;
 const box = (a: number, b: number) => (MASS / 12) * (a * a + b * b);
 
@@ -644,7 +654,7 @@ export const AMG_GT3_CONFIG = {
     trackWidthRear: 1.72,
     // Hub heights 55 / 60 mm below the CG on the 0.340 / 0.3525 m tyres [spec BASEY, derived]
     cgHeight: 0.4,
-    inertia: { pitch: box(1.05, 4.1), roll: box(1.75, 1.05), yaw: box(1.75, 4.1) },
+    inertia: { pitch: box(0.99, 3.85), roll: box(1.78, 0.99), yaw: box(1.78, 3.85) },
     unsprungMassFront: 39,
     unsprungMassRear: 46,
     wheelInertiaFront: 1.75,
@@ -664,10 +674,12 @@ export const AMG_GT3_CONFIG = {
   gearbox: GEARBOX,
   // Auto-clutch 2300–3200 rpm [spec]
   clutch: { maxTorqueNm: 820, biteRpm: 2300, lockRpm: 3200 },
-  // Locking torque = preload + POWER / COAST × input torque [spec]
+  // Locking torque = preload + POWER / COAST × input torque [spec]. The default entry / exit dials scale these by 0.84 / 0.97,
+  // so the car runs ≈ 0.67 coast and 0.30 power lock: more coast lock and less preload keep the rear calm on lift-off and
+  // trail braking (lift-off yaw kick 24 % → 4 %) [ref]
   differential: {
     type: 'LSD_Ramp',
-    settings: { power: 0.3, coast: 0.45, preload: 98, friction_faces: 1, power_ramp_deg: 45, coast_ramp_deg: 45 },
+    settings: { power: 0.31, coast: 0.8, preload: 50, friction_faces: 1, power_ramp_deg: 45, coast_ramp_deg: 45 },
   },
   // Iron discs: steel pad μ(T) curve and heat capacities
   // MAX_TORQUE 4750 / FRONT_SHARE 0.71, ADJUST_STEP 0.5 %
