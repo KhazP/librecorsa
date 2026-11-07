@@ -205,6 +205,23 @@ export interface TrackMetaExtras {
   credit?: { title: string; author: string; url: string; short?: string; license: string; licenseUrl: string };
   /** Per-kind overrides of the default surface table (track-surfaces.ts) */
   surfaceTable?: SurfaceTableOverrides;
+  /**
+   * Drive-plan check per car (scripts/ai/check-lines.ts): a flying AI lap on the full physics tracking the stored line.
+   * The field drives a car on plans only where its check passed (no barrier hit, on the road, on the line, near the
+   * plan's time); elsewhere it keeps its own driver
+   */
+  aiPlans?: Partial<Record<string, AiPlanCheck>>;
+}
+
+export interface AiPlanCheck {
+  ok: boolean;
+  physicsLapS: number;
+  planLapS: number;
+  wallHits: number;
+  offTrackFrames: number;
+  maxErrM: number;
+  /** Date of the check (ISO) */
+  checked: string;
 }
 
 /** Metadata of the active circuit */
