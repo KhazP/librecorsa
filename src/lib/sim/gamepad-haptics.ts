@@ -1,6 +1,6 @@
 import type { CarTelemetry } from "@/types/f1";
 import { handlingCues, pastPeak } from "./handling-cues";
-import { axleSlipFromTelemetry, createAxleSlipSample, throttleSlipAllowance } from "./tyre-slip";
+import { axleSlipFromTelemetry, brakeSlipMargin, createAxleSlipSample, throttleSlipAllowance } from "./tyre-slip";
 
 /**
  * Gamepad rumble for the car: the pad's two motors are driven from the physics so the player
@@ -175,7 +175,7 @@ export function triggerMagnitudes(
     const slip = axleSlipFromTelemetry(t, _triggerSlip);
     const wheelspin = Math.max(t.wheelSlipRatios[2], t.wheelSlipRatios[3]) > 0.02;
     if (left === 0 && (alwaysOn || aids?.absLevel === 0) && t.brake > 0.2 && !wheelspin) {
-      left = limitBuzz(slip.totalNdSlip + 0.15);
+      left = limitBuzz(slip.totalNdSlip + brakeSlipMargin());
     }
     if (right === 0 && (alwaysOn || aids?.tcLevel === 0) && t.throttle > 0.2 && wheelspin) {
       right = limitBuzz(slip.rearNdSlip - throttleSlipAllowance(t.speedKmh));
