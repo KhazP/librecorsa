@@ -16,6 +16,12 @@ import {
   DF_COMP_MIN_MULT,
   DownforceCompensator,
   downforceCompMult,
+  FRONT_SLIP_CUE_END,
+  FRONT_SLIP_CUE_START,
+  progressiveCue,
+  SHIFT_LOOKAHEAD_S,
+  ShiftCue,
+  slipCue,
 } from "../src/lib/input/ffb-toolbox";
 import { WheelFfbClient } from "../src/lib/input/wheel-ffb";
 
@@ -224,6 +230,81 @@ check("WheelFfbClient arms the guard on a barrier touch or a new impact, not on 
   // Switched off, the hit goes straight through
   const off = crashForce(wheelWith({ ffbCollisionGuard: false }), calm, spike({ wallContact: true }));
   near(off.after, 0.95, 1e-3);
+});
+
+console.log("3. Slip and shift cues");
+
+check("progressive cue: silent below the start, a clear onset, square-law ramp to 1 at the end", () => {
+  assert.equal(progressiveCue(0.5, 1, 2), 0);
+  assert.equal(progressiveCue(Number.NaN, 1, 2), 0);
+  near(progressiveCue(1.1, 1, 2), 0.3 + 0.7 * 0.01);
+  near(progressiveCue(2, 1, 2), 1);
+  near(progressiveCue(5, 1, 2), 1);
+  let prev = 0;
+  for (let x = 0.9; x <= 2.1; x += 0.005) {
+    const y = progressiveCue(x, 1, 2);
+    assert.ok(y >= prev - 1e-12, `monotone at ${x}`);
+    prev = y;
+  }
+});
+
+check("slip cue reads the peak: fronts from just before it, rears only spinning under power", () => {
+  assert.equal(slipCue(0.9, 0, 0, false), 0, "grip in hand: no cue");
+  assert.ok(slipCue(1.0, 0, 0, false) > 0.1, "at the peak the cue is on (the old fixed 1.15 / 0.12 thresholds were not)");
+  near(slipCue(FRONT_SLIP_CUE_END, 0, 0, false), 1);
+  assert.ok(slipCue(FRONT_SLIP_CUE_START + 0.2, 0, 0, false) < slipCue(FRONT_SLIP_CUE_START + 0.4, 0, 0, false));
+  assert.equal(slipCue(0.5, 1.4, 0, false), 0, "rear slide off the throttle: the rack SAT tells that one");
+  assert.ok(slipCue(0.5, 1.4, 0.8, false) > 0.3, "wheelspin under power");
+  assert.equal(slipCue(0.5, 1.4, 0.8, true), 0, "traction control already catching it");
+});
+
+check("shift cue comes on ahead of the shift point on rising revs, and resets on the next gear or a lift", () => {
+  const cue = new ShiftCue();
+  const dt = 1 / 60;
+  const rate = 3000; // rpm/s
+  let rpm = 12_000;
+  let firedAt = Number.NaN;
+  for (let i = 0; i < 120 && Number.isNaN(firedAt); i++, rpm += rate * dt) {
+    if (cue.step(rpm, 4, 1, 0.3, 14_600, dt)) firedAt = rpm;
+  }
+  assert.ok(firedAt < 14_600 && firedAt > 14_600 - rate * SHIFT_LOOKAHEAD_S * 1.3, `fired at ${firedAt} rpm`);
+  assert.equal(cue.step(rpm, 4, 1, 0.3, 14_600, dt), true, "latched until the shift");
+  assert.equal(cue.step(rpm - 2500, 5, 1, 0.3, 14_600, dt), false, "next gear clears it");
+  assert.equal(cue.step(14_700, 5, 1, 0.3, 14_600, dt), false, "re-arm delay after the shift");
+  for (let i = 0; i < 10; i++) cue.step(14_700, 5, 1, 0.3, 14_600, dt);
+  assert.equal(cue.on, true, "at the limiter in the new gear");
+  assert.equal(cue.step(14_700, 5, 0, 0.3, 14_600, dt), false, "a lift clears it");
+  const spin = new ShiftCue();
+  for (let i = 0; i < 30; i++) spin.step(14_700, 2, 1, 2.2, 14_600, dt);
+  assert.equal(spin.on, false, "wheelspin revs are not a shift point");
+  const neutral = new ShiftCue();
+  for (let i = 0; i < 30; i++) neutral.step(15_000, 0, 1, 0, 14_600, dt);
+  assert.equal(neutral.on, false, "neutral");
+});
+
+check("WheelFfbClient plays the slide cue from the peak and the shift cue at the dash's SHIFT rpm", () => {
+  type Buzz = { hidSlide: number; hidShift: number };
+  const run = (patch: Partial<WheelSettings>, extra: Partial<CarTelemetry>, frames = 12): Buzz => {
+    const c = new WheelFfbClient();
+    c.hidSink = () => {};
+    let t = 1000;
+    for (let i = 0; i < frames; i++, t += 16) {
+      c.update(carTel(0, 0.2, { speedKmh: 180, throttle: 1, gear: 6, rpm: 13_000, ...extra }), wheelWith(patch), [], t, true, "f12026-car");
+    }
+    const buzz = { ...(c as unknown as Buzz) };
+    c.stop();
+    return buzz;
+  };
+  const tyres = (front: number, rear: number) => ({ tireSlipRatio: [front, front, rear, rear] as [number, number, number, number] });
+  assert.equal(run({}, tyres(0.85, 0.4)).hidSlide, 0);
+  assert.ok(run({}, tyres(1.05, 0.4)).hidSlide > 0.1, "slide at the peak");
+  near(run({ ffbSlip: 0.5 }, tyres(1.6, 0.4)).hidSlide, 0.5, 1e-6);
+  assert.equal(run({ ffbSlip: 0 }, tyres(1.6, 0.4)).hidSlide, 0);
+  assert.equal(run({}, { rpm: 14_800 }).hidShift, 0, "shift cue is off by default");
+  near(run({ ffbShift: 0.7 }, { rpm: 14_800 }).hidShift, 0.7, 1e-9);
+  assert.equal(run({ ffbShift: 1 }, { rpm: 12_000 }).hidShift, 0);
+  // The GT3 calls the shift at 7500 rpm
+  near(run({ ffbShift: 1 }, { rpm: 7600, f12026: { carId: "amg-gt3" } } as unknown as Partial<CarTelemetry>).hidShift, 1, 1e-9);
 });
 
 console.log(`\n${passed} checks passed`);

@@ -14,7 +14,9 @@
  */
 import type { CarTelemetry } from "@/types/f1";
 import { CAR_WHEEL_LOCK_DEG, carWheelLockDeg, findPad, type PadLike, wheelRimAngleDeg, type WheelSettings } from "./device-input";
-import { CollisionGuard, DownforceCompensator } from "./ffb-toolbox";
+import { revRangeFor } from "@/lib/sim/rev-range";
+import { axleSlipFromTelemetry, createAxleSlipSample } from "@/lib/sim/tyre-slip";
+import { CollisionGuard, DownforceCompensator, ShiftCue, slipCue } from "./ffb-toolbox";
 import { WebHidFfb } from "./webhid-ffb";
 
 export const FFB_BRIDGE_PORT = 18500;
@@ -101,7 +103,10 @@ export const HID_WATCHDOG_MS = 150;
 /** WebHID playback timer (ms); the physics samples it plays are 2 ms apart */
 const HID_TICK_MS = 2;
 const PHYSICS_SAMPLE_MS = 2;
-/** Vibrations mixed into the WebHID force (no separate channel): kerb buzz, ABS pulse, tyre slide, grass/gravel rumble, road bumps */
+/**
+ * Vibrations mixed into the WebHID force (no separate channel): kerb buzz, ABS pulse, tyre slide, grass/gravel rumble,
+ * road bumps, shift warning
+ */
 const HID_KERB_HZ = 40;
 const HID_KERB_AMPLITUDE = 0.12;
 const HID_ABS_HZ = 25;
@@ -112,6 +117,8 @@ const HID_ROUGH_HZ = 18;
 const HID_ROUGH_AMPLITUDE = 0.12;
 const HID_BUMP_HZ = 22;
 const HID_BUMP_AMPLITUDE = 0.1;
+const HID_SHIFT_HZ = 60;
+const HID_SHIFT_AMPLITUDE = 0.1;
 const clockMs = () => (typeof performance !== "undefined" ? performance.now() : Date.now());
 
 /** A wheel below this load (N) while moving is off the ground: it keeps a running collision protection on */
@@ -733,6 +740,9 @@ export class WheelFfbClient {
   readonly collisionGuard = new CollisionGuard();
   /** Sim time of the last barrier impact seen; undefined until the first frame after a reset */
   private lastWallImpactAtMs: number | null | undefined = undefined;
+  /** Shift warning from the revs against the car's shift lights (`ffbShift`) */
+  private readonly shiftCue = new ShiftCue();
+  private readonly slipSample = createAxleSlipSample();
   meter: FfbMeterState = {
     force: 0,
     clipping: false,
@@ -762,6 +772,7 @@ export class WheelFfbClient {
   private hidSlide = 0;
   private hidRough = 0;
   private hidBump = 0;
+  private hidShift = 0;
   private hidNoise = 0;
   private hidPlayer: ReturnType<typeof setInterval> | null = null;
   /** Clock (ms) of the last played sample slot and of the last frame update */
@@ -809,6 +820,7 @@ export class WheelFfbClient {
     let slide = 0;
     let rough = 0;
     let bump = 0;
+    let shift = 0;
     let oversteerIntensityPct = 0;
     let understeerIntensityPct = 0;
     let highImpactActive = false;
@@ -945,25 +957,18 @@ export class WheelFfbClient {
       ) {
         rough = Math.max(0.2, Math.min(1, (speedKmh - 10) / 80)) * Math.max(0.4, wheel.ffbKerb);
       }
-      if (speedKmh > 15) {
-        const extraTel = telemetry as CarTelemetry & { frontSlipRatio?: number; ndSlip?: number };
-        const frontSlipRatio = Math.max(
-          Math.abs(telemetry.wheelSlipRatios?.[0] ?? 0),
-          Math.abs(telemetry.wheelSlipRatios?.[1] ?? 0),
-          Math.abs(extraTel.frontSlipRatio ?? 0)
-        );
-        const ndSlip = Math.max(
-          telemetry.tireSlipRatio?.[0] ?? 0,
-          telemetry.tireSlipRatio?.[1] ?? 0,
-          extraTel.ndSlip ?? 0
-        );
-        if (frontSlipRatio > 0.12 || ndSlip > 1.15) {
-          const slipExcess = Math.max(
-            frontSlipRatio > 0.12 ? (frontSlipRatio - 0.12) / 0.35 : 0,
-            ndSlip > 1.15 ? (ndSlip - 1.15) / 1.2 : 0
-          );
-          slide = Math.max(0, Math.min(1, slipExcess));
-        }
+      // Slide and wheelspin, measured against the tyres' own peak slip (normalised combined slip, 1 = the peak)
+      const slip = axleSlipFromTelemetry(telemetry, this.slipSample);
+      const throttle = Number.isFinite(telemetry.throttle) ? telemetry.throttle : 0;
+      if (speedKmh > 15 && wheel.ffbSlip > 0) {
+        slide = slipCue(slip.frontNdSlip, slip.rearNdSlip, throttle, telemetry.f12026?.tcActive === true) * wheel.ffbSlip;
+      }
+      // Shift warning at the rpm the dash calls SHIFT (all rev lights lit)
+      if (wheel.ffbShift > 0 && speedKmh > 5) {
+        const shiftRpm = revRangeFor(telemetry.f12026?.carId ?? vehicle)[1];
+        if (this.shiftCue.step(telemetry.rpm, telemetry.gear, throttle, slip.rearNdSlip, shiftRpm, dtS)) shift = wheel.ffbShift;
+      } else {
+        this.shiftCue.reset();
       }
       const susp = telemetry.suspensionTravelMm;
       this.hidBump = dtS > 0 ? this.hidBump * Math.exp(-dtS * 14) : 0;
@@ -988,6 +993,7 @@ export class WheelFfbClient {
       this.downforceComp.reset();
       this.collisionGuard.reset();
       this.lastWallImpactAtMs = undefined;
+      this.shiftCue.reset();
       this.lastRimDeg = null;
       this.lastFrontSuspMm = null;
       this.hidBump = 0;
@@ -1007,7 +1013,7 @@ export class WheelFfbClient {
     };
     if (useHid) {
       if (this.hidTest) return;
-      this.hidPlay(subframes, force, driving && wheel.ffbEnabled, kerb, abs, slide, rough, bump);
+      this.hidPlay(subframes, force, driving && wheel.ffbEnabled, kerb, abs, slide, rough, bump, shift);
       return;
     }
     this.hidStopPlayer();
@@ -1030,7 +1036,8 @@ export class WheelFfbClient {
     abs: number,
     slide = 0,
     rough = 0,
-    bump = 0
+    bump = 0,
+    shift = 0
   ): void {
     const now = clockMs();
     this.hidQueue = samples && samples.length > 0 ? samples.slice() : [];
@@ -1041,10 +1048,11 @@ export class WheelFfbClient {
     this.hidSlide = slide;
     this.hidRough = rough;
     this.hidBump = bump;
+    this.hidShift = shift;
     this.hidPushMs = now;
     this.hidSlotMs = now;
     this.hidEmit(now, 1);
-    const hasBuzz = kerb > 0 || abs > 0 || slide > 0 || rough > 0 || bump > 0;
+    const hasBuzz = kerb > 0 || abs > 0 || slide > 0 || rough > 0 || bump > 0 || shift > 0;
     const active = activeDriving && (this.force !== 0 || this.hidQueue.length > 0 || hasBuzz);
     if (active && this.hidPlayer === null) {
       const timer = setInterval(() => this.hidTick(), HID_TICK_MS);
@@ -1090,7 +1098,8 @@ export class WheelFfbClient {
       HID_ABS_AMPLITUDE * this.hidAbs * Math.sign(Math.sin(2 * Math.PI * HID_ABS_HZ * t)) +
       HID_SLIDE_AMPLITUDE * this.hidSlide * Math.sin(2 * Math.PI * HID_SLIDE_HZ * t) +
       HID_ROUGH_AMPLITUDE * this.hidRough * (0.65 * Math.sin(2 * Math.PI * HID_ROUGH_HZ * t) + 0.35 * this.hidNoise) +
-      HID_BUMP_AMPLITUDE * this.hidBump * Math.sin(2 * Math.PI * HID_BUMP_HZ * t);
+      HID_BUMP_AMPLITUDE * this.hidBump * Math.sin(2 * Math.PI * HID_BUMP_HZ * t) +
+      HID_SHIFT_AMPLITUDE * this.hidShift * Math.sin(2 * Math.PI * HID_SHIFT_HZ * t);
     this.hidSink?.(Math.max(-1, Math.min(1, f + (this.hidActiveDriving ? buzz : 0))));
   }
 
@@ -1111,8 +1120,10 @@ export class WheelFfbClient {
     this.downforceComp.reset();
     this.collisionGuard.reset();
     this.lastWallImpactAtMs = undefined;
+    this.shiftCue.reset();
     this.lastFrontSuspMm = null;
     this.hidBump = 0;
+    this.hidShift = 0;
     this.force = 0;
     this.hidSink?.(0);
     this.send({ t: "f", f: 0, k: 0, a: 0 });

@@ -64,6 +64,10 @@ export interface WheelSettings {
   ffbKerb: number;
   /** ABS vibration 0..1 */
   ffbAbs: number;
+  /** Tyre slide / wheelspin vibration 0..1, from just before the tyres' peak slip (WebHID wheels) */
+  ffbSlip: number;
+  /** Shift-warning vibration 0..1 as the revs reach the shift lights (WebHID wheels); 0 = off */
+  ffbShift: number;
   /** Reverse the force (for a wheel whose driver pushes the other way) */
   ffbInvert: boolean;
   /** Rim damping 0..1: resists fast rim movement (calms a direct-drive base, adds weight to a belt wheel) */
@@ -147,6 +151,8 @@ export const DEFAULT_WHEEL_SETTINGS: WheelSettings = {
   ffbMinForce: 0,
   ffbKerb: 0.35,
   ffbAbs: 0.2,
+  ffbSlip: 1,
+  ffbShift: 0,
   ffbInvert: false,
   ffbDamping: 0.1,
   ffbFilterS: 0,

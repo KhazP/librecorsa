@@ -8,6 +8,8 @@
  * - Collision protection: a hit throws a torque spike at the rim. Rather than scaling the force down, a slew limiter
  *   starts from the calmest of the last few samples and lets the force drift only slowly from there, inside an eased
  *   band, so the spike never reaches the hands while a falling force still falls fast.
+ * - Slip and shift cues: the tyre slide vibration ramps in from just before the tyres' peak slip (not a fixed slip
+ *   ratio, which means a different thing on every tyre), and a shift warning buzzes as the revs reach the shift point.
  */
 
 const finite = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
@@ -198,5 +200,92 @@ export class CollisionGuard {
     this.recent.fill(0);
     this.recentCount = 0;
     this.recentIdx = 0;
+  }
+}
+
+// ---- Slip and shift cues ----
+
+/** Share of the cue that plays as soon as the input crosses the start: a clear onset, then the ramp */
+export const CUE_ONSET = 0.3;
+/** Front tyres' slide cue range, as normalised combined slip (1 = the tyres' peak) */
+export const FRONT_SLIP_CUE_START = 0.95;
+export const FRONT_SLIP_CUE_END = 1.5;
+/** Rear (driven) tyres' wheelspin cue range under power, as normalised combined slip */
+export const REAR_SLIP_CUE_START = 1.0;
+export const REAR_SLIP_CUE_END = 1.6;
+/** Throttle above which rear slip counts as wheelspin for the cue */
+const WHEELSPIN_THROTTLE = 0.05;
+
+/**
+ * Progressive cue level 0..1 for `x` over [start, end]: 0 below the start, {@link CUE_ONSET} at it, then a square-law
+ * ramp to 1 at the end (the onset eases in over the first tenth so it is not a click)
+ */
+export function progressiveCue(x: number, start: number, end: number, onset = CUE_ONSET): number {
+  if (!finite(x) || !(x >= start) || !(end > start)) return 0;
+  const p = Math.min(1, (x - start) / (end - start));
+  const fadeIn = smoothstep01(p / 0.1);
+  return onset * fadeIn + (1 - onset) * p * p;
+}
+
+/**
+ * Slide cue 0..1 from the axles' normalised slip: the fronts past their peak (understeer, a lock-up), or the rears
+ * spinning under power (traction control not already catching it)
+ */
+export function slipCue(frontNdSlip: number, rearNdSlip: number, throttle: number, tcActive: boolean): number {
+  const front = progressiveCue(frontNdSlip, FRONT_SLIP_CUE_START, FRONT_SLIP_CUE_END);
+  const rear =
+    throttle > WHEELSPIN_THROTTLE && !tcActive ? progressiveCue(rearNdSlip, REAR_SLIP_CUE_START, REAR_SLIP_CUE_END) : 0;
+  return Math.max(front, rear);
+}
+
+/** How far ahead the shift cue reads the revs (s): time to react before the shift point */
+export const SHIFT_LOOKAHEAD_S = 0.3;
+/** Time constant of the rpm-rate smoothing (s) */
+const SHIFT_RATE_TAU_S = 0.1;
+/** After a shift (or a lift) the cue waits this long before it may come on again (s) */
+const SHIFT_REARM_S = 0.1;
+/** The cue stays off while the rears spin this far past their peak (the revs are not the car's speed) */
+const SHIFT_MAX_REAR_ND = 1.5;
+
+/** Shift warning: on once the revs, read {@link SHIFT_LOOKAHEAD_S} ahead, reach the shift point, until the next gear */
+export class ShiftCue {
+  on = false;
+  private lastRpm = Number.NaN;
+  private rateRpmS = 0;
+  private lastGear = Number.NaN;
+  private sinceResetS = 0;
+
+  step(rpm: number, gear: number, throttle: number, rearNdSlip: number, shiftRpm: number, dtS: number): boolean {
+    if (!finite(rpm) || !finite(gear) || !finite(shiftRpm) || shiftRpm <= 0) {
+      this.reset();
+      return false;
+    }
+    if (finite(this.lastRpm) && dtS > 0) {
+      const a = 1 - Math.exp(-dtS / SHIFT_RATE_TAU_S);
+      this.rateRpmS += ((rpm - this.lastRpm) / dtS - this.rateRpmS) * a;
+    }
+    this.lastRpm = rpm;
+    const canShift = gear >= 1 && throttle > 0.01 && !(rearNdSlip > SHIFT_MAX_REAR_ND);
+    if (gear !== this.lastGear || !canShift) {
+      // A new gear's rpm drop must not read as a negative rate into the next one
+      if (gear !== this.lastGear) this.rateRpmS = 0;
+      this.lastGear = gear;
+      this.on = false;
+      this.sinceResetS = 0;
+      return false;
+    }
+    this.sinceResetS += Math.max(0, dtS);
+    if (!this.on && this.sinceResetS > SHIFT_REARM_S) {
+      this.on = rpm + Math.max(0, this.rateRpmS) * SHIFT_LOOKAHEAD_S >= shiftRpm;
+    }
+    return this.on;
+  }
+
+  reset(): void {
+    this.on = false;
+    this.lastRpm = Number.NaN;
+    this.rateRpmS = 0;
+    this.lastGear = Number.NaN;
+    this.sinceResetS = 0;
   }
 }
