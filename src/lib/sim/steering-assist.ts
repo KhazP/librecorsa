@@ -63,6 +63,11 @@ export interface SteeringAssistCarState {
   maxLateralAccel: number;
   /** Measured tyre slip, for learning the fronts' real peak slip angle; absent = the data's peak is used */
   slip?: AxleSlipSample;
+  /**
+   * Road-wheel angle the fronts' lateral force bends the wheels away from the rack's (steering compliance; rad,
+   * + = right); absent = a stiff rack. The limit steers that much further, so the tyres reach their target slip.
+   */
+  frontComplianceRad?: number;
 }
 
 export type SteeringDevice = "keyboard" | "controller";
@@ -578,7 +583,13 @@ export class SteeringAssist {
       targetSlipDeg * (active.countersteerResponse * counterMult * 0.7 + 0.1) + rearToward,
       targetInward
     );
-    const targetAngle = lerp(clamp(targetInward, 0, lockDeg), clamp(targetCounter, 0, lockDeg), counter);
+    // The compliance the tyres' force takes off the rack's angle, toward the steering side
+    const complianceDeg = -inputSign * (car.frontComplianceRad ?? 0) * RAD2DEG;
+    const targetAngle = lerp(
+      clamp(targetInward + complianceDeg, 0, lockDeg),
+      clamp(targetCounter + complianceDeg, 0, lockDeg),
+      counter
+    );
 
     // No limit when travelling sideways / backwards
     const travelDeg = Math.atan2(car.vyMs, car.vxMs) * RAD2DEG;

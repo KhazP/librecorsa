@@ -73,6 +73,11 @@ import { KERB_PROFILE_L, kerbProfileM, surfaceRippleM } from '../track-surfaces'
 
 const G = 9.81;
 const DEG2RAD = Math.PI / 180;
+/**
+ * Of the two fronts' steering compliance (rad), the one the steering assist's grip limit looks after: the less bent
+ * front, the lightly loaded inside one, slips the most and reaches its peak first
+ */
+const leastBent = (left: number, right: number) => (Math.abs(left) < Math.abs(right) ? left : right);
 const RAD2DEG = 180 / Math.PI;
 /** Rwanda (≈1400 m ASL) air density */
 const AIR_DENSITY = 1.06;
@@ -1399,6 +1404,7 @@ export class F12026CarSim implements SimulatorCar {
       brake,
       maxLateralAccel: this.profile.padLateralMu * wetMuScale * (G + v.telemetry.downforceN / v.totalMassKg),
       slip: this.slipScratch.sample(),
+      frontComplianceRad: -leastBent(v.wheels[0].complianceRad, v.wheels[1].complianceRad),
     };
   };
 
