@@ -79,8 +79,8 @@ export interface HidDeviceLike {
 export interface HidApiLike {
   requestDevice(options: { filters: { vendorId?: number; productId?: number; usagePage?: number; usage?: number }[] }): Promise<HidDeviceLike[]>;
   getDevices(): Promise<HidDeviceLike[]>;
-  addEventListener(type: "disconnect", listener: (e: { device: HidDeviceLike }) => void): void;
-  removeEventListener(type: "disconnect", listener: (e: { device: HidDeviceLike }) => void): void;
+  addEventListener(type: "connect" | "disconnect", listener: (e: { device: HidDeviceLike }) => void): void;
+  removeEventListener(type: "connect" | "disconnect", listener: (e: { device: HidDeviceLike }) => void): void;
 }
 
 /* ------------------------------------------------------------------------------------------------------------ */
@@ -149,6 +149,8 @@ const SELECTORS: readonly { key: number; lo: number; hi: number }[] = [
 const MIN_WRITE_INTERVAL_MS = 2;
 /** Consecutive failed writes after which the driver gives up and reports an error */
 const MAX_WRITE_FAILURES = 3;
+/** An unchanged force is written again after this long (ms): covers a write the wheel dropped without an error */
+export const FORCE_KEEPALIVE_MS = 200;
 /** Direction value for "along +X" (90 degrees, east) as a fraction of the direction field's range */
 const DIRECTION_X_FRACTION = 0.25;
 
@@ -461,10 +463,17 @@ export interface WriterChannel {
   send: (raw: number) => Promise<void>;
   /** What the wheel already holds when the stream starts (null: the first value always goes out) */
   initialRaw?: number | null;
+  /**
+   * After this long (ms) without a write on this stream, a value goes out again even if it is unchanged or inside the
+   * threshold; absent: an unchanged value is never resent
+   */
+  keepaliveMs?: number;
 }
 
 interface ChannelState extends WriterChannel {
   lastRaw: number | null;
+  /** When this stream last went out (deps.now ms) */
+  lastSentMs: number;
   pending: number | null;
   urgent: boolean;
 }
@@ -474,7 +483,8 @@ interface ChannelState extends WriterChannel {
  * latest value of each stream is kept (intermediate ones are dropped) and changes below a stream's threshold are
  * skipped (for the force: 1/1000 of the field's range). The force is the first stream; {@link addChannel} adds others
  * (the hardware damper, the Logitech range) that share the write slot, the spacing and the failure count, taking turns
- * when several are waiting.
+ * when several are waiting. The force alone has a keepalive: once {@link FORCE_KEEPALIVE_MS} has passed since it last
+ * went out, the next value is written even if unchanged, covering a write the wheel dropped without an error.
  */
 export class ForceWriter {
   private readonly channels: ChannelState[] = [];
@@ -498,6 +508,7 @@ export class ForceWriter {
       threshold: (field.max - field.min) / 1000,
       zeroRaw: forceToRaw(field, 0),
       send,
+      keepaliveMs: FORCE_KEEPALIVE_MS,
     });
   }
 
@@ -529,7 +540,7 @@ export class ForceWriter {
   }
 
   private add(channel: WriterChannel): ChannelState {
-    const state: ChannelState = { ...channel, lastRaw: channel.initialRaw ?? null, pending: null, urgent: false };
+    const state: ChannelState = { ...channel, lastRaw: channel.initialRaw ?? null, lastSentMs: -Infinity, pending: null, urgent: false };
     this.channels.push(state);
     return state;
   }
@@ -537,7 +548,9 @@ export class ForceWriter {
   private set(c: ChannelState, value: number, urgent: boolean): void {
     if (this.dead) return;
     const raw = c.toRaw(value);
-    if (raw === c.lastRaw || (c.lastRaw !== null && raw !== c.zeroRaw && Math.abs(raw - c.lastRaw) < c.threshold)) {
+    // Nothing written on this stream for a while: the value goes out again, whatever the threshold says
+    const stale = c.keepaliveMs !== undefined && c.lastRaw !== null && this.deps.now() - c.lastSentMs >= c.keepaliveMs;
+    if (!stale && (raw === c.lastRaw || (c.lastRaw !== null && raw !== c.zeroRaw && Math.abs(raw - c.lastRaw) < c.threshold))) {
       c.pending = null; // the wheel already holds (nearly) this value; drop any older queued one
       return;
     }
@@ -584,6 +597,7 @@ export class ForceWriter {
     c.lastRaw = raw;
     this.lastChannel = this.channels.indexOf(c);
     this.lastSendMs = this.deps.now();
+    c.lastSentMs = this.lastSendMs;
     this.current = c
       .send(raw)
       .then(
@@ -713,8 +727,17 @@ export const PID_QUIRKS: readonly { vendorId: number; productId: number; name: s
   },
 ];
 
+function pidQuirkFor(device: Pick<HidDeviceLike, "vendorId" | "productId">) {
+  return PID_QUIRKS.find((q) => q.vendorId === device.vendorId && q.productId === device.productId);
+}
+
 export function pidProfileFor(device: Pick<HidDeviceLike, "vendorId" | "productId">): PidProfile {
-  return PID_QUIRKS.find((q) => q.vendorId === device.vendorId && q.productId === device.productId)?.profile ?? GENERIC_PID_PROFILE;
+  return pidQuirkFor(device)?.profile ?? GENERIC_PID_PROFILE;
+}
+
+/** "generic", or the quirk's wheel name ("PXN V99"), for diagnostics */
+function pidProfileName(device: Pick<HidDeviceLike, "vendorId" | "productId">): string {
+  return pidQuirkFor(device)?.name ?? "generic";
 }
 
 const NO_PID_MESSAGE = "This device does not expose HID PID force feedback (no Set Constant Force / Effect Operation report)";
@@ -759,8 +782,10 @@ async function allocateEffect(
   for (let attempt = 0; attempt < 3; attempt++) {
     const view = await device.receiveFeatureReport(load.reportId);
     let bytes = new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
-    // WebHID leaves the report id out; tolerate a stack that keeps it
-    if (load.reportId !== 0 && bytes.length === Math.ceil(load.bitLength / 8) + 1 && bytes[0] === load.reportId) bytes = bytes.subarray(1);
+    // Chrome hands a numbered feature report back with its id in byte 0, in a buffer sized to the interface's largest
+    // feature report (so often longer than this one); a stack that leaves the id out returns just the report's bytes.
+    // Read by bit offset, the padding after the report does not matter
+    if (load.reportId !== 0 && bytes.length > Math.ceil(load.bitLength / 8) && bytes[0] === load.reportId) bytes = bytes.subarray(1);
     const got = unpackReport(load, bytes);
     const statusField = getField(load, PID.BLOCK_LOAD_STATUS);
     const status = statusField ? selectedUsage(statusField, got[PID.BLOCK_LOAD_STATUS] ?? 0) : PID.BLOCK_LOAD_SUCCESS;
@@ -788,10 +813,13 @@ export function conditionReportValues(
   const cp = getField(cond, PID.CP_OFFSET);
   if (cp) v[PID.CP_OFFSET] = forceToRaw(cp, 0);
   const c = clamp(Number.isFinite(coeff) ? coeff : 0, -1, 1);
+  // A signed coefficient keeps 0 at 0; an unsigned one (0..10000) has no negative side, so 0 is its minimum, not the
+  // midpoint forceToRaw would give it (a damper that starts at half strength)
+  const coeffRaw = (f: PidFieldLayout) => (f.min < 0 ? forceToRaw(f, c) : Math.round(f.min + (f.max - f.min) * Math.abs(c)));
   const posCoeff = getField(cond, PID.POSITIVE_COEFFICIENT);
-  if (posCoeff) v[PID.POSITIVE_COEFFICIENT] = forceToRaw(posCoeff, c);
+  if (posCoeff) v[PID.POSITIVE_COEFFICIENT] = coeffRaw(posCoeff);
   const negCoeff = getField(cond, PID.NEGATIVE_COEFFICIENT);
-  if (negCoeff) v[PID.NEGATIVE_COEFFICIENT] = forceToRaw(negCoeff, c);
+  if (negCoeff) v[PID.NEGATIVE_COEFFICIENT] = coeffRaw(negCoeff);
   const sat = clamp(Number.isFinite(saturation) ? saturation : 1, 0, 1);
   const posSat = getField(cond, PID.POSITIVE_SATURATION);
   if (posSat) v[PID.POSITIVE_SATURATION] = Math.round(posSat.min + (posSat.max - posSat.min) * sat);
@@ -1121,13 +1149,22 @@ export async function setupLogitechClassicDevice(
   }
 }
 
+/**
+ * What a classic Logitech wheel gets when the page lets go of it (teardown, emergency stop): force off, the range back
+ * to 900° if it was changed, centring spring on
+ */
+function lg4ffReleaseCommands(session: LogitechClassicSession): number[][] {
+  return [
+    lg4ffConstantForce(0x80),
+    ...(session.rangeChanged ? [lg4ffRange(LG4FF_MAX_RANGE_DEG)] : []),
+    ...lg4ffAutocenter(LG4FF_AUTOCENTER_ON_RELEASE),
+  ];
+}
+
 /** Best-effort shutdown: force off, the range back to 900° if it was changed, centring spring on. Never throws. */
 export async function teardownLogitechClassicSession(session: LogitechClassicSession): Promise<void> {
   await session.writer.close();
-  const { send } = session;
-  await bestEffort(() => send(lg4ffConstantForce(0x80)));
-  if (session.rangeChanged) await bestEffort(() => send(lg4ffRange(LG4FF_MAX_RANGE_DEG)));
-  for (const r of lg4ffAutocenter(LG4FF_AUTOCENTER_ON_RELEASE)) await bestEffort(() => send(r));
+  for (const bytes of lg4ffReleaseCommands(session)) await bestEffort(() => session.send(bytes));
 }
 
 export function teardownSession(session: FfbSession): Promise<void> {
@@ -1165,6 +1202,258 @@ export async function teardownPidSession(session: PidSession): Promise<void> {
   await attempt(() => deviceControl(device, layout, PID.DC_DISABLE_ACTUATORS));
 }
 
+/** Hands a write to the browser and forgets it: nothing is awaited, and a throw does not stop the writes after it */
+function fireAndForget(send: () => Promise<unknown>): void {
+  try {
+    send().catch(() => {});
+  } catch {
+    // device already gone
+  }
+}
+
+/**
+ * The page is going away (pagehide): every stop command is handed to the browser at once, in order, without waiting
+ * for any of them, since no later promise may get to run. The writer is killed first, so nothing it queued goes out
+ * after them. A PID wheel gets zero force, the hardware damper's coefficient 0 and Stop All Effects (no block is freed:
+ * the next setup resets the wheel); a classic Logitech wheel what {@link teardownLogitechClassicSession} sends.
+ */
+export function emergencyStopSession(session: FfbSession): void {
+  session.writer.kill();
+  if (session.kind === "logitech-classic") {
+    for (const bytes of lg4ffReleaseCommands(session)) fireAndForget(() => session.send(bytes));
+    return;
+  }
+  const { device, layout, blockIndex, damperBlockIndex } = session;
+  const mag = getField(layout.constantForce, PID.MAGNITUDE);
+  if (mag) {
+    fireAndForget(() =>
+      sendOutput(device, layout.constantForce, { [PID.EFFECT_BLOCK_INDEX]: blockIndex, [PID.MAGNITUDE]: forceToRaw(mag, 0) })
+    );
+  }
+  const cond = layout.setCondition;
+  if (damperBlockIndex !== null && cond) {
+    fireAndForget(() => sendOutput(device, cond, conditionReportValues(cond, damperBlockIndex, 0, 1)));
+  }
+  // deviceControl sends before its first await, so the report is handed over here
+  fireAndForget(() => deviceControl(device, layout, PID.DC_STOP_ALL_EFFECTS));
+}
+
+/* ------------------------------------------------------------------------------------------------------------ */
+/* Diagnostics                                                                                                   */
+/* ------------------------------------------------------------------------------------------------------------ */
+
+/** Setup / teardown traffic remembered for {@link WebHidFfb.diagnose} */
+export const HID_TRACE_SIZE = 60;
+
+const hex = (n: number, width = 2) => n.toString(16).padStart(width, "0");
+const hexBytes = (bytes: ArrayLike<number>, max = 64) => {
+  const out: string[] = [];
+  for (let i = 0; i < Math.min(bytes.length, max); i++) out.push(hex(bytes[i] as number));
+  return out.join(" ") + (bytes.length > max ? ` … (${bytes.length} bytes)` : "");
+};
+
+/**
+ * The last {@link HID_TRACE_SIZE} reports written to (and Block Load replies read from) the wheel while `recording`,
+ * which the driver switches on for setup and teardown only: the 500 Hz force stream is never kept
+ */
+export class HidTrace {
+  recording = false;
+  private readonly lines: string[] = [];
+  private readonly t0: number;
+
+  constructor(private readonly now: () => number = defaultFfbDeps.now) {
+    this.t0 = now();
+  }
+
+  /** A line of the trace, prefixed with the time since the driver started (ms) */
+  note(text: string): void {
+    if (this.lines.length >= HID_TRACE_SIZE) this.lines.shift();
+    this.lines.push(`${(this.now() - this.t0).toFixed(0).padStart(7)} ms  ${text}`);
+  }
+
+  report(kind: string, reportId: number, bytes: ArrayLike<number>): void {
+    if (this.recording) this.note(`${kind.padEnd(11)} id ${String(reportId).padStart(3)}  ${hexBytes(bytes)}`);
+  }
+
+  entries(): readonly string[] {
+    return this.lines;
+  }
+}
+
+/** `device` with every report it sends (and every feature report read back) written to `trace` while it records */
+export function tracedDevice(device: HidDeviceLike, trace: HidTrace): HidDeviceLike {
+  const failed = (kind: string, id: number) => (e: unknown) => {
+    if (trace.recording) trace.note(`${kind} id ${id} FAILED: ${errorMessage(e)}`);
+    throw e;
+  };
+  return {
+    get opened() {
+      return device.opened;
+    },
+    vendorId: device.vendorId,
+    productId: device.productId,
+    productName: device.productName,
+    collections: device.collections,
+    open: () => device.open(),
+    close: () => device.close(),
+    sendReport: (id, data) => {
+      trace.report("out", id, data);
+      return device.sendReport(id, data).catch(failed("out", id));
+    },
+    sendFeatureReport: (id, data) => {
+      trace.report("feature out", id, data);
+      return device.sendFeatureReport(id, data).catch(failed("feature out", id));
+    },
+    receiveFeatureReport: (id) =>
+      device.receiveFeatureReport(id).then((view) => {
+        trace.report("feature in", id, new Uint8Array(view.buffer, view.byteOffset, view.byteLength));
+        return view;
+      }, failed("feature in", id)),
+  };
+}
+
+/** Names for the usages the driver knows; anything else is shown as page:id */
+const USAGE_NAMES: ReadonlyMap<number, string> = new Map<number, string>([
+  ...Object.entries(PID).map(([name, usage]) => [usage, name] as [number, string]),
+  [(PAGE_DESKTOP << 16) | 0x30, "X"],
+  [(PAGE_DESKTOP << 16) | 0x31, "Y"],
+  [(PAGE_DESKTOP << 16) | 0x32, "Z"],
+  [(PAGE_DESKTOP << 16) | 0x3b, "DESKTOP_BYTE_COUNT"],
+  [pidUsage(0x01), "PID_PHYSICAL_INTERFACE"],
+  [pidUsage(0x02), "PID_NORMAL"],
+  [pidUsage(0x21), "SET_EFFECT_REPORT"],
+  [pidUsage(0x27), "ET_RAMP"],
+  [pidUsage(0x28), "ET_CUSTOM_FORCE_DATA"],
+  [pidUsage(0x30), "ET_SQUARE"],
+  [pidUsage(0x31), "ET_SINE"],
+  [pidUsage(0x32), "ET_TRIANGLE"],
+  [pidUsage(0x33), "ET_SAWTOOTH_UP"],
+  [pidUsage(0x34), "ET_SAWTOOTH_DOWN"],
+  [pidUsage(0x40), "ET_SPRING"],
+  [pidUsage(0x42), "ET_INERTIA"],
+  [pidUsage(0x43), "ET_FRICTION"],
+  [pidUsage(0x6f), "OFFSET"],
+  [pidUsage(0x71), "PHASE"],
+  [pidUsage(0x72), "PERIOD"],
+  [pidUsage(0xad), "RAM_POOL_AVAILABLE"],
+]);
+
+function usageName(usage: number): string {
+  const page = usage >>> 16;
+  const id = usage & 0xffff;
+  const known = USAGE_NAMES.get(usage);
+  if (known) return known;
+  if (page === PAGE_ORDINAL) return `ORDINAL_${id}`;
+  return `${hex(page, 4)}:${hex(id, 4)}`;
+}
+
+function describeItem(item: HidReportItemLike): string {
+  const usages = expandUsages(item);
+  const list =
+    item.isRange && typeof item.usageMinimum === "number" && typeof item.usageMaximum === "number"
+      ? `${usageName(item.usageMinimum)}..${usageName(item.usageMaximum)}`
+      : usages.length > 6
+        ? `${usages.slice(0, 6).map(usageName).join(", ")}, … (${usages.length})`
+        : usages.map(usageName).join(", ") || "(no usage)";
+  const kind = item.isConstant ? "constant" : item.isArray ? "array" : "variable";
+  return `${item.reportSize ?? 0} bit x ${item.reportCount ?? 0}, ${kind}, logical ${item.logicalMinimum ?? "?"}..${item.logicalMaximum ?? "?"}: ${list}`;
+}
+
+function describeCollections(collections: readonly HidCollectionLike[], depth: number, out: string[]): void {
+  const pad = "  ".repeat(depth);
+  for (const c of collections) {
+    out.push(`${pad}collection ${hex(c.usagePage ?? 0, 4)}:${hex(c.usage ?? 0, 4)} type ${c.type ?? "?"}`);
+    for (const [kind, reports] of [
+      ["input", c.inputReports],
+      ["output", c.outputReports],
+      ["feature", c.featureReports],
+    ] as const) {
+      for (const r of reports ?? []) {
+        const items = r.items ?? [];
+        const bits = items.reduce((sum, i) => sum + Math.max(0, i.reportSize ?? 0) * Math.max(0, i.reportCount ?? 0), 0);
+        out.push(`${pad}  ${kind} report ${r.reportId ?? 0} (${bits} bits)`);
+        for (const item of items) out.push(`${pad}    ${describeItem(item)}`);
+      }
+    }
+    describeCollections(c.children ?? [], depth + 1, out);
+  }
+}
+
+const PID_REPORT_NAMES: readonly [keyof PidLayout, string][] = [
+  ["setEffect", "Set Effect"],
+  ["constantForce", "Set Constant Force"],
+  ["effectOperation", "Effect Operation"],
+  ["setCondition", "Set Condition"],
+  ["blockFree", "PID Block Free"],
+  ["deviceControl", "PID Device Control"],
+  ["deviceGain", "Device Gain"],
+  ["createNewEffect", "Create New Effect"],
+  ["blockLoad", "PID Block Load"],
+];
+
+function describeField(f: PidFieldEntry): string {
+  const range = `${f.min}..${f.max}${f.signed ? " signed" : ""}`;
+  // Only array (selector) fields carry a usage list
+  const selects = f.usages ? ` selects ${f.usages.map(usageName).join(", ")}` : "";
+  return `${usageName(f.usage).padEnd(24)} bit ${String(f.bitOffset).padStart(3)}, ${f.bitSize} bits, ${range}${selects}`;
+}
+
+/** Which driver path a device without a usable HID PID layout takes, for {@link describeHidDevice} */
+function describeNonPid(device: HidDeviceLike): string {
+  const model = logitechClassicModel(device.vendorId, device.productId);
+  if (model) {
+    const report = lg4ffOutputReport(device.collections);
+    return report
+      ? `HID PID: none. Logitech ${model.name}: driven with the hid-lg4ff commands on output report ${report.reportId} (${report.bytes} bytes)`
+      : `HID PID: none. Logitech ${model.name}, but this interface has no 7-byte output report for the hid-lg4ff commands`;
+  }
+  if (device.vendorId === LOGITECH_VENDOR_ID) return `HID PID: none. ${LOGITECH_MESSAGE}`;
+  return "HID PID: no usable Set Constant Force + Effect Operation report";
+}
+
+/**
+ * Everything the driver knows about a device, as text for a bug report: ids and name, the raw report descriptor
+ * (collections, reports, items), then the HID PID reports as {@link parsePidLayout} reads them and the firmware
+ * profile, or which other path it takes (a listed classic Logitech wheel) or why there is none
+ */
+export function describeHidDevice(device: HidDeviceLike): string {
+  const out: string[] = [];
+  out.push(`${deviceName(device)}  [${hex(device.vendorId, 4)}:${hex(device.productId, 4)}]${device.opened ? "  (open)" : ""}`);
+  out.push("Report descriptor:");
+  describeCollections(device.collections, 1, out);
+  const layout = parsePidLayout(device.collections);
+  if (!layout) {
+    out.push(describeNonPid(device));
+    return out.join("\n");
+  }
+  out.push(`PID profile: ${pidProfileName(device)}`);
+  out.push("HID PID reports:");
+  for (const [key, name] of PID_REPORT_NAMES) {
+    const r = layout[key] as PidReportLayout | null | undefined;
+    if (!r) {
+      out.push(`  ${name}: MISSING`);
+      continue;
+    }
+    out.push(`  ${name}: report ${r.reportId}, ${r.bitLength} bits`);
+    for (const f of r.fieldList ?? []) out.push(`    ${describeField(f)}`);
+  }
+  const types = layout.setEffect ? (getField(layout.setEffect, PID.EFFECT_TYPE)?.usages ?? []) : [];
+  out.push(`Effect types: ${types.length > 0 ? types.map(usageName).join(", ") : "(no Set Effect type list)"}`);
+  out.push(`Hardware damper: ${layout.hasDamper ? "yes (Damper effect type and a Set Condition report)" : "no"}`);
+  return out.join("\n");
+}
+
+/** One line on the running session, either kind, for {@link WebHidFfb.diagnose} and the trace */
+function describeSession(session: FfbSession): string {
+  if (session.kind === "pid") {
+    return (
+      `pid driver, constant force on effect block ${session.blockIndex}, ` +
+      `hardware damper ${session.damperBlockIndex !== null ? `on block ${session.damperBlockIndex}` : "none"}`
+    );
+  }
+  return `logitech-classic driver (hid-lg4ff), ${session.model.name}, ${session.rangeChanged ? "range set from the wheel rotation setting" : "the wheel's own range"}`;
+}
+
 /* ------------------------------------------------------------------------------------------------------------ */
 /* Public driver                                                                                                 */
 /* ------------------------------------------------------------------------------------------------------------ */
@@ -1197,6 +1486,12 @@ const LOGITECH_MESSAGE = `Only the Logitech ${LOGITECH_CLASSIC_NAMES} take force
  * the damper; this one comes after it.
  */
 export const IDLE_ZERO_MS = 250;
+/** Wait after a granted wheel's connect event before re-opening it (ms): a multi-interface base arrives one at a time */
+export const HOTPLUG_DELAY_MS = 1500;
+/** Setup attempts when a granted wheel is re-opened (page load, power-cycle): one just switched on may refuse at first */
+export const SETUP_ATTEMPTS = 5;
+/** Wait between those attempts (ms) */
+export const SETUP_RETRY_MS = 2000;
 
 /** A device this driver can drive, and how (the PID layout is parsed once, here) */
 type FfbPick =
@@ -1256,6 +1551,16 @@ export class WebHidFfb {
   private lastDriveMs = 0;
   private idleTimer: unknown = null;
   private rotationDeg: number | null = null;
+  /** Between connect()/reconnect() and dispose(): a granted wheel that comes back is re-opened */
+  private wanted = false;
+  private hotplugApi: HidApiLike | null = null;
+  private hotplugTimer: unknown = null;
+  /** Ends the wait between setup attempts early (dispose) */
+  private wakeRetry: (() => void) | null = null;
+  /** Setup / teardown traffic and status changes, for {@link diagnose} */
+  private readonly trace: HidTrace;
+  /** The device last set up (or tried), kept after a failure so diagnose() can describe it */
+  private lastDevice: HidDeviceLike | null = null;
 
   /** `hid` and `deps` exist for tests; the app uses the defaults */
   constructor(
@@ -1265,17 +1570,19 @@ export class WebHidFfb {
     this.status = this.hidApi()
       ? { state: "idle", device: null, message: null }
       : { state: "unsupported", device: null, message: UNSUPPORTED_BROWSER };
+    this.trace = new HidTrace(deps.now);
   }
 
   /**
    * Must be called straight from a user gesture (the click handler itself): requestDevice is called before anything
    * is awaited, since the prompt needs the click's user activation. Opens the picked wheel and sets the effect up.
    * Resolves to the device name, or null when nothing was picked or setup failed (see `status`). Cancelling the
-   * picker keeps a wheel that is already running.
+   * picker keeps a wheel that is already running. A failed setup is reported at once, not retried.
    */
   connect(): Promise<string | null> {
     const hid = this.hidApi();
     if (!hid) return Promise.resolve(this.fail("unsupported", null, UNSUPPORTED_BROWSER));
+    this.want(hid);
     let picking: Promise<{ devices: HidDeviceLike[] } | { error: string }>;
     try {
       picking = hid.requestDevice({ filters: REQUEST_FILTERS }).then(
@@ -1306,15 +1613,20 @@ export class WebHidFfb {
   }
 
   /**
-   * Re-opens a wheel the user granted earlier, without a prompt (page load); null when there is none, with the status
-   * asking for a Connect click ({@link PAIR_MESSAGE}). Only a device {@link pickFfbDevice} accepts is opened: any
-   * other granted device (a DualSense, a HID++ wheel) leaves the driver idle, not failed. Never shows the picker. A
-   * running wheel is kept.
+   * Re-opens a wheel the user granted earlier, without a prompt (page load, the wheel switched back on); null when
+   * there is none, with the status asking for a Connect click ({@link PAIR_MESSAGE}). Only a device
+   * {@link pickFfbDevice} accepts is opened: any other granted device (a DualSense, a HID++ wheel) leaves the driver
+   * idle, not failed. Never shows the picker. A running wheel is kept. A setup that fails (not an unsupported wheel) is
+   * tried {@link SETUP_ATTEMPTS} times, staying "connecting" in between, since a base that was just powered on may not
+   * take it yet.
    */
   reconnect(): Promise<string | null> {
+    const api = this.hidApi();
+    if (api) this.want(api);
     return this.guard(async () => {
       const hid = this.hidApi();
       if (!hid) return this.fail("unsupported", null, UNSUPPORTED_BROWSER);
+      if (!this.wanted) return null;
       if (this.session && this.device) return deviceName(this.device);
       let devices: HidDeviceLike[];
       try {
@@ -1328,8 +1640,25 @@ export class WebHidFfb {
         return null;
       }
       await this.release();
-      this.setStatus("connecting", deviceName(pick.device), null);
-      return this.attach(hid, pick);
+      const name = deviceName(pick.device);
+      this.setStatus("connecting", name, null);
+      for (let attempt = 1; ; attempt++) {
+        const result = await this.setUp(hid, pick);
+        if (result.ok) return name;
+        if (!this.wanted) {
+          this.setStatus("idle", null, null);
+          return null;
+        }
+        if (result.unsupported || attempt >= SETUP_ATTEMPTS) {
+          return this.fail(result.unsupported ? "unsupported" : "error", name, result.message);
+        }
+        this.setStatus("connecting", name, `${result.message}; trying again (${attempt + 1}/${SETUP_ATTEMPTS})`);
+        await this.waitForRetry(SETUP_RETRY_MS);
+        if (!this.wanted) {
+          this.setStatus("idle", null, null);
+          return null;
+        }
+      }
     });
   }
 
@@ -1369,10 +1698,74 @@ export class WebHidFfb {
   }
 
   /**
+   * The page is going away (pagehide): the wheel's stop commands go out at once, without waiting for anything, since
+   * no later promise may get to run ({@link emergencyStopSession}: zero force, damper 0 and Stop All on a PID wheel;
+   * force off, range and centring spring back on a classic Logitech). The session is dropped (the device stays
+   * referenced, so the next release closes it); {@link resume} sets the wheel up again if the page comes back from
+   * the back/forward cache.
+   */
+  emergencyStop(): void {
+    const session = this.session;
+    if (!session) return;
+    this.session = null;
+    this.clearIdle();
+    this.trace.note("page hidden: emergency stop");
+    this.trace.recording = true;
+    try {
+      emergencyStopSession(session);
+    } finally {
+      this.trace.recording = false;
+    }
+    this.setStatus("idle", null, null);
+  }
+
+  /** The page came back from the back/forward cache: set the wheel up again if the driver is still wanted */
+  resume(): Promise<string | null> {
+    return this.wanted ? this.reconnect() : Promise.resolve(null);
+  }
+
+  /**
+   * A plain-text report for a bug report about a wheel: browser, driver status and session, every granted HID device
+   * described in full ({@link describeHidDevice}), and the last setup / teardown reports sent ({@link HidTrace}).
+   */
+  async diagnose(): Promise<string> {
+    const out: string[] = ["LibreCorsa WebHID force-feedback diagnostics", `Time: ${new Date().toISOString()}`];
+    if (typeof navigator !== "undefined" && typeof navigator.userAgent === "string") out.push(`Browser: ${navigator.userAgent}`);
+    const hid = this.hidApi();
+    out.push(`WebHID: ${hid ? "available" : `unavailable (${UNSUPPORTED_BROWSER})`}`);
+    const s = this.status;
+    out.push(`Status: ${s.state}${s.device ? ` | ${s.device}` : ""}${s.message ? ` | ${s.message}` : ""}`);
+    const ses = this.session;
+    out.push(ses ? `Session: ${describeSession(ses)}` : "Session: none");
+    let devices: HidDeviceLike[] = [];
+    if (hid) {
+      try {
+        devices = await hid.getDevices();
+      } catch (e) {
+        out.push(`getDevices() failed: ${errorMessage(e)}`);
+      }
+    }
+    const current = this.device ?? this.lastDevice;
+    if (current && !devices.includes(current)) devices = [current, ...devices];
+    const picked = pickFfbDevice(devices)?.device ?? null;
+    out.push(`Granted devices: ${devices.length}${devices.length === 0 ? " (pair the wheel with Connect first)" : ""}`);
+    for (const d of devices) {
+      const tags = [d === current ? (ses ? "in use" : "last tried") : "", d === picked ? "the one reconnect picks" : ""].filter(Boolean);
+      out.push("", `--- ${deviceName(d)}${tags.length > 0 ? ` (${tags.join(", ")})` : ""}`, describeHidDevice(d));
+    }
+    const lines = this.trace.entries();
+    out.push("", `Setup and teardown traffic (last ${HID_TRACE_SIZE} lines; the force stream is not recorded):`);
+    out.push(...(lines.length > 0 ? lines.map((l) => `  ${l}`) : ["  (none yet)"]));
+    return out.join("\n");
+  }
+
+  /**
    * Stops all effects, disables actuators and closes the device (after any connect in flight). An error status is
-   * kept, so the reason stays on screen once the driver is switched off because of it.
+   * kept, so the reason stays on screen once the driver is switched off because of it. A granted wheel coming back
+   * afterwards is left alone.
    */
   async dispose(): Promise<void> {
+    this.unwant();
     await this.guard(async () => {
       await this.release();
       if (!isFatalHidStatus(this.status)) this.setStatus("idle", null, null);
@@ -1408,10 +1801,30 @@ export class WebHidFfb {
     return p;
   }
 
+  /** Sets the wheel up and makes it the force output; on failure the status is "error" / "unsupported" */
   private async attach(hid: HidApiLike, pick: FfbPick): Promise<string | null> {
+    const r = await this.setUp(hid, pick);
+    return r.ok ? r.name : this.fail(r.unsupported ? "unsupported" : "error", r.name, r.message);
+  }
+
+  /**
+   * {@link attach} without reporting a failure (the reconnect retries decide when it is one). The setup runs on the
+   * device seen through the trace, so the session's own writes (teardown, emergency stop) are traced too while it
+   * records.
+   */
+  private async setUp(
+    hid: HidApiLike,
+    pick: FfbPick
+  ): Promise<{ ok: true; name: string } | { ok: false; name: string; unsupported: boolean; message: string }> {
     const { device } = pick;
     const name = deviceName(device);
-    this.setStatus("connecting", name, null);
+    if (this.status.state !== "connecting" || this.status.device !== name) this.setStatus("connecting", name, null);
+    this.lastDevice = device;
+    const how =
+      pick.kind === "pid"
+        ? `the HID PID driver (${pidProfileName(device)} profile)`
+        : `the Logitech classic driver (hid-lg4ff, ${pick.model.name})`;
+    this.trace.note(`setup ${name} [${hex(device.vendorId, 4)}:${hex(device.productId, 4)}] with ${how}`);
     const options: LogitechClassicSetupOptions = {
       deps: this.deps,
       rotationDeg: this.rotationDeg,
@@ -1422,18 +1835,27 @@ export class WebHidFfb {
         }
       },
     };
-    const result: SetupResult<FfbSession> =
-      pick.kind === "pid"
-        ? await setupPidDevice(device, { ...options, layout: pick.layout })
-        : await setupLogitechClassicDevice(device, pick.model, options);
+    const traced = tracedDevice(device, this.trace);
+    this.trace.recording = true;
+    let result: SetupResult<FfbSession>;
+    try {
+      result =
+        pick.kind === "pid"
+          ? await setupPidDevice(traced, { ...options, layout: pick.layout })
+          : await setupLogitechClassicDevice(traced, pick.model, options);
+    } finally {
+      this.trace.recording = false;
+    }
     if (!result.ok) {
+      this.trace.note(`setup failed${result.unsupported ? " (unsupported)" : ""}: ${result.message}`);
       try {
         if (device.opened) await device.close();
       } catch {
         // already gone
       }
-      return this.fail(result.unsupported ? "unsupported" : "error", name, result.message);
+      return { ok: false, name, unsupported: result.unsupported, message: result.message };
     }
+    this.trace.note(`setup ok: ${describeSession(result.session)}`);
     this.session = result.session;
     this.device = device;
     if (this.listening !== hid) {
@@ -1441,7 +1863,53 @@ export class WebHidFfb {
       this.listening = hid;
     }
     this.setStatus("ready", name, null);
-    return name;
+    return { ok: true, name };
+  }
+
+  /** From connect()/reconnect() until dispose(): listen for a granted wheel coming back */
+  private want(hid: HidApiLike): void {
+    this.wanted = true;
+    if (this.hotplugApi === hid) return;
+    this.hotplugApi?.removeEventListener("connect", this.onConnect);
+    hid.addEventListener("connect", this.onConnect);
+    this.hotplugApi = hid;
+  }
+
+  private unwant(): void {
+    this.wanted = false;
+    this.hotplugApi?.removeEventListener("connect", this.onConnect);
+    this.hotplugApi = null;
+    if (this.hotplugTimer !== null) {
+      this.deps.clearTimer(this.hotplugTimer);
+      this.hotplugTimer = null;
+    }
+    this.wakeRetry?.();
+  }
+
+  /**
+   * A granted device appeared (the wheel switched back on): re-open it once it has settled. Only a device
+   * {@link pickFfbDevice} accepts (a HID PID interface, a listed classic Logitech wheel) schedules the re-open.
+   */
+  private onConnect = (e: { device: HidDeviceLike }) => {
+    if (!this.wanted || this.session || !pickFfbDevice([e.device])) return;
+    this.trace.note(`connect event: ${deviceName(e.device)}; re-opening in ${HOTPLUG_DELAY_MS} ms`);
+    if (this.hotplugTimer !== null) this.deps.clearTimer(this.hotplugTimer);
+    this.hotplugTimer = this.deps.setTimer(() => {
+      this.hotplugTimer = null;
+      if (this.wanted && !this.session) void this.reconnect();
+    }, HOTPLUG_DELAY_MS);
+  };
+
+  private waitForRetry(ms: number): Promise<void> {
+    return new Promise((resolve) => {
+      const done = () => {
+        if (this.wakeRetry === done) this.wakeRetry = null;
+        this.deps.clearTimer(timer);
+        resolve();
+      };
+      const timer = this.deps.setTimer(done, ms);
+      this.wakeRetry = done;
+    });
   }
 
   private onDisconnect = (e: { device: HidDeviceLike }) => {
@@ -1449,6 +1917,7 @@ export class WebHidFfb {
     if (!d) return;
     const same = e.device === d || (e.device.vendorId === d.vendorId && e.device.productId === d.productId);
     if (!same) return;
+    this.trace.note(`disconnect event: ${deviceName(e.device)}`);
     this.session?.writer.kill();
     this.session = null;
     this.device = null;
@@ -1490,7 +1959,15 @@ export class WebHidFfb {
       this.listening.removeEventListener("disconnect", this.onDisconnect);
       this.listening = null;
     }
-    if (session) await teardownSession(session);
+    if (session) {
+      this.trace.note("teardown");
+      this.trace.recording = true;
+      try {
+        await teardownSession(session);
+      } finally {
+        this.trace.recording = false;
+      }
+    }
     if (device) {
       try {
         if (device.opened) await device.close();
@@ -1509,6 +1986,7 @@ export class WebHidFfb {
     const s = this.status;
     if (s.state === state && s.device === device && s.message === message) return;
     this.status = { state, device, message };
+    this.trace.note(`status ${state}${device ? ` | ${device}` : ""}${message ? ` | ${message}` : ""}`);
     this.onStatus?.(this.status);
     for (const l of this.listeners) l();
   }

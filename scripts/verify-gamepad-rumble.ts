@@ -6,8 +6,8 @@
  */
 import assert from 'node:assert/strict';
 import type { CarTelemetry } from '../src/types/f1';
+import { CRASH_G } from '../src/lib/sim/handling-cues';
 import {
-  CRASH_G,
   createRumbleMixState,
   GamepadHaptics,
   hapticMagnitudes,

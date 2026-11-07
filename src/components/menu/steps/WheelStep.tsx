@@ -319,12 +319,71 @@ function HidFfbStatusLine({ status, on }: { status: WebHidFfbStatus; on: boolean
       {fatal && !browserUnsupported ? (
         <Hint>WebHID switched off; force feedback goes through the bridge.{on ? "" : " Switch it on again to retry."}</Hint>
       ) : null}
-      {on && canConnect ? (
-        <SolidPill tone="volt" onClick={connectHidWheel}>
-          Connect wheel
-        </SolidPill>
-      ) : null}
+      <div className="flex flex-wrap items-center gap-2">
+        {on && canConnect ? (
+          <SolidPill tone="volt" onClick={connectHidWheel}>
+            Connect wheel
+          </SolidPill>
+        ) : null}
+        {browserUnsupported ? null : <CopyHidDiagnostics />}
+      </div>
     </div>
+  );
+}
+
+/**
+ * Copies the WebHID driver's diagnostics (the wheel's report descriptor, its HID PID reports, the setup traffic) for
+ * a bug report. Where the clipboard is refused, the text is shown to copy by hand.
+ */
+function CopyHidDiagnostics() {
+  const [state, setState] = useState<"idle" | "busy" | "copied" | "failed">("idle");
+  const [manual, setManual] = useState<string | null>(null);
+  useEffect(() => {
+    if (state !== "copied") return;
+    const t = setTimeout(() => setState("idle"), 2500);
+    return () => clearTimeout(t);
+  }, [state]);
+  const copy = async () => {
+    setState("busy");
+    let report: string;
+    try {
+      report = await webHidFfb.diagnose();
+    } catch (e) {
+      report = `LibreCorsa WebHID diagnostics failed: ${e instanceof Error ? e.message : String(e)}`;
+    }
+    try {
+      await navigator.clipboard.writeText(report);
+      setManual(null);
+      setState("copied");
+    } catch {
+      setManual(report);
+      setState("failed");
+    }
+  };
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => void copy()}
+        disabled={state === "busy"}
+        className="inline-flex h-[34px] shrink-0 cursor-pointer items-center rounded-full border border-[#262B3D] bg-[#F5F7FA]/[0.08] px-3.5 text-[13px] font-bold whitespace-nowrap text-[#F5F7FA] transition-colors duration-200 hover:border-[#3A4157] disabled:cursor-wait disabled:opacity-60"
+      >
+        <span aria-live="polite">{state === "copied" ? "Copied" : "Copy diagnostics"}</span>
+      </button>
+      {manual !== null ? (
+        <div className="flex w-full flex-col gap-1">
+          <Hint>The browser refused the clipboard: select the text below and copy it.</Hint>
+          <textarea
+            readOnly
+            value={manual}
+            rows={8}
+            aria-label="WebHID diagnostics"
+            onFocus={(e) => e.currentTarget.select()}
+            className="w-full resize-y rounded-[10px] border border-[#262B3D] bg-[#050608] p-2 font-f1-mono text-[11px] leading-snug text-[#C9D1E0]"
+          />
+        </div>
+      ) : null}
+    </>
   );
 }
 
@@ -735,6 +794,26 @@ export const WheelStep: React.FC<SetupStepProps> = ({ settings, onChangeSettings
                   onChange={(v) => setWheel({ ffbAbs: v / 100 })}
                 />
                 <TuningSlider
+                  label="Slip vibration"
+                  value={Math.round(w.ffbSlip * 100)}
+                  min={0}
+                  max={100}
+                  step={5}
+                  format={(v) => (v === 0 ? "Off" : `${v} %`)}
+                  hint="Buzzes from just before the tyres' grip peak: understeer, lock-ups, wheelspin. WebHID wheels"
+                  onChange={(v) => setWheel({ ffbSlip: v / 100 })}
+                />
+                <TuningSlider
+                  label="Shift warning"
+                  value={Math.round(w.ffbShift * 100)}
+                  min={0}
+                  max={100}
+                  step={5}
+                  format={(v) => (v === 0 ? "Off" : `${v} %`)}
+                  hint="Buzzes as the revs reach the shift lights, until the next gear. WebHID wheels"
+                  onChange={(v) => setWheel({ ffbShift: v / 100 })}
+                />
+                <TuningSlider
                   label="Damping"
                   value={Math.round(w.ffbDamping * 100)}
                   min={0}
@@ -754,7 +833,23 @@ export const WheelStep: React.FC<SetupStepProps> = ({ settings, onChangeSettings
                   hint="Low-pass filter on the force. 0 = raw"
                   onChange={(v) => setWheel({ ffbFilterS: v / 1000 })}
                 />
+                <TuningSlider
+                  label="Downforce compensation"
+                  value={Math.round(w.ffbDownforceComp * 100)}
+                  min={0}
+                  max={100}
+                  step={5}
+                  format={(v) => (v === 0 ? "Off" : `${v} %`)}
+                  hint="Takes the aero load out of the steering weight, so fast corners do not clip. Raise Strength to match"
+                  onChange={(v) => setWheel({ ffbDownforceComp: v / 100 })}
+                />
               </AutoGrid>
+              <Toggle
+                label="Collision protection"
+                detail="Holds back the force spike of a hit so it never yanks the rim"
+                checked={w.ffbCollisionGuard}
+                onChange={() => setWheel({ ffbCollisionGuard: !w.ffbCollisionGuard })}
+              />
               <div className="flex flex-wrap items-center gap-2">
                 <SolidPill disabled={!ffbReady} onClick={() => wheelFfb.test(w.ffbInvert)} className="h-10!">
                   Test direction

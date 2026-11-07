@@ -1,5 +1,5 @@
 import type { CarTelemetry } from "@/types/f1";
-import { handlingCues, pastPeak } from "./handling-cues";
+import { CRASH_G, handlingCues, pastPeak } from "./handling-cues";
 import { axleSlipFromTelemetry, brakeSlipMargin, createAxleSlipSample, throttleSlipAllowance } from "./tyre-slip";
 import { DEFAULT_SURFACE_TABLE } from "./track-surfaces";
 
@@ -102,8 +102,6 @@ const IMPACT_HEAVE_FLOOR_G = 1.4;
 const IMPACT_HEAVE_FULL_G = 3;
 /** Below this speed a settling car (a reset onto the grid) is not a hit */
 const IMPACT_MIN_SPEED_KMH = 10;
-/** Horizontal g past which a hit is a crash (a wall), well beyond any car's grip or braking */
-export const CRASH_G = 10;
 /** A wall hit (horizontal g above CRASH_G) starts the pulse at this level, full at twice the threshold */
 const IMPACT_CRASH_FLOOR = 0.6;
 /** Impact envelope decay time constant (s): how long a hit rings out */

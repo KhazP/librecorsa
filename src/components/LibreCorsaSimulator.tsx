@@ -1742,11 +1742,20 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       wheelFfb.stop();
       releaseHeldKeys();
     };
-    const onPageHide = () => wheelFfb.stop();
+    // Leaving the page: the WebHID wheel gets its stop commands now (emergencyStop), as no later promise may run
+    const onPageHide = () => {
+      wheelFfb.stop();
+      webHidFfb.emergencyStop();
+    };
+    // Back from the back/forward cache: the wheel was stopped on the way out
+    const onPageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) void webHidFfb.resume();
+    };
     // Keys held while focus leaves the window (Cmd-Tab, a system dialog) never get their keyup
     const onWindowBlur = () => releaseHeldKeys();
     document.addEventListener("visibilitychange", onVisibilityChange);
     window.addEventListener("pagehide", onPageHide);
+    window.addEventListener("pageshow", onPageShow);
     window.addEventListener("blur", onWindowBlur);
 
     let lastTimeMs = performance.now();
@@ -3119,6 +3128,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       wheelFfb.dispose();
       document.removeEventListener("visibilitychange", onVisibilityChange);
       window.removeEventListener("pagehide", onPageHide);
+      window.removeEventListener("pageshow", onPageShow);
       window.removeEventListener("blur", onWindowBlur);
       window.removeEventListener("mousemove", onMouseMove);
       window.removeEventListener("keydown", onKeyDown);
