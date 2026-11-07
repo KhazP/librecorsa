@@ -206,6 +206,11 @@ const WALL_LINE_DEFAULT_RUNOFF_M = 5.8;
 type TrackProjection = ReturnType<BuiltTrackData['projectWorldToTrack']>;
 
 const _wallHit = createWallHit();
+/**
+ * A mesh kerb's crown above the road for the VF26, which takes its road height from the track samples rather than the
+ * mesh (the converted circuits were driven with this)
+ */
+const MESH_KERB_CROWN_M = 0.018;
 const _groundHit = createGroundHit();
 // Scratch reused by the 500 Hz / 2 kHz steps instead of allocating (single-threaded; read, never kept)
 const _rightFlat = new THREE.Vector3();
@@ -1214,7 +1219,7 @@ export class F1Physics2026 {
     }
     const e = _basis.makeRotationFromQuaternion(this.worldQuaternion).elements;
     const lx = e[0], ly = e[1], lz = e[2];
-    const ux = e[4], uy = e[5], uz = e[6];
+    const uy = e[5];
     const fx = e[8], fy = e[9], fz = e[10];
     const wx = this.worldPosition.x + lx * xInCar + fx * zInCar;
     const wy0 = this.worldPosition.y + ly * xInCar + fy * zInCar;
@@ -1222,8 +1227,6 @@ export class F1Physics2026 {
     if (!this.ground.query(wx, wz, wy0 + 0.6, _groundHit)) {
       return (w.zRoad + w.surfaceBumpM - wy0) / Math.max(0.5, uy);
     }
-    void ux;
-    void uz;
     return (_groundHit.height - wy0) / Math.max(0.5, uy);
   }
 
@@ -1907,7 +1910,7 @@ export class F1Physics2026 {
     let desired = drv.gear;
     const rearOmega = 0.5 * (this.wheels[2].spinVel + this.wheels[3].spinVel);
     if (shiftRequest !== 0) {
-      desired = THREE.MathUtils.clamp(drv.gear + shiftRequest, 1, 8);
+      desired = THREE.MathUtils.clamp(drv.gear + shiftRequest, 1, VF26_DRIVETRAIN.gearRatios.length);
       // Reverse sits below first (no neutral in between), and only near standstill
       if (drv.gear === 1 && shiftRequest < 0) desired = Math.abs(this.vxMs) < 2 ? -1 : 1;
       else if (drv.gear === -1) desired = shiftRequest > 0 && Math.abs(this.vxMs) < 2 ? 1 : -1;
@@ -2086,27 +2089,32 @@ export class F1Physics2026 {
     const dRight = dx * sample.binormal.x + dz * sample.binormal.z;
     const plane = contact.zRoad + dFwd * sample.slopeSin - dRight * Math.sin(contact.bankRad);
     const c = queryWheelGroundContact(this.track, x, z, this.patchApproxS, this.patchSpeed);
-    if (this.meshKerbs && c.surfaceType !== 'kerb') {
-      if (this.ground!.query(x, z, c.zRoad + 0.6, _groundHit) && _groundHit.surface === 'kerb') {
-        const ripple = surfaceRippleM(_groundHit.props, this.patchApproxS + dFwd, 1.0);
-        c.bumpM = Math.max(c.bumpM, 0.018 + ripple * Math.min(1, this.patchSpeed / 8));
-      }
+    if (c.surfaceType !== 'kerb') {
+      const kerbBumpM = this.meshKerbBumpAt(x, z, c.zRoad, this.patchApproxS + dFwd, this.patchSpeed);
+      if (kerbBumpM !== null) c.bumpM = Math.max(c.bumpM, kerbBumpM);
     }
     return c.zRoad + c.bumpM - plane;
   };
+
+  /**
+   * On a circuit whose kerbs are meshes (`meshKerbs`): the bump of a kerb at a point (m, crown plus ripple, the ripple
+   * fading in over the first 8 m/s), or null off one; `_groundHit` then holds the kerb's surface and grip
+   */
+  private meshKerbBumpAt(x: number, z: number, zRoad: number, alongS: number, speedMs: number): number | null {
+    if (!this.meshKerbs || !this.ground!.query(x, z, zRoad + 0.6, _groundHit) || _groundHit.surface !== 'kerb') return null;
+    return MESH_KERB_CROWN_M + surfaceRippleM(_groundHit.props, alongS, 1.0) * Math.min(1, speedMs / 8);
+  }
 
   private updateRoadContacts(sample: ReturnType<BuiltTrackData['getSampleAtDistance']>, reset: boolean): void {
     const speed = Math.abs(this.vxMs);
     for (const w of this.wheels) {
       const approxS = this.sMeters + w.staticPos.x;
       const contact = queryWheelGroundContact(this.track, w.worldPos.x, w.worldPos.z, approxS, speed);
-      if (this.meshKerbs) {
-        if (this.ground!.query(w.worldPos.x, w.worldPos.z, contact.zRoad + 0.6, _groundHit) && _groundHit.surface === 'kerb') {
-          contact.surfaceType = 'kerb';
-          contact.frictionMult = _groundHit.grip;
-          const ripple = surfaceRippleM(_groundHit.props, approxS, 1.0);
-          contact.bumpM = Math.max(contact.bumpM, 0.018 + ripple * Math.min(1, speed / 8));
-        }
+      const kerbBumpM = this.meshKerbBumpAt(w.worldPos.x, w.worldPos.z, contact.zRoad, approxS, speed);
+      if (kerbBumpM !== null) {
+        contact.surfaceType = 'kerb';
+        contact.frictionMult = _groundHit.grip;
+        contact.bumpM = Math.max(contact.bumpM, kerbBumpM);
       }
       w.zRoad = contact.zRoad;
       w.surfaceType = contact.surfaceType;
