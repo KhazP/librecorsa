@@ -12,13 +12,14 @@ import { DEFAULT_SURFACE_TABLE } from "./track-surfaces";
  * Each motor's cues are layered into the headroom the ones before them left (`layerRumble`), after rbrpad's
  * `RumbleMapper`, rather than summed and clipped: however many cues stack (a kerb strike under a lock-up and
  * wheelspin), the motor stays below full and each cue still moves it. Rough ground is felt per wheel from its
- * shock velocity, gated by the wheel's load so a wheel going light over a crest stops contributing (also after
- * rbrpad).
+ * shock velocity, gated by the wheel's load so a wheel going light over a crest stops contributing. A hit (a landing,
+ * a hard kerb strike, a wall) is a short pulse on the strong motor that rings out over ~0.3 s. Both are also after
+ * rbrpad.
  *
  * Effects are short (90 ms) and re-sent only when they change, so a stationary car does not flood
  * the device with commands. The kerb, ABS and TC pulses are the exception: each on / off edge is sent when it
  * happens, with an effect that lasts one half-period, so the 12–25 Hz pulses are felt at their rate rather than
- * aliased by the 60 ms send gate.
+ * aliased by the 60 ms send gate. So does the onset of a hit, so it lands when it happens.
  */
 
 /** Gamepad Haptics API surface used here (the DOM lib types vibrationActuator only loosely) */
@@ -86,6 +87,24 @@ const ROUGH_HOLD_S = 0.05;
  * physics keeps flat, is still felt. Kerbs are left out: they have their own pulse on the weak motor.
  */
 const OFFTRACK_TEXTURE_GAIN = 0.4;
+/**
+ * Impact pulse (rbrpad `Impact`): the body's vertical jolt, gravity and downforce taken out, from the tyres' total
+ * load against the car's weight. Silent below the floor: a clean lap on Rwanda's crests and compressions peaks near
+ * 1.1 g, while landings over kerbs and run-off edges reach 1.5-3 g. Only compression counts: a wheel leaving the
+ * ground reads as negative heave, and the landing after it is the hit.
+ */
+const IMPACT_HEAVE_FLOOR_G = 1.4;
+const IMPACT_HEAVE_FULL_G = 3;
+/** Below this speed a settling car (a reset onto the grid) is not a hit */
+const IMPACT_MIN_SPEED_KMH = 10;
+/** A wall hit (horizontal g above RACK_SAT_HIGH_IMPACT_G) starts the pulse at this level, full at twice the threshold */
+const IMPACT_CRASH_FLOOR = 0.6;
+/** Impact envelope decay time constant (s): how long a hit rings out */
+const IMPACT_DECAY_S = 0.1;
+/** Time constant (s) of the running estimate of the car's weight from its tyre loads */
+const WEIGHT_TAU_S = 2;
+/** Rise of the strong motor that goes out at once, past the send gate */
+const STRONG_ONSET_EDGE = 0.2;
 /** Above this gap between frames (s, a pause or a dropped tab) the held envelopes start again */
 const MAX_MIX_DT_S = 0.25;
 
@@ -104,16 +123,22 @@ export interface RumbleMixState {
   lastTimeS: number;
   /** Peak-held roughness per wheel (FL, FR, RL, RR), 0..1 */
   roughHold: [number, number, number, number];
+  /** Decaying level of the current hit, 0..1 */
+  impactEnvelope: number;
+  /** Running estimate of the car's weight m·g (N): Σ wheel load / verticalG, which steadies on it; 0 until learnt */
+  weightN: number;
 }
 
 export function createRumbleMixState(): RumbleMixState {
-  return { lastTimeS: NaN, roughHold: [0, 0, 0, 0] };
+  return { lastTimeS: NaN, roughHold: [0, 0, 0, 0], impactEnvelope: 0, weightN: 0 };
 }
 
 /** Back to a fresh state (pause, toggle off, unmount) */
 export function resetRumbleMixState(state: RumbleMixState): void {
   state.lastTimeS = NaN;
   state.roughHold.fill(0);
+  state.impactEnvelope = 0;
+  state.weightN = 0;
 }
 
 const finiteOr = (v: number | undefined, fallback: number) => (typeof v === "number" && Number.isFinite(v) ? v : fallback);
@@ -140,6 +165,51 @@ function surfaceRoughness(t: CarTelemetry, hold: number[] | undefined, decay: nu
     sum += gate * layerRumble(rough, OFFTRACK_TEXTURE_GAIN * vibration * texSpeed);
   }
   return sum / 4;
+}
+
+/**
+ * The body's vertical jolt (g, + = pressed down, 0 when steady): the tyres' total load against the car's weight,
+ * less `verticalG` (1 + downforce / weight, which carries no bumps of its own). The weight is learnt from the loads
+ * while every wheel is down, so it needs `mix`; 0 without it or before it has been learnt.
+ */
+function bodyHeaveG(t: CarTelemetry, mix: RumbleMixState | undefined, dt: number): number {
+  const loads = t.wheelLoadsN;
+  if (!mix || !loads) return 0;
+  let sum = 0;
+  let min = Infinity;
+  for (let i = 0; i < 4; i++) {
+    const n = finiteOr(loads[i], 0);
+    sum += n;
+    min = Math.min(min, n);
+  }
+  const verticalG = Math.max(0.2, finiteOr(t.verticalG, 1));
+  const heaveG = mix.weightN > 0 ? sum / mix.weightN - verticalG : 0;
+  // Learnt while every wheel is down, and not from a frame that is itself a hit
+  if (min > ROUGH_LOAD_GATE_LOW_N && heaveG < IMPACT_HEAVE_FLOOR_G) {
+    const weightN = sum / verticalG;
+    if (mix.weightN <= 0) mix.weightN = weightN;
+    else if (dt > 0) mix.weightN += (weightN - mix.weightN) * (1 - Math.exp(-dt / WEIGHT_TAU_S));
+  }
+  return heaveG;
+}
+
+/**
+ * A hit on the strong motor (0..1): a vertical jolt (landing, hard kerb strike) or a wall hit (horizontal g past the
+ * high-impact threshold) sets the level, which then rings out with `IMPACT_DECAY_S`. The raw spike lasts a frame or
+ * two; the envelope makes it land. With `mix` the envelope carries over; without it only this frame's hit counts.
+ */
+function impactPulse(t: CarTelemetry, horizontalG: number, highImpact: boolean, mix: RumbleMixState | undefined, dt: number): number {
+  const heaveG = bodyHeaveG(t, mix, dt);
+  let hit =
+    t.speedKmh > IMPACT_MIN_SPEED_KMH ? clamp01((heaveG - IMPACT_HEAVE_FLOOR_G) / (IMPACT_HEAVE_FULL_G - IMPACT_HEAVE_FLOOR_G)) : 0;
+  if (highImpact) {
+    const crash = IMPACT_CRASH_FLOOR + (1 - IMPACT_CRASH_FLOOR) * clamp01((horizontalG - RACK_SAT_HIGH_IMPACT_G) / RACK_SAT_HIGH_IMPACT_G);
+    hit = Math.max(hit, crash);
+  }
+  if (!mix) return hit;
+  const decay = dt > 0 ? Math.exp(-dt / IMPACT_DECAY_S) : 0;
+  mix.impactEnvelope = Math.max(hit, mix.impactEnvelope * decay);
+  return mix.impactEnvelope;
 }
 
 /**
@@ -191,14 +261,14 @@ export function hapticMagnitudes(
   }
   const gLat = typeof t.lateralG === "number" && Number.isFinite(t.lateralG) ? Math.abs(t.lateralG) : 0;
   const gLon = typeof t.longitudinalG === "number" && Number.isFinite(t.longitudinalG) ? Math.abs(t.longitudinalG) : 0;
-  const highImpact = shaker?.highImpactActive === true || Math.hypot(gLat, gLon) > RACK_SAT_HIGH_IMPACT_G;
-  if (highImpact) {
-    return { weak: 0, strong: 0 };
-  }
+  const horizontalG = Math.hypot(gLat, gLon);
+  // A crash no longer mutes the pad: it is the impact pulse below, and the slide cues stand down under it
+  const highImpact = shaker?.highImpactActive === true || horizontalG > RACK_SAT_HIGH_IMPACT_G;
 
-  let oversteerNorm = clamp01((shaker?.oversteerIntensityPct ?? 0) / 100);
-  let understeerNorm = clamp01((shaker?.understeerIntensityPct ?? 0) / 100);
+  let oversteerNorm = highImpact ? 0 : clamp01((shaker?.oversteerIntensityPct ?? 0) / 100);
+  let understeerNorm = highImpact ? 0 : clamp01((shaker?.understeerIntensityPct ?? 0) / 100);
   if (
+    !highImpact &&
     shaker?.oversteerIntensityPct === undefined &&
     shaker?.understeerIntensityPct === undefined &&
     (t.rearSlipAngleDeg !== undefined || t.frontSlipAngleDeg !== undefined || t.wheelSlipAnglesDeg !== undefined)
@@ -231,7 +301,8 @@ export function hapticMagnitudes(
   weak = layerRumble(weak, understeer);
   weak = layerRumble(weak, texture);
 
-  // Strong motor: lock-up, wheelspin, rear oversteer SAT slide cue, rack-load cue and rough ground under each wheel
+  // Strong motor: a hit, lock-up, wheelspin, rear oversteer SAT slide cue, rack-load cue and rough ground under each wheel
+  const impact = impactPulse(t, horizontalG, highImpact, mix, decayDt);
   const minSlip = t.wheelSlipRatios ? Math.min(...t.wheelSlipRatios) : 0;
   const lockUp = t.speedKmh > 30 ? 0.8 * smoothstep(0.12, 0.45, -minSlip) : 0;
   const rearSlip = t.wheelSlipRatios ? Math.max(t.wheelSlipRatios[2], t.wheelSlipRatios[3]) : 0;
@@ -239,7 +310,8 @@ export function hapticMagnitudes(
   const oversteerSlide = 0.45 * oversteerNorm;
   const rackLoad = 0.25 * Math.pow(clamp01(Math.abs(t.ffbTorqueNorm ?? 0)), 1.5);
   const roughSurface = surfaceRoughness(t, mix?.roughHold, decayDt > 0 ? Math.exp(-decayDt / ROUGH_HOLD_S) : 0);
-  let strong = layerRumble(0, lockUp);
+  let strong = layerRumble(0, impact);
+  strong = layerRumble(strong, lockUp);
   strong = layerRumble(strong, wheelspin);
   strong = layerRumble(strong, oversteerSlide);
   strong = layerRumble(strong, rackLoad);
@@ -412,8 +484,9 @@ export class GamepadHaptics {
 
       const useTriggers = wantTriggers && supportsTriggerRumble(actuator);
       const pulse = pulseState(t, this.timeS, useTriggers);
-      // A pulse edge goes out when it happens: the gate below would otherwise alias 12-25 Hz pulses
-      const edge = pulse.key !== out.pulseKey;
+      // A pulse edge or a hit goes out when it happens: the gate below would otherwise alias 12-25 Hz pulses and
+      // hold a hit back by up to a send interval
+      const edge = pulse.key !== out.pulseKey || strong - out.strong >= STRONG_ONSET_EDGE;
       const sinceS = this.timeS - out.lastSentS;
       if (sinceS < SEND_INTERVAL_S && !edge) continue;
 

@@ -24,7 +24,7 @@ import {
   stepRackSat,
   WheelFfbClient,
 } from "../src/lib/input/wheel-ffb";
-import { hapticMagnitudes } from "../src/lib/sim/gamepad-haptics";
+import { createRumbleMixState, hapticMagnitudes } from "../src/lib/sim/gamepad-haptics";
 
 let passed = 0;
 function check(name: string, fn: () => void) {
@@ -293,7 +293,7 @@ check("WheelFfbClient layers SAT into frame force and 500 Hz subframes and suppr
   assert.ok(client.force < normalForce * 0.4, `crash force attenuated (${client.force} vs ${normalForce})`);
 });
 
-check("TelemetryOutPacket and GamepadHaptics expose oversteer/understeer shaker cues and zero on >10g crash", () => {
+check("TelemetryOutPacket and GamepadHaptics expose oversteer/understeer shaker cues; a >10g crash is a rumble hit", () => {
   const slideTel = {
     speedKmh: 150,
     steering: 0.4,
@@ -332,7 +332,15 @@ check("TelemetryOutPacket and GamepadHaptics expose oversteer/understeer shaker 
   });
   assert.equal(pktCrash.oversteerPct, 0);
   assert.equal(pktCrash.understeerPct, 0);
-  assert.deepEqual(hapticMagnitudes(crashTel, 0.1), { weak: 0, strong: 0 });
+  // The pad no longer goes silent in a crash: the strong motor takes a hit, which rings out back to the normal mix
+  assert.ok(hapticMagnitudes(crashTel, 0.1).strong >= 0.6, "crash is a hit on the strong motor");
+  const mix = createRumbleMixState();
+  hapticMagnitudes(slideTel, 0, undefined, mix);
+  const hit = hapticMagnitudes(crashTel, 1 / 60, undefined, mix).strong;
+  let after = hit;
+  for (let i = 2; i <= 31; i++) after = hapticMagnitudes(slideTel, i / 60, undefined, mix).strong;
+  assert.ok(hit > after, `the hit rings out (${hit.toFixed(3)} → ${after.toFixed(3)})`);
+  near(after, hapticMagnitudes(slideTel, 0.6).strong, 0.01);
 });
 
 console.log(`\n${passed} checks passed`);
