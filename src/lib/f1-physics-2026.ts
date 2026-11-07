@@ -65,7 +65,10 @@ import {
   type Vf26AxleSuspension,
 } from './sim/vf26-data';
 import {
+  createGroundHit,
   createWallHit,
+  type GroundQuery,
+  TrackColliderQuery,
   TrackWallQuery,
   wallPenetration,
   type WallQuery,
@@ -120,7 +123,7 @@ import {
   wetGripFactor,
   wetnessFromWater,
 } from './sim/wet-tyres';
-import type { TrackSurfaceKind } from './sim/track-surfaces';
+import { surfaceRippleM, type TrackSurfaceKind } from './sim/track-surfaces';
 import { BRAKE_DUCT_STEP, type ChassisSetup, clampChassisSetup, DEFAULT_CHASSIS_SETUP, pctScale, startingFuelKg, WING_CLICK_DEG } from './sim/car-setup';
 import { flyingExitSpeedMs, flyingStartPoint, type TyreVisualState } from './sim/simulator-car';
 import type { VehicleWheelState, WheelCornerIndex } from './sim/vehicle-types';
@@ -194,9 +197,11 @@ const WALL_LINE_DEFAULT_RUNOFF_M = 5.8;
 
 type TrackProjection = ReturnType<BuiltTrackData['projectWorldToTrack']>;
 
-/** Barrier walls built once per loaded track root and shared by every VF26 */
+/** Barrier walls and ground colliders built once per loaded track root and shared by every VF26 */
 const wallCache = new WeakMap<THREE.Object3D, WallQuery>();
+const groundCache = new WeakMap<THREE.Object3D, GroundQuery | null>();
 const _wallHit = createWallHit();
+const _groundHit = createGroundHit();
 // Scratch reused by the 500 Hz / 2 kHz steps instead of allocating (single-threaded; read, never kept)
 const _rightFlat = new THREE.Vector3();
 const _roadUp = new THREE.Vector3();
@@ -340,6 +345,8 @@ export class F1Physics2026 {
   })();
   /** Barrier walls from the track GLB (`Track_Collider_Wall_*`); without them, the track data's per-sample barrier lines */
   private walls?: WallQuery;
+  /** 3D surface colliders from the track GLB (`Track_Surface_Kerb`, etc.) */
+  private ground?: GroundQuery;
   private readonly wallIds = new Int32Array(256);
   private readonly wallQueryRadius = Math.max(...this.wallProbePoints.map(([x, z]) => Math.hypot(x, z))) + 0.5;
 
@@ -1030,7 +1037,7 @@ export class F1Physics2026 {
     this.syncWorldTransform();
   }
 
-  /** Collide with the loaded track GLB's barrier walls (`Track_Collider_Wall_*`), where the visible barriers stand */
+  /** Collide with the loaded track GLB's barrier walls (`Track_Collider_Wall_*`) and 3D kerb surfaces (`Track_Surface_Kerb`) */
   public attachTrackRoot(root: THREE.Object3D): void {
     let walls = wallCache.get(root);
     if (!walls) {
@@ -1038,6 +1045,17 @@ export class F1Physics2026 {
       wallCache.set(root, walls);
     }
     this.setWalls(walls.segments.length > 0 ? walls : undefined);
+
+    let ground = groundCache.get(root);
+    if (ground === undefined) {
+      try {
+        ground = TrackColliderQuery.fromTrackRoot(root, getActiveSurfaceTable());
+      } catch {
+        ground = null;
+      }
+      groundCache.set(root, ground);
+    }
+    this.ground = ground ?? undefined;
   }
 
   /** Barrier walls to collide with; none = the track data's per-sample barrier lines */
@@ -2015,6 +2033,13 @@ export class F1Physics2026 {
     const dRight = dx * sample.binormal.x + dz * sample.binormal.z;
     const plane = contact.zRoad + dFwd * sample.slopeSin - dRight * Math.sin(contact.bankRad);
     const c = queryWheelGroundContact(this.track, x, z, this.patchApproxS, this.patchSpeed);
+    if (this.ground && c.surfaceType !== 'kerb') {
+      if (this.ground.query(x, z, c.zRoad + 0.6, _groundHit) && _groundHit.surface === 'kerb') {
+        const step = Math.max(0.014, Math.min(0.035, _groundHit.height - c.zRoad));
+        const ripple = surfaceRippleM(_groundHit.props, this.patchApproxS, 1.0);
+        c.bumpM = Math.max(c.bumpM, step + ripple * Math.min(1, this.patchSpeed / 8));
+      }
+    }
     return c.zRoad + c.bumpM - plane;
   };
 
@@ -2023,6 +2048,15 @@ export class F1Physics2026 {
     for (const w of this.wheels) {
       const approxS = this.sMeters + w.staticPos.x;
       const contact = queryWheelGroundContact(this.track, w.worldPos.x, w.worldPos.z, approxS, speed);
+      if (this.ground && Math.abs(contact.lateralOffsetM) > contact.halfWidthM - 3.2) {
+        if (this.ground.query(w.worldPos.x, w.worldPos.z, contact.zRoad + 0.6, _groundHit) && _groundHit.surface === 'kerb') {
+          contact.surfaceType = 'kerb';
+          contact.frictionMult = _groundHit.grip;
+          const step = Math.max(0.014, Math.min(0.035, _groundHit.height - contact.zRoad));
+          const ripple = surfaceRippleM(_groundHit.props, approxS, 1.0);
+          contact.bumpM = Math.max(contact.bumpM, step + ripple * Math.min(1, speed / 8));
+        }
+      }
       w.zRoad = contact.zRoad;
       w.surfaceType = contact.surfaceType;
       w.surfaceBumpM = contact.bumpM;
@@ -2030,7 +2064,8 @@ export class F1Physics2026 {
       this.patchWheel = w;
       this.patchContact = contact;
       this.patchSample = sample;
-      this.patchNearKerb = Math.abs(contact.lateralOffsetM) > contact.halfWidthM - 0.65;
+      this.patchNearKerb =
+        contact.surfaceType === 'kerb' || Math.abs(contact.lateralOffsetM) > contact.halfWidthM - (this.ground ? 3.2 : 0.65);
       this.patchApproxS = approxS;
       this.patchSpeed = speed;
       const patch = sample5PointContactPatch(

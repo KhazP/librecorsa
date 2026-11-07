@@ -1293,6 +1293,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         car = f12026;
       } else {
         car = new F1Physics2026(track);
+        if (trackRoot) car.attachTrackRoot?.(trackRoot);
       }
       car.aiAutopilot = false;
       car.assistPreset = prev?.assistPreset ?? DEFAULT_ASSIST_PRESET;
@@ -1345,6 +1346,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       // A running race restarts from the lights with the new car
       if (aiFieldRef.current) {
         const field = new AiOpponentField(track, physics, AI_DRIVERS, getTrackEnv(), { skill: settingsRef.current.aiSkill });
+        if (trackRoot) field.attachTrackRoot(trackRoot);
         field.startRace(true);
         aiFieldRef.current = field;
       }
