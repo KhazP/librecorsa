@@ -516,19 +516,28 @@ const GH_FLOOR_CD: LutPoints = [[0, 0.97], [0.005, 0.99], [0.01, 0.994], [0.016,
 const GH_DIFF_REAR_CL: LutPoints = [[0, 0.63], [0.006, 0.79], [0.0124, 0.91], [0.02, 1], [0.035, 0.9929], [0.0479683, 0.972767], [0.0570862, 0.92495], [0.0717542, 0.7287], [0.0943508, 0.493], [0.12, 0.388], [0.14668, 0.327], [0.205, 0.274], [0.4, 0.14]];
 const GH_DIFF_REAR_CD: LutPoints = [[0, 1], [0.012, 1], [0.0124, 1], [0.02, 0.7], [0.035, 0.6], [0.06, 0.6], [0.0688562, 0.53], [0.0737, 0.45], [0.08, 0.28], [0.0944, 0.18], [0.12, 0.09], [0.1467, 0.04], [0.205, 0.03], [0.4, 0.03]];
 
-/** Field 11 of each `.wing` record is CD_GAIN and field 12 CL_GAIN (verified via L/D ≈ 3.6 and neutral aero balance). */
+/**
+ * Field 11 of each `.wing` record is CD_GAIN and field 12 CL_GAIN (verified via L/D ≈ 3.6 and neutral aero balance).
+ *
+ * The floor and diffuser ground-height tables are read at the element's height above the road (CG height + y): their
+ * y sits at the floor's own height, so a 44 / 60 mm static ride reads the tables near their 33 mm peak. Their y used to
+ * be the package's −0.16 / −0.175, which read the tables at 110–126 mm, past their range, so the floor ran at 30 % of its
+ * peak with almost no ride-height or rake sensitivity. With the floor working, its gains are trimmed (×0.77) to a
+ * 2026 car's downforce, CL·A ≈ 4.4 m² static and 5.1 at speed (L/D ≈ 3), and the front wings carry the balance back to
+ * ≈ 47 % front. [derived]
+ */
 export const VF26_WINGS: ReadonlyArray<Vf26WingSpec> = [
   { name: 'BODY', chord: 1, span: 1.366, position: [0, 0.15, -0.08], aoaCl: AOA_BODY_CL, aoaCd: AOA_BODY_CD, clGain: 0.9, cdGain: 0.5, angleDeg: 3.5, xModeAngleDeg: 3.5, yawClGain: -0.2 },
-  { name: 'FRONT_L', chord: 1, span: 0.42, position: [-0.56, -0.09, 2.9], aoaCl: AOA_FRONT_CL, aoaCd: AOA_FRONT_CD, ghCl: GH_FRONTWING_CL, ghCd: GH_FRONTWING_CD, clGain: 2.93, cdGain: 1.25, angleDeg: 6, xModeAngleDeg: -2, yawClGain: -0.571 },
-  { name: 'FRONT_R', chord: 1, span: 0.42, position: [0.56, -0.09, 2.9], aoaCl: AOA_FRONT_CL, aoaCd: AOA_FRONT_CD, ghCl: GH_FRONTWING_CL, ghCd: GH_FRONTWING_CD, clGain: 2.93, cdGain: 1.25, angleDeg: 6, xModeAngleDeg: -2, yawClGain: -0.571 },
+  { name: 'FRONT_L', chord: 1, span: 0.42, position: [-0.56, -0.09, 2.9], aoaCl: AOA_FRONT_CL, aoaCd: AOA_FRONT_CD, ghCl: GH_FRONTWING_CL, ghCd: GH_FRONTWING_CD, clGain: 3.3, cdGain: 1.25, angleDeg: 6, xModeAngleDeg: -2, yawClGain: -0.571 },
+  { name: 'FRONT_R', chord: 1, span: 0.42, position: [0.56, -0.09, 2.9], aoaCl: AOA_FRONT_CL, aoaCd: AOA_FRONT_CD, ghCl: GH_FRONTWING_CL, ghCd: GH_FRONTWING_CD, clGain: 3.3, cdGain: 1.25, angleDeg: 6, xModeAngleDeg: -2, yawClGain: -0.571 },
   { name: 'REAR', chord: 0.45, span: 2, position: [0, 0.55, -1.7], aoaCl: AOA_REAR_CL, aoaCd: AOA_REAR_CD, clGain: 0.7, cdGain: 1.5, angleDeg: 12, xModeAngleDeg: 12, yawClGain: -1.5 },
   { name: 'DRS', chord: 1, span: 1.366, position: [0, 0.59, -1.8], aoaCl: AOA_REAR2_CL, aoaCd: AOA_REAR2_CD, clGain: 0.98, cdGain: 1.7, angleDeg: 17, xModeAngleDeg: 0, yawClGain: -1 },
-  { name: 'DIFFUSER_RL', chord: 1, span: 0.683, position: [-0.3423, -0.175, -1.57], aoaCl: AOA_DIFF_CL, aoaCd: AOA_DIFF_CD, ghCl: GH_DIFF_REAR_CL, ghCd: GH_DIFF_REAR_CD, clGain: 0.7, cdGain: 0.55, angleDeg: 3.5, xModeAngleDeg: 3.5, yawClGain: -1 },
-  { name: 'DIFFUSER_RR', chord: 1, span: 0.683, position: [0.3423, -0.175, -1.57], aoaCl: AOA_DIFF_CL, aoaCd: AOA_DIFF_CD, ghCl: GH_DIFF_REAR_CL, ghCd: GH_DIFF_REAR_CD, clGain: 0.7, cdGain: 0.55, angleDeg: 3.5, xModeAngleDeg: 3.5, yawClGain: -1 },
-  { name: 'FLOOR_FL', chord: 2.5, span: 0.35, position: [0.31, -0.16, 0], aoaCl: AOA_DIFF_CL, aoaCd: AOA_DIFF_CD, ghCl: GH_FLOOR_CL, ghCd: GH_FLOOR_CD, clGain: 2, cdGain: 0.83, angleDeg: 3.5, xModeAngleDeg: 3.5, yawClGain: -0.07 },
-  { name: 'FLOOR_FLL', chord: 2.5, span: 0.35, position: [0.66, -0.16, 0], aoaCl: AOA_DIFF_CL, aoaCd: AOA_DIFF_CD, ghCl: GH_FLOOR_CL, ghCd: GH_FLOOR_CD, clGain: 1, cdGain: 0.83, angleDeg: 3.5, xModeAngleDeg: 3.5, yawClGain: -0.07 },
-  { name: 'FLOOR_FRR', chord: 2.5, span: 0.35, position: [-0.66, -0.16, 0], aoaCl: AOA_DIFF_CL, aoaCd: AOA_DIFF_CD, ghCl: GH_FLOOR_CL, ghCd: GH_FLOOR_CD, clGain: 1, cdGain: 0.83, angleDeg: 3.5, xModeAngleDeg: 3.5, yawClGain: -0.07 },
-  { name: 'FLOOR_FR', chord: 2.5, span: 0.35, position: [-0.31, -0.16, 0], aoaCl: AOA_DIFF_CL, aoaCd: AOA_DIFF_CD, ghCl: GH_FLOOR_CL, ghCd: GH_FLOOR_CD, clGain: 2, cdGain: 0.83, angleDeg: 3.5, xModeAngleDeg: 3.5, yawClGain: -0.07 },
+  { name: 'DIFFUSER_RL', chord: 1, span: 0.683, position: [-0.3423, -0.226, -1.57], aoaCl: AOA_DIFF_CL, aoaCd: AOA_DIFF_CD, ghCl: GH_DIFF_REAR_CL, ghCd: GH_DIFF_REAR_CD, clGain: 0.54, cdGain: 0.55, angleDeg: 3.5, xModeAngleDeg: 3.5, yawClGain: -1 },
+  { name: 'DIFFUSER_RR', chord: 1, span: 0.683, position: [0.3423, -0.226, -1.57], aoaCl: AOA_DIFF_CL, aoaCd: AOA_DIFF_CD, ghCl: GH_DIFF_REAR_CL, ghCd: GH_DIFF_REAR_CD, clGain: 0.54, cdGain: 0.55, angleDeg: 3.5, xModeAngleDeg: 3.5, yawClGain: -1 },
+  { name: 'FLOOR_FL', chord: 2.5, span: 0.35, position: [0.31, -0.233, 0], aoaCl: AOA_DIFF_CL, aoaCd: AOA_DIFF_CD, ghCl: GH_FLOOR_CL, ghCd: GH_FLOOR_CD, clGain: 1.54, cdGain: 0.83, angleDeg: 3.5, xModeAngleDeg: 3.5, yawClGain: -0.07 },
+  { name: 'FLOOR_FLL', chord: 2.5, span: 0.35, position: [0.66, -0.233, 0], aoaCl: AOA_DIFF_CL, aoaCd: AOA_DIFF_CD, ghCl: GH_FLOOR_CL, ghCd: GH_FLOOR_CD, clGain: 0.77, cdGain: 0.83, angleDeg: 3.5, xModeAngleDeg: 3.5, yawClGain: -0.07 },
+  { name: 'FLOOR_FRR', chord: 2.5, span: 0.35, position: [-0.66, -0.233, 0], aoaCl: AOA_DIFF_CL, aoaCd: AOA_DIFF_CD, ghCl: GH_FLOOR_CL, ghCd: GH_FLOOR_CD, clGain: 0.77, cdGain: 0.83, angleDeg: 3.5, xModeAngleDeg: 3.5, yawClGain: -0.07 },
+  { name: 'FLOOR_FR', chord: 2.5, span: 0.35, position: [-0.31, -0.233, 0], aoaCl: AOA_DIFF_CL, aoaCd: AOA_DIFF_CD, ghCl: GH_FLOOR_CL, ghCd: GH_FLOOR_CD, clGain: 1.54, cdGain: 0.83, angleDeg: 3.5, xModeAngleDeg: 3.5, yawClGain: -0.07 },
 ];
 
 /** 2026 active aero actuator: full Z↔X transition time, each way (s) [assumed — 0.2 s actuator delay] */
