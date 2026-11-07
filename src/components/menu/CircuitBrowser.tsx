@@ -24,7 +24,6 @@ import { Chip, Segmented, TrackQualityBadge } from "./menu-ui";
 const km = (t: TrackInfo) => (t.lengthM / 1000).toFixed(2);
 const dirShort = (d: string) => (/counter|anti/i.test(d) ? "CCW" : /clock/i.test(d) ? "CW" : d);
 const isOriginal = (v: CircuitVenue) => v.layouts.some((l) => l.id === RWANDA_TRACK_ID);
-const venueQuality = (v: CircuitVenue) => circuitQuality(v.layouts[0]);
 const TYPES: readonly CircuitType[] = ["permanent", "street", "oval"];
 
 /** Card thumbnail: the layout's real outline once it is loaded (cards load theirs as they scroll near the view) */
@@ -84,6 +83,7 @@ export const CircuitBrowser: React.FC<{
   const [layoutOf, setLayoutOf] = useState<Record<string, string>>({});
   const shownLayout = (v: CircuitVenue): TrackInfo =>
     v.layouts.find((l) => l.id === layoutOf[v.id]) ?? v.layouts.find((l) => l.id === trackId) ?? v.layouts[0];
+  const venueQuality = (v: CircuitVenue) => circuitQuality(shownLayout(v));
 
   const favs = library?.library.favorites.circuits ?? [];
   const recent = library?.library.recent.circuits ?? [];
@@ -114,15 +114,16 @@ export const CircuitBrowser: React.FC<{
           {
             id: "quality:sim",
             label: "Sim-grade",
-            test: (v) => {
-              const q = venueQuality(v);
-              return q === "sim" || q === "original";
-            },
+            test: (v) =>
+              v.layouts.some((l) => {
+                const q = circuitQuality(l);
+                return q === "sim" || q === "original";
+              }),
           },
           {
             id: "quality:sketchfab",
             label: "Sketchfab (mediocre)",
-            test: (v) => venueQuality(v) === "sketchfab",
+            test: (v) => v.layouts.some((l) => circuitQuality(l) === "sketchfab"),
           },
         ],
       },
@@ -168,18 +169,18 @@ export const CircuitBrowser: React.FC<{
       noun="venues"
       items={venues}
       idOf={(v) => v.id}
-      searchText={(v) => {
-        const q = circuitQualityMeta(v.layouts[0]);
-        return [
+      searchText={(v) =>
+        [
           v.name,
           v.city,
           v.country,
           v.region,
-          q.badge,
-          q.filterLabel,
-          ...v.layouts.flatMap((l) => [l.layout, CIRCUIT_TYPE_LABELS[circuitType(l)], l.credit?.author ?? ""]),
-        ].join(" ");
-      }}
+          ...v.layouts.flatMap((l) => {
+            const q = circuitQualityMeta(l);
+            return [l.layout, CIRCUIT_TYPE_LABELS[circuitType(l)], l.credit?.author ?? "", q.badge, q.shortBadge, q.filterLabel];
+          }),
+        ].join(" ")
+      }
       searchPlaceholder="Search circuits, countries, layouts"
       filterGroups={filterGroups}
       sorts={sorts}
@@ -199,7 +200,7 @@ export const CircuitBrowser: React.FC<{
         const location = v.city && v.city !== v.country ? `${v.city}, ${v.country}` : v.country;
         return (
           <span className="flex min-w-0 flex-col gap-1.5 px-3.5 pt-3 pb-3.5">
-            <span className="flex min-h-7 flex-wrap items-center gap-1.5 pr-8">
+            <span className="flex min-h-7 flex-wrap items-center gap-1.5 pr-6">
               <TrackQualityBadge track={t} size="sm" />
             </span>
             <CardOutline track={t} />

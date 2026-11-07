@@ -52,7 +52,7 @@ export const Chip: React.FC<{
   /** Text / dot colour */
   color?: string;
   /** solid: filled with the colour; soft: tinted; outline: hairline in the colour */
-  variant?: "solid" | "soft" | "outline";
+  variant?: "solid" | "outline" | "soft";
   /** Leading status dot */
   dot?: boolean;
   title?: string;
@@ -64,10 +64,15 @@ export const Chip: React.FC<{
       : variant === "soft"
         ? { background: `${color}1F`, color }
         : { boxShadow: `inset 0 0 0 1px ${color === "#8E96AA" ? "#262B3D" : color}`, color };
+  const defaultH = /\bh-(?:\d|\[)/.test(className) ? "" : "h-[26px]";
+  const defaultPx = /\bpx-(?:\d|\[)/.test(className) ? "" : "px-3";
+  const defaultText = /\btext-(?:xs|sm|base|lg|xl|\d|\[)/.test(className) ? "" : "text-[11px]";
+  const defaultTracking = /\btracking-/.test(className) ? "" : "tracking-[0.08em]";
+  const defaultGap = /\bgap-/.test(className) ? "" : "gap-1.5";
   return (
     <span
       title={title}
-      className={`inline-flex h-[26px] shrink-0 items-center gap-1.5 rounded-full px-3 font-f1-mono text-[11px] font-extrabold tracking-[0.08em] whitespace-nowrap uppercase ${className}`}
+      className={`inline-flex shrink-0 items-center rounded-full font-f1-mono font-extrabold whitespace-nowrap uppercase ${defaultH} ${defaultGap} ${defaultPx} ${defaultText} ${defaultTracking} ${className}`}
       style={style}
     >
       {dot ? <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: color }} /> : null}
@@ -93,7 +98,9 @@ export const TrackQualityBadge: React.FC<{
       variant={q.variant}
       dot={q.id !== "original"}
       title={q.description}
-      className={`${size === "sm" ? "h-[22px] max-w-full px-2 text-[9px] tracking-[0.05em]" : ""} ${className}`}
+      className={`${
+        size === "sm" ? "h-[20px] max-w-full min-w-0 gap-1 overflow-hidden px-1.5 text-[8px] tracking-normal" : "max-w-full min-w-0 overflow-hidden"
+      } ${className}`}
     >
       <span className="truncate">{short ? q.shortBadge : q.badge}</span>
     </Chip>

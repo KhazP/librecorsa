@@ -1,7 +1,7 @@
 /**
  * Circuits the simulator offers. Rwanda ships inside the bundle (track-data.ts imports its JSON); the others are
- * converted from Sketchfab scans by scripts/tracks/build_track.py, which writes public/tracks/<id>/ and keeps
- * public/tracks/index.json (this list) up to date. Their track data is fetched when the player picks one.
+ * hand-crafted sim circuits or converted from Sketchfab scans into public/tracks/<id>/ and listed in
+ * public/tracks/index.json. Their track data is fetched when the player picks one.
  */
 import trackIndex from "../../public/tracks/index.json";
 import { withBasePath } from "@/lib/base-path";
@@ -63,7 +63,7 @@ export const CIRCUIT_QUALITY_META: Record<CircuitQuality, CircuitQualityMeta> = 
   sketchfab: {
     id: "sketchfab",
     badge: "SKETCHFAB · MEDIOCRE",
-    shortBadge: "SKETCHFAB",
+    shortBadge: "SKETCHFAB · LOW",
     filterLabel: "Sketchfab (Mediocre)",
     color: "#FFB300",
     variant: "soft",
