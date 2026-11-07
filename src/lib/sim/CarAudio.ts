@@ -26,6 +26,11 @@
 import * as THREE from 'three';
 import { CameraMode, TelemetryData } from '@/types/f1';
 import { withBasePath } from '@/lib/base-path';
+import {
+  ContactAcousticsFrame,
+  ContactAcousticsRig,
+  profileForCarSoundId,
+} from './contact-acoustics';
 import { AMR26_AUDIO_DIR, Vf26SoundBank } from './vf26-audio';
 import { VF26_ENGINE } from './vf26-data';
 
@@ -156,6 +161,7 @@ export class CarAudioEngine {
 
   // Multi-grid sound bank (null until loaded; stays null when the assets are absent)
   private vf26: Vf26SoundBank | null = null;
+  private contactAcoustics: ContactAcousticsRig | null = null;
   private sound: CarSoundSource = AMR26_SOUND;
   private bankDestination: AudioNode | null = null;
   private fallbackDestination: AudioNode | null = null;
@@ -352,6 +358,14 @@ export class CarAudioEngine {
     this.windFilter = windFilter;
     this.windGain = windGain;
 
+    // 5. Contact Patch, Suspension, Surface Texture & Brake Acoustics Synthesizer
+    this.contactAcoustics = new ContactAcousticsRig(
+      ctx,
+      compressor,
+      noiseBuffer,
+      profileForCarSoundId(this.sound.id)
+    );
+
     this.isInitialized = true;
     this.bankDestination = compressor;
     this.fallbackDestination = engineSampleBus;
@@ -362,6 +376,7 @@ export class CarAudioEngine {
   public setCar(sound: CarSoundSource): void {
     if (sound.id === this.sound.id) return;
     this.sound = sound;
+    this.contactAcoustics?.setProfile(profileForCarSoundId(sound.id));
     if (!this.isInitialized || !this.ctx) return;
     this.vf26?.dispose();
     this.vf26 = null;
@@ -409,6 +424,16 @@ export class CarAudioEngine {
   /** True when the VF26 mod sound bank is playing instead of the bundled samples */
   public get usingVf26Sounds(): boolean {
     return this.vf26?.ready === true;
+  }
+
+  /** Contact patch, suspension & brake acoustics synthesizer rig */
+  public get contactRig(): ContactAcousticsRig | null {
+    return this.contactAcoustics;
+  }
+
+  /** Latest evaluated 4-corner contact acoustics frame */
+  public get contactAcousticsFrame(): ContactAcousticsFrame | null {
+    return this.contactAcoustics?.lastFrame ?? null;
   }
 
   private createPinkNoiseBuffer(ctx: AudioContext, durationSec: number): AudioBuffer {
@@ -561,11 +586,25 @@ export class CarAudioEngine {
 
     const now = this.ctx.currentTime;
     const tau = 0.024;
+    const legacyDt = THREE.MathUtils.clamp(dtSeconds ?? 1 / 60, 0, 0.1);
 
     const vf26 = this.vf26?.ready ? this.vf26 : null;
     const squeal = this.tyreSqueal(telemetry);
     // A bank with its own skid recordings plays them in place of the synthesised squeal and scrub
     const bankSkid = vf26?.hasSkid === true;
+    const contactFrame =
+      this.contactAcoustics?.updateFromTelemetry(
+        telemetry,
+        this.cameraMode,
+        legacyDt,
+        bankSkid
+      ) ?? null;
+    const combinedSkidAmp = contactFrame
+      ? Math.max(squeal.amp, contactFrame.peakSkid.volume)
+      : squeal.amp;
+    const combinedSkidPitch = contactFrame
+      ? THREE.MathUtils.clamp(0.75 + contactFrame.peakSkid.pitch, 0.55, 1.25)
+      : squeal.pitch;
     if (vf26) {
       const rpmScale = this.sound.physicsLimiterRpm ? this.sound.limiterRpm / this.sound.physicsLimiterRpm : 1;
       vf26.update(
@@ -580,16 +619,15 @@ export class CarAudioEngine {
           view: INTERIOR_CAMERAS.has(this.cameraMode) ? 'int' : 'ext',
           limiterRpm: this.sound.limiterRpm,
           // sqrt: the recordings are already a full skid, so a light slide comes in early
-          skid: bankSkid ? 0.55 * Math.sqrt(squeal.amp) : 0,
-          skidRate: 0.85 + 0.25 * squeal.pitch,
+          skid: bankSkid ? 0.55 * Math.sqrt(combinedSkidAmp) : 0,
+          skidRate: 0.85 + 0.25 * combinedSkidPitch,
           tcActive: telemetry.f12026?.tcActive ?? false,
         },
-        THREE.MathUtils.clamp(dtSeconds ?? 1 / 60, 0, 0.1)
+        legacyDt
       );
     }
 
     // The smoothing constants below were tuned per 60 Hz frame; scale them to the real frame time
-    const legacyDt = THREE.MathUtils.clamp(dtSeconds ?? 1 / 60, 0, 0.1);
     const per60 = (k: number) => 1 - Math.pow(1 - k, legacyDt * 60);
     const rawRpm = THREE.MathUtils.clamp(telemetry.rpm, 4000, 15000);
     this.smoothedRpm += (rawRpm - this.smoothedRpm) * per60(0.28);
@@ -780,6 +818,8 @@ export class CarAudioEngine {
     this.samplesLoaded = false;
     this.isLoadingSamples = false;
     this.sampleGen++;
+    this.contactAcoustics?.dispose();
+    this.contactAcoustics = null;
     this.vf26?.dispose();
     this.vf26 = null;
     if (this.ctx) {
