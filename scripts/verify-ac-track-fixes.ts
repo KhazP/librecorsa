@@ -317,10 +317,12 @@ async function verifyKerbsFeelAndSound() {
       };
       const kerb = run(targetLat - side * 0.82);
       assert.ok(kerb.frames > 0, `[${tid}/${carKind}] Expected car to register surface='kerb' on kerb at s=${targetS.toFixed(1)}m`);
-      // The serrations keep the dampers working: on smooth asphalt the corners move at a few cm/s
+      // The serrations keep the dampers working: with no ripple these fitted kerbs leave the corners at ~0.01 m/s. A 2 mm
+      // ripple gives 0.03-0.12 m/s; the 8 mm one that once set the bar at 0.08 m/s lifted a wheel off for a third of
+      // the time on every kerb
       assert.ok(
-        kerb.shockMs > 0.08,
-        `[${tid}/${carKind}] Expected the kerb to work the suspension (RMS shock velocity > 0.08 m/s), got ${kerb.shockMs.toFixed(3)} m/s`
+        kerb.shockMs > 0.02,
+        `[${tid}/${carKind}] Expected the kerb to work the suspension (RMS shock velocity > 0.02 m/s), got ${kerb.shockMs.toFixed(3)} m/s`
       );
       console.log(
         `PASS  [${tid}/${carKind}] s=${targetS.toFixed(0)}m kerbFrames=${kerb.frames}, RMS shock velocity ${kerb.shockMs.toFixed(3)} m/s on the kerb`
