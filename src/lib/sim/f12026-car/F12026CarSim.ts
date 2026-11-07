@@ -1642,8 +1642,11 @@ export class F12026CarSim implements SimulatorCar {
     let pedalFF = 0;
     if (plan) {
       const r = this.planSpeedTarget(plan, p.s, speed, prof);
-      vTarget = Math.min(vTarget, r.v);
-      pedalFF = r.pedalFF;
+      // A cap below the plan (traffic, a rejoin) rules: the plan's own pedal feed-forward doesn't apply then
+      if (r.v <= vTarget) {
+        vTarget = r.v;
+        pedalFF = r.pedalFF;
+      }
     }
     for (let d = 0; d <= 300 && !plan; d += 5) {
       const smp = this.track.getSampleAtDistance((p.s + lead + d) % L);
@@ -1687,9 +1690,19 @@ export class F12026CarSim implements SimulatorCar {
     return {
       ...aids,
       // aimed at the road-wheel angle: the rack gives up `complianceRad` to the lateral force, so add it back
-      steer: THREE.MathUtils.clamp(-(delta - 0.5 * (W[0].complianceRad + W[1].complianceRad)) / v.maxSteerRad, -1, 1),
+      steer: this.autopilotSteer(THREE.MathUtils.clamp(-(delta - 0.5 * (W[0].complianceRad + W[1].complianceRad)) / v.maxSteerRad, -1, 1), h),
       drs: v.telemetry.drsAvailable && !v.drsOpen && aids.throttle > 0.95,
     };
+  }
+
+  /**
+   * The autopilot's steering, turned no faster than a driver's hands can turn the wheel when it tracks a plan (the
+   * player's 900°/s at the rim): a hand-back after a knock otherwise slammed the rack across in one step
+   */
+  private autopilotSteer(want: number, h: number): number {
+    if (!this.aiPlan) return want;
+    const maxStep = (DRIVER_RIM_SPEED_DEG_S / (this.config.chassis.maxRoadWheelDeg * RIM_PER_ROAD_WHEEL)) * h;
+    return this.steerCmd + THREE.MathUtils.clamp(want - this.steerCmd, -maxStep, maxStep);
   }
 
   /**
@@ -1724,6 +1737,8 @@ export class F12026CarSim implements SimulatorCar {
     // Pure pursuit on the plan's own path with a short look-ahead: geometric, so it holds when the line crosses the
     // road at a steep angle (a tight corner's turn-in), where errors measured across the track misled a lateral loop.
     // The look-ahead is short enough that the corner-cutting it brings stays a few decimetres.
+    // (a car knocked off its path is handed its own offset as the line bias by the race field, so the look-ahead never
+    // has to pull it back metres at once)
     const ld = Math.max(TRACK_LOOK_MIN_M, speed * TRACK_LOOK_S) / this.aiSteerGain;
     // The look-ahead along the path, as centreline distance (the inside of a corner covers less path per metre of
     // centreline, the outside more)
@@ -1775,7 +1790,18 @@ export class F12026CarSim implements SimulatorCar {
     const v0 = at(lead);
     const v1 = at(lead + 6);
     const aFF = (v1 * v1 - v0 * v0) / 12;
-    if (aFF >= -0.5 && speed < v0) return { v: Infinity, pedalFF: 1 };
+    if (aFF >= -0.5 && speed < v0) {
+      // Still cornering hard (a corner exit): the full plan's acceleration, which shares the tyres between the corner
+      // and the throttle; flooring it there ran the car wide on the power. Near straight: as hard as it can
+      const ayShare = (Math.abs(sampleGrid(plan.kappa, s + lead, t.ds)) * speed * speed) / plan.limits.lateral(speed);
+      if (ayShare > 0.3) {
+        const vExp = sampleGrid(plan.vExpected, s + lead, t.ds) * this.aiPaceScale;
+        const vExp1 = sampleGrid(plan.vExpected, s + lead + 6, t.ds) * this.aiPaceScale;
+        const aExp = (vExp1 * vExp1 - vExp * vExp) / 12;
+        return { v: Math.min(v0, vExp), pedalFF: THREE.MathUtils.clamp(aExp / Math.max(1, plan.limits.traction(speed)), 0, 1) };
+      }
+      return { v: Infinity, pedalFF: 1 };
+    }
     const pedalFF = aFF >= 0 ? 0 : aFF / Math.max(1, plan.limits.braking(speed) / plan.limits.gripScale);
     return { v: v0, pedalFF: THREE.MathUtils.clamp(pedalFF, -1, 1) };
   }
