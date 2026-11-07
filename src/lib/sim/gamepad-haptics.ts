@@ -8,6 +8,10 @@ import { axleSlipFromTelemetry, createAxleSlipSample, throttleSlipAllowance } fr
  * HUD. The weak (high-frequency) motor carries texture and kerb strikes, the strong (low-frequency)
  * motor carries the heavier cues.
  *
+ * Each motor's cues are layered into the headroom the ones before them left (`layerRumble`), after rbrpad's
+ * `RumbleMapper`, rather than summed and clipped: however many cues stack (a kerb strike under a lock-up and
+ * wheelspin), the motor stays below full and each cue still moves it.
+ *
  * Effects are short (90 ms) and re-sent only when they change, so a stationary car does not flood
  * the device with commands. The kerb, ABS and TC pulses are the exception: each on / off edge is sent when it
  * happens, with an effect that lasts one half-period, so the 12–25 Hz pulses are felt at their rate rather than
@@ -72,6 +76,15 @@ const smoothstep = (edge0: number, edge1: number, x: number) => {
 };
 
 /**
+ * Adds a cue into the headroom the cues layered before it left: `acc + e·(1 − acc)` (rbrpad `RumbleMapper.Layer`).
+ * The result never exceeds 1 and grows with every cue, so a strong cue cannot drown the rest out by clipping.
+ * The result is the same in any order; cues are listed by priority for the reader.
+ */
+export function layerRumble(acc: number, effect: number): number {
+  return acc + magnitude01(effect) * (1 - acc);
+}
+
+/**
  * Which pulses are running and in which half of their cycle (a bitmask that changes on every pulse edge), and the
  * shortest running half-period (s; 0 with no pulse)
  */
@@ -133,9 +146,13 @@ export function hapticMagnitudes(
   const kerbPulseOn = (timeS * KERB_PULSE_HZ) % 1 < 0.5;
   const kerb = onKerb && kerbPulseOn ? 0.55 + 0.35 * speedFactor : 0;
   const frontSlip = Math.max(t.tireSlipRatio?.[0] ?? 0, t.tireSlipRatio?.[1] ?? 0);
-  const scrub = 0.4 * smoothstep(0.85, 1.15, frontSlip) + 0.35 * understeerNorm;
+  const scrub = 0.4 * smoothstep(0.85, 1.15, frontSlip);
+  const understeer = 0.35 * understeerNorm;
   const texture = 0.04 * speedFactor;
-  const weak = clamp01(kerb + scrub + texture);
+  let weak = layerRumble(0, kerb);
+  weak = layerRumble(weak, scrub);
+  weak = layerRumble(weak, understeer);
+  weak = layerRumble(weak, texture);
 
   // Strong motor: lock-up, wheelspin, rear oversteer SAT slide cue, rack-load cue and rough surfaces
   const minSlip = t.wheelSlipRatios ? Math.min(...t.wheelSlipRatios) : 0;
@@ -145,7 +162,11 @@ export function hapticMagnitudes(
   const oversteerSlide = 0.45 * oversteerNorm;
   const rackLoad = 0.25 * Math.pow(clamp01(Math.abs(t.ffbTorqueNorm ?? 0)), 1.5);
   const roughSurface = t.surface === "grass" || t.surface === "runoff" ? 0.35 : 0;
-  const strong = clamp01(lockUp + wheelspin + oversteerSlide + rackLoad + roughSurface);
+  let strong = layerRumble(0, lockUp);
+  strong = layerRumble(strong, wheelspin);
+  strong = layerRumble(strong, oversteerSlide);
+  strong = layerRumble(strong, rackLoad);
+  strong = layerRumble(strong, roughSurface);
 
   return { weak, strong };
 }
