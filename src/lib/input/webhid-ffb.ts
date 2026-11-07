@@ -68,8 +68,8 @@ export interface HidDeviceLike {
 export interface HidApiLike {
   requestDevice(options: { filters: { vendorId?: number; productId?: number; usagePage?: number; usage?: number }[] }): Promise<HidDeviceLike[]>;
   getDevices(): Promise<HidDeviceLike[]>;
-  addEventListener(type: "disconnect", listener: (e: { device: HidDeviceLike }) => void): void;
-  removeEventListener(type: "disconnect", listener: (e: { device: HidDeviceLike }) => void): void;
+  addEventListener(type: "connect" | "disconnect", listener: (e: { device: HidDeviceLike }) => void): void;
+  removeEventListener(type: "connect" | "disconnect", listener: (e: { device: HidDeviceLike }) => void): void;
 }
 
 /* ------------------------------------------------------------------------------------------------------------ */
@@ -1041,6 +1041,12 @@ const REQUEST_FILTERS = [
 const UNSUPPORTED_BROWSER = "WebHID needs Chrome or Edge on https or localhost";
 /** Status message when the page loads with WebHID on but no wheel was granted to it yet (pairing needs a click) */
 export const PAIR_MESSAGE = "Click Connect to pair your wheel";
+/** Wait after a granted wheel's connect event before re-opening it (ms): a multi-interface base arrives one at a time */
+export const HOTPLUG_DELAY_MS = 1500;
+/** Setup attempts when a granted wheel is re-opened (page load, power-cycle): one just switched on may refuse at first */
+export const SETUP_ATTEMPTS = 5;
+/** Wait between those attempts (ms) */
+export const SETUP_RETRY_MS = 2000;
 
 function hasOutputReports(collections: readonly HidCollectionLike[]): boolean {
   for (const c of collections) {
@@ -1088,6 +1094,12 @@ export class WebHidFfb {
   private busyClosing = false;
   private listening: HidApiLike | null = null;
   private listeners = new Set<() => void>();
+  /** Between connect()/reconnect() and dispose(): a granted wheel that comes back is re-opened */
+  private wanted = false;
+  private hotplugApi: HidApiLike | null = null;
+  private hotplugTimer: unknown = null;
+  /** Ends the wait between setup attempts early (dispose) */
+  private wakeRetry: (() => void) | null = null;
 
   /** `hid` and `deps` exist for tests; the app uses the defaults */
   constructor(
@@ -1108,6 +1120,7 @@ export class WebHidFfb {
   connect(): Promise<string | null> {
     const hid = this.hidApi();
     if (!hid) return Promise.resolve(this.fail("unsupported", null, UNSUPPORTED_BROWSER));
+    this.want(hid);
     let picking: Promise<{ device: HidDeviceLike | undefined } | { error: string }>;
     try {
       picking = hid.requestDevice({ filters: REQUEST_FILTERS }).then(
@@ -1135,13 +1148,18 @@ export class WebHidFfb {
   }
 
   /**
-   * Re-opens a wheel the user granted earlier, without a prompt (page load); null when there is none, with the status
-   * asking for a Connect click ({@link PAIR_MESSAGE}). Never shows the picker. A running wheel is kept.
+   * Re-opens a wheel the user granted earlier, without a prompt (page load, the wheel switched back on); null when
+   * there is none, with the status asking for a Connect click ({@link PAIR_MESSAGE}). Never shows the picker. A running
+   * wheel is kept. A setup that fails (not an unsupported wheel) is tried {@link SETUP_ATTEMPTS} times, staying
+   * "connecting" in between, since a base that was just powered on may not take it yet.
    */
   reconnect(): Promise<string | null> {
+    const api = this.hidApi();
+    if (api) this.want(api);
     return this.guard(async () => {
       const hid = this.hidApi();
       if (!hid) return this.fail("unsupported", null, UNSUPPORTED_BROWSER);
+      if (!this.wanted) return null;
       if (this.session && this.device) return deviceName(this.device);
       let devices: HidDeviceLike[];
       try {
@@ -1155,8 +1173,25 @@ export class WebHidFfb {
         return null;
       }
       await this.release();
-      this.setStatus("connecting", deviceName(found), null);
-      return this.attach(hid, found);
+      const name = deviceName(found);
+      this.setStatus("connecting", name, null);
+      for (let attempt = 1; ; attempt++) {
+        const result = await this.setUp(hid, found);
+        if (result.ok) return name;
+        if (!this.wanted) {
+          this.setStatus("idle", null, null);
+          return null;
+        }
+        if (result.unsupported || attempt >= SETUP_ATTEMPTS) {
+          return this.fail(result.unsupported ? "unsupported" : "error", name, result.message);
+        }
+        this.setStatus("connecting", name, `${result.message}; trying again (${attempt + 1}/${SETUP_ATTEMPTS})`);
+        await this.waitForRetry(SETUP_RETRY_MS);
+        if (!this.wanted) {
+          this.setStatus("idle", null, null);
+          return null;
+        }
+      }
     });
   }
 
@@ -1188,6 +1223,7 @@ export class WebHidFfb {
    * kept, so the reason stays on screen once the driver is switched off because of it.
    */
   async dispose(): Promise<void> {
+    this.unwant();
     await this.guard(async () => {
       await this.release();
       if (!isFatalHidStatus(this.status)) this.setStatus("idle", null, null);
@@ -1223,9 +1259,19 @@ export class WebHidFfb {
     return p;
   }
 
+  /** Sets the wheel up and makes it the force output; on failure the status is "error" / "unsupported" */
   private async attach(hid: HidApiLike, device: HidDeviceLike): Promise<string | null> {
+    const r = await this.setUp(hid, device);
+    return r.ok ? r.name : this.fail(r.unsupported ? "unsupported" : "error", r.name, r.message);
+  }
+
+  /** {@link attach} without reporting a failure (the reconnect retries decide when it is one) */
+  private async setUp(
+    hid: HidApiLike,
+    device: HidDeviceLike
+  ): Promise<{ ok: true; name: string } | { ok: false; name: string; unsupported: boolean; message: string }> {
     const name = deviceName(device);
-    this.setStatus("connecting", name, null);
+    if (this.status.state !== "connecting" || this.status.device !== name) this.setStatus("connecting", name, null);
     const isClassicLogitech = device.vendorId === VENDOR_LOGITECH && parsePidLayout(device.collections) === null;
     const setupFn = isClassicLogitech ? setupLogitechDevice : setupPidDevice;
     const result = await setupFn(device, {
@@ -1243,7 +1289,7 @@ export class WebHidFfb {
       } catch {
         // already gone
       }
-      return this.fail(result.unsupported ? "unsupported" : "error", name, result.message);
+      return { ok: false, name, unsupported: result.unsupported, message: result.message };
     }
     this.session = result.session;
     this.device = device;
@@ -1252,7 +1298,49 @@ export class WebHidFfb {
       this.listening = hid;
     }
     this.setStatus("ready", name, null);
-    return name;
+    return { ok: true, name };
+  }
+
+  /** From connect()/reconnect() until dispose(): listen for a granted wheel coming back */
+  private want(hid: HidApiLike): void {
+    this.wanted = true;
+    if (this.hotplugApi === hid) return;
+    this.hotplugApi?.removeEventListener("connect", this.onConnect);
+    hid.addEventListener("connect", this.onConnect);
+    this.hotplugApi = hid;
+  }
+
+  private unwant(): void {
+    this.wanted = false;
+    this.hotplugApi?.removeEventListener("connect", this.onConnect);
+    this.hotplugApi = null;
+    if (this.hotplugTimer !== null) {
+      this.deps.clearTimer(this.hotplugTimer);
+      this.hotplugTimer = null;
+    }
+    this.wakeRetry?.();
+  }
+
+  /** A granted force-feedback device appeared (the wheel switched back on): re-open it once it has settled */
+  private onConnect = (e: { device: HidDeviceLike }) => {
+    if (!this.wanted || this.session || !pickFfbDevice([e.device], false)) return;
+    if (this.hotplugTimer !== null) this.deps.clearTimer(this.hotplugTimer);
+    this.hotplugTimer = this.deps.setTimer(() => {
+      this.hotplugTimer = null;
+      if (this.wanted && !this.session) void this.reconnect();
+    }, HOTPLUG_DELAY_MS);
+  };
+
+  private waitForRetry(ms: number): Promise<void> {
+    return new Promise((resolve) => {
+      const done = () => {
+        if (this.wakeRetry === done) this.wakeRetry = null;
+        this.deps.clearTimer(timer);
+        resolve();
+      };
+      const timer = this.deps.setTimer(done, ms);
+      this.wakeRetry = done;
+    });
   }
 
   private onDisconnect = (e: { device: HidDeviceLike }) => {

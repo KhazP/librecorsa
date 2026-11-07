@@ -10,12 +10,15 @@ import {
   forceToRaw,
   FORCE_KEEPALIVE_MS,
   ForceWriter,
+  HOTPLUG_DELAY_MS,
   isFatalHidStatus,
   PAIR_MESSAGE,
   ordinalUsage,
   parsePidLayout,
   PID,
   selectorValue,
+  SETUP_ATTEMPTS,
+  SETUP_RETRY_MS,
   setupLogitechDevice,
   setupPidDevice,
   teardownPidSession,
@@ -152,12 +155,18 @@ class FakeHidDevice implements HidDeviceLike {
   /** When true sendReport stays pending until `release()` */
   hold = false;
   failSends = false;
+  /** open() throws this many more times (a base that was just switched on) */
+  failOpens = 0;
   private waiters: (() => void)[] = [];
   constructor(
     public collections: readonly HidCollectionLike[],
     private readonly blockLoad: PidReportLayout | null = null
   ) {}
   async open() {
+    if (this.failOpens > 0) {
+      this.failOpens--;
+      throw new Error("Failed to open the device");
+    }
     this.opened = true;
   }
   async close() {
@@ -217,6 +226,10 @@ class FakeClock {
 }
 
 const flush = () => new Promise<void>((resolve) => setImmediate(resolve));
+/** Lets a chain of awaits (getDevices, setup, …) run to its next timer */
+const settle = async () => {
+  for (let i = 0; i < 30; i++) await flush();
+};
 const asLayout = (cols: HidCollectionLike[]) => {
   const l = parsePidLayout(cols);
   assert.ok(l, "layout parses");
@@ -556,14 +569,22 @@ async function main() {
   });
 
   function fakeHid(devices: FakeHidDevice[], granted: FakeHidDevice[] = []) {
-    const listeners: ((e: { device: HidDeviceLike }) => void)[] = [];
+    type Listener = (e: { device: HidDeviceLike }) => void;
+    /** "disconnect" listeners (as `listeners`) and "connect" ones */
+    const listeners: Listener[] = [];
+    const connectListeners: Listener[] = [];
+    const of = (t: "connect" | "disconnect") => (t === "connect" ? connectListeners : listeners);
     const api: HidApiLike = {
       requestDevice: async () => devices,
       getDevices: async () => granted,
-      addEventListener: (_t, l) => void listeners.push(l),
-      removeEventListener: (_t, l) => void listeners.splice(listeners.indexOf(l), 1),
+      addEventListener: (t, l) => void of(t).push(l),
+      removeEventListener: (t, l) => {
+        const list = of(t);
+        const i = list.indexOf(l);
+        if (i >= 0) list.splice(i, 1);
+      },
     };
-    return { api, listeners };
+    return { api, listeners, connectListeners };
   }
   const wheel = () => {
     const cols = pidCollections();
@@ -949,6 +970,82 @@ async function main() {
     ffb.setForce(0.9);
     await flush();
     assert.equal(dev.forceWrites.length, before);
+  });
+  await check(`a power-cycled wheel is re-opened ${HOTPLUG_DELAY_MS} ms after it comes back`, async () => {
+    const dev = wheel();
+    const clock = new FakeClock();
+    const { api, listeners, connectListeners } = fakeHid([], [dev]);
+    const ffb = new WebHidFfb(api, clock.deps);
+    assert.equal(await ffb.reconnect(), "Fake DD Base");
+    for (const l of listeners) l({ device: dev });
+    assert.equal(ffb.status.state, "idle");
+    dev.opened = false;
+    // A multi-interface base announces each interface: one re-open, after the last
+    for (const l of [...connectListeners]) l({ device: dev });
+    clock.advance(HOTPLUG_DELAY_MS - 500);
+    for (const l of [...connectListeners]) l({ device: dev });
+    clock.advance(HOTPLUG_DELAY_MS - 1);
+    await settle();
+    assert.equal(ffb.status.state, "idle", "not before the wheel has settled");
+    clock.advance(1);
+    await settle();
+    assert.equal(ffb.status.state, "ready");
+    assert.equal(clock.timers.length, 0, "one re-open, no second one queued");
+    // After dispose a wheel coming back is left alone
+    await ffb.dispose();
+    assert.equal(connectListeners.length, 0);
+  });
+  await check(`re-opening retries a failed setup up to ${SETUP_ATTEMPTS} times without a fatal status in between`, async () => {
+    const dev = wheel();
+    dev.failOpens = 2;
+    const clock = new FakeClock();
+    const ffb = new WebHidFfb(fakeHid([], [dev]).api, clock.deps);
+    const states: string[] = [];
+    ffb.subscribe(() => states.push(ffb.status.state));
+    const p = ffb.reconnect();
+    await settle();
+    assert.equal(ffb.status.state, "connecting");
+    assert.match(ffb.status.message ?? "", new RegExp(`2/${SETUP_ATTEMPTS}`));
+    clock.advance(SETUP_RETRY_MS);
+    await settle();
+    assert.match(ffb.status.message ?? "", new RegExp(`3/${SETUP_ATTEMPTS}`));
+    clock.advance(SETUP_RETRY_MS);
+    await settle();
+    assert.equal(await p, "Fake DD Base");
+    assert.equal(ffb.status.state, "ready");
+    assert.ok(!states.includes("error"), `never fatal on the way (${states.join(" → ")})`);
+    // Every attempt failing: fatal only after the last one
+    const dead = wheel();
+    dead.failOpens = 99;
+    const c2 = new FakeClock();
+    const f2 = new WebHidFfb(fakeHid([], [dead]).api, c2.deps);
+    const p2 = f2.reconnect();
+    for (let i = 1; i < SETUP_ATTEMPTS; i++) {
+      await settle();
+      assert.equal(f2.status.state, "connecting", `attempt ${i}`);
+      c2.advance(SETUP_RETRY_MS);
+    }
+    assert.equal(await p2, null);
+    assert.equal(f2.status.state, "error");
+    // The user's own Connect click is not retried: it reports at once
+    const once = wheel();
+    once.failOpens = 1;
+    const f3 = new WebHidFfb(fakeHid([once]).api, new FakeClock().deps);
+    assert.equal(await f3.connect(), null);
+    assert.equal(f3.status.state, "error");
+  });
+  await check("dispose() during the retries ends them at once and leaves the driver idle", async () => {
+    const dev = wheel();
+    dev.failOpens = 99;
+    const clock = new FakeClock();
+    const ffb = new WebHidFfb(fakeHid([], [dev]).api, clock.deps);
+    const p = ffb.reconnect();
+    await settle();
+    assert.equal(ffb.status.state, "connecting");
+    await ffb.dispose(); // no clock advance: the wait is cut short
+    assert.equal(await p, null);
+    assert.equal(ffb.status.state, "idle");
+    assert.equal(clock.timers.length, 0);
   });
   await check("dispose(): zero force, stop effect, free block, stop all, disable actuators, close", async () => {
     const dev = wheel();
