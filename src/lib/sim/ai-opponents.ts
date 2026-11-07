@@ -117,6 +117,50 @@ const PASS_SPACING_M = 2.5;
  * ~0.4 m apart, and with a few degrees of yaw between them the boxes rubbed for seconds
  */
 const ALONGSIDE_SPACING_M = 2.9;
+
+/**
+ * The racecraft's tunable knobs (scripts/ai/tune-racecraft.ts searches them in headless races). The defaults are the
+ * values the field races with.
+ */
+export interface RacecraftParams {
+  /** Lateral spacing a passing car aims for beside the car it passes (m, at the shipped caution) */
+  passSpacingM: number;
+  /** Centre spacing two cars side by side keep (m) */
+  alongsideSpacingM: number;
+  /** A pass is set up within this many seconds of the car ahead (plus a closing-speed term) */
+  reactGapS: number;
+  /** Pull out of the tow this far behind (m) plus this many seconds of the closing speed */
+  pullOutBaseM: number;
+  pullOutClosingS: number;
+  /** Extra pace once alongside in a pass (share, × 1 + aggression) */
+  attackPush: number;
+  /** How much harder than the car ahead a follower may brake (m/s²), and the distance its braking lead fades over (m) */
+  followRelAccel: number;
+  followFadeM: number;
+  /** Corner speed given away per unit of front downforce lost in the wake (planned cars) */
+  dirtyAirMargin: number;
+  /** Local planner weights (when it is on) */
+  plannerIntent: number;
+  plannerLine: number;
+  plannerProximity: number;
+  plannerConsistency: number;
+}
+
+export const DEFAULT_RACECRAFT: RacecraftParams = {
+  passSpacingM: PASS_SPACING_M,
+  alongsideSpacingM: ALONGSIDE_SPACING_M,
+  reactGapS: 0.35,
+  pullOutBaseM: 3,
+  pullOutClosingS: 0.9,
+  attackPush: 0.012,
+  followRelAccel: 6,
+  followFadeM: 25,
+  dirtyAirMargin: 0.12,
+  plannerIntent: 4,
+  plannerLine: 0.15,
+  plannerProximity: 25,
+  plannerConsistency: 0.4,
+};
 /** Rate at which an AI moves off / back onto its line (m/s) */
 const BIAS_RATE_MS = 2.2;
 /** Off the start an AI keeps its grid lane until a corner comes into view, or this far into the race at most (m) */
@@ -133,14 +177,14 @@ const MISTAKE_APEX_SCALE = 1.06;
  * once our brakes bite (~0.2 s on at its own deceleration), plus what we can take out braking a little harder than it,
  * with 2.5 m to spare. Without the lead for its braking, the car behind in a braking zone was always a step late
  */
-function followCapMs(ahead: SimulatorCar, gapM: number): number {
+function followCapMs(ahead: SimulatorCar, gapM: number, rc: RacecraftParams = DEFAULT_RACECRAFT): number {
   const decelAhead = Math.max(0, -(ahead.telemetry.longitudinalG ?? 0) * 9.81);
   const vAhead = Math.max(0, ahead.vxMs);
   // The lead for the car ahead's braking and the extra gap into a braking zone matter close up; 25 m back they held a
   // quicker car off a slower one that braked early, and it never got close enough to try a pass
-  const close = Math.max(0, Math.min(1, (25 - gapM) / 20));
+  const close = Math.max(0, Math.min(1, (rc.followFadeM - gapM) / Math.max(5, rc.followFadeM - 5)));
   const margin = 2.5 + (decelAhead > 5 ? 0.12 * vAhead * close : 0);
-  return Math.max(0, vAhead - 0.2 * decelAhead * close) + Math.sqrt(2 * 6 * Math.max(0, gapM - margin));
+  return Math.max(0, vAhead - 0.2 * decelAhead * close) + Math.sqrt(2 * rc.followRelAccel * Math.max(0, gapM - margin));
 }
 
 /**
@@ -257,6 +301,8 @@ export interface AiFieldOptions {
   gridOrder?: AiGridOrder;
   /** The player's grid slot (default 'back') */
   playerGrid?: PlayerGridSlot;
+  /** Racecraft knobs (default DEFAULT_RACECRAFT) */
+  racecraft?: Partial<RacecraftParams>;
   /**
    * The local planner chooses how cars on drive plans approach and pass the cars ahead (default false: the racecraft
    * rules on the drive plans race cleaner until its weights are tuned)
@@ -593,6 +639,8 @@ export class AiOpponentField {
   private raceCount = 0;
   /** The local planner is on (cars on drive plans) */
   public localPlanner: boolean;
+  /** Racecraft knobs */
+  public readonly rc: RacecraftParams;
   /** Grid of the next race */
   public gridOrder: AiGridOrder;
   public playerGrid: PlayerGridSlot;
@@ -608,6 +656,7 @@ export class AiOpponentField {
   ) {
     this.damageLevel = options.damage ?? 'reduced';
     this.localPlanner = options.localPlanner ?? false;
+    this.rc = { ...DEFAULT_RACECRAFT, ...(options.racecraft ?? {}) };
     this.gridOrder = options.gridOrder ?? 'pace';
     this.playerGrid = options.playerGrid ?? 'back';
     this.environment = environment ?? new TrackEnvironment(track);
@@ -743,7 +792,9 @@ export class AiOpponentField {
     const sim = car.ai;
     if (!sim || !AiOpponentField.tracksPlans(sim)) return;
     const weather = this.environment.weatherPaceScale(sim);
-    const grip = Math.round(PLAN_GRIP * car.pace * car.pace * weather * weather * 200) / 200;
+    // A damaged car (a broken wing, bent suspension) has less grip to plan with
+    const damaged = car.damage.pristine ? 1 : 1 - 0.35 * car.damage.overall;
+    const grip = Math.round(PLAN_GRIP * car.pace * car.pace * weather * weather * damaged * 200) / 200;
     if (sim.aiPlan && grip === car.planGrip) return;
     this.aiTrack ??= aiTrackFor(this.track);
     const t = this.aiTrack;
@@ -1074,8 +1125,9 @@ export class AiOpponentField {
       if (other === car || other.removed) continue;
       const o = other.sim;
       const ds = wrapHalf(o.sMeters - me.sMeters, L);
-      // Right here, or closing from behind within ~3.5 s
-      if (Math.abs(ds) < CAR_LEN_M + 2 && Math.abs(o.lateralOffsetM - me.lateralOffsetM) < 4) return false;
+      // Overlapping right here and moving, or closing from behind within ~3.5 s. A car stopped or crawling close by
+      // (stuck too, or waiting itself) doesn't count: two cars that each waited for the other never moved again
+      if (Math.abs(ds) < CAR_LEN_M && Math.abs(o.lateralOffsetM - me.lateralOffsetM) < 3 && Math.abs(o.vxMs) > 3) return false;
       if (ds < 0 && o.vxMs > 3 && -ds < Math.max(40, o.vxMs * 3.5)) return false;
     }
     return true;
@@ -1102,7 +1154,9 @@ export class AiOpponentField {
   private applyDamage(car: FieldCar): void {
     if (car.damage.pristine) return;
     car.sim.setDamageEffects?.(car.damage.effects());
-    if (car.damage.terminal && !car.retired) {
+    // Wrecked (no pit lane to fix it in): an AI driver parks it rather than spin round on three good corners
+    const wrecked = car.ai !== null && car.damage.overall >= 0.85;
+    if ((car.damage.terminal || wrecked) && !car.retired) {
       car.retired = true;
       car.retiredAtS = this.raceTimeS;
       car.control?.retire();
@@ -1186,7 +1240,7 @@ export class AiOpponentField {
         1
       );
       const dc = caution - BASE_CAUTION;
-      let passSpacing = PASS_SPACING_M * (1 + 0.5 * dc);
+      let passSpacing = this.rc.passSpacingM * (1 + 0.5 * dc);
       let minClosing = -1 + 3 * dc;
       const followGap = 12 + 10 * dc;
       const defend = THREE.MathUtils.clamp(T.params.defend * this.mods.defendMult + 0.2 * car.aggression, 0, 1);
@@ -1216,14 +1270,14 @@ export class AiOpponentField {
           continue;
         }
         // Alongside: keep a car's width of room
-        if (Math.abs(ds) < CAR_LEN_M + 1.5 && Math.abs(dLat) < ALONGSIDE_SPACING_M) {
+        if (Math.abs(ds) < CAR_LEN_M + 1.5 && Math.abs(dLat) < this.rc.alongsideSpacingM) {
           const away = me.lateralOffsetM >= other.sim.lateralOffsetM ? 1 : -1;
-          targetLat = other.sim.lateralOffsetM + away * ALONGSIDE_SPACING_M;
+          targetLat = other.sim.lateralOffsetM + away * this.rc.alongsideSpacingM;
           // Squeezed against the edge with no room left on that side and not clearly ahead: back out of it
           if (Math.abs(targetLat) > half && ds > -0.5 * CAR_LEN_M) squeezedBy = other;
         }
         // Side by side with its nose behind the other car's: the one that yields if a corner comes and it doesn't own it
-        if (ds > 0.5 && along && Math.abs(dLat) < ALONGSIDE_SPACING_M + 0.6) alongsideAhead = other;
+        if (ds > 0.5 && along && Math.abs(dLat) < this.rc.alongsideSpacingM + 0.6) alongsideAhead = other;
         if (ds > 0 && ds < 90 && Math.abs(dLat) < CAR_WID_M + 0.4 && ds < aheadGap) {
           ahead = other;
           aheadGap = ds;
@@ -1243,7 +1297,7 @@ export class AiOpponentField {
         // A car in our path: never closer than we could still stop behind it if it braked now (the pack into a
         // braking zone, each car on its own braking point, otherwise ran into each other's gearboxes)
         if (ds > 0 && ds < 80 && Math.abs(dLat) < CAR_WID_M + 0.35) {
-          speedCap = Math.min(speedCap, followCapMs(other.sim, ds - CAR_LEN_M));
+          speedCap = Math.min(speedCap, followCapMs(other.sim, ds - CAR_LEN_M, this.rc));
         }
       }
 
@@ -1271,7 +1325,7 @@ export class AiOpponentField {
       if (ahead && targetLat === null) {
         const closing = me.vxMs - ahead.sim.vxMs;
         // About half a second at speed: the slipstream reaches that far, and a pass is set up from there
-        const reactGap = 8 + Math.max(0, closing) * 2.2 + me.vxMs * 0.35;
+        const reactGap = 8 + Math.max(0, closing) * 2.2 + me.vxMs * this.rc.reactGapS;
         // Lapping a backmarker: go by readily (it is told to let us through)
         const lapping = ahead.distM < car.distM - 0.5 * L;
         if (lapping) {
@@ -1308,7 +1362,7 @@ export class AiOpponentField {
             // the wake too early, the passing car lost the tow and never had the speed to get by. Already out (or
             // alongside), the move is held
             const noseToTail = aheadGap - CAR_LEN_M;
-            const pullOut = 3 + Math.max(0, closing) * 0.9 + (Number.isFinite(distToCorner) ? 6 : 0);
+            const pullOut = this.rc.pullOutBaseM + Math.max(0, closing) * this.rc.pullOutClosingS + (Number.isFinite(distToCorner) ? 6 : 0);
             const out = Math.abs(me.lateralOffsetM - aLat) > CAR_WID_M * 0.75;
             if (noseToTail > pullOut && !out && !holding) {
               targetLat = aLat;
@@ -1421,14 +1475,14 @@ export class AiOpponentField {
       const wakeFrontMult = me.telemetry.aeroWakeDownforceMult ?? 1;
       // (the physics lose the downforce; this is the driver's margin for it: a car on a drive plan runs at its real limit
       // and spun in the wake at a smaller one)
-      const dirtyAirPenalty = 1 - (me.aiPlan ? 0.12 : 0.05) * Math.max(0, 1 - wakeFrontMult);
+      const dirtyAirPenalty = 1 - (me.aiPlan ? this.rc.dirtyAirMargin : 0.05) * Math.max(0, 1 - wakeFrontMult);
       // Rain: the pace the tyres' grip on this much water allows (weather.ts / track-environment.ts)
       const weatherPace = this.environment.weatherPaceScale(me);
       // Yellow flag: lift through the zone
       const yellowLift = yellow ? 0.93 : 1;
       // Making a pass stick: a little more into the corner (a later brake, more speed) once alongside
       const passing = craft.passTargetId !== null && ahead !== null && aheadGap < CAR_LEN_M * 1.2;
-      const attackPush = passing ? 1 + 0.012 * (1 + Math.max(0, car.aggression)) : 1;
+      const attackPush = passing ? 1 + this.rc.attackPush * (1 + Math.max(0, car.aggression)) : 1;
       // A car on a drive plan has its pace and the weather in the plan's grip already
       this.refreshPlan(car);
       const planned = me.aiPlan ? 1 : car.pace * weatherPace;
@@ -1459,7 +1513,7 @@ export class AiOpponentField {
       if (other === me || other.removed) continue;
       const ds = wrapHalf(other.sim.sMeters - sim.sMeters, L);
       if (ds > 0 && ds < 80 && Math.abs(other.sim.lateralOffsetM - sim.lateralOffsetM) < CAR_WID_M + 0.35) {
-        cap = Math.min(cap, followCapMs(other.sim, ds - CAR_LEN_M));
+        cap = Math.min(cap, followCapMs(other.sim, ds - CAR_LEN_M, this.rc));
       }
     }
     sim.aiSpeedCapMs = cap;
@@ -1568,7 +1622,13 @@ export class AiOpponentField {
         intentD,
         speedCapMs: speedCap,
         // With no intent, the line is home: leaving it has to buy real progress
-        weights: intentD === null ? { ...DEFAULT_PLANNER_WEIGHTS, line: 0.15 } : DEFAULT_PLANNER_WEIGHTS,
+        weights: {
+          ...DEFAULT_PLANNER_WEIGHTS,
+          intent: this.rc.plannerIntent,
+          proximity: this.rc.plannerProximity,
+          consistency: this.rc.plannerConsistency,
+          line: intentD === null ? this.rc.plannerLine : DEFAULT_PLANNER_WEIGHTS.line,
+        },
         prevEndD: car.local?.endD ?? car.biasM,
       });
       car.localAtS = this.raceTimeS;
