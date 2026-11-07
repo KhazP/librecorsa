@@ -592,19 +592,7 @@ export class CarAudioEngine {
     const squeal = this.tyreSqueal(telemetry);
     // A bank with its own skid recordings plays them in place of the synthesised squeal and scrub
     const bankSkid = vf26?.hasSkid === true;
-    const contactFrame =
-      this.contactAcoustics?.updateFromTelemetry(
-        telemetry,
-        this.cameraMode,
-        legacyDt,
-        bankSkid
-      ) ?? null;
-    const combinedSkidAmp = contactFrame
-      ? Math.max(squeal.amp, contactFrame.peakSkid.volume)
-      : squeal.amp;
-    const combinedSkidPitch = contactFrame
-      ? THREE.MathUtils.clamp(0.75 + contactFrame.peakSkid.pitch, 0.55, 1.25)
-      : squeal.pitch;
+    this.contactAcoustics?.updateFromTelemetry(telemetry, this.cameraMode, legacyDt);
     if (vf26) {
       const rpmScale = this.sound.physicsLimiterRpm ? this.sound.limiterRpm / this.sound.physicsLimiterRpm : 1;
       vf26.update(
@@ -619,8 +607,8 @@ export class CarAudioEngine {
           view: INTERIOR_CAMERAS.has(this.cameraMode) ? 'int' : 'ext',
           limiterRpm: this.sound.limiterRpm,
           // sqrt: the recordings are already a full skid, so a light slide comes in early
-          skid: bankSkid ? 0.55 * Math.sqrt(combinedSkidAmp) : 0,
-          skidRate: 0.85 + 0.25 * combinedSkidPitch,
+          skid: bankSkid ? 0.55 * Math.sqrt(squeal.amp) : 0,
+          skidRate: 0.85 + 0.25 * squeal.pitch,
           tcActive: telemetry.f12026?.tcActive ?? false,
         },
         legacyDt
