@@ -537,6 +537,7 @@ export class F1Physics2026 {
       lateralForceN: 0,
       camberRad: 0,
       contactInCar: { x: 0, y: 0, z: 0 },
+      onRoad: true,
       roadHeightAtCorner: (xInCar, zInCar) => this.evalCornerRoadHeightInCar(0, xInCar, zInCar),
     },
     {
@@ -545,6 +546,7 @@ export class F1Physics2026 {
       lateralForceN: 0,
       camberRad: 0,
       contactInCar: { x: 0, y: 0, z: 0 },
+      onRoad: true,
       roadHeightAtCorner: (xInCar, zInCar) => this.evalCornerRoadHeightInCar(1, xInCar, zInCar),
     },
     {
@@ -553,6 +555,7 @@ export class F1Physics2026 {
       lateralForceN: 0,
       camberRad: 0,
       contactInCar: { x: 0, y: 0, z: 0 },
+      onRoad: true,
       roadHeightAtCorner: (xInCar, zInCar) => this.evalCornerRoadHeightInCar(2, xInCar, zInCar),
     },
     {
@@ -561,6 +564,7 @@ export class F1Physics2026 {
       lateralForceN: 0,
       camberRad: 0,
       contactInCar: { x: 0, y: 0, z: 0 },
+      onRoad: true,
       roadHeightAtCorner: (xInCar, zInCar) => this.evalCornerRoadHeightInCar(3, xInCar, zInCar),
     },
   ];

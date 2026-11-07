@@ -725,6 +725,7 @@ export class F12026CarSim implements SimulatorCar {
       lateralForceN: 0,
       camberRad: 0,
       contactInCar: { x: 0, y: 0, z: 0 },
+      onRoad: false,
       roadHeightAtCorner: (xInCar: number, zInCar: number): number => this.evalCornerRoadHeightInCar(k, xInCar, zInCar),
     });
     this.tyreVisuals = [vis(geo.front.radius, 0), vis(geo.front.radius, 1), vis(geo.rear.radius, 2), vis(geo.rear.radius, 3)];
@@ -1788,6 +1789,7 @@ export class F12026CarSim implements SimulatorCar {
       vis.verticalDeflectionM = w.deflection;
       vis.lateralForceN = w.fy;
       vis.camberRad = w.camberLeftRad;
+      vis.onRoad = w.deflection > 0;
       // The bottom of the tyre in the car frame, under the corner's hardpoint at the current pose: the car frame rides
       // on the sprung body, so this is where the rigs put the unsprung wheel
       _v.set(w.hardpoint.x, 0, w.hardpoint.z).applyQuaternion(q).add(this.worldPosition);

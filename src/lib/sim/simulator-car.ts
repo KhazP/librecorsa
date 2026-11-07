@@ -41,6 +41,12 @@ export interface TyreVisualState {
    */
   contactInCar?: { x: number; y: number; z: number };
   /**
+   * The tyre stands on the road: its contact is the road under it, and the rigs seat it on the car's ground under
+   * the model's own corner (`seatCorner`). False for a rigid-body tyre off the ground, which hangs at `contactInCar`.
+   * The VF26 draws no wheel travel (its body moves on the rig, its wheels stay on the road), so its tyres always do.
+   */
+  onRoad: boolean;
+  /**
    * Optional exact car-frame road height (m) at a rig corner's own `(x, z)` in the car frame, used when a 3D car
    * model's wheelbase or track width differs from the physics vehicle's on cambered/sloped/kerbed surfaces.
    */
