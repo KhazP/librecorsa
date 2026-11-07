@@ -66,23 +66,25 @@ export class ContactAcousticsRig {
     this.out.Q.value = 0.7;
     this.out.connect(destination);
 
-    const noiseVoice = (type: BiquadFilterType, hz: number, q: number): [BiquadFilterNode, GainNode] => {
+    // Each loop starts at its own point of the buffer CarAudio's scrub, gravel and wind also loop from the start:
+    // sample-aligned copies of one noise add up coherently wherever their bands overlap (the roar's and the wind's)
+    const noiseVoice = (hz: number, q: number, startAt: number): [BiquadFilterNode, GainNode] => {
       const source = ctx.createBufferSource();
       source.buffer = noise;
       source.loop = true;
       const filter = ctx.createBiquadFilter();
-      filter.type = type;
+      filter.type = 'bandpass';
       filter.frequency.value = hz;
       filter.Q.value = q;
       const gain = ctx.createGain();
       gain.gain.value = 0;
       source.connect(filter).connect(gain).connect(this.out);
-      source.start();
+      source.start(0, startAt * noise.duration);
       return [filter, gain];
     };
-    [this.roarFilter, this.roarGain] = noiseVoice('bandpass', 230, 1.1);
-    this.rattleGain = noiseVoice('bandpass', 2150, 3.6)[1];
-    this.debrisGain = noiseVoice('bandpass', 3400, 4.5)[1];
+    [this.roarFilter, this.roarGain] = noiseVoice(230, 1.1, 0.25);
+    this.rattleGain = noiseVoice(2150, 3.6, 0.5)[1];
+    this.debrisGain = noiseVoice(3400, 4.5, 0.75)[1];
 
     this.thumpOsc = ctx.createOscillator();
     this.thumpOsc.type = 'sine';
