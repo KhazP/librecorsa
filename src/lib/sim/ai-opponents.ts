@@ -36,6 +36,8 @@ import type { InterpolatedPeerState } from '@/lib/sim/multiplayer-sync';
 import type { SimulatorCar } from '@/lib/sim/simulator-car';
 import { carAheadOnRoad, earnedAtDetection, type OvertakingRaceControl } from '@/lib/sim/overtaking-rules';
 import type { RaceStatus, VehicleModelId } from '@/types/f1';
+import { AiCarControl, aiControlTraits, KNOCK_LATERAL_MS, KNOCK_WALL_MS, KNOCK_YAW_RADS, type AiControlCarState } from '@/lib/sim/ai-car-control';
+import { CarDamage, worldToCarLocal, type DamageLevel, type DamageReport } from '@/lib/sim/car-damage';
 import { F12026_CAR_CONFIG } from '@/lib/sim/f12026-car/F12026CarConfig';
 import { AMG_GT3_CONFIG } from '@/lib/sim/gt3/AmgGt3Config';
 import {
@@ -96,6 +98,10 @@ export interface AiCarStats {
   stuckRecoveries: number;
   contacts: number;
   mistakes: number;
+  /** Spins (a slide the driver could not catch) */
+  spins: number;
+  /** Times the marshals had to move the car */
+  marshalRecoveries: number;
   lapTimesMs: number[];
   /** Running position at each completed lap (1 = leading) */
   lapPositions: number[];
@@ -184,6 +190,8 @@ export interface AiFieldOptions {
   spectate?: boolean;
   /** Tuning files (default: public/ai) */
   library?: AiTuningLibrary;
+  /** Damage from contact and barriers (default 'reduced') */
+  damage?: DamageLevel;
 }
 
 interface FieldCar {
@@ -216,6 +224,17 @@ interface FieldCar {
   inWallHit: boolean;
   /** Touched another car this frame */
   contact: boolean;
+  /** The driver's hands off the autopilot: reaction to a knock, spin, stop and rejoin (AI cars only) */
+  control: AiCarControl | null;
+  damage: CarDamage;
+  /** Out of the race (terminal damage) */
+  retired: boolean;
+  /** Race time the car retired (s) */
+  retiredAtS: number | null;
+  /** Retired and stopped long enough ago that the marshals have taken it away: no longer on the track */
+  removed: boolean;
+  /** Barrier impact last counted for damage (the car's own event clock) */
+  lastWallDamageMs: number;
   /** Covering the inside against a car behind */
   defending: boolean;
   /** Lateral offset of its grid slot (m), held off the start until the first corner; null once it races its line */
@@ -247,6 +266,46 @@ const CONTACT_MAX_DV_MS = 6;
 // as much yaw as the contact gives, which the free-body impulse leaves out: a 2 m/s rear-quarter tap at 260 km/h
 // otherwise kicks ~1 rad/s and spins the car
 const CONTACT_MAX_DYAW_RADS = 0.25;
+/**
+ * Between the field's own cars the caps grow with the impact: a graze keeps the cap above, a real hit gets the yaw its
+ * off-centre impulse gives (up to 2.5 rad/s per frame), so a rear-quarter tap at speed can spin a car, and the speed
+ * change of the impulse itself (at most (1 + e) × the closing speed) is never cut, so a car can't drive through a
+ * stopped one
+ */
+const fieldContactYawCap = (impactMs: number) => THREE.MathUtils.clamp(0.25 + 0.09 * impactMs, CONTACT_MAX_DYAW_RADS, 2.5);
+const fieldContactDvCap = (impactMs: number) => Math.max(CONTACT_MAX_DV_MS, 2 + 1.3 * impactMs);
+/** Two boxes can only overlap with their centres within a full diagonal (m, squared) */
+const CONTACT_BROAD_M2 = CAR_LEN_M * CAR_LEN_M + CAR_WID_M * CAR_WID_M;
+/** A retired car stopped this long is taken away by the marshals (s) */
+const RETIRED_REMOVE_S = 8;
+
+/** What happened on track this frame, for race control (`race-incidents.ts`) and the HUD */
+export type FieldIncident =
+  | {
+      kind: 'contact';
+      /** Car codes; `a` is the car further back on the road when the contact began */
+      a: string;
+      b: string;
+      aIsPlayer: boolean;
+      bIsPlayer: boolean;
+      /** Closing speed along the contact normal (m/s) */
+      impactMs: number;
+      /** Road gap b − a along the track (m) and lateral offsets (m, + right) at contact */
+      dsM: number;
+      aLatM: number;
+      bLatM: number;
+      /** Lateral speeds across the track (m/s, + right) at contact: who moved across into whom */
+      aLatSpeedMs: number;
+      bLatSpeedMs: number;
+      /** Braking at contact */
+      aBraking: boolean;
+      bBraking: boolean;
+      /** Lap distance of the contact (m) */
+      s: number;
+    }
+  | { kind: 'damage'; code: string; isPlayer: boolean; report: DamageReport; source: 'car' | 'wall' }
+  | { kind: 'spin'; code: string; isPlayer: boolean; s: number }
+  | { kind: 'retired'; code: string; isPlayer: boolean; s: number };
 
 const _obbA: RigidBodyCollisionCar = {
   x: 0, y: 0, z: 0, fwdX: 0, fwdZ: 1, vx: 0, vz: 0, yawRateRadS: 0,
@@ -281,20 +340,27 @@ function fillObb(sim: SimulatorCar, out: RigidBodyCollisionCar): void {
 }
 
 /** Hands the solver's deltas to the car, clamped per frame so a deep overlap can never launch it */
-function applyObbDeltas(sim: SimulatorCar, pos: readonly [number, number], vel: readonly [number, number], yaw: number): void {
+function applyObbDeltas(
+  sim: SimulatorCar,
+  pos: readonly [number, number],
+  vel: readonly [number, number],
+  yaw: number,
+  maxDv = CONTACT_MAX_DV_MS,
+  maxYaw = CONTACT_MAX_DYAW_RADS
+): void {
   if (!sim.applyRigidBodyCollision) return;
   const pl = Math.hypot(pos[0], pos[1]);
   const ps = pl > CONTACT_MAX_POS_M ? CONTACT_MAX_POS_M / pl : 1;
   const vl = Math.hypot(vel[0], vel[1]);
-  const vs = vl > CONTACT_MAX_DV_MS ? CONTACT_MAX_DV_MS / vl : 1;
-  sim.applyRigidBodyCollision(
-    pos[0] * ps,
-    pos[1] * ps,
-    vel[0] * vs,
-    vel[1] * vs,
-    THREE.MathUtils.clamp(yaw, -CONTACT_MAX_DYAW_RADS, CONTACT_MAX_DYAW_RADS)
-  );
+  const vs = vl > maxDv ? maxDv / vl : 1;
+  const y = THREE.MathUtils.clamp(yaw, -maxYaw, maxYaw);
+  sim.applyRigidBodyCollision(pos[0] * ps, pos[1] * ps, vel[0] * vs, vel[1] * vs, y);
+  _applied.dvx = vel[0] * vs;
+  _applied.dvz = vel[1] * vs;
+  _applied.dyaw = y;
 }
+/** The deltas the last applyObbDeltas handed over */
+const _applied = { dvx: 0, dvz: 0, dyaw: 0 };
 
 /**
  * Another player's car: its pose is a prediction a few cm out, so the contact is soft. Overlap is worked out at most
@@ -367,6 +433,8 @@ const emptyStats = (): AiCarStats => ({
   stuckRecoveries: 0,
   contacts: 0,
   mistakes: 0,
+  spins: 0,
+  marshalRecoveries: 0,
   lapTimesMs: [],
   lapPositions: [],
 });
@@ -428,6 +496,10 @@ export class AiOpponentField {
   /** Last contact time per pair of field slots (key: lower slot × 256 + higher slot) */
   private readonly contactAt = new Map<number, number>();
   private readonly rng: () => number;
+  /** Damage from contact and barriers */
+  public readonly damageLevel: DamageLevel;
+  /** Incidents this frame for race control: contacts (with who hit whom), damage, retirements */
+  public readonly incidents: FieldIncident[] = [];
 
   constructor(
     private readonly track: BuiltTrackData,
@@ -436,6 +508,7 @@ export class AiOpponentField {
     environment?: TrackEnvironment,
     options: AiFieldOptions = {}
   ) {
+    this.damageLevel = options.damage ?? 'reduced';
     this.environment = environment ?? new TrackEnvironment(track);
     this.ownsEnvironment = !environment;
     this.spectate = options.spectate ?? false;
@@ -454,6 +527,9 @@ export class AiOpponentField {
       const sim = player.createAiPeerCar ? player.createAiPeerCar() : new F1Physics2026(track);
       sim.assistPreset = 'pro';
       sim.aiAutopilot = true;
+      // The field rejoins its own cars after a spin, by driving, not by the car's own teleport
+      sim.aiSelfRecovery = false;
+      sim.autoGearbox = true;
       sim.aiPaceScale = d.pace;
       tuning ??= new AiTrackTuning(track, resolveAiTuning({ classId: this.classId, vehicleId: sim.vehicleId, trackId: this.trackId }, library));
       const car = this.makeCar(`ai_${d.code}`, d.code, d.teamColorHex, sim, sim, d.pace);
@@ -599,6 +675,12 @@ export class AiOpponentField {
       prevVx: 0,
       inWallHit: false,
       contact: false,
+      control: ai ? new AiCarControl() : null,
+      damage: new CarDamage(this.damageLevel, CAR_LEN_M / 2, CAR_WID_M / 2, seededRng(hashString(code) ^ 0x5bd1e995)),
+      retired: false,
+      retiredAtS: null,
+      removed: false,
+      lastWallDamageMs: 0,
       defending: false,
       startLaneM: null,
       prevS: 0,
@@ -659,6 +741,19 @@ export class AiOpponentField {
             )
           : null;
       }
+      car.damage.level = this.damageLevel;
+      car.damage.reset();
+      car.sim.setDamageEffects?.(null);
+      car.retired = false;
+      car.retiredAtS = null;
+      car.removed = false;
+      car.lastWallDamageMs = car.sim.telemetry.f12026?.wallImpact?.atMs ?? 0;
+      if (car.control) {
+        const traits = aiControlTraits(this.skillLevel, car.rng());
+        car.control.reactionS = traits.reactionS;
+        car.control.catchSlipRad = traits.catchSlipRad;
+        car.control.reset();
+      }
       // Start from the grid slot's lane, not the racing line, so the field does not file onto the line off the grid
       car.startLaneM = car.ai ? car.sim.lateralOffsetM : null;
       car.biasM = car.ai ? THREE.MathUtils.clamp(car.sim.lateralOffsetM - aiLineOffsetM(this.track.getSampleAtDistance(car.sim.sMeters), car.ai.racingLineId), -6, 6) : 0;
@@ -677,6 +772,7 @@ export class AiOpponentField {
     this.splitTimer.reset();
     this.playerSplits.reset();
     this.contactAt.clear();
+    this.incidents.length = 0;
     this.phase = standing ? 'lights' : 'racing';
     this.lightsOn = 0;
     this.lightsTimerS = 0;
@@ -698,18 +794,106 @@ export class AiOpponentField {
     }
 
     this.raceTimeS += dt;
+    this.incidents.length = 0;
     if (this.ownsEnvironment) this.environment.update(dt, this.allSims);
     this.planTraffic(dt);
     for (const car of this.cars) {
       car.contact = false;
-      car.ai?.step(dt, {});
+      const sim = car.ai;
+      if (!sim || car.removed) continue;
+      const ctl = car.control as AiCarControl;
+      const wasSpinning = ctl.mode === 'spinning';
+      const out = ctl.update(dt, this.controlState(car), this.clearBehind(car));
+      if (!wasSpinning && ctl.mode === 'spinning') {
+        car.stats.spins++;
+        car.learner?.interrupt();
+        this.incidents.push({ kind: 'spin', code: car.code, isPlayer: false, s: sim.sMeters });
+      }
+      if (out.autopilot) {
+        sim.aiAutopilot = true;
+        if (out.speedCapMs < (sim.aiSpeedCapMs ?? Infinity)) sim.aiSpeedCapMs = out.speedCapMs;
+        sim.step(dt, {});
+      } else {
+        sim.aiAutopilot = false;
+        sim.step(dt, out.inputs);
+      }
     }
     this.resolveContacts();
     this.recoverStuckCars(dt);
     for (const car of this.cars) {
-      if (car.ai) this.observe(car, dt);
+      this.observeDamage(car);
+      if (car.ai && !car.removed) this.observe(car, dt);
       this.trackDistance(car);
       this.syncPeer(car);
+    }
+  }
+
+  /** What the driver feels of the car, for its hands (`AiCarControl`) */
+  private controlState(car: FieldCar): AiControlCarState {
+    const sim = car.sim;
+    const sample = this.track.getSampleAtDistance(sim.sMeters);
+    const q = sim.worldQuaternion;
+    const heading = Math.atan2(2 * (q.x * q.z + q.w * q.y), 1 - 2 * (q.x * q.x + q.y * q.y));
+    const err = heading - Math.atan2(sample.tangent.x, sample.tangent.z);
+    const t = sim.telemetry;
+    return {
+      vxMs: sim.vxMs,
+      vyMs: sim.vyMs,
+      yawRateRadS: sim.yawRateRadS,
+      roadYawRateRadS: sim.vxMs * sample.curvature,
+      headingErrRad: Math.atan2(Math.sin(err), Math.cos(err)),
+      steer: sim.steerAngleNorm,
+      throttle: t.throttle,
+      brake: t.brake,
+    };
+  }
+
+  /** No car is coming up on this stretch for the next few seconds: a stopped car may rejoin */
+  private clearBehind(car: FieldCar): boolean {
+    const L = this.track.totalLengthM;
+    const me = car.sim;
+    for (const other of this.cars) {
+      if (other === car || other.removed) continue;
+      const o = other.sim;
+      const ds = wrapHalf(o.sMeters - me.sMeters, L);
+      // Right here, or closing from behind within ~3.5 s
+      if (Math.abs(ds) < CAR_LEN_M + 2 && Math.abs(o.lateralOffsetM - me.lateralOffsetM) < 4) return false;
+      if (ds < 0 && o.vxMs > 3 && -ds < Math.max(40, o.vxMs * 3.5)) return false;
+    }
+    return true;
+  }
+
+  /**
+   * Damage from barrier hits (the rigid-body cars report each impact and where on the car it landed), and what
+   * the damage does: the car's aero, grip and toe, and retirement
+   */
+  private observeDamage(car: FieldCar): void {
+    if (car.removed) return;
+    const sim = car.sim;
+    const wall = sim.telemetry.f12026?.wallImpact;
+    if (wall && wall.atMs !== car.lastWallDamageMs) {
+      car.lastWallDamageMs = wall.atMs;
+      if (wall.speedMs >= KNOCK_WALL_MS) car.control?.knock(this.controlState(car));
+      const report = car.damage.registerImpact({ localX: wall.localX ?? 0, localZ: wall.localZ ?? CAR_LEN_M / 2, speedMs: wall.speedMs, source: 'wall' });
+      if (report) this.incidents.push({ kind: 'damage', code: car.code, isPlayer: car.isPlayer, report, source: 'wall' });
+    }
+    this.applyDamage(car);
+  }
+
+  /** Hands the damage to the car's physics, and retires a car whose damage is terminal */
+  private applyDamage(car: FieldCar): void {
+    if (car.damage.pristine) return;
+    car.sim.setDamageEffects?.(car.damage.effects());
+    if (car.damage.terminal && !car.retired) {
+      car.retired = true;
+      car.retiredAtS = this.raceTimeS;
+      car.control?.retire();
+      this.incidents.push({ kind: 'retired', code: car.code, isPlayer: car.isPlayer, s: car.sim.sMeters });
+      if (car.isPlayer) this.phase = 'finished';
+    }
+    // Stopped for a while: the marshals take the car away (the player's own car stays where it is)
+    if (car.retired && car.ai && !car.removed && car.retiredAtS !== null && this.raceTimeS - car.retiredAtS > RETIRED_REMOVE_S && Math.abs(car.sim.vxMs) < 1) {
+      car.removed = true;
     }
   }
 
@@ -762,7 +946,7 @@ export class AiOpponentField {
     const L = this.track.totalLengthM;
     for (const car of this.cars) {
       const me = car.ai;
-      if (!me) continue;
+      if (!me || car.removed) continue;
       const sample = this.track.getSampleAtDistance(me.sMeters);
       const line = aiLineOffsetM(sample, me.racingLineId);
       const half = sample.width / 2 - 1.2;
@@ -785,7 +969,7 @@ export class AiOpponentField {
       let alongsideAhead: FieldCar | null = null;
       let squeezedBy: FieldCar | null = null;
       for (const other of this.cars) {
-        if (other === car) continue;
+        if (other === car || other.removed) continue;
         const ds = wrapHalf(other.sim.sMeters - me.sMeters, L);
         const dLat = other.sim.lateralOffsetM - me.lateralOffsetM;
         // Alongside: keep a car's width of room
@@ -897,27 +1081,43 @@ export class AiOpponentField {
   private resolveContacts(): void {
     const L = this.track.totalLengthM;
     for (let a = 0; a < this.cars.length; a++) {
+      if (this.cars[a].removed) continue;
       for (let b = a + 1; b < this.cars.length; b++) {
+        if (this.cars[b].removed) continue;
         const A = this.cars[a].sim;
         const B = this.cars[b].sim;
         const ds = wrapHalf(B.sMeters - A.sMeters, L);
         const dLat = B.lateralOffsetM - A.lateralOffsetM;
-        const overLong = CAR_LEN_M - Math.abs(ds);
-        const overLat = CAR_WID_M - Math.abs(dLat);
-        if (overLong <= 0 || overLat <= 0) continue;
 
-        // 3D OBB SAT contact with the off-centre yaw moment and energy loss; it separates and exchanges momentum on its
-        // own, so the track-coordinate push below is only the fallback for an overlap the boxes do not see
-        fillObb(A, _obbA);
-        fillObb(B, _obbB);
-        const hit = resolveCarToCarObbCollision(_obbA, _obbB);
-        this.noteContact(a, b);
-        if (hit.collided && A.applyRigidBodyCollision && B.applyRigidBodyCollision) {
-          applyObbDeltas(A, hit.posDeltaA, hit.velDeltaA, hit.yawDeltaA);
-          applyObbDeltas(B, hit.posDeltaB, hit.velDeltaB, hit.yawDeltaB);
+        if (A.applyRigidBodyCollision && B.applyRigidBodyCollision) {
+          // Broad phase in the world, not along the track: a car spun across the road is ~5 m wide in track terms
+          const dx = B.worldPosition.x - A.worldPosition.x;
+          const dz = B.worldPosition.z - A.worldPosition.z;
+          if (dx * dx + dz * dz > CONTACT_BROAD_M2 || Math.abs(B.worldPosition.y - A.worldPosition.y) > 2) continue;
+          // 3D OBB SAT contact with the off-centre yaw moment and energy loss
+          fillObb(A, _obbA);
+          fillObb(B, _obbB);
+          const hit = resolveCarToCarObbCollision(_obbA, _obbB);
+          if (!hit.collided) continue;
+          this.noteContact(a, b);
+          const yawCap = fieldContactYawCap(hit.impactSpeedMs);
+          const dvCap = fieldContactDvCap(hit.impactSpeedMs);
+          const stateA = this.cars[a].control ? this.controlState(this.cars[a]) : null;
+          const stateB = this.cars[b].control ? this.controlState(this.cars[b]) : null;
+          applyObbDeltas(A, hit.posDeltaA, hit.velDeltaA, hit.yawDeltaA, dvCap, yawCap);
+          this.afterContact(this.cars[a], _obbA, stateA, hit.impactSpeedMs, hit.contactX, hit.contactZ);
+          applyObbDeltas(B, hit.posDeltaB, hit.velDeltaB, hit.yawDeltaB, dvCap, yawCap);
+          this.afterContact(this.cars[b], _obbB, stateB, hit.impactSpeedMs, hit.contactX, hit.contactZ);
+          if (hit.impactSpeedMs > 0.5) this.reportContact(this.cars[a], this.cars[b], ds, hit.impactSpeedMs);
           continue;
         }
 
+        // A car without rigid-body contact: rectangles in track coordinates (side-by-side overlap pushes the cars
+        // apart laterally; a nose-to-tail hit exchanges speed, restitution 0.2)
+        const overLong = CAR_LEN_M - Math.abs(ds);
+        const overLat = CAR_WID_M - Math.abs(dLat);
+        if (overLong <= 0 || overLat <= 0) continue;
+        this.noteContact(a, b);
         if (overLat < overLong * 0.55) {
           const push = (overLat / 2 + 0.02) * (dLat >= 0 ? 1 : -1);
           A.lateralOffsetM -= push;
@@ -938,6 +1138,53 @@ export class AiOpponentField {
     }
   }
 
+  /**
+   * One car's side of a contact, after its deltas were applied (`_applied`): a knock big enough startles the driver,
+   * and the impact damages the car where it landed
+   */
+  private afterContact(car: FieldCar, box: RigidBodyCollisionCar, before: AiControlCarState | null, impactMs: number, cx: number, cz: number): void {
+    if (car.control && before) {
+      // The lateral part of the speed change, in the car's own frame (left = (fwdZ, −fwdX))
+      const dvLat = Math.abs(_applied.dvx * box.fwdZ - _applied.dvz * box.fwdX);
+      if (Math.abs(_applied.dyaw) > KNOCK_YAW_RADS || dvLat > KNOCK_LATERAL_MS || impactMs > 3) car.control.knock(before);
+    }
+    if (impactMs > 1) {
+      const local = worldToCarLocal(cx, cz, box.x, box.z, box.fwdX, box.fwdZ);
+      const report = car.damage.registerImpact({ localX: local.x, localZ: local.z, speedMs: impactMs, source: 'car' });
+      if (report) this.incidents.push({ kind: 'damage', code: car.code, isPlayer: car.isPlayer, report, source: 'car' });
+    }
+  }
+
+  /** The facts of a contact for race control's judgement: who was where, moving which way */
+  private reportContact(carA: FieldCar, carB: FieldCar, dsAB: number, impactMs: number): void {
+    // `a` is the car further back
+    const [back, front, ds] = dsAB >= 0 ? [carA, carB, dsAB] : [carB, carA, -dsAB];
+    const latSpeed = (sim: SimulatorCar) => {
+      const sample = this.track.getSampleAtDistance(sim.sMeters);
+      const v = sim.worldVelocity;
+      const b = sample.binormal;
+      const bl = Math.hypot(b.x, b.z) || 1;
+      if (v) return (v.x * b.x + v.z * b.z) / bl;
+      return 0;
+    };
+    this.incidents.push({
+      kind: 'contact',
+      a: back.code,
+      b: front.code,
+      aIsPlayer: back.isPlayer,
+      bIsPlayer: front.isPlayer,
+      impactMs,
+      dsM: ds,
+      aLatM: back.sim.lateralOffsetM,
+      bLatM: front.sim.lateralOffsetM,
+      aLatSpeedMs: latSpeed(back.sim),
+      bLatSpeedMs: latSpeed(front.sim),
+      aBraking: back.sim.telemetry.brake > 0.2,
+      bBraking: front.sim.telemetry.brake > 0.2,
+      s: back.sim.sMeters,
+    });
+  }
+
   /** Counts a touch between two cars once (a new one after 1 s apart) */
   private noteContact(ia: number, ib: number): void {
     const a = this.cars[ia];
@@ -953,21 +1200,31 @@ export class AiOpponentField {
     this.contactAt.set(key, this.raceTimeS);
   }
 
-  /** An AI car that has stopped (spun into the gravel, stalled against a wall) rejoins on its line */
+  /**
+   * A car stalled while racing (pinned against a wall, beached without a spin) stops and waits to rejoin like a spun
+   * one; one that cannot get going again (`AiCarControl.needsMarshal`) is put back on its line by the marshals once
+   * the road behind is clear
+   */
   private recoverStuckCars(dt: number): void {
     for (const car of this.cars) {
       const sim = car.ai;
-      if (!sim) continue;
-      car.stuckS = sim.vxMs < 2 || sim.telemetry.offTrack ? car.stuckS + dt : 0;
-      if (car.stuckS > 4) {
+      const ctl = car.control;
+      if (!sim || !ctl || car.retired) continue;
+      car.stuckS = ctl.mode === 'racing' && Math.abs(sim.vxMs) < 2 ? car.stuckS + dt : 0;
+      if (car.stuckS > 3) {
         car.stuckS = 0;
+        ctl.stall();
+      }
+      if (ctl.needsMarshal && this.clearBehind(car)) {
         const sample = this.track.getSampleAtDistance(sim.sMeters);
         const lineLat = aiLineOffsetM(sample, sim.racingLineId);
-        sim.teleportToDistance(sim.sMeters, Math.min(25, sample.optimalSpeedKmh / 3.6), lineLat);
+        sim.teleportToDistance(sim.sMeters, 0, lineLat);
         sim.lateralOffsetM = lineLat;
         car.biasM = 0;
         car.stats.stuckRecoveries++;
+        car.stats.marshalRecoveries++;
         car.learner?.interrupt();
+        ctl.marshalled();
       }
     }
   }
@@ -1019,6 +1276,7 @@ export class AiOpponentField {
       lastLapMs: c.lastLapMs,
       penaltyS: c.isPlayer ? this.playerPenaltyS : 0,
       compound: c.sim.tireCompound,
+      dnf: c.retired || undefined,
     };
   }
 
@@ -1144,9 +1402,27 @@ export class AiOpponentField {
     };
   }
 
+  /** One car's state by its code ('YOU' for the player): the driver's mode, damage, retirement, incidents */
+  public carInfo(code: string): {
+    mode: AiCarControl['mode'];
+    damage: CarDamage;
+    retired: boolean;
+    removed: boolean;
+    sim: SimulatorCar;
+    stats: AiCarStats;
+  } | null {
+    const c = this.cars.find((x) => x.code === code);
+    return c ? { mode: c.control?.mode ?? 'racing', damage: c.damage, retired: c.retired, removed: c.removed, sim: c.sim, stats: c.stats } : null;
+  }
+
+  /** The player's damage (for the HUD) */
+  public playerDamage(): CarDamage | null {
+    return this.cars.find((c) => c.isPlayer)?.damage ?? null;
+  }
+
   /** Render / HUD states of the AI cars (the player is drawn by the caller) */
   public peers(): InterpolatedPeerState[] {
-    return this.cars.filter((c) => !c.isPlayer).map((c) => c.peer);
+    return this.cars.filter((c) => !c.isPlayer && !c.removed).map((c) => c.peer);
   }
 
   /** Time penalties the player serves at the flag (track limits), in seconds */
@@ -1167,7 +1443,8 @@ export class AiOpponentField {
     const playerIdx = order.findIndex((c) => c.isPlayer);
     // A spectated (headless) field has no player: report on its leader
     const player = order[playerIdx] ?? leader;
-    const playerFinished = player.finishTimeS !== null;
+    // Out of the race counts as done: the classification shows the retirement
+    const playerFinished = player.finishTimeS !== null || player.retired;
     const final = playerFinished && classificationClosed(orderedProgress, this.raceTimeS);
     return {
       phase: this.phase,
@@ -1195,6 +1472,8 @@ export class AiOpponentField {
           gapToLeaderS: gapFloor,
           intervalS,
           finished: c.finishTimeS !== null,
+          retired: c.retired || undefined,
+          damage: c.damage.pristine ? undefined : Math.round(c.damage.overall * 100) / 100,
           bestLapMs: c.bestLapMs,
           lastLapMs: c.lastLapMs,
           trackS: lapPositionM(c.distM, L),
