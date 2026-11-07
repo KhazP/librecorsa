@@ -23,9 +23,12 @@ phase 5's tuner running. Approved decisions: §8.
   line and the nose finds the apex walls, and fast sweeps (the swimming pool) run wide. The field keeps its own
   drivers there.
 - **Spielberg inner:** no line is trackable yet.
-- **Lap-1 contact:** cars a few metres ahead follow the line across into a car overlapping them (Okayama turn 1).
-  Holding a car's width regardless of the line made it worse (cars pushed each other off), so I reverted that. It
-  needs corner ownership on the way in.
+- **Pile-ups (fixed):** a car stranded in the gravel drew every car behind it to the road edge and off; and a car
+  without the corner eased off too little to tuck in. Six VF26 races at Okayama and Spielberg: wall hits 62 → 0,
+  spins 24 → 3, retirements 8 → 0.
+- **Lap-1 contact:** at Okayama turn 1 the VF26 on pole bogs down off the line (its throttle is cut on wheelspin),
+  and the car beside it then moves across onto its line into it. Holding a car's width regardless of the line made
+  things worse (cars pushed each other off), so I reverted it.
 - **Late apex** at Spielberg s ≈ 2624 is 38 m early against the real line.
 - **GT3** has no real reference data.
 
