@@ -3,12 +3,18 @@ import { createGltfLoader } from "@/lib/render/gltf-loader";
 import { assetProgress } from "@/lib/loading/asset-progress";
 import { withBasePath } from "@/lib/base-path";
 import type { CarTelemetry } from "@/types/f1";
-import type { TyreVisualState } from "@/lib/sim/simulator-car";
 import type { SimCarRig } from "@/lib/car-builder-2026";
 import type { Vf26ModelInstance } from "@/lib/vf26-car-model";
 import { installTyreDeformation, type TyreDeformationHandle } from "@/lib/render/tyre-deformation";
 import { cleanPortedCarMaterial, sharpenCarMaps } from "@/lib/render/ported-car-materials";
-import { relativeMatrix, updateCorners, WHEEL_NODES, WHEEL_SIDES, type RigCorner } from "@/lib/render/corner-rig";
+import {
+  relativeMatrix,
+  updateCorners,
+  WHEEL_NODES,
+  WHEEL_SIDES,
+  type RigCorner,
+  type WheelSeating,
+} from "@/lib/render/corner-rig";
 import { singlePassTransparency } from "@/lib/render/static-scene";
 
 /**
@@ -289,7 +295,7 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
     _rollRad: number,
     wheelRotationRad: number,
     _dtSeconds?: number,
-    tyres?: readonly TyreVisualState[]
+    wheels?: WheelSeating
   ) => {
     // telemetry.steering = road-wheel angle / max angle, + = right; rotation.y + = left
     const roadWheel = -t.steering * maxRoadWheelRad;
@@ -298,7 +304,7 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
       steerPivot.quaternion.copy(steerRest);
       steerPivot.rotateZ(t.steering * steerLockRad);
     }
-    updateCorners(corners, roadWheel, wheelRotationRad, tyres);
+    updateCorners(corners, roadWheel, wheelRotationRad, wheels);
   };
 
   return {

@@ -5,12 +5,19 @@ import { assetProgress, type AssetTaskId } from "@/lib/loading/asset-progress";
 import { withBasePath } from "@/lib/base-path";
 import { AMG_GT3_CONFIG } from "@/lib/sim/gt3/AmgGt3Config";
 import type { CarTelemetry, LiveryConfig } from "@/types/f1";
-import type { TyreVisualState } from "@/lib/sim/simulator-car";
 import type { SimCarRig } from "@/lib/car-builder-2026";
 import type { Vf26CameraAnchor, Vf26ModelInstance } from "@/lib/vf26-car-model";
 import { installTyreDeformation, type TyreDeformationHandle } from "@/lib/render/tyre-deformation";
 import { applyLivery, collectPaintSlots, type PaintKeys, type PaintSlot } from "@/lib/render/livery-repaint";
-import { bakedCamberOf, relativeMatrix, updateCorners, WHEEL_NODES, WHEEL_SIDES, type RigCorner } from "@/lib/render/corner-rig";
+import {
+  bakedCamberOf,
+  relativeMatrix,
+  updateCorners,
+  WHEEL_NODES,
+  WHEEL_SIDES,
+  type RigCorner,
+  type WheelSeating,
+} from "@/lib/render/corner-rig";
 import { singlePassTransparency } from "@/lib/render/static-scene";
 
 /** Body paint material of the GT3 GLB and its factory colours (orange body, black graphics) */
@@ -431,7 +438,7 @@ export function createGt3CarRig(): SimCarRig {
     _rollRad: number,
     wheelRotationRad: number,
     _dtSeconds?: number,
-    tyres?: readonly TyreVisualState[]
+    wheels?: WheelSeating
   ) => {
     // telemetry.steering = road-wheel angle / max angle, + = right; rotation.y + = left
     const roadWheel = -t.steering * maxRoadWheelRad;
@@ -450,7 +457,7 @@ export function createGt3CarRig(): SimCarRig {
     if (indicators.tc) indicators.tc.visible = aids?.tcActive ?? false;
     if (indicators.tcLed) indicators.tcLed.visible = aids?.tcActive ?? false;
     if (indicators.limiter) indicators.limiter.visible = t.rpm >= ledBlinkRpm;
-    updateCorners(corners, roadWheel, wheelRotationRad, tyres);
+    updateCorners(corners, roadWheel, wheelRotationRad, wheels);
   };
 
   return {

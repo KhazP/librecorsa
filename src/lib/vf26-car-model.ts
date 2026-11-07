@@ -6,7 +6,6 @@ import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js
 import { withBasePath } from "@/lib/base-path";
 import { VF26_CHASSIS } from "@/lib/sim/vf26-data";
 import type { CarTelemetry, LiveryConfig, TireCompound } from "@/types/f1";
-import type { TyreVisualState } from "@/lib/sim/simulator-car";
 import {
   installTyreDeformation,
   setTyreDeformationMap,
@@ -16,7 +15,15 @@ import { applyRearRainLight } from "@/lib/render/golden-hour-environment";
 import { setVf26LiveryColours, upgradeVf26Materials } from "@/lib/render/car-materials";
 import { applyLivery, collectPaintSlots, type PaintKeys } from "@/lib/render/livery-repaint";
 import { moveToDriverHeadLayer } from "@/lib/render/layers";
-import { bakedCamberOf, relativeMatrix, updateCorners, WHEEL_NODES, WHEEL_SIDES, type RigCorner } from "@/lib/render/corner-rig";
+import {
+  bakedCamberOf,
+  relativeMatrix,
+  updateCorners,
+  WHEEL_NODES,
+  WHEEL_SIDES,
+  type RigCorner,
+  type WheelSeating,
+} from "@/lib/render/corner-rig";
 import { singlePassTransparency } from "@/lib/render/static-scene";
 
 /**
@@ -55,13 +62,8 @@ export interface Vf26ModelInstance {
     "cockpit" | "shoulder" | "tcam" | "dash" | "bumper" | "nearChase" | "farChase",
     Vf26CameraAnchor
   >;
-  /** `tyres` (FR, FL, RR, RL) drives the contact-patch / sidewall deformation; omitted = undeformed */
-  update: (
-    telemetry: CarTelemetry,
-    wheelRotationRad: number,
-    dtSeconds: number,
-    tyres?: readonly TyreVisualState[]
-  ) => void;
+  /** `wheels` drives the contact-patch / sidewall deformation and seats the wheels on the road; omitted = undeformed */
+  update: (telemetry: CarTelemetry, wheelRotationRad: number, dtSeconds: number, wheels?: WheelSeating) => void;
   /** Swap the tyre sidewall texture per compound */
   setTireCompound: (compound: TireCompound) => void;
   /** Livery colours for the masked paint */
@@ -371,11 +373,11 @@ export function attachVf26Model(
     t: CarTelemetry,
     wheelRotationRad: number,
     dtSeconds: number,
-    tyres?: readonly TyreVisualState[]
+    wheels?: WheelSeating
   ) => {
     // Front wheels: telemetry.steering = road-wheel angle / max angle, + = right. rotation.y + = left.
     const roadWheel = -t.steering * maxRoadWheelRad;
-    updateCorners(corners, roadWheel, wheelRotationRad, tyres);
+    updateCorners(corners, roadWheel, wheelRotationRad, wheels);
     if (steerBase) steerBase.rotation.z = t.steering * lockRad;
     if (driverMixer && steerAction) {
       steerAction.time = steerFrame(steerTable, t.steering * VF26_CHASSIS.steering.lockDeg) / driverFps;
