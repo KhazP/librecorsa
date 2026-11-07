@@ -250,8 +250,14 @@ for (const cc of CARS) {
     wheelLoadsN: [3500, 3500, 4000, 4000] as [number, number, number, number],
     wheelSlipRatios: [-0.05, -0.05, 0.06, 0.06] as [number, number, number, number],
   };
-  const withAlwaysOnBrake = triggerMagnitudes({ ...tel, wheelSlipRatios: [-0.05, -0.05, 0, 0] }, 0.1, { triggerSlipAlwaysOn: true });
-  const withoutAlwaysOnBrake = triggerMagnitudes({ ...tel, wheelSlipRatios: [-0.05, -0.05, 0, 0] }, 0.1, { triggerSlipAlwaysOn: false });
+  // Braking near the limit in a straight line: the brake trigger reads braking slip, not cornering slip
+  const braking = {
+    ...tel,
+    wheelSlipRatios: [-0.09, -0.09, -0.07, -0.07] as [number, number, number, number],
+    wheelSlipAnglesDeg: [1, 1, 1, 1] as [number, number, number, number],
+  };
+  const withAlwaysOnBrake = triggerMagnitudes(braking, 0.1, { triggerSlipAlwaysOn: true });
+  const withoutAlwaysOnBrake = triggerMagnitudes(braking, 0.1, { triggerSlipAlwaysOn: false });
   const withAlwaysOnThrottle = triggerMagnitudes({ ...tel, brake: 0 }, 0.1, { triggerSlipAlwaysOn: true });
   const withoutAlwaysOnThrottle = triggerMagnitudes({ ...tel, brake: 0 }, 0.1, { triggerSlipAlwaysOn: false });
   check(

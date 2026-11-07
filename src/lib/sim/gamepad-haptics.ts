@@ -342,7 +342,8 @@ const _triggerSlip = createAxleSlipSample();
  * Impulse-trigger magnitudes (0..1) for the car: the left trigger (brake) feels ABS / lock-up as a 20 Hz pulse,
  * the right trigger (throttle) feels wheelspin, and traction control as a 25 Hz pulse. With ABS (traction control)
  * off, the brake (throttle) trigger also buzzes lightly as the tyres approach their grip, firming up toward the peak,
- * so the player feels the limit coming before a lock-up or a spin; only one trigger buzzes at a time. Zero when there
+ * so the player feels the limit coming before a lock-up or a spin; only one trigger buzzes at a time. The brake
+ * trigger reads only the braking part of the tyres' slip, so cornering at the limit does not buzz it. Zero when there
  * is nothing to feel.
  */
 export function triggerMagnitudes(
@@ -381,7 +382,8 @@ export function triggerMagnitudes(
     const slip = axleSlipFromTelemetry(t, _triggerSlip);
     const wheelspin = Math.max(t.wheelSlipRatios[2], t.wheelSlipRatios[3]) > 0.02;
     if (left === 0 && (alwaysOn || aids?.absLevel === 0) && t.brake > 0.2 && !wheelspin) {
-      left = limitBuzz(slip.totalNdSlip + 0.15);
+      // Braking slip only: a car cornering at its limit while braking lightly is not about to lock a wheel
+      left = limitBuzz(slip.brakeNdSlip + 0.15);
     }
     if (right === 0 && (alwaysOn || aids?.tcLevel === 0) && t.throttle > 0.2 && wheelspin) {
       right = limitBuzz(slip.rearNdSlip - throttleSlipAllowance(t.speedKmh));
