@@ -59,6 +59,8 @@ export interface SimulatorCar {
   /** Optional visual tyre state per corner (FR, FL, RR, RL) for the GPU tyre deformation */
   readonly tyreVisuals?: readonly [TyreVisualState, TyreVisualState, TyreVisualState, TyreVisualState];
   readonly wheelbaseM: number;
+  /** Static height of the centre of gravity above the ground (m) */
+  readonly cgHeightM: number;
   readonly maxSteerAngleRad: number;
   /** Mass (kg) and yaw inertia (kg·m²) for car-to-car contact (absent: an F1 car's) */
   readonly contactMassKg?: number;

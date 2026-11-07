@@ -517,6 +517,9 @@ export class F12026CarSim implements SimulatorCar {
   /** The racing line this car follows (`CarSimProfile.racingLine`) */
   private readonly line: RacingLineId;
   public readonly wheelbaseM: number;
+  public get cgHeightM(): number {
+    return this.config.chassis.cgHeight;
+  }
 
   /**
    * Simulated time not yet stepped (s, under one 2 ms step). The renderer carries the pose forward by it: without it
