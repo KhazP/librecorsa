@@ -13,6 +13,9 @@
  *    `roughness` / `roughness wavelength`, but as a true wavelength in metres). Kerb serrations live here, so they
  *    are felt whatever the mesh density.
  *  - `vibration`: rumble gain for force feedback, haptics and audio (AC `VIBRATION_GAIN`).
+ *  - `maxRiseM`: for a raised surface (kerb, sausage), the most it may stand above the drivable surface beneath it;
+ *    any higher and the tyre rides at that height instead. Unlimited by default: the authored mesh is the kerb.
+ *    For converted meshes whose kerbs are modelled as solid blocks rather than a profile.
  *  - `validTrack`: counts as the track for track limits (AC `IS_VALID_TRACK`).
  *
  * A track can override any field per kind in `track_data.json` → `metadata.surfaceTable`.
@@ -28,23 +31,24 @@ export interface SurfaceProps {
   bumpLengthM: number;
   vibration: number;
   validTrack: boolean;
+  maxRiseM: number;
 }
 
 export type SurfaceTable = Record<TrackSurfaceKind, SurfaceProps>;
 export type SurfaceTableOverrides = Partial<Record<TrackSurfaceKind, Partial<SurfaceProps>>>;
 
 export const DEFAULT_SURFACE_TABLE: Readonly<SurfaceTable> = {
-  road: { friction: 1, wetFriction: 1, rollingResistance: 0, bumpHeightM: 0, bumpLengthM: 0, vibration: 0, validTrack: true },
+  road: { friction: 1, wetFriction: 1, rollingResistance: 0, bumpHeightM: 0, bumpLengthM: 0, vibration: 0, validTrack: true, maxRiseM: Infinity },
   // Serrated painted concrete: a 4 mm ripple every 0.65 m, slippery when wet
-  kerb: { friction: 0.96, wetFriction: 0.72, rollingResistance: 0.002, bumpHeightM: 0.004, bumpLengthM: 0.65, vibration: 1, validTrack: true },
-  sausage: { friction: 0.85, wetFriction: 0.7, rollingResistance: 0.01, bumpHeightM: 0, bumpLengthM: 0, vibration: 1, validTrack: false },
+  kerb: { friction: 0.96, wetFriction: 0.72, rollingResistance: 0.002, bumpHeightM: 0.004, bumpLengthM: 0.65, vibration: 1, validTrack: true, maxRiseM: Infinity },
+  sausage: { friction: 0.85, wetFriction: 0.7, rollingResistance: 0.01, bumpHeightM: 0, bumpLengthM: 0, vibration: 1, validTrack: false, maxRiseM: Infinity },
   // Painted asphalt run-off
-  runoff: { friction: 0.75, wetFriction: 0.85, rollingResistance: 0.002, bumpHeightM: 0, bumpLengthM: 0, vibration: 0.15, validTrack: false },
-  pitlane: { friction: 0.97, wetFriction: 0.95, rollingResistance: 0, bumpHeightM: 0, bumpLengthM: 0, vibration: 0, validTrack: true },
+  runoff: { friction: 0.75, wetFriction: 0.85, rollingResistance: 0.002, bumpHeightM: 0, bumpLengthM: 0, vibration: 0.15, validTrack: false, maxRiseM: Infinity },
+  pitlane: { friction: 0.97, wetFriction: 0.95, rollingResistance: 0, bumpHeightM: 0, bumpLengthM: 0, vibration: 0, validTrack: true, maxRiseM: Infinity },
   // Soft and uneven, and very slippery once wet
-  grass: { friction: 0.6, wetFriction: 0.55, rollingResistance: 0.04, bumpHeightM: 0.01, bumpLengthM: 2.4, vibration: 0.5, validTrack: false },
+  grass: { friction: 0.6, wetFriction: 0.55, rollingResistance: 0.04, bumpHeightM: 0.01, bumpLengthM: 2.4, vibration: 0.5, validTrack: false, maxRiseM: Infinity },
   // Loose stones: little grip, and the car ploughs in: about 0.5 g of drag at speed on top of what the tyres give
-  gravel: { friction: 0.45, wetFriction: 0.9, rollingResistance: 0.5, bumpHeightM: 0.008, bumpLengthM: 1.1, vibration: 0.8, validTrack: false },
+  gravel: { friction: 0.45, wetFriction: 0.9, rollingResistance: 0.5, bumpHeightM: 0.008, bumpLengthM: 1.1, vibration: 0.8, validTrack: false, maxRiseM: Infinity },
 };
 
 /** Contact-patch speed (m/s) at which a surface's plough drag is fully built: a crawling car can still drive out */

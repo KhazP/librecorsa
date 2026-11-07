@@ -195,9 +195,11 @@ export interface TrackMetaExtras {
   baseAltitudeM?: number;
   /**
    * `roadMaterials`: the scan's racing-surface materials (build_track.py), drawn with the asphalt shader;
-   * `cutBoxes` / `cutMaterials`: scan geometry standing on the racing line, left out at load (scenery-cuts.ts)
+   * `cutBoxes` / `cutMaterials`: scan geometry standing on the racing line, left out at load (scenery-cuts.ts);
+   * `conformSurfaces`: the off-road collider bands and the visual road are fitted to `Track_Surface_Road` at load
+   * (TrackColliderQuery.ts), for converted circuits whose surfaces don't meet the road edge as exported
    */
-  mesh?: { url?: string; roadMaterials?: string[]; cutBoxes?: SceneryCutBox[]; cutMaterials?: string[] };
+  mesh?: { url?: string; roadMaterials?: string[]; cutBoxes?: SceneryCutBox[]; cutMaterials?: string[]; conformSurfaces?: boolean };
   credit?: { title: string; author: string; url: string; short?: string; license: string; licenseUrl: string };
   /** Per-kind overrides of the default surface table (track-surfaces.ts) */
   surfaceTable?: SurfaceTableOverrides;
