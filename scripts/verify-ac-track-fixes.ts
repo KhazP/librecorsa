@@ -9,11 +9,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { F1Physics2026 } from '../src/lib/f1-physics-2026';
+import { F12026_CAR_CONFIG } from '../src/lib/sim/f12026-car/F12026CarConfig';
 import { F12026CarSim } from '../src/lib/sim/f12026-car/F12026CarSim';
 import { createGroundHit, TrackColliderQuery, TrackWallQuery } from '../src/lib/sim/f12026-car/TrackColliderQuery';
 import { createAmgGt3Sim } from '../src/lib/sim/gt3/AmgGt3Sim';
 import { getActiveTrackData, type RawTrackJson, setActiveTrack } from '../src/lib/track-data';
 import { loadGlbGeometry } from './lib/glb-geometry';
+import { measurePortedWheelContact, type PortedWheelExtras } from './lib/ported-wheel-contact';
 
 const ROOT = path.resolve(__dirname, '..');
 
@@ -350,10 +352,76 @@ async function verifyKerbsFeelAndSound() {
   }
 }
 
+async function verifyTrackEdgeContinuityAndPortedWheelSeating() {
+  console.log('\n=== 4. Verifying Kerb/Edge Step Continuity & Ported F1 Wheel Seating ===');
+  const { getActiveSurfaceTable } = await import('../src/lib/track-data');
+  for (const tid of ['suzuka', 'spa', 'spielberg', 'monaco', 'okayama', 'chang']) {
+    const { raw, root } = loadTrack(tid);
+    const ground = TrackColliderQuery.fromTrackRoot(root, getActiveSurfaceTable());
+    const hit = createGroundHit();
+    let stepCliffs = 0;
+    const n = raw.samples.length;
+    for (let i = 0; i < n; i++) {
+      const s0 = raw.samples[i];
+      const s1 = raw.samples[(i + 1) % n];
+      const sm = raw.samples[(i - 1 + n) % n];
+      const tx = s1.p[0] - sm.p[0];
+      const tz = s1.p[2] - sm.p[2];
+      const tl = Math.hypot(tx, tz) || 1;
+      const rx = -tz / tl;
+      const rz = tx / tl;
+      const hw = s0.w * 0.5;
+      for (const side of [-1, 1] as const) {
+        const wDist = side < 0 ? (s0.wL ?? 45) : (s0.wR ?? 45);
+        const maxOff = Math.min(hw + 3.0, wDist - 0.35);
+        let prevY: number | null = null;
+        for (let d = hw - 0.8; d <= maxOff; d += 0.1) {
+          const x = s0.p[0] + rx * side * d;
+          const z = s0.p[2] + rz * side * d;
+          if (!ground.query(x, z, s0.p[1] + 2.0, hit)) {
+            prevY = null;
+            continue;
+          }
+          if (prevY !== null && Math.abs(hit.height - prevY) > 0.045) {
+            stepCliffs++;
+          }
+          prevY = hit.height;
+        }
+      }
+    }
+    assert.equal(stepCliffs, 0, `[${tid}] Expected 0 lateral kerb/edge step cliffs (>45 mm / 0.1 m), got ${stepCliffs}`);
+    console.log(`PASS  [${tid}] 0 lateral kerb/edge step cliffs across all ${n} samples`);
+  }
+
+  const carExtras: Record<string, PortedWheelExtras> = {};
+  for (const cid of ['sf26', 'f2004']) {
+    const gltf = readGlbJson(path.join(ROOT, 'public', 'cars', cid, 'model', `${cid}.glb`));
+    const carNode = gltf.nodes.find((nd: { name?: string }) => nd.name === 'CAR');
+    carExtras[cid] = carNode.extras as PortedWheelExtras;
+  }
+
+  for (const tid of ['spielberg', 'monaco']) {
+    const { track, root } = loadTrack(tid);
+    const ground = TrackColliderQuery.fromTrackRoot(root, getActiveSurfaceTable());
+    const sim = new F12026CarSim(track, root);
+    const res = measurePortedWheelContact(sim, ground, carExtras, F12026_CAR_CONFIG.chassis, 15);
+    for (const [cid, r] of Object.entries(res)) {
+      assert.ok(
+        Math.abs(r.minMm) < 1.0 && Math.abs(r.maxMm) < 1.0,
+        `[${tid}/${cid}] Expected ported wheel contact within ±1.0 mm of collider, got [${r.minMm.toFixed(2)}, ${r.maxMm.toFixed(2)}] mm`
+      );
+      console.log(
+        `PASS  [${tid}/${cid}] wheel contact [${r.minMm.toFixed(2)} .. +${r.maxMm.toFixed(2)}] mm (body-frame without corner seating: [${r.bodyFrameMinMm.toFixed(1)} .. +${r.bodyFrameMaxMm.toFixed(1)}] mm)`
+      );
+    }
+  }
+}
+
 async function main() {
   await verifyOkayamaMaterialsAndDecalIsolation();
   await verifyMonacoBarrierHitboxes();
   await verifyKerbsFeelAndSound();
+  await verifyTrackEdgeContinuityAndPortedWheelSeating();
   console.log('\nALL AC TRACK FIX VERIFICATIONS PASSED.');
 }
 

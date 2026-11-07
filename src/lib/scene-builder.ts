@@ -16,6 +16,7 @@ import { applySceneryDetail, prepareTreeGeometry, sceneryKind, setSceneryTime } 
 import { attachSceneryInstances, loadSceneryInstances, resetSceneryInstances } from "@/lib/render/scenery-instances";
 import { applySceneryTextures, loadSceneryTextures } from "@/lib/render/scenery-textures";
 import { cleanScanMaterial } from "@/lib/render/scan-materials";
+import { trackGroundQuery } from "@/lib/sim/f12026-car/F12026CarSim";
 import { createGroundHit, type GroundQuery } from "@/lib/sim/f12026-car/TrackColliderQuery";
 import { OVERLAY_LAYER } from "@/lib/render/layers";
 import { cutSceneryBoxes, isCutMaterialMesh, type SceneryCutBox } from "@/lib/scenery-cuts";
@@ -193,6 +194,7 @@ function loadTrackGlb(
       const box = new THREE.Box3();
       const size = new THREE.Vector3();
       root.updateMatrixWorld(true);
+      trackGroundQuery(root);
       root.traverse((obj) => {
         // Exported node extras land on the node; the mesh child inherits nothing, so walk up.
         let node: THREE.Object3D | null = obj;

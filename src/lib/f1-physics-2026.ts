@@ -511,10 +511,38 @@ export class F1Physics2026 {
   public wheelRotationRad = 0;
   /** Visual tyre state per corner (FR, FL, RR, RL), refreshed at the end of each `step()`. Read-only for consumers. */
   public readonly tyreVisuals: [TyreVisualState, TyreVisualState, TyreVisualState, TyreVisualState] = [
-    { loadedRadiusM: 0, verticalDeflectionM: 0, lateralForceN: 0, camberRad: 0 },
-    { loadedRadiusM: 0, verticalDeflectionM: 0, lateralForceN: 0, camberRad: 0 },
-    { loadedRadiusM: 0, verticalDeflectionM: 0, lateralForceN: 0, camberRad: 0 },
-    { loadedRadiusM: 0, verticalDeflectionM: 0, lateralForceN: 0, camberRad: 0 },
+    {
+      loadedRadiusM: 0,
+      verticalDeflectionM: 0,
+      lateralForceN: 0,
+      camberRad: 0,
+      contactInCar: { x: 0, y: 0, z: 0 },
+      roadHeightAtCorner: (xInCar, zInCar) => this.evalCornerRoadHeightInCar(0, xInCar, zInCar),
+    },
+    {
+      loadedRadiusM: 0,
+      verticalDeflectionM: 0,
+      lateralForceN: 0,
+      camberRad: 0,
+      contactInCar: { x: 0, y: 0, z: 0 },
+      roadHeightAtCorner: (xInCar, zInCar) => this.evalCornerRoadHeightInCar(1, xInCar, zInCar),
+    },
+    {
+      loadedRadiusM: 0,
+      verticalDeflectionM: 0,
+      lateralForceN: 0,
+      camberRad: 0,
+      contactInCar: { x: 0, y: 0, z: 0 },
+      roadHeightAtCorner: (xInCar, zInCar) => this.evalCornerRoadHeightInCar(2, xInCar, zInCar),
+    },
+    {
+      loadedRadiusM: 0,
+      verticalDeflectionM: 0,
+      lateralForceN: 0,
+      camberRad: 0,
+      contactInCar: { x: 0, y: 0, z: 0 },
+      roadHeightAtCorner: (xInCar, zInCar) => this.evalCornerRoadHeightInCar(3, xInCar, zInCar),
+    },
   ];
 
   // Lap & sector timing
@@ -1058,6 +1086,8 @@ export class F1Physics2026 {
       groundCache.set(root, ground);
     }
     this.ground = ground ?? undefined;
+    this.syncWorldTransform();
+    this.updateTyreVisuals();
   }
 
   /** Barrier walls to collide with; none = the track data's per-sample barrier lines */
@@ -1144,6 +1174,9 @@ export class F1Physics2026 {
 
   /** Copies the last sub-step's tyre state into `tyreVisuals` (no physics state is written) */
   private updateTyreVisuals(): void {
+    const sample = this.track.getSampleAtDistance(this.sMeters);
+    const carUp = this.localRoadUp(sample);
+    const invUpY = 1 / Math.max(0.5, carUp.y);
     for (let i = 0; i < 4; i++) {
       const w = this.wheels[i];
       const out = this.tyreVisuals[i];
@@ -1151,7 +1184,35 @@ export class F1Physics2026 {
       out.verticalDeflectionM = tyreVerticalDeflection(w.tyre, w.fzN);
       out.lateralForceN = w.fnN;
       out.camberRad = w.camberLeftRad;
+      const c = out.contactInCar!;
+      c.x = w.staticPos.y;
+      c.z = w.staticPos.x;
+      if (this.ground) {
+        c.y = this.evalCornerRoadHeightInCar(i, c.x, c.z);
+      } else {
+        c.y = (w.zRoad + w.surfaceBumpM - w.worldPos.y) * invUpY;
+      }
     }
+  }
+
+  private evalCornerRoadHeightInCar(k: number, xInCar: number, zInCar: number): number {
+    const w = this.wheels[k];
+    if (!this.ground) {
+      return this.tyreVisuals[k].contactInCar?.y ?? 0;
+    }
+    const e = _basis.makeRotationFromQuaternion(this.worldQuaternion).elements;
+    const lx = e[0], ly = e[1], lz = e[2];
+    const ux = e[4], uy = e[5], uz = e[6];
+    const fx = e[8], fy = e[9], fz = e[10];
+    const wx = this.worldPosition.x + lx * xInCar + fx * zInCar;
+    const wy0 = this.worldPosition.y + ly * xInCar + fy * zInCar;
+    const wz = this.worldPosition.z + lz * xInCar + fz * zInCar;
+    if (!this.ground.query(wx, wz, wy0 + 0.6, _groundHit)) {
+      return (w.zRoad + w.surfaceBumpM - wy0) / Math.max(0.5, uy);
+    }
+    void ux;
+    void uz;
+    return (_groundHit.height - wy0) / Math.max(0.5, uy);
   }
 
   /**
@@ -1328,6 +1389,7 @@ export class F1Physics2026 {
       shiftUp: false,
       shiftDown: false,
     });
+    this.updateTyreVisuals();
   }
 
   private overallRatio(gear: number): number {
@@ -3154,7 +3216,12 @@ export class F1Physics2026 {
 
   private syncWorldTransform(): void {
     const sample = this.track.getSampleAtDistance(this.sMeters);
-    const exactGroundY = evaluateSampleLateralHeightM(sample, this.lateralOffsetM);
+    let exactGroundY = evaluateSampleLateralHeightM(sample, this.lateralOffsetM);
+    if (this.ground && this.ground.query(this.worldX, this.worldZ, exactGroundY + 0.6, _groundHit)) {
+      if (Math.abs(_groundHit.height - exactGroundY) < 0.5) {
+        exactGroundY = _groundHit.height;
+      }
+    }
     this.worldPosition.set(this.worldX, exactGroundY, this.worldZ);
 
     const carUp = this.localRoadUp(sample);

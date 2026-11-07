@@ -39,6 +39,11 @@ export interface TyreVisualState {
    * heave, pitch and roll. Absent: the car frame's origin plane is the road under the wheels.
    */
   contactInCar?: { x: number; y: number; z: number };
+  /**
+   * Optional exact car-frame road height (m) at a rig corner's own `(x, z)` in the car frame, used when a 3D car
+   * model's wheelbase or track width differs from the physics vehicle's on cambered/sloped/kerbed surfaces.
+   */
+  roadHeightAtCorner?: (xInCar: number, zInCar: number) => number;
 }
 
 export interface SimulatorCar {

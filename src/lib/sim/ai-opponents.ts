@@ -1051,6 +1051,21 @@ export class AiOpponentField {
     const p = car.peer;
     p.position.copy(sim.worldPosition);
     p.quaternion.copy(sim.worldQuaternion);
+    const tv = sim.tyreVisuals;
+    if (tv && tv[0].contactInCar && tv[1].contactInCar && tv[2].contactInCar && tv[3].contactInCar) {
+      const roadLiftM =
+        0.25 *
+        (tv[0].contactInCar.y + tv[1].contactInCar.y + tv[2].contactInCar.y + tv[3].contactInCar.y);
+      if (Math.abs(roadLiftM) > 1e-5) {
+        const q = sim.worldQuaternion;
+        const upX = 2 * (q.x * q.y - q.w * q.z);
+        const upY = 1 - 2 * (q.x * q.x + q.z * q.z);
+        const upZ = 2 * (q.y * q.z + q.w * q.x);
+        p.position.x += upX * roadLiftM;
+        p.position.y += upY * roadLiftM;
+        p.position.z += upZ * roadLiftM;
+      }
+    }
     p.linearVelocity.set(sim.vyMs, 0, sim.vxMs).applyQuaternion(sim.worldQuaternion);
     p.steerAngle = sim.steerAngleNorm * 0.36;
     for (let i = 0; i < 4; i++) p.wheelRPMs[i] = sim.wheels[i].spinVel * 9.549296;

@@ -41,6 +41,11 @@ export interface RigCorner {
  * 0 (the car frame's origin plane) when the vehicle model gives no contacts.
  */
 export function cornerRoadHeight(corner: RigCorner, tyres?: readonly TyreVisualState[]): number {
+  const idx = corner.isFront ? (corner.isLeft ? 1 : 0) : corner.isLeft ? 3 : 2;
+  const own = tyres?.[idx];
+  if (own?.roadHeightAtCorner) {
+    return own.roadHeightAtCorner(corner.steer.position.x, corner.steer.position.z);
+  }
   const front = tyres?.[corner.isLeft ? 1 : 0]?.contactInCar;
   const rear = tyres?.[corner.isLeft ? 3 : 2]?.contactInCar;
   if (!front || !rear) return 0;
