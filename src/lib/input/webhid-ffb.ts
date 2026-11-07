@@ -651,6 +651,8 @@ export type PidSetupResult = SetupResult<PidSession>;
 export interface PidSetupOptions {
   deps?: FfbDeps;
   onFail?: (message: string, fatal: boolean) => void;
+  /** The device's layout when the caller has parsed it already */
+  layout?: PidLayout;
 }
 
 /* ------------------------------------------------------------------------------------------------------------ */
@@ -713,6 +715,8 @@ export const PID_QUIRKS: readonly { vendorId: number; productId: number; name: s
 export function pidProfileFor(device: Pick<HidDeviceLike, "vendorId" | "productId">): PidProfile {
   return PID_QUIRKS.find((q) => q.vendorId === device.vendorId && q.productId === device.productId)?.profile ?? GENERIC_PID_PROFILE;
 }
+
+const NO_PID_MESSAGE = "This device does not expose HID PID force feedback (no Set Constant Force / Effect Operation report)";
 
 function sendOutput(device: HidDeviceLike, layout: PidReportLayout, values: Record<number, number>): Promise<void> {
   const r = buildReport(layout, values);
@@ -905,14 +909,8 @@ function startLoopCount(layout: PidLayout, profile: PidProfile): number {
 export async function setupPidDevice(device: HidDeviceLike, options: PidSetupOptions = {}): Promise<PidSetupResult> {
   const deps = options.deps ?? defaultFfbDeps;
   const profile = pidProfileFor(device);
-  const layout = parsePidLayout(device.collections);
-  if (!layout) {
-    return {
-      ok: false,
-      unsupported: true,
-      message: "This device does not expose HID PID force feedback (no Set Constant Force / Effect Operation report)",
-    };
-  }
+  const layout = options.layout ?? parsePidLayout(device.collections);
+  if (!layout) return { ok: false, unsupported: true, message: NO_PID_MESSAGE };
   const forceField = getField(layout.constantForce, PID.MAGNITUDE);
   const startValue = getField(layout.effectOperation, PID.EFFECT_OPERATION);
   const start = startValue ? selectorValue(startValue, PID.OP_EFFECT_START) : null;
@@ -1200,25 +1198,34 @@ const LOGITECH_MESSAGE =
  */
 export const IDLE_ZERO_MS = 250;
 
-function hasOutputReports(collections: readonly HidCollectionLike[]): boolean {
-  for (const c of collections) {
-    if ((c.outputReports && c.outputReports.length > 0) || hasOutputReports(c.children ?? [])) return true;
-  }
-  return false;
-}
+/** A device this driver can drive, and how (the PID layout is parsed once, here) */
+type FfbPick =
+  | { kind: "pid"; device: HidDeviceLike; layout: PidLayout }
+  | { kind: "logitech-classic"; device: HidDeviceLike; model: LogitechClassicModel };
 
 /**
- * Multi-interface wheels (e.g. PXN V99) return an input/button HIDDevice alongside a separate FFB output HIDDevice.
- * Pick: 1) first interface with a valid PID layout, 2) first interface with outputReports (or Logitech vendorId),
- * 3) `devices[0]` when `allowFallback` is true (so connect() reports unsupported on a non-FFB pick).
+ * The interface to drive among the HIDDevices a pick or a grant returned (a wheel may list an input-only interface
+ * next to its force-feedback one): the first with a HID PID layout, else the first listed classic Logitech wheel with
+ * lg4ff's output report. Null when there is none, e.g. only a DualSense, a gamepad or a HID++ wheel.
  */
-function pickFfbDevice(devices: readonly HidDeviceLike[], allowFallback: boolean): HidDeviceLike | undefined {
-  return (
-    devices.find((d) => parsePidLayout(d.collections) !== null) ??
-    devices.find((d) => hasOutputReports(d.collections)) ??
-    devices.find((d) => d.vendorId === LOGITECH_VENDOR_ID) ??
-    (allowFallback ? devices[0] : undefined)
-  );
+function pickFfbDevice(devices: readonly HidDeviceLike[]): FfbPick | null {
+  for (const device of devices) {
+    const layout = parsePidLayout(device.collections);
+    if (layout) return { kind: "pid", device, layout };
+  }
+  for (const device of devices) {
+    const model = logitechClassicModel(device.vendorId, device.productId);
+    if (model && lg4ffOutputReport(device.collections)) return { kind: "logitech-classic", device, model };
+  }
+  return null;
+}
+
+/** Why a picked device cannot be driven */
+function unsupportedMessage(device: HidDeviceLike): string {
+  const model = logitechClassicModel(device.vendorId, device.productId);
+  if (model) return `This ${model.name} interface has no 7-byte output report for force feedback`;
+  if (device.vendorId === LOGITECH_VENDOR_ID) return LOGITECH_MESSAGE;
+  return NO_PID_MESSAGE;
 }
 
 function deviceName(d: HidDeviceLike): string {
@@ -1269,10 +1276,10 @@ export class WebHidFfb {
   connect(): Promise<string | null> {
     const hid = this.hidApi();
     if (!hid) return Promise.resolve(this.fail("unsupported", null, UNSUPPORTED_BROWSER));
-    let picking: Promise<{ device: HidDeviceLike | undefined } | { error: string }>;
+    let picking: Promise<{ devices: HidDeviceLike[] } | { error: string }>;
     try {
       picking = hid.requestDevice({ filters: REQUEST_FILTERS }).then(
-        (d) => ({ device: pickFfbDevice(d, true) }),
+        (devices) => ({ devices }),
         (e: unknown) => ({ error: errorMessage(e) })
       );
     } catch (e) {
@@ -1285,19 +1292,24 @@ export class WebHidFfb {
         await this.release();
         return this.fail("error", null, picked.error);
       }
-      if (!picked.device) {
+      const first = picked.devices[0];
+      if (!first) {
         if (this.session && this.device) return deviceName(this.device);
         this.setStatus("idle", null, "No wheel was selected");
         return null;
       }
+      const pick = pickFfbDevice(picked.devices);
       await this.release();
-      return this.attach(hid, picked.device);
+      if (!pick) return this.fail("unsupported", deviceName(first), unsupportedMessage(first));
+      return this.attach(hid, pick);
     }, true);
   }
 
   /**
    * Re-opens a wheel the user granted earlier, without a prompt (page load); null when there is none, with the status
-   * asking for a Connect click ({@link PAIR_MESSAGE}). Never shows the picker. A running wheel is kept.
+   * asking for a Connect click ({@link PAIR_MESSAGE}). Only a device {@link pickFfbDevice} accepts is opened: any
+   * other granted device (a DualSense, a HID++ wheel) leaves the driver idle, not failed. Never shows the picker. A
+   * running wheel is kept.
    */
   reconnect(): Promise<string | null> {
     return this.guard(async () => {
@@ -1310,14 +1322,14 @@ export class WebHidFfb {
       } catch (e) {
         return this.fail("error", null, errorMessage(e));
       }
-      const found = pickFfbDevice(devices, false);
-      if (!found) {
+      const pick = pickFfbDevice(devices);
+      if (!pick) {
         this.setStatus("idle", null, PAIR_MESSAGE);
         return null;
       }
       await this.release();
-      this.setStatus("connecting", deviceName(found), null);
-      return this.attach(hid, found);
+      this.setStatus("connecting", deviceName(pick.device), null);
+      return this.attach(hid, pick);
     });
   }
 
@@ -1396,7 +1408,8 @@ export class WebHidFfb {
     return p;
   }
 
-  private async attach(hid: HidApiLike, device: HidDeviceLike): Promise<string | null> {
+  private async attach(hid: HidApiLike, pick: FfbPick): Promise<string | null> {
+    const { device } = pick;
     const name = deviceName(device);
     this.setStatus("connecting", name, null);
     const options: LogitechClassicSetupOptions = {
@@ -1409,13 +1422,10 @@ export class WebHidFfb {
         }
       },
     };
-    const pid = parsePidLayout(device.collections) !== null;
-    const model = pid ? null : logitechClassicModel(device.vendorId, device.productId);
-    const result: SetupResult<FfbSession> = model
-      ? await setupLogitechClassicDevice(device, model, options)
-      : !pid && device.vendorId === LOGITECH_VENDOR_ID
-        ? { ok: false, unsupported: true, message: LOGITECH_MESSAGE }
-        : await setupPidDevice(device, options);
+    const result: SetupResult<FfbSession> =
+      pick.kind === "pid"
+        ? await setupPidDevice(device, { ...options, layout: pick.layout })
+        : await setupLogitechClassicDevice(device, pick.model, options);
     if (!result.ok) {
       try {
         if (device.opened) await device.close();
