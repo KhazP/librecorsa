@@ -503,7 +503,7 @@ async function asyncChecks() {
     console.log(`  ok  WebHID kerb buzz plays at ${hz.toFixed(1)} Hz (40 Hz synthesised), not aliased to the frame rate`);
   }
 
-  // Tactile synthesis plays on a straight when f === 0, and covers front slip scrub, grass/gravel, and suspension bump kicks
+  // The grass rumble plays on a straight, with no steering torque to carry it
   {
     const c = new WheelFfbClient();
     const out: number[] = [];
@@ -539,9 +539,9 @@ async function asyncChecks() {
     await new Promise((r) => setTimeout(r, 20));
     c.stop();
     const nonZero = out.slice(0, -1).some((v) => Math.abs(v) > 0.005);
-    assert.ok(nonZero, 'tactile vibrations play even when steering rack torque f === 0');
+    assert.ok(nonZero, 'the grass rumble plays with no steering torque');
     passed++;
-    console.log('  ok  WebHID tactile synthesis plays on a straight (f === 0) for slip scrub, grass/gravel, and road bumps');
+    console.log('  ok  WebHID grass rumble plays on a straight (no steering torque)');
   }
 
   // Hardware damper integration forwards speed-scaled damper and reduces software damping by 70%
