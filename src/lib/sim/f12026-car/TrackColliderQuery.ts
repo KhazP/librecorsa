@@ -48,10 +48,9 @@ const DEFAULT_UV_SCALE_M = 6;
 
 /** Surfaces allowed to raise the contact above the road collider */
 const RAISED_SURFACES: ReadonlySet<TrackSurfaceKind> = new Set(['kerb', 'sausage']);
-/** Swept visual surfaces a car drives on (everything tagged but coarse terrain grass) */
+/** Swept visual surfaces a car drives on (the grass too on fitted circuits; kerbs and sausages rise above them) */
 const DRIVABLE_SURFACES: ReadonlySet<TrackSurfaceKind> = new Set(['road', 'runoff', 'pitlane', 'gravel']);
 const SURFACE_MATCH_M = 0.05;
-/** Maximum physical step height of a standard kerb / sausage kerb above the underlying road/verge surface (m) */
 const CELL_SIZE_M = 4;
 
 export interface GroundHit {
@@ -244,7 +243,6 @@ function closestPointOnTriXZ(
  * without vertical steps or wall-foot spikes.
  */
 export function conformTrackSurfaceColliders(root: THREE.Object3D): void {
-  if (root.userData?.__collidersConformed) return;
   root.updateMatrixWorld(true);
   const roadMeshes: THREE.Mesh[] = [];
   const offroadMeshes: { mesh: THREE.Mesh; kind: string }[] = [];
@@ -262,7 +260,6 @@ export function conformTrackSurfaceColliders(root: THREE.Object3D): void {
     }
   });
   if (roadMeshes.length === 0 || offroadMeshes.length === 0) {
-    root.userData = { ...root.userData, __collidersConformed: true };
     return;
   }
 
@@ -319,7 +316,6 @@ export function conformTrackSurfaceColliders(root: THREE.Object3D): void {
   }
   const numT = rTris.length / 9;
   if (numT === 0) {
-    root.userData = { ...root.userData, __collidersConformed: true };
     return;
   }
 
@@ -438,14 +434,23 @@ export function conformTrackSurfaceColliders(root: THREE.Object3D): void {
     string,
     { yPlane: number; dOut: number; edgeX: number; edgeY: number; edgeZ: number; bnx: number; bny: number; bnz: number } | null
   >();
+  const world = new THREE.Vector3();
+  const toLocal = new THREE.Matrix4();
   for (const { mesh, kind } of offroadMeshes) {
     const geom = mesh.geometry as THREE.BufferGeometry;
     const pos = geom.getAttribute('position') as THREE.BufferAttribute;
     if (!pos) continue;
+    toLocal.copy(mesh.matrixWorld).invert();
+    /** Writes a world-space vertex back into the mesh's own space (the road triangles are in world space) */
+    const put = (i: number, wx: number, wy: number, wz: number) => {
+      world.set(wx, wy, wz).applyMatrix4(toLocal);
+      pos.setXYZ(i, world.x, world.y, world.z);
+    };
     for (let i = 0; i < pos.count; i++) {
-      const x = pos.getX(i);
-      const y = pos.getY(i);
-      const z = pos.getZ(i);
+      world.fromBufferAttribute(pos, i).applyMatrix4(mesh.matrixWorld);
+      const x = world.x;
+      const y = world.y;
+      const z = world.z;
       const key = `${Math.round(x * 20)},${Math.round(y * 5)},${Math.round(z * 20)}`;
       let r = cache.get(key);
       if (r === undefined) {
@@ -464,18 +469,17 @@ export function conformTrackSurfaceColliders(root: THREE.Object3D): void {
             -0.65 * dOutExt,
             0.65 * dOutExt
           );
-          pos.setXYZ(i, nx, r.edgeY + dyExt, nz);
+          put(i, nx, r.edgeY + dyExt, nz);
         } else {
-          pos.setY(i, r.yPlane);
+          put(i, x, r.yPlane, z);
         }
       } else {
         const maxDev = r.dOut <= 0.35 ? 0.002 : Math.min(0.08, 0.015 * (r.dOut - 0.35));
-        pos.setY(i, THREE.MathUtils.clamp(y, r.yPlane - maxDev, r.yPlane + maxDev));
+        put(i, x, THREE.MathUtils.clamp(y, r.yPlane - maxDev, r.yPlane + maxDev), z);
       }
     }
     pos.needsUpdate = true;
   }
-  root.userData = { ...root.userData, __collidersConformed: true };
 }
 
 export class TrackColliderQuery implements GroundQuery {
@@ -556,10 +560,7 @@ export class TrackColliderQuery implements GroundQuery {
       if (this.layers.length >= 255) throw new Error('TrackColliderQuery: too many layers');
       const li = this.layers.length;
       const isTagged = !!(src.surface ?? tagged);
-      const drivable =
-        isTagged &&
-        !RAISED_SURFACES.has(surface) &&
-        (DRIVABLE_SURFACES.has(surface) || (fitted && surface === 'grass' && src.object.name !== 'Terrain'));
+      const drivable = isTagged && (DRIVABLE_SURFACES.has(surface) || (fitted && surface === 'grass'));
       this.layers.push({ name: src.object.name, isRoadCollider, surface, grip, props, tagged: isTagged, drivable, uvScaleM });
 
       src.object.updateWorldMatrix(true, true);

@@ -18,15 +18,11 @@ const FIT_WINDOW_M = 0.32;
 /** Decals and grooves sit this far above the road they are laid on (m) */
 const OVERLAY_LIFT_M = 0.002;
 
-const fitted = new WeakSet<THREE.Object3D>();
-
 /**
  * Lays a converted circuit's visual road (`Track_Model`) onto its fitted ground, so the drawn road follows the
  * colliders across crests and compressions and the wheels sit on what the player sees. Grass is left as modelled.
  */
 export function fitVisualRoad(root: THREE.Object3D, ground: GroundQuery): void {
-  if (fitted.has(root)) return;
-  fitted.add(root);
   const tm = root.getObjectByName("Track_Model");
   if (!tm) return;
   root.updateMatrixWorld(true);
