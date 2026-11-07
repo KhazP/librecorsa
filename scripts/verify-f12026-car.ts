@@ -160,6 +160,27 @@ const track = getActiveTrackData();
   check('Centreline: every sample hits road', misses === 0 && roadHits === track.samples.length, `${roadHits}/${track.samples.length}, max |Δy| ${fmt(maxDy, 3)} m`);
   check('4 m past the right edge reads its own surface', Object.keys(offEdge).length > 1 && runoff > 0, JSON.stringify(offEdge));
 
+  // The tyres ride the kerbs and sausages as modelled: probed at their own vertices, the ground is the mesh's height
+  // (less the kerb ripple), not a capped stand-in
+  const v = new THREE.Vector3();
+  for (const [name, surface] of [['Track_Kerbs', 'kerb'], ['Track_Kerbs_Sausage', 'sausage']] as const) {
+    let probed = 0;
+    let onSurface = 0;
+    let maxBelowMm = 0;
+    trackRoot.getObjectByName(name)?.traverse((o) => {
+      if (!(o instanceof THREE.Mesh)) return;
+      const pos = o.geometry.getAttribute('position');
+      for (let i = 0; i < pos.count; i++) {
+        v.fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld);
+        if (!colliders.query(v.x, v.z, v.y + 0.3, hit)) continue;
+        probed++;
+        if (hit.surface === surface) onSurface++;
+        maxBelowMm = Math.max(maxBelowMm, (v.y - hit.height) * 1000);
+      }
+    });
+    check(`${name}: the ground reaches the modelled ${surface} tops`, probed > 100 && maxBelowMm < 5, `${probed} vertices, deepest ${fmt(maxBelowMm, 1)} mm below the mesh, ${onSurface} read '${surface}'`);
+  }
+
   const q0 = performance.now();
   let n = 0;
   for (let k = 0; k < 200_000; k++) {

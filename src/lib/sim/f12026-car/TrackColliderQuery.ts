@@ -8,12 +8,14 @@
  *    `Track_Asphalt_Road` (road, 1.0), `Track_Kerbs` (kerb), `Track_Kerbs_Sausage` (sausage),
  *    `Track_Runoff_Paint` (runoff, 0.75), `Track_Pitlane` (pitlane), `Terrain` (grass).
  *
- * Height comes from the highest drivable visual surface under the wheel (road, kerb, sausage, run-off,
- * pit lane, gravel): those are swept at the full sample resolution, so they carry the real vertical
- * curves. The road collider (one row every 6 m, three points across) only fills in where no drivable
- * surface exists, with kerbs and sausages still allowed above it; failing both, the highest tagged surface
- * (terrain) is used. The surface / grip of a contact is the top-most tagged surface within
- * `SURFACE_MATCH_M` of the contact height, falling back to the contact layer's own tags.
+ * Height comes from the highest drivable visual surface under the wheel (road, run-off, pit lane, gravel): those
+ * are swept at the full sample resolution, so they carry the real vertical curves. The road collider (one row every
+ * 6 m, three points across) fills in where no drivable surface exists, or where the only one lies more than 0.5 m
+ * under it (the road beneath a bridge). A kerb or sausage above that ground carries the wheel at its modelled height,
+ * up to its surface's `maxRiseM`; failing all of these, the highest tagged surface (terrain) is used. The surface /
+ * grip of a contact is the top-most tagged surface within `SURFACE_MATCH_M` of the contact height, falling back to
+ * the contact layer's own tags. Converted circuits built with `conformSurfaces` fit their off-road bands to the
+ * road first, and then also drive on their grass and let a kerb fitted just under the road name the surface.
  *
  * Queries are vertical rays (the wheels probe straight down), answered from a uniform XZ grid of
  * world-space triangles, so a query costs a cell lookup plus a handful of 2D triangle tests.
@@ -47,11 +49,9 @@ const DEFAULT_UV_SCALE_M = 6;
 /** Surfaces allowed to raise the contact above the road collider */
 const RAISED_SURFACES: ReadonlySet<TrackSurfaceKind> = new Set(['kerb', 'sausage']);
 /** Swept visual surfaces a car drives on (everything tagged but coarse terrain grass) */
-const DRIVABLE_SURFACES: ReadonlySet<TrackSurfaceKind> = new Set(['road', 'kerb', 'sausage', 'runoff', 'pitlane', 'gravel']);
+const DRIVABLE_SURFACES: ReadonlySet<TrackSurfaceKind> = new Set(['road', 'runoff', 'pitlane', 'gravel']);
 const SURFACE_MATCH_M = 0.05;
 /** Maximum physical step height of a standard kerb / sausage kerb above the underlying road/verge surface (m) */
-const MAX_KERB_RISE_M = 0.026;
-const MAX_SAUSAGE_RISE_M = 0.068;
 const CELL_SIZE_M = 4;
 
 export interface GroundHit {
@@ -503,8 +503,12 @@ export class TrackColliderQuery implements GroundQuery {
    * Build from the loaded track root: `Track_Collider_Road` plus every node tagged `userData.surface`.
    * Throws when the road collider is missing.
    */
-  static fromTrackRoot(root: THREE.Object3D, table: SurfaceTable = DEFAULT_SURFACE_TABLE): TrackColliderQuery {
-    conformTrackSurfaceColliders(root);
+  static fromTrackRoot(
+    root: THREE.Object3D,
+    table: SurfaceTable = DEFAULT_SURFACE_TABLE,
+    options: { conformSurfaces?: boolean } = {}
+  ): TrackColliderQuery {
+    if (options.conformSurfaces) conformTrackSurfaceColliders(root);
     root.updateMatrixWorld(true);
     const sources: ColliderLayerSource[] = [];
     const found: { road?: THREE.Object3D } = {};
@@ -514,12 +518,23 @@ export class TrackColliderQuery implements GroundQuery {
     });
     if (!found.road) throw new Error('TrackColliderQuery: Track_Collider_Road not found under the track root');
     sources.unshift({ object: found.road, isRoadCollider: true });
-    const out = new TrackColliderQuery(sources, table);
-    out.conformVisualRoad(root);
-    return out;
+    return new TrackColliderQuery(sources, table, options);
   }
 
-  constructor(sources: ColliderLayerSource[], table: SurfaceTable = DEFAULT_SURFACE_TABLE) {
+  /**
+   * The surfaces were fitted to the road (`conformSurfaces`): every tagged mesh is ground the tyres can follow, and a
+   * kerb fitted a touch under the road (within `SURFACE_MATCH_M`) still carries the wheel and names the surface.
+   * Unfitted, the road collider's band is the ground next to the road and the top-most surface names it.
+   */
+  private readonly fitted: boolean;
+
+  constructor(
+    sources: ColliderLayerSource[],
+    table: SurfaceTable = DEFAULT_SURFACE_TABLE,
+    options: { conformSurfaces?: boolean } = {}
+  ) {
+    const fitted = options.conformSurfaces === true;
+    this.fitted = fitted;
     this.layers = [];
     const tri: number[] = [];
     const layerOf: number[] = [];
@@ -544,7 +559,7 @@ export class TrackColliderQuery implements GroundQuery {
       const drivable =
         isTagged &&
         !RAISED_SURFACES.has(surface) &&
-        (DRIVABLE_SURFACES.has(surface) || (surface === 'grass' && src.object.name !== 'Terrain'));
+        (DRIVABLE_SURFACES.has(surface) || (fitted && surface === 'grass' && src.object.name !== 'Terrain'));
       this.layers.push({ name: src.object.name, isRoadCollider, surface, grip, props, tagged: isTagged, drivable, uvScaleM });
 
       src.object.updateWorldMatrix(true, true);
@@ -824,9 +839,8 @@ export class TrackColliderQuery implements GroundQuery {
     let normalU: number;
     let normalV: number;
     if (baseT >= 0) {
-      if (raisedT >= 0 && raisedH >= baseH - SURFACE_MATCH_M && raisedH <= baseH + 0.6) {
-        const raisedLayer = this.layers[this.triLayer[raisedT]];
-        const maxRise = raisedLayer.surface === 'sausage' ? MAX_SAUSAGE_RISE_M : MAX_KERB_RISE_M;
+      if (raisedT >= 0 && raisedH >= baseH - (this.fitted ? SURFACE_MATCH_M : 0) && raisedH <= baseH + 0.6) {
+        const maxRise = this.layers[this.triLayer[raisedT]].props.maxRiseM;
         contactT = raisedT;
         contactH = Math.min(Math.max(baseH, raisedH), baseH + maxRise);
         contactU = raisedU;
@@ -869,7 +883,7 @@ export class TrackColliderQuery implements GroundQuery {
       return false;
     }
 
-    // Classify: top-most tagged surface near the contact height (preferring raised kerb/sausage layers), else the contact layer itself
+    // Classify: top-most tagged surface near the contact height (on fitted surfaces a kerb or sausage first), else the contact layer itself
     let bestTagT = -1;
     let bestTagH = -Infinity;
     let bestTagRaised = false;
@@ -880,7 +894,7 @@ export class TrackColliderQuery implements GroundQuery {
     } else {
       for (let i = 0; i < tagCount; i++) {
         if (Math.abs(tagH[i] - contactH) <= SURFACE_MATCH_M) {
-          const isRaised = RAISED_SURFACES.has(this.layers[this.triLayer[tagT[i]]].surface);
+          const isRaised = this.fitted && RAISED_SURFACES.has(this.layers[this.triLayer[tagT[i]]].surface);
           if ((isRaised && !bestTagRaised) || (isRaised === bestTagRaised && tagH[i] > bestTagH)) {
             bestTagH = tagH[i];
             bestTagT = tagT[i];

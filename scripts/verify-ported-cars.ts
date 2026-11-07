@@ -11,7 +11,8 @@ import { join } from "node:path";
 import { carById, CARS, isCarId, type CarId } from "../src/lib/cars/car-registry";
 import { carPhysics, carTakesPhysicsSwitch } from "../src/lib/cars/f1-mod-physics";
 import { getActiveTrackData } from "../src/lib/track-data";
-import { F12026CarSim, trackGroundQuery } from "../src/lib/sim/f12026-car/F12026CarSim";
+import { F12026CarSim } from "../src/lib/sim/f12026-car/F12026CarSim";
+import { trackColliders } from "../src/lib/sim/track-colliders";
 import { F12026_CAR_CONFIG } from "../src/lib/sim/f12026-car/F12026CarConfig";
 import { loadGlbGeometry } from "./lib/glb-geometry";
 import {
@@ -308,7 +309,7 @@ console.log("\nWheels on the road while driving (rigid-body model, Rwanda collid
 {
   const track = getActiveTrackData(1200);
   const trackRoot = loadGlbGeometry(`public${track.meshUrl ?? "/tracks/rwanda/rwanda_2026.glb"}`);
-  const ground = trackGroundQuery(trackRoot);
+  const ground = trackColliders(trackRoot).ground;
   check("Rwanda track colliders load", !!ground);
   const contact = measurePortedWheelContact(
     new F12026CarSim(track, trackRoot),

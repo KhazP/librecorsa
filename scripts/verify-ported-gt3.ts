@@ -13,7 +13,7 @@ import { AMG_GT3_SOUND } from "../src/lib/sim/gt3/AmgGt3Sim";
 import { loadGlbGeometry } from "./lib/glb-geometry";
 import { gt3RigCameraAnchors } from "../src/lib/gt3-car-model";
 import { getActiveTrackData } from "../src/lib/track-data";
-import { trackGroundQuery } from "../src/lib/sim/f12026-car/F12026CarSim";
+import { trackColliders } from "../src/lib/sim/track-colliders";
 import { createAmgGt3Sim } from "../src/lib/sim/gt3/AmgGt3Sim";
 import { AMG_GT3_CONFIG } from "../src/lib/sim/gt3/AmgGt3Config";
 import {
@@ -294,7 +294,7 @@ for (const spec of PORTED_GT3_SPEC) {
   console.log(`\n=== 3. Wheels on the road while driving (AMG GT3 model, Rwanda colliders) ===`);
   const track = getActiveTrackData(1200);
   const trackRoot = loadGlbGeometry(resolve(process.cwd(), `public${track.meshUrl ?? "/tracks/rwanda/rwanda_2026.glb"}`));
-  const ground = trackGroundQuery(trackRoot);
+  const ground = trackColliders(trackRoot).ground;
   check("Rwanda track colliders load", Boolean(ground));
   if (ground) {
     const contact = measurePortedWheelContact(createAmgGt3Sim(track, trackRoot), ground, wheelExtras, AMG_GT3_CONFIG.chassis, WHEEL_CONTACT_RUN_S);

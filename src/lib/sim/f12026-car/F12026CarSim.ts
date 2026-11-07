@@ -63,14 +63,8 @@ import {
   type PerformanceModeName,
   type TyresCompoundData,
 } from './F12026CarConfig';
-import {
-  createGroundHit,
-  type GroundHit,
-  type GroundQuery,
-  TrackColliderQuery,
-  type TrackSurfaceKind,
-  TrackWallQuery,
-} from './TrackColliderQuery';
+import { createGroundHit, type GroundHit, type GroundQuery, type TrackSurfaceKind } from './TrackColliderQuery';
+import { trackColliders } from '../track-colliders';
 import { type VehicleEvent, type VehicleInputs, VehiclePhysics } from './VehiclePhysics';
 import { KERB_PROFILE_L, kerbProfileM, surfaceRippleM } from '../track-surfaces';
 
@@ -496,29 +490,6 @@ export class TrackSampleGroundQuery implements GroundQuery {
   }
 }
 
-/** The drivable-surface query of a loaded track root (shared with the cars), or null when it has no colliders */
-export function trackGroundQuery(root: THREE.Object3D): TrackColliderQuery | null {
-  return collidersFor(root)?.ground ?? null;
-}
-
-/** Colliders built once per loaded track root and shared by every f12026-car */
-const colliderCache = new WeakMap<THREE.Object3D, { ground: TrackColliderQuery; walls: TrackWallQuery } | null>();
-
-function collidersFor(root: THREE.Object3D) {
-  if (!colliderCache.has(root)) {
-    try {
-      colliderCache.set(root, {
-        ground: TrackColliderQuery.fromTrackRoot(root, getActiveSurfaceTable()),
-        walls: TrackWallQuery.fromTrackRoot(root),
-      });
-    } catch (err) {
-      console.warn('f12026-car: track colliders unavailable, staying on the sample ground', err);
-      colliderCache.set(root, null);
-    }
-  }
-  return colliderCache.get(root) ?? null;
-}
-
 interface AdapterWheel extends SimulatorWheel {
   brakeTempC: number;
 }
@@ -791,8 +762,8 @@ export class F12026CarSim implements SimulatorCar {
 
   /** Where the road under this car's track colliders really ends (null on the sample ground) */
   private autopilotEdges(): AutopilotEdges | null {
-    const c = this.onColliders && this.trackRoot ? collidersFor(this.trackRoot) : null;
-    return c ? autopilotEdges(this.track, c.ground) : null;
+    const ground = this.onColliders && this.trackRoot ? trackColliders(this.trackRoot).ground : null;
+    return ground ? autopilotEdges(this.track, ground) : null;
   }
 
   /** The autopilot's own limit speed along the lap (m/s, every 5 m): what AI tuning scales */
@@ -810,11 +781,11 @@ export class F12026CarSim implements SimulatorCar {
   /** Switch to the GLB's road / surface colliders and barriers (no-op when they cannot be built) */
   public attachTrackRoot(root: THREE.Object3D): void {
     this.trackRoot = root;
-    const c = collidersFor(root);
-    if (!c) return;
+    const { ground, walls } = trackColliders(root);
+    if (!ground) return;
     const wasOn = this.onColliders;
-    this.vehicle.setGround(c.ground);
-    this.vehicle.setWalls(c.walls);
+    this.vehicle.setGround(ground);
+    this.vehicle.setWalls(walls);
     this.onColliders = true;
     // A car at rest is re-seated on the collider heights; a moving one rides over the (small) step
     if (!wasOn && this.vehicle.speedMs < 0.5) {
@@ -1789,15 +1760,15 @@ export class F12026CarSim implements SimulatorCar {
     const yInterp = Math.abs(span) > 0.5 ? front.y + ((zInCar - front.z) * (front.y - rear.y)) / span : k < 2 ? front.y : rear.y;
     const w = this.vehicle.wheels[VF_ORDER[k]];
     if (!(w.deflection > 0) || !this.onColliders || !this.trackRoot) return yInterp;
-    const col = collidersFor(this.trackRoot);
-    if (!col) return yInterp;
+    const ground = trackColliders(this.trackRoot).ground;
+    if (!ground) return yInterp;
     _ey.set(0, 1, 0).applyQuaternion(this.worldQuaternion);
     const upY = Math.max(0.5, _ey.y);
     _v.set(xInCar, yInterp, zInCar).applyQuaternion(this.worldQuaternion).add(this.worldPosition);
-    if (!col.ground.query(_v.x, _v.z, _v.y + 0.6, _hit)) return yInterp;
+    if (!ground.query(_v.x, _v.z, _v.y + 0.6, _hit)) return yInterp;
     let yInCar = yInterp + (_hit.height - _v.y) / upY;
     _v.set(xInCar, yInCar, zInCar).applyQuaternion(this.worldQuaternion).add(this.worldPosition);
-    if (col.ground.query(_v.x, _v.z, _v.y + 0.6, _hit)) {
+    if (ground.query(_v.x, _v.z, _v.y + 0.6, _hit)) {
       yInCar += (_hit.height - _v.y) / upY;
     }
     return yInCar;

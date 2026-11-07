@@ -11,7 +11,8 @@ import path from 'node:path';
 import { F1Physics2026 } from '../src/lib/f1-physics-2026';
 import { F12026_CAR_CONFIG } from '../src/lib/sim/f12026-car/F12026CarConfig';
 import { F12026CarSim } from '../src/lib/sim/f12026-car/F12026CarSim';
-import { createGroundHit, TrackColliderQuery, TrackWallQuery } from '../src/lib/sim/f12026-car/TrackColliderQuery';
+import { createGroundHit, TrackWallQuery } from '../src/lib/sim/f12026-car/TrackColliderQuery';
+import { trackColliders } from '../src/lib/sim/track-colliders';
 import { createAmgGt3Sim } from '../src/lib/sim/gt3/AmgGt3Sim';
 import { getActiveTrackData, type RawTrackJson, setActiveTrack } from '../src/lib/track-data';
 import { loadGlbGeometry } from './lib/glb-geometry';
@@ -196,10 +197,9 @@ async function verifyMonacoBarrierHitboxes() {
 
 async function verifyKerbsFeelAndSound() {
   console.log('\n=== 3. Verifying Kerb Mesh Coverage, Zero Buried Triangles, Feel & Acoustics ===');
-  const { getActiveSurfaceTable } = await import('../src/lib/track-data');
   for (const tid of ['chang', 'okayama', 'okayama_piper', 'spielberg', 'spielberg_south', 'monaco']) {
     const { raw, track, root } = loadTrack(tid);
-    const ground = TrackColliderQuery.fromTrackRoot(root, getActiveSurfaceTable());
+    const ground = trackColliders(root).ground!;
     const hit = createGroundHit();
 
     // Verify Track_Surface_Kerb triangles are never buried under Track_Surface_Runoff or Track_Collider_Road
@@ -354,10 +354,11 @@ async function verifyKerbsFeelAndSound() {
 
 async function verifyTrackEdgeContinuityAndPortedWheelSeating() {
   console.log('\n=== 4. Verifying Kerb/Edge Step Continuity & Ported F1 Wheel Seating ===');
-  const { getActiveSurfaceTable } = await import('../src/lib/track-data');
-  for (const tid of ['suzuka', 'spa', 'spielberg', 'monaco', 'okayama', 'chang']) {
+  // The converted circuits' surfaces are fitted to their road at load (metadata.mesh.conformSurfaces), which is what
+  // closes these steps; the other circuits keep their modelled kerb and verge edges
+  for (const tid of ['spielberg', 'monaco', 'okayama', 'chang']) {
     const { raw, root } = loadTrack(tid);
-    const ground = TrackColliderQuery.fromTrackRoot(root, getActiveSurfaceTable());
+    const ground = trackColliders(root).ground!;
     const hit = createGroundHit();
     let stepCliffs = 0;
     const n = raw.samples.length;
@@ -402,7 +403,7 @@ async function verifyTrackEdgeContinuityAndPortedWheelSeating() {
 
   for (const tid of ['spielberg', 'monaco']) {
     const { track, root } = loadTrack(tid);
-    const ground = TrackColliderQuery.fromTrackRoot(root, getActiveSurfaceTable());
+    const ground = trackColliders(root).ground!;
     const sim = new F12026CarSim(track, root);
     const res = measurePortedWheelContact(sim, ground, carExtras, F12026_CAR_CONFIG.chassis, 15);
     for (const [cid, r] of Object.entries(res)) {

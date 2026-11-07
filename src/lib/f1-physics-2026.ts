@@ -68,12 +68,11 @@ import {
   createGroundHit,
   createWallHit,
   type GroundQuery,
-  TrackColliderQuery,
-  TrackWallQuery,
   wallPenetration,
   type WallQuery,
   wallSweep,
 } from './sim/f12026-car/TrackColliderQuery';
+import { trackColliders } from './sim/track-colliders';
 import { createWingRuntimes, VF26_CG_HEIGHT_M, type WingRuntime, wingAngleDeg } from './sim/vf26-aero';
 import {
   coldPressureFor,
@@ -193,9 +192,6 @@ const WALL_LINE_DEFAULT_RUNOFF_M = 5.8;
 
 type TrackProjection = ReturnType<BuiltTrackData['projectWorldToTrack']>;
 
-/** Barrier walls and ground colliders built once per loaded track root and shared by every VF26 */
-const wallCache = new WeakMap<THREE.Object3D, WallQuery>();
-const groundCache = new WeakMap<THREE.Object3D, GroundQuery | null>();
 const _wallHit = createWallHit();
 const _groundHit = createGroundHit();
 // Scratch reused by the 500 Hz / 2 kHz steps instead of allocating (single-threaded; read, never kept)
@@ -1064,22 +1060,8 @@ export class F1Physics2026 {
 
   /** Collide with the loaded track GLB's barrier walls (`Track_Collider_Wall_*`) and 3D kerb surfaces (`Track_Surface_Kerb`) */
   public attachTrackRoot(root: THREE.Object3D): void {
-    let walls = wallCache.get(root);
-    if (!walls) {
-      walls = TrackWallQuery.fromTrackRoot(root);
-      wallCache.set(root, walls);
-    }
+    const { ground, walls } = trackColliders(root);
     this.setWalls(walls.segments.length > 0 ? walls : undefined);
-
-    let ground = groundCache.get(root);
-    if (ground === undefined) {
-      try {
-        ground = TrackColliderQuery.fromTrackRoot(root, getActiveSurfaceTable());
-      } catch {
-        ground = null;
-      }
-      groundCache.set(root, ground);
-    }
     this.ground = ground ?? undefined;
     this.syncWorldTransform();
     this.updateTyreVisuals();
