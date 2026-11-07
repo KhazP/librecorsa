@@ -18,13 +18,13 @@ Steady-state lateral force against slip angle at four loads. The force rises alm
 
 <sub>Data: [tyre-fy-vs-slip-gt3.csv](tyre-fy-vs-slip-gt3.csv)</sub>
 
-**FA-26 Rigid-Body (f12026-car)**, soft (C3) front
+**F1 2026 Rigid-Body (f12026-car)**, soft (C3) front
 
 ![tyre-fy-vs-slip-f12026](tyre-fy-vs-slip-f12026.svg)
 
 <sub>Data: [tyre-fy-vs-slip-f12026.csv](tyre-fy-vs-slip-f12026.csv)</sub>
 
-**FA-26 Prototype (VF26)**, soft front
+**F1 2026 Prototype (VF26)**, soft front
 
 ![tyre-fy-vs-slip-vf26](tyre-fy-vs-slip-vf26.svg)
 

@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 420" width="720" height="420" role="img" aria-labelledby="t d">
-<title id="t">FA-26 Prototype (VF26): lateral force vs slip angle</title>
-<desc id="d">Steady-state lateral force of the soft front tyre of the FA-26 Prototype (VF26) against slip angle at 2, 4, 6 and 8 kN vertical load. Each curve rises to a peak near 6.7 degrees and falls off gently past it; heavier loads give more force but less per newton (load sensitivity).</desc>
+<title id="t">F1 2026 Prototype (VF26): lateral force vs slip angle</title>
+<desc id="d">Steady-state lateral force of the soft front tyre of the F1 2026 Prototype (VF26) against slip angle at 2, 4, 6 and 8 kN vertical load. Each curve rises to a peak near 6.7 degrees and falls off gently past it; heavier loads give more force but less per newton (load sensitivity).</desc>
 <style>
 svg{--surface:#fcfcfb;--ink:#0b0b0b;--ink2:#52514e;--muted:#898781;--grid:#e1e0d9;--axis:#c3c2b7;--s1:#2a78d6;--s2:#eb6834;--s3:#1baf7a;--r1:#86b6ef;--r2:#3987e5;--r3:#1c5cab;--r4:#0d366b;--mutedSeries:#898781;font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
 @media (prefers-color-scheme: dark){svg{--surface:#1a1a19;--ink:#f0efec;--ink2:#c3c2b7;--muted:#898781;--grid:#2c2c2a;--axis:#383835;--s1:#3987e5;--s2:#d95926;--s3:#199e70;--r1:#1c5cab;--r2:#3987e5;--r3:#86b6ef;--r4:#cde2fb;--mutedSeries:#898781;}}
@@ -10,7 +10,7 @@ svg{--surface:#fcfcfb;--ink:#0b0b0b;--ink2:#52514e;--muted:#898781;--grid:#e1e0d
 .grid{stroke:var(--grid);stroke-width:1}.base{stroke:var(--axis);stroke-width:1}
 </style>
 <rect width="720" height="420" rx="8" fill="var(--surface)"/>
-<text class="ttl" x="64" y="28">FA-26 Prototype (VF26): lateral force vs slip angle</text>
+<text class="ttl" x="64" y="28">F1 2026 Prototype (VF26): lateral force vs slip angle</text>
 <text class="sub" x="64" y="48">Soft front at its optimum temperature and pressure, no camber; dot = peak</text>
 <line x1="64" y1="70" x2="80" y2="70" stroke="var(--r1)" stroke-width="2" stroke-linecap="round"/>
 <text class="leg" x="86" y="74">2 kN</text>
