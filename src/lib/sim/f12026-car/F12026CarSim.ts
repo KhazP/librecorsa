@@ -6,8 +6,10 @@
  * loaded (`attachTrackRoot`); until then (or when it never loads) a ground built from the track samples'
  * lateral height profiles, without barriers.
  *
- * DRS uses the circuit's `ZoneData_DRSZone`s: the flap only opens inside a zone after crossing its
- * detection point (with `drsEligibility` saying yes), and closes on the brake or a lift.
+ * The flaps open in the circuit's `ZoneData_DRSZone`s and close on the brake or a lift, by the car's era
+ * (`overtaking-rules.ts`): a 2026 car opens both flaps in every zone and earns Overtake Mode within 1 s at the
+ * detection point; an older car opens the rear flap alone, in a race only once race control (`raceControl`) says it
+ * was within 1 s at that zone's detection point.
  */
 import {
   BRAKE_DUCT_STEP,
@@ -45,6 +47,7 @@ import {
   RWANDA_DRS_ZONES,
 } from '@/lib/track-data';
 import { SteeringAssist } from '../steering-assist';
+import { type OvertakingRaceControl, type OvertakingRules, OvertakeGrant } from '../overtaking-rules';
 import { type AxleSlipSample, axleSlip, createAxleSlipSample, createWheelSlip } from '../tyre-slip';
 import type { AeroWakeState } from '../aero-wake';
 import type { TrackEvolutionSample } from '../track-evolution';
@@ -590,8 +593,11 @@ export class F12026CarSim implements SimulatorCar {
   public readonly steeringAssist = new SteeringAssist();
   /** DRS is driver-operated on the f12026-car (and absent on a GT3) */
   public autoXMode = false;
-  /** Asked at each DRS detection point (e.g. within 1 s of the car ahead); null = always eligible */
-  public drsEligibility: ((zoneId: string) => boolean) | null = null;
+  /** Race control for the overtaking aids (the 1 s and lap rules); null = practice, the aids are free */
+  public raceControl: OvertakingRaceControl | null = null;
+  /** The car's era: 2026 Straight Mode + Overtake Mode, or rear-flap DRS (`setOvertakingRules`) */
+  private rules: OvertakingRules = 'straight-mode-2026';
+  private readonly overtake = new OvertakeGrant();
 
   private readonly track: BuiltTrackData;
   private trackRoot: THREE.Object3D | null = null;
@@ -730,7 +736,7 @@ export class F12026CarSim implements SimulatorCar {
         this.progressHintS = p.s;
         return p.s / L;
       },
-      drsEligibleAtDetection: (zone) => (this.drsEligibility ? this.drsEligibility(zone.id) : true),
+      drsEligibleAtDetection: (zone) => (this.raceControl?.racing ? this.raceControl.earnedAtDetection(zone.id) : true),
       onEvent: (e) => this.onVehicleEvent(e),
     });
     const v = this.vehicle;
@@ -778,7 +784,25 @@ export class F12026CarSim implements SimulatorCar {
   public createAiPeerCar(): F12026CarSim {
     const peer = new F12026CarSim(this.track, this.trackRoot, this.profile);
     peer.aiAutoTyres = true;
+    peer.setOvertakingRules(this.rules);
     return peer;
+  }
+
+  get overtakingRules(): OvertakingRules | undefined {
+    return this.profile.hasDrs ? this.rules : undefined;
+  }
+
+  /** The overtaking aids of the car's era: both flaps in every zone + Overtake (2026), or the rear flap by the 1 s rule */
+  public setOvertakingRules(rules: OvertakingRules): void {
+    this.rules = rules;
+    this.vehicle.drsFlaps = rules === 'drs-rear' ? 'rear' : 'front-rear';
+    this.vehicle.drsGatedByDetection = rules === 'drs-rear';
+    this.overtake.reset();
+  }
+
+  /** 2026 Overtake Mode (the override): usable now — always in practice, in a race once earned at the detection point */
+  private get overtakeAvailable(): boolean {
+    return this.rules !== 'straight-mode-2026' || this.overtake.available(this.raceControl);
   }
 
   /** Switch to the GLB's road / surface colliders and barriers (no-op when they cannot be built) */
@@ -1095,9 +1119,9 @@ export class F12026CarSim implements SimulatorCar {
     this.applyColdPressures();
   }
 
-  /** Push mode (PSH) for 8 s */
+  /** Push mode (PSH) for 8 s; on a 2026 car in a race only with Overtake Mode earned */
   public activateBoostOverride(): boolean {
-    if (this.profile.hasErs && this.vehicle.ersEnergyJ > 200_000 && this.boostCooldownS <= 0) {
+    if (this.profile.hasErs && this.overtakeAvailable && this.vehicle.ersEnergyJ > 200_000 && this.boostCooldownS <= 0) {
       this.boostRemainingS = BOOST_S;
       return true;
     }
@@ -1265,8 +1289,15 @@ export class F12026CarSim implements SimulatorCar {
       this.boostRemainingS = Math.max(0, this.boostRemainingS - dtSeconds);
       if (this.boostRemainingS === 0) this.boostCooldownS = BOOST_COOLDOWN_S;
     }
-    const push = this.profile.hasErs && (inputs.manualOverride || this.boostRemainingS > 0) && v.ersEnergyJ > 0;
+    // 2026: the override is Overtake Mode, earned in a race within 1 s at the detection point for the lap after it
+    // (with its extra energy); an AI car spends it in the zones, where it overtakes
+    const overtakeOk = this.overtakeAvailable;
+    if (!overtakeOk) this.boostRemainingS = 0;
+    const aiOvertake = this.aiAutopilot && this.rules === 'straight-mode-2026' && !!this.raceControl?.racing && overtakeOk && v.telemetry.drsZone;
+    const push = this.profile.hasErs && overtakeOk && (inputs.manualOverride || this.boostRemainingS > 0 || aiOvertake) && v.ersEnergyJ > 0;
     v.setPerformanceMode(push ? 'PSH' : this.userErsMode);
+    v.extraDeployJ = this.rules === 'straight-mode-2026' ? this.overtake.extraDeployJ(this.raceControl) : 0;
+    const progressBefore = v.trackProgress;
 
     const slices = Math.max(1, Math.ceil(dtSeconds / AID_SLICE_S - 1e-9));
     const h = dtSeconds / slices;
@@ -1294,6 +1325,9 @@ export class F12026CarSim implements SimulatorCar {
         this.lastAxMs2 = dvx.dot(_ez.set(0, 0, 1).applyQuaternion(v.quaternion)) / stepS;
         this.lastAyMs2 = dvx.dot(_ex.set(1, 0, 0).applyQuaternion(v.quaternion)) / stepS;
       }
+    }
+    if (this.rules === 'straight-mode-2026' && this.profile.hasDrs) {
+      this.overtake.observe(progressBefore, v.trackProgress, RWANDA_DRS_ZONES, this.raceControl);
     }
     if (v.telemetry.throttle > 0.01 && this.fuelKg > 0 && this.realism.fuelUse) {
       const mapFlowMult = v.engineMap === 1 ? 1.04 : v.engineMap === 2 ? 1.0 : v.engineMap === 3 ? 0.96 : v.engineMap === 4 ? 0.90 : 0.85;
@@ -1676,6 +1710,7 @@ export class F12026CarSim implements SimulatorCar {
     this.apPedal = this.apYawI = this.apThrottle = 0;
     this.drsPressPending = false;
     this.boostRemainingS = 0;
+    this.overtake.reset();
     this.lastAxMs2 = this.lastAyMs2 = 0;
     this.stuckS = 0;
     const c = this.channels;
@@ -1903,6 +1938,8 @@ export class F12026CarSim implements SimulatorCar {
     t.ersBatteryPercent = vt.ERS_CHARGE * 100;
     t.manualOverrideActive = v.performanceMode === 'PSH';
     t.boostRemainingS = this.boostRemainingS;
+    t.overtakingRules = this.overtakingRules;
+    t.overtakeAvailable = this.profile.hasErs && this.overtakeAvailable;
     t.turboBoostBar = this.profile.turbo ? Number(v.turboBoostBar.toFixed(2)) : 1;
     t.fuelKg = Number(this.fuelKg.toFixed(2));
 

@@ -50,6 +50,11 @@ export interface CarDefinition {
   badge: string;
   /** The vehicle model that drives it */
   physics: VehicleModelId;
+  /**
+   * The season the car raced in, which sets its overtaking aids (`overtakingRulesForSeason`): 2026 on, Straight Mode
+   * in every DRS zone plus Overtake Mode; earlier, rear-flap DRS by the 1 s rule. Absent: no DRS (a GT3)
+   */
+  season?: number;
   /** A ported GLB on the generic rig (`ported-car-model.ts`); absent: the vehicle model's own car */
   modelUrl?: string;
   sound: CarSoundSource;
@@ -68,6 +73,7 @@ export const CARS: readonly CarDefinition[] = [
     sub: "Curvilinear 2026 model · active aero",
     badge: "FA-26",
     physics: "vf26",
+    season: 2026,
     sound: FA26_SOUND,
   },
   {
@@ -77,6 +83,7 @@ export const CARS: readonly CarDefinition[] = [
     sub: "6-DOF rigid-body · track colliders · DRS",
     badge: "6-DOF",
     physics: "f12026-car",
+    season: 2026,
     sound: FA26_SOUND,
   },
   {
@@ -86,6 +93,7 @@ export const CARS: readonly CarDefinition[] = [
     sub: "2026 car",
     badge: "SF-26",
     physics: "f12026-car",
+    season: 2026,
     modelUrl: "/cars/sf26/model/sf26.glb",
     sound: SF26_SOUND,
   },
@@ -96,6 +104,7 @@ export const CARS: readonly CarDefinition[] = [
     sub: "2026 car",
     badge: "W17",
     physics: "f12026-car",
+    season: 2026,
     modelUrl: "/cars/w17/model/w17.glb",
     sound: W17_SOUND,
   },
@@ -106,6 +115,7 @@ export const CARS: readonly CarDefinition[] = [
     sub: "2026 car",
     badge: "RB22",
     physics: "f12026-car",
+    season: 2026,
     modelUrl: "/cars/rb22/model/rb22.glb",
     sound: RB22_SOUND,
   },
@@ -116,6 +126,7 @@ export const CARS: readonly CarDefinition[] = [
     sub: "2018 car",
     badge: "SF71H",
     physics: "f12026-car",
+    season: 2018,
     modelUrl: "/cars/sf71h/model/sf71h.glb",
     sound: SF71H_SOUND,
   },
@@ -126,6 +137,7 @@ export const CARS: readonly CarDefinition[] = [
     sub: "2012 car",
     badge: "RB8",
     physics: "f12026-car",
+    season: 2012,
     modelUrl: "/cars/rb8/model/rb8.glb",
     sound: RB8_SOUND,
   },
@@ -136,6 +148,7 @@ export const CARS: readonly CarDefinition[] = [
     sub: "2005 car",
     badge: "R25",
     physics: "f12026-car",
+    season: 2005,
     modelUrl: "/cars/r25/model/r25.glb",
     sound: R25_SOUND,
   },
@@ -146,6 +159,7 @@ export const CARS: readonly CarDefinition[] = [
     sub: "2004 car",
     badge: "F2004",
     physics: "f12026-car",
+    season: 2004,
     modelUrl: "/cars/f2004/model/f2004.glb",
     sound: F2004_SOUND,
   },

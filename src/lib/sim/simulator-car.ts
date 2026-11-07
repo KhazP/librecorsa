@@ -130,6 +130,12 @@ export interface SimulatorCar {
   getTyreSetup(): TyreSetup;
   setTyreSetup(setup: TyreSetup): void;
   activateBoostOverride(): boolean;
+  /** Race control for the overtaking aids (the 1 s and lap rules, `overtaking-rules.ts`); null = practice, free use */
+  raceControl?: import('./overtaking-rules').OvertakingRaceControl | null;
+  /** The car's overtaking aids (absent: none, e.g. a GT3) */
+  readonly overtakingRules?: import('./overtaking-rules').OvertakingRules;
+  /** Set the overtaking aids of the car's era (a 2026-model car standing in for an older one) */
+  setOvertakingRules?(rules: import('./overtaking-rules').OvertakingRules): void;
   /** Instantiate an AI opponent car of the exact same vehicle model & profile */
   createAiPeerCar?(): SimulatorCar;
   /** Attach loaded 3D track collider root */

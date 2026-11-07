@@ -128,7 +128,7 @@ Made for this project: `scripts/rwanda-props.mjs` generates the jumbotrons, star
 * **Lucide Icons** — Lucide Contributors (ISC)
 * **global_racetrajectory_optimization** — TUM Institute of Automotive Technology (LGPL-3.0): minimum-time racing lines that seed each circuit's F1 and GT3 lines. Used offline only, not bundled.
 * **racetrack-database** — TUM Institute of Automotive Technology (LGPL-3.0): centrelines and track widths, used offline to cross-check the widths measured on the circuit scans. Not bundled.
-* **Design references** (no code or assets used): the kerb as a height ramp with a ripple, as in TORCS / Speed Dreams, and the per-surface table (friction, bump, vibration, valid track) as in Assetto Corsa's `surfaces.ini`.
+* **Design references** (no code or assets used): the kerb as a height ramp with a ripple, as in TORCS / Speed Dreams, and the per-surface table (friction, bump, vibration, valid track) as in Assetto Corsa's `surfaces.ini`. The overtaking-aid rules by era (`src/lib/sim/overtaking-rules.ts`: the 1 s gap measured once at the detection point, lapped cars counting, DRS from the leader's third lap, the same rules for the AI) follow the FIA sporting regulations, cross-checked against [**assetto-corsa-fia-drs-rules**](https://github.com/Zhaoyi-Fan/assetto-corsa-fia-drs-rules) by **Zhaoyi Fan** (MIT).
 
 ### Third-party code
 

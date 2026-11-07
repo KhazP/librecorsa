@@ -49,8 +49,10 @@ import {
   evaluateSampleLateralHeightM,
   getActiveSurfaceTable,
   getActiveTrackData,
+  RWANDA_DRS_ZONES,
 } from './track-data';
 import { Lut } from './sim/lut';
+import { type OvertakingRaceControl, type OvertakingRules, OvertakeGrant } from './sim/overtaking-rules';
 import {
   computeRollCentreHeight,
   mgukDeployCapW,
@@ -494,6 +496,11 @@ export class F1Physics2026 {
   public readonly maxErsEnergyJ: number = VF26_ERS.batteryJ;
   public activeAeroMode: ActiveAeroMode = 'Z_MODE';
   public autoXMode = true;
+  /** Race control for Overtake Mode (the 1 s rule); null = practice, the override is free */
+  public raceControl: OvertakingRaceControl | null = null;
+  /** A 2026 car: Straight Mode in every zone, Overtake Mode within 1 s at the detection point */
+  public readonly overtakingRules: OvertakingRules = 'straight-mode-2026';
+  private readonly overtake = new OvertakeGrant();
   public aiAutopilot = false;
   /** AI driver pace (fraction of the car's limit), line shift (m, + right) and speed ceiling (m/s) */
   public aiPaceScale = 1;
@@ -908,10 +915,10 @@ export class F1Physics2026 {
     this.applyColdPressures();
   }
 
-  /** 2026 Manual Override Mode: full MGU-K deployment sustained to 337 km/h for 8 s */
+  /** 2026 Overtake Mode: full MGU-K deployment sustained to 337 km/h for 8 s; in a race only once earned within 1 s */
   public activateBoostOverride(): boolean {
     const dt = this.drivetrain;
-    if (dt.ersEnergyJ > 200_000 && dt.boostCooldownS <= 0) {
+    if (this.overtake.available(this.raceControl) && dt.ersEnergyJ > 200_000 && dt.boostCooldownS <= 0) {
       dt.ersMode = 'OVERRIDE';
       dt.boostRemainingS = 8.0;
       return true;
@@ -1124,6 +1131,14 @@ export class F1Physics2026 {
       this.activeAeroMode = this.activeAeroMode === 'Z_MODE' ? 'X_MODE' : 'Z_MODE';
     }
     this.prevToggleXMode = inputs.toggleXMode;
+    // In a race the override (Overtake Mode) is only there once earned at the detection point
+    if (!this.overtake.available(this.raceControl)) {
+      inputs.manualOverride = false;
+      const drv = this.drivetrain;
+      if (drv.boostRemainingS > 0) drv.boostRemainingS = 0;
+      if (drv.ersMode === 'OVERRIDE') drv.ersMode = this.userErsMode;
+    }
+    const progressBefore = this.sMeters / this.track.totalLengthM;
 
     let shiftReq: -1 | 0 | 1 = 0;
     if (inputs.shiftUp && !this.prevShiftUp) shiftReq = 1;
@@ -1147,6 +1162,7 @@ export class F1Physics2026 {
       this.timeAccumulator = 0;
     }
 
+    this.overtake.observe(progressBefore, this.sMeters / this.track.totalLengthM, RWANDA_DRS_ZONES, this.raceControl);
     this.syncWorldTransform();
     this.recoverStuckAi(dtSeconds);
     const currentSample = this.track.getSampleAtDistance(this.sMeters);
@@ -1355,6 +1371,7 @@ export class F1Physics2026 {
   }
 
   private finishPlacement(): void {
+    this.overtake.reset();
     const sample = this.track.getSampleAtDistance(this.sMeters);
     this.lastSector = sample.sector;
     this.syncWorldTransform();
@@ -1531,7 +1548,9 @@ export class F1Physics2026 {
       brake = Math.min(ai.brakeCmd, Math.max(0.15, pedalCap)) * this.aiBrakeTrim;
       this.aiTargetSpeedKmh = ai.targetSpeedKmh;
       this.activeAeroMode = isRearFlapAllowedInWet(this.weatherSample.wetness) ? ai.aeroMode : 'Z_MODE';
-      if (drv.boostRemainingS <= 0) drv.ersMode = ai.ersMode;
+      // An earned Overtake Mode is spent in the zones, where the AI car overtakes
+      const aiOvertake = !!this.raceControl?.racing && this.overtake.earned && sample.drsZone;
+      if (drv.boostRemainingS <= 0) drv.ersMode = aiOvertake ? 'OVERRIDE' : ai.ersMode;
     } else {
       const keys = inputs.kbSteer ?? 0;
       const keyboardSteering = keys !== 0 || this.steeringAssist.keyboardEngaged;
@@ -1705,8 +1724,11 @@ export class F1Physics2026 {
     this.updateGravity(sample);
     const altitudeM = BASE_ALTITUDE_M + sample.position.y;
     this.airDensity = this.computeAirDensity(altitudeM);
-    // The rear flap stays shut on a wet road whoever asked for it (a manual toggle or a flying start included)
-    if (this.activeAeroMode === 'X_MODE' && !isRearFlapAllowedInWet(this.weatherSample.wetness)) this.activeAeroMode = 'Z_MODE';
+    // The flaps stay shut on a wet road whoever asked for it (a manual toggle or a flying start included), and
+    // Straight Mode only opens inside a DRS zone
+    if (this.activeAeroMode === 'X_MODE' && (!isRearFlapAllowedInWet(this.weatherSample.wetness) || !sample.drsZone)) {
+      this.activeAeroMode = 'Z_MODE';
+    }
     const xTarget = this.activeAeroMode === 'X_MODE' ? 1 : 0;
     const aeroRate = dt / VF26_ACTIVE_AERO_TRANSITION_S;
     this.xModeBlend += THREE.MathUtils.clamp(xTarget - this.xModeBlend, -aeroRate, aeroRate);
@@ -3090,6 +3112,8 @@ export class F1Physics2026 {
     t.ersBatteryPercent = (drv.ersEnergyJ / VF26_ERS.batteryJ) * 100;
     t.manualOverrideActive = drv.ersMode === 'OVERRIDE' || drv.boostRemainingS > 0;
     t.boostRemainingS = drv.boostRemainingS;
+    t.overtakingRules = this.overtakingRules;
+    t.overtakeAvailable = this.overtake.available(this.raceControl);
     t.turboBoostBar = 1 + drv.boostBar;
     t.fuelKg = drv.fuelKg;
 

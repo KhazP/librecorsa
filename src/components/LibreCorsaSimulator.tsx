@@ -20,6 +20,7 @@ import { F12026_CAR_CONFIG } from "@/lib/sim/f12026-car/F12026CarConfig";
 import type { CarSoundSource } from "@/lib/sim/CarAudio";
 import { OpponentAudio } from "@/lib/sim/opponent-audio";
 import { CARS, carById, carForVehicle, isCarId, type CarId } from "@/lib/cars/car-registry";
+import { overtakingRulesForSeason } from "@/lib/sim/overtaking-rules";
 import { carPhysics, carTakesPhysicsSwitch, subscribeF1ModPhysics } from "@/lib/cars/f1-mod-physics";
 import { buildCircuitScene } from "@/lib/scene-builder";
 import {
@@ -1267,23 +1268,27 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
      * A car of the chosen model on the start grid, with the session's presets carried over from `prev`
      * (defaults for the first car) and that car's saved tyre setup
      */
-    const createCar = (vehicle: VehicleModelId, prev: SimulatorCar | null): SimulatorCar => {
+    const createCar = (vehicle: VehicleModelId, prev: SimulatorCar | null, carId: CarId = carIdRef.current): SimulatorCar => {
       let car: SimulatorCar;
       if (vehicle === "amg-gt3") {
         car = createAmgGt3Sim(track, trackRoot);
       } else if (vehicle === "f12026-car") {
-        const f12026 = new F12026CarSim(track, trackRoot);
-        // DRS is earned at a detection point within 1 s of the car ahead when racing; always in practice
-        f12026.drsEligibility = () => {
-          const field = aiFieldRef.current;
-          if (!field) return true;
-          const gap = field.playerGapAheadS();
-          return gap !== null && gap <= 1;
-        };
-        car = f12026;
+        car = new F12026CarSim(track, trackRoot);
       } else {
         car = new F1Physics2026(track);
         if (trackRoot) car.attachTrackRoot?.(trackRoot);
+      }
+      // The overtaking aids of the car's season, and race control for them while a race is on (free in practice)
+      const season = carById(carId).season;
+      if (season !== undefined) car.setOvertakingRules?.(overtakingRulesForSeason(season));
+      if (car.overtakingRules) {
+        const self = car;
+        car.raceControl = {
+          get racing() {
+            return aiFieldRef.current?.raceRulesActive ?? false;
+          },
+          earnedAtDetection: () => aiFieldRef.current?.detectionEarnedFor(self) ?? true,
+        };
       }
       car.aiAutopilot = false;
       car.assistPreset = prev?.assistPreset ?? DEFAULT_ASSIST_PRESET;
@@ -1320,7 +1325,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
 
     swapCarRef.current = (car) => {
       const vehicle = carPhysics(car);
-      physics = createCar(vehicle, physics);
+      physics = createCar(vehicle, physics, car);
       physicsRef.current = physics;
       swapCarRig(car);
       prefetchSoundBank(soundFor(car).assetDir);

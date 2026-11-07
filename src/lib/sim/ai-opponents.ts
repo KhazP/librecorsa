@@ -34,6 +34,7 @@ import { AI_TUNING_LIBRARY } from '@/lib/sim/ai-tuning-data';
 import { AiSectionLearner, loadLearnedCorners, saveLearnedCorners, type LearnedCorner } from '@/lib/sim/ai-learning';
 import type { InterpolatedPeerState } from '@/lib/sim/multiplayer-sync';
 import type { SimulatorCar } from '@/lib/sim/simulator-car';
+import { carAheadOnRoad, earnedAtDetection, type OvertakingRaceControl } from '@/lib/sim/overtaking-rules';
 import type { RaceStatus, VehicleModelId } from '@/types/f1';
 import { F12026_CAR_CONFIG } from '@/lib/sim/f12026-car/F12026CarConfig';
 import { AMG_GT3_CONFIG } from '@/lib/sim/gt3/AmgGt3Config';
@@ -469,6 +470,8 @@ export class AiOpponentField {
     }
     if (!this.spectate) this.cars.push(this.makeCar('player', PLAYER_CODE, '#E10600', player, null, 1));
     for (const car of this.cars) this.allSims.push(car.sim);
+    // The AI cars' overtaking aids follow the race rules too (the player's are wired by the simulator)
+    for (const car of this.cars) if (car.ai) car.ai.raceControl = this.raceControlFor(car.ai);
     this.applySkill();
   }
 
@@ -1107,6 +1110,48 @@ export class AiOpponentField {
     if (!ahead) return null;
     // The time since that car passed this point (distance over speed only before there is timing there)
     return this.splitTimer.gapS(this.raceTimeS, ahead.id, me.distM) ?? gapM / Math.max(5, me.sim.vxMs);
+  }
+
+  /** The race rules for the overtaking aids apply (the start lights included); after the flag they are free */
+  public get raceRulesActive(): boolean {
+    return this.phase === 'lights' || this.phase === 'racing';
+  }
+
+  /** Race laps the leader has completed */
+  public leaderLapsCompleted(): number {
+    let lead = -Infinity;
+    for (const c of this.cars) if (c.distM > lead) lead = c.distM;
+    return Number.isFinite(lead) ? Math.max(0, Math.floor(lead / this.track.totalLengthM)) : 0;
+  }
+
+  /**
+   * Time to the car directly ahead of `car` on the road (s), a lapped car or a leader a lap up included, as a timing
+   * loop sees it: the time since that car passed this point. Finished cars do not count; null when there is none.
+   */
+  public gapAheadOnRoadS(car: FieldCar): number | null {
+    const others = this.cars.filter((c) => c !== car && c.finishTimeS === null);
+    const ahead = carAheadOnRoad(car.distM, others, this.track.totalLengthM);
+    if (!ahead) return null;
+    return this.splitTimer.gapS(this.raceTimeS, ahead.car.id, ahead.passedHereAtDistM) ?? ahead.roadGapM / Math.max(5, car.sim.vxMs);
+  }
+
+  /** Race control's call at a detection point: within 1 s of the car ahead, and for DRS once the leader has done two laps */
+  public detectionEarnedFor(sim: SimulatorCar): boolean {
+    const car = this.cars.find((c) => c.sim === sim);
+    const rules = sim.overtakingRules;
+    if (!car || !rules) return false;
+    return earnedAtDetection({ rules, gapAheadS: this.gapAheadOnRoadS(car), leaderLapsCompleted: this.leaderLapsCompleted() });
+  }
+
+  /** Race control for a car of this field */
+  public raceControlFor(sim: SimulatorCar): OvertakingRaceControl {
+    const field = this;
+    return {
+      get racing() {
+        return field.raceRulesActive;
+      },
+      earnedAtDetection: () => field.detectionEarnedFor(sim),
+    };
   }
 
   /** Render / HUD states of the AI cars (the player is drawn by the caller) */
