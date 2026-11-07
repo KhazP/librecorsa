@@ -135,13 +135,8 @@ import {
   queryWheelGroundContact,
 } from './sim/track-occupancy';
 import { type AiVehicleParams, RacingLineDriver } from './sim/ai-mpc';
-import {
-  type AxleSlipSample,
-  axleSlip,
-  createAxleSlipSample,
-  createWheelSlip,
-  SteeringAssist,
-} from './sim/steering-assist';
+import { SteeringAssist } from './sim/steering-assist';
+import { type AxleSlipSample, axleSlip, createAxleSlipSample, createWheelSlip } from './sim/tyre-slip';
 import {
   aiLineOffsetM,
   computeSpeedProfile,

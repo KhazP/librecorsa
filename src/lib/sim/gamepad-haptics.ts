@@ -1,7 +1,6 @@
 import type { CarTelemetry } from "@/types/f1";
-import { throttleSlipAllowance } from "@/lib/input/keyboard-pedals";
 import { RACK_SAT_HIGH_IMPACT_G, stepRackSat } from "@/lib/input/wheel-ffb";
-import { axleSlipFromTelemetry, createAxleSlipSample } from "./steering-assist";
+import { axleSlipFromTelemetry, createAxleSlipSample, throttleSlipAllowance } from "./tyre-slip";
 
 /**
  * Gamepad rumble for the car: the pad's two motors are driven from the physics so the player

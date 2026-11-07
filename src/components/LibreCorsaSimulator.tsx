@@ -98,13 +98,8 @@ import { addContactShadow } from "@/lib/render/contact-shadow";
 import { buildKeyLookup, HUD_TOGGLE_EVENT, keyLabel, padButtonLabel, type KeyAction } from "@/lib/input/bindings";
 import { autoConfigureWheel, carWheelLockDeg, connectedPads, DeviceInputReader } from "@/lib/input/device-input";
 import { webHidFfb, wheelFfb } from "@/lib/input/wheel-ffb";
-import {
-  axleSlipFromTelemetry,
-  createAxleSlipSample,
-  DEFAULT_STEERING_ASSIST,
-  deviceAssistTuning,
-  type SteeringAssistSettings,
-} from "@/lib/sim/steering-assist";
+import { DEFAULT_STEERING_ASSIST, deviceAssistTuning, type SteeringAssistSettings } from "@/lib/sim/steering-assist";
+import { axleSlipFromTelemetry, createAxleSlipSample } from "@/lib/sim/tyre-slip";
 import {
   clampFov,
   codeFromName,

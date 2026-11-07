@@ -44,13 +44,8 @@ import {
   getActiveSurfaceTable,
   RWANDA_DRS_ZONES,
 } from '@/lib/track-data';
-import {
-  type AxleSlipSample,
-  axleSlip,
-  createAxleSlipSample,
-  createWheelSlip,
-  SteeringAssist,
-} from '../steering-assist';
+import { SteeringAssist } from '../steering-assist';
+import { type AxleSlipSample, axleSlip, createAxleSlipSample, createWheelSlip } from '../tyre-slip';
 import type { AeroWakeState } from '../aero-wake';
 import type { TrackEvolutionSample } from '../track-evolution';
 import type { WeatherContactSample } from '../weather';

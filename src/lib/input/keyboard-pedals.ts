@@ -9,6 +9,8 @@
  * MIT License — see CREDITS.md.
  */
 
+import { throttleSlipAllowance } from "@/lib/sim/tyre-slip";
+
 /** How far ahead the slip is extrapolated from its rate of change (s) */
 const SLIP_LOOKAHEAD_S = 0.045;
 /** Pedal scale rate (per s) per unit of slip below the peak; past the peak it drops three times as fast */
@@ -37,9 +39,6 @@ class SlipLimitedPedal {
     this.prevSlip = Number.NaN;
   }
 }
-
-/** Normalised slip the driven tyres may carry under power before it counts as wheelspin, by speed (km/h) */
-export const throttleSlipAllowance = (speedKmh: number) => lerp(0.25, 0.35, clamp01((speedKmh - 40) / 120));
 
 export class KeyboardPedalAssist {
   private readonly brake = new SlipLimitedPedal();
