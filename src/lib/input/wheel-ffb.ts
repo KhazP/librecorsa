@@ -122,6 +122,580 @@ const METER_WINDOW = 4800;
 /** Histogram bins for the meter's percentile: 0.01 wide, the last one catching everything from 2 up */
 const METER_BINS = 201;
 
+/** 6-tap finite impulse response (FIR) low-pass kernel for steering rack self-aligning torque (sum = 1.0) */
+export const RACK_SAT_FIR_TAPS = [
+  0.1295867,
+  0.2311436,
+  0.2582509,
+  0.1923936,
+  0.1156718,
+  0.0729534,
+] as const;
+
+/** Exponential moving average coefficient for axle shock velocities and rear sideslip tangent */
+export const RACK_SAT_EMA_ALPHA = 0.030;
+/** Digressive vertical load sensitivity of peak self-aligning torque (negative reduces normalized peak under compression) */
+export const RACK_SAT_Q_DZ2 = -0.2;
+/** Nominal single-wheel vertical load reference (N) */
+export const RACK_SAT_FZ_NOM_N = 3000.0;
+/** Base axle vertical shock damping coefficient (Ns/m) */
+export const RACK_SAT_CZ_BASE_NSM = 2000.0;
+/** Axle shock velocity threshold above which extreme compression spikes are attenuated (m/s) */
+export const RACK_SAT_SHOCK_VEL_CAP_MS = 2.5;
+/** Hyperbolic attenuation rate for extreme shock velocities above the cap (s/m) */
+export const RACK_SAT_SHOCK_ATTEN_RATE = 0.45;
+/** Conversion scale from normalised axle vertical damping load to direct steering rack bump torque */
+export const RACK_SAT_BUMP_TORQUE_SCALE = 0.08;
+/** Minimum activation speed for Pacejka self-aligning torque synthesis (m/s) */
+export const RACK_SAT_MIN_SPEED_MS = 5.0;
+/** Rear oversteer Pacejka SAT deadband offset (~1.7 deg in radians) */
+export const RACK_SAT_OVERSTEER_OFFSET_RAD = 0.030;
+/** Front understeer Pacejka SAT deadband offset (~2.3 deg in radians) */
+export const RACK_SAT_UNDERSTEER_OFFSET_RAD = 0.040;
+/** Rear sideslip soft-ramp threshold below which oversteer SAT eases in linearly (rad) */
+export const RACK_SAT_OVERSTEER_SOFT_RAMP_RAD = 0.015;
+/** Turn-entry yaw-rate threshold below which front understeer counter-torque is halved (rad/s) */
+export const RACK_SAT_UNDERSTEER_YAW_GATE_RAD_S = 0.1;
+/** Front understeer counter-torque shaping scale */
+export const RACK_SAT_UNDERSTEER_SCALE = 0.65;
+/** Symmetric saturation clamp for combined self-aligning torque before FIR filtering */
+export const RACK_SAT_MAX_TORQUE = 0.5;
+/** Resultant horizontal acceleration threshold above which crash torque suppression engages (g) */
+export const RACK_SAT_HIGH_IMPACT_G = 10.0;
+/** Multiplier applied to steering rack SAT torque during >10g high-impact collisions */
+export const RACK_SAT_HIGH_IMPACT_ATTEN = 0.25;
+/** Reference SAT torque corresponding to 100% shaker intensity */
+export const RACK_SAT_SHAKER_REF_TORQUE = 0.8;
+/** Default kinematic wheelbase used when not specified by the vehicle telemetry (m) */
+export const RACK_SAT_DEFAULT_WHEELBASE_M = 2.7;
+/** Reference road-wheel steering lock used when converting normalised [-1..1] steering input (rad) */
+const MAX_ROAD_STEER_RAD = 0.35;
+
+const OVERSTEER_B = 2.5;
+const OVERSTEER_C = 1.85;
+const OVERSTEER_D_BASE = 0.85;
+const OVERSTEER_E = -0.88;
+
+const UNDERSTEER_B = 3.0;
+const UNDERSTEER_C = 1.75;
+const UNDERSTEER_D_BASE = 0.70;
+const UNDERSTEER_E = -0.55;
+
+export interface RackSatState {
+  prevSuspMm: [number, number, number, number];
+  hasPrevSusp: boolean;
+  firstBump: boolean;
+  filteredVelFrontMs: number;
+  filteredVelRearMs: number;
+  firstRearFrame: boolean;
+  filteredRearSideslip: number;
+  firHistory: Float32Array;
+  firIndex: number;
+}
+
+export interface RackSatStepInput {
+  /** Forward speed (m/s); if omitted, derived from `speedKmh / 3.6` */
+  speedMs?: number;
+  /** Speed (km/h); fallback when `speedMs` is omitted */
+  speedKmh?: number;
+  /** Frame time step (s) used to differentiate `suspensionTravelMm` into m/s shock velocities */
+  dtS?: number;
+  /** Per-corner suspension compression [FL, FR, RL, RR] (mm) */
+  suspensionTravelMm?: readonly [number, number, number, number] | readonly number[];
+  /** Optional direct per-corner shock velocity [FL, FR, RL, RR] (m/s, + = compression) */
+  shockVelMs?: readonly [number, number, number, number] | readonly number[];
+  /** Chassis local lateral velocity v_lat (m/s, + = right) */
+  lateralVelMs?: number;
+  /** Chassis local longitudinal velocity v_lon (m/s, + = forward) */
+  longitudinalVelMs?: number;
+  /** Rear axle slip angle (rad), used when local chassis velocities are not supplied */
+  rearSlipAngleRad?: number;
+  /** Rear axle slip angle (deg), fallback when `rearSlipAngleRad` is not supplied */
+  rearSlipAngleDeg?: number;
+  /** Per-corner slip angles [FL, FR, RL, RR] (deg) */
+  wheelSlipAnglesDeg?: readonly number[];
+  /** Front road-wheel steering angle delta_road (rad, + = right) */
+  roadSteerRad?: number;
+  /** Normalised steering angle -1..1 (+ = right), fallback when `roadSteerRad` is not supplied */
+  steering?: number;
+  /** Front slip angle (rad), fallback when kinematic steering inputs are not supplied */
+  frontSlipAngleRad?: number;
+  /** Front slip angle (deg), fallback when `frontSlipAngleRad` is not supplied */
+  frontSlipAngleDeg?: number;
+  /** Chassis yaw rate psi_dot (rad/s, + = turning right) */
+  yawRateRadS?: number;
+  /** Vehicle wheelbase L (m, defaults to 2.7 m) */
+  wheelbaseM?: number;
+  /** Lateral acceleration (g) */
+  lateralG?: number;
+  /** Longitudinal acceleration (g) */
+  longitudinalG?: number;
+  /** Vertical bump damping gain k_bumps (defaults to 1.0) */
+  bumpsGain?: number;
+  /** Rear oversteer SAT gain k_oversteer (defaults to 1.0) */
+  oversteerGain?: number;
+  /** Front understeer SAT gain k_understeer (defaults to 1.0) */
+  understeerGain?: number;
+}
+
+export interface RackSatStepOutput {
+  /** EMA-filtered front axle shock velocity (m/s, + = compression) */
+  filteredVelFrontMs: number;
+  /** EMA-filtered rear axle shock velocity (m/s, + = compression) */
+  filteredVelRearMs: number;
+  /** High-velocity shock spike attenuation factor (0..1, 1 when max|v| <= 2.5 m/s) */
+  shockAttenuation: number;
+  /** Front axle vertical damping load change Delta Fz,front (N) */
+  deltaFzFrontN: number;
+  /** Rear axle vertical damping load change Delta Fz,rear (N) */
+  deltaFzRearN: number;
+  /** Normalised front vertical load change Delta fz,front = Delta Fz,front / 3000 */
+  dfzFront: number;
+  /** Normalised rear vertical load change Delta fz,rear = Delta Fz,rear / 3000 */
+  dfzRear: number;
+  /** Direct vertical bump torque term added to the steering rack */
+  bumpTorque: number;
+  /** EMA-filtered rear sideslip tangent r (rad) */
+  rearSideslipRad: number;
+  /** Front kinematic slip angle alpha_f (rad) */
+  frontSlipAngleRad: number;
+  /** Vertical-load-modulated rear Pacejka peak coefficient D_o */
+  rearPeakD: number;
+  /** Vertical-load-modulated front Pacejka peak coefficient D_u */
+  frontPeakD: number;
+  /** Raw rear Pacejka Magic Formula output sa before deadband shaping */
+  rearPacejkaSa: number;
+  /** Raw front Pacejka Magic Formula output sa_u before deadband shaping */
+  frontPacejkaSa: number;
+  /** Shaped rear oversteer self-aligning torque tau_over */
+  oversteerTorque: number;
+  /** Shaped front understeer counter-torque tau_under */
+  understeerTorque: number;
+  /** Combined clamped SAT torque tau_sat = clamp(tau_over - tau_under, -0.5, 0.5), attenuated on >10g impact */
+  rawSatTorque: number;
+  /** 6-tap FIR filtered SAT torque, attenuated on >10g impact */
+  filteredSatTorque: number;
+  /** Alias for `filteredSatTorque` */
+  satTorque: number;
+  /** Combined rack torque addition (`filteredSatTorque + bumpTorque`) */
+  totalAddedTorque: number;
+  /** Resultant horizontal acceleration sqrt(gLat^2 + gLon^2) (g) */
+  resultantG: number;
+  /** True when `resultantG > 10.0` g */
+  highImpactActive: boolean;
+  /** Oversteer shaker intensity (%, 0..100; 0 during high impact or below speed threshold) */
+  oversteerIntensityPct: number;
+  /** Understeer shaker intensity (%, 0..100; 0 during high impact or below speed threshold) */
+  understeerIntensityPct: number;
+}
+
+/** Evaluates the Pacejka Magic Formula with inner atan argument clamped to [-pi/2, pi/2] */
+export function evaluatePacejkaSat(slipRad: number, B: number, C: number, D: number, E: number): number {
+  const bs = B * slipRad;
+  const x = bs - E * (bs - Math.atan(bs));
+  const halfPi = Math.PI * 0.5;
+  const arg = Math.max(-halfPi, Math.min(halfPi, C * Math.atan(x)));
+  return D * Math.sin(arg);
+}
+
+export function createRackSatState(): RackSatState {
+  return {
+    prevSuspMm: [0, 0, 0, 0],
+    hasPrevSusp: false,
+    firstBump: true,
+    filteredVelFrontMs: 0,
+    filteredVelRearMs: 0,
+    firstRearFrame: true,
+    filteredRearSideslip: 0,
+    firHistory: new Float32Array(RACK_SAT_FIR_TAPS.length),
+    firIndex: 0,
+  };
+}
+
+export function resetRackSatState(state: RackSatState): void {
+  state.prevSuspMm[0] = 0;
+  state.prevSuspMm[1] = 0;
+  state.prevSuspMm[2] = 0;
+  state.prevSuspMm[3] = 0;
+  state.hasPrevSusp = false;
+  state.firstBump = true;
+  state.filteredVelFrontMs = 0;
+  state.filteredVelRearMs = 0;
+  state.firstRearFrame = true;
+  state.filteredRearSideslip = 0;
+  state.firHistory.fill(0);
+  state.firIndex = 0;
+}
+
+export function createRackSatOutput(): RackSatStepOutput {
+  return {
+    filteredVelFrontMs: 0,
+    filteredVelRearMs: 0,
+    shockAttenuation: 1,
+    deltaFzFrontN: 0,
+    deltaFzRearN: 0,
+    dfzFront: 0,
+    dfzRear: 0,
+    bumpTorque: 0,
+    rearSideslipRad: 0,
+    frontSlipAngleRad: 0,
+    rearPeakD: OVERSTEER_D_BASE,
+    frontPeakD: UNDERSTEER_D_BASE,
+    rearPacejkaSa: 0,
+    frontPacejkaSa: 0,
+    oversteerTorque: 0,
+    understeerTorque: 0,
+    rawSatTorque: 0,
+    filteredSatTorque: 0,
+    satTorque: 0,
+    totalAddedTorque: 0,
+    resultantG: 0,
+    highImpactActive: false,
+    oversteerIntensityPct: 0,
+    understeerIntensityPct: 0,
+  };
+}
+
+/**
+ * Pure step evaluation for the dual-Pacejka steering rack self-aligning torque (SAT), axle vertical shock load
+ * modulation, 6-tap FIR smoothing filter, and >10g high-impact crash torque suppression.
+ */
+export function stepRackSat(
+  input: RackSatStepInput,
+  state: RackSatState = createRackSatState(),
+  out: RackSatStepOutput = createRackSatOutput()
+): RackSatStepOutput {
+  const gLat = typeof input.lateralG === "number" && Number.isFinite(input.lateralG) ? Math.abs(input.lateralG) : 0;
+  const gLon =
+    typeof input.longitudinalG === "number" && Number.isFinite(input.longitudinalG) ? Math.abs(input.longitudinalG) : 0;
+  const resultantG = Math.hypot(gLat, gLon);
+  const highImpactActive = resultantG > RACK_SAT_HIGH_IMPACT_G;
+
+  const speedMs =
+    typeof input.speedMs === "number" && Number.isFinite(input.speedMs) && input.speedMs !== 0
+      ? Math.abs(input.speedMs)
+      : typeof input.speedKmh === "number" && Number.isFinite(input.speedKmh)
+        ? Math.abs(input.speedKmh) / 3.6
+        : 0;
+  const dtS = typeof input.dtS === "number" && Number.isFinite(input.dtS) && input.dtS > 0 ? input.dtS : 0;
+
+  // Differentiate per-corner suspension travel (mm -> m/s) or read direct shock velocities
+  let hasVelSample = false;
+  let vFL = 0;
+  let vFR = 0;
+  let vRL = 0;
+  let vRR = 0;
+  const shockVel = input.shockVelMs;
+  const susp = input.suspensionTravelMm;
+  if (
+    shockVel &&
+    shockVel.length >= 4 &&
+    Number.isFinite(shockVel[0]) &&
+    Number.isFinite(shockVel[1]) &&
+    Number.isFinite(shockVel[2]) &&
+    Number.isFinite(shockVel[3])
+  ) {
+    vFL = shockVel[0];
+    vFR = shockVel[1];
+    vRL = shockVel[2];
+    vRR = shockVel[3];
+    hasVelSample = true;
+  } else if (
+    susp &&
+    susp.length >= 4 &&
+    Number.isFinite(susp[0]) &&
+    Number.isFinite(susp[1]) &&
+    Number.isFinite(susp[2]) &&
+    Number.isFinite(susp[3])
+  ) {
+    if (state.hasPrevSusp && dtS > 0) {
+      const invDtMmToM = 1e-3 / dtS;
+      vFL = (susp[0] - state.prevSuspMm[0]) * invDtMmToM;
+      vFR = (susp[1] - state.prevSuspMm[1]) * invDtMmToM;
+      vRL = (susp[2] - state.prevSuspMm[2]) * invDtMmToM;
+      vRR = (susp[3] - state.prevSuspMm[3]) * invDtMmToM;
+      hasVelSample = true;
+    }
+    state.prevSuspMm[0] = susp[0];
+    state.prevSuspMm[1] = susp[1];
+    state.prevSuspMm[2] = susp[2];
+    state.prevSuspMm[3] = susp[3];
+    state.hasPrevSusp = true;
+  }
+
+  const rawBumpsGain =
+    typeof input.bumpsGain === "number" && Number.isFinite(input.bumpsGain) ? Math.max(0, input.bumpsGain) : 1.0;
+  const effectiveBumpsGain = highImpactActive ? 0 : rawBumpsGain;
+
+  let shockAttenuation = 1;
+  let deltaFzFrontN = 0;
+  let deltaFzRearN = 0;
+  let dfzFront = 0;
+  let dfzRear = 0;
+  let bumpTorque = 0;
+
+  if (speedMs > RACK_SAT_MIN_SPEED_MS && effectiveBumpsGain > 0 && hasVelSample) {
+    const avgFront = (vFL + vFR) * 0.5;
+    const avgRear = (vRL + vRR) * 0.5;
+    if (state.firstBump) {
+      state.filteredVelFrontMs = avgFront;
+      state.filteredVelRearMs = avgRear;
+      state.firstBump = false;
+    } else {
+      const oneMinusAlpha = 1.0 - RACK_SAT_EMA_ALPHA;
+      state.filteredVelFrontMs = RACK_SAT_EMA_ALPHA * avgFront + oneMinusAlpha * state.filteredVelFrontMs;
+      state.filteredVelRearMs = RACK_SAT_EMA_ALPHA * avgRear + oneMinusAlpha * state.filteredVelRearMs;
+    }
+
+    deltaFzFrontN = RACK_SAT_CZ_BASE_NSM * state.filteredVelFrontMs * effectiveBumpsGain;
+    deltaFzRearN = RACK_SAT_CZ_BASE_NSM * state.filteredVelRearMs * effectiveBumpsGain;
+
+    const maxVel = Math.max(Math.abs(state.filteredVelFrontMs), Math.abs(state.filteredVelRearMs));
+    if (maxVel > RACK_SAT_SHOCK_VEL_CAP_MS) {
+      const excess = maxVel - RACK_SAT_SHOCK_VEL_CAP_MS;
+      shockAttenuation = 1.0 / (1.0 + excess * RACK_SAT_SHOCK_ATTEN_RATE);
+      deltaFzFrontN *= shockAttenuation;
+      deltaFzRearN *= shockAttenuation;
+    }
+
+    dfzFront = deltaFzFrontN / RACK_SAT_FZ_NOM_N;
+    dfzRear = deltaFzRearN / RACK_SAT_FZ_NOM_N;
+    bumpTorque = (dfzFront + dfzRear) * RACK_SAT_BUMP_TORQUE_SCALE;
+  }
+
+  let rearSideslipRad = 0;
+  let frontSlipAngleRad = 0;
+  let rearPeakD = OVERSTEER_D_BASE * (1.0 + RACK_SAT_Q_DZ2 * dfzRear);
+  let frontPeakD = UNDERSTEER_D_BASE * (1.0 + RACK_SAT_Q_DZ2 * dfzFront);
+  let rearPacejkaSa = 0;
+  let frontPacejkaSa = 0;
+  let oversteerTorque = 0;
+  let understeerTorque = 0;
+  let combinedSat = 0;
+  let oversteerIntensityPct = 0;
+  let understeerIntensityPct = 0;
+
+  if (speedMs > RACK_SAT_MIN_SPEED_MS) {
+    // 1. Rear Oversteer SAT
+    let rRaw = 0;
+    if (typeof input.lateralVelMs === "number" && Number.isFinite(input.lateralVelMs)) {
+      const vLonAbs =
+        typeof input.longitudinalVelMs === "number" &&
+        Number.isFinite(input.longitudinalVelMs) &&
+        Math.abs(input.longitudinalVelMs) > 1e-3
+          ? Math.abs(input.longitudinalVelMs)
+          : speedMs;
+      rRaw = vLonAbs > 1e-3 ? input.lateralVelMs / vLonAbs : 0;
+    } else if (typeof input.rearSlipAngleRad === "number" && Number.isFinite(input.rearSlipAngleRad)) {
+      rRaw = input.rearSlipAngleRad;
+    } else if (typeof input.rearSlipAngleDeg === "number" && Number.isFinite(input.rearSlipAngleDeg)) {
+      rRaw = (input.rearSlipAngleDeg * Math.PI) / 180;
+    } else if (
+      input.wheelSlipAnglesDeg &&
+      input.wheelSlipAnglesDeg.length >= 4 &&
+      Number.isFinite(input.wheelSlipAnglesDeg[2]) &&
+      Number.isFinite(input.wheelSlipAnglesDeg[3])
+    ) {
+      rRaw = ((input.wheelSlipAnglesDeg[2] + input.wheelSlipAnglesDeg[3]) * 0.5 * Math.PI) / 180;
+    }
+
+    if (state.firstRearFrame) {
+      state.filteredRearSideslip = rRaw;
+      state.firstRearFrame = false;
+    } else {
+      state.filteredRearSideslip =
+        RACK_SAT_EMA_ALPHA * rRaw + (1.0 - RACK_SAT_EMA_ALPHA) * state.filteredRearSideslip;
+    }
+    rearSideslipRad = state.filteredRearSideslip;
+    const absR = Math.abs(rearSideslipRad);
+
+    const oversteerGain =
+      typeof input.oversteerGain === "number" && Number.isFinite(input.oversteerGain)
+        ? Math.max(0, input.oversteerGain)
+        : 1.0;
+    const understeerGain =
+      typeof input.understeerGain === "number" && Number.isFinite(input.understeerGain)
+        ? Math.max(0, input.understeerGain)
+        : 1.0;
+
+    rearPeakD = OVERSTEER_D_BASE * (1.0 + RACK_SAT_Q_DZ2 * dfzRear);
+    rearPacejkaSa = evaluatePacejkaSat(rearSideslipRad, OVERSTEER_B, OVERSTEER_C, rearPeakD, OVERSTEER_E);
+    const ramp = absR < RACK_SAT_OVERSTEER_SOFT_RAMP_RAD ? absR / RACK_SAT_OVERSTEER_SOFT_RAMP_RAD : 1.0;
+    const absSa = Math.abs(rearPacejkaSa);
+    if (absSa > RACK_SAT_OVERSTEER_OFFSET_RAD) {
+      const saExcess = rearPacejkaSa - Math.sign(rearPacejkaSa) * RACK_SAT_OVERSTEER_OFFSET_RAD;
+      oversteerTorque = saExcess * (2.0 - absSa) * oversteerGain * ramp;
+    }
+
+    // 2. Front Understeer SAT
+    if (understeerGain > 0) {
+      const wheelbaseM =
+        typeof input.wheelbaseM === "number" && Number.isFinite(input.wheelbaseM) && input.wheelbaseM > 0
+          ? input.wheelbaseM
+          : RACK_SAT_DEFAULT_WHEELBASE_M;
+      const yawRateRadS =
+        typeof input.yawRateRadS === "number" && Number.isFinite(input.yawRateRadS) ? input.yawRateRadS : 0;
+
+      const hasKinematicSteer =
+        typeof input.roadSteerRad === "number" ||
+        typeof input.yawRateRadS === "number" ||
+        (typeof input.steering === "number" &&
+          input.frontSlipAngleRad === undefined &&
+          input.frontSlipAngleDeg === undefined);
+
+      if (hasKinematicSteer) {
+        const deltaRoad =
+          typeof input.roadSteerRad === "number" && Number.isFinite(input.roadSteerRad)
+            ? input.roadSteerRad
+            : typeof input.steering === "number" && Number.isFinite(input.steering)
+              ? input.steering * MAX_ROAD_STEER_RAD
+              : 0;
+        frontSlipAngleRad = deltaRoad - (yawRateRadS * (wheelbaseM * 0.5)) / speedMs;
+      } else if (typeof input.frontSlipAngleRad === "number" && Number.isFinite(input.frontSlipAngleRad)) {
+        frontSlipAngleRad = input.frontSlipAngleRad;
+      } else if (typeof input.frontSlipAngleDeg === "number" && Number.isFinite(input.frontSlipAngleDeg)) {
+        frontSlipAngleRad = (input.frontSlipAngleDeg * Math.PI) / 180;
+      }
+
+      frontPeakD = UNDERSTEER_D_BASE * (1.0 + RACK_SAT_Q_DZ2 * dfzFront);
+      frontPacejkaSa = evaluatePacejkaSat(frontSlipAngleRad, UNDERSTEER_B, UNDERSTEER_C, frontPeakD, UNDERSTEER_E);
+      const absSaU = Math.abs(frontPacejkaSa);
+      if (absSaU > RACK_SAT_UNDERSTEER_OFFSET_RAD) {
+        const saUExcess = frontPacejkaSa - Math.sign(frontPacejkaSa) * RACK_SAT_UNDERSTEER_OFFSET_RAD;
+        const entryRamp = Math.abs(yawRateRadS) < RACK_SAT_UNDERSTEER_YAW_GATE_RAD_S ? 0.5 : 1.0;
+        understeerTorque = saUExcess * (2.0 - absSaU) * understeerGain * RACK_SAT_UNDERSTEER_SCALE * entryRamp;
+      }
+    }
+
+    combinedSat = Math.max(
+      -RACK_SAT_MAX_TORQUE,
+      Math.min(RACK_SAT_MAX_TORQUE, oversteerTorque - understeerTorque)
+    );
+
+    if (!highImpactActive) {
+      oversteerIntensityPct = Math.min(
+        100,
+        Math.max(0, (Math.abs(oversteerTorque) / RACK_SAT_SHAKER_REF_TORQUE) * 100)
+      );
+      understeerIntensityPct = Math.min(
+        100,
+        Math.max(0, (Math.abs(understeerTorque) / RACK_SAT_SHAKER_REF_TORQUE) * 100)
+      );
+    }
+  }
+
+  // Push un-attenuated combined SAT into the 6-tap FIR ring buffer and apply high-impact 0.25x attenuation
+  const tapCount = RACK_SAT_FIR_TAPS.length;
+  const writeIdx = state.firIndex;
+  state.firHistory[writeIdx] = combinedSat;
+  state.firIndex = (writeIdx + 1) % tapCount;
+
+  let firSum = 0;
+  for (let i = 0; i < tapCount; i++) {
+    const histIdx = (writeIdx - i + tapCount) % tapCount;
+    firSum += RACK_SAT_FIR_TAPS[i] * state.firHistory[histIdx];
+  }
+
+  const impactMult = highImpactActive ? RACK_SAT_HIGH_IMPACT_ATTEN : 1.0;
+  const rawSatTorque = combinedSat * impactMult;
+  const filteredSatTorque = firSum * impactMult;
+  const totalAddedTorque = filteredSatTorque + bumpTorque;
+
+  out.filteredVelFrontMs = state.filteredVelFrontMs;
+  out.filteredVelRearMs = state.filteredVelRearMs;
+  out.shockAttenuation = shockAttenuation;
+  out.deltaFzFrontN = deltaFzFrontN;
+  out.deltaFzRearN = deltaFzRearN;
+  out.dfzFront = dfzFront;
+  out.dfzRear = dfzRear;
+  out.bumpTorque = bumpTorque;
+  out.rearSideslipRad = rearSideslipRad;
+  out.frontSlipAngleRad = frontSlipAngleRad;
+  out.rearPeakD = rearPeakD;
+  out.frontPeakD = frontPeakD;
+  out.rearPacejkaSa = rearPacejkaSa;
+  out.frontPacejkaSa = frontPacejkaSa;
+  out.oversteerTorque = oversteerTorque;
+  out.understeerTorque = understeerTorque;
+  out.rawSatTorque = rawSatTorque;
+  out.filteredSatTorque = filteredSatTorque;
+  out.satTorque = filteredSatTorque;
+  out.totalAddedTorque = totalAddedTorque;
+  out.resultantG = resultantG;
+  out.highImpactActive = highImpactActive;
+  out.oversteerIntensityPct = oversteerIntensityPct;
+  out.understeerIntensityPct = understeerIntensityPct;
+  return out;
+}
+
+/**
+ * Zero-allocation synthesizer for dual-Pacejka self-aligning torque (oversteer + understeer), axle vertical shock
+ * velocity load modulation, 6-tap FIR filtering, and >10g high-impact crash suppression.
+ */
+export class RackSatSynthesizer {
+  readonly state: RackSatState = createRackSatState();
+  readonly output: RackSatStepOutput = createRackSatOutput();
+  bumpsGain: number;
+  oversteerGain: number;
+  understeerGain: number;
+  wheelbaseM: number;
+
+  constructor(options?: {
+    bumpsGain?: number;
+    oversteerGain?: number;
+    understeerGain?: number;
+    wheelbaseM?: number;
+  }) {
+    this.bumpsGain = options?.bumpsGain ?? 1.0;
+    this.oversteerGain = options?.oversteerGain ?? 1.0;
+    this.understeerGain = options?.understeerGain ?? 1.0;
+    this.wheelbaseM = options?.wheelbaseM ?? RACK_SAT_DEFAULT_WHEELBASE_M;
+  }
+
+  step(input: RackSatStepInput): RackSatStepOutput {
+    return stepRackSat(
+      {
+        ...input,
+        bumpsGain: input.bumpsGain ?? this.bumpsGain,
+        oversteerGain: input.oversteerGain ?? this.oversteerGain,
+        understeerGain: input.understeerGain ?? this.understeerGain,
+        wheelbaseM: input.wheelbaseM ?? this.wheelbaseM,
+      },
+      this.state,
+      this.output
+    );
+  }
+
+  reset(): void {
+    resetRackSatState(this.state);
+    const o = this.output;
+    o.filteredVelFrontMs = 0;
+    o.filteredVelRearMs = 0;
+    o.shockAttenuation = 1;
+    o.deltaFzFrontN = 0;
+    o.deltaFzRearN = 0;
+    o.dfzFront = 0;
+    o.dfzRear = 0;
+    o.bumpTorque = 0;
+    o.rearSideslipRad = 0;
+    o.frontSlipAngleRad = 0;
+    o.rearPeakD = OVERSTEER_D_BASE;
+    o.frontPeakD = UNDERSTEER_D_BASE;
+    o.rearPacejkaSa = 0;
+    o.frontPacejkaSa = 0;
+    o.oversteerTorque = 0;
+    o.understeerTorque = 0;
+    o.rawSatTorque = 0;
+    o.filteredSatTorque = 0;
+    o.satTorque = 0;
+    o.totalAddedTorque = 0;
+    o.resultantG = 0;
+    o.highImpactActive = false;
+    o.oversteerIntensityPct = 0;
+    o.understeerIntensityPct = 0;
+  }
+}
+
 export interface FfbMeterState {
   /** Force sent this frame, before the bridge's clip (+ = right) */
   force: number;
@@ -130,6 +704,12 @@ export interface FfbMeterState {
   peak: number;
   /** Gain that would put the 98th-percentile force at 90 % for this car; null when the current gain is fine or no data */
   suggestedGain: number | null;
+  /** Rear oversteer self-aligning shaker intensity (%, 0..100) */
+  oversteerIntensityPct?: number;
+  /** Front understeer self-aligning shaker intensity (%, 0..100) */
+  understeerIntensityPct?: number;
+  /** True when horizontal resultant acceleration exceeds the 10g high-impact suppression threshold */
+  highImpactActive?: boolean;
 }
 
 export class WheelFfbClient {
@@ -137,7 +717,17 @@ export class WheelFfbClient {
   hidSink: ((force: number) => void) | null = null;
   /** Linked WebHID driver (for hardware damper forwarding) */
   hidDriver: WebHidFfb | null = null;
-  meter: FfbMeterState = { force: 0, clipping: false, peak: 0, suggestedGain: null };
+  /** Dual-Pacejka steering rack SAT, axle vertical shock load & >10g high-impact synthesizer */
+  readonly rackSat = new RackSatSynthesizer();
+  meter: FfbMeterState = {
+    force: 0,
+    clipping: false,
+    peak: 0,
+    suggestedGain: null,
+    oversteerIntensityPct: 0,
+    understeerIntensityPct: 0,
+    highImpactActive: false,
+  };
   private lastRimDeg: number | null = null;
   private lastFrontSuspMm: [number, number] | null = null;
   private lastUpdateMs = 0;
@@ -198,9 +788,51 @@ export class WheelFfbClient {
     let slide = 0;
     let rough = 0;
     let bump = 0;
+    let oversteerIntensityPct = 0;
+    let understeerIntensityPct = 0;
+    let highImpactActive = false;
     let subframes: number[] | undefined;
     if (driving && wheel.ffbEnabled) {
-      const torque = Number.isFinite(telemetry.ffbTorqueNorm) ? (telemetry.ffbTorqueNorm as number) : 0;
+      const satTel = telemetry as CarTelemetry & RackSatStepInput;
+      const hasSatTelemetry =
+        telemetry.rearSlipAngleDeg !== undefined ||
+        telemetry.frontSlipAngleDeg !== undefined ||
+        telemetry.wheelSlipAnglesDeg !== undefined ||
+        satTel.rearSlipAngleRad !== undefined ||
+        satTel.frontSlipAngleRad !== undefined ||
+        satTel.lateralVelMs !== undefined ||
+        satTel.shockVelMs !== undefined;
+      const satOut = this.rackSat.step({
+        speedMs: satTel.speedMs,
+        speedKmh: telemetry.speedKmh,
+        dtS,
+        suspensionTravelMm: telemetry.suspensionTravelMm,
+        shockVelMs: satTel.shockVelMs,
+        lateralVelMs: satTel.lateralVelMs,
+        longitudinalVelMs: satTel.longitudinalVelMs,
+        rearSlipAngleRad: satTel.rearSlipAngleRad,
+        rearSlipAngleDeg: telemetry.rearSlipAngleDeg,
+        wheelSlipAnglesDeg: telemetry.wheelSlipAnglesDeg,
+        roadSteerRad: satTel.roadSteerRad,
+        steering: hasSatTelemetry ? telemetry.steering : undefined,
+        frontSlipAngleRad: satTel.frontSlipAngleRad,
+        frontSlipAngleDeg: telemetry.frontSlipAngleDeg,
+        yawRateRadS: satTel.yawRateRadS,
+        wheelbaseM: satTel.wheelbaseM,
+        lateralG: telemetry.lateralG,
+        longitudinalG: telemetry.longitudinalG,
+        bumpsGain: hasSatTelemetry ? satTel.bumpsGain : 0,
+        oversteerGain: hasSatTelemetry ? satTel.oversteerGain : 0,
+        understeerGain: hasSatTelemetry ? satTel.understeerGain : 0,
+      });
+      oversteerIntensityPct = satOut.oversteerIntensityPct;
+      understeerIntensityPct = satOut.understeerIntensityPct;
+      highImpactActive = satOut.highImpactActive;
+      const addedSatTorque = hasSatTelemetry ? satOut.totalAddedTorque : 0;
+      const impactScale = highImpactActive ? RACK_SAT_HIGH_IMPACT_ATTEN : 1.0;
+
+      const baseTorque = Number.isFinite(telemetry.ffbTorqueNorm) ? (telemetry.ffbTorqueNorm as number) : 0;
+      const torque = (baseTorque + addedSatTorque) * impactScale;
       const speedKmh = Number.isFinite(telemetry.speedKmh) ? telemetry.speedKmh : 0;
       const gyroFactor = Math.max(0, Math.min(1, (speedKmh - 10) / 180));
       if (hwDamper) {
@@ -242,7 +874,8 @@ export class WheelFfbClient {
       if (rawSub && rawSub.length > 0) {
         const h = dtS / rawSub.length;
         subframes = rawSub.map((sample) => {
-          let sf = smooth(shapeFfbForce(Number.isFinite(sample) ? sample : 0, wheel, telemetry.speedKmh), h) + softLock + damping;
+          const sampleTorque = ((Number.isFinite(sample) ? sample : 0) + addedSatTorque) * impactScale;
+          let sf = smooth(shapeFfbForce(sampleTorque, wheel, telemetry.speedKmh), h) + softLock + damping;
           if (wheel.ffbInvert) sf = -sf;
           return Math.round(sf * 1e4) / 1e4;
         });
@@ -290,7 +923,7 @@ export class WheelFfbClient {
       }
       const susp = telemetry.suspensionTravelMm;
       this.hidBump = dtS > 0 ? this.hidBump * Math.exp(-dtS * 14) : 0;
-      if (susp && Number.isFinite(susp[0]) && Number.isFinite(susp[1])) {
+      if (!highImpactActive && susp && Number.isFinite(susp[0]) && Number.isFinite(susp[1])) {
         if (this.lastFrontSuspMm !== null && dtS > 0) {
           const v0 = Math.abs(susp[0] - this.lastFrontSuspMm[0]) / dtS;
           const v1 = Math.abs(susp[1] - this.lastFrontSuspMm[1]) / dtS;
@@ -302,10 +935,12 @@ export class WheelFfbClient {
         this.lastFrontSuspMm = [susp[0], susp[1]];
       } else {
         this.lastFrontSuspMm = null;
+        if (highImpactActive) this.hidBump = 0;
       }
       if (this.hidBump > 0.01) bump = this.hidBump;
     } else {
       if (hwDamper) activeHid.setDamper(0);
+      this.rackSat.reset();
       this.lastRimDeg = null;
       this.lastFrontSuspMm = null;
       this.hidBump = 0;
@@ -317,6 +952,9 @@ export class WheelFfbClient {
       force,
       clipping: Math.abs(force) > 1,
       peak: Math.max(Math.abs(force), this.meter.peak * Math.exp(-dtS / 1.5)),
+      oversteerIntensityPct,
+      understeerIntensityPct,
+      highImpactActive,
     };
     if (useHid) {
       if (this.hidTest) return;
@@ -420,6 +1058,7 @@ export class WheelFfbClient {
   stop(): void {
     this.cancelHidTest();
     this.hidStopPlayer();
+    this.rackSat.reset();
     this.lastFrontSuspMm = null;
     this.hidBump = 0;
     this.force = 0;
@@ -436,7 +1075,16 @@ export class WheelFfbClient {
   resetMeter(): void {
     this.historyCount = 0;
     this.historyIdx = 0;
-    this.meter = { force: 0, clipping: false, peak: 0, suggestedGain: null };
+    this.rackSat.reset();
+    this.meter = {
+      force: 0,
+      clipping: false,
+      peak: 0,
+      suggestedGain: null,
+      oversteerIntensityPct: 0,
+      understeerIntensityPct: 0,
+      highImpactActive: false,
+    };
   }
 
   /** Keeps |force| history and, once a second, works out a gain that uses the wheel's range without clipping */
