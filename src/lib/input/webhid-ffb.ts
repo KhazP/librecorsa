@@ -681,10 +681,13 @@ export function conditionReportValues(
   const cp = getField(cond, PID.CP_OFFSET);
   if (cp) v[PID.CP_OFFSET] = forceToRaw(cp, 0);
   const c = clamp(Number.isFinite(coeff) ? coeff : 0, -1, 1);
+  // A signed coefficient keeps 0 at 0; an unsigned one (0..10000) has no negative side, so 0 is its minimum, not the
+  // midpoint forceToRaw would give it (a damper that starts at half strength)
+  const coeffRaw = (f: PidFieldLayout) => (f.min < 0 ? forceToRaw(f, c) : Math.round(f.min + (f.max - f.min) * Math.abs(c)));
   const posCoeff = getField(cond, PID.POSITIVE_COEFFICIENT);
-  if (posCoeff) v[PID.POSITIVE_COEFFICIENT] = forceToRaw(posCoeff, c);
+  if (posCoeff) v[PID.POSITIVE_COEFFICIENT] = coeffRaw(posCoeff);
   const negCoeff = getField(cond, PID.NEGATIVE_COEFFICIENT);
-  if (negCoeff) v[PID.NEGATIVE_COEFFICIENT] = forceToRaw(negCoeff, c);
+  if (negCoeff) v[PID.NEGATIVE_COEFFICIENT] = coeffRaw(negCoeff);
   const sat = clamp(Number.isFinite(saturation) ? saturation : 1, 0, 1);
   const posSat = getField(cond, PID.POSITIVE_SATURATION);
   if (posSat) v[PID.POSITIVE_SATURATION] = Math.round(posSat.min + (posSat.max - posSat.min) * sat);

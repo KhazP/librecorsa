@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import {
   buildReport,
   buildSetEffectReport,
+  conditionReportValues,
   forceToRaw,
   ForceWriter,
   isFatalHidStatus,
@@ -468,6 +469,27 @@ async function main() {
     const rep = buildSetEffectReport(layout.setEffect!, 2, PID.ET_CONSTANT_FORCE);
     // Byte 0: block 2, Byte 1: ET 1, Bytes 2-3: 0xFFFF, Byte 4: gain 255, Byte 5: bits X=1, Y=0, DirEn=1 -> 0b101, Byte 6: DirX=64, Byte 7: DirY=0
     assert.deepEqual([...rep.data], [2, 1, 0xff, 0xff, 255, 0b101, 64, 0]);
+  });
+  await check("Set Condition: an unsigned coefficient (0..10000) starts at 0, not the midpoint", () => {
+    const f = (bitOffset: number, min: number, max: number): PidFieldLayout => ({ bitOffset, bitSize: 16, min, max, signed: min < 0 });
+    const cond: PidReportLayout = {
+      reportId: 3,
+      bitLength: 8 + 16 * 4,
+      fields: {
+        [PID.EFFECT_BLOCK_INDEX]: { bitOffset: 0, bitSize: 8, min: 1, max: 40, signed: false },
+        [PID.CP_OFFSET]: f(8, 0, 10000),
+        [PID.POSITIVE_COEFFICIENT]: f(24, 0, 10000),
+        [PID.NEGATIVE_COEFFICIENT]: f(40, -10000, 10000),
+        [PID.POSITIVE_SATURATION]: f(56, 0, 10000),
+      },
+    };
+    const off = conditionReportValues(cond, 2, 0, 1);
+    assert.equal(off[PID.POSITIVE_COEFFICIENT], 0, "unsigned: 0 is the minimum");
+    assert.equal(off[PID.NEGATIVE_COEFFICIENT], 0, "signed: 0 stays 0");
+    assert.equal(off[PID.CP_OFFSET], 5000, "an unsigned centre offset keeps the midpoint");
+    const half = conditionReportValues(cond, 2, 0.35, 1);
+    assert.equal(half[PID.POSITIVE_COEFFICIENT], 3500);
+    assert.equal(half[PID.NEGATIVE_COEFFICIENT], 3500);
   });
   await check("hardware PID Damper (0x41) via Set Condition: allocates, starts at 0, updates when coeff changes >= 0.025", async () => {
     const etWithDamper = [0x26, 0x40, 0x41].map(pid);
