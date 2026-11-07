@@ -427,6 +427,8 @@ const AP_LINE_MAX_MS2 = 3;
 /** Pure-pursuit look-ahead on a plan: this many seconds of travel, at least the minimum (m) */
 const TRACK_LOOK_S = 0.22;
 const TRACK_LOOK_MIN_M = 5;
+/** Lateral acceleration a car metres off its path gets back onto it with (m/s²): sets the look-ahead's stretch */
+const TRACK_REJOIN_MS2 = 6;
 /** Integral on the lateral error (m/s² per m·s) and its cap: a long corner taken a little wide is pulled back */
 const TRACK_KI = 1.2;
 const TRACK_I_MAX_MS2 = 2.5;
@@ -1737,9 +1739,14 @@ export class F12026CarSim implements SimulatorCar {
     // Pure pursuit on the plan's own path with a short look-ahead: geometric, so it holds when the line crosses the
     // road at a steep angle (a tight corner's turn-in), where errors measured across the track misled a lateral loop.
     // The look-ahead is short enough that the corner-cutting it brings stays a few decimetres.
-    // (a car knocked off its path is handed its own offset as the line bias by the race field, so the look-ahead never
-    // has to pull it back metres at once)
-    const ld = Math.max(TRACK_LOOK_MIN_M, speed * TRACK_LOOK_S) / this.aiSteerGain;
+    // Metres off the path (a start, a rejoin, a knock), the look-ahead stretches so that getting back asks for about
+    // TRACK_REJOIN_MS2: pursuit asks ≈ 2v²e/L², and 4 m off at 190 km/h a short look-ahead asked for several g and spun
+    // the car. Within a metre it stays short: tracking errors there are the pursuit's own, and stretching for them
+    // only cut the corners further
+    const [lo0, hi0] = this.lateralRangeAt(p.s, p.sample);
+    const nNow = THREE.MathUtils.clamp(sampleGrid(plan.n, p.s, t.ds) + this.aiLineBiasM, lo0, hi0);
+    const eFar = Math.max(0, Math.abs(nNow - p.lateralOffset) - 1);
+    const ld = Math.max(TRACK_LOOK_MIN_M, speed * TRACK_LOOK_S, Math.sqrt((2 * speed * speed * eFar) / TRACK_REJOIN_MS2)) / this.aiSteerGain;
     // The look-ahead along the path, as centreline distance (the inside of a corner covers less path per metre of
     // centreline, the outside more)
     const kc = sampleGrid(t.kappa, p.s + 0.5 * ld, t.ds);
@@ -1755,8 +1762,6 @@ export class F12026CarSim implements SimulatorCar {
     let kappa = (2 * Math.sin(alpha)) / Math.max(3, dl);
     // A slow integral on the lateral error here and now: a long corner taken a little wide is pulled back
     {
-      const [lo0, hi0] = this.lateralRangeAt(p.s, p.sample);
-      const nNow = THREE.MathUtils.clamp(sampleGrid(plan.n, p.s, t.ds) + this.aiLineBiasM, lo0, hi0);
       const b = p.sample.binormal;
       const leftOf = (b.x * _ex.x + b.z * _ex.z) / (Math.hypot(b.x, b.z) || 1);
       const errLeft = (nNow - p.lateralOffset) * leftOf;

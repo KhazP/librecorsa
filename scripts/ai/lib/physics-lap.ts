@@ -39,6 +39,8 @@ export function physicsLap(
   car.aiPaceScale = 1;
   car.aiPlan = plan;
   car.resetToStartGrid(true, 0);
+  // On the line being judged from the start (the flying start puts the car on the stored line)
+  car.teleportToDistance(car.sMeters, car.vxMs, plan.n[((Math.round(car.sMeters / t.ds) % t.n) + t.n) % t.n]);
   const L = track.totalLengthM;
   const n = new Float64Array(t.n).fill(NaN), v = new Float64Array(t.n).fill(NaN);
   let laps = 0, prev = car.sMeters, lapStart = 0, time = 0, off = 0, maxErr = 0, sumErr = 0, cnt = 0;
