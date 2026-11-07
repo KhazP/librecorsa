@@ -34,10 +34,11 @@ export interface TyreVisualState {
   /** Camber leaning toward +left relative to the road (rad) */
   camberRad: number;
   /**
-   * Bottom of the tyre in the car frame (`worldPosition` / `worldQuaternion`, m): the road under a loaded tyre, the
-   * hub less the unloaded radius for a tyre off the ground. Set by models whose car frame rides on the sprung body
-   * (the rigid-body model), so the rigs put the unsprung wheels on the road rather than carrying them with the body's
-   * heave, pitch and roll. Absent: the car frame's origin plane is the road under the wheels.
+   * Bottom of the tyre in the car frame (`worldPosition` / `worldQuaternion`, m): the road under a tyre `onRoad`, the
+   * hub less the unloaded radius for a tyre off the ground. On the rigid-body model the car frame rides on the sprung
+   * body, so the rigs put the unsprung wheels here rather than carrying them with the body's heave, pitch and roll;
+   * a tyre on the road is then seated on the car's ground under the model's own corner (`seatCorner`). Absent: the
+   * car frame's origin plane is the road under the wheels.
    */
   contactInCar?: { x: number; y: number; z: number };
   /**
@@ -46,11 +47,6 @@ export interface TyreVisualState {
    * The VF26 draws no wheel travel (its body moves on the rig, its wheels stay on the road), so its tyres always do.
    */
   onRoad: boolean;
-  /**
-   * Optional exact car-frame road height (m) at a rig corner's own `(x, z)` in the car frame, used when a 3D car
-   * model's wheelbase or track width differs from the physics vehicle's on cambered/sloped/kerbed surfaces.
-   */
-  roadHeightAtCorner?: (xInCar: number, zInCar: number) => number;
 }
 
 export interface SimulatorCar {

@@ -521,7 +521,6 @@ const _ey = new THREE.Vector3();
 const _ez = new THREE.Vector3();
 const _v = new THREE.Vector3();
 const _qInv = new THREE.Quaternion();
-const _hit = createGroundHit();
 
 export class F12026CarSim implements SimulatorCar {
   public readonly vehicle: VehiclePhysics;
@@ -719,16 +718,15 @@ export class F12026CarSim implements SimulatorCar {
     this.config = structuredClone(profile.config);
     // Unloaded radii, used until the first step
     const geo = compoundData(this.config, this.config.compoundSlots.soft);
-    const vis = (radius: number, k: 0 | 1 | 2 | 3): TyreVisualState => ({
+    const vis = (radius: number): TyreVisualState => ({
       loadedRadiusM: radius,
       verticalDeflectionM: 0,
       lateralForceN: 0,
       camberRad: 0,
       contactInCar: { x: 0, y: 0, z: 0 },
       onRoad: false,
-      roadHeightAtCorner: (xInCar: number, zInCar: number): number => this.evalCornerRoadHeightInCar(k, xInCar, zInCar),
     });
-    this.tyreVisuals = [vis(geo.front.radius, 0), vis(geo.front.radius, 1), vis(geo.rear.radius, 2), vis(geo.rear.radius, 3)];
+    this.tyreVisuals = [vis(geo.front.radius), vis(geo.front.radius), vis(geo.rear.radius), vis(geo.rear.radius)];
     this.baseWingDeg = this.config.aero.wings.map((w) => w.angleDeg);
     const sp = this.config.suspensions;
     this.chassisBase = {
@@ -1798,34 +1796,6 @@ export class F12026CarSim implements SimulatorCar {
       c.y = (v.tyreBottomY(w) - _v.y) / Math.max(0.5, _ey.y);
       c.z = w.hardpoint.z;
     }
-  }
-
-  /**
-   * Car-frame height (m) of the tyre bottom / road at a 3D model corner's own `(xInCar, zInCar)` coordinates.
-   * When the corner's tyre is loaded on the track collider, queries the collider directly under `(xInCar, zInCar)`
-   * so models with shorter/longer wheelbases or different track widths (e.g. F2004, R25, RB8) sit flush on cambered,
-   * crowned, and kerbed surfaces.
-   */
-  private evalCornerRoadHeightInCar(k: 0 | 1 | 2 | 3, xInCar: number, zInCar: number): number {
-    const isLeft = k % 2 === 1;
-    const front = this.tyreVisuals[isLeft ? 1 : 0].contactInCar!;
-    const rear = this.tyreVisuals[isLeft ? 3 : 2].contactInCar!;
-    const span = front.z - rear.z;
-    const yInterp = Math.abs(span) > 0.5 ? front.y + ((zInCar - front.z) * (front.y - rear.y)) / span : k < 2 ? front.y : rear.y;
-    const w = this.vehicle.wheels[VF_ORDER[k]];
-    if (!(w.deflection > 0) || !this.onColliders || !this.trackRoot) return yInterp;
-    const ground = trackColliders(this.trackRoot).ground;
-    if (!ground) return yInterp;
-    _ey.set(0, 1, 0).applyQuaternion(this.worldQuaternion);
-    const upY = Math.max(0.5, _ey.y);
-    _v.set(xInCar, yInterp, zInCar).applyQuaternion(this.worldQuaternion).add(this.worldPosition);
-    if (!ground.query(_v.x, _v.z, _v.y + 0.6, _hit)) return yInterp;
-    let yInCar = yInterp + (_hit.height - _v.y) / upY;
-    _v.set(xInCar, yInCar, zInCar).applyQuaternion(this.worldQuaternion).add(this.worldPosition);
-    if (ground.query(_v.x, _v.z, _v.y + 0.6, _hit)) {
-      yInCar += (_hit.height - _v.y) / upY;
-    }
-    return yInCar;
   }
 
   /** Sector / lap timing at the sector boundaries and the start / finish line (as the VF26) */

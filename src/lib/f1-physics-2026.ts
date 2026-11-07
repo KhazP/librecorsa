@@ -538,7 +538,6 @@ export class F1Physics2026 {
       camberRad: 0,
       contactInCar: { x: 0, y: 0, z: 0 },
       onRoad: true,
-      roadHeightAtCorner: (xInCar, zInCar) => this.evalCornerRoadHeightInCar(0, xInCar, zInCar),
     },
     {
       loadedRadiusM: 0,
@@ -547,7 +546,6 @@ export class F1Physics2026 {
       camberRad: 0,
       contactInCar: { x: 0, y: 0, z: 0 },
       onRoad: true,
-      roadHeightAtCorner: (xInCar, zInCar) => this.evalCornerRoadHeightInCar(1, xInCar, zInCar),
     },
     {
       loadedRadiusM: 0,
@@ -556,7 +554,6 @@ export class F1Physics2026 {
       camberRad: 0,
       contactInCar: { x: 0, y: 0, z: 0 },
       onRoad: true,
-      roadHeightAtCorner: (xInCar, zInCar) => this.evalCornerRoadHeightInCar(2, xInCar, zInCar),
     },
     {
       loadedRadiusM: 0,
@@ -565,7 +562,6 @@ export class F1Physics2026 {
       camberRad: 0,
       contactInCar: { x: 0, y: 0, z: 0 },
       onRoad: true,
-      roadHeightAtCorner: (xInCar, zInCar) => this.evalCornerRoadHeightInCar(3, xInCar, zInCar),
     },
   ];
 
@@ -1213,30 +1209,25 @@ export class F1Physics2026 {
       const c = out.contactInCar!;
       c.x = w.staticPos.y;
       c.z = w.staticPos.x;
-      if (this.ground) {
-        c.y = this.evalCornerRoadHeightInCar(i, c.x, c.z);
-      } else {
-        c.y = (w.zRoad + w.surfaceBumpM - w.worldPos.y) * invUpY;
-      }
+      c.y = this.wheelContactInCar(w, invUpY);
     }
   }
 
-  private evalCornerRoadHeightInCar(k: number, xInCar: number, zInCar: number): number {
-    const w = this.wheels[k];
-    if (!this.ground) {
-      return this.tyreVisuals[k].contactInCar?.y ?? 0;
-    }
+  /**
+   * Car-frame height (m) of the road under a wheel: the track collider there when the car has one (the car frame
+   * sits on it, `syncWorldTransform`), else the wheel's own road and kerb bump. The rigs seat the drawn wheels from it.
+   */
+  private wheelContactInCar(w: VehicleWheelState, invUpY: number): number {
+    if (!this.ground) return (w.zRoad + w.surfaceBumpM - w.worldPos.y) * invUpY;
+    // The wheel's point on the car frame's origin plane
     const e = _basis.makeRotationFromQuaternion(this.worldQuaternion).elements;
-    const lx = e[0], ly = e[1], lz = e[2];
-    const uy = e[5];
-    const fx = e[8], fy = e[9], fz = e[10];
-    const wx = this.worldPosition.x + lx * xInCar + fx * zInCar;
-    const wy0 = this.worldPosition.y + ly * xInCar + fy * zInCar;
-    const wz = this.worldPosition.z + lz * xInCar + fz * zInCar;
-    if (!this.ground.query(wx, wz, wy0 + 0.6, _groundHit)) {
-      return (w.zRoad + w.surfaceBumpM - wy0) / Math.max(0.5, uy);
-    }
-    return (_groundHit.height - wy0) / Math.max(0.5, uy);
+    const x = w.staticPos.y;
+    const z = w.staticPos.x;
+    const px = this.worldPosition.x + e[0] * x + e[8] * z;
+    const py = this.worldPosition.y + e[1] * x + e[9] * z;
+    const pz = this.worldPosition.z + e[2] * x + e[10] * z;
+    const roadY = this.ground.query(px, pz, py + 0.6, _groundHit) ? _groundHit.height : w.zRoad + w.surfaceBumpM;
+    return (roadY - py) * invUpY;
   }
 
   /**
