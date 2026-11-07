@@ -1,5 +1,6 @@
 import type { CarTelemetry } from "@/types/f1";
 import { throttleSlipAllowance } from "@/lib/input/keyboard-pedals";
+import { RACK_SAT_HIGH_IMPACT_G, stepRackSat } from "@/lib/input/wheel-ffb";
 import { axleSlipFromTelemetry, createAxleSlipSample } from "./steering-assist";
 
 /**
@@ -94,26 +95,58 @@ function pulseState(t: CarTelemetry, timeS: number, triggers: boolean): { key: n
 }
 
 /** Motor magnitudes (0..1) for the current car state; `timeS` drives the kerb pulse */
-function hapticMagnitudes(t: CarTelemetry, timeS: number): { weak: number; strong: number } {
+export function hapticMagnitudes(
+  t: CarTelemetry,
+  timeS: number,
+  shaker?: { oversteerIntensityPct?: number; understeerIntensityPct?: number; highImpactActive?: boolean }
+): { weak: number; strong: number } {
+  const gLat = typeof t.lateralG === "number" && Number.isFinite(t.lateralG) ? Math.abs(t.lateralG) : 0;
+  const gLon = typeof t.longitudinalG === "number" && Number.isFinite(t.longitudinalG) ? Math.abs(t.longitudinalG) : 0;
+  const highImpact = shaker?.highImpactActive === true || Math.hypot(gLat, gLon) > RACK_SAT_HIGH_IMPACT_G;
+  if (highImpact) {
+    return { weak: 0, strong: 0 };
+  }
+
+  let oversteerNorm = clamp01((shaker?.oversteerIntensityPct ?? 0) / 100);
+  let understeerNorm = clamp01((shaker?.understeerIntensityPct ?? 0) / 100);
+  if (
+    shaker?.oversteerIntensityPct === undefined &&
+    shaker?.understeerIntensityPct === undefined &&
+    (t.rearSlipAngleDeg !== undefined || t.frontSlipAngleDeg !== undefined || t.wheelSlipAnglesDeg !== undefined)
+  ) {
+    const sat = stepRackSat({
+      speedKmh: t.speedKmh,
+      rearSlipAngleDeg: t.rearSlipAngleDeg,
+      frontSlipAngleDeg: t.frontSlipAngleDeg,
+      wheelSlipAnglesDeg: t.wheelSlipAnglesDeg,
+      steering: t.steering,
+      lateralG: t.lateralG,
+      longitudinalG: t.longitudinalG,
+    });
+    oversteerNorm = clamp01(sat.oversteerIntensityPct / 100);
+    understeerNorm = clamp01(sat.understeerIntensityPct / 100);
+  }
+
   const speedFactor = clamp01(t.speedKmh / 300);
 
-  // Weak motor: kerb strikes pulse on and off, front-tyre scrub near the limit, faint road texture
+  // Weak motor: kerb strikes pulse on and off, front-tyre scrub / understeer SAT near the limit, faint road texture
   const onKerb = t.onKerbLeft || t.onKerbRight;
   const kerbPulseOn = (timeS * KERB_PULSE_HZ) % 1 < 0.5;
   const kerb = onKerb && kerbPulseOn ? 0.55 + 0.35 * speedFactor : 0;
-  const frontSlip = Math.max(t.tireSlipRatio[0], t.tireSlipRatio[1]);
-  const scrub = 0.4 * smoothstep(0.85, 1.15, frontSlip);
+  const frontSlip = Math.max(t.tireSlipRatio?.[0] ?? 0, t.tireSlipRatio?.[1] ?? 0);
+  const scrub = 0.4 * smoothstep(0.85, 1.15, frontSlip) + 0.35 * understeerNorm;
   const texture = 0.04 * speedFactor;
   const weak = clamp01(kerb + scrub + texture);
 
-  // Strong motor: lock-up and wheelspin, a constant rack-load cue and rough surfaces
-  const minSlip = Math.min(...t.wheelSlipRatios);
+  // Strong motor: lock-up, wheelspin, rear oversteer SAT slide cue, rack-load cue and rough surfaces
+  const minSlip = t.wheelSlipRatios ? Math.min(...t.wheelSlipRatios) : 0;
   const lockUp = t.speedKmh > 30 ? 0.8 * smoothstep(0.12, 0.45, -minSlip) : 0;
-  const rearSlip = Math.max(t.wheelSlipRatios[2], t.wheelSlipRatios[3]);
+  const rearSlip = t.wheelSlipRatios ? Math.max(t.wheelSlipRatios[2], t.wheelSlipRatios[3]) : 0;
   const wheelspin = 0.6 * smoothstep(0.12, 0.5, rearSlip);
+  const oversteerSlide = 0.45 * oversteerNorm;
   const rackLoad = 0.25 * Math.pow(clamp01(Math.abs(t.ffbTorqueNorm ?? 0)), 1.5);
   const roughSurface = t.surface === "grass" || t.surface === "runoff" ? 0.35 : 0;
-  const strong = clamp01(lockUp + wheelspin + rackLoad + roughSurface);
+  const strong = clamp01(lockUp + wheelspin + oversteerSlide + rackLoad + roughSurface);
 
   return { weak, strong };
 }
@@ -249,7 +282,13 @@ export class GamepadHaptics {
     t: CarTelemetry,
     dtSeconds: number,
     enabled: boolean,
-    options?: { triggerRumble?: boolean; triggerSlipAlwaysOn?: boolean }
+    options?: {
+      triggerRumble?: boolean;
+      triggerSlipAlwaysOn?: boolean;
+      oversteerIntensityPct?: number;
+      understeerIntensityPct?: number;
+      highImpactActive?: boolean;
+    }
   ): void {
     this.timeS += dtSeconds;
     if (!enabled) {
@@ -258,7 +297,7 @@ export class GamepadHaptics {
     }
     this.active = true;
 
-    const { weak, strong } = hapticMagnitudes(t, this.timeS);
+    const { weak, strong } = hapticMagnitudes(t, this.timeS, options);
     const wantTriggers = options?.triggerRumble === true;
     const trig = wantTriggers ? triggerMagnitudes(t, this.timeS, options) : { left: 0, right: 0 };
     for (const { key, actuator } of connectedPads()) {

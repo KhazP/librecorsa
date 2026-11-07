@@ -1,6 +1,7 @@
 import type { CarTelemetry } from "@/types/f1";
+import { RACK_SAT_HIGH_IMPACT_G, stepRackSat } from "./wheel-ffb";
 
-/** Compact telemetry for dashboards / SimHub / bass shakers, sent ~60 Hz; field names stable (document each with a comment and its unit) */
+/** Compact telemetry for dashboards / motion rigs / bass shakers, sent ~60 Hz; field names stable (document each with a comment and its unit) */
 export interface TelemetryOutPacket {
   /** Packet format version */
   v: 1;
@@ -84,6 +85,10 @@ export interface TelemetryOutPacket {
   tc: boolean;
   /** Steering wheel torque from the tyres, -1..1 (+ = turning the rim right) */
   ffb: number;
+  /** Rear oversteer self-aligning shaker intensity (%, 0..100; present when slip angles or shaker channels are supplied) */
+  oversteerPct?: number;
+  /** Front understeer self-aligning shaker intensity (%, 0..100; present when slip angles or shaker channels are supplied) */
+  understeerPct?: number;
 }
 
 /** Values the telemetry does not carry on CarTelemetry itself */
@@ -102,6 +107,10 @@ export interface TelemetryOutExtra {
   rollRad: number;
   /** Milliseconds since page load */
   nowMs: number;
+  /** Optional precomputed rear oversteer shaker intensity (%, 0..100) */
+  oversteerPct?: number;
+  /** Optional precomputed front understeer shaker intensity (%, 0..100) */
+  understeerPct?: number;
 }
 
 type Quad = [number, number, number, number];
@@ -171,5 +180,37 @@ export function buildTelemetryPacket(t: CarTelemetry, extra: TelemetryOutExtra):
     abs: f12?.absActive ?? false,
     tc: f12?.tcActive ?? false,
     ffb: round(t.ffbTorqueNorm, 3, -1, 1),
+    ...(extra.oversteerPct !== undefined ||
+    extra.understeerPct !== undefined ||
+    t.rearSlipAngleDeg !== undefined ||
+    t.frontSlipAngleDeg !== undefined ||
+    t.wheelSlipAnglesDeg !== undefined
+      ? (() => {
+          const highImpact = Math.hypot(num(t.lateralG), num(t.longitudinalG)) > RACK_SAT_HIGH_IMPACT_G;
+          if (highImpact) {
+            return { oversteerPct: 0, understeerPct: 0 };
+          }
+          if (extra.oversteerPct !== undefined || extra.understeerPct !== undefined) {
+            return {
+              oversteerPct: round(extra.oversteerPct, 1, 0, 100),
+              understeerPct: round(extra.understeerPct, 1, 0, 100),
+            };
+          }
+          const sat = stepRackSat({
+            speedKmh: t.speedKmh,
+            rearSlipAngleDeg: t.rearSlipAngleDeg,
+            frontSlipAngleDeg: t.frontSlipAngleDeg,
+            wheelSlipAnglesDeg: t.wheelSlipAnglesDeg,
+            steering: t.steering,
+            yawRateRadS: extra.yawRateRadS,
+            lateralG: t.lateralG,
+            longitudinalG: t.longitudinalG,
+          });
+          return {
+            oversteerPct: round(sat.oversteerIntensityPct, 1, 0, 100),
+            understeerPct: round(sat.understeerIntensityPct, 1, 0, 100),
+          };
+        })()
+      : {}),
   };
 }
