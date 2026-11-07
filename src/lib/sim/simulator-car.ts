@@ -16,7 +16,7 @@ import type {
   TyreSetup,
 } from '@/types/f1';
 import type { VehicleWheelState } from './vehicle-types';
-import type { SteeringAssistSettings } from './steering-assist';
+import type { SteeringAssistSettings, SteeringSource } from './steering-assist';
 import type { BrakingGuide } from './speed-profile';
 
 /** Per-wheel state used by the skid marks / smoke, multiplayer and AI peers. Order FR, FL, RR, RL. */
@@ -111,8 +111,8 @@ export interface SimulatorCar {
   gamepadAssistEnabled: boolean;
   /** Automatic gear changes; off = the driver shifts with Gear up / Gear down (AI cars keep it on) */
   autoGearbox: boolean;
-  /** Keyboard and controller steering assist; its settings follow the player's steering choices */
-  readonly steeringAssist: { settings: SteeringAssistSettings; readonly keyboardEngaged: boolean };
+  /** Keyboard and controller steering assist (its settings follow the player's tuning) and what steered last */
+  readonly steeringAssist: { settings: SteeringAssistSettings; readonly source: SteeringSource | null };
   autoXMode: boolean;
   activeAeroMode: ActiveAeroMode;
   tireCompound: TireCompound;

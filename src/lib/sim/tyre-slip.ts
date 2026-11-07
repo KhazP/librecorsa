@@ -81,6 +81,18 @@ export function axleSlip(fl: WheelSlip, fr: WheelSlip, rl: WheelSlip, rr: WheelS
   return out;
 }
 
+/** Four tyre samples a car fills in place each step (FL, FR, RL, RR), and their axle sample */
+export class AxleSlipScratch {
+  readonly wheels = [createWheelSlip(), createWheelSlip(), createWheelSlip(), createWheelSlip()] as const;
+  private readonly out = createAxleSlipSample();
+
+  /** The axle sample of `wheels` as they are now (the same object every call) */
+  sample(): AxleSlipSample {
+    const [fl, fr, rl, rr] = this.wheels;
+    return axleSlip(fl, fr, rl, rr, this.out);
+  }
+}
+
 /** Telemetry the axle slip can be read from (CarTelemetry satisfies it); wheel order FL, FR, RL, RR */
 export interface AxleSlipTelemetry {
   tireSlipRatio?: readonly number[];

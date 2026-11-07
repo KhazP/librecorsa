@@ -46,9 +46,9 @@ import {
   getActiveSurfaceTable,
   RWANDA_DRS_ZONES,
 } from '@/lib/track-data';
-import { SteeringAssist } from '../steering-assist';
+import { SteeringAssist, type SteeringAssistCarState } from '../steering-assist';
 import { type OvertakingRaceControl, type OvertakingRules, OvertakeGrant } from '../overtaking-rules';
-import { type AxleSlipSample, axleSlip, createAxleSlipSample, createWheelSlip } from '../tyre-slip';
+import { AxleSlipScratch } from '../tyre-slip';
 import type { AeroWakeState } from '../aero-wake';
 import type { TrackEvolutionSample } from '../track-evolution';
 import type { WeatherContactSample } from '../weather';
@@ -677,10 +677,7 @@ export class F12026CarSim implements SimulatorCar {
   /** Per-wheel ABS pressure share (LF, RF, LR, RR); `absCut` is their minimum */
   private readonly absWheelCut: [number, number, number, number] = [1, 1, 1, 1];
   private readonly prevWheelOmega: [number, number, number, number] = [0, 0, 0, 0];
-  /** The steering assist drove the last step (it starts from a clean state when it takes over) */
-  private assistActive = false;
-  private readonly wheelSlipScratch = [createWheelSlip(), createWheelSlip(), createWheelSlip(), createWheelSlip()] as const;
-  private readonly axleSlipScratch = createAxleSlipSample();
+  private readonly slipScratch = new AxleSlipScratch();
   private steerCmd = 0;
   /** Autopilot pedal (−1 full brake … +1 full throttle): the integral of its speed error */
   private apPedal = 0;
@@ -1363,71 +1360,47 @@ export class F12026CarSim implements SimulatorCar {
     inputs: ControlInputs,
     h: number
   ): { throttle: number; brake: number; brakeWheelScale?: readonly [number, number, number, number]; steer: number; drs: boolean } {
-    let steer: number;
-    const keys = inputs.kbSteer ?? 0;
-    const keyboardSteering = keys !== 0 || this.steeringAssist.keyboardEngaged;
-    if (inputs.padSteer === undefined && inputs.kbSteer === undefined) {
-      this.assistActive = false;
-      steer = inputs.analogSteer !== undefined ? inputs.analogSteer : inputs.steerRight - inputs.steerLeft;
-    } else if (inputs.padSteer !== undefined && !this.gamepadAssistEnabled && !keyboardSteering) {
-      this.assistActive = false;
-      steer = inputs.padSteer;
-    } else {
-      // Start from a clean state when the assist takes over from the wheel, mouse or raw stick
-      if (!this.assistActive) this.steeringAssist.reset();
-      this.assistActive = true;
-      const front = this.compoundData.modelData;
-      const wetMuScale =
-        this.vehicle.waterMm > 0
-          ? wetGripFactor(
-              this.compoundData.wetTraits ?? SLICK_TRAITS,
-              this.vehicle.waterMm,
-              this.vehicle.speedMs,
-              this.vehicle.realism.wetSeverity,
-              0.5 * (this.vehicle.wheels[0].wear + this.vehicle.wheels[1].wear)
-            ) / (this.compoundData.wetTraits?.dryGrip ?? 1)
-          : 1;
-      steer = this.steeringAssist.update(
-        inputs.padSteer ?? 0,
-        keys,
-        {
-          vxMs: this.vxMs,
-          vyMs: this.bodyVy(),
-          yawRateRadS: this.bodyYawRate(),
-          cgToFrontAxleM: this.cgToFrontAxleM,
-          cgToRearAxleM: this.cgToRearAxleM,
-          wheelbaseM: this.wheelbaseM,
-          maxSteerAngleRad: this.maxSteerAngleRad,
-          frontPeakSlipRad: (front.friction_limit_angle || DEFAULT_FRICTION_LIMIT_ANGLE_DEG) * DEG2RAD,
-          brake: inputs.brake,
-          maxLateralAccel:
-            this.profile.padLateralMu *
-            wetMuScale *
-            (G + this.vehicle.telemetry.downforceN / this.vehicle.totalMassKg),
-          slip: this.axleSlipSample(),
-        },
-        h
-      );
-    }
-
+    const steer = this.steeringAssist.steer(inputs, this.gamepadAssistEnabled, this.steeringAssistState, h);
     return { ...this.electronicAids(inputs.throttle, inputs.brake, h, this), steer: THREE.MathUtils.clamp(steer, -1, 1), drs: false };
   }
 
-  /** The tyres' live slip per axle, for the steering assist's learned peak slip angle */
-  private axleSlipSample(): AxleSlipSample {
-    const W = this.vehicle.wheels;
+  /** The car as the steering assist reads it */
+  private readonly steeringAssistState = (brake: number): SteeringAssistCarState => {
+    const v = this.vehicle;
+    // The tyres' live slip per axle, for the learned peak slip angle
     for (let i = 0; i < 4; i++) {
-      const w = W[i];
-      const o = this.wheelSlipScratch[i];
+      const w = v.wheels[i];
+      const o = this.slipScratch.wheels[i];
       o.loadN = w.grounded ? w.fz : 0;
       o.slipAngleRad = w.slipAngleRad;
       o.ndSlip = w.combinedSlip;
       o.slipRatio = w.slipRatio;
       o.onRoad = w.ground.surface === 'road' || w.ground.surface === 'pitlane';
     }
-    const [fl, fr, rl, rr] = this.wheelSlipScratch;
-    return axleSlip(fl, fr, rl, rr, this.axleSlipScratch);
-  }
+    const wetMuScale =
+      v.waterMm > 0
+        ? wetGripFactor(
+            this.compoundData.wetTraits ?? SLICK_TRAITS,
+            v.waterMm,
+            v.speedMs,
+            v.realism.wetSeverity,
+            0.5 * (v.wheels[0].wear + v.wheels[1].wear)
+          ) / (this.compoundData.wetTraits?.dryGrip ?? 1)
+        : 1;
+    return {
+      vxMs: this.vxMs,
+      vyMs: this.bodyVy(),
+      yawRateRadS: this.bodyYawRate(),
+      cgToFrontAxleM: this.cgToFrontAxleM,
+      cgToRearAxleM: this.cgToRearAxleM,
+      wheelbaseM: this.wheelbaseM,
+      maxSteerAngleRad: this.maxSteerAngleRad,
+      frontPeakSlipRad: (this.compoundData.modelData.friction_limit_angle || DEFAULT_FRICTION_LIMIT_ANGLE_DEG) * DEG2RAD,
+      brake,
+      maxLateralAccel: this.profile.padLateralMu * wetMuScale * (G + v.telemetry.downforceN / v.totalMassKg),
+      slip: this.slipScratch.sample(),
+    };
+  };
 
   /** 130 Hz TC1/TC2 + 240 Hz 4-Ch ABS on the pedals, at the given dial positions (the driver's, or the autopilot's) */
   private electronicAids(
@@ -1708,7 +1681,6 @@ export class F12026CarSim implements SimulatorCar {
 
   private afterPlacement(): void {
     this.steeringAssist.reset();
-    this.assistActive = false;
     this.tcCut = this.absCut = 1;
     this.absWheelCut.fill(1);
     for (let i = 0; i < 4; i++) this.prevWheelOmega[i] = this.vehicle.wheels[i].omega;

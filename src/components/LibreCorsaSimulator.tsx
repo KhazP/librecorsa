@@ -2092,9 +2092,10 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         kbTuning.pedalAssistStrength
       );
       const kbSteerDir = (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
-      // On-screen controls: pedals and a steering pad (or the tilt of the device)
+      // On-screen controls: pedals and a steering pad (or the tilt of the device). Without a controller the touch
+      // steering is always the steering, centred too; with one, the stick steers while the touch steering is centred
       const touch = touchInput.active && driving ? touchInput : null;
-      const touchSteerActive = touch !== null && Math.abs(touch.steer) > 0.01;
+      const touchSteering = touch !== null && (gamepadStick === undefined || Math.abs(touch.steer) > 0.01);
       if (touchInput.active) {
         if (driving) {
           if (touchInput.shiftUp) keysRef.current.shiftUp = true;
@@ -2104,24 +2105,22 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         }
         touchInput.shiftUp = touchInput.shiftDown = touchInput.aero = touchInput.boost = false;
       }
-      const activeAnalogSteer = mouseSteerEnabledRef.current
+      // Wheel, mouse and touch steer the rack directly; the car's steering assist picks between them, the keys and the
+      // stick (steering-assist.ts: a pressed key takes over, and hands back once its ramp is at centre)
+      const directSteer = mouseSteerEnabledRef.current
         ? mouseSteerValueRef.current
-        : touchSteerActive
+        : touchSteering
           ? touch.steer
           : gamepadSteer;
-      // The keys steer (through the car's assist) while held or settling back to centre, and whenever no wheel, mouse
-      // or touch steering is in use, so the assist's self-aligning force keeps working with the keys let go
-      const kbSteerActive = kbSteerDir !== 0 || physics.steeringAssist.keyboardEngaged || activeAnalogSteer === undefined;
 
       const inputs: ControlInputs = {
         throttle: Math.max(kb.throttle * kbThrottleScale, gamepadThrottle, touch?.throttle ?? 0),
         brake: Math.max(kb.brake * kbBrakeScale, gamepadBrake, touch?.brake ?? 0),
         steerLeft: 0,
         steerRight: 0,
-        analogSteer: kbSteerActive ? undefined : activeAnalogSteer,
-        kbSteer: kbSteerActive ? kbSteerDir : undefined,
-        padSteer:
-          kbSteerActive && !mouseSteerEnabledRef.current && !touchSteerActive ? gamepadStick : undefined,
+        analogSteer: directSteer,
+        kbSteer: kbSteerDir,
+        padSteer: directSteer === undefined ? gamepadStick : undefined,
         manualOverride:
           keysRef.current.boostHold || boostLatchRef.current || gamepadBoost,
         toggleXMode: keysRef.current.toggleX,
@@ -2457,9 +2456,9 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         };
       });
 
-      // Keep mouseSteerValueRef synchronized with actual steering angle while keyboard A/D override is held
-      // so releasing A/D mid-corner at 300+ km/h transitions seamlessly without a step jump
-      if (mouseSteerEnabledRef.current && kbSteerActive) {
+      // While the keys steer, the mouse follows the steering, so it takes over (once the keys' ramp is at centre)
+      // where the steering is instead of where the mouse was
+      if (mouseSteerEnabledRef.current && physics.steeringAssist.source === "keyboard") {
         mouseSteerValueRef.current = physics.steerAngleNorm;
       }
 

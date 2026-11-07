@@ -27,6 +27,9 @@
  * - Keyboard slide catch. A key cannot ease off or countersteer by degrees, so when the rear slides out past its grip
  *   while a key still steers into the turn, the key hands over to the self-steer force until the rear grips again.
  *
+ * The keyboard and the controller each have their own tuning; the device steering (`SteeringAssist.source`, which the
+ * cars route through `steer`) uses its own, with the keys released as much as held.
+ *
  * The cars' steering racks are linear (road-wheel angle = input × lock), so no input-to-angle curve is needed.
  *
  * Conventions: steering + = right (same as `ControlInputs.analogSteer`), yaw rate + = right, body lateral velocity
@@ -36,6 +39,7 @@
  * MIT License — see CREDITS.md.
  */
 
+import type { ControlInputs } from "@/types/f1";
 import { PAD_SENSITIVITY } from "@/lib/input/device-input";
 import { KB_STEER_RETURN_S, KB_STEER_RISE_S, keyboardRampScales } from "@/lib/input/keyboard-steer";
 import type { AxleSlipSample } from "./tyre-slip";
@@ -350,9 +354,21 @@ export function evaluateSelfSteerDeg(rearAngleDeg: number, tuning: DeviceAssistT
   return clampEased(correctionDeg, -capDeg, capDeg, window);
 }
 
+/** What steers the car: the keys or the stick through the assist, or a wheel, mouse or touch straight to the rack */
+export type SteeringSource = SteeringDevice | "direct";
+
+/** The player's steering inputs as the cars receive them, and the brake the assist's limit follows */
+export type SteeringInputs = Pick<ControlInputs, "analogSteer" | "padSteer" | "kbSteer" | "steerLeft" | "steerRight" | "brake">;
+
+/** Stick travel (shaped, past its dead zone) that takes the steering over from the keys */
+const STICK_TAKEOVER = 0.05;
+
 export class SteeringAssist {
   settings: SteeringAssistSettings;
 
+  private sourceNow: SteeringSource | null = null;
+  /** The assist steered the last step: it starts from a clean state when it takes over */
+  private engaged = false;
   private readonly keyboard = new SmoothTowards(7, 1, -1, 1, 0);
   private readonly steering = new SmoothTowards(7, 0.13, -1, 1, 0);
   private readonly absSteering = new SmoothTowards(7, 0.13, -1, 1, 0);
@@ -368,12 +384,14 @@ export class SteeringAssist {
     this.settings = { ...settings };
   }
 
-  /** The keyboard is steering, or its ramp has not yet settled back to centre */
-  get keyboardEngaged(): boolean {
-    return Math.abs(this.keyboard.state) > 1e-4;
+  /** What steered the last step (null before the first) */
+  get source(): SteeringSource | null {
+    return this.sourceNow;
   }
 
+  /** Back to centre with no slide in progress; the learned peak slip and the steering device are kept */
   reset(): void {
+    this.engaged = false;
     this.keyboard.reset();
     this.steering.reset();
     this.absSteering.reset();
@@ -385,11 +403,49 @@ export class SteeringAssist {
   }
 
   /**
-   * Stick (−1 left .. +1 right, 0 without a controller) and keys (−1 left, 0, +1 right) → steering command
-   * (−1..1, + = right)
+   * The player's steering for one step (−1..1, + = right). A wheel, mouse or touch (`analogSteer`, or
+   * `steerRight − steerLeft` when neither keys nor a stick are given) goes straight to the rack; the keys, and the
+   * stick unless `controllerAssist` is off, go through the assist with the tuning of the device that steers. `car` is
+   * only read while the assist steers.
    */
-  update(stick: number, keys: number, car: SteeringAssistCarState, dt: number): number {
+  steer(
+    inputs: SteeringInputs,
+    controllerAssist: boolean,
+    car: (brake: number) => SteeringAssistCarState,
+    dt: number
+  ): number {
+    const keys = Math.sign(inputs.kbSteer ?? 0);
+    const source = this.pickSource(keys, inputs);
+    this.sourceNow = source;
+    if (source === "direct" || (source === "controller" && !controllerAssist)) {
+      this.engaged = false;
+      return source === "controller" ? (inputs.padSteer ?? 0) : (inputs.analogSteer ?? inputs.steerRight - inputs.steerLeft);
+    }
+    if (!this.engaged) this.reset();
+    this.engaged = true;
+    return this.update(inputs.padSteer ?? 0, keys, source, car(inputs.brake), dt);
+  }
+
+  /**
+   * A pressed key takes the steering, and keeps it while its ramp returns to centre and while the stick stays centred
+   * (a keyboard player with a pad plugged in keeps the keyboard's tuning); a moved stick takes it over, and so does a
+   * wheel, mouse or touch once the keys' ramp is back at centre.
+   */
+  private pickSource(keys: number, inputs: SteeringInputs): SteeringSource {
+    if (keys !== 0) return "keyboard";
+    const keyboardBefore = this.sourceNow === "keyboard" && inputs.kbSteer !== undefined;
+    if (keyboardBefore && Math.abs(this.keyboard.state) > 1e-4) return "keyboard";
+    if (inputs.analogSteer !== undefined) return "direct";
+    if (inputs.padSteer !== undefined) {
+      return keyboardBefore && Math.abs(inputs.padSteer) <= STICK_TAKEOVER ? "keyboard" : "controller";
+    }
+    return inputs.kbSteer !== undefined ? "keyboard" : "direct";
+  }
+
+  /** Stick (−1..1) and keys (−1, 0, +1) → steering command (−1..1, + = right), with `source`'s tuning */
+  private update(stick: number, keys: number, source: SteeringDevice, car: SteeringAssistCarState, dt: number): number {
     const { controller, keyboard } = this.settings;
+    const keyboardSteers = source === "keyboard";
     const lockDeg = car.maxSteerAngleRad * RAD2DEG;
     const wbFactor = car.wheelbaseM / 2.5;
     const speed = Math.hypot(car.vxMs, car.vyMs);
@@ -400,11 +456,10 @@ export class SteeringAssist {
     const kbState = this.keyboard.state;
     const kbCentring = Math.abs(kbState) - Math.sign(kbState) * kbDir > 0;
     const kb = this.keyboard.get(kbDir, dt, kbRateMult * (kbCentring ? 1.5 * keyboard.returnScale : keyboard.riseScale));
-    const keyboardActive = kbDir !== 0 || Math.abs(kb) > 1e-4;
 
     // Then the rounded smoother both inputs share
     const raw = clamp(stick + kb, -1, 1);
-    const rateMult = keyboardActive
+    const rateMult = keyboardSteers
       ? kbRateMult
       : steeringRateMult(speed, lockDeg, controller.steeringRate, controller.rateIncreaseWithSpeed);
     // Under half rate the return to centre stays at least as quick as at half rate
@@ -433,7 +488,7 @@ export class SteeringAssist {
     const peakDeg = this.peakSlip.update(car.frontPeakSlipRad * RAD2DEG, car.slip, initial, Math.max(0, car.vxMs), dt);
 
     // Self-steer: wheels follow the rear axle's direction of travel, plus yaw damping
-    const active = keyboardActive ? keyboard : controller;
+    const active = keyboardSteers ? keyboard : controller;
     const frontGrounded = this.grounded.get(car.slip?.frontGrounded === false ? 0 : 1, dt);
     const selfSteerStrength = Math.max(0.25, frontGrounded) * assistFadeIn;
     const exponent = 1 + (1 - Math.log10(10 * (active.selfSteerResponse * 0.9 + 0.1)));
@@ -487,11 +542,11 @@ export class SteeringAssist {
 
     // Keyboard slide catch: a held key cannot ease off or countersteer by degrees, so when the rear slides out past
     // its grip (from ≈0.85× to ≈1.65× the fronts' peak slip angle at the rear axle) while a key still steers into the
-    // turn, the key's steering hands over to the self-steer force (which
-    // countersteers) until the rear grips again. A stick steers by degrees, so the player catches the slide there.
+    // turn, the key's steering hands over to the self-steer force (which countersteers) until the rear grips again. A
+    // stick steers by degrees, so the player catches the slide there.
     const slidingOut = Math.abs(initial) > 1e-6 && inputSign !== Math.sign(vRightRear);
     const rawSlide =
-      keyboardActive && slidingOut ? clampEased((Math.abs(rearAngle) - peakDeg) / (0.5 * peakDeg), 0, 1, 0.6) : 0;
+      keyboardSteers && slidingOut ? clampEased((Math.abs(rearAngle) - peakDeg) / (0.5 * peakDeg), 0, 1, 0.6) : 0;
     const slide = this.slideCatch.get(rawSlide, dt, rawSlide < this.slideCatch.state ? 0.5 : 1) * midSpeedFade;
 
     const processed = clamp(

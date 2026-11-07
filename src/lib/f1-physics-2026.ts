@@ -136,8 +136,8 @@ import {
   queryWheelGroundContact,
 } from './sim/track-occupancy';
 import { type AiVehicleParams, RacingLineDriver } from './sim/ai-mpc';
-import { SteeringAssist } from './sim/steering-assist';
-import { type AxleSlipSample, axleSlip, createAxleSlipSample, createWheelSlip } from './sim/tyre-slip';
+import { SteeringAssist, type SteeringAssistCarState } from './sim/steering-assist';
+import { AxleSlipScratch } from './sim/tyre-slip';
 import {
   aiLineOffsetM,
   computeSpeedProfile,
@@ -374,10 +374,7 @@ export class F1Physics2026 {
   public gamepadAssistEnabled = true;
   /** Keyboard and controller steering assist */
   public readonly steeringAssist = new SteeringAssist();
-  /** The steering assist drove the last step (it starts from a clean state when it takes over) */
-  private assistActive = false;
-  private readonly wheelSlipScratch = [createWheelSlip(), createWheelSlip(), createWheelSlip(), createWheelSlip()] as const;
-  private readonly axleSlipScratch = createAxleSlipSample();
+  private readonly slipScratch = new AxleSlipScratch();
 
   // Vehicle state (3D Cartesian world + projected curvilinear track state)
   public worldX = 0;
@@ -1464,20 +1461,33 @@ export class F1Physics2026 {
   // 500 Hz outer step
   // ===========================================================================
 
-  /** The tyres' live slip per axle, for the steering assist's learned peak slip angle (wheels are FR, FL, RR, RL) */
-  private axleSlipSample(): AxleSlipSample {
+  /** The car as the steering assist reads it */
+  private readonly steeringAssistState = (brake: number): SteeringAssistCarState => {
+    // The tyres' live slip per axle, for the learned peak slip angle (wheels FR, FL, RR, RL; the sample's FL, FR, RL, RR)
     for (let i = 0; i < 4; i++) {
       const w = this.wheels[i];
-      const o = this.wheelSlipScratch[i];
+      const o = this.slipScratch.wheels[i ^ 1];
       o.loadN = w.fzN;
       o.slipAngleRad = w.slipAngleRad;
       o.ndSlip = w.combinedSlipNorm;
       o.slipRatio = w.slipRatio;
       o.onRoad = w.surfaceType === 'asphalt';
     }
-    const [fr, fl, rr, rl] = this.wheelSlipScratch;
-    return axleSlip(fl, fr, rl, rr, this.axleSlipScratch);
-  }
+    return {
+      vxMs: this.vxMs,
+      vyMs: this.vyMs,
+      yawRateRadS: this.yawRateRadS,
+      cgToFrontAxleM: this.cgToFrontAxleM,
+      cgToRearAxleM: this.cgToRearAxleM,
+      wheelbaseM: this.wheelbaseM,
+      maxSteerAngleRad: this.maxSteerAngleRad,
+      frontPeakSlipRad: VF26_TYRES[this.tireCompound].front.frictionLimitAngleDeg * DEG2RAD,
+      brake,
+      // Measured on the flat pad: ≈1.75 × (g + downforce / m) from 90 to 240 km/h, scaled by surface/wet grip
+      maxLateralAccel: 1.75 * this.aiPlanGrip() * (G + this.aeroDownforceN / this.massKg),
+      slip: this.slipScratch.sample(),
+    };
+  };
 
   private outerStep(dt: number, inputs: ControlInputs, shiftRequest: -1 | 0 | 1): void {
     const sample = this.track.getSampleAtDistance(this.sMeters);
@@ -1554,38 +1564,7 @@ export class F1Physics2026 {
       const aiOvertake = !!this.raceControl?.racing && this.overtake.earned && sample.drsZone;
       if (drv.boostRemainingS <= 0) drv.ersMode = aiOvertake ? 'OVERRIDE' : ai.ersMode;
     } else {
-      const keys = inputs.kbSteer ?? 0;
-      const keyboardSteering = keys !== 0 || this.steeringAssist.keyboardEngaged;
-      if (inputs.padSteer === undefined && inputs.kbSteer === undefined) {
-        this.assistActive = false;
-        steerNorm = inputs.analogSteer !== undefined ? inputs.analogSteer : inputs.steerRight - inputs.steerLeft;
-      } else if (inputs.padSteer !== undefined && !this.gamepadAssistEnabled && !keyboardSteering) {
-        this.assistActive = false;
-        steerNorm = inputs.padSteer;
-      } else {
-        // Start from a clean state when the assist takes over from the wheel, mouse or raw stick
-        if (!this.assistActive) this.steeringAssist.reset();
-        this.assistActive = true;
-        steerNorm = this.steeringAssist.update(
-          inputs.padSteer ?? 0,
-          keys,
-          {
-            vxMs: this.vxMs,
-            vyMs: this.vyMs,
-            yawRateRadS: this.yawRateRadS,
-            cgToFrontAxleM: this.cgToFrontAxleM,
-            cgToRearAxleM: this.cgToRearAxleM,
-            wheelbaseM: this.wheelbaseM,
-            maxSteerAngleRad: this.maxSteerAngleRad,
-            frontPeakSlipRad: VF26_TYRES[this.tireCompound].front.frictionLimitAngleDeg * DEG2RAD,
-            brake,
-            // Measured on the flat pad: ≈1.75 × (g + downforce / m) from 90 to 240 km/h, scaled by surface/wet grip
-            maxLateralAccel: 1.75 * this.aiPlanGrip() * (G + this.aeroDownforceN / this.massKg),
-            slip: this.axleSlipSample(),
-          },
-          dt
-        );
-      }
+      steerNorm = this.steeringAssist.steer(inputs, this.gamepadAssistEnabled, this.steeringAssistState, dt);
 
       if (inputs.manualOverride && drv.ersEnergyJ > 0) {
         drv.ersMode = 'OVERRIDE';
