@@ -319,9 +319,12 @@ export class LapRecorder {
     if (this.rows.length < 1) return null;
     this.noteConditions(input);
 
-    // Closing sample at the lap time, never before the last recorded sample
+    // Closing sample at the time of the frame it is taken on: the line was crossed `currentLapTimeMs` before it, and the
+    // position is the frame's. Stamped at the lap time, a car past the line seemed to cover a frame's distance in a
+    // fraction of it (over 420 km/h, and the leaderboard refused the lap). Never before the last recorded sample
     const lastT = this.rows[this.rows.length - 1][0];
-    const endT = round(Math.max(lapMs / 1000, lastT), 3);
+    const intoNextS = Math.max(0, input.telemetry.currentLapTimeMs) / 1000;
+    const endT = round(Math.max(lapMs / 1000 + intoNextS, lastT), 3);
     this.rows.push(sampleRow(input, endT));
     const rows = this.rows;
     // The physics rules out a lap that ended while an excursion was still being judged
