@@ -1178,25 +1178,24 @@ export function buildCircuitScene(
     });
     if (startLightState !== undefined) applySemaphoreMaterials(startLightState);
 
-    const assembly = root.getObjectByName("Prop_StartLights_0") ?? root.getObjectByName("startlight_SUB1");
-    if (assembly) {
-      const box = new THREE.Box3().setFromObject(assembly);
+    /** The pods across the front of a lamp box, `rowDrop` of its height below centre, at least `minSpacing` apart */
+    const placePodsOnBox = (box: THREE.Box3, rowDrop: number, minSpacing: number) => {
       const center = box.getCenter(new THREE.Vector3());
       const size = box.getSize(new THREE.Vector3());
-      // Four lamps per column (amber, green, red, red): sit on the first red row, 1/8 of the height below centre
-      center.y -= size.y * 0.125;
+      center.y -= size.y * rowDrop;
       // Extent of the box along the start direction: |sx·fx| + |sz·fz| (as for the width), not |size·fwd|, whose
       // terms cancel on a diagonal straight
       const depth = Math.abs(size.x * startFwd.x) + Math.abs(size.y * startFwd.y) + Math.abs(size.z * startFwd.z);
       const width = Math.abs(size.x * startRight.x) + Math.abs(size.z * startRight.z);
-      placePods(center, depth * 0.5, Math.max(0.28, width / 5));
-    } else if (hasSemBox) {
-      const center = semBox.getCenter(new THREE.Vector3());
-      const size = semBox.getSize(new THREE.Vector3());
-      const depth = Math.abs(size.x * startFwd.x) + Math.abs(size.y * startFwd.y) + Math.abs(size.z * startFwd.z);
-      const width = Math.abs(size.x * startRight.x) + Math.abs(size.z * startRight.z);
-      placePods(center, depth * 0.5, Math.max(0.32, width / 5));
-    }
+      placePods(center, depth * 0.5, Math.max(minSpacing, width / 5));
+    };
+    const gantry = root.getObjectByName("Prop_StartLights_0");
+    const acGantry = root.getObjectByName("startlight_SUB1");
+    // Four lamps per column (amber, green, red, red): sit on the first red row, 1/8 of the height below centre
+    if (gantry) placePodsOnBox(new THREE.Box3().setFromObject(gantry), 0.125, 0);
+    else if (acGantry) placePodsOnBox(new THREE.Box3().setFromObject(acGantry), 0.125, 0.28);
+    // The converted circuits' own red lamps, when they have no gantry model
+    else if (hasSemBox) placePodsOnBox(semBox, 0, 0.32);
   };
 
   // ============================================================================
