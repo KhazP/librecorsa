@@ -366,6 +366,8 @@ export class CarAudioEngine {
 
   /** The car whose sound bank plays; swaps the bank when the car changes */
   public setCar(sound: CarSoundSource): void {
+    // Also when the sound stays: the vf26 and f12026-car physics share one
+    this.contactAcoustics?.reset();
     if (sound.id === this.sound.id) return;
     this.sound = sound;
     if (!this.isInitialized || !this.ctx) return;
@@ -563,7 +565,11 @@ export class CarAudioEngine {
    */
   public update(telemetry: TelemetryData, dtSeconds?: number): void {
     if (!this.isInitialized || !this.ctx || this.isMuted || this.isPaused) return;
-    if (this.ctx.state === 'suspended') return;
+    if (this.ctx.state === 'suspended') {
+      // The audio clock stands still, so the rig cannot see this gap itself
+      this.contactAcoustics?.reset();
+      return;
+    }
 
     const now = this.ctx.currentTime;
     const tau = 0.024;

@@ -39,7 +39,9 @@ export class ContactAcousticsRig {
   private readonly brakeFilter: BiquadFilterNode;
   private readonly brakeGain: GainNode;
 
-  private seeded = false;
+  private fresh = true;
+  private lastTime = -Infinity;
+  private lastDistanceM = NaN;
   private readonly prevShockVel = [0, 0, 0, 0];
   /** Smoothed |shock acceleration| per wheel (m/s²) */
   private readonly shockAccel = [0, 0, 0, 0];
@@ -107,6 +109,11 @@ export class ContactAcousticsRig {
     this.brakeHarmonicOsc.start();
   }
 
+  /** Drop the history, for the breaks `update` cannot see itself (another car, a suspended context) */
+  public reset(): void {
+    this.fresh = true;
+  }
+
   /** One frame: `dt` is the frame time (s), `interior` whether the camera sits in or on the car */
   public update(t: TelemetryData, dt: number, interior: boolean): void {
     const now = this.ctx.currentTime;
@@ -114,6 +121,15 @@ export class ContactAcousticsRig {
     const speed = Math.max(0, t.speedKmh / 3.6);
     const pedal = Math.min(1, Math.max(0, t.brake));
     const frontBias = Math.min(0.8, Math.max(0.3, (t.liveTuner?.brakeBiasPct ?? 56) / 100));
+
+    // Frames skipped (paused, muted) or a jump along the track (teleport, restart; the lap line too, harmlessly):
+    // the history is another moment's, so start from this frame instead of differentiating across the gap
+    const fresh =
+      this.fresh || now - this.lastTime > dt + 0.1 || Math.abs(t.trackDistanceM - this.lastDistanceM) > 5 + 2 * speed * dt;
+    this.fresh = false;
+    this.lastTime = now;
+    this.lastDistanceM = t.trackDistanceM;
+    const ease = (k: number) => (fresh ? 1 : per60(k, dt));
 
     let roar = 0;
     let roarTone = 0;
@@ -129,7 +145,7 @@ export class ContactAcousticsRig {
 
       // Road roar on asphalt only: 'runoff' also stands for the gravel traps
       const onAsphalt = t.wheelSurfaces[i] === 'asphalt';
-      this.roarFade[i] += ((onAsphalt ? 1 : 0) - this.roarFade[i]) * per60(onAsphalt ? 1 / 6 : 1 / 3, dt);
+      this.roarFade[i] += ((onAsphalt ? 1 : 0) - this.roarFade[i]) * ease(onAsphalt ? 1 / 6 : 1 / 3);
       const roll = (Math.max(speed, tread) * 0.015) ** 1.1;
       const slide = Math.min(1, Math.max(0, t.tireSlipRatio[i] ?? 0) / 5);
       roar += (0.2 + 0.2 * ramp(t.wheelLoadsN[i] ?? 0, 0, 13000)) * (1 - 0.33 * slide * slide) * roll * this.roarFade[i];
@@ -142,7 +158,9 @@ export class ContactAcousticsRig {
         thump = damper;
         thumpWheel = i;
       }
-      if (this.seeded && dt > 1e-6) {
+      if (fresh) {
+        this.shockAccel[i] = 0;
+      } else if (dt > 1e-6) {
         const accel = Math.abs((shockVel - this.prevShockVel[i]) / dt);
         this.shockAccel[i] += (accel - this.shockAccel[i]) * per60(accel > this.shockAccel[i] ? 0.5 : 0.06, dt);
       }
@@ -157,7 +175,7 @@ export class ContactAcousticsRig {
       const window = ((gt ? 2 : 0.8) * rolling * (1 - ramp(pedal, 0.2, 0.6))) ** 0.8 * ramp(pedal, 0.05, 0.2);
       const share = i < 2 ? frontBias : 1 - frontBias;
       const target = pedal * share * window * tempGate;
-      this.brakeLevel[i] = Math.min(1, Math.max(0, this.brakeLevel[i] + (target - this.brakeLevel[i]) * per60(1 / 6, dt)));
+      this.brakeLevel[i] = Math.min(1, Math.max(0, this.brakeLevel[i] + (target - this.brakeLevel[i]) * ease(1 / 6)));
       const level = this.brakeLevel[i];
       // Off the pedal the ring dies with the square of the level rather than hanging on
       const squeal = 0.6 * rolling * tempGate * level * (level + (1 - level) * ramp(pedal, 0, 0.05));
@@ -171,7 +189,7 @@ export class ContactAcousticsRig {
       if (dirt > 0.05 && speed > 1) {
         const peak = Math.min(0.05, Math.max(0.004, ramp(dirt, 0.05, 1) * (0.15 + 0.85 * ramp(speed, 1, 55)) * 0.045));
         const rateHz = (3 + 35 * ramp(dirt, 0.05, 1)) * (0.2 + 0.8 * ramp(speed, 1, 60));
-        let phase = this.debrisPhase[i] + rateHz * dt;
+        let phase = (fresh ? 0 : this.debrisPhase[i]) + rateHz * dt;
         // Each stone at its own moment within the frame, played a frame late: the rate holds at any frame rate
         while (phase >= 1) {
           phase -= 1;
@@ -184,7 +202,6 @@ export class ContactAcousticsRig {
         this.debrisPhase[i] = 0;
       }
     }
-    this.seeded = true;
 
     this.out.frequency.setTargetAtTime(!interior ? 14000 : gt ? 3800 : 11960, now, 0.03);
 
