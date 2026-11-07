@@ -17,6 +17,7 @@ import {
   carWheelLockDeg,
   DEFAULT_WHEEL_SETTINGS,
   DeviceInputReader,
+  PAD_SENSITIVITY,
   pedalValue,
   snapshotAxes,
   strongestAxisChange,
@@ -34,17 +35,37 @@ import {
 } from '../src/lib/input/wheel-ffb';
 import { PAIR_MESSAGE, WebHidFfb, type HidApiLike } from '../src/lib/input/webhid-ffb';
 import {
+  DEFAULT_KEYBOARD_TUNING,
+  DEFAULT_PAD_TUNING,
   DEFAULT_PLAYER_SETTINGS,
   FFB_POLARITY_V2_KEY,
+  KEYBOARD_FEEL_FIELDS,
+  KEYBOARD_PEDAL_HELP_FIELDS,
   loadPlayerSettings,
   LIBRARY_FAVORITES_MAX,
   LIBRARY_RECENT_MAX,
+  PAD_FINE_TUNING_FIELDS,
   parsePlayerSettings,
+  PAUSE_KEYBOARD_FIELDS,
+  PAUSE_PAD_FIELDS,
   pushLibraryRecent,
+  resetKeyboardTuning,
+  resetPadTuning,
   savePlayerSettings,
   SETTINGS_STORAGE_KEY,
   toggleLibraryFavorite,
 } from '../src/lib/settings/player-settings';
+import {
+  ASSIST_PRESETS,
+  ASSIST_SLIDERS,
+  assistPresetDetail,
+  DEFAULT_DEVICE_ASSIST_TUNING,
+  DEFAULT_STEERING_ASSIST,
+  deviceAssistTuning,
+  matchingAssistPreset,
+  sanitizeAssistTuning,
+  steeringAssistSettings,
+} from '../src/lib/sim/steering-assist';
 
 let passed = 0;
 function check(name: string, fn: () => void) {
@@ -358,6 +379,85 @@ check('browser library: favourites / recents validated, de-duplicated and capped
   assert.equal(pushLibraryRecent(r, 'cars', 'w17'), r);
   const s = { ...DEFAULT_PLAYER_SETTINGS, library: r };
   assert.deepEqual(parsePlayerSettings(JSON.parse(JSON.stringify(s))), s);
+});
+console.log('Steering assist settings');
+check('every assist slider is clamped to its range on load, and a broken value takes its default', () => {
+  for (const tuningKey of ['padTuning', 'keyboardTuning'] as const) {
+    const low = parsePlayerSettings({ [tuningKey]: Object.fromEntries(ASSIST_SLIDERS.map((s) => [s.key, s.min - 100])) })[tuningKey];
+    const high = parsePlayerSettings({ [tuningKey]: Object.fromEntries(ASSIST_SLIDERS.map((s) => [s.key, s.max + 100])) })[tuningKey];
+    const broken = parsePlayerSettings({ [tuningKey]: Object.fromEntries(ASSIST_SLIDERS.map((s) => [s.key, 'x'])) })[tuningKey];
+    for (const s of ASSIST_SLIDERS) {
+      assert.equal(low[s.key], s.min, `${tuningKey}.${s.key} low`);
+      assert.equal(high[s.key], s.max, `${tuningKey}.${s.key} high`);
+      assert.equal(broken[s.key], s.default, `${tuningKey}.${s.key} broken`);
+      assert.equal(DEFAULT_DEVICE_ASSIST_TUNING[s.key], s.default);
+    }
+  }
+  // The assist reads the same ranges: a value past a slider's end works as the end
+  const past = sanitizeAssistTuning({ maxSelfSteerAngleDeg: 90, slipLimitMargin: 1 });
+  assert.equal(deviceAssistTuning(past, 'controller').maxSelfSteerAngleDeg, 30);
+  assert.deepEqual(deviceAssistTuning({ ...DEFAULT_DEVICE_ASSIST_TUNING, maxSelfSteerAngleDeg: 90 }, 'keyboard'), deviceAssistTuning({ ...DEFAULT_DEVICE_ASSIST_TUNING, maxSelfSteerAngleDeg: 30 }, 'keyboard'));
+});
+check('trigger slip buzz with ABS / TC on is off unless the player turned it on', () => {
+  assert.equal(DEFAULT_PLAYER_SETTINGS.padTuning.triggerSlipAlwaysOn, false);
+  assert.equal(parsePlayerSettings({ padTuning: {} }).padTuning.triggerSlipAlwaysOn, false);
+  assert.equal(parsePlayerSettings({ padTuning: { triggerSlipAlwaysOn: true } }).padTuning.triggerSlipAlwaysOn, true);
+});
+check('steerAssistLevel is gone: a save with it loads the per-device sliders as they are, or their defaults', () => {
+  const old = parsePlayerSettings({ steerAssistLevel: 0.9 });
+  assert.equal('steerAssistLevel' in old, false);
+  assert.deepEqual(old.padTuning, DEFAULT_PLAYER_SETTINGS.padTuning);
+  assert.deepEqual(old.keyboardTuning, DEFAULT_PLAYER_SETTINGS.keyboardTuning);
+  const own = parsePlayerSettings({ steerAssistLevel: 0.1, keyboardTuning: { selfSteerStrength: 0.7 } });
+  assert.equal(own.keyboardTuning.selfSteerStrength, 0.7);
+  assert.equal(own.keyboardTuning.dampingStrength, DEFAULT_DEVICE_ASSIST_TUNING.dampingStrength);
+});
+check("the cars' default assist is the game's for the default settings", () => {
+  assert.deepEqual(DEFAULT_STEERING_ASSIST, steeringAssistSettings(DEFAULT_PLAYER_SETTINGS.padTuning, DEFAULT_PLAYER_SETTINGS.keyboardTuning));
+  // and the keyboard's default ramp times are the assist's reference ones
+  assert.equal(DEFAULT_STEERING_ASSIST.keyboard.riseScale, 1);
+  assert.equal(DEFAULT_STEERING_ASSIST.keyboard.returnScale, 1);
+});
+check('each settings card resets exactly the fields it shows', () => {
+  const assistKeys = ASSIST_SLIDERS.map((s) => s.key);
+  const moved = (t: object, skip: readonly string[] = []) =>
+    Object.fromEntries(Object.entries(t).map(([k, v]) => [k, skip.includes(k) ? v : typeof v === 'boolean' ? !v : v + 0.01]));
+  const pad = moved(DEFAULT_PAD_TUNING) as typeof DEFAULT_PAD_TUNING;
+  const fine = resetPadTuning(pad, PAD_FINE_TUNING_FIELDS, 'sharp');
+  for (const k of Object.keys(pad) as (keyof typeof pad)[]) {
+    const inCard = (PAD_FINE_TUNING_FIELDS as readonly string[]).includes(k);
+    const want = k === 'steeringRate' || k === 'deadzone' ? PAD_SENSITIVITY.sharp[k] : inCard ? DEFAULT_PAD_TUNING[k] : pad[k];
+    assert.equal(fine[k], want, `pad fine tuning ${k}`);
+  }
+  const pausePad = resetPadTuning(pad, PAUSE_PAD_FIELDS, 'smooth');
+  assert.equal(pausePad.steeringRate, PAD_SENSITIVITY.smooth.steeringRate);
+  assert.equal(pausePad.deadzone, pad.deadzone);
+  for (const k of assistKeys) assert.equal(pausePad[k], pad[k]);
+  const kb = moved(DEFAULT_KEYBOARD_TUNING) as typeof DEFAULT_KEYBOARD_TUNING;
+  for (const fields of [KEYBOARD_FEEL_FIELDS, KEYBOARD_PEDAL_HELP_FIELDS, PAUSE_KEYBOARD_FIELDS]) {
+    const r = resetKeyboardTuning(kb, fields);
+    for (const k of Object.keys(kb) as (keyof typeof kb)[]) {
+      assert.equal(r[k], (fields as readonly string[]).includes(k) ? DEFAULT_KEYBOARD_TUNING[k] : kb[k], `keyboard ${k}`);
+    }
+  }
+  // No card but the assist card owns an assist slider
+  for (const fields of [PAD_FINE_TUNING_FIELDS, PAUSE_PAD_FIELDS, KEYBOARD_FEEL_FIELDS, KEYBOARD_PEDAL_HELP_FIELDS, PAUSE_KEYBOARD_FIELDS]) {
+    for (const k of fields) assert.ok(!(assistKeys as readonly string[]).includes(k), `${k} belongs to the assist card`);
+  }
+});
+check('presets sit in the sliders\' ranges, match themselves only, and describe their own numbers', () => {
+  for (const p of ASSIST_PRESETS) {
+    assert.deepEqual(sanitizeAssistTuning(p.tuning), p.tuning, `${p.id} in range`);
+    assert.equal(matchingAssistPreset(p.tuning)?.id, p.id);
+    for (const s of ASSIST_SLIDERS) {
+      const nudged = { ...p.tuning, [s.key]: p.tuning[s.key] + (p.tuning[s.key] + s.step <= s.max ? s.step : -s.step) };
+      assert.notEqual(matchingAssistPreset(nudged)?.id, p.id, `${p.id} nudged on ${s.key}`);
+    }
+    const grip = Math.round(deviceAssistTuning(p.tuning, 'controller').targetSlip * 100);
+    assert.ok(assistPresetDetail(p.tuning).includes(`${grip} %`), `${p.id}: ${assistPresetDetail(p.tuning)}`);
+  }
+  assert.ok(assistPresetDetail(ASSIST_PRESETS[0].tuning, 19.3).endsWith('full lock'));
+  assert.ok(assistPresetDetail({ ...DEFAULT_DEVICE_ASSIST_TUNING, maxSelfSteerAngleDeg: 8 }, 19.3).endsWith('8°'));
 });
 check('pre-fix ffbInvert: true save is reset once on load; post-v2 ffbInvert: true is preserved', () => {
   const store = new Map<string, string>();
