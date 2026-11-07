@@ -8,6 +8,7 @@ import {
   buildSetEffectReport,
   forceToRaw,
   ForceWriter,
+  IDLE_ZERO_MS,
   isFatalHidStatus,
   PAIR_MESSAGE,
   ordinalUsage,
@@ -124,6 +125,55 @@ function pidCollections(o: DescriptorOptions = {}): HidCollectionLike[] {
   ];
 }
 
+/** pidCollections plus the Damper effect type and a Set Condition report (id 3) */
+function damperCollections(o: { noCreateNewEffect?: boolean } = {}): HidCollectionLike[] {
+  const base = pidCollections(o);
+  const pidNode = base[1] as HidCollectionLike;
+  const types = [0x26, 0x40, 0x41].map(pid); // constant force, spring, damper: the damper selects as 3
+  const index = variable([pid(0x22)], 8, 1, 1, 40);
+  return [
+    base[0] as HidCollectionLike,
+    {
+      ...pidNode,
+      outputReports: [
+        {
+          reportId: 1,
+          items: [
+            index,
+            selector(types),
+            variable([pid(0x50)], 16, 1, 0, 65535),
+            variable([pid(0x52)], 8, 1, 0, 255),
+            variable([X, Y], 1, 2, 0, 1),
+            variable([pid(0x56)], 1, 1, 0, 1),
+            padding(5),
+            variable([ordinalUsage(1), ordinalUsage(2)], 8, 2, 0, 255),
+          ],
+        },
+        {
+          reportId: 3, // Set Condition: block, parameter block offset, CP offset, +/- coefficient, +/- saturation, dead band
+          items: [
+            index,
+            variable([pid(0x23)], 8, 1, 0, 1),
+            variable([pid(0x60)], 16, 1, -10000, 10000),
+            variable([pid(0x61)], 16, 1, -10000, 10000),
+            variable([pid(0x62)], 16, 1, -10000, 10000),
+            variable([pid(0x63)], 16, 1, 0, 10000),
+            variable([pid(0x64)], 16, 1, 0, 10000),
+            variable([pid(0x65)], 16, 1, 0, 10000),
+          ],
+        },
+        ...(pidNode.outputReports ?? []).slice(1),
+      ],
+      featureReports: o.noCreateNewEffect
+        ? []
+        : [
+            { reportId: 17, items: [selector(types), variable([pid(0xac)], 16, 1, 0, 511)] },
+            { reportId: 18, items: [index, selector(BL_LIST), variable([pid(0xad)], 16, 1, 0, 65535)] },
+          ],
+    },
+  ];
+}
+
 /* ---- fake device ---- */
 
 interface Logged {
@@ -185,6 +235,8 @@ class FakeHidDevice implements HidDeviceLike {
 class FakeClock {
   t = 1000;
   timers: { fn: () => void; at: number; ms: number }[] = [];
+  /** Every sleep the driver asked for, in order */
+  sleeps: number[] = [];
   deps: FfbDeps = {
     now: () => this.t,
     setTimer: (fn, ms) => {
@@ -195,7 +247,9 @@ class FakeClock {
     clearTimer: (h) => {
       this.timers = this.timers.filter((x) => x !== h);
     },
-    sleep: async () => {},
+    sleep: async (ms) => {
+      this.sleeps.push(ms);
+    },
   };
   /** Advances time and fires due timers */
   advance(ms: number) {
@@ -366,6 +420,7 @@ async function main() {
       { kind: "out", id: 5, data: [3, 0, 0] }, // zero force
       { kind: "out", id: 10, data: [3, 1, 255] }, // Op Effect Start, loop 255
     ]);
+    assert.deepEqual(clock.sleeps, [60], "60 ms after the reset, no other pause");
   });
   await check("no Create New Effect report: block index 1", async () => {
     const cols = pidCollections({ noCreateNewEffect: true });
@@ -418,6 +473,36 @@ async function main() {
     assert.equal(setEffect!.data[3], 0xff, "Duration high byte is 0xFF (0xFFFF = infinite, not 32767 ms)");
     assert.equal(setEffect!.data[9], 255, "Trigger Button byte is 0xFF (DIEB_NOTRIGGER), not clamped to 1");
   });
+  await check("PXN V99 (11ff:3245) quirk: trigger 0, Direction Enable set, Stop All, loop 1, 30 / 20 ms pauses", async () => {
+    const cols = pidCollections({ triggerButton: variable([pid(0x53)], 8, 1, 1, 8) });
+    const run = async (vendorId: number, productId: number) => {
+      const dev = new FakeHidDevice(cols, asLayout(cols).blockLoad);
+      dev.vendorId = vendorId;
+      dev.productId = productId;
+      const clock = new FakeClock();
+      assert.ok((await setupPidDevice(dev, { deps: clock.deps })).ok);
+      return { log: dev.log, sleeps: clock.sleeps };
+    };
+    const pxn = await run(0x11ff, 0x3245);
+    assert.deepEqual(pxn.log, [
+      { kind: "out", id: 12, data: [4] }, // device reset
+      { kind: "out", id: 12, data: [3] }, // stop all effects
+      { kind: "out", id: 12, data: [1] }, // enable actuators
+      { kind: "out", id: 13, data: [255] },
+      { kind: "feature", id: 17, data: [1, 0, 0] },
+      // trigger button 0 although its LogicalMin is 1; X enabled with Direction Enable set
+      { kind: "out", id: 1, data: [3, 1, 0xff, 0xff, 0, 0, 0, 0, 255, 0, 0b101, 64, 0, 0, 0] },
+      { kind: "out", id: 5, data: [3, 0, 0] },
+      { kind: "out", id: 10, data: [3, 1, 1] }, // loop 1
+    ]);
+    assert.deepEqual(pxn.sleeps, [30, 20]);
+    // another product of the same vendor gets the generic profile
+    const other = await run(0x11ff, 0x1212);
+    const set = other.log.find((l) => l.kind === "out" && l.id === 1);
+    assert.deepEqual([set?.data[9], set?.data[10]], [0xff, 0b001]);
+    assert.deepEqual(other.log.at(-1), { kind: "out", id: 10, data: [3, 1, 255] });
+    assert.deepEqual(other.sleeps, [60]);
+  });
   await check("duplicate Generic Desktop X/Y usages in Set Effect (1-bit Axes Enable + 8-bit Direction) do not collide", () => {
     const cols: HidCollectionLike[] = [
       {
@@ -447,70 +532,52 @@ async function main() {
     // block 2, constant force, duration 0xFFFF, gain 255, Axes Enable X=1 Y=0 with Direction Enable cleared, Direction X=90° Y=0
     assert.deepEqual([...rep.data], [2, 1, 0xff, 0xff, 255, 0b001, 64, 0]);
   });
-  await check("hardware PID Damper (0x41) via Set Condition: allocates, starts at 0, updates when coeff changes >= 0.025", async () => {
-    const etWithDamper = [0x26, 0x40, 0x41].map(pid);
-    const index = variable([pid(0x22)], 8, 1, 1, 40);
-    const baseCols = pidCollections();
-    const pidNode = baseCols[1] as HidCollectionLike;
-    const cols: HidCollectionLike[] = [
-      baseCols[0]!,
-      {
-        ...pidNode,
-        outputReports: [
-          {
-            reportId: 1,
-            items: [
-              index,
-              selector(etWithDamper),
-              variable([pid(0x50)], 16, 1, 0, 65535),
-              variable([pid(0x52)], 8, 1, 0, 255),
-              variable([X, Y], 1, 2, 0, 1),
-              variable([pid(0x56)], 1, 1, 0, 1),
-              padding(5),
-              variable([ordinalUsage(1), ordinalUsage(2)], 8, 2, 0, 255),
-            ],
-          },
-          {
-            reportId: 3, // Set Condition
-            items: [
-              index,
-              variable([pid(0x23)], 8, 1, 0, 1), // Parameter Block Offset
-              variable([pid(0x60)], 16, 1, -10000, 10000), // CP Offset
-              variable([pid(0x61)], 16, 1, -10000, 10000), // Positive Coefficient
-              variable([pid(0x62)], 16, 1, -10000, 10000), // Negative Coefficient
-              variable([pid(0x63)], 16, 1, 0, 10000), // Positive Saturation
-              variable([pid(0x64)], 16, 1, 0, 10000), // Negative Saturation
-              variable([pid(0x65)], 16, 1, 0, 10000), // Dead Band
-            ],
-          },
-          ...(pidNode.outputReports ?? []).slice(1),
-        ],
-        featureReports: [
-          { reportId: 17, items: [selector(etWithDamper), variable([pid(0xac)], 16, 1, 0, 511)] },
-          { reportId: 18, items: [index, selector(BL_LIST), variable([pid(0xad)], 16, 1, 0, 65535)] },
-        ],
-      },
-    ];
-    const layout = asLayout(cols);
-    assert.equal(layout.hasDamper, true);
-    assert.equal(layout.setCondition?.reportId, 3);
-    const dev = new FakeHidDevice(cols, layout.blockLoad);
+  await check("hardware Damper: its own block from Block Load, Set Effect + Set Condition 0 + start", async () => {
+    const cols = damperCollections();
+    const dev = new FakeHidDevice(cols, asLayout(cols).blockLoad);
     dev.laterBlocks = [4];
     const res = await setupPidDevice(dev, { deps: new FakeClock().deps });
     assert.ok(res.ok);
     if (!res.ok) return;
     assert.equal(res.session.damperBlockIndex, 4);
-    const setDamper = res.session.setDamper;
-    assert.ok(setDamper, "hardware damper running");
-    const condWrites = () => dev.log.filter((l) => l.kind === "out" && l.id === 3);
-    assert.equal(condWrites().length, 1, "initial Set Condition (0 coeff) sent during setup");
-    setDamper(0.01); // < 0.025 change: skipped
-    await flush();
-    assert.equal(condWrites().length, 1);
-    setDamper(0.5); // >= 0.025 change: sent (posCoeff = negCoeff = 5000 = 0x1388)
-    await flush();
-    assert.equal(condWrites().length, 2);
-    assert.deepEqual(condWrites()[1]?.data.slice(4, 8), [0x88, 0x13, 0x88, 0x13]);
+    assert.ok(res.session.setDamper);
+    assert.deepEqual(dev.log.slice(-4), [
+      { kind: "feature", id: 17, data: [3, 0, 0] }, // create: damper
+      { kind: "out", id: 1, data: [4, 3, 0xff, 0xff, 255, 0b001, 64, 0] }, // Set Effect for block 4, type damper
+      { kind: "out", id: 3, data: [4, 0, 0, 0, 0, 0, 0, 0, 0x10, 0x27, 0x10, 0x27, 0, 0] }, // coefficient 0, full saturation
+      { kind: "out", id: 10, data: [4, 1, 255] }, // started like the constant force
+    ]);
+  });
+  await check("no hardware Damper on a guessed block: none without Create New Effect, none on the constant force's block", async () => {
+    for (const [cols, blocks] of [
+      [damperCollections({ noCreateNewEffect: true }), []],
+      [damperCollections(), []], // Block Load hands out block 3 again
+    ] as const) {
+      const dev = new FakeHidDevice(cols, parsePidLayout(cols)?.blockLoad ?? null);
+      dev.laterBlocks = [...blocks];
+      const res = await setupPidDevice(dev, { deps: new FakeClock().deps });
+      assert.ok(res.ok);
+      if (!res.ok) return;
+      assert.equal(res.session.setDamper, undefined);
+      assert.equal(res.session.damperBlockIndex, null);
+      assert.ok(!dev.log.some((l) => l.kind === "out" && (l.id === 3 || l.id === 11)), "no Set Condition, no block freed");
+    }
+  });
+  await check("a damper setup that fails part-way frees its block and leaves the constant force running", async () => {
+    const cols = damperCollections();
+    const dev = new FakeHidDevice(cols, asLayout(cols).blockLoad);
+    dev.laterBlocks = [4];
+    const send = dev.sendReport.bind(dev);
+    dev.sendReport = async (id, data) => {
+      if (id === 3) throw new Error("stalled");
+      return send(id, data);
+    };
+    const res = await setupPidDevice(dev, { deps: new FakeClock().deps });
+    assert.ok(res.ok);
+    if (!res.ok) return;
+    assert.equal(res.session.setDamper, undefined);
+    assert.deepEqual(dev.log.at(-1), { kind: "out", id: 11, data: [4] });
+    assert.ok(!dev.log.some((l) => l.kind === "out" && l.id === 10 && l.data[0] === 4), "damper never started");
   });
 
   function fakeHid(devices: FakeHidDevice[], granted: FakeHidDevice[] = []) {
@@ -680,6 +747,119 @@ async function main() {
     w.setForce(0.5 + 1 / 255); // one raw step is above 255/1000
     await flush();
     assert.deepEqual(sent, [191, 192]);
+  });
+
+  console.log("Hardware damper through the driver");
+  async function damperDriver() {
+    const cols = damperCollections();
+    const dev = new FakeHidDevice(cols, asLayout(cols).blockLoad);
+    dev.laterBlocks = [4];
+    const clock = new FakeClock();
+    const ffb = new WebHidFfb(fakeHid([dev]).api, clock.deps);
+    assert.ok(await ffb.connect());
+    assert.equal(ffb.hasHardwareDamper(), true);
+    dev.log.length = 0;
+    clock.advance(10);
+    return { dev, clock, ffb };
+  }
+  /** Coefficient of a Set Condition write, -10000..10000 */
+  const coeff = (w: Logged | undefined) => {
+    assert.ok(w);
+    const v = (w.data[4] as number) | ((w.data[5] as number) << 8);
+    return v >= 0x8000 ? v - 0x10000 : v;
+  };
+  const conditions = (dev: FakeHidDevice) => dev.log.filter((l) => l.kind === "out" && l.id === 3);
+
+  await check("setDamper: changes under 0.025 are skipped, larger ones go out", async () => {
+    const { dev, clock, ffb } = await damperDriver();
+    ffb.setDamper(0.01);
+    await flush();
+    assert.equal(conditions(dev).length, 0);
+    ffb.setDamper(0.5);
+    await flush();
+    clock.advance(5);
+    ffb.setDamper(0.51);
+    await flush();
+    assert.equal(conditions(dev).length, 1);
+    assert.equal(coeff(conditions(dev)[0]), 5000);
+  });
+  await check("damper and force share one write in flight and take turns", async () => {
+    const { dev, clock, ffb } = await damperDriver();
+    dev.hold = true;
+    ffb.setForce(0.5);
+    ffb.setDamper(0.5);
+    ffb.setForce(0.6);
+    await flush();
+    assert.equal(dev.log.length, 1, "the damper waits for the force write in flight");
+    dev.hold = false;
+    dev.release();
+    await flush();
+    clock.advance(2);
+    await flush();
+    clock.advance(2);
+    await flush();
+    assert.deepEqual(
+      dev.log.map((l) => l.id),
+      [5, 3, 5],
+      "force, then the damper, then the newer force"
+    );
+  });
+  await check("stop() zeroes the hardware damper with the force", async () => {
+    const { dev, clock, ffb } = await damperDriver();
+    ffb.setForce(0.5);
+    ffb.setDamper(0.5);
+    await flush();
+    clock.advance(5);
+    await flush();
+    ffb.stop();
+    await flush();
+    await flush();
+    assert.equal(coeff(conditions(dev).at(-1)), 0);
+    assert.equal(mag(dev.forceWrites.at(-1)), 0);
+  });
+  await check(`no setForce / setDamper call for ${IDLE_ZERO_MS} ms: the driver zeroes force and damper itself`, async () => {
+    const { dev, clock, ffb } = await damperDriver();
+    for (let i = 0; i < 5; i++) {
+      ffb.setForce(0.4 + i / 100);
+      ffb.setDamper(0.5);
+      await flush();
+      clock.advance(100); // the app still calls every 100 ms: nothing is zeroed
+      await flush();
+    }
+    assert.ok(dev.forceWrites.every((w) => mag(w) !== 0));
+    clock.advance(IDLE_ZERO_MS - 100 - 1);
+    await flush();
+    assert.ok(dev.forceWrites.every((w) => mag(w) !== 0), "not before the interval");
+    clock.advance(1);
+    await flush();
+    await flush();
+    assert.equal(mag(dev.forceWrites.at(-1)), 0);
+    assert.equal(coeff(conditions(dev).at(-1)), 0);
+  });
+  await check("failed damper writes count toward the fatal limit", async () => {
+    const { dev, clock, ffb } = await damperDriver();
+    dev.failSends = true;
+    for (let i = 0; i < 3; i++) {
+      ffb.setDamper(i % 2 === 0 ? 0.6 : 0.3);
+      await flush();
+      clock.advance(10);
+      await flush();
+    }
+    assert.equal(ffb.status.state, "error");
+    assert.match(ffb.status.message ?? "", /Force feedback stopped/);
+  });
+  await check("dispose(): the damper block is stopped and freed with the constant force", async () => {
+    const { dev, ffb } = await damperDriver();
+    await ffb.dispose();
+    assert.deepEqual(dev.log, [
+      { kind: "out", id: 5, data: [3, 0, 0] },
+      { kind: "out", id: 10, data: [3, 3, 0] },
+      { kind: "out", id: 10, data: [4, 3, 0] }, // damper stopped
+      { kind: "out", id: 11, data: [3] },
+      { kind: "out", id: 11, data: [4] }, // damper freed
+      { kind: "out", id: 12, data: [3] },
+      { kind: "out", id: 12, data: [2] },
+    ]);
   });
 
   console.log("Classic Logitech wheels (hid-lg4ff commands)");
@@ -872,6 +1052,35 @@ async function main() {
     const none = new WebHidFfb(fakeHid([], [pad]).api, new FakeClock().deps);
     assert.equal(await none.reconnect(), null);
     assert.equal(none.status.state, "idle");
+  });
+  await check("reconnect(): a granted DualSense-style device (output reports, no PID) or a HID++ Logitech stays idle, not fatal", async () => {
+    const dualSense = new FakeHidDevice([
+      {
+        usagePage: 0x01,
+        usage: 0x05,
+        inputReports: [{ reportId: 1, items: [variable([X], 8, 1, 0, 255)] }],
+        outputReports: [{ reportId: 2, items: [variable([(0xff00 << 16) | 0x22], 8, 47, 0, 255)] }],
+      },
+    ]);
+    dualSense.vendorId = 0x054c;
+    dualSense.productId = 0x0ce6;
+    dualSense.productName = "DualSense Wireless Controller";
+    const g920 = logitech(0xc262, "G920");
+    const ffb = new WebHidFfb(fakeHid([], [dualSense, g920]).api, new FakeClock().deps);
+    assert.equal(await ffb.reconnect(), null);
+    assert.equal(ffb.status.state, "idle");
+    assert.equal(ffb.status.message, PAIR_MESSAGE);
+    assert.equal(isFatalHidStatus(ffb.status), false);
+    for (const d of [dualSense, g920]) {
+      assert.equal(d.opened, false);
+      assert.equal(d.log.length, 0);
+    }
+  });
+  await check("reconnect(): a granted listed Logitech wheel reopens", async () => {
+    const g29 = logitech(0xc24f, "G29");
+    const ffb = new WebHidFfb(fakeHid([], [g29]).api, new FakeClock().deps);
+    assert.equal(await ffb.reconnect(), "G29");
+    assert.equal(ffb.status.state, "ready");
   });
   await check("load without a grant: reconnect() never prompts, stays idle and asks for a Connect click", async () => {
     let prompted = 0;
