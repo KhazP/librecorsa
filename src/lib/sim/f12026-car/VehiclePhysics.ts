@@ -713,6 +713,18 @@ export class VehiclePhysics {
   private readonly baseTrackTempC: number;
   public drsOpen = false;
   public drsBlend = 0;
+  /**
+   * Which flaps the DRS button opens: both wings' (2026 Straight Mode) or the rear wing's alone (DRS up to 2025).
+   * Rear only drops the front flap's downforce change and keeps the rear's share of the drag reduction.
+   */
+  public drsFlaps: 'front-rear' | 'rear' = 'front-rear';
+  /**
+   * A zone opens only after its detection point was crossed eligibly (`drsEligibleAtDetection`, DRS up to 2025).
+   * Off: every zone opens for every car (2026 Straight Mode); the detection points are still reported.
+   */
+  public drsGatedByDetection = true;
+  /** Extra MGU-K deploy allowance this lap on top of `deployPerLapJ` (J): 2026 Overtake Mode */
+  public extraDeployJ = 0;
   /** Lap progress from `locateProgress` (NaN without it) */
   public trackProgress = Number.NaN;
   public aeroWake: AeroWakeState = { ...DEFAULT_AERO_WAKE };
@@ -1659,7 +1671,7 @@ export class VehiclePhysics {
       if (!zone && this.lastDrsZoneId !== null && this.drsArmedZone === this.lastDrsZoneId) this.drsArmedZone = null;
       this.lastDrsZoneId = zone?.id ?? null;
       inZone = zone !== undefined;
-      armed = zone !== undefined && this.drsArmedZone === zone.id;
+      armed = zone !== undefined && (!this.drsGatedByDetection || this.drsArmedZone === zone.id);
     }
     const dryEnoughForDrs = isRearFlapAllowedInWet(this.wetness);
     this.telemetry.drsZone = inZone;
@@ -2263,7 +2275,7 @@ export class VehiclePhysics {
         pK = -mode.topGearClipHarvestW;
       } else if (inp.throttle > 0.05 && inp.throttle < 0.9 && mode.partThrottleHarvestW > 0) {
         pK = -mode.partThrottleHarvestW;
-      } else if (inp.throttle > 0.05 && soc > mode.socFloor && this.lapDeployJ < ers.deployPerLapJ) {
+      } else if (inp.throttle > 0.05 && soc > mode.socFloor && this.lapDeployJ < ers.deployPerLapJ + this.extraDeployJ) {
         pK =
           ers.ERS_MAX_DEPLOY *
           mode.deployFraction *
@@ -2412,7 +2424,7 @@ export class VehiclePhysics {
     let pMech = tK * this.engineOmega;
     if (pMech > 0) {
       // Never overrun the per-lap allowance or the store inside a sub-step
-      const room = Math.min(ers.deployPerLapJ - this.lapDeployJ, this.ersEnergyJ);
+      const room = Math.min(ers.deployPerLapJ + this.extraDeployJ - this.lapDeployJ, this.ersEnergyJ);
       const want = (pMech / ers.deployEfficiency) * h;
       if (want > room) {
         const scale = Math.max(0, room) / want;
@@ -2470,7 +2482,7 @@ export class VehiclePhysics {
       let cd = wing.aoaCd.evaluate(aoa) * wing.ghCd.evaluate(h);
       if (wing.yawCl) cl *= wing.yawCl.evaluate(yawDeg);
       if (wing.yawCd) cd *= wing.yawCd.evaluate(yawDeg);
-      if (s.drs) {
+      if (s.drs && !(this.drsFlaps === 'rear' && s.name === 'FRONT_WING')) {
         cl *= 1 + (s.drs.clMult - 1) * this.drsBlend;
         cd *= 1 + (s.drs.cdMult - 1) * this.drsBlend;
       }
@@ -2547,10 +2559,15 @@ export class VehiclePhysics {
     );
     const act = map.activeAero;
     const open = this.drsBlend;
+    // Rear flap alone: no front downforce change, and the rear's share (by downforce change) of the drag reduction
+    const rearOnly = this.drsFlaps === 'rear';
+    const dClAFront = rearOnly ? 0 : act.dClAFront;
+    const dFlaps = Math.abs(act.dClAFront) + Math.abs(act.dClARear);
+    const dCdA = rearOnly && dFlaps > 0 ? (act.dCdA * Math.abs(act.dClARear)) / dFlaps : act.dCdA;
     const clA = map.clA * clMult;
-    let front = q * (clA * balance + act.dClAFront * open);
+    let front = q * (clA * balance + dClAFront * open);
     let rear = q * (clA * (1 - balance) + act.dClARear * open);
-    let cdA = map.cdA * cdMult + act.dCdA * open;
+    let cdA = map.cdA * cdMult + dCdA * open;
     // The wings' angle-of-attack offsets (body pitch included), split to the axles by their position
     for (const wing of this.wings) {
       const s = wing.spec;
