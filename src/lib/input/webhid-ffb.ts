@@ -87,7 +87,6 @@ export const PID = {
   PARAMETER_BLOCK_OFFSET: pidUsage(0x23),
   EFFECT_TYPE: pidUsage(0x25),
   ET_CONSTANT_FORCE: pidUsage(0x26),
-  ET_SPRING: pidUsage(0x40),
   ET_DAMPER: pidUsage(0x41),
   DURATION: pidUsage(0x50),
   SAMPLE_PERIOD: pidUsage(0x51),
@@ -183,16 +182,15 @@ export interface PidLayout {
   constantForce: PidReportLayout;
   effectOperation: PidReportLayout;
   setEffect: PidReportLayout | null;
-  setCondition?: PidReportLayout | null;
+  setCondition: PidReportLayout | null;
   deviceControl: PidReportLayout | null;
   deviceGain: PidReportLayout | null;
   blockFree: PidReportLayout | null;
   /** Feature / input reports */
   createNewEffect: PidReportLayout | null;
   blockLoad: PidReportLayout | null;
-  /** Whether the wheel's descriptor supports a hardware PID Spring (0x40) or Damper (0x41) condition effect */
-  hasSpring?: boolean;
-  hasDamper?: boolean;
+  /** Set Effect offers the Damper condition effect (0x41) and there is a Set Condition report */
+  hasDamper: boolean;
 }
 
 const hasField = (l: PidReportLayout, key: number) => key in l.fields;
@@ -337,7 +335,6 @@ export function parsePidLayout(collections: readonly HidCollectionLike[]): PidLa
 
   if (!constantForce || !effectOperation) return null;
   const effectTypes = setEffect ? (getField(setEffect, PID.EFFECT_TYPE)?.usages ?? []) : [];
-  const hasSpring = setCondition !== null && effectTypes.includes(PID.ET_SPRING);
   const hasDamper = setCondition !== null && effectTypes.includes(PID.ET_DAMPER);
   return {
     constantForce,
@@ -349,7 +346,6 @@ export function parsePidLayout(collections: readonly HidCollectionLike[]): PidLa
     blockFree,
     createNewEffect,
     blockLoad,
-    hasSpring,
     hasDamper,
   };
 }
@@ -445,47 +441,97 @@ export const defaultFfbDeps: FfbDeps = {
   sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
 };
 
+/** One latest-value stream of a {@link ForceWriter} */
+export interface WriterChannel {
+  /** Value → raw field value; equal raws are never sent twice in a row */
+  toRaw: (value: number) => number;
+  /** Raw changes smaller than this are skipped, except a change to `zeroRaw` */
+  threshold: number;
+  zeroRaw?: number;
+  send: (raw: number) => Promise<void>;
+  /** What the wheel already holds when the stream starts (null: the first value always goes out) */
+  initialRaw?: number | null;
+}
+
+interface ChannelState extends WriterChannel {
+  lastRaw: number | null;
+  pending: number | null;
+  urgent: boolean;
+}
+
 /**
- * Streams force values to the wheel: at most one sendReport in flight, at least 2 ms between writes, only the latest
- * value is ever kept (intermediate ones are dropped) and changes below 1/1000 of the field's range are skipped.
+ * Streams values to the wheel: at most one sendReport in flight for the device, at least 2 ms between writes, only the
+ * latest value of each stream is kept (intermediate ones are dropped) and changes below a stream's threshold are
+ * skipped (for the force: 1/1000 of the field's range). The force is the first stream; {@link addChannel} adds others
+ * (the hardware damper, the Logitech range) that share the write slot, the spacing and the failure count, with the
+ * force sent first when several are waiting.
  */
 export class ForceWriter {
-  private lastRaw: number | null = null;
-  private pending: number | null = null;
-  private urgent = false;
+  private readonly channels: ChannelState[] = [];
   private current: Promise<void> | null = null;
   private lastSendMs = -Infinity;
   private timer: unknown = null;
   private failures = 0;
   private dead = false;
-  private readonly zeroRaw: number;
-  private readonly threshold: number;
+  private readonly force: ChannelState;
 
   constructor(
-    private readonly field: PidFieldLayout,
-    private readonly send: (raw: number) => Promise<void>,
+    field: PidFieldLayout,
+    send: (raw: number) => Promise<void>,
     private readonly deps: FfbDeps,
     private readonly onFail?: (message: string, fatal: boolean) => void
   ) {
-    this.zeroRaw = forceToRaw(field, 0);
-    this.threshold = (field.max - field.min) / 1000;
+    this.force = this.add({
+      toRaw: (f) => forceToRaw(field, f),
+      threshold: (field.max - field.min) / 1000,
+      zeroRaw: forceToRaw(field, 0),
+      send,
+    });
   }
 
   /** `urgent` skips the 2 ms spacing (used to zero the wheel at once) */
   setForce(force: number, urgent = false): void {
+    this.set(this.force, force, urgent);
+  }
+
+  /** Another stream on the same device; returns its setter (`urgent` as in {@link setForce}) */
+  addChannel(channel: WriterChannel): (value: number, urgent?: boolean) => void {
+    const state = this.add(channel);
+    return (value, urgent = false) => this.set(state, value, urgent);
+  }
+
+  /** Stops writing and waits for the write in flight; nothing is sent afterwards */
+  async close(): Promise<void> {
+    this.kill();
+    await this.current;
+  }
+
+  /** Stops writing without waiting (device vanished) */
+  kill(): void {
+    this.dead = true;
+    for (const c of this.channels) c.pending = null;
+    if (this.timer !== null) {
+      this.deps.clearTimer(this.timer);
+      this.timer = null;
+    }
+  }
+
+  private add(channel: WriterChannel): ChannelState {
+    const state: ChannelState = { ...channel, lastRaw: channel.initialRaw ?? null, pending: null, urgent: false };
+    this.channels.push(state);
+    return state;
+  }
+
+  private set(c: ChannelState, value: number, urgent: boolean): void {
     if (this.dead) return;
-    const raw = forceToRaw(this.field, force);
-    if (this.lastRaw !== null && raw !== this.zeroRaw && Math.abs(raw - this.lastRaw) < this.threshold) {
-      this.pending = null; // the wheel already holds (nearly) this value; drop any older queued one
+    const raw = c.toRaw(value);
+    if (raw === c.lastRaw || (c.lastRaw !== null && raw !== c.zeroRaw && Math.abs(raw - c.lastRaw) < c.threshold)) {
+      c.pending = null; // the wheel already holds (nearly) this value; drop any older queued one
       return;
     }
-    if (raw === this.lastRaw) {
-      this.pending = null;
-      return;
-    }
-    this.pending = raw;
+    c.pending = raw;
     if (urgent) {
-      this.urgent = true;
+      c.urgent = true;
       if (this.timer !== null) {
         this.deps.clearTimer(this.timer);
         this.timer = null;
@@ -494,30 +540,11 @@ export class ForceWriter {
     this.pump();
   }
 
-  /** Stops writing and waits for the write in flight; nothing is sent afterwards */
-  async close(): Promise<void> {
-    this.dead = true;
-    this.pending = null;
-    if (this.timer !== null) {
-      this.deps.clearTimer(this.timer);
-      this.timer = null;
-    }
-    await this.current;
-  }
-
-  /** Stops writing without waiting (device vanished) */
-  kill(): void {
-    this.dead = true;
-    this.pending = null;
-    if (this.timer !== null) {
-      this.deps.clearTimer(this.timer);
-      this.timer = null;
-    }
-  }
-
   private pump(): void {
-    if (this.dead || this.current !== null || this.pending === null) return;
-    const wait = this.urgent ? 0 : this.lastSendMs + MIN_WRITE_INTERVAL_MS - this.deps.now();
+    if (this.dead || this.current !== null) return;
+    const c = this.channels.find((x) => x.pending !== null && x.urgent) ?? this.channels.find((x) => x.pending !== null);
+    if (!c || c.pending === null) return;
+    const wait = c.urgent ? 0 : this.lastSendMs + MIN_WRITE_INTERVAL_MS - this.deps.now();
     if (wait > 0) {
       if (this.timer === null) {
         this.timer = this.deps.setTimer(() => {
@@ -527,19 +554,20 @@ export class ForceWriter {
       }
       return;
     }
-    const raw = this.pending;
-    this.pending = null;
-    this.urgent = false;
-    this.lastRaw = raw;
+    const raw = c.pending;
+    c.pending = null;
+    c.urgent = false;
+    c.lastRaw = raw;
     this.lastSendMs = this.deps.now();
-    this.current = this.send(raw)
+    this.current = c
+      .send(raw)
       .then(
         () => {
           this.failures = 0;
         },
         (e: unknown) => {
           this.failures++;
-          this.lastRaw = null; // resend the next value whatever it is
+          c.lastRaw = null; // resend the next value whatever it is
           const fatal = this.failures >= MAX_WRITE_FAILURES;
           if (fatal) this.dead = true;
           this.onFail?.(errorMessage(e), fatal);
@@ -567,13 +595,11 @@ export interface PidSession {
   layout: PidLayout;
   /** Effect block holding the Constant Force effect */
   blockIndex: number;
-  /** Effect block holding the hardware Damper condition effect, when supported */
-  damperBlockIndex?: number | null;
-  /** Whether the wheel is running a hardware PID Damper effect */
-  hasHardwareDamper: boolean;
+  /** Effect block holding the hardware Damper condition effect; null when the wheel runs none */
+  damperBlockIndex: number | null;
   writer: ForceWriter;
-  /** Updates the hardware PID Damper coefficient (0..1) when it changes by >= 0.025 */
-  setDamper: (coeff: number) => void;
+  /** Hardware Damper coefficient 0..1, a stream of `writer`; absent without a hardware damper */
+  setDamper?: (coeff: number, urgent?: boolean) => void;
 }
 
 export type PidSetupResult =
@@ -661,21 +687,24 @@ async function deviceControl(device: HidDeviceLike, layout: PidLayout, usage: nu
   return true;
 }
 
-/** Create New Effect (feature) then read PID Block Load back for the block index; fallbackBlock when the device has neither */
+/**
+ * Create New Effect (feature) then read PID Block Load back for the block index. Null when the wheel does not
+ * allocate effects this way (no Create New Effect / Block Load, or the effect type not offered) or names no block.
+ */
 async function allocateEffect(
   device: HidDeviceLike,
   layout: PidLayout,
   deps: FfbDeps,
   profile: PidProfile,
-  effectTypeUsage: number = PID.ET_CONSTANT_FORCE,
-  fallbackBlock = 1
-): Promise<number> {
+  effectTypeUsage: number,
+  effectName: string
+): Promise<number | null> {
   const create = layout.createNewEffect;
   const load = layout.blockLoad;
-  if (!create || !load) return fallbackBlock;
+  if (!create || !load) return null;
   const type = getField(create, PID.EFFECT_TYPE);
   const typeValue = type ? selectorValue(type, effectTypeUsage) : null;
-  if (typeValue === null) return fallbackBlock;
+  if (typeValue === null) return null;
   const c = buildReport(create, { [PID.EFFECT_TYPE]: typeValue, [PID.BYTE_COUNT]: 0 });
   await device.sendFeatureReport(c.reportId, c.data);
   if (profile.createSettleMs > 0) await deps.sleep(profile.createSettleMs);
@@ -689,10 +718,10 @@ async function allocateEffect(
     const statusField = getField(load, PID.BLOCK_LOAD_STATUS);
     const status = statusField ? selectedUsage(statusField, got[PID.BLOCK_LOAD_STATUS] ?? 0) : PID.BLOCK_LOAD_SUCCESS;
     if (status === PID.BLOCK_LOAD_FULL) throw new Error("The wheel has no free effect memory");
-    if (status === PID.BLOCK_LOAD_ERROR) throw new Error("The wheel refused to create a constant force effect");
+    if (status === PID.BLOCK_LOAD_ERROR) throw new Error(`The wheel refused to create a ${effectName} effect`);
     if (status === PID.BLOCK_LOAD_SUCCESS || status === null) {
       const idx = got[PID.EFFECT_BLOCK_INDEX];
-      return idx !== undefined && idx > 0 ? idx : fallbackBlock;
+      return idx !== undefined && idx > 0 ? idx : null;
     }
     await deps.sleep(20);
   }
@@ -768,6 +797,56 @@ export function buildSetEffectReport(
   return { reportId: set.reportId, data };
 }
 
+/** Runs a write whose failure must not stop a cleanup (the device may already be gone) */
+async function bestEffort(fn: () => Promise<unknown>): Promise<void> {
+  try {
+    await fn();
+  } catch {
+    // device may already be gone
+  }
+}
+
+/**
+ * Optional hardware Damper condition effect at coefficient 0, started like the constant force. Only on a wheel that
+ * hands the block out itself (Create New Effect / Block Load): a guessed block index could land on the constant force
+ * one. Null when the wheel has none or setting it up fails; a block it did hand out is given back.
+ */
+async function setupDamper(
+  device: HidDeviceLike,
+  layout: PidLayout,
+  cond: PidReportLayout,
+  deps: FfbDeps,
+  profile: PidProfile,
+  forceBlock: number,
+  start: number,
+  loopCount: number
+): Promise<number | null> {
+  let block: number | null = null;
+  try {
+    block = await allocateEffect(device, layout, deps, profile, PID.ET_DAMPER, "damper");
+    if (block === null || block === forceBlock) return null;
+    if (layout.setEffect) {
+      const r = buildSetEffectReport(layout.setEffect, block, PID.ET_DAMPER, profile);
+      await device.sendReport(r.reportId, r.data);
+    }
+    await sendOutput(device, cond, conditionReportValues(cond, block, 0, 1));
+    await sendOutput(device, layout.effectOperation, {
+      [PID.EFFECT_BLOCK_INDEX]: block,
+      [PID.EFFECT_OPERATION]: start,
+      [PID.LOOP_COUNT]: loopCount,
+    });
+    return block;
+  } catch {
+    // the constant force runs without it (effect memory full, damper refused, a write failed)
+    const freeBlock = block;
+    if (freeBlock !== null && freeBlock !== forceBlock && layout.blockFree) {
+      const free = layout.blockFree;
+      await bestEffort(() => sendOutput(device, free, { [PID.EFFECT_BLOCK_INDEX]: freeBlock }));
+    }
+    return null;
+  }
+}
+
 /** Effect Operation loop count on start */
 function startLoopCount(layout: PidLayout, profile: PidProfile): number {
   const loops = getField(layout.effectOperation, PID.LOOP_COUNT);
@@ -802,7 +881,6 @@ export async function setupPidDevice(device: HidDeviceLike, options: PidSetupOpt
   // What a failure part-way through has to undo
   let actuatorsOn = false;
   let allocated: number | null = null;
-  let damperBlockIndex: number | null = null;
   try {
     if (!device.opened) await device.open();
     if (await deviceControl(device, layout, PID.DC_DEVICE_RESET)) await deps.sleep(profile.resetSleepMs);
@@ -815,7 +893,7 @@ export async function setupPidDevice(device: HidDeviceLike, options: PidSetupOpt
       if (g) await sendOutput(device, layout.deviceGain, { [PID.DEVICE_GAIN]: g.max });
     }
 
-    const blockIndex = await allocateEffect(device, layout, deps, profile, PID.ET_CONSTANT_FORCE, 1);
+    const blockIndex = (await allocateEffect(device, layout, deps, profile, PID.ET_CONSTANT_FORCE, "constant force")) ?? 1;
     allocated = blockIndex;
 
     const set = layout.setEffect;
@@ -835,25 +913,9 @@ export async function setupPidDevice(device: HidDeviceLike, options: PidSetupOpt
       [PID.LOOP_COUNT]: loopCount,
     });
 
-    if (layout.hasDamper && layout.setCondition) {
-      try {
-        const dBlock = await allocateEffect(device, layout, deps, profile, PID.ET_DAMPER, blockIndex + 1);
-        if (set) {
-          const r = buildSetEffectReport(set, dBlock, PID.ET_DAMPER, profile);
-          await device.sendReport(r.reportId, r.data);
-        }
-        await sendOutput(device, layout.setCondition, conditionReportValues(layout.setCondition, dBlock, 0, 1));
-        await sendOutput(device, layout.effectOperation, {
-          [PID.EFFECT_BLOCK_INDEX]: dBlock,
-          [PID.EFFECT_OPERATION]: start,
-          [PID.LOOP_COUNT]: loopCount,
-        });
-        damperBlockIndex = dBlock;
-      } catch {
-        // Hardware damper is optional; continue with Constant Force if effect memory is full or damper creation fails
-        damperBlockIndex = null;
-      }
-    }
+    const cond = layout.setCondition;
+    const damperBlockIndex =
+      layout.hasDamper && cond ? await setupDamper(device, layout, cond, deps, profile, blockIndex, start, loopCount) : null;
 
     const writer = new ForceWriter(
       forceField,
@@ -861,44 +923,26 @@ export async function setupPidDevice(device: HidDeviceLike, options: PidSetupOpt
       deps,
       options.onFail
     );
-    const hasHardwareDamper = damperBlockIndex !== null && Boolean(layout.setCondition);
-    let lastDamper = 0;
-    const setDamper = (coeff: number) => {
-      if (!hasHardwareDamper || damperBlockIndex === null || !layout.setCondition) return;
-      const c = clamp(Number.isFinite(coeff) ? coeff : 0, 0, 1);
-      if (c === lastDamper || (c !== 0 && Math.abs(c - lastDamper) < 0.025)) return;
-      lastDamper = c;
-      void sendOutput(device, layout.setCondition, conditionReportValues(layout.setCondition, damperBlockIndex, c, 1)).catch(() => {});
-    };
-    return {
-      ok: true,
-      session: {
-        device,
-        driver: "pid",
-        layout,
-        blockIndex,
-        damperBlockIndex,
-        hasHardwareDamper,
-        writer,
-        setDamper,
-      },
-    };
+    const session: PidSession = { device, driver: "pid", layout, blockIndex, damperBlockIndex, writer };
+    if (damperBlockIndex !== null && cond) {
+      session.setDamper = writer.addChannel({
+        toRaw: (c) => Math.round(clamp(Number.isFinite(c) ? c : 0, 0, 1) * 1000),
+        threshold: 25,
+        zeroRaw: 0,
+        initialRaw: 0,
+        send: (raw) => sendOutput(device, cond, conditionReportValues(cond, damperBlockIndex, raw / 1000, 1)),
+      });
+    }
+    return { ok: true, session };
   } catch (e) {
-    // Best effort, as in teardownPidSession: never leave the motor armed or an effect block held after a failed setup
-    const attempt = async (fn: () => Promise<unknown>) => {
-      try {
-        await fn();
-      } catch {
-        // device may already be gone
-      }
-    };
+    // As in teardownPidSession: never leave the motor armed or an effect block held after a failed setup
     if (allocated !== null && layout.blockFree) {
       const block = allocated;
-      await attempt(() => sendOutput(device, layout.blockFree as PidReportLayout, { [PID.EFFECT_BLOCK_INDEX]: block }));
+      await bestEffort(() => sendOutput(device, layout.blockFree as PidReportLayout, { [PID.EFFECT_BLOCK_INDEX]: block }));
     }
     if (actuatorsOn) {
-      await attempt(() => deviceControl(device, layout, PID.DC_STOP_ALL_EFFECTS));
-      await attempt(() => deviceControl(device, layout, PID.DC_DISABLE_ACTUATORS));
+      await bestEffort(() => deviceControl(device, layout, PID.DC_STOP_ALL_EFFECTS));
+      await bestEffort(() => deviceControl(device, layout, PID.DC_DISABLE_ACTUATORS));
     }
     return { ok: false, unsupported: false, message: errorMessage(e) };
   }
@@ -945,7 +989,6 @@ export async function setupLogitechDevice(device: HidDeviceLike, options: PidSet
       blockFree: null,
       createNewEffect: null,
       blockLoad: null,
-      hasSpring: false,
       hasDamper: false,
     };
     return {
@@ -956,9 +999,7 @@ export async function setupLogitechDevice(device: HidDeviceLike, options: PidSet
         layout,
         blockIndex: 1,
         damperBlockIndex: null,
-        hasHardwareDamper: false,
         writer,
-        setDamper: () => {},
       },
     };
   } catch (e) {
@@ -966,17 +1007,11 @@ export async function setupLogitechDevice(device: HidDeviceLike, options: PidSet
   }
 }
 
-/** Best-effort shutdown: zero force, stop the effect, free it, stop all, disable actuators. Never throws. */
+/** Best-effort shutdown: zero force, stop the effects, free them, stop all, disable actuators. Never throws. */
 export async function teardownPidSession(session: PidSession): Promise<void> {
   await session.writer.close();
   const { device, layout, blockIndex, damperBlockIndex } = session;
-  const attempt = async (fn: () => Promise<unknown>) => {
-    try {
-      await fn();
-    } catch {
-      // device may already be gone
-    }
-  };
+  const attempt = bestEffort;
   if (session.driver === "logitech") {
     await attempt(() => sendLogitechReport(device, [0xf3, 0, 0, 0, 0, 0, 0]));
     await attempt(() => sendLogitechReport(device, [0xf5, 0, 0, 0, 0, 0, 0]));
@@ -1033,6 +1068,12 @@ const REQUEST_FILTERS = [
 const UNSUPPORTED_BROWSER = "WebHID needs Chrome or Edge on https or localhost";
 /** Status message when the page loads with WebHID on but no wheel was granted to it yet (pairing needs a click) */
 export const PAIR_MESSAGE = "Click Connect to pair your wheel";
+/**
+ * With no setForce / setDamper call for this long (hidden tab, stalled loop, the app's own stop) the driver zeroes the
+ * force and the hardware damper itself. wheel-ffb.ts zeroes the force after 150 ms (HID_WATCHDOG_MS) but cannot reach
+ * the damper; this one comes after it.
+ */
+export const IDLE_ZERO_MS = 250;
 
 function hasOutputReports(collections: readonly HidCollectionLike[]): boolean {
   for (const c of collections) {
@@ -1080,6 +1121,8 @@ export class WebHidFfb {
   private busyClosing = false;
   private listening: HidApiLike | null = null;
   private listeners = new Set<() => void>();
+  private lastDriveMs = 0;
+  private idleTimer: unknown = null;
 
   /** `hid` and `deps` exist for tests; the app uses the defaults */
   constructor(
@@ -1158,21 +1201,24 @@ export class WebHidFfb {
    */
   setForce(force: number): void {
     this.session?.writer.setForce(force);
+    this.noteDrive();
   }
 
-  /** Whether the connected wheel has an active hardware PID Damper condition effect */
+  /** Whether the connected wheel runs a hardware PID Damper condition effect */
   hasHardwareDamper(): boolean {
-    return Boolean(this.session?.hasHardwareDamper);
+    return Boolean(this.session?.setDamper);
   }
 
-  /** Updates the wheel's hardware PID Damper coefficient (0..1) when supported */
+  /** Hardware damper coefficient 0..1; ignored without one. Changes under 0.025 are not sent */
   setDamper(coeff: number): void {
-    this.session?.setDamper(coeff);
+    this.session?.setDamper?.(coeff);
+    this.noteDrive();
   }
 
-  /** Zero force now (pause menu) */
+  /** Zero force and hardware damper now (pause menu) */
   stop(): void {
     this.session?.writer.setForce(0, true);
+    this.session?.setDamper?.(0, true);
   }
 
   /**
@@ -1255,8 +1301,32 @@ export class WebHidFfb {
     this.session?.writer.kill();
     this.session = null;
     this.device = null;
+    this.clearIdle();
     this.setStatus("idle", null, "Wheel disconnected");
   };
+
+  /** Arms the idle backstop ({@link IDLE_ZERO_MS}): one timer, re-armed from its own callback while calls keep coming */
+  private noteDrive(): void {
+    if (!this.session) return;
+    this.lastDriveMs = this.deps.now();
+    if (this.idleTimer === null) this.armIdle(IDLE_ZERO_MS);
+  }
+
+  private armIdle(ms: number): void {
+    this.idleTimer = this.deps.setTimer(() => {
+      this.idleTimer = null;
+      if (!this.session) return;
+      const idle = this.deps.now() - this.lastDriveMs;
+      if (idle < IDLE_ZERO_MS) this.armIdle(IDLE_ZERO_MS - idle);
+      else this.stop();
+    }, ms);
+  }
+
+  private clearIdle(): void {
+    if (this.idleTimer === null) return;
+    this.deps.clearTimer(this.idleTimer);
+    this.idleTimer = null;
+  }
 
   /** Shuts the current session down (best effort) and forgets it */
   private async release(): Promise<void> {
@@ -1264,6 +1334,7 @@ export class WebHidFfb {
     const device = this.device;
     this.session = null;
     this.device = null;
+    this.clearIdle();
     if (this.listening) {
       this.listening.removeEventListener("disconnect", this.onDisconnect);
       this.listening = null;

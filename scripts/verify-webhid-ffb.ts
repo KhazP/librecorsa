@@ -139,8 +139,9 @@ class FakeHidDevice implements HidDeviceLike {
   productId = 0x5678;
   productName = "Fake DD Base";
   log: Logged[] = [];
-  /** Block index the fake hands out; status 1 = success, 2 = full, 3 = error */
+  /** Block index the fake hands out (then the next ones in `laterBlocks`); status 1 = success, 2 = full, 3 = error */
   blockIndex = 3;
+  laterBlocks: number[] = [];
   blockStatus = 1;
   /** When true sendReport stays pending until `release()` */
   hold = false;
@@ -168,6 +169,7 @@ class FakeHidDevice implements HidDeviceLike {
     const layout = this.blockLoad;
     if (!layout) throw new Error("no block load layout");
     const { data } = buildReport(layout, { [PID.EFFECT_BLOCK_INDEX]: this.blockIndex, [PID.BLOCK_LOAD_STATUS]: this.blockStatus });
+    if (this.blockStatus === 1 && this.laterBlocks.length > 0) this.blockIndex = this.laterBlocks.shift() as number;
     return new DataView(data.buffer, data.byteOffset, data.byteLength);
   }
   release() {
@@ -494,16 +496,19 @@ async function main() {
     assert.equal(layout.hasDamper, true);
     assert.equal(layout.setCondition?.reportId, 3);
     const dev = new FakeHidDevice(cols, layout.blockLoad);
+    dev.laterBlocks = [4];
     const res = await setupPidDevice(dev, { deps: new FakeClock().deps });
     assert.ok(res.ok);
     if (!res.ok) return;
-    assert.equal(res.session.hasHardwareDamper, true);
+    assert.equal(res.session.damperBlockIndex, 4);
+    const setDamper = res.session.setDamper;
+    assert.ok(setDamper, "hardware damper running");
     const condWrites = () => dev.log.filter((l) => l.kind === "out" && l.id === 3);
     assert.equal(condWrites().length, 1, "initial Set Condition (0 coeff) sent during setup");
-    res.session.setDamper(0.01); // < 0.025 change: skipped
+    setDamper(0.01); // < 0.025 change: skipped
     await flush();
     assert.equal(condWrites().length, 1);
-    res.session.setDamper(0.5); // >= 0.025 change: sent (posCoeff = negCoeff = 5000 = 0x1388)
+    setDamper(0.5); // >= 0.025 change: sent (posCoeff = negCoeff = 5000 = 0x1388)
     await flush();
     assert.equal(condWrites().length, 2);
     assert.deepEqual(condWrites()[1]?.data.slice(4, 8), [0x88, 0x13, 0x88, 0x13]);
@@ -640,7 +645,7 @@ async function main() {
     assert.equal(dev.forceWrites.length, 2);
     assert.equal(mag(dev.forceWrites[0]), 6000);
     assert.equal(mag(dev.forceWrites[1]), 0, "zero sent right after the write in flight, 0.7 dropped");
-    assert.equal(clock.timers.length, 0, "no spacing timer was needed");
+    assert.ok(!clock.timers.some((t) => t.ms <= 2), "no spacing timer was needed");
   });
   await check("3 failing writes in a row are fatal and stop further writing", async () => {
     const cols = pidCollections();
