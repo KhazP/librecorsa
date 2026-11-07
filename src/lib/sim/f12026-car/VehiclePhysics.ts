@@ -1370,7 +1370,8 @@ export class VehiclePhysics {
    * less the unloaded radius for one off the ground (in the air, or above a road the probe still reaches)
    */
   public tyreBottomY(w: WheelState): number {
-    return w.grounded && w.deflection > 0 ? w.ground.height : w.hubY - this.tyreRadiusOf(w);
+    const R0 = this.tyreRadiusOf(w);
+    return w.grounded && (w.hubY - w.ground.height) * w.ground.ny < R0 ? w.ground.height : w.hubY - R0;
   }
 
   /** Unloaded radius of a wheel's tyre (m) */
@@ -1826,7 +1827,8 @@ export class VehiclePhysics {
       let delta = 0;
       if (w.grounded) {
         delta = R0 - (w.hubY - g.height) * g.ny;
-        if (delta > 0) fz = Math.max(0, w.verticalRate * delta - model.verticalDamping * w.hubVy * g.ny);
+        const vRelN = w.hardpointVel.x * g.nx + w.hubVy * g.ny + w.hardpointVel.z * g.nz;
+        if (delta > 0) fz = Math.max(0, w.verticalRate * delta - model.verticalDamping * vRelN);
       }
       w.fz = fz;
       w.deflection = Math.max(0, delta);
