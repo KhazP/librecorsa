@@ -570,10 +570,15 @@ export class CarAudioEngine {
       this.contactAcoustics?.reset();
       return;
     }
+    // A physics blow-up must neither throw from an AudioParam inside the frame loop nor stick in the smoothed state
+    const t = telemetry;
+    if (!(Number.isFinite(t.speedKmh) && Number.isFinite(t.rpm) && Number.isFinite(t.throttle) && Number.isFinite(t.brake))) {
+      return;
+    }
 
     const now = this.ctx.currentTime;
     const tau = 0.024;
-    const legacyDt = THREE.MathUtils.clamp(dtSeconds ?? 1 / 60, 0, 0.1);
+    const legacyDt = THREE.MathUtils.clamp(Number.isFinite(dtSeconds) ? (dtSeconds as number) : 1 / 60, 0, 0.1);
 
     const vf26 = this.vf26?.ready ? this.vf26 : null;
     const squeal = this.tyreSqueal(telemetry);

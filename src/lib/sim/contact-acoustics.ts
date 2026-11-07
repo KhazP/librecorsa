@@ -16,14 +16,22 @@ const GT_MODELS: ReadonlySet<string> = new Set<VehicleModelId>(['amg-gt3']);
 /** Squeal pitch factor per wheel (FL, FR, RL, RR): the larger front discs ring a little lower */
 const BRAKE_PITCH = [0.49, 0.49, 0.54, 0.54] as const;
 
-/** 0 at `a`, 1 at `b`, clamped */
+/** 0 at `a`, 1 at `b`, clamped (0 for NaN) */
 function ramp(x: number, a: number, b: number): number {
   const u = (x - a) / (b - a);
-  return u <= 0 ? 0 : u >= 1 ? 1 : u;
+  return u > 0 ? (u < 1 ? u : 1) : 0;
 }
 
 /** A smoothing step `k` tuned per 60 Hz frame, for a frame of `dt` seconds (CarAudio's convention) */
 const per60 = (k: number, dt: number) => 1 - Math.pow(1 - k, dt * 60);
+
+/** A telemetry reading, `fallback` when absent or non-finite, so a physics blow-up cannot stick in the rig's state */
+const num = (x: number | undefined, fallback = 0): number => (Number.isFinite(x) ? (x as number) : fallback);
+
+/** AudioParams throw on non-finite values, which would take the frame loop down with them */
+function setTarget(param: AudioParam, value: number, at: number, tau: number): void {
+  if (Number.isFinite(value)) param.setTargetAtTime(value, at, tau);
+}
 
 export class ContactAcousticsRig {
   private readonly ctx: AudioContext;
@@ -117,10 +125,11 @@ export class ContactAcousticsRig {
   /** One frame: `dt` is the frame time (s), `interior` whether the camera sits in or on the car */
   public update(t: TelemetryData, dt: number, interior: boolean): void {
     const now = this.ctx.currentTime;
+    dt = num(dt);
     const gt = GT_MODELS.has(t.f12026?.carId ?? '');
-    const speed = Math.max(0, t.speedKmh / 3.6);
-    const pedal = Math.min(1, Math.max(0, t.brake));
-    const frontBias = Math.min(0.8, Math.max(0.3, (t.liveTuner?.brakeBiasPct ?? 56) / 100));
+    const speed = Math.max(0, num(t.speedKmh) / 3.6);
+    const pedal = Math.min(1, Math.max(0, num(t.brake)));
+    const frontBias = Math.min(0.8, Math.max(0.3, num(t.liveTuner?.brakeBiasPct, 56) / 100));
 
     // Frames skipped (paused, muted) or a jump along the track (teleport, restart; the lap line too, harmlessly):
     // the history is another moment's, so start from this frame instead of differentiating across the gap
@@ -141,18 +150,18 @@ export class ContactAcousticsRig {
 
     for (let i = 0; i < 4; i++) {
       // The tread's own speed: it runs ahead of the car in wheelspin and stops when the wheel locks
-      const tread = speed * Math.abs(1 + (t.wheelSlipRatios[i] ?? 0));
+      const tread = speed * Math.abs(1 + num(t.wheelSlipRatios[i]));
 
       // Road roar on asphalt only: 'runoff' also stands for the gravel traps
       const onAsphalt = t.wheelSurfaces[i] === 'asphalt';
       this.roarFade[i] += ((onAsphalt ? 1 : 0) - this.roarFade[i]) * ease(onAsphalt ? 1 / 6 : 1 / 3);
       const roll = (Math.max(speed, tread) * 0.015) ** 1.1;
-      const slide = Math.min(1, Math.max(0, t.tireSlipRatio[i] ?? 0) / 5);
-      roar += (0.2 + 0.2 * ramp(t.wheelLoadsN[i] ?? 0, 0, 13000)) * (1 - 0.33 * slide * slide) * roll * this.roarFade[i];
+      const slide = ramp(num(t.tireSlipRatio[i]), 0, 5);
+      roar += (0.2 + 0.2 * ramp(num(t.wheelLoadsN[i]), 0, 13000)) * (1 - 0.33 * slide * slide) * roll * this.roarFade[i];
       roarTone += Math.min(1, roll ** 1.2);
 
       // Damper thump and chassis rattle
-      const shockVel = t.suspensionVelocityMs[i] ?? 0;
+      const shockVel = num(t.suspensionVelocityMs[i]);
       const damper = Math.min(1, Math.abs(shockVel) / 10) ** 0.7;
       if (damper > thump) {
         thump = damper;
@@ -169,7 +178,7 @@ export class ContactAcousticsRig {
 
       // Brake squeal: a disc rings under light to moderate pressure, not clamped hard, and only within a band of
       // disc temperature
-      const temp = t.brakeTempsC[i] ?? 0;
+      const temp = num(t.brakeTempsC[i]);
       const tempGate = temp > 180 && temp < 750 ? Math.min(0.25 + 0.75 * ramp(temp, 180, 250), 1 - 0.75 * ramp(temp, 650, 750)) : 0;
       const rolling = ramp(tread, 0, 2.4);
       const window = ((gt ? 2 : 0.8) * rolling * (1 - ramp(pedal, 0.2, 0.6))) ** 0.8 * ramp(pedal, 0.05, 0.2);
@@ -185,7 +194,7 @@ export class ContactAcousticsRig {
       }
 
       // Debris: stones a tyre picked up off track flick into the wheel arch
-      const dirt = Math.min(1, Math.max(0, t.tireDirtyLevel?.[i] ?? 0));
+      const dirt = Math.min(1, Math.max(0, num(t.tireDirtyLevel?.[i])));
       if (dirt > 0.05 && speed > 1) {
         const peak = Math.min(0.05, Math.max(0.004, ramp(dirt, 0.05, 1) * (0.15 + 0.85 * ramp(speed, 1, 55)) * 0.045));
         const rateHz = (3 + 35 * ramp(dirt, 0.05, 1)) * (0.2 + 0.8 * ramp(speed, 1, 60));
@@ -203,21 +212,21 @@ export class ContactAcousticsRig {
       }
     }
 
-    this.out.frequency.setTargetAtTime(!interior ? 14000 : gt ? 3800 : 11960, now, 0.03);
+    setTarget(this.out.frequency, !interior ? 14000 : gt ? 3800 : 11960, now, 0.03);
 
-    this.roarFilter.frequency.setTargetAtTime(244 + 70 * (roarTone / 4), now, 0.03);
-    this.roarGain.gain.setTargetAtTime(0.25 * roar * (interior ? 0.65 : 1) * 0.042, now, 0.025);
+    setTarget(this.roarFilter.frequency, 244 + 70 * (roarTone / 4), now, 0.03);
+    setTarget(this.roarGain.gain, 0.25 * roar * (interior ? 0.65 : 1) * 0.042, now, 0.025);
 
     // 57–73 Hz by corner, so the four dampers are told apart
-    this.thumpOsc.frequency.setTargetAtTime(52 * (1.1 + 0.1 * thumpWheel), now, 0.018);
-    this.thumpGain.gain.setTargetAtTime(thump * 0.055, now, 0.018);
-    this.rattleGain.gain.setTargetAtTime(rattle * 0.048, now, 0.015);
+    setTarget(this.thumpOsc.frequency, 52 * (1.1 + 0.1 * thumpWheel), now, 0.018);
+    setTarget(this.thumpGain.gain, thump * 0.055, now, 0.018);
+    setTarget(this.rattleGain.gain, rattle * 0.048, now, 0.015);
 
     const pedalPitch = 0.015 * ramp(pedal, 0.2, 0.8);
     const brakeHz = Math.min(5200, Math.max(2600, 3400 + (BRAKE_PITCH[brakeWheel] + pedalPitch) * 1200));
-    this.brakeOsc.frequency.setTargetAtTime(brakeHz, now, 0.022);
-    this.brakeHarmonicOsc.frequency.setTargetAtTime(brakeHz * 1.414, now, 0.022);
-    this.brakeFilter.frequency.setTargetAtTime(brakeHz, now, 0.022);
-    this.brakeGain.gain.setTargetAtTime(brake * (interior ? 0.8 : 1) * 0.026, now, 0.022);
+    setTarget(this.brakeOsc.frequency, brakeHz, now, 0.022);
+    setTarget(this.brakeHarmonicOsc.frequency, brakeHz * 1.414, now, 0.022);
+    setTarget(this.brakeFilter.frequency, brakeHz, now, 0.022);
+    setTarget(this.brakeGain.gain, brake * (interior ? 0.8 : 1) * 0.026, now, 0.022);
   }
 }
