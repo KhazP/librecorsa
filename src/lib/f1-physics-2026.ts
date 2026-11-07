@@ -423,6 +423,8 @@ export class F1Physics2026 {
     preset: AeroSetupPreset;
     grip: number;
     trim: { front: number; rear: number };
+    massKg: number;
+    rho: number;
     profile: SpeedProfile;
     params: AiVehicleParams;
   } | null = null;
@@ -2895,12 +2897,19 @@ export class F1Physics2026 {
     const grip = this.aiPlanGrip();
     // Planned on the wings the car actually runs, garage clicks included
     const trim = this.wingTrimDeg;
-    if (!this.aiProfile || this.aiProfile.preset !== this.aeroPreset || this.aiProfile.grip !== grip || this.aiProfile.trim !== trim) {
-      const car = withPlanningGrip(createVf26ProfileCarModel(this.aeroPreset, undefined, trim), grip);
+    // Planned for the car as it is (fuel load, in 10 kg steps) in this circuit's air (0.02 kg/m³ steps): a full tank
+    // corners slower, and a sea-level track gives ~13 % more downforce than the 1400 m of the nominal profile
+    const massKg = Math.round(this.totalMassKg / 10) * 10;
+    const rho = Math.round(this.computeAirDensity(this.track.baseAltitudeM ?? BASE_ALTITUDE_M) * 50) / 50;
+    const p = this.aiProfile;
+    if (!p || p.preset !== this.aeroPreset || p.grip !== grip || p.trim !== trim || p.massKg !== massKg || p.rho !== rho) {
+      const car = withPlanningGrip({ ...createVf26ProfileCarModel(this.aeroPreset, rho, trim), massKg }, grip);
       this.aiProfile = {
         preset: this.aeroPreset,
         grip,
         trim,
+        massKg,
+        rho,
         profile: computeSpeedProfile(this.track.samples, car),
         params: {
           wheelbaseM: this.wheelbaseM,
@@ -2910,8 +2919,9 @@ export class F1Physics2026 {
           aeroTransitionS: VF26_ACTIVE_AERO_TRANSITION_S,
         },
       };
+      return this.aiProfile;
     }
-    return this.aiProfile;
+    return p;
   }
 
   private buildObservation(sample: ReturnType<BuiltTrackData['getSampleAtDistance']>): RaceGymObservation {

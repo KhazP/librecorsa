@@ -33,6 +33,27 @@ export interface SpeedProfileCarModel {
   /** Power delivered to the rear wheels at full deployment (W) */
   maxDrivePowerW: number;
   vMaxMs: number;
+  /**
+   * Tyre load sensitivity: μ falls as the load grows, μ = μ₀ · n^−k with n the load over the car's weight (1 at rest,
+   * ~3 at an F1 car's top speed). Absent / 0: constant μ.
+   */
+  muLoadExp?: number;
+  /** Downforce per (m/s)² at speed v, where it changes with the car's attitude (ride height under aero load); absent:
+   * the constant `downforceCoef` */
+  downforceCoefAt?: (vMs: number) => number;
+}
+
+/** Downforce per (m/s)² of a planning model at speed v */
+export function plannedDownforceCoef(car: SpeedProfileCarModel, vMs: number): number {
+  return car.downforceCoefAt ? car.downforceCoefAt(vMs) : car.downforceCoef;
+}
+
+/** A planning μ at speed v, after the tyres' load sensitivity */
+export function plannedMu(car: SpeedProfileCarModel, mu: number, vMs: number): number {
+  const k = car.muLoadExp ?? 0;
+  if (k === 0) return mu;
+  const n = 1 + (plannedDownforceCoef(car, vMs) * vMs * vMs) / (car.massKg * G);
+  return mu * Math.pow(n, -k);
 }
 
 export interface SpeedProfile {
@@ -99,17 +120,67 @@ export function createVf26ProfileCarModel(
 ): SpeedProfileCarModel {
   // Typical at-speed attitude: ~17 mm lower than static, slight nose-up rake change
   const aero = estimateAeroCoefficients(preset, airDensity, -0.017, 0.0015, 0, undefined, wingTrimDeg);
+  const downforceCoefAt = vf26DownforceCurve(preset, airDensity, wingTrimDeg);
   return {
     massKg: VF26_CHASSIS.totalMassKg + VF26_CHASSIS.fuelKg,
     downforceCoef: aero.downforceCoef,
     dragCoef: aero.dragCoef,
     rearDownforceShare: 1 - aero.frontShare,
     rearWeightFraction: 1 - VF26_CHASSIS.frontWeightFraction,
-    muLat: 1.7,
+    muLat: 1.66,
     muLong: 1.65,
     maxBrakeForceN: vf26FullBrakeForceN() * 0.92,
     maxDrivePowerW: 650_000,
     vMaxMs: 95,
+    // Fitted to the car's own steady cornering limit on the flat pad (2.03 / 3.33 / 4.27 g at 86 / 180 / 248 km/h, sea
+    // level), 4–6 % under it: the tyres give less μ as the aero load grows, and the downforce follows the ride height
+    muLoadExp: 0.1,
+    downforceCoefAt,
+  };
+}
+
+/**
+ * The VF26's downforce per (m/s)² against speed: the car settles on its springs, heave springs, packers and tyres under
+ * its own downforce, and the floor's ground effect follows that ride height (it peaks near 33 mm and falls away below
+ * it). Solved for the steady attitude at each speed (fixed point), tabulated every 5 m/s and interpolated.
+ */
+function vf26DownforceCurve(
+  preset: AeroSetupPreset,
+  airDensity: number,
+  wingTrimDeg?: { front: number; rear: number }
+): (vMs: number) => number {
+  const L = VF26_CHASSIS.wheelbase;
+  const a = L * (1 - VF26_CHASSIS.frontWeightFraction);
+  const b = L - a;
+  // Axle heave stiffness: two corner springs and the heave spring, in series with two tyres; the packer adds its rate
+  // past its travel
+  const axleDrop = (ax: typeof VF26_CHASSIS.front, tyreRate: number, forceN: number) => {
+    const sprung = 2 * ax.springRate + ax.heaveRate;
+    let d = forceN / sprung;
+    if (d > ax.heavePackerTravel) d = ax.heavePackerTravel + (forceN - ax.heavePackerTravel * sprung) / (sprung + ax.heavePackerRate);
+    return d + forceN / (2 * tyreRate);
+  };
+  const table: number[] = [];
+  for (let v = 0; v <= 100; v += 5) {
+    let heave = 0;
+    let pitch = 0;
+    let coef = 0;
+    for (let it = 0; it < 6; it++) {
+      const e = estimateAeroCoefficients(preset, airDensity, heave, pitch, 0, undefined, wingTrimDeg);
+      coef = e.downforceCoef;
+      const df = coef * v * v;
+      const dF = axleDrop(VF26_CHASSIS.front, VF26_TYRES.soft.front.rate, df * e.frontShare);
+      const dR = axleDrop(VF26_CHASSIS.rear, VF26_TYRES.soft.rear.rate, df * (1 - e.frontShare));
+      // Body heave at the CG and pitch (+ nose up) from the two axle drops
+      pitch = (dR - dF) / L;
+      heave = -(dF * b + dR * a) / L;
+    }
+    table.push(coef);
+  }
+  return (vMs: number) => {
+    const x = Math.min(table.length - 1.001, Math.max(0, vMs / 5));
+    const i = Math.floor(x);
+    return table[i] + (table[i + 1] - table[i]) * (x - i);
   };
 }
 
@@ -162,20 +233,41 @@ export function computeSpeedProfile(
   const gN = new Float64Array(n);
   const gT = new Float64Array(n);
   const speedMs = new Float64Array(n);
+  const constantGrip = !car.muLoadExp && !car.downforceCoefAt;
   const aeroLat = (car.muLat * car.downforceCoef) / m;
+  const cl = (v: number) => plannedDownforceCoef(car, v);
+  const muLatAt = (v: number) => plannedMu(car, car.muLat, v);
+  const muLongAt = (v: number) => plannedMu(car, car.muLong, v);
   for (let i = 0; i < n; i++) {
     const k = Math.abs(curvature[i]);
     const bankInto = samples[i].bankingRad * Math.sign(curvature[i] || 1);
     gN[i] = G * Math.cos(bankInto);
     gT[i] = G * Math.sin(bankInto);
-    const den = k - aeroLat;
-    const vLat = den > 1e-7 ? Math.sqrt(Math.max(0, (car.muLat * gN[i] + gT[i]) / den)) : car.vMaxMs;
-    speedMs[i] = Math.min(car.vMaxMs, vLat);
+    if (constantGrip) {
+      const den = k - aeroLat;
+      const vLat = den > 1e-7 ? Math.sqrt(Math.max(0, (car.muLat * gN[i] + gT[i]) / den)) : car.vMaxMs;
+      speedMs[i] = Math.min(car.vMaxMs, vLat);
+    } else {
+      // Grip and downforce both change with speed: the highest speed whose lateral limit still covers v²·κ (bisection;
+      // the limit grows slower than v²·κ above the corner speed)
+      const spare = (v: number) => muLatAt(v) * (gN[i] + (cl(v) * v * v) / m) + gT[i] - v * v * k;
+      if (spare(car.vMaxMs) >= 0) speedMs[i] = car.vMaxMs;
+      else {
+        let lo = 0;
+        let hi = car.vMaxMs;
+        for (let it = 0; it < 28; it++) {
+          const mid = 0.5 * (lo + hi);
+          if (spare(mid) >= 0) lo = mid;
+          else hi = mid;
+        }
+        speedMs[i] = lo;
+      }
+    }
   }
 
   // Fraction of the friction circle still available after the lateral demand at speed v
   const longShare = (i: number, v: number) => {
-    const latMax = car.muLat * (gN[i] + (car.downforceCoef * v * v) / m);
+    const latMax = muLatAt(v) * (gN[i] + (cl(v) * v * v) / m);
     const latUsed = Math.max(0, v * v * Math.abs(curvature[i]) - gT[i]);
     // Between a friction circle and a linear trade-off: with fixed left/right brake and drive
     // torque the less-loaded tyre saturates first, so combined grip is below the ideal circle
@@ -187,7 +279,7 @@ export function computeSpeedProfile(
     // Deceleration available braking at speed u through sample i: tyre grip with u's downforce, the share of it the
     // cornering at u leaves (friction circle), and u's drag
     const decelAt = (i: number, u: number) =>
-      Math.min(car.muLong * (G + (car.downforceCoef * u * u) / m), car.maxBrakeForceN / m) * longShare(i, u) +
+      Math.min(muLongAt(u) * (G + (cl(u) * u * u) / m), car.maxBrakeForceN / m) * longShare(i, u) +
       (car.dragCoef * u * u) / m;
     for (let step = 0; step < n; step++) {
       const i = n - 1 - step;
@@ -213,7 +305,7 @@ export function computeSpeedProfile(
       const j = (i + 1) % n;
       const v = speedMs[i];
       const traction =
-        car.muLong * (car.rearWeightFraction * G + (car.rearDownforceShare * car.downforceCoef * v * v) / m);
+        muLongAt(v) * (car.rearWeightFraction * G + (car.rearDownforceShare * cl(v) * v * v) / m);
       const power = car.maxDrivePowerW / (m * Math.max(5, v));
       const accel = Math.min(traction, power) * longShare(i, v) - (car.dragCoef * v * v) / m;
       speedMs[j] = Math.min(speedMs[j], Math.sqrt(Math.max(0, v * v + 2 * accel * segLenM[i])));
@@ -277,7 +369,7 @@ export function brakingGuideFor(
       const w = profile.speedMs[(i + 3) % n];
       const ds = profile.segLenM[i] + profile.segLenM[(i + 1) % n] + profile.segLenM[(i + 2) % n];
       const need = (v * v - w * w) / (2 * ds);
-      const grip = car.muLong * (G + (car.downforceCoef * v * v) / car.massKg);
+      const grip = plannedMu(car, car.muLong, v) * (G + (plannedDownforceCoef(car, v) * v * v) / car.massKg);
       const can = Math.min(grip, car.maxBrakeForceN / car.massKg) + (car.dragCoef * v * v) / car.massKg;
       brakingZone[i] = need > BRAKING_ZONE_RED * can ? 1.0 : need > BRAKING_ZONE_AMBER * can ? 0.5 : 0.0;
     }
