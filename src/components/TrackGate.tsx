@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { LibreCorsaSimulator } from "@/components/LibreCorsaSimulator";
+import { RenderProfiler } from "@/components/dev/RenderProfiler";
 import { activateTrack, loadStoredTrackId, RWANDA_TRACK_ID } from "@/lib/track-registry";
 import { registerAssetCache } from "@/lib/service-worker";
 
@@ -45,7 +46,9 @@ export const TrackGate: React.FC = () => {
   if (!trackId) return null;
   return (
     <>
-      <LibreCorsaSimulator key={trackId} trackId={trackId} onSelectTrack={(id) => void select(id)} />
+      <RenderProfiler id="sim">
+        <LibreCorsaSimulator key={trackId} trackId={trackId} onSelectTrack={(id) => void select(id)} />
+      </RenderProfiler>
       {error ? (
         <div
           role="alert"
