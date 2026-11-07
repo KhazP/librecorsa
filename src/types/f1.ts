@@ -235,6 +235,33 @@ export interface RaceStatus {
   standings: RaceStandingEntry[];
   /** Split gaps to the cars directly ahead and behind the player in the running order */
   splits?: RaceSplits;
+  /** Race control's live messages, newest first (AI race) */
+  raceControl?: RaceControlFeedMessage[];
+  /** The player is coming up on a yellow flag */
+  yellow?: boolean;
+  /** The player's car damage (absent: none, or damage off) */
+  damage?: PlayerDamageStatus;
+}
+
+/** One race-control message for the HUD */
+export interface RaceControlFeedMessage {
+  id: number;
+  kind: 'yellow' | 'green' | 'investigation' | 'penalty' | 'warning' | 'nfa' | 'retired' | 'info';
+  text: string;
+  detail?: string;
+}
+
+/** The player's damage by part, 0 (as new) .. 1 (gone) */
+export interface PlayerDamageStatus {
+  front: number;
+  rear: number;
+  left: number;
+  right: number;
+  /** Suspension per corner: FR, FL, RR, RL */
+  suspension: [number, number, number, number];
+  punctured: [boolean, boolean, boolean, boolean];
+  overall: number;
+  terminal: boolean;
 }
 
 /** One split gap (time at the same point of the track) to a nearby car */
@@ -275,6 +302,8 @@ export interface TyreSetup {
 }
 
 export interface CarTelemetry {
+  /** The last car-to-car contact this car took in a race: its closing speed (m/s), counted up per contact */
+  carContact?: { speedMs: number; seq: number };
   speedKmh: number;
   speedMs: number;
   rpm: number;

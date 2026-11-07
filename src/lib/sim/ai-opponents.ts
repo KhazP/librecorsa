@@ -50,6 +50,7 @@ import {
   RacecraftMemory,
 } from '@/lib/sim/ai-racecraft';
 import { RaceIncidents } from '@/lib/sim/race-incidents';
+import type { AiGridOrder, PlayerGridSlot } from '@/lib/sim/race-setup';
 import { F12026_CAR_CONFIG } from '@/lib/sim/f12026-car/F12026CarConfig';
 import { AMG_GT3_CONFIG } from '@/lib/sim/gt3/AmgGt3Config';
 import {
@@ -85,6 +86,21 @@ export const AI_DRIVERS: AiDriverDef[] = [
   { code: 'RUB', teamColorHex: '#3671c6', pace: 0.954, aggression: 0.3, consistencyBias: -0.03 },
   { code: 'HUY', teamColorHex: '#b6babd', pace: 0.947, aggression: -0.5, consistencyBias: 0 },
 ];
+
+/** Further down the order, for a bigger field (`aiDriversFor`) */
+export const AI_RESERVE_DRIVERS: AiDriverDef[] = [
+  { code: 'GIS', teamColorHex: '#52e252', pace: 0.951, aggression: 0.6, consistencyBias: -0.06 },
+  { code: 'KAR', teamColorHex: '#ff87bc', pace: 0.944, aggression: 0.1, consistencyBias: 0.04 },
+  { code: 'NYU', teamColorHex: '#6692ff', pace: 0.958, aggression: -0.1, consistencyBias: 0.02 },
+  { code: 'BUT', teamColorHex: '#ffd700', pace: 0.94, aggression: 0.4, consistencyBias: -0.02 },
+  { code: 'RUH', teamColorHex: '#00a19c', pace: 0.936, aggression: -0.4, consistencyBias: 0.06 },
+  { code: 'KIB', teamColorHex: '#9b0000', pace: 0.947, aggression: 0.8, consistencyBias: -0.08 },
+];
+
+/** A field of `n` AI drivers: the five regulars, then the reserves */
+export function aiDriversFor(n: number): AiDriverDef[] {
+  return [...AI_DRIVERS, ...AI_RESERVE_DRIVERS].slice(0, Math.max(1, Math.min(n, AI_DRIVERS.length + AI_RESERVE_DRIVERS.length)));
+}
 
 const PLAYER_CODE = 'YOU';
 /** Car footprint used for contact (m): length, width */
@@ -223,8 +239,7 @@ export interface AiFieldOptions {
   playerGrid?: PlayerGridSlot;
 }
 
-export type AiGridOrder = 'pace' | 'qualifying' | 'reversed';
-export type PlayerGridSlot = 'back' | 'middle' | 'front' | 'random';
+export type { AiGridOrder, PlayerGridSlot } from '@/lib/sim/race-setup';
 
 interface FieldCar {
   id: string;
@@ -538,8 +553,8 @@ export class AiOpponentField {
   /** Last contact time per pair of field slots (key: lower slot × 256 + higher slot) */
   private readonly contactAt = new Map<number, number>();
   private readonly rng: () => number;
-  /** Damage from contact and barriers */
-  public readonly damageLevel: DamageLevel;
+  /** Damage from contact and barriers (from the next start) */
+  public damageLevel: DamageLevel;
   /** Incidents this frame for race control: contacts (with who hit whom), damage, retirements */
   public readonly incidents: FieldIncident[] = [];
   /** Grid of the next race */
@@ -1428,6 +1443,11 @@ export class AiOpponentField {
       const dvLat = Math.abs(_applied.dvx * box.fwdZ - _applied.dvz * box.fwdX);
       if (Math.abs(_applied.dyaw) > KNOCK_YAW_RADS || dvLat > KNOCK_LATERAL_MS || impactMs > 3) car.control.knock(before);
     }
+    // A contact the driver feels (the pad's impact pulse)
+    if (car.isPlayer && impactMs > 1.5) {
+      const prev = car.sim.telemetry.carContact;
+      car.sim.telemetry.carContact = { speedMs: impactMs, seq: (prev?.seq ?? 0) + 1 };
+    }
     if (impactMs > 1) {
       const local = worldToCarLocal(cx, cz, box.x, box.z, box.fwdX, box.fwdZ);
       const report = car.damage.registerImpact({ localX: local.x, localZ: local.z, speedMs: impactMs, source: 'car' });
@@ -1699,6 +1719,28 @@ export class AiOpponentField {
     return c ? { mode: c.control?.mode ?? 'racing', damage: c.damage, retired: c.retired, removed: c.removed, sim: c.sim, stats: c.stats } : null;
   }
 
+  /** Race control's messages for the HUD: the player's own, and the race's retirements and penalties */
+  private raceControlFeed(): RaceStatus['raceControl'] {
+    const live = this.raceControl.live(this.raceTimeS).filter((m) => m.player || m.kind === 'retired' || m.kind === 'penalty');
+    return live.length ? live.slice(0, 2).map(({ id, kind, text, detail }) => ({ id, kind, text, detail })) : undefined;
+  }
+
+  private playerDamageStatus(): RaceStatus['damage'] {
+    const d = this.cars.find((c) => c.isPlayer)?.damage;
+    // A scuff that costs nothing isn't worth a HUD panel
+    if (!d || d.pristine || (d.overall < 0.03 && !d.terminal && !d.punctured.some(Boolean))) return undefined;
+    return {
+      front: d.front,
+      rear: d.rear,
+      left: d.left,
+      right: d.right,
+      suspension: [...d.suspension],
+      punctured: [...d.punctured],
+      overall: d.overall,
+      terminal: d.terminal,
+    };
+  }
+
   /** The player's damage (for the HUD) */
   public playerDamage(): CarDamage | null {
     return this.cars.find((c) => c.isPlayer)?.damage ?? null;
@@ -1769,6 +1811,9 @@ export class AiOpponentField {
       results: playerFinished ? classify(orderedProgress, L, this.raceLaps, final) : undefined,
       resultsFinal: final,
       splits: this.phase === 'racing' ? this.playerSplits.compute(this.splitTimer, this.raceTimeS, orderedProgress) : undefined,
+      raceControl: this.raceControlFeed(),
+      yellow: this.playerUnderYellow() || undefined,
+      damage: this.playerDamageStatus(),
     };
   }
 }
