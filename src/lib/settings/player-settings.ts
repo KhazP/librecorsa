@@ -2,6 +2,7 @@
  * The player's saved controls and driving preferences (localStorage, `bugesera.*` keys).
  * Everything is validated on load: a corrupt or partial save falls back field by field to the defaults.
  */
+import { DEFAULT_RACE_SETUP, parseRaceSetup, type RaceSetup } from "@/lib/sim/race-setup";
 import type { AssistPreset, CameraMode } from "@/types/f1";
 import {
   DEFAULT_KEY_BINDINGS,
@@ -60,6 +61,8 @@ export interface PlayerSettings {
   ghost: boolean;
   /** AI opponents' skill, 0 (Rookie) to 100 (Alien); 70 = Pro */
   aiSkill: number;
+  /** AI race: laps, field, grid, damage, start */
+  race: RaceSetup;
   /** Simulation realism: tyre wear, temperature grip, fuel use and how hard rain bites (Full = the whole model) */
   realism: SimRealism;
   /** Weather, time of day and time multiplier for offline sessions (the host's apply online) */
@@ -344,6 +347,7 @@ export const DEFAULT_PLAYER_SETTINGS: PlayerSettings = {
   profile: DEFAULT_DRIVER_PROFILE,
   ghost: true,
   aiSkill: AI_SKILL_DEFAULT,
+  race: DEFAULT_RACE_SETUP,
   realism: "full",
   conditions: DEFAULT_SESSION_CONDITIONS,
   library: DEFAULT_CONTENT_LIBRARY,
@@ -637,6 +641,7 @@ export function parsePlayerSettings(raw: unknown): PlayerSettings {
     profile: parseProfile(raw.profile),
     ghost: bool(raw.ghost, d.ghost),
     aiSkill: Math.round(num(raw.aiSkill, 0, 100, d.aiSkill)),
+    race: parseRaceSetup(raw.race),
     realism: oneOf(raw.realism, SIM_REALISM_LEVELS, d.realism),
     conditions: sanitizeConditions(raw.conditions),
     library: parseLibrary(raw.library),
