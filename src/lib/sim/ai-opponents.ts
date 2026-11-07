@@ -1431,7 +1431,7 @@ export class AiOpponentField {
       if (hazard) {
         const hs = hazard.sim;
         const hHalf = hazardHalfWidthM(this.headingErr(hs), CAR_LEN_M, CAR_WID_M);
-        const hl = hazardLine(hs.lateralOffsetM, hHalf, sample.width / 2 - 0.3, CAR_WID_M);
+        const hl = hazardLine(hs.lateralOffsetM, hHalf, sample.width / 2 - 0.3, CAR_WID_M, line);
         const gap = Math.max(0, hazardGap - CAR_LEN_M);
         if (hl) {
           targetLat = hl.latM;

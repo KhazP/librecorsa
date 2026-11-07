@@ -82,16 +82,25 @@ export function hazardHalfWidthM(headingErrRad: number, carLenM: number, carWidM
 
 /**
  * Where to pass a hazard at `hazLatM` (half-width `hazHalfM`) on a road ±`halfRoadM`: the side with more room, and
- * how much room that is (m of free road beside it); null when neither side has room for the car
+ * how much room that is (m of free road beside it); null when neither side has room for the car. The line is the
+ * car's own (`lineLatM`) wherever that already clears the hazard: a car stopped off the road needs no move toward it
+ * (cars were steered at the gravel to pass "beside" a car stranded there, and ran into it one after another)
  */
-export function hazardLine(hazLatM: number, hazHalfM: number, halfRoadM: number, carWidM: number): { latM: number; roomM: number } | null {
+export function hazardLine(
+  hazLatM: number,
+  hazHalfM: number,
+  halfRoadM: number,
+  carWidM: number,
+  lineLatM = 0
+): { latM: number; roomM: number } | null {
   const roomRight = halfRoadM - (hazLatM + hazHalfM);
   const roomLeft = hazLatM - hazHalfM + halfRoadM;
   const right = roomRight >= roomLeft;
-  const room = right ? roomRight : roomLeft;
+  const room = Math.min(2 * halfRoadM, right ? roomRight : roomLeft);
   if (room < carWidM + 0.3) return null;
-  const lat = right ? hazLatM + hazHalfM + 0.5 * carWidM + Math.min(0.8, 0.5 * (room - carWidM)) : hazLatM - hazHalfM - 0.5 * carWidM - Math.min(0.8, 0.5 * (room - carWidM));
-  return { latM: lat, roomM: room };
+  const clear = 0.5 * carWidM + Math.min(0.8, 0.5 * (room - carWidM));
+  const lat = right ? Math.max(lineLatM, hazLatM + hazHalfM + clear) : Math.min(lineLatM, hazLatM - hazHalfM - clear);
+  return { latM: Math.max(-halfRoadM, Math.min(halfRoadM, lat)), roomM: room };
 }
 
 /** Yellow flag zone around an incident: from this far before it to this far past it (m) */

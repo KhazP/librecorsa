@@ -46,6 +46,8 @@ const f = (v: number, d = 1) => v.toFixed(d);
   const hl = hazardLine(-2, 2.5, 6, 1.95);
   check('Hazard: passed on the side with room', hl !== null && hl.latM > 0.5, hl ? `line ${f(hl.latM)} m, room ${f(hl.roomM)} m` : 'blocked');
   check('Hazard: a road blocked across is blocked', hazardLine(0, 5.5, 6, 1.95) === null);
+  const offRoad = hazardLine(-18, 3, 6, 1.95, -1);
+  check('Hazard: a car stopped off the road draws no one toward it', offRoad !== null && offRoad.latM === -1, offRoad ? `line ${f(offRoad.latM)} m` : 'blocked');
   check('Yellow: 300 m before an incident, not 100 m past it', inYellowZone(1000, 1300, 5000) && !inYellowZone(1400, 1300, 5000));
   check('Yellow: across the line', inYellowZone(4900, 100, 5000));
 }
