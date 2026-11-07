@@ -469,7 +469,7 @@ export const PauseMenu: React.FC<PauseMenuProps> = (props) => {
               </p>
             ) : null}
             <div className="flex flex-wrap items-center gap-2">
-              <TrackQualityBadge track={trackInfo} className="h-7" />
+              <TrackQualityBadge track={trackInfo} />
               <span className={`${HEADER_CHIP} border border-[#262B3D] bg-[#11131A] text-[#8E96AA]`}>
                 {trackInfo.city && trackInfo.city !== trackInfo.country ? `${trackInfo.city}, ${trackInfo.country}` : trackInfo.country}
               </span>

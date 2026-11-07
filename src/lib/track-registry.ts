@@ -1,7 +1,8 @@
 /**
  * Circuits the simulator offers. Rwanda ships inside the bundle (track-data.ts imports its JSON); the others are
- * hand-crafted sim circuits or converted from Sketchfab scans into public/tracks/<id>/ and listed in
- * public/tracks/index.json. Their track data is fetched when the player picks one.
+ * hand-built sim circuits (scripts/tracks/port_ac_track.py) or community scans (scripts/tracks/build_track.py),
+ * written to public/tracks/<id>/ and listed in public/tracks/index.json. Their track data is fetched when the player
+ * picks one.
  */
 import trackIndex from "../../public/tracks/index.json";
 import { withBasePath } from "@/lib/base-path";
@@ -17,58 +18,46 @@ export interface TrackCredit {
 }
 
 /**
- * Quality / provenance tier of a circuit:
- * - "original": built specifically for LibreCorsa (Rwanda)
- * - "sim": hand-crafted sim-grade circuit (dedicated physical road/kerb/barrier meshes, surface physics, grooves, trees)
- * - "sketchfab": auto-converted from a Sketchfab 3D model (auto-traced road/kerbs/walls; mediocre/rough fidelity)
+ * Where a circuit's model comes from, which sets how far its surfaces can be trusted:
+ * - "original": built for LibreCorsa (Rwanda)
+ * - "sim": a hand-built sim circuit (an Assetto Corsa track) with its own road, kerb and barrier meshes
+ * - "sketchfab": a community 3D model converted automatically, its road, kerbs and barriers traced from the mesh
  */
 export type CircuitQuality = "original" | "sim" | "sketchfab";
 
 export interface CircuitQualityMeta {
-  id: CircuitQuality;
-  /** Compact badge text on cards and next to track names */
+  /** Badge on cards and next to track names */
   badge: string;
-  /** Short pill label in headers / inline tags */
-  shortBadge: string;
-  /** Filter / category label in the browser */
+  /** Filter and group label in the circuit browser */
   filterLabel: string;
-  /** Accent colour */
   color: string;
-  /** Chip variant */
   variant: "solid" | "soft" | "outline";
-  /** Explanation shown in the circuit detail pane */
+  /** Shown in the circuit detail pane and the browser's footnote */
   description: string;
 }
 
 export const CIRCUIT_QUALITY_META: Record<CircuitQuality, CircuitQualityMeta> = {
   original: {
-    id: "original",
-    badge: "ORIGINAL · SIM",
-    shortBadge: "ORIGINAL",
+    badge: "ORIGINAL",
     filterLabel: "LibreCorsa originals",
     color: "#CCFF00",
     variant: "solid",
-    description: "Built for LibreCorsa with custom physics surfaces, kerbs, elevation and trackside scenery.",
+    description: "Built for LibreCorsa with its own surfaces, kerbs, elevation and trackside scenery.",
   },
   sim: {
-    id: "sim",
     badge: "SIM GRADE",
-    shortBadge: "SIM GRADE",
-    filterLabel: "Sim-grade (High quality)",
+    filterLabel: "Sim-grade circuits",
     color: "#00E676",
     variant: "soft",
-    description:
-      "Hand-crafted sim circuit with dedicated physical road, kerb and barrier meshes, surface physics, 3D trees and dynamic tyre grooves.",
+    description: "A hand-built sim circuit, with its own road, kerb and barrier meshes and surface physics.",
   },
   sketchfab: {
-    id: "sketchfab",
-    badge: "SKETCHFAB · MEDIOCRE",
-    shortBadge: "SKETCHFAB · LOW",
-    filterLabel: "Sketchfab (Mediocre)",
+    badge: "SCAN",
+    filterLabel: "Converted scans",
     color: "#FFB300",
     variant: "soft",
     description:
-      "Auto-converted from a Sketchfab 3D model. Road, kerbs, run-off and barriers are detected automatically from the mesh — mediocre surface & visual quality.",
+      "Converted automatically from a community 3D model: the road, kerbs, run-off and barriers are traced from the mesh, so details can differ from the real venue.",
   },
 };
 
@@ -87,24 +76,14 @@ export interface TrackInfo {
   credit?: TrackCredit;
   /** Kind of venue, when the index states it; otherwise `circuitType` reads it from the name and layout */
   type?: CircuitType;
-  /** Quality / provenance tier; inferred from id/credit when omitted */
-  quality?: CircuitQuality;
+  /** Where its model comes from (index.json; Rwanda is the original) */
+  quality: CircuitQuality;
 }
 
 export type CircuitType = "permanent" | "street" | "oval";
 export const CIRCUIT_TYPE_LABELS: Record<CircuitType, string> = { permanent: "Permanent", street: "Street", oval: "Oval" };
 
-/** Quality tier of a track: explicit field, bundled Rwanda original, Sketchfab scan URL, or hand-crafted sim circuit */
-export const circuitQuality = (t: Pick<TrackInfo, "id" | "quality" | "credit">): CircuitQuality => {
-  if (t.quality) return t.quality;
-  if (t.id === RWANDA_TRACK_ID) return "original";
-  const url = `${t.credit?.url ?? ""} ${t.credit?.short ?? ""}`.toLowerCase();
-  if (url.includes("sketchfab.com") || url.includes("skfb.ly")) return "sketchfab";
-  return "sim";
-};
-
-export const circuitQualityMeta = (t: Pick<TrackInfo, "id" | "quality" | "credit">): CircuitQualityMeta =>
-  CIRCUIT_QUALITY_META[circuitQuality(t)];
+export const circuitQualityMeta = (t: Pick<TrackInfo, "quality">): CircuitQualityMeta => CIRCUIT_QUALITY_META[t.quality];
 
 /** Where a circuit is, for the circuit browser's region filter (from its country) */
 export type CircuitRegion = "Africa" | "Americas" | "Asia" | "Europe" | "Middle East" | "Oceania" | "Other";
@@ -181,6 +160,7 @@ export const TRACKS: TrackInfo[] = [
     lengthM: RWANDA_TARGET_LENGTH_M,
     turns: RWANDA_TURN_METADATA.length,
     direction: "clockwise",
+    quality: "original",
   },
   ...(trackIndex as TrackInfo[]),
 ];

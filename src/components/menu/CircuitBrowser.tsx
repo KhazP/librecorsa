@@ -9,10 +9,9 @@ import {
   CIRCUIT_REGIONS,
   CIRCUIT_TYPE_LABELS,
   CIRCUIT_VENUES,
-  circuitQuality,
   circuitQualityMeta,
   circuitType,
-  RWANDA_TRACK_ID,
+  type CircuitQuality,
   type CircuitType,
   type CircuitVenue,
   type TrackInfo,
@@ -23,7 +22,9 @@ import { Chip, Segmented, TrackQualityBadge } from "./menu-ui";
 
 const km = (t: TrackInfo) => (t.lengthM / 1000).toFixed(2);
 const dirShort = (d: string) => (/counter|anti/i.test(d) ? "CCW" : /clock/i.test(d) ? "CW" : d);
-const isOriginal = (v: CircuitVenue) => v.layouts.some((l) => l.id === RWANDA_TRACK_ID);
+const hasQuality = (v: CircuitVenue, q: CircuitQuality) => v.layouts.some((l) => l.quality === q);
+const isOriginal = (v: CircuitVenue) => hasQuality(v, "original");
+const placeOf = (city: string, country: string) => (city && city !== country ? `${city}, ${country}` : country);
 const TYPES: readonly CircuitType[] = ["permanent", "street", "oval"];
 
 /** Card thumbnail: the layout's real outline once it is loaded (cards load theirs as they scroll near the view) */
@@ -83,7 +84,6 @@ export const CircuitBrowser: React.FC<{
   const [layoutOf, setLayoutOf] = useState<Record<string, string>>({});
   const shownLayout = (v: CircuitVenue): TrackInfo =>
     v.layouts.find((l) => l.id === layoutOf[v.id]) ?? v.layouts.find((l) => l.id === trackId) ?? v.layouts[0];
-  const venueQuality = (v: CircuitVenue) => circuitQuality(shownLayout(v));
 
   const favs = library?.library.favorites.circuits ?? [];
   const recent = library?.library.recent.circuits ?? [];
@@ -105,27 +105,16 @@ export const CircuitBrowser: React.FC<{
           { id: "all", label: "All circuits", test: () => true },
           { id: "fav", label: "Favourites", test: (v) => v.layouts.some((l) => favs.includes(l.id)) },
           { id: "recent", label: "Recently raced", test: (v) => v.layouts.some((l) => recent.includes(l.id)) },
-          ...(venues.some(isOriginal) ? [{ id: "original", label: "LibreCorsa originals", test: isOriginal }] : []),
+          ...(venues.some(isOriginal) ? [{ id: "original", label: CIRCUIT_QUALITY_META.original.filterLabel, test: isOriginal }] : []),
         ],
       },
       {
         label: "Quality",
-        filters: [
-          {
-            id: "quality:sim",
-            label: "Sim-grade",
-            test: (v) =>
-              v.layouts.some((l) => {
-                const q = circuitQuality(l);
-                return q === "sim" || q === "original";
-              }),
-          },
-          {
-            id: "quality:sketchfab",
-            label: "Sketchfab (mediocre)",
-            test: (v) => v.layouts.some((l) => circuitQuality(l) === "sketchfab"),
-          },
-        ],
+        filters: (["sim", "sketchfab"] as const).map((q) => ({
+          id: `quality:${q}`,
+          label: CIRCUIT_QUALITY_META[q].filterLabel,
+          test: (v: CircuitVenue) => hasQuality(v, q),
+        })),
       },
       { label: "Region", filters: regions.map((r) => ({ id: `region:${r}`, label: r, test: (v: CircuitVenue) => v.region === r })) },
     ];
@@ -143,7 +132,7 @@ export const CircuitBrowser: React.FC<{
     {
       id: "quality",
       label: "Quality",
-      groupBy: (v) => CIRCUIT_QUALITY_META[venueQuality(v)].filterLabel,
+      groupBy: (v) => circuitQualityMeta(shownLayout(v)).filterLabel,
       groupOrder: [
         CIRCUIT_QUALITY_META.sim.filterLabel,
         CIRCUIT_QUALITY_META.original.filterLabel,
@@ -177,7 +166,7 @@ export const CircuitBrowser: React.FC<{
           v.region,
           ...v.layouts.flatMap((l) => {
             const q = circuitQualityMeta(l);
-            return [l.layout, CIRCUIT_TYPE_LABELS[circuitType(l)], l.credit?.author ?? "", q.badge, q.shortBadge, q.filterLabel];
+            return [l.layout, CIRCUIT_TYPE_LABELS[circuitType(l)], l.credit?.author ?? "", q.badge, q.filterLabel];
           }),
         ].join(" ")
       }
@@ -197,27 +186,26 @@ export const CircuitBrowser: React.FC<{
       renderCard={(v) => {
         const t = shownLayout(v);
         const active = v.layouts.some((l) => l.id === trackId);
-        const location = v.city && v.city !== v.country ? `${v.city}, ${v.country}` : v.country;
         return (
           <span className="flex min-w-0 flex-col gap-1.5 px-3.5 pt-3 pb-3.5">
             <span className="flex min-h-7 flex-wrap items-center gap-1.5 pr-6">
-              <TrackQualityBadge track={t} size="sm" />
+              <TrackQualityBadge track={t} size="xs" />
             </span>
             <CardOutline track={t} />
             <span className="lc-disp text-[16px] leading-[1.05]">{v.name}</span>
-            <span className="truncate text-[12px] text-[#8E96AA]">{location}</span>
+            <span className="truncate text-[12px] text-[#8E96AA]">{placeOf(v.city, v.country)}</span>
             <span className="mt-0.5 flex flex-wrap items-center gap-1.5">
               <span className="lc-data text-[11px] whitespace-nowrap text-[#C5CBD8]">
                 {km(t)} KM · {t.turns} T
               </span>
               <span className="flex-1" />
               {v.layouts.length > 1 ? (
-                <Chip color="#00E5FF" variant="soft" className="h-[22px] px-2 text-[10px]">
+                <Chip color="#00E5FF" variant="soft" size="sm">
                   {v.layouts.length} layouts
                 </Chip>
               ) : null}
               {active ? (
-                <Chip color="#CCFF00" variant="soft" className="h-[22px] px-2 text-[10px]">
+                <Chip color="#CCFF00" variant="soft" size="sm">
                   Active
                 </Chip>
               ) : null}
@@ -246,7 +234,7 @@ export const CircuitBrowser: React.FC<{
             <div className="flex flex-col gap-1.5">
               <span className="lc-disp text-[24px]">{v.name}</span>
               <span className="text-[13px] text-[#C5CBD8]">
-                {t.layout} · {v.city && v.city !== v.country ? `${v.city}, ${v.country}` : v.country}
+                {t.layout} · {placeOf(v.city, v.country)}
               </span>
             </div>
             {v.layouts.length > 1 ? (
@@ -299,8 +287,12 @@ export const CircuitBrowser: React.FC<{
       }}
       footnote={
         <p className="m-0 mx-1 mt-1 text-[12px] leading-relaxed text-[#8E96AA]">
-          <strong className="text-[#00E676]">Sim-grade</strong> circuits are hand-crafted Assetto Corsa tracks by Mitja Bonca with full physical road, kerb and barrier meshes.{" "}
-          <strong className="text-[#FFB300]">Sketchfab · Mediocre</strong> circuits are auto-converted from community 3D models with automatically detected roads, kerbs and walls.
+          {(["sim", "sketchfab"] as const).map((q) => (
+            <React.Fragment key={q}>
+              <strong style={{ color: CIRCUIT_QUALITY_META[q].color }}>{CIRCUIT_QUALITY_META[q].filterLabel}:</strong>{" "}
+              {CIRCUIT_QUALITY_META[q].description}{" "}
+            </React.Fragment>
+          ))}
         </p>
       }
     />

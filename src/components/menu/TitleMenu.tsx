@@ -721,7 +721,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
                 {map ? <TrackOutline map={map} className="h-[92px] w-[112px] shrink-0" /> : null}
                 <div className="flex min-w-0 flex-col gap-1">
                   <div className="flex items-center">
-                    <TrackQualityBadge track={track} size="sm" />
+                    <TrackQualityBadge track={track} size="xs" />
                   </div>
                   <span className="lc-title text-[18px] leading-[1.05]">{track.name}</span>
                   <span className="text-[13px] text-[#8E96AA]">

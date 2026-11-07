@@ -347,7 +347,7 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
             <span className="lc-lbl text-[9px]">Circuit</span>
             <div className="flex flex-wrap items-center gap-1.5">
               <ReadValue>{trackName(settings.trackId)}</ReadValue>
-              <TrackQualityBadge track={getTrackInfo(settings.trackId)} size="sm" />
+              <TrackQualityBadge track={getTrackInfo(settings.trackId)} size="xs" />
             </div>
           </div>
 

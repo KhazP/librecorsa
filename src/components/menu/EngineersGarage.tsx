@@ -370,7 +370,7 @@ export const EngineersGarage: React.FC<PauseMenuProps> = (p) => {
         >
           <span className="flex min-w-0 flex-1 flex-col gap-1">
             <span className="flex items-center gap-2">
-              <Chip className="h-[22px] px-2 text-[10px]">{carKind.title}</Chip>
+              <Chip size="sm">{carKind.title}</Chip>
               <span className="lc-data text-[11px] tracking-[0.12em] text-[#C5CBD8]">{car.badge}</span>
             </span>
             <span className="lc-disp text-[22px] leading-[1.05]">{car.title}</span>

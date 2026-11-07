@@ -98,7 +98,7 @@ export const CarBrowser: React.FC<{
           <span className="flex min-w-0 flex-1 flex-col gap-1.5 overflow-hidden rounded-[17px]">
             <span className="relative flex h-[58px] items-end border-b border-[#262B3D] bg-[#1B1F2B]/70 px-3 pb-2">
               <span className="absolute top-2.5 left-3">
-                <Chip className="h-[22px] px-2 text-[10px]">{k.title}</Chip>
+                <Chip size="sm">{k.title}</Chip>
               </span>
               <span className="lc-data ml-auto text-[11px] tracking-[0.12em] text-[#C5CBD8]">{c.badge}</span>
             </span>
@@ -107,7 +107,7 @@ export const CarBrowser: React.FC<{
               <span className="line-clamp-2 text-[12px] leading-snug text-[#8E96AA]">{c.sub}</span>
               {c.id === carId ? (
                 <span className="mt-0.5">
-                  <Chip color="#CCFF00" variant="soft" className="h-[22px] px-2 text-[10px]">
+                  <Chip color="#CCFF00" variant="soft" size="sm">
                     Current
                   </Chip>
                 </span>

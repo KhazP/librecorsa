@@ -16,7 +16,8 @@
       "short": "https://skfb.ly/pLorW",
       "license": "CC BY 4.0",
       "licenseUrl": "http://creativecommons.org/licenses/by/4.0/"
-    }
+    },
+    "quality": "sketchfab"
   },
   {
     "id": "shanghai",
@@ -35,7 +36,8 @@
       "short": "https://skfb.ly/pLqvL",
       "license": "CC BY 4.0",
       "licenseUrl": "http://creativecommons.org/licenses/by/4.0/"
-    }
+    },
+    "quality": "sketchfab"
   },
   {
     "id": "motegi",
@@ -54,7 +56,8 @@
       "short": "https://skfb.ly/pMIoS",
       "license": "CC BY 4.0",
       "licenseUrl": "http://creativecommons.org/licenses/by/4.0/"
-    }
+    },
+    "quality": "sketchfab"
   },
   {
     "id": "sepang",
@@ -73,7 +76,8 @@
       "short": null,
       "license": "CC BY 4.0",
       "licenseUrl": "http://creativecommons.org/licenses/by/4.0/"
-    }
+    },
+    "quality": "sketchfab"
   },
   {
     "id": "daytona_oval",
@@ -92,7 +96,8 @@
       "short": null,
       "license": "CC BY 4.0",
       "licenseUrl": "http://creativecommons.org/licenses/by/4.0/"
-    }
+    },
+    "quality": "sketchfab"
   },
   {
     "id": "daytona_road",
@@ -111,7 +116,8 @@
       "short": null,
       "license": "CC BY 4.0",
       "licenseUrl": "http://creativecommons.org/licenses/by/4.0/"
-    }
+    },
+    "quality": "sketchfab"
   },
   {
     "id": "marina_bay",
@@ -130,7 +136,8 @@
       "short": null,
       "license": "CC BY 4.0",
       "licenseUrl": "http://creativecommons.org/licenses/by/4.0/"
-    }
+    },
+    "quality": "sketchfab"
   },
   {
     "id": "monza",
@@ -149,7 +156,8 @@
       "short": null,
       "license": "CC BY 4.0",
       "licenseUrl": "http://creativecommons.org/licenses/by/4.0/"
-    }
+    },
+    "quality": "sketchfab"
   },
   {
     "id": "yas_marina",
@@ -168,7 +176,8 @@
       "short": null,
       "license": "CC BY 4.0",
       "licenseUrl": "http://creativecommons.org/licenses/by/4.0/"
-    }
+    },
+    "quality": "sketchfab"
   },
   {
     "id": "silverstone",
@@ -187,7 +196,8 @@
       "short": null,
       "license": "CC BY 4.0",
       "licenseUrl": "http://creativecommons.org/licenses/by/4.0/"
-    }
+    },
+    "quality": "sketchfab"
   },
   {
     "id": "spa",
@@ -206,7 +216,8 @@
       "short": null,
       "license": "CC BY 4.0",
       "licenseUrl": "http://creativecommons.org/licenses/by/4.0/"
-    }
+    },
+    "quality": "sketchfab"
   },
   {
     "id": "chang",
@@ -225,7 +236,8 @@
       "short": null,
       "license": "Used with permission",
       "licenseUrl": "https://www.overtake.gg/downloads/chang-international-circuit.20997/"
-    }
+    },
+    "quality": "sim"
   },
   {
     "id": "okayama",
@@ -244,7 +256,8 @@
       "short": null,
       "license": "Used with permission",
       "licenseUrl": "https://www.overtake.gg/downloads/okayama-international-circuit.15846/"
-    }
+    },
+    "quality": "sim"
   },
   {
     "id": "okayama_piper",
@@ -263,7 +276,8 @@
       "short": null,
       "license": "Used with permission",
       "licenseUrl": "https://www.overtake.gg/downloads/okayama-international-circuit.15846/"
-    }
+    },
+    "quality": "sim"
   },
   {
     "id": "okayama_drift",
@@ -282,7 +296,8 @@
       "short": null,
       "license": "Used with permission",
       "licenseUrl": "https://www.overtake.gg/downloads/okayama-international-circuit.15846/"
-    }
+    },
+    "quality": "sim"
   },
   {
     "id": "spielberg",
@@ -301,7 +316,8 @@
       "short": null,
       "license": "Used with permission",
       "licenseUrl": "https://www.overtake.gg/downloads/spielberg.6437/"
-    }
+    },
+    "quality": "sim"
   },
   {
     "id": "spielberg_south",
@@ -320,7 +336,8 @@
       "short": null,
       "license": "Used with permission",
       "licenseUrl": "https://www.overtake.gg/downloads/spielberg.6437/"
-    }
+    },
+    "quality": "sim"
   },
   {
     "id": "spielberg_inner",
@@ -339,7 +356,8 @@
       "short": null,
       "license": "Used with permission",
       "licenseUrl": "https://www.overtake.gg/downloads/spielberg.6437/"
-    }
+    },
+    "quality": "sim"
   },
   {
     "id": "monaco",
@@ -359,6 +377,7 @@
       "license": "Used with permission",
       "licenseUrl": "https://www.overtake.gg/downloads/monaco.3340/"
     },
-    "type": "street"
+    "type": "street",
+    "quality": "sim"
   }
 ]

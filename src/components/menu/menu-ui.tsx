@@ -46,33 +46,37 @@ export const KeyCap: React.FC<{ children: React.ReactNode; dim?: boolean; tone?:
   </span>
 );
 
+export type ChipSize = "md" | "sm" | "xs";
+
+const CHIP_SIZE: Record<ChipSize, string> = {
+  md: "h-[26px] gap-1.5 px-3 text-[11px] tracking-[0.08em]",
+  sm: "h-[22px] gap-1.5 px-2 text-[10px] tracking-[0.08em]",
+  xs: "h-[20px] gap-1 px-1.5 text-[8px] tracking-normal",
+};
+
 /** Small status pill: FINAL, PB, 2 CONNECTED, 42 ms… */
 export const Chip: React.FC<{
   children: React.ReactNode;
   /** Text / dot colour */
   color?: string;
   /** solid: filled with the colour; soft: tinted; outline: hairline in the colour */
-  variant?: "solid" | "outline" | "soft";
+  variant?: "solid" | "soft" | "outline";
+  size?: ChipSize;
   /** Leading status dot */
   dot?: boolean;
   title?: string;
   className?: string;
-}> = ({ children, color = "#8E96AA", variant = "outline", dot, title, className = "" }) => {
+}> = ({ children, color = "#8E96AA", variant = "outline", size = "md", dot, title, className = "" }) => {
   const style: React.CSSProperties =
     variant === "solid"
       ? { background: color, color: color === "#B845FF" || color === "#FF2A3C" ? "#F5F7FA" : "#08090D" }
       : variant === "soft"
         ? { background: `${color}1F`, color }
         : { boxShadow: `inset 0 0 0 1px ${color === "#8E96AA" ? "#262B3D" : color}`, color };
-  const defaultH = /\bh-(?:\d|\[)/.test(className) ? "" : "h-[26px]";
-  const defaultPx = /\bpx-(?:\d|\[)/.test(className) ? "" : "px-3";
-  const defaultText = /\btext-(?:xs|sm|base|lg|xl|\d|\[)/.test(className) ? "" : "text-[11px]";
-  const defaultTracking = /\btracking-/.test(className) ? "" : "tracking-[0.08em]";
-  const defaultGap = /\bgap-/.test(className) ? "" : "gap-1.5";
   return (
     <span
       title={title}
-      className={`inline-flex shrink-0 items-center rounded-full font-f1-mono font-extrabold whitespace-nowrap uppercase ${defaultH} ${defaultGap} ${defaultPx} ${defaultText} ${defaultTracking} ${className}`}
+      className={`inline-flex shrink-0 items-center rounded-full font-f1-mono font-extrabold whitespace-nowrap uppercase ${CHIP_SIZE[size]} ${className}`}
       style={style}
     >
       {dot ? <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: color }} /> : null}
@@ -81,28 +85,23 @@ export const Chip: React.FC<{
   );
 };
 
-/**
- * Badge indicating whether a circuit is a hand-crafted sim-grade track, LibreCorsa original, or an auto-converted
- * Sketchfab 3D model (mediocre quality).
- */
+/** Where a circuit's model comes from (track-registry `CircuitQuality`), with its description on hover */
 export const TrackQualityBadge: React.FC<{
-  track: Pick<TrackInfo, "id" | "quality" | "credit">;
-  size?: "sm" | "md";
-  short?: boolean;
+  track: Pick<TrackInfo, "quality">;
+  size?: ChipSize;
   className?: string;
-}> = ({ track, size = "md", short = false, className = "" }) => {
+}> = ({ track, size = "md", className = "" }) => {
   const q = circuitQualityMeta(track);
   return (
     <Chip
       color={q.color}
       variant={q.variant}
-      dot={q.id !== "original"}
+      size={size}
+      dot={track.quality !== "original"}
       title={q.description}
-      className={`${
-        size === "sm" ? "h-[20px] max-w-full min-w-0 gap-1 overflow-hidden px-1.5 text-[8px] tracking-normal" : "max-w-full min-w-0 overflow-hidden"
-      } ${className}`}
+      className={`max-w-full min-w-0 overflow-hidden ${className}`}
     >
-      <span className="truncate">{short ? q.shortBadge : q.badge}</span>
+      <span className="truncate">{q.badge}</span>
     </Chip>
   );
 };
