@@ -3,6 +3,7 @@
 import React from "react";
 import { ChevronRight, type LucideIcon } from "lucide-react";
 import { LibreCorsaLogo } from "@/components/ui/LibreCorsaLogo";
+import { circuitQualityMeta, type TrackInfo } from "@/lib/track-registry";
 import { FACE_BUTTONS, useInputMode, type PadFamily } from "./input-mode";
 import { focusOnHover } from "./useFocusNav";
 
@@ -54,8 +55,9 @@ export const Chip: React.FC<{
   variant?: "solid" | "soft" | "outline";
   /** Leading status dot */
   dot?: boolean;
+  title?: string;
   className?: string;
-}> = ({ children, color = "#8E96AA", variant = "outline", dot, className = "" }) => {
+}> = ({ children, color = "#8E96AA", variant = "outline", dot, title, className = "" }) => {
   const style: React.CSSProperties =
     variant === "solid"
       ? { background: color, color: color === "#B845FF" || color === "#FF2A3C" ? "#F5F7FA" : "#08090D" }
@@ -64,12 +66,37 @@ export const Chip: React.FC<{
         : { boxShadow: `inset 0 0 0 1px ${color === "#8E96AA" ? "#262B3D" : color}`, color };
   return (
     <span
+      title={title}
       className={`inline-flex h-[26px] shrink-0 items-center gap-1.5 rounded-full px-3 font-f1-mono text-[11px] font-extrabold tracking-[0.08em] whitespace-nowrap uppercase ${className}`}
       style={style}
     >
-      {dot ? <span aria-hidden className="h-1.5 w-1.5 rounded-full" style={{ background: color }} /> : null}
+      {dot ? <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: color }} /> : null}
       {children}
     </span>
+  );
+};
+
+/**
+ * Badge indicating whether a circuit is a hand-crafted sim-grade track, LibreCorsa original, or an auto-converted
+ * Sketchfab 3D model (mediocre quality).
+ */
+export const TrackQualityBadge: React.FC<{
+  track: Pick<TrackInfo, "id" | "quality" | "credit">;
+  size?: "sm" | "md";
+  short?: boolean;
+  className?: string;
+}> = ({ track, size = "md", short = false, className = "" }) => {
+  const q = circuitQualityMeta(track);
+  return (
+    <Chip
+      color={q.color}
+      variant={q.variant}
+      dot={q.id !== "original"}
+      title={q.description}
+      className={`${size === "sm" ? "h-[22px] max-w-full px-2 text-[9px] tracking-[0.05em]" : ""} ${className}`}
+    >
+      <span className="truncate">{short ? q.shortBadge : q.badge}</span>
+    </Chip>
   );
 };
 

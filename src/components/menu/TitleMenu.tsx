@@ -17,7 +17,7 @@ import type { HudPreset } from "@/lib/settings/player-settings";
 import { useGamepads, type PadState } from "./useMenuNav";
 import { focusInZone, focusOnHover, useFocusNav } from "./useFocusNav";
 import { useInputMode } from "./input-mode";
-import { KeyCap, PadGlyph, PromptBar } from "./menu-ui";
+import { KeyCap, PadGlyph, PromptBar, TrackQualityBadge } from "./menu-ui";
 import { RequestPanel, type FeedbackContext } from "./RequestPanel";
 import { CircuitBrowser } from "./CircuitBrowser";
 import { TrackOutline } from "./circuit-outline";
@@ -720,6 +720,9 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
               <div className="flex items-center gap-4">
                 {map ? <TrackOutline map={map} className="h-[92px] w-[112px] shrink-0" /> : null}
                 <div className="flex min-w-0 flex-col gap-1">
+                  <div className="flex items-center">
+                    <TrackQualityBadge track={track} size="sm" />
+                  </div>
                   <span className="lc-title text-[18px] leading-[1.05]">{track.name}</span>
                   <span className="text-[13px] text-[#8E96AA]">
                     {track.layout} · {track.city}

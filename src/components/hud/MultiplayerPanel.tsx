@@ -14,8 +14,8 @@ import {
   type P2PConnectionStatus,
   type PeerNetStats,
 } from "@/lib/sim/multiplayer-sync";
-import { TRACKS } from "@/lib/track-registry";
-import { Segmented } from "@/components/menu/menu-ui";
+import { getTrackInfo, TRACKS } from "@/lib/track-registry";
+import { Segmented, TrackQualityBadge } from "@/components/menu/menu-ui";
 
 export interface MultiplayerPanelProps {
   p2pStatus?: P2PConnectionStatus;
@@ -345,7 +345,10 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
 
           <div className={`${CARD} flex flex-col gap-2 !p-3 !rounded-[18px]`}>
             <span className="lc-lbl text-[9px]">Circuit</span>
-            <ReadValue>{trackName(settings.trackId)}</ReadValue>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <ReadValue>{trackName(settings.trackId)}</ReadValue>
+              <TrackQualityBadge track={getTrackInfo(settings.trackId)} size="sm" />
+            </div>
           </div>
 
           <RuleRow

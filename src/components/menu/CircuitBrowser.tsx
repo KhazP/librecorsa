@@ -5,9 +5,12 @@ import { Info } from "lucide-react";
 import { SECTOR_COLORS } from "@/components/hud/styles/hud-style-parts";
 import { BASE_ALTITUDE_M } from "@/lib/track-data";
 import {
+  CIRCUIT_QUALITY_META,
   CIRCUIT_REGIONS,
   CIRCUIT_TYPE_LABELS,
   CIRCUIT_VENUES,
+  circuitQuality,
+  circuitQualityMeta,
   circuitType,
   RWANDA_TRACK_ID,
   type CircuitType,
@@ -16,11 +19,12 @@ import {
 } from "@/lib/track-registry";
 import { ContentBrowser, type BrowserFilterGroup, type BrowserSort, type LibraryProps } from "./ContentBrowser";
 import { TrackOutline, useCircuitOutline, useNearView } from "./circuit-outline";
-import { Chip, Segmented } from "./menu-ui";
+import { Chip, Segmented, TrackQualityBadge } from "./menu-ui";
 
 const km = (t: TrackInfo) => (t.lengthM / 1000).toFixed(2);
 const dirShort = (d: string) => (/counter|anti/i.test(d) ? "CCW" : /clock/i.test(d) ? "CW" : d);
 const isOriginal = (v: CircuitVenue) => v.layouts.some((l) => l.id === RWANDA_TRACK_ID);
+const venueQuality = (v: CircuitVenue) => circuitQuality(v.layouts[0]);
 const TYPES: readonly CircuitType[] = ["permanent", "street", "oval"];
 
 /** Card thumbnail: the layout's real outline once it is loaded (cards load theirs as they scroll near the view) */
@@ -104,6 +108,24 @@ export const CircuitBrowser: React.FC<{
           ...(venues.some(isOriginal) ? [{ id: "original", label: "LibreCorsa originals", test: isOriginal }] : []),
         ],
       },
+      {
+        label: "Quality",
+        filters: [
+          {
+            id: "quality:sim",
+            label: "Sim-grade",
+            test: (v) => {
+              const q = venueQuality(v);
+              return q === "sim" || q === "original";
+            },
+          },
+          {
+            id: "quality:sketchfab",
+            label: "Sketchfab (mediocre)",
+            test: (v) => venueQuality(v) === "sketchfab",
+          },
+        ],
+      },
       { label: "Region", filters: regions.map((r) => ({ id: `region:${r}`, label: r, test: (v: CircuitVenue) => v.region === r })) },
     ];
     if (types.length > 1) {
@@ -117,6 +139,17 @@ export const CircuitBrowser: React.FC<{
 
   const sorts: BrowserSort<CircuitVenue>[] = [
     { id: "region", label: "Region", groupBy: (v) => v.region, groupOrder: CIRCUIT_REGIONS, compare: byName },
+    {
+      id: "quality",
+      label: "Quality",
+      groupBy: (v) => CIRCUIT_QUALITY_META[venueQuality(v)].filterLabel,
+      groupOrder: [
+        CIRCUIT_QUALITY_META.sim.filterLabel,
+        CIRCUIT_QUALITY_META.original.filterLabel,
+        CIRCUIT_QUALITY_META.sketchfab.filterLabel,
+      ],
+      compare: byName,
+    },
     { id: "name", label: "A–Z", heading: "A–Z", compare: byName },
     {
       id: "length",
@@ -135,9 +168,18 @@ export const CircuitBrowser: React.FC<{
       noun="venues"
       items={venues}
       idOf={(v) => v.id}
-      searchText={(v) =>
-        [v.name, v.city, v.country, v.region, ...v.layouts.flatMap((l) => [l.layout, CIRCUIT_TYPE_LABELS[circuitType(l)]])].join(" ")
-      }
+      searchText={(v) => {
+        const q = circuitQualityMeta(v.layouts[0]);
+        return [
+          v.name,
+          v.city,
+          v.country,
+          v.region,
+          q.badge,
+          q.filterLabel,
+          ...v.layouts.flatMap((l) => [l.layout, CIRCUIT_TYPE_LABELS[circuitType(l)], l.credit?.author ?? ""]),
+        ].join(" ");
+      }}
       searchPlaceholder="Search circuits, countries, layouts"
       filterGroups={filterGroups}
       sorts={sorts}
@@ -154,20 +196,15 @@ export const CircuitBrowser: React.FC<{
       renderCard={(v) => {
         const t = shownLayout(v);
         const active = v.layouts.some((l) => l.id === trackId);
+        const location = v.city && v.city !== v.country ? `${v.city}, ${v.country}` : v.country;
         return (
           <span className="flex min-w-0 flex-col gap-1.5 px-3.5 pt-3 pb-3.5">
             <span className="flex min-h-7 flex-wrap items-center gap-1.5 pr-8">
-              {isOriginal(v) ? (
-                <span className="inline-flex h-[22px] items-center rounded-full bg-[#CCFF00] px-2 font-f1-mono text-[9px] font-extrabold tracking-[0.08em] text-[#08090D]">
-                  ORIGINAL
-                </span>
-              ) : (
-                <span className="lc-lbl truncate text-[10px]">{v.country}</span>
-              )}
+              <TrackQualityBadge track={t} size="sm" />
             </span>
             <CardOutline track={t} />
             <span className="lc-disp text-[16px] leading-[1.05]">{v.name}</span>
-            <span className="truncate text-[12px] text-[#8E96AA]">{v.city}</span>
+            <span className="truncate text-[12px] text-[#8E96AA]">{location}</span>
             <span className="mt-0.5 flex flex-wrap items-center gap-1.5">
               <span className="lc-data text-[11px] whitespace-nowrap text-[#C5CBD8]">
                 {km(t)} KM · {t.turns} T
@@ -190,6 +227,7 @@ export const CircuitBrowser: React.FC<{
       renderDetail={(v) => {
         const t = shownLayout(v);
         const active = t.id === trackId;
+        const qMeta = circuitQualityMeta(t);
         const stats: [string, string][] = [
           ["Km", km(t)],
           ["Turns", String(t.turns)],
@@ -198,16 +236,16 @@ export const CircuitBrowser: React.FC<{
         return (
           <>
             <div className="flex flex-wrap items-center gap-1.5">
+              <TrackQualityBadge track={t} />
               <Chip>{v.region}</Chip>
               {[...typesOf(v)].map((ty) => (
                 <Chip key={ty}>{CIRCUIT_TYPE_LABELS[ty]}</Chip>
               ))}
-              {isOriginal(v) ? <Chip color="#CCFF00" variant="solid">Original</Chip> : null}
             </div>
             <div className="flex flex-col gap-1.5">
               <span className="lc-disp text-[24px]">{v.name}</span>
               <span className="text-[13px] text-[#C5CBD8]">
-                {t.layout} · {v.city}, {v.country}
+                {t.layout} · {v.city && v.city !== v.country ? `${v.city}, ${v.country}` : v.country}
               </span>
             </div>
             {v.layouts.length > 1 ? (
@@ -231,6 +269,15 @@ export const CircuitBrowser: React.FC<{
                 </div>
               ))}
             </dl>
+            <div className="flex flex-col gap-1 rounded-[10px] border border-[#262B3D] bg-[#08090D]/60 px-3 py-2.5">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="font-f1-mono text-[10px] font-extrabold tracking-[0.08em] uppercase" style={{ color: qMeta.color }}>
+                  {qMeta.filterLabel}
+                </span>
+                {t.credit?.author ? <span className="text-[11px] font-semibold text-[#C5CBD8]">By {t.credit.author}</span> : null}
+              </div>
+              <p className="m-0 text-[12px] leading-snug text-[#8E96AA]">{qMeta.description}</p>
+            </div>
             {active && BASE_ALTITUDE_M > 0 ? (
               <div className="flex items-center justify-between gap-2">
                 <span className="lc-lbl text-[10px]">Altitude</span>
@@ -251,8 +298,8 @@ export const CircuitBrowser: React.FC<{
       }}
       footnote={
         <p className="m-0 mx-1 mt-1 text-[12px] leading-relaxed text-[#8E96AA]">
-          Real-world circuits are converted from community scans (see Credits). Corners, kerbs, run-off and barriers are
-          detected automatically, so details can differ from the real venue.
+          <strong className="text-[#00E676]">Sim-grade</strong> circuits are hand-crafted Assetto Corsa tracks by Mitja Bonca with full physical road, kerb and barrier meshes.{" "}
+          <strong className="text-[#FFB300]">Sketchfab · Mediocre</strong> circuits are auto-converted from community 3D models with automatically detected roads, kerbs and walls.
         </p>
       }
     />

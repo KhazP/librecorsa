@@ -34,7 +34,7 @@ import { MultiplayerPanel, type MultiplayerPanelProps } from "./MultiplayerPanel
 import { DisplayPanel, type DisplayPanelProps } from "./DisplayPanel";
 import { LeaderboardPanel, type LeaderboardPanelProps } from "./LeaderboardPanel";
 import { focusInZone, focusOnHover, focusZone, useFocusNav } from "@/components/menu/useFocusNav";
-import { PromptBar, RailItem, Segmented, TabStrip } from "@/components/menu/menu-ui";
+import { PromptBar, RailItem, Segmented, TabStrip, TrackQualityBadge } from "@/components/menu/menu-ui";
 import {
   ChevronRight,
   CornerDownRight,
@@ -468,9 +468,10 @@ export const PauseMenu: React.FC<PauseMenuProps> = (props) => {
                 {props.pauseNotice}
               </p>
             ) : null}
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <TrackQualityBadge track={trackInfo} className="h-7" />
               <span className={`${HEADER_CHIP} border border-[#262B3D] bg-[#11131A] text-[#8E96AA]`}>
-                {trackInfo.city}, {trackInfo.country}
+                {trackInfo.city && trackInfo.city !== trackInfo.country ? `${trackInfo.city}, ${trackInfo.country}` : trackInfo.country}
               </span>
               <span className={`${HEADER_CHIP} border border-[#262B3D] bg-[#11131A] text-[#F5F7FA]`}>
                 Lap {Math.max(1, race?.lap ?? telemetry.lapCount)}
