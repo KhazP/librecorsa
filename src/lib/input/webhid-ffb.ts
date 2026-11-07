@@ -147,6 +147,8 @@ const VENDOR_LOGITECH = 0x046d;
 const MIN_WRITE_INTERVAL_MS = 2;
 /** Consecutive failed writes after which the driver gives up and reports an error */
 const MAX_WRITE_FAILURES = 3;
+/** An unchanged force is written again after this long (ms): covers a write the wheel dropped without an error */
+export const FORCE_KEEPALIVE_MS = 200;
 /** Direction value for "along +X" (90 degrees, east) as a fraction of the direction field's range */
 const DIRECTION_X_FRACTION = 0.25;
 
@@ -471,7 +473,8 @@ export const defaultFfbDeps: FfbDeps = {
 
 /**
  * Streams force values to the wheel: at most one sendReport in flight, at least 2 ms between writes, only the latest
- * value is ever kept (intermediate ones are dropped) and changes below 1/1000 of the field's range are skipped.
+ * value is ever kept (intermediate ones are dropped) and changes below 1/1000 of the field's range are skipped, unless
+ * {@link FORCE_KEEPALIVE_MS} has passed since the last write: then the value goes out again even if unchanged.
  */
 export class ForceWriter {
   private lastRaw: number | null = null;
@@ -499,11 +502,13 @@ export class ForceWriter {
   setForce(force: number, urgent = false): void {
     if (this.dead) return;
     const raw = forceToRaw(this.field, force);
-    if (this.lastRaw !== null && raw !== this.zeroRaw && Math.abs(raw - this.lastRaw) < this.threshold) {
+    // Nothing (or nothing new) written for a while: the value goes out again, whatever the dead band says
+    const stale = this.deps.now() - this.lastSendMs >= FORCE_KEEPALIVE_MS;
+    if (!stale && this.lastRaw !== null && raw !== this.zeroRaw && Math.abs(raw - this.lastRaw) < this.threshold) {
       this.pending = null; // the wheel already holds (nearly) this value; drop any older queued one
       return;
     }
-    if (raw === this.lastRaw) {
+    if (!stale && raw === this.lastRaw) {
       this.pending = null;
       return;
     }

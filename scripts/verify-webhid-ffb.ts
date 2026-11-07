@@ -8,6 +8,7 @@ import {
   buildSetEffectReport,
   conditionReportValues,
   forceToRaw,
+  FORCE_KEEPALIVE_MS,
   ForceWriter,
   isFatalHidStatus,
   PAIR_MESSAGE,
@@ -657,6 +658,24 @@ async function main() {
     clock.advance(5);
     await flush();
     assert.equal(dev.forceWrites.length, 1);
+  });
+  await check(`an unchanged force is written again after ${FORCE_KEEPALIVE_MS} ms (keepalive), not before`, async () => {
+    const { dev, clock, writer } = await ready();
+    writer.setForce(0.4);
+    await flush();
+    const n = dev.forceWrites.length;
+    for (let t = 0; t < FORCE_KEEPALIVE_MS - 20; t += 10) {
+      clock.advance(10);
+      writer.setForce(0.4);
+      writer.setForce(0.40002); // inside the dead band
+      await flush();
+    }
+    assert.equal(dev.forceWrites.length, n, "no resend inside the keepalive window");
+    clock.advance(30);
+    writer.setForce(0.4);
+    await flush();
+    assert.equal(dev.forceWrites.length, n + 1, "resent once the window has passed");
+    assert.equal(mag(dev.forceWrites.at(-1)), 4000);
   });
   await check("going to zero is never swallowed by the threshold", async () => {
     const { dev, clock, writer } = await ready();
