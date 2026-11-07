@@ -142,6 +142,11 @@ class FakeHidDevice implements HidDeviceLike {
   /** Block index the fake hands out; status 1 = success, 2 = full, 3 = error */
   blockIndex = 3;
   blockStatus = 1;
+  /**
+   * How Block Load comes back: "bare" (just the report), "withId" (report id in byte 0), "withIdPadded" (id in byte 0,
+   * zero-padded to 64 bytes, as Chrome sizes the buffer to the largest feature report)
+   */
+  blockLoadReply: "bare" | "withId" | "withIdPadded" = "bare";
   /** When true sendReport stays pending until `release()` */
   hold = false;
   failSends = false;
@@ -168,7 +173,11 @@ class FakeHidDevice implements HidDeviceLike {
     const layout = this.blockLoad;
     if (!layout) throw new Error("no block load layout");
     const { data } = buildReport(layout, { [PID.EFFECT_BLOCK_INDEX]: this.blockIndex, [PID.BLOCK_LOAD_STATUS]: this.blockStatus });
-    return new DataView(data.buffer, data.byteOffset, data.byteLength);
+    if (this.blockLoadReply === "bare") return new DataView(data.buffer, data.byteOffset, data.byteLength);
+    const out = new Uint8Array(this.blockLoadReply === "withIdPadded" ? 64 : data.length + 1);
+    out[0] = layout.reportId;
+    out.set(data, 1);
+    return new DataView(out.buffer);
   }
   release() {
     const w = this.waiters;
@@ -365,6 +374,18 @@ async function main() {
       { kind: "out", id: 5, data: [3, 0, 0] }, // zero force
       { kind: "out", id: 10, data: [3, 1, 1] }, // Op Effect Start, loop 1
     ]);
+  });
+  await check("Block Load read with Chrome's report-id byte, padded or not, or without it", async () => {
+    for (const reply of ["bare", "withId", "withIdPadded"] as const) {
+      const cols = pidCollections();
+      const dev = new FakeHidDevice(cols, asLayout(cols).blockLoad);
+      dev.blockLoadReply = reply;
+      dev.blockIndex = 7;
+      const res = await setupPidDevice(dev, { deps: new FakeClock().deps });
+      assert.ok(res.ok, `${reply}: setup ok`);
+      if (!res.ok) continue;
+      assert.equal(res.session.blockIndex, 7, `${reply}: block index`);
+    }
   });
   await check("no Create New Effect report: block index 1", async () => {
     const cols = pidCollections({ noCreateNewEffect: true });

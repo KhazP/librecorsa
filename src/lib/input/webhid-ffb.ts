@@ -650,8 +650,10 @@ async function allocateEffect(
   for (let attempt = 0; attempt < 3; attempt++) {
     const view = await device.receiveFeatureReport(load.reportId);
     let bytes = new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
-    // WebHID leaves the report id out; tolerate a stack that keeps it
-    if (load.reportId !== 0 && bytes.length === Math.ceil(load.bitLength / 8) + 1 && bytes[0] === load.reportId) bytes = bytes.subarray(1);
+    // Chrome hands a numbered feature report back with its id in byte 0, in a buffer sized to the interface's largest
+    // feature report (so often longer than this one); a stack that leaves the id out returns just the report's bytes.
+    // Read by bit offset, the padding after the report does not matter
+    if (load.reportId !== 0 && bytes.length > Math.ceil(load.bitLength / 8) && bytes[0] === load.reportId) bytes = bytes.subarray(1);
     const got = unpackReport(load, bytes);
     const statusField = getField(load, PID.BLOCK_LOAD_STATUS);
     const status = statusField ? selectedUsage(statusField, got[PID.BLOCK_LOAD_STATUS] ?? 0) : PID.BLOCK_LOAD_SUCCESS;
