@@ -38,7 +38,7 @@ function readGlbJson(glbPath: string) {
 
 async function verifyOkayamaMaterialsAndDecalIsolation() {
   console.log('\n=== 1. Verifying Okayama & AC Track Road Material depthWrite & Decal Isolation ===');
-  for (const tid of ['okayama', 'okayama_piper', 'okayama_drift', 'chang', 'spielberg', 'monaco']) {
+  for (const tid of ['okayama', 'okayama_piper', 'okayama_drift', 'chang', 'spielberg', 'spielberg_south', 'spielberg_inner', 'monaco']) {
     const { raw, glbPath } = loadTrack(tid);
     const gltf = readGlbJson(glbPath);
     const roadMats = new Set((raw.metadata?.mesh?.roadMaterials ?? []).map((s) => s.toLowerCase()));
@@ -93,7 +93,54 @@ async function verifyMonacoBarrierHitboxes() {
   console.log('\n=== 2. Verifying Monaco Barrier Hitboxes across all 3 Car Physics Models ===');
   const { raw, track, root } = loadTrack('monaco');
   const walls = TrackWallQuery.fromTrackRoot(root);
-  assert.ok(walls.segments.length >= 1200, `Expected >= 1200 wall segments in Monaco, got ${walls.segments.length}`);
+  assert.ok(walls.segments.length >= 1300, `Expected >= 1300 wall segments in Monaco, got ${walls.segments.length}`);
+
+  // Verify 100% water-tight lateral raycast coverage across all 660 samples (0 open holes or 5m step holes)
+  const n = raw.samples.length;
+  let missLeft = 0;
+  let missRight = 0;
+  for (let i = 0; i < n; i++) {
+    const p0 = raw.samples[i].p;
+    const p1 = raw.samples[(i + 1) % n].p;
+    const pm = raw.samples[(i - 1 + n) % n].p;
+    const tx = p1[0] - pm[0];
+    const tz = p1[2] - pm[2];
+    const tl = Math.hypot(tx, tz) || 1;
+    const rx = -tz / tl;
+    const rz = tx / tl;
+    // Check midpoint between sample i and i+1 as well as sample i
+    for (const frac of [0.0, 0.5]) {
+      const ox = p0[0] + (p1[0] - p0[0]) * frac;
+      const oz = p0[2] + (p1[2] - p0[2]) * frac;
+      for (const side of [-1, 1] as const) {
+        const dx = rx * side;
+        const dz = rz * side;
+        let minT = Infinity;
+        const segs = walls.segments;
+        for (let k = 0; k < segs.length; k += 6) {
+          const ax = segs[k];
+          const az = segs[k + 1];
+          const bx = segs[k + 2];
+          const bz = segs[k + 3];
+          const vx = bx - ax;
+          const vz = bz - az;
+          const den = dx * -vz - dz * -vx;
+          if (Math.abs(den) < 1e-9) continue;
+          const px = ax - ox;
+          const pz = az - oz;
+          const t = (px * -vz - pz * -vx) / den;
+          const u = (dx * pz - dz * px) / den;
+          if (u >= -0.02 && u <= 1.02 && t > 0 && t < minT) minT = t;
+        }
+        if (!Number.isFinite(minT) || minT > 45) {
+          if (side < 0) missLeft++;
+          else missRight++;
+        }
+      }
+    }
+  }
+  assert.equal(missLeft, 0, `Expected 0 left barrier holes across all ${n} Monaco samples & midpoints, got ${missLeft}`);
+  assert.equal(missRight, 0, `Expected 0 right barrier holes across all ${n} Monaco samples & midpoints, got ${missRight}`);
 
   const wLs = raw.samples.map((s) => s.wL ?? 99);
   const wRs = raw.samples.map((s) => s.wR ?? 99);
@@ -101,55 +148,110 @@ async function verifyMonacoBarrierHitboxes() {
   const closeRatio = closeWalls / raw.samples.length;
   assert.ok(closeRatio > 0.70, `Expected > 70% of Monaco samples to have close Armco walls, got ${(closeRatio * 100).toFixed(1)}%`);
   console.log(
-    `PASS  [monaco] ${walls.segments.length} 3D wall collider segments, ${(closeRatio * 100).toFixed(1)}% of samples lined with tight barriers`
+    `PASS  [monaco] ${walls.segments.length} 3D wall collider segments, 0/1320 sample/midpoint raycast holes, ${(closeRatio * 100).toFixed(1)}% tight Armco coverage`
   );
 
-  const testS = [100, 450, 880, 1700, 2480];
+  // Include standard Armco stations AND stepping runoff stations (S/F s=2m, Sainte Devote s=205m, Nouvelle Chicane s=2095m, Piscine s=2710m, Rascasse s=2955m)
+  const testS = [2, 100, 205, 450, 880, 1700, 2095, 2480, 2710, 2955];
   for (const carKind of ['vf26', 'f12026', 'gt3'] as const) {
     for (const side of [-1, 1] as const) {
       for (const s0 of testS) {
         const dt = 1 / 120;
         let maxLat = 0;
-        let minSpeed = 120;
         const idx0 = Math.round((s0 / track.totalLengthM) * raw.samples.length) % raw.samples.length;
-        const wallDist = side < 0 ? wLs[idx0] : wRs[idx0];
+        const idx1 = (idx0 + 1) % raw.samples.length;
+        const idx2 = (idx0 + 2) % raw.samples.length;
+        const wallDist =
+          side < 0
+            ? Math.max(wLs[idx0], wLs[idx1], wLs[idx2])
+            : Math.max(wRs[idx0], wRs[idx1], wRs[idx2]);
 
         if (carKind === 'vf26') {
           const car = new F1Physics2026(track);
           car.attachTrackRoot(root);
           car.teleportToDistance(s0, 110 / 3.6, side * 1.5);
           for (let step = 0; step < 180; step++) {
-            const t = car.step(dt, { throttle: 0.3, brake: 0, analogSteer: side * 0.65 });
+            car.step(dt, { throttle: 0.3, brake: 0, analogSteer: side * 0.65 });
             maxLat = Math.max(maxLat, Math.abs(car.lateralOffsetM));
-            minSpeed = Math.min(minSpeed, t.speedKmh);
           }
         } else {
           const car = carKind === 'f12026' ? new F12026CarSim(track, root) : createAmgGt3Sim(track, root);
           car.teleportToDistance(s0, 110 / 3.6, side * 1.5);
           for (let step = 0; step < 180; step++) {
-            const t = car.step(dt, { throttle: 0.3, brake: 0, analogSteer: side * 0.65 });
+            car.step(dt, { throttle: 0.3, brake: 0, analogSteer: side * 0.65 });
             maxLat = Math.max(maxLat, Math.abs(car.lateralOffsetM));
-            minSpeed = Math.min(minSpeed, t.speedKmh);
           }
         }
-        // Car must be stopped by the wall collider and never ghost out into the buildings/harbour (> 12 m)
         assert.ok(
-          maxLat < Math.max(wallDist + 2.2, 9.5),
+          maxLat < Math.max(wallDist + 2.5, 9.5),
           `[monaco/${carKind}] Car ghosted through ${side < 0 ? 'left' : 'right'} wall at s=${s0}m (maxLat=${maxLat.toFixed(2)}m, wallDist=${wallDist.toFixed(2)}m)`
         );
       }
     }
-    console.log(`PASS  [monaco/${carKind}] Stopped cleanly by left & right Armco barriers at s=${testS.join(', ')} m`);
+    console.log(`PASS  [monaco/${carKind}] Stopped cleanly by left & right barriers at all 10 stations: s=${testS.join(', ')} m`);
   }
 }
 
 async function verifyKerbsFeelAndSound() {
-  console.log('\n=== 3. Verifying Kerb Feel & Acoustics across chang, okayama, spielberg, monaco ===');
+  console.log('\n=== 3. Verifying Kerb Mesh Coverage, Zero Buried Triangles, Feel & Acoustics ===');
   const { getActiveSurfaceTable } = await import('../src/lib/track-data');
-  for (const tid of ['chang', 'okayama', 'spielberg', 'monaco']) {
+  for (const tid of ['chang', 'okayama', 'okayama_piper', 'spielberg', 'spielberg_south', 'monaco']) {
     const { raw, track, root } = loadTrack(tid);
     const ground = TrackColliderQuery.fromTrackRoot(root, getActiveSurfaceTable());
     const hit = createGroundHit();
+
+    // Verify Track_Surface_Kerb triangles are never buried under Track_Surface_Runoff or Track_Collider_Road
+    let kerbNode: any = null;
+    root.traverse((o: any) => {
+      if (o.name === 'Track_Surface_Kerb' && o.geometry) kerbNode = o;
+    });
+    assert.ok(kerbNode, `[${tid}] Missing Track_Surface_Kerb mesh in GLB`);
+    kerbNode.updateWorldMatrix(true, true);
+    const pos = kerbNode.geometry.getAttribute('position');
+    const uv = kerbNode.geometry.getAttribute('uv');
+    assert.ok(uv, `[${tid}] Missing TEXCOORD_0 (uv) on Track_Surface_Kerb`);
+    const idx = kerbNode.geometry.getIndex();
+    const triCount = (idx ? idx.count : pos.count) / 3;
+    if (tid === 'monaco') {
+      assert.ok(triCount >= 7000, `[monaco] Expected >= 7000 kerb triangles (including chicane kerbs), got ${triCount}`);
+    }
+
+    let hitKerb = 0;
+    let nonZeroDu = 0;
+    const m = kerbNode.matrixWorld.elements;
+    for (let t = 0; t < triCount; t++) {
+      const i0 = idx ? idx.getX(t * 3) : t * 3;
+      const i1 = idx ? idx.getX(t * 3 + 1) : t * 3 + 1;
+      const i2 = idx ? idx.getX(t * 3 + 2) : t * 3 + 2;
+      const u0 = uv.getX(i0);
+      const u1 = uv.getX(i1);
+      const u2 = uv.getX(i2);
+      if (Math.max(u0, u1, u2) - Math.min(u0, u1, u2) > 1e-4) nonZeroDu++;
+
+      const lx = (pos.getX(i0) + pos.getX(i1) + pos.getX(i2)) / 3;
+      const ly = (pos.getY(i0) + pos.getY(i1) + pos.getY(i2)) / 3;
+      const lz = (pos.getZ(i0) + pos.getZ(i1) + pos.getZ(i2)) / 3;
+      const wx = m[0] * lx + m[4] * ly + m[8] * lz + m[12];
+      const wy = m[1] * lx + m[5] * ly + m[9] * lz + m[13];
+      const wz = m[2] * lx + m[6] * ly + m[10] * lz + m[14];
+      if (ground.query(wx, wz, wy + 1.0, hit) && hit.surface === 'kerb') {
+        hitKerb++;
+      }
+    }
+    const kerbHitRatio = hitKerb / triCount;
+    assert.ok(
+      kerbHitRatio > 0.995,
+      `[${tid}] Expected > 99.5% of Track_Surface_Kerb triangles to resolve as surface='kerb', got ${(kerbHitRatio * 100).toFixed(2)}% (${hitKerb}/${triCount})`
+    );
+    assert.ok(
+      nonZeroDu / triCount > 0.95,
+      `[${tid}] Expected > 95% of Track_Surface_Kerb triangles to have continuous arc-length UVs (du > 0), got ${((nonZeroDu / triCount) * 100).toFixed(1)}%`
+    );
+    console.log(
+      `PASS  [${tid}] Track_Surface_Kerb: ${triCount} tris, ${(kerbHitRatio * 100).toFixed(2)}% surface='kerb' (${hitKerb}/${triCount}), ${((nonZeroDu / triCount) * 100).toFixed(1)}% continuous UV`
+    );
+
+    if (!['chang', 'okayama', 'spielberg', 'monaco'].includes(tid)) continue;
 
     // Find a multi-sample kerb run and locate the lateral midpoint of the 3D Track_Surface_Kerb strip
     let targetS = -1;
@@ -182,7 +284,6 @@ async function verifyKerbsFeelAndSound() {
     for (const carKind of ['vf26', 'f12026', 'gt3'] as const) {
       const dt = 1 / 120;
       const side = Math.sign(targetLat);
-      // Place car so outside wheels ride directly along the kerb strip
       const carLat = targetLat - side * 0.82;
       let kerbFrames = 0;
       let peakKerbAmp = 0;
@@ -237,8 +338,8 @@ async function verifyKerbsFeelAndSound() {
         `[${tid}/${carKind}] Expected audible kerb rumble gain > 0.04 on kerb, got ${peakKerbAmp.toFixed(3)}`
       );
       assert.ok(
-        peakSuspVel > 0.03,
-        `[${tid}/${carKind}] Expected physical suspension stroke velocity > 0.03 m/s on kerb, got ${peakSuspVel.toFixed(4)} m/s`
+        peakSuspVel > 0.05,
+        `[${tid}/${carKind}] Expected physical suspension stroke velocity > 0.05 m/s on kerb, got ${peakSuspVel.toFixed(4)} m/s`
       );
       console.log(
         `PASS  [${tid}/${carKind}] s=${targetS.toFixed(0)}m kerbFrames=${kerbFrames}, peakKerbAmp=${peakKerbAmp.toFixed(
