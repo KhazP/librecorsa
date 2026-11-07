@@ -410,6 +410,7 @@ function parseWheel(v: unknown): WheelSettings {
     ffbInvert: bool(v.ffbInvert, d.ffbInvert),
     ffbDamping: num(v.ffbDamping, 0, 1, d.ffbDamping),
     ffbFilterS: num(v.ffbFilterS, 0, 0.05, d.ffbFilterS),
+    ffbDownforceComp: num(v.ffbDownforceComp, 0, 1, d.ffbDownforceComp),
     ffbPerCar: parsePerCarFfb(v.ffbPerCar),
     steerLockPerCar: parsePerCarLock(v.steerLockPerCar),
     hidFfb: bool(v.hidFfb, d.hidFfb),

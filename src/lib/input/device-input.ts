@@ -70,6 +70,11 @@ export interface WheelSettings {
   ffbDamping: number;
   /** Force low-pass time constant (s, 0..0.05); 0 = unfiltered */
   ffbFilterS: number;
+  /**
+   * Downforce compensation 0..1: the exponent k of (static front load / current front load)^k on the physics torque,
+   * so the aero load at speed does not make the rim heavier. 0 = off, 1 = the full aero share taken out
+   */
+  ffbDownforceComp: number;
   /** Strength per car (gain, minimum force) set from the FFB panel; a car without one uses ffbGain / ffbMinForce */
   ffbPerCar: Partial<Record<string, { gain: number; minForce: number }>>;
   /**
@@ -143,6 +148,7 @@ export const DEFAULT_WHEEL_SETTINGS: WheelSettings = {
   ffbInvert: false,
   ffbDamping: 0.1,
   ffbFilterS: 0,
+  ffbDownforceComp: 0,
   ffbPerCar: {},
   steerLockPerCar: {},
   hidFfb: true,

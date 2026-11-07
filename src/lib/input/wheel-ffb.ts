@@ -14,6 +14,7 @@
  */
 import type { CarTelemetry } from "@/types/f1";
 import { CAR_WHEEL_LOCK_DEG, carWheelLockDeg, findPad, type PadLike, wheelRimAngleDeg, type WheelSettings } from "./device-input";
+import { DownforceCompensator } from "./ffb-toolbox";
 import { WebHidFfb } from "./webhid-ffb";
 
 export const FFB_BRIDGE_PORT = 18500;
@@ -710,6 +711,8 @@ export interface FfbMeterState {
   understeerIntensityPct?: number;
   /** True when horizontal resultant acceleration exceeds the 10g high-impact suppression threshold */
   highImpactActive?: boolean;
+  /** Downforce compensation multiplier on the physics torque (1 = none) */
+  downforceMult?: number;
 }
 
 export class WheelFfbClient {
@@ -719,6 +722,8 @@ export class WheelFfbClient {
   hidDriver: WebHidFfb | null = null;
   /** Dual-Pacejka steering rack SAT, axle vertical shock load & >10g high-impact synthesizer */
   readonly rackSat = new RackSatSynthesizer();
+  /** Takes the front aero load back out of the physics torque (`ffbDownforceComp`) */
+  readonly downforceComp = new DownforceCompensator();
   meter: FfbMeterState = {
     force: 0,
     clipping: false,
@@ -737,6 +742,8 @@ export class WheelFfbClient {
   private historyCount = 0;
   private historyIdx = 0;
   private lastSuggestMs = 0;
+  /** Compensation the meter's history was taken with: a change makes the gain suggestion start over */
+  private meterDownforceComp = 0;
   /** WebHID playback: the frame's samples still to play, the force held once they run out, vibration levels */
   private hidQueue: number[] = [];
   private hidHold = 0;
@@ -778,6 +785,11 @@ export class WheelFfbClient {
     // The bridge also carries telemetry out; with WebHID force feedback it is only needed for that
     this.keepConnection((wheelSettings.ffbEnabled && !useHid) || wheelSettings.telemetryOut, nowMs);
     const wheel: WheelSettings = { ...wheelSettings, ...ffbStrengthFor(wheelSettings, vehicle) };
+    if (wheel.ffbDownforceComp !== this.meterDownforceComp) {
+      this.meterDownforceComp = wheel.ffbDownforceComp;
+      this.historyCount = 0;
+      this.historyIdx = 0;
+    }
     const dtS = this.lastUpdateMs > 0 ? Math.min(0.1, Math.max(0, (nowMs - this.lastUpdateMs) / 1000)) : 0;
     this.lastUpdateMs = nowMs;
     const activeHid = this.hidDriver ?? (webHidFfb.status.state === "ready" ? webHidFfb : null);
@@ -791,6 +803,7 @@ export class WheelFfbClient {
     let oversteerIntensityPct = 0;
     let understeerIntensityPct = 0;
     let highImpactActive = false;
+    let downforceMult = 1;
     let subframes: number[] | undefined;
     if (driving && wheel.ffbEnabled) {
       const satTel = telemetry as CarTelemetry & RackSatStepInput;
@@ -830,9 +843,12 @@ export class WheelFfbClient {
       highImpactActive = satOut.highImpactActive;
       const addedSatTorque = hasSatTelemetry ? satOut.totalAddedTorque : 0;
       const impactScale = highImpactActive ? RACK_SAT_HIGH_IMPACT_ATTEN : 1.0;
+      // The physics torque (and the SAT on it) only: the soft lock, damper and vibrations keep their strength
+      downforceMult = this.downforceComp.step(telemetry.wheelLoadsN, telemetry.frontDownforceN, dtS, wheel.ffbDownforceComp);
+      const torqueScale = impactScale * downforceMult;
 
       const baseTorque = Number.isFinite(telemetry.ffbTorqueNorm) ? (telemetry.ffbTorqueNorm as number) : 0;
-      const torque = (baseTorque + addedSatTorque) * impactScale;
+      const torque = (baseTorque + addedSatTorque) * torqueScale;
       const speedKmh = Number.isFinite(telemetry.speedKmh) ? telemetry.speedKmh : 0;
       const gyroFactor = Math.max(0, Math.min(1, (speedKmh - 10) / 180));
       if (hwDamper) {
@@ -874,7 +890,7 @@ export class WheelFfbClient {
       if (rawSub && rawSub.length > 0) {
         const h = dtS / rawSub.length;
         subframes = rawSub.map((sample) => {
-          const sampleTorque = ((Number.isFinite(sample) ? sample : 0) + addedSatTorque) * impactScale;
+          const sampleTorque = ((Number.isFinite(sample) ? sample : 0) + addedSatTorque) * torqueScale;
           let sf = smooth(shapeFfbForce(sampleTorque, wheel, telemetry.speedKmh), h) + softLock + damping;
           if (wheel.ffbInvert) sf = -sf;
           return Math.round(sf * 1e4) / 1e4;
@@ -941,6 +957,7 @@ export class WheelFfbClient {
     } else {
       if (hwDamper) activeHid.setDamper(0);
       this.rackSat.reset();
+      this.downforceComp.reset();
       this.lastRimDeg = null;
       this.lastFrontSuspMm = null;
       this.hidBump = 0;
@@ -955,6 +972,7 @@ export class WheelFfbClient {
       oversteerIntensityPct,
       understeerIntensityPct,
       highImpactActive,
+      downforceMult,
     };
     if (useHid) {
       if (this.hidTest) return;
@@ -1059,6 +1077,7 @@ export class WheelFfbClient {
     this.cancelHidTest();
     this.hidStopPlayer();
     this.rackSat.reset();
+    this.downforceComp.reset();
     this.lastFrontSuspMm = null;
     this.hidBump = 0;
     this.force = 0;
@@ -1076,6 +1095,7 @@ export class WheelFfbClient {
     this.historyCount = 0;
     this.historyIdx = 0;
     this.rackSat.reset();
+    this.downforceComp.reset();
     this.meter = {
       force: 0,
       clipping: false,
