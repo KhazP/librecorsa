@@ -109,7 +109,8 @@ export class CarDamage {
     /** Half length / half width of the car (m), to place an impact on a corner */
     private readonly halfLengthM = 2.5,
     private readonly halfWidthM = 0.975,
-    private readonly rng: () => number = Math.random
+    /** Dice for punctures and which way a bent corner toes (a race reseeds it from its own seed) */
+    public rng: () => number = Math.random
   ) {}
 
   public reset(): void {

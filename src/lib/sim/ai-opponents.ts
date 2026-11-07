@@ -125,10 +125,17 @@ const BASE_CAUTION = 0.3;
 const MISTAKE_APEX_SCALE = 1.06;
 
 /**
- * Closing speed a car may carry toward the car ahead in its path at a nose-to-tail gap (m): what it can take out
- * braking a little harder than that car, with a metre and a half to spare
+ * The speed a car may carry toward the car ahead in its path at a nose-to-tail gap (m): the speed that car will have
+ * once our brakes bite (~0.2 s on at its own deceleration), plus what we can take out braking a little harder than it,
+ * with 2.5 m to spare. Without the lead for its braking, the car behind in a braking zone was always a step late
  */
-const closingAllowedMs = (gapM: number) => Math.sqrt(2 * 7 * Math.max(0, gapM - 1.5));
+function followCapMs(ahead: SimulatorCar, gapM: number): number {
+  const decelAhead = Math.max(0, -(ahead.telemetry.longitudinalG ?? 0) * 9.81);
+  const vAhead = Math.max(0, ahead.vxMs);
+  // Into a braking zone (the car ahead on the brakes) the gap grows with the speed: ~0.12 s of it on top
+  const margin = 2.5 + (decelAhead > 5 ? 0.12 * vAhead : 0);
+  return Math.max(0, vAhead - 0.2 * decelAhead) + Math.sqrt(2 * 6 * Math.max(0, gapM - margin));
+}
 
 /** What a headless race reports per car */
 export interface AiCarStats {
@@ -557,6 +564,8 @@ export class AiOpponentField {
   public damageLevel: DamageLevel;
   /** Incidents this frame for race control: contacts (with who hit whom), damage, retirements */
   public readonly incidents: FieldIncident[] = [];
+  /** Races started on this field (each one rolls its own damage dice) */
+  private raceCount = 0;
   /** Grid of the next race */
   public gridOrder: AiGridOrder;
   public playerGrid: PlayerGridSlot;
@@ -783,6 +792,7 @@ export class AiOpponentField {
    */
   public startRace(standing: boolean): void {
     const L = this.track.totalLengthM;
+    this.raceCount++;
     this.environment.reset();
     this.assignGrid();
     this.cars.forEach((car) => {
@@ -809,6 +819,7 @@ export class AiOpponentField {
           : null;
       }
       car.damage.level = this.damageLevel;
+      car.damage.rng = seededRng((this.seed + this.raceCount * 0x9e37) ^ hashString(car.code) ^ 0x5bd1e995);
       car.damage.reset();
       car.sim.setDamageEffects?.(null);
       car.retired = false;
@@ -1076,6 +1087,7 @@ export class AiOpponentField {
   private planTraffic(dt: number): void {
     const L = this.track.totalLengthM;
     const decel = this.classId === 'gt3' ? 16 : 32;
+    this.capPlayerAutopilot(L);
     for (const car of this.cars) {
       const me = car.ai;
       if (!me || car.removed) continue;
@@ -1153,7 +1165,7 @@ export class AiOpponentField {
         // A car in our path: never closer than we could still stop behind it if it braked now (the pack into a
         // braking zone, each car on its own braking point, otherwise ran into each other's gearboxes)
         if (ds > 0 && ds < 80 && Math.abs(dLat) < CAR_WID_M + 0.35) {
-          speedCap = Math.min(speedCap, Math.max(0, other.sim.vxMs) + closingAllowedMs(ds - CAR_LEN_M));
+          speedCap = Math.min(speedCap, followCapMs(other.sim, ds - CAR_LEN_M));
         }
       }
 
@@ -1259,7 +1271,10 @@ export class AiOpponentField {
       // braking zone and given up once the car is in the corner itself, where it rejoins its own line to make the turn.
       // One move per straight; none against a car lapping us, none under a yellow
       const mayDefend = targetLat === null && attacker !== null && defend > 0 && kAbs > 0.006 && !inCorner && !lapper && !yellow;
-      const startsDefence = !car.defending && craft.defendMoves < 1 && me.telemetry.brake < 0.05;
+      // ... and only with room to make it: a move across the nose of a car already right behind is a brake test
+      const attackerClosing = attacker ? Math.max(0, attacker.sim.vxMs - me.vxMs) : 0;
+      const startsDefence =
+        !car.defending && craft.defendMoves < 1 && me.telemetry.brake < 0.05 && attackerGap > 12 + 1.5 * attackerClosing;
       const wasDefending = car.defending;
       car.defending = mayDefend && (car.defending || startsDefence);
       if (car.defending && !wasDefending) craft.defendMoves++;
@@ -1328,6 +1343,29 @@ export class AiOpponentField {
       // Rain changed the grip the car plans on: new corner speeds and braking points
       if (car.hooks?.refresh?.()) this.rebuildTarget(car);
     }
+  }
+
+  /**
+   * The player's car on autopilot drives its line blind to traffic: in a race it gets the same "never closer than it
+   * could stop" cap as the AI cars, or it runs into the back of them
+   */
+  private capPlayerAutopilot(L: number): void {
+    const me = this.cars.find((c) => c.isPlayer);
+    if (!me) return;
+    const sim = me.sim;
+    if (!sim.aiAutopilot) {
+      if (sim.aiSpeedCapMs !== undefined && sim.aiSpeedCapMs !== Infinity) sim.aiSpeedCapMs = Infinity;
+      return;
+    }
+    let cap = Infinity;
+    for (const other of this.cars) {
+      if (other === me || other.removed) continue;
+      const ds = wrapHalf(other.sim.sMeters - sim.sMeters, L);
+      if (ds > 0 && ds < 80 && Math.abs(other.sim.lateralOffsetM - sim.lateralOffsetM) < CAR_WID_M + 0.35) {
+        cap = Math.min(cap, followCapMs(other.sim, ds - CAR_LEN_M));
+      }
+    }
+    sim.aiSpeedCapMs = cap;
   }
 
   /** A car the others treat as an obstacle: spinning, stopped or crawling, or retired and not yet taken away */
