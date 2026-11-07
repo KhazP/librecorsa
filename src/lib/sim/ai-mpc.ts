@@ -133,7 +133,10 @@ export class RacingLineDriver {
     const vRef = Math.min(cap, at(speedMs, sRef) * pace);
     const vAhead = Math.min(cap, at(speedMs, sRef + 4) * pace);
     const aFeedforward = (vAhead * vAhead - vRef * vRef) / 8;
-    const aCmd = aFeedforward + 2.2 * (vRef - v);
+    // A traffic cap below the plan (the car ahead braking): track it hard. At the plan's gain a car braking ahead
+    // left this one ~18 m/s over its cap, into the other car's gearbox
+    const capBinds = cap < at(speedMs, sRef) * pace - 0.5;
+    const aCmd = aFeedforward + (capBinds ? 7 : 2.2) * (vRef - v);
 
     const dragAcc = (car.dragCoef * v * v) / car.massKg;
     let throttleCmd = 0;
