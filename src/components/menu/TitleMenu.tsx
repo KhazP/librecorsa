@@ -487,7 +487,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
       run: onDrive,
       primary: true,
     },
-    { id: "race", label: "Race AI", detail: `5 AI cars · ${aiSkillLabel(props.aiSkill ?? AI_SKILL_DEFAULT)} · standing start`, icon: Flag, run: onRaceAi },
+    { id: "race", label: "Race AI", detail: `${props.raceSetup?.opponents ?? 5} AI cars · ${props.raceSetup?.laps ?? 5} laps · ${aiSkillLabel(props.aiSkill ?? AI_SKILL_DEFAULT)} · ${props.raceSetup?.start ?? "standing"} start`, icon: Flag, run: onRaceAi },
     {
       id: "multiplayer",
       label: "Multiplayer",

@@ -39,7 +39,8 @@ import { type ChaseCameraInput, DynamicChaseCamera } from "@/lib/render/chase-ca
 import { LapDeltaTracker } from "@/lib/sim/lap-delta";
 import { TrackLimitsMonitor } from "@/lib/sim/track-limits";
 import { SimVisualFxManager } from "@/lib/sim/visual-fx";
-import { AiOpponentField, AI_DRIVERS, resolvePlayerVsRemoteCar } from "@/lib/sim/ai-opponents";
+import { AiOpponentField, aiDriversFor, resolvePlayerVsRemoteCar } from "@/lib/sim/ai-opponents";
+import type { RaceSetup } from "@/lib/sim/race-setup";
 import { peerWakeEmitters, TrackEnvironment } from "@/lib/sim/track-environment";
 import type { WakeEmitterCar } from "@/lib/sim/aero-wake";
 import { GamepadHaptics } from "@/lib/sim/gamepad-haptics";
@@ -296,6 +297,16 @@ export interface LibreCorsaSimulatorProps {
   onSelectTrack?: (id: string) => void;
 }
 
+
+/** Starts an AI race with the race setup: laps, grid, damage, and the start (standing unless asked otherwise) */
+function startAiRace(field: AiOpponentField, setup: RaceSetup, standing = setup.start === "standing"): void {
+  field.raceLaps = setup.laps;
+  field.gridOrder = setup.aiGrid;
+  field.playerGrid = setup.grid;
+  field.damageLevel = setup.damage;
+  field.startRace(standing);
+}
+
 export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackId = "rwanda", onSelectTrack }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
 
@@ -331,16 +342,18 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
    * An AI field built ahead, while the player is in the menus: building five AI cars (physics, autopilot plans) takes
    * a few hundred ms, which would otherwise be the first frame of the race. Only valid for the car it was built against.
    */
-  const aiFieldSpareRef = useRef<{ field: AiOpponentField; physics: SimulatorCar } | null>(null);
+  const aiFieldSpareRef = useRef<{ field: AiOpponentField; physics: SimulatorCar; opponents: number } | null>(null);
   const prepareAiField = useCallback(() => {
     const run = () => {
       const physics = physicsRef.current;
       // Never while driving: the build would be a hitch on track instead
       if (!physics || phaseRef.current === "driving" || phaseRef.current === "loading") return;
-      if (aiFieldSpareRef.current?.physics === physics) return;
+      const opponents = settingsRef.current.race.opponents;
+      if (aiFieldSpareRef.current?.physics === physics && aiFieldSpareRef.current.opponents === opponents) return;
       aiFieldSpareRef.current = {
-        field: new AiOpponentField(track, physics, AI_DRIVERS, getTrackEnv(), { skill: settingsRef.current.aiSkill }),
+        field: new AiOpponentField(track, physics, aiDriversFor(opponents), getTrackEnv(), { skill: settingsRef.current.aiSkill }),
         physics,
+        opponents,
       };
     };
     scheduleIdle(run);
@@ -351,11 +364,12 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       const spare = aiFieldSpareRef.current;
       aiFieldSpareRef.current = null;
       const skill = settingsRef.current.aiSkill;
-      if (spare && spare.physics === physics) {
+      const opponents = settingsRef.current.race.opponents;
+      if (spare && spare.physics === physics && spare.opponents === opponents) {
         if (spare.field.skill !== skill) spare.field.setSkill(skill);
         return spare.field;
       }
-      return new AiOpponentField(track, physics, AI_DRIVERS, getTrackEnv(), { skill });
+      return new AiOpponentField(track, physics, aiDriversFor(opponents), getTrackEnv(), { skill });
     },
     [track, getTrackEnv]
   );
@@ -727,7 +741,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       if (physicsRef.current) {
         physicsRef.current.aiAutopilot = false;
         lapRecorderRef.current?.reset();
-        if (aiFieldRef.current) aiFieldRef.current.startRace(!flyingStart);
+        // A restart from the menu uses the race's own start; the flying-lap key always gives a rolling one
+        if (aiFieldRef.current) startAiRace(aiFieldRef.current, settingsRef.current.race, flyingStart ? false : undefined);
         else physicsRef.current.resetToStartGrid(flyingStart);
       }
     },
@@ -745,7 +760,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     }
     physics.aiAutopilot = false;
     const field = takeAiField(physics);
-    field.startRace(true);
+    startAiRace(field, settingsRef.current.race);
     aiFieldRef.current = field;
     setAiOpponents(true);
   }, [takeAiField, unlockAudio]);
@@ -857,6 +872,28 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   const library = useMemo(() => ({ library: settings.library, onToggleFavorite: handleToggleFavorite }), [settings.library, handleToggleFavorite]);
 
   /** AI opponents' level: saved, and a running field drives to it at once */
+  /**
+   * The race setup: saved, and used from the next start. A different field size needs a new field: a race running
+   * restarts from the lights with it
+   */
+  const handleChangeRaceSetup = useCallback(
+    (patch: Partial<RaceSetup>) => {
+      const prev = settingsRef.current.race;
+      const next = { ...prev, ...patch };
+      setSettings((s) => ({ ...s, race: next }));
+      settingsRef.current = { ...settingsRef.current, race: next };
+      if (next.opponents === prev.opponents) return;
+      aiFieldSpareRef.current = null;
+      const physics = physicsRef.current;
+      if (aiFieldRef.current && physics) {
+        const field = new AiOpponentField(track, physics, aiDriversFor(next.opponents), getTrackEnv(), { skill: settingsRef.current.aiSkill });
+        startAiRace(field, next);
+        aiFieldRef.current = field;
+      }
+    },
+    [track, getTrackEnv]
+  );
+
   const handleChangeAiSkill = useCallback((aiSkill: number) => {
     setSettings((prev) => ({ ...prev, aiSkill }));
     aiFieldRef.current?.setSkill(aiSkill);
@@ -903,7 +940,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         physics.aiAutopilot = false;
         if (race) {
           if (!aiFieldRef.current) aiFieldRef.current = takeAiField(physics);
-          aiFieldRef.current.startRace(true);
+          startAiRace(aiFieldRef.current, settingsRef.current.race);
         } else {
           aiFieldRef.current = null;
           physics.resetToStartGrid(false);
@@ -1335,9 +1372,11 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       replayRef.current.buffer.clear();
       // A running race restarts from the lights with the new car
       if (aiFieldRef.current) {
-        const field = new AiOpponentField(track, physics, AI_DRIVERS, getTrackEnv(), { skill: settingsRef.current.aiSkill });
+        const field = new AiOpponentField(track, physics, aiDriversFor(settingsRef.current.race.opponents), getTrackEnv(), {
+          skill: settingsRef.current.aiSkill,
+        });
         if (trackRoot) field.attachTrackRoot(trackRoot);
-        field.startRace(true);
+        startAiRace(field, settingsRef.current.race);
         aiFieldRef.current = field;
       }
       setTelemetry({ ...physics.telemetry });
@@ -1704,7 +1743,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       if (replayRef.current.active) return;
       lapRecorder.reset();
       physics.aiAutopilot = false;
-      if (aiFieldRef.current) aiFieldRef.current.startRace(true);
+      if (aiFieldRef.current) startAiRace(aiFieldRef.current, settingsRef.current.race);
       else physics.resetToStartGrid(true);
     };
 
@@ -3392,6 +3431,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     onToggleAiOpponents: handleToggleAiOpponents,
     aiSkill: settings.aiSkill,
     onChangeAiSkill: handleChangeAiSkill,
+    raceSetup: settings.race,
+    onChangeRaceSetup: handleChangeRaceSetup,
     carId,
     vehicleModel,
     onChangeCar: handleChangeCar,
