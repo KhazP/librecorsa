@@ -6,8 +6,13 @@ import assert from "node:assert/strict";
 import {
   buildReport,
   buildSetEffectReport,
+  conditionReportValues,
+  describeHidDevice,
+  HID_TRACE_SIZE,
   forceToRaw,
+  FORCE_KEEPALIVE_MS,
   ForceWriter,
+  HOTPLUG_DELAY_MS,
   IDLE_ZERO_MS,
   isFatalHidStatus,
   PAIR_MESSAGE,
@@ -15,6 +20,8 @@ import {
   parsePidLayout,
   PID,
   selectorValue,
+  SETUP_ATTEMPTS,
+  SETUP_RETRY_MS,
   setupPidDevice,
   teardownPidSession,
   unpackReport,
@@ -192,15 +199,26 @@ class FakeHidDevice implements HidDeviceLike {
   blockIndex = 3;
   laterBlocks: number[] = [];
   blockStatus = 1;
+  /**
+   * How Block Load comes back: "bare" (just the report), "withId" (report id in byte 0), "withIdPadded" (id in byte 0,
+   * zero-padded to 64 bytes, as Chrome sizes the buffer to the largest feature report)
+   */
+  blockLoadReply: "bare" | "withId" | "withIdPadded" = "bare";
   /** When true sendReport stays pending until `release()` */
   hold = false;
   failSends = false;
+  /** open() throws this many more times (a base that was just switched on) */
+  failOpens = 0;
   private waiters: (() => void)[] = [];
   constructor(
     public collections: readonly HidCollectionLike[],
     private readonly blockLoad: PidReportLayout | null = null
   ) {}
   async open() {
+    if (this.failOpens > 0) {
+      this.failOpens--;
+      throw new Error("Failed to open the device");
+    }
     this.opened = true;
   }
   async close() {
@@ -219,7 +237,11 @@ class FakeHidDevice implements HidDeviceLike {
     if (!layout) throw new Error("no block load layout");
     const { data } = buildReport(layout, { [PID.EFFECT_BLOCK_INDEX]: this.blockIndex, [PID.BLOCK_LOAD_STATUS]: this.blockStatus });
     if (this.blockStatus === 1 && this.laterBlocks.length > 0) this.blockIndex = this.laterBlocks.shift() as number;
-    return new DataView(data.buffer, data.byteOffset, data.byteLength);
+    if (this.blockLoadReply === "bare") return new DataView(data.buffer, data.byteOffset, data.byteLength);
+    const out = new Uint8Array(this.blockLoadReply === "withIdPadded" ? 64 : data.length + 1);
+    out[0] = layout.reportId;
+    out.set(data, 1);
+    return new DataView(out.buffer);
   }
   release() {
     const w = this.waiters;
@@ -261,6 +283,10 @@ class FakeClock {
 }
 
 const flush = () => new Promise<void>((resolve) => setImmediate(resolve));
+/** Lets a chain of awaits (getDevices, setup, …) run to its next timer */
+const settle = async () => {
+  for (let i = 0; i < 30; i++) await flush();
+};
 const asLayout = (cols: HidCollectionLike[]) => {
   const l = parsePidLayout(cols);
   assert.ok(l, "layout parses");
@@ -422,6 +448,18 @@ async function main() {
     ]);
     assert.deepEqual(clock.sleeps, [60], "60 ms after the reset, no other pause");
   });
+  await check("Block Load read with Chrome's report-id byte, padded or not, or without it", async () => {
+    for (const reply of ["bare", "withId", "withIdPadded"] as const) {
+      const cols = pidCollections();
+      const dev = new FakeHidDevice(cols, asLayout(cols).blockLoad);
+      dev.blockLoadReply = reply;
+      dev.blockIndex = 7;
+      const res = await setupPidDevice(dev, { deps: new FakeClock().deps });
+      assert.ok(res.ok, `${reply}: setup ok`);
+      if (!res.ok) continue;
+      assert.equal(res.session.blockIndex, 7, `${reply}: block index`);
+    }
+  });
   await check("no Create New Effect report: block index 1", async () => {
     const cols = pidCollections({ noCreateNewEffect: true });
     const dev = new FakeHidDevice(cols);
@@ -532,6 +570,28 @@ async function main() {
     // block 2, constant force, duration 0xFFFF, gain 255, Axes Enable X=1 Y=0 with Direction Enable cleared, Direction X=90° Y=0
     assert.deepEqual([...rep.data], [2, 1, 0xff, 0xff, 255, 0b001, 64, 0]);
   });
+  await check("Set Condition: an unsigned coefficient (0..10000) starts at 0, not the midpoint", () => {
+    const f = (bitOffset: number, min: number, max: number): PidFieldLayout => ({ bitOffset, bitSize: 16, min, max, signed: min < 0 });
+    const cond: PidReportLayout = {
+      reportId: 3,
+      bitLength: 8 + 16 * 4,
+      fields: {
+        [PID.EFFECT_BLOCK_INDEX]: { bitOffset: 0, bitSize: 8, min: 1, max: 40, signed: false },
+        [PID.CP_OFFSET]: f(8, 0, 10000),
+        [PID.POSITIVE_COEFFICIENT]: f(24, 0, 10000),
+        [PID.NEGATIVE_COEFFICIENT]: f(40, -10000, 10000),
+        [PID.POSITIVE_SATURATION]: f(56, 0, 10000),
+      },
+      fieldList: [],
+    };
+    const off = conditionReportValues(cond, 2, 0, 1);
+    assert.equal(off[PID.POSITIVE_COEFFICIENT], 0, "unsigned: 0 is the minimum");
+    assert.equal(off[PID.NEGATIVE_COEFFICIENT], 0, "signed: 0 stays 0");
+    assert.equal(off[PID.CP_OFFSET], 5000, "an unsigned centre offset keeps the midpoint");
+    const half = conditionReportValues(cond, 2, 0.35, 1);
+    assert.equal(half[PID.POSITIVE_COEFFICIENT], 3500);
+    assert.equal(half[PID.NEGATIVE_COEFFICIENT], 3500);
+  });
   await check("hardware Damper: its own block from Block Load, Set Effect + Set Condition 0 + start", async () => {
     const cols = damperCollections();
     const dev = new FakeHidDevice(cols, asLayout(cols).blockLoad);
@@ -581,14 +641,22 @@ async function main() {
   });
 
   function fakeHid(devices: FakeHidDevice[], granted: FakeHidDevice[] = []) {
-    const listeners: ((e: { device: HidDeviceLike }) => void)[] = [];
+    type Listener = (e: { device: HidDeviceLike }) => void;
+    /** "disconnect" listeners (as `listeners`) and "connect" ones */
+    const listeners: Listener[] = [];
+    const connectListeners: Listener[] = [];
+    const of = (t: "connect" | "disconnect") => (t === "connect" ? connectListeners : listeners);
     const api: HidApiLike = {
       requestDevice: async () => devices,
       getDevices: async () => granted,
-      addEventListener: (_t, l) => void listeners.push(l),
-      removeEventListener: (_t, l) => void listeners.splice(listeners.indexOf(l), 1),
+      addEventListener: (t, l) => void of(t).push(l),
+      removeEventListener: (t, l) => {
+        const list = of(t);
+        const i = list.indexOf(l);
+        if (i >= 0) list.splice(i, 1);
+      },
     };
-    return { api, listeners };
+    return { api, listeners, connectListeners };
   }
   const wheel = () => {
     const cols = pidCollections();
@@ -683,6 +751,24 @@ async function main() {
     clock.advance(5);
     await flush();
     assert.equal(dev.forceWrites.length, 1);
+  });
+  await check(`an unchanged force is written again after ${FORCE_KEEPALIVE_MS} ms (keepalive), not before`, async () => {
+    const { dev, clock, writer } = await ready();
+    writer.setForce(0.4);
+    await flush();
+    const n = dev.forceWrites.length;
+    for (let t = 0; t < FORCE_KEEPALIVE_MS - 20; t += 10) {
+      clock.advance(10);
+      writer.setForce(0.4);
+      writer.setForce(0.40002); // inside the dead band
+      await flush();
+    }
+    assert.equal(dev.forceWrites.length, n, "no resend inside the keepalive window");
+    clock.advance(30);
+    writer.setForce(0.4);
+    await flush();
+    assert.equal(dev.forceWrites.length, n + 1, "resent once the window has passed");
+    assert.equal(mag(dev.forceWrites.at(-1)), 4000);
   });
   await check("going to zero is never swallowed by the threshold", async () => {
     const { dev, clock, writer } = await ready();
@@ -847,6 +933,49 @@ async function main() {
     }
     assert.equal(ffb.status.state, "error");
     assert.match(ffb.status.message ?? "", /Force feedback stopped/);
+  });
+  await check("the force keepalive counts the force's own writes: a busy damper stream does not hold it off", async () => {
+    const { dev, clock, ffb } = await damperDriver();
+    ffb.setForce(0.4);
+    await flush();
+    const n = dev.forceWrites.length;
+    for (let t = 0; t < FORCE_KEEPALIVE_MS + 20; t += 10) {
+      clock.advance(10);
+      ffb.setDamper(t % 20 === 0 ? 0.2 : 0.8); // a damper write every 10 ms
+      ffb.setForce(0.4);
+      await flush();
+    }
+    assert.ok(conditions(dev).length > 10, "the damper kept writing");
+    assert.equal(dev.forceWrites.length, n + 1, "the unchanged force went out once more");
+    assert.equal(mag(dev.forceWrites.at(-1)), 4000);
+  });
+  await check("the keepalive is the force's alone: an unchanged damper coefficient is not resent", async () => {
+    const { dev, clock, ffb } = await damperDriver();
+    ffb.setDamper(0.5);
+    await flush();
+    assert.equal(conditions(dev).length, 1);
+    clock.advance(FORCE_KEEPALIVE_MS + 20); // still inside the idle backstop
+    ffb.setDamper(0.5);
+    await flush();
+    clock.advance(5);
+    await flush();
+    assert.equal(conditions(dev).length, 1);
+  });
+  await check("emergencyStop(): the hardware damper is zeroed with the force, before Stop All", async () => {
+    const { dev, clock, ffb } = await damperDriver();
+    ffb.setForce(0.5);
+    ffb.setDamper(0.6);
+    await flush();
+    clock.advance(5);
+    await flush();
+    assert.equal(coeff(conditions(dev).at(-1)), 6000);
+    dev.log.length = 0;
+    ffb.emergencyStop();
+    assert.deepEqual(dev.log, [
+      { kind: "out", id: 5, data: [3, 0, 0] },
+      { kind: "out", id: 3, data: [4, 0, 0, 0, 0, 0, 0, 0, 0x10, 0x27, 0x10, 0x27, 0, 0] }, // damper block 4, coefficient 0
+      { kind: "out", id: 12, data: [3] },
+    ]);
   });
   await check("dispose(): the damper block is stopped and freed with the constant force", async () => {
     const { dev, ffb } = await damperDriver();
@@ -1185,6 +1314,145 @@ async function main() {
     await flush();
     assert.equal(dev.forceWrites.length, before);
   });
+  await check(`a power-cycled wheel is re-opened ${HOTPLUG_DELAY_MS} ms after it comes back`, async () => {
+    const dev = wheel();
+    const clock = new FakeClock();
+    const { api, listeners, connectListeners } = fakeHid([], [dev]);
+    const ffb = new WebHidFfb(api, clock.deps);
+    assert.equal(await ffb.reconnect(), "Fake DD Base");
+    for (const l of listeners) l({ device: dev });
+    assert.equal(ffb.status.state, "idle");
+    dev.opened = false;
+    // A multi-interface base announces each interface: one re-open, after the last
+    for (const l of [...connectListeners]) l({ device: dev });
+    clock.advance(HOTPLUG_DELAY_MS - 500);
+    for (const l of [...connectListeners]) l({ device: dev });
+    clock.advance(HOTPLUG_DELAY_MS - 1);
+    await settle();
+    assert.equal(ffb.status.state, "idle", "not before the wheel has settled");
+    clock.advance(1);
+    await settle();
+    assert.equal(ffb.status.state, "ready");
+    assert.equal(clock.timers.length, 0, "one re-open, no second one queued");
+    // After dispose a wheel coming back is left alone
+    await ffb.dispose();
+    assert.equal(connectListeners.length, 0);
+  });
+  await check("a connect event re-opens only what the driver can drive: a listed Logitech wheel yes, a DualSense or G920 never", async () => {
+    const g29 = logitech(0xc24f, "G29");
+    const clock = new FakeClock();
+    const { api, listeners, connectListeners } = fakeHid([], [g29]);
+    const ffb = new WebHidFfb(api, clock.deps);
+    assert.equal(await ffb.reconnect(), "G29");
+    for (const l of listeners) l({ device: g29 });
+    assert.equal(ffb.status.state, "idle");
+    const dualSense = new FakeHidDevice([
+      { usagePage: 0x01, usage: 0x05, outputReports: [{ reportId: 2, items: [variable([(0xff00 << 16) | 0x22], 8, 47, 0, 255)] }] },
+    ]);
+    dualSense.vendorId = 0x054c;
+    const g920 = logitech(0xc262, "G920");
+    for (const d of [dualSense, g920]) for (const l of [...connectListeners]) l({ device: d });
+    assert.equal(clock.timers.length, 0, "no re-open scheduled for a device the driver would not drive");
+    g29.opened = false;
+    for (const l of [...connectListeners]) l({ device: g29 });
+    assert.equal(clock.timers.length, 1);
+    clock.advance(HOTPLUG_DELAY_MS);
+    await settle();
+    assert.equal(ffb.status.state, "ready");
+    assert.equal(ffb.status.device, "G29");
+    for (const d of [dualSense, g920]) assert.equal(d.opened, false);
+  });
+  await check(`re-opening retries a failed setup up to ${SETUP_ATTEMPTS} times without a fatal status in between`, async () => {
+    const dev = wheel();
+    dev.failOpens = 2;
+    const clock = new FakeClock();
+    const ffb = new WebHidFfb(fakeHid([], [dev]).api, clock.deps);
+    const states: string[] = [];
+    ffb.subscribe(() => states.push(ffb.status.state));
+    const p = ffb.reconnect();
+    await settle();
+    assert.equal(ffb.status.state, "connecting");
+    assert.match(ffb.status.message ?? "", new RegExp(`2/${SETUP_ATTEMPTS}`));
+    clock.advance(SETUP_RETRY_MS);
+    await settle();
+    assert.match(ffb.status.message ?? "", new RegExp(`3/${SETUP_ATTEMPTS}`));
+    clock.advance(SETUP_RETRY_MS);
+    await settle();
+    assert.equal(await p, "Fake DD Base");
+    assert.equal(ffb.status.state, "ready");
+    assert.ok(!states.includes("error"), `never fatal on the way (${states.join(" → ")})`);
+    // Every attempt failing: fatal only after the last one
+    const dead = wheel();
+    dead.failOpens = 99;
+    const c2 = new FakeClock();
+    const f2 = new WebHidFfb(fakeHid([], [dead]).api, c2.deps);
+    const p2 = f2.reconnect();
+    for (let i = 1; i < SETUP_ATTEMPTS; i++) {
+      await settle();
+      assert.equal(f2.status.state, "connecting", `attempt ${i}`);
+      c2.advance(SETUP_RETRY_MS);
+    }
+    assert.equal(await p2, null);
+    assert.equal(f2.status.state, "error");
+    // The user's own Connect click is not retried: it reports at once
+    const once = wheel();
+    once.failOpens = 1;
+    const f3 = new WebHidFfb(fakeHid([once]).api, new FakeClock().deps);
+    assert.equal(await f3.connect(), null);
+    assert.equal(f3.status.state, "error");
+  });
+  await check("dispose() during the retries ends them at once and leaves the driver idle", async () => {
+    const dev = wheel();
+    dev.failOpens = 99;
+    const clock = new FakeClock();
+    const ffb = new WebHidFfb(fakeHid([], [dev]).api, clock.deps);
+    const p = ffb.reconnect();
+    await settle();
+    assert.equal(ffb.status.state, "connecting");
+    await ffb.dispose(); // no clock advance: the wait is cut short
+    assert.equal(await p, null);
+    assert.equal(ffb.status.state, "idle");
+    assert.equal(clock.timers.length, 0);
+  });
+  await check("emergencyStop() (page unload): zero and Stop All go out synchronously, nothing after; resume() sets it up again", async () => {
+    const dev = wheel();
+    const clock = new FakeClock();
+    const ffb = new WebHidFfb(fakeHid([dev], [dev]).api, clock.deps);
+    await ffb.connect();
+    clock.advance(5);
+    ffb.setForce(0.7);
+    await flush();
+    dev.log.length = 0;
+    ffb.emergencyStop(); // no await: the page may not get another turn
+    assert.deepEqual(dev.log, [
+      { kind: "out", id: 5, data: [3, 0, 0] }, // zero force on the effect's block
+      { kind: "out", id: 12, data: [3] }, // stop all effects
+    ]);
+    assert.equal(clock.timers.length, 0, "the idle backstop went with the session");
+    clock.advance(5);
+    ffb.setForce(0.9);
+    await flush();
+    assert.equal(dev.log.length, 2, "the writer is dead: nothing after the stop");
+    assert.equal(ffb.status.state, "idle");
+    ffb.emergencyStop(); // twice is harmless
+    assert.equal(dev.log.length, 2);
+    // Back from the back/forward cache
+    assert.equal(await ffb.resume(), "Fake DD Base");
+    assert.equal(ffb.status.state, "ready");
+    // A classic Logitech wheel gets what its teardown sends (hid-lg4ff bytes): force off, 900° back, centring spring on
+    const g29 = logitech(0xc24f, "G29");
+    const lg = new WebHidFfb(fakeHid([g29]).api, new FakeClock().deps);
+    lg.setRotationDeg(540);
+    await lg.connect();
+    g29.log.length = 0;
+    lg.emergencyStop();
+    assert.deepEqual(writes(g29), [LG4FF.forceOff, LG4FF.range900, LG4FF.springParamsFull, LG4FF.springOn]);
+    assert.equal(lg.status.state, "idle");
+    // Disposed, a page coming back does not reopen the wheel
+    await lg.dispose();
+    assert.equal(await lg.resume(), null);
+    assert.equal(g29.opened, false);
+  });
   await check("dispose(): zero force, stop effect, free block, stop all, disable actuators, close", async () => {
     const dev = wheel();
     const ffb = new WebHidFfb(fakeHid([dev]).api, new FakeClock().deps);
@@ -1210,6 +1478,90 @@ async function main() {
     dev.failSends = true;
     await teardownPidSession(res.session); // must not throw
   });
+  console.log("Diagnostics");
+  await check("describeHidDevice: ids, raw descriptor, each PID report with its fields, what is missing", () => {
+    const text = describeHidDevice(wheel());
+    assert.match(text, /Fake DD Base/);
+    assert.match(text, /output report 5 \(24 bits\)/, "raw descriptor");
+    assert.match(text, /Set Constant Force: report 5, 24 bits/);
+    assert.match(text, /MAGNITUDE\s+bit\s+8, 16 bits, -10000\.\.10000 signed/);
+    assert.match(text, /PID Block Load: report 18/);
+    assert.match(text, /Set Condition: MISSING/);
+    assert.match(text, /Effect types: ET_CONSTANT_FORCE/);
+    const pad = new FakeHidDevice([{ usagePage: 0x01, usage: 0x05 }]);
+    assert.match(describeHidDevice(pad), /HID PID: no usable Set Constant Force/);
+  });
+  await check("diagnose(): status, session, granted devices, setup traffic; the force stream stays out of it", async () => {
+    const dev = wheel();
+    const clock = new FakeClock();
+    const pad = new FakeHidDevice([{ usagePage: 0x01, usage: 0x05 }]);
+    pad.productName = "Button box";
+    const ffb = new WebHidFfb(fakeHid([dev], [pad, dev]).api, clock.deps);
+    await ffb.connect();
+    const report = await ffb.diagnose();
+    assert.match(report, /Status: ready \| Fake DD Base/);
+    assert.match(report, /Session: pid driver, constant force on effect block 3/);
+    assert.match(report, /Granted devices: 2/);
+    assert.match(report, /--- Fake DD Base \(in use, the one reconnect picks\)/);
+    assert.match(report, /--- Button box\n/);
+    assert.match(report, /feature out id\s+17/, "Create New Effect");
+    assert.match(report, /feature in\s+id\s+18\s+03 01/, "Block Load reply: block 3, success");
+    assert.match(report, /out\s+id\s+12\s+04/, "device reset");
+    assert.match(report, /setup ok: pid driver, constant force on effect block 3, hardware damper none/);
+    assert.match(report, /setup Fake DD Base \[1234:5678\] with the HID PID driver \(generic profile\)/);
+    const traffic = (r: string) => r.split("\n").filter((l) => /\b(out|feature (in|out))\s+id/.test(l)).length;
+    const before = traffic(report);
+    for (let i = 0; i < 300; i++) {
+      clock.advance(3);
+      ffb.setForce(Math.sin(i / 10));
+      await flush();
+    }
+    assert.ok(dev.forceWrites.length > 100, "the stream did play");
+    assert.equal(traffic(await ffb.diagnose()), before, "no force writes in the trace");
+    await ffb.dispose();
+    assert.match(await ffb.diagnose(), /teardown[\s\S]*out\s+id\s+12\s+02/, "teardown traffic (disable actuators)");
+  });
+  await check(`the trace keeps the last ${HID_TRACE_SIZE} lines, and a failed setup is still described`, async () => {
+    const dev = wheel();
+    const clock = new FakeClock();
+    const ffb = new WebHidFfb(fakeHid([dev], [dev]).api, clock.deps);
+    for (let i = 0; i < 6; i++) {
+      await ffb.connect();
+      await ffb.dispose();
+    }
+    const lines = (await ffb.diagnose()).split("\n");
+    const start = lines.findIndex((l) => l.startsWith("Setup and teardown traffic"));
+    assert.equal(lines.length - start - 1, HID_TRACE_SIZE);
+    const broken = wheel();
+    broken.blockStatus = 2; // effect memory full
+    const f2 = new WebHidFfb(fakeHid([broken]).api, new FakeClock().deps);
+    assert.equal(await f2.connect(), null);
+    const r2 = await f2.diagnose();
+    assert.match(r2, /Status: error/);
+    assert.match(r2, /--- Fake DD Base \(last tried/);
+    assert.match(r2, /setup failed: The wheel has no free effect memory/);
+    assert.match(r2, /Set Constant Force: report 5/);
+  });
+  await check("describeHidDevice / diagnose(): a classic Logitech wheel, a refused Logitech device and a PID quirk are named", async () => {
+    const g29 = logitech(0xc24f, "G29");
+    assert.match(describeHidDevice(g29), /HID PID: none\. Logitech G29: driven with the hid-lg4ff commands on output report 0 \(7 bytes\)/);
+    assert.match(describeHidDevice(logitech(0xc262, "G920")), /HID PID: none\. Only the Logitech .* bridge/);
+    const pxn = wheel();
+    pxn.vendorId = 0x11ff;
+    pxn.productId = 0x3245;
+    assert.match(describeHidDevice(pxn), /PID profile: PXN V99/);
+    assert.match(describeHidDevice(wheel()), /PID profile: generic/);
+    const ffb = new WebHidFfb(fakeHid([g29], [g29]).api, new FakeClock().deps);
+    ffb.setRotationDeg(540);
+    await ffb.connect();
+    const report = await ffb.diagnose();
+    assert.match(report, /Session: logitech-classic driver \(hid-lg4ff\), G29, range set from the wheel rotation setting/);
+    assert.match(report, /setup G29 \[046d:c24f\] with the Logitech classic driver \(hid-lg4ff, G29\)/);
+    assert.match(report, /out\s+id\s+0\s+f5 00 00 00 00 00 00/, "spring off traced");
+    assert.match(report, /out\s+id\s+0\s+f8 81 1c 02 00 00 00/, "range 540 traced");
+    await ffb.dispose();
+    assert.match(await ffb.diagnose(), /teardown[\s\S]*out\s+id\s+0\s+14 00 00 00 00 00 00/, "teardown traffic (centring spring on)");
+  });
   await check("isSupported(): false without navigator.hid (Node)", () => {
     assert.equal(WebHidFfb.isSupported(), false);
     const ffb = new WebHidFfb();
@@ -1219,7 +1571,20 @@ async function main() {
   console.log(`\n${passed} checks passed`);
 }
 
-main().catch((e) => {
-  console.error(e);
-  process.exit(1);
+// A check that awaits a promise nobody settles drains the event loop and Node exits 0 mid-run: count that as a failure
+let finished = false;
+process.on("exit", (code) => {
+  if (code === 0 && !finished) {
+    console.error(`stopped after ${passed} checks: a check awaited a promise that never settled`);
+    process.exitCode = 1;
+  }
 });
+main().then(
+  () => {
+    finished = true;
+  },
+  (e) => {
+    console.error(e);
+    process.exit(1);
+  }
+);

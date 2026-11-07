@@ -60,10 +60,7 @@ export function sectorTimeColor(ms: number, best: number | null | undefined): st
   return !best || ms <= best + 0.5 ? HUD_PURPLE : HUD_YELLOW;
 }
 
-/** Rev-light range per car: first LED and all-lit rpm (the Formula cars by default; the GT3's 7500 rpm shift point) */
-export function revRangeFor(carId: string | undefined): [number, number] {
-  return carId === "amg-gt3" ? [6200, 7500] : [10_800, 14_600];
-}
+export { revRangeFor } from "@/lib/sim/rev-range";
 
 /** A tyre condition (graining, blistering, flat spot, dirt) is flagged on the HUD from this level (0..1) */
 export const TYRE_CONDITION_SHOW = 0.12;

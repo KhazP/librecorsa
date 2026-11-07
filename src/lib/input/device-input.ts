@@ -65,12 +65,23 @@ export interface WheelSettings {
   ffbKerb: number;
   /** ABS vibration 0..1 */
   ffbAbs: number;
+  /** Tyre slide / wheelspin vibration 0..1, from just before the tyres' peak slip (WebHID wheels) */
+  ffbSlip: number;
+  /** Shift-warning vibration 0..1 as the revs reach the shift lights (WebHID wheels); 0 = off */
+  ffbShift: number;
   /** Reverse the force (for a wheel whose driver pushes the other way) */
   ffbInvert: boolean;
   /** Rim damping 0..1: resists fast rim movement (calms a direct-drive base, adds weight to a belt wheel) */
   ffbDamping: number;
   /** Force low-pass time constant (s, 0..0.05); 0 = unfiltered */
   ffbFilterS: number;
+  /**
+   * Downforce compensation 0..1: the exponent k of (static front load / current front load)^k on the physics torque,
+   * so the aero load at speed does not make the rim heavier. 0 = off, 1 = the full aero share taken out
+   */
+  ffbDownforceComp: number;
+  /** Collision protection: slew-limits the force through a hit so its spike never reaches the rim */
+  ffbCollisionGuard: boolean;
   /** Strength per car (gain, minimum force) set from the FFB panel; a car without one uses ffbGain / ffbMinForce */
   ffbPerCar: Partial<Record<string, { gain: number; minForce: number }>>;
   /**
@@ -145,9 +156,13 @@ export const DEFAULT_WHEEL_SETTINGS: WheelSettings = {
   ffbMinForce: 0,
   ffbKerb: 0.35,
   ffbAbs: 0.2,
+  ffbSlip: 1,
+  ffbShift: 0,
   ffbInvert: false,
   ffbDamping: 0.1,
   ffbFilterS: 0,
+  ffbDownforceComp: 0,
+  ffbCollisionGuard: true,
   ffbPerCar: {},
   steerLockPerCar: {},
   hidFfb: true,

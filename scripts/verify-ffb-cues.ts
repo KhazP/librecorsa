@@ -1,7 +1,8 @@
 /**
  * The steering force and the balance cues come from the car's own tyres, with nothing layered on top:
  *   npx tsx scripts/verify-ffb-cues.ts
- *  - the wheel plays the physics' steering torque (gain / minimum force only), in a corner and in a wall hit alike
+ *  - the wheel plays the physics' steering torque (gain / minimum force only), in a corner and in a wall hit alike (with
+ *    collision protection on, a hit is slew-limited onto that torque, never cut)
  *  - understeer / oversteer cues follow each axle's normalised slip, for the controller rumble and telemetry-out
  */
 import assert from 'node:assert/strict';
@@ -44,10 +45,10 @@ function car(o: { front: number; rear: number; torque?: number; latG?: number; l
 const wheel = { ...DEFAULT_WHEEL_SETTINGS, ffbEnabled: true, hidFfb: false, ffbGain: 0.8, ffbMinForce: 0.05, ffbDamping: 0, ffbFilterS: 0 };
 
 /** The force the client sends for one frame of this telemetry (bridge path: no WebHID sink) */
-function rimForce(t: CarTelemetry): number {
+function rimForce(t: CarTelemetry, w = wheel): number {
   const c = new WheelFfbClient();
-  c.update(t, wheel, [], 1000, true);
-  c.update(t, wheel, [], 1016, true);
+  c.update(t, w, [], 1000, true);
+  c.update(t, w, [], 1016, true);
   const f = c.force;
   c.dispose();
   return f;
@@ -62,7 +63,24 @@ check('in a steady corner the rim gets the physics torque, shaped by gain and mi
 });
 check('a wall hit (15 g) passes the physics torque through instead of muting it', () => {
   const t = car({ front: 1.4, rear: 1.4, torque: 0.9, latG: 15 });
-  near(rimForce(t), shapeFfbForce(0.9, wheel, t.speedKmh), 1e-4);
+  const target = shapeFfbForce(0.9, wheel, t.speedKmh);
+  // Collision protection off: the torque at once
+  near(rimForce(t, { ...wheel, ffbCollisionGuard: false }), target, 1e-4);
+  // On (the default): slew-limited from the corner's force onto the same torque, not cut to a fraction of it
+  const c = new WheelFfbClient();
+  let ms = 1000;
+  for (let i = 0; i < 10; i++, ms += 16) c.update(car({ front: 0.8, rear: 0.7, torque: -0.3 }), wheel, [], ms, true);
+  const before = c.force;
+  const seen: number[] = [];
+  for (let i = 0; i < 60; i++, ms += 16) {
+    c.update(t, wheel, [], ms, true);
+    seen.push(c.force);
+  }
+  c.dispose();
+  assert.ok((seen[0] as number) < before + 0.25 * (target - before), `the spike is held back (${before} → ${seen[0]})`);
+  for (let i = 1; i < seen.length; i++) assert.ok((seen[i] as number) >= (seen[i - 1] as number) - 1e-9, 'it keeps following the torque');
+  assert.ok((seen[30] as number) > 0.9 * target, `close to the torque within 0.5 s (${seen[30]} of ${target})`);
+  near(seen.at(-1) as number, target, 1e-3);
 });
 
 console.log('Balance cues');

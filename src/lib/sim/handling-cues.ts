@@ -8,6 +8,9 @@ export interface HandlingCues {
 
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 
+/** Horizontal g past which a hit is a crash (a wall), well beyond any car's grip or braking */
+export const CRASH_G = 10;
+
 /** How far a tyre's normalised slip (1 = its peak) is past the peak: 0 below 0.85, 1 from 1.15 */
 export function pastPeak(ndSlip: number): number {
   const x = clamp01((ndSlip - 0.85) / 0.3);
