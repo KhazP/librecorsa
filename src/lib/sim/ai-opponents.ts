@@ -1401,8 +1401,12 @@ export class AiOpponentField {
       // Two cars can't take one corner side by side: the one behind on the way in gives the place up and tucks in
       // behind, unless the corner is its own (on the inside, nose at least at the other's middle)
       if (alongsideAhead && kAbs > 0.006) {
-        const owns = ownsCorner(wrapHalf(alongsideAhead.sim.sMeters - me.sMeters, L), me.lateralOffsetM, alongsideAhead.sim.lateralOffsetM, insideSign, CAR_LEN_M);
-        if (!owns) speedCap = Math.min(speedCap, alongsideAhead.sim.vxMs - 1.5);
+        const dsA = wrapHalf(alongsideAhead.sim.sMeters - me.sMeters, L);
+        const owns = ownsCorner(dsA, me.lateralOffsetM, alongsideAhead.sim.lateralOffsetM, insideSign, CAR_LEN_M);
+        // Tuck in behind: drop back by the overlap before the turn-in, not just ease off (1.5 m/s slower took a second
+        // to clear a part overlap while the car ahead moved across onto its line, into the front wheel)
+        const overlapM = Math.max(0, CAR_LEN_M + 0.5 - dsA);
+        if (!owns) speedCap = Math.min(speedCap, alongsideAhead.sim.vxMs - THREE.MathUtils.clamp(1.5 * overlapM, 1.5, 5));
       }
       if (squeezedBy) speedCap = Math.min(speedCap, squeezedBy.sim.vxMs - 2);
       // Defending: a quicker car closing from behind and a real corner coming: cover the inside, the move made while
