@@ -32,6 +32,11 @@ export interface PortedCarOptions {
   /** Steering wheel rotation each way at full lock (deg) */
   steerLockDeg: number;
   /**
+   * Lowers the body (and the cameras and steering wheel on it) onto the wheels by this much (m), for a GLB whose
+   * body is modelled above a racing ride height (`CarDefinition.bodyDropM`). The wheels stay on the road.
+   */
+  bodyDropM?: number;
+  /**
    * Rig-space cameras to use instead of the GLB's own (e.g. the AMG GT3's for every car on the GT3 model), built from
    * where this model's steering wheel and front axle landed in rig space
    */
@@ -212,16 +217,19 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
     const physicsMidZ = chassis.wheelbase * (0.5 - chassis.frontWeightFraction);
     const offset = new THREE.Vector3(0, (extras.tyreRadius?.LF ?? lf[1]) - lf[1], physicsMidZ - 0.5 * (lf[2] + lr[2]));
 
+    // The body, and everything placed on it, may sit lower on the wheels than modelled; the wheels keep `offset`
+    const bodyOffset = offset.clone();
+    bodyOffset.y -= options.bodyDropM ?? 0;
     const bodyGroup = new THREE.Group();
     bodyGroup.name = "PORTED_BODY";
-    bodyGroup.position.copy(offset);
+    bodyGroup.position.copy(bodyOffset);
 
     // The steering wheel's centre in rig space, read before the nodes move (the model is at its bind pose here)
     const steerSource = find("STEER");
     const steerBox = steerSource ? new THREE.Box3().setFromObject(steerSource, true) : null;
     const steerCentre =
       steerBox && !steerBox.isEmpty()
-        ? steerBox.getCenter(new THREE.Vector3()).applyMatrix4(car.matrixWorld.clone().invert()).add(offset)
+        ? steerBox.getCenter(new THREE.Vector3()).applyMatrix4(car.matrixWorld.clone().invert()).add(bodyOffset)
         : null;
     const cameraFit: PortedCameraFit = { steerCentre, frontAxleZ: lf[2] + offset.z };
 
@@ -275,7 +283,7 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
     for (const key of CAMERA_KEYS) {
       const c = cams[key] ?? { pos: [0, 0.9, 0] as [number, number, number], pitchDeg: -5, fov: 58 };
       anchors[key] = {
-        pos: new THREE.Vector3(...c.pos).add(offset),
+        pos: new THREE.Vector3(...c.pos).add(bodyOffset),
         pitchRad: c.pitchDeg * THREE.MathUtils.DEG2RAD,
         fovDeg: c.fov,
       };

@@ -6,6 +6,7 @@
  *
  *   npx tsx scripts/verify-ported-cars.ts
  */
+import * as THREE from "three";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { carById, CARS, isCarId, type CarId } from "../src/lib/cars/car-registry";
@@ -303,6 +304,41 @@ for (const exp of EXPECTED_CARS) {
   });
   check(`${exp.id}: all 6 camera presets populated`, allCamsOk);
   wheelExtras[exp.id] = { wheelCentres: wc, tyreRadius: tr, tyreHalfWidth: thw };
+}
+
+console.log("\nBodies at a racing ride height on their wheels (lowest BODY vertex between the axles, less bodyDropM)");
+{
+  // Some exports model the body in a showroom pose well above the wheels, and the car floated over the road: the
+  // registry's `bodyDropM` brings it down. Tyre bottoms are at y = 0 in every port; the AMR26's floor is at 43 mm.
+  const RIDE_MIN_MM = 15;
+  const RIDE_MAX_MM = 70;
+  const v = new THREE.Vector3();
+  for (const exp of EXPECTED_CARS) {
+    const root = loadGlbGeometry(join("public", "cars", exp.id, "model", `${exp.id}.glb`));
+    root.updateMatrixWorld(true);
+    const car = root.getObjectByName("CAR") ?? root;
+    const toCar = car.matrixWorld.clone().invert();
+    const wc = (car.userData as PortedWheelExtras).wheelCentres;
+    const frontZ = wc.WHEEL_LF[2];
+    const rearZ = wc.WHEEL_LR[2];
+    let lowest = Infinity;
+    root.getObjectByName("BODY")?.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      const toBody = toCar.clone().multiply(mesh.matrixWorld);
+      const pos = mesh.geometry.getAttribute("position");
+      for (let i = 0; i < pos.count; i++) {
+        v.fromBufferAttribute(pos, i).applyMatrix4(toBody);
+        if (v.z < frontZ && v.z > rearZ) lowest = Math.min(lowest, v.y);
+      }
+    });
+    const rideMm = (lowest - (carById(exp.id).bodyDropM ?? 0)) * 1000;
+    check(
+      `${exp.id}: body rides ${RIDE_MIN_MM}-${RIDE_MAX_MM} mm off the road between the axles`,
+      rideMm >= RIDE_MIN_MM && rideMm <= RIDE_MAX_MM,
+      `${rideMm.toFixed(0)} mm`,
+    );
+  }
 }
 
 console.log("\nWheels on the road while driving (rigid-body model, Rwanda colliders)");
