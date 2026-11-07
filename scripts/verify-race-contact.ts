@@ -112,7 +112,8 @@ function run(setup: Setup) {
 
 // ---- 2 + 3. Rear-quarter hits, then the spun car's rejoin
 {
-  const tap = run({ player: [300, -1.5, 63], ai: [304.4, 0, 59], inputs: (i) => ({ throttle: 0.5, analogSteer: i < 20 ? 0.12 : 0 }), frames: 60 * 6 });
+  // 3.5 s: the player's fixed throttle runs it into the first chicane after that
+  const tap = run({ player: [300, -1.5, 63], ai: [304.4, 0, 59], inputs: (i) => ({ throttle: 0.5, analogSteer: i < 20 ? 0.12 : 0 }), frames: 60 * 3.5 });
   const tapInfo = tap.field.carInfo('AIC')!;
   check('Light tap: the AI car is knocked out of shape', tap.modes.has('startled') && tap.maxHeadingDeg > 5, `heading off the road by ${f(tap.maxHeadingDeg, 0)}°, modes ${[...tap.modes].join(' → ')}`);
   check('Light tap: ... and gathers it up', tapInfo.stats.spins === 0, `${tapInfo.stats.spins} spins`);

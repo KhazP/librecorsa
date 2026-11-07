@@ -1,0 +1,186 @@
+/**
+ * Headless checks for the AI's racecraft and race control.
+ *
+ *   npx tsx scripts/verify-race-craft.ts
+ *
+ *  1. The judgements: overlap with hysteresis, who owns the corner, a pass that can't get alongside in time, the
+ *     side to pass a hazard on, the yellow flag zone
+ *  2. Race control: who is at fault in a contact, and what it costs (a penalty when it spun / damaged the other car,
+ *     a warning when it didn't)
+ *  3. Grid: reversed, the player's slot
+ *  4. A quicker car gets past a slower one on Monza, cleanly
+ *  5. A car stopped on the racing line: the car behind sees the yellow, goes round it, and doesn't hit it
+ */
+import { readFileSync } from 'node:fs';
+import { getActiveTrackData, setActiveTrack, type RawTrackJson } from '../src/lib/track-data';
+import { F12026CarSim } from '../src/lib/sim/f12026-car/F12026CarSim';
+import { AiOpponentField, type FieldIncident } from '../src/lib/sim/ai-opponents';
+import { hazardLine, inYellowZone, overlapNow, ownsCorner, passFeasible } from '../src/lib/sim/ai-racecraft';
+import { COLLISION_PENALTY_S, judgeContact, RaceIncidents } from '../src/lib/sim/race-incidents';
+import { loadGlbGeometry } from './lib/glb-geometry';
+
+const failures: string[] = [];
+const check = (name: string, ok: boolean, detail = '') => {
+  console.log(`${ok ? 'PASS' : 'FAIL'}  ${name.padEnd(66)} ${detail}`);
+  if (!ok) failures.push(name);
+};
+const f = (v: number, d = 1) => v.toFixed(d);
+
+// ---- 1. Judgements
+{
+  check('Overlap: alongside within 0.85 car lengths', overlapNow(false, 4.0, 2.5, 5, 1.95) && !overlapNow(false, 4.6, 2.5, 5, 1.95));
+  check('Overlap: stays alongside to 1.1 lengths (hysteresis)', overlapNow(true, 5.3, 2.5, 5, 1.95) && !overlapNow(true, 5.8, 2.5, 5, 1.95));
+  // Right-hander (inside +), me on the right of the other car
+  check('Corner: inside with the nose at its middle owns it', ownsCorner(2.0, 3, 0, 1, 5));
+  check('Corner: inside but a car length back does not', !ownsCorner(4.0, 3, 0, 1, 5));
+  check('Corner: alongside on the outside does not', !ownsCorner(0, -3, 0, 1, 5));
+  check('Pass: on a long straight it can always be tried', passFeasible({ gapM: 30, closingMs: 2, speedMs: 80, distToCornerM: Infinity, brakingZoneM: 0 }));
+  check(
+    'Pass: 30 m back at 2 m/s closing, corner 150 m away: a lunge',
+    !passFeasible({ gapM: 30, closingMs: 2, speedMs: 80, distToCornerM: 150, brakingZoneM: 120 })
+  );
+  check(
+    'Pass: 8 m back at 6 m/s closing, corner 250 m away: on',
+    passFeasible({ gapM: 8, closingMs: 6, speedMs: 80, distToCornerM: 250, brakingZoneM: 120 })
+  );
+  const hl = hazardLine(-2, 2.5, 6, 1.95);
+  check('Hazard: passed on the side with room', hl !== null && hl.latM > 0.5, hl ? `line ${f(hl.latM)} m, room ${f(hl.roomM)} m` : 'blocked');
+  check('Hazard: a road blocked across is blocked', hazardLine(0, 5.5, 6, 1.95) === null);
+  check('Yellow: 300 m before an incident, not 100 m past it', inYellowZone(1000, 1300, 5000) && !inYellowZone(1400, 1300, 5000));
+  check('Yellow: across the line', inYellowZone(4900, 100, 5000));
+}
+
+// ---- 2. Race control
+{
+  const contact = (o: Partial<Extract<FieldIncident, { kind: 'contact' }>>): Extract<FieldIncident, { kind: 'contact' }> => ({
+    kind: 'contact',
+    a: 'YOU',
+    b: 'MUS',
+    aIsPlayer: true,
+    bIsPlayer: false,
+    impactMs: 5,
+    dsM: 4.6,
+    aLatM: 0,
+    bLatM: 0.3,
+    aLatSpeedMs: 0,
+    bLatSpeedMs: 0,
+    aBraking: true,
+    bBraking: true,
+    s: 500,
+    ...o,
+  });
+  check('Fault: hit from behind, in line → the car behind', judgeContact(contact({})).atFault === 'a');
+  check('Fault: alongside, one car moves across → that car', judgeContact(contact({ dsM: 1, aLatM: 0, bLatM: 2.2, bLatSpeedMs: -1.8 })).atFault === 'b');
+  check('Fault: alongside, both drift together → racing incident', judgeContact(contact({ dsM: 1, aLatM: 0, bLatM: 2.2, aLatSpeedMs: 0.9, bLatSpeedMs: -0.9 })).atFault === null);
+
+  const rc = new RaceIncidents('YOU');
+  rc.update(10, [contact({})], false);
+  rc.update(10.5, [{ kind: 'spin', code: 'MUS', isPlayer: false, s: 510 }], false);
+  rc.update(13.5, [], false);
+  check('Penalty: a rear-end that spins the other car costs 5 s', rc.penaltyOf('YOU') === COLLISION_PENALTY_S, `${rc.penaltyOf('YOU')} s`);
+  check('Penalty: ... and race control says so', rc.messages.some((m) => m.kind === 'penalty' && m.player));
+  const rc2 = new RaceIncidents('YOU');
+  rc2.update(10, [contact({ impactMs: 4 })], false);
+  rc2.update(13.5, [], false);
+  check('Warning: the same contact with no consequence is a warning', rc2.penaltyOf('YOU') === 0 && rc2.playerContactWarnings === 1);
+  const rc3 = new RaceIncidents('YOU');
+  rc3.update(10, [contact({ a: 'RUB', b: 'MUS', aIsPlayer: false })], false);
+  rc3.update(10.2, [{ kind: 'damage', code: 'MUS', isPlayer: false, source: 'car', report: { severity: 0.4, zone: 'rear', puncture: false, terminal: false } }], false);
+  rc3.update(13.5, [], false);
+  check('AI at fault: penalised and races with more caution', rc3.penaltyOf('RUB') === COLLISION_PENALTY_S && rc3.cautionOf('RUB', 20) > 0);
+  const rc4 = new RaceIncidents('YOU');
+  rc4.update(10, [], true);
+  check('Yellow: shown when the player comes up on an incident', rc4.messages.some((m) => m.kind === 'yellow'));
+}
+
+// ---- Track for the driving checks
+setActiveTrack('monza', JSON.parse(readFileSync('public/tracks/monza/track_data.json', 'utf8')) as RawTrackJson);
+const track = getActiveTrackData(1200);
+const root = loadGlbGeometry(`public${track.meshUrl}`);
+const DT = 1 / 120;
+
+// ---- 3. Grid
+{
+  const player = new F12026CarSim(track, root);
+  const drivers = [
+    { code: 'AAA', teamColorHex: '#fff', pace: 0.97 },
+    { code: 'BBB', teamColorHex: '#fff', pace: 0.96 },
+    { code: 'CCC', teamColorHex: '#fff', pace: 0.95 },
+  ];
+  const field = new AiOpponentField(track, player, drivers, undefined, { gridOrder: 'reversed', playerGrid: 'front', learning: false, seed: 1 });
+  field.startRace(true);
+  const grid = field.report().cars.map((c) => [c.code, c.gridPos] as const);
+  const slot = (code: string) => grid.find(([c]) => c === code)?.[1];
+  check('Grid: the player on pole when asked', slot('YOU') === 1, grid.map(([c, g]) => `${c} P${g}`).join(' '));
+  check('Grid: reversed puts the slowest AI first', (slot('CCC') ?? 0) < (slot('BBB') ?? 0) && (slot('BBB') ?? 0) < (slot('AAA') ?? 0));
+}
+
+// ---- 4. A quicker car gets by
+{
+  const field = new AiOpponentField(
+    track,
+    new F12026CarSim(track, root),
+    [
+      { code: 'SLO', teamColorHex: '#fff', pace: 0.945 },
+      { code: 'FST', teamColorHex: '#fff', pace: 0.975, aggression: 0.2 },
+    ],
+    undefined,
+    { seed: 5, spectate: true, learning: false, gridOrder: 'reversed' }
+  );
+  field.raceLaps = 3;
+  field.startRace(false);
+  let passedAtS: number | null = null;
+  let hardContacts = 0;
+  for (let t = 0; t < 260 && passedAtS === null; t += DT) {
+    field.update(DT);
+    for (const i of field.incidents) if (i.kind === 'contact' && i.impactMs > 2) hardContacts++;
+    if (field.status().standings[0]?.driverCode === 'FST' && t > 1) passedAtS = t;
+  }
+  const spins = (field.carInfo('SLO')?.stats.spins ?? 0) + (field.carInfo('FST')?.stats.spins ?? 0);
+  check('Duel: a car 3 % quicker gets past within two laps', passedAtS !== null, passedAtS !== null ? `passed at ${f(passedAtS)} s` : 'never passed');
+  check('Duel: ... without a hard contact or a spin', hardContacts === 0 && spins === 0, `${hardContacts} hard contacts, ${spins} spins`);
+}
+
+// ---- 5. A car stopped on the racing line
+{
+  const field = new AiOpponentField(
+    track,
+    new F12026CarSim(track, root),
+    [
+      { code: 'STP', teamColorHex: '#fff', pace: 0.95 },
+      { code: 'RUN', teamColorHex: '#fff', pace: 0.95 },
+    ],
+    undefined,
+    { seed: 2, spectate: true, learning: false, damage: 'full' }
+  );
+  field.raceLaps = 3;
+  field.startRace(false);
+  for (let t = 0; t < 12; t += DT) field.update(DT);
+  const stp = field.carInfo('STP')!;
+  const run = field.carInfo('RUN')!;
+  // The running car on the main straight at speed, the stopped one on its line 400 m up the road, out of the race
+  run.sim.teleportToDistance(80, 70, 0.5);
+  stp.sim.teleportToDistance(480, 0, 0.5);
+  stp.damage.registerImpact({ localX: 0, localZ: 2.5, speedMs: 60, source: 'wall' });
+  let yellowSeen = false;
+  let hit = false;
+  let minClear = Infinity;
+  let passed = false;
+  const L = track.totalLengthM;
+  // (carInfo is a snapshot: read the state again each time)
+  const stpNow = () => field.carInfo('STP')!;
+  for (let t = 0; t < 30 && !passed; t += DT) {
+    field.update(DT);
+    for (const i of field.incidents) if (i.kind === 'contact') hit = true;
+    if (field.underYellow(run.sim.sMeters)) yellowSeen = true;
+    const ds = ((stp.sim.sMeters - run.sim.sMeters + L * 1.5) % L) - L / 2;
+    if (Math.abs(ds) < 5) minClear = Math.min(minClear, Math.abs(stp.sim.lateralOffsetM - run.sim.lateralOffsetM));
+    if (ds < -30) passed = true;
+  }
+  check('Stopped car: the car behind is shown the yellow', yellowSeen);
+  check('Stopped car: it goes round, not into it', passed && !hit, `${passed ? 'passed' : 'not past'}, lateral clearance ${f(minClear)} m${hit ? ', HIT' : ''}`);
+  check('Stopped car: retired and classified DNF', stpNow().retired && !!field.status().standings.find((e) => e.driverCode === 'STP')?.retired);
+}
+
+console.log(failures.length ? `\n${failures.length} check(s) failed: ${failures.join(', ')}` : '\nAll racecraft checks passed.');
+if (failures.length) process.exit(1);
