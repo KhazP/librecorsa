@@ -729,6 +729,26 @@ export const WheelStep: React.FC<SetupStepProps> = ({ settings, onChangeSettings
                   onChange={(v) => setWheel({ ffbAbs: v / 100 })}
                 />
                 <TuningSlider
+                  label="Slip vibration"
+                  value={Math.round(w.ffbSlip * 100)}
+                  min={0}
+                  max={100}
+                  step={5}
+                  format={(v) => (v === 0 ? "Off" : `${v} %`)}
+                  hint="Buzzes from just before the tyres' grip peak: understeer, lock-ups, wheelspin. WebHID wheels"
+                  onChange={(v) => setWheel({ ffbSlip: v / 100 })}
+                />
+                <TuningSlider
+                  label="Shift warning"
+                  value={Math.round(w.ffbShift * 100)}
+                  min={0}
+                  max={100}
+                  step={5}
+                  format={(v) => (v === 0 ? "Off" : `${v} %`)}
+                  hint="Buzzes as the revs reach the shift lights, until the next gear. WebHID wheels"
+                  onChange={(v) => setWheel({ ffbShift: v / 100 })}
+                />
+                <TuningSlider
                   label="Damping"
                   value={Math.round(w.ffbDamping * 100)}
                   min={0}
@@ -748,7 +768,23 @@ export const WheelStep: React.FC<SetupStepProps> = ({ settings, onChangeSettings
                   hint="Low-pass filter on the force. 0 = raw"
                   onChange={(v) => setWheel({ ffbFilterS: v / 1000 })}
                 />
+                <TuningSlider
+                  label="Downforce compensation"
+                  value={Math.round(w.ffbDownforceComp * 100)}
+                  min={0}
+                  max={100}
+                  step={5}
+                  format={(v) => (v === 0 ? "Off" : `${v} %`)}
+                  hint="Takes the aero load out of the steering weight, so fast corners do not clip. Raise Strength to match"
+                  onChange={(v) => setWheel({ ffbDownforceComp: v / 100 })}
+                />
               </AutoGrid>
+              <Toggle
+                label="Collision protection"
+                detail="Holds back the force spike of a hit so it never yanks the rim"
+                checked={w.ffbCollisionGuard}
+                onChange={() => setWheel({ ffbCollisionGuard: !w.ffbCollisionGuard })}
+              />
               <div className="flex flex-wrap items-center gap-2">
                 <SolidPill disabled={!ffbReady} onClick={() => wheelFfb.test(w.ffbInvert)} className="h-10!">
                   Test direction
