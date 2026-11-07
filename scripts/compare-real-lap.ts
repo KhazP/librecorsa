@@ -34,6 +34,8 @@ const L = track.totalLengthM;
 interface RefJson {
   lap: { lap_duration: number; date_start: string };
   car_data: { date: string; speed: number; throttle: number; brake: number; n_gear: number }[];
+  /** Car position samples (OpenF1 units, ≈ 0.1 m), for the real lateral g */
+  location?: { date: string; x: number; y: number }[];
 }
 const ref = JSON.parse(readFileSync(refPath, 'utf8')) as RefJson;
 const t0 = Date.parse(ref.lap.date_start);
@@ -48,6 +50,40 @@ const realD = real.map((c, i) => {
 });
 const realLen = d;
 
+// Real lateral g: v²·κ of the smoothed position trace (κ from the circumcircle over ±3 samples, ≈ ±0.8 s)
+const realAyAt: { d: number; g: number }[] = [];
+if (ref.location?.length) {
+  const P = ref.location
+    .map((p) => ({ t: (Date.parse(p.date) - t0) / 1000, x: p.x, y: p.y }))
+    .filter((p) => p.t >= 0 && p.t <= ref.lap.lap_duration)
+    .sort((a, b) => a.t - b.t);
+  let plen = 0;
+  for (let i = 1; i < P.length; i++) plen += Math.hypot(P[i].x - P[i - 1].x, P[i].y - P[i - 1].y);
+  const k = realLen / plen;
+  const sm = (a: number[]) => a.map((_, i) => {
+    const w = a.slice(Math.max(0, i - 2), i + 3);
+    return (w.reduce((x, y) => x + y, 0) / w.length) * k;
+  });
+  const xs = sm(P.map((p) => p.x));
+  const ys = sm(P.map((p) => p.y));
+  const vAt = (t: number) => {
+    const j = real.findIndex((c) => c.t >= t);
+    return j <= 0 ? real[Math.max(0, j)].v : real[j - 1].v + ((real[j].v - real[j - 1].v) * (t - real[j - 1].t)) / Math.max(1e-6, real[j].t - real[j - 1].t);
+  };
+  const dAt = (t: number) => {
+    const j = real.findIndex((c) => c.t >= t);
+    return j < 0 ? realLen : realD[Math.max(0, j)];
+  };
+  for (let i = 3; i < P.length - 3; i++) {
+    const [ax, ay, bx, by, cx, cy] = [xs[i - 3], ys[i - 3], xs[i], ys[i], xs[i + 3], ys[i + 3]];
+    const a = Math.hypot(bx - ax, by - ay), b = Math.hypot(cx - bx, cy - by), c = Math.hypot(cx - ax, cy - ay);
+    if (a * b * c < 1e-6) continue;
+    const kap = (2 * Math.abs((bx - ax) * (cy - ay) - (by - ay) * (cx - ax))) / (a * b * c);
+    const v = vAt(P[i].t) / 3.6;
+    realAyAt.push({ d: dAt(P[i].t), g: (v * v * kap) / 9.81 });
+  }
+}
+
 // ---- Simulated lap: autopilot from a flying start, second lap recorded
 const root = carKind === 'vf26' ? null : loadGlbGeometry(`public${track.meshUrl}`);
 const car: SimulatorCar =
@@ -56,7 +92,7 @@ car.resetToStartGrid(true);
 car.aiAutopilot = true;
 car.aiPaceScale = pace;
 const DT = 1 / 120;
-const sim: { t: number; s: number; v: number }[] = [];
+const sim: { t: number; s: number; v: number; g: number }[] = [];
 let lap = 0;
 let prevS = car.sMeters;
 let lapT = 0;
@@ -71,7 +107,7 @@ for (let t = 0; t < 600 && lap < 2; t += DT) {
   }
   prevS = s;
   lapT += DT;
-  if (lap === 1) sim.push({ t: lapT, s, v: car.vxMs * 3.6 });
+  if (lap === 1) sim.push({ t: lapT, s, v: car.vxMs * 3.6, g: Math.abs(car.telemetry.lateralG) });
 }
 
 // ---- Resample both on lap fraction
@@ -103,6 +139,9 @@ for (let k = -N / 10; k <= N / 10; k++) {
   }
 }
 const svA = Float64Array.from({ length: N }, (_, i) => sv[(i + bestShift + N) % N]);
+const sg = resample(sim.map((x) => x.s), sim.map((x) => x.g), L);
+const sgA = Float64Array.from({ length: N }, (_, i) => sg[(i + bestShift + N) % N]);
+const rg = realAyAt.length ? resample(realAyAt.map((p) => p.d), realAyAt.map((p) => p.g), realLen) : null;
 
 // Corners: local minima of the real speed (±3 % of the lap), at least 25 km/h below the surrounding maxima
 const corners: number[] = [];
@@ -128,12 +167,19 @@ console.log(`\n${carKind} vs real lap on ${trackId} (track ${f(L, 0)} m, real la
 console.log(`  lap time      sim ${f(simLapTime, 3)} s   real ${f(ref.lap.lap_duration, 3)} s   ${f(((simLapTime - ref.lap.lap_duration) / ref.lap.lap_duration) * 100)} %`);
 console.log(`  top speed     sim ${f(Math.max(...svA))}   real ${f(Math.max(...rv))} km/h`);
 console.log(`  mean speed    sim ${f(svA.reduce((a, b) => a + b, 0) / N)}   real ${f(rv.reduce((a, b) => a + b, 0) / N)} km/h`);
-console.log('\n  corner  at lap %   real min   sim min   diff');
+console.log('\n  corner  at lap %   real min   sim min   diff      real g   sim g   (peak g within ±3 % of the lap)');
 let sumPct = 0;
 corners.forEach((i, n) => {
   const r = minNear(rv, i);
   const s = minNear(svA, i);
   sumPct += (s - r) / r;
-  console.log(`  ${String(n + 1).padStart(6)}  ${f((i / N) * 100).padStart(8)}   ${f(r).padStart(8)}  ${f(s).padStart(8)}   ${((s - r) / r * 100 >= 0 ? '+' : '') + f(((s - r) / r) * 100)} %`);
+  const maxNear = (arr: Float64Array | null, j: number) => {
+    if (!arr) return NaN;
+    let m = 0;
+    for (let k = -W; k <= W; k++) m = Math.max(m, arr[(j + k + N) % N]);
+    return m;
+  };
+  const dp = `${((s - r) / r) * 100 >= 0 ? '+' : ''}${f(((s - r) / r) * 100)} %`;
+  console.log(`  ${String(n + 1).padStart(6)}  ${f((i / N) * 100).padStart(8)}   ${f(r).padStart(8)}  ${f(s).padStart(8)}   ${dp.padStart(7)}   ${f(maxNear(rg, i), 2).padStart(6)}  ${f(maxNear(sgA, i), 2).padStart(6)}`);
 });
 console.log(`  mean corner-speed difference: ${f((sumPct / Math.max(1, corners.length)) * 100)} %`);
