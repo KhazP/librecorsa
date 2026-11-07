@@ -339,6 +339,11 @@ export class F1Physics2026 {
   private walls?: WallQuery;
   /** 3D surface colliders from the track GLB (`Track_Surface_Kerb`, etc.) */
   private ground?: GroundQuery;
+  /**
+   * The circuit's kerbs exist only as meshes (a converted circuit, `conformSurfaces`): its track samples miss some, so
+   * the wheels also read the kerb colliders; elsewhere the samples' kerb profile is the kerb
+   */
+  private meshKerbs = false;
   private readonly wallIds = new Int32Array(256);
   private readonly wallQueryRadius = Math.max(...this.wallProbePoints.map(([x, z]) => Math.hypot(x, z))) + 0.5;
 
@@ -971,6 +976,7 @@ export class F1Physics2026 {
     peer.aiAutoTyres = true;
     if (this.walls) peer.setWalls(this.walls);
     if (this.ground) peer.ground = this.ground;
+    peer.meshKerbs = this.meshKerbs;
     return peer;
   }
 
@@ -1060,9 +1066,10 @@ export class F1Physics2026 {
 
   /** Collide with the loaded track GLB's barrier walls (`Track_Collider_Wall_*`) and 3D kerb surfaces (`Track_Surface_Kerb`) */
   public attachTrackRoot(root: THREE.Object3D): void {
-    const { ground, walls } = trackColliders(root);
+    const { ground, walls, conformSurfaces } = trackColliders(root);
     this.setWalls(walls.segments.length > 0 ? walls : undefined);
     this.ground = ground ?? undefined;
+    this.meshKerbs = conformSurfaces && ground !== null;
     this.syncWorldTransform();
     this.updateTyreVisuals();
   }
@@ -2076,8 +2083,8 @@ export class F1Physics2026 {
     const dRight = dx * sample.binormal.x + dz * sample.binormal.z;
     const plane = contact.zRoad + dFwd * sample.slopeSin - dRight * Math.sin(contact.bankRad);
     const c = queryWheelGroundContact(this.track, x, z, this.patchApproxS, this.patchSpeed);
-    if (this.ground && c.surfaceType !== 'kerb') {
-      if (this.ground.query(x, z, c.zRoad + 0.6, _groundHit) && _groundHit.surface === 'kerb') {
+    if (this.meshKerbs && c.surfaceType !== 'kerb') {
+      if (this.ground!.query(x, z, c.zRoad + 0.6, _groundHit) && _groundHit.surface === 'kerb') {
         const ripple = surfaceRippleM(_groundHit.props, this.patchApproxS + dFwd, 1.0);
         c.bumpM = Math.max(c.bumpM, 0.018 + ripple * Math.min(1, this.patchSpeed / 8));
       }
@@ -2090,8 +2097,8 @@ export class F1Physics2026 {
     for (const w of this.wheels) {
       const approxS = this.sMeters + w.staticPos.x;
       const contact = queryWheelGroundContact(this.track, w.worldPos.x, w.worldPos.z, approxS, speed);
-      if (this.ground) {
-        if (this.ground.query(w.worldPos.x, w.worldPos.z, contact.zRoad + 0.6, _groundHit) && _groundHit.surface === 'kerb') {
+      if (this.meshKerbs) {
+        if (this.ground!.query(w.worldPos.x, w.worldPos.z, contact.zRoad + 0.6, _groundHit) && _groundHit.surface === 'kerb') {
           contact.surfaceType = 'kerb';
           contact.frictionMult = _groundHit.grip;
           const ripple = surfaceRippleM(_groundHit.props, approxS, 1.0);
@@ -2105,8 +2112,9 @@ export class F1Physics2026 {
       this.patchWheel = w;
       this.patchContact = contact;
       this.patchSample = sample;
-      this.patchNearKerb =
-        contact.surfaceType === 'kerb' || Math.abs(contact.lateralOffsetM) > contact.halfWidthM - 1.5;
+      this.patchNearKerb = this.meshKerbs
+        ? contact.surfaceType === 'kerb' || Math.abs(contact.lateralOffsetM) > contact.halfWidthM - 1.5
+        : Math.abs(contact.lateralOffsetM) > contact.halfWidthM - 0.65;
       this.patchApproxS = approxS;
       this.patchSpeed = speed;
       const patch = sample5PointContactPatch(
