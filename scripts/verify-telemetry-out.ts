@@ -98,6 +98,8 @@ const expected: TelemetryOutPacket = {
   abs: false,
   tc: true,
   ffb: -0.123,
+  oversteerPct: 0,
+  understeerPct: 0,
 };
 
 console.log('Packet mapping');

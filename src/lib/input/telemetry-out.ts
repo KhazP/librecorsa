@@ -1,7 +1,7 @@
 import type { CarTelemetry } from "@/types/f1";
-import { RACK_SAT_HIGH_IMPACT_G, stepRackSat } from "./wheel-ffb";
+import { handlingCues } from "@/lib/sim/handling-cues";
 
-/** Compact telemetry for dashboards / motion rigs / bass shakers, sent ~60 Hz; field names stable (document each with a comment and its unit) */
+/** Compact telemetry for dashboards / SimHub / bass shakers, sent ~60 Hz; field names stable (document each with a comment and its unit) */
 export interface TelemetryOutPacket {
   /** Packet format version */
   v: 1;
@@ -85,10 +85,10 @@ export interface TelemetryOutPacket {
   tc: boolean;
   /** Steering wheel torque from the tyres, -1..1 (+ = turning the rim right) */
   ffb: number;
-  /** Rear oversteer self-aligning shaker intensity (%, 0..100; present when slip angles or shaker channels are supplied) */
-  oversteerPct?: number;
-  /** Front understeer self-aligning shaker intensity (%, 0..100; present when slip angles or shaker channels are supplied) */
-  understeerPct?: number;
+  /** Oversteer: the rear tyres past their grip while the fronts still hold (%, 0..100) */
+  oversteerPct: number;
+  /** Understeer: the front tyres past their grip while the rears still hold (%, 0..100) */
+  understeerPct: number;
 }
 
 /** Values the telemetry does not carry on CarTelemetry itself */
@@ -107,10 +107,6 @@ export interface TelemetryOutExtra {
   rollRad: number;
   /** Milliseconds since page load */
   nowMs: number;
-  /** Optional precomputed rear oversteer shaker intensity (%, 0..100) */
-  oversteerPct?: number;
-  /** Optional precomputed front understeer shaker intensity (%, 0..100) */
-  understeerPct?: number;
 }
 
 type Quad = [number, number, number, number];
@@ -135,9 +131,12 @@ const surfaces = (a: readonly unknown[] | undefined): [string, string, string, s
   return [s(a?.[0]), s(a?.[1]), s(a?.[2]), s(a?.[3])];
 };
 
+const _cues = { understeer: 0, oversteer: 0 };
+
 /** Maps the sim's per-frame telemetry to the compact dashboard packet (wheel arrays are FL, FR, RL, RR) */
 export function buildTelemetryPacket(t: CarTelemetry, extra: TelemetryOutExtra): TelemetryOutPacket {
   const f12 = t.f12026;
+  const cues = handlingCues(t, _cues);
   return {
     v: 1,
     car: extra.car,
@@ -180,37 +179,7 @@ export function buildTelemetryPacket(t: CarTelemetry, extra: TelemetryOutExtra):
     abs: f12?.absActive ?? false,
     tc: f12?.tcActive ?? false,
     ffb: round(t.ffbTorqueNorm, 3, -1, 1),
-    ...(extra.oversteerPct !== undefined ||
-    extra.understeerPct !== undefined ||
-    t.rearSlipAngleDeg !== undefined ||
-    t.frontSlipAngleDeg !== undefined ||
-    t.wheelSlipAnglesDeg !== undefined
-      ? (() => {
-          const highImpact = Math.hypot(num(t.lateralG), num(t.longitudinalG)) > RACK_SAT_HIGH_IMPACT_G;
-          if (highImpact) {
-            return { oversteerPct: 0, understeerPct: 0 };
-          }
-          if (extra.oversteerPct !== undefined || extra.understeerPct !== undefined) {
-            return {
-              oversteerPct: round(extra.oversteerPct, 1, 0, 100),
-              understeerPct: round(extra.understeerPct, 1, 0, 100),
-            };
-          }
-          const sat = stepRackSat({
-            speedKmh: t.speedKmh,
-            rearSlipAngleDeg: t.rearSlipAngleDeg,
-            frontSlipAngleDeg: t.frontSlipAngleDeg,
-            wheelSlipAnglesDeg: t.wheelSlipAnglesDeg,
-            steering: t.steering,
-            yawRateRadS: extra.yawRateRadS,
-            lateralG: t.lateralG,
-            longitudinalG: t.longitudinalG,
-          });
-          return {
-            oversteerPct: round(sat.oversteerIntensityPct, 1, 0, 100),
-            understeerPct: round(sat.understeerIntensityPct, 1, 0, 100),
-          };
-        })()
-      : {}),
+    oversteerPct: round(cues.oversteer * 100, 1, 0, 100),
+    understeerPct: round(cues.understeer * 100, 1, 0, 100),
   };
 }
