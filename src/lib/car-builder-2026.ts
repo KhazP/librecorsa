@@ -2,7 +2,7 @@ import * as THREE from "three";
 import type { CarTelemetry, LiveryConfig, TireCompound } from "@/types/f1";
 import { SATIN_PAINT } from "@/lib/render/paint-finish";
 import { AMR26_MODEL_URL, attachVf26Model, loadVf26Template, type Vf26ModelInstance } from "@/lib/vf26-car-model";
-import type { TyreVisualState } from "@/lib/sim/simulator-car";
+import type { WheelSeating } from "@/lib/render/corner-rig";
 import { moveToDriverHeadLayer } from "@/lib/render/layers";
 
 /** What the simulator drives on any car rig (the F1 rig below, or the GT3's in gt3-car-model) */
@@ -22,8 +22,8 @@ export interface SimCarRig {
     rollRad: number,
     wheelRotationRad: number,
     dtSeconds?: number,
-    /** Per-wheel tyre deformation inputs (FR, FL, RR, RL), when the physics provides them */
-    tyres?: readonly TyreVisualState[]
+    /** The physics' tyres, ground and drawn pose, when it gives them: they deform the tyres and seat the wheels */
+    wheels?: WheelSeating
   ) => void;
   /** Detach from the scene and free per-instance resources */
   dispose: () => void;
@@ -2609,12 +2609,12 @@ export function createF1Car2026(
     rollRad: number,
     wheelRotationRad: number,
     _dtOrOffset = 0,
-    tyres?: readonly TyreVisualState[]
+    wheels?: WheelSeating
   ) => {
     chassisGroup.rotation.x = pitchRad;
     chassisGroup.rotation.z = rollRad;
     if (vf26) {
-      vf26.update(telemetry, wheelRotationRad, _dtOrOffset > 0 && _dtOrOffset < 0.25 ? _dtOrOffset : 1 / 60, tyres);
+      vf26.update(telemetry, wheelRotationRad, _dtOrOffset > 0 && _dtOrOffset < 0.25 ? _dtOrOffset : 1 / 60, wheels);
       return;
     }
 

@@ -8,10 +8,17 @@
  * comparison: on the rigid-body model that plane heaves, pitches and rolls with the body.
  */
 import * as THREE from 'three';
-import { cornerRoadHeight, updateCorners, WHEEL_NODES, WHEEL_SIDES, type RigCorner } from '../../src/lib/render/corner-rig';
+import {
+  cornerRoadHeight,
+  updateCorners,
+  WHEEL_NODES,
+  WHEEL_SIDES,
+  type RigCorner,
+  type WheelSeating,
+} from '../../src/lib/render/corner-rig';
 import { installTyreDeformation } from '../../src/lib/render/tyre-deformation';
 import { createGroundHit } from '../../src/lib/sim/f12026-car/TrackColliderQuery';
-import type { F12026CarSim } from '../../src/lib/sim/f12026-car/F12026CarSim';
+import type { SimulatorCar } from '../../src/lib/sim/simulator-car';
 
 /**
  * How far a loaded tyre's flattened bottom may sit from the collider under it (mm). What is left is the tyre's own
@@ -79,10 +86,11 @@ function buildRig(extras: PortedWheelExtras, chassis: { wheelbase: number; front
 
 /**
  * Drives `sim` on its autopilot from the grid for `seconds` and returns, per car, the range of tyre bottom − road
- * over the corners whose tyre is loaded (a wheel off the ground may float). `sim` must have its track colliders.
+ * over the corners whose tyre is loaded (a wheel off the ground may float). `sim` must have its track colliders and
+ * give its tyres' state; the rigs are seated the way the simulator seats the player's car, on the sim's own pose.
  */
 export function measurePortedWheelContact(
-  sim: F12026CarSim,
+  sim: SimulatorCar,
   ground: { query(x: number, z: number, probeY: number, out: ReturnType<typeof createGroundHit>): boolean },
   cars: Record<string, PortedWheelExtras>,
   chassis: { wheelbase: number; frontWeightFraction: number },
@@ -93,6 +101,14 @@ export function measurePortedWheelContact(
   for (const id of Object.keys(cars)) {
     out[id] = { minMm: Infinity, maxMm: -Infinity, bodyFrameMinMm: Infinity, bodyFrameMaxMm: -Infinity, samples: 0, topSpeedKmh: 0 };
   }
+  const tyres = sim.tyreVisuals;
+  if (!tyres) throw new Error('measurePortedWheelContact: the sim gives no tyre state');
+  const wheels: WheelSeating = {
+    tyres,
+    ground: sim.groundQuery ?? null,
+    position: sim.worldPosition,
+    quaternion: sim.worldQuaternion,
+  };
   sim.resetToStartGrid(false);
   sim.aiAutopilot = true;
   const hit = createGroundHit();
@@ -102,11 +118,10 @@ export function measurePortedWheelContact(
   for (let i = 0; i * dt < seconds; i++) {
     sim.step(dt, {});
     if (i * dt < settleS) continue;
-    const tyres = sim.tyreVisuals;
     const roadWheel = -sim.telemetry.steering * sim.maxSteerAngleRad;
     const speedKmh = Math.abs(sim.vxMs) * 3.6;
     for (const [id, rig] of Object.entries(rigs)) {
-      updateCorners(rig.corners, roadWheel, sim.wheelRotationRad, tyres);
+      updateCorners(rig.corners, roadWheel, sim.wheelRotationRad, wheels);
       const range = out[id];
       range.topSpeedKmh = Math.max(range.topSpeedKmh, speedKmh);
       rig.corners.forEach((c, k) => {
@@ -114,7 +129,7 @@ export function measurePortedWheelContact(
         const squash = c.tyre?.axleDropM ?? 0;
         // The flattened patch: the steer pivot less the squashed radius (its x, z stay put under steering)
         p.set(c.steer.position.x, c.steer.position.y - (rig.radius[k] - squash), c.steer.position.z);
-        const roadInCar = cornerRoadHeight(c, tyres);
+        const roadInCar = cornerRoadHeight(c, wheels);
         p.applyQuaternion(sim.worldQuaternion).add(sim.worldPosition);
         if (!ground.query(p.x, p.z, p.y + 0.6, hit)) return;
         const errMm = (p.y - hit.height) * 1000;

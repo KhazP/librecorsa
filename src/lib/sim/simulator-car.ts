@@ -16,6 +16,7 @@ import type {
   TyreSetup,
 } from '@/types/f1';
 import type { VehicleWheelState } from './vehicle-types';
+import type { GroundQuery } from './f12026-car/TrackColliderQuery';
 import type { SteeringAssistSettings, SteeringSource } from './steering-assist';
 import type { BrakingGuide } from './speed-profile';
 
@@ -33,17 +34,19 @@ export interface TyreVisualState {
   /** Camber leaning toward +left relative to the road (rad) */
   camberRad: number;
   /**
-   * Bottom of the tyre in the car frame (`worldPosition` / `worldQuaternion`, m): the road under a loaded tyre, the
-   * hub less the unloaded radius for a tyre off the ground. Set by models whose car frame rides on the sprung body
-   * (the rigid-body model), so the rigs put the unsprung wheels on the road rather than carrying them with the body's
-   * heave, pitch and roll. Absent: the car frame's origin plane is the road under the wheels.
+   * Bottom of the tyre in the car frame (`worldPosition` / `worldQuaternion`, m): the road under a tyre `onRoad`, the
+   * hub less the unloaded radius for a tyre off the ground. On the rigid-body model the car frame rides on the sprung
+   * body, so the rigs put the unsprung wheels here rather than carrying them with the body's heave, pitch and roll;
+   * a tyre on the road is then seated on the car's ground under the model's own corner (`seatCorner`). Absent: the
+   * car frame's origin plane is the road under the wheels.
    */
   contactInCar?: { x: number; y: number; z: number };
   /**
-   * Optional exact car-frame road height (m) at a rig corner's own `(x, z)` in the car frame, used when a 3D car
-   * model's wheelbase or track width differs from the physics vehicle's on cambered/sloped/kerbed surfaces.
+   * The tyre stands on the road: its contact is the road under it, and the rigs seat it on the car's ground under
+   * the model's own corner (`seatCorner`). False for a rigid-body tyre off the ground, which hangs at `contactInCar`.
+   * The VF26 draws no wheel travel (its body moves on the rig, its wheels stay on the road), so its tyres always do.
    */
-  roadHeightAtCorner?: (xInCar: number, zInCar: number) => number;
+  onRoad: boolean;
 }
 
 export interface SimulatorCar {
@@ -58,6 +61,11 @@ export interface SimulatorCar {
   readonly wheels: readonly [SimulatorWheel, SimulatorWheel, SimulatorWheel, SimulatorWheel];
   /** Optional visual tyre state per corner (FR, FL, RR, RL) for the GPU tyre deformation */
   readonly tyreVisuals?: readonly [TyreVisualState, TyreVisualState, TyreVisualState, TyreVisualState];
+  /**
+   * The track collider the car drives on, for reading only (the rigs seat the drawn wheels on it, `seatCorner`);
+   * null / absent while the car is on the track samples' ground
+   */
+  readonly groundQuery?: GroundQuery | null;
   readonly wheelbaseM: number;
   /** Static height of the centre of gravity above the ground (m) */
   readonly cgHeightM: number;

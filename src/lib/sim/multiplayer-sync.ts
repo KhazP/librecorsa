@@ -18,6 +18,8 @@
 import * as THREE from 'three';
 import { isVehicleModelId, type TireCompound, type VehicleModelId } from '@/types/f1';
 import { sanitizeWeatherSync, type WeatherSyncState } from './weather';
+import type { TyreVisualState } from './simulator-car';
+import type { GroundQuery } from './f12026-car/TrackColliderQuery';
 
 const PEER_COMPOUNDS: readonly TireCompound[] = ['soft', 'medium', 'hard', 'intermediate', 'wet'];
 /** Network input is untrusted: only a known model id is kept */
@@ -114,6 +116,12 @@ export interface InterpolatedPeerState {
   gear?: number;
   /** Touched another car this frame (the AI field's contact solver) */
   contact?: boolean;
+  /**
+   * The car's track collider and, from the AI field, its own tyres: the rig seats its wheels per corner at the drawn
+   * pose as it does the player's, so the body keeps its heave (a replayed AI car, without tyres, rests its wheels on
+   * the road). Absent (remote players, the ghost): the wheels stay on the car frame's origin plane.
+   */
+  wheels?: { tyres?: readonly TyreVisualState[]; ground: GroundQuery | null };
 }
 
 export type CollisionMode = 'on' | 'ghost_lap1' | 'off';

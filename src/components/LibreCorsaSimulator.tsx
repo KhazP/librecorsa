@@ -7,6 +7,7 @@ import { F1Physics2026, type ControlInputs } from "@/lib/f1-physics-2026";
 import { F12026CarSim } from "@/lib/sim/f12026-car/F12026CarSim";
 import { trackColliders } from "@/lib/sim/track-colliders";
 import type { SimulatorCar } from "@/lib/sim/simulator-car";
+import type { WheelSeating } from "@/lib/render/corner-rig";
 import { F1AudioEngine2026 } from "@/lib/f1-audio-2026";
 import { createF1Car2026, type SimCarRig } from "@/lib/car-builder-2026";
 import { createGt3CarRig, gt3RigCameraAnchors } from "@/lib/gt3-car-model";
@@ -1782,6 +1783,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       trackS: 0,
       speedKmh: car.speedKmh,
       isAiPeer: true,
+      // The frames hold the body's pose: the rig rests the wheels on the road under each corner
+      wheels: { ground: physics.groundQuery ?? null },
     });
     /** Look of every car seen in the replay window (the frames only hold poses) */
     const replayNames = new Map<string, { code: string; color: string; vehicle?: VehicleModelId }>();
@@ -1833,6 +1836,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     // Horizon-Stabilized Sim Camera State
     /** The player car drawn at the frame time (its physics pose carried forward by the unstepped remainder) */
     const renderCarPos = new THREE.Vector3();
+    /** The player car's tyres on its ground, at the pose it is drawn at (refreshed in place every frame) */
+    const playerWheels: WheelSeating = { ground: null, position: renderCarPos, quaternion: new THREE.Quaternion() };
     const smoothedHeliPos = new THREE.Vector3();
     const smoothedHeliLook = new THREE.Vector3();
     // Cockpit extras, created once the VF26 model has loaded: the wheel's LCD and the live wing mirrors
@@ -2518,13 +2523,18 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       carRig.root.position.copy(renderCarPos);
       carRig.root.quaternion.copy(physics.worldQuaternion);
       carRig.chassisGroup.position.y = physics.rideHeightOffsetM;
+      if (physics.tyreVisuals) {
+        playerWheels.tyres = physics.tyreVisuals;
+        playerWheels.ground = physics.groundQuery ?? null;
+        playerWheels.quaternion = physics.worldQuaternion;
+      }
       carRig.updateFromTelemetry(
         physics.telemetry,
         physics.pitchRad,
         physics.rollRad,
         physics.wheelRotationRad,
         dtSeconds,
-        physics.tyreVisuals
+        physics.tyreVisuals ? playerWheels : undefined
       );
 
       const vf26Body = carRig.getVf26Body();
