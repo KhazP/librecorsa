@@ -1,6 +1,7 @@
 /**
  * Checks the gamepad rumble mix without a browser: headroom layering, per-wheel roughness from shock velocity, the
- * impact pulse, and that the trigger cues are untouched by it:
+ * impact pulse, that the trigger pulses are untouched by it, and that the brake trigger's limit buzz reads braking
+ * slip only:
  *   npx tsx scripts/verify-gamepad-rumble.ts
  */
 import assert from 'node:assert/strict';
@@ -14,6 +15,7 @@ import {
   type RumbleMixState,
   triggerMagnitudes,
 } from '../src/lib/sim/gamepad-haptics';
+import { axleSlipFromTelemetry } from '../src/lib/sim/tyre-slip';
 
 let passed = 0;
 function check(name: string, fn: () => void) {
@@ -213,6 +215,40 @@ check('ABS, lock-up and TC trigger pulses are unchanged, in a crash too', () => 
   assert.equal(triggerMagnitudes(tc, 0.03).right, 0);
   const abs = cruise({ ...braking, speedKmh: 20, wheelSlipRatios: [-0.05, 0, 0, 0], f12026: { absActive: true, tcActive: false } });
   assert.ok(triggerMagnitudes(abs, 0).left >= 0.35);
+});
+
+check('braking part of the slip: all of it braking in a straight line, none cornering or under power', () => {
+  const slip = (nd: number, slipRatio: number, angleDeg: number) =>
+    axleSlipFromTelemetry({ tireSlipRatio: four(nd), wheelSlipRatios: four(slipRatio), wheelSlipAnglesDeg: four(angleDeg), wheelLoadsN: four(3000) });
+  near(slip(0.9, -0.09, 0).brakeNdSlip, 0.9);
+  near(slip(0.9, 0, 7).brakeNdSlip, 0);
+  near(slip(0.9, 0.08, 0).brakeNdSlip, 0, 1e-12);
+  const trail = slip(0.9, -0.06, 4).brakeNdSlip;
+  assert.ok(trail > 0.3 && trail < 0.9, `trail braking counts in part (${trail.toFixed(3)})`);
+  near(slip(0.9, 0, 7).totalNdSlip, 0.9, 1e-12); // the combined slip the steering assist reads is unchanged
+});
+check('aids off: the brake trigger buzzes for braking slip, not for cornering at the limit while braking', () => {
+  const absOff = { absLevel: 0, tcLevel: 5 };
+  const at = (nd: number, slipRatio: number, angleDeg: number) =>
+    triggerMagnitudes(
+      cruise({
+        speedKmh: 120,
+        throttle: 0,
+        brake: 0.6,
+        tireSlipRatio: four(nd),
+        wheelSlipRatios: four(slipRatio),
+        wheelSlipAnglesDeg: four(angleDeg),
+        wheelLoadsN: four(3000),
+        liveTuner: absOff,
+      }),
+      0
+    ).left;
+  assert.equal(at(0.95, -0.01, 7), 0, 'cornering at the limit, braking lightly: no buzz (combined slip would have)');
+  const straight = at(0.8, -0.08, 0.5);
+  assert.ok(straight > 0.1, `approaching a lock-up: buzz (${straight.toFixed(3)})`);
+  const trail = at(0.8, -0.06, 4);
+  assert.ok(trail > 0 && trail < straight, `trail braking: lighter (${trail.toFixed(3)})`);
+  near(at(1.4, -0.3, 0), 0.35 + 0.45 * (0.3 / 0.45)); // locked: the lock-up pulse, as before
 });
 
 /** Replaces navigator.getGamepads for one block, then restores it */
