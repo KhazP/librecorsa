@@ -11,7 +11,7 @@
  *
  * Logitech wheels do not speak HID PID. The G25, G27, Driving Force GT and G29 (LOGITECH_CLASSIC_WHEELS in
  * wheel-support.ts) take the classic Logitech commands, sent as Linux hid-lg4ff sends them
- * ({@link setupLogitechClassicDevice}); any other Logitech wheel is refused and stays on the bridge.
+ * ({@link setupLogitechClassicDevice}); any other Logitech device without a PID descriptor is refused (bridge).
  *
  * Sign convention: `WebHidFfb.setForce` takes the raw PID magnitude, −1..1 over the field's logical range. A PID /
  * DirectInput direction says where the force comes from, so + magnitude along +X (90°) pushes the rim left and − pushes
@@ -196,7 +196,7 @@ export interface PidLayout {
   deviceControl: PidReportLayout | null;
   deviceGain: PidReportLayout | null;
   blockFree: PidReportLayout | null;
-  /** Feature / input reports */
+  /** Feature reports */
   createNewEffect: PidReportLayout | null;
   blockLoad: PidReportLayout | null;
   /** Set Effect offers the Damper condition effect (0x41) and there is a Set Condition report */
@@ -634,7 +634,7 @@ export interface PidSession extends SessionBase {
 export interface LogitechClassicSession extends SessionBase {
   kind: "logitech-classic";
   model: LogitechClassicModel;
-  /** Writes one 7-byte lg4ff command straight to the wheel (setup and teardown, outside `writer`) */
+  /** Writes one 7-byte lg4ff command to the wheel; called directly only at setup and teardown, else through `writer` */
   send: (bytes: readonly number[]) => Promise<void>;
   /** Rotation lock to lock (deg), a stream of `writer`; values outside 40..900 are ignored, as lg4ff_range_store does */
   setRange: (deg: number) => void;
