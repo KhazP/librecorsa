@@ -22,6 +22,9 @@ function ramp(x: number, a: number, b: number): number {
   return u <= 0 ? 0 : u >= 1 ? 1 : u;
 }
 
+/** A smoothing step `k` tuned per 60 Hz frame, for a frame of `dt` seconds (CarAudio's convention) */
+const per60 = (k: number, dt: number) => 1 - Math.pow(1 - k, dt * 60);
+
 export class ContactAcousticsRig {
   private readonly ctx: AudioContext;
   private readonly out: BiquadFilterNode;
@@ -119,8 +122,6 @@ export class ContactAcousticsRig {
     let rattle = 0;
     let brake = 0;
     let brakeWheel = 0;
-    let debris = 0;
-    let click = false;
 
     for (let i = 0; i < 4; i++) {
       // The tread's own speed: it runs ahead of the car in wheelspin and stops when the wheel locks
@@ -128,7 +129,7 @@ export class ContactAcousticsRig {
 
       // Road roar on asphalt only: 'runoff' also stands for the gravel traps
       const onAsphalt = t.wheelSurfaces[i] === 'asphalt';
-      this.roarFade[i] += ((onAsphalt ? 1 : 0) - this.roarFade[i]) * Math.min(1, (onAsphalt ? 10 : 20) * dt);
+      this.roarFade[i] += ((onAsphalt ? 1 : 0) - this.roarFade[i]) * per60(onAsphalt ? 1 / 6 : 1 / 3, dt);
       const roll = (Math.max(speed, tread) * 0.015) ** 1.1;
       const slide = Math.min(1, Math.max(0, t.tireSlipRatio[i] ?? 0) / 5);
       roar += (0.2 + 0.2 * ramp(t.wheelLoadsN[i] ?? 0, 0, 13000)) * (1 - 0.33 * slide * slide) * roll * this.roarFade[i];
@@ -143,7 +144,7 @@ export class ContactAcousticsRig {
       }
       if (this.seeded && dt > 1e-6) {
         const accel = Math.abs((shockVel - this.prevShockVel[i]) / dt);
-        this.shockAccel[i] += (accel - this.shockAccel[i]) * (accel > this.shockAccel[i] ? 0.5 : 0.06);
+        this.shockAccel[i] += (accel - this.shockAccel[i]) * per60(accel > this.shockAccel[i] ? 0.5 : 0.06, dt);
       }
       this.prevShockVel[i] = shockVel;
       rattle = Math.max(rattle, Math.min(1, this.shockAccel[i] / 80) ** 2);
@@ -156,7 +157,7 @@ export class ContactAcousticsRig {
       const window = ((gt ? 2 : 0.8) * rolling * (1 - ramp(pedal, 0.2, 0.6))) ** 0.8 * ramp(pedal, 0.05, 0.2);
       const share = i < 2 ? frontBias : 1 - frontBias;
       const target = pedal * share * window * tempGate;
-      this.brakeLevel[i] = Math.min(1, Math.max(0, this.brakeLevel[i] + (target - this.brakeLevel[i]) * Math.min(1, 10 * dt)));
+      this.brakeLevel[i] = Math.min(1, Math.max(0, this.brakeLevel[i] + (target - this.brakeLevel[i]) * per60(1 / 6, dt)));
       const level = this.brakeLevel[i];
       // Off the pedal the ring dies with the square of the level rather than hanging on
       const squeal = 0.6 * rolling * tempGate * level * (level + (1 - level) * ramp(pedal, 0, 0.05));
@@ -168,12 +169,17 @@ export class ContactAcousticsRig {
       // Debris: stones a tyre picked up off track flick into the wheel arch
       const dirt = Math.min(1, Math.max(0, t.tireDirtyLevel?.[i] ?? 0));
       if (dirt > 0.05 && speed > 1) {
-        debris = Math.max(debris, ramp(dirt, 0.05, 1) * (0.15 + 0.85 * ramp(speed, 1, 55)));
-        this.debrisPhase[i] += (3 + 35 * ramp(dirt, 0.05, 1)) * (0.2 + 0.8 * ramp(speed, 1, 60)) * dt;
-        if (this.debrisPhase[i] >= 1) {
-          click = true;
-          this.debrisPhase[i] -= Math.floor(this.debrisPhase[i]);
+        const peak = Math.min(0.05, Math.max(0.004, ramp(dirt, 0.05, 1) * (0.15 + 0.85 * ramp(speed, 1, 55)) * 0.045));
+        const rateHz = (3 + 35 * ramp(dirt, 0.05, 1)) * (0.2 + 0.8 * ramp(speed, 1, 60));
+        let phase = this.debrisPhase[i] + rateHz * dt;
+        // Each stone at its own moment within the frame, played a frame late: the rate holds at any frame rate
+        while (phase >= 1) {
+          phase -= 1;
+          const at = now + dt - phase / rateHz;
+          this.debrisGain.gain.setValueAtTime(peak, at);
+          this.debrisGain.gain.setTargetAtTime(0, at + 0.004, 0.008);
         }
+        this.debrisPhase[i] = phase;
       } else {
         this.debrisPhase[i] = 0;
       }
@@ -196,10 +202,5 @@ export class ContactAcousticsRig {
     this.brakeHarmonicOsc.frequency.setTargetAtTime(brakeHz * 1.414, now, 0.022);
     this.brakeFilter.frequency.setTargetAtTime(brakeHz, now, 0.022);
     this.brakeGain.gain.setTargetAtTime(brake * (interior ? 0.8 : 1) * 0.026, now, 0.022);
-
-    if (click) {
-      this.debrisGain.gain.setValueAtTime(Math.min(0.05, Math.max(0.004, debris * 0.045)), now);
-      this.debrisGain.gain.setTargetAtTime(0, now + 0.004, 0.008);
-    }
   }
 }
