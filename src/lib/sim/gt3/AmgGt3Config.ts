@@ -65,18 +65,10 @@ const ENGINE = {
     [8000, 100],
     [9500, 118.75],
   ] as LutPoints,
-  // [spec throttle.lut]
+  // Linear pedal [ref]: the earlier map gave 1.5× torque per pedal between 20 and 50 %, the range a driver feeds the power
+  // in on a corner exit, so the rears broke away on a small squeeze
   throttleResponseCurve: [
     [0, 0],
-    [0.1, 0.1],
-    [0.2, 0.2],
-    [0.3, 0.35],
-    [0.4, 0.5],
-    [0.5, 0.65],
-    [0.6, 0.7],
-    [0.7, 0.75],
-    [0.8, 0.8],
-    [0.9, 0.9],
     [1, 1],
   ] as LutPoints,
   idleRpm: 2100,
@@ -244,13 +236,13 @@ const toRake = (lut: LutPoints): LutPoints => lut.map(([aoa, v]) => [aoa - DIFFU
 
 /**
  * Downforce lost to body yaw (|air slip angle| deg → CL multiplier) [est]. The splitter sits in clean air; the
- * underbody's seal and the diffuser's expansion suffer more; the rear wing works in the cabin's wake, which swings
- * across it as the car slides, so it loses most. A few degrees of cornering slip cost the rear 1–3 %, a 10° slide
- * ≈16 % — the balance moves forward and a slide grows instead of settling.
+ * underbody's seal suffers more, and the rear wing works in the cabin's wake, which swings across it as the car slides,
+ * so it loses most: ≈ 2–3 % at 5°, 9 % at 10°. Between the second reference set's ≈ 1 % at 10° and the earlier 16 %,
+ * which moved the balance forward so far that a slide grew by itself.
  */
-const YAW_CL_SPLITTER: LutPoints = [[0, 1], [2, 0.996], [5, 0.975], [10, 0.93], [20, 0.82], [30, 0.7]];
-const YAW_CL_FLOOR: LutPoints = [[0, 1], [2, 0.99], [5, 0.96], [10, 0.89], [20, 0.72], [30, 0.6]];
-const YAW_CL_REAR_WING: LutPoints = [[0, 1], [2, 0.985], [5, 0.94], [10, 0.84], [20, 0.66], [30, 0.5]];
+const YAW_CL_SPLITTER: LutPoints = [[0, 1], [2, 0.998], [5, 0.99], [10, 0.965], [20, 0.88], [30, 0.78]];
+const YAW_CL_FLOOR: LutPoints = [[0, 1], [2, 0.997], [5, 0.985], [10, 0.95], [20, 0.84], [30, 0.72]];
+const YAW_CL_REAR_WING: LutPoints = [[0, 1], [2, 0.995], [5, 0.975], [10, 0.91], [20, 0.76], [30, 0.62]];
 
 /**
  * Splitter, diffuser and rear wing with angle-of-attack and ground-height maps; the body's drag is the
@@ -713,5 +705,10 @@ export const AMG_GT3_ELECTRONICS = {
   tcMinSpeedKmh: 40,
   // The TC lets the rears run p50 0.091 slip while it works [motec]; with the default 0.10 target that is a light
   // tightening at the ≈1.5 g of a typical corner (0.10 × (1 − 0.055·1.5^1.3) ≈ 0.091), not the F1 sim's 0.074 at 1.6 g
-  tcLateralTightening: { gain: 0.055, exponent: 1.3, floor: 0.8 },
+  tcLateralTightening: { gain: 0.055, exponent: 1.3, floor: 0.5 },
+  // Cornering-aware like a GT3 TC: once the rears slide past 65 % of their peak slip angle the wheelspin allowed
+  // shrinks, so a squeeze of throttle out of a slow corner drives the car instead of stepping the rear out (≈ 3° of slide
+  // at the default TC against 13°, and 9 km/h quicker 2 s after the apex), while a flat-out exit still moves the rear a
+  // few degrees before the cut catches it. Steady cornering and the [motec] slip are unchanged
+  tcDryRearSlide: { gain: 1.0, from: 0.65 },
 };

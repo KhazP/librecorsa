@@ -110,6 +110,12 @@ export interface CarElectronicsProfile {
    */
   tcLateralTightening?: { gain: number; exponent: number; floor: number };
   /**
+   * TC1 rear-slide term on a dry road: the slip target also shrinks by `gain` × (rear slip angle / peak − `from`), so a
+   * rear that already slides sideways gets less wheelspin before the cut, as a cornering-aware GT3 TC does. Absent: only
+   * in the wet (gain 0.22 from 0.45), the F1 calibration.
+   */
+  tcDryRearSlide?: { gain: number; from: number };
+  /**
    * ABS rear channels: the lock target × max(`floor`, 1 − `gain`·(|slip angle| − `deadbandRad`)), so a trail-braked rear
    * that already slides is held off the brakes. Default (an F1 calibration): gain 1.4, dead band 0.03 rad, floor 0.72.
    * Gain 0 = the rears regulate slip ratio only.
@@ -1447,11 +1453,10 @@ export class F12026CarSim implements SimulatorCar {
       const tight = elec.tcLateralTightening ?? DEFAULT_TC_LATERAL_TIGHTENING;
       const gLat = Math.abs(this.lastAyMs2) / G;
       const saLimitRad = Math.max(0.05, (this.compoundData.modelData.friction_limit_angle || DEFAULT_FRICTION_LIMIT_ANGLE_DEG) * DEG2RAD);
-      const saRearNorm =
-        v.waterMm > 0
-          ? Math.max(Math.abs(W[2].slipAngleRad), Math.abs(W[3].slipAngleRad)) / saLimitRad
-          : 0;
-      const latFactor = Math.max(tight.floor, 1 - tight.gain * Math.pow(gLat, tight.exponent) - 0.22 * Math.max(0, saRearNorm - 0.45));
+      const saRear = Math.max(Math.abs(W[2].slipAngleRad), Math.abs(W[3].slipAngleRad)) / saLimitRad;
+      const slide = v.waterMm > 0 ? { gain: 0.22, from: 0.45 } : elec.tcDryRearSlide;
+      const slideTerm = slide ? slide.gain * Math.max(0, saRear - slide.from) : 0;
+      const latFactor = Math.max(tight.floor, 1 - tight.gain * Math.pow(gLat, tight.exponent) - slideTerm);
       const tcEffTarget = tcBaseTarget * latFactor;
       // Weighted rear axle slip: 0.65 * max(k_LR, k_RR) + 0.35 * mean(k_LR, k_RR)
       const kL = Math.max(0, W[2].slipRatio);
