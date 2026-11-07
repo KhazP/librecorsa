@@ -32,6 +32,7 @@ import { loadGlbGeometry } from './lib/glb-geometry';
 import { createFlatTestTrack } from './lib/flat-track';
 import { checkBarrierCrashes, vehicleCrashCar } from './lib/barrier-crash';
 import { checkPlacementAndRecovery } from './lib/placement-recovery';
+import { steadyRamp, steerFor, stepSteer } from './lib/handling-tests';
 
 const failures: string[] = [];
 const check = (name: string, ok: boolean, detail: string) => {
@@ -915,6 +916,28 @@ console.log('\n== F12026CarSim (simulator adapter)');
     ch.drsOpenEvents > 0 && ch.AERO_BALANCE > 20 && ch.AERO_BALANCE < 60 && ch.AERO_HEIGHT > 0 && ch.drsDetection !== null,
     `AERO_BALANCE ${fmt(ch.AERO_BALANCE, 1)} %, AERO_HEIGHT ${fmt(ch.AERO_HEIGHT * 1000, 0)} mm, ${ch.drsOpenEvents} CHANGED_DRS_OPEN, last detection ${ch.drsDetection?.zone}`
   );
+}
+
+// High-speed stability (sea-level pad, aids off): a quick turn-in to the limit at 250 km/h must not spin the car, which
+// players reported as "no traction when turning at high speed, it slides and spins"
+{
+  console.log('\nHigh-speed stability...');
+  const pad = createFlatTestTrack(40_000, 3000);
+  const make = () => new F12026CarSim(pad);
+  for (const kmh of [250, 280]) {
+    const v = kmh / 3.6;
+    const ramp = steadyRamp(make, v, 12, 0.5);
+    const limit = steerFor(ramp, 1);
+    const inst = stepSteer(make, v, limit);
+    check(`${kmh} km/h: a step to the cornering limit does not spin`, !inst.spun, `yaw overshoot ${fmt(inst.overshootPct, 0)} %${inst.spun ? ', spun' : ''}`);
+    if (kmh !== 250) continue;
+    const iso = stepSteer(make, v, limit, 0.3);
+    check('250 km/h: the step to the limit over 0.3 s overshoots at most 30 %', !iso.spun && iso.overshootPct <= 30, `${fmt(iso.overshootPct, 0)} %`);
+    const part = stepSteer(make, v, steerFor(ramp, 0.7));
+    check('250 km/h: a step to 70 % of the limit overshoots at most 20 %', !part.spun && part.overshootPct <= 20, `${fmt(part.overshootPct, 0)} %`);
+    const over = stepSteer(make, v, Math.min(1, 2 * limit));
+    check('250 km/h: twice the limit steer runs wide, no spin', !over.spun, over.spun ? 'spun' : 'no spin');
+  }
 }
 
 console.log(failures.length ? `\n${failures.length} check(s) failed: ${failures.join(', ')}` : '\nAll f12026-car checks passed.');

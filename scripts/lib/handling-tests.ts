@@ -168,12 +168,16 @@ export interface StepResult {
   spun: boolean;
 }
 
-/** ISO 7401 step steer: straight, then the steer for `frac` of the peak g as fast as the rack allows */
-export function stepSteer(make: MakeCar, vMs: number, steerNorm: number): StepResult {
+/**
+ * ISO 7401 step steer: straight, then the steer `steerNorm` as fast as the rack allows, or ramped in over `rampS` (ISO
+ * asks for 200–500 °/s at the rim)
+ */
+export function stepSteer(make: MakeCar, vMs: number, steerNorm: number, rampS = 0): StepResult {
   const car = startCar(make, vMs);
   const hold = speedHold(vMs);
   const T0 = 0.5;
-  const s = drive(car, T0 + 3.5, (t) => (t < T0 ? 0 : steerNorm), (c) => ({ throttle: hold(c), brake: 0 }));
+  const at = (t: number) => (t < T0 ? 0 : rampS > 0 ? steerNorm * Math.min(1, (t - T0) / rampS) : steerNorm);
+  const s = drive(car, T0 + 3.5, at, (c) => ({ throttle: hold(c), brake: 0 }));
   const spun = s.some((x) => x.beta > SPIN_SLIP_RAD);
   const steerSs = Math.abs(s[s.length - 1].steer);
   const t50 = s.find((x) => x.t > T0 && Math.abs(x.steer) >= 0.5 * steerSs)?.t ?? T0;

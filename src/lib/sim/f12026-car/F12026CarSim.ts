@@ -189,7 +189,7 @@ export const F12026_SIM_PROFILE: CarSimProfile = {
   // Flat-ground steer ramps: 2.3 g at 100 km/h on 1.24 g of load (μ ≈ 1.8), falling with load
   padLateralMu: 1.75,
   // Flat-ground probes: 2.3 / 3.6 / 4.0 g lateral at 100 / 200 / 280 km/h, 4.3 g on the brakes from 300
-  braking: { lowG: 1.5, aeroG: 2.6, refMs: 70 },
+  braking: { lowG: 1.6, aeroG: 2.8, refMs: 70 },
 };
 
 /** How far inside the track edge the autopilot keeps the CG (m): half the track plus 0.4 m (1.2 m on the f12026-car) */
