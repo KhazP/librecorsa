@@ -533,6 +533,7 @@ export class F12026CarSim implements SimulatorCar {
   public readonly telemetry: CarTelemetry;
   public readonly worldPosition = new THREE.Vector3();
   public readonly worldQuaternion = new THREE.Quaternion();
+  public readonly worldVelocity = new THREE.Vector3();
   public readonly wheels: [AdapterWheel, AdapterWheel, AdapterWheel, AdapterWheel];
   /** Visual tyre state per corner (FR, FL, RR, RL), refreshed in `syncPose()`. Read-only for consumers. */
   public readonly tyreVisuals: [TyreVisualState, TyreVisualState, TyreVisualState, TyreVisualState];
@@ -1734,6 +1735,7 @@ export class F12026CarSim implements SimulatorCar {
     _ey.set(0, 1, 0).applyQuaternion(q);
     this.worldPosition.copy(v.position).addScaledVector(_ey, -this.config.chassis.cgHeight);
     this.worldQuaternion.copy(q);
+    this.worldVelocity.copy(v.velocity);
     _qInv.copy(q).invert();
     const p = this.track.projectWorldToTrack(this.worldPosition.x, this.worldPosition.z, this.poseHintS);
     this.poseHintS = p.s;

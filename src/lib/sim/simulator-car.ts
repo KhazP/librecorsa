@@ -46,6 +46,8 @@ export interface SimulatorCar {
   /** Ground-level origin of the car model and its orientation (model axes: +X left, +Y up, +Z forward) */
   readonly worldPosition: THREE.Vector3;
   readonly worldQuaternion: THREE.Quaternion;
+  /** True 3D world-space linear velocity (m/s) at the car origin, including vertical velocity on slopes */
+  readonly worldVelocity?: THREE.Vector3;
   /** Fixed-step models: simulated time not yet stepped this frame (s); the pose is drawn carried forward by it */
   readonly renderLeadS?: number;
   readonly wheels: readonly [SimulatorWheel, SimulatorWheel, SimulatorWheel, SimulatorWheel];

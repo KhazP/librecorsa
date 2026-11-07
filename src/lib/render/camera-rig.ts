@@ -721,11 +721,12 @@ export class DynamicChaseCamera {
       this.delta.subVectors(input.carPos, this.lastCarPos);
       const deltaLen = this.delta.length();
       this.lastCarPos.copy(input.carPos);
+      const hasExplicitVel = Boolean(input.carVelocity && Number.isFinite(input.carVelocity.x));
 
       if (deltaLen > CHASE_MAX_DELTA_M) {
         // Discontinuity / teleport: clamp delta so velocity never spikes
-        if (input.carVelocity && Number.isFinite(input.carVelocity.x)) {
-          this.carVelocityRaw.copy(input.carVelocity);
+        if (hasExplicitVel) {
+          this.carVelocityRaw.copy(input.carVelocity!);
           const vLen = this.carVelocityRaw.length();
           if (vLen > CHASE_MAX_DELTA_M / h) {
             this.carVelocityRaw.multiplyScalar(CHASE_MAX_DELTA_M / h / vLen);
@@ -735,10 +736,11 @@ export class DynamicChaseCamera {
           this.carVelocityRaw.copy(this.delta).divideScalar(h);
         }
         this.camDirLowSpeed.copy(this.carDirFlat);
+      } else if (hasExplicitVel && (input.carVelocity!.lengthSq() > 1e-6 || deltaLen <= 1e-6)) {
+        // Prefer exact 3D physics velocity over finite-differencing frame-extrapolated positions
+        this.carVelocityRaw.copy(input.carVelocity!);
       } else if (deltaLen > 1e-6) {
         this.carVelocityRaw.copy(this.delta).divideScalar(h);
-      } else if (input.carVelocity && Number.isFinite(input.carVelocity.x)) {
-        this.carVelocityRaw.copy(input.carVelocity);
       } else {
         this.carVelocityRaw.set(0, 0, 0);
       }

@@ -2277,11 +2277,13 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       builtCircuit.updateDynamicRacingLine(physics.sMeters, physics.vxMs, physics.brakingGuide);
 
       // Update 25 Hz BroadcastChannel + Cubic Hermite/Slerp Multiplayer & AI Opponents
-      const carVelocityWorld = new THREE.Vector3(
-        physics.vyMs,
-        0,
-        physics.vxMs
-      ).applyQuaternion(physics.worldQuaternion);
+      const carVelocityWorld = physics.worldVelocity
+        ? physics.worldVelocity.clone()
+        : new THREE.Vector3(
+            physics.vyMs,
+            0,
+            physics.vxMs
+          ).applyQuaternion(physics.worldQuaternion);
       const interpolatedPeers = multiplayerSync.update(
         nowMs,
         {
@@ -2493,8 +2495,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       // The fixed-step physics leaves up to 2 ms unstepped each frame: draw the car (and the cameras on it) where it
       // is at the frame's time, the pose carried forward by its velocity over that remainder
       renderCarPos
-        .set(physics.vyMs, 0, physics.vxMs)
-        .applyQuaternion(physics.worldQuaternion)
+        .copy(carVelocityWorld)
         .multiplyScalar(physics.renderLeadS ?? 0)
         .add(physics.worldPosition);
       carRig.root.position.copy(renderCarPos);

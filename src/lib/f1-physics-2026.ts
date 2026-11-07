@@ -499,6 +499,7 @@ export class F1Physics2026 {
   // Three.js world transform outputs
   public worldPosition = new THREE.Vector3();
   public worldQuaternion = new THREE.Quaternion();
+  public worldVelocity = new THREE.Vector3();
   public wheelRotationRad = 0;
   /** Visual tyre state per corner (FR, FL, RR, RL), refreshed at the end of each `step()`. Read-only for consumers. */
   public readonly tyreVisuals: [TyreVisualState, TyreVisualState, TyreVisualState, TyreVisualState] = [
@@ -3122,5 +3123,10 @@ export class F1Physics2026 {
     const carLeft = _right.crossVectors(carUp, carForward).normalize();
     const basis = _basis.makeBasis(carLeft, carUp, carForward);
     this.worldQuaternion.setFromRotationMatrix(basis);
+    this.worldVelocity
+      .copy(carForward)
+      .multiplyScalar(this.vxMs)
+      .addScaledVector(carLeft, this.vyMs)
+      .addScaledVector(carUp, this.heaveVelMs);
   }
 }
