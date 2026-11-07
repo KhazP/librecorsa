@@ -16,6 +16,62 @@ export interface TrackCredit {
   licenseUrl: string;
 }
 
+/**
+ * Quality / provenance tier of a circuit:
+ * - "original": built specifically for LibreCorsa (Rwanda)
+ * - "sim": hand-crafted sim-grade circuit (dedicated physical road/kerb/barrier meshes, surface physics, grooves, trees)
+ * - "sketchfab": auto-converted from a Sketchfab 3D model (auto-traced road/kerbs/walls; mediocre/rough fidelity)
+ */
+export type CircuitQuality = "original" | "sim" | "sketchfab";
+
+export interface CircuitQualityMeta {
+  id: CircuitQuality;
+  /** Compact badge text on cards and next to track names */
+  badge: string;
+  /** Short pill label in headers / inline tags */
+  shortBadge: string;
+  /** Filter / category label in the browser */
+  filterLabel: string;
+  /** Accent colour */
+  color: string;
+  /** Chip variant */
+  variant: "solid" | "soft" | "outline";
+  /** Explanation shown in the circuit detail pane */
+  description: string;
+}
+
+export const CIRCUIT_QUALITY_META: Record<CircuitQuality, CircuitQualityMeta> = {
+  original: {
+    id: "original",
+    badge: "ORIGINAL · SIM",
+    shortBadge: "ORIGINAL",
+    filterLabel: "LibreCorsa originals",
+    color: "#CCFF00",
+    variant: "solid",
+    description: "Built for LibreCorsa with custom physics surfaces, kerbs, elevation and trackside scenery.",
+  },
+  sim: {
+    id: "sim",
+    badge: "SIM GRADE",
+    shortBadge: "SIM GRADE",
+    filterLabel: "Sim-grade (High quality)",
+    color: "#00E676",
+    variant: "soft",
+    description:
+      "Hand-crafted sim circuit with dedicated physical road, kerb and barrier meshes, surface physics, 3D trees and dynamic tyre grooves.",
+  },
+  sketchfab: {
+    id: "sketchfab",
+    badge: "SKETCHFAB · MEDIOCRE",
+    shortBadge: "SKETCHFAB",
+    filterLabel: "Sketchfab (Mediocre)",
+    color: "#FFB300",
+    variant: "soft",
+    description:
+      "Auto-converted from a Sketchfab 3D model. Road, kerbs, run-off and barriers are detected automatically from the mesh — mediocre surface & visual quality.",
+  },
+};
+
 export interface TrackInfo {
   id: string;
   name: string;
@@ -27,14 +83,28 @@ export interface TrackInfo {
   direction: string;
   /** Track data JSON (relative to the base path); none for the bundled Rwanda layout */
   dataUrl?: string;
-  /** Model attribution (CC BY 4.0 scans) */
+  /** Model attribution (CC BY 4.0 scans or AC track mods) */
   credit?: TrackCredit;
   /** Kind of venue, when the index states it; otherwise `circuitType` reads it from the name and layout */
   type?: CircuitType;
+  /** Quality / provenance tier; inferred from id/credit when omitted */
+  quality?: CircuitQuality;
 }
 
 export type CircuitType = "permanent" | "street" | "oval";
 export const CIRCUIT_TYPE_LABELS: Record<CircuitType, string> = { permanent: "Permanent", street: "Street", oval: "Oval" };
+
+/** Quality tier of a track: explicit field, bundled Rwanda original, Sketchfab scan URL, or hand-crafted sim circuit */
+export const circuitQuality = (t: Pick<TrackInfo, "id" | "quality" | "credit">): CircuitQuality => {
+  if (t.quality) return t.quality;
+  if (t.id === RWANDA_TRACK_ID) return "original";
+  const url = `${t.credit?.url ?? ""} ${t.credit?.short ?? ""}`.toLowerCase();
+  if (url.includes("sketchfab.com") || url.includes("skfb.ly")) return "sketchfab";
+  return "sim";
+};
+
+export const circuitQualityMeta = (t: Pick<TrackInfo, "id" | "quality" | "credit">): CircuitQualityMeta =>
+  CIRCUIT_QUALITY_META[circuitQuality(t)];
 
 /** Where a circuit is, for the circuit browser's region filter (from its country) */
 export type CircuitRegion = "Africa" | "Americas" | "Asia" | "Europe" | "Middle East" | "Oceania" | "Other";
