@@ -2922,6 +2922,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       }
 
       builtCircuit.updateEnvironment(nowMs * 0.001);
+      builtCircuit.setGrooveRubber(getTrackEnv().trackEvolution.meanRacingLineRubber());
       opponentAudio.update({
         context: audioRef.current?.context ?? null,
         output: audioRef.current?.output ?? null,

@@ -238,6 +238,13 @@ export class TrackEvolutionState {
     };
   }
 
+  /** Rubber on the racing line averaged over the lap (0..1) */
+  public meanRacingLineRubber(): number {
+    let sum = 0;
+    for (let i = 0; i < TRACK_EVOLUTION_SECTORS; i++) sum += this.racingLineRubber[i];
+    return sum / TRACK_EVOLUTION_SECTORS;
+  }
+
   /** Exports the 4-property per-sector surface state (groove, marbles, water depth, temperature delta) */
   public exportSurfaceState(lineWaterMm?: ArrayLike<number>): SurfaceStateSnapshot {
     const water: number[] = [];

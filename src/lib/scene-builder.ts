@@ -32,6 +32,8 @@ export interface BuiltCircuitScene {
   waterMesh: THREE.Mesh;
   startLightMeshes: THREE.Mesh[];
   updateEnvironment: (elapsedSeconds: number) => void;
+  /** Darkens a converted circuit's tyre grooves (AC `groove.ini`) with the racing line's rubber (0..1) */
+  setGrooveRubber: (rubber: number) => void;
   /** Recolours the braking line ahead of the car; `guide` = the car's own braking guide (else the circuit's) */
   updateDynamicRacingLine: (carS: number, carSpeedMs: number, guide?: BrakingGuide | null) => void;
   /**
@@ -1406,16 +1408,11 @@ export function buildCircuitScene(
     );
     jetGroup.rotation.y = -jetAngle;
     jetGroup.rotation.z = 0.14;
-    if (grooveMeshes.length) {
-      // Dynamic tyre groove rubbering-in over session time (0 -> 1 over ~6 minutes, scaled by groove.mult)
-      const prog = Math.min(1, elapsedSeconds / 360);
-      for (const g of grooveMeshes) {
-        g.mat.opacity = THREE.MathUtils.clamp(
-          THREE.MathUtils.lerp(g.min, g.max, Math.min(1, prog * g.mult)),
-          0.1,
-          1.0
-        );
-      }
+  };
+
+  const setGrooveRubber = (rubber: number) => {
+    for (const g of grooveMeshes) {
+      g.mat.opacity = THREE.MathUtils.clamp(THREE.MathUtils.lerp(g.min, g.max, Math.min(1, rubber * g.mult)), 0.1, 1.0);
     }
   };
 
@@ -1470,6 +1467,7 @@ export function buildCircuitScene(
     waterMesh,
     startLightMeshes,
     updateEnvironment,
+    setGrooveRubber,
     updateDynamicRacingLine,
     setStartLights,
     trackRoot,
