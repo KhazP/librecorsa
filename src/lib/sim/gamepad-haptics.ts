@@ -1,6 +1,7 @@
 import type { CarTelemetry } from "@/types/f1";
 import { RACK_SAT_HIGH_IMPACT_G, stepRackSat } from "@/lib/input/wheel-ffb";
 import { axleSlipFromTelemetry, createAxleSlipSample, throttleSlipAllowance } from "./tyre-slip";
+import { DEFAULT_SURFACE_TABLE } from "./track-surfaces";
 
 /**
  * Gamepad rumble for the car: the pad's two motors are driven from the physics so the player
@@ -10,7 +11,9 @@ import { axleSlipFromTelemetry, createAxleSlipSample, throttleSlipAllowance } fr
  *
  * Each motor's cues are layered into the headroom the ones before them left (`layerRumble`), after rbrpad's
  * `RumbleMapper`, rather than summed and clipped: however many cues stack (a kerb strike under a lock-up and
- * wheelspin), the motor stays below full and each cue still moves it.
+ * wheelspin), the motor stays below full and each cue still moves it. Rough ground is felt per wheel from its
+ * shock velocity, gated by the wheel's load so a wheel going light over a crest stops contributing (also after
+ * rbrpad).
  *
  * Effects are short (90 ms) and re-sent only when they change, so a stationary car does not flood
  * the device with commands. The kerb, ABS and TC pulses are the exception: each on / off edge is sent when it
@@ -66,6 +69,26 @@ const KERB_PULSE_HZ = 12;
 const ABS_PULSE_HZ = 20;
 const TC_PULSE_HZ = 25;
 
+/**
+ * Surface roughness, per wheel, from its shock velocity (rbrpad `SurfaceRoughness`). Silent below the floor: smooth
+ * asphalt peaks near 0.08 m/s over a lap, braking dive included, while kerbs reach 0.2-0.5 m/s and grass 0.5-0.9.
+ * The squared response keeps light chatter quiet and lets real bumps stand out.
+ */
+const ROUGH_VEL_FLOOR_MS = 0.08;
+const ROUGH_VEL_FULL_MS = 0.9;
+/** Wheel load (N) at which a wheel's roughness is fully gated out / fully in; corners carry ~1.7-4 kN at rest */
+const ROUGH_LOAD_GATE_LOW_N = 200;
+const ROUGH_LOAD_GATE_HIGH_N = 1000;
+/** Peak hold on each wheel's roughness: one shock-velocity sample per frame aliases a kerb's 50-80 Hz ripple */
+const ROUGH_HOLD_S = 0.05;
+/**
+ * Light off-track texture from the surface table's rumble gain (AC `VIBRATION_GAIN`), so painted run-off, which the
+ * physics keeps flat, is still felt. Kerbs are left out: they have their own pulse on the weak motor.
+ */
+const OFFTRACK_TEXTURE_GAIN = 0.4;
+/** Above this gap between frames (s, a pause or a dropped tab) the held envelopes start again */
+const MAX_MIX_DT_S = 0.25;
+
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
 /** clamp01, with a non-finite input read as no effect */
 const magnitude01 = (v: number) => (Number.isFinite(v) ? clamp01(v) : 0);
@@ -74,6 +97,50 @@ const smoothstep = (edge0: number, edge1: number, x: number) => {
   const t = clamp01((x - edge0) / (edge1 - edge0));
   return t * t * (3 - 2 * t);
 };
+
+/** Carried between frames by the rumble mix: the held envelopes need the time since the last frame */
+export interface RumbleMixState {
+  /** Physics time of the previous mix (s); NaN before the first */
+  lastTimeS: number;
+  /** Peak-held roughness per wheel (FL, FR, RL, RR), 0..1 */
+  roughHold: [number, number, number, number];
+}
+
+export function createRumbleMixState(): RumbleMixState {
+  return { lastTimeS: NaN, roughHold: [0, 0, 0, 0] };
+}
+
+/** Back to a fresh state (pause, toggle off, unmount) */
+export function resetRumbleMixState(state: RumbleMixState): void {
+  state.lastTimeS = NaN;
+  state.roughHold.fill(0);
+}
+
+const finiteOr = (v: number | undefined, fallback: number) => (typeof v === "number" && Number.isFinite(v) ? v : fallback);
+
+/**
+ * Rough ground on the strong motor (0..1): each wheel's shock velocity, plus the surface table's off-track texture,
+ * gated by its load and averaged across the four wheels. `hold` (with `decay`, the hold's per-frame factor) keeps the
+ * per-wheel peaks; without it each frame stands alone.
+ */
+function surfaceRoughness(t: CarTelemetry, hold: number[] | undefined, decay: number): number {
+  const texSpeed = smoothstep(10, 90, t.speedKmh);
+  let sum = 0;
+  for (let i = 0; i < 4; i++) {
+    const vel = Math.abs(finiteOr(t.suspensionVelocityMs?.[i], 0));
+    let rough = clamp01((vel - ROUGH_VEL_FLOOR_MS) / (ROUGH_VEL_FULL_MS - ROUGH_VEL_FLOOR_MS));
+    rough *= rough;
+    if (hold) {
+      rough = Math.max(rough, hold[i] * decay);
+      hold[i] = rough;
+    }
+    const surface = t.wheelSurfaces?.[i];
+    const vibration = surface === "grass" || surface === "runoff" ? DEFAULT_SURFACE_TABLE[surface].vibration : 0;
+    const gate = smoothstep(ROUGH_LOAD_GATE_LOW_N, ROUGH_LOAD_GATE_HIGH_N, finiteOr(t.wheelLoadsN?.[i], 0));
+    sum += gate * layerRumble(rough, OFFTRACK_TEXTURE_GAIN * vibration * texSpeed);
+  }
+  return sum / 4;
+}
 
 /**
  * Adds a cue into the headroom the cues layered before it left: `acc + e·(1 − acc)` (rbrpad `RumbleMapper.Layer`).
@@ -106,12 +173,22 @@ function pulseState(t: CarTelemetry, timeS: number, triggers: boolean): { key: n
   return { key, halfS };
 }
 
-/** Motor magnitudes (0..1) for the current car state; `timeS` drives the kerb pulse */
+/**
+ * Motor magnitudes (0..1) for the current car state; `timeS` drives the kerb pulse. `mix` carries the held envelopes
+ * from frame to frame (one per pad driver); without it each call stands alone.
+ */
 export function hapticMagnitudes(
   t: CarTelemetry,
   timeS: number,
-  shaker?: { oversteerIntensityPct?: number; understeerIntensityPct?: number; highImpactActive?: boolean }
+  shaker?: { oversteerIntensityPct?: number; understeerIntensityPct?: number; highImpactActive?: boolean },
+  mix?: RumbleMixState
 ): { weak: number; strong: number } {
+  let decayDt = 0;
+  if (mix) {
+    const dt = timeS - mix.lastTimeS;
+    decayDt = dt > 0 && dt <= MAX_MIX_DT_S ? dt : 0;
+    mix.lastTimeS = timeS;
+  }
   const gLat = typeof t.lateralG === "number" && Number.isFinite(t.lateralG) ? Math.abs(t.lateralG) : 0;
   const gLon = typeof t.longitudinalG === "number" && Number.isFinite(t.longitudinalG) ? Math.abs(t.longitudinalG) : 0;
   const highImpact = shaker?.highImpactActive === true || Math.hypot(gLat, gLon) > RACK_SAT_HIGH_IMPACT_G;
@@ -154,14 +231,14 @@ export function hapticMagnitudes(
   weak = layerRumble(weak, understeer);
   weak = layerRumble(weak, texture);
 
-  // Strong motor: lock-up, wheelspin, rear oversteer SAT slide cue, rack-load cue and rough surfaces
+  // Strong motor: lock-up, wheelspin, rear oversteer SAT slide cue, rack-load cue and rough ground under each wheel
   const minSlip = t.wheelSlipRatios ? Math.min(...t.wheelSlipRatios) : 0;
   const lockUp = t.speedKmh > 30 ? 0.8 * smoothstep(0.12, 0.45, -minSlip) : 0;
   const rearSlip = t.wheelSlipRatios ? Math.max(t.wheelSlipRatios[2], t.wheelSlipRatios[3]) : 0;
   const wheelspin = 0.6 * smoothstep(0.12, 0.5, rearSlip);
   const oversteerSlide = 0.45 * oversteerNorm;
   const rackLoad = 0.25 * Math.pow(clamp01(Math.abs(t.ffbTorqueNorm ?? 0)), 1.5);
-  const roughSurface = t.surface === "grass" || t.surface === "runoff" ? 0.35 : 0;
+  const roughSurface = surfaceRoughness(t, mix?.roughHold, decayDt > 0 ? Math.exp(-decayDt / ROUGH_HOLD_S) : 0);
   let strong = layerRumble(0, lockUp);
   strong = layerRumble(strong, wheelspin);
   strong = layerRumble(strong, oversteerSlide);
@@ -293,6 +370,7 @@ export class GamepadHaptics {
   private timeS = 0;
   private active = false;
   private outputs = new Map<string, PadOutput>();
+  private mix = createRumbleMixState();
 
   /**
    * Call once per frame after the physics step; `enabled` is false while paused or when the toggle is off.
@@ -317,7 +395,7 @@ export class GamepadHaptics {
     }
     this.active = true;
 
-    const { weak, strong } = hapticMagnitudes(t, this.timeS, options);
+    const { weak, strong } = hapticMagnitudes(t, this.timeS, options, this.mix);
     const wantTriggers = options?.triggerRumble === true;
     const trig = wantTriggers ? triggerMagnitudes(t, this.timeS, options) : { left: 0, right: 0 };
     for (const { key, actuator } of connectedPads()) {
@@ -368,6 +446,7 @@ export class GamepadHaptics {
   /** Silences every pad this instance has been driving (pause, toggle off, unmount) */
   stop(): void {
     this.active = false;
+    resetRumbleMixState(this.mix);
     for (const { key, actuator } of connectedPads()) {
       if (!this.outputs.has(key)) continue;
       if (actuator.reset) send(() => actuator.reset?.());
