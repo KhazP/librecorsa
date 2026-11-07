@@ -19,6 +19,8 @@ export interface GgvTable {
    * Below 1 where the car loses downforce as the road squashes it onto its floor
    */
   compressionGain?: number;
+  /** Tightest path at full steering lock, tan(lock) / wheelbase (1/m) */
+  lockKappa: number;
 }
 
 /** Measured 2026-11-07 with scripts/ai/measure-ggv.ts (warm tyres, half fuel, default setup) */
@@ -28,12 +30,14 @@ export const GGV_TABLES: Record<VehicleModelId, GgvTable> = {
     latG: [1.817, 2.101, 2.41, 2.878, 3.447, 4.1, 4.831, 5.355],
     brakeG: [2.002, 2.237, 2.499, 2.856, 3.279, 3.652, 3.818, 3.933],
     accelG: [1.252, 1.327, 1.228, 1.009, 0.761, 0.506, 0.305, 0.015],
+    lockKappa: Math.tan((250 / 12.6) * (Math.PI / 180)) / 3.382,
   },
   'amg-gt3': {
     speedsMs: [15, 25, 35, 45, 55, 65, 75, 85],
     latG: [1.579, 1.661, 1.747, 1.886, 2.046, 2.219, 2.404, 2.574],
     brakeG: [1.548, 1.837, 1.92, 2.015, 2.103, 2.176, 2.231, 2.295],
     accelG: [0.894, 0.82, 0.614, 0.462, 0.335, 0.227, 0.128, 0.02],
+    lockKappa: Math.tan((320 / 12.6) * (Math.PI / 180)) / 2.65,
   },
   vf26: {
     speedsMs: [15, 25, 35, 45, 55, 65, 75, 85],
@@ -43,6 +47,7 @@ export const GGV_TABLES: Record<VehicleModelId, GgvTable> = {
     // Rwanda's banked dip at s ≈ 640 m (g̃ ≈ 2.1 g at 262 km/h): front tyres saturated at ~4.5 g, barely above the
     // flat-road limit; the ride height lost to the load costs the floor most of what the load adds
     compressionGain: 0.15,
+    lockKappa: Math.tan((270 / 14) * (Math.PI / 180)) / 3.4,
   },
 };
 
@@ -76,6 +81,14 @@ export class CarLimits {
     this.muLat = table.latG[0];
     this.muBrake = table.brakeG[0];
     this.compression = table.compressionGain ?? 1;
+  }
+
+  /**
+   * Tightest curvature a line may ask of the car: full lock less the front slip a hairpin needs and the tracker's
+   * room to correct (a line inside a Monaco hairpin at 5 m radius left the cars 8 m wide of it)
+   */
+  get maxKappa(): number {
+    return this.table.lockKappa * 0.85;
   }
 
   /** Extra vertical load over level ground (m/s²), as far as it turns into grip */

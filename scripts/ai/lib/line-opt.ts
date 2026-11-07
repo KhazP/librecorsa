@@ -108,6 +108,8 @@ export interface OptOptions {
   log?: (msg: string) => void;
   /** Stop when the step falls below this (m) */
   minStepM?: number;
+  /** Keep the whole car off the barriers */
+  walls?: WallClearance;
 }
 
 export interface OptResult {
@@ -127,11 +129,82 @@ function curvatureRatePenalty(kappa: Float64Array, ds: number): number {
   return sum;
 }
 
-/** Lap time plus the smoothness penalty of a line */
-export function lineCost(t: AiTrack, n: Float64Array, limits: CarLimits, smoothW: number): { cost: number; lapS: number } {
+/** Σ(|κ| − κmax)²·ds over the stretches tighter than the car can steer (1/m) */
+export function lockPenalty(kappa: Float64Array, seg: Float64Array, kMax: number): number {
+  let sum = 0;
+  for (let i = 0; i < kappa.length; i++) {
+    const e = Math.abs(kappa[i]) - kMax;
+    if (e > 0) sum += e * e * seg[i];
+  }
+  return sum;
+}
+
+/**
+ * The barriers beside the road, for keeping the whole car off them: per grid point the distance from the centreline to
+ * the first wall on each side (m, Infinity where there is none within reach), and the car's barrier probe points
+ * (body frame: x left, z forward; the physics' own `wallProbePoints`)
+ */
+export interface WallClearance {
+  left: Float64Array;
+  right: Float64Array;
+  probes: { x: number; z: number }[];
+  /** Room kept between any probe and a wall (m): the tracker's own error in a slow corner is ~0.4 m */
+  marginM: number;
+}
+
+/**
+ * Σ excess²·ds of the car's probe points past the walls less the margin, with the car on the line, pointing along it.
+ * A probe is placed in the world, then read back in track coordinates at the centreline point it lies beside, so a
+ * nose aimed at an apex wall, or a long car's corners in a tight curve, are seen as they are.
+ */
+export function wallPenalty(t: AiTrack, n: Float64Array, w: WallClearance): number {
+  const N = t.n;
+  let sum = 0;
+  for (let i = 0; i < N; i++) {
+    const room = Math.min(w.left[i], w.right[i]) - Math.abs(n[i]);
+    if (room > 4) continue;
+    const a = (i - 1 + N) % N, b = (i + 1) % N;
+    const px = t.x[i] + t.rx[i] * n[i], pz = t.z[i] + t.rz[i] * n[i];
+    let hx = t.x[b] + t.rx[b] * n[b] - (t.x[a] + t.rx[a] * n[a]);
+    let hz = t.z[b] + t.rz[b] * n[b] - (t.z[a] + t.rz[a] * n[a]);
+    const hl = Math.hypot(hx, hz) || 1;
+    hx /= hl;
+    hz /= hl;
+    // The car's right, turned from its heading as the track's right is from its tangent
+    const sgn = Math.sign(t.rx[i] * -t.tz[i] + t.rz[i] * t.tx[i]) || 1;
+    const qx0 = -hz * sgn, qz0 = hx * sgn;
+    for (const pr of w.probes) {
+      const r = -pr.x;
+      const qx = px + hx * pr.z + qx0 * r, qz = pz + hz * pr.z + qz0 * r;
+      // The centreline point it lies beside: along-track offset ~0 near the probe's own distance
+      let j = (i + Math.round(pr.z / t.ds) + N) % N;
+      for (let it = 0; it < 3; it++) {
+        const along = (qx - t.x[j]) * t.tx[j] + (qz - t.z[j]) * t.tz[j];
+        const step = Math.round(along / t.ds);
+        if (step === 0) break;
+        j = (j + step + N) % N;
+      }
+      const nq = (qx - t.x[j]) * t.rx[j] + (qz - t.z[j]) * t.rz[j];
+      const e = nq >= 0 ? nq - (w.right[j] - w.marginM) : -nq - (w.left[j] - w.marginM);
+      if (e > 0) sum += e * e * t.ds;
+    }
+  }
+  return sum;
+}
+
+/** Weight on the barrier penalty (s·m): half a metre into the margin over 10 m costs 500 s */
+const WALL_W = 200;
+
+/** Weight on the steering-lock penalty (s·m): a 0.1 /m excess over 20 m costs 200 s, i.e. never worth it */
+const LOCK_W = 1000;
+
+/** Lap time plus the smoothness penalty of a line, and a wall at the car's steering lock */
+export function lineCost(t: AiTrack, n: Float64Array, limits: CarLimits, smoothW: number, walls?: WallClearance): { cost: number; lapS: number } {
   const geo = pathGeometry(t, n);
   const plan = planSpeeds(t, n, limits, geo);
-  return { cost: plan.lapS + smoothW * curvatureRatePenalty(geo.kappa, t.ds), lapS: plan.lapS };
+  let cost = plan.lapS + smoothW * curvatureRatePenalty(geo.kappa, t.ds) + LOCK_W * lockPenalty(geo.kappa, geo.seg, limits.maxKappa);
+  if (walls) cost += WALL_W * wallPenalty(t, n, walls);
+  return { cost, lapS: plan.lapS };
 }
 
 /** Minimum Σκ²·ds line by projected gradient on the controls (a smooth, symmetric starting line) */
@@ -193,7 +266,7 @@ export function optimiseLapTime(param: LineParam, b: LineBounds, limits: CarLimi
   const c = Float64Array.from(start);
   for (let k = 0; k < m; k++) c[k] = Math.min(cb.hi[k], Math.max(cb.lo[k], c[k]));
   const grid = new Float64Array(t.n);
-  const evalC = () => lineCost(t, param.toGrid(c, b, grid), limits, smoothW);
+  const evalC = () => lineCost(t, param.toGrid(c, b, grid), limits, smoothW, opts.walls);
   let cur = evalC();
   let sweeps = 0;
   const saved = new Float64Array(64);
