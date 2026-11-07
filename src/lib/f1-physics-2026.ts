@@ -138,6 +138,7 @@ import {
 import { type AiVehicleParams, RacingLineDriver } from './sim/ai-mpc';
 import { SteeringAssist, type SteeringAssistCarState } from './sim/steering-assist';
 import { AxleSlipScratch } from './sim/tyre-slip';
+import { type AutoShiftSchedule, autoShift, createAutoShiftInput, ManualShiftOverride } from './sim/auto-gearbox';
 import {
   aiLineOffsetM,
   computeSpeedProfile,
@@ -163,6 +164,16 @@ const INITIAL_BRAKE_TEMP_C = 380;
 const AI_PLAN_WET_REF_MS = 50;
 /** Share of the wet grip the AI plan leaves in hand on a fully wet road */
 const AI_PLAN_WET_MARGIN = 0.15;
+/** The VF26's auto box: it shifts down on a lift under 60 % throttle, and always under 6200 rpm */
+const VF26_AUTO_SHIFT: AutoShiftSchedule = {
+  upshiftRpm: VF26_DRIVETRAIN.autoUpshiftRpm,
+  limiterRpm: VF26_ENGINE.limiterRpm,
+  downshiftRpm: VF26_DRIVETRAIN.autoDownshiftRpm,
+  lugRpm: 6200,
+  downshiftMarginRpm: 600,
+  upshiftMaxBrake: 0.1,
+  liftThrottle: 0.6,
+};
 const SURFACE_KIND: Record<SurfaceType, TrackSurfaceKind> = {
   asphalt: 'road',
   kerb: 'kerb',
@@ -262,7 +273,6 @@ interface DrivetrainRuntime {
   shiftTarget: number;
   shiftTimerS: number;
   autoShiftCooldownS: number;
-  downshiftProtectedGear: number;
   engineOmega: number;
   clutchLocked: boolean;
   clutchEngagement: number;
@@ -375,6 +385,9 @@ export class F1Physics2026 {
   /** Keyboard and controller steering assist */
   public readonly steeringAssist = new SteeringAssist();
   private readonly slipScratch = new AxleSlipScratch();
+  /** The driver's last paddle shift with the auto box on, and the auto box's reading of the car */
+  private readonly manualShift = new ManualShiftOverride();
+  private readonly autoShiftIn = createAutoShiftInput();
 
   // Vehicle state (3D Cartesian world + projected curvilinear track state)
   public worldX = 0;
@@ -1245,7 +1258,6 @@ export class F1Physics2026 {
       shiftTarget: 1,
       shiftTimerS: 0,
       autoShiftCooldownS: 0,
-      downshiftProtectedGear: 0,
       engineOmega: VF26_ENGINE.idleRpm * RPM2RADS,
       clutchLocked: false,
       clutchEngagement: 0,
@@ -1372,6 +1384,8 @@ export class F1Physics2026 {
   private finishPlacement(): void {
     this.overtake.reset();
     const sample = this.track.getSampleAtDistance(this.sMeters);
+    this.manualShift.clear();
+    this.drivetrain.autoShiftCooldownS = 0;
     this.lastSector = sample.sector;
     this.syncWorldTransform();
     this.updateWheelWorldPositions(sample);
@@ -1873,6 +1887,7 @@ export class F1Physics2026 {
   private updateGearbox(dt: number, shiftRequest: -1 | 0 | 1, throttle: number, brake: number): void {
     const drv = this.drivetrain;
     if (drv.autoShiftCooldownS > 0) drv.autoShiftCooldownS = Math.max(0, drv.autoShiftCooldownS - dt);
+    this.manualShift.tick(dt);
 
     if (drv.shiftTimerS > 0) {
       drv.shiftTimerS -= dt;
@@ -1899,39 +1914,22 @@ export class F1Physics2026 {
         const rpmAfter = rearOmega * this.overallRatio(desired) * RADS2RPM;
         if (rpmAfter > VF26_ENGINE.maxRpm - 500) desired = drv.gear;
       }
-      if (desired !== drv.gear) {
-        // Manual override holds for 1.0 s; a manual short-shift up stays protected from auto-downshift while accelerating
-        drv.autoShiftCooldownS = 1.0;
-        drv.downshiftProtectedGear = desired > drv.gear ? desired : 0;
-      }
+      if (desired !== drv.gear) this.manualShift.shifted(desired > drv.gear ? 1 : -1, desired);
     } else if ((this.autoGearbox || this.aiAutopilot) && drv.gear >= 1 && drv.autoShiftCooldownS <= 0) {
-      if (drv.downshiftProtectedGear !== drv.gear || brake > 0.05 || throttle < 0.02) {
-        drv.downshiftProtectedGear = 0;
-      }
-      const rpm = drv.engineOmega * RADS2RPM;
+      const a = this.autoShiftIn;
       const roadOmega = Math.max(0, this.vxMs) / this.wheels[2].tyre.spec.radius;
-      const rpmRoad = roadOmega * this.overallRatio(drv.gear) * RADS2RPM;
-      const rearGrounded = this.wheels[2].fzN > 1 || this.wheels[3].fzN > 1;
-      const rearSpinning = Math.max(this.wheels[2].slipRatio, this.wheels[3].slipRatio) > 0.14;
-      if (
-        drv.gear < 8 &&
-        rpm > VF26_DRIVETRAIN.autoUpshiftRpm &&
-        drv.clutchLocked &&
-        brake < 0.1 &&
-        rearGrounded &&
-        (!rearSpinning || rpmRoad > VF26_DRIVETRAIN.autoUpshiftRpm)
-      ) {
-        desired = drv.gear + 1;
-      } else if (drv.gear > 1) {
-        // Downshift decisions use road speed so a locking / spinning rear axle can't trigger
-        // a cascade of downshifts; manually short-shifted gears stay protected while accelerating
-        const rpmLower = Math.max(rearOmega, roadOmega) * this.overallRatio(drv.gear - 1) * RADS2RPM;
-        const protectedShortShift = drv.downshiftProtectedGear === drv.gear && rpmRoad > 5500;
-        const wantsDown =
-          !protectedShortShift &&
-          ((rpmRoad < VF26_DRIVETRAIN.autoDownshiftRpm && (brake > 0.05 || throttle < 0.6)) || rpmRoad < 6200);
-        if (wantsDown && rpmLower < VF26_DRIVETRAIN.autoUpshiftRpm - 600) desired = drv.gear - 1;
-      }
+      a.gear = drv.gear;
+      a.topGear = VF26_DRIVETRAIN.gearRatios.length;
+      a.engineRpm = drv.engineOmega * RADS2RPM;
+      a.roadRpm = roadOmega * this.overallRatio(drv.gear) * RADS2RPM;
+      // Downshifts go by road speed (or the rears' if faster) so a locking rear axle can't cascade the box down
+      a.lowerGearRpm = Math.max(rearOmega, roadOmega) * this.overallRatio(drv.gear - 1) * RADS2RPM;
+      a.clutchClosed = drv.clutchLocked;
+      a.throttle = throttle;
+      a.brake = brake;
+      a.rearGrounded = this.wheels[2].fzN > 1 || this.wheels[3].fzN > 1;
+      a.rearSpinning = Math.max(this.wheels[2].slipRatio, this.wheels[3].slipRatio) > 0.14;
+      desired = drv.gear + autoShift(a, VF26_AUTO_SHIFT, this.manualShift);
       if (desired !== drv.gear) drv.autoShiftCooldownS = 0.12;
     }
 

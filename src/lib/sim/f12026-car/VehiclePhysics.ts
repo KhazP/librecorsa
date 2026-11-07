@@ -114,6 +114,7 @@ import {
   type WallQuery,
   wallSweep,
 } from './TrackColliderQuery';
+import { type AutoShiftSchedule, autoShift, createAutoShiftInput, ManualShiftOverride } from '../auto-gearbox';
 
 const G = 9.81;
 const DEG2RAD = Math.PI / 180;
@@ -123,6 +124,8 @@ const RADS2RPM = 30 / Math.PI;
 const SOLVER_ITERATIONS = 8;
 /** Auto box: hold a new gear this long after an upshift before an off-brake downshift (s) */
 const AUTO_DOWNSHIFT_HOLD_S = 1.0;
+/** Auto box: under this share of the downshift point the engine lugs, and the box shifts down whatever the pedals */
+const AUTO_LUG_SHARE = 0.65;
 /** Auto box: brake pedal that counts as braking into a corner, and the least time between its downshifts (s) */
 const AUTO_BRAKE_DOWNSHIFT_PEDAL = 0.3;
 const AUTO_BRAKE_DOWNSHIFT_GAP_S = 0.25;
@@ -790,8 +793,10 @@ export class VehiclePhysics {
   private prevInputs = { shiftUp: false, shiftDown: false, drs: false };
   private drsRequested = false;
   private shiftTimer = 0;
-  private manualOverrideTimerS = 0;
-  private downshiftProtectedGear = 0;
+  /** The driver's last paddle shift with the auto box on, the auto box's schedule and its reading of the car */
+  private readonly manualShift = new ManualShiftOverride();
+  private readonly autoShiftSchedule: AutoShiftSchedule;
+  private readonly autoShiftIn = createAutoShiftInput();
   /** Time since the last upshift (s): the auto box holds the gear a moment after one so wheelspin can't hunt it */
   private sinceUpshiftS = Infinity;
   private sinceDownshiftS = Infinity;
@@ -838,6 +843,21 @@ export class VehiclePhysics {
     this.cgToFrontM = ch.wheelbase * (1 - ch.frontWeightFraction);
     this.cgToRearM = ch.wheelbase * ch.frontWeightFraction;
     this.maxSteerRad = ch.maxRoadWheelDeg * DEG2RAD;
+    const gears = cfg.gearbox.gears;
+    this.autoShiftSchedule = {
+      upshiftRpm: gears.upshift_rpm,
+      limiterRpm: gears.redline_rpm,
+      downshiftRpm: gears.downshift_rpm,
+      lugRpm: AUTO_LUG_SHARE * gears.downshift_rpm,
+      downshiftMarginRpm: 300,
+      upshiftMaxBrake: Infinity,
+      liftThrottle: 0,
+      downshiftHoldS: AUTO_DOWNSHIFT_HOLD_S,
+      brakeDownshift:
+        gears.brake_downshift_rpm === undefined
+          ? undefined
+          : { rpm: gears.brake_downshift_rpm, pedal: AUTO_BRAKE_DOWNSHIFT_PEDAL, gapS: AUTO_BRAKE_DOWNSHIFT_GAP_S },
+    };
     this.steerComplianceRadPerN = ((ch.steerComplianceDegPerKN ?? 0) * DEG2RAD) / 1000;
     this.ffbMechanicalTrailM = ch.ffbMechanicalTrailM ?? DEFAULT_FFB_MECHANICAL_TRAIL_M;
     this.brakeCompound = cfg.brakes.discMaterial ?? 'carbon-ceramic';
@@ -1139,6 +1159,7 @@ export class VehiclePhysics {
     this.timeAccumulator = 0;
     this.gear = 1;
     this.shiftTimer = 0;
+    this.manualShift.clear();
     this.sinceUpshiftS = Infinity;
     this.sinceDownshiftS = Infinity;
     this.limiterTimer = 0;
@@ -1550,18 +1571,8 @@ export class VehiclePhysics {
   }
 
   private handleEdges(inp: VehicleInputs): void {
-    if (inp.shiftUp && !this.prevInputs.shiftUp) {
-      if (this.requestShift(this.gear + 1)) {
-        this.manualOverrideTimerS = 1.0;
-        this.downshiftProtectedGear = this.gear;
-      }
-    }
-    if (inp.shiftDown && !this.prevInputs.shiftDown) {
-      if (this.requestShift(this.gear - 1)) {
-        this.manualOverrideTimerS = 1.0;
-        this.downshiftProtectedGear = 0;
-      }
-    }
+    if (inp.shiftUp && !this.prevInputs.shiftUp && this.requestShift(this.gear + 1)) this.manualShift.shifted(1, this.gear);
+    if (inp.shiftDown && !this.prevInputs.shiftDown && this.requestShift(this.gear - 1)) this.manualShift.shifted(-1, this.gear);
     if (inp.drs && !this.prevInputs.drs) this.drsRequested = !this.drsOpen;
     this.prevInputs.shiftUp = !!inp.shiftUp;
     this.prevInputs.shiftDown = !!inp.shiftDown;
@@ -1596,52 +1607,30 @@ export class VehiclePhysics {
   }
 
   private autoShiftFor(throttle: number, brake: number): void {
-    if (!this.autoShift || this.shiftTimer > 0 || this.manualOverrideTimerS > 0) return;
-    const gb = this.config.gearbox;
+    if (!this.autoShift || this.shiftTimer > 0) return;
     if (this.gear === 0 && throttle > 0.1) {
       this.requestShift(1);
       return;
     }
     if (this.gear < 1) return;
-    if (this.downshiftProtectedGear !== this.gear || brake > 0.05 || throttle < 0.02) {
-      this.downshiftProtectedGear = 0;
-    }
-    // Upshift on engine rpm once the clutch is closed and at least one rear wheel is grounded without excessive wheelspin;
-    // downshift on road speed (locked wheels must not drag the box down through the gears)
     this.updateBasis();
+    const a = this.autoShiftIn;
     const road = this.roadRpm(this.gear);
-    const rearGrounded = this.wheels[2].fz > 1 || this.wheels[3].fz > 1;
-    const rearSpinning = Math.max(this.wheels[2].slipRatio, this.wheels[3].slipRatio) > 0.14;
-    // Wheelspin may lift the engine at most 30 % over road speed for shift purposes
-    const engineRpm = this.clutchEngagement >= 0.99 ? Math.min(this.rpm, road * 1.3) : road;
-    const brakeDown = gb.gears.brake_downshift_rpm;
-    if (
-      engineRpm >= gb.gears.upshift_rpm &&
-      this.gear < gb.ratios.length &&
-      rearGrounded &&
-      (!rearSpinning || road >= gb.gears.upshift_rpm)
-    ) {
-      this.requestShift(this.gear + 1);
-    }
-    // Braking into a corner: down through the box one click at a time while the lower gear stays under the point
-    else if (
-      brakeDown !== undefined &&
-      this.gear > 1 &&
-      brake > AUTO_BRAKE_DOWNSHIFT_PEDAL &&
-      this.sinceDownshiftS > AUTO_BRAKE_DOWNSHIFT_GAP_S &&
-      this.roadRpm(this.gear - 1) < brakeDown
-    ) {
-      this.requestShift(this.gear - 1);
-    }
-    // No downshift straight after an upshift unless braking, and protect manually short-shifted gears while accelerating
-    else if (
-      this.gear > 1 &&
-      !(this.downshiftProtectedGear === this.gear && road > gb.gears.downshift_rpm * 0.65) &&
-      road < gb.gears.downshift_rpm &&
-      (brake > 0.05 || this.sinceUpshiftS > AUTO_DOWNSHIFT_HOLD_S)
-    ) {
-      if (this.roadRpm(this.gear - 1) < gb.gears.upshift_rpm - 300) this.requestShift(this.gear - 1);
-    }
+    a.gear = this.gear;
+    a.topGear = this.config.gearbox.ratios.length;
+    // Wheelspin may lift the engine at most 30 % over road speed for shift purposes; road speed while the clutch slips
+    a.engineRpm = this.clutchEngagement >= 0.99 ? Math.min(this.rpm, road * 1.3) : road;
+    a.roadRpm = road;
+    // Downshifts go by road speed: locked wheels must not drag the box down through the gears
+    a.lowerGearRpm = this.roadRpm(this.gear - 1);
+    a.throttle = throttle;
+    a.brake = brake;
+    a.sinceUpshiftS = this.sinceUpshiftS;
+    a.sinceDownshiftS = this.sinceDownshiftS;
+    a.rearGrounded = this.wheels[2].fz > 1 || this.wheels[3].fz > 1;
+    a.rearSpinning = Math.max(this.wheels[2].slipRatio, this.wheels[3].slipRatio) > 0.14;
+    const shift = autoShift(a, this.autoShiftSchedule, this.manualShift);
+    if (shift !== 0) this.requestShift(this.gear + shift);
   }
 
   private updateDrs(inp: VehicleInputs, dt: number): void {
@@ -1706,7 +1695,7 @@ export class VehiclePhysics {
     const h = dt / VehiclePhysics.SUBSTEPS;
     for (let k = 0; k < VehiclePhysics.SUBSTEPS; k++) this.substep(h, inp);
     this.shiftTimer = Math.max(0, this.shiftTimer - dt);
-    this.manualOverrideTimerS = Math.max(0, this.manualOverrideTimerS - dt);
+    this.manualShift.tick(dt);
     this.sinceUpshiftS += dt;
     this.sinceDownshiftS += dt;
     this.limiterTimer = Math.max(0, this.limiterTimer - dt);
