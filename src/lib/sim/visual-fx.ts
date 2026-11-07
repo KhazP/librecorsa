@@ -11,6 +11,7 @@
 
 import * as THREE from 'three';
 import { createF1Car2026, type SimCarRig } from '@/lib/car-builder-2026';
+import type { WheelSeating } from '@/lib/render/corner-rig';
 import { createGt3CarRig, loadGt3Cockpit, loadGt3Template } from '@/lib/gt3-car-model';
 import { AMR26_MODEL_URL, loadVf26Template } from '@/lib/vf26-car-model';
 import { assetProgress } from '@/lib/loading/asset-progress';
@@ -122,6 +123,8 @@ export class SimVisualFxManager {
       vehicle: VehicleModelId | undefined;
       wheelRot: number;
       telemetry?: CarTelemetry;
+      /** The AI car's wheels on its ground at the drawn pose (refreshed in place each frame) */
+      wheels?: WheelSeating;
       ghostCheckS?: number;
       /** A ghost's translucent materials, faded as it nears the player's car */
       ghostMats?: THREE.Material[];
@@ -650,7 +653,15 @@ export class SimVisualFxManager {
       bt[2] = bt[3] = braking ? 720 : 320;
       syntheticTelemetry.trackDistanceM = peer.trackS;
 
-      carRig.updateFromTelemetry(syntheticTelemetry, pitchRad, rollRad, wheelRot);
+      let wheels: WheelSeating | undefined;
+      if (peer.wheels) {
+        wheels = entry.wheels ??= { ground: null, position: peer.position, quaternion: peer.quaternion };
+        wheels.tyres = peer.wheels.tyres;
+        wheels.ground = peer.wheels.ground;
+        wheels.position = peer.position;
+        wheels.quaternion = peer.quaternion;
+      }
+      carRig.updateFromTelemetry(syntheticTelemetry, pitchRad, rollRad, wheelRot, dt, wheels);
 
       // Opponent car rooster-tail water spray plume in wet conditions
       if (this.wetness > 0.16 && !peer.ghost && peer.speedKmh > 55) {

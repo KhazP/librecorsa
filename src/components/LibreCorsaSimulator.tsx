@@ -1774,6 +1774,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       trackS: 0,
       speedKmh: car.speedKmh,
       isAiPeer: true,
+      // The frames hold the body's pose: the rig rests the wheels on the road under each corner
+      wheels: { ground: physics.groundQuery ?? null },
     });
     /** Look of every car seen in the replay window (the frames only hold poses) */
     const replayNames = new Map<string, { code: string; color: string; vehicle?: VehicleModelId }>();
@@ -1826,7 +1828,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     /** The player car drawn at the frame time (its physics pose carried forward by the unstepped remainder) */
     const renderCarPos = new THREE.Vector3();
     /** The player car's tyres on its ground, at the pose it is drawn at (refreshed in place every frame) */
-    const playerWheels: WheelSeating = { tyres: [], ground: null, position: renderCarPos, quaternion: new THREE.Quaternion() };
+    const playerWheels: WheelSeating = { ground: null, position: renderCarPos, quaternion: new THREE.Quaternion() };
     const smoothedHeliPos = new THREE.Vector3();
     const smoothedHeliLook = new THREE.Vector3();
     // Cockpit extras, created once the VF26 model has loaded: the wheel's LCD and the live wing mirrors

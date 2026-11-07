@@ -35,10 +35,13 @@ export interface RigCorner {
   tyre: TyreDeformationHandle | null;
 }
 
-/** What puts a car's drawn wheels on the road: the physics' tyres, the ground the car drives on and where it is drawn */
+/** What seats a car's drawn wheels on the road: the physics' tyres, the car's ground and the pose it is drawn at */
 export interface WheelSeating {
-  /** Tyre state per corner in physics wheel order (FR, FL, RR, RL): load, deformation, contacts in the car frame */
-  tyres: readonly TyreVisualState[];
+  /**
+   * Tyre state per corner in physics wheel order (FR, FL, RR, RL): load, deformation, contacts in the car frame.
+   * Absent: a car drawn without its physics (a replayed one), whose undeformed wheels rest on the ground.
+   */
+  tyres?: readonly TyreVisualState[];
   /** The car's track collider (`SimulatorCar.groundQuery`); null: the physics' contacts alone */
   ground: GroundQuery | null;
   /** The car frame the rig is drawn in (its root's world pose) */
@@ -86,28 +89,31 @@ export function seatCorner(
  * along the line through that side's front and rear contacts, at the corner's own z, so a model whose wheelbase
  * differs from the vehicle model's still sits on the road when the body pitches; a tyre on the road (`onRoad`) then
  * sits on the car's ground under the corner itself (`seatCorner`), which also takes in a model's different track
- * width on cambered, crowned and kerbed road. 0 (the car frame's origin plane) when the vehicle model gives no
- * contacts.
+ * width on cambered, crowned and kerbed road. Without tyre state the wheel rests on the ground under the corner; 0
+ * (the car frame's origin plane) when the vehicle model's tyres give no contacts.
  */
 export function cornerRoadHeight(corner: RigCorner, wheels?: WheelSeating): number {
-  const tyres = wheels?.tyres;
-  const front = tyres?.[corner.isLeft ? 1 : 0]?.contactInCar;
-  const rear = tyres?.[corner.isLeft ? 3 : 2]?.contactInCar;
-  if (!wheels || !front || !rear) return 0;
+  if (!wheels) return 0;
   const { x, z } = corner.steer.position;
+  const tyres = wheels.tyres;
+  if (!tyres) return seatCorner(wheels.ground, wheels.position, wheels.quaternion, x, z, 0, true);
+  const front = tyres[corner.isLeft ? 1 : 0]?.contactInCar;
+  const rear = tyres[corner.isLeft ? 3 : 2]?.contactInCar;
+  if (!front || !rear) return 0;
   const span = front.z - rear.z;
   const contactY =
     Math.abs(span) > 0.5 ? front.y + ((z - front.z) * (front.y - rear.y)) / span : corner.isFront ? front.y : rear.y;
-  const own = wheels.tyres[corner.isFront ? (corner.isLeft ? 1 : 0) : corner.isLeft ? 3 : 2];
+  const own = tyres[corner.isFront ? (corner.isLeft ? 1 : 0) : corner.isLeft ? 3 : 2];
   return seatCorner(wheels.ground, wheels.position, wheels.quaternion, x, z, contactY, own.onRoad);
 }
 
 /**
  * Per frame, for every car model: steers the fronts (`roadWheelRad`, + = left, with Ackermann), spins every wheel,
- * applies the tyres' visual deformation and puts each wheel on the road under it (corners and `wheels.tyres` in physics
- * wheel order). The steer pivot rests at `restY` (tyre bottom on the car frame's origin plane), drops by the tyre's visual
- * squash so the flattened patch stays where the bottom was, and follows the road under the corner in the car frame:
- * the wheels are unsprung, so they do not move with the body's heave, pitch and roll on the rigid-body model.
+ * applies the tyres' visual deformation and puts each wheel on the road under it (corners and `wheels.tyres` in
+ * physics wheel order). The steer pivot rests at `restY` (tyre bottom on the car frame's origin plane), drops by the
+ * tyre's visual squash so the flattened patch stays where the bottom was, and follows the road under the corner in
+ * the car frame: the wheels are unsprung, so they do not move with the body's heave, pitch and roll on the rigid-body
+ * model.
  */
 export function updateCorners(
   corners: readonly RigCorner[],
@@ -121,10 +127,10 @@ export function updateCorners(
       c.steer.rotation.y = roadWheelRad * (inside ? ACKERMANN_INSIDE : ACKERMANN_OUTSIDE);
     }
     c.spin.rotation.x = wheelRotationRad;
-    const state = wheels?.tyres[i];
-    if (!state) return;
+    if (!wheels) return;
+    const state = wheels.tyres?.[i];
     let squash = 0;
-    if (c.tyre) {
+    if (state && c.tyre) {
       c.tyre.update(state, wheelRotationRad);
       squash = c.tyre.axleDropM;
     }

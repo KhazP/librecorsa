@@ -101,9 +101,10 @@ export function measurePortedWheelContact(
   for (const id of Object.keys(cars)) {
     out[id] = { minMm: Infinity, maxMm: -Infinity, bodyFrameMinMm: Infinity, bodyFrameMaxMm: -Infinity, samples: 0, topSpeedKmh: 0 };
   }
-  if (!sim.tyreVisuals) throw new Error('measurePortedWheelContact: the sim gives no tyre state');
+  const tyres = sim.tyreVisuals;
+  if (!tyres) throw new Error('measurePortedWheelContact: the sim gives no tyre state');
   const wheels: WheelSeating = {
-    tyres: sim.tyreVisuals,
+    tyres,
     ground: sim.groundQuery ?? null,
     position: sim.worldPosition,
     quaternion: sim.worldQuaternion,
@@ -117,7 +118,6 @@ export function measurePortedWheelContact(
   for (let i = 0; i * dt < seconds; i++) {
     sim.step(dt, {});
     if (i * dt < settleS) continue;
-    const tyres = wheels.tyres;
     const roadWheel = -sim.telemetry.steering * sim.maxSteerAngleRad;
     const speedKmh = Math.abs(sim.vxMs) * 3.6;
     for (const [id, rig] of Object.entries(rigs)) {
