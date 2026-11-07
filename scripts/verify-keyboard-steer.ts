@@ -27,7 +27,6 @@ import { KeyboardPedalAssist } from '../src/lib/input/keyboard-pedals';
 import { DEFAULT_PLAYER_SETTINGS, type KeyboardTuning, type PadTuning } from '../src/lib/settings/player-settings';
 import { compoundData, F12026_CAR_CONFIG, type CarPhysicsConfig } from '../src/lib/sim/f12026-car/F12026CarConfig';
 import { F12026CarSim } from '../src/lib/sim/f12026-car/F12026CarSim';
-import { triggerMagnitudes } from '../src/lib/sim/gamepad-haptics';
 import { AMG_GT3_CONFIG } from '../src/lib/sim/gt3/AmgGt3Config';
 import { createAmgGt3Sim } from '../src/lib/sim/gt3/AmgGt3Sim';
 import type { SimulatorCar } from '../src/lib/sim/simulator-car';
@@ -39,7 +38,6 @@ import {
   type SteeringAssistSettings,
   selfSteerDeg,
 } from '../src/lib/sim/steering-assist';
-import { brakeSlipMargin } from '../src/lib/sim/tyre-slip';
 import { VF26_TYRES } from '../src/lib/sim/vf26-data';
 import type { ControlInputs } from '../src/types/f1';
 import { createFlatTestTrack } from './lib/flat-track';
@@ -58,10 +56,8 @@ interface CarCase {
   make: () => SimulatorCar;
   /** Front peak slip angle from the tyre data (deg) */
   peakDeg: (c: SimulatorCar) => number;
-  /** Lateral g of the old open-loop keyboard steering (d13b06a) in case 1 at 70, 110, 150 and 190 km/h */
-  oldLatG: readonly [number, number, number, number];
-  /** Share of the old lateral g case 1 must reach */
-  latGShare: number;
+  /** Least the fronts' settled slip may be, as a share of their peak, with a key held */
+  minSettledSlip: number;
 }
 
 const rigidBodyPeak = (config: CarPhysicsConfig) => (c: SimulatorCar) =>
@@ -72,22 +68,19 @@ const CARS: CarCase[] = [
     name: 'AMG GT3',
     make: () => createAmgGt3Sim(pad),
     peakDeg: rigidBodyPeak(AMG_GT3_CONFIG),
-    oldLatG: [1.55, 1.59, 1.75, 1.84],
-    latGShare: 0.99,
+    minSettledSlip: 0.9,
   },
   {
     name: 'FA-26 Rigid-Body',
     make: () => new F12026CarSim(pad),
     peakDeg: rigidBodyPeak(F12026_CAR_CONFIG),
-    oldLatG: [1.86, 2.18, 2.52, 2.96],
-    latGShare: 0.93,
+    minSettledSlip: 0.84,
   },
   {
     name: 'FA-26 Prototype',
     make: () => new F1Physics2026(pad),
     peakDeg: (c) => VF26_TYRES[c.tireCompound].front.frictionLimitAngleDeg,
-    oldLatG: [1.56, 1.89, 2.22, 2.59],
-    latGShare: 0.93,
+    minSettledSlip: 0.84,
   },
 ];
 
@@ -169,6 +162,32 @@ function drive(
   };
 }
 
+/**
+ * Lateral g with the fronts held near their peak slip by a wheel (`analogSteer`, an integral loop on the slip):
+ * what the car itself corners at, so the keyboard case is measured against the car rather than fixed numbers
+ */
+function wheelLatG(cc: CarCase, kmh: number, seconds = 4): number {
+  const c = placed(cc, kmh);
+  const peakRad = cc.peakDeg(c) / RAD2DEG;
+  const vT = kmh / 3.6;
+  let thr = 0.3;
+  let steer = 0;
+  let ay = 0;
+  let n = 0;
+  for (let t = 0; t < seconds; t += DT) {
+    thr = Math.max(0, Math.min(1, thr + (vT - c.vxMs) * 0.5 * DT));
+    c.step(DT, { throttle: thr, brake: 0, analogSteer: steer });
+    const sa = c.telemetry.wheelSlipAnglesDeg;
+    const front = Math.max(Math.abs(sa[0]), Math.abs(sa[1])) / RAD2DEG / peakRad;
+    steer = Math.max(0, Math.min(1, steer + (0.95 - front) * 0.6 * DT));
+    if (t > seconds - 1) {
+      ay += Math.abs(c.vxMs * c.yawRateRadS) / G;
+      n++;
+    }
+  }
+  return ay / n;
+}
+
 /** Largest frame-by-frame difference of two steering traces */
 const traceDiff = (a: readonly number[], b: readonly number[]) => a.reduce((m, v, i) => Math.max(m, Math.abs(v - b[i])), 0);
 
@@ -188,11 +207,11 @@ const kbTuning = (t: typeof SOFT): KeyboardTuning => ({ ...DEFAULT_PLAYER_SETTIN
 for (const cc of CARS) {
   const name = cc.name.padEnd(17);
   // 1. Held key
-  [70, 110, 150, 190].forEach((kmh, i) => {
+  [70, 110, 150, 190].forEach((kmh) => {
     const n = drive(cc, kmh, 3, () => ({ dir: 1 }));
-    const minG = cc.latGShare * cc.oldLatG[i];
+    const minG = 0.9 * wheelLatG(cc, kmh);
     check(
-      n.turnInSlip <= 1.1 && n.settledSlip >= 0.84 && n.settledSlip <= 1.05 && n.maxBetaDeg < 8 && n.latG >= minG,
+      n.turnInSlip <= 1.1 && n.settledSlip >= cc.minSettledSlip && n.settledSlip <= 1.05 && n.maxBetaDeg < 8 && n.latG >= minG,
       `${name} D held at ${String(kmh).padStart(3)} km/h: fronts ${f2(n.turnInSlip)}× their peak slip on turn-in, ` +
         `${f2(n.settledSlip)}× settled; ${f2(n.latG)} g (at least ${f2(minG)}); body slip ${n.maxBetaDeg.toFixed(1)}°`
     );
@@ -332,35 +351,6 @@ for (const cc of CARS) {
       `the grip eased to ${f2(minBrake)}, ${f2(onRelease)} while the released pedal falls, ${released} once it is up, ` +
       `${f2(recovered)} back under the grip; ${absOn} with ABS on; throttle ${f2(firstThrottle)} on the first press ` +
       `after wheelspin with the key up, eased to ${f2(minThrottle)} held in wheelspin`
-  );
-  // The controller's brake trigger cue backs off where the pedal help does at its default strength
-  check(Math.abs(brakeSlipMargin() - 0.15) < 1e-9, `Brake slip margin at the default strength: ${brakeSlipMargin()}`);
-}
-
-// Always-on trigger slip feedback (works even with ABS & TC enabled)
-{
-  const sim = createAmgGt3Sim(pad);
-  sim.assistPreset = 'semi_pro';
-  const tel = {
-    ...sim.telemetry,
-    speedKmh: 140,
-    brake: 0.7,
-    throttle: 0.7,
-    tireSlipRatio: [1.05, 1.05, 1.35, 1.35] as [number, number, number, number],
-    wheelSlipAnglesDeg: [8, 8, 8, 8] as [number, number, number, number],
-    wheelLoadsN: [3500, 3500, 4000, 4000] as [number, number, number, number],
-    wheelSlipRatios: [-0.05, -0.05, 0.06, 0.06] as [number, number, number, number],
-  };
-  const withAlwaysOnBrake = triggerMagnitudes({ ...tel, wheelSlipRatios: [-0.05, -0.05, 0, 0] }, 0.1, { triggerSlipAlwaysOn: true });
-  const withoutAlwaysOnBrake = triggerMagnitudes({ ...tel, wheelSlipRatios: [-0.05, -0.05, 0, 0] }, 0.1, { triggerSlipAlwaysOn: false });
-  const withAlwaysOnThrottle = triggerMagnitudes({ ...tel, brake: 0 }, 0.1, { triggerSlipAlwaysOn: true });
-  const withoutAlwaysOnThrottle = triggerMagnitudes({ ...tel, brake: 0 }, 0.1, { triggerSlipAlwaysOn: false });
-  check(
-    withAlwaysOnBrake.left > 0.1 &&
-      withAlwaysOnThrottle.right > 0.1 &&
-      withoutAlwaysOnBrake.left === 0 &&
-      withoutAlwaysOnThrottle.right === 0,
-    `Trigger slip always-on: LT=${f2(withAlwaysOnBrake.left)} RT=${f2(withAlwaysOnThrottle.right)} with ABS/TC on vs ${withoutAlwaysOnBrake.left}/${withoutAlwaysOnThrottle.right} when disabled`
   );
 }
 

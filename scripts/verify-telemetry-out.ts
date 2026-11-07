@@ -200,6 +200,16 @@ check('aids off: the trigger buzzes lightly as the tyres approach their grip, fi
   const t2 = triggerMagnitudes(spinning, 0);
   assert.ok(t2.right > 0 && t2.left === 0, 'wheelspin with TC off buzzes the throttle trigger only');
 });
+check('with the option on, the triggers buzz at the grip limit even with ABS and TC on', () => {
+  const aidsOn = { absLevel: 3, tcLevel: 3 } as CarTelemetry['liveTuner'];
+  const limit = { speedKmh: 140, tireSlipRatio: [1.05, 1.05, 1.35, 1.35], wheelLoadsN: [3500, 3500, 4000, 4000], liveTuner: aidsOn };
+  const braking = tel({ ...limit, brake: 0.7, throttle: 0, wheelSlipRatios: [-0.05, -0.05, 0, 0] });
+  const spinning = tel({ ...limit, brake: 0, throttle: 0.7, wheelSlipRatios: [0, 0, 0.06, 0.06] });
+  assert.ok(triggerMagnitudes(braking, 0.1, { triggerSlipAlwaysOn: true }).left > 0.1, 'brake trigger with the option');
+  assert.ok(triggerMagnitudes(spinning, 0.1, { triggerSlipAlwaysOn: true }).right > 0.1, 'throttle trigger with the option');
+  assert.equal(triggerMagnitudes(braking, 0.1, { triggerSlipAlwaysOn: false }).left, 0, 'the ABS speaks for itself');
+  assert.equal(triggerMagnitudes(spinning, 0.1, { triggerSlipAlwaysOn: false }).right, 0, 'the TC speaks for itself');
+});
 check('idle: both triggers are 0', () => {
   assert.deepEqual(triggerMagnitudes(tel({ speedKmh: 0, throttle: 0, brake: 0, wheelSlipRatios: [0, 0, 0, 0] }), 1.234), { left: 0, right: 0 });
   assert.deepEqual(triggerMagnitudes(tel({ speedKmh: 120, throttle: 0.05, brake: 0.02, wheelSlipRatios: [0.05, 0.05, 0.05, 0.05] }), 0.5), { left: 0, right: 0 });

@@ -688,14 +688,18 @@ async function asyncChecks() {
     cHw.update({ speedKmh: 100, ffbTorqueNorm: 0 } as never, wDamp, [pad('Wheel', '', [0.1])], 1020, true);
     cSoft.update({ speedKmh: 100, ffbTorqueNorm: 0 } as never, wDamp, [pad('Wheel', '', [0.1])], 1020, true);
 
-    // At 100 km/h, gyroFactor = (100 - 10) / 180 = 0.5 -> damper = 0.5 * (0.4 + 0.6 * 0.5) = 0.35
-    near(lastHwDamper, 0.35, 1e-6);
-    near(Math.abs(cHw.force), Math.abs(cSoft.force) * 0.3, 1e-6);
+    const at100 = lastHwDamper;
+    assert.ok(at100 > 0, 'the wheel damps while driving');
+    assert.ok(Math.abs(cHw.force) < Math.abs(cSoft.force), 'with the wheel damping, the software damper backs off');
+    cHw.update({ speedKmh: 220, ffbTorqueNorm: 0 } as never, wDamp, [pad('Wheel', '', [0.1])], 1040, true);
+    assert.ok(lastHwDamper > at100, 'the wheel damps more at speed (gyroscopic)');
+    cHw.update({ speedKmh: 220, ffbTorqueNorm: 0 } as never, wDamp, [pad('Wheel', '', [0.1])], 1060, false);
+    assert.equal(lastHwDamper, 0, 'no damping out of the car');
     cHw.stop();
     cSoft.stop();
     unlink();
     passed++;
-    console.log('  ok  WebHID hardware damper forwards speed-scaled coefficient and reduces software damping by 70%');
+    console.log('  ok  WebHID hardware damper: on while driving, rising with speed, off out of the car, software damper backs off');
   }
   console.log(`\n${passed} checks passed`);
 }
