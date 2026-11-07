@@ -16,6 +16,7 @@ import type {
   TyreSetup,
 } from '@/types/f1';
 import type { VehicleWheelState } from './vehicle-types';
+import type { GroundQuery } from './f12026-car/TrackColliderQuery';
 import type { SteeringAssistSettings, SteeringSource } from './steering-assist';
 import type { BrakingGuide } from './speed-profile';
 
@@ -58,6 +59,11 @@ export interface SimulatorCar {
   readonly wheels: readonly [SimulatorWheel, SimulatorWheel, SimulatorWheel, SimulatorWheel];
   /** Optional visual tyre state per corner (FR, FL, RR, RL) for the GPU tyre deformation */
   readonly tyreVisuals?: readonly [TyreVisualState, TyreVisualState, TyreVisualState, TyreVisualState];
+  /**
+   * The track collider the car drives on, for reading only (the rigs seat the drawn wheels on it, `seatCorner`);
+   * null / absent while the car is on the track samples' ground
+   */
+  readonly groundQuery?: GroundQuery | null;
   readonly wheelbaseM: number;
   /** Static height of the centre of gravity above the ground (m) */
   readonly cgHeightM: number;

@@ -669,6 +669,8 @@ export class F12026CarSim implements SimulatorCar {
   private realism: SimRealismFlags = { ...FULL_REALISM };
   private coldPsi: WheelPressures = axlePressures(0, 0);
   private onColliders = false;
+  /** The track's road collider once the car is on it (`attachTrackRoot`) */
+  private collider: GroundQuery | null = null;
   private progressHintS: number | undefined;
   private poseHintS: number | undefined;
   private s = 0;
@@ -787,8 +789,7 @@ export class F12026CarSim implements SimulatorCar {
 
   /** Where the road under this car's track colliders really ends (null on the sample ground) */
   private autopilotEdges(): AutopilotEdges | null {
-    const ground = this.onColliders && this.trackRoot ? trackColliders(this.trackRoot).ground : null;
-    return ground ? autopilotEdges(this.track, ground) : null;
+    return this.collider ? autopilotEdges(this.track, this.collider) : null;
   }
 
   /** The autopilot's own limit speed along the lap (m/s, every 5 m): what AI tuning scales */
@@ -835,6 +836,7 @@ export class F12026CarSim implements SimulatorCar {
     this.vehicle.setGround(ground);
     this.vehicle.setWalls(walls);
     this.onColliders = true;
+    this.collider = ground;
     // A car at rest is re-seated on the collider heights; a moving one rides over the (small) step
     if (!wasOn && this.vehicle.speedMs < 0.5) {
       const p = this.vehicle.position;
@@ -845,6 +847,11 @@ export class F12026CarSim implements SimulatorCar {
 
   public get onTrackColliders(): boolean {
     return this.onColliders;
+  }
+
+  /** The track collider the car drives on (null on the track samples' ground), for the rigs to seat the wheels on */
+  public get groundQuery(): GroundQuery | null {
+    return this.collider;
   }
 
   // ===========================================================================

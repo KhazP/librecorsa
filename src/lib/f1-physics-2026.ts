@@ -992,6 +992,11 @@ export class F1Physics2026 {
     this.finishPlacement();
   }
 
+  /** The track collider the car drives on (null on the track samples' ground), for the rigs to seat the wheels on */
+  public get groundQuery(): GroundQuery | null {
+    return this.ground ?? null;
+  }
+
   public readonly vehicleId = 'vf26' as const;
   public readonly racingLineId = 'f1' as const;
 
