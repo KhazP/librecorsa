@@ -12,6 +12,8 @@ body:
         Thanks for the idea! LibreCorsa can only ship models it is allowed to redistribute: an open license
         (CC BY, CC BY-SA, CC0, or non-commercial CC BY-NC / CC BY-NC-SA) or written permission from the creator. Models ripped from other games
         (Assetto Corsa, ACC, iRacing, F1 games…) can't be used unless the original creator agrees.
+
+        **Please ask the creator for permission before you request a model, and link their answer.**
   - type: input
     id: kind
     attributes:
@@ -30,7 +32,7 @@ body:
     id: link
     attributes:
       label: Model link
-      description: Where the 3D model can be found (Sketchfab, a mod page, a scan…). Requests without a model can't be built.
+      description: "Where the 3D model can be found (Sketchfab, a mod page, a scan…). Requests without a model can't be built. **Heads-up:** models from Sketchfab and similar 3D sites are usually low quality (lower FPS, no real kerbs, tarmac or run-off). A sim mod (e.g. Assetto Corsa) is far better, but only with its creator's permission: ask them first."
     validations:
       required: true
   - type: input
@@ -46,7 +48,9 @@ body:
     id: permission
     attributes:
       label: Permission to use it
-      description: "The license allows it, the creator gave written permission, not asked yet, or don't know."
+      description: "The license allows it, or the creator gave written permission (link it below). Without either it can't be added."
+    validations:
+      required: true
   - type: textarea
     id: notes
     attributes:
