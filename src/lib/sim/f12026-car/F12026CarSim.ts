@@ -1770,11 +1770,13 @@ export class F12026CarSim implements SimulatorCar {
       }
       return vv;
     };
+    // The limit a little ahead (the pedal's lag). Where it rises or holds (a straight, a corner exit) the car simply
+    // accelerates as hard as it can; where it falls, its slope is the braking the pedal is set for
     const v0 = at(lead);
     const v1 = at(lead + 6);
     const aFF = (v1 * v1 - v0 * v0) / 12;
-    const pedalFF =
-      aFF >= 0 ? aFF / Math.max(1, plan.limits.traction(speed)) : aFF / Math.max(1, plan.limits.braking(speed) / plan.limits.gripScale);
+    if (aFF >= -0.5 && speed < v0) return { v: Infinity, pedalFF: 1 };
+    const pedalFF = aFF >= 0 ? 0 : aFF / Math.max(1, plan.limits.braking(speed) / plan.limits.gripScale);
     return { v: v0, pedalFF: THREE.MathUtils.clamp(pedalFF, -1, 1) };
   }
 

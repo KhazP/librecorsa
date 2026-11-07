@@ -5,7 +5,7 @@
  *   npx tsx scripts/ai/measure-ggv.ts [--car f12026-car|amg-gt3|vf26|all] [--out public/ai/ggv.json]
  *
  * Cornering: an ISO 4138-style slow steer ramp at each held speed, the best 1 s mean lateral g (scripts/lib/handling-
- * tests.ts). Braking: full pedal with the AI's ABS from each speed, the mean deceleration over the first 0.35 s.
+ * tests.ts). Braking: full pedal with the AI's ABS from each speed, the mean deceleration from 0.15 s to 0.5 s.
  * Traction: full pedal with TC from each speed in a mid gear, the mean acceleration over 0.5 s. All on level ground
  * with no wind, warm tyres, a half fuel load (the car's default).
  */
@@ -43,10 +43,14 @@ function straightLine(make: () => SimulatorCar, vMs: number, mode: 'brake' | 'th
   for (let t = 0; t < 1.0; t += DT) car.step(DT, { throttle: 0.6 * (vMs / 90) + 0.2, analogSteer: 0 });
   car.teleportToDistance(car.sMeters, vMs, 0);
   for (let t = 0; t < 0.3; t += DT) car.step(DT, { throttle: 0.6 * (vMs / 90) + 0.2, analogSteer: 0 });
-  const v0 = car.vxMs;
+  // From 0.15 s after the pedal (brake pressure and the engine's torque build over the first tenth or so)
   let t = 0;
-  for (; t < windowS; t += DT) car.step(DT, mode === 'brake' ? { brake: 1, analogSteer: 0 } : { throttle: 1, analogSteer: 0 });
-  return (car.vxMs - v0) / t / 9.81;
+  let v0 = car.vxMs;
+  for (; t < 0.15 + windowS; t += DT) {
+    if (t < 0.15) v0 = car.vxMs;
+    car.step(DT, mode === 'brake' ? { brake: 1, analogSteer: 0 } : { throttle: 1, analogSteer: 0 });
+  }
+  return (car.vxMs - v0) / windowS / 9.81;
 }
 
 const speeds = [15, 25, 35, 45, 55, 65, 75, 85];

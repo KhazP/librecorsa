@@ -11,9 +11,14 @@ import { planSpeeds } from './speed-plan';
 
 export interface AiDrivePlan {
   readonly track: AiTrack;
-  /** Lateral offset (m, + right), speed (m/s), path curvature (1/m, + right) and dn/ds per grid point */
+  /**
+   * Lateral offset (m, + right), the speed the car may carry (m/s: the cornering and braking limit; it accelerates as
+   * hard as it can toward it), path curvature (1/m, + right) and dn/ds per grid point
+   */
   readonly n: Float64Array;
   readonly v: Float64Array;
+  /** The full plan's speeds, traction included (what the lap is expected to look like) */
+  readonly vExpected: Float64Array;
   readonly kappa: Float64Array;
   readonly dnds: Float64Array;
   /** The limits the speeds were planned on (the tracker's pedal feed-forward reads them) */
@@ -29,5 +34,5 @@ export function makeDrivePlan(track: AiTrack, offsets: ArrayLike<number>, limits
     const a = n[(i - 1 + track.n) % track.n], b = n[(i + 1) % track.n];
     dnds[i] = (b - a) / (2 * track.ds);
   }
-  return { track, n, v: plan.v, kappa: plan.geometry.kappa, dnds, limits, lapS: plan.lapS };
+  return { track, n, v: plan.vLimit, vExpected: plan.v, kappa: plan.geometry.kappa, dnds, limits, lapS: plan.lapS };
 }

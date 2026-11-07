@@ -18,6 +18,11 @@ import { G, type CarLimits } from './ggv';
 export interface SpeedPlan {
   /** Planned speed per AI grid point (m/s) */
   v: Float64Array;
+  /**
+   * The cornering and braking limits only (no forward / traction pass): what the car may carry at each point. A car
+   * tracks this, accelerating as hard as its own engine allows; the full plan above times the lap
+   */
+  vLimit: Float64Array;
   /** Lap time of the plan along the path (s) */
   lapS: number;
   geometry: PathGeometry;
@@ -57,10 +62,8 @@ export function planSpeeds(track: AiTrack, offsets: ArrayLike<number>, limits: C
     vLat[i] = lo;
   }
 
-  // 2. Passes, twice round the lap
-  const v = Float64Array.from(vLat);
-  for (let round = 0; round < 2; round++) {
-    // Backward: braking into each point
+  // 2. Backward (braking into each point) and forward (accelerating out of each) passes, twice round the lap
+  const backward = (v: Float64Array) => {
     for (let step = 0; step < 2 * n; step++) {
       const i = (2 * n - 1 - step) % n;
       const j = (i + 1) % n;
@@ -70,7 +73,8 @@ export function planSpeeds(track: AiTrack, offsets: ArrayLike<number>, limits: C
       const vMax = Math.sqrt(vj * vj + 2 * Math.max(0.5, aBrake) * seg[i]);
       if (vMax < v[i]) v[i] = vMax;
     }
-    // Forward: accelerating out of each point
+  };
+  const forward = (v: Float64Array) => {
     for (let step = 0; step < 2 * n; step++) {
       const i = step % n;
       const j = (i + 1) % n;
@@ -80,8 +84,17 @@ export function planSpeeds(track: AiTrack, offsets: ArrayLike<number>, limits: C
       const vMax = Math.sqrt(Math.max(0, vi * vi + 2 * aAcc * seg[i]));
       if (vMax < v[j]) v[j] = Math.max(vMax, 1);
     }
+  };
+  // The braking-only envelope: what the car may carry, whatever its engine
+  const vLimit = Float64Array.from(vLat);
+  backward(vLimit);
+  backward(vLimit);
+  const v = Float64Array.from(vLimit);
+  for (let round = 0; round < 2; round++) {
+    forward(v);
+    backward(v);
   }
   let lapS = 0;
   for (let i = 0; i < n; i++) lapS += seg[i] / Math.max(1, 0.5 * (v[i] + v[(i + 1) % n]));
-  return { v, lapS, geometry };
+  return { v, vLimit, lapS, geometry };
 }
