@@ -21,6 +21,7 @@ import type { CarSoundSource } from "@/lib/sim/CarAudio";
 import { OpponentAudio } from "@/lib/sim/opponent-audio";
 import { CARS, carById, carForVehicle, isCarId, type CarId } from "@/lib/cars/car-registry";
 import { overtakingRulesForSeason } from "@/lib/sim/overtaking-rules";
+import { alignGhostToTrack, trackGeometryKey } from "@/lib/sim/ghost-align";
 import { carPhysics, carTakesPhysicsSwitch, subscribeF1ModPhysics } from "@/lib/cars/f1-mod-physics";
 import { buildCircuitScene } from "@/lib/scene-builder";
 import {
@@ -1027,9 +1028,10 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     const rec = await loadBestLap(trackId, vehicleModelRef.current, lapBoardClass(currentBoard())).catch(() => null);
     if (req !== ghostReqRef.current) return;
     ghostSourceRef.current = "pb";
-    ghostRef.current = rec ? new GhostPlayer(rec) : null;
+    // A best from an earlier version of the circuit is moved onto this one
+    ghostRef.current = rec ? new GhostPlayer(alignGhostToTrack(rec, track).recording) : null;
     lapRecorderRef.current?.setContext({ personalBestMs: rec?.lapTimeMs ?? null });
-  }, [trackId, currentBoard]);
+  }, [trackId, currentBoard, track]);
 
   const onLapCompleted = useCallback(
     (summary: LapSummaryData, recording: LapRecording) => {
@@ -1081,10 +1083,11 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   const raceGhost = useCallback((rec: LapRecording | null) => {
     if (!rec) return;
     ghostReqRef.current++;
-    ghostRef.current = new GhostPlayer(rec);
+    // A lap from another version of the circuit (a downloaded or older file) is moved onto this one
+    ghostRef.current = new GhostPlayer(alignGhostToTrack(rec, track).recording);
     ghostSourceRef.current = "other";
     setSettings((prev) => (prev.ghost ? prev : { ...prev, ghost: true }));
-  }, []);
+  }, [track]);
 
   const handleRaceGhostEntry = useCallback(
     async (entry: LeaderboardEntry) => {
@@ -1500,6 +1503,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     // Lap recording for the summary card, the personal-best ghost and the leaderboards
     const lapRecorder = new LapRecorder({
       trackLengthM: track.totalLengthM,
+      trackGeometry: trackGeometryKey(track),
       turns: TURN_METADATA.map((t) => ({ number: t.number, name: t.name, sApprox: t.sApprox })),
       trackId,
       vehicle: vehicleModelRef.current,

@@ -36,6 +36,8 @@ export interface CompletedLap {
 
 export interface LapRecorderOptions {
   trackLengthM: number;
+  /** Fingerprint of the circuit geometry (`trackGeometryKey`), kept with each lap so its ghost fits later versions */
+  trackGeometry?: string;
   turns: LapRecorderTurn[];
   trackId: string;
   vehicle: VehicleModelId;
@@ -136,6 +138,7 @@ interface CornerWindow {
 
 export class LapRecorder {
   private readonly trackLengthM: number;
+  private readonly trackGeometry: string | undefined;
   private readonly trackId: string;
   private readonly sampleHz: number;
   private readonly period: number;
@@ -163,6 +166,7 @@ export class LapRecorder {
 
   constructor(opts: LapRecorderOptions) {
     this.trackLengthM = opts.trackLengthM;
+    this.trackGeometry = opts.trackGeometry;
     this.trackId = opts.trackId;
     this.sampleHz = opts.sampleHz ?? DEFAULT_SAMPLE_HZ;
     this.period = 1 / this.sampleHz;
@@ -389,6 +393,10 @@ export class LapRecorder {
       }, []),
     };
     if (this.lapConditions) recording.conditions = { ...this.lapConditions };
+    if (this.trackGeometry) {
+      recording.trackGeometry = this.trackGeometry;
+      recording.trackLengthM = this.trackLengthM;
+    }
 
     const summary: LapSummaryData = {
       lapNumber,
@@ -572,5 +580,8 @@ export function validateLapRecording(raw: unknown): LapRecording | null {
     data,
   };
   if (conditions) out.conditions = conditions;
+  // The circuit version the lap was driven on (optional: older laps and downloaded ghosts lack it)
+  if (typeof r.trackGeometry === "string" && /^[0-9a-f]{8}$/.test(r.trackGeometry)) out.trackGeometry = r.trackGeometry;
+  if (finite(r.trackLengthM) && r.trackLengthM > 100 && r.trackLengthM < 100_000) out.trackLengthM = r.trackLengthM;
   return out;
 }

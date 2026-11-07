@@ -103,6 +103,13 @@ export interface LapRecording {
   data: number[];
   /** Assists, tyre, surface and physics revision; absent on laps recorded before they were kept */
   conditions?: LapConditions;
+  /**
+   * Fingerprint of the circuit geometry the lap was driven on (`trackGeometryKey`) and its lap length (m), so a ghost
+   * from another version of the circuit can be moved onto this one (`alignGhostToTrack`); absent on older laps.
+   * Kept locally: the leaderboard's wire form leaves them out
+   */
+  trackGeometry?: string;
+  trackLengthM?: number;
 }
 
 /** A corner of the lap: the lowest speed through it, and the best seen on earlier laps */

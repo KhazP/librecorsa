@@ -19,6 +19,7 @@ import { disposeTree } from '@/lib/render/dispose-tree';
 import { LIVERIES } from '@/lib/track-data';
 import { CarTelemetry, LiveryConfig, type VehicleModelId } from '@/types/f1';
 import type { SimulatorWheel as SimWheelState } from './simulator-car';
+import { GHOST_OPACITY, ghostFade } from './ghost-align';
 import { InterpolatedPeerState } from './multiplayer-sync';
 
 const MAX_SKID_SEGMENTS = 900; // Ring buffer of 4-vertex quad segments across all 4 wheels
@@ -116,8 +117,19 @@ export class SimVisualFxManager {
   /** wheelRot: the wheels' spin angle (rad), integrated from their speed each frame */
   private opponentCars = new Map<
     string,
-    { rig: SimCarRig; vehicle: VehicleModelId | undefined; wheelRot: number; telemetry?: CarTelemetry; ghostCheckS?: number }
+    {
+      rig: SimCarRig;
+      vehicle: VehicleModelId | undefined;
+      wheelRot: number;
+      telemetry?: CarTelemetry;
+      ghostCheckS?: number;
+      /** A ghost's translucent materials, faded as it nears the player's car */
+      ghostMats?: THREE.Material[];
+    }
   >();
+  /** The player's car (mean of its wheels) while it is driven; null in replays and menus (the ghost is not faded) */
+  private readonly playerPos = new THREE.Vector3();
+  private playerPosValid = false;
   /**
    * Rigs built during loading (one racing car and one ghost per opponent model) so the shader warm-up covers them;
    * handed out to the first peers that need that model instead of being built on the first frame of a race
@@ -237,6 +249,12 @@ export class SimVisualFxManager {
       this.lastWheelSkidPos.fill(null);
     }
     this.stepParticles(dt);
+    this.playerPosValid = emit;
+    if (emit) {
+      this.playerPos.set(0, 0, 0);
+      for (const w of wheels) this.playerPos.add(w.worldPos);
+      this.playerPos.multiplyScalar(0.25);
+    }
     this.updateOpponentCars(dt, peers);
   }
 
@@ -590,7 +608,14 @@ export class SimVisualFxManager {
       // A late model load adds meshes to a ghost: look for them twice a second, not by walking the rig every frame
       if (peer.ghost && (entry.ghostCheckS = (entry.ghostCheckS ?? 0) - dt) <= 0) {
         ghostify(carRig.root);
+        entry.ghostMats = ghostMaterials(carRig.root);
         entry.ghostCheckS = 0.5;
+      }
+      if (peer.ghost && entry.ghostMats) {
+        // Fades out as it nears the player's car and is gone on top of it, so it never fills the cockpit
+        const fade = this.playerPosValid ? ghostFade(peer.position.distanceTo(this.playerPos)) : 1;
+        carRig.root.visible = fade > 0.004;
+        for (const m of entry.ghostMats) m.opacity = GHOST_OPACITY * fade;
       }
 
       carRig.root.position.copy(peer.position);
@@ -756,6 +781,17 @@ function buildOpponentRig(vehicle: VehicleModelId | undefined, livery: LiveryCon
   return rig;
 }
 
+/** The translucent materials `ghostify` gave a car */
+function ghostMaterials(root: THREE.Object3D): THREE.Material[] {
+  const out: THREE.Material[] = [];
+  root.traverse((obj) => {
+    const mesh = obj as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    for (const m of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) if (m.userData.ghost) out.push(m);
+  });
+  return out;
+}
+
 /** Makes a car translucent (the best-lap ghost); new meshes from a late model load are caught on later calls */
 function ghostify(root: THREE.Object3D): void {
   root.traverse((obj) => {
@@ -768,7 +804,7 @@ function ghostify(root: THREE.Object3D): void {
       if (m.userData.ghost) return m;
       const g = m.clone();
       g.transparent = true;
-      g.opacity = 0.3;
+      g.opacity = GHOST_OPACITY;
       g.depthWrite = false;
       g.userData.ghost = true;
       return g;
