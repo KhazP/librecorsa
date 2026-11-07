@@ -109,6 +109,8 @@ export interface SimulatorCar {
   aiSpeedCapMs?: number;
   /** AI tuning: target speed along the lap replacing the autopilot's own limit profile (m/s, uniform spacing) */
   aiTargetSpeedMs?: Float64Array | null;
+  /** A plan for the autopilot to track as given (`ai/drive-plan.ts`); null: its own line and limit profile */
+  aiPlan?: import('./ai/drive-plan').AiDrivePlan | null;
   /** AI tuning: steering gain multiplier of the autopilot */
   aiSteerGain?: number;
   /** The autopilot's own limit speed along the lap (m/s, uniform spacing), which AI tuning scales */

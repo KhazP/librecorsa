@@ -71,6 +71,8 @@ import { createGroundHit, type GroundHit, type GroundQuery, type TrackSurfaceKin
 import { trackColliders } from '../track-colliders';
 import { type VehicleEvent, type VehicleInputs, VehiclePhysics } from './VehiclePhysics';
 import { KERB_PROFILE_L, kerbProfileM, surfaceRippleM } from '../track-surfaces';
+import { sampleGrid } from '../ai/ai-track';
+import type { AiDrivePlan } from '../ai/drive-plan';
 
 const G = 9.81;
 const DEG2RAD = Math.PI / 180;
@@ -418,6 +420,18 @@ const AMBIENT_C = 27;
 const AP_LINE_KP = 2.25;
 const AP_LINE_KD = 2.1;
 const AP_LINE_MAX_MS2 = 3;
+/**
+ * Tracking a supplied plan (`aiPlan`): pure pursuit on the plan's path with a short look-ahead, a slow integral on
+ * the lateral error, and the plan's speed with its own slope as the pedal feed-forward
+ */
+/** Pure-pursuit look-ahead on a plan: this many seconds of travel, at least the minimum (m) */
+const TRACK_LOOK_S = 0.22;
+const TRACK_LOOK_MIN_M = 5;
+/** Integral on the lateral error (m/s² per m·s) and its cap: a long corner taken a little wide is pulled back */
+const TRACK_KI = 1.2;
+const TRACK_I_MAX_MS2 = 2.5;
+/** A line may put two wheels on a kerb: this much past the autopilot's usual edge margin where the edge has one (m) */
+const TRACK_KERB_ALLOW_M = 0.6;
 /** Autopilot pedals ease off past this share of the rears' peak slip angle, by this much per share beyond it */
 const AP_REAR_GUARD = 0.9;
 const AP_REAR_GUARD_GAIN = 4;
@@ -600,6 +614,14 @@ export class F12026CarSim implements SimulatorCar {
   public aiTargetSpeedMs: Float64Array | null = null;
   /** AI tuning: multiplier on the autopilot's steering (shorter pursuit look-ahead when higher) */
   public aiSteerGain = 1;
+  /**
+   * A plan to track: lateral offset and speed along the lap (`ai/drive-plan.ts`). Set, the autopilot follows it as
+   * given, with `aiLineBiasM`, `aiSpeedCapMs`, `aiPaceScale` and the tuning target's errors on top; null keeps the
+   * autopilot's own line and limit profile
+   */
+  public aiPlan: AiDrivePlan | null = null;
+  /** Integral of the lateral error while tracking a plan (m/s²) */
+  private trackI = 0;
   private _assistPreset: DriverAssistPreset = 'semi_pro';
   /** Live MFD Stage-1 TC slip dial (0 = OFF, 1 = min intervention / max slip, 12 = max intervention / min slip) */
   public tcLevel = 5;
@@ -1554,20 +1576,25 @@ export class F12026CarSim implements SimulatorCar {
     const L = this.track.totalLengthM;
     const speed = v.speedMs;
     const p = this.track.projectWorldToTrack(v.position.x, v.position.z, this.poseHintS);
+    _ex.set(1, 0, 0).applyQuaternion(v.quaternion);
+    _ez.set(0, 0, 1).applyQuaternion(v.quaternion);
+    const beta = Math.atan2(v.velocity.dot(_ex), Math.max(1, v.velocity.dot(_ez)));
+    const plan = this.aiPlan;
+    let kappa: number;
+    if (plan) {
+      kappa = this.planCurvature(plan, p, speed);
+    } else {
     const look = this.track.getSampleAtDistance((p.s + Math.max(10, (speed * 0.55) / this.aiSteerGain)) % L);
     // the racing line uses the kerbs; the autopilot keeps all four wheels on the asphalt
     const [lookLo, lookHi] = autopilotLateralRange(this.track, look, look.s, this.autopilotEdges(), this.profile);
     const off = THREE.MathUtils.clamp(aiLineOffsetM(look, this.line) + this.aiLineBiasM, lookLo, lookHi);
-    _ex.set(1, 0, 0).applyQuaternion(v.quaternion);
-    _ez.set(0, 0, 1).applyQuaternion(v.quaternion);
     const dx = look.position.x + look.binormal.x * off - v.position.x;
     const dz = look.position.z + look.binormal.z * off - v.position.z;
     const dl = Math.hypot(dx, dz);
     const alpha = Math.atan2(dx * _ex.x + dz * _ex.z, dx * _ez.x + dz * _ez.z);
-    const beta = Math.atan2(v.velocity.dot(_ex), Math.max(1, v.velocity.dot(_ez)));
     // Pure pursuit asks for a path curvature; yaw-rate PI makes the car actually turn at it, so its
     // understeer at speed does not carry it wide of the line
-    let kappa = (2 * Math.sin(alpha)) / Math.max(5, dl);
+    kappa = (2 * Math.sin(alpha)) / Math.max(5, dl);
     // ... plus a pull back onto the line here and now, on the error and its rate (the pursuit alone let the car run
     // 2 m past its line and the edge on Daytona's banking exits and into Rwanda's turn 1), capped so a car well off
     // the line rejoins it rather than asking the tyres for a second corner
@@ -1586,6 +1613,7 @@ export class F12026CarSim implements SimulatorCar {
         AP_LINE_MAX_MS2
       );
       kappa += aLat / Math.max(100, speed * speed);
+    }
     }
     // The path curvature is in the horizontal plane, so the yaw that follows it is about world up, not the body's
     // (on Daytona's 31° banking the body's is cos 31° of it, and the integrator built up there sent the car off the
@@ -1611,7 +1639,13 @@ export class F12026CarSim implements SimulatorCar {
     const prof = autopilotProfile(this.track, this.profile, this.autopilotEdges());
     const b = envelopeAt(this.profile.braking, this.circuitAirDensity());
     let vTarget = this.aiSpeedCapMs;
-    for (let d = 0; d <= 300; d += 5) {
+    let pedalFF = 0;
+    if (plan) {
+      const r = this.planSpeedTarget(plan, p.s, speed, prof);
+      vTarget = Math.min(vTarget, r.v);
+      pedalFF = r.pedalFF;
+    }
+    for (let d = 0; d <= 300 && !plan; d += 5) {
       const smp = this.track.getSampleAtDistance((p.s + lead + d) % L);
       const tab = this.aiTargetSpeedMs ?? prof;
       const own = tab[Math.floor(((p.s + lead + d) % L) / (L / tab.length)) % tab.length];
@@ -1621,8 +1655,10 @@ export class F12026CarSim implements SimulatorCar {
       vTarget = Math.min(vTarget, Math.sqrt(vC * vC + 2 * a * d));
     }
     // Off the line the corner is tighter than planned: give speed away for it
-    const lineErr = Math.abs(aiLineOffsetM(p.sample, this.line) + this.aiLineBiasM - p.lateralOffset);
-    vTarget *= 1 - 0.04 * Math.min(5, Math.max(0, lineErr - 1));
+    if (!plan) {
+      const lineErr = Math.abs(aiLineOffsetM(p.sample, this.line) + this.aiLineBiasM - p.lateralOffset);
+      vTarget *= 1 - 0.04 * Math.min(5, Math.max(0, lineErr - 1));
+    }
     // PI on speed: the integral alone lags a falling target, so the car braked on past each apex speed it was given
     const vErr = vTarget - speed;
     const pedalP = AP_PEDAL_P * vErr;
@@ -1630,7 +1666,7 @@ export class F12026CarSim implements SimulatorCar {
     if (!(Math.abs(this.apPedal + pedalP) >= 1 && Math.sign(vErr) === Math.sign(this.apPedal + pedalP))) {
       this.apPedal = THREE.MathUtils.clamp(this.apPedal + vErr * 0.01 * (h * 120), -1, 1);
     }
-    const pedal = THREE.MathUtils.clamp(this.apPedal + pedalP, -1, 1);
+    const pedal = THREE.MathUtils.clamp(this.apPedal + pedalP + pedalFF, -1, 1);
     const W = v.wheels;
     // The rear stepping out (on a trail-braked entry, or on the power): ease both pedals as the rears' slip angle
     // passes AP_REAR_GUARD of their peak, so they regain grip to hold the car with rather than spinning it
@@ -1654,6 +1690,92 @@ export class F12026CarSim implements SimulatorCar {
       steer: THREE.MathUtils.clamp(-(delta - 0.5 * (W[0].complianceRad + W[1].complianceRad)) / v.maxSteerRad, -1, 1),
       drs: v.telemetry.drsAvailable && !v.drsOpen && aids.throttle > 0.95,
     };
+  }
+
+  /**
+   * Where the car's centre may be at lap distance `s` (m, + right): the autopilot's usable road (track edges, raised
+   * lips under the colliders, half the car's track plus a margin), plus `TRACK_KERB_ALLOW_M` over an edge with a kerb
+   * that isn't a lip. The line generator bounds its lines with this, and the tracker keeps its target inside it.
+   */
+  public lateralRangeAt(s: number, sample: TrackSamplePoint = this.track.getSampleAtDistance(s)): [number, number] {
+    const edges = this.autopilotEdges();
+    let [lo, hi] = autopilotLateralRange(this.track, sample, s, edges, this.profile);
+    const half = sample.width / 2;
+    let lipNeg = false, lipPos = false;
+    if (edges) {
+      const n = edges.neg.length;
+      const i = Math.round((wrap(s, this.track.totalLengthM) / this.track.totalLengthM) * n) % n;
+      lipNeg = edges.neg[i] < half - 0.05;
+      lipPos = edges.pos[i] < half - 0.05;
+    }
+    if (sample.kerbLeft && !lipNeg) lo -= TRACK_KERB_ALLOW_M;
+    if (sample.kerbRight && !lipPos) hi += TRACK_KERB_ALLOW_M;
+    return [lo, hi];
+  }
+
+  /**
+   * The curvature (+ left, as the pursuit's) to steer for on a supplied plan: the path's own, a little ahead for the
+   * steering's lag, plus a pull onto the path on the lateral error and its rate. The target is the plan's offset with
+   * the traffic bias, kept inside the autopilot's usable road (edges and lips as ever).
+   */
+  private planCurvature(plan: AiDrivePlan, p: { s: number; lateralOffset: number; sample: TrackSamplePoint }, speed: number): number {
+    const v = this.vehicle;
+    const t = plan.track;
+    // Pure pursuit on the plan's own path with a short look-ahead: geometric, so it holds when the line crosses the
+    // road at a steep angle (a tight corner's turn-in), where errors measured across the track misled a lateral loop.
+    // The look-ahead is short enough that the corner-cutting it brings stays a few decimetres.
+    const ld = Math.max(TRACK_LOOK_MIN_M, speed * TRACK_LOOK_S) / this.aiSteerGain;
+    // The look-ahead along the path, as centreline distance (the inside of a corner covers less path per metre of
+    // centreline, the outside more)
+    const kc = sampleGrid(t.kappa, p.s + 0.5 * ld, t.ds);
+    const nMid = sampleGrid(plan.n, p.s + 0.5 * ld, t.ds);
+    const sLook = p.s + ld / Math.max(0.4, 1 - kc * nMid);
+    const look = this.track.getSampleAtDistance(wrap(sLook, this.track.totalLengthM));
+    const [lo, hi] = this.lateralRangeAt(sLook, look);
+    const nT = THREE.MathUtils.clamp(sampleGrid(plan.n, sLook, t.ds) + this.aiLineBiasM, lo, hi);
+    const dx = look.position.x + look.binormal.x * nT - v.position.x;
+    const dz = look.position.z + look.binormal.z * nT - v.position.z;
+    const dl = Math.hypot(dx, dz);
+    const alpha = Math.atan2(dx * _ex.x + dz * _ex.z, dx * _ez.x + dz * _ez.z);
+    let kappa = (2 * Math.sin(alpha)) / Math.max(3, dl);
+    // A slow integral on the lateral error here and now: a long corner taken a little wide is pulled back
+    {
+      const [lo0, hi0] = this.lateralRangeAt(p.s, p.sample);
+      const nNow = THREE.MathUtils.clamp(sampleGrid(plan.n, p.s, t.ds) + this.aiLineBiasM, lo0, hi0);
+      const b = p.sample.binormal;
+      const leftOf = (b.x * _ex.x + b.z * _ex.z) / (Math.hypot(b.x, b.z) || 1);
+      const errLeft = (nNow - p.lateralOffset) * leftOf;
+      this.trackI = THREE.MathUtils.clamp(this.trackI + TRACK_KI * errLeft * AID_SLICE_S, -TRACK_I_MAX_MS2, TRACK_I_MAX_MS2);
+      kappa += this.trackI / Math.max(100, speed * speed);
+    }
+    return kappa;
+  }
+
+  /**
+   * The speed to drive now on a supplied plan, and the pedal its slope asks for: the plan a little ahead (the pedal's
+   * lag) at this car's pace, with the AI tuning target's errors and learning carried over as its ratio to the limit
+   * profile it was built from
+   */
+  private planSpeedTarget(plan: AiDrivePlan, s: number, speed: number, prof: Float32Array): { v: number; pedalFF: number } {
+    const t = plan.track;
+    const L = this.track.totalLengthM;
+    const lead = Math.max(3, speed * 0.15);
+    const at = (d: number) => {
+      let vv = sampleGrid(plan.v, s + d, t.ds) * this.aiPaceScale;
+      const tab = this.aiTargetSpeedMs;
+      if (tab) {
+        const k = Math.floor((wrap(s + d, L) / L) * tab.length) % tab.length;
+        const base = prof[Math.floor((wrap(s + d, L) / L) * prof.length) % prof.length];
+        if (base > 1) vv *= THREE.MathUtils.clamp(tab[k] / base, 0.8, 1.05);
+      }
+      return vv;
+    };
+    const v0 = at(lead);
+    const v1 = at(lead + 6);
+    const aFF = (v1 * v1 - v0 * v0) / 12;
+    const pedalFF =
+      aFF >= 0 ? aFF / Math.max(1, plan.limits.traction(speed)) : aFF / Math.max(1, plan.limits.braking(speed) / plan.limits.gripScale);
+    return { v: v0, pedalFF: THREE.MathUtils.clamp(pedalFF, -1, 1) };
   }
 
   /**
