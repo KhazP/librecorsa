@@ -21,6 +21,7 @@
 import {
   LG4FF_MAX_RANGE_DEG,
   LG4FF_MIN_RANGE_DEG,
+  LOGITECH_CLASSIC_NAMES,
   LOGITECH_VENDOR_ID,
   logitechClassicModel,
   type LogitechClassicModel,
@@ -1189,8 +1190,7 @@ const REQUEST_FILTERS = [
 const UNSUPPORTED_BROWSER = "WebHID needs Chrome or Edge on https or localhost";
 /** Status message when the page loads with WebHID on but no wheel was granted to it yet (pairing needs a click) */
 export const PAIR_MESSAGE = "Click Connect to pair your wheel";
-const LOGITECH_MESSAGE =
-  "Only the Logitech G25, G27, G29 and Driving Force GT take force feedback from the browser; use the native FFB bridge for this wheel";
+const LOGITECH_MESSAGE = `Only the Logitech ${LOGITECH_CLASSIC_NAMES} take force feedback from the browser; use the native FFB bridge for this wheel`;
 /**
  * With no setForce / setDamper call for this long (hidden tab, stalled loop, the app's own stop) the driver zeroes the
  * force and the hardware damper itself. wheel-ffb.ts zeroes the force after 150 ms (HID_WATCHDOG_MS) but cannot reach

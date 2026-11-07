@@ -1,7 +1,8 @@
 /**
  * Which wheels are known to work, and how. Steering, pedals and buttons come through the browser's Gamepad API for
- * every wheel; force feedback has two paths: WebHID in Chrome/Edge (bases that speak USB HID PID, see
- * webhid-ffb.ts) and the local bridge on Windows (`npm run ffb`, any DirectInput force-feedback wheel).
+ * every wheel; force feedback has two paths: WebHID in Chrome/Edge (bases that speak USB HID PID, and the classic
+ * Logitech wheels listed below; see webhid-ffb.ts) and the local bridge on Windows (`npm run ffb`, any DirectInput
+ * force-feedback wheel).
  *
  * Only what the maintainer has driven is marked tested. Reports from other wheels move rows up (README:
  * "Wheels and force feedback", issue template "Wheel report").
@@ -38,6 +39,12 @@ export function logitechClassicModel(vendorId: number, productId: number): Logit
   return LOGITECH_CLASSIC_WHEELS.find((m) => m.productId === productId) ?? null;
 }
 
+/** "G25, G27, Driving Force GT and G29": the listed wheels, for copy */
+export const LOGITECH_CLASSIC_NAMES = (() => {
+  const names = LOGITECH_CLASSIC_WHEELS.map((m) => m.name);
+  return names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names.at(-1)}` : (names[0] ?? "");
+})();
+
 /** tested: driven by the maintainer; expected: the code path fits, untested; unknown: may not work; no: refused */
 export type SupportLevel = "tested" | "expected" | "unknown" | "no";
 
@@ -71,10 +78,22 @@ export const WHEEL_SUPPORT: readonly WheelSupportRow[] = [
     note: "Untested; without HID PID force feedback the page switches to the bridge",
   },
   {
-    wheel: "Logitech G29, G920, G923, G PRO",
+    wheel: "PXN V99",
+    webHid: "unknown",
+    bridge: "expected",
+    note: "Untested; HID PID with Set Effect values of its own, which no PXN wheel has confirmed",
+  },
+  {
+    wheel: `Logitech ${LOGITECH_CLASSIC_NAMES}`,
+    webHid: "unknown",
+    bridge: "expected",
+    note: "Untested; starts on the bridge. WebHID is opt-in and sends the classic Logitech commands as Linux hid-lg4ff does",
+  },
+  {
+    wheel: "Logitech G920, G923, G PRO, Driving Force Pro",
     webHid: "no",
     bridge: "expected",
-    note: "Untested; Logitech's force feedback is proprietary, bridge only",
+    note: "Untested; bridge only: the browser speaks only the classic Logitech protocol and cannot rescale the DFP's steering axis",
   },
   {
     wheel: "Thrustmaster T150, T248, T300, TMX; Fanatec CSL Elite",
