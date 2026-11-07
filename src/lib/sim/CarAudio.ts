@@ -16,6 +16,8 @@
  *    - Per-wheel (`i = 0..3`) tire squeal & scrub driven by combined slip `s = hypot(sx, sy)`
  *      multiplied by vertical normal load `Fz` (AC's `0.4 * s * Fz * 0.0002 - 0.1`, here with s × 4.5 and −0.12)
  *    - Kerb rumble strip impact resonance and off-track grass/gravel skid layers.
+ * 4. `ContactAcousticsRig` (`contact-acoustics.ts`) adds road roar, damper thump and chassis rattle, brake squeal
+ *    and debris clicks.
  *
  * When a multi-grid sound bank is present (`public/amr26/audio/` or `public/gt3/audio/`, see `vf26-audio.ts`),
  * engine, turbo, transmission, shifts and backfires come from the multi-layer bank instead of the
@@ -26,11 +28,7 @@
 import * as THREE from 'three';
 import { CameraMode, TelemetryData } from '@/types/f1';
 import { withBasePath } from '@/lib/base-path';
-import {
-  ContactAcousticsFrame,
-  ContactAcousticsRig,
-  profileForCarSoundId,
-} from './contact-acoustics';
+import { ContactAcousticsRig } from './contact-acoustics';
 import { AMR26_AUDIO_DIR, Vf26SoundBank } from './vf26-audio';
 import { VF26_ENGINE } from './vf26-data';
 
@@ -270,7 +268,7 @@ export class CarAudioEngine {
     this.axleOsc = axleOsc;
     this.axleGain = axleGain;
 
-    // 4. Shared Pink/White Noise Buffer for Tire Scrub, Gravel & Aero Wind
+    // 4. Shared Pink/White Noise Buffer for Tire Scrub, Gravel, Aero Wind and the contact rig
     const noiseBuffer = this.createPinkNoiseBuffer(ctx, 2.5);
 
     // Tire tonal squeal + bandpass scrub (`calculateTyreSound` in `CarSoundData.cpp`)
@@ -358,13 +356,7 @@ export class CarAudioEngine {
     this.windFilter = windFilter;
     this.windGain = windGain;
 
-    // 5. Contact Patch, Suspension, Surface Texture & Brake Acoustics Synthesizer
-    this.contactAcoustics = new ContactAcousticsRig(
-      ctx,
-      compressor,
-      noiseBuffer,
-      profileForCarSoundId(this.sound.id)
-    );
+    this.contactAcoustics = new ContactAcousticsRig(ctx, compressor, noiseBuffer);
 
     this.isInitialized = true;
     this.bankDestination = compressor;
@@ -376,7 +368,6 @@ export class CarAudioEngine {
   public setCar(sound: CarSoundSource): void {
     if (sound.id === this.sound.id) return;
     this.sound = sound;
-    this.contactAcoustics?.setProfile(profileForCarSoundId(sound.id));
     if (!this.isInitialized || !this.ctx) return;
     this.vf26?.dispose();
     this.vf26 = null;
@@ -424,16 +415,6 @@ export class CarAudioEngine {
   /** True when the VF26 mod sound bank is playing instead of the bundled samples */
   public get usingVf26Sounds(): boolean {
     return this.vf26?.ready === true;
-  }
-
-  /** Contact patch, suspension & brake acoustics synthesizer rig */
-  public get contactRig(): ContactAcousticsRig | null {
-    return this.contactAcoustics;
-  }
-
-  /** Latest evaluated 4-corner contact acoustics frame */
-  public get contactAcousticsFrame(): ContactAcousticsFrame | null {
-    return this.contactAcoustics?.lastFrame ?? null;
   }
 
   private createPinkNoiseBuffer(ctx: AudioContext, durationSec: number): AudioBuffer {
@@ -592,7 +573,6 @@ export class CarAudioEngine {
     const squeal = this.tyreSqueal(telemetry);
     // A bank with its own skid recordings plays them in place of the synthesised squeal and scrub
     const bankSkid = vf26?.hasSkid === true;
-    this.contactAcoustics?.updateFromTelemetry(telemetry, this.cameraMode, legacyDt);
     if (vf26) {
       const rpmScale = this.sound.physicsLimiterRpm ? this.sound.limiterRpm / this.sound.physicsLimiterRpm : 1;
       vf26.update(
@@ -756,6 +736,8 @@ export class CarAudioEngine {
         : 0;
       this.gravelGain.gain.setTargetAtTime(gravelAmp, now, 0.025);
     }
+
+    this.contactAcoustics?.update(telemetry, legacyDt, INTERIOR_CAMERAS.has(this.cameraMode));
   }
 
   /**
@@ -806,7 +788,7 @@ export class CarAudioEngine {
     this.samplesLoaded = false;
     this.isLoadingSamples = false;
     this.sampleGen++;
-    this.contactAcoustics?.dispose();
+    // Closing the context below stops the rig's voices with everything else
     this.contactAcoustics = null;
     this.vf26?.dispose();
     this.vf26 = null;
