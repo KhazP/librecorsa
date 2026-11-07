@@ -186,6 +186,8 @@ function loadTrackGlb(
 
   // `?colliders=1`: draw the physics surfaces (by type) and barriers over the scan, to check them against it
   const showColliders = new URLSearchParams(window.location.search).get("colliders") === "1";
+  /** Each source material's decal clones, by polygon offset and decal flag: meshes that share a material share them */
+  const decalClones = new WeakMap<THREE.Material, Map<string, THREE.Material>>();
   assetProgress.begin("track");
   // Circuit scans are meshopt-compressed (scripts/compress-track-glb.mjs)
   new GLTFLoader()
@@ -253,10 +255,10 @@ function loadTrackGlb(
         if (offset !== undefined) {
           const cloneForDecal = (m: THREE.Material): THREE.Material => {
             const key = `${offset}:${isDecal ? 1 : 0}`;
-            const cached = (m.userData.__decalClones as Record<string, THREE.Material> | undefined)?.[key];
-            if (cached) return cached;
-            const c = m.clone();
-            m.userData.__decalClones = { ...(m.userData.__decalClones as Record<string, THREE.Material> | undefined), [key]: c };
+            let clones = decalClones.get(m);
+            if (!clones) decalClones.set(m, (clones = new Map()));
+            let c = clones.get(key);
+            if (!c) clones.set(key, (c = m.clone()));
             return c;
           };
           obj.material = Array.isArray(obj.material) ? obj.material.map(cloneForDecal) : cloneForDecal(obj.material);
