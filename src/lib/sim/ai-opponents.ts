@@ -8,7 +8,7 @@
  */
 import * as THREE from 'three';
 import { F1Physics2026 } from '@/lib/f1-physics-2026';
-import type { BuiltTrackData } from '@/lib/track-data';
+import { getActiveTrackMetadata, type BuiltTrackData } from '@/lib/track-data';
 import { resolveCarToCarObbCollision, type RigidBodyCollisionCar } from '@/lib/sim/track-evolution';
 import { TrackEnvironment } from '@/lib/sim/track-environment';
 import { aiLineOffsetM, computeSpeedProfile, createVf26ProfileCarModel, withPlanningGrip } from '@/lib/sim/speed-profile';
@@ -780,9 +780,13 @@ export class AiOpponentField {
   private aiTrack: AiTrack | null = null;
   private readonly classLines = new Map<string, Float64Array>();
 
-  /** Whether a car's autopilot tracks drive plans */
+  /**
+   * Whether a car's autopilot tracks drive plans: where the circuit's line check (scripts/ai/check-lines.ts) found this
+   * car can drive the line on the full physics. Elsewhere (a line through Monaco's barriers, an unchecked circuit) it
+   * keeps its own driver
+   */
   private static tracksPlans(sim: SimulatorCar): boolean {
-    return 'aiPlan' in sim;
+    return 'aiPlan' in sim && getActiveTrackMetadata().aiPlans?.[sim.vehicleId ?? '']?.ok === true;
   }
 
   /**
