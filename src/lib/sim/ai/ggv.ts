@@ -14,6 +14,11 @@ export interface GgvTable {
   latG: readonly number[];
   brakeG: readonly number[];
   accelG: readonly number[];
+  /**
+   * Share of the extra grip μ·(g̃ − g) a compression actually gives (1 = all of it; crests always cost the full loss).
+   * Below 1 where the car loses downforce as the road squashes it onto its floor
+   */
+  compressionGain?: number;
 }
 
 /** Measured 2026-11-07 with scripts/ai/measure-ggv.ts (warm tyres, half fuel, default setup) */
@@ -35,6 +40,9 @@ export const GGV_TABLES: Record<VehicleModelId, GgvTable> = {
     latG: [1.787, 2.056, 2.463, 3.003, 3.614, 4.144, 4.432, 4.492],
     brakeG: [1.338, 1.696, 2.181, 2.783, 3.419, 4.084, 4.684, 5.022],
     accelG: [1.318, 1.444, 1.525, 1.322, 1.061, 0.75, 0.366, -0.068],
+    // Rwanda's banked dip at s ≈ 640 m (g̃ ≈ 2.1 g at 262 km/h): front tyres saturated at ~4.5 g, barely above the
+    // flat-road limit; the ride height lost to the load costs the floor most of what the load adds
+    compressionGain: 0.15,
   },
 };
 
@@ -58,6 +66,7 @@ function interp(xs: readonly number[], ys: readonly number[], x: number, extrapo
 export class CarLimits {
   private readonly muLat: number;
   private readonly muBrake: number;
+  private readonly compression: number;
 
   constructor(
     readonly table: GgvTable,
@@ -66,14 +75,21 @@ export class CarLimits {
   ) {
     this.muLat = table.latG[0];
     this.muBrake = table.brakeG[0];
+    this.compression = table.compressionGain ?? 1;
+  }
+
+  /** Extra vertical load over level ground (m/s²), as far as it turns into grip */
+  private extraLoad(gEff: number): number {
+    const d = gEff - G;
+    return d > 0 ? d * this.compression : d;
   }
 
   lateral(v: number, gEff = G): number {
-    return Math.max(0.5, interp(this.table.speedsMs, this.table.latG, v, false) * G + this.muLat * (gEff - G)) * this.gripScale;
+    return Math.max(0.5, interp(this.table.speedsMs, this.table.latG, v, false) * G + this.muLat * this.extraLoad(gEff)) * this.gripScale;
   }
 
   braking(v: number, gEff = G): number {
-    return Math.max(0.5, interp(this.table.speedsMs, this.table.brakeG, v, false) * G + this.muBrake * (gEff - G)) * this.gripScale;
+    return Math.max(0.5, interp(this.table.speedsMs, this.table.brakeG, v, false) * G + this.muBrake * this.extraLoad(gEff)) * this.gripScale;
   }
 
   /** Forward acceleration at full throttle on level ground (power, traction and drag); falls to 0 at top speed */
