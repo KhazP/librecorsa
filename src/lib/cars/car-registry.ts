@@ -42,12 +42,88 @@ export interface CarClass {
   color: string;
 }
 
+/**
+ * Whether a car's physics belong to the car you see, the car-side counterpart of a circuit's `CircuitQuality`:
+ * - "own": its vehicle model was built for this car (the F1 2026 cars, the Mercedes-AMG GT3s)
+ * - "shared": a ported body on another car's model of the same class and era (the 2026 team cars, the BMW)
+ * - "era": a ported body from an earlier season on the 2026 model
+ * The F1 physics switch doesn't change it: a ported F1 car borrows its physics under either model.
+ */
+export type CarQuality = "own" | "shared" | "era";
+
+export interface CarQualityMeta {
+  /** Badge on cards and next to car names */
+  badge: string;
+  /** Filter and group label in the car browser */
+  filterLabel: string;
+  color: string;
+  variant: "solid" | "soft" | "outline";
+  /** Shown in the car detail pane, the browser's footnote and on hover */
+  description: string;
+}
+
+export const CAR_QUALITY_META: Record<CarQuality, CarQualityMeta> = {
+  own: {
+    badge: "OWN PHYSICS",
+    filterLabel: "Own physics",
+    color: "#00E676",
+    variant: "soft",
+    description: "Drives on physics built for this car.",
+  },
+  shared: {
+    badge: "SHARED PHYSICS",
+    filterLabel: "Shared physics",
+    color: "#FFB300",
+    variant: "soft",
+    description: "Drives on the physics of another car from the same class and era, so it handles like that car rather than its own.",
+  },
+  era: {
+    badge: "2026 PHYSICS",
+    filterLabel: "Older cars",
+    color: "#FF6B8A",
+    variant: "soft",
+    description: "Drives on 2026 physics, so it handles like a 2026 car rather than the way it did in its own season.",
+  },
+};
+
+/**
+ * How far each vehicle model has been checked, shown with a car's grade. Keyed by the model the car drives on now,
+ * so a ported F1 car follows the physics switch.
+ */
+export const PHYSICS_CHECK: Record<VehicleModelId, string> = {
+  "amg-gt3": "Its physics are checked against a real GT3 Evo's telemetry.",
+  vf26: "Its physics are checked against the reference data they were built from.",
+  "f12026-car": "Its physics are checked against the range a 2026 F1 car should fall in.",
+};
+
+/** Who made a car's 3D body (CREDITS.md has the full notes) */
+export interface CarCredit {
+  title: string;
+  author: string;
+  url: string;
+  license: string;
+  licenseUrl: string;
+}
+
+const CC_BY = { license: "CC BY 4.0", licenseUrl: "https://creativecommons.org/licenses/by/4.0/" } as const;
+const CC_BY_NC_SA = { license: "CC BY-NC-SA 4.0", licenseUrl: "https://creativecommons.org/licenses/by-nc-sa/4.0/" } as const;
+
+/** The F1 2026 Prototype and Rigid-Body's own body (`public/amr26/model/amr26.glb`) */
+const DEX_F1_2026: CarCredit = { title: "AM26 - F1 25/F1 2026 DLC", author: "DeX", url: "https://skfb.ly/pKNCK", ...CC_BY };
+
+const daveLove = (title: string, url: string): CarCredit => ({ title, author: "Dave Love SketchFab", url, ...CC_BY });
+
 export interface CarDefinition {
   id: CarId;
   classId: CarClassId;
   title: string;
   sub: string;
+  /** Short name on chips (not the grade: that's `quality`) */
   badge: string;
+  /** Whether its physics belong to it */
+  quality: CarQuality;
+  /** Its 3D body's author */
+  credit: CarCredit;
   /** The vehicle model that drives it */
   physics: VehicleModelId;
   /**
@@ -73,6 +149,8 @@ export const CARS: readonly CarDefinition[] = [
     title: "F1 2026 Prototype",
     sub: "Curvilinear 2026 model · active aero",
     badge: "F1 2026",
+    quality: "own",
+    credit: DEX_F1_2026,
     physics: "vf26",
     season: 2026,
     sound: F1_2026_SOUND,
@@ -83,6 +161,8 @@ export const CARS: readonly CarDefinition[] = [
     title: "F1 2026 Rigid-Body",
     sub: "6-DOF rigid-body · track colliders · DRS",
     badge: "6-DOF",
+    quality: "own",
+    credit: DEX_F1_2026,
     physics: "f12026-car",
     season: 2026,
     sound: F1_2026_SOUND,
@@ -93,6 +173,8 @@ export const CARS: readonly CarDefinition[] = [
     title: "SF-26",
     sub: "2026 car",
     badge: "SF-26",
+    quality: "shared",
+    credit: daveLove("2026 Ferrari SF-26", "https://sketchfab.com/3d-models/2026-ferrari-sf-26-e5ca6cecdc42449283f4bed27360f2a7"),
     physics: "f12026-car",
     season: 2026,
     modelUrl: "/cars/sf26/model/sf26.glb",
@@ -104,6 +186,8 @@ export const CARS: readonly CarDefinition[] = [
     title: "W17",
     sub: "2026 car",
     badge: "W17",
+    quality: "shared",
+    credit: daveLove("2026 Mercedes W17", "https://sketchfab.com/3d-models/2026-mercedes-w17-b806f1e70aa343219e7158169549b97b"),
     physics: "f12026-car",
     season: 2026,
     modelUrl: "/cars/w17/model/w17.glb",
@@ -115,6 +199,8 @@ export const CARS: readonly CarDefinition[] = [
     title: "RB22",
     sub: "2026 car",
     badge: "RB22",
+    quality: "shared",
+    credit: daveLove("2026 Redbull RB22", "https://sketchfab.com/3d-models/2026-redbull-rb22-0a3d24a58e0549d591a5a48c22eec383"),
     physics: "f12026-car",
     season: 2026,
     modelUrl: "/cars/rb22/model/rb22.glb",
@@ -126,6 +212,8 @@ export const CARS: readonly CarDefinition[] = [
     title: "SF71H",
     sub: "2018 car",
     badge: "SF71H",
+    quality: "era",
+    credit: daveLove("2018 Ferrari SF71H", "https://sketchfab.com/3d-models/2018-ferrari-sf71h-e54b896bd21f478f8309eecf3726700e"),
     physics: "f12026-car",
     season: 2018,
     modelUrl: "/cars/sf71h/model/sf71h.glb",
@@ -137,6 +225,8 @@ export const CARS: readonly CarDefinition[] = [
     title: "RB8",
     sub: "2012 car",
     badge: "RB8",
+    quality: "era",
+    credit: daveLove("2012 Red Bull RB8", "https://sketchfab.com/3d-models/2012-red-bull-rb8-b74446dcd93a49879546d756e3093b3f"),
     physics: "f12026-car",
     season: 2012,
     modelUrl: "/cars/rb8/model/rb8.glb",
@@ -148,6 +238,8 @@ export const CARS: readonly CarDefinition[] = [
     title: "R25",
     sub: "2005 car",
     badge: "R25",
+    quality: "era",
+    credit: daveLove("2005 Renault R25", "https://sketchfab.com/3d-models/2005-renault-r25-0d58fe125f5b41a2b8482576723120c4"),
     physics: "f12026-car",
     season: 2005,
     modelUrl: "/cars/r25/model/r25.glb",
@@ -159,6 +251,8 @@ export const CARS: readonly CarDefinition[] = [
     title: "F2004",
     sub: "2004 car",
     badge: "F2004",
+    quality: "era",
+    credit: daveLove("2004 Ferrari F2004", "https://sketchfab.com/3d-models/2004-ferrari-f2004-bedade52e6f4415e90e656817c5701f8"),
     physics: "f12026-car",
     season: 2004,
     modelUrl: "/cars/f2004/model/f2004.glb",
@@ -170,6 +264,8 @@ export const CARS: readonly CarDefinition[] = [
     title: "Mercedes-AMG GT3",
     sub: "GT3 Pro · 6.2L V8 · Multi-stage ABS / TC",
     badge: "GT3 PRO",
+    quality: "own",
+    credit: { title: "2020 Mercedes-Benz AMG GT3", author: "Ddiaz Design", url: "https://skfb.ly/pOTPL", ...CC_BY_NC_SA },
     physics: "amg-gt3",
     sound: AMG_GT3_SOUND,
   },
@@ -179,6 +275,13 @@ export const CARS: readonly CarDefinition[] = [
     title: "Mercedes-AMG GT3 Evo",
     sub: "GT3 Evo · AMG GT3 physics · ABS / TC",
     badge: "GT3 EVO",
+    quality: "own",
+    credit: {
+      title: "Mercedes-AMG GT3 Red Bull Racing",
+      author: "VTX",
+      url: "https://sketchfab.com/3d-models/mercedes-amg-gt3-red-bull-racing-035f061cb6624effbc483d5f9b5ecaba",
+      ...CC_BY_NC_SA,
+    },
     physics: "amg-gt3",
     modelUrl: "/cars/amg-gt3-evo/model/amg-gt3-evo.glb",
     sound: AMG_GT3_SOUND,
@@ -189,6 +292,13 @@ export const CARS: readonly CarDefinition[] = [
     title: "BMW M4 GT3 Evo",
     sub: "G82 GT3 Evo · AMG GT3 physics · ABS / TC",
     badge: "M4 GT3",
+    quality: "shared",
+    credit: {
+      title: "2025 BMW M4 GT3 EVO G82",
+      author: "Ddiaz Design",
+      url: "https://sketchfab.com/3d-models/2025-bmw-m4-gt3-evo-g82-113f83dd87064697a5ec2511d280b9d5",
+      ...CC_BY_NC_SA,
+    },
     physics: "amg-gt3",
     modelUrl: "/cars/bmw-m4-gt3/model/bmw-m4-gt3.glb",
     sound: BMW_M4_GT3_SOUND,
@@ -206,6 +316,8 @@ export const carById = (id: CarId): CarDefinition => {
   console.warn(`Unknown car "${id}", using ${CARS[0].id}`);
   return CARS[0];
 };
+
+export const carQualityMeta = (car: Pick<CarDefinition, "quality">): CarQualityMeta => CAR_QUALITY_META[car.quality];
 
 export const carClass = (id: CarClassId): CarClass => CAR_CLASSES.find((c) => c.id === id) ?? CAR_CLASSES[0];
 
