@@ -13,6 +13,7 @@ import { ACTIVE_TRACK_ID, getTrackData, TRACK_TOTAL_LENGTH_M, TURN_METADATA } fr
 import { getTrackInfo, RWANDA_TRACK_ID, TRACKS, type TrackInfo } from "@/lib/track-registry";
 import { SCENERY_CREDITS } from "@/lib/render/scenery-credits";
 import { isLikelyWheel, padDisplayName } from "@/lib/input/device-input";
+import { isTouchDevice } from "@/lib/input/touch-input";
 import type { HudPreset } from "@/lib/settings/player-settings";
 import { useGamepads, type PadState } from "./useMenuNav";
 import { focusInZone, focusOnHover, useFocusNav } from "./useFocusNav";
@@ -36,6 +37,7 @@ import {
   MonitorCog,
   Play,
   Route,
+  TabletSmartphone,
   Timer,
   Users,
   Wrench,
@@ -404,7 +406,9 @@ const CompactEntry: React.FC<{ item: MenuItem; open: boolean; quiet?: boolean }>
 
 /** Controller / wheel / keyboard status pill */
 const DevicePill: React.FC<{ pad: PadState | undefined; slim?: boolean }> = ({ pad, slim }) => {
-  const kind = pad ? (isLikelyWheel(pad) ? "Wheel" : "Controller") : "Keyboard";
+  // A phone or tablet drives with the on-screen controls until a pad is plugged in
+  const touch = !pad && isTouchDevice();
+  const kind = pad ? (isLikelyWheel(pad) ? "Wheel" : "Controller") : touch ? "Touch" : "Keyboard";
   const name = pad ? padDisplayName(pad.id).slice(0, 40) : "Press any button on a controller or wheel";
   if (slim) {
     return (
@@ -417,7 +421,7 @@ const DevicePill: React.FC<{ pad: PadState | undefined; slim?: boolean }> = ({ p
       </div>
     );
   }
-  const Icon = pad ? Gamepad2 : Keyboard;
+  const Icon = pad ? Gamepad2 : touch ? TabletSmartphone : Keyboard;
   return (
     <div className="inline-flex h-9 max-w-full min-w-0 items-center gap-2 rounded-full border border-[#262B3D] bg-[#11131A]/70 py-0 pr-3.5 pl-1.5 font-f1-mono text-[11px] font-bold tracking-[0.12em] text-[#C5CBD8] uppercase backdrop-blur">
       <span
@@ -428,7 +432,7 @@ const DevicePill: React.FC<{ pad: PadState | undefined; slim?: boolean }> = ({ p
         <Icon aria-hidden className="h-3.5 w-3.5" strokeWidth={2.4} />
         {kind}
       </span>
-      <span className="hidden truncate sm:inline">{name}</span>
+      <span className="hidden truncate sm:inline short:hidden">{name}</span>
     </div>
   );
 };
@@ -605,7 +609,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
             <>
               <div className="flex min-w-0 flex-wrap items-center gap-x-[22px] gap-y-3">
                 <LibreCorsaLogo variant="compact" size="md" />
-                <div className="inline-flex h-8 max-w-full min-w-0 items-center gap-2.5 rounded-full border border-[#262B3D] bg-[#11131A]/70 px-3.5 font-f1-mono text-[11px] font-bold tracking-[0.14em] text-[#CCFF00] uppercase backdrop-blur">
+                <div className="inline-flex h-8 max-w-full min-w-0 items-center gap-2.5 rounded-full border border-[#262B3D] bg-[#11131A]/70 px-3.5 font-f1-mono text-[11px] font-bold tracking-[0.14em] text-[#CCFF00] uppercase backdrop-blur short:hidden">
                   <span className="relative flex h-2 w-2 shrink-0">
                     <span className="lc-ping absolute inline-flex h-full w-full rounded-full bg-[#CCFF00]" />
                     <span className="relative inline-flex h-2 w-2 rounded-full bg-[#CCFF00]" />

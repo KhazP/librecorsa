@@ -333,7 +333,8 @@ export const PromptBar: React.FC<{ prompts: readonly Prompt[]; className?: strin
   const { mode, family } = useInputMode();
   const pad = mode === "pad";
   return (
-    <div className={`flex flex-wrap items-center gap-x-[22px] gap-y-2 ${className}`}>
+    // Touch has no keys to show: the bar comes back the moment a controller is used
+    <div className={`flex flex-wrap items-center gap-x-[22px] gap-y-2 ${pad ? "" : "pointer-coarse:hidden!"} ${className}`}>
       {prompts.map((p) => (
         <span
           key={p.action + p.label}
