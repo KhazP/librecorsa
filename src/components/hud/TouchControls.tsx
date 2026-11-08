@@ -31,6 +31,12 @@ interface Visual {
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
+/**
+ * Width of the steering / tilt card: on a portrait phone it ends a gap short of the pedal column
+ * (16 px edges, two 80 px pedals and their 12 px gap, 12 px between)
+ */
+const STICK_WIDTH = "min(clamp(200px, 38vw, 400px), calc(100vw - 216px))";
+
 /** Steering knob diameter (px) */
 const KNOB = 52;
 /** Frosted card the steering / tilt controls sit on */
@@ -100,7 +106,7 @@ const SteerPad: React.FC<SteerPadProps> = ({ value, onChange }) => {
       aria-valuemax={100}
       aria-valuenow={Math.round(value * 100)}
       className={`${STICK_CARD} pointer-events-auto touch-none relative flex flex-col gap-2.5 overflow-hidden px-4 pt-3.5 pb-[18px] short:gap-1.5 short:pt-2.5 short:pb-3`}
-      style={{ width: "clamp(200px, 38vw, 400px)", touchAction: "none" }}
+      style={{ width: STICK_WIDTH, touchAction: "none" }}
       onPointerDown={down}
       onPointerMove={move}
       onPointerUp={release}
@@ -168,7 +174,7 @@ const TiltIndicator: React.FC<TiltIndicatorProps> = ({ value, status, onRecentre
   return (
     <div
       className={`${STICK_CARD} pointer-events-auto touch-none flex flex-col gap-2.5 px-4 pt-3.5 pb-4 short:gap-2 short:pt-2.5 short:pb-3`}
-      style={{ width: "clamp(200px, 38vw, 400px)", touchAction: "none" }}
+      style={{ width: STICK_WIDTH, touchAction: "none" }}
     >
       <div className="flex items-center justify-between">
         <span className={LABEL}>{TILT_LABEL[status]}</span>
@@ -242,7 +248,7 @@ const Pedal: React.FC<PedalProps> = ({ label, color, value, onChange }) => {
       aria-valuemin={0}
       aria-valuemax={100}
       aria-valuenow={Math.round(value * 100)}
-      className="pointer-events-auto touch-none relative flex h-[150px] w-[100px] flex-col justify-between overflow-hidden rounded-[30px] border-2 bg-[#08090D]/60 p-3 backdrop-blur-[10px] short:h-[128px] short:w-[88px] short:rounded-[26px]"
+      className="pointer-events-auto touch-none relative flex h-[150px] w-[100px] flex-col justify-between overflow-hidden rounded-[30px] border-2 bg-[#08090D]/60 p-3 backdrop-blur-[10px] max-sm:portrait:w-[80px] short:h-[128px] short:w-[88px] short:rounded-[26px]"
       style={{
         borderColor: color,
         boxShadow: value > 0 ? `0 0 30px ${color}59` : "none",
