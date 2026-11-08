@@ -888,7 +888,7 @@ export class VehiclePhysics {
 
     const mkAxle = (spec: AxleSuspensionData, dampers: DamperControllerData, name: string, mass: number, inertia: number): AxleRuntime => {
       const heaveActive = suspensionSupportsHeave(spec.type);
-      if (!heaveActive) console.warn(`IGNORING HEAVE SPRING BECAUSE SUSPENSION ${name} IS NOT DOUBLE WISHBONE`);
+      if (!heaveActive && spec.heave.rate > 0) console.warn(`IGNORING HEAVE SPRING BECAUSE SUSPENSION ${name} IS NOT DOUBLE WISHBONE`);
       return { spec, dampers, heaveActive, unsprungMass: mass, wheelInertia: inertia };
     };
     const susp = cfg.suspensions;
