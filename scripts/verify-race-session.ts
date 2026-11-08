@@ -181,6 +181,128 @@ console.log("Multiplayer: late joiners and dropped players");
   check("the player's progress carries no lap count before their flag", p.laps === undefined);
 }
 
+{
+  const me = { name: "Me", code: "MEE", color: "#00ff00" };
+  const lightsOut = 10_000 + 5_000 + 500;
+  const pkt = (id: string, dist: number, fin: number | null, laps?: number): InterpolatedPeerState =>
+    ({ peerId: id, driverCode: id.toUpperCase(), teamColorHex: "#000", speedKmh: 100, position: new THREE.Vector3(), race: { id: "race-1", dist, fin, best: null, laps } }) as unknown as InterpolatedPeerState;
+
+  console.log("Multiplayer: a host clock that steps back");
+  {
+    const r = new MultiplayerRace(start, L, "me", me, roster);
+    r.frame(lightsOut + 2000);
+    const back = r.frame(lightsOut - 300);
+    check("racing stays racing when the clock steps back", back.phase === "racing" && back.raceTimeS === 2, JSON.stringify(back));
+    check("the race time holds until the clock catches up", r.frame(lightsOut + 1500).raceTimeS === 2 && Math.abs(r.frame(lightsOut + 2500).raceTimeS - 2.5) < 1e-9);
+    const lights = new MultiplayerRace(start, L, "me", me, roster);
+    lights.frame(13_500);
+    const lb = lights.frame(9_000);
+    check("the lights never go back to the countdown", lb.phase === "lights" && lb.lightsOn === 4, JSON.stringify(lb));
+  }
+
+  console.log("Multiplayer: race rules for the overtaking aids");
+  {
+    const r = new MultiplayerRace(start, L, "me", me, roster);
+    check("no race rules before any frame", !r.raceRulesActive);
+    r.frame(8_000);
+    check("no race rules in the countdown", !r.raceRulesActive);
+    r.frame(11_000);
+    check("race rules through the lights", r.raceRulesActive);
+    r.frame(lightsOut + 1000);
+    check("race rules while racing", r.raceRulesActive);
+    r.lapClock.finishTimeS = 300;
+    check("free again after the player's flag", !r.raceRulesActive);
+
+    const d = new MultiplayerRace({ ...start, laps: 10, collisions: "on" }, L, "me", me, roster);
+    const f = d.frame(lightsOut + 100_000);
+    d.lapClock.distM = 3 * L + 1000;
+    d.ingestPeers([pkt("host", 3 * L + 1040, null), pkt("other", 3 * L + 500, null)], 100);
+    d.status(f, 50);
+    check(
+      "earned within 1 s of the car ahead",
+      d.detectionEarnedFor({ overtakingRules: "straight-mode-2026" }) && d.detectionEarnedFor({ overtakingRules: "drs-rear" })
+    );
+    check("a car without overtaking aids earns nothing", !d.detectionEarnedFor({}));
+    d.ingestPeers([pkt("host", 3 * L + 1200, null)], 100);
+    d.status(f, 50);
+    check("not earned 4 s behind", !d.detectionEarnedFor({ overtakingRules: "straight-mode-2026" }));
+    d.ingestPeers([pkt("host", 3 * L + 1040, 99, 3)], 100);
+    d.status(f, 50);
+    check("a finished car ahead doesn't count", !d.detectionEarnedFor({ overtakingRules: "straight-mode-2026" }));
+    const silent = new MultiplayerRace({ ...start, laps: 10, collisions: "on" }, L, "me", me, roster);
+    silent.ingestPeers([pkt("host", 3 * L + 1040, null)], 50);
+    const sf = silent.frame(lightsOut + 100_000);
+    silent.lapClock.distM = 3 * L + 1000;
+    silent.status(sf, 50);
+    check("a player silent for 30 s is no car ahead", !silent.detectionEarnedFor({ overtakingRules: "straight-mode-2026" }));
+
+    const early = new MultiplayerRace({ ...start, laps: 10, collisions: "on" }, L, "me", me, roster);
+    const ef = early.frame(lightsOut + 20_000);
+    early.lapClock.distM = 1000;
+    early.ingestPeers([pkt("host", 1040, null)], 20);
+    early.status(ef, 50);
+    check(
+      "DRS waits for the leader's second lap; Overtake Mode doesn't",
+      !early.detectionEarnedFor({ overtakingRules: "drs-rear" }) && early.detectionEarnedFor({ overtakingRules: "straight-mode-2026" })
+    );
+  }
+
+  console.log("Multiplayer: contact per player with ghosting on the opening lap");
+  {
+    const r = new MultiplayerRace(start, L, "me", me, roster);
+    const racing = r.frame(lightsOut + 1000);
+    r.lapClock.reset(L - 20);
+    for (let d = 0; d < L + 40; d += 10) r.lapClock.update((L - 20 + d) % L, 1, 5);
+    r.ingestPeers([pkt("host", L + 50, null), pkt("other", 500, null)], 1);
+    check("solid with a player who is past lap 1 as well", r.collisionsActiveWith(racing, "host"));
+    check("still a ghost to a player on the opening lap", !r.collisionsActiveWith(racing, "other"));
+    check("a player not in this race is a ghost", !r.collisionsActiveWith(racing, "nobody"));
+    const mine = new MultiplayerRace(start, L, "me", me, roster);
+    const mf = mine.frame(lightsOut + 1000);
+    mine.ingestPeers([pkt("host", L + 50, null)], 1);
+    check("a ghost while this car is on its opening lap", !mine.collisionsActiveWith(mf, "host"));
+
+    const on = new MultiplayerRace({ ...start, collisions: "on" }, L, "me", me, roster);
+    check("on: never on the grid", !on.collisionsActiveWith(on.frame(12_000), "other"));
+    check("on: solid with everyone once racing", on.collisionsActiveWith(on.frame(lightsOut + 1000), "other"));
+    const off = new MultiplayerRace({ ...start, collisions: "off" }, L, "me", me, roster);
+    off.ingestPeers([pkt("host", 3 * L, null)], 1);
+    off.lapClock.distM = 3 * L;
+    check("off: never", !off.collisionsActiveWith(off.frame(lightsOut + 100_000), "host"));
+  }
+
+  console.log("Multiplayer: the classification stands once it closes");
+  {
+    const r = new MultiplayerRace({ ...start, laps: 1, collisions: "on" }, L, "me", me, roster);
+    const at = (s: number) => r.frame(lightsOut + s * 1000);
+    r.ingestPeers([pkt("host", 100, null), pkt("other", 90, null)], 1);
+    r.ingestPeers([pkt("host", L + 5, 60, 1)], 60);
+    r.lapClock.distM = L + 3;
+    r.lapClock.finishTimeS = 70;
+    r.lapClock.finishLaps = 1;
+    const st = r.status(at(70), 50);
+    const other = (s: typeof st) => s.results?.find((e) => e.name === "Other");
+    check("closes with the silent player out", st.resultsFinal === true && other(st)?.dnf === true, JSON.stringify(other(st)));
+    r.ingestPeers([pkt("other", L + 10, 75, 1)], 75);
+    const st2 = r.status(at(75), 50);
+    check("stays final when that player's packets come back", st2.resultsFinal === true && other(st2)?.dnf === true, JSON.stringify(other(st2)));
+    check("and the classification no longer changes", JSON.stringify(st2.results) === JSON.stringify(st.results));
+
+    const open = new MultiplayerRace(start, L, "me", me, roster);
+    const at2 = (s: number) => open.frame(lightsOut + s * 1000);
+    open.ingestPeers([pkt("host", 100, null), pkt("other", 90, null)], 1);
+    open.ingestPeers([pkt("host", 3000, null)], 40);
+    const s1 = open.status(at2(40), 50);
+    open.ingestPeers([pkt("other", 3500, null)], 41);
+    const s2 = open.status(at2(41), 50);
+    check(
+      "before it closes, a silent player comes back with its packets",
+      s1.standings[s1.standings.length - 1]?.name === "Other" && s2.standings[0]?.name === "Other",
+      `${s1.standings.map((x) => x.name).join()} then ${s2.standings.map((x) => x.name).join()}`
+    );
+  }
+}
+
 const gaps = new GapTimer();
 gaps.record(10, [100]);
 gaps.record(12, [150, 100]);

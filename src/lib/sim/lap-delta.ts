@@ -3,7 +3,7 @@ import type { CarTelemetry } from "@/types/f1";
 /** Distance resolution of the lap traces (m) */
 const BUCKET_M = 10;
 
-type LapSample = Pick<CarTelemetry, "lapCount" | "lastLapTimeMs" | "bestLapTimeMs" | "trackDistanceM" | "currentLapTimeMs">;
+type LapSample = Pick<CarTelemetry, "lapCount" | "lastLapTimeMs" | "bestLapTimeMs" | "trackDistanceM" | "currentLapTimeMs" | "runId">;
 
 /**
  * Live delta to the best lap of this session: the lap time is recorded every 10 m of the current
@@ -14,6 +14,8 @@ export class LapDeltaTracker {
   private best: Float64Array | null = null;
   private lap: number | null = null;
   private lastBucket = -1;
+  /** The run the trace in progress belongs to (`CarTelemetry.runId`, absent = 0) */
+  private runId: number | null = null;
 
   constructor(trackLengthM: number) {
     this.current = new Float64Array(Math.ceil(trackLengthM / BUCKET_M) + 1).fill(Number.NaN);
@@ -22,6 +24,11 @@ export class LapDeltaTracker {
   /** Records the current lap's trace */
   update(t: LapSample): void {
     const cur = this.current;
+    // A new run (restart, teleport, flashback): the trace so far is not one lap any more, and the lap counter's jump
+    // is no completed lap. The best lap stays the reference (same car, same session)
+    const runId = t.runId ?? 0;
+    if (this.runId !== null && runId !== this.runId) this.restartLap();
+    this.runId = runId;
     if (this.lap === null) this.lap = t.lapCount;
     if (t.lapCount !== this.lap) {
       // Lap completed: keep its trace when it is the new best and was recorded all the way round
@@ -76,6 +83,11 @@ export class LapDeltaTracker {
   /** Forgets the reference and the lap in progress (another car: its laps are not comparable) */
   reset(): void {
     this.best = null;
+    this.restartLap();
+  }
+
+  /** Forgets the lap in progress only */
+  private restartLap(): void {
     this.lap = null;
     this.lastBucket = -1;
     this.current.fill(Number.NaN);

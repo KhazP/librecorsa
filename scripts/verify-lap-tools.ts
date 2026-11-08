@@ -14,6 +14,7 @@ import {
   type LapRecorderTurn,
 } from '../src/lib/sim/lap-recorder';
 import { ReplayBuffer } from '../src/lib/sim/replay-buffer';
+import { LapDeltaTracker } from '../src/lib/sim/lap-delta';
 import { LAP_SAMPLE_FIELDS, LAP_SAMPLE_STRIDE, type LapRecording, type ReplayCarState } from '../src/lib/sim/lap-types';
 
 let passed = 0;
@@ -269,6 +270,33 @@ check('out-lap: the first crossing restarts the clock without a lap, and only th
   const data = done!.recording.data;
   for (let i = 0; i < data.length / STRIDE; i++) assert.equal(data[i * STRIDE + 1], 100, `sample ${i} is from the out-lap`);
   assert.ok(data[0] < 0.02, `first sample at ${data[0]} s`);
+});
+check('a new run between updates: a lap count step of one is no lap', () => {
+  const r = makeRecorder();
+  const run = (lapCount: number, ms: number, last: number | null, runId: number): LapRecorderInput => {
+    const t = tele(lapCount, ms, last);
+    return { ...t, telemetry: { ...t.telemetry, runId } };
+  };
+  r.update(run(0, 0, null, 1));
+  r.update(run(0, 40_000, null, 1));
+  // A race in between (the recorder sits idle), then practice again 30 s into a lap, the count one up
+  assert.equal(r.update(run(1, 30_000, 61_000, 2)), null, 'the step into the new run is not a lap');
+  assert.equal(r.update(run(2, 5, 70_000, 2)), null, 'its first crossing is from a mid-lap start: dropped');
+  assert.ok(r.update(run(3, 5, 80_000, 2)) !== null, 'the next lap is armed');
+});
+check('lap delta: a new run drops the lap in progress, never the best lap', () => {
+  const d = new LapDeltaTracker(1000);
+  const at = (lapCount: number, m: number, curMs: number, lapMs: number | null, runId: number) =>
+    d.update({ lapCount, trackDistanceM: m, currentLapTimeMs: curMs, lastLapTimeMs: lapMs, bestLapTimeMs: lapMs, runId });
+  for (let m = 0; m < 1000; m += 5) at(0, m, m * 100, null, 0);
+  at(1, 0, 0, 100_000, 0);
+  near(d.referenceTimeMs(600)!, 60_000);
+  // A faster lap with a flashback in it: 95 ms/m to 800 m, back to 400 m (a new run), then 90 ms/m to the line
+  for (let m = 0; m < 800; m += 5) at(1, m, m * 95, 100_000, 0);
+  for (let m = 400; m < 1000; m += 5) at(1, m, m * 90, 100_000, 1);
+  assert.ok(d.hasReference, 'the best lap is still the reference in the new run');
+  at(2, 0, 0, 90_000, 1);
+  near(d.referenceTimeMs(600)!, 60_000);
 });
 
 // ---- Ghost playback ----------------------------------------------------------------------------

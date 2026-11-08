@@ -5,6 +5,8 @@
  */
 import type { RaceResultEntry, RaceSplits, RaceStandingEntry, RaceStatus, TireCompound } from "@/types/f1";
 import type { InterpolatedPeerState, PeerRaceProgress, RaceStartInfo } from "@/lib/sim/multiplayer-sync";
+import type { SimulatorCar } from "@/lib/sim/simulator-car";
+import { carAheadOnRoad, earnedAtDetection } from "@/lib/sim/overtaking-rules";
 
 /** Gap timing resolution: the race time at which the first car reached each bucket of race distance */
 const GAP_BUCKET_M = 25;
@@ -360,6 +362,8 @@ export interface MultiplayerRaceFrame {
   raceTimeS: number;
 }
 
+const FRAME_PHASE_ORDER: Record<MultiplayerRaceFrame["phase"], number> = { countdown: 0, lights: 1, racing: 2 };
+
 /** A multiplayer race as this client sees it: the shared start, its own lap clock and everyone's reported progress */
 export class MultiplayerRace {
   readonly lapClock: LapClock;
@@ -371,6 +375,16 @@ export class MultiplayerRace {
   private remote = new Map<string, RacerProgress>();
   /** Race time each remote racer last reported progress for this race (s) */
   private lastSeenS = new Map<string, number>();
+  /**
+   * The furthest the start procedure has got on this client. The host clock it comes from can step back (the offset
+   * is re-measured on every ping, and starts over on a host change), so the phase never goes back and the race time
+   * never runs backwards
+   */
+  private latestFrame: MultiplayerRaceFrame | null = null;
+  /** The player's speed at the last status() (m/s), for the gap ahead at a detection point */
+  private playerSpeedMs = 0;
+  /** The classification once it closed: from then on it no longer changes, whatever packets still arrive */
+  private finalResults: RaceResultEntry[] | null = null;
   /** The player's own time penalties (s) and tyres, reported to everyone */
   penaltyS = 0;
   compound: TireCompound = "soft";
@@ -414,7 +428,30 @@ export class MultiplayerRace {
     return false;
   }
 
+  /** The start procedure at host time `hostNowMs`; call once per frame with the current host clock */
   frame(hostNowMs: number): MultiplayerRaceFrame {
+    const now = this.frameAt(hostNowMs);
+    const prev = this.latestFrame;
+    let f = now;
+    if (prev) {
+      const order = FRAME_PHASE_ORDER[now.phase] - FRAME_PHASE_ORDER[prev.phase];
+      // The clock stepped back past a phase change: stay where the start had got to (racing stays racing)
+      if (order < 0) f = { ...prev };
+      else if (order === 0) {
+        // Same phase: hold the lights, the countdown and the race time until the clock catches up again
+        f = {
+          phase: now.phase,
+          lightsOn: Math.max(now.lightsOn, prev.lightsOn),
+          countdownS: Math.min(now.countdownS, prev.countdownS),
+          raceTimeS: Math.max(now.raceTimeS, prev.raceTimeS),
+        };
+      }
+    }
+    this.latestFrame = f;
+    return f;
+  }
+
+  private frameAt(hostNowMs: number): MultiplayerRaceFrame {
     const sinceLights = hostNowMs - this.start.lightsStartHostMs;
     if (sinceLights < 0) return { phase: "countdown", lightsOn: 0, countdownS: -sinceLights / 1000, raceTimeS: 0 };
     if (hostNowMs < this.lightsOutHostMs) {
@@ -433,6 +470,58 @@ export class MultiplayerRace {
     if (frame.phase !== "racing" || this.start.collisions === "off") return false;
     if (this.start.collisions === "ghost_lap1") return this.lapClock.distM >= this.lapLengthM;
     return true;
+  }
+
+  /**
+   * Contact with one other player this frame. With ghosting on the opening lap the two cars are solid only once both
+   * are past it: each client resolves its own car, so keying it on this car alone had one car pushed by a car that,
+   * on the other client, was still a ghost.
+   */
+  collisionsActiveWith(frame: MultiplayerRaceFrame, peerId: string): boolean {
+    if (frame.phase !== "racing" || this.start.collisions === "off") return false;
+    if (this.start.collisions === "on") return true;
+    const other = this.remote.get(peerId);
+    return this.lapClock.distM >= this.lapLengthM && other !== undefined && other.distM >= this.lapLengthM;
+  }
+
+  /**
+   * The race rules for the player's overtaking aids apply: through the lights and the race, not in the countdown and
+   * not after the player's flag (as an AI race's `raceRulesActive`). From the latest frame().
+   */
+  get raceRulesActive(): boolean {
+    const phase = this.latestFrame?.phase;
+    return (phase === "lights" || phase === "racing") && this.lapClock.finishTimeS === null;
+  }
+
+  /** Race control's call at a detection point for the player's car: within 1 s of the car ahead, and for DRS once the leader has done two laps */
+  detectionEarnedFor(sim: Pick<SimulatorCar, "overtakingRules">): boolean {
+    const rules = sim.overtakingRules;
+    if (!rules) return false;
+    return earnedAtDetection({ rules, gapAheadS: this.gapAheadOnRoadS(), leaderLapsCompleted: this.leaderLapsCompleted() });
+  }
+
+  /** A remote car that is out of the running for the gaps: finished, retired, or silent for this race too long */
+  private outOfRunning(r: RacerProgress, raceTimeS: number): boolean {
+    return r.finishTimeS !== null || !!r.dnf || raceTimeS - (this.lastSeenS.get(r.id) ?? 0) > NO_SHOW_DNF_S;
+  }
+
+  /**
+   * Time to the car directly ahead of the player on the road (s), a lapped car or one a lap up included: the time
+   * since it passed this point. Null when there is none.
+   */
+  private gapAheadOnRoadS(): number | null {
+    const raceTimeS = this.latestFrame?.raceTimeS ?? 0;
+    const others = [...this.remote.values()].filter((r) => !this.outOfRunning(r, raceTimeS));
+    const ahead = carAheadOnRoad(this.lapClock.distM, others, this.lapLengthM);
+    if (!ahead) return null;
+    return this.splitTimer.gapS(raceTimeS, ahead.car.id, ahead.passedHereAtDistM) ?? ahead.roadGapM / Math.max(5, this.playerSpeedMs);
+  }
+
+  /** Race laps the leader has completed (retired cars left out) */
+  private leaderLapsCompleted(): number {
+    let lead = this.lapClock.distM;
+    for (const r of this.remote.values()) if (!r.dnf && r.distM > lead) lead = r.distM;
+    return Math.max(0, Math.floor(lead / this.lapLengthM));
   }
 
   /** What this client reports with its state packets */
@@ -470,11 +559,14 @@ export class MultiplayerRace {
         lastLapMs: p.race.last ?? null,
         penaltyS: p.race.pen ?? 0,
         compound: p.race.cmp,
+        // Retired when the classification closed: that stands even if its packets come back
+        dnf: existing?.dnf,
       });
     }
   }
 
   status(frame: MultiplayerRaceFrame, playerSpeedMs: number): RaceStatus {
+    this.playerSpeedMs = playerSpeedMs;
     const me: RacerProgress = {
       id: this.localPeerId,
       code: this.identity.code,
@@ -492,9 +584,9 @@ export class MultiplayerRace {
       grid: this.gridSlot,
     };
     // A remote car that has sent nothing for this race for a while (it never started, or its player dropped) is out
-    // unless it already finished; it comes back if its packets do
+    // unless it already finished; it comes back if its packets do, until the classification closes
     const remote = [...this.remote.values()].map((r) =>
-      frame.phase === "racing" && r.finishTimeS === null && frame.raceTimeS - (this.lastSeenS.get(r.id) ?? 0) > NO_SHOW_DNF_S
+      !r.dnf && frame.phase === "racing" && r.finishTimeS === null && frame.raceTimeS - (this.lastSeenS.get(r.id) ?? 0) > NO_SHOW_DNF_S
         ? { ...r, dnf: true }
         : r
     );
@@ -536,7 +628,15 @@ export class MultiplayerRace {
       };
     });
     const playerFinished = me.finishTimeS !== null;
-    const final = playerFinished && classificationClosed(ordered, frame.raceTimeS);
+    if (!this.finalResults && playerFinished && classificationClosed(ordered, frame.raceTimeS)) {
+      // The classification closes: the cars out now stay out, and the result is kept as it stands
+      for (const r of remote) {
+        const kept = this.remote.get(r.id);
+        if (r.dnf && kept) kept.dnf = true;
+      }
+      this.finalResults = classify(ordered, L, this.start.laps, true);
+    }
+    const final = this.finalResults !== null;
     return {
       phase: frame.phase === "racing" ? (playerFinished ? "finished" : "racing") : "lights",
       lightsOn: frame.lightsOn,
@@ -546,7 +646,7 @@ export class MultiplayerRace {
       lap: Math.max(1, Math.min(this.start.laps, Math.floor(me.distM / L) + 1)),
       totalLaps: this.start.laps,
       standings,
-      results: playerFinished ? classify(ordered, L, this.start.laps, final) : undefined,
+      results: this.finalResults ?? (playerFinished ? classify(ordered, L, this.start.laps, false) : undefined),
       resultsFinal: final,
       multiplayer: true,
       splits: frame.phase === "racing" ? this.playerSplits.compute(this.splitTimer, frame.raceTimeS, ordered) : undefined,

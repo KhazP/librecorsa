@@ -18,7 +18,7 @@ export interface LapRecorderTurn {
 export interface LapRecorderInput {
   telemetry: Pick<
     CarTelemetry,
-    "lapCount" | "currentLapTimeMs" | "lastLapTimeMs" | "trackDistanceM" | "speedKmh" | "throttle" | "brake" | "steering" | "gear" | "offTrack" | "sectorTimesMs" | "lapInvalid" | "lastLapValid"
+    "lapCount" | "currentLapTimeMs" | "lastLapTimeMs" | "trackDistanceM" | "speedKmh" | "throttle" | "brake" | "steering" | "gear" | "offTrack" | "sectorTimesMs" | "lapInvalid" | "lastLapValid" | "runId"
   >;
   position: { x: number; y: number; z: number };
   quaternion: { x: number; y: number; z: number; w: number };
@@ -152,6 +152,8 @@ export class LapRecorder {
   private sessionSectorBest: [number | null, number | null, number | null] = [null, null, null];
   private sessionCornerBest: (number | null)[];
   private lastLapCount: number | null = null;
+  /** The run the last update belonged to (`CarTelemetry.runId`, absent = 0); null before the first */
+  private lastRunId: number | null = null;
   private lastLapTimeSeen: number | null = null;
   private lastLapClockMs = 0;
   /** True while the lap in progress was armed at its start */
@@ -212,6 +214,11 @@ export class LapRecorder {
   /** Call every frame while driving; returns the lap once one is completed, else null */
   update(input: LapRecorderInput): CompletedLap | null {
     const t = input.telemetry;
+    // A new run (restart, teleport, flashback, new session) since the last update: whatever the lap counter did in
+    // between, it is not a line crossing. The recorder may not have been updated for a while (a race in between)
+    const runId = t.runId ?? 0;
+    if (this.lastRunId !== null && runId !== this.lastRunId) this.reset();
+    this.lastRunId = runId;
     const prevCount = this.lastLapCount;
     const prevLapTimeMs = this.lastLapTimeSeen;
     const prevClockMs = this.lastLapClockMs;
