@@ -3,6 +3,7 @@
 import React from "react";
 import type { F12026Channels } from "@/types/f1";
 import { HUD_CYAN, HUD_GLASS, HUD_GREEN, HUD_LBL, HUD_RED, HUD_VOLT, HUD_WELL, HUD_YELLOW } from "./hud-format";
+import type { AeroReadout } from "./aero-label";
 
 const WHEELS = ["LF", "RF", "LR", "RR"] as const;
 
@@ -27,13 +28,18 @@ export const AidLamp: React.FC<{ label: string; active: boolean }> = ({ label, a
 
 /**
  * Live 6-DOF engineering telemetry channels: per-wheel slip ratio, travel left to the bump rubber and
- * friction-circle use, aero height / balance, LSD locking torque and DRS / TC / ABS state.
+ * friction-circle use, aero height / balance, LSD locking torque and DRS / TC / ABS state. The flap and aid states
+ * come from the readings every other panel shows (`aeroReadout`, `aidsActive`), so they never disagree.
  */
-export const F12026ChannelsPanel: React.FC<{ channels: F12026Channels }> = ({ channels: c }) => {
+export const F12026ChannelsPanel: React.FC<{
+  channels: F12026Channels;
+  aero: AeroReadout;
+  aids: { tc: boolean; abs: boolean };
+}> = ({ channels: c, aero, aids }) => {
   const sr = [c.WHEEL_SR_LF, c.WHEEL_SR_RF, c.WHEEL_SR_LR, c.WHEEL_SR_RR];
   const bump = [c.BUMPSTOPUP_TRAVEL_LF, c.BUMPSTOPUP_TRAVEL_RF, c.BUMPSTOPUP_TRAVEL_LR, c.BUMPSTOPUP_TRAVEL_RR];
-  const drsState = c.CHANGED_DRS_OPEN ? "OPEN" : c.drsAvailable ? "ARMED" : c.drsZone ? "ZONE" : "OFF";
-  const drsColor = c.CHANGED_DRS_OPEN ? HUD_CYAN : c.drsAvailable ? HUD_VOLT : "rgba(255,255,255,0.22)";
+  const drsState = aero.open ? "OPEN" : aero.armed ? "ARMED" : c.drsZone ? "ZONE" : "OFF";
+  const drsColor = aero.open ? HUD_CYAN : aero.armed ? HUD_VOLT : "rgba(255,255,255,0.22)";
 
   return (
     <section aria-label="Engineering channels" className={`w-[320px] rounded-[22px] px-3.5 py-3 ${HUD_GLASS}`} data-testid="f12026-channels">
@@ -113,7 +119,7 @@ export const F12026ChannelsPanel: React.FC<{ channels: F12026Channels }> = ({ ch
                 className="lc-data rounded-full px-2 py-0.5 text-[10px]"
                 style={{
                   backgroundColor: drsColor,
-                  color: c.CHANGED_DRS_OPEN || c.drsAvailable ? "#08090D" : "#F5F7FA",
+                  color: aero.open || aero.armed ? "#08090D" : "#F5F7FA",
                 }}
               >
                 {drsState}
@@ -128,8 +134,8 @@ export const F12026ChannelsPanel: React.FC<{ channels: F12026Channels }> = ({ ch
           </>
         ) : (
           <span className="flex items-center gap-1.5">
-            <AidLamp label="TC" active={c.tcActive} />
-            <AidLamp label="ABS" active={c.absActive} />
+            <AidLamp label="TC" active={aids.tc} />
+            <AidLamp label="ABS" active={aids.abs} />
           </span>
         )}
         {c.wallContact ? (

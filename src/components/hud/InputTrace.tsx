@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef } from "react";
+import { useHudModeRef } from "./hud-mode";
 import { HUD_CYAN, HUD_GLASS, HUD_GREEN, HUD_RED } from "./hud-format";
 
 /** Canvas size in CSS pixels */
@@ -48,6 +49,8 @@ export const InputTrace: React.FC<InputTraceProps> = ({ sample, seconds = 5, wid
   const ringRef = useRef<Ring>({ buf: new Array<Point | undefined>(CAPACITY), head: 0, count: 0 });
   const { throttle, brake, steering, throttleOut, brakeOut, ffbClip } = sample;
   const hasAside = aside !== undefined && aside !== null;
+  // The HUD stays mounted under the pause menu: the trace idles there instead of redrawing an invisible canvas
+  const hudModeRef = useHudModeRef();
 
   // Record a point whenever an input changes; between changes the trace holds the last value
   useEffect(() => {
@@ -102,6 +105,10 @@ export const InputTrace: React.FC<InputTraceProps> = ({ sample, seconds = 5, wid
 
     let raf = 0;
     const draw = () => {
+      if (hudModeRef.current === "hidden") {
+        raf = requestAnimationFrame(draw);
+        return;
+      }
       const dpr = window.devicePixelRatio || 1;
       const pxW = Math.round(WIDTH * dpr);
       const pxH = Math.round(HEIGHT * dpr);

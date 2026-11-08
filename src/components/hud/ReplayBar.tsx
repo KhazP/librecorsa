@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import { Camera, Pause, Play, RotateCcw } from "lucide-react";
 
 const SPEEDS = [0.25, 0.5, 1, 2] as const;
@@ -45,9 +45,15 @@ export const ReplayBar: React.FC<{
 }) => {
   const shown = Math.min(endS, Math.max(startS, timeS));
 
+  // The key listeners read the latest clock and callbacks from here, so they are added once: re-adding them every frame
+  // (the clock moves while playing) dropped the Space latch between keydown and keyup
+  const latest = useRef({ timeS, startS, endS, onTogglePlay, onSeek, onFlashback });
+  latest.current = { timeS, startS, endS, onTogglePlay, onSeek, onFlashback };
+
   useEffect(() => {
-    const clamp = (t: number) => Math.min(endS, Math.max(startS, t));
+    const clamp = (t: number) => Math.min(latest.current.endS, Math.max(latest.current.startS, t));
     const onKey = (e: KeyboardEvent) => {
+      const { timeS, onTogglePlay, onSeek, onFlashback } = latest.current;
       const target = e.target as HTMLElement | null;
       if (
         target &&
@@ -88,7 +94,7 @@ export const ReplayBar: React.FC<{
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("keyup", onKeyUp, true);
     };
-  }, [timeS, startS, endS, onTogglePlay, onSeek, onFlashback]);
+  }, []);
 
   const rel = shown - endS;
   const relText = Math.abs(rel) < 0.05 ? "0.0" : `−${Math.abs(rel).toFixed(1)}`;

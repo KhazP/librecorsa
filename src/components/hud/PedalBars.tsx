@@ -2,7 +2,7 @@
 
 import React from "react";
 import type { CarTelemetry } from "@/types/f1";
-import { HUD_CYAN, HUD_GREEN, HUD_LBL, HUD_RED, HUD_YELLOW } from "./hud-format";
+import { HUD_CYAN, HUD_GREEN, HUD_LBL, HUD_RED, HUD_YELLOW, aidsActive } from "./hud-format";
 
 /** ABS release shows in magenta so it never reads as the throttle's amber TC cut */
 const ABS_COLOR = "#FF3DCB";
@@ -17,13 +17,14 @@ export function pedalLayers(t: CarTelemetry) {
   const absCut = Math.max(0, Math.min(1, Math.max(...absPerWheel)));
   const throttle = Math.max(0, Math.min(1, t.throttle));
   const brake = Math.max(0, Math.min(1, t.brake));
+  const aids = aidsActive(t);
   return {
     throttle,
     throttleOut: throttle * (1 - tcCut),
-    tcActive: tcCut > 0.02 || Boolean(t.f12026?.tcActive),
+    tcActive: aids.tc,
     brake,
     brakeOut: brake * (1 - absCut),
-    absActive: absCut > 0.02 || Boolean(t.f12026?.absActive),
+    absActive: aids.abs,
     absPerWheel,
     clutch: Math.max(0, Math.min(1, 1 - t.clutch)),
     ffb: Math.min(1, Math.abs(t.ffbTorqueNorm ?? 0)),

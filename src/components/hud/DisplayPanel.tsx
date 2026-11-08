@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   sanitizeColor,
   sanitizeDriverCode,
@@ -234,15 +234,30 @@ export const DisplayPanel: React.FC<DisplayPanelProps> = ({ settings, onChangeSe
   const setTouch = (patch: Partial<TouchSettings>) =>
     onChangeSettings((prev) => ({ ...prev, touch: { ...prev.touch, ...patch } }));
 
+  // An edit is saved on Enter, on leaving the field, and when the panel goes away mid-edit (resume, LB / RB)
   const commitName = () => {
-    const name = sanitizeDriverName(nameDraft ?? profile.name);
+    if (nameDraft === null) return;
+    const name = sanitizeDriverName(nameDraft);
     // A name the player typed is theirs: the first upload no longer asks for one
-    setProfile(name === profile.name ? {} : { name, generated: false });
+    if (name !== profile.name) setProfile({ name, generated: false });
     setNameDraft(null);
   };
   const commitCode = () => {
-    setProfile({ code: sanitizeDriverCode(codeDraft ?? profile.code) });
+    if (codeDraft === null) return;
+    setProfile({ code: sanitizeDriverCode(codeDraft) });
     setCodeDraft(null);
+  };
+  const commitRef = useRef({ commitName, commitCode });
+  commitRef.current = { commitName, commitCode };
+  useEffect(
+    () => () => {
+      commitRef.current.commitName();
+      commitRef.current.commitCode();
+    },
+    []
+  );
+  const commitOnEnter = (commit: () => void) => (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") commit();
   };
 
   return (
@@ -259,6 +274,7 @@ export const DisplayPanel: React.FC<DisplayPanelProps> = ({ settings, onChangeSe
                 maxLength={16}
                 value={nameDraft ?? profile.name}
                 onChange={(e) => setNameDraft(e.target.value)}
+                onKeyDown={commitOnEnter(commitName)}
                 onBlur={commitName}
                 className={INPUT}
               />
@@ -270,6 +286,7 @@ export const DisplayPanel: React.FC<DisplayPanelProps> = ({ settings, onChangeSe
                 maxLength={3}
                 value={codeDraft ?? profile.code}
                 onChange={(e) => setCodeDraft(e.target.value.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 3))}
+                onKeyDown={commitOnEnter(commitCode)}
                 onBlur={commitCode}
                 className={`${INPUT} px-3 text-center font-f1-mono font-extrabold tracking-[0.14em] uppercase`}
               />

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import type {
   AeroSetupPreset,
@@ -356,11 +356,33 @@ const PrimaryRailItem: React.FC<{
  */
 export const PauseMenu: React.FC<PauseMenuProps> = (props) => {
   const { telemetry, onTogglePause, onResetCar, aiOpponents, onOpenControls, onExitToTitle, displayPanel, leaderboardPanel } = props;
-  // In a multiplayer race only the host restarts it (for everyone); there is no flying lap
-  const mpRace = telemetry.race?.multiplayer === true;
-  const canRestart = !mpRace || props.isHost === true;
-  const [panel, setPanel] = useState<Panel>(props.openMultiplayer ? "multiplayer" : "settings");
+  // Online: the host restarts the race for everyone and nobody has a flying lap; a guest in a lobby restarts nothing
+  // (racing or not). The shell guards the same handlers.
+  const mpRace = telemetry.race?.multiplayer === true || props.raceRunning === true;
+  const guest = (mpRace || Boolean(props.lobby)) && props.isHost !== true;
+  const canRestart = !guest;
+  const canFly = !mpRace && !guest;
+  const [chosenPanel, setPanel] = useState<Panel>(props.openMultiplayer ? "multiplayer" : "settings");
   const rootRef = useRef<HTMLDivElement | null>(null);
+  // Restart, then close the menu, unless the restart already did: an online host's restart resumes everyone itself,
+  // and toggling after it would pause again. By the next frame React has rendered the reset, so a menu still mounted
+  // means the game is still paused.
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+  const restartAndResume = useCallback(
+    (flyingStart: boolean) => {
+      onResetCar(flyingStart);
+      requestAnimationFrame(() => {
+        if (mounted.current) onTogglePause();
+      });
+    },
+    [onResetCar, onTogglePause]
+  );
   const panelRef = useRef<HTMLElement | null>(null);
   const trackInfo = getTrackInfo(ACTIVE_TRACK_ID);
 
@@ -369,12 +391,13 @@ export const PauseMenu: React.FC<PauseMenuProps> = (props) => {
       [
         { id: "settings" as const, label: "Session", icon: SlidersHorizontal },
         { id: "setup" as const, label: "Car setup", icon: Wrench },
-        { id: "corners" as const, label: "Corners", icon: CornerDownRight },
+        // No jumping round the circuit in an online race
+        ...(mpRace ? [] : [{ id: "corners" as const, label: "Corners", icon: CornerDownRight }]),
         { id: "multiplayer" as const, label: "Multiplayer", icon: Users },
         ...(leaderboardPanel ? [{ id: "leaderboard" as const, label: "Lap times", icon: Timer }] : []),
         ...(displayPanel ? [{ id: "display" as const, label: "Display", icon: MonitorCog }] : []),
       ] satisfies { id: Panel; label: string; icon: LucideIcon }[],
-    [leaderboardPanel, displayPanel]
+    [leaderboardPanel, displayPanel, mpRace]
   );
 
   const actions = useMemo(
@@ -391,24 +414,18 @@ export const PauseMenu: React.FC<PauseMenuProps> = (props) => {
                   ? "Line up on the grid behind the lights"
                   : "Standing start from the grid",
               icon: RotateCcw,
-              run: () => {
-                onResetCar(false);
-                onTogglePause();
-              },
+              run: () => restartAndResume(false),
             },
           ]
         : []),
-      ...(!mpRace
+      ...(canFly
         ? [
             {
               id: "flying",
               label: aiOpponents ? "Rolling start" : "Flying lap",
               detail: aiOpponents ? "Restart the race on the move" : "Timed lap from the main straight",
               icon: Gauge,
-              run: () => {
-                onResetCar(true);
-                onTogglePause();
-              },
+              run: () => restartAndResume(true),
             },
           ]
         : []),
@@ -417,8 +434,11 @@ export const PauseMenu: React.FC<PauseMenuProps> = (props) => {
         : []),
       ...(onExitToTitle ? [{ id: "title", label: "Main menu", detail: "Leave the session", icon: LogOut, run: onExitToTitle }] : []),
     ],
-    [aiOpponents, mpRace, canRestart, onResetCar, onTogglePause, onOpenControls, onExitToTitle]
+    [aiOpponents, mpRace, canRestart, canFly, restartAndResume, onTogglePause, onOpenControls, onExitToTitle]
   );
+
+  // A tab that went away while open (Corners when an online race starts) shows the session tab instead
+  const panel: Panel = tabs.some((t) => t.id === chosenPanel) ? chosenPanel : "settings";
 
   const focusActiveTab = () =>
     rootRef.current?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]')?.focus({ preventScroll: true });
@@ -563,7 +583,11 @@ const InputAssistPanel: React.FC<{
   onChangeSettings: (update: (prev: PlayerSettings) => PlayerSettings) => void;
   lockDeg?: number;
 }> = ({ settings, onChangeSettings, lockDeg }) => {
-  const [device, setDevice] = useState<SteeringDevice>(settings.device === "controller" ? "controller" : "keyboard");
+  // Opens on the player's device and follows it when it changes; a tab picked here holds while that device stays
+  const playerDevice: SteeringDevice = settings.device === "controller" ? "controller" : "keyboard";
+  const [picked, setPicked] = useState<{ device: SteeringDevice; whileDevice: PlayerSettings["device"] } | null>(null);
+  const device = picked && picked.whileDevice === settings.device ? picked.device : playerDevice;
+  const setDevice = (d: SteeringDevice) => setPicked({ device: d, whileDevice: settings.device });
   const kb = settings.keyboardTuning;
   const pad = settings.padTuning;
   const setKb = (patch: Partial<KeyboardTuning>) =>
@@ -703,12 +727,15 @@ export const SessionPanel: React.FC<PauseMenuProps> = (p) => {
       <section className={PANEL_CARD} aria-label="Session">
         <PanelSection>Session</PanelSection>
         <div className="grid gap-x-[22px] gap-y-0.5 sm:grid-cols-2">
-          <Toggle
-            label="AI opponents"
-            detail="Race 5 AI cars from a standing start"
-            checked={p.aiOpponents}
-            onChange={p.onToggleAiOpponents}
-          />
+          {/* An online race has no AI cars to add */}
+          {p.telemetry.race?.multiplayer || p.raceRunning ? null : (
+            <Toggle
+              label="AI opponents"
+              detail="Race 5 AI cars from a standing start"
+              checked={p.aiOpponents}
+              onChange={p.onToggleAiOpponents}
+            />
+          )}
           <Toggle
             label="Racing line"
             detail={`Braking-aware line on the track (${k.racingLine})`}
@@ -1108,8 +1135,11 @@ function buildCornerMap() {
 
 const CornersPanel: React.FC<{ onSelect: (turn: number) => void }> = ({ onSelect }) => {
   const map = useMemo(buildCornerMap, []);
-  // The corner under the pointer or the focus, lit on the map
-  const [hot, setHot] = useState<number | null>(null);
+  // The corner under the pointer, else the focused one, lit on the map (kept apart, so leaving one row with the pointer
+  // falls back to the focused row instead of clearing)
+  const [hover, setHover] = useState<number | null>(null);
+  const [focused, setFocused] = useState<number | null>(null);
+  const hot = hover ?? focused;
   const hotTurn = hot == null ? undefined : TURN_METADATA.find((t) => t.number === hot);
   const hotPoint = hot == null ? undefined : map.turns.find((t) => t.number === hot);
 
@@ -1183,10 +1213,10 @@ const CornersPanel: React.FC<{ onSelect: (turn: number) => void }> = ({ onSelect
             key={t.number}
             type="button"
             onClick={() => onSelect(t.number)}
-            onPointerEnter={() => setHot(t.number)}
-            onPointerLeave={() => setHot((h) => (h === t.number ? null : h))}
-            onFocus={() => setHot(t.number)}
-            onBlur={() => setHot((h) => (h === t.number ? null : h))}
+            onPointerEnter={() => setHover(t.number)}
+            onPointerLeave={() => setHover((h) => (h === t.number ? null : h))}
+            onFocus={() => setFocused(t.number)}
+            onBlur={() => setFocused((f) => (f === t.number ? null : f))}
             aria-label={`Turn ${t.number}: ${cornerName(t.name)}, ${t.complexName}. Apex ${t.apexSpeedKmh} km/h, gear ${t.gear}`}
             title={`${cornerName(t.name)} · ${t.complexName}`}
             className="group grid min-h-[44px] cursor-pointer grid-cols-[44px_minmax(0,1fr)_auto] items-center gap-2.5 rounded-[14px] bg-[#08090D]/55 px-3 py-1 text-left text-[#F5F7FA] shadow-[inset_0_0_0_1px_#1B1F2B] outline-none transition-[background-color,box-shadow,color] duration-200 hover:shadow-[inset_0_0_0_1px_#CCFF00] focus:bg-[#CCFF00] focus:text-[#08090D] focus:shadow-[0_0_0_4px_rgba(204,255,0,0.15)]"

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   AeroSetupPreset,
   CameraMode,
@@ -28,7 +28,9 @@ import { nextCameraMode, PauseMenu } from "./hud/PauseMenu";
 import { F12026ChannelsPanel } from "./hud/F12026ChannelsPanel";
 import { MultiPageMfd } from "./hud/MultiPageMfd";
 import { useLapDeltaTracker } from "./hud/useLapDelta";
-import { HUD_CYAN, HUD_GLASS, HUD_LBL, HUD_RED, HUD_VOLT } from "./hud/hud-format";
+import { HUD_CYAN, HUD_GLASS, HUD_LBL, HUD_RED, HUD_VOLT, aidsActive, raceState } from "./hud/hud-format";
+import { HudModeContext, type HudMode } from "./hud/hud-mode";
+import { aeroReadout } from "./hud/aero-label";
 import { LibreCorsaLogo } from "./ui/LibreCorsaLogo";
 import { InputTrace } from "./hud/InputTrace";
 import { PedalBars, pedalLayers } from "./hud/PedalBars";
@@ -199,6 +201,11 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
   } = props;
 
   const [inviteRoom] = useState(roomFromUrl);
+  // An invite link opens the multiplayer panel on the first pause only
+  const [inviteUsed, setInviteUsed] = useState(false);
+  useEffect(() => {
+    if (paused) setInviteUsed(true);
+  }, [paused]);
   const { mode: inputMode, family: padFamily } = useInputMode();
   const { tracker: lapTracker, deltaS } = useLapDeltaTracker(telemetry, track.totalLengthM);
   const race = telemetry.race;
@@ -216,11 +223,19 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
   // The mirror is placed in window pixels; the HUD frame is inset from the window's edges on a 32:9 screen
   const hudFrameInset = typeof window === "undefined" ? 0 : Math.max(0, (window.innerWidth - window.innerHeight * 2.4) / 2);
   const uiZoom = useUiZoom();
+  const showResults = raceState(race).classified && !props.resultsClosed;
+  // Paused or in a replay, the HUD stays mounted (folds, lap history and timers carry on) but hides and takes no input;
+  // the results card owns the D-pad and keys while it is up
+  const hudMode: HudMode = paused || props.replay ? "hidden" : showResults ? "results" : "live";
+  const hudModeRef = useRef(hudMode);
+  hudModeRef.current = hudMode;
   // The HUD pad button (R3 by default) clears every panel off the screen; start lights and alerts stay
   const [hudHidden, setHudHidden] = useState(false);
   const [hiddenNote, setHiddenNote] = useState(false);
   useEffect(() => {
-    const toggle = () => setHudHidden((h) => !h);
+    const toggle = () => {
+      if (hudModeRef.current !== "hidden") setHudHidden((h) => !h);
+    };
     window.addEventListener(HUD_TOGGLE_EVENT.hud, toggle);
     return () => window.removeEventListener(HUD_TOGGLE_EVENT.hud, toggle);
   }, []);
@@ -234,40 +249,6 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
   const cycleCamera = useCallback(() => {
     onChangeCameraMode(nextCameraMode(cameraMode));
   }, [cameraMode, onChangeCameraMode]);
-
-  if (props.replay && !paused) {
-    return (
-      <div className="pointer-events-none fixed inset-0 z-20 select-none">
-        <div
-          role="status"
-          className="lc-ui-zoom absolute top-[52px] left-1/2 inline-flex h-[38px] -translate-x-1/2 items-center gap-2.5 rounded-full pr-[18px] pl-3.5 text-[#F5F7FA] shadow-[0_10px_30px_rgba(255,42,60,0.35)] sm:top-[68px] short:top-8"
-          style={{ backgroundColor: HUD_RED }}
-        >
-          <span className="relative inline-flex h-2 w-2">
-            <span className="lc-ping absolute inset-0 rounded-full bg-[#F5F7FA]" />
-            <span className="relative h-2 w-2 rounded-full bg-[#F5F7FA]" />
-          </span>
-          <span className="lc-disp text-[18px]">Replay</span>
-        </div>
-        <div className="pointer-events-auto">
-          <ReplayBar {...props.replay} />
-        </div>
-      </div>
-    );
-  }
-
-  if (paused) {
-    return (
-      <PauseMenu
-        {...props}
-        mouseSteerEnabled={mouseSteerEnabled}
-        gamepadAssist={gamepadAssist}
-        initialRoomCode={inviteRoom ?? ""}
-        openMultiplayer={Boolean(inviteRoom) && (props.p2pStatus?.connectedWebRtcPeers ?? 0) === 0}
-        onCycleCamera={cycleCamera}
-      />
-    );
-  }
 
   const lightsPhase = race?.phase === "lights";
   const hud = props.hud;
@@ -301,7 +282,6 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
   /** Scales a corner group of the HUD about that corner */
   const corner = (origin: string): React.CSSProperties | undefined =>
     scale === 1 ? undefined : { transform: `scale(${scale})`, transformOrigin: origin };
-  const showResults = Boolean(race?.results) && !props.resultsClosed;
   // Classic and Telemetry fill both right-hand corners, and on a laptop Broadcast's sits over the pod, so the MFD starts as its status pill there
   // The lap summary toast lifts itself above anything marked data-hud-avoid
   const mfdNode = (
@@ -318,9 +298,14 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
     </div>
   );
 
+  const hidden = hudMode === "hidden";
   return (
-    // Past 2.4:1 (a 32:9 screen) the corner groups keep to a centred frame instead of the far edges
-    <div className="pointer-events-none fixed inset-0 z-20 mx-auto max-w-[calc(100vh*2.4)] select-none p-3 sm:p-4">
+    <HudModeContext.Provider value={hudMode}>
+    {/* Past 2.4:1 (a 32:9 screen) the corner groups keep to a centred frame instead of the far edges */}
+    <div
+      inert={hidden}
+      className={`pointer-events-none fixed inset-0 z-20 mx-auto max-w-[calc(100vh*2.4)] select-none p-3 sm:p-4 ${hidden ? "invisible" : ""}`}
+    >
       {/* Proximity radar: centred just under the horizon, invisible until a car is within 25 m */}
       {hud?.radar !== false && !hudHidden && !lightsPhase && !phone ? (
         <div className="absolute top-[58%] left-1/2 -translate-x-1/2 -translate-y-1/2">
@@ -383,7 +368,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
         {style && !(phone && props.touchControls) ? menuButton : null}
         <StartLights race={race} />
         {/* The ±1 s ribbon sits under every preset except the Phone HUD, whose speed pod owns this spot */}
-        {hud?.deltaBar && !phone && !lightsPhase ? <DeltaBar deltaS={deltaS} /> : null}
+        {hud?.deltaBar && !phone && !lightsPhase ? <DeltaBar deltaS={deltaS} runId={telemetry.runId ?? 0} /> : null}
         {!lightsPhase ? (
           <RaceControlBanner status={telemetry.trackLimits} offTrack={telemetry.offTrack} race={Boolean(race)} />
         ) : null}
@@ -505,13 +490,15 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
       </div>
 
       {/* Classic / Minimal bottom-right: Live Tuner MFD, engineering channels (when active); Minimal's speed pills sit here too */}
-      <div className={`absolute right-3 bottom-3 flex-col items-end gap-2 sm:right-4 sm:bottom-4 ${style ? "hidden" : "flex"}`} style={corner("bottom right")}>
+      {/* Only without a full-screen style: a style draws its own MFD, and a second (hidden) one would still take the D-pad */}
+      {!style ? (
+      <div className="absolute right-3 bottom-3 flex flex-col items-end gap-2 sm:right-4 sm:bottom-4" style={corner("bottom right")}>
         <div className="hidden sm:block">
           {mfdNode}
         </div>
         {f12026 && showChannels ? (
           <div className="hidden sm:block">
-            <F12026ChannelsPanel channels={f12026} />
+            <F12026ChannelsPanel channels={f12026} aero={aeroReadout(telemetry)} aids={aidsActive(telemetry)} />
           </div>
         ) : null}
         {minimal ? (
@@ -526,6 +513,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
           </div>
         ) : null}
       </div>
+      ) : null}
 
       {/* Bottom-centre: input trace (above the style's strip or dash) and Classic's speed cluster */}
       <div
@@ -585,7 +573,8 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
         </div>
       ) : null}
 
-      {showResults && race ? (
+      {/* Mounted only while it can take input: under the pause menu or a replay it would be a second focus owner */}
+      {showResults && race && !hidden ? (
         <div className="pointer-events-auto">
           <RaceResults
             race={race}
@@ -598,5 +587,37 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
         </div>
       ) : null}
     </div>
+
+    {/* Instant replay: only the badge and the transport bar show (under the pause menu, neither) */}
+    {props.replay && !paused ? (
+      <div className="pointer-events-none fixed inset-0 z-20 select-none">
+        <div
+          role="status"
+          className="lc-ui-zoom absolute top-[52px] left-1/2 inline-flex h-[38px] -translate-x-1/2 items-center gap-2.5 rounded-full pr-[18px] pl-3.5 text-[#F5F7FA] shadow-[0_10px_30px_rgba(255,42,60,0.35)] sm:top-[68px] short:top-8"
+          style={{ backgroundColor: HUD_RED }}
+        >
+          <span className="relative inline-flex h-2 w-2">
+            <span className="lc-ping absolute inset-0 rounded-full bg-[#F5F7FA]" />
+            <span className="relative h-2 w-2 rounded-full bg-[#F5F7FA]" />
+          </span>
+          <span className="lc-disp text-[18px]">Replay</span>
+        </div>
+        <div className="pointer-events-auto">
+          <ReplayBar {...props.replay} />
+        </div>
+      </div>
+    ) : null}
+
+    {paused ? (
+      <PauseMenu
+        {...props}
+        mouseSteerEnabled={mouseSteerEnabled}
+        gamepadAssist={gamepadAssist}
+        initialRoomCode={inviteRoom ?? ""}
+        openMultiplayer={!inviteUsed && Boolean(inviteRoom) && (props.p2pStatus?.connectedWebRtcPeers ?? 0) === 0}
+        onCycleCamera={cycleCamera}
+      />
+    ) : null}
+    </HudModeContext.Provider>
   );
 };

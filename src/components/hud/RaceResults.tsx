@@ -3,6 +3,7 @@
 import React, { useEffect, useRef } from "react";
 import { RotateCcw } from "lucide-react";
 import { useFocusNav } from "@/components/menu/useFocusNav";
+import { useHudModeRef } from "./hud-mode";
 import { PromptBar } from "@/components/menu/menu-ui";
 import type { RaceResultEntry, RaceStatus } from "@/types/f1";
 import { STRIKES_PER_PENALTY } from "@/lib/sim/track-limits";
@@ -123,16 +124,21 @@ export const RaceResults: React.FC<{
   const results = race.results;
   const rootRef = useRef<HTMLDivElement | null>(null);
   // A controller closes the card with Ⓑ and reaches its buttons (Esc is handled below)
+  // F1TelemetryHud mounts the card only while the HUD is live; the mode check also keeps Esc from closing it from under
+  // another screen (the pause menu) if it is ever shown there
+  const hudModeRef = useHudModeRef();
   useFocusNav(rootRef, { enabled: Boolean(results), onBack: onClose, keyboardBack: false });
 
   useEffect(() => {
     if (!results) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      // Not e.defaultPrevented: the shell's own Esc (pause) marks the same press, and Esc has always closed the card too
+      if (e.key !== "Escape" || hudModeRef.current === "hidden") return;
+      onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [results, onClose]);
+  }, [results, onClose, hudModeRef]);
 
   if (!results) return null;
 

@@ -2,7 +2,8 @@
 
 import React from "react";
 import type { CarTelemetry, TireCompound } from "@/types/f1";
-import { formatLapTime, formatSectorTime, HUD_PURPLE } from "../hud-format";
+import { aidsActive, formatLapTime, formatSectorTime, HUD_PURPLE } from "../hud-format";
+import { aeroReadout } from "../aero-label";
 import { TyreBrakeGrid } from "../TyreBrakeWidget";
 import { InputTrace } from "../InputTrace";
 import { PedalBars, pedalLayers } from "../PedalBars";
@@ -155,7 +156,7 @@ export const TelemetryHud: React.FC<HudDesignProps> = ({ t, deltaS, map, compoun
     <div data-hud-avoid className="absolute right-5 bottom-5 flex flex-col items-end gap-2 compact:hidden" style={anchor(scale, "bottom right")}>
       {/* The MFD on top: folding it moves nothing else in the corner */}
       {mfd}
-      {t.f12026 ? <F12026ChannelsPanel channels={t.f12026} /> : null}
+      {t.f12026 ? <F12026ChannelsPanel channels={t.f12026} aero={aeroReadout(t)} aids={aidsActive(t)} /> : null}
       {ffb}
     </div>
 

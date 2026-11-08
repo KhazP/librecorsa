@@ -17,6 +17,7 @@ import {
   formatSectorTime,
   sectorTimeColor,
 } from "./hud-format";
+import { useHudMode } from "./hud-mode";
 
 const EMPTY = "—";
 const MINUS = "−";
@@ -128,28 +129,45 @@ export const LapSummary: React.FC<LapSummaryProps> = (props) => {
   const { summary: s, onClose, submitState = "idle" } = props;
   const [expanded, setExpanded] = useState(false);
   const [hovered, setHovered] = useState(false);
+  // The leaderboard name prompt: the typed name while it is open (null = closed); kept while the card is collapsed
+  const [nameDraft, setNameDraft] = useState<string | null>(null);
+  // Portalled out of the HUD, so it hides itself while the HUD is hidden (pause menu, replay)
+  const hidden = useHudMode() === "hidden";
   // The HUD re-renders every frame with a fresh onClose; the timer must not restart for that
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
 
-  // A new lap starts collapsed again
-  useEffect(() => setExpanded(false), [s.lapNumber]);
-
+  // A new lap starts collapsed and un-hovered again (the box is re-keyed under a still pointer, which sends no
+  // pointerleave), with no name prompt open
   useEffect(() => {
-    if (expanded || hovered || submitState === "sending") return;
+    setExpanded(false);
+    setHovered(false);
+    setNameDraft(null);
+  }, [s.lapNumber]);
+  useEffect(() => {
+    if (submitState === "sent") setNameDraft(null);
+  }, [submitState]);
+  // The pause menu or a replay covers the toast: the pointer is no longer on it
+  useEffect(() => {
+    if (hidden) setHovered(false);
+  }, [hidden]);
+
+  // Hidden, the clock stops: the toast gets its full time again once the HUD is back
+  useEffect(() => {
+    if (expanded || hovered || hidden || submitState === "sending") return;
     const id = window.setTimeout(() => closeRef.current(), TOAST_MS);
     return () => window.clearTimeout(id);
-  }, [expanded, hovered, submitState, s.lapNumber]);
+  }, [expanded, hovered, hidden, submitState, s.lapNumber]);
 
-  // Escape folds the open card back into the toast
+  // Escape folds the open card back into the toast (not while it is hidden: there Esc resumes the game)
   useEffect(() => {
-    if (!expanded) return;
+    if (!expanded || hidden) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setExpanded(false);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [expanded]);
+  }, [expanded, hidden]);
 
   const boxRef = useRef<HTMLDivElement>(null);
   const lift = useLiftOverHud(boxRef);
@@ -161,7 +179,8 @@ export const LapSummary: React.FC<LapSummaryProps> = (props) => {
     <div
       key={s.lapNumber}
       ref={boxRef}
-      className="lc-ui-zoom lc-panel-in pointer-events-auto fixed right-3 bottom-4 z-30 w-[min(440px,calc(100vw-1.5rem))] sm:right-4 pointer-coarse:top-[calc(env(safe-area-inset-top,0px)+104px)] pointer-coarse:portrait:top-[calc(env(safe-area-inset-top,0px)+216px)] pointer-coarse:right-auto pointer-coarse:bottom-auto pointer-coarse:left-1/2 pointer-coarse:w-[min(400px,calc(100vw-1.5rem))] pointer-coarse:-translate-x-1/2"
+      inert={hidden}
+      className={`lc-ui-zoom lc-panel-in pointer-events-auto fixed right-3 bottom-4 z-30 w-[min(440px,calc(100vw-1.5rem))] sm:right-4 pointer-coarse:top-[calc(env(safe-area-inset-top,0px)+104px)] pointer-coarse:portrait:top-[calc(env(safe-area-inset-top,0px)+216px)] pointer-coarse:right-auto pointer-coarse:bottom-auto pointer-coarse:left-1/2 pointer-coarse:w-[min(400px,calc(100vw-1.5rem))] pointer-coarse:-translate-x-1/2 ${hidden ? "invisible" : ""}`}
       style={
         lift === null
           ? undefined
@@ -171,7 +190,7 @@ export const LapSummary: React.FC<LapSummaryProps> = (props) => {
       onPointerLeave={() => setHovered(false)}
     >
       {expanded ? (
-        <LapCard {...props} onCollapse={() => setExpanded(false)} />
+        <LapCard {...props} onCollapse={() => setExpanded(false)} nameDraft={nameDraft} onNameDraft={setNameDraft} />
       ) : (
         <LapToast summary={s} onOpen={() => setExpanded(true)} onClose={onClose} />
       )}
@@ -253,10 +272,19 @@ const StatTile: React.FC<{ label: string; children: React.ReactNode; className?:
 const BTN = "inline-flex h-10 cursor-pointer items-center gap-2 rounded-full px-4 text-[13px] font-bold transition-colors";
 
 /** Open card: lap time with status badge, sector splits vs session best, stats, and per-corner speeds */
-const LapCard: React.FC<LapSummaryProps & { onCollapse: () => void }> = ({
+const LapCard: React.FC<
+  LapSummaryProps & {
+    onCollapse: () => void;
+    /** The name prompt's text while it is open (null = closed), owned by LapSummary so a collapse keeps it */
+    nameDraft: string | null;
+    onNameDraft: (draft: string | null) => void;
+  }
+> = ({
   summary: s,
   onClose,
   onCollapse,
+  nameDraft,
+  onNameDraft,
   onSaveGhost,
   onSubmit,
   submitState = "idle",
@@ -266,17 +294,14 @@ const LapCard: React.FC<LapSummaryProps & { onCollapse: () => void }> = ({
   askName = false,
 }) => {
   // Name prompt before the first upload under a generated name; open until the lap is sent
-  const [naming, setNaming] = useState(false);
-  const [draft, setDraft] = useState("");
+  const naming = nameDraft !== null;
+  const draft = nameDraft ?? "";
+  const setDraft = (v: string) => onNameDraft(v);
   const nameId = useId();
-  useEffect(() => {
-    if (submitState === "sent") setNaming(false);
-  }, [submitState]);
   const startSubmit = () => {
     if (!onSubmit) return;
     if (!askName) return onSubmit();
-    setDraft(driverName);
-    setNaming(true);
+    onNameDraft(driverName);
   };
 
   let badge: React.ReactNode = null;

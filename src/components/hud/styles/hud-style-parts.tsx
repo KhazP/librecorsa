@@ -77,8 +77,8 @@ export interface HudDesignProps {
   mfd?: React.ReactNode;
   /** The on-screen touch controls are up (their Menu / Cam sit top-left) */
   touch?: boolean;
-  /** The running lap was cut (off the track at some point): its clock stays red until the next lap */
-  lapInvalid?: boolean;
+  /** The running lap was cut (`useLapInvalid`, the one reading every style shows): its clock stays red until the next lap */
+  lapInvalid: boolean;
   /** Timing tower gaps: to the car ahead or to the leader */
   towerGaps?: "interval" | "leader";
   /** Circuit map: the whole lap, or zoomed in heading-up around the car */
@@ -232,54 +232,60 @@ export const MiniMap: React.FC<{
 /** Sector time colour (see sectorTimeColor): purple at or inside the best, yellow slower */
 export const sectorColor = sectorTimeColor;
 
-/** The last completed sector, for a few seconds after it completes */
 /**
  * True from the moment the car leaves the track until the next lap starts or the run restarts, like the
  * physics' own lap-valid flag: the running clock stays red for the rest of a cut lap, not only while off.
+ * A physics that judges its own track limits reports the verdict instead, and then no cut is kept at all.
  */
 export function useLapInvalid(t: CarTelemetry): boolean {
-  // The lap and clock reading when the cut happened; a new lap or a clock that went back clears it
-  const [cut, setCut] = useState<{ lap: number; atMs: number } | null>(null);
-  const stale = cut !== null && (t.lapCount !== cut.lap || t.currentLapTimeMs < cut.atMs);
+  // The run, lap and clock reading when the cut happened; a new run, a new lap or a clock that went back clears it
+  const [cut, setCut] = useState<{ runId: number; lap: number; atMs: number } | null>(null);
+  const runId = t.runId ?? 0;
+  const stale = cut !== null && (runId !== cut.runId || t.lapCount !== cut.lap || t.currentLapTimeMs < cut.atMs);
   // A physics that judges its own track limits reports the verdict: only a cut that gained time deletes the lap
   const judged = t.lapInvalid !== undefined && t.trackLimits !== undefined;
-  if (!judged && t.offTrack && (cut === null || stale)) setCut({ lap: t.lapCount, atMs: t.currentLapTimeMs });
-  else if (stale && !t.offTrack) setCut(null);
+  // Updated in an effect, not during render; the value below never depends on the update having landed
+  useEffect(() => {
+    if (judged) {
+      if (cut !== null) setCut(null);
+    } else if (t.offTrack && (cut === null || stale)) {
+      setCut({ runId, lap: t.lapCount, atMs: t.currentLapTimeMs });
+    } else if (stale) {
+      setCut(null);
+    }
+  }, [judged, t.offTrack, cut, stale, runId, t.lapCount, t.currentLapTimeMs]);
   if (judged) return Boolean(t.lapInvalid);
   return t.offTrack || (cut !== null && !stale);
 }
 
+/** The last completed sector (or lap), for a few seconds after it completes; a new run clears it */
 export function useSectorFlash(t: CarTelemetry, holdMs = 3500): { sector: number; ms: number; color: string } | null {
   const [flash, setFlash] = useState<{ sector: number; ms: number; color: string } | null>(null);
-  const prev = useRef({ sector: t.currentSector, lap: t.lapCount });
+  const runId = t.runId ?? 0;
+  const prev = useRef({ sector: t.currentSector, lap: t.lapCount, runId });
+  // Edges only set the flash; its timer belongs to the flash itself, so a frame that changes a dependency without an
+  // edge can no longer cancel it
   useEffect(() => {
     const p = prev.current;
-    if (p.sector === t.currentSector && p.lap === t.lapCount) return;
+    if (p.sector === t.currentSector && p.lap === t.lapCount && p.runId === runId) return;
+    prev.current = { sector: t.currentSector, lap: t.lapCount, runId };
+    if (p.runId !== runId) {
+      // A restart is not a completed sector
+      setFlash(null);
+      return;
+    }
     const done = p.sector;
     const ms = t.lapCount !== p.lap ? (t.lastLapTimeMs ?? 0) : t.sectorTimesMs[done - 1];
-    prev.current = { sector: t.currentSector, lap: t.lapCount };
     if (!ms) return;
     const best = t.lapCount !== p.lap ? t.bestLapTimeMs : t.bestSectorTimesMs[done - 1];
     setFlash({ sector: t.lapCount !== p.lap ? 0 : done, ms, color: sectorColor(ms, best) });
+  }, [t.currentSector, t.lapCount, runId, t.lastLapTimeMs, t.sectorTimesMs, t.bestSectorTimesMs, t.bestLapTimeMs]);
+  useEffect(() => {
+    if (!flash) return;
     const id = window.setTimeout(() => setFlash(null), holdMs);
     return () => window.clearTimeout(id);
-  }, [t.currentSector, t.lapCount, t.lastLapTimeMs, t.sectorTimesMs, t.bestSectorTimesMs, t.bestLapTimeMs, holdMs]);
+  }, [flash, holdMs]);
   return flash;
-}
-
-/** The corner just entered, for a couple of seconds */
-export function useTurnCaption(t: CarTelemetry, holdMs = 2400): string | null {
-  const [caption, setCaption] = useState<string | null>(null);
-  const prev = useRef(t.currentTurnNumber);
-  useEffect(() => {
-    if (prev.current === t.currentTurnNumber) return;
-    prev.current = t.currentTurnNumber;
-    if (!t.currentTurnNumber) return;
-    setCaption(`T${t.currentTurnNumber}${t.currentTurnName ? ` · ${t.currentTurnName}` : ""}`);
-    const id = window.setTimeout(() => setCaption(null), holdMs);
-    return () => window.clearTimeout(id);
-  }, [t.currentTurnNumber, t.currentTurnName, holdMs]);
-  return caption;
 }
 
 export const gearLabel = (g: number) => (g < 0 ? "R" : g === 0 ? "N" : String(g));
@@ -291,6 +297,7 @@ export function raceNeighbours(t: CarTelemetry) {
   const st = t.race?.standings;
   if (!st) return null;
   const i = st.findIndex((e) => e.isPlayer);
+  if (i < 0) return null;
   const me = st[i];
   const ahead = i > 0 ? st[i - 1] : null;
   const behind = i < st.length - 1 ? st[i + 1] : null;

@@ -3,21 +3,22 @@
 import React from "react";
 import { Fuel, Zap } from "lucide-react";
 import type { CarTelemetry, TireCompound } from "@/types/f1";
-import { formatDelta, formatLapTime, formatSectorTime, HUD_RED, TYRE_CONDITION_SHOW, tyreHeatColor } from "../hud-format";
+import { atShiftPoint, formatDelta, formatLapTime, formatSectorTime, HUD_RED, TYRE_CONDITION_SHOW, tyreHeatColor } from "../hud-format";
 import { LibreCorsaMark } from "../../ui/LibreCorsaLogo";
-import { anchor, COMPOUND_COLORS, gearLabel, HUD_GLASS, MiniMap, sectorColor, type HudDesignProps } from "./hud-style-parts";
+import { anchor, COMPOUND_COLORS, gearLabel, HUD_GLASS, MiniMap, raceNeighbours, sectorColor, type HudDesignProps } from "./hud-style-parts";
 import { PedalBars } from "../PedalBars";
 import { TowerRows } from "../TimingPanels";
-import { aeroModeLabel } from "../aero-label";
+import { aeroReadout } from "../aero-label";
 
 /** Timing tower in a race, the session card (lap time, sectors, best / last) in practice. Fills its parent's width. */
 export const BroadcastTower: React.FC<{
   t: CarTelemetry;
   trackCode?: string;
   className?: string;
-  lapInvalid?: boolean;
+  /** `useLapInvalid`: the cut-lap reading every panel shows */
+  lapInvalid: boolean;
   gaps?: "interval" | "leader";
-}> = ({ t, trackCode = "LC", className = "", lapInvalid = t.offTrack, gaps }) => {
+}> = ({ t, trackCode = "LC", className = "", lapInvalid, gaps }) => {
   const race = t.race;
   return (
     <section aria-label={race ? "Timing tower" : "Session"} className={`w-full overflow-hidden rounded-[20px] ${HUD_GLASS} ${className}`}>
@@ -102,10 +103,11 @@ export const BroadcastHud: React.FC<HudDesignProps> = ({ t, deltaS, map, compoun
   const race = t.race;
   const [revStart, revFull] = revRange;
   const lit = Math.round(Math.min(1, Math.max(0, (t.rpm - revStart) / (revFull - revStart))) * LEDS);
-  const shift = t.rpm >= revFull;
+  const shift = atShiftPoint(t.rpm, revFull);
   const hasErs = t.f12026?.hasErs ?? true;
-  const ahead = race && race.position > 1 ? race.standings[race.position - 2] : null;
-  const me = race?.standings[race.position - 1];
+  const aero = aeroReadout(t);
+  // The car ahead found by the player's row, as the tower, the MFD and the other styles find it
+  const ahead = race ? raceNeighbours(t)?.ahead ?? null : null;
 
   return (
     <div className="pointer-events-none absolute inset-0 select-none">
@@ -134,13 +136,13 @@ export const BroadcastHud: React.FC<HudDesignProps> = ({ t, deltaS, map, compoun
         className="absolute bottom-[clamp(14px,2.2vw,24px)] left-1/2 flex -translate-x-1/2 flex-col items-center gap-2.5"
         style={anchor(scale, "bottom center")}
       >
-        {ahead && me ? (
+        {race && ahead ? (
           <div
             className={`inline-flex h-[30px] items-center gap-2.5 rounded-full px-4 font-f1-mono text-[11px] font-extrabold tracking-[0.12em] text-[#8E96AA] ${HUD_GLASS}`}
           >
-            <span className="text-[#F5F7FA]">P{race!.position}</span> CHASING
-            <span style={{ color: ahead.teamColorHex }}>{ahead.driverCode}</span>
-            <span className="text-[#F5F7FA] tabular-nums">{(me.gapToLeaderS - ahead.gapToLeaderS).toFixed(3)}s</span>
+            <span className="text-[#F5F7FA]">P{race.position}</span> CHASING
+            <span style={{ color: ahead.color }}>{ahead.code}</span>
+            <span className="text-[#F5F7FA] tabular-nums">{ahead.gap.toFixed(3)}s</span>
           </div>
         ) : null}
 
@@ -223,10 +225,10 @@ export const BroadcastHud: React.FC<HudDesignProps> = ({ t, deltaS, map, compoun
                   </span>
                   <span
                     className={`w-fit rounded-full px-2 py-0.5 font-f1-mono text-[10px] font-extrabold tracking-[0.1em] ${
-                      t.activeAeroMode === "X_MODE" ? "bg-[#CCFF00] text-[#08090D]" : "bg-[#1B1F2B] text-[#8E96AA]"
+                      aero.open ? "bg-[#CCFF00] text-[#08090D]" : "bg-[#1B1F2B] text-[#8E96AA]"
                     }`}
                   >
-                    {aeroModeLabel(t)}
+                    {aero.label}
                   </span>
                 </>
               ) : t.fuelKg > 0 ? (

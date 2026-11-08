@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { CarTelemetry, TireCompound } from "@/types/f1";
 import type { LapDeltaTracker } from "@/lib/sim/lap-delta";
 import { VF26_CHASSIS } from "@/lib/sim/vf26-data";
+import { raceState } from "./hud-format";
 
 /** One line of the relative: a car near the player on the road, whatever its race position */
 export interface RelativeRow {
@@ -118,18 +119,19 @@ const meanWear = (t: CarTelemetry) => (t.tireWearPct[0] + t.tireWearPct[1] + t.t
 /**
  * Completed laps with their sector splits, validity and what each one cost in fuel, battery and tread. The sim keeps
  * each sector until the next lap overwrites it, so the first two are read on the line; the third is what remains of
- * the lap time.
+ * the lap time. The history belongs to one run: it empties when the shell's run counter (`runId`) changes.
  */
 export function useLapHistory(t: CarTelemetry): LapRecord[] {
   const [laps, setLaps] = useState<LapRecord[]>([]);
-  const prev = useRef<{ lapCount: number } | null>(null);
+  const prev = useRef<{ lapCount: number; runId: number } | null>(null);
   const start = useRef<{ fuel: number; ers: number; wear: number } | null>(null);
 
   useEffect(() => {
     const p = prev.current;
+    const runId = t.runId ?? 0;
     const now = { fuel: t.fuelKg, ers: t.ersBatteryPercent, wear: meanWear(t) };
-    if (p && t.lapCount < p.lapCount) {
-      // Back to the grid / pit lane: a new session
+    if (p && runId !== p.runId) {
+      // The shell restarted the run (restart, new session, teleport, flashback, car change): a new history
       setLaps([]);
       start.current = now;
     } else if (p && t.lapCount === p.lapCount + 1 && t.lastLapTimeMs !== null) {
@@ -155,7 +157,7 @@ export function useLapHistory(t: CarTelemetry): LapRecord[] {
       // Mounted on the line: the first lap counts in full (mounted mid-lap, it only counts for its time)
       start.current = now;
     }
-    prev.current = { lapCount: t.lapCount };
+    prev.current = { lapCount: t.lapCount, runId };
   }, [t]);
 
   return laps;
@@ -194,7 +196,7 @@ export function fuelStrategy(t: CarTelemetry, laps: LapRecord[], L: number): Fue
   const hasFuel = t.fuelKg > 0.01;
   const me = t.race?.standings.find((s) => s.isPlayer);
   const raceLapsLeft =
-    t.race?.totalLaps && t.race.phase !== "finished"
+    t.race?.totalLaps && !raceState(t.race).finished
       ? Math.max(0, t.race.totalLaps - (me?.raceDistM !== undefined ? me.raceDistM / L : t.race.lap - 1 + t.trackProgress))
       : null;
   const lapsOfFuel = hasFuel && avgFuelKg && avgFuelKg > 0.001 ? t.fuelKg / avgFuelKg : null;
