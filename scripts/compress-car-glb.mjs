@@ -4,12 +4,12 @@
  *   node scripts/compress-car-glb.mjs public/cars/sf26/model/sf26.glb [more.glb ...]
  *   node scripts/compress-car-glb.mjs --all        # every car and cockpit GLB under public/ (tracks excluded)
  *
- * Run by the Pages deploy before `next build` (the repository keeps the raw files the car tools edit). Geometry is
- * quantized (14-bit positions, 8-bit normals, 12-bit UVs); textures, materials, node names and extras are left as
- * they are. Nothing is pruned: the AMR26's per-compound tyre maps are textures no material uses, found by index from
- * its root node's extras, so the script fails unless the texture list survives unchanged. Skinned meshes keep float
- * positions (their inverse bind matrices assume the unquantized mesh). Already compressed files are skipped. The
- * browser decodes with three's MeshoptDecoder (src/lib/render/gltf-loader.ts).
+ * Run by the Pages deploy before `next build` (the repository keeps the raw files the car tools edit). Normals, UVs
+ * and colours are quantized (8-bit normals, 12-bit UVs); positions stay float, so every mesh keeps its own node
+ * transform and its geometry stays in metres. Textures, materials, node names and extras are left as they are.
+ * Nothing is pruned: the AMR26's per-compound tyre maps are textures no material uses, found by index from its root
+ * node's extras, so the script fails unless the texture list survives unchanged. Already compressed files are
+ * skipped. The browser decodes with three's MeshoptDecoder (src/lib/render/gltf-loader.ts).
  */
 import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -110,16 +110,14 @@ for (const file of files) {
   }
   const doc = await io.read(file);
   doc.setLogger(quiet);
-  const skinned = new Set(doc.getRoot().listNodes().filter((n) => n.getSkin()).map((n) => n.getMesh()).filter(Boolean));
-  const skinnedPrims = new Set([...skinned].flatMap((m) => m.listPrimitives()));
-  // Park skinned positions on an attribute the quantizer skips, then put them back
-  const RAW = "_RAW_POSITION";
-  for (const prim of skinnedPrims) prim.setAttribute(RAW, prim.getAttribute("POSITION"));
+  // Positions stay float: quantizing them moves each mesh's scale and offset onto its node, so the geometry the car
+  // rigs measure and the tyre shader deforms would no longer be in metres (issue #96: opponents and ghosts floated
+  // about 0.65 m up, sitting on tyres read as 1 m in radius). Skinned meshes need it too (their inverse bind matrices
+  // assume the unquantized mesh).
   await doc.transform(
     reorder({ encoder: MeshoptEncoder, target: "size" }),
     quantize({
-      pattern: new RegExp(`^(?!${RAW}$)`),
-      quantizePosition: 14,
+      pattern: /^(?!POSITION$)/,
       quantizeNormal: 8,
       quantizeTexcoord: 12,
       quantizeColor: 8,
@@ -127,10 +125,6 @@ for (const file of files) {
       quantizeGeneric: 12,
     })
   );
-  for (const prim of skinnedPrims) {
-    prim.setAttribute("POSITION", prim.getAttribute(RAW));
-    prim.setAttribute(RAW, null);
-  }
   doc
     .createExtension(EXTMeshoptCompression)
     .setRequired(true)
