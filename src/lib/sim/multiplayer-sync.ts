@@ -804,6 +804,11 @@ export class MultiplayerSyncManager {
                   sdp: pc.localDescription,
                   type: 'data',
                   connectionId: connId,
+                  // The broker now drops an offer without the PeerJS client's `label` and `serialization`, and hangs
+                  // up on the sender (seen 2026-11-08): with them it is passed on. The host ignores them.
+                  label: connId,
+                  reliable: false,
+                  serialization: 'binary',
                 },
               })
             );
