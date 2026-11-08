@@ -220,10 +220,13 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     (race: SessionRace) => {
       session?.resetRun("session");
       session?.setRace(race);
+      // A fresh session on a fresh track: baseline rubber, no marbles, the weather from its start (an AI race's start
+      // and restarts reset it again, as the field always has)
+      getTrackEnv().reset();
       clearSessionState();
       setPhase("driving");
     },
-    [session, clearSessionState, setPhase]
+    [session, getTrackEnv, clearSessionState, setPhase]
   );
 
   /**
@@ -506,14 +509,13 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       // finds no replay or AI field to carry over)
       const allowed = vehicleModelsFor(start.carClass);
       if (!allowed.includes(vehicleModelRef.current)) changeCar(carForVehicle(allowed[0]).id);
-      getTrackEnv().reset();
       const physics = session?.car;
       if (physics) {
         physics.resetToStartGrid(false, race.gridSlot);
         race.lapClock.reset(physics.sMeters);
       }
     },
-    [session, track, getTrackEnv, changeCar, startSession]
+    [session, track, changeCar, startSession]
   );
   const startMpRaceRef = useRef(startMpRace);
   startMpRaceRef.current = startMpRace;
