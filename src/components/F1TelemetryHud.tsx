@@ -213,6 +213,8 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
   // The renderer draws the mirror into this rect; the HUD frames it and starts the top-centre column under it
   const mirrorRect = props.virtualMirror && !phone && typeof window !== "undefined" ? virtualMirrorRect(window.innerWidth, window.innerHeight) : null;
   const mirrorTop = mirrorRect ? mirrorRect.y + mirrorRect.h + 10 : null;
+  // The mirror is placed in window pixels; the HUD frame is inset from the window's edges on a 32:9 screen
+  const hudFrameInset = typeof window === "undefined" ? 0 : Math.max(0, (window.innerWidth - window.innerHeight * 2.4) / 2);
   const uiZoom = useUiZoom();
   // The HUD pad button (R3 by default) clears every panel off the screen; start lights and alerts stay
   const [hudHidden, setHudHidden] = useState(false);
@@ -317,7 +319,8 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
   );
 
   return (
-    <div className="pointer-events-none fixed inset-0 z-20 select-none p-3 sm:p-4">
+    // Past 2.4:1 (a 32:9 screen) the corner groups keep to a centred frame instead of the far edges
+    <div className="pointer-events-none fixed inset-0 z-20 mx-auto max-w-[calc(100vh*2.4)] select-none p-3 sm:p-4">
       {/* Proximity radar: centred just under the horizon, invisible until a car is within 25 m */}
       {hud?.radar !== false && !hudHidden && !lightsPhase && !phone ? (
         <div className="absolute top-[58%] left-1/2 -translate-x-1/2 -translate-y-1/2">
@@ -366,7 +369,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
         <div
           aria-hidden
           className="absolute rounded-[6px] shadow-[0_0_0_3px_#08090D,0_0_0_4px_rgba(255,255,255,0.14),0_14px_40px_rgba(0,0,0,0.5)]"
-          style={{ left: mirrorRect.x, top: mirrorRect.y, width: mirrorRect.w, height: mirrorRect.h }}
+          style={{ left: mirrorRect.x - hudFrameInset, top: mirrorRect.y, width: mirrorRect.w, height: mirrorRect.h }}
         />
       ) : null}
       {/* Top-centre: start lights and race-control notifications (under the Phone HUD's speed pod) */}
