@@ -15,6 +15,7 @@ import { disposeTree } from "@/lib/render/dispose-tree";
 import { FfbPairPrompt } from "@/components/hud/FfbPairPrompt";
 import { GT3_DASH_MESH, GT3_WING_MIRROR_MATERIAL, Gt3DashDisplay } from "@/lib/render/gt3-dash-display";
 import { createPortedCarRig } from "@/lib/ported-car-model";
+import { staticFloorOf } from "@/lib/render/body-floor";
 import { createAmgGt3Sim } from "@/lib/sim/gt3/AmgGt3Sim";
 import { AMG_GT3_CONFIG } from "@/lib/sim/gt3/AmgGt3Config";
 import { F12026_CAR_CONFIG } from "@/lib/sim/f12026-car/F12026CarConfig";
@@ -1441,7 +1442,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
             chassis: (def.physics === "amg-gt3" ? AMG_GT3_CONFIG : F12026_CAR_CONFIG).chassis,
             // the rim on screen turns with the player's own (its lock is the player's when they set one)
             steerLockDeg: carWheelLockDeg(def.physics, settingsRef.current.wheel.steerLockPerCar) / 2,
-            bodyDropM: def.bodyDropM,
+            floor: staticFloorOf(def.physics === "amg-gt3" ? AMG_GT3_CONFIG : F12026_CAR_CONFIG),
             // every GT3 uses the AMG GT3's onboard and chase views, framed on its own steering wheel and front axle
             cameraAnchors: def.physics === "amg-gt3" ? gt3RigCameraAnchors : undefined,
           })

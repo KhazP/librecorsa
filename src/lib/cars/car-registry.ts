@@ -58,12 +58,6 @@ export interface CarDefinition {
   season?: number;
   /** A ported GLB on the generic rig (`ported-car-model.ts`); absent: the vehicle model's own car */
   modelUrl?: string;
-  /**
-   * How far a ported body sits lower on its wheels than in its GLB (m). Some exports model the body well above the
-   * wheels (a showroom pose), so the car floated over the road: this brings the floor down to a racing ride height
-   * (the AMR26's is 43 mm). Absent: as modelled
-   */
-  bodyDropM?: number;
   sound: CarSoundSource;
 }
 
@@ -102,7 +96,6 @@ export const CARS: readonly CarDefinition[] = [
     physics: "f12026-car",
     season: 2026,
     modelUrl: "/cars/sf26/model/sf26.glb",
-    bodyDropM: 0.085, // floor 127-135 mm in the GLB
     sound: SF26_SOUND,
   },
   {
@@ -114,7 +107,6 @@ export const CARS: readonly CarDefinition[] = [
     physics: "f12026-car",
     season: 2026,
     modelUrl: "/cars/w17/model/w17.glb",
-    bodyDropM: 0.055, // floor 96-111 mm in the GLB
     sound: W17_SOUND,
   },
   {
@@ -126,7 +118,6 @@ export const CARS: readonly CarDefinition[] = [
     physics: "f12026-car",
     season: 2026,
     modelUrl: "/cars/rb22/model/rb22.glb",
-    bodyDropM: 0.025, // floor 84-89 mm in the GLB; its diffuser (59 mm) would touch the road under braking any lower
     sound: RB22_SOUND,
   },
   {
