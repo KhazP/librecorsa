@@ -129,7 +129,20 @@ const Credits: React.FC = () => (
           ) by Ddiaz Design · CC BY-NC-SA 4.0
         </CreditRow>
         <CreditRow title="Tyres">
-          2026 Pirelli sidewall by MrMaukus (F1 25 mod) · used with permission
+          &ldquo;2026 Pirelli Tire Pack&rdquo; (
+          <a
+            href="https://www.overtake.gg/downloads/pirelli-tire-pack-for-formula-hybrid-x-2026.81209/"
+            target="_blank"
+            rel="noreferrer"
+            className={linkClass}
+          >
+            overtake.gg
+          </a>
+          ) by Cxjovich ·{" "}
+          <a href="http://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank" rel="noreferrer" className={linkClass}>
+            CC BY-NC-SA 4.0
+          </a>{" "}
+          · used with permission
         </CreditRow>
         {TRACKS.some((t) => t.credit) ? (
           <CreditRow title="Circuits">

@@ -12,7 +12,7 @@ LibreCorsa is an independent, non-commercial, open-source web simulator built wi
   | :--- | :--- |
   | Circuit scans, F1 2026 model, ported F1 car models | CC BY 4.0 |
   | Chang, Okayama, Spielberg (Red Bull Ring) and Monaco circuits | By **Mitja Bonca** (Used with permission) |
-  | 2026 Pirelli tyre sidewall texture (`public/cars/shared/tyres/`) | By **MrMaukus** (Used with permission; all rights reserved by the author) |
+  | 2026 Pirelli tyre sidewall texture (`public/cars/shared/tyres/`) | By **Cxjovich**, CC BY-NC-SA 4.0 (used with permission; non-commercial, share-alike) |
   | Mercedes-AMG GT3, Mercedes-AMG GT3 Evo and BMW M4 GT3 Evo models | CC BY-NC-SA 4.0 (non-commercial, share-alike) |
   | Car sounds ported from Assetto Corsa mods | The mod authors' terms; used non-commercially (see *Car sounds*) |
   | Fonts | SIL Open Font License 1.1 (see *Fonts*) |
@@ -40,9 +40,9 @@ Each model below is by **Dave Love SketchFab** ([https://sketchfab.com/Tyler_Dav
 * `"2005 Renault R25"` ([https://sketchfab.com/3d-models/2005-renault-r25-0d58fe125f5b41a2b8482576723120c4](https://sketchfab.com/3d-models/2005-renault-r25-0d58fe125f5b41a2b8482576723120c4)) by **Dave Love SketchFab** (`r25`)
 * `"2004 Ferrari F2004"` ([https://sketchfab.com/3d-models/2004-ferrari-f2004-bedade52e6f4415e90e656817c5701f8](https://sketchfab.com/3d-models/2004-ferrari-f2004-bedade52e6f4415e90e656817c5701f8)) by **Dave Love SketchFab** (`f2004`)
 
-### 2026 Pirelli tyre sidewall (`public/cars/shared/tyres/pirelli-2026-sidewall.webp`)
+### 2026 Pirelli tyre sidewall (`public/cars/shared/tyres/pirelli-2026-sidewall-cx.webp`)
 
-* Ported from **MrMaukus**'s 2026 Pirelli tyre sidewall mod for F1 25 (OverTake), used in LibreCorsa with the author's permission. The texture stays the author's; it is not covered by the MIT licence or any Creative Commons licence and may not be reused without their permission. Changes for the simulator (`scripts/cars/port_f1_25_sidewall.py`): the rubber albedo and the slick / wet logo masks decoded from the mod's BC7 texture arrays and packed into one lossless WebP. The 2026 cars' tyre shader (`src/lib/render/pirelli-sidewall.ts`) draws it on the sidewalls and tints the logos in the compound colour.
+* Ported from **Cxjovich**'s `"2026 Pirelli Tire Pack"` for the Formula Hybrid X 2026 in Assetto Corsa ([https://www.overtake.gg/downloads/pirelli-tire-pack-for-formula-hybrid-x-2026.81209/](https://www.overtake.gg/downloads/pirelli-tire-pack-for-formula-hybrid-x-2026.81209/)), licensed under [Creative Commons Attribution-NonCommercial-ShareAlike 4.0 (CC BY-NC-SA 4.0)](http://creativecommons.org/licenses/by-nc-sa/4.0/) and used in LibreCorsa with the author's permission. The artwork stays the author's; it is not covered by the MIT licence. Changes for the simulator (`scripts/cars/port_cxjovich_sidewall.py`): the outer sidewall's logo row cut from the pack's slick (C2) and wet tyre textures, re-projected from the tyre strip onto a disc round the axle, and packed into one lossless WebP as the rubber albedo plus slick and wet logo masks. The tyre shader of the F1 cars from 2018 on (`src/lib/render/pirelli-sidewall.ts`) draws it on the sidewalls and tints the logos in the compound colour. The pack's tread textures, normal maps and physics files are not included.
 
 ### Car sounds (`public/cars/<id>/audio/`)
 
