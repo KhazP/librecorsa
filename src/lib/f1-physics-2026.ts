@@ -63,6 +63,7 @@ import {
   VF26_ENGINE,
   VF26_ERS,
   VF26_TYRES,
+  VF26_TYRE_SETUP_RANGES,
   VF26_WINGS,
   type Vf26AxleSuspension,
 } from './sim/vf26-data';
@@ -920,18 +921,19 @@ export class F1Physics2026 {
   }
 
   /**
-   * Sets the tyre setup. Cold pressures are clamped to 14–27 psi (to 0.1 psi), front camber to
-   * −4.5…−1.5° and rear camber to −3.0…−0.5°. A non-finite value keeps the current setting.
+   * Sets the tyre setup, clamped to `VF26_TYRE_SETUP_RANGES` (cold pressures 14–27 psi to 0.1 psi, front camber
+   * −4.5…−1.5°, rear camber −3.0…−0.5°). A non-finite value keeps the current setting.
    */
   public setTyreSetup(setup: TyreSetup): void {
-    const pick = (v: number, lo: number, hi: number, current: number) =>
+    const pick = (v: number, [lo, hi]: [number, number], current: number) =>
       Number.isFinite(v) ? THREE.MathUtils.clamp(v, lo, hi) : current;
+    const ranges = VF26_TYRE_SETUP_RANGES;
     const cp = this.tyreSetup.coldPressurePsi;
     for (const k of ["fl", "fr", "rl", "rr"] as const) {
-      cp[k] = Math.round(pick(setup.coldPressurePsi[k], 14, 27, cp[k]) * 10) / 10;
+      cp[k] = Math.round(pick(setup.coldPressurePsi[k], ranges.coldPsiRange, cp[k]) * 10) / 10;
     }
-    this.axles[0].camberDeg = pick(setup.camberDeg.front, -4.5, -1.5, this.axles[0].camberDeg);
-    this.axles[1].camberDeg = pick(setup.camberDeg.rear, -3.0, -0.5, this.axles[1].camberDeg);
+    this.axles[0].camberDeg = pick(setup.camberDeg.front, ranges.frontCamberRange, this.axles[0].camberDeg);
+    this.axles[1].camberDeg = pick(setup.camberDeg.rear, ranges.rearCamberRange, this.axles[1].camberDeg);
     this.applyColdPressures();
   }
 

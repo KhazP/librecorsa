@@ -59,42 +59,7 @@ import {
 import { LibreCorsaLogo } from "@/components/ui/LibreCorsaLogo";
 import { AI_SKILL_DEFAULT, AI_SKILL_LEVELS, aiSkillLabel } from "@/lib/sim/ai-tuning";
 import { CAMERA_MODES } from "@/lib/render/camera-modes";
-
-interface SliderLimits {
-  min: number;
-  max: number;
-  step: number;
-}
-export interface TyreSetupLimits {
-  pressurePsi: SliderLimits;
-  camberFrontDeg: SliderLimits;
-  camberRearDeg: SliderLimits;
-}
-
-const F1_TYRE_SETUP_LIMITS: TyreSetupLimits = {
-  // VF26 cold gauge pressures at 20 °C; includes the physical 15.7 / 14.1 psi defaults.
-  pressurePsi: { min: 14, max: 27, step: 0.5 },
-  camberFrontDeg: { min: -4.5, max: -1.5, step: 0.1 },
-  camberRearDeg: { min: -3, max: -0.5, step: 0.1 },
-};
-
-/**
- * Slider ranges for the tyre setup per car, shared with the simulator's validation of saved setups
- */
-export const TYRE_SETUP_LIMITS: Record<VehicleModelId, TyreSetupLimits> = {
-  vf26: F1_TYRE_SETUP_LIMITS,
-  // The rigid-body car's own profile ranges (F12026CarSim clamps to these, so the sliders must not go further)
-  "f12026-car": {
-    pressurePsi: { min: 15, max: 25, step: 0.5 },
-    camberFrontDeg: { min: -3.6, max: 0, step: 0.1 },
-    camberRearDeg: { min: -2, max: 0, step: 0.1 },
-  },
-  "amg-gt3": {
-    pressurePsi: { min: 15, max: 30, step: 0.5 },
-    camberFrontDeg: { min: -4, max: 0, step: 0.1 },
-    camberRearDeg: { min: -3, max: 0.5, step: 0.1 },
-  },
-};
+import { TYRE_SETUP_LIMITS } from "@/lib/sim/tyre-setup";
 
 export interface PauseMenuProps extends MultiplayerPanelProps {
   telemetry: CarTelemetry;

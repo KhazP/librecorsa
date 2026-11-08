@@ -12,7 +12,7 @@ import { AMG_GT3_CONFIG } from '../src/lib/sim/gt3/AmgGt3Config';
 import { createAmgGt3Sim } from '../src/lib/sim/gt3/AmgGt3Sim';
 import { createFlatTestTrack } from './lib/flat-track';
 import { F1Physics2026 } from '../src/lib/f1-physics-2026';
-import { TYRE_SETUP_LIMITS } from '../src/components/hud/PauseMenu';
+import { TYRE_SETUP_LIMITS } from '../src/lib/sim/tyre-setup';
 
 // Independent test reference: psig + one standard atmosphere gives psia.
 const ATM = 14.6959;

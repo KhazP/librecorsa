@@ -92,8 +92,8 @@ import { TouchControls } from "@/components/hud/TouchControls";
 import { ReplayBar } from "@/components/hud/ReplayBar";
 import { F1TelemetryHud } from "@/components/F1TelemetryHud";
 import { roomFromUrl } from "@/lib/net/invite-room";
-import { TYRE_SETUP_LIMITS } from "@/components/hud/PauseMenu";
 import { CAMERA_MODES, FALLBACK_COCKPIT_FOV_DEG, nextCameraMode } from "@/lib/render/camera-modes";
+import { loadTyreSetup, saveTyreSetup } from "@/lib/sim/tyre-setup";
 import { LoadingScreen } from "@/components/menu/LoadingScreen";
 import { TitleMenu } from "@/components/menu/TitleMenu";
 import { FirstRunWizard, type WizardMode, type WizardStepId } from "@/components/menu/FirstRunWizard";
@@ -132,9 +132,7 @@ import type {
   TireCompound,
   TyreSetup,
   VehicleModelId,
-  WheelPressures,
 } from "@/types/f1";
-import { axlePressures } from "@/types/f1";
 
 /** Matches the aero package the track's target speeds / braking markers are computed for */
 const DEFAULT_AERO_PRESET: AeroSetupPreset = "balanced";
@@ -191,69 +189,6 @@ const ASSET_STALL_MS = 25_000;
 const approach = (value: number, target: number, maxStep: number) =>
   value + Math.max(-maxStep, Math.min(maxStep, target - value));
 
-/** Tyre setups are saved per car (the VF26 keeps the original key) */
-const TYRE_SETUP_STORAGE_KEYS: Record<VehicleModelId, string> = {
-  vf26: "bugesera.tyreSetup",
-  "f12026-car": "bugesera.tyreSetup.f12026-car",
-  "amg-gt3": "bugesera.tyreSetup.amg-gt3",
-};
-const VEHICLE_STORAGE_KEY = "bugesera.vehicle";
-const RUMBLE_STORAGE_KEY = "bugesera.rumble";
-
-const isFiniteNumber = (value: unknown): value is number =>
-  typeof value === "number" && Number.isFinite(value);
-
-/** Reads a front/rear pair, keeping each value inside its slider range; null when the shape is wrong */
-function readAxlePair(
-  value: unknown,
-  front: { min: number; max: number },
-  rear: { min: number; max: number }
-): { front: number; rear: number } | null {
-  if (!value || typeof value !== "object") return null;
-  const pair = value as { front?: unknown; rear?: unknown };
-  if (!isFiniteNumber(pair.front) || !isFiniteNumber(pair.rear)) return null;
-  return {
-    front: Math.min(front.max, Math.max(front.min, pair.front)),
-    rear: Math.min(rear.max, Math.max(rear.min, pair.rear)),
-  };
-}
-
-/** Saved cold pressures: per wheel, or the older per-axle `{ front, rear }` spread to both tyres of each axle */
-function readWheelPressures(value: unknown, range: { min: number; max: number }): WheelPressures | null {
-  if (!value || typeof value !== "object") return null;
-  const v = value as Record<string, unknown>;
-  const clamp = (x: number) => Math.min(range.max, Math.max(range.min, x));
-  if ([v.fl, v.fr, v.rl, v.rr].every(isFiniteNumber)) {
-    return { fl: clamp(v.fl as number), fr: clamp(v.fr as number), rl: clamp(v.rl as number), rr: clamp(v.rr as number) };
-  }
-  const axle = readAxlePair(value, range, range);
-  return axle ? axlePressures(axle.front, axle.rear) : null;
-}
-
-/** The tyre setup saved from an earlier session, or null when none is saved or it is unusable */
-function loadStoredTyreSetup(vehicle: VehicleModelId): TyreSetup | null {
-  try {
-    const raw = localStorage.getItem(TYRE_SETUP_STORAGE_KEYS[vehicle]);
-    if (!raw) return null;
-    const saved = JSON.parse(raw) as { coldPressurePsi?: unknown; camberDeg?: unknown } | null;
-    const limits = TYRE_SETUP_LIMITS[vehicle];
-    const coldPressurePsi = readWheelPressures(saved?.coldPressurePsi, limits.pressurePsi);
-    const camberDeg = readAxlePair(saved?.camberDeg, limits.camberFrontDeg, limits.camberRearDeg);
-    return coldPressurePsi && camberDeg ? { coldPressurePsi, camberDeg } : null;
-  } catch {
-    // Storage unavailable or corrupt JSON: fall back to the physics defaults
-    return null;
-  }
-}
-
-function saveTyreSetup(vehicle: VehicleModelId, setup: TyreSetup) {
-  try {
-    localStorage.setItem(TYRE_SETUP_STORAGE_KEYS[vehicle], JSON.stringify(setup));
-  } catch {
-    // Storage unavailable: the setup still applies for this session
-  }
-}
-
 /** The sound bank each car plays (the F1 cars share one bank) */
 const soundFor = (car: CarId): CarSoundSource => carById(car).sound;
 /** Runs `fn` when the browser is idle (Safari has no requestIdleCallback: a short timer instead) */
@@ -261,6 +196,9 @@ const scheduleIdle = (fn: (deadline?: IdleDeadline) => void) => {
   if (typeof window.requestIdleCallback === "function") window.requestIdleCallback(fn, { timeout: 500 });
   else window.setTimeout(() => fn(), 16);
 };
+
+const VEHICLE_STORAGE_KEY = "bugesera.vehicle";
+const RUMBLE_STORAGE_KEY = "bugesera.rumble";
 
 /** The car to drive: `?car=` in the URL, else the last choice, else the VF26 */
 function loadStoredCar(): CarId {
@@ -1440,7 +1378,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
 
       // Capture the car's defaults first, then apply its saved tyre setup (if any)
       const tyreDefaults = car.getTyreSetup();
-      const initialTyreSetup = loadStoredTyreSetup(vehicle) ?? tyreDefaults;
+      const initialTyreSetup = loadTyreSetup(vehicle) ?? tyreDefaults;
       car.setTyreSetup(initialTyreSetup);
       setDefaultTyreSetup(tyreDefaults);
       setTyreSetup(initialTyreSetup);

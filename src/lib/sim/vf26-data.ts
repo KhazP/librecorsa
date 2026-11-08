@@ -321,6 +321,17 @@ export const VF26_TYRES: Record<TireCompound, { front: Vf26TyreSpec; rear: Vf26T
 
 };
 
+/** Tyre setup ranges: cold gauge pressure at 20 °C (psi, includes the 15.7 / 14.1 defaults) and static camber (deg) */
+export const VF26_TYRE_SETUP_RANGES: {
+  coldPsiRange: [number, number];
+  frontCamberRange: [number, number];
+  rearCamberRange: [number, number];
+} = {
+  coldPsiRange: [14, 27],
+  frontCamberRange: [-4.5, -1.5],
+  rearCamberRange: [-3.0, -0.5],
+};
+
 // ---------------------------------------------------------------------------
 // Chassis  (`data/cardata.car` section 1 / 2, `data/setup/vf26_setup.carsetup`)
 // ---------------------------------------------------------------------------
