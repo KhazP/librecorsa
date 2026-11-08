@@ -313,28 +313,28 @@ const LapCard: React.FC<LapSummaryProps & { onCollapse: () => void }> = ({
       className="flex max-h-[min(calc(100dvh-9rem),var(--lc-room,100dvh))] w-full flex-col gap-3.5 overflow-y-auto rounded-[28px] border bg-[#0A0B10]/90 p-5 text-[#F5F7FA] backdrop-blur-[20px] pointer-coarse:max-h-[calc(100dvh-12rem)] short:gap-2.5 short:p-4"
       style={{ borderColor: tint.border, boxShadow: `0 30px 80px rgba(0,0,0,0.6), 0 0 0 6px ${tint.ring}` }}
     >
-      {/* Header: lap number, big lap time, status badge */}
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 flex-col gap-1.5">
+      {/* Header: lap number and status badge, then the big lap time on a row of its own (a long badge left it too little room beside it) */}
+      <div className="flex flex-col gap-1.5">
+        <div className="flex items-center justify-between gap-3">
           <span className="lc-data inline-flex items-center gap-2 text-[12px] tracking-[0.12em]">
             <span aria-hidden className="h-[7px] w-[7px] rounded-full bg-[#CCFF00]" />
             LAP {s.lapNumber}
           </span>
-          <span className="lc-data text-[40px] leading-none tracking-[-0.02em] sm:text-[46px] short:text-[34px]">
-            {formatLapTime(s.lapTimeMs)}
-          </span>
+          <div className="flex shrink-0 items-center gap-2">
+            {badge}
+            <button
+              type="button"
+              onClick={onCollapse}
+              aria-label="Collapse lap summary"
+              className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border border-[#262B3D] text-[#8E96AA] transition-colors hover:border-[#3A4157] hover:text-[#F5F7FA]"
+            >
+              <ChevronDown className="h-4 w-4" strokeWidth={2.4} />
+            </button>
+          </div>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
-          {badge}
-          <button
-            type="button"
-            onClick={onCollapse}
-            aria-label="Collapse lap summary"
-            className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border border-[#262B3D] text-[#8E96AA] transition-colors hover:border-[#3A4157] hover:text-[#F5F7FA]"
-          >
-            <ChevronDown className="h-4 w-4" strokeWidth={2.4} />
-          </button>
-        </div>
+        <span className="lc-data text-[40px] leading-none tracking-[-0.02em] sm:text-[46px] short:text-[34px]">
+          {formatLapTime(s.lapTimeMs)}
+        </span>
       </div>
 
       {/* Sector splits, coloured against the session best */}
