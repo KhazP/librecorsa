@@ -11,6 +11,7 @@ import { CARS, carById, carsInClass, isCarId, type CarId } from "../src/lib/cars
 import { BMW_M4_GT3_SOUND } from "../src/lib/sim/CarAudio";
 import { AMG_GT3_SOUND } from "../src/lib/sim/gt3/AmgGt3Sim";
 import { loadGlbGeometry } from "./lib/glb-geometry";
+import { bodyFloorClearance, staticFloorOf } from "../src/lib/render/body-floor";
 import { gt3RigCameraAnchors } from "../src/lib/gt3-car-model";
 import { getActiveTrackData } from "../src/lib/track-data";
 import { trackColliders } from "../src/lib/sim/track-colliders";
@@ -18,6 +19,7 @@ import { createAmgGt3Sim } from "../src/lib/sim/gt3/AmgGt3Sim";
 import { AMG_GT3_CONFIG } from "../src/lib/sim/gt3/AmgGt3Config";
 import {
   measurePortedWheelContact,
+  portedModelOffset,
   WHEEL_CONTACT_RUN_S,
   WHEEL_ON_ROAD_TOLERANCE_MM,
   type PortedWheelExtras,
@@ -287,6 +289,47 @@ for (const spec of PORTED_GT3_SPEC) {
       carSize.z < 5.2,
     `W=${carSize.x.toFixed(3)} m, H=${carSize.y.toFixed(3)} m, L=${carSize.z.toFixed(3)} m`
   );
+}
+
+// Each body sits on the AMG GT3 model's floor (the rig moves it there from wherever the export modelled it), and the
+// rest of it clears the road
+{
+  console.log(`\n=== 3a. Bodies on the AMG GT3 model's floor (BODY's lowest 0.1 m² of level faces between the axles) ===`);
+  const RIDE_MIN_MM = 30;
+  const RIDE_MAX_MM = 100;
+  const floor = staticFloorOf(AMG_GT3_CONFIG);
+  const v = new THREE.Vector3();
+  for (const spec of PORTED_GT3_SPEC) {
+    const extras = wheelExtras[spec.id];
+    if (!extras) continue;
+    const scene = loadGlbGeometry(resolve(process.cwd(), `public/cars/${spec.id}/model/${spec.id}.glb`));
+    scene.updateMatrixWorld(true);
+    const car = scene.getObjectByName("CAR") ?? scene;
+    const offset = portedModelOffset(extras, AMG_GT3_CONFIG.chassis);
+    const toCar = new THREE.Matrix4().makeTranslation(offset.x, offset.y, offset.z).multiply(car.matrixWorld.clone().invert());
+    const frontZ = extras.wheelCentres.WHEEL_LF[2] + offset.z;
+    const rearZ = extras.wheelCentres.WHEEL_LR[2] + offset.z;
+    const body = scene.getObjectByName("BODY");
+    const drop = body ? bodyFloorClearance(body, toCar, frontZ, rearZ, floor) : null;
+    check(`${spec.id} floor found under BODY`, drop !== null, drop === null ? "" : `body ${drop >= 0 ? "lowered" : "raised"} ${Math.abs(drop * 1000).toFixed(0)} mm`);
+    let between = Infinity;
+    let lowest = Infinity;
+    body?.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      const toBody = toCar.clone().multiply(mesh.matrixWorld);
+      const pos = mesh.geometry.getAttribute("position");
+      for (let i = 0; i < pos.count; i++) {
+        v.fromBufferAttribute(pos, i).applyMatrix4(toBody);
+        lowest = Math.min(lowest, v.y);
+        if (v.z < frontZ && v.z > rearZ) between = Math.min(between, v.y);
+      }
+    });
+    const betweenMm = (between - (drop ?? 0)) * 1000;
+    const lowestMm = (lowest - (drop ?? 0)) * 1000;
+    check(`${spec.id} body rides ${RIDE_MIN_MM}-${RIDE_MAX_MM} mm off the road between the axles`, betweenMm >= RIDE_MIN_MM && betweenMm <= RIDE_MAX_MM, `${betweenMm.toFixed(0)} mm`);
+    check(`${spec.id} no part of the body under the road at rest`, lowestMm > 0, `lowest ${lowestMm.toFixed(0)} mm`);
+  }
 }
 
 // The wheels stay on the road (neither sunk nor floating) while the AMG GT3 model drives them
