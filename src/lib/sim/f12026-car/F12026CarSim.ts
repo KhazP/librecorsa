@@ -38,7 +38,7 @@ import type {
   TyreSetup,
   WheelPressures,
 } from '@/types/f1';
-import { axlePressures, pressureAt } from '@/types/f1';
+import { axlePressures, pressureAt, type VehicleModelId } from '@/types/f1';
 import {
   BASE_ALTITUDE_M,
   type BuiltTrackData,
@@ -179,6 +179,10 @@ export interface CarSimProfile {
    * acceleration) the autopilot steers in ahead of its yaw loop. Default 0: the loop's integrator finds it.
    */
   understeerRadPerMs2?: number;
+  /** Fuel flow at full throttle (kg/s); default 0.036 for the GT3, 0.0278 for an F1 car */
+  fuelFlowKgS?: number;
+  /** The TC / ABS dial positions of each driver-assist preset; absent: the F1 or GT3 positions */
+  assistDials?: Record<DriverAssistPreset, AidDials>;
 }
 
 export const F12026_SIM_PROFILE: CarSimProfile = {
@@ -397,15 +401,17 @@ function autopilotProfile(track: BuiltTrackData, profile: CarSimProfile, edges: 
 }
 
 /** TC / ABS / TC2 dial positions */
-interface AidDials {
+export interface AidDials {
   tcLevel: number;
   tc2Level: number;
   absLevel: number;
 }
 
 /** The dial positions of a driver-assist preset */
-function assistPresetDials(profileId: string, preset: DriverAssistPreset): AidDials {
-  const isGt3 = profileId === 'amg-gt3';
+function assistPresetDials(profile: CarSimProfile, preset: DriverAssistPreset): AidDials {
+  const own = profile.assistDials?.[preset];
+  if (own) return own;
+  const isGt3 = profile.id === 'amg-gt3';
   if (preset === 'pro') return { tcLevel: 0, tc2Level: isGt3 ? 5 : 6, absLevel: 0 };
   if (preset === 'semi_pro') return { tcLevel: isGt3 ? 10 : 5, tc2Level: 6, absLevel: isGt3 ? 9 : 5 };
   return { tcLevel: isGt3 ? 12 : 8, tc2Level: 9, absLevel: isGt3 ? 11 : 9 };
@@ -981,8 +987,9 @@ export class F12026CarSim implements SimulatorCar {
   }
 
   /** The vehicle model whose setup limits, wing steps and fuel this car takes */
-  private get setupCar(): 'amg-gt3' | 'f12026-car' {
-    return this.profile.id === 'amg-gt3' ? 'amg-gt3' : 'f12026-car';
+  private get setupCar(): Exclude<VehicleModelId, 'vf26'> {
+    const id = this.profile.id;
+    return id === 'amg-gt3' || id === 'liana' ? id : 'f12026-car';
   }
 
   /** The garage's starting fuel into the car, with the spring preloads set for that load */
@@ -1086,7 +1093,7 @@ export class F12026CarSim implements SimulatorCar {
   }
 
   private applyAssistPresetLevels(preset: DriverAssistPreset): void {
-    Object.assign(this, assistPresetDials(this.profile.id, preset));
+    Object.assign(this, assistPresetDials(this.profile, preset));
   }
 
   public getLiveTunerState(): LiveTunerState {
@@ -1445,7 +1452,7 @@ export class F12026CarSim implements SimulatorCar {
     }
     if (v.telemetry.throttle > 0.01 && this.fuelKg > 0 && this.realism.fuelUse) {
       const mapFlowMult = v.engineMap === 1 ? 1.04 : v.engineMap === 2 ? 1.0 : v.engineMap === 3 ? 0.96 : v.engineMap === 4 ? 0.90 : 0.85;
-      const baseFlowKgS = this.profile.id === 'amg-gt3' ? 0.036 : 0.0278;
+      const baseFlowKgS = this.profile.fuelFlowKgS ?? (this.profile.id === 'amg-gt3' ? 0.036 : 0.0278);
       this.fuelKg = Math.max(0, this.fuelKg - baseFlowKgS * mapFlowMult * v.telemetry.throttle * dtSeconds);
       v.setFuelMass(this.fuelKg);
     }
@@ -1732,7 +1739,7 @@ export class F12026CarSim implements SimulatorCar {
       // understeering on the brakes: ease off so the fronts have grip left to turn with
       Math.max(0, -pedal) * (frontsSaturated ? 0.5 : 1) * rearCut,
       h,
-      assistPresetDials(this.profile.id, 'semi_pro')
+      assistPresetDials(this.profile, 'semi_pro')
     );
     return {
       ...aids,

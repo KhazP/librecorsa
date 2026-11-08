@@ -15,6 +15,7 @@ import type { SimulatorCar } from "../src/lib/sim/simulator-car";
 import type { TyreSetup, VehicleModelId } from "../src/types/f1";
 import { F12026CarSim } from "../src/lib/sim/f12026-car/F12026CarSim";
 import { createAmgGt3Sim } from "../src/lib/sim/gt3/AmgGt3Sim";
+import { createSuzukiLianaSim } from "../src/lib/sim/road/SuzukiLianaSim";
 import { F1Physics2026 } from "../src/lib/f1-physics-2026";
 import { getActiveTrackData } from "../src/lib/track-data";
 import { createFlatTestTrack } from "./lib/flat-track";
@@ -35,6 +36,7 @@ const makers: Record<VehicleModelId, (t: typeof track) => SimulatorCar> = {
   vf26: (t) => new F1Physics2026(t),
   "f12026-car": (t) => new F12026CarSim(t),
   "amg-gt3": (t) => createAmgGt3Sim(t),
+  liana: (t) => createSuzukiLianaSim(t),
 };
 const vehicles = Object.keys(makers) as VehicleModelId[];
 const DT = 1 / 60;
@@ -229,7 +231,7 @@ console.log("Dampers");
 console.log("Fuel load");
 {
   // What every car started on before the garage had a fuel setting
-  const LEGACY_FUEL_KG: Record<VehicleModelId, number> = { vf26: 40, "f12026-car": 35, "amg-gt3": 50 };
+  const LEGACY_FUEL_KG: Record<VehicleModelId, number> = { vf26: 40, "f12026-car": 35, "amg-gt3": 50, liana: 22 };
   // A setup saved before the fuel setting: no fuel field at all
   const { fuelDeltaKg: _drop, ...modern } = DEFAULT_CHASSIS_SETUP;
   void _drop;

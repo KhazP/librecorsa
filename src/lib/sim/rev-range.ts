@@ -3,7 +3,11 @@
  * rpm.
  */
 
-/** Rev-light range per car: first LED and all-lit rpm (the Formula cars by default; the GT3's 7500 rpm shift point) */
+/**
+ * Rev-light range per car: first LED and all-lit rpm (the Formula cars by default; the GT3's 7500 rpm shift point,
+ * the Liana's 6500)
+ */
 export function revRangeFor(carId: string | undefined): [number, number] {
+  if (carId === "liana") return [5200, 6500];
   return carId === "amg-gt3" ? [6200, 7500] : [10_800, 14_600];
 }

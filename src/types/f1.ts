@@ -524,11 +524,14 @@ export type LiveTunerPatch = Partial<
   >
 >;
 
-/** Player car: the VF26 model (F1Physics2026), the 6-DOF f12026-car, or the Mercedes-AMG GT3 on the same vehicle model */
-export type VehicleModelId = "vf26" | "f12026-car" | "amg-gt3";
+/**
+ * Player car: the VF26 model (F1Physics2026), the 6-DOF f12026-car, or the Mercedes-AMG GT3 and the Suzuki Liana on the
+ * same vehicle model
+ */
+export type VehicleModelId = "vf26" | "f12026-car" | "amg-gt3" | "liana";
 
 /** Typed as a Record over VehicleModelId so adding a car fails to compile until it is listed here */
-const VEHICLE_MODEL_ID_SET: Record<VehicleModelId, true> = { vf26: true, "f12026-car": true, "amg-gt3": true };
+const VEHICLE_MODEL_ID_SET: Record<VehicleModelId, true> = { vf26: true, "f12026-car": true, "amg-gt3": true, liana: true };
 
 /** Every vehicle model id, for validating ids from storage and the network */
 export const VEHICLE_MODEL_IDS = Object.keys(VEHICLE_MODEL_ID_SET) as readonly VehicleModelId[];
@@ -572,7 +575,7 @@ export interface F12026Channels {
   /** Share of the friction circle in use per tyre (telemetry only, 1 = at the limit) */
   circleFraction: [number, number, number, number];
   performanceMode: string;
-  /** Which car profile drives the channels ("f12026-car", "amg-gt3"), and whether it has ERS / DRS */
+  /** Which car profile drives the channels ("f12026-car", "amg-gt3", "liana"), and whether it has ERS / DRS */
   carId: string;
   hasErs: boolean;
   hasDrs: boolean;

@@ -12,6 +12,7 @@ import {
   type CarSoundSource,
 } from "@/lib/sim/CarAudio";
 import { AMG_GT3_SOUND } from "@/lib/sim/gt3/AmgGt3Sim";
+import { SUZUKI_LIANA_SOUND } from "@/lib/sim/road/SuzukiLianaSim";
 
 /**
  * The cars in the picker, grouped by class. A car is a body and a sound on one of the vehicle models
@@ -31,9 +32,10 @@ export type CarId =
   | "f2004"
   | "amg-gt3"
   | "amg-gt3-evo"
-  | "bmw-m4-gt3";
+  | "bmw-m4-gt3"
+  | "liana";
 
-export type CarClassId = "f1-2026" | "gt3";
+export type CarClassId = "f1-2026" | "gt3" | "road";
 
 export interface CarClass {
   id: CarClassId;
@@ -44,7 +46,7 @@ export interface CarClass {
 
 /**
  * Whether a car's physics belong to the car you see, the car-side counterpart of a circuit's `CircuitQuality`:
- * - "own": its vehicle model was built for this car (the F1 2026 cars, the Mercedes-AMG GT3s)
+ * - "own": its vehicle model was built for this car (the F1 2026 cars, the Mercedes-AMG GT3s, the Suzuki Liana)
  * - "shared": a ported body on another car's model of the same class and era (the 2026 team cars, the BMW)
  * - "era": a ported body from an earlier season on the 2026 model
  * The F1 physics switch doesn't change it: a ported F1 car borrows its physics under either model.
@@ -94,6 +96,7 @@ export const PHYSICS_CHECK: Record<VehicleModelId, string> = {
   "amg-gt3": "Its physics are checked against a real GT3 Evo's telemetry.",
   vf26: "Its physics are checked against the reference data they were built from.",
   "f12026-car": "Its physics are checked against the range a 2026 F1 car should fall in.",
+  liana: "Its physics come from an Assetto Corsa mod of this car and are checked against its Top Gear lap there.",
 };
 
 /** Who made a car's 3D body (CREDITS.md has the full notes) */
@@ -140,6 +143,7 @@ export interface CarDefinition {
 export const CAR_CLASSES: readonly CarClass[] = [
   { id: "f1-2026", title: "F1 2026", sub: "Active aero · hybrid", color: "#CCFF00" },
   { id: "gt3", title: "GT3", sub: "ABS · TC", color: "#00E5FF" },
+  { id: "road", title: "Road cars", sub: "Street tyres · ABS", color: "#FF8A3D" },
 ];
 
 export const CARS: readonly CarDefinition[] = [
@@ -302,6 +306,25 @@ export const CARS: readonly CarDefinition[] = [
     physics: "amg-gt3",
     modelUrl: "/cars/bmw-m4-gt3/model/bmw-m4-gt3.glb",
     sound: BMW_M4_GT3_SOUND,
+  },
+  {
+    id: "liana",
+    classId: "road",
+    title: "Suzuki Liana 1.6",
+    sub: "2002 · 1.6 L four · front-wheel drive",
+    badge: "LIANA",
+    quality: "own",
+    // An Assetto Corsa car whose author can't be traced; its physics are alekabul's rework (CREDITS.md)
+    credit: {
+      title: "Suzuki Liana",
+      author: "Unknown",
+      url: "http://assetto-db.com/car/suzuki_liana",
+      license: "Freeware mod, author unknown",
+      licenseUrl: "http://assetto-db.com/car/suzuki_liana",
+    },
+    physics: "liana",
+    modelUrl: "/cars/liana/model/liana.glb",
+    sound: SUZUKI_LIANA_SOUND,
   },
 ];
 

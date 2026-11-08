@@ -8,6 +8,8 @@ import { F12026CarSim, F12026_SIM_PROFILE } from "@/lib/sim/f12026-car/F12026Car
 import { F12026_CAR_CONFIG, type CarPhysicsConfig } from "@/lib/sim/f12026-car/F12026CarConfig";
 import { AMG_GT3_SIM_PROFILE, createAmgGt3Sim } from "@/lib/sim/gt3/AmgGt3Sim";
 import { AMG_GT3_CONFIG } from "@/lib/sim/gt3/AmgGt3Config";
+import { SUZUKI_LIANA_SIM_PROFILE, createSuzukiLianaSim } from "@/lib/sim/road/SuzukiLianaSim";
+import { SUZUKI_LIANA_CONFIG } from "@/lib/sim/road/SuzukiLianaConfig";
 import { VF26_ENGINE, VF26_TYRE_SETUP_RANGES } from "@/lib/sim/vf26-data";
 import type { CarClassId } from "./car-registry";
 
@@ -77,6 +79,18 @@ export const VEHICLE_MODELS: Readonly<Record<VehicleModelId, VehicleModel>> = {
     tyreSetupRanges: AMG_GT3_SIM_PROFILE,
     rigConfig: AMG_GT3_CONFIG,
     gt3Cockpit: true,
+    floorSparks: false,
+  },
+  liana: {
+    id: "liana",
+    classId: "road",
+    createSim: (track, trackRoot) => createSuzukiLianaSim(track, trackRoot),
+    limiterRpm: SUZUKI_LIANA_CONFIG.gearbox.gears.redline_rpm,
+    telemetryMaxRpm: 7500,
+    tyreSetupRanges: SUZUKI_LIANA_SIM_PROFILE,
+    rigConfig: SUZUKI_LIANA_CONFIG,
+    // Its only body is the ported GLB, which brings its own cameras
+    gt3Cockpit: false,
     floorSparks: false,
   },
 };

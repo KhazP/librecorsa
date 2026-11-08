@@ -105,11 +105,15 @@ export interface WheelSettings {
 /** Default steering-wheel rotation of Formula cars, lock to lock (1:1 soft lock) */
 export const CAR_WHEEL_LOCK_DEG = 360;
 
-/** Per-car real steering-wheel rotation lock-to-lock (degrees): 360° for Formula cars, 640° for the GT3 (320° each way) */
+/**
+ * Per-car real steering-wheel rotation lock-to-lock (degrees): 360° for Formula cars, 640° for the GT3 (320° each way),
+ * 1080° for the Liana (540° each way)
+ */
 export const CAR_WHEEL_LOCKS_DEG: Readonly<Record<string, number>> = {
   vf26: 360,
   "f12026-car": 360,
   "amg-gt3": 640,
+  liana: 1080,
 };
 
 /** Range of a player-set steering lock (deg, lock to lock): never slower than the real car's */

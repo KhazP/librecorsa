@@ -58,6 +58,7 @@ import { DEFAULT_PLANNER_WEIGHTS, PLAN_DT, PLAN_STEPS, planLocal, type PlannerRe
 import type { AiGridOrder, PlayerGridSlot } from '@/lib/sim/race-setup';
 import { F12026_CAR_CONFIG } from '@/lib/sim/f12026-car/F12026CarConfig';
 import { AMG_GT3_CONFIG } from '@/lib/sim/gt3/AmgGt3Config';
+import { SUZUKI_LIANA_CONFIG } from '@/lib/sim/road/SuzukiLianaConfig';
 import {
   classificationClosed,
   classifiedTimeS,
@@ -526,6 +527,7 @@ const REMOTE_RESTITUTION = 0.1;
 /** Contact mass and yaw inertia of another player's car, from the model it drives */
 function remoteContactMass(vehicle: VehicleModelId | undefined): [number, number] {
   if (vehicle === 'amg-gt3') return [AMG_GT3_CONFIG.chassis.totalMassKg, AMG_GT3_CONFIG.chassis.inertia.yaw];
+  if (vehicle === 'liana') return [SUZUKI_LIANA_CONFIG.chassis.totalMassKg, SUZUKI_LIANA_CONFIG.chassis.inertia.yaw];
   if (vehicle === 'f12026-car') return [F12026_CAR_CONFIG.chassis.totalMassKg, F12026_CAR_CONFIG.chassis.inertia.yaw];
   return [CONTACT_MASS_KG, CONTACT_YAW_INERTIA_KGM2];
 }

@@ -13,6 +13,7 @@ import { type ChassisSetup, CHASSIS_LIMITS, FUEL_KG_PER_L, FUEL_LOAD, type Garag
 import { VF26_CHASSIS } from "./vf26-data";
 import { F12026_CAR_CONFIG } from "./f12026-car/F12026CarConfig";
 import { AMG_GT3_CONFIG } from "./gt3/AmgGt3Config";
+import { SUZUKI_LIANA_CONFIG } from "./road/SuzukiLianaConfig";
 
 export type SetupClassId = "f1" | "gt3";
 
@@ -20,6 +21,8 @@ export const SETUP_CLASS: Record<VehicleModelId, SetupClassId> = {
   vf26: "f1",
   "f12026-car": "f1",
   "amg-gt3": "gt3",
+  // A closed road car: the GT3 sheet (tyres, electronics, mechanical grip, dampers, fuel)
+  liana: "gt3",
 };
 
 export interface SetupState {
@@ -91,7 +94,10 @@ interface CarBaseline {
   steerRatio: number;
 }
 
-const rigidBaseline = (cfg: typeof F12026_CAR_CONFIG | typeof AMG_GT3_CONFIG, vehicle: VehicleModelId): CarBaseline => ({
+const rigidBaseline = (
+  cfg: typeof F12026_CAR_CONFIG | typeof AMG_GT3_CONFIG | typeof SUZUKI_LIANA_CONFIG,
+  vehicle: VehicleModelId
+): CarBaseline => ({
   rideFrontMm: cfg.aero.front_target_height * 1000,
   rideRearMm: cfg.aero.rear_target_height * 1000,
   toeFrontDeg: 0,
@@ -123,6 +129,7 @@ const BASELINES: Record<VehicleModelId, CarBaseline> = {
   },
   "f12026-car": rigidBaseline(F12026_CAR_CONFIG, "f12026-car"),
   "amg-gt3": rigidBaseline(AMG_GT3_CONFIG, "amg-gt3"),
+  liana: rigidBaseline(SUZUKI_LIANA_CONFIG, "liana"),
 };
 
 const clampTo = (v: number, r: { min: number; max: number }) => Math.max(r.min, Math.min(r.max, v));
