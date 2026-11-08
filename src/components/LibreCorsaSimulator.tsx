@@ -15,6 +15,7 @@ import { FfbPairPrompt } from "@/components/hud/FfbPairPrompt";
 import { GT3_DASH_MESH, GT3_WING_MIRROR_MATERIAL, Gt3DashDisplay } from "@/lib/render/gt3-dash-display";
 import { createPortedCarRig } from "@/lib/ported-car-model";
 import { staticFloorOf } from "@/lib/render/body-floor";
+import { FloorSparks } from "@/lib/render/floor-sparks";
 import { isVehicleModelId, vehicleModelSpec, vehicleModelsFor } from "@/lib/cars/vehicle-models";
 import type { CarSoundSource } from "@/lib/sim/CarAudio";
 import { OpponentAudio } from "@/lib/sim/opponent-audio";
@@ -1546,37 +1547,9 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       })();
     };
 
-    // Underbody Titanium Skid-Block Sparks
-    const sparkCount = 48;
-    const sparkGeom = new THREE.BufferGeometry();
-    const sparkPositions = new Float32Array(sparkCount * 3);
-    const sparkVelocities: THREE.Vector3[] = [];
-    const sparkLives = new Float32Array(sparkCount);
-
-    for (let i = 0; i < sparkCount; i++) {
-      sparkVelocities.push(new THREE.Vector3());
-      sparkLives[i] = 0;
-    }
-    sparkGeom.setAttribute(
-      "position",
-      new THREE.BufferAttribute(sparkPositions, 3)
-    );
-    const sparkPoints = new THREE.Points(
-      sparkGeom,
-      new THREE.PointsMaterial({
-        color: 0xfbbf24,
-        size: 0.22,
-        transparent: true,
-        opacity: 0.9,
-      })
-    );
-    scene.add(sparkPoints);
-    let nextSparkIdx = 0;
-    /** Sparks owed to the emitter, so the rate is per second rather than per rendered frame */
-    let sparkEmitAcc = 0;
-    const SPARKS_PER_S = 120;
-    const sparkFwd = new THREE.Vector3();
-    const sparkRight = new THREE.Vector3();
+    // Sparks from under the floor of the cars that throw them
+    const floorSparks = new FloorSparks();
+    scene.add(floorSparks.points);
 
     const onMouseMove = (e: MouseEvent) => {
       if (!mouseSteerEnabledRef.current) return;
@@ -2637,49 +2610,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       );
 
 
-      // Titanium Floor Sparks
-      if (
-        driving &&
-        rigModel(carRigCar).floorSparks &&
-        ((physics.telemetry.speedKmh > 280 &&
-          (physics.telemetry.verticalG ?? 1.0) > 1.15) ||
-          physics.telemetry.onKerbLeft ||
-          physics.telemetry.onKerbRight)
-      ) {
-        const carForward = sparkFwd.set(0, 0, 1).applyQuaternion(physics.worldQuaternion);
-        const carRight = sparkRight.set(-1, 0, 0).applyQuaternion(physics.worldQuaternion);
-        sparkEmitAcc = Math.min(sparkCount, sparkEmitAcc + dtSeconds * SPARKS_PER_S);
-        for (; sparkEmitAcc >= 1; sparkEmitAcc--) {
-          const idx = nextSparkIdx % sparkCount;
-          nextSparkIdx++;
-          const side = (Math.random() - 0.5) * 0.7;
-          const p = physics.worldPosition;
-          sparkPositions[idx * 3] = p.x - carForward.x * 1.9 + carRight.x * side;
-          sparkPositions[idx * 3 + 1] = p.y - carForward.y * 1.9 + carRight.y * side + 0.08;
-          sparkPositions[idx * 3 + 2] = p.z - carForward.z * 1.9 + carRight.z * side;
-
-          const v = sparkVelocities[idx].copy(carForward).multiplyScalar(-physics.vxMs * 0.35);
-          v.x += (Math.random() - 0.5) * 6;
-          v.y += 1.8 + Math.random() * 3.5;
-          v.z += (Math.random() - 0.5) * 6;
-          sparkLives[idx] = 0.25 + Math.random() * 0.2;
-        }
-      } else {
-        sparkEmitAcc = 0;
-      }
-
-      for (let i = 0; i < sparkCount; i++) {
-        if (sparkLives[i] > 0) {
-          sparkLives[i] -= dtSeconds;
-          sparkPositions[i * 3] += sparkVelocities[i].x * dtSeconds;
-          sparkPositions[i * 3 + 1] += sparkVelocities[i].y * dtSeconds;
-          sparkPositions[i * 3 + 2] += sparkVelocities[i].z * dtSeconds;
-          sparkVelocities[i].y -= 9.81 * dtSeconds;
-        } else {
-          sparkPositions[i * 3 + 1] = -999;
-        }
-      }
-      sparkGeom.attributes.position.needsUpdate = true;
+      floorSparks.update(dtSeconds, driving && rigModel(carRigCar).floorSparks ? physics : null);
 
       // Right-handed car basis: +X is carLeft, -X is carRight, +Y is carUp, +Z is carForward
       const carRight = new THREE.Vector3(-1, 0, 0).applyQuaternion(
@@ -3184,6 +3115,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       env.dispose();
       rainFx.dispose();
       virtualMirror.dispose();
+      floorSparks.dispose();
       renderer.dispose();
       audioRef.current?.dispose();
     };
