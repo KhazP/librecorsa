@@ -597,9 +597,17 @@ export class MultiplayerSyncManager {
   private localReady = false;
   /** Host-side lobby members (not including the host) */
   private members = new Map<string, LobbyPlayer>();
+  /** Host: when each member was last heard from (any message or state packet; performance.now ms) */
   private memberSeenMs = new Map<string, number>();
+  /** Host: members dropped for silence, kept so their next packet puts them back (a guest only says hello once) */
+  private lapsedMembers = new Map<string, LobbyPlayer>();
   private lobbySettings: LobbySettings = { trackId: 'rwanda', laps: 5, collisions: 'ghost_lap1', carClass: 'any' };
   private activeRace: RaceStartInfo | null = null;
+  /**
+   * Guest: the race this client is done with (left with leaveRace, or ended by the host); neither a repeated start
+   * nor a lobby still showing it puts this player back in it
+   */
+  private doneRaceId: string | null = null;
   /** hostClock − localClock (ms); 0 on the host */
   private clockOffsetMs = 0;
   private bestClockRttMs = Infinity;
@@ -743,6 +751,23 @@ export class MultiplayerSyncManager {
       return;
     }
     let opened = false;
+    /**
+     * The broker dropped or refused the room after it had been up (or on a reconnect): put it back after a pause. The
+     * socket is closed here, not left to the broker: a refused socket it keeps open would be held up by the heartbeat
+     * and never retried. The players already in race on peer to peer meanwhile, and keep their status.
+     */
+    const putBack = () => {
+      if (this.signalingWs !== ws) return;
+      this.closeSignaling();
+      const next = attempt + 1;
+      this.brokerRetry = setTimeout(() => {
+        this.brokerRetry = null;
+        this.connectHostBroker(roomCode, next);
+      }, BROKER_RETRY_MS[Math.min(attempt, BROKER_RETRY_MS.length - 1)]);
+      if (this.openPeerCount() === 0) {
+        this.emitStatus({ state: 'signaling', statusText: `Reconnecting room ${roomCode}…` });
+      }
+    };
 
     ws.onmessage = async (ev) => {
       if (this.signalingWs !== ws) return;
@@ -755,8 +780,11 @@ export class MultiplayerSyncManager {
             this.emitStatus({ state: 'signaling', statusText: `Room ${roomCode} is open • waiting for players` });
           }
         } else if (msg.type === 'ID-TAKEN') {
-          // On a reconnect it is this room's own old socket, which the broker hasn't cleared yet: the close retries
-          if (attempt > 0) return;
+          // On a reconnect it is this room's own old socket, which the broker hasn't cleared yet: try again shortly
+          if (attempt > 0) {
+            putBack();
+            return;
+          }
           this.closeSignaling();
           this.emitStatus({
             state: 'error',
@@ -764,6 +792,11 @@ export class MultiplayerSyncManager {
             statusText: `Room ${roomCode} is already open on another device. Press Join to race in it, or host with a new code.`,
           });
         } else if (msg.type === 'ERROR' || msg.type === 'INVALID-KEY') {
+          // Refused before the room ever opened: say so. Refused once it had been up: put it back, as after a drop
+          if (opened || attempt > 0) {
+            putBack();
+            return;
+          }
           this.closeSignaling();
           this.emitStatus({ state: 'error', roomCode: '', statusText: BROKER_UNREACHABLE });
         } else if (msg.type === 'OFFER' && msg.src && msg.payload?.sdp) {
@@ -781,20 +814,13 @@ export class MultiplayerSyncManager {
 
     ws.onclose = () => {
       if (this.signalingWs !== ws) return; // Closed on purpose: another room, left, or the code was taken
-      this.signalingWs = null;
-      this.clearBrokerTimers();
       if (!opened && attempt === 0) {
+        this.signalingWs = null;
+        this.clearBrokerTimers();
         this.emitStatus({ state: 'error', roomCode: '', statusText: BROKER_UNREACHABLE });
         return;
       }
-      const next = attempt + 1;
-      this.brokerRetry = setTimeout(() => {
-        this.brokerRetry = null;
-        this.connectHostBroker(roomCode, next);
-      }, BROKER_RETRY_MS[Math.min(attempt, BROKER_RETRY_MS.length - 1)]);
-      if (this.openPeerCount() === 0) {
-        this.emitStatus({ state: 'signaling', statusText: `Reconnecting room ${roomCode}…` });
-      }
+      putBack();
     };
   }
 
@@ -881,7 +907,8 @@ export class MultiplayerSyncManager {
           // The broker couldn't deliver the offer: no host with this code
           if (!answered) notFound();
         } else if (msg.type === 'ID-TAKEN' || msg.type === 'ERROR' || msg.type === 'INVALID-KEY') {
-          fail(BROKER_UNREACHABLE);
+          // Once the host has answered the broker no longer matters: a late error must not close the working link
+          if (!answered) fail(BROKER_UNREACHABLE);
         } else if (msg.type === 'ANSWER' && msg.src && msg.payload?.sdp) {
           const entry = this.rtcPeers.get(msg.src);
           if (entry) {
@@ -1018,28 +1045,7 @@ export class MultiplayerSyncManager {
       const entry = this.rtcPeers.get(remoteId);
       if (!entry || entry.pc !== pc) return;
       const neverOpened = !entry.dc || entry.dc.readyState !== 'open';
-      this.rtcPeers.delete(remoteId);
-      if (entry.gamePeerId) this.dropMember(entry.gamePeerId);
-      if (pc.connectionState === 'disconnected') {
-        pc.onconnectionstatechange = null;
-        try {
-          pc.close();
-        } catch {
-          // Ignore close error
-        }
-      }
-      const strictNat = pc.connectionState === 'failed' && neverOpened;
-      this.emitStatus({
-        state: this.rtcPeers.size > 0 ? 'connected' : strictNat ? 'error' : 'signaling',
-        statusText:
-          this.rtcPeers.size > 0
-            ? `WebRTC P2P Connected (${this.rtcPeers.size} peer)`
-            : strictNat
-              ? hasTurnServer()
-                ? 'Could not connect, even through the TURN relay. Check the TURN details, or try the same Wi-Fi.'
-                : 'Could not connect directly (strict NAT / mobile network). Add a TURN relay under Advanced, or use the same Wi-Fi.'
-              : 'Peer Disconnected • Waiting for Reconnection',
-      });
+      this.losePeer(entry, pc.connectionState === 'failed' && neverOpened);
     };
     pc.onconnectionstatechange = () => {
       const state = pc.connectionState;
@@ -1054,6 +1060,56 @@ export class MultiplayerSyncManager {
     };
 
     return pc;
+  }
+
+  /**
+   * The one way a WebRTC peer goes, whichever noticed first: its state channel closing, or the connection failing or
+   * staying disconnected past the grace period (they come in either order). Forgets it, closes the whole connection,
+   * drops its lobby member, then says what that leaves. `strictNat`: it failed without ever opening.
+   */
+  private losePeer(entry: WebRtcPeerEntry, strictNat = false): void {
+    if (this.rtcPeers.get(entry.remoteId) !== entry) return;
+    this.rtcPeers.delete(entry.remoteId);
+    if (this.manualPendingPc === entry.pc) this.manualPendingPc = null;
+    // Silenced first: the closes below must not report the loss a second time
+    entry.pc.onconnectionstatechange = null;
+    if (entry.dc) entry.dc.onclose = null;
+    if (entry.ctl) entry.ctl.onclose = null;
+    try {
+      entry.dc?.close();
+      entry.ctl?.close();
+      entry.pc.close();
+    } catch {
+      // Ignore close error
+    }
+    if (entry.gamePeerId) this.dropMember(entry.gamePeerId);
+    this.emitPeersStatus(strictNat);
+  }
+
+  /** The connection status once a peer has gone, from what is still open */
+  private emitPeersStatus(strictNat: boolean): void {
+    const open = this.openPeerCount();
+    if (open > 0) {
+      this.emitStatus({ state: 'connected', statusText: `WebRTC P2P Connected (${open} peer)` });
+    } else if (strictNat) {
+      this.emitStatus({
+        state: 'error',
+        statusText: hasTurnServer()
+          ? 'Could not connect, even through the TURN relay. Check the TURN details, or try the same Wi-Fi.'
+          : 'Could not connect directly (strict NAT / mobile network). Add a TURN relay under Advanced, or use the same Wi-Fi.',
+      });
+    } else if (!this.isHost) {
+      // A guest's one connection is to its host, and nothing dials it again: say so rather than wait forever
+      this.emitStatus({ state: 'error', statusText: 'Lost the host. Join again.' });
+    } else if (this.status.mode === 'room_host') {
+      const code = this.status.roomCode;
+      const up = this.signalingWs !== null && this.signalingWs.readyState === WebSocket.OPEN;
+      this.emitStatus({ state: 'signaling', statusText: up ? `Room ${code} is open • waiting for players` : `Reconnecting room ${code}…` });
+    } else if (this.status.mode === 'local') {
+      this.emitStatus({ state: 'connected', statusText: 'Hosting a race for the tabs of this browser' });
+    } else {
+      this.emitStatus({ state: 'signaling', statusText: 'Player left. Make a new offer to connect again.' });
+    }
   }
 
   /** Host side: a guest opened a channel (state or control, by label) */
@@ -1122,12 +1178,8 @@ export class MultiplayerSyncManager {
       });
     };
     dc.onclose = () => {
-      const gone = this.rtcPeers.get(remoteId)?.gamePeerId;
-      this.rtcPeers.delete(remoteId);
-      if (gone) this.dropMember(gone);
-      this.emitStatus({
-        state: this.rtcPeers.size > 0 ? 'connected' : 'idle',
-      });
+      const entry = this.rtcPeers.get(remoteId);
+      if (entry && entry.dc === dc) this.losePeer(entry);
     };
     dc.onmessage = (ev) => {
       if (typeof ev.data !== 'string' || ev.data.length > 16384) return;
@@ -1190,27 +1242,45 @@ export class MultiplayerSyncManager {
   }
 
   private becomeHost(): void {
+    // A guest turning host drops the race it followed: that race ran on the old host's clock and is not its to run
+    // (or to advertise and abort). A host hosting again (another manual offer) keeps its race
+    const dropped = this.isHost ? null : this.activeRace;
+    if (!this.isHost) {
+      this.activeRace = null;
+      this.doneRaceId = null;
+    }
     this.isHost = true;
     this.hostId = this.localPeerId;
     this.clockOffsetMs = 0;
     this.bestClockRttMs = 0;
     if (this.localTrackId) this.lobbySettings = { ...this.lobbySettings, trackId: this.localTrackId };
     this.broadcastLobby();
+    if (dropped) this.onRaceAbort?.(dropped.id);
   }
 
   private becomeGuest(): void {
     // A guest has one connection, to its host: close any left from hosting or from an earlier room
     this.closePeers();
+    // Whatever race ran here (our own as host, or an old host's) is not the new host's
+    const dropped = this.activeRace;
+    this.activeRace = null;
+    this.doneRaceId = null;
     this.isHost = false;
     this.hostId = null;
     this.lastHostLobbyMs = 0;
     this.members.clear();
+    this.memberSeenMs.clear();
+    this.lapsedMembers.clear();
+    this.clockOffsetMs = 0;
     this.bestClockRttMs = Infinity;
     this.setLobby(null);
+    if (dropped) this.onRaceAbort?.(dropped.id);
   }
 
   /** Hosts a race for the other tabs of this browser (no network needed) */
   public hostLocal(): void {
+    // A room left on the broker would keep retrying and write its own status over this one
+    this.closeSignaling();
     this.emitStatus({ mode: 'local', state: 'connected', statusText: 'Hosting a race for the tabs of this browser' });
     this.becomeHost();
   }
@@ -1258,6 +1328,21 @@ export class MultiplayerSyncManager {
     this.sendControl({ type: 'abort', id });
     this.broadcastLobby();
     this.onRaceAbort?.(id);
+  }
+
+  /**
+   * Leaves the race in progress. The host ends it for everyone (abortRace). A guest drops out alone: the race is
+   * forgotten here, and neither the host repeating its start nor its lobby puts this player back in it.
+   */
+  public leaveRace(): void {
+    if (this.isHost) {
+      this.abortRace();
+      return;
+    }
+    // Only the race actually followed: leaveRace also runs from onRaceAbort, after the race was already dropped here
+    // (and the lobby may by then show the host's next race, which this player has not left)
+    if (this.activeRace) this.doneRaceId = this.activeRace.id;
+    this.activeRace = null;
   }
 
   /** The host's clock now (ms): the race timeline every client shares */
@@ -1322,10 +1407,31 @@ export class MultiplayerSyncManager {
   }
 
   private dropMember(peerId: string): void {
-    if (this.members.delete(peerId)) {
-      this.memberSeenMs.delete(peerId);
-      this.broadcastLobby();
+    this.lapsedMembers.delete(peerId);
+    this.memberSeenMs.delete(peerId);
+    if (this.members.delete(peerId)) this.broadcastLobby();
+  }
+
+  /** Host: a member silent too long leaves the lobby, remembered so that its next message or packet brings it back */
+  private lapseMember(peerId: string): void {
+    const member = this.members.get(peerId);
+    this.dropMember(peerId);
+    if (member) this.lapsedMembers.set(peerId, member);
+  }
+
+  /** Host: a guest was heard from (any control message or state packet): it stays in the lobby, or is back in it */
+  private memberHeard(peerId: string, nowMs: number): void {
+    if (!this.isHost) return;
+    if (this.members.has(peerId)) {
+      this.memberSeenMs.set(peerId, nowMs);
+      return;
     }
+    const lapsed = this.lapsedMembers.get(peerId);
+    if (!lapsed) return;
+    this.lapsedMembers.delete(peerId);
+    this.members.set(peerId, lapsed);
+    this.memberSeenMs.set(peerId, nowMs);
+    this.broadcastLobby();
   }
 
   /** Sends a control message over every transport (reliable channels + same-browser BroadcastChannel) */
@@ -1360,11 +1466,14 @@ export class MultiplayerSyncManager {
     if (this.isHost && via && RELAYED_CONTROL.has(msg.type)) {
       this.relay(JSON.stringify(to ? { ctl: msg, from, to } : { ctl: msg, from }), via.remoteId, 'control', to);
     }
+    // Any message is a sign of life, also one passed on to another guest (a hello is taken in below)
+    if (msg.type !== 'hello') this.memberHeard(from, performance.now());
     if (to && to !== this.localPeerId) return;
 
     switch (msg.type) {
       case 'hello':
         if (this.isHost) {
+          this.lapsedMembers.delete(from);
           this.members.set(from, {
             peerId: from,
             name: msg.name,
@@ -1404,6 +1513,8 @@ export class MultiplayerSyncManager {
             this.bestClockRttMs = rtt;
             this.clockOffsetMs = msg.now + rtt / 2 - t1;
           }
+          // The host's clock is known now: a race waiting for it in the lobby can start
+          this.reconcileRace(false);
         }
         break;
       }
@@ -1418,26 +1529,65 @@ export class MultiplayerSyncManager {
         if (this.hostId !== null && from !== this.hostId && nowMs - this.lastHostLobbyMs < HOST_SILENT_MS) break;
         this.lastHostLobbyMs = nowMs;
         if (via) via.gamePeerId = from;
+        let dropped: RaceStartInfo | null = null;
         if (this.hostId !== msg.lobby.hostId) {
           this.hostId = msg.lobby.hostId;
+          // A new host keeps its own clock: measure it afresh (the old offset means nothing against it), and a race
+          // timed on the old host's clock is over here
+          this.clockOffsetMs = 0;
           this.bestClockRttMs = Infinity;
+          dropped = this.activeRace;
+          this.activeRace = null;
+          this.doneRaceId = null;
           this.sendControl({ type: 'hello', ...this.identity, vehicle: this.localVehicle, trackId: this.localTrackId });
           if (this.localReady) this.sendControl({ type: 'ready', ready: true });
         }
         this.setLobby(msg.lobby);
+        if (dropped) this.onRaceAbort?.(dropped.id);
+        this.reconcileRace(true);
         break;
       }
       case 'start':
         if (this.isHost || from !== this.hostId) break;
-        if (this.activeRace?.id === msg.start.id) break;
+        // As the lobby: connected over WebRTC, the start and the abort count from that connection alone, so they stay
+        // in order with the lobby (another tab's copy can overtake it)
+        if (!via && this.rtcPeers.size > 0) break;
+        if (this.activeRace?.id === msg.start.id || this.doneRaceId === msg.start.id) break;
         this.activeRace = msg.start;
         this.onRaceStart?.(msg.start);
         break;
       case 'abort':
-        if (from !== this.hostId || this.activeRace?.id !== msg.id) break;
+        if (from !== this.hostId) break;
+        if (!via && this.rtcPeers.size > 0) break;
+        this.doneRaceId = msg.id;
+        if (this.activeRace?.id !== msg.id) break;
         this.activeRace = null;
         this.onRaceAbort?.(msg.id);
         break;
+    }
+  }
+
+  /**
+   * Guest: follows the host's race from its lobby as well as from the one-off start and abort messages, which a guest
+   * that connected after the start, or missed a message, never got. Only a lobby that just arrived ends a race (it
+   * comes on the same ordered channel as the start, so it always shows a race started before it); a race this client
+   * is done with stays done; and a race starts only on the host's measured clock (on a guessed one its lights would
+   * run at the wrong time).
+   */
+  private reconcileRace(lobbyArrived: boolean): void {
+    if (this.isHost) return;
+    const race = this.lobby?.race ?? null;
+    const active = this.activeRace;
+    if (active) {
+      if (!lobbyArrived || race?.id === active.id) return;
+      this.activeRace = null;
+      this.doneRaceId = active.id;
+      this.onRaceAbort?.(active.id);
+    }
+    if (race && race.id !== this.doneRaceId && this.clockSynced) {
+      // Set before the call: the lobby repeats, and the handler may switch circuits before it is back
+      this.activeRace = race;
+      this.onRaceStart?.(race);
     }
   }
 
@@ -1449,10 +1599,9 @@ export class MultiplayerSyncManager {
       if (this.hostId || this.peers.size > 0) this.sendControl({ type: 'ping', t0: performance.now() });
     }
     if (this.isHost) {
+      // memberSeenMs is kept current by every message and packet (memberHeard), so it alone says who is still here
       for (const [id, seen] of this.memberSeenMs) {
-        const buf = this.peers.get(id);
-        const last = Math.max(seen, buf?.lastReceivedMs ?? 0);
-        if (nowMs - last > 8000) this.dropMember(id);
+        if (nowMs - seen > 8000) this.lapseMember(id);
       }
       if (nowMs - this.lastLobbyMs > 3000) this.broadcastLobby();
     }
@@ -1466,10 +1615,13 @@ export class MultiplayerSyncManager {
       return '';
     }
     const remoteId = `manual_${Math.random().toString(36).slice(2, 7)}`;
+    // A room left on the broker would keep retrying and write its own status over this mode's
+    this.closeSignaling();
     this.becomeHost();
     // A new offer replaces one still waiting for its answer: close that one rather than leave it in rtcPeers forever
     if (this.manualPendingPc) this.closeManualPeer(this.manualPendingPc);
-    const pc = new RTCPeerConnection({ iceServers: iceServers() });
+    // The same failure and grace handling as a room's connections (there is no broker here to send candidates to)
+    const pc = this.createPeerConnection(remoteId, remoteId);
     this.manualPendingPc = pc;
 
     const dc = pc.createDataChannel(STATE_CHANNEL, {
@@ -1511,8 +1663,9 @@ export class MultiplayerSyncManager {
     const remoteId = `manual_host_${Math.random().toString(36).slice(2, 7)}`;
     // Parsed before anything is set up: a mangled token throws here without leaving a half-built peer behind
     const offerDesc = JSON.parse(atob(offerToken.trim()));
+    this.closeSignaling();
     this.becomeGuest();
-    const pc = new RTCPeerConnection({ iceServers: iceServers() });
+    const pc = this.createPeerConnection(remoteId, remoteId);
     const entry: WebRtcPeerEntry = { remoteId, pc, dc: null };
     this.rtcPeers.set(remoteId, entry);
     pc.ondatachannel = (ev) => this.acceptChannel(entry, ev.channel);
@@ -1541,16 +1694,16 @@ export class MultiplayerSyncManager {
    * Completes the manual WebRTC P2P handshake on the host using the guest's Answer token.
    */
   public async acceptManualAnswer(answerToken: string): Promise<void> {
-    if (!this.manualPendingPc) return;
+    const pc = this.manualPendingPc;
+    if (!pc) return;
     const answerDesc = JSON.parse(atob(answerToken.trim()));
-    await this.manualPendingPc.setRemoteDescription(
-      new RTCSessionDescription(answerDesc)
-    );
-    this.emitStatus({
-      mode: 'manual_sdp',
-      state: 'connected',
-      statusText: 'Manual WebRTC P2P Handshake Complete!',
-    });
+    await pc.setRemoteDescription(new RTCSessionDescription(answerDesc));
+    // Answered: no longer the offer waiting, so the next offer (for another player) leaves this connection alone
+    if (this.manualPendingPc === pc) this.manualPendingPc = null;
+    // Connected only once its channel opens (bindDataChannel); until then it is still being set up
+    if (this.openPeerCount() === 0) {
+      this.emitStatus({ mode: 'manual_sdp', state: 'signaling', statusText: 'Answer accepted • connecting…' });
+    }
   }
 
   private waitForIceGathering(
@@ -1607,6 +1760,7 @@ export class MultiplayerSyncManager {
         : typeof performance !== 'undefined'
           ? performance.now()
           : Date.now();
+    if (!isAiPeer) this.memberHeard(pkt.peerId, now);
     let buffer = this.peers.get(pkt.peerId);
     if (!buffer) {
       buffer = {
@@ -1957,9 +2111,13 @@ export class MultiplayerSyncManager {
 
   /** Closes one manual-SDP connection and forgets its entry */
   private closeManualPeer(pc: RTCPeerConnection): void {
+    // Silenced first: closing on purpose is not a lost player
+    pc.onconnectionstatechange = null;
     for (const [id, entry] of this.rtcPeers) {
       if (entry.pc !== pc) continue;
       this.rtcPeers.delete(id);
+      if (entry.dc) entry.dc.onclose = null;
+      if (entry.ctl) entry.ctl.onclose = null;
       entry.dc?.close();
       entry.ctl?.close();
     }
