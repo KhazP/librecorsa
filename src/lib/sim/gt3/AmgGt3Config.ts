@@ -152,52 +152,56 @@ const NO_DAMPER = damper(0, 0, 0, 0);
 /**
  * Double wishbones front and rear: wheel rates, ARBs, bump rubbers and two-stage dampers [spec].
  * The free travel to the rubber is the bump-stop height less the static compression [derived]; roll centres and
- * kinematic camber gain are estimates. No third element.
+ * kinematic camber gain are what the hardpoints give, matched to the reference car's geometry. No third element.
  */
 const SUSPENSIONS: SuspensionsData = {
   front: {
     type: 'SuspensionType_DoubleWishbone',
     actuation: 'push_rod',
     staticCamber: -3.5,
-    camberGainKinematic: -12,
+    camberGainKinematic: -44,
     // Front-stiff platform: ride 3.2 Hz, so the nose holds its height under braking instead of diving onto the stop [ref]
     springs: { wheel_rate: 171_000, helper_rate: 0, helper_range: 0 },
     heave: { rate: 0, gap: 1, packerGap: 1, packerRate: 0 },
     // Long, soft, progressive rubber: the outside front no longer lands on a stiff stop mid-corner [ref]
     bumpStop: { range: 0.0425, rate: 10_000, progression: 1_900_000 },
     droopTravel: 0.06,
-    rollCentreHeight: 0.05,
+    rollCentreHeight: 0.024,
     arb: 68_400, // [ref] front roll share 60 %
+    // Inner pickup heights and pivot-axis tilts, rack height and steering-arm offset set so the solved geometry matches
+    // the reference car's: RC and camber gain above, ≈ 33 % anti-dive, near-parallel steering (−10 % Ackermann),
+    // ≈ 3 °/m toe-out in bump; the uprights are as before [derived, ref]
     hardpoints: [
-      [0.440, 0.098, 0.197],
-      [0.440, 0.072, -0.145],
-      [0.487, -0.122, 0.215],
-      [0.487, -0.155, -0.155],
+      [0.440, 0.0804, 0.197],
+      [0.440, -0.0062, -0.145],
+      [0.487, -0.1670, 0.215],
+      [0.487, -0.1906, -0.155],
       [0.128, 0.135, -0.025],
       [0.098, -0.128, 0.017],
-      [0.447, -0.120, 0.160],
-      [0.110, -0.112, 0.140],
+      [0.447, -0.1554, 0.160],
+      [0.097, -0.112, 0.140],
     ],
   },
   rear: {
     type: 'SuspensionType_DoubleWishbone',
     actuation: 'push_rod',
     staticCamber: -2.5,
-    camberGainKinematic: -10,
+    camberGainKinematic: -25,
     springs: { wheel_rate: 127_000, helper_rate: 0, helper_range: 0 }, // [ref]
     heave: { rate: 0, gap: 1, packerGap: 1, packerRate: 0 },
     bumpStop: { range: 0.056, rate: 9_000, progression: 1_700_000 }, // [ref]
     droopTravel: 0.055,
-    rollCentreHeight: 0.065,
+    rollCentreHeight: 0.06,
     arb: 40_200, // [ref]
+    // As the front: RC and camber gain above, no anti-squat, ≈ 32 % anti-lift, ≈ 7 °/m toe-in in bump [derived, ref]
     hardpoints: [
-      [0.440, 0.092, 0.251],
-      [0.440, 0.092, -0.123],
-      [0.520, -0.125, 0.160],
-      [0.520, -0.112, -0.221],
+      [0.440, 0.0838, 0.251],
+      [0.440, 0.1086, -0.123],
+      [0.520, -0.1092, 0.160],
+      [0.520, -0.1337, -0.221],
       [0.128, 0.148, 0.052],
       [0.110, -0.112, -0.055],
-      [0.505, -0.109, -0.250],
+      [0.505, -0.1117, -0.250],
       [0.110, -0.100, -0.165],
     ],
   },
