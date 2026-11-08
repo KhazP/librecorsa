@@ -212,12 +212,15 @@ export function getActiveTrackMetadata(): RawTrackJson["metadata"] & TrackMetaEx
   return activeRaw.metadata as RawTrackJson["metadata"] & TrackMetaExtras;
 }
 
-let cachedSurfaceTable: SurfaceTable | null = null;
+/** The active circuit's surface table, with the track data it was resolved from (as cachedBuiltTrack keeps its id) */
+let cachedSurfaceTable: { raw: RawTrackJson; table: SurfaceTable } | null = null;
 
 /** Surface physics of the active circuit: the default table with its `metadata.surfaceTable` overrides */
 export function getActiveSurfaceTable(): SurfaceTable {
-  cachedSurfaceTable ??= resolveSurfaceTable(getActiveTrackMetadata().surfaceTable);
-  return cachedSurfaceTable;
+  if (cachedSurfaceTable?.raw !== activeRaw) {
+    cachedSurfaceTable = { raw: activeRaw, table: resolveSurfaceTable(getActiveTrackMetadata().surfaceTable) };
+  }
+  return cachedSurfaceTable.table;
 }
 
 function refill<T>(target: T[], items: T[]): void {
@@ -230,21 +233,27 @@ function refill<T>(target: T[], items: T[]): void {
  * Call before the simulator mounts: built track data, physics and scenes made earlier keep the old layout.
  */
 export function setActiveTrack(id: string, raw: RawTrackJson = rawTrackJson): void {
-  activeRaw = raw;
-  ACTIVE_TRACK_ID = id;
+  // Everything is read from `raw` before anything changes: malformed data throws with the previous circuit whole
   const meta = raw.metadata as RawTrackJson["metadata"] & TrackMetaExtras;
-  TRACK_TOTAL_LENGTH_M = meta.lengthMeters;
+  const rawDs = meta.lengthMeters / raw.samples.length;
+  const drsZones = [...(raw.drsZones as DrsZoneDef[])];
+  const cameras = [...(raw.cameras as TracksideTvCameraDef[])];
+  const spawnGrid = [...(raw.spawnGrid as GridSlotDef[])];
+  const turns = turnsOf(raw);
   if (meta.baseAltitudeM === undefined && id !== "rwanda") {
     console.warn(`Circuit "${id}" has no baseAltitudeM: air density as at sea level`);
   }
+  activeRaw = raw;
+  ACTIVE_TRACK_ID = id;
+  TRACK_TOTAL_LENGTH_M = meta.lengthMeters;
   BASE_ALTITUDE_M = meta.baseAltitudeM ?? (id === "rwanda" ? RWANDA_BASE_ALTITUDE_M : 0);
-  refill(RWANDA_DRS_ZONES, raw.drsZones as DrsZoneDef[]);
-  refill(RWANDA_TV_CAMERAS, raw.cameras as TracksideTvCameraDef[]);
-  refill(RWANDA_SPAWN_GRID, raw.spawnGrid as GridSlotDef[]);
-  refill(TURN_METADATA, turnsOf(raw));
+  refill(RWANDA_DRS_ZONES, drsZones);
+  refill(RWANDA_TV_CAMERAS, cameras);
+  refill(RWANDA_SPAWN_GRID, spawnGrid);
+  refill(TURN_METADATA, turns);
   LEFT_HAND_TURNS = new Set(TURN_METADATA.filter((t) => t.direction === "left").map((t) => t.number));
   TURN_NAMES = new Map(TURN_METADATA.map((t) => [t.number, t.name]));
-  RAW_DS = meta.lengthMeters / raw.samples.length;
+  RAW_DS = rawDs;
   cachedBuiltTrack = null;
   cachedSurfaceTable = null;
 }

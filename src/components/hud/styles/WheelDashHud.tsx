@@ -1,11 +1,11 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { formatDelta, formatLapTime, formatSectorTime } from "../hud-format";
+import { atShiftPoint, formatDelta, formatLapTime, formatSectorTime } from "../hud-format";
 import { TyreMini } from "../TyreBrakeWidget";
 import { anchor, arcPoints, deltaColor, gearLabel, HUD_GLASS, HUD_LBL, MiniMap, raceNeighbours, useSectorFlash, type HudDesignProps } from "./hud-style-parts";
 import { PedalBars } from "../PedalBars";
-import { aeroModeLabel } from "../aero-label";
+import { aeroReadout } from "../aero-label";
 
 const LEDS = 15;
 const LED_COLORS = [...Array(5).fill("#00E676"), ...Array(5).fill("#FF2A3C"), ...Array(5).fill("#2F8BE5")] as string[];
@@ -38,11 +38,14 @@ const Bar: React.FC<{ pct: number; color: string; className?: string }> = ({ pct
   </span>
 );
 
-/** Shift lights blink at the shift point */
+/** Shift lights blink at the shift point, always starting lit (the phase is reset while off) */
 function useBlink(on: boolean, periodMs = 70): boolean {
-  const [phase, setPhase] = useState(false);
+  const [phase, setPhase] = useState(true);
   useEffect(() => {
-    if (!on) return;
+    if (!on) {
+      setPhase(true);
+      return;
+    }
     const id = window.setInterval(() => setPhase((p) => !p), periodMs);
     return () => window.clearInterval(id);
   }, [on, periodMs]);
@@ -54,12 +57,13 @@ export const WheelDash: React.FC<Pick<HudDesignProps, "t" | "deltaS" | "revRange
   t,
   deltaS,
   revRange,
-  lapInvalid = t.offTrack,
+  lapInvalid,
 }) => {
   const [revStart, revFull] = revRange;
   const lit = Math.round(Math.min(1, Math.max(0, (t.rpm - revStart) / (revFull - revStart))) * LEDS);
-  const shift = t.rpm >= revFull;
+  const shift = atShiftPoint(t.rpm, revFull);
   const blink = useBlink(shift);
+  const aero = aeroReadout(t);
   const flash = useSectorFlash(t);
   const nb = raceNeighbours(t);
   const hasErs = t.f12026?.hasErs ?? true;
@@ -111,10 +115,10 @@ export const WheelDash: React.FC<Pick<HudDesignProps, "t" | "deltaS" | "revRange
           {hasErs ? (
             <span
               className={`rounded-full px-2 py-px font-f1-mono text-[9px] font-extrabold tracking-[0.12em] ${
-                t.activeAeroMode === "X_MODE" ? "bg-[#CCFF00] text-[#08090D]" : "bg-[#1B1F2B] text-[#8E96AA]"
+                aero.open ? "bg-[#CCFF00] text-[#08090D]" : "bg-[#1B1F2B] text-[#8E96AA]"
               }`}
             >
-              {aeroModeLabel(t)}
+              {aero.label}
             </span>
           ) : (
             <span className="lc-data text-[10px] text-[#8E96AA]">{Math.round(t.rpm)}</span>

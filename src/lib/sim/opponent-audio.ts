@@ -24,7 +24,8 @@ import * as THREE from 'three';
 import type { CameraMode } from '@/types/f1';
 import { withBasePath } from '@/lib/base-path';
 import type { InterpolatedPeerState } from './multiplayer-sync';
-import { INTERIOR_CAMERAS, type CarSoundSource } from './CarAudio';
+import { type CarSoundSource } from './CarAudio';
+import { CAMERA_MODES } from '@/lib/render/camera-modes';
 import { LoopGrid, LoopVoice, lerpTable, type Vf26AudioManifest } from './vf26-audio';
 
 /** Voices in the pool: the nearest cars get one, the rest are not heard */
@@ -44,9 +45,15 @@ const MAX_CANDIDATES = 64;
 const WHEEL_RADIUS_M = 0.34;
 const RPM_TO_RADS = (2 * Math.PI) / 60;
 
+/** A failed bank (no manifest, a file missing, the network down) is fetched again after this long on the audio clock (s) */
+const BANK_RETRY_S = 10;
+
 /** The exterior engine grid (and skid loop) of one bank, decoded once per audio context */
 interface SharedBank {
-  ready: boolean;
+  /** 'failed' is kept apart from 'loading', so the bank is tried again (`OpponentAudio.bankFor`) */
+  state: 'loading' | 'ready' | 'failed';
+  /** When a failed bank may be fetched again (audio clock, s) */
+  retryAtS: number;
   onKeys: number[];
   onBuffers: AudioBuffer[];
   offKeys: number[];
@@ -85,9 +92,11 @@ async function loadSharedBank(ctx: AudioContext, assetDir: string, bank: SharedB
     bank.throttleCurve = m.throttleCurve?.ext ?? [];
     bank.rpmMin = Math.min(...rpms) * 0.75;
     bank.rpmMax = Math.max(...rpms) * 1.35;
-    bank.ready = true;
+    bank.state = 'ready';
   } catch {
-    // Stays not ready: its voices keep to the synthetic skid and stay silent otherwise
+    // Its voices stay silent until the retry (`OpponentAudio.bankFor`)
+    bank.state = 'failed';
+    bank.retryAtS = ctx.currentTime + BANK_RETRY_S;
   }
 }
 
@@ -166,9 +175,13 @@ class OpponentVoice {
     this.panner.connect(destination);
   }
 
-  /** Hands the voice to a car (or frees it with null); the loops of the previous car fade out on their own */
-  public assign(peerId: string | null): void {
+  /**
+   * Hands the voice to a car at `rank` among the nearest (or frees it with null); the loops of the previous car fade
+   * out on their own
+   */
+  public assign(peerId: string | null, rank = OPPONENT_VOICES): void {
     this.peerId = peerId;
+    this.rank = peerId === null ? OPPONENT_VOICES : rank;
     this.throttle = 0;
     // A freed voice keeps its last rpm so the fading loops hold their pitch (silence() plays them at this.rpm);
     // a new car starts from 0, which snaps to its first target
@@ -179,16 +192,18 @@ class OpponentVoice {
     this.doppler = 1;
     this.skid = 0;
     this.prevContact = false;
+    this.scrapeCooldown = 0;
     this.placed = false;
   }
 
   /** The bank this voice plays; rebuilds its grids when it changes (car swap, another player's car) */
   public bind(sound: CarSoundSource, bank: SharedBank): void {
     // Also rebuilt once a bank bound while loading becomes ready: its keys and buffers were empty at the first bind
-    if (this.bank === bank && this.boundReady === bank.ready) return;
+    const ready = bank.state === 'ready';
+    if (this.bank === bank && this.boundReady === ready) return;
     this.sound = sound;
     this.bank = bank;
-    this.boundReady = bank.ready;
+    this.boundReady = ready;
     this.onGrid?.dispose();
     this.offGrid?.dispose();
     this.skidVoice?.dispose();
@@ -238,7 +253,7 @@ class OpponentVoice {
   ): void {
     const bank = this.bank;
     const sound = this.sound;
-    if (!bank?.ready || !sound || !this.onGrid || !this.offGrid) return;
+    if (bank?.state !== 'ready' || !sound || !this.onGrid || !this.offGrid) return;
 
     // Position (listener-relative, so the glide only smooths the frame steps)
     const pn = this.panner;
@@ -485,7 +500,7 @@ export class OpponentAudio {
     this.invQ.copy(cam.quaternion).invert();
 
     // Cockpit cameras hear the field through the helmet and the bodywork
-    const interior = INTERIOR_CAMERAS.has(f.cameraMode) ? 1 : 0;
+    const interior = CAMERA_MODES[f.cameraMode].interiorAudio ? 1 : 0;
     this.interiorMix += (interior - this.interiorMix) * Math.min(1, dt / 0.12);
     this.interiorFilter?.frequency.setTargetAtTime(18000 - this.interiorMix * 15000, now, 0.03);
     this.bus.gain.setTargetAtTime(0.85 - this.interiorMix * 0.35, now, 0.03);
@@ -523,19 +538,18 @@ export class OpponentAudio {
         }
       }
       if (found >= 0) {
+        // The same car, nearer or further among the others
         this.taken[found] = 1;
         v.rank = found;
       } else if (v.peerId !== null) {
         v.assign(null);
-        v.rank = OPPONENT_VOICES;
       }
     }
     for (let i = 0; i < n; i++) {
       if (this.taken[i]) continue;
       const free = this.voices.find((v) => v.peerId === null);
       if (!free) break;
-      free.assign(this.cand[i]?.peerId ?? null);
-      free.rank = i;
+      free.assign(this.cand[i]?.peerId ?? null, i);
       this.taken[i] = 1;
     }
 
@@ -551,7 +565,7 @@ export class OpponentAudio {
       const bank = this.bankFor(sound.assetDir);
       v.bind(sound, bank);
       v.setHrtf(v.rank < HRTF_VOICES);
-      if (!bank.ready) continue;
+      if (bank.state !== 'ready') continue;
 
       const dist = this.candD[idx];
       this.rel.copy(p.position).sub(this.listenerPos);
@@ -595,11 +609,18 @@ export class OpponentAudio {
     return { banks: this.banks.size, voices: this.voices.length, busy: this.voices.filter((v) => v.peerId).length };
   }
 
+  /** The shared bank of `assetDir`: loaded on first use, and loaded again once a failed load's retry time is up */
   private bankFor(assetDir: string): SharedBank {
     let bank = this.banks.get(assetDir);
+    if (bank?.state === 'failed' && this.ctx && this.ctx.currentTime >= bank.retryAtS) {
+      // The same object, so the voices bound to it rebuild their grids when it becomes ready
+      bank.state = 'loading';
+      void loadSharedBank(this.ctx, assetDir, bank);
+    }
     if (!bank) {
       bank = {
-        ready: false,
+        state: 'loading',
+        retryAtS: 0,
         onKeys: [],
         onBuffers: [],
         offKeys: [],

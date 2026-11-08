@@ -35,8 +35,8 @@ import {
   WHEEL_SUPPORT_SUMMARY,
 } from "@/lib/input/wheel-support";
 import { Choice, Toggle, TyreSlider } from "@/components/hud/PauseMenu";
-import { useGamepads, type PadState } from "../useMenuNav";
-import { useButtonCapture } from "./button-capture";
+import { padPressTracker, suspendMenuNav, useGamepads, type PadState } from "../useMenuNav";
+import { CAPTURE_TIMEOUT_S, useButtonCapture } from "./button-capture";
 import { TuningSlider } from "./TuningSlider";
 import { AutoGrid, BindRow, bindKeyClass, ChoiceText, Hint, PillAction, SetupCard, SolidPill, StatusPill, SubHead, TrackMeter } from "./setup-ui";
 import type { SetupStepProps } from "./types";
@@ -64,21 +64,40 @@ const AxisCalibrator: React.FC<{
   onPedal: (target: "throttle" | "brake", b: PedalBinding) => void;
   onCancel: () => void;
 }> = ({ target, exclude, onSteer, onPedal, onCancel }) => {
-  const [stage, setStage] = useState<"rest" | "act">("rest");
+  // rest: waiting for Continue · act: watching for the axis that moves · locked: a pedal's axis found, followed to its
+  // peak (Save offered). The locked axis itself stays in a ref: the frame loop updates its peak every frame.
+  const [stage, setStage] = useState<"rest" | "act" | "locked">("rest");
   const [meter, setMeter] = useState(0);
-  const [canSavePedal, setCanSavePedal] = useState(false);
   const baseline = useRef<AxisSnapshot | null>(null);
   const locked = useRef<{ padId: string; axis: number; base: number; peak: number } | null>(null);
   // Reports once: a frame can still run after the result, before this calibrator unmounts
   const reported = useRef(false);
   const heldSince = useRef(0);
+  const onCancelRef = useRef(onCancel);
+  onCancelRef.current = onCancel;
+  const measuring = stage !== "rest";
 
   useEffect(() => {
-    if (stage !== "act") return;
+    if (!measuring) return;
+    // The wheel and pedals are moving: neither they nor a pad may drive the menus meanwhile (a stick or LB / RB would
+    // move the focus or change the setup step, ending this). Esc and a controller's Ⓑ still cancel.
+    const resume = suspendMenuNav();
+    const backPressed = padPressTracker([1]);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code !== "Escape") return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      onCancelRef.current();
+    };
+    window.addEventListener("keydown", onKey, { capture: true });
     let raf = 0;
     const tick = (t: number) => {
       raf = requestAnimationFrame(tick);
       const pads = connectedPads();
+      if (backPressed(pads.filter((p) => p.mapping === "standard")) && !reported.current) {
+        onCancelRef.current();
+        return;
+      }
       const base = baseline.current;
       if (!base || reported.current) return;
       const excluded = (padId: string, axis: number) => exclude.some((e) => e.padId === padId && e.axis === axis);
@@ -104,7 +123,7 @@ const AxisCalibrator: React.FC<{
         const found = strongestAxisChange(base, pads, excluded);
         if (found && Math.abs(found.delta) > PEDAL_DETECT) {
           locked.current = { padId: found.padId, axis: found.axis, base: found.base, peak: found.value };
-          setCanSavePedal(true);
+          setStage("locked");
         }
         setMeter(found ? Math.min(1, Math.abs(found.delta) / 1.2) : 0);
         return;
@@ -120,13 +139,17 @@ const AxisCalibrator: React.FC<{
       }
     };
     raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [stage, target, exclude, onSteer, onPedal]);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("keydown", onKey, { capture: true });
+      resume();
+    };
+  }, [measuring, target, exclude, onSteer, onPedal]);
 
   return (
     <div className="flex flex-col gap-2.5 rounded-2xl border border-[#CCFF00]/60 bg-[#CCFF00]/[0.08] p-3.5">
       <p className="lc-title m-0 text-[14px] text-[#F5F7FA]">{stage === "rest" ? PROMPTS[target].rest : PROMPTS[target].act}</p>
-      {stage === "act" ? (
+      {measuring ? (
         <span className="block h-1.5 overflow-hidden rounded-full bg-[#08090D]">
           <span className="block h-full rounded-full bg-[#CCFF00] transition-[width]" style={{ width: `${Math.round(meter * 100)}%` }} />
         </span>
@@ -139,13 +162,12 @@ const AxisCalibrator: React.FC<{
               baseline.current = snapshotAxes(connectedPads());
               locked.current = null;
               heldSince.current = 0;
-              setCanSavePedal(false);
               setStage("act");
             }}
           >
             Continue
           </SolidPill>
-        ) : target !== "steer" && canSavePedal ? (
+        ) : stage === "locked" && target !== "steer" ? (
           <SolidPill
             tone="volt"
             onClick={() => {
@@ -336,28 +358,35 @@ function HidFfbStatusLine({ status, on }: { status: WebHidFfbStatus; on: boolean
  * a bug report. Where the clipboard is refused, the text is shown to copy by hand.
  */
 function CopyHidDiagnostics() {
-  const [state, setState] = useState<"idle" | "busy" | "copied" | "failed">("idle");
-  const [manual, setManual] = useState<string | null>(null);
+  // failed: the clipboard was refused, so the report is shown to copy by hand
+  const [state, setState] = useState<{ kind: "idle" | "busy" | "copied" } | { kind: "failed"; report: string }>({ kind: "idle" });
+  // The awaits below can outlive this button (WebHID switched off, the step left)
+  const alive = useRef(true);
   useEffect(() => {
-    if (state !== "copied") return;
-    const t = setTimeout(() => setState("idle"), 2500);
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
+  useEffect(() => {
+    if (state.kind !== "copied") return;
+    const t = setTimeout(() => setState({ kind: "idle" }), 2500);
     return () => clearTimeout(t);
   }, [state]);
   const copy = async () => {
-    setState("busy");
+    setState({ kind: "busy" });
     let report: string;
     try {
       report = await webHidFfb.diagnose();
     } catch (e) {
       report = `LibreCorsa WebHID diagnostics failed: ${e instanceof Error ? e.message : String(e)}`;
     }
+    if (!alive.current) return;
     try {
       await navigator.clipboard.writeText(report);
-      setManual(null);
-      setState("copied");
+      if (alive.current) setState({ kind: "copied" });
     } catch {
-      setManual(report);
-      setState("failed");
+      if (alive.current) setState({ kind: "failed", report });
     }
   };
   return (
@@ -365,17 +394,17 @@ function CopyHidDiagnostics() {
       <button
         type="button"
         onClick={() => void copy()}
-        disabled={state === "busy"}
+        disabled={state.kind === "busy"}
         className="inline-flex h-[34px] shrink-0 cursor-pointer items-center rounded-full border border-[#262B3D] bg-[#F5F7FA]/[0.08] px-3.5 text-[13px] font-bold whitespace-nowrap text-[#F5F7FA] transition-colors duration-200 hover:border-[#3A4157] disabled:cursor-wait disabled:opacity-60"
       >
-        <span aria-live="polite">{state === "copied" ? "Copied" : "Copy diagnostics"}</span>
+        <span aria-live="polite">{state.kind === "copied" ? "Copied" : "Copy diagnostics"}</span>
       </button>
-      {manual !== null ? (
+      {state.kind === "failed" ? (
         <div className="flex w-full flex-col gap-1">
           <Hint>The browser refused the clipboard: select the text below and copy it.</Hint>
           <textarea
             readOnly
-            value={manual}
+            value={state.report}
             rows={8}
             aria-label="WebHID diagnostics"
             onFocus={(e) => e.currentTarget.select()}
@@ -387,13 +416,29 @@ function CopyHidDiagnostics() {
   );
 }
 
+/**
+ * What the wheel step is waiting on: nothing, an axis being calibrated (`all`: steering, throttle then brake in one
+ * go), or a button press to bind. One at a time, so a rim button pressed during a calibration is never bound.
+ */
+type WheelMode =
+  | { kind: "idle" }
+  | { kind: "calibrating"; target: CalTarget; all: boolean }
+  | { kind: "capturing"; action: PadAction };
+const IDLE: WheelMode = { kind: "idle" };
+
 /** Wheel: type, steering calibration and rotation, pedal calibration, button mapping */
 export const WheelStep: React.FC<SetupStepProps> = ({ settings, onChangeSettings }) => {
   const pads = useGamepads();
   const w = settings.wheel;
-  const [calibrating, setCalibrating] = useState<CalTarget | null>(null);
-  const [calAllSeq, setCalAllSeq] = useState(false);
-  const [capturing, setCapturing] = useState<PadAction | null>(null);
+  const [mode, setModeState] = useState<WheelMode>(IDLE);
+  // Read by the calibrator and capture callbacks, which a late frame can still call after the mode has moved on
+  const modeRef = useRef(mode);
+  const setMode = useCallback((next: WheelMode) => {
+    modeRef.current = next;
+    setModeState(next);
+  }, []);
+  const calibrating = mode.kind === "calibrating" ? mode.target : null;
+  const capturing = mode.kind === "capturing" ? mode.action : null;
   const [customRotation, setCustomRotation] = useState(false);
   const ffb = useSyncExternalStore(wheelFfb.subscribe, wheelFfb.getStatus, wheelFfb.getStatus);
   const hid = useSyncExternalStore(webHidFfb.subscribe, webHidFfb.getStatus, webHidFfb.getStatus);
@@ -403,6 +448,11 @@ export const WheelStep: React.FC<SetupStepProps> = ({ settings, onChangeSettings
   const ffbReady = hidActive || (ffb.connection === "connected" && ffb.device !== null && ffb.error === null);
   // The port field edits as text: a half-typed number must not snap to the range's edge while typing
   const [portText, setPortText] = useState(String(w.telemetryPort));
+  const portRef = useRef<HTMLInputElement | null>(null);
+  // The port can change elsewhere: follow it, unless the field is being edited
+  useEffect(() => {
+    if (document.activeElement !== portRef.current) setPortText(String(w.telemetryPort));
+  }, [w.telemetryPort]);
 
   const setWheel = useCallback(
     (patch: Partial<WheelSettings>) => onChangeSettings((s) => ({ ...s, wheel: { ...s.wheel, ...patch } })),
@@ -416,63 +466,56 @@ export const WheelStep: React.FC<SetupStepProps> = ({ settings, onChangeSettings
     if (patch) setWheel(patch);
   }, [pads.length, w, setWheel]);
 
-  const calAllRef = useRef(calAllSeq);
-  calAllRef.current = calAllSeq;
-
-  const calibratingRef = useRef(calibrating);
-  calibratingRef.current = calibrating;
-  const onSteer = useCallback((steer: AxisBinding) => {
-    if (calibratingRef.current !== "steer") return;
-    setWheel({ steer });
-    if (calAllRef.current) {
-      setCalibrating("throttle");
-    } else {
-      setCalibrating(null);
-    }
-  }, [setWheel]);
+  const onSteer = useCallback(
+    (steer: AxisBinding) => {
+      const m = modeRef.current;
+      if (m.kind !== "calibrating" || m.target !== "steer") return;
+      setWheel({ steer });
+      setMode(m.all ? { kind: "calibrating", target: "throttle", all: true } : IDLE);
+    },
+    [setWheel, setMode]
+  );
   const onPedal = useCallback(
     (target: "throttle" | "brake", b: PedalBinding) => {
       // The result belongs to the calibrator that measured it: a late frame from the throttle step must never land on
       // the brake once the wizard has moved on (that bound both pedals to the throttle's axis)
-      if (target !== calibratingRef.current) return;
+      const m = modeRef.current;
+      if (m.kind !== "calibrating" || m.target !== target) return;
       if (target === "throttle") {
         setWheel({ throttle: b });
-        if (calAllRef.current) {
-          setCalibrating("brake");
-          return;
-        }
+        setMode(m.all ? { kind: "calibrating", target: "brake", all: true } : IDLE);
+        return;
       }
-      if (target === "brake") {
-        setWheel({ brake: b });
-        setCalAllSeq(false);
-      }
-      setCalibrating(null);
+      setWheel({ brake: b });
+      setMode(IDLE);
     },
-    [setWheel]
+    [setWheel, setMode]
   );
   const onCancelCal = useCallback(() => {
-    setCalAllSeq(false);
-    setCalibrating(null);
-  }, []);
+    if (modeRef.current.kind === "calibrating") setMode(IDLE);
+  }, [setMode]);
 
   const onButton = useCallback(
     (b: ButtonBinding) => {
-      if (!capturing) return;
+      const m = modeRef.current;
+      if (m.kind !== "capturing") return;
       onChangeSettings((s) => {
         const buttons = { ...s.wheel.buttons };
         for (const k of Object.keys(buttons) as PadAction[]) {
           const cur = buttons[k];
           if (cur && cur.padId === b.padId && cur.button === b.button) buttons[k] = null;
         }
-        buttons[capturing] = b;
+        buttons[m.action] = b;
         return { ...s, wheel: { ...s.wheel, buttons } };
       });
-      setCapturing(null);
+      setMode(IDLE);
     },
-    [capturing, onChangeSettings]
+    [onChangeSettings, setMode]
   );
-  const onCancelCapture = useCallback(() => setCapturing(null), []);
-  useButtonCapture(capturing !== null, onButton, onCancelCapture);
+  const onCancelCapture = useCallback(() => {
+    if (modeRef.current.kind === "capturing") setMode(IDLE);
+  }, [setMode]);
+  useButtonCapture(capturing, onButton, onCancelCapture);
 
   // Axes already taken, so the next calibration ignores them
   const excludeFor = useCallback(
@@ -497,11 +540,8 @@ export const WheelStep: React.FC<SetupStepProps> = ({ settings, onChangeSettings
             {bound ? `${shortPad(bound.padId)} · axis ${bound.axis}` : "not set"}
           </span>
           <SolidPill
-            disabled={calibrating !== null && calibrating !== target}
-            onClick={() => {
-              setCalAllSeq(false);
-              setCalibrating(calibrating === target ? null : target);
-            }}
+            disabled={capturing !== null || (calibrating !== null && calibrating !== target)}
+            onClick={() => setMode(calibrating === target ? IDLE : { kind: "calibrating", target, all: false })}
             className={calibrating === target ? "lc-listen" : ""}
           >
             {bound ? "Recalibrate" : "Calibrate"}
@@ -555,10 +595,8 @@ export const WheelStep: React.FC<SetupStepProps> = ({ settings, onChangeSettings
           action={
             <SolidPill
               tone="volt"
-              onClick={() => {
-                setCalAllSeq(true);
-                setCalibrating("steer");
-              }}
+              disabled={mode.kind !== "idle"}
+              onClick={() => setMode({ kind: "calibrating", target: "steer", all: true })}
             >
               Calibrate all
             </SolidPill>
@@ -690,8 +728,9 @@ export const WheelStep: React.FC<SetupStepProps> = ({ settings, onChangeSettings
                   <button
                     type="button"
                     aria-label={b || listening ? undefined : `Bind ${label}`}
-                    onClick={() => setCapturing(listening ? null : id)}
-                    className={`${bindKeyClass(listening ? "listening" : b ? "bound" : "empty", "min-w-[96px]")} h-[32px]! text-[11px]!`}
+                    disabled={calibrating !== null}
+                    onClick={() => setMode(listening ? IDLE : { kind: "capturing", action: id })}
+                    className={`${bindKeyClass(listening ? "listening" : b ? "bound" : "empty", "min-w-[96px]")} h-[32px]! text-[11px]! disabled:cursor-not-allowed disabled:opacity-30`}
                   >
                     {listening ? "PRESS…" : b ? `Button ${b.button}` : "+"}
                   </button>
@@ -700,7 +739,7 @@ export const WheelStep: React.FC<SetupStepProps> = ({ settings, onChangeSettings
             })}
           </AutoGrid>
           {capturing ? (
-            <StatusPill tone="live">Press a button on any device · Esc cancels</StatusPill>
+            <StatusPill tone="live">Press a button on any device · Esc cancels · stops after {CAPTURE_TIMEOUT_S} s</StatusPill>
           ) : (
             <Hint>Gear paddles and a pause button are the essentials.</Hint>
           )}
@@ -893,6 +932,7 @@ export const WheelStep: React.FC<SetupStepProps> = ({ settings, onChangeSettings
             <div className={`flex items-center justify-between gap-3 px-2 ${w.telemetryOut ? "" : "opacity-40"}`}>
               <span className="font-f1-mono text-[11px] font-bold text-[#8E96AA]">UDP port</span>
               <input
+                ref={portRef}
                 type="number"
                 inputMode="numeric"
                 min={1024}

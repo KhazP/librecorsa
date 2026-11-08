@@ -42,28 +42,25 @@ const DEVICES: {
 /** Step 1: how the player drives. A connected controller or wheel is detected and preselected. */
 export const DeviceStep: React.FC<
   SetupStepProps & {
-    autoDetect: boolean;
     /** Set once the player picks a device; owned by the wizard, so it survives this step unmounting (Next, Back) */
     pickedRef: React.MutableRefObject<boolean>;
   }
-> = ({ settings, onChangeSettings, autoDetect, pickedRef }) => {
+> = ({ settings, onChangeSettings, pickedRef }) => {
   const pads = useGamepads();
   const choose = (device: InputDevice) => onChangeSettings((s) => ({ ...s, device }));
-  if (!autoDetect) pickedRef.current = true;
-  const touched = pickedRef;
   // The controller whose button map is open (by pad id), if any
   const [mapFor, setMapFor] = useState<string | null>(null);
 
   // Preselect what is plugged in, until the player picks something themselves
   const detected: InputDevice | null = pads.length ? (pads.some(isLikelyWheel) ? "wheel" : "controller") : null;
   useEffect(() => {
-    if (!touched.current && detected && detected !== settings.device) {
+    if (!pickedRef.current && detected && detected !== settings.device) {
       onChangeSettings((s) => ({ ...s, device: detected }));
     }
   }, [detected, settings.device, onChangeSettings]);
 
   const pick = (device: InputDevice) => {
-    touched.current = true;
+    pickedRef.current = true;
     choose(device);
   };
 

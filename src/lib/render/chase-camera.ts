@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { carJumped } from "./camera-rig";
 
 const DEG2RAD = Math.PI / 180;
 const TWO_PI = Math.PI * 2;
@@ -105,10 +106,17 @@ export class DynamicChaseCamera {
   private prevRawVertG = 0;
   private hpfVertG = 0;
   private initialised = false;
+  /** Where the car was at the last update, to notice frames this camera missed (another camera was on) */
+  private readonly lastCarPos = new THREE.Vector3();
 
   update(dt: number, input: ChaseCameraInput): ChaseCameraOutput {
     const out = this.out;
     const h = dt > 0 && Number.isFinite(dt) ? Math.min(dt, 0.05) : 0;
+
+    // Updated only while the chase camera is on: a car that has moved further than one frame allows since the last
+    // update (another camera was on, a teleport) starts the camera over from its pose rather than from stale smoothing
+    if (this.initialised && carJumped(this.lastCarPos, input.carPos, input.carVelocity, dt)) this.initialised = false;
+    this.lastCarPos.copy(input.carPos);
 
     this.carRight.set(-1, 0, 0).applyQuaternion(input.carQuaternion);
     this.carUp.set(0, 1, 0).applyQuaternion(input.carQuaternion);

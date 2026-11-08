@@ -106,6 +106,9 @@ export function stepWindscreenWipers(
     if (Math.floor(prev * 2) !== Math.floor(state.wiperPhase * 2)) {
       state.dropletDensity *= 0.15;
     }
+  } else if (state.wiperPhase > 0) {
+    // Switched off with the blade still at park (phase ≤ 0.01): it settles there rather than staying a hair off it
+    state.wiperPhase = 0;
   }
   return state;
 }
@@ -123,7 +126,6 @@ uniform float uTime;
 uniform float uDroplets;
 uniform float uSpray;
 uniform float uSpeedNorm;
-uniform float uWiperPhase;
 uniform vec3 uTint;
 varying vec2 vUv;
 
@@ -232,7 +234,6 @@ export function createRainFx(scene: THREE.Scene): RainFx {
       uDroplets: { value: 0 },
       uSpray: { value: 0 },
       uSpeedNorm: { value: 0 },
-      uWiperPhase: { value: 0 },
       uTint: { value: new THREE.Color(0xdbe4ee) },
     },
     transparent: true,
@@ -279,7 +280,6 @@ export function createRainFx(scene: THREE.Scene): RainFx {
         visorMat.uniforms.uDroplets.value = windscreenState.dropletDensity;
         visorMat.uniforms.uSpray.value = spray;
         visorMat.uniforms.uSpeedNorm.value = THREE.MathUtils.clamp(carSpeedMs / 80, 0, 1);
-        visorMat.uniforms.uWiperPhase.value = windscreenState.wiperPhase;
         visorTint.copy(baseColor).multiplyScalar(THREE.MathUtils.clamp(0.45 + 0.55 * brightness, 0.25, 1));
       }
 

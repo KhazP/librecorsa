@@ -10,8 +10,10 @@
  */
 import { readFileSync } from 'node:fs';
 import * as THREE from 'three';
-import { getActiveTrackData, setActiveTrack } from '../src/lib/track-data';
+import { getActiveTrackData, setActiveTrack, type BuiltTrackData } from '../src/lib/track-data';
 import { SegmentOccluder } from '../src/lib/render/segment-occluder';
+import { TracksideBroadcastDirector } from '../src/lib/render/camera-rig';
+import type { TrackSamplePoint } from '../src/types/f1';
 import { loadGlbGeometry } from './lib/glb-geometry';
 
 const SIDES = [THREE.FrontSide, THREE.DoubleSide, THREE.BackSide] as const;
@@ -88,4 +90,51 @@ for (const id of ['yas_marina', 'rwanda']) {
   );
 }
 console.log(failed ? `${failed} circuit(s) failed.` : 'The sight-line index answers as the Raycaster does.');
+
+// The director on a synthetic ring: a station the occlusion pass moves while it is on air cuts to its new place, and
+// a car that moved further than a frame allows since the last update (another camera was on) starts it over
+{
+  const R = 640;
+  const L = 2 * Math.PI * R;
+  const N = 2000;
+  // Constant right-hand curvature: every station watches from the inside of the ring (32 m in)
+  const samples = Array.from({ length: N }, (_, i) => {
+    const a = (i / N) * 2 * Math.PI;
+    const outward = new THREE.Vector3(Math.cos(a), 0, Math.sin(a));
+    return { position: outward.clone().multiplyScalar(R), binormal: outward, curvature: 1 / R } as unknown as TrackSamplePoint;
+  });
+  const director = new TracksideBroadcastDirector({ samples, totalLengthM: L } as unknown as BuiltTrackData);
+  const vel = new THREE.Vector3();
+  const frame = (s: number) => {
+    const a = (s / L) * 2 * Math.PI;
+    vel.set(-Math.sin(a), 0, Math.cos(a)).multiplyScalar(60);
+    const pos = new THREE.Vector3(Math.cos(a), 0, Math.sin(a)).multiplyScalar(R);
+    const out = director.update(1 / 60, pos, s, vel, false);
+    return { cut: out.cut, radius: Math.hypot(out.position.x, out.position.z), index: out.cameraIndex };
+  };
+  // A wall 26 m inside the ring blocks every inside station; the first alternative (the outside, 32 m out) is clear
+  const wall = new THREE.Mesh(new THREE.CylinderGeometry(R - 26, R - 26, 40, 256, 1, true), new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }));
+  wall.position.y = 10;
+  const ring = new THREE.Group();
+  ring.add(wall);
+  ring.updateMatrixWorld(true);
+
+  let directorFailed = 0;
+  const expect = (ok: boolean, what: string) => {
+    if (!ok) directorFailed++;
+    console.log(`${ok ? 'PASS' : 'FAIL'}  director: ${what}`);
+  };
+  const first = frame(100);
+  expect(first.cut && first.radius < R, 'primes with a cut, inside the ring');
+  expect(!frame(101).cut, 'then glides');
+  let moved = 0;
+  for (const m of director.occlusionSteps(ring)) moved = m;
+  const recut = frame(102);
+  expect(moved > 0 && recut.cut && recut.radius > R, `the station on air moved outside (${moved} moved): a cut, not a glide`);
+  expect(!frame(103).cut, 'then glides again');
+  const jumped = frame(109);
+  expect(jumped.cut && jumped.index === recut.index, 'a 6 m jump (frames it did not see) starts over on the same station, with a cut');
+  expect(!frame(110).cut, 'then glides again');
+  if (directorFailed) failed++;
+}
 process.exit(failed ? 1 : 0);

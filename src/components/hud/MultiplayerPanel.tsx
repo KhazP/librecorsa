@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Check, ChevronDown, Copy, Crown, Minus, Pencil, Play, Plus, Share2 } from "lucide-react";
 import {
   hasTurnServer,
@@ -66,6 +66,45 @@ const CLASS_OPTIONS: { value: CarClassRule; label: string }[] = [
 const trackName = (id: string) => TRACKS.find((t) => t.id === id)?.name ?? id;
 const optionLabel = <T extends string>(options: { value: T; label: string }[], value: T) =>
   options.find((o) => o.value === value)?.label ?? value;
+
+/** How long the ready button waits for the host to echo a change before it shows the lobby's value again */
+const READY_ECHO_MS = 3000;
+
+/** A confirmation that shows for `ms` ("Link copied"): re-arming restarts it, and it never fires after unmount */
+function useFlash(ms: number): [on: boolean, show: () => void, cancel: () => void] {
+  const [on, setOn] = useState(false);
+  const timer = useRef<number | null>(null);
+  const cancel = useCallback(() => {
+    if (timer.current !== null) window.clearTimeout(timer.current);
+    timer.current = null;
+    setOn(false);
+  }, []);
+  const show = useCallback(() => {
+    if (timer.current !== null) window.clearTimeout(timer.current);
+    setOn(true);
+    timer.current = window.setTimeout(() => {
+      timer.current = null;
+      setOn(false);
+    }, ms);
+  }, [ms]);
+  useEffect(
+    () => () => {
+      if (timer.current !== null) window.clearTimeout(timer.current);
+    },
+    []
+  );
+  return [on, show, cancel];
+}
+
+/**
+ * The manual (no broker) connection, one step at a time: the host creates an offer (1), the guest pastes it and gets an
+ * answer (2), the host pastes that answer (3). Each step is only open to the side and the stage it belongs to.
+ */
+type ManualSdp =
+  | { stage: "idle" }
+  | { stage: "offered"; token: string }
+  | { stage: "answered"; token: string }
+  | { stage: "accepted" };
 
 /** Ping chip tint: green under 80 ms, amber under 160 ms, else crimson */
 const pingChip = (ms: number) =>
@@ -159,7 +198,6 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
   onAcceptManualAnswer,
   lobby,
   localPeerId,
-  isHost = false,
   peerStats,
   profile,
   currentTrackId,
@@ -178,14 +216,16 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
 }) => {
   // Connect box
   const [roomCodeInput, setRoomCodeInput] = useState(initialRoomCode);
-  const [copiedLink, setCopiedLink] = useState(false);
+  const [copiedLink, flashCopiedLink] = useFlash(2000);
   const [canShare, setCanShare] = useState(false);
 
   // Manual connection (advanced)
   const [sdpInput, setSdpInput] = useState("");
-  const [generatedToken, setGeneratedToken] = useState("");
-  const [copiedToken, setCopiedToken] = useState(false);
+  const [sdp, setSdp] = useState<ManualSdp>({ stage: "idle" });
+  const [sdpError, setSdpError] = useState("");
+  const [copiedToken, flashCopiedToken, cancelCopiedToken] = useFlash(1800);
   const [sdpBusy, setSdpBusy] = useState(false);
+  const generatedToken = sdp.stage === "offered" || sdp.stage === "answered" ? sdp.token : "";
 
   // TURN relay (advanced)
   const [advancedOpen, setAdvancedOpen] = useState(false);
@@ -194,11 +234,12 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
   const [turnCred, setTurnCred] = useState("");
   const [turnConfigured, setTurnConfigured] = useState(false);
   const [turnError, setTurnError] = useState("");
-  const [turnSaved, setTurnSaved] = useState(false);
+  const [turnSaved, flashTurnSaved, cancelTurnSaved] = useFlash(1800);
 
-  // Ready toggle: mirrors this player's lobby entry, and applies immediately when pressed
+  // Ready toggle: the lobby's value, except for a few seconds after a press while the host has not echoed it yet
   const serverReady = lobby?.players.find((p) => p.peerId === localPeerId)?.ready ?? false;
-  const [ready, setReadyLocal] = useState(serverReady);
+  const [pendingReady, setPendingReady] = useState<boolean | null>(null);
+  const ready = pendingReady ?? serverReady;
 
   // Browser-only values are read after mount so server and client markup match
   useEffect(() => {
@@ -212,20 +253,38 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
     setCanShare(typeof navigator !== "undefined" && typeof navigator.share === "function");
   }, []);
 
+  // The host echoed the press (the lobby now agrees), or never did: either way the lobby's value shows again
   useEffect(() => {
-    setReadyLocal(serverReady);
-  }, [serverReady]);
+    if (pendingReady === null) return;
+    if (pendingReady === serverReady) {
+      setPendingReady(null);
+      return;
+    }
+    const id = window.setTimeout(() => setPendingReady(null), READY_ECHO_MS);
+    return () => window.clearTimeout(id);
+  }, [pendingReady, serverReady]);
 
-  const runSdp = async (fn: () => Promise<void>) => {
+  /** Runs one manual step; a failure shows under the steps instead of being lost */
+  const runSdp = async (fn: () => Promise<void>, failText: string) => {
     setSdpBusy(true);
+    setSdpError("");
     try {
       await fn();
+    } catch {
+      setSdpError(failText);
     } finally {
       setSdpBusy(false);
     }
   };
+  const resetSdp = () => {
+    setSdp({ stage: "idle" });
+    setSdpInput("");
+    setSdpError("");
+    cancelCopiedToken();
+  };
 
-  const activeCode = (p2pStatus?.roomCode || roomCodeInput.trim()).replace(/^(RWA|LC)-/i, "").toUpperCase();
+  // Only a room this player hosts or has joined can be shared, never a code still being typed
+  const activeCode = (p2pStatus?.roomCode ?? "").replace(/^(RWA|LC)-/i, "").toUpperCase();
 
   const getInviteUrl = (): string | null => {
     if (!activeCode || typeof window === "undefined") return null;
@@ -236,8 +295,7 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
     const url = getInviteUrl();
     if (!url) return;
     navigator.clipboard?.writeText(url).catch(() => undefined);
-    setCopiedLink(true);
-    setTimeout(() => setCopiedLink(false), 2000);
+    flashCopiedLink();
   };
 
   const shareInvite = async () => {
@@ -252,7 +310,7 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
 
   const toggleReady = () => {
     const next = !ready;
-    setReadyLocal(next);
+    setPendingReady(next);
     onSetReady?.(next);
   };
 
@@ -273,8 +331,7 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
       credential: turnCred || undefined,
     });
     setTurnConfigured(hasTurnServer());
-    setTurnSaved(true);
-    setTimeout(() => setTurnSaved(false), 1800);
+    flashTurnSaved();
   };
 
   const clearTurn = () => {
@@ -283,6 +340,7 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
     setTurnUser("");
     setTurnCred("");
     setTurnError("");
+    cancelTurnSaved();
     setTurnConfigured(hasTurnServer());
   };
 
@@ -296,8 +354,10 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
 
   const renderLobby = (state: LobbyState) => {
     const settings = state.settings;
-    const hostPlayer = state.players.find((p) => p.peerId === state.hostId);
-    const isHostPlayer = (p: LobbyPlayer) => p.isHost || p.peerId === state.hostId;
+    // Who hosts comes from one place, the lobby's host id: the crown, "You are host" and the host's controls agree
+    const isHostPlayer = (p: LobbyPlayer) => p.peerId === state.hostId;
+    const hostPlayer = state.players.find(isHostPlayer);
+    const isHost = localPeerId !== undefined && state.hostId === localPeerId;
 
     // Warnings for this player, compared with the host's race settings
     const trackMismatch = currentTrackId !== undefined && currentTrackId !== settings.trackId;
@@ -632,39 +692,54 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
               <div className="flex flex-col gap-2.5">
                 <span className="lc-title text-[14px] text-[#FFB300]">Manual connection (no broker)</span>
                 <div className="flex flex-wrap items-center gap-2">
+                  {/* A guest that answered an offer does not start one of its own (Start over first) */}
                   <button
                     type="button"
-                    disabled={sdpBusy}
+                    disabled={sdpBusy || sdp.stage === "answered"}
                     onClick={() =>
                       runSdp(async () => {
                         const offer = await onCreateManualOffer?.();
-                        if (offer) setGeneratedToken(offer);
-                      })
+                        if (offer) {
+                          setSdp({ stage: "offered", token: offer });
+                          setSdpInput("");
+                          cancelCopiedToken();
+                        }
+                      }, "Couldn't create an offer. Try again.")
                     }
                     className="inline-flex min-h-9 cursor-pointer items-center rounded-full border border-[#00E5FF]/50 bg-[#00E5FF]/[0.12] px-3.5 text-[12px] font-bold text-[#00E5FF] disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     1 · Create offer (host)
                   </button>
+                  {/* A host waiting on the answer to its own offer does not paste an offer (Start over first) */}
                   <button
                     type="button"
-                    disabled={sdpBusy || !sdpInput.trim()}
+                    disabled={sdpBusy || !sdpInput.trim() || sdp.stage === "offered"}
                     onClick={() =>
                       runSdp(async () => {
                         const ans = await onAcceptManualOffer?.(sdpInput.trim());
-                        if (ans) setGeneratedToken(ans);
-                      })
+                        if (ans) {
+                          setSdp({ stage: "answered", token: ans });
+                          setSdpInput("");
+                          cancelCopiedToken();
+                        }
+                      }, "That offer didn't work. Check you pasted all of it.")
                     }
                     className="inline-flex min-h-9 cursor-pointer items-center rounded-full border border-[#FFB300]/50 bg-[#FFB300]/[0.12] px-3.5 text-[12px] font-bold text-[#FFB300] disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     2 · Paste offer, get answer
                   </button>
+                  {/* Only the host that made the offer accepts an answer */}
                   <button
                     type="button"
-                    disabled={sdpBusy || !sdpInput.trim()}
+                    disabled={sdpBusy || !sdpInput.trim() || sdp.stage !== "offered"}
                     onClick={() =>
                       runSdp(async () => {
-                        await onAcceptManualAnswer?.(sdpInput.trim());
-                      })
+                        const ok = await onAcceptManualAnswer?.(sdpInput.trim());
+                        if (ok === false) throw new Error("answer refused");
+                        setSdp({ stage: "accepted" });
+                        setSdpInput("");
+                        cancelCopiedToken();
+                      }, "That answer didn't work. Check you pasted all of it.")
                     }
                     className="inline-flex min-h-9 cursor-pointer items-center rounded-full border border-[#00E676]/50 bg-[#00E676]/[0.12] px-3.5 text-[12px] font-bold text-[#00E676] disabled:cursor-not-allowed disabled:opacity-40"
                   >
@@ -674,11 +749,22 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
                 <input
                   type="text"
                   value={sdpInput}
-                  onChange={(e) => setSdpInput(e.target.value)}
+                  onChange={(e) => {
+                    setSdpInput(e.target.value);
+                    setSdpError("");
+                  }}
                   placeholder="Paste the other player's token here"
                   aria-label="Connection token"
                   className={inputClass}
                 />
+                {sdpError ? (
+                  <p role="alert" className="m-0 text-[12px] font-semibold text-[#FF2A3C]">
+                    {sdpError}
+                  </p>
+                ) : null}
+                {sdp.stage === "accepted" ? (
+                  <p className="m-0 text-[12px] font-semibold text-[#00E676]">Answer accepted. Connecting…</p>
+                ) : null}
                 {generatedToken ? (
                   <div className="flex items-center gap-2">
                     <input
@@ -692,8 +778,7 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
                       type="button"
                       onClick={() => {
                         navigator.clipboard?.writeText(generatedToken).catch(() => undefined);
-                        setCopiedToken(true);
-                        setTimeout(() => setCopiedToken(false), 1800);
+                        flashCopiedToken();
                       }}
                       className="inline-flex h-11 shrink-0 cursor-pointer items-center gap-1.5 rounded-full bg-[#00E676] px-4 text-[13px] font-bold text-[#08090D]"
                     >
@@ -701,6 +786,16 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
                       {copiedToken ? "Copied" : "Copy"}
                     </button>
                   </div>
+                ) : null}
+                {sdp.stage !== "idle" ? (
+                  <button
+                    type="button"
+                    disabled={sdpBusy}
+                    onClick={resetSdp}
+                    className="self-start cursor-pointer text-[12px] font-semibold text-[#8E96AA] hover:text-[#CCFF00] disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Start over
+                  </button>
                 ) : null}
               </div>
 
@@ -714,7 +809,10 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
                   <input
                     type="text"
                     value={turnUrl}
-                    onChange={(e) => setTurnUrl(e.target.value)}
+                    onChange={(e) => {
+                      setTurnUrl(e.target.value);
+                      setTurnError("");
+                    }}
                     placeholder="turn:host:3478"
                     aria-label="TURN URL"
                     autoComplete="off"

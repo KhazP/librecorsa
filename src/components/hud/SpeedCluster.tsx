@@ -3,6 +3,8 @@
 import React from "react";
 import type { CarTelemetry } from "@/types/f1";
 import {
+  aidsActive,
+  atShiftPoint,
   revRangeFor,
   HUD_CYAN,
   HUD_GLASS,
@@ -15,6 +17,7 @@ import {
   HUD_WHITE,
 } from "./hud-format";
 import { AidLamp } from "./F12026ChannelsPanel";
+import { aeroReadout } from "./aero-label";
 
 /** Rev lights: 15 LEDs over the top end of the rev range (Emerald → Corsa Volt → Monza Rosso → Cyan flash) */
 const REV_LEDS = 15;
@@ -25,6 +28,7 @@ const ledColor = (i: number) =>
 
 interface SpeedClusterProps {
   telemetry: CarTelemetry;
+  /** The player's boost latch. The button shows what the physics reports (`manualOverrideActive`), not the request */
   boostLatch: boolean;
   onToggleBoostLatch: () => void;
   onToggleXMode: () => void;
@@ -54,7 +58,6 @@ const InputBar: React.FC<{ label: string; pct: number; color: string; labelColor
 /** Bottom-right LibreCorsa MoTeC-style digital dash pod: rev lights, gear, speed, pedals/FFB, ERS and aero state */
 export const SpeedCluster: React.FC<SpeedClusterProps> = ({
   telemetry,
-  boostLatch,
   onToggleBoostLatch,
   onToggleXMode,
   variant = "full",
@@ -64,17 +67,20 @@ export const SpeedCluster: React.FC<SpeedClusterProps> = ({
   const [revStart, revFull] = revRangeFor(channels?.carId);
   const hasErs = channels?.hasErs ?? true;
   const lit = Math.round(((telemetry.rpm - revStart) / (revFull - revStart)) * REV_LEDS);
-  const flash = telemetry.rpm > revFull;
+  const flash = atShiftPoint(telemetry.rpm, revFull);
   const gear = telemetry.gear === 0 ? "N" : telemetry.gear < 0 ? "R" : String(telemetry.gear);
-  const xMode = telemetry.activeAeroMode === "X_MODE";
+  // The flaps as every panel names them (era from the car's overtaking rules, "armed" from its DRS channel)
+  const aero = aeroReadout(telemetry);
+  const xMode = aero.open;
   // A 2026 car opens both flaps in every zone (X-mode) and earns Overtake; an older one has the rear-flap DRS
   const straightMode = telemetry.overtakingRules === "straight-mode-2026";
-  const drs = channels?.hasDrs ? channels : null;
   const hasAero = !channels || channels.hasDrs;
+  const aids = aidsActive(telemetry);
 
-  const boost = telemetry.manualOverrideActive || boostLatch;
   /** In a race a 2026 car's override (Overtake Mode) is only there once earned within 1 s at the detection point */
   const overtakeLocked = straightMode && telemetry.overtakeAvailable === false;
+  // What the physics reports, with locked first: a latch the physics refuses never lights the button
+  const boost = !overtakeLocked && telemetry.manualOverrideActive;
   const ers = Math.max(0, Math.min(100, telemetry.ersBatteryPercent));
   const deploying = telemetry.mgukPowerKw > 5;
   const harvesting = telemetry.mgukPowerKw < -5;
@@ -82,21 +88,10 @@ export const SpeedCluster: React.FC<SpeedClusterProps> = ({
   const speed = Math.round(telemetry.speedKmh);
   const latG = Math.abs(telemetry.lateralG).toFixed(1);
 
-  const aeroOn = (drs && (xMode || drs.drsAvailable)) || (!drs && xMode);
-  const aeroBg = xMode ? HUD_CYAN : drs?.drsAvailable ? HUD_VOLT : "#1B1F2B";
+  const aeroOn = aero.open || aero.armed;
+  const aeroBg = aero.open ? HUD_CYAN : aero.armed ? HUD_VOLT : "#1B1F2B";
   const aeroTextColor = aeroOn ? "#08090D" : HUD_SLATE;
-  const aeroLabel =
-    drs && !straightMode
-      ? xMode
-        ? "DRS OPEN"
-        : drs.drsAvailable
-          ? "DRS ARMED"
-          : "DRS"
-      : xMode
-        ? "X-MODE"
-        : drs?.drsAvailable
-          ? "X ARMED"
-          : "Z-MODE";
+  const aeroLabel = aero.label;
   const ersColor = boost ? HUD_PURPLE : deploying ? HUD_VOLT : harvesting ? HUD_GREEN : HUD_WHITE;
   const ersLabel = harvesting ? "Harvest" : deploying ? "Deploy" : "ERS SOC";
 
@@ -121,8 +116,8 @@ export const SpeedCluster: React.FC<SpeedClusterProps> = ({
     <>
       {channels && !hasAero ? (
         <>
-          <AidLamp label="TC" active={channels.tcActive} />
-          <AidLamp label="ABS" active={channels.absActive} />
+          <AidLamp label="TC" active={aids.tc} />
+          <AidLamp label="ABS" active={aids.abs} />
         </>
       ) : (
         <button
@@ -131,7 +126,7 @@ export const SpeedCluster: React.FC<SpeedClusterProps> = ({
           className="lc-data pointer-events-auto cursor-pointer rounded-full px-2.5 py-1 text-[11px] transition-colors"
           style={{ backgroundColor: aeroBg, color: aeroTextColor }}
           title={
-            drs && !straightMode
+            telemetry.overtakingRules === "drs-rear"
               ? "DRS (X): rear flap, in a DRS zone; in a race only within 1 s of the car ahead at the detection point, from lap 3"
               : "Straight Mode (X): both flaps open in any DRS zone"
           }

@@ -69,6 +69,8 @@ export interface LeaderboardPanelProps {
   /** Assists, realism and surface of the online board shown ("No assists · Full · Dry") */
   remoteBoardLabel?: string;
   loading: boolean;
+  /** The last fetch of the online board failed (the times shown, if any, are older ones) */
+  error?: boolean;
   onRefresh: () => void;
   onRaceGhost?: (entry: LeaderboardEntry) => void;
   onImportGhost?: (file: File) => void;
@@ -88,6 +90,7 @@ export const LeaderboardPanel: React.FC<LeaderboardPanelProps> = ({
   remoteEnabled,
   remoteBoardLabel,
   loading,
+  error = false,
   onRefresh,
   onRaceGhost,
   onImportGhost,
@@ -180,9 +183,19 @@ export const LeaderboardPanel: React.FC<LeaderboardPanelProps> = ({
             </p>
           ) : loading && remoteSorted.length === 0 ? (
             <p className="m-0 px-1 py-2 text-[13px] text-[#8E96AA]">Loading online times…</p>
+          ) : error && remoteSorted.length === 0 ? (
+            <p role="alert" className="m-0 px-1 py-2 text-[13px] text-[#FF2A3C]">
+              Couldn&apos;t load the online times. Check your connection and press Refresh.
+            </p>
           ) : remoteSorted.length === 0 ? (
             <p className="m-0 px-1 py-2 text-[13px] text-[#8E96AA]">No online times for this track yet.</p>
           ) : (
+            <>
+            {error && !loading ? (
+              <p role="alert" className="m-0 px-1 pb-1 text-[12px] text-[#FFB300]">
+                Couldn&apos;t refresh. These are the last times loaded.
+              </p>
+            ) : null}
             <ol className="m-0 flex list-none flex-col gap-0.5 p-0">
               {remoteSorted.map((e, i) => (
                 <LeaderRow
@@ -194,6 +207,7 @@ export const LeaderboardPanel: React.FC<LeaderboardPanelProps> = ({
                 />
               ))}
             </ol>
+            </>
           )}
           {remoteEnabled && (onExportDriverKey || onImportDriverKey) ? (
             <div className="mt-1.5 flex flex-col gap-2.5 border-t border-[#262B3D] pt-3.5">

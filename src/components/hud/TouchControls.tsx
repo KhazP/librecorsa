@@ -17,6 +17,7 @@ import {
   HUD_VOLT,
   HUD_WHITE,
 } from "./hud-format";
+import { useHudMode } from "./hud-mode";
 
 /** Finger travel from the touch-down point that gives full steering lock, as a fraction of window width */
 const STEER_SPAN_VW = 0.18;
@@ -50,6 +51,14 @@ const LABEL = "font-f1-mono text-[10px] font-extrabold tracking-[0.16em] upperca
 const edge = (side: "top" | "right" | "bottom" | "left", px: number) =>
   `calc(env(safe-area-inset-${side}, 0px) + ${px}px)`;
 
+/** True where the browser asks the player before it sends tilt (iOS); elsewhere tilt simply arrives */
+function tiltNeedsPermission(): boolean {
+  return (
+    typeof DeviceOrientationEvent !== "undefined" &&
+    typeof (DeviceOrientationEvent as unknown as { requestPermission?: unknown }).requestPermission === "function"
+  );
+}
+
 /** Screen orientation angle in degrees, with the legacy window.orientation fallback */
 function currentOrientationAngle(): number {
   if (typeof window === "undefined") return 0;
@@ -62,13 +71,20 @@ function currentOrientationAngle(): number {
 interface SteerPadProps {
   value: number;
   onChange: (v: number) => void;
+  /** Hidden under the pause menu or a replay: a finger still down is let go */
+  suspended: boolean;
 }
 
 /** Horizontal steering slider: the finger's travel from its touch-down point maps to −1..1 */
-const SteerPad: React.FC<SteerPadProps> = ({ value, onChange }) => {
+const SteerPad: React.FC<SteerPadProps> = ({ value, onChange, suspended }) => {
   const pid = useRef<number | null>(null);
   const origin = useRef(0);
 
+  useEffect(() => {
+    if (!suspended) return;
+    pid.current = null;
+    onChange(0);
+  }, [suspended, onChange]);
   useEffect(
     () => () => {
       if (pid.current !== null) onChange(0);
@@ -208,11 +224,19 @@ interface PedalProps {
   color: string;
   value: number;
   onChange: (v: number) => void;
+  /** Hidden under the pause menu or a replay: a finger still down is let go */
+  suspended: boolean;
 }
 
 /** Vertical pedal: the finger's height on the pedal (bottom 0 → top 1) is the input */
-const Pedal: React.FC<PedalProps> = ({ label, color, value, onChange }) => {
+const Pedal: React.FC<PedalProps> = ({ label, color, value, onChange, suspended }) => {
   const pid = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!suspended) return;
+    pid.current = null;
+    onChange(0);
+  }, [suspended, onChange]);
 
   useEffect(
     () => () => {
@@ -349,13 +373,21 @@ export const TouchControls: React.FC<TouchControlsProps> = ({
   onCycleCamera,
 }) => {
   const [vis, setVis] = useState<Visual>({ steer: 0, throttle: 0, brake: 0 });
-  const [tiltStatus, setTiltStatus] = useState<TiltStatus>("off");
+  // The one source for tilt: the label shows it and the orientation listener only steers while it is "ready".
+  // `statusRef` mirrors it for the same-event guard (a first tap on Recentre reaches both tap handlers before a render)
+  const [tiltStatus, setTiltStatusState] = useState<TiltStatus>("off");
+  const statusRef = useRef<TiltStatus>("off");
+  const setTiltStatus = useCallback((s: TiltStatus) => {
+    statusRef.current = s;
+    setTiltStatusState(s);
+  }, []);
+  // Paused or in a replay the overlay stays mounted (tilt keeps its permission) but drives nothing
+  const suspended = useHudMode() === "hidden";
 
   const live = useRef<Visual>({ steer: 0, throttle: 0, brake: 0 });
   const frame = useRef<number | null>(null);
   const tiltOffset = useRef({ beta: 0, gamma: 0 });
   const tiltNeedsZero = useRef(true);
-  const requesting = useRef(false);
 
   /** Coalesce visual updates into one React render per animation frame */
   const schedule = useCallback(() => {
@@ -382,43 +414,54 @@ export const TouchControls: React.FC<TouchControlsProps> = ({
   const setThrottle = useCallback((v: number) => write("throttle", v), [write]);
   const setBrake = useCallback((v: number) => write("brake", v), [write]);
 
-  /** Mark the overlay active for the game loop; clear everything on unmount */
+  /** Mark the overlay active for the game loop while it is shown; clear everything when hidden or unmounted */
   useEffect(() => {
-    touchInput.active = true;
+    if (suspended) {
+      live.current = { steer: 0, throttle: 0, brake: 0 };
+      resetTouchInput();
+      schedule();
+    } else {
+      touchInput.active = true;
+    }
     return () => {
       if (frame.current !== null) cancelAnimationFrame(frame.current);
       frame.current = null;
       resetTouchInput();
     };
-  }, []);
+  }, [suspended, schedule]);
 
-  /** Ask for tilt permission (iOS needs a user gesture); guarded so overlapping taps ask once */
+  /** Ask for tilt permission (iOS needs a user gesture); a request already under way, or granted, is not repeated */
   const enableTilt = useCallback(async () => {
-    if (requesting.current) return;
+    if (statusRef.current === "asking" || statusRef.current === "ready") return;
     if (typeof window === "undefined" || !("DeviceOrientationEvent" in window)) {
       setTiltStatus("unsupported");
       return;
     }
-    requesting.current = true;
     setTiltStatus("asking");
     const ok = await requestTiltPermission();
-    requesting.current = false;
     setTiltStatus(ok ? "ready" : "denied");
-  }, []);
+  }, [setTiltStatus]);
 
-  /** Until tilt is enabled, the first tap anywhere requests permission */
+  /** Where no prompt is needed (Android), tilt is ready at once; with no sensor API it is unsupported */
   useEffect(() => {
-    if (!tiltSteer || tiltStatus !== "off") return;
+    if (!tiltSteer || statusRef.current !== "off") return;
+    if (!("DeviceOrientationEvent" in window)) setTiltStatus("unsupported");
+    else if (!tiltNeedsPermission()) setTiltStatus("ready");
+  }, [tiltSteer, setTiltStatus]);
+
+  /** Until tilt is enabled, the first tap anywhere requests permission (not taps on the pause menu) */
+  useEffect(() => {
+    if (!tiltSteer || tiltStatus !== "off" || suspended) return;
     const onFirstTap = () => {
       void enableTilt();
     };
     window.addEventListener("pointerdown", onFirstTap, { capture: true, once: true });
     return () => window.removeEventListener("pointerdown", onFirstTap, { capture: true });
-  }, [tiltSteer, tiltStatus, enableTilt]);
+  }, [tiltSteer, tiltStatus, suspended, enableTilt]);
 
-  /** Tilt listener: the first sample after enabling (or Recentre) becomes the zero offset */
+  /** Tilt listener, only while tilt is ready and shown: the first sample after enabling (or Recentre) becomes the zero */
   useEffect(() => {
-    if (!tiltSteer) return;
+    if (!tiltSteer || tiltStatus !== "ready" || suspended) return;
     tiltNeedsZero.current = true;
     const onOrientation = (ev: DeviceOrientationEvent) => {
       if (tiltNeedsZero.current) {
@@ -443,12 +486,12 @@ export const TouchControls: React.FC<TouchControlsProps> = ({
       window.removeEventListener("deviceorientation", onOrientation);
       setSteer(0);
     };
-  }, [tiltSteer, tiltRangeDeg, setSteer]);
+  }, [tiltSteer, tiltStatus, suspended, tiltRangeDeg, setSteer]);
 
   const onRecentre = (e: React.PointerEvent<HTMLButtonElement>) => {
     e.preventDefault();
     tiltNeedsZero.current = true;
-    if (tiltStatus !== "ready") void enableTilt();
+    if (statusRef.current === "off" || statusRef.current === "denied") void enableTilt();
   };
 
   return (
@@ -467,7 +510,7 @@ export const TouchControls: React.FC<TouchControlsProps> = ({
         {tiltSteer ? (
           <TiltIndicator value={vis.steer} status={tiltStatus} onRecentre={onRecentre} />
         ) : (
-          <SteerPad value={vis.steer} onChange={setSteer} />
+          <SteerPad value={vis.steer} onChange={setSteer} suspended={suspended} />
         )}
       </div>
 
@@ -514,8 +557,8 @@ export const TouchControls: React.FC<TouchControlsProps> = ({
           />
         </div>
         <div className="flex gap-3 phone:gap-2">
-          <Pedal label="BRAKE" color={HUD_RED} value={vis.brake} onChange={setBrake} />
-          <Pedal label="THROTTLE" color={HUD_GREEN} value={vis.throttle} onChange={setThrottle} />
+          <Pedal label="BRAKE" color={HUD_RED} value={vis.brake} onChange={setBrake} suspended={suspended} />
+          <Pedal label="THROTTLE" color={HUD_GREEN} value={vis.throttle} onChange={setThrottle} suspended={suspended} />
         </div>
       </div>
     </div>

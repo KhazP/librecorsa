@@ -92,6 +92,8 @@ export class LoopVoice {
   private readonly gain: GainNode;
   private silentFor = 0;
   private wasActive = false;
+  /** Detached for good: set() starts nothing any more, even if a late decode hands it a buffer */
+  private disposed = false;
 
   constructor(
     private readonly ctx: AudioContext,
@@ -106,7 +108,7 @@ export class LoopVoice {
   /** Drive the voice; sources are started on demand and stopped after staying silent */
   /** `pitchTau`: time constant of the pitch glide (s); longer than a frame, so the pitch moves smoothly, not in 60 Hz steps */
   public set(target: number, rate: number, now: number, dt: number, tau: number, pitchTau = 0.02): void {
-    if (!this.buffer) return;
+    if (!this.buffer || this.disposed) return;
     const active = target > 1e-4;
     if (active) {
       this.silentFor = 0;
@@ -156,6 +158,8 @@ export class LoopVoice {
   public dispose(): void {
     this.stop();
     this.gain.disconnect();
+    this.disposed = true;
+    this.buffer = null;
   }
 }
 
@@ -256,6 +260,11 @@ export class Vf26SoundBank {
   private tcLevel = 0;
 
   private smoothThrottle = 0;
+  /**
+   * False until the first update and again after `resync()`: that frame only takes the gear and pedal as they are
+   * (no shift, blip or lift is heard from them)
+   */
+  private primed = false;
   private prevThrottle = 0;
   private prevGear = 0;
   private audioRpm = 0;
@@ -398,8 +407,10 @@ export class Vf26SoundBank {
     const fetchDecode = async (job: Job): Promise<boolean> => {
       try {
         const res = await fetchBankFile(withBasePath(this.assetDir + job.file));
-        if (!res.ok) return false;
-        job.assign(await ctx.decodeAudioData(await res.arrayBuffer()));
+        if (!res.ok || this.disposed) return false;
+        const buffer = await ctx.decodeAudioData(await res.arrayBuffer());
+        if (this.disposed) return false;
+        job.assign(buffer);
         return true;
       } catch {
         return false;
@@ -410,7 +421,8 @@ export class Vf26SoundBank {
       let next = 0;
       let failed = 0;
       const worker = async () => {
-        while (next < list.length) {
+        // A disposed bank (the car swapped out, or CarAudio dropping a stale load) fetches and decodes no more files
+        while (next < list.length && !this.disposed) {
           const job = list[next++];
           if (!(await fetchDecode(job))) failed++;
         }
@@ -470,9 +482,18 @@ export class Vf26SoundBank {
     const k = thr > this.smoothThrottle ? 18 : 10;
     this.smoothThrottle += (thr - this.smoothThrottle) * Math.min(1, dt * k);
 
-    // Gear change: upshift ignition cut + pitch drop, or downshift ECU throttle blip + overrun bark
+    // First frame, or the first after a gap (pause, mute, restart): the gear and pedal as they are now
+    const foot = Math.min(1, Math.max(0, inp.pedal ?? thr));
+    if (!this.primed) {
+      this.primed = true;
+      this.prevGear = inp.gear;
+      this.prevThrottle = foot;
+    }
+
+    // Gear change: upshift ignition cut + pitch drop, or downshift ECU throttle blip + overrun bark. Between forward
+    // gears only: into or out of neutral (0) or reverse (-1) is no shift to hear
     if (inp.gear !== this.prevGear) {
-      if (this.prevGear !== 0 && inp.gear > 0) {
+      if (this.prevGear > 0 && inp.gear > 0) {
         const up = inp.gear > this.prevGear;
         if (up) {
           this.upshiftTimer = UPSHIFT_S;
@@ -487,7 +508,8 @@ export class Vf26SoundBank {
           const blipPop = m.lift?.downshiftPopChance ?? 0.5;
           if (blipPop > 0 && inp.throttle < 0.2 && inp.rpm > (m.lift?.popMinRpm ?? 8200)) {
             this.liftTimer = Math.max(this.liftTimer, 0.65);
-            if (Math.random() < blipPop) {
+            // Every pop, like the crackle, waits out the last one's cooldown
+            if (this.popCooldown === 0 && Math.random() < blipPop) {
               this.playOneshot(inp.view === 'int' ? 'backfire_int' : 'pop_ext', 0.42, 0.04 + Math.random() * 0.04);
               this.popCooldown = 0.12;
             }
@@ -572,12 +594,12 @@ export class Vf26SoundBank {
 
     // Lift-off: blow-off valve + overrun backfires / pops
     this.popCooldown = Math.max(0, this.popCooldown - dt);
-    const foot = Math.min(1, Math.max(0, inp.pedal ?? thr));
     const lifted = this.prevThrottle > 0.55 && foot < 0.15;
     if (lifted) {
       this.liftTimer = 0.9;
       if (boost > 0.8) this.playOneshot('blowoff', 0.35 * Math.min(1, boost / 2));
-      if (rpm > (m.lift?.popMinRpm ?? 8500)) {
+      // Not on top of a downshift's pop this frame or a moment ago
+      if (rpm > (m.lift?.popMinRpm ?? 8500) && this.popCooldown === 0) {
         const role = inp.view === 'int' ? 'backfire_int' : Math.random() < 0.5 ? 'backfire_ext' : 'pop_ext';
         const count = 1 + Math.floor(Math.random() * 3);
         for (let i = 0; i < count; i++) this.playOneshot(role, 0.4, i * (0.06 + Math.random() * 0.09));
@@ -608,6 +630,17 @@ export class Vf26SoundBank {
     }
   }
 
+  /**
+   * After a gap in the updates (pause, mute, a restart): the next frame re-reads the gear and pedal instead of
+   * hearing a shift or a lift from the values before the gap, and the shift and lift envelopes of before it end
+   */
+  public resync(): void {
+    this.primed = false;
+    this.upshiftTimer = 0;
+    this.downshiftTimer = 0;
+    this.liftTimer = 0;
+  }
+
   public setLevel(level: number): void {
     this.bus.gain.setTargetAtTime(level, this.ctx.currentTime, 0.04);
   }
@@ -633,6 +666,11 @@ export class Vf26SoundBank {
 
 /** Responses fetched ahead (during loading) by `prefetchSoundBank`, each handed out once */
 const prefetched = new Map<string, Promise<Response>>();
+/**
+ * Manifest URLs of the banks whose prefetch has started: a bank's files are fetched ahead once, so asking again for a
+ * bank already handed out (a remount, swapping back to a car) does not download it all again
+ */
+const prefetchedBanks = new Set<string>();
 
 function fetchBankFile(url: string): Promise<Response> {
   const early = prefetched.get(url);
@@ -664,14 +702,20 @@ function rememberPrefetch(url: string, response: Promise<Response>): void {
 export function prefetchSoundBank(assetDir: string): void {
   if (typeof window === 'undefined') return;
   const manifestUrl = withBasePath(`${assetDir}manifest.json`);
-  if (prefetched.has(manifestUrl)) return;
+  if (prefetchedBanks.has(manifestUrl)) return;
+  prefetchedBanks.add(manifestUrl);
   const init = { priority: 'low' } as RequestInit;
   const manifest = fetch(manifestUrl, init);
   rememberPrefetch(manifestUrl, manifest.then((r) => r.clone()));
+  // No manifest fetched: a later call may try again
+  const forget = () => prefetchedBanks.delete(manifestUrl);
   void manifest
     .then((r) => (r.ok ? (r.json() as Promise<Vf26AudioManifest>) : null))
     .then((m) => {
-      if (!m) return;
+      if (!m) {
+        forget();
+        return;
+      }
       const files = new Set<string>([
         ...Object.values(m.engine ?? {}).flat().map((e) => e.file),
         ...(m.transmission ?? []).map((e) => e.file),
@@ -685,5 +729,5 @@ export function prefetchSoundBank(assetDir: string): void {
         if (!prefetched.has(url)) rememberPrefetch(url, fetch(url, init));
       }
     })
-    .catch(() => {});
+    .catch(forget);
 }

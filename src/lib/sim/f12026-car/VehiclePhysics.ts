@@ -793,6 +793,8 @@ export class VehiclePhysics {
   private prevInputs = { shiftUp: false, shiftDown: false, drs: false };
   private drsRequested = false;
   private shiftTimer = 0;
+  /** A paddle press that came while a shift was still under way: it is made once that shift is done */
+  private pendingShift: -1 | 0 | 1 = 0;
   /** The driver's last paddle shift with the auto box on, the auto box's schedule and its reading of the car */
   private readonly manualShift = new ManualShiftOverride();
   private readonly autoShiftSchedule: AutoShiftSchedule;
@@ -1106,20 +1108,21 @@ export class VehiclePhysics {
     this.lapHarvestJ = 0;
   }
 
-  private liveBrakeBiasOverride: number | null = null;
-
   /** Front brake bias including the performance mode's and the driver's EBB offsets */
   public get brakeBias(): number {
-    if (this.liveBrakeBiasOverride !== null) {
-      return THREE.MathUtils.clamp(this.liveBrakeBiasOverride, 0.3, 0.8);
-    }
     const br = this.config.brakes;
     const steps = this.config.performanceModes[this.performanceMode].ebbOffset + this.ebbUser;
     return THREE.MathUtils.clamp(br.front_bias + br.ebbStep * steps, 0.3, 0.8);
   }
 
+  /**
+   * The driver dials the bias they want now: it is kept as their EBB offset (`ebbUser`, fractional steps) on top of
+   * the running performance mode's, so a later mode change still moves the bias by that mode's offset
+   */
   public set brakeBias(val: number) {
-    this.liveBrakeBiasOverride = THREE.MathUtils.clamp(val, 0.3, 0.8);
+    const br = this.config.brakes;
+    const want = THREE.MathUtils.clamp(val, 0.3, 0.8);
+    this.ebbUser = (want - br.front_bias) / br.ebbStep - this.config.performanceModes[this.performanceMode].ebbOffset;
   }
 
   public get rpm(): number {
@@ -1159,6 +1162,7 @@ export class VehiclePhysics {
     this.timeAccumulator = 0;
     this.gear = 1;
     this.shiftTimer = 0;
+    this.pendingShift = 0;
     this.manualShift.clear();
     this.sinceUpshiftS = Infinity;
     this.sinceDownshiftS = Infinity;
@@ -1571,17 +1575,29 @@ export class VehiclePhysics {
   }
 
   private handleEdges(inp: VehicleInputs): void {
-    if (inp.shiftUp && !this.prevInputs.shiftUp && this.requestShift(this.gear + 1)) this.manualShift.shifted(1, this.gear);
-    if (inp.shiftDown && !this.prevInputs.shiftDown && this.requestShift(this.gear - 1)) this.manualShift.shifted(-1, this.gear);
+    if (inp.shiftUp && !this.prevInputs.shiftUp) this.paddleShift(1);
+    if (inp.shiftDown && !this.prevInputs.shiftDown) this.paddleShift(-1);
     if (inp.drs && !this.prevInputs.drs) this.drsRequested = !this.drsOpen;
     this.prevInputs.shiftUp = !!inp.shiftUp;
     this.prevInputs.shiftDown = !!inp.shiftDown;
     this.prevInputs.drs = !!inp.drs;
   }
 
+  /** The driver's paddle: shifts now, or once the shift under way is done (one press is kept), as the auto box waits */
+  private paddleShift(dir: -1 | 1): void {
+    if (this.shiftTimer > 0) {
+      this.pendingShift = dir;
+      return;
+    }
+    if (this.requestShift(this.gear + dir)) this.manualShift.shifted(dir, this.gear);
+  }
+
   private requestShift(target: number): boolean {
     const gb = this.config.gearbox;
-    const g = THREE.MathUtils.clamp(target, -1, gb.ratios.length);
+    let g = THREE.MathUtils.clamp(target, -1, gb.ratios.length);
+    // A sequential box has no neutral between first and reverse: down from first is reverse (only near standstill,
+    // below), up from reverse is first
+    if (g === 0) g = target < this.gear ? -1 : 1;
     if (g === this.gear) return false;
     // Over-rev protection on downshifts (seamless boxes refuse the shift)
     if (g > 0 && g < this.gear) {
@@ -1691,6 +1707,11 @@ export class VehiclePhysics {
     this.wallContactStep = false;
     this.wallImpactStep = 0;
     this.updateDrs(inp, dt);
+    if (this.pendingShift !== 0 && this.shiftTimer <= 0) {
+      const dir = this.pendingShift;
+      this.pendingShift = 0;
+      this.paddleShift(dir);
+    }
     this.autoShiftFor(inp.throttle, inp.brake);
     this.prevVelocity.copy(this.velocity);
     const h = dt / VehiclePhysics.SUBSTEPS;

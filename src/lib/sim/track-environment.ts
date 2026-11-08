@@ -13,7 +13,13 @@ import { aiLineOffsetM } from '@/lib/sim/speed-profile';
 import type { InterpolatedPeerState } from '@/lib/sim/multiplayer-sync';
 import type { SimulatorCar } from '@/lib/sim/simulator-car';
 import type { TireCompound } from '@/types/f1';
-import { DEFAULT_SESSION_CONDITIONS, type SessionConditions, type WeatherContactSample, WeatherState } from '@/lib/sim/weather';
+import {
+  DEFAULT_SESSION_CONDITIONS,
+  type SessionConditions,
+  type WeatherContactSample,
+  WeatherState,
+  type WeatherSyncState,
+} from '@/lib/sim/weather';
 import { recommendedCompound, WET_TYRE_TRAITS, wetGripFactor, wetnessFromWater } from '@/lib/sim/wet-tyres';
 import { FULL_REALISM, type SimRealismFlags } from '@/lib/sim/sim-realism';
 
@@ -24,15 +30,24 @@ const AI_TYRE_CHANGE_S = 25;
 /** Typical cornering speed the AI's wet pace is judged at (m/s) */
 const AI_PACE_REF_MS = 40;
 
+const isRainTyre = (c: TireCompound) => c === 'intermediate' || c === 'wet';
+
+/** An AI car's standing tyre call: what the weather calls for, how long it has (s), and its own dry slick */
+interface AiTyreCall {
+  target: TireCompound;
+  waitedS: number;
+  slick: TireCompound;
+}
+
 export class TrackEnvironment {
   public readonly trackEvolution: TrackEvolutionState;
   /** Sky, temperatures and the water on the road */
   public readonly weather: WeatherState;
   /** Every car's state before any is updated, simulated cars first (reused: no per-frame allocation) */
   private readonly emitters: WakeEmitterCar[] = [];
-  /** Per simulated car: its weather sample (reused) and how long its AI has wanted other tyres (s) */
+  /** Per simulated car: its weather sample (reused) and its AI's tyre call (`aiTyreCall`) */
   private readonly weatherSamples = new WeakMap<SimulatorCar, WeatherContactSample>();
-  private readonly tyreCallS = new WeakMap<SimulatorCar, number>();
+  private readonly tyreCalls = new WeakMap<SimulatorCar, AiTyreCall>();
   /** True until the first update of a session: the AI cars start on the right tyres */
   private freshSession = true;
   /** Simulation realism for every car on the track (the player's choice applies to the AI field too) */
@@ -53,6 +68,11 @@ export class TrackEnvironment {
   /** A fresh session: back to the baseline rubber, no marbles, and the weather back to its start */
   public reset(): void {
     this.weather.reset();
+    this.restartTrack();
+  }
+
+  /** The track's half of a session restart, after the weather's: the conditions' rubber, its timescale and temperature */
+  private restartTrack(): void {
     this.trackEvolution.reset(this.weather.conditions.surfacePreset ?? 'natural');
     this.trackEvolution.timeScale = this.weather.conditions.surfaceTimeScale ?? 1;
     this.trackEvolution.baseTrackTempC = this.weather.trackTempC;
@@ -71,10 +91,17 @@ export class TrackEnvironment {
   /** New weather / time of day for the session (restarts the weather) */
   public setConditions(conditions: SessionConditions): void {
     this.weather.reset(conditions);
-    this.trackEvolution.reset(this.weather.conditions.surfacePreset ?? 'natural');
-    this.trackEvolution.timeScale = this.weather.conditions.surfaceTimeScale ?? 1;
-    this.trackEvolution.baseTrackTempC = this.weather.trackTempC;
-    this.freshSession = true;
+    this.restartTrack();
+  }
+
+  /**
+   * The host's weather, on a multiplayer guest: eased toward it while the conditions match; when the host's differ
+   * (another preset, forecast, seed, rubber preset or timescale), the same full restart as `setConditions`, taken from
+   * the host's state
+   */
+  public applyWeatherSync(snap: WeatherSyncState): void {
+    // After the weather's own restart, so the track takes the host's track temperature
+    if (this.weather.applySync(snap)) this.restartTrack();
   }
 
   /**
@@ -83,21 +110,32 @@ export class TrackEnvironment {
    * new to the track, starts on the right tyre at once.
    */
   private aiTyreCall(sim: SimulatorCar, calledFor: TireCompound, fresh: boolean, dt: number): void {
-    if (!this.tyreCallS.has(sim)) fresh = true;
     const current = sim.tireCompound;
-    const wantsRain = calledFor === 'intermediate' || calledFor === 'wet';
-    const onRain = current === 'intermediate' || current === 'wet';
-    const target: TireCompound = wantsRain ? calledFor : onRain ? 'medium' : current;
+    const onRain = isRainTyre(current);
+    let call = this.tyreCalls.get(sim);
+    if (!call) {
+      fresh = true;
+      // A car new to the track on rain tyres goes back onto mediums
+      call = { target: current, waitedS: 0, slick: onRain ? 'medium' : current };
+      this.tyreCalls.set(sim, call);
+    }
+    // The slick it runs in the dry, to go back onto when the rain tyres come off
+    if (!onRain) call.slick = current;
+    const target: TireCompound = isRainTyre(calledFor) ? calledFor : onRain ? call.slick : current;
     if (target === current) {
-      this.tyreCallS.set(sim, 0);
+      call.target = target;
+      call.waitedS = 0;
       return;
     }
-    const waited = (this.tyreCallS.get(sim) ?? 0) + dt;
-    if (fresh || waited >= AI_TYRE_CHANGE_S) {
+    // Another call (intermediates to wets, say) waits its own time, not what is left of the last one's
+    if (target !== call.target) {
+      call.target = target;
+      call.waitedS = 0;
+    }
+    call.waitedS += dt;
+    if (fresh || call.waitedS >= AI_TYRE_CHANGE_S) {
       sim.tireCompound = target;
-      this.tyreCallS.set(sim, 0);
-    } else {
-      this.tyreCallS.set(sim, waited);
+      call.waitedS = 0;
     }
   }
 

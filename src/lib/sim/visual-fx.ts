@@ -9,6 +9,7 @@
  * - Opponent vehicle 3D rig manager driven by `MultiplayerSyncManager` Cubic Hermite + Slerp states.
  */
 
+import { steerNormOf } from './car-pose';
 import * as THREE from 'three';
 import { createF1Car2026, type SimCarRig } from '@/lib/car-builder-2026';
 import type { WheelSeating } from '@/lib/render/corner-rig';
@@ -120,7 +121,9 @@ export class SimVisualFxManager {
     string,
     {
       rig: SimCarRig;
+      /** The car and look the rig was built for: a change of either rebuilds it */
       vehicle: VehicleModelId | undefined;
+      ghost: boolean;
       wheelRot: number;
       telemetry?: CarTelemetry;
       /** The AI car's wheels on its ground at the drawn pose (refreshed in place each frame) */
@@ -138,7 +141,11 @@ export class SimVisualFxManager {
    * handed out to the first peers that need that model instead of being built on the first frame of a race
    */
   private pool = new Map<string, SimCarRig[]>();
-  private prewarmedKinds = new Set<string>();
+  /**
+   * One pre-warm per kind of car, settling true once its rigs are built (false when it failed, and then dropped so a
+   * later call tries again); a call while it runs waits for the same one
+   */
+  private prewarms = new Map<string, Promise<boolean>>();
 
   constructor() {
     // 1. Initialize Persistent Tire Skidmark Ribbon Mesh
@@ -546,11 +553,19 @@ export class SimVisualFxManager {
    */
   public prewarm(vehicle: VehicleModelId | undefined): Promise<void> {
     const kind = rigKind(vehicle);
-    if (this.prewarmedKinds.has(kind)) {
-      assetProgress.done('opponents');
-      return Promise.resolve();
+    let job = this.prewarms.get(kind);
+    if (!job) {
+      job = this.buildPrewarm(vehicle, kind);
+      this.prewarms.set(kind, job);
     }
-    this.prewarmedKinds.add(kind);
+    // Each call reports to the loading screen once the rigs are there, not before
+    return job.then((built) => {
+      if (built) assetProgress.done('opponents');
+      else assetProgress.fail('opponents');
+    });
+  }
+
+  private buildPrewarm(vehicle: VehicleModelId | undefined, kind: string): Promise<boolean> {
     const template: Promise<unknown> =
       kind === 'gt3'
         ? Promise.all([loadGt3Template('opponents'), loadGt3Cockpit()])
@@ -576,11 +591,13 @@ export class SimVisualFxManager {
       })
       .then(() => {
         for (const rig of this.pool.get(poolKey(vehicle, true)) ?? []) ghostify(rig.root);
-        assetProgress.done('opponents');
+        return true;
       })
       .catch((err) => {
         console.warn('Opponent cars not pre-warmed', err);
-        assetProgress.fail('opponents');
+        // Not built: the next prewarm() of this kind tries again
+        this.prewarms.delete(kind);
+        return false;
       });
   }
 
@@ -595,15 +612,16 @@ export class SimVisualFxManager {
     for (const peer of peers) {
       activeIds.add(peer.peerId);
       let entry = this.opponentCars.get(peer.peerId);
-      if (entry && entry.vehicle !== peer.vehicle) {
-        // The peer switched car: rebuild its rig
+      const ghost = Boolean(peer.ghost);
+      if (entry && (entry.vehicle !== peer.vehicle || entry.ghost !== ghost)) {
+        // The peer switched car, or became (or stopped being) a ghost: rebuild its rig with that car's materials
         this.group.remove(entry.rig.root);
         entry.rig.dispose();
         disposeTree(entry.rig.root);
         entry = undefined;
       }
       if (!entry) {
-        entry = { rig: this.createOpponentRig(peer), vehicle: peer.vehicle, wheelRot: 0 };
+        entry = { rig: this.createOpponentRig(peer), vehicle: peer.vehicle, ghost, wheelRot: 0 };
         this.opponentCars.set(peer.peerId, entry);
         this.group.add(entry.rig.root);
       }
@@ -642,7 +660,7 @@ export class SimVisualFxManager {
       syntheticTelemetry.rpm = peer.rpm ?? 8500 + (peer.speedKmh % 45) * 95;
       syntheticTelemetry.throttle = peer.throttle;
       syntheticTelemetry.brake = peer.brake;
-      syntheticTelemetry.steering = THREE.MathUtils.clamp(peer.steerAngle / 0.36, -1, 1);
+      syntheticTelemetry.steering = THREE.MathUtils.clamp(steerNormOf(peer.steerAngle), -1, 1);
       syntheticTelemetry.activeAeroMode = peer.speedKmh > 250 && Math.abs(peer.steerAngle) < 0.05 ? 'X_MODE' : 'Z_MODE';
       syntheticTelemetry.icePowerKw = 400 * peer.throttle;
       syntheticTelemetry.mgukPowerKw = peer.throttle > 0.5 ? 250 : -80;

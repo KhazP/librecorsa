@@ -383,6 +383,12 @@ export interface CarTelemetry {
   radar?: RadarBlip[];
   /** Present while racing the AI opponents */
   race?: RaceStatus;
+  /**
+   * Run counter, set by the app shell: it goes up whenever the run restarts (a new session, a restart, a
+   * teleport, a flashback, a car change). Anything that keeps lap- or run-scoped state resets when it changes,
+   * instead of guessing a restart from the lap count or distance.
+   */
+  runId?: number;
   /** Live engineering telemetry channels, present while driving the f12026-car or GT3 */
   f12026?: F12026Channels;
   /** Live in-race MFD tuner state (TC1/TC2, 4-ch ABS, Brake Bias/Migration, 3-Phase Diff, ERS/Engine Map) */

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { connectedPads } from "@/lib/input/device-input";
-import { isMenuNavSuspended } from "./useMenuNav";
+import { isMenuNavSuspended, padKey } from "./useMenuNav";
 import { notePadInput } from "./input-mode";
 
 /**
@@ -42,6 +42,12 @@ const REPEAT_DELAY_MS = 360;
 const REPEAT_RATE_MS = 110;
 
 const lastInZone = new WeakMap<Element, HTMLElement>();
+
+/**
+ * The enabled screens, oldest first. Only the newest takes input: a screen opened over another (controls over the
+ * pause menu, say) must not have one press drive both. Closing it hands input back to the one below.
+ */
+const owners: object[] = [];
 
 /**
  * Back steps owned by a part of a screen (a browser's detail pane → its grid → closing it), asked before the screen's
@@ -117,6 +123,10 @@ export function focusables(root: Element): HTMLElement[] {
   return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(visible);
 }
 
+/** A remembered control can still take the focus: still there, shown, and not disabled since (greyed out mid-capture) */
+const canResume = (el: HTMLElement | undefined): el is HTMLElement =>
+  Boolean(el && el.isConnected && !el.matches(":disabled") && visible(el));
+
 function zoneOf(el: Element, root: Element): Element {
   const z = el.closest("[data-nav-zone]");
   return z && root.contains(z) ? z : root;
@@ -131,7 +141,7 @@ function focusEl(el: HTMLElement): void {
 /** The control a zone (or the root) starts on: its last focus, else its marked default, else its first */
 function entryOf(zone: Element): HTMLElement | null {
   const last = lastInZone.get(zone);
-  if (last && last.isConnected && zone.contains(last) && visible(last)) return last;
+  if (canResume(last) && zone.contains(last)) return last;
   const items = focusables(zone);
   return (
     items.find((e) => e.hasAttribute("data-nav-default")) ??
@@ -242,6 +252,9 @@ export function useFocusNav(rootRef: React.RefObject<HTMLElement | null>, option
 
   useEffect(() => {
     if (!enabled) return;
+    const token = {};
+    owners.push(token);
+    const owns = () => owners[owners.length - 1] === token;
     const root = () => rootRef.current;
     /**
      * Esc / Ⓑ in a text field: stop typing and move the cursor to the next control (else the previous one). Focusing
@@ -291,7 +304,7 @@ export function useFocusNav(rootRef: React.RefObject<HTMLElement | null>, option
       const toZone = zoneOf(target, r);
       if (toZone !== fromZone && toZone !== r && !toZone.contains(active)) {
         const entry = lastInZone.get(toZone);
-        if (entry && entry.isConnected && visible(entry)) return focusEl(entry);
+        if (canResume(entry)) return focusEl(entry);
       }
       focusEl(target);
     };
@@ -316,7 +329,7 @@ export function useFocusNav(rootRef: React.RefObject<HTMLElement | null>, option
     };
 
     const onKey = (e: KeyboardEvent) => {
-      if (isMenuNavSuspended() || e.defaultPrevented) return;
+      if (isMenuNavSuspended() || e.defaultPrevented || !owns()) return;
       const o = ref.current;
       const back = o.onBack || backHandlers.length ? goBack : undefined;
       const target = e.target as Element | null;
@@ -368,13 +381,20 @@ export function useFocusNav(rootRef: React.RefObject<HTMLElement | null>, option
     // previous screen does not fire), directions auto-repeat while held
     let raf = 0;
     let prev: boolean[] | null = null;
+    // Which pad `prev` was read from: when the first pad changes (one of two unplugged), its buttons are a new baseline
+    let prevPad: string | null = null;
     const repeatAt: number[] = [];
     const poll = (t: number) => {
       raf = requestAnimationFrame(poll);
       const pad = connectedPads().find((p) => p.mapping === "standard");
       if (!pad) {
         prev = null;
+        prevPad = null;
         return;
+      }
+      if (padKey(pad) !== prevPad) {
+        prev = null;
+        prevPad = padKey(pad);
       }
       const ax = pad.axes;
       const down = (i: number) => Boolean(pad.buttons[i]?.pressed);
@@ -390,7 +410,8 @@ export function useFocusNav(rootRef: React.RefObject<HTMLElement | null>, option
         down(4),
         down(5),
       ];
-      if (prev === null || isMenuNavSuspended()) {
+      // Not the screen on top: keep the baseline current, so a button held as it takes over does not fire
+      if (prev === null || isMenuNavSuspended() || !owns()) {
         prev = now;
         return;
       }
@@ -441,6 +462,8 @@ export function useFocusNav(rootRef: React.RefObject<HTMLElement | null>, option
       cancelAnimationFrame(raf);
       window.removeEventListener("keydown", onKey);
       document.removeEventListener("focusin", remember);
+      const i = owners.lastIndexOf(token);
+      if (i >= 0) owners.splice(i, 1);
     };
   }, [enabled, rootRef]);
 }

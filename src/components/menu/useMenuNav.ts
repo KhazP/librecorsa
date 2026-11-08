@@ -4,8 +4,8 @@ import { useEffect, useState } from "react";
 import { connectedPads, type PadLike } from "@/lib/input/device-input";
 
 /**
- * Shared menu-input plumbing: the rebinding suspend switch (read by useFocusNav) and a live snapshot of the connected
- * Gamepad API devices. The menus' navigation itself lives in useFocusNav.
+ * Shared menu-input plumbing: the rebinding suspend switch (read by useFocusNav), pad edge helpers and a live snapshot
+ * of the connected Gamepad API devices. The menus' navigation itself lives in useFocusNav.
  */
 let suspended = 0;
 /** Pauses all menu navigation while a control is being captured for rebinding; returns the resume call */
@@ -22,6 +22,33 @@ export function suspendMenuNav(): () => void {
 /** True while a control is being captured for rebinding */
 export function isMenuNavSuspended(): boolean {
   return suspended > 0;
+}
+
+/**
+ * A connected pad's identity across frames: its slot and id. Pollers that read "the first standard pad" compare it
+ * frame to frame and start a fresh baseline when it changes, so another pad's buttons never read as presses.
+ */
+export const padKey = (p: { index: number; id: string }): string => `${p.index}:${p.id}`;
+
+/**
+ * Per-pad press edges for a poller: call it once a frame with the pads to watch; true when one of them pressed one of
+ * `buttons` (default: any) since the last call. A pad seen for the first time only sets its baseline, so a pad that
+ * connects with a button held, or one released while another pad still holds one, is no press.
+ */
+export function padPressTracker(buttons?: readonly number[]): (pads: readonly PadLike[]) => boolean {
+  let prev = new Map<string, boolean[]>();
+  return (pads) => {
+    const next = new Map<string, boolean[]>();
+    let pressed = false;
+    for (const p of pads) {
+      const now = buttons ? buttons.map((i) => Boolean(p.buttons[i]?.pressed)) : p.buttons.map((b) => b.pressed);
+      const before = prev.get(padKey(p));
+      if (before && now.some((d, i) => d && !before[i])) pressed = true;
+      next.set(padKey(p), now);
+    }
+    prev = next;
+    return pressed;
+  };
 }
 
 export interface PadState {

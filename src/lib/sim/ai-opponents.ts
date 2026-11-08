@@ -6,6 +6,7 @@
  * The player's car (the VF26 or the f12026-car) is passed in so that it takes part in the start
  * procedure, contact and order; it is stepped by the caller (the field only steps its AI cars).
  */
+import { steerAngleOf, wheelRpmOf } from './car-pose';
 import * as THREE from 'three';
 import { F1Physics2026 } from '@/lib/f1-physics-2026';
 import type { BuiltTrackData } from '@/lib/track-data';
@@ -391,6 +392,11 @@ export interface AiFieldReport {
 
 export class AiOpponentField {
   public phase: RaceStatus['phase'] = 'racing';
+  /**
+   * False until startRace: the shell builds a spare field in the menus, and a field that never started is not a race
+   * (its `phase` only says where a started race would be)
+   */
+  private started = false;
   /** Race length; the player's flag ends their race (the AI cars finish their own lap and keep circulating) */
   public raceLaps = 5;
   public lightsOn = 0;
@@ -677,6 +683,7 @@ export class AiOpponentField {
     this.splitTimer.reset();
     this.playerSplits.reset();
     this.contactAt.clear();
+    this.started = true;
     this.phase = standing ? 'lights' : 'racing';
     this.lightsOn = 0;
     this.lightsTimerS = 0;
@@ -1060,8 +1067,8 @@ export class AiOpponentField {
       p.wheels.ground = sim.groundQuery ?? null;
     }
     p.linearVelocity.set(sim.vyMs, 0, sim.vxMs).applyQuaternion(sim.worldQuaternion);
-    p.steerAngle = sim.steerAngleNorm * 0.36;
-    for (let i = 0; i < 4; i++) p.wheelRPMs[i] = sim.wheels[i].spinVel * 9.549296;
+    p.steerAngle = steerAngleOf(sim.steerAngleNorm);
+    for (let i = 0; i < 4; i++) p.wheelRPMs[i] = wheelRpmOf(sim.wheels[i].spinVel);
     p.throttle = sim.telemetry.throttle;
     p.brake = sim.telemetry.brake;
     p.trackS = sim.sMeters;
@@ -1086,7 +1093,7 @@ export class AiOpponentField {
    * player's speed; null before the start or when the player leads.
    */
   public playerGapAheadS(): number | null {
-    if (this.phase !== 'racing') return null;
+    if (!this.started || this.phase !== 'racing') return null;
     const me = this.cars.find((c) => c.isPlayer);
     if (!me) return null;
     let gapM = Infinity;
@@ -1102,9 +1109,22 @@ export class AiOpponentField {
     return this.splitTimer.gapS(this.raceTimeS, ahead.id, me.distM) ?? gapM / Math.max(5, me.sim.vxMs);
   }
 
-  /** The race rules for the overtaking aids apply (the start lights included); after the flag they are free */
+  /**
+   * The race rules for the player's overtaking aids apply (the start lights included); after the player's flag they
+   * are free, and never before the race has started
+   */
   public get raceRulesActive(): boolean {
-    return this.phase === 'lights' || this.phase === 'racing';
+    return this.started && (this.phase === 'lights' || this.phase === 'racing');
+  }
+
+  /**
+   * The race rules for one car of the field: from the start until that car's own flag. The player taking the flag
+   * ends the race for the player only; the AI cars still running stay under the rules until they finish.
+   */
+  private raceRulesActiveFor(sim: SimulatorCar): boolean {
+    if (!this.started) return false;
+    const car = this.cars.find((c) => c.sim === sim);
+    return car ? car.finishTimeS === null : this.raceRulesActive;
   }
 
   /** Race laps the leader has completed */
@@ -1138,7 +1158,7 @@ export class AiOpponentField {
     const field = this;
     return {
       get racing() {
-        return field.raceRulesActive;
+        return field.raceRulesActiveFor(sim);
       },
       earnedAtDetection: () => field.detectionEarnedFor(sim),
     };

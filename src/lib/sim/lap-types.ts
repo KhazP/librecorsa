@@ -25,6 +25,25 @@ export interface LapConditions {
   physicsVersion: number;
 }
 
+/** Mean water on the racing line (mm) from which a lap counts as wet */
+export const WET_LAP_WATER_MM = 0.05;
+
+/** The board a lap driven right now would be ranked on: the one place the surface is decided */
+export function lapConditionsNow(c: {
+  assists: AssistPreset;
+  compound: TireCompound;
+  lineWaterMm: number;
+  realism: SimRealism;
+}): LapConditions {
+  return {
+    assists: c.assists,
+    compound: c.compound,
+    surface: c.lineWaterMm >= WET_LAP_WATER_MM ? "wet" : "dry",
+    realism: c.realism,
+    physicsVersion: PHYSICS_VERSION,
+  };
+}
+
 /** Assist presets from the least to the most aided */
 export const ASSIST_PRESETS: readonly AssistPreset[] = ["pro", "semi_pro", "assisted"];
 export const TYRE_COMPOUNDS: readonly TireCompound[] = ["soft", "medium", "hard", "intermediate", "wet"];

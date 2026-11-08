@@ -10,7 +10,7 @@
 import { clampChassisSetup, DEFAULT_CHASSIS_SETUP, FUEL_LOAD, startingFuelKg, type ChassisSetup, type GarageTuner } from "../src/lib/sim/car-setup";
 import { SIM_REALISM_FLAGS } from "../src/lib/sim/sim-realism";
 import { SETUP_CLASS, setupSheet, type SetupState } from "../src/lib/sim/setup-sheet";
-import { TYRE_SETUP_LIMITS } from "../src/components/hud/PauseMenu";
+import { TYRE_SETUP_LIMITS } from "../src/lib/sim/tyre-setup";
 import type { SimulatorCar } from "../src/lib/sim/simulator-car";
 import type { TyreSetup, VehicleModelId } from "../src/types/f1";
 import { F12026CarSim } from "../src/lib/sim/f12026-car/F12026CarSim";

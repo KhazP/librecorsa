@@ -24,6 +24,8 @@ import {
   type WheelSettings,
 } from "@/lib/input/device-input";
 import { KB_STEER_RETURN_S, KB_STEER_RISE_S } from "@/lib/input/keyboard-steer";
+import { isCameraMode } from "@/lib/render/camera-modes";
+import { isCarId, type CarId } from "@/lib/cars/car-registry";
 import { AI_SKILL_DEFAULT } from "@/lib/sim/ai-tuning";
 import { DEFAULT_DEVICE_ASSIST_TUNING, sanitizeAssistTuning, type DeviceAssistTuning } from "@/lib/sim/steering-assist";
 import { SIM_REALISM_LEVELS, type SimRealism } from "@/lib/sim/sim-realism";
@@ -349,8 +351,6 @@ export const DEFAULT_PLAYER_SETTINGS: PlayerSettings = {
   library: DEFAULT_CONTENT_LIBRARY,
 };
 
-const CAMERA_MODES: readonly CameraMode[] = ["chase", "tv_pod", "cockpit_shoulder", "cockpit", "nose", "helicopter", "tv_side"];
-
 type Obj = Record<string, unknown>;
 const isObj = (v: unknown): v is Obj => Boolean(v) && typeof v === "object" && !Array.isArray(v);
 const isNum = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
@@ -617,7 +617,7 @@ export function parsePlayerSettings(raw: unknown): PlayerSettings {
     autoGearbox: bool(raw.autoGearbox, d.autoGearbox),
     mouseSteer: bool(raw.mouseSteer, d.mouseSteer),
     liveryId: isStr(raw.liveryId) ? raw.liveryId : null,
-    camera: CAMERA_MODES.includes(raw.camera as CameraMode) ? (raw.camera as CameraMode) : null,
+    camera: isCameraMode(raw.camera) ? raw.camera : null,
     cockpitFovDeg:
       typeof raw.cockpitFovDeg === "number" && Number.isFinite(raw.cockpitFovDeg)
         ? Math.round(clampFov(raw.cockpitFovDeg))
@@ -655,8 +655,15 @@ export function loadPlayerSettings(): PlayerSettings {
       settings = parsePlayerSettings(json);
       if (!polarityV2 && settings.wheel.ffbInvert) {
         settings = { ...settings, wheel: { ...settings.wheel, ffbInvert: false } };
+        // The reset is stored before the flag that says it was done (just the field, the rest of the save as it
+        // was): a load that no save follows must not stamp the flag over a save that still says true
+        if (isObj(json) && isObj(json.wheel)) {
+          json.wheel.ffbInvert = false;
+          localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(json));
+        }
       }
     }
+    // Only after the migrated settings are stored (a failed write above skips it); nothing to migrate otherwise
     if (!polarityV2) localStorage.setItem(FFB_POLARITY_V2_KEY, "1");
   } catch {
     // Storage unavailable or corrupt JSON: defaults
@@ -697,5 +704,45 @@ export function saveOnboarded() {
     localStorage.setItem(ONBOARDED_STORAGE_KEY, "1");
   } catch {
     // Storage unavailable: the setup shows again next visit
+  }
+}
+
+const CAR_STORAGE_KEY = "bugesera.vehicle";
+const RUMBLE_STORAGE_KEY = "bugesera.rumble";
+
+/** The car to drive: `?car=` in the URL, else the last choice, else the VF26 */
+export function loadCarChoice(): CarId {
+  try {
+    const fromUrl = new URLSearchParams(window.location.search).get("car");
+    if (isCarId(fromUrl)) return fromUrl;
+    const saved = localStorage.getItem(CAR_STORAGE_KEY);
+    return isCarId(saved) ? saved : "vf26";
+  } catch {
+    return "vf26";
+  }
+}
+
+export function saveCarChoice(car: CarId) {
+  try {
+    localStorage.setItem(CAR_STORAGE_KEY, car);
+  } catch {
+    // Storage unavailable: the choice lasts for this session only
+  }
+}
+
+/** Gamepad rumble is on unless it was switched off last time */
+export function loadRumble(): boolean {
+  try {
+    return localStorage.getItem(RUMBLE_STORAGE_KEY) !== "0";
+  } catch {
+    return true;
+  }
+}
+
+export function saveRumble(enabled: boolean) {
+  try {
+    localStorage.setItem(RUMBLE_STORAGE_KEY, enabled ? "1" : "0");
+  } catch {
+    // Storage unavailable: the choice lasts for this session only
   }
 }

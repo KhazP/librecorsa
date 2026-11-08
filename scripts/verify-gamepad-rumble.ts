@@ -295,4 +295,22 @@ check('a hit goes out at once past the send gate, with the trigger cues beside i
   });
 });
 
+check('a pad unplugged (or back under a new slot) leaves no record behind', () => {
+  const calls: Call[] = [];
+  const pads: unknown[] = [{ id: 'pad', vibrationActuator: fakeActuator(['dual-rumble'], calls) }];
+  withPads(pads, () => {
+    const h = new GamepadHaptics();
+    const records = () => (h as unknown as { outputs: Map<string, unknown> }).outputs;
+    h.update(cruise(), DT, true);
+    assert.equal(records().size, 1);
+    // Reconnected in another slot: a new key, the old one gone
+    pads.unshift(null);
+    h.update(cruise(), DT, true);
+    assert.deepEqual([...records().keys()], ['1|pad'], 'only the connected pad keeps a record');
+    pads.length = 0;
+    h.update(cruise(), DT, true);
+    assert.equal(records().size, 0, 'unplugged: no record');
+  });
+});
+
 console.log(`\n${passed} checks passed`);

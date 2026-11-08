@@ -21,7 +21,7 @@ import {
 import { Choice, Toggle } from "@/components/hud/PauseMenu";
 import { PAD_FINE_TUNING_FIELDS, resetPadTuning, type PadTuning } from "@/lib/settings/player-settings";
 import { useGamepads } from "../useMenuNav";
-import { useButtonCapture } from "./button-capture";
+import { CAPTURE_TIMEOUT_S, useButtonCapture } from "./button-capture";
 import { FACE_BUTTONS, padButtonName, padFamilyOf, useInputMode, type PadFamily } from "../input-mode";
 import { StickCurve, TriggerBars, TuningSlider } from "./TuningSlider";
 import { PadMap } from "./PadMap";
@@ -88,7 +88,7 @@ export const ControllerStep: React.FC<SetupStepProps & { steerLockDeg?: number }
     [capturing, onChangeSettings]
   );
   const onCancel = React.useCallback(() => setCapturing(null), []);
-  useButtonCapture(capturing !== null, (b) => onButton(b.button), onCancel, { standardOnly: true });
+  useButtonCapture(capturing, (b) => onButton(b.button), onCancel, { standardOnly: true });
 
   const tuning = settings.padTuning;
   const setTuning = (patch: Partial<PadTuning>) =>
@@ -232,7 +232,7 @@ export const ControllerStep: React.FC<SetupStepProps & { steerLockDeg?: number }
           })}
         </AutoGrid>
         {capturing ? (
-          <StatusPill tone="live">Press a controller button · Esc cancels</StatusPill>
+          <StatusPill tone="live">Press a controller button · Esc cancels · stops after {CAPTURE_TIMEOUT_S} s</StatusPill>
         ) : (
           <Hint>
             {layout === null ? "Custom layout. " : ""}Click a button, then press the one you want.

@@ -69,8 +69,11 @@ export interface LearnedCorner {
 export class AiSectionLearner {
   private readonly state: CornerState[];
   private current = -1;
-  /** True until the first frame is seen: a car first observed inside a section (on the grid) only saw part of it */
-  private firstFrame = true;
+  /**
+   * True until the next frame after the car was placed (the grid at the start, then every `interrupt()`): the
+   * section it is in on that frame was only partly seen, so it teaches nothing
+   */
+  private placed = true;
 
   constructor(
     readonly sections: readonly TrackSection[],
@@ -108,8 +111,8 @@ export class AiSectionLearner {
   /** Feed one frame; returns true when a corner was just evaluated (its parameters may have changed) */
   observe(f: CornerFrame): boolean {
     const i = this.sectionAt(f.s);
-    const partialPass = this.firstFrame;
-    this.firstFrame = false;
+    const partialPass = this.placed;
+    this.placed = false;
     let evaluated = false;
     if (i !== this.current) {
       if (this.current >= 0) evaluated = this.evaluate(this.state[this.current]);
@@ -134,9 +137,13 @@ export class AiSectionLearner {
     return evaluated;
   }
 
-  /** The car was put back on track (stuck recovery): the current corner teaches nothing */
+  /**
+   * The car was put back on track (stuck recovery): the corner it was in teaches nothing, nor does the one it is put
+   * into, entered part-way
+   */
   interrupt(): void {
     if (this.current >= 0) this.state[this.current].disturbed = true;
+    this.placed = true;
   }
 
   private evaluate(st: CornerState): boolean {

@@ -111,6 +111,8 @@ export class TrackLimitsMonitor {
   private penaltyS = 0;
   private lastOnTrackPosition: number | null = null;
   private exc: Excursion | null = null;
+  /** The last frame was judged (`TrackLimitsFrame.active`); a verdict waiting while not is kept off the HUD */
+  private active = true;
   private message: TrackLimitsStatus["message"] = null;
   private readonly status: TrackLimitsStatus = {
     warnings: 0,
@@ -131,6 +133,7 @@ export class TrackLimitsMonitor {
     this.penaltyS = 0;
     this.lastOnTrackPosition = null;
     this.exc = null;
+    this.active = true;
     this.message = null;
   }
 
@@ -154,8 +157,12 @@ export class TrackLimitsMonitor {
 
   /** Advances the judging by one frame; returns the race-control decision taken this frame, if any */
   update(f: TrackLimitsFrame): TrackLimitsEvent | null {
+    this.active = f.active;
     if (!f.active) {
-      this.exc = null;
+      // An excursion still in progress can't be finished by the driver any more (the autopilot, the lights or the
+      // flag took over): forget it. One already back on the track owes a verdict: it waits, its clocks stopped,
+      // until the driver drives again or the session is reset (toggling the autopilot must not wipe a give-back)
+      if (this.exc?.stage === "off") this.exc = null;
       return null;
     }
     const e = this.exc;
@@ -172,9 +179,12 @@ export class TrackLimitsMonitor {
     // `judging`); in practice nothing more to decide, in a race the strike is still decided below
     if (e.stage === "off") return this.whileOff(e, f);
     if (f.offTrack) {
-      // Back off the track before the first excursion was decided: one longer excursion
+      // Back off the track before the first excursion was decided: one longer excursion, judged afresh (the gain
+      // measured for the first part no longer stands)
       e.stage = "off";
       e.onS = 0;
+      e.gainS = null;
+      e.reason = null;
       return null;
     }
     if (e.stage === "judging") return this.whileJudging(e, f);
@@ -189,7 +199,7 @@ export class TrackLimitsMonitor {
     s.penaltyS = this.penaltyS;
     const e = this.exc;
     s.pending =
-      e && e.offS >= MIN_EXCURSION_S
+      e && this.active && e.offS >= MIN_EXCURSION_S
         ? {
             stage: e.stage,
             gainS: e.gainS,
@@ -282,6 +292,7 @@ export class TrackLimitsMonitor {
       const lifted = e.minThrottle < NO_LIFT_THROTTLE || e.maxBrake > NO_LIFT_BRAKE;
       if (lifted && !e.insideCut) return this.close("no_advantage", f);
       e.reason = e.insideCut ? "corner_cut" : "not_lifted";
+      e.gainS = null;
       e.giveBackTarget = null;
       e.liftOwedS = Math.max(LIFT_MIN_S, Math.min(LIFT_MAX_S, e.offS * LIFT_PER_OFF_S));
     }

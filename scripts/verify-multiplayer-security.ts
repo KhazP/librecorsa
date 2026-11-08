@@ -212,8 +212,132 @@ const startOf = (trackId: string) => ({
   check('a lobby from another tab is ignored while connected', guest.hostId === 'peer_host');
 }
 
-if (failures.length > 0) {
-  console.error(`\n${failures.length} check(s) failed`);
-  process.exit(1);
+// 4. Race lifecycle, presence and connection status ------------------------------------------------------------------
+/** The checks that wait on a promise; the result below waits for them */
+let manualChecks: Promise<void> = Promise.resolve();
+{
+  interface More {
+    lastHostLobbyMs: number;
+    memberSeenMs: Map<string, number>;
+    manualPendingPc: unknown;
+    tickControl(nowMs: number): void;
+    handleEnvelope(env: unknown, via: null): void;
+  }
+  const more = (m: MultiplayerSyncManager) => m as unknown as More & Internals;
+  const raceOf = (id: string) => ({ ...startOf('rwanda'), id });
+  const lobbyWith = (hostId: string, race: ReturnType<typeof raceOf> | null) => ({ ...lobbyOf(hostId, 'rwanda'), race });
+  const pong = (entry: Entry, from: string) => sendCtl(entry, from, { type: 'pong', t0: performance.now() - 20, now: 50_000 });
+
+  // Guest: the race follows the host's lobby, a left race stays left
+  {
+    const guest = new MultiplayerSyncManager();
+    const i = more(guest);
+    i.becomeGuest();
+    const toHost = connect(guest, 'remote_host');
+    const events: string[] = [];
+    guest.onRaceStart = (s) => events.push(`start ${s.id}`);
+    guest.onRaceAbort = (id) => events.push(`abort ${id}`);
+
+    sendCtl(toHost, 'peer_host', { type: 'lobby', lobby: lobbyWith('peer_host', raceOf('r1')) });
+    check('a race in the lobby waits for the host clock', events.length === 0, events.join());
+    pong(toHost, 'peer_host');
+    check('a guest that missed the start joins from the lobby once the clock is measured', events.join() === 'start r1', events.join());
+    sendCtl(toHost, 'peer_host', { type: 'lobby', lobby: lobbyWith('peer_host', raceOf('r1')) });
+    check('the repeating lobby starts it only once', events.length === 1, events.join());
+
+    guest.leaveRace();
+    sendCtl(toHost, 'peer_host', { type: 'lobby', lobby: lobbyWith('peer_host', raceOf('r1')) });
+    sendCtl(toHost, 'peer_host', { type: 'start', start: raceOf('r1') });
+    pong(toHost, 'peer_host');
+    check('a race the guest left is not joined again', events.length === 1, events.join());
+
+    sendCtl(toHost, 'peer_host', { type: 'lobby', lobby: lobbyWith('peer_host', raceOf('r2')) });
+    check("the host's next race is joined", events.join() === 'start r1,start r2', events.join());
+    sendCtl(toHost, 'peer_host', { type: 'lobby', lobby: lobbyWith('peer_host', raceOf('r3')) });
+    check('a missed restart: the old race ends and the new one starts', events.join() === 'start r1,start r2,abort r2,start r3', events.join());
+    sendCtl(toHost, 'peer_host', { type: 'lobby', lobby: lobbyWith('peer_host', null) });
+    check('a missed abort: the race ends once the lobby has none', events[events.length - 1] === 'abort r3', events.join());
+    sendCtl(toHost, 'peer_host', { type: 'lobby', lobby: lobbyWith('peer_host', raceOf('r3')) });
+    check('an ended race is not joined again from a stale lobby', events[events.length - 1] === 'abort r3', events.join());
+
+    i.handleEnvelope({ ctl: { type: 'start', start: raceOf('r4') }, from: 'peer_host' }, null);
+    check("another tab's copy of the start waits for the host connection's own", !events.includes('start r4'), events.join());
+    sendCtl(toHost, 'peer_host', { type: 'start', start: raceOf('r4') });
+    check('the start on the host connection goes through', events[events.length - 1] === 'start r4', events.join());
+
+    // A new host: its clock is measured afresh and the old host's race is over here
+    i.lastHostLobbyMs = -1e12;
+    sendCtl(toHost, 'peer_h2', { type: 'lobby', lobby: lobbyWith('peer_h2', null) });
+    check('a host change ends the race and the clock sync', events[events.length - 1] === 'abort r4' && !guest.clockSynced && guest.hostNowMs(1000) === 1000, events.join());
+  }
+
+  // Host: any traffic keeps a guest in the lobby, and brings back one dropped for silence
+  {
+    const host = new MultiplayerSyncManager();
+    host.hostLocal();
+    const i = more(host);
+    const a = connect(host, 'remote_a');
+    sendCtl(a, 'peer_a', { type: 'hello', name: 'Alice', code: 'ALI', color: '#ff0000' });
+    i.memberSeenMs.set('peer_a', performance.now() - 7000);
+    sendCtl(a, 'peer_a', { type: 'ready', ready: true });
+    i.tickControl(performance.now() + 2000);
+    check("a guest's ready keeps it in the lobby", i.members.has('peer_a'));
+    i.tickControl(performance.now() + 9000);
+    check('a guest silent for 8 s leaves the lobby', !i.members.has('peer_a') && !host.lobby?.players.some((p) => p.peerId === 'peer_a'));
+    sendState(a, packet('peer_a'));
+    check('its next packet brings it back, as it was', i.members.get('peer_a')?.name === 'Alice' && host.lobby?.players.some((p) => p.peerId === 'peer_a' && p.ready) === true);
+  }
+
+  // Connection status: one way out per peer, whichever event comes first
+  {
+    const host = new MultiplayerSyncManager();
+    host.hostLocal();
+    const i = more(host);
+    const a = connect(host, 'remote_a');
+    const b = connect(host, 'remote_b');
+    let closedA = 0;
+    a.pc.close = () => void closedA++;
+    sendCtl(a, 'peer_a', { type: 'hello', name: 'Alice', code: 'ALI', color: '#ff0000' });
+    host.status = { ...host.status, mode: 'room_host', roomCode: 'ABCDEF' };
+    a.dc.onclose?.();
+    check('a closed channel closes the whole connection and drops the member', closedA === 1 && !i.rtcPeers.has('remote_a') && !i.members.has('peer_a'));
+    check('another player still connected: still connected', host.status.state === 'connected' && host.status.connectedWebRtcPeers === 1, JSON.stringify(host.status));
+    check("the lost connection can't report itself a second time", a.pc.onconnectionstatechange === null);
+    b.dc.onclose?.();
+    check('the last player gone: the room host waits for players again', host.status.state === 'signaling' && host.status.statusText.includes('ABCDEF'), JSON.stringify(host.status));
+
+    const guest = new MultiplayerSyncManager();
+    more(guest).becomeGuest();
+    const toHost = connect(guest, 'remote_host');
+    guest.status = { ...guest.status, mode: 'room_guest', state: 'connected' };
+    toHost.dc.onclose?.();
+    check('a guest that lost its host says so, and stops waiting', guest.status.state === 'error' && /host/i.test(guest.status.statusText), JSON.stringify(guest.status));
+  }
+
+  // Manual connection: an answered offer is no longer the pending one, and not connected until its channel opens
+  manualChecks = (async () => {
+    const g = globalThis as unknown as { RTCSessionDescription?: unknown };
+    const hadDesc = g.RTCSessionDescription;
+    g.RTCSessionDescription = class {
+      constructor(init: object) {
+        Object.assign(this, init);
+      }
+    };
+    const host = new MultiplayerSyncManager();
+    host.hostLocal();
+    const i = more(host);
+    i.manualPendingPc = { setRemoteDescription: async () => {}, close() {} };
+    await host.acceptManualAnswer(btoa(JSON.stringify({ type: 'answer', sdp: 'v=0' })));
+    check('an answered offer is no longer the pending one (a second guest can be offered)', i.manualPendingPc === null);
+    check('answered is not yet connected', host.status.state === 'signaling', JSON.stringify(host.status));
+    g.RTCSessionDescription = hadDesc;
+  })();
 }
-console.log('\nAll multiplayer security checks passed.');
+
+void manualChecks.then(() => {
+  if (failures.length > 0) {
+    console.error(`\n${failures.length} check(s) failed`);
+    process.exit(1);
+  }
+  console.log('\nAll multiplayer security checks passed.');
+});

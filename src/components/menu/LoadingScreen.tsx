@@ -5,6 +5,7 @@ import { type BuiltTrackData, TURN_METADATA } from "@/lib/track-data";
 import { getTrackInfo } from "@/lib/track-registry";
 import { formatMegabytes, useAssetProgress, type AssetTask } from "@/lib/loading/asset-progress";
 import { connectedPads } from "@/lib/input/device-input";
+import { padPressTracker } from "./useMenuNav";
 import { LibreCorsaLogo } from "@/components/ui/LibreCorsaLogo";
 
 const TIPS = [
@@ -90,6 +91,14 @@ export const LoadingScreen: React.FC<{
   const [tip, setTip] = useState(0);
   const [leaving, setLeaving] = useState(false);
   const leavingRef = useRef(false);
+  // The fade's end; cleared only on unmount (the listeners' effect can re-run mid-fade and must not drop it)
+  const doneTimer = useRef<number | null>(null);
+  useEffect(
+    () => () => {
+      if (doneTimer.current !== null) window.clearTimeout(doneTimer.current);
+    },
+    []
+  );
   const shown = ready ? 1 : progress.progress;
   const trackInfo = getTrackInfo(track.id ?? "rwanda");
 
@@ -143,10 +152,11 @@ export const LoadingScreen: React.FC<{
       leavingRef.current = true;
       onStart();
       setLeaving(true);
-      window.setTimeout(onDone, 520);
+      doneTimer.current = window.setTimeout(onDone, 520);
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.repeat) return;
+      // Only the key that starts is used up: during the fade the menu underneath already takes keys
+      if (e.repeat || leavingRef.current) return;
       e.preventDefault();
       start();
     };
@@ -156,15 +166,12 @@ export const LoadingScreen: React.FC<{
     window.addEventListener("keydown", onKey);
     window.addEventListener("pointerdown", onPointer);
     window.addEventListener("pointerup", onPointer);
+    // A real press on some pad: not a release while another pad holds a button, nor a pad connecting with one held
     let raf = 0;
-    let prev: string | null = null;
+    const pressed = padPressTracker();
     const poll = () => {
       raf = requestAnimationFrame(poll);
-      const down = connectedPads()
-        .map((p) => p.buttons.some((b) => b.pressed))
-        .join();
-      if (prev !== null && down !== prev && down.includes("true")) start();
-      prev = down;
+      if (pressed(connectedPads())) start();
     };
     raf = requestAnimationFrame(poll);
     return () => {

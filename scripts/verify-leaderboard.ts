@@ -45,8 +45,9 @@ for (let f = 0; f < 60 * 600 && !autopilotLap; f++) {
     conditions: {
       assists: laps === 1 && moment ? 'assisted' : 'pro',
       compound: 'medium',
-      wet: false,
+      surface: 'dry',
       realism: laps === 1 && moment ? 'casual' : 'full',
+      physicsVersion: PHYSICS_VERSION,
       autopilot: laps === 2 && moment,
     },
   });

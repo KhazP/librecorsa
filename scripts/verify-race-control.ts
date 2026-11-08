@@ -13,6 +13,8 @@ import { F12026CarSim } from "../src/lib/sim/f12026-car/F12026CarSim";
 import { createAmgGt3Sim } from "../src/lib/sim/gt3/AmgGt3Sim";
 import { F1Physics2026 } from "../src/lib/f1-physics-2026";
 import { createFlatTestTrack } from "./lib/flat-track";
+import { AiOpponentField, AI_DRIVERS } from "../src/lib/sim/ai-opponents";
+import { getActiveTrackData } from "../src/lib/track-data";
 
 let passed = 0;
 function check(name: string, cond: boolean, detail = ""): void {
@@ -140,6 +142,31 @@ console.log("Track limits · warnings and penalties");
   drive(q, 0.5, { offTrack: true, lateralM: 6 });
   drive(q, 0.1, { active: false });
   check("going inactive (lights, pause, autopilot) drops the excursion", !q.judging);
+
+  const g = new TrackLimitsMonitor();
+  g.reset("race");
+  wide(g, 0.6, 0.0, -0.3);
+  const owed = g.snapshot(clock * 1000).pending;
+  drive(g, 3, { active: false, deltaS: -0.3 });
+  check("a give-back still owed waits while not judged (autopilot on)", g.judging && g.snapshot(clock * 1000).pending === null);
+  drive(g, DT, { deltaS: -0.3 });
+  const resumed = g.snapshot(clock * 1000).pending;
+  check(
+    "its window stood still meanwhile",
+    resumed?.stage === "give_back" && owed !== null && Math.abs(resumed.remainingS - (owed.remainingS - DT)) < 1e-6,
+    `${owed?.remainingS} then ${resumed?.remainingS}`
+  );
+  const verdict = drive(g, 6.5, { deltaS: -0.3 });
+  check("and it is decided once the driver drives again", verdict.length === 1 && verdict[0].kind === "warning", JSON.stringify(verdict));
+
+  const again = new TrackLimitsMonitor();
+  again.reset("race");
+  wide(again, 0.6, 0.0, -0.3);
+  drive(again, 0.3, { offTrack: true, lateralM: 6, deltaS: -0.3 });
+  check("going off again while giving back drops the gain measured before", again.snapshot(clock * 1000).pending?.gainS === null);
+  drive(again, 2.0, { deltaS: null });
+  const relifted = again.snapshot(clock * 1000).pending;
+  check("judged again without a reference: no stale gain on the card", relifted?.stage === "give_back" && relifted.gainS === null, JSON.stringify(relifted));
 }
 
 console.log("Classification with penalties");
@@ -319,6 +346,27 @@ console.log("Track limits · illegal overtake position hand-back");
     limits.length === 1 && limits[0].penaltyS === 3 && m.penaltyTotalS === 8,
     JSON.stringify(limits)
   );
+}
+
+console.log("AI race · overtaking-aid rules per car");
+{
+  const track = getActiveTrackData(1200);
+  const player = new F1Physics2026(track);
+  const field = new AiOpponentField(track, player, [AI_DRIVERS[0]], undefined, { seed: 1, learning: false });
+  const ai = field.aiSims()[0];
+  check("a field built but never started applies no race rules", !field.raceRulesActive && ai.raceControl?.racing === false);
+  field.startRace(true);
+  check("the rules apply from the start lights", field.raceRulesActive && ai.raceControl?.racing === true);
+  type Inner = { cars: { isPlayer: boolean; clock: { finishTimeS: number | null } }[] };
+  const cars = (field as unknown as Inner).cars;
+  const playerCar = cars.find((c) => c.isPlayer);
+  const aiCar = cars.find((c) => !c.isPlayer);
+  if (playerCar) playerCar.clock.finishTimeS = 300;
+  field.phase = "finished";
+  check("the player's flag frees the player's aids", !field.raceRulesActive);
+  check("an AI car still racing stays under the rules", ai.raceControl?.racing === true);
+  if (aiCar) aiCar.clock.finishTimeS = 305;
+  check("and is free after its own flag", ai.raceControl?.racing === false);
 }
 
 console.log(`\n${passed} checks passed`);

@@ -4,7 +4,7 @@
  * electronics' starting dials).
  */
 
-import type { AeroSetupPreset, LiveTunerPatch, TireCompound, TyreSetup, VehicleModelId } from "@/types/f1";
+import type { AeroSetupPreset, LiveTunerPatch, TireCompound, TyreSetup, VehicleModelId, WheelPressures } from "@/types/f1";
 import { axlePressures } from "@/types/f1";
 import { VF26_CHASSIS } from "./vf26-data";
 
@@ -220,11 +220,25 @@ export function saveChassisSetup(vehicle: VehicleModelId, setup: ChassisSetup): 
   }
 }
 
-/** Presets saved before pressures were per wheel carry `{ front, rear }`: spread each to both tyres of its axle */
+const isFiniteNumber = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value);
+
+/**
+ * Saved cold pressures: per wheel, or as the `{ front, rear }` saved before pressures were per wheel, spread to both
+ * tyres of each axle. Null when they are neither.
+ */
+export function wheelPressuresOf(value: unknown): WheelPressures | null {
+  if (!value || typeof value !== "object") return null;
+  const v = value as Record<string, unknown>;
+  if (isFiniteNumber(v.fl) && isFiniteNumber(v.fr) && isFiniteNumber(v.rl) && isFiniteNumber(v.rr)) {
+    return { fl: v.fl, fr: v.fr, rl: v.rl, rr: v.rr };
+  }
+  return isFiniteNumber(v.front) && isFiniteNumber(v.rear) ? axlePressures(v.front, v.rear) : null;
+}
+
+/** A preset's tyre setup with per-wheel pressures (an unreadable pressure is left for the car to ignore) */
 function perWheelTyreSetup(tyre: TyreSetup): TyreSetup {
-  const cp = tyre?.coldPressurePsi as unknown as Record<string, number> | undefined;
-  if (!cp || typeof cp.fl === "number") return tyre;
-  return { ...tyre, coldPressurePsi: axlePressures(cp.front, cp.rear) };
+  const coldPressurePsi = wheelPressuresOf(tyre?.coldPressurePsi);
+  return coldPressurePsi ? { ...tyre, coldPressurePsi } : tyre;
 }
 
 export function loadGaragePresets(vehicle: VehicleModelId): GaragePreset[] {

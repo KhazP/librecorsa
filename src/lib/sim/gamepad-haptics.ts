@@ -452,7 +452,8 @@ export class GamepadHaptics {
     const { weak, strong } = hapticMagnitudes(t, this.timeS, this.mix);
     const wantTriggers = options?.triggerRumble === true;
     const trig = wantTriggers ? triggerMagnitudes(t, this.timeS, options) : { left: 0, right: 0 };
-    for (const { key, actuator } of connectedPads()) {
+    const pads = connectedPads();
+    for (const { key, actuator } of pads) {
       const out = this.outputs.get(key) ?? {
         lastSentS: -Infinity,
         weak: 0,
@@ -498,6 +499,13 @@ export class GamepadHaptics {
       out.strong = strong;
       out.left = left;
       out.right = right;
+    }
+    // Every connected pad has its record by now: any beyond them are pads since unplugged (a reconnect comes back
+    // under a new slot or id), dropped so the map does not grow with each one
+    if (this.outputs.size > pads.length) {
+      for (const key of this.outputs.keys()) {
+        if (!pads.some((p) => p.key === key)) this.outputs.delete(key);
+      }
     }
   }
 

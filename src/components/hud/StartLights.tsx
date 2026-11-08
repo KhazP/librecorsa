@@ -2,7 +2,7 @@
 
 import React, { useEffect, useId, useRef, useState } from "react";
 import type { RaceStatus } from "@/types/f1";
-import { HUD_GLASS, HUD_RED, HUD_VOLT } from "./hud-format";
+import { HUD_GLASS, HUD_RED, HUD_VOLT, raceState } from "./hud-format";
 
 const LIGHT_COLUMNS = [0, 1, 2, 3, 4];
 /** Waving chequer strip outline (520 × 60 viewBox) */
@@ -36,11 +36,13 @@ export const StartLights: React.FC<{ race: RaceStatus | undefined }> = ({ race }
   const prevPhase = useRef(race?.phase);
   const patternId = `lc-chk-${useId().replace(/:/g, "")}`;
 
+  // The banner follows the player's own flag (raceState().finished), not the classification
+  const flagged = raceState(race).finished;
   useEffect(() => {
     if (prevPhase.current === "lights" && race?.phase === "racing") setStarts((n) => n + 1);
-    if (race?.phase === "finished" && prevPhase.current !== "finished") setFlags((n) => n + 1);
+    if (flagged && prevPhase.current !== "finished") setFlags((n) => n + 1);
     prevPhase.current = race?.phase;
-  }, [race?.phase]);
+  }, [race?.phase, flagged]);
 
   if (race?.phase === "lights") {
     const countdown =
@@ -106,7 +108,7 @@ export const StartLights: React.FC<{ race: RaceStatus | undefined }> = ({ race }
       </div>
     );
   }
-  if (flags > 0 && race?.phase === "finished") {
+  if (flags > 0 && flagged) {
     if (faded === `flag${flags}`) return null;
     return (
       <div key={flags} onAnimationEnd={fadeEnd(`flag${flags}`)} className="hud-fade-out flex flex-col items-center gap-3.5">

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { ChevronDown, ExternalLink } from "lucide-react";
 import { Segmented } from "./menu-ui";
 
@@ -245,6 +245,9 @@ export const RequestPanel: React.FC<{ context?: FeedbackContext }> = ({ context 
   const [notes, setNotes] = useState("");
   const [sys, setSys] = useState<SystemInfo | null>(null);
   const [tried, setTried] = useState(false);
+  // sent: the issue has been opened on GitHub; the form waits for "Write another" so a second press opens no second one
+  const [sent, setSent] = useState(false);
+  const newReportRef = useRef<HTMLButtonElement | null>(null);
 
   // Read in the browser after mount (the page is pre-rendered without these)
   useEffect(() => setSys(readSystem()), []);
@@ -261,25 +264,41 @@ export const RequestPanel: React.FC<{ context?: FeedbackContext }> = ({ context 
   const ready = mainOk && secondOk && permitted;
   const copy = COPY[kind];
 
+  const clearFields = () => {
+    setMain("");
+    setSecond("");
+    setThird("");
+    setNotes("");
+    setTried(false);
+  };
+
   const pickKind = (k: FeedbackKind) => {
     // The shared fields mean different things per kind: start them empty
-    if (k !== kind) {
-      setMain("");
-      setSecond("");
-      setThird("");
-      setNotes("");
-      setTried(false);
-    }
+    if (k !== kind) clearFields();
     setKind(k);
   };
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (sent) return;
     setTried(true);
     if (!ready) return;
     const url = feedbackIssueUrl({ kind, main, second, third, license, permission, notes }, context, sys);
     window.open(url, "_blank", "noopener,noreferrer");
+    setSent(true);
   };
+
+  const newReport = () => {
+    clearFields();
+    setLicense("");
+    setPermission("");
+    setSent(false);
+  };
+
+  // The send button is gone once sent: keep the focus (a controller's) on the way to a new report
+  useEffect(() => {
+    if (sent) newReportRef.current?.focus({ preventScroll: true });
+  }, [sent]);
 
   const added: [string, string][] =
     kind === "Bug"
@@ -339,7 +358,24 @@ export const RequestPanel: React.FC<{ context?: FeedbackContext }> = ({ context 
         </div>
       </div>
 
-      <form onSubmit={submit} noValidate className="flex min-w-0 flex-col gap-3.5">
+      {sent ? (
+        <div role="status" className="flex min-w-0 flex-col items-start gap-3.5 self-start rounded-[18px] border border-[#262B3D] bg-[#08090D]/60 px-4 py-4">
+          <span className="lc-lbl text-[10px] text-[#CCFF00]">Opened on GitHub</span>
+          <p className="m-0 text-[15px] leading-snug text-[#C5CBD8]">
+            Check the new tab and press Create there to send it. Thanks!
+          </p>
+          <button
+            ref={newReportRef}
+            type="button"
+            onClick={newReport}
+            className="inline-flex h-11 cursor-pointer items-center rounded-full border border-[#262B3D] bg-[#F5F7FA]/[0.08] px-5 text-[14px] font-bold text-[#F5F7FA] transition-colors duration-200 hover:border-[#3A4157]"
+          >
+            Write another
+          </button>
+        </div>
+      ) : null}
+      {/* Hidden, not unmounted, once sent: "Write another" clears it */}
+      <form onSubmit={submit} noValidate className={`${sent ? "hidden" : "flex"} min-w-0 flex-col gap-3.5`}>
         <Segmented
           label="What is it about?"
           className="[&_button]:min-w-0"

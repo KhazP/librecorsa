@@ -14,16 +14,24 @@ type Trend = "gaining" | "losing" | "steady";
 
 /**
  * Rate of change of the live delta, smoothed over ~0.5 s: "gaining" while the delta is falling right now (this
- * corner is quicker than the reference), "losing" while it rises.
+ * corner is quicker than the reference), "losing" while it rises. It samples on every render (the HUD renders with
+ * each telemetry frame), so a delta that stops moving decays to steady instead of keeping its last chevron, and a new
+ * run (`runId`) starts from an empty history.
  */
-export function useDeltaTrend(deltaS: number | null): { trend: Trend; rate: number } {
+export function useDeltaTrend(deltaS: number | null, runId = 0): { trend: Trend; rate: number } {
   const hist = useRef<{ t: number; d: number }[]>([]);
   const rateRef = useRef(0);
+  const runRef = useRef(runId);
   // Only the trend and a quantised strength are state, so this re-renders when the chevron actually changes
   const [out, setOut] = useState<{ trend: Trend; rate: number }>({ trend: "steady", rate: 0 });
   useEffect(() => {
     const now = performance.now();
     const h = hist.current;
+    if (runRef.current !== runId) {
+      runRef.current = runId;
+      h.length = 0;
+      rateRef.current = 0;
+    }
     if (deltaS === null) {
       h.length = 0;
       rateRef.current = 0;
@@ -43,7 +51,7 @@ export function useDeltaTrend(deltaS: number | null): { trend: Trend; rate: numb
     const trend: Trend = rate < -TREND_DEAD_BAND ? "gaining" : rate > TREND_DEAD_BAND ? "losing" : "steady";
     const q = Math.round(Math.min(0.4, Math.abs(rate)) * 10) / 10;
     setOut((o) => (o.trend === trend && o.rate === q ? o : { trend, rate: q }));
-  }, [deltaS]);
+  });
   return out;
 }
 
@@ -72,8 +80,12 @@ const Chevron: React.FC<{ trend: Trend; rate: number; side: "left" | "right" }> 
  * Ahead (negative) fills green to the left; behind (positive) fills red to the right. Chevrons either side of the
  * readout show which way it is moving right now.
  */
-export const DeltaBar: React.FC<{ deltaS: number | null; width?: number }> = ({ deltaS, width = 260 }) => {
-  const { trend, rate } = useDeltaTrend(deltaS);
+export const DeltaBar: React.FC<{ deltaS: number | null; width?: number; /** The shell's run counter (telemetry.runId) */ runId?: number }> = ({
+  deltaS,
+  width = 260,
+  runId = 0,
+}) => {
+  const { trend, rate } = useDeltaTrend(deltaS, runId);
   const has = deltaS !== null;
   const d = deltaS ?? 0;
   const ahead = d <= 0;

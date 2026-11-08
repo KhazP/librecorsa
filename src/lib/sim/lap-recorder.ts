@@ -18,15 +18,15 @@ export interface LapRecorderTurn {
 export interface LapRecorderInput {
   telemetry: Pick<
     CarTelemetry,
-    "lapCount" | "currentLapTimeMs" | "lastLapTimeMs" | "trackDistanceM" | "speedKmh" | "throttle" | "brake" | "steering" | "gear" | "offTrack" | "sectorTimesMs" | "lapInvalid" | "lastLapValid"
+    "lapCount" | "currentLapTimeMs" | "lastLapTimeMs" | "trackDistanceM" | "speedKmh" | "throttle" | "brake" | "steering" | "gear" | "offTrack" | "sectorTimesMs" | "lapInvalid" | "lastLapValid" | "runId"
   >;
   position: { x: number; y: number; z: number };
   quaternion: { x: number; y: number; z: number; w: number };
   /**
-   * What the car is driven with right now; the lap keeps the most-aided preset, the least realistic level, any wet
-   * seen and whether the autopilot ever drove
+   * What the car is driven with right now (`lapConditionsNow`); the lap keeps the most-aided preset, the least
+   * realistic level, any wet surface seen and whether the autopilot ever drove
    */
-  conditions?: { assists: AssistPreset; compound: TireCompound; wet: boolean; realism: SimRealism; autopilot: boolean };
+  conditions?: LapConditions & { autopilot: boolean };
 }
 
 export interface CompletedLap {
@@ -152,6 +152,8 @@ export class LapRecorder {
   private sessionSectorBest: [number | null, number | null, number | null] = [null, null, null];
   private sessionCornerBest: (number | null)[];
   private lastLapCount: number | null = null;
+  /** The run the last update belonged to (`CarTelemetry.runId`, absent = 0); null before the first */
+  private lastRunId: number | null = null;
   private lastLapTimeSeen: number | null = null;
   private lastLapClockMs = 0;
   /** True while the lap in progress was armed at its start */
@@ -212,6 +214,11 @@ export class LapRecorder {
   /** Call every frame while driving; returns the lap once one is completed, else null */
   update(input: LapRecorderInput): CompletedLap | null {
     const t = input.telemetry;
+    // A new run (restart, teleport, flashback, new session) since the last update: whatever the lap counter did in
+    // between, it is not a line crossing. The recorder may not have been updated for a while (a race in between)
+    const runId = t.runId ?? 0;
+    if (this.lastRunId !== null && runId !== this.lastRunId) this.reset();
+    this.lastRunId = runId;
     const prevCount = this.lastLapCount;
     const prevLapTimeMs = this.lastLapTimeSeen;
     const prevClockMs = this.lastLapClockMs;
@@ -290,7 +297,7 @@ export class LapRecorder {
     this.lapConditions = {
       assists: prev && aid(prev.assists) > aid(c.assists) ? prev.assists : c.assists,
       compound: c.compound,
-      surface: c.wet || prev?.surface === "wet" ? "wet" : "dry",
+      surface: c.surface === "wet" || prev?.surface === "wet" ? "wet" : "dry",
       realism: prev && real(prev.realism) < real(c.realism) ? prev.realism : c.realism,
       physicsVersion: PHYSICS_VERSION,
     };

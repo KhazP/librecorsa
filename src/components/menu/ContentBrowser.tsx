@@ -7,7 +7,7 @@ import { connectedPads } from "@/lib/input/device-input";
 import type { ContentLibrary, LibraryKind } from "@/lib/settings/player-settings";
 import { currentInputMode, useInputMode } from "./input-mode";
 import { focusables, focusOnHover, useBackHandler, useMoveHandler, type Dir } from "./useFocusNav";
-import { isMenuNavSuspended } from "./useMenuNav";
+import { isMenuNavSuspended, padKey } from "./useMenuNav";
 import { KeyCap, PadGlyph, PrimaryButton, PromptBar, Segmented } from "./menu-ui";
 
 /** Favourites and recents handed down from the saved settings (absent: the browsers work without them) */
@@ -317,15 +317,21 @@ export function ContentBrowser<T>(props: ContentBrowserProps<T>) {
       }
     };
     window.addEventListener("keydown", onKey);
-    // Controller Ⓧ (2) and Ⓨ (3), edges only
+    // Controller Ⓧ (2) and Ⓨ (3), edges only, from the pad the menus follow (a new first pad starts a new baseline)
     let raf = 0;
     let prev: boolean[] | null = null;
+    let prevPad: string | null = null;
     const poll = () => {
       raf = requestAnimationFrame(poll);
       const p = connectedPads().find((x) => x.mapping === "standard");
       if (!p) {
         prev = null;
+        prevPad = null;
         return;
+      }
+      if (padKey(p) !== prevPad) {
+        prev = null;
+        prevPad = padKey(p);
       }
       const now = [Boolean(p.buttons[2]?.pressed), Boolean(p.buttons[3]?.pressed)];
       if (prev && !isMenuNavSuspended() && inside()) {

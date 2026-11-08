@@ -316,10 +316,19 @@ const buttonDown = (pad: PadLike | undefined, button: number) => {
   return Boolean(b && (b.pressed || b.value > 0.5));
 };
 
+/** The devices a wheel binding names (the steering's, then any separate pedals'); null without a steering binding */
+function boundWheelDevices(wheel: WheelSettings): string | null {
+  return wheel.steer ? [wheel.steer.padId, wheel.throttle?.padId ?? "", wheel.brake?.padId ?? ""].join("\n") : null;
+}
+
 /** Per-frame reader: holds the button edge state and the steering filter */
 export class DeviceInputReader {
   private prevHeld = new Set<PadAction>();
+  /** The device the buttons were read from last frame ("wheel", or the source and pad id); null with none */
+  private prevSource: string | null = null;
   private smoothedSteer = 0;
+  /** The bound wheel devices last frame ({@link boundWheelDevices}) and whether they were all connected */
+  private wheelDevices: string | null = null;
   private wheelPresent = false;
 
   read(pads: readonly PadLike[], settings: DeviceInputSettings, dtSeconds: number, vehicle?: string): DeviceFrame {
@@ -332,11 +341,17 @@ export class DeviceInputReader {
       wheelPad !== undefined &&
       (!wheel.throttle || findPad(pads, wheel.throttle.padId) !== undefined) &&
       (!wheel.brake || findPad(pads, wheel.brake.padId) !== undefined);
-    if (this.wheelPresent && !present) frame.wheelLost = true;
+    // Lost means the same bound devices were all connected last frame and one is gone now: clearing or rebinding the
+    // steering (or the pedals) with everything plugged in is a settings change, not an unplug
+    const devices = boundWheelDevices(wheel);
+    if (devices !== null && devices === this.wheelDevices && this.wheelPresent && !present) frame.wheelLost = true;
+    this.wheelDevices = devices;
     this.wheelPresent = present;
+    let source: string | null = null;
 
     if (wheel.steer && wheelPad) {
       frame.source = "wheel";
+      source = "wheel";
       const target = wheelSteerValue(
         wheelPad.axes[wheel.steer.axis] ?? wheel.steer.center,
         wheel.steer,
@@ -397,11 +412,16 @@ export class DeviceInputReader {
           const button = map[id];
           if (button !== null && buttonDown(pad, button)) held.add(id);
         }
+        source = `${frame.source}:${pad.id}`;
       }
     }
 
-    for (const a of held) if (!this.prevHeld.has(a)) frame.pressed.add(a);
+    // The input moved to another device (wheel unplugged, a second pad took over): what is already held there is the
+    // new baseline, not a press. From no device at all it counts: a browser shows a pad only once a button is pressed
+    const switched = this.prevSource !== null && source !== null && source !== this.prevSource;
+    if (!switched) for (const a of held) if (!this.prevHeld.has(a)) frame.pressed.add(a);
     this.prevHeld = held;
+    this.prevSource = source;
     frame.boostHeld = held.has("boost");
     return frame;
   }

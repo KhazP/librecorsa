@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Check } from "lucide-react";
 import { useFocusNav } from "./useFocusNav";
+import { isMenuNavSuspended } from "./useMenuNav";
 import { PadGlyph, PrimaryButton, PromptBar, Segmented } from "./menu-ui";
 import { useInputMode } from "./input-mode";
 import { DeviceStep } from "./steps/DeviceStep";
@@ -52,7 +53,9 @@ export interface FirstRunWizardProps extends SetupStepProps {
 export const FirstRunWizard: React.FC<FirstRunWizardProps> = (props) => {
   const { mode, onFinish, onExit, onSkip, onStepChange } = props;
   const steps = STEPS[mode];
-  const [stepIndex, setStepIndex] = useState(0);
+  const [rawStepIndex, setStepIndex] = useState(0);
+  // Clamped: `mode` can change while open, and the shorter list must not run past its end
+  const stepIndex = Math.min(rawStepIndex, steps.length - 1);
   const step = steps[stepIndex];
   const last = stepIndex === steps.length - 1;
   const bodyRef = useRef<HTMLDivElement | null>(null);
@@ -76,8 +79,8 @@ export const FirstRunWizard: React.FC<FirstRunWizardProps> = (props) => {
     });
   }, [step, onStepChange]);
 
-  const next = () => (last ? onFinish() : setStepIndex((i) => i + 1));
-  const back = () => (stepIndex === 0 ? onExit() : setStepIndex((i) => i - 1));
+  const next = () => (last ? onFinish() : setStepIndex(stepIndex + 1));
+  const back = () => (stepIndex === 0 ? onExit() : setStepIndex(stepIndex - 1));
   const selectDevice = (device: InputDevice) => props.onChangeSettings((s) => ({ ...s, device }));
   const cycleDevice = (dir: -1 | 1) => {
     const idx = DEVICES.indexOf(props.settings.device);
@@ -94,10 +97,18 @@ export const FirstRunWizard: React.FC<FirstRunWizardProps> = (props) => {
   });
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      // useFocusNav runs first and marks the keys it handled
-      if (e.defaultPrevented || (e.code !== "Enter" && e.code !== "NumpadEnter")) return;
+      // useFocusNav runs first and marks the keys it handled; like it, this stays out of a capture or calibration
+      if (e.defaultPrevented || isMenuNavSuspended() || (e.code !== "Enter" && e.code !== "NumpadEnter")) return;
+      // Controls that take Enter themselves (buttons, links, fields, drop-downs), as useFocusNav leaves them
       const el = document.activeElement;
-      if (el instanceof HTMLButtonElement || el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) return;
+      if (
+        el instanceof HTMLButtonElement ||
+        el instanceof HTMLAnchorElement ||
+        el instanceof HTMLInputElement ||
+        el instanceof HTMLTextAreaElement ||
+        el instanceof HTMLSelectElement
+      )
+        return;
       e.preventDefault();
       next();
     };
@@ -226,7 +237,7 @@ export const FirstRunWizard: React.FC<FirstRunWizardProps> = (props) => {
               ref={bodyRef}
               className="-mx-1.5 mt-4 min-h-0 flex-1 overflow-y-auto px-1.5 pt-1 pb-2 not-compact:mt-6 short:mt-2"
             >
-              {step === "device" ? <DeviceStep {...props} autoDetect pickedRef={devicePickedRef} /> : null}
+              {step === "device" ? <DeviceStep {...props} pickedRef={devicePickedRef} /> : null}
               {step === "setup" && props.settings.device === "keyboard" ? <KeyboardStep {...props} /> : null}
               {step === "setup" && props.settings.device === "controller" ? <ControllerStep {...props} /> : null}
               {step === "setup" && props.settings.device === "wheel" ? <WheelStep {...props} /> : null}

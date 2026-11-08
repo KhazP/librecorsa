@@ -1108,6 +1108,55 @@ async function runVerification() {
     checkBarrierCrashes(check, 'VF26 (track-data walls)', crashTrack, walls, () => vf26CrashCar(new F1Physics2026(crashTrack), crashTrack), 0.55);
   }
 
+  // 13. Driver-facing states: the tuner reads back what was picked, a restart and an autopilot hand-back restore the
+  // player's ERS mode (and a restart the automatic Straight Mode), and a mid-lap placement deletes the lap
+  {
+    console.log('\n13. Tuner, restart, autopilot hand-back and lap states...');
+    const sim = new F1Physics2026(track);
+    sim.resetToStartGrid(false);
+    const readBack = (['CHR', 'LIC', 'BAL', 'RAC', 'PSH'] as const).map((m) => {
+      sim.setLiveTuner({ ersMode: m });
+      return sim.getLiveTunerState().ersMode;
+    });
+    assert(readBack.join() === 'CHR,LIC,BAL,RAC,PSH', `ERS tuner reads back each setting (${readBack.join(' ')})`);
+
+    sim.setLiveTuner({ ersMode: 'CHR' });
+    sim.step(1 / 60, { toggleXMode: true });
+    const manualAfterToggle = !sim.autoXMode;
+    sim.resetToStartGrid(true);
+    assert(
+      manualAfterToggle && sim.autoXMode && sim.drivetrain.ersMode === 'HARVEST',
+      `A restart restores the automatic Straight Mode and the picked ERS mode (autoXMode ${sim.autoXMode}, ERS ${sim.drivetrain.ersMode})`
+    );
+
+    sim.aiAutopilot = true;
+    const aiModes = new Set<string>();
+    for (let i = 0; i < 120; i++) {
+      sim.step(1 / 60, {});
+      aiModes.add(sim.drivetrain.ersMode);
+    }
+    sim.aiAutopilot = false;
+    sim.step(1 / 60, { throttle: 1 });
+    assert(
+      !aiModes.has('HARVEST') && sim.drivetrain.ersMode === 'HARVEST',
+      `Autopilot hand-back restores the picked ERS mode (AI ran ${[...aiModes].join('/')}, now ${sim.drivetrain.ersMode})`
+    );
+
+    sim.resetToStartGrid(true);
+    for (let i = 0; i < 30; i++) sim.step(1 / 60, { throttle: 1 });
+    const cleanBefore = sim.telemetry.lapInvalid !== true;
+    sim.teleportToDistance(2000, 50);
+    const afterTeleport = sim.telemetry.lapInvalid === true;
+    sim.resetToStartGrid(true);
+    const afterRestart = sim.telemetry.lapInvalid === true;
+    sim.restorePose({ x: sim.worldPosition.x, z: sim.worldPosition.z, yawRad: 0, speedMs: 40 });
+    const afterFlashback = sim.telemetry.lapInvalid === true;
+    assert(
+      cleanBefore && afterTeleport && !afterRestart && afterFlashback,
+      `A mid-lap placement deletes the lap, a restart starts clean (before ${cleanBefore ? 'clean' : 'invalid'}, teleport ${afterTeleport}, restart ${afterRestart}, flashback ${afterFlashback})`
+    );
+  }
+
   if (failures.length > 0) {
     console.log(`\n${failures.length} CHECK(S) FAILED:`);
     for (const f of failures) console.log(`  - ${f}`);

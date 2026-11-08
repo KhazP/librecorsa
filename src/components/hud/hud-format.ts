@@ -1,4 +1,4 @@
-import type { TireCompound } from "@/types/f1";
+import type { CarTelemetry, RaceStatus, TireCompound } from "@/types/f1";
 
 /** Shared formatting and colour rules of the LibreCorsa in-race telemetry HUD */
 
@@ -61,6 +61,32 @@ export function sectorTimeColor(ms: number, best: number | null | undefined): st
 }
 
 export { revRangeFor } from "@/lib/sim/rev-range";
+
+/** At or past the shift point (the top of `revRangeFor`): every style flashes its rev lights and gear from here */
+export const atShiftPoint = (rpm: number, revFull: number): boolean => rpm >= revFull;
+
+/**
+ * Driver aids intervening right now, one reading for every panel: the live tuner cutting more than 2 % of the pedal,
+ * or the car's own aid flag (the 6-DOF car reports both, and they agree)
+ */
+export function aidsActive(t: Pick<CarTelemetry, "liveTuner" | "f12026">): { tc: boolean; abs: boolean } {
+  const tuner = t.liveTuner;
+  return {
+    tc: (tuner?.tcCutFraction ?? 0) > 0.02 || Boolean(t.f12026?.tcActive),
+    abs: (tuner?.absCutPerWheel ?? []).some((c) => c > 0.02) || Boolean(t.f12026?.absActive),
+  };
+}
+
+/**
+ * Where a race stands, one reading for every panel:
+ * - `finished`: the player has taken the chequered flag (phase "finished"). The start lights' flag banner and the
+ *   fuel-to-the-flag maths follow this: the player's own race is over, even while others are still running.
+ * - `classified`: the classification is out (results present, provisional until `resultsFinal`). The results card
+ *   follows this, since it needs the rows to show.
+ */
+export function raceState(race: RaceStatus | undefined): { finished: boolean; classified: boolean } {
+  return { finished: race?.phase === "finished", classified: Boolean(race?.results) };
+}
 
 /** A tyre condition (graining, blistering, flat spot, dirt) is flagged on the HUD from this level (0..1) */
 export const TYRE_CONDITION_SHOW = 0.12;

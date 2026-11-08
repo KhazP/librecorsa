@@ -138,7 +138,8 @@ export const ConditionsPanel: React.FC<ConditionsPanelProps> = ({
             {WEATHER_PRESETS.map((id) => (
               <ChoiceCard
                 key={id}
-                active={conditions.weather === id}
+                // A custom forecast (weatherNodes) overrides the preset, so then no preset is the active one
+                active={conditions.weather === id && !conditions.weatherNodes}
                 disabled={locked}
                 // A preset replaces any custom forecast (the sim prefers weatherNodes over the preset when both exist)
                 onClick={() =>

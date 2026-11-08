@@ -163,4 +163,25 @@ check('after reset() the camera starts behind the car where it now is', () => {
   assert.ok(o.back > 4 && o.back < 6 && Math.abs(o.left) < 0.01, JSON.stringify(o));
 });
 
+check('back from another camera with the car further on, it starts over as after reset(), not from stale smoothing', () => {
+  const a = drive();
+  const b = drive();
+  for (let i = 0; i < 120; i++) {
+    step(a, 1 / 60, 60, 0.5);
+    step(b, 1 / 60, 60, 0.5);
+  }
+  // Another camera was on for 3 s: the car drove on round the corner and neither chase camera saw it
+  for (const d of [a, b]) {
+    for (let i = 0; i < 180; i++) {
+      d.yaw += 0.5 / 60;
+      d.input.carPos.add(new THREE.Vector3(Math.sin(d.yaw), 0, Math.cos(d.yaw)));
+    }
+  }
+  b.cam.reset();
+  const pa = step(a, 1 / 60, 60, 0.5);
+  const pb = step(b, 1 / 60, 60, 0.5);
+  assert.ok(pa.position.distanceTo(pb.position) < 1e-9, `${pa.position.distanceTo(pb.position)} m from a reset camera`);
+  assert.ok(Math.abs(pa.fovDeg - pb.fovDeg) < 1e-9);
+});
+
 console.log(`\n${passed} checks passed`);

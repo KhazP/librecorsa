@@ -153,6 +153,8 @@ export class WingMirrors {
   private readonly overlays: THREE.Mesh[] = [];
   private surfaceActive = false;
   private renderOnNextUpdate = false;
+  /** After dispose(): the render target and surfaces are gone, so update() does nothing */
+  private disposed = false;
 
   // Preallocated per-frame state
   private readonly eye = new THREE.Vector3();
@@ -228,7 +230,7 @@ export class WingMirrors {
    * when enabled; when disabled the mirrors go back to their dark glass material.
    */
   update(frameIndex: number, enabled: boolean, chassis: THREE.Object3D): void {
-    if (!this.found || !this.rt) return;
+    if (this.disposed || !this.found || !this.rt) return;
     if (enabled !== this.surfaceActive) {
       this.surfaceActive = enabled;
       for (const s of this.slots) s.mesh.material = enabled ? s.surface : s.glass;
@@ -243,6 +245,8 @@ export class WingMirrors {
   }
 
   dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
     for (const s of this.slots) {
       s.mesh.material = s.glass;
       s.mesh.geometry = s.glassGeometry;

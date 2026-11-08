@@ -10,6 +10,7 @@ import { MfdStatusChips, TunerMfdPanel } from "./TunerMfdPanel";
 import { BrakeBar, cornerData, psiDeltaColor, TyreGlyph } from "./TyreBrakeWidget";
 import { computeRelatives, fuelStrategy, useLapHistory, type LapRecord, type RelativeRow } from "./mfd-data";
 import { COMPOUND_COLORS } from "./styles/hud-style-parts";
+import { useHudModeRef } from "./hud-mode";
 
 export type MfdPageId = "elec" | "rel" | "tyre" | "fuel" | "stnd";
 
@@ -301,6 +302,7 @@ export const MultiPageMfd: React.FC<MultiPageMfdProps> = ({
   const [page, setPage] = useState<MfdPageId>(readPage);
   const [folded, setFolded] = useState(defaultFolded);
   const laps = useLapHistory(t);
+  const hudModeRef = useHudModeRef();
   // Opened by the D-pad (not by the driver asking for the MFD): the auto-fold timer applies
   const padOpened = useRef(false);
   const foldTimer = useRef<number | null>(null);
@@ -310,8 +312,16 @@ export const MultiPageMfd: React.FC<MultiPageMfdProps> = ({
     foldTimer.current = null;
   };
   useEffect(() => clearFold, []);
+  // Switching auto-fold off cancels a fold already on its way
+  useEffect(() => {
+    if (!autoFold) clearFold();
+  }, [autoFold]);
 
+  // Every page change goes through here, and the page is remembered across sessions from this one place
+  const pageRef = useRef(page);
+  pageRef.current = page;
   const choose = useCallback((p: MfdPageId) => {
+    pageRef.current = p;
     setPage(p);
     try {
       window.localStorage.setItem(PAGE_KEY, p);
@@ -319,11 +329,19 @@ export const MultiPageMfd: React.FC<MultiPageMfdProps> = ({
       // Not remembered across sessions
     }
   }, []);
+  const stepPage = useCallback(
+    (delta: -1 | 1) => {
+      const idx = PAGES.findIndex((x) => x.id === pageRef.current);
+      choose(PAGES[(idx + delta + PAGES.length) % PAGES.length].id);
+    },
+    [choose]
+  );
 
   const armAutoFold = useCallback(() => {
     if (padOpened.current && autoFold) {
       clearFold();
       foldTimer.current = window.setTimeout(() => {
+        foldTimer.current = null;
         padOpened.current = false;
         setFolded(true);
       }, AUTO_FOLD_MS);
@@ -347,19 +365,10 @@ export const MultiPageMfd: React.FC<MultiPageMfdProps> = ({
         padOpened.current = true;
         setFolded(false);
       }
-      setPage((cur) => {
-        const idx = PAGES.findIndex((x) => x.id === cur);
-        const p = PAGES[(idx + delta + PAGES.length) % PAGES.length].id;
-        try {
-          window.localStorage.setItem(PAGE_KEY, p);
-        } catch {
-          // Not remembered
-        }
-        return p;
-      });
+      stepPage(delta);
       armAutoFold();
     },
-    [armAutoFold]
+    [armAutoFold, stepPage]
   );
 
   const onInteract = useCallback(() => {
@@ -372,27 +381,22 @@ export const MultiPageMfd: React.FC<MultiPageMfdProps> = ({
   }, [armAutoFold, choose]);
 
   useEffect(() => {
+    // The MFD and page buttons do nothing while the HUD is hidden under the pause menu or a replay
     const toggle = () => {
+      if (hudModeRef.current === "hidden") return;
       clearFold();
       padOpened.current = false;
       setFolded((f) => !f);
     };
     const next = () => {
+      if (hudModeRef.current === "hidden") return;
       clearFold();
       padOpened.current = false;
       if (foldedRef.current) {
         setFolded(false);
         return;
       }
-      setPage((cur) => {
-        const p = PAGES[(PAGES.findIndex((x) => x.id === cur) + 1) % PAGES.length].id;
-        try {
-          window.localStorage.setItem(PAGE_KEY, p);
-        } catch {
-          // Not remembered
-        }
-        return p;
-      });
+      stepPage(1);
     };
     window.addEventListener(HUD_TOGGLE_EVENT.mfd, toggle);
     window.addEventListener(HUD_TOGGLE_EVENT.mfdPage, next);
@@ -400,7 +404,7 @@ export const MultiPageMfd: React.FC<MultiPageMfdProps> = ({
       window.removeEventListener(HUD_TOGGLE_EVENT.mfd, toggle);
       window.removeEventListener(HUD_TOGGLE_EVENT.mfdPage, next);
     };
-  }, []);
+  }, [hudModeRef, stepPage]);
 
   const racing = Boolean(t.race);
   const rows = useMemo(

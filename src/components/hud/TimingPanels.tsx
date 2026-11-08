@@ -129,8 +129,8 @@ interface LapPanelProps {
   deltaS: number | null;
   /** Minimal HUD: a lap pill with a one-line sector and lap-time strip under it */
   variant?: "full" | "minimal";
-  /** The running lap was cut: its clock stays crimson until the next lap */
-  lapInvalid?: boolean;
+  /** The running lap was cut (`useLapInvalid`): its clock stays crimson until the next lap */
+  lapInvalid: boolean;
 }
 
 /** Sector state: purple for a session best, amber slower, cyan in progress, dim to come */
@@ -153,7 +153,7 @@ function sectorCells(telemetry: CarTelemetry) {
 }
 
 /** Current lap time, live delta bar & badge, 3-sector telemetry cells, and last / best lap comparison */
-export const LapPanel: React.FC<LapPanelProps> = ({ telemetry, deltaS, variant = "full", lapInvalid = telemetry.offTrack }) => {
+export const LapPanel: React.FC<LapPanelProps> = ({ telemetry, deltaS, variant = "full", lapInvalid }) => {
   const sectors = sectorCells(telemetry);
   const lap = Math.max(1, telemetry.lapCount);
   // A cut lap is invalid: the clock shows it in crimson until the next lap starts

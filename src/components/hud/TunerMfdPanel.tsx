@@ -6,7 +6,8 @@ import { connectedPads } from "@/lib/input/device-input";
 import { HUD_TOGGLE_EVENT } from "@/lib/input/bindings";
 import { notePadInput } from "@/components/menu/input-mode";
 import type { CarTelemetry, DiffPhase, LiveTunerPatch, LiveTunerState } from "@/types/f1";
-import { HUD_CYAN, HUD_GREEN, HUD_RED, HUD_VOLT, HUD_YELLOW } from "./hud-format";
+import { HUD_CYAN, HUD_GREEN, HUD_RED, HUD_VOLT, HUD_YELLOW, aidsActive } from "./hud-format";
+import { useHudModeRef } from "./hud-mode";
 
 export type MfdCategoryId = "tc" | "abs" | "bias" | "diff" | "pwr";
 
@@ -128,8 +129,7 @@ export interface TunerMfdPanelProps {
 /** TC / ABS / bias / diff phase chips: the MFD's one-line status */
 export const MfdStatusChips: React.FC<{ telemetry: CarTelemetry }> = ({ telemetry }) => {
   const tuner = telemetry.liveTuner ?? FALLBACK_TUNER;
-  const tcActive = tuner.tcCutFraction > 0.02 || Boolean(telemetry.f12026?.tcActive);
-  const absActive = tuner.absCutPerWheel.some((c) => c > 0.02) || Boolean(telemetry.f12026?.absActive);
+  const { tc: tcActive, abs: absActive } = aidsActive(telemetry);
   return (
     <div className="flex items-center gap-1">
       <span
@@ -157,7 +157,8 @@ export const MfdStatusChips: React.FC<{ telemetry: CarTelemetry }> = ({ telemetr
 /**
  * Live electronics tuner (TC, ABS, brake bias, diff, engine map, ERS), laid out for one thumb on the D-pad while
  * driving: ◀ ▶ picks the dial, ▲ ▼ changes it (keys , . and − =). Every dial draws the same blocks at the same size,
- * so nothing moves while you step through them.
+ * so nothing moves while you step through them. [ and ] are the cockpit FOV's keys, not the tuner's. The D-pad and keys
+ * act only while the HUD is live (not under the pause menu, a replay or the results card).
  */
 export const TunerMfdPanel: React.FC<TunerMfdPanelProps> = ({
   telemetry,
@@ -175,8 +176,10 @@ export const TunerMfdPanel: React.FC<TunerMfdPanelProps> = ({
 
   const dials = useMemo(() => ALL_DIALS.filter((d) => (d.id === "ers_mode" ? tuner.hasErs : true)), [tuner.hasErs]);
 
-  const [dialIdx, setDialIdx] = useState(0);
+  // The dial by id: on a car without ERS the list is shorter, and an index would land on a different dial
+  const [dialId, setDialId] = useState<MfdDialId>("tc1");
   const [ownCollapsed, setCollapsed] = useState(defaultCollapsed);
+  const hudModeRef = useHudModeRef();
   // Embedded, the multi-page MFD folds and unfolds; this panel is then always open
   const collapsed = embedded ? false : ownCollapsed;
   const interactRef = useRef(onInteract);
@@ -186,17 +189,22 @@ export const TunerMfdPanel: React.FC<TunerMfdPanelProps> = ({
   // The MFD pad button (L3 by default) opens and closes it
   useEffect(() => {
     if (embedded) return;
-    const toggle = () => setCollapsed((c) => !c);
+    const toggle = () => {
+      if (hudModeRef.current !== "hidden") setCollapsed((c) => !c);
+    };
     window.addEventListener(HUD_TOGGLE_EVENT.mfd, toggle);
     return () => window.removeEventListener(HUD_TOGGLE_EVENT.mfd, toggle);
-  }, [embedded]);
+  }, [embedded, hudModeRef]);
   const [flashDir, setFlashDir] = useState<"up" | "down" | "left" | "right" | null>(null);
 
-  const safeIdx = Math.min(dialIdx, dials.length - 1);
-  const activeDial = dials[safeIdx] ?? dials[0];
+  // A dial this car lacks (ERS) shows the first one of its group until the player picks another
+  const activeDial =
+    dials.find((d) => d.id === dialId) ??
+    dials.find((d) => d.category === ALL_DIALS.find((a) => a.id === dialId)?.category) ??
+    dials[0];
   const categoryDials = useMemo(() => dials.filter((d) => d.category === activeDial.category), [dials, activeDial.category]);
 
-  const tcActive = tuner.tcCutFraction > 0.02 || Boolean(telemetry.f12026?.tcActive);
+  const tcActive = aidsActive(telemetry).tc;
 
   const emit = useCallback(
     (patch: LiveTunerPatch) => {
@@ -215,32 +223,34 @@ export const TunerMfdPanel: React.FC<TunerMfdPanelProps> = ({
     return () => window.clearTimeout(id);
   }, [flashDir]);
 
+  // Folded or hidden, a press wakes the MFD or steps its pages, never a dial: the guard is the state itself, not
+  // whether the optional callbacks were passed
   const cycleDial = useCallback(
     (delta: -1 | 1) => {
       const m = mfdStateRef.current;
-      if (m.embedded && m.folded && m.onWake) {
-        m.onWake();
+      if (m.embedded && m.folded) {
+        m.onWake?.();
         return;
       }
-      if (m.embedded && !m.folded && m.hidden && m.onCyclePage) {
-        m.onCyclePage(delta);
+      if (m.embedded && m.hidden) {
+        m.onCyclePage?.(delta);
         return;
       }
       setCollapsed(false);
       interactRef.current?.();
-      // From the dial on screen: dialIdx can sit past the end after the list shrank (a car without ERS)
-      setDialIdx((prev) => (Math.min(prev, dials.length - 1) + delta + dials.length) % dials.length);
+      // From the dial on screen (the fallback one when the stored dial is not on this car)
+      const at = Math.max(0, dials.findIndex((d) => d.id === activeDial.id));
+      setDialId(dials[(at + delta + dials.length) % dials.length].id);
       triggerFlash(delta < 0 ? "left" : "right");
     },
-    [dials.length, triggerFlash]
+    [dials, activeDial.id, triggerFlash]
   );
 
   const pickDial = useCallback(
     (id: MfdDialId) => {
-      const idx = dials.findIndex((d) => d.id === id);
-      if (idx === -1) return;
+      if (!dials.some((d) => d.id === id)) return;
       interactRef.current?.();
-      setDialIdx(idx);
+      setDialId(id);
     },
     [dials]
   );
@@ -248,11 +258,11 @@ export const TunerMfdPanel: React.FC<TunerMfdPanelProps> = ({
   const adjustActiveDial = useCallback(
     (dir: -1 | 1) => {
       const m = mfdStateRef.current;
-      if (m.embedded && m.folded && m.onWake) {
-        m.onWake();
+      if (m.embedded && m.folded) {
+        m.onWake?.();
         return;
       }
-      if (m.embedded && !m.folded && m.hidden) {
+      if (m.embedded && m.hidden) {
         interactRef.current?.();
         return;
       }
@@ -307,17 +317,23 @@ export const TunerMfdPanel: React.FC<TunerMfdPanelProps> = ({
     let prev: [boolean, boolean, boolean, boolean] | null = null;
     const repeatAt: [number, number, number, number] = [Infinity, Infinity, Infinity, Infinity];
 
+    /** Forget the buttons: the next frame only records them, so one held through a menu fires nothing */
+    const disarm = () => {
+      prev = null;
+      repeatAt.fill(Infinity);
+    };
+
     const poll = (nowMs: number) => {
       raf = requestAnimationFrame(poll);
-      // Do not intercept D-Pad while a full-screen menu / modal (PauseMenu, TitleMenu, Wizard) is open
-      if (document.querySelector("[data-nav-zone]")) {
-        prev = null;
+      // The pause menu, a replay and the results card own the D-pad (the HUD is only mounted while driving)
+      if (hudModeRef.current !== "live") {
+        disarm();
         return;
       }
       const pads = connectedPads();
       const pad = pads.find((p) => p.mapping === "standard") ?? pads[0];
       if (!pad) {
-        prev = null;
+        disarm();
         return;
       }
       const down = (btnIdx: number) => Boolean(pad.buttons[btnIdx]?.pressed);
@@ -353,18 +369,18 @@ export const TunerMfdPanel: React.FC<TunerMfdPanelProps> = ({
 
     raf = requestAnimationFrame(poll);
     return () => cancelAnimationFrame(raf);
-  }, []);
+  }, [hudModeRef]);
 
-  // Keyboard shortcuts: , / . (or [ / ]) cycle MFD dials; - / = adjust value
+  // Keyboard shortcuts: , / . cycle MFD dials; - / = adjust value ([ / ] belong to the cockpit FOV)
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || document.querySelector("[data-nav-zone]")) {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || hudModeRef.current !== "live") {
         return;
       }
-      if (e.key === "," || e.key === "<" || e.key === "[") {
+      if (e.key === "," || e.key === "<") {
         e.preventDefault();
         cycleDial(-1);
-      } else if (e.key === "." || e.key === ">" || e.key === "]") {
+      } else if (e.key === "." || e.key === ">") {
         e.preventDefault();
         cycleDial(1);
       } else if (e.key === "-" || e.key === "_") {
@@ -377,7 +393,7 @@ export const TunerMfdPanel: React.FC<TunerMfdPanelProps> = ({
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [cycleDial, adjustActiveDial]);
+  }, [cycleDial, adjustActiveDial, hudModeRef]);
 
   // The active dial's value, a short tag beside its name, and its segment bar
   const hero = useMemo((): { text: string; tag: string; segments: number; filled: number; off: boolean } => {

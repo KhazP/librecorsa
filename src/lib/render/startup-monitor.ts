@@ -32,7 +32,8 @@ export class StartupMonitor {
   private t0 = -1;
   private last = 0;
   private readonly buckets: Bucket[] = [];
-  private sectionStart = 0;
+  /** When the open section began (begin()); null with none open, so an end() without its begin() adds nothing */
+  private sectionStart: number | null = null;
   private prev = { programs: 0, textures: 0, geometries: 0 };
   private done = false;
 
@@ -84,11 +85,13 @@ export class StartupMonitor {
   }
 
   end(section: Section): void {
-    if (this.t0 < 0 || this.done) return;
+    const start = this.sectionStart;
+    this.sectionStart = null;
+    if (start === null || this.t0 < 0 || this.done) return;
     const now = performance.now();
     const b = this.bucket(now);
     if (!b) return;
-    const ms = now - this.sectionStart;
+    const ms = now - start;
     if (section === "sim") b.simMs += ms;
     else if (section === "probe") b.probeMs += ms;
     else if (section === "idle") {

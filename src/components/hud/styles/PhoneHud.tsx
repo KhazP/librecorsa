@@ -2,7 +2,8 @@
 
 import React, { useSyncExternalStore } from "react";
 import { Zap } from "lucide-react";
-import { formatDelta, formatLapTime, HUD_RED } from "../hud-format";
+import { atShiftPoint, formatDelta, formatLapTime, HUD_RED } from "../hud-format";
+import { aeroReadout } from "../aero-label";
 import { anchor, deltaColor, gearLabel, HUD_GLASS, HUD_LBL, MiniMap, type HudDesignProps } from "./hud-style-parts";
 
 /** A phone in either orientation: narrow, or a landscape screen this short */
@@ -34,11 +35,11 @@ const ledColor = (i: number) => (i < 5 ? "#00E676" : i < 9 ? HUD_RED : "#2F8BE5"
  * In portrait the speed pod drops under the top row and the map steps aside. It sits in the HUD's
  * safe frame, so its offsets start where a notch or the Dynamic Island ends.
  */
-export const PhoneHud: React.FC<HudDesignProps> = ({ t, deltaS, map, revRange, scale, touch, lapInvalid = t.offTrack }) => {
+export const PhoneHud: React.FC<HudDesignProps> = ({ t, deltaS, map, revRange, scale, touch, lapInvalid }) => {
   const race = t.race;
   const [revStart, revFull] = revRange;
   const lit = Math.round(Math.min(1, Math.max(0, (t.rpm - revStart) / (revFull - revStart))) * LEDS);
-  const shift = t.rpm >= revFull;
+  const shift = atShiftPoint(t.rpm, revFull);
   const hasErs = t.f12026?.hasErs ?? true;
 
   return (
@@ -86,7 +87,7 @@ export const PhoneHud: React.FC<HudDesignProps> = ({ t, deltaS, map, revRange, s
                 <span className="relative h-1 flex-1 overflow-hidden rounded-full bg-white/10">
                   <span className="absolute inset-y-0 left-0 rounded-full bg-[#00E5FF]" style={{ width: `${t.ersBatteryPercent}%` }} />
                 </span>
-                {t.activeAeroMode === "X_MODE" ? (
+                {aeroReadout(t).open ? (
                   <span className="rounded-full bg-[#CCFF00] px-1.5 font-f1-mono text-[8px] leading-[14px] font-extrabold text-[#08090D]">X</span>
                 ) : null}
               </div>

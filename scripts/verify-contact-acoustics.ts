@@ -508,5 +508,251 @@ console.log("\n7. Noise loops and teardown");
   check("update() after dispose() touches nothing", writes() === before);
 }
 
-console.log(`\nContact acoustics verification: ${passed} passed, ${failed} failed.`);
-if (failed > 0) process.exit(1);
+// ---------------------------------------------------------------------------------------------------------------
+// 8. Engine voice and shift edges: these let the (mocked) bank and sample loads land, so they run after the rest
+// ---------------------------------------------------------------------------------------------------------------
+
+const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
+async function settle(ticks = 8): Promise<void> {
+  for (let i = 0; i < ticks; i++) await tick();
+}
+
+const ONESHOT_ROLES = ["gear_up", "gear_down", "shift_cut", "backfire_int", "backfire_ext", "pop_ext", "blowoff", "limiter"];
+/** A small bank: three rpm anchors per layer and view, and one recording per one-shot role */
+function fakeManifest() {
+  const engine = (view: string) =>
+    [4000, 8000, 12000].flatMap((rpm) =>
+      (["on", "off"] as const).map((layer) => ({ file: `e_${view}_${layer}_${rpm}.ogg`, layer, channels: 1, rms: 0.1, rpm }))
+    );
+  return {
+    sampleRate: 48000,
+    loopSeconds: 2,
+    engine: { ext: engine("ext"), int: engine("int") },
+    turbo: [],
+    transmission: [],
+    oneshots: ONESHOT_ROLES.map((role) => ({ file: `os_${role}.ogg`, role, channels: 1, seconds: 0.3, peak: 0.5 })),
+    throttleCurve: { ext: [[0, 0], [1, 1]], int: [[0, 0], [1, 1]] },
+  };
+}
+
+/** Which banks and WAV loops "exist", every URL fetched, and whether a file takes a turn of the event loop to arrive */
+const net = { banks: new Set<string>(), wavs: false, log: [] as string[], slow: false };
+function fakeFetch(url: string) {
+  net.log.push(url);
+  if (url.endsWith("manifest.json")) {
+    const ok = [...net.banks].some((dir) => url.endsWith(`${dir}manifest.json`));
+    return Promise.resolve(ok ? { ok: true, json: () => Promise.resolve(fakeManifest()) } : { ok: false });
+  }
+  if (url.includes("/audio/f1_real_") && !net.wavs) return Promise.resolve({ ok: false });
+  // The "decoded" buffer carries the file it came from, so a played source can be traced back to it
+  const res = { ok: true, arrayBuffer: () => Promise.resolve({ file: url }) };
+  return net.slow ? new Promise((resolve) => setImmediate(() => resolve(res))) : Promise.resolve(res);
+}
+const fileOf = (src: MockSource) => (src.buffer as { file?: string } | null)?.file ?? "";
+/** One-shots of `roles` started in `run` so far */
+const plays = (run: Run, ...roles: string[]) =>
+  run.ctx.sources.filter((src) => src.started && roles.some((r) => fileOf(src).includes(`os_${r}.ogg`))).length;
+const ALL_ONESHOTS = ONESHOT_ROLES.filter((r) => r !== "limiter");
+const POPS = ["backfire_int", "backfire_ext", "pop_ext"];
+
+async function startLoaded(banks: string[], wavs = false): Promise<Run> {
+  net.banks = new Set(banks);
+  net.wavs = wavs;
+  const run = start();
+  await settle();
+  return run;
+}
+
+const AMR26_DIR = "/amr26/audio/";
+const BMW_DIR = BMW_M4_GT3_SOUND.assetDir;
+const gearTel = (gear: number, throttle: number, rpm: number) => telemetry({ gear, throttle, rpm });
+
+async function engineVoiceChecks(): Promise<void> {
+  console.log("\n8. Engine voice and shift edges");
+  // Let the earlier runs' loads fail on the original mocks before swapping them
+  await settle();
+  const g = globalThis as unknown as { fetch: unknown };
+  const origFetch = g.fetch;
+  const origDecode = MockContext.prototype.decodeAudioData;
+  const origRandom = Math.random;
+  g.fetch = fakeFetch;
+  MockContext.prototype.decodeAudioData = function (ab: unknown) {
+    return Promise.resolve({ duration: 2, length: 16000, sampleRate: 8000, file: (ab as { file: string }).file });
+  } as unknown as typeof origDecode;
+  try {
+    {
+      // A throw half-way through init() leaves no context open beside the next one
+      const origCompressor = MockContext.prototype.createDynamicsCompressor;
+      let throwOnce = true;
+      MockContext.prototype.createDynamicsCompressor = function (this: MockContext) {
+        if (throwOnce) {
+          throwOnce = false;
+          throw new Error("no compressor");
+        }
+        return origCompressor.call(this);
+      };
+      const engine = new CarAudioEngine();
+      let threw = false;
+      try {
+        engine.init();
+      } catch {
+        threw = true;
+      }
+      const first = MockContext.all[MockContext.all.length - 1];
+      const halfBuilt = threw && !engine.isInitialized && engine.context === null && first.state === "closed";
+      engine.resume();
+      MockContext.prototype.createDynamicsCompressor = origCompressor;
+      check(
+        "init(): a throw half-way closes its context; the retry builds one context",
+        halfBuilt && engine.isInitialized && engine.context !== null && (engine.context as unknown) !== first,
+        `threw ${threw}, first ${first.state}`
+      );
+      engine.dispose();
+    }
+
+    {
+      // Reverse into first is no upshift; first into second is
+      const run = await startLoaded([AMR26_DIR]);
+      drive(run, 0.3, 60, () => gearTel(-1, 0.2, 6000));
+      frame(run, gearTel(1, 0.2, 6000));
+      const fromReverse = plays(run, "gear_up", "shift_cut");
+      drive(run, 0.3, 60, () => gearTel(1, 0.4, 7000));
+      const gearUps = plays(run, "gear_up");
+      frame(run, gearTel(2, 0.4, 7000));
+      const upshift = plays(run, "gear_up") - gearUps;
+      check(
+        "Reverse to first plays no gear or shift-cut sound; first to second does",
+        run.engine.usingVf26Sounds && fromReverse === 0 && upshift === 1,
+        `reverse→1: ${fromReverse}, 1→2: ${upshift}`
+      );
+      run.engine.dispose();
+    }
+
+    {
+      // A restart made during a pause (5th, flat out → 1st, foot off) is not heard as a downshift and a lift
+      const restart = async (pause: boolean) => {
+        const run = await startLoaded([AMR26_DIR]);
+        drive(run, 0.5, 60, () => gearTel(5, 1, 11000));
+        const before = plays(run, ...ALL_ONESHOTS);
+        if (pause) {
+          run.engine.setPaused(true);
+          for (let k = 0; k < 5; k++) frame(run, gearTel(1, 0, 4500));
+          run.engine.setPaused(false);
+        }
+        drive(run, 0.3, 60, () => gearTel(1, 0, 4500));
+        const after = plays(run, ...ALL_ONESHOTS) - before;
+        const gearDown = plays(run, "gear_down");
+        run.engine.dispose();
+        return { after, gearDown };
+      };
+      const control = await restart(false);
+      const paused = await restart(true);
+      check(
+        "A restart during a pause fires no one-shot on resume (without the pause it is a downshift)",
+        control.gearDown === 1 && paused.after === 0,
+        `control: ${control.after} one-shots (gear_down ${control.gearDown}), after the pause: ${paused.after}`
+      );
+    }
+
+    {
+      // A lift and a downshift on the same frame: one pop, not the blip's pop and a lift burst on top of it
+      Math.random = () => 0;
+      const run = await startLoaded([AMR26_DIR]);
+      drive(run, 0.5, 60, () => gearTel(5, 1, 11000));
+      const before = plays(run, ...POPS);
+      frame(run, gearTel(4, 0, 11000));
+      const pops = plays(run, ...POPS) - before;
+      Math.random = origRandom;
+      check("A lift on a downshift's frame pops once", pops === 1, `${pops} pops`);
+      run.engine.dispose();
+    }
+
+    {
+      // The WAV loops of a car without a bank fall silent once a later car's bank plays
+      const run = await startLoaded([], true);
+      drive(run, 0.3, 60, steady());
+      const wavLoops = run.ctx.sources.filter((src) => fileOf(src).includes("/audio/f1_real_"));
+      const wavGain = (src: MockSource) => (src.outs[0] as MockGain | undefined)?.gain.last ?? NaN;
+      const playingBefore = wavLoops.filter((src) => wavGain(src) > 0).length;
+      net.banks = new Set([BMW_DIR]);
+      run.engine.setCar(BMW_M4_GT3_SOUND);
+      await settle();
+      drive(run, 0.3, 60, steady());
+      const playingAfter = wavLoops.filter((src) => !(wavGain(src) === 0)).length;
+      check(
+        "WAV loops then a bank: the loops go silent, only the bank plays",
+        wavLoops.length === 5 && playingBefore > 0 && run.engine.usingVf26Sounds && playingAfter === 0,
+        `${wavLoops.length} loops, ${playingBefore} heard before the bank, ${playingAfter} after`
+      );
+      run.engine.dispose();
+    }
+
+    {
+      // dispose() while the bank is loading: the failed load does not fall back into the closed context
+      net.banks = new Set();
+      net.wavs = true;
+      const run = start();
+      run.engine.dispose();
+      await settle();
+      const wavs = run.ctx.sources.filter((src) => fileOf(src).includes("/audio/f1_real_")).length;
+      check("dispose() mid-load: no WAV loop is loaded into the closed context", wavs === 0, `${wavs} loops`);
+    }
+
+    {
+      // Disposed once ready: the bank's background decode (one-shots, other view) stops fetching
+      net.banks = new Set([AMR26_DIR]);
+      net.wavs = false;
+      net.log = [];
+      net.slow = true;
+      const run = start();
+      for (let k = 0; k < 20 && !run.engine.usingVf26Sounds; k++) await tick();
+      const ready = run.engine.usingVf26Sounds;
+      run.engine.dispose();
+      await settle();
+      net.slow = false;
+      const background = net.log.filter((u) => u.includes("os_") || u.includes("e_int_")).length;
+      const total = fakeManifest().oneshots.length + fakeManifest().engine.int.length;
+      check(
+        "A bank disposed while decoding in the background fetches no more files",
+        ready && background <= 4 && background < total,
+        `${background} of ${total} background files fetched`
+      );
+    }
+
+    {
+      // Synthesised voices: only a change between forward gears dips the engine
+      const levelsAfter = async (from: number, to: number) => {
+        const run = await startLoaded([]);
+        drive(run, 0.5, 60, () => gearTel(from, 0.6, 9000));
+        frame(run, gearTel(to, 0.6, 9000));
+        const levels = run.ctx.nodes.map((n) => (n instanceof MockGain ? n.gain.last : 0));
+        run.engine.dispose();
+        return levels;
+      };
+      const stay = await levelsAfter(1, 1);
+      const diff = (a: number[], b: number[]) => a.reduce((m, x, i) => Math.max(m, Math.abs(x - b[i])), 0);
+      const intoNeutral = diff(await levelsAfter(1, 0), stay);
+      const intoReverse = diff(await levelsAfter(1, -1), stay);
+      const upshift = diff(await levelsAfter(1, 2), stay);
+      check(
+        "Into neutral or reverse: no shift cut; 1st to 2nd: the cut",
+        intoNeutral === 0 && intoReverse === 0 && upshift > 0,
+        `N ${intoNeutral}, R ${intoReverse}, 1→2 ${upshift.toExponential(2)}`
+      );
+    }
+  } finally {
+    g.fetch = origFetch;
+    MockContext.prototype.decodeAudioData = origDecode;
+    Math.random = origRandom;
+  }
+}
+
+void engineVoiceChecks()
+  .catch((err) => {
+    failed++;
+    console.log(`  FAIL  engine voice checks threw: ${String(err)}`);
+  })
+  .then(() => {
+    console.log(`\nContact acoustics verification: ${passed} passed, ${failed} failed.`);
+    if (failed > 0) process.exit(1);
+  });
