@@ -161,6 +161,10 @@ type AppPhase = "loading" | "title" | "wizard" | "driving";
 
 /** The race on track with the player: none (practice), the AI field, or a multiplayer race; never two at once */
 type SessionRace = { kind: "practice" } | { kind: "ai"; field: AiOpponentField } | { kind: "mp"; race: MultiplayerRace };
+/** The AI field on track, when the session is a race against it */
+const aiFieldOf = (race: SessionRace): AiOpponentField | null => (race.kind === "ai" ? race.field : null);
+/** The multiplayer race on track, when the session is an online race */
+const mpRaceOf = (race: SessionRace): MultiplayerRace | null => (race.kind === "mp" ? race.race : null);
 /** Why the run on track starts over (see resetRun) */
 type RunResetReason = "session" | "restart" | "teleport" | "car" | "race" | "flashback";
 /** The VR headset: off, being asked for a session, or presenting */
@@ -235,8 +239,10 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   const carRigRef = useRef<SimCarRig | null>(null);
   const liveryRef = useRef<LiveryConfig>(LIVERIES[0]);
   const racingLineMeshRef = useRef<THREE.Mesh | null>(null);
-  /** The AI race field while "AI opponents" is enabled */
-  const aiFieldRef = useRef<AiOpponentField | null>(null);
+  /** The session on track: practice, a race against the AI field, or an online race (written only by setRace) */
+  const raceRef = useRef<SessionRace>({ kind: "practice" });
+  /** Its kind, for the menus */
+  const [raceKind, setRaceKind] = useState<SessionRace["kind"]>("practice");
   /** Track evolution and aero wake for every car on the circuit (the player's in every mode); an AI field shares it */
   const trackEnvRef = useRef<TrackEnvironment | null>(null);
   const getTrackEnv = useCallback(
@@ -310,7 +316,6 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   rumbleEnabledRef.current = gamepadRumble;
   /** Pad rumble driven from the physics; created with the physics and silenced on pause / unmount */
   const hapticsRef = useRef<GamepadHaptics | null>(null);
-  const [aiOpponents, setAiOpponents] = useState(false);
   const [paused, setPaused] = useState(false);
   /** Why the game paused itself (shown in the pause menu); cleared on resume */
   const [pauseNotice, setPauseNotice] = useState<string | null>(null);
@@ -387,9 +392,6 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   // ---- Multiplayer lobby and races
   const [lobby, setLobby] = useState<LobbyState | null>(null);
   const [peerStats, setPeerStats] = useState<PeerNetStats[]>([]);
-  /** The multiplayer race in progress (this client's view of it) */
-  const mpRaceRef = useRef<MultiplayerRace | null>(null);
-  const [mpRaceRunning, setMpRaceRunning] = useState(false);
   /** The results card was closed for this race */
   const [resultsClosed, setResultsClosed] = useState(false);
 
@@ -536,10 +538,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
 
   /** Puts a race on track with the player (or none): the AI field and a multiplayer race never run together */
   const setRace = useCallback((next: SessionRace) => {
-    aiFieldRef.current = next.kind === "ai" ? next.field : null;
-    mpRaceRef.current = next.kind === "mp" ? next.race : null;
-    setAiOpponents(next.kind === "ai");
-    setMpRaceRunning(next.kind === "mp");
+    raceRef.current = next;
+    setRaceKind(next.kind);
   }, []);
 
   /** What belongs to a whole session: the lap card and its upload, the pause and its notice, the boost latch, the hint */
@@ -576,7 +576,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
    */
   const endMpRace = useCallback(
     (tellManager: boolean) => {
-      if (!mpRaceRef.current) return;
+      if (raceRef.current.kind !== "mp") return;
       // A host who has taken the flag leaves the others to finish: their race goes on, only this client steps out.
       // A host leaving mid-race (or once everyone is classified) ends it for all, as an abort.
       const race = physicsRef.current?.telemetry.race;
@@ -688,7 +688,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   /** The car picker: the car is fixed for a multiplayer race (its start picks one the class allows) */
   const handleChangeCar = useCallback(
     (next: CarId) => {
-      if (mpRaceRef.current) return;
+      if (raceRef.current.kind === "mp") return;
       changeCar(next);
     },
     [changeCar]
@@ -730,7 +730,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   /** The autopilot drives the player's car; never in a multiplayer race */
   const toggleAutopilot = useCallback(() => {
     const physics = physicsRef.current;
-    if (!physics || mpRaceRef.current) return;
+    if (!physics || raceRef.current.kind === "mp") return;
     physics.aiAutopilot = !physics.aiAutopilot;
     if (physics.aiAutopilot && physics.vxMs < 5) physics.vxMs = 45;
   }, []);
@@ -775,14 +775,15 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     (flyingStart: boolean) => {
       unlockAudio();
       // In a multiplayer race only the host can restart it (for everyone); others keep their place
-      if (mpRaceRef.current) {
+      const race = raceRef.current;
+      if (race.kind === "mp") {
         if (isMpHostRef.current && !flyingStart) getMultiplayerManager().startRace();
         return;
       }
       const physics = physicsRef.current;
       if (!physics) return;
       resetRun("restart");
-      if (aiFieldRef.current) aiFieldRef.current.startRace(!flyingStart);
+      if (race.kind === "ai") race.field.startRace(!flyingStart);
       else physics.resetToStartGrid(flyingStart);
     },
     [unlockAudio, resetRun]
@@ -792,9 +793,9 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     unlockAudio();
     const physics = physicsRef.current;
     // Not in a multiplayer race: the AI field would run alongside it
-    if (!physics || mpRaceRef.current) return;
+    if (!physics || raceRef.current.kind === "mp") return;
     resetRun("race");
-    if (aiFieldRef.current) {
+    if (raceRef.current.kind === "ai") {
       setRace({ kind: "practice" });
       return;
     }
@@ -807,10 +808,10 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     (turnNumber: number) => {
       unlockAudio();
       const physics = physicsRef.current;
-      if (!physics || mpRaceRef.current) return;
+      if (!physics || raceRef.current.kind === "mp") return;
       resetRun("teleport");
       // Corner practice leaves the race: the field would otherwise lose track of the player's distance
-      if (aiFieldRef.current) setRace({ kind: "practice" });
+      if (raceRef.current.kind === "ai") setRace({ kind: "practice" });
       physics.teleportToTurn(turnNumber);
     },
     [unlockAudio, resetRun, setRace]
@@ -892,7 +893,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   /** AI opponents' level: saved, and a running field drives to it at once */
   const handleChangeAiSkill = useCallback((aiSkill: number) => {
     setSettings((prev) => ({ ...prev, aiSkill }));
-    aiFieldRef.current?.setSkill(aiSkill);
+    aiFieldOf(raceRef.current)?.setSkill(aiSkill);
   }, []);
 
   /** Weather and time of day: saved, and the session on track switches to them (the weather starts over) */
@@ -927,7 +928,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   const startDriving = useCallback(
     (race: boolean) => {
       const physics = physicsRef.current;
-      const field = race && physics ? (aiFieldRef.current ?? takeAiField(physics)) : null;
+      const field = race && physics ? (aiFieldOf(raceRef.current) ?? takeAiField(physics)) : null;
       startSession(field ? { kind: "ai", field } : { kind: "practice" });
       if (field) field.startRace(true);
       else physics?.resetToStartGrid(false);
@@ -1298,12 +1299,12 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         const self = car;
         car.raceControl = {
           get racing() {
-            const mpRace = mpRaceRef.current;
-            return mpRace ? mpRace.raceRulesActive : (aiFieldRef.current?.raceRulesActive ?? false);
+            const race = raceRef.current;
+            return race.kind === "mp" ? race.race.raceRulesActive : race.kind === "ai" ? race.field.raceRulesActive : false;
           },
           earnedAtDetection: () => {
-            const mpRace = mpRaceRef.current;
-            return mpRace ? mpRace.detectionEarnedFor(self) : (aiFieldRef.current?.detectionEarnedFor(self) ?? true);
+            const race = raceRef.current;
+            return race.kind === "mp" ? race.race.detectionEarnedFor(self) : race.kind === "ai" ? race.field.detectionEarnedFor(self) : true;
           },
         };
       }
@@ -1350,7 +1351,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       lapRecorderRef.current?.setContext({ vehicle });
       lapDelta.reset();
       // A running race restarts from the lights with the new car
-      if (aiFieldRef.current) {
+      if (raceRef.current.kind === "ai") {
         const field = takeAiField(physics);
         if (trackRoot) field.attachTrackRoot(trackRoot);
         setRaceRef.current({ kind: "ai", field });
@@ -1415,7 +1416,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       if (disposed) return;
       trackRoot = root;
       physics.attachTrackRoot?.(root);
-      aiFieldRef.current?.attachTrackRoot(root);
+      aiFieldOf(raceRef.current)?.attachTrackRoot(root);
       aiFieldSpareRef.current?.field.attachTrackRoot(root);
       // Move broadcast cameras that would film the inside of a grandstand: about a second of raycasts on a scan,
       // spread over idle slices so neither the loading screen nor the menus freeze (until done, the TV view uses
@@ -1690,10 +1691,11 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
 
     const restartRun = () => {
       // A multiplayer race is restarted by the host, from the pause menu
-      if (mpRaceRef.current) return;
+      const race = raceRef.current;
+      if (race.kind === "mp") return;
       // Out of a replay first (the reset does that), then the car moves
       resetRunRef.current("restart");
-      if (aiFieldRef.current) aiFieldRef.current.startRace(true);
+      if (race.kind === "ai") race.field.startRace(true);
       else physics.resetToStartGrid(true);
     };
 
@@ -1810,7 +1812,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       const rp = replayRef.current;
       if (rp.active) return exitReplay();
       // Not in a multiplayer race (the field keeps racing) and only with something recorded
-      if (mpRaceRef.current || rp.buffer.durationS < 1 || phaseRef.current !== "driving") return;
+      if (raceRef.current.kind === "mp" || rp.buffer.durationS < 1 || phaseRef.current !== "driving") return;
       replaySaved.pos.copy(physics.worldPosition);
       replaySaved.quat.copy(physics.worldQuaternion);
       // Opens paused a moment back, showing the car there: scrub back to the point to flash back to, or play
@@ -2155,7 +2157,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       }
 
       // The AI field holds the player on the grid until the lights go out, then runs its cars
-      const aiField = aiFieldRef.current;
+      const aiField = aiFieldOf(raceRef.current);
       if (physics.steeringAssist.settings !== assistSettingsRef.current) {
         physics.steeringAssist.settings = assistSettingsRef.current;
       }
@@ -2166,7 +2168,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       }
       // A multiplayer race runs on the host's clock: the grid is held until the shared lights-out, and until this
       // guest has measured that clock (lights off, no countdown)
-      const mpRace = mpRaceRef.current;
+      const mpRace = mpRaceOf(raceRef.current);
       const mpFrame = mpRace
         ? multiplayerSync.clockSynced
           ? mpRace.frame(multiplayerSync.hostNowMs(nowMs))
@@ -3172,7 +3174,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     mp.onRaceAbort = (id) => {
       // Aborted before it could start here (this circuit still loading): it never starts
       if (pendingRaceStart?.id === id) pendingRaceStart = null;
-      if (mpRaceRef.current?.start.id === id) endMpRace(false);
+      if (mpRaceOf(raceRef.current)?.start.id === id) endMpRace(false);
     };
     const timer = window.setInterval(() => setPeerStats(mp.getPeerStats()), 1000);
     return () => {
@@ -3339,7 +3341,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     autoGearbox,
     onSetAutoGearbox: setAutoGearbox,
     gamepadRumble,
-    aiOpponents,
+    aiOpponents: raceKind === "ai",
     onToggleAiOpponents: handleToggleAiOpponents,
     aiSkill: settings.aiSkill,
     onChangeAiSkill: handleChangeAiSkill,
@@ -3381,7 +3383,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     currentVehicle: vehicleModel,
     vehicleLabel,
     vehiclesForClass: vehicleModelsFor,
-    raceRunning: mpRaceRunning,
+    raceRunning: raceKind === "mp",
     onHostLocal: handleHostLocal,
     onSetLobbySettings: handleSetLobbySettings,
     onSetReady: handleSetReady,
@@ -3483,9 +3485,9 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
           resultsClosed={resultsClosed}
           onCloseResults={() => setResultsClosed(true)}
           onRestartRace={
-            mpRaceRunning && !isMpHost ? undefined : () => handleResetCar(false)
+            raceKind === "mp" && !isMpHost ? undefined : () => handleResetCar(false)
           }
-          onBackToLobby={mpRaceRunning ? handleBackToLobby : undefined}
+          onBackToLobby={raceKind === "mp" ? handleBackToLobby : undefined}
           replay={
             replayUi.active
               ? {
