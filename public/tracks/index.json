@@ -379,5 +379,25 @@
     },
     "type": "street",
     "quality": "sim"
+  },
+  {
+    "id": "topgear",
+    "name": "Top Gear Test Track",
+    "layout": "Full lap",
+    "country": "United Kingdom",
+    "city": "Dunsfold, Surrey",
+    "lengthM": 2879.85,
+    "turns": 9,
+    "direction": "anticlockwise",
+    "dataUrl": "/tracks/topgear/track_data.json",
+    "credit": {
+      "title": "Top Gear Test Track",
+      "author": "Unknown",
+      "url": "https://assettocorsa.club/",
+      "short": null,
+      "license": "Freeware mod",
+      "licenseUrl": "https://assettocorsa.club/"
+    },
+    "quality": "sim"
   }
 ]
