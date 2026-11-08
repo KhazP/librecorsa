@@ -1,7 +1,7 @@
 # Race AI foundation: design and status
 
 **Status (2026-11-07, branch `claude/race-ai`):** phases 0–2 built, phase 4's planner built but off by default,
-phase 5's tuner running. Approved decisions: §8.
+phase 5's first tuner run done (defaults kept). Approved decisions: §8.
 
 ## Where it stands
 
@@ -15,7 +15,7 @@ phase 5's tuner running. Approved decisions: §8.
 | Line check | `metadata.aiPlans` per car and circuit; the field drives plans only where it passed | 51 of 60 pass (20 circuits × 3 cars). Fails: Monaco and Spielberg inner (all cars), Silverstone and Yas Marina (f12026-car), Daytona road (GT3) |
 | VF26 field on plans | 8-car headless races | Rwanda best 1:33.2 → 1:31.9, Spielberg 1:13.7 → 1:12.3, same or fewer incidents |
 | D4 planner | `src/lib/sim/ai/local-planner.ts`, Frenet quintics, cars ahead as hard obstacles | more passes, more incidents: off by default |
-| D7 tuning | `scripts/ai/tune-racecraft.ts`, cross-entropy over the racecraft knobs | running; one race per candidate per track is noisy, so results need a multi-seed A/B before they become defaults |
+| D7 tuning | `scripts/ai/tune-racecraft.ts`, cross-entropy over the racecraft knobs | VF26 run done (30 generations, Spielberg + Okayama, 2 seeds). On 10 held-out seeds per track the best candidate scored 2.5 ± 1.5 worse than the defaults, with more spins and contacts; the distribution mean tied (−0.1 ± 1.0). Defaults kept: the search fitted seed noise. A useful next run needs more seeds per candidate. |
 
 **Open problems**
 
