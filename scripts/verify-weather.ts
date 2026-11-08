@@ -397,9 +397,12 @@ console.log('\n== RealRoad wet surface evolution, tread depth & 5-node weather')
   puddleCar.wheelWaterMm = [0.05, 3.0, 0.05, 3.0];
   puddleCar.wetness = 0.5;
   for (let i = 0; i < 60; i++) puddleCar.step(1 / 120, { throttle: 0, brake: 0, steer: 0, clutch: 1 });
+  // The wheels now steer to the hardpoints' bump steer: squatting under the aero load the fronts toe out and the
+  // rears toe in by ≈0.4 mrad, and the dry side's toe force resists part of the pull (−0.24 °/s at 0.5 s; −0.73 °/s
+  // with no toe). It still pulls toward the flooded side. Bound −0.01 → −0.002 rad/s
   check(
     'Per-wheel standing puddle pulls car yaw toward the flooded side',
-    puddleCar.angularVelocity.y < -0.01,
+    puddleCar.angularVelocity.y < -0.002,
     `yawRate ${fmt(puddleCar.angularVelocity.y * (180 / Math.PI), 2)} °/s (pulled right toward 3.0 mm puddle)`
   );
 
