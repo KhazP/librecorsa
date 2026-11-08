@@ -226,7 +226,10 @@ console.log("\n== The GT3's own handling, not the F1's");
   };
   const withTc = powerOn('semi_pro');
   const noTc = powerOn('pro');
-  check('TC lets a power-on exit slide but catches it', withTc > 4 && withTc < 25 && noTc > 45, `peak body slip ${fmt(withTc, 1)}° with TC, ${fmt(noTc, 1)}° without`);
+  // Lower bound 3° (was 4°, at 4.6° with rigid halfshafts): the compliant shafts bring the full-throttle step into the
+  // rear tyres (and the diff's locking torque across them) over the driveline's wind-up, so the TC's instant cut catches
+  // the slide at ≈ 3.5°. Still a visible step-out it then holds; the band guards against a TC that never lets the rear go
+  check('TC lets a power-on exit slide but catches it', withTc > 3 && withTc < 25 && noTc > 45, `peak body slip ${fmt(withTc, 1)}° with TC, ${fmt(noTc, 1)}° without`);
 
   // Light trail braking into a 160 km/h corner tightens the line (weight on the nose, rear still braking 29 %)
   const curvature = (brake: number, steer: number) => {
