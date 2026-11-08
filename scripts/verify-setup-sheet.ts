@@ -260,9 +260,11 @@ console.log("Fuel load");
     sameFuel.applyChassisSetup?.({ ...DEFAULT_CHASSIS_SETUP, fuelDeltaKg: 10, springFrontPct: 6 });
     check(`${v}: changing another setting keeps the fuel burnt so far`, burnt < f.defaultKg + 10 && sameFuel.telemetry.fuelKg === burnt);
 
-    // Full realism burns it and the car lightens; Casual keeps the load (and its mass) all run
+    // Full realism burns it and the car lightens; Casual keeps the load (and its mass) all run. 20 kg over the default,
+    // or a full tank where that's less (the Liana's 37 kg tank starts on 22)
+    const extra = Math.min(20, f.maxKg - f.defaultKg);
     const burn = (level: "full" | "casual") => {
-      const car = withSetup(v, { fuelDeltaKg: 20 });
+      const car = withSetup(v, { fuelDeltaKg: extra });
       (car as Massy).setSimRealism?.(SIM_REALISM_FLAGS[level]);
       car.resetToStartGrid(true);
       const m0 = massOf(car);
@@ -271,7 +273,7 @@ console.log("Fuel load");
     };
     const full = burn("full");
     const casual = burn("casual");
-    const start = f.defaultKg + 20;
+    const start = f.defaultKg + extra;
     check(`${v}: Full burns the fuel and the car lightens`, full.fuel < start - 0.05 && Math.abs(full.dm + (start - full.fuel)) < 0.006 /* the readout is to 0.01 kg */, `${(start - full.fuel).toFixed(2)} kg in 10 s`);
     check(`${v}: Casual keeps the load and its mass`, casual.fuel === start && casual.dm === 0);
   }
