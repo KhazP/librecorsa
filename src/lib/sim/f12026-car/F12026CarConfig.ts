@@ -39,7 +39,8 @@ export type PhysicsTyreCompound =
   | 'PhysicsTyreCompound_GT3_Medium'
   | 'PhysicsTyreCompound_GT3_Hard'
   | 'PhysicsTyreCompound_GT3_Intermediate'
-  | 'PhysicsTyreCompound_GT3_Wet';
+  | 'PhysicsTyreCompound_GT3_Wet'
+  | 'PhysicsTyreCompound_Road_Street';
 
 /** The simulator's compound choice: soft / medium / hard slicks, intermediate and full wet */
 export type CompoundSlot = 'soft' | 'medium' | 'hard' | 'intermediate' | 'wet';
