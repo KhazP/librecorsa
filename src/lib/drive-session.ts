@@ -244,17 +244,13 @@ export interface ReplayUi {
 
 /** What the drive reads and writes on the component (refs, state setters and callbacks) */
 export interface DriveSessionHost {
-  autopilotPaceRef: Cell<{ car: unknown; pace: number }>;
   carIdRef: Cell<CarId>;
   cycleCamera: () => void;
   getTrackEnv: () => TrackEnvironment;
   ghostRef: Cell<GhostPlayer | null>;
   handleToggleRacingLine: () => void;
-  hapticsRef: Cell<GamepadHaptics | null>;
   lapRecorderRef: Cell<LapRecorder | null>;
   onLapCompletedRef: Cell<(summary: LapSummaryData, recording: LapRecording) => void>;
-  phaseRef: Cell<AppPhase>;
-  rumbleEnabledRef: Cell<boolean>;
   setSettings: SetState<PlayerSettings>;
   /** The session's kind changed (setRace), for the menus */
   setRaceKind: (kind: SessionRace["kind"]) => void;
@@ -263,7 +259,6 @@ export interface DriveSessionHost {
   track: BuiltTrackData;
   trackId: string;
   vehicleModelRef: Cell<VehicleModelId>;
-  wizardStepRef: { readonly current: string };
 }
 
 /**
@@ -299,6 +294,14 @@ export class DriveSession {
     return this.carNow();
   }
   private readonly carNow: () => SimulatorCar;
+  /** Where the player is: loading, the title menu, the setup screens or driving (the menus film the car orbiting) */
+  readonly setPhase: (phase: AppPhase) => void;
+  /** The setup screen's step (the car-select step orbits closer) */
+  readonly setWizardStep: (step: string) => void;
+  /** Pad rumble on or off */
+  readonly setRumble: (on: boolean) => void;
+  /** Stops the pad rumble and the wheel's force at once (the pause menu, the menus) */
+  readonly silenceFeedback: () => void;
   /** Esc / pad Menu: opens or closes the pause menu, releasing every held key */
   readonly togglePause: () => void;
   /** Closes the pause menu and its notice (a new session) */
@@ -340,24 +343,19 @@ export class DriveSession {
 
   constructor(container: HTMLDivElement, host: DriveSessionHost) {
     const {
-      autopilotPaceRef,
       carIdRef,
       cycleCamera,
       getTrackEnv,
       ghostRef,
       handleToggleRacingLine,
-      hapticsRef,
       lapRecorderRef,
       onLapCompletedRef,
-      phaseRef,
-      rumbleEnabledRef,
       setSettings,
       setRaceKind,
       onRunReset,
       track,
       trackId,
       vehicleModelRef,
-      wizardStepRef,
     } = host;
 
     let disposed = false;
@@ -373,6 +371,21 @@ export class DriveSession {
     const setP2pStatus = (p2pStatus: P2PConnectionStatus) => this.publish({ p2pStatus });
     const setVrState = (vr: VrState) => this.publish({ vr });
     const setPauseNotice = (pauseNotice: string) => this.publish({ pauseNotice });
+    /** The app phase, the setup screen's step and the rumble switch, as the component last set them */
+    let appPhaseNow: AppPhase = "loading";
+    let wizardStep = "device";
+    let rumbleEnabled = false;
+    this.setPhase = (phase) => {
+      appPhaseNow = phase;
+    };
+    this.setWizardStep = (step) => {
+      wizardStep = step;
+    };
+    this.setRumble = (on) => {
+      rumbleEnabled = on;
+    };
+    /** The player car's dry autopilot pace, which the weather scales each frame */
+    let autopilotPace: { car: unknown; pace: number } = { car: null, pace: 1 };
     /** The boost latch, for the frame loop and the HUD at once */
     const setLatch = (boostLatch: boolean) => this.publish({ boostLatch });
     this.setBoostLatch = setLatch;
@@ -423,7 +436,7 @@ export class DriveSession {
         audio = new F1AudioEngine2026();
         audio.setCar(soundFor(carIdRef.current));
         // Created paused unless the car is being driven; from then on the frame loop alone pauses and resumes it
-        audio.setPaused(this.snapshot.paused || phaseRef.current !== "driving");
+        audio.setPaused(this.snapshot.paused || appPhaseNow !== "driving");
       }
       if (!audio.isInitialized) {
         audio.init();
@@ -546,7 +559,7 @@ export class DriveSession {
     this.prepareAiField = () => {
       const run = () => {
         // Never while driving: the build would be a hitch on track instead
-        if (disposed || phaseRef.current === "driving" || phaseRef.current === "loading") return;
+        if (disposed || appPhaseNow === "driving" || appPhaseNow === "loading") return;
         if (aiFieldSpare?.physics === physics) return;
         aiFieldSpare = { field: buildAiField(physics), physics };
       };
@@ -591,7 +604,10 @@ export class DriveSession {
     };
 
     const haptics = new GamepadHaptics();
-    hapticsRef.current = haptics;
+    this.silenceFeedback = () => {
+      haptics.stop();
+      wheelFfb.stop();
+    };
 
     const scene = new THREE.Scene();
     // The scene root never moves: left to update its own matrix, it forced every object's world matrix to be
@@ -655,7 +671,7 @@ export class DriveSession {
       const occlusionSlice = (deadline?: IdleDeadline) => {
         if (disposed) return;
         // On track only true idle time counts: a slice the browser forces after its timeout would be a hitch
-        const driving = phaseRef.current === "driving";
+        const driving = appPhaseNow === "driving";
         const idleMs = deadline?.timeRemaining() ?? 8;
         if (!driving || idleMs >= 3) {
           const until = performance.now() + (driving ? Math.min(idleMs, 6) : Math.max(4, Math.min(12, idleMs)));
@@ -861,7 +877,7 @@ export class DriveSession {
         return;
       }
       // The loading screen, title menu and setup own the keyboard outside the car
-      if (phaseRef.current !== "driving") return;
+      if (appPhaseNow !== "driving") return;
       this.unlockAudio();
       const code = e.code;
 
@@ -1095,7 +1111,7 @@ export class DriveSession {
       const rp = replay;
       if (rp.active) return exitReplay();
       // Not in a multiplayer race (the field keeps racing) and only with something recorded
-      if (raceNow().kind === "mp" || rp.buffer.durationS < 1 || phaseRef.current !== "driving") return;
+      if (raceNow().kind === "mp" || rp.buffer.durationS < 1 || appPhaseNow !== "driving") return;
       replaySaved.pos.copy(physics.worldPosition);
       replaySaved.quat.copy(physics.worldQuaternion);
       // Opens paused a moment back, showing the car there: scrub back to the point to flash back to, or play
@@ -1279,14 +1295,14 @@ export class DriveSession {
 
     const animate = (nowMs: number) => {
       // Dev: a frame that took far longer than a frame is a stall worth knowing about (shader compiles, uploads, builds)
-      if (process.env.NODE_ENV !== "production" && lastTimeMs > 0 && nowMs - lastTimeMs > 120 && phaseRef.current !== "loading") {
-        console.info(`[load] long frame: ${(nowMs - lastTimeMs).toFixed(0)} ms (${phaseRef.current})`);
+      if (process.env.NODE_ENV !== "production" && lastTimeMs > 0 && nowMs - lastTimeMs > 120 && appPhaseNow !== "loading") {
+        console.info(`[load] long frame: ${(nowMs - lastTimeMs).toFixed(0)} ms (${appPhaseNow})`);
       }
       // A hitch (GC, shader compile, a slow commit) is caught up in full, up to a quarter second, so the car never
       // drops into slow motion; a longer stall (hidden tab, debugger) is not
       const dtSeconds = Math.min((nowMs - lastTimeMs) / 1000, MAX_FRAME_CATCH_UP_S);
       lastTimeMs = nowMs;
-      if (phaseRef.current === "driving") startupMonitor?.frame(nowMs);
+      if (appPhaseNow === "driving") startupMonitor?.frame(nowMs);
 
       // Optional Gamepad / Sim Racing Wheel Polling. Controllers with the standard mapping (Xbox,
       // DualShock, DualSense …) send the raw thumbstick through the physics' gamepad steering
@@ -1295,7 +1311,7 @@ export class DriveSession {
       // Read every frame (also in menus / paused) so button edges never fire on a stale press
       const pads = connectedPads();
       const device = deviceInput.read(pads, settings, dtSeconds, vehicleModelRef.current);
-      const appPhase = phaseRef.current;
+      const appPhase = appPhaseNow;
       const inMenu = appPhase !== "driving";
       const rp = replay;
       if (rp.active && inMenu) exitReplay();
@@ -1456,9 +1472,9 @@ export class DriveSession {
         trackEnv.update(dtSeconds, aiField ? aiField.sims() : soloCars, remoteWake);
         // The autopilot backs off for rain like the AI field does, from the car's own pace
         if (physics.aiPaceScale !== undefined) {
-          const base = autopilotPaceRef.current;
-          if (base.car !== physics) autopilotPaceRef.current = { car: physics, pace: physics.aiPaceScale };
-          physics.aiPaceScale = autopilotPaceRef.current.pace * (physics.aiAutopilot ? trackEnv.weatherPaceScale(physics) : 1);
+          const base = autopilotPace;
+          if (base.car !== physics) autopilotPace = { car: physics, pace: physics.aiPaceScale };
+          physics.aiPaceScale = autopilotPace.pace * (physics.aiAutopilot ? trackEnv.weatherPaceScale(physics) : 1);
         }
         startupMonitor?.begin();
         if (!aiField?.playerFrozen && !mpFrozen) physics.step(dtSeconds, inputs);
@@ -1468,7 +1484,7 @@ export class DriveSession {
       if (mpRace && mpFrame && mpFrame.phase === "racing" && !this.snapshot.paused) {
         mpRace.lapClock.update(physics.sMeters, mpFrame.raceTimeS, mpRace.start.laps, mpRace.flagOut);
       }
-      haptics.update(physics.telemetry, dtSeconds, rumbleEnabledRef.current && driving, {
+      haptics.update(physics.telemetry, dtSeconds, rumbleEnabled && driving, {
         triggerRumble: padTuning.triggerRumble,
         triggerSlipAlwaysOn: padTuning.triggerSlipAlwaysOn,
       });
@@ -1891,7 +1907,7 @@ export class DriveSession {
         driving,
         inVr,
         menu: inMenu
-          ? { close: appPhase === "wizard" && wizardStepRef.current === "car", width: container.clientWidth, height: container.clientHeight }
+          ? { close: appPhase === "wizard" && wizardStep === "car", width: container.clientWidth, height: container.clientHeight }
           : null,
       });
 
@@ -2076,7 +2092,6 @@ export class DriveSession {
       lapRecorderRef.current = null;
       haptics.stop();
       opponentAudio.dispose();
-      hapticsRef.current = null;
       wheelFfb.dispose();
       document.removeEventListener("visibilitychange", onVisibilityChange);
       window.removeEventListener("pagehide", onPageHide);

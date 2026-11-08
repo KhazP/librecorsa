@@ -9,7 +9,6 @@ import { alignGhostToTrack } from "@/lib/sim/ghost-align";
 import { carPhysics, carTakesPhysicsSwitch, subscribeF1ModPhysics } from "@/lib/cars/f1-mod-physics";
 import { type ChassisSetup, saveChassisSetup } from "@/lib/sim/car-setup";
 import { TrackEnvironment } from "@/lib/sim/track-environment";
-import { GamepadHaptics } from "@/lib/sim/gamepad-haptics";
 import { getMultiplayerManager, type LobbySettings, type LobbyState, type PeerNetStats, type RaceStartInfo } from "@/lib/sim/multiplayer-sync";
 import { MultiplayerRace } from "@/lib/sim/race-session";
 import { GhostPlayer, LapRecorder } from "@/lib/sim/lap-recorder";
@@ -77,8 +76,6 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     () => (trackEnvRef.current ??= new TrackEnvironment(track, settingsRef.current.conditions)),
     [track]
   );
-  /** The player car's dry autopilot pace, which the weather scales each frame */
-  const autopilotPaceRef = useRef<{ car: unknown; pace: number }>({ car: null, pace: 1 });
 
   /** What the drive shows the UI (telemetry, replay bar, weather, the car's setup …): one subscription to the session */
   const [idleSnapshot] = useState(() => idleDriveSnapshot(track));
@@ -105,17 +102,24 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   const [aeroPreset, setAeroPreset] =
     useState<AeroSetupPreset>(DEFAULT_AERO_PRESET);
   const [gamepadRumble, setGamepadRumble] = useState<boolean>(loadRumble);
-  const rumbleEnabledRef = useRef(gamepadRumble);
-  rumbleEnabledRef.current = gamepadRumble;
-  /** Pad rumble driven from the physics; created with the physics and silenced on pause / unmount */
-  const hapticsRef = useRef<GamepadHaptics | null>(null);
+  useEffect(() => {
+    session?.setRumble(gamepadRumble);
+  }, [session, gamepadRumble]);
 
   const [phase, setPhaseState] = useState<AppPhase>("loading");
   const phaseRef = useRef<AppPhase>("loading");
-  const setPhase = useCallback((next: AppPhase) => {
-    phaseRef.current = next;
-    setPhaseState(next);
-  }, []);
+  const setPhase = useCallback(
+    (next: AppPhase) => {
+      phaseRef.current = next;
+      setPhaseState(next);
+      session?.setPhase(next);
+    },
+    [session]
+  );
+  // The session takes the phase on once it exists too (setPhase above tells it of every change at once)
+  useEffect(() => {
+    session?.setPhase(phaseRef.current);
+  }, [session]);
   /** The loading screen stays mounted while it fades out over the title menu */
   const [loadingVisible, setLoadingVisible] = useState(true);
   const [settings, setSettings] = useState<PlayerSettings>(DEFAULT_PLAYER_SETTINGS);
@@ -143,7 +147,6 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   const [wizardMode, setWizardMode] = useState<WizardMode>("first-run");
   /** Where the controls setup returns to */
   const wizardReturnRef = useRef<"title" | "pause">("title");
-  const wizardStepRef = useRef<WizardStepId>("device");
   /** First-run setup started from "Race AI" rather than "Drive" */
   const pendingRaceRef = useRef(false);
   const [launchHint, setLaunchHint] = useState(false);
@@ -762,9 +765,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     }
   }, [wizardMode, startDriving, leaveWizard]);
 
-  const handleWizardStep = useCallback((step: WizardStepId) => {
-    wizardStepRef.current = step;
-  }, []);
+  const handleWizardStep = useCallback((step: WizardStepId) => session?.setWizardStep(step), [session]);
 
   /** "Press any key" on the loading screen: the user gesture that unlocks audio */
   const handleLoadingStart = useCallback(() => {
@@ -801,34 +802,26 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   // follows the frame loop, which pauses it on every frame the car is not driven, in every phase)
   useEffect(() => {
     const silence = paused || phase !== "driving";
-    if (silence) {
-      hapticsRef.current?.stop();
-      wheelFfb.stop();
-    }
-  }, [paused, phase]);
+    if (silence) session?.silenceFeedback();
+  }, [session, paused, phase]);
 
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
     const session = new DriveSession(container, {
-      autopilotPaceRef,
       carIdRef,
       cycleCamera,
       getTrackEnv,
       ghostRef,
       handleToggleRacingLine,
-      hapticsRef,
       lapRecorderRef,
       onLapCompletedRef,
-      phaseRef,
-      rumbleEnabledRef,
       setSettings,
       setRaceKind,
       onRunReset,
       track,
       trackId,
       vehicleModelRef,
-      wizardStepRef,
     });
     setSession(session);
     return () => {
