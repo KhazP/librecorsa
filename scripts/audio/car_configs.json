@@ -590,5 +590,55 @@
     },
     "lift": { "popMinRpm": 4200, "crackleMinRpm": 4600, "downshiftPopChance": 0.65 },
     "limiterRetriggerS": 0.85
+  },
+  "liana": {
+    "outDir": "public/cars/liana/audio",
+    "limiterRpm": 7000,
+    "sourceDescription": "Suzuki Liana (Top Gear) for Assetto Corsa, author unknown - content/cars/suzuki_liana/sfx/suzuki_liana.bank",
+    "intBank": "/Users/alpyalay/Downloads/librecorsa-src/suzuki_liana/suzuki_liana/sfx/suzuki_liana.bank",
+    "engine": {
+      "int": {
+        "on": [
+          { "rpm": 900, "rootRpm": 1000, "sample": "fwd_idle {fcb9f1ed-6511-45ad-8450-cf1e32977d02}#35" },
+          { "rpm": 3300, "rootRpm": 3300, "sample": "fwd_onload_6000 {303fd7ed-14f5-4e19-802a-3feded10a29f}#0" },
+          { "rpm": 7000, "rootRpm": 3300, "sample": "fwd_onload_6000 {303fd7ed-14f5-4e19-802a-3feded10a29f}#0" }
+        ],
+        "off": [
+          { "rpm": 900, "rootRpm": 1000, "sample": "fwd_idle {fcb9f1ed-6511-45ad-8450-cf1e32977d02}#35" },
+          { "rpm": 4500, "rootRpm": 4500, "sample": "fwd_offlow {c59b7cf3-b1cc-4256-8639-4295d3856d18}#34" },
+          { "rpm": 7000, "rootRpm": 4500, "sample": "fwd_offlow {c59b7cf3-b1cc-4256-8639-4295d3856d18}#34" }
+        ]
+      },
+      "ext": {
+        "on": [
+          { "rpm": 900, "rootRpm": 1000, "sample": "fwd_idle {fcb9f1ed-6511-45ad-8450-cf1e32977d02}#35" },
+          { "rpm": 3300, "rootRpm": 3300, "sample": "fwd_onload_6000 {303fd7ed-14f5-4e19-802a-3feded10a29f}#0" },
+          { "rpm": 7000, "rootRpm": 3300, "sample": "fwd_onload_6000 {303fd7ed-14f5-4e19-802a-3feded10a29f}#0" }
+        ],
+        "off": [
+          { "rpm": 900, "rootRpm": 1000, "sample": "fwd_idle {fcb9f1ed-6511-45ad-8450-cf1e32977d02}#35" },
+          { "rpm": 4500, "rootRpm": 4500, "sample": "fwd_offlow {c59b7cf3-b1cc-4256-8639-4295d3856d18}#34" },
+          { "rpm": 7000, "rootRpm": 4500, "sample": "fwd_offlow {c59b7cf3-b1cc-4256-8639-4295d3856d18}#34" }
+        ]
+      }
+    },
+    "transmission": [
+      { "layer": "on", "drivetrainSpeed": 160, "sample": "transmission {041f08f4-b4dc-4246-bfbb-8e011fa4e817}#9", "rms": 0.03 },
+      { "layer": "off", "drivetrainSpeed": 160, "sample": "transmission {041f08f4-b4dc-4246-bfbb-8e011fa4e817}#9", "rms": 0.022 }
+    ],
+    "skid": { "int": "Skid {8e97e90c-34c2-476f-a910-3f33d0e134f4} {f2e8192e-a441-4301-be64-ea80fa25dd0a}#11", "ext": "Skid {8e97e90c-34c2-476f-a910-3f33d0e134f4} {f2e8192e-a441-4301-be64-ea80fa25dd0a}#11" },
+    "tractionControl": "traction_control {26587186-27be-4ae6-b408-03264bbd1299}#30",
+    "oneshots": {
+      "gear_up": ["int_gearup {c39127d1-2613-4d0f-8dfa-03e162de8a15}#16", "ext_gearup2 {0f6442af-aa1c-4c67-978e-fbef5b82e61f}#38"],
+      "gear_down": ["int_geardown {9777a2f1-9e7c-4ae4-b40e-f515ec715746}#23", "ext_shift_down2 {5cca0be8-85a7-4801-9d39-71b8d7df42a9}#42"],
+      "backfire_ext": ["ext_backfire2 {9025e94a-22d1-4669-a5ce-9c338b2f4190}#17"]
+    },
+    "limiterFallbackSample": "limiter {dfa68263-ba38-4f33-a51d-3a9274273ee5}#18",
+    "throttleCurve": {
+      "ext": [[0.0, 0.0], [0.1, 0.25], [0.25, 0.55], [0.5, 0.8], [0.75, 0.94], [1.0, 1.0]],
+      "int": [[0.0, 0.0], [0.1, 0.28], [0.25, 0.58], [0.5, 0.82], [0.75, 0.95], [1.0, 1.0]]
+    },
+    "lift": { "popMinRpm": 6600, "crackleMinRpm": 6900, "downshiftPopChance": 0.05 },
+    "limiterRetriggerS": 0.85
   }
 }
