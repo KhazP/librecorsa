@@ -3,7 +3,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getActiveTrackData, LIVERIES } from "@/lib/track-data";
 import { F1Physics2026 } from "@/lib/f1-physics-2026";
-import type { SimulatorCar } from "@/lib/sim/simulator-car";
 import { F1AudioEngine2026 } from "@/lib/f1-audio-2026";
 import { FfbPairPrompt } from "@/components/hud/FfbPairPrompt";
 import { isVehicleModelId, vehicleModelsFor } from "@/lib/cars/vehicle-models";
@@ -11,7 +10,6 @@ import { carForVehicle, type CarId } from "@/lib/cars/car-registry";
 import { alignGhostToTrack } from "@/lib/sim/ghost-align";
 import { carPhysics, carTakesPhysicsSwitch, subscribeF1ModPhysics } from "@/lib/cars/f1-mod-physics";
 import { type ChassisSetup, DEFAULT_CHASSIS_SETUP, saveChassisSetup } from "@/lib/sim/car-setup";
-import { AiOpponentField, AI_DRIVERS } from "@/lib/sim/ai-opponents";
 import { TrackEnvironment } from "@/lib/sim/track-environment";
 import { GamepadHaptics } from "@/lib/sim/gamepad-haptics";
 import { getMultiplayerManager, type LobbySettings, type LobbyState, type P2PConnectionStatus, type PeerNetStats, type RaceStartInfo } from "@/lib/sim/multiplayer-sync";
@@ -47,20 +45,7 @@ import { autoConfigureWheel, connectedPads } from "@/lib/input/device-input";
 import { webHidFfb, wheelFfb } from "@/lib/input/wheel-ffb";
 import { clampFov, codeFromName, DEFAULT_PLAYER_SETTINGS, loadCarChoice, loadOnboarded, loadPlayerSettings, loadRumble, pushLibraryRecent, saveCarChoice, saveOnboarded, toggleLibraryFavorite, type LibraryKind, sanitizeDriverName, savePlayerSettings, saveRumble, type PlayerSettings } from "@/lib/settings/player-settings";
 import type { AeroSetupPreset, AssistPreset, CameraMode, CarTelemetry, LiveTunerPatch, LiveryConfig, TireCompound, TyreSetup, VehicleModelId } from "@/types/f1";
-import {
-  aiFieldOf,
-  autoCompoundFor,
-  DEFAULT_AERO_PRESET,
-  DriveSession,
-  HELD_KEYS,
-  mpRaceOf,
-  scheduleIdle,
-  soundFor,
-  type AppPhase,
-  type RunResetReason,
-  type SessionRace,
-  type VrState,
-} from "@/lib/drive-session";
+import { aiFieldOf, autoCompoundFor, DEFAULT_AERO_PRESET, DriveSession, HELD_KEYS, mpRaceOf, soundFor, type AppPhase, type RunResetReason, type SessionRace, type VrState } from "@/lib/drive-session";
 
 const DEFAULT_ASSIST_PRESET: AssistPreset = DEFAULT_PLAYER_SETTINGS.assistPreset;
 /** A lap record's car: records are per vehicle model, named after its first car */
@@ -81,8 +66,6 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   const [session, setSession] = useState<DriveSession | null>(null);
 
   const track = useMemo(() => getActiveTrackData(1200), []);
-  /** The player's car: the VF26 (F1Physics2026) or the f12026-car (F12026CarSim) */
-  const physicsRef = useRef<SimulatorCar | null>(null);
   /** The chosen car, and the vehicle model it drives on */
   const [carId, setCarId] = useState<CarId>(loadCarChoice);
   const carIdRef = useRef(carId);
@@ -101,41 +84,6 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   const [weatherHud, setWeatherHud] = useState<WeatherHudState | null>(null);
   /** The player car's dry autopilot pace, which the weather scales each frame */
   const autopilotPaceRef = useRef<{ car: unknown; pace: number }>({ car: null, pace: 1 });
-
-  /**
-   * An AI field built ahead, while the player is in the menus: building five AI cars (physics, autopilot plans) takes
-   * a few hundred ms, which would otherwise be the first frame of the race. Only valid for the car it was built against.
-   */
-  const aiFieldSpareRef = useRef<{ field: AiOpponentField; physics: SimulatorCar } | null>(null);
-  /** A new AI field round the player's car, at the player's chosen skill */
-  const buildAiField = useCallback(
-    (physics: SimulatorCar) => new AiOpponentField(track, physics, AI_DRIVERS, getTrackEnv(), { skill: settingsRef.current.aiSkill }),
-    [track, getTrackEnv]
-  );
-  const prepareAiField = useCallback(() => {
-    const run = () => {
-      const physics = physicsRef.current;
-      // Never while driving: the build would be a hitch on track instead
-      if (!physics || phaseRef.current === "driving" || phaseRef.current === "loading") return;
-      if (aiFieldSpareRef.current?.physics === physics) return;
-      aiFieldSpareRef.current = { field: buildAiField(physics), physics };
-    };
-    scheduleIdle(run);
-  }, [buildAiField]);
-  /** The AI field for a race: the spare one when it was built for this car, else a new one */
-  const takeAiField = useCallback(
-    (physics: SimulatorCar) => {
-      const spare = aiFieldSpareRef.current;
-      aiFieldSpareRef.current = null;
-      const skill = settingsRef.current.aiSkill;
-      if (spare && spare.physics === physics) {
-        if (spare.field.skill !== skill) spare.field.setSkill(skill);
-        return spare.field;
-      }
-      return buildAiField(physics);
-    },
-    [buildAiField]
-  );
 
   const [virtualMirrorOn, setVirtualMirrorOn] = useState(false);
   const [telemetry, setTelemetry] = useState<CarTelemetry>(() => {
@@ -373,7 +321,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       if (session?.race.kind !== "mp") return;
       // A host who has taken the flag leaves the others to finish: their race goes on, only this client steps out.
       // A host leaving mid-race (or once everyone is classified) ends it for all, as an abort.
-      const race = physicsRef.current?.telemetry.race;
+      const race = session.car.telemetry.race;
       const othersStillRacing = race?.phase === "finished" && !race.resultsFinal;
       const leaveForAll = tellManager && !(isMpHostRef.current && othersStillRacing);
       // Off the race before the manager hears: a host's leave comes back as an abort, which must find nothing to end
@@ -390,7 +338,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     session?.resetRun("session");
     session?.setRace({ kind: "practice" });
     clearSessionState();
-    physicsRef.current?.resetToStartGrid(false);
+    session?.car.resetToStartGrid(false);
     setPhase("title");
   }, [session, endMpRace, clearSessionState, setPhase]);
 
@@ -414,10 +362,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
 
   const handleAeroPresetChange = useCallback((preset: AeroSetupPreset) => {
     setAeroPreset(preset);
-    if (physicsRef.current) {
-      physicsRef.current.aeroPreset = preset;
-    }
-  }, []);
+    if (session) session.car.aeroPreset = preset;
+  }, [session]);
 
   // The preferences only change the settings: the session applies them to the car and the scene
   const handleAssistPresetChange = useCallback((preset: AssistPreset) => setPreference("assistPreset", preset), [setPreference]);
@@ -439,15 +385,15 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
 
   const handleChangeTyreSetup = useCallback((next: TyreSetup) => {
     setTyreSetup(next);
-    physicsRef.current?.setTyreSetup(next);
+    session?.car.setTyreSetup(next);
     saveTyreSetup(vehicleModelRef.current, next);
-  }, []);
+  }, [session]);
 
   const handleChangeChassisSetup = useCallback((next: ChassisSetup) => {
     setChassisSetup(next);
-    physicsRef.current?.applyChassisSetup?.(next);
+    session?.car.applyChassisSetup?.(next);
     saveChassisSetup(vehicleModelRef.current, next);
-  }, []);
+  }, [session]);
 
   /** Swaps the player's car (the run starts over with it); the player's own pick goes through handleChangeCar */
   const changeCar = useCallback(
@@ -519,7 +465,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   }, [unlockAudio, setLatch]);
 
   const handleChangeLiveTuner = useCallback((patch: LiveTunerPatch) => {
-    const car = physicsRef.current;
+    const car = session?.car;
     if (!car) return;
     car.setLiveTuner?.(patch);
     const updated = car.getLiveTunerState?.() ?? car.telemetry.liveTuner;
@@ -529,7 +475,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         liveTuner: { ...updated },
       }));
     }
-  }, []);
+  }, [session]);
 
   const handleToggleMouseSteer = useCallback(() => {
     unlockAudio();
@@ -549,8 +495,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         if (isMpHostRef.current && !flyingStart) getMultiplayerManager().startRace();
         return;
       }
-      const physics = physicsRef.current;
-      if (!physics) return;
+      const physics = session.car;
       session.resetRun("restart");
       if (race.kind === "ai") race.field.startRace(!flyingStart);
       else physics.resetToStartGrid(flyingStart);
@@ -560,28 +505,26 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
 
   const handleToggleAiOpponents = useCallback(() => {
     unlockAudio();
-    const physics = physicsRef.current;
     // Not in a multiplayer race: the AI field would run alongside it
-    if (!physics || !session || session.race.kind === "mp") return;
+    if (!session || session.race.kind === "mp") return;
     session.resetRun("race");
     if (session.race.kind === "ai") {
       session.setRace({ kind: "practice" });
       return;
     }
-    const field = takeAiField(physics);
+    const field = session.takeAiField();
     session.setRace({ kind: "ai", field });
     field.startRace(true);
-  }, [takeAiField, unlockAudio, session]);
+  }, [unlockAudio, session]);
 
   const handleSelectTurn = useCallback(
     (turnNumber: number) => {
       unlockAudio();
-      const physics = physicsRef.current;
-      if (!physics || !session || session.race.kind === "mp") return;
+      if (!session || session.race.kind === "mp") return;
       session.resetRun("teleport");
       // Corner practice leaves the race: the field would otherwise lose track of the player's distance
       if (session.race.kind === "ai") session.setRace({ kind: "practice" });
-      physics.teleportToTurn(turnNumber);
+      session.car.teleportToTurn(turnNumber);
     },
     [unlockAudio, session]
   );
@@ -658,11 +601,11 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     const next = settingsRef.current.conditions;
     if (JSON.stringify(env.weather.conditions) !== JSON.stringify(next)) {
       env.setConditions(next);
-      const car = physicsRef.current;
+      const car = session?.car;
       const autoCompound = autoCompoundFor(env.weather.lineWaterMm, car?.tireCompound);
       if (car && car.tireCompound !== autoCompound) handleTireCompoundChange(autoCompound);
     }
-  }, [conditionsKey, getTrackEnv, handleTireCompoundChange]);
+  }, [conditionsKey, getTrackEnv, session, handleTireCompoundChange]);
   useEffect(() => {
     getTrackEnv().setSimRealism(SIM_REALISM_FLAGS[settings.realism]);
   }, [settings.realism, getTrackEnv]);
@@ -675,21 +618,20 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   /** Leaves the menus for the car: a practice run from the grid, or a race against the AI field */
   const startDriving = useCallback(
     (race: boolean) => {
-      const physics = physicsRef.current;
-      const field = race && physics ? ((session && aiFieldOf(session.race)) ?? takeAiField(physics)) : null;
+      const field = race && session ? (aiFieldOf(session.race) ?? session.takeAiField()) : null;
       startSession(field ? { kind: "ai", field } : { kind: "practice" });
       if (field) field.startRace(true);
-      else physics?.resetToStartGrid(false);
+      else session?.car.resetToStartGrid(false);
       setLaunchHint(true);
     },
-    [session, takeAiField, startSession]
+    [session, startSession]
   );
 
   // In the menus (after loading, after a race): have the next race's AI field ready (a car swap asks for its own)
   useEffect(() => {
     if (phase === "loading" || phase === "driving" || !assetsReady) return;
-    prepareAiField();
-  }, [phase, assetsReady, prepareAiField]);
+    session?.prepareAiField();
+  }, [session, phase, assetsReady]);
 
   /** A multiplayer race was started (by us as host, or by the host): line up in our grid slot behind the lights */
   const startMpRace = useCallback(
@@ -704,13 +646,13 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       const allowed = vehicleModelsFor(start.carClass);
       if (!allowed.includes(vehicleModelRef.current)) changeCar(carForVehicle(allowed[0]).id);
       getTrackEnv().reset();
-      const physics = physicsRef.current;
+      const physics = session?.car;
       if (physics) {
         physics.resetToStartGrid(false, race.gridSlot);
         race.lapClock.reset(physics.sMeters);
       }
     },
-    [track, getTrackEnv, changeCar, startSession]
+    [session, track, getTrackEnv, changeCar, startSession]
   );
   const startMpRaceRef = useRef(startMpRace);
   startMpRaceRef.current = startMpRace;
@@ -739,12 +681,12 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   const currentBoard = useCallback(
     (): LapConditions =>
       lapConditionsNow({
-        assists: physicsRef.current?.assistPreset ?? DEFAULT_ASSIST_PRESET,
-        compound: physicsRef.current?.tireCompound ?? "soft",
+        assists: session?.car.assistPreset ?? DEFAULT_ASSIST_PRESET,
+        compound: session?.car.tireCompound ?? "soft",
         lineWaterMm: getTrackEnv().weather.lineWaterMm,
         realism: settingsRef.current.realism,
       }),
-    [getTrackEnv]
+    [session, getTrackEnv]
   );
   const refreshLeaderboard = useCallback(async () => {
     // Several refreshes can overlap (car change, realism change, a saved lap): only the latest may land
@@ -1008,7 +950,6 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     const container = containerRef.current;
     if (!container) return;
     const session = new DriveSession(container, {
-      aiFieldSpareRef,
       audioRef,
       autopilotPaceRef,
       boostLatchRef,
@@ -1028,8 +969,6 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       onLapCompletedRef,
       pausedRef,
       phaseRef,
-      physicsRef,
-      prepareAiField,
       releaseHeldKeys,
       rumbleEnabledRef,
       setAssetsReady,
@@ -1052,7 +991,6 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       onRunReset,
       slashCommandBufferRef,
       steerLockDegRef,
-      takeAiField,
       togglePauseRef,
       track,
       trackId,
@@ -1066,7 +1004,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       session.dispose();
       setSession(null);
     };
-  }, [track, getTrackEnv, takeAiField, prepareAiField, unlockAudio, handleToggleMute, handleToggleRacingLine, releaseHeldKeys, setLatch, setVrState, onRunReset]);
+  }, [track, getTrackEnv, unlockAudio, handleToggleMute, handleToggleRacingLine, releaseHeldKeys, setLatch, setVrState, onRunReset]);
 
   // Saved settings and the first-run flag are read after mount (the page is prerendered without storage); the
   // session takes the settings on through applySettings, whether it exists yet or not

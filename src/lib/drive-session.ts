@@ -34,7 +34,7 @@ import { CameraRig } from "@/lib/render/camera-rig";
 import { LapDeltaTracker } from "@/lib/sim/lap-delta";
 import { TrackLimitsMonitor } from "@/lib/sim/track-limits";
 import { SimVisualFxManager } from "@/lib/sim/visual-fx";
-import { AiOpponentField, resolvePlayerVsRemoteCar } from "@/lib/sim/ai-opponents";
+import { AiOpponentField, AI_DRIVERS, resolvePlayerVsRemoteCar } from "@/lib/sim/ai-opponents";
 import { peerWakeEmitters, TrackEnvironment } from "@/lib/sim/track-environment";
 import type { WakeEmitterCar } from "@/lib/sim/aero-wake";
 import { GamepadHaptics } from "@/lib/sim/gamepad-haptics";
@@ -138,7 +138,7 @@ const approach = (value: number, target: number, maxStep: number) =>
 /** The sound bank each car plays (the F1 cars share one bank) */
 export const soundFor = (car: CarId): CarSoundSource => carById(car).sound;
 /** Runs `fn` when the browser is idle (Safari has no requestIdleCallback: a short timer instead) */
-export const scheduleIdle = (fn: (deadline?: IdleDeadline) => void) => {
+const scheduleIdle = (fn: (deadline?: IdleDeadline) => void) => {
   if (typeof window.requestIdleCallback === "function") window.requestIdleCallback(fn, { timeout: 500 });
   else window.setTimeout(() => fn(), 16);
 };
@@ -182,7 +182,6 @@ export interface ReplayUi {
 
 /** What the drive reads and writes on the component (refs, state setters and callbacks) */
 export interface DriveSessionHost {
-  aiFieldSpareRef: Cell<{ field: AiOpponentField; physics: SimulatorCar } | null>;
   audioRef: Cell<F1AudioEngine2026 | null>;
   autopilotPaceRef: Cell<{ car: unknown; pace: number }>;
   boostLatchRef: Cell<boolean>;
@@ -202,8 +201,6 @@ export interface DriveSessionHost {
   onLapCompletedRef: Cell<(summary: LapSummaryData, recording: LapRecording) => void>;
   pausedRef: Cell<boolean>;
   phaseRef: Cell<AppPhase>;
-  physicsRef: Cell<SimulatorCar | null>;
-  prepareAiField: () => void;
   releaseHeldKeys: () => void;
   rumbleEnabledRef: Cell<boolean>;
   setAssetsReady: SetState<boolean>;
@@ -228,7 +225,6 @@ export interface DriveSessionHost {
   onRunReset: (reason: RunResetReason) => void;
   slashCommandBufferRef: Cell<string>;
   steerLockDegRef: Cell<number | undefined>;
-  takeAiField: (physics: SimulatorCar) => AiOpponentField;
   togglePauseRef: Cell<() => void>;
   track: BuiltTrackData;
   trackId: string;
@@ -257,6 +253,15 @@ export class DriveSession {
   readonly setRace: (next: SessionRace) => void;
   /** The autopilot takes or hands back the player's car; never in a multiplayer race */
   readonly toggleAutopilot: () => void;
+  /** The player's car: the VF26 (F1Physics2026) or the f12026-car (F12026CarSim); a car swap replaces it */
+  get car(): SimulatorCar {
+    return this.carNow();
+  }
+  private readonly carNow: () => SimulatorCar;
+  /** Builds the next race's AI field while the browser is idle in the menus (never while driving or loading) */
+  readonly prepareAiField: () => void;
+  /** The AI field for a race: the one built ahead when it was built for this car, else a new one */
+  readonly takeAiField: () => AiOpponentField;
   /** The player's preferences: kept for the frame loop, and the ones that act on the car or the scene applied */
   readonly applySettings: (settings: PlayerSettings) => void;
   /** Puts the tyre compound on the car and its model */
@@ -280,7 +285,6 @@ export class DriveSession {
 
   constructor(container: HTMLDivElement, host: DriveSessionHost) {
     const {
-      aiFieldSpareRef,
       audioRef,
       autopilotPaceRef,
       boostLatchRef,
@@ -300,8 +304,6 @@ export class DriveSession {
       onLapCompletedRef,
       pausedRef,
       phaseRef,
-      physicsRef,
-      prepareAiField,
       releaseHeldKeys,
       rumbleEnabledRef,
       setAssetsReady,
@@ -324,7 +326,6 @@ export class DriveSession {
       onRunReset,
       slashCommandBufferRef,
       steerLockDegRef,
-      takeAiField,
       togglePauseRef,
       track,
       trackId,
@@ -416,7 +417,34 @@ export class DriveSession {
     };
 
     let physics = createCar(vehicleModelRef.current, null);
-    physicsRef.current = physics;
+    this.carNow = () => physics;
+
+    /**
+     * An AI field built ahead, while the player is in the menus: building five AI cars (physics, autopilot plans) takes
+     * a few hundred ms, which would otherwise be the first frame of the race. Only valid for the car it was built against.
+     */
+    let aiFieldSpare: { field: AiOpponentField; physics: SimulatorCar } | null = null;
+    /** A new AI field round the player's car, at the player's chosen skill */
+    const buildAiField = (car: SimulatorCar) => new AiOpponentField(track, car, AI_DRIVERS, getTrackEnv(), { skill: settings.aiSkill });
+    this.prepareAiField = () => {
+      const run = () => {
+        // Never while driving: the build would be a hitch on track instead
+        if (disposed || phaseRef.current === "driving" || phaseRef.current === "loading") return;
+        if (aiFieldSpare?.physics === physics) return;
+        aiFieldSpare = { field: buildAiField(physics), physics };
+      };
+      scheduleIdle(run);
+    };
+    this.takeAiField = () => {
+      const spare = aiFieldSpare;
+      aiFieldSpare = null;
+      const skill = settings.aiSkill;
+      if (spare && spare.physics === physics) {
+        if (spare.field.skill !== skill) spare.field.setSkill(skill);
+        return spare.field;
+      }
+      return buildAiField(physics);
+    };
 
     this.setCar = (car) => {
       if (disposed) return;
@@ -425,21 +453,20 @@ export class DriveSession {
       this.resetRun("car");
       const vehicle = carPhysics(car);
       physics = createCar(vehicle, physics, car);
-      physicsRef.current = physics;
       swapCarRig(car);
       prefetchSoundBank(soundFor(car).assetDir);
       lapRecorderRef.current?.setContext({ vehicle });
       lapDelta.reset();
       // A running race restarts from the lights with the new car
       if (raceNow().kind === "ai") {
-        const field = takeAiField(physics);
+        const field = this.takeAiField();
         if (trackRoot) field.attachTrackRoot(trackRoot);
         this.setRace({ kind: "ai", field });
         field.startRace(true);
       }
       setTelemetry({ ...physics.telemetry });
       // In the menus, the next race's field is built for the new car
-      prepareAiField();
+      this.prepareAiField();
     };
 
     const haptics = new GamepadHaptics();
@@ -499,7 +526,7 @@ export class DriveSession {
       trackRoot = root;
       physics.attachTrackRoot?.(root);
       aiFieldOf(raceNow())?.attachTrackRoot(root);
-      aiFieldSpareRef.current?.field.attachTrackRoot(root);
+      aiFieldSpare?.field.attachTrackRoot(root);
       // Move broadcast cameras that would film the inside of a grandstand: about a second of raycasts on a scan,
       // spread over idle slices so neither the loading screen nor the menus freeze (until done, the TV view uses
       // the stations as built)
