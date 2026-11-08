@@ -205,8 +205,6 @@ export function idleDriveSnapshot(track: BuiltTrackData): DriveSnapshot {
   };
 }
 
-/** A mutable cell the component owns (a React ref) */
-type Cell<T> = { current: T };
 /** A React state setter */
 type SetState<T> = (value: T | ((prev: T) => T)) => void;
 
@@ -242,15 +240,17 @@ export interface ReplayUi {
   speed: number;
 }
 
-/** What the drive reads and writes on the component (refs, state setters and callbacks) */
+/**
+ * What the session needs from the component: the circuit, the car to start with, and the few callbacks it reports
+ * back through (settings changes the keys ask for, the race kind, a new run). Everything else goes in through methods
+ * and comes back out through the snapshot.
+ */
 export interface DriveSessionHost {
-  carIdRef: Cell<CarId>;
+  /** The car to start with (setCar swaps it later) */
+  car: CarId;
   cycleCamera: () => void;
   getTrackEnv: () => TrackEnvironment;
-  ghostRef: Cell<GhostPlayer | null>;
   handleToggleRacingLine: () => void;
-  lapRecorderRef: Cell<LapRecorder | null>;
-  onLapCompletedRef: Cell<(summary: LapSummaryData, recording: LapRecording) => void>;
   setSettings: SetState<PlayerSettings>;
   /** The session's kind changed (setRace), for the menus */
   setRaceKind: (kind: SessionRace["kind"]) => void;
@@ -258,7 +258,6 @@ export interface DriveSessionHost {
   onRunReset: (reason: RunResetReason) => void;
   track: BuiltTrackData;
   trackId: string;
-  vehicleModelRef: Cell<VehicleModelId>;
 }
 
 /**
@@ -294,6 +293,12 @@ export class DriveSession {
     return this.carNow();
   }
   private readonly carNow: () => SimulatorCar;
+  /** Lap recording for the summary card, the personal-best ghost and the leaderboards */
+  readonly lapRecorder: LapRecorder;
+  /** The ghost raced in practice (the personal best or a chosen lap), or none */
+  readonly setGhost: (ghost: GhostPlayer | null) => void;
+  /** Calls `listener` with every lap completed in practice; returns the unsubscribe */
+  readonly onLapCompleted: (listener: (summary: LapSummaryData, recording: LapRecording) => void) => () => void;
   /** Where the player is: loading, the title menu, the setup screens or driving (the menus film the car orbiting) */
   readonly setPhase: (phase: AppPhase) => void;
   /** The setup screen's step (the car-select step orbits closer) */
@@ -343,19 +348,15 @@ export class DriveSession {
 
   constructor(container: HTMLDivElement, host: DriveSessionHost) {
     const {
-      carIdRef,
+      car: initialCar,
       cycleCamera,
       getTrackEnv,
-      ghostRef,
       handleToggleRacingLine,
-      lapRecorderRef,
-      onLapCompletedRef,
       setSettings,
       setRaceKind,
       onRunReset,
       track,
       trackId,
-      vehicleModelRef,
     } = host;
 
     let disposed = false;
@@ -383,6 +384,18 @@ export class DriveSession {
     };
     this.setRumble = (on) => {
       rumbleEnabled = on;
+    };
+    /** The car being driven and the vehicle model it drives on (setCar changes both) */
+    let carIdNow: CarId = initialCar;
+    let vehicleNow: VehicleModelId = carPhysics(initialCar);
+    let ghostPlayer: GhostPlayer | null = null;
+    this.setGhost = (ghost) => {
+      ghostPlayer = ghost;
+    };
+    const lapListeners = new Set<(summary: LapSummaryData, recording: LapRecording) => void>();
+    this.onLapCompleted = (listener) => {
+      lapListeners.add(listener);
+      return () => lapListeners.delete(listener);
     };
     /** The player car's dry autopilot pace, which the weather scales each frame */
     let autopilotPace: { car: unknown; pace: number } = { car: null, pace: 1 };
@@ -434,7 +447,7 @@ export class DriveSession {
       if (disposed) return;
       if (!audio) {
         audio = new F1AudioEngine2026();
-        audio.setCar(soundFor(carIdRef.current));
+        audio.setCar(soundFor(carIdNow));
         // Created paused unless the car is being driven; from then on the frame loop alone pauses and resumes it
         audio.setPaused(this.snapshot.paused || appPhaseNow !== "driving");
       }
@@ -477,7 +490,7 @@ export class DriveSession {
     // A circuit switch remounts this component: its track and warm-up load again (the car models stay cached)
     assetProgress.reset(["track", "opponents", "shaders"]);
     // The engine sound downloads alongside (decoded once the first key press unlocks audio)
-    prefetchSoundBank(soundFor(carIdRef.current).assetDir);
+    prefetchSoundBank(soundFor(carIdNow).assetDir);
     /** The authored track once the GLB is loaded: the f12026-car drives on its Track_Collider_* meshes */
     let trackRoot: THREE.Object3D | null = null;
 
@@ -485,7 +498,7 @@ export class DriveSession {
      * A car of the chosen model on the start grid, with the session's presets carried over from `prev`
      * (defaults for the first car) and that car's saved tyre setup
      */
-    const createCar = (vehicle: VehicleModelId, prev: SimulatorCar | null, carId: CarId = carIdRef.current): SimulatorCar => {
+    const createCar = (vehicle: VehicleModelId, prev: SimulatorCar | null, carId: CarId = carIdNow): SimulatorCar => {
       const car = vehicleModelSpec(vehicle).createSim(track, trackRoot);
       // The overtaking aids of the car's season, and race control for them while a race is on (free in practice)
       const season = carById(carId).season;
@@ -530,7 +543,7 @@ export class DriveSession {
     /** The last car's setup as the garage shows it (createCar's) */
     let carSetup!: Pick<DriveSnapshot, "tireCompound" | "tyreSetup" | "defaultTyreSetup" | "chassisSetup">;
 
-    let physics = createCar(vehicleModelRef.current, null);
+    let physics = createCar(vehicleNow, null);
     this.carNow = () => physics;
     this.snapshot = {
       telemetry: { ...physics.telemetry },
@@ -583,11 +596,13 @@ export class DriveSession {
       // must still be the old car then. The replay and the live delta belong to the old car.
       this.resetRun("car");
       const vehicle = carPhysics(car);
+      carIdNow = car;
+      vehicleNow = vehicle;
       physics = createCar(vehicle, physics, car);
       this.publish(carSetup);
       swapCarRig(car);
       prefetchSoundBank(soundFor(car).assetDir);
-      lapRecorderRef.current?.setContext({ vehicle });
+      lapRecorder.setContext({ vehicle });
       lapDelta.reset();
       // A running race restarts from the lights with the new car
       if (raceNow().kind === "ai") {
@@ -720,8 +735,8 @@ export class DriveSession {
       scene.add(rig.root);
       return rig;
     };
-    let carRig = createCarRig(carIdRef.current);
-    let carRigCar: CarId = carIdRef.current;
+    let carRig = createCarRig(carIdNow);
+    let carRigCar: CarId = carIdNow;
     const swapCarRig = (car: CarId) => {
       if (car === carRigCar) return;
       // The cockpit extras belong to the old body
@@ -750,7 +765,7 @@ export class DriveSession {
     scene.add(visualFx.group);
     // The opponents and the ghost reflect the world too
     reflectionProbe.track(visualFx.group);
-    void visualFx.prewarm(carPhysics(carIdRef.current));
+    void visualFx.prewarm(carPhysics(carIdNow));
     // One connection for the page: it survives a circuit switch (which remounts this component)
     const multiplayerSync = getMultiplayerManager();
     multiplayerSync.onStatusChange = (st) => {
@@ -764,11 +779,11 @@ export class DriveSession {
       trackGeometry: trackGeometryKey(track),
       turns: TURN_METADATA.map((t) => ({ number: t.number, name: t.name, sApprox: t.sApprox })),
       trackId,
-      vehicle: vehicleModelRef.current,
+      vehicle: vehicleNow,
       driverName: settings.profile.name,
       driverCode: settings.profile.code,
     });
-    lapRecorderRef.current = lapRecorder;
+    this.lapRecorder = lapRecorder;
 
     this.applyGraphics = (quality, renderScale) => {
       if (disposed) return;
@@ -1310,7 +1325,7 @@ export class DriveSession {
       // rack directly.
       // Read every frame (also in menus / paused) so button edges never fire on a stale press
       const pads = connectedPads();
-      const device = deviceInput.read(pads, settings, dtSeconds, vehicleModelRef.current);
+      const device = deviceInput.read(pads, settings, dtSeconds, vehicleNow);
       const appPhase = appPhaseNow;
       const inMenu = appPhase !== "driving";
       const rp = replay;
@@ -1495,7 +1510,7 @@ export class DriveSession {
         pads,
         nowMs,
         driving && settingsNow.device === "wheel",
-        vehicleModelRef.current
+        vehicleNow
       );
       physics.telemetry.race = mpRace && mpFrame ? mpRace.status(mpFrame, physics.vxMs) : aiField?.status();
       physics.telemetry.runId = runId;
@@ -1568,7 +1583,7 @@ export class DriveSession {
             autopilot: physics.aiAutopilot,
           },
         });
-        if (done) onLapCompletedRef.current(done.summary, done.recording);
+        if (done) for (const listener of lapListeners) listener(done.summary, done.recording);
       }
 
       // Telemetry out (UDP via the bridge) for dashboards and motion rigs
@@ -1577,9 +1592,9 @@ export class DriveSession {
         wheelFfb.sendTelemetry(
           settingsNow.wheel.telemetryPort,
           buildTelemetryPacket(physics.telemetry, {
-            car: vehicleModelRef.current,
+            car: vehicleNow,
             track: trackId,
-            maxRpm: vehicleModelSpec(vehicleModelRef.current).telemetryMaxRpm,
+            maxRpm: vehicleModelSpec(vehicleNow).telemetryMaxRpm,
             yawRateRadS: physics.yawRateRadS,
             pitchRad: physics.pitchRad,
             rollRad: physics.rollRad,
@@ -1606,7 +1621,7 @@ export class DriveSession {
           teamColorHex: settingsNow.profile.color,
           name: settingsNow.profile.name,
           race: mpRace?.progress(),
-          vehicle: vehicleModelRef.current,
+          vehicle: vehicleNow,
           trackId,
           pos: [
             physics.worldPosition.x,
@@ -1667,7 +1682,7 @@ export class DriveSession {
       }
 
       // Personal-best (or chosen) ghost, in practice only, timed against the lap in progress
-      const ghost = ghostRef.current;
+      const ghost = ghostPlayer;
       if (ghost && settingsNow.ghost && !aiField && !mpRace && !replaying && !inMenu) {
         const g = ghost.sampleAt(physics.telemetry.currentLapTimeMs / 1000);
         if (g) {
@@ -1940,7 +1955,7 @@ export class DriveSession {
         }
         cueDrsAvail = drsAvail;
         cueDrsOpen = drsOpen;
-        const limiter = vehicleModelSpec(vehicleModelRef.current).limiterRpm;
+        const limiter = vehicleModelSpec(vehicleNow).limiterRpm;
         if (tc.gear !== cueGear || tc.rpm < limiter - 600) {
           cueGear = tc.gear;
           cueShiftArmed = true;
@@ -2089,7 +2104,6 @@ export class DriveSession {
       window.clearInterval(assetWatchdog);
       renderer.setAnimationLoop(null);
       void renderer.xr.getSession()?.end();
-      lapRecorderRef.current = null;
       haptics.stop();
       opponentAudio.dispose();
       wheelFfb.dispose();

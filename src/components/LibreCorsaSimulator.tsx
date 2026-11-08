@@ -11,7 +11,7 @@ import { type ChassisSetup, saveChassisSetup } from "@/lib/sim/car-setup";
 import { TrackEnvironment } from "@/lib/sim/track-environment";
 import { getMultiplayerManager, type LobbySettings, type LobbyState, type PeerNetStats, type RaceStartInfo } from "@/lib/sim/multiplayer-sync";
 import { MultiplayerRace } from "@/lib/sim/race-session";
-import { GhostPlayer, LapRecorder } from "@/lib/sim/lap-recorder";
+import { GhostPlayer } from "@/lib/sim/lap-recorder";
 import { lapBoardClass, lapConditionsNow, type LapConditions, type LapRecording, type LapSummaryData, type LeaderboardEntry } from "@/lib/sim/lap-types";
 import { exportLapFile, importLapFile, loadBestLap, saveBestLapIfFaster } from "@/lib/sim/ghost-store";
 import {
@@ -159,7 +159,6 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   const [resultsClosed, setResultsClosed] = useState(false);
 
   // ---- Laps, ghosts, leaderboards
-  const lapRecorderRef = useRef<LapRecorder | null>(null);
   const [lapSummary, setLapSummary] = useState<{ summary: LapSummaryData; recording: LapRecording } | null>(null);
   const [submitState, setSubmitState] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const [submitRank, setSubmitRank] = useState<number | null>(null);
@@ -167,8 +166,6 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   /** Bumped by every new or closed lap card and every upload: only the upload of the card still shown may land on it */
   const submitReqRef = useRef(0);
   const [driverKeyNotice, setDriverKeyNotice] = useState<string | null>(null);
-  /** Ghost being raced: the personal best (default) or a downloaded / imported lap */
-  const ghostRef = useRef<GhostPlayer | null>(null);
   const ghostSourceRef = useRef<"pb" | "other">("pb");
   /** Bumped by every ghost choice, so a slower PB load cannot replace a ghost picked after it started */
   const ghostReqRef = useRef(0);
@@ -588,9 +585,9 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     if (req !== ghostReqRef.current) return;
     ghostSourceRef.current = "pb";
     // A best from an earlier version of the circuit is moved onto this one
-    ghostRef.current = rec ? new GhostPlayer(alignGhostToTrack(rec, track).recording) : null;
-    lapRecorderRef.current?.setContext({ personalBestMs: rec?.lapTimeMs ?? null });
-  }, [trackId, currentBoard, track]);
+    session?.setGhost(rec ? new GhostPlayer(alignGhostToTrack(rec, track).recording) : null);
+    session?.lapRecorder.setContext({ personalBestMs: rec?.lapTimeMs ?? null });
+  }, [session, trackId, currentBoard, track]);
 
   const onLapCompleted = useCallback(
     (summary: LapSummaryData, recording: LapRecording) => {
@@ -611,16 +608,15 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
           if (ghostSourceRef.current === "pb" && ghostReq === ghostReqRef.current && recording.vehicle === vehicleModelRef.current) {
             // Newer than any best still loading from before this lap
             ghostReqRef.current++;
-            ghostRef.current = new GhostPlayer(recording);
+            session?.setGhost(new GhostPlayer(recording));
           }
           void refreshLeaderboard();
         })
         .catch(() => {});
     },
-    [refreshLeaderboard]
+    [session, refreshLeaderboard]
   );
-  const onLapCompletedRef = useRef(onLapCompleted);
-  onLapCompletedRef.current = onLapCompleted;
+  useEffect(() => session?.onLapCompleted(onLapCompleted), [session, onLapCompleted]);
 
   /**
    * Uploads the shown lap. `name` comes from the lap card's name prompt (first upload under a generated
@@ -658,10 +654,10 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     if (!rec) return;
     ghostReqRef.current++;
     // A lap from another version of the circuit (a downloaded or older file) is moved onto this one
-    ghostRef.current = new GhostPlayer(alignGhostToTrack(rec, track).recording);
+    session?.setGhost(new GhostPlayer(alignGhostToTrack(rec, track).recording));
     ghostSourceRef.current = "other";
     setSettings((prev) => (prev.ghost ? prev : { ...prev, ghost: true }));
-  }, [track]);
+  }, [session, track]);
 
   const handleRaceGhostEntry = useCallback(
     async (entry: LeaderboardEntry) => {
@@ -809,19 +805,15 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     const container = containerRef.current;
     if (!container) return;
     const session = new DriveSession(container, {
-      carIdRef,
+      car: carIdRef.current,
       cycleCamera,
       getTrackEnv,
-      ghostRef,
       handleToggleRacingLine,
-      lapRecorderRef,
-      onLapCompletedRef,
       setSettings,
       setRaceKind,
       onRunReset,
       track,
       trackId,
-      vehicleModelRef,
     });
     setSession(session);
     return () => {
@@ -900,8 +892,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   // Name, code, colour and car as other players see them
   useEffect(() => {
     getMultiplayerManager().setIdentity(settings.profile, vehicleModel, trackId);
-    lapRecorderRef.current?.setContext({ driverName: settings.profile.name, driverCode: settings.profile.code });
-  }, [settings.profile, vehicleModel, trackId]);
+    session?.lapRecorder.setContext({ driverName: settings.profile.name, driverCode: settings.profile.code });
+  }, [session, settings.profile, vehicleModel, trackId]);
 
   // A car change brings back that car's personal-best ghost and leaderboard
   useEffect(() => {
