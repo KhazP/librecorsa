@@ -12,7 +12,7 @@
  */
 
 import type { LutPoints } from '../lut';
-import { WET_TYRE_TRAITS, type WetTyreTraits } from '../wet-tyres';
+import { F1_RAIN_TYRE_PACK, f1RainTraits, WET_TYRE_TRAITS, type WetTyreTraits } from '../wet-tyres';
 
 // ---------------------------------------------------------------------------
 // Enums
@@ -600,14 +600,19 @@ export function compoundData(config: CarPhysicsConfig, compound: PhysicsTyreComp
  * temperature curve moved down to its cooler window and falling off twice as fast again above it (a rain tyre on a dry
  * track overheats), cooler blankets, and a longer, softer tread (relaxation length, peak slip angle). The water
  * response, and the extra heat and wear on a dry road, come from `wetTraits` at run time.
+ * `f1Pack`: an F1 car's rain tyres take the 2026 Pirelli pack's temperature curve, window and wear ratio instead
+ * (`F1_RAIN_TYRE_PACK`).
  */
 export function deriveRainCompound(
   base: TyresCompoundData,
   kind: 'intermediate' | 'wet',
   tyre_compound: PhysicsTyreCompound,
-  name: string
+  name: string,
+  f1Pack = false
 ): TyresCompoundData {
-  const traits = WET_TYRE_TRAITS[kind];
+  const th = base.thermalData;
+  const peakC = 0.5 * (th.optimalTempC[0] + th.optimalTempC[1]);
+  const traits = f1Pack ? f1RainTraits(kind, peakC) : WET_TYRE_TRAITS[kind];
   const k = traits.dryGrip;
   const tread = kind === 'wet' ? 1.10 : 1.05;
   const angle = kind === 'wet' ? 1.12 : 1.06;
@@ -626,13 +631,13 @@ export function deriveRainCompound(
     if (m.slip_ratio_limit) out.slip_ratio_limit = m.slip_ratio_limit * slipRatioScale;
     return out;
   };
-  const th = base.thermalData;
-  const peakC = 0.5 * (th.optimalTempC[0] + th.optimalTempC[1]);
-  const thermalPerformanceCurve: LutPoints = th.thermalPerformanceCurve.map(([t, g]) => {
-    const over = Math.max(0, t - peakC);
-    const loss = (1 - g) * (1 + 2 * Math.min(1, over / 40));
-    return [t + traits.tempShiftC, Number(Math.max(0.5, 1 - loss).toFixed(4))] as [number, number];
-  });
+  const thermalPerformanceCurve: LutPoints = f1Pack
+    ? F1_RAIN_TYRE_PACK[kind].thermalCurve
+    : th.thermalPerformanceCurve.map(([t, g]) => {
+        const over = Math.max(0, t - peakC);
+        const loss = (1 - g) * (1 + 2 * Math.min(1, over / 40));
+        return [t + traits.tempShiftC, Number(Math.max(0.5, 1 - loss).toFixed(4))] as [number, number];
+      });
   const model = { ...base.modelData, ...scaleModel(base.modelData) } as TyresModelData;
   model.falloff_level = Math.min(0.95, base.modelData.falloff_level + (kind === 'wet' ? 0.06 : 0.04));
   model.falloff_slope = kind === 'wet' ? 1.5 : 1.8;
@@ -1320,9 +1325,9 @@ const F12026_TYRES = {
   PhysicsTyreCompound_F1_Soft: f1Compound('PhysicsTyreCompound_F1_Soft', 'Soft', 'S', C3_FRONT, C3_REAR, C3_TEMP, [95, 115]),
   PhysicsTyreCompound_F1_Medium: F1_MEDIUM,
   PhysicsTyreCompound_F1_Hard: f1Compound('PhysicsTyreCompound_F1_Hard', 'Hard', 'H', C1_FRONT, C1_REAR, C1_TEMP, [105, 125]),
-  // Rain tyres on the medium's carcass [est]
-  PhysicsTyreCompound_F1_Intermediate: deriveRainCompound(F1_MEDIUM, 'intermediate', 'PhysicsTyreCompound_F1_Intermediate', 'Intermediate'),
-  PhysicsTyreCompound_F1_Wet: deriveRainCompound(F1_MEDIUM, 'wet', 'PhysicsTyreCompound_F1_Wet', 'Full Wet'),
+  // Rain tyres on the medium's carcass [est], with the 2026 Pirelli pack's temperature curves and wear ratio
+  PhysicsTyreCompound_F1_Intermediate: deriveRainCompound(F1_MEDIUM, 'intermediate', 'PhysicsTyreCompound_F1_Intermediate', 'Intermediate', true),
+  PhysicsTyreCompound_F1_Wet: deriveRainCompound(F1_MEDIUM, 'wet', 'PhysicsTyreCompound_F1_Wet', 'Full Wet', true),
 } satisfies Partial<Record<PhysicsTyreCompound, TyresCompoundData>>;
 
 const F12026_MASS = 769;

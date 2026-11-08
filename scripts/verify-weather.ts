@@ -209,7 +209,7 @@ console.log('\n== VF26 tyre (ac-tyre): peak lateral force at 4 kN, 55 m/s');
   const peakFy = (c: TireCompound, waterMm: number) => {
     let best = 0;
     for (let deg = 1; deg <= 14; deg += 0.5) {
-      const t = createTyreRuntime(VF26_TYRES[c].front, c === 'medium' ? 95 : 95 + WET_TYRE_TRAITS[c].tempShiftC);
+      const t = createTyreRuntime(VF26_TYRES[c].front, c === 'medium' ? 95 : 95 + (VF26_TYRES[c].front.wet?.tempShiftC ?? 0));
       t.waterMm = waterMm;
       t.wetness = wetnessFromWater(waterMm);
       let fy = 0;

@@ -14,7 +14,7 @@
 
 import type { TireCompound } from '@/types/f1';
 import type { LutPoints } from './lut';
-import { WET_TYRE_TRAITS, type WetTyreTraits } from './wet-tyres';
+import { F1_RAIN_TYRE_PACK, f1RainTraits, type WetTyreTraits } from './wet-tyres';
 
 // ---------------------------------------------------------------------------
 // Tyres  (`tyres/f1_2026/f12026_*_305_720_18.tyre` / `*_405_720_18.tyre`)
@@ -277,20 +277,14 @@ const VF26_SLICKS: Record<'soft' | 'medium' | 'hard', { front: Vf26TyreSpec; rea
 
 /**
  * A treaded rain tyre built on the medium slick's carcass [assumed]: the grip tables scaled by the compound's dry grip,
- * the temperature curve moved down to its cooler window (and falling off faster above it, so a rain tyre on a dry
- * track overheats), a longer, softer tread (relaxation length, peak slip angle) and the medium's wear rate. Its water
- * behaviour, extra heat and wear on a dry road come from `wet` at run time
+ * the pack's temperature curve and window (`F1_RAIN_TYRE_PACK`), a longer, softer tread (relaxation length, peak slip
+ * angle) and the medium's wear rate. Its water behaviour, extra heat and wear on a dry road come from `wet` at run time
  */
 function deriveVf26RainTyre(base: Vf26TyreSpec, kind: 'intermediate' | 'wet'): Vf26TyreSpec {
-  const traits = WET_TYRE_TRAITS[kind];
+  // The medium slick's curve peaks at 102.5 °C
+  const traits = f1RainTraits(kind, 102.5);
   const k = traits.dryGrip;
-  const peakC = 102.5;
-  const thermalCurve: LutPoints = base.thermalCurve.map(([t, g]) => {
-    const shifted = t + traits.tempShiftC;
-    // Above the shifted peak the rubber goes off half as fast again as the slick's
-    const over = Math.max(0, t - peakC);
-    return [Math.max(-20, shifted), Number(Math.max(0.5, 1 - (1 - g) * (1 + 0.5 * Math.min(1, over / 40))).toFixed(4))] as [number, number];
-  });
+  const thermalCurve: LutPoints = F1_RAIN_TYRE_PACK[kind].thermalCurve;
   return {
     ...base,
     name: kind === 'wet' ? 'Full Wet (W)' : 'Intermediate (I)',

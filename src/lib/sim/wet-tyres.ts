@@ -71,6 +71,44 @@ export const WET_TYRE_TRAITS: Record<TireCompound, WetTyreTraits> = {
   },
 };
 
+/**
+ * The F1 rain tyres' temperature and wear behaviour, from Cxjovich's 2026 Pirelli Tire Pack (OverTake, used with
+ * permission, CC BY-NC-SA 4.0; see CREDITS.md):
+ *  - `thermalCurve`: grip against tyre temperature (°C, absolute), the pack's `FR_Temp_Comp_6.lut` (intermediate,
+ *    peak 75 °C, going off past 90) and `FR_Temp_Comp_7.lut` (full wet, peak 70 °C, a broad window);
+ *  - `wetWearScale`: the full wet wears about 0.7x as fast as the intermediate. The pack's wear curves
+ *    (`F/R_Wear_Comp_6/7.lut`, grip against distance) have the inter lose 3-12 % grip in 0.6-0.85x the wet's distance
+ *    (fronts ~0.75, rears ~0.62); this model has one wear-to-grip curve for every compound, so only their ratio is kept.
+ * Each F1 car's rain tyres put the peak there whatever its slick's (`f1RainTraits`); GT3 keeps the generic traits.
+ */
+export const F1_RAIN_TYRE_PACK: Record<
+  'intermediate' | 'wet',
+  { peakTempC: number; thermalCurve: ReadonlyArray<readonly [number, number]>; wetWearScale: number }
+> = {
+  intermediate: {
+    peakTempC: 75,
+    thermalCurve: [
+      [0, 0.9423], [20, 0.9645], [40, 0.9854], [60, 0.9983], [70, 0.9996], [75, 1], [80, 0.9996], [90, 0.985],
+      [100, 0.97], [110, 0.95], [120, 0.92],
+    ],
+    wetWearScale: 1,
+  },
+  wet: {
+    peakTempC: 70,
+    thermalCurve: [
+      [0, 0.9423], [20, 0.9645], [40, 0.9854], [50, 0.9932], [60, 0.9983], [65, 0.9996], [70, 1], [75, 0.9996],
+      [80, 0.9983], [90, 0.9932], [100, 0.9854], [120, 0.9645],
+    ],
+    wetWearScale: 0.7,
+  },
+};
+
+/** An F1 rain tyre's traits on a car whose slick peaks at `slickPeakC`: its window put at the pack's peak */
+export function f1RainTraits(kind: 'intermediate' | 'wet', slickPeakC: number): WetTyreTraits {
+  const pack = F1_RAIN_TYRE_PACK[kind];
+  return { ...WET_TYRE_TRAITS[kind], tempShiftC: pack.peakTempC - slickPeakC, wetWearScale: pack.wetWearScale };
+}
+
 /** Water film depth (mm) at which the road counts as damp, wet and flooded, for labels */
 export const DAMP_MM = 0.08;
 export const WET_MM = 0.5;
