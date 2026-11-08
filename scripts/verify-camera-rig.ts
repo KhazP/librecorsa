@@ -116,4 +116,31 @@ check('reset() starts the smoothed chase camera over', () => {
   assert.ok(finite(camera.position) && camera.position.distanceTo(moving) < 20, 'still behind the car after a reset');
 });
 
+check('the helicopter glides behind a moving car, and starts over after a reset or a jump', () => {
+  const { camera, rig, car, frame } = setup();
+  const vel = new THREE.Vector3(0, 0, 40).applyQuaternion(car.worldQuaternion);
+  const pos = car.worldPosition.clone();
+  const fly = (n: number) => {
+    for (let i = 0; i < n; i++) {
+      pos.addScaledVector(vel, 1 / 60);
+      rig.update(frame('helicopter', { carPos: pos.clone(), carVelocity: vel }));
+    }
+  };
+  fly(1);
+  // The first frame puts it straight over its spot: 28 m back, 14 m out each way and 24 m up
+  const spot = (p: THREE.Vector3) =>
+    p.clone().addScaledVector(new THREE.Vector3(0, 0, 1).applyQuaternion(car.worldQuaternion), -28).add(new THREE.Vector3(14, 24, 14));
+  assert.ok(camera.position.distanceTo(spot(pos)) < 1e-6, 'snapped on first use');
+  fly(30);
+  const lag = camera.position.distanceTo(spot(pos));
+  assert.ok(lag > 0.5 && lag < 20, `glides behind the car (${lag.toFixed(2)} m behind its spot)`);
+  rig.reset();
+  fly(1);
+  assert.ok(camera.position.distanceTo(spot(pos)) < 1e-6, 'starts over after reset()');
+  fly(10);
+  pos.addScaledVector(vel, 3); // 120 m in one frame: a replay scrub, or frames it did not see
+  fly(1);
+  assert.ok(camera.position.distanceTo(spot(pos)) < 1e-6, 'starts over after a jump');
+});
+
 console.log(`\n${passed} camera rig checks passed`);
