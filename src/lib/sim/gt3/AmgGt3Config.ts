@@ -474,6 +474,9 @@ function gt3Compound(
       relaxationLengthX: 0.09883,
       relaxationLengthY: 0.09883,
       rollingResistance: 0.012,
+      // Speed term in the proportion of a radial tyre's (Wong, Theory of Ground Vehicles: 0.0136 + 0.40e-7·V², V km/h):
+      // +26 % at 300 km/h [derived]
+      rollingResistanceSpeedSq: 4.6e-7,
       verticalDamping: 500,
       pneumaticTrail: 0.04,
       // +3 % longitudinal grip under braking. It was +9 %, which stood in for the front downforce the splitter stall used to

@@ -2379,7 +2379,9 @@ export class VehiclePhysics {
       // Pad μ(T) of the disc (1 in its window, a mild loss cold or faded)
       const friction = (w.isFront ? demand : Math.max(0, demand - rearDriveBrake)) * w.brakeDisc.muFactor;
       const tyre = this.tyres[w.isFront ? 0 : 1].data.modelData;
-      w.brakeTorqueNm = friction + w.fz * tyre.rollingResistance * w.rollingRadius;
+      const rollV = w.vx;
+      const rollingResistance = tyre.rollingResistance + (tyre.rollingResistanceSpeedSq ?? 0) * rollV * rollV;
+      w.brakeTorqueNm = friction + w.fz * rollingResistance * w.rollingRadius;
     }
 
     // ---- predicted velocities from the free torques

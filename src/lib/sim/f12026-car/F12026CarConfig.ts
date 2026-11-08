@@ -483,8 +483,13 @@ export interface TyresModelData {
   /** Carcass relaxation lengths (m) */
   relaxationLengthX: number;
   relaxationLengthY: number;
-  /** Rolling-resistance coefficient */
+  /** Rolling-resistance coefficient at walking speed */
   rollingResistance: number;
+  /**
+   * Its growth with speed, per (m/s)²: f = rollingResistance + rollingResistanceSpeedSq·v², the standard tyre form (the
+   * carcass's hysteresis work per second rises with the deflection rate). Absent: 0, no speed term
+   */
+  rollingResistanceSpeedSq?: number;
   /** Radial damping (Ns/m) */
   verticalDamping: number;
   /** Pneumatic trail at zero slip (m) */
@@ -1230,6 +1235,9 @@ function f1Compound(
       relaxationLengthX: 0.1025,
       relaxationLengthY: 0.1025,
       rollingResistance: 0.012,
+      // Speed term in the proportion of a radial tyre's, f = 0.0136 + 0.40e-7·V² (V km/h; Wong, Theory of Ground
+      // Vehicles): 3.8e-5 of the static value per (m/s)², so +26 % at 300 km/h [derived]
+      rollingResistanceSpeedSq: 4.6e-7,
       verticalDamping: 396,
       pneumaticTrail: 0.035,
       brakeDxMod: 0.05,
