@@ -2,14 +2,8 @@
 
 import React, { useState } from "react";
 import { PAD_ACTIONS, PAD_BRAKE_BUTTON, PAD_THROTTLE_BUTTON, type PadButtonBindings } from "@/lib/input/bindings";
-import { FACE_BUTTONS, type PadFamily } from "../input-mode";
+import { FACE_BUTTONS, PAD_BUTTON_NAMES as NAMES, type PadFamily } from "../input-mode";
 import type { PadState } from "../useMenuNav";
-
-/** Standard-mapping button names per pad family */
-const NAMES: Record<PadFamily, Record<number, string>> = {
-  xbox: { 0: "A", 1: "B", 2: "X", 3: "Y", 4: "LB", 5: "RB", 6: "LT", 7: "RT", 8: "View", 9: "Menu", 10: "LS", 11: "RS" },
-  playstation: { 0: "✕", 1: "○", 2: "□", 3: "△", 4: "L1", 5: "R1", 6: "L2", 7: "R2", 8: "Create", 9: "Options", 10: "L3", 11: "R3" },
-};
 
 /** Face button colours (A B X Y / ✕ ○ □ △) */
 const FACE_COLOR = {

@@ -2,9 +2,11 @@
 
 import React, { useEffect, useState } from "react";
 import {
-  DEFAULT_PAD_BUTTONS,
+  matchPadLayout,
   PAD_ACTIONS,
   PAD_BRAKE_BUTTON,
+  PAD_LAYOUT_IDS,
+  PAD_LAYOUTS,
   PAD_THROTTLE_BUTTON,
   padButtonLabel,
   rebindPadButton,
@@ -20,7 +22,7 @@ import { Choice, Toggle } from "@/components/hud/PauseMenu";
 import { PAD_FINE_TUNING_FIELDS, resetPadTuning, type PadTuning } from "@/lib/settings/player-settings";
 import { useGamepads } from "../useMenuNav";
 import { useButtonCapture } from "./button-capture";
-import { FACE_BUTTONS, padFamilyOf, useInputMode, type PadFamily } from "../input-mode";
+import { FACE_BUTTONS, padButtonName, padFamilyOf, useInputMode, type PadFamily } from "../input-mode";
 import { StickCurve, TriggerBars, TuningSlider } from "./TuningSlider";
 import { PadMap } from "./PadMap";
 import { AssistTuningCard, AutoGrid, BindRow, bindKeyClass, ChoiceText, Hint, PillAction, SetupCard, StatusPill, TrackMeter } from "./setup-ui";
@@ -75,6 +77,7 @@ export const ControllerStep: React.FC<SetupStepProps & { steerLockDeg?: number }
   const pad = pads.find((p) => p.mapping === "standard") ?? null;
   const [capturing, setCapturing] = useState<PadAction | null>(null);
   const [showMap, setShowMap] = useState(false);
+  const layout = matchPadLayout(settings.padButtons);
 
   const onButton = React.useCallback(
     (button: number) => {
@@ -177,12 +180,27 @@ export const ControllerStep: React.FC<SetupStepProps & { steerLockDeg?: number }
       <SetupCard
         label="Buttons · RT throttle · LT brake · left stick steers"
         action={
-          <span className="flex gap-2">
-            <PillAction onClick={() => setShowMap((v) => !v)}>{showMap ? "Hide map" : "Button map"}</PillAction>
-            <PillAction onClick={() => onChangeSettings((s) => ({ ...s, padButtons: DEFAULT_PAD_BUTTONS }))}>Reset</PillAction>
-          </span>
+          <PillAction onClick={() => setShowMap((v) => !v)}>{showMap ? "Hide map" : "Button map"}</PillAction>
         }
       >
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {PAD_LAYOUT_IDS.map((id) => {
+            const { label, buttons: b } = PAD_LAYOUTS[id];
+            const name = (button: number | null) => padButtonName(button, family);
+            return (
+              <Choice
+                key={id}
+                active={layout === id}
+                onClick={() => onChangeSettings((s) => ({ ...s, padButtons: { ...PAD_LAYOUTS[id].buttons } }))}
+              >
+                <ChoiceText
+                  title={label}
+                  detail={`${name(b.shiftUp)} / ${name(b.shiftDown)} gears · ${name(b.boost)} boost`}
+                />
+              </Choice>
+            );
+          })}
+        </div>
         {showMap ? (
           <div className="rounded-2xl border border-[#262B3D] bg-[#08090D] p-3">
             <PadMap family={pad ? padFamilyOf(pad.id) : family} bindings={settings.padButtons} pad={pad} />
@@ -216,7 +234,9 @@ export const ControllerStep: React.FC<SetupStepProps & { steerLockDeg?: number }
         {capturing ? (
           <StatusPill tone="live">Press a controller button · Esc cancels</StatusPill>
         ) : (
-          <Hint>Click a button, then press the one you want.</Hint>
+          <Hint>
+            {layout === null ? "Custom layout. " : ""}Click a button, then press the one you want.
+          </Hint>
         )}
       </SetupCard>
 

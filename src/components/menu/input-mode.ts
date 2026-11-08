@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { padButtonLabel } from "@/lib/input/bindings";
 import { connectedPads } from "@/lib/input/device-input";
 
 /**
@@ -27,6 +28,16 @@ export const FACE_BUTTONS: Record<PadFamily, readonly { label: string; color: st
     { label: "△", color: "#45C9A6" },
   ],
 };
+
+/** Standard-mapping buttons 0..11 as printed on each pad family */
+export const PAD_BUTTON_NAMES: Record<PadFamily, Record<number, string>> = {
+  xbox: { 0: "A", 1: "B", 2: "X", 3: "Y", 4: "LB", 5: "RB", 6: "LT", 7: "RT", 8: "View", 9: "Menu", 10: "LS", 11: "RS" },
+  playstation: { 0: "✕", 1: "○", 2: "□", 3: "△", 4: "L1", 5: "R1", 6: "L2", 7: "R2", 8: "Create", 9: "Options", 10: "L3", 11: "R3" },
+};
+
+/** A standard-mapping button's name on this pad family ("—" when unbound) */
+export const padButtonName = (button: number | null | undefined, family: PadFamily): string =>
+  button === null || button === undefined ? "—" : (PAD_BUTTON_NAMES[family][button] ?? padButtonLabel(button));
 
 let mode: InputMode = "pointer";
 let family: PadFamily = "xbox";
