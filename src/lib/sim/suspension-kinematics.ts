@@ -15,6 +15,13 @@
  * - Computes Side-View Instant Centres (SVIC) from inclined wishbone axes to evaluate anti-dive
  *   (front braking) and anti-squat (rear traction) vertical link reaction forces.
  * - Models pushrod / pullrod bellcrank rocker motion ratio `motionRatio(zBumpM)`.
+ * - Solves the upright as a rigid body (kingpin from the ball joints, turned about it until the tie rod is at its
+ *   length for the rack position) for the exact camber `uprightCamberRad`, road-wheel angle `wheelSteerRad` (Ackermann
+ *   and bump steer from the arm geometry), kingpin scrub / trail at the ground, and the paths of the contact patch and
+ *   the hub per unit of travel (`contact*PerBump`, `hub*PerBump`): the virtual-work coefficients that give a multibody
+ *   suspension's roll centre, jacking, anti-dive, anti-squat and anti-lift. The f12026-car / GT3 physics uses these.
+ *   `dynamicCamberDeltaRad`, `roadSteerRad`, `bumpSteerToeInRad`, `scrubRadiusM` and the axle's `rollCentreHeightM`
+ *   keep their earlier blended forms for the VF26, whose hardpoints carry no tie rod.
  */
 
 export type Vec3Tuple = readonly [number, number, number];
@@ -36,6 +43,15 @@ export interface DoubleWishboneHardpoints {
   carSteer: Vec3Tuple;
   /** Upright steering arm ball joint [x_inboard, y_up, z_fwd] (m) */
   tyreSteer: Vec3Tuple;
+  /** Tie-rod (toe-link) length from `carSteer` to `tyreSteer` at static (m) */
+  tieRodLengthM: number;
+  /**
+   * Rack travel per radian of commanded road-wheel angle, linearised about straight ahead (m/rad, signed for this
+   * steering arm's layout). The rack moves both inner tie-rod joints together, as a pinion does, so each wheel's own
+   * angle (and the Ackermann between them) comes out of the arm geometry. Measured on the hardpoints by
+   * `buildDoubleWishboneHardpoints`.
+   */
+  rackTravelPerSteerRad: number;
   /** Actuation topology ('pull_rod' for modern F1 front, 'push_rod' for rear / GT3) */
   actuation: 'pull_rod' | 'push_rod';
   /** Rocker bellcrank progressive motion ratio slope (per m of bump) */
@@ -51,10 +67,20 @@ export interface CornerKinematicsState {
   tyreBottom: [number, number, number];
   /** Dynamic camber change from wishbone + steering KPI/caster geometry (rad, negative = top inward) */
   dynamicCamberDeltaRad: number;
+  /**
+   * Camber change of the wheel from the solved upright pose (rad, negative = top inward): the wishbones' travel plus
+   * the caster / KPI camber of the steer angle, exact for the hardpoints (no blend)
+   */
+  uprightCamberRad: number;
   /** Kinematic bump steer toe change from tie-rod arc mismatch (rad, + = toe-in) */
   bumpSteerToeInRad: number;
   /** Road wheel steer angle including Ackermann and bump steer (rad, + = left) */
   roadSteerRad: number;
+  /**
+   * Road-wheel angle of the solved upright (rad, + = left): the tie rod at its length from the rack's position, so the
+   * steering arm's Ackermann and the toe link's bump steer are both in it
+   */
+  wheelSteerRad: number;
   /** Kingpin inclination angle in front view (rad) */
   kpiRad: number;
   /** Caster angle in side view (rad) */
@@ -67,8 +93,26 @@ export interface CornerKinematicsState {
    * the kingpin's ground offset from the hardpoints, held within 8–42 mm (not the raw geometric offset)
    */
   scrubRadiusM: number;
+  /** Kingpin axis's ground point inboard of the contact patch centre (m): the hardpoints' own scrub radius */
+  kingpinScrubM: number;
+  /** Kingpin axis's ground point ahead of the contact patch centre (m): the hardpoints' own mechanical trail */
+  kingpinTrailM: number;
   /** Instantaneous pushrod/pullrod rocker motion ratio (normalized to 1.0 at static ride height) */
   motionRatioNorm: number;
+  /**
+   * Contact patch motion per metre of wheel-centre bump, inboard and forward (m/m). These are the front- and side-view
+   * swing-arm slopes for a force at the ground (virtual work: a force F there loads the wheel's travel by F · dr/dz):
+   * −inboard is tan θ of the front-view instant centre (roll centre, jacking), +forward the anti-dive slope of an
+   * outboard brake.
+   */
+  contactInboardPerBump: number;
+  contactForwardPerBump: number;
+  /**
+   * Wheel-centre motion per metre of its bump, inboard and forward (m/m): the swing-arm slopes for a force at the hub,
+   * as a driveshaft's (anti-squat of an inboard drive, Milliken RCVD §17.4) or the unsprung mass's own inertia
+   */
+  hubInboardPerBump: number;
+  hubForwardPerBump: number;
   /** Front-view instant centre [u_inboard, v_up] from wheel center (m) */
   fvic: [number, number];
   /** Side-view pitch slope tan(theta_svic) for anti-dive / anti-squat */
@@ -84,7 +128,11 @@ export interface AxleKinematicsState {
   rollCentreHeightM: number;
   /** Lateral roll-centre migration from car centreline (m, + = left) */
   rollCentreLatOffsetM: number;
-  /** Anti-dive / anti-squat fraction (0..0.45) */
+  /**
+   * Side-view swing-arm slope tan θ at the contact patch, mean of the two wheels (+ = the patch moves forward in bump).
+   * Times wheelbase / CG height and the axle's share of the braking force it is the anti-dive fraction of a front axle
+   * (+) or the anti-lift fraction of a rear one (−), Milliken RCVD §17.3
+   */
   antiPitchFraction: number;
 }
 
@@ -172,7 +220,7 @@ export function buildDoubleWishboneHardpoints(
         ? [0.096, -0.009, -0.074]
         : [0.104, 0.014, -0.072];
 
-  return {
+  const out: DoubleWishboneHardpoints = {
     carTopFront: hp[0],
     carTopRear: hp[1],
     carBottomFront: hp[2],
@@ -181,10 +229,17 @@ export function buildDoubleWishboneHardpoints(
     tyreBottom: hp[5],
     carSteer,
     tyreSteer,
+    tieRodLengthM: Math.hypot(tyreSteer[0] - carSteer[0], tyreSteer[1] - carSteer[1], tyreSteer[2] - carSteer[2]),
+    rackTravelPerSteerRad: 1,
     actuation,
     rockerProgressivityPerM: actuation === 'pull_rod' ? 1.35 : 1.15,
     staticCasterTrailM: options.staticCasterTrailM ?? (gt3 ? 0.025 : 0.012),
   };
+  // Rack ratio: with 1 m per "radian", a 1 mm nudge of the rack reads straight off the left wheel's solved angle
+  const nudgeM = 0.001;
+  const nudged = solveCornerKinematics3D(out, 0, nudgeM, true, 0.33).wheelSteerRad;
+  out.rackTravelPerSteerRad = Math.abs(nudged) > 1e-6 ? nudgeM / nudged : 0;
+  return out;
 }
 
 /** Rotate vector `v` around unit axis `k` by `angleRad` (Rodrigues' formula); `dOut` gets d(out)/d(angle) */
@@ -218,6 +273,37 @@ function rotateAroundAxis(
 const _rotU: [number, number, number] = [0, 0, 0];
 const _rotL: [number, number, number] = [0, 0, 0];
 const _dRot: [number, number, number] = [0, 0, 0];
+const _dRotL: [number, number, number] = [0, 0, 0];
+const _dRotU: [number, number, number] = [0, 0, 0];
+const _armA: [number, number, number] = [0, 0, 0];
+const _axisA: [number, number, number] = [0, 0, 0];
+const _hubA: [number, number, number] = [0, 0, 0];
+const _armS: [number, number, number] = [0, 0, 0];
+const _spin: [number, number, number] = [0, 0, 0];
+const _hub: [number, number, number] = [0, 0, 0];
+
+/** Angle wrapped to (−π, π] */
+function wrapAngle(a: number): number {
+  return Math.atan2(Math.sin(a), Math.cos(a));
+}
+
+/** Rotate `v` about unit axis `k` by the angle whose cosine and sine are `c`, `s` (Rodrigues) */
+function rotateCosSin(
+  vx: number,
+  vy: number,
+  vz: number,
+  kx: number,
+  ky: number,
+  kz: number,
+  c: number,
+  s: number,
+  out: [number, number, number]
+): void {
+  const dot = kx * vx + ky * vy + kz * vz;
+  out[0] = vx * c + (ky * vz - kz * vy) * s + kx * dot * (1 - c);
+  out[1] = vy * c + (kz * vx - kx * vz) * s + ky * dot * (1 - c);
+  out[2] = vz * c + (kx * vy - ky * vx) * s + kz * dot * (1 - c);
+}
 
 /** Ground-plane caster trail (m, + = ahead) of a kingpin through `bot` along (·, ky, kz), wheel centre at (·, cy, cz) */
 function kingpinGroundTrail(
@@ -239,13 +325,21 @@ export function createCornerKinematicsState(): CornerKinematicsState {
     tyreTop: [0, 0, 0],
     tyreBottom: [0, 0, 0],
     dynamicCamberDeltaRad: 0,
+    uprightCamberRad: 0,
     bumpSteerToeInRad: 0,
     roadSteerRad: 0,
+    wheelSteerRad: 0,
     kpiRad: 0,
     casterRad: 0,
     casterTrailM: 0,
     scrubRadiusM: 0,
+    kingpinScrubM: 0,
+    kingpinTrailM: 0,
     motionRatioNorm: 1,
+    contactInboardPerBump: 0,
+    contactForwardPerBump: 0,
+    hubInboardPerBump: 0,
+    hubForwardPerBump: 0,
     fvic: [1.6, 0.05],
     svicPitchSlope: 0,
   };
@@ -309,7 +403,7 @@ export function solveCornerKinematics3D(
     if (Math.abs(_dRot[1]) < 1e-4) break;
     thetaL = Math.max(-0.5, Math.min(0.5, thetaL - errY / _dRot[1]));
   }
-  rotateAroundAxis(rL0x, rL0y, rL0z, klX, klY, klZ, thetaL, _rotL);
+  rotateAroundAxis(rL0x, rL0y, rL0z, klX, klY, klZ, thetaL, _rotL, _dRotL);
   const botX = hp.carBottomFront[0] + _rotL[0];
   const botY = hp.carBottomFront[1] + _rotL[1];
   const botZ = hp.carBottomFront[2] + _rotL[2];
@@ -347,7 +441,7 @@ export function solveCornerKinematics3D(
     if (Math.abs(deriv) < 1e-6) break;
     thetaU = Math.max(-0.5, Math.min(0.5, thetaU - err / deriv));
   }
-  rotateAroundAxis(rU0x, rU0y, rU0z, kuX, kuY, kuZ, thetaU, _rotU);
+  rotateAroundAxis(rU0x, rU0y, rU0z, kuX, kuY, kuZ, thetaU, _rotU, _dRotU);
   const topX = hp.carTopFront[0] + _rotU[0];
   const topY = hp.carTopFront[1] + _rotU[1];
   const topZ = hp.carTopFront[2] + _rotU[2];
@@ -424,6 +518,143 @@ export function solveCornerKinematics3D(
   // 8. Pushrod / Pullrod bellcrank rocker progressive motion ratio
   const motionRatioNorm = Math.max(0.85, Math.min(1.28, 1 + hp.rockerProgressivityPerM * z));
 
+  // 9. The upright as a rigid body. It carries both ball joints and the steering arm: turn the static kingpin onto the
+  // solved one, then about itself until the tie rod (rack end `carSteer` to arm `tyreSteer`) is back at its length.
+  // Camber, steer / toe and the paths of the hub and the contact patch all come off that pose (no blend constants).
+  const k0Len = Math.sqrt(uprightLenSq) || 1;
+  const k0x = uprightDx0 / k0Len;
+  const k0y = uprightDy0 / k0Len;
+  const k0z = uprightDz0 / k0Len;
+  const kLen = Math.hypot(kx, ky, kz) || 1;
+  const k1x = kx / kLen;
+  const k1y = ky / kLen;
+  const k1z = kz / kLen;
+  // Alignment k0 → k1: about k0 × k1 by the angle between them
+  let alX = k0y * k1z - k0z * k1y;
+  let alY = k0z * k1x - k0x * k1z;
+  let alZ = k0x * k1y - k0y * k1x;
+  const alSin = Math.hypot(alX, alY, alZ);
+  const alCos = k0x * k1x + k0y * k1y + k0z * k1z;
+  if (alSin > 1e-12) {
+    alX /= alSin;
+    alY /= alSin;
+    alZ /= alSin;
+  } else {
+    alX = 1;
+    alY = 0;
+    alZ = 0;
+  }
+  // Steering arm (lower ball joint → arm joint) once aligned
+  rotateCosSin(
+    hp.tyreSteer[0] - hp.tyreBottom[0],
+    hp.tyreSteer[1] - hp.tyreBottom[1],
+    hp.tyreSteer[2] - hp.tyreBottom[2],
+    alX, alY, alZ, alCos, alSin, _armA
+  );
+  // The rack slides along the car's lateral axis, so its end moves outboard on one side as it moves inboard on the other
+  const rackM = nominalSteerRad * hp.rackTravelPerSteerRad;
+  const csX = hp.carSteer[0] + (isLeft ? -rackM : rackM);
+  const csY = hp.carSteer[1];
+  const csZ = hp.carSteer[2];
+  // |B + Rot(k1, ψ)·arm − C|² = L² is P cos ψ + Q sin ψ = rhs: solved in closed form, on the branch nearest straight ahead
+  const bcX = botX - csX;
+  const bcY = botY - csY;
+  const bcZ = botZ - csZ;
+  const kArm = k1x * _armA[0] + k1y * _armA[1] + k1z * _armA[2];
+  const kBc = k1x * bcX + k1y * bcY + k1z * bcZ;
+  const pCos = bcX * _armA[0] + bcY * _armA[1] + bcZ * _armA[2] - kBc * kArm;
+  const qSin =
+    bcX * (k1y * _armA[2] - k1z * _armA[1]) + bcY * (k1z * _armA[0] - k1x * _armA[2]) + bcZ * (k1x * _armA[1] - k1y * _armA[0]);
+  const armSq = _armA[0] * _armA[0] + _armA[1] * _armA[1] + _armA[2] * _armA[2];
+  const rhs = 0.5 * (hp.tieRodLengthM * hp.tieRodLengthM - (bcX * bcX + bcY * bcY + bcZ * bcZ) - armSq) - kBc * kArm;
+  const pq = Math.hypot(pCos, qSin);
+  let psi = 0;
+  if (pq > 1e-9) {
+    const phase = Math.atan2(qSin, pCos);
+    const spread = Math.acos(Math.max(-1, Math.min(1, rhs / pq)));
+    const psiA = wrapAngle(phase + spread);
+    const psiB = wrapAngle(phase - spread);
+    psi = Math.abs(psiA) < Math.abs(psiB) ? psiA : psiB;
+  }
+  const psiCos = Math.cos(psi);
+  const psiSin = Math.sin(psi);
+  rotateCosSin(_armA[0], _armA[1], _armA[2], k1x, k1y, k1z, psiCos, psiSin, _armS);
+  const sX = botX + _armS[0];
+  const sY = botY + _armS[1];
+  const sZ = botZ + _armS[2];
+  // Wheel spin axis (static: x, inboard) and wheel centre (static: the origin) carried by the same rotation
+  rotateCosSin(1, 0, 0, alX, alY, alZ, alCos, alSin, _axisA);
+  rotateCosSin(_axisA[0], _axisA[1], _axisA[2], k1x, k1y, k1z, psiCos, psiSin, _spin);
+  rotateCosSin(-hp.tyreBottom[0], -hp.tyreBottom[1], -hp.tyreBottom[2], alX, alY, alZ, alCos, alSin, _hubA);
+  rotateCosSin(_hubA[0], _hubA[1], _hubA[2], k1x, k1y, k1z, psiCos, psiSin, _hub);
+  const wX = botX + _hub[0];
+  const wY = botY + _hub[1];
+  const wZ = botZ + _hub[2];
+  const aX = _spin[0];
+  const aY = _spin[1];
+  const aZ = _spin[2];
+  // Camber: the spin axis tilting up inboard leans the wheel's top outboard (positive camber)
+  const uprightCamberRad = Math.asin(Math.max(-1, Math.min(1, aY)));
+  // Toe: the wheel heads along spin axis × up; its inboard component is toe-in, which on the left wheel steers right
+  const toeInRad = Math.atan2(-aZ, aX);
+  const wheelSteerRad = isLeft ? -toeInRad : toeInRad;
+  // Contact patch: the lowest point of the wheel disc, a loaded radius from the centre
+  const gx = aY * aX;
+  const gy = aY * aY - 1;
+  const gz = aY * aZ;
+  const gLen = Math.sqrt(Math.max(1e-9, 1 - aY * aY));
+  const cpX = wX + (radius * gx) / gLen;
+  const cpY = wY + (radius * gy) / gLen;
+  const cpZ = wZ + (radius * gz) / gLen;
+  // Kingpin's ground point (at the contact patch's height) against the contact patch: scrub radius and mechanical trail
+  const sKp = (cpY - botY) / Math.max(0.05, ky);
+  const kingpinScrubM = botX + sKp * kx - cpX;
+  const kingpinTrailM = botZ + sKp * kz - cpZ;
+
+  // 10. Paths per unit of travel (velocities with z as time). Lower ball joint along its arc; upper from the upright
+  // keeping its length; the upright's spin from those two plus the tie rod (rack held) keeping its length
+  const dBy = Math.abs(_dRotL[1]) > 1e-6 ? _dRotL[1] : 1e-6;
+  const vBx = _dRotL[0] / dBy;
+  const vBy = _dRotL[1] / dBy;
+  const vBz = _dRotL[2] / dBy;
+  const dUe = kx * _dRotU[0] + ky * _dRotU[1] + kz * _dRotU[2];
+  const thetaURate = Math.abs(dUe) > 1e-9 ? (kx * vBx + ky * vBy + kz * vBz) / dUe : 0;
+  const dvX = _dRotU[0] * thetaURate - vBx;
+  const dvY = _dRotU[1] * thetaURate - vBy;
+  const dvZ = _dRotU[2] * thetaURate - vBz;
+  const kSq = kx * kx + ky * ky + kz * kz;
+  // Spin across the kingpin: e × Δv / |e|²; the turn about it is whatever keeps the tie rod's length
+  let omX = (ky * dvZ - kz * dvY) / kSq;
+  let omY = (kz * dvX - kx * dvZ) / kSq;
+  let omZ = (kx * dvY - ky * dvX) / kSq;
+  const rsX = sX - botX;
+  const rsY = sY - botY;
+  const rsZ = sZ - botZ;
+  const tcX = sX - csX;
+  const tcY = sY - csY;
+  const tcZ = sZ - csZ;
+  const vsX = vBx + omY * rsZ - omZ * rsY;
+  const vsY = vBy + omZ * rsX - omX * rsZ;
+  const vsZ = vBz + omX * rsY - omY * rsX;
+  const turnDen = tcX * (k1y * rsZ - k1z * rsY) + tcY * (k1z * rsX - k1x * rsZ) + tcZ * (k1x * rsY - k1y * rsX);
+  const turnRate = Math.abs(turnDen) > 1e-9 ? -(tcX * vsX + tcY * vsY + tcZ * vsZ) / turnDen : 0;
+  omX += turnRate * k1x;
+  omY += turnRate * k1y;
+  omZ += turnRate * k1z;
+  const vWx = vBx + omY * _hub[2] - omZ * _hub[1];
+  const vWy = vBy + omZ * _hub[0] - omX * _hub[2];
+  const vWz = vBz + omX * _hub[1] - omY * _hub[0];
+  // Contact patch path as a point of the upright: a force there whose moment about the axle goes into the upright (an
+  // outboard caliper, and any lateral force through the bearing) loads the travel along this path, so the upright's
+  // pitch in side view counts (anti-dive is measured from the contact patch, Milliken RCVD §17.3)
+  const rcX = cpX - wX;
+  const rcY = cpY - wY;
+  const rcZ = cpZ - wZ;
+  const vCx = vWx + omY * rcZ - omZ * rcY;
+  const vCz = vWz + omX * rcY - omY * rcX;
+  // Per metre of the wheel centre's own rise (the hub travel the springs see)
+  const perHub = 1 / (Math.abs(vWy) > 0.2 ? vWy : 1);
+
   out.tyreTop[0] = topX;
   out.tyreTop[1] = topY;
   out.tyreTop[2] = topZ;
@@ -431,13 +662,21 @@ export function solveCornerKinematics3D(
   out.tyreBottom[1] = botY;
   out.tyreBottom[2] = botZ;
   out.dynamicCamberDeltaRad = dynamicCamberDeltaRad;
+  out.uprightCamberRad = uprightCamberRad;
   out.bumpSteerToeInRad = bumpSteerToeInRad;
   out.roadSteerRad = roadSteerRad;
+  out.wheelSteerRad = wheelSteerRad;
   out.kpiRad = kpiRad;
   out.casterRad = casterRad;
   out.casterTrailM = casterTrailM;
   out.scrubRadiusM = scrubRadiusM;
+  out.kingpinScrubM = kingpinScrubM;
+  out.kingpinTrailM = kingpinTrailM;
   out.motionRatioNorm = motionRatioNorm;
+  out.contactInboardPerBump = vCx * perHub;
+  out.contactForwardPerBump = vCz * perHub;
+  out.hubInboardPerBump = vWx * perHub;
+  out.hubForwardPerBump = vWz * perHub;
   out.fvic[0] = icU;
   out.fvic[1] = icV;
   out.svicPitchSlope = svicPitchSlope;
@@ -477,7 +716,6 @@ export function solveAxleKinematics3D(
   const rawHeight = (2 * halfTrack * slopeL * slopeR) / denom;
   out.rollCentreHeightM = Math.max(-0.02, Math.min(rMean * 0.65, rawHeight));
 
-  const meanSvSlope = 0.5 * (left.svicPitchSlope + right.svicPitchSlope);
-  out.antiPitchFraction = Math.max(0.05, Math.min(0.35, meanSvSlope * 0.85));
+  out.antiPitchFraction = 0.5 * (left.contactForwardPerBump + right.contactForwardPerBump);
   return out;
 }
