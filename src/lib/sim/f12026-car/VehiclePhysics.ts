@@ -422,6 +422,11 @@ interface AxleRuntime {
   spec: AxleSuspensionData;
   dampers: DamperControllerData;
   heaveActive: boolean;
+  /**
+   * Axle heave from static (m, + = bump) at which the heave element is at its free length. Below static when it carries
+   * its share of the car's weight there (see computeStaticGeometry), so its rate runs on through static ride height
+   */
+  heaveFreeM: number;
   unsprungMass: number;
   wheelInertia: number;
 }
@@ -891,7 +896,7 @@ export class VehiclePhysics {
     const mkAxle = (spec: AxleSuspensionData, dampers: DamperControllerData, name: string, mass: number, inertia: number): AxleRuntime => {
       const heaveActive = suspensionSupportsHeave(spec.type);
       if (!heaveActive) console.warn(`IGNORING HEAVE SPRING BECAUSE SUSPENSION ${name} IS NOT DOUBLE WISHBONE`);
-      return { spec, dampers, heaveActive, unsprungMass: mass, wheelInertia: inertia };
+      return { spec, dampers, heaveActive, heaveFreeM: spec.heave.gap, unsprungMass: mass, wheelInertia: inertia };
     };
     const susp = cfg.suspensions;
     this.axles = [
@@ -1525,7 +1530,13 @@ export class VehiclePhysics {
     this.computeStaticGeometry();
   }
 
-  /** Static hub distances and spring preloads, on flat ground at the target ride heights */
+  /**
+   * Static hub distances and spring preloads, on flat ground at the target ride heights. A heave element in contact at
+   * static (`gap` 0) is a preloaded coilover in parallel with the corner springs: from a common free ride height every
+   * element is compressed alike, so it carries its rate's share of the weight and the corner springs the rest (the
+   * static ride height is unchanged; VRC's preloaded heave coilovers, AC's heave springs). With a gap it only meets
+   * the car after that much heave, as before.
+   */
   private computeStaticGeometry(): void {
     const ch = this.config.chassis;
     const sinT = this.staticPitchSin();
@@ -1539,7 +1550,21 @@ export class VehiclePhysics {
       const hpY = cgY + w.hardpoint.y * cosT - w.hardpoint.z * sinT;
       const hubY = R0 - fz / this.tyreVerticalRate(w);
       w.staticHubDist = (hpY - hubY) / cosT;
-      w.springPreload = springDeflectionFor(fz - axle.unsprungMass * G, axle.spec.springs);
+      const load = fz - axle.unsprungMass * G;
+      const springs = axle.spec.springs;
+      const heave = axle.spec.heave;
+      const preloaded = axle.heaveActive && heave.rate > 0 && heave.gap <= 0;
+      // Static deflection d with springForce(d) + ½·heave rate·d = load (each wheel takes half the heave force): monotonic,
+      // so bisect below the corner-only deflection
+      let lo = 0;
+      let hi = springDeflectionFor(load, springs);
+      for (let k = 0; preloaded && k < 50; k++) {
+        const mid = 0.5 * (lo + hi);
+        if (springForce(mid, springs) + 0.5 * heave.rate * mid > load) hi = mid;
+        else lo = mid;
+      }
+      w.springPreload = hi;
+      axle.heaveFreeM = preloaded ? -hi : heave.gap;
     }
   }
 
@@ -1836,7 +1861,7 @@ export class VehiclePhysics {
         const heave = 0.5 * (L.compression + R.compression);
         const hv = 0.5 * (L.compressionVel + R.compressionVel);
         const fh =
-          s.heave.rate * Math.max(0, heave - s.heave.gap) +
+          s.heave.rate * Math.max(0, heave - axle.heaveFreeM) +
           s.heave.packerRate * Math.max(0, heave - s.heave.packerGap) +
           damperForce(d.heave, hv, knee);
         L.suspensionForce += 0.5 * fh;

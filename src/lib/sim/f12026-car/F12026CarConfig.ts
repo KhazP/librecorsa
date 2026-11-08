@@ -279,7 +279,10 @@ export interface SuspensionSettingUnits {
 export interface HeaveSpringData {
   /** Rate at the wheel per unit axle heave (N/m) */
   rate: number;
-  /** Heave travel before the element engages (m) */
+  /**
+   * Heave travel before the element engages (m). 0: in contact at static ride height, where it carries its rate's share
+   * of the weight (a preloaded coilover), so its rate runs on into droop
+   */
   gap: number;
   /** Packer: rate added once heave exceeds `packerGap` (N/m) */
   packerGap: number;
