@@ -1349,6 +1349,11 @@ export const F12026_CAR_CONFIG = {
     wheelInertiaRear: 2.063,
     // STEER_LOCK 250° / STEER_RATIO 12.6 [ref_car.ini]
     maxRoadWheelDeg: 250 / 12.6,
+    // A kN of lateral force puts ≈ 45 Nm on the kingpin (12 mm caster + ≈ 33 mm pneumatic trail). The all-spherical-joint
+    // chain gives way to it: the rack held by the power steering (≈ 1.3 kNm/deg at the kingpin: valve torsion bar
+    // times the assist) in series with a carbon / titanium tie-rod (≈ 5 kNm/deg) is ≈ 0.04 °/kN, the upright and
+    // wishbones ≈ 0.01 more: 0.05 °/kN, a fifth of the bushed GT3's [est]
+    steerComplianceDegPerKN: 0.05,
   },
   engine: F12026_ENGINE,
   ers: F12026_ERS,
