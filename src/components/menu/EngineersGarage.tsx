@@ -19,7 +19,7 @@ import { LIVERIES } from "@/lib/track-data";
 
 const TIRE_COMPOUNDS: readonly TireCompound[] = ["soft", "medium", "hard", "intermediate", "wet"];
 const AERO_PRESETS: readonly AeroSetupPreset[] = ["low_downforce", "balanced", "high_downforce"];
-import { CARS, FACTORY_LIVERY_NOTE, carById, carClass, carTakesLivery } from "@/lib/cars/car-registry";
+import { CARS, FACTORY_LIVERY_NOTE, carById, carClassYear, carTakesLivery } from "@/lib/cars/car-registry";
 
 const FALLBACK_TUNER: Pick<
   LiveTunerState,
@@ -278,7 +278,6 @@ export const EngineersGarage: React.FC<PauseMenuProps> = (p) => {
     if (currentInputMode() !== "pointer") browseRef.current?.focus({ preventScroll: true });
   };
   const car = carById(p.carId);
-  const carKind = carClass(car.classId);
 
   const changedIn = (g: SetupGroup) => g.params.filter((q) => isChanged(q, st)).length;
   const groupChanged = changedIn(group);
@@ -378,7 +377,7 @@ export const EngineersGarage: React.FC<PauseMenuProps> = (p) => {
         >
           <span className="flex min-w-0 flex-1 flex-col gap-1">
             <span className="flex items-center gap-2">
-              <Chip size="sm">{carKind.title}</Chip>
+              <Chip size="sm">{carClassYear(car)}</Chip>
               <span className="lc-data text-[11px] tracking-[0.12em] text-[#C5CBD8]">{car.badge}</span>
               <CarQualityBadge car={car} size="sm" />
             </span>

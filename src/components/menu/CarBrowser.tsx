@@ -8,7 +8,9 @@ import {
   CARS,
   carClass,
   carClassesInUse,
+  carClassYear,
   carQualityMeta,
+  compareCarsByClassAndYear,
   carTakesLivery,
   FACTORY_LIVERY_NOTE,
   PHYSICS_CHECK,
@@ -22,8 +24,6 @@ import { CarPhysicsSwitch } from "./CarPicker";
 import { CarQualityBadge, Chip } from "./menu-ui";
 import { focusOnHover } from "./useFocusNav";
 
-const ORDER = new Map(CARS.map((c, i) => [c.id, i]));
-const byRegistry = (a: CarDefinition, b: CarDefinition) => (ORDER.get(a.id) ?? 0) - (ORDER.get(b.id) ?? 0);
 const byName = (a: CarDefinition, b: CarDefinition) => a.title.localeCompare(b.title);
 const QUALITIES: readonly CarQuality[] = ["own", "shared", "era"];
 
@@ -40,7 +40,7 @@ const Spec: React.FC<{ k: string; children: React.ReactNode }> = ({ k, children 
 
 /**
  * Every car in the game, from the car registry: its classes become the categories (a new class shows up on its own),
- * with favourites and recently driven. Opened from the Engineer's Garage.
+ * each split by year, newest first, with favourites and recently driven. Opened from the Engineer's Garage.
  */
 export const CarBrowser: React.FC<{
   carId: CarId;
@@ -80,16 +80,23 @@ export const CarBrowser: React.FC<{
   ];
 
   const sorts: BrowserSort<CarDefinition>[] = [
-    { id: "class", label: "Class", groupBy: (c) => carClass(c.classId).title, groupOrder: classes.map((k) => k.title), compare: byRegistry },
+    {
+      id: "class",
+      label: "Class",
+      groupBy: (c) => carClass(c.classId).title,
+      groupOrder: classes.map((k) => k.title),
+      subGroupBy: (c) => String(c.year),
+      compare: compareCarsByClassAndYear,
+    },
     {
       id: "quality",
       label: "Physics",
       groupBy: (c) => carQualityMeta(c).filterLabel,
       groupOrder: qualities.map((q) => CAR_QUALITY_META[q].filterLabel),
-      compare: byRegistry,
+      compare: compareCarsByClassAndYear,
     },
     { id: "name", label: "A–Z", heading: "A–Z", compare: byName },
-    { id: "recent", label: "Recent", heading: "Recently driven first", compare: (a, b) => recentRank(a) - recentRank(b) || byRegistry(a, b) },
+    { id: "recent", label: "Recent", heading: "Recently driven first", compare: (a, b) => recentRank(a) - recentRank(b) || compareCarsByClassAndYear(a, b) },
   ];
 
   return (
@@ -101,9 +108,9 @@ export const CarBrowser: React.FC<{
       searchText={(c) => {
         const k = carClass(c.classId);
         const q = carQualityMeta(c);
-        return `${c.title} ${c.sub} ${c.badge} ${k.title} ${k.sub} ${q.badge} ${q.filterLabel} ${c.credit.author}`;
+        return `${c.title} ${c.sub} ${c.badge} ${c.year} ${k.title} ${k.sub} ${q.badge} ${q.filterLabel} ${c.credit.author}`;
       }}
-      searchPlaceholder="Search cars, classes"
+      searchPlaceholder="Search cars, classes, years"
       filterGroups={filterGroups}
       sorts={sorts}
       initialSelectedId={carId}
@@ -111,31 +118,28 @@ export const CarBrowser: React.FC<{
       onToggleFavorite={library ? (c) => library.onToggleFavorite("cars", [c.id]) : undefined}
       onClose={onClose}
       toolbar={toolbar}
-      renderCard={(c) => {
-        const k = carClass(c.classId);
-        return (
-          <span className="flex min-w-0 flex-1 flex-col gap-1.5 overflow-hidden rounded-[17px]">
-            <span className="relative flex h-[58px] items-end border-b border-[#262B3D] bg-[#1B1F2B]/70 px-3 pb-2">
-              <span className="absolute top-2.5 left-3">
-                <Chip size="sm">{k.title}</Chip>
-              </span>
-              <span className="lc-data ml-auto text-[11px] tracking-[0.12em] text-[#C5CBD8]">{c.badge}</span>
+      renderCard={(c) => (
+        <span className="flex min-w-0 flex-1 flex-col gap-1.5 overflow-hidden rounded-[17px]">
+          <span className="relative flex h-[58px] items-end border-b border-[#262B3D] bg-[#1B1F2B]/70 px-3 pb-2">
+            <span className="absolute top-2.5 left-3">
+              <Chip size="sm">{carClassYear(c)}</Chip>
             </span>
-            <span className="flex min-w-0 flex-col gap-1 px-3 pt-0.5 pb-3">
-              <span className="lc-disp text-[17px] leading-[1.05]">{c.title}</span>
-              <span className="line-clamp-2 text-[12px] leading-snug text-[#8E96AA]">{c.sub}</span>
-              <span className="mt-0.5 flex min-w-0 flex-wrap items-center gap-1.5">
-                <CarQualityBadge car={c} size="xs" />
-                {c.id === carId ? (
-                  <Chip color="#CCFF00" variant="soft" size="sm">
-                    Current
-                  </Chip>
-                ) : null}
-              </span>
+            <span className="lc-data ml-auto text-[11px] tracking-[0.12em] text-[#C5CBD8]">{c.badge}</span>
+          </span>
+          <span className="flex min-w-0 flex-col gap-1 px-3 pt-0.5 pb-3">
+            <span className="lc-disp text-[17px] leading-[1.05]">{c.title}</span>
+            <span className="line-clamp-2 text-[12px] leading-snug text-[#8E96AA]">{c.sub}</span>
+            <span className="mt-0.5 flex min-w-0 flex-wrap items-center gap-1.5">
+              <CarQualityBadge car={c} size="xs" />
+              {c.id === carId ? (
+                <Chip color="#CCFF00" variant="soft" size="sm">
+                  Current
+                </Chip>
+              ) : null}
             </span>
           </span>
-        );
-      }}
+        </span>
+      )}
       renderDetail={(c) => {
         const k = carClass(c.classId);
         const own = physicsLabel(c);
@@ -144,7 +148,7 @@ export const CarBrowser: React.FC<{
           <>
             <div className="flex flex-wrap items-center gap-1.5">
               <CarQualityBadge car={c} />
-              <Chip>{k.title}</Chip>
+              <Chip>{carClassYear(c)}</Chip>
               <span className="lc-data text-[11px] tracking-[0.12em] text-[#C5CBD8]">{c.badge}</span>
             </div>
             <div className="flex flex-col gap-1.5">
@@ -155,6 +159,7 @@ export const CarBrowser: React.FC<{
               <Spec k="Class">
                 {k.title} · {k.sub}
               </Spec>
+              <Spec k="Year">{c.year}</Spec>
               {own && !carTakesPhysicsSwitch(c.id) ? <Spec k="Physics">{own}</Spec> : null}
             </div>
             {carTakesPhysicsSwitch(c.id) ? <CarPhysicsSwitch color="#CCFF00" /> : null}

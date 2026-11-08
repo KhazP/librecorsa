@@ -2,13 +2,13 @@
 
 import React, { useState } from "react";
 import { Choice } from "@/components/hud/PauseMenu";
-import { carById, carClass, carClassesInUse, carsInClass, type CarClassId, type CarId } from "@/lib/cars/car-registry";
+import { carById, carClass, carClassesInUse, carsByYear, type CarClassId, type CarId } from "@/lib/cars/car-registry";
 import { carTakesPhysicsSwitch, F1_MOD_PHYSICS_OPTIONS, setF1ModPhysics, useF1ModPhysics } from "@/lib/cars/f1-mod-physics";
 import { CarQualityBadge } from "./menu-ui";
 
 /**
- * The car picker: class tabs, then the cars of the open class. The open class follows the car chosen elsewhere.
- * `compact` drops the description line (the garage).
+ * The car picker: class tabs, then the cars of the open class under a heading per year, newest first. The open class
+ * follows the car chosen elsewhere. `compact` drops the description line (the garage).
  */
 export const CarPicker: React.FC<{ carId: CarId; onChangeCar: (car: CarId) => void; compact?: boolean }> = ({
   carId,
@@ -53,23 +53,31 @@ export const CarPicker: React.FC<{ carId: CarId; onChangeCar: (car: CarId) => vo
         })}
       </div>
       <div className={`grid gap-2 ${compact ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
-        {carsInClass(classId).map((car) => (
-          <Choice key={car.id} active={car.id === carId} onClick={() => onChangeCar(car.id)}>
-            <span className="flex flex-col gap-0.5">
-              <span className="flex flex-wrap items-center gap-2">
-                <span className="lc-title text-[15px] leading-tight">{car.title}</span>
-                <span className="font-f1-mono text-[9px] font-extrabold tracking-[0.1em]" style={{ color: open.color }}>
-                  {car.badge}
+        {carsByYear(classId).map(({ year, cars }) => (
+          <React.Fragment key={year}>
+            <div className="col-span-full flex items-center gap-2.5 px-1 pt-1">
+              <span className="lc-data text-[11px] tracking-[0.12em] text-[#C5CBD8]">{year}</span>
+              <span aria-hidden className="h-px flex-1 bg-[#262B3D]" />
+            </div>
+            {cars.map((car) => (
+              <Choice key={car.id} active={car.id === carId} onClick={() => onChangeCar(car.id)}>
+                <span className="flex flex-col gap-0.5">
+                  <span className="flex flex-wrap items-center gap-2">
+                    <span className="lc-title text-[15px] leading-tight">{car.title}</span>
+                    <span className="font-f1-mono text-[9px] font-extrabold tracking-[0.1em]" style={{ color: open.color }}>
+                      {car.badge}
+                    </span>
+                    <CarQualityBadge car={car} size="xs" />
+                  </span>
+                  {compact ? null : (
+                    <span className="text-[12px] leading-[1.4] opacity-75">
+                      {carTakesPhysicsSwitch(car.id) ? `${car.sub} · ${physicsTitle} physics` : car.sub}
+                    </span>
+                  )}
                 </span>
-                <CarQualityBadge car={car} size="xs" />
-              </span>
-              {compact ? null : (
-                <span className="text-[12px] leading-[1.4] opacity-75">
-                  {carTakesPhysicsSwitch(car.id) ? `${car.sub} · ${physicsTitle} physics` : car.sub}
-                </span>
-              )}
-            </span>
-          </Choice>
+              </Choice>
+            ))}
+          </React.Fragment>
         ))}
       </div>
       {carTakesPhysicsSwitch(carId) && current.classId === classId ? <CarPhysicsSwitch color={open.color} /> : null}

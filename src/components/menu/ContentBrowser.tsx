@@ -35,6 +35,11 @@ export interface BrowserSort<T> {
   /** Sorted into headed groups by this key, in `groupOrder` (unknown keys after, A–Z) */
   groupBy?: (item: T) => string;
   groupOrder?: readonly string[];
+  /**
+   * A small divider inside each group for each run of this key (a car class's years), in the order `compare` puts
+   * them: it should keep a key's items together
+   */
+  subGroupBy?: (item: T) => string;
   /** Order of the list (inside each group) */
   compare: (a: T, b: T) => number;
   /** Heading of the single group when there is no `groupBy` */
@@ -129,7 +134,20 @@ export function ContentBrowser<T>(props: ContentBrowserProps<T>) {
 
   const groups = useMemo(() => {
     const sorted = [...visible].sort(sort.compare);
-    if (!sort.groupBy) return sorted.length ? [{ key: "all", label: sort.heading ?? "", items: sorted }] : [];
+    /** A group's items in runs of `subGroupBy` (one unlabelled run without it) */
+    const runsOf = (list: T[]) => {
+      const sub = sort.subGroupBy;
+      if (!sub) return [{ key: "", items: list }];
+      const runs: { key: string; items: T[] }[] = [];
+      for (const it of list) {
+        const k = sub(it);
+        const last = runs[runs.length - 1];
+        if (last && last.key === k) last.items.push(it);
+        else runs.push({ key: k, items: [it] });
+      }
+      return runs;
+    };
+    if (!sort.groupBy) return sorted.length ? [{ key: "all", label: sort.heading ?? "", items: sorted, runs: runsOf(sorted) }] : [];
     const byKey = new Map<string, T[]>();
     for (const it of sorted) {
       const k = sort.groupBy(it);
@@ -142,7 +160,7 @@ export function ContentBrowser<T>(props: ContentBrowserProps<T>) {
       if (ia >= 0 || ib >= 0) return (ia < 0 ? Infinity : ia) - (ib < 0 ? Infinity : ib);
       return a.localeCompare(b);
     });
-    return keys.map((k) => ({ key: k, label: k, items: byKey.get(k)! }));
+    return keys.map((k) => ({ key: k, label: k, items: byKey.get(k)!, runs: runsOf(byKey.get(k)!) }));
   }, [visible, sort]);
 
   const selected = items.find((i) => idOf(i) === selectedId) ?? visible[0] ?? items[0];
@@ -448,52 +466,62 @@ export function ContentBrowser<T>(props: ContentBrowserProps<T>) {
                     <span aria-hidden className="h-px flex-1 bg-[#262B3D]" />
                   </div>
                 ) : null}
-                <div className="grid grid-cols-[repeat(auto-fill,minmax(min(168px,calc(50%-5px)),1fr))] gap-2.5">
-                  {g.items.map((it) => {
-                    const id = idOf(it);
-                    const isSel = id === selectedKey;
-                    const fav = props.isFavorite(it);
-                    const main = props.primaryAction(it);
-                    return (
-                      <div key={id} className="relative min-w-0">
-                        <button
-                          type="button"
-                          data-browser-item={id}
-                          aria-pressed={isSel}
-                          onPointerEnter={focusOnHover}
-                          onFocus={() => {
-                            // The d-pad and arrows show what they land on; the mouse only by clicking
-                            if (currentInputMode() !== "pointer" && id !== selectedKey) setSelectedId(id);
-                          }}
-                          onClick={() => choose(id)}
-                          onDoubleClick={() => (main.disabled ? undefined : main.run())}
-                          className={`group flex h-full w-full min-w-0 cursor-pointer scroll-mt-12 scroll-mb-2 flex-col rounded-[18px] border bg-[#11131A] text-left text-[#F5F7FA] outline-none transition-[background-color,border-color,box-shadow] duration-[220ms] ease-[cubic-bezier(.2,.8,.2,1)] focus:border-[#CCFF00] focus:bg-[#1B1F2B] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#CCFF00] ${
-                            isSel ? "border-[#CCFF00] shadow-[inset_0_0_0_1px_#CCFF00,0_0_0_5px_rgba(204,255,0,0.1)]" : "border-[#262B3D] hover:border-[#3A4157]"
-                          }`}
-                        >
-                          {props.renderCard(it, { selected: isSel })}
-                        </button>
-                        {/* A pointer shortcut: the d-pad stars with Ⓧ, so the focus skips it */}
-                        {onToggleFavorite || fav ? (
-                          <button
-                            type="button"
-                            tabIndex={-1}
-                            data-nav-skip
-                            aria-label={fav ? "Remove from favourites" : "Add to favourites"}
-                            aria-pressed={fav}
-                            disabled={!onToggleFavorite}
-                            onClick={() => onToggleFavorite?.(it)}
-                            className={`absolute top-2 right-2 inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-full bg-[#08090D]/80 transition-colors disabled:cursor-default ${
-                              fav ? "text-[#FFB300]" : "text-[#8E96AA] hover:text-[#F5F7FA]"
-                            }`}
-                          >
-                            <Star aria-hidden className="h-3.5 w-3.5" strokeWidth={2.4} fill={fav ? "currentColor" : "none"} />
-                          </button>
-                        ) : null}
+                {g.runs.map((run, ri) => (
+                  <div key={`${run.key}#${ri}`} role={run.key ? "group" : undefined} aria-label={run.key || undefined} className="mb-3 last:mb-0">
+                    {run.key ? (
+                      <div className="mb-2 flex items-center gap-2.5 px-1.5">
+                        <span className="lc-data text-[11px] tracking-[0.12em] text-[#C5CBD8]">{run.key}</span>
+                        <span aria-hidden className="h-px flex-1 bg-[#262B3D]" />
                       </div>
-                    );
-                  })}
-                </div>
+                    ) : null}
+                    <div className="grid grid-cols-[repeat(auto-fill,minmax(min(168px,calc(50%-5px)),1fr))] gap-2.5">
+                      {run.items.map((it) => {
+                        const id = idOf(it);
+                        const isSel = id === selectedKey;
+                        const fav = props.isFavorite(it);
+                        const main = props.primaryAction(it);
+                        return (
+                          <div key={id} className="relative min-w-0">
+                            <button
+                              type="button"
+                              data-browser-item={id}
+                              aria-pressed={isSel}
+                              onPointerEnter={focusOnHover}
+                              onFocus={() => {
+                                // The d-pad and arrows show what they land on; the mouse only by clicking
+                                if (currentInputMode() !== "pointer" && id !== selectedKey) setSelectedId(id);
+                              }}
+                              onClick={() => choose(id)}
+                              onDoubleClick={() => (main.disabled ? undefined : main.run())}
+                              className={`group flex h-full w-full min-w-0 cursor-pointer scroll-mt-12 scroll-mb-2 flex-col rounded-[18px] border bg-[#11131A] text-left text-[#F5F7FA] outline-none transition-[background-color,border-color,box-shadow] duration-[220ms] ease-[cubic-bezier(.2,.8,.2,1)] focus:border-[#CCFF00] focus:bg-[#1B1F2B] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#CCFF00] ${
+                                isSel ? "border-[#CCFF00] shadow-[inset_0_0_0_1px_#CCFF00,0_0_0_5px_rgba(204,255,0,0.1)]" : "border-[#262B3D] hover:border-[#3A4157]"
+                              }`}
+                            >
+                              {props.renderCard(it, { selected: isSel })}
+                            </button>
+                            {/* A pointer shortcut: the d-pad stars with Ⓧ, so the focus skips it */}
+                            {onToggleFavorite || fav ? (
+                              <button
+                                type="button"
+                                tabIndex={-1}
+                                data-nav-skip
+                                aria-label={fav ? "Remove from favourites" : "Add to favourites"}
+                                aria-pressed={fav}
+                                disabled={!onToggleFavorite}
+                                onClick={() => onToggleFavorite?.(it)}
+                                className={`absolute top-2 right-2 inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-full bg-[#08090D]/80 transition-colors disabled:cursor-default ${
+                                  fav ? "text-[#FFB300]" : "text-[#8E96AA] hover:text-[#F5F7FA]"
+                                }`}
+                              >
+                                <Star aria-hidden className="h-3.5 w-3.5" strokeWidth={2.4} fill={fav ? "currentColor" : "none"} />
+                              </button>
+                            ) : null}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
               </section>
             ))
           ) : (
