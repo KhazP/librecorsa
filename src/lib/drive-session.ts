@@ -478,9 +478,12 @@ export class DriveSession {
     let runId = 0;
     /** The instant replay: the recording, and where it is shown from while open */
     const replay: ReplayState = { buffer: new ReplayBuffer({ maxSeconds: 90, hz: 30 }), active: false, playing: true, timeS: 0, speed: 1 };
+    /** Race control's session for a race on track (or practice) */
+    const limitsSessionOf = (race: SessionRace) => (race.kind === "practice" ? "practice" : "race");
     this.setRace = (next) => {
       this.currentRace = next;
       setRaceKind(next.kind);
+      trackLimits.reset(limitsSessionOf(next));
     };
     this.toggleAutopilot = () => {
       if (disposed || raceNow().kind === "mp") return;
@@ -1091,6 +1094,7 @@ export class DriveSession {
       // The replay only moved the drawn car (the physics never left the live pose): put the drawing back
       physics.worldPosition.copy(replaySaved.pos);
       physics.worldQuaternion.copy(replaySaved.quat);
+      cameraRig.reset();
       setReplayUi((u) => ({ ...u, active: false }));
     };
     const flashbackReplay = () => {
@@ -1134,6 +1138,7 @@ export class DriveSession {
       rp.playing = false;
       rp.speed = 1;
       rp.timeS = Math.max(rp.buffer.startS, rp.buffer.endS - REPLAY_OPEN_BACK_S);
+      cameraRig.reset();
       setReplayUi({ active: true, timeS: rp.timeS, startS: rp.buffer.startS, endS: rp.buffer.endS, playing: false, speed: 1 });
     };
 
@@ -1145,6 +1150,9 @@ export class DriveSession {
         replay.buffer.clear();
       }
       onRunReset(reason);
+      // Race control and the cameras start over with the run (the car is about to be put somewhere else)
+      trackLimits.reset(limitsSessionOf(raceNow()));
+      cameraRig.reset();
       lapRecorder.reset();
       physics.aiAutopilot = false;
       kbInput.throttle = 0;
@@ -1179,18 +1187,15 @@ export class DriveSession {
     let gt3Dash: Gt3DashDisplay | null = null;
     let cockpitProbeFrame = 0;
     const lapDelta = new LapDeltaTracker(track.totalLengthM);
-    // Race control: judges every excursion past the track limits (see TrackLimitsMonitor)
+    // Race control: judges every excursion past the track limits (see TrackLimitsMonitor); resetRun and setRace start
+    // its session over
     const trackLimits = new TrackLimitsMonitor();
-    // Its session starts over with every new run (runId), a change of session kind and a new car
-    let tlCar: SimulatorCar | null = null;
-    let tlRunId = -1;
     /** The wheel went while it could not pause the game (menus, loading): it pauses once the car is driven again */
     let wheelLostPending = false;
     const displayExtra: { deltaMs: number | null } = { deltaMs: null };
-    // The view camera: every view's placement, the menus' orbit and the driver's neck
+    // The view camera: every view's placement, the menus' orbit and the driver's neck; told to start over when the
+    // run does and when the replay moves the drawn car
     const cameraRig = new CameraRig(camera, track);
-    /** Where the cameras last saw the car: a jump further than it can drive (a teleport, a restart, a replay's end) starts them over */
-    const cameraCarPos = new THREE.Vector3();
     let frameIndex = 0;
     const deviceInput = new DeviceInputReader();
     /** Per-axle tyre slip read from the car's telemetry each frame, for the keyboard pedal help */
@@ -1520,12 +1525,6 @@ export class DriveSession {
       {
         const t = physics.telemetry;
         const raceNow = t.race;
-        const session = aiField || mpRace ? "race" : "practice";
-        if (session !== trackLimits.mode || physics !== tlCar || runId !== tlRunId) {
-          trackLimits.reset(session);
-          tlCar = physics;
-          tlRunId = runId;
-        }
         physics.trackLimitsMode = "judged";
         if (driving) {
           const tlEvent = trackLimits.update({
@@ -1825,10 +1824,6 @@ export class DriveSession {
         .copy(carVelocityWorld)
         .multiplyScalar(physics.renderLeadS ?? 0)
         .add(physics.worldPosition);
-      if (cameraCarPos.distanceTo(renderCarPos) > Math.max(5, 2 * carVelocityWorld.length() * dtSeconds)) {
-        cameraRig.reset();
-      }
-      cameraCarPos.copy(renderCarPos);
       carRig.root.position.copy(renderCarPos);
       carRig.root.quaternion.copy(physics.worldQuaternion);
       carRig.chassisGroup.position.y = physics.rideHeightOffsetM;

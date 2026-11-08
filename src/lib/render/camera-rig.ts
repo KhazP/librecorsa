@@ -624,6 +624,9 @@ export class CameraRig {
   private readonly tvDirector: TracksideBroadcastDirector;
   private readonly smoothedHeliPos = new THREE.Vector3();
   private readonly smoothedHeliLook = new THREE.Vector3();
+  /** Where the helicopter last saw the car, and whether it starts over on its next frame (first use, reset()) */
+  private readonly heliLastCarPos = new THREE.Vector3();
+  private heliSnap = true;
   private menuOrbitRad = 0.6;
   private menuViewOffset = false;
   // Neck FX: velocity-aligned slide look, steering look, 25 m track-spline apex lookahead, and horizon roll stabilization
@@ -657,11 +660,12 @@ export class CameraRig {
     return this.tvDirector.occlusionSteps(trackRoot);
   }
 
-  /** Starts the smoothed cameras over (the car has been put somewhere else) */
+  /** Starts the smoothed cameras over: the run started over, or the replay moved the drawn car */
   reset(): void {
     this.cockpitShake.reset();
     this.chaseCamera.reset();
     this.tvDirector.reset();
+    this.heliSnap = true;
   }
 
   update(f: CameraRigFrame): void {
@@ -805,7 +809,10 @@ export class CameraRig {
       heliTarget.x += 14;
       heliTarget.y += 24;
       heliTarget.z += 14;
-      if (this.smoothedHeliPos.distanceTo(heliTarget) > 80) {
+      // Updated only while this view is on, like the chase and TV cameras: a car further than one frame allows from where
+      // it last saw it (another view was on, a replay scrub) puts the helicopter straight over it rather than flying across
+      if (this.heliSnap || carJumped(this.heliLastCarPos, renderCarPos, f.carVelocity, dtSeconds)) {
+        this.heliSnap = false;
         this.smoothedHeliPos.copy(heliTarget);
         this.smoothedHeliLook.copy(renderCarPos);
       } else {
@@ -815,6 +822,7 @@ export class CameraRig {
         this.lookTarget.copy(renderCarPos).addScaledVector(carForward, 14),
         Math.min(1, dtSeconds * 12)
       );
+      this.heliLastCarPos.copy(renderCarPos);
       camera.position.copy(this.smoothedHeliPos);
       camera.up.set(0, 1, 0);
       camera.lookAt(this.smoothedHeliLook);
