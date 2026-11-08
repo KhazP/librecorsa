@@ -136,7 +136,7 @@ const approach = (value: number, target: number, maxStep: number) =>
   value + Math.max(-maxStep, Math.min(maxStep, target - value));
 
 /** The sound bank each car plays (the F1 cars share one bank) */
-export const soundFor = (car: CarId): CarSoundSource => carById(car).sound;
+const soundFor = (car: CarId): CarSoundSource => carById(car).sound;
 /** Runs `fn` when the browser is idle (Safari has no requestIdleCallback: a short timer instead) */
 const scheduleIdle = (fn: (deadline?: IdleDeadline) => void) => {
   if (typeof window.requestIdleCallback === "function") window.requestIdleCallback(fn, { timeout: 500 });
@@ -160,6 +160,8 @@ export interface DriveSnapshot {
   p2pStatus: P2PConnectionStatus;
   /** The headset session; the render loop itself follows renderer.xr.isPresenting, which this tracks */
   vr: VrState;
+  /** The car sounds are muted */
+  muted: boolean;
   /** The car's setup as the garage shows it */
   tireCompound: TireCompound;
   tyreSetup: TyreSetup;
@@ -187,6 +189,7 @@ export function idleDriveSnapshot(track: BuiltTrackData): DriveSnapshot {
       statusText: "BroadcastChannel Active (Same-Browser) • Ready for WebRTC P2P",
     },
     vr: "off",
+    muted: false,
     tireCompound: "soft",
     tyreSetup: car.getTyreSetup(),
     defaultTyreSetup: car.getTyreSetup(),
@@ -233,14 +236,12 @@ export interface ReplayUi {
 
 /** What the drive reads and writes on the component (refs, state setters and callbacks) */
 export interface DriveSessionHost {
-  audioRef: Cell<F1AudioEngine2026 | null>;
   autopilotPaceRef: Cell<{ car: unknown; pace: number }>;
   boostLatchRef: Cell<boolean>;
   carIdRef: Cell<CarId>;
   cycleCamera: () => void;
   getTrackEnv: () => TrackEnvironment;
   ghostRef: Cell<GhostPlayer | null>;
-  handleToggleMute: () => void;
   handleToggleRacingLine: () => void;
   hapticsRef: Cell<GamepadHaptics | null>;
   kbInputRef: Cell<{ throttle: number; brake: number }>;
@@ -264,7 +265,6 @@ export interface DriveSessionHost {
   togglePauseRef: Cell<() => void>;
   track: BuiltTrackData;
   trackId: string;
-  unlockAudio: () => void;
   vehicleModelRef: Cell<VehicleModelId>;
   wizardStepRef: { readonly current: string };
 }
@@ -302,6 +302,9 @@ export class DriveSession {
     return this.carNow();
   }
   private readonly carNow: () => SimulatorCar;
+  /** Creates and starts the car audio on a user gesture (the browser keeps audio locked until one) */
+  readonly unlockAudio: () => void;
+  readonly toggleMute: () => void;
   /** Builds the next race's AI field while the browser is idle in the menus (never while driving or loading) */
   readonly prepareAiField: () => void;
   /** The AI field for a race: the one built ahead when it was built for this car, else a new one */
@@ -333,14 +336,12 @@ export class DriveSession {
 
   constructor(container: HTMLDivElement, host: DriveSessionHost) {
     const {
-      audioRef,
       autopilotPaceRef,
       boostLatchRef,
       carIdRef,
       cycleCamera,
       getTrackEnv,
       ghostRef,
-      handleToggleMute,
       handleToggleRacingLine,
       hapticsRef,
       kbInputRef,
@@ -362,7 +363,6 @@ export class DriveSession {
       togglePauseRef,
       track,
       trackId,
-      unlockAudio,
       vehicleModelRef,
       wizardStepRef,
     } = host;
@@ -379,6 +379,30 @@ export class DriveSession {
     const setAssetsReady = (assetsReady: boolean) => this.publish({ assetsReady });
     const setP2pStatus = (p2pStatus: P2PConnectionStatus) => this.publish({ p2pStatus });
     const setVrState = (vr: VrState) => this.publish({ vr });
+
+    /** The car sounds: created by the first unlockAudio, then paused and resumed by the frame loop alone */
+    let audio: F1AudioEngine2026 | null = null;
+    this.unlockAudio = () => {
+      if (disposed) return;
+      if (!audio) {
+        audio = new F1AudioEngine2026();
+        audio.setCar(soundFor(carIdRef.current));
+        // Created paused unless the car is being driven; from then on the frame loop alone pauses and resumes it
+        audio.setPaused(pausedRef.current || phaseRef.current !== "driving");
+      }
+      if (!audio.isInitialized) {
+        audio.init();
+        audio.setMuted(this.snapshot.muted);
+      } else {
+        audio.resume();
+      }
+    };
+    this.toggleMute = () => {
+      this.unlockAudio();
+      const muted = !this.snapshot.muted;
+      this.publish({ muted });
+      audio?.setMuted(muted);
+    };
     /** The player's preferences (applySettings), and what the frame loop derives from them */
     let settings: PlayerSettings = DEFAULT_PLAYER_SETTINGS;
     let keyLookup = buildKeyLookup(settings.keys);
@@ -470,6 +494,7 @@ export class DriveSession {
       assetsReady: false,
       p2pStatus: getMultiplayerManager().status,
       vr: "off",
+      muted: false,
       ...carSetup,
     };
 
@@ -502,6 +527,7 @@ export class DriveSession {
 
     this.setCar = (car) => {
       if (disposed) return;
+      const newCar = car !== carRigCar;
       // The run starts over before the old car goes: leaving the replay writes its saved pose into `physics`, which
       // must still be the old car then. The replay and the live delta belong to the old car.
       this.resetRun("car");
@@ -522,6 +548,8 @@ export class DriveSession {
       setTelemetry({ ...physics.telemetry });
       // In the menus, the next race's field is built for the new car
       this.prepareAiField();
+      // Another car's sound (the physics switch keeps the car, and its sound)
+      if (newCar) audio?.setCar(soundFor(car));
     };
 
     const haptics = new GamepadHaptics();
@@ -796,7 +824,7 @@ export class DriveSession {
       }
       // The loading screen, title menu and setup own the keyboard outside the car
       if (phaseRef.current !== "driving") return;
-      unlockAudio();
+      this.unlockAudio();
       const code = e.code;
 
       if (code === "Escape") {
@@ -884,7 +912,7 @@ export class DriveSession {
           setSettings((prev) => ({ ...prev, mouseSteer: !prev.mouseSteer }));
           break;
         case "mute":
-          handleToggleMute();
+          this.toggleMute();
           break;
         case "autopilot":
           this.toggleAutopilot();
@@ -1829,8 +1857,8 @@ export class DriveSession {
       builtCircuit.updateEnvironment(nowMs * 0.001);
       builtCircuit.setGrooveRubber(getTrackEnv().trackEvolution.meanRacingLineRubber());
       opponentAudio.update({
-        context: audioRef.current?.context ?? null,
-        output: audioRef.current?.output ?? null,
+        context: audio?.context ?? null,
+        output: audio?.output ?? null,
         active: driving,
         camera,
         cameraMode: mode,
@@ -1838,10 +1866,10 @@ export class DriveSession {
         soundFor: opponentSound,
         dt: dtSeconds,
       });
-      audioRef.current?.setCameraMode(mode);
-      audioRef.current?.setPaused(!driving);
+      audio?.setCameraMode(mode);
+      audio?.setPaused(!driving);
       if (driving) {
-        audioRef.current?.update(physics.telemetry, dtSeconds);
+        audio?.update(physics.telemetry, dtSeconds);
         // Cues: DRS enabled (two-tone), flap open (chime; VF26: X-mode), shift point (150 rpm short of the limiter)
         const tc = physics.telemetry;
         const cues = settingsNow.hud;
@@ -1850,8 +1878,8 @@ export class DriveSession {
         );
         const drsOpen = tc.f12026 ? tc.f12026.CHANGED_DRS_OPEN : tc.activeAeroMode === "X_MODE";
         if (cues.drsBeep && !tc.aiAutopilot) {
-          if (drsAvail && !cueDrsAvail) audioRef.current?.cue("drs_available");
-          if (drsOpen && !cueDrsOpen) audioRef.current?.cue("drs_open");
+          if (drsAvail && !cueDrsAvail) audio?.cue("drs_available");
+          if (drsOpen && !cueDrsOpen) audio?.cue("drs_open");
         }
         cueDrsAvail = drsAvail;
         cueDrsOpen = drsOpen;
@@ -1861,7 +1889,7 @@ export class DriveSession {
           cueShiftArmed = true;
         }
         if (cues.shiftBeep && cueShiftArmed && tc.gear > 0 && tc.rpm >= limiter - 150) {
-          audioRef.current?.cue("shift");
+          audio?.cue("shift");
           cueShiftArmed = false;
         }
       }
@@ -2029,7 +2057,7 @@ export class DriveSession {
       virtualMirror.dispose();
       floorSparks.dispose();
       renderer.dispose();
-      audioRef.current?.dispose();
+      audio?.dispose();
     };
   }
 

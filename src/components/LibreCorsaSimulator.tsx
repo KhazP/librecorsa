@@ -2,7 +2,6 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { getActiveTrackData, LIVERIES } from "@/lib/track-data";
-import { F1AudioEngine2026 } from "@/lib/f1-audio-2026";
 import { FfbPairPrompt } from "@/components/hud/FfbPairPrompt";
 import { isVehicleModelId, vehicleModelsFor } from "@/lib/cars/vehicle-models";
 import { carForVehicle, type CarId } from "@/lib/cars/car-registry";
@@ -43,7 +42,7 @@ import { autoConfigureWheel, connectedPads } from "@/lib/input/device-input";
 import { webHidFfb, wheelFfb } from "@/lib/input/wheel-ffb";
 import { clampFov, codeFromName, DEFAULT_PLAYER_SETTINGS, loadCarChoice, loadOnboarded, loadPlayerSettings, loadRumble, pushLibraryRecent, saveCarChoice, saveOnboarded, toggleLibraryFavorite, type LibraryKind, sanitizeDriverName, savePlayerSettings, saveRumble, type PlayerSettings } from "@/lib/settings/player-settings";
 import type { AeroSetupPreset, AssistPreset, CameraMode, LiveTunerPatch, LiveryConfig, TireCompound, TyreSetup, VehicleModelId } from "@/types/f1";
-import { aiFieldOf, autoCompoundFor, DEFAULT_AERO_PRESET, DriveSession, HELD_KEYS, idleDriveSnapshot, mpRaceOf, soundFor, type AppPhase, type RunResetReason, type SessionRace } from "@/lib/drive-session";
+import { aiFieldOf, autoCompoundFor, DEFAULT_AERO_PRESET, DriveSession, HELD_KEYS, idleDriveSnapshot, mpRaceOf, type AppPhase, type RunResetReason, type SessionRace } from "@/lib/drive-session";
 
 const DEFAULT_ASSIST_PRESET: AssistPreset = DEFAULT_PLAYER_SETTINGS.assistPreset;
 /** A lap record's car: records are per vehicle model, named after its first car */
@@ -71,7 +70,6 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   const carIdRef = useRef(carId);
   const [vehicleModel, setVehicleModel] = useState<VehicleModelId>(() => carPhysics(carId));
   const vehicleModelRef = useRef(vehicleModel);
-  const audioRef = useRef<F1AudioEngine2026 | null>(null);
   /** The kind of session on track (practice, an AI race or an online race), for the menus; the session sets it */
   const [raceKind, setRaceKind] = useState<SessionRace["kind"]>("practice");
   /** Track evolution and aero wake for every car on the circuit (the player's in every mode); an AI field shares it */
@@ -95,6 +93,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     assetsReady,
     p2pStatus,
     vr: vrState,
+    muted,
     tireCompound,
     tyreSetup,
     defaultTyreSetup,
@@ -103,7 +102,6 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
 
   const [aeroPreset, setAeroPreset] =
     useState<AeroSetupPreset>(DEFAULT_AERO_PRESET);
-  const [isMuted, setIsMuted] = useState(false);
   const [boostLatch, setBoostLatch] = useState(false);
   const [gamepadRumble, setGamepadRumble] = useState<boolean>(loadRumble);
   const rumbleEnabledRef = useRef(gamepadRumble);
@@ -310,23 +308,6 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     setPhase("title");
   }, [session, endMpRace, clearSessionState, setPhase]);
 
-  // Read through a ref so unlockAudio stays stable: the scene effect depends on it and must not rebuild on mute
-  const isMutedRef = useRef(isMuted);
-  isMutedRef.current = isMuted;
-  const unlockAudio = useCallback(() => {
-    if (!audioRef.current) {
-      audioRef.current = new F1AudioEngine2026();
-      audioRef.current.setCar(soundFor(carIdRef.current));
-      // Created paused unless the car is being driven; from then on the frame loop alone pauses and resumes it
-      audioRef.current.setPaused(pausedRef.current || phaseRef.current !== "driving");
-    }
-    if (!audioRef.current.isInitialized) {
-      audioRef.current.init();
-      audioRef.current.setMuted(isMutedRef.current);
-    } else {
-      audioRef.current.resume();
-    }
-  }, []);
 
   const handleAeroPresetChange = useCallback((preset: AeroSetupPreset) => {
     setAeroPreset(preset);
@@ -361,7 +342,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   /** Swaps the player's car (the run starts over with it); the player's own pick goes through handleChangeCar */
   const changeCar = useCallback(
     (next: CarId) => {
-      unlockAudio();
+      session?.unlockAudio();
       if (next === carIdRef.current) return;
       carIdRef.current = next;
       setCarId(next);
@@ -369,9 +350,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       setVehicleModel(vehicleModelRef.current);
       saveCarChoice(next);
       session?.setCar(next);
-      audioRef.current?.setCar(soundFor(next));
     },
-    [unlockAudio, session]
+    [session]
   );
   /** The car picker: the car is fixed for a multiplayer race (its start picks one the class allows) */
   const handleChangeCar = useCallback(
@@ -403,43 +383,37 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     setSettings((prev) => ({ ...prev, racingLine: !prev.racingLine }));
   }, []);
 
-  const handleToggleMute = useCallback(() => {
-    unlockAudio();
-    const next = !isMutedRef.current;
-    isMutedRef.current = next;
-    setIsMuted(next);
-    audioRef.current?.setMuted(next);
-  }, [unlockAudio]);
+  const handleToggleMute = useCallback(() => session?.toggleMute(), [session]);
 
   const handleToggleAiAutopilot = useCallback(() => {
-    unlockAudio();
+    session?.unlockAudio();
     session?.toggleAutopilot();
-  }, [unlockAudio, session]);
+  }, [session]);
 
   // The on-screen aero button sends the same input as the key, pad and touch button (the car toggles on it)
   const handleToggleXMode = useCallback(() => {
-    unlockAudio();
+    session?.unlockAudio();
     keysRef.current.toggleX = true;
-  }, [unlockAudio]);
+  }, [session]);
 
   const handleToggleBoostLatch = useCallback(() => {
-    unlockAudio();
+    session?.unlockAudio();
     setLatch(!boostLatchRef.current);
-  }, [unlockAudio, setLatch]);
+  }, [session, setLatch]);
 
   const handleChangeLiveTuner = useCallback((patch: LiveTunerPatch) => session?.setLiveTuner(patch), [session]);
 
   const handleToggleMouseSteer = useCallback(() => {
-    unlockAudio();
+    session?.unlockAudio();
     setSettings((prev) => ({ ...prev, mouseSteer: !prev.mouseSteer }));
-  }, [unlockAudio]);
+  }, [session]);
 
   /** This client hosts the multiplayer lobby (the one derivation: the lobby's host is us) */
   const isMpHostRef = useRef(false);
 
   const handleResetCar = useCallback(
     (flyingStart: boolean) => {
-      unlockAudio();
+      session?.unlockAudio();
       if (!session) return;
       // In a multiplayer race only the host can restart it (for everyone); others keep their place
       const race = session.race;
@@ -452,11 +426,11 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       if (race.kind === "ai") race.field.startRace(!flyingStart);
       else physics.resetToStartGrid(flyingStart);
     },
-    [unlockAudio, session]
+    [session]
   );
 
   const handleToggleAiOpponents = useCallback(() => {
-    unlockAudio();
+    session?.unlockAudio();
     // Not in a multiplayer race: the AI field would run alongside it
     if (!session || session.race.kind === "mp") return;
     session.resetRun("race");
@@ -467,18 +441,18 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     const field = session.takeAiField();
     session.setRace({ kind: "ai", field });
     field.startRace(true);
-  }, [unlockAudio, session]);
+  }, [session]);
 
   const handleSelectTurn = useCallback(
     (turnNumber: number) => {
-      unlockAudio();
+      session?.unlockAudio();
       if (!session || session.race.kind === "mp") return;
       session.resetRun("teleport");
       // Corner practice leaves the race: the field would otherwise lose track of the player's distance
       if (session.race.kind === "ai") session.setRace({ kind: "practice" });
       session.car.teleportToTurn(turnNumber);
     },
-    [unlockAudio, session]
+    [session]
   );
 
   // The page's one multiplayer manager (it outlives this component across circuit switches)
@@ -620,12 +594,12 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
           pendingRaceStart = start;
           return;
         }
-        unlockAudio();
+        session?.unlockAudio();
         setLoadingVisible(false);
       }
       startMpRaceRef.current(start);
     },
-    [unlockAudio, session]
+    [session]
   );
 
   // ---- Laps, ghosts, leaderboards
@@ -859,12 +833,12 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
 
   /** "Press any key" on the loading screen: the user gesture that unlocks audio */
   const handleLoadingStart = useCallback(() => {
-    unlockAudio();
+    session?.unlockAudio();
     // A race taken up from the loading screen has already left it: never send that session to the title
     if (phaseRef.current !== "loading") return;
     setPhase("title");
     if (inviteRoom) getMultiplayerManager().joinRoom(inviteRoom);
-  }, [unlockAudio, setPhase, inviteRoom]);
+  }, [session, setPhase, inviteRoom]);
   const handleLoadingDone = useCallback(() => setLoadingVisible(false), []);
 
   // The title opens on the lobby by itself once (back to the lobby, or a ?room= invite): used up when the title is left
@@ -902,14 +876,12 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     const container = containerRef.current;
     if (!container) return;
     const session = new DriveSession(container, {
-      audioRef,
       autopilotPaceRef,
       boostLatchRef,
       carIdRef,
       cycleCamera,
       getTrackEnv,
       ghostRef,
-      handleToggleMute,
       handleToggleRacingLine,
       hapticsRef,
       kbInputRef,
@@ -931,7 +903,6 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       togglePauseRef,
       track,
       trackId,
-      unlockAudio,
       vehicleModelRef,
       wizardStepRef,
     });
@@ -940,7 +911,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       session.dispose();
       setSession(null);
     };
-  }, [track, getTrackEnv, unlockAudio, handleToggleMute, handleToggleRacingLine, releaseHeldKeys, setLatch, onRunReset]);
+  }, [track, getTrackEnv, handleToggleRacingLine, releaseHeldKeys, setLatch, onRunReset]);
 
   // Saved settings and the first-run flag are read after mount (the page is prerendered without storage); the
   // session takes the settings on through applySettings, whether it exists yet or not
@@ -1145,7 +1116,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     tireCompound,
     selectedLivery,
     showRacingLine,
-    isMuted,
+    isMuted: muted,
     mouseSteerEnabled,
     gamepadAssist,
     autoGearbox,
@@ -1232,7 +1203,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     <div
       className="relative h-screen w-screen overflow-hidden bg-[#0B0B10] supports-[height:100dvh]:h-dvh"
       onPointerDown={() => {
-        if (phaseRef.current !== "loading") unlockAudio();
+        if (phaseRef.current !== "loading") session?.unlockAudio();
       }}
     >
       <div ref={containerRef} className="h-full w-full" />
