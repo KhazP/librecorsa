@@ -90,7 +90,8 @@ import { TURN_METADATA } from "@/lib/track-data";
 import { getTrackInfo } from "@/lib/track-registry";
 import { TouchControls } from "@/components/hud/TouchControls";
 import { ReplayBar } from "@/components/hud/ReplayBar";
-import { F1TelemetryHud, roomFromUrl } from "@/components/F1TelemetryHud";
+import { F1TelemetryHud } from "@/components/F1TelemetryHud";
+import { roomFromUrl } from "@/lib/net/invite-room";
 import { TYRE_SETUP_LIMITS } from "@/components/hud/PauseMenu";
 import { CAMERA_MODES, FALLBACK_COCKPIT_FOV_DEG, nextCameraMode } from "@/lib/render/camera-modes";
 import { LoadingScreen } from "@/components/menu/LoadingScreen";
@@ -3648,6 +3649,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
             settings.device === "wheel" && (!settings.wheel.throttle || !settings.wheel.brake)
           }
           onCycleCamera={cycleCamera}
+          inviteRoom={inviteRoom}
           cockpitFovDeg={settings.cockpitFovDeg}
           cockpitFovDefaultDeg={carCockpitFov}
           onChangeCockpitFov={handleCockpitFovChange}

@@ -155,14 +155,8 @@ interface F1TelemetryHudProps extends MultiplayerPanelProps {
   leaderboardPanel?: LeaderboardPanelProps;
   /** Air / track temperature and the track's wetness (weather.ts) */
   weather?: WeatherHudState | null;
-}
-
-/** Normalises a ?room= invite link value to the bare room code, or null when it is not one */
-export function roomFromUrl(): string | null {
-  if (typeof window === "undefined") return null;
-  const raw = new URLSearchParams(window.location.search).get("room");
-  const code = raw?.trim().replace(/^(RWA|LC)-/i, "").toUpperCase().slice(0, 6) ?? "";
-  return code.length >= 3 ? code : null;
+  /** The room in the page's invite link: the pause menu opens on it until a peer is connected */
+  inviteRoom?: string | null;
 }
 
 /** The last DRS detection crossed (f12026-car), shown for 2.5 s after it happens */
@@ -201,7 +195,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
     onCycleCamera,
   } = props;
 
-  const [inviteRoom] = useState(roomFromUrl);
+  const inviteRoom = props.inviteRoom ?? null;
   // An invite link opens the multiplayer panel on the first pause only
   const [inviteUsed, setInviteUsed] = useState(false);
   useEffect(() => {
