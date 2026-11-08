@@ -116,6 +116,13 @@ interface ActiveSampleNode {
   gain: GainNode;
 }
 
+/**
+ * What plays the engine, one at a time: the car's sound bank; the bundled WAV loops (the synthesised sub-harmonic,
+ * turbo and axle voices under them); those synthesised voices alone (no bank, no loops); or nothing while the car's
+ * bank is loading (at the start, and after a car change)
+ */
+type EngineVoice = 'loading' | 'bank' | 'samples' | 'synth';
+
 export class CarAudioEngine {
   private ctx: AudioContext | null = null;
   private masterGain: GainNode | null = null;
@@ -154,6 +161,8 @@ export class CarAudioEngine {
   private isLoadingSamples = false;
   /** Bumped by dispose(): a sample load still in flight from the closed context is then thrown away */
   private sampleGen = 0;
+  /** What plays the engine; set only by `setEngineVoice` (see `EngineVoice`) */
+  private engineVoice: EngineVoice = 'loading';
 
   // Multi-grid sound bank (null until loaded; stays null when the assets are absent)
   private vf26: Vf26SoundBank | null = null;
@@ -167,14 +176,24 @@ export class CarAudioEngine {
 
   private isMuted = false;
   private isPaused = false;
-  public isInitialized = false;
+
+  /** The audio graph is built: true exactly while there is a context (init() assigns it last, dispose() clears it) */
+  public get isInitialized(): boolean {
+    return this.ctx !== null;
+  }
 
   // State variables ported from `CarSoundData.cpp`
   private smoothAccel = 0.01;
   private turboLag = 0.25;
-  private prevGear = 1;
+  private prevGear = 0;
   private shiftCutTimer = 0;
   private smoothedRpm = 4200;
+  /**
+   * Set whenever a frame goes unheard (muted, paused, the context not running), on a car change and before the first
+   * frame: the next frame heard only takes the gear and pedal as they are, so a shift, a restart or a lift made in the
+   * gap fires no shift cut, gear sound, blip or pop
+   */
+  private edgesStale = true;
 
   public init(): void {
     if (this.isInitialized || typeof window === 'undefined') return;
@@ -185,8 +204,24 @@ export class CarAudioEngine {
     if (!AudioCtx) return;
 
     const ctx = new AudioCtx();
+    try {
+      this.buildGraph(ctx);
+    } catch (err) {
+      // Half built: close this context, so the next init() starts clean instead of opening a second one beside it
+      try {
+        void Promise.resolve(ctx.close()).catch(() => {});
+      } catch {
+        // Ignore
+      }
+      throw err;
+    }
     this.ctx = ctx;
+    this.edgesStale = true;
+    void this.loadEngineSounds(ctx);
+  }
 
+  /** Builds the voices and buses on `ctx` (init() only takes the context once this has finished) */
+  private buildGraph(ctx: AudioContext): void {
     const compressor = ctx.createDynamicsCompressor();
     compressor.threshold.value = -8;
     compressor.knee.value = 12;
@@ -355,45 +390,67 @@ export class CarAudioEngine {
 
     this.contactAcoustics = new ContactAcousticsRig(ctx, compressor, noiseBuffer);
 
-    this.isInitialized = true;
     this.bankDestination = compressor;
     this.fallbackDestination = engineSampleBus;
-    void this.loadEngineSounds(ctx);
   }
 
   /** The car whose sound bank plays; swaps the bank when the car changes */
   public setCar(sound: CarSoundSource): void {
     // Also when the sound stays: the vf26 and f12026-car physics share one
     this.contactAcoustics?.reset();
+    // Another car: its gear and pedal are not the last car's
+    this.edgesStale = true;
     if (sound.id === this.sound.id) return;
     this.sound = sound;
-    if (!this.isInitialized || !this.ctx) return;
+    if (!this.ctx) return;
     this.vf26?.dispose();
     this.vf26 = null;
     void this.loadEngineSounds(this.ctx);
   }
 
+  /**
+   * The one place the engine's voice changes: the sources not in use are faded out. The synthesised sub-harmonic,
+   * turbo and axle voices play under the WAV loops ('samples') and alone ('synth'), never beside the bank
+   */
+  private setEngineVoice(voice: EngineVoice): void {
+    this.engineVoice = voice;
+    const ctx = this.ctx;
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    if (voice !== 'samples') {
+      for (const l of this.sampleNodes) l.gain.gain.setTargetAtTime(0, now, 0.05);
+    }
+    if (voice === 'bank' || voice === 'loading') {
+      this.subHarmonicGain?.gain.setTargetAtTime(0, now, 0.05);
+      this.turboGain?.gain.setTargetAtTime(0, now, 0.05);
+      this.axleGain?.gain.setTargetAtTime(0, now, 0.05);
+    }
+  }
+
   /** Prefer the car's converted sound bank; fall back to the bundled F1 loops when it is not available */
   private async loadEngineSounds(ctx: AudioContext): Promise<void> {
     const loadId = ++this.bankLoadId;
+    this.setEngineVoice('loading');
     const bank = new Vf26SoundBank(ctx, this.bankDestination ?? ctx.destination, this.sound.assetDir);
     const ok = await bank.load(INTERIOR_CAMERAS.has(this.cameraMode) ? 'int' : 'ext');
-    if (loadId !== this.bankLoadId) {
+    // A later car, or dispose() (a closed context): this load is not wanted any more
+    if (loadId !== this.bankLoadId || this.ctx !== ctx) {
       bank.dispose();
       return;
     }
-    if (ok && this.ctx === ctx) {
+    if (ok) {
       this.vf26 = bank;
-      // Silence the legacy engine voices that the bank replaces
-      this.subHarmonicGain?.gain.setTargetAtTime(0, ctx.currentTime, 0.05);
-      this.turboGain?.gain.setTargetAtTime(0, ctx.currentTime, 0.05);
-      this.axleGain?.gain.setTargetAtTime(0, ctx.currentTime, 0.05);
+      this.setEngineVoice('bank');
       return;
     }
     bank.dispose();
-    if (!this.samplesLoaded && !this.isLoadingSamples) {
-      await this.loadRealSamples(ctx, this.fallbackDestination ?? ctx.destination);
+    if (this.samplesLoaded) {
+      this.setEngineVoice('samples');
+      return;
     }
+    // The synthesised voices until the WAV loops are in (loadRealSamples switches to them)
+    this.setEngineVoice('synth');
+    await this.loadRealSamples(ctx, this.fallbackDestination ?? ctx.destination);
   }
 
   /** Current camera, used to pick the interior or exterior engine sound */
@@ -413,7 +470,7 @@ export class CarAudioEngine {
 
   /** True when the VF26 mod sound bank is playing instead of the bundled samples */
   public get usingVf26Sounds(): boolean {
-    return this.vf26?.ready === true;
+    return this.engineVoice === 'bank';
   }
 
   private createPinkNoiseBuffer(ctx: AudioContext, durationSec: number): AudioBuffer {
@@ -473,6 +530,8 @@ export class CarAudioEngine {
       if (loaded.length > 0) {
         this.sampleNodes = loaded;
         this.samplesLoaded = true;
+        // They take over from the synthesised voices they were loaded to replace (not from a bank loaded since)
+        if (this.engineVoice === 'synth') this.setEngineVoice('samples');
       }
     } catch {
       // Fallback to warm sub-harmonic synthesis if network sample load fails
@@ -559,10 +618,13 @@ export class CarAudioEngine {
 
   /** One frame of the player's car; `dtSeconds` is the frame time */
   public update(telemetry: TelemetryData, dtSeconds?: number): void {
-    if (!this.isInitialized || !this.ctx || this.isMuted || this.isPaused) return;
-    if (this.ctx.state === 'suspended') {
-      // The audio clock stands still, so the rig cannot see this gap itself
-      this.contactAcoustics?.reset();
+    if (!this.ctx) return;
+    // The same test as cue() and the opponents': nothing is heard unless the context runs
+    const running = this.ctx.state === 'running';
+    if (this.isMuted || this.isPaused || !running) {
+      this.edgesStale = true;
+      // A context that is not running has its audio clock standing still, so the rig cannot see this gap itself
+      if (!running) this.contactAcoustics?.reset();
       return;
     }
     // A physics blow-up must neither throw from an AudioParam inside the frame loop nor stick in the smoothed state
@@ -570,12 +632,19 @@ export class CarAudioEngine {
     if (!(Number.isFinite(t.speedKmh) && Number.isFinite(t.rpm) && Number.isFinite(t.throttle) && Number.isFinite(t.brake))) {
       return;
     }
+    // First frame heard after a gap: take the gear (here and in the bank) as it is now
+    if (this.edgesStale) {
+      this.edgesStale = false;
+      this.prevGear = telemetry.gear;
+      this.shiftCutTimer = 0;
+      this.vf26?.resync();
+    }
 
     const now = this.ctx.currentTime;
     const tau = 0.024;
     const legacyDt = THREE.MathUtils.clamp(Number.isFinite(dtSeconds) ? (dtSeconds as number) : 1 / 60, 0, 0.1);
 
-    const vf26 = this.vf26?.ready ? this.vf26 : null;
+    const vf26 = this.engineVoice === 'bank' ? this.vf26 : null;
     const squeal = this.tyreSqueal(telemetry);
     // A bank with its own skid recordings plays them in place of the synthesised squeal and scrub
     const bankSkid = vf26?.hasSkid === true;
@@ -622,10 +691,11 @@ export class CarAudioEngine {
       (0.75 * revCor * revCor + 0.25) * this.smoothAccel +
       (1.0 - this.smoothAccel) * 0.25 * revCor * revCor;
 
-    // Gear shift detection (`gear_changing` in `CarSoundData.cpp`)
+    // Gear shift detection (`gear_changing` in `CarSoundData.cpp`): between forward gears only (0 is neutral, -1
+    // reverse), the same rule as the bank's shift sounds
     if (telemetry.gear !== this.prevGear) {
+      if (this.prevGear > 0 && telemetry.gear > 0) this.shiftCutTimer = 0.065; // 65ms seamless shift ignition cut
       this.prevGear = telemetry.gear;
-      this.shiftCutTimer = 0.065; // 65ms seamless shift ignition cut
     }
     if (this.shiftCutTimer > 0) {
       this.shiftCutTimer = Math.max(0, this.shiftCutTimer - legacyDt);
@@ -639,7 +709,7 @@ export class CarAudioEngine {
     }
 
     // Crossfade across the 5 real F1 WAV sample loops
-    if (this.samplesLoaded && this.sampleNodes.length > 0) {
+    if (this.engineVoice === 'samples') {
       const onThrottleWeight = 0.35 + 0.65 * this.smoothAccel;
       const overrunWeight =
         (1.0 - this.smoothAccel) * THREE.MathUtils.clamp((rpm - 5000) / 7000, 0.15, 1.0);
@@ -666,17 +736,19 @@ export class CarAudioEngine {
 
     // A four-stroke V6 fires three times per revolution
     const f0 = (rpm / 60) * 3.0;
-    if (!vf26 && this.subHarmonicOsc && this.subHarmonicGain && this.subHarmonicFilter) {
+    // The synthesised engine voices: under the WAV loops, or alone
+    const synthVoices = this.engineVoice === 'samples' || this.engineVoice === 'synth';
+    if (synthVoices && this.subHarmonicOsc && this.subHarmonicGain && this.subHarmonicFilter) {
       this.subHarmonicOsc.frequency.setTargetAtTime(f0 * 0.5, now, tau);
       this.subHarmonicFilter.frequency.setTargetAtTime(Math.min(260, f0 * 0.85), now, tau);
-      const subLevel = (this.samplesLoaded ? 0.055 : 0.16) * (0.4 + 0.6 * this.smoothAccel) * shiftDip;
+      const subLevel = (this.engineVoice === 'samples' ? 0.055 : 0.16) * (0.4 + 0.6 * this.smoothAccel) * shiftDip;
       this.subHarmonicGain.gain.setTargetAtTime(subLevel, now, tau);
     }
 
     // Turbo lag model (`turbo_lag`, `turbo_ilag` in `CarSoundData.cpp` lines 163-168)
     this.turboLag += (this.smoothAccel - this.turboLag) * per60(0.1);
     const turboIlag = Math.exp(-3.0 * this.turboLag);
-    if (!vf26 && this.turboOsc && this.turboGain) {
+    if (synthVoices && this.turboOsc && this.turboGain) {
       const turboFreq = 1650 + (1.0 - turboIlag) * 2400 + mp * 850;
       const turboAmp = THREE.MathUtils.clamp((1.0 - turboIlag) * 0.022 * mp, 0, 0.025);
       this.turboOsc.frequency.setTargetAtTime(turboFreq, now, tau);
@@ -687,7 +759,7 @@ export class CarAudioEngine {
     const speedMs = Math.max(0, telemetry.speedKmh / 3.6);
     const u2 = speedMs * speedMs;
 
-    if (!vf26 && this.axleOsc && this.axleGain) {
+    if (synthVoices && this.axleOsc && this.axleGain) {
       // axle.a = 0.2 * sqrt(sqrt(u2) * 0.05), axle.f = sqrt(u2) * 0.06
       const axleFreq = 320 + speedMs * 16.5 + Math.abs(telemetry.mgukPowerKw) * 1.1;
       const axleAmp = THREE.MathUtils.clamp(
@@ -794,6 +866,11 @@ export class CarAudioEngine {
     this.samplesLoaded = false;
     this.isLoadingSamples = false;
     this.sampleGen++;
+    // A bank load still in flight belongs to the closed context: it is dropped when it lands, not played or fallen
+    // back from
+    this.bankLoadId++;
+    this.setEngineVoice('loading');
+    this.edgesStale = true;
     // Closing the context below stops the rig's voices with everything else
     this.contactAcoustics = null;
     this.vf26?.dispose();
@@ -802,6 +879,5 @@ export class CarAudioEngine {
       void this.ctx.close();
       this.ctx = null;
     }
-    this.isInitialized = false;
   }
 }
