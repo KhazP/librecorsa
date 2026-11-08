@@ -46,7 +46,6 @@ import {
   type InterpolatedPeerState,
   type LobbySettings,
   type LobbyState,
-  type MultiplayerSyncManager,
   type P2PConnectionStatus,
   type PeerNetStats,
   type RaceStartInfo,
@@ -221,7 +220,6 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   const carRigRef = useRef<SimCarRig | null>(null);
   const liveryRef = useRef<LiveryConfig>(LIVERIES[0]);
   const racingLineMeshRef = useRef<THREE.Mesh | null>(null);
-  const multiplayerRef = useRef<MultiplayerSyncManager | null>(null);
   /** The AI race field while "AI opponents" is enabled */
   const aiFieldRef = useRef<AiOpponentField | null>(null);
   /** Track evolution and aero wake for every car on the circuit (the player's in every mode); an AI field shares it */
@@ -801,27 +799,16 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     [unlockAudio, resetRun, setRace]
   );
 
-  const handleHostP2PRoom = useCallback((customCode?: string) => {
-    return multiplayerRef.current?.hostRoom(customCode) ?? "";
-  }, []);
-
-  const handleJoinP2PRoom = useCallback((roomCode: string) => {
-    multiplayerRef.current?.joinRoom(roomCode);
-  }, []);
-
-  const handleCreateManualOffer = useCallback(async () => {
-    if (!multiplayerRef.current) return "";
-    return multiplayerRef.current.createManualOffer();
-  }, []);
-
-  const handleAcceptManualOffer = useCallback(async (offerToken: string) => {
-    if (!multiplayerRef.current) return "";
-    return multiplayerRef.current.acceptManualOfferAndCreateAnswer(offerToken);
-  }, []);
-
+  // The page's one multiplayer manager (it outlives this component across circuit switches)
+  const handleHostP2PRoom = useCallback((customCode?: string) => getMultiplayerManager().hostRoom(customCode), []);
+  const handleJoinP2PRoom = useCallback((roomCode: string) => getMultiplayerManager().joinRoom(roomCode), []);
+  const handleCreateManualOffer = useCallback(() => getMultiplayerManager().createManualOffer(), []);
+  const handleAcceptManualOffer = useCallback(
+    (offerToken: string) => getMultiplayerManager().acceptManualOfferAndCreateAnswer(offerToken),
+    []
+  );
   const handleAcceptManualAnswer = useCallback(async (answerToken: string) => {
-    if (!multiplayerRef.current) return false;
-    await multiplayerRef.current.acceptManualAnswer(answerToken);
+    await getMultiplayerManager().acceptManualAnswer(answerToken);
     return true;
   }, []);
 
@@ -1234,7 +1221,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     // A race taken up from the loading screen has already left it: never send that session to the title
     if (phaseRef.current !== "loading") return;
     setPhase("title");
-    if (inviteRoom) multiplayerRef.current?.joinRoom(inviteRoom);
+    if (inviteRoom) getMultiplayerManager().joinRoom(inviteRoom);
   }, [unlockAudio, setPhase, inviteRoom]);
   const handleLoadingDone = useCallback(() => setLoadingVisible(false), []);
 
@@ -1507,7 +1494,6 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       setP2pStatus(st);
     };
     setP2pStatus(multiplayerSync.status);
-    multiplayerRef.current = multiplayerSync;
 
     // Lap recording for the summary card, the personal-best ghost and the leaderboards
     const lapRecorder = new LapRecorder({
