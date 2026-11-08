@@ -14,6 +14,10 @@ import * as THREE from 'three';
 import { createF1Car2026, type SimCarRig } from '@/lib/car-builder-2026';
 import type { WheelSeating } from '@/lib/render/corner-rig';
 import { createGt3CarRig, loadGt3Cockpit, loadGt3Template } from '@/lib/gt3-car-model';
+import { createPortedCarRig, loadTemplate as loadPortedTemplate } from '@/lib/ported-car-model';
+import { staticFloorOf } from '@/lib/render/body-floor';
+import { CAR_WHEEL_LOCKS_DEG } from '@/lib/input/device-input';
+import { SUZUKI_LIANA_CONFIG } from './road/SuzukiLianaConfig';
 import { AMR26_MODEL_URL, loadVf26Template } from '@/lib/vf26-car-model';
 import { assetProgress } from '@/lib/loading/asset-progress';
 import { addContactShadow, seatContactShadow } from '@/lib/render/contact-shadow';
@@ -569,7 +573,9 @@ export class SimVisualFxManager {
     const template: Promise<unknown> =
       kind === 'gt3'
         ? Promise.all([loadGt3Template('opponents'), loadGt3Cockpit()])
-        : loadVf26Template(AMR26_MODEL_URL, 'opponents');
+        : kind === 'road'
+          ? loadPortedTemplate(LIANA_MODEL_URL)
+          : loadVf26Template(AMR26_MODEL_URL, 'opponents');
     return template
       .then(() => {
         // The rigs attach the cached template in their own `then`, registered before this one returns. One racing
@@ -796,7 +802,9 @@ function createPeerTelemetry(): CarTelemetry {
 
 /** The AI field's drivers (ai-opponents.ts AI_DRIVERS), whose liveries the pool is built in */
 const PREWARM_DRIVERS = ['KIG', 'MUS', 'NYA', 'RUB', 'HUY'] as const;
-const rigKind = (vehicle: VehicleModelId | undefined) => (vehicle === 'amg-gt3' ? 'gt3' : 'f1');
+const rigKind = (vehicle: VehicleModelId | undefined) => (vehicle === 'amg-gt3' ? 'gt3' : vehicle === 'liana' ? 'road' : 'f1');
+/** The Liana has no body of its own model: its opponents wear its ported GLB (car-registry's `modelUrl`) */
+const LIANA_MODEL_URL = '/cars/liana/model/liana.glb';
 const poolKey = (vehicle: VehicleModelId | undefined, ghost: boolean) => `${rigKind(vehicle)}${ghost ? ':ghost' : ''}`;
 
 function buildOpponentRig(vehicle: VehicleModelId | undefined, livery: LiveryConfig): SimCarRig {
@@ -804,6 +812,13 @@ function buildOpponentRig(vehicle: VehicleModelId | undefined, livery: LiveryCon
   if (vehicle === 'amg-gt3') {
     rig = createGt3CarRig();
     rig.setLivery(livery);
+  } else if (vehicle === 'liana') {
+    rig = createPortedCarRig({
+      url: LIANA_MODEL_URL,
+      chassis: SUZUKI_LIANA_CONFIG.chassis,
+      steerLockDeg: CAR_WHEEL_LOCKS_DEG.liana / 2,
+      floor: staticFloorOf(SUZUKI_LIANA_CONFIG),
+    });
   } else {
     rig = createF1Car2026(livery, 'medium');
   }
