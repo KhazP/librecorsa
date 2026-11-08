@@ -551,12 +551,15 @@ export class ForceWriter {
     // Nothing written on this stream for a while: the value goes out again, whatever the threshold says
     const stale = c.keepaliveMs !== undefined && c.lastRaw !== null && this.deps.now() - c.lastSentMs >= c.keepaliveMs;
     if (!stale && (raw === c.lastRaw || (c.lastRaw !== null && raw !== c.zeroRaw && Math.abs(raw - c.lastRaw) < c.threshold))) {
-      c.pending = null; // the wheel already holds (nearly) this value; drop any older queued one
+      // The wheel already holds (nearly) this value; drop any older queued one, and its urgency with it
+      c.pending = null;
+      c.urgent = false;
       return;
     }
+    // Urgency belongs to the queued value: a newer ordinary value that replaces an urgent one keeps the spacing
     c.pending = raw;
+    c.urgent = urgent;
     if (urgent) {
-      c.urgent = true;
       if (this.timer !== null) {
         this.deps.clearTimer(this.timer);
         this.timer = null;
@@ -1551,8 +1554,18 @@ export class WebHidFfb {
   private lastDriveMs = 0;
   private idleTimer: unknown = null;
   private rotationDeg: number | null = null;
-  /** Between connect()/reconnect() and dispose(): a granted wheel that comes back is re-opened */
+  /**
+   * From reconnect() (or a connect() whose picker returned a wheel) until dispose(): a granted wheel that comes back
+   * is re-opened. A cancelled picker arms nothing.
+   */
   private wanted = false;
+  /** dispose() calls so far: a picker that resolves after one does not arm `wanted` again */
+  private disposals = 0;
+  /**
+   * A session let go of outside any operation (a fatal write failure) while its teardown still runs: every later
+   * release waits for that teardown first, so no setup reaches the device under it
+   */
+  private dropping: { session: FfbSession | null; done: Promise<void> } | null = null;
   private hotplugApi: HidApiLike | null = null;
   private hotplugTimer: unknown = null;
   /** Ends the wait between setup attempts early (dispose) */
@@ -1577,12 +1590,14 @@ export class WebHidFfb {
    * Must be called straight from a user gesture (the click handler itself): requestDevice is called before anything
    * is awaited, since the prompt needs the click's user activation. Opens the picked wheel and sets the effect up.
    * Resolves to the device name, or null when nothing was picked or setup failed (see `status`). Cancelling the
-   * picker keeps a wheel that is already running. A failed setup is reported at once, not retried.
+   * picker, or a picker that fails (a second Connect while one is open), keeps a wheel that is already running. A
+   * failed setup is reported at once, not retried. Only a chosen wheel arms the re-open on hotplug (see `wanted`).
    */
   connect(): Promise<string | null> {
     const hid = this.hidApi();
     if (!hid) return Promise.resolve(this.fail("unsupported", null, UNSUPPORTED_BROWSER));
-    this.want(hid);
+    // A dispose() while the picker is open wins: the wheel picked afterwards is set up, then let go, never re-armed
+    const disposals = this.disposals;
     let picking: Promise<{ devices: HidDeviceLike[] } | { error: string }>;
     try {
       picking = hid.requestDevice({ filters: REQUEST_FILTERS }).then(
@@ -1596,6 +1611,7 @@ export class WebHidFfb {
     return this.guard(async () => {
       const picked = await picking;
       if ("error" in picked) {
+        if (this.session && this.device) return deviceName(this.device);
         await this.release();
         return this.fail("error", null, picked.error);
       }
@@ -1605,6 +1621,7 @@ export class WebHidFfb {
         this.setStatus("idle", null, "No wheel was selected");
         return null;
       }
+      if (this.disposals === disposals) this.want(hid);
       const pick = pickFfbDevice(picked.devices);
       await this.release();
       if (!pick) return this.fail("unsupported", deviceName(first), unsupportedMessage(first));
@@ -1706,17 +1723,21 @@ export class WebHidFfb {
    */
   emergencyStop(): void {
     const session = this.session;
-    if (!session) return;
+    // A session still being torn down after a fatal failure gets the stop commands too (its writer is dead already)
+    const dropped = this.dropping?.session ?? null;
+    if (!session && !dropped) return;
     this.session = null;
     this.clearIdle();
     this.trace.note("page hidden: emergency stop");
     this.trace.recording = true;
     try {
-      emergencyStopSession(session);
+      if (session) emergencyStopSession(session);
+      if (dropped && dropped !== session) emergencyStopSession(dropped);
     } finally {
       this.trace.recording = false;
     }
-    this.setStatus("idle", null, null);
+    // A fatal error stays on screen; a running wheel goes idle
+    if (session) this.setStatus("idle", null, null);
   }
 
   /** The page came back from the back/forward cache: set the wheel up again if the driver is still wanted */
@@ -1830,7 +1851,8 @@ export class WebHidFfb {
       rotationDeg: this.rotationDeg,
       onFail: (message, fatal) => {
         if (fatal && this.device === device) {
-          this.session?.writer.kill();
+          // The session goes at once (reconnect, hotplug and the hardware damper all see none), the error stays
+          this.drop();
           this.setStatus("error", name, `Force feedback stopped: ${message}`);
         }
       },
@@ -1866,7 +1888,7 @@ export class WebHidFfb {
     return { ok: true, name };
   }
 
-  /** From connect()/reconnect() until dispose(): listen for a granted wheel coming back */
+  /** From reconnect() (or a wheel picked in connect()) until dispose(): listen for a granted wheel coming back */
   private want(hid: HidApiLike): void {
     this.wanted = true;
     if (this.hotplugApi === hid) return;
@@ -1877,6 +1899,7 @@ export class WebHidFfb {
 
   private unwant(): void {
     this.wanted = false;
+    this.disposals++;
     this.hotplugApi?.removeEventListener("connect", this.onConnect);
     this.hotplugApi = null;
     if (this.hotplugTimer !== null) {
@@ -1948,10 +1971,36 @@ export class WebHidFfb {
     this.idleTimer = null;
   }
 
-  /** Shuts the current session down (best effort) and forgets it */
+  /** Shuts the current session down (best effort) and forgets it, once a dropped session's teardown has finished */
   private async release(): Promise<void> {
-    const session = this.session;
-    const device = this.device;
+    const { session, device } = this.detach();
+    const dropping = this.dropping;
+    if (dropping) await dropping.done;
+    await this.shutDown(session, device);
+  }
+
+  /**
+   * A fatal write failure: the session is forgotten at once, outside any operation, and torn down in the background
+   * as dispose() would (zero force, stop and free the effects, Stop All, disable actuators, close), best effort
+   */
+  private drop(): void {
+    const { session, device } = this.detach();
+    if (!session && !device) return;
+    const before = this.dropping?.done;
+    const done: Promise<void> = (async () => {
+      await before;
+      await this.shutDown(session, device);
+    })()
+      .catch(() => {})
+      .finally(() => {
+        if (this.dropping?.done === done) this.dropping = null;
+      });
+    this.dropping = { session, done };
+  }
+
+  /** Forgets the current session and device at once (every later call sees none) and returns them */
+  private detach(): { session: FfbSession | null; device: HidDeviceLike | null } {
+    const held = { session: this.session, device: this.device };
     this.session = null;
     this.device = null;
     this.clearIdle();
@@ -1959,6 +2008,11 @@ export class WebHidFfb {
       this.listening.removeEventListener("disconnect", this.onDisconnect);
       this.listening = null;
     }
+    return held;
+  }
+
+  /** Best-effort shutdown of a detached session, then its device closed */
+  private async shutDown(session: FfbSession | null, device: HidDeviceLike | null): Promise<void> {
     if (session) {
       this.trace.note("teardown");
       this.trace.recording = true;

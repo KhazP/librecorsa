@@ -33,7 +33,15 @@ import {
   softLockForce,
   WheelFfbClient,
 } from '../src/lib/input/wheel-ffb';
-import { PAIR_MESSAGE, WebHidFfb, type HidApiLike } from '../src/lib/input/webhid-ffb';
+import {
+  ForceWriter,
+  PAIR_MESSAGE,
+  WebHidFfb,
+  type FfbDeps,
+  type HidApiLike,
+  type HidCollectionLike,
+  type HidDeviceLike,
+} from '../src/lib/input/webhid-ffb';
 import {
   DEFAULT_KEYBOARD_TUNING,
   DEFAULT_PAD_TUNING,
@@ -536,6 +544,245 @@ check('linkHidSink flips sign from WheelFfbClient (+ = right) to WebHidFfb.setFo
   unlink();
 });
 
+check('clearing or rebinding the steering with the wheel plugged in is not an unplug', () => {
+  const reader = new DeviceInputReader();
+  const steer = { padId: 'DD base', axis: 0, center: 0, invert: false };
+  const pads = [pad('DD base', '', [0.1, 0])];
+  const bound = { wheel: { ...DEFAULT_WHEEL_SETTINGS, steer }, padButtons: DEFAULT_PAD_BUTTONS };
+  const withSteer = (s: typeof steer | null) => ({ ...bound, wheel: { ...bound.wheel, steer: s } });
+  assert.equal(reader.read(pads, bound, 1 / 60).wheelLost, undefined);
+  assert.equal(reader.read(pads, withSteer({ ...steer, axis: 1 }), 1 / 60).wheelLost, undefined, 'rebound to another axis');
+  assert.equal(reader.read(pads, withSteer(null), 1 / 60).wheelLost, undefined, 'steering cleared');
+  assert.equal(reader.read(pads, withSteer({ ...steer, padId: 'Other base' }), 1 / 60).wheelLost, undefined, 'bound to an absent device');
+  assert.equal(reader.read(pads, bound, 1 / 60).wheelLost, undefined, 'bound again');
+  assert.equal(reader.read([], bound, 1 / 60).wheelLost, true, 'then unplugged: lost');
+});
+check('a button already held on the device the input switches to is not a press; pressing it again is', () => {
+  const reader = new DeviceInputReader();
+  const settings = { wheel: { ...DEFAULT_WHEEL_SETTINGS, steer: { padId: 'DD base', axis: 0, center: 0, invert: false } }, padButtons: DEFAULT_PAD_BUTTONS };
+  const xboxHeld = pad('Xbox', 'standard', [0, 0], [5]);
+  assert.equal(reader.read([pad('DD base', '', [0]), xboxHeld], settings, 1 / 60).source, 'wheel');
+  const switched = reader.read([xboxHeld], settings, 1 / 60);
+  assert.equal(switched.source, 'controller');
+  assert.ok(!switched.pressed.has('shiftUp'), 'held across the switch: no press');
+  reader.read([pad('Xbox', 'standard', [0, 0])], settings, 1 / 60);
+  assert.ok(reader.read([xboxHeld], settings, 1 / 60).pressed.has('shiftUp'), 'pressed again: a press');
+  // A pad that only appears with a press (the browser hides it until then) still counts from no device at all
+  const fresh = new DeviceInputReader();
+  const pads = { wheel: DEFAULT_WHEEL_SETTINGS, padButtons: DEFAULT_PAD_BUTTONS };
+  assert.equal(fresh.read([], pads, 1 / 60).source, null);
+  assert.ok(fresh.read([xboxHeld], pads, 1 / 60).pressed.has('shiftUp'), 'first press of a pad that just appeared');
+});
+check('the polarity reset is stored with its flag: a load that no save follows does not lose it', () => {
+  const store = new Map<string, string>();
+  let failSettingsWrite = false;
+  const g = globalThis as unknown as { localStorage?: Storage };
+  const prevStorage = g.localStorage;
+  g.localStorage = {
+    getItem: (k: string) => store.get(k) ?? null,
+    setItem: (k: string, v: string) => {
+      if (failSettingsWrite && k === SETTINGS_STORAGE_KEY) throw new Error('quota');
+      store.set(k, v);
+    },
+    removeItem: (k: string) => void store.delete(k),
+    clear: () => store.clear(),
+    key: () => null,
+    length: 0,
+  };
+  try {
+    const legacy = { ...DEFAULT_PLAYER_SETTINGS, wheel: { ...DEFAULT_WHEEL_SETTINGS, ffbInvert: true } };
+    store.set(SETTINGS_STORAGE_KEY, JSON.stringify(legacy));
+    assert.equal(loadPlayerSettings().wheel.ffbInvert, false);
+    assert.equal(loadPlayerSettings().wheel.ffbInvert, false, 'a second load, with no save between, is still reset');
+    assert.equal(JSON.parse(store.get(SETTINGS_STORAGE_KEY) as string).wheel.ffbInvert, false, 'the reset is stored');
+    // The settings write failing leaves the flag unstamped, so the next load resets it again
+    store.clear();
+    store.set(SETTINGS_STORAGE_KEY, JSON.stringify(legacy));
+    failSettingsWrite = true;
+    assert.equal(loadPlayerSettings().wheel.ffbInvert, false);
+    assert.equal(store.get(FFB_POLARITY_V2_KEY), undefined, 'no flag without the stored reset');
+  } finally {
+    if (prevStorage === undefined) delete g.localStorage;
+    else g.localStorage = prevStorage;
+  }
+});
+check('stop() forgets the rim angle and filter: the first frame after it has no damper kick', () => {
+  const steer = { padId: 'Wheel', axis: 0, center: 0, invert: false };
+  const w = { ...DEFAULT_WHEEL_SETTINGS, ffbEnabled: true, hidFfb: true, ffbMinForce: 0, ffbFilterS: 0, ffbDamping: 0.5, rotationDeg: 900, steer };
+  const c = new WheelFfbClient();
+  c.hidSink = () => {};
+  c.update({ speedKmh: 100, ffbTorqueNorm: 0 } as never, w, [pad('Wheel', '', [0])], 1000, true);
+  c.stop(); // e.g. the tab was hidden
+  c.update({ speedKmh: 100, ffbTorqueNorm: 0 } as never, w, [pad('Wheel', '', [0.1])], 1020, true);
+  const fresh = new WheelFfbClient();
+  fresh.hidSink = () => {};
+  fresh.update({ speedKmh: 100, ffbTorqueNorm: 0 } as never, w, [pad('Wheel', '', [0.1])], 1020, true);
+  near(c.force, fresh.force);
+  c.stop();
+  fresh.stop();
+});
+check('the direction test takes the route update() takes: the bridge while WebHID FFB is off, even with the driver ready', () => {
+  const c = new WheelFfbClient();
+  const sent: number[] = [];
+  c.hidSink = (f) => sent.push(f);
+  c.update({ speedKmh: 0, ffbTorqueNorm: 0 } as never, { ...DEFAULT_WHEEL_SETTINGS, hidFfb: false }, [], 1000, false);
+  sent.length = 0;
+  assert.equal(c.test(false), false, 'bridge route (not connected here)');
+  assert.equal(sent.length, 0, 'nothing went to the WebHID wheel');
+  c.update({ speedKmh: 0, ffbTorqueNorm: 0 } as never, { ...DEFAULT_WHEEL_SETTINGS, hidFfb: true }, [], 1016, false);
+  assert.equal(c.test(false), true, 'WebHID route once it is on');
+  c.stop();
+});
+check('bridge socket: replaced is final until FFB goes off and on; a retry after a failure stays "unreachable"', () => {
+  const made: FakeSocket[] = [];
+  class FakeSocket {
+    static OPEN = 1;
+    readyState = 0;
+    closed = false;
+    onopen: (() => void) | null = null;
+    onmessage: ((e: { data: unknown }) => void) | null = null;
+    onclose: (() => void) | null = null;
+    constructor(readonly url: string) {
+      made.push(this);
+    }
+    send() {}
+    close() {
+      this.closed = true;
+      this.readyState = 3;
+    }
+    open() {
+      this.readyState = 1;
+      this.onopen?.();
+    }
+    message(m: object) {
+      this.onmessage?.({ data: JSON.stringify(m) });
+    }
+    drop() {
+      this.readyState = 3;
+      this.onclose?.();
+    }
+  }
+  const g = globalThis as unknown as { WebSocket?: unknown };
+  const prevWs = g.WebSocket;
+  g.WebSocket = FakeSocket;
+  try {
+    const c = new WheelFfbClient();
+    const on = { ...DEFAULT_WHEEL_SETTINGS, ffbEnabled: true, hidFfb: false };
+    const tick = (ms: number, w = on) => c.update({ speedKmh: 0, ffbTorqueNorm: 0 } as never, w, [], ms, false);
+    tick(1000);
+    assert.equal(made.length, 1);
+    assert.equal(c.status.connection, 'connecting');
+    made[0].open();
+    assert.equal(c.status.connection, 'connected');
+    made[0].message({ type: 'replaced' });
+    assert.equal(c.status.connection, 'replaced');
+    assert.ok(made[0].closed, 'the replaced socket is let go of');
+    made[0].message({ type: 'status', ok: true, device: 'Wheel' });
+    made[0].drop();
+    assert.equal(c.status.connection, 'replaced', 'a late status or close from it changes nothing');
+    tick(7000);
+    assert.equal(made.length, 1, 'no new attempt while replaced');
+    tick(7016, { ...on, ffbEnabled: false });
+    assert.equal(c.status.connection, 'off');
+    tick(7032);
+    assert.equal(made.length, 2);
+    assert.equal(c.status.connection, 'connecting');
+    made[1].drop();
+    assert.equal(c.status.connection, 'unreachable');
+    tick(13000);
+    assert.equal(made.length, 3, 'retried after 5 s');
+    assert.equal(c.status.connection, 'unreachable', 'the retry keeps the how-to-start help on screen');
+    made[2].open();
+    assert.equal(c.status.connection, 'connected');
+    c.dispose();
+    assert.equal(c.status.connection, 'off');
+  } finally {
+    g.WebSocket = prevWs;
+  }
+});
+
+/** Manual clock and timers for the WebHID driver and its writer */
+function manualClock() {
+  let t = 1000;
+  let timers: { fn: () => void; at: number }[] = [];
+  const deps: FfbDeps = {
+    now: () => t,
+    setTimer: (fn, ms) => {
+      const h = { fn, at: t + ms };
+      timers.push(h);
+      return h;
+    },
+    clearTimer: (h) => {
+      timers = timers.filter((x) => x !== h);
+    },
+    sleep: async () => {},
+  };
+  return {
+    deps,
+    advance(ms: number) {
+      t += ms;
+      const due = timers.filter((x) => x.at <= t);
+      timers = timers.filter((x) => x.at > t);
+      for (const d of due) d.fn();
+    },
+  };
+}
+const flush = () => new Promise<void>((resolve) => setImmediate(resolve));
+const settle = async () => {
+  for (let i = 0; i < 30; i++) await flush();
+};
+
+/** A Logitech G29's HID interface (lg4ff's 7-byte output report), its writes logged */
+class FakeG29 implements HidDeviceLike {
+  opened = false;
+  vendorId = 0x046d;
+  productId = 0xc24f;
+  productName = 'G29';
+  collections: readonly HidCollectionLike[] = [
+    {
+      usagePage: 0x01,
+      usage: 0x04,
+      outputReports: [
+        {
+          reportId: 0,
+          items: [{ usages: [(0xff00 << 16) | 1], reportSize: 8, reportCount: 7, logicalMinimum: 0, logicalMaximum: 255, isArray: false, isConstant: false }],
+        },
+      ],
+    },
+  ];
+  log: number[][] = [];
+  failSends = false;
+  async open() {
+    this.opened = true;
+  }
+  async close() {
+    this.opened = false;
+  }
+  async sendReport(_id: number, data: Uint8Array) {
+    this.log.push([...data]);
+    if (this.failSends) throw new Error('device vanished');
+  }
+  async sendFeatureReport() {}
+  async receiveFeatureReport(): Promise<DataView> {
+    throw new Error('no feature reports');
+  }
+}
+
+function fakeHidApi(picked: HidDeviceLike[], granted: HidDeviceLike[] = []) {
+  let connectListeners = 0;
+  const api: HidApiLike = {
+    requestDevice: async () => picked,
+    getDevices: async () => granted,
+    addEventListener: (t) => {
+      if (t === 'connect') connectListeners++;
+    },
+    removeEventListener: (t) => {
+      if (t === 'connect') connectListeners--;
+    },
+  };
+  return { api, connectListeners: () => connectListeners };
+}
+
 async function asyncChecks() {
   // Page load with WebHID saved on and no wheel granted: no prompt, no sink, the bridge keeps the force
   let prompted = 0;
@@ -700,6 +947,132 @@ async function asyncChecks() {
     unlink();
     passed++;
     console.log('  ok  WebHID hardware damper: on while driving, rising with speed, off out of the car, software damper backs off');
+  }
+
+  // The watchdog zeroes the meter the shell polls along with the force
+  {
+    const c = new WheelFfbClient();
+    c.hidSink = () => {};
+    c.update({ speedKmh: 50, ffbTorqueNorm: 0.6 } as never, wheel, [], 1000, true);
+    assert.ok(c.meter.force > 0);
+    await new Promise((r) => setTimeout(r, HID_WATCHDOG_MS + 40));
+    assert.equal(c.meter.force, 0, 'meter force zeroed with the wheel');
+    assert.equal(c.meter.clipping, false);
+    c.stop();
+    passed++;
+    console.log('  ok  WebHID watchdog: the polled meter reads zero once it has let go of the wheel');
+  }
+
+  // ForceWriter: an urgent value dropped as already held takes its urgency with it
+  {
+    const clock = manualClock();
+    const sent: number[] = [];
+    let finish: () => void = () => {};
+    const w = new ForceWriter(
+      { bitOffset: 0, bitSize: 8, min: 0, max: 255, signed: false },
+      (raw) => {
+        sent.push(raw);
+        return new Promise<void>((resolve) => (finish = resolve));
+      },
+      clock.deps
+    );
+    w.setForce(0.5); // out at once, held in flight
+    assert.equal(sent.length, 1);
+    w.setForce(0, true); // an urgent zero queued behind it
+    w.setForce(0.5); // the wheel already holds 0.5: the queued zero is dropped
+    finish();
+    await flush();
+    assert.equal(sent.length, 1, 'nothing left queued');
+    w.setForce(0.8);
+    assert.equal(sent.length, 1, 'an ordinary value right after a write waits out the 2 ms spacing');
+    clock.advance(2);
+    await flush();
+    assert.equal(sent.length, 2);
+    w.kill();
+    passed++;
+    console.log('  ok  ForceWriter: a dropped urgent value leaves no urgency behind for the next ordinary one');
+  }
+
+  // A fatal write failure lets go of the session: torn down at once, and every later call sees no session
+  {
+    const clock = manualClock();
+    const g29 = new FakeG29();
+    const hid = fakeHidApi([g29], [g29]);
+    const ffb = new WebHidFfb(hid.api, clock.deps);
+    assert.equal(await ffb.connect(), 'G29');
+    g29.failSends = true;
+    const failedAt = g29.log.length;
+    for (let i = 0; i < 3; i++) {
+      clock.advance(10);
+      ffb.setForce(i % 2 === 0 ? 0.6 : -0.6);
+      await flush();
+      await flush();
+    }
+    assert.equal(ffb.status.state, 'error');
+    await settle();
+    assert.ok(g29.log.slice(failedAt).some((r) => r[0] === 0x13), 'teardown tried force off after the failure');
+    assert.ok(g29.log.slice(failedAt).some((r) => r[0] === 0x14), 'and the centring spring back on');
+    assert.equal(g29.opened, false, 'device closed');
+    assert.equal(ffb.status.state, 'error', 'the reason stays on screen');
+    // A cancelled picker no longer reports the dead wheel as connected
+    hid.api.requestDevice = async () => [];
+    assert.equal(await ffb.connect(), null);
+    // The wheel works again: reconnect() sets it up afresh rather than answering with the old session
+    g29.failSends = false;
+    const before = g29.log.length;
+    assert.equal(await ffb.reconnect(), 'G29');
+    assert.equal(ffb.status.state, 'ready');
+    assert.equal(g29.opened, true);
+    assert.ok(g29.log.slice(before).some((r) => r[0] === 0xf5), 'set up again (spring off)');
+    await ffb.dispose();
+    passed++;
+    console.log('  ok  WebHID fatal write failure: session torn down at once, error kept, reconnect sets the wheel up again');
+  }
+
+  // connect(): only a chosen wheel arms the re-open on hotplug; a dispose() while the picker is open wins
+  {
+    const g29 = new FakeG29();
+    const cancelled = fakeHidApi([]);
+    const a = new WebHidFfb(cancelled.api, manualClock().deps);
+    assert.equal(await a.connect(), null);
+    assert.equal(cancelled.connectListeners(), 0, 'a cancelled picker arms nothing');
+    const picked = fakeHidApi([g29]);
+    const b = new WebHidFfb(picked.api, manualClock().deps);
+    assert.equal(await b.connect(), 'G29');
+    assert.equal(picked.connectListeners(), 1, 'a chosen wheel is re-opened when it comes back');
+    await b.dispose();
+    assert.equal(picked.connectListeners(), 0);
+    // The picker still open when the driver is switched off: the pick is let go of and nothing is armed
+    const slow = fakeHidApi([]);
+    let choose: (d: HidDeviceLike[]) => void = () => {};
+    slow.api.requestDevice = () => new Promise((resolve) => (choose = resolve));
+    const c = new WebHidFfb(slow.api, manualClock().deps);
+    const connecting = c.connect();
+    const disposing = c.dispose();
+    choose([new FakeG29()]);
+    await connecting;
+    await disposing;
+    assert.equal(slow.connectListeners(), 0, 'not re-armed after dispose');
+    assert.equal(c.status.state, 'idle');
+    passed++;
+    console.log('  ok  WebHID connect(): hotplug armed only by a chosen wheel, never after a dispose');
+  }
+
+  // A second Connect whose picker fails (one is already open, no user gesture) keeps the running wheel
+  {
+    const g29 = new FakeG29();
+    const hid = fakeHidApi([g29]);
+    const ffb = new WebHidFfb(hid.api, manualClock().deps);
+    assert.equal(await ffb.connect(), 'G29');
+    hid.api.requestDevice = async () => {
+      throw new Error('A chooser is already open');
+    };
+    assert.equal(await ffb.connect(), 'G29');
+    assert.equal(ffb.status.state, 'ready');
+    assert.equal(g29.opened, true);
+    await ffb.dispose();
+    passed++;
+    console.log('  ok  WebHID connect(): a failing picker keeps a wheel that is already running');
   }
   console.log(`\n${passed} checks passed`);
 }

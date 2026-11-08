@@ -13,7 +13,15 @@
  * synthesised on that clock rather than at the frame rate.
  */
 import type { CarTelemetry } from "@/types/f1";
-import { CAR_WHEEL_LOCK_DEG, carWheelLockDeg, findPad, type PadLike, wheelRimAngleDeg, type WheelSettings } from "./device-input";
+import {
+  CAR_WHEEL_LOCK_DEG,
+  carWheelLockDeg,
+  DEFAULT_WHEEL_SETTINGS,
+  findPad,
+  type PadLike,
+  wheelRimAngleDeg,
+  type WheelSettings,
+} from "./device-input";
 import { CRASH_G } from "@/lib/sim/handling-cues";
 import { revRangeFor } from "@/lib/sim/rev-range";
 import { axleSlipFromTelemetry, createAxleSlipSample } from "@/lib/sim/tyre-slip";
@@ -187,9 +195,11 @@ export class WheelFfbClient {
   private hidPushMs = 0;
   /** WebHID direction test in progress: it owns the force until it ends */
   private hidTest: { timer: ReturnType<typeof setInterval> } | null = null;
+  /** `hidFfb` as the last update() saw it (the default until the first): with {@link hidSink}, decides the route */
+  private hidFfbOn = DEFAULT_WHEEL_SETTINGS.hidFfb;
 
+  /** The open (or opening) bridge socket; null while off, unreachable between retries, and once replaced */
   private ws: WebSocket | null = null;
-  private replaced = false;
   private lastAttemptMs = -Infinity;
   private listeners = new Set<() => void>();
   status: FfbStatus = { connection: "off", device: null, error: null };
@@ -208,7 +218,8 @@ export class WheelFfbClient {
     driving: boolean,
     vehicle?: string
   ): void {
-    const useHid = wheelSettings.hidFfb && this.hidSink !== null;
+    this.hidFfbOn = wheelSettings.hidFfb;
+    const useHid = this.usesHid();
     // The bridge also carries telemetry out; with WebHID force feedback it is only needed for that
     this.keepConnection((wheelSettings.ffbEnabled && !useHid) || wheelSettings.telemetryOut, nowMs);
     const wheel: WheelSettings = { ...wheelSettings, ...ffbStrengthFor(wheelSettings, vehicle) };
@@ -332,12 +343,7 @@ export class WheelFfbClient {
       }
     } else {
       if (hwDamper) activeHid.setDamper(0);
-      this.downforceComp.reset();
-      this.collisionGuard.reset();
-      this.lastWallImpactAtMs = undefined;
-      this.shiftCue.reset();
-      this.lastRimDeg = null;
-      this.filtered = 0;
+      this.resetDriving();
     }
     this.force = force;
     this.meter = {
@@ -404,7 +410,7 @@ export class WheelFfbClient {
     if (now - this.hidPushMs > HID_WATCHDOG_MS) {
       // Frame updates stopped (hidden tab, stalled loop): let go of the wheel
       this.hidStopPlayer();
-      this.force = 0;
+      this.zeroOutput();
       this.hidSink?.(0);
       return;
     }
@@ -446,16 +452,32 @@ export class WheelFfbClient {
     this.hidActiveDriving = false;
   }
 
-  /** Zero the wheel now (pause menu opened, hidden tab, blurred window) instead of waiting for the next frame */
-  stop(): void {
-    this.cancelHidTest();
-    this.hidStopPlayer();
+  /**
+   * Forgets the driving state the force is worked out from, out of the car and on {@link stop} alike: the next
+   * driving frame starts over (no rim speed against an angle from before, no filter or guard carried over)
+   */
+  private resetDriving(): void {
     this.downforceComp.reset();
     this.collisionGuard.reset();
     this.lastWallImpactAtMs = undefined;
     this.shiftCue.reset();
+    this.lastRimDeg = null;
+    this.filtered = 0;
     this.hidShift = 0;
+  }
+
+  /** The force is zero outside update() (stop, the watchdog): the meter the shell polls says so too */
+  private zeroOutput(): void {
     this.force = 0;
+    if (this.meter.force !== 0 || this.meter.clipping) this.meter = { ...this.meter, force: 0, clipping: false };
+  }
+
+  /** Zero the wheel now (pause menu opened, hidden tab, blurred window) instead of waiting for the next frame */
+  stop(): void {
+    this.cancelHidTest();
+    this.hidStopPlayer();
+    this.resetDriving();
+    this.zeroOutput();
     this.hidSink?.(0);
     // Straight to the wheel, past the writer's 2 ms spacing and any older queued value
     this.hidDriver?.stop();
@@ -504,21 +526,28 @@ export class WheelFfbClient {
    * Through the WebHID wheel while it is the force output, otherwise the bridge's; false when neither is connected.
    */
   test(invert: boolean): boolean {
-    if (!this.hidSink) return this.send({ t: "test", inv: invert });
+    const sink = this.usesHid() ? this.hidSink : null;
+    if (!sink) return this.send({ t: "test", inv: invert });
     this.cancelHidTest();
     this.hidStopPlayer();
     const start = Date.now();
     const timer = setInterval(() => {
       const tS = (Date.now() - start) / 1000;
-      if (tS >= DIRECTION_TEST_S || !this.hidSink) {
+      // Ends early once the WebHID wheel is no longer the force output (driver gone, or WebHID FFB switched off)
+      if (tS >= DIRECTION_TEST_S || !this.usesHid() || !this.hidSink) {
         this.cancelHidTest();
         return;
       }
       this.hidSink(directionTestForce(tS, invert));
     }, TEST_STEP_MS);
     this.hidTest = { timer };
-    this.hidSink(directionTestForce(0, invert));
+    sink(directionTestForce(0, invert));
     return true;
+  }
+
+  /** The route update() and test() share: the WebHID wheel while WebHID FFB is on and its driver is ready */
+  private usesHid(): boolean {
+    return this.hidFfbOn && this.hidSink !== null;
   }
 
   private cancelHidTest(): void {
@@ -554,6 +583,17 @@ export class WheelFfbClient {
     for (const l of this.listeners) l();
   }
 
+  /**
+   * The bridge connection, as one state (`status.connection`) with `ws` the socket of the attempt in progress:
+   * - off → connecting: the first attempt once FFB (or telemetry out) is on
+   * - connecting / connected → unreachable: the socket closed (or never opened); a retry every {@link RECONNECT_MS}
+   *   stays "unreachable", so the setup screen keeps its how-to-start help instead of flashing, until a socket opens
+   * - connecting / unreachable → connected: a socket opened (then the bridge's status messages fill in the wheel)
+   * - any → replaced: another tab took the bridge; this socket is let go of at once, so nothing it still delivers (a
+   *   late status, its close) changes the state, and no attempt is made until FFB is switched off and on again
+   * - any → off: switched off
+   * Events of a socket that is no longer `ws` are ignored.
+   */
   private keepConnection(on: boolean, nowMs: number) {
     if (!on) {
       if (this.ws) {
@@ -562,11 +602,12 @@ export class WheelFfbClient {
         ws.close();
       }
       this.lastAttemptMs = -Infinity;
-      this.replaced = false;
       this.setStatus({ connection: "off", device: null, error: null });
       return;
     }
-    if (this.replaced || this.ws || typeof WebSocket === "undefined" || nowMs - this.lastAttemptMs < RECONNECT_MS) return;
+    if (this.status.connection === "replaced" || this.ws || typeof WebSocket === "undefined" || nowMs - this.lastAttemptMs < RECONNECT_MS) {
+      return;
+    }
     this.lastAttemptMs = nowMs;
     // Each failed attempt logs a connection error in the console; hence the slow retry, and only while FFB is on
     const ws = new WebSocket(BRIDGE_URL);
@@ -580,7 +621,8 @@ export class WheelFfbClient {
       try {
         const m = JSON.parse(e.data) as { type?: string; ok?: boolean; device?: string | null; error?: string | null };
         if (m.type === "replaced") {
-          this.replaced = true;
+          this.ws = null;
+          ws.close();
           this.setStatus({ connection: "replaced", device: null, error: null });
         } else if (m.type === "status") {
           this.setStatus({ connection: "connected", device: m.device ?? null, error: m.ok ? null : (m.error ?? "Wheel not ready") });
@@ -592,7 +634,7 @@ export class WheelFfbClient {
     ws.onclose = () => {
       if (this.ws !== ws) return;
       this.ws = null;
-      if (!this.replaced) this.setStatus({ connection: "unreachable", device: null, error: null });
+      this.setStatus({ connection: "unreachable", device: null, error: null });
     };
   }
 }

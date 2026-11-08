@@ -655,8 +655,15 @@ export function loadPlayerSettings(): PlayerSettings {
       settings = parsePlayerSettings(json);
       if (!polarityV2 && settings.wheel.ffbInvert) {
         settings = { ...settings, wheel: { ...settings.wheel, ffbInvert: false } };
+        // The reset is stored before the flag that says it was done (just the field, the rest of the save as it
+        // was): a load that no save follows must not stamp the flag over a save that still says true
+        if (isObj(json) && isObj(json.wheel)) {
+          json.wheel.ffbInvert = false;
+          localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(json));
+        }
       }
     }
+    // Only after the migrated settings are stored (a failed write above skips it); nothing to migrate otherwise
     if (!polarityV2) localStorage.setItem(FFB_POLARITY_V2_KEY, "1");
   } catch {
     // Storage unavailable or corrupt JSON: defaults
