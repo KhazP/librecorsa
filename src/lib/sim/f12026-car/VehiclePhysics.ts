@@ -101,6 +101,7 @@ import {
   suspensionSupportsHeave,
   type TyresCompoundData,
   type TyresPressureData,
+  turboSteadyBoost,
   type WingData,
   type ZoneData_DRSZone,
 } from './F12026CarConfig';
@@ -153,8 +154,6 @@ const LOW_SPEED_FADE_MS = 4;
 const ROAD_CONDUCTANCE = 30;
 /** Steering-column torque that maps to full FFB output (front-axle aligning moment incl. caster trail, Nm) */
 const FFB_REFERENCE_NM = 600;
-/** Torque share missing at full turbo lag (boost far below its target) */
-const TURBO_LAG_TORQUE_LOSS = 0.1;
 /** Outer-step FFB samples kept per frame for the 500 Hz bridge (≈ one 60 Hz frame; the newest are kept) */
 const FFB_SUBFRAME_MAX = 8;
 /** Caster (mechanical) trail when the chassis data has none: keeps the wheel weighted once the pneumatic trail collapses */
@@ -703,11 +702,15 @@ export class VehiclePhysics {
   /** Driver EBB offset in steps (+ = forward), on top of the performance mode's */
   public ebbUser = 0;
   public compound: PhysicsTyreCompound;
-  /** Live turbo boost pressure (bar absolute, 1.0 = atmospheric) with spool lag, and the boost asked for */
+  /** Live turbo boost pressure for the gauge and the sound (bar absolute, 1.0 = atmospheric; `TurboData.displayMaxBoostBar`) */
   public turboBoostBar = 1.0;
-  private turboTargetBar = 1.0;
-  /** Turbocharged engine: the boost's spool lag costs a little torque (set by the adapter from its profile) */
-  public turbocharged = false;
+  /** Boost the turbo has spooled to (`TurboData` units: torque ∝ 1 + boost) */
+  private turboBoost = 0;
+  /**
+   * The turbo's spool lag shapes the ICE torque: on by default when the engine has `turbo` data; the adapter sets it
+   * from its car profile
+   */
+  public turbocharged: boolean;
   /** Disc / pad material of the brakes (`BrakesData.discMaterial`) */
   private readonly brakeCompound: BrakeCompoundKind;
   /** Dynamic brake bias after pressure-sensitive brake migration */
@@ -1061,6 +1064,7 @@ export class VehiclePhysics {
     this.computeStaticGeometry();
 
     this.engineOmega = cfg.engine.idleRpm * RPM2RADS;
+    this.turbocharged = cfg.engine.turbo !== undefined;
     this.ersEnergyJ = cfg.ers.ERS_MAX_CHARGE;
     this.dynamicBrakeBias = this.brakeBias;
     this.telemetry = this.createTelemetry();
@@ -1196,6 +1200,7 @@ export class VehiclePhysics {
     this.limiterTimer = 0;
     this.engineOmega = this.config.engine.idleRpm * RPM2RADS;
     this.turboBoostBar = 1.0;
+    this.turboBoost = 0;
     this.drsOpen = false;
     this.drsBlend = 0;
     this.drsRequested = false;
@@ -1275,6 +1280,9 @@ export class VehiclePhysics {
         w.slipRatio = 0;
         w.tanSlipAngle = 0;
       }
+      // A rolling start is a car already driving: its turbo spooled for the road rpm, as on the throttle
+      const turbo = this.config.engine.turbo;
+      this.turboBoost = turbo ? turboSteadyBoost(turbo, this.rpm) : 0;
     }
     this.prevVelocity.copy(this.velocity);
     this.ffbSubframeSamples.length = 0;
@@ -1354,7 +1362,7 @@ export class VehiclePhysics {
     this.aeroDragN = 0;
     this.rideFront = 0;
     this.rideRear = 0;
-    this.turboTargetBar = 1;
+    this.turboBoost = 0;
     this.ffbSum = 0;
     this.ffbSamples = 0;
     this.telemetry.ffbTorqueNorm = 0;
@@ -1752,10 +1760,16 @@ export class VehiclePhysics {
     this.sinceUpshiftS += dt;
     this.sinceDownshiftS += dt;
     this.limiterTimer = Math.max(0, this.limiterTimer - dt);
-    const targetBoost = 1 + 2.5 * inp.throttle * THREE.MathUtils.clamp((this.rpm - 6000) / 4000, 0, 1);
-    const tauTurbo = targetBoost > this.turboBoostBar ? 0.14 : 0.05;
-    this.turboBoostBar += (targetBoost - this.turboBoostBar) * Math.min(1, dt / tauTurbo);
-    this.turboTargetBar = targetBoost;
+    // Turbo: spools toward the boost the cylinders' air asks for, faster the more exhaust there is; runs down slowly
+    const turbo = this.config.engine.turbo;
+    if (turbo && this.turbocharged) {
+      const target = turboSteadyBoost(turbo, this.rpm) * this.icePlate;
+      const tau = target > this.turboBoost ? (turbo.spoolUpS * turbo.spoolRefRpm) / Math.max(this.rpm, this.config.engine.idleRpm) : turbo.spoolDownS;
+      this.turboBoost += (target - this.turboBoost) * Math.min(1, dt / tau);
+      this.turboBoostBar = 1 + (turbo.displayMaxBoostBar * this.turboBoost) / turbo.maxBoost;
+    } else {
+      this.turboBoostBar = 1;
+    }
     this.updateThermal(dt);
     this.updateOutputs(dt);
     // Keep the newest samples: a long frame drops its oldest, not its latest, torque
@@ -2345,17 +2359,21 @@ export class VehiclePhysics {
     plate = Math.max(this.icePlate, THREE.MathUtils.clamp((eng.idleRpm + 200 - rpm) / 800, 0, 0.15));
     if (this.limiterTimer > 0) plate = 0;
     const sparkShare = inp.ignitionCut ?? 1;
-    let tIce =
-      (plate * sparkShare * this.luts.power.evaluate(rpm) * engineMapTorqueScale * 1000) / omegaE -
-      (1 - plate) * this.luts.coast.evaluate(rpm) * mode.coastTorqueScale * this.engineBrakingScale;
-    if (this.shiftTimer > 0 && tIce > 0) tIce *= gb.shiftTorqueFraction;
-    if (tIce > 0) tIce *= this.damagePowerMult;
-    // Turbo lag: while the boost still trails the demand (≈0.14 s spool), up to TURBO_LAG_TORQUE_LOSS of the torque
-    // is missing. Kept small: the torque curve is the steady-state, full-boost one
-    if (this.turbocharged && tIce > 0) {
-      const spoolDeficit = THREE.MathUtils.clamp((this.turboTargetBar - this.turboBoostBar) / 2.5, 0, 1);
-      tIce *= 1 - TURBO_LAG_TORQUE_LOSS * spoolDeficit;
+    // Turbo lag: the curve is the torque with the boost this plate makes in steady state; while the rotor trails it the
+    // torque is (1 + boost made) / (1 + boost asked for) of that, as torque ∝ 1 + boost. A rotor still spinning faster
+    // than the demand gives no more than the demand (the wastegate and the throttle hold the plenum to it)
+    const turbo = eng.turbo;
+    const boostShare =
+      turbo && this.turbocharged ? Math.min(1, (1 + this.turboBoost) / (1 + turboSteadyBoost(turbo, rpm) * plate)) : 1;
+    const tCombustion = (plate * sparkShare * this.luts.power.evaluate(rpm) * engineMapTorqueScale * 1000) / omegaE;
+    let tIce = tCombustion * boostShare - (1 - plate) * this.luts.coast.evaluate(rpm) * mode.coastTorqueScale * this.engineBrakingScale;
+    // Crank torque the lag costs, which the MGU-K may fill below
+    let turboDeficit = tCombustion * (1 - boostShare);
+    if (this.shiftTimer > 0 && tIce > 0) {
+      tIce *= gb.shiftTorqueFraction;
+      turboDeficit *= gb.shiftTorqueFraction;
     }
+    if (tIce > 0) tIce *= this.damagePowerMult;
 
     // ---- clutch engagement
     const axleOmega = 0.5 * (W[2].omega + W[3].omega);
@@ -2375,6 +2393,8 @@ export class VehiclePhysics {
     const speedKmh = this.velocity.length() * 3.6;
     const topGear = this.gear === gb.ratios.length;
     let pK = 0;
+    /** The ECU may deploy now: the MGU-K then also fills the torque the turbo lag costs */
+    let deployAllowed = false;
     const coupled = engage > 0.9 && this.gear > 0;
     if (coupled) {
       if (inp.brake > 0.05) {
@@ -2386,6 +2406,7 @@ export class VehiclePhysics {
       } else if (inp.throttle > 0.05 && inp.throttle < 0.9 && mode.partThrottleHarvestW > 0) {
         pK = -mode.partThrottleHarvestW;
       } else if (inp.throttle > 0.05 && soc > mode.socFloor && this.lapDeployJ < ers.deployPerLapJ + this.extraDeployJ) {
+        deployAllowed = mode.deployFraction > 0;
         pK =
           ers.ERS_MAX_DEPLOY *
           mode.deployFraction *
@@ -2423,6 +2444,12 @@ export class VehiclePhysics {
         cap = Math.min(cap, Math.max(0, rearDemand / (Math.abs(ratio) * gb.efficiency) - Math.max(0, -tIce)));
       }
       tK = -Math.min(-pK / omegaE, cap);
+    }
+    // Torque fill: with no MGU-H to spin the turbo, the MGU-K makes up the torque its lag costs, within the motor's torque
+    // curve and the gear's power clip, from the same store and lap allowance as the deploy
+    if (deployAllowed && turboDeficit > 0) {
+      const fillCap = Math.min(this.luts.mgukDeploy.evaluate(rpm), (ers.ERS_MAX_DEPLOY * this.luts.deployVsGear.evaluate(this.gear)) / omegaE);
+      tK = Math.max(tK, Math.min(fillCap * sparkShare, tK + turboDeficit));
     }
     if (this.limiterTimer > 0 && tK > 0) tK = 0;
     this.mgukTorque = tK;

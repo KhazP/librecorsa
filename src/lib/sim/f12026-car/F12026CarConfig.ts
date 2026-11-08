@@ -102,11 +102,36 @@ export interface EngineData {
    * at run time. Absent: the torque follows the pedal at once
    */
   torqueResponseS?: { rise: number; fall: number };
+  /** Turbocharger; absent: naturally aspirated */
+  turbo?: TurboData;
   idleRpm: number;
   /** Crank + flywheel + MGU-K/H rotor inertia reflected to the crank (kg·m²) */
   inertia: number;
   /** Ignition cut held after the limiter trips (s) */
   limiterCutS: number;
+}
+
+/**
+ * Exhaust-driven turbocharger. The power curve is the steady state with the boost made; this is the boost the torque waits
+ * for. Torque ∝ 1 + boost (an AC-style turbo), and the full-load boost at `rpm` is maxBoost·(rpm / referenceRpm)^gamma,
+ * capped at maxBoost (`turboSteadyBoost`). The rotor spools toward the boost the throttle asks for with a time constant
+ * spoolUpS·spoolRefRpm / rpm (the turbine's surplus power grows with the exhaust flow, ∝ rpm), and runs down with
+ * spoolDownS once the exhaust stops pushing (rotor inertia against the compressor's work)
+ */
+export interface TurboData {
+  maxBoost: number;
+  referenceRpm: number;
+  gamma: number;
+  spoolUpS: number;
+  spoolRefRpm: number;
+  spoolDownS: number;
+  /** Gauge pressure shown at full boost (bar), for the HUD and the sound */
+  displayMaxBoostBar: number;
+}
+
+/** Full-load steady-state boost of `turbo` at `rpm` */
+export function turboSteadyBoost(turbo: TurboData, rpm: number): number {
+  return Math.min(turbo.maxBoost, turbo.maxBoost * Math.max(0, rpm / turbo.referenceRpm) ** turbo.gamma);
 }
 
 export interface ERSData {
@@ -713,8 +738,23 @@ const REF_WHEEL_TORQUE: [number, number][] = [
   [13050, 125.964],
 ];
 
-/** Turbo boost on the curve: MAX_BOOST 1.12 (torque × 2.12), reached at REFERENCE_RPM 3700 with GAMMA 1.5 [ref_engine.ini] */
-const refBoost = (rpm: number) => Math.min(1.12, 1.12 * (rpm / 3700) ** 1.5);
+/**
+ * Turbo boost on the curve: MAX_BOOST 1.12 (torque × 2.12), reached at REFERENCE_RPM 3700 with GAMMA 1.5 [ref_engine.ini].
+ * One large turbo and no MGU-H, so only the exhaust spins it: a race-size rotor (≈ 2e-4 kg·m² at ≈ 12 000 rad/s, ≈ 15 kJ)
+ * on ≈ 50–70 kW of turbine surplus at 10 000 rpm full load spools in ≈ 0.25 s, slower as the exhaust thins with rpm;
+ * with the throttle shut it runs down over ≈ 1.5 s against the compressor's recirculation work [est]. The MGU-K fills
+ * the torque the lag costs (VehiclePhysics.solveDrivetrain). The gauge reads 2.5 bar at full boost, as before [display]
+ */
+const F12026_TURBO: TurboData = {
+  maxBoost: 1.12,
+  referenceRpm: 3700,
+  gamma: 1.5,
+  spoolUpS: 0.25,
+  spoolRefRpm: 10_000,
+  spoolDownS: 1.5,
+  displayMaxBoostBar: 2.5,
+};
+const refBoost = (rpm: number) => turboSteadyBoost(F12026_TURBO, rpm);
 
 /**
  * ICE crank power (kW): ≈389 kW at 9570 rpm, ≈361 kW of it at the wheels [derived]. The 0 rpm row is left out: as
@@ -744,6 +784,7 @@ const F12026_ENGINE: EngineData = {
   // revolution that is 90 % of a torque step in ≈ 85 ms at 9000 rpm. Closing 20 ms: the overrun fuel cut takes the torque
   // off before the plenum empties [est]
   torqueResponseS: { rise: 0.03, fall: 0.02 },
+  turbo: F12026_TURBO,
   // MINIMUM / INERTIA [ref_engine.ini]
   idleRpm: 3700,
   inertia: 0.0729,
