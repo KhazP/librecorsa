@@ -24,6 +24,7 @@ import { TuningSlider } from "@/components/menu/steps/TuningSlider";
 import { keyLabel } from "@/lib/input/bindings";
 import type { SteeringDevice } from "@/lib/sim/steering-assist";
 import { FACTORY_LIVERY_NOTE, carTakesLivery, type CarId } from "@/lib/cars/car-registry";
+import { vehicleModelSpec } from "@/lib/cars/vehicle-models";
 import {
   COCKPIT_FOV_MAX_DEG,
   COCKPIT_FOV_MIN_DEG,
@@ -937,6 +938,11 @@ export const SetupPanel: React.FC<PauseMenuProps> = (p) => {
           <div className="grid gap-3.5 sm:grid-cols-2">
             <div className="flex min-w-0 flex-col gap-2.5">
               <PanelSection>Tyres</PanelSection>
+              {vehicleModelSpec(p.vehicleModel).onlyTyre ? (
+                <div className="flex min-h-[46px] items-center rounded-full border border-[#262B3D] bg-[#08090D] px-4 text-[13px] font-bold text-[#C5CBD8]">
+                  {vehicleModelSpec(p.vehicleModel).onlyTyre}
+                </div>
+              ) : (
               <div className="flex rounded-full border border-[#262B3D] bg-[#08090D] p-1">
                 {COMPOUNDS.map((c) => {
                   const active = p.tireCompound === c.id;
@@ -963,6 +969,7 @@ export const SetupPanel: React.FC<PauseMenuProps> = (p) => {
                   );
                 })}
               </div>
+              )}
             </div>
             <div className="flex min-w-0 flex-col gap-2.5">
               <PanelSection>Traction &amp; ABS</PanelSection>

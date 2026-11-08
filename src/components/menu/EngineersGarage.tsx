@@ -20,6 +20,7 @@ import { LIVERIES } from "@/lib/track-data";
 const TIRE_COMPOUNDS: readonly TireCompound[] = ["soft", "medium", "hard", "intermediate", "wet"];
 const AERO_PRESETS: readonly AeroSetupPreset[] = ["low_downforce", "balanced", "high_downforce"];
 import { CARS, FACTORY_LIVERY_NOTE, carById, carClassYear, carTakesLivery } from "@/lib/cars/car-registry";
+import { vehicleModelSpec } from "@/lib/cars/vehicle-models";
 
 const FALLBACK_TUNER: Pick<
   LiveTunerState,
@@ -284,6 +285,13 @@ export const EngineersGarage: React.FC<PauseMenuProps> = (p) => {
   const live = Boolean(group.extras?.includes("liveTyres"));
 
   const extra = (x: string) => {
+    const onlyTyre = vehicleModelSpec(car.physics).onlyTyre;
+    if (x === "compound" && onlyTyre)
+      return (
+        <div key={x} className="flex min-h-[46px] items-center rounded-full border border-[#262B3D] bg-[#08090D] px-4 text-[13px] font-bold text-[#C5CBD8]">
+          {onlyTyre}
+        </div>
+      );
     if (x === "compound")
       return (
         <GarageSegmented

@@ -40,6 +40,11 @@ export interface VehicleModel {
   gt3Cockpit: boolean;
   /** The plank throws sparks off the road at speed */
   floorSparks: boolean;
+  /**
+   * The one tyre this model runs in every compound slot (a road car's street tyre): the menus name it instead of
+   * offering slicks and rain tyres. Absent: the soft / medium / hard / intermediate / wet choice
+   */
+  onlyTyre?: string;
 }
 
 export const VEHICLE_MODELS: Readonly<Record<VehicleModelId, VehicleModel>> = {
@@ -92,6 +97,7 @@ export const VEHICLE_MODELS: Readonly<Record<VehicleModelId, VehicleModel>> = {
     // Its only body is the ported GLB, which brings its own cameras
     gt3Cockpit: false,
     floorSparks: false,
+    onlyTyre: "Street tyres",
   },
 };
 
