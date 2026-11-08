@@ -166,8 +166,22 @@ type RunResetReason = "session" | "restart" | "teleport" | "car" | "race" | "fla
 /** The VR headset: off, being asked for a session, or presenting */
 type VrState = "off" | "requesting" | "on";
 
-/** Key actions that act while held (the rest are one-shot toggles) */
-const HELD_KEY_ACTIONS: ReadonlySet<KeyAction> = new Set(["throttle", "brake", "steerLeft", "steerRight", "boostHold", "throttleHalf"]);
+/** Key actions that act while held, and the held-key flag each sets (the rest are one-shot actions) */
+const HELD_KEYS = {
+  throttle: "up",
+  brake: "down",
+  steerLeft: "left",
+  steerRight: "right",
+  throttleHalf: "half",
+  boostHold: "boostHold",
+} as const satisfies Partial<Record<KeyAction, string>>;
+type HeldKeyAction = keyof typeof HELD_KEYS;
+const isHeldKeyAction = (action: KeyAction): action is HeldKeyAction => Object.hasOwn(HELD_KEYS, action);
+/** Held keys that take the car back from the autopilot (holding boost does not) */
+const DRIVER_KEYS: ReadonlySet<HeldKeyAction> = new Set(["throttle", "brake", "steerLeft", "steerRight", "throttleHalf"]);
+
+/** One-shot driving actions: the same whether they come from a key, a pad button or a touch pad */
+type DriveAction = Exclude<KeyAction, HeldKeyAction> | "mfd" | "hud";
 
 /** Telemetry-out rate (Hz) */
 const TELEMETRY_OUT_HZ = 60;
@@ -479,7 +493,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   /** Lets go of every held driving key: on pause, and when the window loses focus (its keyups never arrive) */
   const releaseHeldKeys = useCallback(() => {
     const k = keysRef.current;
-    k.up = k.down = k.left = k.right = k.boostHold = k.half = false;
+    for (const flag of Object.values(HELD_KEYS)) k[flag] = false;
     kbInputRef.current.throttle = 0;
     kbInputRef.current.brake = 0;
     kbPedalAssistRef.current.reset();
@@ -1617,48 +1631,30 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       const action = keyLookupRef.current.get(code);
       if (!action) return;
       // Held controls ignore auto-repeat anyway; toggles must not flicker while a key is held
-      if (e.repeat && !HELD_KEY_ACTIONS.has(action)) return;
+      if (isHeldKeyAction(action)) {
+        keysRef.current[HELD_KEYS[action]] = true;
+        if (DRIVER_KEYS.has(action) && physics.aiAutopilot) physics.aiAutopilot = false;
+        return;
+      }
+      // Held controls ignore auto-repeat anyway; one-shot actions must not flicker while a key is held
+      if (e.repeat) return;
+      runAction(action);
+    };
+
+    /** Every one-shot driving action, from the keyboard, a pad or the touch pads */
+    const runAction = (action: DriveAction) => {
       switch (action) {
-        case "throttle":
-          keysRef.current.up = true;
-          if (physics.aiAutopilot) physics.aiAutopilot = false;
-          break;
-        case "brake":
-          keysRef.current.down = true;
-          if (physics.aiAutopilot) physics.aiAutopilot = false;
-          break;
-        case "steerLeft":
-          keysRef.current.left = true;
-          if (physics.aiAutopilot) physics.aiAutopilot = false;
-          break;
-        case "steerRight":
-          keysRef.current.right = true;
-          if (physics.aiAutopilot) physics.aiAutopilot = false;
-          break;
-        case "boostHold":
-          keysRef.current.boostHold = true;
-          break;
-        case "throttleHalf":
-          keysRef.current.half = true;
-          if (physics.aiAutopilot) physics.aiAutopilot = false;
-          break;
-        case "replay":
-          toggleReplayRef.current();
-          break;
-        case "boostLatch":
-          setLatch(!boostLatchRef.current);
-          break;
-        case "mouseSteer":
-          setMouseSteerRef.current(!mouseSteerEnabledRef.current);
-          break;
-        case "aero":
-          keysRef.current.toggleX = true;
-          break;
         case "shiftUp":
           keysRef.current.shiftUp = true;
           break;
         case "shiftDown":
           keysRef.current.shiftDown = true;
+          break;
+        case "aero":
+          keysRef.current.toggleX = true;
+          break;
+        case "boostLatch":
+          setLatch(!boostLatchRef.current);
           break;
         case "camera":
           cycleCamera();
@@ -1666,17 +1662,26 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         case "racingLine":
           handleToggleRacingLine();
           break;
+        case "restart":
+          restartRun();
+          break;
+        case "replay":
+          toggleReplayRef.current();
+          break;
+        case "mouseSteer":
+          setMouseSteerRef.current(!mouseSteerEnabledRef.current);
+          break;
         case "mute":
           handleToggleMute();
           break;
         case "autopilot":
           toggleAutopilot();
           break;
-        case "restart":
-          restartRun();
-          break;
+        // The HUD owns these panels
+        case "mfd":
         case "mfdPage":
-          window.dispatchEvent(new Event(HUD_TOGGLE_EVENT.mfdPage));
+        case "hud":
+          window.dispatchEvent(new Event(HUD_TOGGLE_EVENT[action]));
           break;
       }
     };
@@ -1698,12 +1703,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         return;
       }
       const action = keyLookupRef.current.get(e.code);
-      if (action === "throttle") keysRef.current.up = false;
-      else if (action === "brake") keysRef.current.down = false;
-      else if (action === "steerLeft") keysRef.current.left = false;
-      else if (action === "steerRight") keysRef.current.right = false;
-      else if (action === "boostHold") keysRef.current.boostHold = false;
-      else if (action === "throttleHalf") keysRef.current.half = false;
+      if (action && isHeldKeyAction(action)) keysRef.current[HELD_KEYS[action]] = false;
     };
 
     window.addEventListener("mousemove", onMouseMove);
@@ -2060,14 +2060,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
             continue;
           }
           if (!driving) continue;
-          if (action === "shiftUp") keysRef.current.shiftUp = true;
-          else if (action === "shiftDown") keysRef.current.shiftDown = true;
-          else if (action === "aero") keysRef.current.toggleX = true;
-          else if (action === "camera") cycleCamera();
-          else if (action === "racingLine") handleToggleRacingLine();
-          else if (action === "restart") restartRun();
-          // The HUD owns these panels: L3 folds the Live Tuner MFD, R3 clears the whole HUD off the screen
-          else if (action === "mfd" || action === "mfdPage" || action === "hud") window.dispatchEvent(new Event(HUD_TOGGLE_EVENT[action]));
+          // Boost acts while held (`boostHeld`); L3 folds the Live Tuner MFD, R3 clears the whole HUD off the screen
+          if (action !== "boost") runAction(action);
         }
       }
 
@@ -2117,10 +2111,10 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         touch !== null && ((gamepadStick === undefined && gamepadSteer === undefined) || Math.abs(touch.steer) > 0.01);
       if (touchInput.active) {
         if (driving) {
-          if (touchInput.shiftUp) keysRef.current.shiftUp = true;
-          if (touchInput.shiftDown) keysRef.current.shiftDown = true;
-          if (touchInput.aero) keysRef.current.toggleX = true;
-          if (touchInput.boost) setLatch(!boostLatchRef.current);
+          if (touchInput.shiftUp) runAction("shiftUp");
+          if (touchInput.shiftDown) runAction("shiftDown");
+          if (touchInput.aero) runAction("aero");
+          if (touchInput.boost) runAction("boostLatch");
         }
         touchInput.shiftUp = touchInput.shiftDown = touchInput.aero = touchInput.boost = false;
       }
