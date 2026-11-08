@@ -26,7 +26,6 @@ import {
 import { exportDriverKeyFile, importDriverKeyFile } from "@/lib/net/driver-key";
 import { isTouchDevice, resetTouchInput } from "@/lib/input/touch-input";
 import { isFatalHidStatus } from "@/lib/input/webhid-ffb";
-import { KeyboardPedalAssist } from "@/lib/input/keyboard-pedals";
 import { SIM_REALISM_FLAGS, type SimRealism } from "@/lib/sim/sim-realism";
 import type { SessionConditions } from "@/lib/sim/weather";
 import { getTrackInfo } from "@/lib/track-registry";
@@ -42,7 +41,7 @@ import { autoConfigureWheel, connectedPads } from "@/lib/input/device-input";
 import { webHidFfb, wheelFfb } from "@/lib/input/wheel-ffb";
 import { clampFov, codeFromName, DEFAULT_PLAYER_SETTINGS, loadCarChoice, loadOnboarded, loadPlayerSettings, loadRumble, pushLibraryRecent, saveCarChoice, saveOnboarded, toggleLibraryFavorite, type LibraryKind, sanitizeDriverName, savePlayerSettings, saveRumble, type PlayerSettings } from "@/lib/settings/player-settings";
 import type { AeroSetupPreset, AssistPreset, CameraMode, LiveTunerPatch, LiveryConfig, TireCompound, TyreSetup, VehicleModelId } from "@/types/f1";
-import { aiFieldOf, autoCompoundFor, DEFAULT_AERO_PRESET, DriveSession, HELD_KEYS, idleDriveSnapshot, mpRaceOf, type AppPhase, type RunResetReason, type SessionRace } from "@/lib/drive-session";
+import { aiFieldOf, autoCompoundFor, DEFAULT_AERO_PRESET, DriveSession, idleDriveSnapshot, mpRaceOf, type AppPhase, type RunResetReason, type SessionRace } from "@/lib/drive-session";
 
 const DEFAULT_ASSIST_PRESET: AssistPreset = DEFAULT_PLAYER_SETTINGS.assistPreset;
 /** A lap record's car: records are per vehicle model, named after its first car */
@@ -94,6 +93,9 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     p2pStatus,
     vr: vrState,
     muted,
+    paused,
+    pauseNotice,
+    boostLatch,
     tireCompound,
     tyreSetup,
     defaultTyreSetup,
@@ -102,17 +104,11 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
 
   const [aeroPreset, setAeroPreset] =
     useState<AeroSetupPreset>(DEFAULT_AERO_PRESET);
-  const [boostLatch, setBoostLatch] = useState(false);
   const [gamepadRumble, setGamepadRumble] = useState<boolean>(loadRumble);
   const rumbleEnabledRef = useRef(gamepadRumble);
   rumbleEnabledRef.current = gamepadRumble;
   /** Pad rumble driven from the physics; created with the physics and silenced on pause / unmount */
   const hapticsRef = useRef<GamepadHaptics | null>(null);
-  const [paused, setPaused] = useState(false);
-  /** Why the game paused itself (shown in the pause menu); cleared on resume */
-  const [pauseNotice, setPauseNotice] = useState<string | null>(null);
-  const pausedRef = useRef(false);
-  pausedRef.current = paused;
 
   const [phase, setPhaseState] = useState<AppPhase>("loading");
   const phaseRef = useRef<AppPhase>("loading");
@@ -198,52 +194,6 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   /** The next view in the camera cycle, from the key, the pad, the touch pads and the menus alike */
   const cycleCamera = useCallback(() => setSettings((prev) => ({ ...prev, camera: nextCameraMode(prev.camera ?? "chase") })), []);
 
-  const boostLatchRef = useRef<boolean>(false);
-  boostLatchRef.current = boostLatch;
-
-  const mouseSteerValueRef = useRef<number>(0);
-  const slashCommandBufferRef = useRef<string>("");
-
-  const keysRef = useRef<{
-    up: boolean;
-    down: boolean;
-    left: boolean;
-    right: boolean;
-    boostHold: boolean;
-    shiftUp: boolean;
-    shiftDown: boolean;
-    toggleX: boolean;
-    half: boolean;
-  }>({
-    up: false,
-    down: false,
-    left: false,
-    right: false,
-    boostHold: false,
-    shiftUp: false,
-    shiftDown: false,
-    toggleX: false,
-    half: false,
-  });
-  /** Ramped keyboard pedals 0..1 (the steering keys are shaped by the car's steering assist) */
-  const kbInputRef = useRef({ throttle: 0, brake: 0 });
-  /** Slip help on the keyboard's pedals while the car's ABS / traction control is off */
-  const kbPedalAssistRef = useRef(new KeyboardPedalAssist());
-  /** Lets go of every held driving key: on pause, and when the window loses focus (its keyups never arrive) */
-  const releaseHeldKeys = useCallback(() => {
-    const k = keysRef.current;
-    for (const flag of Object.values(HELD_KEYS)) k[flag] = false;
-    kbInputRef.current.throttle = 0;
-    kbInputRef.current.brake = 0;
-    kbPedalAssistRef.current.reset();
-  }, []);
-
-  /** The boost latch, for the frame loop (ref) and the HUD (state) at once */
-  const setLatch = useCallback((on: boolean) => {
-    boostLatchRef.current = on;
-    setBoostLatch(on);
-  }, []);
-
   // ---- Session and run: the one place that starts, restarts and leaves what is on track (the session resets the run)
   /** A new run re-opens the race results card (a flashback keeps it as it was) */
   const onRunReset = useCallback((reason: RunResetReason) => {
@@ -257,12 +207,10 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     setSubmitState("idle");
     setSubmitRank(null);
     setSubmitError(null);
-    setPauseNotice(null);
-    setLatch(false);
     setLaunchHint(false);
-    pausedRef.current = false;
-    setPaused(false);
-  }, [setLatch]);
+    session?.endPause();
+    session?.setBoostLatch(false);
+  }, [session]);
 
   /**
    * A session starts on track: practice, a race against the AI field, or a multiplayer race. The caller places the
@@ -393,13 +341,13 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   // The on-screen aero button sends the same input as the key, pad and touch button (the car toggles on it)
   const handleToggleXMode = useCallback(() => {
     session?.unlockAudio();
-    keysRef.current.toggleX = true;
+    session?.runAction("aero");
   }, [session]);
 
   const handleToggleBoostLatch = useCallback(() => {
     session?.unlockAudio();
-    setLatch(!boostLatchRef.current);
-  }, [session, setLatch]);
+    session?.runAction("boostLatch");
+  }, [session]);
 
   const handleChangeLiveTuner = useCallback((patch: LiveTunerPatch) => session?.setLiveTuner(patch), [session]);
 
@@ -477,20 +425,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   const handleAbortMpRace = useCallback(() => getMultiplayerManager().abortRace(), []);
 
   /** Esc / pad Menu: open or close the pause menu, releasing every held key */
-  const togglePause = useCallback(() => {
-    // From the ref the frame loop reads, with the side effects here rather than inside a state updater (which React
-    // may run twice, or later than this call)
-    const next = !pausedRef.current;
-    pausedRef.current = next;
-    setPaused(next);
-    if (!next) setPauseNotice(null);
-    if (next) {
-      wheelFfb.stop();
-      releaseHeldKeys();
-    }
-  }, [releaseHeldKeys]);
-  const togglePauseRef = useRef(togglePause);
-  togglePauseRef.current = togglePause;
+  const togglePause = useCallback(() => session?.togglePause(), [session]);
 
   const setRacingLineVisible = useCallback((visible: boolean) => setPreference("racingLine", visible), [setPreference]);
   const setGamepadAssistEnabled = useCallback((enabled: boolean) => setPreference("gamepadAssist", enabled), [setPreference]);
@@ -877,30 +812,19 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     if (!container) return;
     const session = new DriveSession(container, {
       autopilotPaceRef,
-      boostLatchRef,
       carIdRef,
       cycleCamera,
       getTrackEnv,
       ghostRef,
       handleToggleRacingLine,
       hapticsRef,
-      kbInputRef,
-      kbPedalAssistRef,
-      keysRef,
       lapRecorderRef,
-      mouseSteerValueRef,
       onLapCompletedRef,
-      pausedRef,
       phaseRef,
-      releaseHeldKeys,
       rumbleEnabledRef,
-      setLatch,
-      setPauseNotice,
       setSettings,
       setRaceKind,
       onRunReset,
-      slashCommandBufferRef,
-      togglePauseRef,
       track,
       trackId,
       vehicleModelRef,
@@ -911,7 +835,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       session.dispose();
       setSession(null);
     };
-  }, [track, getTrackEnv, handleToggleRacingLine, releaseHeldKeys, setLatch, onRunReset]);
+  }, [track, getTrackEnv, handleToggleRacingLine, onRunReset]);
 
   // Saved settings and the first-run flag are read after mount (the page is prerendered without storage); the
   // session takes the settings on through applySettings, whether it exists yet or not

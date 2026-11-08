@@ -103,7 +103,7 @@ export type RunResetReason = "session" | "restart" | "teleport" | "car" | "race"
 export type VrState = "off" | "requesting" | "on";
 
 /** Key actions that act while held, and the held-key flag each sets (the rest are one-shot actions) */
-export const HELD_KEYS = {
+const HELD_KEYS = {
   throttle: "up",
   brake: "down",
   steerLeft: "left",
@@ -117,7 +117,7 @@ const isHeldKeyAction = (action: KeyAction): action is HeldKeyAction => Object.h
 const DRIVER_KEYS: ReadonlySet<HeldKeyAction> = new Set(["throttle", "brake", "steerLeft", "steerRight", "throttleHalf"]);
 
 /** One-shot driving actions: the same whether they come from a key, a pad button or a touch pad */
-type DriveAction = Exclude<KeyAction, HeldKeyAction> | "mfd" | "hud";
+export type DriveAction = Exclude<KeyAction, HeldKeyAction> | "mfd" | "hud";
 
 /** Telemetry-out rate (Hz) */
 const TELEMETRY_OUT_HZ = 60;
@@ -162,6 +162,11 @@ export interface DriveSnapshot {
   vr: VrState;
   /** The car sounds are muted */
   muted: boolean;
+  /** The pause menu is open, and why the game paused itself (cleared on resume) */
+  paused: boolean;
+  pauseNotice: string | null;
+  /** The manual-override boost is latched on */
+  boostLatch: boolean;
   /** The car's setup as the garage shows it */
   tireCompound: TireCompound;
   tyreSetup: TyreSetup;
@@ -190,6 +195,9 @@ export function idleDriveSnapshot(track: BuiltTrackData): DriveSnapshot {
     },
     vr: "off",
     muted: false,
+    paused: false,
+    pauseNotice: null,
+    boostLatch: false,
     tireCompound: "soft",
     tyreSetup: car.getTyreSetup(),
     defaultTyreSetup: car.getTyreSetup(),
@@ -237,32 +245,21 @@ export interface ReplayUi {
 /** What the drive reads and writes on the component (refs, state setters and callbacks) */
 export interface DriveSessionHost {
   autopilotPaceRef: Cell<{ car: unknown; pace: number }>;
-  boostLatchRef: Cell<boolean>;
   carIdRef: Cell<CarId>;
   cycleCamera: () => void;
   getTrackEnv: () => TrackEnvironment;
   ghostRef: Cell<GhostPlayer | null>;
   handleToggleRacingLine: () => void;
   hapticsRef: Cell<GamepadHaptics | null>;
-  kbInputRef: Cell<{ throttle: number; brake: number }>;
-  kbPedalAssistRef: Cell<KeyboardPedalAssist>;
-  keysRef: Cell<DriveKeys>;
   lapRecorderRef: Cell<LapRecorder | null>;
-  mouseSteerValueRef: Cell<number>;
   onLapCompletedRef: Cell<(summary: LapSummaryData, recording: LapRecording) => void>;
-  pausedRef: Cell<boolean>;
   phaseRef: Cell<AppPhase>;
-  releaseHeldKeys: () => void;
   rumbleEnabledRef: Cell<boolean>;
-  setLatch: (on: boolean) => void;
-  setPauseNotice: SetState<string | null>;
   setSettings: SetState<PlayerSettings>;
   /** The session's kind changed (setRace), for the menus */
   setRaceKind: (kind: SessionRace["kind"]) => void;
   /** The run started over (resetRun), for what the component keeps per run */
   onRunReset: (reason: RunResetReason) => void;
-  slashCommandBufferRef: Cell<string>;
-  togglePauseRef: Cell<() => void>;
   track: BuiltTrackData;
   trackId: string;
   vehicleModelRef: Cell<VehicleModelId>;
@@ -302,6 +299,13 @@ export class DriveSession {
     return this.carNow();
   }
   private readonly carNow: () => SimulatorCar;
+  /** Esc / pad Menu: opens or closes the pause menu, releasing every held key */
+  readonly togglePause: () => void;
+  /** Closes the pause menu and its notice (a new session) */
+  readonly endPause: () => void;
+  readonly setBoostLatch: (on: boolean) => void;
+  /** A one-shot driving action, as from a key, a pad button or a touch pad */
+  readonly runAction: (action: DriveAction) => void;
   /** Creates and starts the car audio on a user gesture (the browser keeps audio locked until one) */
   readonly unlockAudio: () => void;
   readonly toggleMute: () => void;
@@ -337,30 +341,19 @@ export class DriveSession {
   constructor(container: HTMLDivElement, host: DriveSessionHost) {
     const {
       autopilotPaceRef,
-      boostLatchRef,
       carIdRef,
       cycleCamera,
       getTrackEnv,
       ghostRef,
       handleToggleRacingLine,
       hapticsRef,
-      kbInputRef,
-      kbPedalAssistRef,
-      keysRef,
       lapRecorderRef,
-      mouseSteerValueRef,
       onLapCompletedRef,
-      pausedRef,
       phaseRef,
-      releaseHeldKeys,
       rumbleEnabledRef,
-      setLatch,
-      setPauseNotice,
       setSettings,
       setRaceKind,
       onRunReset,
-      slashCommandBufferRef,
-      togglePauseRef,
       track,
       trackId,
       vehicleModelRef,
@@ -379,6 +372,48 @@ export class DriveSession {
     const setAssetsReady = (assetsReady: boolean) => this.publish({ assetsReady });
     const setP2pStatus = (p2pStatus: P2PConnectionStatus) => this.publish({ p2pStatus });
     const setVrState = (vr: VrState) => this.publish({ vr });
+    const setPauseNotice = (pauseNotice: string) => this.publish({ pauseNotice });
+    /** The boost latch, for the frame loop and the HUD at once */
+    const setLatch = (boostLatch: boolean) => this.publish({ boostLatch });
+    this.setBoostLatch = setLatch;
+
+    /** The driving keys held down, and the one-shot presses waiting for the next frame */
+    const heldKeys: DriveKeys = {
+      up: false,
+      down: false,
+      left: false,
+      right: false,
+      boostHold: false,
+      shiftUp: false,
+      shiftDown: false,
+      toggleX: false,
+      half: false,
+    };
+    /** Ramped keyboard pedals 0..1 (the steering keys are shaped by the car's steering assist) */
+    const kbInput = { throttle: 0, brake: 0 };
+    /** Slip help on the keyboard's pedals while the car's ABS / traction control is off */
+    const kbPedalAssist = new KeyboardPedalAssist();
+    /** The mouse's steering, -1..1, while mouse steering is on */
+    let mouseSteerValue = 0;
+    /** Typed "/boost" so far */
+    let slashCommandBuffer = "";
+    /** Lets go of every held driving key: on pause, and when the window loses focus (its keyups never arrive) */
+    const releaseHeldKeys = () => {
+      for (const flag of Object.values(HELD_KEYS)) heldKeys[flag] = false;
+      kbInput.throttle = 0;
+      kbInput.brake = 0;
+      kbPedalAssist.reset();
+    };
+    this.togglePause = () => {
+      if (disposed) return;
+      const paused = !this.snapshot.paused;
+      this.publish(paused ? { paused } : { paused, pauseNotice: null });
+      if (paused) {
+        wheelFfb.stop();
+        releaseHeldKeys();
+      }
+    };
+    this.endPause = () => this.publish({ paused: false, pauseNotice: null });
 
     /** The car sounds: created by the first unlockAudio, then paused and resumed by the frame loop alone */
     let audio: F1AudioEngine2026 | null = null;
@@ -388,7 +423,7 @@ export class DriveSession {
         audio = new F1AudioEngine2026();
         audio.setCar(soundFor(carIdRef.current));
         // Created paused unless the car is being driven; from then on the frame loop alone pauses and resumes it
-        audio.setPaused(pausedRef.current || phaseRef.current !== "driving");
+        audio.setPaused(this.snapshot.paused || phaseRef.current !== "driving");
       }
       if (!audio.isInitialized) {
         audio.init();
@@ -495,6 +530,9 @@ export class DriveSession {
       p2pStatus: getMultiplayerManager().status,
       vr: "off",
       muted: false,
+      paused: false,
+      pauseNotice: null,
+      boostLatch: false,
       ...carSetup,
     };
 
@@ -736,7 +774,7 @@ export class DriveSession {
       if (next.gamepadAssist !== prev.gamepadAssist) physics.gamepadAssistEnabled = next.gamepadAssist;
       if (next.autoGearbox !== prev.autoGearbox) physics.autoGearbox = next.autoGearbox;
       builtCircuit.racingLineMesh.visible = next.racingLine;
-      if (prev.mouseSteer && !next.mouseSteer) mouseSteerValueRef.current = 0;
+      if (prev.mouseSteer && !next.mouseSteer) mouseSteerValue = 0;
       if (next.liveryId !== prev.liveryId) {
         livery = liveryFor(next.liveryId);
         carRig.setLivery(livery);
@@ -811,7 +849,7 @@ export class DriveSession {
       // Center 65% of screen maps smoothly to [-1, 1] steering lock with slight precision curve
       const rawNorm = ((e.clientX / w) * 2 - 1) / 0.65;
       const clamped = THREE.MathUtils.clamp(rawNorm, -1, 1);
-      mouseSteerValueRef.current =
+      mouseSteerValue =
         Math.sign(clamped) * Math.pow(Math.abs(clamped), 1.18);
     };
 
@@ -829,10 +867,10 @@ export class DriveSession {
 
       if (code === "Escape") {
         e.preventDefault();
-        togglePauseRef.current();
+        this.togglePause();
         return;
       }
-      if (pausedRef.current) return;
+      if (this.snapshot.paused) return;
 
       // [ / ] narrow / widen the onboard FOV live, unless the player bound those keys to a control
       if ((code === "BracketLeft" || code === "BracketRight") && !keyLookup.has(code)) {
@@ -848,22 +886,22 @@ export class DriveSession {
       // is bound to that key)
       if (e.key && e.key.length === 1) {
         if (e.key === "/" && !keyLookup.has(code)) {
-          slashCommandBufferRef.current = "/";
+          slashCommandBuffer = "/";
           return;
-        } else if (slashCommandBufferRef.current.startsWith("/")) {
-          slashCommandBufferRef.current = (
-            slashCommandBufferRef.current + e.key.toLowerCase()
+        } else if (slashCommandBuffer.startsWith("/")) {
+          slashCommandBuffer = (
+            slashCommandBuffer + e.key.toLowerCase()
           ).slice(-6);
-          if (slashCommandBufferRef.current === "/boost") {
+          if (slashCommandBuffer === "/boost") {
             // Latches on (never off), and only when the car grants the override
             if (physics.activateBoostOverride()) setLatch(true);
-            slashCommandBufferRef.current = "";
+            slashCommandBuffer = "";
             return;
           }
-          if ("/boost".startsWith(slashCommandBufferRef.current)) {
+          if ("/boost".startsWith(slashCommandBuffer)) {
             return;
           } else {
-            slashCommandBufferRef.current = "";
+            slashCommandBuffer = "";
           }
         }
       }
@@ -872,7 +910,7 @@ export class DriveSession {
       if (!action) return;
       // Held controls ignore auto-repeat anyway; toggles must not flicker while a key is held
       if (isHeldKeyAction(action)) {
-        keysRef.current[HELD_KEYS[action]] = true;
+        heldKeys[HELD_KEYS[action]] = true;
         if (DRIVER_KEYS.has(action) && physics.aiAutopilot) physics.aiAutopilot = false;
         return;
       }
@@ -881,20 +919,23 @@ export class DriveSession {
       runAction(action);
     };
 
+    this.runAction = (action) => {
+      if (!disposed) runAction(action);
+    };
     /** Every one-shot driving action, from the keyboard, a pad or the touch pads */
     const runAction = (action: DriveAction) => {
       switch (action) {
         case "shiftUp":
-          keysRef.current.shiftUp = true;
+          heldKeys.shiftUp = true;
           break;
         case "shiftDown":
-          keysRef.current.shiftDown = true;
+          heldKeys.shiftDown = true;
           break;
         case "aero":
-          keysRef.current.toggleX = true;
+          heldKeys.toggleX = true;
           break;
         case "boostLatch":
-          setLatch(!boostLatchRef.current);
+          setLatch(!this.snapshot.boostLatch);
           break;
         case "camera":
           cycleCamera();
@@ -944,7 +985,7 @@ export class DriveSession {
         return;
       }
       const action = keyLookup.get(e.code);
-      if (action && isHeldKeyAction(action)) keysRef.current[HELD_KEYS[action]] = false;
+      if (action && isHeldKeyAction(action)) heldKeys[HELD_KEYS[action]] = false;
     };
 
     window.addEventListener("mousemove", onMouseMove);
@@ -1075,9 +1116,9 @@ export class DriveSession {
       onRunReset(reason);
       lapRecorder.reset();
       physics.aiAutopilot = false;
-      kbInputRef.current.throttle = 0;
-      kbInputRef.current.brake = 0;
-      kbPedalAssistRef.current.reset();
+      kbInput.throttle = 0;
+      kbInput.brake = 0;
+      kbPedalAssist.reset();
     };
     this.replayTogglePlay = () => {
       if (!replay.playing && replay.timeS >= replay.buffer.endS - 0.05) replay.timeS = replay.buffer.startS;
@@ -1275,10 +1316,10 @@ export class DriveSession {
       }
       if (wheelLostPending && !inMenu) {
         wheelLostPending = false;
-        if (!pausedRef.current) togglePauseRef.current();
+        if (!this.snapshot.paused) this.togglePause();
         setPauseNotice("Steering wheel disconnected. Reconnect it, or resume to drive with what's left.");
       }
-      const driving = !inMenu && !pausedRef.current && !replaying && !device.wheelLost;
+      const driving = !inMenu && !this.snapshot.paused && !replaying && !device.wheelLost;
       const padTuning = settingsNow.padTuning;
       const kbTuning = settingsNow.keyboardTuning;
       const isPad = device.source === "controller";
@@ -1296,7 +1337,7 @@ export class DriveSession {
         for (const action of device.pressed) {
           if (action === "pause") {
             // Opening only: in the pause menu, B / Menu resume through the menu's own navigation
-            if (!pausedRef.current) togglePauseRef.current();
+            if (!this.snapshot.paused) this.togglePause();
             continue;
           }
           if (!driving) continue;
@@ -1309,8 +1350,8 @@ export class DriveSession {
       // car's ABS / traction control is off. The steering keys' direction goes to the car's steering assist, which
       // ramps it to the front tyres' grip limit, self-aligns the car when they are let go and caps a countersteer.
       // Wheel and mouse inputs are passed through untouched.
-      const keys = keysRef.current;
-      const kb = kbInputRef.current;
+      const keys = heldKeys;
+      const kb = kbInput;
       // Half-throttle key: a fixed part throttle for wet-like traction or slow corners
       const kbThrottleTarget = keys.up ? 1 : keys.half ? kbTuning.halfThrottle : 0;
       const throttleRising = kbThrottleTarget > kb.throttle;
@@ -1326,7 +1367,7 @@ export class DriveSession {
       );
       const carAids = physics.telemetry.liveTuner;
       const tyreSlip = axleSlipFromTelemetry(physics.telemetry, kbAxleSlip);
-      const kbBrakeScale = kbPedalAssistRef.current.brakeScale(
+      const kbBrakeScale = kbPedalAssist.brakeScale(
         keys.down,
         kb.brake,
         tyreSlip.totalNdSlip,
@@ -1334,7 +1375,7 @@ export class DriveSession {
         driving && kbTuning.brakeAssist && carAids?.absLevel === 0,
         kbTuning.pedalAssistStrength
       );
-      const kbThrottleScale = kbPedalAssistRef.current.throttleScale(
+      const kbThrottleScale = kbPedalAssist.throttleScale(
         kbThrottleTarget > 0,
         kb.throttle,
         tyreSlip.rearNdSlip,
@@ -1361,7 +1402,7 @@ export class DriveSession {
       // Wheel, mouse and touch steer the rack directly; the car's steering assist picks between them, the keys and the
       // stick (steering-assist.ts: a pressed key takes over, and hands back once its ramp is at centre)
       const directSteer = settings.mouseSteer
-        ? mouseSteerValueRef.current
+        ? mouseSteerValue
         : touchSteering
           ? touch.steer
           : gamepadSteer;
@@ -1375,14 +1416,14 @@ export class DriveSession {
         kbSteer: kbSteerDir,
         padSteer: directSteer === undefined ? gamepadStick : undefined,
         manualOverride:
-          keysRef.current.boostHold || boostLatchRef.current || gamepadBoost,
-        toggleXMode: keysRef.current.toggleX,
-        shiftUp: keysRef.current.shiftUp,
-        shiftDown: keysRef.current.shiftDown,
+          heldKeys.boostHold || this.snapshot.boostLatch || gamepadBoost,
+        toggleXMode: heldKeys.toggleX,
+        shiftUp: heldKeys.shiftUp,
+        shiftDown: heldKeys.shiftDown,
       };
-      keysRef.current.toggleX = false;
-      keysRef.current.shiftUp = false;
-      keysRef.current.shiftDown = false;
+      heldKeys.toggleX = false;
+      heldKeys.shiftUp = false;
+      heldKeys.shiftDown = false;
       // The driver takes the car back from the autopilot with any device (the keys do it on key down): a pedal, the
       // stick, the touch steering pad. Not the wheel's rim, which its force feedback turns on its own.
       if (driving && physics.aiAutopilot) {
@@ -1424,7 +1465,7 @@ export class DriveSession {
         aiField?.update(dtSeconds);
         startupMonitor?.end("sim");
       }
-      if (mpRace && mpFrame && mpFrame.phase === "racing" && !pausedRef.current) {
+      if (mpRace && mpFrame && mpFrame.phase === "racing" && !this.snapshot.paused) {
         mpRace.lapClock.update(physics.sMeters, mpFrame.raceTimeS, mpRace.start.laps, mpRace.flagOut);
       }
       haptics.update(physics.telemetry, dtSeconds, rumbleEnabledRef.current && driving, {
@@ -1687,7 +1728,7 @@ export class DriveSession {
           rp.buffer.push(replayClockS, cars);
         }
       } else if (replaying) {
-        if (rp.playing && !pausedRef.current) {
+        if (rp.playing && !this.snapshot.paused) {
           rp.timeS = Math.min(rp.buffer.endS, rp.timeS + dtSeconds * rp.speed);
           if (rp.timeS >= rp.buffer.endS) rp.playing = false;
         }
@@ -1726,11 +1767,11 @@ export class DriveSession {
       // While the keys steer, the mouse follows the steering, so it takes over (once the keys' ramp is at centre)
       // where the steering is instead of where the mouse was
       if (settings.mouseSteer && physics.steeringAssist.source === "keyboard") {
-        mouseSteerValueRef.current = physics.steerAngleNorm;
+        mouseSteerValue = physics.steerAngleNorm;
       }
 
       // The latched boost lets go once the battery is empty (where the cars stop deploying it)
-      if (boostLatchRef.current && physics.ersEnergyJ <= 0) setLatch(false);
+      if (this.snapshot.boostLatch && physics.ersEnergyJ <= 0) setLatch(false);
 
       // The menus film the car from outside, whatever the player's camera is
       const inVr = renderer.xr.isPresenting;
@@ -1994,7 +2035,7 @@ export class DriveSession {
 
       // Paused, the car is frozen but the pause menu (and the HUD under it) would still re-render at 30 Hz for nothing;
       // 4 Hz keeps what can still move there (remote players) current
-      if (nowMs - lastHudSyncMs > (pausedRef.current ? 250 : 33)) {
+      if (nowMs - lastHudSyncMs > (this.snapshot.paused ? 250 : 33)) {
         lastHudSyncMs = nowMs;
         setTelemetry({
           ...physics.telemetry,
