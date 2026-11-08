@@ -31,8 +31,20 @@ export interface TyreVisualState {
   verticalDeflectionM: number;
   /** Lateral tyre force in the wheel frame (N, + left) */
   lateralForceN: number;
-  /** Camber leaning toward +left relative to the road (rad) */
+  /**
+   * Camber leaning toward +left relative to the road (rad). Not drawn: the drawn tyre's camber is its wheel model's
+   * own orientation against the road (`corner-rig.ts`)
+   */
   camberRad: number;
+  /**
+   * Carcass deflection of the relaxation-length tyre model (m, wheel frame), in its own sign convention: x + while the
+   * tyre drives (rim faster than the road, Fx +), y + while the contact slides toward +left (Fy −, so the tread is
+   * pulled toward −left). Only the elastic part: past the grip peak (normalised combined slip > 1) the states are
+   * scaled back to the peak's, the rest being sliding. Absent (a replayed or remote car): the renderer falls back to
+   * `lateralForceN` for the lateral shear and draws no wind-up.
+   */
+  carcassDeflectionXM?: number;
+  carcassDeflectionYM?: number;
   /**
    * Bottom of the tyre in the car frame (`worldPosition` / `worldQuaternion`, m): the road under a tyre `onRoad`, the
    * hub less the unloaded radius for a tyre off the ground. On the rigid-body model the car frame rides on the sprung

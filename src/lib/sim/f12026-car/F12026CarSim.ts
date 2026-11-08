@@ -2001,6 +2001,14 @@ export class F12026CarSim implements SimulatorCar {
     this.vyMs = this.bodyVy();
     this.yawRateRadS = this.bodyYawRate();
     this.steerAngleNorm = this.steerCmd;
+    // Relaxation lengths of the fitted compound (front, then the rear's own where it has them): the carcass states
+    // below are its slip states times these (the dry lengths; a wet road shortens or stretches them by up to ~20 %)
+    const cd = this.compoundData;
+    const rearModel = cd.rearOverride?.modelData;
+    const relaxFx = cd.modelData.relaxationLengthX;
+    const relaxFy = cd.modelData.relaxationLengthY;
+    const relaxRx = rearModel?.relaxationLengthX ?? relaxFx;
+    const relaxRy = rearModel?.relaxationLengthY ?? relaxFy;
     for (let k = 0; k < 4; k++) {
       const w = v.wheels[VF_ORDER[k]];
       const out = this.wheels[k];
@@ -2018,6 +2026,11 @@ export class F12026CarSim implements SimulatorCar {
       vis.verticalDeflectionM = w.deflection;
       vis.lateralForceN = w.fy;
       vis.camberRad = w.camberLeftRad;
+      // Carcass deflection: the relaxed slip ratio / tan(slip angle) times the relaxation length (the same states as
+      // ac-tyre's deflX / deflY), held at the grip peak's once the tyre slides
+      const elastic = 1 / Math.max(1, w.combinedSlip);
+      vis.carcassDeflectionXM = w.slipRatio * (w.isFront ? relaxFx : relaxRx) * elastic;
+      vis.carcassDeflectionYM = w.tanSlipAngle * (w.isFront ? relaxFy : relaxRy) * elastic;
       vis.onRoad = w.deflection > 0;
       // The bottom of the tyre in the car frame, under the corner's hardpoint at the current pose: the car frame rides
       // on the sprung body, so this is where the rigs put the unsprung wheel

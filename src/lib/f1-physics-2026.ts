@@ -1265,6 +1265,10 @@ export class F1Physics2026 {
       out.verticalDeflectionM = tyreVerticalDeflection(w.tyre, w.fzN);
       out.lateralForceN = w.fnN;
       out.camberRad = w.camberLeftRad;
+      // The tyre model's carcass states, held at the grip peak's once the tyre slides
+      const elastic = 1 / Math.max(1, w.combinedSlipNorm);
+      out.carcassDeflectionXM = w.tyre.deflX * elastic;
+      out.carcassDeflectionYM = w.tyre.deflY * elastic;
       const c = out.contactInCar!;
       c.x = w.staticPos.y;
       c.z = w.staticPos.x;
