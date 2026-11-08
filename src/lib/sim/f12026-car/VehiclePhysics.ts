@@ -16,7 +16,9 @@
  *                4-way `DamperControllerData` (base corner + heave / roll / pitch mode dampers).
  * - Unsprung:    4 hub masses on the tyre's radial spring (`pressureSpringCurve` × `thermalVerticalK`).
  * - Tyres:       load-sensitive normalised-slip model on the `TyresModelData` fields (`Dy0`, `Dx0`,
- *                `lsExpY`, `lsExpX`, `Fz0`, `friction_limit_angle`, `slip_ratio_limit`). Slip ratio
+ *                `lsExpY`, `lsExpX`, `Fz0`, `friction_limit_angle`, `slip_ratio_limit`). The cornering
+ *                stiffness saturates with load (Pacejka `pKy2`), so the peak slip angle grows with load and the
+ *                lateral relaxation length follows the stiffness. Slip ratio
  *                (`WHEEL_SR_*`) and slip angle come from relaxation-length carcass states. Camber thrust
  *                (`camberGain`, `contact_camber_c1/c2`) enters as an equivalent slip-angle shift, camber
  *                grip from `dcamber0/1` (lateral) and `dcamber0_x/1_x` (longitudinal). Fx / Fy come from
@@ -298,6 +300,8 @@ export interface WheelState {
   slipRatio: number;
   tanSlipAngle: number;
   slipAngleRad: number;
+  /** Slip angle of this tyre's peak lateral force at its present load (rad; held while unloaded, 0 until loaded) */
+  peakSlipAngleRad: number;
   /** Normalised combined slip (1 = peak) and share of the friction circle in use (telemetry; 1 = on the circle) */
   combinedSlip: number;
   circleFraction: number;
@@ -438,7 +442,11 @@ export interface TyreRuntime {
   data: TyresCompoundData;
   thermal: Lut;
   pressureSpring: Lut;
+  /** tan(peak slip angle) at Fz0; at other loads see `tyrePeakSlipTan` */
   tanPeakAngle: number;
+  /** Pacejka pKy2 (`TyresModelData.pKy2`) and the peak lateral force at Fz0 (N, before temperature, wear, water…) */
+  pKy2: number;
+  peakForceY0: number;
   peakSlipRatio: number;
   /** Magic-formula shape: y = sin(C·atan(B·s)), peak 1 at s = 1 */
   B: number;
@@ -542,11 +550,14 @@ export function createTyreRuntime(compound: TyresCompoundData, rear = false): Ty
   const { B, C } = fitMagicFormula(model.falloff_level);
   const cam = data.camberData;
   const fla = model.friction_limit_angle && model.friction_limit_angle > 0 ? model.friction_limit_angle : DEFAULT_FRICTION_LIMIT_ANGLE_DEG;
+  const dyCurve = model.dyCurve ? new Lut(model.dyCurve) : null;
   return {
     data,
     thermal: new Lut(data.thermalData.thermalPerformanceCurve),
     pressureSpring: new Lut(data.pressureData.pressureSpringCurve),
     tanPeakAngle: Math.tan(fla * DEG2RAD),
+    pKy2: model.pKy2,
+    peakForceY0: (dyCurve ? dyCurve.evaluate(fz0) : model.Dy0) * fz0,
     peakSlipRatio: model.slip_ratio_limit,
     B,
     C,
@@ -556,11 +567,14 @@ export function createTyreRuntime(compound: TyresCompoundData, rear = false): Ty
     falloffSlope: Math.max(0, model.falloff_slope),
     camberThrustLimit: cam.contact_camber_c2 > 0 ? Math.sqrt(cam.contact_camber_c1 / (3 * cam.contact_camber_c2)) : Infinity,
     fz0,
-    dyCurve: model.dyCurve ? new Lut(model.dyCurve) : null,
+    dyCurve,
     dxCurve: model.dxCurve ? new Lut(model.dxCurve) : null,
     brakeDxMod: model.brakeDxMod ?? 0,
   };
 }
+
+/** Load (as a share of Fz0) below which the load laws are held, so they stay finite as a wheel unloads */
+const MIN_LOAD_RATIO = 0.05;
 
 /**
  * Peak friction coefficient of a tyre at vertical load `fz` (N), lateral (`y`) or longitudinal (`x`): the compound's
@@ -571,8 +585,33 @@ export function tyrePeakMu(t: Pick<TyreRuntime, 'data' | 'fz0' | 'dyCurve' | 'dx
   const curve = axis === 'y' ? t.dyCurve : t.dxCurve;
   if (curve) return curve.evaluate(fz);
   const m = t.data.modelData;
-  const loadRef = Math.max(0.05, fz / t.fz0);
+  const loadRef = Math.max(MIN_LOAD_RATIO, fz / t.fz0);
   return axis === 'y' ? m.Dy0 * Math.pow(loadRef, m.lsExpY - 1) : m.Dx0 * Math.pow(loadRef, m.lsExpX - 1);
+}
+
+/**
+ * Cornering stiffness at load `fz` over the one at Fz0. Pacejka MF: Kyα = pKy1·Fz0·sin(2·atan(Fz / (pKy2·Fz0))),
+ * which normalised to Fz0 is x·(pKy2² + 1) / (pKy2² + x²) with x = Fz / Fz0: near-linear in light load, saturating
+ * to its peak at pKy2·Fz0. The lateral relaxation length scales with it (MF 6.1: σα = Kyα / lateral carcass stiffness).
+ */
+export function tyreCorneringStiffnessLoadFactor(t: Pick<TyreRuntime, 'fz0' | 'pKy2'>, fz: number): number {
+  const x = Math.max(MIN_LOAD_RATIO, fz / t.fz0);
+  const p2 = t.pKy2 * t.pKy2;
+  return (x * (p2 + 1)) / (p2 + x * x);
+}
+
+/**
+ * tan(peak slip angle) at load `fz`: the peak lateral force there over the cornering stiffness, both from the
+ * compound's data at Fz0 (`friction_limit_angle`, the load table) and the stiffness's load law. Before the carcass
+ * temperature (a softer carcass peaks later) and before the grip scalings (temperature, wear, water), which scale
+ * force and stiffness together.
+ */
+export function tyrePeakSlipTan(
+  t: Pick<TyreRuntime, 'data' | 'fz0' | 'dyCurve' | 'dxCurve' | 'pKy2' | 'tanPeakAngle' | 'peakForceY0'>,
+  fz: number
+): number {
+  const fzL = Math.max(fz, MIN_LOAD_RATIO * t.fz0);
+  return (t.tanPeakAngle * tyrePeakMu(t, fzL, 'y') * fzL) / (t.peakForceY0 * tyreCorneringStiffnessLoadFactor(t, fzL));
 }
 
 /** Grip at hot inflation pressure `psi` (gauge): a parabola about the optimum, floored at half grip */
@@ -992,6 +1031,7 @@ export class VehiclePhysics {
         slipRatio: 0,
         tanSlipAngle: 0,
         slipAngleRad: 0,
+        peakSlipAngleRad: 0,
         combinedSlip: 0,
         circleFraction: 0,
         camberLeftRad: 0,
@@ -1919,7 +1959,12 @@ export class VehiclePhysics {
       if (fz > 0) {
         const bristleScale = dynamicBristleRelaxationScale(fz, tyre.fz0, wWetness);
         const rx = model.relaxationLengthX * bristleScale;
-        const ry = model.relaxationLengthY * bristleScale;
+        // The lateral length follows the cornering stiffness (σ = Kyα / lateral carcass stiffness), so the carcass
+        // stiffness stays the one at Fz0 at every load; the bristle model's own load stretch would count load twice
+        const ry =
+          model.relaxationLengthY *
+          tyreCorneringStiffnessLoadFactor(tyre, fz) *
+          dynamicBristleRelaxationScale(tyre.fz0, tyre.fz0, wWetness);
         w.slipRatio = (w.slipRatio + (h * vsx) / rx) / (1 + (h * absVx) / rx);
         w.tanSlipAngle = (w.tanSlipAngle + (h * vy) / ry) / (1 + (h * absVx) / ry);
         w.slipRatio = THREE.MathUtils.clamp(w.slipRatio, -5, 5);
@@ -1988,14 +2033,18 @@ export class VehiclePhysics {
         w.muY = muY;
         w.muX = muX;
 
+        // Peak slip angle at this load: the cornering stiffness saturates with load while the peak force keeps growing
+        const tanPeak = tyrePeakSlipTan(tyre, fz);
+        w.peakSlipAngleRad = Math.atan(tanPeak);
+
         // Camber thrust (toward the lean) as an equivalent slip-angle shift
         const gc = THREE.MathUtils.clamp(w.camberLeftRad, -tyre.camberThrustLimit, tyre.camberThrustLimit);
         const thrust = cam.camberGain * (cam.contact_camber_c1 * gc - cam.contact_camber_c2 * gc * gc * gc);
         const BC = tyre.B * tyre.C;
-        const tanEff = w.tanSlipAngle - (thrust * tyre.tanPeakAngle) / Math.max(1e-3, muY * BC);
+        const tanEff = w.tanSlipAngle - (thrust * tanPeak) / Math.max(1e-3, muY * BC);
 
         // Combined slip
-        combinedSlipForces(tyre, model, w.slipRatio / tyre.peakSlipRatio, tanEff / tyre.tanPeakAngle, _comb);
+        combinedSlipForces(tyre, model, w.slipRatio / tyre.peakSlipRatio, tanEff / tanPeak, _comb);
         fx = muX * fz * _comb.fx;
         fy = -muY * fz * _comb.fy;
         const s = Math.hypot(_comb.sx, _comb.sy);

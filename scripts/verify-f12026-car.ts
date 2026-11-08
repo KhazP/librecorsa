@@ -22,6 +22,9 @@ import {
 import {
   combinedSlipForces,
   createTyreRuntime,
+  tyreCorneringStiffnessLoadFactor,
+  tyrePeakMu,
+  tyrePeakSlipTan,
   tyreSlipCurve,
   type VehicleEvent,
   VehiclePhysics,
@@ -550,8 +553,36 @@ console.log('\n== Lap on the Rwanda colliders');
 }
 
 // ---------------------------------------------------------------------------
-// 8. Stereo's combined slip (this model's interpretation)
+// 8. Tyre load sensitivity and combined slip
 // ---------------------------------------------------------------------------
+
+console.log('\n== Tyre load sensitivity (cornering stiffness, peak slip angle, relaxation length)');
+{
+  const soft = F12026_CAR_CONFIG.tyreCompounds.PhysicsTyreCompound_F1_Soft;
+  for (const rear of [false, true]) {
+    const t = createTyreRuntime(soft, rear);
+    const BC = t.B * t.C;
+    const deg = (fz: number) => (Math.atan(tyrePeakSlipTan(t, fz)) * 180) / Math.PI;
+    const K = (fz: number) => (tyrePeakMu(t, fz, 'y') * fz * BC) / tyrePeakSlipTan(t, fz);
+    const K0 = K(t.fz0);
+    const axle = rear ? 'rear' : 'front';
+    check(
+      `${axle}: the data's peak slip angle and cornering stiffness hold at Fz0`,
+      Math.abs(tyrePeakSlipTan(t, t.fz0) - t.tanPeakAngle) < 1e-12 && Math.abs(tyreCorneringStiffnessLoadFactor(t, t.fz0) - 1) < 1e-12,
+      `${fmt(deg(t.fz0), 2)}° at ${fmt(t.fz0, 0)} N, ${fmt((K0 * Math.PI) / 180, 0)} N/deg`
+    );
+    // Pacejka: the stiffness peaks at pKy2·Fz0, having grown less than the peak force there, so the loaded tyre peaks
+    // later (the wide rear's stiffness peaks far up, so its peak slip angle only grows at aero loads)
+    const F = (fz: number) => tyrePeakMu(t, fz, 'y') * fz;
+    const top = t.pKy2 * t.fz0;
+    const loads = [2000, 4000, 8000, 12000, top];
+    check(
+      `${axle}: cornering stiffness saturates with load, peak slip angle grows`,
+      K(top) / K0 < F(top) / F(t.fz0) && K(top) >= K(0.8 * top) && K(top) >= K(1.25 * top) && deg(top) > deg(t.fz0),
+      loads.map((fz) => `${fmt(fz / 1000, 1)} kN ${fmt(deg(fz), 1)}° / ${fmt((K(fz) * Math.PI) / 180 / 1000, 2)} kN/deg`).join(', ')
+    );
+  }
+}
 
 console.log('\n== Combined slip (combinedFactor / new_combined / falloff)');
 {
