@@ -138,7 +138,11 @@ const Credits: React.FC = () => (
           >
             overtake.gg
           </a>
-          ) by Cxjovich ·{" "}
+          ) by{" "}
+          <a href="https://www.overtake.gg/members/cxjovich.4261212/" target="_blank" rel="noreferrer" className={linkClass}>
+            Cxjovich
+          </a>{" "}
+          ·{" "}
           <a href="http://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank" rel="noreferrer" className={linkClass}>
             CC BY-NC-SA 4.0
           </a>{" "}
