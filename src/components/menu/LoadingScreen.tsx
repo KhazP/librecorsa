@@ -46,7 +46,7 @@ function taskFill(t: AssetTask): number | null {
 /** Shown once loaded; touch screens are told to tap */
 const ContinuePrompt: React.FC = () => (
   <div className="flex flex-col gap-2">
-    <span className="lc-disp lc-breathe text-[24px] text-[#CCFF00] sm:text-[30px]">
+    <span className="lc-disp lc-breathe text-[24px] text-[#CCFF00] sm:text-[30px] phone:text-[22px]">
       <span className="pointer-coarse:hidden">Press any key to enter track</span>
       <span className="hidden pointer-coarse:inline">Tap to enter track</span>
     </span>
@@ -59,7 +59,7 @@ const ContinuePrompt: React.FC = () => (
 
 /** One start-light column (two lamps) inside the pill */
 const LightColumn: React.FC<{ lit: boolean; ready: boolean }> = ({ lit, ready }) => {
-  const lamp = `h-[18px] w-[18px] rounded-full transition-all duration-300 sm:h-[22px] sm:w-[22px] ${
+  const lamp = `h-[18px] w-[18px] rounded-full transition-all duration-300 sm:h-[22px] sm:w-[22px] phone:h-[18px] phone:w-[18px] ${
     ready
       ? "bg-[#CCFF00] shadow-[0_0_16px_#CCFF00]"
       : lit
@@ -211,7 +211,7 @@ export const LoadingScreen: React.FC<{
         </g>
       </svg>
 
-      <div className="relative mx-auto flex w-full max-w-[1440px] flex-1 flex-col px-5 pt-[clamp(28px,4.4vh,48px)] pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:px-10 lg:px-16">
+      <div className="relative mx-auto flex w-full max-w-[1440px] flex-1 flex-col pl-[max(1.25rem,env(safe-area-inset-left))] pr-[max(1.25rem,env(safe-area-inset-right))] pt-[max(clamp(28px,4.4vh,48px),env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:pl-[max(2.5rem,env(safe-area-inset-left))] sm:pr-[max(2.5rem,env(safe-area-inset-right))] lg:pl-[max(4rem,env(safe-area-inset-left))] lg:pr-[max(4rem,env(safe-area-inset-right))]">
         <div className="grid flex-1 grid-cols-1 items-center gap-8 lg:grid-cols-2 lg:gap-10 short:grid-cols-[minmax(0,1fr)_auto] short:gap-6">
           <div className="order-2 flex max-w-[560px] min-w-0 flex-col gap-[clamp(20px,3.6vh,36px)] lg:order-1 short:order-1">
             <LibreCorsaLogo variant="full" size="lg" />
@@ -220,7 +220,7 @@ export const LoadingScreen: React.FC<{
             <div className="flex flex-wrap items-end gap-x-7 gap-y-4 short:gap-x-5">
               <div className="flex flex-col gap-2">
                 <span
-                  className="lc-disp text-[clamp(72px,12vw,168px)] tracking-[-0.02em] tabular-nums short:text-[56px]"
+                  className="lc-disp text-[clamp(72px,12vw,168px)] tracking-[-0.02em] tabular-nums phone:text-[48px]"
                   style={{ color: ready ? "#CCFF00" : "#F5F7FA" }}
                 >
                   {Math.round(shown * 100)}%
@@ -363,7 +363,7 @@ export const LoadingScreen: React.FC<{
 
       {/* Compact screens: the prompt stays pinned to the bottom instead of falling below the fold */}
       {ready ? (
-        <div className="sticky bottom-0 hidden border-t border-[#262B3D] bg-[#08090D]/92 px-5 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-md compact:block sm:px-10">
+        <div className="sticky bottom-0 hidden border-t border-[#262B3D] bg-[#08090D]/92 pl-[max(1.25rem,env(safe-area-inset-left))] pr-[max(1.25rem,env(safe-area-inset-right))] pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-md compact:block sm:pl-[max(2.5rem,env(safe-area-inset-left))] sm:pr-[max(2.5rem,env(safe-area-inset-right))]">
           <div className="mx-auto max-w-[1440px]">
             <ContinuePrompt />
           </div>

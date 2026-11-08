@@ -3,7 +3,7 @@ import { LibreCorsaLogo } from "@/components/ui/LibreCorsaLogo";
 /** Route fallback before the simulator mounts: matches the simulator's own loading screen */
 export default function Loading() {
   return (
-    <div className="relative flex h-screen w-screen flex-col justify-center overflow-hidden bg-[#08090D] px-5 text-[#F5F7FA] sm:px-10 lg:px-16">
+    <div className="relative flex h-screen w-screen flex-col justify-center overflow-hidden bg-[#08090D] pl-[max(1.25rem,env(safe-area-inset-left))] pr-[max(1.25rem,env(safe-area-inset-right))] text-[#F5F7FA] sm:pl-[max(2.5rem,env(safe-area-inset-left))] sm:pr-[max(2.5rem,env(safe-area-inset-right))] lg:pl-[max(4rem,env(safe-area-inset-left))] lg:pr-[max(4rem,env(safe-area-inset-right))]">
       <div
         aria-hidden
         className="pointer-events-none fixed inset-0"
@@ -13,7 +13,7 @@ export default function Loading() {
         <LibreCorsaLogo variant="full" size="lg" />
         <div className="flex flex-wrap items-end gap-x-7 gap-y-4">
           <div className="flex flex-col gap-2">
-            <span className="lc-disp text-[clamp(72px,12vw,168px)] tracking-[-0.02em] tabular-nums short:text-[64px]">
+            <span className="lc-disp text-[clamp(72px,12vw,168px)] tracking-[-0.02em] tabular-nums phone:text-[48px]">
               0%
             </span>
             <span className="lc-lbl lc-breathe">Starting up</span>
@@ -25,8 +25,8 @@ export default function Loading() {
           >
             {Array.from({ length: 5 }, (_, i) => (
               <span key={i} className="flex flex-col gap-1.5 rounded-full bg-[#08090D] p-1.5">
-                <span className="h-[18px] w-[18px] rounded-full bg-[#1B1F2B] shadow-[inset_0_1px_3px_rgba(0,0,0,0.8)] sm:h-[22px] sm:w-[22px]" />
-                <span className="h-[18px] w-[18px] rounded-full bg-[#1B1F2B] shadow-[inset_0_1px_3px_rgba(0,0,0,0.8)] sm:h-[22px] sm:w-[22px]" />
+                <span className="h-[18px] w-[18px] rounded-full bg-[#1B1F2B] shadow-[inset_0_1px_3px_rgba(0,0,0,0.8)] sm:h-[22px] sm:w-[22px] phone:h-[18px] phone:w-[18px]" />
+                <span className="h-[18px] w-[18px] rounded-full bg-[#1B1F2B] shadow-[inset_0_1px_3px_rgba(0,0,0,0.8)] sm:h-[22px] sm:w-[22px] phone:h-[18px] phone:w-[18px]" />
               </span>
             ))}
           </div>

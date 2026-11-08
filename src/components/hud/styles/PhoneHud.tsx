@@ -27,14 +27,12 @@ export function usePhoneLayout(): boolean {
 const LEDS = 12;
 const ledColor = (i: number) => (i < 5 ? "#00E676" : i < 9 ? HUD_RED : "#2F8BE5");
 
-/** Edge inset that clears a notch */
-const inset = (side: "top" | "left" | "right", px: number) => `calc(env(safe-area-inset-${side}, 0px) + ${px}px)`;
-
 /**
  * Phone: one HUD for small screens, after the mobile racers (Real Racing 3, GRID). Everything lives
  * along the top edge so the thumbs on the steering pad and pedals never cover it: speed and gear
  * top-centre, position, lap and delta top-right, a small map top-left under the touch Menu / Cam.
- * In portrait the speed pod drops under the top row and the map steps aside.
+ * In portrait the speed pod drops under the top row and the map steps aside. It sits in the HUD's
+ * safe frame, so its offsets start where a notch or the Dynamic Island ends.
  */
 export const PhoneHud: React.FC<HudDesignProps> = ({ t, deltaS, map, revRange, scale, touch, lapInvalid = t.offTrack }) => {
   const race = t.race;
@@ -48,27 +46,27 @@ export const PhoneHud: React.FC<HudDesignProps> = ({ t, deltaS, map, revRange, s
       {/* Top-left: map, under the touch Menu / Cam when they are up */}
       <div
         className="absolute hidden landscape:block"
-        style={{ top: inset("top", touch ? 64 : 12), left: inset("left", 12), ...anchor(scale, "top left") }}
+        style={{ top: touch ? 64 : 12, left: 12, ...anchor(scale, "top left") }}
       >
-        <div className={`h-[92px] w-[92px] rounded-[20px] p-2 ${HUD_GLASS}`}>
+        <div className={`h-[92px] w-[92px] rounded-[20px] p-2 phone:h-[72px] phone:w-[72px] phone:rounded-[16px] phone:p-1.5 ${HUD_GLASS}`}>
           <MiniMap map={map} t={t} sectors className="block h-full w-full" stroke={30} />
         </div>
       </div>
 
       {/* Speed pod: top-centre in landscape, under the top row in portrait */}
       <div
-        className="absolute left-1/2 -translate-x-1/2 portrait:top-[calc(env(safe-area-inset-top,0px)+124px)] landscape:top-[calc(env(safe-area-inset-top,0px)+12px)]"
+        className="absolute left-1/2 -translate-x-1/2 portrait:top-[124px] landscape:top-3"
         style={anchor(scale, "top center")}
       >
-        <div className={`flex items-center gap-2.5 rounded-[22px] p-1.5 pr-3.5 ${HUD_GLASS}`}>
+        <div className={`flex items-center gap-2.5 rounded-[22px] p-1.5 pr-3.5 phone:gap-2 phone:rounded-[18px] phone:p-1 phone:pr-3 ${HUD_GLASS}`}>
           <span
-            className={`flex h-[60px] w-[56px] shrink-0 items-center justify-center rounded-[16px] transition-colors duration-75 ${
+            className={`flex h-[60px] w-[56px] shrink-0 items-center justify-center rounded-[16px] transition-colors duration-75 phone:h-[46px] phone:w-[44px] phone:rounded-[14px] ${
               shift ? "bg-[#2F8BE5] text-[#F5F7FA]" : "bg-[#CCFF00] text-[#08090D]"
             }`}
           >
-            <span className="lc-disp text-[40px] leading-none">{gearLabel(t.gear)}</span>
+            <span className="lc-disp text-[40px] leading-none phone:text-[30px]">{gearLabel(t.gear)}</span>
           </span>
-          <div className="flex w-[112px] flex-col gap-1.5">
+          <div className="flex w-[112px] flex-col gap-1.5 phone:w-[96px] phone:gap-1">
             <div className="flex gap-[3px]" aria-hidden>
               {Array.from({ length: LEDS }, (_, i) => (
                 <span
@@ -79,7 +77,7 @@ export const PhoneHud: React.FC<HudDesignProps> = ({ t, deltaS, map, revRange, s
               ))}
             </div>
             <div className="flex items-baseline justify-between">
-              <span className="lc-data text-[30px] leading-none tracking-[-0.02em] text-[#F5F7FA] tabular-nums">{Math.round(t.speedKmh)}</span>
+              <span className="lc-data text-[30px] leading-none tracking-[-0.02em] text-[#F5F7FA] tabular-nums phone:text-[23px]">{Math.round(t.speedKmh)}</span>
               <span className="font-f1-mono text-[9px] font-extrabold tracking-[0.16em] text-[#8E96AA]">KM/H</span>
             </div>
             {hasErs ? (
@@ -99,18 +97,18 @@ export const PhoneHud: React.FC<HudDesignProps> = ({ t, deltaS, map, revRange, s
 
       {/* Top-right: position (race) or lap, the running lap and the delta */}
       <div
-        className="absolute w-[176px] landscape:w-[196px]"
-        style={{ top: inset("top", 12), right: inset("right", 12), ...anchor(scale, "top right") }}
+        className="absolute w-[176px] landscape:w-[196px] phone:w-[160px]"
+        style={{ top: 12, right: 12, ...anchor(scale, "top right") }}
       >
-        <section aria-label="Timing" className={`flex flex-col gap-1.5 rounded-[20px] px-3 pt-2 pb-2.5 ${HUD_GLASS}`}>
+        <section aria-label="Timing" className={`flex flex-col gap-1.5 rounded-[20px] px-3 pt-2 pb-2.5 phone:gap-1 phone:rounded-[16px] phone:px-2.5 phone:pt-1.5 phone:pb-2 ${HUD_GLASS}`}>
           <div className="flex items-baseline justify-between gap-2">
             {race ? (
-              <span className="lc-disp text-[26px] leading-none text-[#F5F7FA]">
+              <span className="lc-disp text-[26px] leading-none text-[#F5F7FA] phone:text-[21px]">
                 P{race.position}
-                <span className="text-[16px] text-[#8E96AA]">/{race.standings.length}</span>
+                <span className="text-[16px] text-[#8E96AA] phone:text-[13px]">/{race.standings.length}</span>
               </span>
             ) : (
-              <span className="lc-disp text-[22px] leading-none text-[#F5F7FA]">Lap {Math.max(1, t.lapCount)}</span>
+              <span className="lc-disp text-[22px] leading-none text-[#F5F7FA] phone:text-[18px]">Lap {Math.max(1, t.lapCount)}</span>
             )}
             {race ? (
               <span className={HUD_LBL}>
@@ -120,11 +118,11 @@ export const PhoneHud: React.FC<HudDesignProps> = ({ t, deltaS, map, revRange, s
             ) : null}
           </div>
           <div className="flex items-center justify-between gap-2">
-            <span className={`lc-data text-[17px] leading-none tabular-nums ${lapInvalid ? "text-[#FF2A3C]" : "text-[#F5F7FA]"}`}>
+            <span className={`lc-data text-[17px] leading-none tabular-nums phone:text-[15px] ${lapInvalid ? "text-[#FF2A3C]" : "text-[#F5F7FA]"}`}>
               {formatLapTime(t.currentLapTimeMs)}
             </span>
             <span
-              className="lc-data inline-flex h-[22px] w-[66px] shrink-0 items-center justify-center rounded-full text-[11px] whitespace-nowrap text-[#08090D] tabular-nums"
+              className="lc-data inline-flex h-[22px] w-[66px] shrink-0 items-center justify-center rounded-full text-[11px] whitespace-nowrap phone:h-5 phone:w-[60px] phone:text-[10px] text-[#08090D] tabular-nums"
               style={{ backgroundColor: deltaS === null ? "#1B1F2B" : deltaColor(deltaS), color: deltaS === null ? "#8E96AA" : "#08090D" }}
             >
               {deltaS === null ? "--.---" : formatDelta(Math.max(-9.999, Math.min(9.999, deltaS)))}

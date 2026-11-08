@@ -33,9 +33,10 @@ const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v
 
 /**
  * Width of the steering / tilt card: on a portrait phone it ends a gap short of the pedal column
- * (16 px edges, two 80 px pedals and their 12 px gap, 12 px between)
+ * (16 px edges, two 80 px pedals and their 12 px gap, 12 px between); on a landscape phone it stays
+ * a thumb's sweep wide instead of taking a third of the screen
  */
-const STICK_WIDTH = "min(clamp(200px, 38vw, 400px), calc(100vw - 216px))";
+const STICK_WIDTH = "w-[min(clamp(200px,38vw,400px),calc(100vw-216px))] phone:w-[min(clamp(180px,30vw,280px),calc(100vw-216px))]";
 
 /** Steering knob diameter (px) */
 const KNOB = 52;
@@ -105,8 +106,8 @@ const SteerPad: React.FC<SteerPadProps> = ({ value, onChange }) => {
       aria-valuemin={-100}
       aria-valuemax={100}
       aria-valuenow={Math.round(value * 100)}
-      className={`${STICK_CARD} pointer-events-auto touch-none relative flex flex-col gap-2.5 overflow-hidden px-4 pt-3.5 pb-[18px] short:gap-1.5 short:pt-2.5 short:pb-3`}
-      style={{ width: STICK_WIDTH, touchAction: "none" }}
+      className={`${STICK_CARD} ${STICK_WIDTH} pointer-events-auto touch-none relative flex flex-col gap-2.5 overflow-hidden px-4 pt-3.5 pb-[18px] phone:gap-1.5 phone:pt-2.5 phone:pb-3`}
+      style={{ touchAction: "none" }}
       onPointerDown={down}
       onPointerMove={move}
       onPointerUp={release}
@@ -119,7 +120,7 @@ const SteerPad: React.FC<SteerPadProps> = ({ value, onChange }) => {
           {Math.round(value * 100)}
         </span>
       </div>
-      <div className="pointer-events-none relative h-14 short:h-11">
+      <div className="pointer-events-none relative h-14 phone:h-11">
         {/* Track */}
         <span className="absolute inset-x-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-[#1B1F2B]" />
         {/* Fill from the centre to the knob */}
@@ -137,7 +138,7 @@ const SteerPad: React.FC<SteerPadProps> = ({ value, onChange }) => {
         <span className="absolute inset-y-2 left-1/2 w-0.5 -translate-x-1/2 bg-[#F5F7FA]/40" />
         {/* Knob */}
         <span
-          className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border-[3px] short:scale-[0.85]"
+          className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border-[3px] phone:scale-[0.85]"
           style={{
             left: knobLeft,
             width: KNOB,
@@ -173,8 +174,8 @@ const TiltIndicator: React.FC<TiltIndicatorProps> = ({ value, status, onRecentre
 
   return (
     <div
-      className={`${STICK_CARD} pointer-events-auto touch-none flex flex-col gap-2.5 px-4 pt-3.5 pb-4 short:gap-2 short:pt-2.5 short:pb-3`}
-      style={{ width: STICK_WIDTH, touchAction: "none" }}
+      className={`${STICK_CARD} ${STICK_WIDTH} pointer-events-auto touch-none flex flex-col gap-2.5 px-4 pt-3.5 pb-4 phone:gap-2 phone:pt-2.5 phone:pb-3`}
+      style={{ touchAction: "none" }}
     >
       <div className="flex items-center justify-between">
         <span className={LABEL}>{TILT_LABEL[status]}</span>
@@ -248,7 +249,7 @@ const Pedal: React.FC<PedalProps> = ({ label, color, value, onChange }) => {
       aria-valuemin={0}
       aria-valuemax={100}
       aria-valuenow={Math.round(value * 100)}
-      className="pointer-events-auto touch-none relative flex h-[150px] w-[100px] flex-col justify-between overflow-hidden rounded-[30px] border-2 bg-[#08090D]/60 p-3 backdrop-blur-[10px] max-sm:portrait:w-[80px] short:h-[128px] short:w-[88px] short:rounded-[26px]"
+      className="pointer-events-auto touch-none relative flex h-[150px] w-[100px] flex-col justify-between overflow-hidden rounded-[30px] border-2 bg-[#08090D]/60 p-3 backdrop-blur-[10px] max-sm:portrait:w-[80px] short:w-[88px] phone:h-[116px] phone:rounded-[24px]"
       style={{
         borderColor: color,
         boxShadow: value > 0 ? `0 0 30px ${color}59` : "none",
@@ -303,8 +304,8 @@ const TapButton: React.FC<TapButtonProps> = ({ label, ariaLabel, color, textColo
     className={`pointer-events-auto touch-none flex items-center justify-center rounded-full active:scale-95 ${
       small
         ? "h-11 min-w-[72px] border border-white/8 bg-[#08090D]/70 px-4 text-[14px] font-bold backdrop-blur-[14px] short:h-9 short:min-w-[64px]"
-        : `h-14 border-2 bg-[#08090D]/60 font-f1-mono text-[13px] font-extrabold backdrop-blur-[10px] short:h-12 ${
-            wide ? "w-[84px] short:w-[72px]" : "w-14 short:w-12"
+        : `h-14 border-2 bg-[#08090D]/60 font-f1-mono text-[13px] font-extrabold backdrop-blur-[10px] phone:h-12 ${
+            wide ? "w-[84px] phone:w-[72px]" : "w-14 phone:w-12"
           }`
     }`}
     style={{
@@ -472,7 +473,7 @@ export const TouchControls: React.FC<TouchControlsProps> = ({
 
       {/* Bottom-right: shift / boost / aero buttons above the pedals */}
       <div
-        className="absolute flex flex-col items-end gap-3 short:gap-2"
+        className="absolute flex flex-col items-end gap-3 phone:gap-2"
         style={{ right: edge("right", 16), bottom: edge("bottom", 16) }}
       >
         <div className="flex gap-2">
@@ -512,7 +513,7 @@ export const TouchControls: React.FC<TouchControlsProps> = ({
             }}
           />
         </div>
-        <div className="flex gap-3 short:gap-2">
+        <div className="flex gap-3 phone:gap-2">
           <Pedal label="BRAKE" color={HUD_RED} value={vis.brake} onChange={setBrake} />
           <Pedal label="THROTTLE" color={HUD_GREEN} value={vis.throttle} onChange={setThrottle} />
         </div>
