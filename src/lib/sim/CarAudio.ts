@@ -32,6 +32,7 @@ import { CAMERA_MODES } from '@/lib/render/camera-modes';
 import { ContactAcousticsRig } from './contact-acoustics';
 import { AMR26_AUDIO_DIR, Vf26SoundBank } from './vf26-audio';
 import { VF26_ENGINE } from './vf26-data';
+import { AMG_GT3_CONFIG } from './gt3/AmgGt3Config';
 
 /** Where a car's converted sound bank lives, and its rev limiter (for the limiter bounce) */
 export interface CarSoundSource {
@@ -55,8 +56,8 @@ export const SF71H_SOUND: CarSoundSource = { id: 'sf71h', assetDir: '/cars/sf71h
 export const RB8_SOUND: CarSoundSource = { id: 'rb8', assetDir: '/cars/rb8/audio/', limiterRpm: 18000, physicsLimiterRpm: VF26_ENGINE.limiterRpm };
 export const R25_SOUND: CarSoundSource = { id: 'r25', assetDir: '/cars/r25/audio/', limiterRpm: 19000, physicsLimiterRpm: VF26_ENGINE.limiterRpm };
 export const F2004_SOUND: CarSoundSource = { id: 'f2004', assetDir: '/cars/f2004/audio/', limiterRpm: 19000, physicsLimiterRpm: VF26_ENGINE.limiterRpm };
-/** The AMG GT3 vehicle model's limiter (AmgGt3Config gearbox redline) */
-const AMG_GT3_LIMITER_RPM = 7900;
+/** The AMG GT3 vehicle model's limiter (its gearbox redline) */
+const AMG_GT3_LIMITER_RPM = AMG_GT3_CONFIG.gearbox.gears.redline_rpm;
 export const BMW_M4_GT3_SOUND: CarSoundSource = { id: 'bmw-m4-gt3', assetDir: '/cars/bmw-m4-gt3/audio/', limiterRpm: 7000, physicsLimiterRpm: AMG_GT3_LIMITER_RPM };
 
 

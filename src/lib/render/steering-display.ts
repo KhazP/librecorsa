@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import type { CarTelemetry } from "@/types/f1";
 import { planarUvGeometry } from "./planar-uv";
+import { VF26_ENGINE } from "@/lib/sim/vf26-data";
 
 /**
  * Steering-wheel screen for the VF26 GLB.
@@ -25,7 +26,8 @@ const LED_GAP = 4;
 const LED_TOP = 6;
 const LED_H = 24;
 const LED_START_RPM = 10000;
-const LIMITER_RPM = 12500;
+/** The VF26 wheel's last LED lights at the engine's limiter */
+const LIMITER_RPM = VF26_ENGINE.limiterRpm;
 
 const COLOR_BG = "#000000";
 const COLOR_LED_OFF = "#16191e";
