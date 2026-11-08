@@ -115,6 +115,7 @@ import {
   wallSweep,
 } from './TrackColliderQuery';
 import { type AutoShiftSchedule, autoShift, createAutoShiftInput, ManualShiftOverride } from '../auto-gearbox';
+import { contactHalfLengthM } from './steering-torque';
 
 const G = 9.81;
 const DEG2RAD = Math.PI / 180;
@@ -272,6 +273,8 @@ export interface WheelState {
   deflection: number;
   loadedRadius: number;
   rollingRadius: number;
+  /** Contact-patch half-length from the deflection (m) */
+  patchHalfLengthM: number;
   /** Tyre radial stiffness (N/m) */
   verticalRate: number;
   fz: number;
@@ -976,6 +979,7 @@ export class VehiclePhysics {
         deflection: 0,
         loadedRadius: 0,
         rollingRadius: 0,
+        patchHalfLengthM: 0,
         verticalRate: 0,
         fz: 0,
         fx: 0,
@@ -1313,6 +1317,7 @@ export class VehiclePhysics {
       w.fx = 0;
       w.fy = 0;
       w.mz = 0;
+      w.patchHalfLengthM = 0;
       w.mx = 0;
       w.vx = 0;
       w.vy = 0;
@@ -2023,7 +2028,10 @@ export class VehiclePhysics {
           wWaterMm > 0
             ? wetPneumaticTrailScale(td.wetTraits ?? SLICK_TRAITS, wWaterMm, absVx, w.wear)
             : 1;
-        w.mz = -fy * model.pneumaticTrail * wetTrailMult * Math.max(0, 1 - s);
+        // The pneumatic trail at zero slip is a third of the patch half-length (brush model, parabolic pressure), so it
+        // grows with the load as the patch lengthens
+        w.patchHalfLengthM = contactHalfLengthM(R0, w.deflection);
+        w.mz = -fy * (w.patchHalfLengthM / 3) * wetTrailMult * Math.max(0, 1 - s);
         const yCpShift = THREE.MathUtils.clamp(
           -0.35 * geo.width * Math.sin(w.camberLeftRad) + (fy / Math.max(500, fz)) * 0.018,
           -0.45 * geo.width,
@@ -2033,6 +2041,7 @@ export class VehiclePhysics {
       } else {
         w.combinedSlip = 0;
         w.circleFraction = 0;
+        w.patchHalfLengthM = 0;
         w.mz = 0;
         w.mx = 0;
       }
