@@ -111,14 +111,18 @@ import {
   clampFov,
   codeFromName,
   DEFAULT_PLAYER_SETTINGS,
+  loadCarChoice,
   loadOnboarded,
   loadPlayerSettings,
+  loadRumble,
   pushLibraryRecent,
+  saveCarChoice,
   saveOnboarded,
   toggleLibraryFavorite,
   type LibraryKind,
   sanitizeDriverName,
   savePlayerSettings,
+  saveRumble,
   type PlayerSettings,
 } from "@/lib/settings/player-settings";
 import type {
@@ -197,46 +201,6 @@ const scheduleIdle = (fn: (deadline?: IdleDeadline) => void) => {
   else window.setTimeout(() => fn(), 16);
 };
 
-const VEHICLE_STORAGE_KEY = "bugesera.vehicle";
-const RUMBLE_STORAGE_KEY = "bugesera.rumble";
-
-/** The car to drive: `?car=` in the URL, else the last choice, else the VF26 */
-function loadStoredCar(): CarId {
-  try {
-    const fromUrl = new URLSearchParams(window.location.search).get("car");
-    if (isCarId(fromUrl)) return fromUrl;
-    const saved = localStorage.getItem(VEHICLE_STORAGE_KEY);
-    return isCarId(saved) ? saved : "vf26";
-  } catch {
-    return "vf26";
-  }
-}
-
-function saveCar(car: CarId) {
-  try {
-    localStorage.setItem(VEHICLE_STORAGE_KEY, car);
-  } catch {
-    // Storage unavailable: the choice lasts for this session only
-  }
-}
-
-/** Gamepad rumble is on unless it was switched off last time */
-function loadStoredRumble(): boolean {
-  try {
-    return localStorage.getItem(RUMBLE_STORAGE_KEY) !== "0";
-  } catch {
-    return true;
-  }
-}
-
-function saveRumble(enabled: boolean) {
-  try {
-    localStorage.setItem(RUMBLE_STORAGE_KEY, enabled ? "1" : "0");
-  } catch {
-    // Storage unavailable: the choice lasts for this session only
-  }
-}
-
 export interface LibreCorsaSimulatorProps {
   /** Active circuit (already set with `setActiveTrack`; the gate remounts this component on a change) */
   trackId?: string;
@@ -251,7 +215,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   /** The player's car: the VF26 (F1Physics2026) or the f12026-car (F12026CarSim) */
   const physicsRef = useRef<SimulatorCar | null>(null);
   /** The chosen car, and the vehicle model it drives on */
-  const [carId, setCarId] = useState<CarId>(loadStoredCar);
+  const [carId, setCarId] = useState<CarId>(loadCarChoice);
   const carIdRef = useRef(carId);
   const [vehicleModel, setVehicleModel] = useState<VehicleModelId>(() => carPhysics(carId));
   const vehicleModelRef = useRef(vehicleModel);
@@ -345,7 +309,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   const setRacingLineVisibleRef = useRef<(visible: boolean) => void>(() => {});
   const setMouseSteerRef = useRef<(enabled: boolean) => void>(() => {});
   const [autoGearbox, setAutoGearboxState] = useState(true);
-  const [gamepadRumble, setGamepadRumble] = useState<boolean>(loadStoredRumble);
+  const [gamepadRumble, setGamepadRumble] = useState<boolean>(loadRumble);
   const rumbleEnabledRef = useRef(gamepadRumble);
   rumbleEnabledRef.current = gamepadRumble;
   /** Pad rumble driven from the physics; created with the physics and silenced on pause / unmount */
@@ -702,7 +666,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       setCarId(next);
       vehicleModelRef.current = carPhysics(next);
       setVehicleModel(vehicleModelRef.current);
-      saveCar(next);
+      saveCarChoice(next);
       swapCarRef.current?.(next);
       audioRef.current?.setCar(soundFor(next));
     },

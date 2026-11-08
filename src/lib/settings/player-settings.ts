@@ -25,6 +25,7 @@ import {
 } from "@/lib/input/device-input";
 import { KB_STEER_RETURN_S, KB_STEER_RISE_S } from "@/lib/input/keyboard-steer";
 import { isCameraMode } from "@/lib/render/camera-modes";
+import { isCarId, type CarId } from "@/lib/cars/car-registry";
 import { AI_SKILL_DEFAULT } from "@/lib/sim/ai-tuning";
 import { DEFAULT_DEVICE_ASSIST_TUNING, sanitizeAssistTuning, type DeviceAssistTuning } from "@/lib/sim/steering-assist";
 import { SIM_REALISM_LEVELS, type SimRealism } from "@/lib/sim/sim-realism";
@@ -703,5 +704,45 @@ export function saveOnboarded() {
     localStorage.setItem(ONBOARDED_STORAGE_KEY, "1");
   } catch {
     // Storage unavailable: the setup shows again next visit
+  }
+}
+
+const CAR_STORAGE_KEY = "bugesera.vehicle";
+const RUMBLE_STORAGE_KEY = "bugesera.rumble";
+
+/** The car to drive: `?car=` in the URL, else the last choice, else the VF26 */
+export function loadCarChoice(): CarId {
+  try {
+    const fromUrl = new URLSearchParams(window.location.search).get("car");
+    if (isCarId(fromUrl)) return fromUrl;
+    const saved = localStorage.getItem(CAR_STORAGE_KEY);
+    return isCarId(saved) ? saved : "vf26";
+  } catch {
+    return "vf26";
+  }
+}
+
+export function saveCarChoice(car: CarId) {
+  try {
+    localStorage.setItem(CAR_STORAGE_KEY, car);
+  } catch {
+    // Storage unavailable: the choice lasts for this session only
+  }
+}
+
+/** Gamepad rumble is on unless it was switched off last time */
+export function loadRumble(): boolean {
+  try {
+    return localStorage.getItem(RUMBLE_STORAGE_KEY) !== "0";
+  } catch {
+    return true;
+  }
+}
+
+export function saveRumble(enabled: boolean) {
+  try {
+    localStorage.setItem(RUMBLE_STORAGE_KEY, enabled ? "1" : "0");
+  } catch {
+    // Storage unavailable: the choice lasts for this session only
   }
 }
