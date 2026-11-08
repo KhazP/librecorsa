@@ -402,7 +402,8 @@ export interface AeroData {
   drag: number;
   /**
    * Height of the total drag's line of action above the CG, body frame (m). Wings, wheels and body each drag at their
-   * own height, so the sum pitches the car (nose up when it acts above the CG). Absent: through the CG, no pitch moment
+   * own height, so the sum pitches the car (nose up when it acts above the CG). Absent: through the CG, no pitch moment.
+   * Set it for wing-element aero; a ride-height map whose balance is an axle split already carries the drag's moment
    */
   dragCentreY?: number;
   wings: WingData[];
@@ -1086,10 +1087,11 @@ const F12026_AERO: AeroData = {
   front_lift: 0,
   rear_lift: 0,
   drag: 0,
-  // An open-wheeler's drag is about a third wheels (at ≈ 0.36–0.40 m), a third rear wing (≈ 0.8 m), the rest front wing
-  // (≈ 0.15 m) and body / floor / cooling (≈ 0.3 m) (breakdown: Katz, Race Car Aerodynamics): ≈ 0.45 m off the ground,
-  // 0.18 m above the 0.27 m CG [est]
-  dragCentreY: 0.18,
+  // No dragCentreY: the map's drag stays through the CG. Its balance table is a front/rear axle split, the way tunnel
+  // and CFD balances are quoted, and an axle split already holds the drag's pitching moment (the drag acts ≈ 0.45 m up,
+  // 0.18 m above the CG, which unloads the front by ≈ 1.1 points of the downforce at any speed); the source map applies
+  // its drag at the reference point, and this table (with its −1.5 pt) is tuned that way. Raising the drag here would
+  // count that moment twice
   wings: [
     {
       // Offset vs the 30° reference angle, set at 25° [ref_aero.ini WING_0, CL_FW_AOA.lut / CD_FW_AOA.lut]
