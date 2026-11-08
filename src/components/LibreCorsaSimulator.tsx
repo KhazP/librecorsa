@@ -181,6 +181,10 @@ const MP_CLOCK_UNSYNCED_FRAME: MultiplayerRaceFrame = { phase: "countdown", ligh
 /** A loading task with no progress for this long is given up on (the procedural stand-in stays) */
 const ASSET_STALL_MS = 25_000;
 
+/** Slicks or rain tyres for the line's water; a car on slicks keeps its own slick */
+const autoCompoundFor = (lineWaterMm: number, current: TireCompound | undefined): TireCompound =>
+  recommendedCompound(lineWaterMm, current && !isRainCompound(current) ? current : "soft");
+
 const approach = (value: number, target: number, maxStep: number) =>
   value + Math.max(-maxStep, Math.min(maxStep, target - value));
 
@@ -312,10 +316,6 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   const [settings, setSettings] = useState<PlayerSettings>(DEFAULT_PLAYER_SETTINGS);
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
-  /** Player's driver's-eye FOV (null = the car's own), read by the render loop */
-  const cockpitFovRef = useRef<number | null>(settings.cockpitFovDeg);
-  cockpitFovRef.current = settings.cockpitFovDeg;
-  /** The current car's own driver's-eye FOV, for the FOV slider's default and the [ / ] keys */
   // The preferences the game applies to the car and the camera: `settings` is their only copy
   const assistPreset = settings.assistPreset;
   const showRacingLine = settings.racingLine;
@@ -333,6 +333,10 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   gamepadAssistRef.current = gamepadAssist;
   const showRacingLineRef = useRef(showRacingLine);
   showRacingLineRef.current = showRacingLine;
+  /** Player's driver's-eye FOV (null = the car's own), read by the render loop */
+  const cockpitFovRef = useRef<number | null>(settings.cockpitFovDeg);
+  cockpitFovRef.current = settings.cockpitFovDeg;
+  /** The current car's own driver's-eye FOV, for the FOV slider's default and the [ / ] keys */
   const [carCockpitFov, setCarCockpitFov] = useState(FALLBACK_COCKPIT_FOV_DEG);
   const carCockpitFovRef = useRef(carCockpitFov);
   /** Saved settings have been read and applied (saving before that would overwrite them with defaults) */
@@ -900,14 +904,9 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     const next = settingsRef.current.conditions;
     if (JSON.stringify(env.weather.conditions) !== JSON.stringify(next)) {
       env.setConditions(next);
-      // Slicks or rain tyres for the new water; a player already on slicks keeps their own slick
-      const current = physicsRef.current?.tireCompound;
-      const autoCompound = recommendedCompound(env.weather.lineWaterMm, current && !isRainCompound(current) ? current : "soft");
-      if (physicsRef.current && physicsRef.current.tireCompound !== autoCompound) {
-        physicsRef.current.tireCompound = autoCompound;
-        setTireCompound(autoCompound);
-        carRigRef.current?.setTireCompound(autoCompound);
-      }
+      const car = physicsRef.current;
+      const autoCompound = autoCompoundFor(env.weather.lineWaterMm, car?.tireCompound);
+      if (car && car.tireCompound !== autoCompound) handleTireCompoundChange(autoCompound);
     }
   }, [conditionsKey, getTrackEnv, handleTireCompoundChange]);
   useEffect(() => {
@@ -1304,17 +1303,17 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         };
       }
       car.aiAutopilot = false;
-      car.assistPreset = prev?.assistPreset ?? DEFAULT_ASSIST_PRESET;
+      // The player's preferences from their settings; the aero package and the tyre on from the car before
+      const prefs = settingsRef.current;
+      car.assistPreset = prefs.assistPreset;
+      car.gamepadAssistEnabled = prefs.gamepadAssist;
+      car.autoGearbox = prefs.autoGearbox;
       car.aeroPreset = prev?.aeroPreset ?? DEFAULT_AERO_PRESET;
       if (prev) {
         car.tireCompound = prev.tireCompound;
       } else {
-        const autoCompound = recommendedCompound(
-          getTrackEnv().weather.lineWaterMm,
-          isRainCompound(car.tireCompound) ? "soft" : car.tireCompound
-        );
-        car.tireCompound = autoCompound;
-        setTireCompound(autoCompound);
+        car.tireCompound = autoCompoundFor(getTrackEnv().weather.lineWaterMm, car.tireCompound);
+        setTireCompound(car.tireCompound);
       }
       car.resetToStartGrid(false);
 
