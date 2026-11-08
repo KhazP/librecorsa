@@ -115,7 +115,15 @@ import {
   wallSweep,
 } from './TrackColliderQuery';
 import { type AutoShiftSchedule, autoShift, createAutoShiftInput, ManualShiftOverride } from '../auto-gearbox';
-import { contactHalfLengthM, kingpinMomentNm } from './steering-torque';
+import {
+  contactHalfLengthM,
+  kingpinMomentNm,
+  PATCH_HALF_WIDTH_SHARE,
+  PATCH_TWIST_DAMPING_S,
+  patchTwistStiffness,
+  spinFrictionArmM,
+  stepPatchTwist,
+} from './steering-torque';
 
 const G = 9.81;
 const DEG2RAD = Math.PI / 180;
@@ -285,6 +293,14 @@ export interface WheelState {
   fy: number;
   /** Self-aligning moment about the contact normal (Nm) */
   mz: number;
+  /** Moment of the patch twisted against the road about the contact normal (Nm): the parking torque */
+  mzTwist: number;
+  /**
+   * Patch twist (rad, + = wheel turned left of the rubber held by the road), and the toe / compliance share of the
+   * steer angle it was last wound from (the driver's share comes in as a rate)
+   */
+  twistRad: number;
+  twistSteerRad: number;
   /** Overturning moment Mx (Nm) from lateral contact patch shift */
   mx: number;
   /** Spin (rad/s) and accumulated visual rotation (rad) */
@@ -680,6 +696,12 @@ export class VehiclePhysics {
   private ffbSamples = 0;
   /** 500 Hz outer-step FFB samples accumulated during step() */
   private ffbSubframeSamples: number[] = [];
+  /**
+   * Commanded road-wheel angle at the last step() and its rate over that step (rad, rad/s): how fast the wheel is
+   * really being turned, which the once-per-frame input otherwise only shows as steps
+   */
+  private lastCmdSteerRad = Number.NaN;
+  private cmdSteerRateRadS = 0;
 
   // ---- body state (world)
   /** CG position */
@@ -988,6 +1010,9 @@ export class VehiclePhysics {
         fx: 0,
         fy: 0,
         mz: 0,
+        mzTwist: 0,
+        twistRad: 0,
+        twistSteerRad: Number.NaN,
         mx: 0,
         omega: 0,
         rotationRad: 0,
@@ -1219,6 +1244,8 @@ export class VehiclePhysics {
       w.tanSlipAngle = 0;
       w.omega = 0;
       w.complianceRad = 0;
+      w.twistRad = 0;
+      w.twistSteerRad = Number.NaN;
     }
     // Lift the body so the hardpoints sit at their static distance above the hubs
     let dy = 0;
@@ -1272,6 +1299,8 @@ export class VehiclePhysics {
     }
     this.prevVelocity.copy(this.velocity);
     this.ffbSubframeSamples.length = 0;
+    this.lastCmdSteerRad = Number.NaN;
+    this.cmdSteerRateRadS = 0;
     this.updateOutputs(0);
   }
 
@@ -1320,6 +1349,9 @@ export class VehiclePhysics {
       w.fx = 0;
       w.fy = 0;
       w.mz = 0;
+      w.mzTwist = 0;
+      w.twistRad = 0;
+      w.twistSteerRad = Number.NaN;
       w.patchHalfLengthM = 0;
       w.mx = 0;
       w.vx = 0;
@@ -1389,7 +1421,7 @@ export class VehiclePhysics {
     if (!Number.isFinite(p.x + p.y + p.z + v.x + v.y + v.z + w.x + w.y + w.z + q.x + q.y + q.z + q.w + this.engineOmega)) return false;
     if (v.lengthSq() > BLOWN_UP_SPEED_MS * BLOWN_UP_SPEED_MS || w.lengthSq() > BLOWN_UP_SPIN_RADS * BLOWN_UP_SPIN_RADS) return false;
     for (const wh of this.wheels) {
-      if (!Number.isFinite(wh.omega + wh.hubY + wh.hubVy + wh.slipRatio + wh.tanSlipAngle + wh.complianceRad)) return false;
+      if (!Number.isFinite(wh.omega + wh.hubY + wh.hubVy + wh.slipRatio + wh.tanSlipAngle + wh.complianceRad + wh.twistRad)) return false;
     }
     return true;
   }
@@ -1407,6 +1439,17 @@ export class VehiclePhysics {
     const inp = this.sanitizeInputs(inputs);
     this.handleEdges(inp);
     this.timeAccumulator = Math.min(this.timeAccumulator + dtSeconds, 0.1);
+    // The steering input arrives once per call: spread its change over the fixed steps this call runs, the wheel's
+    // real speed (a step that runs none carries the change on to the next)
+    let fixedSteps = 0;
+    for (let a = this.timeAccumulator; a >= VehiclePhysics.FIXED_DT; a -= VehiclePhysics.FIXED_DT) fixedSteps++;
+    if (fixedSteps > 0) {
+      const cmdSteerRad = -inp.steer * this.maxSteerRad;
+      this.cmdSteerRateRadS = Number.isFinite(this.lastCmdSteerRad)
+        ? (cmdSteerRad - this.lastCmdSteerRad) / (fixedSteps * VehiclePhysics.FIXED_DT)
+        : 0;
+      this.lastCmdSteerRad = cmdSteerRad;
+    }
     let steps = 0;
     while (this.timeAccumulator >= VehiclePhysics.FIXED_DT) {
       this.timeAccumulator -= VehiclePhysics.FIXED_DT;
@@ -1940,6 +1983,8 @@ export class VehiclePhysics {
 
       let fx = 0;
       let fy = 0;
+      /** The driver's share of this wheel's steer angle (the rest is toe and compliance) */
+      const cmdSteerRad = w.isFront ? -inp.steer * this.maxSteerRad : 0;
       if (fz > 0) {
         const td = tyre.data;
         const cam = td.camberData;
@@ -2041,13 +2086,33 @@ export class VehiclePhysics {
           0.45 * geo.width
         );
         w.mx = fz * yCpShift;
+
+        // Patch twist (parking torque): the wheel's yaw over the road (steering and the body's yaw) winds the rubber
+        // held in the patch up against the tyre's twist stiffness; rolling lets it out, and past the spin friction
+        // moment the patch slides round instead
+        const patchB = PATCH_HALF_WIDTH_SHARE * geo.width;
+        const cfa = (muY * fz * tyre.B * tyre.C) / tyre.tanPeakAngle;
+        const cfk = (muX * fz * tyre.B * tyre.C) / tyre.peakSlipRatio;
+        const kTwist = patchTwistStiffness(cfa, cfk, model.relaxationLengthY, model.relaxationLengthX, w.patchHalfLengthM, patchB);
+        const maxTwist = kTwist > 0 ? (0.5 * (muX + muY) * fz * spinFrictionArmM(w.patchHalfLengthM, patchB)) / kTwist : 0;
+        // The wheel's yaw rate over the road: the driver's steering (spread over the frame), the toe / compliance
+        // angle's own change, and the body's yaw
+        const ownSteerDelta = Number.isFinite(w.twistSteerRad) ? w.steerRad - cmdSteerRad - w.twistSteerRad : 0;
+        const psiRate = (w.isFront ? this.cmdSteerRateRadS : 0) + ownSteerDelta / h + this.angularVelocity.dot(_n);
+        w.twistRad = stepPatchTwist(w.twistRad, psiRate * h, absVx * h, w.patchHalfLengthM, maxTwist);
+        const twistRate = psiRate - (absVx / Math.max(1e-3, w.patchHalfLengthM)) * w.twistRad;
+        const mTwistMax = kTwist * maxTwist;
+        w.mzTwist = -THREE.MathUtils.clamp(kTwist * (w.twistRad + PATCH_TWIST_DAMPING_S * twistRate), -mTwistMax, mTwistMax);
       } else {
         w.combinedSlip = 0;
         w.circleFraction = 0;
         w.patchHalfLengthM = 0;
         w.mz = 0;
+        w.mzTwist = 0;
+        w.twistRad = 0;
         w.mx = 0;
       }
+      w.twistSteerRad = w.steerRad - cmdSteerRad;
       tyreTorque[i] = -fx * w.rollingRadius;
       // Per-wheel hydrodynamic water-wedge drag: acts on the hub/chassis (pulling toward deeper puddles)
       const hydroDrag = wWaterMm > 0 && vx > 0.5 ? hydrodynamicDragN(wWaterMm, absVx, geo.width, fz) : 0;
@@ -2060,7 +2125,6 @@ export class VehiclePhysics {
       if (w.isFront) {
         const flatSpotVib = flatSpotVibrationNm(w.flatSpotSeverity, w.rotationRad, w.omega, fz);
         const speedGate = THREE.MathUtils.clamp(absVx / 5, 0, 1);
-        const lowSpeedScale = THREE.MathUtils.lerp(0.03, 1.0, THREE.MathUtils.smoothstep(absVx * 3.6, 0.5, 4.0));
         const isoRough = evaluateIso8608RoadRoughness(
           w.hardpointWorld.x,
           w.hardpointWorld.z,
@@ -2068,9 +2132,9 @@ export class VehiclePhysics {
         );
         const roadTexNm = isoRough * w.verticalRate * 0.006 * speedGate * (w.isLeft ? 1 : -1);
         const tyreKingpinNm = kingpinMomentNm(
-          _ex, _ey, _ez, _n, _fw, _lw, w.isLeft ? -1 : 1, w.steerRad, w.loadedRadius, kin, fx, fy, fz, w.mz, w.mx
+          _ex, _ey, _ez, _n, _fw, _lw, w.isLeft ? -1 : 1, w.steerRad, w.loadedRadius, kin, fx, fy, fz, w.mz + w.mzTwist, w.mx
         );
-        ffbMz += tyreKingpinNm * lowSpeedScale + flatSpotVib + roadTexNm;
+        ffbMz += tyreKingpinNm + flatSpotVib + roadTexNm;
       }
 
       // Loose ground (gravel, grass) ploughs against the contact patch's motion, sliding or rolling, outside the
@@ -2092,7 +2156,8 @@ export class VehiclePhysics {
       const rcHeight = 0.75 * axle.spec.rollCentreHeight + 0.25 * kinRcHeight;
       _w.copy(_p).addScaledVector(_n, rcHeight);
       this.addForceAt(_f, _w);
-      if (w.mz !== 0) this.torque.addScaledVector(_n, w.mz);
+      const mzBody = w.mz + w.mzTwist;
+      if (mzBody !== 0) this.torque.addScaledVector(_n, mzBody);
     }
     this.telemetry.ffbTorqueNorm = THREE.MathUtils.clamp(ffbMz / FFB_REFERENCE_NM, -1, 1);
     this.ffbSum += this.telemetry.ffbTorqueNorm;

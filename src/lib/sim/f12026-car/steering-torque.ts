@@ -10,7 +10,13 @@
  * steering ratio.
  *
  * The contact patch comes from the brush model with a rectangular patch of half-length a and half-width b:
- * - pneumatic trail at zero slip t0 = a/3 (parabolic pressure).
+ * - pneumatic trail at zero slip t0 = a/3 (parabolic pressure),
+ * - tread stiffness per unit area k = C_Fα / (4a²b) (from the cornering stiffness C_Fα = 4ka²b),
+ * - twist (spin) stiffness of the tread kφ·J = C_Fα·(a² + b²)/(3a), J = 4ab(a² + b²)/3 its polar moment, in series
+ *   with the carcass's,
+ * - Coulomb spin friction moment μ·Fz·r̄, r̄ the mean distance of the patch from its centre,
+ * which together give the parking torque of a tyre twisted in place (elastic, then sliding) and its decay once it
+ * rolls (the twisted rubber leaves the patch over about its half-length a).
  */
 import type { CornerKinematicsState } from '../suspension-kinematics';
 
@@ -20,10 +26,62 @@ interface Vec3Like {
   z: number;
 }
 
+/**
+ * Tread half-width as a share of the section width: the tread is ≈ 84 % of the section, as the contact patch sampler
+ * (`sample5PointContactPatch`, 0.42 × width) already takes it
+ */
+export const PATCH_HALF_WIDTH_SHARE = 0.42;
+/** Floor on the patch half-length (m): keeps the brush-model divisions finite on a barely loaded tyre */
+const MIN_PATCH_HALF_LENGTH_M = 0.005;
+/**
+ * Viscous time constant of the twisted tyre (s): the tread rubber's hysteresis, a loss factor ωτ ≈ 0.5 at the 2–4 Hz
+ * a parked rim rocks at (racing compounds run ≈ 0.3–0.6). It is also what lets a direct-drive rim settle on a parked
+ * tyre's twist through the frame-rate input delay (60 fps, hands off) instead of rocking on it
+ */
+export const PATCH_TWIST_DAMPING_S = 0.03;
+
 /** Contact-patch half-length (m) of a tyre of radius `radiusM` pressed `deflectionM` into the road: the chord √(2Rδ − δ²) */
 export function contactHalfLengthM(radiusM: number, deflectionM: number): number {
   const d = Math.min(Math.max(0, deflectionM), radiusM);
   return Math.sqrt(2 * radiusM * d - d * d);
+}
+
+/**
+ * Mean distance (m) of a uniformly loaded 2a × 2b rectangle from its centre: the lever arm of Coulomb friction when
+ * the patch spins about its centre (the exact integral of √(x² + y²) over the rectangle)
+ */
+export function spinFrictionArmM(a: number, b: number): number {
+  const A = Math.max(MIN_PATCH_HALF_LENGTH_M, a);
+  const B = Math.max(MIN_PATCH_HALF_LENGTH_M, b);
+  const d = Math.sqrt(A * A + B * B);
+  return (2 * A * B * d + A * A * A * Math.log((B + d) / A) + B * B * B * Math.log((A + d) / B)) / (6 * A * B);
+}
+
+/**
+ * Twist stiffness of the tyre about the contact normal (Nm/rad): the tread brush, C_Fα(a² + b²)/(3a), in series with
+ * the carcass. The carcass's lateral and longitudinal stiffness at the patch follow from the relaxation lengths
+ * (σ = slip stiffness / carcass stiffness, Pacejka's stretched string), and spread along / across the patch they
+ * resist a yaw of the belt by (C_Fα·a²/σy + C_Fκ·b²/σx)/3.
+ *
+ * `cfa` cornering stiffness (N/rad), `cfk` longitudinal slip stiffness (N per unit slip), `sigmaY` / `sigmaX` the
+ * relaxation lengths (m), `a` / `b` the patch half-length / half-width (m).
+ */
+export function patchTwistStiffness(cfa: number, cfk: number, sigmaY: number, sigmaX: number, a: number, b: number): number {
+  const A = Math.max(MIN_PATCH_HALF_LENGTH_M, a);
+  const tread = (cfa * (A * A + b * b)) / (3 * A);
+  const carcass = ((cfa * A * A) / Math.max(1e-3, sigmaY) + (cfk * b * b) / Math.max(1e-3, sigmaX)) / 3;
+  return tread > 0 && carcass > 0 ? (tread * carcass) / (tread + carcass) : 0;
+}
+
+/**
+ * One step of the patch twist (rad, + = wheel turned left of the rubber stuck to the road): the wheel's yaw over the
+ * ground `dPsiRad` winds it up, rolling `rollDistM` lets it out over the half-length `a`, and past `maxTwistRad`
+ * (spin friction / twist stiffness) the patch slides instead (elastic-plastic). Implicit in the roll-out, so any
+ * speed and step size stay stable.
+ */
+export function stepPatchTwist(twistRad: number, dPsiRad: number, rollDistM: number, a: number, maxTwistRad: number): number {
+  const t = (twistRad + dPsiRad) / (1 + rollDistM / Math.max(MIN_PATCH_HALF_LENGTH_M, a));
+  return t > maxTwistRad ? maxTwistRad : t < -maxTwistRad ? -maxTwistRad : t;
 }
 
 /**
