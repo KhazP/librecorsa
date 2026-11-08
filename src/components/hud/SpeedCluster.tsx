@@ -235,7 +235,7 @@ export const SpeedCluster: React.FC<SpeedClusterProps> = ({
             className="lc-data rounded-full px-2 py-0.5 text-[9px] italic"
             style={{ backgroundColor: isGt3 ? HUD_CYAN : isRoad ? HUD_ROAD : HUD_VOLT, color: "#08090D" }}
           >
-            {isGt3 ? "GT3 PRO" : isRoad ? "ROAD CAR" : "F1 2026"}
+            {isGt3 ? "GT3 PRO" : isRoad ? "ROAD CAR" : "F1"}
           </span>
           {flash ? (
             <span className="lc-data animate-pulse rounded-full bg-[#FF2A3C] px-2 py-0.5 text-[9px] text-[#F5F7FA]">
