@@ -211,13 +211,9 @@ export interface DriveSessionHost {
   phaseRef: Cell<AppPhase>;
   physicsRef: Cell<SimulatorCar | null>;
   prepareAiField: () => void;
-  raceRef: Cell<SessionRace>;
   racingLineMeshRef: Cell<THREE.Mesh | null>;
   releaseHeldKeys: () => void;
-  replayRef: Cell<ReplayState>;
-  resetRunRef: Cell<(reason: RunResetReason) => void>;
   rumbleEnabledRef: Cell<boolean>;
-  runIdRef: Cell<number>;
   setAssetsReady: SetState<boolean>;
   setCarCockpitFov: SetState<number>;
   setChassisSetup: SetState<ChassisSetup>;
@@ -226,7 +222,6 @@ export interface DriveSessionHost {
   setMouseSteerRef: Cell<(enabled: boolean) => void>;
   setP2pStatus: SetState<P2PConnectionStatus>;
   setPauseNotice: SetState<string | null>;
-  setRaceRef: Cell<(next: SessionRace) => void>;
   setReplayUi: SetState<ReplayUi>;
   setSettings: SetState<PlayerSettings>;
   setSteerLockDeg: SetState<number | undefined>;
@@ -236,11 +231,14 @@ export interface DriveSessionHost {
   setVirtualMirrorOn: SetState<boolean>;
   setVrState: (next: VrState) => void;
   setWeatherHud: SetState<WeatherHudState | null>;
+  /** The session's kind changed (setRace), for the menus */
+  setRaceKind: (kind: SessionRace["kind"]) => void;
+  /** The run started over (resetRun), for what the component keeps per run */
+  onRunReset: (reason: RunResetReason) => void;
   settingsRef: Cell<PlayerSettings>;
   slashCommandBufferRef: Cell<string>;
   steerLockDegRef: Cell<number | undefined>;
   takeAiField: (physics: SimulatorCar) => AiOpponentField;
-  toggleAutopilot: () => void;
   togglePauseRef: Cell<() => void>;
   track: BuiltTrackData;
   trackId: string;
@@ -256,6 +254,23 @@ export interface DriveSessionHost {
  */
 export class DriveSession {
   private readonly teardown: () => void;
+  /** The race on track with the player: practice, the AI field or an online race (setRace is its only writer) */
+  private currentRace: SessionRace = { kind: "practice" };
+  /**
+   * The run starts over: a new session, a restart or reset, a corner jump, a car change, AI opponents on or off, a
+   * flashback. It never moves the car: the caller places it afterwards, so leaving the replay (which puts the drawn
+   * car back where the replay found it) comes first and can't undo the move. A flashback keeps its own trimmed
+   * replay and the race results.
+   */
+  readonly resetRun: (reason: RunResetReason) => void;
+  /** Puts a race on track with the player (or none): the AI field and a multiplayer race never run together */
+  readonly setRace: (next: SessionRace) => void;
+  /** The autopilot takes or hands back the player's car; never in a multiplayer race */
+  readonly toggleAutopilot: () => void;
+  /** The replay bar's play / pause (from the start again once at the end), seek and speed */
+  readonly replayTogglePlay: () => void;
+  readonly replaySeek: (timeS: number) => void;
+  readonly replaySpeed: (speed: number) => void;
   /** Swaps the player's car in the running scene (the run starts over with it) */
   readonly setCar: (car: CarId) => void;
   /** Applies the graphics preset to the running renderer */
@@ -300,13 +315,9 @@ export class DriveSession {
       phaseRef,
       physicsRef,
       prepareAiField,
-      raceRef,
       racingLineMeshRef,
       releaseHeldKeys,
-      replayRef,
-      resetRunRef,
       rumbleEnabledRef,
-      runIdRef,
       setAssetsReady,
       setCarCockpitFov,
       setChassisSetup,
@@ -315,7 +326,6 @@ export class DriveSession {
       setMouseSteerRef,
       setP2pStatus,
       setPauseNotice,
-      setRaceRef,
       setReplayUi,
       setSettings,
       setSteerLockDeg,
@@ -325,11 +335,12 @@ export class DriveSession {
       setVirtualMirrorOn,
       setVrState,
       setWeatherHud,
+      setRaceKind,
+      onRunReset,
       settingsRef,
       slashCommandBufferRef,
       steerLockDegRef,
       takeAiField,
-      toggleAutopilot,
       togglePauseRef,
       track,
       trackId,
@@ -340,6 +351,23 @@ export class DriveSession {
     } = host;
 
     let disposed = false;
+    const raceNow = (): SessionRace => this.currentRace;
+    /**
+     * Bumped whenever the run on track starts over (see resetRun) and written into the telemetry every frame, so
+     * anything holding lap- or run-scoped state (race control's track limits) starts over with it.
+     */
+    let runId = 0;
+    /** The instant replay: the recording, and where it is shown from while open */
+    const replay: ReplayState = { buffer: new ReplayBuffer({ maxSeconds: 90, hz: 30 }), active: false, playing: true, timeS: 0, speed: 1 };
+    this.setRace = (next) => {
+      this.currentRace = next;
+      setRaceKind(next.kind);
+    };
+    this.toggleAutopilot = () => {
+      if (disposed || raceNow().kind === "mp") return;
+      physics.aiAutopilot = !physics.aiAutopilot;
+      if (physics.aiAutopilot && physics.vxMs < 5) physics.vxMs = 45;
+    };
     // A circuit switch remounts this component: its track and warm-up load again (the car models stay cached)
     assetProgress.reset(["track", "opponents", "shaders"]);
     // The engine sound downloads alongside (decoded once the first key press unlocks audio)
@@ -360,11 +388,11 @@ export class DriveSession {
         const self = car;
         car.raceControl = {
           get racing() {
-            const race = raceRef.current;
+            const race = raceNow();
             return race.kind === "mp" ? race.race.raceRulesActive : race.kind === "ai" ? race.field.raceRulesActive : false;
           },
           earnedAtDetection: () => {
-            const race = raceRef.current;
+            const race = raceNow();
             return race.kind === "mp" ? race.race.detectionEarnedFor(self) : race.kind === "ai" ? race.field.detectionEarnedFor(self) : true;
           },
         };
@@ -404,7 +432,7 @@ export class DriveSession {
       if (disposed) return;
       // The run starts over before the old car goes: leaving the replay writes its saved pose into `physics`, which
       // must still be the old car then. The replay and the live delta belong to the old car.
-      resetRunRef.current("car");
+      this.resetRun("car");
       const vehicle = carPhysics(car);
       physics = createCar(vehicle, physics, car);
       physicsRef.current = physics;
@@ -413,10 +441,10 @@ export class DriveSession {
       lapRecorderRef.current?.setContext({ vehicle });
       lapDelta.reset();
       // A running race restarts from the lights with the new car
-      if (raceRef.current.kind === "ai") {
+      if (raceNow().kind === "ai") {
         const field = takeAiField(physics);
         if (trackRoot) field.attachTrackRoot(trackRoot);
-        setRaceRef.current({ kind: "ai", field });
+        this.setRace({ kind: "ai", field });
         field.startRace(true);
       }
       setTelemetry({ ...physics.telemetry });
@@ -480,7 +508,7 @@ export class DriveSession {
       if (disposed) return;
       trackRoot = root;
       physics.attachTrackRoot?.(root);
-      aiFieldOf(raceRef.current)?.attachTrackRoot(root);
+      aiFieldOf(raceNow())?.attachTrackRoot(root);
       aiFieldSpareRef.current?.field.attachTrackRoot(root);
       // Move broadcast cameras that would film the inside of a grandstand: about a second of raycasts on a scan,
       // spread over idle slices so neither the loading screen nor the menus freeze (until done, the TV view uses
@@ -744,7 +772,7 @@ export class DriveSession {
           handleToggleMute();
           break;
         case "autopilot":
-          toggleAutopilot();
+          this.toggleAutopilot();
           break;
         // The HUD owns these panels
         case "mfd":
@@ -757,10 +785,10 @@ export class DriveSession {
 
     const restartRun = () => {
       // A multiplayer race is restarted by the host, from the pause menu
-      const race = raceRef.current;
+      const race = raceNow();
       if (race.kind === "mp") return;
       // Out of a replay first (the reset does that), then the car moves
-      resetRunRef.current("restart");
+      this.resetRun("restart");
       if (race.kind === "ai") race.field.startRace(true);
       else physics.resetToStartGrid(true);
     };
@@ -842,7 +870,7 @@ export class DriveSession {
     /** Look of every car seen in the replay window (the frames only hold poses) */
     const replayNames = new Map<string, { code: string; color: string; vehicle?: VehicleModelId }>();
     const exitReplay = () => {
-      const rp = replayRef.current;
+      const rp = replay;
       if (!rp.active) return;
       rp.active = false;
       // The replay only moved the drawn car (the physics never left the live pose): put the drawing back
@@ -851,7 +879,7 @@ export class DriveSession {
       setReplayUi((u) => ({ ...u, active: false }));
     };
     const flashbackReplay = () => {
-      const rp = replayRef.current;
+      const rp = replay;
       if (!rp.active) return;
       const frame = rp.buffer.frameAt(rp.timeS);
       const car = frame?.cars.find((c) => c.id === "player");
@@ -870,7 +898,7 @@ export class DriveSession {
       rp.active = false;
       setReplayUi((u) => ({ ...u, active: false }));
       // A new run from here (the lap in progress is dropped; the trimmed replay stays)
-      resetRunRef.current("flashback");
+      this.resetRun("flashback");
     };
     this.exitReplay = () => {
       if (!disposed) exitReplay();
@@ -880,10 +908,10 @@ export class DriveSession {
     };
     this.toggleReplay = () => {
       if (disposed) return;
-      const rp = replayRef.current;
+      const rp = replay;
       if (rp.active) return exitReplay();
       // Not in a multiplayer race (the field keeps racing) and only with something recorded
-      if (raceRef.current.kind === "mp" || rp.buffer.durationS < 1 || phaseRef.current !== "driving") return;
+      if (raceNow().kind === "mp" || rp.buffer.durationS < 1 || phaseRef.current !== "driving") return;
       replaySaved.pos.copy(physics.worldPosition);
       replaySaved.quat.copy(physics.worldQuaternion);
       // Opens paused a moment back, showing the car there: scrub back to the point to flash back to, or play
@@ -892,6 +920,34 @@ export class DriveSession {
       rp.speed = 1;
       rp.timeS = Math.max(rp.buffer.startS, rp.buffer.endS - REPLAY_OPEN_BACK_S);
       setReplayUi({ active: true, timeS: rp.timeS, startS: rp.buffer.startS, endS: rp.buffer.endS, playing: false, speed: 1 });
+    };
+
+    this.resetRun = (reason) => {
+      if (disposed) return;
+      runId++;
+      if (reason !== "flashback") {
+        exitReplay();
+        replay.buffer.clear();
+      }
+      onRunReset(reason);
+      lapRecorder.reset();
+      physics.aiAutopilot = false;
+      kbInputRef.current.throttle = 0;
+      kbInputRef.current.brake = 0;
+      kbPedalAssistRef.current.reset();
+    };
+    this.replayTogglePlay = () => {
+      if (!replay.playing && replay.timeS >= replay.buffer.endS - 0.05) replay.timeS = replay.buffer.startS;
+      replay.playing = !replay.playing;
+      setReplayUi((u) => ({ ...u, playing: replay.playing, timeS: replay.timeS }));
+    };
+    this.replaySeek = (tS) => {
+      replay.timeS = tS;
+      setReplayUi((u) => ({ ...u, timeS: tS }));
+    };
+    this.replaySpeed = (speed) => {
+      replay.speed = speed;
+      setReplayUi((u) => ({ ...u, speed }));
     };
 
     // Horizon-Stabilized Sim Camera State
@@ -910,7 +966,7 @@ export class DriveSession {
     const lapDelta = new LapDeltaTracker(track.totalLengthM);
     // Race control: judges every excursion past the track limits (see TrackLimitsMonitor)
     const trackLimits = new TrackLimitsMonitor();
-    // Its session starts over with every new run (runIdRef), a change of session kind and a new car
+    // Its session starts over with every new run (runId), a change of session kind and a new car
     let tlCar: SimulatorCar | null = null;
     let tlRunId = -1;
     /** The wheel went while it could not pause the game (menus, loading): it pauses once the car is driven again */
@@ -1057,7 +1113,7 @@ export class DriveSession {
       const device = deviceInput.read(pads, settingsRef.current, dtSeconds, vehicleModelRef.current);
       const appPhase = phaseRef.current;
       const inMenu = appPhase !== "driving";
-      const rp = replayRef.current;
+      const rp = replay;
       if (rp.active && inMenu) exitReplay();
       const replaying = rp.active;
       const settingsNow = settingsRef.current;
@@ -1194,7 +1250,7 @@ export class DriveSession {
       }
 
       // The AI field holds the player on the grid until the lights go out, then runs its cars
-      const aiField = aiFieldOf(raceRef.current);
+      const aiField = aiFieldOf(raceNow());
       if (physics.steeringAssist.settings !== assistSettingsRef.current) {
         physics.steeringAssist.settings = assistSettingsRef.current;
       }
@@ -1205,7 +1261,7 @@ export class DriveSession {
       }
       // A multiplayer race runs on the host's clock: the grid is held until the shared lights-out, and until this
       // guest has measured that clock (lights off, no countdown)
-      const mpRace = mpRaceOf(raceRef.current);
+      const mpRace = mpRaceOf(raceNow());
       const mpFrame = mpRace
         ? multiplayerSync.clockSynced
           ? mpRace.frame(multiplayerSync.hostNowMs(nowMs))
@@ -1245,7 +1301,6 @@ export class DriveSession {
         vehicleModelRef.current
       );
       physics.telemetry.race = mpRace && mpFrame ? mpRace.status(mpFrame, physics.vxMs) : aiField?.status();
-      const runId = runIdRef.current;
       physics.telemetry.runId = runId;
 
       // Track limits: race control judges each excursion once the car is back on the asphalt. Practice deletes
@@ -1867,6 +1922,11 @@ export class DriveSession {
       renderer.dispose();
       audioRef.current?.dispose();
     };
+  }
+
+  /** The race on track with the player */
+  get race(): SessionRace {
+    return this.currentRace;
   }
 
   /** Stops the frame loop and frees the renderer, the scene and the listeners */
