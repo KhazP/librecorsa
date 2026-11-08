@@ -46,7 +46,7 @@ function taskFill(t: AssetTask): number | null {
 /** Shown once loaded; touch screens are told to tap */
 const ContinuePrompt: React.FC = () => (
   <div className="flex flex-col gap-2">
-    <span className="lc-disp lc-breathe text-[24px] text-[#CCFF00] sm:text-[30px]">
+    <span className="lc-disp lc-breathe text-[24px] text-[#CCFF00] sm:text-[30px] phone:text-[22px]">
       <span className="pointer-coarse:hidden">Press any key to enter track</span>
       <span className="hidden pointer-coarse:inline">Tap to enter track</span>
     </span>
@@ -59,7 +59,7 @@ const ContinuePrompt: React.FC = () => (
 
 /** One start-light column (two lamps) inside the pill */
 const LightColumn: React.FC<{ lit: boolean; ready: boolean }> = ({ lit, ready }) => {
-  const lamp = `h-[18px] w-[18px] rounded-full transition-all duration-300 sm:h-[22px] sm:w-[22px] ${
+  const lamp = `h-[18px] w-[18px] rounded-full transition-all duration-300 sm:h-[22px] sm:w-[22px] phone:h-[18px] phone:w-[18px] ${
     ready
       ? "bg-[#CCFF00] shadow-[0_0_16px_#CCFF00]"
       : lit
@@ -220,7 +220,7 @@ export const LoadingScreen: React.FC<{
             <div className="flex flex-wrap items-end gap-x-7 gap-y-4 short:gap-x-5">
               <div className="flex flex-col gap-2">
                 <span
-                  className="lc-disp text-[clamp(72px,12vw,168px)] tracking-[-0.02em] tabular-nums short:text-[56px]"
+                  className="lc-disp text-[clamp(72px,12vw,168px)] tracking-[-0.02em] tabular-nums phone:text-[48px]"
                   style={{ color: ready ? "#CCFF00" : "#F5F7FA" }}
                 >
                   {Math.round(shown * 100)}%
