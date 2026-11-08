@@ -462,7 +462,6 @@ function gt3Compound(
       pKy2: 3.65,
       // Default TC (0.10) and ABS (0.09) limits sit around it [est]
       slip_ratio_limit: 0.1,
-      combinedFactor: 1,
       new_combined: false,
       fx_shift_SA: 0,
       fx_scale_SA: 0,

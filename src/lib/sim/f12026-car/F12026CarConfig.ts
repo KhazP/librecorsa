@@ -462,11 +462,9 @@ export interface TyresModelData {
   /** Slip ratio at peak longitudinal force */
   slip_ratio_limit: number;
   /**
-   * Stereo's combined factor k (0..2): the combined slip seen by each axis is √(s_own² + (k·s_other)²).
-   * 1 = friction circle, < 1 = relaxed (elliptical) cross-axis penalty, > 1 = harsher penalty.
+   * Enables the asymmetric cross-axis shift / scale terms below. Either way the combined force is the pure-slip curve
+   * at the normalised slip vector's length, split along it, so it stays inside the μx / μy friction ellipse
    */
-  combinedFactor: number;
-  /** Enables the asymmetric cross-axis shift / scale terms below */
   new_combined: boolean;
   /** Longitudinal slip: s_x·(1 − fx_scale_SA·min(1, |s_y|)) + fx_shift_SA·s_y */
   fx_shift_SA: number;
@@ -1217,8 +1215,6 @@ function f1Compound(
       pKy2: 3.2,
       // The source derives it at run time; its ABS / TC limits are 0.10 [ref_electronics.ini]
       slip_ratio_limit: 0.1,
-      // The source's COMBINED_FACTOR 2.2 is not this model's cross-axis factor: slightly elliptical combined envelope [est]
-      combinedFactor: 0.94,
       new_combined: false,
       fx_shift_SA: 0,
       fx_scale_SA: 0,

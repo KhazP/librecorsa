@@ -584,13 +584,13 @@ console.log('\n== Tyre load sensitivity (cornering stiffness, peak slip angle, r
   }
 }
 
-console.log('\n== Combined slip (combinedFactor / new_combined / falloff)');
+console.log('\n== Combined slip (normalised slip vector / new_combined / falloff)');
 {
   const base = F12026_CAR_CONFIG.tyreCompounds.PhysicsTyreCompound_F1_Soft;
   const tyreWith = (patch: Partial<typeof base.modelData>) => createTyreRuntime({ ...base, modelData: { ...base.modelData, ...patch } });
   const noCross = { new_combined: false, fx_shift_SA: 0, fx_scale_SA: 0, fy_shift_SR: 0, fy_scale_SR: 0 };
   const out = { fx: 0, fy: 0, sx: 0, sy: 0 };
-  const t1 = tyreWith({ combinedFactor: 1 });
+  const t1 = createTyreRuntime(base);
   let circleErr = 0;
   for (const [sx, sy] of [
     [0.3, 0.4],
@@ -602,18 +602,22 @@ console.log('\n== Combined slip (combinedFactor / new_combined / falloff)');
     const s = Math.hypot(sx, sy);
     circleErr = Math.max(circleErr, Math.abs(Math.hypot(out.fx, out.fy) - tyreSlipCurve(t1, s)), Math.abs(Math.atan2(out.fy, out.fx) - Math.atan2(sy, sx)));
   }
-  check('k = 1: friction circle (magnitude + direction)', circleErr < 1e-9, `max err ${circleErr.toExponential(1)}`);
+  check('Force along the normalised slip vector, sized by its length', circleErr < 1e-9, `max err ${circleErr.toExponential(1)}`);
   combinedSlipForces(t1, noCross, 0.6, 0, out);
-  const pure = out.fx;
-  combinedSlipForces(tyreWith({ combinedFactor: 0.4 }), noCross, 0.6, 0, out);
-  check('Pure slip independent of k', Math.abs(out.fx - pure) < 1e-12 && out.fy === 0, '');
-  combinedSlipForces(t1, noCross, 0.6, 0.6, out);
-  const fK1 = Math.hypot(out.fx, out.fy);
-  combinedSlipForces(tyreWith({ combinedFactor: 0.5 }), noCross, 0.6, 0.6, out);
-  const fK05 = Math.hypot(out.fx, out.fy);
-  combinedSlipForces(tyreWith({ combinedFactor: 1.5 }), noCross, 0.6, 0.6, out);
-  const fK15 = Math.hypot(out.fx, out.fy);
-  check('k < 1 relaxes, k > 1 tightens the cross-axis penalty', fK05 > fK1 && fK15 < fK1, `|F| ${fmt(fK05, 3)} / ${fmt(fK1, 3)} / ${fmt(fK15, 3)} (k 0.5 / 1 / 1.5)`);
+  check('Pure slip follows the pure-slip curve', Math.abs(out.fx - tyreSlipCurve(t1, 0.6)) < 1e-12 && out.fy === 0, '');
+  // The friction ellipse (Fx / μx·Fz)² + (Fy / μy·Fz)² ≤ 1 is the unit circle in these force fractions: no slip pair,
+  // with or without the cross terms, may leave it (the old per-axis combined factor let 0.94 run ≈3 % past it)
+  let worstUse = 0;
+  const crossAll = { new_combined: true, fx_shift_SA: 0.1, fx_scale_SA: 0.3, fy_shift_SR: -0.05, fy_scale_SR: 0.2 };
+  for (const model of [noCross, crossAll]) {
+    for (let sx = -3; sx <= 3; sx += 0.05) {
+      for (let sy = -3; sy <= 3; sy += 0.05) {
+        combinedSlipForces(t1, model, sx, sy, out);
+        worstUse = Math.max(worstUse, Math.hypot(out.fx, out.fy));
+      }
+    }
+  }
+  check('Combined forces never leave the friction ellipse', worstUse <= 1 + 1e-9, `max ${fmt(worstUse, 4)} of the ellipse over |s_x|, |s_y| ≤ 3`);
   const cross = { new_combined: true, fx_shift_SA: 0, fx_scale_SA: 0.3, fy_shift_SR: 0, fy_scale_SR: 0.2 };
   combinedSlipForces(t1, cross, 0.5, 0.8, out);
   const sxm = 0.5 * (1 - 0.3 * 0.8);

@@ -22,8 +22,8 @@
  *                (`WHEEL_SR_*`) and slip angle come from relaxation-length carcass states. Camber thrust
  *                (`camberGain`, `contact_camber_c1/c2`) enters as an equivalent slip-angle shift, camber
  *                grip from `dcamber0/1` (lateral) and `dcamber0_x/1_x` (longitudinal). Fx / Fy come from
- *                friction-ellipse combined slip (`combinedFactor`, optional `new_combined` SA/SR cross terms,
- *                optional `use_slip_falloff` past-peak decay). `circleFraction` is a telemetry output only.
+ *                friction-ellipse combined slip (the normalised slip vector, optional `new_combined` SA/SR cross
+ *                terms, optional `use_slip_falloff` past-peak decay). `circleFraction` is a telemetry output only.
  *                Grip × `userData.grip`. 2-node (surface / core) thermal model, ideal-gas pressure, compound
  *                performance curve.
  * - Aero:        front wing, venturi floor and rear wing: `lutAOA_CL/CD(angle)` × `lutGH_CL/CD_mult(ride
@@ -451,8 +451,6 @@ export interface TyreRuntime {
   /** Magic-formula shape: y = sin(C·atan(B·s)), peak 1 at s = 1 */
   B: number;
   C: number;
-  /** `combinedFactor` clamped to 0..2 */
-  combinedFactor: number;
   useFalloff: boolean;
   falloffLevel: number;
   falloffSlope: number;
@@ -561,7 +559,6 @@ export function createTyreRuntime(compound: TyresCompoundData, rear = false): Ty
     peakSlipRatio: model.slip_ratio_limit,
     B,
     C,
-    combinedFactor: THREE.MathUtils.clamp(Number.isFinite(model.combinedFactor) ? model.combinedFactor : 1, 0, 2),
     useFalloff: model.use_slip_falloff,
     falloffLevel: model.falloff_level,
     falloffSlope: Math.max(0, model.falloff_slope),
@@ -635,9 +632,12 @@ function slipCurveOverS(t: TyreRuntime, s: number): number {
 }
 
 /**
- * Combined slip (this model's interpretation of `combinedFactor`, `new_combined` and the SA/SR
- * cross terms): normalised slips (sx, sy) → per-axis force fractions (fx, fy) of μ·Fz, signs following
- * the slips. With k = 1 and no cross terms this is the plain friction circle.
+ * Combined slip by the normalised slip vector (Pacejka's similarity method, Tire and Vehicle Dynamics ch. 4; the
+ * friction ellipse a brush model gives): normalised slips (sx, sy) → per-axis force fractions (fx, fy) of μ·Fz. One
+ * combined slip s = |(sx, sy)| sets the force F(s) on the pure-slip curve, split along the slip direction: fx = F(s)·sx/s,
+ * fy = F(s)·sy/s. So fx² + fy² = F(s)² ≤ 1, and with each axis's own μ the forces stay on or inside the friction
+ * ellipse (Fx / μx·Fz)² + (Fy / μy·Fz)² ≤ 1 at every slip. `new_combined` first shifts / scales the slips by the
+ * SA/SR cross terms.
  */
 export function combinedSlipForces(
   t: TyreRuntime,
@@ -652,9 +652,9 @@ export function combinedSlipForces(
     sxm = sx * (1 - model.fx_scale_SA * Math.min(1, Math.abs(sy))) + model.fx_shift_SA * sy;
     sym = sy * (1 - model.fy_scale_SR * Math.min(1, Math.abs(sx))) + model.fy_shift_SR * sx;
   }
-  const k = t.combinedFactor;
-  out.fx = sxm * slipCurveOverS(t, Math.hypot(sxm, k * sym));
-  out.fy = sym * slipCurveOverS(t, Math.hypot(sym, k * sxm));
+  const fOverS = slipCurveOverS(t, Math.hypot(sxm, sym));
+  out.fx = sxm * fOverS;
+  out.fy = sym * fOverS;
   out.sx = sxm;
   out.sy = sym;
 }
@@ -2049,8 +2049,6 @@ export class VehiclePhysics {
         fy = -muY * fz * _comb.fy;
         const s = Math.hypot(_comb.sx, _comb.sy);
         w.combinedSlip = s;
-        // A relaxed combinedFactor may use more than the circle; low-speed damping must not add to that
-        const useSlip = Math.hypot(_comb.fx, _comb.fy);
 
         // Low-speed contact damping (keeps a parked car from ringing on the carcass spring)
         const fade = Math.max(0, 1 - absVx / LOW_SPEED_FADE_MS);
@@ -2058,14 +2056,14 @@ export class VehiclePhysics {
           fx += fade * LOW_SPEED_DAMPING * muX * fz * vsx;
           fy -= fade * LOW_SPEED_DAMPING * muY * fz * vy;
         }
+        // The slip forces sit inside the friction ellipse already; the low-speed damping must not push them past it
         const use = Math.hypot(fx / (muX * fz), fy / (muY * fz));
-        const limit = Math.max(1, useSlip);
-        if (use > limit) {
-          fx *= limit / use;
-          fy *= limit / use;
+        if (use > 1) {
+          fx /= use;
+          fy /= use;
         }
-        // Telemetry only: share of the friction circle in use (> 1 when combinedFactor < 1 lets it exceed)
-        w.circleFraction = Math.min(use, limit);
+        // Telemetry only: share of the friction ellipse in use (1 = on it)
+        w.circleFraction = Math.min(use, 1);
 
         // Self-aligning moment: pneumatic trail collapsing toward the limit and over standing water (hydroplaning wedge)
         const wetTrailMult =
