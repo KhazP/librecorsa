@@ -1535,6 +1535,8 @@ export class F1Physics2026 {
     let brake = inputs.brake;
     let steerNorm: number; // + = right
 
+    let launchPedal: number | undefined;
+
     if (this.aiAutopilot) {
       // The player's steering assist holds nothing while the autopilot drives, so a hand-back starts from centre
       this.steeringAssist.reset();
@@ -1581,6 +1583,10 @@ export class F1Physics2026 {
       const throttleWant = spin > 0.085 ? Math.max(0.2, 1 - (spin - 0.085) * 10) : 1;
       this.aiThrottleTrim += (throttleWant - this.aiThrottleTrim) * Math.min(1, (throttleWant < this.aiThrottleTrim ? 40 : 6) * dt);
       throttle = ai.throttleCmd * this.aiThrottleTrim;
+      // The auto-clutch's launch revs follow the pedal the driver wants, not its feathering of the wheelspin: with the
+      // feathered pedal the launch window came down at the first spin, the engine fell into the anti-stall and the
+      // clutch let go (the AI lost ~0.25 s to 100 km/h on a flat-out launch)
+      launchPedal = ai.throttleCmd;
       // Brake only up to what the less-loaded front tyre can take (left/right torque is equal),
       // using the grip left over after its current cornering force
       // Front torque per wheel at pedal p is T·(bias + mig·p)·p with the migration, so the cap is the root of
@@ -1624,7 +1630,7 @@ export class F1Physics2026 {
       }
     }
 
-    drv.launchPedal = throttle;
+    drv.launchPedal = launchPedal ?? throttle;
 
     // ---- 2. Driver aids (12-stage 130 Hz TC1/TC2 + Lateral-G & 12-stage 240 Hz 4-channel ABS) ----
     const tcLv = THREE.MathUtils.clamp(Math.round(this.tcLevel), 0, 12);

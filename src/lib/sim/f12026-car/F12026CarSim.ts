@@ -731,6 +731,8 @@ export class F12026CarSim implements SimulatorCar {
   /** Autopilot pedal (−1 full brake … +1 full throttle): the integral of its speed error */
   private apPedal = 0;
   private apThrottle = 0;
+  /** Pulling away from rest (cleared at 20 m/s) */
+  private apLaunch = false;
   /** Autopilot steer trim (rad) integrated from the yaw-rate shortfall, i.e. the car's understeer */
   private apYawI = 0;
   private lastAxMs2 = 0;
@@ -1677,8 +1679,13 @@ export class F12026CarSim implements SimulatorCar {
     // passes AP_REAR_GUARD of their peak, so they regain grip to hold the car with rather than spinning it
     const rearSlip = Math.max(Math.abs(W[2].slipAngleRad), Math.abs(W[3].slipAngleRad)) / peak;
     const rearCut = THREE.MathUtils.clamp(1 - AP_REAR_GUARD_GAIN * (rearSlip - AP_REAR_GUARD), 0.15, 1);
-    // squeezed on rather than stabbed: at most full throttle in 0.4 s
-    const throttle = Math.min(Math.max(0, pedal), this.apThrottle + 2.5 * h) * rearCut;
+    // squeezed on rather than stabbed: at most full throttle in 0.4 s. Off the line (from rest until 72 km/h) it goes
+    // down at once, the traction control metering the wheelspin as on a player's launch (the squeeze cost the AI a car
+    // length to 100 km/h). Only from rest: a quick pedal out of a slow corner put the car in the barrier at Sepang
+    if (speed < 1) this.apLaunch = true;
+    else if (speed > 20) this.apLaunch = false;
+    const squeeze = this.apLaunch ? 12 : 2.5;
+    const throttle = Math.min(Math.max(0, pedal), this.apThrottle + squeeze * h) * rearCut;
     this.apThrottle = throttle;
     // The car's own TC and per-wheel ABS: a lock-up of the unloaded inside front no longer takes the brakes off all
     // four wheels (the car then ran into the corner 20-25 km/h hot), nor inside-rear wheelspin the whole throttle
@@ -1896,6 +1903,7 @@ export class F12026CarSim implements SimulatorCar {
     this.absWheelCut.fill(1);
     for (let i = 0; i < 4; i++) this.prevWheelOmega[i] = this.vehicle.wheels[i].omega;
     this.apPedal = this.apYawI = this.apThrottle = 0;
+    this.apLaunch = false;
     this.drsPressPending = false;
     this.boostRemainingS = 0;
     this.overtake.reset();
