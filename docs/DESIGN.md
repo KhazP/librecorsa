@@ -107,7 +107,7 @@ Heights: primary button 52, rail entry 58 (primary 64), segmented option 40, chi
 
 - Corner groups are anchored to their corner and scale about it (`anchor()`), so HUD size never pushes a group off-screen.
 - With the touch controls up, every preset gives way to the Phone HUD at any screen size: the pads take both bottom corners and the top-left, where the other presets put their panels.
-- Past 2.4:1 (a 32:9 screen) the HUD keeps to a centred 2.4:1 frame instead of the far edges. Anything the renderer places in window pixels (the virtual mirror) is offset by the frame's inset.
+- Past 2.4:1 (a 32:9 screen) the HUD keeps to a centred 2.4:1 frame instead of the far edges. Anything the renderer places in window pixels (the virtual mirror's frame) is `fixed` to the window, not placed in the HUD layer.
 - Labels are 9 px mono; values are `.lc-data`; the gear sits in a volt tile in display italic.
 - The player's own row in any table is volt with void ink.
 - Semantics: purple overall best, green PB / gaining, crimson losing / invalid, amber caution, cyan info / ERS.
@@ -118,6 +118,11 @@ Heights: primary button 52, rail entry 58 (primary 64), segmented option 40, chi
 - Menus and HUD are drawn for a 1080p-class window. `--lc-ui-zoom` (`globals.css`) scales them up on bigger ones: 1.25 from 2200 × 1300, 1.5 from 2700 × 1600, 2 from 3400 × 1900 (both sides must clear a step, so 21:9 and 32:9 scale by height). Menu and overlay roots take it as CSS `zoom` (`.lc-ui-zoom`); the HUD multiplies its corner-group scale by it (`useUiZoom()`).
 - Inside a zoomed root, `vw` / `vh` resolve before the zoom: keep them inside `clamp()` / `min()` with a px cap. A position measured in window pixels and set on a zoomed element is divided by the zoom.
 - Short screens (`short:`, under 512 px tall, i.e. landscape phones) drop secondary chrome before the primary action leaves the screen. Touch screens hide key prompts until a controller is used.
+- Safe area: the page draws under the notch, Dynamic Island and home indicator (`viewportFit: "cover"`), so no text or control may sit in `env(safe-area-inset-*)`. The scene, glows and letterbox bars run to the true edge.
+  - The HUD layer is a `.lc-safe-frame` (`globals.css`): groups anchored inside it clear the insets with plain offsets. Never add `env()` inside it.
+  - Every other fixed root adds the inset itself. Menu roots pad with `max(<padding>, env(safe-area-inset-<side>))` on every side and at every breakpoint; touch pads, toasts and portalled panels offset with `calc(env(safe-area-inset-<side>, 0px) + <gap>)`.
+  - Centre a bottom pill between `left` / `right` of `max(1rem, env(…))` with `mx-auto`, not with `left-1/2` and a `100vw` width: the insets need not be equal.
+  - Scrolling content may pass under the top and bottom insets, but must clear them at each end of the scroll.
 
 ## 10. Motion
 
