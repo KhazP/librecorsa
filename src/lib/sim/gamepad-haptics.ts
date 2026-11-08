@@ -300,7 +300,11 @@ export function hapticMagnitudes(t: CarTelemetry, timeS: number, mix?: RumbleMix
   const rearSlip = Math.max(t.wheelSlipRatios[2], t.wheelSlipRatios[3]);
   const wheelspin = 0.6 * smoothstep(0.12, 0.5, rearSlip);
   const rearSlide = crash ? 0 : 0.45 * handlingCues(t, _cues).oversteer;
-  const rackLoad = 0.25 * Math.pow(clamp01(Math.abs(t.ffbTorqueNorm ?? 0)), 1.5);
+  // The rack-load cue is the corner's weight: parked, the steering torque is the tyres twisted in place, which would
+  // otherwise hum on through the pad after a wiggle of the stick. It eases in over the first few km/h, as the wheel's
+  // minimum force does
+  const rolling = clamp01((t.speedKmh - 1) * 0.2);
+  const rackLoad = 0.25 * rolling * Math.pow(clamp01(Math.abs(t.ffbTorqueNorm ?? 0)), 1.5);
   const roughSurface = surfaceRoughness(t, mix?.roughHold, decayDt > 0 ? Math.exp(-decayDt / ROUGH_HOLD_S) : 0);
   let strong = layerRumble(0, impact);
   strong = layerRumble(strong, lockUp);

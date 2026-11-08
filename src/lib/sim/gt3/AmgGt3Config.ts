@@ -663,6 +663,11 @@ export const AMG_GT3_CONFIG = {
     steerComplianceDegPerKN: 0.28,
     // ~7° caster on a road-car-derived upright: more caster trail than the F1's 12 mm, so a heavier rim
     ffbMechanicalTrailM: 0.025,
+    // Electro-hydraulic power steering: an electrically driven pump, so its flow (and the assist) follows road speed, as
+    // the AMG road car's speed-sensitive steering does. A rotary valve's ≈ 2 Nm on-centre lap, full assist (1.4 Nm per
+    // Nm of the driver's, ≈ 60 % of the rack load) 15 Nm later, fading out between 20 and 80 km/h so the corners at
+    // speed keep their unassisted weight [est]
+    powerSteering: { steeringRatio: 12.6, deadbandNm: 2, rampNm: 15, maxRatio: 1.4, speedFadeMs: [20 / 3.6, 80 / 3.6] },
   },
   engine: ENGINE,
   ers: ERS,
