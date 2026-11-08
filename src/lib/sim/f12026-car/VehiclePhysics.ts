@@ -24,8 +24,9 @@
  *                grip from `dcamber0/1` (lateral) and `dcamber0_x/1_x` (longitudinal). Fx / Fy come from
  *                friction-ellipse combined slip (the normalised slip vector, optional `new_combined` SA/SR cross
  *                terms, optional `use_slip_falloff` past-peak decay). `circleFraction` is a telemetry output only.
- *                Grip × `userData.grip`. 2-node (surface / core) thermal model, ideal-gas pressure, compound
- *                performance curve.
+ *                Grip × `userData.grip`. One thermal model: 3 bands (I/M/O) × 2 nodes (tread surface / carcass);
+ *                grip and flash temperature from the surfaces (compound performance curve), ideal-gas pressure
+ *                and carcass stiffness (radial and cornering) from the carcass.
  * - Aero:        front wing, venturi floor and rear wing: `lutAOA_CL/CD(angle)` × `lutGH_CL/CD_mult(ride
  *                height)`, forces at each element's centre of pressure; DRS scales the rear wing.
  * - Power unit:  ICE power curve + MGU-K (`torqueLut` / `coastLut`, 120 kW, 4 MJ store, per-lap limits),
@@ -103,6 +104,7 @@ import {
   suspensionSupportsHeave,
   type TyresCompoundData,
   type TyresPressureData,
+  type TyresThermalPatchData,
   type WingData,
   type ZoneData_DRSZone,
 } from './F12026CarConfig';
@@ -315,13 +317,15 @@ export interface WheelState {
   vx: number;
   vy: number;
   slipVelX: number;
+  /** Tread surface temperature (°C): the bands' surfaces weighted by contact pressure (derived, see `bandTempsC`) */
   surfaceTempC: number;
+  /** Carcass (core) temperature (°C): the bands' mean core; inflation gas, carcass stiffness (derived) */
   coreTempC: number;
-  /** Inner, Middle, Outer surface band temperatures (°C) */
+  /** Inner, Middle, Outer surface band temperatures (°C): the tread surface nodes, which set the grip */
   bandTempsC: [number, number, number];
-  /** Inner, Middle, Outer carcass temperatures (°C) */
+  /** Inner, Middle, Outer tread-bulk temperatures (°C): between each band's surface and core, for display */
   bandCarcassTempsC: [number, number, number];
-  /** Inner, Middle, Outer core temperatures (°C) */
+  /** Inner, Middle, Outer core temperatures (°C): each band's carcass node */
   bandCoreTempsC: [number, number, number];
   /** Inner, Middle, Outer share of the contact pressure (and of the heat), summing to 1 */
   bandLoadShares: [number, number, number];
@@ -609,6 +613,18 @@ export function tyrePeakSlipTan(
 ): number {
   const fzL = Math.max(fz, MIN_LOAD_RATIO * t.fz0);
   return (t.tanPeakAngle * tyrePeakMu(t, fzL, 'y') * fzL) / (t.peakForceY0 * tyreCorneringStiffnessLoadFactor(t, fzL));
+}
+
+/**
+ * Carcass stiffness at carcass temperature `carcassC` over its stiffness at `thermalVerticalRefC` (the rubber softens
+ * as it warms), floored at 0.7: the radial rate takes it, and so does the cornering stiffness (same rubber), so a hot
+ * carcass peaks at a larger slip angle and a cold one is sharper
+ */
+export function tyreCarcassStiffnessFactor(
+  th: Pick<TyresThermalPatchData, 'thermalVerticalK' | 'thermalVerticalRefC'>,
+  carcassC: number
+): number {
+  return Math.max(0.7, 1 + th.thermalVerticalK * (carcassC - th.thermalVerticalRefC));
 }
 
 /** Grip at hot inflation pressure `psi` (gauge): a parabola about the optimum, floored at half grip */
@@ -1580,8 +1596,7 @@ export class VehiclePhysics {
   private tyreVerticalRate(w: WheelState): number {
     const t = this.tyres[w.isFront ? 0 : 1];
     const geo = w.isFront ? t.data.front : t.data.rear;
-    const th = t.data.thermalData;
-    const thermal = Math.max(0.7, 1 + th.thermalVerticalK * (w.coreTempC - th.thermalVerticalRefC));
+    const thermal = tyreCarcassStiffnessFactor(t.data.thermalData, w.coreTempC);
     return t.pressureSpring.evaluate(w.pressurePsi) * geo.verticalRateScale * thermal;
   }
 
@@ -2033,8 +2048,9 @@ export class VehiclePhysics {
         w.muY = muY;
         w.muX = muX;
 
-        // Peak slip angle at this load: the cornering stiffness saturates with load while the peak force keeps growing
-        const tanPeak = tyrePeakSlipTan(tyre, fz);
+        // Peak slip angle at this load: the cornering stiffness saturates with load while the peak force keeps growing;
+        // a warm carcass is softer, so it peaks later (its lateral carcass stiffness softens alike: same relaxation length)
+        const tanPeak = tyrePeakSlipTan(tyre, fz) / tyreCarcassStiffnessFactor(td.thermalData, w.coreTempC);
         w.peakSlipAngleRad = Math.atan(tanPeak);
 
         // Camber thrust (toward the lean) as an equivalent slip-angle shift
@@ -2716,7 +2732,7 @@ export class VehiclePhysics {
     }
   }
 
-  /** 9-node I/M/O + 16-sector tyre temperatures, wear, flat-spots, graining, blistering, dirt, and 2-node brake discs */
+  /** 6-node I/M/O + 16-sector tyre temperatures, wear, flat-spots, graining, blistering, dirt, and 2-node brake discs */
   private updateThermal(dt: number): void {
     const carSpeedMs = this.velocity.length();
     for (const w of this.wheels) {
@@ -2730,13 +2746,9 @@ export class VehiclePhysics {
       const extWetCool = wetExternalGasCoolingWK(this.wetness, v);
       const slipPower = (Math.abs(w.fx * w.slipVelX) + Math.abs(w.fy * w.vy)) * heatScale;
       const hyst = th.hysteresis * w.fz * v * heatScale;
-      const toCore = th.surfaceToCore * (w.surfaceTempC - w.coreTempC);
-      const surfCool = (th.surfaceCooling[0] + th.surfaceCooling[1] * v) * (w.surfaceTempC - this.ambientC);
-      const roadCool = w.fz > 0 ? roadG * (w.surfaceTempC - this.trackTempC) : 0;
-      const coreCool = (th.coreCooling[0] + th.coreCooling[1] * v + extWetCool) * (w.coreTempC - this.ambientC);
-      w.surfaceTempC += ((th.slipHeatShare * slipPower - toCore - surfCool - roadCool) / th.surfaceHeatCapacity) * dt;
-      w.coreTempC += ((hyst + toCore - coreCool) / th.coreHeatCapacity) * dt;
 
+      // One thermal model: three bands, each a tread-surface node over a carcass (core) node, each a third of the
+      // tyre (a third of the heat capacity and conductances, so with an even load the bands are the 2-node tyre).
       // 3-band I/M/O thermal distribution from camber & lateral force shift, in ac-tyre's convention: camber leaning
       // toward the car (negative camber) loads the inner shoulder, the lateral force rolls the patch onto the shoulder
       // away from the force (+ bias = toward the outer band). Inward is −left on a left wheel
@@ -2768,6 +2780,11 @@ export class VehiclePhysics {
       w.bandTempsC[0] -= d01;
       w.bandTempsC[1] += d01 - d12;
       w.bandTempsC[2] += d12;
+      // The tyre's surface temperature is the band surfaces weighted by contact pressure (the rubber on the road: flash
+      // temperature, graining); its carcass temperature the bands' mean carcass (the inner liner the inflation gas
+      // sees, and the rubber behind the carcass's vertical and cornering stiffness)
+      w.surfaceTempC = shares[0] * w.bandTempsC[0] + shares[1] * w.bandTempsC[1] + shares[2] * w.bandTempsC[2];
+      w.coreTempC = (w.bandCoreTempsC[0] + w.bandCoreTempsC[1] + w.bandCoreTempsC[2]) / 3;
 
       // Wear & 16-sector flat-spotting / graining / blistering / dirt pickup
       const wearDelta =

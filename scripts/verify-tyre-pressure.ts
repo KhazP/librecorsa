@@ -95,13 +95,18 @@ for (const [name, config] of [['F12026', F12026_CAR_CONFIG], ['AMG GT3', AMG_GT3
         near(w.pressurePsi, w.coldPressurePsi);
         w.coldPressurePsi = w.isFront ? 20 : 19;
       }
-      // Exercise heating and cooling through the real thermal step, comparing the resulting gas proxy.
+      // Exercise heating and cooling through the real thermal step, comparing the resulting gas proxy. The thermal
+      // state is the three bands' surface and carcass nodes; the tyre's core (gas) temperature is derived from them
       for (const tempC of [110, 35]) {
-        for (const w of car.wheels) w.coreTempC = w.surfaceTempC = tempC;
+        for (const w of car.wheels) {
+          w.bandTempsC.fill(tempC);
+          w.bandCoreTempsC.fill(tempC);
+        }
         car.step(0.002, { throttle: 0, brake: 0, steer: 0 });
         for (const [i, w] of car.wheels.entries()) {
           const refC = data[w.isFront ? 0 : 1].pressureData.coldRefC;
           near(w.coldPressurePsi, w.isFront ? 20 : 19);
+          near(w.coreTempC, tempC, 0.5);
           near(gasInvariant(w.pressurePsi, w.coreTempC), gasInvariant(w.coldPressurePsi, refC));
           near(car.telemetry.tyrePressurePsi[i], w.pressurePsi);
         }
