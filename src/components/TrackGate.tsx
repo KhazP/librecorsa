@@ -3,8 +3,11 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { LibreCorsaSimulator } from "@/components/LibreCorsaSimulator";
 import { RenderProfiler } from "@/components/dev/RenderProfiler";
-import { activateTrack, loadStoredTrackId, RWANDA_TRACK_ID } from "@/lib/track-registry";
+import { activateTrack, getTrackInfo, loadStoredTrackId, RWANDA_TRACK_ID } from "@/lib/track-registry";
 import { registerAssetCache } from "@/lib/service-worker";
+
+/** How long the "couldn't load" notice stays up (ms) */
+const ERROR_NOTICE_MS = 6000;
 
 /**
  * Activates the chosen circuit before the simulator mounts, and remounts it (fresh scene, physics and
@@ -12,29 +15,42 @@ import { registerAssetCache } from "@/lib/service-worker";
  */
 export const TrackGate: React.FC = () => {
   const [trackId, setTrackId] = useState<string | null>(null);
+  /** The circuit the simulator is mounted on (null before the first load lands) */
+  const trackIdRef = useRef<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // Only the latest pick counts: a slower load of a circuit picked earlier must not land after it
   const requestRef = useRef(0);
   const select = useCallback(async (id: string) => {
     const req = ++requestRef.current;
+    // A new pick replaces the last one's notice
+    setError(null);
     try {
       const info = await activateTrack(id);
       if (req !== requestRef.current) return;
-      setError(null);
+      trackIdRef.current = info.id;
       setTrackId(info.id);
     } catch (err) {
       if (req !== requestRef.current) return;
-      console.warn("Track switch failed, staying on Rwanda:", err);
-      setError(`Could not load that circuit (${String(err)})`);
+      const current = trackIdRef.current;
+      if (current !== null) {
+        // A failed load never replaces the active circuit: the one in use stays, as it is
+        console.warn(`Track switch failed, staying on ${current}:`, err);
+        setError(`Couldn't load that circuit. Staying on ${getTrackInfo(current).name}.`);
+        return;
+      }
+      // The first load has nothing to stay on: Rwanda ships with the bundle
+      console.warn("Track load failed, using Rwanda:", err);
       try {
         await activateTrack(RWANDA_TRACK_ID);
       } catch (fallbackErr) {
-        // Rwanda ships with the bundle; this only fails if that is broken too
+        // This only fails if the bundled circuit is broken too
         console.error("Rwanda fallback failed:", fallbackErr);
       }
       if (req !== requestRef.current) return;
+      trackIdRef.current = RWANDA_TRACK_ID;
       setTrackId(RWANDA_TRACK_ID);
+      setError(`Couldn't load that circuit. Driving ${getTrackInfo(RWANDA_TRACK_ID).name} instead.`);
     }
   }, []);
 
@@ -42,6 +58,12 @@ export const TrackGate: React.FC = () => {
     registerAssetCache();
     void select(loadStoredTrackId());
   }, [select]);
+
+  useEffect(() => {
+    if (!error) return;
+    const id = window.setTimeout(() => setError(null), ERROR_NOTICE_MS);
+    return () => window.clearTimeout(id);
+  }, [error]);
 
   if (!trackId) return null;
   return (
