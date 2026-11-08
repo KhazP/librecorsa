@@ -159,11 +159,14 @@ export const EngineersGarage: React.FC<PauseMenuProps> = (p) => {
   // Presets, per car
   const [presets, setPresets] = useState<GaragePreset[]>([]);
   const [name, setName] = useState("");
-  const [note, setNote] = useState<string | null>(null);
+  // Each note is its own toast: the same text twice (Baseline, Baseline) restarts the 2.4 s timer
+  const [note, setNoteState] = useState<{ text: string; seq: number } | null>(null);
+  const noteSeq = useRef(0);
+  const setNote = (text: string) => setNoteState({ text, seq: ++noteSeq.current });
   useEffect(() => setPresets(loadGaragePresets(p.vehicleModel)), [p.vehicleModel]);
   useEffect(() => {
     if (!note) return;
-    const id = window.setTimeout(() => setNote(null), 2400);
+    const id = window.setTimeout(() => setNoteState(null), 2400);
     return () => window.clearTimeout(id);
   }, [note]);
 
@@ -259,7 +262,10 @@ export const EngineersGarage: React.FC<PauseMenuProps> = (p) => {
   const [browsing, setBrowsing] = useState(false);
   const browseRef = useRef<HTMLButtonElement | null>(null);
   const { mode, family } = useInputMode();
+  // The car is fixed for an online race (the shell refuses the swap too)
+  const carLocked = p.telemetry.race?.multiplayer === true || p.raceRunning === true;
   const openBrowser = () => {
+    if (carLocked) return;
     flushSync(() => setBrowsing(true));
     if (currentInputMode() === "pointer") return;
     const card = document.querySelector<HTMLElement>(`[data-browser-item="${CSS.escape(p.carId)}"]`);
@@ -365,8 +371,9 @@ export const EngineersGarage: React.FC<PauseMenuProps> = (p) => {
           type="button"
           onClick={openBrowser}
           onPointerEnter={focusOnHover}
-          aria-label={`Change car: ${car.title}`}
-          className="group flex w-full cursor-pointer flex-wrap items-center gap-3 rounded-[18px] border border-[#262B3D] bg-[#08090D]/55 py-3 pr-3 pl-4 text-left text-[#F5F7FA] outline-none transition-[border-color,box-shadow,background-color] duration-200 hover:border-[#3A4157] focus:border-[#CCFF00] focus:shadow-[0_0_0_5px_rgba(204,255,0,0.12)]"
+          disabled={carLocked}
+          aria-label={carLocked ? `${car.title}: fixed for this race` : `Change car: ${car.title}`}
+          className="group flex w-full cursor-pointer flex-wrap items-center gap-3 rounded-[18px] disabled:cursor-not-allowed disabled:opacity-60 border border-[#262B3D] bg-[#08090D]/55 py-3 pr-3 pl-4 text-left text-[#F5F7FA] outline-none transition-[border-color,box-shadow,background-color] duration-200 hover:border-[#3A4157] focus:border-[#CCFF00] focus:shadow-[0_0_0_5px_rgba(204,255,0,0.12)]"
         >
           <span className="flex min-w-0 flex-1 flex-col gap-1">
             <span className="flex items-center gap-2">
@@ -378,8 +385,8 @@ export const EngineersGarage: React.FC<PauseMenuProps> = (p) => {
           </span>
           <span className="inline-flex h-11 shrink-0 items-center gap-2.5 rounded-full border border-[#262B3D] bg-[#1B1F2B]/80 px-4 transition-colors group-hover:border-[#3A4157] group-focus:border-transparent group-focus:bg-[#CCFF00] group-focus:text-[#08090D]">
             <LayoutGrid aria-hidden className="h-4 w-4" strokeWidth={2.4} />
-            <span className="lc-title text-[15px]">Change car</span>
-            <span className="lc-data text-[11px] opacity-70">{CARS.length}</span>
+            <span className="lc-title text-[15px]">{carLocked ? "Fixed for this race" : "Change car"}</span>
+            {carLocked ? null : <span className="lc-data text-[11px] opacity-70">{CARS.length}</span>}
           </span>
         </button>
         {carTakesPhysicsSwitch(p.carId) ? <CarPhysicsSwitch color="#CCFF00" /> : null}
@@ -428,7 +435,7 @@ export const EngineersGarage: React.FC<PauseMenuProps> = (p) => {
           <SmallButton onClick={resetAll} title="Every chassis setting, tyre pressure and camber back to the car's baseline">
             Baseline
           </SmallButton>
-          {note ? <span className="font-f1-mono text-[10px] font-extrabold tracking-[0.08em] text-[#CCFF00]">{note}</span> : null}
+          {note ? <span className="font-f1-mono text-[10px] font-extrabold tracking-[0.08em] text-[#CCFF00]">{note.text}</span> : null}
           {presets.length > 0 ? (
             <div className="flex w-full flex-wrap gap-1.5">
               {presets.map((x) => (

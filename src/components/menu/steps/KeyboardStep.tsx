@@ -19,6 +19,7 @@ import {
   type KeyboardTuning,
 } from "@/lib/settings/player-settings";
 import { suspendMenuNav } from "../useMenuNav";
+import { CAPTURE_TIMEOUT_S } from "./button-capture";
 import { TuningSlider } from "./TuningSlider";
 import { AssistTuningCard, AutoGrid, BindRow, bindKeyClass, PillAction, SetupCard, StatusPill } from "./setup-ui";
 import type { SetupStepProps } from "./types";
@@ -42,11 +43,13 @@ export const KeyboardStep: React.FC<SetupStepProps & { steerLockDeg?: number }> 
       e.preventDefault();
       e.stopImmediatePropagation();
       if (e.code === "Escape") {
+        setNotice(null);
         setCapture(null);
         return;
       }
       if (RESERVED_CODES.has(e.code)) {
-        setNotice(`${keyLabel(e.code)} is reserved`);
+        // Still listening: the prompt shows this until another key is pressed
+        setNotice(`${keyLabel(e.code)} is reserved · press another key`);
         return;
       }
       const owner = KEY_ACTIONS.find((a) => settings.keys[a.id].includes(e.code) && a.id !== capture.action);
@@ -55,7 +58,13 @@ export const KeyboardStep: React.FC<SetupStepProps & { steerLockDeg?: number }> 
       setCapture(null);
     };
     window.addEventListener("keydown", onKey, { capture: true });
+    // Gives up like the controller and wheel captures, so a controller that opened it is never stuck here
+    const timeout = window.setTimeout(() => {
+      setNotice(null);
+      setCapture(null);
+    }, CAPTURE_TIMEOUT_S * 1000);
     return () => {
+      window.clearTimeout(timeout);
       window.removeEventListener("keydown", onKey, { capture: true });
       // Let the key-up of the captured key pass before menus listen again
       window.setTimeout(resume, 0);
@@ -84,6 +93,8 @@ export const KeyboardStep: React.FC<SetupStepProps & { steerLockDeg?: number }> 
                 <span className="flex shrink-0 flex-wrap justify-end gap-1.5">
                   {Array.from({ length: slots }, (_, slot) => {
                     const listening = capture?.action === id && capture.slot === slot;
+                    // An empty slot binds the next free one, so the clicked chip and the one listening can differ
+                    const target = Math.min(slot, codes.length);
                     const code = codes[slot];
                     return (
                       <span key={slot} className="group relative">
@@ -92,7 +103,8 @@ export const KeyboardStep: React.FC<SetupStepProps & { steerLockDeg?: number }> 
                           aria-label={code || listening ? undefined : `Add a key for ${label}`}
                           onClick={() => {
                             setNotice(null);
-                            setCapture({ action: id, slot: Math.min(slot, codes.length) });
+                            // Clicking the chip that is listening stops listening, as on the controller and wheel
+                            setCapture(capture?.action === id && capture.slot === target ? null : { action: id, slot: target });
                           }}
                           className={bindKeyClass(listening ? "listening" : code ? "bound" : "empty")}
                         >
@@ -117,7 +129,7 @@ export const KeyboardStep: React.FC<SetupStepProps & { steerLockDeg?: number }> 
           })}
         </AutoGrid>
         <StatusPill tone={capture ? "live" : notice ? "info" : "idle"}>
-          {capture ? "Press a key · Esc cancels" : (notice ?? "Esc always opens the menu.")}
+          {capture ? (notice ?? `Press a key · Esc cancels · stops after ${CAPTURE_TIMEOUT_S} s`) : (notice ?? "Esc always opens the menu.")}
         </StatusPill>
       </SetupCard>
 

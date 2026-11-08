@@ -78,16 +78,16 @@ function start(): void {
   const wasActive = new Map<string, boolean>();
   const poll = () => {
     raf = requestAnimationFrame(poll);
+    // Every pad's state is recorded each frame, even after the first one that woke up
+    let woke: string | null = null;
     for (const p of connectedPads()) {
       if (p.mapping !== "standard") continue;
       const active = p.buttons.some((b) => b.pressed) || p.axes.some((a) => Math.abs(a) > 0.5);
       const was = wasActive.get(p.id) ?? false;
       wasActive.set(p.id, active);
-      if (active && !was) {
-        notePadInput(p.id);
-        return;
-      }
+      if (active && !was && woke === null) woke = p.id;
     }
+    if (woke !== null) notePadInput(woke);
   };
   raf = requestAnimationFrame(poll);
   document.documentElement.dataset.input = mode;

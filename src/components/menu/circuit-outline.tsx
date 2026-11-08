@@ -43,12 +43,30 @@ export const TrackOutline: React.FC<{ map: HudMap; sectors?: boolean; className?
 /**
  * Outlines of circuits other than the loaded one, drawn from each circuit's own `track_data.json` centreline (the same
  * samples the scene is built from). Fetched on demand, one at a time, and kept for the session; the loaded circuit and
- * the bundled Rwanda layout need no fetch.
+ * the bundled Rwanda layout need no fetch. A failed fetch is retried the next time the outline is wanted, once
+ * RETRY_AFTER_MS has passed (or at once when the browser comes back online).
  */
-const outlines = new Map<string, HudMap | null>();
+const outlines = new Map<string, HudMap>();
+/** When each circuit's last fetch failed */
+const failedAt = new Map<string, number>();
 const listeners = new Set<() => void>();
 const queue: TrackInfo[] = [];
 let fetching = false;
+const RETRY_AFTER_MS = 15_000;
+/** A request that hangs gives up after this, so the outlines queued behind it still load */
+const FETCH_TIMEOUT_MS = 12_000;
+
+const notify = () => {
+  for (const l of listeners) l();
+};
+
+if (typeof window !== "undefined") {
+  window.addEventListener("online", () => {
+    if (failedAt.size === 0) return;
+    failedAt.clear();
+    notify();
+  });
+}
 
 const outlineOfRaw = (raw: RawTrackJson): HudMap =>
   buildHudMap({
@@ -56,10 +74,15 @@ const outlineOfRaw = (raw: RawTrackJson): HudMap =>
     samples: raw.samples.map((s) => ({ position: { x: s.p[0], z: s.p[2] }, sector: s.sec })),
   });
 
-/** The outline when it is at hand: `undefined` = not loaded yet, `null` = it could not be loaded */
+/** The outline when it is at hand: `undefined` = not loaded yet (or due a retry), `null` = it could not be loaded */
 function outlineNow(t: TrackInfo): HudMap | null | undefined {
   const known = outlines.get(t.id);
   if (known !== undefined) return known;
+  const failed = failedAt.get(t.id);
+  if (failed !== undefined) {
+    if (performance.now() - failed < RETRY_AFTER_MS) return null;
+    failedAt.delete(t.id);
+  }
   let map: HudMap | undefined;
   if (t.id === ACTIVE_TRACK_ID) map = buildHudMap(getTrackData());
   else if (!t.dataUrl) map = outlineOfRaw(RWANDA_TRACK_JSON);
@@ -73,15 +96,19 @@ async function pump(): Promise<void> {
   try {
     while (queue.length) {
       const t = queue.shift()!;
-      if (outlines.has(t.id) || !t.dataUrl) continue;
+      if (outlines.has(t.id) || failedAt.has(t.id) || !t.dataUrl) continue;
+      const abort = new AbortController();
+      const timer = setTimeout(() => abort.abort(), FETCH_TIMEOUT_MS);
       try {
-        const res = await fetch(withBasePath(t.dataUrl));
+        const res = await fetch(withBasePath(t.dataUrl), { signal: abort.signal });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         outlines.set(t.id, outlineOfRaw((await res.json()) as RawTrackJson));
       } catch {
-        outlines.set(t.id, null);
+        failedAt.set(t.id, performance.now());
+      } finally {
+        clearTimeout(timer);
       }
-      for (const l of listeners) l();
+      notify();
     }
   } finally {
     fetching = false;

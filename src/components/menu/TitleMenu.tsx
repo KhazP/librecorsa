@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import type { PauseMenuProps } from "@/components/hud/PauseMenu";
 import { carById, carClass } from "@/lib/cars/car-registry";
@@ -453,7 +453,8 @@ const DevicePill: React.FC<{ pad: PadState | undefined; slim?: boolean }> = ({ p
 export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
   const { firstRun, onDrive, onRaceAi, onControls, trackId = RWANDA_TRACK_ID, onSelectTrack } = props;
   const track = getTrackInfo(trackId);
-  const [panel, setPanel] = useState<TitlePanel | null>(props.initialPanel ?? null);
+  // The panel asked for; `panel` below is the one shown, which must still be on offer
+  const [chosenPanel, setPanel] = useState<TitlePanel | null>(props.initialPanel ?? null);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const panelRef = useRef<HTMLElement | null>(null);
   const { mode, family } = useInputMode();
@@ -549,6 +550,12 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
     },
   ];
   const panelItems = items.filter((i) => i.panel);
+  // Some panels exist only while their props do: when an open one's go away, back to the title screen (and it stays
+  // closed, rather than springing open again if they come back)
+  const panel = chosenPanel && panelItems.some((i) => i.panel === chosenPanel) ? chosenPanel : null;
+  useEffect(() => {
+    if (chosenPanel && !panel) setPanel(null);
+  }, [chosenPanel, panel]);
   const byId = (ids: readonly string[]) => ids.flatMap((id) => items.filter((i) => i.id === id));
 
   // Ⓑ: out of the panel to its rail entry, then close the panel
