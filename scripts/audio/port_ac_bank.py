@@ -580,6 +580,8 @@ def port_car(car_id: str, cfg: dict[str, Any], ffmpeg: str) -> dict[str, Any]:
         "lift": cfg["lift"],
         "limiterRetriggerS": cfg.get("limiterRetriggerS", 0.85),
     }
+    if "shift" in cfg:
+        manifest["shift"] = cfg["shift"]
 
     used_samples: set[str] = set()
     max_boundary_jump = 0.0
@@ -615,6 +617,7 @@ def port_car(car_id: str, cfg: dict[str, Any], ffmpeg: str) -> dict[str, Any]:
                 manifest["engine"][view].append(
                     {
                         "file": fn,
+                        "fsbName": sname,
                         "layer": layer,
                         "rpm": anchor_rpm,
                         "channels": ch,

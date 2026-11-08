@@ -64,6 +64,12 @@ export interface Vf26AudioManifest {
   tractionControl?: RawLoopEntry;
   /** Rev-limiter one-shot retrigger interval while held on the limiter (default 0.9 s) */
   limiterRetriggerS?: number;
+  /**
+   * How the car changes gear. "sequential" (default): a race box, an ignition-cut bark and a 60 ms dip with the revs
+   * snapping to the next gear. "manual": a road car's clutch, the throttle off for `clutchS` while the revs fall with
+   * the physics, and no shift one-shots or ignition-cut bark
+   */
+  shift?: { style: 'sequential' | 'manual'; clutchS?: number };
 }
 
 export type Vf26View = 'ext' | 'int';
@@ -269,6 +275,8 @@ export class Vf26SoundBank {
   private prevGear = 0;
   private audioRpm = 0;
   private upshiftTimer = 0;
+  /** Length of the upshift under way (s): the sequential cut's or the manual clutch's */
+  private upshiftLen = UPSHIFT_S;
   private downshiftTimer = 0;
   private liftTimer = 0;
   private popCooldown = 0;
@@ -490,20 +498,25 @@ export class Vf26SoundBank {
       this.prevThrottle = foot;
     }
 
-    // Gear change: upshift ignition cut + pitch drop, or downshift ECU throttle blip + overrun bark. Between forward
-    // gears only: into or out of neutral (0) or reverse (-1) is no shift to hear
+    // Gear change: upshift ignition cut + pitch drop, or downshift ECU throttle blip + overrun bark (a manual road
+    // car: a lift and a clutch, see `Vf26AudioManifest.shift`). Between forward gears only: into or out of neutral (0)
+    // or reverse (-1) is no shift to hear
+    const manual = m.shift?.style === 'manual';
     if (inp.gear !== this.prevGear) {
       if (this.prevGear > 0 && inp.gear > 0) {
         const up = inp.gear > this.prevGear;
         if (up) {
-          this.upshiftTimer = UPSHIFT_S;
+          this.upshiftLen = manual ? (m.shift?.clutchS ?? 0.25) : UPSHIFT_S;
+          this.upshiftTimer = this.upshiftLen;
           this.downshiftTimer = 0;
-          this.playOneshot('gear_up', 0.58);
-          this.playOneshot('shift_cut', inp.view === 'int' ? 0.42 : 0.28);
+          if (!manual) {
+            this.playOneshot('gear_up', 0.58);
+            this.playOneshot('shift_cut', inp.view === 'int' ? 0.42 : 0.28);
+          }
         } else {
           this.downshiftTimer = 0.085;
           this.upshiftTimer = 0;
-          this.playOneshot('gear_down', 0.55);
+          if (!manual) this.playOneshot('gear_down', 0.55);
           // Downshift blip on the overrun: unburnt fuel bangs in the exhaust and overrun crackle carries on
           const blipPop = m.lift?.downshiftPopChance ?? 0.5;
           if (blipPop > 0 && inp.throttle < 0.2 && inp.rpm > (m.lift?.popMinRpm ?? 8200)) {
@@ -528,7 +541,7 @@ export class Vf26SoundBank {
     const shifting = this.upshiftTimer > 0 || this.downshiftTimer > 0;
     if (this.audioRpm === 0) {
       this.audioRpm = targetRpm;
-    } else if (shifting) {
+    } else if (shifting && !manual) {
       const span = Math.max(4000, this.rpmRange[1] - this.rpmRange[0]);
       const maxSlew = span * 12 * dt;
       const diff = targetRpm - this.audioRpm;
@@ -542,10 +555,16 @@ export class Vf26SoundBank {
     // Upshift cut & engagement envelope + downshift ECU auto-blip
     let shiftOnScale = 1.0;
     let shiftOffScale = 1.0;
-    if (this.upshiftTimer > 0) {
+    if (this.upshiftTimer > 0 && manual) {
+      // Foot off and clutch in: the engine falls to the overrun note, then the throttle comes back in over the last
+      // third as the clutch bites
+      const p = 1 - this.upshiftTimer / this.upshiftLen;
+      shiftOnScale = p < 0.65 ? 0 : (p - 0.65) / 0.35;
+      shiftOffScale = 0.7;
+    } else if (this.upshiftTimer > 0) {
       // The ignition cut: a short dip (not a hole: the engine never stops sounding through a seamless shift), then
       // back onto the next gear with a slight punch
-      const p = 1 - this.upshiftTimer / UPSHIFT_S;
+      const p = 1 - this.upshiftTimer / this.upshiftLen;
       if (p < 0.4) {
         shiftOnScale = 0.55;
         shiftOffScale = 0.75;
