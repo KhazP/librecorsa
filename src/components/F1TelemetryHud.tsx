@@ -24,7 +24,7 @@ import { LapPanel, TimingTower } from "./hud/TimingPanels";
 import { SpeedCluster } from "./hud/SpeedCluster";
 import { TyrePanel } from "./hud/TyrePanel";
 import { StartLights } from "./hud/StartLights";
-import { nextCameraMode, PauseMenu } from "./hud/PauseMenu";
+import { PauseMenu } from "./hud/PauseMenu";
 import { F12026ChannelsPanel } from "./hud/F12026ChannelsPanel";
 import { MultiPageMfd } from "./hud/MultiPageMfd";
 import { useLapDeltaTracker } from "./hud/useLapDelta";
@@ -109,7 +109,8 @@ interface F1TelemetryHudProps extends MultiplayerPanelProps {
   onToggleGamepadRumble: () => void;
   onChangeAeroPreset: (preset: AeroSetupPreset) => void;
   onChangeAssistPreset: (preset: DriverAssistPreset) => void;
-  onChangeCameraMode: (mode: CameraMode) => void;
+  /** The next view in the camera cycle */
+  onCycleCamera: () => void;
   onChangeTireCompound: (compound: TireCompound) => void;
   onChangeTyreSetup: (setup: TyreSetup) => void;
   onChangeLivery: (livery: LiveryConfig) => void;
@@ -197,7 +198,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
     mouseSteerEnabled = false,
     gamepadAssist = true,
     paused,
-    onChangeCameraMode,
+    onCycleCamera,
   } = props;
 
   const [inviteRoom] = useState(roomFromUrl);
@@ -244,9 +245,6 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
     return () => window.clearTimeout(id);
   }, [hudHidden]);
 
-  const cycleCamera = useCallback(() => {
-    onChangeCameraMode(nextCameraMode(cameraMode));
-  }, [cameraMode, onChangeCameraMode]);
 
   const lightsPhase = race?.phase === "lights";
   const hud = props.hud;
@@ -612,7 +610,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
         gamepadAssist={gamepadAssist}
         initialRoomCode={inviteRoom ?? ""}
         openMultiplayer={!inviteUsed && Boolean(inviteRoom) && (props.p2pStatus?.connectedWebRtcPeers ?? 0) === 0}
-        onCycleCamera={cycleCamera}
+        onCycleCamera={onCycleCamera}
       />
     ) : null}
     </HudModeContext.Provider>

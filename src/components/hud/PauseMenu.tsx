@@ -58,24 +58,7 @@ import {
 } from "lucide-react";
 import { LibreCorsaLogo } from "@/components/ui/LibreCorsaLogo";
 import { AI_SKILL_DEFAULT, AI_SKILL_LEVELS, aiSkillLabel } from "@/lib/sim/ai-tuning";
-
-export const CAMERA_LABELS: Record<CameraMode, string> = {
-  chase: "Chase",
-  tv_pod: "T-cam",
-  cockpit_shoulder: "Shoulder",
-  cockpit: "Cockpit",
-  nose: "Nose",
-  helicopter: "Helicopter",
-  tv_side: "Trackside TV",
-};
-
-/** Views the C key (and the pause menu's camera button) cycles through */
-export const CAMERA_CYCLE: readonly CameraMode[] = ["cockpit", "tv_pod", "chase", "tv_side"];
-
-/** The view after `mode` in the C-key cycle (views outside the cycle return to its start) */
-export function nextCameraMode(mode: CameraMode): CameraMode {
-  return CAMERA_CYCLE[(CAMERA_CYCLE.indexOf(mode) + 1) % CAMERA_CYCLE.length];
-}
+import { CAMERA_MODES } from "@/lib/render/camera-modes";
 
 interface SliderLimits {
   min: number;
@@ -780,7 +763,7 @@ export const SessionPanel: React.FC<PauseMenuProps> = (p) => {
               onClick={p.onCycleCamera}
               className="inline-flex h-9 shrink-0 cursor-pointer items-center rounded-full border border-[#262B3D] bg-[#08090D] px-3.5 font-f1-mono text-xs font-extrabold text-[#CCFF00] transition-colors hover:border-[#CCFF00]"
             >
-              {CAMERA_LABELS[p.cameraMode]} · {k.camera}
+              {CAMERA_MODES[p.cameraMode].label} · {k.camera}
             </button>
           </div>
         </div>

@@ -28,6 +28,7 @@
 import * as THREE from 'three';
 import { CameraMode, TelemetryData } from '@/types/f1';
 import { withBasePath } from '@/lib/base-path';
+import { CAMERA_MODES } from '@/lib/render/camera-modes';
 import { ContactAcousticsRig } from './contact-acoustics';
 import { AMR26_AUDIO_DIR, Vf26SoundBank } from './vf26-audio';
 import { VF26_ENGINE } from './vf26-data';
@@ -58,8 +59,6 @@ export const F2004_SOUND: CarSoundSource = { id: 'f2004', assetDir: '/cars/f2004
 const AMG_GT3_LIMITER_RPM = 7900;
 export const BMW_M4_GT3_SOUND: CarSoundSource = { id: 'bmw-m4-gt3', assetDir: '/cars/bmw-m4-gt3/audio/', limiterRpm: 7000, physicsLimiterRpm: AMG_GT3_LIMITER_RPM };
 
-/** Cameras mounted on the car use the mod's interior engine event; the rest hear the exterior one */
-export const INTERIOR_CAMERAS: ReadonlySet<CameraMode> = new Set<CameraMode>(['cockpit', 'cockpit_shoulder', 'nose', 'tv_pod']);
 
 
 interface SampleLayerDef {
@@ -432,7 +431,7 @@ export class CarAudioEngine {
     const loadId = ++this.bankLoadId;
     this.setEngineVoice('loading');
     const bank = new Vf26SoundBank(ctx, this.bankDestination ?? ctx.destination, this.sound.assetDir);
-    const ok = await bank.load(INTERIOR_CAMERAS.has(this.cameraMode) ? 'int' : 'ext');
+    const ok = await bank.load(CAMERA_MODES[this.cameraMode].interiorAudio ? 'int' : 'ext');
     // A later car, or dispose() (a closed context): this load is not wanted any more
     if (loadId !== this.bankLoadId || this.ctx !== ctx) {
       bank.dispose();
@@ -659,7 +658,7 @@ export class CarAudioEngine {
           gear: telemetry.gear,
           speedKmh: telemetry.speedKmh,
           boostBarGauge: Math.max(0, telemetry.turboBoostBar - 1),
-          view: INTERIOR_CAMERAS.has(this.cameraMode) ? 'int' : 'ext',
+          view: CAMERA_MODES[this.cameraMode].interiorAudio ? 'int' : 'ext',
           limiterRpm: this.sound.limiterRpm,
           // sqrt: the recordings are already a full skid, so a light slide comes in early
           skid: bankSkid ? 0.55 * Math.sqrt(squeal.amp) : 0,
@@ -815,7 +814,7 @@ export class CarAudioEngine {
       this.gravelGain.gain.setTargetAtTime(gravelAmp, now, 0.025);
     }
 
-    this.contactAcoustics?.update(telemetry, legacyDt, INTERIOR_CAMERAS.has(this.cameraMode));
+    this.contactAcoustics?.update(telemetry, legacyDt, CAMERA_MODES[this.cameraMode].interiorAudio);
   }
 
   /**

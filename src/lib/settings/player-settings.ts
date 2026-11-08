@@ -24,6 +24,7 @@ import {
   type WheelSettings,
 } from "@/lib/input/device-input";
 import { KB_STEER_RETURN_S, KB_STEER_RISE_S } from "@/lib/input/keyboard-steer";
+import { isCameraMode } from "@/lib/render/camera-modes";
 import { AI_SKILL_DEFAULT } from "@/lib/sim/ai-tuning";
 import { DEFAULT_DEVICE_ASSIST_TUNING, sanitizeAssistTuning, type DeviceAssistTuning } from "@/lib/sim/steering-assist";
 import { SIM_REALISM_LEVELS, type SimRealism } from "@/lib/sim/sim-realism";
@@ -349,8 +350,6 @@ export const DEFAULT_PLAYER_SETTINGS: PlayerSettings = {
   library: DEFAULT_CONTENT_LIBRARY,
 };
 
-const CAMERA_MODES: readonly CameraMode[] = ["chase", "tv_pod", "cockpit_shoulder", "cockpit", "nose", "helicopter", "tv_side"];
-
 type Obj = Record<string, unknown>;
 const isObj = (v: unknown): v is Obj => Boolean(v) && typeof v === "object" && !Array.isArray(v);
 const isNum = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
@@ -617,7 +616,7 @@ export function parsePlayerSettings(raw: unknown): PlayerSettings {
     autoGearbox: bool(raw.autoGearbox, d.autoGearbox),
     mouseSteer: bool(raw.mouseSteer, d.mouseSteer),
     liveryId: isStr(raw.liveryId) ? raw.liveryId : null,
-    camera: CAMERA_MODES.includes(raw.camera as CameraMode) ? (raw.camera as CameraMode) : null,
+    camera: isCameraMode(raw.camera) ? raw.camera : null,
     cockpitFovDeg:
       typeof raw.cockpitFovDeg === "number" && Number.isFinite(raw.cockpitFovDeg)
         ? Math.round(clampFov(raw.cockpitFovDeg))

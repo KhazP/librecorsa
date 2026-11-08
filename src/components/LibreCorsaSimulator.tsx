@@ -91,7 +91,8 @@ import { getTrackInfo } from "@/lib/track-registry";
 import { TouchControls } from "@/components/hud/TouchControls";
 import { ReplayBar } from "@/components/hud/ReplayBar";
 import { F1TelemetryHud, roomFromUrl } from "@/components/F1TelemetryHud";
-import { CAMERA_LABELS, nextCameraMode, TYRE_SETUP_LIMITS } from "@/components/hud/PauseMenu";
+import { TYRE_SETUP_LIMITS } from "@/components/hud/PauseMenu";
+import { CAMERA_MODES, FALLBACK_COCKPIT_FOV_DEG, nextCameraMode } from "@/lib/render/camera-modes";
 import { LoadingScreen } from "@/components/menu/LoadingScreen";
 import { TitleMenu } from "@/components/menu/TitleMenu";
 import { FirstRunWizard, type WizardMode, type WizardStepId } from "@/components/menu/FirstRunWizard";
@@ -152,8 +153,6 @@ const KB_BRAKE_FALL_S = 0.08;
 // Rotates a camera (which looks down -Z) to look along the car's +Z forward axis
 const CAM_FORWARD_FLIP = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI);
 const CAM_X_AXIS = new THREE.Vector3(1, 0, 0);
-/** Driver's-eye FOV of the procedural car (no model camera anchors); the FOV setting shifts every onboard camera from it */
-const FALLBACK_COCKPIT_FOV_DEG = 62;
 
 /**
  * Session flow: assets loading → "press any key" → title menu → (first-run / controls setup) → driving.
@@ -438,7 +437,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   const cockpitFovRef = useRef<number | null>(settings.cockpitFovDeg);
   cockpitFovRef.current = settings.cockpitFovDeg;
   /** The current car's own driver's-eye FOV, for the FOV slider's default and the [ / ] keys */
-  const [carCockpitFov, setCarCockpitFov] = useState(60);
+  const [carCockpitFov, setCarCockpitFov] = useState(FALLBACK_COCKPIT_FOV_DEG);
   const carCockpitFovRef = useRef(carCockpitFov);
   /** Saved settings have been read and applied (saving before that would overwrite them with defaults) */
   const [settingsHydrated, setSettingsHydrated] = useState(false);
@@ -541,6 +540,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
 
   const cameraModeRef = useRef<CameraMode>("chase");
   cameraModeRef.current = cameraMode;
+  /** The next view in the camera cycle, from the key, the pad, the touch pads and the menus alike */
+  const cycleCamera = useCallback(() => setCameraMode(nextCameraMode(cameraModeRef.current)), []);
 
   const boostLatchRef = useRef<boolean>(false);
   boostLatchRef.current = boostLatch;
@@ -1482,7 +1483,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     scene.matrixAutoUpdate = false;
 
     const camera = new THREE.PerspectiveCamera(
-      62,
+      FALLBACK_COCKPIT_FOV_DEG,
       container.clientWidth / Math.max(1, container.clientHeight),
       0.12,
       5500
@@ -1817,7 +1818,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
           keysRef.current.shiftDown = true;
           break;
         case "camera":
-          setCameraMode(nextCameraMode(cameraModeRef.current));
+          cycleCamera();
           break;
         case "racingLine":
           handleToggleRacingLine();
@@ -2219,7 +2220,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
           if (action === "shiftUp") keysRef.current.shiftUp = true;
           else if (action === "shiftDown") keysRef.current.shiftDown = true;
           else if (action === "aero") keysRef.current.toggleX = true;
-          else if (action === "camera") setCameraMode(nextCameraMode(cameraModeRef.current));
+          else if (action === "camera") cycleCamera();
           else if (action === "racingLine") handleToggleRacingLine();
           else if (action === "restart") restartRun();
           // The HUD owns these panels: L3 folds the Live Tuner MFD, R3 clears the whole HUD off the screen
@@ -2659,6 +2660,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       // The menus film the car from outside, whatever the player's camera is
       const inVr = renderer.xr.isPresenting;
       const mode: CameraMode = inMenu ? "chase" : inVr ? "cockpit" : cameraModeRef.current;
+      const view = CAMERA_MODES[mode];
       const vf26Cams = carRig.getCameraAnchors();
       const carFovDeg = vf26Cams ? vf26Cams.cockpit.fovDeg : FALLBACK_COCKPIT_FOV_DEG;
       if (carFovDeg !== carCockpitFovRef.current) {
@@ -2670,7 +2672,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       carRig.helmetGroup.visible = !vf26Cams;
       // From the driver's eye point the helmet would fill the view: the camera leaves its layer out, while the
       // sun's shadow camera keeps it so the head still shadows the cockpit
-      if (mode === "cockpit") camera.layers.disable(DRIVER_HEAD_LAYER);
+      if (view.driverEye) camera.layers.disable(DRIVER_HEAD_LAYER);
       else camera.layers.enable(DRIVER_HEAD_LAYER);
 
       // The fixed-step physics leaves up to 2 ms unstepped each frame: draw the car (and the cameras on it) where it
@@ -2739,8 +2741,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       }
       lapDelta.update(physics.telemetry);
       // The wheel is only in shot from the onboard views; the display redraws itself at 30 Hz
-      const onboard = mode === "cockpit" || mode === "tv_pod" || mode === "cockpit_shoulder";
-      if (onboard && (wheelDisplay || gt3Dash)) {
+      if (view.wheelInShot && (wheelDisplay || gt3Dash)) {
         const delta = lapDelta.delta(physics.telemetry);
         const deltaMs = delta === null ? null : delta * 1000;
         if (wheelDisplay) {
@@ -2833,17 +2834,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
           ? Math.sin(nowMs * 0.07) * 0.007 * (speedNorm - 0.72)
           : 0;
 
-      const vf26Cam =
-        vf26Cams &&
-        (mode === "cockpit"
-          ? vf26Cams.cockpit
-          : mode === "cockpit_shoulder"
-            ? vf26Cams.shoulder
-            : mode === "tv_pod"
-              ? vf26Cams.tcam
-              : mode === "nose"
-                ? vf26Cams.bumper
-                : null);
+      const vf26Cam = vf26Cams && view.anchor ? vf26Cams[view.anchor] : null;
       if (vf26Cam) {
         // Onboard camera anchors from the car model: bolted to the sprung chassis at the
         // model's position, pitch and field of view
@@ -2853,9 +2844,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         camera.quaternion
           .multiply(CAM_FORWARD_FLIP)
           .multiply(new THREE.Quaternion().setFromAxisAngle(CAM_X_AXIS, vf26Cam.pitchRad));
-        const headLocked =
-          (mode === "cockpit" || mode === "cockpit_shoulder") &&
-          settingsNow.hud.headMovement === "static";
+        const headLocked = view.driverHead && settingsNow.hud.headMovement === "static";
         if (!headLocked) {
           // Micro-shake: pitch about the lens' X axis, roll about its view axis, heave along the car's up
           shakeEuler.set(shake.pitchRad, 0, shake.rollRad);
@@ -2864,7 +2853,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         }
         camera.up.copy(carUp);
         // The player's FOV shifts the driver's-eye cameras together, keeping the model's framing between them
-        const targetOnboardFov = mode === "nose" ? vf26Cam.fovDeg : clampFov(vf26Cam.fovDeg + onboardFovShift);
+        const targetOnboardFov = view.playerFov ? clampFov(vf26Cam.fovDeg + onboardFovShift) : vf26Cam.fovDeg;
         if (camera.fov !== targetOnboardFov) {
           camera.fov = targetOnboardFov;
           camera.updateProjectionMatrix();
@@ -2962,7 +2951,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
             )
             .addScaledVector(carRight, -physics.yawRateRadS * 0.3)
         );
-        camera.fov = 62 + speedNorm * 4 + onboardFovShift;
+        camera.fov = FALLBACK_COCKPIT_FOV_DEG + speedNorm * 4 + onboardFovShift;
         camera.updateProjectionMatrix();
       } else if (mode === "nose") {
         // Reference Image 4: Forward Nose-Cone Camera showing narrow Nose Tip, delicate Y-Pitot Probe, curved vertical Front Wing Endplates at bottom corners & 3D Dashed Braking Line
@@ -3049,7 +3038,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       // chassis' suspension pitch and roll and turns them a little toward where the car is going; the road's own
       // camber and gradient stay in view. "Locked" leaves the camera bolted to the chassis.
       const neckOn =
-        settingsNow.hud.headMovement === "natural" && driving && !inVr && (mode === "cockpit" || mode === "cockpit_shoulder");
+        settingsNow.hud.headMovement === "natural" && driving && !inVr && view.driverHead;
       let neckYawTarget = 0;
       let neckPitchTarget = 0;
       let neckRollTarget = 0;
@@ -3103,7 +3092,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       neckRoll += (neckRollTarget - neckRoll) * Math.min(1, dtSeconds * 14);
       if (
         (Math.abs(neckYaw) > 1e-4 || Math.abs(neckPitch) > 1e-4 || Math.abs(neckRoll) > 1e-4) &&
-        (mode === "cockpit" || mode === "cockpit_shoulder")
+        view.driverHead
       ) {
         if (Math.abs(neckYaw) > 1e-4) {
           camera.quaternion.premultiply(neckQuat.setFromAxisAngle(carUp, neckYaw));
@@ -3181,7 +3170,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       // Spray thrown up by the cars ahead (the wake model's, from their speed, gap and the water)
       const sprayWake = trackEnv.weatherSampleFor(physics)?.sprayIntensity ?? 0;
       // Droplets on the visor only from the driver's eye (the mirrors render without this layer)
-      if (mode === "cockpit" && !inVr) camera.layers.enable(RAIN_VISOR_LAYER);
+      if (view.driverEye && !inVr) camera.layers.enable(RAIN_VISOR_LAYER);
       else camera.layers.disable(RAIN_VISOR_LAYER);
       const skyLight = THREE.MathUtils.clamp((skyConditions.elevationDeg + 3) / 17, 0, 1) * (1 - 0.4 * wx.cloudCover);
       visualFx.setLightLevel(skyLight);
@@ -3219,16 +3208,17 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       // chase view too when the player asked for it always
       const vmSetting = settingsNow.hud.virtualMirror;
       const vmView =
-        mode === "tv_pod" || mode === "nose" || mode === "cockpit_shoulder" || (mode === "cockpit" && !(wingMirrors?.found && wingMirrors.coversSides));
-      const vmOn =
-        driving && !inVr && container.clientWidth >= 640 && vmSetting !== "off" && (vmView || (vmSetting === "always" && mode === "chase"));
+        view.virtualMirror === "always" ||
+        (view.virtualMirror === "noSideMirrors" && !(wingMirrors?.found && wingMirrors.coversSides)) ||
+        (view.virtualMirror === "onRequest" && vmSetting === "always");
+      const vmOn = driving && !inVr && container.clientWidth >= 640 && vmSetting !== "off" && vmView;
       virtualMirror.update(frameIndex, vmOn, carRig.chassisGroup, carRig.root);
       if (vmOn !== virtualMirrorShown) {
         virtualMirrorShown = vmOn;
         setVirtualMirrorOn(vmOn);
       }
       // Rear view into the mirrors' render target (cockpit only, every 2nd frame), then the main frame
-      wingMirrors?.update(frameIndex, mode === "cockpit" && !inVr, carRig.chassisGroup);
+      wingMirrors?.update(frameIndex, view.driverEye && !inVr, carRig.chassisGroup);
       // Counted here, not inside the optional call above: without wing mirrors it never advanced, which also
       // disabled the virtual mirror's every-other-frame throttle
       frameIndex++;
@@ -3657,7 +3647,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
           wheelUncalibrated={
             settings.device === "wheel" && (!settings.wheel.throttle || !settings.wheel.brake)
           }
-          onChangeCameraMode={setCameraMode}
+          onCycleCamera={cycleCamera}
           cockpitFovDeg={settings.cockpitFovDeg}
           cockpitFovDefaultDeg={carCockpitFov}
           onChangeCockpitFov={handleCockpitFovChange}
@@ -3713,11 +3703,11 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
                   endS: replayUi.endS,
                   playing: replayUi.playing,
                   speed: replayUi.speed,
-                  cameraLabel: CAMERA_LABELS[cameraMode],
+                  cameraLabel: CAMERA_MODES[cameraMode].label,
                   onTogglePlay: handleReplayTogglePlay,
                   onSeek: handleReplaySeek,
                   onSpeed: handleReplaySpeed,
-                  onCycleCamera: () => setCameraMode(nextCameraMode(cameraMode)),
+                  onCycleCamera: cycleCamera,
                   onExit: () => exitReplayRef.current(),
                   onFlashback: () => flashbackReplayRef.current(),
                   exitKeyLabel: settings.keys.replay[0] ? keyLabel(settings.keys.replay[0]) : "T",
@@ -3730,7 +3720,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
                   tiltSteer: settings.touch.tiltSteer,
                   tiltRangeDeg: settings.touch.tiltRangeDeg,
                   onPause: togglePause,
-                  onCycleCamera: () => setCameraMode(nextCameraMode(cameraMode)),
+                  onCycleCamera: cycleCamera,
                 }
               : null
           }
@@ -3740,7 +3730,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       {phase === "title" ? (
         <TitleMenu
           {...menuProps}
-          onCycleCamera={() => setCameraMode(nextCameraMode(cameraMode))}
+          onCycleCamera={cycleCamera}
           initialRoomCode={inviteRoom ?? ""}
           initialPanel={titleInitialPanel ?? (inviteRoom ? "multiplayer" : null)}
           firstRun={!onboarded}

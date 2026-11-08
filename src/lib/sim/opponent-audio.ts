@@ -24,7 +24,8 @@ import * as THREE from 'three';
 import type { CameraMode } from '@/types/f1';
 import { withBasePath } from '@/lib/base-path';
 import type { InterpolatedPeerState } from './multiplayer-sync';
-import { INTERIOR_CAMERAS, type CarSoundSource } from './CarAudio';
+import { type CarSoundSource } from './CarAudio';
+import { CAMERA_MODES } from '@/lib/render/camera-modes';
 import { LoopGrid, LoopVoice, lerpTable, type Vf26AudioManifest } from './vf26-audio';
 
 /** Voices in the pool: the nearest cars get one, the rest are not heard */
@@ -499,7 +500,7 @@ export class OpponentAudio {
     this.invQ.copy(cam.quaternion).invert();
 
     // Cockpit cameras hear the field through the helmet and the bodywork
-    const interior = INTERIOR_CAMERAS.has(f.cameraMode) ? 1 : 0;
+    const interior = CAMERA_MODES[f.cameraMode].interiorAudio ? 1 : 0;
     this.interiorMix += (interior - this.interiorMix) * Math.min(1, dt / 0.12);
     this.interiorFilter?.frequency.setTargetAtTime(18000 - this.interiorMix * 15000, now, 0.03);
     this.bus.gain.setTargetAtTime(0.85 - this.interiorMix * 0.35, now, 0.03);
