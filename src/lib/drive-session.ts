@@ -15,8 +15,7 @@ import { FloorSparks } from "@/lib/render/floor-sparks";
 import { vehicleModelSpec } from "@/lib/cars/vehicle-models";
 import type { CarSoundSource } from "@/lib/sim/CarAudio";
 import { OpponentAudio } from "@/lib/sim/opponent-audio";
-import { carById, carForVehicle, type CarId } from "@/lib/cars/car-registry";
-import { overtakingRulesForSeason } from "@/lib/sim/overtaking-rules";
+import { carById, carForVehicle, carOvertakingRules, type CarId } from "@/lib/cars/car-registry";
 import { trackGeometryKey } from "@/lib/sim/ghost-align";
 import { carPhysics } from "@/lib/cars/f1-mod-physics";
 import { buildCircuitScene } from "@/lib/scene-builder";
@@ -504,9 +503,10 @@ export class DriveSession {
      */
     const createCar = (vehicle: VehicleModelId, prev: SimulatorCar | null, carId: CarId = carIdNow): SimulatorCar => {
       const car = vehicleModelSpec(vehicle).createSim(track, trackRoot);
-      // The overtaking aids of the car's season, and race control for them while a race is on (free in practice)
-      const season = carById(carId).season;
-      if (season !== undefined) car.setOvertakingRules?.(overtakingRulesForSeason(season));
+      // An F1 car's overtaking aids by its year, and race control for them while a race is on (free in practice);
+      // other classes have none
+      const rules = carOvertakingRules(carById(carId));
+      if (rules !== undefined) car.setOvertakingRules?.(rules);
       if (car.overtakingRules) {
         const self = car;
         car.raceControl = {
@@ -733,7 +733,7 @@ export class DriveSession {
             // every GT3 uses the AMG GT3's onboard and chase views, framed on its own steering wheel and front axle
             cameraAnchors: model.gt3Cockpit ? gt3RigCameraAnchors : undefined,
             // F1 cars from 2018 on wear the 2026 Pirelli sidewall (the SF71H on its 13" tyres too; the models' own are poor)
-            pirelliSidewall: def.classId === "f1-2026" && (def.season ?? 0) >= 2018,
+            pirelliSidewall: def.classId === "f1" && def.year >= 2018,
           })
         : model.gt3Cockpit
           ? createGt3CarRig()

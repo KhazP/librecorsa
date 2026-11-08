@@ -13,11 +13,13 @@ import {
 } from "@/lib/sim/CarAudio";
 import { AMG_GT3_SOUND } from "@/lib/sim/gt3/AmgGt3Sim";
 import { SUZUKI_LIANA_SOUND } from "@/lib/sim/road/SuzukiLianaSim";
+import { overtakingRulesForSeason, type OvertakingRules } from "@/lib/sim/overtaking-rules";
 
 /**
- * The cars in the picker, grouped by class. A car is a body and a sound on one of the vehicle models
- * (`VehicleModelId`): setups, telemetry, lap records and leaderboards stay keyed by that model, so a new car only
- * needs its GLB (`public/cars/<id>/model/`), its sound bank (`public/cars/<id>/audio/`) and an entry here.
+ * The cars in the picker, grouped by class and then by year, newest first. A car is a body and a sound on one of the
+ * vehicle models (`VehicleModelId`): setups, telemetry, lap records and leaderboards stay keyed by that model, so a
+ * new car only needs its GLB (`public/cars/<id>/model/`), its sound bank (`public/cars/<id>/audio/`) and an entry
+ * here with its class and year.
  * The first car of each vehicle model keeps the model's id, so saved choices and `?car=` links still resolve.
  */
 export type CarId =
@@ -35,7 +37,11 @@ export type CarId =
   | "bmw-m4-gt3"
   | "liana";
 
-export type CarClassId = "f1-2026" | "gt3" | "road";
+/**
+ * The kinds of car, one menu category each; a car's year groups it within its class. Class ids live only in code
+ * and the menus' state (saved choices are `CarId`s, an online room's rule is `CarClassRule`), so they can be renamed.
+ */
+export type CarClassId = "f1" | "gt3" | "road";
 
 export interface CarClass {
   id: CarClassId;
@@ -46,7 +52,8 @@ export interface CarClass {
 
 /**
  * Whether a car's physics belong to the car you see, the car-side counterpart of a circuit's `CircuitQuality`:
- * - "own": its vehicle model was built for this car (the F1 2026 cars, the Mercedes-AMG GT3s, the Suzuki Liana)
+ * - "own": its vehicle model was built for this car (the F1 2026 Prototype and Rigid-Body, the Mercedes-AMG GT3s,
+ *   the Suzuki Liana)
  * - "shared": a ported body on another car's model of the same class and era (the 2026 team cars, the BMW)
  * - "era": a ported body from an earlier season on the 2026 model
  * The F1 physics switch doesn't change it: a ported F1 car borrows its physics under either model.
@@ -130,135 +137,136 @@ export interface CarDefinition {
   /** The vehicle model that drives it */
   physics: VehicleModelId;
   /**
-   * The season the car raced in, which sets its overtaking aids (`overtakingRulesForSeason`): 2026 on, Straight Mode
-   * in every DRS zone plus Overtake Mode; 2011 to 2025, rear-flap DRS by the 1 s rule; before 2011, no DRS.
-   * Absent: no DRS (a GT3)
+   * The car's year: the season it raced in, or the model year of a road car. The menus group a class's cars by it,
+   * newest first. For an F1 car it also sets the overtaking aids (`carOvertakingRules`): 2026 on, Straight Mode in
+   * every DRS zone plus Overtake Mode; 2011 to 2025, rear-flap DRS by the 1 s rule; before 2011, no DRS. Other
+   * classes never get them, whatever their year.
    */
-  season?: number;
+  year: number;
   /** A ported GLB on the generic rig (`ported-car-model.ts`); absent: the vehicle model's own car */
   modelUrl?: string;
   sound: CarSoundSource;
 }
 
 export const CAR_CLASSES: readonly CarClass[] = [
-  { id: "f1-2026", title: "F1 2026", sub: "Active aero · hybrid", color: "#CCFF00" },
-  { id: "gt3", title: "GT3", sub: "ABS · TC", color: "#00E5FF" },
-  { id: "road", title: "Road cars", sub: "Street tyres · ABS", color: "#FF8A3D" },
+  { id: "f1", title: "F1", sub: "Open-wheel · DRS / active aero", color: "#CCFF00" },
+  { id: "gt3", title: "GT3", sub: "Closed-wheel · ABS / TC", color: "#00E5FF" },
+  { id: "road", title: "Road cars", sub: "Road-legal · street tyres", color: "#FF8A3D" },
 ];
 
 export const CARS: readonly CarDefinition[] = [
   {
     id: "vf26",
-    classId: "f1-2026",
+    classId: "f1",
     title: "F1 2026 Prototype",
     sub: "Curvilinear 2026 model · active aero",
     badge: "F1 2026",
     quality: "own",
     credit: DEX_F1_2026,
     physics: "vf26",
-    season: 2026,
+    year: 2026,
     sound: F1_2026_SOUND,
   },
   {
     id: "f12026-car",
-    classId: "f1-2026",
+    classId: "f1",
     title: "F1 2026 Rigid-Body",
     sub: "6-DOF rigid-body · track colliders · DRS",
     badge: "6-DOF",
     quality: "own",
     credit: DEX_F1_2026,
     physics: "f12026-car",
-    season: 2026,
+    year: 2026,
     sound: F1_2026_SOUND,
   },
   {
     id: "sf26",
-    classId: "f1-2026",
+    classId: "f1",
     title: "SF-26",
     sub: "2026 car",
     badge: "SF-26",
     quality: "shared",
     credit: daveLove("2026 Ferrari SF-26", "https://sketchfab.com/3d-models/2026-ferrari-sf-26-e5ca6cecdc42449283f4bed27360f2a7"),
     physics: "f12026-car",
-    season: 2026,
+    year: 2026,
     modelUrl: "/cars/sf26/model/sf26.glb",
     sound: SF26_SOUND,
   },
   {
     id: "w17",
-    classId: "f1-2026",
+    classId: "f1",
     title: "W17",
     sub: "2026 car",
     badge: "W17",
     quality: "shared",
     credit: daveLove("2026 Mercedes W17", "https://sketchfab.com/3d-models/2026-mercedes-w17-b806f1e70aa343219e7158169549b97b"),
     physics: "f12026-car",
-    season: 2026,
+    year: 2026,
     modelUrl: "/cars/w17/model/w17.glb",
     sound: W17_SOUND,
   },
   {
     id: "rb22",
-    classId: "f1-2026",
+    classId: "f1",
     title: "RB22",
     sub: "2026 car",
     badge: "RB22",
     quality: "shared",
     credit: daveLove("2026 Redbull RB22", "https://sketchfab.com/3d-models/2026-redbull-rb22-0a3d24a58e0549d591a5a48c22eec383"),
     physics: "f12026-car",
-    season: 2026,
+    year: 2026,
     modelUrl: "/cars/rb22/model/rb22.glb",
     sound: RB22_SOUND,
   },
   {
     id: "sf71h",
-    classId: "f1-2026",
+    classId: "f1",
     title: "SF71H",
     sub: "2018 car",
     badge: "SF71H",
     quality: "era",
     credit: daveLove("2018 Ferrari SF71H", "https://sketchfab.com/3d-models/2018-ferrari-sf71h-e54b896bd21f478f8309eecf3726700e"),
     physics: "f12026-car",
-    season: 2018,
+    year: 2018,
     modelUrl: "/cars/sf71h/model/sf71h.glb",
     sound: SF71H_SOUND,
   },
   {
     id: "rb8",
-    classId: "f1-2026",
+    classId: "f1",
     title: "RB8",
     sub: "2012 car",
     badge: "RB8",
     quality: "era",
     credit: daveLove("2012 Red Bull RB8", "https://sketchfab.com/3d-models/2012-red-bull-rb8-b74446dcd93a49879546d756e3093b3f"),
     physics: "f12026-car",
-    season: 2012,
+    year: 2012,
     modelUrl: "/cars/rb8/model/rb8.glb",
     sound: RB8_SOUND,
   },
   {
     id: "r25",
-    classId: "f1-2026",
+    classId: "f1",
     title: "R25",
     sub: "2005 car",
     badge: "R25",
     quality: "era",
     credit: daveLove("2005 Renault R25", "https://sketchfab.com/3d-models/2005-renault-r25-0d58fe125f5b41a2b8482576723120c4"),
     physics: "f12026-car",
-    season: 2005,
+    year: 2005,
     modelUrl: "/cars/r25/model/r25.glb",
     sound: R25_SOUND,
   },
   {
     id: "f2004",
-    classId: "f1-2026",
+    classId: "f1",
     title: "F2004",
     sub: "2004 car",
     badge: "F2004",
     quality: "era",
     credit: daveLove("2004 Ferrari F2004", "https://sketchfab.com/3d-models/2004-ferrari-f2004-bedade52e6f4415e90e656817c5701f8"),
     physics: "f12026-car",
-    season: 2004,
+    year: 2004,
     modelUrl: "/cars/f2004/model/f2004.glb",
     sound: F2004_SOUND,
   },
@@ -271,6 +279,7 @@ export const CARS: readonly CarDefinition[] = [
     quality: "own",
     credit: { title: "2020 Mercedes-Benz AMG GT3", author: "Ddiaz Design", url: "https://skfb.ly/pOTPL", ...CC_BY_NC_SA },
     physics: "amg-gt3",
+    year: 2020,
     sound: AMG_GT3_SOUND,
   },
   {
@@ -287,6 +296,8 @@ export const CARS: readonly CarDefinition[] = [
       ...CC_BY_NC_SA,
     },
     physics: "amg-gt3",
+    // The model's title gives no year: the Evo's homologation year
+    year: 2020,
     modelUrl: "/cars/amg-gt3-evo/model/amg-gt3-evo.glb",
     sound: AMG_GT3_SOUND,
   },
@@ -304,6 +315,7 @@ export const CARS: readonly CarDefinition[] = [
       ...CC_BY_NC_SA,
     },
     physics: "amg-gt3",
+    year: 2025,
     modelUrl: "/cars/bmw-m4-gt3/model/bmw-m4-gt3.glb",
     sound: BMW_M4_GT3_SOUND,
   },
@@ -323,6 +335,7 @@ export const CARS: readonly CarDefinition[] = [
       licenseUrl: "http://assetto-db.com/car/suzuki_liana",
     },
     physics: "liana",
+    year: 2002,
     modelUrl: "/cars/liana/model/liana.glb",
     sound: SUZUKI_LIANA_SOUND,
   },
@@ -344,6 +357,26 @@ export const carQualityMeta = (car: Pick<CarDefinition, "quality">): CarQualityM
 
 export const carClass = (id: CarClassId): CarClass => CAR_CLASSES.find((c) => c.id === id) ?? CAR_CLASSES[0];
 
+/** A car's class and year, as its chip reads: "F1 · 2018", "Road cars · 2002" */
+export const carClassYear = (car: Pick<CarDefinition, "classId" | "year">): string =>
+  `${carClass(car.classId).title} · ${car.year}`;
+
+/**
+ * The overtaking aids a car races with: an F1 car's by its year (`overtakingRulesForSeason`), none for any other
+ * class (absent: its vehicle model keeps its flaps shut, as a GT3 or road car always has).
+ */
+export const carOvertakingRules = (car: Pick<CarDefinition, "classId" | "year">): OvertakingRules | undefined =>
+  car.classId === "f1" ? overtakingRulesForSeason(car.year) : undefined;
+
+const CLASS_ORDER = new Map<CarClassId, number>(CAR_CLASSES.map((k, i) => [k.id, i]));
+const REGISTRY_ORDER = new Map<CarId, number>(CARS.map((c, i) => [c.id, i]));
+
+/** The menus' order: by class, then newest first, then as listed here */
+export const compareCarsByClassAndYear = (a: CarDefinition, b: CarDefinition): number =>
+  (CLASS_ORDER.get(a.classId) ?? 0) - (CLASS_ORDER.get(b.classId) ?? 0) ||
+  b.year - a.year ||
+  (REGISTRY_ORDER.get(a.id) ?? 0) - (REGISTRY_ORDER.get(b.id) ?? 0);
+
 /**
  * Whether the livery picker repaints this car. Ported cars (`modelUrl`) keep the paint their GLB was authored
  * with; the menus show "Factory livery" for them instead of the swatches.
@@ -356,7 +389,15 @@ export const FACTORY_LIVERY_NOTE = "Factory livery: this car keeps its original 
 /** The classes that have cars, in picker order */
 export const carClassesInUse = (): CarClass[] => CAR_CLASSES.filter((k) => CARS.some((c) => c.classId === k.id));
 
+/** A class's cars in registry order */
 export const carsInClass = (id: CarClassId): CarDefinition[] => CARS.filter((c) => c.classId === id);
+
+/** A class's cars by year, newest first (registry order within a year), for the year headings in the menus */
+export const carsByYear = (id: CarClassId): { year: number; cars: CarDefinition[] }[] => {
+  const groups = new Map<number, CarDefinition[]>();
+  for (const car of carsInClass(id)) groups.set(car.year, [...(groups.get(car.year) ?? []), car]);
+  return [...groups.entries()].sort(([a], [b]) => b - a).map(([year, cars]) => ({ year, cars }));
+};
 
 /** The car that stands for a vehicle model (its first car), e.g. for a leaderboard entry or a class rule */
 export const carForVehicle = (vehicle: VehicleModelId): CarDefinition =>

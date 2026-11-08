@@ -9,7 +9,7 @@
 import * as THREE from "three";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { carById, CARS, isCarId, type CarId } from "../src/lib/cars/car-registry";
+import { CAR_CLASSES, carById, CARS, carsByYear, carsInClass, isCarId, type CarId } from "../src/lib/cars/car-registry";
 import { carPhysics, carTakesPhysicsSwitch } from "../src/lib/cars/f1-mod-physics";
 import { getActiveTrackData } from "../src/lib/track-data";
 import { F12026CarSim } from "../src/lib/sim/f12026-car/F12026CarSim";
@@ -148,19 +148,39 @@ console.log("Registry & CREDITS.md checks");
 const creditsMd = readFileSync("CREDITS.md", "utf8");
 check("CREDITS.md credits Dave Love SketchFab under CC BY 4.0", creditsMd.includes("Dave Love SketchFab") && creditsMd.includes("http://creativecommons.org/licenses/by/4.0/"));
 
-const f1Cars = CARS.filter((c) => c.classId === "f1-2026");
+const f1Cars = CARS.filter((c) => c.classId === "f1");
 for (const native of ["vf26", "f12026-car", "amg-gt3", "amg-gt3-evo", "bmw-m4-gt3"] as const) {
   check(
     `${native}: physics switch leaves it on its own model`,
     !carTakesPhysicsSwitch(native) && carPhysics(native, "vf26") === carById(native).physics && carPhysics(native, "f12026-car") === carById(native).physics
   );
 }
-check("f1-2026 class has 2 native + 7 ported cars", f1Cars.length === 9, `${f1Cars.length} cars`);
+check("F1 class has 2 native + 7 ported cars", f1Cars.length === 9, `${f1Cars.length} cars`);
+
+// The menus group each class by year, newest first; no heading may be a single car's name
+const f1Years = carsByYear("f1").map((g) => g.year);
+check("F1 years newest first: 2026, 2018, 2012, 2005, 2004", f1Years.join(",") === "2026,2018,2012,2005,2004", f1Years.join(", "));
+check(
+  "Year groups hold every car of their class once",
+  CAR_CLASSES.every((k) => {
+    const grouped = carsByYear(k.id).flatMap((g) => g.cars.map((c) => c.id));
+    const own = carsInClass(k.id).map((c) => c.id);
+    return grouped.length === own.length && own.every((id) => grouped.includes(id));
+  })
+);
+check(
+  "No class is named after a car",
+  CAR_CLASSES.every((k) => {
+    const name = k.title.toLowerCase();
+    return !name.includes("liana") && !CARS.some((c) => c.title.toLowerCase() === name || c.badge.toLowerCase() === name);
+  }),
+  CAR_CLASSES.map((k) => k.title).join(", ")
+);
 
 for (const exp of EXPECTED_CARS) {
   check(`${exp.id}: isCarId`, isCarId(exp.id));
   const def = carById(exp.id);
-  check(`${exp.id}: registered with f12026-car physics and modelUrl`, def.id === exp.id && def.classId === "f1-2026" && def.physics === "f12026-car" && def.modelUrl === `/cars/${exp.id}/model/${exp.id}.glb`);
+  check(`${exp.id}: registered with f12026-car physics and modelUrl`, def.id === exp.id && def.classId === "f1" && def.physics === "f12026-car" && def.modelUrl === `/cars/${exp.id}/model/${exp.id}.glb`);
   check(
     `${exp.id}: physics switch picks rigid-body by default and F1 2026 on request`,
     carTakesPhysicsSwitch(exp.id) && carPhysics(exp.id) === "f12026-car" && carPhysics(exp.id, "vf26") === "vf26"

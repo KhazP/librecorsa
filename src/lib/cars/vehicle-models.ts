@@ -45,7 +45,7 @@ export interface VehicleModel {
 export const VEHICLE_MODELS: Readonly<Record<VehicleModelId, VehicleModel>> = {
   vf26: {
     id: "vf26",
-    classId: "f1-2026",
+    classId: "f1",
     createSim: (track, trackRoot) => {
       const car = new F1Physics2026(track);
       if (trackRoot) car.attachTrackRoot(trackRoot);
@@ -61,7 +61,7 @@ export const VEHICLE_MODELS: Readonly<Record<VehicleModelId, VehicleModel>> = {
   },
   "f12026-car": {
     id: "f12026-car",
-    classId: "f1-2026",
+    classId: "f1",
     createSim: (track, trackRoot) => new F12026CarSim(track, trackRoot),
     limiterRpm: F12026_CAR_CONFIG.gearbox.gears.redline_rpm,
     telemetryMaxRpm: 15000,
@@ -100,9 +100,12 @@ export const vehicleModelSpec = (id: VehicleModelId): VehicleModel => VEHICLE_MO
 export const isVehicleModelId = (value: unknown): value is VehicleModelId =>
   typeof value === "string" && Object.hasOwn(VEHICLE_MODELS, value);
 
-/** The vehicle models an online room's class rule lets in */
+/**
+ * The vehicle models an online room's class rule lets in: an F1 or GT3 room admits that class's models, "any" every
+ * model. There is no road-car rule, so road cars race only in "any" rooms.
+ */
 export function vehicleModelsFor(rule: CarClassRule): VehicleModelId[] {
-  const classId: CarClassId | null = rule === "f1" ? "f1-2026" : rule === "gt3" ? "gt3" : null;
+  const classId: CarClassId | null = rule === "f1" ? "f1" : rule === "gt3" ? "gt3" : null;
   return Object.values(VEHICLE_MODELS)
     .filter((m) => classId === null || m.classId === classId)
     .map((m) => m.id);

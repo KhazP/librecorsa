@@ -29,7 +29,7 @@ const QUALITIES: readonly CarQuality[] = ["own", "shared", "era"];
 
 /** A car's own vehicle model, for the cars without the physics switch (the GT3s say theirs in their sub line) */
 const physicsLabel = (car: CarDefinition) =>
-  car.classId === "f1-2026" ? F1_MOD_PHYSICS_OPTIONS.find((o) => o.id === car.physics)?.title : undefined;
+  car.classId === "f1" ? F1_MOD_PHYSICS_OPTIONS.find((o) => o.id === car.physics)?.title : undefined;
 
 const Spec: React.FC<{ k: string; children: React.ReactNode }> = ({ k, children }) => (
   <div className="flex items-baseline justify-between gap-3 border-t border-white/[0.07] py-2">

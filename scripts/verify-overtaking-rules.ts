@@ -18,7 +18,7 @@ import {
 } from '../src/lib/sim/overtaking-rules';
 import { FlatGroundQuery } from '../src/lib/sim/f12026-car/TrackColliderQuery';
 import { VehiclePhysics, type VehicleInputs } from '../src/lib/sim/f12026-car/VehiclePhysics';
-import { CARS } from '../src/lib/cars/car-registry';
+import { CARS, carOvertakingRules } from '../src/lib/cars/car-registry';
 import { getActiveTrackData } from '../src/lib/track-data';
 import { F12026CarSim } from '../src/lib/sim/f12026-car/F12026CarSim';
 import { F1Physics2026 } from '../src/lib/f1-physics-2026';
@@ -35,11 +35,26 @@ console.log('== Rules by season');
 check('2026 cars: Straight Mode + Overtake', overtakingRulesForSeason(2026) === 'straight-mode-2026');
 check('2011 to 2025: rear-flap DRS', overtakingRulesForSeason(2025) === 'drs-rear' && overtakingRulesForSeason(2011) === 'drs-rear');
 check('Before 2011: no DRS', overtakingRulesForSeason(2010) === 'none' && overtakingRulesForSeason(2004) === 'none');
-const f1Cars = CARS.filter((c) => c.classId === 'f1-2026');
+const f1Cars = CARS.filter((c) => c.classId === 'f1');
+const otherCars = CARS.filter((c) => c.classId !== 'f1');
 check(
-  'Every F1 car has a season, no GT3 does',
-  f1Cars.every((c) => c.season !== undefined) && CARS.filter((c) => c.classId === 'gt3').every((c) => c.season === undefined),
-  f1Cars.map((c) => `${c.id}:${c.season}`).join(' ')
+  'Every car has a year',
+  CARS.every((c) => Number.isInteger(c.year) && c.year >= 1950 && c.year <= 2100),
+  CARS.map((c) => `${c.id}:${c.year}`).join(' ')
+);
+check(
+  'F1 cars race with their year\'s aids',
+  f1Cars.length > 0 && f1Cars.every((c) => carOvertakingRules(c) === overtakingRulesForSeason(c.year)),
+  f1Cars.map((c) => `${c.id}:${carOvertakingRules(c)}`).join(' ')
+);
+check(
+  'GT3 and road cars get no aids, whatever their year',
+  otherCars.some((c) => c.classId === 'gt3') &&
+    otherCars.some((c) => c.classId === 'road') &&
+    // a year that would give an F1 car DRS (the 2025 BMW), so the class is what rules it out
+    otherCars.some((c) => overtakingRulesForSeason(c.year) !== 'none') &&
+    otherCars.every((c) => carOvertakingRules(c) === undefined),
+  otherCars.map((c) => `${c.id}:${c.year}`).join(' ')
 );
 
 // ---------------------------------------------------------------------------
