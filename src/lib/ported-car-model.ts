@@ -308,8 +308,6 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
         ? installTyreDeformation(tyreMesh, {
             unloadedRadiusM: extras.tyreRadius?.[SIDE[i]] ?? 0.34,
             halfWidthM: extras.tyreHalfWidth?.[SIDE[i]] ?? 0.16,
-            // The re-based wheel (alignWheelAxles) carries no camber of its own
-            bakedCamberRad: 0,
             pirelliSidewall: options.pirelliSidewall ? compound : undefined,
           })
         : null;

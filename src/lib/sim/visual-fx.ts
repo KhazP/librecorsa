@@ -684,6 +684,8 @@ export class SimVisualFxManager {
         wheels.ground = peer.wheels.ground;
         wheels.position = peer.position;
         wheels.quaternion = peer.quaternion;
+        // Road samples under the treads and tyre shadows for the cars near the player's (in a replay: samples across)
+        wheels.detail = this.playerPosValid ? tyreDetailAt(peer.position.distanceTo(this.playerPos)) : 1;
       }
       carRig.updateFromTelemetry(syntheticTelemetry, pitchRad, rollRad, wheelRot, dt, wheels);
       seatContactShadow(carRig.root, wheels);
@@ -724,6 +726,17 @@ export class SimVisualFxManager {
       }
     }
   }
+}
+
+/**
+ * How closely an opponent's tyres follow the road (`WheelSeating.detail`) at a distance (m) from the player's car:
+ * the kerb profile across and along each tread and the tyre shadows (four draw calls a car) close up, the profile
+ * across only in the middle distance, the plane under each hub beyond, where a tread is a few pixels wide. The road
+ * samples cost ~25 µs a car per frame at full detail, so the radii are generous (chase and TV shots frame cars well
+ * away from the player's)
+ */
+function tyreDetailAt(distanceM: number): 0 | 1 | 2 {
+  return distanceM < 60 ? 2 : distanceM < 150 ? 1 : 0;
 }
 
 /** Telemetry stand-in for an opponent's rig; the per-frame fields are refreshed in updateOpponentCars */

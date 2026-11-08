@@ -10,7 +10,6 @@ import type { Vf26CameraAnchor, Vf26ModelInstance } from "@/lib/vf26-car-model";
 import { installTyreDeformation, type TyreDeformationHandle } from "@/lib/render/tyre-deformation";
 import { applyLivery, collectPaintSlots, type PaintKeys, type PaintSlot } from "@/lib/render/livery-repaint";
 import {
-  bakedCamberOf,
   relativeMatrix,
   updateCorners,
   WHEEL_NODES,
@@ -361,14 +360,12 @@ export function createGt3CarRig(): SimCarRig {
       root.add(steer);
 
       const isLeft = i % 2 === 1;
-      // A rotation a about the forward (Z) axis moves the top of the wheel toward -X for a > 0
-      const bakedCamberRad = bakedCamberOf(wheel);
+      // The authored camber stays on the wheel node: the rig gives the shader the road in that node's frame
       const tyreMesh = spin.getObjectByName(`${wheelName}_TYRE`) as THREE.Mesh | undefined;
       const tyre = tyreMesh?.isMesh
         ? installTyreDeformation(tyreMesh, {
             unloadedRadiusM: extras.tyreRadius?.[SIDE[i]] ?? 0.34,
             halfWidthM: extras.tyreHalfWidth?.[SIDE[i]] ?? 0.163,
-            bakedCamberRad,
           })
         : null;
       corners.push({ steer, spin, isFront: i < 2, isLeft, restY: steer.position.y, tyre });
