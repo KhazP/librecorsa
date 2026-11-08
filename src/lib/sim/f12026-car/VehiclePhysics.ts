@@ -314,6 +314,8 @@ export interface WheelState {
   mz: number;
   /** Moment of the patch twisted against the road about the contact normal (Nm): the parking torque */
   mzTwist: number;
+  /** Front wheel's gyroscopic torque about its steering axis (N·m), added to the rack (0 on the rears) */
+  gyroSteerNm: number;
   /**
    * Patch twist (rad, + = wheel turned left of the rubber held by the road), and the toe / compliance share of the
    * steer angle it was last wound from (the driver's share comes in as a rate)
@@ -1054,6 +1056,7 @@ export class VehiclePhysics {
         fy: 0,
         mz: 0,
         mzTwist: 0,
+        gyroSteerNm: 0,
         twistRad: 0,
         twistSteerRad: Number.NaN,
         mx: 0,
@@ -1398,6 +1401,7 @@ export class VehiclePhysics {
       w.fy = 0;
       w.mz = 0;
       w.mzTwist = 0;
+      w.gyroSteerNm = 0;
       w.twistRad = 0;
       w.twistSteerRad = Number.NaN;
       w.patchHalfLengthM = 0;
@@ -2236,8 +2240,8 @@ export class VehiclePhysics {
         const tyreKingpinNm = kingpinMomentNm(
           _ex, _ey, _ez, _n, _fw, _lw, w.isLeft ? -1 : 1, w.steerRad, w.loadedRadius, _kpGeo, fx, fy, fz, w.mz + w.mzTwist, w.mx
         );
-        const gyroSteerNm = this.wheelGyroSteerNm(w, _fw);
-        ffbMz += tyreKingpinNm + flatSpotVibrationNm(w.flatSpotSeverity, w.rotationRad, w.omega, fz) + gyroSteerNm;
+        w.gyroSteerNm = this.wheelGyroSteerNm(w, _fw);
+        ffbMz += tyreKingpinNm + flatSpotVibrationNm(w.flatSpotSeverity, w.rotationRad, w.omega, fz) + w.gyroSteerNm;
       }
 
       // Loose ground (gravel, grass) ploughs against the contact patch's motion, sliding or rolling, outside the
