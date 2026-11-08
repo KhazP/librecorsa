@@ -3363,12 +3363,15 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     };
   }, [settings.keys]);
 
+  // With the touch pads up and no wheel or controller picked, the pads are what the player drives with
   const launchHintText =
     settings.device === "wheel"
       ? "Press the throttle to launch · pause button or Esc for menu"
       : settings.device === "controller"
         ? `Hold RT to launch · ${padButtonLabel(settings.padButtons.pause)} for menu`
-        : `Hold ${keyLabel(settings.keys.throttle[0])} to launch · Esc for menu`;
+        : touchVisible && !vrActive
+          ? "Hold Throttle to launch"
+          : `Hold ${keyLabel(settings.keys.throttle[0])} to launch · Esc for menu`;
 
   const menuProps = {
     telemetry,
