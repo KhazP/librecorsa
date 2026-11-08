@@ -144,6 +144,15 @@ export interface RacecraftParams {
   plannerLine: number;
   plannerProximity: number;
   plannerConsistency: number;
+  /** Defending: a car this far behind (m) and closing by more than this (m/s) is an attacker */
+  defendLookM: number;
+  defendClosingMs: number;
+  /** How far across a defensive move goes (m, × the driver's defend), and the room it needs to the attacker: half a
+   * car length plus this many seconds of the closing speed */
+  defendReachM: number;
+  defendRoomS: number;
+  /** Off the start an AI keeps its grid lane until a corner comes into view, or this far into the race at most (m) */
+  startLaneMaxM: number;
 }
 
 export const DEFAULT_RACECRAFT: RacecraftParams = {
@@ -160,11 +169,14 @@ export const DEFAULT_RACECRAFT: RacecraftParams = {
   plannerLine: 0.15,
   plannerProximity: 25,
   plannerConsistency: 0.4,
+  defendLookM: 30,
+  defendClosingMs: 1,
+  defendReachM: 2.2,
+  defendRoomS: 0.8,
+  startLaneMaxM: 900,
 };
 /** Rate at which an AI moves off / back onto its line (m/s) */
 const BIAS_RATE_MS = 2.2;
-/** Off the start an AI keeps its grid lane until a corner comes into view, or this far into the race at most (m) */
-const START_LANE_MAX_M = 900;
 const LIGHT_INTERVAL_S = 1.0;
 const GAP_BUCKET_M = 10;
 /** The overtake caution the passing rules below were written for (the shipped default): no change at this value */
@@ -1331,7 +1343,7 @@ export class AiOpponentField {
           aheadGap = ds;
         }
         // Closing in from behind, not yet alongside
-        if (ds < -CAR_LEN_M && ds > -30 && other.sim.vxMs - me.vxMs > 1 && -ds < attackerGap) {
+        if (ds < -CAR_LEN_M && ds > -this.rc.defendLookM && other.sim.vxMs - me.vxMs > this.rc.defendClosingMs && -ds < attackerGap) {
           attacker = other;
           attackerGap = -ds;
         }
@@ -1431,7 +1443,7 @@ export class AiOpponentField {
 
       // Off the start: run down the grid lane, side by side, until the first corner comes into view
       if (car.startLaneM !== null) {
-        if (kAbs > 0.006 || car.distM > START_LANE_MAX_M) car.startLaneM = null;
+        if (kAbs > 0.006 || car.distM > this.rc.startLaneMaxM) car.startLaneM = null;
         else if (targetLat === null) targetLat = car.startLaneM;
       }
       // Two cars can't take one corner side by side: the one behind on the way in gives the place up and tucks in
@@ -1455,10 +1467,10 @@ export class AiOpponentField {
       const mayDefend =
         (targetLat === null || onStartLane) && attacker !== null && defend > 0 && (kAbs > 0.006 || onStartLane) && !inCorner && !lapper && !yellow;
       // ... and only with room to make it: the move must be made before the attacker gets there (a move across the
-      // nose of a car already right behind is a brake test). Half a car length plus 0.8 s of the closing speed
+      // nose of a car already right behind is a brake test). Half a car length plus 0.8 s of the closing speed (defaults)
       const attackerClosing = attacker ? Math.max(0, attacker.sim.vxMs - me.vxMs) : 0;
       const startsDefence =
-        !car.defending && craft.defendMoves < 1 && me.telemetry.brake < 0.05 && attackerGap > 0.5 * CAR_LEN_M + 0.8 * attackerClosing;
+        !car.defending && craft.defendMoves < 1 && me.telemetry.brake < 0.05 && attackerGap > 0.5 * CAR_LEN_M + this.rc.defendRoomS * attackerClosing;
       const wasDefending = car.defending;
       car.defending = mayDefend && (car.defending || startsDefence);
       if (car.defending && !wasDefending && attacker) {
@@ -1467,7 +1479,7 @@ export class AiOpponentField {
         const dLatAtt = attacker.sim.lateralOffsetM - me.lateralOffsetM;
         const side = Math.abs(dLatAtt) > 0.8 || insideSign === 0 ? Math.sign(dLatAtt) || 1 : insideSign;
         const from = onStartLane ? me.lateralOffsetM : line;
-        const reach = Math.abs(dLatAtt) > 0.8 ? Math.min(Math.abs(dLatAtt), 2.2 * defend) : 2.2 * defend;
+        const reach = Math.abs(dLatAtt) > 0.8 ? Math.min(Math.abs(dLatAtt), this.rc.defendReachM * defend) : this.rc.defendReachM * defend;
         const to = THREE.MathUtils.clamp(from + side * reach, -half, half);
         craft.defendOffLine = onStartLane;
         craft.defendLatM = onStartLane ? to : to - line;
