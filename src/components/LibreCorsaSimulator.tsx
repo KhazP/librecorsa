@@ -937,13 +937,11 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     [takeAiField, startSession]
   );
 
-  // In the menus (after loading, after a race, after a car change): have the next race's AI field ready.
-  // The car swap replaces the physics in an effect; the timer lets it land first.
+  // In the menus (after loading, after a race): have the next race's AI field ready (a car swap asks for its own)
   useEffect(() => {
     if (phase === "loading" || phase === "driving" || !assetsReady) return;
-    const id = window.setTimeout(prepareAiField, 300);
-    return () => window.clearTimeout(id);
-  }, [phase, carId, assetsReady, prepareAiField]);
+    prepareAiField();
+  }, [phase, assetsReady, prepareAiField]);
 
   /** A multiplayer race was started (by us as host, or by the host): line up in our grid slot behind the lights */
   const startMpRace = useCallback(
@@ -1358,6 +1356,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         field.startRace(true);
       }
       setTelemetry({ ...physics.telemetry });
+      // In the menus, the next race's field is built for the new car
+      prepareAiField();
     };
 
     const haptics = new GamepadHaptics();
@@ -3117,7 +3117,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       renderer.dispose();
       audioRef.current?.dispose();
     };
-  }, [track, getTrackEnv, takeAiField, unlockAudio, handleToggleMute, handleToggleRacingLine, releaseHeldKeys, toggleAutopilot, setLatch, setVrState]);
+  }, [track, getTrackEnv, takeAiField, prepareAiField, unlockAudio, handleToggleMute, handleToggleRacingLine, releaseHeldKeys, toggleAutopilot, setLatch, setVrState]);
 
   // Saved settings and the first-run flag are read after mount (the page is prerendered without
   // storage), once the scene effect above has created the car they apply to
