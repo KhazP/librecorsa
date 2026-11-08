@@ -8,8 +8,9 @@
  * - Body:        6-DOF sprung body (quaternion attitude, world-frame angular velocity, body-frame inertia).
  *                Hubs ride with the body horizontally, so horizontal translation uses the total mass.
  * - Contact:     each corner probes the ground straight down through a `GroundQuery`
- *                (`TrackColliderQuery` on `Track_Collider_Road` + the `userData.surface` meshes), giving
- *                height, normal, `surface` and `grip`.
+ *                (`TrackColliderQuery` on `Track_Collider_Road` + the `userData.surface` meshes) at five points
+ *                over its contact patch, folded into an enveloped road height and plane normal
+ *                (`ContactPatch.ts`); the centre gives `surface` and `grip`.
  * - Suspension:  pull-rod double wishbones: main spring in series with a helper (`helper_rate` /
  *                `helper_range`), bump rubbers after `BumpStopSettingsUnits.range` (`BUMPSTOPUP_TRAVEL_*`),
  *                droop limiter, ARBs, heave spring + packers (double-wishbone configurations),
@@ -114,6 +115,7 @@ import {
   type WallQuery,
   wallSweep,
 } from './TrackColliderQuery';
+import { queryContactPatch } from './ContactPatch';
 import { type AutoShiftSchedule, autoShift, createAutoShiftInput, ManualShiftOverride } from '../auto-gearbox';
 
 const G = 9.81;
@@ -131,10 +133,19 @@ const AUTO_BRAKE_DOWNSHIFT_PEDAL = 0.3;
 const AUTO_BRAKE_DOWNSHIFT_GAP_S = 0.25;
 /** Probe start above the suspension hardpoint (m) */
 const GROUND_PROBE_UP_M = 0.6;
+/**
+ * Least half-length of the contact patch the ground is sampled over (m): the 0.15 m patch rFactor 2 / LMU / iRacing
+ * sample, kept by a lightly loaded tyre whose deflection chord would be shorter (see `ContactPatch.ts`)
+ */
+const CONTACT_PATCH_MIN_HALF_LENGTH_M = 0.075;
+/** The tread's edges, as a share of the section width each side of centre (as ac-tyre's `sample5PointContactPatch`) */
+const TREAD_HALF_WIDTH_SHARE = 0.42;
 /** Placement: the ground under each tyre is looked for at most this far above the ground under the CG (m) */
 const ROAD_ATTITUDE_PROBE_UP_M = 1.5;
 /** Placement: steepest grade or camber the car is seated on (rad, ≈34°: Daytona's 31° turn banking) */
 const ROAD_ATTITUDE_MAX_RAD = 0.6;
+/** Steepest slope a contact patch's plane may take (rise over run): the grade or camber a car is seated on */
+const CONTACT_MAX_SLOPE = Math.tan(ROAD_ATTITUDE_MAX_RAD);
 /**
  * Past these the integration has blown up rather than the car crashed: 200 m/s is 720 km/h, and 40 rad/s is over six
  * turns a second (a barrel roll or a spin at speed stays under ≈15 rad/s)
@@ -1771,7 +1782,7 @@ export class VehiclePhysics {
       w.hardpointWorld.copy(w.hardpoint).applyQuaternion(this.quaternion).add(this.position);
       _r.subVectors(w.hardpointWorld, this.position);
       w.hardpointVel.crossVectors(this.angularVelocity, _r).add(this.velocity);
-      w.grounded = this.ground.query(w.hardpointWorld.x, w.hardpointWorld.z, w.hardpointWorld.y + GROUND_PROBE_UP_M, w.ground);
+      w.grounded = this.queryContactPatch(w);
       if (w.grounded) this.climbStep(w, h);
       else w.contactY = Number.NaN;
       w.compression = w.staticHubDist - (w.hardpointWorld.y - w.hubY) / upY;
@@ -2153,10 +2164,44 @@ export class VehiclePhysics {
   }
 
   /**
+   * Ground under a wheel's contact patch (`ContactPatch.ts`): the enveloped road height and plane normal over a patch
+   * as long as the tyre's deflection chord (at least `CONTACT_PATCH_MIN_HALF_LENGTH_M` each way) and as wide as its
+   * tread, headed along the road wheel (last sub-step's steer). False when nothing is under the patch centre.
+   */
+  private queryContactPatch(w: WheelState): boolean {
+    const geo = w.isFront ? this.tyres[0].data.front : this.tyres[1].data.rear;
+    const R0 = geo.radius;
+    const d = Math.min(Math.max(0, w.deflection), R0);
+    const halfLength = Math.max(CONTACT_PATCH_MIN_HALF_LENGTH_M, Math.sqrt(d * (2 * R0 - d)));
+    const c = Math.cos(w.steerRad);
+    const s = Math.sin(w.steerRad);
+    const fx = _ez.x * c + _ex.x * s;
+    const fz = _ez.z * c + _ex.z * s;
+    const fl = Math.sqrt(fx * fx + fz * fz);
+    const p = w.hardpointWorld;
+    // On its side or nose-down the wheel has no horizontal heading: probe at the hub alone
+    if (fl < 1e-3) return this.ground.query(p.x, p.z, p.y + GROUND_PROBE_UP_M, w.ground);
+    return queryContactPatch(
+      this.ground,
+      p.x,
+      p.z,
+      p.y + GROUND_PROBE_UP_M,
+      fx / fl,
+      fz / fl,
+      halfLength,
+      TREAD_HALF_WIDTH_SHARE * geo.width,
+      R0,
+      CONTACT_MAX_SLOPE,
+      w.ground
+    );
+  }
+
+  /**
    * A tyre meets an abrupt rise (a surface seam, the edge of a raised verge) along its contact arc: over a step
    * of height d it rises across √(2Rd − d²) of travel, so the contact height climbs at most travel·√(d / 2R)
    * per step instead of jumping (a one-step jump drives the whole step into the tyre spring and launches the
-   * car). Drops and gentle grades pass straight through.
+   * car). Gentle grades pass straight through, and so do drops: the contact patch's trailing samples already hold the
+   * tyre up on an edge until it has rolled off (`queryContactPatch`).
    */
   private climbStep(w: WheelState, h: number): void {
     const g = w.ground;
