@@ -4,6 +4,7 @@
  *  - pneumatic trail from the contact patch (a/3), so it grows with load
  *  - Fx at the scrub radius, Fy at the caster trail, Fz's KPI / caster weight-jacking, Mz and Mx onto the axis
  *  - a parked car's tyres twist against the road: the rim is heavy when turned in place and holds steady
+ *  - hydraulic power steering takes part of the rack torque, the parked load most, so it stays inside full scale
  *  - the road texture is a position-based height the tyres roll over, so the rim only feels it through them
  *  - the F1 has steering compliance, stiffer than the GT3's
  */
@@ -13,7 +14,12 @@ import { VehiclePhysics } from '../src/lib/sim/f12026-car/VehiclePhysics';
 import { FlatGroundQuery } from '../src/lib/sim/f12026-car/TrackColliderQuery';
 import { F12026_CAR_CONFIG } from '../src/lib/sim/f12026-car/F12026CarConfig';
 import { AMG_GT3_CONFIG } from '../src/lib/sim/gt3/AmgGt3Config';
-import { contactHalfLengthM, kingpinMomentNm, spinFrictionArmM } from '../src/lib/sim/f12026-car/steering-torque';
+import {
+  contactHalfLengthM,
+  driverRackTorqueNm,
+  kingpinMomentNm,
+  spinFrictionArmM,
+} from '../src/lib/sim/f12026-car/steering-torque';
 import { roadTextureHeightM, ROAD_TEXTURE_RMS_M } from '../src/lib/sim/road-texture';
 
 let passed = 0;
@@ -127,7 +133,7 @@ console.log('Moments about the kingpin');
 
 console.log('Parked and slow');
 for (const [name, config] of CARS) {
-  check(`${name}: turning the wheel in place builds a heavy, steady torque against it`, () => {
+  check(`${name}: turning the wheel in place builds a heavy, steady torque against it, the power steering keeping it in range`, () => {
     const c = make(config);
     for (let t = 0; t < 0.5; t += DT) {
       c.step(DT, { throttle: 0, brake: 1, steer: 0 });
@@ -145,7 +151,7 @@ for (const [name, config] of CARS) {
     const mean = held.reduce((s, x) => s + x, 0) / held.length;
     // Rim convention (+ = right): turned right, the tyres push it back left
     assert.ok(Math.abs(before) < 0.01, `before ${before}`);
-    assert.ok(mean < -0.4, `held ${mean}`);
+    assert.ok(mean < -0.45 && mean > -0.75, `held ${mean}`);
     assert.ok(sd(held) < 0.01, `steady ${sd(held)}`);
     assert.ok(c.velocity.length() < 0.05, `the car stays put (${c.velocity.length()} m/s)`);
     return `${before.toFixed(3)} → ${mean.toFixed(2)}`;
@@ -180,6 +186,34 @@ for (const [name, config] of CARS) {
     return `parked ${parked.toFixed(2)}, 5 km/h ${slow.toFixed(2)}`;
   });
 }
+
+console.log('Power steering');
+check("the rim gets the driver's share: T·(1 + boost ratio) holds the rack, none below the valve's deadband", () => {
+  for (const [, config] of CARS) {
+    const ps = config.chassis.powerSteering;
+    assert.ok(ps, 'both cars have power steering');
+    const below = 0.9 * ps.deadbandNm * ps.steeringRatio;
+    assert.equal(driverRackTorqueNm(below, 0, ps), below);
+    let last = 0;
+    for (const rack of [200, 400, 600, 800, 1000]) {
+      const driver = driverRackTorqueNm(rack, 0, ps);
+      const t = driver / ps.steeringRatio;
+      const u = THREE.MathUtils.clamp((t - ps.deadbandNm) / ps.rampNm, 0, 1);
+      const ratio = ps.maxRatio * u * u * (3 - 2 * u);
+      assert.ok(Math.abs(t * (1 + ratio) - rack / ps.steeringRatio) < 1e-3, `${rack}: ${t}`);
+      assert.ok(driver > last && driver <= rack, `rises with the rack, never above it (${rack} → ${driver})`);
+      assert.equal(driverRackTorqueNm(-rack, 0, ps), -driver);
+      last = driver;
+    }
+  }
+});
+check("the GT3's speed-sensitive pump gives no assist at speed; the F1's engine-driven one the same at any speed", () => {
+  const gt3 = AMG_GT3_CONFIG.chassis.powerSteering;
+  const f1 = F12026_CAR_CONFIG.chassis.powerSteering;
+  assert.equal(driverRackTorqueNm(700, 100 / 3.6, gt3), 700);
+  assert.ok(driverRackTorqueNm(700, 0, gt3) < 0.6 * 700);
+  assert.equal(driverRackTorqueNm(500, 0, f1), driverRackTorqueNm(500, 80, f1));
+});
 
 console.log('Road texture');
 check('a deterministic height of position, ≈ 0.5 mm RMS, that the patch smooths', () => {

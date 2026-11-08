@@ -96,6 +96,7 @@ import {
   F12026_CAR_CONFIG,
   type PerformanceModeName,
   type PhysicsTyreCompound,
+  type PowerSteeringData,
   type SuspensionSettingUnits,
   suspensionSupportsHeave,
   type TyresCompoundData,
@@ -116,6 +117,7 @@ import {
 import { type AutoShiftSchedule, autoShift, createAutoShiftInput, ManualShiftOverride } from '../auto-gearbox';
 import {
   contactHalfLengthM,
+  driverRackTorqueNm,
   kingpinMomentNm,
   PATCH_HALF_WIDTH_SHARE,
   PATCH_TWIST_DAMPING_S,
@@ -692,6 +694,7 @@ export class VehiclePhysics {
   /** Steering compliance (rad of road-wheel angle per N of lateral force) */
   private readonly steerComplianceRadPerN: number;
   private readonly ffbMechanicalTrailM: number;
+  private readonly powerSteering: PowerSteeringData | undefined;
   /** Sum / count of the per-step FFB torque since the last takeFfbAverage() */
   private ffbSum = 0;
   private ffbSamples = 0;
@@ -904,6 +907,7 @@ export class VehiclePhysics {
           : { rpm: gears.brake_downshift_rpm, pedal: AUTO_BRAKE_DOWNSHIFT_PEDAL, gapS: AUTO_BRAKE_DOWNSHIFT_GAP_S },
     };
     this.steerComplianceRadPerN = ((ch.steerComplianceDegPerKN ?? 0) * DEG2RAD) / 1000;
+    this.powerSteering = ch.powerSteering;
     this.ffbMechanicalTrailM = ch.ffbMechanicalTrailM ?? DEFAULT_FFB_MECHANICAL_TRAIL_M;
     this.brakeCompound = cfg.brakes.discMaterial ?? 'carbon-ceramic';
     // Body axes: X = left (pitch), Y = up (yaw), Z = forward (roll)
@@ -2155,7 +2159,9 @@ export class VehiclePhysics {
       const mzBody = w.mz + w.mzTwist;
       if (mzBody !== 0) this.torque.addScaledVector(_n, mzBody);
     }
-    this.telemetry.ffbTorqueNorm = THREE.MathUtils.clamp(ffbMz / FFB_REFERENCE_NM, -1, 1);
+    // The rim feels the driver's share of the rack torque, the power steering's assist taking the rest
+    const driverNm = driverRackTorqueNm(ffbMz, this.velocity.dot(_ez), this.powerSteering);
+    this.telemetry.ffbTorqueNorm = THREE.MathUtils.clamp(driverNm / FFB_REFERENCE_NM, -1, 1);
     this.ffbSum += this.telemetry.ffbTorqueNorm;
     this.ffbSamples++;
 

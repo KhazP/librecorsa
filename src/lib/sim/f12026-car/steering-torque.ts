@@ -19,6 +19,7 @@
  * rolls (the twisted rubber leaves the patch over about its half-length a).
  */
 import type { CornerKinematicsState } from '../suspension-kinematics';
+import type { PowerSteeringData } from './F12026CarConfig';
 
 interface Vec3Like {
   x: number;
@@ -174,4 +175,37 @@ export function kingpinMomentNm(
     mz * (nx * kx + ny * ky + nz * kz) +
     mx * (fwx * kx + fwy * ky + fwz * kz)
   );
+}
+
+/** Assist ratio of a boost valve at the driver's column torque `driverNm` (≥ 0), before any speed fade */
+function boostRatio(ps: PowerSteeringData, driverNm: number): number {
+  const u = (driverNm - ps.deadbandNm) / Math.max(1e-6, ps.rampNm);
+  if (u <= 0) return 0;
+  return u >= 1 ? ps.maxRatio : ps.maxRatio * u * u * (3 - 2 * u);
+}
+
+/**
+ * The driver's share of the rack torque (Nm, in the same kingpin-sum units as `rackKingpinNm`, sign kept) with
+ * hydraulic power steering at road speed `speedMs`: the column torque T that, with the assist it opens the valve to,
+ * holds the rack, T·(1 + ratio(T)) = rack / steering ratio. The left side rises with T, so a bisection finds it.
+ */
+export function driverRackTorqueNm(rackKingpinNm: number, speedMs: number, ps: PowerSteeringData | undefined): number {
+  if (!ps || ps.maxRatio <= 0 || rackKingpinNm === 0) return rackKingpinNm;
+  let fade = 1;
+  if (ps.speedFadeMs) {
+    const [v0, v1] = ps.speedFadeMs;
+    const u = Math.min(1, Math.max(0, (Math.abs(speedMs) - v0) / Math.max(1e-6, v1 - v0)));
+    fade = 1 - u * u * (3 - 2 * u);
+    if (fade <= 0) return rackKingpinNm;
+  }
+  const column = Math.abs(rackKingpinNm) / ps.steeringRatio;
+  if (column <= ps.deadbandNm) return rackKingpinNm;
+  let lo = ps.deadbandNm;
+  let hi = column;
+  for (let i = 0; i < 24; i++) {
+    const mid = 0.5 * (lo + hi);
+    if (mid * (1 + fade * boostRatio(ps, mid)) > column) hi = mid;
+    else lo = mid;
+  }
+  return Math.sign(rackKingpinNm) * 0.5 * (lo + hi) * ps.steeringRatio;
 }

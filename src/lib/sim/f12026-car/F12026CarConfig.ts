@@ -83,6 +83,30 @@ export interface ChassisData {
    * tie-rod / bush flex). Adds understeer gradient roughly linearly in lateral g; default 0 (rigid)
    */
   steerComplianceDegPerKN?: number;
+  /** Hydraulic power steering; none = an unassisted rack */
+  powerSteering?: PowerSteeringData;
+}
+
+/**
+ * Hydraulic power steering: the boost valve shares the rack's torque between the driver and the assist piston by the
+ * torque the driver puts through the column. Below `deadbandNm` the valve stays on its centre lap (no assist); over
+ * the next `rampNm` its assist ratio (assist torque per Nm of the driver's) builds to `maxRatio` and holds there.
+ * The rim feels the driver's share.
+ */
+export interface PowerSteeringData {
+  /** Steering ratio between the column and the road wheels, through which the valve sees the rack */
+  steeringRatio: number;
+  /** Column torque the valve passes unassisted (Nm at the rim) */
+  deadbandNm: number;
+  /** Column torque past the deadband over which the assist ratio builds to its full value (Nm) */
+  rampNm: number;
+  /** Full assist ratio: assist torque per Nm of the driver's */
+  maxRatio: number;
+  /**
+   * Road speed over which a speed-sensitive pump fades the assist out [from, gone by] (m/s). Omitted: an engine-driven
+   * pump, the same assist at any speed
+   */
+  speedFadeMs?: readonly [number, number];
 }
 
 // ---------------------------------------------------------------------------
@@ -1354,6 +1378,11 @@ export const F12026_CAR_CONFIG = {
     // times the assist) in series with a carbon / titanium tie-rod (≈ 5 kNm/deg) is ≈ 0.04 °/kN, the upright and
     // wishbones ≈ 0.01 more: 0.05 °/kN, a fifth of the bushed GT3's [est]
     steerComplianceDegPerKN: 0.05,
+    // The rules allow only hydraulic assist, neither electronically controlled nor electrically powered: an engine-driven
+    // pump, the same boost at any speed. Teams size it to keep the fast corners' weight with the driver: the valve opens
+    // at ≈ 26 Nm at the rim (above the ≈ 24 Nm of a 2.5 g corner at 200 km/h) and reaches a light 0.45 ratio 6 Nm
+    // later, so the slow hairpins and parking get the help [est]
+    powerSteering: { steeringRatio: 12.6, deadbandNm: 26, rampNm: 6, maxRatio: 0.45 },
   },
   engine: F12026_ENGINE,
   ers: F12026_ERS,
