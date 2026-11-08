@@ -6,11 +6,14 @@
  *
  * Model (fixed 500 Hz outer step, 4 × 2 kHz sub-steps):
  * - Body:        6-DOF sprung body (quaternion attitude, world-frame angular velocity, body-frame inertia).
- *                Hubs ride with the body horizontally, so horizontal translation uses the total mass.
+ *                Hubs ride with the body horizontally, so horizontal translation uses the total mass; the
+ *                unsprung masses' own inertia reaches the tyres along the hub's path (the solved wishbones).
  * - Contact:     each corner probes the ground straight down through a `GroundQuery`
  *                (`TrackColliderQuery` on `Track_Collider_Road` + the `userData.surface` meshes), giving
  *                height, normal, `surface` and `grip`.
- * - Suspension:  pull-rod double wishbones: main spring in series with a helper (`helper_rate` /
+ * - Suspension:  pull-rod double wishbones solved from their hardpoints (camber, steer with Ackermann and bump
+ *                steer; tyre forces reach the body through the link geometry: roll centre, jacking, anti-dive,
+ *                anti-squat, anti-lift): main spring in series with a helper (`helper_rate` /
  *                `helper_range`), bump rubbers after `BumpStopSettingsUnits.range` (`BUMPSTOPUP_TRAVEL_*`),
  *                droop limiter, ARBs, heave spring + packers (double-wishbone configurations),
  *                4-way `DamperControllerData` (base corner + heave / roll / pitch mode dampers).
@@ -286,7 +289,7 @@ export interface WheelState {
   rotationRad: number;
   /** Road-wheel steer (rad, + = left) */
   steerRad: number;
-  /** Kinematic bump-steer toe offset (rad) */
+  /** Toe the steering geometry adds to the rack's nominal angle: Ackermann, bump steer and damage toe (rad, + = toe-in) */
   toeRad: number;
   /** Steering-compliance angle given up to the lateral force (rad, filtered) */
   complianceRad: number;
@@ -832,6 +835,8 @@ export class VehiclePhysics {
   private mapAeroRearN = 0;
   private mapAeroDragN = 0;
   private readonly prevVelocity = new THREE.Vector3();
+  /** The body's acceleration less gravity at the last sub-step (m/s², world): what the unsprung masses ride with */
+  private readonly bodySpecificForce = new THREE.Vector3();
   private readonly force = new THREE.Vector3();
   private readonly torque = new THREE.Vector3();
   private lastInputs: VehicleInputs = { throttle: 0, brake: 0, steer: 0 };
@@ -1338,6 +1343,7 @@ export class VehiclePhysics {
     this.aeroDragN = 0;
     this.rideFront = 0;
     this.rideRear = 0;
+    this.bodySpecificForce.set(0, 0, 0);
     this.turboTargetBar = 1;
     this.ffbSum = 0;
     this.ffbSamples = 0;
@@ -1859,9 +1865,11 @@ export class VehiclePhysics {
       const kin = w.isFront
         ? (w.isLeft ? frontKin.left : frontKin.right)
         : (w.isLeft ? rearKin.left : rearKin.right);
-      w.toeRad = kin.bumpSteerToeInRad + this.damageToeRad[i];
+      // The solved upright's angle against the rack's nominal one: its Ackermann and bump steer, as toe-in
+      const rackSteer = w.isFront ? -inp.steer * this.maxSteerRad : 0;
+      w.toeRad = (w.isLeft ? -1 : 1) * (kin.wheelSteerRad - rackSteer) + this.damageToeRad[i];
       w.casterTrailM = kin.casterTrailM;
-      w.scrubRadiusM = kin.scrubRadiusM;
+      w.scrubRadiusM = kin.kingpinScrubM;
 
       let fz = 0;
       let delta = 0;
@@ -1875,17 +1883,11 @@ export class VehiclePhysics {
       w.loadedRadius = R0 - w.deflection + dR * 0.25;
       w.rollingRadius = Math.max(0.2, R0 - w.deflection / 3);
 
-      // Hub: tyre normal force up, suspension force down
-      const hubAcc = (fz * g.ny - w.suspensionForce * _ey.y) / axle.unsprungMass - G;
-      w.hubVy += hubAcc * h;
-      w.hubY += w.hubVy * h;
-
-      // Suspension load reaches the body vertically at the hardpoint
-      _f.set(0, w.suspensionForce * _ey.y, 0);
-      this.addForceAt(_f, w.hardpointWorld);
-
-      // Wheel frame on the contact plane
-      w.steerRad = (w.isFront ? -inp.steer * this.maxSteerRad : 0) + (w.isLeft ? -1 : 1) * (w.isFront ? this.staticToeRad.front : this.staticToeRad.rear);
+      // Wheel frame on the contact plane: the solved upright's road-wheel angle (rack, Ackermann, bump steer), the
+      // setup's static toe and any damage toe
+      w.steerRad =
+        kin.wheelSteerRad +
+        (w.isLeft ? -1 : 1) * ((w.isFront ? this.staticToeRad.front : this.staticToeRad.rear) + this.damageToeRad[i]);
       if (w.isFront && this.steerComplianceRadPerN > 0) {
         // The lateral force bends the steering toward straight; filtered (~15 ms) so the force loop stays stable
         const target = -this.steerComplianceRadPerN * w.fy;
@@ -1905,10 +1907,10 @@ export class VehiclePhysics {
       w.vx = vx;
       w.vy = vy;
 
-      // Camber relative to the road, leaning toward +left (rad), combining static camber + 3D wishbone kinematic camber curve
-      const staticCamberDeg = axle.spec.staticCamber + 0.75 * axle.spec.camberGainKinematic * w.compression;
+      // Camber relative to the road, leaning toward +left (rad): the setup's static camber plus the solved upright's
+      // camber (wishbone travel, and the caster / KPI camber of the steer angle), plus the body's lean
       const leanBody = Math.asin(THREE.MathUtils.clamp(_ey.dot(_lw), -1, 1));
-      w.camberLeftRad = (w.isLeft ? 1 : -1) * (staticCamberDeg * DEG2RAD + 0.25 * kin.dynamicCamberDeltaRad) + leanBody;
+      w.camberLeftRad = (w.isLeft ? 1 : -1) * (axle.spec.staticCamber * DEG2RAD + kin.uprightCamberRad) + leanBody;
 
       // Relaxation-length carcass: slip ratio and tan(slip angle), implicit in |vx|
       const rim = w.omega * w.rollingRadius;
@@ -2074,15 +2076,40 @@ export class VehiclePhysics {
         dragY = (-dragN * vy) / patchSpeed;
       }
 
-      // Tyre forces reach the body at the dynamic 3D roll centre; the normal's horizontal part holds it on slopes
+      // Tyre forces reach the body through the links: across at the contact patch, where they act (so the whole car
+      // sees the full load transfer), and up / down as the links' jacking force. That is the contact force's virtual
+      // work along the patch's path per unit of travel, F · dr/dz (front view: roll centre and jacking; side view:
+      // anti-dive / anti-lift), as a multibody suspension transmits it (AC's DWB, rFactor 2). The brake caliper sits on
+      // the upright, so braking acts along the patch's path; a driveshaft's drive force acts along the hub's, its torque
+      // going into the chassis (anti-squat, Milliken RCVD §17.4). The normal's horizontal part holds the car on slopes.
       _f.copy(_fw).multiplyScalar(fx + dragX).addScaledVector(_lw, fy + dragY);
       _f.x += fz * g.nx;
       _f.z += fz * g.nz;
-      const kinRcHeight = w.isFront ? frontKin.rollCentreHeightM : rearKin.rollCentreHeightM;
-      const rcHeight = 0.75 * axle.spec.rollCentreHeight + 0.25 * kinRcHeight;
-      _w.copy(_p).addScaledVector(_n, rcHeight);
-      this.addForceAt(_f, _w);
+      this.addForceAt(_f, _p);
       if (w.mz !== 0) this.torque.addScaledVector(_n, w.mz);
+      // Contact force in the body frame, inboard (body +X is inboard on the right) and forward
+      const inX = w.isLeft ? -1 : 1;
+      const fIn = inX * (_f.dot(_ex) + fz * g.ny * _ex.y);
+      const fFwd = _f.dot(_ez) + fz * g.ny * _ez.y;
+      const tDrive = Math.abs(w.driveTorqueNm);
+      const fDrive = tDrive > 0 ? (tDrive / (tDrive + w.brakeTorqueNm)) * (fx + hydroDrag) * _fw.dot(_ez) : 0;
+      // The unsprung mass's own inertia (with its weight) acts at the hub: its lateral / longitudinal part loads the
+      // travel along the hub's path and so reaches the tyre without passing through the spring
+      const sfIn = inX * this.bodySpecificForce.dot(_ex);
+      const sfFwd = this.bodySpecificForce.dot(_ez);
+      const jack =
+        fIn * kin.contactInboardPerBump +
+        (fFwd - fDrive) * kin.contactForwardPerBump +
+        fDrive * kin.hubForwardPerBump -
+        axle.unsprungMass * (sfIn * kin.hubInboardPerBump + sfFwd * kin.hubForwardPerBump);
+
+      // Hub: tyre normal force up; spring, damper and link forces down, and up on the body at the hardpoint
+      const link = w.suspensionForce - jack;
+      const hubAcc = (fz * g.ny - link * _ey.y) / axle.unsprungMass - G;
+      w.hubVy += hubAcc * h;
+      w.hubY += w.hubVy * h;
+      _f.set(0, link * _ey.y, 0);
+      this.addForceAt(_f, w.hardpointWorld);
     }
     this.telemetry.ffbTorqueNorm = THREE.MathUtils.clamp(ffbMz / FFB_REFERENCE_NM, -1, 1);
     this.ffbSum += this.telemetry.ffbTorqueNorm;
@@ -2097,6 +2124,8 @@ export class VehiclePhysics {
     this.applyPlankContact();
 
     // ---- gravity and integration
+    // Acceleration less gravity, for the next sub-step's unsprung inertia (the hubs ride with the body across)
+    this.bodySpecificForce.set(this.force.x / this.totalMassKg, this.force.y / this.sprungMassKg, this.force.z / this.totalMassKg);
     this.force.y -= this.sprungMassKg * G;
     this.velocity.x += (this.force.x / this.totalMassKg) * h;
     this.velocity.z += (this.force.z / this.totalMassKg) * h;
