@@ -148,6 +148,27 @@ const Credits: React.FC = () => (
           </a>{" "}
           · used with permission
         </CreditRow>
+        <CreditRow title="Suzuki Liana">
+          Physics from &ldquo;Physics reworked for Top Gear Liana 1.6 GLX&rdquo; (
+          <a
+            href="https://www.overtake.gg/downloads/physics-reworked-for-top-gear-liana-1-6-glx.28636/"
+            target="_blank"
+            rel="noreferrer"
+            className={linkClass}
+          >
+            overtake.gg
+          </a>
+          ) by{" "}
+          <a href="https://www.overtake.gg/members/alekabul.294399/" target="_blank" rel="noreferrer" className={linkClass}>
+            alekabul
+          </a>
+          <br />
+          Model and sounds from a freeware Assetto Corsa mod (
+          <a href="http://assetto-db.com/car/suzuki_liana" target="_blank" rel="noreferrer" className={linkClass}>
+            assetto-db.com
+          </a>
+          ), author unknown
+        </CreditRow>
         {TRACKS.some((t) => t.credit) ? (
           <CreditRow title="Circuits">
             {TRACKS.filter((t, i, arr) => t.credit && arr.findIndex((o) => o.credit?.url === t.credit?.url) === i).map((t) => (

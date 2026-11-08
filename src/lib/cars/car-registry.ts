@@ -331,7 +331,7 @@ export const CARS: readonly CarDefinition[] = [
       title: "Suzuki Liana",
       author: "Unknown",
       url: "http://assetto-db.com/car/suzuki_liana",
-      license: "Freeware mod, author unknown",
+      license: "Freeware mod",
       licenseUrl: "http://assetto-db.com/car/suzuki_liana",
     },
     physics: "liana",
