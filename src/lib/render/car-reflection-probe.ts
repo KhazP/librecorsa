@@ -60,16 +60,19 @@ export class CarReflectionProbe {
     this.sunDisc = (sky.material.uniforms.showSunDisc as { value: number } | undefined) ?? null;
   }
 
-  /** The prefiltered reflection map (null until the first full turn, or when off) */
+  /** The prefiltered reflection map (null until the first full turn after it was switched on, or when off) */
   get texture(): THREE.Texture | null {
-    return this.quality === "off" ? null : (this.envTarget?.texture ?? null);
+    return this.quality === "off" || !this.primed ? null : (this.envTarget?.texture ?? null);
   }
 
   setQuality(quality: ReflectionQuality): void {
     if (quality === this.quality) return;
+    const wasOff = this.quality === "off";
     this.quality = quality;
     // Off: hand the cars back to the sky's environment map
     if (quality === "off") this.applyTo(null);
+    // Back on: the map from before is stale, so the next update films all six faces and hands the cars the new one
+    else if (wasOff) this.primed = false;
   }
 
   /** A car whose materials should reflect the probe (call again after its model swaps in: new materials are caught) */

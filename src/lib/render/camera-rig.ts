@@ -193,6 +193,16 @@ function clamp01(x: number): number {
   return x < 0 ? 0 : x > 1 ? 1 : x;
 }
 
+/**
+ * Whether the car is further from where a camera rig last saw it than one frame of `dt` allows (the shell's teleport
+ * test): a rig updated only while its camera is on uses it to notice the frames it missed, and starts over
+ */
+export function carJumped(lastPos: THREE.Vector3, carPos: THREE.Vector3, carVel: THREE.Vector3, dt: number): boolean {
+  const speed = carVel.length();
+  const step = Number.isFinite(speed) && dt > 0 ? 2 * speed * dt : 0;
+  return lastPos.distanceTo(carPos) > Math.max(5, step);
+}
+
 function clampAbs(x: number, limit: number): number {
   return x > limit ? limit : x < -limit ? -limit : x;
 }
@@ -283,8 +293,12 @@ export class TracksideBroadcastDirector {
   };
   private readonly lookVel = new THREE.Vector3();
   private readonly lead = new THREE.Vector3();
-  private initialised = false;
+  /** Station on air; -1 until the next update primes the director (after construction, reset() or a jump) */
   private current = -1;
+  /** occlusionSteps moved the dolly of the station on air: the next update cuts to it instead of gliding */
+  private recut = false;
+  /** Where the car was at the last update, to notice frames this director missed (another camera was on) */
+  private readonly lastCarPos = new THREE.Vector3();
   private fovBase = FOV_MAX_DEG;
   private kerbAmt = 0;
 
@@ -397,6 +411,7 @@ export class TracksideBroadcastDirector {
           const curve = this.buildDolly(centre, side * sideMul, offset, height + extraH);
           if (yield* clear(curve, centre)) {
             this.curves[k] = curve;
+            if (k === this.current) this.recut = true;
             moved++;
             break;
           }
@@ -410,6 +425,11 @@ export class TracksideBroadcastDirector {
     const out = this.out;
     const h = dt > 0 ? Math.min(dt, 0.1) : 0;
 
+    // Updated only while the TV camera is on: a car that has moved further than one frame allows since the last
+    // update (another camera was on, a teleport) starts the director over rather than gliding from a stale station
+    if (this.current >= 0 && carJumped(this.lastCarPos, carPos, carVel, dt)) this.current = -1;
+    this.lastCarPos.copy(carPos);
+
     // Station choice: nearest by track distance, with hysteresis
     let best = 0;
     let bestScore = Infinity;
@@ -421,7 +441,7 @@ export class TracksideBroadcastDirector {
       }
     }
     let cut = false;
-    if (!this.initialised || this.current < 0) {
+    if (this.current < 0) {
       this.current = best;
       cut = true;
     } else if (best !== this.current) {
@@ -430,6 +450,10 @@ export class TracksideBroadcastDirector {
         this.current = best;
         cut = true;
       }
+    }
+    if (this.recut) {
+      cut = true;
+      this.recut = false;
     }
     const k = this.current;
 
@@ -441,7 +465,7 @@ export class TracksideBroadcastDirector {
     // Look-at: critically damped, leading the car by its velocity
     this.lead.copy(carVel).multiplyScalar(LOOK_LEAD_S).add(carPos);
     this.lead.y += LOOK_HEIGHT_M;
-    if (cut || !this.initialised) {
+    if (cut) {
       out.lookAt.copy(this.lead);
       this.lookVel.set(0, 0, 0);
     } else {
@@ -456,7 +480,7 @@ export class TracksideBroadcastDirector {
       FOV_MAX_DEG
     );
     const kerbTarget = onKerb ? 1 : 0;
-    if (cut || !this.initialised) {
+    if (cut) {
       this.fovBase = fovTarget;
       this.kerbAmt = kerbTarget;
     } else {
@@ -469,13 +493,12 @@ export class TracksideBroadcastDirector {
 
     out.cameraIndex = k;
     out.cut = cut;
-    this.initialised = true;
     return out;
   }
 
   reset(): void {
-    this.initialised = false;
     this.current = -1;
+    this.recut = false;
     this.fovBase = FOV_MAX_DEG;
     this.kerbAmt = 0;
     this.lookVel.set(0, 0, 0);
