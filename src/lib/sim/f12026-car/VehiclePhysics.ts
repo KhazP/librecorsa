@@ -823,7 +823,7 @@ export class VehiclePhysics {
   private aeroFrontN = 0;
   private aeroDownN = 0;
   private aeroDragN = 0;
-  /** Air slip angle the wing-element aero last saw (|deg|) */
+  /** Air slip angle the aero last saw (|deg|), wing-element or map path */
   public aeroYawDeg = 0;
   private rideFront = 0;
   private rideRear = 0;
@@ -1760,6 +1760,16 @@ export class VehiclePhysics {
     this.torque.add(_tmp.crossVectors(_r, f));
   }
 
+  /**
+   * Aero drag −`perMs`·air (N) at the drag's centre of pressure (`AeroData.dragCentreY` above the CG): above the CG it
+   * pitches the nose up and loads the rear axle, as the rear wing's and wheels' drag do on the real car
+   */
+  private addDragAtCentre(air: THREE.Vector3, perMs: number): void {
+    _f.copy(air).multiplyScalar(-perMs);
+    _p.set(0, this.config.aero.dragCentreY ?? 0, 0).applyQuaternion(this.quaternion).add(this.position);
+    this.addForceAt(_f, _p);
+  }
+
   private substep(h: number, inp: VehicleInputs): void {
     this.updateBasis();
     this.force.set(0, 0, 0);
@@ -2558,7 +2568,7 @@ export class VehiclePhysics {
 
     const speed = air.length();
     const dragN = 0.5 * this.airDensity * speed * speed * drag;
-    if (speed > 1e-3) this.force.addScaledVector(air, -dragN / speed);
+    if (speed > 1e-3) this.addDragAtCentre(air, dragN / speed);
 
     this.aeroDownN = down;
     this.aeroFrontN = front;
@@ -2592,6 +2602,7 @@ export class VehiclePhysics {
     // Signed here (the map's yaw tables span ±, and its balance shift may be odd in yaw); the wing path above reads
     // the magnitude, its per-wing yaw tables being one-sided
     const yawDeg = Math.abs(vF) > 1 ? Math.atan2(air.dot(_ex), Math.abs(vF)) * RAD2DEG : 0;
+    this.aeroYawDeg = Math.abs(yawDeg);
     const ml = this.mapLuts!;
     const clMult = rhTable(map, map.cl, this.rideFront, this.rideRear) * ml.rollCl.evaluate(rollDeg) * ml.yawCl.evaluate(yawDeg);
     const cdMult = rhTable(map, map.cd, this.rideFront, this.rideRear) * ml.rollCd.evaluate(rollDeg) * ml.yawCd.evaluate(yawDeg);
@@ -2638,7 +2649,7 @@ export class VehiclePhysics {
       _p.set(0, this.floorOffsetY, z).applyQuaternion(this.quaternion).add(this.position);
       this.addForceAt(_f, _p);
     }
-    if (speed > 1e-3) this.force.addScaledVector(air, -this.mapAeroDragN / speed);
+    if (speed > 1e-3) this.addDragAtCentre(air, this.mapAeroDragN / speed);
     this.aeroDownN = this.mapAeroFrontN + this.mapAeroRearN;
     this.aeroFrontN = this.mapAeroFrontN;
     this.aeroDragN = this.mapAeroDragN;

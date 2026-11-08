@@ -360,6 +360,11 @@ export interface AeroData {
   rear_lift: number;
   /** Bodywork drag coefficient × area (m²) */
   drag: number;
+  /**
+   * Height of the total drag's line of action above the CG, body frame (m). Wings, wheels and body each drag at their
+   * own height, so the sum pitches the car (nose up when it acts above the CG). Absent: through the CG, no pitch moment
+   */
+  dragCentreY?: number;
   wings: WingData[];
   /** `AeroSettingsUnits.front_target_height` / `rear_target_height`: static floor heights (m) */
   front_target_height: number;
@@ -1012,6 +1017,10 @@ const F12026_AERO: AeroData = {
   front_lift: 0,
   rear_lift: 0,
   drag: 0,
+  // An open-wheeler's drag is about a third wheels (at ≈ 0.36–0.40 m), a third rear wing (≈ 0.8 m), the rest front wing
+  // (≈ 0.15 m) and body / floor / cooling (≈ 0.3 m) (breakdown: Katz, Race Car Aerodynamics): ≈ 0.45 m off the ground,
+  // 0.18 m above the 0.27 m CG [est]
+  dragCentreY: 0.18,
   wings: [
     {
       // Offset vs the 30° reference angle, set at 25° [ref_aero.ini WING_0, CL_FW_AOA.lut / CD_FW_AOA.lut]

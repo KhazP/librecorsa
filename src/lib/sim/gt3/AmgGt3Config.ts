@@ -252,6 +252,9 @@ const AERO: AeroData = {
   front_lift: 0,
   rear_lift: 0,
   drag: 0.35 * WING_AREA,
+  // A closed car's drag acts near the centroid of its frontal area (≈ 0.55 m up a 1.2 m tall body), raised a little by
+  // the rear wing at ≈ 1.15 m: ≈ 0.6 m off the ground, 0.2 m above the 0.40 m CG [est]
+  dragCentreY: 0.2,
   wings: [
     {
       name: 'FRONT_WING',
