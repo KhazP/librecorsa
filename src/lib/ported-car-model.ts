@@ -68,6 +68,19 @@ const CAMERA_KEYS = ["cockpit", "tcam", "dash", "bumper", "nearChase", "farChase
 
 const templates = new Map<string, Promise<THREE.Group | null>>();
 
+/**
+ * The `CAR` root a ported GLB's extras sit on. Found by its `wheelCentres`, not its name: three's GLTFLoader names the
+ * scene before its nodes, so in a GLB whose scene is also called "CAR" (the GT3 ports') the root node loads as
+ * "CAR_1" and `getObjectByName("CAR")` returns the scene, which has no extras.
+ */
+export function portedCarRoot(model: THREE.Object3D): THREE.Object3D {
+  let root: THREE.Object3D | undefined;
+  model.traverse((o) => {
+    if (!root && (o.userData as Partial<PortedExtras> | undefined)?.wheelCentres) root = o;
+  });
+  return root ?? model.getObjectByName("CAR") ?? model;
+}
+
 /** Loads (once) and caches a ported car GLB; the rigs clone it. Exported to pre-warm opponents before a race */
 export function loadTemplate(url: string): Promise<THREE.Group | null> {
   let template = templates.get(url);
@@ -240,7 +253,7 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
     if (!template || disposed) return;
     const model = template.clone(true);
     model.updateMatrixWorld(true);
-    const car = model.getObjectByName("CAR") ?? model;
+    const car = portedCarRoot(model);
     const extras = (car.userData ?? {}) as PortedExtras;
     const find = (name: string) => model.getObjectByName(name);
 
