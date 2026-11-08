@@ -753,7 +753,12 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
           ) : null}
         </div>
 
-        <p className="m-0 font-f1-mono text-[11px] leading-normal text-[#8E96AA]/80">
+        <p
+          role={p2pStatus?.state === "error" ? "alert" : undefined}
+          className={`m-0 font-f1-mono leading-normal ${
+            p2pStatus?.state === "error" ? "text-[13px] font-semibold text-[#FF2A3C]" : "text-[11px] text-[#8E96AA]/80"
+          }`}
+        >
           {p2pStatus?.statusText ?? "Same-browser tabs connect automatically. Use a room code for other devices."}
         </p>
       </div>
