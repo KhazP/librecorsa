@@ -81,6 +81,8 @@ export interface LibreCorsaSimulatorProps {
 
 export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackId = "rwanda", onSelectTrack }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  /** The drive on the mounted circuit: the scene, the car and the frame loop (created once the container exists) */
+  const [session, setSession] = useState<DriveSession | null>(null);
 
   const track = useMemo(() => getActiveTrackData(1200), []);
   /** The player's car: the VF26 (F1Physics2026) or the f12026-car (F12026CarSim) */
@@ -90,8 +92,6 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   const carIdRef = useRef(carId);
   const [vehicleModel, setVehicleModel] = useState<VehicleModelId>(() => carPhysics(carId));
   const vehicleModelRef = useRef(vehicleModel);
-  /** Swaps the player's car in the running scene (set by the scene effect) */
-  const swapCarRef = useRef<((car: CarId) => void) | null>(null);
   const audioRef = useRef<F1AudioEngine2026 | null>(null);
   const carRigRef = useRef<SimCarRig | null>(null);
   const liveryRef = useRef<LiveryConfig>(LIVERIES[0]);
@@ -303,15 +303,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     vrStateRef.current = next;
     setVrStateUi(next);
   }, []);
-  const enterVrRef = useRef<(() => void) | null>(null);
   const [ffbMeter, setFfbMeter] = useState(wheelFfb.meter);
   const [touchVisible, setTouchVisible] = useState(false);
-  /** Applies the graphics preset to the running renderer (set by the scene effect) */
-  const applyGraphicsRef = useRef<((quality: "low" | "medium" | "high", renderScale: number) => void) | null>(null);
-  /** Enters / leaves / flashbacks the instant replay (set by the scene effect) */
-  const toggleReplayRef = useRef<() => void>(() => {});
-  const exitReplayRef = useRef<() => void>(() => {});
-  const flashbackReplayRef = useRef<() => void>(() => {});
 
   const cameraModeRef = useRef<CameraMode>("chase");
   cameraModeRef.current = cameraMode;
@@ -382,7 +375,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   const resetRun = useCallback((reason: RunResetReason) => {
     runIdRef.current++;
     if (reason !== "flashback") {
-      exitReplayRef.current();
+      session?.exitReplay();
       replayRef.current.buffer.clear();
       setResultsClosed(false);
     }
@@ -391,7 +384,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     kbInputRef.current.throttle = 0;
     kbInputRef.current.brake = 0;
     kbPedalAssistRef.current.reset();
-  }, []);
+  }, [session]);
 
   /** Puts a race on track with the player (or none): the AI field and a multiplayer race never run together */
   const setRace = useCallback((next: SessionRace) => {
@@ -537,10 +530,10 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       vehicleModelRef.current = carPhysics(next);
       setVehicleModel(vehicleModelRef.current);
       saveCarChoice(next);
-      swapCarRef.current?.(next);
+      session?.setCar(next);
       audioRef.current?.setCar(soundFor(next));
     },
-    [unlockAudio]
+    [unlockAudio, session]
   );
   /** The car picker: the car is fixed for a multiplayer race (its start picks one the class allows) */
   const handleChangeCar = useCallback(
@@ -561,9 +554,9 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         if (vehicle === vehicleModelRef.current) return;
         vehicleModelRef.current = vehicle;
         setVehicleModel(vehicle);
-        swapCarRef.current?.(car);
+        session?.setCar(car);
       }),
-    []
+    [session]
   );
 
   const handleLiveryChange = useCallback((livery: LiveryConfig) => {
@@ -1134,7 +1127,6 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     if (!container) return;
     const session = new DriveSession(container, {
       aiFieldSpareRef,
-      applyGraphicsRef,
       assistSettingsRef,
       audioRef,
       autopilotPaceRef,
@@ -1145,9 +1137,6 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       carRigRef,
       cockpitFovRef,
       cycleCamera,
-      enterVrRef,
-      exitReplayRef,
-      flashbackReplayRef,
       getTrackEnv,
       ghostRef,
       handleToggleMute,
@@ -1194,11 +1183,9 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       settingsRef,
       slashCommandBufferRef,
       steerLockDegRef,
-      swapCarRef,
       takeAiField,
       toggleAutopilot,
       togglePauseRef,
-      toggleReplayRef,
       track,
       trackId,
       unlockAudio,
@@ -1206,7 +1193,11 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       vrStateRef,
       wizardStepRef,
     });
-    return () => session.dispose();
+    setSession(session);
+    return () => {
+      session.dispose();
+      setSession(null);
+    };
   }, [track, getTrackEnv, takeAiField, prepareAiField, unlockAudio, handleToggleMute, handleToggleRacingLine, releaseHeldKeys, toggleAutopilot, setLatch, setVrState]);
 
   // Saved settings and the first-run flag are read after mount (the page is prerendered without
@@ -1299,8 +1290,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   }, [vehicleModel, loadPbGhost, refreshLeaderboard]);
 
   useEffect(() => {
-    applyGraphicsRef.current?.(settings.graphics.quality, settings.graphics.renderScale);
-  }, [settings.graphics.quality, settings.graphics.renderScale]);
+    session?.applyGraphics(settings.graphics.quality, settings.graphics.renderScale);
+  }, [session, settings.graphics.quality, settings.graphics.renderScale]);
 
   const ffbMeterOn = phase === "driving" && settings.device === "wheel" && settings.wheel.ffbEnabled;
   useEffect(() => {
@@ -1486,7 +1477,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       onChangeSettings: handleChangeSettings,
       vrSupported,
       vrActive: vrState === "on",
-      onEnterVr: () => enterVrRef.current?.(),
+      onEnterVr: () => session?.enterVr(),
     },
     library,
     leaderboardPanel: {
@@ -1591,8 +1582,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
                   onSeek: handleReplaySeek,
                   onSpeed: handleReplaySpeed,
                   onCycleCamera: cycleCamera,
-                  onExit: () => exitReplayRef.current(),
-                  onFlashback: () => flashbackReplayRef.current(),
+                  onExit: () => session?.exitReplay(),
+                  onFlashback: () => session?.flashbackReplay(),
                   exitKeyLabel: settings.keys.replay[0] ? keyLabel(settings.keys.replay[0]) : "T",
                 }
               : null

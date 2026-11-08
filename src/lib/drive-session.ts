@@ -183,7 +183,6 @@ export interface ReplayUi {
 /** What the drive reads and writes on the component (refs, state setters and callbacks) */
 export interface DriveSessionHost {
   aiFieldSpareRef: Cell<{ field: AiOpponentField; physics: SimulatorCar } | null>;
-  applyGraphicsRef: Cell<((quality: "low" | "medium" | "high", renderScale: number) => void) | null>;
   assistSettingsRef: Cell<SteeringAssistSettings>;
   audioRef: Cell<F1AudioEngine2026 | null>;
   autopilotPaceRef: Cell<{ car: unknown; pace: number }>;
@@ -194,9 +193,6 @@ export interface DriveSessionHost {
   carRigRef: Cell<SimCarRig | null>;
   cockpitFovRef: Cell<number | null>;
   cycleCamera: () => void;
-  enterVrRef: Cell<(() => void) | null>;
-  exitReplayRef: Cell<() => void>;
-  flashbackReplayRef: Cell<() => void>;
   getTrackEnv: () => TrackEnvironment;
   ghostRef: Cell<GhostPlayer | null>;
   handleToggleMute: () => void;
@@ -243,11 +239,9 @@ export interface DriveSessionHost {
   settingsRef: Cell<PlayerSettings>;
   slashCommandBufferRef: Cell<string>;
   steerLockDegRef: Cell<number | undefined>;
-  swapCarRef: Cell<((car: CarId) => void) | null>;
   takeAiField: (physics: SimulatorCar) => AiOpponentField;
   toggleAutopilot: () => void;
   togglePauseRef: Cell<() => void>;
-  toggleReplayRef: Cell<() => void>;
   track: BuiltTrackData;
   trackId: string;
   unlockAudio: () => void;
@@ -262,11 +256,22 @@ export interface DriveSessionHost {
  */
 export class DriveSession {
   private readonly teardown: () => void;
+  /** Swaps the player's car in the running scene (the run starts over with it) */
+  readonly setCar: (car: CarId) => void;
+  /** Applies the graphics preset to the running renderer */
+  readonly applyGraphics: (quality: "low" | "medium" | "high", renderScale: number) => void;
+  /** Asks the headset for a VR session (one request at a time) */
+  readonly enterVr: () => void;
+  /** Opens the instant replay a moment back, paused, or closes it */
+  readonly toggleReplay: () => void;
+  /** Leaves the replay: the drawn car goes back to the live pose */
+  readonly exitReplay: () => void;
+  /** Starts the run over from the replay's current point */
+  readonly flashbackReplay: () => void;
 
   constructor(container: HTMLDivElement, host: DriveSessionHost) {
     const {
       aiFieldSpareRef,
-      applyGraphicsRef,
       assistSettingsRef,
       audioRef,
       autopilotPaceRef,
@@ -277,9 +282,6 @@ export class DriveSession {
       carRigRef,
       cockpitFovRef,
       cycleCamera,
-      enterVrRef,
-      exitReplayRef,
-      flashbackReplayRef,
       getTrackEnv,
       ghostRef,
       handleToggleMute,
@@ -326,11 +328,9 @@ export class DriveSession {
       settingsRef,
       slashCommandBufferRef,
       steerLockDegRef,
-      swapCarRef,
       takeAiField,
       toggleAutopilot,
       togglePauseRef,
-      toggleReplayRef,
       track,
       trackId,
       unlockAudio,
@@ -400,7 +400,8 @@ export class DriveSession {
     let physics = createCar(vehicleModelRef.current, null);
     physicsRef.current = physics;
 
-    swapCarRef.current = (car) => {
+    this.setCar = (car) => {
+      if (disposed) return;
       // The run starts over before the old car goes: leaving the replay writes its saved pose into `physics`, which
       // must still be the old car then. The replay and the live delta belong to the old car.
       resetRunRef.current("car");
@@ -588,12 +589,13 @@ export class DriveSession {
     });
     lapRecorderRef.current = lapRecorder;
 
-    applyGraphicsRef.current = (quality, renderScale) => {
+    this.applyGraphics = (quality, renderScale) => {
+      if (disposed) return;
       applyGraphicsQuality(renderer, postFx, env, quality, renderScale);
       reflectionProbe.setQuality(quality === "low" ? "off" : quality);
       postFx.setSize(container.clientWidth, container.clientHeight);
     };
-    applyGraphicsRef.current(settingsRef.current.graphics.quality, settingsRef.current.graphics.renderScale);
+    this.applyGraphics(settingsRef.current.graphics.quality, settingsRef.current.graphics.renderScale);
 
     // WebXR: the headset's pose is added to a rig placed at the driver's eye every frame
     renderer.xr.enabled = true;
@@ -602,7 +604,8 @@ export class DriveSession {
     xrCamera.layers.enable(OVERLAY_LAYER);
     xrRig.add(xrCamera);
     scene.add(xrRig);
-    enterVrRef.current = () => {
+    this.enterVr = () => {
+      if (disposed) return;
       const xr = (navigator as Navigator & { xr?: { requestSession: (mode: string, init?: object) => Promise<XRSession> } }).xr;
       // One request at a time: a second click while the headset is being asked does nothing
       if (!xr || vrStateRef.current !== "off" || renderer.xr.isPresenting) return;
@@ -732,7 +735,7 @@ export class DriveSession {
           restartRun();
           break;
         case "replay":
-          toggleReplayRef.current();
+          this.toggleReplay();
           break;
         case "mouseSteer":
           setMouseSteerRef.current(!mouseSteerEnabledRef.current);
@@ -869,9 +872,14 @@ export class DriveSession {
       // A new run from here (the lap in progress is dropped; the trimmed replay stays)
       resetRunRef.current("flashback");
     };
-    exitReplayRef.current = exitReplay;
-    flashbackReplayRef.current = flashbackReplay;
-    toggleReplayRef.current = () => {
+    this.exitReplay = () => {
+      if (!disposed) exitReplay();
+    };
+    this.flashbackReplay = () => {
+      if (!disposed) flashbackReplay();
+    };
+    this.toggleReplay = () => {
+      if (disposed) return;
       const rp = replayRef.current;
       if (rp.active) return exitReplay();
       // Not in a multiplayer race (the field keeps racing) and only with something recorded
@@ -1830,14 +1838,8 @@ export class DriveSession {
       disposed = true;
       unsubscribeAssets();
       window.clearInterval(assetWatchdog);
-      swapCarRef.current = null;
       renderer.setAnimationLoop(null);
       void renderer.xr.getSession()?.end();
-      enterVrRef.current = null;
-      applyGraphicsRef.current = null;
-      exitReplayRef.current = () => {};
-      flashbackReplayRef.current = () => {};
-      toggleReplayRef.current = () => {};
       lapRecorderRef.current = null;
       haptics.stop();
       opponentAudio.dispose();
