@@ -51,7 +51,7 @@ export type ChipSize = "md" | "sm" | "xs";
 const CHIP_SIZE: Record<ChipSize, string> = {
   md: "h-[26px] gap-1.5 px-3 text-[11px] tracking-[0.08em]",
   sm: "h-[22px] gap-1.5 px-2 text-[10px] tracking-[0.08em]",
-  xs: "h-[20px] gap-1 px-1.5 text-[8px] tracking-normal",
+  xs: "h-[20px] gap-1 px-1.5 text-[9px] tracking-normal",
 };
 
 /** Small status pill: FINAL, PB, 2 CONNECTED, 42 ms… */

@@ -160,7 +160,7 @@ export const ConditionsPanel: React.FC<ConditionsPanelProps> = ({
                     key={WEATHER_NODE_LABELS[idx]}
                     className="flex flex-col gap-0.5 rounded-[12px] border border-[#262B3D] bg-[#08090D]/60 px-2 py-1.5 text-center"
                   >
-                    <span className="lc-lbl text-[8px] text-[#8E96AA]">{WEATHER_NODE_LABELS[idx]}</span>
+                    <span className="lc-lbl text-[9px] text-[#8E96AA]">{WEATHER_NODE_LABELS[idx]}</span>
                     <span className="text-[11px] leading-tight font-bold text-[#F5F7FA]">{sky.label}</span>
                     <span className="font-f1-mono text-[10px] text-[#00E5FF]">
                       {node.rainChance > 0 ? `${Math.round(node.rainChance)}% rain` : `${node.temperatureC.toFixed(0)}°C`}
