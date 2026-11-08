@@ -20,7 +20,9 @@
  * deflection drives `axleDropM`, which the caller lowers the steer pivot by so the flat patch stays on the road.
  */
 import * as THREE from 'three';
+import type { TireCompound } from '@/types/f1';
 import type { TyreVisualState } from '../sim/simulator-car';
+import { createPirelliSidewall } from './pirelli-sidewall';
 
 /** Default visual exaggeration of the radial deflection */
 const DEFAULT_GAIN = 1.4;
@@ -36,6 +38,8 @@ export interface TyreDeformationHandle {
    * bulge takes its side from the vertex's own x, so the corner's side is not needed.
    */
   update(state: TyreVisualState, spinAngleRad: number): void;
+  /** Recolours the 2026 Pirelli sidewall branding (no-op on a tyre without it) */
+  setCompound(compound: TireCompound): void;
   /** How far (m) the axle should drop so the flattened patch touches the ground (the steer pivot's y is lowered by this) */
   axleDropM: number;
   dispose(): void;
@@ -53,6 +57,8 @@ export interface TyreDeformationOptions {
    * `camberRad − bakedCamberRad`, so a wheel at its baked camber has a level patch. Default 0.
    */
   bakedCamberRad?: number;
+  /** Draw the 2026 Pirelli sidewall (pirelli-sidewall.ts) over the model's own, in this compound's colours */
+  pirelliSidewall?: TireCompound;
 }
 
 type UniformMap = Record<string, THREE.IUniform>;
@@ -159,11 +165,15 @@ export function installTyreDeformation(
     uGain: { value: gain },
   };
 
+  const sidewall = opts.pirelliSidewall ? createPirelliSidewall(mesh.geometry, opts.pirelliSidewall) : null;
   material.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, uniforms);
     shader.vertexShader = injectDeform(shader.vertexShader, true);
+    sidewall?.patch(shader);
   };
-  material.customProgramCacheKey = () => 'vf26-tyre-deform';
+  // Tyres with and without the sidewall compile to different programs
+  const programKey = sidewall ? 'vf26-tyre-deform-sidewall' : 'vf26-tyre-deform';
+  material.customProgramCacheKey = () => programKey;
   mesh.material = material;
 
   const depth = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking });
@@ -199,6 +209,9 @@ export function installTyreDeformation(
       );
       uniforms.uCamber.value = state.camberRad - bakedCamber;
       handle.axleDropM = visual;
+    },
+    setCompound(compound) {
+      sidewall?.setCompound(compound);
     },
     dispose() {
       mesh.material = original;

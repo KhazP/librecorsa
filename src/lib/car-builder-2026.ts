@@ -4,6 +4,7 @@ import { SATIN_PAINT } from "@/lib/render/paint-finish";
 import { AMR26_MODEL_URL, attachVf26Model, loadVf26Template, type Vf26ModelInstance } from "@/lib/vf26-car-model";
 import type { WheelSeating } from "@/lib/render/corner-rig";
 import { moveToDriverHeadLayer } from "@/lib/render/layers";
+import { PIRELLI_COMPOUND_COLORS } from "@/lib/render/pirelli-sidewall";
 
 /** What the simulator drives on any car rig (the F1 rig below, or the GT3's in gt3-car-model) */
 export interface SimCarRig {
@@ -44,13 +45,7 @@ export interface F1CarRig2026 extends SimCarRig {
 
 export type F1Car2026Rig = F1CarRig2026;
 
-const TIRE_STRIPE_COLORS: Record<TireCompound, number> = {
-  soft: 0xe10600, // Pirelli Soft Red
-  medium: 0xffd700, // Pirelli Medium Yellow
-  hard: 0xf8fafc, // Pirelli Hard White
-  intermediate: 0x3ccb4a, // Pirelli Intermediate Green
-  wet: 0x2e7bff, // Pirelli Full Wet Blue
-};
+const TIRE_STRIPE_COLORS = PIRELLI_COMPOUND_COLORS;
 
 function createCarbonWeaveTexture(): THREE.CanvasTexture {
   const canvas = document.createElement("canvas");
