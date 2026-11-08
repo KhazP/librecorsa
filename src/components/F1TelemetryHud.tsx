@@ -60,7 +60,7 @@ const HUD_STYLES: Partial<Record<HudPreset, { component: React.FC<HudDesignProps
   dash: { component: WheelDashHud, bottomClearance: 252 },
   telemetry: { component: TelemetryHud, bottomClearance: 252 },
 };
-/** Every preset gives way to the Phone HUD on a phone-sized screen */
+/** Every preset gives way to the Phone HUD on a phone-sized screen, and wherever the touch controls are up */
 const PHONE_STYLE = { component: PhoneHud, bottomClearance: 16 };
 
 interface F1TelemetryHudProps extends MultiplayerPanelProps {
@@ -204,7 +204,9 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
   const f12026 = telemetry.f12026;
   const drsNotice = useDrsDetectionNotice(f12026?.drsDetection ?? null);
   const hudMap = useMemo(() => buildHudMap(track), [track]);
-  const phone = usePhoneLayout();
+  // The touch pads take both bottom corners and the top-left, where every other preset puts its panels:
+  // with them up, the Phone HUD (laid out round them) is the layout at any screen size
+  const phone = usePhoneLayout() || Boolean(props.touchControls);
   const lapInvalid = useLapInvalid(telemetry);
   // Under the virtual mirror's strip (its rect is shared with the renderer), with a little air
   // The renderer draws the mirror into this rect; the HUD frames it and starts the top-centre column under it

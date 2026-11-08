@@ -16,6 +16,7 @@ import {
   type VirtualMirrorMode,
 } from "@/lib/settings/player-settings";
 import { Toggle } from "./PauseMenu";
+import { isTouchDevice } from "@/lib/input/touch-input";
 
 export interface DisplayPanelProps {
   settings: PlayerSettings;
@@ -222,6 +223,8 @@ export const DisplayPanel: React.FC<DisplayPanelProps> = ({ settings, onChangeSe
 
   const { profile, hud, graphics, touch } = settings;
   const activePreset = HUD_PRESETS.find((p) => p.id === hud.preset);
+  // The touch pads replace every layout with the touch one (F1TelemetryHud)
+  const touchUp = touch.mode === "on" || (touch.mode === "auto" && isTouchDevice());
 
   const setProfile = (patch: Partial<DriverProfile>) =>
     onChangeSettings((prev) => ({ ...prev, profile: { ...prev.profile, ...patch } }));
@@ -337,6 +340,11 @@ export const DisplayPanel: React.FC<DisplayPanelProps> = ({ settings, onChangeSe
           {activePreset ? (
             <p className="-mt-1 mb-0 text-[12px] leading-snug text-[#8E96AA]">
               {activePreset.title} · {activePreset.detail}
+            </p>
+          ) : null}
+          {touchUp ? (
+            <p className="-mt-1 mb-0 text-[12px] leading-snug text-[#00E5FF]">
+              With the touch controls on, the HUD uses the touch layout
             </p>
           ) : null}
 
