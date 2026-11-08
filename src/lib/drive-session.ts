@@ -29,7 +29,7 @@ import {
 import { SteeringWheelDisplay } from "@/lib/render/steering-display";
 import { WingMirrors } from "@/lib/render/wing-mirrors";
 import { VirtualMirror } from "@/lib/render/virtual-mirror";
-import { type ChassisSetup, loadChassisSetup } from "@/lib/sim/car-setup";
+import { type ChassisSetup, DEFAULT_CHASSIS_SETUP, loadChassisSetup } from "@/lib/sim/car-setup";
 import { CameraRig } from "@/lib/render/camera-rig";
 import { LapDeltaTracker } from "@/lib/sim/lap-delta";
 import { TrackLimitsMonitor } from "@/lib/sim/track-limits";
@@ -70,7 +70,7 @@ import { webHidFfb, wheelFfb } from "@/lib/input/wheel-ffb";
 import { steeringAssistSettings } from "@/lib/sim/steering-assist";
 import { axleSlipFromTelemetry, createAxleSlipSample } from "@/lib/sim/tyre-slip";
 import { clampFov, DEFAULT_KEYBOARD_TUNING, DEFAULT_PLAYER_SETTINGS, type PlayerSettings } from "@/lib/settings/player-settings";
-import type { AeroSetupPreset, CameraMode, CarTelemetry, RadarBlip, TireCompound, TyreSetup, VehicleModelId } from "@/types/f1";
+import type { AeroSetupPreset, CameraMode, CarTelemetry, LiveTunerPatch, RadarBlip, TireCompound, TyreSetup, VehicleModelId } from "@/types/f1";
 
 /** Matches the aero package the track's target speeds / braking markers are computed for */
 export const DEFAULT_AERO_PRESET: AeroSetupPreset = "balanced";
@@ -143,6 +143,57 @@ const scheduleIdle = (fn: (deadline?: IdleDeadline) => void) => {
   else window.setTimeout(() => fn(), 16);
 };
 
+/** What the drive shows the UI: one snapshot, replaced whenever any part changes (see DriveSession.subscribe) */
+export interface DriveSnapshot {
+  telemetry: CarTelemetry;
+  replay: ReplayUi;
+  /** The car's steering lock (road-wheel degrees, after the garage's ratio), for the assist menus' countersteer slider */
+  steerLockDeg: number | undefined;
+  /** The current car's own driver's-eye FOV, for the FOV slider's default */
+  carCockpitFovDeg: number;
+  /** The virtual mirror strip is on screen */
+  virtualMirror: boolean;
+  /** Air / track temperature and wetness for the HUD badge and the conditions panel (sampled twice a second) */
+  weather: WeatherHudState | null;
+  /** Track, car and shaders are loaded (or given up on): the loading screen offers to continue */
+  assetsReady: boolean;
+  p2pStatus: P2PConnectionStatus;
+  /** The headset session; the render loop itself follows renderer.xr.isPresenting, which this tracks */
+  vr: VrState;
+  /** The car's setup as the garage shows it */
+  tireCompound: TireCompound;
+  tyreSetup: TyreSetup;
+  /** The car's own tyre setup, before the player's saved one */
+  defaultTyreSetup: TyreSetup;
+  chassisSetup: ChassisSetup;
+}
+
+/** The snapshot before the drive exists: a throwaway VF26's numbers, as the menus need something to show */
+export function idleDriveSnapshot(track: BuiltTrackData): DriveSnapshot {
+  const car = new F1Physics2026(track);
+  return {
+    telemetry: { ...car.telemetry },
+    replay: { active: false, timeS: 0, startS: 0, endS: 0, playing: true, speed: 1 },
+    steerLockDeg: undefined,
+    carCockpitFovDeg: FALLBACK_COCKPIT_FOV_DEG,
+    virtualMirror: false,
+    weather: null,
+    assetsReady: false,
+    p2pStatus: {
+      mode: "local",
+      roomCode: "",
+      state: "idle",
+      connectedWebRtcPeers: 0,
+      statusText: "BroadcastChannel Active (Same-Browser) • Ready for WebRTC P2P",
+    },
+    vr: "off",
+    tireCompound: "soft",
+    tyreSetup: car.getTyreSetup(),
+    defaultTyreSetup: car.getTyreSetup(),
+    chassisSetup: DEFAULT_CHASSIS_SETUP,
+  };
+}
+
 /** A mutable cell the component owns (a React ref) */
 type Cell<T> = { current: T };
 /** A React state setter */
@@ -185,7 +236,6 @@ export interface DriveSessionHost {
   audioRef: Cell<F1AudioEngine2026 | null>;
   autopilotPaceRef: Cell<{ car: unknown; pace: number }>;
   boostLatchRef: Cell<boolean>;
-  carCockpitFovRef: Cell<number>;
   carIdRef: Cell<CarId>;
   cycleCamera: () => void;
   getTrackEnv: () => TrackEnvironment;
@@ -203,34 +253,19 @@ export interface DriveSessionHost {
   phaseRef: Cell<AppPhase>;
   releaseHeldKeys: () => void;
   rumbleEnabledRef: Cell<boolean>;
-  setAssetsReady: SetState<boolean>;
-  setCarCockpitFov: SetState<number>;
-  setChassisSetup: SetState<ChassisSetup>;
-  setDefaultTyreSetup: SetState<TyreSetup>;
   setLatch: (on: boolean) => void;
-  setP2pStatus: SetState<P2PConnectionStatus>;
   setPauseNotice: SetState<string | null>;
-  setReplayUi: SetState<ReplayUi>;
   setSettings: SetState<PlayerSettings>;
-  setSteerLockDeg: SetState<number | undefined>;
-  setTelemetry: SetState<CarTelemetry>;
-  setTireCompound: SetState<TireCompound>;
-  setTyreSetup: SetState<TyreSetup>;
-  setVirtualMirrorOn: SetState<boolean>;
-  setVrState: (next: VrState) => void;
-  setWeatherHud: SetState<WeatherHudState | null>;
   /** The session's kind changed (setRace), for the menus */
   setRaceKind: (kind: SessionRace["kind"]) => void;
   /** The run started over (resetRun), for what the component keeps per run */
   onRunReset: (reason: RunResetReason) => void;
   slashCommandBufferRef: Cell<string>;
-  steerLockDegRef: Cell<number | undefined>;
   togglePauseRef: Cell<() => void>;
   track: BuiltTrackData;
   trackId: string;
   unlockAudio: () => void;
   vehicleModelRef: Cell<VehicleModelId>;
-  vrStateRef: Cell<VrState>;
   wizardStepRef: { readonly current: string };
 }
 
@@ -240,6 +275,15 @@ export interface DriveSessionHost {
  */
 export class DriveSession {
   private readonly teardown: () => void;
+  private snapshot: DriveSnapshot;
+  private readonly listeners = new Set<() => void>();
+  /** Calls `listener` whenever the snapshot changes (useSyncExternalStore's subscribe); returns the unsubscribe */
+  readonly subscribe = (listener: () => void): (() => void) => {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  };
+  /** What the drive shows the UI now: the same object until something in it changes */
+  readonly getSnapshot = (): DriveSnapshot => this.snapshot;
   /** The race on track with the player: practice, the AI field or an online race (setRace is its only writer) */
   private currentRace: SessionRace = { kind: "practice" };
   /**
@@ -266,6 +310,10 @@ export class DriveSession {
   readonly applySettings: (settings: PlayerSettings) => void;
   /** Puts the tyre compound on the car and its model */
   readonly setTireCompound: (compound: TireCompound) => void;
+  /** The garage's tyre and chassis setup, and the live tuner, on the car */
+  readonly setTyreSetup: (setup: TyreSetup) => void;
+  readonly setChassisSetup: (setup: ChassisSetup) => void;
+  readonly setLiveTuner: (patch: LiveTunerPatch) => void;
   /** The replay bar's play / pause (from the start again once at the end), seek and speed */
   readonly replayTogglePlay: () => void;
   readonly replaySeek: (timeS: number) => void;
@@ -288,7 +336,6 @@ export class DriveSession {
       audioRef,
       autopilotPaceRef,
       boostLatchRef,
-      carCockpitFovRef,
       carIdRef,
       cycleCamera,
       getTrackEnv,
@@ -306,36 +353,32 @@ export class DriveSession {
       phaseRef,
       releaseHeldKeys,
       rumbleEnabledRef,
-      setAssetsReady,
-      setCarCockpitFov,
-      setChassisSetup,
-      setDefaultTyreSetup,
       setLatch,
-      setP2pStatus,
       setPauseNotice,
-      setReplayUi,
       setSettings,
-      setSteerLockDeg,
-      setTelemetry,
-      setTireCompound,
-      setTyreSetup,
-      setVirtualMirrorOn,
-      setVrState,
-      setWeatherHud,
       setRaceKind,
       onRunReset,
       slashCommandBufferRef,
-      steerLockDegRef,
       togglePauseRef,
       track,
       trackId,
       unlockAudio,
       vehicleModelRef,
-      vrStateRef,
       wizardStepRef,
     } = host;
 
     let disposed = false;
+    // What the UI shows goes out through the snapshot (see subscribe)
+    const setTelemetry = (telemetry: CarTelemetry) => this.publish({ telemetry });
+    const setReplayUi = (next: ReplayUi | ((prev: ReplayUi) => ReplayUi)) =>
+      this.publish({ replay: typeof next === "function" ? next(this.snapshot.replay) : next });
+    const setSteerLockDeg = (steerLockDeg: number) => this.publish({ steerLockDeg });
+    const setCarCockpitFov = (carCockpitFovDeg: number) => this.publish({ carCockpitFovDeg });
+    const setVirtualMirrorOn = (virtualMirror: boolean) => this.publish({ virtualMirror });
+    const setWeatherHud = (weather: WeatherHudState) => this.publish({ weather });
+    const setAssetsReady = (assetsReady: boolean) => this.publish({ assetsReady });
+    const setP2pStatus = (p2pStatus: P2PConnectionStatus) => this.publish({ p2pStatus });
+    const setVrState = (vr: VrState) => this.publish({ vr });
     /** The player's preferences (applySettings), and what the frame loop derives from them */
     let settings: PlayerSettings = DEFAULT_PLAYER_SETTINGS;
     let keyLookup = buildKeyLookup(settings.keys);
@@ -399,7 +442,6 @@ export class DriveSession {
         car.tireCompound = prev.tireCompound;
       } else {
         car.tireCompound = autoCompoundFor(getTrackEnv().weather.lineWaterMm, car.tireCompound);
-        setTireCompound(car.tireCompound);
       }
       car.resetToStartGrid(false);
 
@@ -407,17 +449,29 @@ export class DriveSession {
       const tyreDefaults = car.getTyreSetup();
       const initialTyreSetup = loadTyreSetup(vehicle) ?? tyreDefaults;
       car.setTyreSetup(initialTyreSetup);
-      setDefaultTyreSetup(tyreDefaults);
-      setTyreSetup(initialTyreSetup);
       // and its garage chassis setup
       const chassis = loadChassisSetup(vehicle);
       car.applyChassisSetup?.(chassis);
-      setChassisSetup(chassis);
+      carSetup = { tireCompound: car.tireCompound, tyreSetup: initialTyreSetup, defaultTyreSetup: tyreDefaults, chassisSetup: chassis };
       return car;
     };
+    /** The last car's setup as the garage shows it (createCar's) */
+    let carSetup!: Pick<DriveSnapshot, "tireCompound" | "tyreSetup" | "defaultTyreSetup" | "chassisSetup">;
 
     let physics = createCar(vehicleModelRef.current, null);
     this.carNow = () => physics;
+    this.snapshot = {
+      telemetry: { ...physics.telemetry },
+      replay: { active: false, timeS: 0, startS: 0, endS: 0, playing: true, speed: 1 },
+      steerLockDeg: undefined,
+      carCockpitFovDeg: FALLBACK_COCKPIT_FOV_DEG,
+      virtualMirror: false,
+      weather: null,
+      assetsReady: false,
+      p2pStatus: getMultiplayerManager().status,
+      vr: "off",
+      ...carSetup,
+    };
 
     /**
      * An AI field built ahead, while the player is in the menus: building five AI cars (physics, autopilot plans) takes
@@ -453,6 +507,7 @@ export class DriveSession {
       this.resetRun("car");
       const vehicle = carPhysics(car);
       physics = createCar(vehicle, physics, car);
+      this.publish(carSetup);
       swapCarRig(car);
       prefetchSoundBank(soundFor(car).assetDir);
       lapRecorderRef.current?.setContext({ vehicle });
@@ -666,6 +721,23 @@ export class DriveSession {
       if (disposed) return;
       physics.tireCompound = compound;
       carRig.setTireCompound(compound);
+      this.publish({ tireCompound: compound });
+    };
+    this.setTyreSetup = (setup) => {
+      if (disposed) return;
+      physics.setTyreSetup(setup);
+      this.publish({ tyreSetup: setup });
+    };
+    this.setChassisSetup = (setup) => {
+      if (disposed) return;
+      physics.applyChassisSetup?.(setup);
+      this.publish({ chassisSetup: setup });
+    };
+    this.setLiveTuner = (patch) => {
+      if (disposed) return;
+      physics.setLiveTuner?.(patch);
+      const updated = physics.getLiveTunerState?.() ?? physics.telemetry.liveTuner;
+      if (updated) this.publish({ telemetry: { ...this.snapshot.telemetry, liveTuner: { ...updated } } });
     };
 
     // WebXR: the headset's pose is added to a rig placed at the driver's eye every frame
@@ -679,7 +751,7 @@ export class DriveSession {
       if (disposed) return;
       const xr = (navigator as Navigator & { xr?: { requestSession: (mode: string, init?: object) => Promise<XRSession> } }).xr;
       // One request at a time: a second click while the headset is being asked does nothing
-      if (!xr || vrStateRef.current !== "off" || renderer.xr.isPresenting) return;
+      if (!xr || this.snapshot.vr !== "off" || renderer.xr.isPresenting) return;
       setVrState("requesting");
       void (async () => {
         let session: XRSession | null = null;
@@ -739,7 +811,7 @@ export class DriveSession {
         const step = code === "BracketLeft" ? -1 : 1;
         setSettings((prev) => ({
           ...prev,
-          cockpitFovDeg: Math.round(clampFov((prev.cockpitFovDeg ?? carCockpitFovRef.current) + step)),
+          cockpitFovDeg: Math.round(clampFov((prev.cockpitFovDeg ?? this.snapshot.carCockpitFovDeg) + step)),
         }));
         return;
       }
@@ -1298,10 +1370,7 @@ export class DriveSession {
         physics.steeringAssist.settings = assistSettings;
       }
       const lockDeg = Math.round(physics.maxSteerAngleRad * (1800 / Math.PI)) / 10;
-      if (lockDeg !== steerLockDegRef.current) {
-        steerLockDegRef.current = lockDeg;
-        setSteerLockDeg(lockDeg);
-      }
+      if (lockDeg !== this.snapshot.steerLockDeg) setSteerLockDeg(lockDeg);
       // A multiplayer race runs on the host's clock: the grid is held until the shared lights-out, and until this
       // guest has measured that clock (lights off, no countdown)
       const mpRace = mpRaceOf(raceNow());
@@ -1641,10 +1710,7 @@ export class DriveSession {
       const view = CAMERA_MODES[mode];
       const vf26Cams = carRig.getCameraAnchors();
       const carFovDeg = vf26Cams ? vf26Cams.cockpit.fovDeg : FALLBACK_COCKPIT_FOV_DEG;
-      if (carFovDeg !== carCockpitFovRef.current) {
-        carCockpitFovRef.current = carFovDeg;
-        setCarCockpitFov(carFovDeg);
-      }
+      if (carFovDeg !== this.snapshot.carCockpitFovDeg) setCarCockpitFov(carFovDeg);
       const onboardFovShift = settings.cockpitFovDeg === null ? 0 : settings.cockpitFovDeg - carFovDeg;
       // The procedural helmet goes once the VF26 model (with its own driver) has replaced the procedural car
       carRig.helmetGroup.visible = !vf26Cams;
@@ -1965,6 +2031,11 @@ export class DriveSession {
       renderer.dispose();
       audioRef.current?.dispose();
     };
+  }
+
+  private publish(patch: Partial<DriveSnapshot>): void {
+    this.snapshot = { ...this.snapshot, ...patch };
+    for (const listener of this.listeners) listener();
   }
 
   /** The race on track with the player */

@@ -1,18 +1,17 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { getActiveTrackData, LIVERIES } from "@/lib/track-data";
-import { F1Physics2026 } from "@/lib/f1-physics-2026";
 import { F1AudioEngine2026 } from "@/lib/f1-audio-2026";
 import { FfbPairPrompt } from "@/components/hud/FfbPairPrompt";
 import { isVehicleModelId, vehicleModelsFor } from "@/lib/cars/vehicle-models";
 import { carForVehicle, type CarId } from "@/lib/cars/car-registry";
 import { alignGhostToTrack } from "@/lib/sim/ghost-align";
 import { carPhysics, carTakesPhysicsSwitch, subscribeF1ModPhysics } from "@/lib/cars/f1-mod-physics";
-import { type ChassisSetup, DEFAULT_CHASSIS_SETUP, saveChassisSetup } from "@/lib/sim/car-setup";
+import { type ChassisSetup, saveChassisSetup } from "@/lib/sim/car-setup";
 import { TrackEnvironment } from "@/lib/sim/track-environment";
 import { GamepadHaptics } from "@/lib/sim/gamepad-haptics";
-import { getMultiplayerManager, type LobbySettings, type LobbyState, type P2PConnectionStatus, type PeerNetStats, type RaceStartInfo } from "@/lib/sim/multiplayer-sync";
+import { getMultiplayerManager, type LobbySettings, type LobbyState, type PeerNetStats, type RaceStartInfo } from "@/lib/sim/multiplayer-sync";
 import { MultiplayerRace } from "@/lib/sim/race-session";
 import { GhostPlayer, LapRecorder } from "@/lib/sim/lap-recorder";
 import { lapBoardClass, lapConditionsNow, type LapConditions, type LapRecording, type LapSummaryData, type LeaderboardEntry } from "@/lib/sim/lap-types";
@@ -31,11 +30,10 @@ import { isFatalHidStatus } from "@/lib/input/webhid-ffb";
 import { KeyboardPedalAssist } from "@/lib/input/keyboard-pedals";
 import { SIM_REALISM_FLAGS, type SimRealism } from "@/lib/sim/sim-realism";
 import type { SessionConditions } from "@/lib/sim/weather";
-import type { WeatherHudState } from "@/components/hud/WeatherBadge";
 import { getTrackInfo } from "@/lib/track-registry";
 import { F1TelemetryHud } from "@/components/F1TelemetryHud";
 import { roomFromUrl } from "@/lib/net/invite-room";
-import { CAMERA_MODES, FALLBACK_COCKPIT_FOV_DEG, nextCameraMode } from "@/lib/render/camera-modes";
+import { CAMERA_MODES, nextCameraMode } from "@/lib/render/camera-modes";
 import { saveTyreSetup } from "@/lib/sim/tyre-setup";
 import { LoadingScreen } from "@/components/menu/LoadingScreen";
 import { TitleMenu } from "@/components/menu/TitleMenu";
@@ -44,12 +42,14 @@ import { keyLabel, padButtonLabel } from "@/lib/input/bindings";
 import { autoConfigureWheel, connectedPads } from "@/lib/input/device-input";
 import { webHidFfb, wheelFfb } from "@/lib/input/wheel-ffb";
 import { clampFov, codeFromName, DEFAULT_PLAYER_SETTINGS, loadCarChoice, loadOnboarded, loadPlayerSettings, loadRumble, pushLibraryRecent, saveCarChoice, saveOnboarded, toggleLibraryFavorite, type LibraryKind, sanitizeDriverName, savePlayerSettings, saveRumble, type PlayerSettings } from "@/lib/settings/player-settings";
-import type { AeroSetupPreset, AssistPreset, CameraMode, CarTelemetry, LiveTunerPatch, LiveryConfig, TireCompound, TyreSetup, VehicleModelId } from "@/types/f1";
-import { aiFieldOf, autoCompoundFor, DEFAULT_AERO_PRESET, DriveSession, HELD_KEYS, mpRaceOf, soundFor, type AppPhase, type RunResetReason, type SessionRace, type VrState } from "@/lib/drive-session";
+import type { AeroSetupPreset, AssistPreset, CameraMode, LiveTunerPatch, LiveryConfig, TireCompound, TyreSetup, VehicleModelId } from "@/types/f1";
+import { aiFieldOf, autoCompoundFor, DEFAULT_AERO_PRESET, DriveSession, HELD_KEYS, idleDriveSnapshot, mpRaceOf, soundFor, type AppPhase, type RunResetReason, type SessionRace } from "@/lib/drive-session";
 
 const DEFAULT_ASSIST_PRESET: AssistPreset = DEFAULT_PLAYER_SETTINGS.assistPreset;
 /** A lap record's car: records are per vehicle model, named after its first car */
 const vehicleLabel = (id: string) => (isVehicleModelId(id) ? carForVehicle(id).title : id);
+/** The snapshot store before the session exists: nothing to subscribe to */
+const noSubscribe = () => () => {};
 /** A race the host started before this circuit was loaded (or on another one): picked up once the scene has loaded */
 let pendingRaceStart: RaceStartInfo | null = null;
 
@@ -80,27 +80,29 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     () => (trackEnvRef.current ??= new TrackEnvironment(track, settingsRef.current.conditions)),
     [track]
   );
-  /** Air / track temperature and wetness for the HUD badge and the conditions panel (sampled twice a second) */
-  const [weatherHud, setWeatherHud] = useState<WeatherHudState | null>(null);
   /** The player car's dry autopilot pace, which the weather scales each frame */
   const autopilotPaceRef = useRef<{ car: unknown; pace: number }>({ car: null, pace: 1 });
 
-  const [virtualMirrorOn, setVirtualMirrorOn] = useState(false);
-  const [telemetry, setTelemetry] = useState<CarTelemetry>(() => {
-    const tempPhys = new F1Physics2026(track);
-    return { ...tempPhys.telemetry };
-  });
+  /** What the drive shows the UI (telemetry, replay bar, weather, the car's setup …): one subscription to the session */
+  const [idleSnapshot] = useState(() => idleDriveSnapshot(track));
+  const {
+    telemetry,
+    replay: replayUi,
+    steerLockDeg,
+    carCockpitFovDeg: carCockpitFov,
+    virtualMirror: virtualMirrorOn,
+    weather: weatherHud,
+    assetsReady,
+    p2pStatus,
+    vr: vrState,
+    tireCompound,
+    tyreSetup,
+    defaultTyreSetup,
+    chassisSetup,
+  } = useSyncExternalStore(session?.subscribe ?? noSubscribe, session?.getSnapshot ?? (() => idleSnapshot), () => idleSnapshot);
 
   const [aeroPreset, setAeroPreset] =
     useState<AeroSetupPreset>(DEFAULT_AERO_PRESET);
-  const [tireCompound, setTireCompound] = useState<TireCompound>("soft");
-  // Starts from the physics defaults (read from a throwaway instance, as the telemetry seed does)
-  // until the real physics exists; the effect below then swaps in the physics defaults and any saved setup
-  const [defaultTyreSetup, setDefaultTyreSetup] = useState<TyreSetup>(() =>
-    new F1Physics2026(track).getTyreSetup()
-  );
-  const [tyreSetup, setTyreSetup] = useState<TyreSetup>(defaultTyreSetup);
-  const [chassisSetup, setChassisSetup] = useState<ChassisSetup>(DEFAULT_CHASSIS_SETUP);
   const [isMuted, setIsMuted] = useState(false);
   const [boostLatch, setBoostLatch] = useState(false);
   const [gamepadRumble, setGamepadRumble] = useState<boolean>(loadRumble);
@@ -120,10 +122,6 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     phaseRef.current = next;
     setPhaseState(next);
   }, []);
-  /** Track, car and shaders are loaded (or given up on): the loading screen offers to continue */
-  const [assetsReady, setAssetsReady] = useState(false);
-  const assetsReadyRef = useRef(assetsReady);
-  assetsReadyRef.current = assetsReady;
   /** The loading screen stays mounted while it fades out over the title menu */
   const [loadingVisible, setLoadingVisible] = useState(true);
   const [settings, setSettings] = useState<PlayerSettings>(DEFAULT_PLAYER_SETTINGS);
@@ -145,9 +143,6 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   useEffect(() => {
     session?.applySettings(settings);
   }, [session, settings]);
-  /** The current car's own driver's-eye FOV, for the FOV slider's default and the [ / ] keys */
-  const [carCockpitFov, setCarCockpitFov] = useState(FALLBACK_COCKPIT_FOV_DEG);
-  const carCockpitFovRef = useRef(carCockpitFov);
   /** Saved settings have been read and applied (saving before that would overwrite them with defaults) */
   const [settingsHydrated, setSettingsHydrated] = useState(false);
   const [onboarded, setOnboarded] = useState(false);
@@ -159,16 +154,6 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   const pendingRaceRef = useRef(false);
   const [launchHint, setLaunchHint] = useState(false);
   const [inviteRoom, setInviteRoom] = useState<string | null>(null);
-  /** The car's steering lock (road-wheel degrees, after the garage's ratio), for the assist menus' countersteer slider */
-  const [steerLockDeg, setSteerLockDeg] = useState<number | undefined>(undefined);
-  const steerLockDegRef = useRef(steerLockDeg);
-  const [p2pStatus, setP2pStatus] = useState<P2PConnectionStatus>({
-    mode: "local",
-    roomCode: "",
-    state: "idle",
-    connectedWebRtcPeers: 0,
-    statusText: "BroadcastChannel Active (Same-Browser) • Ready for WebRTC P2P",
-  });
 
   // ---- Multiplayer lobby and races
   const [lobby, setLobby] = useState<LobbyState | null>(null);
@@ -207,25 +192,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     remoteError: false,
   });
 
-  // ---- Instant replay
-  const [replayUi, setReplayUi] = useState<{ active: boolean; timeS: number; startS: number; endS: number; playing: boolean; speed: number }>({
-    active: false,
-    timeS: 0,
-    startS: 0,
-    endS: 0,
-    playing: true,
-    speed: 1,
-  });
-
   // ---- VR, FFB meter
   const [vrSupported, setVrSupported] = useState(false);
-  /** The headset session for the menus; the render loop itself follows renderer.xr.isPresenting, which this tracks */
-  const [vrState, setVrStateUi] = useState<VrState>("off");
-  const vrStateRef = useRef<VrState>("off");
-  const setVrState = useCallback((next: VrState) => {
-    vrStateRef.current = next;
-    setVrStateUi(next);
-  }, []);
   const [ffbMeter, setFfbMeter] = useState(wheelFfb.meter);
   const [touchVisible, setTouchVisible] = useState(false);
 
@@ -378,20 +346,15 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     saveRumble(next);
   }, [gamepadRumble]);
 
-  const handleTireCompoundChange = useCallback((compound: TireCompound) => {
-    setTireCompound(compound);
-    session?.setTireCompound(compound);
-  }, [session]);
+  const handleTireCompoundChange = useCallback((compound: TireCompound) => session?.setTireCompound(compound), [session]);
 
   const handleChangeTyreSetup = useCallback((next: TyreSetup) => {
-    setTyreSetup(next);
-    session?.car.setTyreSetup(next);
+    session?.setTyreSetup(next);
     saveTyreSetup(vehicleModelRef.current, next);
   }, [session]);
 
   const handleChangeChassisSetup = useCallback((next: ChassisSetup) => {
-    setChassisSetup(next);
-    session?.car.applyChassisSetup?.(next);
+    session?.setChassisSetup(next);
     saveChassisSetup(vehicleModelRef.current, next);
   }, [session]);
 
@@ -464,18 +427,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     setLatch(!boostLatchRef.current);
   }, [unlockAudio, setLatch]);
 
-  const handleChangeLiveTuner = useCallback((patch: LiveTunerPatch) => {
-    const car = session?.car;
-    if (!car) return;
-    car.setLiveTuner?.(patch);
-    const updated = car.getLiveTunerState?.() ?? car.telemetry.liveTuner;
-    if (updated) {
-      setTelemetry((prev) => ({
-        ...prev,
-        liveTuner: { ...updated },
-      }));
-    }
-  }, [session]);
+  const handleChangeLiveTuner = useCallback((patch: LiveTunerPatch) => session?.setLiveTuner(patch), [session]);
 
   const handleToggleMouseSteer = useCallback(() => {
     unlockAudio();
@@ -664,7 +616,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   const takeRaceStart = useCallback(
     (start: RaceStartInfo) => {
       if (phaseRef.current === "loading") {
-        if (!assetsReadyRef.current) {
+        if (!session?.getSnapshot().assetsReady) {
           pendingRaceStart = start;
           return;
         }
@@ -673,7 +625,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       }
       startMpRaceRef.current(start);
     },
-    [unlockAudio]
+    [unlockAudio, session]
   );
 
   // ---- Laps, ghosts, leaderboards
@@ -953,7 +905,6 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       audioRef,
       autopilotPaceRef,
       boostLatchRef,
-      carCockpitFovRef,
       carIdRef,
       cycleCamera,
       getTrackEnv,
@@ -971,32 +922,17 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       phaseRef,
       releaseHeldKeys,
       rumbleEnabledRef,
-      setAssetsReady,
-      setCarCockpitFov,
-      setChassisSetup,
-      setDefaultTyreSetup,
       setLatch,
-      setP2pStatus,
       setPauseNotice,
-      setReplayUi,
       setSettings,
-      setSteerLockDeg,
-      setTelemetry,
-      setTireCompound,
-      setTyreSetup,
-      setVirtualMirrorOn,
-      setVrState,
-      setWeatherHud,
       setRaceKind,
       onRunReset,
       slashCommandBufferRef,
-      steerLockDegRef,
       togglePauseRef,
       track,
       trackId,
       unlockAudio,
       vehicleModelRef,
-      vrStateRef,
       wizardStepRef,
     });
     setSession(session);
@@ -1004,7 +940,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       session.dispose();
       setSession(null);
     };
-  }, [track, getTrackEnv, unlockAudio, handleToggleMute, handleToggleRacingLine, releaseHeldKeys, setLatch, setVrState, onRunReset]);
+  }, [track, getTrackEnv, unlockAudio, handleToggleMute, handleToggleRacingLine, releaseHeldKeys, setLatch, onRunReset]);
 
   // Saved settings and the first-run flag are read after mount (the page is prerendered without storage); the
   // session takes the settings on through applySettings, whether it exists yet or not
