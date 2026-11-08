@@ -149,7 +149,7 @@ export const FirstRunWizard: React.FC<FirstRunWizardProps> = (props) => {
           : "not-compact:bg-[linear-gradient(90deg,rgba(8,9,13,0.97)_0%,rgba(8,9,13,0.9)_55%,rgba(8,9,13,0.15)_80%)]"
       }`}
     >
-      <div className="flex h-full w-full flex-col px-5 pt-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:px-10 lg:px-[clamp(20px,3.9vw,56px)] short:pt-3 short:pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+      <div className="flex h-full w-full flex-col pl-[max(1.25rem,env(safe-area-inset-left))] pr-[max(1.25rem,env(safe-area-inset-right))] pt-[max(1.5rem,env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:pl-[max(2.5rem,env(safe-area-inset-left))] sm:pr-[max(2.5rem,env(safe-area-inset-right))] lg:pl-[max(clamp(20px,3.9vw,56px),env(safe-area-inset-left))] lg:pr-[max(clamp(20px,3.9vw,56px),env(safe-area-inset-right))] short:pt-[max(0.75rem,env(safe-area-inset-top))] short:pb-[max(0.75rem,env(safe-area-inset-bottom))]">
         <div className="flex min-h-0 flex-1 gap-[clamp(24px,3.4vw,48px)]">
           {/* Step rail (roomy screens): where you are in the setup */}
           <aside className="hidden w-[230px] shrink-0 flex-col gap-9 not-compact:flex">
@@ -214,7 +214,7 @@ export const FirstRunWizard: React.FC<FirstRunWizardProps> = (props) => {
                 </span>
               )}
             </div>
-            <h1 className="lc-disp mt-3 text-[clamp(30px,min(5.4vw,9vh),76px)] text-[#F5F7FA] short:mt-1 short:text-[26px]">
+            <h1 className="lc-disp mt-3 text-[clamp(30px,min(5.4vw,9vh),76px)] text-[#F5F7FA] short:mt-1 short:text-[26px] phone:text-[24px]">
               {info.title}
             </h1>
             <p className="mt-3 text-[15px] leading-snug text-[#C5CBD8] sm:text-[17px] short:hidden">{info.detail}</p>

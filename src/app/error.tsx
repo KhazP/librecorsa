@@ -55,7 +55,7 @@ export default function ErrorBoundary({
         }}
       />
 
-      <main className="relative z-[1] flex h-full max-w-[860px] flex-col justify-center gap-7 overflow-y-auto px-5 py-12 sm:px-[6vw] lg:px-24 short:gap-4 short:py-6">
+      <main className="relative z-[1] flex h-full max-w-[860px] flex-col justify-center gap-7 overflow-y-auto pl-[max(1.25rem,env(safe-area-inset-left))] pr-[max(1.25rem,env(safe-area-inset-right))] pt-[max(3rem,env(safe-area-inset-top))] pb-[max(3rem,env(safe-area-inset-bottom))] sm:pl-[max(6vw,env(safe-area-inset-left))] sm:pr-[max(6vw,env(safe-area-inset-right))] lg:pl-[max(6rem,env(safe-area-inset-left))] lg:pr-[max(6rem,env(safe-area-inset-right))] short:gap-4 short:pt-[max(1.5rem,env(safe-area-inset-top))] short:pb-[max(1.5rem,env(safe-area-inset-bottom))]">
         <LibreCorsaLogo variant="compact" size="md" />
 
         <div className="flex flex-col gap-4">

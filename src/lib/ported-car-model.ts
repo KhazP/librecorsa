@@ -16,6 +16,7 @@ import {
   type WheelSeating,
 } from "@/lib/render/corner-rig";
 import { singlePassTransparency } from "@/lib/render/static-scene";
+import { bodyFloorClearance, type StaticFloor } from "@/lib/render/body-floor";
 
 /**
  * Cars ported to one GLB each (a registry car's `modelUrl`), on any vehicle model. Node layout:
@@ -32,10 +33,11 @@ export interface PortedCarOptions {
   /** Steering wheel rotation each way at full lock (deg) */
   steerLockDeg: number;
   /**
-   * Lowers the body (and the cameras and steering wheel on it) onto the wheels by this much (m), for a GLB whose
-   * body is modelled above a racing ride height (`CarDefinition.bodyDropM`). The wheels stay on the road.
+   * The vehicle model's floor at rest (`staticFloorOf`): the body (and the cameras and steering wheel on it) moves
+   * on its wheels until its floor is there, since exports model it at any height (some in a showroom pose well above
+   * the wheels, which floated over the road). The wheels stay on the road.
    */
-  bodyDropM?: number;
+  floor: StaticFloor;
   /**
    * Rig-space cameras to use instead of the GLB's own (e.g. the AMG GT3's for every car on the GT3 model), built from
    * where this model's steering wheel and front axle landed in rig space
@@ -178,6 +180,35 @@ function placeholderBody(): THREE.Mesh {
   return mesh;
 }
 
+/** Body drop per model and vehicle-model floor, measured once (it reads every level face of the body) */
+const bodyDrops = new Map<string, number>();
+
+/**
+ * How far (m) to lower a model's body for its floor to sit on the vehicle model's at rest (`bodyFloorClearance`;
+ * negative raises it); 0 for a model with no `BODY` node or too little level area between its axles to measure
+ */
+function bodyDropOf(
+  model: THREE.Object3D,
+  car: THREE.Object3D,
+  offset: THREE.Vector3,
+  frontAxleZ: number,
+  rearAxleZ: number,
+  options: PortedCarOptions
+): number {
+  const f = options.floor;
+  const key = `${options.url}|${offset.y}|${offset.z}|${f.frontAxleZ}|${f.rearAxleZ}|${f.frontY}|${f.rearY}`;
+  let drop = bodyDrops.get(key);
+  if (drop === undefined) {
+    const body = model.getObjectByName("BODY");
+    const toCar = new THREE.Matrix4().makeTranslation(offset.x, offset.y, offset.z).multiply(car.matrixWorld.clone().invert());
+    const clearance = body ? bodyFloorClearance(body, toCar, frontAxleZ + offset.z, rearAxleZ + offset.z, f) : null;
+    if (clearance === null) console.warn(`Ported car model ${options.url}: no floor found under BODY, body left as modelled`);
+    drop = clearance ?? 0;
+    bodyDrops.set(key, drop);
+  }
+  return drop;
+}
+
 /**
  * A ported car's rig: model body (and steering wheel) in `chassisGroup` (sprung), wheels on per-corner steer pivots
  * under `root` (unsprung), aligned so the model's axles sit on the physics axles.
@@ -217,9 +248,10 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
     const physicsMidZ = chassis.wheelbase * (0.5 - chassis.frontWeightFraction);
     const offset = new THREE.Vector3(0, (extras.tyreRadius?.LF ?? lf[1]) - lf[1], physicsMidZ - 0.5 * (lf[2] + lr[2]));
 
-    // The body, and everything placed on it, may sit lower on the wheels than modelled; the wheels keep `offset`
+    // The body, and everything placed on it, moves on its wheels to put its floor on the physics'; the wheels keep
+    // `offset`
     const bodyOffset = offset.clone();
-    bodyOffset.y -= options.bodyDropM ?? 0;
+    bodyOffset.y -= bodyDropOf(model, car, offset, lf[2], lr[2], options);
     const bodyGroup = new THREE.Group();
     bodyGroup.name = "PORTED_BODY";
     bodyGroup.position.copy(bodyOffset);

@@ -329,16 +329,16 @@ const PrimaryRailItem: React.FC<{
     data-nav-default=""
     onPointerEnter={focusOnHover}
     onClick={onClick}
-    className="group relative mb-1 flex min-h-[76px] w-full cursor-pointer items-center gap-3.5 rounded-[22px] border-0 bg-[#CCFF00]/10 px-4 py-1.5 text-left text-[#F5F7FA] shadow-[inset_0_0_0_1.5px_rgba(204,255,0,0.5)] outline-none transition-[background-color,box-shadow,color] duration-[220ms] ease-[cubic-bezier(.2,.8,.2,1)] focus:bg-[#CCFF00] focus:text-[#08090D] focus:shadow-[0_0_0_6px_rgba(204,255,0,0.12),0_16px_40px_rgba(204,255,0,0.2)] focus-visible:outline-none short:min-h-[60px]"
+    className="group relative mb-1 flex min-h-[76px] w-full cursor-pointer items-center gap-3.5 rounded-[22px] border-0 phone:min-h-[52px] phone:gap-3 phone:rounded-[18px] phone:px-3 bg-[#CCFF00]/10 px-4 py-1.5 text-left text-[#F5F7FA] shadow-[inset_0_0_0_1.5px_rgba(204,255,0,0.5)] outline-none transition-[background-color,box-shadow,color] duration-[220ms] ease-[cubic-bezier(.2,.8,.2,1)] focus:bg-[#CCFF00] focus:text-[#08090D] focus:shadow-[0_0_0_6px_rgba(204,255,0,0.12),0_16px_40px_rgba(204,255,0,0.2)] focus-visible:outline-none short:min-h-[60px]"
   >
     <span
       aria-hidden
-      className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#CCFF00] text-[#08090D] transition-colors duration-[220ms] group-focus:bg-[#08090D] group-focus:text-[#CCFF00] short:h-9 short:w-9"
+      className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#CCFF00] text-[#08090D] transition-colors duration-[220ms] group-focus:bg-[#08090D] group-focus:text-[#CCFF00] short:h-9 short:w-9 phone:h-8 phone:w-8"
     >
       <Icon className="h-[18px] w-[18px]" fill="currentColor" strokeWidth={0} />
     </span>
     <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-      <span className="lc-disp text-[30px] short:text-[24px]">{label}</span>
+      <span className="lc-disp text-[30px] short:text-[24px] phone:text-[20px]">{label}</span>
       {detail ? (
         <span className="truncate text-[12px] text-[#C5CBD8] group-focus:font-semibold group-focus:text-[#08090D]/70">
           {detail}
@@ -478,7 +478,7 @@ export const PauseMenu: React.FC<PauseMenuProps> = (props) => {
   return (
     <div
       ref={rootRef}
-      className="lc-ui-zoom pointer-events-auto fixed inset-0 z-40 flex flex-col overflow-y-auto bg-[#08090D]/84 px-5 pt-[26px] pb-[max(1.125rem,env(safe-area-inset-bottom))] backdrop-blur-md sm:px-[clamp(20px,3.4vw,48px)] short:pt-3"
+      className="lc-ui-zoom pointer-events-auto fixed inset-0 z-40 flex flex-col overflow-y-auto bg-[#08090D]/84 pl-[max(1.25rem,env(safe-area-inset-left))] pr-[max(1.25rem,env(safe-area-inset-right))] pt-[max(26px,env(safe-area-inset-top))] pb-[max(1.125rem,env(safe-area-inset-bottom))] backdrop-blur-md sm:pl-[max(clamp(20px,3.4vw,48px),env(safe-area-inset-left))] sm:pr-[max(clamp(20px,3.4vw,48px),env(safe-area-inset-right))] short:pt-[max(0.75rem,env(safe-area-inset-top))]"
     >
       <div className="mx-auto flex w-full max-w-[1320px] flex-1 flex-col">
         <div className="flex flex-wrap items-end justify-between gap-4 border-b border-[#262B3D] pb-[18px] short:pb-3">
@@ -487,7 +487,7 @@ export const PauseMenu: React.FC<PauseMenuProps> = (props) => {
               <Pause aria-hidden className="h-3.5 w-3.5" fill="currentColor" strokeWidth={0} />
               PAUSED
             </div>
-            <h1 className="lc-disp m-0 text-[clamp(32px,4.2vw,60px)] text-[#F5F7FA] short:text-[28px]">
+            <h1 className="lc-disp m-0 text-[clamp(32px,4.2vw,60px)] text-[#F5F7FA] short:text-[28px] phone:text-[22px]">
               {trackInfo.name}
             </h1>
             {props.pauseNotice ? (

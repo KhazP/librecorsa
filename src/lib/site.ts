@@ -6,3 +6,5 @@ export const SITE_TITLE = "LibreCorsa: free open-source racing simulator in your
 export const SITE_DESCRIPTION =
   "Free, open-source sim racing in your browser: 500 Hz physics, open-wheelers and a GT3, AI races, multiplayer and wheel force feedback. Nothing to install.";
 export const REPO_URL = "https://github.com/KhazP/librecorsa";
+/** Voluntary tips (same as .github/FUNDING.yml); never unlocks anything, the assets are non-commercial */
+export const SUPPORT_URL = "https://buymeacoffee.com/alpyalayg";

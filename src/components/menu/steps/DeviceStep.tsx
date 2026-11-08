@@ -76,7 +76,7 @@ export const DeviceStep: React.FC<
               type="button"
               onClick={() => pick(d.id)}
               aria-pressed={active}
-              className={`lc-glass relative flex cursor-pointer flex-col items-start gap-3.5 rounded-[24px] p-5 text-left transition-[background-color,border-color,box-shadow] duration-200 not-compact:min-h-[220px] short:gap-2 short:p-3.5 ${
+              className={`lc-glass relative flex cursor-pointer flex-col items-start gap-3.5 rounded-[24px] p-5 text-left transition-[background-color,border-color,box-shadow] duration-200 not-compact:min-h-[220px] short:p-3.5 short:flex-row short:flex-wrap short:items-center short:gap-3 max-sm:grid max-sm:grid-cols-[auto_minmax(0,1fr)] max-sm:items-center max-sm:gap-x-3.5 max-sm:gap-y-1 max-sm:p-4 max-sm:pr-12 phone:rounded-[20px] ${
                 active
                   ? "border-[1.5px]! border-[#CCFF00]! bg-[#CCFF00]/[0.07]! shadow-[0_0_0_6px_rgba(204,255,0,0.08)]!"
                   : "hover:border-[#3A4157]!"
@@ -84,20 +84,20 @@ export const DeviceStep: React.FC<
             >
               <span
                 aria-hidden
-                className={`inline-flex h-14 w-14 shrink-0 items-center justify-center rounded-full short:h-10 short:w-10 ${
+                className={`inline-flex h-14 w-14 shrink-0 items-center justify-center rounded-full short:h-10 short:w-10 max-sm:row-span-2 max-sm:h-11 max-sm:w-11 ${
                   active ? "bg-[#CCFF00] text-[#08090D]" : "bg-[#1B1F2B] text-[#C5CBD8]"
                 }`}
               >
-                <Icon className="h-[26px] w-[26px] short:h-5 short:w-5" strokeWidth={1.8} />
+                <Icon className="h-[26px] w-[26px] short:h-5 short:w-5 max-sm:h-[22px] max-sm:w-[22px]" strokeWidth={1.8} />
               </span>
-              <span className={`lc-disp text-[28px] short:text-[22px] ${active ? "text-[#F5F7FA]" : "text-[#C5CBD8]"}`}>
+              <span className={`lc-disp text-[28px] short:text-[22px] phone:text-[20px] ${active ? "text-[#F5F7FA]" : "text-[#C5CBD8]"}`}>
                 {d.title}
               </span>
-              <span className={`text-[14px] leading-[1.45] short:hidden ${active ? "text-[#C5CBD8]" : "text-[#8E96AA]"}`}>
+              <span className={`text-[14px] leading-[1.45] short:hidden max-sm:text-[13px] max-sm:leading-snug ${active ? "text-[#C5CBD8]" : "text-[#8E96AA]"}`}>
                 {d.detail}
               </span>
               {detected === d.id ? (
-                <span className="mt-auto inline-flex h-6 items-center gap-1.5 rounded-full bg-[#CCFF00] px-2.5 font-f1-mono text-[10px] font-extrabold tracking-[0.1em] text-[#08090D]">
+                <span className="mt-auto inline-flex h-6 items-center gap-1.5 rounded-full bg-[#CCFF00] max-sm:col-start-2 max-sm:mt-1 max-sm:justify-self-start px-2.5 font-f1-mono text-[10px] font-extrabold tracking-[0.1em] text-[#08090D]">
                   <span aria-hidden className="relative inline-flex h-1.5 w-1.5">
                     <span className="lc-ping absolute inset-0 rounded-full bg-[#08090D]" />
                     <span className="relative h-1.5 w-1.5 rounded-full bg-[#08090D]" />

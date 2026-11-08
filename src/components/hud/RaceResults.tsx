@@ -153,13 +153,13 @@ export const RaceResults: React.FC<{
   const podium = [ordered[1], ordered[0], ordered[2]];
 
   return (
-    <div className="lc-ui-zoom pointer-events-none fixed inset-0 z-50 flex items-center justify-center bg-[#08090D]/55 p-4">
+    <div className="lc-ui-zoom pointer-events-none fixed inset-0 z-50 flex items-center justify-center bg-[#08090D]/55 pt-[max(1rem,env(safe-area-inset-top))] pr-[max(1rem,env(safe-area-inset-right))] pb-[max(1rem,env(safe-area-inset-bottom))] pl-[max(1rem,env(safe-area-inset-left))]">
       <div
         ref={rootRef}
         role="dialog"
         aria-modal="true"
         aria-label="Race result"
-        className="pointer-events-auto flex max-h-[calc(100dvh-2rem)] w-full max-w-[760px] flex-col gap-[18px] overflow-hidden rounded-[30px] border border-white/8 bg-[#0A0B10]/92 px-[26px] pt-6 pb-[22px] text-[#F5F7FA] shadow-[0_40px_100px_rgba(0,0,0,0.65)] backdrop-blur-[20px] short:gap-3 short:px-4 short:pt-4 short:pb-3"
+        className="pointer-events-auto flex max-h-full w-full max-w-[760px] flex-col gap-[18px] overflow-hidden rounded-[30px] border border-white/8 bg-[#0A0B10]/92 px-[26px] pt-6 pb-[22px] text-[#F5F7FA] shadow-[0_40px_100px_rgba(0,0,0,0.65)] backdrop-blur-[20px] short:gap-3 short:px-4 short:pt-4 short:pb-3"
       >
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-3">

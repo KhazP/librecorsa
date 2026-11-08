@@ -176,18 +176,18 @@ export const RailItem: React.FC<{
     aria-expanded={open}
     data-nav-default={primary ? "" : undefined}
     className={`group relative flex w-full cursor-pointer items-center gap-3.5 border-0 px-[18px] text-left text-[#F5F7FA] outline-none transition-[background-color,box-shadow,color] duration-[220ms] ease-[cubic-bezier(.2,.8,.2,1)] focus:bg-[#CCFF00] focus:text-[#08090D] focus:shadow-[0_0_0_5px_rgba(204,255,0,0.12)] focus-visible:outline-none ${
-      primary ? "min-h-[64px] rounded-[22px] py-2.5" : "min-h-[58px] rounded-[20px] py-1.5"
+      primary ? "min-h-[64px] rounded-[22px] py-2.5 phone:min-h-[52px] phone:rounded-[18px] phone:py-1.5" : "min-h-[58px] rounded-[20px] py-1.5 phone:min-h-[46px] phone:rounded-[16px] phone:py-1"
     } ${open ? "bg-[#00E5FF]/[0.08] shadow-[inset_0_0_0_1px_rgba(0,229,255,0.4)]" : "bg-transparent hover:bg-white/[0.04]"}`}
   >
     {Icon ? (
       <Icon
         aria-hidden
-        className={`shrink-0 ${primary ? "h-6 w-6" : "h-5 w-5"} ${open ? "text-[#00E5FF]" : "text-[#8E96AA]"} group-focus:text-[#08090D]`}
+        className={`shrink-0 ${primary ? "h-6 w-6 phone:h-5 phone:w-5" : "h-5 w-5 phone:h-[18px] phone:w-[18px]"} ${open ? "text-[#00E5FF]" : "text-[#8E96AA]"} group-focus:text-[#08090D]`}
         strokeWidth={2}
       />
     ) : null}
     <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-      <span className={`lc-disp flex items-center gap-2.5 ${primary ? "text-[26px]" : "text-[18px] leading-[1.05]"}`}>
+      <span className={`lc-disp flex items-center gap-2.5 ${primary ? "text-[26px] phone:text-[20px]" : "text-[18px] leading-[1.05] phone:text-[16px]"}`}>
         {label}
         {badge ? (
           <span className="inline-flex h-5 items-center rounded-full bg-[#00E5FF] px-2 font-f1-mono text-[10px] font-extrabold tracking-[0.06em] text-[#08090D] not-italic group-focus:bg-[#08090D] group-focus:text-[#CCFF00]">
@@ -196,7 +196,7 @@ export const RailItem: React.FC<{
         ) : null}
       </span>
       {detail ? (
-        <span className="truncate text-[12px] text-[#8E96AA] group-focus:font-semibold group-focus:text-[#08090D]/75">
+        <span className="truncate text-[12px] text-[#8E96AA] group-focus:font-semibold group-focus:text-[#08090D]/75 phone:text-[11px]">
           {detail}
         </span>
       ) : null}
@@ -386,7 +386,7 @@ export const PrimaryButton: React.FC<{
     disabled={disabled}
     onClick={onClick}
     onPointerEnter={focusOnHover}
-    className={`lc-primary-button inline-flex h-[52px] cursor-pointer items-center rounded-full transition-[background-color,box-shadow,border-color] duration-200 disabled:cursor-not-allowed disabled:opacity-40 ${
+    className={`lc-primary-button inline-flex h-[52px] cursor-pointer phone:h-11 items-center rounded-full transition-[background-color,box-shadow,border-color] duration-200 disabled:cursor-not-allowed disabled:opacity-40 ${
       tone === "red"
         ? "gap-3 border-0 bg-[#CCFF00] text-[#08090D] shadow-[0_0_0_5px_rgba(204,255,0,0.12),0_12px_30px_rgba(204,255,0,0.22)] hover:bg-[#d9ff33]"
         : "gap-2.5 border border-[#262B3D] bg-[#1B1F2B]/80 text-[#F5F7FA] hover:border-[#3A4157] hover:bg-[#262B3D]"
@@ -414,7 +414,7 @@ export const PrimaryButton: React.FC<{
     ) : prompt ? (
       <span className="inline-flex h-8 min-w-8 items-center justify-center">{prompt}</span>
     ) : null}
-    <span className={tone === "red" ? "lc-disp text-[20px]" : "lc-title text-[16px]"}>{children}</span>
+    <span className={tone === "red" ? "lc-disp text-[20px] phone:text-[17px]" : "lc-title text-[16px] phone:text-[15px]"}>{children}</span>
   </button>
 );
 
