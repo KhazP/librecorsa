@@ -527,16 +527,23 @@ export interface TyresModelData {
    * its width: load sensitivity follows contact pressure, so a wider tyre at the same load keeps more μ
    */
   Fz0: number;
-  /** Slip angle at peak lateral force (deg); `DEFAULT_FRICTION_LIMIT_ANGLE_DEG` when unset or 0 */
+  /**
+   * Slip angle at peak lateral force at `Fz0` (deg); `DEFAULT_FRICTION_LIMIT_ANGLE_DEG` when unset or 0. With the peak
+   * μ at Fz0 it fixes the cornering stiffness there; away from Fz0 the stiffness follows `pKy2` and the peak slip
+   * angle follows from the two
+   */
   friction_limit_angle?: number;
+  /**
+   * Pacejka MF pKy2: cornering stiffness saturates with load as Kyα ∝ sin(2·atan(Fz / (pKy2·Fz0))), peaking at
+   * Fz = pKy2·Fz0. The lateral relaxation length follows the stiffness (σ = Kyα / lateral carcass stiffness)
+   */
+  pKy2: number;
   /** Slip ratio at peak longitudinal force */
   slip_ratio_limit: number;
   /**
-   * Stereo's combined factor k (0..2): the combined slip seen by each axis is √(s_own² + (k·s_other)²).
-   * 1 = friction circle, < 1 = relaxed (elliptical) cross-axis penalty, > 1 = harsher penalty.
+   * Enables the asymmetric cross-axis shift / scale terms below. Either way the combined force is the pure-slip curve
+   * at the normalised slip vector's length, split along it, so it stays inside the μx / μy friction ellipse
    */
-  combinedFactor: number;
-  /** Enables the asymmetric cross-axis shift / scale terms below */
   new_combined: boolean;
   /** Longitudinal slip: s_x·(1 − fx_scale_SA·min(1, |s_y|)) + fx_shift_SA·s_y */
   fx_shift_SA: number;
@@ -554,7 +561,7 @@ export interface TyresModelData {
   falloff_level: number;
   /** Decay rate past the peak (per unit (s − 1)²), used with `use_slip_falloff` */
   falloff_slope: number;
-  /** Carcass relaxation lengths (m) */
+  /** Carcass relaxation lengths (m); the lateral one at `Fz0` (it scales with the cornering stiffness, see `pKy2`) */
   relaxationLengthX: number;
   relaxationLengthY: number;
   /** Rolling-resistance coefficient at walking speed */
@@ -1321,10 +1328,14 @@ function f1Compound(
       lsExpX: 0.756,
       Fz0: 3460,
       friction_limit_angle: 6.137,
+      // Where the cornering stiffness peaks, scaled from Pacejka's MF 6.1 reference tyre (205/60R15, Fz0 4 kN,
+      // pKy2 1.715: peak at 6.86 kN) by load capacity, the Tire and Rim Association formula P^0.585·Sd^1.39·(Dr + Sd)
+      // (psi, section width and rim in inches; the reference at 35 psi). This 280 mm front on an 18" rim at 25 psi
+      // carries 1.59 ×: peak at 10.9 kN = 3.2 × Fz0. Peak slip 6.1° at 4 kN, 7.2° at 8 kN, 9.2° at 12 kN
+      // [Pacejka, Tire and Vehicle Dynamics 3rd ed., MF 6.1 parameter set; TRA load formula; est]
+      pKy2: 3.2,
       // The source derives it at run time; its ABS / TC limits are 0.10 [ref_electronics.ini]
       slip_ratio_limit: 0.1,
-      // The source's COMBINED_FACTOR 2.2 is not this model's cross-axis factor: slightly elliptical combined envelope [est]
-      combinedFactor: 0.94,
       new_combined: false,
       fx_shift_SA: 0,
       fx_scale_SA: 0,
@@ -1384,6 +1395,9 @@ function f1Compound(
         lsExpX: 0.7875,
         Fz0: 3460,
         friction_limit_angle: 5.411,
+        // The front's scaling for the 375 mm rear at 24 psi: 2.64 × the reference's capacity, peak at 18.1 kN; peak slip
+        // 5.4° at 4 kN, 5.3° at 8 kN, 5.9° at 12 kN [est]
+        pKy2: 5.2,
         relaxationLengthX: 0.1044,
         relaxationLengthY: 0.1044,
         verticalDamping: 481,

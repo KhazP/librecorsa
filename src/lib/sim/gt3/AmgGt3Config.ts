@@ -466,9 +466,12 @@ function gt3Compound(
       dyCurve: buildGt3LoadCurve(gripScale, 3787, 0.7917),
       dxCurve: buildGt3LoadCurve(gripScale, 3787, 0.8017),
       friction_limit_angle: 6.12,
+      // Cornering stiffness peak scaled from Pacejka's MF 6.1 reference tyre by load capacity, as the f12026-car's
+      // (F12026CarConfig f1Compound): the 315 mm front on an 18" rim at 26 psi carries 2.01 × the reference, peak at
+      // 13.8 kN = 3.65 × Fz0; the 325 mm rear 2.13 ×, 14.6 kN = 3.75 × its Fz0 [Pacejka MF 6.1; TRA load formula; est]
+      pKy2: 3.65,
       // Default TC (0.10) and ABS (0.09) limits sit around it [est]
       slip_ratio_limit: 0.1,
-      combinedFactor: 1,
       new_combined: false,
       fx_shift_SA: 0,
       fx_scale_SA: 0,
@@ -539,6 +542,7 @@ function gt3Compound(
         dyCurve: buildGt3LoadCurve(rearGripScale, 3910, 0.8044),
         dxCurve: buildGt3LoadCurve(rearGripScale, 3910, 0.8144),
         friction_limit_angle: 6.06,
+        pKy2: 3.75,
         relaxationLengthX: 0.10173,
         relaxationLengthY: 0.10173,
       },

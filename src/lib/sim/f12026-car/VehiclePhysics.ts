@@ -20,14 +20,17 @@
  *                4-way `DamperControllerData` (base corner + heave / roll / pitch mode dampers).
  * - Unsprung:    4 hub masses on the tyre's radial spring (`pressureSpringCurve` × `thermalVerticalK`).
  * - Tyres:       load-sensitive normalised-slip model on the `TyresModelData` fields (`Dy0`, `Dx0`,
- *                `lsExpY`, `lsExpX`, `Fz0`, `friction_limit_angle`, `slip_ratio_limit`). Slip ratio
+ *                `lsExpY`, `lsExpX`, `Fz0`, `friction_limit_angle`, `slip_ratio_limit`). The cornering
+ *                stiffness saturates with load (Pacejka `pKy2`), so the peak slip angle grows with load and the
+ *                lateral relaxation length follows the stiffness. Slip ratio
  *                (`WHEEL_SR_*`) and slip angle come from relaxation-length carcass states. Camber thrust
  *                (`camberGain`, `contact_camber_c1/c2`) enters as an equivalent slip-angle shift, camber
  *                grip from `dcamber0/1` (lateral) and `dcamber0_x/1_x` (longitudinal). Fx / Fy come from
- *                friction-ellipse combined slip (`combinedFactor`, optional `new_combined` SA/SR cross terms,
- *                optional `use_slip_falloff` past-peak decay). `circleFraction` is a telemetry output only.
- *                Grip × `userData.grip`. 2-node (surface / core) thermal model, ideal-gas pressure, compound
- *                performance curve.
+ *                friction-ellipse combined slip (the normalised slip vector, optional `new_combined` SA/SR cross
+ *                terms, optional `use_slip_falloff` past-peak decay). `circleFraction` is a telemetry output only.
+ *                Grip × `userData.grip`. One thermal model: 3 bands (I/M/O) × 2 nodes (tread surface / carcass);
+ *                grip and flash temperature from the surfaces (compound performance curve), ideal-gas pressure
+ *                and carcass stiffness (radial and cornering) from the carcass.
  * - Aero:        front wing, venturi floor and rear wing: `lutAOA_CL/CD(angle)` × `lutGH_CL/CD_mult(ride
  *                height)`, forces at each element's centre of pressure; DRS scales the rear wing.
  * - Power unit:  ICE power curve + MGU-K (`torqueLut` / `coastLut`, 120 kW, 4 MJ store, per-lap limits),
@@ -106,6 +109,7 @@ import {
   type TyresCompoundData,
   type TyresPressureData,
   turboSteadyBoost,
+  type TyresThermalPatchData,
   type WingData,
   type ZoneData_DRSZone,
 } from './F12026CarConfig';
@@ -352,6 +356,10 @@ export interface WheelState {
   slipRatio: number;
   tanSlipAngle: number;
   slipAngleRad: number;
+  /** Slip angle of this tyre's peak lateral force at its present load (rad; held while unloaded, 0 until loaded) */
+  peakSlipAngleRad: number;
+  /** Lateral force per unit tan(slip angle) at small slip, with every grip scaling as it is now (N; 0 unloaded) */
+  corneringStiffness: number;
   /** Normalised combined slip (1 = peak) and share of the friction circle in use (telemetry; 1 = on the circle) */
   combinedSlip: number;
   circleFraction: number;
@@ -365,13 +373,15 @@ export interface WheelState {
   vx: number;
   vy: number;
   slipVelX: number;
+  /** Tread surface temperature (°C): the bands' surfaces weighted by contact pressure (derived, see `bandTempsC`) */
   surfaceTempC: number;
+  /** Carcass (core) temperature (°C): the bands' mean core; inflation gas, carcass stiffness (derived) */
   coreTempC: number;
-  /** Inner, Middle, Outer surface band temperatures (°C) */
+  /** Inner, Middle, Outer surface band temperatures (°C): the tread surface nodes, which set the grip */
   bandTempsC: [number, number, number];
-  /** Inner, Middle, Outer carcass temperatures (°C) */
+  /** Inner, Middle, Outer tread-bulk temperatures (°C): between each band's surface and core, for display */
   bandCarcassTempsC: [number, number, number];
-  /** Inner, Middle, Outer core temperatures (°C) */
+  /** Inner, Middle, Outer core temperatures (°C): each band's carcass node */
   bandCoreTempsC: [number, number, number];
   /** Inner, Middle, Outer share of the contact pressure (and of the heat), summing to 1 */
   bandLoadShares: [number, number, number];
@@ -497,13 +507,15 @@ export interface TyreRuntime {
   data: TyresCompoundData;
   thermal: Lut;
   pressureSpring: Lut;
+  /** tan(peak slip angle) at Fz0; at other loads see `tyrePeakSlipTan` */
   tanPeakAngle: number;
+  /** Pacejka pKy2 (`TyresModelData.pKy2`) and the peak lateral force at Fz0 (N, before temperature, wear, water…) */
+  pKy2: number;
+  peakForceY0: number;
   peakSlipRatio: number;
   /** Magic-formula shape: y = sin(C·atan(B·s)), peak 1 at s = 1 */
   B: number;
   C: number;
-  /** `combinedFactor` clamped to 0..2 */
-  combinedFactor: number;
   useFalloff: boolean;
   falloffLevel: number;
   falloffSlope: number;
@@ -601,25 +613,30 @@ export function createTyreRuntime(compound: TyresCompoundData, rear = false): Ty
   const { B, C } = fitMagicFormula(model.falloff_level);
   const cam = data.camberData;
   const fla = model.friction_limit_angle && model.friction_limit_angle > 0 ? model.friction_limit_angle : DEFAULT_FRICTION_LIMIT_ANGLE_DEG;
+  const dyCurve = model.dyCurve ? new Lut(model.dyCurve) : null;
   return {
     data,
     thermal: new Lut(data.thermalData.thermalPerformanceCurve),
     pressureSpring: new Lut(data.pressureData.pressureSpringCurve),
     tanPeakAngle: Math.tan(fla * DEG2RAD),
+    pKy2: model.pKy2,
+    peakForceY0: (dyCurve ? dyCurve.evaluate(fz0) : model.Dy0) * fz0,
     peakSlipRatio: model.slip_ratio_limit,
     B,
     C,
-    combinedFactor: THREE.MathUtils.clamp(Number.isFinite(model.combinedFactor) ? model.combinedFactor : 1, 0, 2),
     useFalloff: model.use_slip_falloff,
     falloffLevel: model.falloff_level,
     falloffSlope: Math.max(0, model.falloff_slope),
     camberThrustLimit: cam.contact_camber_c2 > 0 ? Math.sqrt(cam.contact_camber_c1 / (3 * cam.contact_camber_c2)) : Infinity,
     fz0,
-    dyCurve: model.dyCurve ? new Lut(model.dyCurve) : null,
+    dyCurve,
     dxCurve: model.dxCurve ? new Lut(model.dxCurve) : null,
     brakeDxMod: model.brakeDxMod ?? 0,
   };
 }
+
+/** Load (as a share of Fz0) below which the load laws are held, so they stay finite as a wheel unloads */
+const MIN_LOAD_RATIO = 0.05;
 
 /**
  * Peak friction coefficient of a tyre at vertical load `fz` (N), lateral (`y`) or longitudinal (`x`): the compound's
@@ -630,8 +647,45 @@ export function tyrePeakMu(t: Pick<TyreRuntime, 'data' | 'fz0' | 'dyCurve' | 'dx
   const curve = axis === 'y' ? t.dyCurve : t.dxCurve;
   if (curve) return curve.evaluate(fz);
   const m = t.data.modelData;
-  const loadRef = Math.max(0.05, fz / t.fz0);
+  const loadRef = Math.max(MIN_LOAD_RATIO, fz / t.fz0);
   return axis === 'y' ? m.Dy0 * Math.pow(loadRef, m.lsExpY - 1) : m.Dx0 * Math.pow(loadRef, m.lsExpX - 1);
+}
+
+/**
+ * Cornering stiffness at load `fz` over the one at Fz0. Pacejka MF: Kyα = pKy1·Fz0·sin(2·atan(Fz / (pKy2·Fz0))),
+ * which normalised to Fz0 is x·(pKy2² + 1) / (pKy2² + x²) with x = Fz / Fz0: near-linear in light load, saturating
+ * to its peak at pKy2·Fz0. The lateral relaxation length scales with it (MF 6.1: σα = Kyα / lateral carcass stiffness).
+ */
+export function tyreCorneringStiffnessLoadFactor(t: Pick<TyreRuntime, 'fz0' | 'pKy2'>, fz: number): number {
+  const x = Math.max(MIN_LOAD_RATIO, fz / t.fz0);
+  const p2 = t.pKy2 * t.pKy2;
+  return (x * (p2 + 1)) / (p2 + x * x);
+}
+
+/**
+ * tan(peak slip angle) at load `fz`: the peak lateral force there over the cornering stiffness, both from the
+ * compound's data at Fz0 (`friction_limit_angle`, the load table) and the stiffness's load law. Before the carcass
+ * temperature (a softer carcass peaks later) and before the grip scalings (temperature, wear, water), which scale
+ * force and stiffness together.
+ */
+export function tyrePeakSlipTan(
+  t: Pick<TyreRuntime, 'data' | 'fz0' | 'dyCurve' | 'dxCurve' | 'pKy2' | 'tanPeakAngle' | 'peakForceY0'>,
+  fz: number
+): number {
+  const fzL = Math.max(fz, MIN_LOAD_RATIO * t.fz0);
+  return (t.tanPeakAngle * tyrePeakMu(t, fzL, 'y') * fzL) / (t.peakForceY0 * tyreCorneringStiffnessLoadFactor(t, fzL));
+}
+
+/**
+ * Carcass stiffness at carcass temperature `carcassC` over its stiffness at `thermalVerticalRefC` (the rubber softens
+ * as it warms), floored at 0.7: the radial rate takes it, and so does the cornering stiffness (same rubber), so a hot
+ * carcass peaks at a larger slip angle and a cold one is sharper
+ */
+export function tyreCarcassStiffnessFactor(
+  th: Pick<TyresThermalPatchData, 'thermalVerticalK' | 'thermalVerticalRefC'>,
+  carcassC: number
+): number {
+  return Math.max(0.7, 1 + th.thermalVerticalK * (carcassC - th.thermalVerticalRefC));
 }
 
 /** Grip at hot inflation pressure `psi` (gauge): a parabola about the optimum, floored at half grip */
@@ -655,9 +709,12 @@ function slipCurveOverS(t: TyreRuntime, s: number): number {
 }
 
 /**
- * Combined slip (this model's interpretation of `combinedFactor`, `new_combined` and the SA/SR
- * cross terms): normalised slips (sx, sy) → per-axis force fractions (fx, fy) of μ·Fz, signs following
- * the slips. With k = 1 and no cross terms this is the plain friction circle.
+ * Combined slip by the normalised slip vector (Pacejka's similarity method, Tire and Vehicle Dynamics ch. 4; the
+ * friction ellipse a brush model gives): normalised slips (sx, sy) → per-axis force fractions (fx, fy) of μ·Fz. One
+ * combined slip s = |(sx, sy)| sets the force F(s) on the pure-slip curve, split along the slip direction: fx = F(s)·sx/s,
+ * fy = F(s)·sy/s. So fx² + fy² = F(s)² ≤ 1, and with each axis's own μ the forces stay on or inside the friction
+ * ellipse (Fx / μx·Fz)² + (Fy / μy·Fz)² ≤ 1 at every slip. `new_combined` first shifts / scales the slips by the
+ * SA/SR cross terms.
  */
 export function combinedSlipForces(
   t: TyreRuntime,
@@ -672,9 +729,9 @@ export function combinedSlipForces(
     sxm = sx * (1 - model.fx_scale_SA * Math.min(1, Math.abs(sy))) + model.fx_shift_SA * sy;
     sym = sy * (1 - model.fy_scale_SR * Math.min(1, Math.abs(sx))) + model.fy_shift_SR * sx;
   }
-  const k = t.combinedFactor;
-  out.fx = sxm * slipCurveOverS(t, Math.hypot(sxm, k * sym));
-  out.fy = sym * slipCurveOverS(t, Math.hypot(sym, k * sxm));
+  const fOverS = slipCurveOverS(t, Math.hypot(sxm, sym));
+  out.fx = sxm * fOverS;
+  out.fy = sym * fOverS;
   out.sx = sxm;
   out.sy = sym;
 }
@@ -1081,6 +1138,8 @@ export class VehiclePhysics {
         slipRatio: 0,
         tanSlipAngle: 0,
         slipAngleRad: 0,
+        peakSlipAngleRad: 0,
+        corneringStiffness: 0,
         combinedSlip: 0,
         circleFraction: 0,
         camberLeftRad: 0,
@@ -1421,6 +1480,7 @@ export class VehiclePhysics {
       w.vy = 0;
       w.slipVelX = 0;
       w.slipAngleRad = 0;
+      w.corneringStiffness = 0;
       w.combinedSlip = 0;
       w.circleFraction = 0;
       w.camberLeftRad = 0;
@@ -1678,8 +1738,7 @@ export class VehiclePhysics {
   private tyreVerticalRate(w: WheelState): number {
     const t = this.tyres[w.isFront ? 0 : 1];
     const geo = w.isFront ? t.data.front : t.data.rear;
-    const th = t.data.thermalData;
-    const thermal = Math.max(0.7, 1 + th.thermalVerticalK * (w.coreTempC - th.thermalVerticalRefC));
+    const thermal = tyreCarcassStiffnessFactor(t.data.thermalData, w.coreTempC);
     return t.pressureSpring.evaluate(w.pressurePsi) * geo.verticalRateScale * thermal;
   }
 
@@ -2090,7 +2149,12 @@ export class VehiclePhysics {
       if (fz > 0) {
         const bristleScale = dynamicBristleRelaxationScale(fz, tyre.fz0, wWetness);
         const rx = model.relaxationLengthX * bristleScale;
-        const ry = model.relaxationLengthY * bristleScale;
+        // The lateral length follows the cornering stiffness (σ = Kyα / lateral carcass stiffness), so the carcass
+        // stiffness stays the one at Fz0 at every load; the bristle model's own load stretch would count load twice
+        const ry =
+          model.relaxationLengthY *
+          tyreCorneringStiffnessLoadFactor(tyre, fz) *
+          dynamicBristleRelaxationScale(tyre.fz0, tyre.fz0, wWetness);
         w.slipRatio = (w.slipRatio + (h * vsx) / rx) / (1 + (h * absVx) / rx);
         w.tanSlipAngle = (w.tanSlipAngle + (h * vy) / ry) / (1 + (h * absVx) / ry);
         w.slipRatio = THREE.MathUtils.clamp(w.slipRatio, -5, 5);
@@ -2161,20 +2225,24 @@ export class VehiclePhysics {
         w.muY = muY;
         w.muX = muX;
 
+        // Peak slip angle at this load: the cornering stiffness saturates with load while the peak force keeps growing;
+        // a warm carcass is softer, so it peaks later (its lateral carcass stiffness softens alike: same relaxation length)
+        const tanPeak = tyrePeakSlipTan(tyre, fz) / tyreCarcassStiffnessFactor(td.thermalData, w.coreTempC);
+        w.peakSlipAngleRad = Math.atan(tanPeak);
+
         // Camber thrust (toward the lean) as an equivalent slip-angle shift
         const gc = THREE.MathUtils.clamp(w.camberLeftRad, -tyre.camberThrustLimit, tyre.camberThrustLimit);
         const thrust = cam.camberGain * (cam.contact_camber_c1 * gc - cam.contact_camber_c2 * gc * gc * gc);
         const BC = tyre.B * tyre.C;
-        const tanEff = w.tanSlipAngle - (thrust * tyre.tanPeakAngle) / Math.max(1e-3, muY * BC);
+        const tanEff = w.tanSlipAngle - (thrust * tanPeak) / Math.max(1e-3, muY * BC);
+        w.corneringStiffness = (muY * fz * BC) / tanPeak;
 
         // Combined slip
-        combinedSlipForces(tyre, model, w.slipRatio / tyre.peakSlipRatio, tanEff / tyre.tanPeakAngle, _comb);
+        combinedSlipForces(tyre, model, w.slipRatio / tyre.peakSlipRatio, tanEff / tanPeak, _comb);
         fx = muX * fz * _comb.fx;
         fy = -muY * fz * _comb.fy;
         const s = Math.hypot(_comb.sx, _comb.sy);
         w.combinedSlip = s;
-        // A relaxed combinedFactor may use more than the circle; low-speed damping must not add to that
-        const useSlip = Math.hypot(_comb.fx, _comb.fy);
 
         // Low-speed contact damping (keeps a parked car from ringing on the carcass spring)
         const fade = Math.max(0, 1 - absVx / LOW_SPEED_FADE_MS);
@@ -2182,14 +2250,14 @@ export class VehiclePhysics {
           fx += fade * LOW_SPEED_DAMPING * muX * fz * vsx;
           fy -= fade * LOW_SPEED_DAMPING * muY * fz * vy;
         }
+        // The slip forces sit inside the friction ellipse already; the low-speed damping must not push them past it
         const use = Math.hypot(fx / (muX * fz), fy / (muY * fz));
-        const limit = Math.max(1, useSlip);
-        if (use > limit) {
-          fx *= limit / use;
-          fy *= limit / use;
+        if (use > 1) {
+          fx /= use;
+          fy /= use;
         }
-        // Telemetry only: share of the friction circle in use (> 1 when combinedFactor < 1 lets it exceed)
-        w.circleFraction = Math.min(use, limit);
+        // Telemetry only: share of the friction ellipse in use (1 = on it)
+        w.circleFraction = Math.min(use, 1);
 
         // Self-aligning moment: pneumatic trail collapsing toward the limit and over standing water (hydroplaning wedge)
         const wetTrailMult =
@@ -2227,6 +2295,7 @@ export class VehiclePhysics {
         w.combinedSlip = 0;
         w.circleFraction = 0;
         w.patchHalfLengthM = 0;
+        w.corneringStiffness = 0;
         w.mz = 0;
         w.mzTwist = 0;
         w.twistRad = 0;
@@ -2994,7 +3063,7 @@ export class VehiclePhysics {
     }
   }
 
-  /** 9-node I/M/O + 16-sector tyre temperatures, wear, flat-spots, graining, blistering, dirt, and 2-node brake discs */
+  /** 6-node I/M/O + 16-sector tyre temperatures, wear, flat-spots, graining, blistering, dirt, and 2-node brake discs */
   private updateThermal(dt: number): void {
     const carSpeedMs = this.velocity.length();
     for (const w of this.wheels) {
@@ -3008,13 +3077,9 @@ export class VehiclePhysics {
       const extWetCool = wetExternalGasCoolingWK(this.wetness, v);
       const slipPower = (Math.abs(w.fx * w.slipVelX) + Math.abs(w.fy * w.vy)) * heatScale;
       const hyst = th.hysteresis * w.fz * v * heatScale;
-      const toCore = th.surfaceToCore * (w.surfaceTempC - w.coreTempC);
-      const surfCool = (th.surfaceCooling[0] + th.surfaceCooling[1] * v) * (w.surfaceTempC - this.ambientC);
-      const roadCool = w.fz > 0 ? roadG * (w.surfaceTempC - this.trackTempC) : 0;
-      const coreCool = (th.coreCooling[0] + th.coreCooling[1] * v + extWetCool) * (w.coreTempC - this.ambientC);
-      w.surfaceTempC += ((th.slipHeatShare * slipPower - toCore - surfCool - roadCool) / th.surfaceHeatCapacity) * dt;
-      w.coreTempC += ((hyst + toCore - coreCool) / th.coreHeatCapacity) * dt;
 
+      // One thermal model: three bands, each a tread-surface node over a carcass (core) node, each a third of the
+      // tyre (a third of the heat capacity and conductances, so with an even load the bands are the 2-node tyre).
       // 3-band I/M/O thermal distribution from camber & lateral force shift, in ac-tyre's convention: camber leaning
       // toward the car (negative camber) loads the inner shoulder, the lateral force rolls the patch onto the shoulder
       // away from the force (+ bias = toward the outer band). Inward is −left on a left wheel
@@ -3046,6 +3111,11 @@ export class VehiclePhysics {
       w.bandTempsC[0] -= d01;
       w.bandTempsC[1] += d01 - d12;
       w.bandTempsC[2] += d12;
+      // The tyre's surface temperature is the band surfaces weighted by contact pressure (the rubber on the road: flash
+      // temperature, graining); its carcass temperature the bands' mean carcass (the inner liner the inflation gas
+      // sees, and the rubber behind the carcass's vertical and cornering stiffness)
+      w.surfaceTempC = shares[0] * w.bandTempsC[0] + shares[1] * w.bandTempsC[1] + shares[2] * w.bandTempsC[2];
+      w.coreTempC = (w.bandCoreTempsC[0] + w.bandCoreTempsC[1] + w.bandCoreTempsC[2]) / 3;
 
       // Wear & 16-sector flat-spotting / graining / blistering / dirt pickup
       const wearDelta =
