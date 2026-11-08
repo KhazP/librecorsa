@@ -16,7 +16,6 @@ import { setVf26LiveryColours, upgradeVf26Materials } from "@/lib/render/car-mat
 import { applyLivery, collectPaintSlots, type PaintKeys } from "@/lib/render/livery-repaint";
 import { moveToDriverHeadLayer } from "@/lib/render/layers";
 import {
-  bakedCamberOf,
   relativeMatrix,
   updateCorners,
   WHEEL_NODES,
@@ -199,8 +198,6 @@ export function attachVf26Model(
   // Per-corner pivots. Built before re-parenting so the bind matrices can be read from the clone.
   interface Corner extends RigCorner {
     discMat: THREE.MeshStandardMaterial | null;
-    /** Static camber baked into the wheel node, in the physics' camberLeftRad sense (+ = top toward +X) */
-    bakedCamberRad: number;
   }
   const corners: Corner[] = [];
   WHEELS.forEach((wheelName, i) => {
@@ -245,7 +242,6 @@ export function attachVf26Model(
     steer.add(wheel);
     setFromMatrix(wheel, wheelLocal);
     root.add(steer);
-    const bakedCamberRad = bakedCamberOf(wheel);
     corners.push({
       steer,
       spin,
@@ -253,7 +249,6 @@ export function attachVf26Model(
       isLeft: i % 2 === 1,
       discMat,
       restY: steer.position.y,
-      bakedCamberRad,
       tyre: null,
     });
   });
@@ -333,10 +328,10 @@ export function attachVf26Model(
     const mesh = tyreMesh as THREE.Mesh;
     mesh.geometry.computeBoundingBox();
     const box = mesh.geometry.boundingBox!;
+    // The wheel node's baked camber needs no telling: the rig gives the shader the road in the wheel node's own frame
     return installTyreDeformation(mesh, {
       unloadedRadiusM: box.max.y,
       halfWidthM: box.max.x,
-      bakedCamberRad: c.bakedCamberRad,
       // A 2026 car: the 2026 Pirelli sidewall over the model's own (recoloured by setTireCompound)
       pirelliSidewall: "medium",
     });

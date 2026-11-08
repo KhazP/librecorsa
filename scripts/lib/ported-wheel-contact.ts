@@ -89,6 +89,23 @@ function buildRig(extras: PortedWheelExtras, chassis: { wheelbase: number; front
  * over the corners whose tyre is loaded (a wheel off the ground may float). `sim` must have its track colliders and
  * give its tyres' state; the rigs are seated the way the simulator seats the player's car, on the sim's own pose.
  */
+/** Half the span (m) and the height jump (m) that mark a road step edge around a measurement point */
+const STEP_EDGE_SPAN_M = 0.03;
+const STEP_EDGE_JUMP_M = 0.01;
+const _edgeHit = createGroundHit();
+
+function onStepEdge(
+  ground: { query(x: number, z: number, probeY: number, out: ReturnType<typeof createGroundHit>): boolean },
+  p: THREE.Vector3,
+  height: number
+): boolean {
+  for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+    if (!ground.query(p.x + dx * STEP_EDGE_SPAN_M, p.z + dz * STEP_EDGE_SPAN_M, p.y + 0.6, _edgeHit)) continue;
+    if (Math.abs(_edgeHit.height - height) > STEP_EDGE_JUMP_M) return true;
+  }
+  return false;
+}
+
 export function measurePortedWheelContact(
   sim: SimulatorCar,
   ground: { query(x: number, z: number, probeY: number, out: ReturnType<typeof createGroundHit>): boolean },
@@ -132,6 +149,9 @@ export function measurePortedWheelContact(
         const roadInCar = cornerRoadHeight(c, wheels);
         p.applyQuaternion(sim.worldQuaternion).add(sim.worldPosition);
         if (!ground.query(p.x, p.z, p.y + 0.6, hit)) return;
+        // Skip a patch centred on a kerb's step edge: there the road height jumps within millimetres of the point, so a
+        // point measurement is undefined (the drawn tread drapes over the step, which the shader handles)
+        if (onStepEdge(ground, p, hit.height)) return;
         const errMm = (p.y - hit.height) * 1000;
         // The same corner on the car frame's origin plane (the bottom of a tyre carried by the body)
         p.set(c.steer.position.x, c.steer.position.y - roadInCar - (rig.radius[k] - squash), c.steer.position.z);
