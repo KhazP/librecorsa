@@ -253,19 +253,21 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
    * a few hundred ms, which would otherwise be the first frame of the race. Only valid for the car it was built against.
    */
   const aiFieldSpareRef = useRef<{ field: AiOpponentField; physics: SimulatorCar } | null>(null);
+  /** A new AI field round the player's car, at the player's chosen skill */
+  const buildAiField = useCallback(
+    (physics: SimulatorCar) => new AiOpponentField(track, physics, AI_DRIVERS, getTrackEnv(), { skill: settingsRef.current.aiSkill }),
+    [track, getTrackEnv]
+  );
   const prepareAiField = useCallback(() => {
     const run = () => {
       const physics = physicsRef.current;
       // Never while driving: the build would be a hitch on track instead
       if (!physics || phaseRef.current === "driving" || phaseRef.current === "loading") return;
       if (aiFieldSpareRef.current?.physics === physics) return;
-      aiFieldSpareRef.current = {
-        field: new AiOpponentField(track, physics, AI_DRIVERS, getTrackEnv(), { skill: settingsRef.current.aiSkill }),
-        physics,
-      };
+      aiFieldSpareRef.current = { field: buildAiField(physics), physics };
     };
     scheduleIdle(run);
-  }, [track, getTrackEnv]);
+  }, [buildAiField]);
   /** The AI field for a race: the spare one when it was built for this car, else a new one */
   const takeAiField = useCallback(
     (physics: SimulatorCar) => {
@@ -276,9 +278,9 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         if (spare.field.skill !== skill) spare.field.setSkill(skill);
         return spare.field;
       }
-      return new AiOpponentField(track, physics, AI_DRIVERS, getTrackEnv(), { skill });
+      return buildAiField(physics);
     },
-    [track, getTrackEnv]
+    [buildAiField]
   );
 
   const [virtualMirrorOn, setVirtualMirrorOn] = useState(false);
@@ -1349,7 +1351,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       lapDelta.reset();
       // A running race restarts from the lights with the new car
       if (aiFieldRef.current) {
-        const field = new AiOpponentField(track, physics, AI_DRIVERS, getTrackEnv(), { skill: settingsRef.current.aiSkill });
+        const field = takeAiField(physics);
         if (trackRoot) field.attachTrackRoot(trackRoot);
         setRaceRef.current({ kind: "ai", field });
         field.startRace(true);
@@ -3113,7 +3115,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       renderer.dispose();
       audioRef.current?.dispose();
     };
-  }, [track, getTrackEnv, unlockAudio, handleToggleMute, handleToggleRacingLine, releaseHeldKeys, toggleAutopilot, setLatch, setVrState]);
+  }, [track, getTrackEnv, takeAiField, unlockAudio, handleToggleMute, handleToggleRacingLine, releaseHeldKeys, toggleAutopilot, setLatch, setVrState]);
 
   // Saved settings and the first-run flag are read after mount (the page is prerendered without
   // storage), once the scene effect above has created the car they apply to
