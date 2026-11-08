@@ -6,64 +6,33 @@
     "ext": [
       {
         "file": "engine_ext_on_900.ogg",
+        "fsbName": "fwd_idle {fcb9f1ed-6511-45ad-8450-cf1e32977d02}",
         "layer": "on",
         "rpm": 900,
         "channels": 1,
         "rms": 0.165
       },
       {
-        "file": "engine_ext_on_2200.ogg",
-        "layer": "on",
-        "rpm": 2200,
-        "channels": 2,
-        "rms": 0.1788
-      },
-      {
         "file": "engine_ext_on_3300.ogg",
+        "fsbName": "fwd_onload_6000 {303fd7ed-14f5-4e19-802a-3feded10a29f}",
         "layer": "on",
         "rpm": 3300,
-        "channels": 2,
-        "rms": 0.1925
-      },
-      {
-        "file": "engine_ext_on_5000.ogg",
-        "layer": "on",
-        "rpm": 5000,
-        "channels": 2,
-        "rms": 0.2062
-      },
-      {
-        "file": "engine_ext_on_7000.ogg",
-        "layer": "on",
-        "rpm": 7000,
         "channels": 2,
         "rms": 0.22
       },
       {
         "file": "engine_ext_off_900.ogg",
+        "fsbName": "fwd_idle {fcb9f1ed-6511-45ad-8450-cf1e32977d02}",
         "layer": "off",
         "rpm": 900,
         "channels": 1,
         "rms": 0.125
       },
       {
-        "file": "engine_ext_off_2500.ogg",
-        "layer": "off",
-        "rpm": 2500,
-        "channels": 1,
-        "rms": 0.1417
-      },
-      {
         "file": "engine_ext_off_4500.ogg",
+        "fsbName": "fwd_offlow {c59b7cf3-b1cc-4256-8639-4295d3856d18}",
         "layer": "off",
         "rpm": 4500,
-        "channels": 1,
-        "rms": 0.1583
-      },
-      {
-        "file": "engine_ext_off_7000.ogg",
-        "layer": "off",
-        "rpm": 7000,
         "channels": 1,
         "rms": 0.175
       }
@@ -71,64 +40,33 @@
     "int": [
       {
         "file": "engine_int_on_900.ogg",
+        "fsbName": "fwd_idle {fcb9f1ed-6511-45ad-8450-cf1e32977d02}",
         "layer": "on",
         "rpm": 900,
         "channels": 1,
         "rms": 0.165
       },
       {
-        "file": "engine_int_on_2200.ogg",
-        "layer": "on",
-        "rpm": 2200,
-        "channels": 2,
-        "rms": 0.1788
-      },
-      {
         "file": "engine_int_on_3300.ogg",
+        "fsbName": "fwd_onload_6000 {303fd7ed-14f5-4e19-802a-3feded10a29f}",
         "layer": "on",
         "rpm": 3300,
-        "channels": 2,
-        "rms": 0.1925
-      },
-      {
-        "file": "engine_int_on_5000.ogg",
-        "layer": "on",
-        "rpm": 5000,
-        "channels": 2,
-        "rms": 0.2062
-      },
-      {
-        "file": "engine_int_on_7000.ogg",
-        "layer": "on",
-        "rpm": 7000,
         "channels": 2,
         "rms": 0.22
       },
       {
         "file": "engine_int_off_900.ogg",
+        "fsbName": "fwd_idle {fcb9f1ed-6511-45ad-8450-cf1e32977d02}",
         "layer": "off",
         "rpm": 900,
         "channels": 1,
         "rms": 0.125
       },
       {
-        "file": "engine_int_off_2500.ogg",
-        "layer": "off",
-        "rpm": 2500,
-        "channels": 1,
-        "rms": 0.1417
-      },
-      {
         "file": "engine_int_off_4500.ogg",
+        "fsbName": "fwd_offlow {c59b7cf3-b1cc-4256-8639-4295d3856d18}",
         "layer": "off",
         "rpm": 4500,
-        "channels": 1,
-        "rms": 0.1583
-      },
-      {
-        "file": "engine_int_off_7000.ogg",
-        "layer": "off",
-        "rpm": 7000,
         "channels": 1,
         "rms": 0.175
       }
@@ -288,11 +226,15 @@
     ]
   },
   "lift": {
-    "popMinRpm": 6600,
-    "crackleMinRpm": 6900,
-    "downshiftPopChance": 0.05
+    "popMinRpm": 99999,
+    "crackleMinRpm": 99999,
+    "downshiftPopChance": 0
   },
   "limiterRetriggerS": 0.85,
+  "shift": {
+    "style": "manual",
+    "clutchS": 0.25
+  },
   "skid": {
     "int": {
       "file": "skid_int.ogg",

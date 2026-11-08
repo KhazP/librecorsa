@@ -600,31 +600,21 @@
       "int": {
         "on": [
           { "rpm": 900, "rootRpm": 1000, "sample": "fwd_idle {fcb9f1ed-6511-45ad-8450-cf1e32977d02}#35" },
-          { "rpm": 2200, "rootRpm": 3300, "sample": "fwd_onload_6000 {303fd7ed-14f5-4e19-802a-3feded10a29f}#0" },
-          { "rpm": 3300, "rootRpm": 3300, "sample": "fwd_onload_6000 {303fd7ed-14f5-4e19-802a-3feded10a29f}#0" },
-          { "rpm": 5000, "rootRpm": 3300, "sample": "fwd_onload_6000 {303fd7ed-14f5-4e19-802a-3feded10a29f}#0" },
-          { "rpm": 7000, "rootRpm": 3300, "sample": "fwd_onload_6000 {303fd7ed-14f5-4e19-802a-3feded10a29f}#0" }
+          { "rpm": 3300, "rootRpm": 3300, "sample": "fwd_onload_6000 {303fd7ed-14f5-4e19-802a-3feded10a29f}#0" }
         ],
         "off": [
           { "rpm": 900, "rootRpm": 1000, "sample": "fwd_idle {fcb9f1ed-6511-45ad-8450-cf1e32977d02}#35" },
-          { "rpm": 2500, "rootRpm": 4500, "sample": "fwd_offlow {c59b7cf3-b1cc-4256-8639-4295d3856d18}#34" },
-          { "rpm": 4500, "rootRpm": 4500, "sample": "fwd_offlow {c59b7cf3-b1cc-4256-8639-4295d3856d18}#34" },
-          { "rpm": 7000, "rootRpm": 4500, "sample": "fwd_offlow {c59b7cf3-b1cc-4256-8639-4295d3856d18}#34" }
+          { "rpm": 4500, "rootRpm": 4500, "sample": "fwd_offlow {c59b7cf3-b1cc-4256-8639-4295d3856d18}#34" }
         ]
       },
       "ext": {
         "on": [
           { "rpm": 900, "rootRpm": 1000, "sample": "fwd_idle {fcb9f1ed-6511-45ad-8450-cf1e32977d02}#35" },
-          { "rpm": 2200, "rootRpm": 3300, "sample": "fwd_onload_6000 {303fd7ed-14f5-4e19-802a-3feded10a29f}#0" },
-          { "rpm": 3300, "rootRpm": 3300, "sample": "fwd_onload_6000 {303fd7ed-14f5-4e19-802a-3feded10a29f}#0" },
-          { "rpm": 5000, "rootRpm": 3300, "sample": "fwd_onload_6000 {303fd7ed-14f5-4e19-802a-3feded10a29f}#0" },
-          { "rpm": 7000, "rootRpm": 3300, "sample": "fwd_onload_6000 {303fd7ed-14f5-4e19-802a-3feded10a29f}#0" }
+          { "rpm": 3300, "rootRpm": 3300, "sample": "fwd_onload_6000 {303fd7ed-14f5-4e19-802a-3feded10a29f}#0" }
         ],
         "off": [
           { "rpm": 900, "rootRpm": 1000, "sample": "fwd_idle {fcb9f1ed-6511-45ad-8450-cf1e32977d02}#35" },
-          { "rpm": 2500, "rootRpm": 4500, "sample": "fwd_offlow {c59b7cf3-b1cc-4256-8639-4295d3856d18}#34" },
-          { "rpm": 4500, "rootRpm": 4500, "sample": "fwd_offlow {c59b7cf3-b1cc-4256-8639-4295d3856d18}#34" },
-          { "rpm": 7000, "rootRpm": 4500, "sample": "fwd_offlow {c59b7cf3-b1cc-4256-8639-4295d3856d18}#34" }
+          { "rpm": 4500, "rootRpm": 4500, "sample": "fwd_offlow {c59b7cf3-b1cc-4256-8639-4295d3856d18}#34" }
         ]
       }
     },
@@ -644,7 +634,8 @@
       "ext": [[0.0, 0.0], [0.1, 0.25], [0.25, 0.55], [0.5, 0.8], [0.75, 0.94], [1.0, 1.0]],
       "int": [[0.0, 0.0], [0.1, 0.28], [0.25, 0.58], [0.5, 0.82], [0.75, 0.95], [1.0, 1.0]]
     },
-    "lift": { "popMinRpm": 6600, "crackleMinRpm": 6900, "downshiftPopChance": 0.05 },
+    "lift": { "popMinRpm": 99999, "crackleMinRpm": 99999, "downshiftPopChance": 0 },
+    "shift": { "style": "manual", "clutchS": 0.25 },
     "limiterRetriggerS": 0.85
   }
 }

@@ -104,10 +104,19 @@ for (const [bankId, { sound, maxIdleRpm }] of seenBanks) {
       const minRpm = sorted[0] ?? Infinity;
       const maxRpm = sorted[sorted.length - 1] ?? 0;
 
+      // A bank with a full set of recordings has 4+ anchors to the limiter; a road car's (the Liana's: an idle, an
+      // on-load and an overrun loop) may have only two, the top one pitched up to the limiter. Never the same
+      // recording at two anchors: two copies of one loop at the same pitch comb-filter into a doubled engine
+      const sources = layerEntries.map((e) => (e as { fsbName?: string }).fsbName).filter((n): n is string => !!n);
+      const pitchToLimiter = sound.limiterRpm / Math.max(1, maxRpm);
       check(
-        `${bankId} engine.${view}.${layer}: >= 4 anchors covering idle (<= ${maxIdleRpm}) to limiter (>= ${sound.limiterRpm})`,
-        layerEntries.length >= 4 && strictlyIncreasing && minRpm <= maxIdleRpm && maxRpm >= sound.limiterRpm,
-        `anchors=[${rpms.join(", ")}]`
+        `${bankId} engine.${view}.${layer}: idle (<= ${maxIdleRpm}) to limiter (${sound.limiterRpm}), one recording per anchor`,
+        layerEntries.length >= 2 &&
+          strictlyIncreasing &&
+          minRpm <= maxIdleRpm &&
+          (layerEntries.length >= 4 ? maxRpm >= sound.limiterRpm : pitchToLimiter <= 2.2) &&
+          new Set(sources).size === sources.length,
+        `anchors=[${rpms.join(", ")}]${sources.length ? `, ${new Set(sources).size} recordings` : ""}`
       );
 
       for (const e of layerEntries) {
