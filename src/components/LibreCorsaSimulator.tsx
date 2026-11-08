@@ -41,6 +41,7 @@ import { webHidFfb, wheelFfb } from "@/lib/input/wheel-ffb";
 import { clampFov, codeFromName, DEFAULT_PLAYER_SETTINGS, loadCarChoice, loadOnboarded, loadPlayerSettings, loadRumble, pushLibraryRecent, saveCarChoice, saveOnboarded, toggleLibraryFavorite, type LibraryKind, sanitizeDriverName, savePlayerSettings, saveRumble, type PlayerSettings } from "@/lib/settings/player-settings";
 import type { AeroSetupPreset, AssistPreset, CameraMode, LiveTunerPatch, LiveryConfig, TireCompound, TyreSetup, VehicleModelId } from "@/types/f1";
 import { aiFieldOf, autoCompoundFor, DEFAULT_AERO_PRESET, DriveSession, idleDriveSnapshot, mpRaceOf, type AppPhase, type RunResetReason, type SessionRace } from "@/lib/drive-session";
+import { startAiRace, type RaceSetup } from "@/lib/sim/race-setup";
 
 const DEFAULT_ASSIST_PRESET: AssistPreset = DEFAULT_PLAYER_SETTINGS.assistPreset;
 /** A lap record's car: records are per vehicle model, named after its first car */
@@ -374,7 +375,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       }
       const physics = session.car;
       session.resetRun("restart");
-      if (race.kind === "ai") race.field.startRace(!flyingStart);
+      // A restart from the menu uses the race's own start; the flying-lap key always gives a rolling one
+      if (race.kind === "ai") startAiRace(race.field, settingsRef.current.race, flyingStart ? false : undefined);
       else physics.resetToStartGrid(flyingStart);
     },
     [session]
@@ -391,7 +393,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     }
     const field = session.takeAiField();
     session.setRace({ kind: "ai", field });
-    field.startRace(true);
+    startAiRace(field, settingsRef.current.race);
   }, [session]);
 
   const handleSelectTurn = useCallback(
@@ -451,6 +453,14 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     if (session) aiFieldOf(session.race)?.setSkill(aiSkill);
   }, [session]);
 
+  /**
+   * The race setup: saved, and used from the next start. The session builds a field of the new size, and restarts a
+   * race running from the lights with it
+   */
+  const handleChangeRaceSetup = useCallback((patch: Partial<RaceSetup>) => {
+    setSettings((prev) => ({ ...prev, race: { ...prev.race, ...patch } }));
+  }, []);
+
   /** Weather and time of day: saved, and the session on track switches to them (the weather starts over) */
   const handleChangeConditions = useCallback((conditions: SessionConditions) => {
     setSettings((prev) => ({ ...prev, conditions }));
@@ -484,7 +494,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     (race: boolean) => {
       const field = race && session ? (aiFieldOf(session.race) ?? session.takeAiField()) : null;
       startSession(field ? { kind: "ai", field } : { kind: "practice" });
-      if (field) field.startRace(true);
+      if (field) startAiRace(field, settingsRef.current.race);
       else session?.car.resetToStartGrid(false);
       setLaunchHint(true);
     },
@@ -1037,6 +1047,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     onToggleAiOpponents: handleToggleAiOpponents,
     aiSkill: settings.aiSkill,
     onChangeAiSkill: handleChangeAiSkill,
+    raceSetup: settings.race,
+    onChangeRaceSetup: handleChangeRaceSetup,
     carId,
     vehicleModel,
     onChangeCar: handleChangeCar,

@@ -109,6 +109,8 @@ export interface SimulatorCar {
   aiSpeedCapMs?: number;
   /** AI tuning: target speed along the lap replacing the autopilot's own limit profile (m/s, uniform spacing) */
   aiTargetSpeedMs?: Float64Array | null;
+  /** A plan for the autopilot to track as given (`ai/drive-plan.ts`); null: its own line and limit profile */
+  aiPlan?: import('./ai/drive-plan').AiDrivePlan | null;
   /** AI tuning: steering gain multiplier of the autopilot */
   aiSteerGain?: number;
   /** The autopilot's own limit speed along the lap (m/s, uniform spacing), which AI tuning scales */
@@ -161,6 +163,10 @@ export interface SimulatorCar {
   getLiveTunerState?(): LiveTunerState;
   setLiveTuner?(patch: LiveTunerPatch): void;
 
+  /** Apply the car's damage (`car-damage.ts`): aero, per-wheel grip and toe, engine; null = undamaged */
+  setDamageEffects?(effects: Readonly<import('./car-damage').CarDamageEffects> | null): void;
+  /** The car puts itself back on the line when stuck on autopilot (default true; a race field rejoins its own cars) */
+  aiSelfRecovery?: boolean;
   /** Apply trailing vortex wake / slipstream deficit from cars ahead */
   setAeroWakeState?(wake: import('./aero-wake').AeroWakeState): void;
   /** Apply the dynamic track evolution sample under the car */

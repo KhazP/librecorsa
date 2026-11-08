@@ -117,6 +117,9 @@ import {
   evaluateRollAeroFactor,
   type RelativeAirspeed,
 } from './sim/aero-wake';
+import { type CarDamageEffects, withDamage } from './sim/car-damage';
+import type { AiDrivePlan } from './sim/ai/drive-plan';
+import { sampleGrid } from './sim/ai/ai-track';
 import type { TrackEvolutionSample } from './sim/track-evolution';
 import { DRY_WEATHER_SAMPLE, type WeatherContactSample } from './sim/weather';
 import { FULL_REALISM, type SimRealismFlags } from './sim/sim-realism';
@@ -532,6 +535,12 @@ export class F1Physics2026 {
   public aiPaceScale = 1;
   public aiLineBiasM = 0;
   public aiSpeedCapMs = Infinity;
+  /**
+   * A plan to drive (`sim/ai/drive-plan.ts`): its line and its cornering-and-braking limit, handed to the racing line
+   * driver as its profile instead of the one it builds itself; null keeps its own
+   */
+  public aiPlan: AiDrivePlan | null = null;
+  private planProfileCache: { plan: AiDrivePlan; profile: SpeedProfile } | null = null;
 
   // Three.js world transform outputs
   public worldPosition = new THREE.Vector3();
@@ -710,8 +719,19 @@ export class F1Physics2026 {
   }
 
   public setAeroWakeState(wake: AeroWakeState): void {
-    this.aeroWakeState = wake;
+    this.lastWake = wake;
+    this.aeroWakeState = withDamage(wake, this.damage) ?? wake;
   }
+
+  /** Damage (car-damage.ts): on the VF26 model the aero loss only, through the wake multipliers */
+  public setDamageEffects(effects: Readonly<CarDamageEffects> | null): void {
+    this.damage = effects;
+    if (this.lastWake) this.aeroWakeState = withDamage(this.lastWake, effects) ?? this.lastWake;
+  }
+  private lastWake: AeroWakeState | null = null;
+  private damage: Readonly<CarDamageEffects> | null = null;
+  /** The car puts itself back on the line when stuck (off in a race: the field rejoins its cars) */
+  public aiSelfRecovery = true;
 
   public setTrackEvolutionSample(sample: TrackEvolutionSample): void {
     if (!Number.isFinite(sample.gripMultiplier) || !Number.isFinite(sample.trackTempC)) return;
@@ -1274,7 +1294,7 @@ export class F1Physics2026 {
    * (the line follower cannot turn it round), is put back on the AI line
    */
   private recoverStuckAi(dtSeconds: number): void {
-    if (!this.aiAutopilot) {
+    if (!this.aiAutopilot || !this.aiSelfRecovery) {
       this.aiStuckS = 0;
       return;
     }
@@ -1555,11 +1575,14 @@ export class F1Physics2026 {
     let brake = inputs.brake;
     let steerNorm: number; // + = right
 
+    let launchPedal: number | undefined;
+
     if (this.aiAutopilot) {
       // The player's steering assist holds nothing while the autopilot drives, so a hand-back starts from centre
       this.steeringAssist.reset();
       this.lastObservation = this.buildObservation(sample);
-      const plan = this.getAiPlan();
+      const own = this.getAiPlan();
+      const plan = this.aiPlan ? { profile: this.planProfile(this.aiPlan), params: own.params } : own;
       plan.params.paceScale = this.aiPaceScale;
       plan.params.lineBiasM = this.aiLineBiasM;
       plan.params.speedCapMs = this.aiSpeedCapMs;
@@ -1600,6 +1623,10 @@ export class F1Physics2026 {
       const throttleWant = spin > 0.085 ? Math.max(0.2, 1 - (spin - 0.085) * 10) : 1;
       this.aiThrottleTrim += (throttleWant - this.aiThrottleTrim) * Math.min(1, (throttleWant < this.aiThrottleTrim ? 40 : 6) * dt);
       throttle = ai.throttleCmd * this.aiThrottleTrim;
+      // The auto-clutch's launch revs follow the pedal the driver wants, not its feathering of the wheelspin: with the
+      // feathered pedal the launch window came down at the first spin, the engine fell into the anti-stall and the
+      // clutch let go (the AI lost ~0.25 s to 100 km/h on a flat-out launch)
+      launchPedal = ai.throttleCmd;
       // Brake only up to what the less-loaded front tyre can take (left/right torque is equal),
       // using the grip left over after its current cornering force
       // Front torque per wheel at pedal p is T·(bias + mig·p)·p with the migration, so the cap is the root of
@@ -1643,7 +1670,7 @@ export class F1Physics2026 {
       }
     }
 
-    drv.launchPedal = throttle;
+    drv.launchPedal = launchPedal ?? throttle;
 
     // ---- 2. Driver aids (12-stage 130 Hz TC1/TC2 + Lateral-G & 12-stage 240 Hz 4-channel ABS) ----
     const tcLv = THREE.MathUtils.clamp(Math.round(this.tcLevel), 0, 12);
@@ -2927,6 +2954,34 @@ export class F1Physics2026 {
   }
 
   /** Target-speed profile for the AI, rebuilt when the aero package or the road's wet grip changes */
+  /** A drive plan as the racing line driver's profile, on the track samples it reads (built once per plan) */
+  private planProfile(plan: AiDrivePlan): SpeedProfile {
+    const c = this.planProfileCache;
+    if (c && c.plan === plan) return c.profile;
+    const samples = this.track.samples;
+    const n = samples.length;
+    const ds = plan.track.ds;
+    const lineOffsetM = new Float64Array(n), curvature = new Float64Array(n), speedMs = new Float64Array(n);
+    const pointX = new Float64Array(n), pointZ = new Float64Array(n), segLenM = new Float64Array(n);
+    for (let i = 0; i < n; i++) {
+      const smp = samples[i];
+      const off = sampleGrid(plan.n, smp.s, ds);
+      lineOffsetM[i] = off;
+      curvature[i] = sampleGrid(plan.kappa, smp.s, ds);
+      speedMs[i] = sampleGrid(plan.v, smp.s, ds);
+      const bl = Math.hypot(smp.binormal.x, smp.binormal.z) || 1;
+      pointX[i] = smp.position.x + (smp.binormal.x / bl) * off;
+      pointZ[i] = smp.position.z + (smp.binormal.z / bl) * off;
+    }
+    for (let i = 0; i < n; i++) {
+      const j = (i + 1) % n;
+      segLenM[i] = Math.max(0.1, Math.hypot(pointX[j] - pointX[i], pointZ[j] - pointZ[i]));
+    }
+    const profile = { lineOffsetM, curvature, speedMs, brakeEnvelopeMs: speedMs, segLenM, pointX, pointZ } as unknown as SpeedProfile;
+    this.planProfileCache = { plan, profile };
+    return profile;
+  }
+
   private getAiPlan(): { profile: SpeedProfile; params: AiVehicleParams } {
     const grip = this.aiPlanGrip();
     // Planned on the wings the car actually runs, garage clicks included

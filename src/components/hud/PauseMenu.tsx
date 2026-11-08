@@ -60,6 +60,47 @@ import { LibreCorsaLogo } from "@/components/ui/LibreCorsaLogo";
 import { AI_SKILL_DEFAULT, AI_SKILL_LEVELS, aiSkillLabel } from "@/lib/sim/ai-tuning";
 import { CAMERA_MODES } from "@/lib/render/camera-modes";
 import { TYRE_SETUP_LIMITS } from "@/lib/sim/tyre-setup";
+import {
+  AI_GRID_LABELS,
+  DEFAULT_RACE_SETUP,
+  PLAYER_GRID_LABELS,
+  RACE_LAP_OPTIONS,
+  RACE_OPPONENT_OPTIONS,
+  RACE_AGGRESSION_LABELS,
+  RACE_START_LABELS,
+  type RaceSetup,
+} from "@/lib/sim/race-setup";
+import { DAMAGE_LEVEL_LABELS, DAMAGE_LEVELS } from "@/lib/sim/car-damage";
+
+/** A row of choices as chips (the race setup) */
+function SetupChips<T extends string | number>(props: {
+  label: string;
+  value: T;
+  options: readonly T[];
+  format?: (v: T) => string;
+  onChange: (v: T) => void;
+}) {
+  return (
+    <div className="flex min-h-[44px] flex-wrap items-center justify-between gap-x-3 gap-y-1 px-2">
+      <span className="text-[15px] leading-tight font-bold text-[#F5F7FA]">{props.label}</span>
+      <span className="flex flex-wrap gap-1.5">
+        {props.options.map((o) => (
+          <button
+            key={String(o)}
+            type="button"
+            aria-pressed={props.value === o}
+            onClick={() => props.onChange(o)}
+            className={`min-h-[30px] cursor-pointer rounded-full px-3 font-f1-mono text-[11px] font-extrabold tracking-[0.1em] uppercase transition-colors ${
+              props.value === o ? "bg-[#CCFF00] text-[#08090D]" : "border border-[#262B3D] text-[#8E96AA] hover:border-[#CCFF00] hover:text-[#CCFF00]"
+            }`}
+          >
+            {props.format ? props.format(o) : String(o)}
+          </button>
+        ))}
+      </span>
+    </div>
+  );
+}
 
 export interface PauseMenuProps extends MultiplayerPanelProps {
   telemetry: CarTelemetry;
@@ -91,6 +132,9 @@ export interface PauseMenuProps extends MultiplayerPanelProps {
   /** AI opponents' skill (0 Rookie … 100 Alien) and its setter */
   aiSkill?: number;
   onChangeAiSkill?: (skill: number) => void;
+  /** AI race setup (laps, field, grid, damage, start) and its setter; applies from the next start */
+  raceSetup?: RaceSetup;
+  onChangeRaceSetup?: (patch: Partial<RaceSetup>) => void;
   /** The chosen car, and the vehicle model it drives on (setups and records are per vehicle model) */
   carId: CarId;
   vehicleModel: VehicleModelId;
@@ -758,6 +802,29 @@ export const SessionPanel: React.FC<PauseMenuProps> = (p) => {
                 </button>
               ))}
             </div>
+          </div>
+        ) : null}
+        {p.onChangeRaceSetup ? (
+          <div className="border-t border-[#262B3D] pt-1.5 pb-1">
+            <div className="flex items-baseline justify-between px-2 pb-0.5">
+              <span className="font-f1-mono text-[10px] font-extrabold tracking-[0.18em] text-[#8E96AA] uppercase">Race setup</span>
+              <span className="font-f1-mono text-[10px] text-[#5A6275]">From the next start</span>
+            </div>
+            {(() => {
+              const r = p.raceSetup ?? DEFAULT_RACE_SETUP;
+              const set = p.onChangeRaceSetup;
+              return (
+                <>
+                  <SetupChips label="Laps" value={r.laps} options={RACE_LAP_OPTIONS} onChange={(laps) => set({ laps })} />
+                  <SetupChips label="Opponents" value={r.opponents} options={RACE_OPPONENT_OPTIONS} onChange={(opponents) => set({ opponents })} />
+                  <SetupChips label="Your grid slot" value={r.grid} options={["back", "middle", "front", "random"] as const} format={(v) => PLAYER_GRID_LABELS[v]} onChange={(grid) => set({ grid })} />
+                  <SetupChips label="AI grid" value={r.aiGrid} options={["qualifying", "pace", "reversed"] as const} format={(v) => AI_GRID_LABELS[v]} onChange={(aiGrid) => set({ aiGrid })} />
+                  <SetupChips label="Damage" value={r.damage} options={DAMAGE_LEVELS} format={(v) => DAMAGE_LEVEL_LABELS[v]} onChange={(damage) => set({ damage })} />
+                  <SetupChips label="Start" value={r.start} options={["standing", "rolling"] as const} format={(v) => RACE_START_LABELS[v]} onChange={(start) => set({ start })} />
+                  <SetupChips label="Racing" value={r.aggression} options={["clean", "normal", "hard"] as const} format={(v) => RACE_AGGRESSION_LABELS[v]} onChange={(aggression) => set({ aggression })} />
+                </>
+              );
+            })()}
           </div>
         ) : null}
         {p.onChangeCockpitFov ? (

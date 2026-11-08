@@ -43,6 +43,8 @@ import { FfbMeter } from "./hud/FfbMeter";
 import { LapSummary } from "./hud/LapSummary";
 import { RaceResults } from "./hud/RaceResults";
 import { RaceControlBanner } from "./hud/RaceControlBanner";
+import { RaceIncidentFeed } from "./hud/RaceIncidentFeed";
+import { DamageWidget } from "./hud/DamageWidget";
 import { ReplayBar } from "./hud/ReplayBar";
 import { TouchControls, type TouchControlsProps } from "./hud/TouchControls";
 import { getTrackInfo } from "@/lib/track-registry";
@@ -102,6 +104,9 @@ interface F1TelemetryHudProps extends MultiplayerPanelProps {
   /** AI opponents' skill 0..100 and its setter (pause menu) */
   aiSkill?: number;
   onChangeAiSkill?: (skill: number) => void;
+  /** AI race setup and its setter (pause menu) */
+  raceSetup?: import("@/lib/sim/race-setup").RaceSetup;
+  onChangeRaceSetup?: (patch: Partial<import("@/lib/sim/race-setup").RaceSetup>) => void;
   carId: CarId;
   vehicleModel: VehicleModelId;
   onChangeCar: (car: CarId) => void;
@@ -247,8 +252,16 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
   const classic = !phone && preset === "classic";
   const minimal = !phone && preset === "minimal";
   // Split gaps (AI races, multiplayer) and weather sit under the top corner groups, not in the middle of the screen
-  const gapsNode =
+  const splitsNode =
     hud?.splitGaps !== false && !phone && !lightsPhase && race?.phase === "racing" ? <SplitGaps splits={race.splits} variant="panel" /> : null;
+  // The split gaps, and the car's damage once something is broken (AI race)
+  const gapsNode =
+    splitsNode || race?.damage ? (
+      <>
+        {splitsNode}
+        <DamageWidget damage={race?.damage} />
+      </>
+    ) : null;
   const weatherNode = props.weather && !phone && !minimal && !lightsPhase ? <WeatherBadge weather={props.weather} variant="panel" /> : null;
 
   const showTyres = classic;
@@ -361,6 +374,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
         {!lightsPhase ? (
           <RaceControlBanner status={telemetry.trackLimits} offTrack={telemetry.offTrack} race={Boolean(race)} />
         ) : null}
+        {!lightsPhase && race ? <RaceIncidentFeed messages={race.raceControl} yellow={race.yellow} /> : null}
         {drsNotice ? (
           <div
             className="inline-flex h-10 items-center gap-2.5 rounded-full border pr-5 pl-2 shadow-[0_14px_40px_rgba(0,0,0,0.5)]"

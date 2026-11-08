@@ -23,6 +23,8 @@ import { RequestPanel, type FeedbackContext } from "./RequestPanel";
 import { CircuitBrowser } from "./CircuitBrowser";
 import { TrackOutline } from "./circuit-outline";
 import { ConditionsPanel, type ConditionsPanelProps } from "./ConditionsPanel";
+import { RaceSetupPanel } from "./RaceSetupPanel";
+import { DEFAULT_RACE_SETUP, RACE_START_LABELS } from "@/lib/sim/race-setup";
 import { TIME_OF_DAY_LABELS, WEATHER_LABELS } from "@/lib/sim/weather";
 import { LibreCorsaLogo } from "@/components/ui/LibreCorsaLogo";
 import { AI_SKILL_DEFAULT, aiSkillLabel } from "@/lib/sim/ai-tuning";
@@ -48,11 +50,12 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-type TitlePanel = "circuit" | "conditions" | "garage" | "multiplayer" | "leaderboard" | "display" | "credits" | "request";
+type TitlePanel = "race" | "circuit" | "conditions" | "garage" | "multiplayer" | "leaderboard" | "display" | "credits" | "request";
 
 export interface TitleMenuProps extends PauseMenuProps {
   firstRun: boolean;
   onDrive: () => void;
+  /** Starts the AI race (from the race setup panel's Start race) */
   onRaceAi: () => void;
   onControls: () => void;
   initialPanel?: TitlePanel | null;
@@ -527,6 +530,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
   const activeTrackId = ACTIVE_TRACK_ID;
   const map = useMemo(() => (activeTrackId === trackId ? buildHudMap(getTrackData()) : null), [activeTrackId, trackId]);
 
+  const raceSetup = props.raceSetup ?? DEFAULT_RACE_SETUP;
   const items: MenuItem[] = [
     {
       id: "drive",
@@ -536,7 +540,14 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
       run: onDrive,
       primary: true,
     },
-    { id: "race", label: "Race AI", detail: `5 AI cars · ${aiSkillLabel(props.aiSkill ?? AI_SKILL_DEFAULT)} · standing start`, icon: Flag, run: onRaceAi },
+    {
+      id: "race",
+      label: "Race AI",
+      detail: `${raceSetup.opponents} AI cars · ${raceSetup.laps} laps · ${aiSkillLabel(props.aiSkill ?? AI_SKILL_DEFAULT)} · ${RACE_START_LABELS[raceSetup.start].toLowerCase()} start`,
+      icon: Flag,
+      // The race is set up first; its panel has the start (without a setter there is nothing to set: straight to the lights)
+      ...(props.onChangeRaceSetup ? { panel: "race" as const, run: () => openPanel("race") } : { run: onRaceAi }),
+    },
     {
       id: "multiplayer",
       label: "Multiplayer",
@@ -615,6 +626,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
 
   const panelTitle = items.find((i) => i.panel === panel)?.label;
   const frameHeading: Record<TitlePanel, { kicker: string; color?: string }> = {
+    race: { kicker: `Race setup · ${track.name}`, color: "#CCFF00" },
     circuit: { kicker: "Circuit selection" },
     conditions: { kicker: "Weather, time of day and realism", color: "#00E5FF" },
     garage: { kicker: "Engineer's garage · setup, presets and livery" },
@@ -730,6 +742,26 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
                   title={panel === "request" ? undefined : panelTitle}
                   onClose={closePanel}
                 >
+                  {panel === "race" && props.onChangeRaceSetup ? (
+                    <RaceSetupPanel
+                      setup={raceSetup}
+                      onChange={props.onChangeRaceSetup}
+                      aiSkill={props.aiSkill}
+                      onChangeAiSkill={props.onChangeAiSkill}
+                      track={track}
+                      conditionsLabel={
+                        props.conditionsPanel
+                          ? `${WEATHER_LABELS[props.conditionsPanel.conditions.weather].label} · ${TIME_OF_DAY_LABELS[props.conditionsPanel.conditions.timeOfDay]}`
+                          : undefined
+                      }
+                      car={{ title: vehicle.title, badge: vehicle.badge, color: vehicleColor }}
+                      playerCode={props.profile?.code}
+                      onOpenCircuit={() => openPanel("circuit")}
+                      onOpenConditions={props.conditionsPanel ? () => openPanel("conditions") : undefined}
+                      onOpenGarage={() => openPanel("garage")}
+                      onStart={onRaceAi}
+                    />
+                  ) : null}
                   {panel === "circuit" ? <CircuitBrowser trackId={trackId} onSelect={onSelectTrack} library={props.library} /> : null}
                   {panel === "conditions" && props.conditionsPanel ? <ConditionsPanel {...props.conditionsPanel} /> : null}
                   {panel === "garage" ? <EngineersGarage {...props} /> : null}

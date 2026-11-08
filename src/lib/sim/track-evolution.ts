@@ -310,6 +310,9 @@ export interface ObbCollisionResolution {
   nz: number;
   /** Normal closing speed at the contact point (m/s) */
   impactSpeedMs: number;
+  /** World (X, Z) of the contact point */
+  contactX: number;
+  contactZ: number;
   /** Position correction for Car A (m) */
   posDeltaA: [number, number];
   /** Position correction for Car B (m) */
@@ -333,6 +336,8 @@ const NO_COLLISION: ObbCollisionResolution = {
   nx: 0,
   nz: 0,
   impactSpeedMs: 0,
+  contactX: 0,
+  contactZ: 0,
   posDeltaA: [0, 0],
   posDeltaB: [0, 0],
   velDeltaA: [0, 0],
@@ -453,6 +458,8 @@ export function resolveCarToCarObbCollision(
       nx: bestNx,
       nz: bestNz,
       impactSpeedMs: 0,
+      contactX: cx,
+      contactZ: cz,
       posDeltaA,
       posDeltaB,
       velDeltaA: [0, 0],
@@ -500,6 +507,8 @@ export function resolveCarToCarObbCollision(
     nx: bestNx,
     nz: bestNz,
     impactSpeedMs: -vn,
+    contactX: cx,
+    contactZ: cz,
     posDeltaA,
     posDeltaB,
     velDeltaA: [-jx * invMassA, -jz * invMassA],

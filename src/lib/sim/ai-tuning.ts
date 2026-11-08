@@ -232,14 +232,23 @@ export interface AiSkillModifiers {
   cautionAdd: number;
   /** × defend */
   defendMult: number;
+  /** × each driver's pace deficit (1 − pace): below 1 the field runs closer together */
+  spread: number;
+  /**
+   * 0..1: how far the plan grip goes from the default toward the most this car drove cleanly on the circuit (its line
+   * check's `maxGrip`): 1 runs the field at the car's checked limit
+   */
+  gripReach: number;
 }
 
-// Anchors at 0 / 35 / 70 / 100. Pro is the identity (apart from a small lap-to-lap spread).
+// Anchors at 0 / 35 / 70 / 100. Pro is the identity (apart from a small lap-to-lap spread). Alien plans toward the
+// car's checked limit on the circuit (it was ~4 % of grip under it, and a player at the limit drove away from it),
+// with the field a little closer together (at half the spread, packs of equal cars spun each other off at Okayama)
 const SKILL_ANCHORS: readonly [number, AiSkillModifiers][] = [
-  [0, { paceMult: 0.94, brakeMarginAdd: 0.14, apexMult: 0.965, lapPaceSigma: 0.05, cornerBrakeSigma: 0.5, mistakesPerLap: 0.3, cautionAdd: 0.35, defendMult: 0.3 }],
-  [35, { paceMult: 0.97, brakeMarginAdd: 0.06, apexMult: 0.985, lapPaceSigma: 0.03, cornerBrakeSigma: 0.3, mistakesPerLap: 0.1, cautionAdd: 0.15, defendMult: 0.7 }],
-  [70, { paceMult: 1, brakeMarginAdd: 0, apexMult: 1, lapPaceSigma: 0.012, cornerBrakeSigma: 0.1, mistakesPerLap: 0, cautionAdd: 0, defendMult: 1 }],
-  [100, { paceMult: 1.018, brakeMarginAdd: 0, apexMult: 1.01, lapPaceSigma: 0.006, cornerBrakeSigma: 0.05, mistakesPerLap: 0, cautionAdd: -0.15, defendMult: 1.25 }],
+  [0, { paceMult: 0.94, brakeMarginAdd: 0.14, apexMult: 0.965, lapPaceSigma: 0.05, cornerBrakeSigma: 0.5, mistakesPerLap: 0.3, cautionAdd: 0.35, defendMult: 0.3, spread: 1, gripReach: 0 }],
+  [35, { paceMult: 0.97, brakeMarginAdd: 0.06, apexMult: 0.985, lapPaceSigma: 0.03, cornerBrakeSigma: 0.3, mistakesPerLap: 0.1, cautionAdd: 0.15, defendMult: 0.7, spread: 1, gripReach: 0 }],
+  [70, { paceMult: 1, brakeMarginAdd: 0, apexMult: 1, lapPaceSigma: 0.012, cornerBrakeSigma: 0.1, mistakesPerLap: 0, cautionAdd: 0, defendMult: 1, spread: 1, gripReach: 0 }],
+  [100, { paceMult: 1.012, brakeMarginAdd: 0, apexMult: 1.01, lapPaceSigma: 0.006, cornerBrakeSigma: 0.05, mistakesPerLap: 0, cautionAdd: -0.15, defendMult: 1.25, spread: 0.75, gripReach: 1 }],
 ];
 
 export function aiSkillModifiers(skill: number): AiSkillModifiers {

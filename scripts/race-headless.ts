@@ -42,6 +42,8 @@ const seed = Number(opt('seed', '1'));
 const learning = !flag('no-learn');
 const sweep = opt('sweep', '');
 const weather = opt('weather', 'clear') as WeatherPresetId;
+const gridOrder = opt('grid', 'pace') as 'pace' | 'qualifying';
+const damage = opt('damage', 'reduced') as 'off' | 'reduced' | 'full';
 const DT = 1 / 120;
 
 if (!WEATHER_PRESETS.includes(weather)) {
@@ -92,6 +94,8 @@ function race(label: string, opts: { skill: number; learning: boolean; library?:
     spectate: true,
     trackId,
     library: opts.library,
+    gridOrder,
+    damage,
   });
   field.raceLaps = laps;
   field.startRace(true);
@@ -137,13 +141,14 @@ function printRace(run: RaceRun): void {
   console.log(`simulated ${run.simS.toFixed(1)} s in ${run.wallS.toFixed(1)} s (${(run.simS / Math.max(0.01, run.wallS)).toFixed(1)}× real time)`);
   console.log(
     `${padR('Pos', 4)}${padR('Car', 5)}${pad('Grid', 5)}${pad('Pace', 7)}${pad('Time / gap', 13)}${pad('Best', 10)}${pad('Avg', 10)}${pad('σ lap', 7)}` +
-      `${pad('Off', 5)}${pad('Wall', 5)}${pad('Stuck', 6)}${pad('Cont', 5)}${pad('Mist', 5)}${pad('±Pos', 5)}  Learnt (corners: brake+ / apex)`
+      `${pad('Off', 5)}${pad('Wall', 5)}${pad('Stuck', 6)}${pad('Cont', 5)}${pad('Mist', 5)}${pad('Spin', 5)}${pad('Pass', 5)}${pad('Dmg', 5)}${pad('Pen', 5)}${pad('±Pos', 5)}  Learnt (corners: brake+ / apex)`
   );
   for (const c of byPos) {
     const fl = flying(c.stats.lapTimesMs);
     const lapsDone = Math.floor(c.distM / L);
-    const time =
-      c === winner
+    const time = c.retired
+      ? 'DNF'
+      : c === winner
         ? c.finishTimeS !== null
           ? fmtLap(c.finishTimeS * 1000)
           : `${lapsDone} laps`
@@ -163,8 +168,13 @@ function printRace(run: RaceRun): void {
     console.log(
       `${padR(c.position, 4)}${padR(c.code, 5)}${pad(c.gridPos, 5)}${pad(c.pace.toFixed(3), 7)}${pad(time, 13)}${pad(fmtLap(c.bestLapMs), 10)}` +
         `${pad(fmtLap(mean(fl)), 10)}${pad(fl.length > 1 ? (sd(fl) / 1000).toFixed(2) : '-', 7)}` +
-        `${pad(c.stats.offTracks, 5)}${pad(c.stats.wallHits, 5)}${pad(c.stats.stuckRecoveries, 6)}${pad(c.stats.contacts, 5)}${pad(c.stats.mistakes, 5)}${pad(moves, 5)}  ${learntStr}`
+        `${pad(c.stats.offTracks, 5)}${pad(c.stats.wallHits, 5)}${pad(c.stats.stuckRecoveries, 6)}${pad(c.stats.contacts, 5)}${pad(c.stats.mistakes, 5)}${pad(c.stats.spins, 5)}${pad(c.stats.passes, 5)}${pad(Math.round(c.damage * 100), 5)}${pad(c.penaltyS || '-', 5)}${pad(moves, 5)}  ${learntStr}`
     );
+  }
+  const rc = r.raceControl.filter((m) => m.kind !== 'yellow' && m.kind !== 'green');
+  if (rc.length) {
+    console.log('\nRace control:');
+    for (const m of rc) console.log(`  ${(m.atS).toFixed(1).padStart(6)} s  ${m.text}${m.detail ? ` · ${m.detail}` : ''}`);
   }
   if (flag('laps-table')) {
     console.log('\nLap times (lap 1 from the grid):');

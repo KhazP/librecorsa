@@ -182,6 +182,8 @@ const WALL_SKIN_M = 0.001;
 const WALL_Y_SLACK_M = 0.3;
 /** Impact speed (m/s) that raises a `WALL_IMPACT` event */
 const WALL_IMPACT_EVENT_MS = 2;
+/** A hit this much harder than the step's hardest so far, while already touching, is a new impact (m/s) */
+const WALL_IMPACT_HARDER_MS = 4;
 
 export const WHEEL_NAMES = ['LF', 'RF', 'LR', 'RR'] as const;
 export type WheelName = (typeof WHEEL_NAMES)[number];
@@ -210,7 +212,13 @@ export type VehicleEvent =
   /** Crossed a `ZoneData_DRSZone` detection point; `eligible` = DRS may open in that zone */
   | { type: 'DRS_DETECTION'; zone: string; eligible: boolean }
   /** Started touching a barrier at `speedMs` into the wall */
-  | { type: 'WALL_IMPACT'; speedMs: number };
+  | {
+      type: 'WALL_IMPACT';
+      speedMs: number;
+      /** Where the hardest-hit point was, in the car frame (m, + left / + forward) */
+      localX: number;
+      localZ: number;
+    };
 
 export interface VehiclePhysicsOptions {
   ground: GroundQuery;
@@ -733,6 +741,10 @@ export class VehiclePhysics {
   /** Lap progress from `locateProgress` (NaN without it) */
   public trackProgress = Number.NaN;
   public aeroWake: AeroWakeState = { ...DEFAULT_AERO_WAKE };
+  /** Damage (car-damage.ts), per wheel LF, RF, LR, RR: grip multiplier and extra toe (rad, + in); engine torque multiplier */
+  public readonly damageGrip = new Float64Array([1, 1, 1, 1]);
+  public readonly damageToeRad = new Float64Array(4);
+  public damagePowerMult = 1;
   public trackEvolution: TrackEvolutionSample = { ...DEFAULT_TRACK_EVOLUTION_SAMPLE };
   /** Water film under the car (mm), per-wheel water film [LF, RF, LR, RR] (mm), and how wet the road acts (0..1) */
   public waterMm = 0;
@@ -788,6 +800,8 @@ export class VehiclePhysics {
   private wallContactNow = false;
   private wallContactStep = false;
   private wallImpactStep = 0;
+  /** Hardest hit of the contact going on now (m/s); 0 once off the barrier */
+  private wallContactPeakMs = 0;
 
   private timeAccumulator = 0;
   private prevInputs = { shiftUp: false, shiftDown: false, drs: false };
@@ -1845,7 +1859,7 @@ export class VehiclePhysics {
       const kin = w.isFront
         ? (w.isLeft ? frontKin.left : frontKin.right)
         : (w.isLeft ? rearKin.left : rearKin.right);
-      w.toeRad = kin.bumpSteerToeInRad;
+      w.toeRad = kin.bumpSteerToeInRad + this.damageToeRad[i];
       w.casterTrailM = kin.casterTrailM;
       w.scrubRadiusM = kin.scrubRadiusM;
 
@@ -1955,7 +1969,8 @@ export class VehiclePhysics {
           degradation *
           g.grip *
           this.trackEvolution.gripMultiplier *
-          wet;
+          wet *
+          this.damageGrip[i];
 
         // Camber grip: leaning into the force direction (force opposes the slip)
         const forceSign = w.tanSlipAngle > 0 ? -1 : 1;
@@ -2176,6 +2191,8 @@ export class VehiclePhysics {
     const n = walls.near(p.x, p.z, this.wallQueryRadius + Math.hypot(p.x - prev.x, p.z - prev.z), this.wallIds);
     if (n === 0) return;
     let impact = 0;
+    let hitX = 0;
+    let hitZ = 0;
     if (wallSweep(walls, this.wallIds, n, prev.x, prev.z, p.x, p.z, p.y, WALL_Y_SLACK_M, _wallHit) >= 0) {
       this.wallContactNow = true;
       p.x += _wallHit.nx * (_wallHit.depth + WALL_SKIN_M);
@@ -2189,14 +2206,25 @@ export class VehiclePhysics {
       this.wallContactNow = true;
       _r.subVectors(_p, p);
       _r.y = 0;
-      impact = Math.max(impact, this.wallImpulse(_r, _wallHit.nx, _wallHit.nz));
+      const hitMs = this.wallImpulse(_r, _wallHit.nx, _wallHit.nz);
+      if (hitMs > impact) {
+        impact = hitMs;
+        hitX = probe.x;
+        hitZ = probe.z;
+      }
       p.x += _wallHit.nx * (depth + WALL_SKIN_M);
       p.z += _wallHit.nz * (depth + WALL_SKIN_M);
     }
     if (this.wallContactNow) {
       this.wallContactStep = true;
+      // A new hit, or a harder one while still scraping along (a slide into the barrier, then the nose)
+      if (!wasTouching) this.wallContactPeakMs = 0;
+      const harder = impact >= this.wallContactPeakMs + WALL_IMPACT_HARDER_MS;
+      this.wallContactPeakMs = Math.max(this.wallContactPeakMs, impact);
       this.wallImpactStep = Math.max(this.wallImpactStep, impact);
-      if (!wasTouching && impact >= WALL_IMPACT_EVENT_MS) this.onEvent?.({ type: 'WALL_IMPACT', speedMs: impact });
+      if ((!wasTouching || harder) && impact >= WALL_IMPACT_EVENT_MS) {
+        this.onEvent?.({ type: 'WALL_IMPACT', speedMs: impact, localX: hitX, localZ: hitZ });
+      }
     }
   }
 
@@ -2254,6 +2282,7 @@ export class VehiclePhysics {
       (plate * this.luts.power.evaluate(rpm) * engineMapTorqueScale * 1000) / omegaE -
       (1 - plate) * this.luts.coast.evaluate(rpm) * mode.coastTorqueScale * this.engineBrakingScale;
     if (this.shiftTimer > 0 && tIce > 0) tIce *= gb.shiftTorqueFraction;
+    if (tIce > 0) tIce *= this.damagePowerMult;
     // Turbo lag: while the boost still trails the demand (≈0.14 s spool), up to TURBO_LAG_TORQUE_LOSS of the torque
     // is missing. Kept small: the torque curve is the steady-state, full-boost one
     if (this.turbocharged && tIce > 0) {

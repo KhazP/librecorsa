@@ -132,10 +132,12 @@ export interface RumbleMixState {
   impactEnvelope: number;
   /** Running estimate of the car's weight m·g (N): Σ wheel load / verticalG, which steadies on it; 0 until learnt */
   weightN: number;
+  /** The last car-to-car contact felt (`CarTelemetry.carContact.seq`) */
+  contactSeq: number;
 }
 
 export function createRumbleMixState(): RumbleMixState {
-  return { lastTimeS: NaN, roughHold: [0, 0, 0, 0], impactEnvelope: 0, weightN: 0 };
+  return { lastTimeS: NaN, roughHold: [0, 0, 0, 0], impactEnvelope: 0, weightN: 0, contactSeq: 0 };
 }
 
 /** Back to a fresh state (pause, toggle off, unmount) */
@@ -218,6 +220,11 @@ function impactPulse(
   if (crash) {
     const over = clamp01((horizontalG - CRASH_G) / CRASH_G);
     hit = Math.max(hit, IMPACT_CRASH_FLOOR + (1 - IMPACT_CRASH_FLOOR) * over);
+  }
+  // Another car's hit: the contact impulse moves the car between physics steps, so it never shows in the g-forces
+  if (mix && t.carContact && t.carContact.seq !== mix.contactSeq) {
+    mix.contactSeq = t.carContact.seq;
+    hit = Math.max(hit, IMPACT_CRASH_FLOOR + (1 - IMPACT_CRASH_FLOOR) * clamp01(t.carContact.speedMs / 12));
   }
   if (!mix) return hit;
   const decay = dt > 0 ? Math.exp(-dt / IMPACT_DECAY_S) : 0;

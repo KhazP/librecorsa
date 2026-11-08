@@ -34,7 +34,8 @@ import { CameraRig } from "@/lib/render/camera-rig";
 import { LapDeltaTracker } from "@/lib/sim/lap-delta";
 import { TrackLimitsMonitor } from "@/lib/sim/track-limits";
 import { SimVisualFxManager } from "@/lib/sim/visual-fx";
-import { AiOpponentField, AI_DRIVERS, resolvePlayerVsRemoteCar } from "@/lib/sim/ai-opponents";
+import { AiOpponentField, aiDriversFor, resolvePlayerVsRemoteCar } from "@/lib/sim/ai-opponents";
+import { startAiRace } from "@/lib/sim/race-setup";
 import { peerWakeEmitters, TrackEnvironment } from "@/lib/sim/track-environment";
 import type { WakeEmitterCar } from "@/lib/sim/aero-wake";
 import { GamepadHaptics } from "@/lib/sim/gamepad-haptics";
@@ -567,17 +568,20 @@ export class DriveSession {
 
     /**
      * An AI field built ahead, while the player is in the menus: building five AI cars (physics, autopilot plans) takes
-     * a few hundred ms, which would otherwise be the first frame of the race. Only valid for the car it was built against.
+     * a few hundred ms, which would otherwise be the first frame of the race. Only valid for the car and the field size
+     * it was built for.
      */
-    let aiFieldSpare: { field: AiOpponentField; physics: SimulatorCar } | null = null;
-    /** A new AI field round the player's car, at the player's chosen skill */
-    const buildAiField = (car: SimulatorCar) => new AiOpponentField(track, car, AI_DRIVERS, getTrackEnv(), { skill: settings.aiSkill });
+    let aiFieldSpare: { field: AiOpponentField; physics: SimulatorCar; opponents: number } | null = null;
+    /** A new AI field round the player's car, of the race setup's size, at the player's chosen skill */
+    const buildAiField = (car: SimulatorCar) =>
+      new AiOpponentField(track, car, aiDriversFor(settings.race.opponents), getTrackEnv(), { skill: settings.aiSkill });
     this.prepareAiField = () => {
       const run = () => {
         // Never while driving: the build would be a hitch on track instead
         if (disposed || appPhaseNow === "driving" || appPhaseNow === "loading") return;
-        if (aiFieldSpare?.physics === physics) return;
-        aiFieldSpare = { field: buildAiField(physics), physics };
+        const opponents = settings.race.opponents;
+        if (aiFieldSpare?.physics === physics && aiFieldSpare.opponents === opponents) return;
+        aiFieldSpare = { field: buildAiField(physics), physics, opponents };
       };
       scheduleIdle(run);
     };
@@ -585,7 +589,7 @@ export class DriveSession {
       const spare = aiFieldSpare;
       aiFieldSpare = null;
       const skill = settings.aiSkill;
-      if (spare && spare.physics === physics) {
+      if (spare && spare.physics === physics && spare.opponents === settings.race.opponents) {
         if (spare.field.skill !== skill) spare.field.setSkill(skill);
         return spare.field;
       }
@@ -612,7 +616,7 @@ export class DriveSession {
         const field = this.takeAiField();
         if (trackRoot) field.attachTrackRoot(trackRoot);
         this.setRace({ kind: "ai", field });
-        field.startRace(true);
+        startAiRace(field, settings.race);
       }
       setTelemetry({ ...physics.telemetry });
       // In the menus, the next race's field is built for the new car
@@ -818,6 +822,17 @@ export class DriveSession {
       if (next.graphics.quality !== prev.graphics.quality || next.graphics.renderScale !== prev.graphics.renderScale) {
         this.applyGraphics(next.graphics.quality, next.graphics.renderScale);
       }
+      // Another field size needs another field: a race running restarts from the lights with it
+      if (next.race.opponents !== prev.race.opponents) {
+        aiFieldSpare = null;
+        if (raceNow().kind === "ai") {
+          this.resetRun("race");
+          const field = this.takeAiField();
+          if (trackRoot) field.attachTrackRoot(trackRoot);
+          this.setRace({ kind: "ai", field });
+          startAiRace(field, next.race);
+        }
+      }
     };
     this.setTireCompound = (compound) => {
       if (disposed) return;
@@ -1009,7 +1024,7 @@ export class DriveSession {
       if (race.kind === "mp") return;
       // Out of a replay first (the reset does that), then the car moves
       this.resetRun("restart");
-      if (race.kind === "ai") race.field.startRace(true);
+      if (race.kind === "ai") startAiRace(race.field, settings.race);
       else physics.resetToStartGrid(true);
     };
 
