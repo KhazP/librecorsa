@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { TURN_METADATA, type BuiltTrackData } from "@/lib/track-data";
+import { LIVERIES, TURN_METADATA, type BuiltTrackData } from "@/lib/track-data";
 import { F1Physics2026, type ControlInputs } from "@/lib/f1-physics-2026";
 import { trackColliders } from "@/lib/sim/track-colliders";
 import type { SimulatorCar } from "@/lib/sim/simulator-car";
@@ -67,10 +67,10 @@ import { addContactShadow, seatContactShadow } from "@/lib/render/contact-shadow
 import { buildKeyLookup, HUD_TOGGLE_EVENT, type KeyAction } from "@/lib/input/bindings";
 import { carWheelLockDeg, connectedPads, DeviceInputReader, findPad } from "@/lib/input/device-input";
 import { webHidFfb, wheelFfb } from "@/lib/input/wheel-ffb";
-import type { SteeringAssistSettings } from "@/lib/sim/steering-assist";
+import { steeringAssistSettings } from "@/lib/sim/steering-assist";
 import { axleSlipFromTelemetry, createAxleSlipSample } from "@/lib/sim/tyre-slip";
-import { clampFov, DEFAULT_KEYBOARD_TUNING, type PlayerSettings } from "@/lib/settings/player-settings";
-import type { AeroSetupPreset, CameraMode, CarTelemetry, LiveryConfig, RadarBlip, TireCompound, TyreSetup, VehicleModelId } from "@/types/f1";
+import { clampFov, DEFAULT_KEYBOARD_TUNING, DEFAULT_PLAYER_SETTINGS, type PlayerSettings } from "@/lib/settings/player-settings";
+import type { AeroSetupPreset, CameraMode, CarTelemetry, RadarBlip, TireCompound, TyreSetup, VehicleModelId } from "@/types/f1";
 
 /** Matches the aero package the track's target speeds / braking markers are computed for */
 export const DEFAULT_AERO_PRESET: AeroSetupPreset = "balanced";
@@ -183,15 +183,11 @@ export interface ReplayUi {
 /** What the drive reads and writes on the component (refs, state setters and callbacks) */
 export interface DriveSessionHost {
   aiFieldSpareRef: Cell<{ field: AiOpponentField; physics: SimulatorCar } | null>;
-  assistSettingsRef: Cell<SteeringAssistSettings>;
   audioRef: Cell<F1AudioEngine2026 | null>;
   autopilotPaceRef: Cell<{ car: unknown; pace: number }>;
   boostLatchRef: Cell<boolean>;
-  cameraModeRef: Cell<CameraMode>;
   carCockpitFovRef: Cell<number>;
   carIdRef: Cell<CarId>;
-  carRigRef: Cell<SimCarRig | null>;
-  cockpitFovRef: Cell<number | null>;
   cycleCamera: () => void;
   getTrackEnv: () => TrackEnvironment;
   ghostRef: Cell<GhostPlayer | null>;
@@ -200,18 +196,14 @@ export interface DriveSessionHost {
   hapticsRef: Cell<GamepadHaptics | null>;
   kbInputRef: Cell<{ throttle: number; brake: number }>;
   kbPedalAssistRef: Cell<KeyboardPedalAssist>;
-  keyLookupRef: Cell<ReturnType<typeof buildKeyLookup>>;
   keysRef: Cell<DriveKeys>;
   lapRecorderRef: Cell<LapRecorder | null>;
-  liveryRef: Cell<LiveryConfig>;
-  mouseSteerEnabledRef: Cell<boolean>;
   mouseSteerValueRef: Cell<number>;
   onLapCompletedRef: Cell<(summary: LapSummaryData, recording: LapRecording) => void>;
   pausedRef: Cell<boolean>;
   phaseRef: Cell<AppPhase>;
   physicsRef: Cell<SimulatorCar | null>;
   prepareAiField: () => void;
-  racingLineMeshRef: Cell<THREE.Mesh | null>;
   releaseHeldKeys: () => void;
   rumbleEnabledRef: Cell<boolean>;
   setAssetsReady: SetState<boolean>;
@@ -219,7 +211,6 @@ export interface DriveSessionHost {
   setChassisSetup: SetState<ChassisSetup>;
   setDefaultTyreSetup: SetState<TyreSetup>;
   setLatch: (on: boolean) => void;
-  setMouseSteerRef: Cell<(enabled: boolean) => void>;
   setP2pStatus: SetState<P2PConnectionStatus>;
   setPauseNotice: SetState<string | null>;
   setReplayUi: SetState<ReplayUi>;
@@ -235,7 +226,6 @@ export interface DriveSessionHost {
   setRaceKind: (kind: SessionRace["kind"]) => void;
   /** The run started over (resetRun), for what the component keeps per run */
   onRunReset: (reason: RunResetReason) => void;
-  settingsRef: Cell<PlayerSettings>;
   slashCommandBufferRef: Cell<string>;
   steerLockDegRef: Cell<number | undefined>;
   takeAiField: (physics: SimulatorCar) => AiOpponentField;
@@ -267,6 +257,10 @@ export class DriveSession {
   readonly setRace: (next: SessionRace) => void;
   /** The autopilot takes or hands back the player's car; never in a multiplayer race */
   readonly toggleAutopilot: () => void;
+  /** The player's preferences: kept for the frame loop, and the ones that act on the car or the scene applied */
+  readonly applySettings: (settings: PlayerSettings) => void;
+  /** Puts the tyre compound on the car and its model */
+  readonly setTireCompound: (compound: TireCompound) => void;
   /** The replay bar's play / pause (from the start again once at the end), seek and speed */
   readonly replayTogglePlay: () => void;
   readonly replaySeek: (timeS: number) => void;
@@ -287,15 +281,11 @@ export class DriveSession {
   constructor(container: HTMLDivElement, host: DriveSessionHost) {
     const {
       aiFieldSpareRef,
-      assistSettingsRef,
       audioRef,
       autopilotPaceRef,
       boostLatchRef,
-      cameraModeRef,
       carCockpitFovRef,
       carIdRef,
-      carRigRef,
-      cockpitFovRef,
       cycleCamera,
       getTrackEnv,
       ghostRef,
@@ -304,18 +294,14 @@ export class DriveSession {
       hapticsRef,
       kbInputRef,
       kbPedalAssistRef,
-      keyLookupRef,
       keysRef,
       lapRecorderRef,
-      liveryRef,
-      mouseSteerEnabledRef,
       mouseSteerValueRef,
       onLapCompletedRef,
       pausedRef,
       phaseRef,
       physicsRef,
       prepareAiField,
-      racingLineMeshRef,
       releaseHeldKeys,
       rumbleEnabledRef,
       setAssetsReady,
@@ -323,7 +309,6 @@ export class DriveSession {
       setChassisSetup,
       setDefaultTyreSetup,
       setLatch,
-      setMouseSteerRef,
       setP2pStatus,
       setPauseNotice,
       setReplayUi,
@@ -337,7 +322,6 @@ export class DriveSession {
       setWeatherHud,
       setRaceKind,
       onRunReset,
-      settingsRef,
       slashCommandBufferRef,
       steerLockDegRef,
       takeAiField,
@@ -351,6 +335,12 @@ export class DriveSession {
     } = host;
 
     let disposed = false;
+    /** The player's preferences (applySettings), and what the frame loop derives from them */
+    let settings: PlayerSettings = DEFAULT_PLAYER_SETTINGS;
+    let keyLookup = buildKeyLookup(settings.keys);
+    let assistSettings = steeringAssistSettings(settings.padTuning, settings.keyboardTuning);
+    const liveryFor = (id: string | null) => LIVERIES.find((l) => l.id === id) ?? LIVERIES[0];
+    let livery = liveryFor(settings.liveryId);
     const raceNow = (): SessionRace => this.currentRace;
     /**
      * Bumped whenever the run on track starts over (see resetRun) and written into the telemetry every frame, so
@@ -399,7 +389,7 @@ export class DriveSession {
       }
       car.aiAutopilot = false;
       // The player's preferences from their settings; the aero package and the tyre on from the car before
-      const prefs = settingsRef.current;
+      const prefs = settings;
       car.assistPreset = prefs.assistPreset;
       car.gamepadAssistEnabled = prefs.gamepadAssist;
       car.autoGearbox = prefs.autoGearbox;
@@ -502,7 +492,7 @@ export class DriveSession {
 
     const builtCircuit = buildCircuitScene(track);
     scene.add(builtCircuit.sceneGroup);
-    racingLineMeshRef.current = builtCircuit.racingLineMesh;
+    builtCircuit.racingLineMesh.visible = settings.racingLine;
     // Track_Collider_Road / surface colliders and Track_Collider_Wall_* barriers for the f12026-car
     void builtCircuit.trackRoot.then((root) => {
       if (disposed) return;
@@ -552,19 +542,18 @@ export class DriveSession {
             url: def.modelUrl,
             chassis: model.rigConfig.chassis,
             // the rim on screen turns with the player's own (its lock is the player's when they set one)
-            steerLockDeg: carWheelLockDeg(def.physics, settingsRef.current.wheel.steerLockPerCar) / 2,
+            steerLockDeg: carWheelLockDeg(def.physics, settings.wheel.steerLockPerCar) / 2,
             floor: staticFloorOf(model.rigConfig),
             // every GT3 uses the AMG GT3's onboard and chase views, framed on its own steering wheel and front axle
             cameraAnchors: model.gt3Cockpit ? gt3RigCameraAnchors : undefined,
           })
         : model.gt3Cockpit
           ? createGt3CarRig()
-          : createF1Car2026(liveryRef.current, physics.tireCompound);
-      rig.setLivery(liveryRef.current);
+          : createF1Car2026(livery, physics.tireCompound);
+      rig.setLivery(livery);
       reflectionProbe.track(rig.root);
       addContactShadow(rig.root, def.physics);
       scene.add(rig.root);
-      carRigRef.current = rig;
       return rig;
     };
     let carRig = createCarRig(carIdRef.current);
@@ -612,8 +601,8 @@ export class DriveSession {
       turns: TURN_METADATA.map((t) => ({ number: t.number, name: t.name, sApprox: t.sApprox })),
       trackId,
       vehicle: vehicleModelRef.current,
-      driverName: settingsRef.current.profile.name,
-      driverCode: settingsRef.current.profile.code,
+      driverName: settings.profile.name,
+      driverCode: settings.profile.code,
     });
     lapRecorderRef.current = lapRecorder;
 
@@ -623,7 +612,34 @@ export class DriveSession {
       reflectionProbe.setQuality(quality === "low" ? "off" : quality);
       postFx.setSize(container.clientWidth, container.clientHeight);
     };
-    this.applyGraphics(settingsRef.current.graphics.quality, settingsRef.current.graphics.renderScale);
+    this.applyGraphics(settings.graphics.quality, settings.graphics.renderScale);
+    this.applySettings = (next) => {
+      const prev = settings;
+      if (disposed || next === prev) return;
+      settings = next;
+      if (next.keys !== prev.keys) keyLookup = buildKeyLookup(next.keys);
+      if (next.padTuning !== prev.padTuning || next.keyboardTuning !== prev.keyboardTuning) {
+        assistSettings = steeringAssistSettings(next.padTuning, next.keyboardTuning);
+      }
+      // The preferences the game applies to the car (a new car takes them in createCar)
+      if (next.assistPreset !== prev.assistPreset) physics.assistPreset = next.assistPreset;
+      if (next.gamepadAssist !== prev.gamepadAssist) physics.gamepadAssistEnabled = next.gamepadAssist;
+      if (next.autoGearbox !== prev.autoGearbox) physics.autoGearbox = next.autoGearbox;
+      builtCircuit.racingLineMesh.visible = next.racingLine;
+      if (prev.mouseSteer && !next.mouseSteer) mouseSteerValueRef.current = 0;
+      if (next.liveryId !== prev.liveryId) {
+        livery = liveryFor(next.liveryId);
+        carRig.setLivery(livery);
+      }
+      if (next.graphics.quality !== prev.graphics.quality || next.graphics.renderScale !== prev.graphics.renderScale) {
+        this.applyGraphics(next.graphics.quality, next.graphics.renderScale);
+      }
+    };
+    this.setTireCompound = (compound) => {
+      if (disposed) return;
+      physics.tireCompound = compound;
+      carRig.setTireCompound(compound);
+    };
 
     // WebXR: the headset's pose is added to a rig placed at the driver's eye every frame
     renderer.xr.enabled = true;
@@ -663,7 +679,7 @@ export class DriveSession {
     scene.add(floorSparks.points);
 
     const onMouseMove = (e: MouseEvent) => {
-      if (!mouseSteerEnabledRef.current) return;
+      if (!settings.mouseSteer) return;
       const w = Math.max(1, window.innerWidth);
       // Center 65% of screen maps smoothly to [-1, 1] steering lock with slight precision curve
       const rawNorm = ((e.clientX / w) * 2 - 1) / 0.65;
@@ -692,7 +708,7 @@ export class DriveSession {
       if (pausedRef.current) return;
 
       // [ / ] narrow / widen the onboard FOV live, unless the player bound those keys to a control
-      if ((code === "BracketLeft" || code === "BracketRight") && !keyLookupRef.current.has(code)) {
+      if ((code === "BracketLeft" || code === "BracketRight") && !keyLookup.has(code)) {
         const step = code === "BracketLeft" ? -1 : 1;
         setSettings((prev) => ({
           ...prev,
@@ -704,7 +720,7 @@ export class DriveSession {
       // Support typing "/boost" anywhere to latch 350kW MGU-K + 425kW ICE Overboost ("/" starts it unless a control
       // is bound to that key)
       if (e.key && e.key.length === 1) {
-        if (e.key === "/" && !keyLookupRef.current.has(code)) {
+        if (e.key === "/" && !keyLookup.has(code)) {
           slashCommandBufferRef.current = "/";
           return;
         } else if (slashCommandBufferRef.current.startsWith("/")) {
@@ -725,7 +741,7 @@ export class DriveSession {
         }
       }
 
-      const action = keyLookupRef.current.get(code);
+      const action = keyLookup.get(code);
       if (!action) return;
       // Held controls ignore auto-repeat anyway; toggles must not flicker while a key is held
       if (isHeldKeyAction(action)) {
@@ -766,7 +782,7 @@ export class DriveSession {
           this.toggleReplay();
           break;
         case "mouseSteer":
-          setMouseSteerRef.current(!mouseSteerEnabledRef.current);
+          setSettings((prev) => ({ ...prev, mouseSteer: !prev.mouseSteer }));
           break;
         case "mute":
           handleToggleMute();
@@ -800,7 +816,7 @@ export class DriveSession {
       ) {
         return;
       }
-      const action = keyLookupRef.current.get(e.code);
+      const action = keyLookup.get(e.code);
       if (action && isHeldKeyAction(action)) keysRef.current[HELD_KEYS[action]] = false;
     };
 
@@ -1110,13 +1126,13 @@ export class DriveSession {
       // rack directly.
       // Read every frame (also in menus / paused) so button edges never fire on a stale press
       const pads = connectedPads();
-      const device = deviceInput.read(pads, settingsRef.current, dtSeconds, vehicleModelRef.current);
+      const device = deviceInput.read(pads, settings, dtSeconds, vehicleModelRef.current);
       const appPhase = phaseRef.current;
       const inMenu = appPhase !== "driving";
       const rp = replay;
       if (rp.active && inMenu) exitReplay();
       const replaying = rp.active;
-      const settingsNow = settingsRef.current;
+      const settingsNow = settings;
       // The wheel unplugged: pause rather than hand the car to whatever pad is left (no input this frame). In a replay
       // the replay pauses with it; in the menus it waits for the car, unless by then the wheel is back (or unbound) or
       // the player has picked another device to drive with.
@@ -1217,7 +1233,7 @@ export class DriveSession {
       }
       // Wheel, mouse and touch steer the rack directly; the car's steering assist picks between them, the keys and the
       // stick (steering-assist.ts: a pressed key takes over, and hands back once its ramp is at centre)
-      const directSteer = mouseSteerEnabledRef.current
+      const directSteer = settings.mouseSteer
         ? mouseSteerValueRef.current
         : touchSteering
           ? touch.steer
@@ -1251,8 +1267,8 @@ export class DriveSession {
 
       // The AI field holds the player on the grid until the lights go out, then runs its cars
       const aiField = aiFieldOf(raceNow());
-      if (physics.steeringAssist.settings !== assistSettingsRef.current) {
-        physics.steeringAssist.settings = assistSettingsRef.current;
+      if (physics.steeringAssist.settings !== assistSettings) {
+        physics.steeringAssist.settings = assistSettings;
       }
       const lockDeg = Math.round(physics.maxSteerAngleRad * (1800 / Math.PI)) / 10;
       if (lockDeg !== steerLockDegRef.current) {
@@ -1585,7 +1601,7 @@ export class DriveSession {
 
       // While the keys steer, the mouse follows the steering, so it takes over (once the keys' ramp is at centre)
       // where the steering is instead of where the mouse was
-      if (mouseSteerEnabledRef.current && physics.steeringAssist.source === "keyboard") {
+      if (settings.mouseSteer && physics.steeringAssist.source === "keyboard") {
         mouseSteerValueRef.current = physics.steerAngleNorm;
       }
 
@@ -1594,7 +1610,7 @@ export class DriveSession {
 
       // The menus film the car from outside, whatever the player's camera is
       const inVr = renderer.xr.isPresenting;
-      const mode: CameraMode = inMenu ? "chase" : inVr ? "cockpit" : cameraModeRef.current;
+      const mode: CameraMode = inMenu ? "chase" : inVr ? "cockpit" : (settings.camera ?? "chase");
       const view = CAMERA_MODES[mode];
       const vf26Cams = carRig.getCameraAnchors();
       const carFovDeg = vf26Cams ? vf26Cams.cockpit.fovDeg : FALLBACK_COCKPIT_FOV_DEG;
@@ -1602,7 +1618,7 @@ export class DriveSession {
         carCockpitFovRef.current = carFovDeg;
         setCarCockpitFov(carFovDeg);
       }
-      const onboardFovShift = cockpitFovRef.current === null ? 0 : cockpitFovRef.current - carFovDeg;
+      const onboardFovShift = settings.cockpitFovDeg === null ? 0 : settings.cockpitFovDeg - carFovDeg;
       // The procedural helmet goes once the VF26 model (with its own driver) has replaced the procedural car
       carRig.helmetGroup.visible = !vf26Cams;
       // From the driver's eye point the helmet would fill the view: the camera leaves its layer out, while the

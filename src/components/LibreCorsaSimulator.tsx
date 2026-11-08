@@ -1,12 +1,10 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import * as THREE from "three";
 import { getActiveTrackData, LIVERIES } from "@/lib/track-data";
 import { F1Physics2026 } from "@/lib/f1-physics-2026";
 import type { SimulatorCar } from "@/lib/sim/simulator-car";
 import { F1AudioEngine2026 } from "@/lib/f1-audio-2026";
-import { type SimCarRig } from "@/lib/car-builder-2026";
 import { FfbPairPrompt } from "@/components/hud/FfbPairPrompt";
 import { isVehicleModelId, vehicleModelsFor } from "@/lib/cars/vehicle-models";
 import { carForVehicle, type CarId } from "@/lib/cars/car-registry";
@@ -44,10 +42,9 @@ import { saveTyreSetup } from "@/lib/sim/tyre-setup";
 import { LoadingScreen } from "@/components/menu/LoadingScreen";
 import { TitleMenu } from "@/components/menu/TitleMenu";
 import { FirstRunWizard, type WizardMode, type WizardStepId } from "@/components/menu/FirstRunWizard";
-import { buildKeyLookup, keyLabel, padButtonLabel } from "@/lib/input/bindings";
+import { keyLabel, padButtonLabel } from "@/lib/input/bindings";
 import { autoConfigureWheel, connectedPads } from "@/lib/input/device-input";
 import { webHidFfb, wheelFfb } from "@/lib/input/wheel-ffb";
-import { DEFAULT_STEERING_ASSIST, steeringAssistSettings, type SteeringAssistSettings } from "@/lib/sim/steering-assist";
 import { clampFov, codeFromName, DEFAULT_PLAYER_SETTINGS, loadCarChoice, loadOnboarded, loadPlayerSettings, loadRumble, pushLibraryRecent, saveCarChoice, saveOnboarded, toggleLibraryFavorite, type LibraryKind, sanitizeDriverName, savePlayerSettings, saveRumble, type PlayerSettings } from "@/lib/settings/player-settings";
 import type { AeroSetupPreset, AssistPreset, CameraMode, CarTelemetry, LiveTunerPatch, LiveryConfig, TireCompound, TyreSetup, VehicleModelId } from "@/types/f1";
 import {
@@ -92,9 +89,6 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   const [vehicleModel, setVehicleModel] = useState<VehicleModelId>(() => carPhysics(carId));
   const vehicleModelRef = useRef(vehicleModel);
   const audioRef = useRef<F1AudioEngine2026 | null>(null);
-  const carRigRef = useRef<SimCarRig | null>(null);
-  const liveryRef = useRef<LiveryConfig>(LIVERIES[0]);
-  const racingLineMeshRef = useRef<THREE.Mesh | null>(null);
   /** The kind of session on track (practice, an AI race or an online race), for the menus; the session sets it */
   const [raceKind, setRaceKind] = useState<SessionRace["kind"]>("practice");
   /** Track evolution and aero wake for every car on the circuit (the player's in every mode); an AI field shares it */
@@ -161,10 +155,6 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   const [chassisSetup, setChassisSetup] = useState<ChassisSetup>(DEFAULT_CHASSIS_SETUP);
   const [isMuted, setIsMuted] = useState(false);
   const [boostLatch, setBoostLatch] = useState(false);
-  // The setters the toggle handlers call (defined further down)
-  const setGamepadAssistEnabledRef = useRef<(enabled: boolean) => void>(() => {});
-  const setRacingLineVisibleRef = useRef<(visible: boolean) => void>(() => {});
-  const setMouseSteerRef = useRef<(enabled: boolean) => void>(() => {});
   const [gamepadRumble, setGamepadRumble] = useState<boolean>(loadRumble);
   const rumbleEnabledRef = useRef(gamepadRumble);
   rumbleEnabledRef.current = gamepadRumble;
@@ -203,14 +193,10 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     setSettings((prev) => (prev[key] === value ? prev : { ...prev, [key]: value }));
   }, []);
   const setCameraMode = useCallback((mode: CameraMode) => setPreference("camera", mode), [setPreference]);
-  // Current values for the toggle handlers
-  const gamepadAssistRef = useRef(gamepadAssist);
-  gamepadAssistRef.current = gamepadAssist;
-  const showRacingLineRef = useRef(showRacingLine);
-  showRacingLineRef.current = showRacingLine;
-  /** Player's driver's-eye FOV (null = the car's own), read by the render loop */
-  const cockpitFovRef = useRef<number | null>(settings.cockpitFovDeg);
-  cockpitFovRef.current = settings.cockpitFovDeg;
+  // The session takes the settings on whenever they change, and once it exists (whichever comes first)
+  useEffect(() => {
+    session?.applySettings(settings);
+  }, [session, settings]);
   /** The current car's own driver's-eye FOV, for the FOV slider's default and the [ / ] keys */
   const [carCockpitFov, setCarCockpitFov] = useState(FALLBACK_COCKPIT_FOV_DEG);
   const carCockpitFovRef = useRef(carCockpitFov);
@@ -225,13 +211,6 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   const pendingRaceRef = useRef(false);
   const [launchHint, setLaunchHint] = useState(false);
   const [inviteRoom, setInviteRoom] = useState<string | null>(null);
-  const keyLookupRef = useRef(buildKeyLookup(settings.keys));
-  keyLookupRef.current = useMemo(() => buildKeyLookup(settings.keys), [settings.keys]);
-  const assistSettingsRef = useRef<SteeringAssistSettings>(DEFAULT_STEERING_ASSIST);
-  assistSettingsRef.current = useMemo(
-    () => steeringAssistSettings(settings.padTuning, settings.keyboardTuning),
-    [settings.padTuning, settings.keyboardTuning]
-  );
   /** The car's steering lock (road-wheel degrees, after the garage's ratio), for the assist menus' countersteer slider */
   const [steerLockDeg, setSteerLockDeg] = useState<number | undefined>(undefined);
   const steerLockDegRef = useRef(steerLockDeg);
@@ -302,16 +281,12 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   const [ffbMeter, setFfbMeter] = useState(wheelFfb.meter);
   const [touchVisible, setTouchVisible] = useState(false);
 
-  const cameraModeRef = useRef<CameraMode>("chase");
-  cameraModeRef.current = cameraMode;
   /** The next view in the camera cycle, from the key, the pad, the touch pads and the menus alike */
-  const cycleCamera = useCallback(() => setCameraMode(nextCameraMode(cameraModeRef.current)), []);
+  const cycleCamera = useCallback(() => setSettings((prev) => ({ ...prev, camera: nextCameraMode(prev.camera ?? "chase") })), []);
 
   const boostLatchRef = useRef<boolean>(false);
   boostLatchRef.current = boostLatch;
 
-  const mouseSteerEnabledRef = useRef<boolean>(false);
-  mouseSteerEnabledRef.current = mouseSteerEnabled;
   const mouseSteerValueRef = useRef<number>(0);
   const slashCommandBufferRef = useRef<string>("");
 
@@ -444,17 +419,11 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     }
   }, []);
 
-  const handleAssistPresetChange = useCallback((preset: AssistPreset) => {
-    setPreference("assistPreset", preset);
-    if (physicsRef.current) {
-      physicsRef.current.assistPreset = preset;
-    }
-  }, []);
+  // The preferences only change the settings: the session applies them to the car and the scene
+  const handleAssistPresetChange = useCallback((preset: AssistPreset) => setPreference("assistPreset", preset), [setPreference]);
 
-  // The toggles read the current value from a ref and apply their effects in the handler, not inside a state
-  // updater (React may run those twice, or after the call)
   const handleToggleGamepadAssist = useCallback(() => {
-    setGamepadAssistEnabledRef.current(!gamepadAssistRef.current);
+    setSettings((prev) => ({ ...prev, gamepadAssist: !prev.gamepadAssist }));
   }, []);
 
   const handleToggleGamepadRumble = useCallback(() => {
@@ -465,11 +434,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
 
   const handleTireCompoundChange = useCallback((compound: TireCompound) => {
     setTireCompound(compound);
-    if (physicsRef.current) {
-      physicsRef.current.tireCompound = compound;
-    }
-    carRigRef.current?.setTireCompound(compound);
-  }, []);
+    session?.setTireCompound(compound);
+  }, [session]);
 
   const handleChangeTyreSetup = useCallback((next: TyreSetup) => {
     setTyreSetup(next);
@@ -522,14 +488,10 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     [session]
   );
 
-  const handleLiveryChange = useCallback((livery: LiveryConfig) => {
-    setPreference("liveryId", livery.id);
-    liveryRef.current = livery;
-    carRigRef.current?.setLivery(livery);
-  }, []);
+  const handleLiveryChange = useCallback((livery: LiveryConfig) => setPreference("liveryId", livery.id), [setPreference]);
 
   const handleToggleRacingLine = useCallback(() => {
-    setRacingLineVisibleRef.current(!showRacingLineRef.current);
+    setSettings((prev) => ({ ...prev, racingLine: !prev.racingLine }));
   }, []);
 
   const handleToggleMute = useCallback(() => {
@@ -571,7 +533,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
 
   const handleToggleMouseSteer = useCallback(() => {
     unlockAudio();
-    setMouseSteerRef.current(!mouseSteerEnabledRef.current);
+    setSettings((prev) => ({ ...prev, mouseSteer: !prev.mouseSteer }));
   }, [unlockAudio]);
 
   /** This client hosts the multiplayer lobby (the one derivation: the lobby's host is us) */
@@ -661,31 +623,10 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   const togglePauseRef = useRef(togglePause);
   togglePauseRef.current = togglePause;
 
-  const setRacingLineVisible = useCallback((visible: boolean) => {
-    showRacingLineRef.current = visible;
-    setPreference("racingLine", visible);
-    if (racingLineMeshRef.current) racingLineMeshRef.current.visible = visible;
-  }, []);
-  setRacingLineVisibleRef.current = setRacingLineVisible;
-
-  const setGamepadAssistEnabled = useCallback((enabled: boolean) => {
-    gamepadAssistRef.current = enabled;
-    setPreference("gamepadAssist", enabled);
-    if (physicsRef.current) physicsRef.current.gamepadAssistEnabled = enabled;
-  }, []);
-  setGamepadAssistEnabledRef.current = setGamepadAssistEnabled;
-
-  const setAutoGearbox = useCallback((enabled: boolean) => {
-    setPreference("autoGearbox", enabled);
-    if (physicsRef.current) physicsRef.current.autoGearbox = enabled;
-  }, []);
-
-  const setMouseSteer = useCallback((enabled: boolean) => {
-    mouseSteerEnabledRef.current = enabled;
-    setPreference("mouseSteer", enabled);
-    if (!enabled) mouseSteerValueRef.current = 0;
-  }, []);
-  setMouseSteerRef.current = setMouseSteer;
+  const setRacingLineVisible = useCallback((visible: boolean) => setPreference("racingLine", visible), [setPreference]);
+  const setGamepadAssistEnabled = useCallback((enabled: boolean) => setPreference("gamepadAssist", enabled), [setPreference]);
+  const setAutoGearbox = useCallback((enabled: boolean) => setPreference("autoGearbox", enabled), [setPreference]);
+  const setMouseSteer = useCallback((enabled: boolean) => setPreference("mouseSteer", enabled), [setPreference]);
 
   const handleChangeSettings = useCallback((update: (prev: PlayerSettings) => PlayerSettings) => {
     setSettings((prev) => update(prev));
@@ -1068,15 +1009,11 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     if (!container) return;
     const session = new DriveSession(container, {
       aiFieldSpareRef,
-      assistSettingsRef,
       audioRef,
       autopilotPaceRef,
       boostLatchRef,
-      cameraModeRef,
       carCockpitFovRef,
       carIdRef,
-      carRigRef,
-      cockpitFovRef,
       cycleCamera,
       getTrackEnv,
       ghostRef,
@@ -1085,18 +1022,14 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       hapticsRef,
       kbInputRef,
       kbPedalAssistRef,
-      keyLookupRef,
       keysRef,
       lapRecorderRef,
-      liveryRef,
-      mouseSteerEnabledRef,
       mouseSteerValueRef,
       onLapCompletedRef,
       pausedRef,
       phaseRef,
       physicsRef,
       prepareAiField,
-      racingLineMeshRef,
       releaseHeldKeys,
       rumbleEnabledRef,
       setAssetsReady,
@@ -1104,7 +1037,6 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       setChassisSetup,
       setDefaultTyreSetup,
       setLatch,
-      setMouseSteerRef,
       setP2pStatus,
       setPauseNotice,
       setReplayUi,
@@ -1118,7 +1050,6 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       setWeatherHud,
       setRaceKind,
       onRunReset,
-      settingsRef,
       slashCommandBufferRef,
       steerLockDegRef,
       takeAiField,
@@ -1137,23 +1068,14 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     };
   }, [track, getTrackEnv, takeAiField, prepareAiField, unlockAudio, handleToggleMute, handleToggleRacingLine, releaseHeldKeys, setLatch, setVrState, onRunReset]);
 
-  // Saved settings and the first-run flag are read after mount (the page is prerendered without
-  // storage), once the scene effect above has created the car they apply to
+  // Saved settings and the first-run flag are read after mount (the page is prerendered without storage); the
+  // session takes the settings on through applySettings, whether it exists yet or not
   useEffect(() => {
-    const saved = loadPlayerSettings();
-    setSettings(saved);
-    cockpitFovRef.current = saved.cockpitFovDeg;
+    setSettings(loadPlayerSettings());
     setOnboarded(loadOnboarded());
-    handleAssistPresetChange(saved.assistPreset);
-    setRacingLineVisible(saved.racingLine);
-    setGamepadAssistEnabled(saved.gamepadAssist);
-    setAutoGearbox(saved.autoGearbox);
-    setMouseSteer(saved.mouseSteer);
-    const livery = LIVERIES.find((l) => l.id === saved.liveryId);
-    if (livery) handleLiveryChange(livery);
     setInviteRoom(roomFromUrl());
     setSettingsHydrated(true);
-  }, [handleAssistPresetChange, setRacingLineVisible, setGamepadAssistEnabled, setAutoGearbox, setMouseSteer, handleLiveryChange]);
+  }, []);
 
   useEffect(() => {
     if (!settingsHydrated) return;
@@ -1225,10 +1147,6 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     void refreshLeaderboard();
     wheelFfb.resetMeter();
   }, [vehicleModel, loadPbGhost, refreshLeaderboard]);
-
-  useEffect(() => {
-    session?.applyGraphics(settings.graphics.quality, settings.graphics.renderScale);
-  }, [session, settings.graphics.quality, settings.graphics.renderScale]);
 
   const ffbMeterOn = phase === "driving" && settings.device === "wheel" && settings.wheel.ffbEnabled;
   useEffect(() => {
