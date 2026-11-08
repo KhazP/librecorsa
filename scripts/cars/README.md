@@ -33,3 +33,21 @@ uv run --python 3.14 --no-project --with numpy --with scipy --with opencv-python
     - `WHEEL_RF`, `WHEEL_LF`, `WHEEL_RR`, `WHEEL_LR` (hub pivots at each tyre's tread centre)
       - `WHEEL_xx_RIM` (rotating wheel rim, spokes, hub, and brake disc)
       - `WHEEL_xx_TYRE` (single-primitive tyre mesh for `installTyreDeformation`)
+
+# Assetto Corsa Car Porter (`port_ac_car.py`)
+
+`scripts/cars/port_ac_car.py` converts an Assetto Corsa car (its main `.kn5` plus one skin) into the same `CAR` / `BODY` / `STEER` / `WHEEL_xx` layout. It is written for the Suzuki Liana 1.6 (its `MATERIALS` table maps the car's 57 kn5 materials); the kn5 reader, the hierarchy split and the paint bake are generic AC.
+
+```bash
+uv run --python 3.14 --no-project --with numpy --with pillow \
+  python -P scripts/cars/port_ac_car.py \
+  /Users/alpyalay/Downloads/librecorsa-src/suzuki_liana/suzuki_liana \
+  public/cars/liana/model/liana.glb --skin light_blue
+```
+
+Flags: `--skin <folder>` (skin whose maps override the kn5's, default `light_blue`), `--kn5 <file>` (default `<folder name>.kn5`), `--max-tex` / `--small-tex` / `--normal-tex` (size caps: 2048 paint, 1024 other colour maps, 512 normal maps), `--jpeg-quality` (default 88).
+
+- **Axes**: the kn5 frame is already the rig's (+X left, +Y up, +Z forward, counter-clockwise faces); the porter only lifts the lowest tyre point to `y = 0` and centres X on the wheels. car.ini's `GRAPHICS_OFFSET` is not applied (the rig aligns by wheel centres).
+- **Parts**: meshes under `WHEEL_xx` are the wheel (the `object__90*` tyre one primitive, everything else `WHEEL_xx_RIM`), under `STEER_HR` the steering wheel (its node frame becomes `STEER`), the rest `BODY`, one mesh per material. Blurred rims (`RIM_BLUR_*`), shift-light quads (`LED_*`), LODs, damage and dirt maps are dropped.
+- **Paint**: `ksPerPixelMultiMap` materials are baked to one opaque colour texture as AC shades them, `diffuse * (detail * (1 - diffuse.a) + diffuse.a)` in gamma space, with the skin's `MAT_plancia.dds` as the body's detail: the paint takes the skin colour, badges (alpha 1) keep their own.
+- **Cameras**: the cockpit eye from car.ini `DRIVEREYES` (read from `data/` or `data.acd`); dash, bumper and roof cameras placed from the geometry.
