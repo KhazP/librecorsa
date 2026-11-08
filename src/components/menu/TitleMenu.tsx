@@ -754,7 +754,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
                           ? `${WEATHER_LABELS[props.conditionsPanel.conditions.weather].label} · ${TIME_OF_DAY_LABELS[props.conditionsPanel.conditions.timeOfDay]}`
                           : undefined
                       }
-                      car={{ title: vehicle.title, badge: vehicle.badge, color: vehicleColor }}
+                      car={{ id: vehicle.id, quality: vehicle.quality, title: vehicle.title, badge: vehicle.badge, color: vehicleColor }}
                       playerCode={props.profile?.code}
                       onOpenCircuit={() => openPanel("circuit")}
                       onOpenConditions={props.conditionsPanel ? () => openPanel("conditions") : undefined}

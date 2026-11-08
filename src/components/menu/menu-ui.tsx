@@ -4,6 +4,8 @@ import React from "react";
 import { ChevronRight, type LucideIcon } from "lucide-react";
 import { LibreCorsaLogo } from "@/components/ui/LibreCorsaLogo";
 import { circuitQualityMeta, type TrackInfo } from "@/lib/track-registry";
+import { carQualityMeta, PHYSICS_CHECK, type CarDefinition } from "@/lib/cars/car-registry";
+import { carPhysics, useF1ModPhysics } from "@/lib/cars/f1-mod-physics";
 import { FACE_BUTTONS, useInputMode, type PadFamily } from "./input-mode";
 import { focusOnHover } from "./useFocusNav";
 
@@ -99,6 +101,31 @@ export const TrackQualityBadge: React.FC<{
       size={size}
       dot={track.quality !== "original"}
       title={q.description}
+      className={`max-w-full min-w-0 overflow-hidden ${className}`}
+    >
+      <span className="truncate">{q.badge}</span>
+    </Chip>
+  );
+};
+
+/**
+ * Whether a car's physics belong to it (car-registry `CarQuality`). On hover, the grade's description and how far the
+ * physics it drives on now have been checked (a ported F1 car follows the physics switch).
+ */
+export const CarQualityBadge: React.FC<{
+  car: Pick<CarDefinition, "id" | "quality">;
+  size?: ChipSize;
+  className?: string;
+}> = ({ car, size = "md", className = "" }) => {
+  const q = carQualityMeta(car);
+  const physics = carPhysics(car.id, useF1ModPhysics());
+  return (
+    <Chip
+      color={q.color}
+      variant={q.variant}
+      size={size}
+      dot
+      title={`${q.description} ${PHYSICS_CHECK[physics]}`}
       className={`max-w-full min-w-0 overflow-hidden ${className}`}
     >
       <span className="truncate">{q.badge}</span>

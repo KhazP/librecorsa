@@ -4,23 +4,28 @@ import React from "react";
 import type { LiveryConfig } from "@/types/f1";
 import { LIVERIES } from "@/lib/track-data";
 import {
+  CAR_QUALITY_META,
   CARS,
   carClass,
   carClassesInUse,
+  carQualityMeta,
   carTakesLivery,
   FACTORY_LIVERY_NOTE,
+  PHYSICS_CHECK,
   type CarDefinition,
   type CarId,
+  type CarQuality,
 } from "@/lib/cars/car-registry";
-import { carTakesPhysicsSwitch, F1_MOD_PHYSICS_OPTIONS } from "@/lib/cars/f1-mod-physics";
+import { carPhysics, carTakesPhysicsSwitch, F1_MOD_PHYSICS_OPTIONS, useF1ModPhysics } from "@/lib/cars/f1-mod-physics";
 import { ContentBrowser, type BrowserFilterGroup, type BrowserSort, type LibraryProps } from "./ContentBrowser";
 import { CarPhysicsSwitch } from "./CarPicker";
-import { Chip } from "./menu-ui";
+import { CarQualityBadge, Chip } from "./menu-ui";
 import { focusOnHover } from "./useFocusNav";
 
 const ORDER = new Map(CARS.map((c, i) => [c.id, i]));
 const byRegistry = (a: CarDefinition, b: CarDefinition) => (ORDER.get(a.id) ?? 0) - (ORDER.get(b.id) ?? 0);
 const byName = (a: CarDefinition, b: CarDefinition) => a.title.localeCompare(b.title);
+const QUALITIES: readonly CarQuality[] = ["own", "shared", "era"];
 
 /** A car's own vehicle model, for the cars without the physics switch (the GT3s say theirs in their sub line) */
 const physicsLabel = (car: CarDefinition) =>
@@ -49,6 +54,8 @@ export const CarBrowser: React.FC<{
   toolbar?: React.ReactNode;
 }> = ({ carId, onChangeCar, selectedLivery, onChangeLivery, library, onClose, toolbar }) => {
   const classes = carClassesInUse();
+  const modPhysics = useF1ModPhysics();
+  const qualities = QUALITIES.filter((q) => CARS.some((c) => c.quality === q));
   const favs = library?.library.favorites.cars ?? [];
   const recent = library?.library.recent.cars ?? [];
   const recentRank = (c: CarDefinition) => {
@@ -66,10 +73,21 @@ export const CarBrowser: React.FC<{
       ],
     },
     { label: "Class", filters: classes.map((k) => ({ id: `class:${k.id}`, label: k.title, test: (c: CarDefinition) => c.classId === k.id })) },
+    {
+      label: "Physics",
+      filters: qualities.map((q) => ({ id: `quality:${q}`, label: CAR_QUALITY_META[q].filterLabel, test: (c: CarDefinition) => c.quality === q })),
+    },
   ];
 
   const sorts: BrowserSort<CarDefinition>[] = [
     { id: "class", label: "Class", groupBy: (c) => carClass(c.classId).title, groupOrder: classes.map((k) => k.title), compare: byRegistry },
+    {
+      id: "quality",
+      label: "Physics",
+      groupBy: (c) => carQualityMeta(c).filterLabel,
+      groupOrder: qualities.map((q) => CAR_QUALITY_META[q].filterLabel),
+      compare: byRegistry,
+    },
     { id: "name", label: "A–Z", heading: "A–Z", compare: byName },
     { id: "recent", label: "Recent", heading: "Recently driven first", compare: (a, b) => recentRank(a) - recentRank(b) || byRegistry(a, b) },
   ];
@@ -82,7 +100,8 @@ export const CarBrowser: React.FC<{
       idOf={(c) => c.id}
       searchText={(c) => {
         const k = carClass(c.classId);
-        return `${c.title} ${c.sub} ${c.badge} ${k.title} ${k.sub}`;
+        const q = carQualityMeta(c);
+        return `${c.title} ${c.sub} ${c.badge} ${k.title} ${k.sub} ${q.badge} ${q.filterLabel} ${c.credit.author}`;
       }}
       searchPlaceholder="Search cars, classes"
       filterGroups={filterGroups}
@@ -105,13 +124,14 @@ export const CarBrowser: React.FC<{
             <span className="flex min-w-0 flex-col gap-1 px-3 pt-0.5 pb-3">
               <span className="lc-disp text-[17px] leading-[1.05]">{c.title}</span>
               <span className="line-clamp-2 text-[12px] leading-snug text-[#8E96AA]">{c.sub}</span>
-              {c.id === carId ? (
-                <span className="mt-0.5">
+              <span className="mt-0.5 flex min-w-0 flex-wrap items-center gap-1.5">
+                <CarQualityBadge car={c} size="xs" />
+                {c.id === carId ? (
                   <Chip color="#CCFF00" variant="soft" size="sm">
                     Current
                   </Chip>
-                </span>
-              ) : null}
+                ) : null}
+              </span>
             </span>
           </span>
         );
@@ -119,9 +139,11 @@ export const CarBrowser: React.FC<{
       renderDetail={(c) => {
         const k = carClass(c.classId);
         const own = physicsLabel(c);
+        const q = carQualityMeta(c);
         return (
           <>
             <div className="flex flex-wrap items-center gap-1.5">
+              <CarQualityBadge car={c} />
               <Chip>{k.title}</Chip>
               <span className="lc-data text-[11px] tracking-[0.12em] text-[#C5CBD8]">{c.badge}</span>
             </div>
@@ -136,6 +158,17 @@ export const CarBrowser: React.FC<{
               {own && !carTakesPhysicsSwitch(c.id) ? <Spec k="Physics">{own}</Spec> : null}
             </div>
             {carTakesPhysicsSwitch(c.id) ? <CarPhysicsSwitch color="#CCFF00" /> : null}
+            <div className="flex flex-col gap-1 rounded-[10px] border border-[#262B3D] bg-[#08090D]/60 px-3 py-2.5">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="font-f1-mono text-[10px] font-extrabold tracking-[0.08em] uppercase" style={{ color: q.color }}>
+                  {q.filterLabel}
+                </span>
+                <span className="text-[11px] font-semibold text-[#C5CBD8]">Model by {c.credit.author}</span>
+              </div>
+              <p className="m-0 text-[12px] leading-snug text-[#8E96AA]">
+                {q.description} {PHYSICS_CHECK[carPhysics(c.id, modPhysics)]}
+              </p>
+            </div>
             <div className="flex flex-col gap-2">
               <span className="lc-lbl text-[10px]">Livery</span>
               {carTakesLivery(c.id) ? (
@@ -166,6 +199,15 @@ export const CarBrowser: React.FC<{
           </>
         );
       }}
+      footnote={
+        <p className="m-0 mx-1 mt-1 text-[12px] leading-relaxed text-[#8E96AA]">
+          {qualities.map((q) => (
+            <React.Fragment key={q}>
+              <strong style={{ color: CAR_QUALITY_META[q].color }}>{CAR_QUALITY_META[q].filterLabel}:</strong> {CAR_QUALITY_META[q].description}{" "}
+            </React.Fragment>
+          ))}
+        </p>
+      }
       primaryAction={(c) =>
         c.id === carId
           ? { label: "Current car", disabled: true, run: () => {} }

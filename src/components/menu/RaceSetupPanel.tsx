@@ -2,7 +2,8 @@
 
 import React from "react";
 import { ChevronRight, CloudSun, Flag, Minus, Plus, Route, Wrench, type LucideIcon } from "lucide-react";
-import { Chip, PrimaryButton, Segmented, TrackQualityBadge } from "./menu-ui";
+import { CarQualityBadge, Chip, PrimaryButton, Segmented, TrackQualityBadge } from "./menu-ui";
+import type { CarDefinition } from "@/lib/cars/car-registry";
 import { focusOnHover } from "./useFocusNav";
 import type { TrackInfo } from "@/lib/track-registry";
 import { aiDriversFor } from "@/lib/sim/ai-opponents";
@@ -30,7 +31,7 @@ export interface RaceSetupPanelProps {
   track: TrackInfo;
   /** Weather and time of day, as a line */
   conditionsLabel?: string;
-  car: { title: string; badge: string; color: string };
+  car: Pick<CarDefinition, "id" | "quality" | "title" | "badge"> & { color: string };
   /** The player's driver code on the grid */
   playerCode?: string;
   onOpenCircuit: () => void;
@@ -190,6 +191,7 @@ export const RaceSetupPanel: React.FC<RaceSetupPanelProps> = ({
                     {car.badge}
                   </span>
                   <span className="truncate">{car.title}</span>
+                  <CarQualityBadge car={car} size="xs" />
                 </span>
               }
               onClick={onOpenGarage}

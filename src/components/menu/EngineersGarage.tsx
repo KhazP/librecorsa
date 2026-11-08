@@ -10,7 +10,7 @@ import { COMPOUNDS, PanelSection, type PauseMenuProps } from "@/components/hud/P
 import { TYRE_SETUP_LIMITS } from "@/lib/sim/tyre-setup";
 import { CarPhysicsSwitch } from "./CarPicker";
 import { CarBrowser } from "./CarBrowser";
-import { Chip, PadGlyph } from "./menu-ui";
+import { CarQualityBadge, Chip, PadGlyph } from "./menu-ui";
 import { currentInputMode, useInputMode } from "./input-mode";
 import { focusOnHover } from "./useFocusNav";
 import { carTakesPhysicsSwitch } from "@/lib/cars/f1-mod-physics";
@@ -380,6 +380,7 @@ export const EngineersGarage: React.FC<PauseMenuProps> = (p) => {
             <span className="flex items-center gap-2">
               <Chip size="sm">{carKind.title}</Chip>
               <span className="lc-data text-[11px] tracking-[0.12em] text-[#C5CBD8]">{car.badge}</span>
+              <CarQualityBadge car={car} size="sm" />
             </span>
             <span className="lc-disp text-[22px] leading-[1.05]">{car.title}</span>
             <span className="truncate text-[12px] text-[#8E96AA]">{car.sub}</span>

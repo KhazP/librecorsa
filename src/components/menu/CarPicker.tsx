@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { Choice } from "@/components/hud/PauseMenu";
 import { carById, carClass, carClassesInUse, carsInClass, type CarClassId, type CarId } from "@/lib/cars/car-registry";
 import { carTakesPhysicsSwitch, F1_MOD_PHYSICS_OPTIONS, setF1ModPhysics, useF1ModPhysics } from "@/lib/cars/f1-mod-physics";
+import { CarQualityBadge } from "./menu-ui";
 
 /**
  * The car picker: class tabs, then the cars of the open class. The open class follows the car chosen elsewhere.
@@ -60,6 +61,7 @@ export const CarPicker: React.FC<{ carId: CarId; onChangeCar: (car: CarId) => vo
                 <span className="font-f1-mono text-[9px] font-extrabold tracking-[0.1em]" style={{ color: open.color }}>
                   {car.badge}
                 </span>
+                <CarQualityBadge car={car} size="xs" />
               </span>
               {compact ? null : (
                 <span className="text-[12px] leading-[1.4] opacity-75">
