@@ -180,7 +180,7 @@ export const LoadingScreen: React.FC<{
 
   return (
     <div
-      className={`pointer-events-auto fixed inset-0 z-50 flex flex-col overflow-y-auto bg-[#08090D] text-[#F5F7FA] transition-opacity duration-500 ${
+      className={`lc-ui-zoom pointer-events-auto fixed inset-0 z-50 flex flex-col overflow-y-auto bg-[#08090D] text-[#F5F7FA] transition-opacity duration-500 ${
         leaving ? "opacity-0" : "opacity-100"
       }`}
     >

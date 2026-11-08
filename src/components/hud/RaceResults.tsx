@@ -147,7 +147,7 @@ export const RaceResults: React.FC<{
   const podium = [ordered[1], ordered[0], ordered[2]];
 
   return (
-    <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center bg-[#08090D]/55 p-4">
+    <div className="lc-ui-zoom pointer-events-none fixed inset-0 z-50 flex items-center justify-center bg-[#08090D]/55 p-4">
       <div
         ref={rootRef}
         role="dialog"

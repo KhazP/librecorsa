@@ -132,7 +132,7 @@ export const FirstRunWizard: React.FC<FirstRunWizardProps> = (props) => {
   return (
     <div
       ref={rootRef}
-      className={`pointer-events-auto fixed inset-0 z-40 flex bg-gradient-to-r from-[#08090D]/95 via-[#08090D]/82 to-[#08090D]/15 ${
+      className={`lc-ui-zoom pointer-events-auto fixed inset-0 z-40 flex bg-gradient-to-r from-[#08090D]/95 via-[#08090D]/82 to-[#08090D]/15 ${
         step === "car"
           ? "not-compact:bg-[linear-gradient(90deg,rgba(8,9,13,0.97)_0%,rgba(8,9,13,0.88)_45%,rgba(8,9,13,0)_68%)]"
           : "not-compact:bg-[linear-gradient(90deg,rgba(8,9,13,0.97)_0%,rgba(8,9,13,0.9)_55%,rgba(8,9,13,0.15)_80%)]"

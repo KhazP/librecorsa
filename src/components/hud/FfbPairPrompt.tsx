@@ -16,7 +16,7 @@ export function FfbPairPrompt({ wanted }: { wanted: boolean }) {
     <div
       role="dialog"
       aria-label="Force feedback"
-      className="pointer-events-auto fixed bottom-5 left-1/2 z-50 flex max-w-[calc(100vw-32px)] -translate-x-1/2 items-center gap-3 rounded-full border border-[#262B3D] bg-[#0E1016]/95 py-2 pr-2 pl-5 text-[13px] text-[#F5F7FA] shadow-[0_10px_30px_rgba(0,0,0,0.45)]"
+      className="lc-ui-zoom pointer-events-auto fixed bottom-5 left-1/2 z-50 flex max-w-[calc(100vw-32px)] -translate-x-1/2 items-center gap-3 rounded-full border border-[#262B3D] bg-[#0E1016]/95 py-2 pr-2 pl-5 text-[13px] text-[#F5F7FA] shadow-[0_10px_30px_rgba(0,0,0,0.45)]"
     >
       <span className="min-w-0">
         <b className="font-bold text-[#CCFF00]">Force feedback</b> needs your wheel picked once in the browser

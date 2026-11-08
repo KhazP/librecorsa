@@ -99,12 +99,12 @@ export const ReplayBar: React.FC<{
   return (
     <>
       {/* Cinema letterbox while the replay runs */}
-      <div aria-hidden className="pointer-events-none fixed inset-x-0 top-0 z-[-1] h-10 bg-black sm:h-14 short:h-6" />
-      <div aria-hidden className="pointer-events-none fixed inset-x-0 bottom-0 z-[-1] h-10 bg-black sm:h-14 short:h-6" />
+      <div aria-hidden className="lc-ui-zoom pointer-events-none fixed inset-x-0 top-0 z-[-1] h-10 bg-black sm:h-14 short:h-6" />
+      <div aria-hidden className="lc-ui-zoom pointer-events-none fixed inset-x-0 bottom-0 z-[-1] h-10 bg-black sm:h-14 short:h-6" />
 
       <section
         aria-label="Replay controls"
-        className="pointer-events-auto fixed bottom-14 left-1/2 z-40 flex w-[min(820px,calc(100vw-2rem))] -translate-x-1/2 flex-col gap-2.5 rounded-[28px] border border-white/8 bg-[#08090D]/80 px-4 py-3.5 text-[#F5F7FA] shadow-[0_20px_60px_rgba(0,0,0,0.6)] backdrop-blur-[16px] sm:bottom-[76px] short:bottom-3 short:gap-2 short:py-2.5"
+        className="lc-ui-zoom pointer-events-auto fixed bottom-14 left-1/2 z-40 flex w-[min(820px,calc(100vw-2rem))] -translate-x-1/2 flex-col gap-2.5 rounded-[28px] border border-white/8 bg-[#08090D]/80 px-4 py-3.5 text-[#F5F7FA] shadow-[0_20px_60px_rgba(0,0,0,0.6)] backdrop-blur-[16px] sm:bottom-[76px] short:bottom-3 short:gap-2 short:py-2.5"
       >
         <div className="flex items-center gap-3.5">
           <button
@@ -194,7 +194,7 @@ export const ReplayBar: React.FC<{
 
       <div
         aria-hidden
-        className="pointer-events-none fixed bottom-[18px] left-1/2 z-40 hidden -translate-x-1/2 gap-[18px] font-f1-mono text-[11px] font-bold tracking-[0.1em] whitespace-nowrap text-[#8E96AA] sm:flex pointer-coarse:hidden short:hidden"
+        className="lc-ui-zoom pointer-events-none fixed bottom-[18px] left-1/2 z-40 hidden -translate-x-1/2 gap-[18px] font-f1-mono text-[11px] font-bold tracking-[0.1em] whitespace-nowrap text-[#8E96AA] sm:flex pointer-coarse:hidden short:hidden"
       >
         <span>SPACE PLAY / PAUSE</span>
         <span>← → SEEK {SEEK_STEP_S} S</span>

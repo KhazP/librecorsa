@@ -599,7 +599,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
   return (
     <div
       ref={rootRef}
-      className={`pointer-events-auto fixed inset-0 z-40 flex flex-col overflow-y-auto px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:px-10 ${
+      className={`lc-ui-zoom pointer-events-auto fixed inset-0 z-40 flex flex-col overflow-y-auto px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:px-10 ${
         panel
           ? "bg-[linear-gradient(90deg,rgba(8,9,13,0.97)_0%,rgba(8,9,13,0.9)_60%,rgba(8,9,13,0.4)_85%)] pt-7 short:pt-4"
           : "bg-[linear-gradient(90deg,rgba(8,9,13,0.97)_0%,rgba(8,9,13,0.86)_30%,rgba(8,9,13,0.2)_58%,rgba(8,9,13,0)_70%)] pt-[clamp(1.5rem,3.6vh,2.5rem)] max-lg:bg-[#08090D]/80 short:pt-4"

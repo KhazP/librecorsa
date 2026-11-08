@@ -458,7 +458,7 @@ export const PauseMenu: React.FC<PauseMenuProps> = (props) => {
   return (
     <div
       ref={rootRef}
-      className="pointer-events-auto fixed inset-0 z-40 flex flex-col overflow-y-auto bg-[#08090D]/84 px-5 pt-[26px] pb-[max(1.125rem,env(safe-area-inset-bottom))] backdrop-blur-md sm:px-[clamp(20px,3.4vw,48px)] short:pt-3"
+      className="lc-ui-zoom pointer-events-auto fixed inset-0 z-40 flex flex-col overflow-y-auto bg-[#08090D]/84 px-5 pt-[26px] pb-[max(1.125rem,env(safe-area-inset-bottom))] backdrop-blur-md sm:px-[clamp(20px,3.4vw,48px)] short:pt-3"
     >
       <div className="mx-auto flex w-full max-w-[1320px] flex-1 flex-col">
         <div className="flex flex-wrap items-end justify-between gap-4 border-b border-[#262B3D] pb-[18px] short:pb-3">

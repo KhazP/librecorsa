@@ -5,6 +5,34 @@
 /* Landscape phones and other very short viewports */
 @custom-variant short (@media (max-height: 32rem));
 
+/*
+ * Big-screen UI scale (src/lib/ui-zoom.ts). Menus and HUD are drawn for a 1080p-class window; a 1440p or 4K one at
+ * 100 % OS scaling gets them bigger instead of shrinking into its corners. Both sides must clear a step, so a 21:9
+ * or 32:9 screen scales by its height. Inside a zoomed root, vw / vh resolve before the zoom: keep them inside
+ * clamp() / min() with a px cap.
+ */
+:root {
+  --lc-ui-zoom: 1;
+}
+@media (min-width: 2200px) and (min-height: 1300px) {
+  :root {
+    --lc-ui-zoom: 1.25;
+  }
+}
+@media (min-width: 2700px) and (min-height: 1600px) {
+  :root {
+    --lc-ui-zoom: 1.5;
+  }
+}
+@media (min-width: 3400px) and (min-height: 1900px) {
+  :root {
+    --lc-ui-zoom: 2;
+  }
+}
+.lc-ui-zoom {
+  zoom: var(--lc-ui-zoom);
+}
+
 :root {
   color-scheme: dark;
 

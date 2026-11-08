@@ -51,6 +51,7 @@ import { BroadcastHud } from "./hud/styles/BroadcastHud";
 import { WheelDashHud } from "./hud/styles/WheelDashHud";
 import { TelemetryHud } from "./hud/styles/TelemetryHud";
 import { PhoneHud, usePhoneLayout } from "./hud/styles/PhoneHud";
+import { useUiZoom } from "@/lib/ui-zoom";
 import { buildHudMap, revRangeOf, useLapInvalid, type HudDesignProps } from "./hud/styles/hud-style-parts";
 import type { HudPreset } from "@/lib/settings/player-settings";
 
@@ -212,6 +213,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
   // The renderer draws the mirror into this rect; the HUD frames it and starts the top-centre column under it
   const mirrorRect = props.virtualMirror && !phone && typeof window !== "undefined" ? virtualMirrorRect(window.innerWidth, window.innerHeight) : null;
   const mirrorTop = mirrorRect ? mirrorRect.y + mirrorRect.h + 10 : null;
+  const uiZoom = useUiZoom();
   // The HUD pad button (R3 by default) clears every panel off the screen; start lights and alerts stay
   const [hudHidden, setHudHidden] = useState(false);
   const [hiddenNote, setHiddenNote] = useState(false);
@@ -236,7 +238,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
       <div className="pointer-events-none fixed inset-0 z-20 select-none">
         <div
           role="status"
-          className="absolute top-[52px] left-1/2 inline-flex h-[38px] -translate-x-1/2 items-center gap-2.5 rounded-full pr-[18px] pl-3.5 text-[#F5F7FA] shadow-[0_10px_30px_rgba(255,42,60,0.35)] sm:top-[68px] short:top-8"
+          className="lc-ui-zoom absolute top-[52px] left-1/2 inline-flex h-[38px] -translate-x-1/2 items-center gap-2.5 rounded-full pr-[18px] pl-3.5 text-[#F5F7FA] shadow-[0_10px_30px_rgba(255,42,60,0.35)] sm:top-[68px] short:top-8"
           style={{ backgroundColor: HUD_RED }}
         >
           <span className="relative inline-flex h-2 w-2">
@@ -283,7 +285,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
   // Telemetry has its own trace and force meter; a phone's thumbs sit where the trace would
   const showTrace = !phone && preset !== "telemetry" && hud?.inputTrace === true;
   const showFfb = Boolean(props.ffbMeter) && classic;
-  const scale = hud?.scale ?? 1;
+  const scale = (hud?.scale ?? 1) * uiZoom;
   const trackInfo = getTrackInfo(ACTIVE_TRACK_ID);
   const menuButton = (
     <button

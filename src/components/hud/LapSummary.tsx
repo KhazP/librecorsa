@@ -2,6 +2,7 @@
 
 import React, { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useUiZoom } from "@/lib/ui-zoom";
 import { ChevronDown, ChevronUp, X } from "lucide-react";
 import type { CornerStat, LapSummaryData } from "@/lib/sim/lap-types";
 import {
@@ -152,14 +153,20 @@ export const LapSummary: React.FC<LapSummaryProps> = (props) => {
 
   const boxRef = useRef<HTMLDivElement>(null);
   const lift = useLiftOverHud(boxRef);
+  // The box is zoomed on big screens; the lift is in window pixels
+  const zoom = useUiZoom();
 
   if (typeof document === "undefined") return null;
   return createPortal(
     <div
       key={s.lapNumber}
       ref={boxRef}
-      className="lc-panel-in pointer-events-auto fixed right-3 bottom-4 z-30 w-[min(440px,calc(100vw-1.5rem))] sm:right-4 pointer-coarse:top-[calc(env(safe-area-inset-top,0px)+104px)] pointer-coarse:portrait:top-[calc(env(safe-area-inset-top,0px)+216px)] pointer-coarse:right-auto pointer-coarse:bottom-auto pointer-coarse:left-1/2 pointer-coarse:w-[min(400px,calc(100vw-1.5rem))] pointer-coarse:-translate-x-1/2"
-      style={lift === null ? undefined : ({ bottom: lift, "--lc-room": `calc(100dvh - ${lift + 16}px)` } as React.CSSProperties)}
+      className="lc-ui-zoom lc-panel-in pointer-events-auto fixed right-3 bottom-4 z-30 w-[min(440px,calc(100vw-1.5rem))] sm:right-4 pointer-coarse:top-[calc(env(safe-area-inset-top,0px)+104px)] pointer-coarse:portrait:top-[calc(env(safe-area-inset-top,0px)+216px)] pointer-coarse:right-auto pointer-coarse:bottom-auto pointer-coarse:left-1/2 pointer-coarse:w-[min(400px,calc(100vw-1.5rem))] pointer-coarse:-translate-x-1/2"
+      style={
+        lift === null
+          ? undefined
+          : ({ bottom: lift / zoom, "--lc-room": `calc((100dvh - ${lift + 16}px) / ${zoom})` } as React.CSSProperties)
+      }
       onPointerEnter={() => setHovered(true)}
       onPointerLeave={() => setHovered(false)}
     >
