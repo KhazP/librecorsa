@@ -220,8 +220,6 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
   // The renderer draws the mirror into this rect; the HUD frames it and starts the top-centre column under it
   const mirrorRect = props.virtualMirror && !phone && typeof window !== "undefined" ? virtualMirrorRect(window.innerWidth, window.innerHeight) : null;
   const mirrorTop = mirrorRect ? mirrorRect.y + mirrorRect.h + 10 : null;
-  // The mirror is placed in window pixels; the HUD frame is inset from the window's edges on a 32:9 screen
-  const hudFrameInset = typeof window === "undefined" ? 0 : Math.max(0, (window.innerWidth - window.innerHeight * 2.4) / 2);
   const uiZoom = useUiZoom();
   const showResults = raceState(race).classified && !props.resultsClosed;
   // Paused or in a replay, the HUD stays mounted (folds, lap history and timers carry on) but hides and takes no input;
@@ -301,10 +299,11 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
   const hidden = hudMode === "hidden";
   return (
     <HudModeContext.Provider value={hudMode}>
-    {/* Past 2.4:1 (a 32:9 screen) the corner groups keep to a centred frame instead of the far edges */}
+    {/* The corner groups keep clear of a notch and the home indicator, and past 2.4:1 (a 32:9 screen) they keep to
+        a centred frame instead of the far edges. What belongs to the whole window is fixed to it instead. */}
     <div
       inert={hidden}
-      className={`pointer-events-none fixed inset-0 z-20 mx-auto max-w-[calc(100vh*2.4)] select-none p-3 sm:p-4 ${hidden ? "invisible" : ""}`}
+      className={`lc-safe-frame pointer-events-none fixed z-20 mx-auto max-w-[calc(100vh*2.4)] select-none p-3 sm:p-4 ${hidden ? "invisible" : ""}`}
     >
       {/* Proximity radar: centred just under the horizon, invisible until a car is within 25 m */}
       {hud?.radar !== false && !hudHidden && !lightsPhase && !phone ? (
@@ -315,7 +314,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
       {/* Off the track: a crimson edge glow that breathes behind the HUD (opacity-only animation) */}
       {telemetry.offTrack && !lightsPhase ? (
         <div
-          className="lc-vign absolute inset-0"
+          className="lc-vign fixed inset-0"
           style={{ background: "radial-gradient(ellipse at center, rgba(255,42,60,0) 62%, rgba(255,42,60,0.32) 100%)" }}
           aria-hidden="true"
         />
@@ -349,20 +348,18 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
         </div>
       )}
 
-      {/* A frame round the virtual mirror, so its sky never reads as the real one */}
+      {/* A frame round the virtual mirror, so its sky never reads as the real one (the renderer places it in window pixels) */}
       {mirrorRect && !hudHidden ? (
         <div
           aria-hidden
-          className="absolute rounded-[6px] shadow-[0_0_0_3px_#08090D,0_0_0_4px_rgba(255,255,255,0.14),0_14px_40px_rgba(0,0,0,0.5)]"
-          style={{ left: mirrorRect.x - hudFrameInset, top: mirrorRect.y, width: mirrorRect.w, height: mirrorRect.h }}
+          className="fixed rounded-[6px] shadow-[0_0_0_3px_#08090D,0_0_0_4px_rgba(255,255,255,0.14),0_14px_40px_rgba(0,0,0,0.5)]"
+          style={{ left: mirrorRect.x, top: mirrorRect.y, width: mirrorRect.w, height: mirrorRect.h }}
         />
       ) : null}
       {/* Top-centre: start lights and race-control notifications (under the Phone HUD's speed pod) */}
       <div
-        className={`absolute left-1/2 -translate-x-1/2 ${
-          phone ? "top-[calc(env(safe-area-inset-top,0px)+96px)] portrait:top-[calc(env(safe-area-inset-top,0px)+208px)]" : "top-4"
-        }`}
-        style={mirrorTop !== null ? { top: mirrorTop } : undefined}
+        className={`absolute left-1/2 -translate-x-1/2 ${phone ? "top-[96px] portrait:top-[208px]" : "top-4"}`}
+        style={mirrorTop !== null ? { top: `calc(${mirrorTop}px - env(safe-area-inset-top, 0px))` } : undefined}
       >
       <div className="flex flex-col items-center gap-2" style={corner("top center")}>
         {style && !(phone && props.touchControls) ? menuButton : null}
@@ -590,7 +587,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
 
     {/* Instant replay: only the badge and the transport bar show (under the pause menu, neither) */}
     {props.replay && !paused ? (
-      <div className="pointer-events-none fixed inset-0 z-20 select-none">
+      <div className="lc-safe-frame pointer-events-none fixed z-20 select-none">
         <div
           role="status"
           className="lc-ui-zoom absolute top-[52px] left-1/2 inline-flex h-[38px] -translate-x-1/2 items-center gap-2.5 rounded-full pr-[18px] pl-3.5 text-[#F5F7FA] shadow-[0_10px_30px_rgba(255,42,60,0.35)] sm:top-[68px] short:top-8"

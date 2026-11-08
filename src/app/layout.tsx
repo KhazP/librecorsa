@@ -92,6 +92,9 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   themeColor: "#08090D",
   colorScheme: "dark",
+  // Draw under the notch, Dynamic Island and home indicator: the scene runs edge to edge and the UI keeps
+  // to the safe area by itself (.lc-safe-frame, env(safe-area-inset-*); docs/DESIGN.md §9)
+  viewportFit: "cover",
 };
 
 // schema.org description of the game for search results

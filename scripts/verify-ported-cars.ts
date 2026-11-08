@@ -16,8 +16,10 @@ import { F12026CarSim } from "../src/lib/sim/f12026-car/F12026CarSim";
 import { trackColliders } from "../src/lib/sim/track-colliders";
 import { F12026_CAR_CONFIG } from "../src/lib/sim/f12026-car/F12026CarConfig";
 import { loadGlbGeometry } from "./lib/glb-geometry";
+import { bodyFloorClearance, staticFloorOf } from "../src/lib/render/body-floor";
 import {
   measurePortedWheelContact,
+  portedModelOffset,
   WHEEL_CONTACT_RUN_S,
   WHEEL_ON_ROAD_TOLERANCE_MM,
   type PortedWheelExtras,
@@ -306,38 +308,48 @@ for (const exp of EXPECTED_CARS) {
   wheelExtras[exp.id] = { wheelCentres: wc, tyreRadius: tr, tyreHalfWidth: thw };
 }
 
-console.log("\nBodies at a racing ride height on their wheels (lowest BODY vertex between the axles, less bodyDropM)");
+console.log("\nBodies on the vehicle model's floor (BODY's lowest 0.1 m² of level faces between the axles)");
 {
-  // Some exports model the body in a showroom pose well above the wheels, and the car floated over the road: the
-  // registry's `bodyDropM` brings it down. Tyre bottoms are at y = 0 in every port; the AMR26's floor is at 43 mm.
+  // Exports model the body at any height on its wheels (some in a showroom pose, which floated over the road): the
+  // rig moves it to put its floor on the physics' at rest. The rest of it must then clear the road, and the floor
+  // look like a racing car's between the axles.
   const RIDE_MIN_MM = 15;
   const RIDE_MAX_MM = 70;
+  const floor = staticFloorOf(F12026_CAR_CONFIG);
   const v = new THREE.Vector3();
   for (const exp of EXPECTED_CARS) {
     const root = loadGlbGeometry(join("public", "cars", exp.id, "model", `${exp.id}.glb`));
     root.updateMatrixWorld(true);
     const car = root.getObjectByName("CAR") ?? root;
-    const toCar = car.matrixWorld.clone().invert();
-    const wc = (car.userData as PortedWheelExtras).wheelCentres;
-    const frontZ = wc.WHEEL_LF[2];
-    const rearZ = wc.WHEEL_LR[2];
+    const extras = car.userData as PortedWheelExtras;
+    const offset = portedModelOffset(extras, F12026_CAR_CONFIG.chassis);
+    const toCar = new THREE.Matrix4().makeTranslation(offset.x, offset.y, offset.z).multiply(car.matrixWorld.clone().invert());
+    const frontZ = extras.wheelCentres.WHEEL_LF[2] + offset.z;
+    const rearZ = extras.wheelCentres.WHEEL_LR[2] + offset.z;
+    const body = root.getObjectByName("BODY");
+    const drop = body ? bodyFloorClearance(body, toCar, frontZ, rearZ, floor) : null;
+    check(`${exp.id}: floor found under BODY`, drop !== null, drop === null ? "" : `body ${drop >= 0 ? "lowered" : "raised"} ${Math.abs(drop * 1000).toFixed(0)} mm`);
+    let between = Infinity;
     let lowest = Infinity;
-    root.getObjectByName("BODY")?.traverse((o) => {
+    body?.traverse((o) => {
       const mesh = o as THREE.Mesh;
       if (!mesh.isMesh) return;
       const toBody = toCar.clone().multiply(mesh.matrixWorld);
       const pos = mesh.geometry.getAttribute("position");
       for (let i = 0; i < pos.count; i++) {
         v.fromBufferAttribute(pos, i).applyMatrix4(toBody);
-        if (v.z < frontZ && v.z > rearZ) lowest = Math.min(lowest, v.y);
+        lowest = Math.min(lowest, v.y);
+        if (v.z < frontZ && v.z > rearZ) between = Math.min(between, v.y);
       }
     });
-    const rideMm = (lowest - (carById(exp.id).bodyDropM ?? 0)) * 1000;
+    const betweenMm = (between - (drop ?? 0)) * 1000;
+    const lowestMm = (lowest - (drop ?? 0)) * 1000;
     check(
       `${exp.id}: body rides ${RIDE_MIN_MM}-${RIDE_MAX_MM} mm off the road between the axles`,
-      rideMm >= RIDE_MIN_MM && rideMm <= RIDE_MAX_MM,
-      `${rideMm.toFixed(0)} mm`,
+      betweenMm >= RIDE_MIN_MM && betweenMm <= RIDE_MAX_MM,
+      `${betweenMm.toFixed(0)} mm`,
     );
+    check(`${exp.id}: no part of the body under the road at rest`, lowestMm > 0, `lowest ${lowestMm.toFixed(0)} mm`);
   }
 }
 

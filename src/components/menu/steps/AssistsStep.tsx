@@ -61,20 +61,20 @@ export const AssistsStep: React.FC<SetupStepProps> = (p) => {
               type="button"
               onClick={() => apply(l.id)}
               aria-pressed={active}
-              className={`lc-glass relative flex cursor-pointer flex-col items-start gap-3 rounded-[24px] p-5 text-left transition-[background-color,border-color,box-shadow] duration-200 short:gap-2 short:p-3.5 ${
+              className={`lc-glass relative flex cursor-pointer flex-col items-start gap-3 rounded-[24px] p-5 text-left transition-[background-color,border-color,box-shadow] duration-200 short:gap-2 short:p-3.5 max-sm:grid max-sm:grid-cols-[auto_minmax(0,1fr)] max-sm:items-center max-sm:gap-x-3.5 max-sm:gap-y-1 max-sm:p-4 max-sm:pr-12 phone:rounded-[20px] ${
                 active
                   ? "border-[1.5px]! border-[#CCFF00]! bg-[#CCFF00]/[0.07]! shadow-[0_0_0_6px_rgba(204,255,0,0.08)]!"
                   : "hover:border-[#3A4157]!"
               }`}
             >
-              <span aria-hidden className="flex items-end gap-1">
+              <span aria-hidden className="flex items-end gap-1 max-sm:row-span-2 max-sm:mt-1 max-sm:self-start">
                 {[10, 16, 22].map((h, i) => (
                   <span key={h} className="w-2 rounded-full" style={{ height: h, background: i <= index ? barColor : "#262B3D" }} />
                 ))}
               </span>
-              <span className={`lc-disp text-[30px] short:text-[22px] ${active ? "text-[#F5F7FA]" : "text-[#C5CBD8]"}`}>{l.title}</span>
+              <span className={`lc-disp text-[30px] short:text-[22px] phone:text-[20px] ${active ? "text-[#F5F7FA]" : "text-[#C5CBD8]"}`}>{l.title}</span>
               <ul
-                className={`m-0 flex list-none flex-col gap-1.5 p-0 text-[14px] leading-[1.4] short:hidden ${
+                className={`m-0 flex list-none flex-col gap-1.5 p-0 text-[14px] leading-[1.4] short:hidden max-sm:gap-1 max-sm:text-[13px] ${
                   active ? "text-[#C5CBD8]" : "text-[#8E96AA]"
                 }`}
               >

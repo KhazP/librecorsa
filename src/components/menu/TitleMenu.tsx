@@ -26,8 +26,12 @@ import { ConditionsPanel, type ConditionsPanelProps } from "./ConditionsPanel";
 import { TIME_OF_DAY_LABELS, WEATHER_LABELS } from "@/lib/sim/weather";
 import { LibreCorsaLogo } from "@/components/ui/LibreCorsaLogo";
 import { AI_SKILL_DEFAULT, aiSkillLabel } from "@/lib/sim/ai-tuning";
+import { REPO_URL, SUPPORT_URL } from "@/lib/site";
+import { EmbeddedBadge } from "./EmbeddedBadge";
 import {
   CloudSun,
+  CodeXml,
+  Coffee,
   ExternalLink,
   Flag,
   Gamepad2,
@@ -247,7 +251,9 @@ interface MenuItem {
   label: string;
   detail: string;
   icon: LucideIcon;
-  run: () => void;
+  run?: () => void;
+  /** A link out instead of an action: opens in a new tab */
+  href?: string;
   panel?: TitlePanel;
   primary?: boolean;
   badge?: string;
@@ -279,14 +285,14 @@ const DriveHero: React.FC<{ item: MenuItem; pad: boolean; family: "xbox" | "play
     data-nav-default=""
     onPointerEnter={focusOnHover}
     onClick={item.run}
-    className={`${ENTRY_FOCUS} relative flex min-h-[92px] w-full items-center gap-[18px] rounded-[28px] bg-[#CCFF00]/[0.06] py-3.5 pr-6 pl-4 shadow-[inset_0_0_0_1.5px_rgba(204,255,0,0.35)] hover:bg-[#CCFF00]/[0.1] focus:shadow-[0_0_0_6px_rgba(204,255,0,0.12),0_18px_48px_rgba(204,255,0,0.22)] compact:min-h-[76px] compact:gap-4 compact:rounded-[24px] compact:pr-5 short:min-h-[64px]`}
+    className={`${ENTRY_FOCUS} relative flex min-h-[92px] w-full items-center gap-[18px] rounded-[28px] bg-[#CCFF00]/[0.06] py-3.5 pr-6 pl-4 shadow-[inset_0_0_0_1.5px_rgba(204,255,0,0.35)] hover:bg-[#CCFF00]/[0.1] focus:shadow-[0_0_0_6px_rgba(204,255,0,0.12),0_18px_48px_rgba(204,255,0,0.22)] compact:min-h-[76px] compact:gap-4 compact:rounded-[24px] compact:pr-5 short:min-h-[64px] phone:min-h-[56px] phone:gap-3 phone:rounded-[20px] phone:py-2 phone:pr-4 phone:pl-2.5`}
   >
-    <span className="inline-flex h-[60px] w-[60px] shrink-0 items-center justify-center rounded-full bg-[#CCFF00] text-[#08090D] transition-colors group-focus:bg-[#08090D] group-focus:text-[#CCFF00] compact:h-12 compact:w-12 short:h-10 short:w-10">
-      <Play aria-hidden className="ml-0.5 h-6 w-6 compact:h-5 compact:w-5" fill="currentColor" strokeWidth={0} />
+    <span className="inline-flex h-[60px] w-[60px] shrink-0 items-center justify-center rounded-full bg-[#CCFF00] text-[#08090D] transition-colors group-focus:bg-[#08090D] group-focus:text-[#CCFF00] compact:h-12 compact:w-12 short:h-10 short:w-10 phone:h-9 phone:w-9">
+      <Play aria-hidden className="ml-0.5 h-6 w-6 compact:h-5 compact:w-5 phone:h-4 phone:w-4" fill="currentColor" strokeWidth={0} />
     </span>
-    <span className="flex min-w-0 flex-1 flex-col gap-1">
-      <span className="lc-disp text-[50px] compact:text-[38px] short:text-[30px]">{item.label}</span>
-      <span className={`${ENTRY_DETAIL} text-[15px] font-semibold compact:text-[14px]`}>{item.detail}</span>
+    <span className="flex min-w-0 flex-1 flex-col gap-1 phone:gap-0.5">
+      <span className="lc-disp text-[50px] compact:text-[38px] short:text-[30px] phone:text-[24px]">{item.label}</span>
+      <span className={`${ENTRY_DETAIL} text-[15px] font-semibold compact:text-[14px] phone:text-[12px]`}>{item.detail}</span>
     </span>
     <span className={`hidden shrink-0 sm:inline-flex ${pad ? "" : "pointer-coarse:hidden!"}`}>
       {pad ? (
@@ -310,15 +316,15 @@ const MainEntry: React.FC<{ item: MenuItem }> = ({ item }) => {
       onPointerEnter={focusOnHover}
       onClick={item.run}
       aria-expanded={item.panel ? false : undefined}
-      className={`${ENTRY_FOCUS} flex min-h-[64px] w-full items-center gap-4 rounded-[22px] bg-transparent py-2 pr-5 pl-[22px] hover:bg-white/[0.04] compact:min-h-[56px] short:min-h-[48px]`}
+      className={`${ENTRY_FOCUS} flex min-h-[64px] w-full items-center gap-4 rounded-[22px] bg-transparent py-2 pr-5 pl-[22px] hover:bg-white/[0.04] compact:min-h-[56px] short:min-h-[48px] phone:min-h-[46px] phone:gap-3 phone:rounded-[16px] phone:py-1 phone:pr-4 phone:pl-4`}
     >
-      <Icon aria-hidden className={`${ENTRY_ICON} h-6 w-6`} strokeWidth={2} />
+      <Icon aria-hidden className={`${ENTRY_ICON} h-6 w-6 phone:h-5 phone:w-5`} strokeWidth={2} />
       <span className="flex min-w-0 flex-col gap-0.5">
         <span className="flex flex-wrap items-center gap-2.5">
-          <span className="lc-disp text-[30px] compact:text-[24px]">{item.label}</span>
+          <span className="lc-disp text-[30px] compact:text-[24px] phone:text-[18px]">{item.label}</span>
           {item.badge ? <Badge>{item.badge}</Badge> : null}
         </span>
-        <span className={`${ENTRY_DETAIL} text-[14px]`}>{item.detail}</span>
+        <span className={`${ENTRY_DETAIL} text-[14px] phone:text-[12px]`}>{item.detail}</span>
       </span>
     </button>
   );
@@ -334,32 +340,61 @@ const GridEntry: React.FC<{ item: MenuItem }> = ({ item }) => {
       onPointerEnter={focusOnHover}
       onClick={item.run}
       aria-expanded={item.panel ? false : undefined}
-      className={`${ENTRY_FOCUS} flex min-h-[56px] min-w-0 items-center gap-3 rounded-[18px] bg-transparent py-1.5 pr-3.5 pl-[22px] hover:bg-white/[0.04] compact:pl-4`}
+      className={`${ENTRY_FOCUS} flex min-h-[56px] min-w-0 items-center gap-3 rounded-[18px] bg-transparent py-1.5 pr-3.5 pl-[22px] hover:bg-white/[0.04] compact:pl-4 phone:min-h-[46px] phone:rounded-[16px] phone:py-1`}
     >
       <Icon aria-hidden className={`${ENTRY_ICON} h-5 w-5`} strokeWidth={2} />
       <span className="flex min-w-0 flex-col">
-        <span className="lc-title text-[18px] leading-[1.1]">{item.label}</span>
-        <span className={`${ENTRY_DETAIL} text-[12px]`}>{item.detail}</span>
+        <span className="lc-title text-[18px] leading-[1.1] phone:text-[15px]">{item.label}</span>
+        <span className={`${ENTRY_DETAIL} text-[12px] phone:text-[11px]`}>{item.detail}</span>
       </span>
     </button>
   );
 };
 
-/** Lap times / Credits / Request: the quiet text links under the grid */
-const LinkEntry: React.FC<{ item: MenuItem }> = ({ item }) => {
-  const Icon = item.icon;
-  return (
+/** A menu entry's element: a button, or a link out when the entry has an href */
+const EntryShell: React.FC<{ item: MenuItem; expanded?: boolean; className: string; children: React.ReactNode }> = ({
+  item,
+  expanded,
+  className,
+  children,
+}) =>
+  item.href ? (
+    <a
+      href={item.href}
+      target="_blank"
+      rel="noopener noreferrer"
+      data-rail-id={item.id}
+      onPointerEnter={focusOnHover}
+      className={`${className} no-underline`}
+    >
+      {children}
+    </a>
+  ) : (
     <button
       type="button"
       data-rail-id={item.id}
       onPointerEnter={focusOnHover}
       onClick={item.run}
-      aria-expanded={item.panel ? false : undefined}
+      aria-expanded={item.panel ? expanded : undefined}
+      className={className}
+    >
+      {children}
+    </button>
+  );
+
+/** Lap times / Credits / Request / Coffee / GitHub: the quiet text links under the grid */
+const LinkEntry: React.FC<{ item: MenuItem }> = ({ item }) => {
+  const Icon = item.icon;
+  return (
+    <EntryShell
+      item={item}
+      expanded={false}
       className={`${ENTRY_FOCUS} inline-flex min-h-[44px] items-center gap-2 rounded-full bg-transparent px-3 text-[14px] font-semibold text-[#C5CBD8] hover:bg-white/[0.04] hover:text-[#F5F7FA]`}
     >
       <Icon aria-hidden className={`${ENTRY_ICON} h-4 w-4`} strokeWidth={2} />
       {item.label}
-    </button>
+      {item.href ? <ExternalLink aria-hidden className={`${ENTRY_ICON} h-3.5 w-3.5`} strokeWidth={2} /> : null}
+    </EntryShell>
   );
 };
 
@@ -384,12 +419,9 @@ const CompactEntry: React.FC<{ item: MenuItem; open: boolean; quiet?: boolean }>
     );
   }
   return (
-    <button
-      type="button"
-      data-rail-id={item.id}
-      onPointerEnter={focusOnHover}
-      onClick={item.run}
-      aria-expanded={item.panel ? open : undefined}
+    <EntryShell
+      item={item}
+      expanded={open}
       className={`${ENTRY_FOCUS} flex min-h-[44px] w-full items-center gap-3 rounded-[14px] px-3.5 ${
         open ? "bg-[#00E5FF]/[0.08] shadow-[inset_0_0_0_1px_rgba(0,229,255,0.4)]" : "bg-transparent hover:bg-white/[0.04]"
       }`}
@@ -405,10 +437,11 @@ const CompactEntry: React.FC<{ item: MenuItem; open: boolean; quiet?: boolean }>
         {item.short ?? item.label}
       </span>
       {item.badge ? <Badge small>{item.badge}</Badge> : null}
+      {item.href ? <ExternalLink aria-hidden className={`${ENTRY_ICON} h-3.5 w-3.5`} strokeWidth={2} /> : null}
       {open ? (
         <span aria-hidden className="h-2 w-2 shrink-0 rounded-full bg-[#00E5FF] shadow-[0_0_10px_#00E5FF] group-focus:hidden" />
       ) : null}
-    </button>
+    </EntryShell>
   );
 };
 
@@ -548,6 +581,8 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
       panel: "request",
       run: () => openPanel("request"),
     },
+    { id: "support", label: "Buy me a coffee", detail: "Support development", icon: Coffee, href: SUPPORT_URL },
+    { id: "github", label: "GitHub", detail: "Source code", icon: CodeXml, href: REPO_URL },
   ];
   const panelItems = items.filter((i) => i.panel);
   // Some panels exist only while their props do: when an open one's go away, back to the title screen (and it stays
@@ -606,10 +641,10 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
   return (
     <div
       ref={rootRef}
-      className={`lc-ui-zoom pointer-events-auto fixed inset-0 z-40 flex flex-col overflow-y-auto px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:px-10 ${
+      className={`lc-ui-zoom pointer-events-auto fixed inset-0 z-40 flex flex-col overflow-y-auto pl-[max(1.25rem,env(safe-area-inset-left))] pr-[max(1.25rem,env(safe-area-inset-right))] pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:pl-[max(2.5rem,env(safe-area-inset-left))] sm:pr-[max(2.5rem,env(safe-area-inset-right))] ${
         panel
-          ? "bg-[linear-gradient(90deg,rgba(8,9,13,0.97)_0%,rgba(8,9,13,0.9)_60%,rgba(8,9,13,0.4)_85%)] pt-7 short:pt-4"
-          : "bg-[linear-gradient(90deg,rgba(8,9,13,0.97)_0%,rgba(8,9,13,0.86)_30%,rgba(8,9,13,0.2)_58%,rgba(8,9,13,0)_70%)] pt-[clamp(1.5rem,3.6vh,2.5rem)] max-lg:bg-[#08090D]/80 short:pt-4"
+          ? "bg-[linear-gradient(90deg,rgba(8,9,13,0.97)_0%,rgba(8,9,13,0.9)_60%,rgba(8,9,13,0.4)_85%)] pt-[max(1.75rem,env(safe-area-inset-top))] short:pt-[max(1rem,env(safe-area-inset-top))]"
+          : "bg-[linear-gradient(90deg,rgba(8,9,13,0.97)_0%,rgba(8,9,13,0.86)_30%,rgba(8,9,13,0.2)_58%,rgba(8,9,13,0)_70%)] pt-[max(clamp(1.5rem,3.6vh,2.5rem),env(safe-area-inset-top))] max-lg:bg-[#08090D]/80 short:pt-[max(1rem,env(safe-area-inset-top))]"
       }`}
     >
       <div className={`flex w-full flex-1 flex-col ${panel ? "gap-[22px]" : "gap-[clamp(20px,3vh,32px)]"} short:gap-4`}>
@@ -617,7 +652,10 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
         <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
           {panel ? (
             <>
-              <LibreCorsaLogo variant="compact" size="sm" />
+              <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2">
+                <LibreCorsaLogo variant="compact" size="sm" />
+                <EmbeddedBadge />
+              </div>
               <DevicePill pad={pad} slim />
             </>
           ) : (
@@ -631,6 +669,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
                   </span>
                   <span className="truncate">{kicker}</span>
                 </div>
+                <EmbeddedBadge />
               </div>
               <div className="flex min-w-0 flex-wrap items-center gap-2.5">
                 <DevicePill pad={pad} />
@@ -675,7 +714,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
                 <CompactEntry key={item.id} item={item} open={item.panel === panel} />
               ))}
               <div aria-hidden className="mx-3.5 my-2 h-px bg-[#262B3D]" />
-              {byId(["credits", "request"]).map((item) => (
+              {byId(["credits", "request", "support", "github"]).map((item) => (
                 <CompactEntry key={item.id} item={item} open={item.panel === panel} quiet />
               ))}
             </nav>
@@ -703,26 +742,35 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
         ) : (
           /* Title screen: the menu bottom-left, what Drive launches bottom-right */
           <main className="flex flex-1 flex-wrap items-end justify-between gap-8 compact:items-start short:gap-5">
-            <nav className="flex w-full max-w-[460px] flex-col gap-1.5 xl:max-w-[520px]" data-nav-zone="rail" aria-label="Main menu">
-              {byId(["drive"]).map((item) => (
-                <DriveHero key={item.id} item={item} pad={mode === "pad"} family={family} />
-              ))}
-              {byId(["race", "multiplayer"]).map((item) => (
-                <MainEntry key={item.id} item={item} />
-              ))}
-              <div className="mt-[18px] mb-1 ml-[22px] flex items-center gap-2.5 compact:mt-3 short:mt-2">
-                <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-[#CCFF00]" />
-                <span className="lc-lbl">Setup</span>
-              </div>
-              <div className="grid grid-cols-1 gap-1 min-[400px]:grid-cols-2">
-                {byId(["circuit", "conditions", "garage", "controls", "display"]).map((item) => (
-                  <GridEntry key={item.id} item={item} />
+            {/* Landscape phones put the setup beside the actions instead of under them, so it all fits one screen */}
+            <nav
+              className="flex w-full max-w-[460px] flex-col gap-1.5 xl:max-w-[520px] short:grid short:max-w-none short:grid-cols-2 short:items-start short:gap-x-5"
+              data-nav-zone="rail"
+              aria-label="Main menu"
+            >
+              <div className="flex flex-col gap-1.5 phone:gap-1">
+                {byId(["drive"]).map((item) => (
+                  <DriveHero key={item.id} item={item} pad={mode === "pad"} family={family} />
+                ))}
+                {byId(["race", "multiplayer"]).map((item) => (
+                  <MainEntry key={item.id} item={item} />
                 ))}
               </div>
-              <div className="mt-3.5 ml-2.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 short:mt-2">
-                {byId(["leaderboard", "credits", "request"]).map((item) => (
-                  <LinkEntry key={item.id} item={item} />
-                ))}
+              <div className="flex flex-col">
+                <div className="mt-[18px] mb-1 ml-[22px] flex items-center gap-2.5 compact:mt-3 short:mt-1 phone:ml-4">
+                  <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-[#CCFF00]" />
+                  <span className="lc-lbl">Setup</span>
+                </div>
+                <div className="grid grid-cols-1 gap-1 min-[360px]:grid-cols-2">
+                  {byId(["circuit", "conditions", "garage", "controls", "display"]).map((item) => (
+                    <GridEntry key={item.id} item={item} />
+                  ))}
+                </div>
+                <div className="mt-3.5 ml-2.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 short:mt-2">
+                  {byId(["leaderboard", "credits", "request", "support", "github"]).map((item) => (
+                    <LinkEntry key={item.id} item={item} />
+                  ))}
+                </div>
               </div>
             </nav>
 

@@ -4,6 +4,15 @@
 @custom-variant compact (@media not all and (min-width: 64rem) and (min-height: 48rem));
 /* Landscape phones and other very short viewports */
 @custom-variant short (@media (max-height: 32rem));
+/* Phones either way up (narrow or short viewports): the compact sizes, as dense as a mobile racer's menus and HUD */
+@custom-variant phone {
+  @media (max-width: 40rem) {
+    @slot;
+  }
+  @media (max-height: 32rem) {
+    @slot;
+  }
+}
 
 /*
  * Big-screen UI scale (src/lib/ui-zoom.ts). Menus and HUD are drawn for a 1080p-class window; a 1440p or 4K one at
@@ -31,6 +40,16 @@
 }
 .lc-ui-zoom {
   zoom: var(--lc-ui-zoom);
+}
+
+/*
+ * Safe area. The page runs under the notch, Dynamic Island and home indicator (viewportFit "cover", layout.tsx).
+ * A fixed layer with this class covers only the part of the screen nothing sits over, so whatever is anchored
+ * inside it clears them on its own. Anything that must reach the true edge (a vignette, a letterbox) goes outside it.
+ */
+.lc-safe-frame {
+  inset: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px)
+    env(safe-area-inset-left, 0px);
 }
 
 :root {
