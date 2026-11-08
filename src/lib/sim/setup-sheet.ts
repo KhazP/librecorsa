@@ -9,7 +9,7 @@
  */
 
 import type { TyreSetup, VehicleModelId } from "@/types/f1";
-import { type ChassisSetup, CHASSIS_LIMITS, FUEL_KG_PER_L, FUEL_LOAD, type GarageTuner, STEER_RATIO_BASE } from "./car-setup";
+import { type ChassisSetup, CHASSIS_LIMITS, FUEL_KG_PER_L, FUEL_LOAD, type GarageTuner, STEER_RATIO_BASE, WING_CLICK_DEG } from "./car-setup";
 import { VF26_CHASSIS } from "./vf26-data";
 import { F12026_CAR_CONFIG } from "./f12026-car/F12026CarConfig";
 import { AMG_GT3_CONFIG } from "./gt3/AmgGt3Config";
@@ -92,6 +92,8 @@ interface CarBaseline {
   bumpStopRangeRearMm: number;
   diffPreloadNm: number;
   steerRatio: number;
+  /** Front brake share (%) a reset puts back; absent: the class's default */
+  brakeBiasPct?: number;
 }
 
 const rigidBaseline = (
@@ -110,6 +112,7 @@ const rigidBaseline = (
   bumpStopRangeRearMm: cfg.suspensions.rear.bumpStop.range * 1000,
   diffPreloadNm: cfg.differential.settings.preload,
   steerRatio: STEER_RATIO_BASE[vehicle],
+  brakeBiasPct: Number((cfg.brakes.front_bias * 100).toFixed(1)),
 });
 
 const BASELINES: Record<VehicleModelId, CarBaseline> = {
@@ -397,8 +400,13 @@ function f1Sheet(vehicle: VehicleModelId, b: CarBaseline, r: TyreRanges, d: Tyre
   ];
 }
 
-/** The GT3 sheet: shared by every GT3 car */
+/**
+ * The GT3 sheet: shared by every GT3 car, and by the road cars (closed-wheel cars with ABS / TC). The brake bias,
+ * bump-stop and preload ranges reach each car's own baseline; the rear wing and aero packages only show on a car
+ * that has a wing.
+ */
 function gt3Sheet(vehicle: VehicleModelId, b: CarBaseline, r: TyreRanges, d: TyreSetup): SetupGroup[] {
+  const hasWing = WING_CLICK_DEG[vehicle].rear > 0;
   const rate = (key: keyof ChassisSetup, label: string, baseNmm: number, fx: SetupEffect) =>
     // The slider runs in % of the baseline; the readout is the rate itself
     chassisParam(key, { label, base: 0, min: -100, max: 100, step: CHASSIS_LIMITS[key].step, format: (v) => `${Math.round(baseNmm * (1 + v / 100))} N/mm`, fx });
@@ -430,15 +438,15 @@ function gt3Sheet(vehicle: VehicleModelId, b: CarBaseline, r: TyreRanges, d: Tyr
         chassisParam("arbFrontPct", { label: "Front anti-roll bar", base: 11, perUnit: 1 / 5, min: 1, max: 21, step: 1, format: int, fx: FX.arbFront }),
         chassisParam("arbRearPct", { label: "Rear anti-roll bar", base: 11, perUnit: 1 / 5, min: 1, max: 21, step: 1, format: int, fx: FX.arbRear }),
         chassisParam("brakePowerPct", { label: "Brake power", base: 100, min: 80, max: 100, step: 1, format: pct, fx: FX.brakePressure }),
-        tunerParam("brakeBiasPct", { label: "Brake bias", base: 71, min: 60, max: 78, step: 0.5, format: (v) => `${v.toFixed(1)}%`, fx: FX.bias }),
+        tunerParam("brakeBiasPct", { label: "Brake bias", base: b.brakeBiasPct ?? 71, min: 60, max: 78, step: 0.5, format: (v) => `${v.toFixed(1)}%`, fx: FX.bias }),
         chassisParam("steerRatioDelta", { label: "Steering ratio", base: b.steerRatio, min: 10, max: 16, step: 0.2, format: (v) => v.toFixed(1), fx: FX.steerRatio }),
         rate("springFrontPct", "Front wheel rate", b.wheelRateFrontNmm, FX.wheelRateFront),
         rate("springRearPct", "Rear wheel rate", b.wheelRateRearNmm, FX.wheelRateRear),
         rate("bumpStopRateFrontPct", "Front bump stop rate", b.bumpStopRateFrontNmm, FX.bumpStopRate),
         rate("bumpStopRateRearPct", "Rear bump stop rate", b.bumpStopRateRearNmm, FX.bumpStopRate),
-        chassisParam("bumpStopRangeFrontMm", { label: "Front bump stop range", base: Math.round(b.bumpStopRangeFrontMm), min: 5, max: 70, step: 1, format: mm, fx: FX.bumpStopRange }),
-        chassisParam("bumpStopRangeRearMm", { label: "Rear bump stop range", base: Math.round(b.bumpStopRangeRearMm), min: 5, max: 70, step: 1, format: mm, fx: FX.bumpStopRange }),
-        chassisParam("diffPreloadNm", { label: "Diff preload", base: b.diffPreloadNm, min: 20, max: 300, step: 10, format: (v) => `${Math.round(v)} Nm`, fx: FX.preload }),
+        chassisParam("bumpStopRangeFrontMm", { label: "Front bump stop range", base: Math.round(b.bumpStopRangeFrontMm), min: 5, max: Math.max(70, Math.round(b.bumpStopRangeFrontMm) + 10), step: 1, format: mm, fx: FX.bumpStopRange }),
+        chassisParam("bumpStopRangeRearMm", { label: "Rear bump stop range", base: Math.round(b.bumpStopRangeRearMm), min: 5, max: Math.max(70, Math.round(b.bumpStopRangeRearMm) + 10), step: 1, format: mm, fx: FX.bumpStopRange }),
+        chassisParam("diffPreloadNm", { label: "Diff preload", base: b.diffPreloadNm, min: Math.min(20, b.diffPreloadNm), max: 300, step: 10, format: (v) => `${Math.round(v)} Nm`, fx: FX.preload }),
       ],
     },
     {
@@ -451,11 +459,11 @@ function gt3Sheet(vehicle: VehicleModelId, b: CarBaseline, r: TyreRanges, d: Tyr
       id: "aero",
       label: "Aero",
       short: "Aero",
-      extras: ["aeroPackage"],
+      extras: hasWing ? ["aeroPackage"] : [],
       params: [
         chassisParam("rideHeightFrontMm", { label: "Front ride height", base: Math.round(b.rideFrontMm), min: Math.round(b.rideFrontMm) - 15, max: Math.round(b.rideFrontMm) + 15, step: 1, format: mm, fx: FX.rideFront }),
         chassisParam("rideHeightRearMm", { label: "Rear ride height", base: Math.round(b.rideRearMm), min: Math.round(b.rideRearMm) - 15, max: Math.round(b.rideRearMm) + 15, step: 1, format: mm, fx: FX.rideRear }),
-        chassisParam("rearWingClicks", { label: "Rear wing", base: 5, min: 0, max: 10, step: 1, format: int, fx: FX.rearWing }),
+        ...(hasWing ? [chassisParam("rearWingClicks", { label: "Rear wing", base: 5, min: 0, max: 10, step: 1, format: int, fx: FX.rearWing })] : []),
         chassisParam("brakeDuctFront", { label: "Front brake ducts", base: 3, min: 0, max: 6, step: 1, format: int, fx: FX.ductFront }),
         chassisParam("brakeDuctRear", { label: "Rear brake ducts", base: 3, min: 0, max: 6, step: 1, format: int, fx: FX.ductRear }),
       ],
