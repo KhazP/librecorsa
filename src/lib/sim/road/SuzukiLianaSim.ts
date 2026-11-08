@@ -60,7 +60,9 @@ export const SUZUKI_LIANA_SIM_PROFILE: CarSimProfile = {
   padLateralMu: 0.75,
   // 0.8 g on the brakes at town speeds to ≈ 0.95 g at the top end (drag), no downforce
   braking: { lowG: 0.8, aeroG: 0.15, refMs: 50 },
-  understeerRadPerMs2: 0.006,
+  // A nose-heavy front-driver: ≈ 7.5° more front than rear slip at 0.78 g on the steady ramp (scripts/verify-liana.ts),
+  // so the autopilot steers that much in ahead of its yaw loop; with less it ran 1.7 m wide in Top Gear's 7 m section
+  understeerRadPerMs2: 0.015,
   speedProfile: SUZUKI_LIANA_PROFILE_CAR,
   // The slower line: lower grip than an F1 car moves the apexes and braking points
   racingLine: 'gt3',
