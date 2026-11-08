@@ -40,7 +40,6 @@ import { Lut } from '../lut';
 import { tyreGaugePressureAtTemperature } from '../tyre-pressure';
 import {
   advanceDirtyLevel,
-  evaluateIso8608RoadRoughness,
   flatSpotVibrationNm,
   tyreCentrifugalGrowthM,
   wearGripMultiplier,
@@ -124,6 +123,7 @@ import {
   spinFrictionArmM,
   stepPatchTwist,
 } from './steering-torque';
+import { roadTextureHeightM } from '../road-texture';
 
 const G = 9.81;
 const DEG2RAD = Math.PI / 180;
@@ -643,6 +643,7 @@ export function combinedSlipForces(
 }
 
 const _comb = { fx: 0, fy: 0, sx: 0, sy: 0 };
+const _roadSlope = { dhdx: 0, dhdz: 0 };
 
 // Scratch (single-threaded, never escapes a call)
 const _m = new THREE.Matrix4();
@@ -1917,8 +1918,11 @@ export class VehiclePhysics {
       let fz = 0;
       let delta = 0;
       if (w.grounded) {
-        delta = R0 - (w.hubY - g.height) * g.ny;
-        const vRelN = w.hardpointVel.x * g.nx + w.hubVy * g.ny + w.hardpointVel.z * g.nz;
+        // Road micro-texture under the patch (position-based, so the tyre and through it the rack feel the same bumps)
+        const roadDz = roadTextureHeightM(w.hardpointWorld.x, w.hardpointWorld.z, w.patchHalfLengthM, _roadSlope);
+        const roadVy = _roadSlope.dhdx * w.hardpointVel.x + _roadSlope.dhdz * w.hardpointVel.z;
+        delta = R0 - (w.hubY - g.height - roadDz) * g.ny;
+        const vRelN = w.hardpointVel.x * g.nx + (w.hubVy - roadVy) * g.ny + w.hardpointVel.z * g.nz;
         if (delta > 0) fz = Math.max(0, w.verticalRate * delta - model.verticalDamping * vRelN);
       }
       w.fz = fz;
@@ -2120,21 +2124,13 @@ export class VehiclePhysics {
       w.fx = fx;
       w.fy = fy;
       // Rack torque: each front tyre's road loads about its kingpin axis (Fx at the scrub radius, Fy at the caster trail,
-      // Fz's KPI / caster weight-jacking, Mz and Mx projected onto the axis), plus the flat-spot shake and road
-      // micro-roughness. Any other moment about the kingpin joins this sum as its own term
+      // Fz's KPI / caster weight-jacking, Mz and Mx projected onto the axis), plus the flat-spot shake. Any other moment
+      // about the kingpin joins this sum as its own term
       if (w.isFront) {
-        const flatSpotVib = flatSpotVibrationNm(w.flatSpotSeverity, w.rotationRad, w.omega, fz);
-        const speedGate = THREE.MathUtils.clamp(absVx / 5, 0, 1);
-        const isoRough = evaluateIso8608RoadRoughness(
-          w.hardpointWorld.x,
-          w.hardpointWorld.z,
-          g.surface === 'kerb' || g.surface === 'sausage' ? 'kerb' : 'asphalt'
-        );
-        const roadTexNm = isoRough * w.verticalRate * 0.006 * speedGate * (w.isLeft ? 1 : -1);
         const tyreKingpinNm = kingpinMomentNm(
           _ex, _ey, _ez, _n, _fw, _lw, w.isLeft ? -1 : 1, w.steerRad, w.loadedRadius, kin, fx, fy, fz, w.mz + w.mzTwist, w.mx
         );
-        ffbMz += tyreKingpinNm + flatSpotVib + roadTexNm;
+        ffbMz += tyreKingpinNm + flatSpotVibrationNm(w.flatSpotSeverity, w.rotationRad, w.omega, fz);
       }
 
       // Loose ground (gravel, grass) ploughs against the contact patch's motion, sliding or rolling, outside the
