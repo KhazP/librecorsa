@@ -292,14 +292,20 @@ export interface AxleSuspensionData {
   actuation: 'pull_rod' | 'push_rod';
   /** `BasicSuspensionData.staticCamber` (deg, negative = top inward) */
   staticCamber: number;
-  /** Kinematic camber change with bump (deg per m of compression) */
+  /**
+   * Kinematic camber change with bump at static (deg per m of compression): what `hardpoints` give, for reference (the
+   * physics solves the camber from the hardpoints; the verify suites check the two agree)
+   */
   camberGainKinematic: number;
   springs: SuspensionSettingUnits;
   heave: HeaveSpringData;
   bumpStop: BumpStopSettingsUnits;
   /** Rebound travel from static to the droop limiter (m) */
   droopTravel: number;
-  /** Kinematic roll-centre height above the ground (m): tyre forces act on the body here */
+  /**
+   * Kinematic roll-centre height above the ground at static (m): what `hardpoints` give, for reference (the tyre forces
+   * reach the body through the solved link geometry; the verify suites check the two agree)
+   */
   rollCentreHeight: number;
   /** Anti-roll bar rate at the wheel (`MechanicalBalanceUnits.arbs`, N/m) */
   arb: number;
@@ -945,14 +951,16 @@ const F12026_SUSPENSIONS: SuspensionsData = {
     droopTravel: 0.03,
     rollCentreHeight: 0.045,
     arb: 120_000,
+    // Inner pickup heights (each wishbone and the rack moved as a whole) set so the solved geometry gives the RC and
+    // camber gain above; the side view (≈ 22 % anti-dive) and the uprights are as before [derived]
     hardpoints: [
-      [0.7198, 0.1858, 0.0],
-      [0.7198, 0.1828, -0.375],
-      [0.7500, -0.0273, 0.05],
-      [0.7500, -0.0229, -0.40],
+      [0.7198, 0.1286, 0.0],
+      [0.7198, 0.1256, -0.375],
+      [0.7500, -0.0520, 0.05],
+      [0.7500, -0.0476, -0.40],
       [0.1749, 0.1925, -0.0356],
       [0.1350, -0.0225, -0.0083],
-      [0.7198, 0.1883, 0.08],
+      [0.7198, 0.1317, 0.08],
       [0.1749, 0.1925, 0.06],
     ],
   },
@@ -967,14 +975,15 @@ const F12026_SUSPENSIONS: SuspensionsData = {
     droopTravel: 0.04,
     rollCentreHeight: 0.08,
     arb: 45_000,
+    // As the front: inner pickup heights for the RC and camber gain above, side view and uprights as before [derived]
     hardpoints: [
-      [0.6847, 0.1297, 0.42],
-      [0.6847, 0.1418, -0.05],
-      [0.6887, -0.0186, 0.45],
-      [0.6887, -0.0127, -0.05],
+      [0.6847, 0.1729, 0.42],
+      [0.6847, 0.1850, -0.05],
+      [0.6887, 0.0227, 0.45],
+      [0.6887, 0.0286, -0.05],
       [0.2483, 0.1925, 0.0],
       [0.2299, 0.0175, 0.0],
-      [0.6847, 0.1423, -0.125],
+      [0.6847, 0.1851, -0.125],
       [0.2483, 0.1925, -0.125],
     ],
   },
