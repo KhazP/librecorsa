@@ -363,10 +363,16 @@ export function setTyreColdPressure(t: TyreRuntime, coldPsi: number): void {
   updateInflation(t);
 }
 
-/** Sets every node and the gas to one temperature (tyre blankets) and resets surface degradation states */
+/**
+ * A fresh set off the blankets: every node and the gas at one temperature, and no degradation carried over (tread
+ * wear, flat spots, graining, blisters, dirt). Its callers fit a set: a compound change and a placement on the grid.
+ * A teleport (corner practice, a stuck-car rescue) moves the car, not its tyres: it keeps the wear through
+ * tyreWearState / restoreTyreWear.
+ */
 export function setTyreTemperature(t: TyreRuntime, tempC: number): void {
   t.nodes.fill(tempC);
   t.circumferentialTempsC.fill(tempC);
+  t.wear = 0;
   t.circumferentialWear.fill(0);
   t.wheelAngleRad = 0;
   t.angularVelRadS = 0;
@@ -379,6 +385,39 @@ export function setTyreTemperature(t: TyreRuntime, tempC: number): void {
   t.surfaceTempC = tempC;
   t.coreTempC = tempC;
   updateInflation(t);
+}
+
+/** The wear and damage a set carries (tread, flat spots, graining, blisters, dirt), for a placement that moves the car, not its tyres */
+export interface TyreWearState {
+  wear: number;
+  circumferentialWear: Float64Array;
+  flatSpotSeverity: number;
+  flatSpotRadiusDropM: number;
+  grainLevel: number;
+  blisterLevel: number;
+  dirtyLevel: number;
+}
+
+export function tyreWearState(t: TyreRuntime): TyreWearState {
+  return {
+    wear: t.wear,
+    circumferentialWear: t.circumferentialWear.slice(),
+    flatSpotSeverity: t.flatSpotSeverity,
+    flatSpotRadiusDropM: t.flatSpotRadiusDropM,
+    grainLevel: t.grainLevel,
+    blisterLevel: t.blisterLevel,
+    dirtyLevel: t.dirtyLevel,
+  };
+}
+
+export function restoreTyreWear(t: TyreRuntime, s: TyreWearState): void {
+  t.wear = s.wear;
+  t.circumferentialWear.set(s.circumferentialWear);
+  t.flatSpotSeverity = s.flatSpotSeverity;
+  t.flatSpotRadiusDropM = s.flatSpotRadiusDropM;
+  t.grainLevel = s.grainLevel;
+  t.blisterLevel = s.blisterLevel;
+  t.dirtyLevel = s.dirtyLevel;
 }
 
 /** Surface temperature of one band (0 inner, 1 middle, 2 outer) */

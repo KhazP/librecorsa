@@ -88,6 +88,8 @@ import {
   setTyreColdPressure,
   setTyreSpec,
   setTyreTemperature,
+  restoreTyreWear,
+  tyreWearState,
   tyreBandSurfaceTempC,
   tyreLoadedRadius,
   tyreRollingRadius,
@@ -378,6 +380,8 @@ export class F1Physics2026 {
   public lastLsdTorqueNm = 0;
   public engineMap = 2;
   private userErsMode: ERSMode = 'BALANCED';
+  /** The tuner's ERS setting as the player picked it (two settings share a mode, so the mode alone can't be read back) */
+  private userErsLabel: 'PSH' | 'RAC' | 'BAL' | 'LIC' | 'CHR' = 'RAC';
   public tireCompound: TireCompound = 'soft';
   /** AI cars fit the tyre the weather calls for (set on cars made by `createAiPeerCar`) */
   public aiAutoTyres = false;
@@ -429,7 +433,11 @@ export class F1Physics2026 {
   private lastAyMs2 = 0;
   private prevShiftUp = false;
   private prevShiftDown = false;
+  /** A paddle press that came while a shift was still under way: it is made once that shift is done */
+  private pendingShift: -1 | 0 | 1 = 0;
   private prevToggleXMode = false;
+  /** `aiAutopilot` as the last step saw it: the shell flips it between frames, so `step` acts on the change */
+  private prevAiAutopilot = false;
   private tcCut = 1;
   private aiBrakeTrim = 1;
   private aiThrottleTrim = 1;
@@ -798,15 +806,9 @@ export class F1Physics2026 {
   }
 
   public getLiveTunerState(): LiveTunerState {
-    const drv = this.drivetrain;
-    const ersLabel =
-      drv.ersMode === 'OVERRIDE'
-        ? 'PSH'
-        : drv.ersMode === 'HOTLAP'
-          ? 'PSH'
-          : drv.ersMode === 'HARVEST'
-            ? 'CHR'
-            : 'RAC';
+    // The setting the player picked, not the mode running now (an override or the autopilot's own choice): the tuner
+    // steps from what it reads back, and LIC / CHR and BAL / RAC share a mode
+    const ersLabel = this.userErsLabel;
     return {
       tcLevel: this.tcLevel,
       tc2Level: this.tc2Level,
@@ -866,6 +868,7 @@ export class F1Physics2026 {
       if (m === 'PSH') this.userErsMode = 'HOTLAP';
       else if (m === 'CHR' || m === 'LIC') this.userErsMode = 'HARVEST';
       else this.userErsMode = 'BALANCED';
+      this.userErsLabel = m === 'PSH' || m === 'BAL' || m === 'LIC' || m === 'CHR' ? m : 'RAC';
       if (this.drivetrain.boostRemainingS <= 0) {
         this.drivetrain.ersMode = this.userErsMode;
       }
@@ -975,7 +978,11 @@ export class F1Physics2026 {
     }
     this.activeAeroMode = flyingStart ? 'X_MODE' : 'Z_MODE';
     this.xModeBlend = flyingStart ? 1 : 0;
+    // A restart hands Straight Mode back to the automatic rule, as at the first start
+    this.autoXMode = true;
     this.drivetrain = this.createDrivetrain();
+    // The ERS setting the player picked in the tuner, not the fresh drivetrain's default
+    this.drivetrain.ersMode = this.userErsMode;
     // A fresh tank of the garage's fuel load: its mass and readout from the first frame
     this.recomputeMassProperties();
     this.telemetry.fuelKg = this.drivetrain.fuelKg;
@@ -1011,8 +1018,13 @@ export class F1Physics2026 {
 
   public teleportToDistance(sMeters: number, speedMs = 0, lateral = 0): void {
     this.lineCrossingStartsLap = false;
+    // Moved mid-lap (corner practice, a stuck-car rescue): the lap under way can't count
+    this.invalidateLap();
     const wrapped = ((sMeters % this.track.totalLengthM) + this.track.totalLengthM) % this.track.totalLengthM;
+    // The car moves, its tyres don't get swapped: the set keeps its wear and damage (only the grid fits a fresh set)
+    const worn = this.wheels.map((w) => tyreWearState(w.tyre));
     this.placeCar(wrapped, Math.max(0, speedMs), lateral);
+    this.wheels.forEach((w, i) => restoreTyreWear(w.tyre, worn[i]));
     const dt = this.drivetrain;
     dt.gear = this.selectGearForSpeed(this.vxMs);
     dt.shiftTarget = dt.gear;
@@ -1029,6 +1041,8 @@ export class F1Physics2026 {
     const tangent = this.track.getSampleAtDistance(p.s).tangent;
     const trackHeadingRad = Math.atan2(tangent.x, tangent.z);
     this.lineCrossingStartsLap = false;
+    // A flashback moves the car mid-lap: the lap under way can't count
+    this.invalidateLap();
     this.timeAccumulator = 0;
     this.sMeters = p.s;
     this.lateralOffsetM = p.lateralOffset;
@@ -1148,6 +1162,11 @@ export class F1Physics2026 {
       shiftDown: Boolean(rawInputs.shiftDown),
     };
 
+    if (this.aiAutopilot !== this.prevAiAutopilot) {
+      this.prevAiAutopilot = this.aiAutopilot;
+      if (this.aiAutopilot) this.onAutopilotEngaged();
+      else this.onAutopilotReleased();
+    }
     if (inputs.toggleXMode && !this.prevToggleXMode) {
       this.autoXMode = false;
       this.activeAeroMode = this.activeAeroMode === 'Z_MODE' ? 'X_MODE' : 'Z_MODE';
@@ -1192,6 +1211,24 @@ export class F1Physics2026 {
     this.updateTelemetrySnapshot(currentSample, inputs);
     this.updateTyreVisuals();
     return this.telemetry;
+  }
+
+  /** The autopilot takes the car: its driver starts from what the car is doing now, not from its last drive */
+  private onAutopilotEngaged(): void {
+    this.aiDriver.reset();
+    this.aiBrakeTrim = 1;
+    this.aiThrottleTrim = 1;
+    this.aiFrontCourseRad = Math.atan2(this.vyMs - this.yawRateRadS * this.cgToFrontAxleM, Math.max(3, this.vxMs));
+  }
+
+  /**
+   * The player takes the car back: the ERS mode the player picked instead of the AI's, and Straight Mode shut (the
+   * automatic rule opens it again at once where it applies; a manual player opens it themselves)
+   */
+  private onAutopilotReleased(): void {
+    const drv = this.drivetrain;
+    if (drv.boostRemainingS <= 0) drv.ersMode = this.userErsMode;
+    this.activeAeroMode = 'Z_MODE';
   }
 
   /** Copies the last sub-step's tyre state into `tyreVisuals` (no physics state is written) */
@@ -1388,6 +1425,7 @@ export class F1Physics2026 {
     this.overtake.reset();
     const sample = this.track.getSampleAtDistance(this.sMeters);
     this.manualShift.clear();
+    this.pendingShift = 0;
     this.drivetrain.autoShiftCooldownS = 0;
     this.lastSector = sample.sector;
     this.syncWorldTransform();
@@ -1894,6 +1932,8 @@ export class F1Physics2026 {
     if (drv.autoShiftCooldownS > 0) drv.autoShiftCooldownS = Math.max(0, drv.autoShiftCooldownS - dt);
     this.manualShift.tick(dt);
 
+    // A paddle press during a shift waits for it to finish (one press is kept), instead of being dropped
+    if (shiftRequest !== 0 && drv.shiftTimerS > 0) this.pendingShift = shiftRequest;
     if (drv.shiftTimerS > 0) {
       drv.shiftTimerS -= dt;
       if (drv.shiftTimerS <= 0) {
@@ -1905,6 +1945,10 @@ export class F1Physics2026 {
         }
       }
       return;
+    }
+    if (this.pendingShift !== 0) {
+      if (shiftRequest === 0) shiftRequest = this.pendingShift;
+      this.pendingShift = 0;
     }
 
     let desired = drv.gear;
@@ -2516,6 +2560,7 @@ export class F1Physics2026 {
       const slipAfter = drv.engineOmega - omegaAxle * ratio;
       if (ratio !== 0 && Math.abs(slipAfter) < 8 && capacity >= Math.abs(tEngine) * 0.9 && capacity > 50) {
         drv.clutchLocked = true;
+        drv.clutchEngagement = 1;
         drv.engineOmega = omegaAxle * ratio;
         drv.launchSlipS = 0;
       }

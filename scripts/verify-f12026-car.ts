@@ -943,5 +943,67 @@ console.log('\n== F12026CarSim (simulator adapter)');
   }
 }
 
+// Driver-facing states: the tuner reads back what was picked, a picked PSH is not a running boost, the dialled brake bias
+// keeps the modes' EBB offsets, a mid-lap placement deletes the lap, and the auto Straight Mode flag stays off
+{
+  console.log('\nTuner, boost and lap states...');
+  const pad = createFlatTestTrack(40_000, 3000);
+  const sim = new F12026CarSim(pad);
+  sim.resetToStartGrid(false);
+  const readBack = (['CHR', 'LIC', 'BAL', 'RAC', 'PSH'] as const).map((m) => {
+    sim.setLiveTuner({ ersMode: m });
+    return sim.getLiveTunerState().ersMode;
+  });
+  check('ERS tuner reads back each setting', readBack.join() === 'CHR,LIC,BAL,RAC,PSH', readBack.join(' '));
+  sim.step(1 / 60, { throttle: 0.5 });
+  check('PSH picked in the tuner is not Overtake boost', !sim.telemetry.manualOverrideActive, `manualOverrideActive ${sim.telemetry.manualOverrideActive}`);
+  sim.setLiveTuner({ ersMode: 'RAC' });
+  sim.step(1 / 60, { throttle: 0.5, manualOverride: true });
+  const boostOn = sim.telemetry.manualOverrideActive;
+  const dialDuringPush = sim.getLiveTunerState().ersMode;
+  check('Held override is the boost; the dial keeps RAC', boostOn && dialDuringPush === 'RAC', `manualOverrideActive ${boostOn}, dial ${dialDuringPush}`);
+
+  sim.setLiveTuner({ ersMode: 'RAC' });
+  sim.setLiveTuner({ brakeBiasPct: 57 });
+  const racPct = sim.getLiveTunerState().brakeBiasPct;
+  sim.setLiveTuner({ ersMode: 'BAL' });
+  const balPct = sim.getLiveTunerState().brakeBiasPct;
+  const step = F12026_CAR_CONFIG.brakes.ebbStep * 100;
+  const offsetGap = (F12026_CAR_CONFIG.performanceModes.RAC.ebbOffset - F12026_CAR_CONFIG.performanceModes.BAL.ebbOffset) * step;
+  check(
+    'Dialled brake bias keeps the modes\' EBB offsets',
+    Math.abs(racPct - 57) < 0.051 && Math.abs(racPct - balPct - offsetGap) < 0.051,
+    `57.0 % dialled in RAC reads ${fmt(racPct, 1)} %, in BAL ${fmt(balPct, 1)} % (offset gap ${fmt(offsetGap, 1)} %)`
+  );
+
+  sim.resetToStartGrid(false);
+  for (let i = 0; i < 30; i++) sim.step(1 / 60, { throttle: 1 });
+  const cleanBefore = sim.telemetry.lapInvalid !== true;
+  sim.teleportToDistance(2000, 50);
+  const afterTeleport = sim.telemetry.lapInvalid === true;
+  sim.resetToStartGrid(false);
+  const afterRestart = sim.telemetry.lapInvalid === true;
+  sim.teleportToTurn(1);
+  const afterTurn = sim.telemetry.lapInvalid === true;
+  // Flashback on the out-lap (12 m behind the line, not yet timed) keeps it; once over the line it deletes the lap
+  sim.resetToStartGrid(false);
+  sim.restorePose({ x: sim.worldPosition.x, z: sim.worldPosition.z, yawRad: 0, speedMs: 0 });
+  const outLapFlashback = sim.telemetry.lapInvalid === true;
+  sim.resetToStartGrid(false);
+  for (let i = 0; i < 150; i++) sim.step(1 / 60, { throttle: 1 });
+  const timing = sim.telemetry.currentLapTimeMs < 2400;
+  sim.restorePose({ x: sim.worldPosition.x, z: sim.worldPosition.z, yawRad: 0, speedMs: 40 });
+  const afterFlashback = sim.telemetry.lapInvalid === true;
+  check(
+    'A mid-lap placement deletes the lap; a restart starts clean',
+    cleanBefore && afterTeleport && !afterRestart && afterTurn && !outLapFlashback && timing && afterFlashback,
+    `before ${cleanBefore ? 'clean' : 'invalid'}, teleport ${afterTeleport}, restart ${afterRestart}, corner practice ${afterTurn}, ` +
+      `out-lap flashback ${outLapFlashback}, timed-lap flashback ${afterFlashback}${timing ? '' : ' (line not crossed)'}`
+  );
+
+  sim.autoXMode = true;
+  check('Driver-operated DRS: autoXMode stays off', !sim.autoXMode && !sim.telemetry.autoXMode, `autoXMode ${sim.autoXMode}`);
+}
+
 console.log(failures.length ? `\n${failures.length} check(s) failed: ${failures.join(', ')}` : '\nAll f12026-car checks passed.');
 process.exit(failures.length ? 1 : 0);

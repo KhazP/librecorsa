@@ -604,13 +604,22 @@ export class F12026CarSim implements SimulatorCar {
   public absLevel = 5;
   /** User-selected ERS deployment mode in MFD (overridden to 'PSH' while manual override / boost is held) */
   private userErsMode: PerformanceModeName = 'RAC';
+  /** Push mode is running (the override held or latched, the 8 s boost, or the AI's Overtake Mode), not just picked */
+  private pushActive = false;
+  /** `aiAutopilot` as the last step saw it: the shell flips it between frames, so `step` acts on the change */
+  private prevAiAutopilot = false;
   public gamepadAssistEnabled = true;
   /** Automatic gear changes; off = the driver shifts. The autopilot always shifts for itself (VehiclePhysics.autoShift) */
   public autoGearbox = true;
   /** Keyboard and controller steering assist */
   public readonly steeringAssist = new SteeringAssist();
-  /** DRS is driver-operated on the f12026-car (and absent on a GT3) */
-  public autoXMode = false;
+  /** DRS is driver-operated on the f12026-car (and absent on a GT3): there is no automatic mode, so writes are ignored */
+  public get autoXMode(): boolean {
+    return false;
+  }
+  public set autoXMode(_auto: boolean) {
+    // nothing to switch: the driver opens the flap
+  }
   /** Race control for the overtaking aids (the 1 s and lap rules); null = practice, the aids are free */
   public raceControl: OvertakingRaceControl | null = null;
   /** The car's era: 2026 Straight Mode + Overtake Mode, or rear-flap DRS (`setOvertakingRules`) */
@@ -1059,7 +1068,8 @@ export class F12026CarSim implements SimulatorCar {
       diffActivePhase: v.diffActivePhase,
       diffLockingTorqueNm: Math.round(v.telemetry.LSD_LOCKING_TORQUE),
       engineMap: v.engineMap,
-      ersMode: v.performanceMode,
+      // The setting the player picked, not the push mode an override runs: the tuner steps from what it reads back
+      ersMode: this.userErsMode,
       hasErs: this.profile.hasErs,
       tcCutFraction: Number(Math.max(0, 1 - this.tcCut).toFixed(3)),
       absCutPerWheel: [
@@ -1083,6 +1093,14 @@ export class F12026CarSim implements SimulatorCar {
     if (patch.absLevel !== undefined) {
       this.absLevel = THREE.MathUtils.clamp(Math.round(patch.absLevel), 0, 12);
     }
+    // The mode before the bias: the bias the driver dials is set as their offset on top of the mode's own
+    if (patch.ersMode !== undefined && this.profile.hasErs) {
+      const m = patch.ersMode as PerformanceModeName;
+      if (m === 'PSH' || m === 'RAC' || m === 'BAL' || m === 'LIC' || m === 'CHR') {
+        this.userErsMode = m;
+        v.setPerformanceMode(m);
+      }
+    }
     if (patch.brakeBiasPct !== undefined) {
       v.brakeBias = THREE.MathUtils.clamp(patch.brakeBiasPct / 100, 0.45, 0.78);
     }
@@ -1100,13 +1118,6 @@ export class F12026CarSim implements SimulatorCar {
     }
     if (patch.engineMap !== undefined) {
       v.engineMap = THREE.MathUtils.clamp(Math.round(patch.engineMap), 1, 5);
-    }
-    if (patch.ersMode !== undefined && this.profile.hasErs) {
-      const m = patch.ersMode as PerformanceModeName;
-      if (m === 'PSH' || m === 'RAC' || m === 'BAL' || m === 'LIC' || m === 'CHR') {
-        this.userErsMode = m;
-        v.setPerformanceMode(m);
-      }
     }
     this.telemetry.liveTuner = this.getLiveTunerState();
   }
@@ -1256,6 +1267,7 @@ export class F12026CarSim implements SimulatorCar {
     this.lapStartMs = 0;
     this.sectorStartMs = 0;
     this.lapValid = true;
+    this.telemetry.lapInvalid = false;
     this.lineCrossingStartsLap = true;
     this.telemetry.currentLapTimeMs = 0;
     this.telemetry.topSpeedThisLapKmh = 0;
@@ -1263,12 +1275,16 @@ export class F12026CarSim implements SimulatorCar {
 
   public teleportToDistance(sMeters: number, speedMs = 0, lateral = 0): void {
     this.lineCrossingStartsLap = false;
+    // Moved mid-lap (corner practice, a stuck or lost car's rescue): the lap under way can't count
+    this.invalidateLap();
     this.placeAt(wrap(sMeters, this.track.totalLengthM), lateral, Math.max(0, speedMs));
     this.afterPlacement();
   }
 
   /** Flashback: back on the ground at a replayed pose, rolling at its speed, with the tyres as they are now */
   public restorePose(pose: { x: number; z: number; yawRad: number; speedMs: number; s?: number }): void {
+    // A flashback moves the car mid-lap: the timed lap under way can't count (an out-lap, not yet timed, carries on)
+    if (!this.lineCrossingStartsLap) this.invalidateLap();
     const p = this.track.projectWorldToTrack(pose.x, pose.z, pose.s ?? this.s);
     this.progressHintS = this.poseHintS = p.s;
     this.resetVehicle(pose.x, pose.z, pose.yawRad, Math.max(0, pose.speedMs), true);
@@ -1292,6 +1308,8 @@ export class F12026CarSim implements SimulatorCar {
     const [xa, za] = onLine(target.s - 2.5);
     const [xb, zb] = onLine(target.s + 2.5);
     this.lineCrossingStartsLap = false;
+    // Corner practice moves the car mid-lap: the lap under way can't count
+    this.invalidateLap();
     this.progressHintS = this.poseHintS = target.s;
     this.resetVehicle(x, z, Math.atan2(xb - xa, zb - za), Math.min(62, target.optimalSpeedKmh / 3.6));
     this.afterPlacement();
@@ -1314,6 +1332,11 @@ export class F12026CarSim implements SimulatorCar {
       shiftDown: raw.shiftDown ?? false,
     };
     if (inputs.toggleXMode && this.profile.hasDrs) this.drsPressPending = true;
+    if (this.aiAutopilot !== this.prevAiAutopilot) {
+      this.prevAiAutopilot = this.aiAutopilot;
+      // The autopilot takes the car: its pedal and steer integrators start from zero, not from its last drive
+      if (this.aiAutopilot) this.apPedal = this.apYawI = this.apThrottle = 0;
+    }
 
     // Push mode while the override is held / latched, or for the boost's 8 s
     this.boostCooldownS = Math.max(0, this.boostCooldownS - dtSeconds);
@@ -1327,25 +1350,30 @@ export class F12026CarSim implements SimulatorCar {
     if (!overtakeOk) this.boostRemainingS = 0;
     const aiOvertake = this.aiAutopilot && this.rules === 'straight-mode-2026' && !!this.raceControl?.racing && overtakeOk && v.telemetry.drsZone;
     const push = this.profile.hasErs && overtakeOk && (inputs.manualOverride || this.boostRemainingS > 0 || aiOvertake) && v.ersEnergyJ > 0;
+    this.pushActive = push;
     v.setPerformanceMode(push ? 'PSH' : this.userErsMode);
     v.extraDeployJ = this.rules === 'straight-mode-2026' ? this.overtake.extraDeployJ(this.raceControl) : 0;
     const progressBefore = v.trackProgress;
 
     const slices = Math.max(1, Math.ceil(dtSeconds / AID_SLICE_S - 1e-9));
     const h = dtSeconds / slices;
-    let first = true;
+    // The paddles and the DRS button go to every slice of the frame: VehiclePhysics compares each slice with the one
+    // before, so a press is one edge per frame (released in the later slices, a held paddle was a new press each frame)
+    const drsPress = this.drsPressPending;
+    this.drsPressPending = false;
     this.vehicle.autoShift = this.autoGearbox || this.aiAutopilot;
     for (let k = 0; k < slices; k++) {
       const cmd: { throttle: number; brake: number; brakeWheelScale?: readonly [number, number, number, number]; steer: number; drs: boolean } =
         this.aiAutopilot ? this.autopilot(h) : this.driverCommand(inputs, h);
-      const vin: VehicleInputs = { throttle: cmd.throttle, brake: cmd.brake, brakeWheelScale: cmd.brakeWheelScale, steer: cmd.steer };
-      if (first) {
-        vin.drs = this.drsPressPending || cmd.drs;
-        vin.shiftUp = inputs.shiftUp;
-        vin.shiftDown = inputs.shiftDown;
-        this.drsPressPending = false;
-        first = false;
-      }
+      const vin: VehicleInputs = {
+        throttle: cmd.throttle,
+        brake: cmd.brake,
+        brakeWheelScale: cmd.brakeWheelScale,
+        steer: cmd.steer,
+        drs: drsPress || cmd.drs,
+        shiftUp: inputs.shiftUp,
+        shiftDown: inputs.shiftDown,
+      };
       this.steerCmd = cmd.steer;
       _v.copy(v.velocity);
       v.step(h, vin);
@@ -1723,9 +1751,12 @@ export class F12026CarSim implements SimulatorCar {
     this.apPedal = this.apYawI = this.apThrottle = 0;
     this.drsPressPending = false;
     this.boostRemainingS = 0;
+    this.pushActive = false;
     this.overtake.reset();
     this.lastAxMs2 = this.lastAyMs2 = 0;
     this.stuckS = 0;
+    // The off-track verdict belongs to where the car was: the new spot is judged afresh
+    this.wasOffTrack = false;
     const c = this.channels;
     c.CHANGED_DRS_OPEN = false;
     c.drsOpenEvents = 0;
@@ -1922,7 +1953,8 @@ export class F12026CarSim implements SimulatorCar {
     t.mgukPowerKw = mgukKw;
     t.totalPowerKw = Math.max(0, iceKw + Math.max(0, mgukKw));
     t.ersBatteryPercent = vt.ERS_CHARGE * 100;
-    t.manualOverrideActive = v.performanceMode === 'PSH';
+    // Push actually running (the override or the boost), not PSH picked in the tuner
+    t.manualOverrideActive = this.pushActive;
     t.boostRemainingS = this.boostRemainingS;
     t.overtakingRules = this.profile.hasDrs ? this.rules : undefined;
     t.overtakeAvailable = this.profile.hasErs && this.overtakeAvailable;

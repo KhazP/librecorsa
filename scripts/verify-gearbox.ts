@@ -10,6 +10,9 @@
  * 4. A manual downshift that runs the engine into the limiter: the box shifts back up well inside the override's second
  *    (on the VehiclePhysics cars only once past their normal upshift point).
  * 5. Placement: a manual shift made just before a teleport does not hold the box afterwards.
+ * 6. A paddle press during a shift is made once that shift is done: not dropped, and not before it.
+ * 7. No neutral in the sequence: down from first stays in first while rolling and is reverse at a standstill, and up
+ *    from reverse is first.
  *
  * Usage: npx tsx scripts/verify-gearbox.ts
  */
@@ -128,6 +131,8 @@ interface Model {
   limiterKmh: number;
   /** Placement: a manual shift (up or down) from the first speed, then a teleport to the second, landing in the shifted gear */
   placement: { dir: 1 | -1; fromKmh: number; toKmh: number };
+  /** How long an upshift takes (s): a second paddle press inside it waits for it */
+  upshiftS: number;
 }
 
 const MODELS: Model[] = [
@@ -139,6 +144,7 @@ const MODELS: Model[] = [
     shortShiftKmh: 110,
     limiterKmh: 190,
     placement: { dir: 1, fromKmh: 110, toKmh: 150 },
+    upshiftS: VF26_DRIVETRAIN.upshiftTimeS,
   },
   {
     name: 'F1 2026 Rigid-Body (VehiclePhysics)',
@@ -148,6 +154,7 @@ const MODELS: Model[] = [
     shortShiftKmh: 100,
     limiterKmh: 180,
     placement: { dir: -1, fromKmh: 180, toKmh: 175 },
+    upshiftS: F12026_CAR_CONFIG.gearbox.shiftTimeS,
   },
   {
     name: 'AMG GT3 (VehiclePhysics)',
@@ -157,6 +164,7 @@ const MODELS: Model[] = [
     shortShiftKmh: 70,
     limiterKmh: 190,
     placement: { dir: -1, fromKmh: 190, toKmh: 185 },
+    upshiftS: AMG_GT3_CONFIG.gearbox.shiftTimeS,
   },
 ];
 
@@ -278,6 +286,64 @@ for (const m of MODELS) {
         (p.dir < 0
           ? `up at ${Math.round(after.rpm)} rpm (a fresh car: ${Math.round(fresh.rpm)})`
           : `down at ${after.atKmh.toFixed(1)} km/h (a fresh car: ${fresh.atKmh.toFixed(1)})`)
+    );
+  }
+
+  // 6. Two upshift presses 8 ms apart with the manual box: the second, inside the first shift, lands once it is done
+  {
+    const fine = 1 / 240;
+    const c = m.make();
+    c.autoGearbox = false;
+    c.teleportToDistance(1000, 120 / 3.6);
+    const g0 = c.telemetry.gear;
+    const presses: Partial<ControlInputs>[] = [{ shiftUp: true }, {}, { shiftUp: true }];
+    let firstS = Infinity;
+    let secondS = Infinity;
+    let t = 0;
+    for (let i = 0; t < 0.5; i++) {
+      c.step(fine, { analogSteer: 0, throttle: 0.3, ...(presses[i] ?? {}) });
+      t += fine;
+      if (firstS === Infinity && c.telemetry.gear > g0) firstS = t;
+      if (secondS === Infinity && c.telemetry.gear >= g0 + 2) secondS = t;
+    }
+    const gap = secondS - firstS;
+    check(
+      c.telemetry.gear === g0 + 2 && gap >= m.upshiftS - fine - 1e-9,
+      `${name} two upshift presses 8 ms apart (the shift takes ${Math.round(m.upshiftS * 1000)} ms): gear ${g0} → ` +
+        `${c.telemetry.gear}, the second ${Number.isFinite(gap) ? `${Math.round(gap * 1000)} ms after the first` : 'never made'}`
+    );
+  }
+
+  // 7. No neutral: down from first while rolling stays in first; at a standstill it is reverse, and up again is first
+  {
+    const c = m.make();
+    c.autoGearbox = false;
+    c.teleportToDistance(1000, 40 / 3.6);
+    let thr = 0.1;
+    let lowest = c.telemetry.gear;
+    for (let n = 0; n < 8; n++) {
+      step(c, { throttle: thr, shiftDown: true });
+      for (let i = 0; i < 15; i++) {
+        step(c, { throttle: (thr = cruise(c, 40, thr)) });
+        lowest = Math.min(lowest, c.telemetry.gear);
+      }
+    }
+    const rolling = c.telemetry.gear;
+    const rollingKmh = c.telemetry.speedKmh;
+    const s = m.make();
+    s.autoGearbox = false;
+    s.teleportToDistance(1000, 0);
+    for (let i = 0; i < 30; i++) step(s, {});
+    paddle(s, -1, {});
+    for (let i = 0; i < 12; i++) step(s, {});
+    const stopped = s.telemetry.gear;
+    paddle(s, 1, {});
+    for (let i = 0; i < 12; i++) step(s, {});
+    const backUp = s.telemetry.gear;
+    check(
+      rolling === 1 && lowest === 1 && stopped === -1 && backUp === 1,
+      `${name} manual box, down from first at ${Math.round(rollingKmh)} km/h: gear ${rolling} (lowest ${lowest}); ` +
+        `at a standstill down → ${stopped}, then up → ${backUp}`
     );
   }
 }
