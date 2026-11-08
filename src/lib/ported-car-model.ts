@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { createGltfLoader } from "@/lib/render/gltf-loader";
 import { assetProgress } from "@/lib/loading/asset-progress";
 import { withBasePath } from "@/lib/base-path";
-import type { CarTelemetry } from "@/types/f1";
+import type { CarTelemetry, TireCompound } from "@/types/f1";
 import type { SimCarRig } from "@/lib/car-builder-2026";
 import type { Vf26ModelInstance } from "@/lib/vf26-car-model";
 import { installTyreDeformation, type TyreDeformationHandle } from "@/lib/render/tyre-deformation";
@@ -43,6 +43,8 @@ export interface PortedCarOptions {
    * where this model's steering wheel and front axle landed in rig space
    */
   cameraAnchors?: (fit: PortedCameraFit) => Vf26ModelInstance["cameraAnchors"];
+  /** A 2026 car: its tyres get the 2026 Pirelli sidewall, recoloured by the compound (the model's own otherwise) */
+  pirelliSidewall?: boolean;
 }
 
 /** A ported model's driver and nose in rig space, once loaded */
@@ -230,6 +232,8 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
   let steerPivot: THREE.Object3D | null = null;
   const steerRest = new THREE.Quaternion();
   let disposed = false;
+  // The compound the sidewalls show; the tyres are built when the model loads
+  let compound: TireCompound = "medium";
 
   void loadTemplate(options.url).then((template) => {
     if (!template || disposed) return;
@@ -292,6 +296,7 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
             halfWidthM: extras.tyreHalfWidth?.[SIDE[i]] ?? 0.16,
             // The re-based wheel (alignWheelAxles) carries no camber of its own
             bakedCamberRad: 0,
+            pirelliSidewall: options.pirelliSidewall ? compound : undefined,
           })
         : null;
       corners.push({ steer, spin, isFront: i < 2, isLeft: i % 2 === 1, restY: steer.position.y, tyre });
@@ -351,9 +356,12 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
     root,
     chassisGroup,
     helmetGroup: new THREE.Group(),
-    // The model keeps its own paint and tyres
+    // The model keeps its own paint; a 2026 car's tyre sidewalls show the compound
     setLivery: () => {},
-    setTireCompound: () => {},
+    setTireCompound: (c) => {
+      compound = c;
+      for (const corner of corners) corner.tyre?.setCompound(c);
+    },
     getCameraAnchors: () => cameraAnchors,
     getVf26Body: () => null,
     updateFromTelemetry,

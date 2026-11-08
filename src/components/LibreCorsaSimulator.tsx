@@ -1463,11 +1463,13 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
             floor: staticFloorOf(model.rigConfig),
             // every GT3 uses the AMG GT3's onboard and chase views, framed on its own steering wheel and front axle
             cameraAnchors: model.gt3Cockpit ? gt3RigCameraAnchors : undefined,
+            pirelliSidewall: def.season === 2026,
           })
         : model.gt3Cockpit
           ? createGt3CarRig()
           : createF1Car2026(liveryRef.current, physics.tireCompound);
       rig.setLivery(liveryRef.current);
+      rig.setTireCompound(physics.tireCompound);
       reflectionProbe.track(rig.root);
       addContactShadow(rig.root, def.physics);
       scene.add(rig.root);
