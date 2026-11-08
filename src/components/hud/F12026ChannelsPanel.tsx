@@ -2,7 +2,7 @@
 
 import React from "react";
 import type { F12026Channels } from "@/types/f1";
-import { HUD_CYAN, HUD_GLASS, HUD_GREEN, HUD_LBL, HUD_RED, HUD_VOLT, HUD_WELL, HUD_YELLOW } from "./hud-format";
+import { HUD_CYAN, HUD_ROAD, HUD_GLASS, HUD_GREEN, HUD_LBL, HUD_RED, HUD_VOLT, HUD_WELL, HUD_YELLOW } from "./hud-format";
 import type { AeroReadout } from "./aero-label";
 
 const WHEELS = ["LF", "RF", "LR", "RR"] as const;
@@ -47,10 +47,10 @@ export const F12026ChannelsPanel: React.FC<{
         <div className="flex items-center gap-2">
           <span
             className="h-[7px] w-[7px] rounded-full"
-            style={{ backgroundColor: c.carId === "amg-gt3" ? HUD_CYAN : HUD_VOLT }}
+            style={{ backgroundColor: c.carId === "amg-gt3" ? HUD_CYAN : c.carId === "liana" ? HUD_ROAD : HUD_VOLT }}
           />
           <span className="lc-data text-[11px] tracking-[0.12em] text-[#F5F7FA]">
-            {c.carId === "amg-gt3" ? "AMG GT3 · CHANNELS" : "F1 2026 · CHANNELS"}
+            {c.carId === "amg-gt3" ? "AMG GT3 · CHANNELS" : c.carId === "liana" ? "ROAD CAR · CHANNELS" : "F1 2026 · CHANNELS"}
           </span>
         </div>
         <span className="lc-data rounded-full bg-[#1B1F2B] px-2 py-0.5 text-[9px] uppercase text-[#CCFF00]">
