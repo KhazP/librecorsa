@@ -413,6 +413,11 @@ function assistPresetDials(profileId: string, preset: DriverAssistPreset): AidDi
 
 /** Driver aids and the autopilot run on frame slices no longer than this (s) */
 const AID_SLICE_S = 1 / 240;
+/**
+ * The autopilot's integrators are stale once it has been off this long (s). An AI car's hand-back after a knock
+ * (its driver's reaction, under half a second) keeps them; a takeover after a real stint off resets them.
+ */
+const AUTOPILOT_STALE_S = 1;
 const BOOST_S = 8;
 const BOOST_COOLDOWN_S = 4;
 const AMBIENT_C = 27;
@@ -635,8 +640,8 @@ export class F12026CarSim implements SimulatorCar {
   private userErsMode: PerformanceModeName = 'RAC';
   /** Push mode is running (the override held or latched, the 8 s boost, or the AI's Overtake Mode), not just picked */
   private pushActive = false;
-  /** `aiAutopilot` as the last step saw it: the shell flips it between frames, so `step` acts on the change */
-  private prevAiAutopilot = false;
+  /** Seconds the autopilot has been off: `step` decides from it whether a takeover starts it afresh */
+  private autopilotIdleS = 0;
   public gamepadAssistEnabled = true;
   /** Automatic gear changes; off = the driver shifts. The autopilot always shifts for itself (VehiclePhysics.autoShift) */
   public autoGearbox = true;
@@ -1378,10 +1383,13 @@ export class F12026CarSim implements SimulatorCar {
       shiftDown: raw.shiftDown ?? false,
     };
     if (inputs.toggleXMode && this.profile.hasDrs) this.drsPressPending = true;
-    if (this.aiAutopilot !== this.prevAiAutopilot) {
-      this.prevAiAutopilot = this.aiAutopilot;
-      // The autopilot takes the car: its pedal and steer integrators start from zero, not from its last drive
-      if (this.aiAutopilot) this.apPedal = this.apYawI = this.apThrottle = 0;
+    if (this.aiAutopilot) {
+      // The autopilot takes the car after a stint off: its pedal and steer integrators start from zero, not from its
+      // last drive. A brief hand-back (an AI driver's reaction to a knock) carries on from where it was.
+      if (this.autopilotIdleS > AUTOPILOT_STALE_S) this.apPedal = this.apYawI = this.apThrottle = 0;
+      this.autopilotIdleS = 0;
+    } else {
+      this.autopilotIdleS += dtSeconds;
     }
 
     // Push mode while the override is held / latched, or for the boost's 8 s
