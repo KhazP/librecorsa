@@ -1,14 +1,13 @@
 /**
- * The 2026 Pirelli sidewall on the 2026 cars' tyres, from MrMaukus's F1 25 sidewall mod (used with permission,
- * see CREDITS.md; texture ported by `scripts/cars/port_f1_25_sidewall.py`).
+ * The 2026 Pirelli sidewall on the 2018+ cars' tyres, from Cxjovich's 2026 Pirelli Tire Pack (used with permission,
+ * CC BY-NC-SA 4.0, see CREDITS.md; texture ported by `scripts/cars/port_cxjovich_sidewall.py`).
  *
- * The texture is a planar disc centred on the axle, as F1 25 maps it: R = rubber albedo (sRGB), G = slick branding
- * (P ZERO, chequers, PIRELLI), B = wet branding (Cinturato), both masks tinted with the compound colour. It is drawn
- * from the tyre's own mesh-local position, so it fits every model whatever its tyre UVs are, and spins with the
- * rubber:
- *  - radius: the texture's rim seat → sidewall edge band ([TEX_RIM, TEX_SHOULDER] of the half-width) is stretched
- *    over the mesh's bead → shoulder band (measured from the geometry), so the branding fills the sidewall the way it
- *    does in F1 25 on every model;
+ * The texture is a planar disc centred on the axle: R = rubber albedo (sRGB), G = slick branding (P ZERO, chequers,
+ * PIRELLI), B = wet branding (Cinturato), both masks tinted with the compound colour. It is drawn from the tyre's own
+ * mesh-local position, so it fits every model whatever its tyre UVs are, and spins with the rubber:
+ *  - radius: the mesh's shoulder lands on the texture's sidewall edge (TEX_SHOULDER of the half-width) and the bead
+ *    on its rim seat (TEX_RIM), unless that would stretch the lettering: a tall sidewall (the 13" tyres before 2022)
+ *    keeps the texture's proportions instead, the logos near the shoulder and plain rubber down to the bead;
  *  - side: u is mirrored on the −X face, so the lettering reads correctly from outside on both faces;
  *  - faces only: weighted by the rest normal's axle component, so the tread and the shoulder keep the model's map.
  */
@@ -16,7 +15,7 @@ import * as THREE from "three";
 import type { TireCompound } from "@/types/f1";
 import { withBasePath } from "@/lib/base-path";
 
-export const PIRELLI_SIDEWALL_URL = "/cars/shared/tyres/pirelli-2026-sidewall.webp";
+export const PIRELLI_SIDEWALL_URL = "/cars/shared/tyres/pirelli-2026-sidewall-cx.webp";
 
 /** Pirelli's compound colours (sRGB) */
 export const PIRELLI_COMPOUND_COLORS: Readonly<Record<TireCompound, number>> = {
@@ -93,7 +92,7 @@ uniform vec3 uSidewallFit;
 
 const FRAGMENT_BODY = /* glsl */ `
 {
-  // Radius in the texture: bead -> TEX_RIM, shoulder -> TEX_SHOULDER (uSidewallFit = shoulder m, TEX_SHOULDER, dt/dr)
+  // Radius in the texture: shoulder -> TEX_SHOULDER, inwards at dt/dr (uSidewallFit = shoulder m, TEX_SHOULDER, dt/dr)
   float swR = length(vSidewallRest.yz);
   float swT = uSidewallFit.y + (swR - uSidewallFit.x) * uSidewallFit.z;
   vec2 swDir = vSidewallRest.yz / max(swR, 1e-5);
@@ -122,13 +121,16 @@ export function createPirelliSidewall(
 ): PirelliSidewallPatch {
   loadSidewallTexture();
   const { beadM, shoulderM } = sidewallBand(geometry);
+  // Texture half-widths per metre: the bead-to-shoulder fit, or at least the uniform scale that keeps the lettering's
+  // proportions (on a tall sidewall the fit would stretch it radially)
+  const texPerM = Math.max((TEX_SHOULDER - TEX_RIM) / (shoulderM - beadM), TEX_SHOULDER / shoulderM);
   const tint = new THREE.Color();
   const uniforms: Record<string, THREE.IUniform> = {
     uSidewallMap: sharedMap,
     uSidewallReady: sharedReady,
     uSidewallTint: { value: tint },
     uSidewallWet: { value: 0 },
-    uSidewallFit: { value: new THREE.Vector3(shoulderM, TEX_SHOULDER, (TEX_SHOULDER - TEX_RIM) / (shoulderM - beadM)) },
+    uSidewallFit: { value: new THREE.Vector3(shoulderM, TEX_SHOULDER, texPerM) },
   };
   const setCompound = (c: TireCompound) => {
     tint.setHex(PIRELLI_COMPOUND_COLORS[c]);

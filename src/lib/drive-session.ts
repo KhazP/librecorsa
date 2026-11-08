@@ -732,7 +732,8 @@ export class DriveSession {
             floor: staticFloorOf(model.rigConfig),
             // every GT3 uses the AMG GT3's onboard and chase views, framed on its own steering wheel and front axle
             cameraAnchors: model.gt3Cockpit ? gt3RigCameraAnchors : undefined,
-            pirelliSidewall: def.season === 2026,
+            // F1 cars from 2018 on wear the 2026 Pirelli sidewall (the SF71H on its 13" tyres too; the models' own are poor)
+            pirelliSidewall: def.classId === "f1-2026" && (def.season ?? 0) >= 2018,
           })
         : model.gt3Cockpit
           ? createGt3CarRig()

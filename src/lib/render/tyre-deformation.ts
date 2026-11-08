@@ -38,7 +38,7 @@ export interface TyreDeformationHandle {
    * bulge takes its side from the vertex's own x, so the corner's side is not needed.
    */
   update(state: TyreVisualState, spinAngleRad: number): void;
-  /** Recolours the 2026 Pirelli sidewall branding (no-op on a tyre without it) */
+  /** Recolours the Pirelli sidewall branding (no-op on a tyre without it) */
   setCompound(compound: TireCompound): void;
   /** How far (m) the axle should drop so the flattened patch touches the ground (the steer pivot's y is lowered by this) */
   axleDropM: number;
@@ -57,7 +57,7 @@ export interface TyreDeformationOptions {
    * `camberRad − bakedCamberRad`, so a wheel at its baked camber has a level patch. Default 0.
    */
   bakedCamberRad?: number;
-  /** Draw the 2026 Pirelli sidewall (pirelli-sidewall.ts) over the model's own, in this compound's colours */
+  /** Draw the Pirelli sidewall (pirelli-sidewall.ts) over the model's own, in this compound's colours */
   pirelliSidewall?: TireCompound;
 }
 

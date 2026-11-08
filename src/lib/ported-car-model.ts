@@ -43,7 +43,7 @@ export interface PortedCarOptions {
    * where this model's steering wheel and front axle landed in rig space
    */
   cameraAnchors?: (fit: PortedCameraFit) => Vf26ModelInstance["cameraAnchors"];
-  /** A 2026 car: its tyres get the 2026 Pirelli sidewall, recoloured by the compound (the model's own otherwise) */
+  /** A 2018+ car: its tyres get the 2026 Pirelli sidewall, recoloured by the compound (the model's own otherwise) */
   pirelliSidewall?: boolean;
 }
 
