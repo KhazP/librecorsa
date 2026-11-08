@@ -235,7 +235,10 @@ export interface DifferentialData {
   halfshaft?: { stiffnessNmPerRad: number; dampingNmsPerRad: number };
   /** Electronic diff: the coast locking (same units as `coast`) while braking, i.e. on corner entry; default `coast` */
   coastBraking?: number;
-  /** 2026 3-Phase Active Electronic Differential (Entry braking <= -0.5G, Mid apex -0.5G..+0.5G, Exit/HiSpd > +0.5G or > 250 km/h) */
+  /**
+   * 2026 3-Phase Active Electronic Differential: Entry map on the brake, Exit / HiSpd map on the power or past
+   * `hiSpdSwitchKmh`, Mid map between and at the apex; blended by the pedals and the steering, not switched
+   */
   threePhase?: boolean;
   /** Default Entry coast locking dial (1..12, where locking = (level - 1) / 11; default 3 -> 18.2%) */
   diffEntryLevel?: number;
@@ -243,7 +246,7 @@ export interface DifferentialData {
   diffMidLevel?: number;
   /** Default Exit / High-Speed power locking dial (1..12; default 5 -> 36.4%) */
   diffExitLevel?: number;
-  /** High-speed straight stability threshold where Exit/HiSpd lock engages regardless of G_long (km/h; default 250) */
+  /** High-speed stability threshold where the Exit/HiSpd lock engages whatever the pedals (km/h; default 250) */
   hiSpdSwitchKmh?: number;
 }
 

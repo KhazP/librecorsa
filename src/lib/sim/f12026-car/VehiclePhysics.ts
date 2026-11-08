@@ -154,6 +154,16 @@ const LOW_SPEED_FADE_MS = 4;
 const ROAD_CONDUCTANCE = 30;
 /** Steering-column torque that maps to full FFB output (front-axle aligning moment incl. caster trail, Nm) */
 const FFB_REFERENCE_NM = 600;
+/**
+ * Diff map blending: the pedal travel over which the brake hands the diff to its entry map and the throttle to its exit
+ * map (a touch of brake is corner entry; power is committed from ≈ 40 % pedal), the road-wheel angle over which the lock
+ * keeps a light pedal on the mid map (a fast corner's ≈ 1° to a medium-speed apex's ≈ 6°), and the speed band (km/h)
+ * either side of the high-speed switch [est]
+ */
+const DIFF_BRAKE_PHASE = [0.02, 0.2] as const;
+const DIFF_POWER_PHASE = [0.1, 0.4] as const;
+const DIFF_TURNED_IN_DEG = [1, 6] as const;
+const DIFF_HISPD_BLEND_KMH = 20;
 /** Outer-step FFB samples kept per frame for the 500 Hz bridge (≈ one 60 Hz frame; the newest are kept) */
 const FFB_SUBFRAME_MAX = 8;
 /** Caster (mechanical) trail when the chassis data has none: keeps the wheel weighted once the pneumatic trail collapses */
@@ -2514,37 +2524,34 @@ export class VehiclePhysics {
     const diffCfg = cfg.differential;
     const diff = diffCfg.settings;
     const cot = (deg: number) => 1 / Math.tan(Math.max(5, deg) * DEG2RAD);
-    const gLong = this.telemetry.lonG;
     const hiSpdKmh = diffCfg.hiSpdSwitchKmh ?? 250;
+    // Phase weights, blended as an ECU blends its diff maps rather than switched: the entry map on the brake, the exit
+    // map on the power, the mid map between. A light pedal with the lock on (trail braking into the apex, maintenance
+    // throttle at it) stays with the mid map until the pedal commits
+    const smooth = THREE.MathUtils.smoothstep;
+    const turnedIn = smooth(Math.abs(inp.steer) * this.maxSteerRad * RAD2DEG, DIFF_TURNED_IN_DEG[0], DIFF_TURNED_IN_DEG[1]);
+    const brakeW = smooth(inp.brake, DIFF_BRAKE_PHASE[0], DIFF_BRAKE_PHASE[1]);
+    const powerW = smooth(inp.throttle, DIFF_POWER_PHASE[0], DIFF_POWER_PHASE[1]);
+    let entryW = brakeW * (1 - turnedIn * (1 - brakeW));
+    let exitW = powerW * (1 - turnedIn * (1 - powerW)) * (1 - brakeW);
     let powerCoeff = diff.power;
-    let coastCoeff = inp.brake > 0.05 ? (diffCfg.coastBraking ?? diff.coast) : diff.coast;
+    let coastCoeff = THREE.MathUtils.lerp(diff.coast, diffCfg.coastBraking ?? diff.coast, entryW);
     if (diffCfg.threePhase) {
-      if (gLong > 0.5 || speedKmh > hiSpdKmh || speedKmh < 1) {
-        this.diffActivePhase = 'EXIT';
-        powerCoeff = (THREE.MathUtils.clamp(this.diffExitLevel, 1, 12) - 1) / 11;
-        coastCoeff = (THREE.MathUtils.clamp(this.diffMidLevel, 1, 12) - 1) / 11;
-      } else if (gLong > -0.5) {
-        this.diffActivePhase = 'MID';
-        powerCoeff = (THREE.MathUtils.clamp(this.diffMidLevel, 1, 12) - 1) / 11;
-        coastCoeff = (THREE.MathUtils.clamp(this.diffMidLevel, 1, 12) - 1) / 11;
-      } else {
-        this.diffActivePhase = 'ENTRY';
-        powerCoeff = (THREE.MathUtils.clamp(this.diffMidLevel, 1, 12) - 1) / 11;
-        coastCoeff = (THREE.MathUtils.clamp(this.diffEntryLevel, 1, 12) - 1) / 11;
-      }
+      // Past the high-speed switch (and at a standstill launch) the exit map holds for straight-line stability
+      const hiSpdW = speedKmh < 1 ? 1 : smooth(speedKmh, hiSpdKmh - DIFF_HISPD_BLEND_KMH, hiSpdKmh + DIFF_HISPD_BLEND_KMH);
+      entryW *= 1 - hiSpdW;
+      exitW = Math.max(exitW, hiSpdW);
+      const level = (dial: number) => (THREE.MathUtils.clamp(dial, 1, 12) - 1) / 11;
+      const mid = level(this.diffMidLevel);
+      powerCoeff = THREE.MathUtils.lerp(mid, level(this.diffExitLevel), exitW);
+      coastCoeff = THREE.MathUtils.lerp(mid, level(this.diffEntryLevel), entryW);
     } else {
-      if (inp.brake > 0.05 || gLong <= -0.35) {
-        this.diffActivePhase = 'ENTRY';
-      } else if (inp.throttle > 0.25 || gLong > 0.35) {
-        this.diffActivePhase = 'EXIT';
-      } else {
-        this.diffActivePhase = 'MID';
-      }
       const entryScale = 0.65 + ((THREE.MathUtils.clamp(this.diffEntryLevel, 1, 12) - 1) / 11) * 0.7;
       const exitScale = 0.65 + ((THREE.MathUtils.clamp(this.diffExitLevel, 1, 12) - 1) / 11) * 0.7;
       powerCoeff = THREE.MathUtils.clamp(diff.power * exitScale, 0.05, 0.92);
       coastCoeff = THREE.MathUtils.clamp(coastCoeff * entryScale, 0.05, 0.88);
     }
+    this.diffActivePhase = entryW > 0.5 ? 'ENTRY' : exitW > 0.5 ? 'EXIT' : 'MID';
     const lockPower = powerCoeff * diff.friction_faces * cot(diff.power_ramp_deg);
     const lockCoast = coastCoeff * diff.friction_faces * cot(diff.coast_ramp_deg);
     let lockTorque = diff.preload;
