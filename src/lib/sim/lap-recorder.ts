@@ -23,10 +23,10 @@ export interface LapRecorderInput {
   position: { x: number; y: number; z: number };
   quaternion: { x: number; y: number; z: number; w: number };
   /**
-   * What the car is driven with right now; the lap keeps the most-aided preset, the least realistic level, any wet
-   * seen and whether the autopilot ever drove
+   * What the car is driven with right now (`lapConditionsNow`); the lap keeps the most-aided preset, the least
+   * realistic level, any wet surface seen and whether the autopilot ever drove
    */
-  conditions?: { assists: AssistPreset; compound: TireCompound; wet: boolean; realism: SimRealism; autopilot: boolean };
+  conditions?: LapConditions & { autopilot: boolean };
 }
 
 export interface CompletedLap {
@@ -297,7 +297,7 @@ export class LapRecorder {
     this.lapConditions = {
       assists: prev && aid(prev.assists) > aid(c.assists) ? prev.assists : c.assists,
       compound: c.compound,
-      surface: c.wet || prev?.surface === "wet" ? "wet" : "dry",
+      surface: c.surface === "wet" || prev?.surface === "wet" ? "wet" : "dry",
       realism: prev && real(prev.realism) < real(c.realism) ? prev.realism : c.realism,
       physicsVersion: PHYSICS_VERSION,
     };

@@ -54,7 +54,7 @@ import {
 import { MultiplayerRace, type MultiplayerRaceFrame } from "@/lib/sim/race-session";
 import { GhostPlayer, LapRecorder } from "@/lib/sim/lap-recorder";
 import { ReplayBuffer } from "@/lib/sim/replay-buffer";
-import { PHYSICS_VERSION, lapBoardClass, type LapConditions, type LapRecording, type LapSummaryData, type LeaderboardEntry, type ReplayCarState } from "@/lib/sim/lap-types";
+import { lapBoardClass, lapConditionsNow, type LapConditions, type LapRecording, type LapSummaryData, type LeaderboardEntry, type ReplayCarState } from "@/lib/sim/lap-types";
 import { exportLapFile, importLapFile, loadBestLap, saveBestLapIfFaster } from "@/lib/sim/ghost-store";
 import {
   boardLabel,
@@ -137,8 +137,6 @@ import type {
 /** Matches the aero package the track's target speeds / braking markers are computed for */
 const DEFAULT_AERO_PRESET: AeroSetupPreset = "balanced";
 const DEFAULT_ASSIST_PRESET: AssistPreset = "semi_pro";
-/** Mean water on the racing line (mm) from which a lap counts as wet, for the leaderboard */
-const WET_LAP_WATER_MM = 0.05;
 /** Longest frame (s) simulated in full; must not exceed the physics' own F1Physics2026.MAX_CATCH_UP_S */
 const MAX_FRAME_CATCH_UP_S = F1Physics2026.MAX_CATCH_UP_S;
 
@@ -985,13 +983,13 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   // ---- Laps, ghosts, leaderboards
   /** The board for what the player drives with now: their assists and realism, today's surface, this physics revision */
   const currentBoard = useCallback(
-    (): LapConditions => ({
-      assists: physicsRef.current?.assistPreset ?? DEFAULT_ASSIST_PRESET,
-      compound: physicsRef.current?.tireCompound ?? "soft",
-      surface: getTrackEnv().weather.lineWaterMm >= WET_LAP_WATER_MM ? "wet" : "dry",
-      realism: settingsRef.current.realism,
-      physicsVersion: PHYSICS_VERSION,
-    }),
+    (): LapConditions =>
+      lapConditionsNow({
+        assists: physicsRef.current?.assistPreset ?? DEFAULT_ASSIST_PRESET,
+        compound: physicsRef.current?.tireCompound ?? "soft",
+        lineWaterMm: getTrackEnv().weather.lineWaterMm,
+        realism: settingsRef.current.realism,
+      }),
     [getTrackEnv]
   );
   const refreshLeaderboard = useCallback(async () => {
@@ -2314,10 +2312,12 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
           // Laps are ranked only against laps driven with the same assists, realism, surface and physics revision;
           // an autopilot lap never ranks
           conditions: {
-            assists: physics.assistPreset,
-            compound: physics.tireCompound,
-            wet: trackEnv.weather.lineWaterMm >= WET_LAP_WATER_MM,
-            realism: settingsNow.realism,
+            ...lapConditionsNow({
+              assists: physics.assistPreset,
+              compound: physics.tireCompound,
+              lineWaterMm: trackEnv.weather.lineWaterMm,
+              realism: settingsNow.realism,
+            }),
             autopilot: physics.aiAutopilot,
           },
         });
