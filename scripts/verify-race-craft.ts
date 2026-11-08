@@ -14,7 +14,7 @@
 import { readFileSync } from 'node:fs';
 import { getActiveTrackData, setActiveTrack, type RawTrackJson } from '../src/lib/track-data';
 import { F12026CarSim } from '../src/lib/sim/f12026-car/F12026CarSim';
-import { AiOpponentField, type FieldIncident } from '../src/lib/sim/ai-opponents';
+import { AiOpponentField, launchReactionS, type FieldIncident } from '../src/lib/sim/ai-opponents';
 import { hazardLine, inYellowZone, overlapNow, ownsCorner, passFeasible } from '../src/lib/sim/ai-racecraft';
 import { COLLISION_PENALTY_S, judgeContact, RaceIncidents } from '../src/lib/sim/race-incidents';
 import { loadGlbGeometry } from './lib/glb-geometry';
@@ -182,6 +182,45 @@ const DT = 1 / 120;
   check('Stopped car: the car behind is shown the yellow', yellowSeen);
   check('Stopped car: it goes round, not into it', passed && !hit, `${passed ? 'passed' : 'not past'}, lateral clearance ${f(minClear)} m${hit ? ', HIT' : ''}`);
   check('Stopped car: retired and classified DNF', stpNow().retired && !!field.status().standings.find((e) => e.driverCode === 'STP')?.retired);
+}
+
+// ---- Launch: reaction times like a real grid's, and off the line as quick as a flat-out launch
+{
+  check('Launch: an alien reacts in 0.12-0.22 s', launchReactionS(100, 0, 0.99) >= 0.119 && launchReactionS(100, 1, 0.99) <= 0.221, `${f(launchReactionS(100, 0, 0.99), 2)}-${f(launchReactionS(100, 1, 0.99), 2)} s`);
+  check('Launch: a rookie reacts in 0.25-0.35 s', launchReactionS(0, 0, 0.99) >= 0.249 && launchReactionS(0, 1, 0.99) <= 0.351, `${f(launchReactionS(0, 0, 0.99), 2)}-${f(launchReactionS(0, 1, 0.99), 2)} s`);
+  const bogRate = (skill: number) => {
+    let n = 0;
+    for (let i = 0; i < 1000; i++) if (launchReactionS(skill, 0.5, (i + 0.5) / 1000) > launchReactionS(skill, 0.5, 0.999) + 0.1) n++;
+    return n / 1000;
+  };
+  check('Launch: bogged starts are rare for an alien, commoner for a rookie', bogRate(100) < 0.06 && bogRate(0) > 0.12, `${f(100 * bogRate(100), 0)} % / ${f(100 * bogRate(0), 0)} %`);
+
+  // A flat-out launch from pole (the player holding the throttle down), as the yardstick
+  const manual = new F12026CarSim(track, root);
+  manual.resetToStartGrid(false, 0);
+  const flatOut: number[] = [];
+  const MAN = { throttle: 1, brake: 0, steerLeft: 0, steerRight: 0, manualOverride: false, toggleXMode: false, shiftUp: false, shiftDown: false };
+  for (let t = 0; t < 3.5; t += DT) {
+    manual.step(DT, MAN);
+    flatOut.push(manual.telemetry.speedKmh);
+  }
+  const drivers = [
+    { code: 'AAA', teamColorHex: '#fff', pace: 0.97 },
+    { code: 'BBB', teamColorHex: '#fff', pace: 0.96 },
+    { code: 'CCC', teamColorHex: '#fff', pace: 0.95 },
+  ];
+  const field = new AiOpponentField(track, new F12026CarSim(track, root), drivers, undefined, { spectate: true, learning: false, seed: 3, skill: 100 });
+  field.attachTrackRoot(root as never);
+  field.startRace(true);
+  while (field.phase === 'lights') field.update(DT);
+  for (let t = 0; t < 3; t += DT) field.update(DT);
+  const cars = (field as unknown as { cars: { code: string; ai: F12026CarSim | null; launchReactS: number }[] }).cars.filter((c) => c.ai);
+  const shares = cars.map((c) => c.ai!.telemetry.speedKmh / flatOut[Math.max(0, Math.round((3 - c.launchReactS) / DT) - 1)]);
+  check(
+    'Launch: 3 s after the lights, each AI car is as quick as a flat-out launch after its reaction',
+    shares.every((x) => x > 0.93),
+    cars.map((c, i) => `${c.code} ${f(c.ai!.telemetry.speedKmh, 0)} km/h (${f(100 * shares[i], 0)} %, react ${f(c.launchReactS, 2)} s)`).join(', ')
+  );
 }
 
 console.log(failures.length ? `\n${failures.length} check(s) failed: ${failures.join(', ')}` : '\nAll racecraft checks passed.');

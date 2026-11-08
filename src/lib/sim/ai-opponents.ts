@@ -194,6 +194,19 @@ function followCapMs(ahead: SimulatorCar, gapM: number, rc: RacecraftParams = DE
  */
 const PLAN_GRIP = 0.97;
 
+/**
+ * Lights out to the car moving (s) for an AI skill 0..100 and two seeded draws 0..1: a reaction of 0.30 s for a rookie
+ * to 0.17 s for an alien, ± 0.05 s from start to start, and now and then (1 start in 6 for a rookie, 1 in 25 for an
+ * alien) a launch bogged by wheelspin or a slow clutch release, worth a few tenths. Real F1 starts react in 0.15-0.3 s
+ */
+export function launchReactionS(skill: number, draw: number, badDraw: number): number {
+  const k = THREE.MathUtils.clamp(skill / 100, 0, 1);
+  const react = 0.3 - 0.13 * k + (draw - 0.5) * 0.1;
+  const badChance = 0.17 - 0.13 * k;
+  const bogged = badDraw < badChance ? 0.2 + 0.3 * (badDraw / badChance) : 0;
+  return react + bogged;
+}
+
 /** What a headless race reports per car */
 export interface AiCarStats {
   offTracks: number;
@@ -368,6 +381,8 @@ interface FieldCar {
   defending: boolean;
   /** Lateral offset of its grid slot (m), held off the start until the first corner; null once it races its line */
   startLaneM: number | null;
+  /** Time from lights out until it gets going (s): its reaction, now and then a bogged launch on top */
+  launchReactS: number;
   /** Laps, distance and flag of this car (the same clock a multiplayer race keeps) */
   readonly clock: LapClock;
   /** Race distance covered (m); negative on the grid behind the line */
@@ -891,6 +906,7 @@ export class AiOpponentField {
       intentD: null,
       defending: false,
       startLaneM: null,
+      launchReactS: 0,
       prevS: 0,
       biasM: 0,
       stuckS: 0,
@@ -966,6 +982,9 @@ export class AiOpponentField {
         car.control.catchSlipRad = traits.catchSlipRad;
         car.control.reset();
       }
+      // A standing start only: a rolling one is already under way at the green
+      const launchDraw = car.ai ? launchReactionS(this.skillLevel, car.rng(), car.rng()) : 0;
+      car.launchReactS = standing ? launchDraw : 0;
       // Start from the grid slot's lane, not the racing line, so the field does not file onto the line off the grid
       car.startLaneM = car.ai ? car.sim.lateralOffsetM : null;
       car.biasM = car.ai ? THREE.MathUtils.clamp(car.sim.lateralOffsetM - aiLineOffsetM(this.track.getSampleAtDistance(car.sim.sMeters), car.ai.racingLineId), -6, 6) : 0;
@@ -1062,6 +1081,8 @@ export class AiOpponentField {
       if (out.autopilot) {
         sim.aiAutopilot = true;
         if (out.speedCapMs < (sim.aiSpeedCapMs ?? Infinity)) sim.aiSpeedCapMs = out.speedCapMs;
+        // Lights out: on the brakes until the driver reacts
+        if (this.raceTimeS < car.launchReactS) sim.aiSpeedCapMs = 0;
         sim.step(dt, {});
       } else {
         sim.aiAutopilot = false;
