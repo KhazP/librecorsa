@@ -115,7 +115,7 @@ import {
   wallSweep,
 } from './TrackColliderQuery';
 import { type AutoShiftSchedule, autoShift, createAutoShiftInput, ManualShiftOverride } from '../auto-gearbox';
-import { contactHalfLengthM } from './steering-torque';
+import { contactHalfLengthM, kingpinMomentNm } from './steering-torque';
 
 const G = 9.81;
 const DEG2RAD = Math.PI / 180;
@@ -152,7 +152,10 @@ const LOW_SPEED_DAMPING = 0.3;
 const LOW_SPEED_FADE_MS = 4;
 /** Contact-patch / track-surface conductance while loaded (W/K) */
 const ROAD_CONDUCTANCE = 30;
-/** Steering-column torque that maps to full FFB output (front-axle aligning moment incl. caster trail, Nm) */
+/**
+ * Rack torque that maps to full FFB output: the sum of both front tyres' moments about their kingpin axes (Nm). The
+ * column sees it divided by the steering ratio (≈ 48 Nm on 12.6:1)
+ */
 const FFB_REFERENCE_NM = 600;
 /** Torque share missing at full turbo lag (boost far below its target) */
 const TURBO_LAG_TORQUE_LOSS = 0.1;
@@ -2051,7 +2054,9 @@ export class VehiclePhysics {
       fx -= hydroDrag;
       w.fx = fx;
       w.fy = fy;
-      // 3D Steering rack torque: pneumatic Mz + kinematic caster trail + scrub radius + overturning Mx + flat-spot + ISO road micro-roughness
+      // Rack torque: each front tyre's road loads about its kingpin axis (Fx at the scrub radius, Fy at the caster trail,
+      // Fz's KPI / caster weight-jacking, Mz and Mx projected onto the axis), plus the flat-spot shake and road
+      // micro-roughness. Any other moment about the kingpin joins this sum as its own term
       if (w.isFront) {
         const flatSpotVib = flatSpotVibrationNm(w.flatSpotSeverity, w.rotationRad, w.omega, fz);
         const speedGate = THREE.MathUtils.clamp(absVx / 5, 0, 1);
@@ -2062,14 +2067,10 @@ export class VehiclePhysics {
           g.surface === 'kerb' || g.surface === 'sausage' ? 'kerb' : 'asphalt'
         );
         const roadTexNm = isoRough * w.verticalRate * 0.006 * speedGate * (w.isLeft ? 1 : -1);
-        ffbMz +=
-          (w.mz -
-            fy * w.casterTrailM -
-            fx * (w.isLeft ? w.scrubRadiusM : -w.scrubRadiusM) * 0.15 +
-            0.08 * w.mx) *
-            lowSpeedScale +
-          flatSpotVib +
-          roadTexNm;
+        const tyreKingpinNm = kingpinMomentNm(
+          _ex, _ey, _ez, _n, _fw, _lw, w.isLeft ? -1 : 1, w.steerRad, w.loadedRadius, kin, fx, fy, fz, w.mz, w.mx
+        );
+        ffbMz += tyreKingpinNm * lowSpeedScale + flatSpotVib + roadTexNm;
       }
 
       // Loose ground (gravel, grass) ploughs against the contact patch's motion, sliding or rolling, outside the
