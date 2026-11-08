@@ -3,7 +3,7 @@ import { LibreCorsaLogo } from "@/components/ui/LibreCorsaLogo";
 /** Route fallback before the simulator mounts: matches the simulator's own loading screen */
 export default function Loading() {
   return (
-    <div className="relative flex h-screen w-screen flex-col justify-center overflow-hidden bg-[#08090D] px-5 text-[#F5F7FA] sm:px-10 lg:px-16">
+    <div className="relative flex h-screen w-screen flex-col justify-center overflow-hidden bg-[#08090D] pl-[max(1.25rem,env(safe-area-inset-left))] pr-[max(1.25rem,env(safe-area-inset-right))] text-[#F5F7FA] sm:pl-[max(2.5rem,env(safe-area-inset-left))] sm:pr-[max(2.5rem,env(safe-area-inset-right))] lg:pl-[max(4rem,env(safe-area-inset-left))] lg:pr-[max(4rem,env(safe-area-inset-right))]">
       <div
         aria-hidden
         className="pointer-events-none fixed inset-0"
