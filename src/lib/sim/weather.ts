@@ -266,6 +266,21 @@ export function dynamicWeatherAt(seed: number, weatherS: number): { cloud: numbe
   return { cloud, rain };
 }
 
+/** The sky classification closest to a cloud cover and rain intensity (rain weighs double) */
+export function nearestSkyCover(cloud: number, rain: number): SkyCoverId {
+  let sky: SkyCoverId = SKY_COVER_IDS[0];
+  let best = Infinity;
+  for (const id of SKY_COVER_IDS) {
+    const sp = SKY_COVER_SPECS[id];
+    const e = (sp.cloud - cloud) ** 2 + 4 * (sp.rain - rain) ** 2;
+    if (e < best) {
+      best = e;
+      sky = id;
+    }
+  }
+  return sky;
+}
+
 /** Smooth interpolation exponent between consecutive weather nodes (`fWeatherLerpPower`) */
 export const WEATHER_LERP_POWER = 1.35;
 /** Default 5-node weather schedule duration in weather-clock seconds (30 min) */
@@ -342,19 +357,9 @@ export function defaultWeatherNodesForPreset(
       ];
     case 'dynamic': {
       // What the dynamic weather will actually do at each node over the default schedule, as the nearest sky
-      const skies = Object.keys(SKY_COVER_SPECS) as SkyCoverId[];
       return WEATHER_NODE_FRACTIONS.map((f, idx) => {
         const d = dynamicWeatherAt(seed, f * DEFAULT_WEATHER_DURATION_S);
-        let sky = skies[0];
-        let best = Infinity;
-        for (const id of skies) {
-          const sp = SKY_COVER_SPECS[id];
-          const e = (sp.cloud - d.cloud) ** 2 + 4 * (sp.rain - d.rain) ** 2;
-          if (e < best) {
-            best = e;
-            sky = id;
-          }
-        }
+        const sky = nearestSkyCover(d.cloud, d.rain);
         const spec = SKY_COVER_SPECS[sky];
         const oct = (Math.floor(hash01(seed, idx + 31) * 8) % 8) as WindDirectionOctant;
         return makeNode(
@@ -482,6 +487,47 @@ export const WEATHER_SECTORS = 64;
 /** Time constant of the track surface temperature (s of weather clock) */
 const TRACK_TEMP_TAU_S = 600;
 
+/**
+ * What drives the sky and the rain through a session, fixed by the conditions at `reset`: a 5-node forecast
+ * (`weatherNodes`), the seeded dynamic weather, or a static preset
+ */
+export type WeatherRegime = 'schedule' | 'dynamic' | 'preset';
+
+function regimeOf(c: SessionConditions): WeatherRegime {
+  if (c.weatherNodes && c.weatherNodes.length >= 2) return 'schedule';
+  return c.weather === 'dynamic' ? 'dynamic' : 'preset';
+}
+
+function sameNodes(a: readonly WeatherNode[] | undefined, b: readonly WeatherNode[] | undefined): boolean {
+  if (!a || !b) return a === b;
+  return (
+    a.length === b.length &&
+    a.every(
+      (n, i) =>
+        n.sky === b[i].sky &&
+        n.rainChance === b[i].rainChance &&
+        n.temperatureC === b[i].temperatureC &&
+        n.humidityPct === b[i].humidityPct &&
+        n.windSpeedKmh === b[i].windSpeedKmh &&
+        n.windDirectionOctant === b[i].windDirectionOctant
+    )
+  );
+}
+
+/** Two sanitized sets of conditions describe the same session (every field `reset` reads) */
+export function sameConditions(a: SessionConditions, b: SessionConditions): boolean {
+  return (
+    a.weather === b.weather &&
+    a.timeOfDay === b.timeOfDay &&
+    a.timeScale === b.timeScale &&
+    a.seed === b.seed &&
+    a.weatherDurationS === b.weatherDurationS &&
+    a.surfacePreset === b.surfacePreset &&
+    a.surfaceTimeScale === b.surfaceTimeScale &&
+    sameNodes(a.weatherNodes, b.weatherNodes)
+  );
+}
+
 /** Weather state as the host sends it to the other clients */
 export interface WeatherSyncState {
   conditions: SessionConditions;
@@ -497,6 +543,11 @@ export interface WeatherSyncState {
 
 export class WeatherState {
   public conditions: SessionConditions;
+  /** What drives the sky this session; set only by `reset`, from the conditions */
+  private activeRegime: WeatherRegime = 'preset';
+  public get regime(): WeatherRegime {
+    return this.activeRegime;
+  }
   /** Local solar time (h) */
   public clockH = GOLDEN_HOUR_CLOCK_H;
   /** Weather clock (s): real seconds × max(1, timeScale) since the session started */
@@ -532,10 +583,11 @@ export class WeatherState {
   /** Back to the start of a session with `conditions` (or the current ones) */
   public reset(conditions: SessionConditions = this.conditions): void {
     this.conditions = sanitizeConditions(conditions);
+    this.activeRegime = regimeOf(this.conditions);
     this.clockH = TIME_OF_DAY_HOURS[this.conditions.timeOfDay];
     this.weatherS = 0;
     const nodes = this.conditions.weatherNodes;
-    if (nodes && nodes.length >= 2) {
+    if (this.regime === 'schedule' && nodes) {
       const w0 = interpolateWeatherNodes(nodes, 0, this.conditions.seed);
       this.skyCover = w0.sky;
       this.cloudCover = w0.cloud;
@@ -545,8 +597,17 @@ export class WeatherState {
       this.windDirectionDeg = w0.windDirectionDeg;
       this.windVxMs = w0.windVxMs;
       this.windVzMs = w0.windVzMs;
-      this.waterMm = equilibriumWaterMm(w0.rain);
-      this.lineWater.fill(1);
+      // A forecast is made from a preset (the menu seeds its nodes from one): start on that preset's water, a drying
+      // track's part-dried line included, unless the first node's rain stands deeper
+      const rainWaterMm = equilibriumWaterMm(w0.rain);
+      const preset = this.conditions.weather === 'dynamic' ? null : PRESET_STATE[this.conditions.weather];
+      if (preset && preset.waterMm > rainWaterMm) {
+        this.waterMm = preset.waterMm;
+        this.lineWater.fill(preset.lineWater);
+      } else {
+        this.waterMm = rainWaterMm;
+        this.lineWater.fill(1);
+      }
       this.ambientC = w0.ambientC;
       this.trackTempC = trackTargetTempC(this.clockH, this.cloudCover, this.rainIntensity, this.wetness);
     } else {
@@ -568,6 +629,7 @@ export class WeatherState {
     this.updateRainGrid3x3();
   }
 
+  /** Start of the 'preset' and 'dynamic' regimes */
   private presetNow(): PresetState {
     const c = this.conditions;
     if (c.weather !== 'dynamic') return PRESET_STATE[c.weather];
@@ -666,12 +728,13 @@ export class WeatherState {
     this.weatherS += dtW;
     if (c.timeScale > 0) this.clockH = Math.min(CLOCK_MAX_H, Math.max(CLOCK_MIN_H, this.clockH + (dt * c.timeScale) / 3600));
 
-    const nodes = c.weatherNodes;
-    const hasCustomNodes = Boolean(nodes && nodes.length >= 2);
-    if (hasCustomNodes && nodes) {
+    const schedule = this.regime === 'schedule';
+    // The forecast's air temperature (the other regimes take it from the clock, cloud and rain below)
+    let scheduleAmbientC = this.ambientC;
+    if (schedule && c.weatherNodes) {
       const durationS = Math.max(300, c.weatherDurationS ?? DEFAULT_WEATHER_DURATION_S);
       const progress01 = Math.min(1, this.weatherS / durationS);
-      const wNow = interpolateWeatherNodes(nodes, progress01, c.seed);
+      const wNow = interpolateWeatherNodes(c.weatherNodes, progress01, c.seed);
       this.skyCover = wNow.sky;
       this.cloudCover = wNow.cloud;
       this.rainIntensity = wNow.rain;
@@ -680,11 +743,16 @@ export class WeatherState {
       this.windDirectionDeg = wNow.windDirectionDeg;
       this.windVxMs = wNow.windVxMs;
       this.windVzMs = wNow.windVzMs;
-    } else if (c.weather === 'dynamic') {
+      scheduleAmbientC = wNow.ambientC;
+    } else if (this.regime === 'dynamic') {
       const d = dynamicWeatherAt(c.seed, this.weatherS);
       this.cloudCover = d.cloud;
       this.rainIntensity = d.rain;
-    } else {
+      // The sky the cloud and rain make now, and that sky's humidity (as reset() starts from); the wind keeps its start
+      this.skyCover = nearestSkyCover(d.cloud, d.rain);
+      this.humidityPct = SKY_COVER_SPECS[this.skyCover].defaultHumidityPct;
+    } else if (c.weather !== 'dynamic') {
+      // A static preset: the sky, humidity and wind stay as reset() set them
       const p = PRESET_STATE[c.weather];
       this.cloudCover = p.cloud;
       this.rainIntensity = p.rain;
@@ -697,7 +765,7 @@ export class WeatherState {
     const h = this.waterMm;
     const drain = DRAIN_K * Math.pow(Math.max(0, h), DRAIN_EXP);
     const sunUp = Math.max(0, Math.sin(this.sun.elevationDeg * DEG));
-    const humidityWindMult = hasCustomNodes
+    const humidityWindMult = schedule
       ? (1.35 - 0.7 * (this.humidityPct / 100)) * (0.85 + 0.012 * this.windSpeedKmh)
       : 1;
     const evap =
@@ -716,13 +784,7 @@ export class WeatherState {
     // A bone-dry track has no line to speak of: reset it so the next shower starts uniform
     if (this.waterMm <= 0) this.lineWater.fill(1);
 
-    if (hasCustomNodes && nodes) {
-      const durationS = Math.max(300, c.weatherDurationS ?? DEFAULT_WEATHER_DURATION_S);
-      const wNow = interpolateWeatherNodes(nodes, Math.min(1, this.weatherS / durationS), c.seed);
-      this.ambientC = wNow.ambientC;
-    } else {
-      this.ambientC = ambientTempC(this.clockH, this.cloudCover, rain);
-    }
+    this.ambientC = schedule ? scheduleAmbientC : ambientTempC(this.clockH, this.cloudCover, rain);
     const target = trackTargetTempC(this.clockH, this.cloudCover, rain, this.wetness);
     this.trackTempC += (target - this.trackTempC) * (1 - Math.exp(-dtW / TRACK_TEMP_TAU_S));
   }
@@ -784,16 +846,14 @@ export class WeatherState {
   }
 
   /**
-   * Takes the host's weather. A change of conditions restarts from the host's state; otherwise the local state is
-   * eased toward it, so a guest's sky and water never jump between the 3 s lobby updates.
+   * Takes the host's weather. A change of conditions (any of them: the forecast, the rubber preset and timescale
+   * included) restarts from the host's state; otherwise the local state is eased toward it, so a guest's sky and water
+   * never jump between the 3 s lobby updates. Returns true when it restarted (the track should restart with it:
+   * `TrackEnvironment.applyWeatherSync`).
    */
-  public applySync(s: WeatherSyncState): void {
+  public applySync(s: WeatherSyncState): boolean {
     const c = sanitizeConditions(s.conditions);
-    const same =
-      c.weather === this.conditions.weather &&
-      c.timeOfDay === this.conditions.timeOfDay &&
-      c.timeScale === this.conditions.timeScale &&
-      c.seed === this.conditions.seed;
+    const same = sameConditions(c, this.conditions);
     if (!same) this.reset(c);
     const k = same ? 0.5 : 1;
     this.clockH += (s.clockH - this.clockH) * k;
@@ -806,6 +866,7 @@ export class WeatherState {
     if (s.lineWater && s.lineWater.length === WEATHER_SECTORS) {
       for (let i = 0; i < WEATHER_SECTORS; i++) this.lineWater[i] += (s.lineWater[i] - this.lineWater[i]) * k;
     }
+    return !same;
   }
 }
 

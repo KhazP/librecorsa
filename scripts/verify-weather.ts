@@ -38,6 +38,7 @@ import {
   dynamicWeatherAt,
   GOLDEN_HOUR_CLOCK_H,
   interpolateWeatherNodes,
+  nearestSkyCover,
   sanitizeWeatherSync,
   sunPosition,
   topographicalPuddleFactor,
@@ -439,6 +440,80 @@ console.log('\n== RealRoad wet surface evolution, tread depth & 5-node weather')
     (wakeDry.sprayIntensity ?? 0) === 0 && (wakeWet.sprayIntensity ?? 0) > 0.35 && visor.dropletDensity > 0.05,
     `spray dry ${fmt(wakeDry.sprayIntensity ?? 0, 2)}, wet ${fmt(wakeWet.sprayIntensity ?? 0, 2)}, visor droplets ${fmt(visor.dropletDensity, 2)} (wiper: ${visor.wiperMode})`
   );
+}
+
+// ---------------------------------------------------------------------------
+// 9. Weather regime, host sync of the whole conditions, AI tyre call
+// ---------------------------------------------------------------------------
+console.log('\n== Weather regime, host sync & AI tyre call');
+{
+  // Dynamic weather: the sky classification follows the cloud and rain instead of staying at its start
+  const dyn = new WeatherState(5300, { ...DEFAULT_SESSION_CONDITIONS, weather: 'dynamic', seed: 7, timeScale: 60 });
+  const skies = new Set<string>([dyn.skyCover]);
+  let skyMatches = true;
+  for (let i = 0; i < 240; i++) {
+    dyn.step(1);
+    skies.add(dyn.skyCover);
+    if (dyn.skyCover !== nearestSkyCover(dyn.cloudCover, dyn.rainIntensity)) skyMatches = false;
+  }
+  check('Dynamic weather: the sky follows the cloud and rain', dyn.regime === 'dynamic' && skyMatches && skies.size > 1, `${skies.size} skies over 4 h of weather clock`);
+
+  // A forecast made from the drying preset starts on the drying preset's water, not on a bone-dry track
+  const dryingNodes = defaultWeatherNodesForPreset('drying', 'afternoon', 3);
+  const dryingSchedule = new WeatherState(5300, { ...DEFAULT_SESSION_CONDITIONS, weather: 'drying', timeOfDay: 'afternoon', weatherNodes: dryingNodes });
+  const dryingPreset = new WeatherState(5300, { ...DEFAULT_SESSION_CONDITIONS, weather: 'drying', timeOfDay: 'afternoon' });
+  check(
+    'Drying forecast starts wet with a part-dried line',
+    dryingSchedule.regime === 'schedule' && Math.abs(dryingSchedule.waterMm - dryingPreset.waterMm) < 1e-9 && Math.abs(dryingSchedule.lineWaterMm - dryingPreset.lineWaterMm) < 1e-9 && dryingSchedule.waterMm > 0.5,
+    `${fmt(dryingSchedule.waterMm)} mm, line ${fmt(dryingSchedule.lineWaterMm)} mm (preset ${fmt(dryingPreset.waterMm)} / ${fmt(dryingPreset.lineWaterMm)})`
+  );
+
+  // A guest on the same preset takes the host's forecast and rubber settings too, and restarts its track with them
+  const track = getActiveTrackData();
+  const hostConditions = {
+    ...DEFAULT_SESSION_CONDITIONS,
+    weather: 'clear' as const,
+    weatherNodes: defaultWeatherNodesForPreset('heavy_rain', 'golden_hour', 1),
+    weatherDurationS: 900,
+    surfacePreset: 'green' as const,
+    surfaceTimeScale: 0,
+  };
+  const hostEnv = new TrackEnvironment(track, hostConditions);
+  for (let i = 0; i < 60; i++) hostEnv.update(1, []);
+  const guestEnv = new TrackEnvironment(track, { ...DEFAULT_SESSION_CONDITIONS, weather: 'clear' });
+  guestEnv.trackEvolution.timeScale = 3;
+  const hostSnap = sanitizeWeatherSync(JSON.parse(JSON.stringify(hostEnv.weather.snapshot())));
+  if (hostSnap) guestEnv.applyWeatherSync(hostSnap);
+  const gw = guestEnv.weather;
+  check(
+    'Guest takes the host forecast and rubber settings (same preset)',
+    !!hostSnap &&
+      gw.regime === 'schedule' &&
+      gw.conditions.weatherNodes?.length === 5 &&
+      gw.conditions.weatherDurationS === 900 &&
+      gw.conditions.surfacePreset === 'green' &&
+      guestEnv.trackEvolution.timeScale === 0 &&
+      Math.abs(gw.waterMm - hostEnv.weather.waterMm) < 1e-9 &&
+      Math.abs(guestEnv.trackEvolution.baseTrackTempC - hostEnv.weather.trackTempC) < 1e-9,
+    `${gw.regime}, ${gw.conditions.weatherNodes?.length ?? 0} nodes, ${gw.conditions.surfacePreset}, rubber ×${guestEnv.trackEvolution.timeScale}, ${fmt(gw.waterMm)} mm`
+  );
+  // The next snapshot, conditions unchanged, only eases (no second restart)
+  for (let i = 0; i < 30; i++) hostEnv.update(1, []);
+  const easeSnap = sanitizeWeatherSync(JSON.parse(JSON.stringify(hostEnv.weather.snapshot())));
+  const restarted = easeSnap ? gw.applySync(easeSnap) : true;
+  check('Unchanged host conditions ease, not restart', !restarted, `restarted: ${restarted}`);
+
+  // An AI car that went onto rain tyres goes back onto its own slick, not a medium
+  const env = new TrackEnvironment(track, { ...DEFAULT_SESSION_CONDITIONS, weather: 'heavy_rain' });
+  const ai = new F1Physics2026(track).createAiPeerCar();
+  ai.aiAutopilot = true;
+  ai.tireCompound = 'soft';
+  env.update(1 / 60, [ai]);
+  const inRain = ai.tireCompound as TireCompound;
+  env.setConditions({ ...DEFAULT_SESSION_CONDITIONS, weather: 'clear' });
+  env.update(1 / 60, [ai]);
+  const back = ai.tireCompound as TireCompound;
+  check('AI comes off rain tyres onto the slick it had', inRain === 'wet' && back === 'soft', `soft → ${inRain} → ${back}`);
 }
 
 console.log(failures.length ? `\n${failures.length} check(s) failed: ${failures.join(', ')}` : '\nAll weather checks passed.');
