@@ -103,7 +103,7 @@ export const PHYSICS_CHECK: Record<VehicleModelId, string> = {
   "amg-gt3": "Its physics are checked against a real GT3 Evo's telemetry.",
   vf26: "Its physics are checked against the reference data they were built from.",
   "f12026-car": "Its physics are checked against the range a 2026 F1 car should fall in.",
-  liana: "Its physics come from an Assetto Corsa mod of this car and are checked against its Top Gear lap there.",
+  liana: "Its physics come from an Assetto Corsa mod of this car and are checked against its laps of Dunsfold there.",
 };
 
 /** Who made a car's 3D body (CREDITS.md has the full notes) */
@@ -326,12 +326,13 @@ export const CARS: readonly CarDefinition[] = [
     sub: "2002 · 1.6 L four · front-wheel drive",
     badge: "LIANA",
     quality: "own",
-    // An Assetto Corsa car whose author can't be traced; its physics are alekabul's rework (CREDITS.md)
+    // The body is Forza Motorsport 4's (Turn 10 Studios), converted for Assetto Corsa in 2015 by an author the mod
+    // doesn't name; its physics are alekabul's rework, used with permission (CREDITS.md)
     credit: {
-      title: "Suzuki Liana",
-      author: "Unknown",
+      title: "Suzuki Liana 1.6 GLX",
+      author: "Turn 10 Studios (Forza Motorsport 4), via an Assetto Corsa conversion",
       url: "http://assetto-db.com/car/suzuki_liana",
-      license: "Freeware mod",
+      license: "Game asset, not licensed for redistribution",
       licenseUrl: "http://assetto-db.com/car/suzuki_liana",
     },
     physics: "liana",

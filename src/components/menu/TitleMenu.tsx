@@ -161,13 +161,14 @@ const Credits: React.FC = () => (
           ) by{" "}
           <a href="https://www.overtake.gg/members/alekabul.294399/" target="_blank" rel="noreferrer" className={linkClass}>
             alekabul
-          </a>
+          </a>{" "}
+          · used with permission
           <br />
-          Model and sounds from a freeware Assetto Corsa mod (
+          Assetto Corsa conversion (2015, author not named;{" "}
           <a href="http://assetto-db.com/car/suzuki_liana" target="_blank" rel="noreferrer" className={linkClass}>
             assetto-db.com
           </a>
-          ), author unknown
+          ) of the Forza Motorsport 4 model by Turn 10 Studios
         </CreditRow>
         {TRACKS.some((t) => t.credit) ? (
           <CreditRow title="Circuits">
