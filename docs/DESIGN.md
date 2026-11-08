@@ -106,19 +106,27 @@ Heights: primary button 52, rail entry 58 (primary 64), segmented option 40, chi
 ## 8. HUD
 
 - Corner groups are anchored to their corner and scale about it (`anchor()`), so HUD size never pushes a group off-screen.
+- With the touch controls up, every preset gives way to the Phone HUD at any screen size: the pads take both bottom corners and the top-left, where the other presets put their panels.
+- Past 2.4:1 (a 32:9 screen) the HUD keeps to a centred 2.4:1 frame instead of the far edges. Anything the renderer places in window pixels (the virtual mirror) is offset by the frame's inset.
 - Labels are 9 px mono; values are `.lc-data`; the gear sits in a volt tile in display italic.
 - The player's own row in any table is volt with void ink.
 - Semantics: purple overall best, green PB / gaining, crimson losing / invalid, amber caution, cyan info / ERS.
 - Text over the scene gets `.hud-text-shadow` only when it is not on glass.
 
-## 9. Motion
+## 9. Screen size
+
+- Menus and HUD are drawn for a 1080p-class window. `--lc-ui-zoom` (`globals.css`) scales them up on bigger ones: 1.25 from 2200 × 1300, 1.5 from 2700 × 1600, 2 from 3400 × 1900 (both sides must clear a step, so 21:9 and 32:9 scale by height). Menu and overlay roots take it as CSS `zoom` (`.lc-ui-zoom`); the HUD multiplies its corner-group scale by it (`useUiZoom()`).
+- Inside a zoomed root, `vw` / `vh` resolve before the zoom: keep them inside `clamp()` / `min()` with a px cap. A position measured in window pixels and set on a zoomed element is divided by the zoom.
+- Short screens (`short:`, under 512 px tall, i.e. landscape phones) drop secondary chrome before the primary action leaves the screen. Touch screens hide key prompts until a controller is used.
+
+## 10. Motion
 
 - Focus, hover and value changes: 220 ms `cubic-bezier(0.2, 0.8, 0.2, 1)`.
 - Panels enter with `lc-panel-in` (180 ms, 10 px slide).
 - Status loops (`lc-ping`, `lc-breathe`, `lc-alert`, `lc-listen`) only for live states.
 - `prefers-reduced-motion` turns every loop and entrance off.
 
-## 10. Don't
+## 11. Don't
 
 - Square or 4–10 px-radius cards for sheets, or flat opaque pages over the scene.
 - Upright or non-italic display headings; sans-serif labels; proportional numbers.
