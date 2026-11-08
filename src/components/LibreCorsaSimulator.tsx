@@ -106,6 +106,7 @@ import { axleSlipFromTelemetry, createAxleSlipSample } from "@/lib/sim/tyre-slip
 import {
   clampFov,
   codeFromName,
+  DEFAULT_KEYBOARD_TUNING,
   DEFAULT_PLAYER_SETTINGS,
   loadCarChoice,
   loadOnboarded,
@@ -136,16 +137,16 @@ import type {
 
 /** Matches the aero package the track's target speeds / braking markers are computed for */
 const DEFAULT_AERO_PRESET: AeroSetupPreset = "balanced";
-const DEFAULT_ASSIST_PRESET: AssistPreset = "semi_pro";
+const DEFAULT_ASSIST_PRESET: AssistPreset = DEFAULT_PLAYER_SETTINGS.assistPreset;
 /** Longest frame (s) simulated in full; must not exceed the physics' own F1Physics2026.MAX_CATCH_UP_S */
 const MAX_FRAME_CATCH_UP_S = F1Physics2026.MAX_CATCH_UP_S;
 
 // Keyboard-only input shaping: a key press becomes a pedal squeeze, not a step
 /** A replay / flashback opens this far before the present, paused (s) */
 const REPLAY_OPEN_BACK_S = 3;
-const KB_THROTTLE_RISE_S = 0.25;
+const KB_THROTTLE_RISE_S = DEFAULT_KEYBOARD_TUNING.throttleRiseS;
 const KB_THROTTLE_FALL_S = 0.1;
-const KB_BRAKE_RISE_S = 0.17;
+const KB_BRAKE_RISE_S = DEFAULT_KEYBOARD_TUNING.brakeRiseS;
 const KB_BRAKE_FALL_S = 0.08;
 // Rotates a camera (which looks down -Z) to look along the car's +Z forward axis
 const CAM_FORWARD_FLIP = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI);
@@ -270,10 +271,6 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
 
   const [aeroPreset, setAeroPreset] =
     useState<AeroSetupPreset>(DEFAULT_AERO_PRESET);
-  const [assistPreset, setAssistPreset] = useState<AssistPreset>(
-    DEFAULT_ASSIST_PRESET
-  );
-  const [cameraMode, setCameraMode] = useState<CameraMode>("chase");
   const [tireCompound, setTireCompound] = useState<TireCompound>("soft");
   // Starts from the physics defaults (read from a throwaway instance, as the telemetry seed does)
   // until the real physics exists; the effect below then swaps in the physics defaults and any saved setup
@@ -282,23 +279,12 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   );
   const [tyreSetup, setTyreSetup] = useState<TyreSetup>(defaultTyreSetup);
   const [chassisSetup, setChassisSetup] = useState<ChassisSetup>(DEFAULT_CHASSIS_SETUP);
-  const [selectedLivery, setSelectedLivery] = useState<LiveryConfig>(
-    LIVERIES[0]
-  );
-  const [showRacingLine, setShowRacingLine] = useState(true);
   const [isMuted, setIsMuted] = useState(false);
   const [boostLatch, setBoostLatch] = useState(false);
-  const [mouseSteerEnabled, setMouseSteerEnabled] = useState(false);
-  const [gamepadAssist, setGamepadAssist] = useState(true);
-  // Current values for the toggle handlers, and the setters they call (defined further down)
-  const gamepadAssistRef = useRef(gamepadAssist);
-  gamepadAssistRef.current = gamepadAssist;
-  const showRacingLineRef = useRef(showRacingLine);
-  showRacingLineRef.current = showRacingLine;
+  // The setters the toggle handlers call (defined further down)
   const setGamepadAssistEnabledRef = useRef<(enabled: boolean) => void>(() => {});
   const setRacingLineVisibleRef = useRef<(visible: boolean) => void>(() => {});
   const setMouseSteerRef = useRef<(enabled: boolean) => void>(() => {});
-  const [autoGearbox, setAutoGearboxState] = useState(true);
   const [gamepadRumble, setGamepadRumble] = useState<boolean>(loadRumble);
   const rumbleEnabledRef = useRef(gamepadRumble);
   rumbleEnabledRef.current = gamepadRumble;
@@ -330,6 +316,23 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   const cockpitFovRef = useRef<number | null>(settings.cockpitFovDeg);
   cockpitFovRef.current = settings.cockpitFovDeg;
   /** The current car's own driver's-eye FOV, for the FOV slider's default and the [ / ] keys */
+  // The preferences the game applies to the car and the camera: `settings` is their only copy
+  const assistPreset = settings.assistPreset;
+  const showRacingLine = settings.racingLine;
+  const gamepadAssist = settings.gamepadAssist;
+  const autoGearbox = settings.autoGearbox;
+  const mouseSteerEnabled = settings.mouseSteer;
+  const selectedLivery = useMemo(() => LIVERIES.find((l) => l.id === settings.liveryId) ?? LIVERIES[0], [settings.liveryId]);
+  const cameraMode: CameraMode = settings.camera ?? "chase";
+  const setPreference = useCallback(<K extends keyof PlayerSettings>(key: K, value: PlayerSettings[K]) => {
+    setSettings((prev) => (prev[key] === value ? prev : { ...prev, [key]: value }));
+  }, []);
+  const setCameraMode = useCallback((mode: CameraMode) => setPreference("camera", mode), [setPreference]);
+  // Current values for the toggle handlers
+  const gamepadAssistRef = useRef(gamepadAssist);
+  gamepadAssistRef.current = gamepadAssist;
+  const showRacingLineRef = useRef(showRacingLine);
+  showRacingLineRef.current = showRacingLine;
   const [carCockpitFov, setCarCockpitFov] = useState(FALLBACK_COCKPIT_FOV_DEG);
   const carCockpitFovRef = useRef(carCockpitFov);
   /** Saved settings have been read and applied (saving before that would overwrite them with defaults) */
@@ -609,7 +612,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   }, []);
 
   const handleAssistPresetChange = useCallback((preset: AssistPreset) => {
-    setAssistPreset(preset);
+    setPreference("assistPreset", preset);
     if (physicsRef.current) {
       physicsRef.current.assistPreset = preset;
     }
@@ -687,7 +690,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   );
 
   const handleLiveryChange = useCallback((livery: LiveryConfig) => {
-    setSelectedLivery(livery);
+    setPreference("liveryId", livery.id);
     liveryRef.current = livery;
     carRigRef.current?.setLivery(livery);
   }, []);
@@ -843,26 +846,26 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
 
   const setRacingLineVisible = useCallback((visible: boolean) => {
     showRacingLineRef.current = visible;
-    setShowRacingLine(visible);
+    setPreference("racingLine", visible);
     if (racingLineMeshRef.current) racingLineMeshRef.current.visible = visible;
   }, []);
   setRacingLineVisibleRef.current = setRacingLineVisible;
 
   const setGamepadAssistEnabled = useCallback((enabled: boolean) => {
     gamepadAssistRef.current = enabled;
-    setGamepadAssist(enabled);
+    setPreference("gamepadAssist", enabled);
     if (physicsRef.current) physicsRef.current.gamepadAssistEnabled = enabled;
   }, []);
   setGamepadAssistEnabledRef.current = setGamepadAssistEnabled;
 
   const setAutoGearbox = useCallback((enabled: boolean) => {
-    setAutoGearboxState(enabled);
+    setPreference("autoGearbox", enabled);
     if (physicsRef.current) physicsRef.current.autoGearbox = enabled;
   }, []);
 
   const setMouseSteer = useCallback((enabled: boolean) => {
     mouseSteerEnabledRef.current = enabled;
-    setMouseSteerEnabled(enabled);
+    setPreference("mouseSteer", enabled);
     if (!enabled) mouseSteerValueRef.current = 0;
   }, []);
   setMouseSteerRef.current = setMouseSteer;
@@ -906,7 +909,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         carRigRef.current?.setTireCompound(autoCompound);
       }
     }
-  }, [conditionsKey, getTrackEnv]);
+  }, [conditionsKey, getTrackEnv, handleTireCompoundChange]);
   useEffect(() => {
     getTrackEnv().setSimRealism(SIM_REALISM_FLAGS[settings.realism]);
   }, [settings.realism, getTrackEnv]);
@@ -1304,8 +1307,6 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       car.assistPreset = prev?.assistPreset ?? DEFAULT_ASSIST_PRESET;
       car.aeroPreset = prev?.aeroPreset ?? DEFAULT_AERO_PRESET;
       if (prev) {
-        car.gamepadAssistEnabled = prev.gamepadAssistEnabled;
-        car.autoGearbox = prev.autoGearbox;
         car.tireCompound = prev.tireCompound;
       } else {
         const autoCompound = recommendedCompound(
@@ -3216,24 +3217,14 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     setMouseSteer(saved.mouseSteer);
     const livery = LIVERIES.find((l) => l.id === saved.liveryId);
     if (livery) handleLiveryChange(livery);
-    if (saved.camera) setCameraMode(saved.camera);
     setInviteRoom(roomFromUrl());
     setSettingsHydrated(true);
   }, [handleAssistPresetChange, setRacingLineVisible, setGamepadAssistEnabled, setAutoGearbox, setMouseSteer, handleLiveryChange]);
 
   useEffect(() => {
     if (!settingsHydrated) return;
-    savePlayerSettings({
-      ...settings,
-      assistPreset,
-      racingLine: showRacingLine,
-      gamepadAssist,
-      autoGearbox,
-      mouseSteer: mouseSteerEnabled,
-      liveryId: selectedLivery.id,
-      camera: cameraMode,
-    });
-  }, [settingsHydrated, settings, assistPreset, showRacingLine, gamepadAssist, autoGearbox, mouseSteerEnabled, selectedLivery, cameraMode]);
+    savePlayerSettings(settings);
+  }, [settingsHydrated, settings]);
 
   // Recently driven / raced, for the browsers: the car and circuit in use once the save is read, then every change
   useEffect(() => {
