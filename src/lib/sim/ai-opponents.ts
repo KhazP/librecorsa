@@ -1441,17 +1441,32 @@ export class AiOpponentField {
       // still on the throttle (never started under braking, never while a pass of our own is on), held through the
       // braking zone and given up once the car is in the corner itself, where it rejoins its own line to make the turn.
       // One move per straight; none against a car lapping us, none under a yellow
-      const mayDefend = targetLat === null && attacker !== null && defend > 0 && kAbs > 0.006 && !inCorner && !lapper && !yellow;
-      // ... and only with room to make it: a move across the nose of a car already right behind is a brake test
+      // Off the start the grid lane gives way to it: the run to the first corner is where places go, and a car that
+      // only held its lane was driven past by anything quicker off the line
+      const onStartLane = car.startLaneM !== null && targetLat === car.startLaneM;
+      const mayDefend =
+        (targetLat === null || onStartLane) && attacker !== null && defend > 0 && (kAbs > 0.006 || onStartLane) && !inCorner && !lapper && !yellow;
+      // ... and only with room to make it: the move must be made before the attacker gets there (a move across the
+      // nose of a car already right behind is a brake test). Half a car length plus 0.8 s of the closing speed
       const attackerClosing = attacker ? Math.max(0, attacker.sim.vxMs - me.vxMs) : 0;
       const startsDefence =
-        !car.defending && craft.defendMoves < 1 && me.telemetry.brake < 0.05 && attackerGap > 12 + 1.5 * attackerClosing;
+        !car.defending && craft.defendMoves < 1 && me.telemetry.brake < 0.05 && attackerGap > 0.5 * CAR_LEN_M + 0.8 * attackerClosing;
       const wasDefending = car.defending;
       car.defending = mayDefend && (car.defending || startsDefence);
-      if (car.defending && !wasDefending) craft.defendMoves++;
-      if (car.defending) {
-        targetLat = line + insideSign * Math.max(0, Math.min(half - insideSign * line, 2.2 * defend));
+      if (car.defending && !wasDefending && attacker) {
+        craft.defendMoves++;
+        // Cover the side the attacker is going for; one directly behind gets the inside of the corner ahead covered
+        const dLatAtt = attacker.sim.lateralOffsetM - me.lateralOffsetM;
+        const side = Math.abs(dLatAtt) > 0.8 || insideSign === 0 ? Math.sign(dLatAtt) || 1 : insideSign;
+        const from = onStartLane ? me.lateralOffsetM : line;
+        const reach = Math.abs(dLatAtt) > 0.8 ? Math.min(Math.abs(dLatAtt), 2.2 * defend) : 2.2 * defend;
+        const to = THREE.MathUtils.clamp(from + side * reach, -half, half);
+        craft.defendOffLine = onStartLane;
+        craft.defendLatM = onStartLane ? to : to - line;
+        // The new lane is the one held to the first corner: going back to the grid slot's would be a second move
+        if (onStartLane) car.startLaneM = to;
       }
+      if (car.defending) targetLat = THREE.MathUtils.clamp(craft.defendOffLine ? craft.defendLatM : line + craft.defendLatM, -half, half);
       // Blue flag: give the car lapping us the inside of the next corner and a little room
       let blueLift = 1;
       if (lapper && targetLat === null) {

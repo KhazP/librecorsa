@@ -119,6 +119,12 @@ export class RacecraftMemory {
   public readonly alongside = new Map<string, boolean>();
   /** Defensive moves made on this straight */
   public defendMoves = 0;
+  /**
+   * Where the defensive move under way goes, fixed when it starts so it never mirrors the attacker: an offset from the
+   * racing line (m), or from the road's centre for a move off the grid (`defendOffLine`)
+   */
+  public defendLatM = 0;
+  public defendOffLine = false;
   /** Committed to a side for a pass into the corner ahead (+1 right, −1 left, 0 none), and until where (lap m) */
   public commitSide = 0;
   public commitUntilS = 0;
@@ -131,6 +137,8 @@ export class RacecraftMemory {
   public reset(): void {
     this.alongside.clear();
     this.defendMoves = 0;
+    this.defendLatM = 0;
+    this.defendOffLine = false;
     this.commitSide = 0;
     this.commitUntilS = 0;
     this.wasInCorner = false;
