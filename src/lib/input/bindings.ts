@@ -118,6 +118,80 @@ export const DEFAULT_PAD_BUTTONS: PadButtonBindings = {
   hud: 11, // RS click (R3)
 };
 
+/** Ready-made controller layouts, after the defaults of the racing games players come from */
+export type PadLayout = "default" | "gt" | "f1" | "forza";
+
+/**
+ * Each layout puts what its game has on the same buttons (standard mapping; Xbox names, PlayStation in brackets). An
+ * action the game lacks keeps its LibreCorsa default button when that one is free, else takes a free one. All of them
+ * leave the triggers (throttle / brake) and the D-pad (the MFD's dials) alone, keep Menu on pause and restart on View:
+ * restart is not a rewind, and it must not sit under a thumb.
+ */
+export const PAD_LAYOUTS: Record<PadLayout, { label: string; buttons: PadButtonBindings }> = {
+  default: { label: "Default", buttons: DEFAULT_PAD_BUTTONS },
+  // Gran Turismo 7: ✕ up, □ down, R1 change view, R3 nitro / overtake, Options pause
+  gt: {
+    label: "GT style",
+    buttons: {
+      shiftUp: 0, // A (✕)
+      shiftDown: 2, // X (□)
+      boost: 11, // RS (R3)
+      camera: 5, // RB (R1)
+      pause: 9, // Menu (Options)
+      restart: 8, // View (Create)
+      aero: 3, // Y (△)
+      mfd: 10, // LS (L3)
+      mfdPage: 1, // B (○)
+      hud: 4, // LB (L1)
+      racingLine: null,
+    },
+  },
+  // F1 24: A up, X down, B overtake, Y DRS, RB next camera, View flashback, Menu pause
+  f1: {
+    label: "F1 style",
+    buttons: {
+      shiftUp: 0, // A (✕)
+      shiftDown: 2, // X (□)
+      boost: 1, // B (○)
+      aero: 3, // Y (△)
+      camera: 5, // RB (R1)
+      pause: 9, // Menu (Options)
+      restart: 8, // View (Create)
+      mfd: 10, // LS (L3)
+      mfdPage: 4, // LB (L1)
+      hud: 11, // RS (R3)
+      racingLine: null,
+    },
+  },
+  // Forza: B up, X down (manual layout), RB switch camera, LS toggle convertible, Menu pause
+  forza: {
+    label: "Forza style",
+    buttons: {
+      shiftUp: 1, // B (○)
+      shiftDown: 2, // X (□)
+      boost: 0, // A (✕)
+      camera: 5, // RB (R1)
+      aero: 10, // LS (L3)
+      pause: 9, // Menu (Options)
+      restart: 8, // View (Create)
+      mfd: 4, // LB (L1)
+      mfdPage: 3, // Y (△)
+      hud: 11, // RS (R3)
+      racingLine: null,
+    },
+  },
+};
+
+export const PAD_LAYOUT_IDS = Object.keys(PAD_LAYOUTS) as PadLayout[];
+
+/** The ready-made layout these bindings are, or null once the player has rebound a button */
+export function matchPadLayout(bindings: PadButtonBindings): PadLayout | null {
+  return (
+    PAD_LAYOUT_IDS.find((id) => PAD_ACTIONS.every(({ id: action }) => (bindings[action] ?? null) === PAD_LAYOUTS[id].buttons[action])) ??
+    null
+  );
+}
+
 /** Window events the game loop fires for the HUD's own pad toggles (the MFD and the HUD listen for them) */
 export const HUD_TOGGLE_EVENT = { mfd: "lc:toggle-mfd", mfdPage: "lc:mfd-page", hud: "lc:toggle-hud" } as const;
 
