@@ -678,6 +678,9 @@ export const AMG_GT3_CONFIG = {
   differential: {
     type: 'LSD_Ramp',
     settings: { power: 0.31, coast: 0.8, preload: 50, friction_faces: 1, power_ramp_deg: 45, coast_ramp_deg: 45 },
+    // Solid steel Ø 32 mm × 0.55 m from the rear transaxle (G 80 GPa): GJ/L ≈ 15 kNm/rad, ≈ 11 kNm/rad with the CV joints;
+    // shuffle 7.2 Hz in 1st, 19 Hz in 6th. Damping 10 % of critical for a wheel on its own shaft [est]
+    halfshaft: { stiffnessNmPerRad: 11_000, dampingNmsPerRad: 29 },
   },
   // Iron discs: steel pad μ(T) curve and heat capacities
   // MAX_TORQUE 4750 / FRONT_SHARE 0.71, ADJUST_STEP 0.5 %

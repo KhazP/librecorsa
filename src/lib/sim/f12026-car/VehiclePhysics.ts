@@ -819,6 +819,12 @@ export class VehiclePhysics {
   private limiterTimer = 0;
   private clutchEngagement = 1;
   private lsdLockTorque = 0;
+  /**
+   * Rear halfshaft twist (rad, + = the diff side ahead of the hub): the mean of the two (it carries the drive torque) and
+   * half their left-minus-right difference (it carries the diff's locking torque)
+   */
+  private shaftTwistMeanRad = 0;
+  private shaftTwistHalfDiffRad = 0;
   private mgukTorque = 0;
   private aeroFrontN = 0;
   private aeroDownN = 0;
@@ -1332,6 +1338,8 @@ export class VehiclePhysics {
     }
     this.clutchEngagement = 1;
     this.lsdLockTorque = 0;
+    this.shaftTwistMeanRad = 0;
+    this.shaftTwistHalfDiffRad = 0;
     this.mgukTorque = 0;
     this.aeroFrontN = 0;
     this.aeroDownN = 0;
@@ -2428,8 +2436,34 @@ export class VehiclePhysics {
     let accC = 0;
     let accD = 0;
     const half = 0.5 * ratio;
-    const mC = ratio !== 0 ? 1 / (1 / Ie + (half * half) / Iw[2] + (half * half) / Iw[3]) : 0;
-    const mD = 1 / (1 / Iw[2] + 1 / Iw[3]);
+    let mC = ratio !== 0 ? 1 / (1 / Ie + (half * half) / Iw[2] + (half * half) / Iw[3]) : 0;
+    let mD = 1 / (1 / Iw[2] + 1 / Iw[3]);
+    // Compliant halfshafts make the clutch and diff rows soft constraints: an implicit spring-damper on each row's own
+    // coordinate (Catto, "Soft Constraints", GDC 2011; ODE's CFM / ERP), stable at any stiffness. The side gears' inertia
+    // is negligible next to the wheels' and the engine's, so the shafts sit in series with the clutch and the diff. With
+    // equal shafts the two rows see independent modes: the clutch row (J = [1, −r/2, −r/2]) twists both shafts alike
+    // (2k/r², 2c/r² at the crank, coordinate r·θ_mean); the diff row (J = [1, −1] on the rears) twists them oppositely
+    // (k/2, c/2, coordinate −2·θ_halfDiff). Rigid shafts: gamma = bias = 0, the rows as before.
+    const shaft = cfg.differential.halfshaft;
+    let gammaC = 0;
+    let biasC = 0;
+    let gammaD = 0;
+    let biasD = 0;
+    if (shaft) {
+      const k = shaft.stiffnessNmPerRad;
+      const cS = shaft.dampingNmsPerRad;
+      if (ratio !== 0) {
+        const kC = (2 * k) / (ratio * ratio);
+        const denC = (2 * cS) / (ratio * ratio) + h * kC;
+        gammaC = 1 / (h * denC);
+        biasC = (kC * ratio * this.shaftTwistMeanRad) / denC;
+        mC = 1 / (1 / mC + gammaC);
+      }
+      const denD = 0.5 * cS + h * 0.5 * k;
+      gammaD = 1 / (h * denD);
+      biasD = (0.5 * k * -2 * this.shaftTwistHalfDiffRad) / denD;
+      mD = 1 / (1 / mD + gammaD);
+    }
     const diffCfg = cfg.differential;
     const diff = diffCfg.settings;
     const cot = (deg: number) => 1 / Math.tan(Math.max(5, deg) * DEG2RAD);
@@ -2478,7 +2512,7 @@ export class VehiclePhysics {
         const c = wE - half * (wW[2] + wW[3]);
         const max = clutchCap * h;
         const prev = accC;
-        accC = THREE.MathUtils.clamp(prev - c * mC, -max, max);
+        accC = THREE.MathUtils.clamp(prev - (c + biasC + gammaC * prev) * mC, -max, max);
         const d = accC - prev;
         wE += d / Ie;
         wW[2] -= (half * d) / Iw[2];
@@ -2491,13 +2525,22 @@ export class VehiclePhysics {
         const c = wW[2] - wW[3];
         const max = lockTorque * h;
         const prev = accD;
-        accD = THREE.MathUtils.clamp(prev - c * mD, -max, max);
+        accD = THREE.MathUtils.clamp(prev - (c + biasD + gammaD * prev) * mD, -max, max);
         const d = accD - prev;
         wW[2] += d / Iw[2];
         wW[3] -= d / Iw[3];
       }
     }
     this.lsdLockTorque = lockTorque;
+    if (shaft) {
+      // The twists follow the torque the rows delivered (c·θ̇ + k·θ = T, implicit), so a slipping clutch or diff holds
+      // the shafts at the torque it passes rather than winding them up by its slip
+      const k = shaft.stiffnessNmPerRad;
+      const den = shaft.dampingNmsPerRad + h * k;
+      const tMean = clutchCap > 0 && ratio !== 0 ? -(accC / h) * half : 0;
+      this.shaftTwistMeanRad += (h * (tMean - k * this.shaftTwistMeanRad)) / den;
+      this.shaftTwistHalfDiffRad += (h * (accD / h - k * this.shaftTwistHalfDiffRad)) / den;
+    }
     this.engineOmega = Math.max(0, wE);
     for (let i = 0; i < 4; i++) {
       W[i].driveTorqueNm = i >= 2 ? -(accC / h) * half : 0;

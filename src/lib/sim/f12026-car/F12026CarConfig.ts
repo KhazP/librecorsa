@@ -196,6 +196,12 @@ export interface DifferentialSettingsUnits {
 export interface DifferentialData {
   type: 'LSD_Ramp';
   settings: DifferentialSettingsUnits;
+  /**
+   * Torsional compliance of each rear halfshaft, diff side gear to hub with its CV joints: stiffness (Nm/rad) and damping
+   * (Nm·s/rad). The driveline winds up against the tyres, and a throttle step rings at its shuffle frequency (the engine
+   * on the shafts, √(2k / (r²·I_engine)) at overall ratio r). Absent: rigid shafts
+   */
+  halfshaft?: { stiffnessNmPerRad: number; dampingNmsPerRad: number };
   /** Electronic diff: the coast locking (same units as `coast`) while braking, i.e. on corner entry; default `coast` */
   coastBraking?: number;
   /** 2026 3-Phase Active Electronic Differential (Entry braking <= -0.5G, Mid apex -0.5G..+0.5G, Exit/HiSpd > +0.5G or > 250 km/h) */
@@ -918,6 +924,10 @@ const F12026_DIFFERENTIAL: DifferentialData = {
     power_ramp_deg: 45,
     coast_ramp_deg: 45,
   },
+  // Titanium tube ≈ 40 / 30 mm × 0.45 m between the CV joints (G 44 GPa): GJ/L ≈ 17 kNm/rad, ≈ 13 kNm/rad with the two
+  // joints in series, ≈ 11° of twist at the ≈ 2.5 kNm a rear tyre takes at low speed; shuffle 5.8 Hz in 1st, 20 Hz in 8th.
+  // Damping: 10 % of critical for a wheel on its own shaft (√(k/I_w) ≈ 13 Hz; CV-joint and bearing friction) [est]
+  halfshaft: { stiffnessNmPerRad: 13_000, dampingNmsPerRad: 33 },
   coastBraking: 2 / 11,
   threePhase: true,
   diffEntryLevel: 3,
