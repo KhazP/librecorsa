@@ -16,7 +16,12 @@ export interface LibreCorsaLogoProps {
 const SIZES = {
   sm: { mark: "h-8 w-8", word: "text-lg", gap: "gap-2.5" },
   md: { mark: "h-11 w-11", word: "text-2xl", gap: "gap-3" },
-  lg: { mark: "h-16 w-16", word: "text-[2.6rem]", gap: "gap-4" },
+  // lg shrinks on a phone (width) and a landscape phone (height) so the lock-up never runs off the screen
+  lg: {
+    mark: "h-[clamp(2.75rem,min(13vw,12vh),4rem)] w-[clamp(2.75rem,min(13vw,12vh),4rem)]",
+    word: "text-[clamp(1.5rem,min(8.4vw,7vh),2.6rem)]",
+    gap: "gap-[clamp(0.75rem,3.5vw,1rem)]",
+  },
 } as const;
 
 /**
@@ -73,9 +78,9 @@ export const LibreCorsaLogo: React.FC<LibreCorsaLogoProps> = ({
   const s = SIZES[size ?? (variant === "compact" ? "sm" : "md")];
 
   return (
-    <div className={`inline-flex items-center select-none ${s.gap} ${className}`}>
+    <div className={`inline-flex max-w-full items-center select-none ${s.gap} ${className}`}>
       <LibreCorsaMark className={`${s.mark} shrink-0 drop-shadow-[0_4px_14px_rgba(204,255,0,0.18)]`} />
-      <div className="flex flex-col justify-center">
+      <div className="flex min-w-0 flex-col justify-center">
         <div
           className={`font-f1-display leading-none font-black tracking-[0.06em] text-[#F5F7FA] italic ${s.word}`}
           style={{ textShadow: "0 2px 18px rgba(0,0,0,0.6)" }}
@@ -89,7 +94,7 @@ export const LibreCorsaLogo: React.FC<LibreCorsaLogoProps> = ({
               <span className="h-[5px] w-4 bg-[#00E5FF]" />
               <span className="h-[5px] w-4 bg-[#FF2A3C]" />
             </span>
-            <span className="font-f1-mono text-[10px] font-bold tracking-[0.24em] text-[#8E96AA] uppercase">{subtitle}</span>
+            <span className="font-f1-mono text-[10px] font-bold tracking-[0.24em] text-balance text-[#8E96AA] uppercase">{subtitle}</span>
           </div>
         ) : null}
       </div>

@@ -212,15 +212,15 @@ export const LoadingScreen: React.FC<{
       </svg>
 
       <div className="relative mx-auto flex w-full max-w-[1440px] flex-1 flex-col px-5 pt-[clamp(28px,4.4vh,48px)] pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:px-10 lg:px-16">
-        <div className="grid flex-1 grid-cols-1 items-center gap-8 lg:grid-cols-2 lg:gap-10">
-          <div className="order-2 flex max-w-[560px] flex-col gap-[clamp(20px,3.6vh,36px)] lg:order-1">
+        <div className="grid flex-1 grid-cols-1 items-center gap-8 lg:grid-cols-2 lg:gap-10 short:grid-cols-[minmax(0,1fr)_auto] short:gap-6">
+          <div className="order-2 flex max-w-[560px] min-w-0 flex-col gap-[clamp(20px,3.6vh,36px)] lg:order-1 short:order-1">
             <LibreCorsaLogo variant="full" size="lg" />
 
             {/* Percentage and the start lights as the progress indicator */}
-            <div className="flex flex-wrap items-end gap-x-7 gap-y-4">
+            <div className="flex flex-wrap items-end gap-x-7 gap-y-4 short:gap-x-5">
               <div className="flex flex-col gap-2">
                 <span
-                  className="lc-disp text-[clamp(72px,12vw,168px)] tracking-[-0.02em] tabular-nums short:text-[64px]"
+                  className="lc-disp text-[clamp(72px,12vw,168px)] tracking-[-0.02em] tabular-nums short:text-[56px]"
                   style={{ color: ready ? "#CCFF00" : "#F5F7FA" }}
                 >
                   {Math.round(shown * 100)}%
@@ -240,8 +240,8 @@ export const LoadingScreen: React.FC<{
               </div>
             </div>
 
-            {/* What is still arriving */}
-            <div className="flex flex-col border-t border-[#262B3D]">
+            {/* What is still arriving; once all of it is in, compact screens drop the rows for the pinned prompt */}
+            <div className={`flex flex-col border-t border-[#262B3D] ${ready ? "compact:hidden" : ""}`}>
               {progress.tasks.map((t) => {
                 const color = taskColor(t);
                 const fill = taskFill(t);
@@ -290,7 +290,7 @@ export const LoadingScreen: React.FC<{
           </div>
 
           {/* The circuit drawing itself in Corsa Volt */}
-          <div className="order-1 mx-auto flex w-full max-w-[min(280px,32vh)] items-center justify-center lg:order-2 lg:max-w-[min(640px,100%,calc(100vh_-_12rem))]">
+          <div className="order-1 mx-auto flex w-full max-w-[min(280px,32vh)] items-center justify-center lg:order-2 lg:max-w-[min(640px,100%,calc(100vh_-_12rem))] short:order-2 short:w-[min(220px,45vh)] short:max-w-none">
             <svg
               viewBox="-8 -8 116 116"
               className="h-auto w-full overflow-visible"
@@ -352,7 +352,7 @@ export const LoadingScreen: React.FC<{
           </div>
         </div>
 
-        <footer className="mt-6 flex flex-wrap items-center justify-between gap-2.5 border-t border-[#262B3D] pt-3.5 font-f1-mono text-[11px] font-bold tracking-[0.12em] text-[#8E96AA]">
+        <footer className={`mt-6 flex flex-wrap items-center justify-between gap-2.5 border-t border-[#262B3D] pt-3.5 font-f1-mono text-[11px] font-bold tracking-[0.12em] text-[#8E96AA] short:hidden ${ready ? "compact:hidden" : ""}`}>
           <span>
             {trackInfo.name.toUpperCase()} · {(track.totalLengthM / 1000).toFixed(2)} KM · {TURN_METADATA.length} TURNS
             {isRwanda ? " · 1,400 M ALTITUDE" : ""}
