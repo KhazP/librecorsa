@@ -109,9 +109,9 @@ const car = (patch: Partial<AutoShiftInput>): AutoShiftInput => ({
 }
 {
   const o = new ManualShiftOverride();
-  const air = autoShift(car({ engineRpm: 11200, rearGrounded: false }), SCHEDULE, o);
-  const spin = autoShift(car({ engineRpm: 11200, roadRpm: 9500, rearSpinning: true }), SCHEDULE, o);
-  const spinAtPoint = autoShift(car({ engineRpm: 11200, roadRpm: 11100, rearSpinning: true }), SCHEDULE, o);
+  const air = autoShift(car({ engineRpm: 11200, drivenGrounded: false }), SCHEDULE, o);
+  const spin = autoShift(car({ engineRpm: 11200, roadRpm: 9500, drivenSpinning: true }), SCHEDULE, o);
+  const spinAtPoint = autoShift(car({ engineRpm: 11200, roadRpm: 11100, drivenSpinning: true }), SCHEDULE, o);
   check(
     air === 0 && spin === 0 && spinAtPoint === 1,
     `policy: no upshift with the rears in the air (${air}) or spinning (${spin}) unless road speed is at the point (${spinAtPoint})`

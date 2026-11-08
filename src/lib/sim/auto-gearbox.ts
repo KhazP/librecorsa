@@ -45,10 +45,10 @@ export interface AutoShiftInput {
   /** Since the last upshift / downshift (s; only read where the schedule asks for them) */
   sinceUpshiftS: number;
   sinceDownshiftS: number;
-  /** At least one rear wheel carries load */
-  rearGrounded: boolean;
-  /** The rear tyres spin up past their grip */
-  rearSpinning: boolean;
+  /** At least one driven wheel carries load */
+  drivenGrounded: boolean;
+  /** The driven tyres spin up past their grip */
+  drivenSpinning: boolean;
 }
 
 export const createAutoShiftInput = (): AutoShiftInput => ({
@@ -62,8 +62,8 @@ export const createAutoShiftInput = (): AutoShiftInput => ({
   brake: 0,
   sinceUpshiftS: Infinity,
   sinceDownshiftS: Infinity,
-  rearGrounded: true,
-  rearSpinning: false,
+  drivenGrounded: true,
+  drivenSpinning: false,
 });
 
 /** How long a manual downshift holds off auto upshifts, and a manual upshift any auto downshift whatever the throttle (s) */
@@ -133,9 +133,9 @@ function wantsUpshift(car: AutoShiftInput, s: AutoShiftSchedule): boolean {
     car.engineRpm >= s.upshiftRpm &&
     car.clutchClosed &&
     car.brake < s.upshiftMaxBrake &&
-    // Not with the rears in the air or spinning up, unless the road speed itself is at the upshift point
-    car.rearGrounded &&
-    (!car.rearSpinning || car.roadRpm >= s.upshiftRpm)
+    // Not with the driven wheels in the air or spinning up, unless the road speed itself is at the upshift point
+    car.drivenGrounded &&
+    (!car.drivenSpinning || car.roadRpm >= s.upshiftRpm)
   );
 }
 

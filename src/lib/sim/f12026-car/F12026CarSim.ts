@@ -108,14 +108,14 @@ export interface CarElectronicsProfile {
   tcRateHz: number;
   tcMinSpeedKmh: number;
   /**
-   * TC1 slip target tightening with lateral g: target × max(`floor`, 1 − `gain`·(|a_y|/g)^`exponent` − rear-slide
-   * term in the wet). Default (an F1 calibration): gain 0.14, exponent 1.3, floor 0.42.
+   * TC1 slip target tightening with lateral g: target × max(`floor`, 1 − `gain`·(|a_y|/g)^`exponent` − driven-axle
+   * slide term in the wet). Default (an F1 calibration): gain 0.14, exponent 1.3, floor 0.42.
    */
   tcLateralTightening?: { gain: number; exponent: number; floor: number };
   /**
-   * TC1 rear-slide term on a dry road: the slip target also shrinks by `gain` × (rear slip angle / peak − `from`), so a
-   * rear that already slides sideways gets less wheelspin before the cut, as a cornering-aware GT3 TC does. Absent: only
-   * in the wet (gain 0.22 from 0.45), the F1 calibration.
+   * TC1 slide term on a dry road: the slip target also shrinks by `gain` × (driven axle's slip angle / peak − `from`),
+   * so a driven axle that already slides sideways (the rear on an F1 car or a GT3) gets less wheelspin before the cut,
+   * as a cornering-aware GT3 TC does. Absent: only in the wet (gain 0.22 from 0.45), the F1 calibration.
    */
   tcDryRearSlide?: { gain: number; from: number };
   /**
@@ -1541,16 +1541,18 @@ export class F12026CarSim implements SimulatorCar {
       const tight = elec.tcLateralTightening ?? DEFAULT_TC_LATERAL_TIGHTENING;
       const gLat = Math.abs(this.lastAyMs2) / G;
       const saLimitRad = Math.max(0.05, (this.compoundData.modelData.friction_limit_angle || DEFAULT_FRICTION_LIMIT_ANGLE_DEG) * DEG2RAD);
-      const saRear = Math.max(Math.abs(W[2].slipAngleRad), Math.abs(W[3].slipAngleRad)) / saLimitRad;
+      // The driven axle's tyres: the rears on an F1 car or a GT3, the fronts on a front-wheel-drive car
+      const [dl, dr] = v.drivenWheels;
+      const saDriven = Math.max(Math.abs(W[dl].slipAngleRad), Math.abs(W[dr].slipAngleRad)) / saLimitRad;
       const slide = v.waterMm > 0 ? { gain: 0.22, from: 0.45 } : elec.tcDryRearSlide;
-      const slideTerm = slide ? slide.gain * Math.max(0, saRear - slide.from) : 0;
+      const slideTerm = slide ? slide.gain * Math.max(0, saDriven - slide.from) : 0;
       const latFactor = Math.max(tight.floor, 1 - tight.gain * Math.pow(gLat, tight.exponent) - slideTerm);
       const tcEffTarget = tcBaseTarget * latFactor;
-      // Weighted rear axle slip: 0.65 * max(k_LR, k_RR) + 0.35 * mean(k_LR, k_RR)
-      const kL = Math.max(0, W[2].slipRatio);
-      const kR = Math.max(0, W[3].slipRatio);
-      const kRear = 0.65 * Math.max(kL, kR) + 0.35 * (0.5 * (kL + kR));
-      const eTc = Math.max(0, kRear - tcEffTarget);
+      // Weighted driven axle slip: 0.65 * max(k_L, k_R) + 0.35 * mean(k_L, k_R)
+      const kL = Math.max(0, W[dl].slipRatio);
+      const kR = Math.max(0, W[dr].slipRatio);
+      const kDriven = 0.65 * Math.max(kL, kR) + 0.35 * (0.5 * (kL + kR));
+      const eTc = Math.max(0, kDriven - tcEffTarget);
       const tc2 = THREE.MathUtils.clamp(dials.tc2Level, 1, 12);
       const tc2Norm = (tc2 - 1) / 11;
       // Stage A (0 < eTc <= 0.03): smooth spark timing retard up to 25% cut

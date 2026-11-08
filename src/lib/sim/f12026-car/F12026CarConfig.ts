@@ -573,6 +573,8 @@ export interface TyresCompoundData {
 
 export interface CarPhysicsConfig {
   screenName: string;
+  /** The axle the engine drives through the clutch and differential; absent: the rear */
+  drivenAxle?: 'front' | 'rear';
   chassis: ChassisData;
   engine: EngineData;
   ers: ERSData;

@@ -2005,8 +2005,8 @@ export class F1Physics2026 {
       a.clutchClosed = drv.clutchLocked;
       a.throttle = throttle;
       a.brake = brake;
-      a.rearGrounded = this.wheels[2].fzN > 1 || this.wheels[3].fzN > 1;
-      a.rearSpinning = Math.max(this.wheels[2].slipRatio, this.wheels[3].slipRatio) > 0.14;
+      a.drivenGrounded = this.wheels[2].fzN > 1 || this.wheels[3].fzN > 1;
+      a.drivenSpinning = Math.max(this.wheels[2].slipRatio, this.wheels[3].slipRatio) > 0.14;
       desired = drv.gear + autoShift(a, VF26_AUTO_SHIFT, this.manualShift);
       if (desired !== drv.gear) drv.autoShiftCooldownS = 0.12;
     }

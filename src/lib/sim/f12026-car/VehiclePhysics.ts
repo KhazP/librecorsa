@@ -660,6 +660,8 @@ export class VehiclePhysics {
   public readonly cgToFrontM: number;
   public readonly cgToRearM: number;
   public readonly wheelbaseM: number;
+  /** The wheels the engine drives (left, right): 0/1 the front pair, 2/3 the rear (`CarPhysicsConfig.drivenAxle`) */
+  public readonly drivenWheels: readonly [number, number];
   /** Road-wheel angle at full lock (rad); the garage's steering ratio changes it */
   public maxSteerRad: number;
   /** Garage: static toe per axle (rad, + = toe-in), engine braking and brake duct cooling relative to the baseline */
@@ -877,6 +879,7 @@ export class VehiclePhysics {
     this.steerComplianceRadPerN = ((ch.steerComplianceDegPerKN ?? 0) * DEG2RAD) / 1000;
     this.ffbMechanicalTrailM = ch.ffbMechanicalTrailM ?? DEFAULT_FFB_MECHANICAL_TRAIL_M;
     this.brakeCompound = cfg.brakes.discMaterial ?? 'carbon-ceramic';
+    this.drivenWheels = cfg.drivenAxle === 'front' ? [0, 1] : [2, 3];
     // Body axes: X = left (pitch), Y = up (yaw), Z = forward (roll)
     this.dryInertiaBody = new THREE.Vector3(ch.inertia.pitch, ch.inertia.yaw, ch.inertia.roll);
     this.inertiaBody = this.dryInertiaBody.clone();
@@ -1235,7 +1238,7 @@ export class VehiclePhysics {
       // Free-rolling at the road speed under each tyre: held at speed / r, the tyres would drive (or brake) the
       // pinned car through the whole settle, and on a grade that thrust pitches it up
       for (const w of this.wheels) w.omega = (k === 0 ? speedMs : Math.max(0, w.vx)) / Math.max(0.2, w.rollingRadius || 0.35);
-      if (rolling) this.engineOmega = 0.5 * (this.wheels[2].omega + this.wheels[3].omega) * this.totalRatio();
+      if (rolling) this.engineOmega = this.drivenOmega() * this.totalRatio();
       this.substep(h, hold);
       this.position.x = x;
       this.position.z = z;
@@ -1552,12 +1555,19 @@ export class VehiclePhysics {
     return 0;
   }
 
-  /** Engine rpm the road speed implies in `gear` (rear rolling radius, no wheelspin); needs `updateBasis` */
+  /** Engine rpm the road speed implies in `gear` (driven wheels' rolling radius, no wheelspin); needs `updateBasis` */
   private roadRpm(gear: number, speedMs = Math.abs(this.velocity.dot(_ez))): number {
     const gb = this.config.gearbox;
     if (gear < 1) return 0;
-    const r = Math.max(0.2, 0.5 * (this.wheels[2].rollingRadius + this.wheels[3].rollingRadius) || 0.35);
+    const [dl, dr] = this.drivenWheels;
+    const r = Math.max(0.2, 0.5 * (this.wheels[dl].rollingRadius + this.wheels[dr].rollingRadius) || 0.35);
     return (speedMs / r) * gb.ratios[gear - 1] * gb.finalDrive * RADS2RPM;
+  }
+
+  /** Mean spin of the driven wheels (rad/s) */
+  private drivenOmega(): number {
+    const [dl, dr] = this.drivenWheels;
+    return 0.5 * (this.wheels[dl].omega + this.wheels[dr].omega);
   }
 
   /** Lowest gear that keeps the road rpm under the upshift point */
@@ -1657,8 +1667,9 @@ export class VehiclePhysics {
     a.brake = brake;
     a.sinceUpshiftS = this.sinceUpshiftS;
     a.sinceDownshiftS = this.sinceDownshiftS;
-    a.rearGrounded = this.wheels[2].fz > 1 || this.wheels[3].fz > 1;
-    a.rearSpinning = Math.max(this.wheels[2].slipRatio, this.wheels[3].slipRatio) > 0.14;
+    const [dl, dr] = this.drivenWheels;
+    a.drivenGrounded = this.wheels[dl].fz > 1 || this.wheels[dr].fz > 1;
+    a.drivenSpinning = Math.max(this.wheels[dl].slipRatio, this.wheels[dr].slipRatio) > 0.14;
     const shift = autoShift(a, this.autoShiftSchedule, this.manualShift);
     if (shift !== 0) this.requestShift(this.gear + shift);
   }
@@ -2291,7 +2302,7 @@ export class VehiclePhysics {
     }
 
     // ---- clutch engagement
-    const axleOmega = 0.5 * (W[2].omega + W[3].omega);
+    const axleOmega = this.drivenOmega();
     const wheelSideRpm = Math.abs(axleOmega * ratio) * RADS2RPM;
     const cl = cfg.clutch;
     let engage = 0;
@@ -2362,12 +2373,13 @@ export class VehiclePhysics {
 
     // ---- brakes (physical brake pad μ(T))
     const crankBrake = Math.max(0, -tK) + Math.max(0, -tIce);
-    const rearDriveBrake = inp.brake > 0.05 && br.brakeByWire !== false ? (crankBrake * engage * Math.abs(ratio) * gb.efficiency) / 2 : 0;
+    const driveBrake = inp.brake > 0.05 && br.brakeByWire !== false ? (crankBrake * engage * Math.abs(ratio) * gb.efficiency) / 2 : 0;
+    const [dl, dr] = this.drivenWheels;
     for (let i = 0; i < 4; i++) {
       const w = W[i];
       const demand = inp.brake * (inp.brakeWheelScale ? inp.brakeWheelScale[i] : 1) * br.maxTorqueNm * (w.isFront ? bias : 1 - bias);
       // Pad μ(T) of the disc (1 in its window, a mild loss cold or faded)
-      const friction = (w.isFront ? demand : Math.max(0, demand - rearDriveBrake)) * w.brakeDisc.muFactor;
+      const friction = (i === dl || i === dr ? Math.max(0, demand - driveBrake) : demand) * w.brakeDisc.muFactor;
       const tyre = this.tyres[w.isFront ? 0 : 1].data.modelData;
       w.brakeTorqueNm = friction + w.fz * tyre.rollingResistance * w.rollingRadius;
     }
@@ -2387,8 +2399,8 @@ export class VehiclePhysics {
     let accC = 0;
     let accD = 0;
     const half = 0.5 * ratio;
-    const mC = ratio !== 0 ? 1 / (1 / Ie + (half * half) / Iw[2] + (half * half) / Iw[3]) : 0;
-    const mD = 1 / (1 / Iw[2] + 1 / Iw[3]);
+    const mC = ratio !== 0 ? 1 / (1 / Ie + (half * half) / Iw[dl] + (half * half) / Iw[dr]) : 0;
+    const mD = 1 / (1 / Iw[dl] + 1 / Iw[dr]);
     const diffCfg = cfg.differential;
     const diff = diffCfg.settings;
     const cot = (deg: number) => 1 / Math.tan(Math.max(5, deg) * DEG2RAD);
@@ -2434,32 +2446,32 @@ export class VehiclePhysics {
         wW[i] += (accB[i] - prev) / Iw[i];
       }
       if (clutchCap > 0 && ratio !== 0) {
-        const c = wE - half * (wW[2] + wW[3]);
+        const c = wE - half * (wW[dl] + wW[dr]);
         const max = clutchCap * h;
         const prev = accC;
         accC = THREE.MathUtils.clamp(prev - c * mC, -max, max);
         const d = accC - prev;
         wE += d / Ie;
-        wW[2] -= (half * d) / Iw[2];
-        wW[3] -= (half * d) / Iw[3];
+        wW[dl] -= (half * d) / Iw[dl];
+        wW[dr] -= (half * d) / Iw[dr];
       }
       // Torque into the diff (Nm): + when the engine drives the wheels forward
       const tIn = (-accC / h) * ratio;
       lockTorque = diff.preload + Math.abs(tIn) * (tIn >= 0 ? lockPower : lockCoast);
       {
-        const c = wW[2] - wW[3];
+        const c = wW[dl] - wW[dr];
         const max = lockTorque * h;
         const prev = accD;
         accD = THREE.MathUtils.clamp(prev - c * mD, -max, max);
         const d = accD - prev;
-        wW[2] += d / Iw[2];
-        wW[3] -= d / Iw[3];
+        wW[dl] += d / Iw[dl];
+        wW[dr] -= d / Iw[dr];
       }
     }
     this.lsdLockTorque = lockTorque;
     this.engineOmega = Math.max(0, wE);
     for (let i = 0; i < 4; i++) {
-      W[i].driveTorqueNm = i >= 2 ? -(accC / h) * half : 0;
+      W[i].driveTorqueNm = i === dl || i === dr ? -(accC / h) * half : 0;
       W[i].omega = wW[i];
     }
 
