@@ -1770,6 +1770,23 @@ export class VehiclePhysics {
     this.addForceAt(_f, _p);
   }
 
+  /**
+   * Gyroscopic torque a front wheel puts on the steering (Nm, + = toward left lock, as the rack sum). Its spin momentum
+   * I·ω lies along the axle; turning the wheel about its rolling axis `fw` at rate p (body roll, plus the camber the
+   * suspension gives it over a bump: the axle's kinematic camber gain × bump rate) precesses it, and the steering arm
+   * takes the part about the steering axis, −I·ω·p. Lean the top right and the wheel steers right, as a bicycle wheel
+   * does. The camber the steering itself adds (caster, kingpin inclination) is left out: that turn is about the
+   * steering axis, and a precession about an axis puts no torque about that same axis.
+   */
+  private wheelGyroSteerNm(w: WheelState, fw: THREE.Vector3): number {
+    const axle = this.axles[w.isFront ? 0 : 1];
+    // Bump camber rate, leaning + left (the left wheel's camber is its lean to the left, the right's to the right);
+    // leaning + left turns the wheel about −fw
+    const camberRate = (w.isLeft ? 1 : -1) * axle.spec.camberGainKinematic * DEG2RAD * w.compressionVel;
+    const p = this.angularVelocity.dot(fw) - camberRate;
+    return -axle.wheelInertia * w.omega * p;
+  }
+
   private substep(h: number, inp: VehicleInputs): void {
     this.updateBasis();
     this.force.set(0, 0, 0);
@@ -2063,6 +2080,7 @@ export class VehiclePhysics {
           g.surface === 'kerb' || g.surface === 'sausage' ? 'kerb' : 'asphalt'
         );
         const roadTexNm = isoRough * w.verticalRate * 0.006 * speedGate * (w.isLeft ? 1 : -1);
+        const gyroSteerNm = this.wheelGyroSteerNm(w, _fw);
         ffbMz +=
           (w.mz -
             fy * w.casterTrailM -
@@ -2070,7 +2088,8 @@ export class VehiclePhysics {
             0.08 * w.mx) *
             lowSpeedScale +
           flatSpotVib +
-          roadTexNm;
+          roadTexNm +
+          gyroSteerNm;
       }
 
       // Loose ground (gravel, grass) ploughs against the contact patch's motion, sliding or rolling, outside the
@@ -2114,13 +2133,23 @@ export class VehiclePhysics {
     this.wallPrevCg.copy(this.position);
     this.position.addScaledVector(this.velocity, h);
 
-    // ω̇ = I⁻¹(τ − ω × Iω), with I in body axes
+    // ω̇ = I⁻¹(τ − ω × (Iω + h)), with I in body axes and h the spinning wheels' angular momentum (body frame): each
+    // wheel's I·ω lies along its axle, (cos δ, 0, −sin δ) at road-wheel steer δ. Turning the car turns those momenta,
+    // and the body supplies that precession through the uprights: in a corner it rolls the car outward (≈ 0.8 kNm on
+    // the F1 at 250 km/h and 4 g), and a roll rate pushes back in yaw
     _w.copy(this.angularVelocity).applyQuaternion(_qd.copy(this.quaternion).invert());
     _tmp.copy(this.torque).applyQuaternion(_qd);
     const I = this.inertiaBody;
-    const lx = I.x * _w.x;
+    let hx = 0;
+    let hz = 0;
+    for (const w of this.wheels) {
+      const spin = this.axles[w.isFront ? 0 : 1].wheelInertia * w.omega;
+      hx += spin * Math.cos(w.steerRad);
+      hz -= spin * Math.sin(w.steerRad);
+    }
+    const lx = I.x * _w.x + hx;
     const ly = I.y * _w.y;
-    const lz = I.z * _w.z;
+    const lz = I.z * _w.z + hz;
     const gx = _w.y * lz - _w.z * ly;
     const gy = _w.z * lx - _w.x * lz;
     const gz = _w.x * ly - _w.y * lx;
