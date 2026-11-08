@@ -390,11 +390,22 @@ export const PrimaryButton: React.FC<{
       tone === "red"
         ? "gap-3 border-0 bg-[#CCFF00] text-[#08090D] shadow-[0_0_0_5px_rgba(204,255,0,0.12),0_12px_30px_rgba(204,255,0,0.22)] hover:bg-[#d9ff33]"
         : "gap-2.5 border border-[#262B3D] bg-[#1B1F2B]/80 text-[#F5F7FA] hover:border-[#3A4157] hover:bg-[#262B3D]"
-    } ${prompt ? (tone === "red" ? "pr-[26px] pl-2.5" : "pr-[22px] pl-2.5") : "px-[26px]"}`}
+    } ${
+      // A key chip has nothing to say on a touch screen: it hides there and the label takes even padding
+      typeof prompt === "string"
+        ? tone === "red"
+          ? "pr-[26px] pl-2.5 pointer-coarse:pl-[26px]"
+          : "pr-[22px] pl-2.5 pointer-coarse:pl-[22px]"
+        : prompt
+          ? tone === "red"
+            ? "pr-[26px] pl-2.5"
+            : "pr-[22px] pl-2.5"
+          : "px-[26px]"
+    }`}
   >
     {typeof prompt === "string" ? (
       <span
-        className={`inline-flex h-8 items-center rounded-full px-2.5 font-f1-mono text-[11px] font-extrabold ${
+        className={`inline-flex h-8 items-center rounded-full px-2.5 font-f1-mono text-[11px] font-extrabold pointer-coarse:hidden ${
           tone === "red" ? "bg-[#08090D] text-[#CCFF00]" : "border border-[#262B3D] text-[#8E96AA]"
         }`}
       >

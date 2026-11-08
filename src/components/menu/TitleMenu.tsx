@@ -222,9 +222,17 @@ const PanelFrame: React.FC<{
             type="button"
             data-nav-skip
             onClick={onClose}
-            className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-full border border-[#262B3D] bg-[#08090D]/60 pr-3.5 pl-2 text-[13px] font-bold text-[#C5CBD8] transition-colors hover:border-[#3A4157] hover:text-[#F5F7FA]"
+            className={`inline-flex h-10 cursor-pointer items-center gap-2 rounded-full border border-[#262B3D] bg-[#08090D]/60 pr-3.5 pl-2 text-[13px] font-bold text-[#C5CBD8] transition-colors hover:border-[#3A4157] hover:text-[#F5F7FA] ${
+              mode === "pad" ? "" : "pointer-coarse:pl-3.5"
+            }`}
           >
-            {mode === "pad" ? <PadGlyph button="b" family={family} /> : <KeyCap>ESC</KeyCap>}
+            {mode === "pad" ? (
+              <PadGlyph button="b" family={family} />
+            ) : (
+              <span className="inline-flex pointer-coarse:hidden">
+                <KeyCap>ESC</KeyCap>
+              </span>
+            )}
             Close
           </button>
         </div>
@@ -280,7 +288,7 @@ const DriveHero: React.FC<{ item: MenuItem; pad: boolean; family: "xbox" | "play
       <span className="lc-disp text-[50px] compact:text-[38px] short:text-[30px]">{item.label}</span>
       <span className={`${ENTRY_DETAIL} text-[15px] font-semibold compact:text-[14px]`}>{item.detail}</span>
     </span>
-    <span className="hidden shrink-0 sm:inline-flex">
+    <span className={`hidden shrink-0 sm:inline-flex ${pad ? "" : "pointer-coarse:hidden!"}`}>
       {pad ? (
         <PadGlyph button="a" family={family} />
       ) : (
