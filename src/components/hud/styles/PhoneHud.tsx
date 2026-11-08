@@ -27,14 +27,12 @@ export function usePhoneLayout(): boolean {
 const LEDS = 12;
 const ledColor = (i: number) => (i < 5 ? "#00E676" : i < 9 ? HUD_RED : "#2F8BE5");
 
-/** Edge inset that clears a notch */
-const inset = (side: "top" | "left" | "right", px: number) => `calc(env(safe-area-inset-${side}, 0px) + ${px}px)`;
-
 /**
  * Phone: one HUD for small screens, after the mobile racers (Real Racing 3, GRID). Everything lives
  * along the top edge so the thumbs on the steering pad and pedals never cover it: speed and gear
  * top-centre, position, lap and delta top-right, a small map top-left under the touch Menu / Cam.
- * In portrait the speed pod drops under the top row and the map steps aside.
+ * In portrait the speed pod drops under the top row and the map steps aside. It sits in the HUD's
+ * safe frame, so its offsets start where a notch or the Dynamic Island ends.
  */
 export const PhoneHud: React.FC<HudDesignProps> = ({ t, deltaS, map, revRange, scale, touch, lapInvalid = t.offTrack }) => {
   const race = t.race;
@@ -48,7 +46,7 @@ export const PhoneHud: React.FC<HudDesignProps> = ({ t, deltaS, map, revRange, s
       {/* Top-left: map, under the touch Menu / Cam when they are up */}
       <div
         className="absolute hidden landscape:block"
-        style={{ top: inset("top", touch ? 64 : 12), left: inset("left", 12), ...anchor(scale, "top left") }}
+        style={{ top: touch ? 64 : 12, left: 12, ...anchor(scale, "top left") }}
       >
         <div className={`h-[92px] w-[92px] rounded-[20px] p-2 ${HUD_GLASS}`}>
           <MiniMap map={map} t={t} sectors className="block h-full w-full" stroke={30} />
@@ -57,7 +55,7 @@ export const PhoneHud: React.FC<HudDesignProps> = ({ t, deltaS, map, revRange, s
 
       {/* Speed pod: top-centre in landscape, under the top row in portrait */}
       <div
-        className="absolute left-1/2 -translate-x-1/2 portrait:top-[calc(env(safe-area-inset-top,0px)+124px)] landscape:top-[calc(env(safe-area-inset-top,0px)+12px)]"
+        className="absolute left-1/2 -translate-x-1/2 portrait:top-[124px] landscape:top-3"
         style={anchor(scale, "top center")}
       >
         <div className={`flex items-center gap-2.5 rounded-[22px] p-1.5 pr-3.5 ${HUD_GLASS}`}>
@@ -100,7 +98,7 @@ export const PhoneHud: React.FC<HudDesignProps> = ({ t, deltaS, map, revRange, s
       {/* Top-right: position (race) or lap, the running lap and the delta */}
       <div
         className="absolute w-[176px] landscape:w-[196px]"
-        style={{ top: inset("top", 12), right: inset("right", 12), ...anchor(scale, "top right") }}
+        style={{ top: 12, right: 12, ...anchor(scale, "top right") }}
       >
         <section aria-label="Timing" className={`flex flex-col gap-1.5 rounded-[20px] px-3 pt-2 pb-2.5 ${HUD_GLASS}`}>
           <div className="flex items-baseline justify-between gap-2">

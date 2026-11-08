@@ -33,6 +33,16 @@
   zoom: var(--lc-ui-zoom);
 }
 
+/*
+ * Safe area. The page runs under the notch, Dynamic Island and home indicator (viewportFit "cover", layout.tsx).
+ * A fixed layer with this class covers only the part of the screen nothing sits over, so whatever is anchored
+ * inside it clears them on its own. Anything that must reach the true edge (a vignette, a letterbox) goes outside it.
+ */
+.lc-safe-frame {
+  inset: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px)
+    env(safe-area-inset-left, 0px);
+}
+
 :root {
   color-scheme: dark;
 
