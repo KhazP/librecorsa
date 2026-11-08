@@ -27,6 +27,7 @@ import { TIME_OF_DAY_LABELS, WEATHER_LABELS } from "@/lib/sim/weather";
 import { LibreCorsaLogo } from "@/components/ui/LibreCorsaLogo";
 import { AI_SKILL_DEFAULT, aiSkillLabel } from "@/lib/sim/ai-tuning";
 import { REPO_URL, SUPPORT_URL } from "@/lib/site";
+import { EmbeddedBadge } from "./EmbeddedBadge";
 import {
   CloudSun,
   CodeXml,
@@ -644,7 +645,10 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
         <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
           {panel ? (
             <>
-              <LibreCorsaLogo variant="compact" size="sm" />
+              <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2">
+                <LibreCorsaLogo variant="compact" size="sm" />
+                <EmbeddedBadge />
+              </div>
               <DevicePill pad={pad} slim />
             </>
           ) : (
@@ -658,6 +662,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
                   </span>
                   <span className="truncate">{kicker}</span>
                 </div>
+                <EmbeddedBadge />
               </div>
               <div className="flex min-w-0 flex-wrap items-center gap-2.5">
                 <DevicePill pad={pad} />
