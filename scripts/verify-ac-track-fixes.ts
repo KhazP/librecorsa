@@ -42,7 +42,7 @@ function readGlbJson(glbPath: string) {
 
 async function verifyOkayamaMaterialsAndDecalIsolation() {
   console.log('\n=== 1. Verifying Okayama & AC Track Road Material depthWrite & Decal Isolation ===');
-  for (const tid of ['okayama', 'okayama_piper', 'okayama_drift', 'chang', 'spielberg', 'spielberg_south', 'spielberg_inner', 'monaco', 'topgear']) {
+  for (const tid of ['okayama', 'okayama_piper', 'okayama_drift', 'chang', 'spielberg', 'spielberg_south', 'spielberg_inner', 'monaco', 'dunsfold']) {
     const { raw, glbPath } = loadTrack(tid);
     const gltf = readGlbJson(glbPath);
     const roadMats = new Set((raw.metadata?.mesh?.roadMaterials ?? []).map((s) => s.toLowerCase()));

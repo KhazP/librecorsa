@@ -5,7 +5,7 @@
  *   npx tsx scripts/verify-liana.ts
  *
  * Straight line, braking and cornering on flat ground, the front-wheel drive, ABS / TC through the simulator
- * adapter, then autopilot laps of the Top Gear test track. The ranges are the road car's (Suzuki's figures, Top Gear's
+ * adapter, then autopilot laps of Dunsfold Aerodrome (the Top Gear test track). The ranges are the road car's (Suzuki's figures, Top Gear's
  * lap board) and the Assetto Corsa car's (its 100 % AI lapped 1:41.7–1:43.0 there), not tuned to these numbers.
  */
 import { readFileSync, existsSync } from 'node:fs';
@@ -190,13 +190,13 @@ console.log('\n== Driver aids through the adapter');
   check('ABS keeps the wheels turning on a stamp', abs.lock < 0.4 && abs.dist < locked.dist + 2, `max lock ${fmt(abs.lock, 2)} with ABS (${fmt(abs.dist, 0)} m), ${fmt(locked.lock, 2)} without (${fmt(locked.dist, 0)} m)`);
 }
 
-console.log('\n== Autopilot round the Top Gear test track');
-if (!existsSync('public/tracks/topgear/track_data.json')) {
-  check('Top Gear test track is ported', false, 'public/tracks/topgear/track_data.json missing');
+console.log('\n== Autopilot round Dunsfold Aerodrome');
+if (!existsSync('public/tracks/dunsfold/track_data.json')) {
+  check('Dunsfold Aerodrome is ported', false, 'public/tracks/dunsfold/track_data.json missing');
 } else {
-  setActiveTrack('topgear', JSON.parse(readFileSync('public/tracks/topgear/track_data.json', 'utf8')) as RawTrackJson);
+  setActiveTrack('dunsfold', JSON.parse(readFileSync('public/tracks/dunsfold/track_data.json', 'utf8')) as RawTrackJson);
   const track = getActiveTrackData();
-  const root = loadGlbGeometry(`public${track.meshUrl ?? '/tracks/topgear/topgear.glb'}`);
+  const root = loadGlbGeometry(`public${track.meshUrl ?? '/tracks/dunsfold/dunsfold.glb'}`);
   const lap = (sim: F12026CarSim) => {
     sim.resetToStartGrid(true);
     sim.aiAutopilot = true;
