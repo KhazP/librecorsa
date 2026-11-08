@@ -1,7 +1,12 @@
 import * as THREE from "three";
 import { SegmentOccluder } from "./segment-occluder";
-import type { CarTelemetry, TrackSamplePoint } from "@/types/f1";
+import { carJumped, type ChaseCameraInput, DynamicChaseCamera } from "./chase-camera";
+import { CAMERA_MODES, FALLBACK_COCKPIT_FOV_DEG } from "./camera-modes";
+import { clampFov } from "@/lib/settings/player-settings";
+import type { CameraMode, CarTelemetry, TrackSamplePoint } from "@/types/f1";
 import type { BuiltTrackData } from "@/lib/track-data";
+import type { SimulatorCar } from "@/lib/sim/simulator-car";
+import type { Vf26CameraAnchor } from "@/lib/vf26-car-model";
 
 const TWO_PI = Math.PI * 2;
 const RAD2DEG = 180 / Math.PI;
@@ -191,16 +196,6 @@ export class CockpitMicroShake {
 
 function clamp01(x: number): number {
   return x < 0 ? 0 : x > 1 ? 1 : x;
-}
-
-/**
- * Whether the car is further from where a camera rig last saw it than one frame of `dt` allows (the shell's teleport
- * test): a rig updated only while its camera is on uses it to notice the frames it missed, and starts over
- */
-export function carJumped(lastPos: THREE.Vector3, carPos: THREE.Vector3, carVel: THREE.Vector3, dt: number): boolean {
-  const speed = carVel.length();
-  const step = Number.isFinite(speed) && dt > 0 ? 2 * speed * dt : 0;
-  return lastPos.distanceTo(carPos) > Math.max(5, step);
 }
 
 function clampAbs(x: number, limit: number): number {
@@ -548,4 +543,390 @@ function smoothDamp3(cur: THREE.Vector3, target: THREE.Vector3, vel: THREE.Vecto
   temp = (vel.z + omega * change) * h;
   vel.z = (vel.z - omega * temp) * expo;
   cur.z = target.z + (change + temp) * expo;
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// The view camera: each view's placement, the menus' orbit and the driver's neck
+// ---------------------------------------------------------------------------------------------------------------
+
+// Rotates a camera (which looks down -Z) to look along the car's +Z forward axis
+const CAM_FORWARD_FLIP = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI);
+const CAM_X_AXIS = new THREE.Vector3(1, 0, 0);
+
+/** What the view camera reads from the player's car */
+export type CameraRigCar = Pick<
+  SimulatorCar,
+  | "telemetry"
+  | "worldPosition"
+  | "worldQuaternion"
+  | "wheelbaseM"
+  | "cgHeightM"
+  | "rideHeightOffsetM"
+  | "pitchRad"
+  | "rollRad"
+  | "yawRateRadS"
+  | "vxMs"
+  | "vyMs"
+  | "sMeters"
+  | "lateralOffsetM"
+>;
+
+/** One frame of the view camera */
+export interface CameraRigFrame {
+  dt: number;
+  nowMs: number;
+  /** The view to place (the menus pass "chase", which their orbit then replaces) */
+  mode: CameraMode;
+  car: CameraRigCar;
+  /** Where the car is drawn this frame (its pose carried forward by the physics' unstepped remainder) */
+  carPos: THREE.Vector3;
+  carVelocity: THREE.Vector3;
+  /** The car model's anchor for this view, on its sprung chassis; null places the view from the car's pose instead */
+  anchor: Vf26CameraAnchor | null;
+  chassis: THREE.Object3D;
+  /** Degrees the player's FOV setting moves the onboard views off the car's own */
+  onboardFovShift: number;
+  headMovement: "natural" | "static";
+  /** The car is being driven (not paused, in a menu or in a replay) */
+  driving: boolean;
+  /** In a VR headset, which is the driver's head */
+  inVr: boolean;
+  /** In the menus: the attract orbit (closer on the car-select step), framed for a viewport of width × height */
+  menu: { close: boolean; width: number; height: number } | null;
+}
+
+/**
+ * Places the view camera every frame: on the car model's onboard anchor when it has one for the view, else from the
+ * car's pose (the chase camera, the procedural onboard views, the helicopter, the trackside TV cameras); then the
+ * menus' orbit, and the driver's neck in the views at the driver's head. The fallback onboard poses are tuned to the
+ * procedural VF26 and apply to any car without anchors.
+ */
+export class CameraRig {
+  private readonly cockpitShake = new CockpitMicroShake();
+  private readonly shakeQuat = new THREE.Quaternion();
+  private readonly shakeEuler = new THREE.Euler();
+  private readonly anchorPitch = new THREE.Quaternion();
+  private readonly chaseCamera = new DynamicChaseCamera();
+  private readonly chaseInput: ChaseCameraInput = {
+    carPos: new THREE.Vector3(),
+    carQuaternion: new THREE.Quaternion(),
+    carVelocity: new THREE.Vector3(),
+    longitudinalG: 0,
+    lateralG: 0,
+    verticalG: 1,
+    wheelbaseM: 0,
+    cgHeightM: 0,
+    rideHeightOffsetM: 0,
+    kerbShakeM: 0,
+    manualOverrideActive: false,
+  };
+  /** Automatic trackside broadcast cameras on dolly splines (telephoto, zooming in over kerbs) */
+  private readonly tvDirector: TracksideBroadcastDirector;
+  private readonly smoothedHeliPos = new THREE.Vector3();
+  private readonly smoothedHeliLook = new THREE.Vector3();
+  private menuOrbitRad = 0.6;
+  private menuViewOffset = false;
+  // Neck FX: velocity-aligned slide look, steering look, 25 m track-spline apex lookahead, and horizon roll stabilization
+  private neckYaw = 0;
+  private neckPitch = 0;
+  private neckRoll = 0;
+  private neckDriftState = 1;
+  private readonly neckQuat = new THREE.Quaternion();
+  private readonly neckPitchQuat = new THREE.Quaternion();
+  private readonly neckRollQuat = new THREE.Quaternion();
+  private readonly neckLookDelta = new THREE.Vector3();
+  /** The head's sense of "up": follows the car's up with a 0.4 s lag, so quick body pitch and roll are held off */
+  private readonly headUp = new THREE.Vector3(0, 1, 0);
+  private readonly headCross = new THREE.Vector3();
+  // Per-frame scratch
+  private readonly carRight = new THREE.Vector3();
+  private readonly carUp = new THREE.Vector3();
+  private readonly carForward = new THREE.Vector3();
+  private readonly target = new THREE.Vector3();
+  private readonly lookTarget = new THREE.Vector3();
+
+  constructor(
+    private readonly camera: THREE.PerspectiveCamera,
+    private readonly track: BuiltTrackData
+  ) {
+    this.tvDirector = new TracksideBroadcastDirector(track);
+  }
+
+  /** Moves broadcast cameras that would film the inside of a grandstand (see TracksideBroadcastDirector) */
+  occlusionSteps(trackRoot: THREE.Object3D): Generator<number, void, void> {
+    return this.tvDirector.occlusionSteps(trackRoot);
+  }
+
+  /** Starts the smoothed cameras over (the car has been put somewhere else) */
+  reset(): void {
+    this.cockpitShake.reset();
+    this.chaseCamera.reset();
+    this.tvDirector.reset();
+  }
+
+  update(f: CameraRigFrame): void {
+    const camera = this.camera;
+    const physics = f.car;
+    const dtSeconds = f.dt;
+    const nowMs = f.nowMs;
+    const mode = f.mode;
+    const view = CAMERA_MODES[mode];
+    const renderCarPos = f.carPos;
+    const shake = this.cockpitShake.update(dtSeconds, physics.telemetry);
+
+    // Right-handed car basis: +X is carLeft, -X is carRight, +Y is carUp, +Z is carForward
+    const carRight = this.carRight.set(-1, 0, 0).applyQuaternion(physics.worldQuaternion);
+    const carUp = this.carUp.set(0, 1, 0).applyQuaternion(physics.worldQuaternion);
+    const carForward = this.carForward.set(0, 0, 1).applyQuaternion(physics.worldQuaternion);
+
+    const speedNorm = THREE.MathUtils.clamp(physics.telemetry.speedKmh / 350, 0, 1);
+    const kerbShake = physics.telemetry.onKerbLeft || physics.telemetry.onKerbRight ? Math.sin(nowMs * 0.095) * 0.018 : 0;
+    const highSpeedBuffet = speedNorm > 0.72 ? Math.sin(nowMs * 0.07) * 0.007 * (speedNorm - 0.72) : 0;
+    const target = this.target;
+
+    const anchor = f.anchor;
+    if (anchor) {
+      // Onboard camera anchors from the car model: bolted to the sprung chassis at the
+      // model's position, pitch and field of view
+      f.chassis.updateWorldMatrix(true, false);
+      camera.position.copy(anchor.pos).applyMatrix4(f.chassis.matrixWorld);
+      f.chassis.getWorldQuaternion(camera.quaternion);
+      camera.quaternion.multiply(CAM_FORWARD_FLIP).multiply(this.anchorPitch.setFromAxisAngle(CAM_X_AXIS, anchor.pitchRad));
+      const headLocked = view.driverHead && f.headMovement === "static";
+      if (!headLocked) {
+        // Micro-shake: pitch about the lens' X axis, roll about its view axis, heave along the car's up
+        this.shakeEuler.set(shake.pitchRad, 0, shake.rollRad);
+        camera.quaternion.multiply(this.shakeQuat.setFromEuler(this.shakeEuler));
+        camera.position.addScaledVector(carUp, shake.heaveM);
+      }
+      camera.up.copy(carUp);
+      // The player's FOV shifts the driver's-eye cameras together, keeping the model's framing between them
+      const targetOnboardFov = view.playerFov ? clampFov(anchor.fovDeg + f.onboardFovShift) : anchor.fovDeg;
+      if (camera.fov !== targetOnboardFov) {
+        camera.fov = targetOnboardFov;
+        camera.updateProjectionMatrix();
+      }
+    } else if (mode === "chase") {
+      const chaseInput = this.chaseInput;
+      chaseInput.carPos = renderCarPos;
+      chaseInput.carQuaternion = physics.worldQuaternion;
+      chaseInput.carVelocity = f.carVelocity;
+      chaseInput.longitudinalG = physics.telemetry.longitudinalG;
+      chaseInput.lateralG = physics.telemetry.lateralG;
+      chaseInput.verticalG = physics.telemetry.verticalG;
+      chaseInput.wheelbaseM = physics.wheelbaseM;
+      chaseInput.cgHeightM = physics.cgHeightM;
+      chaseInput.rideHeightOffsetM = physics.rideHeightOffsetM;
+      chaseInput.kerbShakeM = kerbShake;
+      chaseInput.manualOverrideActive = physics.telemetry.manualOverrideActive;
+      const chase = this.chaseCamera.update(dtSeconds, chaseInput);
+      camera.position.copy(chase.position);
+      camera.up.copy(chase.up);
+      camera.lookAt(chase.lookAt);
+      camera.fov = chase.fovDeg;
+      camera.updateProjectionMatrix();
+    } else if (mode === "tv_pod") {
+      // Broadcast Roll-Hoop T-Cam mounted at front lens of T-Cam pod looking down over painted helmet #16, butterfly wheel + gloved hand, Halo arch, mirrors, wheel brows & nose cone
+      camera.position
+        .copy(renderCarPos)
+        .addScaledVector(carForward, -0.06)
+        .addScaledVector(carRight, -0.02 - physics.rollRad * 0.3)
+        .addScaledVector(carUp, 0.905 + physics.rideHeightOffsetM + kerbShake * 0.4);
+      camera.up
+        .copy(carUp)
+        .addScaledVector(carRight, -physics.rollRad * 0.25)
+        .normalize();
+      camera.lookAt(
+        target
+          .copy(renderCarPos)
+          .addScaledVector(carForward, 3.6)
+          .addScaledVector(carRight, -physics.yawRateRadS * 0.12)
+          .addScaledVector(carUp, 0.22 - physics.pitchRad * 2.2 + highSpeedBuffet)
+      );
+      camera.fov = 60 + speedNorm * 5 + f.onboardFovShift;
+      camera.updateProjectionMatrix();
+    } else if (mode === "cockpit_shoulder") {
+      // Reference Image 2: Left Over-the-Shoulder Cockpit Bolster Camera showing helmet on right, yellow gloved hand on butterfly steering wheel, Halo arch & left mirror/wheel brow
+      camera.position
+        .copy(renderCarPos)
+        .addScaledVector(carForward, 0.06)
+        .addScaledVector(carRight, -0.24 - physics.rollRad * 0.22)
+        .addScaledVector(carUp, 0.715 + physics.rideHeightOffsetM + kerbShake * 0.35);
+      camera.up
+        .copy(carUp)
+        .addScaledVector(carRight, -physics.rollRad * 0.22)
+        .normalize();
+      camera.lookAt(
+        target
+          .copy(renderCarPos)
+          .addScaledVector(carForward, 5.5)
+          .addScaledVector(carRight, 0.13 - physics.yawRateRadS * 0.25)
+          .addScaledVector(carUp, 0.4 - physics.pitchRad * 2.8 + highSpeedBuffet)
+      );
+      camera.fov = 58 + speedNorm * 5 + f.onboardFovShift;
+      camera.updateProjectionMatrix();
+    } else if (mode === "cockpit") {
+      // Reference Image 3: Driver Eye-Point Camera inside cockpit framing full Butterfly Steering Wheel OLED, Labeled Buttons, Rotary Dials, 3D Gloved Hands, Wing Mirrors & Wheel Brows under Halo
+      camera.position
+        .copy(renderCarPos)
+        .addScaledVector(carForward, 0.21 - physics.pitchRad * 0.2)
+        .addScaledVector(carRight, -physics.rollRad * 0.22)
+        .addScaledVector(carUp, 0.675 + physics.rideHeightOffsetM + kerbShake * 0.32);
+      camera.up
+        .copy(carUp)
+        .addScaledVector(carRight, -physics.rollRad * 0.2)
+        .normalize();
+      camera.lookAt(
+        target
+          .copy(renderCarPos)
+          .addScaledVector(carForward, 8.0)
+          .addScaledVector(carUp, 0.5 - physics.pitchRad * 3.5 + highSpeedBuffet)
+          .addScaledVector(carRight, -physics.yawRateRadS * 0.3)
+      );
+      camera.fov = FALLBACK_COCKPIT_FOV_DEG + speedNorm * 4 + f.onboardFovShift;
+      camera.updateProjectionMatrix();
+    } else if (mode === "nose") {
+      // Reference Image 4: Forward Nose-Cone Camera showing narrow Nose Tip, delicate Y-Pitot Probe, curved vertical Front Wing Endplates at bottom corners & 3D Dashed Braking Line
+      camera.position
+        .copy(renderCarPos)
+        .addScaledVector(carForward, 1.66)
+        .addScaledVector(carUp, 0.455 + physics.rideHeightOffsetM + kerbShake * 0.32);
+      camera.up.copy(carUp);
+      camera.lookAt(
+        target
+          .copy(renderCarPos)
+          .addScaledVector(carForward, 18.0)
+          .addScaledVector(carUp, 0.25 - physics.pitchRad * 5.0)
+      );
+      camera.fov = 64 + speedNorm * 4;
+      camera.updateProjectionMatrix();
+    } else if (mode === "helicopter") {
+      const heliTarget = target.copy(renderCarPos).addScaledVector(carForward, -28);
+      heliTarget.x += 14;
+      heliTarget.y += 24;
+      heliTarget.z += 14;
+      if (this.smoothedHeliPos.distanceTo(heliTarget) > 80) {
+        this.smoothedHeliPos.copy(heliTarget);
+        this.smoothedHeliLook.copy(renderCarPos);
+      } else {
+        this.smoothedHeliPos.lerp(heliTarget, Math.min(1, dtSeconds * 6));
+      }
+      this.smoothedHeliLook.lerp(
+        this.lookTarget.copy(renderCarPos).addScaledVector(carForward, 14),
+        Math.min(1, dtSeconds * 12)
+      );
+      camera.position.copy(this.smoothedHeliPos);
+      camera.up.set(0, 1, 0);
+      camera.lookAt(this.smoothedHeliLook);
+      camera.fov = 52;
+      camera.updateProjectionMatrix();
+    } else if (mode === "tv_side") {
+      // Trackside broadcast: telephoto spline cameras that pan with the car and zoom in over kerbs
+      const tv = this.tvDirector.update(
+        dtSeconds,
+        renderCarPos,
+        physics.sMeters,
+        f.carVelocity,
+        physics.telemetry.onKerbLeft || physics.telemetry.onKerbRight
+      );
+      camera.position.copy(tv.position);
+      camera.up.set(0, 1, 0);
+      camera.lookAt(tv.lookAt);
+      camera.fov = tv.fovDeg;
+      camera.updateProjectionMatrix();
+    }
+
+    if (f.menu) {
+      // Attract camera: a slow telephoto orbit of the car on the grid (closer on the car-select step)
+      const close = f.menu.close;
+      this.menuOrbitRad += dtSeconds * (close ? 0.2 : 0.08);
+      const radius = close ? 6.2 : 9.5;
+      const p = renderCarPos;
+      camera.position.set(
+        p.x + Math.sin(this.menuOrbitRad) * radius,
+        p.y + (close ? 1.35 : 2.2),
+        p.z + Math.cos(this.menuOrbitRad) * radius
+      );
+      camera.up.set(0, 1, 0);
+      camera.lookAt(p.x, p.y + 0.55, p.z);
+      camera.fov = close ? 36 : 32;
+      // Push the car right of centre so the menu panel on the left does not cover it
+      const w = f.menu.width;
+      const h = f.menu.height;
+      if (w >= 1024) camera.setViewOffset(w, h, -w * (close ? 0.2 : 0.16), 0, w, h);
+      else camera.clearViewOffset();
+      camera.updateProjectionMatrix();
+      this.menuViewOffset = true;
+    } else if (this.menuViewOffset) {
+      camera.clearViewOffset();
+      camera.updateProjectionMatrix();
+      this.menuViewOffset = false;
+    }
+
+    // Driver's head (not in VR, where the headset is the head). A neck holds the eyes steady against the
+    // chassis' suspension pitch and roll and turns them a little toward where the car is going; the road's own
+    // camber and gradient stay in view. "Locked" leaves the camera bolted to the chassis.
+    const neckOn = f.headMovement === "natural" && f.driving && !f.inVr && view.driverHead;
+    let neckYawTarget = 0;
+    let neckPitchTarget = 0;
+    let neckRollTarget = 0;
+    if (neckOn) {
+      const speedMs = Math.hypot(physics.vxMs, physics.vyMs);
+      // Look toward the direction of travel in a slide (+vyMs is toward carLeft: positive yaw about carUp)
+      const sliding = speedMs > 3 ? physics.vyMs / Math.max(3, speedMs) : 0;
+      const slidingMult = Math.min(Math.abs(sliding) * 0.8, 1);
+      if (slidingMult > 0.2) {
+        this.neckDriftState = Math.max(0, this.neckDriftState - 0.5 * dtSeconds);
+      } else {
+        this.neckDriftState = Math.min(1, this.neckDriftState + 0.25 * dtSeconds);
+      }
+      const velYaw = THREE.MathUtils.clamp(Math.max(slidingMult - 0.2, 0) * Math.sign(sliding) * 0.35, -0.14, 0.14);
+
+      // Look toward the corner 25 m ahead: a few degrees, faded out off the road and at walking pace
+      const aheadSample = this.track.getSampleAtDistance((physics.sMeters + 25) % Math.max(1, this.track.totalLengthM));
+      const neckLookDelta = this.neckLookDelta.copy(aheadSample.position).sub(physics.worldPosition);
+      const chordLen = neckLookDelta.length();
+      let apexYaw = 0;
+      if (chordLen > 1) {
+        const latDot = neckLookDelta.dot(carRight) / chordLen;
+        const fwdDot = neckLookDelta.dot(carForward) / chordLen;
+        const trackWeight =
+          THREE.MathUtils.clamp((15 - Math.abs(physics.lateralOffsetM)) / 7, 0, 1) *
+          THREE.MathUtils.clamp(fwdDot, 0, 1) *
+          this.neckDriftState *
+          THREE.MathUtils.clamp((speedMs - 4) / 12, 0, 1);
+        apexYaw = THREE.MathUtils.clamp(-latDot * 0.22, -0.1, 0.1) * trackWeight;
+      }
+
+      neckYawTarget = THREE.MathUtils.clamp(velYaw + apexYaw, -0.17, 0.17);
+      // Hold the head against the body's quick pitch and roll. The VF26 reports its suspension pitch (about the
+      // car's +X, carLeft) and roll (about carForward) apart from its pose; the rigid-body cars carry theirs in
+      // the pose, which the lagging head-up takes out.
+      const headUp = this.headUp.lerp(carUp, Math.min(1, dtSeconds * 2.5)).normalize();
+      const headCross = this.headCross.crossVectors(carUp, headUp);
+      const bodyPitch = Math.atan2(headCross.dot(carRight), carUp.dot(headUp));
+      const bodyRoll = Math.atan2(headCross.dot(carForward), carUp.dot(headUp));
+      neckPitchTarget = THREE.MathUtils.clamp((physics.pitchRad + bodyPitch) * 0.6, -0.06, 0.06);
+      neckRollTarget = THREE.MathUtils.clamp((-physics.rollRad + bodyRoll) * 0.6, -0.08, 0.08);
+    } else {
+      this.neckDriftState = 1;
+      this.headUp.copy(carUp);
+    }
+    // The yaw eases in like a turn of the head; the stabilisation follows the chassis closely
+    this.neckYaw += (neckYawTarget - this.neckYaw) * Math.min(1, dtSeconds * 3);
+    this.neckPitch += (neckPitchTarget - this.neckPitch) * Math.min(1, dtSeconds * 14);
+    this.neckRoll += (neckRollTarget - this.neckRoll) * Math.min(1, dtSeconds * 14);
+    const { neckYaw, neckPitch, neckRoll } = this;
+    if ((Math.abs(neckYaw) > 1e-4 || Math.abs(neckPitch) > 1e-4 || Math.abs(neckRoll) > 1e-4) && view.driverHead) {
+      if (Math.abs(neckYaw) > 1e-4) {
+        camera.quaternion.premultiply(this.neckQuat.setFromAxisAngle(carUp, neckYaw));
+      }
+      if (Math.abs(neckPitch) > 1e-4) {
+        camera.quaternion.premultiply(this.neckPitchQuat.setFromAxisAngle(carRight, neckPitch));
+      }
+      if (Math.abs(neckRoll) > 1e-4) {
+        camera.quaternion.premultiply(this.neckRollQuat.setFromAxisAngle(carForward, neckRoll));
+      }
+    }
+  }
 }

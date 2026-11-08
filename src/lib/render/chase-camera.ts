@@ -1,5 +1,4 @@
 import * as THREE from "three";
-import { carJumped } from "./camera-rig";
 
 const DEG2RAD = Math.PI / 180;
 const TWO_PI = Math.PI * 2;
@@ -61,6 +60,16 @@ export interface ChaseCameraOutput {
   lookAt: THREE.Vector3;
   up: THREE.Vector3;
   fovDeg: number;
+}
+
+/**
+ * Whether the car is further from where a camera rig last saw it than one frame of `dt` allows (the shell's teleport
+ * test): a rig updated only while its camera is on uses it to notice the frames it missed, and starts over
+ */
+export function carJumped(lastPos: THREE.Vector3, carPos: THREE.Vector3, carVel: THREE.Vector3, dt: number): boolean {
+  const speed = carVel.length();
+  const step = Number.isFinite(speed) && dt > 0 ? 2 * speed * dt : 0;
+  return lastPos.distanceTo(carPos) > Math.max(5, step);
 }
 
 /**
