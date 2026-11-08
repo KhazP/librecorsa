@@ -54,6 +54,7 @@ import {
 import { MultiplayerRace, type MultiplayerRaceFrame } from "@/lib/sim/race-session";
 import { GhostPlayer, LapRecorder } from "@/lib/sim/lap-recorder";
 import { ReplayBuffer } from "@/lib/sim/replay-buffer";
+import { GHOST_CAR_COLOR, steerAngleOf, steerNormOf, wheelRpmAtSpeed, wheelRpmOf } from "@/lib/sim/car-pose";
 import { lapBoardClass, lapConditionsNow, type LapConditions, type LapRecording, type LapSummaryData, type LeaderboardEntry, type ReplayCarState } from "@/lib/sim/lap-types";
 import { exportLapFile, importLapFile, loadBestLap, saveBestLapIfFaster } from "@/lib/sim/ghost-store";
 import {
@@ -1794,13 +1795,13 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     const replayPeerState = (car: ReplayCarState): InterpolatedPeerState => ({
       peerId: car.id,
       driverCode: replayNames.get(car.id)?.code ?? "",
-      teamColorHex: replayNames.get(car.id)?.color ?? "#9CA3AF",
+      teamColorHex: replayNames.get(car.id)?.color ?? GHOST_CAR_COLOR,
       vehicle: replayNames.get(car.id)?.vehicle,
       position: new THREE.Vector3(car.x, car.y, car.z),
       quaternion: new THREE.Quaternion(car.qx, car.qy, car.qz, car.qw),
       linearVelocity: new THREE.Vector3(),
-      steerAngle: car.steer * 0.36,
-      wheelRPMs: [0, 0, 0, 0].map(() => (car.speedKmh / 3.6 / 0.36) * 9.549296) as [number, number, number, number],
+      steerAngle: steerAngleOf(car.steer),
+      wheelRPMs: [0, 0, 0, 0].map(() => wheelRpmAtSpeed(car.speedKmh)) as [number, number, number, number],
       throttle: car.throttle,
       brake: car.brake,
       trackS: 0,
@@ -2374,12 +2375,12 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
           ],
           linVel: [carVelocityWorld.x, carVelocityWorld.y, carVelocityWorld.z],
           angVel: [0, physics.yawRateRadS, 0],
-          steerAngle: physics.steerAngleNorm * 0.36,
+          steerAngle: steerAngleOf(physics.steerAngleNorm),
           wheelRPMs: [
-            physics.wheels[0].spinVel * 9.549296,
-            physics.wheels[1].spinVel * 9.549296,
-            physics.wheels[2].spinVel * 9.549296,
-            physics.wheels[3].spinVel * 9.549296,
+            wheelRpmOf(physics.wheels[0].spinVel),
+            wheelRpmOf(physics.wheels[1].spinVel),
+            wheelRpmOf(physics.wheels[2].spinVel),
+            wheelRpmOf(physics.wheels[3].spinVel),
           ],
           throttle: physics.telemetry.throttle,
           brake: physics.telemetry.brake,
@@ -2424,18 +2425,18 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       if (ghost && settingsNow.ghost && !aiField && !mpRace && !replaying && !inMenu) {
         const g = ghost.sampleAt(physics.telemetry.currentLapTimeMs / 1000);
         if (g) {
-          const wheelRpm = (g.speedKmh / 3.6 / 0.36) * 9.549296;
+          const wheelRpm = wheelRpmAtSpeed(g.speedKmh);
           renderPeers = [
             ...renderPeers,
             {
               peerId: "ghost",
               driverCode: ghost.recording.driverCode,
-              teamColorHex: "#9CA3AF",
+              teamColorHex: GHOST_CAR_COLOR,
               vehicle: ghost.recording.vehicle,
               position: ghostPos.set(g.x, g.y, g.z),
               quaternion: ghostQuat.set(g.qx, g.qy, g.qz, g.qw),
               linearVelocity: ghostVel,
-              steerAngle: g.steer * 0.36,
+              steerAngle: steerAngleOf(g.steer),
               wheelRPMs: [wheelRpm, wheelRpm, wheelRpm, wheelRpm],
               throttle: g.throttle,
               brake: g.brake,
@@ -2487,7 +2488,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
               qz: p.quaternion.z,
               qw: p.quaternion.w,
               speedKmh: p.speedKmh,
-              steer: p.steerAngle / 0.36,
+              steer: steerNormOf(p.steerAngle),
               throttle: p.throttle,
               brake: p.brake,
               gear: 0,

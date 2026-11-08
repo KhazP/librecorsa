@@ -6,6 +6,7 @@
  * The player's car (the VF26 or the f12026-car) is passed in so that it takes part in the start
  * procedure, contact and order; it is stepped by the caller (the field only steps its AI cars).
  */
+import { steerAngleOf, wheelRpmOf } from './car-pose';
 import * as THREE from 'three';
 import { F1Physics2026 } from '@/lib/f1-physics-2026';
 import type { BuiltTrackData } from '@/lib/track-data';
@@ -1066,8 +1067,8 @@ export class AiOpponentField {
       p.wheels.ground = sim.groundQuery ?? null;
     }
     p.linearVelocity.set(sim.vyMs, 0, sim.vxMs).applyQuaternion(sim.worldQuaternion);
-    p.steerAngle = sim.steerAngleNorm * 0.36;
-    for (let i = 0; i < 4; i++) p.wheelRPMs[i] = sim.wheels[i].spinVel * 9.549296;
+    p.steerAngle = steerAngleOf(sim.steerAngleNorm);
+    for (let i = 0; i < 4; i++) p.wheelRPMs[i] = wheelRpmOf(sim.wheels[i].spinVel);
     p.throttle = sim.telemetry.throttle;
     p.brake = sim.telemetry.brake;
     p.trackS = sim.sMeters;

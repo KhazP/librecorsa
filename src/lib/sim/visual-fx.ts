@@ -9,6 +9,7 @@
  * - Opponent vehicle 3D rig manager driven by `MultiplayerSyncManager` Cubic Hermite + Slerp states.
  */
 
+import { steerNormOf } from './car-pose';
 import * as THREE from 'three';
 import { createF1Car2026, type SimCarRig } from '@/lib/car-builder-2026';
 import type { WheelSeating } from '@/lib/render/corner-rig';
@@ -659,7 +660,7 @@ export class SimVisualFxManager {
       syntheticTelemetry.rpm = peer.rpm ?? 8500 + (peer.speedKmh % 45) * 95;
       syntheticTelemetry.throttle = peer.throttle;
       syntheticTelemetry.brake = peer.brake;
-      syntheticTelemetry.steering = THREE.MathUtils.clamp(peer.steerAngle / 0.36, -1, 1);
+      syntheticTelemetry.steering = THREE.MathUtils.clamp(steerNormOf(peer.steerAngle), -1, 1);
       syntheticTelemetry.activeAeroMode = peer.speedKmh > 250 && Math.abs(peer.steerAngle) < 0.05 ? 'X_MODE' : 'Z_MODE';
       syntheticTelemetry.icePowerKw = 400 * peer.throttle;
       syntheticTelemetry.mgukPowerKw = peer.throttle > 0.5 ? 250 : -80;
