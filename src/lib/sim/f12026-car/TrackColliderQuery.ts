@@ -18,7 +18,8 @@
  * road first, and then also drive on their grass and let a kerb fitted just under the road name the surface.
  *
  * Queries are vertical rays (the wheels probe straight down), answered from a uniform XZ grid of
- * world-space triangles, so a query costs a cell lookup plus a handful of 2D triangle tests.
+ * world-space triangles, so a query costs a cell lookup plus a handful of 2D triangle tests. `queryMany` answers a
+ * tyre's contact patch (several points a few centimetres apart) with one pass over the cell's triangles.
  *
  * Each surface kind's physics comes from the track's surface table (track-surfaces.ts). Its ripple (kerb
  * serrations, grass and gravel bumps) is added to the contact height analytically: along the surface from the
@@ -52,6 +53,20 @@ const RAISED_SURFACES: ReadonlySet<TrackSurfaceKind> = new Set(['kerb', 'sausage
 const DRIVABLE_SURFACES: ReadonlySet<TrackSurfaceKind> = new Set(['road', 'runoff', 'pitlane', 'gravel']);
 const SURFACE_MATCH_M = 0.05;
 const CELL_SIZE_M = 4;
+/**
+ * Margin of `queryMany`'s triangle box test (m): a point the barycentric test accepts lies at most 1e-6 of the
+ * triangle's size outside it (microns on the largest terrain triangles), so the box test never rejects one it keeps
+ */
+const TRI_BOX_MARGIN_M = 1e-3;
+/** Most points one `queryMany` answers (a contact patch takes five) */
+export const GROUND_QUERY_MANY_MAX = 8;
+/** Tagged surfaces kept per point to classify its contact */
+const MAX_TAGS = 32;
+/** Candidate slots per scanned point: the highest road-collider, raised (kerb, sausage), any and drivable surface */
+const CAND_ROAD = 0;
+const CAND_RAISED = 1;
+const CAND_ANY = 2;
+const CAND_DRIVE = 3;
 
 export interface GroundHit {
   /** Contact height (world Y, m) */
@@ -72,6 +87,24 @@ export interface GroundHit {
 /** Anything that can answer "what is under this XZ point, at or below probeY" */
 export interface GroundQuery {
   query(x: number, z: number, probeY: number, out: GroundHit): boolean;
+  /**
+   * The ground is a smooth analytic surface (flat, or interpolated from the track samples) with no texture or seams for
+   * a tyre's contact patch to envelope: the tyres probe it at their centre alone
+   */
+  readonly smooth?: boolean;
+  /**
+   * Optional: `query` for up to `GROUND_QUERY_MANY_MAX` nearby points at once (a tyre's contact patch), for a ground
+   * that can share work between them. Returns a bit mask, bit i set when point i has ground (in `outs[i]`); points
+   * from `fullCount` (default all) on may get only their height.
+   */
+  queryMany?(
+    xs: ArrayLike<number>,
+    zs: ArrayLike<number>,
+    count: number,
+    probeY: number,
+    outs: readonly GroundHit[],
+    fullCount?: number
+  ): number;
 }
 
 interface Layer {
@@ -734,33 +767,10 @@ export class TrackColliderQuery implements GroundQuery {
    * Returns false when nothing is underneath (the wheel is off the mesh: airborne).
    */
   query(x: number, z: number, probeY: number, out: GroundHit): boolean {
-    const fx = (x - this.minX) / CELL_SIZE_M;
-    const fz = (z - this.minZ) / CELL_SIZE_M;
-    if (fx < 0 || fz < 0 || fx >= this.nx || fz >= this.nz) return false;
-    const cell = Math.floor(fz) * this.nx + Math.floor(fx);
+    const cell = this.cellAt(x, z);
+    if (cell < 0) return false;
+    this.clearCandidates(0);
     const tris = this.tris;
-
-    let roadH = -Infinity;
-    let roadT = -1;
-    let roadU = 0;
-    let roadV = 0;
-    let raisedH = -Infinity;
-    let raisedT = -1;
-    let raisedU = 0;
-    let raisedV = 0;
-    let anyH = -Infinity;
-    let anyT = -1;
-    let anyU = 0;
-    let anyV = 0;
-    let driveH = -Infinity;
-    let driveT = -1;
-    let driveU = 0;
-    let driveV = 0;
-    // Tagged surfaces, kept to classify the final contact height
-    let tagCount = 0;
-    const tagH = this.scratchH;
-    const tagT = this.scratchT;
-
     for (let k = this.cellStart[cell], end = this.cellStart[cell + 1]; k < end; k++) {
       const t = this.cellTris[k];
       const o = t * 9;
@@ -780,41 +790,194 @@ export class TrackColliderQuery implements GroundQuery {
       const ay = tris[o + 1];
       const h = ay + u * (tris[o + 4] - ay) + v * (tris[o + 7] - ay);
       if (h > probeY) continue;
+      this.addCandidate(0, t, u, v, h);
+    }
+    return this.resolve(0, out);
+  }
 
-      const layer = this.layers[this.triLayer[t]];
-      if (layer.isRoadCollider) {
-        if (h > roadH) {
-          roadH = h;
-          roadT = t;
-          roadU = u;
-          roadV = v;
-        }
-      } else {
-        if (RAISED_SURFACES.has(layer.surface) && h > raisedH) {
-          raisedH = h;
-          raisedT = t;
-          raisedU = u;
-          raisedV = v;
-        }
-        if (h > anyH) {
-          anyH = h;
-          anyT = t;
-          anyU = u;
-          anyV = v;
-        }
-        if (layer.drivable && h > driveH) {
-          driveH = h;
-          driveT = t;
-          driveU = u;
-          driveV = v;
-        }
-        if (layer.tagged && tagCount < tagH.length) {
-          tagH[tagCount] = h;
-          tagT[tagCount] = t;
-          tagCount++;
+  /**
+   * `query` for up to `GROUND_QUERY_MANY_MAX` nearby points at once (a tyre's contact patch), each answered exactly as
+   * `query` would: points in the same grid cell share one pass over its triangles, the bulk of a query's cost.
+   * Returns a bit mask, bit i set when point i has ground (written to `outs[i]`); points from `fullCount` on get only
+   * their height.
+   */
+  queryMany(
+    xs: ArrayLike<number>,
+    zs: ArrayLike<number>,
+    count: number,
+    probeY: number,
+    outs: readonly GroundHit[],
+    fullCount = count
+  ): number {
+    const n = Math.min(count, GROUND_QUERY_MANY_MAX);
+    const cells = this.manyCells;
+    let pending = 0;
+    for (let i = 0; i < n; i++) {
+      cells[i] = this.cellAt(xs[i], zs[i]);
+      if (cells[i] >= 0) pending |= 1 << i;
+    }
+    const gx = this.groupX;
+    const gz = this.groupZ;
+    const slots = this.groupSlots;
+    const tris = this.tris;
+    let found = 0;
+    while (pending !== 0) {
+      // The points sharing the lowest pending point's cell, scanned together
+      const cell = cells[31 - Math.clz32(pending & -pending)];
+      let m = 0;
+      let x0 = Infinity;
+      let x1 = -Infinity;
+      let z0 = Infinity;
+      let z1 = -Infinity;
+      for (let i = 0; i < n; i++) {
+        if ((pending >> i) & 1 && cells[i] === cell) {
+          slots[m] = i;
+          gx[m] = xs[i];
+          gz[m] = zs[i];
+          x0 = Math.min(x0, xs[i]);
+          x1 = Math.max(x1, xs[i]);
+          z0 = Math.min(z0, zs[i]);
+          z1 = Math.max(z1, zs[i]);
+          m++;
+          pending &= ~(1 << i);
+          this.clearCandidates(i);
         }
       }
+      x0 -= TRI_BOX_MARGIN_M;
+      x1 += TRI_BOX_MARGIN_M;
+      z0 -= TRI_BOX_MARGIN_M;
+      z1 += TRI_BOX_MARGIN_M;
+      for (let k = this.cellStart[cell], end = this.cellStart[cell + 1]; k < end; k++) {
+        const t = this.cellTris[k];
+        const o = t * 9;
+        const ax = tris[o];
+        const az = tris[o + 2];
+        const bx = tris[o + 3];
+        const bz = tris[o + 5];
+        const cx = tris[o + 6];
+        const cz = tris[o + 8];
+        // Triangles clear of the whole group's box are skipped for every point at once
+        if (
+          ((+(ax > x1) & +(bx > x1) & +(cx > x1)) |
+            (+(ax < x0) & +(bx < x0) & +(cx < x0)) |
+            (+(az > z1) & +(bz > z1) & +(cz > z1)) |
+            (+(az < z0) & +(bz < z0) & +(cz < z0))) !==
+          0
+        )
+          continue;
+        const v0x = bx - ax;
+        const v0z = bz - az;
+        const v1x = cx - ax;
+        const v1z = cz - az;
+        const den = v0x * v1z - v1x * v0z;
+        if (Math.abs(den) < 1e-12) continue;
+        for (let j = 0; j < m; j++) {
+          const px = gx[j] - ax;
+          const pz = gz[j] - az;
+          const u = (px * v1z - v1x * pz) / den;
+          const v = (v0x * pz - px * v0z) / den;
+          if (u < -1e-6 || v < -1e-6 || u + v > 1 + 1e-6) continue;
+          const ay = tris[o + 1];
+          const h = ay + u * (tris[o + 4] - ay) + v * (tris[o + 7] - ay);
+          if (h > probeY) continue;
+          this.addCandidate(slots[j], t, u, v, h);
+        }
+      }
+      for (let j = 0; j < m; j++) {
+        const p = slots[j];
+        if (this.resolve(p, outs[p], p < fullCount)) found |= 1 << p;
+      }
     }
+    return found;
+  }
+
+  /** Grid cell of (x, z), or -1 off the grid */
+  private cellAt(x: number, z: number): number {
+    const fx = (x - this.minX) / CELL_SIZE_M;
+    const fz = (z - this.minZ) / CELL_SIZE_M;
+    if (fx < 0 || fz < 0 || fx >= this.nx || fz >= this.nz) return -1;
+    return Math.floor(fz) * this.nx + Math.floor(fx);
+  }
+
+  /** Point `p` starts a scan with no candidates */
+  private clearCandidates(p: number): void {
+    for (let c = p * 4, e = c + 4; c < e; c++) {
+      this.candH[c] = -Infinity;
+      this.candT[c] = -1;
+      this.candU[c] = 0;
+      this.candV[c] = 0;
+    }
+    this.tagCount[p] = 0;
+  }
+
+  /**
+   * Point `p` lies over triangle `t` (barycentric u, v) at height `h`: it keeps its highest road-collider, raised, any
+   * and drivable surface, and its tagged surfaces (in the cell's order, so ties keep the first)
+   */
+  private addCandidate(p: number, t: number, u: number, v: number, h: number): void {
+    const cH = this.candH;
+    const c = p * 4;
+    const layer = this.layers[this.triLayer[t]];
+    if (layer.isRoadCollider) {
+      if (h > cH[c + CAND_ROAD]) this.setCandidate(c + CAND_ROAD, t, u, v, h);
+      return;
+    }
+    if (RAISED_SURFACES.has(layer.surface) && h > cH[c + CAND_RAISED]) this.setCandidate(c + CAND_RAISED, t, u, v, h);
+    if (h > cH[c + CAND_ANY]) this.setCandidate(c + CAND_ANY, t, u, v, h);
+    if (layer.drivable && h > cH[c + CAND_DRIVE]) this.setCandidate(c + CAND_DRIVE, t, u, v, h);
+    if (layer.tagged && this.tagCount[p] < MAX_TAGS) {
+      const ti = p * MAX_TAGS + this.tagCount[p]++;
+      this.scratchH[ti] = h;
+      this.scratchT[ti] = t;
+    }
+  }
+
+  private setCandidate(c: number, t: number, u: number, v: number, h: number): void {
+    this.candH[c] = h;
+    this.candT[c] = t;
+    this.candU[c] = u;
+    this.candV[c] = v;
+  }
+
+  /** Ripple of the surface triangle `t` belongs to at barycentric (u, v) (kerb serrations, grass and gravel bumps), m */
+  private rippleAt(t: number, bu: number, bv: number): number {
+    const layer = this.layers[this.triLayer[t]];
+    const uo = this.triUVAt[t];
+    if (!(layer.uvScaleM > 0) || uo < 0) return 0;
+    const uv = this.triUV;
+    const bw = 1 - bu - bv;
+    const u = bw * uv[uo] + bu * uv[uo + 2] + bv * uv[uo + 4];
+    const v = bw * uv[uo + 1] + bu * uv[uo + 3] + bv * uv[uo + 5];
+    return surfaceRippleM(layer.props, u * layer.uvScaleM, Math.sin(Math.PI * Math.min(1, Math.max(0, v))));
+  }
+
+  /**
+   * Point `p`'s ground from its scanned candidates (see the class notes), into `out`; false when it has none. Unless
+   * `full`, only its height is written (no normal or surface tags).
+   */
+  private resolve(p: number, out: GroundHit, full = true): boolean {
+    const c = p * 4;
+    const roadH = this.candH[c + CAND_ROAD];
+    const roadT = this.candT[c + CAND_ROAD];
+    const roadU = this.candU[c + CAND_ROAD];
+    const roadV = this.candV[c + CAND_ROAD];
+    const raisedH = this.candH[c + CAND_RAISED];
+    const raisedT = this.candT[c + CAND_RAISED];
+    const raisedU = this.candU[c + CAND_RAISED];
+    const raisedV = this.candV[c + CAND_RAISED];
+    const anyH = this.candH[c + CAND_ANY];
+    const anyT = this.candT[c + CAND_ANY];
+    const anyU = this.candU[c + CAND_ANY];
+    const anyV = this.candV[c + CAND_ANY];
+    const driveH = this.candH[c + CAND_DRIVE];
+    const driveT = this.candT[c + CAND_DRIVE];
+    const driveU = this.candU[c + CAND_DRIVE];
+    const driveV = this.candV[c + CAND_DRIVE];
+    // Tagged surfaces, kept to classify the final contact height
+    const tagCount = this.tagCount[p];
+    const tagAt = p * MAX_TAGS;
+    const tagH = this.scratchH;
+    const tagT = this.scratchT;
 
     let baseT = -1;
     let baseH = -Infinity;
@@ -883,6 +1046,10 @@ export class TrackColliderQuery implements GroundQuery {
     } else {
       return false;
     }
+    if (!full) {
+      out.height = contactH + this.rippleAt(contactT, contactU, contactV);
+      return true;
+    }
 
     // Classify: top-most tagged surface near the contact height (on fitted surfaces a kerb or sausage first), else the contact layer itself
     let bestTagT = -1;
@@ -893,7 +1060,7 @@ export class TrackColliderQuery implements GroundQuery {
       bestTagH = contactH;
       bestTagRaised = true;
     } else {
-      for (let i = 0; i < tagCount; i++) {
+      for (let i = tagAt; i < tagAt + tagCount; i++) {
         if (Math.abs(tagH[i] - contactH) <= SURFACE_MATCH_M) {
           const isRaised = this.fitted && RAISED_SURFACES.has(this.layers[this.triLayer[tagT[i]]].surface);
           if ((isRaised && !bestTagRaised) || (isRaised === bestTagRaised && tagH[i] > bestTagH)) {
@@ -906,16 +1073,7 @@ export class TrackColliderQuery implements GroundQuery {
     }
     const tagLayer = this.layers[this.triLayer[bestTagT >= 0 ? bestTagT : contactT]];
 
-    // Ripple of the surface the wheel stands on (kerb serrations, grass and gravel bumps)
-    const contactLayer = this.layers[this.triLayer[contactT]];
-    const uo = this.triUVAt[contactT];
-    if (contactLayer.uvScaleM > 0 && uo >= 0) {
-      const uv = this.triUV;
-      const bw = 1 - contactU - contactV;
-      const u = bw * uv[uo] + contactU * uv[uo + 2] + contactV * uv[uo + 4];
-      const v = bw * uv[uo + 1] + contactU * uv[uo + 3] + contactV * uv[uo + 5];
-      contactH += surfaceRippleM(contactLayer.props, u * contactLayer.uvScaleM, Math.sin(Math.PI * Math.min(1, Math.max(0, v))));
-    }
+    contactH += this.rippleAt(contactT, contactU, contactV);
 
     const vo = normalT * 9;
     const vn = this.triVertNormal;
@@ -936,12 +1094,26 @@ export class TrackColliderQuery implements GroundQuery {
     return true;
   }
 
-  private readonly scratchH = new Float64Array(32);
-  private readonly scratchT = new Int32Array(32);
+  /** `queryMany`: each point's grid cell, and the points of the cell being scanned (coordinates, index) */
+  private readonly manyCells = new Int32Array(GROUND_QUERY_MANY_MAX);
+  private readonly groupX = new Float64Array(GROUND_QUERY_MANY_MAX);
+  private readonly groupZ = new Float64Array(GROUND_QUERY_MANY_MAX);
+  private readonly groupSlots = new Int32Array(GROUND_QUERY_MANY_MAX);
+  /** Per point, its highest road-collider / raised / any / drivable candidate (`CAND_*`): height, triangle, u, v */
+  private readonly candH = new Float64Array(GROUND_QUERY_MANY_MAX * 4);
+  private readonly candT = new Int32Array(GROUND_QUERY_MANY_MAX * 4);
+  private readonly candU = new Float64Array(GROUND_QUERY_MANY_MAX * 4);
+  private readonly candV = new Float64Array(GROUND_QUERY_MANY_MAX * 4);
+  /** Per point, up to `MAX_TAGS` tagged surfaces (height, triangle) */
+  private readonly tagCount = new Int32Array(GROUND_QUERY_MANY_MAX);
+  private readonly scratchH = new Float64Array(GROUND_QUERY_MANY_MAX * MAX_TAGS);
+  private readonly scratchT = new Int32Array(GROUND_QUERY_MANY_MAX * MAX_TAGS);
 }
 
 /** Infinite flat ground (tests, garage) */
 export class FlatGroundQuery implements GroundQuery {
+  readonly smooth = true;
+
   constructor(
     private readonly height = 0,
     private readonly surface: TrackSurfaceKind = 'road',
