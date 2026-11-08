@@ -337,6 +337,8 @@ export function attachVf26Model(
       unloadedRadiusM: box.max.y,
       halfWidthM: box.max.x,
       bakedCamberRad: c.bakedCamberRad,
+      // A 2026 car: the 2026 Pirelli sidewall over the model's own (recoloured by setTireCompound)
+      pirelliSidewall: "medium",
     });
   });
   corners.forEach((c, i) => (c.tyre = tyreHandles[i]));
@@ -344,6 +346,7 @@ export function attachVf26Model(
   const setTireCompound = (compound: TireCompound) => {
     const map = tyreMaps[compound];
     if (map) setTyreDeformationMap(liveTyreHandles, map);
+    for (const h of liveTyreHandles) h.setCompound(compound);
   };
 
   // Clearcoat paint, carbon weave (body, wings, uprights) and the rear FIA rain / ERS light, bright enough to bloom

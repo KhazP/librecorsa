@@ -12,6 +12,7 @@ LibreCorsa is an independent, non-commercial, open-source web simulator built wi
   | :--- | :--- |
   | Circuit scans, F1 2026 model, ported F1 car models | CC BY 4.0 |
   | Chang, Okayama, Spielberg (Red Bull Ring) and Monaco circuits | By **Mitja Bonca** (Used with permission) |
+  | 2026 Pirelli tyre sidewall texture (`public/cars/shared/tyres/`) | By **MrMaukus** (Used with permission; all rights reserved by the author) |
   | Mercedes-AMG GT3, Mercedes-AMG GT3 Evo and BMW M4 GT3 Evo models | CC BY-NC-SA 4.0 (non-commercial, share-alike) |
   | Car sounds ported from Assetto Corsa mods | The mod authors' terms; used non-commercially (see *Car sounds*) |
   | Fonts | SIL Open Font License 1.1 (see *Fonts*) |
@@ -38,6 +39,10 @@ Each model below is by **Dave Love SketchFab** ([https://sketchfab.com/Tyler_Dav
 * `"2012 Red Bull RB8"` ([https://sketchfab.com/3d-models/2012-red-bull-rb8-b74446dcd93a49879546d756e3093b3f](https://sketchfab.com/3d-models/2012-red-bull-rb8-b74446dcd93a49879546d756e3093b3f)) by **Dave Love SketchFab** (`rb8`)
 * `"2005 Renault R25"` ([https://sketchfab.com/3d-models/2005-renault-r25-0d58fe125f5b41a2b8482576723120c4](https://sketchfab.com/3d-models/2005-renault-r25-0d58fe125f5b41a2b8482576723120c4)) by **Dave Love SketchFab** (`r25`)
 * `"2004 Ferrari F2004"` ([https://sketchfab.com/3d-models/2004-ferrari-f2004-bedade52e6f4415e90e656817c5701f8](https://sketchfab.com/3d-models/2004-ferrari-f2004-bedade52e6f4415e90e656817c5701f8)) by **Dave Love SketchFab** (`f2004`)
+
+### 2026 Pirelli tyre sidewall (`public/cars/shared/tyres/pirelli-2026-sidewall.webp`)
+
+* Ported from **MrMaukus**'s 2026 Pirelli tyre sidewall mod for F1 25 (OverTake), used in LibreCorsa with the author's permission. The texture stays the author's; it is not covered by the MIT licence or any Creative Commons licence and may not be reused without their permission. Changes for the simulator (`scripts/cars/port_f1_25_sidewall.py`): the rubber albedo and the slick / wet logo masks decoded from the mod's BC7 texture arrays and packed into one lossless WebP. The 2026 cars' tyre shader (`src/lib/render/pirelli-sidewall.ts`) draws it on the sidewalls and tints the logos in the compound colour.
 
 ### Car sounds (`public/cars/<id>/audio/`)
 

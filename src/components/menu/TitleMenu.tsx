@@ -125,6 +125,9 @@ const Credits: React.FC = () => (
           </a>
           ) by Ddiaz Design · CC BY-NC-SA 4.0
         </CreditRow>
+        <CreditRow title="Tyres">
+          2026 Pirelli sidewall by MrMaukus (F1 25 mod) · used with permission
+        </CreditRow>
         {TRACKS.some((t) => t.credit) ? (
           <CreditRow title="Circuits">
             {TRACKS.filter((t, i, arr) => t.credit && arr.findIndex((o) => o.credit?.url === t.credit?.url) === i).map((t) => (
