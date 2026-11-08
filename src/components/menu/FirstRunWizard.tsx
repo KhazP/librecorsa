@@ -203,7 +203,7 @@ export const FirstRunWizard: React.FC<FirstRunWizardProps> = (props) => {
                 </span>
               )}
             </div>
-            <h1 className="lc-disp mt-3 text-[clamp(30px,min(5.4vw,9vh),76px)] text-[#F5F7FA] short:mt-1 short:text-[26px]">
+            <h1 className="lc-disp mt-3 text-[clamp(30px,min(5.4vw,9vh),76px)] text-[#F5F7FA] short:mt-1 short:text-[26px] phone:text-[24px]">
               {info.title}
             </h1>
             <p className="mt-3 text-[15px] leading-snug text-[#C5CBD8] sm:text-[17px] short:hidden">{info.detail}</p>
