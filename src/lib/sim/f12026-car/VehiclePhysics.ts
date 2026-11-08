@@ -104,6 +104,7 @@ import {
   suspensionSupportsHeave,
   type TyresCompoundData,
   type TyresPressureData,
+  turboSteadyBoost,
   type WingData,
   type ZoneData_DRSZone,
 } from './F12026CarConfig';
@@ -170,8 +171,16 @@ const ROAD_CONDUCTANCE = 30;
  * column sees it divided by the steering ratio (≈ 48 Nm on 12.6:1)
  */
 const FFB_REFERENCE_NM = 600;
-/** Torque share missing at full turbo lag (boost far below its target) */
-const TURBO_LAG_TORQUE_LOSS = 0.1;
+/**
+ * Diff map blending: the pedal travel over which the brake hands the diff to its entry map and the throttle to its exit
+ * map (a touch of brake is corner entry; power is committed from ≈ 40 % pedal), the road-wheel angle over which the lock
+ * keeps a light pedal on the mid map (a fast corner's ≈ 1° to a medium-speed apex's ≈ 6°), and the speed band (km/h)
+ * either side of the high-speed switch [est]
+ */
+const DIFF_BRAKE_PHASE = [0.02, 0.2] as const;
+const DIFF_POWER_PHASE = [0.1, 0.4] as const;
+const DIFF_TURNED_IN_DEG = [1, 6] as const;
+const DIFF_HISPD_BLEND_KMH = 20;
 /** Outer-step FFB samples kept per frame for the 500 Hz bridge (≈ one 60 Hz frame; the newest are kept) */
 const FFB_SUBFRAME_MAX = 8;
 /** Caster (mechanical) trail when the chassis data has none: keeps the wheel weighted once the pneumatic trail collapses */
@@ -209,6 +218,11 @@ export interface VehicleInputs {
   /** Pedals 0..1 */
   throttle: number;
   brake: number;
+  /**
+   * Share of the drive torque the ECU lets through by cutting spark and fuel, and the MGU-K's with it (0..1: traction
+   * control). Acts at once, unlike the pedal, whose torque waits on the air path. Omitted = 1
+   */
+  ignitionCut?: number;
   /** Per-wheel brake pressure share 0..1 (LF, RF, LR, RR) after a per-wheel ABS; omitted = 1 */
   brakeWheelScale?: readonly [number, number, number, number];
   /** Steering −1..1, + = right */
@@ -740,11 +754,15 @@ export class VehiclePhysics {
   /** Driver EBB offset in steps (+ = forward), on top of the performance mode's */
   public ebbUser = 0;
   public compound: PhysicsTyreCompound;
-  /** Live turbo boost pressure (bar absolute, 1.0 = atmospheric) with spool lag, and the boost asked for */
+  /** Live turbo boost pressure for the gauge and the sound (bar absolute, 1.0 = atmospheric; `TurboData.displayMaxBoostBar`) */
   public turboBoostBar = 1.0;
-  private turboTargetBar = 1.0;
-  /** Turbocharged engine: the boost's spool lag costs a little torque (set by the adapter from its profile) */
-  public turbocharged = false;
+  /** Boost the turbo has spooled to (`TurboData` units: torque ∝ 1 + boost) */
+  private turboBoost = 0;
+  /**
+   * The turbo's spool lag shapes the ICE torque: on by default when the engine has `turbo` data; the adapter sets it
+   * from its car profile
+   */
+  public turbocharged: boolean;
   /** Disc / pad material of the brakes (`BrakesData.discMaterial`) */
   private readonly brakeCompound: BrakeCompoundKind;
   /** Dynamic brake bias after pressure-sensitive brake migration */
@@ -860,12 +878,20 @@ export class VehiclePhysics {
   private sinceDownshiftS = Infinity;
   private limiterTimer = 0;
   private clutchEngagement = 1;
+  /** Throttle plate the cylinders see, after the air path's lag (`EngineData.torqueResponseS`) */
+  private icePlate = 0;
   private lsdLockTorque = 0;
+  /**
+   * Rear halfshaft twist (rad, + = the diff side ahead of the hub): the mean of the two (it carries the drive torque) and
+   * half their left-minus-right difference (it carries the diff's locking torque)
+   */
+  private shaftTwistMeanRad = 0;
+  private shaftTwistHalfDiffRad = 0;
   private mgukTorque = 0;
   private aeroFrontN = 0;
   private aeroDownN = 0;
   private aeroDragN = 0;
-  /** Air slip angle the wing-element aero last saw (|deg|) */
+  /** Air slip angle the aero last saw (|deg|), wing-element or map path */
   public aeroYawDeg = 0;
   private rideFront = 0;
   private rideRear = 0;
@@ -1097,6 +1123,7 @@ export class VehiclePhysics {
     this.computeStaticGeometry();
 
     this.engineOmega = cfg.engine.idleRpm * RPM2RADS;
+    this.turbocharged = cfg.engine.turbo !== undefined;
     this.ersEnergyJ = cfg.ers.ERS_MAX_CHARGE;
     this.dynamicBrakeBias = this.brakeBias;
     this.telemetry = this.createTelemetry();
@@ -1232,6 +1259,7 @@ export class VehiclePhysics {
     this.limiterTimer = 0;
     this.engineOmega = this.config.engine.idleRpm * RPM2RADS;
     this.turboBoostBar = 1.0;
+    this.turboBoost = 0;
     this.drsOpen = false;
     this.drsBlend = 0;
     this.drsRequested = false;
@@ -1313,6 +1341,9 @@ export class VehiclePhysics {
         w.slipRatio = 0;
         w.tanSlipAngle = 0;
       }
+      // A rolling start is a car already driving: its turbo spooled for the road rpm, as on the throttle
+      const turbo = this.config.engine.turbo;
+      this.turboBoost = turbo ? turboSteadyBoost(turbo, this.rpm) : 0;
     }
     this.prevVelocity.copy(this.velocity);
     this.ffbSubframeSamples.length = 0;
@@ -1388,7 +1419,10 @@ export class VehiclePhysics {
       if (!w.bandLoadShares.every(Number.isFinite)) w.bandLoadShares = [1 / 3, 1 / 3, 1 / 3];
     }
     this.clutchEngagement = 1;
+    this.icePlate = 0;
     this.lsdLockTorque = 0;
+    this.shaftTwistMeanRad = 0;
+    this.shaftTwistHalfDiffRad = 0;
     this.mgukTorque = 0;
     this.aeroFrontN = 0;
     this.aeroDownN = 0;
@@ -1396,7 +1430,7 @@ export class VehiclePhysics {
     this.rideFront = 0;
     this.rideRear = 0;
     this.bodySpecificForce.set(0, 0, 0);
-    this.turboTargetBar = 1;
+    this.turboBoost = 0;
     this.ffbSum = 0;
     this.ffbSamples = 0;
     this.telemetry.ffbTorqueNorm = 0;
@@ -1666,6 +1700,7 @@ export class VehiclePhysics {
     return {
       throttle: c(fin(i.throttle), 0, 1),
       brake: c(fin(i.brake), 0, 1),
+      ignitionCut: i.ignitionCut === undefined ? undefined : c(fin(i.ignitionCut), 0, 1),
       steer: c(fin(i.steer), -1, 1),
       brakeWheelScale: i.brakeWheelScale
         ? [c(fin(i.brakeWheelScale[0]), 0, 1), c(fin(i.brakeWheelScale[1]), 0, 1), c(fin(i.brakeWheelScale[2]), 0, 1), c(fin(i.brakeWheelScale[3]), 0, 1)]
@@ -1824,10 +1859,16 @@ export class VehiclePhysics {
     this.sinceUpshiftS += dt;
     this.sinceDownshiftS += dt;
     this.limiterTimer = Math.max(0, this.limiterTimer - dt);
-    const targetBoost = 1 + 2.5 * inp.throttle * THREE.MathUtils.clamp((this.rpm - 6000) / 4000, 0, 1);
-    const tauTurbo = targetBoost > this.turboBoostBar ? 0.14 : 0.05;
-    this.turboBoostBar += (targetBoost - this.turboBoostBar) * Math.min(1, dt / tauTurbo);
-    this.turboTargetBar = targetBoost;
+    // Turbo: spools toward the boost the cylinders' air asks for, faster the more exhaust there is; runs down slowly
+    const turbo = this.config.engine.turbo;
+    if (turbo && this.turbocharged) {
+      const target = turboSteadyBoost(turbo, this.rpm) * this.icePlate;
+      const tau = target > this.turboBoost ? (turbo.spoolUpS * turbo.spoolRefRpm) / Math.max(this.rpm, this.config.engine.idleRpm) : turbo.spoolDownS;
+      this.turboBoost += (target - this.turboBoost) * Math.min(1, dt / tau);
+      this.turboBoostBar = 1 + (turbo.displayMaxBoostBar * this.turboBoost) / turbo.maxBoost;
+    } else {
+      this.turboBoostBar = 1;
+    }
     this.updateThermal(dt);
     this.updateOutputs(dt);
     // Keep the newest samples: a long frame drops its oldest, not its latest, torque
@@ -1847,6 +1888,33 @@ export class VehiclePhysics {
     this.force.add(f);
     _r.subVectors(point, this.position);
     this.torque.add(_tmp.crossVectors(_r, f));
+  }
+
+  /**
+   * Aero drag −`perMs`·air (N) at the drag's centre of pressure (`AeroData.dragCentreY` above the CG): above the CG it
+   * pitches the nose up and loads the rear axle, as the rear wing's and wheels' drag do on the real car
+   */
+  private addDragAtCentre(air: THREE.Vector3, perMs: number): void {
+    _f.copy(air).multiplyScalar(-perMs);
+    _p.set(0, this.config.aero.dragCentreY ?? 0, 0).applyQuaternion(this.quaternion).add(this.position);
+    this.addForceAt(_f, _p);
+  }
+
+  /**
+   * Gyroscopic torque a front wheel puts on the steering (Nm, + = toward left lock, as the rack sum). Its spin momentum
+   * I·ω lies along the axle; turning the wheel about its rolling axis `fw` at rate p (body roll, plus the camber the
+   * suspension gives it over a bump: the axle's kinematic camber gain × bump rate) precesses it, and the steering arm
+   * takes the part about the steering axis, −I·ω·p. Lean the top right and the wheel steers right, as a bicycle wheel
+   * does. The camber the steering itself adds (caster, kingpin inclination) is left out: that turn is about the
+   * steering axis, and a precession about an axis puts no torque about that same axis.
+   */
+  private wheelGyroSteerNm(w: WheelState, fw: THREE.Vector3): number {
+    const axle = this.axles[w.isFront ? 0 : 1];
+    // Bump camber rate, leaning + left (the left wheel's camber is its lean to the left, the right's to the right);
+    // leaning + left turns the wheel about −fw
+    const camberRate = (w.isLeft ? 1 : -1) * axle.spec.camberGainKinematic * DEG2RAD * w.compressionVel;
+    const p = this.angularVelocity.dot(fw) - camberRate;
+    return -axle.wheelInertia * w.omega * p;
   }
 
   private substep(h: number, inp: VehicleInputs): void {
@@ -2168,7 +2236,8 @@ export class VehiclePhysics {
         const tyreKingpinNm = kingpinMomentNm(
           _ex, _ey, _ez, _n, _fw, _lw, w.isLeft ? -1 : 1, w.steerRad, w.loadedRadius, _kpGeo, fx, fy, fz, w.mz + w.mzTwist, w.mx
         );
-        ffbMz += tyreKingpinNm + flatSpotVibrationNm(w.flatSpotSeverity, w.rotationRad, w.omega, fz);
+        const gyroSteerNm = this.wheelGyroSteerNm(w, _fw);
+        ffbMz += tyreKingpinNm + flatSpotVibrationNm(w.flatSpotSeverity, w.rotationRad, w.omega, fz) + gyroSteerNm;
       }
 
       // Loose ground (gravel, grass) ploughs against the contact patch's motion, sliding or rolling, outside the
@@ -2242,13 +2311,23 @@ export class VehiclePhysics {
     this.wallPrevCg.copy(this.position);
     this.position.addScaledVector(this.velocity, h);
 
-    // ω̇ = I⁻¹(τ − ω × Iω), with I in body axes
+    // ω̇ = I⁻¹(τ − ω × (Iω + h)), with I in body axes and h the spinning wheels' angular momentum (body frame): each
+    // wheel's I·ω lies along its axle, (cos δ, 0, −sin δ) at road-wheel steer δ. Turning the car turns those momenta,
+    // and the body supplies that precession through the uprights: in a corner it rolls the car outward (≈ 0.8 kNm on
+    // the F1 at 250 km/h and 4 g), and a roll rate pushes back in yaw
     _w.copy(this.angularVelocity).applyQuaternion(_qd.copy(this.quaternion).invert());
     _tmp.copy(this.torque).applyQuaternion(_qd);
     const I = this.inertiaBody;
-    const lx = I.x * _w.x;
+    let hx = 0;
+    let hz = 0;
+    for (const w of this.wheels) {
+      const spin = this.axles[w.isFront ? 0 : 1].wheelInertia * w.omega;
+      hx += spin * Math.cos(w.steerRad);
+      hz -= spin * Math.sin(w.steerRad);
+    }
+    const lx = I.x * _w.x + hx;
     const ly = I.y * _w.y;
-    const lz = I.z * _w.z;
+    const lz = I.z * _w.z + hz;
     const gx = _w.y * lz - _w.z * ly;
     const gy = _w.z * lx - _w.x * lz;
     const gz = _w.x * ly - _w.y * lx;
@@ -2414,19 +2493,34 @@ export class VehiclePhysics {
     const baseExp = (mapIdx >= 3 ? 1 + (mapIdx - 2) * 0.12 : 1) + lowGearWetExp;
     const rawThrottle = baseExp > 1 ? Math.pow(inp.throttle, baseExp) : inp.throttle;
     let plate = this.luts.throttle.evaluate(rawThrottle);
-    plate = Math.max(plate, THREE.MathUtils.clamp((eng.idleRpm + 200 - rpm) / 800, 0, 0.15));
-    if (this.limiterTimer > 0) plate = 0;
-    let tIce =
-      (plate * this.luts.power.evaluate(rpm) * engineMapTorqueScale * 1000) / omegaE -
-      (1 - plate) * this.luts.coast.evaluate(rpm) * mode.coastTorqueScale * this.engineBrakingScale;
-    if (this.shiftTimer > 0 && tIce > 0) tIce *= gb.shiftTorqueFraction;
-    if (tIce > 0) tIce *= this.damagePowerMult;
-    // Turbo lag: while the boost still trails the demand (≈0.14 s spool), up to TURBO_LAG_TORQUE_LOSS of the torque
-    // is missing. Kept small: the torque curve is the steady-state, full-boost one
-    if (this.turbocharged && tIce > 0) {
-      const spoolDeficit = THREE.MathUtils.clamp((this.turboTargetBar - this.turboBoostBar) / 2.5, 0, 1);
-      tIce *= 1 - TURBO_LAG_TORQUE_LOSS * spoolDeficit;
+    // Air path: the plate the cylinders see trails the pedal's (actuator, plenum), plus one crank revolution from the
+    // intake stroke to the power stroke. The idle controller (spark advance), the limiter and the spark cut below act on
+    // the combustion at once
+    const resp = eng.torqueResponseS;
+    if (resp) {
+      const tau = (plate > this.icePlate ? resp.rise : resp.fall) + 60 / Math.max(rpm, eng.idleRpm);
+      this.icePlate += (plate - this.icePlate) * Math.min(1, h / tau);
+    } else {
+      this.icePlate = plate;
     }
+    plate = Math.max(this.icePlate, THREE.MathUtils.clamp((eng.idleRpm + 200 - rpm) / 800, 0, 0.15));
+    if (this.limiterTimer > 0) plate = 0;
+    const sparkShare = inp.ignitionCut ?? 1;
+    // Turbo lag: the curve is the torque with the boost this plate makes in steady state; while the rotor trails it the
+    // torque is (1 + boost made) / (1 + boost asked for) of that, as torque ∝ 1 + boost. A rotor still spinning faster
+    // than the demand gives no more than the demand (the wastegate and the throttle hold the plenum to it)
+    const turbo = eng.turbo;
+    const boostShare =
+      turbo && this.turbocharged ? Math.min(1, (1 + this.turboBoost) / (1 + turboSteadyBoost(turbo, rpm) * plate)) : 1;
+    const tCombustion = (plate * sparkShare * this.luts.power.evaluate(rpm) * engineMapTorqueScale * 1000) / omegaE;
+    let tIce = tCombustion * boostShare - (1 - plate) * this.luts.coast.evaluate(rpm) * mode.coastTorqueScale * this.engineBrakingScale;
+    // Crank torque the lag costs, which the MGU-K may fill below
+    let turboDeficit = tCombustion * (1 - boostShare);
+    if (this.shiftTimer > 0 && tIce > 0) {
+      tIce *= gb.shiftTorqueFraction;
+      turboDeficit *= gb.shiftTorqueFraction;
+    }
+    if (tIce > 0) tIce *= this.damagePowerMult;
 
     // ---- clutch engagement
     const axleOmega = 0.5 * (W[2].omega + W[3].omega);
@@ -2446,6 +2540,8 @@ export class VehiclePhysics {
     const speedKmh = this.velocity.length() * 3.6;
     const topGear = this.gear === gb.ratios.length;
     let pK = 0;
+    /** The ECU may deploy now: the MGU-K then also fills the torque the turbo lag costs */
+    let deployAllowed = false;
     const coupled = engage > 0.9 && this.gear > 0;
     if (coupled) {
       if (inp.brake > 0.05) {
@@ -2457,6 +2553,7 @@ export class VehiclePhysics {
       } else if (inp.throttle > 0.05 && inp.throttle < 0.9 && mode.partThrottleHarvestW > 0) {
         pK = -mode.partThrottleHarvestW;
       } else if (inp.throttle > 0.05 && soc > mode.socFloor && this.lapDeployJ < ers.deployPerLapJ + this.extraDeployJ) {
+        deployAllowed = mode.deployFraction > 0;
         pK =
           ers.ERS_MAX_DEPLOY *
           mode.deployFraction *
@@ -2484,7 +2581,7 @@ export class VehiclePhysics {
     const bias = this.dynamicBrakeBias;
 
     let tK = 0;
-    if (pK > 0) tK = Math.min(pK / omegaE, this.luts.mgukDeploy.evaluate(rpm));
+    if (pK > 0) tK = Math.min(pK / omegaE, this.luts.mgukDeploy.evaluate(rpm)) * sparkShare;
     else if (pK < 0) {
       let cap = this.luts.mgukHarvest.evaluate(rpm);
       // On the pedal the brake-by-wire never lets the drivetrain brake the rear axle past its share of the demand:
@@ -2494,6 +2591,12 @@ export class VehiclePhysics {
         cap = Math.min(cap, Math.max(0, rearDemand / (Math.abs(ratio) * gb.efficiency) - Math.max(0, -tIce)));
       }
       tK = -Math.min(-pK / omegaE, cap);
+    }
+    // Torque fill: with no MGU-H to spin the turbo, the MGU-K makes up the torque its lag costs, within the motor's torque
+    // curve and the gear's power clip, from the same store and lap allowance as the deploy
+    if (deployAllowed && turboDeficit > 0) {
+      const fillCap = Math.min(this.luts.mgukDeploy.evaluate(rpm), (ers.ERS_MAX_DEPLOY * this.luts.deployVsGear.evaluate(this.gear)) / omegaE);
+      tK = Math.max(tK, Math.min(fillCap * sparkShare, tK + turboDeficit));
     }
     if (this.limiterTimer > 0 && tK > 0) tK = 0;
     this.mgukTorque = tK;
@@ -2507,7 +2610,9 @@ export class VehiclePhysics {
       // Pad μ(T) of the disc (1 in its window, a mild loss cold or faded)
       const friction = (w.isFront ? demand : Math.max(0, demand - rearDriveBrake)) * w.brakeDisc.muFactor;
       const tyre = this.tyres[w.isFront ? 0 : 1].data.modelData;
-      w.brakeTorqueNm = friction + w.fz * tyre.rollingResistance * w.rollingRadius;
+      const rollV = w.vx;
+      const rollingResistance = tyre.rollingResistance + (tyre.rollingResistanceSpeedSq ?? 0) * rollV * rollV;
+      w.brakeTorqueNm = friction + w.fz * rollingResistance * w.rollingRadius;
     }
 
     // ---- predicted velocities from the free torques
@@ -2525,42 +2630,65 @@ export class VehiclePhysics {
     let accC = 0;
     let accD = 0;
     const half = 0.5 * ratio;
-    const mC = ratio !== 0 ? 1 / (1 / Ie + (half * half) / Iw[2] + (half * half) / Iw[3]) : 0;
-    const mD = 1 / (1 / Iw[2] + 1 / Iw[3]);
+    let mC = ratio !== 0 ? 1 / (1 / Ie + (half * half) / Iw[2] + (half * half) / Iw[3]) : 0;
+    let mD = 1 / (1 / Iw[2] + 1 / Iw[3]);
+    // Compliant halfshafts make the clutch and diff rows soft constraints: an implicit spring-damper on each row's own
+    // coordinate (Catto, "Soft Constraints", GDC 2011; ODE's CFM / ERP), stable at any stiffness. The side gears' inertia
+    // is negligible next to the wheels' and the engine's, so the shafts sit in series with the clutch and the diff. With
+    // equal shafts the two rows see independent modes: the clutch row (J = [1, −r/2, −r/2]) twists both shafts alike
+    // (2k/r², 2c/r² at the crank, coordinate r·θ_mean); the diff row (J = [1, −1] on the rears) twists them oppositely
+    // (k/2, c/2, coordinate −2·θ_halfDiff). Rigid shafts: gamma = bias = 0, the rows as before.
+    const shaft = cfg.differential.halfshaft;
+    let gammaC = 0;
+    let biasC = 0;
+    let gammaD = 0;
+    let biasD = 0;
+    if (shaft) {
+      const k = shaft.stiffnessNmPerRad;
+      const cS = shaft.dampingNmsPerRad;
+      if (ratio !== 0) {
+        const kC = (2 * k) / (ratio * ratio);
+        const denC = (2 * cS) / (ratio * ratio) + h * kC;
+        gammaC = 1 / (h * denC);
+        biasC = (kC * ratio * this.shaftTwistMeanRad) / denC;
+        mC = 1 / (1 / mC + gammaC);
+      }
+      const denD = 0.5 * cS + h * 0.5 * k;
+      gammaD = 1 / (h * denD);
+      biasD = (0.5 * k * -2 * this.shaftTwistHalfDiffRad) / denD;
+      mD = 1 / (1 / mD + gammaD);
+    }
     const diffCfg = cfg.differential;
     const diff = diffCfg.settings;
     const cot = (deg: number) => 1 / Math.tan(Math.max(5, deg) * DEG2RAD);
-    const gLong = this.telemetry.lonG;
     const hiSpdKmh = diffCfg.hiSpdSwitchKmh ?? 250;
+    // Phase weights, blended as an ECU blends its diff maps rather than switched: the entry map on the brake, the exit
+    // map on the power, the mid map between. A light pedal with the lock on (trail braking into the apex, maintenance
+    // throttle at it) stays with the mid map until the pedal commits
+    const smooth = THREE.MathUtils.smoothstep;
+    const turnedIn = smooth(Math.abs(inp.steer) * this.maxSteerRad * RAD2DEG, DIFF_TURNED_IN_DEG[0], DIFF_TURNED_IN_DEG[1]);
+    const brakeW = smooth(inp.brake, DIFF_BRAKE_PHASE[0], DIFF_BRAKE_PHASE[1]);
+    const powerW = smooth(inp.throttle, DIFF_POWER_PHASE[0], DIFF_POWER_PHASE[1]);
+    let entryW = brakeW * (1 - turnedIn * (1 - brakeW));
+    let exitW = powerW * (1 - turnedIn * (1 - powerW)) * (1 - brakeW);
     let powerCoeff = diff.power;
-    let coastCoeff = inp.brake > 0.05 ? (diffCfg.coastBraking ?? diff.coast) : diff.coast;
+    let coastCoeff = THREE.MathUtils.lerp(diff.coast, diffCfg.coastBraking ?? diff.coast, entryW);
     if (diffCfg.threePhase) {
-      if (gLong > 0.5 || speedKmh > hiSpdKmh || speedKmh < 1) {
-        this.diffActivePhase = 'EXIT';
-        powerCoeff = (THREE.MathUtils.clamp(this.diffExitLevel, 1, 12) - 1) / 11;
-        coastCoeff = (THREE.MathUtils.clamp(this.diffMidLevel, 1, 12) - 1) / 11;
-      } else if (gLong > -0.5) {
-        this.diffActivePhase = 'MID';
-        powerCoeff = (THREE.MathUtils.clamp(this.diffMidLevel, 1, 12) - 1) / 11;
-        coastCoeff = (THREE.MathUtils.clamp(this.diffMidLevel, 1, 12) - 1) / 11;
-      } else {
-        this.diffActivePhase = 'ENTRY';
-        powerCoeff = (THREE.MathUtils.clamp(this.diffMidLevel, 1, 12) - 1) / 11;
-        coastCoeff = (THREE.MathUtils.clamp(this.diffEntryLevel, 1, 12) - 1) / 11;
-      }
+      // Past the high-speed switch (and at a standstill launch) the exit map holds for straight-line stability
+      const hiSpdW = speedKmh < 1 ? 1 : smooth(speedKmh, hiSpdKmh - DIFF_HISPD_BLEND_KMH, hiSpdKmh + DIFF_HISPD_BLEND_KMH);
+      entryW *= 1 - hiSpdW;
+      exitW = Math.max(exitW, hiSpdW);
+      const level = (dial: number) => (THREE.MathUtils.clamp(dial, 1, 12) - 1) / 11;
+      const mid = level(this.diffMidLevel);
+      powerCoeff = THREE.MathUtils.lerp(mid, level(this.diffExitLevel), exitW);
+      coastCoeff = THREE.MathUtils.lerp(mid, level(this.diffEntryLevel), entryW);
     } else {
-      if (inp.brake > 0.05 || gLong <= -0.35) {
-        this.diffActivePhase = 'ENTRY';
-      } else if (inp.throttle > 0.25 || gLong > 0.35) {
-        this.diffActivePhase = 'EXIT';
-      } else {
-        this.diffActivePhase = 'MID';
-      }
       const entryScale = 0.65 + ((THREE.MathUtils.clamp(this.diffEntryLevel, 1, 12) - 1) / 11) * 0.7;
       const exitScale = 0.65 + ((THREE.MathUtils.clamp(this.diffExitLevel, 1, 12) - 1) / 11) * 0.7;
       powerCoeff = THREE.MathUtils.clamp(diff.power * exitScale, 0.05, 0.92);
       coastCoeff = THREE.MathUtils.clamp(coastCoeff * entryScale, 0.05, 0.88);
     }
+    this.diffActivePhase = entryW > 0.5 ? 'ENTRY' : exitW > 0.5 ? 'EXIT' : 'MID';
     const lockPower = powerCoeff * diff.friction_faces * cot(diff.power_ramp_deg);
     const lockCoast = coastCoeff * diff.friction_faces * cot(diff.coast_ramp_deg);
     let lockTorque = diff.preload;
@@ -2575,7 +2703,7 @@ export class VehiclePhysics {
         const c = wE - half * (wW[2] + wW[3]);
         const max = clutchCap * h;
         const prev = accC;
-        accC = THREE.MathUtils.clamp(prev - c * mC, -max, max);
+        accC = THREE.MathUtils.clamp(prev - (c + biasC + gammaC * prev) * mC, -max, max);
         const d = accC - prev;
         wE += d / Ie;
         wW[2] -= (half * d) / Iw[2];
@@ -2588,13 +2716,22 @@ export class VehiclePhysics {
         const c = wW[2] - wW[3];
         const max = lockTorque * h;
         const prev = accD;
-        accD = THREE.MathUtils.clamp(prev - c * mD, -max, max);
+        accD = THREE.MathUtils.clamp(prev - (c + biasD + gammaD * prev) * mD, -max, max);
         const d = accD - prev;
         wW[2] += d / Iw[2];
         wW[3] -= d / Iw[3];
       }
     }
     this.lsdLockTorque = lockTorque;
+    if (shaft) {
+      // The twists follow the torque the rows delivered (c·θ̇ + k·θ = T, implicit), so a slipping clutch or diff holds
+      // the shafts at the torque it passes rather than winding them up by its slip
+      const k = shaft.stiffnessNmPerRad;
+      const den = shaft.dampingNmsPerRad + h * k;
+      const tMean = clutchCap > 0 && ratio !== 0 ? -(accC / h) * half : 0;
+      this.shaftTwistMeanRad += (h * (tMean - k * this.shaftTwistMeanRad)) / den;
+      this.shaftTwistHalfDiffRad += (h * (accD / h - k * this.shaftTwistHalfDiffRad)) / den;
+    }
     this.engineOmega = Math.max(0, wE);
     for (let i = 0; i < 4; i++) {
       W[i].driveTorqueNm = i >= 2 ? -(accC / h) * half : 0;
@@ -2696,7 +2833,7 @@ export class VehiclePhysics {
 
     const speed = air.length();
     const dragN = 0.5 * this.airDensity * speed * speed * drag;
-    if (speed > 1e-3) this.force.addScaledVector(air, -dragN / speed);
+    if (speed > 1e-3) this.addDragAtCentre(air, dragN / speed);
 
     this.aeroDownN = down;
     this.aeroFrontN = front;
@@ -2730,6 +2867,7 @@ export class VehiclePhysics {
     // Signed here (the map's yaw tables span ±, and its balance shift may be odd in yaw); the wing path above reads
     // the magnitude, its per-wing yaw tables being one-sided
     const yawDeg = Math.abs(vF) > 1 ? Math.atan2(air.dot(_ex), Math.abs(vF)) * RAD2DEG : 0;
+    this.aeroYawDeg = Math.abs(yawDeg);
     const ml = this.mapLuts!;
     const clMult = rhTable(map, map.cl, this.rideFront, this.rideRear) * ml.rollCl.evaluate(rollDeg) * ml.yawCl.evaluate(yawDeg);
     const cdMult = rhTable(map, map.cd, this.rideFront, this.rideRear) * ml.rollCd.evaluate(rollDeg) * ml.yawCd.evaluate(yawDeg);
@@ -2776,7 +2914,7 @@ export class VehiclePhysics {
       _p.set(0, this.floorOffsetY, z).applyQuaternion(this.quaternion).add(this.position);
       this.addForceAt(_f, _p);
     }
-    if (speed > 1e-3) this.force.addScaledVector(air, -this.mapAeroDragN / speed);
+    if (speed > 1e-3) this.addDragAtCentre(air, this.mapAeroDragN / speed);
     this.aeroDownN = this.mapAeroFrontN + this.mapAeroRearN;
     this.aeroFrontN = this.mapAeroFrontN;
     this.aeroDragN = this.mapAeroDragN;

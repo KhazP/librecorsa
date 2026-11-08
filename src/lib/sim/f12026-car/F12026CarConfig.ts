@@ -120,11 +120,42 @@ export interface EngineData {
   coastCurve: LutPoints;
   /** Pedal → throttle-plate map (0..1 → 0..1) */
   throttleResponseCurve: LutPoints;
+  /**
+   * First-order lag of the ICE's air path behind the throttle (s), opening and closing: drive-by-wire actuator, manifold
+   * filling and the ECU's torque ramp. One crank revolution, the intake-to-power-stroke delay of a four-stroke, is added
+   * at run time. Absent: the torque follows the pedal at once
+   */
+  torqueResponseS?: { rise: number; fall: number };
+  /** Turbocharger; absent: naturally aspirated */
+  turbo?: TurboData;
   idleRpm: number;
   /** Crank + flywheel + MGU-K/H rotor inertia reflected to the crank (kg·m²) */
   inertia: number;
   /** Ignition cut held after the limiter trips (s) */
   limiterCutS: number;
+}
+
+/**
+ * Exhaust-driven turbocharger. The power curve is the steady state with the boost made; this is the boost the torque waits
+ * for. Torque ∝ 1 + boost (an AC-style turbo), and the full-load boost at `rpm` is maxBoost·(rpm / referenceRpm)^gamma,
+ * capped at maxBoost (`turboSteadyBoost`). The rotor spools toward the boost the throttle asks for with a time constant
+ * spoolUpS·spoolRefRpm / rpm (the turbine's surplus power grows with the exhaust flow, ∝ rpm), and runs down with
+ * spoolDownS once the exhaust stops pushing (rotor inertia against the compressor's work)
+ */
+export interface TurboData {
+  maxBoost: number;
+  referenceRpm: number;
+  gamma: number;
+  spoolUpS: number;
+  spoolRefRpm: number;
+  spoolDownS: number;
+  /** Gauge pressure shown at full boost (bar), for the HUD and the sound */
+  displayMaxBoostBar: number;
+}
+
+/** Full-load steady-state boost of `turbo` at `rpm` */
+export function turboSteadyBoost(turbo: TurboData, rpm: number): number {
+  return Math.min(turbo.maxBoost, turbo.maxBoost * Math.max(0, rpm / turbo.referenceRpm) ** turbo.gamma);
 }
 
 export interface ERSData {
@@ -220,9 +251,18 @@ export interface DifferentialSettingsUnits {
 export interface DifferentialData {
   type: 'LSD_Ramp';
   settings: DifferentialSettingsUnits;
+  /**
+   * Torsional compliance of each rear halfshaft, diff side gear to hub with its CV joints: stiffness (Nm/rad) and damping
+   * (Nm·s/rad). The driveline winds up against the tyres, and a throttle step rings at its shuffle frequency (the engine
+   * on the shafts, √(2k / (r²·I_engine)) at overall ratio r). Absent: rigid shafts
+   */
+  halfshaft?: { stiffnessNmPerRad: number; dampingNmsPerRad: number };
   /** Electronic diff: the coast locking (same units as `coast`) while braking, i.e. on corner entry; default `coast` */
   coastBraking?: number;
-  /** 2026 3-Phase Active Electronic Differential (Entry braking <= -0.5G, Mid apex -0.5G..+0.5G, Exit/HiSpd > +0.5G or > 250 km/h) */
+  /**
+   * 2026 3-Phase Active Electronic Differential: Entry map on the brake, Exit / HiSpd map on the power or past
+   * `hiSpdSwitchKmh`, Mid map between and at the apex; blended by the pedals and the steering, not switched
+   */
   threePhase?: boolean;
   /** Default Entry coast locking dial (1..12, where locking = (level - 1) / 11; default 3 -> 18.2%) */
   diffEntryLevel?: number;
@@ -230,7 +270,7 @@ export interface DifferentialData {
   diffMidLevel?: number;
   /** Default Exit / High-Speed power locking dial (1..12; default 5 -> 36.4%) */
   diffExitLevel?: number;
-  /** High-speed straight stability threshold where Exit/HiSpd lock engages regardless of G_long (km/h; default 250) */
+  /** High-speed stability threshold where the Exit/HiSpd lock engages whatever the pedals (km/h; default 250) */
   hiSpdSwitchKmh?: number;
 }
 
@@ -393,6 +433,12 @@ export interface AeroData {
   rear_lift: number;
   /** Bodywork drag coefficient × area (m²) */
   drag: number;
+  /**
+   * Height of the total drag's line of action above the CG, body frame (m). Wings, wheels and body each drag at their
+   * own height, so the sum pitches the car (nose up when it acts above the CG). Absent: through the CG, no pitch moment.
+   * Set it for wing-element aero; a ride-height map whose balance is an axle split already carries the drag's moment
+   */
+  dragCentreY?: number;
   wings: WingData[];
   /** `AeroSettingsUnits.front_target_height` / `rear_target_height`: static floor heights (m) */
   front_target_height: number;
@@ -511,8 +557,13 @@ export interface TyresModelData {
   /** Carcass relaxation lengths (m) */
   relaxationLengthX: number;
   relaxationLengthY: number;
-  /** Rolling-resistance coefficient */
+  /** Rolling-resistance coefficient at walking speed */
   rollingResistance: number;
+  /**
+   * Its growth with speed, per (m/s)²: f = rollingResistance + rollingResistanceSpeedSq·v², the standard tyre form (the
+   * carcass's hysteresis work per second rises with the deflection rate). Absent: 0, no speed term
+   */
+  rollingResistanceSpeedSq?: number;
   /** Radial damping (Ns/m) */
   verticalDamping: number;
   /** Pneumatic trail at zero slip (m) */
@@ -724,8 +775,23 @@ const REF_WHEEL_TORQUE: [number, number][] = [
   [13050, 125.964],
 ];
 
-/** Turbo boost on the curve: MAX_BOOST 1.12 (torque × 2.12), reached at REFERENCE_RPM 3700 with GAMMA 1.5 [ref_engine.ini] */
-const refBoost = (rpm: number) => Math.min(1.12, 1.12 * (rpm / 3700) ** 1.5);
+/**
+ * Turbo boost on the curve: MAX_BOOST 1.12 (torque × 2.12), reached at REFERENCE_RPM 3700 with GAMMA 1.5 [ref_engine.ini].
+ * One large turbo and no MGU-H, so only the exhaust spins it: a race-size rotor (≈ 2e-4 kg·m² at ≈ 12 000 rad/s, ≈ 15 kJ)
+ * on ≈ 50–70 kW of turbine surplus at 10 000 rpm full load spools in ≈ 0.25 s, slower as the exhaust thins with rpm;
+ * with the throttle shut it runs down over ≈ 1.5 s against the compressor's recirculation work [est]. The MGU-K fills
+ * the torque the lag costs (VehiclePhysics.solveDrivetrain). The gauge reads 2.5 bar at full boost, as before [display]
+ */
+const F12026_TURBO: TurboData = {
+  maxBoost: 1.12,
+  referenceRpm: 3700,
+  gamma: 1.5,
+  spoolUpS: 0.25,
+  spoolRefRpm: 10_000,
+  spoolDownS: 1.5,
+  displayMaxBoostBar: 2.5,
+};
+const refBoost = (rpm: number) => turboSteadyBoost(F12026_TURBO, rpm);
 
 /**
  * ICE crank power (kW): ≈389 kW at 9570 rpm, ≈361 kW of it at the wheels [derived]. The 0 rpm row is left out: as
@@ -751,6 +817,11 @@ const F12026_ENGINE: EngineData = {
     [0, 0],
     [1, 1],
   ],
+  // Drive-by-wire barrels at the trumpets: actuator ≈ 20 ms and a small plenum, so ≈ 30 ms opening; with the crank
+  // revolution that is 90 % of a torque step in ≈ 85 ms at 9000 rpm. Closing 20 ms: the overrun fuel cut takes the torque
+  // off before the plenum empties [est]
+  torqueResponseS: { rise: 0.03, fall: 0.02 },
+  turbo: F12026_TURBO,
   // MINIMUM / INERTIA [ref_engine.ini]
   idleRpm: 3700,
   inertia: 0.0729,
@@ -941,6 +1012,10 @@ const F12026_DIFFERENTIAL: DifferentialData = {
     power_ramp_deg: 45,
     coast_ramp_deg: 45,
   },
+  // Titanium tube ≈ 40 / 30 mm × 0.45 m between the CV joints (G 44 GPa): GJ/L ≈ 17 kNm/rad, ≈ 13 kNm/rad with the two
+  // joints in series, ≈ 11° of twist at the ≈ 2.5 kNm a rear tyre takes at low speed; shuffle 5.8 Hz in 1st, 20 Hz in 8th.
+  // Damping: 10 % of critical for a wheel on its own shaft (√(k/I_w) ≈ 13 Hz; CV-joint and bearing friction) [est]
+  halfshaft: { stiffnessNmPerRad: 13_000, dampingNmsPerRad: 33 },
   coastBraking: 2 / 11,
   threePhase: true,
   diffEntryLevel: 3,
@@ -1048,6 +1123,11 @@ const F12026_AERO: AeroData = {
   front_lift: 0,
   rear_lift: 0,
   drag: 0,
+  // No dragCentreY: the map's drag stays through the CG. Its balance table is a front/rear axle split, the way tunnel
+  // and CFD balances are quoted, and an axle split already holds the drag's pitching moment (the drag acts ≈ 0.45 m up,
+  // 0.18 m above the CG, which unloads the front by ≈ 1.1 points of the downforce at any speed); the source map applies
+  // its drag at the reference point, and this table (with its −1.5 pt) is tuned that way. Raising the drag here would
+  // count that moment twice
   wings: [
     {
       // Offset vs the 30° reference angle, set at 25° [ref_aero.ini WING_0, CL_FW_AOA.lut / CD_FW_AOA.lut]
@@ -1257,6 +1337,9 @@ function f1Compound(
       relaxationLengthX: 0.1025,
       relaxationLengthY: 0.1025,
       rollingResistance: 0.012,
+      // Speed term in the proportion of a radial tyre's, f = 0.0136 + 0.40e-7·V² (V km/h; Wong, Theory of Ground
+      // Vehicles): 3.8e-5 of the static value per (m/s)², so +26 % at 300 km/h [derived]
+      rollingResistanceSpeedSq: 4.6e-7,
       verticalDamping: 396,
       pneumaticTrail: 0.035,
       brakeDxMod: 0.05,

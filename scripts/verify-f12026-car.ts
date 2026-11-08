@@ -891,11 +891,12 @@ console.log('\n== F12026CarSim (simulator adapter)');
   // At full pace (this car's own limit) it still keeps the car on the asphalt, in every assist preset
   for (const preset of ['assisted', 'pro'] as const) {
     /**
-     * How far the CG may stand past the asphalt's edge (m): a graze of the line, far inside the track limits. 0.05 until
-     * the F1 got its steering compliance and the road its texture: the autopilot's pace tuning predates both and now
-     * grazes one corner exit (s ≈ 3995 m) by ≈ 9 cm, still a metre inside the track limits
+     * How far the CG may stand past the asphalt's edge (m): a graze of the line, far inside the track limits. 0.15 m (was
+     * 0.05): the F1's steering compliance, the road texture and the wheels' gyroscopic roll couple (≈ 10 % more load
+     * transfer at speed) each move the full-pace line out of the fast s ≈ 4000 corner, where it had 1 cm to spare; the
+     * autopilot's targets are the circuit's speed profile, not this car's, so it runs ≈ 0.1 m wider there
      */
-    const AUTOPILOT_EDGE_TOLERANCE_M = 0.1;
+    const AUTOPILOT_EDGE_TOLERANCE_M = 0.15;
     const fast = new F12026CarSim(track, trackRoot);
     fast.assistPreset = preset;
     fast.resetToStartGrid(true);

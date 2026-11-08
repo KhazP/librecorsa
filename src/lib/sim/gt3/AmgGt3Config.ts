@@ -71,6 +71,9 @@ const ENGINE = {
     [0, 0],
     [1, 1],
   ] as LutPoints,
+  // Drive-by-wire actuator and intake filling ≈ 30 ms opening (90 % of a torque step in ≈ 85 ms at 6000 rpm with the
+  // crank revolution), 20 ms closing with the overrun fuel cut [est]
+  torqueResponseS: { rise: 0.03, fall: 0.02 },
   idleRpm: 2100,
   // Engine 0.130 + gearbox 0.018 [spec]
   inertia: 0.148,
@@ -256,6 +259,9 @@ const AERO: AeroData = {
   front_lift: 0,
   rear_lift: 0,
   drag: 0.35 * WING_AREA,
+  // A closed car's drag acts near the centroid of its frontal area (≈ 0.55 m up a 1.2 m tall body), raised a little by
+  // the rear wing at ≈ 1.15 m: ≈ 0.6 m off the ground, 0.2 m above the 0.40 m CG [est]
+  dragCentreY: 0.2,
   wings: [
     {
       name: 'FRONT_WING',
@@ -475,6 +481,9 @@ function gt3Compound(
       relaxationLengthX: 0.09883,
       relaxationLengthY: 0.09883,
       rollingResistance: 0.012,
+      // Speed term in the proportion of a radial tyre's (Wong, Theory of Ground Vehicles: 0.0136 + 0.40e-7·V², V km/h):
+      // +26 % at 300 km/h [derived]
+      rollingResistanceSpeedSq: 4.6e-7,
       verticalDamping: 500,
       pneumaticTrail: 0.04,
       // +3 % longitudinal grip under braking. It was +9 %, which stood in for the front downforce the splitter stall used to
@@ -681,6 +690,9 @@ export const AMG_GT3_CONFIG = {
   differential: {
     type: 'LSD_Ramp',
     settings: { power: 0.31, coast: 0.8, preload: 50, friction_faces: 1, power_ramp_deg: 45, coast_ramp_deg: 45 },
+    // Solid steel Ø 32 mm × 0.55 m from the rear transaxle (G 80 GPa): GJ/L ≈ 15 kNm/rad, ≈ 11 kNm/rad with the CV joints;
+    // shuffle 7.2 Hz in 1st, 19 Hz in 6th. Damping 10 % of critical for a wheel on its own shaft [est]
+    halfshaft: { stiffnessNmPerRad: 11_000, dampingNmsPerRad: 29 },
   },
   // Iron discs: steel pad μ(T) curve and heat capacities
   // MAX_TORQUE 4750 / FRONT_SHARE 0.71, ADJUST_STEP 0.5 %
