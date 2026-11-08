@@ -8,6 +8,10 @@ import {
   clearKey,
   DEFAULT_KEY_BINDINGS,
   DEFAULT_PAD_BUTTONS,
+  matchPadLayout,
+  PAD_ACTIONS,
+  PAD_LAYOUT_IDS,
+  PAD_LAYOUTS,
   rebindKey,
   rebindPadButton,
 } from '../src/lib/input/bindings';
@@ -112,6 +116,34 @@ check('a pad button moves between actions', () => {
   const next = rebindPadButton(DEFAULT_PAD_BUTTONS, 'racingLine', 0); // A was boost
   assert.equal(next.racingLine, 0);
   assert.equal(next.boost, null);
+});
+check('controller layouts: every action set, no shared button, triggers / D-pad / thumb-restart left alone', () => {
+  assert.equal(PAD_LAYOUTS.default.buttons, DEFAULT_PAD_BUTTONS);
+  for (const id of PAD_LAYOUT_IDS) {
+    const b = PAD_LAYOUTS[id].buttons;
+    const used: number[] = [];
+    for (const { id: action } of PAD_ACTIONS) {
+      assert.notEqual(b[action], undefined, `${id}.${action} unset`);
+      if (b[action] !== null) used.push(b[action] as number);
+    }
+    assert.equal(new Set(used).size, used.length, `${id}: a button does two things`);
+    for (const button of used) assert.ok(button <= 11 && button !== 6 && button !== 7, `${id}: button ${button} is fixed`);
+    assert.equal(b.pause, 9, `${id}: pause off Menu`);
+    assert.equal(b.restart, 8, `${id}: restart off View`);
+  }
+  // What each layout takes from its game
+  assert.deepEqual([PAD_LAYOUTS.gt.buttons.shiftUp, PAD_LAYOUTS.gt.buttons.shiftDown, PAD_LAYOUTS.gt.buttons.boost], [0, 2, 11]);
+  assert.deepEqual([PAD_LAYOUTS.f1.buttons.boost, PAD_LAYOUTS.f1.buttons.aero, PAD_LAYOUTS.f1.buttons.camera], [1, 3, 5]);
+  assert.deepEqual([PAD_LAYOUTS.forza.buttons.shiftUp, PAD_LAYOUTS.forza.buttons.shiftDown, PAD_LAYOUTS.forza.buttons.camera], [1, 2, 5]);
+});
+check('the picked layout is read back from the bindings, through a save, and lost on a rebind', () => {
+  for (const id of PAD_LAYOUT_IDS) {
+    const buttons = { ...PAD_LAYOUTS[id].buttons };
+    assert.equal(matchPadLayout(buttons), id);
+    const saved = parsePlayerSettings(JSON.parse(JSON.stringify({ ...DEFAULT_PLAYER_SETTINGS, padButtons: buttons })));
+    assert.equal(matchPadLayout(saved.padButtons), id, `${id} after a reload`);
+    assert.equal(matchPadLayout(rebindPadButton(buttons, 'racingLine', 4)), null, `${id} rebound`);
+  }
 });
 
 console.log('Wheel and pedals');
