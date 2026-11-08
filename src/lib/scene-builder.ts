@@ -192,7 +192,10 @@ function loadTrackGlb(
   // Circuit scans are meshopt-compressed (scripts/compress-track-glb.mjs)
   new GLTFLoader()
     .setMeshoptDecoder(MeshoptDecoder)
-    .loadAsync(withBasePath(url), (event) => assetProgress.progress("track", event))
+    // A superseded download keeps running: its bytes must not move the newer load's progress bar
+    .loadAsync(withBasePath(url), (event) => {
+      if (current()) assetProgress.progress("track", event);
+    })
     .then((gltf) => {
       const root = gltf.scene;
       root.name = "Rwanda2026Track";

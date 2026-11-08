@@ -208,6 +208,10 @@ let activateGen = 0;
 /**
  * Fetches (when needed) and activates a circuit; resolves once `setActiveTrack` has run. A call overtaken by a later
  * one rejects instead of activating: the active track is global, and a slow fetch must not replace a newer choice.
+ * That holds even when the later call fails: TrackGate keeps only its latest pick's result too, so an older pick
+ * landing afterwards would leave the global out of step with the circuit on screen. A failed call never changes the
+ * active track (`setActiveTrack` reads all of the data before it switches anything), so after one, the active track
+ * is still the last one activated (`ACTIVE_TRACK_ID`): the circuit to fall back to.
  */
 export async function activateTrack(id: string): Promise<TrackInfo> {
   if (!TRACKS.some((t) => t.id === id)) throw new Error(`Unknown circuit "${id}"`);
