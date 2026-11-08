@@ -192,6 +192,11 @@ export interface VehicleInputs {
   /** Pedals 0..1 */
   throttle: number;
   brake: number;
+  /**
+   * Share of the drive torque the ECU lets through by cutting spark and fuel, and the MGU-K's with it (0..1: traction
+   * control). Acts at once, unlike the pedal, whose torque waits on the air path. Omitted = 1
+   */
+  ignitionCut?: number;
   /** Per-wheel brake pressure share 0..1 (LF, RF, LR, RR) after a per-wheel ABS; omitted = 1 */
   brakeWheelScale?: readonly [number, number, number, number];
   /** Steering −1..1, + = right */
@@ -818,6 +823,8 @@ export class VehiclePhysics {
   private sinceDownshiftS = Infinity;
   private limiterTimer = 0;
   private clutchEngagement = 1;
+  /** Throttle plate the cylinders see, after the air path's lag (`EngineData.torqueResponseS`) */
+  private icePlate = 0;
   private lsdLockTorque = 0;
   /**
    * Rear halfshaft twist (rad, + = the diff side ahead of the hub): the mean of the two (it carries the drive torque) and
@@ -1337,6 +1344,7 @@ export class VehiclePhysics {
       if (!w.bandLoadShares.every(Number.isFinite)) w.bandLoadShares = [1 / 3, 1 / 3, 1 / 3];
     }
     this.clutchEngagement = 1;
+    this.icePlate = 0;
     this.lsdLockTorque = 0;
     this.shaftTwistMeanRad = 0;
     this.shaftTwistHalfDiffRad = 0;
@@ -1585,6 +1593,7 @@ export class VehiclePhysics {
     return {
       throttle: c(fin(i.throttle), 0, 1),
       brake: c(fin(i.brake), 0, 1),
+      ignitionCut: i.ignitionCut === undefined ? undefined : c(fin(i.ignitionCut), 0, 1),
       steer: c(fin(i.steer), -1, 1),
       brakeWheelScale: i.brakeWheelScale
         ? [c(fin(i.brakeWheelScale[0]), 0, 1), c(fin(i.brakeWheelScale[1]), 0, 1), c(fin(i.brakeWheelScale[2]), 0, 1), c(fin(i.brakeWheelScale[3]), 0, 1)]
@@ -2323,10 +2332,21 @@ export class VehiclePhysics {
     const baseExp = (mapIdx >= 3 ? 1 + (mapIdx - 2) * 0.12 : 1) + lowGearWetExp;
     const rawThrottle = baseExp > 1 ? Math.pow(inp.throttle, baseExp) : inp.throttle;
     let plate = this.luts.throttle.evaluate(rawThrottle);
-    plate = Math.max(plate, THREE.MathUtils.clamp((eng.idleRpm + 200 - rpm) / 800, 0, 0.15));
+    // Air path: the plate the cylinders see trails the pedal's (actuator, plenum), plus one crank revolution from the
+    // intake stroke to the power stroke. The idle controller (spark advance), the limiter and the spark cut below act on
+    // the combustion at once
+    const resp = eng.torqueResponseS;
+    if (resp) {
+      const tau = (plate > this.icePlate ? resp.rise : resp.fall) + 60 / Math.max(rpm, eng.idleRpm);
+      this.icePlate += (plate - this.icePlate) * Math.min(1, h / tau);
+    } else {
+      this.icePlate = plate;
+    }
+    plate = Math.max(this.icePlate, THREE.MathUtils.clamp((eng.idleRpm + 200 - rpm) / 800, 0, 0.15));
     if (this.limiterTimer > 0) plate = 0;
+    const sparkShare = inp.ignitionCut ?? 1;
     let tIce =
-      (plate * this.luts.power.evaluate(rpm) * engineMapTorqueScale * 1000) / omegaE -
+      (plate * sparkShare * this.luts.power.evaluate(rpm) * engineMapTorqueScale * 1000) / omegaE -
       (1 - plate) * this.luts.coast.evaluate(rpm) * mode.coastTorqueScale * this.engineBrakingScale;
     if (this.shiftTimer > 0 && tIce > 0) tIce *= gb.shiftTorqueFraction;
     if (tIce > 0) tIce *= this.damagePowerMult;
@@ -2393,7 +2413,7 @@ export class VehiclePhysics {
     const bias = this.dynamicBrakeBias;
 
     let tK = 0;
-    if (pK > 0) tK = Math.min(pK / omegaE, this.luts.mgukDeploy.evaluate(rpm));
+    if (pK > 0) tK = Math.min(pK / omegaE, this.luts.mgukDeploy.evaluate(rpm)) * sparkShare;
     else if (pK < 0) {
       let cap = this.luts.mgukHarvest.evaluate(rpm);
       // On the pedal the brake-by-wire never lets the drivetrain brake the rear axle past its share of the demand:

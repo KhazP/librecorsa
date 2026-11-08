@@ -96,6 +96,12 @@ export interface EngineData {
   coastCurve: LutPoints;
   /** Pedal → throttle-plate map (0..1 → 0..1) */
   throttleResponseCurve: LutPoints;
+  /**
+   * First-order lag of the ICE's air path behind the throttle (s), opening and closing: drive-by-wire actuator, manifold
+   * filling and the ECU's torque ramp. One crank revolution, the intake-to-power-stroke delay of a four-stroke, is added
+   * at run time. Absent: the torque follows the pedal at once
+   */
+  torqueResponseS?: { rise: number; fall: number };
   idleRpm: number;
   /** Crank + flywheel + MGU-K/H rotor inertia reflected to the crank (kg·m²) */
   inertia: number;
@@ -734,6 +740,10 @@ const F12026_ENGINE: EngineData = {
     [0, 0],
     [1, 1],
   ],
+  // Drive-by-wire barrels at the trumpets: actuator ≈ 20 ms and a small plenum, so ≈ 30 ms opening; with the crank
+  // revolution that is 90 % of a torque step in ≈ 85 ms at 9000 rpm. Closing 20 ms: the overrun fuel cut takes the torque
+  // off before the plenum empties [est]
+  torqueResponseS: { rise: 0.03, fall: 0.02 },
   // MINIMUM / INERTIA [ref_engine.ini]
   idleRpm: 3700,
   inertia: 0.0729,

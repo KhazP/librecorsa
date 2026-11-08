@@ -71,6 +71,9 @@ const ENGINE = {
     [0, 0],
     [1, 1],
   ] as LutPoints,
+  // Drive-by-wire actuator and intake filling ≈ 30 ms opening (90 % of a torque step in ≈ 85 ms at 6000 rpm with the
+  // crank revolution), 20 ms closing with the overrun fuel cut [est]
+  torqueResponseS: { rise: 0.03, fall: 0.02 },
   idleRpm: 2100,
   // Engine 0.130 + gearbox 0.018 [spec]
   inertia: 0.148,

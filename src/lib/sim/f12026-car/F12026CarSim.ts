@@ -1417,10 +1417,11 @@ export class F12026CarSim implements SimulatorCar {
     this.drsPressPending = false;
     this.vehicle.autoShift = this.autoGearbox || this.aiAutopilot;
     for (let k = 0; k < slices; k++) {
-      const cmd: { throttle: number; brake: number; brakeWheelScale?: readonly [number, number, number, number]; steer: number; drs: boolean } =
+      const cmd: { throttle: number; ignitionCut: number; brake: number; brakeWheelScale?: readonly [number, number, number, number]; steer: number; drs: boolean } =
         this.aiAutopilot ? this.autopilot(h) : this.driverCommand(inputs, h);
       const vin: VehicleInputs = {
         throttle: cmd.throttle,
+        ignitionCut: cmd.ignitionCut,
         brake: cmd.brake,
         brakeWheelScale: cmd.brakeWheelScale,
         steer: cmd.steer,
@@ -1471,7 +1472,7 @@ export class F12026CarSim implements SimulatorCar {
   private driverCommand(
     inputs: ControlInputs,
     h: number
-  ): { throttle: number; brake: number; brakeWheelScale?: readonly [number, number, number, number]; steer: number; drs: boolean } {
+  ): { throttle: number; ignitionCut: number; brake: number; brakeWheelScale?: readonly [number, number, number, number]; steer: number; drs: boolean } {
     const want = THREE.MathUtils.clamp(this.steeringAssist.steer(inputs, this.gamepadAssistEnabled, this.steeringAssistState, h), -1, 1);
     // The rack turns no faster than hands turn a wheel (900°/s at the rim, as the VF26's): a stick flick or a phone tilt
     // otherwise reached the tyres as an instant step, which snaps a car at speed
@@ -1519,20 +1520,24 @@ export class F12026CarSim implements SimulatorCar {
     };
   };
 
-  /** 130 Hz TC1/TC2 + 240 Hz 4-Ch ABS on the pedals, at the given dial positions (the driver's, or the autopilot's) */
+  /**
+   * 130 Hz TC1/TC2 + 240 Hz 4-Ch ABS on the pedals, at the given dial positions (the driver's, or the autopilot's). The
+   * TC cuts spark and fuel (`ignitionCut`), which takes torque off at once; the pedal itself passes through
+   */
   private electronicAids(
     throttleIn: number,
     brake: number,
     h: number,
     dials: AidDials
-  ): { throttle: number; brake: number; brakeWheelScale: readonly [number, number, number, number] } {
+  ): { throttle: number; ignitionCut: number; brake: number; brakeWheelScale: readonly [number, number, number, number] } {
     const v = this.vehicle;
     const W = v.wheels;
     const speed = v.speedMs;
     const elec = this.profile.electronics ?? F12026_ELECTRONICS;
 
     // 130 Hz 2-Stage Traction Control (TC1 slip target + Lateral-G compensation + TC2 spark/cylinder cut)
-    let throttle = throttleIn;
+    const throttle = throttleIn;
+    let ignitionCut = 1;
     const tcLv = THREE.MathUtils.clamp(Math.round(dials.tcLevel), 0, 12);
     const tcBaseTarget = tcLv > 0 ? elec.tcLevels[THREE.MathUtils.clamp(12 - tcLv, 0, elec.tcLevels.length - 1)] : 0;
     const tcMinSpeedMs = elec.tcMinSpeedKmh / 3.6;
@@ -1562,7 +1567,7 @@ export class F12026CarSim implements SimulatorCar {
       const want = eTc > 0 ? Math.max(minThrottleShare, 1 - stageACut - stageBCut) : 1;
       const tcRate = elec.tcRateHz;
       this.tcCut += (want - this.tcCut) * Math.min(1, (want < this.tcCut ? tcRate : tcRate * 0.24) * h);
-      throttle *= this.tcCut;
+      ignitionCut = this.tcCut;
     } else {
       this.tcCut = 1;
     }
@@ -1594,7 +1599,7 @@ export class F12026CarSim implements SimulatorCar {
       cut.fill(1);
     }
     for (let i = 0; i < 4; i++) this.prevWheelOmega[i] = W[i].omega;
-    return { throttle, brake, brakeWheelScale: cut };
+    return { throttle, ignitionCut, brake, brakeWheelScale: cut };
   }
 
   /**
@@ -1605,6 +1610,7 @@ export class F12026CarSim implements SimulatorCar {
    */
   private autopilot(h: number): {
     throttle: number;
+    ignitionCut: number;
     brake: number;
     brakeWheelScale: readonly [number, number, number, number];
     steer: number;
