@@ -4,7 +4,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import * as THREE from "three";
 import { getActiveTrackData, LIVERIES } from "@/lib/track-data";
 import { F1Physics2026, type ControlInputs } from "@/lib/f1-physics-2026";
-import { F12026CarSim } from "@/lib/sim/f12026-car/F12026CarSim";
 import { trackColliders } from "@/lib/sim/track-colliders";
 import type { SimulatorCar } from "@/lib/sim/simulator-car";
 import type { WheelSeating } from "@/lib/render/corner-rig";
@@ -16,12 +15,10 @@ import { FfbPairPrompt } from "@/components/hud/FfbPairPrompt";
 import { GT3_DASH_MESH, GT3_WING_MIRROR_MATERIAL, Gt3DashDisplay } from "@/lib/render/gt3-dash-display";
 import { createPortedCarRig } from "@/lib/ported-car-model";
 import { staticFloorOf } from "@/lib/render/body-floor";
-import { createAmgGt3Sim } from "@/lib/sim/gt3/AmgGt3Sim";
-import { AMG_GT3_CONFIG } from "@/lib/sim/gt3/AmgGt3Config";
-import { F12026_CAR_CONFIG } from "@/lib/sim/f12026-car/F12026CarConfig";
+import { isVehicleModelId, vehicleModelSpec, vehicleModelsFor } from "@/lib/cars/vehicle-models";
 import type { CarSoundSource } from "@/lib/sim/CarAudio";
 import { OpponentAudio } from "@/lib/sim/opponent-audio";
-import { CARS, carById, carForVehicle, isCarId, type CarId } from "@/lib/cars/car-registry";
+import { carById, carForVehicle, isCarId, type CarId } from "@/lib/cars/car-registry";
 import { overtakingRulesForSeason } from "@/lib/sim/overtaking-rules";
 import { alignGhostToTrack, trackGeometryKey } from "@/lib/sim/ghost-align";
 import { carPhysics, carTakesPhysicsSwitch, subscribeF1ModPhysics } from "@/lib/cars/f1-mod-physics";
@@ -46,7 +43,6 @@ import type { WakeEmitterCar } from "@/lib/sim/aero-wake";
 import { GamepadHaptics } from "@/lib/sim/gamepad-haptics";
 import {
   getMultiplayerManager,
-  type CarClassRule,
   type InterpolatedPeerState,
   type LobbySettings,
   type LobbyState,
@@ -175,12 +171,8 @@ const HELD_KEY_ACTIONS: ReadonlySet<KeyAction> = new Set(["throttle", "brake", "
 
 /** Telemetry-out rate (Hz) */
 const TELEMETRY_OUT_HZ = 60;
-/** Rev limit for the telemetry-out packet's rpm bar */
-const MAX_RPM: Record<VehicleModelId, number> = { vf26: 15000, "f12026-car": 15000, "amg-gt3": 8250 };
-/** Rev limiter of each car (rpm): the shift beep sounds 150 rpm short of it */
-const LIMITER_RPM: Record<VehicleModelId, number> = { vf26: 12500, "f12026-car": 13050, "amg-gt3": 7900 };
 /** A lap record's car: records are per vehicle model, named after its first car */
-const vehicleLabel = (id: string) => CARS.find((c) => c.physics === id)?.title ?? id;
+const vehicleLabel = (id: string) => (isVehicleModelId(id) ? carForVehicle(id).title : id);
 
 /** A race the host started before this circuit was loaded (or on another one): picked up once the scene has loaded */
 let pendingRaceStart: RaceStartInfo | null = null;
@@ -834,11 +826,6 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     getMultiplayerManager().startRace();
   }, []);
   const handleAbortMpRace = useCallback(() => getMultiplayerManager().abortRace(), []);
-  const vehiclesForClass = useCallback(
-    (rule: CarClassRule): string[] =>
-      rule === "f1" ? ["vf26", "f12026-car"] : rule === "gt3" ? ["amg-gt3"] : ["vf26", "f12026-car", "amg-gt3"],
-    []
-  );
 
   /** Esc / pad Menu: open or close the pause menu, releasing every held key */
   const togglePause = useCallback(() => {
@@ -962,7 +949,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       startSession({ kind: "mp", race });
       // The class may rule out the current car: take the first allowed one (after the session reset, so the swap
       // finds no replay or AI field to carry over)
-      const allowed = vehiclesForClass(start.carClass) as VehicleModelId[];
+      const allowed = vehicleModelsFor(start.carClass);
       if (!allowed.includes(vehicleModelRef.current)) changeCar(carForVehicle(allowed[0]).id);
       getTrackEnv().reset();
       const physics = physicsRef.current;
@@ -971,7 +958,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         race.lapClock.reset(physics.sMeters);
       }
     },
-    [track, getTrackEnv, vehiclesForClass, changeCar, startSession]
+    [track, getTrackEnv, changeCar, startSession]
   );
   const startMpRaceRef = useRef(startMpRace);
   startMpRaceRef.current = startMpRace;
@@ -1298,15 +1285,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
      * (defaults for the first car) and that car's saved tyre setup
      */
     const createCar = (vehicle: VehicleModelId, prev: SimulatorCar | null, carId: CarId = carIdRef.current): SimulatorCar => {
-      let car: SimulatorCar;
-      if (vehicle === "amg-gt3") {
-        car = createAmgGt3Sim(track, trackRoot);
-      } else if (vehicle === "f12026-car") {
-        car = new F12026CarSim(track, trackRoot);
-      } else {
-        car = new F1Physics2026(track);
-        if (trackRoot) car.attachTrackRoot?.(trackRoot);
-      }
+      const car = vehicleModelSpec(vehicle).createSim(track, trackRoot);
       // The overtaking aids of the car's season, and race control for them while a race is on (free in practice)
       const season = carById(carId).season;
       if (season !== undefined) car.setOvertakingRules?.(overtakingRulesForSeason(season));
@@ -1466,20 +1445,23 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     /**
      * The 3D car: a ported car's own GLB on the generic rig, else the vehicle model's own car
      */
-    const isGt3Rig = (car: CarId) => carById(car).physics === "amg-gt3";
+    // The body follows the car's registry model, not `carPhysics`: a ported F1 car switched to the VF26 physics
+    // keeps the geometry it was fitted to
+    const rigModel = (car: CarId) => vehicleModelSpec(carById(car).physics);
     const createCarRig = (car: CarId): SimCarRig => {
       const def = carById(car);
+      const model = rigModel(car);
       const rig = def.modelUrl
         ? createPortedCarRig({
             url: def.modelUrl,
-            chassis: (def.physics === "amg-gt3" ? AMG_GT3_CONFIG : F12026_CAR_CONFIG).chassis,
+            chassis: model.rigConfig.chassis,
             // the rim on screen turns with the player's own (its lock is the player's when they set one)
             steerLockDeg: carWheelLockDeg(def.physics, settingsRef.current.wheel.steerLockPerCar) / 2,
-            floor: staticFloorOf(def.physics === "amg-gt3" ? AMG_GT3_CONFIG : F12026_CAR_CONFIG),
+            floor: staticFloorOf(model.rigConfig),
             // every GT3 uses the AMG GT3's onboard and chase views, framed on its own steering wheel and front axle
-            cameraAnchors: def.physics === "amg-gt3" ? gt3RigCameraAnchors : undefined,
+            cameraAnchors: model.gt3Cockpit ? gt3RigCameraAnchors : undefined,
           })
-        : isGt3Rig(car)
+        : model.gt3Cockpit
           ? createGt3CarRig()
           : createF1Car2026(liveryRef.current, physics.tireCompound);
       rig.setLivery(liveryRef.current);
@@ -2350,7 +2332,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
           buildTelemetryPacket(physics.telemetry, {
             car: vehicleModelRef.current,
             track: trackId,
-            maxRpm: MAX_RPM[vehicleModelRef.current],
+            maxRpm: vehicleModelSpec(vehicleModelRef.current).telemetryMaxRpm,
             yawRateRadS: physics.yawRateRadS,
             pitchRad: physics.pitchRad,
             rollRad: physics.rollRad,
@@ -2617,7 +2599,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         if (steerBase) wheelDisplay = new SteeringWheelDisplay(steerBase);
         wingMirrors = new WingMirrors(renderer, scene, vf26Body);
       }
-      if (!vf26Body && !gt3Dash && isGt3Rig(carRigCar) && cockpitProbeFrame++ % 30 === 0) {
+      if (!vf26Body && !gt3Dash && rigModel(carRigCar).gt3Cockpit && cockpitProbeFrame++ % 30 === 0) {
         const anchors = carRig.getCameraAnchors();
         if (anchors && carRig.chassisGroup.getObjectByName(GT3_DASH_MESH)) {
           gt3Dash = new Gt3DashDisplay(carRig.chassisGroup);
@@ -2671,7 +2653,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       // Titanium Floor Sparks
       if (
         driving &&
-        !isGt3Rig(carRigCar) &&
+        rigModel(carRigCar).floorSparks &&
         ((physics.telemetry.speedKmh > 280 &&
           (physics.telemetry.verticalG ?? 1.0) > 1.15) ||
           physics.telemetry.onKerbLeft ||
@@ -3037,7 +3019,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         }
         cueDrsAvail = drsAvail;
         cueDrsOpen = drsOpen;
-        const limiter = LIMITER_RPM[vehicleModelRef.current];
+        const limiter = vehicleModelSpec(vehicleModelRef.current).limiterRpm;
         if (tc.gear !== cueGear || tc.rpm < limiter - 600) {
           cueGear = tc.gear;
           cueShiftArmed = true;
@@ -3493,7 +3475,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     currentTrackId: trackId,
     currentVehicle: vehicleModel,
     vehicleLabel,
-    vehiclesForClass,
+    vehiclesForClass: vehicleModelsFor,
     raceRunning: mpRaceRunning,
     onHostLocal: handleHostLocal,
     onSetLobbySettings: handleSetLobbySettings,

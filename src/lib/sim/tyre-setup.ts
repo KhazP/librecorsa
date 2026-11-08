@@ -4,9 +4,7 @@
  */
 
 import type { TyreSetup, VehicleModelId, WheelPressures } from "@/types/f1";
-import { F12026_SIM_PROFILE } from "./f12026-car/F12026CarSim";
-import { AMG_GT3_SIM_PROFILE } from "./gt3/AmgGt3Sim";
-import { VF26_TYRE_SETUP_RANGES } from "./vf26-data";
+import { VEHICLE_MODELS, type TyreSetupRanges } from "@/lib/cars/vehicle-models";
 import { wheelPressuresOf } from "./car-setup";
 
 interface SliderLimits {
@@ -20,12 +18,6 @@ export interface TyreSetupLimits {
   camberRearDeg: SliderLimits;
 }
 
-interface TyreSetupRanges {
-  coldPsiRange: readonly [number, number];
-  frontCamberRange: readonly [number, number];
-  rearCamberRange: readonly [number, number];
-}
-
 const limitsOf = (r: TyreSetupRanges): TyreSetupLimits => ({
   pressurePsi: { min: r.coldPsiRange[0], max: r.coldPsiRange[1], step: 0.5 },
   camberFrontDeg: { min: r.frontCamberRange[0], max: r.frontCamberRange[1], step: 0.1 },
@@ -34,9 +26,9 @@ const limitsOf = (r: TyreSetupRanges): TyreSetupLimits => ({
 
 /** Slider ranges for the tyre setup per vehicle model, also used to check a saved setup */
 export const TYRE_SETUP_LIMITS: Record<VehicleModelId, TyreSetupLimits> = {
-  vf26: limitsOf(VF26_TYRE_SETUP_RANGES),
-  "f12026-car": limitsOf(F12026_SIM_PROFILE),
-  "amg-gt3": limitsOf(AMG_GT3_SIM_PROFILE),
+  vf26: limitsOf(VEHICLE_MODELS.vf26.tyreSetupRanges),
+  "f12026-car": limitsOf(VEHICLE_MODELS["f12026-car"].tyreSetupRanges),
+  "amg-gt3": limitsOf(VEHICLE_MODELS["amg-gt3"].tyreSetupRanges),
 };
 
 /** Tyre setups are saved per vehicle model (the VF26 keeps the original key) */
