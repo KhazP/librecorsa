@@ -10,10 +10,12 @@ phase 5's first tuner run done (defaults kept). Approved decisions: §8.
 | D8 tooling | `scripts/ai/line-report.ts` (per corner, vs OpenF1 and `fast_lane.ai`), `measure-ggv.ts`, `check-lines.ts` | OpenF1 fit at Spielberg 3.2 m rms |
 | D2 AI grid | `src/lib/sim/ai/ai-track.ts` | 2 m spacing, 3D (slope, crests, banking) |
 | g-g-v | `src/lib/sim/ai/ggv.ts`, measured per car on its own physics | compression grip per car (VF26 0.15: its floor stalls), steering-lock curvature |
-| D1 tracker | pure pursuit + integral on the plan, in the f12026-car / GT3 autopilot; the VF26's driver takes the plan as its profile | physics lap within ~0.1 s of plan on most circuits (f12026-car, GT3); VF26 2–6 % under plan |
+| D1 tracker | pure pursuit + integral on the plan, in the f12026-car / GT3 autopilot; the VF26's driver takes the plan as its profile | physics lap within ~0.1 s of plan on most circuits (f12026-car, GT3); VF26 2–6 % under plan, mostly on exits: at Spielberg its plan expects ~10–15 % more acceleration than the car delivers over a lap (ERS / power), so most of the gap is an optimistic plan, not lost pace. Its braking zones still lose 0.1–0.15 s each |
 | D3 lines | lap-time optimised on the car's limits, bounded by its usable road, the steering lock and barrier clearance, accepted only on a clean physics lap | Spielberg F1 75.3 → 70.1 s physics; line 2.3 m from the real 2026 line, corner speeds 6 % low |
 | Line check | `metadata.aiPlans` per car and circuit; the field drives plans only where it passed | 51 of 60 pass (20 circuits × 3 cars). Fails: Monaco and Spielberg inner (all cars), Silverstone and Yas Marina (f12026-car), Daytona road (GT3) |
 | VF26 field on plans | 8-car headless races | Rwanda best 1:33.2 → 1:31.9, Spielberg 1:13.7 → 1:12.3, same or fewer incidents |
+| Grip ceiling | `check-lines.ts --ceiling 1,1.04,1.08`: the highest plan grip each car drives cleanly (2.5 m off the line at most), `aiPlans[car].maxGrip`. Alien plans to one step (0.04) under it | VF26 1.04–1.08 on most circuits, but 0.95 at Spielberg and the Daytona oval. Alien, 6 races: VF26 Okayama −2.1 s, Rwanda −1.8 s; f12026-car Okayama −0.4 s, Spielberg −0.3 s; about one more car spinning per race in the VF26 at Okayama |
+| Starts | per-driver reaction (0.17–0.30 s by skill, now and then a bogged launch); the launch clutch reads the AI's wanted pedal; the f12026-car / GT3 autopilot floors it from rest | AI within 2–7 % of a flat-out launch after its reaction (verify-race-craft) |
 | D4 planner | `src/lib/sim/ai/local-planner.ts`, Frenet quintics, cars ahead as hard obstacles | more passes, more incidents: off by default |
 | D7 tuning | `scripts/ai/tune-racecraft.ts`, cross-entropy over the racecraft knobs | VF26 run done (30 generations, Spielberg + Okayama, 2 seeds). On 10 held-out seeds per track the best candidate scored 2.5 ± 1.5 worse than the defaults, with more spins and contacts; the distribution mean tied (−0.1 ± 1.0). Defaults kept: the search fitted seed noise. A useful next run needs more seeds per candidate. |
 
@@ -26,9 +28,12 @@ phase 5's first tuner run done (defaults kept). Approved decisions: §8.
 - **Pile-ups (fixed):** a car stranded in the gravel drew every car behind it to the road edge and off; and a car
   without the corner eased off too little to tuck in. Six VF26 races at Okayama and Spielberg: wall hits 62 → 0,
   spins 24 → 3, retirements 8 → 0.
-- **Lap-1 contact:** at Okayama turn 1 the VF26 on pole bogs down off the line (its throttle is cut on wheelspin),
-  and the car beside it then moves across onto its line into it. Holding a car's width regardless of the line made
-  things worse (cars pushed each other off), so I reverted it.
+- **Lap-1 contact:** the VF26's bog off the line is fixed (its auto-clutch read the feathered pedal). A turn-1
+  collision at Okayama still happens now and then.
+- **Spielberg for the VF26:** its grip ceiling is 0.95 (2.6 m off the line at 1.0), so Alien gains little there.
+  Next: re-optimise the line at a higher grip, or win back the braking-zone losses.
+- **Start defence and launch in the tuner:** the next overnight run should add them to the score, with at least 6
+  seeds per candidate (2 seeds fitted noise).
 - **Late apex** at Spielberg s ≈ 2624 is 38 m early against the real line.
 - **GT3** has no real reference data.
 
