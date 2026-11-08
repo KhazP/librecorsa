@@ -8,7 +8,7 @@
  */
 import * as THREE from 'three';
 import { F1Physics2026 } from '@/lib/f1-physics-2026';
-import { getActiveTrackMetadata, type BuiltTrackData } from '@/lib/track-data';
+import { getActiveTrackMetadata, type AiPlanCheck, type BuiltTrackData } from '@/lib/track-data';
 import { resolveCarToCarObbCollision, type RigidBodyCollisionCar } from '@/lib/sim/track-evolution';
 import { TrackEnvironment } from '@/lib/sim/track-environment';
 import { aiLineOffsetM, computeSpeedProfile, createVf26ProfileCarModel, withPlanningGrip } from '@/lib/sim/speed-profile';
@@ -193,6 +193,8 @@ function followCapMs(ahead: SimulatorCar, gapM: number, rc: RacecraftParams = DE
  * the corners and on the brakes, not down the straights
  */
 const PLAN_GRIP = 0.97;
+/** Below a circuit's checked grip ceiling, what the fastest level plans to (see refreshPlan) */
+const RACE_GRIP_MARGIN = 0.04;
 
 /**
  * Lights out to the car moving (s) for an AI skill 0..100 and two seeded draws 0..1: a reaction of 0.30 s for a rookie
@@ -737,7 +739,7 @@ export class AiOpponentField {
   private applySkill(): void {
     for (const car of this.cars) {
       if (!car.ai) continue;
-      car.basePace = Math.min(0.999, car.defPace * this.mods.paceMult * this.tuning.params.pace);
+      car.basePace = Math.min(0.999, (1 - (1 - car.defPace) * this.mods.spread) * this.mods.paceMult * this.tuning.params.pace);
       car.pace = car.basePace;
     }
   }
@@ -821,7 +823,13 @@ export class AiOpponentField {
     const weather = this.environment.weatherPaceScale(sim);
     // A damaged car (a broken wing, bent suspension) has less grip to plan with
     const damaged = car.damage.pristine ? 1 : 1 - 0.35 * car.damage.overall;
-    const grip = Math.round(PLAN_GRIP * car.pace * car.pace * weather * weather * damaged * 200) / 200;
+    // The fastest levels plan toward the most grip this car drove cleanly here (the circuit's line check), one step
+    // (0.04) under it: the check is a flying lap alone, and a race adds traffic, dirty air and a pack on lap 1 (at
+    // the full step the VF26 hit Okayama's barriers four times as often)
+    const checked = (getActiveTrackMetadata().aiPlans?.[sim.vehicleId ?? ''] as AiPlanCheck | undefined)?.maxGrip;
+    const ceiling = Math.max(PLAN_GRIP, (checked ?? PLAN_GRIP) - RACE_GRIP_MARGIN);
+    const planGrip = PLAN_GRIP + (ceiling - PLAN_GRIP) * this.mods.gripReach;
+    const grip = Math.round(planGrip * car.pace * car.pace * weather * weather * damaged * 200) / 200;
     if (sim.aiPlan && grip === car.planGrip) return;
     this.aiTrack ??= aiTrackFor(this.track);
     const t = this.aiTrack;
