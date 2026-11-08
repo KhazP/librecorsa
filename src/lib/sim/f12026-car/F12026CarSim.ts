@@ -1511,7 +1511,7 @@ export class F12026CarSim implements SimulatorCar {
       cgToRearAxleM: this.cgToRearAxleM,
       wheelbaseM: this.wheelbaseM,
       maxSteerAngleRad: this.maxSteerAngleRad,
-      frontPeakSlipRad: (this.compoundData.modelData.friction_limit_angle || DEFAULT_FRICTION_LIMIT_ANGLE_DEG) * DEG2RAD,
+      frontPeakSlipRad: this.frontPeakSlipRad(),
       brake,
       maxLateralAccel: this.profile.padLateralMu * wetMuScale * (G + v.telemetry.downforceN / v.totalMassKg),
       slip: this.slipScratch.sample(),
@@ -1664,12 +1664,24 @@ export class F12026CarSim implements SimulatorCar {
     const kYawP = 0.5 + 3 * THREE.MathUtils.clamp((speed - 65) / 30, 0, 1);
     // Never steer the fronts far past their peak slip angle: beyond it they only scrub and the car runs wide
     // (the integrator holds while the governor is on, so it cannot wind up)
-    const peak = (this.compoundData.modelData.friction_limit_angle || DEFAULT_FRICTION_LIMIT_ANGLE_DEG) * DEG2RAD;
+    // Braking takes its share of the fronts' grip (the tyre's friction ellipse), so the harder they brake the less
+    // lateral slip is worth asking of them: the allowance shrinks with the fronts' normalised slip ratio
+    const [fl, fr] = v.wheels;
+    const sxF = (0.5 * (Math.abs(fl.slipRatio) + Math.abs(fr.slipRatio))) / Math.max(0.01, this.compoundData.modelData.slip_ratio_limit);
+    const peak = this.frontPeakSlipRad() * Math.sqrt(Math.max(0.2, 1.15 * 1.15 - sxF * sxF));
     const betaF = Math.atan2(v.velocity.dot(_ex) - this.bodyYawRate() * this.cgToFrontAxleM, Math.max(1, v.velocity.dot(_ez)));
-    // the car's understeer at the lateral acceleration asked for, steered in up front rather than left to the integrator
-    const understeer = (this.profile.understeerRadPerMs2 ?? 0) * speed * speed * kappa;
+    // the car's understeer at the lateral acceleration asked for, steered in up front rather than left to the integrator:
+    // the profile's calibrated gradient, else the front slip the corner needs at the fronts' present cornering stiffness
+    // (it saturates with load, so a car pressed into a compression needs lock the yaw loop could not find in time)
+    const kF = fl.corneringStiffness + fr.corneringStiffness;
+    const understeer =
+      this.profile.understeerRadPerMs2 !== undefined
+        ? this.profile.understeerRadPerMs2 * speed * speed * kappa
+        : kF > 0
+          ? THREE.MathUtils.clamp((v.totalMassKg * speed * speed * kappa * this.cgToRearAxleM) / (v.wheelbaseM * kF), -peak, peak)
+          : 0;
     const raw = Math.atan(v.wheelbaseM * kappa) + understeer + 0.8 * beta + kYawP * kYaw * yawErr + this.apYawI;
-    const delta = THREE.MathUtils.clamp(raw, betaF - 1.15 * peak, betaF + 1.15 * peak);
+    const delta = THREE.MathUtils.clamp(raw, betaF - peak, betaF + peak);
     const frontsSaturated = delta !== raw;
     if (!frontsSaturated) this.apYawI = THREE.MathUtils.clamp(this.apYawI + yawErr * kYaw * 2 * h, -0.05, 0.05);
     // Braking envelope of this car: its own limit speeds (capped at the circuit's) × pace over the next 300 m,
@@ -1911,6 +1923,18 @@ export class F12026CarSim implements SimulatorCar {
   /** + = turning right (rotation about +Y turns the nose toward +X = left) */
   private bodyYawRate(): number {
     return -this.vehicle.angularVelocity.dot(_ey.set(0, 1, 0).applyQuaternion(this.vehicle.quaternion));
+  }
+
+  /**
+   * The front tyres' peak slip angle as they are loaded now (rad): it grows with load, so the loaded outside front peaks
+   * later than the data's angle at Fz0. Load-weighted over the axle; the data's angle while both fronts are unloaded.
+   */
+  private frontPeakSlipRad(): number {
+    const [l, r] = this.vehicle.wheels;
+    const fz = l.fz + r.fz;
+    return fz > 0 && l.peakSlipAngleRad > 0 && r.peakSlipAngleRad > 0
+      ? (l.fz * l.peakSlipAngleRad + r.fz * r.peakSlipAngleRad) / fz
+      : (this.compoundData.modelData.friction_limit_angle || DEFAULT_FRICTION_LIMIT_ANGLE_DEG) * DEG2RAD;
   }
 
   /** At track distance `s`, `lateral` m right of the centreline, heading along the track */

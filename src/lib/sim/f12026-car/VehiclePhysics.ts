@@ -304,6 +304,8 @@ export interface WheelState {
   slipAngleRad: number;
   /** Slip angle of this tyre's peak lateral force at its present load (rad; held while unloaded, 0 until loaded) */
   peakSlipAngleRad: number;
+  /** Lateral force per unit tan(slip angle) at small slip, with every grip scaling as it is now (N; 0 unloaded) */
+  corneringStiffness: number;
   /** Normalised combined slip (1 = peak) and share of the friction circle in use (telemetry; 1 = on the circle) */
   combinedSlip: number;
   circleFraction: number;
@@ -1048,6 +1050,7 @@ export class VehiclePhysics {
         tanSlipAngle: 0,
         slipAngleRad: 0,
         peakSlipAngleRad: 0,
+        corneringStiffness: 0,
         combinedSlip: 0,
         circleFraction: 0,
         camberLeftRad: 0,
@@ -1374,6 +1377,7 @@ export class VehiclePhysics {
       w.vy = 0;
       w.slipVelX = 0;
       w.slipAngleRad = 0;
+      w.corneringStiffness = 0;
       w.combinedSlip = 0;
       w.circleFraction = 0;
       w.camberLeftRad = 0;
@@ -2058,6 +2062,7 @@ export class VehiclePhysics {
         const thrust = cam.camberGain * (cam.contact_camber_c1 * gc - cam.contact_camber_c2 * gc * gc * gc);
         const BC = tyre.B * tyre.C;
         const tanEff = w.tanSlipAngle - (thrust * tanPeak) / Math.max(1e-3, muY * BC);
+        w.corneringStiffness = (muY * fz * BC) / tanPeak;
 
         // Combined slip
         combinedSlipForces(tyre, model, w.slipRatio / tyre.peakSlipRatio, tanEff / tanPeak, _comb);
@@ -2096,6 +2101,7 @@ export class VehiclePhysics {
       } else {
         w.combinedSlip = 0;
         w.circleFraction = 0;
+        w.corneringStiffness = 0;
         w.mz = 0;
         w.mx = 0;
       }
