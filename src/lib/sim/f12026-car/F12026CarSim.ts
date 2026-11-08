@@ -474,6 +474,8 @@ function surfaceType(kind: TrackSurfaceKind): SurfaceType {
  * kerb / run-off / gravel widths. Stands in for the colliders until the track GLB is loaded.
  */
 export class TrackSampleGroundQuery implements GroundQuery {
+  /** Interpolated from the samples: nothing for a contact patch to envelope, so the tyres probe it at one point */
+  readonly smooth = true;
   private hintS: number | undefined;
 
   constructor(private readonly track: BuiltTrackData) {}

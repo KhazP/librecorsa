@@ -88,6 +88,11 @@ export interface GroundHit {
 export interface GroundQuery {
   query(x: number, z: number, probeY: number, out: GroundHit): boolean;
   /**
+   * The ground is a smooth analytic surface (flat, or interpolated from the track samples) with no texture or seams for
+   * a tyre's contact patch to envelope: the tyres probe it at their centre alone
+   */
+  readonly smooth?: boolean;
+  /**
    * Optional: `query` for up to `GROUND_QUERY_MANY_MAX` nearby points at once (a tyre's contact patch), for a ground
    * that can share work between them. Returns a bit mask, bit i set when point i has ground (in `outs[i]`); points
    * from `fullCount` (default all) on may get only their height.
@@ -1107,6 +1112,8 @@ export class TrackColliderQuery implements GroundQuery {
 
 /** Infinite flat ground (tests, garage) */
 export class FlatGroundQuery implements GroundQuery {
+  readonly smooth = true;
+
   constructor(
     private readonly height = 0,
     private readonly surface: TrackSurfaceKind = 'road',

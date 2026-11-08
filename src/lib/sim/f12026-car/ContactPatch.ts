@@ -28,7 +28,8 @@
  *    seated on.
  *  - Surface, grip and the surface's physics come from the centre sample, as before.
  *
- * A ground with `queryMany` (the track colliders) answers all five samples in one pass over its grid cell's triangles.
+ * A ground with `queryMany` (the track colliders) answers all five samples in one pass over its grid cell's triangles;
+ * a `smooth` one (flat, or the track samples' interpolated stand-in) has nothing to envelope and is probed at the centre.
  * Allocation-free: module-level scratch points and hits.
  */
 
@@ -72,7 +73,7 @@ export function queryContactPatch(
   maxSlope: number,
   out: GroundHit
 ): boolean {
-  if (!(halfLength > 0) || !(halfWidth > 0)) return ground.query(x, z, probeY, out);
+  if (ground.smooth || !(halfLength > 0) || !(halfWidth > 0)) return ground.query(x, z, probeY, out);
   // Left of the heading, horizontal (Y up: up × forward)
   const leftX = fwdZ;
   const leftZ = -fwdX;
