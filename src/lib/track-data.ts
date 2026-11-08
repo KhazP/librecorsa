@@ -220,6 +220,11 @@ export interface AiPlanCheck {
   wallHits: number;
   offTrackFrames: number;
   maxErrM: number;
+  /**
+   * The highest plan grip (share of the car's measured limits) this car still drove cleanly here, with a margin: the
+   * fastest AI level plans up to it. Absent: not searched (the field stays at its default plan grip)
+   */
+  maxGrip?: number;
   /** Date of the check (ISO) */
   checked: string;
 }
