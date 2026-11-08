@@ -26,8 +26,11 @@ import { ConditionsPanel, type ConditionsPanelProps } from "./ConditionsPanel";
 import { TIME_OF_DAY_LABELS, WEATHER_LABELS } from "@/lib/sim/weather";
 import { LibreCorsaLogo } from "@/components/ui/LibreCorsaLogo";
 import { AI_SKILL_DEFAULT, aiSkillLabel } from "@/lib/sim/ai-tuning";
+import { REPO_URL, SUPPORT_URL } from "@/lib/site";
 import {
   CloudSun,
+  CodeXml,
+  Coffee,
   ExternalLink,
   Flag,
   Gamepad2,
@@ -247,7 +250,9 @@ interface MenuItem {
   label: string;
   detail: string;
   icon: LucideIcon;
-  run: () => void;
+  run?: () => void;
+  /** A link out instead of an action: opens in a new tab */
+  href?: string;
   panel?: TitlePanel;
   primary?: boolean;
   badge?: string;
@@ -345,21 +350,50 @@ const GridEntry: React.FC<{ item: MenuItem }> = ({ item }) => {
   );
 };
 
-/** Lap times / Credits / Request: the quiet text links under the grid */
-const LinkEntry: React.FC<{ item: MenuItem }> = ({ item }) => {
-  const Icon = item.icon;
-  return (
+/** A menu entry's element: a button, or a link out when the entry has an href */
+const EntryShell: React.FC<{ item: MenuItem; expanded?: boolean; className: string; children: React.ReactNode }> = ({
+  item,
+  expanded,
+  className,
+  children,
+}) =>
+  item.href ? (
+    <a
+      href={item.href}
+      target="_blank"
+      rel="noopener noreferrer"
+      data-rail-id={item.id}
+      onPointerEnter={focusOnHover}
+      className={`${className} no-underline`}
+    >
+      {children}
+    </a>
+  ) : (
     <button
       type="button"
       data-rail-id={item.id}
       onPointerEnter={focusOnHover}
       onClick={item.run}
-      aria-expanded={item.panel ? false : undefined}
+      aria-expanded={item.panel ? expanded : undefined}
+      className={className}
+    >
+      {children}
+    </button>
+  );
+
+/** Lap times / Credits / Request / Coffee / GitHub: the quiet text links under the grid */
+const LinkEntry: React.FC<{ item: MenuItem }> = ({ item }) => {
+  const Icon = item.icon;
+  return (
+    <EntryShell
+      item={item}
+      expanded={false}
       className={`${ENTRY_FOCUS} inline-flex min-h-[44px] items-center gap-2 rounded-full bg-transparent px-3 text-[14px] font-semibold text-[#C5CBD8] hover:bg-white/[0.04] hover:text-[#F5F7FA]`}
     >
       <Icon aria-hidden className={`${ENTRY_ICON} h-4 w-4`} strokeWidth={2} />
       {item.label}
-    </button>
+      {item.href ? <ExternalLink aria-hidden className={`${ENTRY_ICON} h-3.5 w-3.5`} strokeWidth={2} /> : null}
+    </EntryShell>
   );
 };
 
@@ -384,12 +418,9 @@ const CompactEntry: React.FC<{ item: MenuItem; open: boolean; quiet?: boolean }>
     );
   }
   return (
-    <button
-      type="button"
-      data-rail-id={item.id}
-      onPointerEnter={focusOnHover}
-      onClick={item.run}
-      aria-expanded={item.panel ? open : undefined}
+    <EntryShell
+      item={item}
+      expanded={open}
       className={`${ENTRY_FOCUS} flex min-h-[44px] w-full items-center gap-3 rounded-[14px] px-3.5 ${
         open ? "bg-[#00E5FF]/[0.08] shadow-[inset_0_0_0_1px_rgba(0,229,255,0.4)]" : "bg-transparent hover:bg-white/[0.04]"
       }`}
@@ -405,10 +436,11 @@ const CompactEntry: React.FC<{ item: MenuItem; open: boolean; quiet?: boolean }>
         {item.short ?? item.label}
       </span>
       {item.badge ? <Badge small>{item.badge}</Badge> : null}
+      {item.href ? <ExternalLink aria-hidden className={`${ENTRY_ICON} h-3.5 w-3.5`} strokeWidth={2} /> : null}
       {open ? (
         <span aria-hidden className="h-2 w-2 shrink-0 rounded-full bg-[#00E5FF] shadow-[0_0_10px_#00E5FF] group-focus:hidden" />
       ) : null}
-    </button>
+    </EntryShell>
   );
 };
 
@@ -547,6 +579,8 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
       panel: "request",
       run: () => openPanel("request"),
     },
+    { id: "support", label: "Buy me a coffee", detail: "Support development", icon: Coffee, href: SUPPORT_URL },
+    { id: "github", label: "GitHub", detail: "Source code", icon: CodeXml, href: REPO_URL },
   ];
   const panelItems = items.filter((i) => i.panel);
   const byId = (ids: readonly string[]) => ids.flatMap((id) => items.filter((i) => i.id === id));
@@ -668,7 +702,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
                 <CompactEntry key={item.id} item={item} open={item.panel === panel} />
               ))}
               <div aria-hidden className="mx-3.5 my-2 h-px bg-[#262B3D]" />
-              {byId(["credits", "request"]).map((item) => (
+              {byId(["credits", "request", "support", "github"]).map((item) => (
                 <CompactEntry key={item.id} item={item} open={item.panel === panel} quiet />
               ))}
             </nav>
@@ -721,7 +755,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
                   ))}
                 </div>
                 <div className="mt-3.5 ml-2.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 short:mt-2">
-                  {byId(["leaderboard", "credits", "request"]).map((item) => (
+                  {byId(["leaderboard", "credits", "request", "support", "github"]).map((item) => (
                     <LinkEntry key={item.id} item={item} />
                   ))}
                 </div>
