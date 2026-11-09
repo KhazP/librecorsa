@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import type { LiveryConfig } from "@/types/f1";
 import { LIVERIES } from "@/lib/track-data";
 import {
@@ -10,6 +10,7 @@ import {
   carClassesInUse,
   carClassYear,
   carQualityMeta,
+  carThumbUrl,
   compareCarsByClassAndYear,
   carTakesLivery,
   FACTORY_LIVERY_NOTE,
@@ -21,6 +22,7 @@ import {
 import { carPhysics, carTakesPhysicsSwitch, F1_MOD_PHYSICS_OPTIONS, useF1ModPhysics } from "@/lib/cars/f1-mod-physics";
 import { ContentBrowser, type BrowserFilterGroup, type BrowserSort, type LibraryProps } from "./ContentBrowser";
 import { CarPhysicsSwitch } from "./CarPicker";
+import { withBasePath } from "@/lib/base-path";
 import { CarQualityBadge, Chip, LiveryPicker } from "./menu-ui";
 
 const byName = (a: CarDefinition, b: CarDefinition) => a.title.localeCompare(b.title);
@@ -29,6 +31,27 @@ const QUALITIES: readonly CarQuality[] = ["own", "shared", "era"];
 /** A car's own vehicle model, for the cars without the physics switch (the GT3s say theirs in their sub line) */
 const physicsLabel = (car: CarDefinition) =>
   car.classId === "f1" ? F1_MOD_PHYSICS_OPTIONS.find((o) => o.id === car.physics)?.title : undefined;
+
+/**
+ * The car's picture (`npm run car-thumbs`); a copy without the file (a clone, for a hosted car) shows nothing here and
+ * the card keeps its text. A car that takes liveries is pictured in the default one.
+ */
+const CarThumb: React.FC<{ car: CarDefinition; className?: string }> = ({ car, className = "" }) => {
+  const [failed, setFailed] = useState(false);
+  if (failed) return null;
+  return (
+    // A plain img: a static file the export serves as is (next/image would need a loader for it)
+    <img
+      src={withBasePath(carThumbUrl(car.id))}
+      alt=""
+      loading="lazy"
+      decoding="async"
+      draggable={false}
+      onError={() => setFailed(true)}
+      className={`pointer-events-none object-contain select-none ${className}`}
+    />
+  );
+};
 
 const Spec: React.FC<{ k: string; children: React.ReactNode }> = ({ k, children }) => (
   <div className="flex items-baseline justify-between gap-3 border-t border-white/[0.07] py-2">
@@ -120,14 +143,18 @@ export const CarBrowser: React.FC<{
       onClose={onClose}
       toolbar={toolbar}
       renderCard={(c) => (
-        <span className="flex min-w-0 flex-1 flex-col gap-1.5 overflow-hidden rounded-[17px]">
-          <span className="relative flex h-[58px] items-end border-b border-[#262B3D] bg-[#1B1F2B]/70 px-3 pb-2">
-            <span className="absolute top-2.5 left-3">
-              <Chip size="sm">{carClassYear(c)}</Chip>
+        <span className="flex min-w-0 flex-1 flex-col gap-1.5 overflow-hidden rounded-[17px] phone:flex-row phone:items-stretch phone:gap-0">
+          <span className="relative flex min-h-[58px] flex-col justify-end border-b border-[#262B3D] bg-[#1B1F2B]/70 px-3 pt-9 pb-2 phone:w-[132px] phone:shrink-0 phone:border-r phone:border-b-0 phone:px-2 phone:pt-8">
+            {/* Clear of the favourite star in the corner */}
+            <span className="absolute top-2.5 right-10 left-3 flex phone:right-2 phone:left-2">
+              <Chip size="sm" className="max-w-full overflow-hidden">
+                <span className="truncate">{carClassYear(c)}</span>
+              </Chip>
             </span>
-            <span className="lc-data ml-auto text-[11px] tracking-[0.12em] text-[#C5CBD8]">{c.badge}</span>
+            <CarThumb car={c} className="-mt-2 h-[84px] w-full phone:h-[64px]" />
+            <span className="lc-data ml-auto text-[11px] tracking-[0.12em] text-[#C5CBD8] phone:hidden">{c.badge}</span>
           </span>
-          <span className="flex min-w-0 flex-col gap-1 px-3 pt-0.5 pb-3">
+          <span className="flex min-w-0 flex-col gap-1 px-3 pt-0.5 pb-3 phone:flex-1 phone:justify-center phone:py-2.5 phone:pr-9">
             <span className="lc-disp text-[17px] leading-[1.05] [overflow-wrap:anywhere] hyphens-auto">{c.title}</span>
             <span className="line-clamp-2 text-[12px] leading-snug text-[#8E96AA]">{c.sub}</span>
             <span className="mt-0.5 flex min-w-0 flex-wrap items-center gap-1.5">
@@ -147,6 +174,7 @@ export const CarBrowser: React.FC<{
         const q = carQualityMeta(c);
         return (
           <>
+            <CarThumb car={c} className="-mx-1 -mt-1 h-auto w-[calc(100%+0.5rem)] max-w-none" />
             <div className="flex flex-wrap items-center gap-1.5">
               <CarQualityBadge car={c} />
               <Chip>{carClassYear(c)}</Chip>
