@@ -2641,7 +2641,9 @@ export class VehiclePhysics {
     if (rpm >= gb.gears.redline_rpm) this.limiterTimer = eng.limiterCutS;
     const mapIdx = THREE.MathUtils.clamp(Math.round(this.engineMap), 1, 5);
     const engineMapTorqueScale = [1.0, 0.985, 0.96, 0.925, 0.87][mapIdx - 1] ?? 1.0;
-    const wetPedalBlend = Math.max(this.wetness, mapIdx >= 4 ? (mapIdx - 3) * 0.35 : 0);
+    // The softer low-gear pedal: the driver's own choice (engine maps 4 and 5), and on a power unit with a wet pedal map
+    // the ECU's on a wet road. A car without one keeps the pedal its driver set
+    const wetPedalBlend = Math.max(eng.wetPedalMap ? this.wetness : 0, mapIdx >= 4 ? (mapIdx - 3) * 0.35 : 0);
     const lowGearWetExp = this.gear >= 1 && this.gear <= 4 ? (5 - this.gear) * 0.065 * wetPedalBlend : 0;
     const baseExp = (mapIdx >= 3 ? 1 + (mapIdx - 2) * 0.12 : 1) + lowGearWetExp;
     const rawThrottle = baseExp > 1 ? Math.pow(inp.throttle, baseExp) : inp.throttle;

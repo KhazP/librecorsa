@@ -132,6 +132,11 @@ export interface EngineData {
    * at run time. Absent: the torque follows the pedal at once
    */
   torqueResponseS?: { rise: number; fall: number };
+  /**
+   * The ECU softens the pedal in the low gears by itself on a wet road (an F1 power unit's wet pedal map). Absent: the
+   * pedal map changes only when the driver picks engine map 4 or 5
+   */
+  wetPedalMap?: boolean;
   /** Turbocharger; absent: naturally aspirated */
   turbo?: TurboData;
   idleRpm: number;
@@ -841,6 +846,7 @@ const F12026_ENGINE: EngineData = {
   // revolution that is 90 % of a torque step in ≈ 85 ms at 9000 rpm. Closing 20 ms: the overrun fuel cut takes the torque
   // off before the plenum empties [est]
   torqueResponseS: { rise: 0.03, fall: 0.02 },
+  wetPedalMap: true,
   turbo: F12026_TURBO,
   // MINIMUM / INERTIA [ref_engine.ini]
   idleRpm: 3700,
