@@ -77,6 +77,11 @@ export interface ChassisData {
   /** Unsprung mass per corner (wheel, tyre, upright, brake) (kg) */
   unsprungMassFront: number;
   unsprungMassRear: number;
+  /**
+   * Where the fuel sits, from the CG of the car without fuel (m: y up, z forward). Its weight acts there, so a tank
+   * behind the CG moves the weight split rearward as it fills. Absent: at the CG
+   */
+  fuelTank?: { y: number; z: number };
   /** Wheel + tyre spin inertia per corner (kg·m²) */
   wheelInertiaFront: number;
   wheelInertiaRear: number;
@@ -225,6 +230,8 @@ export interface GearBoxData {
   finalDrive: number;
   /** Seamless shift: torque dip duration (s) and the torque kept during it */
   shiftTimeS: number;
+  /** The same for a down-shift, where it differs (s) */
+  downshiftTimeS?: number;
   shiftTorqueFraction: number;
   efficiency: number;
   gears: {
@@ -295,6 +302,8 @@ export interface BrakesData {
   brakeByWire?: boolean;
   /** Base front bias (0..1) */
   front_bias: number;
+  /** Handbrake: brake torque on each rear wheel at full pull (Nm), outside the pedal's bias and ABS. Absent: none */
+  handbrakeTorqueNm?: number;
   /** One EBB step moves the bias this much (0..1) */
   ebbStep: number;
   /** Disc / pad material for the brake thermal model and pad μ(T) (default carbon-carbon, F1) */
@@ -524,6 +533,11 @@ export interface TyreGeometry {
   rimRadius: number;
   /** Vertical-rate multiplier on `pressureSpringCurve` for this axle */
   verticalRateScale: number;
+  /**
+   * Growth of the free radius with spin (m per rad/s): the belt stretches as the wheel turns faster, which lifts the car
+   * and lengthens its gearing at speed. Absent: the model's own small growth, on the steering arms only
+   */
+  radiusGrowthPerRadS?: number;
 }
 
 /** Peak slip angle used when `friction_limit_angle` is unset or 0 (deg) */
@@ -589,6 +603,11 @@ export interface TyresModelData {
    * carcass's hysteresis work per second rises with the deflection rate). Absent: 0, no speed term
    */
   rollingResistanceSpeedSq?: number;
+  /**
+   * Its growth with slip: × (1 + this × the combined slip over the peak slip), on a rolling wheel. A tyre working at
+   * its limit scrubs: a street tyre several times its free-rolling drag, a racing slick a few per cent. Absent: 0
+   */
+  rollingResistanceSlipGain?: number;
   /** Radial damping (Ns/m) */
   verticalDamping: number;
   /** Pneumatic trail at zero slip (m) */
@@ -669,6 +688,11 @@ export interface TyresPressureData {
   optimalPsi: number;
   /** Inflation pressure (psi gauge) → radial stiffness (N/m) */
   pressureSpringCurve: LutPoints;
+  /**
+   * Rolling resistance against pressure: × (1 + this × (optimalPsi / pressure − 1)), so a soft tyre drags more.
+   * Absent: 0, no change with pressure
+   */
+  pressureRollingGain?: number;
   /** Grip loss per (ΔP / P_opt)² */
   pressureGripSensitivity: number;
   /** Grip loss per psi away from the optimum, μ ÷ (1 + this × |ΔP|); when set it replaces the parabola above */

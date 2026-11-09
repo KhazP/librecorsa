@@ -266,6 +266,8 @@ export interface VehicleInputs {
   steer: number;
   /** Clutch pedal 0..1 (1 = fully open); omitted = auto clutch */
   clutch?: number;
+  /** Handbrake 0..1, on the rear wheels of a car that has one (`BrakesData.handbrakeTorqueNm`) */
+  handbrake?: number;
   /** Edge-triggered */
   shiftUp?: boolean;
   shiftDown?: boolean;
@@ -795,6 +797,11 @@ export function combinedSlipForces(
 
 const _comb = { fx: 0, fy: 0, sx: 0, sy: 0 };
 const _brush: BrushForces = { fx: 0, fy: 0, slipNorm: 0 };
+/** Spin past which a tyre's radius grows no further (rad/s): a wheel spun up off the ground does not balloon */
+const MAX_GROWTH_SPIN_RADS = 350;
+/** The scrub term of rolling resistance: the slip (over the peak slip) it stops growing at, and the spin it is whole from */
+const SCRUB_MAX_SLIP = 3;
+const SCRUB_FULL_SPIN_RADS = 20;
 const _roadSlope = { dhdx: 0, dhdz: 0 };
 
 // Scratch (single-threaded, never escapes a call)
@@ -1722,10 +1729,10 @@ export class VehiclePhysics {
   }
 
   /**
-   * Fuel on board (kg): its mass sits at the CG (the tank is behind the driver, between the axles), so the weight
-   * split stays and the moments of inertia grow with the mass, as the VF26's uniform-box body does. The spring
-   * preloads keep the load they were last set for (`refreshStaticGeometry` sets them for this load), so a car
-   * that burns fuel rises on its springs.
+   * Fuel on board (kg): its mass rides with the body and the moments of inertia grow with the mass, as the VF26's
+   * uniform-box body does. Its weight acts at the tank (`ChassisData.fuelTank`; at the CG without one), so a tank
+   * behind the CG moves the weight split rearward. The spring preloads keep the load they were last set for
+   * (`refreshStaticGeometry` sets them for this load), so a car that burns fuel rises on its springs.
    */
   public setFuelMass(kg: number): void {
     const fuel = Number.isFinite(kg) ? Math.max(0, kg) : 0;
@@ -1739,7 +1746,9 @@ export class VehiclePhysics {
 
   private staticCornerLoad(front: boolean): number {
     const ch = this.config.chassis;
-    return 0.5 * this.totalMassKg * G * (front ? ch.frontWeightFraction : 1 - ch.frontWeightFraction);
+    // The fuel's weight acts at the tank: its moment about the CG moves that much load between the axles
+    const tankShiftN = (this.fuelKg * G * (ch.fuelTank?.z ?? 0)) / ch.wheelbase;
+    return 0.5 * (this.totalMassKg * G * (front ? ch.frontWeightFraction : 1 - ch.frontWeightFraction) + (front ? tankShiftN : -tankShiftN));
   }
 
   /**
@@ -1853,6 +1862,7 @@ export class VehiclePhysics {
         ? [c(fin(i.brakeWheelScale[0]), 0, 1), c(fin(i.brakeWheelScale[1]), 0, 1), c(fin(i.brakeWheelScale[2]), 0, 1), c(fin(i.brakeWheelScale[3]), 0, 1)]
         : undefined,
       clutch: i.clutch === undefined ? undefined : c(fin(i.clutch), 0, 1),
+      handbrake: i.handbrake === undefined ? undefined : c(fin(i.handbrake), 0, 1),
       shiftUp: !!i.shiftUp,
       shiftDown: !!i.shiftDown,
       drs: !!i.drs,
@@ -1895,7 +1905,7 @@ export class VehiclePhysics {
     if (g > this.gear) this.sinceUpshiftS = 0;
     if (down) this.sinceDownshiftS = 0;
     this.gear = g;
-    this.shiftTimer = gb.shiftTimeS;
+    this.shiftTimer = down ? (gb.downshiftTimeS ?? gb.shiftTimeS) : gb.shiftTimeS;
     // The ECU blips the engine up to the new gear's road speed on a downshift, so the closed clutch does not
     // jerk the rear axle down by the engine's inertia (that impulse locked the rears under trail braking).
     // Road speed, not wheel speed: matching spinning wheels would feed the wheelspin.
@@ -2161,8 +2171,9 @@ export class VehiclePhysics {
       const geo = w.isFront ? tyre.data.front : tyre.data.rear;
       const model = tyre.data.modelData;
       const g = w.ground;
-      const R0 = geo.radius;
-      const dR = tyreCentrifugalGrowthM(w.omega);
+      // A tyre whose data states its growth with spin runs on the grown radius: contact, rolling radius and all
+      const R0 = geo.radius + (geo.radiusGrowthPerRadS ?? 0) * Math.min(Math.abs(w.omega), MAX_GROWTH_SPIN_RADS);
+      const dR = geo.radiusGrowthPerRadS !== undefined ? 0 : tyreCentrifugalGrowthM(w.omega);
       w.verticalRate = this.tyreVerticalRate(w);
 
       const kin = w.isFront
@@ -2500,6 +2511,12 @@ export class VehiclePhysics {
     // Acceleration less gravity, for the next sub-step's unsprung inertia (the hubs ride with the body across)
     this.bodySpecificForce.set(this.force.x / this.totalMassKg, this.force.y / this.sprungMassKg, this.force.z / this.totalMassKg);
     this.force.y -= this.sprungMassKg * G;
+    // The fuel's weight acts at the tank, not at the CG: the moment of that offset
+    const tank = this.config.chassis.fuelTank;
+    if (tank && this.fuelKg > 0) {
+      _r.set(0, tank.y, tank.z).applyQuaternion(this.quaternion);
+      this.torque.add(_tmp.crossVectors(_r, _f.set(0, -this.fuelKg * G, 0)));
+    }
     this.velocity.x += (this.force.x / this.totalMassKg) * h;
     this.velocity.z += (this.force.z / this.totalMassKg) * h;
     this.velocity.y += (this.force.y / this.sprungMassKg) * h;
@@ -2843,10 +2860,16 @@ export class VehiclePhysics {
       const demand = inp.brake * (inp.brakeWheelScale ? inp.brakeWheelScale[i] : 1) * br.maxTorqueNm * (w.isFront ? bias : 1 - bias);
       // Pad μ(T) of the disc (1 in its window, a mild loss cold or faded)
       const friction = (i === dl || i === dr ? Math.max(0, demand - driveBrake) : demand) * w.brakeDisc.muFactor;
-      const tyre = this.tyres[w.isFront ? 0 : 1].data.modelData;
+      const compound = this.tyres[w.isFront ? 0 : 1].data;
+      const tyre = compound.modelData;
       const rollV = w.vx;
-      const rollingResistance = tyre.rollingResistance + (tyre.rollingResistanceSpeedSq ?? 0) * rollV * rollV;
-      w.brakeTorqueNm = friction + w.fz * rollingResistance * w.rollingRadius;
+      // Rolling resistance: its speed term, more of it on a soft tyre, and the scrub of a tyre working at its limit
+      // (on a turning wheel: a locked one only slides)
+      const softDrag = 1 + (compound.pressureData.pressureRollingGain ?? 0) * (compound.pressureData.optimalPsi / Math.max(1, w.pressurePsi) - 1);
+      const scrub = (tyre.rollingResistanceSlipGain ?? 0) * Math.min(w.combinedSlip, SCRUB_MAX_SLIP) * Math.min(1, Math.abs(w.omega) / SCRUB_FULL_SPIN_RADS);
+      const rollingResistance = (tyre.rollingResistance + (tyre.rollingResistanceSpeedSq ?? 0) * rollV * rollV) * softDrag * (1 + scrub * softDrag);
+      const handbrake = !w.isFront && inp.handbrake ? inp.handbrake * (br.handbrakeTorqueNm ?? 0) : 0;
+      w.brakeTorqueNm = friction + handbrake + w.fz * rollingResistance * w.rollingRadius;
     }
 
     // ---- predicted velocities from the free torques
