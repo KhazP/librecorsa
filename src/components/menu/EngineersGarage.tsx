@@ -10,7 +10,7 @@ import { COMPOUNDS, PanelSection, type PauseMenuProps } from "@/components/hud/P
 import { TYRE_SETUP_LIMITS } from "@/lib/sim/tyre-setup";
 import { CarPhysicsSwitch } from "./CarPicker";
 import { CarBrowser } from "./CarBrowser";
-import { CarQualityBadge, Chip, PadGlyph } from "./menu-ui";
+import { CarQualityBadge, CHOSEN_PILL, Chip, CURSOR_PILL, LiveryPicker, PadGlyph, Segmented } from "./menu-ui";
 import { currentInputMode, useInputMode } from "./input-mode";
 import { focusOnHover } from "./useFocusNav";
 import { carTakesPhysicsSwitch } from "@/lib/cars/f1-mod-physics";
@@ -30,23 +30,8 @@ const FALLBACK_TUNER: Pick<
 /** Changed from the car's baseline (the electronics have no fixed baseline: each car and assist level brings its own) */
 const isChanged = (q: SetupParam, st: SetupState) => q.writes !== "tuner" && Math.abs(q.get(st) - q.base) > 1e-6;
 
-const GarageSegmented: React.FC<{ items: readonly { id: string; label: React.ReactNode }[]; active: string; onPick: (id: string) => void }> = ({ items, active, onPick }) => (
-  <div className="flex rounded-full border border-[#262B3D] bg-[#08090D] p-1">
-    {items.map((it) => (
-      <button
-        key={it.id}
-        type="button"
-        aria-pressed={active === it.id}
-        onClick={() => onPick(it.id)}
-        className={`inline-flex min-h-[38px] flex-1 cursor-pointer items-center justify-center gap-2 rounded-full text-[13px] font-bold ${
-          active === it.id ? "bg-[#CCFF00] text-[#08090D]" : "text-[#8E96AA] hover:text-[#F5F7FA]"
-        }`}
-      >
-        {it.label}
-      </button>
-    ))}
-  </div>
-);
+/** The garage's segmented rows run a little tighter than the menus' */
+const GARAGE_SEGMENTED = "[&>button]:min-h-[38px] [&>button]:px-2 [&>button]:text-[13px]";
 
 /**
  * One setup row: label, readout, slider with the baseline marked, and a plain-English line on what the current
@@ -87,7 +72,7 @@ const SetupRow: React.FC<{
             </span>
           ) : null}
         </span>
-        <span className="shrink-0 font-f1-mono text-sm font-extrabold whitespace-nowrap text-[#CCFF00] tabular-nums">{format(value)}</span>
+        <span className="shrink-0 font-f1-mono text-sm font-extrabold whitespace-nowrap text-[#F5F7FA] tabular-nums">{format(value)}</span>
       </span>
       <span className="relative">
         <input
@@ -133,12 +118,13 @@ const SmallButton: React.FC<{ onClick: () => void; children: React.ReactNode; to
     onClick={onClick}
     disabled={disabled}
     title={title}
-    className={`inline-flex h-9 shrink-0 cursor-pointer items-center rounded-full px-3.5 font-f1-mono text-[11px] font-extrabold tracking-[0.12em] uppercase transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+    onPointerEnter={focusOnHover}
+    className={`inline-flex h-9 shrink-0 cursor-pointer items-center rounded-full px-3.5 font-f1-mono text-[11px] font-extrabold tracking-[0.12em] uppercase transition-[background-color,border-color,box-shadow,color] duration-200 disabled:cursor-not-allowed disabled:opacity-40 ${CURSOR_PILL} focus:border-transparent ${
       tone === "volt"
-        ? "bg-[#CCFF00] text-[#08090D] hover:bg-[#D9FF40]"
+        ? "border border-[#F5F7FA]/40 text-[#F5F7FA] hover:border-[#F5F7FA]"
         : tone === "danger"
           ? "border border-[#262B3D] text-[#8E96AA] hover:border-[#FF2A3C] hover:text-[#FF2A3C]"
-          : "border border-[#262B3D] text-[#8E96AA] hover:border-[#CCFF00] hover:text-[#CCFF00]"
+          : "border border-[#262B3D] text-[#C5CBD8] hover:border-[#3A4157] hover:text-[#F5F7FA]"
     }`}
   >
     {children}
@@ -294,11 +280,13 @@ export const EngineersGarage: React.FC<PauseMenuProps> = (p) => {
       );
     if (x === "compound")
       return (
-        <GarageSegmented
+        <Segmented<TireCompound>
           key={x}
-          active={p.tireCompound}
-          onPick={(id) => p.onChangeTireCompound(id as typeof p.tireCompound)}
-          items={COMPOUNDS.map((c) => ({
+          label="Tyre compound"
+          className={GARAGE_SEGMENTED}
+          value={p.tireCompound}
+          onChange={p.onChangeTireCompound}
+          options={COMPOUNDS.map((c) => ({
             id: c.id,
             label: (
               <>
@@ -311,24 +299,28 @@ export const EngineersGarage: React.FC<PauseMenuProps> = (p) => {
       );
     if (x === "aeroPackage")
       return (
-        <GarageSegmented
+        <Segmented<AeroSetupPreset>
           key={x}
-          active={p.aeroPreset}
-          onPick={(id) => p.onChangeAeroPreset(id as typeof p.aeroPreset)}
-          items={[
-            { id: "low_downforce", label: "Low DF" },
+          label="Aero package"
+          className={GARAGE_SEGMENTED}
+          value={p.aeroPreset}
+          onChange={p.onChangeAeroPreset}
+          options={[
+            { id: "low_downforce", label: "Low downforce" },
             { id: "balanced", label: "Balanced" },
-            { id: "high_downforce", label: "High DF" },
+            { id: "high_downforce", label: "High downforce" },
           ]}
         />
       );
     if (x === "assists")
       return (
-        <GarageSegmented
+        <Segmented<typeof p.assistPreset>
           key={x}
-          active={p.assistPreset}
-          onPick={(id) => p.onChangeAssistPreset(id as typeof p.assistPreset)}
-          items={[
+          label="Assists"
+          className={GARAGE_SEGMENTED}
+          value={p.assistPreset}
+          onChange={p.onChangeAssistPreset}
+          options={[
             { id: "pro", label: "Assists off" },
             { id: "semi_pro", label: "TC + ABS" },
             { id: "assisted", label: "Full" },
@@ -401,30 +393,11 @@ export const EngineersGarage: React.FC<PauseMenuProps> = (p) => {
         {carTakesPhysicsSwitch(p.carId) ? <CarPhysicsSwitch color="#CCFF00" /> : null}
         <div className="flex min-h-[54px] flex-wrap items-center gap-x-3 gap-y-2 rounded-[18px] border border-[#262B3D] bg-[#08090D]/55 px-3 py-2">
           <span className="lc-lbl w-[68px] shrink-0 text-[10px]">Livery</span>
-        {!carTakesLivery(p.carId) ? (
-          <p className="m-0 text-[13px] text-[#8E96AA]">{FACTORY_LIVERY_NOTE}</p>
-        ) : (
-          <>
-          <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Livery">
-            {LIVERIES.map((liv) => {
-              const active = p.selectedLivery.id === liv.id;
-              return (
-                <button
-                  key={liv.id}
-                  type="button"
-                  aria-pressed={active}
-                  aria-label={liv.name}
-                  title={`${liv.name} · ${liv.team}`}
-                  onClick={() => p.onChangeLivery(liv)}
-                  className={`h-7 w-12 cursor-pointer rounded-full transition-[box-shadow] ${active ? "shadow-[0_0_0_2px_#08090D,0_0_0_4px_#CCFF00]" : "shadow-[inset_0_0_0_1px_rgba(255,255,255,0.15)] hover:shadow-[0_0_0_1px_#8E96AA]"}`}
-                  style={{ background: `linear-gradient(135deg, ${liv.primary} 0 55%, ${liv.accent} 55% 65%, ${liv.secondary} 65% 100%)` }}
-                />
-              );
-            })}
-          </div>
-          <span className="min-w-0 truncate text-[13px] font-semibold text-[#C5CBD8]">{p.selectedLivery.name}</span>
-          </>
-        )}
+          {!carTakesLivery(p.carId) ? (
+            <p className="m-0 text-[13px] text-[#8E96AA]">{FACTORY_LIVERY_NOTE}</p>
+          ) : (
+            <LiveryPicker liveries={LIVERIES} value={p.selectedLivery} onChange={p.onChangeLivery} />
+          )}
         </div>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-[18px] border border-[#262B3D] bg-[#08090D]/55 px-3 py-2">
           <span className="lc-lbl w-[68px] shrink-0 text-[10px]">Presets</span>
@@ -480,14 +453,14 @@ export const EngineersGarage: React.FC<PauseMenuProps> = (p) => {
               aria-selected={group.id === g.id}
               onClick={() => setTab(g.id)}
               title={g.label}
-              className={`inline-flex min-h-[40px] flex-[1_0_auto] cursor-pointer items-center justify-center gap-1.5 rounded-full px-3 text-[13px] font-bold whitespace-nowrap transition-colors ${
-                group.id === g.id ? "bg-[#CCFF00] text-[#08090D]" : "text-[#8E96AA] hover:text-[#F5F7FA]"
+              className={`group inline-flex min-h-[40px] flex-[1_0_auto] cursor-pointer items-center justify-center gap-1.5 rounded-full px-3 text-[13px] font-bold whitespace-nowrap transition-[background-color,box-shadow,color] duration-200 ${CURSOR_PILL} ${
+                group.id === g.id ? CHOSEN_PILL : "text-[#8E96AA] hover:text-[#F5F7FA]"
               }`}
             >
               {/* A short sheet (the GT3s' six pages) always fits its full names; the F1 sheet's nine only on wide screens */}
               <span className={sheet.length <= 6 ? "hidden lg:inline" : "hidden min-[1800px]:inline"}>{g.label}</span>
               <span className={sheet.length <= 6 ? "lg:hidden" : "min-[1800px]:hidden"}>{g.short}</span>
-              {n ? <span aria-label={`${n} changed`} className={`h-1.5 w-1.5 rounded-full ${group.id === g.id ? "bg-[#08090D]" : "bg-[#CCFF00]"}`} /> : null}
+              {n ? <span aria-label={`${n} changed`} className="h-1.5 w-1.5 rounded-full bg-[#00E5FF] group-focus:bg-[#08090D]" /> : null}
             </button>
           );
         })}

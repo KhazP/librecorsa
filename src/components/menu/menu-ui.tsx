@@ -6,10 +6,26 @@ import { LibreCorsaLogo } from "@/components/ui/LibreCorsaLogo";
 import { circuitQualityMeta, type TrackInfo } from "@/lib/track-registry";
 import { carQualityMeta, PHYSICS_CHECK, type CarDefinition } from "@/lib/cars/car-registry";
 import { carPhysics, useF1ModPhysics } from "@/lib/cars/f1-mod-physics";
+import type { LiveryConfig } from "@/types/f1";
 import { FACE_BUTTONS, useInputMode, type PadFamily } from "./input-mode";
 import { focusOnHover } from "./useFocusNav";
 
 /** Shared building blocks of the LibreCorsa loading screen, title menu and setup wizard */
+
+/*
+ * Chosen vs. "you are here" (DESIGN.md §1.2, §7). Volt belongs to the cursor and the screen's main action only; the
+ * option a setting is on is lit white, so the cursor is the one bright thing on a busy panel.
+ */
+/** A pill or segment the setting is on: raised, white text, a lit hairline */
+export const CHOSEN_PILL = "bg-[#262B3D] text-[#F5F7FA] shadow-[inset_0_0_0_1px_rgba(245,247,250,0.28)]";
+/** The cursor on a pill or segment: the volt fill */
+export const CURSOR_PILL =
+  "outline-none focus:bg-[#CCFF00] focus:text-[#08090D] focus:shadow-[0_0_0_5px_rgba(204,255,0,0.12)] focus-visible:outline-none";
+/** A tile or card the setting is on: a white edge */
+export const CHOSEN_TILE = "border-[1.5px] border-[#F5F7FA]/60 bg-white/[0.05]";
+/** The cursor on a tile or card: the volt edge and halo */
+export const CURSOR_TILE =
+  "outline-none focus:border-[#CCFF00] focus:shadow-[inset_0_0_0_1px_#CCFF00,0_0_0_5px_rgba(204,255,0,0.12)] focus-visible:outline-none";
 
 export const SectionLabel: React.FC<{ children: React.ReactNode; className?: string }> = ({
   children,
@@ -133,6 +149,55 @@ export const CarQualityBadge: React.FC<{
   );
 };
 
+/**
+ * Livery swatches with the name beside them: the chosen one has a white ring, the cursor a volt one, and the name
+ * follows the cursor (so a controller or keyboard reads each livery's name, not only the chosen one's)
+ */
+export const LiveryPicker: React.FC<{
+  liveries: readonly LiveryConfig[];
+  value: LiveryConfig;
+  onChange: (livery: LiveryConfig) => void;
+  /** The ring's gap matches the surface behind it */
+  surface?: string;
+}> = ({ liveries, value, onChange, surface = "#08090D" }) => {
+  const [hover, setHover] = React.useState<LiveryConfig | null>(null);
+  const shown = hover ?? value;
+  return (
+    <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
+      <div className="flex flex-wrap items-center gap-2" role="radiogroup" aria-label="Livery">
+        {liveries.map((liv) => {
+          const on = value.id === liv.id;
+          return (
+            <button
+              key={liv.id}
+              type="button"
+              role="radio"
+              aria-checked={on}
+              aria-label={`${liv.name} · ${liv.team}`}
+              onClick={() => onChange(liv)}
+              onPointerEnter={focusOnHover}
+              onFocus={() => setHover(liv)}
+              onBlur={() => setHover(null)}
+              className={`h-9 w-12 cursor-pointer rounded-full outline-none transition-[box-shadow] duration-200 pointer-coarse:h-11 pointer-coarse:w-14 focus:shadow-[0_0_0_2px_var(--lc-swatch-gap),0_0_0_4px_#CCFF00,0_0_0_9px_rgba(204,255,0,0.14)] focus-visible:outline-none ${
+                on
+                  ? "shadow-[0_0_0_2px_var(--lc-swatch-gap),0_0_0_4px_#F5F7FA]"
+                  : "shadow-[inset_0_0_0_1px_rgba(255,255,255,0.15)] hover:shadow-[0_0_0_1px_#8E96AA]"
+              }`}
+              style={
+                {
+                  "--lc-swatch-gap": surface,
+                  background: `linear-gradient(135deg, ${liv.primary} 0 55%, ${liv.accent} 55% 65%, ${liv.secondary} 65% 100%)`,
+                } as React.CSSProperties
+              }
+            />
+          );
+        })}
+      </div>
+      <span className="min-w-0 truncate text-[13px] font-semibold text-[#C5CBD8]">{shown.name}</span>
+    </div>
+  );
+};
+
 /** Pill segmented control (Off / TC + ABS / Full) */
 export function Segmented<T extends string>({
   options,
@@ -165,8 +230,8 @@ export function Segmented<T extends string>({
             disabled={o.disabled}
             onClick={() => onChange(o.id)}
             onPointerEnter={focusOnHover}
-            className={`min-h-[40px] flex-1 cursor-pointer rounded-full px-3 text-sm font-bold transition-colors duration-200 disabled:cursor-not-allowed disabled:opacity-40 ${
-              active ? "bg-[#CCFF00] text-[#08090D]" : "text-[#8E96AA] hover:text-[#F5F7FA]"
+            className={`inline-flex min-h-[40px] flex-1 cursor-pointer items-center justify-center gap-2 rounded-full px-3 text-sm font-bold transition-[background-color,box-shadow,color] duration-200 disabled:cursor-not-allowed disabled:opacity-40 ${CURSOR_PILL} ${
+              active ? CHOSEN_PILL : "text-[#8E96AA] hover:text-[#F5F7FA]"
             }`}
           >
             {o.label}
@@ -275,10 +340,8 @@ export function TabStrip<T extends string>({
               onFocus={() => {
                 if (!active) onChange(t.id);
               }}
-              className={`lc-title inline-flex min-h-[40px] shrink-0 cursor-pointer items-center gap-2 rounded-full px-3.5 text-[14px] whitespace-nowrap outline-none transition-colors duration-200 ${
-                active
-                  ? "bg-[#CCFF00] text-[#08090D]"
-                  : "text-[#8E96AA] hover:bg-white/5 hover:text-[#F5F7FA]"
+              className={`lc-title inline-flex min-h-[40px] shrink-0 cursor-pointer items-center gap-2 rounded-full px-3.5 text-[14px] whitespace-nowrap transition-[background-color,box-shadow,color] duration-200 ${CURSOR_PILL} ${
+                active ? CHOSEN_PILL : "text-[#8E96AA] hover:bg-white/5 hover:text-[#F5F7FA]"
               }`}
             >
               {/* Every tab carries its icon, so the strip keeps its widths as the selection moves */}
@@ -413,10 +476,11 @@ export const PrimaryButton: React.FC<{
     disabled={disabled}
     onClick={onClick}
     onPointerEnter={focusOnHover}
-    className={`lc-primary-button inline-flex h-[52px] cursor-pointer phone:h-11 items-center rounded-full transition-[background-color,box-shadow,border-color] duration-200 disabled:cursor-not-allowed disabled:opacity-40 ${
+    className={`lc-primary-button inline-flex h-[52px] cursor-pointer phone:h-11 items-center rounded-full transition-[background-color,box-shadow,border-color] duration-200 disabled:cursor-not-allowed ${
       tone === "red"
-        ? "gap-3 border-0 bg-[#CCFF00] text-[#08090D] shadow-[0_0_0_5px_rgba(204,255,0,0.12),0_12px_30px_rgba(204,255,0,0.22)] hover:bg-[#d9ff33]"
-        : "gap-2.5 border border-[#262B3D] bg-[#1B1F2B]/80 text-[#F5F7FA] hover:border-[#3A4157] hover:bg-[#262B3D]"
+        ? // Greyed out, not a dimmed volt: a disabled main action must not look like the cursor
+          "gap-3 border-0 bg-[#CCFF00] text-[#08090D] shadow-[0_0_0_5px_rgba(204,255,0,0.12),0_12px_30px_rgba(204,255,0,0.22)] hover:bg-[#d9ff33] disabled:bg-[#1B1F2B] disabled:text-[#8E96AA] disabled:shadow-none"
+        : "gap-2.5 border border-[#262B3D] bg-[#1B1F2B]/80 text-[#F5F7FA] hover:border-[#3A4157] hover:bg-[#262B3D] disabled:opacity-40"
     } ${
       // A key chip has nothing to say on a touch screen: it hides there and the label takes even padding
       typeof prompt === "string"

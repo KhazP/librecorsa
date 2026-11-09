@@ -2,7 +2,7 @@
 
 import React from "react";
 import { ChevronRight, CloudSun, Flag, Minus, Plus, Route, Wrench, type LucideIcon } from "lucide-react";
-import { CarQualityBadge, Chip, PrimaryButton, Segmented, TrackQualityBadge } from "./menu-ui";
+import { CarQualityBadge, CHOSEN_PILL, Chip, CURSOR_PILL, CURSOR_TILE, PrimaryButton, Segmented, TrackQualityBadge } from "./menu-ui";
 import type { CarDefinition } from "@/lib/cars/car-registry";
 import { focusOnHover } from "./useFocusNav";
 import type { TrackInfo } from "@/lib/track-registry";
@@ -76,8 +76,7 @@ const Stepper: React.FC<{
   quick?: readonly number[];
 }> = ({ value, min, max, onChange, label, quick }) => {
   const step = (d: number) => onChange(Math.min(max, Math.max(min, value + d)));
-  const btn =
-    "flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-full border border-[#262B3D] bg-[#08090D] text-[#C5CBD8] transition-colors hover:border-[#CCFF00] hover:text-[#CCFF00] disabled:cursor-not-allowed disabled:opacity-40";
+  const btn = `flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-full border border-[#262B3D] bg-[#08090D] text-[#C5CBD8] transition-[background-color,border-color,box-shadow,color] duration-200 hover:border-[#3A4157] hover:text-[#F5F7FA] disabled:cursor-not-allowed disabled:opacity-40 ${CURSOR_PILL} focus:border-transparent`;
   return (
     <div className="flex flex-wrap items-center gap-2">
       <button type="button" aria-label={`Fewer ${label}`} className={btn} disabled={value <= min} onClick={() => step(-1)} onPointerEnter={focusOnHover}>
@@ -97,8 +96,9 @@ const Stepper: React.FC<{
               type="button"
               onClick={() => onChange(q)}
               onPointerEnter={focusOnHover}
-              className={`min-h-[32px] cursor-pointer rounded-full px-3 font-f1-mono text-[12px] font-extrabold transition-colors ${
-                q === value ? "bg-[#CCFF00] text-[#08090D]" : "border border-[#262B3D] text-[#8E96AA] hover:border-[#CCFF00] hover:text-[#CCFF00]"
+              aria-pressed={q === value}
+              className={`min-h-[32px] cursor-pointer rounded-full px-3 font-f1-mono text-[12px] font-extrabold transition-[background-color,box-shadow,color] duration-200 ${CURSOR_PILL} ${
+                q === value ? CHOSEN_PILL : "border border-[#262B3D] text-[#8E96AA] hover:border-[#3A4157] hover:text-[#F5F7FA]"
               }`}
             >
               {q}
@@ -117,14 +117,14 @@ const LinkRow: React.FC<{ icon: LucideIcon; label: string; value: React.ReactNod
     disabled={!onClick}
     onClick={onClick}
     onPointerEnter={focusOnHover}
-    className="flex min-h-[52px] w-full cursor-pointer items-center gap-3 rounded-[16px] border border-[#262B3D] bg-[#08090D]/50 px-3.5 text-left transition-colors hover:border-[#3A4157] hover:bg-[#1B1F2B] disabled:cursor-default"
+    className={`flex min-h-[52px] w-full cursor-pointer items-center gap-3 rounded-[16px] border border-[#262B3D] bg-[#08090D]/50 px-3.5 text-left transition-[background-color,border-color,box-shadow] duration-200 hover:border-[#3A4157] hover:bg-[#1B1F2B] disabled:cursor-default ${CURSOR_TILE}`}
   >
     <Icon size={18} aria-hidden className="shrink-0 text-[#8E96AA]" />
     <span className="flex min-w-0 flex-1 flex-col">
-      <span className="lc-lbl text-[9px]">{label}</span>
+      <span className="lc-lbl">{label}</span>
       <span className="truncate text-[14px] font-semibold text-[#F5F7FA]">{value}</span>
     </span>
-    {onClick ? <ChevronRight size={16} aria-hidden className="shrink-0 text-[#5A6275]" /> : null}
+    {onClick ? <ChevronRight size={16} aria-hidden className="shrink-0 text-[#8E96AA]" /> : null}
   </button>
 );
 
@@ -219,7 +219,8 @@ export const RaceSetupPanel: React.FC<RaceSetupPanelProps> = ({
                   value={Math.round(aiSkill)}
                   aria-label="AI difficulty, fine"
                   onChange={(e) => onChangeAiSkill(Number(e.target.value))}
-                  className="mt-1 w-full cursor-pointer accent-[#CCFF00]"
+                  className="lc-range mt-2.5"
+                  style={{ "--lc-fill": `${Math.round(aiSkill)}%` } as React.CSSProperties}
                 />
               </Row>
             ) : null}
@@ -288,7 +289,7 @@ export const RaceSetupPanel: React.FC<RaceSetupPanelProps> = ({
                   key={g.code}
                   className={`flex items-center gap-2 rounded-[10px] px-2 py-1 ${i % 2 === 1 ? "translate-y-2" : ""} ${g.player ? "bg-[#CCFF00]/[0.1]" : ""}`}
                 >
-                  <span className="w-[2.5ch] text-right font-f1-mono text-[11px] font-bold text-[#5A6275]">{i + 1}</span>
+                  <span className="w-[2.5ch] text-right font-f1-mono text-[11px] font-bold text-[#8E96AA]">{i + 1}</span>
                   <span aria-hidden className="h-3 w-1 shrink-0 rounded-full" style={{ background: g.color }} />
                   <span className={`font-f1-mono text-[13px] font-extrabold ${g.player ? "text-[#CCFF00]" : "text-[#F5F7FA]"}`}>{g.code}</span>
                 </li>

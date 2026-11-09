@@ -198,15 +198,17 @@ export const Toggle: React.FC<{
       {detail ? <span className="text-[12px] leading-snug text-[#8E96AA]">{detail}</span> : null}
     </span>
     <input type="checkbox" checked={checked} onChange={onChange} disabled={disabled} className="peer sr-only" />
+    {/* DESIGN.md §6 Switch: ON / OFF written inside; on is lit white (volt is the cursor, which rings the whole row) */}
     <span
       aria-hidden
-      className={`relative h-7 w-12 shrink-0 rounded-full transition-colors duration-200 peer-focus-visible:ring-2 peer-focus-visible:ring-[#CCFF00] ${
-        checked ? "bg-[#CCFF00]" : "bg-[#1B1F2B] shadow-[inset_0_0_0_1px_#262B3D]"
+      className={`relative h-[30px] w-16 shrink-0 rounded-full font-f1-mono text-[11px] font-extrabold tracking-[0.08em] transition-colors duration-200 ${
+        checked ? "bg-[#F5F7FA] text-[#08090D]" : "bg-[#1B1F2B] text-[#8E96AA] shadow-[inset_0_0_0_1px_#262B3D]"
       }`}
     >
+      <span className={`absolute inset-y-0 flex items-center ${checked ? "left-2.5" : "right-2"}`}>{checked ? "ON" : "OFF"}</span>
       <span
-        className={`absolute top-1 left-1 h-5 w-5 rounded-full transition-transform duration-[220ms] ease-[cubic-bezier(.2,.8,.2,1)] ${
-          checked ? "translate-x-5 bg-[#08090D]" : "translate-x-0 bg-[#8E96AA]"
+        className={`absolute top-[5px] left-[5px] h-5 w-5 rounded-full transition-transform duration-[220ms] ease-[cubic-bezier(.2,.8,.2,1)] ${
+          checked ? "translate-x-[34px] bg-[#08090D]" : "translate-x-0 bg-[#8E96AA]"
         }`}
       />
     </span>
@@ -225,7 +227,7 @@ export const TyreSlider: React.FC<{
       <span className="min-w-0 truncate text-[14px] font-bold text-[#F5F7FA]" title={label}>
         {label}
       </span>
-      <span className="shrink-0 font-f1-mono text-sm font-extrabold whitespace-nowrap text-[#CCFF00] tabular-nums">{format(value)}</span>
+      <span className="shrink-0 font-f1-mono text-sm font-extrabold whitespace-nowrap text-[#F5F7FA] tabular-nums">{format(value)}</span>
     </span>
     <input
       type="range"

@@ -205,7 +205,7 @@ export const CircuitBrowser: React.FC<{
                 </Chip>
               ) : null}
               {active ? (
-                <Chip color="#CCFF00" variant="soft" size="sm">
+                <Chip color="#F5F7FA" size="sm">
                   Active
                 </Chip>
               ) : null}
@@ -282,7 +282,7 @@ export const CircuitBrowser: React.FC<{
       }}
       primaryAction={(v) => {
         const t = shownLayout(v);
-        if (t.id === trackId) return { label: "Active circuit", disabled: true, run: () => {} };
+        if (t.id === trackId) return { label: "Active circuit", disabled: true, current: true, run: () => {} };
         return { label: "Load circuit", disabled: !onSelect, run: () => onSelect?.(t.id) };
       }}
       footnote={

@@ -8,7 +8,7 @@ file disagree, fix one of them; don't let a third look appear.
 ## 1. Principles
 
 1. **The track is the hero.** UI floats on frosted glass over the live 3D scene. Menus dim and blur the scene, they never replace it with a flat page.
-2. **One focus colour.** Acid volt `#CCFF00` means "you are here": the focused entry fills volt with void ink. Nothing else uses a volt fill except the primary button, the player's own row and the gear tile.
+2. **One focus colour.** Acid volt `#CCFF00` means "you are here": the focused entry fills volt with void ink. Nothing else uses a volt fill except the primary button, the player's own row and the gear tile. What a setting is *on* is lit white, never volt (§6 "Chosen"), so on a busy panel the cursor is the one bright thing.
 3. **Words are italic, numbers are mono.** Display text is Chakra Petch bold italic in capitals, UI text is Geist. Every number, label and key cap is Geist Mono with tabular figures.
 4. **Every input, always.** Each screen works with a controller, the keyboard and the mouse, and shows the prompts for the input last used.
 5. **Colour is never alone.** Every coloured state also carries a sign, glyph or word (− / +, ▲ ▼, HOT, PB, +1 LAP).
@@ -81,17 +81,19 @@ Heights: primary button 52, rail entry 58 (primary 64), segmented option 40, chi
 
 ## 6. Components (in `menu-ui.tsx`)
 
+- **Chosen vs. cursor** (`CHOSEN_PILL` / `CURSOR_PILL`, `CHOSEN_TILE` / `CURSOR_TILE`): the option a setting is on is raised titanium-on-border `#262B3D` with white text and a white 28% hairline (pills, segments, tabs, quick picks), or a 1.5 px white 60% edge (tiles, cards); a swatch gets a white ring. The cursor is the volt fill on pills and the volt edge plus halo on tiles and cards, and wins over chosen. A main action that is already done ("Active circuit", "Current car") is a titanium status with a white check, not a dimmed volt button.
 - **SectionLabel**: a 6 px volt dot, then `.lc-lbl`.
 - **RailItem**: icon, display label, one slate detail line. Focus: volt fill, void ink, 5 px volt halo, chevron appears. Open panel: cyan inset hairline and a glowing cyan dot.
-- **TabStrip**: pill track on void, active tab volt; LB / RB glyphs (or Q / E caps) at either end.
-- **Segmented**: pill track on void, active option volt. Use for 2–4 choices.
+- **TabStrip**: pill track on void, active tab chosen (white); the cursor fills it volt; LB / RB glyphs (or Q / E caps) at either end.
+- **Segmented**: pill track on void, active option chosen (white); the cursor fills volt. Use for 2–4 choices. One component for every segmented row (menus, garage, display).
+- **LiveryPicker**: swatches with the name of the one under the cursor beside them (white ring = in use, volt ring = cursor).
 - **Chip**: 26 px pill, mono 11 px 800; `solid`, `soft` (12% tint) or `outline`.
 - **KeyCap**: 22 px round cap, void with keyline; `volt` and `ink` tones inside buttons.
 - **PadGlyph**: face buttons in their own colours (Xbox A `#5DC21E`, B `#E5413A`, X `#2F8BE5`, Y `#F4C21B`); LB / RB outlined pills.
 - **PromptBar**: no container; glyph or key cap + 13 px 600 fog label, 22 px gaps, on a hairline at the bottom of the screen.
 - **PrimaryButton**: 52 px volt pill, display label, a void key chip inside on the left; secondary tone is titanium with a hairline.
 - **Range** (`.lc-range`): 6 px track, volt fill to the value, white thumb with a 4 px volt ring.
-- **Switch**: 30 × 64 pill, ON / OFF written inside. On = volt fill, void knob.
+- **Switch** (`Toggle`): 30 × 64 pill, ON / OFF written inside. On = white fill, void knob; off = titanium, slate knob. The cursor rings the whole row in volt.
 - **Meter / CenterMeter**: slate label, 8 px titanium track, mono value.
 
 ## 7. Focus and navigation
@@ -136,6 +138,7 @@ Heights: primary button 52, rail entry 58 (primary 64), segmented option 40, chi
 
 - Square or 4–10 px-radius cards for sheets, or flat opaque pages over the scene.
 - Upright or non-italic display headings; sans-serif labels; proportional numbers.
-- A second focus colour, or volt used for decoration.
+- A second focus colour, or volt used for decoration or for "selected".
+- A kicker (small label) above a panel heading. The heading speaks for itself; a panel about one circuit names it in a line under the heading.
 - Colour as the only signal.
 - Emoji, gradient washes, coloured left-border cards.

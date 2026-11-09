@@ -21,8 +21,7 @@ import {
 import { carPhysics, carTakesPhysicsSwitch, F1_MOD_PHYSICS_OPTIONS, useF1ModPhysics } from "@/lib/cars/f1-mod-physics";
 import { ContentBrowser, type BrowserFilterGroup, type BrowserSort, type LibraryProps } from "./ContentBrowser";
 import { CarPhysicsSwitch } from "./CarPicker";
-import { CarQualityBadge, Chip } from "./menu-ui";
-import { focusOnHover } from "./useFocusNav";
+import { CarQualityBadge, Chip, LiveryPicker } from "./menu-ui";
 
 const byName = (a: CarDefinition, b: CarDefinition) => a.title.localeCompare(b.title);
 const QUALITIES: readonly CarQuality[] = ["own", "shared", "era"];
@@ -132,7 +131,7 @@ export const CarBrowser: React.FC<{
             <span className="mt-0.5 flex min-w-0 flex-wrap items-center gap-1.5">
               <CarQualityBadge car={c} size="xs" />
               {c.id === carId ? (
-                <Chip color="#CCFF00" variant="soft" size="sm">
+                <Chip color="#F5F7FA" size="sm">
                   Current
                 </Chip>
               ) : null}
@@ -177,26 +176,7 @@ export const CarBrowser: React.FC<{
             <div className="flex flex-col gap-2">
               <span className="lc-lbl text-[10px]">Livery</span>
               {carTakesLivery(c.id) ? (
-                <div className="flex flex-wrap gap-1.5" role="group" aria-label="Livery">
-                  {LIVERIES.map((liv) => {
-                    const on = selectedLivery.id === liv.id;
-                    return (
-                      <button
-                        key={liv.id}
-                        type="button"
-                        aria-pressed={on}
-                        aria-label={liv.name}
-                        title={`${liv.name} · ${liv.team}`}
-                        onClick={() => onChangeLivery(liv)}
-                        onPointerEnter={focusOnHover}
-                        className={`h-[22px] w-9 cursor-pointer rounded-full transition-[box-shadow] ${
-                          on ? "shadow-[0_0_0_2px_#11131A,0_0_0_4px_#CCFF00]" : "shadow-[inset_0_0_0_1px_rgba(255,255,255,0.15)] hover:shadow-[0_0_0_1px_#8E96AA]"
-                        }`}
-                        style={{ background: `linear-gradient(90deg, ${liv.primary} 0 50%, ${liv.secondary} 50% 100%)` }}
-                      />
-                    );
-                  })}
-                </div>
+                <LiveryPicker liveries={LIVERIES} value={selectedLivery} onChange={onChangeLivery} surface="#11131A" />
               ) : (
                 <p className="m-0 text-[12px] text-[#8E96AA]">{FACTORY_LIVERY_NOTE}</p>
               )}
@@ -215,7 +195,7 @@ export const CarBrowser: React.FC<{
       }
       primaryAction={(c) =>
         c.id === carId
-          ? { label: "Current car", disabled: true, run: () => {} }
+          ? { label: "Current car", disabled: true, current: true, run: () => {} }
           : {
               label: "Choose car",
               run: () => {

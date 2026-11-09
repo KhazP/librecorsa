@@ -247,24 +247,20 @@ const Credits: React.FC = () => (
  * shared panels (also shown in the pause menu) switch their cards to the inset look of this sheet.
  */
 const PanelFrame: React.FC<{
-  kicker?: string;
-  kickerColor?: string;
+  /** A line under the heading where the panel is about one thing (the circuit a race or a leaderboard is on) */
+  subtitle?: string;
   title?: string;
   onClose: () => void;
   children: React.ReactNode;
-}> = ({ kicker, kickerColor = "#00E5FF", title, onClose, children }) => {
+}> = ({ subtitle, title, onClose, children }) => {
   const { mode, family } = useInputMode();
   return (
     <div className="lc-title-frame lc-glass flex min-w-0 flex-col gap-[18px] rounded-[28px] p-5 text-[#F5F7FA] sm:px-7 sm:pt-6 sm:pb-[26px]">
       {title ? (
         <div className="flex flex-wrap items-end justify-between gap-4">
-          <div className="flex min-w-0 flex-col gap-2">
-            {kicker ? (
-              <span className="lc-lbl" style={{ color: kickerColor }}>
-                {kicker}
-              </span>
-            ) : null}
+          <div className="flex min-w-0 flex-col gap-1.5">
             <h2 className="lc-disp m-0 text-[34px] sm:text-[44px]">{title}</h2>
+            {subtitle ? <p className="m-0 truncate text-[14px] font-semibold text-[#C5CBD8]">{subtitle}</p> : null}
           </div>
           {/* A pointer / touch affordance: a controller steps back with Ⓑ, so the focus skips it */}
           <button
@@ -664,16 +660,10 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
   useFocusNav(rootRef, { onBack: back, onPrevTab: () => cycle(-1), onNextTab: () => cycle(1) });
 
   const panelTitle = items.find((i) => i.panel === panel)?.label;
-  const frameHeading: Record<TitlePanel, { kicker: string; color?: string }> = {
-    race: { kicker: `Race setup · ${track.name}`, color: "#CCFF00" },
-    circuit: { kicker: "Circuit selection" },
-    conditions: { kicker: "Weather, time of day and realism", color: "#00E5FF" },
-    garage: { kicker: "Engineer's garage · setup, presets and livery" },
-    multiplayer: { kicker: "WebRTC peer-to-peer" },
-    leaderboard: { kicker: `Leaderboard · ${props.leaderboardPanel?.trackName ?? track.name}`, color: "#CCFF00" },
-    display: { kicker: "HUD, graphics, touch, VR" },
-    credits: { kicker: "About LibreCorsa & credits" },
-    request: { kicker: "Bugs, ideas, cars and tracks" },
+  // The heading speaks for itself; only panels about one circuit say which, under it
+  const panelSubtitle: Partial<Record<TitlePanel, string>> = {
+    race: `${track.name}${track.layout ? ` · ${track.layout}` : ""}`,
+    leaderboard: props.leaderboardPanel?.trackName ?? track.name,
   };
 
   const vehicle = carById(props.carId);
@@ -776,8 +766,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
             <section ref={panelRef} className="min-h-0 min-w-0 scroll-mt-4" data-nav-zone="panel" aria-label={panelTitle}>
               <div key={panel} className="lc-panel-in">
                 <PanelFrame
-                  kicker={frameHeading[panel].kicker}
-                  kickerColor={frameHeading[panel].color}
+                  subtitle={panelSubtitle[panel]}
                   title={panel === "request" ? undefined : panelTitle}
                   onClose={closePanel}
                 >

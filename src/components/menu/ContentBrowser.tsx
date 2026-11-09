@@ -2,13 +2,13 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
-import { Search, Star } from "lucide-react";
+import { Check, Search, Star } from "lucide-react";
 import { connectedPads } from "@/lib/input/device-input";
 import type { ContentLibrary, LibraryKind } from "@/lib/settings/player-settings";
 import { currentInputMode, useInputMode } from "./input-mode";
 import { focusables, focusOnHover, useBackHandler, useMoveHandler, type Dir } from "./useFocusNav";
 import { isMenuNavSuspended, padKey } from "./useMenuNav";
-import { KeyCap, PadGlyph, PrimaryButton, PromptBar, Segmented } from "./menu-ui";
+import { CURSOR_TILE, KeyCap, PadGlyph, PrimaryButton, PromptBar, Segmented } from "./menu-ui";
 
 /** Favourites and recents handed down from the saved settings (absent: the browsers work without them) */
 export interface LibraryProps {
@@ -49,6 +49,8 @@ export interface BrowserSort<T> {
 export interface BrowserAction {
   label: string;
   disabled?: boolean;
+  /** Already the one in use (the loaded circuit, the car driven): shown as a status with a check, not a button */
+  current?: boolean;
   run: () => void;
 }
 
@@ -493,8 +495,9 @@ export function ContentBrowser<T>(props: ContentBrowserProps<T>) {
                               }}
                               onClick={() => choose(id)}
                               onDoubleClick={() => (main.disabled ? undefined : main.run())}
-                              className={`group flex h-full w-full min-w-0 cursor-pointer scroll-mt-12 scroll-mb-2 flex-col rounded-[18px] border bg-[#11131A] text-left text-[#F5F7FA] outline-none transition-[background-color,border-color,box-shadow] duration-[220ms] ease-[cubic-bezier(.2,.8,.2,1)] focus:border-[#CCFF00] focus:bg-[#1B1F2B] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#CCFF00] ${
-                                isSel ? "border-[#CCFF00] shadow-[inset_0_0_0_1px_#CCFF00,0_0_0_5px_rgba(204,255,0,0.1)]" : "border-[#262B3D] hover:border-[#3A4157]"
+                              className={`group flex h-full w-full min-w-0 cursor-pointer scroll-mt-12 scroll-mb-2 flex-col rounded-[18px] border bg-[#11131A] text-left text-[#F5F7FA] transition-[background-color,border-color,box-shadow] duration-[220ms] ease-[cubic-bezier(.2,.8,.2,1)] focus:bg-[#1B1F2B] ${CURSOR_TILE} ${
+                                // The card in the detail pane is lit white; the cursor is volt
+                                isSel ? "border-[#F5F7FA]/60 shadow-[inset_0_0_0_1px_rgba(245,247,250,0.35)]" : "border-[#262B3D] hover:border-[#3A4157]"
                               }`}
                             >
                               {props.renderCard(it, { selected: isSel })}
@@ -560,13 +563,20 @@ export function ContentBrowser<T>(props: ContentBrowserProps<T>) {
               </div>
               <div className="flex shrink-0 flex-col gap-2 border-t border-[#262B3D] p-3">
                 <div data-browser-primary className="flex flex-col [&>button]:w-full [&>button]:justify-center">
-                  <PrimaryButton
-                    onClick={action.run}
-                    disabled={action.disabled}
-                    prompt={action.disabled ? undefined : pad ? <PadGlyph button="a" family={family} /> : "ENTER"}
-                  >
-                    {action.label}
-                  </PrimaryButton>
+                  {action.current ? (
+                    <div role="status" className="inline-flex h-[52px] items-center justify-center gap-2.5 rounded-full bg-[#1B1F2B] text-[#C5CBD8] phone:h-11">
+                      <Check aria-hidden className="h-[18px] w-[18px] text-[#F5F7FA]" strokeWidth={3} />
+                      <span className="lc-title text-[16px]">{action.label}</span>
+                    </div>
+                  ) : (
+                    <PrimaryButton
+                      onClick={action.run}
+                      disabled={action.disabled}
+                      prompt={action.disabled ? undefined : pad ? <PadGlyph button="a" family={family} /> : "ENTER"}
+                    >
+                      {action.label}
+                    </PrimaryButton>
+                  )}
                 </div>
                 {onToggleFavorite ? (
                   <button

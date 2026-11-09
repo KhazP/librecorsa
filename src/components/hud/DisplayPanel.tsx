@@ -17,6 +17,8 @@ import {
 } from "@/lib/settings/player-settings";
 import { Toggle } from "./PauseMenu";
 import { isTouchDevice } from "@/lib/input/touch-input";
+import { CHOSEN_PILL, CHOSEN_TILE, CURSOR_PILL, CURSOR_TILE, Segmented } from "@/components/menu/menu-ui";
+import { focusOnHover } from "@/components/menu/useFocusNav";
 
 export interface DisplayPanelProps {
   settings: PlayerSettings;
@@ -84,7 +86,7 @@ const RangeRow: React.FC<{
   >
     <span className="flex items-center justify-between gap-3">
       <span className="text-[15px] font-bold text-[#F5F7FA]">{label}</span>
-      <span className="font-f1-mono text-[13px] font-extrabold text-[#CCFF00] tabular-nums">{format(value)}</span>
+      <span className="font-f1-mono text-[13px] font-extrabold text-[#F5F7FA] tabular-nums">{format(value)}</span>
     </span>
     <input
       type="range"
@@ -113,13 +115,10 @@ const OptionCard: React.FC<{ active: boolean; title: string; detail: string; onC
     role="radio"
     aria-checked={active}
     onClick={onClick}
-    className={`flex min-w-0 cursor-pointer flex-col items-start gap-0.5 rounded-[14px] px-3 py-2.5 text-left transition-[background-color,border-color] duration-200 ${
+    onPointerEnter={focusOnHover}
+    className={`flex min-w-0 cursor-pointer flex-col items-start gap-0.5 rounded-[14px] px-3 py-2.5 text-left transition-[background-color,border-color,box-shadow] duration-200 ${CURSOR_TILE} ${
       tall ? "min-h-[92px]" : "min-h-[56px]"
-    } ${
-      active
-        ? "border-[1.5px] border-[#CCFF00] bg-[#CCFF00]/[0.07]"
-        : "border border-[#262B3D] bg-transparent hover:border-[#3A4157] hover:bg-white/[0.03]"
-    }`}
+    } ${active ? CHOSEN_TILE : "border border-[#262B3D] bg-transparent hover:border-[#3A4157] hover:bg-white/[0.03]"}`}
   >
     <span className={`text-[15px] font-bold ${active ? "text-[#F5F7FA]" : "text-[#C5CBD8]"}`}>{title}</span>
     <span className={`text-[12px] leading-snug ${active ? "text-[#C5CBD8]" : "text-[#8E96AA]"}`}>{detail}</span>
@@ -128,7 +127,7 @@ const OptionCard: React.FC<{ active: boolean; title: string; detail: string; onC
 
 /** Schematic of where each HUD style puts its panels (decorative) */
 const HudThumb: React.FC<{ preset: HudPreset; active: boolean }> = ({ preset, active }) => {
-  const fill = active ? "#CCFF00" : "#5B6275";
+  const fill = active ? "#F5F7FA" : "#5B6275";
   return (
     <svg viewBox="0 0 64 36" className="h-auto w-full rounded-lg bg-[#141822]" aria-hidden>
       {preset === "broadcast" ? (
@@ -177,8 +176,8 @@ const MIRROR_CHOICES: { id: VirtualMirrorMode; title: string; detail: string }[]
   { id: "off", title: "Off", detail: "Wing mirrors only" },
 ];
 
-/** Labelled pill segmented row */
-function Segmented<T extends string>({
+/** The shared segmented control under a field label */
+function LabelledSegmented<T extends string>({
   label,
   value,
   options,
@@ -192,25 +191,13 @@ function Segmented<T extends string>({
   return (
     <div className="flex min-w-0 flex-col gap-2">
       <span className={FIELD_LABEL}>{label}</span>
-      <div role="radiogroup" aria-label={label} className="flex rounded-full border border-[#262B3D] bg-[#08090D] p-1">
-        {options.map((o) => {
-          const active = o.id === value;
-          return (
-            <button
-              key={o.id}
-              type="button"
-              role="radio"
-              aria-checked={active}
-              onClick={() => onChange(o.id)}
-              className={`min-h-[38px] min-w-0 flex-1 cursor-pointer rounded-full px-2 text-[13px] font-bold whitespace-nowrap transition-colors ${
-                active ? "bg-[#CCFF00] text-[#08090D]" : "text-[#8E96AA] hover:text-[#F5F7FA]"
-              }`}
-            >
-              {o.label}
-            </button>
-          );
-        })}
-      </div>
+      <Segmented<T>
+        label={label}
+        value={value}
+        options={options}
+        onChange={onChange}
+        className="[&>button]:min-h-[38px] [&>button]:min-w-0 [&>button]:px-2 [&>button]:text-[13px] [&>button]:whitespace-nowrap"
+      />
     </div>
   );
 }
@@ -305,9 +292,10 @@ export const DisplayPanel: React.FC<DisplayPanelProps> = ({ settings, onChangeSe
                     aria-label={`Colour ${c}`}
                     aria-pressed={active}
                     onClick={() => setProfile({ color: sanitizeColor(c) })}
+                    onPointerEnter={focusOnHover}
                     style={{ backgroundColor: c }}
-                    className={`h-[30px] w-[30px] shrink-0 cursor-pointer rounded-full transition-transform hover:scale-110 ${
-                      active ? "border-2 border-[#F5F7FA] shadow-[0_0_0_3px_#CCFF00]" : "border-0"
+                    className={`h-[30px] w-[30px] shrink-0 cursor-pointer rounded-full outline-none transition-[box-shadow] duration-200 pointer-coarse:h-11 pointer-coarse:w-11 focus:shadow-[0_0_0_2px_#08090D,0_0_0_4px_#CCFF00,0_0_0_9px_rgba(204,255,0,0.14)] focus-visible:outline-none ${
+                      active ? "shadow-[0_0_0_2px_#08090D,0_0_0_4px_#F5F7FA]" : "shadow-[inset_0_0_0_1px_rgba(255,255,255,0.15)]"
                     }`}
                   />
                 );
@@ -340,10 +328,9 @@ export const DisplayPanel: React.FC<DisplayPanelProps> = ({ settings, onChangeSe
                   aria-checked={active}
                   title={p.detail}
                   onClick={() => setHud({ preset: p.id })}
-                  className={`flex min-w-0 cursor-pointer flex-col gap-1.5 rounded-[14px] px-1.5 pt-1.5 pb-2 text-left transition-[background-color,border-color] duration-200 ${
-                    active
-                      ? "border-[1.5px] border-[#CCFF00] bg-[#CCFF00]/[0.07]"
-                      : "border border-[#262B3D] bg-transparent hover:border-[#3A4157] hover:bg-white/[0.03]"
+                  onPointerEnter={focusOnHover}
+                  className={`flex min-w-0 cursor-pointer flex-col gap-1.5 rounded-[14px] px-1.5 pt-1.5 pb-2 text-left transition-[background-color,border-color,box-shadow] duration-200 ${CURSOR_TILE} ${
+                    active ? CHOSEN_TILE : "border border-[#262B3D] bg-transparent hover:border-[#3A4157] hover:bg-white/[0.03]"
                   }`}
                 >
                   <HudThumb preset={p.id} active={active} />
@@ -415,7 +402,7 @@ export const DisplayPanel: React.FC<DisplayPanelProps> = ({ settings, onChangeSe
             </div>
           </div>
           <div className="grid gap-3 min-[420px]:grid-cols-2">
-            <Segmented
+            <LabelledSegmented
               label="Timing tower"
               value={hud.towerGaps}
               options={[
@@ -424,7 +411,7 @@ export const DisplayPanel: React.FC<DisplayPanelProps> = ({ settings, onChangeSe
               ]}
               onChange={(towerGaps) => setHud({ towerGaps })}
             />
-            <Segmented
+            <LabelledSegmented
               label="Circuit map"
               value={hud.mapMode}
               options={[
@@ -466,7 +453,7 @@ export const DisplayPanel: React.FC<DisplayPanelProps> = ({ settings, onChangeSe
               onChange={() => setHud({ shiftBeep: !hud.shiftBeep })}
             />
             <div className="pt-2">
-              <Segmented
+              <LabelledSegmented
                 label="Cockpit head movement"
                 value={hud.headMovement}
                 options={[
@@ -515,7 +502,8 @@ export const DisplayPanel: React.FC<DisplayPanelProps> = ({ settings, onChangeSe
                 type="button"
                 disabled={vrActive}
                 onClick={onEnterVr}
-                className="inline-flex min-h-[40px] cursor-pointer items-center rounded-full border border-[#CCFF00] bg-[#CCFF00]/[0.12] px-4 text-[13px] font-bold text-[#CCFF00] transition-colors hover:bg-[#CCFF00]/25 disabled:cursor-not-allowed disabled:opacity-60"
+                onPointerEnter={focusOnHover}
+                className={`inline-flex min-h-[40px] cursor-pointer items-center rounded-full px-4 text-[13px] font-bold transition-[background-color,box-shadow,color] duration-200 disabled:cursor-not-allowed disabled:opacity-60 ${CHOSEN_PILL} ${CURSOR_PILL}`}
               >
                 {vrActive ? "In VR" : "Enter VR (WebXR)"}
               </button>

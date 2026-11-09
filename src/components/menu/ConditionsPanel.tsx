@@ -2,7 +2,7 @@
 
 import React from "react";
 import { CloudRain, CloudSun, Sun, Sunrise, Sunset, Cloud, CloudDrizzle, Shuffle, type LucideIcon } from "lucide-react";
-import { Segmented } from "./menu-ui";
+import { CHOSEN_TILE, CURSOR_TILE, Segmented } from "./menu-ui";
 import { focusOnHover } from "./useFocusNav";
 import {
   defaultWeatherNodesForPreset,
@@ -86,14 +86,14 @@ const ChoiceCard: React.FC<{
     disabled={disabled}
     onClick={onClick}
     onPointerEnter={focusOnHover}
-    className={`flex min-h-[64px] cursor-pointer flex-col items-start justify-center gap-1 rounded-[18px] px-3.5 py-2.5 text-left transition-[background-color,border-color,color] duration-200 disabled:cursor-not-allowed disabled:opacity-50 ${
+    className={`flex min-h-[64px] cursor-pointer flex-col items-start justify-center gap-1 rounded-[18px] px-3.5 py-2.5 text-left transition-[background-color,border-color,box-shadow,color] duration-200 disabled:cursor-not-allowed disabled:opacity-50 ${CURSOR_TILE} ${
       active
-        ? "border-[1.5px] border-[#CCFF00] bg-[#CCFF00]/[0.07] text-[#F5F7FA]"
+        ? `${CHOSEN_TILE} text-[#F5F7FA]`
         : "border border-[#262B3D] bg-[#08090D]/50 text-[#C5CBD8] hover:border-[#3A4157] hover:bg-[#1B1F2B] hover:text-[#F5F7FA]"
     }`}
   >
     <span className="flex items-center gap-2 text-[14px] leading-tight font-bold">
-      {Icon ? <Icon aria-hidden size={16} className={active ? "text-[#CCFF00]" : "text-[#8E96AA]"} /> : null}
+      {Icon ? <Icon aria-hidden size={16} className={active ? "text-[#F5F7FA]" : "text-[#8E96AA]"} /> : null}
       {title}
     </span>
     {sub ? <span className={`text-[12px] ${active ? "text-[#C5CBD8]" : "text-[#8E96AA]"}`}>{sub}</span> : null}
