@@ -3,7 +3,7 @@
  * (the same SQL runs), R2 as a map.
  */
 import { DatabaseSync } from 'node:sqlite';
-import type { D1Database, D1PreparedStatement, D1Result, R2Bucket } from '../../cloudflare/api/types';
+import type { D1Database, D1PreparedStatement, D1Result, DurableObjectState, R2Bucket, ServerSocket } from '../../cloudflare/api/types';
 
 type Bind = null | number | bigint | string;
 
@@ -51,4 +51,60 @@ export function fakeR2(): R2Bucket & { objects: Map<string, string> } {
       for (const key of Array.isArray(keys) ? keys : [keys]) objects.delete(key);
     },
   };
+}
+
+/** The server end of a socket a Durable Object accepted: records what was sent to it and whether it was closed */
+export class FakeSocket implements ServerSocket {
+  sent: Record<string, unknown>[] = [];
+  closed: number | null = null;
+  readyState = 1;
+  tags: string[] = [];
+  private attachment: unknown = null;
+  send(message: string): void {
+    if (this.closed !== null) throw new Error('closed');
+    this.sent.push(JSON.parse(message));
+  }
+  close(code?: number): void {
+    this.closed ??= code ?? 1000;
+    this.readyState = 3;
+  }
+  serializeAttachment(value: unknown): void {
+    this.attachment = JSON.parse(JSON.stringify(value));
+  }
+  deserializeAttachment(): unknown {
+    return this.attachment;
+  }
+  last(): Record<string, unknown> | undefined {
+    return this.sent[this.sent.length - 1];
+  }
+}
+
+/** A Durable Object's state: storage as a map, the alarm as a number, sockets as FakeSockets */
+export function fakeState(): DurableObjectState & { sockets: FakeSocket[]; alarmMs: number | null; store: Map<string, unknown> } {
+  const store = new Map<string, unknown>();
+  const sockets: FakeSocket[] = [];
+  const state = {
+    sockets,
+    store,
+    alarmMs: null as number | null,
+    storage: {
+      get: async <T>(key: string) => store.get(key) as T | undefined,
+      put: async <T>(key: string, value: T) => void store.set(key, JSON.parse(JSON.stringify(value))),
+      delete: async (key: string) => store.delete(key),
+      setAlarm: async (ms: number) => void (state.alarmMs = ms),
+      deleteAlarm: async () => void (state.alarmMs = null),
+      deleteAll: async () => {
+        store.clear();
+        state.alarmMs = null;
+      },
+    },
+    acceptWebSocket(ws: ServerSocket, tags: string[] = []) {
+      (ws as FakeSocket).tags = tags;
+      sockets.push(ws as FakeSocket);
+    },
+    // As the runtime: only sockets still open
+    getWebSockets: (tag?: string) => sockets.filter((x) => x.closed === null && (tag === undefined || x.tags.includes(tag))),
+    setWebSocketAutoResponse() {},
+  };
+  return state;
 }

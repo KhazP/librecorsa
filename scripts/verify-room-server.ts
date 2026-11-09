@@ -10,7 +10,8 @@
 import { handleApi, onlineConfig } from '../cloudflare/api/index';
 import { MAX_GUESTS, RoomServer } from '../cloudflare/api/room';
 import { cleanIceServers, generateIceServers } from '../cloudflare/api/turn';
-import type { DurableObjectState, Env, ServerSocket } from '../cloudflare/api/types';
+import type { Env } from '../cloudflare/api/types';
+import { FakeSocket, fakeState } from './lib/fake-cloudflare';
 import { parseApiBase, parseOnlineConfig } from '../src/lib/net/online-config';
 import { sanitizeIceServers } from '../src/lib/sim/multiplayer-sync';
 
@@ -29,53 +30,6 @@ Object.assign(globalThis, {
     ) {}
   },
 });
-
-class FakeSocket implements ServerSocket {
-  sent: Record<string, unknown>[] = [];
-  closed: number | null = null;
-  readyState = 1;
-  tags: string[] = [];
-  private attachment: unknown = null;
-  send(message: string): void {
-    if (this.closed !== null) throw new Error('closed');
-    this.sent.push(JSON.parse(message));
-  }
-  close(code?: number): void {
-    this.closed ??= code ?? 1000;
-    this.readyState = 3;
-  }
-  serializeAttachment(value: unknown): void {
-    this.attachment = JSON.parse(JSON.stringify(value));
-  }
-  deserializeAttachment(): unknown {
-    return this.attachment;
-  }
-  last(): Record<string, unknown> | undefined {
-    return this.sent[this.sent.length - 1];
-  }
-}
-
-function fakeState(): DurableObjectState & { sockets: FakeSocket[] } {
-  const store = new Map<string, unknown>();
-  const sockets: FakeSocket[] = [];
-  return {
-    sockets,
-    storage: {
-      get: async <T>(key: string) => store.get(key) as T | undefined,
-      put: async <T>(key: string, value: T) => void store.set(key, value),
-      delete: async (key: string) => store.delete(key),
-      setAlarm: async () => {},
-      deleteAlarm: async () => {},
-    },
-    acceptWebSocket(ws: ServerSocket, tags: string[] = []) {
-      (ws as FakeSocket).tags = tags;
-      sockets.push(ws as FakeSocket);
-    },
-    // As the runtime: only sockets still open
-    getWebSockets: (tag?: string) => sockets.filter((s) => s.closed === null && (tag === undefined || s.tags.includes(tag))),
-    setWebSocketAutoResponse() {},
-  };
-}
 
 const ICE = [{ urls: ['turn:turn.example:3478'], username: 'u', credential: 'c' }];
 const env = {} as Env;
