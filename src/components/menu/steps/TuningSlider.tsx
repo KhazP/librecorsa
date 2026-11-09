@@ -80,7 +80,7 @@ export const StickCurve: React.FC<{ deadzone: number; outerDeadzone: number; lin
 
   return (
     <div className="flex flex-col gap-2 rounded-[18px] border border-[#262B3D] bg-[#08090D] p-3.5">
-      <span className="lc-lbl text-[10px]!">Stick response</span>
+      <span className="lc-lbl!">Stick response</span>
       <svg viewBox="0 0 160 100" className="block h-auto w-full" role="img" aria-label="Stick response curve">
         <rect x="6" y="6" width="148" height="88" rx="10" fill="none" stroke="#262B3D" strokeWidth="1" />
         <line x1="80" y1="6" x2="80" y2="94" stroke="#262B3D" strokeWidth="1" />
@@ -124,7 +124,7 @@ const TriggerRow: React.FC<{ label: string; button: number; gamma: number; color
   return (
     <div className="flex flex-col gap-1.5">
       <span className="flex items-center justify-between gap-2">
-        <span className="lc-lbl text-[10px]!">{label}</span>
+        <span className="lc-lbl!">{label}</span>
         <span ref={readout} className="font-f1-mono text-[11px] font-extrabold text-[#F5F7FA] tabular-nums">
           0% → 0%
         </span>

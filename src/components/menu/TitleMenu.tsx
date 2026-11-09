@@ -953,7 +953,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
               <div className="h-px bg-[#262B3D]" />
               <dl className="m-0 grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-4 gap-y-2.5">
                 <>
-                  <dt className="lc-lbl text-[10px]">Car</dt>
+                  <dt className="lc-lbl">Car</dt>
                   <dd className="m-0 flex min-w-0 items-center justify-end gap-2 text-[14px] font-semibold">
                     <span
                       className="shrink-0 rounded-full px-1.5 py-0.5 font-f1-mono text-[9px] font-extrabold text-[#08090D]"
@@ -966,7 +966,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
                 </>
                 {livery ? (
                   <>
-                    <dt className="lc-lbl text-[10px]">Livery</dt>
+                    <dt className="lc-lbl">Livery</dt>
                     <dd className="m-0 flex min-w-0 items-center justify-end gap-2 text-[14px] font-semibold">
                       {vehicle.modelUrl ? (
                         <span className="truncate">Factory</span>
@@ -985,14 +985,14 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
                     </dd>
                   </>
                 ) : null}
-                <dt className="lc-lbl text-[10px]">Assists</dt>
+                <dt className="lc-lbl">Assists</dt>
                 <dd className="m-0 truncate text-right text-[14px] font-semibold">
                   {ASSIST_LABELS[props.assistPreset] ?? props.assistPreset}
                   {props.showRacingLine ? " · racing line" : ""}
                 </dd>
                 {hudPreset ? (
                   <>
-                    <dt className="lc-lbl text-[10px]">HUD</dt>
+                    <dt className="lc-lbl">HUD</dt>
                     <dd className="m-0 truncate text-right text-[14px] font-semibold">{HUD_LABELS[hudPreset] ?? hudPreset}</dd>
                   </>
                 ) : null}
@@ -1013,10 +1013,13 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
               ...(mode === "pad" && (raceOpen || !panel) ? [{ action: "start" as const, label: raceOpen ? "Start race" : "Drive" }] : []),
             ]}
           />
-          <span className="font-f1-mono text-[11px] font-bold tracking-[0.12em] text-[#8E96AA]">
-            {(TRACK_TOTAL_LENGTH_M / 1000).toFixed(2)} KM · {TURN_METADATA.length} TURNS
-            {panel ? null : <span className="hidden text-[#CCFF00]/80 xl:inline"> · 500 HZ VEHICLE DYNAMICS</span>}
-          </span>
+          {/* The circuit's numbers are on the title screen's own cards; a panel already says what it is about */}
+          {panel ? null : (
+            <span className="font-f1-mono text-[11px] font-bold tracking-[0.12em] text-[#8E96AA]">
+              {(TRACK_TOTAL_LENGTH_M / 1000).toFixed(2)} KM · {TURN_METADATA.length} TURNS
+              <span className="hidden text-[#CCFF00]/80 xl:inline"> · 500 HZ VEHICLE DYNAMICS</span>
+            </span>
+          )}
         </footer>
       </div>
     </div>

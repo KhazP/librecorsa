@@ -57,7 +57,7 @@ const TOUCH_CHOICES: { id: TouchMode; title: string; detail: string }[] = [
  */
 const CARD =
   "flex min-w-0 flex-col gap-3.5 rounded-[24px] border border-white/[0.07] bg-[#0D0F15]/[0.82] p-[18px] text-[#F5F7FA] [.lc-title-frame_&]:rounded-[22px] [.lc-title-frame_&]:border-[#262B3D] [.lc-title-frame_&]:bg-[#08090D]/60";
-const FIELD_LABEL = "lc-lbl text-[9px]";
+const FIELD_LABEL = "lc-lbl";
 const INPUT =
   "h-11 w-full min-w-0 rounded-[14px] border border-[#262B3D] bg-[#08090D] px-3.5 text-[15px] font-semibold text-[#F5F7FA] outline-none focus:border-[#CCFF00] focus:shadow-[0_0_0_4px_rgba(204,255,0,0.12)]";
 
@@ -95,6 +95,8 @@ const RangeRow: React.FC<{
       step={step}
       value={value}
       onChange={(e) => onChange(Number(Number(e.target.value).toFixed(2)))}
+      // A row that only matters with another option on (tilt range without tilt steering) is off, not just faint
+      disabled={dim}
       className="lc-range"
       style={{ "--lc-fill": `${((value - min) / (max - min || 1)) * 100}%` } as React.CSSProperties}
     />

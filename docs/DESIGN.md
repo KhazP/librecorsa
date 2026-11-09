@@ -41,7 +41,7 @@ Colour-blind palettes swap the *semantic* pairs (gain/loss, cold/hot, lapped ahe
 
 ## 3. Type
 
-Target type system (the proposal boards use it; the code still ships Titillium Web and JetBrains Mono).
+The type system, loaded in `src/app/layout.tsx`.
 Each layer borrows from where racing sims put it: a squared motorsport face for display (Chakra Petch, as in
 AC EVO's menus and the RaceLab / SimHub overlays), a neutral grotesk for UI text, a mono for timing.
 
@@ -50,13 +50,12 @@ AC EVO's menus and the RaceLab / SimHub overlays), a neutral grotesk for UI text
 | Display | `.lc-disp` | Chakra Petch 700 italic, uppercase, line-height 0.95. Sizes 72 / 44 / 28 / 18. Headings, rail labels, buttons, gear |
 | Title | `.lc-title` | Chakra Petch 700 italic, uppercase. 13–20 px. Tabs, secondary buttons |
 | Body | – | Geist 400 / 500 / 600, 13–17 px, fog on dark. All sentence-case UI text, inputs |
-| Label | `.lc-lbl` | Geist Mono 600, 11 px, tracking 0.16em, uppercase, slate. HUD: 9 px, 0.18em (`HUD_LBL`) |
+| Label | `.lc-lbl` | Geist Mono 600, 11 px, tracking 0.16em, uppercase, slate. Menus never shrink it; only the HUD goes to 9 px, 0.18em (`HUD_LBL`) |
 | Data | `.lc-data` | Geist Mono 700, tabular figures. Lap times, gaps, speeds, values |
 | Logo | `.font-f1-display` | Orbitron, only in the wordmark |
 
 Geist has no true italic, so nothing set in Geist is italicised; italic display always uses Chakra Petch.
-Migration: load Geist and Geist Mono with the `geist` package (`next/font`), Chakra Petch through `next/font/local`
-like the current fonts, then swap the families in `.lc-disp`, `.lc-title`, `.lc-lbl`, `.lc-data` and `body`.
+All four are self-hosted through `next/font/local` (`src/app/fonts/`).
 
 ## 4. Shape
 
@@ -87,7 +86,7 @@ Heights: primary button 52, rail entry 58 (primary 64), segmented option 40, chi
 - **TabStrip**: pill track on void, active tab chosen (white); the cursor fills it volt; LB / RB glyphs (or Q / E caps) at either end.
 - **Segmented**: pill track on void, active option chosen (white); the cursor fills volt. Use for 2–4 choices. One component for every segmented row (menus, garage, display).
 - **LiveryPicker**: swatches with the name of the one under the cursor beside them (white ring = in use, volt ring = cursor).
-- **Chip**: 26 px pill, mono 11 px 800; `solid`, `soft` (12% tint) or `outline`.
+- **Chip**: 26 px pill, mono 11 px 800 (`sm` 22 px / 11 px, `xs` 20 px / 10 px; nothing smaller in a menu); `solid`, `soft` (12% tint) or `outline`.
 - **KeyCap**: 22 px round cap, void with keyline; `volt` and `ink` tones inside buttons.
 - **PadGlyph**: face buttons in their own colours (Xbox A `#5DC21E`, B `#E5413A`, X `#2F8BE5`, Y `#F4C21B`); LB / RB outlined pills.
 - **PromptBar**: no container; glyph or key cap + 13 px 600 fog label, 22 px gaps, on a hairline at the bottom of the screen.

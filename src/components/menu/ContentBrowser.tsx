@@ -426,7 +426,7 @@ export function ContentBrowser<T>(props: ContentBrowserProps<T>) {
         >
           {filterGroups.map((g, gi) => (
             <div key={g.label} className="contents md:flex md:flex-col md:gap-0.5">
-              <span className={`lc-lbl hidden px-3 pb-1.5 text-[10px] md:block ${gi ? "pt-3.5" : "pt-0.5"}`}>{g.label}</span>
+              <span className={`lc-lbl hidden px-3 pb-1.5 md:block ${gi ? "pt-3.5" : "pt-0.5"}`}>{g.label}</span>
               {g.filters.map((f) => {
                 const on = f.id === filter?.id;
                 const n = countOf(f);

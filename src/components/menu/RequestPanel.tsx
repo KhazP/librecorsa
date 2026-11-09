@@ -77,7 +77,7 @@ const Field: React.FC<{ label: string; hint?: string; caution?: string; required
   children,
 }) => (
   <label className="flex min-w-0 flex-col gap-1.5">
-    <span className="lc-lbl text-[10px]">
+    <span className="lc-lbl">
       {label}
       {required ? <span className="text-[#CCFF00]"> *</span> : null}
     </span>
@@ -336,7 +336,7 @@ export const RequestPanel: React.FC<{ context?: FeedbackContext }> = ({ context 
         ) : null}
         {added.length ? (
           <div className="flex flex-col gap-2 rounded-[18px] border border-[#262B3D] bg-[#08090D]/60 px-4 py-3.5">
-            <span className="lc-lbl text-[10px]">Added to your report</span>
+            <span className="lc-lbl">Added to your report</span>
             <dl className="m-0 grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1 text-[13px]">
               {added.map(([k, v]) => (
                 <React.Fragment key={k}>
@@ -360,7 +360,7 @@ export const RequestPanel: React.FC<{ context?: FeedbackContext }> = ({ context 
 
       {sent ? (
         <div role="status" className="flex min-w-0 flex-col items-start gap-3.5 self-start rounded-[18px] border border-[#262B3D] bg-[#08090D]/60 px-4 py-4">
-          <span className="lc-lbl text-[10px] text-[#CCFF00]">Opened on GitHub</span>
+          <span className="lc-lbl text-[#CCFF00]">Opened on GitHub</span>
           <p className="m-0 text-[15px] leading-snug text-[#C5CBD8]">
             Check the new tab and press Create there to send it. Thanks!
           </p>

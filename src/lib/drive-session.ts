@@ -191,7 +191,7 @@ export function idleDriveSnapshot(track: BuiltTrackData): DriveSnapshot {
       roomCode: "",
       state: "idle",
       connectedWebRtcPeers: 0,
-      statusText: "BroadcastChannel Active (Same-Browser) • Ready for WebRTC P2P",
+      statusText: "Ready. Tabs in this browser find each other; other devices join with a room code.",
     },
     vr: "off",
     muted: false,

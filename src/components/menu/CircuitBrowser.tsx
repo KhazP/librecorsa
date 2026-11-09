@@ -48,7 +48,7 @@ const DetailOutline: React.FC<{ track: TrackInfo }> = ({ track }) => {
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center justify-between gap-2">
-        <span className="lc-lbl text-[10px]">Layout</span>
+        <span className="lc-lbl">Layout</span>
         <span className="flex gap-2.5">
           {SECTOR_COLORS.map((c, i) => (
             <span key={c} className="inline-flex items-center gap-1 font-f1-mono text-[10px] font-extrabold" style={{ color: c }}>
@@ -111,7 +111,7 @@ export const CircuitBrowser: React.FC<{
         filters: [
           { id: "all", label: "All circuits", test: () => true },
           { id: "fav", label: "Favourites", test: (v) => v.layouts.some((l) => favs.includes(l.id)) },
-          { id: "recent", label: "Recently raced", test: (v) => v.layouts.some((l) => recent.includes(l.id)) },
+          { id: "recent", label: "Recently driven", test: (v) => v.layouts.some((l) => recent.includes(l.id)) },
           ...(venues.some(isOriginal) ? [{ id: "original", label: CIRCUIT_QUALITY_META.original.filterLabel, test: isOriginal }] : []),
         ],
       },
@@ -154,7 +154,7 @@ export const CircuitBrowser: React.FC<{
       heading: "Longest first",
       compare: (a, b) => Math.max(...b.layouts.map((l) => l.lengthM)) - Math.max(...a.layouts.map((l) => l.lengthM)),
     },
-    { id: "recent", label: "Recent", heading: "Recently raced first", compare: (a, b) => recentRank(a) - recentRank(b) || byName(a, b) },
+    { id: "recent", label: "Recent", heading: "Recently driven first", compare: (a, b) => recentRank(a) - recentRank(b) || byName(a, b) },
   ];
 
   const activeVenue = venues.find((v) => v.layouts.some((l) => l.id === trackId));
@@ -209,7 +209,7 @@ export const CircuitBrowser: React.FC<{
             <span className="truncate text-[12px] text-[#8E96AA]">{placeOf(v.city, v.country)}</span>
             <span className="mt-0.5 flex flex-wrap items-center gap-1.5">
               <span className="lc-data text-[11px] whitespace-nowrap text-[#C5CBD8]">
-                {km(t)} KM · {t.turns} T
+                {km(t)} KM · {t.turns} TURNS
               </span>
               <span className="flex-1" />
               {v.layouts.length > 1 ? (
@@ -253,7 +253,7 @@ export const CircuitBrowser: React.FC<{
             </div>
             {v.layouts.length > 1 ? (
               <div className="flex flex-col gap-2">
-                <span className="lc-lbl text-[10px]">{v.layouts.length} layouts</span>
+                <span className="lc-lbl">{v.layouts.length} layouts</span>
                 <Segmented
                   label={`${v.name} layout`}
                   className="[&>button]:min-h-[36px] [&>button]:px-2 [&>button]:text-[13px]"
@@ -266,7 +266,7 @@ export const CircuitBrowser: React.FC<{
             <dl className="m-0 grid grid-cols-3 gap-1.5">
               {stats.map(([k, val]) => (
                 <div key={k} className="flex min-w-0 flex-col gap-0.5 rounded-[10px] bg-[#08090D]/60 px-2.5 py-2">
-                  <dt className="lc-lbl text-[9px]">{k}</dt>
+                  <dt className="lc-lbl">{k}</dt>
                   <dd className="lc-data m-0 truncate text-[15px] text-[#F5F7FA]">{val}</dd>
                 </div>
               ))}
@@ -278,8 +278,8 @@ export const CircuitBrowser: React.FC<{
             <DetailOutline track={t} />
             <div className="flex flex-col gap-1 rounded-[10px] border border-[#262B3D] bg-[#08090D]/60 px-3 py-2.5">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="font-f1-mono text-[10px] font-extrabold tracking-[0.08em] uppercase" style={{ color: qMeta.color }}>
-                  {qMeta.filterLabel}
+                <span className="font-f1-mono text-[11px] font-extrabold tracking-[0.08em] uppercase" style={{ color: qMeta.color }}>
+                  {qMeta.badge}
                 </span>
                 {t.credit?.author ? <span className="text-[11px] font-semibold text-[#C5CBD8]">By {t.credit.author}</span> : null}
               </div>
@@ -287,7 +287,7 @@ export const CircuitBrowser: React.FC<{
             </div>
             {active && BASE_ALTITUDE_M > 0 ? (
               <div className="flex items-center justify-between gap-2">
-                <span className="lc-lbl text-[10px]">Altitude</span>
+                <span className="lc-lbl">Altitude</span>
                 <span className="lc-data text-[13px]">{Math.round(BASE_ALTITUDE_M).toLocaleString("en-US")} m</span>
               </div>
             ) : null}

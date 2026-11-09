@@ -285,7 +285,7 @@ export const AssistCurve: React.FC<{ tuning: DeviceAssistTuning; device: Steerin
   return (
     <div className="flex flex-col gap-2 rounded-[18px] border border-[#262B3D] bg-[#08090D] p-3.5">
       <div className="flex items-center justify-between gap-2">
-        <span className="lc-lbl text-[10px]!">Self-steer curve</span>
+        <span className="lc-lbl!">Self-steer curve</span>
         <span className="font-f1-mono text-[11px] font-extrabold text-[#CCFF00] tabular-nums">
           {Math.round(resolved.targetSlip * 100)}% grip · {capLabel}
         </span>

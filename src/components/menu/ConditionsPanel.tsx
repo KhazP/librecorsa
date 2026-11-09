@@ -132,7 +132,7 @@ export const ConditionsPanel: React.FC<ConditionsPanelProps> = ({
           <CardHeader
             label="Weather"
             color="#00E5FF"
-            right={locked ? <span className="lc-lbl text-[9px] text-[#00E5FF]">Set by the host</span> : null}
+            right={locked ? <span className="lc-lbl text-[#00E5FF]">Set by the host</span> : null}
           />
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             {WEATHER_PRESETS.map((id) => (
@@ -152,7 +152,7 @@ export const ConditionsPanel: React.FC<ConditionsPanelProps> = ({
             ))}
           </div>
           <div className="flex flex-col gap-1.5 pt-1">
-            <span className="lc-lbl text-[9px]">5-node session forecast</span>
+            <span className="lc-lbl">Forecast through the session</span>
             <div className="grid grid-cols-5 gap-1.5">
               {(conditions.weatherNodes ?? defaultWeatherNodesForPreset(conditions.weather, conditions.timeOfDay, conditions.seed)).map((node, idx) => {
                 const sky = SKY_COVER_SPECS[node.sky];
@@ -161,7 +161,7 @@ export const ConditionsPanel: React.FC<ConditionsPanelProps> = ({
                     key={WEATHER_NODE_LABELS[idx]}
                     className="flex flex-col gap-0.5 rounded-[12px] border border-[#262B3D] bg-[#08090D]/60 px-2 py-1.5 text-center"
                   >
-                    <span className="lc-lbl text-[9px] text-[#8E96AA]">{WEATHER_NODE_LABELS[idx]}</span>
+                    <span className="lc-lbl text-[#8E96AA]">{WEATHER_NODE_LABELS[idx]}</span>
                     <span className="text-[11px] leading-tight font-bold text-[#F5F7FA]">{sky.label}</span>
                     <span className="font-f1-mono text-[10px] text-[#00E5FF]">
                       {node.rainChance > 0 ? `${Math.round(node.rainChance)}% rain` : `${node.temperatureC.toFixed(0)}°C`}
@@ -188,7 +188,7 @@ export const ConditionsPanel: React.FC<ConditionsPanelProps> = ({
             ))}
           </div>
           <div className="flex flex-col gap-2">
-            <span className="lc-lbl text-[9px]">Time progression</span>
+            <span className="lc-lbl">Time progression</span>
             <Segmented
               label="Time progression"
               value={String(conditions.timeScale)}
@@ -201,9 +201,9 @@ export const ConditionsPanel: React.FC<ConditionsPanelProps> = ({
 
       <div className="flex min-w-0 flex-col gap-4">
         <div className={CARD}>
-          <CardHeader label="Track surface rubber" color="#00E676" />
+          <CardHeader label="Track grip" color="#00E676" />
           <Segmented
-            label="Track surface rubber"
+            label="Track grip"
             className="[&>button]:px-1.5 [&>button]:text-[13px]"
             value={conditions.surfacePreset ?? "natural"}
             onChange={(v) => !locked && set({ surfacePreset: v as SurfaceGripPresetId })}
@@ -217,9 +217,9 @@ export const ConditionsPanel: React.FC<ConditionsPanelProps> = ({
             {SURFACE_GRIP_PRESET_LABELS[conditions.surfacePreset ?? "natural"].detail}
           </p>
           <div className="flex flex-col gap-2">
-            <span className="lc-lbl text-[9px]">Surface evolution rate</span>
+            <span className="lc-lbl">How fast the grip changes</span>
             <Segmented
-              label="Surface evolution rate"
+              label="How fast the grip changes"
               value={String(conditions.surfaceTimeScale ?? 1)}
               onChange={(v) => !locked && set({ surfaceTimeScale: Number(v) })}
               options={SURFACE_TIME_SCALES.map((s) => ({
@@ -253,7 +253,7 @@ export const ConditionsPanel: React.FC<ConditionsPanelProps> = ({
                 ["Surface", `${trackStateLabel(readout.waterMm)}${readout.rain > 0.05 ? " · rain" : ""}`],
               ].map(([k, v]) => (
                 <div key={k} className="flex min-w-0 flex-col gap-1">
-                  <dt className="lc-lbl text-[9px]">{k}</dt>
+                  <dt className="lc-lbl">{k}</dt>
                   <dd className="m-0 font-f1-mono text-[15px] font-extrabold text-[#F5F7FA]">{v}</dd>
                 </div>
               ))}

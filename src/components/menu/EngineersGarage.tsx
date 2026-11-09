@@ -429,7 +429,7 @@ export const EngineersGarage: React.FC<
         </button>
         {carTakesPhysicsSwitch(p.carId) ? <CarPhysicsSwitch color="#CCFF00" /> : null}
         <div className="flex min-h-[54px] flex-wrap items-center gap-x-3 gap-y-2 rounded-[18px] border border-[#262B3D] bg-[#08090D]/55 px-3 py-2">
-          <span className="lc-lbl w-[68px] shrink-0 text-[10px]">Livery</span>
+          <span className="lc-lbl w-[68px] shrink-0">Livery</span>
           {!carTakesLivery(p.carId) ? (
             <p className="m-0 text-[13px] text-[#8E96AA]">{FACTORY_LIVERY_NOTE}</p>
           ) : (
@@ -437,7 +437,7 @@ export const EngineersGarage: React.FC<
           )}
         </div>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-[18px] border border-[#262B3D] bg-[#08090D]/55 px-3 py-2">
-          <span className="lc-lbl w-[68px] shrink-0 text-[10px]">Presets</span>
+          <span className="lc-lbl w-[68px] shrink-0">Presets</span>
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}

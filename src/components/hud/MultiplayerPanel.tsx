@@ -126,7 +126,7 @@ const PILL_CYAN = `${PILL} border-0 bg-[#00E5FF] px-5 text-[#08090D] hover:opaci
 const stepButtonClass =
   "flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border border-[#262B3D] bg-[#1B1F2B] text-[#F5F7FA] transition-colors hover:border-[#CCFF00] disabled:cursor-not-allowed disabled:opacity-40";
 const inputClass =
-  "h-11 w-full min-w-0 rounded-[14px] border border-[#262B3D] bg-[#08090D] px-3.5 font-f1-mono text-[13px] text-[#F5F7FA] placeholder:text-[#8E96AA]/50 focus:border-[#CCFF00] focus:shadow-[0_0_0_4px_rgba(204,255,0,0.12)] focus:outline-none";
+  "h-11 w-full min-w-0 rounded-[14px] border border-[#262B3D] bg-[#08090D] px-3.5 font-f1-mono text-[13px] text-[#F5F7FA] placeholder:text-[#8E96AA] focus:border-[#CCFF00] focus:shadow-[0_0_0_4px_rgba(204,255,0,0.12)] focus:outline-none";
 
 function ReadValue({ children }: { children: React.ReactNode }) {
   return <span className="text-[14px] leading-tight font-bold text-[#F5F7FA]">{children}</span>;
@@ -148,7 +148,7 @@ function RuleRow<T extends string>({
 }) {
   return (
     <div className="col-span-full flex flex-wrap items-center gap-x-3 gap-y-2">
-      <span className="lc-lbl w-[74px] shrink-0 text-[9px]">{label}</span>
+      <span className="lc-lbl w-[74px] shrink-0">{label}</span>
       {editable ? (
         <Segmented
           label={label}
@@ -216,6 +216,7 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
 }) => {
   // Connect box
   const [roomCodeInput, setRoomCodeInput] = useState(initialRoomCode);
+  const joinReady = roomCodeInput.trim().length >= 3;
   const [copiedLink, flashCopiedLink] = useFlash(2000);
   const [canShare, setCanShare] = useState(false);
 
@@ -375,7 +376,7 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
 
         <div className="grid grid-cols-2 gap-2.5">
           <div className={`${CARD} flex flex-col gap-2 !p-3 !rounded-[18px]`}>
-            <span className="lc-lbl text-[9px]">Laps</span>
+            <span className="lc-lbl">Laps</span>
             {isHost ? (
               <div className="flex items-center justify-between gap-1.5">
                 <button
@@ -404,7 +405,7 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
           </div>
 
           <div className={`${CARD} flex flex-col gap-2 !p-3 !rounded-[18px]`}>
-            <span className="lc-lbl text-[9px]">Circuit</span>
+            <span className="lc-lbl">Circuit</span>
             <div className="flex flex-wrap items-center gap-1.5">
               <ReadValue>{trackName(settings.trackId)}</ReadValue>
               <TrackQualityBadge track={getTrackInfo(settings.trackId)} size="xs" />
@@ -611,7 +612,7 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
           </div>
           <div className="h-px bg-[#262B3D]" />
           <div className="flex flex-col gap-2">
-            <span className="lc-lbl text-[10px]">{hostedCode ? "Join another room" : "Host or join a room"}</span>
+            <span className="lc-lbl">{hostedCode ? "Join another room" : "Host or join a room"}</span>
             <div className="flex flex-wrap gap-2">
               <input
                 type="text"
@@ -620,18 +621,20 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
                 onChange={(e) => setRoomCodeInput(e.target.value.toUpperCase())}
                 placeholder="CODE"
                 aria-label="Room code"
-                className="h-11 min-w-[7rem] flex-1 rounded-full border border-[#262B3D] bg-[#08090D] px-4 font-f1-mono text-[15px] font-extrabold tracking-[0.3em] text-[#F5F7FA] uppercase placeholder:text-[#8E96AA]/50 focus:border-[#CCFF00] focus:shadow-[0_0_0_4px_rgba(204,255,0,0.12)] focus:outline-none"
+                className="h-11 min-w-[7rem] flex-1 rounded-full border border-[#262B3D] bg-[#08090D] px-4 font-f1-mono text-[15px] font-extrabold tracking-[0.3em] text-[#F5F7FA] uppercase placeholder:text-[#8E96AA] focus:border-[#CCFF00] focus:shadow-[0_0_0_4px_rgba(204,255,0,0.12)] focus:outline-none"
               />
               <button
                 type="button"
+                disabled={!joinReady}
                 onClick={() => {
-                  if (roomCodeInput.trim().length >= 3) onJoinP2PRoom?.(roomCodeInput.trim());
+                  if (joinReady) onJoinP2PRoom?.(roomCodeInput.trim());
                 }}
-                className={PILL_CYAN}
+                className={joinReady ? PILL_VOLT : PILL_DARK}
               >
                 Join
               </button>
-              <button type="button" onClick={hostRoom} className={hostedCode ? PILL_DARK : PILL_VOLT}>
+              {/* One main action at a time: Host until a code is typed, then Join */}
+              <button type="button" onClick={hostRoom} className={hostedCode || joinReady ? PILL_DARK : PILL_VOLT}>
                 Host
               </button>
             </div>
@@ -648,7 +651,7 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
 
         {profile ? (
           <div className="flex min-w-0 items-center gap-2.5 rounded-full border border-[#262B3D] bg-[#08090D]/60 py-1.5 pr-3 pl-3.5">
-            <span className="lc-lbl text-[9px]">You</span>
+            <span className="lc-lbl">You</span>
             <span className="h-3.5 w-3.5 shrink-0 rounded-full" style={{ backgroundColor: profile.color }} />
             <span className="font-f1-mono text-[12px] font-extrabold tracking-[0.1em]">{profile.code}</span>
             <span className="min-w-0 flex-1 truncate text-[14px] font-semibold">{profile.name}</span>
@@ -676,7 +679,7 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
             onClick={() => setAdvancedOpen((open) => !open)}
             className="flex min-h-[44px] w-full cursor-pointer items-center justify-between gap-2 rounded-[22px] px-4 py-2 text-left hover:bg-white/[0.04]"
           >
-            <span className="lc-title text-[14px] text-[#8E96AA]">Advanced · manual connection &amp; TURN relay</span>
+            <span className="lc-title text-[14px] text-[#8E96AA]">Advanced · connect by hand, or through a relay server</span>
             <span className="flex shrink-0 items-center gap-2">
               {turnConfigured ? <span className={`${CHIP} bg-[#00E5FF]/[0.12] text-[#00E5FF] uppercase`}>TURN relay</span> : null}
               <ChevronDown
@@ -854,7 +857,7 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
         <p
           role={p2pStatus?.state === "error" ? "alert" : undefined}
           className={`m-0 font-f1-mono leading-normal ${
-            p2pStatus?.state === "error" ? "text-[13px] font-semibold text-[#FF2A3C]" : "text-[11px] text-[#8E96AA]/80"
+            p2pStatus?.state === "error" ? "text-[13px] font-semibold text-[#FF2A3C]" : "text-[13px] text-[#8E96AA]"
           }`}
         >
           {p2pStatus?.statusText ?? "Same-browser tabs connect automatically. Use a room code for other devices."}

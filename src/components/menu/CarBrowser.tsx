@@ -32,7 +32,7 @@ const physicsLabel = (car: CarDefinition) =>
 
 const Spec: React.FC<{ k: string; children: React.ReactNode }> = ({ k, children }) => (
   <div className="flex items-baseline justify-between gap-3 border-t border-white/[0.07] py-2">
-    <span className="lc-lbl text-[10px]">{k}</span>
+    <span className="lc-lbl">{k}</span>
     <span className="min-w-0 text-right text-[13px] font-semibold text-[#F5F7FA]">{children}</span>
   </div>
 );
@@ -176,7 +176,7 @@ export const CarBrowser: React.FC<{
               </p>
             </div>
             <div className="flex flex-col gap-2">
-              <span className="lc-lbl text-[10px]">Livery</span>
+              <span className="lc-lbl">Livery</span>
               {carTakesLivery(c.id) ? (
                 <LiveryPicker liveries={LIVERIES} value={selectedLivery} onChange={onChangeLivery} surface="#11131A" />
               ) : (
