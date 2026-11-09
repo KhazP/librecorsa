@@ -1,7 +1,7 @@
 /**
- * Headless checks of the online leaderboard rules: laps carry their conditions and are ranked per board, and the
- * sample-consistency checks pass real laps while refusing cheap fakes. Runs the reference Worker against an
- * in-memory KV. (scripts/leaderboard-supabase/schema.sql mirrors the same rules in SQL.)
+ * Headless checks of the online lap boards: laps carry their conditions, the sample-consistency checks pass real laps
+ * while refusing cheap fakes, and the board API (cloudflare/api/board.ts, run here on an in-memory SQLite and bucket)
+ * ranks every driver once on one board per circuit and car, keeps their best lap of each class, and guards names.
  *
  *   npx tsx scripts/verify-leaderboard.ts
  */
@@ -10,7 +10,12 @@ import { F1Physics2026 } from '../src/lib/f1-physics-2026';
 import { LapRecorder, validateLapRecording, type CompletedLap } from '../src/lib/sim/lap-recorder';
 import { lapPlausibilityProblem } from '../src/lib/sim/lap-plausibility';
 import { LAP_SAMPLE_STRIDE, PHYSICS_VERSION, lapBoardClass, type LapRecording } from '../src/lib/sim/lap-types';
-import worker from './leaderboard-worker/worker';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { handleApi } from '../cloudflare/api/index';
+import { boardDeps, driverNameKey, listLaps, submitLap, type BoardDeps } from '../cloudflare/api/board';
+import type { Env } from '../cloudflare/api/types';
+import { fakeD1, fakeR2 } from './lib/fake-cloudflare';
 
 const failures: string[] = [];
 const check = (name: string, ok: boolean, detail = '') => {
@@ -99,47 +104,138 @@ check('a lap with a third cut out is refused', lapPlausibilityProblem(cut.data) 
 const open = { ...real, data: real.data.slice(0, Math.floor(n * 0.9) * S) };
 check('a lap that stops short of the line is refused', lapPlausibilityProblem(open.data) !== null, String(lapPlausibilityProblem(open.data)));
 
-// 3. The reference Worker ----------------------------------------------------------------------------------------------
-const kv = new Map<string, string>();
-const env = {
-  LAPS: {
-    get: async (k: string) => kv.get(k) ?? null,
-    put: async (k: string, v: string) => void kv.set(k, v),
-    delete: async (k: string) => void kv.delete(k),
-  },
-};
-const post = async (body: unknown, ip: string) =>
-  worker.fetch(
-    new Request('https://lb.test/laps', { method: 'POST', body: JSON.stringify(body), headers: { 'CF-Connecting-IP': ip } }),
-    env
+// 3. The board API -----------------------------------------------------------------------------------------------------
+const schema = readFileSync(join(__dirname, '../cloudflare/migrations/0001_lap_boards.sql'), 'utf8');
+const ghosts = fakeR2();
+let nowMs = Date.UTC(2026, 10, 10, 12);
+const deps: BoardDeps = { db: fakeD1(schema), ghosts, eventRule: () => 'Unknown event', now: () => nowMs };
+const KEY_A = 'a'.repeat(43);
+const KEY_B = 'b'.repeat(43);
+
+type PostAnswer = { ok: boolean; rank?: number; total?: number; error?: string };
+let ipCounter = 0;
+const post = async (rec: unknown, driverKey: string | null = KEY_A, extra: Record<string, unknown> = {}, ip?: string) => {
+  const res = await submitLap(
+    deps,
+    new Request('https://librecorsa.test/api/laps', {
+      method: 'POST',
+      body: JSON.stringify({ rec, ...(driverKey === null ? {} : { driverKey }), ...extra }),
+      headers: { 'CF-Connecting-IP': ip ?? `10.0.${Math.floor(ipCounter / 250)}.${ipCounter++ % 250}` },
+    })
   );
-const list = async (board: string | null) =>
-  worker.fetch(new Request(`https://lb.test/laps?track=rwanda&vehicle=vf26${board === null ? '' : `&board=${board}`}`), env);
-const board = lapBoardClass(real.conditions!);
+  return { status: res.status, body: res.body as PostAnswer };
+};
+type Row = { id: string; name: string; lapTimeMs: number; conditions: { assists: string; realism: string; surface: string; physicsVersion: number } };
+type ListAnswer = { laps: Row[]; total: number; physics: number[]; me: { rank: number; lap: Row } | null };
+const list = async (query = '', physics = PHYSICS_VERSION) => {
+  const res = await listLaps(deps, new URL(`https://librecorsa.test/api/laps?track=rwanda&vehicle=vf26&physics=${physics}${query}`));
+  return { status: res.status, body: res.body as ListAnswer };
+};
+/** The real lap driven by someone else, a little slower or faster, under other conditions */
+const variant = (k: number, driverName: string, conditions: Partial<NonNullable<LapRecording['conditions']>> = {}): LapRecording => ({
+  ...scaled(k),
+  driverName,
+  driverCode: driverName.slice(0, 3).toUpperCase(),
+  conditions: { ...real.conditions!, ...conditions },
+});
 
 async function main(): Promise<void> {
-
   {
-    const res = await post(older, '10.0.0.1');
-    const body = (await res.json()) as { ok: boolean; error?: string };
-    check('worker: a lap without conditions is refused', res.status === 400 && !body.ok, body.error);
+    const res = await post(older);
+    check('board: a lap without conditions is refused', res.status === 400 && !res.body.ok, res.body.error);
   }
   {
-    const res = await post(scaled(0.95), '10.0.0.2');
-    const body = (await res.json()) as { ok: boolean; error?: string };
-    check('worker: a rescaled lap is refused', res.status === 400 && !body.ok, body.error);
+    const res = await post(scaled(0.95));
+    check('board: a rescaled lap is refused', res.status === 400 && !res.body.ok, res.body.error);
   }
   {
-    const res = await post(real, '10.0.0.3');
-    const body = (await res.json()) as { ok: boolean; rank?: number; error?: string };
-    check('worker: a real lap is ranked', res.status === 200 && body.ok && body.rank === 1, body.error ?? `rank ${body.rank}`);
+    const res = await post(real, null);
+    check('board: a lap without a driver key is refused', res.status === 400 && !res.body.ok, res.body.error);
   }
   {
-    const rows = ((await (await list(board)).json()) as { laps: { conditions?: unknown }[] }).laps;
-    check('worker: the lap is on its own board, with its conditions', rows.length === 1 && rows[0].conditions !== undefined);
-    const other = ((await (await list(`p${PHYSICS_VERSION}-pro-full-dry`)).json()) as { laps: unknown[] }).laps;
-    check('worker: and on no other board', other.length === 0);
-    check('worker: listing without a board is refused', (await list(null)).status === 400);
+    const res = await post(real);
+    check('board: a real lap is ranked', res.status === 200 && res.body.ok && res.body.rank === 1 && res.body.total === 1, res.body.error ?? `rank ${res.body.rank}`);
+  }
+  {
+    const { body } = await list('&name=test%20driver');
+    check('board: the lap is listed with what it was driven with', body.laps.length === 1 && body.laps[0].conditions.assists === 'assisted' && body.laps[0].conditions.realism === 'casual');
+    check('board: the driver finds their own place', body.me?.rank === 1 && body.total === 1);
+    const ghost = ghosts.objects.get(`laps/${body.laps[0].id}.json`);
+    check('board: the ghost is kept beside the row', ghost !== undefined && validateLapRecording(JSON.parse(ghost)) !== null);
+  }
+  {
+    // The same driver, slower, without assists: another class, so it is kept, and the board still shows them once
+    const res = await post(variant(1.02, 'Test Driver', { assists: 'pro', realism: 'full' }));
+    check('board: a slower lap of another class is kept, not refused', res.status === 200 && res.body.ok && res.body.rank === 1, res.body.error);
+    const all = (await list()).body;
+    check('board: a driver appears once, with their fastest lap', all.laps.length === 1 && all.total === 1 && all.laps[0].conditions.assists === 'assisted');
+    const pro = (await list('&assists=pro')).body;
+    check('board: narrowed to no assists, their no-assist lap shows', pro.laps.length === 1 && pro.laps[0].conditions.assists === 'pro' && pro.laps[0].lapTimeMs > all.laps[0].lapTimeMs);
+    check('board: an unknown filter value is refused', (await list('&assists=cheats')).status === 400);
+  }
+  {
+    const res = await post(variant(1.03, 'Test Driver', { assists: 'pro', realism: 'full' }));
+    check('board: a slower lap of the same class is refused', res.status === 409 && !res.body.ok, res.body.error);
+    const before = ghosts.objects.size;
+    const faster = await post(variant(1.01, 'Test Driver', { assists: 'pro', realism: 'full' }));
+    check('board: a faster lap of the same class replaces it, ghost included', faster.body.ok === true && ghosts.objects.size === before, `${ghosts.objects.size} ghosts`);
+  }
+  {
+    // Someone else, faster, no assists
+    const res = await post(variant(0.99, 'Quick Rival', { assists: 'pro', realism: 'full' }), KEY_B);
+    check('board: a faster driver takes first', res.body.ok === true && res.body.rank === 1 && res.body.total === 2, res.body.error);
+    const { body } = await list('&name=Test%20Driver');
+    check('board: fastest first, everyone once', body.laps.length === 2 && body.laps[0].name === 'Quick Rival' && body.laps[1].name === 'Test Driver');
+    check('board: the first driver is now second of two', body.me?.rank === 2 && body.total === 2);
+    const assisted = (await list('&assists=assisted&name=Test%20Driver')).body;
+    check('board: narrowed to assisted laps, only the assisted driver, first', assisted.laps.length === 1 && assisted.total === 1 && assisted.me?.rank === 1);
+  }
+  {
+    const res = await post(variant(0.985, '  test   DRIVER ', {}), KEY_B);
+    check('board: a claimed name needs its key (case and spaces ignored)', res.status === 409 && !res.body.ok, res.body.error);
+    check('name key: outer spaces off, inner runs as one, lower case', driverNameKey('  Test \t Driver ') === 'test driver');
+  }
+  {
+    const res = await post(real, KEY_A, { event: '2026-W46' });
+    check('board: an unknown event is refused', res.status === 400 && !res.body.ok, res.body.error);
+  }
+  {
+    // A lap from an older physics revision goes on that revision's board
+    const res = await post(variant(0.98, 'Old Timer', { physicsVersion: 1 }), 'c'.repeat(43));
+    check('board: an older-physics lap is ranked on its own board', res.body.ok === true && res.body.rank === 1 && res.body.total === 1);
+    const now = (await list()).body;
+    check('board: and not on the current one, which lists both revisions', now.total === 2 && now.physics.join() === `${PHYSICS_VERSION},1`, now.physics.join());
+    check('board: the older board has it', (await list('', 1)).body.laps[0]?.name === 'Old Timer');
+  }
+  {
+    let last = { status: 0, body: {} as PostAnswer };
+    for (let i = 0; i < 31; i++) last = await post(older, KEY_A, {}, '10.9.9.9');
+    check('board: upload 31 in an hour from one address is refused', last.status === 429, last.body.error);
+  }
+  {
+    // Seven months later the claim has lapsed: a new key takes the name, and the old owner's laps go
+    nowMs += 213 * 24 * 3600 * 1000;
+    const res = await post(variant(1.028, 'Test Driver', { assists: 'pro', realism: 'full' }), KEY_B);
+    check('board: a lapsed name can be claimed with a new key', res.body.ok === true, res.body.error);
+    const { body } = await list('&name=Test%20Driver');
+    check("board: the previous owner's laps went with the claim", body.me?.lap.lapTimeMs === variant(1.028, 'x').lapTimeMs && body.total === 2);
+    check('board: no ghost is left without a row', ghosts.objects.size === 3, `${ghosts.objects.size} ghosts`);
+  }
+  {
+    // Through the API: switched on and off, never cached
+    const env = { ONLINE_BOARD: 'on', BOARD_DB: deps.db, GHOSTS: ghosts } as unknown as Env;
+    const api = (path: string, e: Env) => {
+      const url = new URL(`https://librecorsa.org${path}`);
+      return handleApi(new Request(url), e, url);
+    };
+    const listed = await api(`/api/laps?track=rwanda&vehicle=vf26&physics=${PHYSICS_VERSION}`, env);
+    const rows = ((await listed.json()) as ListAnswer).laps;
+    check('api: GET /api/laps lists the board, never cached', listed.status === 200 && rows.length === 2 && listed.headers.get('Cache-Control') === 'no-store');
+    const ghost = await api(`/api/laps/${rows[0].id}`, env);
+    check('api: GET /api/laps/<id> returns the ghost', ghost.status === 200 && validateLapRecording(await ghost.json()) !== null);
+    check('api: an unknown lap is 404', (await api('/api/laps/00000000-0000-4000-8000-000000000000', env)).status === 404);
+    check('api: the board switched off answers 404', (await api('/api/laps?track=rwanda&vehicle=vf26&physics=2', { ...env, ONLINE_BOARD: 'off' })).status === 404);
+    check('api: no database bound: off', boardDeps({} as Env, () => null) === null);
   }
 
   if (failures.length > 0) {
