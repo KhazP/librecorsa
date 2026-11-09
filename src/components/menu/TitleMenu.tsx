@@ -30,6 +30,7 @@ import { TIME_OF_DAY_LABELS, WEATHER_LABELS } from "@/lib/sim/weather";
 import { LibreCorsaLogo } from "@/components/ui/LibreCorsaLogo";
 import { AI_SKILL_DEFAULT, aiSkillLabel } from "@/lib/sim/ai-tuning";
 import { REPO_URL, SUPPORT_URL } from "@/lib/site";
+import { withBasePath } from "@/lib/base-path";
 import { EmbeddedBadge } from "./EmbeddedBadge";
 import {
   CarFront,
@@ -43,6 +44,7 @@ import {
   Keyboard,
   MessageSquarePlus,
   MonitorCog,
+  Newspaper,
   Play,
   Route,
   TabletSmartphone,
@@ -679,6 +681,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
       panel: "request",
       run: () => openPanel("request"),
     },
+    { id: "press", label: "Press", detail: "Coverage and press kit", icon: Newspaper, href: withBasePath("/press") },
     { id: "support", label: "Buy me a coffee", detail: "Support development", icon: Coffee, href: SUPPORT_URL },
     { id: "github", label: "GitHub", detail: "Source code", icon: CodeXml, href: REPO_URL },
   ];
@@ -817,7 +820,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
                 <CompactEntry key={item.id} item={item} open={item.panel === panel} />
               ))}
               <div aria-hidden className="mx-3.5 my-2 h-px bg-[#262B3D]" />
-              {byId(["credits", "request", "support", "github"]).map((item) => (
+              {byId(["credits", "request", "press", "support", "github"]).map((item) => (
                 <CompactEntry key={item.id} item={item} open={item.panel === panel} quiet />
               ))}
             </nav>
@@ -918,7 +921,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
                   ))}
                 </div>
                 <div className="mt-3.5 ml-2.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 short:mt-2">
-                  {byId(["leaderboard", "credits", "request", "support", "github"]).map((item) => (
+                  {byId(["leaderboard", "credits", "request", "press", "support", "github"]).map((item) => (
                     <LinkEntry key={item.id} item={item} />
                   ))}
                 </div>
