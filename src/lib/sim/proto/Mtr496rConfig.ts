@@ -538,13 +538,22 @@ function protoCompound(
       Fz0: FZ0,
       dyCurve,
       dxCurve,
-      // [spec FRICTION_LIMIT_ANGLE]
+      // A brush tyre, on the mod's own shape data: the peak slip angle [spec FRICTION_LIMIT_ANGLE], its growth with load
+      // (6.2 % per FZ0) and with a soft tyre [spec FLEX_GAIN, PRESSURE_FLEX_GAIN], the combined-slip exponent
+      // [spec COMBINED_FACTOR], the longitudinal stiffness [spec CX_MULT] and the grip lost to sliding speed
+      // [spec SPEED_SENSITIVITY]
+      curve: 'brush',
       friction_limit_angle: 6.216,
-      // Cornering stiffness peak scaled from Pacejka's MF 6.1 reference tyre by load capacity, as the GT3's: the 290 mm
-      // front carries ≈ 0.92 × the GT3's 315 mm, peak at ≈ 12.7 kN = 4.2 × FZ0 [Pacejka MF 6.1; est]
+      peakSlipLoadGain: 0.0621,
+      peakSlipPressureGain: -0.06,
+      combinedExponent: 2.23,
+      longStiffnessMult: 1.24,
+      speedSensitivity: 0.002,
+      // Unused by a brush tyre (the magic-formula family's stiffness law)
       pKy2: 4.2,
-      // The mod's TC (9 % default) sits under it [est]
-      slip_ratio_limit: 0.1,
+      // Slip ratio at the peak of the drive force: tan(6.216°) / 1.24 of theoretical slip [derived]. The mod's TC
+      // (9 % default) sits just under it
+      slip_ratio_limit: 0.096,
       new_combined: false,
       fx_shift_SA: 0,
       fx_scale_SA: 0,
@@ -586,6 +595,8 @@ function protoCompound(
       optimalPsi: 35,
       pressureSpringCurve: pressureSpring(rate),
       pressureGripSensitivity: 1.0,
+      // 0.2 % of grip per psi off the ideal [spec PRESSURE_D_GAIN]
+      pressureGripLossPerPsi: 0.002,
       // Out of 60 °C blankets, as the GT3's, the way AC's default tyre-blanket assist starts them: the mod's curves give
       // 71 % grip at 25 °C [est]. (Its 26 psi static pressure is the ambient set that reaches 35 psi hot.)
       coldRefC: 60,
