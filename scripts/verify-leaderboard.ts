@@ -16,6 +16,7 @@ import { handleApi } from '../cloudflare/api/index';
 import { boardDeps, driverNameKey, listLaps, submitLap, type BoardDeps } from '../cloudflare/api/board';
 import type { Env } from '../cloudflare/api/types';
 import { fakeD1, fakeR2 } from './lib/fake-cloudflare';
+import { CHALLENGE_ROTATION, challengeAt, challengeProblem, fitsChallenge, isoWeekId, timeLeftLabel } from '../src/lib/net/weekly-challenge';
 
 const failures: string[] = [];
 const check = (name: string, ok: boolean, detail = '') => {
@@ -107,12 +108,15 @@ check('a lap that stops short of the line is refused', lapPlausibilityProblem(op
 // 3. The board API -----------------------------------------------------------------------------------------------------
 const schema = readFileSync(join(__dirname, '../cloudflare/migrations/0001_lap_boards.sql'), 'utf8');
 const ghosts = fakeR2();
-let nowMs = Date.UTC(2026, 10, 10, 12);
-const deps: BoardDeps = { db: fakeD1(schema), ghosts, eventRule: () => 'Unknown event', now: () => nowMs };
+// A Wednesday noon in a week whose challenge is the test lap's circuit and car (Rwanda, the 2026 prototype)
+let nowMs = Date.UTC(2026, 10, 11, 12);
+while (challengeAt(nowMs).trackId !== 'rwanda' || challengeAt(nowMs).vehicle !== 'vf26') nowMs += 7 * 86_400_000;
+const week = challengeAt(nowMs);
+const deps: BoardDeps = { db: fakeD1(schema), ghosts, eventRule: challengeProblem, now: () => nowMs };
 const KEY_A = 'a'.repeat(43);
 const KEY_B = 'b'.repeat(43);
 
-type PostAnswer = { ok: boolean; rank?: number; total?: number; error?: string };
+type PostAnswer = { ok: boolean; rank?: number; total?: number; eventRank?: number; eventTotal?: number; eventError?: string; error?: string };
 let ipCounter = 0;
 const post = async (rec: unknown, driverKey: string | null = KEY_A, extra: Record<string, unknown> = {}, ip?: string) => {
   const res = await submitLap(
@@ -196,15 +200,35 @@ async function main(): Promise<void> {
     check('name key: outer spaces off, inner runs as one, lower case', driverNameKey('  Test \t Driver ') === 'test driver');
   }
   {
-    const res = await post(real, KEY_A, { event: '2026-W46' });
-    check('board: an unknown event is refused', res.status === 400 && !res.body.ok, res.body.error);
+    // The weekly challenge: this week's circuit and car, its assists and realism, a dry track
+    check('challenge: weeks run Monday to Monday (UTC), named by ISO week', isoWeekId(Date.UTC(2026, 10, 9)) === '2026-W46' && isoWeekId(Date.UTC(2026, 11, 28)) === '2026-W53' && isoWeekId(Date.UTC(2027, 0, 4)) === '2027-W01');
+    const monday = Date.UTC(2026, 10, 9);
+    check('challenge: one challenge from Monday 00:00 to Sunday 23:59', challengeAt(monday).id === '2026-W46' && challengeAt(monday + 7 * 86_400_000 - 1).id === '2026-W46' && challengeAt(monday - 1).id === '2026-W45' && challengeAt(monday).endsMs - challengeAt(monday).startsMs === 7 * 86_400_000);
+    check('challenge: the next week is the next entry of the rotation', challengeAt(week.endsMs).trackId === CHALLENGE_ROTATION[1].trackId);
+    check('challenge: time left reads in days, hours, minutes', timeLeftLabel(week.endsMs, week.endsMs - 3 * 86_400_000 - 4 * 3_600_000) === '3 d 4 h' && timeLeftLabel(week.endsMs, week.endsMs - 5 * 60_000) === '5 min');
+    const fit = variant(1.015, 'Weekly Hero', { assists: week.assists, realism: week.realism });
+    check('challenge: a lap to the rules fits, one with other assists does not', fitsChallenge(fit, week) && !fitsChallenge(variant(1.015, 'x', { assists: 'assisted', realism: week.realism }), week) && !fitsChallenge({ ...fit, conditions: { ...fit.conditions!, surface: 'wet' } }, week));
+
+    const res = await post(fit, 'd'.repeat(43), { event: week.id });
+    check('challenge: a lap to the rules goes on the week\'s board', res.body.ok === true && res.body.eventRank === 1 && res.body.eventTotal === 1 && res.body.eventError === undefined, res.body.error ?? res.body.eventError);
+    const board = (await list(`&event=${week.id}&name=Weekly%20Hero`)).body;
+    check('challenge: its board lists only challenge laps', board.laps.length === 1 && board.laps[0].name === 'Weekly Hero' && board.me?.rank === 1);
+    check('challenge: the lap counts on the open board too', (await list('&name=Weekly%20Hero')).body.me !== null);
+
+    const off = await post(variant(0.995, 'Weekly Hero', { assists: 'pro', realism: 'full' }), 'd'.repeat(43), { event: week.id });
+    check('challenge: a lap not to the rules still counts on the open board, with the reason', off.body.ok === true && off.body.eventRank === undefined && typeof off.body.eventError === 'string', off.body.eventError);
+    check('challenge: and stays off the week\'s board', (await list(`&event=${week.id}`)).body.total === 1);
+    const late = await post(variant(1.01, 'Weekly Hero', { assists: week.assists, realism: week.realism }), 'd'.repeat(43), { event: '2020-W01' });
+    check('challenge: a lap sent for a past week counts on the open board only', late.body.ok === true && late.body.eventError === 'That weekly challenge has ended', late.body.eventError);
+    const junk = await post(variant(1.03, 'Weekly Hero', { assists: week.assists, realism: week.realism }), 'd'.repeat(43), { event: 'nope' });
+    check('challenge: nothing to store and a bad event: refused with the reason', junk.status === 409 && junk.body.error === 'Unknown event', junk.body.error);
   }
   {
     // A lap from an older physics revision goes on that revision's board
     const res = await post(variant(0.98, 'Old Timer', { physicsVersion: 1 }), 'c'.repeat(43));
     check('board: an older-physics lap is ranked on its own board', res.body.ok === true && res.body.rank === 1 && res.body.total === 1);
     const now = (await list()).body;
-    check('board: and not on the current one, which lists both revisions', now.total === 2 && now.physics.join() === `${PHYSICS_VERSION},1`, now.physics.join());
+    check('board: and not on the current one, which lists both revisions', now.total === 3 && now.physics.join() === `${PHYSICS_VERSION},1`, now.physics.join());
     check('board: the older board has it', (await list('', 1)).body.laps[0]?.name === 'Old Timer');
   }
   {
@@ -218,8 +242,9 @@ async function main(): Promise<void> {
     const res = await post(variant(1.028, 'Test Driver', { assists: 'pro', realism: 'full' }), KEY_B);
     check('board: a lapsed name can be claimed with a new key', res.body.ok === true, res.body.error);
     const { body } = await list('&name=Test%20Driver');
-    check("board: the previous owner's laps went with the claim", body.me?.lap.lapTimeMs === variant(1.028, 'x').lapTimeMs && body.total === 2);
-    check('board: no ghost is left without a row', ghosts.objects.size === 3, `${ghosts.objects.size} ghosts`);
+    check("board: the previous owner's laps went with the claim", body.me?.lap.lapTimeMs === variant(1.028, 'x').lapTimeMs && body.total === 3);
+    const stored = (await deps.db.prepare('SELECT COUNT(*) AS n FROM laps').first<{ n: number }>())?.n;
+    check('board: every row has its ghost and every ghost its row', ghosts.objects.size === stored, `${ghosts.objects.size} ghosts, ${stored} rows`);
   }
   {
     // Through the API: switched on and off, never cached
@@ -230,7 +255,7 @@ async function main(): Promise<void> {
     };
     const listed = await api(`/api/laps?track=rwanda&vehicle=vf26&physics=${PHYSICS_VERSION}`, env);
     const rows = ((await listed.json()) as ListAnswer).laps;
-    check('api: GET /api/laps lists the board, never cached', listed.status === 200 && rows.length === 2 && listed.headers.get('Cache-Control') === 'no-store');
+    check('api: GET /api/laps lists the board, never cached', listed.status === 200 && rows.length === 3 && listed.headers.get('Cache-Control') === 'no-store');
     const ghost = await api(`/api/laps/${rows[0].id}`, env);
     check('api: GET /api/laps/<id> returns the ghost', ghost.status === 200 && validateLapRecording(await ghost.json()) !== null);
     check('api: an unknown lap is 404', (await api('/api/laps/00000000-0000-4000-8000-000000000000', env)).status === 404);
