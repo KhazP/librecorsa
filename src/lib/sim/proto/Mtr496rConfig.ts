@@ -179,8 +179,8 @@ const SUSPENSIONS: SuspensionsData = {
     staticCamber: -2.1,
     camberGainKinematic: -26.8,
     springs: { wheel_rate: 120_000, helper_rate: 0, helper_range: 0 },
-    // [spec HEAVE_FRONT SPRING_RATE, BUMPSTOP_UP, BUMP_STOP_RATE]
-    heave: { rate: 120_000, gap: 0, packerGap: 0.06, packerRate: 250_000 },
+    // [spec HEAVE_FRONT SPRING_RATE, PROGRESSIVE_SPRING_RATE, BUMPSTOP_UP, BUMP_STOP_RATE]
+    heave: { rate: 120_000, gap: 0, packerGap: 0.06, packerRate: 250_000, progressiveRate: 10_000 },
     // [spec PACKER_RANGE, BUMP_STOP_RATE]
     bumpStop: { range: 0.02, rate: 150_000, progression: 0 },
     // [spec BUMPSTOP_DN]
@@ -206,8 +206,8 @@ const SUSPENSIONS: SuspensionsData = {
     staticCamber: -1.75,
     camberGainKinematic: -35.7,
     springs: { wheel_rate: 90_000, helper_rate: 0, helper_range: 0 },
-    // [spec HEAVE_REAR SPRING_RATE, BUMPSTOP_UP, BUMP_STOP_RATE]
-    heave: { rate: 150_000, gap: 0, packerGap: 0.08, packerRate: 150_000 },
+    // [spec HEAVE_REAR SPRING_RATE, PROGRESSIVE_SPRING_RATE, BUMPSTOP_UP, BUMP_STOP_RATE]
+    heave: { rate: 150_000, gap: 0, packerGap: 0.08, packerRate: 150_000, progressiveRate: 10_000 },
     // [spec BUMPSTOP_UP = PACKER_RANGE, BUMP_STOP_RATE]
     bumpStop: { range: 0.05, rate: 150_000, progression: 0 },
     // [spec BUMPSTOP_DN]
@@ -229,21 +229,25 @@ const SUSPENSIONS: SuspensionsData = {
   dampers_controller: {
     front: {
       base: damper(9000, 3400, 5000, 4000),
-      // [spec HEAVE_FRONT DAMP_*]
+      // [spec HEAVE_FRONT DAMP_*, DAMP_FAST_BUMPTHRESHOLD / REBOUNDTHRESHOLD]
       heave: damper(4660, 1700, 5610, 2660),
       roll: NO_DAMPER,
       pitch: NO_DAMPER,
       fastThresholdMs: 0.1,
       fastReboundThresholdMs: 0.1,
+      heaveFastThresholdMs: 0.088,
+      heaveFastReboundThresholdMs: 0.18,
     },
     rear: {
       base: damper(7500, 3000, 8400, 4000),
-      // [spec HEAVE_REAR DAMP_*]
+      // [spec HEAVE_REAR DAMP_*, DAMP_FAST_BUMPTHRESHOLD / REBOUNDTHRESHOLD]
       heave: damper(4850, 1340, 5040, 2180),
       roll: NO_DAMPER,
       pitch: NO_DAMPER,
       fastThresholdMs: 0.1,
       fastReboundThresholdMs: 0.1,
+      heaveFastThresholdMs: 0.088,
+      heaveFastReboundThresholdMs: 0.18,
     },
   },
 };

@@ -2093,10 +2093,12 @@ export class VehiclePhysics {
       if (axle.heaveActive) {
         const heave = 0.5 * (L.compression + R.compression);
         const hv = 0.5 * (L.compressionVel + R.compressionVel);
+        const hx = Math.max(0, heave - axle.heaveFreeM);
+        const heaveKnee = d.heaveFastThresholdMs ?? knee;
         const fh =
-          s.heave.rate * Math.max(0, heave - axle.heaveFreeM) +
+          (s.heave.rate + (s.heave.progressiveRate ?? 0) * hx) * hx +
           s.heave.packerRate * Math.max(0, heave - s.heave.packerGap) +
-          damperForce(d.heave, hv, knee);
+          damperForce(d.heave, hv, heaveKnee, d.heaveFastReboundThresholdMs ?? d.heaveFastThresholdMs ?? reboundKnee);
         L.suspensionForce += 0.5 * fh;
         R.suspensionForce += 0.5 * fh;
       }

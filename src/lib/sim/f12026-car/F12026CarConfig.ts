@@ -323,6 +323,9 @@ export interface DamperControllerData {
   fastThresholdMs: number;
   /** Rebound slow/fast knee of the base damper (m/s); default `fastThresholdMs` */
   fastReboundThresholdMs?: number;
+  /** The heave damper's own bump and rebound knees (m/s); default the base damper's */
+  heaveFastThresholdMs?: number;
+  heaveFastReboundThresholdMs?: number;
 }
 
 /** `BumpStopSettingsUnits` */
@@ -357,6 +360,8 @@ export interface HeaveSpringData {
   /** Packer: rate added once heave exceeds `packerGap` (N/m) */
   packerGap: number;
   packerRate: number;
+  /** Extra rate per metre of the element's own compression (N/m²): force = (rate + this · x) · x. Absent: linear */
+  progressiveRate?: number;
 }
 
 /** `SuspensionGeometryData` + the axle's setup values */
