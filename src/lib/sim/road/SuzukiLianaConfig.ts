@@ -26,6 +26,7 @@ import type {
   TyresCompoundData,
 } from '../f12026-car/F12026CarConfig';
 import type { WetTyreTraits } from '../wet-tyres';
+import { modBodyHeightM, modCornerStops } from '../mod-suspension';
 
 /** Driveline efficiency of this model; the wheel torque curve is divided by it for crank torque */
 const DRIVELINE_EFFICIENCY = 0.92;
@@ -147,9 +148,23 @@ const damper = (slow_bump: number, fast_bump: number, slow_rebound: number, fast
 
 const NO_DAMPER = damper(0, 0, 0, 0);
 
+/** Sprung load on a front / rear spring at static ride (N): 1250 kg less its hubs (90 / 85 kg), 64 % forward [derived] */
+const SPRUNG_KG = 1250 - 2 * 90 - 2 * 85;
+const FRONT_STATIC_LOAD_N = (SPRUNG_KG * 9.81 * 0.64) / 2;
+const REAR_STATIC_LOAD_N = (SPRUNG_KG * 9.81 * 0.36) / 2;
 /**
- * The mod's wheel rates, front anti-roll bar (no rear bar), bump stops and two-stage dampers [spec suspensions.ini].
- * Bump-stop gap and droop are measured from the design position, which this model takes as the static one.
+ * The mod measures its stops from the suspension's design position, with the springs working on their rod lengths
+ * (`mod-suspension.ts`): at static ride the soft springs have the fronts 3.5 mm short of that position and the rears
+ * 22.5 mm past it, so the stops are these far from static [spec ROD_LENGTH, PACKER_RANGE, BUMPSTOP_UP / DN; derived]
+ */
+const FRONT_STOPS = modCornerStops({ staticLoadN: FRONT_STATIC_LOAD_N, springRate: 36_000, rodLength: 0.082, packerRange: 0.15, bumpStopUp: 0.075, bumpStopDn: 0.075 });
+const REAR_STOPS = modCornerStops({ staticLoadN: REAR_STATIC_LOAD_N, springRate: 20_000, rodLength: 0.057, packerRange: 0.15, bumpStopUp: 0.055, bumpStopDn: 0.05 });
+const mm = (m: number) => Number(m.toFixed(4));
+
+/**
+ * The mod's wheel rates, front anti-roll bar (no rear bar), bump stops and two-stage dampers [spec suspensions.ini],
+ * the stops at their distance from static ride (above): the front strut's packer 72 mm up, its rigid bump stop
+ * (500 kN/m, as a strut's is) 79 mm up; the rear's bump stop 33 mm up, its packer 71 mm up; droop 72 / 73 mm.
  * Hardpoints are [x inboard, y up, z forward] from the wheel centre:
  *  - front: the strut's top mount stands in for the upper ball joint, with a 1 m virtual upper arm square to the
  *    strut axis (STRUT_CAR → STRUT_TYRE) [derived]; lower arm and tie rod [spec]. KPI 10.4°, caster 3.3°, within the
@@ -166,8 +181,9 @@ const SUSPENSIONS: SuspensionsData = {
     camberGainKinematic: -21,
     springs: { wheel_rate: 36_000, helper_rate: 0, helper_range: 0 },
     heave: { rate: 0, gap: 1, packerGap: 1, packerRate: 0 },
-    bumpStop: { range: 0.075, rate: 30_000, progression: 0 },
-    droopTravel: 0.075,
+    // [spec PACKER_RANGE, BUMP_STOP_RATE; BUMPSTOP_UP, a strut's rigid stop; BUMPSTOP_DN]
+    bumpStop: { range: mm(FRONT_STOPS.packerGapM), rate: 30_000, progression: 0, hardStop: { range: mm(FRONT_STOPS.bumpStopGapM), rate: 500_000 } },
+    droopTravel: mm(FRONT_STOPS.droopM),
     rollCentreHeight: 0.054,
     // [spec ARB FRONT]
     arb: 12_000,
@@ -190,8 +206,9 @@ const SUSPENSIONS: SuspensionsData = {
     camberGainKinematic: -41,
     springs: { wheel_rate: 20_000, helper_rate: 0, helper_range: 0 },
     heave: { rate: 0, gap: 1, packerGap: 1, packerRate: 0 },
-    bumpStop: { range: 0.055, rate: 50_000, progression: 0 },
-    droopTravel: 0.05,
+    // [spec BUMPSTOP_UP, PACKER_RANGE, BUMP_STOP_RATE; BUMPSTOP_DN]
+    bumpStop: { range: mm(REAR_STOPS.bumpStopGapM), rate: 50_000, progression: 0, hardStop: { range: mm(REAR_STOPS.packerGapM), rate: 50_000 } },
+    droopTravel: mm(REAR_STOPS.droopM),
     rollCentreHeight: 0.098,
     // No rear bar [spec ARB REAR]
     arb: 0,
@@ -227,10 +244,18 @@ const SUSPENSIONS: SuspensionsData = {
 };
 
 const WHEELBASE = 2.46;
-const CG_HEIGHT = 0.538;
-/** Ride-height pickups 0.37 m (front) and 0.35 m (rear) below the CG [spec RIDE, derived] */
-const FRONT_TARGET_HEIGHT = CG_HEIGHT - 0.37;
-const REAR_TARGET_HEIGHT = CG_HEIGHT - 0.35;
+/**
+ * The body's height at each axle: the tyre's loaded radius (0.288 m less ≈ 10 / 8 mm of deflection at its hot
+ * pressure) less the wheel centre's height in the body frame (BASEY −0.25, plus the static offset): 0.531 m at the
+ * front, 0.508 m at the rear, so the CG, 64 % of the sprung weight forward, rides 0.523 m up [spec BASEY, RADIUS, RATE;
+ * derived]
+ */
+const FRONT_BODY_HEIGHT = modBodyHeightM(0.288, (FRONT_STATIC_LOAD_N + 90 * 9.81) / 367_840, -0.25, FRONT_STOPS.staticOffsetM);
+const REAR_BODY_HEIGHT = modBodyHeightM(0.288, (REAR_STATIC_LOAD_N + 85 * 9.81) / 309_760, -0.25, REAR_STOPS.staticOffsetM);
+const CG_HEIGHT = Number((FRONT_BODY_HEIGHT + (REAR_BODY_HEIGHT - FRONT_BODY_HEIGHT) * 0.36).toFixed(4));
+/** Ride-height pickups 0.37 m (front) and 0.35 m (rear) below the CG's level [spec RIDE, derived] */
+const FRONT_TARGET_HEIGHT = Number((FRONT_BODY_HEIGHT - 0.37).toFixed(4));
+const REAR_TARGET_HEIGHT = Number((REAR_BODY_HEIGHT - 0.35).toFixed(4));
 /** Body and boot elements: chord 1 × span 2 m [spec aero.ini] */
 const AERO_AREA = 2;
 /** The boot's lift (CL −0.134 × CL_GAIN 0.5 × area) acts 1.47 m behind the CG, 0.10 m ahead of the rear axle [derived] */
