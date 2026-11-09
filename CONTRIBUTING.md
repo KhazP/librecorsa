@@ -41,8 +41,8 @@ racing-line optimiser.
   before and after. Comparisons with other sims are useful.
 - Don't rename the `bugesera.*` localStorage keys or the `bugesera-laps` IndexedDB name. Players' saved
   settings and ghosts live there.
-- Changes to the online leaderboard go in `scripts/leaderboard-supabase/schema.sql` and must stay safe to run
-  again on the live database.
+- The online side is the Worker in `cloudflare/` ([its README](cloudflare/README.md)). Changes to the lap boards'
+  tables go in a new file under `cloudflare/migrations/`, never an edit to one already applied.
 
 ## Cars, tracks and sounds
 

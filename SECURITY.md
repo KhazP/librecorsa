@@ -1,9 +1,10 @@
 # Security policy
 
-LibreCorsa is a static site with an optional online leaderboard on Supabase. The parts worth reporting are the
-leaderboard (`scripts/leaderboard-supabase/schema.sql`: anything that lets someone read or change data they
-shouldn't, post under a name they don't own, or knock the board over), the force-feedback bridge (`npm run ffb`)
-and anything that runs untrusted input in the browser.
+LibreCorsa is a static site with an optional online side: a Cloudflare Worker (`cloudflare/api`) with the lap
+boards, the room server and the race server. The parts worth reporting are that Worker (anything that lets someone
+read or change data they shouldn't, post under a name they don't own, speak as another player in a room or a race,
+run up the relay bill, or knock a board or a race over), the force-feedback bridge (`npm run ffb`) and anything that
+runs untrusted input in the browser.
 
 ## Reporting
 
