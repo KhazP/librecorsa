@@ -129,22 +129,33 @@ console.log('\n== Weather & time of day');
 console.log('\n== VehiclePhysics: peak lateral g at 150 km/h and braking 200→80 km/h');
 const DT = 1 / 120;
 const flat = new FlatGroundQuery();
+/**
+ * Best lateral g held for half a second on a slow steer ramp at `kmh`: a held mean, not the largest single sample,
+ * which the speed-hold pedal's kicks and the road texture move by more than the tyres differ
+ */
 function peakLateralG(config: typeof F12026_CAR_CONFIG | typeof AMG_GT3_CONFIG, compound: TireCompound, waterMm: number, kmh: number): number {
   const car = new VehiclePhysics({ ground: flat, config, airDensity: 1.06, compound: config.compoundSlots[compound] });
   car.waterMm = waterMm;
   car.wetness = wetnessFromWater(waterMm);
   car.reset(0, 0, 0, kmh / 3.6);
   let pedal = 0.3;
-  let maxLat = 0;
+  let best = 0;
+  const window: number[] = [];
+  let sum = 0;
+  const held = Math.round(0.5 / DT);
   for (let t = 0; t < 8; t += DT) {
     pedal = THREE.MathUtils.clamp(pedal + (car.telemetry.speedKmh < kmh ? 0.02 : -0.02), 0, 1);
     car.step(DT, { throttle: pedal, brake: 0, steer: -Math.min(1, t / 8) * 0.9 });
-    maxLat = Math.max(maxLat, Math.abs(car.telemetry.latG));
+    const lat = Math.abs(car.telemetry.latG);
+    window.push(lat);
+    sum += lat;
+    if (window.length > held) sum -= window.shift()!;
+    if (window.length === held) best = Math.max(best, sum / held);
     const fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(car.quaternion);
     const right = new THREE.Vector3(1, 0, 0).applyQuaternion(car.quaternion);
     if (Math.abs(Math.atan2(car.velocity.dot(right), car.velocity.dot(fwd))) > 0.35) break;
   }
-  return maxLat;
+  return best;
 }
 function brakingDistance(config: typeof F12026_CAR_CONFIG, compound: TireCompound, waterMm: number): number {
   const car = new VehiclePhysics({ ground: flat, config, airDensity: 1.06, compound: config.compoundSlots[compound] });
