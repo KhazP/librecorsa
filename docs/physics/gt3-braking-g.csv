@@ -1,10 +1,10 @@
 series,speed_kmh,g
-"Simulator",99,1.53039
-"Simulator",117,1.59527
-"Simulator",153,1.87458
-"Simulator",189,2.13571
-"Simulator",225,2.19774
-"Simulator",243,2.22994
+"Simulator",99,1.56237
+"Simulator",117,1.67949
+"Simulator",153,1.70597
+"Simulator",189,2.15313
+"Simulator",225,2.20382
+"Simulator",243,2.24385
 "MoTeC (real car)",99,1.68
 "MoTeC (real car)",117,1.72
 "MoTeC (real car)",153,1.83
