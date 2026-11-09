@@ -307,22 +307,30 @@ const STREET_COMPOUND: TyresCompoundData = {
     Fz0: Math.round(FZ0_FRONT),
     dyCurve: linearLoadCurve(1.2557, -0.05),
     dxCurve: linearLoadCurve(1.1967, -0.048),
-    // [spec FRICTION_LIMIT_ANGLE]
+    // A brush tyre on the mod's v3 shape data: the peak slip angle [spec FRICTION_LIMIT_ANGLE], a fuller rise to it
+    // [spec XMU], the peak angle growing 5 % per 2 kN of load [derived from FLEX 0.000984], and the grip lost to
+    // sliding speed, 6.4 % at 10 m/s [spec SPEED_SENSITIVITY]. A v3 tyre has no falloff: past the peak it holds its
+    // grip but for the sliding speed, which is what makes a street tyre forgiving. One curve for both directions
+    // [approx: the data states its slip against the road speed, this family against the wheel's]
+    curve: 'brush',
     friction_limit_angle: 13.2,
-    // Cornering stiffness peak scaled from Pacejka's MF 6.1 reference tyre (205/60 R15, pKy2 1.715 at Fz0 4 kN) by load
-    // capacity, as the GT3's: the 185/65 R14 (load index 86, 530 kg) carries 0.86 × the reference (91, 615 kg), so its
-    // stiffness peaks at ≈ 5.9 kN = 1.51 × the front Fz0 [Pacejka MF 6.1; ETRTO load index; est]
+    curveFullness: 0.28,
+    peakSlipLoadGain: 0.05,
+    peakSlipLoadRefN: 2000,
+    longStiffnessMult: 1,
+    speedSensitivity: 0.006383,
+    // Unused by a brush tyre (the magic-formula family's stiffness law)
     pKy2: Number((5910 / FZ0_FRONT).toFixed(2)),
-    // A street tyre peaks at about 11 % slip; the mod's ABS (8 %) and TC (12 %) targets sit either side [est]
+    // The slip the driver aids are scaled to: the mod's ABS (8 %) and TC (12 %) targets sit either side [est]
     slip_ratio_limit: 0.11,
     new_combined: false,
     fx_shift_SA: 0,
     fx_scale_SA: 0,
     fy_shift_SR: 0,
     fy_scale_SR: 0,
-    use_slip_falloff: true,
-    falloff_level: 0.8,
-    falloff_slope: 3,
+    use_slip_falloff: false,
+    falloff_level: 1,
+    falloff_slope: 0,
     // [spec RELAXATION_LENGTH]
     relaxationLengthX: 0.04741,
     relaxationLengthY: 0.04741,
@@ -348,6 +356,8 @@ const STREET_COMPOUND: TyresCompoundData = {
       [250, 0.85],
     ],
     optimalTempC: [75, 85],
+    // [spec GRAIN_GAIN / GRAIN_GAMMA, BLISTER_GAIN / BLISTER_GAMMA]
+    tread: { grainGain: 0.4, grainGamma: 2, blisterGain: 0.3, blisterGamma: 1.5 },
     // A lighter tyre than a GT3 slick heats and cools faster: the GT3's capacities × 0.6 [est]
     surfaceHeatCapacity: 1100,
     coreHeatCapacity: 6600,
@@ -371,6 +381,8 @@ const STREET_COMPOUND: TyresCompoundData = {
       [50, 445_280],
     ],
     pressureGripSensitivity: 1.0,
+    // 0.2 % of grip per psi off the ideal [spec PRESSURE_D_GAIN]
+    pressureGripLossPerPsi: 0.002,
     // Set cold in the pits, not on blankets [est]
     coldRefC: 25,
   },

@@ -123,10 +123,11 @@ console.log('\n== Straight line (flat ground, sea level)');
 }
 
 console.log('\n== Cornering (flat, steer ramp at constant speed)');
-// On its mod's tyre data the Liana peaks at ≈ 0.85 g and holds ≈ 0.8 g
+// On its mod's tyre data the Liana peaks at ≈ 0.95 g at town speeds and ≈ 0.88 g at 110 km/h (the sliding speed costs
+// grip), and holds ≈ 0.83 g
 for (const [kmh, lo, hi] of [
-  [60, 0.82, 0.92],
-  [110, 0.8, 0.92],
+  [60, 0.88, 1.0],
+  [110, 0.82, 0.94],
 ] as const) {
   const car = makeCar();
   car.reset(0, 0, 0, kmh / 3.6);
@@ -178,15 +179,19 @@ console.log('\n== Driver aids through the adapter');
   };
   const tc = launch('assisted');
   const raw = launch('pro');
-  check('TC holds front wheelspin in the wet (from 25 km/h)', tc.slip < 0.16 && tc.slip < raw.slip * 0.5 && tc.kmh >= raw.kmh,
+  // The mod's street tyre holds its grip past the peak, so its TC (12 % slip) trims the wheelspin rather than rescuing
+  // the launch: under its target, well under the untamed slip, and no more than a few km/h for it
+  check('TC holds front wheelspin in the wet (from 25 km/h)', tc.slip < 0.12 && tc.slip < raw.slip * 0.7 && tc.kmh >= raw.kmh - 4,
     `mean front slip ${fmt(tc.slip, 2)} with TC, ${fmt(raw.slip, 2)} without; ${fmt(tc.kmh, 0)} / ${fmt(raw.kmh, 0)} km/h after 6 s`);
-  const stop = (preset: 'pro' | 'semi_pro') => {
+  const stop = (preset: 'pro' | 'semi_pro', onWet = false) => {
     const sim = createSuzukiLianaSim(wide);
     sim.assistPreset = preset;
+    if (onWet) sim.setWeatherSample(wet);
     sim.teleportToDistance(1000, 110 / 3.6);
     let lock = 0;
     const s0 = sim.sMeters;
     for (let t = 0; t < 8 && sim.telemetry.speedKmh > 20; t += DTS) {
+      if (onWet) sim.setWeatherSample(wet);
       sim.step(DTS, { brake: 1 });
       lock = Math.max(lock, -Math.min(...sim.telemetry.wheelSlipRatios));
     }
@@ -194,7 +199,12 @@ console.log('\n== Driver aids through the adapter');
   };
   const abs = stop('semi_pro');
   const locked = stop('pro');
-  check('ABS keeps the wheels turning on a stamp', abs.lock < 0.4 && abs.dist < locked.dist + 2, `max lock ${fmt(abs.lock, 2)} with ABS (${fmt(abs.dist, 0)} m), ${fmt(locked.lock, 2)} without (${fmt(locked.dist, 0)} m)`);
+  // On a dry road its 1600 Nm brakes cannot lock the tyres; on standing water they do, and the ABS keeps them turning
+  const absWet = stop('semi_pro', true);
+  const lockedWet = stop('pro', true);
+  check('A stamp locks the wheels on standing water, not with ABS', lockedWet.lock > 0.9 && absWet.lock < 0.4 && absWet.dist < lockedWet.dist + 2,
+    `max lock ${fmt(absWet.lock, 2)} with ABS (${fmt(absWet.dist, 0)} m), ${fmt(lockedWet.lock, 2)} without (${fmt(lockedWet.dist, 0)} m)`);
+  check('Dry stamp: the ABS holds its slip and costs under a tenth of the stop', abs.lock < 0.2 && abs.dist < locked.dist * 1.1, `max lock ${fmt(abs.lock, 2)} with ABS (${fmt(abs.dist, 0)} m), ${fmt(locked.lock, 2)} without (${fmt(locked.dist, 0)} m)`);
 }
 
 console.log('\n== Autopilot round Dunsfold Aerodrome');

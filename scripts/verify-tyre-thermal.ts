@@ -4,9 +4,9 @@
  *
  *   npx tsx scripts/verify-tyre-thermal.ts
  *
- * Graining and blistering follow each compound's own working window (`tyreGrainThresholdsC`): a GT3 or prototype slick
- * run at its normal temperatures must not grain, a road tyre grains only while it is cold, and an F1 slick keeps the
- * thresholds it always had. The inner, middle and outer bands of the tread keep their own temperatures: negative camber
+ * Graining and blistering follow each compound's own working window (`tyreGrainThresholdsC`): a GT3 slick run at its
+ * normal temperatures must not grain, and an F1 slick keeps the thresholds it always had. A brush tyre (the 496R's
+ * slicks, the Liana's street tyre) grains and blisters slowly, by the work done outside its grip curve's peak. The inner, middle and outer bands of the tread keep their own temperatures: negative camber
  * loads the inner shoulder, so it runs hottest.
  */
 import { getActiveTrackData } from '../src/lib/track-data';
@@ -94,11 +94,12 @@ console.log('\n== Stints round Rwanda (autopilot)');
   const f1 = stint(new F12026CarSim(track), 4);
   check('F1: no graining or blistering over 4 laps', Math.max(...f1.grainByLap.flat()) < 0.1 && f1.blister === 0,
     `grain ${quad(f1.grainByLap[f1.grainByLap.length - 1])}, core ${quad(f1.coreC, 0)} °C`);
-  // A road tyre leaves the garage at 25 °C: its fronts tear while cold, then clean up once warm
+  // A road tyre leaves the garage at 25 °C and runs well under its 75 °C peak: on its slow tread model that grains the
+  // worked fronts a little each lap (a softer tyre, not a slower one), never to the full within a stint
   const liana = stint(createSuzukiLianaSim(track), 5);
   const end = liana.grainByLap[liana.grainByLap.length - 1];
-  check('Liana: the fronts grain cold on lap 1 and are clean again by lap 5', Math.max(liana.grainByLap[0][0], liana.grainByLap[0][1]) > 0.3 && Math.max(...end) < 0.2,
-    `lap 1 ${quad(liana.grainByLap[0])}, lap 5 ${quad(end)}, core ${quad(liana.coreC, 0)} °C`);
+  check('Liana: cold fronts grain slowly, under a tenth in 5 laps', end[0] > 0.001 && Math.max(...end) < 0.1 && liana.blister === 0,
+    `lap 1 ${quad(liana.grainByLap[0], 3)}, lap 5 ${quad(end, 3)}, core ${quad(liana.coreC, 0)} °C`);
 }
 
 console.log(failures.length ? `\n${failures.length} check(s) failed: ${failures.join(', ')}` : '\nAll tyre thermal checks passed.');
