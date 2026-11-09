@@ -55,11 +55,12 @@
 ## Features
 
 ### Physics
-- **500 Hz fixed-step integration** (4 × 2 kHz sub-steps), with each wheel riding the real track surface. The default open-wheeler's chassis is planar (speed, side-slip and yaw on the local road plane) plus sprung heave, pitch and roll; the 2026 Rigid-Body and the GT3s run on a 6-DOF rigid body.
-- **Tyres**: a Pacejka-style slip curve with combined slip, load sensitivity, carcass relaxation and a load-dependent rolling radius. A 9-node thermal model (inner/middle/outer × surface/bulk/carcass) sets the grip window, ideal-gas pressure sets carcass stiffness, and the tyres wear. Soft, medium and hard slicks, plus intermediates and full wets that clear water up to a depth and aquaplane past it.
-- **Chassis**: double-wishbone kinematics with roll centres from the hardpoints, springs, dampers, bump stops, anti-roll bars and heave elements. There's a preload / power / coast limited-slip differential and thermal brakes whose pad friction changes with temperature.
+- **500 Hz fixed-step integration** (4 × 2 kHz sub-steps), with each wheel riding the real track surface. The default 2026 Prototype's chassis is planar (speed, side-slip and yaw on the local road plane) plus sprung heave, pitch and roll. The 2026 Rigid-Body, the GT3s and the Suzuki Liana run on a 6-DOF rigid body that carries the spinning wheels' gyroscopic coupling. Their tyres feel the road over the whole contact patch: five ground samples per wheel (centre, both ends, both tread edges) fold into one height and slope, so a seam or a kerb's step edge is rolled over rather than hit at a point, and the road carries a fine ISO 8608 texture (about 0.5 mm RMS) for them to roll over.
+- **Tyres**: a Pacejka-style slip curve with combined slip on a friction ellipse, load sensitivity, carcass relaxation, a load-dependent rolling radius and a pneumatic trail set by the contact patch's length. On the 6-DOF cars the cornering stiffness saturates with load, so the peak slip angle grows under load. Grip follows the inner, middle and outer tread temperatures: a 9-node thermal model (surface, bulk and carcass per band) on the 2026 Prototype, a tread surface over a carcass per band on the 6-DOF cars. Ideal-gas pressure sets carcass stiffness, and the tyres wear. Soft, medium and hard slicks, plus intermediates and full wets that clear water up to a depth and aquaplane past it.
+- **Chassis**: double-wishbone suspension built from its hardpoints, with springs, dampers, bump stops, anti-roll bars and heave elements. On the 6-DOF cars the solver poses each upright for camber, Ackermann and bump steer, and the tyre forces reach the body through the links: roll-centre jacking, anti-dive, anti-squat and anti-lift, and the full load transfer. The 2026 Prototype takes its roll centres from the hardpoints. The race cars have a preload / power / coast limited-slip differential (the 2026 Rigid-Body's entry, mid and exit maps blend with the pedals and the steering), the Rigid-Body and the GT3s have compliant halfshafts, and every car has thermal brakes whose pad friction changes with temperature.
+- **Steering**: on the 6-DOF cars the rack torque is the front tyres' moment about the kingpin axes: braking and drive force at the scrub radius, cornering force at the caster and pneumatic trail, the steered wheels' weight jacking, and the wheels' gyroscopic torque. A parked tyre twists against the road instead of turning freely, and the road texture reaches the rim only through the tyre forces. The 2026 Rigid-Body and the GT3s have hydraulic power steering (the GT3's fades out with speed) and give up a little steering angle under cornering force. The 2026 Prototype sums the same kinds of moment with fixed gains.
 - **Aero**: ride-height-sensitive wings and floor, altitude-corrected air density, and dirty air behind other cars. 2026 active aero switches between Z-mode (cornering) and X-mode (straights).
-- **Surfaces**: one data table for road, kerb, sausage kerb, run-off, pit lane, grass and gravel, with dry and wet friction, rolling resistance, a bump ripple you feel through the wheel, vibration and whether it counts for track limits. A circuit can override it in its track data. Kerbs rise to a 32 mm crown with a 4 mm ripple.
+- **Surfaces**: one data table for road, kerb, sausage kerb, run-off, pit lane, grass and gravel, with dry and wet friction, rolling resistance, a bump ripple you feel through the wheel, vibration and whether it counts for track limits. A circuit can override it in its track data. Kerbs rise to a 32 mm crown with a 2 mm ripple.
 - **Weather and time of day**: clear, overcast, light rain, heavy rain, drying and dynamic weather. The water film builds and drains, and the cars dry the racing line first. Six times of day, and the clock can run at up to 60×.
 - **Evolving track**: the racing line rubbers in as you drive.
 - **Assists**: traction control on the friction circle, ABS, and a slip-angle-limited steering assist for keyboards and gamepads (S-curve key ramp, self-aligning, slide catch) with pedal slip help for the keys. Each can be tuned, and all but the keyboard's steering assist switched off.
@@ -68,9 +69,12 @@
 ### Cars
 | Car | Model | Notes |
 | :-- | :-- | :-- |
-| **2026 open-wheeler** (default) | Planar chassis + heave / pitch / roll, 4 sprung corners | 1.6 L V6 turbo + 350 kW MGU-K, 4 MJ battery, manual override boost, Z/X-mode aero |
-| **2026 Rigid-Body** | 6-DOF rigid body on the track colliders | Load-sensitive normalized-slip tyres, driver-operated DRS with detection points, live telemetry channels |
-| **Mercedes-AMG GT3** | 6-DOF rigid body | 6.2 L NA V8, 6-speed sequential, multi-stage ABS / TC, its own braking-point model |
+| **2026 Prototype** (default) | Planar chassis + heave / pitch / roll, 4 sprung corners | 1.6 L V6 turbo + 350 kW MGU-K, 4 MJ battery, manual override boost, Z/X-mode aero |
+| **2026 Rigid-Body** | 6-DOF rigid body on the track colliders | The same 350 kW / 4 MJ hybrid; turbo boost that builds with exhaust energy while the MGU-K fills the lag; driver-opened X-mode flaps in every DRS zone, and Overtake Mode earned within 1 s at the detection point; live telemetry channels |
+| **Mercedes-AMG GT3** | 6-DOF rigid body | 6.2 L NA V8, 6-speed sequential, multi-stage ABS / TC, its own braking-point model. The GT3 Evo and the BMW M4 GT3 Evo drive on its physics |
+| **Suzuki Liana 1.6** | 6-DOF rigid body | 2002 road car: 1.6 L four, front-wheel drive through an open differential, 5-speed manual, ABS and TC, one street tyre. Physics from alekabul's mod of this car, used with permission |
+
+The other Formula Open-Wheel cars are ported bodies that drive on the 2026 Rigid-Body's physics, or the Prototype's with the switch in the car picker.
 
 Each car has its own cockpit, steering wheel and shift lights, plus a multi-layer sound bank (engine, turbo, transmission, shifts, backfires, limiter, tyre skid, TC cut). Interior and exterior sounds switch with the camera.
 
@@ -139,9 +143,9 @@ Drove one of these, or a wheel that isn't listed? A [wheel report](https://githu
 
 The physics is checked against data, not just tuned by feel, and the evidence is generated from the simulator's own code so anyone can reproduce it ([full page](docs/physics/README.md), `npm run physics:report`).
 
-- **The GT3 against a real car.** The Mercedes-AMG GT3 runs the same manoeuvres as reference GT3 Evo MoTeC logs: sustained cornering, braking and full-throttle g by speed, gearing and the understeer gradient. Every point sits within −10 % to +16 % of the logs, and `npm run verify` fails the build if one leaves its tolerance.
-- **Tyre curves for every car**: force against slip angle at four loads, grip against load, temperature and pressure.
-- **Honest gaps**: the VF26 reaches 6–18 % less cornering g than the cornering-limit table in its reference data, and the page says so.
+- **The GT3 against a real car.** The Mercedes-AMG GT3 runs the same manoeuvres as reference GT3 Evo MoTeC logs: sustained cornering, braking and full-throttle g by speed, gearing and the understeer gradient. Every point sits within −13 % to +17 % of the logs, and `npm run verify` fails the build if one leaves its tolerance.
+- **Tyre curves for the 2026 Prototype, the 2026 Rigid-Body and the GT3**: force against slip angle at four loads, grip against load, temperature and pressure.
+- **Honest gaps**: the 2026 Prototype corners 14 % below the cornering-limit table in its reference data at 86 km/h, where it runs out of front grip, and 4–17 % above it from 144 km/h up. The page says so.
 - **Frame-rate independence**: physics runs in fixed 2 ms steps (500 Hz, four 2 kHz substeps), so the same three-second launch ends within 0.3 km/h and 0.2 m at 30, 60, 144 or 240 fps.
 
 <p align="center">
