@@ -40,8 +40,11 @@ acevo_physics_strings.txt
 # Wrangler local state
 .wrangler/
 
-# Private scratch reports (audits)
+# Private scratch reports (audits, assessments, research)
 AUDIT-*.md
+AUDIT-*.jpg
+PORT-ASSESSMENT-*.md
+UI-RESEARCH-*.md
 
 # Hosted-only cars and circuits: served on librecorsa.org from the librecorsa-assets R2 bucket
 # (npm run upload-hosted), never committed. The repository carries the Rwanda circuit and the 2026 prototype car
