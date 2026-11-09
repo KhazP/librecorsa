@@ -15,6 +15,8 @@
     "run_worker_first": ["/__migrate"]
   },
   "r2_buckets": [{ "binding": "LARGE_ASSETS", "bucket_name": "librecorsa-assets" }],
+  // Workers caching: the circuit GLBs from R2 are kept at the edge, tiered, with byte ranges served from the cache
+  "cache": { "enabled": true },
   "routes": [{ "pattern": "librecorsa.org", "custom_domain": true }],
   "workers_dev": false,
   "preview_urls": false

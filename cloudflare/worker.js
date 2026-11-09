@@ -6,6 +6,11 @@
  * librecorsa-assets R2 bucket under the same path, and this serves it from there, so the game fetches it
  * from the usual same-origin URL. Anything not in the bucket either gets the site's 404 page.
  *
+ * Workers caching is on (wrangler.jsonc): Cloudflare keeps those files at the edge, tiered, and answers repeat and
+ * byte-range requests without running this or reading R2. Each deploy is a fresh cache (the Worker version is part of
+ * the key), and CI uploads to R2 before it deploys, so a re-uploaded file is never served stale. Browsers still check
+ * the ETag before reusing their copy.
+ *
  * The game used to live at https://khazp.github.io/librecorsa/, and browsers keep saved data per origin, so
  * settings, garage setups, ghost laps and the leaderboard driver key stayed behind there. The redirect page
  * that now sits at the old address (cloudflare/old-site-redirect.html) gathers that data and POSTs it here as a
@@ -35,7 +40,11 @@ export default {
 
 async function notFound(env, url) {
   const page = await env.ASSETS.fetch(new URL("/404.html", url));
-  return new Response(page.body, { status: 404, headers: page.headers });
+  const headers = new Headers(page.headers);
+  // Not kept at the edge: a path that 404s now may be a file the next upload adds
+  headers.set("Cache-Control", "no-store");
+  headers.delete("ETag");
+  return new Response(page.body, { status: 404, headers });
 }
 
 /** A file CI moved to R2, with ETag revalidation and byte ranges; null when the bucket has no such file */
@@ -58,8 +67,10 @@ async function fromBucket(request, env, url) {
   object.writeHttpMetadata(headers);
   headers.set("ETag", object.httpEtag);
   headers.set("Accept-Ranges", "bytes");
-  // Same policy as the static files: cache, but check the ETag before reuse, so a re-uploaded file shows up at once
+  // Browsers: same policy as the static files, cache but check the ETag before reuse. The edge keeps it until the next
+  // deploy (a new Worker version starts an empty cache); Cloudflare reads this header and strips it
   headers.set("Cache-Control", "public, max-age=0, must-revalidate");
+  headers.set("Cloudflare-CDN-Cache-Control", "public, max-age=31536000");
 
   if (request.method === "HEAD") {
     headers.set("Content-Length", String(object.size));
