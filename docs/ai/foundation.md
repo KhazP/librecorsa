@@ -32,8 +32,13 @@ phase 5's first tuner run done (defaults kept). Approved decisions: §8.
   collision at Okayama still happens now and then.
 - **Spielberg for the VF26:** its grip ceiling is 0.95 (2.6 m off the line at 1.0), so Alien gains little there.
   Next: re-optimise the line at a higher grip, or win back the braking-zone losses.
-- **Start defence and launch in the tuner:** the next overnight run should add them to the score, with at least 6
-  seeds per candidate (2 seeds fitted noise).
+- **Start defence in the tuner (run done, defaults kept):** `--mode defence` tuned the five defence knobs (look-back,
+  closing speed, reach, room, start lane) on a reversed grid, f12026, Spielberg + Okayama, 6 seeds, 15 generations.
+  It settled on an earlier, roomier move (look 37 m, room 1.1 s; reach, closing and lane near the defaults). On 10
+  fresh seeds at Spielberg, Okayama and Rwanda (held out), against the defaults: the mean +6.0 ± 5.9 (12 wins, 15
+  losses), the best candidate +2.4 ± 6.7. Lap-1 places won barely moved (2.43 → 2.30, the quickest car's 1.03 →
+  1.03). These thresholds are not what limits start defence. Next: the move itself (how often a driver defends,
+  `defend` × skill, and one move per straight), measured against a real launch from behind.
 - **Late apex** at Spielberg s ≈ 2624 is 38 m early against the real line.
 - **GT3** has no real reference data.
 
