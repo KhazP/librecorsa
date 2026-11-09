@@ -1424,7 +1424,7 @@ function f1Compound(
       // Speed term in the proportion of a radial tyre's, f = 0.0136 + 0.40e-7·V² (V km/h; Wong, Theory of Ground
       // Vehicles): 3.8e-5 of the static value per (m/s)², so +26 % at 300 km/h [derived]
       rollingResistanceSpeedSq: 4.6e-7,
-      verticalDamping: 396,
+      verticalDamping: 396.40625,
       pneumaticTrail: 0.035,
       brakeDxMod: 0.05,
     },
@@ -1478,7 +1478,7 @@ function f1Compound(
         pKy2: 5.2,
         relaxationLengthX: 0.1044,
         relaxationLengthY: 0.1044,
-        verticalDamping: 481,
+        verticalDamping: 480.925,
       },
       camberData: { camberGain: 0.159, dcamber0: 1.211, dcamber1: -11.584 },
       pressureData: { optimalPsi: 24, pressureSpringCurve: rateCurve(274_490, 15, 12_250) },
