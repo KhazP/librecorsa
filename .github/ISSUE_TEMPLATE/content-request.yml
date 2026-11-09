@@ -36,6 +36,11 @@ body:
     validations:
       required: true
   - type: input
+    id: modders
+    attributes:
+      label: Asked sim modders first?
+      description: "For Sketchfab links only: did you ask the modders who made it for other sim racing games (Assetto Corsa, rFactor 2, AMS2…) for permission, and did they say no?"
+  - type: input
     id: creator
     attributes:
       label: Creator / modder

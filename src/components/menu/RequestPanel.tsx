@@ -175,6 +175,8 @@ export interface FeedbackForm {
   third: string;
   license: string;
   permission: string;
+  /** Car / Track with a Sketchfab link: the sim modders were asked first and said no */
+  askedModders: boolean;
   notes: string;
 }
 
@@ -224,12 +226,18 @@ export function feedbackIssueUrl(f: FeedbackForm, ctx: FeedbackContext | undefin
       set("creator", f.third);
       set("license", f.license);
       set("permission", f.permission);
+      if (isSketchfab(f.second) && f.askedModders) set("modders", "Yes, they said no");
       set("notes", f.notes);
   }
   return `${REPO_URL}/issues/new?${q.toString()}`;
 }
 
 const isUrl = (s: string) => /^https?:\/\/[^\s/]+\.[^\s]+$/i.test(s.trim());
+
+/** A Sketchfab page or short link: only requested once the sim modders have said no */
+function isSketchfab(s: string): boolean {
+  return /^https?:\/\/([a-z0-9-]+\.)*(sketchfab\.com|skfb\.ly)(\/|$)/i.test(s.trim());
+}
 
 /**
  * Title-menu panel for feedback: bug and wheel reports, ideas, and car or circuit requests. It collects the
@@ -242,6 +250,7 @@ export const RequestPanel: React.FC<{ context?: FeedbackContext }> = ({ context 
   const [third, setThird] = useState("");
   const [license, setLicense] = useState<string>("");
   const [permission, setPermission] = useState<string>("");
+  const [askedModders, setAskedModders] = useState(false);
   const [notes, setNotes] = useState("");
   const [sys, setSys] = useState<SystemInfo | null>(null);
   const [tried, setTried] = useState(false);
@@ -261,13 +270,18 @@ export const RequestPanel: React.FC<{ context?: FeedbackContext }> = ({ context 
   const permitted =
     !content || writtenPermission || (license !== "Don't know" && (openLicense || permission === PERMISSIONS[0]));
   const ripped = content && !permitted && (permission !== "" || license === "Don't know");
-  const ready = mainOk && secondOk && permitted;
+  // Sketchfab models are a last resort (no physics, tarmac grip, kerbs or racing line): the sim modders come first
+  const sketchfab = content && isSketchfab(second);
+  const moddersOk = !sketchfab || askedModders;
+  const ready = mainOk && secondOk && permitted && moddersOk;
+  const locked = !permitted || !moddersOk;
   const copy = COPY[kind];
 
   const clearFields = () => {
     setMain("");
     setSecond("");
     setThird("");
+    setAskedModders(false);
     setNotes("");
     setTried(false);
   };
@@ -283,7 +297,7 @@ export const RequestPanel: React.FC<{ context?: FeedbackContext }> = ({ context 
     if (sent) return;
     setTried(true);
     if (!ready) return;
-    const url = feedbackIssueUrl({ kind, main, second, third, license, permission, notes }, context, sys);
+    const url = feedbackIssueUrl({ kind, main, second, third, license, permission, askedModders, notes }, context, sys);
     window.open(url, "_blank", "noopener,noreferrer");
     setSent(true);
   };
@@ -476,7 +490,7 @@ export const RequestPanel: React.FC<{ context?: FeedbackContext }> = ({ context 
               label="Model link"
               required
               hint="The page of the 3D model: Sketchfab, a mod site or a scan. Requests without a model can't be built."
-              caution="Heads-up: models from Sketchfab and similar 3D sites are usually low quality (lower FPS, no real kerbs, tarmac or run-off). A sim mod (e.g. Assetto Corsa) is far better, but only with its creator's permission: ask them first."
+              caution={sketchfab ? undefined : "A sim mod (e.g. Assetto Corsa) is far better than Sketchfab: ask its modders first."}
             >
               <input
                 type="url"
@@ -487,6 +501,33 @@ export const RequestPanel: React.FC<{ context?: FeedbackContext }> = ({ context 
                 className={`${inputClass} ${(tried || second.trim() !== "") && !secondOk ? badClass : ""}`}
               />
             </Field>
+            {sketchfab ? (
+              <label
+                className={`flex cursor-pointer items-start gap-3 rounded-[14px] border bg-[#08090D] px-3.5 py-3 ${
+                  tried && !askedModders ? "border-[#FF2A3C]" : "border-[#262B3D]"
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={askedModders}
+                  onChange={(e) => setAskedModders(e.target.checked)}
+                  aria-invalid={tried && !askedModders}
+                  className="mt-0.5 h-[18px] w-[18px] shrink-0 cursor-pointer accent-[#CCFF00]"
+                />
+                <span className="flex min-w-0 flex-col gap-1">
+                  <span className="text-[14px] leading-snug text-[#F5F7FA]">
+                    I asked the modders who made this {kind === "Track" ? "track" : "car"} for other sim racing games (Assetto Corsa,
+                    rFactor 2, AMS2…) for permission, and they said no.
+                    <span className="text-[#CCFF00]"> *</span>
+                  </span>
+                  <span className="text-[12px] leading-snug text-[#8E96AA]">
+                    {kind === "Track"
+                      ? "Sketchfab tracks are made to look at, not to race on: no grip for the tarmac, no real kerbs, no racing line. A sim mod is far better, so ask its modders first."
+                      : "Sketchfab cars are made to look at, not to drive: no physics comes with them. A sim mod is far better, so ask its modders first."}
+                  </span>
+                </span>
+              </label>
+            ) : null}
             <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
               <Field label="Creator / modder">
                 <input value={third} onChange={(e) => setThird(e.target.value)} maxLength={80} className={inputClass} />
@@ -524,14 +565,18 @@ export const RequestPanel: React.FC<{ context?: FeedbackContext }> = ({ context 
               ? "Add a link to the 3D model (starting with https://)."
               : !permitted
                 ? "It needs an open license or the creator's written permission first."
-                : "Fill in the fields marked *."}
+                : !moddersOk
+                  ? "Sketchfab is the last resort. Ask the sim modders first."
+                  : "Fill in the fields marked *."}
           </p>
         ) : null}
         <button
           type="submit"
           disabled={!permitted}
+          // Left pressable while only the Sketchfab box is missing, so pressing it says why
+          aria-disabled={locked || undefined}
           className={`inline-flex h-[52px] items-center gap-2.5 self-end rounded-full border-0 px-6 transition-colors ${
-            permitted
+            !locked
               ? "cursor-pointer bg-[#CCFF00] text-[#08090D] shadow-[0_0_0_5px_rgba(204,255,0,0.12)] hover:bg-[#d9ff33]"
               : "cursor-not-allowed bg-[#262B3D] text-[#8E96AA]"
           }`}
