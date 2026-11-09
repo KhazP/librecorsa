@@ -181,6 +181,9 @@ const LOW_SPEED_DAMPING = 0.3;
 const LOW_SPEED_FADE_MS = 4;
 /** Contact-patch / track-surface conductance while loaded (W/K) */
 const ROAD_CONDUCTANCE = 30;
+/** Heat conducted between neighbouring tyre bands (inner / middle / outer), through the tread and through the carcass (W/K) */
+const BAND_TREAD_CONDUCTANCE = 2;
+const BAND_CARCASS_CONDUCTANCE = 10;
 /**
  * Rack torque that maps to full FFB output: the sum of both front tyres' moments about their kingpin axes (Nm). The
  * column sees it divided by the steering ratio (≈ 48 Nm on 12.6:1)
@@ -3136,14 +3139,23 @@ export class VehiclePhysics {
         const bCoreCool = (th.coreCooling[0] + th.coreCooling[1] * v + extWetCool) * (w.bandCoreTempsC[b] - this.ambientC);
         w.bandTempsC[b] += ((th.slipHeatShare * slipPower * share - bToCore - bSurfCool - bRoadCool) / th.surfaceHeatCapacity) * dt;
         w.bandCoreTempsC[b] += ((hyst * share + bToCore - bCoreCool) / th.coreHeatCapacity) * dt;
-        w.bandCarcassTempsC[b] = 0.55 * w.bandTempsC[b] + 0.45 * w.bandCoreTempsC[b];
       }
-      // Cross-band conduction
-      const d01 = 12 * (w.bandTempsC[0] - w.bandTempsC[1]) * dt;
-      const d12 = 12 * (w.bandTempsC[1] - w.bandTempsC[2]) * dt;
+      // Cross-band conduction: heat crosses between neighbouring bands through the tread and through the carcass (W/K),
+      // each band a third of its layer's heat capacity. Slow next to the bands' own heating and cooling, so camber and
+      // pressure keep their inner / outer temperature difference
+      const kSurf = ((3 * BAND_TREAD_CONDUCTANCE) / th.surfaceHeatCapacity) * dt;
+      const kCore = ((3 * BAND_CARCASS_CONDUCTANCE) / th.coreHeatCapacity) * dt;
+      const d01 = kSurf * (w.bandTempsC[0] - w.bandTempsC[1]);
+      const d12 = kSurf * (w.bandTempsC[1] - w.bandTempsC[2]);
       w.bandTempsC[0] -= d01;
       w.bandTempsC[1] += d01 - d12;
       w.bandTempsC[2] += d12;
+      const c01 = kCore * (w.bandCoreTempsC[0] - w.bandCoreTempsC[1]);
+      const c12 = kCore * (w.bandCoreTempsC[1] - w.bandCoreTempsC[2]);
+      w.bandCoreTempsC[0] -= c01;
+      w.bandCoreTempsC[1] += c01 - c12;
+      w.bandCoreTempsC[2] += c12;
+      for (let b = 0; b < 3; b++) w.bandCarcassTempsC[b] = 0.55 * w.bandTempsC[b] + 0.45 * w.bandCoreTempsC[b];
       // The tyre's surface temperature is the band surfaces weighted by contact pressure (the rubber on the road: flash
       // temperature, graining); its carcass temperature the bands' mean carcass (the inner liner the inflation gas
       // sees, and the rubber behind the carcass's vertical and cornering stiffness)

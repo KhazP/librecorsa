@@ -6,7 +6,8 @@
  *
  * Graining and blistering follow each compound's own working window (`tyreGrainThresholdsC`): a GT3 or prototype slick
  * run at its normal temperatures must not grain, a road tyre grains only while it is cold, and an F1 slick keeps the
- * thresholds it always had.
+ * thresholds it always had. The inner, middle and outer bands of the tread keep their own temperatures: negative camber
+ * loads the inner shoulder, so it runs hottest.
  */
 import { getActiveTrackData } from '../src/lib/track-data';
 import { tyreGrainThresholdsC } from '../src/lib/sim/f12026-car/VehiclePhysics';
@@ -41,6 +42,8 @@ interface StintResult {
   /** Worst blistering over the stint */
   blister: number;
   coreC: number[];
+  /** Mean tread surface temperature of each wheel's inner / middle / outer band over the last lap (°C) */
+  bandsC: number[][];
 }
 
 /** An autopilot stint of `laps` flying laps from the grid on blanket / garage temperatures */
@@ -53,16 +56,26 @@ function stint(sim: F12026CarSim, laps: number): StintResult {
   let t = 0;
   let blister = 0;
   const grainByLap: number[][] = [];
+  let bandSum = [0, 1, 2, 3].map(() => [0, 0, 0]);
+  let bandsC = bandSum;
+  let samples = 0;
   while (t < 240 * (laps + 1) && sim.telemetry.lapCount < lap0 + laps + 1) {
     sim.step(1 / 60, {});
     t += 1 / 60;
-    for (const w of sim.vehicle.wheels) blister = Math.max(blister, w.blisterLevel);
+    sim.vehicle.wheels.forEach((w, i) => {
+      blister = Math.max(blister, w.blisterLevel);
+      for (let b = 0; b < 3; b++) bandSum[i][b] += w.bandTempsC[b];
+    });
+    samples++;
     if (sim.telemetry.lapCount !== last) {
       last = sim.telemetry.lapCount;
       grainByLap.push(sim.vehicle.wheels.map((w) => w.grainLevel));
+      bandsC = bandSum.map((wheel) => wheel.map((sum) => sum / samples));
+      bandSum = [0, 1, 2, 3].map(() => [0, 0, 0]);
+      samples = 0;
     }
   }
-  return { grainByLap, blister, coreC: sim.vehicle.wheels.map((w) => w.coreTempC) };
+  return { grainByLap, blister, coreC: sim.vehicle.wheels.map((w) => w.coreTempC), bandsC };
 }
 
 console.log('\n== Stints round Rwanda (autopilot)');
@@ -71,6 +84,10 @@ console.log('\n== Stints round Rwanda (autopilot)');
   const gt3 = stint(createAmgGt3Sim(track), 5);
   check('GT3: no graining or blistering over 5 laps', Math.max(...gt3.grainByLap.flat()) < 0.1 && gt3.blister === 0,
     `grain ${quad(gt3.grainByLap[gt3.grainByLap.length - 1])}, core ${quad(gt3.coreC, 0)} °C`);
+  // −3.5° of front camber: the inner band carries the most load and runs hottest, the outer coolest
+  const spread = (wheel: number[]) => wheel[0] - wheel[2];
+  check('GT3: front tyres run 5–15 °C hotter inside than outside', [0, 1].every((i) => spread(gt3.bandsC[i]) > 5 && spread(gt3.bandsC[i]) < 15 && gt3.bandsC[i][0] > gt3.bandsC[i][1] && gt3.bandsC[i][1] > gt3.bandsC[i][2]),
+    `inner / middle / outer ${quad(gt3.bandsC[0], 0)} and ${quad(gt3.bandsC[1], 0)} °C`);
   const proto = stint(createMtr496rSim(track), 5);
   check('496R: no graining or blistering over 5 laps', Math.max(...proto.grainByLap.flat()) < 0.1 && proto.blister === 0,
     `grain ${quad(proto.grainByLap[proto.grainByLap.length - 1])}, core ${quad(proto.coreC, 0)} °C`);
