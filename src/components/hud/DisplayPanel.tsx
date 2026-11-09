@@ -497,6 +497,12 @@ export const DisplayPanel: React.FC<DisplayPanelProps> = ({ settings, onChangeSe
 
           <div className="flex flex-wrap items-center gap-x-3.5 gap-y-2 border-t border-[#262B3D] px-2 pt-3">
             <span className="w-[34px] shrink-0 text-[15px] font-bold">VR</span>
+            <span
+              className="lc-data shrink-0 rounded-full border border-[#FFB300]/40 px-2 py-0.5 text-[10px] tracking-[0.14em] text-[#FFB300]"
+              title="VR is a work in progress: expect rough edges"
+            >
+              WIP
+            </span>
             {vrSupported ? (
               <button
                 type="button"
