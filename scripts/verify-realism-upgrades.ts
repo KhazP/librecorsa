@@ -246,19 +246,35 @@ check('The tyres carry the whole load transfer, M·a·h, through springs and lin
     const make = () => new VehiclePhysics({ ground: new FlatGroundQuery(0), config: cfg, airDensity: 1e-6 });
     const corner = make();
     corner.reset(0, 0, 0, 15);
+    // Averaged over the last second: the road texture (`road-texture.ts`) rocks the loads ±20 % moment to moment, but
+    // it is zero-mean. The spinning wheels' momentum H = Σ I_w·ω precesses at the yaw rate r, and the tyres supply
+    // that roll couple H·r on top of ΣFy·h (VehiclePhysics' ω × (Iω + h)): ~10 % of it on the F1 at 15 m/s
+    let rollMoment = 0;
+    let fyMoment = 0;
     for (let i = 0; i < 500 * 8; i++) {
       corner.step(1 / 500, { throttle: corner.velocity.length() < 15 ? 0.35 : 0, brake: 0, steer: Math.min(0.12, i / 1500) });
+      if (i < 500 * 7) continue;
+      const W = corner.wheels;
+      rollMoment += ((W[0].fz - W[1].fz) * cfg.chassis.trackWidthFront + (W[2].fz - W[3].fz) * cfg.chassis.trackWidthRear) / 2;
+      const spinMomentum = W.reduce(
+        (a, w) => a + (w.isFront ? cfg.chassis.wheelInertiaFront : cfg.chassis.wheelInertiaRear) * w.omega * Math.cos(w.steerRad),
+        0
+      );
+      fyMoment += -W.reduce((a, w) => a + w.fy, 0) * h - spinMomentum * corner.angularVelocity.y;
     }
-    const W = corner.wheels;
-    const rollMoment = ((W[0].fz - W[1].fz) * cfg.chassis.trackWidthFront + (W[2].fz - W[3].fz) * cfg.chassis.trackWidthRear) / 2;
-    const fyMoment = -W.reduce((a, w) => a + w.fy, 0) * h;
-    assert.ok(Math.abs(rollMoment / fyMoment - 1) < 0.03, `${name}: lateral load moment ${rollMoment.toFixed(0)} Nm vs ΣFy·h ${fyMoment.toFixed(0)} Nm`);
+    assert.ok(Math.abs(rollMoment / fyMoment - 1) < 0.03, `${name}: lateral load moment ${(rollMoment / 500).toFixed(0)} Nm vs ΣFy·h + H·r ${(fyMoment / 500).toFixed(0)} Nm`);
     const stop = make();
     stop.reset(0, 0, 0, 30);
-    for (let i = 0; i < 250; i++) stop.step(1 / 500, { throttle: 0, brake: 0.4, steer: 0 });
-    const B = stop.wheels;
-    const frontGain = B[0].fz + B[1].fz - stop.totalMassKg * 9.81 * cfg.chassis.frontWeightFraction;
-    const fxMoment = -B.reduce((a, w) => a + w.fx, 0) * h;
+    // Averaged from 0.5 s to 1 s into the stop, past the dive's first swing, for the road texture as above
+    let frontGain = 0;
+    let fxMoment = 0;
+    for (let i = 0; i < 500; i++) {
+      stop.step(1 / 500, { throttle: 0, brake: 0.4, steer: 0 });
+      if (i < 250) continue;
+      const B = stop.wheels;
+      frontGain += (B[0].fz + B[1].fz - stop.totalMassKg * 9.81 * cfg.chassis.frontWeightFraction) / 250;
+      fxMoment += (-B.reduce((a, w) => a + w.fx, 0) * h) / 250;
+    }
     assert.ok(Math.abs((frontGain * stop.wheelbaseM) / fxMoment - 1) < 0.05, `${name}: front gains ${frontGain.toFixed(0)} N under braking vs ΣFx·h / L ${(fxMoment / stop.wheelbaseM).toFixed(0)} N`);
   }
 });

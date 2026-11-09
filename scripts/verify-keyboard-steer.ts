@@ -47,6 +47,20 @@ const G = 9.81;
 const RAD2DEG = 180 / Math.PI;
 const pad = createFlatTestTrack(30_000, 3000);
 
+/**
+ * Throttle that holds a speed, P + I as `lib/handling-tests.ts` holds it. Integral alone (as it was) wound the pedal
+ * up while the car slowed through the turn-in and was still near 0.9 when the speed came back: on the merged tyre and
+ * drivetrain model that is a power slide in the F1 at 70 km/h, and the assist then steered the fronts off their peak
+ */
+function speedHold(vT: number) {
+  let integ = 0.3;
+  return (vx: number) => {
+    const e = vT - vx;
+    integ = Math.max(0, Math.min(1, integ + 0.4 * e * DT));
+    return Math.max(0, Math.min(1, integ + 0.6 * e));
+  };
+}
+
 /** The assist as the game sets it up for the player's settings */
 const gameAssist = (padTuning: PadTuning = DEFAULT_PLAYER_SETTINGS.padTuning, keyboardTuning: KeyboardTuning = DEFAULT_PLAYER_SETTINGS.keyboardTuning) =>
   steeringAssistSettings(padTuning, keyboardTuning);
@@ -127,14 +141,14 @@ function drive(
   const { holdSpeed = true, steering = (dir) => ({ kbSteer: dir }) } = opts;
   const c = placed(cc, kmh, opts.assist);
   const peakRad = cc.peakDeg(c) / RAD2DEG;
-  const vT = kmh / 3.6;
+  const hold = speedHold(kmh / 3.6);
   let thr = 0.3;
   let turnIn = 0, settled = 0, nSettled = 0, ay = 0, peakAy = 0, maxBeta = 0;
   const steer: number[] = [];
   for (let t = 0; t < seconds; t += DT) {
     const k = keys(t);
     const brake = k.brake ?? 0;
-    if (holdSpeed && brake === 0) thr = Math.max(0, Math.min(1, thr + (vT - c.vxMs) * 0.5 * DT));
+    if (holdSpeed && brake === 0) thr = hold(c.vxMs);
     const throttle = brake > 0 ? 0 : holdSpeed ? thr : 0.3;
     c.step(DT, { throttle, brake, ...steering(k.dir) });
     steer.push(c.steerAngleNorm);
@@ -170,12 +184,13 @@ function wheelLatG(cc: CarCase, kmh: number, seconds = 4): number {
   const c = placed(cc, kmh);
   const peakRad = cc.peakDeg(c) / RAD2DEG;
   const vT = kmh / 3.6;
+  const hold = speedHold(vT);
   let thr = 0.3;
   let steer = 0;
   let ay = 0;
   let n = 0;
   for (let t = 0; t < seconds; t += DT) {
-    thr = Math.max(0, Math.min(1, thr + (vT - c.vxMs) * 0.5 * DT));
+    thr = hold(c.vxMs);
     c.step(DT, { throttle: thr, brake: 0, analogSteer: steer });
     const sa = c.telemetry.wheelSlipAnglesDeg;
     const front = Math.max(Math.abs(sa[0]), Math.abs(sa[1])) / RAD2DEG / peakRad;

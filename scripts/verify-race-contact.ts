@@ -118,7 +118,15 @@ function run(setup: Setup) {
   const tapInfo = tap.field.carInfo('AIC')!;
   check('Light tap: the AI car is knocked out of shape', tap.modes.has('startled') && tap.maxHeadingDeg > 5, `heading off the road by ${f(tap.maxHeadingDeg, 0)}°, modes ${[...tap.modes].join(' → ')}`);
   check('Light tap: ... and gathers it up', tapInfo.stats.spins === 0, `${tapInfo.stats.spins} spins`);
-  const hit = run({ player: [300, -1.5, 63], ai: [304.4, 0, 59], inputs: (i) => ({ throttle: 0.5, analogSteer: i < 20 ? 0.25 : 0 }), frames: 60 * 40 });
+  // The player brakes once the AI car has gone (~0.8 s): held on throttle, its 13° swerve keeps shoving the spinning
+  // car into the pit wall and wrecks it (≥ 0.85 damage retires it), and whether it does is down to the spin's exact
+  // path, not to the rejoin under test
+  const hit = run({
+    player: [300, -1.5, 63],
+    ai: [304.4, 0, 59],
+    inputs: (i) => ({ throttle: i < 50 ? 0.5 : 0, brake: i < 50 ? 0 : 1, analogSteer: i < 20 ? 0.25 : 0 }),
+    frames: 60 * 40,
+  });
   const info = hit.field.carInfo('AIC')!;
   check('Firm hit: the AI car spins', info.stats.spins > 0 && hit.maxHeadingDeg > 60, `heading off the road by ${f(hit.maxHeadingDeg, 0)}°, modes ${[...hit.modes].join(' → ')}`);
   const stopFrame = hit.trace.findIndex((t) => t.mode === 'stopped');

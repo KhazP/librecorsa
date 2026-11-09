@@ -977,7 +977,10 @@ console.log('\n== F12026CarSim (simulator adapter)');
     const iso = stepSteer(make, v, limit, 0.3);
     check('250 km/h: the step to the limit over 0.3 s overshoots at most 30 %', !iso.spun && iso.overshootPct <= 30, `${fmt(iso.overshootPct, 0)} %`);
     const part = stepSteer(make, v, steerFor(ramp, 0.7));
-    check('250 km/h: a step to 70 % of the limit overshoots at most 20 %', !part.spun && part.overshootPct <= 20, `${fmt(part.overshootPct, 0)} %`);
+    // 25 % (was 20 %): measured ≈ 12 % on the pre-merge model; the F1's steering compliance (0.05 °/kN, ≈ 0.5° given
+    // back at 3 g: more lock for the same steady yaw, so a larger first swing) adds ≈ 4 points, and the hardpoint
+    // geometry, the wheels' gyroscopic roll couple and the load-saturating tyre stiffness ≈ 1–2 each, to ≈ 21 %
+    check('250 km/h: a step to 70 % of the limit overshoots at most 25 %', !part.spun && part.overshootPct <= 25, `${fmt(part.overshootPct, 0)} %`);
     const over = stepSteer(make, v, Math.min(1, 2 * limit));
     check('250 km/h: twice the limit steer runs wide, no spin', !over.spun, over.spun ? 'spun' : 'no spin');
   }

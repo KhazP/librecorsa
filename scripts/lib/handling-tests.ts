@@ -183,7 +183,15 @@ export function stepSteer(make: MakeCar, vMs: number, steerNorm: number, rampS =
   const t50 = s.find((x) => x.t > T0 && Math.abs(x.steer) >= 0.5 * steerSs)?.t ?? T0;
   const tail = s.filter((x) => x.t > s[s.length - 1].t - 1);
   const rSs = mean(tail.map((x) => x.r));
-  const after = s.filter((x) => x.t >= t50);
+  // The peak is read off the yaw rate averaged over ±25 ms: the road texture (`road-texture.ts`) shakes it by a few
+  // per cent at ~10 Hz, and the largest single sample of that ripple is not the car's overshoot. The yaw mode (≈ 2 Hz)
+  // passes the average untouched
+  const half = Math.round(0.025 / DT);
+  const smooth = s.map((x, i) => {
+    const w = s.slice(Math.max(0, i - half), i + half + 1);
+    return { ...x, r: mean(w.map((y) => y.r)) };
+  });
+  const after = smooth.filter((x) => x.t >= t50);
   const t90 = after.find((x) => x.r * Math.sign(rSs) >= 0.9 * Math.abs(rSs))?.t ?? NaN;
   let peak = after[0];
   for (const x of after) if (x.r * Math.sign(rSs) > peak.r * Math.sign(rSs)) peak = x;
