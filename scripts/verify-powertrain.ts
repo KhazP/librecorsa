@@ -96,5 +96,38 @@ for (const brake of [0.15, 0.3]) {
     `ratio ${fmt(ratio)}, ${fmt((100 * drivetrain) / demand, 0)} % of it through the drivetrain`);
 }
 
+console.log('\n== Plain ramp differentials lock by their data');
+/**
+ * Lock share of a car's diff: the locking torque beyond the preload over the torque into the diff, on a flat-out run
+ * (`power`) and lifted off in gear (`coast`), from the telemetry's locking torque and the driven wheels' drive torque
+ */
+function lockShares(config: CarPhysicsConfig, v0: number): { power: number; coast: number } {
+  const preload = config.differential.settings.preload;
+  const measure = (throttle: number) => {
+    const car = makeCar(config, v0);
+    const [dl, dr] = car.drivenWheels;
+    let lock = 0;
+    let into = 0;
+    for (let i = 0; i < 3 / DT; i++) {
+      car.step(DT, { throttle, brake: 0, steer: 0 });
+      if (i < 1.5 / DT) continue;
+      lock += car.telemetry.LSD_LOCKING_TORQUE - preload;
+      into += Math.abs(car.wheels[dl].driveTorqueNm + car.wheels[dr].driveTorqueNm);
+    }
+    return lock / into;
+  };
+  return { power: measure(1), coast: measure(0) };
+}
+for (const [name, config, v0] of [
+  ['GT3', AMG_GT3_CONFIG, 40],
+  ['496R', MTR_496R_CONFIG, 50],
+  ['Liana', SUZUKI_LIANA_CONFIG, 25],
+] as const) {
+  const want = config.differential.settings;
+  const got = lockShares(config, v0);
+  check(`${name}: locks ${want.power} on power and ${want.coast} on the overrun`, Math.abs(got.power - want.power) < 0.005 && Math.abs(got.coast - want.coast) < 0.005,
+    `${fmt(got.power)} / ${fmt(got.coast)}`);
+}
+
 console.log(failures.length ? `\n${failures.length} check(s) failed: ${failures.join(', ')}` : '\nAll powertrain checks passed.');
 if (failures.length) process.exitCode = 1;

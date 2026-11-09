@@ -688,12 +688,12 @@ export const AMG_GT3_CONFIG = {
   gearbox: GEARBOX,
   // Auto-clutch 2300–3200 rpm [spec]
   clutch: { maxTorqueNm: 820, biteRpm: 2300, lockRpm: 3200 },
-  // Locking torque = preload + POWER / COAST × input torque [spec]. The default entry / exit dials scale these by 0.84 / 0.97,
-  // so the car runs ≈ 0.67 coast and 0.30 power lock: more coast lock and less preload keep the rear calm on lift-off and
-  // trail braking (lift-off yaw kick 24 % → 4 %) [ref]
+  // Locking torque = preload + POWER / COAST × input torque [spec]: 0.30 power and 0.67 coast lock with the dials where
+  // the car has them. The coast lock and the light preload keep the rear calm on lift-off and trail braking (lift-off
+  // yaw kick 24 % → 4 %) [ref]
   differential: {
     type: 'LSD_Ramp',
-    settings: { power: 0.31, coast: 0.8, preload: 50, friction_faces: 1, power_ramp_deg: 45, coast_ramp_deg: 45 },
+    settings: { power: 0.3, coast: 0.67, preload: 50, friction_faces: 1, power_ramp_deg: 45, coast_ramp_deg: 45 },
     // Solid steel Ø 32 mm × 0.55 m from the rear transaxle (G 80 GPa): GJ/L ≈ 15 kNm/rad, ≈ 11 kNm/rad with the CV joints;
     // shuffle 7.2 Hz in 1st, 19 Hz in 6th. Damping 10 % of critical for a wheel on its own shaft [est]
     halfshaft: { stiffnessNmPerRad: 11_000, dampingNmsPerRad: 29 },

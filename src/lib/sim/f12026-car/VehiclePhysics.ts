@@ -862,6 +862,9 @@ export class VehiclePhysics {
   public diffEntryLevel = 3;
   public diffMidLevel = 5;
   public diffExitLevel = 5;
+  /** The car's own entry / exit dial positions: a plain ramp diff has its data's lock there (the dials scale about them) */
+  private readonly diffEntryDefault: number;
+  private readonly diffExitDefault: number;
   public diffActivePhase: 'ENTRY' | 'MID' | 'EXIT' = 'MID';
   /** Live-tunable engine torque/throttle map (1 = Quali 100%, 2 = Race 98.5%, 3 = Smooth 96%, 4 = Lean 92.5%, 5 = Save 87%) */
   public engineMap = 1;
@@ -1098,6 +1101,8 @@ export class VehiclePhysics {
     this.diffEntryLevel = cfg.differential.diffEntryLevel ?? 4;
     this.diffMidLevel = cfg.differential.diffMidLevel ?? 5;
     this.diffExitLevel = cfg.differential.diffExitLevel ?? 6;
+    this.diffEntryDefault = this.diffEntryLevel;
+    this.diffExitDefault = this.diffExitLevel;
     // F1 pull-rod cars and GT3 push-rod cars pass their unpacked 3D wishbone + tie-rod hardpoints into the 3D linkage solver
     const kinOptions = {
       geometry: susp.front.actuation === 'pull_rod' ? ('f1' as const) : ('gt3' as const),
@@ -2837,10 +2842,11 @@ export class VehiclePhysics {
       powerCoeff = THREE.MathUtils.lerp(mid, level(this.diffExitLevel), exitW);
       coastCoeff = THREE.MathUtils.lerp(mid, level(this.diffEntryLevel), entryW);
     } else {
-      const entryScale = 0.65 + ((THREE.MathUtils.clamp(this.diffEntryLevel, 1, 12) - 1) / 11) * 0.7;
-      const exitScale = 0.65 + ((THREE.MathUtils.clamp(this.diffExitLevel, 1, 12) - 1) / 11) * 0.7;
-      powerCoeff = THREE.MathUtils.clamp(diff.power * exitScale, 0.05, 0.92);
-      coastCoeff = THREE.MathUtils.clamp(coastCoeff * entryScale, 0.05, 0.88);
+      // A plain ramp diff locks by its data (POWER / COAST) with the dials where the car has them; turning a dial
+      // scales that lock, 0.65× at 1 to 1.35× at 12, about the car's own position. An open diff stays open (no floor)
+      const dial = (level: number) => 0.65 + ((THREE.MathUtils.clamp(level, 1, 12) - 1) / 11) * 0.7;
+      powerCoeff = THREE.MathUtils.clamp((diff.power * dial(this.diffExitLevel)) / dial(this.diffExitDefault), 0, 1);
+      coastCoeff = THREE.MathUtils.clamp((coastCoeff * dial(this.diffEntryLevel)) / dial(this.diffEntryDefault), 0, 1);
     }
     this.diffActivePhase = entryW > 0.5 ? 'ENTRY' : exitW > 0.5 ? 'EXIT' : 'MID';
     const lockPower = powerCoeff * diff.friction_faces * cot(diff.power_ramp_deg);
