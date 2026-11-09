@@ -163,14 +163,15 @@ export const EngineersGarage: React.FC<
   // Presets, per car
   const [presets, setPresets] = useState<GaragePreset[]>([]);
   const [name, setName] = useState("");
-  // Each note is its own toast: the same text twice (Reset, Reset) restarts its timer. One that can be undone stays longer
+  // Each note is its own toast: the same text twice (Reset, Reset) restarts its timer. One that can be undone stays
+  // until the next note or until it is dismissed: a player reading it must not lose the Undo to a timer
   const [note, setNoteState] = useState<{ text: string; seq: number; undo?: () => void } | null>(null);
   const noteSeq = useRef(0);
   const setNote = (text: string, undo?: () => void) => setNoteState({ text, seq: ++noteSeq.current, undo });
   useEffect(() => setPresets(loadGaragePresets(p.vehicleModel)), [p.vehicleModel]);
   useEffect(() => {
-    if (!note) return;
-    const id = window.setTimeout(() => setNoteState(null), note.undo ? 8000 : 2400);
+    if (!note || note.undo) return;
+    const id = window.setTimeout(() => setNoteState(null), 2400);
     return () => window.clearTimeout(id);
   }, [note]);
 
@@ -459,14 +460,25 @@ export const EngineersGarage: React.FC<
             <div role="status" className="flex w-full flex-wrap items-center justify-between gap-x-3 gap-y-1.5 rounded-[14px] border border-[#262B3D] bg-[#11131A] py-1.5 pr-1.5 pl-3.5">
               <span className="text-[14px] font-semibold text-[#F5F7FA]">{note.text}</span>
               {note.undo ? (
-                <SmallButton
-                  onClick={() => {
-                    note.undo?.();
-                    setNoteState(null);
-                  }}
-                >
-                  Undo
-                </SmallButton>
+                <span className="flex items-center gap-1">
+                  <SmallButton
+                    onClick={() => {
+                      note.undo?.();
+                      setNoteState(null);
+                    }}
+                  >
+                    Undo
+                  </SmallButton>
+                  <button
+                    type="button"
+                    aria-label="Dismiss"
+                    onClick={() => setNoteState(null)}
+                    onPointerEnter={focusOnHover}
+                    className="inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-full text-[#8E96AA] outline-none hover:text-[#F5F7FA] focus:bg-[#CCFF00] focus:text-[#08090D]"
+                  >
+                    <X aria-hidden className="h-4 w-4" strokeWidth={2.6} />
+                  </button>
+                </span>
               ) : null}
             </div>
           ) : null}
