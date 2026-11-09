@@ -15,11 +15,16 @@ import { SegmentOccluder } from '../src/lib/render/segment-occluder';
 import { TracksideBroadcastDirector } from '../src/lib/render/camera-rig';
 import type { TrackSamplePoint } from '../src/types/f1';
 import { loadGlbGeometry } from './lib/glb-geometry';
+import { hasFile, noteSkip } from './lib/hosted-files';
 
 const SIDES = [THREE.FrontSide, THREE.DoubleSide, THREE.BackSide] as const;
 let failed = 0;
 
 for (const id of ['yas_marina', 'rwanda']) {
+  if (!hasFile(`public/tracks/${id}/track_data.json`)) {
+    noteSkip(id, `public/tracks/${id}/track_data.json`);
+    continue;
+  }
   const raw = JSON.parse(readFileSync(`public/tracks/${id}/track_data.json`, 'utf8'));
   setActiveTrack(id, raw);
   const track = getActiveTrackData(1200);

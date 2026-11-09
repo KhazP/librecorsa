@@ -13,6 +13,7 @@ import type * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { CARS } from "../src/lib/cars/car-registry";
 import { portedCarRoot } from "../src/lib/ported-car-model";
+import { hasFile, noteSkip } from "./lib/hosted-files";
 
 let passed = 0;
 let failed = 0;
@@ -63,6 +64,10 @@ async function main(): Promise<void> {
   console.log("Ported car roots through GLTFLoader");
   for (const car of CARS) {
     if (!car.modelUrl) continue;
+    if (!hasFile(`public${car.modelUrl}`)) {
+      noteSkip(car.id, `public${car.modelUrl}`);
+      continue;
+    }
     const scene = await load(car.modelUrl);
     const root = portedCarRoot(scene);
     const extras = root.userData as { wheelCentres?: Record<string, number[]>; tyreRadius?: Record<string, number>; cameras?: object };

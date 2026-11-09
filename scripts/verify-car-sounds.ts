@@ -24,6 +24,7 @@ import {
 import { AMG_GT3_SOUND } from "../src/lib/sim/gt3/AmgGt3Sim";
 import { SUZUKI_LIANA_SOUND } from "../src/lib/sim/road/SuzukiLianaSim";
 import type { Vf26AudioManifest } from "../src/lib/sim/vf26-audio";
+import { noteSkip, REPO_CAR_IDS } from "./lib/hosted-files";
 
 let passed = 0;
 function check(name: string, cond: boolean, detail = ""): void {
@@ -80,9 +81,15 @@ for (const exp of Object.values(EXPECTED_SOUNDS)) {
   }
 }
 
+// The repository carries only the 2026 prototype's bank; the others are skipped where a clone lacks them
+const repoBanks = new Set([...REPO_CAR_IDS].map((id) => carById(id as CarId).sound.id));
 for (const [bankId, { sound, maxIdleRpm }] of seenBanks) {
   const relDir = join("public", sound.assetDir.replace(/^\/+|\/+$/g, ""));
   const manifestPath = join(relDir, "manifest.json");
+  if (!existsSync(manifestPath) && !repoBanks.has(bankId)) {
+    noteSkip(bankId, manifestPath);
+    continue;
+  }
   check(`${bankId}: manifest exists at ${manifestPath}`, existsSync(manifestPath));
 
   const m = JSON.parse(readFileSync(manifestPath, "utf8")) as Vf26AudioManifest;

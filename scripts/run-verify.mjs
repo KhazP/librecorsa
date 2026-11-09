@@ -27,7 +27,9 @@ for (const suite of suites) {
   const started = Date.now();
   const result = spawnSync(process.execPath, ["--import", "tsx", join(scriptsDir, suite), ...passArgs], {
     stdio: "inherit",
-    env: { ...process.env, NODE_OPTIONS: nodeOptions },
+    // The suites check the whole car and circuit registry; ones that load a hosted-only file skip it when a clone
+    // doesn't have it (scripts/lib/hosted-files.ts, src/lib/hosted-content.ts)
+    env: { NEXT_PUBLIC_HOSTED_CONTENT: "1", ...process.env, NODE_OPTIONS: nodeOptions },
   });
   const seconds = ((Date.now() - started) / 1000).toFixed(1);
   if (result.status !== 0) {

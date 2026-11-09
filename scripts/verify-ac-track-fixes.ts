@@ -18,6 +18,9 @@ import { createAmgGt3Sim } from '../src/lib/sim/gt3/AmgGt3Sim';
 import { getActiveTrackData, type RawTrackJson, setActiveTrack } from '../src/lib/track-data';
 import { loadGlbGeometry } from './lib/glb-geometry';
 import { measurePortedWheelContact, type PortedWheelExtras } from './lib/ported-wheel-contact';
+import { skipSuiteWithout } from './lib/hosted-files';
+
+skipSuiteWithout('public/tracks/okayama/track_data.json', 'public/tracks/monaco/track_data.json', 'public/tracks/dunsfold/track_data.json', 'public/cars/sf26/model/sf26.glb');
 
 const ROOT = path.resolve(__dirname, '..');
 

@@ -12,6 +12,7 @@ import { copyFileSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import * as THREE from 'three';
+import { hasFile, noteSkip } from './lib/hosted-files';
 
 interface GltfNode {
   name?: string;
@@ -67,6 +68,10 @@ const work = mkdtempSync(path.join(tmpdir(), 'lc-car-compression-'));
 try {
   // The opponents' car and one ported car (small, so the suite stays quick)
   for (const rel of ['public/amr26/model/amr26.glb', 'public/cars/rb8/model/rb8.glb']) {
+    if (!hasFile(rel)) {
+      noteSkip(path.basename(rel), rel);
+      continue;
+    }
     const raw = path.join(ROOT, rel);
     const out = path.join(work, path.basename(rel));
     copyFileSync(raw, out);

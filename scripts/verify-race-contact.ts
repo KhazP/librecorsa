@@ -21,6 +21,9 @@ import { AiOpponentField, type FieldIncident } from '../src/lib/sim/ai-opponents
 import type { DamageLevel } from '../src/lib/sim/car-damage';
 import type { ControlInputs } from '../src/types/f1';
 import { loadGlbGeometry } from './lib/glb-geometry';
+import { skipSuiteWithout } from './lib/hosted-files';
+
+skipSuiteWithout('public/tracks/monza/track_data.json', 'public/tracks/monza/monza.glb');
 
 const failures: string[] = [];
 const check = (name: string, ok: boolean, detail: string) => {

@@ -24,6 +24,7 @@ import {
   WHEEL_ON_ROAD_TOLERANCE_MM,
   type PortedWheelExtras,
 } from "./lib/ported-wheel-contact";
+import { noteSkip } from "./lib/hosted-files";
 
 let passed = 0;
 let failed = 0;
@@ -122,8 +123,10 @@ const wheelExtras: Record<string, PortedWheelExtras> = {};
 for (const spec of PORTED_GT3_SPEC) {
   console.log(`\n=== 2. Ported GLB: ${spec.id} (${spec.title}) ===`);
   const glbPath = resolve(process.cwd(), `public/cars/${spec.id}/model/${spec.id}.glb`);
-  check(`${spec.id} GLB exists at public/cars/${spec.id}/model/${spec.id}.glb`, existsSync(glbPath));
-  if (!existsSync(glbPath)) continue;
+  if (!existsSync(glbPath)) {
+    noteSkip(spec.id, `public/cars/${spec.id}/model/${spec.id}.glb`);
+    continue;
+  }
 
   const sizeBytes = statSync(glbPath).size;
   const sizeMb = sizeBytes / (1024 * 1024);
@@ -342,6 +345,7 @@ for (const spec of PORTED_GT3_SPEC) {
   if (ground) {
     const contact = measurePortedWheelContact(createAmgGt3Sim(track, trackRoot), ground, wheelExtras, AMG_GT3_CONFIG.chassis, WHEEL_CONTACT_RUN_S);
     for (const spec of PORTED_GT3_SPEC) {
+      if (!wheelExtras[spec.id]) continue;
       const r = contact[spec.id];
       check(
         `${spec.id} loaded tyres sit on the road within ±${WHEEL_ON_ROAD_TOLERANCE_MM} mm`,

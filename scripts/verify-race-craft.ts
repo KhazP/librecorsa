@@ -18,6 +18,9 @@ import { AiOpponentField, launchReactionS, type FieldIncident } from '../src/lib
 import { hazardLine, inYellowZone, overlapNow, ownsCorner, passFeasible } from '../src/lib/sim/ai-racecraft';
 import { COLLISION_PENALTY_S, judgeContact, RaceIncidents } from '../src/lib/sim/race-incidents';
 import { loadGlbGeometry } from './lib/glb-geometry';
+import { skipSuiteWithout } from './lib/hosted-files';
+
+skipSuiteWithout('public/tracks/monza/track_data.json', 'public/tracks/monza/monza.glb');
 
 const failures: string[] = [];
 const check = (name: string, ok: boolean, detail = '') => {
