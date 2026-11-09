@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
-import { ChevronLeft, LayoutGrid } from "lucide-react";
+import { ChevronLeft, LayoutGrid, X } from "lucide-react";
 import type { AeroSetupPreset, LiveTunerPatch, LiveTunerState, TireCompound } from "@/types/f1";
 import { DEFAULT_CHASSIS_SETUP, loadGaragePresets, saveGaragePresets, type GaragePreset, type GarageTuner } from "@/lib/sim/car-setup";
 import { setupSheet, type SetupEffect, type SetupGroup, type SetupParam, type SetupState } from "@/lib/sim/setup-sheet";
@@ -62,7 +62,7 @@ const SetupRow: React.FC<{
     onChange(v);
   };
   return (
-    <label className={`flex flex-col gap-2 rounded-[14px] px-2 py-2 hover:bg-white/[0.04] ${disabled ? "opacity-45" : ""}`} title={fx ? `▲ ${fx.more}\n▼ ${fx.less}` : undefined}>
+    <label className={`group/row flex flex-col gap-2 rounded-[14px] px-2 py-2 hover:bg-white/[0.04] ${disabled ? "opacity-45" : ""}`}>
       <span className="flex items-center justify-between gap-3">
         <span className="flex min-w-0 items-center gap-1.5">
           <span className="min-w-0 text-[14px] leading-tight font-bold text-[#F5F7FA]">{label}</span>
@@ -91,7 +91,18 @@ const SetupRow: React.FC<{
           <span aria-hidden className="pointer-events-none absolute top-1/2 h-3 w-0.5 -translate-y-1/2 rounded-full bg-[#F5F7FA]/40" style={{ left: `${basePct}%` }} />
         ) : null}
       </span>
-      {text ? <span className={`text-[12px] leading-[1.4] ${dir === 0 ? "text-[#8E96AA]/70" : "text-[#C5CBD8]"}`}>{text}</span> : null}
+      {text ? <span className={`text-[12px] leading-[1.4] ${dir === 0 ? "text-[#8E96AA]" : "text-[#C5CBD8]"}`}>{text}</span> : null}
+      {/* Both ways, where a controller or keyboard can read it too: shown while the row is pointed at or focused */}
+      {fx ? (
+        <span className="hidden flex-col gap-0.5 rounded-[10px] bg-[#08090D]/70 px-2.5 py-2 text-[12px] leading-[1.4] text-[#C5CBD8] group-focus-within/row:flex group-hover/row:flex">
+          <span>
+            <span className="font-bold text-[#F5F7FA]">{invert ? "Left" : "Right"}:</span> {fx.more.replace(/^▲\s*/, "")}
+          </span>
+          <span>
+            <span className="font-bold text-[#F5F7FA]">{invert ? "Right" : "Left"}:</span> {fx.less.replace(/^▼\s*/, "")}
+          </span>
+        </span>
+      ) : null}
     </label>
   );
 };
@@ -152,14 +163,14 @@ export const EngineersGarage: React.FC<
   // Presets, per car
   const [presets, setPresets] = useState<GaragePreset[]>([]);
   const [name, setName] = useState("");
-  // Each note is its own toast: the same text twice (Baseline, Baseline) restarts the 2.4 s timer
-  const [note, setNoteState] = useState<{ text: string; seq: number } | null>(null);
+  // Each note is its own toast: the same text twice (Reset, Reset) restarts its timer. One that can be undone stays longer
+  const [note, setNoteState] = useState<{ text: string; seq: number; undo?: () => void } | null>(null);
   const noteSeq = useRef(0);
-  const setNote = (text: string) => setNoteState({ text, seq: ++noteSeq.current });
+  const setNote = (text: string, undo?: () => void) => setNoteState({ text, seq: ++noteSeq.current, undo });
   useEffect(() => setPresets(loadGaragePresets(p.vehicleModel)), [p.vehicleModel]);
   useEffect(() => {
     if (!note) return;
-    const id = window.setTimeout(() => setNoteState(null), 2400);
+    const id = window.setTimeout(() => setNoteState(null), note.undo ? 8000 : 2400);
     return () => window.clearTimeout(id);
   }, [note]);
 
@@ -175,6 +186,15 @@ export const EngineersGarage: React.FC<
     engineMap: tuner.engineMap,
   };
   const st: SetupState = { chassis, tyre: p.tyreSetup, tuner: currentTuner };
+  /** The whole setup as it stands, so an action that overwrites it can be undone */
+  const snapshot = () => ({ chassis: { ...chassis }, tyre: p.tyreSetup, compound: p.tireCompound, aero: p.aeroPreset, tuner: { ...currentTuner } });
+  const restore = (s: ReturnType<typeof snapshot>) => {
+    p.onChangeChassisSetup?.(s.chassis);
+    p.onChangeTyreSetup(s.tyre);
+    p.onChangeTireCompound(s.compound);
+    p.onChangeAeroPreset(s.aero);
+    p.onChangeLiveTuner?.(s.tuner);
+  };
   const canWrite = (q: SetupParam) => (q.writes === "chassis" ? canChassis : q.writes === "tuner" ? canTune : true);
   const apply = (q: SetupParam, v: number) => {
     const next = q.set(st, v);
@@ -184,10 +204,12 @@ export const EngineersGarage: React.FC<
   };
   /** The page's settings back at the car's baseline (the electronics stay as they are) */
   const resetGroup = (g: SetupGroup) => {
+    const before = snapshot();
     let next = st;
     for (const q of g.params) if (q.writes !== "tuner") next = q.set(next, q.base);
     if (g.params.some((q) => q.writes === "chassis")) p.onChangeChassisSetup?.(next.chassis);
     if (g.params.some((q) => q.writes === "tyre")) p.onChangeTyreSetup(next.tyre);
+    setNote(`${g.label} back to baseline`, () => restore(before));
   };
 
   const savePreset = () => {
@@ -218,6 +240,7 @@ export const EngineersGarage: React.FC<
     setNote(saveGaragePresets(p.vehicleModel, next) ? `Saved “${preset.name}”` : "Could not save: storage is blocked");
   };
   const loadPreset = (x: GaragePreset) => {
+    const before = snapshot();
     // Saved presets come from storage: every value goes back through the sheet's own range (as the sliders would),
     // so a hand-edited or older preset cannot hand the car a value no slider can produce
     let loaded: SetupState = {
@@ -237,18 +260,24 @@ export const EngineersGarage: React.FC<
     if (TIRE_COMPOUNDS.includes(x.compound)) p.onChangeTireCompound(x.compound);
     if (AERO_PRESETS.includes(x.aero)) p.onChangeAeroPreset(x.aero);
     p.onChangeLiveTuner?.(loaded.tuner);
-    setNote(`Loaded “${x.name}”`);
+    setNote(`Loaded “${x.name}”`, () => restore(before));
   };
   const deletePreset = (x: GaragePreset) => {
+    const before = presets;
     const next = presets.filter((y) => y.id !== x.id);
     setPresets(next);
     saveGaragePresets(p.vehicleModel, next);
+    setNote(`Deleted “${x.name}”`, () => {
+      setPresets(before);
+      saveGaragePresets(p.vehicleModel, before);
+    });
   };
   const resetAll = () => {
+    const before = snapshot();
     p.onChangeChassisSetup?.({ ...DEFAULT_CHASSIS_SETUP });
     p.onChangeTyreSetup(p.defaultTyreSetup);
     p.onChangeAeroPreset("balanced");
-    setNote("Back to the baseline setup");
+    setNote("Every setting back to baseline", () => restore(before));
   };
 
   // The car browser takes the garage's place while it is open; Ⓑ / Esc (or Garage) comes back to the Change car button
@@ -422,24 +451,46 @@ export const EngineersGarage: React.FC<
           <SmallButton tone="volt" onClick={savePreset}>
             Save
           </SmallButton>
-          <SmallButton onClick={resetAll} title="Every chassis setting, tyre pressure and camber back to the car's baseline">
-            Baseline
+          <span aria-hidden className="mx-1 h-6 w-px bg-[#262B3D] max-sm:hidden" />
+          <SmallButton tone="danger" onClick={resetAll} title="Every chassis setting, tyre pressure and camber back to the car's baseline">
+            Reset all
           </SmallButton>
-          {note ? <span className="font-f1-mono text-[10px] font-extrabold tracking-[0.08em] text-[#CCFF00]">{note.text}</span> : null}
+          {note ? (
+            <div role="status" className="flex w-full flex-wrap items-center justify-between gap-x-3 gap-y-1.5 rounded-[14px] border border-[#262B3D] bg-[#11131A] py-1.5 pr-1.5 pl-3.5">
+              <span className="text-[14px] font-semibold text-[#F5F7FA]">{note.text}</span>
+              {note.undo ? (
+                <SmallButton
+                  onClick={() => {
+                    note.undo?.();
+                    setNoteState(null);
+                  }}
+                >
+                  Undo
+                </SmallButton>
+              ) : null}
+            </div>
+          ) : null}
           {presets.length > 0 ? (
             <div className="flex w-full flex-wrap gap-1.5">
               {presets.map((x) => (
                 <span key={x.id} className="inline-flex items-center gap-1 rounded-full border border-[#262B3D] bg-[#11131A] py-0.5 pr-0.5 pl-3">
-                  <button type="button" onClick={() => loadPreset(x)} className="cursor-pointer text-[12px] font-bold text-[#F5F7FA] hover:text-[#CCFF00]" title={`Load ${x.name}`}>
+                  <button
+                    type="button"
+                    onClick={() => loadPreset(x)}
+                    onPointerEnter={focusOnHover}
+                    aria-label={`Load ${x.name}`}
+                    className="cursor-pointer rounded-full px-1 text-[13px] font-bold text-[#F5F7FA] outline-none focus:bg-[#CCFF00] focus:text-[#08090D]"
+                  >
                     {x.name}
                   </button>
                   <button
                     type="button"
                     onClick={() => deletePreset(x)}
                     aria-label={`Delete ${x.name}`}
-                    className="inline-flex h-6 w-6 cursor-pointer items-center justify-center rounded-full text-[#5B6275] hover:bg-white/10 hover:text-[#FF2A3C]"
+                    onPointerEnter={focusOnHover}
+                    className="inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-full text-[#8E96AA] outline-none hover:bg-white/10 hover:text-[#FF2A3C] focus:bg-[#CCFF00] focus:text-[#08090D]"
                   >
-                    ×
+                    <X aria-hidden className="h-3.5 w-3.5" strokeWidth={2.6} />
                   </button>
                 </span>
               ))}
@@ -450,7 +501,7 @@ export const EngineersGarage: React.FC<
 
 
       {/* Sheet pages */}
-      <div role="tablist" aria-label="Setup" className="flex gap-0.5 overflow-x-auto rounded-full border border-[#262B3D] bg-[#08090D] p-1 [scrollbar-width:none]">
+      <div role="tablist" aria-label="Setup" className="flex flex-wrap gap-0.5 rounded-[24px] border border-[#262B3D] bg-[#08090D] p-1">
         {sheet.map((g) => {
           const n = changedIn(g);
           return (
@@ -465,9 +516,8 @@ export const EngineersGarage: React.FC<
                 group.id === g.id ? CHOSEN_PILL : "text-[#8E96AA] hover:text-[#F5F7FA]"
               }`}
             >
-              {/* A short sheet (the GT3s' six pages) always fits its full names; the F1 sheet's nine only on wide screens */}
-              <span className={sheet.length <= 6 ? "hidden lg:inline" : "hidden min-[1800px]:inline"}>{g.label}</span>
-              <span className={sheet.length <= 6 ? "lg:hidden" : "min-[1800px]:hidden"}>{g.short}</span>
+              {/* Full names always: the strip wraps to a second row instead of shortening them to "Susp." and "Electr." */}
+              <span>{g.label}</span>
               {n ? <span aria-label={`${n} changed`} className="h-1.5 w-1.5 rounded-full bg-[#00E5FF] group-focus:bg-[#08090D]" /> : null}
             </button>
           );
