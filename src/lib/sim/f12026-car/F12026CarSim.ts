@@ -1682,9 +1682,12 @@ export class F12026CarSim implements SimulatorCar {
     // Never steer the fronts far past their peak slip angle: beyond it they only scrub and the car runs wide
     // (the integrator holds while the governor is on, so it cannot wind up)
     // Braking takes its share of the fronts' grip (the tyre's friction ellipse), so the harder they brake the less
-    // lateral slip is worth asking of them: the allowance shrinks with the fronts' normalised slip ratio
+    // lateral slip is worth asking of them: the allowance shrinks with the fronts' normalised braking slip ratio. Only
+    // braking: a front-drive car's unloaded inside front spins up on the way out of a slow corner (an open diff), and
+    // counting that drive slip choked the lock to under half the peak, so the car ran straight off the exit
     const [fl, fr] = v.wheels;
-    const sxF = (0.5 * (Math.abs(fl.slipRatio) + Math.abs(fr.slipRatio))) / Math.max(0.01, this.compoundData.modelData.slip_ratio_limit);
+    const sxF =
+      (0.5 * (Math.max(0, -fl.slipRatio) + Math.max(0, -fr.slipRatio))) / Math.max(0.01, this.compoundData.modelData.slip_ratio_limit);
     const peak = this.frontPeakSlipRad() * Math.sqrt(Math.max(0.2, 1.15 * 1.15 - sxF * sxF));
     const betaF = Math.atan2(v.velocity.dot(_ex) - this.bodyYawRate() * this.cgToFrontAxleM, Math.max(1, v.velocity.dot(_ez)));
     // the car's understeer at the lateral acceleration asked for, steered in up front rather than left to the integrator:
