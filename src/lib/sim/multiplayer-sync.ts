@@ -618,7 +618,7 @@ export class MultiplayerSyncManager {
     roomCode: '',
     state: 'idle',
     connectedWebRtcPeers: 0,
-    statusText: 'Ready. Tabs in this browser find each other; other devices join with a room code.',
+    statusText: "Host a room and send the link, or join with a friend's code.",
   };
   public onStatusChange?: (status: P2PConnectionStatus) => void;
 

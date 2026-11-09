@@ -20,7 +20,7 @@ import { Segmented, TrackQualityBadge } from "@/components/menu/menu-ui";
 export interface MultiplayerPanelProps {
   p2pStatus?: P2PConnectionStatus;
   initialRoomCode?: string;
-  onHostP2PRoom?: (customCode?: string) => string;
+  onHostP2PRoom?: () => string;
   onJoinP2PRoom?: (roomCode: string) => void;
   onCreateManualOffer?: () => Promise<string>;
   onAcceptManualOffer?: (offerToken: string) => Promise<string>;
@@ -187,7 +187,7 @@ function NetBadge({ stats }: { stats?: PeerNetStats }) {
   );
 }
 
-/** Peer-to-peer multiplayer: room codes over a public WebRTC broker, or a manual SDP exchange */
+/** Private rooms: host one and share its link, or join a friend's with their code; the lobby once in one */
 export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
   p2pStatus,
   initialRoomCode = "",
@@ -287,6 +287,11 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
   // Only a room this player hosts or has joined can be shared, never a code still being typed
   const activeCode = (p2pStatus?.roomCode ?? "").replace(/^(RWA|LC)-/i, "").toUpperCase();
 
+  // Once in a room, its own code leaves the join field (an invite link put it there)
+  useEffect(() => {
+    if (activeCode) setRoomCodeInput((typed) => (typed.trim().toUpperCase() === activeCode ? "" : typed));
+  }, [activeCode]);
+
   const getInviteUrl = (): string | null => {
     if (!activeCode || typeof window === "undefined") return null;
     return `${window.location.origin}${window.location.pathname}?room=LC-${activeCode}`;
@@ -322,7 +327,7 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
   const saveTurn = () => {
     const url = turnUrl.trim();
     if (!/^turns?:/i.test(url)) {
-      setTurnError("The URL must start with turn: or turns:");
+      setTurnError("The address must start with turn: or turns:");
       return;
     }
     setTurnError("");
@@ -345,9 +350,13 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
     setTurnConfigured(hasTurnServer());
   };
 
+  // A new room always gets a fresh code: the field below is only for joining a friend's
   const hostRoom = () => {
-    const code = onHostP2PRoom?.(roomCodeInput || undefined);
-    if (code) setRoomCodeInput(code);
+    onHostP2PRoom?.();
+    setRoomCodeInput("");
+  };
+  const joinRoom = () => {
+    if (joinReady) onJoinP2PRoom?.(roomCodeInput.trim());
   };
 
   const connected = p2pStatus?.connectedWebRtcPeers ?? 0;
@@ -587,66 +596,74 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
             </span>
           </div>
           {hostedCode ? (
-            <div
-              className="font-f1-mono text-[40px] leading-none font-extrabold tracking-[0.14em] break-all text-[#CCFF00] tabular-nums sm:text-[46px]"
-              aria-label={`Room code ${hostedCode}`}
-            >
-              {hostedCode}
-            </div>
+            <>
+              <div
+                className="font-f1-mono text-[40px] leading-none font-extrabold tracking-[0.14em] break-all text-[#CCFF00] tabular-nums sm:text-[46px]"
+                aria-label={`Room code ${hostedCode}`}
+              >
+                {hostedCode}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button type="button" disabled={!activeCode} onClick={copyLink} className={`flex-1 ${PILL_VOLT}`}>
+                  {copiedLink ? <Check aria-hidden className="h-4 w-4" strokeWidth={2.4} /> : <Copy aria-hidden className="h-4 w-4" strokeWidth={2.2} />}
+                  {copiedLink ? "Link copied" : "Copy invite link"}
+                </button>
+                {canShare ? (
+                  <button type="button" disabled={!activeCode} onClick={() => void shareInvite()} className={`flex-1 ${PILL_DARK}`}>
+                    <Share2 aria-hidden className="h-4 w-4" strokeWidth={2.2} />
+                    Share…
+                  </button>
+                ) : null}
+              </div>
+            </>
           ) : (
-            <p className="m-0 text-[14px] leading-snug text-[#8E96AA]">
-              No room yet. Host one, or enter a friend&apos;s code to join theirs.
-            </p>
-          )}
-          <div className="flex flex-wrap gap-2">
-            <button type="button" disabled={!activeCode} onClick={copyLink} className={`flex-1 ${hostedCode ? PILL_VOLT : PILL_DARK}`}>
-              {copiedLink ? <Check aria-hidden className="h-4 w-4" strokeWidth={2.4} /> : <Copy aria-hidden className="h-4 w-4" strokeWidth={2.2} />}
-              {copiedLink ? "Link copied" : "Copy link"}
-            </button>
-            {canShare ? (
-              <button type="button" disabled={!activeCode} onClick={() => void shareInvite()} className={`flex-1 ${PILL_DARK}`}>
-                <Share2 aria-hidden className="h-4 w-4" strokeWidth={2.2} />
-                Share…
+            <>
+              <p className="m-0 text-[14px] leading-snug text-[#8E96AA]">
+                Host a room and send your friends the link, or join theirs with the code they gave you.
+              </p>
+              <button type="button" onClick={hostRoom} className={`w-full ${joinReady ? PILL_DARK : PILL_VOLT}`}>
+                Host a room
               </button>
-            ) : null}
-          </div>
+            </>
+          )}
           <div className="h-px bg-[#262B3D]" />
-          <div className="flex flex-col gap-2">
-            <span className="lc-lbl">{hostedCode ? "Join another room" : "Host or join a room"}</span>
+          <form
+            className="flex flex-col gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              joinRoom();
+            }}
+          >
+            <label htmlFor="lc-room-code" className="lc-lbl">
+              {hostedCode ? "Join another room" : "Join a friend's room"}
+            </label>
             <div className="flex flex-wrap gap-2">
               <input
+                id="lc-room-code"
                 type="text"
                 maxLength={6}
                 value={roomCodeInput}
                 onChange={(e) => setRoomCodeInput(e.target.value.toUpperCase())}
                 placeholder="CODE"
-                aria-label="Room code"
+                autoComplete="off"
+                autoCapitalize="characters"
+                spellCheck={false}
                 className="h-11 min-w-[7rem] flex-1 rounded-full border border-[#262B3D] bg-[#08090D] px-4 font-f1-mono text-[15px] font-extrabold tracking-[0.3em] text-[#F5F7FA] uppercase placeholder:text-[#8E96AA] focus:border-[#CCFF00] focus:shadow-[0_0_0_4px_rgba(204,255,0,0.12)] focus:outline-none"
               />
-              <button
-                type="button"
-                disabled={!joinReady}
-                onClick={() => {
-                  if (joinReady) onJoinP2PRoom?.(roomCodeInput.trim());
-                }}
-                className={joinReady ? PILL_VOLT : PILL_DARK}
-              >
+              <button type="submit" disabled={!joinReady} className={joinReady ? PILL_VOLT : PILL_DARK}>
                 Join
               </button>
-              {/* One main action at a time: Host until a code is typed, then Join */}
-              <button type="button" onClick={hostRoom} className={hostedCode || joinReady ? PILL_DARK : PILL_VOLT}>
-                Host
-              </button>
             </div>
-          </div>
-          <button
-            type="button"
-            disabled={!onHostLocal}
-            onClick={() => onHostLocal?.()}
-            className="self-start cursor-pointer text-left text-[13px] font-semibold text-[#00E5FF] hover:text-[#CCFF00] hover:underline disabled:cursor-not-allowed disabled:opacity-40 disabled:no-underline"
-          >
-            Race these tabs (same browser)
-          </button>
+          </form>
+          {hostedCode ? (
+            <button
+              type="button"
+              onClick={hostRoom}
+              className="self-start cursor-pointer text-left text-[13px] font-semibold text-[#00E5FF] hover:text-[#CCFF00] hover:underline"
+            >
+              Host a new room instead
+            </button>
+          ) : null}
         </div>
 
         {profile ? (
@@ -679,9 +696,9 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
             onClick={() => setAdvancedOpen((open) => !open)}
             className="flex min-h-[44px] w-full cursor-pointer items-center justify-between gap-2 rounded-[22px] px-4 py-2 text-left hover:bg-white/[0.04]"
           >
-            <span className="lc-title text-[14px] text-[#8E96AA]">Advanced · connect by hand, or through a relay server</span>
+            <span className="lc-title text-[14px] text-[#8E96AA]">More ways to connect</span>
             <span className="flex shrink-0 items-center gap-2">
-              {turnConfigured ? <span className={`${CHIP} bg-[#00E5FF]/[0.12] text-[#00E5FF] uppercase`}>TURN relay</span> : null}
+              {turnConfigured ? <span className={`${CHIP} bg-[#00E5FF]/[0.12] text-[#00E5FF] uppercase`}>Own relay</span> : null}
               <ChevronDown
                 aria-hidden
                 className={`h-4 w-4 text-[#8E96AA] transition-transform ${advancedOpen ? "rotate-180" : ""}`}
@@ -692,8 +709,27 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
 
           {advancedOpen ? (
             <div className="flex flex-col gap-4 border-t border-[#262B3D] p-4">
-              <div className="flex flex-col gap-2.5">
-                <span className="lc-title text-[14px] text-[#FFB300]">Manual connection (no broker)</span>
+              <div className="flex flex-col gap-2">
+                <span className="lc-title text-[14px] text-[#00E676]">Two windows on this computer</span>
+                <p className="m-0 text-[12px] leading-snug text-[#8E96AA]">
+                  Open the game in another tab or window of this browser, then start a race between them here. No room needed.
+                </p>
+                <button
+                  type="button"
+                  disabled={!onHostLocal}
+                  onClick={() => onHostLocal?.()}
+                  className={`${PILL_DARK} min-h-9 self-start text-[13px]`}
+                >
+                  Race these tabs
+                </button>
+              </div>
+
+              <div className="flex flex-col gap-2.5 border-t border-[#262B3D] pt-4">
+                <span className="lc-title text-[14px] text-[#FFB300]">Connect by hand</span>
+                <p className="m-0 text-[12px] leading-snug text-[#8E96AA]">
+                  Works without any room: the host makes an offer, the other player answers it, and you send each other the
+                  two tokens.
+                </p>
                 <div className="flex flex-wrap items-center gap-2">
                   {/* A guest that answered an offer does not start one of its own (Start over first) */}
                   <button
@@ -803,10 +839,10 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
               </div>
 
               <div className="flex flex-col gap-2.5 border-t border-[#262B3D] pt-4">
-                <span className="lc-title text-[14px] text-[#00E5FF]">TURN relay</span>
+                <span className="lc-title text-[14px] text-[#00E5FF]">Your own relay server</span>
                 <p className="m-0 text-[12px] leading-snug text-[#8E96AA]">
-                  Needed when players are on strict NATs or mobile data. Free TURN: Cloudflare Calls, Metered.ca. Applies to
-                  new connections.
+                  Only if players still can&apos;t reach each other: the address and login of a TURN server you run or rent.
+                  Used for connections made after you save it.
                 </p>
                 <div className="grid gap-2 sm:grid-cols-3">
                   <input
@@ -817,7 +853,7 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
                       setTurnError("");
                     }}
                     placeholder="turn:host:3478"
-                    aria-label="TURN URL"
+                    aria-label="Relay address"
                     autoComplete="off"
                     className={inputClass}
                   />
@@ -826,7 +862,7 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
                     value={turnUser}
                     onChange={(e) => setTurnUser(e.target.value)}
                     placeholder="Username"
-                    aria-label="TURN username"
+                    aria-label="Relay username"
                     autoComplete="off"
                     className={inputClass}
                   />
@@ -834,8 +870,8 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
                     type="password"
                     value={turnCred}
                     onChange={(e) => setTurnCred(e.target.value)}
-                    placeholder="Credential"
-                    aria-label="TURN credential"
+                    placeholder="Password"
+                    aria-label="Relay password"
                     autoComplete="new-password"
                     className={inputClass}
                   />
@@ -860,7 +896,7 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
             p2pStatus?.state === "error" ? "text-[13px] font-semibold text-[#FF2A3C]" : "text-[13px] text-[#8E96AA]"
           }`}
         >
-          {p2pStatus?.statusText ?? "Same-browser tabs connect automatically. Use a room code for other devices."}
+          {p2pStatus?.statusText ?? "Host a room and send the link, or join with a friend's code."}
         </p>
       </div>
 
