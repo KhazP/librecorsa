@@ -201,6 +201,8 @@ const BAND_CARCASS_CONDUCTANCE = 10;
  */
 const TREAD_CONDITION_RATE = 1e-6;
 const GRAIN_WEAR_OFF_RATE = 5e-7;
+/** Rolling speed from which a brush tyre's camber thrust is in full (m/s) */
+const CAMBER_THRUST_FULL_MS = 3;
 /**
  * Rack torque that maps to full FFB output: the sum of both front tyres' moments about their kingpin axes (Nm). The
  * column sees it divided by the steering ratio (≈ 48 Nm on 12.6:1)
@@ -2309,8 +2311,10 @@ export class VehiclePhysics {
           const bt = tyre.brush;
           // Peak slip angle from the load, the grip state and the pressure; a grained tread is softer and peaks later
           tanPeak = brushPeakSlipTan(bt, fz, base, w.pressurePsi / td.pressureData.optimalPsi) * (1 + w.grainLevel);
-          // Camber thrust (toward the lean) as a shift of the slip angle
-          const tanEff = Math.tan(Math.atan(w.tanSlipAngle) - Math.sin(w.camberLeftRad) * cam.camberGain);
+          // Camber thrust (toward the lean) as a shift of the slip angle. It comes with rolling: a leaning tyre that
+          // stands still pushes nowhere, so the shift fades in over the first metres per second
+          const camberShift = Math.sin(w.camberLeftRad) * cam.camberGain * Math.min(1, absVx / CAMBER_THRUST_FULL_MS);
+          const tanEff = Math.tan(Math.atan(w.tanSlipAngle) - camberShift);
           brushForces(bt, w.slipRatio, tanEff, tanPeak, _brush);
           fx = muX * fz * _brush.fx;
           fy = -muY * fz * _brush.fy;
