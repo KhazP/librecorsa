@@ -4,7 +4,7 @@ import { patchShader, type ShaderPatch } from "@/lib/render/shader-patch";
 
 /**
  * Surface detail for trackside scenery that ships as flat-colour, UV-less geometry (Rwanda's trees, grandstand
- * roofs, spire, lake, paint and sausage kerbs). Nothing is added to the GLB: the variation is world-space value
+ * roofs, spire, lake, paint and sausage kerbs). The lake gets wind waves, gusts, rain rings and sun glitter. Nothing is added to the GLB: the variation is world-space value
  * noise in the shader, and the trees get rounded normals, a per-tree tint and an occlusion term baked into their
  * geometry once at load.
  *
@@ -295,6 +295,17 @@ float scnDetail = uSceneryDetail * ( 1.0 - smoothstep( 60.0, 220.0, scnDist ) );
 	}
 	// Wet paint darkens like the asphalt around it
 	diffuseColor.rgb *= 1.0 - 0.22 * uWetness;
+#elif defined( SCENERY_WATER )
+	// Lake: wind waves in three octaves (9, 3.2 and 0.8 m), each faded out once a pixel is too coarse for it. The slope
+	// no pixel resolves widens the highlight instead (roughness below), so the far lake shows a broad sun path rather
+	// than shimmering. Slow gusts leave calmer, glossier patches between ruffled ones.
+	vec2 scnL = scnP.xz;
+	float scnFw = max( fwidth( scnL.x ), fwidth( scnL.y ) );
+	float scnGust = 0.35 + 0.65 * smoothstep( -0.45, 0.55, vf26ValueNoise( scnL / 160.0 + uSceneryTime * vec2( 0.0035, 0.002 ) ) );
+	vec3 scnOct = 1.0 - smoothstep( vec3( 0.25 ), vec3( 0.5 ), scnFw / vec3( 9.0, 3.2, 0.8 ) );
+	float scnLost = scnGust * dot( 1.0 - scnOct * uSceneryDetail, vec3( 0.05, 0.06, 0.05 ) );
+	// Ruffled water scatters a little more light back than a calm patch
+	diffuseColor.rgb *= 0.92 + 0.16 * scnGust;
 #endif`,
   ],
   [
@@ -304,6 +315,8 @@ float scnDetail = uSceneryDetail * ( 1.0 - smoothstep( 60.0, 220.0, scnDist ) );
 	roughnessFactor = clamp( roughnessFactor + 0.1 * scnDetail * vf26ValueNoise( scnP.xz / 3.1 + scnP.y * 0.2 ), 0.04, 1.0 );
 #elif defined( SCENERY_PAINT )
 	roughnessFactor = mix( roughnessFactor, 0.12, 0.8 * uWetness );
+#elif defined( SCENERY_WATER )
+	roughnessFactor = min( sqrt( roughnessFactor * roughnessFactor + 0.7 * scnLost * scnLost ), 0.2 );
 #endif`,
   ],
   [
@@ -317,17 +330,61 @@ float scnDetail = uSceneryDetail * ( 1.0 - smoothstep( 60.0, 220.0, scnDist ) );
 		float scnAa = 1.0 - smoothstep( 0.25, 0.5, max( fwidth( scnB.x ), fwidth( scnB.y ) ) / 0.55 );
 		scnH = 0.09 * ( 0.65 * vf26ValueNoise( scnB / 0.55 ) + 0.35 * vf26ValueNoise( scnB / 1.6 ) ) * scnDetail * scnAa;
 	#else
-		// Wind ripples drifting across the lake, and rain rings close to the camera
-		vec2 scnL = scnP.xz;
-		float scnAa = 1.0 - smoothstep( 0.25, 0.5, max( fwidth( scnL.x ), fwidth( scnL.y ) ) / 0.8 );
-		scnH = 0.012 * ( vf26ValueNoise( scnL / 2.4 + uSceneryTime * vec2( 0.06, 0.035 ) ) + 0.5 * vf26ValueNoise( scnL / 0.8 - uSceneryTime * vec2( 0.05, 0.08 ) ) );
-		scnH *= uSceneryDetail * scnAa;
+		// The lake's wind waves drifting with the gusts, and rain rings close to the camera
+		scnH = 0.07 * scnOct.x * vf26ValueNoise( scnL / 9.0 + uSceneryTime * vec2( 0.035, 0.02 ) )
+			+ 0.03 * scnOct.y * vf26ValueNoise( scnL / 3.2 + uSceneryTime * vec2( -0.05, 0.06 ) )
+			+ 0.01 * scnOct.z * vf26ValueNoise( scnL / 0.8 - uSceneryTime * vec2( 0.05, 0.08 ) );
+		scnH *= scnGust * uSceneryDetail;
 		if ( uRainIntensity > 0.02 ) {
 			scnH += 0.004 * vf26RainSplash( scnL, uWetTime, uRainIntensity ) * uSceneryDetail * ( 1.0 - smoothstep( 15.0, 45.0, scnDist ) );
 		}
 	#endif
 	normal = vf26PerturbNormal( -vViewPosition, normal, vec2( dFdx( scnH ), dFdy( scnH ) ), faceDirection );
+	#ifdef SCENERY_WATER
+		// Specular anti-aliasing: the bumped normal's spread across a pixel widens the lobe (from beautiful-water)
+		vec3 scnNx = dFdx( normal );
+		vec3 scnNy = dFdy( normal );
+		roughnessFactor = sqrt( roughnessFactor * roughnessFactor + min( 0.32 * max( dot( scnNx, scnNx ), dot( scnNy, scnNy ) ), 0.012 ) );
+	#endif
 }
+#endif`,
+  ],
+  [
+    "#include <lights_fragment_end>",
+    /* glsl */ `#include <lights_fragment_end>
+#if defined( SCENERY_WATER ) && NUM_SUN_LIGHTS > 0
+{
+	// Sun glitter, adapted from beautiful-water (MIT): a wider GGX lobe finds where the sun's reflection falls, and
+	// drifting multi-scale noise breaks it into separate flashes. Past ~170 m (and on Low) the flashes average into a
+	// soft path. The sun's shadow is left out: nothing on the circuit shades the open lake.
+	vec3 scnSunL = sunLights[ 0 ].direction;
+	vec3 scnHv = normalize( geometryViewDir + scnSunL );
+	float scnNoL = saturate( dot( normal, scnSunL ) );
+	float scnNoV = max( dot( normal, geometryViewDir ), 1e-3 );
+	float scnNoH = saturate( dot( normal, scnHv ) );
+	float scnVoH = saturate( dot( geometryViewDir, scnHv ) );
+	float scnAlpha = clamp( 2.7 * roughnessFactor * roughnessFactor + 0.01, 0.014, 0.088 );
+	float scnSpec = D_GGX( scnAlpha, scnNoH ) * V_GGX_SmithCorrelated( scnAlpha, scnNoL, scnNoV ) * F_Schlick( 0.02, 1.0, scnVoH ) * scnNoL;
+	scnSpec = scnSpec / ( 1.0 + scnSpec );
+	vec2 scnWind = vec2( 0.8638, 0.5038 );
+	vec2 scnCross = vec2( -scnWind.y, scnWind.x );
+	vec2 scnGp = scnL - scnWind * ( uSceneryTime * 0.31 ) + scnCross * ( uSceneryTime * 0.047 );
+	vec2 scnGuv = vec2( dot( scnGp, scnWind ) * 0.72, dot( scnGp, scnCross ) * 1.58 );
+	mat2 scnTurn = mat2( 0.61, -0.79, 0.79, 0.61 );
+	float scnG = 0.5 + 0.5 * ( 0.26 * vf26ValueNoise( scnGuv * 2.5 + vec2( 7.3, -4.8 ) )
+		+ 0.47 * vf26ValueNoise( scnTurn * scnGuv * 8.8 + vec2( -13.2, 19.6 ) )
+		+ 0.27 * vf26ValueNoise( scnTurn * scnGuv * 21.5 + vec2( 31.7, -9.1 ) ) );
+	float scnGaa = max( fwidth( scnG ) * 1.45, 0.022 );
+	float scnResolved = uSceneryDetail * ( 1.0 - smoothstep( 62.0, 175.0, scnDist ) );
+	float scnOcc = mix( 0.18, smoothstep( 0.5 - scnGaa, 0.69 + scnGaa, scnG ), scnResolved );
+	float scnSpark = scnResolved * smoothstep( 0.67 - scnGaa, 0.83 + scnGaa, scnG );
+	reflectedLight.directSpecular += sunLights[ 0 ].color * scnSpec * ( 0.28 * scnOcc + 0.72 * scnSpark ) * scnGust * 1.2;
+}
+#endif
+#ifdef SCENERY_WATER
+	// The sun's reflection is no brighter than the sky draws the sun (its disc is capped at 30, times the water's
+	// Fresnel): uncapped, the near-mirror highlight reached thousands and bloomed into a round blob
+	reflectedLight.directSpecular = min( reflectedLight.directSpecular, vec3( 12.0 ) );
 #endif`,
   ],
   [
