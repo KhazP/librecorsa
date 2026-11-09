@@ -147,5 +147,7 @@ The deploy meshopt-compresses every car GLB before building, and the game reads 
 ## Licences
 
 - Only port models and sounds you have the right to use. A model's licence and a mod's terms come with it, and a game's own assets usually can't be redistributed at all.
-- Keep ported content local. `public/cars/` is gitignored apart from the 2026 car. Please don't open pull requests that add third-party models or sounds.
+- **Unlicensed or unauthorised mods are for local use only.** If a mod has no licence, or its author hasn't said you can use it, keep it on your own machine: don't commit it, upload it, host it or share it in any form.
+- **Releasing a ported car needs permission.** Before you publish one on your fork, your own site or anywhere else, get the author's permission, or check that its licence allows redistribution, and keep a record of it.
+- Keep ported content local by default. `public/cars/` is gitignored apart from the 2026 car. Please don't open pull requests that add third-party models or sounds.
 - If you share a ported car anywhere, credit its author the way `CREDITS.md` does: title, author, link, licence, and what you changed.
