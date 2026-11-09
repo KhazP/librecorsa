@@ -13,6 +13,7 @@ import * as THREE from 'three';
 import { setActiveTrack, getActiveTrackData, type RawTrackJson } from '../src/lib/track-data';
 import { FlatGroundQuery } from '../src/lib/sim/f12026-car/TrackColliderQuery';
 import { VehiclePhysics, type VehicleInputs } from '../src/lib/sim/f12026-car/VehiclePhysics';
+import { compoundData } from '../src/lib/sim/f12026-car/F12026CarConfig';
 import { SUZUKI_LIANA_CONFIG } from '../src/lib/sim/road/SuzukiLianaConfig';
 import { SUZUKI_LIANA_PROFILE_CAR, createSuzukiLianaSim } from '../src/lib/sim/road/SuzukiLianaSim';
 import type { F12026CarSim } from '../src/lib/sim/f12026-car/F12026CarSim';
@@ -47,6 +48,11 @@ console.log('\n== Liana config');
 {
   check('Front-wheel drive, five gears, 7000 rpm limiter', C.drivenAxle === 'front' && C.gearbox.ratios.length === 5 && C.gearbox.gears.redline_rpm === 7000, '');
   check('No hybrid, wings or brake-by-wire', C.ers.ERS_MAX_DEPLOY === 0 && C.aero.wings.length === 0 && C.brakes.brakeByWire === false, '');
+  // The mod's tyre data: μ = DY0 + DY1 · Fz / 2000 N, so 1.2557 − 0.05 · 2 at 4 kN and 1.1967 − 0.048 · 2 along
+  const street = compoundData(C, C.compoundSlots.soft).modelData;
+  const muAt4kN = (curve: readonly (readonly number[])[] | undefined) => curve?.find((p) => p[0] === 4000)?.[1] ?? NaN;
+  check('Tyre grip at 4 kN is the mod\'s: 1.156 across, 1.101 along', Math.abs(muAt4kN(street.dyCurve) - 1.1557) < 0.001 && Math.abs(muAt4kN(street.dxCurve) - 1.1007) < 0.001,
+    `${fmt(muAt4kN(street.dyCurve), 3)} / ${fmt(muAt4kN(street.dxCurve), 3)}`);
   const car = makeCar();
   check('The engine drives the front wheels', car.drivenWheels[0] === 0 && car.drivenWheels[1] === 1, `wheels ${car.drivenWheels.join(', ')}`);
 }
@@ -117,10 +123,10 @@ console.log('\n== Straight line (flat ground, sea level)');
 }
 
 console.log('\n== Cornering (flat, steer ramp at constant speed)');
-// A 2002 economy saloon on 185/65 R14s holds ≈ 0.75–0.8 g
+// On its mod's tyre data the Liana peaks at ≈ 0.85 g and holds ≈ 0.8 g
 for (const [kmh, lo, hi] of [
-  [60, 0.7, 0.95],
-  [110, 0.7, 0.95],
+  [60, 0.82, 0.92],
+  [110, 0.8, 0.92],
 ] as const) {
   const car = makeCar();
   car.reset(0, 0, 0, kmh / 3.6);

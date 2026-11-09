@@ -257,20 +257,25 @@ const AERO: AeroData = {
 /** 185/65 R14 street tyre: section 0.185 m, radius 0.288 m, rim radius 0.1908 m [spec tyres.ini] */
 const STREET: TyreGeometry = { width: 0.185, radius: 0.288, rimRadius: 0.1908, verticalRateScale: 1 };
 
+/** The load the mod's v3 tyre data states its load sensitivity over (N): DY1 / DX1 are the change in μ per this much load */
+const LOAD_SENSITIVITY_REF_N = 2000;
 /**
- * The mod's v3 tyre grip falls linearly with load: μ = DY0 + DY1 · Fz (kN) [spec DY0 1.2557 / DY1 −0.050,
- * DX0 1.1967 / DX1 −0.048]. Tabulated so this model's load-sensitivity curve follows it exactly.
+ * The mod's v3 tyre grip falls linearly with load: μ = DY0 + DY1 · Fz / 2000 N [spec DY0 1.2557 / DY1 −0.050,
+ * DX0 1.1967 / DX1 −0.048]: 1.16 at the front's static 3.9 kN. Tabulated so this model's load-sensitivity curve
+ * follows it exactly.
  */
-const linearLoadCurve = (mu0: number, perKn: number): LutPoints =>
-  [0, 1000, 2000, 3000, 4000, 5000, 6000, 8000, 10000].map((fz) => [fz, Number(Math.max(0.5, mu0 + (perKn * fz) / 1000).toFixed(4))]);
+const linearLoadCurve = (mu0: number, perRef: number): LutPoints =>
+  [0, 1000, 2000, 3000, 4000, 5000, 6000, 8000, 10000].map((fz) => [fz, Number(Math.max(0.5, muAt(mu0, perRef, fz)).toFixed(4))]);
 
 /** Static corner loads (N) [derived]: the reference loads for Dy0 / Dx0 and the power-law fallback */
 const MASS = 1250;
 const FZ0_FRONT = (MASS * 9.81 * 0.64) / 2;
 const FZ0_REAR = (MASS * 9.81 * 0.36) / 2;
-const muAt = (mu0: number, perKn: number, fz: number) => mu0 + (perKn * fz) / 1000;
+function muAt(mu0: number, perRef: number, fz: number): number {
+  return mu0 + (perRef * fz) / LOAD_SENSITIVITY_REF_N;
+}
 /** Local load-sensitivity exponent of the linear law at `fz` [derived] */
-const lsExpAt = (mu0: number, perKn: number, fz: number) => 1 + (perKn * fz) / 1000 / muAt(mu0, perKn, fz);
+const lsExpAt = (mu0: number, perRef: number, fz: number) => 1 + (perRef * fz) / LOAD_SENSITIVITY_REF_N / muAt(mu0, perRef, fz);
 
 /**
  * A road tyre's tread clears water well, unlike a slick, and grips on a wet road at about two thirds of its dry level
