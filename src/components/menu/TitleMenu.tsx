@@ -52,6 +52,15 @@ import {
 
 type TitlePanel = "race" | "circuit" | "conditions" | "garage" | "multiplayer" | "leaderboard" | "display" | "credits" | "request";
 
+/**
+ * Where the title menu picks up when it comes back: Controls is a screen of its own, and loading a circuit reloads the
+ * whole scene, so both unmount the menu. Kept outside React for that reason; only honoured for the circuit it was meant
+ * for (a failed load stays on the old one and must not reopen a panel later) and for a few minutes.
+ */
+let resumeAt: { panel: TitlePanel | null; focus: string; trackId: string; at: number } | null = null;
+const peekResume = (trackId: string) =>
+  resumeAt && resumeAt.trackId === trackId && Date.now() - resumeAt.at < 10 * 60_000 ? resumeAt : null;
+
 export interface TitleMenuProps extends PauseMenuProps {
   firstRun: boolean;
   onDrive: () => void;
@@ -527,14 +536,29 @@ const DevicePill: React.FC<{ pad: PadState | undefined; slim?: boolean }> = ({ p
 export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
   const { firstRun, onDrive, onRaceAi, onControls, trackId = RWANDA_TRACK_ID, onSelectTrack } = props;
   const track = getTrackInfo(trackId);
+  // Back from Controls or a circuit load: the panel the player was on (read once; a StrictMode re-run must see it too)
+  const [resume] = useState(() => (props.initialPanel ? null : peekResume(trackId)));
   // The panel asked for; `panel` below is the one shown, which must still be on offer
-  const [chosenPanel, setPanel] = useState<TitlePanel | null>(props.initialPanel ?? null);
+  const [chosenPanel, setPanel] = useState<TitlePanel | null>(props.initialPanel ?? resume?.panel ?? null);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const panelRef = useRef<HTMLElement | null>(null);
   const { mode, family } = useInputMode();
+  // The circuit panel opened from the race setup's Event card: loading a circuit then returns to the race setup
+  const fromRaceRef = useRef(false);
 
   const focusRail = (id: string) => {
     rootRef.current?.querySelector<HTMLElement>(`[data-rail-id="${id}"]`)?.focus({ preventScroll: true });
+  };
+
+  useEffect(() => {
+    resumeAt = null;
+    if (resume) focusRail(resume.focus);
+    // Mount only: where the menu came back to
+  }, []);
+
+  /** Remembers where to come back to, just before something unmounts the menu */
+  const resumeHere = (focus: string, panelAfter: TitlePanel | null, forTrack = trackId) => {
+    resumeAt = { panel: panelAfter, focus, trackId: forTrack, at: Date.now() };
   };
 
   // The title screen and the panel view draw the rail differently: keep the focus on its entry across the switch
@@ -543,7 +567,8 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
   };
 
   // Below lg the panel opens under the rail, usually off-screen: render it now and bring it into view
-  const openPanel = (next: TitlePanel) => {
+  const openPanel = (next: TitlePanel, opts: { fromRace?: boolean } = {}) => {
+    fromRaceRef.current = Boolean(opts.fromRace);
     flushSync(() => setPanel(next));
     keepFocus(next);
     if (window.matchMedia("(min-width: 64rem)").matches) return;
@@ -619,7 +644,17 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
     ...(props.displayPanel
       ? [{ id: "display", label: "Display", detail: "HUD, graphics, touch, VR", icon: MonitorCog, panel: "display" as const, run: () => openPanel("display") }]
       : []),
-    { id: "controls", label: "Controls", detail: "Keyboard, controller or wheel", icon: Gamepad2, run: onControls },
+    {
+      id: "controls",
+      label: "Controls",
+      detail: "Keyboard, controller or wheel",
+      icon: Gamepad2,
+      // A screen of its own: coming back lands on this entry, with the panel that was open still open
+      run: () => {
+        resumeHere("controls", panel);
+        onControls();
+      },
+    },
     { id: "credits", label: "Credits", detail: "Open-source sim · asset sources", icon: Info, panel: "credits", run: () => openPanel("credits") },
     {
       id: "request",
@@ -654,10 +689,18 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
     const from = i >= 0 ? i : step > 0 ? -1 : 0;
     const next = panelItems[(from + step + panelItems.length) % panelItems.length] ?? panelItems[0];
     if (!next?.panel) return;
+    fromRaceRef.current = false;
     flushSync(() => setPanel(next.panel!));
     focusRail(next.id);
   };
-  useFocusNav(rootRef, { onBack: back, onPrevTab: () => cycle(-1), onNextTab: () => cycle(1) });
+  // Menu / Start is the screen's main action: the race on the race setup, Drive on the title screen
+  const raceOpen = panel === "race" && Boolean(props.onChangeRaceSetup);
+  useFocusNav(rootRef, {
+    onBack: back,
+    onPrevTab: () => cycle(-1),
+    onNextTab: () => cycle(1),
+    onStart: raceOpen ? onRaceAi : panel ? undefined : onDrive,
+  });
 
   const panelTitle = items.find((i) => i.panel === panel)?.label;
   // The heading speaks for itself; only panels about one circuit say which, under it
@@ -784,13 +827,28 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
                       }
                       car={{ id: vehicle.id, quality: vehicle.quality, title: vehicle.title, badge: vehicle.badge, color: vehicleColor }}
                       playerCode={props.profile?.code}
-                      onOpenCircuit={() => openPanel("circuit")}
-                      onOpenConditions={props.conditionsPanel ? () => openPanel("conditions") : undefined}
-                      onOpenGarage={() => openPanel("garage")}
+                      onOpenCircuit={() => openPanel("circuit", { fromRace: true })}
+                      onOpenConditions={props.conditionsPanel ? () => openPanel("conditions", { fromRace: true }) : undefined}
+                      onOpenGarage={() => openPanel("garage", { fromRace: true })}
                       onStart={onRaceAi}
                     />
                   ) : null}
-                  {panel === "circuit" ? <CircuitBrowser trackId={trackId} onSelect={onSelectTrack} library={props.library} /> : null}
+                  {panel === "circuit" ? (
+                    <CircuitBrowser
+                      trackId={trackId}
+                      onSelect={
+                        onSelectTrack
+                          ? (id) => {
+                              // The scene reloads: come back to the race setup if that is where the player came from
+                              const back: TitlePanel = fromRaceRef.current && props.onChangeRaceSetup ? "race" : "circuit";
+                              resumeHere(back, back, id);
+                              onSelectTrack(id);
+                            }
+                          : undefined
+                      }
+                      library={props.library}
+                    />
+                  ) : null}
                   {panel === "conditions" && props.conditionsPanel ? <ConditionsPanel {...props.conditionsPanel} /> : null}
                   {panel === "garage" ? <EngineersGarage {...props} /> : null}
                   {panel === "multiplayer" ? <MultiplayerPanel {...props} /> : null}
@@ -921,6 +979,8 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
               { action: "select", label: "Select" },
               ...(panel ? [{ action: "back" as const, label: panelTitle ? `Close ${panelTitle}` : "Back" }] : []),
               { action: "tabs", label: "Switch panel" },
+              // A controller's Menu button has no key: shown with a pad only
+              ...(mode === "pad" && (raceOpen || !panel) ? [{ action: "start" as const, label: raceOpen ? "Start race" : "Drive" }] : []),
             ]}
           />
           <span className="font-f1-mono text-[11px] font-bold tracking-[0.12em] text-[#8E96AA]">

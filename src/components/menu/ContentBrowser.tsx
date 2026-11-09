@@ -165,7 +165,8 @@ export function ContentBrowser<T>(props: ContentBrowserProps<T>) {
     return keys.map((k) => ({ key: k, label: k, items: byKey.get(k)!, runs: runsOf(byKey.get(k)!) }));
   }, [visible, sort]);
 
-  const selected = items.find((i) => idOf(i) === selectedId) ?? visible[0] ?? items[0];
+  // Nothing matches the search or category: the detail pane empties too, rather than offering a hidden card's action
+  const selected = visible.length ? (items.find((i) => idOf(i) === selectedId) ?? visible[0]) : undefined;
   const selectedKey = selected ? idOf(selected) : undefined;
   const action = selected ? props.primaryAction(selected) : null;
   const selectedFav = selected ? props.isFavorite(selected) : false;
@@ -488,6 +489,8 @@ export function ContentBrowser<T>(props: ContentBrowserProps<T>) {
                               type="button"
                               data-browser-item={id}
                               aria-pressed={isSel}
+                              // Entering the browser starts on the card it shows (the loaded circuit, the current car)
+                              data-nav-default={isSel ? "" : undefined}
                               onPointerEnter={focusOnHover}
                               onFocus={() => {
                                 // The d-pad and arrows show what they land on; the mouse only by clicking

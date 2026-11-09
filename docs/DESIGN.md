@@ -98,7 +98,10 @@ Heights: primary button 52, rail entry 58 (primary 64), segmented option 40, chi
 
 ## 7. Focus and navigation
 
-- One focus model for all inputs: the mouse focuses what it hovers (`focusOnHover`), arrows / d-pad move it, Enter / A activates.
+- One focus model for all inputs: the mouse focuses what it hovers (`focusOnHover`), arrows / d-pad move it, Enter / A activates. A control that slides under a resting pointer (a panel opening reflows the rail) does not take the focus; only real pointer movement does.
+- Entering a panel or zone resumes where it was left, else starts on its `data-nav-default` (the loaded circuit's card, the Garage's car, the race's Circuit row), never a text field. A segmented row is entered on the option it is set to.
+- Menu / Start is the screen's main action (Drive on the title screen, Start race on the race setup).
+- Leaving a screen that replaces the menu (Controls, a circuit reload) comes back to the panel and entry it was opened from.
 - Up / down moves between rows; left / right changes the focused row's value.
 - LB / RB (Q / E) switch tabs or categories. B / Esc goes back exactly one level, never more.
 - Rows that hold an input ring the whole row: 2 px volt outline, 14 px radius, volt 6% tint.

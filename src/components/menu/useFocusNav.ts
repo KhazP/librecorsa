@@ -127,11 +127,6 @@ export function focusables(root: Element): HTMLElement[] {
 const canResume = (el: HTMLElement | undefined): el is HTMLElement =>
   Boolean(el && el.isConnected && !el.matches(":disabled") && visible(el));
 
-function zoneOf(el: Element, root: Element): Element {
-  const z = el.closest("[data-nav-zone]");
-  return z && root.contains(z) ? z : root;
-}
-
 function focusEl(el: HTMLElement): void {
   (el.focus as (o?: { preventScroll?: boolean; focusVisible?: boolean }) => void)({ preventScroll: true, focusVisible: true });
   const target = el.closest("label") ?? el;
@@ -145,10 +140,40 @@ function entryOf(zone: Element): HTMLElement | null {
   const items = focusables(zone);
   return (
     items.find((e) => e.hasAttribute("data-nav-default")) ??
-    items.find((e) => e.getAttribute("aria-selected") === "true" || e.getAttribute("aria-pressed") === "true") ??
+    items.find(
+      (e) =>
+        e.getAttribute("aria-selected") === "true" ||
+        e.getAttribute("aria-pressed") === "true" ||
+        e.getAttribute("aria-checked") === "true",
+    ) ??
     items[0] ??
     null
   );
+}
+
+/**
+ * Where a move into new ground lands: the outermost zone being entered resumes its last focus, else starts on its
+ * marked default; a radio group is entered on the option it is set to (not whichever end is nearest).
+ */
+function landingFor(target: HTMLElement, active: HTMLElement, root: Element): HTMLElement {
+  let entered: Element | null = null;
+  let z: Element | null = target.closest("[data-nav-zone]");
+  while (z && z !== root && root.contains(z) && !z.contains(active)) {
+    entered = z;
+    z = z.parentElement?.closest("[data-nav-zone]") ?? null;
+  }
+  if (entered) {
+    const last = lastInZone.get(entered);
+    if (canResume(last) && entered.contains(last)) return last;
+    const def = focusables(entered).find((e) => e.hasAttribute("data-nav-default"));
+    if (def) return def;
+  }
+  const group = target.closest('[role="radiogroup"]');
+  if (group && !group.contains(active)) {
+    const checked = focusables(group).find((e) => e.getAttribute("aria-checked") === "true");
+    if (checked) return checked;
+  }
+  return target;
 }
 
 /** Moves the focus into a zone (by its `data-nav-zone` name) inside `root` */
@@ -299,14 +324,8 @@ export function useFocusNav(rootRef: React.RefObject<HTMLElement | null>, option
       const items = focusables(r).filter((el) => !scrolledAway(el, active));
       const target = nearest(active, items, dir);
       if (!target) return;
-      // Entering another zone resumes where that zone was left
-      const fromZone = zoneOf(active, r);
-      const toZone = zoneOf(target, r);
-      if (toZone !== fromZone && toZone !== r && !toZone.contains(active)) {
-        const entry = lastInZone.get(toZone);
-        if (canResume(entry)) return focusEl(entry);
-      }
-      focusEl(target);
+      // Entering another zone resumes where that zone was left (or starts at its default)
+      focusEl(landingFor(target, active, r));
     };
 
     const press = () => {
@@ -468,9 +487,23 @@ export function useFocusNav(rootRef: React.RefObject<HTMLElement | null>, option
   }, [enabled, rootRef]);
 }
 
+/**
+ * Where the mouse last really moved to. A layout change (a panel opening reflows the rail) slides a new control under
+ * a resting pointer and the browser sends it a pointerenter at the same spot: that is not the player pointing at it.
+ */
+let lastMove: { x: number; y: number } | null = null;
+if (typeof window !== "undefined") {
+  const note = (e: PointerEvent) => {
+    if (e.pointerType === "mouse") lastMove = { x: e.clientX, y: e.clientY };
+  };
+  // A press counts too: the click that opens a panel is where the pointer rests while the rail reflows under it
+  for (const type of ["pointermove", "pointerdown"] as const) window.addEventListener(type, note, { capture: true, passive: true });
+}
+
 /** Focuses a control under the pointer (hover and focus are the same highlight in the menus) */
 export function focusOnHover(e: React.PointerEvent<HTMLElement>): void {
   if (e.pointerType !== "mouse") return;
+  if (lastMove && lastMove.x === e.clientX && lastMove.y === e.clientY) return;
   const active = document.activeElement;
   if (isTextEntry(active) || active instanceof HTMLSelectElement) return;
   if (active !== e.currentTarget) (e.currentTarget.focus as (o?: object) => void)({ preventScroll: true });

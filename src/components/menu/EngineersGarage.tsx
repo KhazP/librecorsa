@@ -369,6 +369,8 @@ export const EngineersGarage: React.FC<PauseMenuProps> = (p) => {
         <button
           ref={browseRef}
           type="button"
+          // Where the garage starts: the car, not the preset name field
+          data-nav-default=""
           onClick={openBrowser}
           onPointerEnter={focusOnHover}
           disabled={carLocked}

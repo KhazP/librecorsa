@@ -111,9 +111,16 @@ const Stepper: React.FC<{
 };
 
 /** A summary line that opens another panel (circuit, conditions, garage) */
-const LinkRow: React.FC<{ icon: LucideIcon; label: string; value: React.ReactNode; onClick?: () => void }> = ({ icon: Icon, label, value, onClick }) => (
+const LinkRow: React.FC<{ icon: LucideIcon; label: string; value: React.ReactNode; onClick?: () => void; navDefault?: boolean }> = ({
+  icon: Icon,
+  label,
+  value,
+  onClick,
+  navDefault,
+}) => (
   <button
     type="button"
+    data-nav-default={navDefault ? "" : undefined}
     disabled={!onClick}
     onClick={onClick}
     onPointerEnter={focusOnHover}
@@ -168,6 +175,7 @@ export const RaceSetupPanel: React.FC<RaceSetupPanelProps> = ({
           <div className={CARD}>
             <CardHeader label="Event" />
             <LinkRow
+              navDefault
               icon={Route}
               label="Circuit"
               value={
