@@ -1,21 +1,26 @@
 """Port an Assetto Corsa car (.kn5 + one skin) into LibreCorsa's ported-car GLB layout.
 
-usage: python -P scripts/cars/port_ac_car.py <ac car folder> <out.glb> [--skin light_blue] [--kn5 suzuki_liana.kn5]
+usage: python -P scripts/cars/port_ac_car.py <ac car folder> <out.glb> [--car liana] [--skin light_blue] [--kn5 x.kn5]
 
     uv run --python 3.14 --no-project --with numpy --with pillow python -P scripts/cars/port_ac_car.py \
       ~/Downloads/librecorsa-src/suzuki_liana/suzuki_liana public/cars/liana/model/liana.glb --skin light_blue
+    uv run --python 3.14 --no-project --with numpy --with pillow python -P scripts/cars/port_ac_car.py \
+      <unpacked MTRacing_496R.rar>/content/cars/mt_mtr_496r public/cars/mtr-496r/model/mtr-496r.glb
 
-Written for the Suzuki Liana 1.6 (`MATERIALS` below is its material table); the reader, the hierarchy split, the
-multi-map paint bake and the camera reads are generic AC. The car folder is read only. Its LODs (`<car>_B/C/D.kn5`),
-`collider.kn5`, damage, dirt and blur textures, the blurred rims (`RIM_BLUR_*`) and the shift-light quads (`LED_*`)
-are left out.
+Each car has a preset (`PRESETS`): its material table, the nodes and materials it leaves out, the skin files that
+override the kn5's, how its tyres and spinning parts are named, and its windscreen. `--car` picks one; by default the
+car folder's name does. The reader, the hierarchy split, the multi-map paint bake and the camera reads are generic AC.
+The car folder is read only. Its LODs (`<car>_B/C/D.kn5`), `collider.kn5`, damage, dirt and blur textures and the
+blurred rims (`RIM_BLUR_*`) are left out.
 
 Output node layout (read by src/lib/ported-car-model.ts):
     CAR (extras: wheelCentres, tyreRadius, tyreHalfWidth, wheelbaseM, trackWidthM, steer, cameras, source)
       BODY              body, cabin, glass, lights and brake callipers, one mesh per material
-      STEER             steering wheel pivot (AC's STEER_HR: local +Z down the column into the dash)
+      STEER             steering wheel pivot (AC's STEER_HR: local +Z down the column into the dash); a preset's
+                        `steer_nodes` (a screen, shift lights) are child nodes of their own, named as in the kn5
       WHEEL_RF          hub pivot at the tyre's centre
-        WHEEL_RF_RIM    wheel, hubcap, brake disc / drum (one primitive per material)
+        WHEEL_RF_RIM    wheel, hubcap, brake disc / drum (one primitive per material); a car whose discs sit beside the
+                        wheel (`DISC_RF`, the preset's `spinning`) has them here too
         WHEEL_RF_TYRE   tyre, one primitive (the tyre deformation shader)
       WHEEL_LF / WHEEL_RR / WHEEL_LR
 
@@ -235,10 +240,12 @@ def vec3(s):
 # factors for those and real textures only where a map carries detail. The GLB names steer the rig's material clean-up
 # (src/lib/render/ported-car-materials.ts classifies by name: *paint*/*body* -> paint, *glass*/*light* -> kept as
 # authored, *tyre*/*rubber* -> rubber, *chrome*/*metal*/*steel*/*brake*/*hub* -> metal, *mirror* -> mirror).
-# color: sRGB 0-255 (factor, or tint over the texture); tex: a texture key from `texture_for`
+# color: sRGB 0-255 (factor, or tint over the texture); tex: a texture key from `TexturePool.colour`; detail: the
+# material's ksPerPixelMultiMap detail map (carbon weave) as its colour, its UVs scaled by its detailUVMultiplier;
+# mode: OPAQUE / MASK (AC's alpha-tested shaders) / BLEND
 # ---------------------------------------------------------------------------------------------------------------------
 
-MATERIALS = {
+LIANA_MATERIALS = {
     # Exterior
     'body': dict(name='liana_body_paint', tex='bake:body', metal=0.0, rough=0.25),
     'caliper': dict(name='brake_caliper', tex='bake:body', metal=0.6, rough=0.5),
@@ -303,11 +310,126 @@ MATERIALS = {
     'Material #27': dict(name='gauge_fuel', tex='suz_liana_02_gas_static_a.png', rough=0.4, emissive=0.35),
     'rpm2': dict(name='gauge_black', color=(10, 10, 10), rough=0.4),
 }
-# Materials / nodes not ported: the blurred rims (inactive in AC, shown above 30 km/h), the 32 shift-light quads
-SKIP_MATERIALS = {'blur_rim', 'blur_lip', 'motec_trasp_fx'}
-SKIP_NODE_PREFIXES = ('LED_',)
-# The body's ksPerPixelMultiMap detail map: the skin's file overrides the kn5's
-SKIN_FILES = ('MAT_plancia.dds',)
+
+# The MTRacing 496R (munyuturbo). Its own bodywork is the MT_* materials; the tub, lamps, mirrors, cockpit, wheels and
+# brakes keep the base car's material names (Material_CAR_*, Material_INT_*, INT_*, EXT_*)
+MTR_496R_MATERIALS = {
+    # Bodywork: the skin's paint (4096 px, its own AO baked in) under its multimap mask (the mirror housings and other
+    # alpha-0 areas take the dark flake map's colour), carbon, trim and glass
+    'MT_ext_carpaint': dict(name='mtr_body_paint', tex='bakemean:MT_ext_carpaint', metal=0.0, rough=0.25),
+    'MT_carbon': dict(name='mtr_carbon', detail=True, color=(210, 210, 210), rough=0.3),
+    'MT_ext_plastic': dict(name='black_trim', color=(30, 30, 30), rough=0.5),
+    'MT_ext_rubber': dict(name='rubber_trim', color=(25, 25, 25), rough=0.85),
+    'MT_metal': dict(name='trim_metal', color=(90, 90, 90), metal=1.0, rough=0.2),
+    'MT_Exhaust': dict(name='exhaust_metal', color=(70, 70, 70), metal=1.0, rough=0.3),
+    'MT_Exhaust_in': dict(name='exhaust_inner_black', color=(6, 6, 6), rough=0.9),
+    'MT_black': dict(name='matte_black', color=(6, 6, 6), rough=0.9),
+    'MT_ext_window': dict(name='window_glass', color=(34, 42, 46), alpha=0.3, rough=0.05, mode='BLEND', double=True),
+    'MT_headlight_glass': dict(name='lens_glass', color=(240, 240, 240), alpha=0.12, rough=0.03, mode='BLEND',
+                               double=True),
+    'headlight_reflector': dict(name='headlight_chrome', color=(225, 225, 225), metal=1.0, rough=0.1),
+    'MT_door_decals': dict(name='door_decals', tex='mt_door_decals.dds', rough=0.4, mode='MASK'),
+    'MT_ext_hachimaki': dict(name='sunstrip_decal', tex='mt_hachimaki.dds', rough=0.3),
+    'MT_int_hachimaki': dict(name='sunstrip_inner_decal', tex='mt_hachimaki.dds', rough=0.5, mode='BLEND'),
+    'MT_net': dict(name='grille_mesh', tex='GRID.dds', rough=0.6, mode='MASK', double=True),
+    'MT_radiator': dict(name='radiator', tex='Radiator_D.dds', rough=0.6),
+    'MT_suspention_arm_metal': dict(name='suspension_arm_metal', tex='Suspention_Texture.dds', metal=0.5, rough=0.4),
+    'LMH_lifting_hook_red_plastic': dict(name='lifting_hook_red', tex='Suspention_Texture.dds', rough=0.5),
+    'MT_rear_suspention_decal': dict(name='rear_suspension_decal', tex='MT_Rear_Suspention_Decal.dds', rough=0.5,
+                                     mode='MASK'),
+    'MT_int_plastic': dict(name='mtr_interior_plastic', color=(36, 36, 36), rough=0.6),
+    'Badge': dict(name='fuel_filler_badge', tex='Badge.dds', rough=0.5),
+    # The base car's tub, lamps and mirrors
+    'Material_CAR_transp': dict(name='lamp_glass', color=(230, 240, 240), alpha=0.15, rough=0.03, mode='BLEND',
+                                double=True),
+    'Material_CAR_lights': dict(name='tail_light', tex='lights_D_rear2.dds', rough=0.3),
+    'Material_CAR_mirror': dict(name='mirror_face', color=(235, 235, 235), metal=1.0, rough=0.02),
+    'Material_CAR_skin_body': dict(name='chassis_panels', tex='skin_D_orange_trasp.dds', rough=0.4),
+    'Material_CAR_plastic': dict(name='chassis_plastic', tex='skin_D.dds', rough=0.5),
+    'Material_CAR_gloss': dict(name='chassis_gloss', tex='skin_D.dds', rough=0.2),
+    'Material_CAR__body_carbon': dict(name='tub_carbon', detail=True, color=(210, 210, 210), rough=0.35),
+    'Material_CAR_mechanics': dict(name='chassis_mechanics', tex='mechanics.dds', rough=0.5, mode='MASK'),
+    # Wheels and brakes
+    'EXT_Tyre': dict(name='tyre', tex='tyre_d.dds', rough=0.9, normal='tyre_nm.dds'),
+    'EXT_Rim': dict(name='rim_alloy', tex='Rim_D.dds', metal=0.6, rough=0.35),
+    'EXT_Brake_disc': dict(name='brake_disc', tex='Brake_Disc_DIF.dds', metal=0.8, rough=0.45),
+    'EXT_BrakeCaliper': dict(name='brake_caliper', tex='bake:EXT_BrakeCaliper', metal=0.4, rough=0.45),
+    'EXT_Mechanics': dict(name='hub_mechanics', tex='EXT_Mechanics.dds', metal=0.5, rough=0.45),
+    'EXT_Mechanics_multipmap_AT': dict(name='hub_mechanics_detail', tex='EXT_Mechanics.dds', metal=0.5, rough=0.45,
+                                       mode='MASK'),
+    # Cockpit
+    'Material_INT_chrome': dict(name='interior_chrome', color=(120, 120, 120), metal=1.0, rough=0.2),
+    'Material_INT_belt': dict(name='seat_belt', tex='Cockpit_Belt.dds', rough=0.9),
+    'Material_INT_plastic_COLORS': dict(name='interior_colours', tex='COLORS_palette.dds', rough=0.5),
+    'Material_INT_plastic_black_seats': dict(name='seat_black', color=(20, 20, 20), rough=0.7),
+    'Material_INT_skin': dict(name='interior_carbon', detail=True, color=(210, 210, 210), rough=0.35),
+    'INT_DETAILS_METAL_NM': dict(name='interior_metal_details', tex='INT_Details.dds', metal=0.6, rough=0.4),
+    'INT_DETAILS_PLASTIC_NM': dict(name='interior_plastic_details', tex='INT_Details.dds', rough=0.5),
+    'INT_DETAILS_ALU_NM': dict(name='interior_alu', tex='INT_Details.dds', metal=1.0, rough=0.3),
+    'INT_DETAILS_METAL_AT_NM': dict(name='interior_metal_details_cut', tex='INT_Details.dds', metal=0.6, rough=0.4,
+                                    mode='MASK'),
+    'INT_DETAILS_CHROME_NM': dict(name='interior_chrome_details', tex='INT_Details.dds', metal=1.0, rough=0.2),
+    'INT_Decals_logos_FLAT': dict(name='interior_decals', tex='INT_Decals.dds', rough=0.5, mode='MASK'),
+    'INT_LED': dict(name='dash_led', tex='INT_LED.dds', rough=0.3, mode='MASK'),
+    'INT_LEDS': dict(name='wheel_leds', tex='INT_LED_sq.dds', rough=0.3),
+    'INT_LEDS_LIMITER': dict(name='wheel_limiter_leds', tex='INT_LED_sq.dds', rough=0.3),
+    'INT_LCD': dict(name='wheel_lcd', tex='LCD.dds', rough=0.2, emissive=0.35),
+    # The wheel's screen on its own: the game draws its live display over it (src/lib/render/steering-display.ts)
+    'INT_LCD@GEO_LCD': dict(name='INT_DISPLAY', color=(8, 8, 10), rough=0.25),
+    'INT_CARBON_STEER': dict(name='steering_carbon', detail=True, color=(210, 210, 210), rough=0.35),
+    'INT_OCC_PLASTIC_Black': dict(name='steering_plastic', color=(40, 40, 40), rough=0.6),
+    'INT_OCC_RUBBER_Rollbar': dict(name='steering_rubber_grip', color=(28, 28, 28), rough=0.9),
+    'INT_OCC_CARBON_base': dict(name='cockpit_carbon', detail=True, color=(210, 210, 210), rough=0.4),
+}
+
+# Per car: its material table; the materials and nodes it leaves out; the skin files that override the kn5's; the name
+# its tyre meshes start with; the nodes beside a wheel that spin with it (`<prefix><corner>`); its windscreen
+# material(s), which place the dash camera
+PRESETS = {
+    'liana': dict(
+        title='Suzuki Liana',
+        materials=LIANA_MATERIALS,
+        # The blurred rims (inactive in AC, shown above 30 km/h), the 32 shift-light quads
+        skip_materials={'blur_rim', 'blur_lip', 'motec_trasp_fx'},
+        skip_node_prefixes=('LED_',),
+        skip_nodes=(),
+        # The body's ksPerPixelMultiMap detail map
+        skin_files=('MAT_plancia.dds',),
+        default_skin='light_blue',
+        steer_nodes=(),
+        skin_maps={},
+        tyre_prefix='object__90',
+        spinning=(),
+        windscreen=('window',),
+    ),
+    'mtr-496r': dict(
+        title='MTRacing 496R',
+        materials=MTR_496R_MATERIALS,
+        # The windscreen's inner face (a near-clear second layer) and the blur rims; the belts drawn fastened round a
+        # driver the car doesn't carry (CINTURE_OFF, the belts lying on the seat, stays)
+        skip_materials={'MT_int_window', 'EXT_Rim_Blur', 'EXT_Rim_Blur_Alfa', 'DAMAGE_GLASS'},
+        skip_node_prefixes=(),
+        skip_nodes=('CINTURE_ON',),
+        skin_files=('skin.dds', 'skin_MAP.dds', 'mt_door_decals.dds', 'mt_hachimaki.dds'),
+        default_skin='04_mtrgreen_metallic',
+        # The wheel's screen and its shift lights (digital_instruments.ini's RPM_* LEDs) as nodes of their own, so the
+        # game can draw the screen and light each LED
+        steer_nodes=('GEO_LCD', 'RPM_'),
+        # What a livery changes, as files beside the model (`--skins-out`): kn5 material -> (file, how it is made). The
+        # game swaps these onto the GLB materials of the same names (extras.skinMaps) for the skin a player picks
+        skin_maps={
+            'MT_ext_carpaint': ('paint.jpg', 'bakemean'),
+            'MT_door_decals': ('decals.png', 'diffuse'),
+            'MT_ext_hachimaki': ('sunstrip.png', 'diffuse'),
+            'MT_int_hachimaki': ('sunstrip.png', 'diffuse'),
+        },
+        tyre_prefix='g_Tyre_',
+        spinning=('DISC_',),
+        windscreen=('MT_ext_window',),
+    ),
+}
+# The car folders the presets were written for
+PRESET_BY_FOLDER = {'suzuki_liana': 'liana', 'mt_mtr_496r': 'mtr-496r'}
 
 
 def srgb_to_linear(c):
@@ -321,12 +443,13 @@ def decode(raw):
     return im.convert('RGBA')
 
 
-def bake_multimap(diffuse, detail, uv_mult):
+def bake_multimap(diffuse, detail, uv_mult, flat=False):
     """AC's ksPerPixelMultiMap colour: diffuse * (detail * (1 - diffuse.a) + diffuse.a), in gamma space, as an opaque
-    RGB image at the larger of the two sizes (the detail tiled `uv_mult` times; a flat detail is its mean colour)"""
+    RGB image at the larger of the two sizes (the detail tiled `uv_mult` times; a flat detail, or any with `flat`, is
+    its mean colour)"""
     d = np.asarray(diffuse, np.float32) / 255.0
     t = np.asarray(detail, np.float32) / 255.0
-    flat = t[..., :3].reshape(-1, 3).std(0).max() < 2 / 255
+    flat = flat or t[..., :3].reshape(-1, 3).std(0).max() < 2 / 255
     if flat:
         size = diffuse.size
         det = np.broadcast_to(t[..., :3].reshape(-1, 3).mean(0), (size[1], size[0], 3))
@@ -385,12 +508,19 @@ class TexturePool:
         the caller, which passes the cropped image through `image`)"""
         if key in self.cache:
             return self.cache[key]
-        if key.startswith('bake:'):
-            m = self.mats[key[5:]]
+        if key.startswith(('bake:', 'bakemean:')):
+            m = self.mats[key.split(':', 1)[1]]
             diffuse = decode(self.src[m['maps']['txDiffuse']])
             detail = decode(self.src[m['maps']['txDetail']])
-            im = bake_multimap(diffuse, detail, m['props'].get('detailUVMultiplier', 1.0))
-            return self._add(key, im, cap or self.max_tex, False)
+            # 'bakemean:': the detail as its mean colour, for a fine pattern (paint flake) tiled past any bake size; the
+            # diffuse comes down to the size cap first
+            mean = key.startswith('bakemean:')
+            limit = cap or self.max_tex
+            if mean and max(diffuse.size) > limit:
+                k = limit / max(diffuse.size)
+                diffuse = diffuse.resize((round(diffuse.width * k), round(diffuse.height * k)), Image.LANCZOS)
+            im = bake_multimap(diffuse, detail, m['props'].get('detailUVMultiplier', 1.0), flat=mean)
+            return self._add(key, im, limit, False)
         im = decode(self.src[key])
         has_alpha = (alpha or key in self.alpha_keys) and np.asarray(im)[..., 3].min() < 255
         return self._add(key, im, cap or self.small_tex, has_alpha)
@@ -413,6 +543,107 @@ class TexturePool:
 # ---------------------------------------------------------------------------------------------------------------------
 # Port
 # ---------------------------------------------------------------------------------------------------------------------
+
+
+def read_rev_leds(data, nodes):
+    """The shift lights digital_instruments.ini drives, among `nodes`: {leds: [{node, rpm, color}], blinkRpm, blinkHz}.
+    [LED_n] gives a node, its switch-on rpm and its EMISSIVE colour (normalised to its brightest channel); an
+    [RPM_SERIE_n] lights PREFIX<START_INDEX>..<END_INDEX> from RPM_START to RPM_END, in red (it gives no colour)."""
+    if 'digital_instruments.ini' not in data:
+        return None
+    cp = ini(data['digital_instruments.ini'])
+    leds, blink = [], None
+
+    def colour(sec):
+        rgb = vec3(sec.get('EMISSIVE', '1,0,0'))
+        top = max(rgb) or 1.0
+        return [round(c / top, 3) for c in rgb]
+
+    for name in cp.sections():
+        sec = cp[name]
+        if name.startswith('LED_') and sec.get('OBJECT_NAME') in nodes and float(sec.get('RPM_SWITCH', 0)) > 0:
+            leds.append({'node': sec['OBJECT_NAME'], 'rpm': float(sec['RPM_SWITCH']), 'color': colour(sec)})
+        elif name.startswith('RPM_SERIE_'):
+            a, b = int(sec.get('START_INDEX', 0)), int(sec.get('END_INDEX', 0))
+            r0, r1 = float(sec.get('RPM_START', 0)), float(sec.get('RPM_END', 0))
+            for k in range(a, b + 1):
+                node = f"{sec.get('PREFIX', '')}{k}"
+                if node in nodes:
+                    leds.append({'node': node, 'rpm': r0 + (r1 - r0) * (k - a) / max(1, b - a), 'color': [1.0, 0.0, 0.0]})
+        else:
+            continue
+        if 'BLINK_SWITCH' in sec and blink is None:
+            blink = (float(sec['BLINK_SWITCH']), float(sec.get('BLINK_HZ', 5)))
+    if not leds:
+        return None
+    out = {'leds': sorted(leds, key=lambda l: (l['rpm'], l['node']))}
+    if blink:
+        out['blinkRpm'], out['blinkHz'] = blink
+    return out
+
+
+def paint_swatch(path):
+    """The two main colours of a skin's baked paint (`paint.jpg`), as #rrggbb: its atlas's black background and the
+    darkest AO left out, quantised to 1/16 steps; the second must differ from the first"""
+    px = np.asarray(Image.open(path).convert('RGB').resize((256, 256)), np.int32).reshape(-1, 3)
+    px = px[px.max(1) > 14] // 16 * 16 + 8
+    if not len(px):
+        return ['#101010', '#101010']
+    keys, counts = np.unique(px, axis=0, return_counts=True)
+    order = np.argsort(-counts)
+    first = keys[order[0]]
+    second = next((keys[i] for i in order[1:] if np.abs(keys[i] - first).sum() > 96), first)
+    return ['#%02x%02x%02x' % tuple(int(v) for v in c) for c in (first, second)]
+
+
+def export_skins(car_dir, preset, textures, materials, out_dir, max_tex, small_tex, jpeg_quality):
+    """Every skin's livery files (`preset['skin_maps']`) into <out_dir>/<skin>/, and skins.json listing them"""
+    by_name = {m['name']: m for m in materials}
+    skins_dir = os.path.join(car_dir, 'skins')
+    listing = []
+    for skin in sorted(os.listdir(skins_dir)):
+        sdir = os.path.join(skins_dir, skin)
+        if not os.path.isdir(sdir):
+            continue
+        src = dict(textures)
+        for f in preset['skin_files']:
+            if os.path.isfile(os.path.join(sdir, f)):
+                src[f] = open(os.path.join(sdir, f), 'rb').read()
+        os.makedirs(os.path.join(out_dir, skin), exist_ok=True)
+        done = set()
+        for mat, (fname, how) in preset['skin_maps'].items():
+            if fname in done:
+                continue
+            done.add(fname)
+            m = by_name[mat]
+            diffuse = decode(src[m['maps']['txDiffuse']])
+            if how == 'bakemean':
+                if max(diffuse.size) > max_tex:
+                    k = max_tex / max(diffuse.size)
+                    diffuse = diffuse.resize((round(diffuse.width * k), round(diffuse.height * k)), Image.LANCZOS)
+                im = bake_multimap(diffuse, decode(src[m['maps']['txDetail']]), 1.0, flat=True)
+            else:
+                im = diffuse
+                if max(im.size) > small_tex:
+                    k = small_tex / max(im.size)
+                    im = im.resize((round(im.width * k), round(im.height * k)), Image.LANCZOS)
+            out = os.path.join(out_dir, skin, fname)
+            if fname.endswith('.png'):
+                im.convert('RGBA').save(out, format='PNG', optimize=True)
+            else:
+                im.convert('RGB').save(out, format='JPEG', quality=jpeg_quality, optimize=True)
+        ui = {}
+        if os.path.isfile(os.path.join(sdir, 'ui_skin.json')):
+            try:
+                ui = json.loads(open(os.path.join(sdir, 'ui_skin.json'), 'rb').read().decode('utf-8', 'replace'))
+            except ValueError:
+                ui = {}
+        listing.append({'id': skin, 'name': ui.get('skinname', ''), 'number': ui.get('number', ''),
+                        'swatch': paint_swatch(os.path.join(out_dir, skin, 'paint.jpg'))})
+    with open(os.path.join(out_dir, 'skins.json'), 'w') as fh:
+        json.dump(listing, fh, indent=1)
+    print(f'  {len(listing)} skins -> {out_dir}')
+    return listing
 
 
 def world_mesh(node):
@@ -446,26 +677,31 @@ def uv_region(uv):
     return tile, np.r_[lo, hi]
 
 
-def classify(nodes, i):
+def classify(nodes, i, preset):
     """('skip'|'body'|'steer'|'tyre'|'rim', corner)"""
     n = nodes[i]
     anc = ancestors(nodes, i)
-    if any(a.startswith('RIM_BLUR_') for a in anc) or n['name'].startswith(SKIP_NODE_PREFIXES):
+    if (any(a.startswith('RIM_BLUR_') for a in anc) or n['name'].startswith(preset['skip_node_prefixes'])
+            or n['name'] in preset['skip_nodes'] or any(a in preset['skip_nodes'] for a in anc)):
         return 'skip', None
     for a in anc:
         if a.startswith('WHEEL_') and a[6:] in CORNERS:
-            return ('tyre' if n['name'].startswith('object__90') else 'rim'), a[6:]
+            return ('tyre' if n['name'].startswith(preset['tyre_prefix']) else 'rim'), a[6:]
+        for prefix in preset['spinning']:
+            if a.startswith(prefix) and a[len(prefix):] in CORNERS:
+                return 'rim', a[len(prefix):]
         if a.startswith('STEER_HR'):
             return 'steer', None
     return 'body', None
 
 
-def port(car_dir, out_path, skin, kn5_name, max_tex, small_tex, normal_tex, jpeg_quality):
+def port(car_dir, out_path, preset, skin, kn5_name, max_tex, small_tex, normal_tex, jpeg_quality):
+    MATERIALS = preset['materials']
     kn5_path = os.path.join(car_dir, kn5_name or f'{os.path.basename(os.path.normpath(car_dir))}.kn5')
     textures, materials, nodes = read_kn5(kn5_path)
     skin_tex = {}
     if skin:
-        for f in SKIN_FILES:
+        for f in preset['skin_files']:
             p = os.path.join(car_dir, 'skins', skin, f)
             if os.path.isfile(p):
                 skin_tex[f] = open(p, 'rb').read()
@@ -479,13 +715,13 @@ def port(car_dir, out_path, skin, kn5_name, max_tex, small_tex, normal_tex, jpeg
         if me is None:
             continue
         mat = materials[me['mat']]['name']
-        kind, corner = classify(nodes, i)
-        if not (n['active'] and me['visible'] and me['renderable']) or mat in SKIP_MATERIALS:
+        kind, corner = classify(nodes, i, preset)
+        if not (n['active'] and me['visible'] and me['renderable']) or mat in preset['skip_materials']:
             kind = 'skip'
         if kind == 'skip':
             dropped[mat] = dropped.get(mat, 0) + 1
             continue
-        parts.append([kind, corner, mat, *world_mesh(n)])
+        parts.append([kind, corner, mat, *world_mesh(n), n['name']])
 
     # Shift: lowest tyre point to y = 0, X centred on the four tyres
     tyres = [p for p in parts if p[0] == 'tyre']
@@ -530,7 +766,7 @@ def port(car_dir, out_path, skin, kn5_name, max_tex, small_tex, normal_tex, jpeg
 
     writer = GlbWriter(use_quantization=False)
     writer.j['asset']['generator'] = 'scripts/cars/port_ac_car.py'
-    alpha_keys = {s['tex'] for s in MATERIALS.values() if s.get('mode') == 'BLEND' and s.get('tex')}
+    alpha_keys = {s['tex'] for s in MATERIALS.values() if s.get('mode', 'OPAQUE') != 'OPAQUE' and s.get('tex')}
     pool = TexturePool(writer, textures, skin_tex, materials, max_tex, small_tex, normal_tex, jpeg_quality, alpha_keys)
 
     # Materials (one glTF material per kn5 material in use)
@@ -540,7 +776,8 @@ def port(car_dir, out_path, skin, kn5_name, max_tex, small_tex, normal_tex, jpeg
     def material_for(kn5_name):
         if kn5_name in mat_index:
             return mat_index[kn5_name]
-        src = next(m for m in materials if m['name'] == kn5_name)
+        # 'material@node': a node with a material entry of its own (the kn5 material's maps)
+        src = next(m for m in materials if m['name'] == kn5_name.split('@')[0])
         spec = MATERIALS.get(kn5_name)
         if spec is None:
             # Unknown material: its diffuse texture as a plain dielectric
@@ -550,7 +787,7 @@ def port(car_dir, out_path, skin, kn5_name, max_tex, small_tex, normal_tex, jpeg
         pbr = {'metallicFactor': float(spec.get('metal', 0.0)), 'roughnessFactor': float(spec.get('rough', 0.5))}
         colour = [1.0, 1.0, 1.0]
         alpha = float(spec.get('alpha', 1.0))
-        tex = spec.get('tex')
+        tex = src['maps']['txDetail'] if spec.get('detail') else spec.get('tex')
         if tex and tex.startswith('mean:'):
             colour = srgb_to_linear(pool.mean_colour(tex[5:])).tolist()
             tex = None
@@ -569,7 +806,8 @@ def port(car_dir, out_path, skin, kn5_name, max_tex, small_tex, normal_tex, jpeg
                 uv_remap[kn5_name] = (tile, box, (W, H))
                 ti = pool.image(f'{tex[5:]}#{kn5_name}', crop, alpha=True)
             else:
-                ti = pool.colour(tex, alpha=(mode == 'BLEND'), cap=max_tex if tex.startswith('bake:body') else None)
+                ti = pool.colour(tex, alpha=(mode != 'OPAQUE'),
+                                 cap=max_tex if tex.startswith(('bake:body', 'bakemean:')) else None)
             pbr['baseColorTexture'] = {'index': ti}
         pbr['baseColorFactor'] = [float(v) for v in colour] + [alpha]
         gm = {'name': spec['name'], 'pbrMetallicRoughness': pbr}
@@ -588,6 +826,10 @@ def port(car_dir, out_path, skin, kn5_name, max_tex, small_tex, normal_tex, jpeg
 
     def prim(pos, nrm, uv, tris, kn5_name):
         mi = material_for(kn5_name)
+        if MATERIALS.get(kn5_name, {}).get('detail'):
+            # The detail map tiles detailUVMultiplier times across the material's UVs (the sampler repeats)
+            src = next(m for m in materials if m['name'] == kn5_name.split('@')[0])
+            uv = uv * np.float32(src['props'].get('detailUVMultiplier', 1.0) or 1.0)
         if kn5_name in uv_remap:
             tile, box, (W, H) = uv_remap[kn5_name]
             uv = uv - tile.astype(np.float32)
@@ -598,13 +840,13 @@ def port(car_dir, out_path, skin, kn5_name, max_tex, small_tex, normal_tex, jpeg
     wheel_nodes = []
     for c in CORNERS:
         centre = np.array(wheel_centres[f'WHEEL_{c}'])
-        t = merge([p[3:] for p in tyres if p[1] == c])
+        t = merge([p[3:7] for p in tyres if p[1] == c])
         tyre_mats = {p[2] for p in tyres if p[1] == c}
         assert len(tyre_mats) == 1, f'{c} tyre uses several materials: {tyre_mats}'
         tyre_node = writer.add_mesh_node(f'WHEEL_{c}_TYRE', [prim(t[0] - centre, t[1], t[2], t[3], tyre_mats.pop())])
         rim_prims = []
         for mat in sorted({p[2] for p in parts if p[0] == 'rim' and p[1] == c}):
-            r = merge([p[3:] for p in parts if p[0] == 'rim' and p[1] == c and p[2] == mat])
+            r = merge([p[3:7] for p in parts if p[0] == 'rim' and p[1] == c and p[2] == mat])
             rim_prims.append(prim(r[0] - centre, r[1], r[2], r[3], mat))
         rim_node = writer.add_mesh_node(f'WHEEL_{c}_RIM', rim_prims)
         wheel_nodes.append(writer.add_node(f'WHEEL_{c}', children=[rim_node, tyre_node], translation=centre))
@@ -612,18 +854,31 @@ def port(car_dir, out_path, skin, kn5_name, max_tex, small_tex, normal_tex, jpeg
     # Steering wheel, in the STEER frame
     to_steer = np.linalg.inv(M_steer)
     steer_kids = []
-    for mat in sorted({p[2] for p in steer_parts}):
-        s = merge([p[3:] for p in steer_parts if p[2] == mat])
+    own_node = lambda p: p[7].startswith(preset['steer_nodes']) if preset['steer_nodes'] else False  # noqa: E731
+    for mat in sorted({p[2] for p in steer_parts if not own_node(p)}):
+        s = merge([p[3:7] for p in steer_parts if p[2] == mat and not own_node(p)])
         pos_l = s[0] @ to_steer[:3, :3].T + to_steer[:3, 3]
         nrm_l = s[1] @ M_steer[:3, :3]
         steer_kids.append(writer.add_mesh_node(f'STEER_{MATERIALS.get(mat, {"name": mat})["name"]}',
                                                [prim(pos_l, nrm_l, s[2], s[3], mat)]))
+    own_steer = sorted({p[7] for p in steer_parts if own_node(p)})
+    for name in own_steer:
+        node_parts = [p for p in steer_parts if p[7] == name]
+        mats = sorted({p[2] for p in node_parts})
+        prims_out = []
+        for mat in mats:
+            key = f'{mat}@{name}' if f'{mat}@{name}' in MATERIALS else mat
+            s = merge([p[3:7] for p in node_parts if p[2] == mat])
+            pos_l = s[0] @ to_steer[:3, :3].T + to_steer[:3, 3]
+            nrm_l = s[1] @ M_steer[:3, :3]
+            prims_out.append(prim(pos_l, nrm_l, s[2], s[3], key))
+        steer_kids.append(writer.add_mesh_node(name, prims_out))
 
     # Body: one mesh per material (front callipers included: the rig has no steer-only part of a wheel)
     body_parts = [p for p in parts if p[0] == 'body']
     body_kids = []
     for mat in sorted({p[2] for p in body_parts}, key=lambda m: [x['name'] for x in materials].index(m)):
-        b = merge([p[3:] for p in body_parts if p[2] == mat])
+        b = merge([p[3:7] for p in body_parts if p[2] == mat])
         body_kids.append(writer.add_mesh_node(f'BODY_{MATERIALS.get(mat, {"name": mat})["name"]}',
                                               [prim(b[0], b[1], b[2], b[3], mat)]))
     body_node = writer.add_node('BODY', children=body_kids)
@@ -635,7 +890,7 @@ def port(car_dir, out_path, skin, kn5_name, max_tex, small_tex, normal_tex, jpeg
     car_ini = ini(data['car.ini']) if 'car.ini' in data else None
     eyes = np.array(vec3(car_ini['GRAPHICS']['DRIVEREYES'])) + shift if car_ini else pivot + [0, 0.27, -0.47]
     solid = np.vstack([p[3] for p in body_parts if MATERIALS.get(p[2], {}).get('mode', 'OPAQUE') == 'OPAQUE'])
-    glass = np.vstack([p[3] for p in body_parts if p[2] == 'window'])
+    glass = np.vstack([p[3] for p in body_parts if p[2] in preset['windscreen']])
 
     def top_y(x, z, below, half=0.06):
         m = (np.abs(solid[:, 0] - x) < half) & (np.abs(solid[:, 2] - z) < half) & (solid[:, 1] < below)
@@ -666,6 +921,8 @@ def port(car_dir, out_path, skin, kn5_name, max_tex, small_tex, normal_tex, jpeg
         'farChase': {'pos': [0.0, 2.6, -7.3], 'pitchDeg': -10, 'fov': 60},
     }
 
+    rev_leds = read_rev_leds(data, set(own_steer))
+
     lf, rf, lr, rr = (wheel_centres[f'WHEEL_{c}'] for c in ('LF', 'RF', 'LR', 'RR'))
     extras = {
         'wheelCentres': wheel_centres,
@@ -675,8 +932,11 @@ def port(car_dir, out_path, skin, kn5_name, max_tex, small_tex, normal_tex, jpeg
         'trackWidthM': {'front': round(lf[0] - rf[0], 5), 'rear': round(lr[0] - rr[0], 5)},
         'steer': {'pivot': r3(pivot), 'columnAxis': [round(float(v), 5) for v in column]},
         'cameras': cameras,
+        **({'revLeds': rev_leds} if rev_leds else {}),
+        **({'skinMaps': {MATERIALS[m]['name']: f for m, (f, _) in preset['skin_maps'].items()}}
+           if preset['skin_maps'] else {}),
         'source': {
-            'title': 'Suzuki Liana',
+            'title': preset['title'],
             'kn5': os.path.basename(kn5_path),
             'skin': skin,
             'converted': 'scripts/cars/port_ac_car.py',
@@ -692,6 +952,7 @@ def port(car_dir, out_path, skin, kn5_name, max_tex, small_tex, normal_tex, jpeg
     nverts = sum(len(p[3]) for p in parts)
     ntris = sum(len(p[6]) for p in parts)
     print(f'wrote {out_path} ({os.path.getsize(out_path) / 1e6:.2f} MB)')
+    print(f'  rev LEDs: {json.dumps(rev_leds)}')
     print(f'  {len(parts)} kn5 meshes -> {len(body_kids)} body meshes, {len(steer_kids)} steer, 4 wheels; '
           f'{nverts} vertices, {ntris} triangles; {len(writer.j["materials"])} materials')
     print(f'  dropped meshes by material: {dropped}')
@@ -712,15 +973,29 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.split('\n')[0])
     ap.add_argument('car_dir', help='the AC car folder (content/cars/<id>)')
     ap.add_argument('out', help='output .glb')
-    ap.add_argument('--skin', default='light_blue', help='skin folder whose maps override the kn5 (default light_blue)')
+    ap.add_argument('--car', default=None, choices=sorted(PRESETS), help='car preset (default: by the folder name)')
+    ap.add_argument('--skin', default=None, help="skin folder whose maps override the kn5 (default: the preset's)")
     ap.add_argument('--kn5', default=None, help='kn5 file in the car folder (default <folder name>.kn5)')
     ap.add_argument('--max-tex', type=int, default=2048, help='paint texture size cap (px)')
     ap.add_argument('--small-tex', type=int, default=1024, help='other colour textures size cap (px)')
     ap.add_argument('--normal-tex', type=int, default=512, help='normal map size cap (px)')
     ap.add_argument('--jpeg-quality', type=int, default=88)
+    ap.add_argument('--skins-out', default=None,
+                    help="also write every skin's livery files (the preset's skin_maps) into this folder")
     a = ap.parse_args()
+    car = a.car or PRESET_BY_FOLDER.get(os.path.basename(os.path.normpath(a.car_dir)))
+    if car is None:
+        ap.error(f'no preset for {a.car_dir}: pass --car')
+    preset = PRESETS[car]
     with np.errstate(all='ignore'):
-        port(a.car_dir, a.out, a.skin, a.kn5, a.max_tex, a.small_tex, a.normal_tex, a.jpeg_quality)
+        port(a.car_dir, a.out, preset, a.skin or preset['default_skin'], a.kn5, a.max_tex, a.small_tex, a.normal_tex,
+             a.jpeg_quality)
+        if a.skins_out:
+            if not preset['skin_maps']:
+                ap.error(f'{car} has no skin_maps to export')
+            kn5 = os.path.join(a.car_dir, a.kn5 or f'{os.path.basename(os.path.normpath(a.car_dir))}.kn5')
+            textures, materials, _ = read_kn5(kn5)
+            export_skins(a.car_dir, preset, textures, materials, a.skins_out, a.max_tex, a.small_tex, a.jpeg_quality)
 
 
 if __name__ == '__main__':

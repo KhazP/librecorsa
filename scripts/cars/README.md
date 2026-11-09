@@ -36,18 +36,24 @@ uv run --python 3.14 --no-project --with numpy --with scipy --with opencv-python
 
 # Assetto Corsa Car Porter (`port_ac_car.py`)
 
-`scripts/cars/port_ac_car.py` converts an Assetto Corsa car (its main `.kn5` plus one skin) into the same `CAR` / `BODY` / `STEER` / `WHEEL_xx` layout. It is written for the Suzuki Liana 1.6 (its `MATERIALS` table maps the car's 57 kn5 materials); the kn5 reader, the hierarchy split and the paint bake are generic AC.
+`scripts/cars/port_ac_car.py` converts an Assetto Corsa car (its main `.kn5` plus one skin) into the same `CAR` / `BODY` / `STEER` / `WHEEL_xx` layout. Each car has a preset in `PRESETS`: its material table, the nodes and materials it leaves out, the skin files that override the kn5's, how its tyre meshes and spinning parts are named, and its windscreen. There are two, the Suzuki Liana 1.6 (`liana`) and the MTRacing 496R (`mtr-496r`); the kn5 reader, the hierarchy split and the paint bake are generic AC.
 
 ```bash
 uv run --python 3.14 --no-project --with numpy --with pillow \
   python -P scripts/cars/port_ac_car.py \
   /Users/alpyalay/Downloads/librecorsa-src/suzuki_liana/suzuki_liana \
   public/cars/liana/model/liana.glb --skin light_blue
+uv run --python 3.14 --no-project --with numpy --with pillow \
+  python -P scripts/cars/port_ac_car.py \
+  /Users/alpyalay/Downloads/librecorsa-src/mt_mtr_496r/mt_mtr_496r \
+  public/cars/mtr-496r/model/mtr-496r.glb
 ```
 
-Flags: `--skin <folder>` (skin whose maps override the kn5's, default `light_blue`), `--kn5 <file>` (default `<folder name>.kn5`), `--max-tex` / `--small-tex` / `--normal-tex` (size caps: 2048 paint, 1024 other colour maps, 512 normal maps), `--jpeg-quality` (default 88).
+Flags: `--car <preset>` (default: by the car folder's name), `--skins-out <folder>` (also every skin's livery files, the preset's `skin_maps`, into `<folder>/<skin>/` with a `skins.json` listing them: the 496R's go to `public/cars/mtr-496r/skins`), `--skin <folder>` (skin whose maps override the kn5's, default the preset's: `light_blue`, `04_mtrgreen_metallic`), `--kn5 <file>` (default `<folder name>.kn5`), `--max-tex` / `--small-tex` / `--normal-tex` (size caps: 2048 paint, 1024 other colour maps, 512 normal maps), `--jpeg-quality` (default 88).
 
 - **Axes**: the kn5 frame is already the rig's (+X left, +Y up, +Z forward, counter-clockwise faces); the porter only lifts the lowest tyre point to `y = 0` and centres X on the wheels. car.ini's `GRAPHICS_OFFSET` is not applied (the rig aligns by wheel centres).
-- **Parts**: meshes under `WHEEL_xx` are the wheel (the `object__90*` tyre one primitive, everything else `WHEEL_xx_RIM`), under `STEER_HR` the steering wheel (its node frame becomes `STEER`), the rest `BODY`, one mesh per material. Blurred rims (`RIM_BLUR_*`), shift-light quads (`LED_*`), LODs, damage and dirt maps are dropped.
-- **Paint**: `ksPerPixelMultiMap` materials are baked to one opaque colour texture as AC shades them, `diffuse * (detail * (1 - diffuse.a) + diffuse.a)` in gamma space, with the skin's `MAT_plancia.dds` as the body's detail: the paint takes the skin colour, badges (alpha 1) keep their own.
+- **Parts**: meshes under `WHEEL_xx` are the wheel (the tyre, `object__90*` on the Liana and `g_Tyre_*` on the 496R, one primitive; everything else `WHEEL_xx_RIM`, joined by the 496R's `DISC_xx` brake discs), under `STEER_HR` the steering wheel (its node frame becomes `STEER`), the rest `BODY`, one mesh per material. Blurred rims (`RIM_BLUR_*`), LODs, damage and dirt maps are dropped, and each preset's own list (the Liana's shift-light quads, the 496R's fastened belts and inner windscreen).
+- **Paint**: `ksPerPixelMultiMap` materials are baked to one opaque colour texture as AC shades them, `diffuse * (detail * (1 - diffuse.a) + diffuse.a)` in gamma space, with the skin's `MAT_plancia.dds` as the body's detail: the paint takes the skin colour, badges (alpha 1) keep their own. The 496R's paint is its skin's `skin.dds` under the same mask with the flake map as its mean colour (`bakemean:`); its carbon takes the material's detail weave, its UVs scaled by `detailUVMultiplier`.
+- **Wheel dash**: a preset's `steer_nodes` (the 496R's screen `GEO_LCD` and its `RPM_*` shift lights) stay nodes of their own under `STEER`; the screen's material becomes `INT_DISPLAY`, which the game draws its live display on, and the CAR node's `revLeds` extras give each light's rpm and colour from the car's `digital_instruments.ini` (`src/lib/render/ported-wheel-dash.ts`).
+- **Liveries**: the GLB's `skinMaps` extras name the materials a livery repaints and the file each takes from a skin's folder; the rig swaps them in for the livery a player picks (`CarDefinition.skins`).
 - **Cameras**: the cockpit eye from car.ini `DRIVEREYES` (read from `data/` or `data.acd`); dash, bumper and roof cameras placed from the geometry.
