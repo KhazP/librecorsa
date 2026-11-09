@@ -68,6 +68,54 @@ console.log('\n== At rest');
   const front = (fz[0] + fz[1]) / fz.reduce((a, b) => a + b, 0);
   // 64 % of the sprung mass on the front, as the mod's CG_LOCATION puts it, plus the hubs: 60.5 % of the car
   check('Front axle carries ≈ 60.5 % of the weight', Math.abs(front - 0.605) < 0.01, `${fmt(front * 100, 1)} %`);
+
+  // The tank is 1.37 m behind the CG: 30 kg of fuel puts its own weight and more on the rear axle, and lifts the front
+  const fuelled = makeCar();
+  fuelled.setFuelMass(30);
+  fuelled.refreshStaticGeometry();
+  fuelled.reset(0, 0, 0);
+  run(fuelled, 3, () => ({ throttle: 0, brake: 1, steer: 0 }));
+  const rearGainN = fuelled.wheels[2].fz + fuelled.wheels[3].fz - fz[2] - fz[3];
+  const frontGainN = fuelled.wheels[0].fz + fuelled.wheels[1].fz - fz[0] - fz[1];
+  const tank = C.chassis.fuelTank;
+  const expectedRear = 30 * 9.81 * (1 - C.chassis.frontWeightFraction) + (30 * 9.81 * Math.abs(tank.z)) / C.chassis.wheelbase;
+  check('30 kg of fuel in the rear tank loads the rear axle with 270 N, 24 N more than its weight', Math.abs(rearGainN - expectedRear) < 6 && Math.abs(frontGainN + rearGainN - 30 * 9.81) < 3,
+    `rear +${fmt(rearGainN, 0)} N, front ${fmt(frontGainN, 0)} N (expected rear +${fmt(expectedRear, 0)} N)`);
+}
+
+console.log('\n== Handbrake and tyre scrub');
+{
+  // The handbrake works the rear brakes only: from 60 km/h, clutch out, it locks them and the car slows on its rears
+  const car = makeCar();
+  car.reset(0, 0, 0, 60 / 3.6);
+  run(car, 0.5, () => ({ throttle: 0, brake: 0, steer: 0, clutch: 1 }));
+  const v0 = car.telemetry.speedKmh;
+  run(car, 1, () => ({ throttle: 0, brake: 0, steer: 0, clutch: 1, handbrake: 1 }));
+  const rearRim = Math.max(Math.abs(car.wheels[2].omega), Math.abs(car.wheels[3].omega)) * 0.288 * 3.6;
+  const frontRim = Math.min(Math.abs(car.wheels[0].omega), Math.abs(car.wheels[1].omega)) * 0.288 * 3.6;
+  const decelG = (v0 - car.telemetry.speedKmh) / 3.6 / 9.81;
+  check('The handbrake locks the rears and leaves the fronts rolling', rearRim < 3 && frontRim > car.telemetry.speedKmh * 0.9 && decelG > 0.25 && decelG < 0.5,
+    `rears ${fmt(rearRim, 1)} km/h at the rim, fronts ${fmt(frontRim, 1)} of ${fmt(car.telemetry.speedKmh, 1)} km/h, ${fmt(decelG, 2)} g`);
+
+  // A street tyre scrubs when it works: coasting at 90 km/h, clutch out, a held corner near the limit slows the car
+  // harder than the straight does by more than the slip angle's own drag
+  const coast = (steer: number) => {
+    const c = makeCar();
+    c.reset(0, 0, 0, 90 / 3.6);
+    run(c, 0.4, (_, t) => ({ throttle: 0, brake: 0, steer: steer * Math.min(1, t / 0.3), clutch: 1 }));
+    let scrubNm = 0;
+    let n = 0;
+    run(c, 0.6, () => {
+      for (const w of c.wheels) scrubNm += w.brakeTorqueNm;
+      n++;
+      return { throttle: 0, brake: 0, steer, clutch: 1 };
+    });
+    return { torque: scrubNm / n, slip: Math.max(...c.wheels.map((w) => w.combinedSlip)) };
+  };
+  const straight = coast(0);
+  const corner = coast(-0.12);
+  check('Rolling drag is 2.5–6 × the free-rolling drag in a hard corner', corner.torque > 2.5 * straight.torque && corner.torque < 6 * straight.torque && corner.slip > 0.5,
+    `${fmt(straight.torque, 0)} Nm straight, ${fmt(corner.torque, 0)} Nm at ${fmt(corner.slip, 2)} of the peak slip`);
 }
 
 console.log('\n== Straight line (flat ground, sea level)');
@@ -181,7 +229,8 @@ console.log('\n== Driver aids through the adapter');
   const raw = launch('pro');
   // The mod's street tyre holds its grip past the peak, so its TC (12 % slip) trims the wheelspin rather than rescuing
   // the launch: under its target, well under the untamed slip, and no more than a few km/h for it
-  check('TC holds front wheelspin in the wet (from 25 km/h)', tc.slip < 0.12 && tc.slip < raw.slip * 0.7 && tc.kmh >= raw.kmh - 4,
+  // A spinning street tyre scrubs its own speed off, so the untamed wheelspin is modest too
+  check('TC holds front wheelspin in the wet (from 25 km/h)', tc.slip < 0.12 && tc.slip < raw.slip * 0.9 && tc.kmh >= raw.kmh - 4,
     `mean front slip ${fmt(tc.slip, 2)} with TC, ${fmt(raw.slip, 2)} without; ${fmt(tc.kmh, 0)} / ${fmt(raw.kmh, 0)} km/h after 6 s`);
   const stop = (preset: 'pro' | 'semi_pro', onWet = false) => {
     const sim = createSuzukiLianaSim(wide);
