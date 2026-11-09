@@ -94,6 +94,9 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
+          # The lap boards' tables first (cloudflare/migrations; nothing to do when they are up to date). The token
+          # needs D1 edit rights as well as Workers'
+          npx wrangler d1 migrations apply librecorsa-board --remote
           npx wrangler deploy
           npx wrangler deploy -c cloudflare/www/wrangler.jsonc
 
