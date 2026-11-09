@@ -70,6 +70,8 @@ jobs:
       - name: Build static export
         env:
           NEXT_PUBLIC_BASE_PATH: ""
+          # The online side served by this site's Worker (cloudflare/api): room codes, relay servers, lap boards
+          NEXT_PUBLIC_ONLINE_API: "/api"
           # Online leaderboard (scripts/leaderboard-supabase); repository variables, empty = local board only
           NEXT_PUBLIC_SUPABASE_URL: ${{ vars.SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY }}

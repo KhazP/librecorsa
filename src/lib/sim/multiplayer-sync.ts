@@ -4,10 +4,12 @@
  * Implements:
  * - Compact network state packet:
  *   `[timestamp, pos, quat, linVel, angVel, steerAngle, wheelRPMs, throttle, brake]`
- * - 3 Zero-Cost Serverless P2P Transports (100% Free Forever on Static GitHub Pages):
+ * - 3 P2P Transports (the first two free forever on a static host):
  *   1. Room Code P2P Mode: WebRTC `RTCPeerConnection` + unreliable/unordered `RTCDataChannel`
- *      (`ordered: false, maxRetransmits: 0`) using Google Public STUN (`stun:stun.l.google.com:19302`)
- *      and the public PeerJS Cloud Signaling Broker (`wss://0.peerjs.com/peerjs`) with a 6-character Room Code.
+ *      (`ordered: false, maxRetransmits: 0`) using Google Public STUN (`stun:stun.l.google.com:19302`) with a
+ *      6-character Room Code. The players of a code are introduced by this site's room server when it has one
+ *      switched on (cloudflare/api/room.ts, which also hands out relay servers for networks that block a direct
+ *      link), else by the public PeerJS Cloud Signaling Broker (`wss://0.peerjs.com/peerjs`).
  *   2. Manual Copy-Paste SDP Offer/Answer Mode: 100% brokerless WebRTC P2P connection via base64 SDP tokens.
  *   3. Local Same-Machine Mode: Zero-config `BroadcastChannel` across browser tabs/windows.
  * - Dead-reckoning state buffer with Cubic Hermite position/velocity spline interpolation
@@ -20,6 +22,7 @@ import { isVehicleModelId, type TireCompound, type VehicleModelId } from '@/type
 import { sanitizeWeatherSync, type WeatherSyncState } from './weather';
 import type { TyreVisualState } from './simulator-car';
 import type { GroundQuery } from './f12026-car/TrackColliderQuery';
+import { getOnlineConfig, onlineApiBase, onlineSocketUrl } from '@/lib/net/online-config';
 
 const PEER_COMPOUNDS: readonly TireCompound[] = ['soft', 'medium', 'hard', 'intermediate', 'wet'];
 /** Network input is untrusted: only a known model id is kept */
@@ -238,9 +241,31 @@ export function saveUserTurnServer(server: { urls: string; username?: string; cr
   }
 }
 
-/** STUN, plus a TURN relay from the build (NEXT_PUBLIC_TURN_*) and / or the player's own, for strict NATs */
-function iceServers(): RTCIceServer[] {
-  const servers: RTCIceServer[] = [...GOOGLE_STUN_SERVERS];
+/** Connection servers a room server sent: only well-formed stun / turn entries are kept */
+export function sanitizeIceServers(raw: unknown): RTCIceServer[] {
+  if (!Array.isArray(raw)) return [];
+  const out: RTCIceServer[] = [];
+  for (const entry of raw.slice(0, 8)) {
+    if (typeof entry !== 'object' || entry === null) continue;
+    const e = entry as Record<string, unknown>;
+    const urls = (Array.isArray(e.urls) ? e.urls : [e.urls]).filter(
+      (u): u is string => typeof u === 'string' && u.length <= 256 && /^(stun|turns?):/i.test(u)
+    );
+    if (urls.length === 0) continue;
+    const server: RTCIceServer = { urls };
+    if (typeof e.username === 'string') server.username = e.username.slice(0, 512);
+    if (typeof e.credential === 'string') server.credential = e.credential.slice(0, 512);
+    out.push(server);
+  }
+  return out;
+}
+
+/**
+ * STUN, plus relays for networks that block a direct link: the room server's (`room`), one from the build
+ * (NEXT_PUBLIC_TURN_*) and / or the player's own
+ */
+function iceServers(room: readonly RTCIceServer[] = []): RTCIceServer[] {
+  const servers: RTCIceServer[] = [...GOOGLE_STUN_SERVERS, ...room];
   const envUrls = process.env.NEXT_PUBLIC_TURN_URLS;
   if (envUrls) {
     const urls = envUrls.split(',').map((u) => u.trim()).filter((u) => /^turns?:/i.test(u));
@@ -257,9 +282,12 @@ function iceServers(): RTCIceServer[] {
   return servers;
 }
 
-/** True when a TURN relay is configured (the UI explains strict-NAT failures differently without one) */
+const hasRelay = (servers: readonly RTCIceServer[]): boolean =>
+  servers.some((s) => (Array.isArray(s.urls) ? s.urls : [s.urls]).some((u) => /^turns?:/i.test(u)));
+
+/** True when a TURN relay is configured in the build or by the player */
 export function hasTurnServer(): boolean {
-  return iceServers().some((s) => (Array.isArray(s.urls) ? s.urls : [s.urls]).some((u) => /^turns?:/i.test(u)));
+  return hasRelay(iceServers());
 }
 
 const clampStr = (v: unknown, max: number, fallback: string) =>
@@ -529,6 +557,13 @@ const BROKER_RETRY_MS = [1000, 3000, 5000, 10000];
 /** Guest: an offer with no answer in this long means no host is there (the broker doesn't reliably say so) */
 const JOIN_TIMEOUT_MS = 15000;
 
+/** The room server answers a literal "ping" without waking up; sent this often to keep the socket alive (ms) */
+const ROOM_SERVER_PING_MS = 30000;
+/** Connection ids of a room server's players: the host as seen by a guest, a guest (with its server id) by the host */
+const ROOM_HOST_ID = 'room_host';
+const ROOM_GUEST_PREFIX = 'room_guest_';
+const HOST_TOKEN_KEY = 'lc.roomHostToken';
+
 const BROKER_UNREACHABLE =
   "Couldn't reach the room server. Check your connection and try again, or use a manual connection under Advanced.";
 
@@ -564,6 +599,12 @@ export class MultiplayerSyncManager {
   private brokerHeartbeat: ReturnType<typeof setInterval> | null = null;
   private brokerRetry: ReturnType<typeof setTimeout> | null = null;
   private joinTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Who introduces this room's players: this site's room server, or the public PeerJS broker */
+  private signalVia: 'server' | 'broker' = 'broker';
+  /** Counts every closed signalling socket: a room opened after an await checks it is still the one wanted */
+  private signalGen = 0;
+  /** Connection servers the room server sent for this room (relays for networks that block a direct link) */
+  private roomIce: RTCIceServer[] = [];
   private rtcPeers = new Map<string, WebRtcPeerEntry>();
   private manualPendingPc: RTCPeerConnection | null = null;
 
@@ -734,8 +775,132 @@ export class MultiplayerSyncManager {
       state: 'signaling',
       statusText: `Opening room ${roomCode}…`,
     });
-    this.connectHostBroker(roomCode, 0);
+    this.viaRoomServer((server) => (server ? this.connectHostServer(roomCode, 0) : this.connectHostBroker(roomCode, 0)));
     return roomCode;
+  }
+
+  /**
+   * Runs `open` with whether this site's room server pairs room codes (asked at run time; without an online side it
+   * is the public broker, at once). Dropped when another room was opened or this one left meanwhile.
+   */
+  private viaRoomServer(open: (server: boolean) => void): void {
+    this.roomIce = [];
+    if (!onlineApiBase) {
+      this.signalVia = 'broker';
+      open(false);
+      return;
+    }
+    const gen = this.signalGen;
+    void getOnlineConfig().then((config) => {
+      if (gen !== this.signalGen) return;
+      this.signalVia = config.rooms ? 'server' : 'broker';
+      open(config.rooms);
+    });
+  }
+
+  /** Host: after losing the room's signalling socket, opens it again after a pause (longer each time) */
+  private putRoomBack(ws: WebSocket, roomCode: string, attempt: number, connect: (roomCode: string, attempt: number) => void): void {
+    if (this.signalingWs !== ws) return;
+    this.closeSignaling();
+    this.brokerRetry = setTimeout(() => {
+      this.brokerRetry = null;
+      connect(roomCode, attempt + 1);
+    }, BROKER_RETRY_MS[Math.min(attempt, BROKER_RETRY_MS.length - 1)]);
+    if (this.openPeerCount() === 0) {
+      this.emitStatus({ state: 'signaling', statusText: `Reconnecting room ${roomCode}…` });
+    }
+  }
+
+  /** This browser's secret for the rooms it hosts: the room server lets the same host take its room back */
+  private hostToken(): string {
+    try {
+      const saved = sessionStorage.getItem(HOST_TOKEN_KEY);
+      if (saved && /^[A-Za-z0-9_-]{8,64}$/.test(saved)) return saved;
+    } catch {
+      // Storage blocked: a token for this page only
+    }
+    const bytes = new Uint8Array(18);
+    crypto.getRandomValues(bytes);
+    const token = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+    try {
+      sessionStorage.setItem(HOST_TOKEN_KEY, token);
+    } catch {
+      // Storage blocked
+    }
+    return token;
+  }
+
+  /** Opens a socket on this site's room server, pinging it so it stays open */
+  private openRoomServer(path: string): WebSocket {
+    this.closeSignaling();
+    const url = onlineSocketUrl(path);
+    if (!url) throw new Error('No room server');
+    const ws = new WebSocket(url);
+    this.signalingWs = ws;
+    this.brokerHeartbeat = setInterval(() => {
+      if (ws.readyState === WebSocket.OPEN) ws.send('ping');
+    }, ROOM_SERVER_PING_MS);
+    return ws;
+  }
+
+  /**
+   * Host: opens the room on this site's room server, and opens it again whenever the socket is lost (a phone's
+   * network change, the page in the background), so guests can still find it. `attempt` > 0 is such a reconnect.
+   */
+  private connectHostServer(roomCode: string, attempt: number): void {
+    let ws: WebSocket;
+    try {
+      ws = this.openRoomServer(`/rooms/${encodeURIComponent(roomCode)}?role=host&token=${this.hostToken()}`);
+    } catch {
+      this.emitStatus({ state: 'error', roomCode: '', statusText: BROKER_UNREACHABLE });
+      return;
+    }
+    let opened = false;
+    const reconnect = (code: string, next: number) => this.connectHostServer(code, next);
+
+    ws.onmessage = async (ev) => {
+      if (this.signalingWs !== ws || typeof ev.data !== 'string' || ev.data === 'pong') return;
+      try {
+        const msg = JSON.parse(ev.data);
+        if (msg.t === 'welcome') {
+          opened = true;
+          attempt = 0;
+          this.roomIce = sanitizeIceServers(msg.iceServers);
+          if (this.openPeerCount() === 0) {
+            this.emitStatus({ state: 'signaling', statusText: `Room ${roomCode} is open • waiting for players` });
+          }
+        } else if (msg.t === 'taken') {
+          this.closeSignaling();
+          this.emitStatus({
+            state: 'error',
+            roomCode: '',
+            statusText: `Room ${roomCode} is already open on another device. Press Join to race in it, or host a new room.`,
+          });
+        } else if (msg.t === 'signal' && typeof msg.from === 'string' && /^[a-f0-9]{12}$/.test(msg.from)) {
+          const remoteId = `${ROOM_GUEST_PREFIX}${msg.from}`;
+          if (msg.data?.sdp) {
+            const answer = await this.answerOffer(remoteId, msg.data.sdp, remoteId);
+            if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ t: 'signal', to: msg.from, data: { sdp: answer } }));
+          } else if (msg.data?.candidate) {
+            const entry = this.rtcPeers.get(remoteId);
+            if (entry) await entry.pc.addIceCandidate(new RTCIceCandidate(msg.data.candidate));
+          }
+        }
+      } catch {
+        // Ignore a malformed message
+      }
+    };
+
+    ws.onclose = () => {
+      if (this.signalingWs !== ws) return; // Closed on purpose: another room, left, or the code was taken
+      if (!opened && attempt === 0) {
+        this.signalingWs = null;
+        this.clearBrokerTimers();
+        this.emitStatus({ state: 'error', roomCode: '', statusText: BROKER_UNREACHABLE });
+        return;
+      }
+      this.putRoomBack(ws, roomCode, attempt, reconnect);
+    };
   }
 
   /**
@@ -756,18 +921,7 @@ export class MultiplayerSyncManager {
      * socket is closed here, not left to the broker: a refused socket it keeps open would be held up by the heartbeat
      * and never retried. The players already in race on peer to peer meanwhile, and keep their status.
      */
-    const putBack = () => {
-      if (this.signalingWs !== ws) return;
-      this.closeSignaling();
-      const next = attempt + 1;
-      this.brokerRetry = setTimeout(() => {
-        this.brokerRetry = null;
-        this.connectHostBroker(roomCode, next);
-      }, BROKER_RETRY_MS[Math.min(attempt, BROKER_RETRY_MS.length - 1)]);
-      if (this.openPeerCount() === 0) {
-        this.emitStatus({ state: 'signaling', statusText: `Reconnecting room ${roomCode}…` });
-      }
-    };
+    const putBack = () => this.putRoomBack(ws, roomCode, attempt, (code, next) => this.connectHostBroker(code, next));
 
     ws.onmessage = async (ev) => {
       if (this.signalingWs !== ws) return;
@@ -789,7 +943,7 @@ export class MultiplayerSyncManager {
           this.emitStatus({
             state: 'error',
             roomCode: '',
-            statusText: `Room ${roomCode} is already open on another device. Press Join to race in it, or host with a new code.`,
+            statusText: `Room ${roomCode} is already open on another device. Press Join to race in it, or host a new room.`,
           });
         } else if (msg.type === 'ERROR' || msg.type === 'INVALID-KEY') {
           // Refused before the room ever opened: say so. Refused once it had been up: put it back, as after a drop
@@ -836,16 +990,98 @@ export class MultiplayerSyncManager {
 
     this.closeSignaling();
     this.becomeGuest();
-    const guestBrokerId = `rwanda2026_room_${roomCode}_guest_${Math.random().toString(36).slice(2, 7)}`;
-    const hostBrokerId = `rwanda2026_room_${roomCode}_host`;
-    const connId = `dc_${Math.random().toString(36).slice(2, 9)}`;
-
     this.emitStatus({
       mode: 'room_guest',
       roomCode,
       state: 'signaling',
       statusText: `Joining room ${roomCode}…`,
     });
+    this.viaRoomServer((server) => (server ? this.joinRoomServer(roomCode) : this.joinRoomBroker(roomCode)));
+  }
+
+  /** Guest: makes the connection to the host with both channels and returns the offer to send it */
+  private async offerToHost(hostRemoteId: string, connId: string): Promise<RTCSessionDescription | null> {
+    const pc = this.createPeerConnection(hostRemoteId, connId);
+    const dc = pc.createDataChannel(STATE_CHANNEL, {
+      ordered: false,
+      maxRetransmits: 0,
+    });
+    const ctl = pc.createDataChannel(CONTROL_CHANNEL, { ordered: true });
+    const entry: WebRtcPeerEntry = { remoteId: hostRemoteId, pc, dc, ctl };
+    this.rtcPeers.set(hostRemoteId, entry);
+    this.bindDataChannel(hostRemoteId, dc);
+    this.bindControlChannel(entry, ctl);
+
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    return pc.localDescription;
+  }
+
+  /** Guest: joins a room through this site's room server, which says at once when nobody hosts the code */
+  private joinRoomServer(roomCode: string): void {
+    let ws: WebSocket;
+    try {
+      ws = this.openRoomServer(`/rooms/${encodeURIComponent(roomCode)}?role=guest`);
+    } catch {
+      this.emitStatus({ state: 'error', roomCode: '', statusText: BROKER_UNREACHABLE });
+      return;
+    }
+    /** The host answered: from here the connection is peer to peer, and losing the room server no longer matters */
+    let answered = false;
+    const fail = (statusText: string) => {
+      this.closeSignaling();
+      this.dropUnansweredPeer(ROOM_HOST_ID);
+      this.emitStatus({ state: 'error', roomCode: '', statusText });
+    };
+    const notFound = () => fail(`Couldn't find room ${roomCode}. Check the code, and ask the host to keep the game open on screen.`);
+
+    ws.onmessage = async (ev) => {
+      if (this.signalingWs !== ws || typeof ev.data !== 'string' || ev.data === 'pong') return;
+      try {
+        const msg = JSON.parse(ev.data);
+        if (msg.t === 'welcome') {
+          this.roomIce = sanitizeIceServers(msg.iceServers);
+          const sdp = await this.offerToHost(ROOM_HOST_ID, ROOM_HOST_ID);
+          if (this.signalingWs !== ws) return;
+          ws.send(JSON.stringify({ t: 'signal', data: { sdp } }));
+          this.joinTimer = setTimeout(() => {
+            this.joinTimer = null;
+            if (!answered) notFound();
+          }, JOIN_TIMEOUT_MS);
+        } else if (msg.t === 'nohost') {
+          notFound();
+        } else if (msg.t === 'full') {
+          fail(`Room ${roomCode} is full.`);
+        } else if (msg.t === 'signal' && msg.data?.sdp) {
+          const entry = this.rtcPeers.get(ROOM_HOST_ID);
+          if (entry) {
+            answered = true;
+            if (this.joinTimer !== null) clearTimeout(this.joinTimer);
+            this.joinTimer = null;
+            await entry.pc.setRemoteDescription(new RTCSessionDescription(msg.data.sdp));
+          }
+        } else if (msg.t === 'signal' && msg.data?.candidate) {
+          const entry = this.rtcPeers.get(ROOM_HOST_ID);
+          if (entry) await entry.pc.addIceCandidate(new RTCIceCandidate(msg.data.candidate));
+        }
+      } catch {
+        // Ignore a malformed message
+      }
+    };
+
+    ws.onclose = () => {
+      if (this.signalingWs !== ws) return; // Closed on purpose
+      this.signalingWs = null;
+      this.clearBrokerTimers();
+      if (!answered) fail(BROKER_UNREACHABLE);
+    };
+  }
+
+  /** Guest: joins a room through the public PeerJS broker */
+  private joinRoomBroker(roomCode: string): void {
+    const guestBrokerId = `rwanda2026_room_${roomCode}_guest_${Math.random().toString(36).slice(2, 7)}`;
+    const hostBrokerId = `rwanda2026_room_${roomCode}_host`;
+    const connId = `dc_${Math.random().toString(36).slice(2, 9)}`;
 
     let ws: WebSocket;
     try {
@@ -869,26 +1105,15 @@ export class MultiplayerSyncManager {
       try {
         const msg = JSON.parse(ev.data);
         if (msg.type === 'OPEN') {
-          const pc = this.createPeerConnection(hostBrokerId, connId);
-          const dc = pc.createDataChannel(STATE_CHANNEL, {
-            ordered: false,
-            maxRetransmits: 0,
-          });
-          const ctl = pc.createDataChannel(CONTROL_CHANNEL, { ordered: true });
-          const entry: WebRtcPeerEntry = { remoteId: hostBrokerId, pc, dc, ctl };
-          this.rtcPeers.set(hostBrokerId, entry);
-          this.bindDataChannel(hostBrokerId, dc);
-          this.bindControlChannel(entry, ctl);
-
-          const offer = await pc.createOffer();
-          await pc.setLocalDescription(offer);
+          const sdp = await this.offerToHost(hostBrokerId, connId);
+          if (this.signalingWs !== ws) return;
 
           ws.send(
             JSON.stringify({
               type: 'OFFER',
               dst: hostBrokerId,
               payload: {
-                sdp: pc.localDescription,
+                sdp,
                 type: 'data',
                 connectionId: connId,
                 // The broker now drops an offer without the PeerJS client's `label` and `serialization`, and hangs up
@@ -978,11 +1203,12 @@ export class MultiplayerSyncManager {
     }
   }
 
-  private async handleBrokerOffer(
+  /** Host: takes a guest's offer and returns the answer to send back */
+  private async answerOffer(
     remoteId: string,
     sdp: RTCSessionDescriptionInit,
     connectionId: string
-  ): Promise<void> {
+  ): Promise<RTCSessionDescription | null> {
     const pc = this.createPeerConnection(remoteId, connectionId);
     const entry: WebRtcPeerEntry = { remoteId, pc, dc: null };
     this.rtcPeers.set(remoteId, entry);
@@ -991,6 +1217,15 @@ export class MultiplayerSyncManager {
     await pc.setRemoteDescription(new RTCSessionDescription(sdp));
     const answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
+    return pc.localDescription;
+  }
+
+  private async handleBrokerOffer(
+    remoteId: string,
+    sdp: RTCSessionDescriptionInit,
+    connectionId: string
+  ): Promise<void> {
+    const localDescription = await this.answerOffer(remoteId, sdp, connectionId);
 
     if (this.signalingWs && this.signalingWs.readyState === WebSocket.OPEN) {
       this.signalingWs.send(
@@ -998,7 +1233,7 @@ export class MultiplayerSyncManager {
           type: 'ANSWER',
           dst: remoteId,
           payload: {
-            sdp: pc.localDescription,
+            sdp: localDescription,
             type: 'data',
             connectionId,
           },
@@ -1011,26 +1246,29 @@ export class MultiplayerSyncManager {
     remoteId: string,
     connectionId: string
   ): RTCPeerConnection {
-    const pc = new RTCPeerConnection({ iceServers: iceServers() });
+    const pc = new RTCPeerConnection({ iceServers: iceServers(this.roomIce) });
 
     pc.onicecandidate = (ev) => {
-      if (
-        ev.candidate &&
-        this.signalingWs &&
-        this.signalingWs.readyState === WebSocket.OPEN
-      ) {
-        this.signalingWs.send(
-          JSON.stringify({
-            type: 'CANDIDATE',
-            dst: remoteId,
-            payload: {
-              candidate: ev.candidate,
-              type: 'data',
-              connectionId,
-            },
-          })
-        );
+      const ws = this.signalingWs;
+      if (!ev.candidate || !ws || ws.readyState !== WebSocket.OPEN) return;
+      if (this.signalVia === 'server') {
+        // The host names the guest; a guest's only peer is the host
+        const guest = remoteId.startsWith(ROOM_GUEST_PREFIX) ? remoteId.slice(ROOM_GUEST_PREFIX.length) : undefined;
+        const data = { candidate: ev.candidate };
+        ws.send(JSON.stringify(guest ? { t: 'signal', to: guest, data } : { t: 'signal', data }));
+        return;
       }
+      ws.send(
+        JSON.stringify({
+          type: 'CANDIDATE',
+          dst: remoteId,
+          payload: {
+            candidate: ev.candidate,
+            type: 'data',
+            connectionId,
+          },
+        })
+      );
     };
 
     // `disconnected` is often a short ICE blip that recovers by itself (same pc, same channels): give it a grace
@@ -1090,13 +1328,13 @@ export class MultiplayerSyncManager {
   private emitPeersStatus(strictNat: boolean): void {
     const open = this.openPeerCount();
     if (open > 0) {
-      this.emitStatus({ state: 'connected', statusText: `WebRTC P2P Connected (${open} peer)` });
+      this.emitStatus({ state: 'connected', statusText: open === 1 ? 'Connected to 1 player' : `Connected to ${open} players` });
     } else if (strictNat) {
       this.emitStatus({
         state: 'error',
-        statusText: hasTurnServer()
-          ? 'Could not connect, even through the TURN relay. Check the TURN details, or try the same Wi-Fi.'
-          : 'Could not connect directly (strict NAT / mobile network). Add a TURN relay under Advanced, or use the same Wi-Fi.',
+        statusText: hasRelay(iceServers(this.roomIce))
+          ? "Couldn't connect to the other player. Try again, or use the same Wi-Fi."
+          : "Couldn't connect: one of your networks blocks direct links. Use the same Wi-Fi, or try another network.",
       });
     } else if (!this.isHost) {
       // A guest's one connection is to its host, and nothing dials it again: say so rather than wait forever
@@ -1174,7 +1412,7 @@ export class MultiplayerSyncManager {
     dc.onopen = () => {
       this.emitStatus({
         state: 'connected',
-        statusText: `WebRTC DataChannel Connected (25 Hz Unordered UDP)`,
+        statusText: 'Connected',
       });
     };
     dc.onclose = () => {
@@ -1637,7 +1875,7 @@ export class MultiplayerSyncManager {
     this.emitStatus({
       mode: 'manual_sdp',
       state: 'signaling',
-      statusText: 'Gathering STUN ICE Candidates for Manual Offer...',
+      statusText: 'Making an offer…',
     });
 
     const offer = await pc.createOffer();
@@ -1648,7 +1886,7 @@ export class MultiplayerSyncManager {
     this.emitStatus({
       mode: 'manual_sdp',
       state: 'signaling',
-      statusText: 'Offer Ready — Send to Peer & Paste Their Answer',
+      statusText: 'Offer ready. Send it to the other player, then paste their answer.',
     });
     return token;
   }
@@ -1685,7 +1923,7 @@ export class MultiplayerSyncManager {
     this.emitStatus({
       mode: 'manual_sdp',
       state: 'signaling',
-      statusText: 'Answer Generated — Send Back to Host to Connect!',
+      statusText: 'Answer ready. Send it back to the host.',
     });
     return answerToken;
   }
@@ -1730,6 +1968,7 @@ export class MultiplayerSyncManager {
   }
 
   private closeSignaling(): void {
+    this.signalGen++;
     this.clearBrokerTimers();
     const ws = this.signalingWs;
     this.signalingWs = null;
