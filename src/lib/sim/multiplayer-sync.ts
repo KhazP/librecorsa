@@ -18,74 +18,30 @@
  */
 
 import * as THREE from 'three';
-import { isVehicleModelId, type TireCompound, type VehicleModelId } from '@/types/f1';
-import { sanitizeWeatherSync, type WeatherSyncState } from './weather';
+import type { VehicleModelId } from '@/types/f1';
+import type { WeatherSyncState } from './weather';
 import type { TyreVisualState } from './simulator-car';
 import type { GroundQuery } from './f12026-car/TrackColliderQuery';
 import { getOnlineConfig, onlineApiBase, onlineSocketUrl } from '@/lib/net/online-config';
+import {
+  PEER_ID_RE,
+  sanitizeControl,
+  sanitizePacket,
+  type CarClassRule,
+  type CollisionMode,
+  type ControlEnvelope,
+  type ControlMessage,
+  type LobbyPlayer,
+  type LobbySettings,
+  type LobbyState,
+  type NetworkVehiclePacket,
+  type PeerRaceProgress,
+  type RaceStartInfo,
+} from '@/lib/net/wire';
 
-const PEER_COMPOUNDS: readonly TireCompound[] = ['soft', 'medium', 'hard', 'intermediate', 'wet'];
-/** Network input is untrusted: only a known model id is kept */
-const asPeerVehicle = (v: unknown): VehicleModelId | undefined =>
-  isVehicleModelId(v) ? v : undefined;
-
-export interface NetworkVehiclePacket {
-  peerId: string;
-  driverCode: string;
-  teamColorHex: string;
-  /** Car the sender drives (absent from older clients: rendered as the AMR) */
-  vehicle?: VehicleModelId;
-  /** Circuit the sender is on (absent from older clients) */
-  trackId?: string;
-  /** Monotonic timestamp in milliseconds (`performance.now()` / synchronized clock) */
-  timestampMs: number;
-  /** World position [x, y, z] (m) */
-  pos: [number, number, number];
-  /** World orientation quaternion [x, y, z, w] */
-  quat: [number, number, number, number];
-  /** World linear velocity [vx, vy, vz] (m/s) */
-  linVel: [number, number, number];
-  /** World angular velocity [wx, wy, wz] (rad/s) */
-  angVel: [number, number, number];
-  /** Front wheel steering angle (rad) */
-  steerAngle: number;
-  /** 4-wheel angular speeds [FR, FL, RR, RL] (RPM) */
-  wheelRPMs: [number, number, number, number];
-  /** Throttle pedal (0..1) */
-  throttle: number;
-  /** Brake pedal (0..1) */
-  brake: number;
-  /** Track arc-length s (m) */
-  trackS: number;
-  /** Speed (km/h) */
-  speedKmh: number;
-  /** Sender's packet counter (loss statistics); absent from older clients */
-  seq?: number;
-  /** Driver name (absent from older clients) */
-  name?: string;
-  /** Progress in a multiplayer race */
-  race?: PeerRaceProgress;
-}
-
-/** A racer's progress, sent with every state packet while a multiplayer race runs */
-export interface PeerRaceProgress {
-  /** Race id the progress belongs to */
-  id: string;
-  /** Distance covered since the start line (m), laps included */
-  dist: number;
-  /** Race time (s, from lights out) at the finish; null while still racing */
-  fin: number | null;
-  /** Laps completed at the finish: fewer than the race's when lapped (absent from older clients) */
-  laps?: number;
-  /** Fastest lap of the race (ms); null before one */
-  best: number | null;
-  /** Last completed lap (ms) */
-  last?: number | null;
-  /** Time penalties served at the flag (s) */
-  pen?: number;
-  /** Tyre compound: soft / medium / hard / intermediate / wet */
-  cmp?: TireCompound;
-}
+// What goes over the wire, and the checks on it, live in a module of their own (the race server reads them too)
+export { sanitizePacket };
+export type { CarClassRule, CollisionMode, LobbyPlayer, LobbySettings, LobbyState, NetworkVehiclePacket, PeerRaceProgress, RaceStartInfo };
 
 export interface InterpolatedPeerState {
   peerId: string;
@@ -127,52 +83,6 @@ export interface InterpolatedPeerState {
   wheels?: { tyres?: readonly TyreVisualState[]; ground: GroundQuery | null };
 }
 
-export type CollisionMode = 'on' | 'ghost_lap1' | 'off';
-export type CarClassRule = 'any' | 'f1' | 'gt3';
-
-export interface LobbySettings {
-  trackId: string;
-  laps: number;
-  collisions: CollisionMode;
-  carClass: CarClassRule;
-}
-
-export interface LobbyPlayer {
-  peerId: string;
-  name: string;
-  code: string;
-  color: string;
-  vehicle?: VehicleModelId;
-  trackId?: string;
-  ready: boolean;
-  isHost: boolean;
-}
-
-export interface LobbyState {
-  hostId: string;
-  settings: LobbySettings;
-  players: LobbyPlayer[];
-  /** The race in progress, if any */
-  race: RaceStartInfo | null;
-  /** The host's weather and clock (host-authoritative; guests ease theirs to it) */
-  weather?: WeatherSyncState;
-}
-
-/** Everything every client needs to run the same start: the lights are timed on the host's clock */
-export interface RaceStartInfo {
-  id: string;
-  /** Host clock (ms) at which the first red light comes on */
-  lightsStartHostMs: number;
-  /** Hold after the fifth light before lights out (ms) */
-  holdMs: number;
-  laps: number;
-  collisions: CollisionMode;
-  carClass: CarClassRule;
-  trackId: string;
-  /** Peer ids in grid order */
-  grid: string[];
-}
-
 export interface PeerNetStats {
   peerId: string;
   name: string;
@@ -191,22 +101,6 @@ export interface DriverIdentity {
   name: string;
   code: string;
   color: string;
-}
-
-type ControlMessage =
-  | { type: 'hello'; name: string; code: string; color: string; vehicle?: VehicleModelId; trackId?: string }
-  | { type: 'ping'; t0: number }
-  | { type: 'pong'; t0: number; now: number }
-  | { type: 'lobby'; lobby: LobbyState }
-  | { type: 'ready'; ready: boolean }
-  | { type: 'start'; start: RaceStartInfo }
-  | { type: 'abort'; id: string };
-
-interface ControlEnvelope {
-  ctl: ControlMessage;
-  from: string;
-  /** Recipient peer id; absent = everyone */
-  to?: string;
 }
 
 const TURN_STORAGE_KEY = 'bugesera.turn';
@@ -288,194 +182,6 @@ const hasRelay = (servers: readonly RTCIceServer[]): boolean =>
 /** True when a TURN relay is configured in the build or by the player */
 export function hasTurnServer(): boolean {
   return hasRelay(iceServers());
-}
-
-const clampStr = (v: unknown, max: number, fallback: string) =>
-  typeof v === 'string' ? v.replace(/[\u0000-\u001f\u007f<>]/g, '').slice(0, max) : fallback;
-const asCode = (v: unknown) => {
-  const s = typeof v === 'string' ? v.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3) : '';
-  return s.length === 3 ? s : 'DRV';
-};
-const asColor = (v: unknown) => (typeof v === 'string' && /^#[0-9a-fA-F]{6}$/.test(v) ? v : '#E10600');
-const finite = (v: unknown, lo: number, hi: number): number | null =>
-  typeof v === 'number' && Number.isFinite(v) && v >= lo && v <= hi ? v : null;
-const COLLISION_MODES: readonly CollisionMode[] = ['on', 'ghost_lap1', 'off'];
-const CAR_CLASSES: readonly CarClassRule[] = ['any', 'f1', 'gt3'];
-
-function sanitizeRace(v: unknown): PeerRaceProgress | undefined {
-  if (!v || typeof v !== 'object') return undefined;
-  const r = v as Record<string, unknown>;
-  const dist = finite(r.dist, -10_000, 10_000_000);
-  if (typeof r.id !== 'string' || dist === null) return undefined;
-  return {
-    id: r.id.slice(0, 32),
-    dist,
-    fin: finite(r.fin, 0, 1e6),
-    laps: typeof r.laps === 'number' && Number.isInteger(r.laps) && r.laps >= 0 && r.laps <= 99 ? r.laps : undefined,
-    best: finite(r.best, 0, 1e7),
-    last: finite(r.last, 0, 1e7),
-    pen: finite(r.pen, 0, 600) ?? undefined,
-    cmp: PEER_COMPOUNDS.includes(r.cmp as TireCompound) ? (r.cmp as TireCompound) : undefined,
-  };
-}
-
-function sanitizeStart(v: unknown): RaceStartInfo | null {
-  if (!v || typeof v !== 'object') return null;
-  const s = v as Record<string, unknown>;
-  const lightsStartHostMs = finite(s.lightsStartHostMs, -1e15, 1e15);
-  const holdMs = finite(s.holdMs, 0, 5000);
-  const laps = finite(s.laps, 1, 99);
-  if (typeof s.id !== 'string' || lightsStartHostMs === null || holdMs === null || laps === null) return null;
-  if (!Array.isArray(s.grid)) return null;
-  return {
-    id: s.id.slice(0, 32),
-    lightsStartHostMs,
-    holdMs,
-    laps: Math.round(laps),
-    collisions: COLLISION_MODES.includes(s.collisions as CollisionMode) ? (s.collisions as CollisionMode) : 'on',
-    carClass: CAR_CLASSES.includes(s.carClass as CarClassRule) ? (s.carClass as CarClassRule) : 'any',
-    trackId: clampStr(s.trackId, 64, 'rwanda'),
-    grid: s.grid.filter((g): g is string => typeof g === 'string').slice(0, 32).map((g) => g.slice(0, 64)),
-  };
-}
-
-function sanitizeLobby(v: unknown): LobbyState | null {
-  if (!v || typeof v !== 'object') return null;
-  const l = v as Record<string, unknown>;
-  const st = (l.settings ?? {}) as Record<string, unknown>;
-  if (typeof l.hostId !== 'string' || !Array.isArray(l.players)) return null;
-  return {
-    hostId: l.hostId.slice(0, 64),
-    weather: sanitizeWeatherSync(l.weather) ?? undefined,
-    settings: {
-      trackId: clampStr(st.trackId, 64, 'rwanda'),
-      laps: Math.round(finite(st.laps, 1, 99) ?? 5),
-      collisions: COLLISION_MODES.includes(st.collisions as CollisionMode) ? (st.collisions as CollisionMode) : 'on',
-      carClass: CAR_CLASSES.includes(st.carClass as CarClassRule) ? (st.carClass as CarClassRule) : 'any',
-    },
-    players: l.players.slice(0, 32).flatMap((p): LobbyPlayer[] => {
-      if (!p || typeof p !== 'object') return [];
-      const q = p as Record<string, unknown>;
-      if (typeof q.peerId !== 'string') return [];
-      return [
-        {
-          peerId: q.peerId.slice(0, 64),
-          name: clampStr(q.name, 16, 'Driver'),
-          code: asCode(q.code),
-          color: asColor(q.color),
-          vehicle: asPeerVehicle(q.vehicle),
-          trackId: typeof q.trackId === 'string' ? q.trackId.slice(0, 64) : undefined,
-          ready: q.ready === true,
-          isHost: q.isHost === true,
-        },
-      ];
-    }),
-    race: l.race ? sanitizeStart(l.race) : null,
-  };
-}
-
-/** Peer ids are generated as `peer_xxxxxxx`; anything else from the network is refused */
-const PEER_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
-
-/** `n` finite numbers, each clamped to ±`lim`; null when the shape or a value is wrong */
-function finiteVec(v: unknown, n: number, lim: number): number[] | null {
-  if (!Array.isArray(v) || v.length !== n) return null;
-  const out = new Array<number>(n);
-  for (let i = 0; i < n; i++) {
-    const x = v[i];
-    if (typeof x !== 'number' || !Number.isFinite(x)) return null;
-    out[i] = Math.max(-lim, Math.min(lim, x));
-  }
-  return out;
-}
-
-const clampNum = (v: unknown, lo: number, hi: number, fallback: number): number =>
-  typeof v === 'number' && Number.isFinite(v) ? Math.max(lo, Math.min(hi, v)) : fallback;
-
-/** World coordinates beyond this (m) are not on any circuit */
-const MAX_WORLD_COORD_M = 100_000;
-
-/**
- * Validates a vehicle state packet from the network: every number finite and in range, arrays the right length, the
- * quaternion normalised, strings cleaned. Null when the packet is unusable. A bad value would otherwise reach the
- * prediction, contact and rendering of every client (the host relays what it accepts).
- */
-export function sanitizePacket(v: unknown): NetworkVehiclePacket | null {
-  if (!v || typeof v !== 'object') return null;
-  const p = v as Record<string, unknown>;
-  if (typeof p.peerId !== 'string' || !PEER_ID_RE.test(p.peerId)) return null;
-  const timestampMs = finite(p.timestampMs, -1e15, 1e15);
-  const pos = finiteVec(p.pos, 3, Infinity);
-  const quat = finiteVec(p.quat, 4, 2);
-  const linVel = finiteVec(p.linVel, 3, 150);
-  const angVel = finiteVec(p.angVel, 3, 30);
-  const wheelRPMs = finiteVec(p.wheelRPMs, 4, 10_000);
-  if (timestampMs === null || !pos || !quat || !linVel || !angVel || !wheelRPMs) return null;
-  if (pos.some((c) => Math.abs(c) > MAX_WORLD_COORD_M)) return null;
-  const qLen = Math.hypot(quat[0], quat[1], quat[2], quat[3]);
-  if (qLen < 1e-6) return null;
-  const seq = typeof p.seq === 'number' && Number.isInteger(p.seq) && p.seq >= 0 ? p.seq : undefined;
-  return {
-    peerId: p.peerId,
-    driverCode: asCode(p.driverCode),
-    teamColorHex: asColor(p.teamColorHex),
-    vehicle: asPeerVehicle(p.vehicle),
-    trackId: typeof p.trackId === 'string' ? p.trackId.slice(0, 64) : undefined,
-    timestampMs,
-    pos: pos as [number, number, number],
-    quat: quat.map((c) => c / qLen) as [number, number, number, number],
-    linVel: linVel as [number, number, number],
-    angVel: angVel as [number, number, number],
-    steerAngle: clampNum(p.steerAngle, -1, 1, 0),
-    wheelRPMs: wheelRPMs as [number, number, number, number],
-    throttle: clampNum(p.throttle, 0, 1, 0),
-    brake: clampNum(p.brake, 0, 1, 0),
-    trackS: clampNum(p.trackS, -10_000, 10_000_000, 0),
-    speedKmh: clampNum(p.speedKmh, 0, 600, 0),
-    seq,
-    name: typeof p.name === 'string' ? clampStr(p.name, 16, 'Driver') : undefined,
-    race: sanitizeRace(p.race),
-  };
-}
-
-/** Validates a control message from the network; null when it is not one */
-function sanitizeControl(v: unknown): ControlMessage | null {
-  if (!v || typeof v !== 'object') return null;
-  const m = v as Record<string, unknown>;
-  switch (m.type) {
-    case 'hello':
-      return {
-        type: 'hello',
-        name: clampStr(m.name, 16, 'Driver'),
-        code: asCode(m.code),
-        color: asColor(m.color),
-        vehicle: asPeerVehicle(m.vehicle),
-        trackId: typeof m.trackId === 'string' ? m.trackId.slice(0, 64) : undefined,
-      };
-    case 'ping': {
-      const t0 = finite(m.t0, -1e15, 1e15);
-      return t0 === null ? null : { type: 'ping', t0 };
-    }
-    case 'pong': {
-      const t0 = finite(m.t0, -1e15, 1e15);
-      const now = finite(m.now, -1e15, 1e15);
-      return t0 === null || now === null ? null : { type: 'pong', t0, now };
-    }
-    case 'lobby': {
-      const lobby = sanitizeLobby(m.lobby);
-      return lobby ? { type: 'lobby', lobby } : null;
-    }
-    case 'ready':
-      return { type: 'ready', ready: m.ready === true };
-    case 'start': {
-      const start = sanitizeStart(m.start);
-      return start ? { type: 'start', start } : null;
-    }
-    case 'abort':
-      return typeof m.id === 'string' ? { type: 'abort', id: m.id.slice(0, 32) } : null;
-    default:
-      return null;
-  }
 }
 
 export interface P2PConnectionStatus {
