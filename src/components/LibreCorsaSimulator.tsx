@@ -9,7 +9,9 @@ import { alignGhostToTrack } from "@/lib/sim/ghost-align";
 import { carPhysics, carTakesPhysicsSwitch, subscribeF1ModPhysics } from "@/lib/cars/f1-mod-physics";
 import { type ChassisSetup, saveChassisSetup } from "@/lib/sim/car-setup";
 import { TrackEnvironment } from "@/lib/sim/track-environment";
-import { getMultiplayerManager, type LobbySettings, type LobbyState, type PeerNetStats, type RaceStartInfo } from "@/lib/sim/multiplayer-sync";
+import { getMultiplayerManager, type LobbySettings, type LobbyState, type PeerNetStats, type RaceStartInfo, type ScheduledRaceStatus } from "@/lib/sim/multiplayer-sync";
+import { getOnlineConfig } from "@/lib/net/online-config";
+import { DEFAULT_RACE_SLOT_S } from "@/lib/net/race-schedule";
 import { MultiplayerRace } from "@/lib/sim/race-session";
 import { GhostPlayer } from "@/lib/sim/lap-recorder";
 import { lapBoardClass, lapConditionsNow, type LapConditions, type LapRecording, type LapSummaryData, type LeaderboardEntry } from "@/lib/sim/lap-types";
@@ -74,8 +76,11 @@ const trackNameOf = (id: string) => TRACKS.find((t) => t.id === id)?.name ?? id;
 const noSubscribe = () => () => {};
 /** A race the host started before this circuit was loaded (or on another one): picked up once the scene has loaded */
 let pendingRaceStart: RaceStartInfo | null = null;
-/** The weekly challenge (its id) to go out on once its circuit has loaded: asked for from another circuit's menu */
-let pendingChallenge: string | null = null;
+/**
+ * The weekly challenge to go out on once its circuit has loaded (asked for from another circuit's menu): its id, and
+ * whether as a race against the AI (a scheduled race nobody else entered) rather than practice
+ */
+let pendingChallenge: { id: string; race: boolean } | null = null;
 
 export interface LibreCorsaSimulatorProps {
   /** Active circuit (already set with `setActiveTrack`; the gate remounts this component on a change) */
@@ -207,11 +212,18 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   /** This site has an online lap board switched on (asked once at start) */
   const [boardOn, setBoardOn] = useState(false);
   const boardOnRef = useRef(false);
+  /** Scheduled races run on this site, and how often (seconds) */
+  const [races, setRaces] = useState<{ on: boolean; slotS: number }>({ on: false, slotS: DEFAULT_RACE_SLOT_S });
+  /** This player's entry in the next scheduled race */
+  const [raceEntry, setRaceEntry] = useState<ScheduledRaceStatus>({ state: "idle", startsMs: null, text: "" });
   useEffect(() => {
     let live = true;
     void boardOnline().then((on) => {
       boardOnRef.current = on;
       if (live) setBoardOn(on);
+    });
+    void getOnlineConfig().then((config) => {
+      if (live) setRaces({ on: config.races, slotS: config.raceSlotS });
     });
     return () => {
       live = false;
@@ -538,6 +550,17 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     session?.prepareAiField();
   }, [session, phase, assetsReady]);
 
+  /** The week's challenge rules: its assists and realism, a dry track (its car and circuit are the caller's to set) */
+  const applyWeekRules = useCallback(() => {
+    const week = challengeAt(Date.now());
+    setSettings((prev) => ({
+      ...prev,
+      assistPreset: week.assists,
+      realism: week.realism,
+      conditions: { ...prev.conditions, weather: "clear", weatherNodes: undefined },
+    }));
+  }, []);
+
   /** A multiplayer race was started (by us as host, or by the host): line up in our grid slot behind the lights */
   const startMpRace = useCallback(
     (start: RaceStartInfo) => {
@@ -546,17 +569,19 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       const profile = settingsRef.current.profile;
       const race = new MultiplayerRace(start, track.totalLengthM, mp.localPeerId, profile, roster);
       startSession({ kind: "mp", race });
-      // The class may rule out the current car: take the first allowed one (after the session reset, so the swap
-      // finds no replay or AI field to carry over)
-      const allowed = vehicleModelsFor(start.carClass);
+      // The class may rule out the current car, or the race names one car for everyone (a scheduled race): take it,
+      // or the first allowed one (after the session reset, so the swap finds no replay or AI field to carry over)
+      const allowed = start.vehicle ? [start.vehicle] : vehicleModelsFor(start.carClass);
       if (!allowed.includes(vehicleModelRef.current)) changeCar(carForVehicle(allowed[0]).id);
+      // A scheduled race is driven to the week's rules: its assists and realism, a dry track
+      if (mp.inScheduledRace) applyWeekRules();
       const physics = session?.car;
       if (physics) {
         physics.resetToStartGrid(false, race.gridSlot);
         race.lapClock.reset(physics.sMeters);
       }
     },
-    [session, track, changeCar, startSession]
+    [session, track, changeCar, startSession, applyWeekRules]
   );
   const startMpRaceRef = useRef(startMpRace);
   startMpRaceRef.current = startMpRace;
@@ -901,22 +926,38 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     const mp = getMultiplayerManager();
     setLocalPeerId(mp.localPeerId);
     setLobby(mp.lobby);
-    mp.onLobbyChange = (l) => {
-      setLobby(l ? { ...l, players: [...l.players] } : null);
-      // The host's weather and clock: a guest's session eases to them (a different preset restarts it)
-      if (l?.weather && l.hostId !== mp.localPeerId) trackEnvRef.current?.applyWeatherSync(l.weather);
-      // In the menus a guest follows the host by itself: its circuit, then a car its class allows. While driving it
-      // is asked instead (the lobby's "Switch circuit" and car choices), so a lap is never cut short
-      if (!l || l.hostId === mp.localPeerId || phaseRef.current !== "title") return;
+    /**
+     * In the menus a guest follows the host by itself: its circuit, then a car its class allows (or the one car a
+     * scheduled race names). While driving it is asked instead (the lobby's "Switch circuit" and car choices), so a lap
+     * is never cut short.
+     */
+    const follow = (l: LobbyState | null) => {
+      if (!l || l.hostId === mp.localPeerId || (phaseRef.current !== "title" && phaseRef.current !== "loading")) return;
       if (l.settings.trackId !== trackId) {
         if (onSelectTrack && TRACKS.some((t) => t.id === l.settings.trackId)) onSelectTrack(l.settings.trackId);
         return;
       }
-      const allowed = vehicleModelsFor(l.settings.carClass);
+      const allowed = l.settings.vehicle ? [l.settings.vehicle] : vehicleModelsFor(l.settings.carClass);
       if (allowed.length > 0 && !allowed.includes(vehicleModelRef.current)) changeCar(carForVehicle(allowed[0]).id);
     };
+    mp.onLobbyChange = (l) => {
+      setLobby(l ? { ...l, players: [...l.players] } : null);
+      // The host's weather and clock: a guest's session eases to them (a different preset restarts it)
+      if (l?.weather && l.hostId !== mp.localPeerId) trackEnvRef.current?.applyWeatherSync(l.weather);
+      follow(l);
+    };
+    // The lobby already here counts too: the scene that just loaded for its circuit still has its car to take
+    follow(mp.lobby);
+    setRaceEntry(mp.raceStatus);
+    mp.onRaceStatusChange = setRaceEntry;
     mp.weatherProvider = () => trackEnvRef.current?.weather.snapshot() ?? null;
     mp.onRaceStart = (start) => {
+      // A scheduled race nobody else entered: out of it, and the same race against the AI instead
+      if (mp.inScheduledRace && start.grid.length <= 1) {
+        mp.leaveScheduledRace();
+        soloRaceRef.current();
+        return;
+      }
       // A race on another circuit: switch to it, and pick the race up once that scene has loaded
       if (start.trackId && start.trackId !== trackId && onSelectTrack) {
         pendingRaceStart = start;
@@ -933,6 +974,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     const timer = window.setInterval(() => setPeerStats(mp.getPeerStats()), 1000);
     return () => {
       mp.onLobbyChange = undefined;
+      mp.onRaceStatusChange = undefined;
       mp.weatherProvider = undefined;
       mp.onRaceStart = undefined;
       mp.onRaceAbort = undefined;
@@ -949,44 +991,64 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     () => fetchRemoteBoard(challenge.trackId, challenge.vehicle, { event: challenge.id, name: settingsRef.current.profile.name, limit: 20 }).catch(() => null),
     [challenge]
   );
-  /** Out on track to the week's rules: its car, assists and realism, a dry track */
-  const driveChallenge = useCallback(() => {
-    const week = challengeAt(Date.now());
-    setSettings((prev) => ({
-      ...prev,
-      assistPreset: week.assists,
-      realism: week.realism,
-      conditions: { ...prev.conditions, weather: "clear", weatherNodes: undefined },
-    }));
-    startSession({ kind: "practice" });
-    // After the session reset, so the swap finds no replay or AI field to carry over (as a multiplayer race's)
-    if (vehicleModelRef.current !== week.vehicle) changeCar(carForVehicle(week.vehicle).id);
-    session?.car.resetToStartGrid(false);
-    setLaunchHint(true);
-  }, [session, startSession, changeCar]);
-  /** The menu's "Drive the challenge": on another circuit the scene loads the week's first, then goes out */
-  const handleDriveChallenge = useCallback(() => {
-    const week = challengeAt(Date.now());
-    if (week.trackId !== trackId) {
-      if (!onSelectTrack) return;
-      pendingChallenge = week.id;
-      void onSelectTrack(week.trackId);
-      return;
-    }
-    driveChallenge();
-  }, [trackId, onSelectTrack, driveChallenge]);
+  /**
+   * Out on track to the week's rules: its car, assists and realism, a dry track. `race`: against the AI over the
+   * week's race distance (when its field is ready for this car; else practice).
+   */
+  const driveChallenge = useCallback(
+    (race: boolean) => {
+      const week = challengeAt(Date.now());
+      applyWeekRules();
+      startSession({ kind: "practice" });
+      // After the session reset, so the swap finds no replay or AI field to carry over (as a multiplayer race's)
+      if (vehicleModelRef.current !== week.vehicle) changeCar(carForVehicle(week.vehicle).id);
+      if (race && session) {
+        // The field for the car now on track, over the week's race distance
+        const field = session.takeAiField();
+        session.setRace({ kind: "ai", field });
+        startAiRace(field, { ...settingsRef.current.race, laps: week.raceLaps, start: "standing" });
+      } else {
+        session?.car.resetToStartGrid(false);
+      }
+      setLaunchHint(true);
+    },
+    [session, startSession, changeCar, applyWeekRules]
+  );
+  /** The week's challenge from any circuit: on another one the scene loads the week's first, then goes out */
+  const goChallenge = useCallback(
+    (race: boolean) => {
+      const week = challengeAt(Date.now());
+      if (week.trackId !== trackId) {
+        if (!onSelectTrack) return;
+        pendingChallenge = { id: week.id, race };
+        void onSelectTrack(week.trackId);
+        return;
+      }
+      driveChallenge(race);
+    },
+    [trackId, onSelectTrack, driveChallenge]
+  );
+  const handleDriveChallenge = useCallback(() => goChallenge(false), [goChallenge]);
+  /** The scheduled race nobody else entered, as a race against the AI */
+  const soloRaceRef = useRef(() => {});
+  soloRaceRef.current = () => goChallenge(true);
+  const handleJoinRace = useCallback(() => {
+    session?.unlockAudio();
+    getMultiplayerManager().joinScheduledRace();
+  }, [session]);
+  const handleLeaveRace = useCallback(() => getMultiplayerManager().leaveScheduledRace(), []);
   // The challenge asked for from another circuit, now that this one has loaded
   useEffect(() => {
     if (!assetsReady || !pendingChallenge) return;
-    const id = pendingChallenge;
+    const asked = pendingChallenge;
     pendingChallenge = null;
     const week = challengeAt(Date.now());
-    if (week.id !== id || week.trackId !== trackId) return;
+    if (week.id !== asked.id || week.trackId !== trackId) return;
     if (phaseRef.current === "loading") {
       session?.unlockAudio();
       setLoadingVisible(false);
     }
-    driveChallenge();
+    driveChallenge(asked.race);
   }, [assetsReady, trackId, session, driveChallenge]);
 
   // The race the host started before this circuit loaded
@@ -1119,7 +1181,10 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
           : `Hold ${keyLabel(settings.keys.throttle[0])} to launch · Esc for menu`;
 
   // The one derivation of hosting: the lobby names this client as its host
-  const isMpHost = lobby !== null && lobby.hostId === localPeerId;
+  /** Entered in a scheduled race: its lobby is the race server's, shown on the Weekly challenge panel, not as a room */
+  const inScheduledRace = raceEntry.state === "joining" || raceEntry.state === "joined";
+  const roomLobby = inScheduledRace ? null : lobby;
+  const isMpHost = roomLobby !== null && roomLobby.hostId === localPeerId;
   isMpHostRef.current = isMpHost;
 
   const menuProps = {
@@ -1175,7 +1240,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     onAcceptManualAnswer: handleAcceptManualAnswer,
     onTogglePause: togglePause,
     keyNames,
-    lobby,
+    lobby: roomLobby,
     localPeerId,
     isHost: isMpHost,
     peerStats,
@@ -1328,7 +1393,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
           {...menuProps}
           onCycleCamera={cycleCamera}
           initialRoomCode={inviteRoom ?? ""}
-          initialPanel={titleInitialPanel ?? (inviteRoom ? "multiplayer" : null)}
+          // Back where the player was when a race entry or a room moved the game to another circuit (the scene reloads)
+          initialPanel={titleInitialPanel ?? (inScheduledRace ? "challenge" : inviteRoom || (roomLobby && !isMpHost) ? "multiplayer" : null)}
           firstRun={!onboarded}
           onDrive={() => handleTitleStart(false)}
           onRaceAi={() => handleTitleStart(true)}
@@ -1346,6 +1412,17 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
                   boardVersion,
                   driverName: settings.profile.name,
                   onDrive: handleDriveChallenge,
+                  races:
+                    races.on && challengeAvailable
+                      ? {
+                          slotS: races.slotS,
+                          laps: challenge.raceLaps,
+                          entry: raceEntry,
+                          entrants: inScheduledRace ? (lobby?.players ?? []).map((p) => ({ id: p.peerId, name: p.name, code: p.code, me: p.peerId === localPeerId })) : [],
+                          onJoin: handleJoinRace,
+                          onLeave: handleLeaveRace,
+                        }
+                      : undefined,
                 }
               : undefined
           }
@@ -1354,7 +1431,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
             realism: settings.realism,
             onChangeConditions: handleChangeConditions,
             onChangeRealism: handleChangeRealism,
-            hostControlled: lobby !== null && !isMpHost,
+            hostControlled: roomLobby !== null && !isMpHost,
             readout: weatherHud,
           }}
         />

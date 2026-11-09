@@ -648,6 +648,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
             icon: Trophy,
             panel: "challenge" as const,
             run: () => openPanel("challenge"),
+            badge: props.challengePanel.races?.entry.state === "joined" ? "In the next race" : undefined,
           },
         ]
       : []),
