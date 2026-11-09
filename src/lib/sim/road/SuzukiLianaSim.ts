@@ -35,7 +35,9 @@ export const SUZUKI_LIANA_PROFILE_CAR: SpeedProfileCarModel = {
   rearDownforceShare: C.aero.front_lift / (C.aero.front_lift + C.aero.rear_lift),
   rearWeightFraction: C.chassis.frontWeightFraction,
   muLat: 0.73,
-  muLong: 0.78,
+  // 0.77: the ABS stop from 100 km/h takes 49.6 m on the integrated tyre / drivetrain model (49.0 m before), and the
+  // plan must not brake later than the car can stop
+  muLong: 0.77,
   maxBrakeForceN: (2 * C.brakes.maxTorqueNm) / RADIUS,
   // Peak crank power (the curve is kW) through the driveline: ≈ 76 kW at the wheels
   maxDrivePowerW: Math.max(...C.engine.powerCurve.map(([, kw]) => kw)) * 1000 * C.gearbox.efficiency,
