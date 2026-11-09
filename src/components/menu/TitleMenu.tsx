@@ -163,6 +163,13 @@ const Credits: React.FC = () => (
           </a>{" "}
           · used with permission
         </CreditRow>
+        <CreditRow title="MTRacing 496R">
+          Model, sound and physics from &ldquo;MTRacing 496R&rdquo; by{" "}
+          <a href="https://www.overtake.gg/members/munyuturbo.1202939/" target="_blank" rel="noreferrer" className={linkClass}>
+            munyuturbo
+          </a>{" "}
+          · used with permission
+        </CreditRow>
         <CreditRow title="Suzuki Liana">
           Physics from &ldquo;Physics reworked for Top Gear Liana 1.6 GLX&rdquo; (
           <a
