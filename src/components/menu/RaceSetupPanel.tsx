@@ -59,7 +59,7 @@ const CardHeader: React.FC<{ label: string; color?: string; right?: React.ReactN
 
 const Row: React.FC<{ label: string; hint?: React.ReactNode; children: React.ReactNode }> = ({ label, hint, children }) => (
   <div className="flex flex-col gap-1.5">
-    <div className="flex items-baseline justify-between gap-3">
+    <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
       <span className="text-[13px] font-semibold text-[#C5CBD8]">{label}</span>
       {hint ? <span className="text-right text-[12px] text-[#8E96AA]">{hint}</span> : null}
     </div>
@@ -130,7 +130,7 @@ const LinkRow: React.FC<{ icon: LucideIcon; label: string; value: React.ReactNod
     <Icon size={18} aria-hidden className="shrink-0 text-[#8E96AA]" />
     <span className="flex min-w-0 flex-1 flex-col">
       <span className="lc-lbl">{label}</span>
-      <span className="truncate text-[14px] font-semibold text-[#F5F7FA]">{value}</span>
+      <span className="min-w-0 text-[14px] font-semibold text-[#F5F7FA]">{value}</span>
     </span>
     {onClick ? <ChevronRight size={16} aria-hidden className="shrink-0 text-[#8E96AA]" /> : null}
   </button>
@@ -181,8 +181,8 @@ export const RaceSetupPanel: React.FC<RaceSetupPanelProps> = ({
               icon={Route}
               label="Circuit"
               value={
-                <span className="flex min-w-0 items-center gap-2">
-                  <span className="truncate">
+                <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                  <span className="min-w-0">
                     {track.name}
                     {track.layout ? ` · ${track.layout}` : ""}
                   </span>
@@ -196,11 +196,11 @@ export const RaceSetupPanel: React.FC<RaceSetupPanelProps> = ({
               icon={Wrench}
               label="Car · the field drives the same car"
               value={
-                <span className="flex min-w-0 items-center gap-2">
+                <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
                   <span className="shrink-0 rounded-full px-1.5 py-0.5 font-f1-mono text-[9px] font-extrabold text-[#08090D]" style={{ background: car.color }}>
                     {car.badge}
                   </span>
-                  <span className="truncate">{car.title}</span>
+                  <span className="min-w-0">{car.title}</span>
                   <CarQualityBadge car={car} size="xs" />
                 </span>
               }
@@ -310,12 +310,12 @@ export const RaceSetupPanel: React.FC<RaceSetupPanelProps> = ({
       </div>
 
       {/* Pinned to the bottom of the screen while the setup scrolls under it: the start is never below the fold */}
-      <div className="sticky bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-10 flex flex-wrap items-center justify-between gap-x-4 gap-y-2.5 rounded-[22px] border border-white/[0.09] bg-[#08090D]/90 py-2.5 pr-2.5 pl-4 shadow-[0_-10px_40px_rgba(0,0,0,0.45)] backdrop-blur-md">
+      <div className="sticky bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-10 flex flex-wrap items-center justify-between gap-x-4 gap-y-2.5 phone:flex-nowrap phone:gap-x-3 rounded-[22px] border border-white/[0.09] bg-[#08090D]/90 py-2.5 pr-2.5 pl-4 shadow-[0_-10px_40px_rgba(0,0,0,0.45)] backdrop-blur-md">
         <span className="flex min-w-0 flex-col">
           <span className="truncate text-[15px] font-bold text-[#F5F7FA]">
             {setup.laps} {setup.laps === 1 ? "lap" : "laps"} · {distanceKm.toFixed(1)} km · {setup.opponents} AI cars
           </span>
-          <span className="truncate text-[13px] text-[#C5CBD8]">
+          <span className="truncate text-[13px] text-[#C5CBD8] phone:hidden">
             {aiSkillLabel(aiSkill)} · {RACE_START_LABELS[setup.start].toLowerCase()} start · {track.name}
           </span>
         </span>

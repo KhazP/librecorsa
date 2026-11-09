@@ -33,7 +33,7 @@ const CardOutline: React.FC<{ track: TrackInfo }> = ({ track }) => {
   const near = useNearView(ref);
   const map = useCircuitOutline(track, near);
   return (
-    <div ref={ref} className="flex h-[78px] items-center justify-center">
+    <div ref={ref} className="flex h-[78px] items-center justify-center phone:h-[60px]">
       {map ? (
         <TrackOutline map={map} thin className="h-full max-w-full" />
       ) : (
@@ -194,12 +194,18 @@ export const CircuitBrowser: React.FC<{
         const t = shownLayout(v);
         const active = v.layouts.some((l) => l.id === trackId);
         return (
-          <span className="flex min-w-0 flex-col gap-1.5 px-3.5 pt-3 pb-3.5">
-            <span className="flex min-h-7 flex-wrap items-center gap-1.5 pr-6">
+          <span className="flex min-w-0 flex-col gap-1.5 px-3.5 pt-3 pb-3.5 phone:flex-row phone:items-center phone:gap-3 phone:px-3 phone:py-2.5">
+            <span className="flex min-h-7 flex-wrap items-center gap-1.5 pr-6 phone:hidden">
               <TrackQualityBadge track={t} size="xs" />
             </span>
-            <CardOutline track={t} />
-            <span className="lc-disp text-[16px] leading-[1.05]">{v.name}</span>
+            <span className="phone:w-[76px] phone:shrink-0">
+              <CardOutline track={t} />
+            </span>
+            <span className="flex min-w-0 flex-col gap-1.5 phone:flex-1 phone:gap-1 phone:pr-7">
+            <span className="hidden phone:flex">
+              <TrackQualityBadge track={t} size="xs" />
+            </span>
+            <span className="lc-disp text-[16px] leading-[1.05] [overflow-wrap:anywhere] hyphens-auto">{v.name}</span>
             <span className="truncate text-[12px] text-[#8E96AA]">{placeOf(v.city, v.country)}</span>
             <span className="mt-0.5 flex flex-wrap items-center gap-1.5">
               <span className="lc-data text-[11px] whitespace-nowrap text-[#C5CBD8]">
@@ -216,6 +222,7 @@ export const CircuitBrowser: React.FC<{
                   Active
                 </Chip>
               ) : null}
+            </span>
             </span>
           </span>
         );

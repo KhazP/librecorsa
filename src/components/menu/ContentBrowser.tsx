@@ -402,13 +402,16 @@ export function ContentBrowser<T>(props: ContentBrowserProps<T>) {
           <span className="hidden sm:inline-flex">{pad ? <PadGlyph button="y" family={family} /> : <KeyCap>/</KeyCap>}</span>
         </label>
         {sorts.length > 1 ? (
-          <Segmented
-            label="Sort"
-            className="w-full shrink-0 sm:w-auto [&>button]:px-3.5 [&>button]:whitespace-nowrap"
-            options={sorts.map((s) => ({ id: s.id, label: s.label }))}
-            value={sort.id}
-            onChange={setSortId}
-          />
+          // On a phone the sort scrolls sideways in its own row rather than pushing the page wider than the screen
+          <div className="-mx-1 w-[calc(100%+0.5rem)] min-w-0 shrink-0 overflow-x-auto px-1 [scrollbar-width:none] sm:mx-0 sm:w-auto sm:px-0">
+            <Segmented
+              label="Sort"
+              className="w-max min-w-full [&>button]:px-3.5 [&>button]:whitespace-nowrap"
+              options={sorts.map((s) => ({ id: s.id, label: s.label }))}
+              value={sort.id}
+              onChange={setSortId}
+            />
+          </div>
         ) : null}
       </div>
 
@@ -477,7 +480,8 @@ export function ContentBrowser<T>(props: ContentBrowserProps<T>) {
                         <span aria-hidden className="h-px flex-1 bg-[#262B3D]" />
                       </div>
                     ) : null}
-                    <div className="grid grid-cols-[repeat(auto-fill,minmax(min(168px,calc(50%-5px)),1fr))] gap-2.5">
+                    {/* A phone lists one card per row (as a row: picture left, words right) */}
+                    <div className="grid grid-cols-[repeat(auto-fill,minmax(min(168px,calc(50%-5px)),1fr))] gap-2.5 phone:grid-cols-1 phone:gap-2">
                       {run.items.map((it) => {
                         const id = idOf(it);
                         const isSel = id === selectedKey;

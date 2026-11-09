@@ -691,9 +691,12 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
   }, [chosenPanel, panel]);
   const byId = (ids: readonly string[]) => ids.flatMap((id) => items.filter((i) => i.id === id));
 
-  // Ⓑ: out of the panel to its rail entry, then close the panel
+  // Ⓑ: out of the panel to its rail entry, then close the panel (straight out where the rail is hidden: phones)
   const back = () => {
-    if (panel && focusInZone(rootRef.current, "panel")) return focusRail(panel);
+    if (panel && focusInZone(rootRef.current, "panel")) {
+      const entry = rootRef.current?.querySelector<HTMLElement>(`[data-rail-id="${panel}"]`);
+      if (entry && entry.offsetParent !== null) return focusRail(panel);
+    }
     if (panel) closePanel();
   };
   // LB / RB: the neighbouring panel, with the focus on its rail entry
@@ -804,7 +807,8 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
         {panel ? (
           /* Panel view: slim rail + the panel's sheet */
           <div className="grid flex-1 grid-cols-1 items-start gap-5 lg:grid-cols-[250px_minmax(0,1000px)] lg:gap-7">
-            <nav className="flex flex-col gap-0.5" data-nav-zone="rail" aria-label="Main menu">
+            {/* Below lg the rail would stack 13 rows above the panel: the panel takes the screen, Close goes back */}
+            <nav className="flex flex-col gap-0.5 max-lg:hidden" data-nav-zone="rail" aria-label="Main menu">
               {byId(["drive", "race", "multiplayer"]).map((item) => (
                 <CompactEntry key={item.id} item={item} open={item.panel === panel} />
               ))}

@@ -230,7 +230,7 @@ export function Segmented<T extends string>({
             disabled={o.disabled}
             onClick={() => onChange(o.id)}
             onPointerEnter={focusOnHover}
-            className={`inline-flex min-h-[40px] flex-1 cursor-pointer items-center justify-center gap-2 rounded-full px-3 text-sm font-bold transition-[background-color,box-shadow,color] duration-200 disabled:cursor-not-allowed disabled:opacity-40 ${CURSOR_PILL} ${
+            className={`inline-flex min-h-[40px] min-w-0 flex-1 cursor-pointer items-center justify-center gap-2 rounded-full px-3 text-sm leading-tight font-bold phone:px-1.5 phone:text-[13px] transition-[background-color,box-shadow,color] duration-200 disabled:cursor-not-allowed disabled:opacity-40 ${CURSOR_PILL} ${
               active ? CHOSEN_PILL : "text-[#8E96AA] hover:text-[#F5F7FA]"
             }`}
           >

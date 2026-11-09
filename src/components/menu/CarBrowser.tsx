@@ -128,7 +128,7 @@ export const CarBrowser: React.FC<{
             <span className="lc-data ml-auto text-[11px] tracking-[0.12em] text-[#C5CBD8]">{c.badge}</span>
           </span>
           <span className="flex min-w-0 flex-col gap-1 px-3 pt-0.5 pb-3">
-            <span className="lc-disp text-[17px] leading-[1.05]">{c.title}</span>
+            <span className="lc-disp text-[17px] leading-[1.05] [overflow-wrap:anywhere] hyphens-auto">{c.title}</span>
             <span className="line-clamp-2 text-[12px] leading-snug text-[#8E96AA]">{c.sub}</span>
             <span className="mt-0.5 flex min-w-0 flex-wrap items-center gap-1.5">
               <CarQualityBadge car={c} size="xs" />
