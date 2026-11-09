@@ -150,7 +150,7 @@ const creditsMd = readFileSync("CREDITS.md", "utf8");
 check("CREDITS.md credits Dave Love SketchFab under CC BY 4.0", creditsMd.includes("Dave Love SketchFab") && creditsMd.includes("http://creativecommons.org/licenses/by/4.0/"));
 
 const f1Cars = CARS.filter((c) => c.classId === "f1");
-for (const native of ["vf26", "f12026-car", "amg-gt3", "amg-gt3-evo", "bmw-m4-gt3"] as const) {
+for (const native of ["vf26", "f12026-car", "amg-gt3", "amg-gt3-evo", "bmw-m4-gt3", "mtr-496r"] as const) {
   check(
     `${native}: physics switch leaves it on its own model`,
     !carTakesPhysicsSwitch(native) && carPhysics(native, "vf26") === carById(native).physics && carPhysics(native, "f12026-car") === carById(native).physics

@@ -1,0 +1,272 @@
+/**
+ * Headless checks for the MTRacing 496R (`src/lib/sim/proto`): the f12026-car vehicle model on munyuturbo's Assetto
+ * Corsa data, a rear-driven prototype with ground-effect aero.
+ *
+ *   npx tsx scripts/verify-mtr-496r.ts
+ *
+ * At rest, the aero map against speed, straight line, braking and cornering on flat ground, the driver aids through the
+ * simulator adapter, the ported body (when this copy has it), then autopilot laps of Rwanda against the GT3's. The
+ * ranges are what the mod's data gives in Assetto Corsa terms (its wing tables, its gearing, the GT3's grip below it),
+ * not tuned to these numbers.
+ */
+import * as THREE from 'three';
+import { getActiveTrackData } from '../src/lib/track-data';
+import { FlatGroundQuery } from '../src/lib/sim/f12026-car/TrackColliderQuery';
+import { VehiclePhysics, type VehicleInputs } from '../src/lib/sim/f12026-car/VehiclePhysics';
+import { MTR_496R_CONFIG } from '../src/lib/sim/proto/Mtr496rConfig';
+import { MTR_496R_PROFILE_CAR, createMtr496rSim } from '../src/lib/sim/proto/Mtr496rSim';
+import { createAmgGt3Sim } from '../src/lib/sim/gt3/AmgGt3Sim';
+import type { F12026CarSim } from '../src/lib/sim/f12026-car/F12026CarSim';
+import { carById } from '../src/lib/cars/car-registry';
+import { loadGlbGeometry } from './lib/glb-geometry';
+import { createFlatTestTrack } from './lib/flat-track';
+import { hasFile, noteSkip } from './lib/hosted-files';
+import { readFileSync } from 'node:fs';
+
+const failures: string[] = [];
+const check = (name: string, ok: boolean, detail: string) => {
+  console.log(`${ok ? 'PASS' : 'FAIL'}  ${name.padEnd(54)} ${detail}`);
+  if (!ok) failures.push(name);
+};
+const fmt = (v: number, d = 2) => v.toFixed(d);
+const DT = 1 / 120;
+const flat = new FlatGroundQuery(0);
+const C = MTR_496R_CONFIG;
+
+const makeCar = () => new VehiclePhysics({ ground: flat, config: C, airDensity: 1.225 });
+
+function run(car: VehiclePhysics, seconds: number, drive: (car: VehiclePhysics, t: number) => VehicleInputs, stop?: (car: VehiclePhysics, t: number) => boolean): number {
+  let t = 0;
+  while (t < seconds) {
+    car.step(DT, drive(car, t));
+    t += DT;
+    if (stop?.(car, t)) break;
+  }
+  return t;
+}
+
+console.log('\n== 496R config');
+{
+  check('Rear-wheel drive, six gears, 10 000 rpm limiter', !('drivenAxle' in C) && C.gearbox.ratios.length === 6 && C.gearbox.gears.redline_rpm === 10_000, '');
+  check('No hybrid or brake-by-wire; splitter, diffuser and rear wing', C.ers.ERS_MAX_DEPLOY === 0 && C.brakes.brakeByWire === false && C.aero.wings.length === 3, '');
+  check('Heave springs on both axles', C.suspensions.front.heave.rate > 0 && C.suspensions.rear.heave.rate > 0, '');
+  const car = makeCar();
+  check('The engine drives the rear wheels', car.drivenWheels[0] === 2 && car.drivenWheels[1] === 3, `wheels ${car.drivenWheels.join(', ')}`);
+}
+
+console.log('\n== At rest');
+{
+  const car = makeCar();
+  car.reset(0, 0, 0);
+  run(car, 3, () => ({ throttle: 0, brake: 1, steer: 0 }));
+  const t = car.telemetry;
+  const fz = car.wheels.map((w) => w.fz);
+  const front = (fz[0] + fz[1]) / fz.reduce((a, b) => a + b, 0);
+  check('Front axle carries ≈ 48.5 % of the weight', Math.abs(front - 0.485) < 0.01, `${fmt(front * 100, 1)} %`);
+  // The pickups 0.181 / 0.170 m under the CG, 0.28 m up: 99 / 110 mm
+  check('Rides at the mod\'s 99 / 110 mm', Math.abs(t.aeroHeightFront - 0.099) < 0.004 && Math.abs(t.aeroHeightRear - 0.11) < 0.004,
+    `${fmt(t.aeroHeightFront * 1000, 1)} / ${fmt(t.aeroHeightRear * 1000, 1)} mm`);
+}
+
+console.log('\n== Aero against speed (flat, held speed)');
+{
+  const at = (kmh: number) => {
+    const car = makeCar();
+    car.reset(0, 0, 0, kmh / 3.6);
+    let pedal = 0.5;
+    run(car, 6, (c) => {
+      pedal = THREE.MathUtils.clamp(pedal + (c.telemetry.speedKmh < kmh ? 0.01 : -0.01), 0, 1);
+      return { throttle: pedal, brake: 0, steer: 0 };
+    });
+    const t = car.telemetry;
+    const q = 0.5 * 1.225 * (kmh / 3.6) ** 2;
+    return { clA: t.downforceN / q, cdA: t.dragN / q, bal: t.AERO_BALANCE, front: t.aeroHeightFront, rear: t.aeroHeightRear };
+  };
+  const slow = at(100);
+  const fast = at(300);
+  // Splitter 0.84 + rear wing 1.43 + a diffuser that comes in as the car settles (its table peaks at 35–60 mm)
+  check('CL·A 2.5–2.9 m² at 100 km/h, more as it settles', slow.clA > 2.5 && slow.clA < 2.9 && fast.clA > slow.clA + 0.3,
+    `${fmt(slow.clA)} m² at 100, ${fmt(fast.clA)} m² at 300 km/h`);
+  check('CD·A 1.1–1.3 m²', slow.cdA > 1.1 && slow.cdA < 1.3 && fast.cdA > 1.1 && fast.cdA < 1.3, `${fmt(slow.cdA)} / ${fmt(fast.cdA)} m²`);
+  // The front wing ahead of the front axle, the rear wing behind the rear: 40–42 % on the front
+  check('Aero balance 38–44 % front', slow.bal > 38 && slow.bal < 44 && fast.bal > 38 && fast.bal < 44, `${fmt(slow.bal, 1)} / ${fmt(fast.bal, 1)} %`);
+  check('Floor clear of the ground at 300 km/h', Math.min(fast.front, fast.rear) > 0.04, `${fmt(fast.front * 1000, 0)} / ${fmt(fast.rear * 1000, 0)} mm`);
+}
+
+const pad = createFlatTestTrack(30_000, 3000);
+
+console.log('\n== Straight line through the adapter (its own TC)');
+{
+  const sim = createMtr496rSim(pad);
+  sim.assistPreset = 'semi_pro';
+  sim.teleportToDistance(1000, 0);
+  let t100 = NaN;
+  let t200 = NaN;
+  let vmax = 0;
+  for (let t = 0; t < 45; t += DT) {
+    sim.step(DT, { throttle: 1 });
+    const v = sim.telemetry.speedKmh;
+    vmax = Math.max(vmax, v);
+    if (Number.isNaN(t100) && v >= 100) t100 = t;
+    if (Number.isNaN(t200) && v >= 200) t200 = t;
+  }
+  // The mod quotes 3.7 s; its TC only works above 50 km/h, so a flat-out start spins the rears to there
+  check('0-100 km/h 3.0–4.2 s on a flat-out start', t100 > 3.0 && t100 < 4.2, `${fmt(t100)} s, 0-200 ${fmt(t200)} s`);
+  // 410 kW at the wheels against CD·A ≈ 1.18 m²; sixth runs to 338 km/h at the limiter
+  check('Top speed 290–315 km/h', vmax > 290 && vmax < 315, `${fmt(vmax, 1)} km/h`);
+}
+
+console.log('\n== Braking through the adapter');
+{
+  const stop = (preset: 'pro' | 'semi_pro') => {
+    const sim = createMtr496rSim(pad);
+    sim.assistPreset = preset;
+    sim.teleportToDistance(1000, 200 / 3.6);
+    const s0 = sim.sMeters;
+    let lock = 0;
+    for (let t = 0; t < 10 && sim.telemetry.speedKmh > 1; t += DT) {
+      sim.step(DT, { brake: 1 });
+      if (sim.telemetry.speedKmh > 30) lock = Math.max(lock, -Math.min(...sim.telemetry.wheelSlipRatios));
+    }
+    return { dist: sim.sMeters - s0, lock };
+  };
+  const abs = stop('semi_pro');
+  const raw = stop('pro');
+  // 5900 Nm brakes and no ABS of its own: a stamp locks the wheels; the semi-pro ABS holds them
+  check('A stamp on 5900 Nm brakes locks the wheels without ABS', raw.lock > 0.5, `max lock ${fmt(raw.lock, 2)}, ${fmt(raw.dist, 0)} m`);
+  check('Semi-pro ABS stops 200→0 km/h in under 100 m', abs.lock < 0.3 && abs.dist < 100 && abs.dist < raw.dist, `${fmt(abs.dist, 1)} m, max lock ${fmt(abs.lock, 2)}`);
+
+  const pm = MTR_496R_PROFILE_CAR;
+  let planned = 0;
+  for (let v = 200 / 3.6; v > 1; v -= 0.05) {
+    const grip = pm.muLong * (9.81 + (pm.downforceCoef * v * v) / pm.massKg);
+    const decel = Math.min(grip, pm.maxBrakeForceN / pm.massKg) + (pm.dragCoef * v * v) / pm.massKg;
+    planned += (v * 0.05) / decel;
+  }
+  // The stop above is on the tyres' starting (blanket) temperature, a little short of their window
+  check('Braking line never plans shorter than the car stops', planned >= abs.dist * 0.9, `${fmt(planned, 1)} m planned vs ${fmt(abs.dist, 1)} m stopped`);
+}
+
+console.log('\n== Cornering (flat, steer ramp at constant speed)');
+// Slicks out of 60 °C blankets: the GT3 holds 1.6–1.9 g here; the 496R is 300 kg lighter with more downforce
+for (const [kmh, lo, hi] of [
+  [100, 1.6, 2.1],
+  [200, 1.9, 2.6],
+] as const) {
+  const car = makeCar();
+  car.reset(0, 0, 0, kmh / 3.6);
+  let maxLat = 0;
+  let pedal = 0.3;
+  let frontSa = 0;
+  let rearSa = 0;
+  run(car, 12, (c, t) => {
+    pedal = THREE.MathUtils.clamp(pedal + (c.telemetry.speedKmh < kmh ? 0.02 : -0.02), 0, 1);
+    return { throttle: pedal, brake: 0, steer: -Math.min(1, t / 12) * 0.5 };
+  }, (c) => {
+    const lat = Math.abs(c.telemetry.latG);
+    if (lat > maxLat) {
+      maxLat = lat;
+      frontSa = 0.5 * (Math.abs(c.wheels[0].slipAngleRad) + Math.abs(c.wheels[1].slipAngleRad));
+      rearSa = 0.5 * (Math.abs(c.wheels[2].slipAngleRad) + Math.abs(c.wheels[3].slipAngleRad));
+    }
+    const beta = Math.atan2(c.velocity.dot(new THREE.Vector3(1, 0, 0).applyQuaternion(c.quaternion)), c.velocity.dot(new THREE.Vector3(0, 0, 1).applyQuaternion(c.quaternion)));
+    return Math.abs(beta) > 0.35;
+  });
+  check(`Peak lateral at ${kmh} km/h ${lo}–${hi} g`, maxLat > lo && maxLat < hi, `${fmt(maxLat, 2)} g`);
+  // Aero balance 41 % front against 48.5 % of the weight: the fronts give first
+  check(`Understeers at the limit at ${kmh} km/h`, frontSa > rearSa, `front ${fmt((frontSa * 180) / Math.PI, 1)}°, rear ${fmt((rearSa * 180) / Math.PI, 1)}° slip at the peak`);
+}
+
+console.log('\n== Traction control through the adapter');
+{
+  const exit = (preset: 'pro' | 'semi_pro') => {
+    const sim = createMtr496rSim(pad);
+    sim.assistPreset = preset;
+    sim.teleportToDistance(1000, 70 / 3.6);
+    let sum = 0;
+    let n = 0;
+    for (let t = 0; t < 2; t += DT) {
+      sim.step(DT, { throttle: 1 });
+      sum += Math.max(sim.telemetry.wheelSlipRatios[2], sim.telemetry.wheelSlipRatios[3]);
+      n++;
+    }
+    return sum / n;
+  };
+  const tc = exit('semi_pro');
+  const raw = exit('pro');
+  // Above the TC's 50 km/h floor, its 9 % target in the second it works
+  check('TC holds rear wheelspin above 50 km/h', tc < 0.15 && tc < raw * 0.6, `mean rear slip ${fmt(tc, 2)} with TC, ${fmt(raw, 2)} without`);
+}
+
+console.log('\n== Ported body');
+{
+  const def = carById('mtr-496r');
+  const glb = `public${def.modelUrl}`;
+  if (!hasFile(glb)) {
+    noteSkip('Ported body', glb);
+  } else {
+    const buf = readFileSync(glb);
+    const json = JSON.parse(buf.subarray(20, 20 + buf.readUInt32LE(12)).toString('utf8')) as {
+      nodes: { name: string; mesh?: number; children?: number[]; extras?: Record<string, unknown> }[];
+      meshes: { primitives: unknown[] }[];
+    };
+    const byName = new Map(json.nodes.map((n) => [n.name, n]));
+    const corners = ['RF', 'LF', 'RR', 'LR'];
+    check('CAR / BODY / STEER / WHEEL_xx rig nodes', ['CAR', 'BODY', 'STEER', ...corners.map((c) => `WHEEL_${c}`)].every((n) => byName.has(n)), '');
+    check('Each tyre is one primitive (the tyre shader)', corners.every((c) => {
+      const tyre = byName.get(`WHEEL_${c}_TYRE`);
+      return tyre?.mesh !== undefined && json.meshes[tyre.mesh].primitives.length === 1;
+    }), '');
+    const extras = byName.get('CAR')?.extras as { wheelbaseM: number; cameras: Record<string, unknown>; tyreRadius: Record<string, number> };
+    check('Wheelbase matches the physics (2.8 m)', Math.abs(extras.wheelbaseM - C.chassis.wheelbase) < 0.02, `${fmt(extras.wheelbaseM, 3)} m`);
+    check('Tyre radii match the physics', Math.abs(extras.tyreRadius.LF - 0.34) < 0.005 && Math.abs(extras.tyreRadius.LR - 0.355) < 0.005,
+      `front ${fmt(extras.tyreRadius.LF, 3)}, rear ${fmt(extras.tyreRadius.LR, 3)} m`);
+    check('Cockpit, dash, bumper and roof cameras', ['cockpit', 'dash', 'bumper', 'tcam'].every((k) => k in extras.cameras), '');
+    // The wheel's screen and its nine shift lights are STEER nodes of their own, with the mod's thresholds
+    const steerKids = (byName.get('STEER')?.children ?? []).map((i) => json.nodes[i].name);
+    const ledNodes = [...Array.from({ length: 8 }, (_, i) => `RPM_${i}`), 'RPM_LIMITER_1'];
+    const revLeds = (byName.get('CAR')?.extras as { revLeds?: { leds: { node: string; rpm: number }[]; blinkRpm?: number } }).revLeds;
+    check('Wheel screen and shift lights under STEER', ['GEO_LCD', ...ledNodes].every((n) => steerKids.includes(n)), `${steerKids.length} STEER children`);
+    check('Shift lights 8000–9500 rpm, blinking at 9600', revLeds?.leds.length === 9 && revLeds.leds[0].rpm === 8000 && revLeds.leds[8].rpm === 9500 && revLeds.blinkRpm === 9600,
+      revLeds ? revLeds.leds.map((l) => `${l.node}@${l.rpm}`).join(' ') : 'no revLeds');
+    // Every livery in the registry has its files, named as the GLB's skinMaps say
+    const skinMaps = (byName.get('CAR')?.extras as { skinMaps?: Record<string, string> }).skinMaps ?? {};
+    const files = [...new Set(Object.values(skinMaps))];
+    const skins = def.skins ?? [];
+    const missing = skins.flatMap((s) => files.map((f) => `public/cars/mtr-496r/skins/${s.id}/${f}`)).filter((f) => !hasFile(f));
+    check('20 liveries, each with its paint, decals and sunstrip', skins.length === 20 && files.length === 3 && missing.length === 0,
+      missing.length ? `missing ${missing.slice(0, 3).join(', ')}` : `${files.join(', ')}`);
+    check('Under 9 MB before meshopt', buf.length < 9e6, `${fmt(buf.length / 1e6)} MB`);
+  }
+}
+
+console.log('\n== Autopilot round Rwanda against the GT3');
+{
+  const track = getActiveTrackData();
+  const root = loadGlbGeometry('public/tracks/rwanda/rwanda_2026.glb');
+  const lap = (sim: F12026CarSim) => {
+    sim.resetToStartGrid(true);
+    sim.aiAutopilot = true;
+    sim.aiPaceScale = 1;
+    const lap0 = sim.telemetry.lapCount;
+    let t = 0;
+    let beyond = -Infinity;
+    let maxSlip = 0;
+    while (t < 300 && sim.telemetry.lapCount < lap0 + 2) {
+      sim.step(1 / 60, {});
+      t += 1 / 60;
+      beyond = Math.max(beyond, Math.abs(sim.lateralOffsetM) - track.getSampleAtDistance(sim.sMeters).width / 2);
+      maxSlip = Math.max(maxSlip, (Math.abs(Math.atan2(sim.vyMs, Math.max(1, sim.vxMs))) * 180) / Math.PI);
+    }
+    return { done: sim.telemetry.lapCount === lap0 + 2, lapS: (sim.telemetry.lastLapTimeMs ?? 0) / 1000, beyond, maxSlip, top: sim.telemetry.allTimeTopSpeedKmh };
+  };
+  const proto = lap(createMtr496rSim(track, root));
+  const gt3 = lap(createAmgGt3Sim(track, root));
+  check('Flying lap completes, CG within 0.5 m of the edge', proto.done && proto.beyond <= 0.5 && proto.maxSlip < 12,
+    `lap ${fmt(proto.lapS, 2)} s, top ${fmt(proto.top, 0)} km/h, CG ${fmt(Math.max(0, proto.beyond), 2)} m past the edge, max body slip ${fmt(proto.maxSlip, 1)}°`);
+  // 300 kg lighter, more downforce and a little more power than the GT3
+  check('Quicker than the GT3', proto.lapS < gt3.lapS - 2, `${fmt(proto.lapS, 2)} s vs the GT3's ${fmt(gt3.lapS, 2)} s`);
+}
+
+console.log(failures.length ? `\n${failures.length} check(s) failed: ${failures.join(', ')}` : '\nAll 496R checks passed.');
+if (failures.length) process.exitCode = 1;
