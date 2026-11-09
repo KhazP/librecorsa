@@ -31,7 +31,7 @@ const LEVELS: { id: Level; title: string; preset: AssistPreset; racingLine: bool
     title: "Sim",
     preset: "pro",
     racingLine: false,
-    points: ["No traction control, no ABS", "No racing line", "Real F1 power on cold tyres: be gentle"],
+    points: ["No traction control, no ABS", "No racing line", "Full power on cold tyres: be gentle"],
   },
 ];
 

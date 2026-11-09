@@ -16,7 +16,7 @@ const TIPS = [
   "The racing line turns Monza Rosso where you need to brake. Press R to hide it once you know the track.",
   "On a controller, the slip-angle steering assist keeps the front tyres at their grip limit.",
   "Hold OVR Boost on the straights; the hybrid battery recharges under braking.",
-  "Switch between F1 cars, GT3s and road cars from the Garage menu.",
+  "Switch between open-wheelers, GT3s and road cars from the Garage menu.",
 ];
 
 const LIGHTS = 5;

@@ -148,7 +148,7 @@ export const PAD_LAYOUTS: Record<PadLayout, { label: string; buttons: PadButtonB
   },
   // F1 24: A up, X down, B overtake, Y DRS, RB next camera, View flashback, Menu pause
   f1: {
-    label: "F1 style",
+    label: "Formula style",
     buttons: {
       shiftUp: 0, // A (✕)
       shiftDown: 2, // X (□)

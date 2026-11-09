@@ -59,7 +59,7 @@ const COLLISION_OPTIONS: { value: CollisionMode; label: string }[] = [
 
 const CLASS_OPTIONS: { value: CarClassRule; label: string }[] = [
   { value: "any", label: "Any" },
-  { value: "f1", label: "F1 only" },
+  { value: "f1", label: "Open-wheelers only" },
   { value: "gt3", label: "GT3 only" },
 ];
 

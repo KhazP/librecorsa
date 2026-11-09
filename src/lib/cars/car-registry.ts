@@ -103,7 +103,7 @@ export const CAR_QUALITY_META: Record<CarQuality, CarQualityMeta> = {
 export const PHYSICS_CHECK: Record<VehicleModelId, string> = {
   "amg-gt3": "Its physics are checked against a real GT3 Evo's telemetry.",
   vf26: "Its physics are checked against the reference data they were built from.",
-  "f12026-car": "Its physics are checked against the range a 2026 F1 car should fall in.",
+  "f12026-car": "Its physics are checked against the range a 2026 open-wheeler should fall in.",
   liana: "Its physics come from an Assetto Corsa mod of this car and are checked against its laps of Dunsfold there.",
 };
 
@@ -150,7 +150,7 @@ export interface CarDefinition {
 }
 
 export const CAR_CLASSES: readonly CarClass[] = [
-  { id: "f1", title: "F1", sub: "Open-wheel · DRS / active aero", color: "#CCFF00" },
+  { id: "f1", title: "Formula Open-Wheel", sub: "Single-seaters · DRS / active aero", color: "#CCFF00" },
   { id: "gt3", title: "GT3", sub: "Closed-wheel · ABS / TC", color: "#00E5FF" },
   { id: "road", title: "Road cars", sub: "Road-legal · street tyres", color: "#FF8A3D" },
 ];
@@ -160,9 +160,9 @@ const ALL_CARS: readonly CarDefinition[] = [
   {
     id: "vf26",
     classId: "f1",
-    title: "F1 2026 Prototype",
+    title: "2026 Prototype",
     sub: "Curvilinear 2026 model · active aero",
-    badge: "F1 2026",
+    badge: "PROTO 26",
     quality: "own",
     credit: DEX_F1_2026,
     physics: "vf26",
@@ -172,7 +172,7 @@ const ALL_CARS: readonly CarDefinition[] = [
   {
     id: "f12026-car",
     classId: "f1",
-    title: "F1 2026 Rigid-Body",
+    title: "2026 Rigid-Body",
     sub: "6-DOF rigid-body · track colliders · DRS",
     badge: "6-DOF",
     quality: "own",

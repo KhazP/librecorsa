@@ -10,7 +10,7 @@ export type F1ModPhysics = Extract<VehicleModelId, "f12026-car" | "vf26">;
 
 export const F1_MOD_PHYSICS_OPTIONS: readonly { id: F1ModPhysics; title: string; sub: string }[] = [
   { id: "f12026-car", title: "Rigid-body", sub: "6-DOF multibody · track colliders · DRS" },
-  { id: "vf26", title: "F1 2026", sub: "Curvilinear F1 2026 model" },
+  { id: "vf26", title: "2026 Prototype", sub: "Curvilinear 2026 model" },
 ];
 
 const STORAGE_KEY = "librecorsa.f1ModPhysics";

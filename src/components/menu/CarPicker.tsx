@@ -92,9 +92,9 @@ export const CarPhysicsSwitch: React.FC<{ color: string }> = ({ color }) => {
     <div className="flex flex-col gap-1.5">
       <div className="flex items-baseline justify-between gap-2">
         <span className="font-f1-mono text-[10px] font-extrabold tracking-[0.12em] text-[#8E96AA]">PHYSICS</span>
-        <span className="text-[11px] text-[#8E96AA]">Applies to every ported F1 car</span>
+        <span className="text-[11px] text-[#8E96AA]">Applies to every ported open-wheeler</span>
       </div>
-      <div role="radiogroup" aria-label="F1 car physics" className="flex gap-0.5 rounded-full border border-[#262B3D] bg-[#08090D] p-1">
+      <div role="radiogroup" aria-label="Open-wheeler physics" className="flex gap-0.5 rounded-full border border-[#262B3D] bg-[#08090D] p-1">
         {F1_MOD_PHYSICS_OPTIONS.map((o) => {
           const selected = o.id === modPhysics;
           return (

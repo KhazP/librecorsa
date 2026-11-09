@@ -664,7 +664,7 @@ export const WheelStep: React.FC<SetupStepProps> = ({ settings, onChangeSettings
             ) : null}
             <Hint>
               Match your wheel driver&apos;s rotation. Steering is 1:1 up to the car&apos;s lock ({CAR_WHEEL_LOCKS_DEG.vf26}°
-              F1, {CAR_WHEEL_LOCKS_DEG["amg-gt3"]}° GT3, {CAR_WHEEL_LOCKS_DEG.liana}° road cars); a base with less rotation
+              open-wheelers, {CAR_WHEEL_LOCKS_DEG["amg-gt3"]}° GT3, {CAR_WHEEL_LOCKS_DEG.liana}° road cars); a base with less rotation
               still reaches full lock.
             </Hint>
           </div>
