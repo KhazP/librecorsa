@@ -8,7 +8,8 @@
  *
  * Nothing here is kept at the edge: Workers caching is on for the site's large files, so every answer says no-store.
  */
-import { boardDeps, ghostOf, listLaps, submitLap, type EventRule } from "./board";
+import { challengeProblem } from "../../src/lib/net/weekly-challenge";
+import { boardDeps, ghostOf, listLaps, submitLap } from "./board";
 import { ROOM_CODE_RE } from "./room";
 import { turnConfigured } from "./turn";
 import type { Env } from "./types";
@@ -54,9 +55,6 @@ export function json(body: unknown, status: number, origin: string | null): Resp
   });
 }
 
-/** Which laps may go on a weekly challenge's board */
-const eventRule: EventRule = () => "Unknown event";
-
 export async function handleApi(request: Request, env: Env, url: URL): Promise<Response> {
   const origin = allowedOrigin(request, url, env);
   // A browser on another site gets no answer it can read, and no socket
@@ -82,7 +80,8 @@ export async function handleApi(request: Request, env: Env, url: URL): Promise<R
   }
 
   if (path === "/api/laps" || path.startsWith("/api/laps/")) {
-    const deps = config.board ? boardDeps(env, eventRule) : null;
+    // A weekly challenge's board takes this week's laps driven to its rules (src/lib/net/weekly-challenge.ts)
+    const deps = config.board ? boardDeps(env, challengeProblem) : null;
     if (!deps) return json({ ok: false, error: "The lap boards are off" }, 404, origin);
     try {
       if (path === "/api/laps" && request.method === "POST") {

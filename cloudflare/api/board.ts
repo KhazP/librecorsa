@@ -1,6 +1,7 @@
 /**
  * The online lap boards, on D1 (rows) and R2 (ghost samples):
- *   POST /api/laps        { rec: LapRecording, driverKey, event? } -> { ok: true, rank, total } | { ok: false, error }
+ *   POST /api/laps        { rec: LapRecording, driverKey, event? }
+ *                         -> { ok: true, rank, total, eventRank?, eventTotal?, eventError? } | { ok: false, error }
  *   GET  /api/laps?track=&vehicle=&physics=&assists=&realism=&surface=&event=&name=&limit=
  *                         -> { laps: [...], total, me: { rank, lap } | null, physics: [revisions with laps] }
  *   GET  /api/laps/<id>   -> the lap's LapRecording (its ghost), or 404
@@ -170,12 +171,13 @@ export async function submitLap(deps: BoardDeps, request: Request): Promise<Answ
   const checked = checkLap(body.rec);
   if (!checked.ok) return fail(checked.error);
   const rec = checked.rec;
+  // A lap sent for a challenge it doesn't fit (the week turned, a clock is off) still counts on the open board
   let event = "";
+  let eventError: string | null = null;
   if (body.event !== undefined && body.event !== "") {
-    if (typeof body.event !== "string" || !EVENT_ID_RE.test(body.event)) return fail("Unknown event");
-    const problem = deps.eventRule(rec, body.event, nowMs);
-    if (problem) return fail(problem);
-    event = body.event;
+    if (typeof body.event !== "string" || !EVENT_ID_RE.test(body.event)) eventError = "Unknown event";
+    else eventError = deps.eventRule(rec, body.event, nowMs);
+    if (eventError === null) event = body.event as string;
   }
 
   // The name must be free, lapsed, or claimed with this driver key
@@ -205,10 +207,11 @@ export async function submitLap(deps: BoardDeps, request: Request): Promise<Answ
   // A challenge lap also counts on the open board
   const onOpen = await storeLap(deps, rec, "", nameKey);
   const onEvent = event ? await storeLap(deps, rec, event, nameKey) : false;
-  if (!onOpen && !onEvent) return fail("Not faster than your best lap", 409);
+  if (!onOpen && !onEvent) return fail(eventError ?? "Not faster than your best lap", 409);
 
   const place = await placeOf(deps, rec, "", nameKey);
   const answer: Record<string, unknown> = { ok: true, rank: place.rank, total: place.total };
+  if (eventError) answer.eventError = eventError;
   if (event) {
     const eventPlace = await placeOf(deps, rec, event, nameKey);
     answer.eventRank = eventPlace.rank;
