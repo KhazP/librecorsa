@@ -597,6 +597,36 @@ export interface TyresModelData {
    */
   dyCurve?: LutPoints;
   dxCurve?: LutPoints;
+  /**
+   * Force curve family (see `brush-tyre.ts`). 'magic' (default): sin(C·atan(B·s)) to the peak and the falloff above.
+   * 'brush': the brush model's cubic to the peak, so the cornering stiffness is 3 × the peak force over the peak slip,
+   * then a gentle decay toward `falloff_level` (`falloff_slope` per unit of slip past the peak; none without
+   * `use_slip_falloff`). A brush tyre also works on the theoretical slips (κ / (1 + κ), tan α / (1 + κ)), takes camber
+   * as a slip-angle shift of sin γ × `camberGain`, moves its peak slip with load, grip and pressure by the fields
+   * below, and lags by twice its relaxation length at small slip. `pKy2` and `slip_ratio_limit` are then unused
+   * (the limit only when `longStiffnessMult` is given)
+   */
+  curve?: 'magic' | 'brush';
+  /** 'brush': a fuller rising branch, the cubic plus this × 3s(1 − s)² (0: the plain cubic) */
+  curveFullness?: number;
+  /**
+   * 'brush': growth of the peak slip angle with load. The angle at twice the reference load is (1 + this) × the angle
+   * at the reference load, and the peak slip is linear in load between and beyond. May be negative
+   */
+  peakSlipLoadGain?: number;
+  /** 'brush': the reference load of `peakSlipLoadGain` (N); default the tyre's Fz0 */
+  peakSlipLoadRefN?: number;
+  /** 'brush': the peak slip divides by 1 + this × (pressure / optimal pressure − 1): a softer tyre peaks later */
+  peakSlipPressureGain?: number;
+  /** 'brush': exponent of the combined slip, (|s_x|^p + |s_y|^p)^(1/p); 2 (default) is the friction circle */
+  combinedExponent?: number;
+  /**
+   * 'brush': longitudinal over lateral slip stiffness, so the longitudinal force peaks at the peak slip over this.
+   * Absent: taken from `slip_ratio_limit` at Fz0
+   */
+  longStiffnessMult?: number;
+  /** 'brush': grip lost to sliding speed, μ ÷ (1 + this × sliding speed in m/s) */
+  speedSensitivity?: number;
   /** BRAKE_DX_MOD: longitudinal μ × (1 + brakeDxMod) while the tyre is braking (negative slip ratio) */
   brakeDxMod?: number;
 }
@@ -632,6 +662,8 @@ export interface TyresPressureData {
   pressureSpringCurve: LutPoints;
   /** Grip loss per (ΔP / P_opt)² */
   pressureGripSensitivity: number;
+  /** Grip loss per psi away from the optimum, μ ÷ (1 + this × |ΔP|); when set it replaces the parabola above */
+  pressureGripLossPerPsi?: number;
   /** Temperature the cold pressure is set at (°C, tyre blankets) */
   coldRefC: number;
 }

@@ -135,6 +135,16 @@ import {
   spinFrictionArmM,
   stepPatchTwist,
 } from './steering-torque';
+import {
+  brushForces,
+  brushPeakSlipTan,
+  brushRelaxationLength,
+  brushSlipStiffness,
+  brushSpeedGrip,
+  createBrushTyre,
+  type BrushForces,
+  type BrushTyre,
+} from './brush-tyre';
 import { roadTextureHeightM } from '../road-texture';
 
 const G = 9.81;
@@ -532,6 +542,8 @@ export interface TyreRuntime {
   brakeDxMod: number;
   /** Core temperatures (°C) at which the compound grains, cleans up and blisters (`tyreGrainThresholdsC`) */
   grain: { grainBelow: number; healFrom: number; healTo: number; blisterAbove: number };
+  /** The brush family's constants when the compound is a brush tyre (`TyresModelData.curve`), else null */
+  brush: BrushTyre | null;
 }
 
 /** Main spring in series with a helper that goes coil-bound after `helper_range` */
@@ -638,6 +650,7 @@ export function createTyreRuntime(compound: TyresCompoundData, rear = false): Ty
     dxCurve: model.dxCurve ? new Lut(model.dxCurve) : null,
     brakeDxMod: model.brakeDxMod ?? 0,
     grain: tyreGrainThresholdsC(data.thermalData.optimalTempC),
+    brush: model.curve === 'brush' ? createBrushTyre(model, Math.tan(fla * DEG2RAD), fz0) : null,
   };
 }
 
@@ -705,8 +718,10 @@ export function tyreGrainThresholdsC(optimalTempC: readonly [number, number]): {
   return { grainBelow: low - 17, healFrom: low - 17, healTo: high + 5, blisterAbove: high + 13 };
 }
 
-/** Grip at hot inflation pressure `psi` (gauge): a parabola about the optimum, floored at half grip */
-export function tyrePressureGrip(p: Pick<TyresPressureData, 'optimalPsi' | 'pressureGripSensitivity'>, psi: number): number {
+/** Grip at hot inflation pressure `psi` (gauge): a parabola about the optimum, or the data's loss per psi; floored at half grip */
+export function tyrePressureGrip(p: Pick<TyresPressureData, 'optimalPsi' | 'pressureGripSensitivity' | 'pressureGripLossPerPsi'>, psi: number): number {
+  // Tyre data that states its loss per psi: linear either side of the optimum
+  if (p.pressureGripLossPerPsi !== undefined) return Math.max(0.5, 1 / (1 + p.pressureGripLossPerPsi * Math.abs(psi - p.optimalPsi)));
   const dp = (psi - p.optimalPsi) / p.optimalPsi;
   return Math.max(0.5, 1 - p.pressureGripSensitivity * dp * dp);
 }
@@ -754,6 +769,7 @@ export function combinedSlipForces(
 }
 
 const _comb = { fx: 0, fy: 0, sx: 0, sy: 0 };
+const _brush: BrushForces = { fx: 0, fy: 0, slipNorm: 0 };
 const _roadSlope = { dhdx: 0, dhdz: 0 };
 
 // Scratch (single-threaded, never escapes a call)
@@ -2182,14 +2198,20 @@ export class VehiclePhysics {
       const wWaterMm = this.wheelWaterMm[i] > 0 ? this.wheelWaterMm[i] : this.waterMm;
       const wWetness = wWaterMm > 0 ? wetnessFromWater(wWaterMm) : this.wetness;
       if (fz > 0) {
-        const bristleScale = dynamicBristleRelaxationScale(fz, tyre.fz0, wWetness);
-        const rx = model.relaxationLengthX * bristleScale;
-        // The lateral length follows the cornering stiffness (σ = Kyα / lateral carcass stiffness), so the carcass
-        // stiffness stays the one at Fz0 at every load; the bristle model's own load stretch would count load twice
-        const ry =
-          model.relaxationLengthY *
-          tyreCorneringStiffnessLoadFactor(tyre, fz) *
-          dynamicBristleRelaxationScale(tyre.fz0, tyre.fz0, wWetness);
+        let rx: number;
+        let ry: number;
+        if (tyre.brush) {
+          // A brush tyre's lag: both slips follow over the same length, from its load and how far it has slid
+          rx = ry = brushRelaxationLength(tyre.brush, fz, w.combinedSlip) * dynamicBristleRelaxationScale(tyre.fz0, tyre.fz0, wWetness);
+        } else {
+          rx = model.relaxationLengthX * dynamicBristleRelaxationScale(fz, tyre.fz0, wWetness);
+          // The lateral length follows the cornering stiffness (σ = Kyα / lateral carcass stiffness), so the carcass
+          // stiffness stays the one at Fz0 at every load; the bristle model's own load stretch would count load twice
+          ry =
+            model.relaxationLengthY *
+            tyreCorneringStiffnessLoadFactor(tyre, fz) *
+            dynamicBristleRelaxationScale(tyre.fz0, tyre.fz0, wWetness);
+        }
         w.slipRatio = (w.slipRatio + (h * vsx) / rx) / (1 + (h * absVx) / rx);
         w.tanSlipAngle = (w.tanSlipAngle + (h * vy) / ry) / (1 + (h * absVx) / ry);
         w.slipRatio = THREE.MathUtils.clamp(w.slipRatio, -5, 5);
@@ -2255,41 +2277,68 @@ export class VehiclePhysics {
         const dY = tyrePeakMu(tyre, fz, 'y');
         const dX = tyrePeakMu(tyre, fz, 'x');
         const brakeMod = w.slipRatio < 0 ? 1 + tyre.brakeDxMod : 1;
-        const muY = dY * base * camberGrip;
-        const muX = dX * brakeMod * base * camberGripX;
+        // A brush tyre loses grip with its sliding speed
+        const speedGrip = tyre.brush ? brushSpeedGrip(tyre.brush, Math.hypot(vsx, vy)) : 1;
+        const muY = dY * base * camberGrip * speedGrip;
+        const muX = dX * brakeMod * base * camberGripX * speedGrip;
         w.muY = muY;
         w.muX = muX;
 
-        // Peak slip angle at this load: the cornering stiffness saturates with load while the peak force keeps growing;
-        // a warm carcass is softer, so it peaks later (its lateral carcass stiffness softens alike: same relaxation length)
-        const tanPeak = tyrePeakSlipTan(tyre, fz) / tyreCarcassStiffnessFactor(td.thermalData, w.coreTempC);
+        let tanPeak: number;
+        let s: number;
+        /** Slip stiffnesses (N per unit of tan α / of slip ratio), for the patch's twist */
+        let cfa: number;
+        let cfk: number;
+        if (tyre.brush) {
+          const bt = tyre.brush;
+          // Peak slip angle from the load, the grip state and the pressure
+          tanPeak = brushPeakSlipTan(bt, fz, base, w.pressurePsi / td.pressureData.optimalPsi);
+          // Camber thrust (toward the lean) as a shift of the slip angle
+          const tanEff = Math.tan(Math.atan(w.tanSlipAngle) - Math.sin(w.camberLeftRad) * cam.camberGain);
+          brushForces(bt, w.slipRatio, tanEff, tanPeak, _brush);
+          fx = muX * fz * _brush.fx;
+          fy = -muY * fz * _brush.fy;
+          s = _brush.slipNorm;
+          cfa = muY * fz * brushSlipStiffness(bt, tanPeak);
+          cfk = muX * fz * brushSlipStiffness(bt, tanPeak / bt.longStiffnessMult);
+        } else {
+          // Peak slip angle at this load: the cornering stiffness saturates with load while the peak force keeps growing;
+          // a warm carcass is softer, so it peaks later (its lateral carcass stiffness softens alike: same relaxation length)
+          tanPeak = tyrePeakSlipTan(tyre, fz) / tyreCarcassStiffnessFactor(td.thermalData, w.coreTempC);
+
+          // Camber thrust (toward the lean) as an equivalent slip-angle shift
+          const gc = THREE.MathUtils.clamp(w.camberLeftRad, -tyre.camberThrustLimit, tyre.camberThrustLimit);
+          const thrust = cam.camberGain * (cam.contact_camber_c1 * gc - cam.contact_camber_c2 * gc * gc * gc);
+          const BC = tyre.B * tyre.C;
+          const tanEff = w.tanSlipAngle - (thrust * tanPeak) / Math.max(1e-3, muY * BC);
+
+          // Combined slip
+          combinedSlipForces(tyre, model, w.slipRatio / tyre.peakSlipRatio, tanEff / tanPeak, _comb);
+          fx = muX * fz * _comb.fx;
+          fy = -muY * fz * _comb.fy;
+          s = Math.hypot(_comb.sx, _comb.sy);
+          cfa = (muY * fz * BC) / tyre.tanPeakAngle;
+          cfk = (muX * fz * BC) / tyre.peakSlipRatio;
+          w.corneringStiffness = (muY * fz * BC) / tanPeak;
+        }
+        if (tyre.brush) w.corneringStiffness = cfa;
         w.peakSlipAngleRad = Math.atan(tanPeak);
-
-        // Camber thrust (toward the lean) as an equivalent slip-angle shift
-        const gc = THREE.MathUtils.clamp(w.camberLeftRad, -tyre.camberThrustLimit, tyre.camberThrustLimit);
-        const thrust = cam.camberGain * (cam.contact_camber_c1 * gc - cam.contact_camber_c2 * gc * gc * gc);
-        const BC = tyre.B * tyre.C;
-        const tanEff = w.tanSlipAngle - (thrust * tanPeak) / Math.max(1e-3, muY * BC);
-        w.corneringStiffness = (muY * fz * BC) / tanPeak;
-
-        // Combined slip
-        combinedSlipForces(tyre, model, w.slipRatio / tyre.peakSlipRatio, tanEff / tanPeak, _comb);
-        fx = muX * fz * _comb.fx;
-        fy = -muY * fz * _comb.fy;
-        const s = Math.hypot(_comb.sx, _comb.sy);
         w.combinedSlip = s;
 
         // Low-speed contact damping (keeps a parked car from ringing on the carcass spring)
+        const slipUse = Math.hypot(fx / (muX * fz), fy / (muY * fz));
         const fade = Math.max(0, 1 - absVx / LOW_SPEED_FADE_MS);
         if (fade > 0) {
           fx += fade * LOW_SPEED_DAMPING * muX * fz * vsx;
           fy -= fade * LOW_SPEED_DAMPING * muY * fz * vy;
         }
-        // The slip forces sit inside the friction ellipse already; the low-speed damping must not push them past it
+        // The slip forces sit on or inside the friction ellipse already (a brush tyre's combined-slip exponent may
+        // take them a little past it); the low-speed damping must not push them further
+        const limit = Math.max(1, slipUse);
         const use = Math.hypot(fx / (muX * fz), fy / (muY * fz));
-        if (use > 1) {
-          fx /= use;
-          fy /= use;
+        if (use > limit) {
+          fx *= limit / use;
+          fy *= limit / use;
         }
         // Telemetry only: share of the friction ellipse in use (1 = on it)
         w.circleFraction = Math.min(use, 1);
@@ -2314,8 +2363,6 @@ export class VehiclePhysics {
         // held in the patch up against the tyre's twist stiffness; rolling lets it out, and past the spin friction
         // moment the patch slides round instead
         const patchB = PATCH_HALF_WIDTH_SHARE * geo.width;
-        const cfa = (muY * fz * tyre.B * tyre.C) / tyre.tanPeakAngle;
-        const cfk = (muX * fz * tyre.B * tyre.C) / tyre.peakSlipRatio;
         const kTwist = patchTwistStiffness(cfa, cfk, model.relaxationLengthY, model.relaxationLengthX, w.patchHalfLengthM, patchB);
         const maxTwist = kTwist > 0 ? (0.5 * (muX + muY) * fz * spinFrictionArmM(w.patchHalfLengthM, patchB)) / kTwist : 0;
         // The wheel's yaw rate over the road: the driver's steering (spread over the frame), the toe / compliance
