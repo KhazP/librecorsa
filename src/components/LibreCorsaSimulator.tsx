@@ -15,13 +15,14 @@ import { GhostPlayer } from "@/lib/sim/lap-recorder";
 import { lapBoardClass, lapConditionsNow, type LapConditions, type LapRecording, type LapSummaryData, type LeaderboardEntry } from "@/lib/sim/lap-types";
 import { exportLapFile, importLapFile, listBestLaps, loadBestLap, saveBestLapIfFaster } from "@/lib/sim/ghost-store";
 import {
-  boardLabel,
+  boardOnline,
+  fetchRemoteBoard,
   fetchRemoteGhost,
-  fetchRemoteLeaderboard,
   lapToEntry,
   localLeaderboard,
-  remoteLeaderboardEnabled,
   submitLap,
+  type BoardFilter,
+  type SubmitResult,
 } from "@/lib/net/leaderboard";
 import { exportDriverKeyFile, importDriverKeyFile } from "@/lib/net/driver-key";
 import { isTouchDevice, resetTouchInput } from "@/lib/input/touch-input";
@@ -49,6 +50,9 @@ const DEFAULT_ASSIST_PRESET: AssistPreset = DEFAULT_PLAYER_SETTINGS.assistPreset
 const vehicleLabel = (id: string) => (isVehicleModelId(id) ? carForVehicle(id).title : id);
 /** Every personal best in this browser (Lap times switches circuit and car without reloading the scene) */
 const loadAllLocalLaps = () => listBestLaps().then((laps) => laps.map((lap) => lapToEntry(lap, "local")));
+/** The place an upload's answer gives the lap on its board; null when it failed or said none */
+const placeOf = (res: SubmitResult): { rank: number; total: number | null } | null =>
+  res.ok && res.rank !== undefined ? { rank: res.rank, total: res.total ?? null } : null;
 // A lap on a circuit this build no longer lists keeps its id as its name (getTrackInfo would name it after another)
 const trackNameOf = (id: string) => TRACKS.find((t) => t.id === id)?.name ?? id;
 /** The snapshot store before the session exists: nothing to subscribe to */
@@ -168,7 +172,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   // ---- Laps, ghosts, leaderboards
   const [lapSummary, setLapSummary] = useState<{ summary: LapSummaryData; recording: LapRecording } | null>(null);
   const [submitState, setSubmitState] = useState<"idle" | "sending" | "sent" | "error">("idle");
-  const [submitRank, setSubmitRank] = useState<number | null>(null);
+  /** Place of the uploaded lap on its board, and how many drivers that board has */
+  const [submitRank, setSubmitRank] = useState<{ rank: number; total: number | null } | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   /** Bumped by every new or closed lap card and every upload: only the upload of the card still shown may land on it */
   const submitReqRef = useRef(0);
@@ -178,20 +183,23 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   const ghostReqRef = useRef(0);
   /** Bumped by every leaderboard refresh; only the latest one updates the panel */
   const leaderboardReqRef = useRef(0);
-  const [leaderboard, setLeaderboard] = useState<{
-    local: LeaderboardEntry[];
-    remote: LeaderboardEntry[];
-    loading: boolean;
-    /** Label of the online board shown: the assists and surface it ranks */
-    boardLabel?: string;
-    /** The last online fetch failed (its list is empty for that reason, not because nobody has a time) */
-    remoteError: boolean;
-  }>({
-    local: [],
-    remote: [],
-    loading: false,
-    remoteError: false,
-  });
+  /** This car's best laps on this circuit, saved in this browser */
+  const [localLaps, setLocalLaps] = useState<LeaderboardEntry[]>([]);
+  /** Bumped when the online board may have changed (a lap went up), so the panel reads it again */
+  const [boardVersion, setBoardVersion] = useState(0);
+  /** This site has an online lap board switched on (asked once at start) */
+  const [boardOn, setBoardOn] = useState(false);
+  const boardOnRef = useRef(false);
+  useEffect(() => {
+    let live = true;
+    void boardOnline().then((on) => {
+      boardOnRef.current = on;
+      if (live) setBoardOn(on);
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
 
   // ---- VR, FFB meter
   const [vrSupported, setVrSupported] = useState(false);
@@ -568,31 +576,19 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     [session, getTrackEnv]
   );
   const refreshLeaderboard = useCallback(async () => {
-    // Several refreshes can overlap (car change, realism change, a saved lap): only the latest may land
+    // Several refreshes can overlap (car change, a saved lap): only the latest may land
     const req = ++leaderboardReqRef.current;
-    setLeaderboard((l) => ({ ...l, loading: true }));
-    const vehicle = vehicleModelRef.current;
-    const board = currentBoard();
-    let remoteError = false;
-    const [local, remote] = await Promise.all([
-      localLeaderboard(trackId, vehicle, lapBoardClass(board)).catch((): LeaderboardEntry[] => []),
-      remoteLeaderboardEnabled
-        ? fetchRemoteLeaderboard(trackId, vehicle, lapBoardClass(board)).catch((): LeaderboardEntry[] => {
-            remoteError = true;
-            return [];
-          })
-        : Promise.resolve<LeaderboardEntry[]>([]),
-    ]);
+    const local = await localLeaderboard(trackId, vehicleModelRef.current).catch((): LeaderboardEntry[] => []);
     if (req !== leaderboardReqRef.current) return;
-    setLeaderboard({ local, remote, loading: false, boardLabel: boardLabel(board), remoteError });
-  }, [trackId, currentBoard]);
-  // Another realism level ranks on another board (the first fetch comes from the car effect below)
-  const realismSeenRef = useRef(settings.realism);
-  useEffect(() => {
-    if (realismSeenRef.current === settings.realism) return;
-    realismSeenRef.current = settings.realism;
-    void refreshLeaderboard();
-  }, [settings.realism, refreshLeaderboard]);
+    setLocalLaps(local);
+    setBoardVersion((v) => v + 1);
+  }, [trackId]);
+  /** One online board for the Lap Times panel, with this player's place on it */
+  const loadRemoteBoard = useCallback(
+    (track: string, vehicle: VehicleModelId, filter: BoardFilter, physics: number) =>
+      fetchRemoteBoard(track, vehicle, { filter, physics, name: settingsRef.current.profile.name }).catch(() => null),
+    []
+  );
 
   /** Races the personal best of this car as the ghost, replacing whichever lap was chosen */
   const loadPbGhost = useCallback(async () => {
@@ -620,6 +616,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       if (!summary.valid || summary.autopilot) return;
       // A ghost chosen (or another car's best requested) while this saves wins over it
       const ghostReq = ghostReqRef.current;
+      // The upload this lap's card may show the result of (a later card, or a manual upload, takes over)
+      const submitReq = submitReqRef.current;
       void saveBestLapIfFaster(recording)
         .then((saved) => {
           if (!saved) return;
@@ -629,6 +627,19 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
             session?.setGhost(new GhostPlayer(recording));
           }
           void refreshLeaderboard();
+          // A new personal best goes on the online board by itself, once the player has a name of their own (the
+          // first upload asks for it on the lap card) and unless they turned this off. It fails quietly: the card
+          // keeps its upload button
+          const profile = settingsRef.current.profile;
+          if (!boardOnRef.current || !profile.autoUpload || profile.generated) return;
+          const shown = () => submitReq === submitReqRef.current;
+          if (shown()) setSubmitState("sending");
+          return submitLap(recording).then((res) => {
+            if (res.ok) setBoardVersion((v) => v + 1);
+            if (!shown()) return;
+            setSubmitState(res.ok ? "sent" : "idle");
+            setSubmitRank(placeOf(res));
+          });
         })
         .catch(() => {});
     },
@@ -654,14 +665,14 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     }
     const req = ++submitReqRef.current;
     setSubmitState("sending");
-    const res = await submitLap(rec).catch((): { ok: boolean; rank?: number; error?: string } => ({ ok: false }));
-    if (res.ok) void refreshLeaderboard();
+    const res = await submitLap(rec).catch((): SubmitResult => ({ ok: false }));
+    if (res.ok) setBoardVersion((v) => v + 1);
     // The card was closed or replaced by another lap meanwhile: this answer is not about the one shown
     if (req !== submitReqRef.current) return;
     setSubmitState(res.ok ? "sent" : "error");
-    setSubmitRank(res.ok ? (res.rank ?? null) : null);
+    setSubmitRank(placeOf(res));
     setSubmitError(res.ok ? null : (res.error ?? null));
-  }, [lapSummary, refreshLeaderboard]);
+  }, [lapSummary]);
   const closeLapSummary = useCallback(() => {
     submitReqRef.current++;
     setLapSummary(null);
@@ -1124,13 +1135,12 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       trackNameOf,
       loadAllLocal: loadAllLocalLaps,
       vehicleLabel,
-      local: leaderboard.local,
-      remote: leaderboard.remote,
-      remoteEnabled: remoteLeaderboardEnabled,
-      remoteBoardLabel: leaderboard.boardLabel,
-      loading: leaderboard.loading,
-      error: leaderboard.remoteError,
-      onRefresh: () => void refreshLeaderboard(),
+      local: localLaps,
+      remoteEnabled: boardOn,
+      loadRemote: loadRemoteBoard,
+      boardVersion,
+      vehicle: vehicleModel,
+      driverName: settings.profile.name,
       onRaceGhost: (entry: LeaderboardEntry) => void handleRaceGhostEntry(entry),
       onImportGhost: (file: File) => void handleImportGhost(file),
       onExportBest: () => void handleExportBest(),
@@ -1193,7 +1203,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
                   onClose: closeLapSummary,
                   onSaveGhost: () => exportLapFile(lapSummary.recording),
                   onSubmit:
-                    remoteLeaderboardEnabled && lapSummary.summary.valid && !lapSummary.summary.autopilot
+                    boardOn && lapSummary.summary.valid && !lapSummary.summary.autopilot
                       ? (name?: string) => void handleSubmitLap(name)
                       : undefined,
                   driverName: settings.profile.name,

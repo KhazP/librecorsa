@@ -2,8 +2,9 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Download, Flag, RotateCw } from "lucide-react";
-import type { LeaderboardEntry } from "@/lib/sim/lap-types";
-import { boardLabel } from "@/lib/net/leaderboard";
+import { isVehicleModelId, type VehicleModelId } from "@/types/f1";
+import { PHYSICS_VERSION, type LeaderboardEntry } from "@/lib/sim/lap-types";
+import { boardLabel, driverNameKey, type BoardFilter, type RemoteBoard } from "@/lib/net/leaderboard";
 import { CHOSEN_PILL, CURSOR_PILL } from "@/components/menu/menu-ui";
 import { focusOnHover } from "@/components/menu/useFocusNav";
 import { formatDelta, formatLapTime, formatSectorTime, HUD_PURPLE } from "./hud-format";
@@ -83,25 +84,33 @@ const Timed: React.FC<{ ms: number; best: boolean; lap?: boolean }> = ({ ms, bes
   </span>
 );
 
-/** One ranked lap of the online board: position, code, name over car and date, lap time and the ghost */
+/** One driver of the online board: place, code and name over what the lap was driven with, lap time and the ghost */
 const OnlineRow: React.FC<{
-  index: number;
+  rank: number;
   entry: LeaderboardEntry;
-  vehicleLabel: (id: string) => string;
+  fastest: boolean;
+  mine: boolean;
   onRaceGhost?: (entry: LeaderboardEntry) => void;
-}> = ({ index, entry, vehicleLabel, onRaceGhost }) => (
-  <li className={`${ROW_GRID} min-h-[52px] rounded-[12px] px-3 py-1.5 hover:bg-white/[0.04]`}>
-    <span className="lc-data text-[15px] text-[#8E96AA]">{index + 1}</span>
+}> = ({ rank, entry, fastest, mine, onRaceGhost }) => (
+  <li
+    aria-current={mine ? "true" : undefined}
+    className={`${ROW_GRID} min-h-[52px] rounded-[12px] px-3 py-1.5 ${
+      mine ? "bg-[#CCFF00]/[0.07] shadow-[inset_0_0_0_1px_rgba(204,255,0,0.35)]" : "hover:bg-white/[0.04]"
+    }`}
+  >
+    <span className={`lc-data text-[15px] ${mine ? "text-[#CCFF00]" : "text-[#8E96AA]"}`}>{rank}</span>
     <span className="flex min-w-0 flex-col">
       <span className="truncate text-[14px] font-bold text-[#F5F7FA]">
         <span className="font-f1-mono tracking-[0.1em]">{entry.code}</span> · {entry.name}
+        {mine ? <span className="font-normal text-[#8E96AA]"> (you)</span> : null}
       </span>
       <span className="truncate text-[12px] text-[#8E96AA]">
-        {vehicleLabel(entry.vehicle)} · {new Date(entry.recordedAt).toLocaleDateString()}
+        {entry.conditions ? `${boardLabel(entry.conditions)} · ` : ""}
+        {new Date(entry.recordedAt).toLocaleDateString()}
       </span>
     </span>
     <span className="text-right">
-      <Timed ms={entry.lapTimeMs} best={index === 0} lap />
+      <Timed ms={entry.lapTimeMs} best={fastest} lap />
     </span>
     {entry.sectorTimesMs.map((s, i) => (
       <span key={i} className={SECTOR_CELL}>
@@ -119,6 +128,21 @@ const OnlineRow: React.FC<{
   </li>
 );
 
+/** A pill that narrows the online board when on ("No assists") */
+const FilterToggle: React.FC<{ label: string; on: boolean; onChange: (on: boolean) => void }> = ({ label, on, onChange }) => (
+  <button
+    type="button"
+    aria-pressed={on}
+    onClick={() => onChange(!on)}
+    onPointerEnter={focusOnHover}
+    className={`inline-flex min-h-[32px] cursor-pointer items-center rounded-full px-3 text-[12px] font-bold whitespace-nowrap transition-[background-color,box-shadow,color] duration-200 ${CURSOR_PILL} ${
+      on ? CHOSEN_PILL : "text-[#C5CBD8] shadow-[inset_0_0_0_1px_#262B3D] hover:text-[#F5F7FA]"
+    }`}
+  >
+    {label}
+  </button>
+);
+
 export interface LeaderboardPanelProps {
   trackName: string;
   /** The loaded circuit (laps on it can be raced as a ghost) */
@@ -126,18 +150,20 @@ export interface LeaderboardPanelProps {
   /** A circuit's name, for the circuit switcher */
   trackNameOf?: (id: string) => string;
   vehicleLabel: (id: string) => string;
-  /** This car's laps on this circuit, on the board being driven */
+  /** This car's best laps on this circuit, saved in this browser */
   local: LeaderboardEntry[];
   /** Every personal best saved in this browser, any circuit and car: lets the panel switch circuit and car */
   loadAllLocal?: () => Promise<LeaderboardEntry[]>;
-  remote: LeaderboardEntry[];
+  /** This site has an online board */
   remoteEnabled: boolean;
-  /** Assists, realism and surface of the online board shown ("No assists · Full · Dry") */
-  remoteBoardLabel?: string;
-  loading: boolean;
-  /** The last fetch of the online board failed (the times shown, if any, are older ones) */
-  error?: boolean;
-  onRefresh: () => void;
+  /** Reads one online board (a circuit and car, optionally only laps driven a certain way); null when it can't be read */
+  loadRemote?: (trackId: string, vehicle: VehicleModelId, filter: BoardFilter, physics: number) => Promise<RemoteBoard | null>;
+  /** Changes when the online board may have changed (a lap went up): it is read again */
+  boardVersion?: number;
+  /** The car being driven: the online board shown until another car is picked */
+  vehicle?: string;
+  /** The player's name, to mark their row */
+  driverName?: string;
   onRaceGhost?: (entry: LeaderboardEntry) => void;
   onImportGhost?: (file: File) => void;
   onExportBest?: () => void;
@@ -160,12 +186,11 @@ export const LeaderboardPanel: React.FC<LeaderboardPanelProps> = ({
   vehicleLabel,
   local,
   loadAllLocal,
-  remote,
   remoteEnabled,
-  remoteBoardLabel,
-  loading,
-  error = false,
-  onRefresh,
+  loadRemote,
+  boardVersion = 0,
+  vehicle,
+  driverName = "",
   onRaceGhost,
   onImportGhost,
   onExportBest,
@@ -209,12 +234,14 @@ export const LeaderboardPanel: React.FC<LeaderboardPanelProps> = ({
 
   const onCircuit = useMemo(() => pool.filter((e) => e.trackId === circuit), [pool, circuit]);
   const cars = useMemo(() => {
-    const ids = [...new Set(onCircuit.map((e) => e.vehicle))];
+    const ids: string[] = [...new Set(onCircuit.map((e) => e.vehicle))];
+    // The car being driven can always be picked on its own circuit (for its online board), laps or not
+    if (vehicle && circuit === here && !ids.includes(vehicle)) ids.push(vehicle);
     return [
       { id: ALL_CARS, label: "All cars", count: onCircuit.length },
-      ...ids.map((id) => ({ id: id as string, label: vehicleLabel(id), count: onCircuit.filter((e) => e.vehicle === id).length })),
+      ...ids.map((id) => ({ id, label: vehicleLabel(id), count: onCircuit.filter((e) => e.vehicle === id).length })),
     ];
-  }, [onCircuit, vehicleLabel]);
+  }, [onCircuit, vehicleLabel, vehicle, circuit, here]);
   const carShown = cars.some((c) => c.id === car) ? car : ALL_CARS;
 
   // Fastest first, whatever order the caller passed
@@ -230,7 +257,52 @@ export const LeaderboardPanel: React.FC<LeaderboardPanelProps> = ({
   const bestLap = rows[0]?.lapTimeMs ?? 0;
   const toFind = theoretical && bestLap ? (theoretical - bestLap) / 1000 : 0;
 
-  const remoteSorted = useMemo(() => [...remote].sort((a, b) => a.lapTimeMs - b.lapTimeMs), [remote]);
+  // ---- The online board: follows the circuit and car picked above (with "All cars", the car being driven)
+  const onlineCar = carShown !== ALL_CARS ? carShown : (vehicle ?? rows[0]?.vehicle ?? "");
+  const [noAssists, setNoAssists] = useState(false);
+  const [fullRealism, setFullRealism] = useState(false);
+  const [wetOnly, setWetOnly] = useState(false);
+  const [physics, setPhysics] = useState(PHYSICS_VERSION);
+  const [reload, setReload] = useState(0);
+  /** `key`: the circuit, car and filters `board` was read for (a board is never shown under another's heading) */
+  const [online, setOnline] = useState<{ key: string; board: RemoteBoard | null; loading: boolean; error: boolean }>({
+    key: "",
+    board: null,
+    loading: false,
+    error: false,
+  });
+  const boardKey = `${circuit}|${onlineCar}|${noAssists}|${fullRealism}|${wetOnly}|${physics}`;
+  // Another circuit or car starts on the current physics again
+  useEffect(() => setPhysics(PHYSICS_VERSION), [circuit, onlineCar]);
+  useEffect(() => {
+    if (!remoteEnabled || !loadRemote || !circuit || !isVehicleModelId(onlineCar)) {
+      setOnline({ key: "", board: null, loading: false, error: false });
+      return;
+    }
+    let live = true;
+    setOnline((o) => ({ ...o, loading: true }));
+    const filter: BoardFilter = {};
+    if (noAssists) filter.assists = "pro";
+    if (fullRealism) filter.realism = "full";
+    if (wetOnly) filter.surface = "wet";
+    void loadRemote(circuit, onlineCar, filter, physics).then((board) => {
+      if (!live) return;
+      // On a failed refresh of the same board the times already shown stay (marked as older)
+      setOnline((o) => ({ key: boardKey, board: board ?? (o.key === boardKey ? o.board : null), loading: false, error: board === null }));
+    });
+    return () => {
+      live = false;
+    };
+    // boardKey stands for the circuit, car, filters and physics
+  }, [remoteEnabled, loadRemote, boardKey, boardVersion, reload]);
+  const shown = online.key === boardKey ? online.board : null;
+  const myKey = driverNameKey(driverName);
+  const me = shown?.me ?? null;
+  // The driver just ahead, when they are among the rows fetched
+  const ahead = me && me.rank >= 2 ? (shown?.entries[me.rank - 2] ?? null) : null;
+  const leader = shown?.entries[0] ?? null;
+  const olderPhysics = (shown?.physics ?? []).filter((v) => v !== PHYSICS_VERSION);
+  const filtered = noAssists || fullRealism || wetOnly;
 
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -265,12 +337,6 @@ export const LeaderboardPanel: React.FC<LeaderboardPanelProps> = ({
             <button type="button" onClick={onExportBest} onPointerEnter={focusOnHover} className={BUTTON}>
               <Download aria-hidden className="h-[15px] w-[15px]" strokeWidth={2.2} />
               Export my best
-            </button>
-          ) : null}
-          {remoteEnabled ? (
-            <button type="button" onClick={onRefresh} disabled={loading} onPointerEnter={focusOnHover} className={BUTTON}>
-              <RotateCw aria-hidden className={`h-[15px] w-[15px] ${loading ? "animate-spin" : ""}`} strokeWidth={2.2} />
-              {loading ? "Refreshing…" : "Refresh online"}
             </button>
           ) : null}
         </div>
@@ -382,35 +448,99 @@ export const LeaderboardPanel: React.FC<LeaderboardPanelProps> = ({
       {remoteEnabled ? (
         <section className={CARD} aria-label="Online">
           <CardHeader label="Online" color="#00E5FF">
-            {remoteBoardLabel ? (
-              <span className="truncate text-[12px] text-[#8E96AA]" title="Laps are ranked against laps driven with the same assists, realism and surface">
-                {remoteBoardLabel}
+            <span className="min-w-0 truncate text-[12px] text-[#8E96AA]">
+              {onlineCar ? `${vehicleLabel(onlineCar)} · ` : ""}
+              {nameOf(circuit)}
+            </span>
+            <button
+              type="button"
+              onClick={() => setReload((n) => n + 1)}
+              disabled={online.loading}
+              onPointerEnter={focusOnHover}
+              aria-label="Refresh online times"
+              className={`${SMALL_BUTTON} ml-auto h-[30px]`}
+            >
+              <RotateCw aria-hidden className={`h-3.5 w-3.5 ${online.loading ? "animate-spin" : ""}`} strokeWidth={2.2} />
+              {online.loading ? "Loading…" : "Refresh"}
+            </button>
+          </CardHeader>
+
+          <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Show only">
+            <span className="lc-lbl mr-1">Only</span>
+            <FilterToggle label="No assists" on={noAssists} onChange={setNoAssists} />
+            <FilterToggle label="Full realism" on={fullRealism} onChange={setFullRealism} />
+            <FilterToggle label="Wet laps" on={wetOnly} onChange={setWetOnly} />
+            {olderPhysics.length > 0 || physics !== PHYSICS_VERSION ? (
+              <span className="ml-auto flex flex-wrap items-center gap-1.5">
+                <FilterToggle label="Current version" on={physics === PHYSICS_VERSION} onChange={() => setPhysics(PHYSICS_VERSION)} />
+                {[...new Set([...olderPhysics, ...(physics !== PHYSICS_VERSION ? [physics] : [])])].map((v) => (
+                  <FilterToggle key={v} label={`Older laps (v${v})`} on={physics === v} onChange={() => setPhysics(v)} />
+                ))}
               </span>
             ) : null}
-            {loading ? (
-              <span className="lc-breathe ml-auto font-f1-mono text-[11px] font-extrabold tracking-[0.12em] text-[#00E5FF]">LOADING…</span>
-            ) : null}
-          </CardHeader>
-          {loading && remoteSorted.length === 0 ? (
+          </div>
+
+          {/* Where the player stands */}
+          {me ? (
+            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-[14px] border border-[#CCFF00]/30 bg-[#CCFF00]/[0.05] px-3.5 py-2.5">
+              <span className="flex min-w-0 flex-col">
+                <span className="text-[14px] font-bold text-[#F5F7FA]">
+                  You are <span className="lc-data text-[#CCFF00]">P{me.rank}</span> of {shown?.total ?? me.rank}
+                  <span className="lc-data ml-2 text-[#C5CBD8]">{formatLapTime(me.entry.lapTimeMs)}</span>
+                </span>
+                <span className="truncate text-[12px] text-[#8E96AA]">
+                  {me.rank === 1
+                    ? "Fastest on this board"
+                    : ahead
+                      ? `${((me.entry.lapTimeMs - ahead.lapTimeMs) / 1000).toFixed(3)} s behind ${ahead.name}`
+                      : leader
+                        ? `${((me.entry.lapTimeMs - leader.lapTimeMs) / 1000).toFixed(3)} s off the fastest lap`
+                        : ""}
+                </span>
+              </span>
+              {ahead && onRaceGhost && circuit === here ? (
+                <button type="button" onClick={() => onRaceGhost(ahead)} onPointerEnter={focusOnHover} className={`${SMALL_BUTTON} h-9`}>
+                  <Flag aria-hidden className="h-3.5 w-3.5" strokeWidth={2.4} />
+                  Race the ghost ahead
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+
+          {online.loading && !shown ? (
             <p className="m-0 px-1 py-2 text-[13px] text-[#8E96AA]">Loading online times…</p>
-          ) : error && remoteSorted.length === 0 ? (
+          ) : online.error && !shown ? (
             <p role="alert" className="m-0 px-1 py-2 text-[13px] text-[#FF2A3C]">
-              Couldn&apos;t load the online times. Check your connection and press Refresh online.
+              Couldn&apos;t load the online times. Check your connection and press Refresh.
             </p>
-          ) : remoteSorted.length === 0 ? (
-            <p className="m-0 px-1 py-2 text-[13px] text-[#8E96AA]">No online times for this circuit and car yet.</p>
+          ) : !shown || shown.entries.length === 0 ? (
+            <p className="m-0 px-1 py-2 text-[13px] text-[#8E96AA]">
+              {filtered ? "No online laps like that here yet. Turn a filter off to see every lap." : "No online times for this circuit and car yet. Yours can be the first."}
+            </p>
           ) : (
             <>
-              {error && !loading ? (
+              {online.error && !online.loading ? (
                 <p role="alert" className="m-0 px-1 pb-1 text-[12px] text-[#FFB300]">
                   Couldn&apos;t refresh. These are the last times loaded.
                 </p>
               ) : null}
               <ol className="m-0 flex list-none flex-col gap-0.5 p-0">
-                {remoteSorted.map((e, i) => (
-                  <OnlineRow key={e.id ?? `${e.code}-${e.recordedAt}-${i}`} index={i} entry={e} vehicleLabel={vehicleLabel} onRaceGhost={onRaceGhost} />
+                {shown.entries.map((e, i) => (
+                  <OnlineRow
+                    key={e.id ?? `${e.code}-${e.recordedAt}-${i}`}
+                    rank={i + 1}
+                    entry={e}
+                    fastest={i === 0}
+                    mine={myKey !== "" && driverNameKey(e.name) === myKey}
+                    onRaceGhost={circuit === here ? onRaceGhost : undefined}
+                  />
                 ))}
               </ol>
+              {shown.total > shown.entries.length ? (
+                <p className="m-0 px-1 text-[12px] text-[#8E96AA]">
+                  The fastest {shown.entries.length} of {shown.total} drivers.
+                </p>
+              ) : null}
             </>
           )}
           {onExportDriverKey || onImportDriverKey ? (
