@@ -18,7 +18,13 @@
  * anything already saved here, then continues to the page the player asked for.
  *
  * Only POSTs from the old origin are accepted, and only the game's own keys are imported.
+ *
+ * /api is the game's online side (cloudflare/api): room codes, connection servers and the lap boards.
  */
+import { handleApi } from "./api/index.ts";
+
+// Durable Object classes (wrangler.jsonc binds them)
+export { RoomServer } from "./api/index.ts";
 
 const OLD_ORIGIN = "https://khazp.github.io";
 // localStorage keys the game writes (bugesera.* settings/track/car/driver key, lc.* garage and MFD, librecorsa.* AI learning)
@@ -30,6 +36,7 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (url.pathname === "/__migrate") return migrate(request);
+    if (url.pathname === "/api" || url.pathname.startsWith("/api/")) return handleApi(request, env, url);
     if (request.method === "GET" || request.method === "HEAD") {
       const large = await fromBucket(request, env, url);
       if (large) return large;

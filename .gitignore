@@ -37,8 +37,9 @@ __pycache__/
 HANDOFF.md
 acevo_physics_strings.txt
 
-# Wrangler local state
+# Wrangler local state and local-only settings (DEV_ORIGINS, a TURN key for testing)
 .wrangler/
+.dev.vars
 
 # Private scratch reports (audits, assessments, research)
 AUDIT-*.md
