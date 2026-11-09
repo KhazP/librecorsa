@@ -465,10 +465,18 @@ function gt3Compound(
       Fz0: 3787,
       dyCurve: buildGt3LoadCurve(gripScale, 3787, 0.7917),
       dxCurve: buildGt3LoadCurve(gripScale, 3787, 0.8017),
+      // A brush tyre: the brush curve to the peak slip angle [motec, with the steering compliance: understeer gradient
+      // 1.43 °/g against the logs' 1.44], and the second reference set's shape data, the peak angle growing 4.3 % per
+      // Fz0 of load (3.5 % at the rear) and with a softer tyre, the friction circle, the longitudinal stiffness × 1.05
+      // and the grip lost to sliding speed [ref]
+      curve: 'brush',
       friction_limit_angle: 6.12,
-      // Cornering stiffness peak scaled from Pacejka's MF 6.1 reference tyre by load capacity, as the f12026-car's
-      // (F12026CarConfig f1Compound): the 315 mm front on an 18" rim at 26 psi carries 2.01 × the reference, peak at
-      // 13.8 kN = 3.65 × Fz0; the 325 mm rear 2.13 ×, 14.6 kN = 3.75 × its Fz0 [Pacejka MF 6.1; TRA load formula; est]
+      peakSlipLoadGain: 0.043,
+      peakSlipPressureGain: 0.05,
+      combinedExponent: 2,
+      longStiffnessMult: 1.05,
+      speedSensitivity: 0.000353,
+      // Unused by a brush tyre (the magic-formula family's stiffness law)
       pKy2: 3.65,
       // Default TC (0.10) and ABS (0.09) limits sit around it [est]
       slip_ratio_limit: 0.1,
@@ -489,9 +497,10 @@ function gt3Compound(
       rollingResistanceSpeedSq: 4.6e-7,
       verticalDamping: 500,
       pneumaticTrail: 0.04,
-      // +3 % longitudinal grip under braking. It was +9 %, which stood in for the front downforce the splitter stall used to
-      // lose under braking; with the stall gone the braking fit holds on less [motec, ref]
-      brakeDxMod: 0.03,
+      // No extra longitudinal grip under braking [ref]. It was +9 %, then +3 %: the first stood in for the front downforce
+      // the splitter stall used to lose under braking, the second for a braking measure that read the dive, not the
+      // grip. Measured over a settled stop the logs fit best with none (3.9 % RMS over 99-243 km/h) [motec]
+      brakeDxMod: 0,
     },
     thermalData: {
       thermalPerformanceCurve: thermalCurve,
@@ -506,6 +515,8 @@ function gt3Compound(
       coreCooling: [8, 0.2],
       thermalVerticalK: -0.001,
       thermalVerticalRefC: 90,
+      // Slow graining / blistering gains and exponents [ref]
+      tread: { grainGain: 0.5, grainGamma: 1, blisterGain: 0.5, blisterGamma: 1 },
     },
     pressureData: {
       optimalPsi: 26,
@@ -519,6 +530,8 @@ function gt3Compound(
       ],
       // ≈ 0.5 % grip per psi off the ideal over the usual ±2–4 psi
       pressureGripSensitivity: 1.0,
+      // 0.25 % of grip per psi off the ideal [ref]
+      pressureGripLossPerPsi: 0.0025,
       coldRefC: 60,
     },
     camberData: {
@@ -542,6 +555,8 @@ function gt3Compound(
         dyCurve: buildGt3LoadCurve(rearGripScale, 3910, 0.8044),
         dxCurve: buildGt3LoadCurve(rearGripScale, 3910, 0.8144),
         friction_limit_angle: 6.06,
+        peakSlipLoadGain: 0.035,
+        speedSensitivity: 0.000351,
         pKy2: 3.75,
         relaxationLengthX: 0.10173,
         relaxationLengthY: 0.10173,
@@ -557,6 +572,7 @@ function gt3Compound(
           [34, 486_182],
         ],
         pressureGripSensitivity: 1.0,
+        pressureGripLossPerPsi: 0.0025,
         coldRefC: 60,
       },
       camberData: {

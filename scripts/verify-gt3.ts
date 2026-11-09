@@ -229,7 +229,8 @@ console.log("\n== The GT3's own handling, not the F1's");
   // Lower bound 3° (was 4°, at 4.6°): the rear now takes its whole load transfer under power (the tyre forces used to act
   // at the roll centre, hiding rc / h ≈ 20 % of it), and the compliant halfshafts bring the full-throttle step in over the
   // driveline's wind-up, so the TC's instant cut catches the slide at ≈ 3.5°. Still a visible step-out it then holds
-  check('TC lets a power-on exit slide but catches it', withTc > 3 && withTc < 25 && noTc > 45, `peak body slip ${fmt(withTc, 1)}° with TC, ${fmt(noTc, 1)}° without`);
+  // Without TC it still spins, 42° in the 1.5 s (35° asked; it was 45° on tyres that let go three times as fast past the peak)
+  check('TC lets a power-on exit slide but catches it', withTc > 3 && withTc < 25 && noTc > 35, `peak body slip ${fmt(withTc, 1)}° with TC, ${fmt(noTc, 1)}° without`);
 
   // Light trail braking into a 160 km/h corner tightens the line (weight on the nose, rear still braking 29 %)
   const curvature = (brake: number, steer: number) => {
