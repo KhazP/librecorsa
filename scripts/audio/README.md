@@ -38,4 +38,4 @@ uv run --python 3.14 --no-project --with numpy --with scipy --with fsb5 \
    - The 2.4 s loop is phase-aligned by maximizing normalized cross-correlation over the 0.25 s equal-power crossfade window (`tail * cos(t) + head * sin(t)`), DC-centered, and micro-bridged (32 samples = 0.67 ms) to `0.0` at the wrap-around boundary so the loop boundary jump is `0.0`.
 3. **Channel & Level Optimization**:
    - Stereo samples whose L-R difference RMS is `< 3%` of signal RMS are automatically downmixed to mono, alongside interior/auxiliary loops (`turbo`, `transmission`, `skid`, `tc`, `oneshots`).
-   - Engine loops are RMS-leveled along a smooth curve from idle to limiter (`0.165 → 0.220` on-throttle, `0.125 → 0.175` off-throttle) with soft-knee peak limiting at `0.92`, then encoded with `ffmpeg -c:a libvorbis -q:a 4`.
+   - Engine loops are RMS-leveled along a smooth curve from idle to limiter (`0.165 → 0.220` on-throttle, `0.125 → 0.175` off-throttle) with soft-knee peak limiting at `0.92`, then encoded with `ffmpeg -c:a libvorbis -q:a 4`. An anchor with its own `"rms"` keeps that level instead (the 496R's overrun, which its bank fades out as the revs rise).

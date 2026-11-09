@@ -601,9 +601,12 @@ def port_car(car_id: str, cfg: dict[str, Any], ffmpeg: str) -> dict[str, Any]:
                 resampled = pitch_resample(raw_x, anchor_rpm, root_rpm)
                 loop = make_seamless_loop(resampled, LOOP_S, XFADE_S, RATE)
 
-                # Consistent RMS curve across RPM: rises smoothly from idle to limiter
+                # Consistent RMS curve across RPM: rises smoothly from idle to limiter, unless the anchor sets its own
+                # level (a bank whose overrun fades out with rpm, as the 496R's does)
                 frac = idx_item / max(1, n_items - 1)
-                if layer == "on":
+                if "rms" in item:
+                    target_rms = float(item["rms"])
+                elif layer == "on":
                     target_rms = 0.165 + 0.055 * frac
                 else:
                     target_rms = 0.125 + 0.050 * frac

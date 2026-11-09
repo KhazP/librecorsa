@@ -637,5 +637,69 @@
     "lift": { "popMinRpm": 99999, "crackleMinRpm": 99999, "downshiftPopChance": 0 },
     "shift": { "style": "manual", "clutchS": 0.25 },
     "limiterRetriggerS": 0.85
+  },
+  "mtr-496r": {
+    "outDir": "public/cars/mtr-496r/audio",
+    "limiterRpm": 10000,
+    "sourceDescription": "MTRacing 496R v0.9 for Assetto Corsa by munyuturbo - content/cars/mt_mtr_496r/sfx/mt_mtr_496r.bank",
+    "intBank": "/Users/alpyalay/Downloads/librecorsa-src/mt_mtr_496r/mt_mtr_496r/sfx/mt_mtr_496r.bank",
+    "engine": {
+      "int": {
+        "on": [
+          { "rpm": 2000, "rootRpm": 2000, "sample": "496hd_int_engine_2008_on#25" },
+          { "rpm": 3000, "rootRpm": 3000, "sample": "496hd_int_engine_3020_on#5" },
+          { "rpm": 4000, "rootRpm": 4000, "sample": "496hd_int_engine_4019_on#44" },
+          { "rpm": 5000, "rootRpm": 5000, "sample": "496hd_int_engine_5035_on#16" },
+          { "rpm": 6000, "rootRpm": 6000, "sample": "496hd_int_engine_6020_on#61" },
+          { "rpm": 10000, "rootRpm": 7000, "sample": "496hd_int_engine_6998_on#31" }
+        ],
+        "off": [
+          { "rpm": 2200, "rootRpm": 2200, "sample": "496hd_engine_idol_int#12", "rms": 0.16 },
+          { "rpm": 3000, "rootRpm": 3000, "sample": "496_int_engine_3003_on#60", "rms": 0.11 },
+          { "rpm": 4000, "rootRpm": 4000, "sample": "496_int_engine_4001_on#1", "rms": 0.1 },
+          { "rpm": 5000, "rootRpm": 5000, "sample": "496_int_engine_4993_on#43", "rms": 0.1 },
+          { "rpm": 10000, "rootRpm": 6000, "sample": "496_int_engine_6012_on#62", "rms": 0.1 }
+        ]
+      },
+      "ext": {
+        "on": [
+          { "rpm": 2000, "rootRpm": 2000, "sample": "496_ext_engine_2000_on#29" },
+          { "rpm": 2500, "rootRpm": 2500, "sample": "496_ext_engine_2505_on#30" },
+          { "rpm": 3000, "rootRpm": 3000, "sample": "496_ext_engine_3003_on_2#45" },
+          { "rpm": 3500, "rootRpm": 3500, "sample": "496_ext_engine_3498_on#32" },
+          { "rpm": 4500, "rootRpm": 4500, "sample": "496_ext_engine_4509_on#0" },
+          { "rpm": 5500, "rootRpm": 5500, "sample": "496_ext_engine_5511_on_2#17" },
+          { "rpm": 6000, "rootRpm": 6000, "sample": "496_ext_engine_6012_on_2#56" },
+          { "rpm": 7500, "rootRpm": 7500, "sample": "496_ext_engine_7529_on_2#20" },
+          { "rpm": 10000, "rootRpm": 8000, "sample": "496_ext_engine_8002_on_3#18" }
+        ],
+        "off": [
+          { "rpm": 2200, "rootRpm": 2200, "sample": "496_engine_idol_ext#42", "rms": 0.16 },
+          { "rpm": 2500, "rootRpm": 2500, "sample": "496_ext_engine_2505_on#30", "rms": 0.15 },
+          { "rpm": 3500, "rootRpm": 3500, "sample": "496_ext_engine_3498_on#32", "rms": 0.12 },
+          { "rpm": 10000, "rootRpm": 4500, "sample": "496_ext_engine_4509_on#0", "rms": 0.055 }
+        ]
+      }
+    },
+    "transmission": [
+      { "layer": "on", "drivetrainSpeed": 160, "sample": "919_tr_whine_low_3#47", "rms": 0.05 },
+      { "layer": "off", "drivetrainSpeed": 160, "sample": "919_tr_whine_verlow_2#53", "rms": 0.04 }
+    ],
+    "skid": { "int": "Skid#15", "ext": "skid_ext_mono#13" },
+    "tractionControl": "traction_control#48",
+    "oneshots": {
+      "gear_up": ["496_gearup#41"],
+      "gear_down": ["496_geardown#6"],
+      "shift_cut": ["496_ext_p_engine_6519#4", "496_ext_p_engine_7005#7", "496_ext_p_engine_7529#59"],
+      "backfire_int": ["500_backfire3#14", "500_backfire4#54", "500_backfire5#27", "500_backfire6#39", "500_backfire7#21"],
+      "backfire_ext": ["backfireEXT_1#33", "backfireEXT_2#57", "backfireEXT_3#36", "backfireEXT_4#51", "backfireEXT_5#35", "backfireEXT_6#49", "backfireEXT_7#34", "backfireEXT_8#23", "backfireEXT_9#26"]
+    },
+    "limiterFallbackSample": "500_limiter#52",
+    "throttleCurve": {
+      "ext": [[0.0, 0.0], [0.2, 0.04], [0.3, 0.2], [0.4, 0.66], [0.47, 0.88], [0.6, 0.96], [0.85, 1.0], [1.0, 1.0]],
+      "int": [[0.0, 0.0], [0.1, 0.08], [0.2, 0.2], [0.3, 0.45], [0.4, 0.73], [0.52, 0.91], [0.7, 0.98], [0.9, 1.0], [1.0, 1.0]]
+    },
+    "lift": { "popMinRpm": 6000, "crackleMinRpm": 6500, "downshiftPopChance": 0.65 },
+    "limiterRetriggerS": 0.85
   }
 }
