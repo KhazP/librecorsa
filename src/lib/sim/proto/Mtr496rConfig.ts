@@ -26,6 +26,7 @@ import type {
   TyresCompoundData,
 } from '../f12026-car/F12026CarConfig';
 import { deriveRainCompound } from '../f12026-car/F12026CarConfig';
+import { modBodyHeightM, modCornerStops } from '../mod-suspension';
 
 /** Driveline efficiency of this model; the wheel torque curve is divided by it for crank torque */
 const DRIVELINE_EFFICIENCY = 0.92;
@@ -163,13 +164,49 @@ const damper = (slow_bump: number, fast_bump: number, slow_rebound: number, fast
 
 const NO_DAMPER = damper(0, 0, 0, 0);
 
+const MASS = 1025;
+const WHEELBASE = 2.8;
+/** Share of the sprung weight on the front axle [spec CG_LOCATION] */
+const FRONT_WEIGHT = 0.485;
+/** Sprung load on a front / rear spring at static ride (N): the car less its hubs (36 / 39 kg) [derived] */
+const SPRUNG_KG = MASS - 2 * 36 - 2 * 39;
+const FRONT_STATIC_LOAD_N = (SPRUNG_KG * 9.81 * FRONT_WEIGHT) / 2;
+const REAR_STATIC_LOAD_N = (SPRUNG_KG * 9.81 * (1 - FRONT_WEIGHT)) / 2;
+/** Tyre radial rate at the 35 psi it runs at (N/m): 254 300 at 26 psi + 5233 per psi [spec RATE, PRESSURE_SPRING_GAIN] */
+const HOT_TYRE_RATE = 254_300 + 5233 * 9;
+/**
+ * The mod measures its stops from the suspension's design position, with the springs working on their rod lengths
+ * (`mod-suspension.ts`): at static ride the fronts sit 1.9 mm into their travel and the rears 11.4 mm, so the stops are
+ * these far from static [spec ROD_LENGTH, PACKER_RANGE, BUMPSTOP_UP / DN of FRONT / REAR / HEAVE_*; derived]
+ */
+const FRONT_STOPS = modCornerStops({
+  staticLoadN: FRONT_STATIC_LOAD_N,
+  springRate: 120_000,
+  rodLength: 0.005,
+  packerRange: 0.02,
+  bumpStopUp: 0.055,
+  bumpStopDn: 0.055,
+  heave: { springRate: 120_000, rodLength: 0.02, packerRange: 0.1, bumpStopUp: 0.06 },
+});
+const REAR_STOPS = modCornerStops({
+  staticLoadN: REAR_STATIC_LOAD_N,
+  springRate: 90_000,
+  rodLength: 0,
+  packerRange: 0.05,
+  bumpStopUp: 0.05,
+  bumpStopDn: 0.05,
+  heave: { springRate: 150_000, rodLength: 0.005, packerRange: 0.08, bumpStopUp: 0.08 },
+});
+const mm = (m: number) => Number(m.toFixed(4));
+
 /**
  * Double wishbones front and rear with a heave spring on each axle: the mod's wheel rates, anti-roll bars, bump stops,
- * packers and two-stage dampers [spec suspensions.ini]. Travel is measured from the design position, which this model
- * takes as the static one (as the Liana's); the front's packers, 20 mm up, are the first stop its wheels meet. The heave
- * elements carry their share of the weight at static (AC's heave springs are preloaded by their rod), with their bump
- * stops as packers. Hardpoints are [x inboard, y up, z forward] from the wheel centre [spec]; camber gain and roll-centre
- * heights are what the kinematic solver gives on them at static [derived].
+ * packers and two-stage dampers [spec suspensions.ini], the stops at their distance from static ride (above). The
+ * front's packers, 13 mm up, are the first stop its wheels meet, its bump stop 53 mm up the second; the rear's packer
+ * and bump stop come in together 39 mm up. The heave elements carry their share of the weight at static (their springs
+ * are preloaded by their rod); a heave element's own bump stop is rigid (500 kN/m), the front's 58 mm up, the rear's
+ * behind its 150 kN/m packer at 64 mm. Hardpoints are [x inboard, y up, z forward] from the wheel centre [spec]; camber
+ * gain and roll-centre heights are what the kinematic solver gives on them at static [derived].
  */
 const SUSPENSIONS: SuspensionsData = {
   front: {
@@ -179,12 +216,12 @@ const SUSPENSIONS: SuspensionsData = {
     staticCamber: -2.1,
     camberGainKinematic: -26.8,
     springs: { wheel_rate: 120_000, helper_rate: 0, helper_range: 0 },
-    // [spec HEAVE_FRONT SPRING_RATE, PROGRESSIVE_SPRING_RATE, BUMPSTOP_UP, BUMP_STOP_RATE]
-    heave: { rate: 120_000, gap: 0, packerGap: 0.06, packerRate: 250_000, progressiveRate: 10_000 },
-    // [spec PACKER_RANGE, BUMP_STOP_RATE]
-    bumpStop: { range: 0.02, rate: 150_000, progression: 0 },
+    // [spec HEAVE_FRONT SPRING_RATE, PROGRESSIVE_SPRING_RATE, BUMPSTOP_UP]
+    heave: { rate: 120_000, gap: 0, packerGap: mm(FRONT_STOPS.heaveBumpStopGapM), packerRate: 500_000, progressiveRate: 10_000 },
+    // [spec PACKER_RANGE, BUMPSTOP_UP, BUMP_STOP_RATE]
+    bumpStop: { range: mm(FRONT_STOPS.packerGapM), rate: 150_000, progression: 0, hardStop: { range: mm(FRONT_STOPS.bumpStopGapM), rate: 150_000 } },
     // [spec BUMPSTOP_DN]
-    droopTravel: 0.055,
+    droopTravel: mm(FRONT_STOPS.droopM),
     rollCentreHeight: 0.0527,
     // [spec ARB FRONT]
     arb: 120_000,
@@ -206,12 +243,12 @@ const SUSPENSIONS: SuspensionsData = {
     staticCamber: -1.75,
     camberGainKinematic: -35.7,
     springs: { wheel_rate: 90_000, helper_rate: 0, helper_range: 0 },
-    // [spec HEAVE_REAR SPRING_RATE, PROGRESSIVE_SPRING_RATE, BUMPSTOP_UP, BUMP_STOP_RATE]
-    heave: { rate: 150_000, gap: 0, packerGap: 0.08, packerRate: 150_000, progressiveRate: 10_000 },
-    // [spec BUMPSTOP_UP = PACKER_RANGE, BUMP_STOP_RATE]
-    bumpStop: { range: 0.05, rate: 150_000, progression: 0 },
+    // [spec HEAVE_REAR SPRING_RATE, PROGRESSIVE_SPRING_RATE, PACKER_RANGE, BUMP_STOP_RATE]
+    heave: { rate: 150_000, gap: 0, packerGap: mm(REAR_STOPS.heavePackerGapM), packerRate: 150_000, progressiveRate: 10_000 },
+    // The packer and the bump stop meet at the same travel: twice the rate [spec PACKER_RANGE = BUMPSTOP_UP, BUMP_STOP_RATE]
+    bumpStop: { range: mm(REAR_STOPS.packerGapM), rate: 300_000, progression: 0 },
     // [spec BUMPSTOP_DN]
-    droopTravel: 0.05,
+    droopTravel: mm(REAR_STOPS.droopM),
     rollCentreHeight: 0.1203,
     // [spec ARB REAR]
     arb: 20_000,
@@ -252,17 +289,18 @@ const SUSPENSIONS: SuspensionsData = {
   },
 };
 
-const MASS = 1025;
-const WHEELBASE = 2.8;
 /**
- * GRAPHICS_OFFSET puts the ground 0.28 m under the CG: the model's tyres touch down 0.04 m below its origin, which sits
- * 0.24 m below the CG [spec car.ini, derived], as the f12026-car's CG is read. (BASEY + tyre radius would put it at
- * 0.43 m, where the splitter and diffuser would sit far above the heights their ground-effect tables work at.)
+ * The body's height at each axle is the tyre's loaded radius less the wheel centre's height in the body frame (BASEY
+ * 0.085 / 0.080 above the CG's level, plus the static offset): 0.245 m at the front, 0.255 m at the rear, so the CG,
+ * 48.5 % of the weight forward, rides 0.250 m up [spec BASEY, RADIUS; derived]. The ride-height pickups sit 0.181 m
+ * (front) and 0.170 m (rear) below the CG's level [spec RIDE]: 64 / 85 mm off the ground at rest, where the splitter's
+ * and the diffuser's ground-effect tables (25-140 mm) work.
  */
-const CG_HEIGHT = 0.28;
-/** Ride-height pickups 0.181 m (front) and 0.170 m (rear) below the CG [spec RIDE]: 99 / 110 mm off the ground at rest */
-const FRONT_TARGET_HEIGHT = CG_HEIGHT - 0.181;
-const REAR_TARGET_HEIGHT = CG_HEIGHT - 0.17;
+const FRONT_BODY_HEIGHT = modBodyHeightM(0.34, FRONT_STATIC_LOAD_N / HOT_TYRE_RATE + (36 * 9.81) / HOT_TYRE_RATE, 0.085, FRONT_STOPS.staticOffsetM);
+const REAR_BODY_HEIGHT = modBodyHeightM(0.355, REAR_STATIC_LOAD_N / HOT_TYRE_RATE + (39 * 9.81) / HOT_TYRE_RATE, 0.08, REAR_STOPS.staticOffsetM);
+const CG_HEIGHT = Number((FRONT_BODY_HEIGHT + (REAR_BODY_HEIGHT - FRONT_BODY_HEIGHT) * (1 - FRONT_WEIGHT)).toFixed(4));
+const FRONT_TARGET_HEIGHT = Number((FRONT_BODY_HEIGHT - 0.181).toFixed(4));
+const REAR_TARGET_HEIGHT = Number((REAR_BODY_HEIGHT - 0.17).toFixed(4));
 /** Static rake (deg) [derived] */
 const STATIC_RAKE_DEG = (Math.asin((REAR_TARGET_HEIGHT - FRONT_TARGET_HEIGHT) / WHEELBASE) * 180) / Math.PI;
 
@@ -719,7 +757,7 @@ export const MTR_496R_CONFIG = {
     // With driver, no fuel [spec TOTALMASS]
     totalMassKg: MASS,
     // [spec CG_LOCATION]
-    frontWeightFraction: 0.485,
+    frontWeightFraction: FRONT_WEIGHT,
     // [spec WHEELBASE, TRACK]
     wheelbase: WHEELBASE,
     trackWidthFront: 1.54,

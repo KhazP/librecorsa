@@ -64,8 +64,8 @@ console.log('\n== At rest');
   const fz = car.wheels.map((w) => w.fz);
   const front = (fz[0] + fz[1]) / fz.reduce((a, b) => a + b, 0);
   check('Front axle carries ≈ 48.5 % of the weight', Math.abs(front - 0.485) < 0.01, `${fmt(front * 100, 1)} %`);
-  // The pickups 0.181 / 0.170 m under the CG, 0.28 m up: 99 / 110 mm
-  check('Rides at the mod\'s 99 / 110 mm', Math.abs(t.aeroHeightFront - 0.099) < 0.004 && Math.abs(t.aeroHeightRear - 0.11) < 0.004,
+  // The pickups 0.181 / 0.170 m under the CG's level, the body 0.245 / 0.255 m up at the axles: 64 / 85 mm
+  check('Rides at the mod\'s 64 / 85 mm', Math.abs(t.aeroHeightFront - 0.064) < 0.004 && Math.abs(t.aeroHeightRear - 0.085) < 0.004,
     `${fmt(t.aeroHeightFront * 1000, 1)} / ${fmt(t.aeroHeightRear * 1000, 1)} mm`);
 }
 
@@ -85,8 +85,8 @@ console.log('\n== Aero against speed (flat, held speed)');
   };
   const slow = at(100);
   const fast = at(300);
-  // Splitter 0.84 + rear wing 1.43 + a diffuser that comes in as the car settles (its table peaks at 35–60 mm)
-  check('CL·A 2.5–2.9 m² at 100 km/h, more as it settles', slow.clA > 2.5 && slow.clA < 2.9 && fast.clA > slow.clA + 0.3,
+  // Splitter, rear wing and a diffuser that works from rest at this ride height (its table peaks at 35–60 mm)
+  check('CL·A 3.1–3.6 m² from 100 to 300 km/h', slow.clA > 3.1 && slow.clA < 3.6 && fast.clA > 3.1 && fast.clA < 3.6,
     `${fmt(slow.clA)} m² at 100, ${fmt(fast.clA)} m² at 300 km/h`);
   check('CD·A 1.1–1.3 m²', slow.cdA > 1.1 && slow.cdA < 1.3 && fast.cdA > 1.1 && fast.cdA < 1.3, `${fmt(slow.cdA)} / ${fmt(fast.cdA)} m²`);
   // The front wing ahead of the front axle, the rear wing behind the rear: 40–42 % on the front
@@ -151,8 +151,8 @@ console.log('\n== Braking through the adapter');
 console.log('\n== Cornering (flat, steer ramp at constant speed)');
 // Slicks out of 60 °C blankets: the GT3 holds 1.6–1.9 g here; the 496R is 300 kg lighter with more downforce
 for (const [kmh, lo, hi] of [
-  [100, 1.6, 2.1],
-  [200, 1.9, 2.6],
+  [100, 1.8, 2.15],
+  [200, 2.2, 2.65],
 ] as const) {
   const car = makeCar();
   car.reset(0, 0, 0, kmh / 3.6);
