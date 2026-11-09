@@ -10,7 +10,7 @@ import { COMPOUNDS, PanelSection, type PauseMenuProps } from "@/components/hud/P
 import { TYRE_SETUP_LIMITS } from "@/lib/sim/tyre-setup";
 import { CarPhysicsSwitch } from "./CarPicker";
 import { CarBrowser } from "./CarBrowser";
-import { CarQualityBadge, CHOSEN_PILL, Chip, CURSOR_PILL, LiveryPicker, PadGlyph, Segmented } from "./menu-ui";
+import { CarQualityBadge, CarSkinPicker, CHOSEN_PILL, Chip, CURSOR_PILL, LiveryPicker, PadGlyph, Segmented } from "./menu-ui";
 import { currentInputMode, useInputMode } from "./input-mode";
 import { focusOnHover } from "./useFocusNav";
 import { carTakesPhysicsSwitch } from "@/lib/cars/f1-mod-physics";
@@ -431,7 +431,9 @@ export const EngineersGarage: React.FC<
         {carTakesPhysicsSwitch(p.carId) ? <CarPhysicsSwitch color="#CCFF00" /> : null}
         <div className="flex min-h-[54px] flex-wrap items-center gap-x-3 gap-y-2 rounded-[18px] border border-[#262B3D] bg-[#08090D]/55 px-3 py-2">
           <span className="lc-lbl w-[68px] shrink-0">Livery</span>
-          {!carTakesLivery(p.carId) ? (
+          {carById(p.carId).skins?.length ? (
+            <CarSkinPicker carId={p.carId} />
+          ) : !carTakesLivery(p.carId) ? (
             <p className="m-0 text-[13px] text-[#8E96AA]">{FACTORY_LIVERY_NOTE}</p>
           ) : (
             <LiveryPicker liveries={LIVERIES} value={p.selectedLivery} onChange={p.onChangeLivery} />

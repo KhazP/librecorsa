@@ -23,7 +23,7 @@ import { carPhysics, carTakesPhysicsSwitch, F1_MOD_PHYSICS_OPTIONS, useF1ModPhys
 import { ContentBrowser, type BrowserFilterGroup, type BrowserSort, type LibraryProps } from "./ContentBrowser";
 import { CarPhysicsSwitch } from "./CarPicker";
 import { withBasePath } from "@/lib/base-path";
-import { CarQualityBadge, Chip, LiveryPicker } from "./menu-ui";
+import { CarQualityBadge, CarSkinPicker, Chip, LiveryPicker } from "./menu-ui";
 
 const byName = (a: CarDefinition, b: CarDefinition) => a.title.localeCompare(b.title);
 const QUALITIES: readonly CarQuality[] = ["own", "shared", "era"];
@@ -207,6 +207,8 @@ export const CarBrowser: React.FC<{
               <span className="lc-lbl">Livery</span>
               {carTakesLivery(c.id) ? (
                 <LiveryPicker liveries={LIVERIES} value={selectedLivery} onChange={onChangeLivery} surface="#11131A" />
+              ) : c.skins?.length ? (
+                <CarSkinPicker carId={c.id} surface="#11131A" />
               ) : (
                 <p className="m-0 text-[12px] text-[#8E96AA]">{FACTORY_LIVERY_NOTE}</p>
               )}

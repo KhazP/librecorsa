@@ -4,7 +4,8 @@ import React from "react";
 import { ChevronRight, type LucideIcon } from "lucide-react";
 import { LibreCorsaLogo } from "@/components/ui/LibreCorsaLogo";
 import { circuitQualityMeta, type TrackInfo } from "@/lib/track-registry";
-import { carQualityMeta, PHYSICS_CHECK, type CarDefinition } from "@/lib/cars/car-registry";
+import { carById, carQualityMeta, PHYSICS_CHECK, type CarDefinition, type CarId } from "@/lib/cars/car-registry";
+import { setCarSkin, useCarSkinId } from "@/lib/cars/car-skins";
 import { carPhysics, useF1ModPhysics } from "@/lib/cars/f1-mod-physics";
 import type { LiveryConfig } from "@/types/f1";
 import { FACE_BUTTONS, useInputMode, type PadFamily } from "./input-mode";
@@ -194,6 +195,51 @@ export const LiveryPicker: React.FC<{
         })}
       </div>
       <span className="min-w-0 truncate text-[13px] font-semibold text-[#C5CBD8]">{shown.name}</span>
+    </div>
+  );
+};
+
+/**
+ * The liveries of a car that has its own (its mod's skins, `CarDefinition.skins`): one swatch each in its two main
+ * colours, the picked one ringed, its name beside them. The pick is kept per car and goes onto the car at once.
+ */
+export const CarSkinPicker: React.FC<{ carId: CarId; surface?: string }> = ({ carId, surface = "#08090D" }) => {
+  const skins = carById(carId).skins ?? [];
+  const value = useCarSkinId(carId) ?? skins[0]?.id;
+  const [hover, setHover] = React.useState<string | null>(null);
+  const shown = skins.find((s) => s.id === (hover ?? value));
+  return (
+    <div className="flex min-w-0 flex-col gap-2">
+      <div className="flex flex-wrap items-center gap-2" role="radiogroup" aria-label="Livery">
+        {skins.map((skin) => {
+          const on = value === skin.id;
+          return (
+            <button
+              key={skin.id}
+              type="button"
+              role="radio"
+              aria-checked={on}
+              aria-label={skin.name}
+              onClick={() => setCarSkin(carId, skin.id)}
+              onPointerEnter={focusOnHover}
+              onFocus={() => setHover(skin.id)}
+              onBlur={() => setHover(null)}
+              className={`h-9 w-12 cursor-pointer rounded-full outline-none transition-[box-shadow] duration-200 pointer-coarse:h-11 pointer-coarse:w-14 focus:shadow-[0_0_0_2px_var(--lc-swatch-gap),0_0_0_4px_#CCFF00,0_0_0_9px_rgba(204,255,0,0.14)] focus-visible:outline-none ${
+                on
+                  ? "shadow-[0_0_0_2px_var(--lc-swatch-gap),0_0_0_4px_#F5F7FA]"
+                  : "shadow-[inset_0_0_0_1px_rgba(255,255,255,0.15)] hover:shadow-[0_0_0_1px_#8E96AA]"
+              }`}
+              style={
+                {
+                  "--lc-swatch-gap": surface,
+                  background: `linear-gradient(135deg, ${skin.swatch[0]} 0 60%, ${skin.swatch[1]} 60% 100%)`,
+                } as React.CSSProperties
+              }
+            />
+          );
+        })}
+      </div>
+      <span className="min-w-0 truncate text-[13px] font-semibold text-[#C5CBD8]">{shown?.name}</span>
     </div>
   );
 };

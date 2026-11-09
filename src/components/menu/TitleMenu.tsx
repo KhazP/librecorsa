@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import type { PauseMenuProps } from "@/components/hud/PauseMenu";
 import { carById, carClass } from "@/lib/cars/car-registry";
+import { carSkinFor } from "@/lib/cars/car-skins";
 import { EngineersGarage } from "./EngineersGarage";
 import { MultiplayerPanel } from "@/components/hud/MultiplayerPanel";
 import { DisplayPanel } from "@/components/hud/DisplayPanel";
@@ -730,6 +731,8 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
 
   const vehicleColor = carClass(vehicle.classId).color;
   const livery = props.selectedLivery;
+  // A car with liveries of its own wears the one picked for it (read on each render: the menus re-render as panels change)
+  const skin = carSkinFor(vehicle.id);
   const hudPreset = props.displayPanel?.settings.hud.preset;
   const kicker = `${track.name} · ${track.country} · ${km(track)} KM`;
   // What a bug report gets without the player typing it
@@ -971,7 +974,16 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
                   <>
                     <dt className="lc-lbl">Livery</dt>
                     <dd className="m-0 flex min-w-0 items-center justify-end gap-2 text-[14px] font-semibold">
-                      {vehicle.modelUrl ? (
+                      {skin ? (
+                        <>
+                          <span
+                            aria-hidden
+                            className="h-3 w-7 shrink-0 rounded-full"
+                            style={{ background: `linear-gradient(135deg, ${skin.swatch[0]} 0 60%, ${skin.swatch[1]} 60% 100%)` }}
+                          />
+                          <span className="truncate">{skin.name}</span>
+                        </>
+                      ) : vehicle.modelUrl ? (
                         <span className="truncate">Factory</span>
                       ) : (
                         <>
