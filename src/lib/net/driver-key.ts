@@ -1,6 +1,6 @@
 /**
  * The driver key: a random secret kept in this browser that claims the player's name on the online board
- * (scripts/leaderboard-supabase/schema.sql stores only its SHA-256). It is sent with uploads and nowhere else,
+ * (cloudflare/api/board.ts stores only its SHA-256). It is sent with uploads and nowhere else,
  * never written into lap or ghost files, and can be exported to a file to move to another browser or device.
  */
 

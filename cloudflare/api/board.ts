@@ -77,7 +77,7 @@ const entryOf = (r: LapRow) => ({
 
 /**
  * The claim key of a driver name: outer spaces off, runs of whitespace as one space, lower case. The same rule as the
- * Supabase board this one replaced (`driver_name_key`), so migrated claims keep matching.
+ * Supabase board this one replaced, so the claims carried over from it (scripts/migrate-supabase-board.ts) keep matching.
  */
 export function driverNameKey(name: string): string {
   return name.replace(/^ +| +$/g, "").replace(/[ \t\n\r\f\v]+/g, " ").toLowerCase();

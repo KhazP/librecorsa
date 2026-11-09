@@ -5,9 +5,8 @@
  * Autopilot laps of Rwanda agree to about 0.3 % on both; the limits leave room for spins and wet laps.
  *
  * A heuristic, not proof: a lap built by a careful forger passes. What it stops is the cheap fake (a short lap time
- * pasted onto a real recording, a scaled time axis, invented samples). The online boards run the same rules:
- * scripts/leaderboard-worker/worker.ts and scripts/leaderboard-supabase/schema.sql (`lap_problem`) mirror this file,
- * so change all three together.
+ * pasted onto a real recording, a scaled time axis, invented samples). The online board runs this same function
+ * on every upload (cloudflare/api/lap-check.ts).
  */
 import { LAP_SAMPLE_STRIDE } from "./lap-types";
 
