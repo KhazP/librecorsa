@@ -73,6 +73,8 @@ jobs:
           # Online leaderboard (scripts/leaderboard-supabase); repository variables, empty = local board only
           NEXT_PUBLIC_SUPABASE_URL: ${{ vars.SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY }}
+          # List every car and circuit: the ones not in the repository are served from R2 (src/lib/hosted-content.ts)
+          NEXT_PUBLIC_HOSTED_CONTENT: "1"
         run: npm run build
 
       # Cloudflare's asset store takes files up to 25 MiB. Bigger ones (large circuit GLBs) go to the

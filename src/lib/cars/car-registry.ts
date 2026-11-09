@@ -14,6 +14,7 @@ import {
 import { AMG_GT3_SOUND } from "@/lib/sim/gt3/AmgGt3Sim";
 import { SUZUKI_LIANA_SOUND } from "@/lib/sim/road/SuzukiLianaSim";
 import { overtakingRulesForSeason, type OvertakingRules } from "@/lib/sim/overtaking-rules";
+import { carListed } from "@/lib/hosted-content";
 
 /**
  * The cars in the picker, grouped by class and then by year, newest first. A car is a body and a sound on one of the
@@ -154,7 +155,8 @@ export const CAR_CLASSES: readonly CarClass[] = [
   { id: "road", title: "Road cars", sub: "Road-legal · street tyres", color: "#FF8A3D" },
 ];
 
-export const CARS: readonly CarDefinition[] = [
+/** Every car the game knows, whether or not this copy has its files (`hosted-content.ts`) */
+const ALL_CARS: readonly CarDefinition[] = [
   {
     id: "vf26",
     classId: "f1",
@@ -341,6 +343,9 @@ export const CARS: readonly CarDefinition[] = [
     sound: SUZUKI_LIANA_SOUND,
   },
 ];
+
+/** The cars this copy lists: all of them on librecorsa.org, the 2026 prototype in a clone of the repository */
+export const CARS: readonly CarDefinition[] = ALL_CARS.filter((c) => carListed(c.id));
 
 const BY_ID = new Map<string, CarDefinition>(CARS.map((c) => [c.id, c]));
 

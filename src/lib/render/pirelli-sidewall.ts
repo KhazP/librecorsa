@@ -14,6 +14,7 @@
 import * as THREE from "three";
 import type { TireCompound } from "@/types/f1";
 import { withBasePath } from "@/lib/base-path";
+import { HOSTED_CONTENT } from "@/lib/hosted-content";
 
 export const PIRELLI_SIDEWALL_URL = "/cars/shared/tyres/pirelli-2026-sidewall-cx.webp";
 
@@ -36,7 +37,8 @@ const sharedReady: THREE.IUniform<number> = { value: 0 };
 let loadStarted = false;
 
 function loadSidewallTexture(): void {
-  if (loadStarted || typeof window === "undefined") return;
+  // The artwork is hosted on librecorsa.org only (`hosted-content.ts`); a clone keeps the tyres' own sidewall
+  if (loadStarted || typeof window === "undefined" || !HOSTED_CONTENT) return;
   loadStarted = true;
   new THREE.TextureLoader().load(
     withBasePath(PIRELLI_SIDEWALL_URL),

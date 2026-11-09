@@ -6,6 +6,7 @@
  */
 import trackIndex from "../../public/tracks/index.json";
 import { withBasePath } from "@/lib/base-path";
+import { trackListed } from "@/lib/hosted-content";
 import { RWANDA_TARGET_LENGTH_M, RWANDA_TURN_METADATA, setActiveTrack, type RawTrackJson } from "@/lib/track-data";
 
 export interface TrackCredit {
@@ -162,7 +163,8 @@ export const TRACKS: TrackInfo[] = [
     direction: "clockwise",
     quality: "original",
   },
-  ...(trackIndex as TrackInfo[]),
+  // On librecorsa.org every circuit; in a clone of the repository only the ones it carries (`hosted-content.ts`)
+  ...(trackIndex as TrackInfo[]).filter((t) => trackListed(t.id)),
 ];
 
 /** The circuits grouped by venue (same name and country), in index order */
