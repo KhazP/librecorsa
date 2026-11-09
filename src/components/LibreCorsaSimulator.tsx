@@ -415,7 +415,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   );
 
   // The page's one multiplayer manager (it outlives this component across circuit switches)
-  const handleHostP2PRoom = useCallback((customCode?: string) => getMultiplayerManager().hostRoom(customCode), []);
+  const handleHostP2PRoom = useCallback(() => getMultiplayerManager().hostRoom(), []);
   const handleJoinP2PRoom = useCallback((roomCode: string) => getMultiplayerManager().joinRoom(roomCode), []);
   const handleCreateManualOffer = useCallback(() => getMultiplayerManager().createManualOffer(), []);
   const handleAcceptManualOffer = useCallback(
@@ -872,6 +872,15 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       setLobby(l ? { ...l, players: [...l.players] } : null);
       // The host's weather and clock: a guest's session eases to them (a different preset restarts it)
       if (l?.weather && l.hostId !== mp.localPeerId) trackEnvRef.current?.applyWeatherSync(l.weather);
+      // In the menus a guest follows the host by itself: its circuit, then a car its class allows. While driving it
+      // is asked instead (the lobby's "Switch circuit" and car choices), so a lap is never cut short
+      if (!l || l.hostId === mp.localPeerId || phaseRef.current !== "title") return;
+      if (l.settings.trackId !== trackId) {
+        if (onSelectTrack && TRACKS.some((t) => t.id === l.settings.trackId)) onSelectTrack(l.settings.trackId);
+        return;
+      }
+      const allowed = vehicleModelsFor(l.settings.carClass);
+      if (allowed.length > 0 && !allowed.includes(vehicleModelRef.current)) changeCar(carForVehicle(allowed[0]).id);
     };
     mp.weatherProvider = () => trackEnvRef.current?.weather.snapshot() ?? null;
     mp.onRaceStart = (start) => {
@@ -896,7 +905,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       mp.onRaceAbort = undefined;
       window.clearInterval(timer);
     };
-  }, [session, trackId, onSelectTrack, takeRaceStart, endMpRace]);
+  }, [session, trackId, onSelectTrack, takeRaceStart, endMpRace, changeCar]);
 
   // The race the host started before this circuit loaded
   useEffect(() => {
