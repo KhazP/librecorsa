@@ -28,7 +28,7 @@ export type SuspensionTypeEnum =
   | 'SuspensionType_MultilinkNew'
   | 'SuspensionType_StrutMultilink';
 
-/** `PhysicsTyreCompound`: F1 and GT3 slicks, and their treaded rain tyres */
+/** `PhysicsTyreCompound`: F1, GT3 and prototype slicks, their treaded rain tyres, and a road car's street tyre */
 export type PhysicsTyreCompound =
   | 'PhysicsTyreCompound_F1_Soft'
   | 'PhysicsTyreCompound_F1_Medium'
@@ -40,6 +40,11 @@ export type PhysicsTyreCompound =
   | 'PhysicsTyreCompound_GT3_Hard'
   | 'PhysicsTyreCompound_GT3_Intermediate'
   | 'PhysicsTyreCompound_GT3_Wet'
+  | 'PhysicsTyreCompound_Proto_Soft'
+  | 'PhysicsTyreCompound_Proto_Medium'
+  | 'PhysicsTyreCompound_Proto_Hard'
+  | 'PhysicsTyreCompound_Proto_Intermediate'
+  | 'PhysicsTyreCompound_Proto_Wet'
   | 'PhysicsTyreCompound_Road_Street';
 
 /** The simulator's compound choice: soft / medium / hard slicks, intermediate and full wet */
