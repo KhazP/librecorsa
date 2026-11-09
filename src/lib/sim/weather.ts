@@ -146,7 +146,7 @@ export const TIME_OF_DAY_LABELS: Record<TimeOfDayId, string> = {
 
 const DEG = Math.PI / 180;
 /** A generic near-equatorial site (Kigali is 2° S) with the sun 12° north: the circuits share one sky */
-const LATITUDE_DEG = -2;
+export const LATITUDE_DEG = -2;
 const DECLINATION_DEG = 12;
 /** The look the sim was built around: the sun 14° up at bearing 127° (three.js Sky azimuth) */
 export const GOLDEN_HOUR_ELEVATION_DEG = 14;
@@ -177,7 +177,8 @@ function solveGoldenHourClock(): number {
 }
 
 export const GOLDEN_HOUR_CLOCK_H = solveGoldenHourClock();
-const AZIMUTH_OFFSET_DEG = GOLDEN_HOUR_AZIMUTH_DEG + solarAngles(GOLDEN_HOUR_CLOCK_H).compassDeg;
+/** Three.js Sky azimuth of compass north (deg): a compass bearing `c` points along azimuth `AZIMUTH_OFFSET_DEG - c` */
+export const AZIMUTH_OFFSET_DEG = GOLDEN_HOUR_AZIMUTH_DEG + solarAngles(GOLDEN_HOUR_CLOCK_H).compassDeg;
 
 export const TIME_OF_DAY_HOURS: Record<TimeOfDayId, number> = {
   dawn: 6.3,

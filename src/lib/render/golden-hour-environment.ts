@@ -14,6 +14,8 @@ import {
   ToneMappingMode,
 } from "postprocessing";
 import { patchShader } from "./shader-patch";
+import { PhysicalSky } from "./physical-sky";
+import type { CloudsEffect } from "@takram/three-clouds";
 
 /*
  * Golden-hour lighting, sky/environment and post-processing for LibreCorsa.
@@ -139,6 +141,10 @@ export interface GoldenHourEnvironment {
   /** unit vector from scene towards the sun */
   sunDirection: THREE.Vector3;
   sky: Sky;
+  /** The physically based sky and its volumetric clouds (`?sky=physical`); null with the classic sky */
+  physicalSky: PhysicalSky | null;
+  /** The visible sky whose `showSunDisc` uniform the car reflection probe zeroes while it films */
+  probeSky: { material: { uniforms: Record<string, { value: unknown }> } };
   /** Weak warm-blue / olive fill; added to the scene by createGoldenHourEnvironment. */
   fillLight: THREE.HemisphereLight;
   /** Call once per frame before rendering: keeps the sky dome centred on the camera (the shadow cascades fit the rendering camera on their own) */
@@ -175,6 +181,7 @@ export function applyGraphicsQuality(
   // Toggling the light's shadow recompiles the lit materials on their own (shadow count is part of the program key)
   env.sunLight.castShadow = quality !== "low";
   postFx.setQuality(quality);
+  env.physicalSky?.setQuality(quality);
   // Scenery noise and bump off on Low (the baked tree shading stays); fewer instanced trees and shrubs below High
   setSceneryQuality(quality);
   setSceneryDensity(quality);
@@ -344,10 +351,12 @@ class SkyBaker {
   private readonly groundFill = new THREE.HemisphereLight();
   private pmrem: THREE.PMREMGenerator | null;
 
-  constructor(renderer: THREE.WebGLRenderer) {
+  /** `physicalSky`: the physical sky's sun-less quad, baked in place of the classic sky once it is ready */
+  constructor(renderer: THREE.WebGLRenderer, private readonly physicalSky: THREE.Object3D | null = null) {
     this.sky.scale.setScalar(1000);
     configureSkyUniforms(this.sky, false);
     this.scene.add(this.sky);
+    if (physicalSky) this.scene.add(physicalSky);
     // Tarmac, grass and run-off seen from a car: a dark, slightly warm grey
     this.ground = new THREE.Mesh(new THREE.CircleGeometry(900, 48), new THREE.MeshLambertMaterial({ color: GROUND_ALBEDO }));
     this.ground.rotation.x = -Math.PI / 2;
@@ -358,6 +367,7 @@ class SkyBaker {
 
   bake(sunDir: THREE.Vector3, look: SkyLook, sun: GroundLight, fill: THREE.HemisphereLight): THREE.WebGLCubeRenderTarget {
     applySkyLook(this.sky, sunDir, look);
+    this.sky.visible = !this.physicalSky?.visible;
     // The ground takes the scene's own sun and sky light, so it sits at the brightness the real circuit has
     this.groundSun.color.copy(sun.color);
     this.groundSun.intensity = sun.intensity;
@@ -375,6 +385,7 @@ class SkyBaker {
     this.sky.material.dispose();
     this.ground.geometry.dispose();
     this.ground.material.dispose();
+    // The physical sky's quad is the PhysicalSky's to dispose
     this.scene.clear();
   }
 }
@@ -385,7 +396,8 @@ class SkyBaker {
 
 export function createGoldenHourEnvironment(
   renderer: THREE.WebGLRenderer,
-  scene: THREE.Scene
+  scene: THREE.Scene,
+  options: { physicalSky?: boolean } = {}
 ): GoldenHourEnvironment {
   const sunDirection = sunDirectionUnit();
 
@@ -401,8 +413,20 @@ export function createGoldenHourEnvironment(
   configureSkyUniforms(sky, true);
   scene.add(sky);
 
+  // The physical sky takes over from the classic one once its lookup tables are computed (a fraction of a second,
+  // under the loading screen); until then, and if that fails, the classic sky stays up
+  // Set once the bake exists below; the ready callback re-bakes the environment from the new sky
+  let rebakeNow: () => void = () => {};
+  const physicalSky = options.physicalSky
+    ? new PhysicalSky(renderer, () => {
+        sky.visible = false;
+        rebakeNow();
+      })
+    : null;
+  if (physicalSky) scene.add(physicalSky.mesh);
+
   // --- Environment map (PMREM, re-baked only when the sky changes visibly) ---
-  const baker = new SkyBaker(renderer);
+  const baker = new SkyBaker(renderer, physicalSky?.bakeMesh ?? null);
   const skyLook = skyLookFor(GOLDEN_HOUR_SKY, {} as SkyLook);
   const skySunDir = sunDirection.clone();
   // The first bake, before the scene's lights exist: their starting values
@@ -463,6 +487,9 @@ export function createGoldenHourEnvironment(
     lastBakeMs = performance.now();
     pendingBake = false;
   };
+  rebakeNow = () => {
+    if (!disposed) rebake();
+  };
 
   const setConditions = (c: SkyConditions) => {
     if (disposed) return;
@@ -496,6 +523,7 @@ export function createGoldenHourEnvironment(
 
     skyLookFor(current, skyLook);
     applySkyLook(sky, skySunDir, skyLook);
+    physicalSky?.setConditions({ sunDirection: skySunDir, cloud, rain });
     const dElev = Math.abs(e - baked.elevationDeg);
     const dCloud = Math.abs(cloud - baked.cloud);
     const dRain = Math.abs(rain - baked.rain);
@@ -509,6 +537,8 @@ export function createGoldenHourEnvironment(
     sunLight,
     sunDirection,
     sky,
+    physicalSky,
+    probeSky: physicalSky?.mesh ?? sky,
     fillLight,
 
     update(_carWorldPos: THREE.Vector3, camera: THREE.Camera): void {
@@ -536,6 +566,7 @@ export function createGoldenHourEnvironment(
       sunLight.shadow.dispose();
       envTarget.dispose();
       baker.dispose();
+      physicalSky?.dispose();
     },
   };
 }
@@ -570,7 +601,7 @@ export function createPostFx(
   renderer: THREE.WebGLRenderer,
   scene: THREE.Scene,
   camera: THREE.Camera,
-  opts?: { multisampling?: number }
+  opts?: { multisampling?: number; clouds?: { readonly clouds: CloudsEffect; readonly cloudsActive: boolean } | null }
 ): PostFx {
   const composer = new EffectComposer(renderer, {
     frameBufferType: THREE.HalfFloatType,
@@ -578,6 +609,12 @@ export function createPostFx(
   });
 
   const renderPass = new RenderPass(scene, camera);
+  // Volumetric clouds (physical sky only) go over the rendered frame before bloom, so their bright edges bloom too.
+  // Their own pass: inside the bloom pass, bloom would read the frame from before the clouds were composited.
+  const sky = opts?.clouds ?? null;
+  const cloudsPass = sky ? new EffectPass(camera, sky.clouds) : null;
+  // EffectPass gives its camera to its own material only; the clouds march their rays from the effect's camera
+  if (cloudsPass) cloudsPass.mainCamera = camera;
 
   const bloom = new BloomEffect({
     mipmapBlur: true,
@@ -600,6 +637,7 @@ export function createPostFx(
   const gradePass = new EffectPass(camera, new DisplayGradeEffect(GRADE_CONTRAST, GRADE_SATURATION));
 
   composer.addPass(renderPass);
+  if (cloudsPass) composer.addPass(cloudsPass);
   composer.addPass(effectPass);
   composer.addPass(gradePass);
 
@@ -607,6 +645,8 @@ export function createPostFx(
     composer,
 
     render(dtSeconds: number): void {
+      // Off until the atmosphere is ready and on presets without clouds (their composite has no off switch of its own)
+      if (cloudsPass && sky) cloudsPass.enabled = sky.cloudsActive;
       composer.render(dtSeconds);
     },
 
@@ -616,6 +656,7 @@ export function createPostFx(
 
     setCamera(next: THREE.Camera): void {
       renderPass.mainCamera = next;
+      if (cloudsPass) cloudsPass.mainCamera = next;
       effectPass.mainCamera = next;
       gradePass.mainCamera = next;
     },
@@ -626,9 +667,11 @@ export function createPostFx(
     },
 
     dispose(): void {
-      // EffectPass.dispose() also disposes the bloom and tone-mapping effects.
+      // EffectPass.dispose() also disposes the bloom and tone-mapping effects, and the clouds (which the
+      // PhysicalSky disposes again: three's dispose calls are idempotent)
       composer.removeAllPasses();
       renderPass.dispose();
+      cloudsPass?.dispose();
       effectPass.dispose();
       gradePass.dispose();
       composer.dispose();
