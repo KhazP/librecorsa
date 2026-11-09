@@ -7,7 +7,7 @@ LibreCorsa is an independent, non-commercial, open-source web simulator built wi
 ## 1. Licensing
 
 * **Source Code (`src/`, `scripts/`)**: Licensed under the [MIT License](LICENSE). The MIT licence covers the code only.
-* **3D Models & Audio Assets (`public/`)**: Each asset keeps its own licence, listed below. Several are **non-commercial only**, so `public/` as a whole may not be used commercially:
+* **3D Models & Audio Assets (`public/`)**: Each asset keeps its own licence, listed below. Several are **non-commercial only**, so `public/` as a whole may not be used commercially. This repository carries only the Rwanda circuit and the 2026 prototype's model (`public/amr26/`) and sound (`public/cars/f12026/`); every other asset below is served on librecorsa.org for playing there and is not in the repository:
   | Asset | Licence |
   | :--- | :--- |
   | Circuit scans, F1 2026 model, ported F1 car models | CC BY 4.0 |

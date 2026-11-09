@@ -25,7 +25,11 @@
 
 </div>
 
-**LibreCorsa** is an open-source racing simulator that runs entirely in the browser. It has 500 Hz vehicle dynamics, a thermal tyre model, 2026-regulation open-wheelers and a GT3 car. There are four circuits, AI races, ghosts and replays, and peer-to-peer multiplayer. It works with a keyboard, gamepad, touch screen or a force-feedback wheel. Nothing to install, and no server: it ships as a static site.
+<p align="center">
+  <a href="https://librecorsa.org/media/librecorsa-trailer.mp4"><img src="docs/media/trailer-poster.jpg" alt="Watch the 40-second LibreCorsa trailer" width="100%" /></a>
+</p>
+
+**LibreCorsa** is an open-source racing simulator that runs entirely in the browser. It has 500 Hz vehicle dynamics, a thermal tyre model, 2026-regulation open-wheelers, GT3 cars and a road car. There are more than a dozen circuits, AI races, ghosts and replays, and peer-to-peer multiplayer. It works with a keyboard, gamepad, touch screen or a force-feedback wheel. Nothing to install, and no server: it ships as a static site.
 
 <p align="center">
   <img src="docs/media/race-grid-shanghai.jpg" alt="Lined up on the grid at Shanghai against five AI cars" width="100%" />
@@ -51,7 +55,7 @@
 ## Features
 
 ### Physics
-- **500 Hz fixed-step integration** (4 × 2 kHz sub-steps), with each wheel riding the real track surface. The default open-wheeler's chassis is planar (speed, side-slip and yaw on the local road plane) plus sprung heave, pitch and roll; the f12026-car and the GT3 run on a 6-DOF rigid body.
+- **500 Hz fixed-step integration** (4 × 2 kHz sub-steps), with each wheel riding the real track surface. The default open-wheeler's chassis is planar (speed, side-slip and yaw on the local road plane) plus sprung heave, pitch and roll; the 2026 Rigid-Body and the GT3s run on a 6-DOF rigid body.
 - **Tyres**: a Pacejka-style slip curve with combined slip, load sensitivity, carcass relaxation and a load-dependent rolling radius. A 9-node thermal model (inner/middle/outer × surface/bulk/carcass) sets the grip window, ideal-gas pressure sets carcass stiffness, and the tyres wear. Soft, medium and hard slicks, plus intermediates and full wets that clear water up to a depth and aquaplane past it.
 - **Chassis**: double-wishbone kinematics with roll centres from the hardpoints, springs, dampers, bump stops, anti-roll bars and heave elements. There's a preload / power / coast limited-slip differential and thermal brakes whose pad friction changes with temperature.
 - **Aero**: ride-height-sensitive wings and floor, altitude-corrected air density, and dirty air behind other cars. 2026 active aero switches between Z-mode (cornering) and X-mode (straights).
@@ -65,7 +69,7 @@
 | Car | Model | Notes |
 | :-- | :-- | :-- |
 | **2026 open-wheeler** (default) | Planar chassis + heave / pitch / roll, 4 sprung corners | 1.6 L V6 turbo + 350 kW MGU-K, 4 MJ battery, manual override boost, Z/X-mode aero |
-| **f12026-car** | 6-DOF rigid body on the track colliders | Load-sensitive normalized-slip tyres, driver-operated DRS with detection points, live telemetry channels |
+| **2026 Rigid-Body** | 6-DOF rigid body on the track colliders | Load-sensitive normalized-slip tyres, driver-operated DRS with detection points, live telemetry channels |
 | **Mercedes-AMG GT3** | 6-DOF rigid body | 6.2 L NA V8, 6-speed sequential, multi-stage ABS / TC, its own braking-point model |
 
 Each car has its own cockpit, steering wheel and shift lights, plus a multi-layer sound bank (engine, turbo, transmission, shifts, backfires, limiter, tyre skid, TC cut). Interior and exterior sounds switch with the camera.
@@ -81,6 +85,14 @@ Each car has its own cockpit, steering wheel and shift lights, plus a multi-laye
 | Okayama International Circuit (GP / Piper / Formula Drift) | Japan | 3.70 / 1.97 / 1.97 km |
 | Red Bull Ring — Spielberg (GP / South / Inner skill course) | Austria | 4.32 / 2.34 / 0.94 km |
 | Circuit de Monaco | Monaco | 3.30 km |
+| Sepang International Circuit | Malaysia | 5.53 km |
+| Daytona International Speedway (Oval / Road course) | United States | 4.04 / 5.78 km |
+| Marina Bay Street Circuit | Singapore | 5.04 km |
+| Autodromo Nazionale Monza | Italy | 5.79 km |
+| Yas Marina Circuit | United Arab Emirates | 5.28 km |
+| Silverstone Circuit | United Kingdom | 5.87 km |
+| Circuit de Spa-Francorchamps | Belgium | 6.99 km |
+| Dunsfold Aerodrome | United Kingdom | 2.88 km |
 
 The Rwanda circuit was built in Blender for this project: 14 corners, 52 m of elevation, 1,400 m above sea level. The Sketchfab circuits are CC BY 4.0 scans converted by `scripts/tracks/build_track.py`, and Chang, Okayama, Spielberg (Red Bull Ring), and Monaco are Assetto Corsa circuits by **Mitja Bonca** (used with permission), converted by `scripts/tracks/port_ac_track.py` with their 3D/2D trees, dynamic tyre grooves, skidmarks, starting lights and trackside semaphores, AI fast/pit lanes, kerbs, surface tables, section names, DRS zones, and TV cameras. Every circuit is meshopt-compressed (`npm run compress-tracks`) while keeping hidden physics meshes bit-exact, and has a lap-time-optimal racing line for each car class. Open the sim with `?colliders=1` to see the physics surfaces drawn over the circuit.
 
@@ -98,6 +110,7 @@ The Rwanda circuit was built in Blender for this project: 14 corners, 52 m of el
 - **Touch**: on-screen pedals and steering, or tilt to steer.
 - **Telemetry out**: 60 Hz UDP JSON through the bridge, for dashboards and motion rigs.
 - **Setup wizard**: picks your device and tunes steering, pedals and force feedback on first launch.
+- **VR (work in progress)**: WebXR headsets (Quest Browser, or Chrome with SteamVR / OpenXR), from the Display panel. Expect rough edges.
 
 ### Wheels and force feedback
 
@@ -171,24 +184,30 @@ npm run build            # static export into ./out
 | Script | What it does |
 | :-- | :-- |
 | `npm run typecheck` | `tsc --noEmit` over the whole project |
-| `npm run verify` | Every `scripts/verify-*.ts` suite (physics, f12026-car, GT3, input, lap tools, race session, realism, weather, AI tuning, telemetry out, WebHID FFB) |
+| `npm run verify` | Every `scripts/verify-*.ts` suite (physics, 2026 Rigid-Body, GT3, input, lap tools, race session, realism, weather, AI tuning, telemetry out, WebHID FFB) |
 | `npm run verify:laps` | Slow: player-style laps for every car and assist preset at full pace |
 | `npm run physics:report` | Regenerate the [physics validation page](docs/physics/README.md): tyre curves, the GT3 against MoTeC logs, frame-rate checks |
 | `npm run race:headless` | A full-physics AI race without rendering, faster than real time, with a results table. `-- --track suzuka --car amg-gt3 --weather heavy_rain --sweep skill` |
 | `npm run compress-tracks` | Meshopt-compress the circuit GLBs and check the physics meshes are unchanged |
 | `npm run ffb` | Local force-feedback and telemetry bridge (Windows) |
+| `npm run upload-hosted -- <paths>` | Upload hosted-only cars or circuits to R2 (see [What's in the repository](#whats-in-the-repository)) |
 
 The tech is **Next.js 16** (static export), **React 19**, **Three.js** (WebGL2, AgX tone mapping, PBR), the **Web Audio API**, **WebRTC**, **WebHID** and **Tailwind CSS 4**.
 
+### What's in the repository
+A clone carries the **Rwanda circuit** and the **2026 prototype car** (both versions: its body in `public/amr26/` and its sound in `public/cars/f12026/`), so `npm run dev` gives you a working game with those. Every other car and circuit is hosted on librecorsa.org only and is gitignored: the files sit in the `librecorsa-assets` R2 bucket, and `cloudflare/worker.js` serves them at the same paths. A clone lists only what it has (`src/lib/hosted-content.ts`); the deploy sets `NEXT_PUBLIC_HOSTED_CONTENT=1` to list everything, and you can set it in `.env.local` if you have the hosted files in `public/`. The verify suites skip checks that need files a clone doesn't have.
+
+To add your own car, see **[Porting a car](docs/PORTING-CARS.md)**. To publish a hosted car or circuit, upload its folder with `npm run upload-hosted -- public/cars/<id>` (car models go up compressed), then push to `main` so the edge cache picks it up.
+
 ### Deployment
-Every push to `main` runs typecheck and the verify suites, then builds `./out` and deploys it to Cloudflare at [librecorsa.org](https://librecorsa.org/) (`.github/workflows/deploy-pages.yml`, `wrangler.jsonc`). The old GitHub Pages address, `khazp.github.io/librecorsa/`, serves a redirect page that keeps old links working and carries a returning player's saved settings, setups and ghost laps over (`cloudflare/old-site-redirect.html`, `cloudflare/worker.js`). Cloudflare's asset store takes files up to 25 MiB, so CI moves anything bigger into the `librecorsa-assets` R2 bucket and the Worker serves it from there at the same URL. Hosting costs nothing.
+Every push to `main` runs typecheck and the verify suites, then builds `./out` and deploys it to Cloudflare at [librecorsa.org](https://librecorsa.org/) (`.github/workflows/deploy-pages.yml`, `wrangler.jsonc`). The old GitHub Pages address, `khazp.github.io/librecorsa/`, serves a redirect page that keeps old links working and carries a returning player's saved settings, setups and ghost laps over (`cloudflare/old-site-redirect.html`, `cloudflare/worker.js`). Cloudflare's asset store takes files up to 25 MiB, so CI moves anything bigger into the `librecorsa-assets` R2 bucket; the hosted-only cars and circuits live there too, and the Worker serves both at the same URL. Hosting costs nothing.
 
 ---
 
 ## License & credits
 
 - **Code** is under the [MIT License](LICENSE).
-- **3D models and audio** in `public/` are for non-commercial, personal and educational use. Each one keeps its own license.
+- **3D models and audio** are for non-commercial, personal and educational use. Each one keeps its own license. This repository carries only the Rwanda circuit and the 2026 prototype's model and sound; the rest are served on librecorsa.org for playing there.
 - **Cars**: the 2026 car model is by **DeX** ([CC BY 4.0](https://skfb.ly/pKNCK)), and the Mercedes-AMG GT3 by **Ddiaz Design** ([CC BY-NC-SA 4.0](https://skfb.ly/pOTPL)).
 - **Circuits**: the Sketchfab scans are by **Dave** and **Dave Love SketchFab**, plus Motegi by **Kevin Love SketchFab** (all CC BY 4.0); Chang International Circuit, Okayama International Circuit, Spielberg (Red Bull Ring), and Circuit de Monaco are by **Mitja Bonca** (used with permission).
 - **Rwanda trackside trees**: the acacia by **evolveduk** and the shrub by **Natural_Disbuster (lemedesign)**, both CC BY 4.0.
