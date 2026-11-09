@@ -42,3 +42,13 @@ acevo_physics_strings.txt
 
 # Private scratch reports (audits)
 AUDIT-*.md
+
+# Hosted-only cars and circuits: served on librecorsa.org from the librecorsa-assets R2 bucket
+# (npm run upload-hosted), never committed. The repository carries the Rwanda circuit and the 2026 prototype car
+# (src/lib/hosted-content.ts)
+/public/tracks/*
+!/public/tracks/rwanda/
+!/public/tracks/index.json
+/public/cars/*
+!/public/cars/f12026/
+/public/gt3/

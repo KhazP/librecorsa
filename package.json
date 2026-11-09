@@ -13,7 +13,8 @@
     "race:headless": "node --disable-warning=THREE_CJS_DEPRECATED --import tsx scripts/race-headless.ts",
     "physics:report": "node --disable-warning=THREE_CJS_DEPRECATED --import tsx scripts/physics-report.ts",
     "ffb": "tsx scripts/ffb-bridge.ts",
-    "compress-tracks": "node scripts/compress-track-glb.mjs --all"
+    "compress-tracks": "node scripts/compress-track-glb.mjs --all",
+    "upload-hosted": "node scripts/upload-hosted.mjs"
   },
   "dependencies": {
     "lucide-react": "^1.65.0",
