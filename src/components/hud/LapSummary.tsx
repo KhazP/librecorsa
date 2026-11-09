@@ -72,7 +72,7 @@ interface LapSummaryProps {
   askName?: boolean;
   submitState?: "idle" | "sending" | "sent" | "error";
   /** Place of the uploaded lap on its online board, and how many drivers that board has */
-  submitRank?: { rank: number; total: number | null } | null;
+  submitRank?: { rank: number; total: number | null; challengeRank?: number | null } | null;
   /** Why the board refused the last upload (e.g. the name is taken), shown under the buttons */
   submitError?: string | null;
 }
@@ -324,7 +324,7 @@ const LapCard: React.FC<
       ? "Sending…"
       : submitState === "sent"
         ? submitRank != null
-          ? `Online · P${submitRank.rank}${submitRank.total ? ` of ${submitRank.total}` : ""}`
+          ? `Online · P${submitRank.rank}${submitRank.total ? ` of ${submitRank.total}` : ""}${submitRank.challengeRank ? ` · P${submitRank.challengeRank} this week` : ""}`
           : "Online"
         : submitState === "error"
           ? "Failed — retry"

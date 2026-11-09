@@ -53,6 +53,28 @@ export interface SubmitResult {
   error?: string;
 }
 
+const CHALLENGE_BEST_KEY = "lc.challengeBest";
+
+/** This browser's best lap (ms) on the board of weekly challenge `id`, as last confirmed by the server; null without one */
+export function loadChallengeBest(id: string): number | null {
+  try {
+    const saved: unknown = JSON.parse(localStorage.getItem(CHALLENGE_BEST_KEY) ?? "null");
+    if (!isRecord(saved) || saved.id !== id) return null;
+    return finiteNumber(saved.lapTimeMs);
+  } catch {
+    return null;
+  }
+}
+
+/** Remembers the lap that went on a weekly challenge's board (only the current week's is kept) */
+export function saveChallengeBest(id: string, lapTimeMs: number): void {
+  try {
+    localStorage.setItem(CHALLENGE_BEST_KEY, JSON.stringify({ id, lapTimeMs }));
+  } catch {
+    // Storage blocked: the next challenge lap is simply sent again
+  }
+}
+
 /** True when this site has an online lap board switched on (asked once, then remembered for a while) */
 export async function boardOnline(): Promise<boolean> {
   return (await getOnlineConfig()).board;

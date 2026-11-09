@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExtern
 import { getActiveTrackData, LIVERIES } from "@/lib/track-data";
 import { FfbPairPrompt } from "@/components/hud/FfbPairPrompt";
 import { isVehicleModelId, vehicleModelsFor } from "@/lib/cars/vehicle-models";
-import { carForVehicle, type CarId } from "@/lib/cars/car-registry";
+import { CARS, carForVehicle, type CarId } from "@/lib/cars/car-registry";
 import { alignGhostToTrack } from "@/lib/sim/ghost-align";
 import { carPhysics, carTakesPhysicsSwitch, subscribeF1ModPhysics } from "@/lib/cars/f1-mod-physics";
 import { type ChassisSetup, saveChassisSetup } from "@/lib/sim/car-setup";
@@ -19,12 +19,15 @@ import {
   fetchRemoteBoard,
   fetchRemoteGhost,
   lapToEntry,
+  loadChallengeBest,
   localLeaderboard,
+  saveChallengeBest,
   submitLap,
   type BoardFilter,
   type SubmitResult,
 } from "@/lib/net/leaderboard";
 import { exportDriverKeyFile, importDriverKeyFile } from "@/lib/net/driver-key";
+import { challengeAt, fitsChallenge } from "@/lib/net/weekly-challenge";
 import { isTouchDevice, resetTouchInput } from "@/lib/input/touch-input";
 import { isFatalHidStatus } from "@/lib/input/webhid-ffb";
 import { SIM_REALISM_FLAGS, type SimRealism } from "@/lib/sim/sim-realism";
@@ -50,15 +53,29 @@ const DEFAULT_ASSIST_PRESET: AssistPreset = DEFAULT_PLAYER_SETTINGS.assistPreset
 const vehicleLabel = (id: string) => (isVehicleModelId(id) ? carForVehicle(id).title : id);
 /** Every personal best in this browser (Lap times switches circuit and car without reloading the scene) */
 const loadAllLocalLaps = () => listBestLaps().then((laps) => laps.map((lap) => lapToEntry(lap, "local")));
-/** The place an upload's answer gives the lap on its board; null when it failed or said none */
-const placeOf = (res: SubmitResult): { rank: number; total: number | null } | null =>
-  res.ok && res.rank !== undefined ? { rank: res.rank, total: res.total ?? null } : null;
+/** The place an upload's answer gives the lap on its board (and on the week's challenge); null when it failed or said none */
+const placeOf = (res: SubmitResult): { rank: number; total: number | null; challengeRank: number | null } | null =>
+  res.ok && res.rank !== undefined ? { rank: res.rank, total: res.total ?? null, challengeRank: res.eventRank ?? null } : null;
+/** The weekly challenge a lap was driven to (its id), if it fits this week's */
+const challengeOf = (rec: LapRecording): string | undefined => {
+  const week = challengeAt(Date.now());
+  return fitsChallenge(rec, week) ? week.id : undefined;
+};
+/** Uploads a lap, to this week's challenge board too when it fits; remembers the lap the challenge board took */
+const uploadLap = async (rec: LapRecording): Promise<SubmitResult> => {
+  const event = challengeOf(rec);
+  const res = await submitLap(rec, { event }).catch((): SubmitResult => ({ ok: false }));
+  if (res.ok && event && res.eventRank !== undefined) saveChallengeBest(event, rec.lapTimeMs);
+  return res;
+};
 // A lap on a circuit this build no longer lists keeps its id as its name (getTrackInfo would name it after another)
 const trackNameOf = (id: string) => TRACKS.find((t) => t.id === id)?.name ?? id;
 /** The snapshot store before the session exists: nothing to subscribe to */
 const noSubscribe = () => () => {};
 /** A race the host started before this circuit was loaded (or on another one): picked up once the scene has loaded */
 let pendingRaceStart: RaceStartInfo | null = null;
+/** The weekly challenge (its id) to go out on once its circuit has loaded: asked for from another circuit's menu */
+let pendingChallenge: string | null = null;
 
 export interface LibreCorsaSimulatorProps {
   /** Active circuit (already set with `setActiveTrack`; the gate remounts this component on a change) */
@@ -173,7 +190,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   const [lapSummary, setLapSummary] = useState<{ summary: LapSummaryData; recording: LapRecording } | null>(null);
   const [submitState, setSubmitState] = useState<"idle" | "sending" | "sent" | "error">("idle");
   /** Place of the uploaded lap on its board, and how many drivers that board has */
-  const [submitRank, setSubmitRank] = useState<{ rank: number; total: number | null } | null>(null);
+  const [submitRank, setSubmitRank] = useState<ReturnType<typeof placeOf>>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   /** Bumped by every new or closed lap card and every upload: only the upload of the card still shown may land on it */
   const submitReqRef = useRef(0);
@@ -620,21 +637,26 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       const submitReq = submitReqRef.current;
       void saveBestLapIfFaster(recording)
         .then((saved) => {
-          if (!saved) return;
-          if (ghostSourceRef.current === "pb" && ghostReq === ghostReqRef.current && recording.vehicle === vehicleModelRef.current) {
-            // Newer than any best still loading from before this lap
-            ghostReqRef.current++;
-            session?.setGhost(new GhostPlayer(recording));
+          if (saved) {
+            if (ghostSourceRef.current === "pb" && ghostReq === ghostReqRef.current && recording.vehicle === vehicleModelRef.current) {
+              // Newer than any best still loading from before this lap
+              ghostReqRef.current++;
+              session?.setGhost(new GhostPlayer(recording));
+            }
+            void refreshLeaderboard();
           }
-          void refreshLeaderboard();
-          // A new personal best goes on the online board by itself, once the player has a name of their own (the
-          // first upload asks for it on the lap card) and unless they turned this off. It fails quietly: the card
-          // keeps its upload button
+          // A new personal best goes on the online board by itself, and so does the best lap of this week's
+          // challenge (which an older, faster lap of the same kind doesn't stand in for). Only once the player has a
+          // name of their own (the first upload asks for it on the lap card) and unless they turned this off. It
+          // fails quietly: the card keeps its upload button
+          const week = challengeOf(recording);
+          const weekBest = week ? loadChallengeBest(week) : null;
+          if (!saved && !(week && (weekBest === null || recording.lapTimeMs < weekBest))) return;
           const profile = settingsRef.current.profile;
           if (!boardOnRef.current || !profile.autoUpload || profile.generated) return;
           const shown = () => submitReq === submitReqRef.current;
           if (shown()) setSubmitState("sending");
-          return submitLap(recording).then((res) => {
+          return uploadLap(recording).then((res) => {
             if (res.ok) setBoardVersion((v) => v + 1);
             if (!shown()) return;
             setSubmitState(res.ok ? "sent" : "idle");
@@ -665,7 +687,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     }
     const req = ++submitReqRef.current;
     setSubmitState("sending");
-    const res = await submitLap(rec).catch((): SubmitResult => ({ ok: false }));
+    const res = await uploadLap(rec);
     if (res.ok) setBoardVersion((v) => v + 1);
     // The card was closed or replaced by another lap meanwhile: this answer is not about the one shown
     if (req !== submitReqRef.current) return;
@@ -917,6 +939,55 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       window.clearInterval(timer);
     };
   }, [session, trackId, onSelectTrack, takeRaceStart, endMpRace, changeCar]);
+
+  // ---- Weekly challenge
+  // The week is read when the menus open (it only turns on Monday)
+  const challengeWeek = challengeAt(Date.now()).id;
+  const challenge = useMemo(() => challengeAt(Date.now()), [challengeWeek]);
+  const challengeAvailable = TRACKS.some((t) => t.id === challenge.trackId) && CARS.some((c) => c.physics === challenge.vehicle);
+  const loadChallengeBoard = useCallback(
+    () => fetchRemoteBoard(challenge.trackId, challenge.vehicle, { event: challenge.id, name: settingsRef.current.profile.name, limit: 20 }).catch(() => null),
+    [challenge]
+  );
+  /** Out on track to the week's rules: its car, assists and realism, a dry track */
+  const driveChallenge = useCallback(() => {
+    const week = challengeAt(Date.now());
+    setSettings((prev) => ({
+      ...prev,
+      assistPreset: week.assists,
+      realism: week.realism,
+      conditions: { ...prev.conditions, weather: "clear", weatherNodes: undefined },
+    }));
+    startSession({ kind: "practice" });
+    // After the session reset, so the swap finds no replay or AI field to carry over (as a multiplayer race's)
+    if (vehicleModelRef.current !== week.vehicle) changeCar(carForVehicle(week.vehicle).id);
+    session?.car.resetToStartGrid(false);
+    setLaunchHint(true);
+  }, [session, startSession, changeCar]);
+  /** The menu's "Drive the challenge": on another circuit the scene loads the week's first, then goes out */
+  const handleDriveChallenge = useCallback(() => {
+    const week = challengeAt(Date.now());
+    if (week.trackId !== trackId) {
+      if (!onSelectTrack) return;
+      pendingChallenge = week.id;
+      void onSelectTrack(week.trackId);
+      return;
+    }
+    driveChallenge();
+  }, [trackId, onSelectTrack, driveChallenge]);
+  // The challenge asked for from another circuit, now that this one has loaded
+  useEffect(() => {
+    if (!assetsReady || !pendingChallenge) return;
+    const id = pendingChallenge;
+    pendingChallenge = null;
+    const week = challengeAt(Date.now());
+    if (week.id !== id || week.trackId !== trackId) return;
+    if (phaseRef.current === "loading") {
+      session?.unlockAudio();
+      setLoadingVisible(false);
+    }
+    driveChallenge();
+  }, [assetsReady, trackId, session, driveChallenge]);
 
   // The race the host started before this circuit loaded
   useEffect(() => {
@@ -1264,6 +1335,20 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
           onControls={() => openControls("title")}
           trackId={trackId}
           onSelectTrack={onSelectTrack}
+          challengePanel={
+            boardOn
+              ? {
+                  challenge,
+                  trackName: getTrackInfo(challenge.trackId).name,
+                  carTitle: carForVehicle(challenge.vehicle).title,
+                  available: challengeAvailable,
+                  loadBoard: loadChallengeBoard,
+                  boardVersion,
+                  driverName: settings.profile.name,
+                  onDrive: handleDriveChallenge,
+                }
+              : undefined
+          }
           conditionsPanel={{
             conditions: settings.conditions,
             realism: settings.realism,

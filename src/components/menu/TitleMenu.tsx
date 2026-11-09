@@ -7,6 +7,8 @@ import { carById, carClass } from "@/lib/cars/car-registry";
 import { carSkinFor } from "@/lib/cars/car-skins";
 import { EngineersGarage } from "./EngineersGarage";
 import { MultiplayerPanel } from "@/components/hud/MultiplayerPanel";
+import { ChallengePanel, type ChallengePanelProps } from "@/components/menu/ChallengePanel";
+import { timeLeftLabel } from "@/lib/net/weekly-challenge";
 import { DisplayPanel } from "@/components/hud/DisplayPanel";
 import { LeaderboardPanel } from "@/components/hud/LeaderboardPanel";
 import { buildHudMap } from "@/components/hud/styles/hud-style-parts";
@@ -50,12 +52,13 @@ import {
   Route,
   TabletSmartphone,
   Timer,
+  Trophy,
   Users,
   Wrench,
   type LucideIcon,
 } from "lucide-react";
 
-type TitlePanel = "race" | "circuit" | "car" | "conditions" | "garage" | "multiplayer" | "leaderboard" | "display" | "credits" | "request";
+type TitlePanel = "race" | "circuit" | "car" | "conditions" | "garage" | "multiplayer" | "challenge" | "leaderboard" | "display" | "credits" | "request";
 
 /**
  * Where the title menu picks up when it comes back: Controls is a screen of its own, and loading a circuit reloads the
@@ -80,6 +83,8 @@ export interface TitleMenuProps extends PauseMenuProps {
   onSelectTrack?: (id: string) => void | Promise<void>;
   /** Weather, time of day and simulation realism */
   conditionsPanel?: ConditionsPanelProps;
+  /** This week's challenge (only with an online board) */
+  challengePanel?: ChallengePanelProps;
 }
 
 const linkClass = "underline decoration-[#00E5FF]/40 underline-offset-2 text-[#00E5FF] hover:text-[#CCFF00]";
@@ -633,6 +638,19 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
       run: () => openPanel("multiplayer"),
       badge: lobbyPlayers > 1 ? `${lobbyPlayers} in lobby` : undefined,
     },
+    ...(props.challengePanel
+      ? [
+          {
+            id: "challenge",
+            label: "Weekly challenge",
+            short: "Challenge",
+            detail: `${props.challengePanel.trackName} · ${props.challengePanel.carTitle} · ${timeLeftLabel(props.challengePanel.challenge.endsMs, Date.now())} left`,
+            icon: Trophy,
+            panel: "challenge" as const,
+            run: () => openPanel("challenge"),
+          },
+        ]
+      : []),
     {
       id: "circuit",
       label: "Circuit",
@@ -822,7 +840,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
           <div className="grid flex-1 grid-cols-1 items-start gap-5 lg:grid-cols-[250px_minmax(0,1000px)] lg:gap-7">
             {/* Below lg the rail would stack 13 rows above the panel: the panel takes the screen, Close goes back */}
             <nav className="flex flex-col gap-0.5 max-lg:hidden" data-nav-zone="rail" aria-label="Main menu">
-              {byId(["drive", "race", "multiplayer"]).map((item) => (
+              {byId(["drive", "race", "multiplayer", "challenge"]).map((item) => (
                 <CompactEntry key={item.id} item={item} open={item.panel === panel} />
               ))}
               <div aria-hidden className="mx-3.5 my-2 h-px bg-[#262B3D]" />
@@ -895,6 +913,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
                   ) : null}
                   {panel === "garage" ? <EngineersGarage {...props} onOpenCarBrowser={() => openPanel("car")} /> : null}
                   {panel === "multiplayer" ? <MultiplayerPanel {...props} /> : null}
+                  {panel === "challenge" && props.challengePanel ? <ChallengePanel {...props.challengePanel} /> : null}
                   {panel === "leaderboard" && props.leaderboardPanel ? <LeaderboardPanel {...props.leaderboardPanel} /> : null}
                   {panel === "display" && props.displayPanel ? <DisplayPanel {...props.displayPanel} /> : null}
                   {panel === "credits" ? <Credits /> : null}
@@ -916,7 +935,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
                 {byId(["drive"]).map((item) => (
                   <DriveHero key={item.id} item={item} pad={mode === "pad"} family={family} />
                 ))}
-                {byId(["race", "multiplayer"]).map((item) => (
+                {byId(["race", "multiplayer", "challenge"]).map((item) => (
                   <MainEntry key={item.id} item={item} />
                 ))}
               </div>
