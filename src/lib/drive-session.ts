@@ -661,15 +661,17 @@ export class DriveSession {
     container.innerHTML = "";
     container.appendChild(renderer.domElement);
 
-    // Golden-hour sky dome, its baked PMREM environment, horizon fog and the cascaded sun shadow. `?sky=physical`:
-    // the physically based sky with volumetric clouds instead (physical-sky.ts)
+    // Golden-hour sky dome, its baked PMREM environment, horizon fog and the cascaded sun shadow. On Medium and High
+    // the physically based sky with volumetric clouds replaces the dome (physical-sky.ts); `?sky=classic` keeps the
+    // dome on every preset
     const env = createGoldenHourEnvironment(renderer, scene, {
-      physicalSky: new URLSearchParams(window.location.search).get("sky") === "physical",
+      physicalSky: new URLSearchParams(window.location.search).get("sky") !== "classic",
     });
     // Rain streaks around the camera (one GPU-animated draw, hidden in the dry)
     const rainFx = createRainFx(scene);
-    // Scene render + one merged effect pass (mipmap bloom, then AgX tone mapping); the physical sky's clouds first
-    const postFx = createPostFx(renderer, scene, camera, { clouds: env.physicalSky });
+    // Scene render + one merged effect pass (mipmap bloom, then AgX tone mapping); applyGraphicsQuality puts the
+    // physical sky's clouds in front of it
+    const postFx = createPostFx(renderer, scene, camera);
     // Live reflections of the world on the cars (High / Medium); Low keeps the sky's
     const reflectionProbe = new CarReflectionProbe(renderer, scene);
     // `?perf=1`: a report of the first 30 s on track (startup-monitor.ts)

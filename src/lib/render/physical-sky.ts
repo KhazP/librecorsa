@@ -4,11 +4,12 @@ import { CloudShape, CloudShapeDetail, CloudsEffect, LocalWeather, Turbulence } 
 import { Ellipsoid, Geodetic, radians } from "@takram/three-geospatial";
 import { AZIMUTH_OFFSET_DEG, LATITUDE_DEG } from "@/lib/sim/weather";
 import { withBasePath } from "@/lib/base-path";
+import { isTouchDevice } from "@/lib/input/touch-input";
 import { patchShader, type ShaderPatch } from "./shader-patch";
 
 /*
- * Physically based sky and volumetric clouds (@takram/three-atmosphere and @takram/three-clouds, MIT), opt-in with
- * `?sky=physical` while the classic three.js Sky stays the default.
+ * Physically based sky and volumetric clouds (@takram/three-atmosphere and @takram/three-clouds, MIT): the sky on
+ * the Medium and High graphics presets. Low keeps the classic three.js Sky, and so does `?sky=classic`.
  *
  * What it takes from the sim
  *   The sun direction stays the weather model's (src/lib/sim/weather.ts): every circuit shares one near-equatorial
@@ -21,8 +22,9 @@ import { patchShader, type ShaderPatch } from "./shader-patch";
  *     pinned to the far plane at 0 instead, and the clouds' scene-depth read is converted (sky test and view z).
  *   - Exposure: the library is tuned for exposure ~10; this scene runs at ~1.15. The sky and the clouds are scaled
  *     by the same SKY_RADIANCE_SCALE, and the visible sun disc is capped like the classic sky's.
- *   - Volumetric clouds run on High (the library's "medium" preset) and Medium ("low"). Without them (Low, the
- *     environment bake, the reflection probe), an overcast veil greys the sky with the weather's cloud cover.
+ *   - Volumetric clouds run wherever this sky shows: High uses the library's "medium" preset, Medium its "low", and
+ *     phones and tablets "low" at half resolution. The environment bake and the reflection probe have no clouds, so
+ *     an overcast veil greys their sky with the weather's cloud cover.
  *   - The clouds' noise volumes are generated on the GPU and their ray-march jitter is our own blue noise
  *     (scripts/generate-blue-noise.ts): nothing is fetched from outside the game.
  */
@@ -214,7 +216,7 @@ export class PhysicalSky {
   private readonly sunECEF = new THREE.Vector3(0, 0, 1);
   private readonly procedural: Array<{ dispose(): void }> = [];
   private stbn: THREE.Data3DTexture | null = null;
-  private cloudsOn = false;
+  private quality: SkyQuality = "high";
   private cloud = 0;
   private rain = 0;
   private disposed = false;
@@ -258,8 +260,6 @@ export class PhysicalSky {
       .then(() => {
         if (this.disposed) return;
         this.ready = true;
-        this.mesh.visible = true;
-        this.bakeMesh.visible = true;
         this.applyLook();
         onReady();
       })
@@ -286,23 +286,31 @@ export class PhysicalSky {
     this.applyLook();
   }
 
-  /** Volumetric clouds on High (the library's "medium" preset) and Medium ("low"), off on Low */
+  /** The graphics preset: this sky and its clouds on Medium and High, hidden on Low (the classic sky shows there) */
   setQuality(quality: SkyQuality): void {
-    this.cloudsOn = quality !== "low";
-    if (quality === "high") this.clouds.qualityPreset = "medium";
-    else if (quality === "medium") this.clouds.qualityPreset = "low";
+    this.quality = quality;
+    const touch = isTouchDevice();
+    this.clouds.qualityPreset = quality === "high" && !touch ? "medium" : "low";
+    this.clouds.resolutionScale = touch ? 0.5 : 1;
     this.clouds.lightShafts = false;
     this.applyLook();
   }
 
-  /** Whether the clouds' pass should run this frame: the atmosphere is ready and the graphics preset has clouds */
+  /** This sky is up: its lookup tables are ready and the preset is not Low */
+  get showing(): boolean {
+    return this.ready && this.quality !== "low";
+  }
+
+  /** Whether the clouds' pass should run this frame (they come and go with the sky) */
   get cloudsActive(): boolean {
-    return this.cloudsOn && this.ready;
+    return this.showing;
   }
 
   private applyLook(): void {
     const { cloud, rain } = this;
     const volumetric = this.cloudsActive;
+    this.mesh.visible = this.showing;
+    this.bakeMesh.visible = this.showing;
     // A clear day keeps a few fair-weather clouds; full cover closes the sky
     this.clouds.coverage = 0.25 + 0.6 * cloud + 0.1 * rain;
     // The bake has no volumetric clouds, so its sky always takes the veil; the visible sky only past what they show

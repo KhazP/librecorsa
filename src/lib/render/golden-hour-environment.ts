@@ -141,10 +141,15 @@ export interface GoldenHourEnvironment {
   /** unit vector from scene towards the sun */
   sunDirection: THREE.Vector3;
   sky: Sky;
-  /** The physically based sky and its volumetric clouds (`?sky=physical`); null with the classic sky */
-  physicalSky: PhysicalSky | null;
-  /** The visible sky whose `showSunDisc` uniform the car reflection probe zeroes while it films */
+  /**
+   * The physically based sky and its volumetric clouds, shown on Medium and High. Created the first time either is
+   * picked, so a Low session never builds it; null until then, and always with `?sky=classic`.
+   */
+  readonly physicalSky: PhysicalSky | null;
+  /** The visible sky's sun-disc switch (`showSunDisc`), which the car reflection probe zeroes while it films */
   probeSky: { material: { uniforms: Record<string, { value: unknown }> } };
+  /** Graphics preset: the physical sky on Medium and High, the classic sky on Low */
+  setQuality(quality: "low" | "medium" | "high"): void;
   /** Weak warm-blue / olive fill; added to the scene by createGoldenHourEnvironment. */
   fillLight: THREE.HemisphereLight;
   /** Call once per frame before rendering: keeps the sky dome centred on the camera (the shadow cascades fit the rendering camera on their own) */
@@ -162,6 +167,8 @@ export interface PostFx {
   setCamera(camera: THREE.Camera): void;
   /** Graphics preset: MSAA samples and bloom on / off */
   setQuality(quality: "low" | "medium" | "high"): void;
+  /** Puts the physical sky's clouds into the chain, right after the scene render (once; later calls are no-ops) */
+  setClouds(sky: { readonly clouds: CloudsEffect; readonly cloudsActive: boolean }): void;
   dispose(): void;
 }
 
@@ -181,7 +188,8 @@ export function applyGraphicsQuality(
   // Toggling the light's shadow recompiles the lit materials on their own (shadow count is part of the program key)
   env.sunLight.castShadow = quality !== "low";
   postFx.setQuality(quality);
-  env.physicalSky?.setQuality(quality);
+  env.setQuality(quality);
+  if (env.physicalSky) postFx.setClouds(env.physicalSky);
   // Scenery noise and bump off on Low (the baked tree shading stays); fewer instanced trees and shrubs below High
   setSceneryQuality(quality);
   setSceneryDensity(quality);
@@ -351,18 +359,24 @@ class SkyBaker {
   private readonly groundFill = new THREE.HemisphereLight();
   private pmrem: THREE.PMREMGenerator | null;
 
-  /** `physicalSky`: the physical sky's sun-less quad, baked in place of the classic sky once it is ready */
-  constructor(renderer: THREE.WebGLRenderer, private readonly physicalSky: THREE.Object3D | null = null) {
+  /** The physical sky's sun-less quad, baked in place of the classic sky while it shows */
+  private physicalSky: THREE.Object3D | null = null;
+
+  constructor(renderer: THREE.WebGLRenderer) {
     this.sky.scale.setScalar(1000);
     configureSkyUniforms(this.sky, false);
     this.scene.add(this.sky);
-    if (physicalSky) this.scene.add(physicalSky);
     // Tarmac, grass and run-off seen from a car: a dark, slightly warm grey
     this.ground = new THREE.Mesh(new THREE.CircleGeometry(900, 48), new THREE.MeshLambertMaterial({ color: GROUND_ALBEDO }));
     this.ground.rotation.x = -Math.PI / 2;
     this.ground.position.y = -1.5;
     this.scene.add(this.ground, this.groundSun, this.groundFill);
     this.pmrem = new THREE.PMREMGenerator(renderer);
+  }
+
+  setPhysicalSky(quad: THREE.Object3D): void {
+    this.physicalSky = quad;
+    this.scene.add(quad);
   }
 
   bake(sunDir: THREE.Vector3, look: SkyLook, sun: GroundLight, fill: THREE.HemisphereLight): THREE.WebGLCubeRenderTarget {
@@ -397,6 +411,7 @@ class SkyBaker {
 export function createGoldenHourEnvironment(
   renderer: THREE.WebGLRenderer,
   scene: THREE.Scene,
+  /** `physicalSky`: allow the physically based sky on Medium and High (default false: the classic sky everywhere) */
   options: { physicalSky?: boolean } = {}
 ): GoldenHourEnvironment {
   const sunDirection = sunDirectionUnit();
@@ -413,20 +428,12 @@ export function createGoldenHourEnvironment(
   configureSkyUniforms(sky, true);
   scene.add(sky);
 
-  // The physical sky takes over from the classic one once its lookup tables are computed (a fraction of a second,
-  // under the loading screen); until then, and if that fails, the classic sky stays up
-  // Set once the bake exists below; the ready callback re-bakes the environment from the new sky
-  let rebakeNow: () => void = () => {};
-  const physicalSky = options.physicalSky
-    ? new PhysicalSky(renderer, () => {
-        sky.visible = false;
-        rebakeNow();
-      })
-    : null;
-  if (physicalSky) scene.add(physicalSky.mesh);
+  // The physical sky (Medium / High) is built the first time it is needed and takes over from the classic sky once its
+  // lookup tables are computed (a fraction of a second); until then, on Low and if that fails, the classic sky shows
+  let physicalSky: PhysicalSky | null = null;
 
   // --- Environment map (PMREM, re-baked only when the sky changes visibly) ---
-  const baker = new SkyBaker(renderer, physicalSky?.bakeMesh ?? null);
+  const baker = new SkyBaker(renderer);
   const skyLook = skyLookFor(GOLDEN_HOUR_SKY, {} as SkyLook);
   const skySunDir = sunDirection.clone();
   // The first bake, before the scene's lights exist: their starting values
@@ -487,8 +494,35 @@ export function createGoldenHourEnvironment(
     lastBakeMs = performance.now();
     pendingBake = false;
   };
-  rebakeNow = () => {
-    if (!disposed) rebake();
+  /** Shows whichever sky the preset and the physical sky's readiness call for, and re-bakes the environment from it */
+  const applySkyChoice = () => {
+    if (disposed) return;
+    sky.visible = !physicalSky?.showing;
+    rebake();
+  };
+
+  const setQuality = (quality: "low" | "medium" | "high") => {
+    if (disposed) return;
+    if (!physicalSky && options.physicalSky && quality !== "low") {
+      physicalSky = new PhysicalSky(renderer, applySkyChoice);
+      scene.add(physicalSky.mesh);
+      baker.setPhysicalSky(physicalSky.bakeMesh);
+      physicalSky.setConditions({ sunDirection: skySunDir, cloud: current.cloud, rain: current.rain });
+    }
+    if (!physicalSky) return;
+    const wasShowing = physicalSky.showing;
+    physicalSky.setQuality(quality);
+    if (physicalSky.showing !== wasShowing) applySkyChoice();
+  };
+
+  // The probe keeps this switch object; it forwards to the sky on show now
+  const sunDiscSwitch = {
+    get value(): number {
+      return ((physicalSky?.showing ? physicalSky.mesh : sky).material.uniforms.showSunDisc as { value: number }).value;
+    },
+    set value(v: number) {
+      ((physicalSky?.showing ? physicalSky.mesh : sky).material.uniforms.showSunDisc as { value: number }).value = v;
+    },
   };
 
   const setConditions = (c: SkyConditions) => {
@@ -537,8 +571,10 @@ export function createGoldenHourEnvironment(
     sunLight,
     sunDirection,
     sky,
-    physicalSky,
-    probeSky: physicalSky?.mesh ?? sky,
+    get physicalSky() {
+      return physicalSky;
+    },
+    probeSky: { material: { uniforms: { showSunDisc: sunDiscSwitch } } },
     fillLight,
 
     update(_carWorldPos: THREE.Vector3, camera: THREE.Camera): void {
@@ -552,6 +588,7 @@ export function createGoldenHourEnvironment(
     },
 
     setConditions,
+    setQuality,
 
     dispose(): void {
       if (disposed) return;
@@ -601,7 +638,7 @@ export function createPostFx(
   renderer: THREE.WebGLRenderer,
   scene: THREE.Scene,
   camera: THREE.Camera,
-  opts?: { multisampling?: number; clouds?: { readonly clouds: CloudsEffect; readonly cloudsActive: boolean } | null }
+  opts?: { multisampling?: number }
 ): PostFx {
   const composer = new EffectComposer(renderer, {
     frameBufferType: THREE.HalfFloatType,
@@ -609,12 +646,11 @@ export function createPostFx(
   });
 
   const renderPass = new RenderPass(scene, camera);
-  // Volumetric clouds (physical sky only) go over the rendered frame before bloom, so their bright edges bloom too.
-  // Their own pass: inside the bloom pass, bloom would read the frame from before the clouds were composited.
-  const sky = opts?.clouds ?? null;
-  const cloudsPass = sky ? new EffectPass(camera, sky.clouds) : null;
-  // EffectPass gives its camera to its own material only; the clouds march their rays from the effect's camera
-  if (cloudsPass) cloudsPass.mainCamera = camera;
+  // Volumetric clouds (physical sky only, added by setClouds) go over the rendered frame before bloom, so their bright
+  // edges bloom too. Their own pass: inside the bloom pass, bloom would read the frame from before the clouds.
+  let sky: { readonly clouds: CloudsEffect; readonly cloudsActive: boolean } | null = null;
+  let cloudsPass: EffectPass | null = null;
+  let mainCamera = camera;
 
   const bloom = new BloomEffect({
     mipmapBlur: true,
@@ -637,7 +673,6 @@ export function createPostFx(
   const gradePass = new EffectPass(camera, new DisplayGradeEffect(GRADE_CONTRAST, GRADE_SATURATION));
 
   composer.addPass(renderPass);
-  if (cloudsPass) composer.addPass(cloudsPass);
   composer.addPass(effectPass);
   composer.addPass(gradePass);
 
@@ -655,6 +690,7 @@ export function createPostFx(
     },
 
     setCamera(next: THREE.Camera): void {
+      mainCamera = next;
       renderPass.mainCamera = next;
       if (cloudsPass) cloudsPass.mainCamera = next;
       effectPass.mainCamera = next;
@@ -664,6 +700,16 @@ export function createPostFx(
     setQuality(quality: "low" | "medium" | "high"): void {
       composer.multisampling = quality === "high" ? 4 : quality === "medium" ? 2 : 0;
       bloom.intensity = quality === "high" ? 0.4 : 0;
+    },
+
+    setClouds(next): void {
+      if (cloudsPass) return;
+      sky = next;
+      cloudsPass = new EffectPass(mainCamera, next.clouds);
+      // EffectPass gives its camera to its own material only; the clouds march their rays from the effect's camera
+      cloudsPass.mainCamera = mainCamera;
+      cloudsPass.enabled = next.cloudsActive;
+      composer.addPass(cloudsPass, 1);
     },
 
     dispose(): void {

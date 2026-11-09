@@ -1,5 +1,5 @@
 /**
- * The physical sky (src/lib/render/physical-sky.ts, `?sky=physical`): the scene sits on the globe with up, north and
+ * The physical sky (src/lib/render/physical-sky.ts, Medium and High graphics): the scene sits on the globe with up, north and
  * east where the weather model puts them, so the sky's sun stands where the scene's sun light comes from; the shader
  * edits still land on the libraries' current sources; and the clouds' blue noise is our own and well formed.
  *
