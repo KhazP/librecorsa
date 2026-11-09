@@ -52,6 +52,19 @@ function section(title: string, id: string, run: (mod: ModData) => void): void {
   const from = checks;
   run(mod);
   console.log(`${failures.length === before ? 'PASS' : 'FAIL'}  ${title}: ${checks - from} values against the source`);
+  if (process.argv.includes('--unread')) listUnread(mod);
+}
+
+const PHYSICS_FILES = ['car.ini', 'suspensions.ini', 'tyres.ini', 'drivetrain.ini', 'engine.ini', 'brakes.ini', 'aero.ini', 'electronics.ini'];
+
+/** With `--unread`: the source's keys this suite never read, per file and section */
+function listUnread(mod: ModData): void {
+  for (const file of PHYSICS_FILES) {
+    if (!mod.has(file)) continue;
+    const { keys, sections } = mod.unread(file);
+    for (const [name, left] of Object.entries(keys)) console.log(`        ${file} [${name}] ${left.join(' ')}`);
+    if (sections.length) console.log(`        ${file} sections not read: ${sections.join(' ')}`);
+  }
 }
 
 // ---------------------------------------------------------------------------

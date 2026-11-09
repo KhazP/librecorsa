@@ -105,6 +105,8 @@ export function readCarData(dir: string): Map<string, string> {
 export class ModData {
   private readonly files: Map<string, string>;
   private readonly inis = new Map<string, Record<string, IniSection>>();
+  /** `file|SECTION|KEY` of every key asked for */
+  private readonly asked = new Set<string>();
 
   constructor(readonly dir: string) {
     this.files = readCarData(dir);
@@ -157,7 +159,24 @@ export class ModData {
 
   /** A key's text, `undefined` when the section or key is absent */
   text(file: string, section: string, key: string): string | undefined {
+    this.asked.add(`${file}|${section.toUpperCase()}|${key.toUpperCase()}`);
     return this.ini(file)[section.toUpperCase()]?.[key.toUpperCase()];
+  }
+
+  /**
+   * What a reader of this data left unread in an ini file: the keys never asked for in the sections it did read
+   * (section → keys), and the sections it never opened
+   */
+  unread(file: string): { keys: Record<string, string[]>; sections: string[] } {
+    const keys: Record<string, string[]> = {};
+    const sections: string[] = [];
+    for (const [name, body] of Object.entries(this.ini(file))) {
+      const all = Object.keys(body);
+      const left = all.filter((k) => !this.asked.has(`${file}|${name}|${k}`));
+      if (left.length === all.length) sections.push(name);
+      else if (left.length) keys[name] = left;
+    }
+    return { keys, sections };
   }
 
   /** A key's number; NaN when absent, so a comparison against it fails */
