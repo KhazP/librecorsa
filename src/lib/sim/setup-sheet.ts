@@ -14,6 +14,7 @@ import { VF26_CHASSIS } from "./vf26-data";
 import { F12026_CAR_CONFIG } from "./f12026-car/F12026CarConfig";
 import { AMG_GT3_CONFIG } from "./gt3/AmgGt3Config";
 import { SUZUKI_LIANA_CONFIG } from "./road/SuzukiLianaConfig";
+import { MTR_496R_CONFIG } from "./proto/Mtr496rConfig";
 
 export type SetupClassId = "f1" | "gt3";
 
@@ -23,6 +24,8 @@ export const SETUP_CLASS: Record<VehicleModelId, SetupClassId> = {
   "amg-gt3": "gt3",
   // A closed road car: the GT3 sheet (tyres, electronics, mechanical grip, dampers, fuel)
   liana: "gt3",
+  // A closed-wheel car on a rear wing: the GT3 sheet
+  "mtr-496r": "gt3",
 };
 
 export interface SetupState {
@@ -94,10 +97,12 @@ interface CarBaseline {
   steerRatio: number;
   /** Front brake share (%) a reset puts back; absent: the class's default */
   brakeBiasPct?: number;
+  /** The brake-bias adjuster's range (%); absent: the GT3 sheet's 60–78 */
+  brakeBiasRangePct?: readonly [number, number];
 }
 
 const rigidBaseline = (
-  cfg: typeof F12026_CAR_CONFIG | typeof AMG_GT3_CONFIG | typeof SUZUKI_LIANA_CONFIG,
+  cfg: typeof F12026_CAR_CONFIG | typeof AMG_GT3_CONFIG | typeof SUZUKI_LIANA_CONFIG | typeof MTR_496R_CONFIG,
   vehicle: VehicleModelId
 ): CarBaseline => ({
   rideFrontMm: cfg.aero.front_target_height * 1000,
@@ -133,6 +138,9 @@ const BASELINES: Record<VehicleModelId, CarBaseline> = {
   "f12026-car": rigidBaseline(F12026_CAR_CONFIG, "f12026-car"),
   "amg-gt3": rigidBaseline(AMG_GT3_CONFIG, "amg-gt3"),
   liana: rigidBaseline(SUZUKI_LIANA_CONFIG, "liana"),
+  // Its 58 % sits below a GT3's bias range: the mod's adjuster runs from 52 % [spec setup.ini FRONT_BIAS] to the 78 %
+  // every car stops at
+  "mtr-496r": { ...rigidBaseline(MTR_496R_CONFIG, "mtr-496r"), brakeBiasRangePct: [52, 78] },
 };
 
 const clampTo = (v: number, r: { min: number; max: number }) => Math.max(r.min, Math.min(r.max, v));
@@ -438,7 +446,15 @@ function gt3Sheet(vehicle: VehicleModelId, b: CarBaseline, r: TyreRanges, d: Tyr
         chassisParam("arbFrontPct", { label: "Front anti-roll bar", base: 11, perUnit: 1 / 5, min: 1, max: 21, step: 1, format: int, fx: FX.arbFront }),
         chassisParam("arbRearPct", { label: "Rear anti-roll bar", base: 11, perUnit: 1 / 5, min: 1, max: 21, step: 1, format: int, fx: FX.arbRear }),
         chassisParam("brakePowerPct", { label: "Brake power", base: 100, min: 80, max: 100, step: 1, format: pct, fx: FX.brakePressure }),
-        tunerParam("brakeBiasPct", { label: "Brake bias", base: b.brakeBiasPct ?? 71, min: 60, max: 78, step: 0.5, format: (v) => `${v.toFixed(1)}%`, fx: FX.bias }),
+        tunerParam("brakeBiasPct", {
+          label: "Brake bias",
+          base: b.brakeBiasPct ?? 71,
+          min: b.brakeBiasRangePct?.[0] ?? 60,
+          max: b.brakeBiasRangePct?.[1] ?? 78,
+          step: 0.5,
+          format: (v) => `${v.toFixed(1)}%`,
+          fx: FX.bias,
+        }),
         chassisParam("steerRatioDelta", { label: "Steering ratio", base: b.steerRatio, min: 10, max: 16, step: 0.2, format: (v) => v.toFixed(1), fx: FX.steerRatio }),
         rate("springFrontPct", "Front wheel rate", b.wheelRateFrontNmm, FX.wheelRateFront),
         rate("springRearPct", "Rear wheel rate", b.wheelRateRearNmm, FX.wheelRateRear),

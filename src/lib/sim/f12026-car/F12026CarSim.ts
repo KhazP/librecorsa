@@ -991,7 +991,7 @@ export class F12026CarSim implements SimulatorCar {
   /** The vehicle model whose setup limits, wing steps and fuel this car takes */
   private get setupCar(): Exclude<VehicleModelId, 'vf26'> {
     const id = this.profile.id;
-    return id === 'amg-gt3' || id === 'liana' ? id : 'f12026-car';
+    return id === 'amg-gt3' || id === 'liana' || id === 'mtr-496r' ? id : 'f12026-car';
   }
 
   /** The garage's starting fuel into the car, with the spring preloads set for that load */

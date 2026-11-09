@@ -57,6 +57,14 @@ export const GGV_TABLES: Record<VehicleModelId, GgvTable> = {
     accelG: [0.37, 0.28, 0.24, 0.18, 0.15, 0.12, 0.08, 0.05, 0.02],
     lockKappa: Math.tan(36 * (Math.PI / 180)) / 2.46,
   },
+  // Measured 2026-11-09
+  'mtr-496r': {
+    speedsMs: [15, 25, 35, 45, 55, 65, 75, 85],
+    latG: [1.53, 1.62, 1.74, 1.9, 2.09, 2.29, 2.54, 2.78],
+    brakeG: [1.68, 1.88, 2.02, 2.23, 2.52, 2.88, 3.29, 3.63],
+    accelG: [1.01, 0.98, 0.81, 0.64, 0.46, 0.29, 0.14, 0],
+    lockKappa: Math.tan((240 / 14) * (Math.PI / 180)) / 2.8,
+  },
 };
 
 export const G = 9.81;

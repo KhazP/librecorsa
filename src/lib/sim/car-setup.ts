@@ -130,6 +130,8 @@ export const WING_CLICK_DEG: Record<VehicleModelId, { front: number; rear: numbe
   "amg-gt3": { front: 0.4, rear: 0.6 },
   // No wings
   liana: { front: 0, rear: 0 },
+  // A fixed splitter; the rear wing in its 1° setup clicks [spec setup.ini WING_2]
+  "mtr-496r": { front: 0, rear: 1 },
 };
 
 /**
@@ -142,6 +144,8 @@ export const FUEL_LOAD: Record<VehicleModelId, { defaultKg: number; minKg: numbe
   "amg-gt3": { defaultKg: 50, minKg: 5, maxKg: 89 },
   // 30 l of a 50 l tank of petrol [spec car.ini FUEL / MAX_FUEL]
   liana: { defaultKg: 22, minKg: 4, maxKg: 37 },
+  // 30 l of a 90 l tank [spec car.ini FUEL / MAX_FUEL]
+  "mtr-496r": { defaultKg: 22, minKg: 4, maxKg: 67 },
 };
 
 /** Race fuel density (kg per litre), for the litre readouts */
@@ -163,6 +167,7 @@ export const STEER_RATIO_BASE: Record<VehicleModelId, number> = {
   "f12026-car": 11,
   "amg-gt3": 12.6,
   liana: 15,
+  "mtr-496r": 14,
 };
 
 export function clampChassisSetup(v: unknown): ChassisSetup {

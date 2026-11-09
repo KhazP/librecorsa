@@ -10,6 +10,8 @@ export const HUD_YELLOW = "#FFB300";
 export const HUD_CYAN = "#00E5FF";
 /** The road-car class colour (car-registry `CAR_CLASSES`) */
 export const HUD_ROAD = "#FF8A3D";
+/** The prototype class colour (car-registry `CAR_CLASSES`) */
+export const HUD_PROTO = "#B388FF";
 export const HUD_VOID = "#08090D";
 export const HUD_CARBON = "#11131A";
 export const HUD_TITANIUM = "#1B1F2B";

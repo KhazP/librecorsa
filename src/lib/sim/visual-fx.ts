@@ -18,6 +18,7 @@ import { createPortedCarRig, loadTemplate as loadPortedTemplate } from '@/lib/po
 import { staticFloorOf } from '@/lib/render/body-floor';
 import { CAR_WHEEL_LOCKS_DEG } from '@/lib/input/device-input';
 import { SUZUKI_LIANA_CONFIG } from './road/SuzukiLianaConfig';
+import { MTR_496R_CONFIG } from './proto/Mtr496rConfig';
 import { AMR26_MODEL_URL, loadVf26Template } from '@/lib/vf26-car-model';
 import { assetProgress } from '@/lib/loading/asset-progress';
 import { addContactShadow, seatContactShadow } from '@/lib/render/contact-shadow';
@@ -573,8 +574,8 @@ export class SimVisualFxManager {
     const template: Promise<unknown> =
       kind === 'gt3'
         ? Promise.all([loadGt3Template('opponents'), loadGt3Cockpit()])
-        : kind === 'road'
-          ? loadPortedTemplate(LIANA_MODEL_URL)
+        : kind === 'road' || kind === 'proto'
+          ? loadPortedTemplate(PORTED_ONLY[kind].url)
           : loadVf26Template(AMR26_MODEL_URL, 'opponents');
     return template
       .then(() => {
@@ -815,9 +816,16 @@ function createPeerTelemetry(): CarTelemetry {
 
 /** The AI field's drivers (ai-opponents.ts AI_DRIVERS), whose liveries the pool is built in */
 const PREWARM_DRIVERS = ['KIG', 'MUS', 'NYA', 'RUB', 'HUY'] as const;
-const rigKind = (vehicle: VehicleModelId | undefined) => (vehicle === 'amg-gt3' ? 'gt3' : vehicle === 'liana' ? 'road' : 'f1');
-/** The Liana has no body of its own model: its opponents wear its ported GLB (car-registry's `modelUrl`) */
-const LIANA_MODEL_URL = '/cars/liana/model/liana.glb';
+const rigKind = (vehicle: VehicleModelId | undefined) =>
+  vehicle === 'amg-gt3' ? 'gt3' : vehicle === 'liana' ? 'road' : vehicle === 'mtr-496r' ? 'proto' : 'f1';
+/**
+ * The models with no body of their own: their opponents wear the car's ported GLB (car-registry's `modelUrl`), on the
+ * model's chassis and wheel lock
+ */
+const PORTED_ONLY = {
+  road: { url: '/cars/liana/model/liana.glb', config: SUZUKI_LIANA_CONFIG, lockDeg: CAR_WHEEL_LOCKS_DEG.liana },
+  proto: { url: '/cars/mtr-496r/model/mtr-496r.glb', config: MTR_496R_CONFIG, lockDeg: CAR_WHEEL_LOCKS_DEG['mtr-496r'] },
+} as const;
 const poolKey = (vehicle: VehicleModelId | undefined, ghost: boolean) => `${rigKind(vehicle)}${ghost ? ':ghost' : ''}`;
 
 function buildOpponentRig(vehicle: VehicleModelId | undefined, livery: LiveryConfig): SimCarRig {
@@ -825,12 +833,13 @@ function buildOpponentRig(vehicle: VehicleModelId | undefined, livery: LiveryCon
   if (vehicle === 'amg-gt3') {
     rig = createGt3CarRig();
     rig.setLivery(livery);
-  } else if (vehicle === 'liana') {
+  } else if (vehicle === 'liana' || vehicle === 'mtr-496r') {
+    const own = PORTED_ONLY[rigKind(vehicle) as 'road' | 'proto'];
     rig = createPortedCarRig({
-      url: LIANA_MODEL_URL,
-      chassis: SUZUKI_LIANA_CONFIG.chassis,
-      steerLockDeg: CAR_WHEEL_LOCKS_DEG.liana / 2,
-      floor: staticFloorOf(SUZUKI_LIANA_CONFIG),
+      url: own.url,
+      chassis: own.config.chassis,
+      steerLockDeg: own.lockDeg / 2,
+      floor: staticFloorOf(own.config),
     });
   } else {
     rig = createF1Car2026(livery, 'medium');

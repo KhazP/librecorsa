@@ -7,6 +7,7 @@ import {
   atShiftPoint,
   revRangeFor,
   HUD_CYAN,
+  HUD_PROTO,
   HUD_ROAD,
   HUD_GLASS,
   HUD_GREEN,
@@ -66,6 +67,7 @@ export const SpeedCluster: React.FC<SpeedClusterProps> = ({
   const channels = telemetry.f12026;
   const isGt3 = channels?.carId === "amg-gt3";
   const isRoad = channels?.carId === "liana";
+  const isProto = channels?.carId === "mtr-496r";
   const [revStart, revFull] = revRangeFor(channels?.carId);
   const hasErs = channels?.hasErs ?? true;
   const lit = Math.round(((telemetry.rpm - revStart) / (revFull - revStart)) * REV_LEDS);
@@ -233,9 +235,9 @@ export const SpeedCluster: React.FC<SpeedClusterProps> = ({
         <div className="flex items-center gap-1.5">
           <span
             className="lc-data rounded-full px-2 py-0.5 text-[9px] italic"
-            style={{ backgroundColor: isGt3 ? HUD_CYAN : isRoad ? HUD_ROAD : HUD_VOLT, color: "#08090D" }}
+            style={{ backgroundColor: isGt3 ? HUD_CYAN : isRoad ? HUD_ROAD : isProto ? HUD_PROTO : HUD_VOLT, color: "#08090D" }}
           >
-            {isGt3 ? "GT3 PRO" : isRoad ? "ROAD CAR" : "FORMULA"}
+            {isGt3 ? "GT3 PRO" : isRoad ? "ROAD CAR" : isProto ? "PROTOTYPE" : "FORMULA"}
           </span>
           {flash ? (
             <span className="lc-data animate-pulse rounded-full bg-[#FF2A3C] px-2 py-0.5 text-[9px] text-[#F5F7FA]">

@@ -59,6 +59,7 @@ import type { AiGridOrder, PlayerGridSlot } from '@/lib/sim/race-setup';
 import { F12026_CAR_CONFIG } from '@/lib/sim/f12026-car/F12026CarConfig';
 import { AMG_GT3_CONFIG } from '@/lib/sim/gt3/AmgGt3Config';
 import { SUZUKI_LIANA_CONFIG } from '@/lib/sim/road/SuzukiLianaConfig';
+import { MTR_496R_CONFIG } from '@/lib/sim/proto/Mtr496rConfig';
 import {
   classificationClosed,
   classifiedTimeS,
@@ -540,6 +541,7 @@ const REMOTE_RESTITUTION = 0.1;
 function remoteContactMass(vehicle: VehicleModelId | undefined): [number, number] {
   if (vehicle === 'amg-gt3') return [AMG_GT3_CONFIG.chassis.totalMassKg, AMG_GT3_CONFIG.chassis.inertia.yaw];
   if (vehicle === 'liana') return [SUZUKI_LIANA_CONFIG.chassis.totalMassKg, SUZUKI_LIANA_CONFIG.chassis.inertia.yaw];
+  if (vehicle === 'mtr-496r') return [MTR_496R_CONFIG.chassis.totalMassKg, MTR_496R_CONFIG.chassis.inertia.yaw];
   if (vehicle === 'f12026-car') return [F12026_CAR_CONFIG.chassis.totalMassKg, F12026_CAR_CONFIG.chassis.inertia.yaw];
   return [CONTACT_MASS_KG, CONTACT_YAW_INERTIA_KGM2];
 }

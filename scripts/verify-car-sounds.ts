@@ -23,6 +23,7 @@ import {
 } from "../src/lib/sim/CarAudio";
 import { AMG_GT3_SOUND } from "../src/lib/sim/gt3/AmgGt3Sim";
 import { SUZUKI_LIANA_SOUND } from "../src/lib/sim/road/SuzukiLianaSim";
+import { MTR_496R_SOUND } from "../src/lib/sim/proto/Mtr496rSim";
 import type { Vf26AudioManifest } from "../src/lib/sim/vf26-audio";
 import { noteSkip, REPO_CAR_IDS } from "./lib/hosted-files";
 
@@ -50,6 +51,7 @@ const EXPECTED_SOUNDS: Record<CarId, { sound: CarSoundSource; maxIdleRpm: number
   "amg-gt3-evo": { sound: AMG_GT3_SOUND, maxIdleRpm: 1600 },
   "bmw-m4-gt3": { sound: BMW_M4_GT3_SOUND, maxIdleRpm: 1600 },
   liana: { sound: SUZUKI_LIANA_SOUND, maxIdleRpm: 1000 },
+  "mtr-496r": { sound: MTR_496R_SOUND, maxIdleRpm: 2200 },
 };
 
 const MAX_BANK_BYTES = Math.round(3.4 * 1024 * 1024);

@@ -13,6 +13,7 @@ import {
 } from "@/lib/sim/CarAudio";
 import { AMG_GT3_SOUND } from "@/lib/sim/gt3/AmgGt3Sim";
 import { SUZUKI_LIANA_SOUND } from "@/lib/sim/road/SuzukiLianaSim";
+import { MTR_496R_SOUND } from "@/lib/sim/proto/Mtr496rSim";
 import { overtakingRulesForSeason, type OvertakingRules } from "@/lib/sim/overtaking-rules";
 import { carListed, REPO_CAR_IDS } from "@/lib/hosted-content";
 
@@ -36,13 +37,14 @@ export type CarId =
   | "amg-gt3"
   | "amg-gt3-evo"
   | "bmw-m4-gt3"
+  | "mtr-496r"
   | "liana";
 
 /**
  * The kinds of car, one menu category each; a car's year groups it within its class. Class ids live only in code
  * and the menus' state (saved choices are `CarId`s, an online room's rule is `CarClassRule`), so they can be renamed.
  */
-export type CarClassId = "f1" | "gt3" | "road";
+export type CarClassId = "f1" | "gt3" | "proto" | "road";
 
 export interface CarClass {
   id: CarClassId;
@@ -54,7 +56,7 @@ export interface CarClass {
 /**
  * Whether a car's physics belong to the car you see, the car-side counterpart of a circuit's `CircuitQuality`:
  * - "own": its vehicle model was built for this car (the F1 2026 Prototype and Rigid-Body, the Mercedes-AMG GT3s,
- *   the Suzuki Liana)
+ *   the MTRacing 496R, the Suzuki Liana)
  * - "shared": a ported body on another car's model of the same class and era (the 2026 team cars, the BMW)
  * - "era": a ported body from an earlier season on the 2026 model
  * The F1 physics switch doesn't change it: a ported F1 car borrows its physics under either model.
@@ -105,6 +107,7 @@ export const PHYSICS_CHECK: Record<VehicleModelId, string> = {
   vf26: "Its physics are checked against the reference data they were built from.",
   "f12026-car": "Its physics are checked against the range a 2026 open-wheeler should fall in.",
   liana: "Its physics come from an Assetto Corsa mod of this car and are checked against its laps of Dunsfold there.",
+  "mtr-496r": "Its physics come from the Assetto Corsa mod this car was made for.",
 };
 
 /** Who made a car's 3D body (CREDITS.md has the full notes) */
@@ -116,11 +119,47 @@ export interface CarCredit {
   licenseUrl: string;
 }
 
+/**
+ * One of a ported car's own liveries (its mod's skins): its paint, decals and sunstrip as files beside the model,
+ * `public/cars/<car>/skins/<id>/` (scripts/cars/port_ac_car.py --skins-out), which the rig swaps onto the GLB's
+ * materials by name (the GLB's `skinMaps` extras)
+ */
+export interface CarSkin {
+  id: string;
+  name: string;
+  /** Its two main colours, for the picker */
+  swatch: readonly [string, string];
+}
+
 const CC_BY = { license: "CC BY 4.0", licenseUrl: "https://creativecommons.org/licenses/by/4.0/" } as const;
 const CC_BY_NC_SA = { license: "CC BY-NC-SA 4.0", licenseUrl: "https://creativecommons.org/licenses/by-nc-sa/4.0/" } as const;
 
 /** The F1 2026 Prototype and Rigid-Body's own body (`public/amr26/model/amr26.glb`) */
 const DEX_F1_2026: CarCredit = { title: "AM26 - F1 25/F1 2026 DLC", author: "DeX", url: "https://skfb.ly/pKNCK", ...CC_BY };
+
+/** The 496R's 20 skins, the GLB's own MTR Green first [scripts/cars/port_ac_car.py --skins-out skins.json] */
+const MTR_496R_SKINS: readonly CarSkin[] = [
+  { id: "04_mtrgreen_metallic", name: "#4 MTR Green", swatch: ["#085848", "#081818"] },
+  { id: "01_carbon", name: "#1 Carbon", swatch: ["#181818", "#181818"] },
+  { id: "02_white", name: "#2 White", swatch: ["#e8e8e8", "#b8b8b8"] },
+  { id: "03_blue_metallic", name: "#3 Blue Metallic", swatch: ["#081848", "#081848"] },
+  { id: "05_yellow", name: "#5 Yellow", swatch: ["#e8b808", "#a88808"] },
+  { id: "06_red", name: "#6 Red", swatch: ["#a80808", "#180818"] },
+  { id: "07_mtr_blue", name: "#7 MTR Blue", swatch: ["#080818", "#080818"] },
+  { id: "08_green", name: "#8 Green", swatch: ["#38a808", "#184808"] },
+  { id: "09_violet", name: "#9 Violet", swatch: ["#280878", "#080818"] },
+  { id: "10_dark_purple", name: "#10 Dark Purple", swatch: ["#480818", "#480818"] },
+  { id: "h_2_blue", name: "#2 Blue & Black", swatch: ["#0838b8", "#180818"] },
+  { id: "h_311_red", name: "#311 Red & Black", swatch: ["#e8e8e8", "#e80808"] },
+  { id: "h_35_blue_metallic", name: "#35 Blue Metallic", swatch: ["#180818", "#083868"] },
+  { id: "h_36_blue_metallic", name: "#36 Blue Metallic", swatch: ["#180818", "#083868"] },
+  { id: "h_3_yellow", name: "#3 Yellow & Black", swatch: ["#e8c808", "#180818"] },
+  { id: "h_50_red", name: "#50 Red", swatch: ["#b80808", "#180818"] },
+  { id: "h_51_red", name: "#51 Red", swatch: ["#b80808", "#180818"] },
+  { id: "h_7_black", name: "#7 Matte Black", swatch: ["#787878", "#180818"] },
+  { id: "h_83_yellow", name: "#83 Yellow", swatch: ["#c8a808", "#180818"] },
+  { id: "h_8_black", name: "#8 Matte Black", swatch: ["#787878", "#180818"] },
+];
 
 const daveLove = (title: string, url: string): CarCredit => ({ title, author: "Dave Love SketchFab", url, ...CC_BY });
 
@@ -146,12 +185,15 @@ export interface CarDefinition {
   year: number;
   /** A ported GLB on the generic rig (`ported-car-model.ts`); absent: the vehicle model's own car */
   modelUrl?: string;
+  /** The liveries a player can pick for it (the first is the one its GLB is painted in); absent: its factory paint */
+  skins?: readonly CarSkin[];
   sound: CarSoundSource;
 }
 
 export const CAR_CLASSES: readonly CarClass[] = [
   { id: "f1", title: "Formula Open-Wheel", sub: "Single-seaters · DRS / active aero", color: "#CCFF00" },
   { id: "gt3", title: "GT3", sub: "Closed-wheel · ABS / TC", color: "#00E5FF" },
+  { id: "proto", title: "Prototypes", sub: "Closed-wheel · high downforce · TC", color: "#B388FF" },
   { id: "road", title: "Road cars", sub: "Road-legal · street tyres", color: "#FF8A3D" },
 ];
 
@@ -322,6 +364,27 @@ const ALL_CARS: readonly CarDefinition[] = [
     sound: BMW_M4_GT3_SOUND,
   },
   {
+    id: "mtr-496r",
+    classId: "proto",
+    title: "MTRacing 496R",
+    sub: "2025 · 4.0 L V8 · rear-wheel drive",
+    badge: "496R",
+    quality: "own",
+    // munyuturbo's own Assetto Corsa car, model, physics and sound, used with their permission (CREDITS.md)
+    credit: {
+      title: "MTRacing 496R",
+      author: "munyuturbo",
+      url: "https://www.overtake.gg/members/munyuturbo.1202939/",
+      license: "Used with the author's permission",
+      licenseUrl: "https://www.overtake.gg/members/munyuturbo.1202939/",
+    },
+    physics: "mtr-496r",
+    year: 2025,
+    modelUrl: "/cars/mtr-496r/model/mtr-496r.glb",
+    skins: MTR_496R_SKINS,
+    sound: MTR_496R_SOUND,
+  },
+  {
     id: "liana",
     classId: "road",
     title: "Suzuki Liana 1.6",
@@ -395,6 +458,16 @@ export const carTakesLivery = (id: CarId): boolean => !carById(id).modelUrl;
  * in the repository. A copy without the file shows the card without a picture.
  */
 export const carThumbUrl = (id: CarId): string => (REPO_CAR_IDS.has(id) ? "/amr26/thumb.webp" : `/cars/${id}/thumb.webp`);
+
+/** A car's skin by id, its first (the GLB's own paint) when the id is unknown or absent; null for a car without skins */
+export const carSkin = (id: CarId, skinId: string | null | undefined): CarSkin | null => {
+  const skins = carById(id).skins;
+  if (!skins?.length) return null;
+  return skins.find((s) => s.id === skinId) ?? skins[0];
+};
+
+/** Where a skin's files are: beside the car's model, so they go up to R2 with it */
+export const carSkinBaseUrl = (id: CarId, skinId: string): string => `/cars/${id}/skins/${skinId}`;
 
 /** Shown in place of the livery swatches for a car that keeps its own paint */
 export const FACTORY_LIVERY_NOTE = "Factory livery: this car keeps its original paint.";

@@ -2,7 +2,7 @@
  * Headless AI race for tuning: the full-physics AI field on a circuit, faster than real time and without rendering,
  * then a results table (laps, gaps, incidents, position changes) and what each car learnt.
  *
- *   npx tsx scripts/race-headless.ts [--track rwanda] [--car vf26|f12026-car|amg-gt3|liana] [--laps 5] [--cars 5]
+ *   npx tsx scripts/race-headless.ts [--track rwanda] [--car vf26|f12026-car|amg-gt3|liana|mtr-496r] [--laps 5] [--cars 5]
  *       [--skill 70] [--seed 1] [--no-learn] [--laps-table] [--sweep skill | learn | <param>=v1,v2,...]
  *       [--weather clear|overcast|light_rain|heavy_rain|drying|dynamic]
  *   npm run race:headless -- --track suzuka --car amg-gt3 --sweep skill
@@ -17,6 +17,7 @@ import { F1Physics2026 } from '../src/lib/f1-physics-2026';
 import { F12026CarSim } from '../src/lib/sim/f12026-car/F12026CarSim';
 import { createAmgGt3Sim } from '../src/lib/sim/gt3/AmgGt3Sim';
 import { createSuzukiLianaSim } from '../src/lib/sim/road/SuzukiLianaSim';
+import { createMtr496rSim } from '../src/lib/sim/proto/Mtr496rSim';
 import { AI_DRIVERS, AiOpponentField, type AiDriverDef, type AiFieldReport } from '../src/lib/sim/ai-opponents';
 import { AI_PARAM_RANGES, AI_SKILL_LEVELS, aiSkillLabel, type AiTuningLibrary, type AiTuningParams } from '../src/lib/sim/ai-tuning';
 import { AI_TUNING_LIBRARY } from '../src/lib/sim/ai-tuning-data';
@@ -25,7 +26,7 @@ import { TrackEnvironment } from '../src/lib/sim/track-environment';
 import { DEFAULT_SESSION_CONDITIONS, WEATHER_PRESETS, type WeatherPresetId } from '../src/lib/sim/weather';
 import { loadGlbGeometry } from './lib/glb-geometry';
 
-type CarKind = 'vf26' | 'f12026-car' | 'amg-gt3' | 'liana';
+type CarKind = 'vf26' | 'f12026-car' | 'amg-gt3' | 'liana' | 'mtr-496r';
 
 const argv = process.argv.slice(2);
 const flag = (name: string) => argv.includes(`--${name}`);
@@ -51,7 +52,7 @@ if (!WEATHER_PRESETS.includes(weather)) {
   console.error(`unknown --weather ${weather}`);
   process.exit(2);
 }
-if (!['vf26', 'f12026-car', 'amg-gt3', 'liana'].includes(carKind)) {
+if (!['vf26', 'f12026-car', 'amg-gt3', 'liana', 'mtr-496r'].includes(carKind)) {
   console.error(`unknown --car ${carKind}`);
   process.exit(2);
 }
@@ -64,6 +65,7 @@ const root = carKind === 'vf26' ? null : loadGlbGeometry(`public${track.meshUrl 
 function makeTemplate(): SimulatorCar {
   if (carKind === 'amg-gt3') return createAmgGt3Sim(track, root);
   if (carKind === 'liana') return createSuzukiLianaSim(track, root);
+  if (carKind === 'mtr-496r') return createMtr496rSim(track, root);
   if (carKind === 'f12026-car') return new F12026CarSim(track, root);
   return new F1Physics2026(track);
 }
@@ -223,7 +225,7 @@ function printSummary(runs: RaceRun[]): void {
 
 /** The tuning library with one class parameter replaced */
 function libraryWith(key: keyof AiTuningParams, value: number): AiTuningLibrary {
-  const classId = carKind === 'amg-gt3' || carKind === 'liana' ? 'gt3' : 'f1-2026';
+  const classId = carKind === 'amg-gt3' || carKind === 'liana' || carKind === 'mtr-496r' ? 'gt3' : 'f1-2026';
   const base = AI_TUNING_LIBRARY[classId] ?? {};
   return { ...AI_TUNING_LIBRARY, [classId]: { ...base, params: { ...base.params, [key]: value } } };
 }

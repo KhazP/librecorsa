@@ -30,6 +30,7 @@ export const TYRE_SETUP_LIMITS: Record<VehicleModelId, TyreSetupLimits> = {
   "f12026-car": limitsOf(VEHICLE_MODELS["f12026-car"].tyreSetupRanges),
   "amg-gt3": limitsOf(VEHICLE_MODELS["amg-gt3"].tyreSetupRanges),
   liana: limitsOf(VEHICLE_MODELS.liana.tyreSetupRanges),
+  "mtr-496r": limitsOf(VEHICLE_MODELS["mtr-496r"].tyreSetupRanges),
 };
 
 /** Tyre setups are saved per vehicle model (the VF26 keeps the original key) */
@@ -38,6 +39,7 @@ const STORAGE_KEYS: Record<VehicleModelId, string> = {
   "f12026-car": "bugesera.tyreSetup.f12026-car",
   "amg-gt3": "bugesera.tyreSetup.amg-gt3",
   liana: "bugesera.tyreSetup.liana",
+  "mtr-496r": "bugesera.tyreSetup.mtr-496r",
 };
 
 const clampTo = (x: number, range: { min: number; max: number }) => Math.min(range.max, Math.max(range.min, x));

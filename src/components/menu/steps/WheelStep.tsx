@@ -193,6 +193,7 @@ const AxisCalibrator: React.FC<{
 const STEER_LOCK_CLASSES = [
   { label: "Formula cars", models: ["vf26", "f12026-car"] },
   { label: "GT3", models: ["amg-gt3"] },
+  { label: "Prototypes", models: ["mtr-496r"] },
   { label: "Road cars", models: ["liana"] },
 ] as const;
 
@@ -664,7 +665,8 @@ export const WheelStep: React.FC<SetupStepProps> = ({ settings, onChangeSettings
             ) : null}
             <Hint>
               Match your wheel driver&apos;s rotation. Steering is 1:1 up to the car&apos;s lock ({CAR_WHEEL_LOCKS_DEG.vf26}°
-              open-wheelers, {CAR_WHEEL_LOCKS_DEG["amg-gt3"]}° GT3, {CAR_WHEEL_LOCKS_DEG.liana}° road cars); a base with less rotation
+              open-wheelers, {CAR_WHEEL_LOCKS_DEG["amg-gt3"]}° GT3, {CAR_WHEEL_LOCKS_DEG["mtr-496r"]}° prototypes,{" "}
+              {CAR_WHEEL_LOCKS_DEG.liana}° road cars); a base with less rotation
               still reaches full lock.
             </Hint>
           </div>

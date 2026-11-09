@@ -10,6 +10,8 @@ import { AMG_GT3_SIM_PROFILE, createAmgGt3Sim } from "@/lib/sim/gt3/AmgGt3Sim";
 import { AMG_GT3_CONFIG } from "@/lib/sim/gt3/AmgGt3Config";
 import { SUZUKI_LIANA_SIM_PROFILE, createSuzukiLianaSim } from "@/lib/sim/road/SuzukiLianaSim";
 import { SUZUKI_LIANA_CONFIG } from "@/lib/sim/road/SuzukiLianaConfig";
+import { MTR_496R_SIM_PROFILE, createMtr496rSim } from "@/lib/sim/proto/Mtr496rSim";
+import { MTR_496R_CONFIG } from "@/lib/sim/proto/Mtr496rConfig";
 import { VF26_ENGINE, VF26_TYRE_SETUP_RANGES } from "@/lib/sim/vf26-data";
 import type { CarClassId } from "./car-registry";
 
@@ -99,6 +101,18 @@ export const VEHICLE_MODELS: Readonly<Record<VehicleModelId, VehicleModel>> = {
     floorSparks: false,
     onlyTyre: "Street tyres",
   },
+  "mtr-496r": {
+    id: "mtr-496r",
+    classId: "proto",
+    createSim: (track, trackRoot) => createMtr496rSim(track, trackRoot),
+    limiterRpm: MTR_496R_CONFIG.gearbox.gears.redline_rpm,
+    telemetryMaxRpm: 10_500,
+    tyreSetupRanges: MTR_496R_SIM_PROFILE,
+    rigConfig: MTR_496R_CONFIG,
+    // Its only body is the ported GLB, which brings its own cameras
+    gt3Cockpit: false,
+    floorSparks: false,
+  },
 };
 
 export const vehicleModelSpec = (id: VehicleModelId): VehicleModel => VEHICLE_MODELS[id];
@@ -108,7 +122,7 @@ export const isVehicleModelId = (value: unknown): value is VehicleModelId =>
 
 /**
  * The vehicle models an online room's class rule lets in: an F1 or GT3 room admits that class's models, "any" every
- * model. There is no road-car rule, so road cars race only in "any" rooms.
+ * model. There is no road-car or prototype rule, so those race only in "any" rooms.
  */
 export function vehicleModelsFor(rule: CarClassRule): VehicleModelId[] {
   const classId: CarClassId | null = rule === "f1" ? "f1" : rule === "gt3" ? "gt3" : null;
