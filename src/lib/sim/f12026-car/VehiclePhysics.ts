@@ -2116,6 +2116,8 @@ export class VehiclePhysics {
         let f = springForce(w.springPreload + w.compression, s.springs);
         const intoRubber = w.compression - s.bumpStop.range;
         if (intoRubber > 0) f += s.bumpStop.rate * intoRubber + s.bumpStop.progression * intoRubber * intoRubber;
+        const hard = s.bumpStop.hardStop;
+        if (hard && w.compression > hard.range) f += hard.rate * (w.compression - hard.range);
         const pastDroop = -s.droopTravel - w.compression;
         if (pastDroop > 0) f -= DROOP_STOP_RATE * pastDroop + DROOP_STOP_DAMP * Math.max(0, -w.compressionVel);
         f += damperForce(d.base, w.compressionVel, knee, reboundKnee);

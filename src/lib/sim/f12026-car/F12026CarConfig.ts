@@ -341,6 +341,8 @@ export interface BumpStopSettingsUnits {
   rate: number;
   /** Extra rate per metre of rubber compression (N/m²) */
   progression: number;
+  /** A second stop further up the travel (m from static ride) adding its own rate (N/m at the wheel) */
+  hardStop?: { range: number; rate: number };
 }
 
 /** `SuspensionSettingUnits` */
