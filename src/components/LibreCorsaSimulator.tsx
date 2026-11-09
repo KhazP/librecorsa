@@ -13,11 +13,12 @@ import { getMultiplayerManager, type LobbySettings, type LobbyState, type PeerNe
 import { MultiplayerRace } from "@/lib/sim/race-session";
 import { GhostPlayer } from "@/lib/sim/lap-recorder";
 import { lapBoardClass, lapConditionsNow, type LapConditions, type LapRecording, type LapSummaryData, type LeaderboardEntry } from "@/lib/sim/lap-types";
-import { exportLapFile, importLapFile, loadBestLap, saveBestLapIfFaster } from "@/lib/sim/ghost-store";
+import { exportLapFile, importLapFile, listBestLaps, loadBestLap, saveBestLapIfFaster } from "@/lib/sim/ghost-store";
 import {
   boardLabel,
   fetchRemoteGhost,
   fetchRemoteLeaderboard,
+  lapToEntry,
   localLeaderboard,
   remoteLeaderboardEnabled,
   submitLap,
@@ -27,7 +28,7 @@ import { isTouchDevice, resetTouchInput } from "@/lib/input/touch-input";
 import { isFatalHidStatus } from "@/lib/input/webhid-ffb";
 import { SIM_REALISM_FLAGS, type SimRealism } from "@/lib/sim/sim-realism";
 import type { SessionConditions } from "@/lib/sim/weather";
-import { getTrackInfo } from "@/lib/track-registry";
+import { getTrackInfo, TRACKS } from "@/lib/track-registry";
 import { F1TelemetryHud } from "@/components/F1TelemetryHud";
 import { roomFromUrl } from "@/lib/net/invite-room";
 import { CAMERA_MODES, nextCameraMode } from "@/lib/render/camera-modes";
@@ -46,6 +47,10 @@ import { startAiRace, type RaceSetup } from "@/lib/sim/race-setup";
 const DEFAULT_ASSIST_PRESET: AssistPreset = DEFAULT_PLAYER_SETTINGS.assistPreset;
 /** A lap record's car: records are per vehicle model, named after its first car */
 const vehicleLabel = (id: string) => (isVehicleModelId(id) ? carForVehicle(id).title : id);
+/** Every personal best in this browser (Lap times switches circuit and car without reloading the scene) */
+const loadAllLocalLaps = () => listBestLaps().then((laps) => laps.map((lap) => lapToEntry(lap, "local")));
+// A lap on a circuit this build no longer lists keeps its id as its name (getTrackInfo would name it after another)
+const trackNameOf = (id: string) => TRACKS.find((t) => t.id === id)?.name ?? id;
 /** The snapshot store before the session exists: nothing to subscribe to */
 const noSubscribe = () => () => {};
 /** A race the host started before this circuit was loaded (or on another one): picked up once the scene has loaded */
@@ -1105,6 +1110,9 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     library,
     leaderboardPanel: {
       trackName: getTrackInfo(trackId).name,
+      trackId,
+      trackNameOf,
+      loadAllLocal: loadAllLocalLaps,
       vehicleLabel,
       local: leaderboard.local,
       remote: leaderboard.remote,

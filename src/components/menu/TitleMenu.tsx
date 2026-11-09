@@ -716,10 +716,9 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
   });
 
   const panelTitle = items.find((i) => i.panel === panel)?.label;
-  // The heading speaks for itself; only panels about one circuit say which, under it
+  // The heading speaks for itself; the race setup says which circuit it is on, under it (Lap times picks its own)
   const panelSubtitle: Partial<Record<TitlePanel, string>> = {
     race: `${track.name}${track.layout ? ` · ${track.layout}` : ""}`,
-    leaderboard: props.leaderboardPanel?.trackName ?? track.name,
   };
 
   const vehicleColor = carClass(vehicle.classId).color;
