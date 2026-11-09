@@ -361,7 +361,9 @@ const STREET_COMPOUND: TyresCompoundData = {
     // [spec RELAXATION_LENGTH]
     relaxationLengthX: 0.04741,
     relaxationLengthY: 0.04741,
+    // 10 N + 0.00102 N·s²/m² per kN of load [spec ROLLING_RESISTANCE_0 / _1]
     rollingResistance: 0.01,
+    rollingResistanceSpeedSq: 1.02e-6,
     // [spec DAMP]
     verticalDamping: 1500,
     pneumaticTrail: 0.035,
