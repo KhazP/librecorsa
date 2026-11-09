@@ -57,7 +57,7 @@ const DetailOutline: React.FC<{ track: TrackInfo }> = ({ track }) => {
           ))}
         </span>
       </div>
-      <div className="flex aspect-[16/10] max-h-[170px] items-center justify-center rounded-[12px] bg-[#08090D]/60 p-1">
+      <div className="flex aspect-[16/10] max-h-[130px] items-center justify-center rounded-[12px] bg-[#08090D]/60 p-1">
         {map ? (
           <TrackOutline map={map} sectors className="h-full w-full" label={`${track.name} · ${track.layout} by sector`} />
         ) : (
@@ -75,11 +75,18 @@ const DetailOutline: React.FC<{ track: TrackInfo }> = ({ track }) => {
 export const CircuitBrowser: React.FC<{
   /** The loaded circuit */
   trackId: string;
-  /** Switches circuit (reloads the scene) */
-  onSelect?: (id: string) => void;
+  /** Switches circuit (reloads the scene); settles when the load fails (on success the menu is replaced) */
+  onSelect?: (id: string) => void | Promise<void>;
   library?: LibraryProps;
 }> = ({ trackId, onSelect, library }) => {
   const venues = CIRCUIT_VENUES;
+  // The layout being loaded: its button says so until the scene reloads (or the load fails and it is offered again)
+  const [loadingId, setLoadingId] = useState<string | null>(null);
+  const load = (id: string) => {
+    if (!onSelect || loadingId) return;
+    setLoadingId(id);
+    void Promise.resolve(onSelect(id)).finally(() => setLoadingId(null));
+  };
   // The layout each venue shows: the loaded one where it is that venue's, else its first
   const [layoutOf, setLayoutOf] = useState<Record<string, string>>({});
   const shownLayout = (v: CircuitVenue): TrackInfo =>
@@ -249,7 +256,6 @@ export const CircuitBrowser: React.FC<{
                 />
               </div>
             ) : null}
-            <DetailOutline track={t} />
             <dl className="m-0 grid grid-cols-3 gap-1.5">
               {stats.map(([k, val]) => (
                 <div key={k} className="flex min-w-0 flex-col gap-0.5 rounded-[10px] bg-[#08090D]/60 px-2.5 py-2">
@@ -258,6 +264,11 @@ export const CircuitBrowser: React.FC<{
                 </div>
               ))}
             </dl>
+            <p className="m-0 flex items-start gap-2 text-[12px] leading-normal text-[#C5CBD8]">
+              <Info aria-hidden className="mt-0.5 h-4 w-4 shrink-0 text-[#00E5FF]" strokeWidth={2} />
+              Loading a circuit reloads the scene. Online, everyone in the room picks the same one.
+            </p>
+            <DetailOutline track={t} />
             <div className="flex flex-col gap-1 rounded-[10px] border border-[#262B3D] bg-[#08090D]/60 px-3 py-2.5">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="font-f1-mono text-[10px] font-extrabold tracking-[0.08em] uppercase" style={{ color: qMeta.color }}>
@@ -273,17 +284,14 @@ export const CircuitBrowser: React.FC<{
                 <span className="lc-data text-[13px]">{Math.round(BASE_ALTITUDE_M).toLocaleString("en-US")} m</span>
               </div>
             ) : null}
-            <p className="m-0 flex items-start gap-2 text-[12px] leading-normal text-[#C5CBD8]">
-              <Info aria-hidden className="mt-0.5 h-4 w-4 shrink-0 text-[#00E5FF]" strokeWidth={2} />
-              Switching reloads the scene; multiplayer peers must pick the same circuit.
-            </p>
           </>
         );
       }}
       primaryAction={(v) => {
         const t = shownLayout(v);
         if (t.id === trackId) return { label: "Active circuit", disabled: true, current: true, run: () => {} };
-        return { label: "Load circuit", disabled: !onSelect, run: () => onSelect?.(t.id) };
+        if (loadingId === t.id) return { label: `Loading ${v.name}…`, disabled: true, run: () => {} };
+        return { label: "Load circuit", disabled: !onSelect || loadingId !== null, run: () => load(t.id) };
       }}
       footnote={
         <p className="m-0 mx-1 mt-1 text-[12px] leading-relaxed text-[#8E96AA]">

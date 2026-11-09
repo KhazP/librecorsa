@@ -73,7 +73,8 @@ export interface TitleMenuProps extends PauseMenuProps {
   /** Active circuit id */
   trackId?: string;
   /** Switches circuit (reloads the scene) */
-  onSelectTrack?: (id: string) => void;
+  /** Switches circuit (reloads the scene); settles when the load fails or lands */
+  onSelectTrack?: (id: string) => void | Promise<void>;
   /** Weather, time of day and simulation realism */
   conditionsPanel?: ConditionsPanelProps;
 }
@@ -853,7 +854,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
                               // The scene reloads: come back to the race setup if that is where the player came from
                               const back: TitlePanel = fromRaceRef.current && props.onChangeRaceSetup ? "race" : "circuit";
                               resumeHere(back, back, id);
-                              onSelectTrack(id);
+                              return onSelectTrack(id);
                             }
                           : undefined
                       }

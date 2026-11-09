@@ -60,7 +60,8 @@ export interface LibreCorsaSimulatorProps {
   /** Active circuit (already set with `setActiveTrack`; the gate remounts this component on a change) */
   trackId?: string;
   /** Title menu circuit picker */
-  onSelectTrack?: (id: string) => void;
+  /** Switches circuit: settles once the load lands (the scene remounts) or fails (the old circuit stays) */
+  onSelectTrack?: (id: string) => void | Promise<void>;
 }
 
 export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackId = "rwanda", onSelectTrack }) => {

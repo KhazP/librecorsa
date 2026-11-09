@@ -2,7 +2,8 @@
 
 import React from "react";
 import { ChevronRight, CloudSun, Flag, Minus, Plus, Route, Wrench, type LucideIcon } from "lucide-react";
-import { CarQualityBadge, CHOSEN_PILL, Chip, CURSOR_PILL, CURSOR_TILE, PrimaryButton, Segmented, TrackQualityBadge } from "./menu-ui";
+import { CarQualityBadge, CHOSEN_PILL, Chip, CURSOR_PILL, CURSOR_TILE, PadGlyph, PrimaryButton, Segmented, TrackQualityBadge } from "./menu-ui";
+import { useInputMode } from "./input-mode";
 import type { CarDefinition } from "@/lib/cars/car-registry";
 import { focusOnHover } from "./useFocusNav";
 import type { TrackInfo } from "@/lib/track-registry";
@@ -164,6 +165,7 @@ export const RaceSetupPanel: React.FC<RaceSetupPanelProps> = ({
   onOpenGarage,
   onStart,
 }) => {
+  const { mode, family } = useInputMode();
   const grid = gridPreview(setup, playerCode);
   const distanceKm = (setup.laps * track.lengthM) / 1000;
   const skillPreset = AI_SKILL_LEVELS.find((l) => l.value === Math.round(aiSkill))?.id ?? "custom";
@@ -307,11 +309,17 @@ export const RaceSetupPanel: React.FC<RaceSetupPanelProps> = ({
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <span className="text-[13px] text-[#8E96AA]">
-          {setup.laps} {setup.laps === 1 ? "lap" : "laps"} · {setup.opponents} AI · {aiSkillLabel(aiSkill)} · {RACE_START_LABELS[setup.start].toLowerCase()} start
+      {/* Pinned to the bottom of the screen while the setup scrolls under it: the start is never below the fold */}
+      <div className="sticky bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-10 flex flex-wrap items-center justify-between gap-x-4 gap-y-2.5 rounded-[22px] border border-white/[0.09] bg-[#08090D]/90 py-2.5 pr-2.5 pl-4 shadow-[0_-10px_40px_rgba(0,0,0,0.45)] backdrop-blur-md">
+        <span className="flex min-w-0 flex-col">
+          <span className="truncate text-[15px] font-bold text-[#F5F7FA]">
+            {setup.laps} {setup.laps === 1 ? "lap" : "laps"} · {distanceKm.toFixed(1)} km · {setup.opponents} AI cars
+          </span>
+          <span className="truncate text-[13px] text-[#C5CBD8]">
+            {aiSkillLabel(aiSkill)} · {RACE_START_LABELS[setup.start].toLowerCase()} start · {track.name}
+          </span>
         </span>
-        <PrimaryButton onClick={onStart} prompt={<Flag size={18} aria-hidden />}>
+        <PrimaryButton onClick={onStart} prompt={mode === "pad" ? <PadGlyph button="menu" family={family} /> : <Flag size={18} aria-hidden />}>
           Start race
         </PrimaryButton>
       </div>

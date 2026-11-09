@@ -69,7 +69,7 @@ export const TrackGate: React.FC = () => {
   return (
     <>
       <RenderProfiler id="sim">
-        <LibreCorsaSimulator key={trackId} trackId={trackId} onSelectTrack={(id) => void select(id)} />
+        <LibreCorsaSimulator key={trackId} trackId={trackId} onSelectTrack={select} />
       </RenderProfiler>
       {error ? (
         <div
