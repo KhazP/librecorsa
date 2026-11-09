@@ -15,11 +15,13 @@ import { VF26_AI_REFERENCE, VF26_TYRES } from '../src/lib/sim/vf26-data';
 import { F1Physics2026 } from '../src/lib/f1-physics-2026';
 import { compoundData, F12026_CAR_CONFIG, type CarPhysicsConfig } from '../src/lib/sim/f12026-car/F12026CarConfig';
 import { AMG_GT3_CONFIG } from '../src/lib/sim/gt3/AmgGt3Config';
+import { brushForces, brushPeakSlipTan, brushSpeedGrip, type BrushForces } from '../src/lib/sim/f12026-car/brush-tyre';
 import { FlatGroundQuery } from '../src/lib/sim/f12026-car/TrackColliderQuery';
 import {
   combinedSlipForces,
   createTyreRuntime,
   tyrePeakMu,
+  tyrePeakSlipTan,
   tyrePressureGrip,
   VehiclePhysics,
   type TyreRuntime,
@@ -72,12 +74,20 @@ function rigidTyre(cfg: CarPhysicsConfig, rear = false): RigidTyre {
   const tempC = 0.5 * (th.optimalTempC[0] + th.optimalTempC[1]);
   const scale = rt.thermal.evaluate(tempC) * tyrePressureGrip(rt.data.pressureData, rt.data.pressureData.optimalPsi);
   const out = { fx: 0, fy: 0, sx: 0, sy: 0 };
+  const brushOut: BrushForces = { fx: 0, fy: 0, slipNorm: 0 };
   return {
     rt,
     tempC,
     peakMu: (fz) => tyrePeakMu(rt, fz, 'y') * scale,
     fy(fz, alpha) {
-      combinedSlipForces(rt, rt.data.modelData, 0, Math.tan(alpha) / rt.tanPeakAngle, out);
+      // The curve the game runs: a brush tyre against its peak slip at this load, in the game's own functions; the
+      // magic-formula family against the peak its stiffness law gives at this load
+      if (rt.brush) {
+        const peak = brushPeakSlipTan(rt.brush, fz, scale, 1);
+        brushForces(rt.brush, 0, Math.tan(alpha), peak, brushOut);
+        return tyrePeakMu(rt, fz, 'y') * scale * brushSpeedGrip(rt.brush, 50 * Math.tan(alpha)) * fz * brushOut.fy;
+      }
+      combinedSlipForces(rt, rt.data.modelData, 0, Math.tan(alpha) / tyrePeakSlipTan(rt, fz), out);
       return tyrePeakMu(rt, fz, 'y') * scale * fz * out.fy;
     },
   };
@@ -199,11 +209,15 @@ const tempChart = chart(
   seriesCsv('temp_C', 'grip', tSeries)
 );
 
+/** Peak slip angle (deg) of a rigid-body tyre at load `fz`, by the law the game runs */
+const peakSlipDeg = (t: RigidTyre, fz: number) =>
+  Math.atan(t.rt.brush ? brushPeakSlipTan(t.rt.brush, fz, 1, 1) : tyrePeakSlipTan(t.rt, fz)) / DEG;
+
 const tyreTable = [
-  '| Tyre (soft, front) | Peak slip angle | Peak μ at 4 kN | Working window | Optimum hot pressure |',
+  '| Tyre (soft, front) | Peak slip angle at 4 kN | Peak μ at 4 kN | Working window | Optimum hot pressure |',
   '| :-- | --: | --: | :-- | --: |',
-  `| GT3 | ${fmt(Math.atan(gt3Front.rt.tanPeakAngle) / DEG, 1)}° | ${fmt(gt3Front.peakMu(4000))} | ${gt3Front.rt.data.thermalData.optimalTempC.join('–')} °C | ${gt3Front.rt.data.pressureData.optimalPsi} psi |`,
-  `| f12026-car | ${fmt(Math.atan(f1Front.rt.tanPeakAngle) / DEG, 1)}° | ${fmt(f1Front.peakMu(4000))} | ${f1Front.rt.data.thermalData.optimalTempC.join('–')} °C | ${f1Front.rt.data.pressureData.optimalPsi} psi |`,
+  `| GT3 | ${fmt(peakSlipDeg(gt3Front, 4000), 1)}° | ${fmt(gt3Front.peakMu(4000))} | ${gt3Front.rt.data.thermalData.optimalTempC.join('–')} °C | ${gt3Front.rt.data.pressureData.optimalPsi} psi |`,
+  `| f12026-car | ${fmt(peakSlipDeg(f1Front, 4000), 1)}° | ${fmt(f1Front.peakMu(4000))} | ${f1Front.rt.data.thermalData.optimalTempC.join('–')} °C | ${f1Front.rt.data.pressureData.optimalPsi} psi |`,
   `| VF26 | ${fmt(vf26Front.spec.frictionLimitAngleDeg, 1)}° | ${fmt(vf26PeakMu(4000))} | peak at ${vf26Front.tempC} °C | ${vf26Front.spec.pressureRefPsi} psi |`,
 ].join('\n');
 
