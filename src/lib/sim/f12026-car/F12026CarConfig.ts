@@ -652,6 +652,13 @@ export interface TyresThermalPatchData {
   /** Vertical-rate change per °C of core temperature away from the reference */
   thermalVerticalK: number;
   thermalVerticalRefC: number;
+  /**
+   * A brush tyre's slow tread condition (GRAIN_* / BLISTER_* of its data): worked below the temperature where its grip
+   * curve first reaches its peak the tread grains, above the last it blisters, each at `gain` × slip^`gamma` × rolling
+   * speed × the degrees past the threshold. Graining softens the tyre (it peaks later) and wears off with rolling;
+   * blisters cost grip and stay. Both take many laps. Absent: a brush tyre neither grains nor blisters
+   */
+  tread?: { grainGain: number; grainGamma: number; blisterGain: number; blisterGamma: number };
 }
 
 /** `TyresPressureData` */

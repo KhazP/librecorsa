@@ -43,7 +43,7 @@
  */
 
 import * as THREE from 'three';
-import { Lut } from '../lut';
+import { Lut, type LutPoints } from '../lut';
 import { tyreGaugePressureAtTemperature } from '../tyre-pressure';
 import {
   advanceDirtyLevel,
@@ -194,6 +194,13 @@ const ROAD_CONDUCTANCE = 30;
 /** Heat conducted between neighbouring tyre bands (inner / middle / outer), through the tread and through the carcass (W/K) */
 const BAND_TREAD_CONDUCTANCE = 2;
 const BAND_CARCASS_CONDUCTANCE = 10;
+/**
+ * A brush tyre's graining / blistering per unit of (slip^gamma × grip × metres rolled × gain × °C outside the grip
+ * curve's peak), and the graining worn off per unit of (grip × metres rolled × gain): full graining takes tens of
+ * minutes of hard work on a cold tyre
+ */
+const TREAD_CONDITION_RATE = 1e-6;
+const GRAIN_WEAR_OFF_RATE = 5e-7;
 /**
  * Rack torque that maps to full FFB output: the sum of both front tyres' moments about their kingpin axes (Nm). The
  * column sees it divided by the steering ratio (≈ 48 Nm on 12.6:1)
@@ -544,6 +551,8 @@ export interface TyreRuntime {
   grain: { grainBelow: number; healFrom: number; healTo: number; blisterAbove: number };
   /** The brush family's constants when the compound is a brush tyre (`TyresModelData.curve`), else null */
   brush: BrushTyre | null;
+  /** Core temperatures (°C) between which the grip curve is at its peak: a brush tyre grains below, blisters above */
+  peakWindowC: [number, number];
 }
 
 /** Main spring in series with a helper that goes coil-bound after `helper_range` */
@@ -651,7 +660,16 @@ export function createTyreRuntime(compound: TyresCompoundData, rear = false): Ty
     brakeDxMod: model.brakeDxMod ?? 0,
     grain: tyreGrainThresholdsC(data.thermalData.optimalTempC),
     brush: model.curve === 'brush' ? createBrushTyre(model, Math.tan(fla * DEG2RAD), fz0) : null,
+    peakWindowC: gripCurvePeakWindowC(data.thermalData.thermalPerformanceCurve),
   };
+}
+
+/** First and last temperature (°C) at which a grip-against-temperature curve is at its peak */
+export function gripCurvePeakWindowC(curve: LutPoints): [number, number] {
+  let peak = 0;
+  for (const [, grip] of curve) peak = Math.max(peak, grip);
+  const at = curve.filter(([, grip]) => grip >= peak - 1e-6);
+  return [at[0][0], at[at.length - 1][0]];
 }
 
 /** Load (as a share of Fz0) below which the load laws are held, so they stay finite as a wheel unloads */
@@ -2240,12 +2258,10 @@ export class VehiclePhysics {
         const pressureGrip = tyrePressureGrip(td.pressureData, w.pressurePsi);
         w.thermalGrip = thermal;
         // Wear, graining, blistering, dirt and flat-spots, as the VF26's tyre model (ac-tyre computeTyreForces)
-        const degradation =
-          wearGripMultiplier(w.wear) *
-          (1 - 0.08 * w.grainLevel) *
-          (1 - 0.12 * w.blisterLevel) *
-          (1 - 0.18 * w.dirtyLevel) *
-          (1 - 0.05 * w.flatSpotSeverity);
+        // A brush tyre's graining softens it (below, at the peak slip) rather than costing grip; its blisters cost up to
+        // a sixth of the grip
+        const treadGrip = tyre.brush ? 1 / (1 + 0.2 * w.blisterLevel) : (1 - 0.08 * w.grainLevel) * (1 - 0.12 * w.blisterLevel);
+        const degradation = wearGripMultiplier(w.wear) * treadGrip * (1 - 0.18 * w.dirtyLevel) * (1 - 0.05 * w.flatSpotSeverity);
         // Water: the tyre's response (film lubrication, aquaplaning past what its tread clears at this speed) and the
         // surface's (painted kerbs and grass go slicker than the asphalt in the same water)
         const severity = this.realism.wetSeverity;
@@ -2291,8 +2307,8 @@ export class VehiclePhysics {
         let cfk: number;
         if (tyre.brush) {
           const bt = tyre.brush;
-          // Peak slip angle from the load, the grip state and the pressure
-          tanPeak = brushPeakSlipTan(bt, fz, base, w.pressurePsi / td.pressureData.optimalPsi);
+          // Peak slip angle from the load, the grip state and the pressure; a grained tread is softer and peaks later
+          tanPeak = brushPeakSlipTan(bt, fz, base, w.pressurePsi / td.pressureData.optimalPsi) * (1 + w.grainLevel);
           // Camber thrust (toward the lean) as a shift of the slip angle
           const tanEff = Math.tan(Math.atan(w.tanSlipAngle) - Math.sin(w.camberLeftRad) * cam.camberGain);
           brushForces(bt, w.slipRatio, tanEff, tanPeak, _brush);
@@ -3252,16 +3268,33 @@ export class VehiclePhysics {
       // Graining / blistering against the compound's own working window (a rain tyre's sits lower, a GT or road tyre's
       // lower than an F1 slick's): a tyre worked hard well below it tears its cold tread, one running in or near it
       // cleans up, one far above it blisters
-      const grain = this.tyres[w.isFront ? 0 : 1].grain;
+      const rt = this.tyres[w.isFront ? 0 : 1];
+      const grain = rt.grain;
       const core = w.coreTempC;
-      const surfCoreDelta = w.surfaceTempC - w.coreTempC;
-      if (core < grain.grainBelow && surfCoreDelta > 10 && slipPower > 6000) {
-        w.grainLevel = Math.min(1, w.grainLevel + (slipPower / 100000) * ((grain.grainBelow - core) / 30) * 0.25 * dt);
-      } else if (core >= grain.healFrom && core <= grain.healTo && w.fz > 500 && slipPower < 25000) {
-        w.grainLevel = Math.max(0, w.grainLevel - 0.035 * dt);
-      }
-      if (core > grain.blisterAbove) {
-        w.blisterLevel = Math.min(1, w.blisterLevel + (core - grain.blisterAbove) * 0.0035 * dt);
+      if (rt.brush) {
+        // A brush tyre's tread condition builds slowly, with the work done at the wrong temperature: slip^gamma × the
+        // road's grip × rolling speed × the degrees outside the grip curve's peak. Graining wears off as the tyre rolls
+        const tread = th.tread;
+        if (tread && v > 2 && w.fz > 0) {
+          const work = w.ground.grip * v * this.realism.tyreWearScale * dt;
+          const slip = Math.min(2, w.combinedSlip);
+          const [peakFrom, peakTo] = rt.peakWindowC;
+          if (core < peakFrom) w.grainLevel += Math.pow(slip, tread.grainGamma) * work * tread.grainGain * (peakFrom - core) * TREAD_CONDITION_RATE;
+          w.grainLevel = THREE.MathUtils.clamp(w.grainLevel - work * tread.grainGain * GRAIN_WEAR_OFF_RATE, 0, 1);
+          if (core > peakTo) {
+            w.blisterLevel = Math.min(1, w.blisterLevel + Math.pow(slip, tread.blisterGamma) * work * tread.blisterGain * (core - peakTo) * TREAD_CONDITION_RATE);
+          }
+        }
+      } else {
+        const surfCoreDelta = w.surfaceTempC - w.coreTempC;
+        if (core < grain.grainBelow && surfCoreDelta > 10 && slipPower > 6000) {
+          w.grainLevel = Math.min(1, w.grainLevel + (slipPower / 100000) * ((grain.grainBelow - core) / 30) * 0.25 * dt);
+        } else if (core >= grain.healFrom && core <= grain.healTo && w.fz > 500 && slipPower < 25000) {
+          w.grainLevel = Math.max(0, w.grainLevel - 0.035 * dt);
+        }
+        if (core > grain.blisterAbove) {
+          w.blisterLevel = Math.min(1, w.blisterLevel + (core - grain.blisterAbove) * 0.0035 * dt);
+        }
       }
 
       w.dirtyLevel = advanceDirtyLevel(w.dirtyLevel, w.ground.surface, slipPower, v, dt, this.trackEvolution.marbleLevel);

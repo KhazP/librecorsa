@@ -579,6 +579,8 @@ function protoCompound(
       // Grip against tread temperature (°C) [spec tcurve_*.lut]
       thermalPerformanceCurve: thermalCurve,
       optimalTempC: window,
+      // [spec GRAIN_GAIN / GRAIN_GAMMA, BLISTER_GAIN / BLISTER_GAMMA]
+      tread: { grainGain: 0.5, grainGamma: 1, blisterGain: 0.5, blisterGamma: 1 },
       // The GT3 slick's heat capacities and cooling [est]
       surfaceHeatCapacity: 1800,
       coreHeatCapacity: 11000,
