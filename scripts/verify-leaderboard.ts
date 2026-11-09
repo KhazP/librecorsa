@@ -16,6 +16,7 @@ import { handleApi } from '../cloudflare/api/index';
 import { boardDeps, driverNameKey, listLaps, submitLap, type BoardDeps } from '../cloudflare/api/board';
 import type { Env } from '../cloudflare/api/types';
 import { fakeD1, fakeR2 } from './lib/fake-cloudflare';
+import { planImport, type SupabaseDriver, type SupabaseLap } from './migrate-supabase-board';
 import { CHALLENGE_ROTATION, challengeAt, challengeProblem, fitsChallenge, isoWeekId, timeLeftLabel } from '../src/lib/net/weekly-challenge';
 
 const failures: string[] = [];
@@ -261,6 +262,51 @@ async function main(): Promise<void> {
     check('api: an unknown lap is 404', (await api('/api/laps/00000000-0000-4000-8000-000000000000', env)).status === 404);
     check('api: the board switched off answers 404', (await api('/api/laps?track=rwanda&vehicle=vf26&physics=2', { ...env, ONLINE_BOARD: 'off' })).status === 404);
     check('api: no database bound: off', boardDeps({} as Env, () => null) === null);
+  }
+
+  {
+    // Carrying the old Supabase board over (scripts/migrate-supabase-board.ts), onto an empty board
+    const db = fakeD1(schema);
+    const run = async (sql: string[]) => {
+      for (const statement of sql) await db.prepare(statement).run();
+    };
+    const hash = (c: string) => c.repeat(64);
+    const stamp = '2026-10-01T10:00:00Z';
+    const oldDrivers: SupabaseDriver[] = [
+      { name_key: 'mira tanaka', key_hash: hash('a'), claimed_at: stamp, last_seen: stamp },
+      { name_key: 'jonas weber', key_hash: hash('b'), claimed_at: stamp, last_seen: stamp },
+      { name_key: 'bad', key_hash: 'nope', claimed_at: stamp, last_seen: stamp },
+    ];
+    const id = (n: number) => `00000000-0000-4000-8000-00000000000${n}`;
+    const oldLaps: SupabaseLap[] = [
+      { id: id(1), rec: variant(1.0, 'Mira Tanaka', { assists: 'pro', realism: 'full' }), created_at: stamp },
+      { id: id(2), rec: variant(1.01, 'Jonas Weber', {}), created_at: stamp },
+      { id: id(3), rec: older, created_at: stamp },
+      { id: id(4), rec: variant(1.02, 'Nobody Claimed', {}), created_at: stamp },
+      { id: id(5), rec: scaled(0.9), created_at: stamp },
+    ];
+    const plan = planImport(oldLaps, oldDrivers, new Map());
+    check('migration: valid laps under claimed names are carried over, the rest left out with a reason', plan.laps === 2 && plan.drivers === 2 && plan.ghosts.size === 2 && Object.values(plan.skipped).reduce((a, b) => a + b, 0) === 4, JSON.stringify(plan.skipped));
+    await run(plan.sql);
+    await run(plan.sql);
+    const count = async (table: string) => (await db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).first<{ n: number }>())?.n;
+    check('migration: running it twice writes each row once', (await count('laps')) === 2 && (await count('drivers')) === 2);
+    const mira = await db.prepare("SELECT key_hash FROM drivers WHERE name_key = 'mira tanaka'").first<{ key_hash: string }>();
+    check('migration: a name keeps the hash of its key', mira?.key_hash === hash('a'));
+    const migrated: BoardDeps = { db, ghosts: fakeR2(), eventRule: challengeProblem, now: () => nowMs };
+    const listed = (await listLaps(migrated, new URL(`https://librecorsa.test/api/laps?track=rwanda&vehicle=vf26&physics=${PHYSICS_VERSION}&name=Mira%20Tanaka`))).body as ListAnswer;
+    check('migration: the carried-over laps show on the new board', listed.total === 2 && listed.laps[0].name === 'Mira Tanaka' && listed.me?.rank === 1);
+
+    // Later: the driver went faster on the old board from a browser still on the old game; someone else took a name here
+    const again = planImport(
+      [{ id: id(6), rec: variant(0.99, 'Mira Tanaka', { assists: 'pro', realism: 'full' }), created_at: stamp }, { id: id(7), rec: variant(1.03, 'Mira Tanaka', { assists: 'pro', realism: 'full' }), created_at: stamp }, oldLaps[1]],
+      oldDrivers.slice(0, 2),
+      new Map([['mira tanaka', hash('a')], ['jonas weber', hash('f')]]),
+    );
+    await run(again.sql);
+    const best = await db.prepare("SELECT id, lap_time_ms FROM laps WHERE name_key = 'mira tanaka'").all<{ id: string; lap_time_ms: number }>();
+    check('migration: a second run keeps the faster lap of a driver and class', best.results.length === 1 && best.results[0].id === id(6), best.results.map((r) => r.id).join());
+    check('migration: a name claimed by someone else on the new board keeps its new owner', again.drivers === 1 && again.laps === 2 && again.skipped['lap under a name claimed by someone else on the new board'] === 1, JSON.stringify(again.skipped));
   }
 
   if (failures.length > 0) {
