@@ -2732,6 +2732,8 @@ export class VehiclePhysics {
 
     // ---- brakes (physical brake pad μ(T))
     const crankBrake = Math.max(0, -tK) + Math.max(0, -tIce);
+    // The slowing engine gives up some of its own inertia's torque, so a little less than the crank's braking reaches the
+    // wheels: this share keeps the rear axle on its demand under harvest (scripts/verify-powertrain.ts)
     const driveBrake = inp.brake > 0.05 && br.brakeByWire !== false ? (crankBrake * engage * Math.abs(ratio) * gb.efficiency) / 2 : 0;
     const [dl, dr] = this.drivenWheels;
     for (let i = 0; i < 4; i++) {
@@ -2753,7 +2755,12 @@ export class VehiclePhysics {
       Iw[i] = this.axles[W[i].isFront ? 0 : 1].wheelInertia;
       wW[i] = W[i].omega + (tyreTorque[i] / Iw[i]) * h;
     }
-    let wE = this.engineOmega + ((tIce + tK) / Ie) * h;
+    // Driveline loss: the gearbox and final drive pass `efficiency` of the torque the crank drives the wheels with, once
+    // the clutch carries it. The cars' crank curves are their wheel curves over that efficiency, so the wheels get the
+    // wheel curve. A free-revving engine loses nothing, and the overrun (engine braking, harvest) passes 1:1
+    const tCrank = tIce + tK;
+    const tDriveline = tCrank > 0 ? tCrank * (1 - (1 - gb.efficiency) * engage) : tCrank;
+    let wE = this.engineOmega + (tDriveline / Ie) * h;
 
     // ---- sequential impulses & 3-Phase Electronic Differential (Entry / Mid / Exit-HiSpd)
     const accB = _brakeImpulse.fill(0);

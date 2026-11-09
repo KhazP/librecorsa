@@ -18,6 +18,7 @@ import { MTR_496R_PROFILE_CAR, createMtr496rSim } from '../src/lib/sim/proto/Mtr
 import { createAmgGt3Sim } from '../src/lib/sim/gt3/AmgGt3Sim';
 import type { F12026CarSim } from '../src/lib/sim/f12026-car/F12026CarSim';
 import { carById } from '../src/lib/cars/car-registry';
+import { wetnessFromWater } from '../src/lib/sim/wet-tyres';
 import { loadGlbGeometry } from './lib/glb-geometry';
 import { createFlatTestTrack } from './lib/flat-track';
 import { hasFile, noteSkip } from './lib/hosted-files';
@@ -179,13 +180,17 @@ for (const [kmh, lo, hi] of [
 
 console.log('\n== Traction control through the adapter');
 {
+  // At its mod's power the 496R no longer spins its slicks on a dry road at 70 km/h: on a damp one it does
+  const damp = { waterMm: 0.3, wetness: wetnessFromWater(0.3), ambientC: 15, rain: 0.3 };
   const exit = (preset: 'pro' | 'semi_pro') => {
     const sim = createMtr496rSim(pad);
     sim.assistPreset = preset;
+    sim.setWeatherSample(damp);
     sim.teleportToDistance(1000, 70 / 3.6);
     let sum = 0;
     let n = 0;
     for (let t = 0; t < 2; t += DT) {
+      sim.setWeatherSample(damp);
       sim.step(DT, { throttle: 1 });
       sum += Math.max(sim.telemetry.wheelSlipRatios[2], sim.telemetry.wheelSlipRatios[3]);
       n++;
@@ -195,7 +200,7 @@ console.log('\n== Traction control through the adapter');
   const tc = exit('semi_pro');
   const raw = exit('pro');
   // Above the TC's 50 km/h floor, its 9 % target in the second it works
-  check('TC holds rear wheelspin above 50 km/h', tc < 0.15 && tc < raw * 0.6, `mean rear slip ${fmt(tc, 2)} with TC, ${fmt(raw, 2)} without`);
+  check('TC holds rear wheelspin above 50 km/h on a damp road', tc < 0.15 && tc < raw * 0.6, `mean rear slip ${fmt(tc, 2)} with TC, ${fmt(raw, 2)} without`);
 }
 
 console.log('\n== Ported body');
