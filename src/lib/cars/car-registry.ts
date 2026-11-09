@@ -14,7 +14,7 @@ import {
 import { AMG_GT3_SOUND } from "@/lib/sim/gt3/AmgGt3Sim";
 import { SUZUKI_LIANA_SOUND } from "@/lib/sim/road/SuzukiLianaSim";
 import { overtakingRulesForSeason, type OvertakingRules } from "@/lib/sim/overtaking-rules";
-import { carListed } from "@/lib/hosted-content";
+import { carListed, REPO_CAR_IDS } from "@/lib/hosted-content";
 
 /**
  * The cars in the picker, grouped by class and then by year, newest first. A car is a body and a sound on one of the
@@ -388,6 +388,13 @@ export const compareCarsByClassAndYear = (a: CarDefinition, b: CarDefinition): n
  * with; the menus show "Factory livery" for them instead of the swatches.
  */
 export const carTakesLivery = (id: CarId): boolean => !carById(id).modelUrl;
+
+/**
+ * The car browser's picture of a car (`npm run car-thumbs` renders them): beside a hosted car's files, so it goes up to
+ * R2 with them (`npm run upload-hosted`); both repository cars drive the 2026 prototype's body, whose one picture is
+ * in the repository. A copy without the file shows the card without a picture.
+ */
+export const carThumbUrl = (id: CarId): string => (REPO_CAR_IDS.has(id) ? "/amr26/thumb.webp" : `/cars/${id}/thumb.webp`);
 
 /** Shown in place of the livery swatches for a car that keeps its own paint */
 export const FACTORY_LIVERY_NOTE = "Factory livery: this car keeps its original paint.";
