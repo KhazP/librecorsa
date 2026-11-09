@@ -1,10 +1,11 @@
 /**
- * Reads a car mod's unpacked data folder (Assetto Corsa compatible: `car.ini`, `suspensions.ini`, `tyres.ini`, `*.lut`,
- * …) for the scripts that compare a car's config with the data it was taken from. The folders are local reference
- * material, not part of the repository: `modDir` says where one would be, and a suite skips a car whose folder is absent.
+ * Reads a car mod's data (Assetto Corsa compatible: `car.ini`, `suspensions.ini`, `tyres.ini`, `*.lut`, …), unpacked or
+ * packed, for the scripts that compare a car's config with the data it was taken from or start a config from one. The
+ * folders are local reference material, not part of the repository: `modDir` says where one would be, and a suite skips
+ * a car whose folder is absent.
  */
-import { existsSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { basename, join, resolve } from 'node:path';
 import { REALISM_REF } from '../ai/lib/references';
 
 /** A table of (x, y) points, x ascending */
@@ -38,18 +39,88 @@ export function parseInlineLut(text: string): Lut {
   return out;
 }
 
-/** One data folder: its ini files by section and key (both upper case), its tables by file name */
+const i32 = (x: number): number => x | 0;
+/** Integer division that rounds toward zero */
+const cdiv = (a: number, b: number): number => Math.trunc(a / b);
+
+/** The key a packed `data.acd` is written with: eight bytes worked out from its car folder's name */
+function packedDataKey(folderName: string): number[] {
+  const s = [...folderName.toLowerCase()].map((c) => c.charCodeAt(0));
+  const n = s.length;
+  const k = [i32(s.reduce((a, b) => a + b, 0)), 0, 0, -125, 66, 101, 171, 171];
+  for (let i = 0; i < n - 1; i += 2) k[1] = i32(Math.imul(s[i], k[1]) - s[i + 1]);
+  for (let i = 1; i < n - 3; i += 3) k[2] = i32(-27 - s[i - 1] + cdiv(Math.imul(s[i], k[2]), s[i + 1] + 27));
+  for (let i = 1; i < n; i++) k[3] = i32(k[3] - s[i]);
+  for (let i = 1; i < n - 4; i += 4) k[4] = i32(Math.imul(s[i - 1] + 15, Math.imul(s[i] + 15, k[4])) + 22);
+  for (let i = 0; i < n - 2; i += 2) k[5] = i32(k[5] - s[i]);
+  for (let i = 0; i < n - 2; i += 2) k[6] = k[6] - cdiv(k[6], s[i]) * s[i];
+  for (let i = 0; i < n - 1; i++) k[7] = i32(cdiv(k[7], s[i]) + s[i + 1]);
+  return [...k.map((v) => String(v & 0xff)).join('-')].map((c) => c.charCodeAt(0));
+}
+
+/** The files of a packed `data.acd` ({name → text}); `folderName` is the car folder it shipped in */
+function readPackedData(path: string, folderName: string): Map<string, string> {
+  const key = packedDataKey(folderName);
+  const d = readFileSync(path);
+  const out = new Map<string, string>();
+  let o = 0;
+  while (o + 4 <= d.length) {
+    const nameLen = d.readInt32LE(o);
+    o += 4;
+    // Versioned archives start with a header word
+    if (nameLen < 0) {
+      o += 4;
+      continue;
+    }
+    const name = d.toString('latin1', o, o + nameLen);
+    o += nameLen;
+    const len = d.readInt32LE(o);
+    o += 4;
+    let text = '';
+    for (let i = 0; i < len; i++) text += String.fromCharCode((d[o + 4 * i] - key[i % key.length]) & 0xff);
+    o += 4 * len;
+    out.set(name.toLowerCase(), text);
+  }
+  return out;
+}
+
+/**
+ * The data files of a car ({lower-case name → text}) from any of: an unpacked data folder, a car folder holding
+ * `data/`, or a car folder holding a packed `data.acd`. Empty when there is none.
+ */
+export function readCarData(dir: string): Map<string, string> {
+  const out = new Map<string, string>();
+  if (!existsSync(dir) || !statSync(dir).isDirectory()) return out;
+  const unpacked = existsSync(join(dir, 'data')) && statSync(join(dir, 'data')).isDirectory() ? join(dir, 'data') : dir;
+  const names = readdirSync(unpacked);
+  if (names.some((f) => /\.ini$/i.test(f))) {
+    for (const f of names) if (/\.(ini|lut|2dlut)$/i.test(f)) out.set(f.toLowerCase(), readFileSync(join(unpacked, f), 'latin1'));
+    return out;
+  }
+  const packed = join(dir, 'data.acd');
+  return existsSync(packed) ? readPackedData(packed, basename(resolve(dir))) : out;
+}
+
+/** One car's data: its ini files by section and key (both upper case), its tables by file name */
 export class ModData {
+  private readonly files: Map<string, string>;
   private readonly inis = new Map<string, Record<string, IniSection>>();
 
-  constructor(readonly dir: string) {}
+  constructor(readonly dir: string) {
+    this.files = readCarData(dir);
+  }
 
   get present(): boolean {
-    return existsSync(join(this.dir, 'car.ini')) || existsSync(join(this.dir, 'tyres.ini'));
+    return this.files.has('car.ini') || this.files.has('tyres.ini');
   }
 
   has(file: string): boolean {
-    return existsSync(join(this.dir, file));
+    return this.files.has(file.toLowerCase());
+  }
+
+  /** The names of the ini file's sections, in upper case */
+  sections(file: string): string[] {
+    return Object.keys(this.ini(file));
   }
 
   ini(file: string): Record<string, IniSection> {
@@ -58,7 +129,7 @@ export class ModData {
     parsed = {};
     let section: IniSection = {};
     let open = '';
-    for (const raw of readFileSync(join(this.dir, file), 'utf8').split(/\r?\n/)) {
+    for (const raw of (this.files.get(file.toLowerCase()) ?? '').split(/\r?\n/)) {
       const line = stripComment(raw);
       if (!line) continue;
       const head = /^\[(.+)\]$/.exec(line);
@@ -104,7 +175,7 @@ export class ModData {
   lut(nameOrInline: string | undefined): Lut {
     if (!nameOrInline) return [];
     if (nameOrInline.startsWith('(')) return parseInlineLut(nameOrInline);
-    return this.has(nameOrInline) ? parseLut(readFileSync(join(this.dir, nameOrInline), 'utf8')) : [];
+    return parseLut(this.files.get(nameOrInline.toLowerCase()) ?? '');
   }
 
   /** The table a key points at */
