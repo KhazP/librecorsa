@@ -19,7 +19,7 @@ see `src/lib/sim/lap-plausibility.ts`).
 
 A lap is ranked only against laps on the same circuit, in the same car, under the same **board**: the physics
 revision, assist preset, realism level (casual, standard or full) and surface (dry or wet) it was driven with,
-sent in the lap's `conditions` (`p2-pro-full-dry`). The game shows the board for the assists and realism the player
+sent in the lap's `conditions` (`p3-pro-full-dry`). The game shows the board for the assists and realism the player
 drives with now. Laps where the autopilot drove are never uploaded. Laps uploaded before boards
 existed stay in the table on board `legacy`, which the game doesn't show; uploads without conditions are refused.
 When a physics change makes old times incomparable, bump `PHYSICS_VERSION` in `src/lib/sim/lap-types.ts`: new laps

@@ -7,7 +7,7 @@
 -- Validation and plausibility checks are heuristics, not cheat-proof. Safe to run again.
 --
 -- Boards: a lap is ranked against laps on the same circuit, in the same car, and on the same board: the physics
--- revision, assist preset, realism level and surface it was driven with ("p2-pro-full-dry", from rec.conditions; lapBoardClass in
+-- revision, assist preset, realism level and surface it was driven with ("p3-pro-full-dry", from rec.conditions; lapBoardClass in
 -- src/lib/sim/lap-types.ts). Laps stored before boards existed are on board 'legacy', which the game doesn't show.
 --
 -- Driver names are claimed with a device key: a random secret the game keeps in the browser. The first upload
@@ -31,7 +31,7 @@ alter table public.laps add column if not exists board text not null default 'le
 drop index if exists public.laps_board_idx;
 create index if not exists laps_board_class_idx on public.laps (track_id, vehicle, board, lap_time_ms, created_at);
 
--- The board of a lap's conditions ("p2-pro-full-dry"), or null when they are missing or malformed
+-- The board of a lap's conditions ("p3-pro-full-dry"), or null when they are missing or malformed
 create or replace function public.lap_board(c jsonb)
 returns text
 language plpgsql

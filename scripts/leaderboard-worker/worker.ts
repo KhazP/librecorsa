@@ -1,7 +1,7 @@
 /**
  * Reference leaderboard backend for the simulator: a Cloudflare Worker storing laps in KV.
  * Routes: POST /laps, GET /laps?track=&vehicle=&board=&limit=, GET /laps/:id.
- * `board` is the lap's class (physics revision, assists, realism, surface: "p2-pro-full-dry"); laps are ranked only within it.
+ * `board` is the lap's class (physics revision, assists, realism, surface: "p3-pro-full-dry"); laps are ranked only within it.
  * Validation and plausibility checks are heuristics, not cheat-proof.
  * Self-contained: the minimal KV and Env types are declared here, no workers-types dependency.
  */
