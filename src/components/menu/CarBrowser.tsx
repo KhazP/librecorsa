@@ -51,7 +51,9 @@ export const CarBrowser: React.FC<{
   onClose?: () => void;
   /** Before the search field (the Back button) */
   toolbar?: React.ReactNode;
-}> = ({ carId, onChangeCar, selectedLivery, onChangeLivery, library, onClose, toolbar }) => {
+  /** The car cannot change now (an online race): the detail pane says why instead of offering Choose car */
+  lockedReason?: string;
+}> = ({ carId, onChangeCar, selectedLivery, onChangeLivery, library, onClose, toolbar, lockedReason }) => {
   const classes = carClassesInUse();
   const modPhysics = useF1ModPhysics();
   const qualities = QUALITIES.filter((q) => CARS.some((c) => c.quality === q));
@@ -196,7 +198,9 @@ export const CarBrowser: React.FC<{
       primaryAction={(c) =>
         c.id === carId
           ? { label: "Current car", disabled: true, current: true, run: () => {} }
-          : {
+          : lockedReason
+            ? { label: lockedReason, disabled: true, run: () => {} }
+            : {
               label: "Choose car",
               run: () => {
                 onChangeCar(c.id);

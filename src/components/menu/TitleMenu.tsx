@@ -21,6 +21,7 @@ import { useInputMode } from "./input-mode";
 import { KeyCap, PadGlyph, PromptBar, TrackQualityBadge } from "./menu-ui";
 import { RequestPanel, type FeedbackContext } from "./RequestPanel";
 import { CircuitBrowser } from "./CircuitBrowser";
+import { CarBrowser } from "./CarBrowser";
 import { TrackOutline } from "./circuit-outline";
 import { ConditionsPanel, type ConditionsPanelProps } from "./ConditionsPanel";
 import { RaceSetupPanel } from "./RaceSetupPanel";
@@ -31,6 +32,7 @@ import { AI_SKILL_DEFAULT, aiSkillLabel } from "@/lib/sim/ai-tuning";
 import { REPO_URL, SUPPORT_URL } from "@/lib/site";
 import { EmbeddedBadge } from "./EmbeddedBadge";
 import {
+  CarFront,
   CloudSun,
   CodeXml,
   Coffee,
@@ -50,7 +52,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-type TitlePanel = "race" | "circuit" | "conditions" | "garage" | "multiplayer" | "leaderboard" | "display" | "credits" | "request";
+type TitlePanel = "race" | "circuit" | "car" | "conditions" | "garage" | "multiplayer" | "leaderboard" | "display" | "credits" | "request";
 
 /**
  * Where the title menu picks up when it comes back: Controls is a screen of its own, and loading a circuit reloads the
@@ -591,6 +593,9 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
   const map = useMemo(() => (activeTrackId === trackId ? buildHudMap(getTrackData()) : null), [activeTrackId, trackId]);
 
   const raceSetup = props.raceSetup ?? DEFAULT_RACE_SETUP;
+  const vehicle = carById(props.carId);
+  // The car is fixed for an online race (the shell refuses the swap too)
+  const carLocked = props.telemetry.race?.multiplayer === true || props.raceRunning === true;
   const items: MenuItem[] = [
     {
       id: "drive",
@@ -625,6 +630,14 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
       panel: "circuit",
       run: () => openPanel("circuit"),
     },
+    {
+      id: "car",
+      label: "Car",
+      detail: carLocked ? `${vehicle.title} · fixed for this race` : vehicle.title,
+      icon: CarFront,
+      panel: "car",
+      run: () => openPanel("car"),
+    },
     ...(props.conditionsPanel
       ? [
           {
@@ -637,7 +650,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
           },
         ]
       : []),
-    { id: "garage", label: "Garage", detail: "Engineer's garage: car, setup and presets", icon: Wrench, panel: "garage", run: () => openPanel("garage") },
+    { id: "garage", label: "Garage", detail: "Setup, presets and livery", icon: Wrench, panel: "garage", run: () => openPanel("garage") },
     ...(props.leaderboardPanel
       ? [{ id: "leaderboard", label: "Lap times", detail: "Leaderboard and ghosts", icon: Timer, panel: "leaderboard" as const, run: () => openPanel("leaderboard") }]
       : []),
@@ -709,7 +722,6 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
     leaderboard: props.leaderboardPanel?.trackName ?? track.name,
   };
 
-  const vehicle = carById(props.carId);
   const vehicleColor = carClass(vehicle.classId).color;
   const livery = props.selectedLivery;
   const hudPreset = props.displayPanel?.settings.hud.preset;
@@ -797,7 +809,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
                 <CompactEntry key={item.id} item={item} open={item.panel === panel} />
               ))}
               <div aria-hidden className="mx-3.5 my-2 h-px bg-[#262B3D]" />
-              {byId(["circuit", "conditions", "garage", "leaderboard", "display", "controls"]).map((item) => (
+              {byId(["circuit", "car", "conditions", "garage", "leaderboard", "display", "controls"]).map((item) => (
                 <CompactEntry key={item.id} item={item} open={item.panel === panel} />
               ))}
               <div aria-hidden className="mx-3.5 my-2 h-px bg-[#262B3D]" />
@@ -829,7 +841,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
                       playerCode={props.profile?.code}
                       onOpenCircuit={() => openPanel("circuit", { fromRace: true })}
                       onOpenConditions={props.conditionsPanel ? () => openPanel("conditions", { fromRace: true }) : undefined}
-                      onOpenGarage={() => openPanel("garage", { fromRace: true })}
+                      onOpenGarage={() => openPanel("car", { fromRace: true })}
                       onStart={onRaceAi}
                     />
                   ) : null}
@@ -850,7 +862,21 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
                     />
                   ) : null}
                   {panel === "conditions" && props.conditionsPanel ? <ConditionsPanel {...props.conditionsPanel} /> : null}
-                  {panel === "garage" ? <EngineersGarage {...props} /> : null}
+                  {panel === "car" ? (
+                    <CarBrowser
+                      carId={props.carId}
+                      onChangeCar={(id) => {
+                        props.onChangeCar(id);
+                        // Picked from the race setup's Event card: back to the race with its new car
+                        if (fromRaceRef.current && props.onChangeRaceSetup) openPanel("race");
+                      }}
+                      selectedLivery={props.selectedLivery}
+                      onChangeLivery={props.onChangeLivery}
+                      library={props.library}
+                      lockedReason={carLocked ? "Fixed for this race" : undefined}
+                    />
+                  ) : null}
+                  {panel === "garage" ? <EngineersGarage {...props} onOpenCarBrowser={() => openPanel("car")} /> : null}
                   {panel === "multiplayer" ? <MultiplayerPanel {...props} /> : null}
                   {panel === "leaderboard" && props.leaderboardPanel ? <LeaderboardPanel {...props.leaderboardPanel} /> : null}
                   {panel === "display" && props.displayPanel ? <DisplayPanel {...props.displayPanel} /> : null}
@@ -883,7 +909,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
                   <span className="lc-lbl">Setup</span>
                 </div>
                 <div className="grid grid-cols-1 gap-1 min-[360px]:grid-cols-2">
-                  {byId(["circuit", "conditions", "garage", "controls", "display"]).map((item) => (
+                  {byId(["circuit", "car", "conditions", "garage", "controls", "display"]).map((item) => (
                     <GridEntry key={item.id} item={item} />
                   ))}
                 </div>

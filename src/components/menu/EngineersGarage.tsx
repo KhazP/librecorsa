@@ -135,7 +135,12 @@ const SmallButton: React.FC<{ onClick: () => void; children: React.ReactNode; to
  * Engineer's Garage: the car's setup sheet (one layout for the F1 cars, another for the GT3s, shared by every car
  * of the class), and named presets saved per car. Opened from the title screen's Garage and from Pause → Car setup.
  */
-export const EngineersGarage: React.FC<PauseMenuProps> = (p) => {
+export const EngineersGarage: React.FC<
+  PauseMenuProps & {
+    /** Change car opens this instead of the garage's own car browser (the title menu's Car panel) */
+    onOpenCarBrowser?: () => void;
+  }
+> = (p) => {
   const sheet = useMemo(() => setupSheet(p.vehicleModel, TYRE_SETUP_LIMITS[p.vehicleModel], p.defaultTyreSetup), [p.vehicleModel, p.defaultTyreSetup]);
   const [tabId, setTab] = useState(sheet[0].id);
   const group: SetupGroup = sheet.find((g) => g.id === tabId) ?? sheet[0];
@@ -254,6 +259,7 @@ export const EngineersGarage: React.FC<PauseMenuProps> = (p) => {
   const carLocked = p.telemetry.race?.multiplayer === true || p.raceRunning === true;
   const openBrowser = () => {
     if (carLocked) return;
+    if (p.onOpenCarBrowser) return p.onOpenCarBrowser();
     flushSync(() => setBrowsing(true));
     if (currentInputMode() === "pointer") return;
     const card = document.querySelector<HTMLElement>(`[data-browser-item="${CSS.escape(p.carId)}"]`);
