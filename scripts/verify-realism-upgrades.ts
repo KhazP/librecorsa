@@ -56,6 +56,10 @@ import {
 import { peerWakeEmitters, TrackEnvironment } from '../src/lib/sim/track-environment';
 import { AiOpponentField } from '../src/lib/sim/ai-opponents';
 import { createAmgGt3Sim } from '../src/lib/sim/gt3/AmgGt3Sim';
+import { AMG_GT3_CONFIG } from '../src/lib/sim/gt3/AmgGt3Config';
+import { compoundData, F12026_CAR_CONFIG } from '../src/lib/sim/f12026-car/F12026CarConfig';
+import { VehiclePhysics } from '../src/lib/sim/f12026-car/VehiclePhysics';
+import { FlatGroundQuery } from '../src/lib/sim/f12026-car/TrackColliderQuery';
 import { CarAudioEngine } from '../src/lib/sim/CarAudio';
 import type { TrackEvolutionSample } from '../src/lib/sim/track-evolution';
 import type { AeroWakeState, WakeEmitterCar } from '../src/lib/sim/aero-wake';
@@ -201,7 +205,62 @@ check('3D double-wishbone solver reproduces the VF26 camber gains in bump and co
 
   const axle = solveAxleKinematics3D(frontHp, 0.02, -0.01, 0.08, 1.60, 0.34, 0.35);
   assert.ok(Number.isFinite(axle.rollCentreHeightM) && Math.abs(axle.rollCentreLatOffsetM) > 0, 'Roll centre migrates laterally under asymmetric roll');
+  // Side-view slope at the contact patch: the VF26 front's inclined arm axes give anti-dive
   assert.ok(axle.antiPitchFraction > 0.05, '3D wishbone plane inclinations yield anti-dive / anti-squat');
+});
+
+check('f12026-car and GT3 hardpoints solve to their configs\' camber gain and roll centre, with anti-dive and a closed tie rod', () => {
+  const D = 180 / Math.PI;
+  for (const [name, cfg] of [['f12026-car', F12026_CAR_CONFIG], ['amg-gt3', AMG_GT3_CONFIG]] as const) {
+    const tyre = compoundData(cfg, cfg.compoundSlots.soft);
+    for (const front of [true, false]) {
+      const spec = front ? cfg.suspensions.front : cfg.suspensions.rear;
+      const hp = buildDoubleWishboneHardpoints(spec.hardpoints, front, spec.actuation);
+      const R = front ? tyre.front.radius : tyre.rear.radius;
+      const halfTrack = 0.5 * (front ? cfg.chassis.trackWidthFront : cfg.chassis.trackWidthRear);
+      const at = (z: number, steer = 0, left = true) => ({ ...solveCornerKinematics3D(hp, z, steer, left, R) });
+      const s0 = at(0);
+      const gain = ((at(0.005).uprightCamberRad - at(-0.005).uprightCamberRad) / 0.01) * D;
+      // Force-based roll centre: tan θ of the front-view swing arm (the patch's lateral path) times the half track
+      const rc = -s0.contactInboardPerBump * halfTrack;
+      const where = `${name} ${front ? 'front' : 'rear'}`;
+      assert.ok(Math.abs(gain - spec.camberGainKinematic) < 1, `${where}: camber gain ${gain.toFixed(1)} vs ${spec.camberGainKinematic} deg/m`);
+      assert.ok(Math.abs(rc - spec.rollCentreHeight) < 0.003, `${where}: roll centre ${(rc * 1000).toFixed(1)} vs ${spec.rollCentreHeight * 1000} mm`);
+      assert.ok(Math.abs(s0.uprightCamberRad) < 1e-9 && Math.abs(s0.wheelSteerRad) < 1e-9, `${where}: no camber or toe of its own at static`);
+      if (front) {
+        assert.ok(s0.contactForwardPerBump > 0.02, `${where}: the patch moves forward in bump (anti-dive), slope ${s0.contactForwardPerBump.toFixed(3)}`);
+        // The rack turns both wheels the same way, within a few per cent of the nominal angle (the rest is Ackermann)
+        const n = 10 / D;
+        const inner = at(0, n, true).wheelSteerRad;
+        const outer = at(0, n, false).wheelSteerRad;
+        assert.ok(Math.abs(inner / n - 1) < 0.05 && Math.abs(outer / n - 1) < 0.05, `${where}: 10° rack gives ${(inner * D).toFixed(2)}° / ${(outer * D).toFixed(2)}°`);
+      }
+    }
+  }
+});
+
+check('The tyres carry the whole load transfer, M·a·h, through springs and links (f12026-car, GT3: steady corner and braking)', () => {
+  for (const [name, cfg] of [['f12026-car', F12026_CAR_CONFIG], ['amg-gt3', AMG_GT3_CONFIG]] as const) {
+    const h = cfg.chassis.cgHeight;
+    // No air, so no aero moments: what the tyres' vertical loads hold is the tyre forces' moment at the ground
+    const make = () => new VehiclePhysics({ ground: new FlatGroundQuery(0), config: cfg, airDensity: 1e-6 });
+    const corner = make();
+    corner.reset(0, 0, 0, 15);
+    for (let i = 0; i < 500 * 8; i++) {
+      corner.step(1 / 500, { throttle: corner.velocity.length() < 15 ? 0.35 : 0, brake: 0, steer: Math.min(0.12, i / 1500) });
+    }
+    const W = corner.wheels;
+    const rollMoment = ((W[0].fz - W[1].fz) * cfg.chassis.trackWidthFront + (W[2].fz - W[3].fz) * cfg.chassis.trackWidthRear) / 2;
+    const fyMoment = -W.reduce((a, w) => a + w.fy, 0) * h;
+    assert.ok(Math.abs(rollMoment / fyMoment - 1) < 0.03, `${name}: lateral load moment ${rollMoment.toFixed(0)} Nm vs ΣFy·h ${fyMoment.toFixed(0)} Nm`);
+    const stop = make();
+    stop.reset(0, 0, 0, 30);
+    for (let i = 0; i < 250; i++) stop.step(1 / 500, { throttle: 0, brake: 0.4, steer: 0 });
+    const B = stop.wheels;
+    const frontGain = B[0].fz + B[1].fz - stop.totalMassKg * 9.81 * cfg.chassis.frontWeightFraction;
+    const fxMoment = -B.reduce((a, w) => a + w.fx, 0) * h;
+    assert.ok(Math.abs((frontGain * stop.wheelbaseM) / fxMoment - 1) < 0.05, `${name}: front gains ${frontGain.toFixed(0)} N under braking vs ΣFx·h / L ${(fxMoment / stop.wheelbaseM).toFixed(0)} N`);
+  }
 });
 
 // -----------------------------------------------------------------------------

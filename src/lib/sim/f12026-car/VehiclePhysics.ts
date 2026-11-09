@@ -6,24 +6,31 @@
  *
  * Model (fixed 500 Hz outer step, 4 × 2 kHz sub-steps):
  * - Body:        6-DOF sprung body (quaternion attitude, world-frame angular velocity, body-frame inertia).
- *                Hubs ride with the body horizontally, so horizontal translation uses the total mass.
+ *                Hubs ride with the body horizontally, so horizontal translation uses the total mass; the
+ *                unsprung masses' own inertia reaches the tyres along the hub's path (the solved wishbones).
  * - Contact:     each corner probes the ground straight down through a `GroundQuery`
- *                (`TrackColliderQuery` on `Track_Collider_Road` + the `userData.surface` meshes), giving
- *                height, normal, `surface` and `grip`.
- * - Suspension:  pull-rod double wishbones: main spring in series with a helper (`helper_rate` /
+ *                (`TrackColliderQuery` on `Track_Collider_Road` + the `userData.surface` meshes) at five points
+ *                over its contact patch, folded into an enveloped road height and plane normal
+ *                (`ContactPatch.ts`); the centre gives `surface` and `grip`.
+ * - Suspension:  pull-rod double wishbones solved from their hardpoints (camber, steer with Ackermann and bump
+ *                steer; tyre forces reach the body through the link geometry: roll centre, jacking, anti-dive,
+ *                anti-squat, anti-lift): main spring in series with a helper (`helper_rate` /
  *                `helper_range`), bump rubbers after `BumpStopSettingsUnits.range` (`BUMPSTOPUP_TRAVEL_*`),
  *                droop limiter, ARBs, heave spring + packers (double-wishbone configurations),
  *                4-way `DamperControllerData` (base corner + heave / roll / pitch mode dampers).
  * - Unsprung:    4 hub masses on the tyre's radial spring (`pressureSpringCurve` × `thermalVerticalK`).
  * - Tyres:       load-sensitive normalised-slip model on the `TyresModelData` fields (`Dy0`, `Dx0`,
- *                `lsExpY`, `lsExpX`, `Fz0`, `friction_limit_angle`, `slip_ratio_limit`). Slip ratio
+ *                `lsExpY`, `lsExpX`, `Fz0`, `friction_limit_angle`, `slip_ratio_limit`). The cornering
+ *                stiffness saturates with load (Pacejka `pKy2`), so the peak slip angle grows with load and the
+ *                lateral relaxation length follows the stiffness. Slip ratio
  *                (`WHEEL_SR_*`) and slip angle come from relaxation-length carcass states. Camber thrust
  *                (`camberGain`, `contact_camber_c1/c2`) enters as an equivalent slip-angle shift, camber
  *                grip from `dcamber0/1` (lateral) and `dcamber0_x/1_x` (longitudinal). Fx / Fy come from
- *                friction-ellipse combined slip (`combinedFactor`, optional `new_combined` SA/SR cross terms,
- *                optional `use_slip_falloff` past-peak decay). `circleFraction` is a telemetry output only.
- *                Grip × `userData.grip`. 2-node (surface / core) thermal model, ideal-gas pressure, compound
- *                performance curve.
+ *                friction-ellipse combined slip (the normalised slip vector, optional `new_combined` SA/SR cross
+ *                terms, optional `use_slip_falloff` past-peak decay). `circleFraction` is a telemetry output only.
+ *                Grip × `userData.grip`. One thermal model: 3 bands (I/M/O) × 2 nodes (tread surface / carcass);
+ *                grip and flash temperature from the surfaces (compound performance curve), ideal-gas pressure
+ *                and carcass stiffness (radial and cornering) from the carcass.
  * - Aero:        front wing, venturi floor and rear wing: `lutAOA_CL/CD(angle)` × `lutGH_CL/CD_mult(ride
  *                height)`, forces at each element's centre of pressure; DRS scales the rear wing.
  * - Power unit:  ICE power curve + MGU-K (`torqueLut` / `coastLut`, 120 kW, 4 MJ store, per-lap limits),
@@ -40,7 +47,6 @@ import { Lut } from '../lut';
 import { tyreGaugePressureAtTemperature } from '../tyre-pressure';
 import {
   advanceDirtyLevel,
-  evaluateIso8608RoadRoughness,
   flatSpotVibrationNm,
   tyreCentrifugalGrowthM,
   wearGripMultiplier,
@@ -97,10 +103,13 @@ import {
   F12026_CAR_CONFIG,
   type PerformanceModeName,
   type PhysicsTyreCompound,
+  type PowerSteeringData,
   type SuspensionSettingUnits,
   suspensionSupportsHeave,
   type TyresCompoundData,
   type TyresPressureData,
+  turboSteadyBoost,
+  type TyresThermalPatchData,
   type WingData,
   type ZoneData_DRSZone,
 } from './F12026CarConfig';
@@ -114,7 +123,19 @@ import {
   type WallQuery,
   wallSweep,
 } from './TrackColliderQuery';
+import { queryContactPatch } from './ContactPatch';
 import { type AutoShiftSchedule, autoShift, createAutoShiftInput, ManualShiftOverride } from '../auto-gearbox';
+import {
+  contactHalfLengthM,
+  driverRackTorqueNm,
+  kingpinMomentNm,
+  PATCH_HALF_WIDTH_SHARE,
+  PATCH_TWIST_DAMPING_S,
+  patchTwistStiffness,
+  spinFrictionArmM,
+  stepPatchTwist,
+} from './steering-torque';
+import { roadTextureHeightM } from '../road-texture';
 
 const G = 9.81;
 const DEG2RAD = Math.PI / 180;
@@ -131,10 +152,19 @@ const AUTO_BRAKE_DOWNSHIFT_PEDAL = 0.3;
 const AUTO_BRAKE_DOWNSHIFT_GAP_S = 0.25;
 /** Probe start above the suspension hardpoint (m) */
 const GROUND_PROBE_UP_M = 0.6;
+/**
+ * Least half-length of the contact patch the ground is sampled over (m): the 0.15 m patch rFactor 2 / LMU / iRacing
+ * sample, kept by a lightly loaded tyre whose deflection chord would be shorter (see `ContactPatch.ts`)
+ */
+const CONTACT_PATCH_MIN_HALF_LENGTH_M = 0.075;
+/** The tread's edges, as a share of the section width each side of centre (as ac-tyre's `sample5PointContactPatch`) */
+const TREAD_HALF_WIDTH_SHARE = 0.42;
 /** Placement: the ground under each tyre is looked for at most this far above the ground under the CG (m) */
 const ROAD_ATTITUDE_PROBE_UP_M = 1.5;
 /** Placement: steepest grade or camber the car is seated on (rad, ≈34°: Daytona's 31° turn banking) */
 const ROAD_ATTITUDE_MAX_RAD = 0.6;
+/** Steepest slope a contact patch's plane may take (rise over run): the grade or camber a car is seated on */
+const CONTACT_MAX_SLOPE = Math.tan(ROAD_ATTITUDE_MAX_RAD);
 /**
  * Past these the integration has blown up rather than the car crashed: 200 m/s is 720 km/h, and 40 rad/s is over six
  * turns a second (a barrel roll or a spin at speed stays under ≈15 rad/s)
@@ -151,10 +181,21 @@ const LOW_SPEED_DAMPING = 0.3;
 const LOW_SPEED_FADE_MS = 4;
 /** Contact-patch / track-surface conductance while loaded (W/K) */
 const ROAD_CONDUCTANCE = 30;
-/** Steering-column torque that maps to full FFB output (front-axle aligning moment incl. caster trail, Nm) */
+/**
+ * Rack torque that maps to full FFB output: the sum of both front tyres' moments about their kingpin axes (Nm). The
+ * column sees it divided by the steering ratio (≈ 48 Nm on 12.6:1)
+ */
 const FFB_REFERENCE_NM = 600;
-/** Torque share missing at full turbo lag (boost far below its target) */
-const TURBO_LAG_TORQUE_LOSS = 0.1;
+/**
+ * Diff map blending: the pedal travel over which the brake hands the diff to its entry map and the throttle to its exit
+ * map (a touch of brake is corner entry; power is committed from ≈ 40 % pedal), the road-wheel angle over which the lock
+ * keeps a light pedal on the mid map (a fast corner's ≈ 1° to a medium-speed apex's ≈ 6°), and the speed band (km/h)
+ * either side of the high-speed switch [est]
+ */
+const DIFF_BRAKE_PHASE = [0.02, 0.2] as const;
+const DIFF_POWER_PHASE = [0.1, 0.4] as const;
+const DIFF_TURNED_IN_DEG = [1, 6] as const;
+const DIFF_HISPD_BLEND_KMH = 20;
 /** Outer-step FFB samples kept per frame for the 500 Hz bridge (≈ one 60 Hz frame; the newest are kept) */
 const FFB_SUBFRAME_MAX = 8;
 /** Caster (mechanical) trail when the chassis data has none: keeps the wheel weighted once the pneumatic trail collapses */
@@ -192,6 +233,11 @@ export interface VehicleInputs {
   /** Pedals 0..1 */
   throttle: number;
   brake: number;
+  /**
+   * Share of the drive torque the ECU lets through by cutting spark and fuel, and the MGU-K's with it (0..1: traction
+   * control). Acts at once, unlike the pedal, whose torque waits on the air path. Omitted = 1
+   */
+  ignitionCut?: number;
   /** Per-wheel brake pressure share 0..1 (LF, RF, LR, RR) after a per-wheel ABS; omitted = 1 */
   brakeWheelScale?: readonly [number, number, number, number];
   /** Steering −1..1, + = right */
@@ -272,6 +318,8 @@ export interface WheelState {
   deflection: number;
   loadedRadius: number;
   rollingRadius: number;
+  /** Contact-patch half-length from the deflection (m) */
+  patchHalfLengthM: number;
   /** Tyre radial stiffness (N/m) */
   verticalRate: number;
   fz: number;
@@ -279,6 +327,16 @@ export interface WheelState {
   fy: number;
   /** Self-aligning moment about the contact normal (Nm) */
   mz: number;
+  /** Moment of the patch twisted against the road about the contact normal (Nm): the parking torque */
+  mzTwist: number;
+  /** Front wheel's gyroscopic torque about its steering axis (N·m), added to the rack (0 on the rears) */
+  gyroSteerNm: number;
+  /**
+   * Patch twist (rad, + = wheel turned left of the rubber held by the road), and the toe / compliance share of the
+   * steer angle it was last wound from (the driver's share comes in as a rate)
+   */
+  twistRad: number;
+  twistSteerRad: number;
   /** Overturning moment Mx (Nm) from lateral contact patch shift */
   mx: number;
   /** Spin (rad/s) and accumulated visual rotation (rad) */
@@ -286,7 +344,7 @@ export interface WheelState {
   rotationRad: number;
   /** Road-wheel steer (rad, + = left) */
   steerRad: number;
-  /** Kinematic bump-steer toe offset (rad) */
+  /** Toe the steering geometry adds to the rack's nominal angle: Ackermann, bump steer and damage toe (rad, + = toe-in) */
   toeRad: number;
   /** Steering-compliance angle given up to the lateral force (rad, filtered) */
   complianceRad: number;
@@ -298,6 +356,10 @@ export interface WheelState {
   slipRatio: number;
   tanSlipAngle: number;
   slipAngleRad: number;
+  /** Slip angle of this tyre's peak lateral force at its present load (rad; held while unloaded, 0 until loaded) */
+  peakSlipAngleRad: number;
+  /** Lateral force per unit tan(slip angle) at small slip, with every grip scaling as it is now (N; 0 unloaded) */
+  corneringStiffness: number;
   /** Normalised combined slip (1 = peak) and share of the friction circle in use (telemetry; 1 = on the circle) */
   combinedSlip: number;
   circleFraction: number;
@@ -311,13 +373,15 @@ export interface WheelState {
   vx: number;
   vy: number;
   slipVelX: number;
+  /** Tread surface temperature (°C): the bands' surfaces weighted by contact pressure (derived, see `bandTempsC`) */
   surfaceTempC: number;
+  /** Carcass (core) temperature (°C): the bands' mean core; inflation gas, carcass stiffness (derived) */
   coreTempC: number;
-  /** Inner, Middle, Outer surface band temperatures (°C) */
+  /** Inner, Middle, Outer surface band temperatures (°C): the tread surface nodes, which set the grip */
   bandTempsC: [number, number, number];
-  /** Inner, Middle, Outer carcass temperatures (°C) */
+  /** Inner, Middle, Outer tread-bulk temperatures (°C): between each band's surface and core, for display */
   bandCarcassTempsC: [number, number, number];
-  /** Inner, Middle, Outer core temperatures (°C) */
+  /** Inner, Middle, Outer core temperatures (°C): each band's carcass node */
   bandCoreTempsC: [number, number, number];
   /** Inner, Middle, Outer share of the contact pressure (and of the heat), summing to 1 */
   bandLoadShares: [number, number, number];
@@ -419,6 +483,11 @@ interface AxleRuntime {
   spec: AxleSuspensionData;
   dampers: DamperControllerData;
   heaveActive: boolean;
+  /**
+   * Axle heave from static (m, + = bump) at which the heave element is at its free length. Below static when it carries
+   * its share of the car's weight there (see computeStaticGeometry), so its rate runs on through static ride height
+   */
+  heaveFreeM: number;
   unsprungMass: number;
   wheelInertia: number;
 }
@@ -438,13 +507,15 @@ export interface TyreRuntime {
   data: TyresCompoundData;
   thermal: Lut;
   pressureSpring: Lut;
+  /** tan(peak slip angle) at Fz0; at other loads see `tyrePeakSlipTan` */
   tanPeakAngle: number;
+  /** Pacejka pKy2 (`TyresModelData.pKy2`) and the peak lateral force at Fz0 (N, before temperature, wear, water…) */
+  pKy2: number;
+  peakForceY0: number;
   peakSlipRatio: number;
   /** Magic-formula shape: y = sin(C·atan(B·s)), peak 1 at s = 1 */
   B: number;
   C: number;
-  /** `combinedFactor` clamped to 0..2 */
-  combinedFactor: number;
   useFalloff: boolean;
   falloffLevel: number;
   falloffSlope: number;
@@ -542,25 +613,30 @@ export function createTyreRuntime(compound: TyresCompoundData, rear = false): Ty
   const { B, C } = fitMagicFormula(model.falloff_level);
   const cam = data.camberData;
   const fla = model.friction_limit_angle && model.friction_limit_angle > 0 ? model.friction_limit_angle : DEFAULT_FRICTION_LIMIT_ANGLE_DEG;
+  const dyCurve = model.dyCurve ? new Lut(model.dyCurve) : null;
   return {
     data,
     thermal: new Lut(data.thermalData.thermalPerformanceCurve),
     pressureSpring: new Lut(data.pressureData.pressureSpringCurve),
     tanPeakAngle: Math.tan(fla * DEG2RAD),
+    pKy2: model.pKy2,
+    peakForceY0: (dyCurve ? dyCurve.evaluate(fz0) : model.Dy0) * fz0,
     peakSlipRatio: model.slip_ratio_limit,
     B,
     C,
-    combinedFactor: THREE.MathUtils.clamp(Number.isFinite(model.combinedFactor) ? model.combinedFactor : 1, 0, 2),
     useFalloff: model.use_slip_falloff,
     falloffLevel: model.falloff_level,
     falloffSlope: Math.max(0, model.falloff_slope),
     camberThrustLimit: cam.contact_camber_c2 > 0 ? Math.sqrt(cam.contact_camber_c1 / (3 * cam.contact_camber_c2)) : Infinity,
     fz0,
-    dyCurve: model.dyCurve ? new Lut(model.dyCurve) : null,
+    dyCurve,
     dxCurve: model.dxCurve ? new Lut(model.dxCurve) : null,
     brakeDxMod: model.brakeDxMod ?? 0,
   };
 }
+
+/** Load (as a share of Fz0) below which the load laws are held, so they stay finite as a wheel unloads */
+const MIN_LOAD_RATIO = 0.05;
 
 /**
  * Peak friction coefficient of a tyre at vertical load `fz` (N), lateral (`y`) or longitudinal (`x`): the compound's
@@ -571,8 +647,45 @@ export function tyrePeakMu(t: Pick<TyreRuntime, 'data' | 'fz0' | 'dyCurve' | 'dx
   const curve = axis === 'y' ? t.dyCurve : t.dxCurve;
   if (curve) return curve.evaluate(fz);
   const m = t.data.modelData;
-  const loadRef = Math.max(0.05, fz / t.fz0);
+  const loadRef = Math.max(MIN_LOAD_RATIO, fz / t.fz0);
   return axis === 'y' ? m.Dy0 * Math.pow(loadRef, m.lsExpY - 1) : m.Dx0 * Math.pow(loadRef, m.lsExpX - 1);
+}
+
+/**
+ * Cornering stiffness at load `fz` over the one at Fz0. Pacejka MF: Kyα = pKy1·Fz0·sin(2·atan(Fz / (pKy2·Fz0))),
+ * which normalised to Fz0 is x·(pKy2² + 1) / (pKy2² + x²) with x = Fz / Fz0: near-linear in light load, saturating
+ * to its peak at pKy2·Fz0. The lateral relaxation length scales with it (MF 6.1: σα = Kyα / lateral carcass stiffness).
+ */
+export function tyreCorneringStiffnessLoadFactor(t: Pick<TyreRuntime, 'fz0' | 'pKy2'>, fz: number): number {
+  const x = Math.max(MIN_LOAD_RATIO, fz / t.fz0);
+  const p2 = t.pKy2 * t.pKy2;
+  return (x * (p2 + 1)) / (p2 + x * x);
+}
+
+/**
+ * tan(peak slip angle) at load `fz`: the peak lateral force there over the cornering stiffness, both from the
+ * compound's data at Fz0 (`friction_limit_angle`, the load table) and the stiffness's load law. Before the carcass
+ * temperature (a softer carcass peaks later) and before the grip scalings (temperature, wear, water), which scale
+ * force and stiffness together.
+ */
+export function tyrePeakSlipTan(
+  t: Pick<TyreRuntime, 'data' | 'fz0' | 'dyCurve' | 'dxCurve' | 'pKy2' | 'tanPeakAngle' | 'peakForceY0'>,
+  fz: number
+): number {
+  const fzL = Math.max(fz, MIN_LOAD_RATIO * t.fz0);
+  return (t.tanPeakAngle * tyrePeakMu(t, fzL, 'y') * fzL) / (t.peakForceY0 * tyreCorneringStiffnessLoadFactor(t, fzL));
+}
+
+/**
+ * Carcass stiffness at carcass temperature `carcassC` over its stiffness at `thermalVerticalRefC` (the rubber softens
+ * as it warms), floored at 0.7: the radial rate takes it, and so does the cornering stiffness (same rubber), so a hot
+ * carcass peaks at a larger slip angle and a cold one is sharper
+ */
+export function tyreCarcassStiffnessFactor(
+  th: Pick<TyresThermalPatchData, 'thermalVerticalK' | 'thermalVerticalRefC'>,
+  carcassC: number
+): number {
+  return Math.max(0.7, 1 + th.thermalVerticalK * (carcassC - th.thermalVerticalRefC));
 }
 
 /** Grip at hot inflation pressure `psi` (gauge): a parabola about the optimum, floored at half grip */
@@ -596,9 +709,12 @@ function slipCurveOverS(t: TyreRuntime, s: number): number {
 }
 
 /**
- * Combined slip (this model's interpretation of `combinedFactor`, `new_combined` and the SA/SR
- * cross terms): normalised slips (sx, sy) → per-axis force fractions (fx, fy) of μ·Fz, signs following
- * the slips. With k = 1 and no cross terms this is the plain friction circle.
+ * Combined slip by the normalised slip vector (Pacejka's similarity method, Tire and Vehicle Dynamics ch. 4; the
+ * friction ellipse a brush model gives): normalised slips (sx, sy) → per-axis force fractions (fx, fy) of μ·Fz. One
+ * combined slip s = |(sx, sy)| sets the force F(s) on the pure-slip curve, split along the slip direction: fx = F(s)·sx/s,
+ * fy = F(s)·sy/s. So fx² + fy² = F(s)² ≤ 1, and with each axis's own μ the forces stay on or inside the friction
+ * ellipse (Fx / μx·Fz)² + (Fy / μy·Fz)² ≤ 1 at every slip. `new_combined` first shifts / scales the slips by the
+ * SA/SR cross terms.
  */
 export function combinedSlipForces(
   t: TyreRuntime,
@@ -613,14 +729,15 @@ export function combinedSlipForces(
     sxm = sx * (1 - model.fx_scale_SA * Math.min(1, Math.abs(sy))) + model.fx_shift_SA * sy;
     sym = sy * (1 - model.fy_scale_SR * Math.min(1, Math.abs(sx))) + model.fy_shift_SR * sx;
   }
-  const k = t.combinedFactor;
-  out.fx = sxm * slipCurveOverS(t, Math.hypot(sxm, k * sym));
-  out.fy = sym * slipCurveOverS(t, Math.hypot(sym, k * sxm));
+  const fOverS = slipCurveOverS(t, Math.hypot(sxm, sym));
+  out.fx = sxm * fOverS;
+  out.fy = sym * fOverS;
   out.sx = sxm;
   out.sy = sym;
 }
 
 const _comb = { fx: 0, fy: 0, sx: 0, sy: 0 };
+const _roadSlope = { dhdx: 0, dhdz: 0 };
 
 // Scratch (single-threaded, never escapes a call)
 const _m = new THREE.Matrix4();
@@ -634,6 +751,8 @@ const _ez = new THREE.Vector3();
 const _r = new THREE.Vector3();
 const _v = new THREE.Vector3();
 const _f = new THREE.Vector3();
+/** Kingpin geometry handed to the rack-torque sum (geometric scrub and trail) */
+const _kpGeo = { kpiRad: 0, casterRad: 0, scrubRadiusM: 0, casterTrailM: 0 };
 const _p = new THREE.Vector3();
 const _plankHit = createGroundHit();
 const _wallHit = createWallHit();
@@ -671,11 +790,18 @@ export class VehiclePhysics {
   /** Steering compliance (rad of road-wheel angle per N of lateral force) */
   private readonly steerComplianceRadPerN: number;
   private readonly ffbMechanicalTrailM: number;
+  private readonly powerSteering: PowerSteeringData | undefined;
   /** Sum / count of the per-step FFB torque since the last takeFfbAverage() */
   private ffbSum = 0;
   private ffbSamples = 0;
   /** 500 Hz outer-step FFB samples accumulated during step() */
   private ffbSubframeSamples: number[] = [];
+  /**
+   * Commanded road-wheel angle at the last step() and its rate over that step (rad, rad/s): how fast the wheel is
+   * really being turned, which the once-per-frame input otherwise only shows as steps
+   */
+  private lastCmdSteerRad = Number.NaN;
+  private cmdSteerRateRadS = 0;
 
   // ---- body state (world)
   /** CG position */
@@ -700,11 +826,15 @@ export class VehiclePhysics {
   /** Driver EBB offset in steps (+ = forward), on top of the performance mode's */
   public ebbUser = 0;
   public compound: PhysicsTyreCompound;
-  /** Live turbo boost pressure (bar absolute, 1.0 = atmospheric) with spool lag, and the boost asked for */
+  /** Live turbo boost pressure for the gauge and the sound (bar absolute, 1.0 = atmospheric; `TurboData.displayMaxBoostBar`) */
   public turboBoostBar = 1.0;
-  private turboTargetBar = 1.0;
-  /** Turbocharged engine: the boost's spool lag costs a little torque (set by the adapter from its profile) */
-  public turbocharged = false;
+  /** Boost the turbo has spooled to (`TurboData` units: torque ∝ 1 + boost) */
+  private turboBoost = 0;
+  /**
+   * The turbo's spool lag shapes the ICE torque: on by default when the engine has `turbo` data; the adapter sets it
+   * from its car profile
+   */
+  public turbocharged: boolean;
   /** Disc / pad material of the brakes (`BrakesData.discMaterial`) */
   private readonly brakeCompound: BrakeCompoundKind;
   /** Dynamic brake bias after pressure-sensitive brake migration */
@@ -820,12 +950,20 @@ export class VehiclePhysics {
   private sinceDownshiftS = Infinity;
   private limiterTimer = 0;
   private clutchEngagement = 1;
+  /** Throttle plate the cylinders see, after the air path's lag (`EngineData.torqueResponseS`) */
+  private icePlate = 0;
   private lsdLockTorque = 0;
+  /**
+   * Rear halfshaft twist (rad, + = the diff side ahead of the hub): the mean of the two (it carries the drive torque) and
+   * half their left-minus-right difference (it carries the diff's locking torque)
+   */
+  private shaftTwistMeanRad = 0;
+  private shaftTwistHalfDiffRad = 0;
   private mgukTorque = 0;
   private aeroFrontN = 0;
   private aeroDownN = 0;
   private aeroDragN = 0;
-  /** Air slip angle the wing-element aero last saw (|deg|) */
+  /** Air slip angle the aero last saw (|deg|), wing-element or map path */
   public aeroYawDeg = 0;
   private rideFront = 0;
   private rideRear = 0;
@@ -834,6 +972,8 @@ export class VehiclePhysics {
   private mapAeroRearN = 0;
   private mapAeroDragN = 0;
   private readonly prevVelocity = new THREE.Vector3();
+  /** The body's acceleration less gravity at the last sub-step (m/s², world): what the unsprung masses ride with */
+  private readonly bodySpecificForce = new THREE.Vector3();
   private readonly force = new THREE.Vector3();
   private readonly torque = new THREE.Vector3();
   private lastInputs: VehicleInputs = { throttle: 0, brake: 0, steer: 0 };
@@ -877,6 +1017,7 @@ export class VehiclePhysics {
           : { rpm: gears.brake_downshift_rpm, pedal: AUTO_BRAKE_DOWNSHIFT_PEDAL, gapS: AUTO_BRAKE_DOWNSHIFT_GAP_S },
     };
     this.steerComplianceRadPerN = ((ch.steerComplianceDegPerKN ?? 0) * DEG2RAD) / 1000;
+    this.powerSteering = ch.powerSteering;
     this.ffbMechanicalTrailM = ch.ffbMechanicalTrailM ?? DEFAULT_FFB_MECHANICAL_TRAIL_M;
     this.brakeCompound = cfg.brakes.discMaterial ?? 'carbon-ceramic';
     this.drivenWheels = cfg.drivenAxle === 'front' ? [0, 1] : [2, 3];
@@ -889,7 +1030,7 @@ export class VehiclePhysics {
     const mkAxle = (spec: AxleSuspensionData, dampers: DamperControllerData, name: string, mass: number, inertia: number): AxleRuntime => {
       const heaveActive = suspensionSupportsHeave(spec.type);
       if (!heaveActive && spec.heave.rate > 0) console.warn(`IGNORING HEAVE SPRING BECAUSE SUSPENSION ${name} IS NOT DOUBLE WISHBONE`);
-      return { spec, dampers, heaveActive, unsprungMass: mass, wheelInertia: inertia };
+      return { spec, dampers, heaveActive, heaveFreeM: spec.heave.gap, unsprungMass: mass, wheelInertia: inertia };
     };
     const susp = cfg.suspensions;
     this.axles = [
@@ -979,11 +1120,16 @@ export class VehiclePhysics {
         deflection: 0,
         loadedRadius: 0,
         rollingRadius: 0,
+        patchHalfLengthM: 0,
         verticalRate: 0,
         fz: 0,
         fx: 0,
         fy: 0,
         mz: 0,
+        mzTwist: 0,
+        gyroSteerNm: 0,
+        twistRad: 0,
+        twistSteerRad: Number.NaN,
         mx: 0,
         omega: 0,
         rotationRad: 0,
@@ -995,6 +1141,8 @@ export class VehiclePhysics {
         slipRatio: 0,
         tanSlipAngle: 0,
         slipAngleRad: 0,
+        peakSlipAngleRad: 0,
+        corneringStiffness: 0,
         combinedSlip: 0,
         circleFraction: 0,
         camberLeftRad: 0,
@@ -1051,6 +1199,7 @@ export class VehiclePhysics {
     this.computeStaticGeometry();
 
     this.engineOmega = cfg.engine.idleRpm * RPM2RADS;
+    this.turbocharged = cfg.engine.turbo !== undefined;
     this.ersEnergyJ = cfg.ers.ERS_MAX_CHARGE;
     this.dynamicBrakeBias = this.brakeBias;
     this.telemetry = this.createTelemetry();
@@ -1186,6 +1335,7 @@ export class VehiclePhysics {
     this.limiterTimer = 0;
     this.engineOmega = this.config.engine.idleRpm * RPM2RADS;
     this.turboBoostBar = 1.0;
+    this.turboBoost = 0;
     this.drsOpen = false;
     this.drsBlend = 0;
     this.drsRequested = false;
@@ -1215,6 +1365,8 @@ export class VehiclePhysics {
       w.tanSlipAngle = 0;
       w.omega = 0;
       w.complianceRad = 0;
+      w.twistRad = 0;
+      w.twistSteerRad = Number.NaN;
     }
     // Lift the body so the hardpoints sit at their static distance above the hubs
     let dy = 0;
@@ -1265,9 +1417,14 @@ export class VehiclePhysics {
         w.slipRatio = 0;
         w.tanSlipAngle = 0;
       }
+      // A rolling start is a car already driving: its turbo spooled for the road rpm, as on the throttle
+      const turbo = this.config.engine.turbo;
+      this.turboBoost = turbo ? turboSteadyBoost(turbo, this.rpm) : 0;
     }
     this.prevVelocity.copy(this.velocity);
     this.ffbSubframeSamples.length = 0;
+    this.lastCmdSteerRad = Number.NaN;
+    this.cmdSteerRateRadS = 0;
     this.updateOutputs(0);
   }
 
@@ -1316,11 +1473,17 @@ export class VehiclePhysics {
       w.fx = 0;
       w.fy = 0;
       w.mz = 0;
+      w.mzTwist = 0;
+      w.gyroSteerNm = 0;
+      w.twistRad = 0;
+      w.twistSteerRad = Number.NaN;
+      w.patchHalfLengthM = 0;
       w.mx = 0;
       w.vx = 0;
       w.vy = 0;
       w.slipVelX = 0;
       w.slipAngleRad = 0;
+      w.corneringStiffness = 0;
       w.combinedSlip = 0;
       w.circleFraction = 0;
       w.camberLeftRad = 0;
@@ -1334,14 +1497,18 @@ export class VehiclePhysics {
       if (!w.bandLoadShares.every(Number.isFinite)) w.bandLoadShares = [1 / 3, 1 / 3, 1 / 3];
     }
     this.clutchEngagement = 1;
+    this.icePlate = 0;
     this.lsdLockTorque = 0;
+    this.shaftTwistMeanRad = 0;
+    this.shaftTwistHalfDiffRad = 0;
     this.mgukTorque = 0;
     this.aeroFrontN = 0;
     this.aeroDownN = 0;
     this.aeroDragN = 0;
     this.rideFront = 0;
     this.rideRear = 0;
-    this.turboTargetBar = 1;
+    this.bodySpecificForce.set(0, 0, 0);
+    this.turboBoost = 0;
     this.ffbSum = 0;
     this.ffbSamples = 0;
     this.telemetry.ffbTorqueNorm = 0;
@@ -1384,7 +1551,7 @@ export class VehiclePhysics {
     if (!Number.isFinite(p.x + p.y + p.z + v.x + v.y + v.z + w.x + w.y + w.z + q.x + q.y + q.z + q.w + this.engineOmega)) return false;
     if (v.lengthSq() > BLOWN_UP_SPEED_MS * BLOWN_UP_SPEED_MS || w.lengthSq() > BLOWN_UP_SPIN_RADS * BLOWN_UP_SPIN_RADS) return false;
     for (const wh of this.wheels) {
-      if (!Number.isFinite(wh.omega + wh.hubY + wh.hubVy + wh.slipRatio + wh.tanSlipAngle + wh.complianceRad)) return false;
+      if (!Number.isFinite(wh.omega + wh.hubY + wh.hubVy + wh.slipRatio + wh.tanSlipAngle + wh.complianceRad + wh.twistRad)) return false;
     }
     return true;
   }
@@ -1402,6 +1569,17 @@ export class VehiclePhysics {
     const inp = this.sanitizeInputs(inputs);
     this.handleEdges(inp);
     this.timeAccumulator = Math.min(this.timeAccumulator + dtSeconds, 0.1);
+    // The steering input arrives once per call: spread its change over the fixed steps this call runs, the wheel's
+    // real speed (a step that runs none carries the change on to the next)
+    let fixedSteps = 0;
+    for (let a = this.timeAccumulator; a >= VehiclePhysics.FIXED_DT; a -= VehiclePhysics.FIXED_DT) fixedSteps++;
+    if (fixedSteps > 0) {
+      const cmdSteerRad = -inp.steer * this.maxSteerRad;
+      this.cmdSteerRateRadS = Number.isFinite(this.lastCmdSteerRad)
+        ? (cmdSteerRad - this.lastCmdSteerRad) / (fixedSteps * VehiclePhysics.FIXED_DT)
+        : 0;
+      this.lastCmdSteerRad = cmdSteerRad;
+    }
     let steps = 0;
     while (this.timeAccumulator >= VehiclePhysics.FIXED_DT) {
       this.timeAccumulator -= VehiclePhysics.FIXED_DT;
@@ -1522,7 +1700,13 @@ export class VehiclePhysics {
     this.computeStaticGeometry();
   }
 
-  /** Static hub distances and spring preloads, on flat ground at the target ride heights */
+  /**
+   * Static hub distances and spring preloads, on flat ground at the target ride heights. A heave element in contact at
+   * static (`gap` 0) is a preloaded coilover in parallel with the corner springs: from a common free ride height every
+   * element is compressed alike, so it carries its rate's share of the weight and the corner springs the rest (the
+   * static ride height is unchanged; VRC's preloaded heave coilovers, AC's heave springs). With a gap it only meets
+   * the car after that much heave, as before.
+   */
   private computeStaticGeometry(): void {
     const ch = this.config.chassis;
     const sinT = this.staticPitchSin();
@@ -1536,15 +1720,28 @@ export class VehiclePhysics {
       const hpY = cgY + w.hardpoint.y * cosT - w.hardpoint.z * sinT;
       const hubY = R0 - fz / this.tyreVerticalRate(w);
       w.staticHubDist = (hpY - hubY) / cosT;
-      w.springPreload = springDeflectionFor(fz - axle.unsprungMass * G, axle.spec.springs);
+      const load = fz - axle.unsprungMass * G;
+      const springs = axle.spec.springs;
+      const heave = axle.spec.heave;
+      const preloaded = axle.heaveActive && heave.rate > 0 && heave.gap <= 0;
+      // Static deflection d with springForce(d) + ½·heave rate·d = load (each wheel takes half the heave force): monotonic,
+      // so bisect below the corner-only deflection
+      let lo = 0;
+      let hi = springDeflectionFor(load, springs);
+      for (let k = 0; preloaded && k < 50; k++) {
+        const mid = 0.5 * (lo + hi);
+        if (springForce(mid, springs) + 0.5 * heave.rate * mid > load) hi = mid;
+        else lo = mid;
+      }
+      w.springPreload = hi;
+      axle.heaveFreeM = preloaded ? -hi : heave.gap;
     }
   }
 
   private tyreVerticalRate(w: WheelState): number {
     const t = this.tyres[w.isFront ? 0 : 1];
     const geo = w.isFront ? t.data.front : t.data.rear;
-    const th = t.data.thermalData;
-    const thermal = Math.max(0.7, 1 + th.thermalVerticalK * (w.coreTempC - th.thermalVerticalRefC));
+    const thermal = tyreCarcassStiffnessFactor(t.data.thermalData, w.coreTempC);
     return t.pressureSpring.evaluate(w.pressurePsi) * geo.verticalRateScale * thermal;
   }
 
@@ -1587,6 +1784,7 @@ export class VehiclePhysics {
     return {
       throttle: c(fin(i.throttle), 0, 1),
       brake: c(fin(i.brake), 0, 1),
+      ignitionCut: i.ignitionCut === undefined ? undefined : c(fin(i.ignitionCut), 0, 1),
       steer: c(fin(i.steer), -1, 1),
       brakeWheelScale: i.brakeWheelScale
         ? [c(fin(i.brakeWheelScale[0]), 0, 1), c(fin(i.brakeWheelScale[1]), 0, 1), c(fin(i.brakeWheelScale[2]), 0, 1), c(fin(i.brakeWheelScale[3]), 0, 1)]
@@ -1746,10 +1944,16 @@ export class VehiclePhysics {
     this.sinceUpshiftS += dt;
     this.sinceDownshiftS += dt;
     this.limiterTimer = Math.max(0, this.limiterTimer - dt);
-    const targetBoost = 1 + 2.5 * inp.throttle * THREE.MathUtils.clamp((this.rpm - 6000) / 4000, 0, 1);
-    const tauTurbo = targetBoost > this.turboBoostBar ? 0.14 : 0.05;
-    this.turboBoostBar += (targetBoost - this.turboBoostBar) * Math.min(1, dt / tauTurbo);
-    this.turboTargetBar = targetBoost;
+    // Turbo: spools toward the boost the cylinders' air asks for, faster the more exhaust there is; runs down slowly
+    const turbo = this.config.engine.turbo;
+    if (turbo && this.turbocharged) {
+      const target = turboSteadyBoost(turbo, this.rpm) * this.icePlate;
+      const tau = target > this.turboBoost ? (turbo.spoolUpS * turbo.spoolRefRpm) / Math.max(this.rpm, this.config.engine.idleRpm) : turbo.spoolDownS;
+      this.turboBoost += (target - this.turboBoost) * Math.min(1, dt / tau);
+      this.turboBoostBar = 1 + (turbo.displayMaxBoostBar * this.turboBoost) / turbo.maxBoost;
+    } else {
+      this.turboBoostBar = 1;
+    }
     this.updateThermal(dt);
     this.updateOutputs(dt);
     // Keep the newest samples: a long frame drops its oldest, not its latest, torque
@@ -1771,6 +1975,33 @@ export class VehiclePhysics {
     this.torque.add(_tmp.crossVectors(_r, f));
   }
 
+  /**
+   * Aero drag −`perMs`·air (N) at the drag's centre of pressure (`AeroData.dragCentreY` above the CG): above the CG it
+   * pitches the nose up and loads the rear axle, as the rear wing's and wheels' drag do on the real car
+   */
+  private addDragAtCentre(air: THREE.Vector3, perMs: number): void {
+    _f.copy(air).multiplyScalar(-perMs);
+    _p.set(0, this.config.aero.dragCentreY ?? 0, 0).applyQuaternion(this.quaternion).add(this.position);
+    this.addForceAt(_f, _p);
+  }
+
+  /**
+   * Gyroscopic torque a front wheel puts on the steering (Nm, + = toward left lock, as the rack sum). Its spin momentum
+   * I·ω lies along the axle; turning the wheel about its rolling axis `fw` at rate p (body roll, plus the camber the
+   * suspension gives it over a bump: the axle's kinematic camber gain × bump rate) precesses it, and the steering arm
+   * takes the part about the steering axis, −I·ω·p. Lean the top right and the wheel steers right, as a bicycle wheel
+   * does. The camber the steering itself adds (caster, kingpin inclination) is left out: that turn is about the
+   * steering axis, and a precession about an axis puts no torque about that same axis.
+   */
+  private wheelGyroSteerNm(w: WheelState, fw: THREE.Vector3): number {
+    const axle = this.axles[w.isFront ? 0 : 1];
+    // Bump camber rate, leaning + left (the left wheel's camber is its lean to the left, the right's to the right);
+    // leaning + left turns the wheel about −fw
+    const camberRate = (w.isLeft ? 1 : -1) * axle.spec.camberGainKinematic * DEG2RAD * w.compressionVel;
+    const p = this.angularVelocity.dot(fw) - camberRate;
+    return -axle.wheelInertia * w.omega * p;
+  }
+
   private substep(h: number, inp: VehicleInputs): void {
     this.updateBasis();
     this.force.set(0, 0, 0);
@@ -1782,7 +2013,7 @@ export class VehiclePhysics {
       w.hardpointWorld.copy(w.hardpoint).applyQuaternion(this.quaternion).add(this.position);
       _r.subVectors(w.hardpointWorld, this.position);
       w.hardpointVel.crossVectors(this.angularVelocity, _r).add(this.velocity);
-      w.grounded = this.ground.query(w.hardpointWorld.x, w.hardpointWorld.z, w.hardpointWorld.y + GROUND_PROBE_UP_M, w.ground);
+      w.grounded = this.queryContactPatch(w);
       if (w.grounded) this.climbStep(w, h);
       else w.contactY = Number.NaN;
       w.compression = w.staticHubDist - (w.hardpointWorld.y - w.hubY) / upY;
@@ -1841,7 +2072,7 @@ export class VehiclePhysics {
         const heave = 0.5 * (L.compression + R.compression);
         const hv = 0.5 * (L.compressionVel + R.compressionVel);
         const fh =
-          s.heave.rate * Math.max(0, heave - s.heave.gap) +
+          s.heave.rate * Math.max(0, heave - axle.heaveFreeM) +
           s.heave.packerRate * Math.max(0, heave - s.heave.packerGap) +
           damperForce(d.heave, hv, knee);
         L.suspensionForce += 0.5 * fh;
@@ -1870,15 +2101,20 @@ export class VehiclePhysics {
       const kin = w.isFront
         ? (w.isLeft ? frontKin.left : frontKin.right)
         : (w.isLeft ? rearKin.left : rearKin.right);
-      w.toeRad = kin.bumpSteerToeInRad + this.damageToeRad[i];
-      w.casterTrailM = kin.casterTrailM;
-      w.scrubRadiusM = kin.scrubRadiusM;
+      // The solved upright's angle against the rack's nominal one: its Ackermann and bump steer, as toe-in
+      const rackSteer = w.isFront ? -inp.steer * this.maxSteerRad : 0;
+      w.toeRad = (w.isLeft ? -1 : 1) * (kin.wheelSteerRad - rackSteer) + this.damageToeRad[i];
+      w.casterTrailM = kin.kingpinTrailM;
+      w.scrubRadiusM = kin.kingpinScrubM;
 
       let fz = 0;
       let delta = 0;
       if (w.grounded) {
-        delta = R0 - (w.hubY - g.height) * g.ny;
-        const vRelN = w.hardpointVel.x * g.nx + w.hubVy * g.ny + w.hardpointVel.z * g.nz;
+        // Road micro-texture under the patch (position-based, so the tyre and through it the rack feel the same bumps)
+        const roadDz = roadTextureHeightM(w.hardpointWorld.x, w.hardpointWorld.z, w.patchHalfLengthM, _roadSlope);
+        const roadVy = _roadSlope.dhdx * w.hardpointVel.x + _roadSlope.dhdz * w.hardpointVel.z;
+        delta = R0 - (w.hubY - g.height - roadDz) * g.ny;
+        const vRelN = w.hardpointVel.x * g.nx + (w.hubVy - roadVy) * g.ny + w.hardpointVel.z * g.nz;
         if (delta > 0) fz = Math.max(0, w.verticalRate * delta - model.verticalDamping * vRelN);
       }
       w.fz = fz;
@@ -1886,17 +2122,11 @@ export class VehiclePhysics {
       w.loadedRadius = R0 - w.deflection + dR * 0.25;
       w.rollingRadius = Math.max(0.2, R0 - w.deflection / 3);
 
-      // Hub: tyre normal force up, suspension force down
-      const hubAcc = (fz * g.ny - w.suspensionForce * _ey.y) / axle.unsprungMass - G;
-      w.hubVy += hubAcc * h;
-      w.hubY += w.hubVy * h;
-
-      // Suspension load reaches the body vertically at the hardpoint
-      _f.set(0, w.suspensionForce * _ey.y, 0);
-      this.addForceAt(_f, w.hardpointWorld);
-
-      // Wheel frame on the contact plane
-      w.steerRad = (w.isFront ? -inp.steer * this.maxSteerRad : 0) + (w.isLeft ? -1 : 1) * (w.isFront ? this.staticToeRad.front : this.staticToeRad.rear);
+      // Wheel frame on the contact plane: the solved upright's road-wheel angle (rack, Ackermann, bump steer), the
+      // setup's static toe and any damage toe
+      w.steerRad =
+        kin.wheelSteerRad +
+        (w.isLeft ? -1 : 1) * ((w.isFront ? this.staticToeRad.front : this.staticToeRad.rear) + this.damageToeRad[i]);
       if (w.isFront && this.steerComplianceRadPerN > 0) {
         // The lateral force bends the steering toward straight; filtered (~15 ms) so the force loop stays stable
         const target = -this.steerComplianceRadPerN * w.fy;
@@ -1916,10 +2146,10 @@ export class VehiclePhysics {
       w.vx = vx;
       w.vy = vy;
 
-      // Camber relative to the road, leaning toward +left (rad), combining static camber + 3D wishbone kinematic camber curve
-      const staticCamberDeg = axle.spec.staticCamber + 0.75 * axle.spec.camberGainKinematic * w.compression;
+      // Camber relative to the road, leaning toward +left (rad): the setup's static camber plus the solved upright's
+      // camber (wishbone travel, and the caster / KPI camber of the steer angle), plus the body's lean
       const leanBody = Math.asin(THREE.MathUtils.clamp(_ey.dot(_lw), -1, 1));
-      w.camberLeftRad = (w.isLeft ? 1 : -1) * (staticCamberDeg * DEG2RAD + 0.25 * kin.dynamicCamberDeltaRad) + leanBody;
+      w.camberLeftRad = (w.isLeft ? 1 : -1) * (axle.spec.staticCamber * DEG2RAD + kin.uprightCamberRad) + leanBody;
 
       // Relaxation-length carcass: slip ratio and tan(slip angle), implicit in |vx|
       const rim = w.omega * w.rollingRadius;
@@ -1930,7 +2160,12 @@ export class VehiclePhysics {
       if (fz > 0) {
         const bristleScale = dynamicBristleRelaxationScale(fz, tyre.fz0, wWetness);
         const rx = model.relaxationLengthX * bristleScale;
-        const ry = model.relaxationLengthY * bristleScale;
+        // The lateral length follows the cornering stiffness (σ = Kyα / lateral carcass stiffness), so the carcass
+        // stiffness stays the one at Fz0 at every load; the bristle model's own load stretch would count load twice
+        const ry =
+          model.relaxationLengthY *
+          tyreCorneringStiffnessLoadFactor(tyre, fz) *
+          dynamicBristleRelaxationScale(tyre.fz0, tyre.fz0, wWetness);
         w.slipRatio = (w.slipRatio + (h * vsx) / rx) / (1 + (h * absVx) / rx);
         w.tanSlipAngle = (w.tanSlipAngle + (h * vy) / ry) / (1 + (h * absVx) / ry);
         w.slipRatio = THREE.MathUtils.clamp(w.slipRatio, -5, 5);
@@ -1943,6 +2178,8 @@ export class VehiclePhysics {
 
       let fx = 0;
       let fy = 0;
+      /** The driver's share of this wheel's steer angle (the rest is toe and compliance) */
+      const cmdSteerRad = w.isFront ? -inp.steer * this.maxSteerRad : 0;
       if (fz > 0) {
         const td = tyre.data;
         const cam = td.camberData;
@@ -1999,20 +2236,24 @@ export class VehiclePhysics {
         w.muY = muY;
         w.muX = muX;
 
+        // Peak slip angle at this load: the cornering stiffness saturates with load while the peak force keeps growing;
+        // a warm carcass is softer, so it peaks later (its lateral carcass stiffness softens alike: same relaxation length)
+        const tanPeak = tyrePeakSlipTan(tyre, fz) / tyreCarcassStiffnessFactor(td.thermalData, w.coreTempC);
+        w.peakSlipAngleRad = Math.atan(tanPeak);
+
         // Camber thrust (toward the lean) as an equivalent slip-angle shift
         const gc = THREE.MathUtils.clamp(w.camberLeftRad, -tyre.camberThrustLimit, tyre.camberThrustLimit);
         const thrust = cam.camberGain * (cam.contact_camber_c1 * gc - cam.contact_camber_c2 * gc * gc * gc);
         const BC = tyre.B * tyre.C;
-        const tanEff = w.tanSlipAngle - (thrust * tyre.tanPeakAngle) / Math.max(1e-3, muY * BC);
+        const tanEff = w.tanSlipAngle - (thrust * tanPeak) / Math.max(1e-3, muY * BC);
+        w.corneringStiffness = (muY * fz * BC) / tanPeak;
 
         // Combined slip
-        combinedSlipForces(tyre, model, w.slipRatio / tyre.peakSlipRatio, tanEff / tyre.tanPeakAngle, _comb);
+        combinedSlipForces(tyre, model, w.slipRatio / tyre.peakSlipRatio, tanEff / tanPeak, _comb);
         fx = muX * fz * _comb.fx;
         fy = -muY * fz * _comb.fy;
         const s = Math.hypot(_comb.sx, _comb.sy);
         w.combinedSlip = s;
-        // A relaxed combinedFactor may use more than the circle; low-speed damping must not add to that
-        const useSlip = Math.hypot(_comb.fx, _comb.fy);
 
         // Low-speed contact damping (keeps a parked car from ringing on the carcass spring)
         const fade = Math.max(0, 1 - absVx / LOW_SPEED_FADE_MS);
@@ -2020,58 +2261,78 @@ export class VehiclePhysics {
           fx += fade * LOW_SPEED_DAMPING * muX * fz * vsx;
           fy -= fade * LOW_SPEED_DAMPING * muY * fz * vy;
         }
+        // The slip forces sit inside the friction ellipse already; the low-speed damping must not push them past it
         const use = Math.hypot(fx / (muX * fz), fy / (muY * fz));
-        const limit = Math.max(1, useSlip);
-        if (use > limit) {
-          fx *= limit / use;
-          fy *= limit / use;
+        if (use > 1) {
+          fx /= use;
+          fy /= use;
         }
-        // Telemetry only: share of the friction circle in use (> 1 when combinedFactor < 1 lets it exceed)
-        w.circleFraction = Math.min(use, limit);
+        // Telemetry only: share of the friction ellipse in use (1 = on it)
+        w.circleFraction = Math.min(use, 1);
 
         // Self-aligning moment: pneumatic trail collapsing toward the limit and over standing water (hydroplaning wedge)
         const wetTrailMult =
           wWaterMm > 0
             ? wetPneumaticTrailScale(td.wetTraits ?? SLICK_TRAITS, wWaterMm, absVx, w.wear)
             : 1;
-        w.mz = -fy * model.pneumaticTrail * wetTrailMult * Math.max(0, 1 - s);
+        // The pneumatic trail at zero slip is a third of the patch half-length (brush model, parabolic pressure), so it
+        // grows with the load as the patch lengthens
+        w.patchHalfLengthM = contactHalfLengthM(R0, w.deflection);
+        w.mz = -fy * (w.patchHalfLengthM / 3) * wetTrailMult * Math.max(0, 1 - s);
         const yCpShift = THREE.MathUtils.clamp(
           -0.35 * geo.width * Math.sin(w.camberLeftRad) + (fy / Math.max(500, fz)) * 0.018,
           -0.45 * geo.width,
           0.45 * geo.width
         );
         w.mx = fz * yCpShift;
+
+        // Patch twist (parking torque): the wheel's yaw over the road (steering and the body's yaw) winds the rubber
+        // held in the patch up against the tyre's twist stiffness; rolling lets it out, and past the spin friction
+        // moment the patch slides round instead
+        const patchB = PATCH_HALF_WIDTH_SHARE * geo.width;
+        const cfa = (muY * fz * tyre.B * tyre.C) / tyre.tanPeakAngle;
+        const cfk = (muX * fz * tyre.B * tyre.C) / tyre.peakSlipRatio;
+        const kTwist = patchTwistStiffness(cfa, cfk, model.relaxationLengthY, model.relaxationLengthX, w.patchHalfLengthM, patchB);
+        const maxTwist = kTwist > 0 ? (0.5 * (muX + muY) * fz * spinFrictionArmM(w.patchHalfLengthM, patchB)) / kTwist : 0;
+        // The wheel's yaw rate over the road: the driver's steering (spread over the frame), the toe / compliance
+        // angle's own change, and the body's yaw
+        const ownSteerDelta = Number.isFinite(w.twistSteerRad) ? w.steerRad - cmdSteerRad - w.twistSteerRad : 0;
+        const psiRate = (w.isFront ? this.cmdSteerRateRadS : 0) + ownSteerDelta / h + this.angularVelocity.dot(_n);
+        w.twistRad = stepPatchTwist(w.twistRad, psiRate * h, absVx * h, w.patchHalfLengthM, maxTwist);
+        const twistRate = psiRate - (absVx / Math.max(1e-3, w.patchHalfLengthM)) * w.twistRad;
+        const mTwistMax = kTwist * maxTwist;
+        w.mzTwist = -THREE.MathUtils.clamp(kTwist * (w.twistRad + PATCH_TWIST_DAMPING_S * twistRate), -mTwistMax, mTwistMax);
       } else {
         w.combinedSlip = 0;
         w.circleFraction = 0;
+        w.patchHalfLengthM = 0;
+        w.corneringStiffness = 0;
         w.mz = 0;
+        w.mzTwist = 0;
+        w.twistRad = 0;
         w.mx = 0;
       }
+      w.twistSteerRad = w.steerRad - cmdSteerRad;
       tyreTorque[i] = -fx * w.rollingRadius;
       // Per-wheel hydrodynamic water-wedge drag: acts on the hub/chassis (pulling toward deeper puddles)
       const hydroDrag = wWaterMm > 0 && vx > 0.5 ? hydrodynamicDragN(wWaterMm, absVx, geo.width, fz) : 0;
       fx -= hydroDrag;
       w.fx = fx;
       w.fy = fy;
-      // 3D Steering rack torque: pneumatic Mz + kinematic caster trail + scrub radius + overturning Mx + flat-spot + ISO road micro-roughness
+      // Rack torque: each front tyre's road loads about its kingpin axis (Fx at the scrub radius, Fy at the caster trail,
+      // Fz's KPI / caster weight-jacking, Mz and Mx projected onto the axis), plus the flat-spot shake. Any other moment
+      // about the kingpin joins this sum as its own term
       if (w.isFront) {
-        const flatSpotVib = flatSpotVibrationNm(w.flatSpotSeverity, w.rotationRad, w.omega, fz);
-        const speedGate = THREE.MathUtils.clamp(absVx / 5, 0, 1);
-        const lowSpeedScale = THREE.MathUtils.lerp(0.03, 1.0, THREE.MathUtils.smoothstep(absVx * 3.6, 0.5, 4.0));
-        const isoRough = evaluateIso8608RoadRoughness(
-          w.hardpointWorld.x,
-          w.hardpointWorld.z,
-          g.surface === 'kerb' || g.surface === 'sausage' ? 'kerb' : 'asphalt'
+        // The solved upright's own kingpin ground offsets (the blended scrub / trail fields stay for the VF26)
+        _kpGeo.kpiRad = kin.kpiRad;
+        _kpGeo.casterRad = kin.casterRad;
+        _kpGeo.scrubRadiusM = kin.kingpinScrubM;
+        _kpGeo.casterTrailM = kin.kingpinTrailM;
+        const tyreKingpinNm = kingpinMomentNm(
+          _ex, _ey, _ez, _n, _fw, _lw, w.isLeft ? -1 : 1, w.steerRad, w.loadedRadius, _kpGeo, fx, fy, fz, w.mz + w.mzTwist, w.mx
         );
-        const roadTexNm = isoRough * w.verticalRate * 0.006 * speedGate * (w.isLeft ? 1 : -1);
-        ffbMz +=
-          (w.mz -
-            fy * w.casterTrailM -
-            fx * (w.isLeft ? w.scrubRadiusM : -w.scrubRadiusM) * 0.15 +
-            0.08 * w.mx) *
-            lowSpeedScale +
-          flatSpotVib +
-          roadTexNm;
+        w.gyroSteerNm = this.wheelGyroSteerNm(w, _fw);
+        ffbMz += tyreKingpinNm + flatSpotVibrationNm(w.flatSpotSeverity, w.rotationRad, w.omega, fz) + w.gyroSteerNm;
       }
 
       // Loose ground (gravel, grass) ploughs against the contact patch's motion, sliding or rolling, outside the
@@ -2085,17 +2346,45 @@ export class VehiclePhysics {
         dragY = (-dragN * vy) / patchSpeed;
       }
 
-      // Tyre forces reach the body at the dynamic 3D roll centre; the normal's horizontal part holds it on slopes
+      // Tyre forces reach the body through the links: across at the contact patch, where they act (so the whole car
+      // sees the full load transfer), and up / down as the links' jacking force. That is the contact force's virtual
+      // work along the patch's path per unit of travel, F · dr/dz (front view: roll centre and jacking; side view:
+      // anti-dive / anti-lift), as a multibody suspension transmits it (AC's DWB, rFactor 2). The brake caliper sits on
+      // the upright, so braking acts along the patch's path; a driveshaft's drive force acts along the hub's, its torque
+      // going into the chassis (anti-squat, Milliken RCVD §17.4). The normal's horizontal part holds the car on slopes.
       _f.copy(_fw).multiplyScalar(fx + dragX).addScaledVector(_lw, fy + dragY);
       _f.x += fz * g.nx;
       _f.z += fz * g.nz;
-      const kinRcHeight = w.isFront ? frontKin.rollCentreHeightM : rearKin.rollCentreHeightM;
-      const rcHeight = 0.75 * axle.spec.rollCentreHeight + 0.25 * kinRcHeight;
-      _w.copy(_p).addScaledVector(_n, rcHeight);
-      this.addForceAt(_f, _w);
-      if (w.mz !== 0) this.torque.addScaledVector(_n, w.mz);
+      this.addForceAt(_f, _p);
+      const mzBody = w.mz + w.mzTwist;
+      if (mzBody !== 0) this.torque.addScaledVector(_n, mzBody);
+      // Contact force in the body frame, inboard (body +X is inboard on the right) and forward
+      const inX = w.isLeft ? -1 : 1;
+      const fIn = inX * (_f.dot(_ex) + fz * g.ny * _ex.y);
+      const fFwd = _f.dot(_ez) + fz * g.ny * _ez.y;
+      const tDrive = Math.abs(w.driveTorqueNm);
+      const fDrive = tDrive > 0 ? (tDrive / (tDrive + w.brakeTorqueNm)) * (fx + hydroDrag) * _fw.dot(_ez) : 0;
+      // The unsprung mass's own inertia (with its weight) acts at the hub: its lateral / longitudinal part loads the
+      // travel along the hub's path and so reaches the tyre without passing through the spring
+      const sfIn = inX * this.bodySpecificForce.dot(_ex);
+      const sfFwd = this.bodySpecificForce.dot(_ez);
+      const jack =
+        fIn * kin.contactInboardPerBump +
+        (fFwd - fDrive) * kin.contactForwardPerBump +
+        fDrive * kin.hubForwardPerBump -
+        axle.unsprungMass * (sfIn * kin.hubInboardPerBump + sfFwd * kin.hubForwardPerBump);
+
+      // Hub: tyre normal force up; spring, damper and link forces down, and up on the body at the hardpoint
+      const link = w.suspensionForce - jack;
+      const hubAcc = (fz * g.ny - link * _ey.y) / axle.unsprungMass - G;
+      w.hubVy += hubAcc * h;
+      w.hubY += w.hubVy * h;
+      _f.set(0, link * _ey.y, 0);
+      this.addForceAt(_f, w.hardpointWorld);
     }
-    this.telemetry.ffbTorqueNorm = THREE.MathUtils.clamp(ffbMz / FFB_REFERENCE_NM, -1, 1);
+    // The rim feels the driver's share of the rack torque, the power steering's assist taking the rest
+    const driverNm = driverRackTorqueNm(ffbMz, this.velocity.dot(_ez), this.powerSteering);
+    this.telemetry.ffbTorqueNorm = THREE.MathUtils.clamp(driverNm / FFB_REFERENCE_NM, -1, 1);
     this.ffbSum += this.telemetry.ffbTorqueNorm;
     this.ffbSamples++;
 
@@ -2108,6 +2397,8 @@ export class VehiclePhysics {
     this.applyPlankContact();
 
     // ---- gravity and integration
+    // Acceleration less gravity, for the next sub-step's unsprung inertia (the hubs ride with the body across)
+    this.bodySpecificForce.set(this.force.x / this.totalMassKg, this.force.y / this.sprungMassKg, this.force.z / this.totalMassKg);
     this.force.y -= this.sprungMassKg * G;
     this.velocity.x += (this.force.x / this.totalMassKg) * h;
     this.velocity.z += (this.force.z / this.totalMassKg) * h;
@@ -2115,13 +2406,23 @@ export class VehiclePhysics {
     this.wallPrevCg.copy(this.position);
     this.position.addScaledVector(this.velocity, h);
 
-    // ω̇ = I⁻¹(τ − ω × Iω), with I in body axes
+    // ω̇ = I⁻¹(τ − ω × (Iω + h)), with I in body axes and h the spinning wheels' angular momentum (body frame): each
+    // wheel's I·ω lies along its axle, (cos δ, 0, −sin δ) at road-wheel steer δ. Turning the car turns those momenta,
+    // and the body supplies that precession through the uprights: in a corner it rolls the car outward (≈ 0.8 kNm on
+    // the F1 at 250 km/h and 4 g), and a roll rate pushes back in yaw
     _w.copy(this.angularVelocity).applyQuaternion(_qd.copy(this.quaternion).invert());
     _tmp.copy(this.torque).applyQuaternion(_qd);
     const I = this.inertiaBody;
-    const lx = I.x * _w.x;
+    let hx = 0;
+    let hz = 0;
+    for (const w of this.wheels) {
+      const spin = this.axles[w.isFront ? 0 : 1].wheelInertia * w.omega;
+      hx += spin * Math.cos(w.steerRad);
+      hz -= spin * Math.sin(w.steerRad);
+    }
+    const lx = I.x * _w.x + hx;
     const ly = I.y * _w.y;
-    const lz = I.z * _w.z;
+    const lz = I.z * _w.z + hz;
     const gx = _w.y * lz - _w.z * ly;
     const gy = _w.z * lx - _w.x * lz;
     const gz = _w.x * ly - _w.y * lx;
@@ -2164,10 +2465,44 @@ export class VehiclePhysics {
   }
 
   /**
+   * Ground under a wheel's contact patch (`ContactPatch.ts`): the enveloped road height and plane normal over a patch
+   * as long as the tyre's deflection chord (at least `CONTACT_PATCH_MIN_HALF_LENGTH_M` each way) and as wide as its
+   * tread, headed along the road wheel (last sub-step's steer). False when nothing is under the patch centre.
+   */
+  private queryContactPatch(w: WheelState): boolean {
+    const geo = w.isFront ? this.tyres[0].data.front : this.tyres[1].data.rear;
+    const R0 = geo.radius;
+    const d = Math.min(Math.max(0, w.deflection), R0);
+    const halfLength = Math.max(CONTACT_PATCH_MIN_HALF_LENGTH_M, Math.sqrt(d * (2 * R0 - d)));
+    const c = Math.cos(w.steerRad);
+    const s = Math.sin(w.steerRad);
+    const fx = _ez.x * c + _ex.x * s;
+    const fz = _ez.z * c + _ex.z * s;
+    const fl = Math.sqrt(fx * fx + fz * fz);
+    const p = w.hardpointWorld;
+    // On its side or nose-down the wheel has no horizontal heading: probe at the hub alone
+    if (fl < 1e-3) return this.ground.query(p.x, p.z, p.y + GROUND_PROBE_UP_M, w.ground);
+    return queryContactPatch(
+      this.ground,
+      p.x,
+      p.z,
+      p.y + GROUND_PROBE_UP_M,
+      fx / fl,
+      fz / fl,
+      halfLength,
+      TREAD_HALF_WIDTH_SHARE * geo.width,
+      R0,
+      CONTACT_MAX_SLOPE,
+      w.ground
+    );
+  }
+
+  /**
    * A tyre meets an abrupt rise (a surface seam, the edge of a raised verge) along its contact arc: over a step
    * of height d it rises across √(2Rd − d²) of travel, so the contact height climbs at most travel·√(d / 2R)
    * per step instead of jumping (a one-step jump drives the whole step into the tyre spring and launches the
-   * car). Drops and gentle grades pass straight through.
+   * car). Gentle grades pass straight through, and so do drops: the contact patch's trailing samples already hold the
+   * tyre up on an edge until it has rolled off (`queryContactPatch`).
    */
   private climbStep(w: WheelState, h: number): void {
     const g = w.ground;
@@ -2287,19 +2622,34 @@ export class VehiclePhysics {
     const baseExp = (mapIdx >= 3 ? 1 + (mapIdx - 2) * 0.12 : 1) + lowGearWetExp;
     const rawThrottle = baseExp > 1 ? Math.pow(inp.throttle, baseExp) : inp.throttle;
     let plate = this.luts.throttle.evaluate(rawThrottle);
-    plate = Math.max(plate, THREE.MathUtils.clamp((eng.idleRpm + 200 - rpm) / 800, 0, 0.15));
-    if (this.limiterTimer > 0) plate = 0;
-    let tIce =
-      (plate * this.luts.power.evaluate(rpm) * engineMapTorqueScale * 1000) / omegaE -
-      (1 - plate) * this.luts.coast.evaluate(rpm) * mode.coastTorqueScale * this.engineBrakingScale;
-    if (this.shiftTimer > 0 && tIce > 0) tIce *= gb.shiftTorqueFraction;
-    if (tIce > 0) tIce *= this.damagePowerMult;
-    // Turbo lag: while the boost still trails the demand (≈0.14 s spool), up to TURBO_LAG_TORQUE_LOSS of the torque
-    // is missing. Kept small: the torque curve is the steady-state, full-boost one
-    if (this.turbocharged && tIce > 0) {
-      const spoolDeficit = THREE.MathUtils.clamp((this.turboTargetBar - this.turboBoostBar) / 2.5, 0, 1);
-      tIce *= 1 - TURBO_LAG_TORQUE_LOSS * spoolDeficit;
+    // Air path: the plate the cylinders see trails the pedal's (actuator, plenum), plus one crank revolution from the
+    // intake stroke to the power stroke. The idle controller (spark advance), the limiter and the spark cut below act on
+    // the combustion at once
+    const resp = eng.torqueResponseS;
+    if (resp) {
+      const tau = (plate > this.icePlate ? resp.rise : resp.fall) + 60 / Math.max(rpm, eng.idleRpm);
+      this.icePlate += (plate - this.icePlate) * Math.min(1, h / tau);
+    } else {
+      this.icePlate = plate;
     }
+    plate = Math.max(this.icePlate, THREE.MathUtils.clamp((eng.idleRpm + 200 - rpm) / 800, 0, 0.15));
+    if (this.limiterTimer > 0) plate = 0;
+    const sparkShare = inp.ignitionCut ?? 1;
+    // Turbo lag: the curve is the torque with the boost this plate makes in steady state; while the rotor trails it the
+    // torque is (1 + boost made) / (1 + boost asked for) of that, as torque ∝ 1 + boost. A rotor still spinning faster
+    // than the demand gives no more than the demand (the wastegate and the throttle hold the plenum to it)
+    const turbo = eng.turbo;
+    const boostShare =
+      turbo && this.turbocharged ? Math.min(1, (1 + this.turboBoost) / (1 + turboSteadyBoost(turbo, rpm) * plate)) : 1;
+    const tCombustion = (plate * sparkShare * this.luts.power.evaluate(rpm) * engineMapTorqueScale * 1000) / omegaE;
+    let tIce = tCombustion * boostShare - (1 - plate) * this.luts.coast.evaluate(rpm) * mode.coastTorqueScale * this.engineBrakingScale;
+    // Crank torque the lag costs, which the MGU-K may fill below
+    let turboDeficit = tCombustion * (1 - boostShare);
+    if (this.shiftTimer > 0 && tIce > 0) {
+      tIce *= gb.shiftTorqueFraction;
+      turboDeficit *= gb.shiftTorqueFraction;
+    }
+    if (tIce > 0) tIce *= this.damagePowerMult;
 
     // ---- clutch engagement
     const axleOmega = this.drivenOmega();
@@ -2319,6 +2669,8 @@ export class VehiclePhysics {
     const speedKmh = this.velocity.length() * 3.6;
     const topGear = this.gear === gb.ratios.length;
     let pK = 0;
+    /** The ECU may deploy now: the MGU-K then also fills the torque the turbo lag costs */
+    let deployAllowed = false;
     const coupled = engage > 0.9 && this.gear > 0;
     if (coupled) {
       if (inp.brake > 0.05) {
@@ -2330,6 +2682,7 @@ export class VehiclePhysics {
       } else if (inp.throttle > 0.05 && inp.throttle < 0.9 && mode.partThrottleHarvestW > 0) {
         pK = -mode.partThrottleHarvestW;
       } else if (inp.throttle > 0.05 && soc > mode.socFloor && this.lapDeployJ < ers.deployPerLapJ + this.extraDeployJ) {
+        deployAllowed = mode.deployFraction > 0;
         pK =
           ers.ERS_MAX_DEPLOY *
           mode.deployFraction *
@@ -2357,7 +2710,7 @@ export class VehiclePhysics {
     const bias = this.dynamicBrakeBias;
 
     let tK = 0;
-    if (pK > 0) tK = Math.min(pK / omegaE, this.luts.mgukDeploy.evaluate(rpm));
+    if (pK > 0) tK = Math.min(pK / omegaE, this.luts.mgukDeploy.evaluate(rpm)) * sparkShare;
     else if (pK < 0) {
       let cap = this.luts.mgukHarvest.evaluate(rpm);
       // On the pedal the brake-by-wire never lets the drivetrain brake the rear axle past its share of the demand:
@@ -2367,6 +2720,12 @@ export class VehiclePhysics {
         cap = Math.min(cap, Math.max(0, rearDemand / (Math.abs(ratio) * gb.efficiency) - Math.max(0, -tIce)));
       }
       tK = -Math.min(-pK / omegaE, cap);
+    }
+    // Torque fill: with no MGU-H to spin the turbo, the MGU-K makes up the torque its lag costs, within the motor's torque
+    // curve and the gear's power clip, from the same store and lap allowance as the deploy
+    if (deployAllowed && turboDeficit > 0) {
+      const fillCap = Math.min(this.luts.mgukDeploy.evaluate(rpm), (ers.ERS_MAX_DEPLOY * this.luts.deployVsGear.evaluate(this.gear)) / omegaE);
+      tK = Math.max(tK, Math.min(fillCap * sparkShare, tK + turboDeficit));
     }
     if (this.limiterTimer > 0 && tK > 0) tK = 0;
     this.mgukTorque = tK;
@@ -2381,7 +2740,9 @@ export class VehiclePhysics {
       // Pad μ(T) of the disc (1 in its window, a mild loss cold or faded)
       const friction = (i === dl || i === dr ? Math.max(0, demand - driveBrake) : demand) * w.brakeDisc.muFactor;
       const tyre = this.tyres[w.isFront ? 0 : 1].data.modelData;
-      w.brakeTorqueNm = friction + w.fz * tyre.rollingResistance * w.rollingRadius;
+      const rollV = w.vx;
+      const rollingResistance = tyre.rollingResistance + (tyre.rollingResistanceSpeedSq ?? 0) * rollV * rollV;
+      w.brakeTorqueNm = friction + w.fz * rollingResistance * w.rollingRadius;
     }
 
     // ---- predicted velocities from the free torques
@@ -2399,42 +2760,65 @@ export class VehiclePhysics {
     let accC = 0;
     let accD = 0;
     const half = 0.5 * ratio;
-    const mC = ratio !== 0 ? 1 / (1 / Ie + (half * half) / Iw[dl] + (half * half) / Iw[dr]) : 0;
-    const mD = 1 / (1 / Iw[dl] + 1 / Iw[dr]);
+    let mC = ratio !== 0 ? 1 / (1 / Ie + (half * half) / Iw[dl] + (half * half) / Iw[dr]) : 0;
+    let mD = 1 / (1 / Iw[dl] + 1 / Iw[dr]);
+    // Compliant halfshafts make the clutch and diff rows soft constraints: an implicit spring-damper on each row's own
+    // coordinate (Catto, "Soft Constraints", GDC 2011; ODE's CFM / ERP), stable at any stiffness. The side gears' inertia
+    // is negligible next to the wheels' and the engine's, so the shafts sit in series with the clutch and the diff. With
+    // equal shafts the two rows see independent modes: the clutch row (J = [1, −r/2, −r/2]) twists both shafts alike
+    // (2k/r², 2c/r² at the crank, coordinate r·θ_mean); the diff row (J = [1, −1] on the driven wheels) twists them oppositely
+    // (k/2, c/2, coordinate −2·θ_halfDiff). Rigid shafts: gamma = bias = 0, the rows as before.
+    const shaft = cfg.differential.halfshaft;
+    let gammaC = 0;
+    let biasC = 0;
+    let gammaD = 0;
+    let biasD = 0;
+    if (shaft) {
+      const k = shaft.stiffnessNmPerRad;
+      const cS = shaft.dampingNmsPerRad;
+      if (ratio !== 0) {
+        const kC = (2 * k) / (ratio * ratio);
+        const denC = (2 * cS) / (ratio * ratio) + h * kC;
+        gammaC = 1 / (h * denC);
+        biasC = (kC * ratio * this.shaftTwistMeanRad) / denC;
+        mC = 1 / (1 / mC + gammaC);
+      }
+      const denD = 0.5 * cS + h * 0.5 * k;
+      gammaD = 1 / (h * denD);
+      biasD = (0.5 * k * -2 * this.shaftTwistHalfDiffRad) / denD;
+      mD = 1 / (1 / mD + gammaD);
+    }
     const diffCfg = cfg.differential;
     const diff = diffCfg.settings;
     const cot = (deg: number) => 1 / Math.tan(Math.max(5, deg) * DEG2RAD);
-    const gLong = this.telemetry.lonG;
     const hiSpdKmh = diffCfg.hiSpdSwitchKmh ?? 250;
+    // Phase weights, blended as an ECU blends its diff maps rather than switched: the entry map on the brake, the exit
+    // map on the power, the mid map between. A light pedal with the lock on (trail braking into the apex, maintenance
+    // throttle at it) stays with the mid map until the pedal commits
+    const smooth = THREE.MathUtils.smoothstep;
+    const turnedIn = smooth(Math.abs(inp.steer) * this.maxSteerRad * RAD2DEG, DIFF_TURNED_IN_DEG[0], DIFF_TURNED_IN_DEG[1]);
+    const brakeW = smooth(inp.brake, DIFF_BRAKE_PHASE[0], DIFF_BRAKE_PHASE[1]);
+    const powerW = smooth(inp.throttle, DIFF_POWER_PHASE[0], DIFF_POWER_PHASE[1]);
+    let entryW = brakeW * (1 - turnedIn * (1 - brakeW));
+    let exitW = powerW * (1 - turnedIn * (1 - powerW)) * (1 - brakeW);
     let powerCoeff = diff.power;
-    let coastCoeff = inp.brake > 0.05 ? (diffCfg.coastBraking ?? diff.coast) : diff.coast;
+    let coastCoeff = THREE.MathUtils.lerp(diff.coast, diffCfg.coastBraking ?? diff.coast, entryW);
     if (diffCfg.threePhase) {
-      if (gLong > 0.5 || speedKmh > hiSpdKmh || speedKmh < 1) {
-        this.diffActivePhase = 'EXIT';
-        powerCoeff = (THREE.MathUtils.clamp(this.diffExitLevel, 1, 12) - 1) / 11;
-        coastCoeff = (THREE.MathUtils.clamp(this.diffMidLevel, 1, 12) - 1) / 11;
-      } else if (gLong > -0.5) {
-        this.diffActivePhase = 'MID';
-        powerCoeff = (THREE.MathUtils.clamp(this.diffMidLevel, 1, 12) - 1) / 11;
-        coastCoeff = (THREE.MathUtils.clamp(this.diffMidLevel, 1, 12) - 1) / 11;
-      } else {
-        this.diffActivePhase = 'ENTRY';
-        powerCoeff = (THREE.MathUtils.clamp(this.diffMidLevel, 1, 12) - 1) / 11;
-        coastCoeff = (THREE.MathUtils.clamp(this.diffEntryLevel, 1, 12) - 1) / 11;
-      }
+      // Past the high-speed switch (and at a standstill launch) the exit map holds for straight-line stability
+      const hiSpdW = speedKmh < 1 ? 1 : smooth(speedKmh, hiSpdKmh - DIFF_HISPD_BLEND_KMH, hiSpdKmh + DIFF_HISPD_BLEND_KMH);
+      entryW *= 1 - hiSpdW;
+      exitW = Math.max(exitW, hiSpdW);
+      const level = (dial: number) => (THREE.MathUtils.clamp(dial, 1, 12) - 1) / 11;
+      const mid = level(this.diffMidLevel);
+      powerCoeff = THREE.MathUtils.lerp(mid, level(this.diffExitLevel), exitW);
+      coastCoeff = THREE.MathUtils.lerp(mid, level(this.diffEntryLevel), entryW);
     } else {
-      if (inp.brake > 0.05 || gLong <= -0.35) {
-        this.diffActivePhase = 'ENTRY';
-      } else if (inp.throttle > 0.25 || gLong > 0.35) {
-        this.diffActivePhase = 'EXIT';
-      } else {
-        this.diffActivePhase = 'MID';
-      }
       const entryScale = 0.65 + ((THREE.MathUtils.clamp(this.diffEntryLevel, 1, 12) - 1) / 11) * 0.7;
       const exitScale = 0.65 + ((THREE.MathUtils.clamp(this.diffExitLevel, 1, 12) - 1) / 11) * 0.7;
       powerCoeff = THREE.MathUtils.clamp(diff.power * exitScale, 0.05, 0.92);
       coastCoeff = THREE.MathUtils.clamp(coastCoeff * entryScale, 0.05, 0.88);
     }
+    this.diffActivePhase = entryW > 0.5 ? 'ENTRY' : exitW > 0.5 ? 'EXIT' : 'MID';
     const lockPower = powerCoeff * diff.friction_faces * cot(diff.power_ramp_deg);
     const lockCoast = coastCoeff * diff.friction_faces * cot(diff.coast_ramp_deg);
     let lockTorque = diff.preload;
@@ -2449,7 +2833,7 @@ export class VehiclePhysics {
         const c = wE - half * (wW[dl] + wW[dr]);
         const max = clutchCap * h;
         const prev = accC;
-        accC = THREE.MathUtils.clamp(prev - c * mC, -max, max);
+        accC = THREE.MathUtils.clamp(prev - (c + biasC + gammaC * prev) * mC, -max, max);
         const d = accC - prev;
         wE += d / Ie;
         wW[dl] -= (half * d) / Iw[dl];
@@ -2462,13 +2846,22 @@ export class VehiclePhysics {
         const c = wW[dl] - wW[dr];
         const max = lockTorque * h;
         const prev = accD;
-        accD = THREE.MathUtils.clamp(prev - c * mD, -max, max);
+        accD = THREE.MathUtils.clamp(prev - (c + biasD + gammaD * prev) * mD, -max, max);
         const d = accD - prev;
         wW[dl] += d / Iw[dl];
         wW[dr] -= d / Iw[dr];
       }
     }
     this.lsdLockTorque = lockTorque;
+    if (shaft) {
+      // The twists follow the torque the rows delivered (c·θ̇ + k·θ = T, implicit), so a slipping clutch or diff holds
+      // the shafts at the torque it passes rather than winding them up by its slip
+      const k = shaft.stiffnessNmPerRad;
+      const den = shaft.dampingNmsPerRad + h * k;
+      const tMean = clutchCap > 0 && ratio !== 0 ? -(accC / h) * half : 0;
+      this.shaftTwistMeanRad += (h * (tMean - k * this.shaftTwistMeanRad)) / den;
+      this.shaftTwistHalfDiffRad += (h * (accD / h - k * this.shaftTwistHalfDiffRad)) / den;
+    }
     this.engineOmega = Math.max(0, wE);
     for (let i = 0; i < 4; i++) {
       W[i].driveTorqueNm = i === dl || i === dr ? -(accC / h) * half : 0;
@@ -2570,7 +2963,7 @@ export class VehiclePhysics {
 
     const speed = air.length();
     const dragN = 0.5 * this.airDensity * speed * speed * drag;
-    if (speed > 1e-3) this.force.addScaledVector(air, -dragN / speed);
+    if (speed > 1e-3) this.addDragAtCentre(air, dragN / speed);
 
     this.aeroDownN = down;
     this.aeroFrontN = front;
@@ -2604,6 +2997,7 @@ export class VehiclePhysics {
     // Signed here (the map's yaw tables span ±, and its balance shift may be odd in yaw); the wing path above reads
     // the magnitude, its per-wing yaw tables being one-sided
     const yawDeg = Math.abs(vF) > 1 ? Math.atan2(air.dot(_ex), Math.abs(vF)) * RAD2DEG : 0;
+    this.aeroYawDeg = Math.abs(yawDeg);
     const ml = this.mapLuts!;
     const clMult = rhTable(map, map.cl, this.rideFront, this.rideRear) * ml.rollCl.evaluate(rollDeg) * ml.yawCl.evaluate(yawDeg);
     const cdMult = rhTable(map, map.cd, this.rideFront, this.rideRear) * ml.rollCd.evaluate(rollDeg) * ml.yawCd.evaluate(yawDeg);
@@ -2650,7 +3044,7 @@ export class VehiclePhysics {
       _p.set(0, this.floorOffsetY, z).applyQuaternion(this.quaternion).add(this.position);
       this.addForceAt(_f, _p);
     }
-    if (speed > 1e-3) this.force.addScaledVector(air, -this.mapAeroDragN / speed);
+    if (speed > 1e-3) this.addDragAtCentre(air, this.mapAeroDragN / speed);
     this.aeroDownN = this.mapAeroFrontN + this.mapAeroRearN;
     this.aeroFrontN = this.mapAeroFrontN;
     this.aeroDragN = this.mapAeroDragN;
@@ -2681,7 +3075,7 @@ export class VehiclePhysics {
     }
   }
 
-  /** 9-node I/M/O + 16-sector tyre temperatures, wear, flat-spots, graining, blistering, dirt, and 2-node brake discs */
+  /** 6-node I/M/O + 16-sector tyre temperatures, wear, flat-spots, graining, blistering, dirt, and 2-node brake discs */
   private updateThermal(dt: number): void {
     const carSpeedMs = this.velocity.length();
     for (const w of this.wheels) {
@@ -2695,13 +3089,9 @@ export class VehiclePhysics {
       const extWetCool = wetExternalGasCoolingWK(this.wetness, v);
       const slipPower = (Math.abs(w.fx * w.slipVelX) + Math.abs(w.fy * w.vy)) * heatScale;
       const hyst = th.hysteresis * w.fz * v * heatScale;
-      const toCore = th.surfaceToCore * (w.surfaceTempC - w.coreTempC);
-      const surfCool = (th.surfaceCooling[0] + th.surfaceCooling[1] * v) * (w.surfaceTempC - this.ambientC);
-      const roadCool = w.fz > 0 ? roadG * (w.surfaceTempC - this.trackTempC) : 0;
-      const coreCool = (th.coreCooling[0] + th.coreCooling[1] * v + extWetCool) * (w.coreTempC - this.ambientC);
-      w.surfaceTempC += ((th.slipHeatShare * slipPower - toCore - surfCool - roadCool) / th.surfaceHeatCapacity) * dt;
-      w.coreTempC += ((hyst + toCore - coreCool) / th.coreHeatCapacity) * dt;
 
+      // One thermal model: three bands, each a tread-surface node over a carcass (core) node, each a third of the
+      // tyre (a third of the heat capacity and conductances, so with an even load the bands are the 2-node tyre).
       // 3-band I/M/O thermal distribution from camber & lateral force shift, in ac-tyre's convention: camber leaning
       // toward the car (negative camber) loads the inner shoulder, the lateral force rolls the patch onto the shoulder
       // away from the force (+ bias = toward the outer band). Inward is −left on a left wheel
@@ -2733,6 +3123,11 @@ export class VehiclePhysics {
       w.bandTempsC[0] -= d01;
       w.bandTempsC[1] += d01 - d12;
       w.bandTempsC[2] += d12;
+      // The tyre's surface temperature is the band surfaces weighted by contact pressure (the rubber on the road: flash
+      // temperature, graining); its carcass temperature the bands' mean carcass (the inner liner the inflation gas
+      // sees, and the rubber behind the carcass's vertical and cornering stiffness)
+      w.surfaceTempC = shares[0] * w.bandTempsC[0] + shares[1] * w.bandTempsC[1] + shares[2] * w.bandTempsC[2];
+      w.coreTempC = (w.bandCoreTempsC[0] + w.bandCoreTempsC[1] + w.bandCoreTempsC[2]) / 3;
 
       // Wear & 16-sector flat-spotting / graining / blistering / dirt pickup
       const wearDelta =

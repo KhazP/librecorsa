@@ -480,6 +480,8 @@ function surfaceType(kind: TrackSurfaceKind): SurfaceType {
  * kerb / run-off / gravel widths. Stands in for the colliders until the track GLB is loaded.
  */
 export class TrackSampleGroundQuery implements GroundQuery {
+  /** Interpolated from the samples: nothing for a contact patch to envelope, so the tyres probe it at one point */
+  readonly smooth = true;
   private hintS: number | undefined;
 
   constructor(private readonly track: BuiltTrackData) {}
@@ -1424,10 +1426,11 @@ export class F12026CarSim implements SimulatorCar {
     this.drsPressPending = false;
     this.vehicle.autoShift = this.autoGearbox || this.aiAutopilot;
     for (let k = 0; k < slices; k++) {
-      const cmd: { throttle: number; brake: number; brakeWheelScale?: readonly [number, number, number, number]; steer: number; drs: boolean } =
+      const cmd: { throttle: number; ignitionCut: number; brake: number; brakeWheelScale?: readonly [number, number, number, number]; steer: number; drs: boolean } =
         this.aiAutopilot ? this.autopilot(h) : this.driverCommand(inputs, h);
       const vin: VehicleInputs = {
         throttle: cmd.throttle,
+        ignitionCut: cmd.ignitionCut,
         brake: cmd.brake,
         brakeWheelScale: cmd.brakeWheelScale,
         steer: cmd.steer,
@@ -1478,7 +1481,7 @@ export class F12026CarSim implements SimulatorCar {
   private driverCommand(
     inputs: ControlInputs,
     h: number
-  ): { throttle: number; brake: number; brakeWheelScale?: readonly [number, number, number, number]; steer: number; drs: boolean } {
+  ): { throttle: number; ignitionCut: number; brake: number; brakeWheelScale?: readonly [number, number, number, number]; steer: number; drs: boolean } {
     const want = THREE.MathUtils.clamp(this.steeringAssist.steer(inputs, this.gamepadAssistEnabled, this.steeringAssistState, h), -1, 1);
     // The rack turns no faster than hands turn a wheel (900°/s at the rim, as the VF26's): a stick flick or a phone tilt
     // otherwise reached the tyres as an instant step, which snaps a car at speed
@@ -1518,7 +1521,7 @@ export class F12026CarSim implements SimulatorCar {
       cgToRearAxleM: this.cgToRearAxleM,
       wheelbaseM: this.wheelbaseM,
       maxSteerAngleRad: this.maxSteerAngleRad,
-      frontPeakSlipRad: (this.compoundData.modelData.friction_limit_angle || DEFAULT_FRICTION_LIMIT_ANGLE_DEG) * DEG2RAD,
+      frontPeakSlipRad: this.frontPeakSlipRad(),
       brake,
       maxLateralAccel: this.profile.padLateralMu * wetMuScale * (G + v.telemetry.downforceN / v.totalMassKg),
       slip: this.slipScratch.sample(),
@@ -1526,20 +1529,24 @@ export class F12026CarSim implements SimulatorCar {
     };
   };
 
-  /** 130 Hz TC1/TC2 + 240 Hz 4-Ch ABS on the pedals, at the given dial positions (the driver's, or the autopilot's) */
+  /**
+   * 130 Hz TC1/TC2 + 240 Hz 4-Ch ABS on the pedals, at the given dial positions (the driver's, or the autopilot's). The
+   * TC cuts spark and fuel (`ignitionCut`), which takes torque off at once; the pedal itself passes through
+   */
   private electronicAids(
     throttleIn: number,
     brake: number,
     h: number,
     dials: AidDials
-  ): { throttle: number; brake: number; brakeWheelScale: readonly [number, number, number, number] } {
+  ): { throttle: number; ignitionCut: number; brake: number; brakeWheelScale: readonly [number, number, number, number] } {
     const v = this.vehicle;
     const W = v.wheels;
     const speed = v.speedMs;
     const elec = this.profile.electronics ?? F12026_ELECTRONICS;
 
     // 130 Hz 2-Stage Traction Control (TC1 slip target + Lateral-G compensation + TC2 spark/cylinder cut)
-    let throttle = throttleIn;
+    const throttle = throttleIn;
+    let ignitionCut = 1;
     const tcLv = THREE.MathUtils.clamp(Math.round(dials.tcLevel), 0, 12);
     const tcBaseTarget = tcLv > 0 ? elec.tcLevels[THREE.MathUtils.clamp(12 - tcLv, 0, elec.tcLevels.length - 1)] : 0;
     const tcMinSpeedMs = elec.tcMinSpeedKmh / 3.6;
@@ -1571,7 +1578,7 @@ export class F12026CarSim implements SimulatorCar {
       const want = eTc > 0 ? Math.max(minThrottleShare, 1 - stageACut - stageBCut) : 1;
       const tcRate = elec.tcRateHz;
       this.tcCut += (want - this.tcCut) * Math.min(1, (want < this.tcCut ? tcRate : tcRate * 0.24) * h);
-      throttle *= this.tcCut;
+      ignitionCut = this.tcCut;
     } else {
       this.tcCut = 1;
     }
@@ -1603,7 +1610,7 @@ export class F12026CarSim implements SimulatorCar {
       cut.fill(1);
     }
     for (let i = 0; i < 4; i++) this.prevWheelOmega[i] = W[i].omega;
-    return { throttle, brake, brakeWheelScale: cut };
+    return { throttle, ignitionCut, brake, brakeWheelScale: cut };
   }
 
   /**
@@ -1614,6 +1621,7 @@ export class F12026CarSim implements SimulatorCar {
    */
   private autopilot(h: number): {
     throttle: number;
+    ignitionCut: number;
     brake: number;
     brakeWheelScale: readonly [number, number, number, number];
     steer: number;
@@ -1673,12 +1681,24 @@ export class F12026CarSim implements SimulatorCar {
     const kYawP = 0.5 + 3 * THREE.MathUtils.clamp((speed - 65) / 30, 0, 1);
     // Never steer the fronts far past their peak slip angle: beyond it they only scrub and the car runs wide
     // (the integrator holds while the governor is on, so it cannot wind up)
-    const peak = (this.compoundData.modelData.friction_limit_angle || DEFAULT_FRICTION_LIMIT_ANGLE_DEG) * DEG2RAD;
+    // Braking takes its share of the fronts' grip (the tyre's friction ellipse), so the harder they brake the less
+    // lateral slip is worth asking of them: the allowance shrinks with the fronts' normalised slip ratio
+    const [fl, fr] = v.wheels;
+    const sxF = (0.5 * (Math.abs(fl.slipRatio) + Math.abs(fr.slipRatio))) / Math.max(0.01, this.compoundData.modelData.slip_ratio_limit);
+    const peak = this.frontPeakSlipRad() * Math.sqrt(Math.max(0.2, 1.15 * 1.15 - sxF * sxF));
     const betaF = Math.atan2(v.velocity.dot(_ex) - this.bodyYawRate() * this.cgToFrontAxleM, Math.max(1, v.velocity.dot(_ez)));
-    // the car's understeer at the lateral acceleration asked for, steered in up front rather than left to the integrator
-    const understeer = (this.profile.understeerRadPerMs2 ?? 0) * speed * speed * kappa;
+    // the car's understeer at the lateral acceleration asked for, steered in up front rather than left to the integrator:
+    // the profile's calibrated gradient, else the front slip the corner needs at the fronts' present cornering stiffness
+    // (it saturates with load, so a car pressed into a compression needs lock the yaw loop could not find in time)
+    const kF = fl.corneringStiffness + fr.corneringStiffness;
+    const understeer =
+      this.profile.understeerRadPerMs2 !== undefined
+        ? this.profile.understeerRadPerMs2 * speed * speed * kappa
+        : kF > 0
+          ? THREE.MathUtils.clamp((v.totalMassKg * speed * speed * kappa * this.cgToRearAxleM) / (v.wheelbaseM * kF), -peak, peak)
+          : 0;
     const raw = Math.atan(v.wheelbaseM * kappa) + understeer + 0.8 * beta + kYawP * kYaw * yawErr + this.apYawI;
-    const delta = THREE.MathUtils.clamp(raw, betaF - 1.15 * peak, betaF + 1.15 * peak);
+    const delta = THREE.MathUtils.clamp(raw, betaF - peak, betaF + peak);
     const frontsSaturated = delta !== raw;
     if (!frontsSaturated) this.apYawI = THREE.MathUtils.clamp(this.apYawI + yawErr * kYaw * 2 * h, -0.05, 0.05);
     // Braking envelope of this car: its own limit speeds (capped at the circuit's) × pace over the next 300 m,
@@ -1920,6 +1940,18 @@ export class F12026CarSim implements SimulatorCar {
   /** + = turning right (rotation about +Y turns the nose toward +X = left) */
   private bodyYawRate(): number {
     return -this.vehicle.angularVelocity.dot(_ey.set(0, 1, 0).applyQuaternion(this.vehicle.quaternion));
+  }
+
+  /**
+   * The front tyres' peak slip angle as they are loaded now (rad): it grows with load, so the loaded outside front peaks
+   * later than the data's angle at Fz0. Load-weighted over the axle; the data's angle while both fronts are unloaded.
+   */
+  private frontPeakSlipRad(): number {
+    const [l, r] = this.vehicle.wheels;
+    const fz = l.fz + r.fz;
+    return fz > 0 && l.peakSlipAngleRad > 0 && r.peakSlipAngleRad > 0
+      ? (l.fz * l.peakSlipAngleRad + r.fz * r.peakSlipAngleRad) / fz
+      : (this.compoundData.modelData.friction_limit_angle || DEFAULT_FRICTION_LIMIT_ANGLE_DEG) * DEG2RAD;
   }
 
   /** At track distance `s`, `lateral` m right of the centreline, heading along the track */

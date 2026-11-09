@@ -304,9 +304,12 @@ const STREET_COMPOUND: TyresCompoundData = {
     dxCurve: linearLoadCurve(1.1967, -0.048),
     // [spec FRICTION_LIMIT_ANGLE]
     friction_limit_angle: 13.2,
+    // Cornering stiffness peak scaled from Pacejka's MF 6.1 reference tyre (205/60 R15, pKy2 1.715 at Fz0 4 kN) by load
+    // capacity, as the GT3's: the 185/65 R14 (load index 86, 530 kg) carries 0.86 × the reference (91, 615 kg), so its
+    // stiffness peaks at ≈ 5.9 kN = 1.51 × the front Fz0 [Pacejka MF 6.1; ETRTO load index; est]
+    pKy2: Number((5910 / FZ0_FRONT).toFixed(2)),
     // A street tyre peaks at about 11 % slip; the mod's ABS (8 %) and TC (12 %) targets sit either side [est]
     slip_ratio_limit: 0.11,
-    combinedFactor: 1,
     new_combined: false,
     fx_shift_SA: 0,
     fx_scale_SA: 0,
@@ -384,6 +387,8 @@ const STREET_COMPOUND: TyresCompoundData = {
       lsExpY: Number(lsExpAt(1.2557, -0.05, FZ0_REAR).toFixed(4)),
       lsExpX: Number(lsExpAt(1.1967, -0.048, FZ0_REAR).toFixed(4)),
       Fz0: Math.round(FZ0_REAR),
+      // The same tyre's ≈ 5.9 kN stiffness peak over the lighter rear's Fz0
+      pKy2: Number((5910 / FZ0_REAR).toFixed(2)),
     },
     pressureData: {
       optimalPsi: 40,

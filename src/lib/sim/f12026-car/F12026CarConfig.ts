@@ -84,6 +84,30 @@ export interface ChassisData {
    * tie-rod / bush flex). Adds understeer gradient roughly linearly in lateral g; default 0 (rigid)
    */
   steerComplianceDegPerKN?: number;
+  /** Hydraulic power steering; none = an unassisted rack */
+  powerSteering?: PowerSteeringData;
+}
+
+/**
+ * Hydraulic power steering: the boost valve shares the rack's torque between the driver and the assist piston by the
+ * torque the driver puts through the column. Below `deadbandNm` the valve stays on its centre lap (no assist); over
+ * the next `rampNm` its assist ratio (assist torque per Nm of the driver's) builds to `maxRatio` and holds there.
+ * The rim feels the driver's share.
+ */
+export interface PowerSteeringData {
+  /** Steering ratio between the column and the road wheels, through which the valve sees the rack */
+  steeringRatio: number;
+  /** Column torque the valve passes unassisted (Nm at the rim) */
+  deadbandNm: number;
+  /** Column torque past the deadband over which the assist ratio builds to its full value (Nm) */
+  rampNm: number;
+  /** Full assist ratio: assist torque per Nm of the driver's */
+  maxRatio: number;
+  /**
+   * Road speed over which a speed-sensitive pump fades the assist out [from, gone by] (m/s). Omitted: an engine-driven
+   * pump, the same assist at any speed
+   */
+  speedFadeMs?: readonly [number, number];
 }
 
 // ---------------------------------------------------------------------------
@@ -97,11 +121,42 @@ export interface EngineData {
   coastCurve: LutPoints;
   /** Pedal → throttle-plate map (0..1 → 0..1) */
   throttleResponseCurve: LutPoints;
+  /**
+   * First-order lag of the ICE's air path behind the throttle (s), opening and closing: drive-by-wire actuator, manifold
+   * filling and the ECU's torque ramp. One crank revolution, the intake-to-power-stroke delay of a four-stroke, is added
+   * at run time. Absent: the torque follows the pedal at once
+   */
+  torqueResponseS?: { rise: number; fall: number };
+  /** Turbocharger; absent: naturally aspirated */
+  turbo?: TurboData;
   idleRpm: number;
   /** Crank + flywheel + MGU-K/H rotor inertia reflected to the crank (kg·m²) */
   inertia: number;
   /** Ignition cut held after the limiter trips (s) */
   limiterCutS: number;
+}
+
+/**
+ * Exhaust-driven turbocharger. The power curve is the steady state with the boost made; this is the boost the torque waits
+ * for. Torque ∝ 1 + boost (an AC-style turbo), and the full-load boost at `rpm` is maxBoost·(rpm / referenceRpm)^gamma,
+ * capped at maxBoost (`turboSteadyBoost`). The rotor spools toward the boost the throttle asks for with a time constant
+ * spoolUpS·spoolRefRpm / rpm (the turbine's surplus power grows with the exhaust flow, ∝ rpm), and runs down with
+ * spoolDownS once the exhaust stops pushing (rotor inertia against the compressor's work)
+ */
+export interface TurboData {
+  maxBoost: number;
+  referenceRpm: number;
+  gamma: number;
+  spoolUpS: number;
+  spoolRefRpm: number;
+  spoolDownS: number;
+  /** Gauge pressure shown at full boost (bar), for the HUD and the sound */
+  displayMaxBoostBar: number;
+}
+
+/** Full-load steady-state boost of `turbo` at `rpm` */
+export function turboSteadyBoost(turbo: TurboData, rpm: number): number {
+  return Math.min(turbo.maxBoost, turbo.maxBoost * Math.max(0, rpm / turbo.referenceRpm) ** turbo.gamma);
 }
 
 export interface ERSData {
@@ -197,9 +252,18 @@ export interface DifferentialSettingsUnits {
 export interface DifferentialData {
   type: 'LSD_Ramp';
   settings: DifferentialSettingsUnits;
+  /**
+   * Torsional compliance of each rear halfshaft, diff side gear to hub with its CV joints: stiffness (Nm/rad) and damping
+   * (Nm·s/rad). The driveline winds up against the tyres, and a throttle step rings at its shuffle frequency (the engine
+   * on the shafts, √(2k / (r²·I_engine)) at overall ratio r). Absent: rigid shafts
+   */
+  halfshaft?: { stiffnessNmPerRad: number; dampingNmsPerRad: number };
   /** Electronic diff: the coast locking (same units as `coast`) while braking, i.e. on corner entry; default `coast` */
   coastBraking?: number;
-  /** 2026 3-Phase Active Electronic Differential (Entry braking <= -0.5G, Mid apex -0.5G..+0.5G, Exit/HiSpd > +0.5G or > 250 km/h) */
+  /**
+   * 2026 3-Phase Active Electronic Differential: Entry map on the brake, Exit / HiSpd map on the power or past
+   * `hiSpdSwitchKmh`, Mid map between and at the apex; blended by the pedals and the steering, not switched
+   */
   threePhase?: boolean;
   /** Default Entry coast locking dial (1..12, where locking = (level - 1) / 11; default 3 -> 18.2%) */
   diffEntryLevel?: number;
@@ -207,7 +271,7 @@ export interface DifferentialData {
   diffMidLevel?: number;
   /** Default Exit / High-Speed power locking dial (1..12; default 5 -> 36.4%) */
   diffExitLevel?: number;
-  /** High-speed straight stability threshold where Exit/HiSpd lock engages regardless of G_long (km/h; default 250) */
+  /** High-speed stability threshold where the Exit/HiSpd lock engages whatever the pedals (km/h; default 250) */
   hiSpdSwitchKmh?: number;
 }
 
@@ -280,7 +344,10 @@ export interface SuspensionSettingUnits {
 export interface HeaveSpringData {
   /** Rate at the wheel per unit axle heave (N/m) */
   rate: number;
-  /** Heave travel before the element engages (m) */
+  /**
+   * Heave travel before the element engages (m). 0: in contact at static ride height, where it carries its rate's share
+   * of the weight (a preloaded coilover), so its rate runs on into droop
+   */
   gap: number;
   /** Packer: rate added once heave exceeds `packerGap` (N/m) */
   packerGap: number;
@@ -293,14 +360,20 @@ export interface AxleSuspensionData {
   actuation: 'pull_rod' | 'push_rod';
   /** `BasicSuspensionData.staticCamber` (deg, negative = top inward) */
   staticCamber: number;
-  /** Kinematic camber change with bump (deg per m of compression) */
+  /**
+   * Kinematic camber change with bump at static (deg per m of compression): what `hardpoints` give, for reference (the
+   * physics solves the camber from the hardpoints; the verify suites check the two agree)
+   */
   camberGainKinematic: number;
   springs: SuspensionSettingUnits;
   heave: HeaveSpringData;
   bumpStop: BumpStopSettingsUnits;
   /** Rebound travel from static to the droop limiter (m) */
   droopTravel: number;
-  /** Kinematic roll-centre height above the ground (m): tyre forces act on the body here */
+  /**
+   * Kinematic roll-centre height above the ground at static (m): what `hardpoints` give, for reference (the tyre forces
+   * reach the body through the solved link geometry; the verify suites check the two agree)
+   */
   rollCentreHeight: number;
   /** Anti-roll bar rate at the wheel (`MechanicalBalanceUnits.arbs`, N/m) */
   arb: number;
@@ -361,6 +434,12 @@ export interface AeroData {
   rear_lift: number;
   /** Bodywork drag coefficient × area (m²) */
   drag: number;
+  /**
+   * Height of the total drag's line of action above the CG, body frame (m). Wings, wheels and body each drag at their
+   * own height, so the sum pitches the car (nose up when it acts above the CG). Absent: through the CG, no pitch moment.
+   * Set it for wing-element aero; a ride-height map whose balance is an axle split already carries the drag's moment
+   */
+  dragCentreY?: number;
   wings: WingData[];
   /** `AeroSettingsUnits.front_target_height` / `rear_target_height`: static floor heights (m) */
   front_target_height: number;
@@ -449,16 +528,23 @@ export interface TyresModelData {
    * its width: load sensitivity follows contact pressure, so a wider tyre at the same load keeps more μ
    */
   Fz0: number;
-  /** Slip angle at peak lateral force (deg); `DEFAULT_FRICTION_LIMIT_ANGLE_DEG` when unset or 0 */
+  /**
+   * Slip angle at peak lateral force at `Fz0` (deg); `DEFAULT_FRICTION_LIMIT_ANGLE_DEG` when unset or 0. With the peak
+   * μ at Fz0 it fixes the cornering stiffness there; away from Fz0 the stiffness follows `pKy2` and the peak slip
+   * angle follows from the two
+   */
   friction_limit_angle?: number;
+  /**
+   * Pacejka MF pKy2: cornering stiffness saturates with load as Kyα ∝ sin(2·atan(Fz / (pKy2·Fz0))), peaking at
+   * Fz = pKy2·Fz0. The lateral relaxation length follows the stiffness (σ = Kyα / lateral carcass stiffness)
+   */
+  pKy2: number;
   /** Slip ratio at peak longitudinal force */
   slip_ratio_limit: number;
   /**
-   * Stereo's combined factor k (0..2): the combined slip seen by each axis is √(s_own² + (k·s_other)²).
-   * 1 = friction circle, < 1 = relaxed (elliptical) cross-axis penalty, > 1 = harsher penalty.
+   * Enables the asymmetric cross-axis shift / scale terms below. Either way the combined force is the pure-slip curve
+   * at the normalised slip vector's length, split along it, so it stays inside the μx / μy friction ellipse
    */
-  combinedFactor: number;
-  /** Enables the asymmetric cross-axis shift / scale terms below */
   new_combined: boolean;
   /** Longitudinal slip: s_x·(1 − fx_scale_SA·min(1, |s_y|)) + fx_shift_SA·s_y */
   fx_shift_SA: number;
@@ -476,11 +562,16 @@ export interface TyresModelData {
   falloff_level: number;
   /** Decay rate past the peak (per unit (s − 1)²), used with `use_slip_falloff` */
   falloff_slope: number;
-  /** Carcass relaxation lengths (m) */
+  /** Carcass relaxation lengths (m); the lateral one at `Fz0` (it scales with the cornering stiffness, see `pKy2`) */
   relaxationLengthX: number;
   relaxationLengthY: number;
-  /** Rolling-resistance coefficient */
+  /** Rolling-resistance coefficient at walking speed */
   rollingResistance: number;
+  /**
+   * Its growth with speed, per (m/s)²: f = rollingResistance + rollingResistanceSpeedSq·v², the standard tyre form (the
+   * carcass's hysteresis work per second rises with the deflection rate). Absent: 0, no speed term
+   */
+  rollingResistanceSpeedSq?: number;
   /** Radial damping (Ns/m) */
   verticalDamping: number;
   /** Pneumatic trail at zero slip (m) */
@@ -694,8 +785,23 @@ const REF_WHEEL_TORQUE: [number, number][] = [
   [13050, 125.964],
 ];
 
-/** Turbo boost on the curve: MAX_BOOST 1.12 (torque × 2.12), reached at REFERENCE_RPM 3700 with GAMMA 1.5 [ref_engine.ini] */
-const refBoost = (rpm: number) => Math.min(1.12, 1.12 * (rpm / 3700) ** 1.5);
+/**
+ * Turbo boost on the curve: MAX_BOOST 1.12 (torque × 2.12), reached at REFERENCE_RPM 3700 with GAMMA 1.5 [ref_engine.ini].
+ * One large turbo and no MGU-H, so only the exhaust spins it: a race-size rotor (≈ 2e-4 kg·m² at ≈ 12 000 rad/s, ≈ 15 kJ)
+ * on ≈ 50–70 kW of turbine surplus at 10 000 rpm full load spools in ≈ 0.25 s, slower as the exhaust thins with rpm;
+ * with the throttle shut it runs down over ≈ 1.5 s against the compressor's recirculation work [est]. The MGU-K fills
+ * the torque the lag costs (VehiclePhysics.solveDrivetrain). The gauge reads 2.5 bar at full boost, as before [display]
+ */
+const F12026_TURBO: TurboData = {
+  maxBoost: 1.12,
+  referenceRpm: 3700,
+  gamma: 1.5,
+  spoolUpS: 0.25,
+  spoolRefRpm: 10_000,
+  spoolDownS: 1.5,
+  displayMaxBoostBar: 2.5,
+};
+const refBoost = (rpm: number) => turboSteadyBoost(F12026_TURBO, rpm);
 
 /**
  * ICE crank power (kW): ≈389 kW at 9570 rpm, ≈361 kW of it at the wheels [derived]. The 0 rpm row is left out: as
@@ -721,6 +827,11 @@ const F12026_ENGINE: EngineData = {
     [0, 0],
     [1, 1],
   ],
+  // Drive-by-wire barrels at the trumpets: actuator ≈ 20 ms and a small plenum, so ≈ 30 ms opening; with the crank
+  // revolution that is 90 % of a torque step in ≈ 85 ms at 9000 rpm. Closing 20 ms: the overrun fuel cut takes the torque
+  // off before the plenum empties [est]
+  torqueResponseS: { rise: 0.03, fall: 0.02 },
+  turbo: F12026_TURBO,
   // MINIMUM / INERTIA [ref_engine.ini]
   idleRpm: 3700,
   inertia: 0.0729,
@@ -911,6 +1022,10 @@ const F12026_DIFFERENTIAL: DifferentialData = {
     power_ramp_deg: 45,
     coast_ramp_deg: 45,
   },
+  // Titanium tube ≈ 40 / 30 mm × 0.45 m between the CV joints (G 44 GPa): GJ/L ≈ 17 kNm/rad, ≈ 13 kNm/rad with the two
+  // joints in series, ≈ 11° of twist at the ≈ 2.5 kNm a rear tyre takes at low speed; shuffle 5.8 Hz in 1st, 20 Hz in 8th.
+  // Damping: 10 % of critical for a wheel on its own shaft (√(k/I_w) ≈ 13 Hz; CV-joint and bearing friction) [est]
+  halfshaft: { stiffnessNmPerRad: 13_000, dampingNmsPerRad: 33 },
   coastBraking: 2 / 11,
   threePhase: true,
   diffEntryLevel: 3,
@@ -953,14 +1068,16 @@ const F12026_SUSPENSIONS: SuspensionsData = {
     droopTravel: 0.03,
     rollCentreHeight: 0.045,
     arb: 120_000,
+    // Inner pickup heights (each wishbone and the rack moved as a whole) set so the solved geometry gives the RC and
+    // camber gain above; the side view (≈ 22 % anti-dive) and the uprights are as before [derived]
     hardpoints: [
-      [0.7198, 0.1858, 0.0],
-      [0.7198, 0.1828, -0.375],
-      [0.7500, -0.0273, 0.05],
-      [0.7500, -0.0229, -0.40],
+      [0.7198, 0.1286, 0.0],
+      [0.7198, 0.1256, -0.375],
+      [0.7500, -0.0520, 0.05],
+      [0.7500, -0.0476, -0.40],
       [0.1749, 0.1925, -0.0356],
       [0.1350, -0.0225, -0.0083],
-      [0.7198, 0.1883, 0.08],
+      [0.7198, 0.1317, 0.08],
       [0.1749, 0.1925, 0.06],
     ],
   },
@@ -975,14 +1092,15 @@ const F12026_SUSPENSIONS: SuspensionsData = {
     droopTravel: 0.04,
     rollCentreHeight: 0.08,
     arb: 45_000,
+    // As the front: inner pickup heights for the RC and camber gain above, side view and uprights as before [derived]
     hardpoints: [
-      [0.6847, 0.1297, 0.42],
-      [0.6847, 0.1418, -0.05],
-      [0.6887, -0.0186, 0.45],
-      [0.6887, -0.0127, -0.05],
+      [0.6847, 0.1729, 0.42],
+      [0.6847, 0.1850, -0.05],
+      [0.6887, 0.0227, 0.45],
+      [0.6887, 0.0286, -0.05],
       [0.2483, 0.1925, 0.0],
       [0.2299, 0.0175, 0.0],
-      [0.6847, 0.1423, -0.125],
+      [0.6847, 0.1851, -0.125],
       [0.2483, 0.1925, -0.125],
     ],
   },
@@ -1015,6 +1133,11 @@ const F12026_AERO: AeroData = {
   front_lift: 0,
   rear_lift: 0,
   drag: 0,
+  // No dragCentreY: the map's drag stays through the CG. Its balance table is a front/rear axle split, the way tunnel
+  // and CFD balances are quoted, and an axle split already holds the drag's pitching moment (the drag acts ≈ 0.45 m up,
+  // 0.18 m above the CG, which unloads the front by ≈ 1.1 points of the downforce at any speed); the source map applies
+  // its drag at the reference point, and this table (with its −1.5 pt) is tuned that way. Raising the drag here would
+  // count that moment twice
   wings: [
     {
       // Offset vs the 30° reference angle, set at 25° [ref_aero.ini WING_0, CL_FW_AOA.lut / CD_FW_AOA.lut]
@@ -1208,10 +1331,14 @@ function f1Compound(
       lsExpX: 0.756,
       Fz0: 3460,
       friction_limit_angle: 6.137,
+      // Where the cornering stiffness peaks, scaled from Pacejka's MF 6.1 reference tyre (205/60R15, Fz0 4 kN,
+      // pKy2 1.715: peak at 6.86 kN) by load capacity, the Tire and Rim Association formula P^0.585·Sd^1.39·(Dr + Sd)
+      // (psi, section width and rim in inches; the reference at 35 psi). This 280 mm front on an 18" rim at 25 psi
+      // carries 1.59 ×: peak at 10.9 kN = 3.2 × Fz0. Peak slip 6.1° at 4 kN, 7.2° at 8 kN, 9.2° at 12 kN
+      // [Pacejka, Tire and Vehicle Dynamics 3rd ed., MF 6.1 parameter set; TRA load formula; est]
+      pKy2: 3.2,
       // The source derives it at run time; its ABS / TC limits are 0.10 [ref_electronics.ini]
       slip_ratio_limit: 0.1,
-      // The source's COMBINED_FACTOR 2.2 is not this model's cross-axis factor: slightly elliptical combined envelope [est]
-      combinedFactor: 0.94,
       new_combined: false,
       fx_shift_SA: 0,
       fx_scale_SA: 0,
@@ -1224,6 +1351,9 @@ function f1Compound(
       relaxationLengthX: 0.1025,
       relaxationLengthY: 0.1025,
       rollingResistance: 0.012,
+      // Speed term in the proportion of a radial tyre's, f = 0.0136 + 0.40e-7·V² (V km/h; Wong, Theory of Ground
+      // Vehicles): 3.8e-5 of the static value per (m/s)², so +26 % at 300 km/h [derived]
+      rollingResistanceSpeedSq: 4.6e-7,
       verticalDamping: 396,
       pneumaticTrail: 0.035,
       brakeDxMod: 0.05,
@@ -1268,6 +1398,9 @@ function f1Compound(
         lsExpX: 0.7875,
         Fz0: 3460,
         friction_limit_angle: 5.411,
+        // The front's scaling for the 375 mm rear at 24 psi: 2.64 × the reference's capacity, peak at 18.1 kN; peak slip
+        // 5.4° at 4 kN, 5.3° at 8 kN, 5.9° at 12 kN [est]
+        pKy2: 5.2,
         relaxationLengthX: 0.1044,
         relaxationLengthY: 0.1044,
         verticalDamping: 481,
@@ -1357,6 +1490,16 @@ export const F12026_CAR_CONFIG = {
     wheelInertiaRear: 2.063,
     // STEER_LOCK 250° / STEER_RATIO 12.6 [ref_car.ini]
     maxRoadWheelDeg: 250 / 12.6,
+    // A kN of lateral force puts ≈ 45 Nm on the kingpin (12 mm caster + ≈ 33 mm pneumatic trail). The all-spherical-joint
+    // chain gives way to it: the rack held by the power steering (≈ 1.3 kNm/deg at the kingpin: valve torsion bar
+    // times the assist) in series with a carbon / titanium tie-rod (≈ 5 kNm/deg) is ≈ 0.04 °/kN, the upright and
+    // wishbones ≈ 0.01 more: 0.05 °/kN, a fifth of the bushed GT3's [est]
+    steerComplianceDegPerKN: 0.05,
+    // The rules allow only hydraulic assist, neither electronically controlled nor electrically powered: an engine-driven
+    // pump, the same boost at any speed. Teams size it to keep the fast corners' weight with the driver: the valve opens
+    // at ≈ 26 Nm at the rim (above the ≈ 24 Nm of a 2.5 g corner at 200 km/h) and reaches a light 0.45 ratio 6 Nm
+    // later, so the slow hairpins and parking get the help [est]
+    powerSteering: { steeringRatio: 12.6, deadbandNm: 26, rampNm: 6, maxRatio: 0.45 },
   },
   engine: F12026_ENGINE,
   ers: F12026_ERS,

@@ -71,6 +71,9 @@ const ENGINE = {
     [0, 0],
     [1, 1],
   ] as LutPoints,
+  // Drive-by-wire actuator and intake filling ≈ 30 ms opening (90 % of a torque step in ≈ 85 ms at 6000 rpm with the
+  // crank revolution), 20 ms closing with the overrun fuel cut [est]
+  torqueResponseS: { rise: 0.03, fall: 0.02 },
   idleRpm: 2100,
   // Engine 0.130 + gearbox 0.018 [spec]
   inertia: 0.148,
@@ -152,52 +155,56 @@ const NO_DAMPER = damper(0, 0, 0, 0);
 /**
  * Double wishbones front and rear: wheel rates, ARBs, bump rubbers and two-stage dampers [spec].
  * The free travel to the rubber is the bump-stop height less the static compression [derived]; roll centres and
- * kinematic camber gain are estimates. No third element.
+ * kinematic camber gain are what the hardpoints give, matched to the reference car's geometry. No third element.
  */
 const SUSPENSIONS: SuspensionsData = {
   front: {
     type: 'SuspensionType_DoubleWishbone',
     actuation: 'push_rod',
     staticCamber: -3.5,
-    camberGainKinematic: -12,
+    camberGainKinematic: -44,
     // Front-stiff platform: ride 3.2 Hz, so the nose holds its height under braking instead of diving onto the stop [ref]
     springs: { wheel_rate: 171_000, helper_rate: 0, helper_range: 0 },
     heave: { rate: 0, gap: 1, packerGap: 1, packerRate: 0 },
     // Long, soft, progressive rubber: the outside front no longer lands on a stiff stop mid-corner [ref]
     bumpStop: { range: 0.0425, rate: 10_000, progression: 1_900_000 },
     droopTravel: 0.06,
-    rollCentreHeight: 0.05,
+    rollCentreHeight: 0.024,
     arb: 68_400, // [ref] front roll share 60 %
+    // Inner pickup heights and pivot-axis tilts, rack height and steering-arm offset set so the solved geometry matches
+    // the reference car's: RC and camber gain above, ≈ 33 % anti-dive, near-parallel steering (−10 % Ackermann),
+    // ≈ 3 °/m toe-out in bump; the uprights are as before [derived, ref]
     hardpoints: [
-      [0.440, 0.098, 0.197],
-      [0.440, 0.072, -0.145],
-      [0.487, -0.122, 0.215],
-      [0.487, -0.155, -0.155],
+      [0.440, 0.0804, 0.197],
+      [0.440, -0.0062, -0.145],
+      [0.487, -0.1670, 0.215],
+      [0.487, -0.1906, -0.155],
       [0.128, 0.135, -0.025],
       [0.098, -0.128, 0.017],
-      [0.447, -0.120, 0.160],
-      [0.110, -0.112, 0.140],
+      [0.447, -0.1554, 0.160],
+      [0.097, -0.112, 0.140],
     ],
   },
   rear: {
     type: 'SuspensionType_DoubleWishbone',
     actuation: 'push_rod',
     staticCamber: -2.5,
-    camberGainKinematic: -10,
+    camberGainKinematic: -25,
     springs: { wheel_rate: 127_000, helper_rate: 0, helper_range: 0 }, // [ref]
     heave: { rate: 0, gap: 1, packerGap: 1, packerRate: 0 },
     bumpStop: { range: 0.056, rate: 9_000, progression: 1_700_000 }, // [ref]
     droopTravel: 0.055,
-    rollCentreHeight: 0.065,
+    rollCentreHeight: 0.06,
     arb: 40_200, // [ref]
+    // As the front: RC and camber gain above, no anti-squat, ≈ 32 % anti-lift, ≈ 7 °/m toe-in in bump [derived, ref]
     hardpoints: [
-      [0.440, 0.092, 0.251],
-      [0.440, 0.092, -0.123],
-      [0.520, -0.125, 0.160],
-      [0.520, -0.112, -0.221],
+      [0.440, 0.0838, 0.251],
+      [0.440, 0.1086, -0.123],
+      [0.520, -0.1092, 0.160],
+      [0.520, -0.1337, -0.221],
       [0.128, 0.148, 0.052],
       [0.110, -0.112, -0.055],
-      [0.505, -0.109, -0.250],
+      [0.505, -0.1117, -0.250],
       [0.110, -0.100, -0.165],
     ],
   },
@@ -252,6 +259,9 @@ const AERO: AeroData = {
   front_lift: 0,
   rear_lift: 0,
   drag: 0.35 * WING_AREA,
+  // A closed car's drag acts near the centroid of its frontal area (≈ 0.55 m up a 1.2 m tall body), raised a little by
+  // the rear wing at ≈ 1.15 m: ≈ 0.6 m off the ground, 0.2 m above the 0.40 m CG [est]
+  dragCentreY: 0.2,
   wings: [
     {
       name: 'FRONT_WING',
@@ -456,9 +466,12 @@ function gt3Compound(
       dyCurve: buildGt3LoadCurve(gripScale, 3787, 0.7917),
       dxCurve: buildGt3LoadCurve(gripScale, 3787, 0.8017),
       friction_limit_angle: 6.12,
+      // Cornering stiffness peak scaled from Pacejka's MF 6.1 reference tyre by load capacity, as the f12026-car's
+      // (F12026CarConfig f1Compound): the 315 mm front on an 18" rim at 26 psi carries 2.01 × the reference, peak at
+      // 13.8 kN = 3.65 × Fz0; the 325 mm rear 2.13 ×, 14.6 kN = 3.75 × its Fz0 [Pacejka MF 6.1; TRA load formula; est]
+      pKy2: 3.65,
       // Default TC (0.10) and ABS (0.09) limits sit around it [est]
       slip_ratio_limit: 0.1,
-      combinedFactor: 1,
       new_combined: false,
       fx_shift_SA: 0,
       fx_scale_SA: 0,
@@ -471,6 +484,9 @@ function gt3Compound(
       relaxationLengthX: 0.09883,
       relaxationLengthY: 0.09883,
       rollingResistance: 0.012,
+      // Speed term in the proportion of a radial tyre's (Wong, Theory of Ground Vehicles: 0.0136 + 0.40e-7·V², V km/h):
+      // +26 % at 300 km/h [derived]
+      rollingResistanceSpeedSq: 4.6e-7,
       verticalDamping: 500,
       pneumaticTrail: 0.04,
       // +3 % longitudinal grip under braking. It was +9 %, which stood in for the front downforce the splitter stall used to
@@ -526,6 +542,7 @@ function gt3Compound(
         dyCurve: buildGt3LoadCurve(rearGripScale, 3910, 0.8044),
         dxCurve: buildGt3LoadCurve(rearGripScale, 3910, 0.8144),
         friction_limit_angle: 6.06,
+        pKy2: 3.75,
         relaxationLengthX: 0.10173,
         relaxationLengthY: 0.10173,
       },
@@ -659,6 +676,11 @@ export const AMG_GT3_CONFIG = {
     steerComplianceDegPerKN: 0.28,
     // ~7° caster on a road-car-derived upright: more caster trail than the F1's 12 mm, so a heavier rim
     ffbMechanicalTrailM: 0.025,
+    // Electro-hydraulic power steering: an electrically driven pump, so its flow (and the assist) follows road speed, as
+    // the AMG road car's speed-sensitive steering does. A rotary valve's ≈ 2 Nm on-centre lap, full assist (1.4 Nm per
+    // Nm of the driver's, ≈ 60 % of the rack load) 15 Nm later, fading out between 20 and 80 km/h so the corners at
+    // speed keep their unassisted weight [est]
+    powerSteering: { steeringRatio: 12.6, deadbandNm: 2, rampNm: 15, maxRatio: 1.4, speedFadeMs: [20 / 3.6, 80 / 3.6] },
   },
   engine: ENGINE,
   ers: ERS,
@@ -672,6 +694,9 @@ export const AMG_GT3_CONFIG = {
   differential: {
     type: 'LSD_Ramp',
     settings: { power: 0.31, coast: 0.8, preload: 50, friction_faces: 1, power_ramp_deg: 45, coast_ramp_deg: 45 },
+    // Solid steel Ø 32 mm × 0.55 m from the rear transaxle (G 80 GPa): GJ/L ≈ 15 kNm/rad, ≈ 11 kNm/rad with the CV joints;
+    // shuffle 7.2 Hz in 1st, 19 Hz in 6th. Damping 10 % of critical for a wheel on its own shaft [est]
+    halfshaft: { stiffnessNmPerRad: 11_000, dampingNmsPerRad: 29 },
   },
   // Iron discs: steel pad μ(T) curve and heat capacities
   // MAX_TORQUE 4750 / FRONT_SHARE 0.71, ADJUST_STEP 0.5 %
