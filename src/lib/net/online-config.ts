@@ -44,8 +44,10 @@ export function onlineUrl(path: string): string | null {
 /** The WebSocket address for a path ("/rooms/ABC123?role=guest"); null without an online side */
 export function onlineSocketUrl(path: string, pageOrigin?: string): string | null {
   if (!onlineApiBase) return null;
-  const origin = pageOrigin ?? (typeof window !== "undefined" ? window.location.origin : "");
-  const base = onlineApiBase.startsWith("/") ? `${origin}${onlineApiBase}` : onlineApiBase;
+  // A path ("/api") is on the page's own site; a full URL stands as it is
+  const base = onlineApiBase.startsWith("/")
+    ? `${pageOrigin ?? (typeof window !== "undefined" ? window.location.origin : "")}${onlineApiBase}`
+    : onlineApiBase;
   return /^https?:\/\//.test(base) ? `${base.replace(/^http/, "ws")}${path}` : null;
 }
 

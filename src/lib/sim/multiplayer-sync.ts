@@ -185,11 +185,21 @@ export function hasTurnServer(): boolean {
 }
 
 export interface P2PConnectionStatus {
-  mode: 'local' | 'room_host' | 'room_guest' | 'manual_sdp';
+  mode: 'local' | 'room_host' | 'room_guest' | 'manual_sdp' | 'race_server';
   roomCode: string;
   state: 'idle' | 'signaling' | 'connected' | 'error';
   connectedWebRtcPeers: number;
   statusText: string;
+}
+
+/** Where this player stands with the scheduled races (the race server, cloudflare/api/race.ts) */
+export interface ScheduledRaceStatus {
+  /** idle: not entered. joining: asking the server. joined: in the next race's lobby, or racing it */
+  state: 'idle' | 'joining' | 'joined' | 'error';
+  /** When the entered race's lights start, on this device's clock (epoch ms) */
+  startsMs: number | null;
+  /** Why entering failed, or the entry was lost */
+  text: string;
 }
 
 interface PeerSnapshotBuffer {
@@ -263,6 +273,16 @@ const BROKER_RETRY_MS = [1000, 3000, 5000, 10000];
 /** Guest: an offer with no answer in this long means no host is there (the broker doesn't reliably say so) */
 const JOIN_TIMEOUT_MS = 15000;
 
+/** How often a lost race-server socket is reopened during a race before giving up, and the pauses between (ms) */
+const RACE_RECONNECT_MS = [500, 1500, 3000, 5000];
+const RACE_REFUSALS: Record<string, string> = {
+  closed: 'That race is about to start. You are in time for the next one.',
+  full: 'That race is full. Join the next one.',
+  started: 'That race has started without you. Join the next one.',
+  taken: 'You are already in this race in another window.',
+  bad: "Couldn't join the race. Reload the game and try again.",
+};
+
 /** The room server answers a literal "ping" without waking up; sent this often to keep the socket alive (ms) */
 const ROOM_SERVER_PING_MS = 30000;
 /** Connection ids of a room server's players: the host as seen by a guest, a guest (with its server id) by the host */
@@ -305,6 +325,20 @@ export class MultiplayerSyncManager {
   private brokerHeartbeat: ReturnType<typeof setInterval> | null = null;
   private brokerRetry: ReturnType<typeof setTimeout> | null = null;
   private joinTimer: ReturnType<typeof setTimeout> | null = null;
+  /** The socket to a scheduled race's server, which stands in for a host and passes every car's state on */
+  private raceWs: WebSocket | null = null;
+  /** The entered race's number (to get back into it after a lost socket) and this page's secret for it */
+  private raceIndex: number | null = null;
+  private raceToken = '';
+  private raceRetry: ReturnType<typeof setTimeout> | null = null;
+  /**
+   * Car state from the race server waiting for the next frame, newest per car. Its socket delivers in order, so after
+   * a network stall a second of packets lands at once: ingesting them all would read the first as a clock jump and
+   * throw the car's history away. Only the newest matters to a car drawn where it is now.
+   */
+  private raceInbox = new Map<string, { pkt: NetworkVehiclePacket; atMs: number }>();
+  public raceStatus: ScheduledRaceStatus = { state: 'idle', startsMs: null, text: '' };
+  public onRaceStatusChange?: (status: ScheduledRaceStatus) => void;
   /** Who introduces this room's players: this site's room server, or the public PeerJS broker */
   private signalVia: 'server' | 'broker' = 'broker';
   /** Counts every closed signalling socket: a room opened after an await checks it is still the one wanted */
@@ -414,7 +448,8 @@ export class MultiplayerSyncManager {
         this.channel = new BroadcastChannel('kigali_f1_sim_net_v1');
         this.channel.onmessage = (ev: MessageEvent<NetworkVehiclePacket | ControlEnvelope>) => {
           const data = ev.data as Partial<ControlEnvelope> & Partial<NetworkVehiclePacket>;
-          if (!data || typeof data !== 'object') return;
+          // In a scheduled race only its server counts: another tab's lobby or cars would read as a second host
+          if (!data || typeof data !== 'object' || this.inScheduledRace) return;
           if (data.ctl) {
             this.handleEnvelope(data as ControlEnvelope, null);
           } else {
@@ -1279,6 +1314,11 @@ export class MultiplayerSyncManager {
    * forgotten here, and neither the host repeating its start nor its lobby puts this player back in it.
    */
   public leaveRace(): void {
+    // A scheduled race is left for good: there is no lobby to go back to, the next race is another entry
+    if (this.inScheduledRace) {
+      this.leaveScheduledRace();
+      return;
+    }
     if (this.isHost) {
       this.abortRace();
       return;
@@ -1381,6 +1421,17 @@ export class MultiplayerSyncManager {
   /** Sends a control message over every transport (reliable channels + same-browser BroadcastChannel) */
   private sendControl(msg: ControlMessage, to?: string): void {
     const env: ControlEnvelope = to ? { ctl: msg, from: this.localPeerId, to } : { ctl: msg, from: this.localPeerId };
+    if (this.inScheduledRace) {
+      // A scheduled race: everything goes through its server, and nothing to the other tabs
+      if (this.raceWs?.readyState === WebSocket.OPEN) {
+        try {
+          this.raceWs.send(JSON.stringify(env));
+        } catch {
+          // Ignore send failure
+        }
+      }
+      return;
+    }
     if (this.channel) {
       try {
         this.channel.postMessage(env);
@@ -1551,6 +1602,144 @@ export class MultiplayerSyncManager {
     }
   }
 
+  // ---------------------------------------------------------------------------------------------
+  // Scheduled races: the race server stands in for a host (cloudflare/api/race.ts)
+  // ---------------------------------------------------------------------------------------------
+
+  /** True while entered in a scheduled race (its lobby, or the race itself), also while its socket is being reopened */
+  public get inScheduledRace(): boolean {
+    return this.raceStatus.state === 'joining' || this.raceStatus.state === 'joined';
+  }
+
+  private emitRaceStatus(patch: Partial<ScheduledRaceStatus>): void {
+    this.raceStatus = { ...this.raceStatus, ...patch };
+    this.onRaceStatusChange?.({ ...this.raceStatus });
+  }
+
+  /**
+   * Enters the next scheduled race: leaves any room, and follows the race server as a guest follows a host. Its lobby
+   * names the circuit and car, its start comes shortly before the lights, and the cars' state goes through it.
+   */
+  public joinScheduledRace(): void {
+    if (typeof window === 'undefined' || typeof WebSocket === 'undefined') return;
+    this.closeSignaling();
+    this.becomeGuest();
+    const bytes = new Uint8Array(18);
+    crypto.getRandomValues(bytes);
+    this.raceToken = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+    this.raceIndex = null;
+    this.emitStatus({ mode: 'race_server', roomCode: '', state: 'signaling', statusText: 'Joining the next race…' });
+    this.emitRaceStatus({ state: 'joining', startsMs: null, text: '' });
+    this.openRaceServer('next', 0);
+  }
+
+  /** Leaves the scheduled race (or its lobby); a race under way ends here */
+  public leaveScheduledRace(): void {
+    if (!this.raceWs && this.raceStatus.state === 'idle') return;
+    this.closeRaceServer();
+    this.becomeGuest();
+    this.emitStatus({ mode: 'local', state: 'idle', statusText: "Host a room and send the link, or join with a friend's code." });
+  }
+
+  /** Closes the race server's socket without telling the game anything (the caller says what happens next) */
+  private closeRaceServer(): void {
+    if (this.raceRetry !== null) clearTimeout(this.raceRetry);
+    this.raceRetry = null;
+    this.raceInbox.clear();
+    const ws = this.raceWs;
+    this.raceWs = null;
+    this.raceIndex = null;
+    if (ws) {
+      ws.onmessage = null;
+      ws.onclose = null;
+      try {
+        ws.close();
+      } catch {
+        // Ignore close error
+      }
+    }
+    if (this.raceStatus.state !== 'idle') this.emitRaceStatus({ state: 'idle', startsMs: null, text: '' });
+  }
+
+  /** The entry failed or was lost: back to no race, with the reason */
+  private failRace(text: string): void {
+    this.closeRaceServer();
+    this.becomeGuest();
+    this.emitStatus({ mode: 'local', state: 'idle', statusText: text });
+    this.emitRaceStatus({ state: 'error', startsMs: null, text });
+  }
+
+  /** Opens the socket to a race ("next", or the number of the one to get back into) */
+  private openRaceServer(which: 'next' | number, attempt: number): void {
+    void getOnlineConfig().then((config) => {
+      // Left, or another race or room chosen, while the config was read
+      if (this.raceStatus.state === 'idle' || this.raceStatus.state === 'error' || this.raceWs) return;
+      const url = config.races
+        ? onlineSocketUrl(`/races/${which}?peer=${encodeURIComponent(this.localPeerId)}&token=${this.raceToken}`)
+        : null;
+      if (!url) {
+        this.failRace('Scheduled races are not running right now.');
+        return;
+      }
+      let ws: WebSocket;
+      try {
+        ws = new WebSocket(url);
+      } catch {
+        this.failRace("Couldn't reach the race server. Check your connection and try again.");
+        return;
+      }
+      this.raceWs = ws;
+      let welcomed = false;
+
+      ws.onmessage = (ev) => {
+        if (this.raceWs !== ws || typeof ev.data !== 'string' || ev.data.length > 65536) return;
+        let data: Record<string, unknown>;
+        try {
+          data = JSON.parse(ev.data);
+        } catch {
+          return;
+        }
+        if (!data || typeof data !== 'object') return;
+        if (typeof data.t === 'string') {
+          if (data.t === 'welcome' && typeof data.startsMs === 'number' && typeof data.now === 'number' && typeof data.index === 'number') {
+            welcomed = true;
+            attempt = 0;
+            this.raceIndex = data.index;
+            // The server's start time on this device's clock (off by the trip here, which a countdown doesn't show)
+            this.emitRaceStatus({ state: 'joined', startsMs: data.startsMs - data.now + Date.now(), text: '' });
+            this.emitStatus({ mode: 'race_server', state: 'connected', statusText: 'In the next race' });
+          } else if (data.t !== 'welcome') {
+            this.failRace(RACE_REFUSALS[data.t] ?? RACE_REFUSALS.bad);
+          }
+          return;
+        }
+        if (data.ctl !== undefined) {
+          this.handleEnvelope(data as unknown as ControlEnvelope, null);
+          return;
+        }
+        const pkt = sanitizePacket(data);
+        if (!pkt || pkt.peerId === this.localPeerId) return;
+        const waiting = this.raceInbox.get(pkt.peerId);
+        if (!waiting || pkt.timestampMs >= waiting.pkt.timestampMs) this.raceInbox.set(pkt.peerId, { pkt, atMs: performance.now() });
+      };
+
+      ws.onclose = () => {
+        if (this.raceWs !== ws) return; // Closed on purpose
+        this.raceWs = null;
+        // Lost during the race (or its lobby): get back in, a few times. Never got in at all: say so
+        const index = this.raceIndex;
+        if (welcomed && index !== null && attempt < RACE_RECONNECT_MS.length) {
+          this.raceRetry = setTimeout(() => {
+            this.raceRetry = null;
+            this.openRaceServer(index, attempt + 1);
+          }, RACE_RECONNECT_MS[attempt]);
+          return;
+        }
+        this.failRace(welcomed ? 'Lost the connection to the race.' : "Couldn't reach the race server. Check your connection and try again.");
+      };
+    });
+  }
+
   /**
    * 100% Brokerless Manual SDP Offer Generator (works forever with zero servers).
    */
@@ -1675,6 +1864,7 @@ export class MultiplayerSyncManager {
 
   private closeSignaling(): void {
     this.signalGen++;
+    this.closeRaceServer();
     this.clearBrokerTimers();
     const ws = this.signalingWs;
     this.signalingWs = null;
@@ -1829,7 +2019,16 @@ export class MultiplayerSyncManager {
       };
       const serialized = JSON.stringify(fullPacket);
 
-      if (this.channel) {
+      if (this.inScheduledRace) {
+        // The race server passes cars on only once the race is made, so nothing is sent while waiting in its lobby
+        if (this.activeRace && this.raceWs?.readyState === WebSocket.OPEN) {
+          try {
+            this.raceWs.send(serialized);
+          } catch {
+            // Ignore send failure
+          }
+        }
+      } else if (this.channel) {
         try {
           this.channel.postMessage(fullPacket);
         } catch {
@@ -1852,6 +2051,12 @@ export class MultiplayerSyncManager {
           }
         }
       }
+    }
+
+    // The race server's cars: the newest packet of each since the last frame, at the time it arrived
+    if (this.raceInbox.size > 0) {
+      for (const { pkt, atMs } of this.raceInbox.values()) this.ingestPacket(pkt, false, atMs);
+      this.raceInbox.clear();
     }
 
     this.tickControl(nowMs);
