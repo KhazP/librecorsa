@@ -197,7 +197,17 @@ export const CarBrowser: React.FC<{
                 <span className="font-f1-mono text-[10px] font-extrabold tracking-[0.08em] uppercase" style={{ color: q.color }}>
                   {q.filterLabel}
                 </span>
-                <span className="text-[11px] font-semibold text-[#C5CBD8]">Model by {c.credit.author}</span>
+                <span className="text-[11px] font-semibold text-[#C5CBD8]">
+                  Model by{" "}
+                  <a
+                    href={c.credit.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="underline decoration-[#4A5268] underline-offset-2 hover:text-[#F5F7FA]"
+                  >
+                    {c.credit.author}
+                  </a>
+                </span>
               </div>
               <p className="m-0 text-[12px] leading-snug text-[#8E96AA]">
                 {q.description} {PHYSICS_CHECK[carPhysics(c.id, modPhysics)]}
