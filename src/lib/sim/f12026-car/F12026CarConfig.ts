@@ -1385,24 +1385,31 @@ function f1Compound(
       lsExpY: 0.72,
       lsExpX: 0.756,
       Fz0: 3460,
+      // A brush tyre on the tyre data's own shape: the peak slip angle (FRICTION_LIMIT_ANGLE), its growth with load,
+      // 6.9 % per Fz0 (FLEX_GAIN), and with a softer tyre (PRESSURE_FLEX_GAIN), the combined-slip exponent
+      // (COMBINED_FACTOR), the longitudinal stiffness (CX_MULT) and the grip lost to sliding speed (SPEED_SENSITIVITY)
+      // [ref_tyres.ini]
+      curve: 'brush',
       friction_limit_angle: 6.137,
-      // Where the cornering stiffness peaks, scaled from Pacejka's MF 6.1 reference tyre (205/60R15, Fz0 4 kN,
-      // pKy2 1.715: peak at 6.86 kN) by load capacity, the Tire and Rim Association formula P^0.585·Sd^1.39·(Dr + Sd)
-      // (psi, section width and rim in inches; the reference at 35 psi). This 280 mm front on an 18" rim at 25 psi
-      // carries 1.59 ×: peak at 10.9 kN = 3.2 × Fz0. Peak slip 6.1° at 4 kN, 7.2° at 8 kN, 9.2° at 12 kN
-      // [Pacejka, Tire and Vehicle Dynamics 3rd ed., MF 6.1 parameter set; TRA load formula; est]
+      peakSlipLoadGain: 0.069,
+      peakSlipPressureGain: 0.1,
+      combinedExponent: 2.2,
+      longStiffnessMult: 1.15,
+      speedSensitivity: 0.001795,
+      // Unused by a brush tyre (the magic-formula family's stiffness law)
       pKy2: 3.2,
-      // The source derives it at run time; its ABS / TC limits are 0.10 [ref_electronics.ini]
+      // The slip the driver aids are scaled to; the drive force peaks at tan(6.137°) / 1.15 of theoretical slip, 10.3 %
+      // [derived]. The source's ABS / TC limits are 0.10 [ref_electronics.ini]
       slip_ratio_limit: 0.1,
       new_combined: false,
       fx_shift_SA: 0,
       fx_scale_SA: 0,
       fy_shift_SR: 0,
       fy_scale_SR: 0,
-      // FALLOFF_LEVEL / FALLOFF_SPEED
+      // FALLOFF_LEVEL / FALLOFF_SPEED [ref_tyres.ini]: 97.9 % of the grip at 1.5 × the peak slip angle, 96.3 % at 2 ×
       use_slip_falloff: true,
       falloff_level: 0.85,
-      falloff_slope: 2.1,
+      falloff_slope: 3,
       relaxationLengthX: 0.1025,
       relaxationLengthY: 0.1025,
       rollingResistance: 0.012,
@@ -1426,11 +1433,15 @@ function f1Compound(
       coreCooling: [8, 0.2],
       thermalVerticalK: -0.0012,
       thermalVerticalRefC: 100,
+      // GRAIN_GAIN / GRAIN_GAMMA, BLISTER_GAIN / BLISTER_GAMMA [ref_tyres.ini]
+      tread: { grainGain: 0.125, grainGamma: 0.5, blisterGain: 0.125, blisterGamma: 0.5 },
     },
     pressureData: {
       optimalPsi: 25,
       pressureSpringCurve: rateCurve(213_175, 16, 11_550),
       pressureGripSensitivity: 1.6,
+      // 0.25 % of grip per psi off the ideal (PRESSURE_D_GAIN) [ref_tyres.ini]
+      pressureGripLossPerPsi: 0.0025,
       // BLANKETS_TEMP 80 °C
       coldRefC: 80,
     },
@@ -1453,8 +1464,9 @@ function f1Compound(
         lsExpX: 0.7875,
         Fz0: 3460,
         friction_limit_angle: 5.411,
-        // The front's scaling for the 375 mm rear at 24 psi: 2.64 × the reference's capacity, peak at 18.1 kN; peak slip
-        // 5.4° at 4 kN, 5.3° at 8 kN, 5.9° at 12 kN [est]
+        // The rear's own load gain and sliding-speed loss [ref_tyres.ini REAR]
+        peakSlipLoadGain: 0.07,
+        speedSensitivity: 0.001665,
         pKy2: 5.2,
         relaxationLengthX: 0.1044,
         relaxationLengthY: 0.1044,

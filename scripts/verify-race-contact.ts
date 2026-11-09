@@ -115,19 +115,19 @@ function run(setup: Setup) {
 
 // ---- 2 + 3. Rear-quarter hits, then the spun car's rejoin
 {
-  // A tap: 8 frames of steering into the rear quarter (held longer it is a spin-out move, and spins the car). 3.5 s:
-  // the player's fixed throttle runs it into the first chicane after that
-  const tap = run({ player: [300, -1.5, 63], ai: [304.4, 0, 59], inputs: (i) => ({ throttle: 0.5, analogSteer: i < 8 ? 0.12 : 0 }), frames: 60 * 3.5 });
+  // A tap: 8 frames of a tenth of the lock into the rear quarter (more lock, or held longer, it is a spin-out move and
+  // wrecks the car ahead). 3.5 s: the player's fixed throttle runs it into the first chicane after that
+  const tap = run({ player: [300, -1.5, 63], ai: [304.4, 0, 59], inputs: (i) => ({ throttle: 0.5, analogSteer: i < 8 ? 0.1 : 0 }), frames: 60 * 3.5 });
   const tapInfo = tap.field.carInfo('AIC')!;
   check('Light tap: the AI car is knocked out of shape', tap.modes.has('startled') && tap.maxHeadingDeg > 5, `heading off the road by ${f(tap.maxHeadingDeg, 0)}°, modes ${[...tap.modes].join(' → ')}`);
   check('Light tap: ... and gathers it up', tapInfo.stats.spins === 0, `${tapInfo.stats.spins} spins`);
-  // The player brakes once the AI car has gone (~0.8 s): held on throttle, its 13° swerve keeps shoving the spinning
-  // car into the pit wall and wrecks it (≥ 0.85 damage retires it), and whether it does is down to the spin's exact
-  // path, not to the rejoin under test
+  // The player brakes once the AI car has gone (~0.5 s): held on throttle, its swerve keeps shoving the spinning car
+  // into the pit wall and wrecks it (≥ 0.85 damage retires it), and whether it does is down to the spin's exact path,
+  // not to the rejoin under test
   const hit = run({
     player: [300, -1.5, 63],
     ai: [304.4, 0, 59],
-    inputs: (i) => ({ throttle: i < 50 ? 0.5 : 0, brake: i < 50 ? 0 : 1, analogSteer: i < 20 ? 0.25 : 0 }),
+    inputs: (i) => ({ throttle: i < 30 ? 0.5 : 0, brake: i < 30 ? 0 : 1, analogSteer: i < 20 ? 0.25 : 0 }),
     frames: 60 * 40,
   });
   const info = hit.field.carInfo('AIC')!;
