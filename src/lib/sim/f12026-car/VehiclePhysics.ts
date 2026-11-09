@@ -555,6 +555,9 @@ export interface TyreRuntime {
   brush: BrushTyre | null;
   /** Core temperatures (°C) between which the grip curve is at its peak: a brush tyre grains below, blisters above */
   peakWindowC: [number, number];
+  /** The compound's own wear curve (km slid → grip, 1 = new) and the distance at which it is worn out; null: generic wear */
+  wearCurve: Lut | null;
+  wearOutKm: number;
 }
 
 /** Main spring in series with a helper that goes coil-bound after `helper_range` */
@@ -663,6 +666,8 @@ export function createTyreRuntime(compound: TyresCompoundData, rear = false): Ty
     grain: tyreGrainThresholdsC(data.thermalData.optimalTempC),
     brush: model.curve === 'brush' ? createBrushTyre(model, Math.tan(fla * DEG2RAD), fz0) : null,
     peakWindowC: gripCurvePeakWindowC(data.thermalData.thermalPerformanceCurve),
+    wearCurve: data.wear ? new Lut(data.wear.curve.map(([km, pct]) => [km, pct / 100] as const)) : null,
+    wearOutKm: data.wear ? data.wear.curve[data.wear.curve.length - 1][0] : 0,
   };
 }
 
@@ -2265,7 +2270,9 @@ export class VehiclePhysics {
         // A brush tyre's graining softens it (below, at the peak slip) rather than costing grip; its blisters cost up to
         // a sixth of the grip
         const treadGrip = tyre.brush ? 1 / (1 + 0.2 * w.blisterLevel) : (1 - 0.08 * w.grainLevel) * (1 - 0.12 * w.blisterLevel);
-        const degradation = wearGripMultiplier(w.wear) * treadGrip * (1 - 0.18 * w.dirtyLevel) * (1 - 0.05 * w.flatSpotSeverity);
+        // Wear: the compound's own curve against the distance its tread has slid, else the generic curve
+        const wearGrip = tyre.wearCurve ? tyre.wearCurve.evaluate(w.wear * tyre.wearOutKm) : wearGripMultiplier(w.wear);
+        const degradation = wearGrip * treadGrip * (1 - 0.18 * w.dirtyLevel) * (1 - 0.05 * w.flatSpotSeverity);
         // Water: the tyre's response (film lubrication, aquaplaning past what its tread clears at this speed) and the
         // surface's (painted kerbs and grass go slicker than the asphalt in the same water)
         const severity = this.realism.wetSeverity;
@@ -3242,8 +3249,15 @@ export class VehiclePhysics {
       w.coreTempC = (w.bandCoreTempsC[0] + w.bandCoreTempsC[1] + w.bandCoreTempsC[2]) / 3;
 
       // Wear & 16-sector flat-spotting / graining / blistering / dirt pickup
-      const wearDelta =
-        (slipPower * 1.4e-8 + w.fz * v * 2.5e-10) * dt * this.realism.tyreWearScale * wetWearScale(traits, this.wetness);
+      // A compound with its own wear curve wears by the distance its tread slides over the road (more under more load,
+      // when its data says so), as a share of the distance that wears it out; the others by sliding power and rolling
+      const wearRt = this.tyres[w.isFront ? 0 : 1];
+      const wearDelta = wearRt.wearCurve
+        ? ((Math.hypot(w.slipVelX, w.vy) * dt * (td.wear?.loadScaled ? w.fz / wearRt.fz0 : 1)) / (1000 * wearRt.wearOutKm)) *
+          (w.fz > 0 ? 1 : 0) *
+          this.realism.tyreWearScale *
+          wetWearScale(traits, this.wetness)
+        : (slipPower * 1.4e-8 + w.fz * v * 2.5e-10) * dt * this.realism.tyreWearScale * wetWearScale(traits, this.wetness);
       w.wear = Math.min(1, w.wear + wearDelta);
       const numSec = w.circumferentialWear.length;
       const rimSpeed = Math.abs(w.omega * w.rollingRadius);

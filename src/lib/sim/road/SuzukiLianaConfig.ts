@@ -322,6 +322,8 @@ const STREET_COMPOUND: TyresCompoundData = {
   shortName: 'S',
   tyre_compound: 'PhysicsTyreCompound_Road_Street',
   wetTraits: STREET_TYRE_TRAITS,
+  // Grip (% of new) against km slid [spec street_front.lut]
+  wear: { curve: [[0, 100], [0.3, 100], [0.5, 99.5], [1, 99], [1.5, 98.5], [4, 98], [10, 97], [11, 96]] },
   front: STREET,
   rear: STREET,
   modelData: {

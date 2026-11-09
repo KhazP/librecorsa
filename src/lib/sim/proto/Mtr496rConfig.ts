@@ -557,7 +557,9 @@ function protoCompound(
   /** RATE [spec] */
   rate: number,
   thermalCurve: LutPoints,
-  window: [number, number]
+  window: [number, number],
+  /** Grip (% of new) against km slid [spec Wear_*.lut] */
+  wearCurve: LutPoints
 ): TyresCompoundData {
   const dyCurve = loadTable(grip.y);
   const dxCurve = loadTable(grip.x);
@@ -565,6 +567,7 @@ function protoCompound(
     name,
     shortName,
     tyre_compound,
+    wear: { curve: wearCurve },
     front: PROTO_FRONT,
     rear: PROTO_REAR,
     modelData: {
@@ -681,7 +684,8 @@ const TYRES = {
       [240, 0.8],
       [300, 0.6],
     ],
-    [70, 85]
+    [70, 85],
+    [[0, 99.5], [0.72, 100], [4, 100], [12, 99], [20, 98], [30, 96.4], [36, 94], [48, 90.5], [60, 80], [70, 70], [71, 20]]
   ),
   PhysicsTyreCompound_Proto_Medium: protoCompound(
     'PhysicsTyreCompound_Proto_Medium',
@@ -705,7 +709,8 @@ const TYRES = {
       [240, 0.8],
       [300, 0.6],
     ],
-    [80, 88]
+    [80, 88],
+    [[0, 99.5], [0.48, 100], [4.8, 100], [14, 99.7], [20, 99], [30, 97.4], [36, 95.7], [48, 92.5], [60, 81], [70, 72], [71, 22]]
   ),
   PhysicsTyreCompound_Proto_Hard: protoCompound(
     'PhysicsTyreCompound_Proto_Hard',
@@ -729,7 +734,8 @@ const TYRES = {
       [240, 0.8],
       [300, 0.6],
     ],
-    [80, 90]
+    [80, 90],
+    [[0, 99.8], [0.48, 100], [7.2, 100], [20, 99.6], [28.8, 98.5], [48, 96], [62.4, 94], [65, 89], [75, 75], [80, 74], [81, 20]]
   ),
 } satisfies Partial<Record<PhysicsTyreCompound, TyresCompoundData>>;
 

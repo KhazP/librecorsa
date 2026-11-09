@@ -698,6 +698,12 @@ export interface TyresCompoundData {
   tyre_compound: PhysicsTyreCompound;
   /** Behaviour on a wet road (`wet-tyres.ts`); absent = a slick */
   wetTraits?: WetTyreTraits;
+  /**
+   * The compound's own wear (WEAR_CURVE of its data): grip (% of new) against the distance the tread has slid over
+   * the road (km). The tyre is worn out at the curve's last point. `loadScaled`: sliding under more than Fz0 of load
+   * counts for more, in proportion. Absent: the model's generic wear
+   */
+  wear?: { curve: LutPoints; loadScaled?: boolean };
   front: TyreGeometry;
   rear: TyreGeometry;
   modelData: TyresModelData;
