@@ -7,6 +7,8 @@
  * feature can be turned off on the server without a new build.
  */
 
+import { DEFAULT_RACE_SLOT_S } from "./race-schedule";
+
 export interface OnlineConfig {
   /** Room codes are paired by the room server */
   rooms: boolean;
@@ -16,9 +18,11 @@ export interface OnlineConfig {
   races: boolean;
   /** The online lap boards */
   board: boolean;
+  /** Seconds between scheduled races */
+  raceSlotS: number;
 }
 
-const OFF: OnlineConfig = { rooms: false, relay: false, races: false, board: false };
+const OFF: OnlineConfig = { rooms: false, relay: false, races: false, board: false, raceSlotS: DEFAULT_RACE_SLOT_S };
 const CONFIG_TIMEOUT_MS = 5000;
 /** A failed read is tried again after this long, a good one is kept this long (ms) */
 const RETRY_AFTER_MS = 30_000;
@@ -49,7 +53,14 @@ export function onlineSocketUrl(path: string, pageOrigin?: string): string | nul
 export function parseOnlineConfig(raw: unknown): OnlineConfig {
   if (typeof raw !== "object" || raw === null) return OFF;
   const r = raw as Record<string, unknown>;
-  return { rooms: r.rooms === true, relay: r.relay === true, races: r.races === true, board: r.board === true };
+  const slot = r.raceSlotS;
+  return {
+    rooms: r.rooms === true,
+    relay: r.relay === true,
+    races: r.races === true,
+    board: r.board === true,
+    raceSlotS: typeof slot === "number" && Number.isInteger(slot) && slot >= 30 && slot <= 86_400 ? slot : DEFAULT_RACE_SLOT_S,
+  };
 }
 
 let cached: { config: OnlineConfig; at: number; ok: boolean } | null = null;

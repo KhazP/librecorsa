@@ -3,28 +3,38 @@
  *   GET /api/config               which online features this deployment has switched on
  *   GET /api/rooms/<CODE>         WebSocket to a private room's server (room.ts)
  *   POST /api/laps, GET /api/laps, GET /api/laps/<id>   the lap boards (board.ts)
+ *   GET /api/races/next, /api/races/<n>                 WebSocket to a scheduled race's server (race.ts)
  * Every feature is optional: with its binding missing or its switch off (wrangler.jsonc `vars`), the config says
  * so and the game falls back to what works without a server.
  *
  * Nothing here is kept at the edge: Workers caching is on for the site's large files, so every answer says no-store.
  */
+import { DEFAULT_RACE_SLOT_S, nextRaceSlot, raceSlot } from "../../src/lib/net/race-schedule";
 import { challengeProblem } from "../../src/lib/net/weekly-challenge";
 import { boardDeps, ghostOf, listLaps, submitLap } from "./board";
 import { ROOM_CODE_RE } from "./room";
 import { turnConfigured } from "./turn";
 import type { Env } from "./types";
 
+export { RaceServer } from "./race";
 export { RoomServer } from "./room";
 
 const on = (value: string | undefined): boolean => value === "on";
 
+/** Seconds between scheduled races: RACE_SLOT_S, else every 20 minutes */
+export function raceSlotSeconds(env: Env): number {
+  const s = Number(env.RACE_SLOT_S);
+  return Number.isInteger(s) && s >= 30 && s <= 86_400 ? s : DEFAULT_RACE_SLOT_S;
+}
+
 /** What the game may use online, as the Worker is configured right now */
-export function onlineConfig(env: Env): { rooms: boolean; relay: boolean; races: boolean; board: boolean } {
+export function onlineConfig(env: Env): { rooms: boolean; relay: boolean; races: boolean; board: boolean; raceSlotS: number } {
   return {
     rooms: on(env.ONLINE_ROOMS) && Boolean(env.ROOMS),
     relay: on(env.ONLINE_ROOMS) && Boolean(env.ROOMS) && turnConfigured(env),
     races: on(env.ONLINE_RACES) && Boolean(env.RACES),
     board: on(env.ONLINE_BOARD) && Boolean(env.BOARD_DB) && Boolean(env.GHOSTS),
+    raceSlotS: raceSlotSeconds(env),
   };
 }
 
@@ -77,6 +87,25 @@ export async function handleApi(request: Request, env: Env, url: URL): Promise<R
       if (!success) return json({ ok: false, error: "Too many tries, wait a minute" }, 429, origin);
     }
     return env.ROOMS.get(env.ROOMS.idFromName(code)).fetch(request);
+  }
+
+  const race = /^\/api\/races\/(next|\d{1,12})$/.exec(path);
+  if (race && request.method === "GET") {
+    if (!config.races || !env.RACES) return json({ ok: false, error: "Scheduled races are off" }, 404, origin);
+    if (env.ROOM_LIMIT) {
+      const { success } = await env.ROOM_LIMIT.limit({ key: request.headers.get("CF-Connecting-IP") ?? "unknown" });
+      if (!success) return json({ ok: false, error: "Too many tries, wait a minute" }, 429, origin);
+    }
+    // The slot comes from this clock, never the caller's: the next race, or one under way to get back into
+    const nowMs = Date.now();
+    const slot = race[1] === "next" ? nextRaceSlot(nowMs, config.raceSlotS) : raceSlot(Number(race[1]), config.raceSlotS);
+    if (slot.startsMs > nowMs + config.raceSlotS * 1000 + 60_000 || slot.startsMs < nowMs - 3 * 3_600_000) {
+      return json({ ok: false, error: "No such race" }, 404, origin);
+    }
+    const to = new URL(request.url);
+    to.searchParams.set("slot", String(slot.index));
+    to.searchParams.set("slotS", String(config.raceSlotS));
+    return env.RACES.get(env.RACES.idFromName(`race-${config.raceSlotS}-${slot.index}`)).fetch(new Request(to, request));
   }
 
   if (path === "/api/laps" || path.startsWith("/api/laps/")) {

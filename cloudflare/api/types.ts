@@ -54,6 +54,7 @@ export interface DurableObjectStorage {
   delete(key: string): Promise<boolean>;
   setAlarm(scheduledTimeMs: number): Promise<void>;
   deleteAlarm(): Promise<void>;
+  deleteAll(): Promise<void>;
 }
 
 /** The server end of a WebSocket accepted by a Durable Object */
@@ -89,6 +90,8 @@ export interface Env {
   ONLINE_ROOMS?: string;
   ONLINE_RACES?: string;
   ONLINE_BOARD?: string;
+  /** Seconds between scheduled races (default 1200) */
+  RACE_SLOT_S?: string;
   /** Cloudflare TURN key (secrets); without them rooms connect directly only */
   TURN_KEY_ID?: string;
   TURN_KEY_API_TOKEN?: string;

@@ -24,7 +24,7 @@
 import { handleApi } from "./api/index.ts";
 
 // Durable Object classes (wrangler.jsonc binds them)
-export { RoomServer } from "./api/index.ts";
+export { RaceServer, RoomServer } from "./api/index.ts";
 
 const OLD_ORIGIN = "https://khazp.github.io";
 // localStorage keys the game writes (bugesera.* settings/track/car/driver key, lc.* garage and MFD, librecorsa.* AI learning)
