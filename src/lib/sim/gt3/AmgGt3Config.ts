@@ -682,6 +682,9 @@ export const AMG_GT3_CONFIG = {
     inertia: { pitch: box(0.99, 3.85), roll: box(1.78, 0.99), yaw: box(1.78, 3.85) },
     unsprungMassFront: 39,
     unsprungMassRear: 46,
+    // The fuel cell sits behind the cabin, 1.25 m behind the CG and 0.20 m above it [ref]: a full tank moves 3 % of the
+    // weight to the rear axle
+    fuelTank: { y: 0.2, z: -1.25 },
     wheelInertiaFront: 1.75,
     wheelInertiaRear: 1.95,
     // 320° lock [spec] on ~12.6 ratio: steering-wheel angle per path

@@ -141,6 +141,8 @@ const GEARBOX = {
   reverse: 2.5,
   finalDrive: 4.0,
   shiftTimeS: 0.06,
+  // [spec CHANGE_DN_TIME]
+  downshiftTimeS: 0.1,
   shiftTorqueFraction: 0.1,
   efficiency: DRIVELINE_EFFICIENCY,
   gears: {
@@ -521,9 +523,12 @@ const AERO: AeroData = {
   airDensity: 1.225,
 };
 
-/** Front 0.290 × R 0.340, rear 0.340 × R 0.355, rim R 0.2413 [spec tyres.ini] */
-const PROTO_FRONT: TyreGeometry = { width: 0.29, radius: 0.34, rimRadius: 0.2413, verticalRateScale: 1 };
-const PROTO_REAR: TyreGeometry = { width: 0.34, radius: 0.355, rimRadius: 0.2413, verticalRateScale: 1 };
+/**
+ * Front 0.290 × R 0.340, rear 0.340 × R 0.355, rim R 0.2413; the radius grows 0.025 mm per rad/s of spin, 6 mm at
+ * 300 km/h [spec tyres.ini RADIUS_ANGULAR_K]
+ */
+const PROTO_FRONT: TyreGeometry = { width: 0.29, radius: 0.34, rimRadius: 0.2413, verticalRateScale: 1, radiusGrowthPerRadS: 2.5e-5 };
+const PROTO_REAR: TyreGeometry = { width: 0.34, radius: 0.355, rimRadius: 0.2413, verticalRateScale: 1, radiusGrowthPerRadS: 2.5e-5 };
 
 /** The tyres' reference load [spec FZ0] */
 const FZ0 = 3000;
@@ -610,6 +615,8 @@ function protoCompound(
       // 5 N + 0.00039 N·s²/m² per kN of load [spec ROLLING_RESISTANCE_0 / _1]
       rollingResistance: 0.005,
       rollingResistanceSpeedSq: 3.9e-7,
+      // 2.2 % more at the peak slip [spec ROLLING_RESISTANCE_SLIP]
+      rollingResistanceSlipGain: 0.022,
       // [spec DAMP]
       verticalDamping: 540,
       pneumaticTrail: 0.04,
@@ -637,6 +644,8 @@ function protoCompound(
       // [spec PRESSURE_IDEAL]
       optimalPsi: 35,
       pressureSpringCurve: pressureSpring(rate),
+      // [spec PRESSURE_RR_GAIN]
+      pressureRollingGain: 0.97,
       pressureGripSensitivity: 1.0,
       // 0.2 % of grip per psi off the ideal [spec PRESSURE_D_GAIN]
       pressureGripLossPerPsi: 0.002,
@@ -773,6 +782,8 @@ export const MTR_496R_CONFIG = {
     // [spec HUB_MASS]
     unsprungMassFront: 36,
     unsprungMassRear: 39,
+    // The tank sits 0.10 m behind the CG, level with it [spec FUELTANK POSITION]
+    fuelTank: { y: 0, z: -0.1 },
     // [spec ANGULAR_INERTIA]
     wheelInertiaFront: 1.8,
     wheelInertiaRear: 1.8,

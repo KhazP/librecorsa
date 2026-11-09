@@ -126,6 +126,8 @@ const GEARBOX = {
   reverse: 3.25,
   finalDrive: 4.11,
   shiftTimeS: 0.25,
+  // [spec CHANGE_DN_TIME]
+  downshiftTimeS: 0.27,
   shiftTorqueFraction: 0,
   efficiency: DRIVELINE_EFFICIENCY,
   gears: {
@@ -364,6 +366,8 @@ const STREET_COMPOUND: TyresCompoundData = {
     // 10 N + 0.00102 N·s²/m² per kN of load [spec ROLLING_RESISTANCE_0 / _1]
     rollingResistance: 0.01,
     rollingResistanceSpeedSq: 1.02e-6,
+    // A street tyre scrubs: 5.4 × its free-rolling drag at the peak slip [spec ROLLING_RESISTANCE_SLIP]
+    rollingResistanceSlipGain: 4.368,
     // [spec DAMP]
     verticalDamping: 1500,
     pneumaticTrail: 0.035,
@@ -409,6 +413,8 @@ const STREET_COMPOUND: TyresCompoundData = {
       [42, 367_840],
       [50, 445_280],
     ],
+    // [spec PRESSURE_RR_GAIN]
+    pressureRollingGain: 1.5,
     pressureGripSensitivity: 1.0,
     // 0.2 % of grip per psi off the ideal [spec PRESSURE_D_GAIN]
     pressureGripLossPerPsi: 0.002,
@@ -470,6 +476,8 @@ export const SUZUKI_LIANA_CONFIG = {
     // [spec HUB_MASS]
     unsprungMassFront: 90,
     unsprungMassRear: 85,
+    // The tank is under the rear seat, 1.37 m behind the CG and 0.20 m below it [spec FUELTANK POSITION]
+    fuelTank: { y: -0.2, z: -1.3675 },
     // [spec ANGULAR_INERTIA]
     wheelInertiaFront: 1.65,
     wheelInertiaRear: 1.62,
@@ -489,8 +497,9 @@ export const SUZUKI_LIANA_CONFIG = {
     type: 'LSD_Ramp',
     settings: { power: 0.04, coast: 0.04, preload: 0, friction_faces: 1, power_ramp_deg: 45, coast_ramp_deg: 45 },
   },
-  // Iron discs, 1600 Nm per wheel at full pedal, 75 % front, no bias adjuster [spec brakes.ini]
-  brakes: { maxTorqueNm: 1600, front_bias: 0.75, ebbStep: 0.005, brakeByWire: false, discMaterial: 'endurance-steel', migration: { amount: 0, rampStart: 0 } },
+  // Iron discs, 1600 Nm per wheel at full pedal, 75 % front, no bias adjuster; a handbrake on the rears
+  // [spec brakes.ini, HANDBRAKE_TORQUE]
+  brakes: { maxTorqueNm: 1600, front_bias: 0.75, handbrakeTorqueNm: 1600, ebbStep: 0.005, brakeByWire: false, discMaterial: 'endurance-steel', migration: { amount: 0, rampStart: 0 } },
   suspensions: SUSPENSIONS,
   aero: AERO,
   tyreCompounds: { PhysicsTyreCompound_Road_Street: STREET_COMPOUND },
