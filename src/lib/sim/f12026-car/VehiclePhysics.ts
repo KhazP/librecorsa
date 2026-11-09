@@ -527,6 +527,8 @@ export interface TyreRuntime {
   dyCurve: Lut | null;
   dxCurve: Lut | null;
   brakeDxMod: number;
+  /** Core temperatures (°C) at which the compound grains, cleans up and blisters (`tyreGrainThresholdsC`) */
+  grain: { grainBelow: number; healFrom: number; healTo: number; blisterAbove: number };
 }
 
 /** Main spring in series with a helper that goes coil-bound after `helper_range` */
@@ -632,6 +634,7 @@ export function createTyreRuntime(compound: TyresCompoundData, rear = false): Ty
     dyCurve,
     dxCurve: model.dxCurve ? new Lut(model.dxCurve) : null,
     brakeDxMod: model.brakeDxMod ?? 0,
+    grain: tyreGrainThresholdsC(data.thermalData.optimalTempC),
   };
 }
 
@@ -686,6 +689,17 @@ export function tyreCarcassStiffnessFactor(
   carcassC: number
 ): number {
   return Math.max(0.7, 1 + th.thermalVerticalK * (carcassC - th.thermalVerticalRefC));
+}
+
+/**
+ * Core temperatures (°C) at which a compound grains, cleans up and blisters, from its working window `[low, high]`:
+ * graining below low − 17, cleaning up from there to high + 5 (a tyre too warm to tear, rolled without much sliding,
+ * wears its grained tread off), blistering above high + 13. An F1 slick's 95–115 °C window gives 78 / 78–120 / 128 °C;
+ * a GT3 or road tyre's lower window moves them down with it.
+ */
+export function tyreGrainThresholdsC(optimalTempC: readonly [number, number]): { grainBelow: number; healFrom: number; healTo: number; blisterAbove: number } {
+  const [low, high] = optimalTempC;
+  return { grainBelow: low - 17, healFrom: low - 17, healTo: high + 5, blisterAbove: high + 13 };
 }
 
 /** Grip at hot inflation pressure `psi` (gauge): a parabola about the optimum, floored at half grip */
@@ -3166,16 +3180,19 @@ export class VehiclePhysics {
       }
       w.flatSpotSeverity = Math.min(1, Math.max(0, (maxSecW - minSecW) * 18));
 
-      // Graining / blistering thresholds move down with a rain tyre's working window
-      const core = w.coreTempC - traits.tempShiftC;
+      // Graining / blistering against the compound's own working window (a rain tyre's sits lower, a GT or road tyre's
+      // lower than an F1 slick's): a tyre worked hard well below it tears its cold tread, one running in or near it
+      // cleans up, one far above it blisters
+      const grain = this.tyres[w.isFront ? 0 : 1].grain;
+      const core = w.coreTempC;
       const surfCoreDelta = w.surfaceTempC - w.coreTempC;
-      if (core < 78 && surfCoreDelta > 10 && slipPower > 6000) {
-        w.grainLevel = Math.min(1, w.grainLevel + (slipPower / 100000) * ((78 - core) / 30) * 0.25 * dt);
-      } else if (core >= 82 && core <= 120 && w.fz > 500 && slipPower < 25000) {
+      if (core < grain.grainBelow && surfCoreDelta > 10 && slipPower > 6000) {
+        w.grainLevel = Math.min(1, w.grainLevel + (slipPower / 100000) * ((grain.grainBelow - core) / 30) * 0.25 * dt);
+      } else if (core >= grain.healFrom && core <= grain.healTo && w.fz > 500 && slipPower < 25000) {
         w.grainLevel = Math.max(0, w.grainLevel - 0.035 * dt);
       }
-      if (core > 128) {
-        w.blisterLevel = Math.min(1, w.blisterLevel + (core - 128) * 0.0035 * dt);
+      if (core > grain.blisterAbove) {
+        w.blisterLevel = Math.min(1, w.blisterLevel + (core - grain.blisterAbove) * 0.0035 * dt);
       }
 
       w.dirtyLevel = advanceDirtyLevel(w.dirtyLevel, w.ground.surface, slipPower, v, dt, this.trackEvolution.marbleLevel);
