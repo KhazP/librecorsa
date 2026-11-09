@@ -45,6 +45,11 @@ export interface PortedCarOptions {
   cameraAnchors?: (fit: PortedCameraFit) => Vf26ModelInstance["cameraAnchors"];
   /** A 2018+ car: its tyres get the 2026 Pirelli sidewall, recoloured by the compound (the model's own otherwise) */
   pirelliSidewall?: boolean;
+  /**
+   * A livery of the car's own to wear instead of the paint its GLB was made in: the folder of its files
+   * (`carSkinBaseUrl`), which replace the textures of the materials the GLB's `skinMaps` extras name
+   */
+  skinBaseUrl?: string | null;
 }
 
 /** A ported model's driver and nose in rig space, once loaded */
@@ -60,6 +65,36 @@ interface PortedExtras {
   tyreRadius?: Record<string, number>;
   tyreHalfWidth?: Record<string, number>;
   cameras?: Partial<Record<string, { pos: [number, number, number]; pitchDeg: number; fov: number }>>;
+  /** The wheel's shift lights (ported-wheel-dash.ts), handed on to the `STEER` node */
+  revLeds?: unknown;
+  /** GLB material name -> the file of a livery that replaces its colour texture */
+  skinMaps?: Record<string, string>;
+}
+
+/** Livery textures, loaded once each and shared by every car wearing them */
+const skinTextures = new Map<string, Promise<THREE.Texture | null>>();
+
+function loadSkinTexture(url: string, like: THREE.Texture | null): Promise<THREE.Texture | null> {
+  let tex = skinTextures.get(url);
+  if (!tex) {
+    tex = new THREE.TextureLoader()
+      .loadAsync(withBasePath(url))
+      .then((t) => {
+        // As the GLB's own: glTF UVs (no flip), sRGB colour, repeating
+        t.flipY = false;
+        t.colorSpace = THREE.SRGBColorSpace;
+        t.wrapS = t.wrapT = THREE.RepeatWrapping;
+        t.anisotropy = like?.anisotropy ?? 4;
+        t.needsUpdate = true;
+        return t;
+      })
+      .catch((err) => {
+        console.warn(`Livery texture ${url} not loaded, keeping the model's paint`, err);
+        return null;
+      });
+    skinTextures.set(url, tex);
+  }
+  return tex;
 }
 
 const WHEELS = WHEEL_NODES;
@@ -248,6 +283,23 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
   let disposed = false;
   // The compound the sidewalls show; the tyres are built when the model loads
   let compound: TireCompound = "medium";
+  // The livery: this rig's copies of the materials it repaints (with their own textures), and the skin it wears
+  const skinSlots: { mat: THREE.MeshStandardMaterial; file: string; own: THREE.Texture | null }[] = [];
+  let skinBase = options.skinBaseUrl ?? null;
+  const applySkin = () => {
+    const base = skinBase;
+    for (const slot of skinSlots) {
+      if (!base) {
+        slot.mat.map = slot.own;
+        continue;
+      }
+      void loadSkinTexture(`${base}/${slot.file}`, slot.own).then((tex) => {
+        if (disposed || skinBase !== base || !tex) return;
+        slot.mat.map = tex;
+        slot.mat.needsUpdate = true;
+      });
+    }
+  };
 
   void loadTemplate(options.url).then((template) => {
     if (!template || disposed) return;
@@ -321,6 +373,27 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
       bodyGroup.add(steerNode);
       steerPivot = steerNode;
       steerRest.copy(steerNode.quaternion);
+      if (extras.revLeds) steerNode.userData.revLeds = extras.revLeds;
+    }
+    // The materials a livery repaints, copied for this car (the template's are every car's)
+    const skinMaps = extras.skinMaps;
+    if (skinMaps) {
+      const copies = new Map<THREE.Material, THREE.MeshStandardMaterial>();
+      bodyGroup.traverse((o) => {
+        const mesh = o as THREE.Mesh;
+        if (!mesh.isMesh || Array.isArray(mesh.material)) return;
+        const src = mesh.material as THREE.MeshStandardMaterial;
+        const file = skinMaps[src.name];
+        if (!file || !src.isMeshStandardMaterial) return;
+        let copy = copies.get(src);
+        if (!copy) {
+          copy = src.clone();
+          copies.set(src, copy);
+          skinSlots.push({ mat: copy, file, own: src.map });
+        }
+        mesh.material = copy;
+      });
+      applySkin();
     }
     placeholder.removeFromParent();
     placeholder.geometry.dispose();
@@ -368,8 +441,14 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
     root,
     chassisGroup,
     helmetGroup: new THREE.Group(),
-    // The model keeps its own paint; a 2026 car's tyre sidewalls show the compound
+    // The model keeps its own paint (or wears a livery of its own, `setSkin`); a 2026 car's tyre sidewalls show the
+    // compound
     setLivery: () => {},
+    setSkin: (baseUrl) => {
+      if (baseUrl === skinBase) return;
+      skinBase = baseUrl;
+      applySkin();
+    },
     setTireCompound: (c) => {
       compound = c;
       for (const corner of corners) corner.tyre?.setCompound(c);
@@ -380,6 +459,7 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
     dispose: () => {
       disposed = true;
       for (const c of corners) c.tyre?.dispose();
+      for (const slot of skinSlots) slot.mat.dispose();
       root.removeFromParent();
     },
   };

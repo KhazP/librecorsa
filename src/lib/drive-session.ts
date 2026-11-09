@@ -15,7 +15,8 @@ import { FloorSparks } from "@/lib/render/floor-sparks";
 import { vehicleModelSpec } from "@/lib/cars/vehicle-models";
 import type { CarSoundSource } from "@/lib/sim/CarAudio";
 import { OpponentAudio } from "@/lib/sim/opponent-audio";
-import { carById, carForVehicle, carOvertakingRules, type CarId } from "@/lib/cars/car-registry";
+import { carById, carForVehicle, carOvertakingRules, carSkinBaseUrl, type CarId } from "@/lib/cars/car-registry";
+import { carSkinFor, subscribeCarSkins } from "@/lib/cars/car-skins";
 import { trackGeometryKey } from "@/lib/sim/ghost-align";
 import { carPhysics } from "@/lib/cars/f1-mod-physics";
 import { buildCircuitScene } from "@/lib/scene-builder";
@@ -26,6 +27,8 @@ import {
   createPostFx,
 } from "@/lib/render/golden-hour-environment";
 import { SteeringWheelDisplay } from "@/lib/render/steering-display";
+import { PortedWheelDash } from "@/lib/render/ported-wheel-dash";
+import { revRangeFor } from "@/lib/sim/rev-range";
 import { WingMirrors } from "@/lib/render/wing-mirrors";
 import { VirtualMirror } from "@/lib/render/virtual-mirror";
 import { type ChassisSetup, DEFAULT_CHASSIS_SETUP, loadChassisSetup } from "@/lib/sim/car-setup";
@@ -725,6 +728,12 @@ export class DriveSession {
     // The body follows the car's registry model, not `carPhysics`: a ported F1 car switched to the VF26 physics
     // keeps the geometry it was fitted to
     const rigModel = (car: CarId) => vehicleModelSpec(carById(car).physics);
+    /** The livery files the player picked for a car with its own (null: the paint its model was made in) */
+    const skinUrlFor = (car: CarId): string | null => {
+      const skins = carById(car).skins;
+      const skin = carSkinFor(car);
+      return skin && skins && skin.id !== skins[0].id ? carSkinBaseUrl(car, skin.id) : null;
+    };
     const createCarRig = (car: CarId): SimCarRig => {
       const def = carById(car);
       const model = rigModel(car);
@@ -739,6 +748,7 @@ export class DriveSession {
             cameraAnchors: model.gt3Cockpit ? gt3RigCameraAnchors : undefined,
             // F1 cars from 2018 on wear the 2026 Pirelli sidewall (the SF71H on its 13" tyres too; the models' own are poor)
             pirelliSidewall: def.classId === "f1" && def.year >= 2018,
+            skinBaseUrl: skinUrlFor(car),
           })
         : model.gt3Cockpit
           ? createGt3CarRig()
@@ -752,6 +762,8 @@ export class DriveSession {
     };
     let carRig = createCarRig(carIdNow);
     let carRigCar: CarId = carIdNow;
+    // A livery picked in the menus goes onto the car at once
+    const unsubscribeCarSkins = subscribeCarSkins(() => carRig.setSkin?.(skinUrlFor(carRigCar)));
     const swapCarRig = (car: CarId) => {
       if (car === carRigCar) return;
       // The cockpit extras belong to the old body
@@ -762,6 +774,8 @@ export class DriveSession {
       vf26ExtrasFor = null;
       gt3Dash?.dispose();
       gt3Dash = null;
+      portedDash?.dispose();
+      portedDash = null;
       reflectionProbe.untrack(carRig.root);
       carRig.dispose();
       // Free the old car's GPU memory: switching cars otherwise stacks every model's textures on the GPU
@@ -1208,6 +1222,9 @@ export class DriveSession {
     let vf26ExtrasFor: THREE.Object3D | null = null;
     // The AMG GT3's MoTeC dash and rear-view mirror, once its cockpit model has loaded
     let gt3Dash: Gt3DashDisplay | null = null;
+    // A ported body's wheel screen and shift lights (the 496R's), once its GLB has loaded under the rig
+    let portedDash: PortedWheelDash | null = null;
+    let portedProbeFrame = 0;
     let cockpitProbeFrame = 0;
     const lapDelta = new LapDeltaTracker(track.totalLengthM);
     // Race control: judges every excursion past the track limits (see TrackLimitsMonitor); resetRun and setRace start
@@ -1874,6 +1891,9 @@ export class DriveSession {
         if (steerBase) wheelDisplay = new SteeringWheelDisplay(steerBase);
         wingMirrors = new WingMirrors(renderer, scene, vf26Body);
       }
+      if (!vf26Body && !portedDash && carById(carRigCar).modelUrl && portedProbeFrame++ % 30 === 0) {
+        portedDash = PortedWheelDash.from(carRig.chassisGroup, revRangeFor(carById(carRigCar).physics));
+      }
       if (!vf26Body && !gt3Dash && rigModel(carRigCar).gt3Cockpit && cockpitProbeFrame++ % 30 === 0) {
         const anchors = carRig.getCameraAnchors();
         if (anchors && carRig.chassisGroup.getObjectByName(GT3_DASH_MESH)) {
@@ -1901,7 +1921,7 @@ export class DriveSession {
       }
       lapDelta.update(physics.telemetry);
       // The wheel is only in shot from the onboard views; the display redraws itself at 30 Hz
-      if (view.wheelInShot && (wheelDisplay || gt3Dash)) {
+      if (view.wheelInShot && (wheelDisplay || gt3Dash || portedDash?.found)) {
         const delta = lapDelta.delta(physics.telemetry);
         const deltaMs = delta === null ? null : delta * 1000;
         if (wheelDisplay) {
@@ -1909,6 +1929,7 @@ export class DriveSession {
           wheelDisplay.update(physics.telemetry, nowMs, displayExtra);
         }
         gt3Dash?.update(physics.telemetry, nowMs, { deltaMs });
+        if (portedDash?.found) portedDash.update(physics.telemetry, nowMs, { deltaMs });
       }
 
       // Update persistent 4-wheel skidmark ribbons, tire smoke/gravel/rooster-tail particles & opponent 3D cars
@@ -2138,6 +2159,8 @@ export class DriveSession {
       wheelDisplay?.dispose();
       wingMirrors?.dispose();
       gt3Dash?.dispose();
+      portedDash?.dispose();
+      unsubscribeCarSkins();
       postFx.dispose();
       reflectionProbe.dispose();
       env.dispose();

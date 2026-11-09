@@ -114,8 +114,12 @@ export class SteeringWheelDisplay {
   private readonly ctx: CanvasRenderingContext2D | null = null;
   private readonly texture: THREE.CanvasTexture | null = null;
   private lastDrawMs = -Infinity;
+  /** The LED bar's first LED and its limiter (rpm): the VF26's by default */
+  private readonly ledStartRpm: number;
+  private readonly limiterRpm: number;
 
-  constructor(steerRoot: THREE.Object3D) {
+  constructor(steerRoot: THREE.Object3D, revRange: readonly [number, number] = [LED_START_RPM, LIMITER_RPM]) {
+    [this.ledStartRpm, this.limiterRpm] = revRange;
     let target: THREE.Mesh | null = null;
     steerRoot.traverse((obj) => {
       if (target) return;
@@ -196,8 +200,8 @@ export class SteeringWheelDisplay {
     // RPM LEDs: green / red / blue segments, all blue and flashing at the limiter
     const rpm = Number.isFinite(t.rpm) ? t.rpm : 0;
     const segW = (BOX_W - (LED_COUNT - 1) * LED_GAP) / LED_COUNT;
-    const litCount = Math.round(clamp01((rpm - LED_START_RPM) / (LIMITER_RPM - LED_START_RPM)) * LED_COUNT);
-    const atLimiter = rpm >= LIMITER_RPM;
+    const litCount = Math.round(clamp01((rpm - this.ledStartRpm) / (this.limiterRpm - this.ledStartRpm)) * LED_COUNT);
+    const atLimiter = rpm >= this.limiterRpm;
     const flashOn = Math.floor(nowMs / 100) % 2 === 0;
     for (let i = 0; i < LED_COUNT; i++) {
       let colour = COLOR_LED_OFF;
