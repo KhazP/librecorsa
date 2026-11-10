@@ -42,7 +42,7 @@ const scale = (lut: Lut, k: number): Lut => lut.map(([x, y]) => [x, y * k]);
 const upTo = (lut: Lut, xMax: number): Lut => lut.filter(([x]) => x <= xMax);
 const G = 9.81;
 
-function section(title: string, id: string, run: (mod: ModData) => void): void {
+function section(title: string, id: string, run: (mod: ModData) => void, wholeSource = true): void {
   const mod = new ModData(modDir(id));
   if (!mod.present) {
     console.log(`SKIP  ${title}: its source data isn't on this machine (${id})`);
@@ -52,18 +52,78 @@ function section(title: string, id: string, run: (mod: ModData) => void): void {
   const from = checks;
   run(mod);
   console.log(`${failures.length === before ? 'PASS' : 'FAIL'}  ${title}: ${checks - from} values against the source`);
-  if (process.argv.includes('--unread')) listUnread(mod);
+  if (wholeSource && process.argv.includes('--unread')) listUnread(mod);
 }
 
 const PHYSICS_FILES = ['car.ini', 'suspensions.ini', 'tyres.ini', 'drivetrain.ini', 'engine.ini', 'brakes.ini', 'aero.ini', 'electronics.ini'];
 
-/** With `--unread`: the source's keys this suite never read, per file and section */
+/** Sections and keys with no physics in them (names, graphics, pit stops, damage, debug) */
+const NOT_PHYSICS_SECTION = /^(HEADER|INFO|GRAPHICS|GRAPHICS_OFFSETS|DISCS_GRAPHICS|PIT_STOP|RULES|DAMAGE|COMPOUND_DEFAULT|_EXTENSION|EXPLOSION)$/;
+const NOT_PHYSICS_KEY = /^(NAME|SHORT_NAME|TYPE_HINT|GRAPHICS_.*|DEBUG.*|COCKPIT_ADJUSTABLE|SUPPORTS_SHIFTER|PRESENT|ACTIVE|WEAR_CURVE|PERFORMANCE_CURVE)$/;
+
+/**
+ * Source keys no check reads, and why the config does not carry them, matched on `file [SECTION] KEY` (a compound's
+ * `_1`, `_2` sections count as one). Anything the source has that is neither checked nor listed here prints as
+ * unexplained: a key to carry, or to add here with its reason.
+ */
+const NOT_CARRIED: [RegExp, string][] = [
+  [/^tyres\.ini \[THERMAL_(FRONT|REAR)\] /, "tyre heat flow: this sim's own thermal model, not yet fitted to these"],
+  [/^tyres\.ini \[(FRONT|REAR)\] (DY0|DY1|DX0|DX1|DY_REF|DX_REF)$/, 'replaced by the load curves the data also gives'],
+  [/^tyres\.ini \[(FRONT|REAR)\] (FLEX|XMU)$/, 'not read by this tyre data version, or carried in a derived form (the Liana: peak angle against load)'],
+  [/^tyres\.ini \[(FRONT|REAR)\] DCAMBER_LUT(_SMOOTH)?$/, "names a table that isn't in the data; the camber terms stand in"],
+  [/^tyres\.ini \[(FRONT|REAR)\] PRESSURE_FLEX_GAIN$/, 'not carried for this tyre data version (the Liana)'],
+  [/^tyres\.ini \[(FRONT|REAR)\] (ANGULAR_INERTIA|ROLLING_RESISTANCE_[01]|ROLLING_RESISTANCE_SLIP|PRESSURE_RR_GAIN|RADIUS_ANGULAR_K|BRAKE_DX_MOD)$/, "taken from another data set or this sim's own (f12026 tyres, the other compounds' wheels)"],
+  [/^tyres\.ini \[(FRONT|REAR)\] (CAMBER_SPRING_MULT|ROLLING_RADIUS_MULT|RADIUS_ANGULAR_K_2|DX_CAMBER_REF|DX_CAMBER_MULT|DROPOFF_FACTOR_.)$/, "an extension's tyre terms: not modelled"],
+  [/^tyres\.ini \[(VIRTUALKM|ADDITIONAL1|THERMAL_MODEL)\] /, 'wear by load and blanket settings: not carried'],
+  [/^car\.ini \[CONTROLS\] (FFMULT|STEER_ASSIST)$/, "force feedback scaling: this sim's own"],
+  [/^car\.ini \[CONTROLS\] LINEAR_STEER_ROD_RATIO$/, 'rack travel: steering is by road-wheel angle (STEER_LOCK / STEER_RATIO) on the solved geometry'],
+  [/^car\.ini \[FUEL\] /, "fuel load and use: the sim's own (car-setup)"],
+  [/^suspensions\.ini \[(FRONT|REAR)\] (TYPE|RIM_OFFSET)$/, 'the config states the suspension type itself; rim offset is graphics'],
+  [/^suspensions\.ini \[(FRONT|REAR)\] TOE_OUT$/, 'static toe is a setup value here (the data gives a rod length, not an angle): not converted'],
+  [/^suspensions\.ini \[(FRONT|REAR)\] WBTYRE_BOTTOM$/, "a strut's lower ball joint is STRUT_TYRE"],
+  [/^suspensions\.ini \[HEAVE_(FRONT|REAR)\] BUMPSTOP_DN$/, 'no droop stop on a heave element'],
+  [/^suspensions\.ini \[HEAVE_(FRONT|REAR)\] BUMP_STOP_RATE$/, "the element's packers lie past its own bump stop, which is rigid"],
+  [/^drivetrain\.ini \[GEARS\] GEAR_7$/, 'past the gear count: unused'],
+  [/^drivetrain\.ini \[GEARBOX\] (CHANGE_UP_TIME|AUTO_CUTOFF_TIME)$/, 'one up-shift time: the longer of the change and the ignition cut'],
+  [/^drivetrain\.ini \[GEARBOX\] (VALID_SHIFT_RPM_WINDOW|CONTROLS_WINDOW_GAIN)$/, 'H-pattern shift rules: not modelled'],
+  [/^drivetrain\.ini \[(AUTOCLUTCH|DOWNSHIFT_PROFILE|AUTOBLIP|DOWNSHIFT_PROTECTION|AUTO_SHIFTER|TRACTION)\] /, "clutch, blip and auto-shift timing: this sim's own gearbox logic"],
+  [/^engine\.ini \[ENGINE_DATA\] (ALTITUDE_SENSITIVITY|AMBIENT_EFFECT)$/, "air density acts on the engine through this sim's own weather"],
+  [/^engine\.ini \[(COAST_REF|COAST_DATA|COAST_CURVE)\] /, 'the overrun torque is the reference line (COAST_REF) alone'],
+  [/^brakes\.ini \[TEMPS_(FRONT|REAR)\] /, "brake heat: this sim's own disc model by material"],
+  [/^brakes\.ini \[DATA\] (HANDBRAKE_TORQUE|ADJUST_STEP)$/, 'no handbrake or bias adjuster on this car'],
+  [/^aero\.ini \[WING_\d+\] ZONE_/, 'slipstream and damage zones: not modelled per element'],
+  [/^aero\.ini \[(WING_0|FIN_0|WING_1)\] /, 'the body (and the Liana\'s boot) as constant drag and lift; the 496R\'s fin has no tables'],
+  [/^electronics\.ini \[(ABS|TRACTION_CONTROL)\] CURVE$/, 'the switch positions are listed in the config'],
+  [/^electronics\.ini \[EDL\] /, 'electronic diff lock by the brakes: not modelled'],
+];
+
+/** With `--unread`: the source's physics keys this suite never read, grouped by why they are not carried */
 function listUnread(mod: ModData): void {
+  const byReason = new Map<string, Set<string>>();
+  const note = (id: string) => {
+    const reason = NOT_CARRIED.find(([re]) => re.test(id))?.[1] ?? 'UNEXPLAINED';
+    let set = byReason.get(reason);
+    if (!set) byReason.set(reason, (set = new Set()));
+    set.add(id);
+  };
+  // A compound's numbered sections (FRONT_2, THERMAL_REAR_1) are one kind
+  const kind = (name: string) => name.replace(/^((?:THERMAL_)?(?:FRONT|REAR))_\d+$/, '$1');
   for (const file of PHYSICS_FILES) {
     if (!mod.has(file)) continue;
     const { keys, sections } = mod.unread(file);
-    for (const [name, left] of Object.entries(keys)) console.log(`        ${file} [${name}] ${left.join(' ')}`);
-    if (sections.length) console.log(`        ${file} sections not read: ${sections.join(' ')}`);
+    for (const [name, left] of Object.entries(keys)) {
+      if (NOT_PHYSICS_SECTION.test(name)) continue;
+      for (const key of left) if (!NOT_PHYSICS_KEY.test(key)) note(`${file} [${kind(name)}] ${key}`);
+    }
+    // A section never opened: one line for it, unless it is another compound's (a tyre the car here doesn't fit)
+    for (const name of sections) {
+      if (NOT_PHYSICS_SECTION.test(name) || /^(THERMAL_)?(FRONT|REAR)(_\d+)?$/.test(name)) continue;
+      note(`${file} [${name}] *`);
+    }
+  }
+  for (const [reason, ids] of [...byReason].sort(([a], [b]) => (a === 'UNEXPLAINED' ? 1 : b === 'UNEXPLAINED' ? -1 : a.localeCompare(b)))) {
+    console.log(`        ${reason}:`);
+    console.log(`          ${[...ids].map((id) => id.replace(/\.ini/, '')).join(', ')}`);
   }
 }
 
@@ -113,6 +173,11 @@ const TYRE_KEYS: Record<string, (t: AxleTyre) => number | undefined> = {
   LS_EXPY: (t) => t.model.lsExpY,
   LS_EXPX: (t) => t.model.lsExpX,
   BRAKE_DX_MOD: (t) => t.model.brakeDxMod,
+  // Millimetres of radius per rad/s of spin
+  RADIUS_ANGULAR_K: (t) => (t.geometry.radiusGrowthPerRadS ?? NaN) * 1000,
+  // Thousandths of the free-rolling drag per unit of slip over the peak slip
+  ROLLING_RESISTANCE_SLIP: (t) => (t.model.rollingResistanceSlipGain ?? NaN) * 1000,
+  PRESSURE_RR_GAIN: (t) => t.pressure.pressureRollingGain,
 };
 
 interface TyreCheck {
@@ -170,9 +235,15 @@ function checkChassis(label: string, mod: ModData, config: CarPhysicsConfig): vo
   eq(`${label} TRACK rear`, ch.trackWidthRear, s('REAR', 'TRACK'));
   eq(`${label} HUB_MASS front`, ch.unsprungMassFront, s('FRONT', 'HUB_MASS'));
   eq(`${label} HUB_MASS rear`, ch.unsprungMassRear, s('REAR', 'HUB_MASS'));
+  const tank = mod.vec('car.ini', 'FUELTANK', 'POSITION');
+  eq(`${label} FUELTANK POSITION y`, ch.fuelTank?.y ?? NaN, tank[1]);
+  eq(`${label} FUELTANK POSITION z`, ch.fuelTank?.z ?? NaN, tank[2]);
   eq(`${label} ANGULAR_INERTIA front`, ch.wheelInertiaFront, mod.num('tyres.ini', 'FRONT', 'ANGULAR_INERTIA'));
   eq(`${label} ANGULAR_INERTIA rear`, ch.wheelInertiaRear, mod.num('tyres.ini', 'REAR', 'ANGULAR_INERTIA'));
 }
+
+/** Rate of a stop the source data gives no rate for: a strut's or a heave element's own bump stop (N/m) */
+const RIGID_STOP_RATE = 500_000;
 
 const HARDPOINT_KEYS = ['WBCAR_TOP_FRONT', 'WBCAR_TOP_REAR', 'WBCAR_BOTTOM_FRONT', 'WBCAR_BOTTOM_REAR', 'WBTYRE_TOP', 'WBTYRE_BOTTOM', 'WBCAR_STEER', 'WBTYRE_STEER'];
 
@@ -220,12 +291,24 @@ function checkSuspension(label: string, mod: ModData, config: CarPhysicsConfig, 
     eq(`${name} first stop from static ride`, sus.bumpStop.range, near, 1e-4);
     if (sus.bumpStop.hardStop) eq(`${name} second stop from static ride`, sus.bumpStop.hardStop.range, far, 1e-4);
     eq(`${name} droop from static ride`, sus.droopTravel, st.droopM, 1e-4);
+    // The packers work at BUMP_STOP_RATE, and so does a wishbone corner's bump stop (a strut's is rigid); where the two
+    // meet at the same travel their rates add
+    const packerRate = s(axle, 'BUMP_STOP_RATE');
+    const stopRate = opts.strutFront && axle === 'FRONT' ? RIGID_STOP_RATE : packerRate;
+    const together = Math.abs(st.packerGapM - st.bumpStopGapM) < 1e-4;
+    const packerFirst = st.packerGapM <= st.bumpStopGapM;
+    eq(`${name} BUMP_STOP_RATE at the first stop`, sus.bumpStop.rate, together ? packerRate + stopRate : packerFirst ? packerRate : stopRate);
+    if (sus.bumpStop.hardStop) eq(`${name} BUMP_STOP_RATE at the second stop`, sus.bumpStop.hardStop.rate, packerFirst ? stopRate : packerRate);
+    // This model's corner springs are linear
+    eq(`${name} PROGRESSIVE_SPRING_RATE`, 0, s(axle, 'PROGRESSIVE_SPRING_RATE'));
 
     const heave = `HEAVE_${axle}`;
     if (Number.isFinite(s(heave, 'SPRING_RATE'))) {
       eq(`${name} heave SPRING_RATE`, sus.heave.rate, s(heave, 'SPRING_RATE'));
       eq(`${name} heave PROGRESSIVE_SPRING_RATE`, sus.heave.progressiveRate ?? 0, s(heave, 'PROGRESSIVE_SPRING_RATE'));
       eq(`${name} heave first stop from static ride`, sus.heave.packerGap, Math.min(st.heavePackerGapM, st.heaveBumpStopGapM), 1e-4);
+      // A heave element's packers work at its BUMP_STOP_RATE; its own bump stop is rigid
+      eq(`${name} heave BUMP_STOP_RATE at the first stop`, sus.heave.packerRate, st.heavePackerGapM <= st.heaveBumpStopGapM ? s(heave, 'BUMP_STOP_RATE') : RIGID_STOP_RATE);
       eq(`${name} heave DAMP_BUMP`, damp.heave.slow_bump, s(heave, 'DAMP_BUMP'));
       eq(`${name} heave DAMP_FAST_BUMP`, damp.heave.fast_bump, s(heave, 'DAMP_FAST_BUMP'));
       eq(`${name} heave DAMP_REBOUND`, damp.heave.slow_rebound, s(heave, 'DAMP_REBOUND'));
@@ -308,13 +391,14 @@ section('MTR 496R', 'mt_mtr_496r', (mod) => {
   eq('496R AUTO_SHIFTER UP', config.gearbox.gears.upshift_rpm, mod.num('drivetrain.ini', 'AUTO_SHIFTER', 'UP'));
   eq('496R AUTO_SHIFTER DOWN', config.gearbox.gears.downshift_rpm, mod.num('drivetrain.ini', 'AUTO_SHIFTER', 'DOWN'));
   eq('496R AUTO_CUTOFF_TIME', config.gearbox.shiftTimeS, mod.num('drivetrain.ini', 'GEARBOX', 'AUTO_CUTOFF_TIME') / 1000);
+  eq('496R CHANGE_DN_TIME', config.gearbox.downshiftTimeS, mod.num('drivetrain.ini', 'GEARBOX', 'CHANGE_DN_TIME') / 1000);
   eq('496R brake ADJUST_STEP', config.brakes.ebbStep, mod.num('brakes.ini', 'DATA', 'ADJUST_STEP') / 100);
   eq('496R TC SLIP_RATIO_LIMIT', MTR_496R_ELECTRONICS.tcDefault, mod.num('electronics.ini', 'TRACTION_CONTROL', 'SLIP_RATIO_LIMIT'));
   eq('496R TC RATE_HZ', MTR_496R_ELECTRONICS.tcRateHz, mod.num('electronics.ini', 'TRACTION_CONTROL', 'RATE_HZ'));
   eq('496R TC MIN_SPEED_KMH', MTR_496R_ELECTRONICS.tcMinSpeedKmh, mod.num('electronics.ini', 'TRACTION_CONTROL', 'MIN_SPEED_KMH'));
 
   // Slick Soft / Medium / Hard are the first three compounds
-  const keys = [...V10_SHAPE, 'WIDTH', 'RADIUS', 'RIM_RADIUS', 'DAMP', 'RELAXATION_LENGTH', 'ROLLING_RESISTANCE_0', 'ROLLING_RESISTANCE_1', 'CAMBER_GAIN', 'DCAMBER_0', 'DCAMBER_1', 'PRESSURE_IDEAL', 'PRESSURE_D_GAIN', 'FZ0', 'LS_EXPY', 'LS_EXPX', 'BRAKE_DX_MOD'];
+  const keys = [...V10_SHAPE, 'WIDTH', 'RADIUS', 'RIM_RADIUS', 'RADIUS_ANGULAR_K', 'DAMP', 'RELAXATION_LENGTH', 'ROLLING_RESISTANCE_0', 'ROLLING_RESISTANCE_1', 'ROLLING_RESISTANCE_SLIP', 'PRESSURE_RR_GAIN', 'CAMBER_GAIN', 'DCAMBER_0', 'DCAMBER_1', 'PRESSURE_IDEAL', 'PRESSURE_D_GAIN', 'FZ0', 'LS_EXPY', 'LS_EXPX', 'BRAKE_DX_MOD'];
   (['soft', 'medium', 'hard'] as const).forEach((slot, i) => {
     const compound = compoundData(config, config.compoundSlots[slot]);
     const suffix = i ? `_${i}` : '';
@@ -376,6 +460,8 @@ section('Suzuki Liana', 'suzuki_liana', (mod) => {
   checkSuspension('Liana', mod, config, { hardpoints: { front: [2, 3, 4, 5, 6, 7], rear: ALL }, strutFront: true });
   checkDriveline('Liana', mod, config);
   eq('Liana CHANGE_UP_TIME', config.gearbox.shiftTimeS, mod.num('drivetrain.ini', 'GEARBOX', 'CHANGE_UP_TIME') / 1000);
+  eq('Liana CHANGE_DN_TIME', config.gearbox.downshiftTimeS, mod.num('drivetrain.ini', 'GEARBOX', 'CHANGE_DN_TIME') / 1000);
+  eq('Liana HANDBRAKE_TORQUE', config.brakes.handbrakeTorqueNm, mod.num('brakes.ini', 'DATA', 'HANDBRAKE_TORQUE'));
   const el = (sec: string, key: string) => mod.num('electronics.ini', sec, key);
   eq('Liana ABS SLIP_RATIO_LIMIT', SUZUKI_LIANA_ELECTRONICS.absDefault, el('ABS', 'SLIP_RATIO_LIMIT'));
   eq('Liana ABS RATE_HZ', SUZUKI_LIANA_ELECTRONICS.absRateHz, el('ABS', 'RATE_HZ'));
@@ -385,7 +471,7 @@ section('Suzuki Liana', 'suzuki_liana', (mod) => {
 
   // The street tyre is the first compound: an older tyre data version, with a linear load law and no falloff
   const compound = compoundData(config, config.compoundSlots.soft);
-  const keys = ['WIDTH', 'RADIUS', 'RIM_RADIUS', 'DAMP', 'FRICTION_LIMIT_ANGLE', 'XMU', 'SPEED_SENSITIVITY', 'RELAXATION_LENGTH', 'ROLLING_RESISTANCE_0', 'ROLLING_RESISTANCE_1', 'CAMBER_GAIN', 'DCAMBER_0', 'DCAMBER_1', 'PRESSURE_IDEAL', 'PRESSURE_D_GAIN'];
+  const keys = ['WIDTH', 'RADIUS', 'RIM_RADIUS', 'DAMP', 'FRICTION_LIMIT_ANGLE', 'XMU', 'SPEED_SENSITIVITY', 'RELAXATION_LENGTH', 'ROLLING_RESISTANCE_0', 'ROLLING_RESISTANCE_1', 'ROLLING_RESISTANCE_SLIP', 'PRESSURE_RR_GAIN', 'CAMBER_GAIN', 'DCAMBER_0', 'DCAMBER_1', 'PRESSURE_IDEAL', 'PRESSURE_D_GAIN'];
   for (const axle of ['front', 'rear'] as const) {
     const AX = axle.toUpperCase();
     const tyre = axleTyre(compound, axle);
@@ -401,8 +487,11 @@ section('Suzuki Liana', 'suzuki_liana', (mod) => {
 });
 
 // The GT3's base is a data set this machine doesn't hold; what it took from its second reference is checked here
-section('AMG GT3 (second reference)', 'merc_gt3', (mod) => {
+section('AMG GT3 (second reference)', 'gt3_ref', (mod) => {
   const config = AMG_GT3_CONFIG;
+  const tank = mod.vec('car.ini', 'FUELTANK', 'POSITION');
+  eq('GT3 FUELTANK POSITION y', config.chassis.fuelTank.y, tank[1]);
+  eq('GT3 FUELTANK POSITION z', config.chassis.fuelTank.z, tank[2]);
   const s = (sec: string, key: string) => mod.num('suspensions.ini', sec, key);
   eq('GT3 ARB front', config.suspensions.front.arb, s('ARB', 'FRONT'));
   eq('GT3 ARB rear', config.suspensions.rear.arb, s('ARB', 'REAR'));
@@ -418,7 +507,7 @@ section('AMG GT3 (second reference)', 'merc_gt3', (mod) => {
     const AX = axle.toUpperCase();
     checkTyre(`GT3 ${axle}`, mod, axleTyre(compound, axle), { sectionName: AX, thermalName: `THERMAL_${AX}`, keys, tread: true });
   }
-});
+}, false);
 
 // The f12026 car's tyres: C3 / C2 / C1 (the third to fifth compounds) as soft / medium / hard. Its grip above 4 kN is
 // this sim's own (the data's falls further than a tyre does at a Formula 1 car's loads), so the load curves are
