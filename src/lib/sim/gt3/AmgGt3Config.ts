@@ -439,6 +439,22 @@ function buildGt3LoadCurve(dRef: number, fz0: number, lsExp: number): LutPoints 
  * keep the grip steps (DY_REF = DX_REF 1.58 / 1.56 / 1.54) scaled ×1.165 to reference GT3 grip [motec], and three
  * temperature curves.
  */
+/** The reference slick's wear: grip (% of new) against km slid [ref] */
+const GT3_WEAR_CURVE: [number, number][] = [
+  [0, 100],
+  [3.69, 99.62],
+  [7.37, 98.93],
+  [11.06, 97.96],
+  [14.75, 96.87],
+  [18.43, 95.82],
+  [22.12, 94.78],
+  [25.8, 93.47],
+  [29.49, 91.58],
+  [33.18, 88.81],
+  [36.86, 84.87],
+  [40.55, 80],
+];
+
 function gt3Compound(
   tyre_compound: PhysicsTyreCompound,
   name: string,
@@ -446,7 +462,9 @@ function gt3Compound(
   /** D_REF (lateral = longitudinal) of the compound */
   gripScale: number,
   thermalCurve: LutPoints,
-  window: [number, number]
+  window: [number, number],
+  /** Tread life against the soft's (× the distance of its wear curve) */
+  wearLife: number
 ): TyresCompoundData {
   // Wider 325/705-18 rear slick has ~1.2 % higher peak reference μ at Fz0 = 3910 N and flatter load sensitivity
   const rearGripScale = Number((gripScale * 1.012).toFixed(4));
@@ -454,6 +472,9 @@ function gt3Compound(
     name,
     shortName,
     tyre_compound,
+    // Grip against the distance the tread has slid, in proportion to the load over the data's 2.5 kN [ref]: little lost
+    // over the first 25 km, then the cliff. The medium and the hard stretch it [est]
+    wear: { curve: GT3_WEAR_CURVE.map(([km, pct]) => [Number((km * wearLife).toFixed(2)), pct]), loadScaled: true, loadRefN: 2500 },
     front: GT3_FRONT,
     rear: GT3_REAR,
     modelData: {
@@ -604,7 +625,8 @@ const TYRES = {
       [240, 0.8],
       [300, 0.6],
     ],
-    [70, 85]
+    [70, 85],
+    1
   ),
   PhysicsTyreCompound_GT3_Medium: gt3Compound(
     'PhysicsTyreCompound_GT3_Medium',
@@ -626,7 +648,8 @@ const TYRES = {
       [240, 0.8],
       [300, 0.6],
     ],
-    [80, 95]
+    [80, 95],
+    1.6
   ),
   PhysicsTyreCompound_GT3_Hard: gt3Compound(
     'PhysicsTyreCompound_GT3_Hard',
@@ -648,7 +671,8 @@ const TYRES = {
       [240, 0.8],
       [300, 0.6],
     ],
-    [80, 105]
+    [80, 105],
+    2.4
   ),
 } satisfies Partial<Record<PhysicsTyreCompound, TyresCompoundData>>;
 
@@ -682,9 +706,8 @@ export const AMG_GT3_CONFIG = {
     inertia: { pitch: box(0.99, 3.85), roll: box(1.78, 0.99), yaw: box(1.78, 3.85) },
     unsprungMassFront: 39,
     unsprungMassRear: 46,
-    // The fuel cell sits behind the cabin, 1.25 m behind the CG and 0.20 m above it [ref]: a full tank moves 3 % of the
-    // weight to the rear axle
-    fuelTank: { y: 0.2, z: -1.25 },
+    // No tank position: the car's balance is fitted to telemetry at the CG it has, and the fuel load of those laps is
+    // not known, so the fuel rides at the CG
     wheelInertiaFront: 1.75,
     wheelInertiaRear: 1.95,
     // 320° lock [spec] on ~12.6 ratio: steering-wheel angle per path
