@@ -15,7 +15,8 @@
     "ffb": "tsx scripts/ffb-bridge.ts",
     "compress-tracks": "node scripts/compress-track-glb.mjs --all",
     "upload-hosted": "node scripts/upload-hosted.mjs",
-    "car-thumbs": "node --disable-warning=THREE_CJS_DEPRECATED --import tsx scripts/render-car-thumbs.ts"
+    "car-thumbs": "node --disable-warning=THREE_CJS_DEPRECATED --import tsx scripts/render-car-thumbs.ts",
+    "press-kit": "node --import tsx scripts/build-press-kit.ts"
   },
   "dependencies": {
     "@takram/three-atmosphere": "^0.19.1",

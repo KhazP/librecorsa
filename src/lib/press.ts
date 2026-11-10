@@ -196,7 +196,28 @@ export const DISCUSSIONS: DiscussionItem[] = [
   },
 ];
 
-const newestFirst = <T extends { date: string }>(items: T[]) => [...items].sort((a, b) => b.date.localeCompare(a.date));
+/**
+ * The press kit's screenshots, in the order the press page shows them: full size (2560 × 1440) in
+ * public/press/screenshots/. After changing this list or a picture, `npm run press-kit` remakes the page's thumbnails
+ * and the press kit ZIP.
+ */
+export const PRESS_SCREENSHOTS: { file: string; alt: string }[] = [
+  { file: "monaco-hairpin.jpg", alt: "The field through the hairpin at Monaco" },
+  { file: "rise-side-by-side.jpg", alt: "Side by side through a corner at RISE Motordrome, Rwanda" },
+  { file: "rise-aerial.jpg", alt: "The field through the esses at RISE Motordrome, from above" },
+  { file: "suzuka-ferris-wheel.jpg", alt: "Suzuka, with the Ferris wheel behind" },
+  { file: "rise-onboard.jpg", alt: "Onboard in a race at RISE Motordrome, with the race HUD" },
+  { file: "title-menu.jpg", alt: "The title menu" },
+  { file: "silverstone-rain.jpg", alt: "Three cars through a wet corner at Silverstone" },
+  { file: "suzuka-kerb.jpg", alt: "Riding the kerb at Suzuka" },
+  { file: "monaco-harbour.jpg", alt: "The field along the harbour at Monaco, from above" },
+  { file: "rise-grandstand.jpg", alt: "Three cars below the grandstand at RISE Motordrome" },
+];
+
+/** The press kit download: every screenshot plus the logos (made by `npm run press-kit`) */
+export const PRESS_KIT_ZIP = "/press/librecorsa-press-kit.zip";
+
+const newestFirst =<T extends { date: string }>(items: T[]) => [...items].sort((a, b) => b.date.localeCompare(a.date));
 
 export const coverage = () => newestFirst(COVERAGE);
 export const discussions = () => newestFirst(DISCUSSIONS);
