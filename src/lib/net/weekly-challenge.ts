@@ -27,20 +27,22 @@ export interface WeeklyChallenge extends ChallengeRules {
 }
 
 /**
- * The weeks, in order, then round again. Mostly with some assists and standard realism so anyone can set a time;
- * every few weeks one for no assists and the full simulation.
+ * The weeks, in order, then round again: the first entry is the week of 9 November 2026. Mostly with some assists
+ * and standard realism so anyone can set a time; every few weeks one for no assists and the full simulation.
+ *
+ * Only the project's own circuit and circuits used with their author's permission: none converted from a Sketchfab
+ * model (`quality: "sketchfab"` in public/tracks/index.json), and not Dunsfold, which has no permission on record.
+ * The race laps make a race of about ten minutes in that car.
  */
 export const CHALLENGE_ROTATION: readonly ChallengeRules[] = [
-  { trackId: "rwanda_official_short", vehicle: "vf26", assists: "semi_pro", realism: "standard", raceLaps: 5 },
-  { trackId: "monza", vehicle: "amg-gt3", assists: "semi_pro", realism: "standard", raceLaps: 5 },
-  { trackId: "spa", vehicle: "vf26", assists: "pro", realism: "full", raceLaps: 4 },
-  { trackId: "dunsfold", vehicle: "liana", assists: "semi_pro", realism: "standard", raceLaps: 6 },
-  { trackId: "silverstone", vehicle: "mtr-496r", assists: "semi_pro", realism: "standard", raceLaps: 5 },
-  { trackId: "suzuka", vehicle: "vf26", assists: "semi_pro", realism: "standard", raceLaps: 5 },
-  { trackId: "spielberg", vehicle: "amg-gt3", assists: "pro", realism: "full", raceLaps: 8 },
-  { trackId: "sepang", vehicle: "mtr-496r", assists: "semi_pro", realism: "standard", raceLaps: 5 },
-  { trackId: "yas_marina", vehicle: "amg-gt3", assists: "semi_pro", realism: "standard", raceLaps: 6 },
-  { trackId: "okayama", vehicle: "liana", assists: "pro", realism: "full", raceLaps: 6 },
+  { trackId: "rwanda_official_short", vehicle: "vf26", assists: "semi_pro", realism: "standard", raceLaps: 6 },
+  { trackId: "rwanda_official", vehicle: "vf26", assists: "pro", realism: "full", raceLaps: 5 },
+  { trackId: "spielberg", vehicle: "amg-gt3", assists: "semi_pro", realism: "standard", raceLaps: 7 },
+  { trackId: "chang", vehicle: "mtr-496r", assists: "semi_pro", realism: "standard", raceLaps: 6 },
+  { trackId: "okayama_piper", vehicle: "liana", assists: "semi_pro", realism: "standard", raceLaps: 7 },
+  { trackId: "monaco", vehicle: "amg-gt3", assists: "semi_pro", realism: "standard", raceLaps: 6 },
+  { trackId: "okayama", vehicle: "mtr-496r", assists: "pro", realism: "full", raceLaps: 6 },
+  { trackId: "spielberg_south", vehicle: "liana", assists: "semi_pro", realism: "standard", raceLaps: 7 },
 ];
 
 const DAY_MS = 86_400_000;
@@ -50,6 +52,8 @@ const FIRST_MONDAY_MS = -3 * DAY_MS;
 
 /** Weeks since the Monday before the epoch */
 const weekIndex = (nowMs: number): number => Math.floor((nowMs - FIRST_MONDAY_MS) / WEEK_MS);
+/** The week the rotation's first entry ran: Monday 9 November 2026 */
+const ROTATION_FIRST_WEEK = weekIndex(Date.UTC(2026, 10, 9));
 
 /** ISO 8601 week of the week starting on `mondayMs`, "2026-W46" (a week belongs to the year of its Thursday) */
 export function isoWeekId(mondayMs: number): string {
@@ -63,7 +67,8 @@ export function isoWeekId(mondayMs: number): string {
 export function challengeAt(nowMs: number): WeeklyChallenge {
   const index = weekIndex(nowMs);
   const startsMs = FIRST_MONDAY_MS + index * WEEK_MS;
-  const rules = CHALLENGE_ROTATION[((index % CHALLENGE_ROTATION.length) + CHALLENGE_ROTATION.length) % CHALLENGE_ROTATION.length];
+  const n = CHALLENGE_ROTATION.length;
+  const rules = CHALLENGE_ROTATION[(((index - ROTATION_FIRST_WEEK) % n) + n) % n];
   return { ...rules, id: isoWeekId(startsMs), startsMs, endsMs: startsMs + WEEK_MS };
 }
 

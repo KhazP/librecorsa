@@ -205,6 +205,17 @@ async function main(): Promise<void> {
     check('challenge: weeks run Monday to Monday (UTC), named by ISO week', isoWeekId(Date.UTC(2026, 10, 9)) === '2026-W46' && isoWeekId(Date.UTC(2026, 11, 28)) === '2026-W53' && isoWeekId(Date.UTC(2027, 0, 4)) === '2027-W01');
     const monday = Date.UTC(2026, 10, 9);
     check('challenge: one challenge from Monday 00:00 to Sunday 23:59', challengeAt(monday).id === '2026-W46' && challengeAt(monday + 7 * 86_400_000 - 1).id === '2026-W46' && challengeAt(monday - 1).id === '2026-W45' && challengeAt(monday).endsMs - challengeAt(monday).startsMs === 7 * 86_400_000);
+    {
+      // Only the project's own circuit and circuits used with permission, and each week on a listed circuit
+      type Listed = { id: string; quality: string };
+      const listed = JSON.parse(readFileSync(join(__dirname, '../public/tracks/index.json'), 'utf8')) as Listed[];
+      const off = CHALLENGE_ROTATION.filter((c) => {
+        const t = listed.find((x) => x.id === c.trackId);
+        return !t || t.quality === 'sketchfab' || t.id === 'dunsfold';
+      });
+      check('challenge: no week is on a circuit converted from a Sketchfab model, or on Dunsfold', off.length === 0, off.map((c) => c.trackId).join(', '));
+      check('challenge: the rotation starts on the week of 9 November 2026', challengeAt(monday).trackId === CHALLENGE_ROTATION[0].trackId && challengeAt(monday - 1).trackId === CHALLENGE_ROTATION[CHALLENGE_ROTATION.length - 1].trackId);
+    }
     check('challenge: the next week is the next entry of the rotation', challengeAt(week.endsMs).trackId === CHALLENGE_ROTATION[1].trackId);
     check('challenge: time left reads in days, hours, minutes', timeLeftLabel(week.endsMs, week.endsMs - 3 * 86_400_000 - 4 * 3_600_000) === '3 d 4 h' && timeLeftLabel(week.endsMs, week.endsMs - 5 * 60_000) === '5 min');
     const fit = variant(1.015, 'Weekly Hero', { assists: week.assists, realism: week.realism });
