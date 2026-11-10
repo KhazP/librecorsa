@@ -1,6 +1,7 @@
 /**
  * Which engine the VF26 model runs on: `F1Physics2026` (what it ships on) or the rigid-body `VehiclePhysics` on the
- * same car data (`createVf26Sim`). The rigid-body one is opt-in while it is being driven and compared:
+ * same car data, tuned for that engine (`createVf26Sim`, `Vf26Tune.ts`). The rigid-body one is opt-in while it is
+ * being driven and compared:
  * `?vf26engine=rigid` in the address switches it on and `?vf26engine=classic` off, and the choice is kept for the
  * browser. Off the browser (scripts, the race server) it is the shipping engine.
  */

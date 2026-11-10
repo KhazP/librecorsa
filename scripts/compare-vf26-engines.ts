@@ -1,6 +1,7 @@
 /**
  * The VF26 on its two engines, side by side: `F1Physics2026` (the one it ships on) and the rigid-body `VehiclePhysics`
- * on the same data (`createVf26Sim`), with the reference envelope that came with the car's data (`VF26_AI_REFERENCE`).
+ * on the same data, then the car a driver gets on the rigid-body engine (that data tuned, `Vf26Tune.ts`), with the
+ * reference envelope that came with the car's data (`VF26_AI_REFERENCE`).
  *
  *   npx tsx scripts/compare-vf26-engines.ts
  *
@@ -8,15 +9,15 @@
  * times, top speed, a stop from 300 km/h, sustained lateral g at five speeds, the steering it takes, and what the car
  * does past the limit. Prints a table; `scripts/verify-vf26-fold.ts` asserts the bands.
  */
-import { measureVf26, VF26_ENGINES, type Vf26Measurement } from './lib/vf26-measure';
+import { measureVf26, VF26_ENGINES, VF26_TUNED, type Vf26Measurement } from './lib/vf26-measure';
 import { VF26_AI_REFERENCE } from '../src/lib/sim/vf26-data';
 
-const results: [string, Vf26Measurement][] = VF26_ENGINES.map(({ name, make }) => [name, measureVf26(make)]);
+const results: [string, Vf26Measurement][] = [...VF26_ENGINES, VF26_TUNED].map(({ name, make }) => [name, measureVf26(make)]);
 const pad = (s: string, n: number) => s.padEnd(n);
 const row = (label: string, pick: (m: Vf26Measurement) => string, ref = '') =>
-  console.log(pad(label, 30) + results.map(([, m]) => pad(pick(m), 16)).join('') + ref);
+  console.log(pad(label, 30) + results.map(([, m]) => pad(pick(m), 24)).join('') + ref);
 
-console.log(pad('', 30) + results.map(([name]) => pad(name, 16)).join('') + 'reference');
+console.log(pad('', 30) + results.map(([name]) => pad(name, 24)).join('') + 'reference');
 const refAccel = (kmh: number) => {
   // The reference's time to a speed, read off its (s, m/s) points
   const pts = VF26_AI_REFERENCE.accel;

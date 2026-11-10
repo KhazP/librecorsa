@@ -1,16 +1,18 @@
 /**
- * The VF26 on the rigid-body engine: the f12026-car adapter (`F12026CarSim`) driving `VF26_CAR_CONFIG`, the same car
- * data `F1Physics2026` runs. The 2026 rules (override, straight-line mode, energy store) are the adapter's.
+ * The VF26 on the rigid-body engine: the f12026-car adapter (`F12026CarSim`) driving the tuned car of `Vf26Tune.ts`.
+ * The 2026 rules (override, straight-line mode, energy store) are the adapter's. `VF26_DATA_SIM_PROFILE` is the same
+ * adapter on the untouched car data `F1Physics2026` runs, for comparing the two engines on one car.
  */
 import type { BuiltTrackData } from '@/lib/track-data';
 import type * as THREE from 'three';
 import { VF26_TYRE_SETUP_RANGES } from '../vf26-data';
 import { type CarSimProfile, F12026CarSim, F12026_ELECTRONICS } from './F12026CarSim';
 import { VF26_CAR_CONFIG } from './Vf26Config';
+import { VF26_TUNED_CONFIG } from './Vf26Tune';
 
 export const VF26_SIM_PROFILE: CarSimProfile = {
   id: 'vf26',
-  config: VF26_CAR_CONFIG,
+  config: VF26_TUNED_CONFIG,
   hasErs: true,
   hasDrs: true,
   turbo: true,
@@ -29,6 +31,9 @@ export const VF26_SIM_PROFILE: CarSimProfile = {
   braking: { lowG: 1.6, aeroG: 2.8, refMs: 70 },
 };
 
-export function createVf26Sim(track: BuiltTrackData, root?: THREE.Object3D | null): F12026CarSim {
-  return new F12026CarSim(track, root, VF26_SIM_PROFILE);
+/** The same car on the data as it stands, untuned: what `F1Physics2026` drives */
+export const VF26_DATA_SIM_PROFILE: CarSimProfile = { ...VF26_SIM_PROFILE, config: VF26_CAR_CONFIG };
+
+export function createVf26Sim(track: BuiltTrackData, root?: THREE.Object3D | null, profile: CarSimProfile = VF26_SIM_PROFILE): F12026CarSim {
+  return new F12026CarSim(track, root, profile);
 }

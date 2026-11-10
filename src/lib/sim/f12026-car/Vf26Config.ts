@@ -56,6 +56,8 @@ export interface Vf26Overrides {
   /** Overrun torque against the data's */
   coastScale?: number;
   brakeTorqueNm?: number;
+  /** Differential lock under power, as a share of the input torque */
+  diffPowerLock?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -553,7 +555,7 @@ export function buildVf26Config(overrides: Vf26Overrides = {}) {
     differential: {
       type: 'LSD_Ramp',
       settings: {
-        power: VF26_DRIVETRAIN.diffPowerLock,
+        power: overrides.diffPowerLock ?? VF26_DRIVETRAIN.diffPowerLock,
         coast: VF26_DRIVETRAIN.diffCoastLock,
         preload: VF26_DRIVETRAIN.diffPreloadNm,
         friction_faces: 1,

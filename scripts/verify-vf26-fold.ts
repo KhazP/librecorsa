@@ -1,6 +1,7 @@
 /**
- * The VF26 on the rigid-body engine (`createVf26Sim`, `Vf26Config`) against the engine it ships on (`F1Physics2026`):
- * the same car data must give the same car. Flat-ground measures from `scripts/lib/vf26-measure.ts`, then autopilot
+ * The VF26's data on the rigid-body engine (`VF26_DATA_SIM_PROFILE`, `Vf26Config`) against the engine it ships on
+ * (`F1Physics2026`): the same car data must give the same car. The car a driver gets on the rigid-body engine is that
+ * data tuned (`Vf26Tune.ts`), held by `verify-vf26-tuned.ts`. Flat-ground measures from `scripts/lib/vf26-measure.ts`, then autopilot
  * laps of Rwanda on both.
  *
  *   npx tsx scripts/verify-vf26-fold.ts
@@ -10,7 +11,7 @@
  */
 import { getActiveTrackData } from '../src/lib/track-data';
 import { F1Physics2026 } from '../src/lib/f1-physics-2026';
-import { createVf26Sim } from '../src/lib/sim/f12026-car/Vf26Sim';
+import { createVf26Sim, VF26_DATA_SIM_PROFILE } from '../src/lib/sim/f12026-car/Vf26Sim';
 import type { SimulatorCar } from '../src/lib/sim/simulator-car';
 import { VF26_AI_REFERENCE, VF26_TYRES } from '../src/lib/sim/vf26-data';
 import { createFlatTestTrack } from './lib/flat-track';
@@ -66,7 +67,7 @@ console.log('\n== Autopilot laps of Rwanda');
     return { lapS, maxSlipDeg, pastEdgeM, done: sim.telemetry.lapCount >= lap0 + 3 };
   };
   const old = laps(() => new F1Physics2026(track));
-  const rigid = laps(() => createVf26Sim(track));
+  const rigid = laps(() => createVf26Sim(track, null, VF26_DATA_SIM_PROFILE));
   check('Flying lap within 1.5 % of the other engine', rigid.done && within(rigid.lapS, old.lapS, 1.5), `${rigid.lapS.toFixed(2)} s vs ${old.lapS.toFixed(2)} s (${sign(pct(rigid.lapS, old.lapS))})`);
   check('... on the road, under 8° of body slip', rigid.pastEdgeM < 0.2 && rigid.maxSlipDeg < 8, `CG ${Math.max(0, rigid.pastEdgeM).toFixed(2)} m past the edge, ${rigid.maxSlipDeg.toFixed(1)}° of slip`);
 }
@@ -91,7 +92,7 @@ console.log('\n== Flat out from rest, by driver-aid preset');
   };
   for (const preset of ['assisted', 'semi_pro'] as const) {
     const old = flatOut(() => new F1Physics2026(pad), preset);
-    const rigid = flatOut(() => createVf26Sim(pad), preset);
+    const rigid = flatOut(() => createVf26Sim(pad, null, VF26_DATA_SIM_PROFILE), preset);
     check(`${preset}: straight, 0–200 km/h within 20 % of the other engine`, Number.isNaN(rigid.spunAtS) && within(rigid.to200S, old.to200S, 20),
       `${rigid.to200S.toFixed(2)} s vs ${old.to200S.toFixed(2)} s`);
   }
@@ -99,7 +100,7 @@ console.log('\n== Flat out from rest, by driver-aid preset');
   // their peak, through second and third gear: on the rigid body the rears then have a fifth of their cornering
   // stiffness left and the car turns round at about 140 km/h, as a car with this power does; the planar engine has
   // nothing to turn it and runs straight. Reported, not asserted: it is the difference a driver on Pro will meet
-  const pro = flatOut(() => createVf26Sim(pad), 'pro');
+  const pro = flatOut(() => createVf26Sim(pad, null, VF26_DATA_SIM_PROFILE), 'pro');
   console.log(`INFO  pro (no traction control), pedal flat from rest: ${Number.isNaN(pro.spunAtS) ? 'runs straight' : `spins at ${pro.spunAtS.toFixed(1)} s`} (the other engine runs straight)`);
 }
 

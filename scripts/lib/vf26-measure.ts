@@ -7,7 +7,7 @@ import * as THREE from 'three';
 import { F1Physics2026 } from '../../src/lib/f1-physics-2026';
 import type { SimulatorCar } from '../../src/lib/sim/simulator-car';
 import { VF26_AI_REFERENCE } from '../../src/lib/sim/vf26-data';
-import { createVf26Sim } from '../../src/lib/sim/f12026-car/Vf26Sim';
+import { createVf26Sim, VF26_DATA_SIM_PROFILE } from '../../src/lib/sim/f12026-car/Vf26Sim';
 import { createFlatTestTrack } from './flat-track';
 
 export interface Vf26Measurement {
@@ -30,11 +30,13 @@ export interface Vf26Measurement {
 const pad = createFlatTestTrack(60_000, 3000);
 const H = 1 / 240;
 
-/** The engines a VF26 can run on: the one it ships on, and (once it exists) the rigid-body one */
+/** The engines a VF26 can run on, each on the car data as it stands: the one it ships on, and the rigid-body one */
 export const VF26_ENGINES: { name: string; make: () => SimulatorCar }[] = [
   { name: 'F1Physics2026', make: () => new F1Physics2026(pad) },
-  { name: 'VehiclePhysics', make: () => createVf26Sim(pad) },
+  { name: 'VehiclePhysics', make: () => createVf26Sim(pad, null, VF26_DATA_SIM_PROFILE) },
 ];
+/** The car a driver gets on the rigid-body engine: the data's, tuned (`Vf26Tune.ts`) */
+export const VF26_TUNED = { name: 'VehiclePhysics, tuned', make: (): SimulatorCar => createVf26Sim(pad) };
 
 function fresh(make: () => SimulatorCar, speedMs: number): SimulatorCar {
   const sim = make();
