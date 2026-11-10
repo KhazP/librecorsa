@@ -538,7 +538,6 @@ function gt3Compound(
       // +26 % at 300 km/h [derived]
       rollingResistanceSpeedSq: 4.6e-7,
       verticalDamping: 500,
-      pneumaticTrail: 0.04,
       // No extra longitudinal grip under braking [ref]. It was +9 %, then +3 %: the first stood in for the front downforce
       // the splitter stall used to lose under braking, the second for a braking measure that read the dive, not the
       // grip. Measured over a settled stop the logs fit best with none (3.9 % RMS over 99-243 km/h) [motec]
@@ -557,8 +556,8 @@ function gt3Compound(
       coreCooling: [8, 0.2],
       thermalVerticalK: -0.001,
       thermalVerticalRefC: 90,
-      // Slow graining / blistering gains and exponents [ref]
-      tread: { grainGain: 0.5, grainGamma: 1, blisterGain: 0.5, blisterGamma: 1 },
+      // Slow graining / blistering gains and exponents [ref]; the graining wears off as the tread slides
+      tread: { grainGain: 0.5, grainGamma: 1, blisterGain: 0.5, blisterGamma: 1, wearOffWithSlip: true },
     },
     pressureData: {
       optimalPsi: 26,

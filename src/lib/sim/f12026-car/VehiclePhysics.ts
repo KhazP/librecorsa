@@ -46,7 +46,7 @@ import * as THREE from 'three';
 import { Lut, type LutPoints } from '../lut';
 import { tyreGaugePressureAtTemperature } from '../tyre-pressure';
 import {
-  advanceDirtyLevel,
+  advanceTreadDirt,
   flatSpotVibrationNm,
   tyreCentrifugalGrowthM,
   wearGripMultiplier,
@@ -197,13 +197,26 @@ const BAND_TREAD_CONDUCTANCE = 2;
 const BAND_CARCASS_CONDUCTANCE = 10;
 /**
  * A brush tyre's graining / blistering per unit of (slip^gamma × grip × metres rolled × gain × °C outside the grip
- * curve's peak), and the graining worn off per unit of (grip × metres rolled × gain): full graining takes tens of
- * minutes of hard work on a cold tyre
+ * curve's peak), and the graining worn off per unit of (grip × metres rolled × gain, × slip^gamma where the tread wears
+ * it off only as it slides): full graining takes tens of minutes of hard work on a cold tyre
  */
 const TREAD_CONDITION_RATE = 1e-6;
 const GRAIN_WEAR_OFF_RATE = 5e-7;
 /** Rolling speed from which a brush tyre's camber thrust is in full (m/s) */
 const CAMBER_THRUST_FULL_MS = 3;
+
+/**
+ * Steering shake of a flat-spotted tyre (Nm): one thump per revolution, peaking as the most worn of its sectors comes
+ * round to the road, at the size of the tyre model's flat-spot shake (`flatSpotVibrationNm` at its crest)
+ */
+export function flatSpotThumpNm(severity: number, rotationRad: number, omega: number, fz: number, sectorWear: ArrayLike<number>): number {
+  if (severity <= 0.005) return 0;
+  const n = sectorWear.length;
+  let flat = 0;
+  for (let i = 1; i < n; i++) if (sectorWear[i] > sectorWear[flat]) flat = i;
+  const flatRad = ((flat + 0.5) / n) * 2 * Math.PI;
+  return flatSpotVibrationNm(severity, Math.PI / 4, omega, fz) * Math.cos(rotationRad - flatRad);
+}
 /**
  * Rack torque that maps to full FFB output: the sum of both front tyres' moments about their kingpin axes (Nm). The
  * column sees it divided by the steering ratio (≈ 48 Nm on 12.6:1)
@@ -829,6 +842,8 @@ const _m = new THREE.Matrix4();
 const _tyreTorque = new Float64Array(4);
 const _wheelInertia = new Float64Array(4);
 const _wheelOmega = new Float64Array(4);
+/** A tyre's inner / middle / outer shares of its heat when its pressure moves them (`TyresThermalPatchData.pressureHeat`) */
+const _heatShares = new Float64Array(3);
 const _brakeImpulse = new Float64Array(4);
 const _ex = new THREE.Vector3();
 const _ey = new THREE.Vector3();
@@ -2431,10 +2446,11 @@ export class VehiclePhysics {
           wWaterMm > 0
             ? wetPneumaticTrailScale(td.wetTraits ?? SLICK_TRAITS, wWaterMm, absVx, w.wear)
             : 1;
-        // The pneumatic trail at zero slip is a third of the patch half-length (brush model, parabolic pressure), so it
-        // grows with the load as the patch lengthens
+        // The pneumatic trail at zero slip is a third of the patch half-length (brush model, parabolic pressure), or the
+        // tyre's own share of it, so it grows with the load as the patch lengthens
         w.patchHalfLengthM = contactHalfLengthM(R0, w.deflection);
-        w.mz = -fy * (w.patchHalfLengthM / 3) * wetTrailMult * Math.max(0, 1 - s);
+        const trail0 = model.trailShare === undefined ? w.patchHalfLengthM / 3 : w.patchHalfLengthM * model.trailShare;
+        w.mz = -fy * trail0 * wetTrailMult * Math.max(0, 1 - s);
         const yCpShift = THREE.MathUtils.clamp(
           -0.35 * geo.width * Math.sin(w.camberLeftRad) + (fy / Math.max(500, fz)) * 0.018,
           -0.45 * geo.width,
@@ -2486,7 +2502,7 @@ export class VehiclePhysics {
           _ex, _ey, _ez, _n, _fw, _lw, w.isLeft ? -1 : 1, w.steerRad, w.loadedRadius, _kpGeo, fx, fy, fz, w.mz + w.mzTwist, w.mx
         );
         w.gyroSteerNm = this.wheelGyroSteerNm(w, _fw);
-        ffbMz += tyreKingpinNm + flatSpotVibrationNm(w.flatSpotSeverity, w.rotationRad, w.omega, fz) + w.gyroSteerNm;
+        ffbMz += tyreKingpinNm + flatSpotThumpNm(w.flatSpotSeverity, w.rotationRad, w.omega, fz, w.circumferentialWear) + w.gyroSteerNm;
       }
 
       // Loose ground (gravel, grass) ploughs against the contact patch's motion, sliding or rolling, outside the
@@ -2934,7 +2950,7 @@ export class VehiclePhysics {
       // Rolling resistance: its speed term, more of it on a soft tyre, and the scrub of a tyre working at its limit
       // (on a turning wheel: a locked one only slides)
       const softDrag = 1 + (compound.pressureData.pressureRollingGain ?? 0) * (compound.pressureData.optimalPsi / Math.max(1, w.pressurePsi) - 1);
-      const scrub = (tyre.rollingResistanceSlipGain ?? 0) * Math.min(w.combinedSlip, SCRUB_MAX_SLIP) * Math.min(1, Math.abs(w.omega) / SCRUB_FULL_SPIN_RADS);
+      const scrub = (tyre.rollingResistanceSlipGain ?? 0) * Math.min(w.combinedSlip, tyre.rollingResistanceSlipMax ?? SCRUB_MAX_SLIP) * Math.min(1, Math.abs(w.omega) / SCRUB_FULL_SPIN_RADS);
       const rollingResistance = (tyre.rollingResistance + (tyre.rollingResistanceSpeedSq ?? 0) * rollV * rollV) * softDrag * (1 + scrub * softDrag);
       const handbrake = !w.isFront && inp.handbrake ? inp.handbrake * (br.handbrakeTorqueNm ?? 0) : 0;
       w.brakeTorqueNm = friction + handbrake + w.fz * rollingResistance * w.rollingRadius;
@@ -3309,7 +3325,8 @@ export class VehiclePhysics {
       const inward = w.isLeft ? -1 : 1;
       const camberIn = inward * w.camberLeftRad;
       const fyIn = (inward * w.fy) / Math.max(500, w.fz);
-      const bias = THREE.MathUtils.clamp(-camberIn * 3.8 + fyIn * 0.22, -0.75, 0.75);
+      const spread = th.bandSpread;
+      const bias = THREE.MathUtils.clamp(-camberIn * (spread ? spread.camber : 3.8) + fyIn * (spread ? spread.lateral : 0.22), -0.75, 0.75);
       const sI = Math.max(0.08, (1 - bias) * 0.33);
       const sM = 0.34;
       const sO = Math.max(0.08, (1 + bias) * 0.33);
@@ -3322,14 +3339,32 @@ export class VehiclePhysics {
       const size = this.tyres[w.isFront ? 0 : 1].thermalSize;
       const surfaceCap = th.surfaceHeatCapacity * size;
       const coreCap = th.coreHeatCapacity * size;
+      // Inflation pressure in the heat: an under-inflated tyre works its rubber harder and flexes more, an
+      // over-inflated one runs on its crown (`TyresThermalPatchData.pressureHeat`)
+      const ph = th.pressureHeat;
+      let slipHeat = slipPower;
+      let rollHeat = hyst;
+      if (ph) {
+        const pd = td.pressureData;
+        const pRel = w.pressurePsi / pd.optimalPsi - 1;
+        slipHeat = slipPower * Math.max(0, 1 - ph.slipGain * pRel);
+        rollHeat = hyst * Math.max(0, 1 + (pd.pressureRollingGain ?? 0) * (pd.optimalPsi / Math.max(1, w.pressurePsi) - 1));
+        const hI = shares[0] * Math.max(0, 1 - ph.crownGain * pRel);
+        const hM = shares[1] * Math.max(0, 1 + 2 * ph.crownGain * pRel);
+        const hO = shares[2] * Math.max(0, 1 - ph.crownGain * pRel);
+        const hSum = hI + hM + hO;
+        _heatShares[0] = hI / hSum;
+        _heatShares[1] = hM / hSum;
+        _heatShares[2] = hO / hSum;
+      }
       for (let b = 0; b < 3; b++) {
-        const share = shares[b] * 3;
+        const share = (ph ? _heatShares[b] : shares[b]) * 3;
         const bToCore = th.surfaceToCore * size * (w.bandTempsC[b] - w.bandCoreTempsC[b]);
         const bSurfCool = (th.surfaceCooling[0] + th.surfaceCooling[1] * v) * size * (w.bandTempsC[b] - this.ambientC);
         const bRoadCool = w.fz > 0 ? roadG * size * (shares[b] * 3) * (w.bandTempsC[b] - this.trackTempC) : 0;
         const bCoreCool = (th.coreCooling[0] + th.coreCooling[1] * v + extWetCool) * size * (w.bandCoreTempsC[b] - this.ambientC);
-        w.bandTempsC[b] += ((th.slipHeatShare * slipPower * share - bToCore - bSurfCool - bRoadCool) / surfaceCap) * dt;
-        w.bandCoreTempsC[b] += ((hyst * share + bToCore - bCoreCool) / coreCap) * dt;
+        w.bandTempsC[b] += ((th.slipHeatShare * slipHeat * share - bToCore - bSurfCool - bRoadCool) / surfaceCap) * dt;
+        w.bandCoreTempsC[b] += ((rollHeat * share + bToCore - bCoreCool) / coreCap) * dt;
       }
       // Cross-band conduction: heat crosses between neighbouring bands through the tread and through the carcass (W/K),
       // each band a third of its layer's heat capacity. Slow next to the bands' own heating and cooling, so camber and
@@ -3371,7 +3406,7 @@ export class VehiclePhysics {
         const lockFrac = (0.35 * v - rimSpeed) / (0.35 * v);
         const prevSec = (sec + numSec - 1) % numSec;
         const nextSec = (sec + 1) % numSec;
-        const locWear = wearDelta * (1 + 11 * lockFrac);
+        const locWear = td.flatSpotSoftness === undefined ? wearDelta * (1 + 11 * lockFrac) : wearDelta * (1 + 11 * lockFrac) * td.flatSpotSoftness;
         w.circumferentialWear[sec] = Math.min(1, w.circumferentialWear[sec] + locWear * 0.6);
         w.circumferentialWear[prevSec] = Math.min(1, w.circumferentialWear[prevSec] + locWear * 0.2);
         w.circumferentialWear[nextSec] = Math.min(1, w.circumferentialWear[nextSec] + locWear * 0.2);
@@ -3398,14 +3433,16 @@ export class VehiclePhysics {
       const core = w.coreTempC;
       if (rt.brush) {
         // A brush tyre's tread condition builds slowly, with the work done at the wrong temperature: slip^gamma × the
-        // road's grip × rolling speed × the degrees outside the grip curve's peak. Graining wears off as the tyre rolls
+        // road's grip × rolling speed × the degrees outside the grip curve's peak. Graining wears off as the tyre rolls,
+        // or, with `wearOffWithSlip`, only as its tread slides
         const tread = th.tread;
         if (tread && v > 2 && w.fz > 0) {
           const work = w.ground.grip * v * this.realism.tyreWearScale * dt;
           const slip = Math.min(2, w.combinedSlip);
           const [peakFrom, peakTo] = rt.peakWindowC;
           if (core < peakFrom) w.grainLevel += Math.pow(slip, tread.grainGamma) * work * tread.grainGain * (peakFrom - core) * TREAD_CONDITION_RATE;
-          w.grainLevel = THREE.MathUtils.clamp(w.grainLevel - work * tread.grainGain * GRAIN_WEAR_OFF_RATE, 0, 1);
+          const wearOff = tread.wearOffWithSlip ? Math.pow(slip, tread.grainGamma) * work : work;
+          w.grainLevel = THREE.MathUtils.clamp(w.grainLevel - wearOff * tread.grainGain * GRAIN_WEAR_OFF_RATE, 0, 1);
           if (core > peakTo) {
             w.blisterLevel = Math.min(1, w.blisterLevel + Math.pow(slip, tread.blisterGamma) * work * tread.blisterGain * (core - peakTo) * TREAD_CONDITION_RATE);
           }
@@ -3422,7 +3459,7 @@ export class VehiclePhysics {
         }
       }
 
-      w.dirtyLevel = advanceDirtyLevel(w.dirtyLevel, w.ground.surface, slipPower, v, dt, this.trackEvolution.marbleLevel);
+      w.dirtyLevel = advanceTreadDirt(w.dirtyLevel, w.ground.surface, v, dt, this.trackEvolution.marbleLevel);
 
       const p = td.pressureData;
       const rimWetDeltaC = rimWetEnvironmentCoolingWK(this.wetness, v) * 0.45 * Math.max(0, w.coreTempC - this.ambientC) * 0.02;

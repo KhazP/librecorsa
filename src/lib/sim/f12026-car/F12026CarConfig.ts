@@ -660,10 +660,18 @@ export interface TyresModelData {
    * its limit scrubs: a street tyre several times its free-rolling drag, a racing slick a few per cent. Absent: 0
    */
   rollingResistanceSlipGain?: number;
+  /**
+   * The combined slip (over the peak slip) past which the scrub term above grows no further: 1 holds it at its value at
+   * the peak, so a slide drags no more than a tyre at its limit. Absent: 3
+   */
+  rollingResistanceSlipMax?: number;
   /** Radial damping (Ns/m) */
   verticalDamping: number;
-  /** Pneumatic trail at zero slip (m) */
-  pneumaticTrail: number;
+  /**
+   * Pneumatic trail at zero slip as a share of the contact patch's half-length (it shrinks to nothing at the peak slip).
+   * Absent: a third, the brush model's under a parabolic pressure
+   */
+  trailShare?: number;
   /**
    * Tabulated load sensitivity (DY_CURVE / DX_CURVE): vertical load (N) → peak μ. When set it replaces
    * `Dy0`·(Fz/Fz0)^(lsExp−1) for that axis; Fz0 / lsExp then only matter to code that reads them directly
@@ -732,9 +740,25 @@ export interface TyresThermalPatchData {
    * A brush tyre's slow tread condition (GRAIN_* / BLISTER_* of its data): worked below the temperature where its grip
    * curve first reaches its peak the tread grains, above the last it blisters, each at `gain` × slip^`gamma` × rolling
    * speed × the degrees past the threshold. Graining softens the tyre (it peaks later) and wears off with rolling;
-   * blisters cost grip and stay. Both take many laps. Absent: a brush tyre neither grains nor blisters
+   * blisters cost grip and stay. Both take many laps. Absent: a brush tyre neither grains nor blisters.
+   * `wearOffWithSlip`: the graining wears off only as the tread slides, with the same slip^`grainGamma` it grows by, so
+   * a grained tyre does not clean up on a straight. Absent: it wears off with rolling alone
    */
-  tread?: { grainGain: number; grainGamma: number; blisterGain: number; blisterGamma: number };
+  tread?: { grainGain: number; grainGamma: number; blisterGain: number; blisterGamma: number; wearOffWithSlip?: boolean };
+  /**
+   * Inflation pressure in the heat flow, with p = pressure / optimal − 1: the sliding heat × (1 − `slipGain` × p), the
+   * middle band's share of the heat × (1 + 2 × `crownGain` × p) and each shoulder's × (1 − `crownGain` × p) (an
+   * over-inflated tyre runs on its crown), and the rolling heat × the rolling-resistance factor of
+   * `TyresPressureData.pressureRollingGain` (a soft tyre flexes more and heats more). The bands' grip weighting is
+   * left alone. Absent: pressure does not move the heat
+   */
+  pressureHeat?: { slipGain: number; crownGain: number };
+  /**
+   * How the contact pressure, and with it the heat and the grip weighting, moves across the inner / middle / outer
+   * bands: the shift toward the inner shoulder per radian of camber leaning toward the car, and toward the outer one
+   * per unit of lateral force over load. Absent: 3.8 and 0.22
+   */
+  bandSpread?: { camber: number; lateral: number };
 }
 
 /** `TyresPressureData` */
@@ -789,6 +813,11 @@ export interface TyresCompoundData {
    * Absent: the model's generic wear
    */
   wear?: { curve: LutPoints; loadScaled?: boolean; loadRefN?: number };
+  /**
+   * How readily a locked wheel grinds a flat spot into this compound, × the build-up of the tread worn away at the
+   * grounded spot (a softer compound flat-spots sooner). Absent: 1
+   */
+  flatSpotSoftness?: number;
   front: TyreGeometry;
   rear: TyreGeometry;
   modelData: TyresModelData;
@@ -1513,7 +1542,6 @@ function f1Compound(
       // Vehicles): 3.8e-5 of the static value per (m/s)², so +26 % at 300 km/h [derived]
       rollingResistanceSpeedSq: 4.6e-7,
       verticalDamping: 396.40625,
-      pneumaticTrail: 0.035,
       brakeDxMod: 0.05,
     },
     thermalData: {
@@ -1531,8 +1559,8 @@ function f1Compound(
       coreCooling: [8, 0.2],
       thermalVerticalK: -0.0012,
       thermalVerticalRefC: 100,
-      // GRAIN_GAIN / GRAIN_GAMMA, BLISTER_GAIN / BLISTER_GAMMA [ref_tyres.ini]
-      tread: { grainGain: 0.125, grainGamma: 0.5, blisterGain: 0.125, blisterGamma: 0.5 },
+      // GRAIN_GAIN / GRAIN_GAMMA, BLISTER_GAIN / BLISTER_GAMMA [ref_tyres.ini]; the graining wears off as the tread slides
+      tread: { grainGain: 0.125, grainGamma: 0.5, blisterGain: 0.125, blisterGamma: 0.5, wearOffWithSlip: true },
     },
     pressureData: {
       optimalPsi: 25,

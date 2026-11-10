@@ -375,11 +375,11 @@ const STREET_COMPOUND: TyresCompoundData = {
     // 10 N + 0.00102 N·s²/m² per kN of load [spec ROLLING_RESISTANCE_0 / _1]
     rollingResistance: 0.01,
     rollingResistanceSpeedSq: 1.02e-6,
-    // A street tyre scrubs: 5.4 × its free-rolling drag at the peak slip [spec ROLLING_RESISTANCE_SLIP]
+    // A street tyre scrubs: 5.4 × its free-rolling drag at the peak slip, and no more past it [spec ROLLING_RESISTANCE_SLIP]
     rollingResistanceSlipGain: 4.368,
+    rollingResistanceSlipMax: 1,
     // [spec DAMP]
     verticalDamping: 1500,
-    pneumaticTrail: 0.035,
   },
   thermalData: {
     // Grip against tread temperature (°C) [spec tcurve_street.lut]
@@ -398,8 +398,11 @@ const STREET_COMPOUND: TyresCompoundData = {
       [250, 0.85],
     ],
     optimalTempC: [75, 85],
-    // [spec GRAIN_GAIN / GRAIN_GAMMA, BLISTER_GAIN / BLISTER_GAMMA]
-    tread: { grainGain: 0.4, grainGamma: 2, blisterGain: 0.3, blisterGamma: 1.5 },
+    // [spec GRAIN_GAIN / GRAIN_GAMMA, BLISTER_GAIN / BLISTER_GAMMA]; the graining wears off as the tread slides
+    tread: { grainGain: 0.4, grainGamma: 2, blisterGain: 0.3, blisterGamma: 1.5, wearOffWithSlip: true },
+    // Pressure moves the heat: the sliding heat and the crown against the shoulders [ref], the rolling heat by
+    // PRESSURE_RR_GAIN [spec]
+    pressureHeat: { slipGain: 0.5, crownGain: 0.05 },
     // A lighter tyre than a GT3 slick heats and cools faster: the GT3's capacities × 0.6 [est]
     surfaceHeatCapacity: 1100,
     coreHeatCapacity: 6600,

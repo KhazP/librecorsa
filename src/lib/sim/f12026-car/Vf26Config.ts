@@ -431,7 +431,6 @@ function modelData(t: Vf26TyreSpec): TyresCompoundData['modelData'] {
     relaxationLengthY: t.relaxationLength,
     rollingResistance: t.rollingResistance,
     verticalDamping: t.damp,
-    pneumaticTrail: 0.035,
     brakeDxMod: t.brakeDxMod ?? 0,
   };
 }

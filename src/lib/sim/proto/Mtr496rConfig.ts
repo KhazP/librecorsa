@@ -579,8 +579,8 @@ function protoCompound(
     name,
     shortName,
     tyre_compound,
-    // Sliding under more than FZ0 of load wears in proportion [spec VIRTUALKM USE_LOAD]
-    wear: { curve: wearCurve, loadScaled: true },
+    // Sliding under load wears in proportion, counted per 2000 N of it [spec VIRTUALKM USE_LOAD]
+    wear: { curve: wearCurve, loadScaled: true, loadRefN: 2000 },
     front: PROTO_FRONT,
     rear: PROTO_REAR,
     modelData: {
@@ -623,11 +623,11 @@ function protoCompound(
       // 5 N + 0.00039 N·s²/m² per kN of load [spec ROLLING_RESISTANCE_0 / _1]
       rollingResistance: 0.005,
       rollingResistanceSpeedSq: 3.9e-7,
-      // 2.2 % more at the peak slip [spec ROLLING_RESISTANCE_SLIP]
+      // 2.2 % more at the peak slip, and no more past it [spec ROLLING_RESISTANCE_SLIP]
       rollingResistanceSlipGain: 0.022,
+      rollingResistanceSlipMax: 1,
       // [spec DAMP]
       verticalDamping: 540,
-      pneumaticTrail: 0.04,
       // [spec BRAKE_DX_MOD]
       brakeDxMod: 0.1,
     },
@@ -635,8 +635,11 @@ function protoCompound(
       // Grip against tread temperature (°C) [spec tcurve_*.lut]
       thermalPerformanceCurve: thermalCurve,
       optimalTempC: window,
-      // [spec GRAIN_GAIN / GRAIN_GAMMA, BLISTER_GAIN / BLISTER_GAMMA]
-      tread: { grainGain: 0.5, grainGamma: 1, blisterGain: 0.5, blisterGamma: 1 },
+      // [spec GRAIN_GAIN / GRAIN_GAMMA, BLISTER_GAIN / BLISTER_GAMMA]; the graining wears off as the tread slides
+      tread: { grainGain: 0.5, grainGamma: 1, blisterGain: 0.5, blisterGamma: 1, wearOffWithSlip: true },
+      // Pressure moves the heat: the sliding heat and the crown against the shoulders [ref], the rolling heat by
+      // PRESSURE_RR_GAIN [spec]
+      pressureHeat: { slipGain: 0.5, crownGain: 0.05 },
       // The GT3 slick's heat capacities and cooling [est]; the carcass heats by the tyre's rolling loss (0.005 of the
       // load, 0.0064 at 60 m/s, more with scrub): on a stint all four settle near 75 °C, in the window, with the
       // pressures within a psi of their optimum
