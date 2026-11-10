@@ -64,10 +64,10 @@ const FACTS: [string, React.ReactNode][] = [
 ];
 
 const SCREENSHOTS = [
-  { file: "race-grid-shanghai.jpg", alt: "On the grid at Shanghai with five AI cars" },
-  { file: "on-track.jpg", alt: "On track at the Rwanda circuit" },
-  { file: "title-menu.jpg", alt: "Title menu and garage" },
-  { file: "loading-suzuka.jpg", alt: "Suzuka drawing itself while it loads" },
+  { file: "spa-dusk.jpg", alt: "Dusk in the rain at Spa-Francorchamps", size: "2560 × 1440" },
+  { file: "spa-rain-pack.jpg", alt: "Chasing the field through the spray at Spa", size: "2560 × 1440" },
+  { file: "race-grid-shanghai.jpg", alt: "On the grid at Shanghai with five AI cars", size: "1600 × 900" },
+  { file: "loading-suzuka.jpg", alt: "Suzuka drawing itself while it loads", size: "1600 × 900" },
 ];
 
 const BRAND_FILES = [
@@ -219,7 +219,7 @@ export default function PressPage() {
           </a>
 
           <div className="flex flex-col gap-3">
-            <p className="lc-lbl">Screenshots · 1600 × 900</p>
+            <p className="lc-lbl">Screenshots</p>
             <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {SCREENSHOTS.map((s) => (
                 <li key={s.file}>
@@ -228,7 +228,10 @@ export default function PressPage() {
                     <img src={withBasePath(`/press/${s.file}`)} alt={s.alt} width={1600} height={900} loading="lazy" className="aspect-video w-full object-cover" />
                     <span className="flex items-center justify-between gap-3 px-4 py-3 text-[14px] text-[#C5CBD8] group-hover:text-[#F5F7FA]">
                       {s.alt}
-                      <Download aria-hidden className="h-4 w-4 shrink-0 text-[#8E96AA] group-hover:text-[#CCFF00]" />
+                      <span className="flex shrink-0 items-center gap-2">
+                        <span className="lc-data text-[12px] font-semibold text-[#8E96AA]">{s.size}</span>
+                        <Download aria-hidden className="h-4 w-4 shrink-0 text-[#8E96AA] group-hover:text-[#CCFF00]" />
+                      </span>
                     </span>
                   </a>
                 </li>
