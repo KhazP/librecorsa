@@ -718,12 +718,14 @@ export const AMG_GT3_CONFIG = {
     // Hub heights 55 / 60 mm below the CG on the 0.340 / 0.3525 m tyres [spec BASEY, derived]
     cgHeight: 0.4,
     inertia: { pitch: box(0.99, 3.85), roll: box(1.78, 0.99), yaw: box(1.78, 3.85) },
-    unsprungMassFront: 39,
-    unsprungMassRear: 46,
+    // An 18 in wheel and tyre (25 kg), the brake, the upright and half the links [ref]
+    unsprungMassFront: 45,
+    unsprungMassRear: 49,
     // No tank position: the car's balance is fitted to telemetry at the CG it has, and the fuel load of those laps is
     // not known, so the fuel rides at the CG
-    wheelInertiaFront: 1.75,
-    wheelInertiaRear: 1.95,
+    // Wheel, tyre and disc about the axle (kg·m²) [ref]
+    wheelInertiaFront: 1.6,
+    wheelInertiaRear: 1.8,
     // 320° lock [spec] on ~12.6 ratio: steering-wheel angle per path
     // curvature is 1900 deg·m over the 2.65 m wheelbase [motec]
     maxRoadWheelDeg: 320 / 12.6,
