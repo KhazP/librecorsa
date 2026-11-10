@@ -235,6 +235,12 @@ const LATENCIES = [0.02, 0.05, 0.09, 0.14];
   check('a hit from behind never moves only the car that was hit', victimOnly === 0, worst || `${racing} racing, ${strikerOnly} striker only, ${through} through`);
   const slow = twoClients(steady(400, 50), steady(300, 56), 40, 0.05);
   check('a 22 km/h tap is contact for both', slow.movedA && slow.movedB);
+  // Between the two limits the car behind bounces off a car that is not moved: so does a follower who meets a car
+  // that has only just stopped (its flag is not up yet), which leaves braking hard in front of someone unpunished
+  const mid = twoClients(steady(400, 50), steady(300, 50 + (RAM_VICTIM_MS + RAM_STRIKER_MS) / 2), 12, 0.05);
+  check('between the limits the car behind bounces off an unmoved car', mid.movedB && !mid.movedA);
+  const justStopped = twoClients(steady(400, 0), steady(391, 12.5), 3, 0.05);
+  check('as it does off a car that has only just stopped', justStopped.movedB && !justStopped.movedA);
   const hard = twoClients(steady(400, 50), steady(300, 75), 12, 0.05);
   check('a 90 km/h ram is a pass-through for both', hard.touched && !hard.movedA && !hard.movedB);
 }

@@ -18,10 +18,11 @@
  */
 
 /**
- * Under this speed a car is standing on the track as far as the others are concerned (m/s, ~40 km/h): above the
- * ~29 km/h a car left in gear creeps along at, below the slowest corners
+ * Under this speed a car is standing on the track as far as the others are concerned (m/s, ~32 km/h): just above the
+ * 29 km/h the MTR 496R creeps along at when left in gear. Kept low so that no corner is slow enough to trip it (not
+ * measured for every car and circuit); a car driven slowly on purpose above it is caught by the ram rule instead
  */
-export const SLOW_MS = 11;
+export const SLOW_MS = 9;
 /** Going backwards along the track faster than this is the wrong way (m/s) */
 export const WRONG_WAY_MS = 3;
 /** A hazard this long is flagged to the others, and a little later the car stops taking contact itself (s) */
