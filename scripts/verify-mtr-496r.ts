@@ -21,6 +21,7 @@ import { carById } from '../src/lib/cars/car-registry';
 import { wetnessFromWater } from '../src/lib/sim/wet-tyres';
 import { loadGlbGeometry } from './lib/glb-geometry';
 import { createFlatTestTrack } from './lib/flat-track';
+import { measureUpshift } from './lib/upshift-test';
 import { hasFile, noteSkip } from './lib/hosted-files';
 import { readFileSync } from 'node:fs';
 
@@ -277,6 +278,13 @@ console.log('\n== Autopilot round Rwanda against the GT3');
     `lap ${fmt(proto.lapS, 2)} s, top ${fmt(proto.top, 0)} km/h, CG ${fmt(Math.max(0, proto.beyond), 2)} m past the edge, max body slip ${fmt(proto.maxSlip, 1)}°`);
   // 300 kg lighter, more downforce and a little more power than the GT3
   check('Quicker than the GT3', proto.lapS < gt3.lapS - 2, `${fmt(proto.lapS, 2)} s vs the GT3's ${fmt(gt3.lapS, 2)} s`);
+}
+
+console.log('\n== Up-shift');
+{
+  // A dog box: 40 ms between gears with the ignition cut for 60 ms (16 % with the gear changed in no time)
+  const u = measureUpshift((t) => createMtr496rSim(t), 90);
+  check('An up-shift on a light pedal: the dogs are out, then the driven wheels take the engine\'s excess, under 15 % of slip', u.to === u.from + 1 && u.gMin < u.gBefore - 0.1 && u.slipPeak < 0.15, `gear ${u.from} → ${u.to}, slip ${(u.slipBefore * 100).toFixed(1)} % → ${(u.slipPeak * 100).toFixed(1)} %, ${u.gBefore.toFixed(2)} g → ${u.gMin.toFixed(2)} … ${u.gPeak.toFixed(2)} g`);
 }
 
 console.log(failures.length ? `\n${failures.length} check(s) failed: ${failures.join(', ')}` : '\nAll 496R checks passed.');

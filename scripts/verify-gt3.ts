@@ -16,6 +16,7 @@ import { brakingGuideFor, computeSpeedProfile, createVf26ProfileCarModel } from 
 import { F12026CarSim } from '../src/lib/sim/f12026-car/F12026CarSim';
 import { loadGlbGeometry } from './lib/glb-geometry';
 import { createFlatTestTrack } from './lib/flat-track';
+import { measureUpshift } from './lib/upshift-test';
 import { checkBarrierCrashes, vehicleCrashCar } from './lib/barrier-crash';
 import { checkPlacementAndRecovery } from './lib/placement-recovery';
 import { TrackWallQuery } from '../src/lib/sim/f12026-car/TrackColliderQuery';
@@ -317,6 +318,13 @@ console.log('\n== Autopilot on the Rwanda colliders');
   // Rejoins (flashback, autopilot / AI rejoin, blow-up recovery) on Rwanda's hills, rolling at 260 km/h (issue #21)
   console.log('\n== Placement and blow-up recovery');
   checkPlacementAndRecovery(check, 'GT3', track, () => createAmgGt3Sim(track, root));
+}
+
+console.log('\n== Up-shift');
+{
+  // A dog box: 50 ms between gears with the ignition cut for 70 ms; the engine slows a little on its own, the dogs take the rest (8.8 % with the gear changed in no time)
+  const u = measureUpshift((t) => createAmgGt3Sim(t), 80);
+  check('An up-shift on a light pedal: the dogs are out, then the driven wheels take the engine\'s excess, under 7 % of slip', u.to === u.from + 1 && u.gMin < u.gBefore - 0.1 && u.slipPeak < 0.07, `gear ${u.from} → ${u.to}, slip ${(u.slipBefore * 100).toFixed(1)} % → ${(u.slipPeak * 100).toFixed(1)} %, ${u.gBefore.toFixed(2)} g → ${u.gMin.toFixed(2)} … ${u.gPeak.toFixed(2)} g`);
 }
 
 console.log(failures.length ? `\n${failures.length} check(s) failed: ${failures.join(', ')}` : '\nAll GT3 checks passed.');

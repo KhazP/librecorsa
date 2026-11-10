@@ -129,6 +129,9 @@ const GEARBOX = {
   // [spec CHANGE_DN_TIME]
   downshiftTimeS: 0.27,
   shiftTorqueFraction: 0,
+  // The lever is between gears for the whole change, the pedal up with it [spec CHANGE_UP_TIME, AUTO_CUTOFF_TIME]
+  upshiftNeutralS: 0.25,
+  upshiftCutS: 0.25,
   efficiency: DRIVELINE_EFFICIENCY,
   gears: {
     // [spec LIMITER]

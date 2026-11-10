@@ -134,9 +134,13 @@ const GEARBOX = {
   ratios: [2.5, 1.951, 1.521, 1.2414, 1.0847, 0.96],
   reverse: 3.818,
   finalDrive: 3.4285,
-  // 100 ms up-shift with the ignition cut [spec CHANGE_UP_TIME]
-  shiftTimeS: 0.1,
+  // Dog box: 50 ms between gears, the ignition cut for 70 ms [spec CHANGE_UP_TIME, AUTO_CUTOFF_TIME]
+  shiftTimeS: 0.07,
+  // [spec CHANGE_DN_TIME]
+  downshiftTimeS: 0.1,
   shiftTorqueFraction: 0.1,
+  upshiftNeutralS: 0.05,
+  upshiftCutS: 0.07,
   efficiency: DRIVELINE_EFFICIENCY,
   gears: {
     // Reference telemetry limiter: logs peak at 7899 rpm [motec]

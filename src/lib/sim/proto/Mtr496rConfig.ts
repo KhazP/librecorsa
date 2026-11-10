@@ -144,6 +144,9 @@ const GEARBOX = {
   // [spec CHANGE_DN_TIME]
   downshiftTimeS: 0.1,
   shiftTorqueFraction: 0.1,
+  // Dog box: 40 ms between gears, the ignition cut for 60 ms [spec CHANGE_UP_TIME, AUTO_CUTOFF_TIME]
+  upshiftNeutralS: 0.04,
+  upshiftCutS: 0.06,
   efficiency: DRIVELINE_EFFICIENCY,
   gears: {
     // [spec LIMITER]

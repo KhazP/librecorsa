@@ -19,6 +19,7 @@ import { SUZUKI_LIANA_PROFILE_CAR, createSuzukiLianaSim } from '../src/lib/sim/r
 import type { F12026CarSim } from '../src/lib/sim/f12026-car/F12026CarSim';
 import { loadGlbGeometry } from './lib/glb-geometry';
 import { createFlatTestTrack } from './lib/flat-track';
+import { measureUpshift } from './lib/upshift-test';
 import { wetnessFromWater } from '../src/lib/sim/wet-tyres';
 import { noteSkip } from './lib/hosted-files';
 
@@ -286,6 +287,13 @@ if (!existsSync('public/tracks/dunsfold/track_data.json')) {
     `lap ${lapStr}, top ${fmt(r.top, 0)} km/h, CG ${fmt(Math.max(0, r.beyond), 1)} m past the edge, max body slip ${fmt(r.maxSlip, 1)}°`);
   // The Assetto Corsa car's 100 % AI: 1:41.7–1:43.0; its author's own laps 1:46.7; the real car's board ≈ 1:42–1:50
   check('Lap 1:38–1:52 (the AC car\'s AI: 1:41.7–1:43.0)', r.lapS > 98 && r.lapS < 112, lapStr);
+}
+
+console.log('\n== Up-shift');
+{
+  // A manual box: the lever is between gears for a quarter of a second, the engine slowing meanwhile (22 % with the gear changed in no time)
+  const u = measureUpshift((t) => createSuzukiLianaSim(t), 45);
+  check('An up-shift on a light pedal: the dogs are out, then the driven wheels take the engine\'s excess, under 20 % of slip', u.to === u.from + 1 && u.gMin < u.gBefore && u.slipPeak < 0.2, `gear ${u.from} → ${u.to}, slip ${(u.slipBefore * 100).toFixed(1)} % → ${(u.slipPeak * 100).toFixed(1)} %, ${u.gBefore.toFixed(2)} g → ${u.gMin.toFixed(2)} … ${u.gPeak.toFixed(2)} g`);
 }
 
 console.log(failures.length ? `\n${failures.length} check(s) failed: ${failures.join(', ')}` : '\nAll Liana checks passed.');
