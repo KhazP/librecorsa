@@ -513,8 +513,17 @@ export const SUZUKI_LIANA_CONFIG = {
     brakeLock: { power: { torqueNm: 60, deadZone: 0.1, fullSpin: 0.4 }, coast: { torqueNm: 10, deadZone: 0.1, fullSpin: 1 } },
   },
   // Iron discs, 1600 Nm per wheel at full pedal, 75 % front, no bias adjuster; a handbrake on the rears
-  // [spec brakes.ini, HANDBRAKE_TORQUE]
-  brakes: { maxTorqueNm: 1600, front_bias: 0.75, handbrakeTorqueNm: 1600, ebbStep: 0.005, brakeByWire: false, discMaterial: 'endurance-steel', migration: { amount: 0, rampStart: 0 } },
+  // [spec brakes.ini, HANDBRAKE_TORQUE]. The data gives the pads no temperature curve: full friction at any temperature
+  brakes: {
+    maxTorqueNm: 1600,
+    front_bias: 0.75,
+    handbrakeTorqueNm: 1600,
+    ebbStep: 0.005,
+    brakeByWire: false,
+    discMaterial: 'endurance-steel',
+    padMuCurve: [[0, 1]],
+    migration: { amount: 0, rampStart: 0 },
+  },
   suspensions: SUSPENSIONS,
   aero: AERO,
   tyreCompounds: { PhysicsTyreCompound_Road_Street: STREET_COMPOUND },

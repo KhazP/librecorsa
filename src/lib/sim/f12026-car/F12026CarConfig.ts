@@ -354,6 +354,13 @@ export interface BrakesData {
   /** Disc / pad material for the brake thermal model and pad μ(T) (default carbon-carbon, F1) */
   discMaterial?: 'carbon-ceramic' | 'endurance-steel';
   /**
+   * The pads' friction against disc temperature (°C → share of `maxTorqueNm`, linear between points, held past the
+   * ends), in place of the material's built-in curve. Pad glazing still acts on top. Absent: the material's curve
+   */
+  padMuCurve?: LutPoints;
+  /** Disc temperature the car starts and restarts with (°C); default 380 */
+  discStartTempC?: number;
+  /**
    * Brake-by-wire migration: the bias moves forward by `amount` at full pedal, starting at `rampStart` of the pedal
    * travel (BRAKE_MIGRATION + BMIG_RAMP). Default 0.015 from the first of the travel
    */

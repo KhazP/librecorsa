@@ -814,8 +814,16 @@ export const MTR_496R_CONFIG = {
     settings: { power: 0.3, coast: 0.55, preload: 60, friction_faces: 1, power_ramp_deg: 45, coast_ramp_deg: 45 },
   },
   // 5900 Nm at full pedal, 58 % front, bias adjustable in 0.5 % steps; the pads' grip peaks at 400 °C and is 80 % of it
-  // cold, like steel discs [spec brakes.ini]
-  brakes: { maxTorqueNm: 5900, front_bias: 0.58, ebbStep: 0.005, brakeByWire: false, discMaterial: 'endurance-steel', migration: { amount: 0, rampStart: 0 } },
+  // cold, easing to 97 % at 900 °C and 82 % at 1200 (the same curve front and rear) [spec brakes.ini PERF_CURVE]
+  brakes: {
+    maxTorqueNm: 5900,
+    front_bias: 0.58,
+    ebbStep: 0.005,
+    brakeByWire: false,
+    discMaterial: 'endurance-steel',
+    padMuCurve: [[0, 0.8], [400, 1], [900, 0.97], [1200, 0.82], [2000, 0.62]],
+    migration: { amount: 0, rampStart: 0 },
+  },
   suspensions: SUSPENSIONS,
   aero: AERO,
   tyreCompounds: TYRES_WITH_RAIN,

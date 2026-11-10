@@ -59,6 +59,7 @@ import {
 } from '../suspension-kinematics';
 import {
   type BrakeCompoundKind,
+  type BrakePadMuCurve,
   type BrakeDiscState,
   computeDynamicBrakeMigration,
   createBrakeDiscState,
@@ -924,6 +925,10 @@ export class VehiclePhysics {
   public turbocharged: boolean;
   /** Disc / pad material of the brakes (`BrakesData.discMaterial`) */
   private readonly brakeCompound: BrakeCompoundKind;
+  /** The car's own pad friction against disc temperature (`BrakesData.padMuCurve`), else the material's */
+  private readonly brakePadCurve: BrakePadMuCurve | undefined;
+  /** Disc temperature at the start and every reset (°C, `BrakesData.discStartTempC`) */
+  private readonly brakeStartTempC: number;
   /** Dynamic brake bias after pressure-sensitive brake migration */
   public dynamicBrakeBias = 0.56;
   /** Live-tunable dynamic brake migration ramp amount (0..0.06) */
@@ -1110,6 +1115,8 @@ export class VehiclePhysics {
     this.powerSteering = ch.powerSteering;
     this.ffbMechanicalTrailM = ch.ffbMechanicalTrailM ?? DEFAULT_FFB_MECHANICAL_TRAIL_M;
     this.brakeCompound = cfg.brakes.discMaterial ?? 'carbon-ceramic';
+    this.brakePadCurve = cfg.brakes.padMuCurve;
+    this.brakeStartTempC = cfg.brakes.discStartTempC ?? 380;
     this.drivenWheels = cfg.drivenAxle === 'front' ? [0, 1] : [2, 3];
     // Body axes: X = left (pitch), Y = up (yaw), Z = forward (roll)
     this.dryInertiaBody = new THREE.Vector3(ch.inertia.pitch, ch.inertia.yaw, ch.inertia.roll);
@@ -1257,7 +1264,7 @@ export class VehiclePhysics {
         grainLevel: 0,
         blisterLevel: 0,
         dirtyLevel: 0,
-        brakeDisc: createBrakeDiscState(380, this.brakeCompound),
+        brakeDisc: createBrakeDiscState(this.brakeStartTempC, this.brakeCompound, this.brakePadCurve),
         coldPressurePsi: 0,
         pressurePsi: 0,
         brakeTorqueNm: 0,
@@ -1741,7 +1748,7 @@ export class VehiclePhysics {
       w.grainLevel = 0;
       w.blisterLevel = 0;
       w.dirtyLevel = 0;
-      resetBrakeDiscState(w.brakeDisc, 380, this.brakeCompound);
+      resetBrakeDiscState(w.brakeDisc, this.brakeStartTempC, this.brakeCompound, this.brakePadCurve);
       w.pressurePsi = w.coldPressurePsi;
     }
   }
@@ -3434,7 +3441,8 @@ export class VehiclePhysics {
         dt,
         this.brakeCompound,
         w.isFront ? this.brakeDuctScale.front : this.brakeDuctScale.rear,
-        Math.min(1, this.wetness + 0.5 * sprayBoost)
+        Math.min(1, this.wetness + 0.5 * sprayBoost),
+        this.brakePadCurve
       );
     }
   }
