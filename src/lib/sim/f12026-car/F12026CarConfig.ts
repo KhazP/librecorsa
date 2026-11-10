@@ -306,6 +306,15 @@ export interface DifferentialData {
    * on the shafts, √(2k / (r²·I_engine)) at overall ratio r). Absent: rigid shafts
    */
   halfshaft?: { stiffnessNmPerRad: number; dampingNmsPerRad: number };
+  /**
+   * Brake-operated diff lock of a road car's stability system: a brake torque (Nm) on the driven wheel that turns the
+   * faster, growing from nothing at `deadZone` to all of it at `fullSpin` (how much faster than the other wheel it
+   * turns: 1 = twice as fast), with its own numbers on the power and off it
+   */
+  brakeLock?: {
+    power: { torqueNm: number; deadZone: number; fullSpin: number };
+    coast: { torqueNm: number; deadZone: number; fullSpin: number };
+  };
   /** Electronic diff: the coast locking (same units as `coast`) while braking, i.e. on corner entry; default `coast` */
   coastBraking?: number;
   /**

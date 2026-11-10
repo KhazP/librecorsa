@@ -2920,6 +2920,16 @@ export class VehiclePhysics {
       const handbrake = !w.isFront && inp.handbrake ? inp.handbrake * (br.handbrakeTorqueNm ?? 0) : 0;
       w.brakeTorqueNm = friction + handbrake + w.fz * rollingResistance * w.rollingRadius;
     }
+    // Brake-operated diff lock: the faster driven wheel is held back
+    const brakeLock = cfg.differential.brakeLock;
+    if (brakeLock) {
+      const l = Math.abs(W[dl].omega);
+      const r = Math.abs(W[dr].omega);
+      const map = tIce + tK > 0 ? brakeLock.power : brakeLock.coast;
+      const spin = Math.max(l, r) / Math.max(1, Math.min(l, r)) - 1;
+      const share = THREE.MathUtils.clamp((spin - map.deadZone) / Math.max(1e-6, map.fullSpin - map.deadZone), 0, 1);
+      W[l > r ? dl : dr].brakeTorqueNm += share * map.torqueNm;
+    }
 
     // ---- predicted velocities from the free torques
     const Ie = eng.inertia;
