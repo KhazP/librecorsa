@@ -115,8 +115,11 @@ async function main() {
   // A late entrant, and one who left
   const cy = await join_('peer_cy', token('c'), 'Cy');
   check("and the names in the lobby are still their own", lobbyOf(cy)?.players.find((p) => p.peerId === 'peer_bea')?.name === 'Bea');
+  // As the runtime does it: the socket is still listed while its close is handled
+  cy.closing = true;
   await server.webSocketClose(cy, 1001);
-  check('an entrant who leaves is gone from the lobby', lobbyOf(al)?.players.length === 2);
+  cy.closing = false;
+  check('an entrant who leaves is gone from the lobby at once', lobbyOf(al)?.players.length === 2);
   const dee = await join_('peer_dee', token('d'));
   nowMs = slot.startsMs - RACE_JOIN_CUTOFF_MS + 1;
   check('too close to the lights nobody new is taken', (await join_('peer_late', token('e'), 'Late')).last()?.t === 'closed');

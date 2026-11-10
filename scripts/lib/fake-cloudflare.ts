@@ -57,6 +57,8 @@ export function fakeR2(): R2Bucket & { objects: Map<string, string> } {
 export class FakeSocket implements ServerSocket {
   sent: Record<string, unknown>[] = [];
   closed: number | null = null;
+  /** Set while the object handles this socket's close: the real runtime still lists it then */
+  closing = false;
   readyState = 1;
   tags: string[] = [];
   private attachment: unknown = null;
@@ -102,8 +104,8 @@ export function fakeState(): DurableObjectState & { sockets: FakeSocket[]; alarm
       (ws as FakeSocket).tags = tags;
       sockets.push(ws as FakeSocket);
     },
-    // As the runtime: only sockets still open
-    getWebSockets: (tag?: string) => sockets.filter((x) => x.closed === null && (tag === undefined || x.tags.includes(tag))),
+    // As the runtime: sockets still open, and one whose close is being handled right now (`closing`)
+    getWebSockets: (tag?: string) => sockets.filter((x) => (x.closed === null || x.closing) && (tag === undefined || x.tags.includes(tag))),
     setWebSocketAutoResponse() {},
   };
   return state;

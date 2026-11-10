@@ -112,9 +112,18 @@ export class RaceServer {
     return this.race;
   }
 
-  /** The sockets of entrants (not ones being refused) */
-  private sockets(): ServerSocket[] {
-    return this.state.getWebSockets("car");
+  /**
+   * The sockets of entrants (not ones being refused), one per car. `gone` is a socket being closed: while its close
+   * is handled the runtime still lists it. A car back on a new socket may briefly have its old one listed too: the
+   * newest stands for it.
+   */
+  private sockets(gone?: ServerSocket): ServerSocket[] {
+    const byCar = new Map<string, ServerSocket>();
+    for (const ws of this.state.getWebSockets("car")) {
+      const peer = ws === gone ? undefined : entrantOf(ws)?.peer;
+      if (peer !== undefined) byCar.set(peer, ws);
+    }
+    return [...byCar.values()];
   }
 
   /** Takes a new socket into the race, or tells it why not (the game closes it then) */
@@ -130,7 +139,7 @@ export class RaceServer {
     const race = await this.getRace();
     const nowMs = this.now();
 
-    const same = this.sockets().filter((s) => entrantOf(s)?.peer === peer);
+    const same = this.state.getWebSockets("car").filter((s) => entrantOf(s)?.peer === peer);
     let joinedMs = nowMs;
     if (same.length > 0) {
       // The same car back on a new socket (its network changed): it takes over. Someone else using its id is refused
@@ -156,8 +165,8 @@ export class RaceServer {
     send(ws, this.lobbyMessage(meta, race));
   }
 
-  private players(): LobbyPlayer[] {
-    return this.sockets()
+  private players(gone?: ServerSocket): LobbyPlayer[] {
+    return this.sockets(gone)
       .map(entrantOf)
       .filter((e): e is Entrant => e !== null && e.name !== undefined)
       .sort((a, b) => a.joinedMs - b.joinedMs)
@@ -173,22 +182,22 @@ export class RaceServer {
       }));
   }
 
-  private lobbyMessage(meta: Meta, race: RaceStartInfo | null): string {
+  private lobbyMessage(meta: Meta, race: RaceStartInfo | null, gone?: ServerSocket): string {
     const rules = raceRules(meta);
     const lobby: LobbyState = {
       hostId: RACE_SERVER_ID,
       settings: { trackId: rules.trackId, laps: rules.raceLaps, collisions: "ghost_lap1", carClass: "any", vehicle: rules.vehicle },
-      players: this.players(),
+      players: this.players(gone),
       race,
     };
     return JSON.stringify({ ctl: { type: "lobby", lobby }, from: RACE_SERVER_ID });
   }
 
-  private async broadcastLobby(): Promise<void> {
+  private async broadcastLobby(gone?: ServerSocket): Promise<void> {
     const meta = await this.getMeta();
     if (!meta) return;
-    const text = this.lobbyMessage(meta, await this.getRace());
-    for (const ws of this.sockets()) send(ws, text);
+    const text = this.lobbyMessage(meta, await this.getRace(), gone);
+    for (const ws of this.sockets(gone)) send(ws, text);
   }
 
   private withinRate(ws: ServerSocket, kind: "state" | "control", nowMs: number): boolean {
@@ -263,7 +272,9 @@ export class RaceServer {
 
   async webSocketClose(ws: ServerSocket, code: number): Promise<void> {
     close(ws, code === 1005 || code === 1006 ? 1000 : code, "closed");
-    if (entrantOf(ws)) await this.broadcastLobby();
+    // Unless this was the old socket of a car that is already back on a new one
+    const who = entrantOf(ws);
+    if (who && !this.sockets(ws).some((s) => entrantOf(s)?.peer === who.peer)) await this.broadcastLobby(ws);
   }
 
   async webSocketError(ws: ServerSocket): Promise<void> {
