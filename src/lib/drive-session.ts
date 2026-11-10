@@ -1489,6 +1489,9 @@ export class DriveSession {
         steerLeft: 0,
         steerRight: 0,
         analogSteer: directSteer,
+        // A bound steering wheel's rim turns the rack at the speed of the driver's hands; a mouse, the touch pad and
+        // an unbound device keep the car's limit on how fast the rack turns
+        steerRim: device.source === "wheel" && !settings.mouseSteer && !touchSteering,
         kbSteer: kbSteerDir,
         padSteer: directSteer === undefined ? gamepadStick : undefined,
         manualOverride:
