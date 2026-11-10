@@ -880,6 +880,9 @@ export class VehiclePhysics {
   private ffbSamples = 0;
   /** 500 Hz outer-step FFB samples accumulated during step() */
   private ffbSubframeSamples: number[] = [];
+  /** The torque of the substeps of the outer step under way, summed, and their count: its sample is their mean */
+  private ffbStepSum = 0;
+  private ffbStepSamples = 0;
   /**
    * Commanded road-wheel angle at the last step() and its rate over that step (rad, rad/s): how fast the wheel is
    * really being turned, which the once-per-frame input otherwise only shows as steps
@@ -1512,6 +1515,8 @@ export class VehiclePhysics {
     }
     this.prevVelocity.copy(this.velocity);
     this.ffbSubframeSamples.length = 0;
+    this.ffbStepSum = 0;
+    this.ffbStepSamples = 0;
     this.lastCmdSteerRad = Number.NaN;
     this.cmdSteerRateRadS = 0;
     this.updateOutputs(0);
@@ -2056,7 +2061,10 @@ export class VehiclePhysics {
     this.updateOutputs(dt);
     // Keep the newest samples: a long frame drops its oldest, not its latest, torque
     if (this.ffbSubframeSamples.length >= FFB_SUBFRAME_MAX) this.ffbSubframeSamples.shift();
-    this.ffbSubframeSamples.push(-this.telemetry.ffbTorqueNorm);
+    // The mean of the step's substeps, not its last: a 500 Hz sample of the 2 kHz torque without the aliasing
+    this.ffbSubframeSamples.push(-(this.ffbStepSamples > 0 ? this.ffbStepSum / this.ffbStepSamples : this.telemetry.ffbTorqueNorm));
+    this.ffbStepSum = 0;
+    this.ffbStepSamples = 0;
   }
 
   private updateBasis(): void {
@@ -2526,6 +2534,8 @@ export class VehiclePhysics {
     this.telemetry.ffbTorqueNorm = THREE.MathUtils.clamp(driverNm / FFB_REFERENCE_NM, -1, 1);
     this.ffbSum += this.telemetry.ffbTorqueNorm;
     this.ffbSamples++;
+    this.ffbStepSum += this.telemetry.ffbTorqueNorm;
+    this.ffbStepSamples++;
 
     // ---- drivetrain, brakes and wheel spin
     this.solveDrivetrain(h, inp, tyreTorque);
