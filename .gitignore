@@ -51,6 +51,8 @@ UI-RESEARCH-*.md
 # (src/lib/hosted-content.ts)
 /public/tracks/*
 !/public/tracks/rwanda/
+!/public/tracks/rwanda_official/
+!/public/tracks/rwanda_official_short/
 !/public/tracks/index.json
 /public/cars/*
 !/public/cars/f12026/

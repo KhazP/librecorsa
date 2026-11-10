@@ -155,7 +155,7 @@ export const TRACKS: TrackInfo[] = [
   {
     id: RWANDA_TRACK_ID,
     name: "Rwanda International Circuit",
-    layout: "2026 concept layout",
+    layout: "Fan concept layout",
     country: "Rwanda",
     city: "Bugesera",
     lengthM: RWANDA_TARGET_LENGTH_M,
