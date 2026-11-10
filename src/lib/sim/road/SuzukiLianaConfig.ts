@@ -132,6 +132,9 @@ const GEARBOX = {
   // The lever is between gears for the whole change, the pedal up with it [spec CHANGE_UP_TIME, AUTO_CUTOFF_TIME]
   upshiftNeutralS: 0.25,
   upshiftCutS: 0.25,
+  // Down: 270 ms between gears with the driver's heel and toe, then the clutch let out slowly, home after a second and
+  // a half [spec CHANGE_DN_TIME, DOWNSHIFT_PROFILE, AUTOBLIP]
+  downshift: { neutralS: 0.27, clutchReleaseS: 0.18, clutchHomeS: 1.5, blip: { level: 1, riseS: 0.02 } },
   efficiency: DRIVELINE_EFFICIENCY,
   gears: {
     // [spec LIMITER]

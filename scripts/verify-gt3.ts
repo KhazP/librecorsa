@@ -16,7 +16,7 @@ import { brakingGuideFor, computeSpeedProfile, createVf26ProfileCarModel } from 
 import { F12026CarSim } from '../src/lib/sim/f12026-car/F12026CarSim';
 import { loadGlbGeometry } from './lib/glb-geometry';
 import { createFlatTestTrack } from './lib/flat-track';
-import { measureUpshift } from './lib/upshift-test';
+import { downshiftTakenAt, measureDownshift, measureUpshift } from './lib/upshift-test';
 import { checkBarrierCrashes, vehicleCrashCar } from './lib/barrier-crash';
 import { checkPlacementAndRecovery } from './lib/placement-recovery';
 import { TrackWallQuery } from '../src/lib/sim/f12026-car/TrackColliderQuery';
@@ -325,6 +325,17 @@ console.log('\n== Up-shift');
   // A dog box: 50 ms between gears with the ignition cut for 70 ms; the engine slows a little on its own, the dogs take the rest (8.8 % with the gear changed in no time)
   const u = measureUpshift((t) => createAmgGt3Sim(t), 80);
   check('An up-shift on a light pedal: the dogs are out, then the driven wheels take the engine\'s excess, under 7 % of slip', u.to === u.from + 1 && u.gMin < u.gBefore - 0.1 && u.slipPeak < 0.07, `gear ${u.from} → ${u.to}, slip ${(u.slipBefore * 100).toFixed(1)} % → ${(u.slipPeak * 100).toFixed(1)} %, ${u.gBefore.toFixed(2)} g → ${u.gMin.toFixed(2)} … ${u.gPeak.toFixed(2)} g`);
+}
+
+console.log('\n== Down-shift');
+{
+  // The control unit's blip holds until the engine is at the lower gear's speed; the clutch takes up the rest
+  const d = measureDownshift((t) => createAmgGt3Sim(t), 170, 4, 0.5);
+  check('A down-shift on the brakes: the blip brings the engine up, no wheel slips past 5 % and the car is not tugged 0.25 g harder', d.to === d.from - 1 && d.slipPeak < 0.05 && d.gMin > d.gBefore - 0.25, `gear ${d.from} → ${d.to}, ${d.gBefore.toFixed(2)} g → ${d.gMin.toFixed(2)} … ${d.gMax.toFixed(2)} g, slip at most ${(d.slipPeak * 100).toFixed(1)} %`);
+  const g = AMG_GT3_CONFIG.gearbox;
+  const taken = downshiftTakenAt((t) => createAmgGt3Sim(t), 4, g.ratios, g.gears.redline_rpm, 300);
+  const refused = !downshiftTakenAt((t) => createAmgGt3Sim(t), 4, g.ratios, g.gears.redline_rpm, 700);
+  check('The box takes a down-shift that lands 300 rpm over the limiter and refuses one 700 over', taken && refused, `300 over: ${taken ? 'taken' : 'refused'}, 700 over: ${refused ? 'refused' : 'taken'}`);
 }
 
 console.log(failures.length ? `\n${failures.length} check(s) failed: ${failures.join(', ')}` : '\nAll GT3 checks passed.');

@@ -21,7 +21,7 @@ import { carById } from '../src/lib/cars/car-registry';
 import { wetnessFromWater } from '../src/lib/sim/wet-tyres';
 import { loadGlbGeometry } from './lib/glb-geometry';
 import { createFlatTestTrack } from './lib/flat-track';
-import { measureUpshift } from './lib/upshift-test';
+import { downshiftTakenAt, measureDownshift, measureUpshift } from './lib/upshift-test';
 import { hasFile, noteSkip } from './lib/hosted-files';
 import { readFileSync } from 'node:fs';
 
@@ -285,6 +285,17 @@ console.log('\n== Up-shift');
   // A dog box: 40 ms between gears with the ignition cut for 60 ms (16 % with the gear changed in no time)
   const u = measureUpshift((t) => createMtr496rSim(t), 90);
   check('An up-shift on a light pedal: the dogs are out, then the driven wheels take the engine\'s excess, under 15 % of slip', u.to === u.from + 1 && u.gMin < u.gBefore - 0.1 && u.slipPeak < 0.15, `gear ${u.from} → ${u.to}, slip ${(u.slipBefore * 100).toFixed(1)} % → ${(u.slipPeak * 100).toFixed(1)} %, ${u.gBefore.toFixed(2)} g → ${u.gMin.toFixed(2)} … ${u.gPeak.toFixed(2)} g`);
+}
+
+console.log('\n== Down-shift');
+{
+  // A 60 % blip in the 100 ms between gears; the clutch takes up what it leaves
+  const d = measureDownshift((t) => createMtr496rSim(t), 190, 4, 0.5);
+  check('A down-shift on the brakes: the blip brings the engine up, no wheel slips past 6 % and the car is not tugged 0.25 g harder', d.to === d.from - 1 && d.slipPeak < 0.06 && d.gMin > d.gBefore - 0.25, `gear ${d.from} → ${d.to}, ${d.gBefore.toFixed(2)} g → ${d.gMin.toFixed(2)} … ${d.gMax.toFixed(2)} g, slip at most ${(d.slipPeak * 100).toFixed(1)} %`);
+  const g = MTR_496R_CONFIG.gearbox;
+  const taken = downshiftTakenAt((t) => createMtr496rSim(t), 4, g.ratios, g.gears.redline_rpm, 300);
+  const refused = !downshiftTakenAt((t) => createMtr496rSim(t), 4, g.ratios, g.gears.redline_rpm, 700);
+  check('The box takes a down-shift that lands 300 rpm over the limiter and refuses one 700 over', taken && refused, `300 over: ${taken ? 'taken' : 'refused'}, 700 over: ${refused ? 'refused' : 'taken'}`);
 }
 
 console.log(failures.length ? `\n${failures.length} check(s) failed: ${failures.join(', ')}` : '\nAll 496R checks passed.');

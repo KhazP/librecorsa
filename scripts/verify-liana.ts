@@ -19,7 +19,7 @@ import { SUZUKI_LIANA_PROFILE_CAR, createSuzukiLianaSim } from '../src/lib/sim/r
 import type { F12026CarSim } from '../src/lib/sim/f12026-car/F12026CarSim';
 import { loadGlbGeometry } from './lib/glb-geometry';
 import { createFlatTestTrack } from './lib/flat-track';
-import { measureUpshift } from './lib/upshift-test';
+import { downshiftTakenAt, measureDownshift, measureUpshift } from './lib/upshift-test';
 import { wetnessFromWater } from '../src/lib/sim/wet-tyres';
 import { noteSkip } from './lib/hosted-files';
 
@@ -294,6 +294,13 @@ console.log('\n== Up-shift');
   // A manual box: the lever is between gears for a quarter of a second, the engine slowing meanwhile (22 % with the gear changed in no time)
   const u = measureUpshift((t) => createSuzukiLianaSim(t), 45);
   check('An up-shift on a light pedal: the dogs are out, then the driven wheels take the engine\'s excess, under 20 % of slip', u.to === u.from + 1 && u.gMin < u.gBefore && u.slipPeak < 0.2, `gear ${u.from} → ${u.to}, slip ${(u.slipBefore * 100).toFixed(1)} % → ${(u.slipPeak * 100).toFixed(1)} %, ${u.gBefore.toFixed(2)} g → ${u.gMin.toFixed(2)} … ${u.gPeak.toFixed(2)} g`);
+}
+
+console.log('\n== Down-shift');
+{
+  // The driver's heel and toe in the quarter second between gears, then the clutch let out slowly
+  const d = measureDownshift((t) => createSuzukiLianaSim(t), 110, 4, 0.5);
+  check('A down-shift on the brakes: the blip brings the engine up, no wheel slips past 8 % and the car is not tugged 0.25 g harder', d.to === d.from - 1 && d.slipPeak < 0.08 && d.gMin > d.gBefore - 0.25, `gear ${d.from} → ${d.to}, ${d.gBefore.toFixed(2)} g → ${d.gMin.toFixed(2)} … ${d.gMax.toFixed(2)} g, slip at most ${(d.slipPeak * 100).toFixed(1)} %`);
 }
 
 console.log(failures.length ? `\n${failures.length} check(s) failed: ${failures.join(', ')}` : '\nAll Liana checks passed.');

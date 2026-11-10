@@ -141,6 +141,9 @@ const GEARBOX = {
   shiftTorqueFraction: 0.1,
   upshiftNeutralS: 0.05,
   upshiftCutS: 0.07,
+  // Down: 100 ms between gears, the clutch home from 122 to 168 ms, a 73 % blip, and up to 500 rpm over the limiter
+  // [spec CHANGE_DN_TIME, DOWNSHIFT_PROFILE, AUTOBLIP, DOWNSHIFT_PROTECTION]
+  downshift: { neutralS: 0.1, clutchReleaseS: 0.122, clutchHomeS: 0.168, blip: { level: 0.73, riseS: 0.01 }, overRevRpm: 500 },
   efficiency: DRIVELINE_EFFICIENCY,
   gears: {
     // Reference telemetry limiter: logs peak at 7899 rpm [motec]

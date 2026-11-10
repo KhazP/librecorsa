@@ -147,6 +147,9 @@ const GEARBOX = {
   // Dog box: 40 ms between gears, the ignition cut for 60 ms [spec CHANGE_UP_TIME, AUTO_CUTOFF_TIME]
   upshiftNeutralS: 0.04,
   upshiftCutS: 0.06,
+  // Down: 100 ms between gears, the clutch home by 130 ms, a 60 % blip, and up to 500 rpm over the limiter
+  // [spec CHANGE_DN_TIME, DOWNSHIFT_PROFILE, AUTOBLIP, DOWNSHIFT_PROTECTION]
+  downshift: { neutralS: 0.1, clutchReleaseS: 0.05, clutchHomeS: 0.13, blip: { level: 0.6, riseS: 0.01 }, overRevRpm: 500 },
   efficiency: DRIVELINE_EFFICIENCY,
   gears: {
     // [spec LIMITER]
