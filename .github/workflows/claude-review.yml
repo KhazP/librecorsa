@@ -1,0 +1,78 @@
+name: Claude review
+
+# Claude reads every push through the API, billed to the account that owns the API key (the Claude Code GitHub Action
+# would bill plan usage instead). The review goes to the run summary, and to a commit comment when it finds something.
+# It never fails a push for what it finds. Needs the repository secret ANTHROPIC_API_KEY; without it the job passes
+# and says so. The script holds the full list of files it leaves out; the list below only saves starting a runner.
+on:
+  push:
+    branches: ['**']
+    paths-ignore:
+      - '**/*.md'
+      - '**/*.png'
+      - '**/*.jpg'
+      - '**/*.webp'
+      - '**/*.wav'
+      - '**/*.ogg'
+      - '**/*.glb'
+      - '**/*.meta'
+      - '**/*.unity'
+      - '**/*.prefab'
+      - '**/*.asset'
+  workflow_dispatch:
+    inputs:
+      base:
+        description: 'Commit to compare against (default: the parent on main, the fork point on a branch)'
+        required: false
+      head:
+        description: 'Commit to review (default: the tip of the chosen branch)'
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  review:
+    if: github.actor != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check for the API key
+        id: key
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ -n "$ANTHROPIC_API_KEY" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::ANTHROPIC_API_KEY is not set for this repository, so the push was not reviewed."
+          fi
+
+      # All history, so the push can be compared with the tip it replaced; file contents are fetched only as needed.
+      - name: Checkout
+        if: steps.key.outputs.present == 'true'
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          filter: blob:none
+
+      - name: Setup Python
+        if: steps.key.outputs.present == 'true'
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - name: Review
+        if: steps.key.outputs.present == 'true'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN: ${{ github.token }}
+          REVIEW_BEFORE: ${{ github.event.before }}
+          REVIEW_BASE: ${{ github.event.inputs.base }}
+          REVIEW_HEAD: ${{ github.event.inputs.head }}
+          REVIEW_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          REVIEW_MODEL: claude-opus-5-5
+          REVIEW_EFFORT: high
+        run: |
+          python -m pip install --quiet --disable-pip-version-check "anthropic>=2.8,<3"
+          python .github/scripts/claude_review.py
