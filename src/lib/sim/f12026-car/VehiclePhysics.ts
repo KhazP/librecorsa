@@ -557,6 +557,11 @@ export interface TyreRuntime {
   brush: BrushTyre | null;
   /** Core temperatures (°C) between which the grip curve is at its peak: a brush tyre grains below, blisters above */
   peakWindowC: [number, number];
+  /**
+   * Size of this axle's tyre over the front's (tread width × radius): the compound's heat capacities and cooling are
+   * stated for the front tyre, and a wider rear holds and sheds heat in proportion
+   */
+  thermalSize: number;
   /** The compound's own wear curve (km slid → grip, 1 = new) and the distance at which it is worn out; null: generic wear */
   wearCurve: Lut | null;
   wearOutKm: number;
@@ -668,6 +673,7 @@ export function createTyreRuntime(compound: TyresCompoundData, rear = false): Ty
     grain: tyreGrainThresholdsC(data.thermalData.optimalTempC),
     brush: model.curve === 'brush' ? createBrushTyre(model, Math.tan(fla * DEG2RAD), fz0) : null,
     peakWindowC: gripCurvePeakWindowC(data.thermalData.thermalPerformanceCurve),
+    thermalSize: rear ? (compound.rear.width * compound.rear.radius) / (compound.front.width * compound.front.radius) : 1,
     wearCurve: data.wear ? new Lut(data.wear.curve.map(([km, pct]) => [km, pct / 100] as const)) : null,
     wearOutKm: data.wear ? data.wear.curve[data.wear.curve.length - 1][0] : 0,
   };
@@ -3240,20 +3246,24 @@ export class VehiclePhysics {
       shares[0] = sI / sSum;
       shares[1] = sM / sSum;
       shares[2] = sO / sSum;
+      // The compound's heat capacities and conductances are the front tyre's: this axle's scale with its size
+      const size = this.tyres[w.isFront ? 0 : 1].thermalSize;
+      const surfaceCap = th.surfaceHeatCapacity * size;
+      const coreCap = th.coreHeatCapacity * size;
       for (let b = 0; b < 3; b++) {
         const share = shares[b] * 3;
-        const bToCore = th.surfaceToCore * (w.bandTempsC[b] - w.bandCoreTempsC[b]);
-        const bSurfCool = (th.surfaceCooling[0] + th.surfaceCooling[1] * v) * (w.bandTempsC[b] - this.ambientC);
-        const bRoadCool = w.fz > 0 ? roadG * (shares[b] * 3) * (w.bandTempsC[b] - this.trackTempC) : 0;
-        const bCoreCool = (th.coreCooling[0] + th.coreCooling[1] * v + extWetCool) * (w.bandCoreTempsC[b] - this.ambientC);
-        w.bandTempsC[b] += ((th.slipHeatShare * slipPower * share - bToCore - bSurfCool - bRoadCool) / th.surfaceHeatCapacity) * dt;
-        w.bandCoreTempsC[b] += ((hyst * share + bToCore - bCoreCool) / th.coreHeatCapacity) * dt;
+        const bToCore = th.surfaceToCore * size * (w.bandTempsC[b] - w.bandCoreTempsC[b]);
+        const bSurfCool = (th.surfaceCooling[0] + th.surfaceCooling[1] * v) * size * (w.bandTempsC[b] - this.ambientC);
+        const bRoadCool = w.fz > 0 ? roadG * size * (shares[b] * 3) * (w.bandTempsC[b] - this.trackTempC) : 0;
+        const bCoreCool = (th.coreCooling[0] + th.coreCooling[1] * v + extWetCool) * size * (w.bandCoreTempsC[b] - this.ambientC);
+        w.bandTempsC[b] += ((th.slipHeatShare * slipPower * share - bToCore - bSurfCool - bRoadCool) / surfaceCap) * dt;
+        w.bandCoreTempsC[b] += ((hyst * share + bToCore - bCoreCool) / coreCap) * dt;
       }
       // Cross-band conduction: heat crosses between neighbouring bands through the tread and through the carcass (W/K),
       // each band a third of its layer's heat capacity. Slow next to the bands' own heating and cooling, so camber and
       // pressure keep their inner / outer temperature difference
-      const kSurf = ((3 * BAND_TREAD_CONDUCTANCE) / th.surfaceHeatCapacity) * dt;
-      const kCore = ((3 * BAND_CARCASS_CONDUCTANCE) / th.coreHeatCapacity) * dt;
+      const kSurf = ((3 * BAND_TREAD_CONDUCTANCE) / surfaceCap) * dt;
+      const kCore = ((3 * BAND_CARCASS_CONDUCTANCE) / coreCap) * dt;
       const d01 = kSurf * (w.bandTempsC[0] - w.bandTempsC[1]);
       const d12 = kSurf * (w.bandTempsC[1] - w.bandTempsC[2]);
       w.bandTempsC[0] -= d01;
