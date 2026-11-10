@@ -530,7 +530,7 @@ function gt3Compound(
       surfaceHeatCapacity: 1800,
       coreHeatCapacity: 11000,
       slipHeatShare: 0.35,
-      hysteresis: 0.0038,
+      hysteresis: 0.0044,
       surfaceToCore: 40,
       surfaceCooling: [5, 0.6],
       coreCooling: [8, 0.2],

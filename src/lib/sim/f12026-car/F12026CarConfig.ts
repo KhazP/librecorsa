@@ -663,7 +663,10 @@ export interface TyresThermalPatchData {
   coreHeatCapacity: number;
   /** Share of sliding power that heats the tread surface */
   slipHeatShare: number;
-  /** Rolling hysteresis power coefficient (W per N per m/s) */
+  /**
+   * Rolling hysteresis power coefficient (W per N per m/s): the share of the load that the rolling tyre turns into
+   * heat in its carcass. A tyre's rolling resistance is that loss, so it sits near the rolling-resistance coefficient
+   */
   hysteresis: number;
   /** Surface → core conductance (W/K) */
   surfaceToCore: number;
@@ -1461,11 +1464,13 @@ function f1Compound(
     thermalData: {
       thermalPerformanceCurve: thermalCurve,
       optimalTempC: window,
-      // The mod's thermal model is not this one: these are ours [est]
+      // The mod's thermal model is not this one: these are ours [est]. The carcass heats by most of the tyre's rolling
+      // loss (0.012 of the load): on a race stint all four settle near 100 °C, in the compounds' windows, with the
+      // pressures within a psi of their optimum (scripts/verify-tyre-thermal.ts)
       surfaceHeatCapacity: 1500,
       coreHeatCapacity: 9500,
       slipHeatShare: 0.35,
-      hysteresis: 0.0042,
+      hysteresis: 0.0107,
       surfaceToCore: 40,
       surfaceCooling: [5, 0.6],
       coreCooling: [8, 0.2],

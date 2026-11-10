@@ -630,11 +630,13 @@ function protoCompound(
       optimalTempC: window,
       // [spec GRAIN_GAIN / GRAIN_GAMMA, BLISTER_GAIN / BLISTER_GAMMA]
       tread: { grainGain: 0.5, grainGamma: 1, blisterGain: 0.5, blisterGamma: 1 },
-      // The GT3 slick's heat capacities and cooling [est]
+      // The GT3 slick's heat capacities and cooling [est]; the carcass heats by the tyre's rolling loss (0.005 of the
+      // load, 0.0064 at 60 m/s, more with scrub): on a stint all four settle near 75 °C, in the window, with the
+      // pressures within a psi of their optimum
       surfaceHeatCapacity: 1800,
       coreHeatCapacity: 11000,
       slipHeatShare: 0.35,
-      hysteresis: 0.0038,
+      hysteresis: 0.0072,
       surfaceToCore: 40,
       surfaceCooling: [5, 0.6],
       coreCooling: [8, 0.2],
