@@ -152,6 +152,7 @@ interface F1TelemetryHudProps extends MultiplayerPanelProps {
   onCloseResults?: () => void;
   onRestartRace?: () => void;
   onBackToLobby?: () => void;
+  backToLobbyLabel?: string;
   /** Instant replay in progress: only the transport bar shows */
   replay?: React.ComponentProps<typeof ReplayBar> | null;
   /** On-screen pedals and steering (touch screens) */
@@ -585,6 +586,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
             onClose={() => props.onCloseResults?.()}
             onRestart={props.onRestartRace}
             onBackToLobby={props.onBackToLobby}
+            backLabel={props.backToLobbyLabel}
             trackLimitStrikes={telemetry.trackLimits?.totalStrikes ?? 0}
           />
         </div>

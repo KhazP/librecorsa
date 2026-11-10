@@ -792,9 +792,10 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
 
   const [localPeerId, setLocalPeerId] = useState("");
   /** The title menu's panel on its next visit (back to the lobby after a race); used up once the title is left */
-  const [titleInitialPanel, setTitleInitialPanel] = useState<"multiplayer" | null>(null);
+  const [titleInitialPanel, setTitleInitialPanel] = useState<"multiplayer" | "challenge" | null>(null);
   const handleBackToLobby = useCallback(() => {
-    setTitleInitialPanel("multiplayer");
+    // After a scheduled race there is no lobby: back to the races (asked before leaving ends the entry)
+    setTitleInitialPanel(getMultiplayerManager().inScheduledRace ? "challenge" : "multiplayer");
     leaveSession();
   }, [leaveSession]);
 
@@ -1356,6 +1357,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
             raceKind === "mp" && !isMpHost ? undefined : () => handleResetCar(false)
           }
           onBackToLobby={raceKind === "mp" ? handleBackToLobby : undefined}
+          backToLobbyLabel={inScheduledRace ? "Back to the races" : undefined}
           replay={
             replayUi.active
               ? {

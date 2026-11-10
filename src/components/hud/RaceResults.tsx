@@ -118,9 +118,11 @@ export const RaceResults: React.FC<{
   onClose: () => void;
   onRestart?: () => void;
   onBackToLobby?: () => void;
+  /** What going back leads to: the room's lobby, or (after a scheduled race) the races */
+  backLabel?: string;
   /** The player's track-limits strikes this race */
   trackLimitStrikes?: number;
-}> = ({ race, trackName, onClose, onRestart, onBackToLobby, trackLimitStrikes = 0 }) => {
+}> = ({ race, trackName, onClose, onRestart, onBackToLobby, backLabel = "Back to lobby", trackLimitStrikes = 0 }) => {
   const results = race.results;
   const rootRef = useRef<HTMLDivElement | null>(null);
   // A controller closes the card with Ⓑ and reaches its buttons (Esc is handled below)
@@ -287,7 +289,7 @@ export const RaceResults: React.FC<{
                 onClick={onBackToLobby}
                 className={`${BUTTON_BASE} border border-[#00E5FF]/50 bg-[#00E5FF]/8 text-[#00E5FF] hover:bg-[#00E5FF]/15`}
               >
-                Back to lobby
+                {backLabel}
               </button>
             ) : null}
             <button
