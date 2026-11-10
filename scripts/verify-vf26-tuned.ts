@@ -267,15 +267,20 @@ console.log('\n== Up-shifts, and the throttle out of a corner');
     }
     check('Flat out through the gears: no up-shift adds 6 % of slip', shifts >= 3 && rise < 0.06, `${shifts} shifts, ${f(rise * 100, 1)} % at most`);
   }
-  // A 1.6 g corner at 100 km/h, then a pedal step with the box left to shift, lifted to 15 % after; the steering held,
-  // or a driver steering against the slide and its rate, 0.12 s late
-  const exit = (throttle: number, holdS: number, driver: boolean) => {
+  // A 1.6 g corner at 100 km/h, then a pedal step, lifted to 15 % after; the box left to shift or held in second (where
+  // the full pedal is more than the rear tyres carry); the steering held, or a driver steering against the slide and
+  // its rate, 0.12 s late
+  const exit = (throttle: number, holdS: number, driver: boolean, second = false) => {
     const sim = fresh(100);
+    sim.autoGearbox = !second;
     const v = 100 / 3.6;
     let steer = 0;
+    let shifted = false;
     for (let t = 0; t < 7; t += H) {
       if (Math.abs(sim.telemetry.lateralG) < 1.6) steer += 0.03 * H;
-      sim.step(H, { throttle: THREE.MathUtils.clamp(0.25 + 0.6 * (v - sim.vxMs), 0, 1), analogSteer: steer });
+      const shiftUp: boolean = second && !shifted && t > 0.5;
+      shifted = shifted || shiftUp;
+      sim.step(H, { throttle: THREE.MathUtils.clamp(0.25 + 0.6 * (v - sim.vxMs), 0, 1), analogSteer: steer, shiftUp });
     }
     const slide = () => (Math.atan2(sim.vyMs, Math.max(1, Math.abs(sim.vxMs))) * 180) / Math.PI;
     const b0 = slide();
@@ -294,8 +299,10 @@ console.log('\n== Up-shifts, and the throttle out of a corner');
   };
   const part = exit(0.6, 0.5, false);
   check('60 % throttle out of a 1.6 g corner, the steering held: under 3° of slide', part.peak < 3, `${f(part.peak, 1)}°`);
-  const full = exit(1, 0.3, true);
-  check('Full throttle for 0.3 s there, then a lift and opposite lock: caught under 15°', full.peak < 15 && full.end < 2, `${f(full.peak, 1)}° at most, ${f(full.end, 1)}° two seconds on`);
+  const full = exit(1, 0.4, true, true);
+  check('Full throttle for 0.4 s there in second, then a lift and opposite lock: a slide of 2 to 15°, caught', between(full.peak, 2, 15) && full.end < 2, `${f(full.peak, 1)}° at most, ${f(full.end, 1)}° two seconds on`);
+  const held = exit(1, 0.4, false, true);
+  check('... and with the steering held it is a spin: the slide is the driver\'s to catch', held.peak > 25, `${f(held.peak, 0)}°`);
 }
 
 console.log('\n== Ride heights and downforce against speed');
