@@ -172,6 +172,15 @@ console.log('\n== The other compounds, and steering from the keyboard');
     bodySlipDeg = Math.max(bodySlipDeg, (Math.abs(Math.atan2(sim.vyMs, Math.max(1, Math.abs(sim.vxMs)))) * 180) / Math.PI);
   }
   check('A steering key held at 250 km/h: the car at its limit, under 5° of slide', sum / n > 0.95 * m.lateralG[4] && bodySlipDeg < 5, `${f(sum / n)} g, ${f(bodySlipDeg, 1)}° of body slip`);
+
+  // A mouse or pad turns the rack no faster than hands turn the 270° of rim lock on its 14:1 rack (900°/s)
+  const steer = fresh(50);
+  let tLock = NaN;
+  for (let t = 0; t < 1 && Number.isNaN(tLock); t += H) {
+    steer.step(H, { analogSteer: 1 });
+    if (steer.steerAngleNorm >= 0.999) tLock = t + H;
+  }
+  check('Full lock from centre in 0.29–0.31 s (270° at 900°/s)', between(tLock, 0.29, 0.31), `${f(tLock, 3)} s`);
 }
 
 console.log('\n== Against 2026 qualifying laps, flat out');

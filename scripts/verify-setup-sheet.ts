@@ -257,7 +257,8 @@ console.log("Fuel load");
     check(`${v}: the fuel load sets the starting fuel and the mass`, Math.abs(light.telemetry.fuelKg - f.minKg) < 1e-6 && Math.abs(heavy.telemetry.fuelKg - f.maxKg) < 1e-6 && Math.abs(dm - (f.maxKg - f.minKg)) < 1e-6, `${f.minKg}–${f.maxKg} kg, +${dm.toFixed(1)} kg`);
     check(`${v}: the load holds through a restart`, (heavy.resetToStartGrid(true), Math.abs(heavy.telemetry.fuelKg - f.maxKg) < 1e-6));
     const sameFuel = withSetup(v, { fuelDeltaKg: 10 });
-    for (let i = 0; i < 120; i++) sameFuel.step(DT, { throttle: 1 });
+    // 4 s: a car whose fuel flow follows its rpm burns under the readout's 0.01 kg in the first 2 s of a launch
+    for (let i = 0; i < 240; i++) sameFuel.step(DT, { throttle: 1 });
     const burnt = sameFuel.telemetry.fuelKg;
     sameFuel.applyChassisSetup?.({ ...DEFAULT_CHASSIS_SETUP, fuelDeltaKg: 10, springFrontPct: 6 });
     check(`${v}: changing another setting keeps the fuel burnt so far`, burnt < f.defaultKg + 10 && sameFuel.telemetry.fuelKg === burnt);

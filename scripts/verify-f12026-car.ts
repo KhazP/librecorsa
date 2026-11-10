@@ -30,7 +30,7 @@ import {
   VehiclePhysics,
   type VehicleInputs,
 } from '../src/lib/sim/f12026-car/VehiclePhysics';
-import { F12026CarSim } from '../src/lib/sim/f12026-car/F12026CarSim';
+import { type AidControlProfile, F12026_ELECTRONICS, F12026_SIM_PROFILE, F12026CarSim } from '../src/lib/sim/f12026-car/F12026CarSim';
 import { loadGlbGeometry } from './lib/glb-geometry';
 import { createFlatTestTrack } from './lib/flat-track';
 import { measureUpshift } from './lib/upshift-test';
@@ -985,6 +985,29 @@ console.log('\n== F12026CarSim (simulator adapter)');
     const over = stepSteer(make, v, Math.min(1, 2 * limit));
     check('250 km/h: twice the limit steer runs wide, no spin', !over.spun, over.spun ? 'spun' : 'no spin');
   }
+}
+
+// The TC / ABS gains are the profile's over the F1 calibration: an ABS whose floor is full pressure locks like no ABS
+{
+  console.log('\nDriver-aid gains from the profile...');
+  const pad = createFlatTestTrack(40_000, 3000);
+  const stop = (preset: 'pro' | 'assisted', control?: Partial<AidControlProfile>) => {
+    const profile = control ? { ...F12026_SIM_PROFILE, electronics: { ...F12026_ELECTRONICS, control } } : F12026_SIM_PROFILE;
+    const sim = new F12026CarSim(pad, null, profile);
+    sim.assistPreset = preset;
+    sim.teleportToDistance(1000, 150 / 3.6);
+    let lock = 0;
+    for (let t = 0; t < 6 && sim.telemetry.speedKmh > 40; t += 1 / 120) {
+      sim.step(1 / 120, { brake: 1 });
+      lock = Math.max(lock, -Math.min(...sim.telemetry.wheelSlipRatios));
+    }
+    return lock;
+  };
+  const abs = stop('assisted');
+  const noCut = stop('assisted', { absFloor: 1 });
+  const off = stop('pro');
+  check('ABS floor from the profile: full pressure locks as ABS off does', abs < 0.3 && noCut > 0.5 && Math.abs(noCut - off) < 0.05,
+    `max lock ${fmt(abs, 2)} with ABS, ${fmt(noCut, 2)} with its floor at 1, ${fmt(off, 2)} off`);
 }
 
 // Driver-facing states: the tuner reads back what was picked, a picked PSH is not a running boost, the dialled brake bias

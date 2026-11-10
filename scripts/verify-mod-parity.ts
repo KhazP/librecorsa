@@ -15,6 +15,9 @@ import { AMG_GT3_CONFIG } from '../src/lib/sim/gt3/AmgGt3Config';
 import { modBodyHeightM, modCornerStops, type ModCornerStops } from '../src/lib/sim/mod-suspension';
 import { MTR_496R_CONFIG, MTR_496R_ELECTRONICS } from '../src/lib/sim/proto/Mtr496rConfig';
 import { SUZUKI_LIANA_CONFIG, SUZUKI_LIANA_ELECTRONICS } from '../src/lib/sim/road/SuzukiLianaConfig';
+import { MTR_496R_SIM_PROFILE } from '../src/lib/sim/proto/Mtr496rSim';
+import { SUZUKI_LIANA_SIM_PROFILE } from '../src/lib/sim/road/SuzukiLianaSim';
+import type { CarSimProfile } from '../src/lib/sim/f12026-car/F12026CarSim';
 import { lutAt, lutGap, modDir, ModData, type Lut } from './lib/mod-data';
 
 const failures: string[] = [];
@@ -77,7 +80,8 @@ const NOT_CARRIED: [RegExp, string][] = [
   [/^tyres\.ini \[(VIRTUALKM|ADDITIONAL1|THERMAL_MODEL)\] /, 'wear by load and blanket settings: not carried'],
   [/^car\.ini \[CONTROLS\] (FFMULT|STEER_ASSIST)$/, "force feedback scaling: this sim's own"],
   [/^car\.ini \[CONTROLS\] LINEAR_STEER_ROD_RATIO$/, 'rack travel: steering is by road-wheel angle (STEER_LOCK / STEER_RATIO) on the solved geometry'],
-  [/^car\.ini \[FUEL\] /, "fuel load and use: the sim's own (car-setup)"],
+  [/^car\.ini \[FUEL\] (FUEL|MAX_FUEL)$/, "fuel load: the sim's own (car-setup)"],
+  [/^car\.ini \[FUEL\] CONSUMPTION$/, 'fuel use: a constant flow on this car (its profile has no per-rpm rule)'],
   [/^suspensions\.ini \[(FRONT|REAR)\] (TYPE|RIM_OFFSET)$/, 'the config states the suspension type itself; rim offset is graphics'],
   [/^suspensions\.ini \[(FRONT|REAR)\] TOE_OUT$/, 'static toe is a setup value here (the data gives a rod length, not an angle): not converted'],
   [/^suspensions\.ini \[(FRONT|REAR)\] WBTYRE_BOTTOM$/, "a strut's lower ball joint is STRUT_TYRE"],
@@ -89,7 +93,7 @@ const NOT_CARRIED: [RegExp, string][] = [
   [/^drivetrain\.ini \[(AUTOCLUTCH|DOWNSHIFT_PROFILE|AUTOBLIP|DOWNSHIFT_PROTECTION|AUTO_SHIFTER|TRACTION)\] /, "clutch and auto-shift rules: this sim's own gearbox logic"],
   [/^engine\.ini \[ENGINE_DATA\] (ALTITUDE_SENSITIVITY|AMBIENT_EFFECT)$/, 'air density against engine torque: carried only where the car is not fitted to measurements made in one air'],
   [/^engine\.ini \[(COAST_REF|COAST_DATA|COAST_CURVE)\] /, 'the overrun torque is the reference line (COAST_REF) alone'],
-  [/^brakes\.ini \[TEMPS_(FRONT|REAR)\] /, "brake heat: this sim's own disc model by material"],
+  [/^brakes\.ini \[TEMPS_(FRONT|REAR)\] (TRANSFER|COOL_TRANSFER|TORQUE_K|COOL_SPEED_FACTOR)$/, "brake heat: this sim's own disc model by material (the pads' PERF_CURVE is carried)"],
   [/^brakes\.ini \[DATA\] (HANDBRAKE_TORQUE|ADJUST_STEP)$/, 'no handbrake or bias adjuster on this car'],
   [/^aero\.ini \[WING_\d+\] ZONE_/, 'slipstream and damage zones: not modelled per element'],
   [/^aero\.ini \[(WING_0|FIN_0|WING_1)\] /, 'the body (and the Liana\'s boot) as constant drag and lift; the 496R\'s fin has no tables'],
@@ -384,6 +388,27 @@ function checkDriveline(label: string, mod: ModData, config: CarPhysicsConfig): 
   eq(`${label} brake FRONT_SHARE`, config.brakes.front_bias, mod.num('brakes.ini', 'DATA', 'FRONT_SHARE'));
 }
 
+/**
+ * What the simulator's profile carries from the data: the steering ratio (the hand-speed limit's rim lock), the fuel
+ * flow per rpm, and the pads' friction against temperature (one curve for all four, so front and rear must agree; no
+ * `[TEMPS_*]` in the data means constant brakes, a flat curve)
+ */
+function checkProfile(label: string, mod: ModData, config: CarPhysicsConfig, profile: CarSimProfile): void {
+  eq(`${label} STEER_RATIO`, profile.steerRatio ?? NaN, mod.num('car.ini', 'CONTROLS', 'STEER_RATIO'));
+  eq(`${label} FUEL CONSUMPTION`, profile.fuelLPerS1000Rpm ?? NaN, mod.num('car.ini', 'FUEL', 'CONSUMPTION'));
+  const ours = config.brakes.padMuCurve ?? [];
+  if (mod.sections('brakes.ini').includes('TEMPS_FRONT')) {
+    sameCurve(`${label} brake PERF_CURVE front`, ours, mod.lutOf('brakes.ini', 'TEMPS_FRONT', 'PERF_CURVE'), 1e-9);
+    sameCurve(`${label} brake PERF_CURVE rear`, ours, mod.lutOf('brakes.ini', 'TEMPS_REAR', 'PERF_CURVE'), 1e-9);
+  } else {
+    checks++;
+    if (!(ours.length > 0 && ours.every(([, y]) => y === 1))) {
+      failures.push(`${label} constant brakes`);
+      console.log(`FAIL  ${`${label} constant brakes`.padEnd(62)} the data has no [TEMPS_*]: the pad curve must be flat at 1`);
+    }
+  }
+}
+
 // ---------------------------------------------------------------------------
 // The cars
 // ---------------------------------------------------------------------------
@@ -394,6 +419,7 @@ const ALL = [0, 1, 2, 3, 4, 5, 6, 7];
 section('MTR 496R', 'mt_mtr_496r', (mod) => {
   const config = MTR_496R_CONFIG;
   checkChassis('496R', mod, config);
+  checkProfile('496R', mod, config, MTR_496R_SIM_PROFILE);
   checkSuspension('496R', mod, config, { hardpoints: { front: ALL, rear: ALL } });
   checkDriveline('496R', mod, config);
   eq('496R AUTO_SHIFTER UP', config.gearbox.gears.upshift_rpm, mod.num('drivetrain.ini', 'AUTO_SHIFTER', 'UP'));
@@ -464,6 +490,7 @@ section('MTR 496R', 'mt_mtr_496r', (mod) => {
 section('Suzuki Liana', 'suzuki_liana', (mod) => {
   const config = SUZUKI_LIANA_CONFIG;
   checkChassis('Liana', mod, config);
+  checkProfile('Liana', mod, config, SUZUKI_LIANA_SIM_PROFILE);
   // The front is a strut: its top mount and lower ball joint, the lower arm and the tie rod are the source's; the
   // virtual upper arm is this model's
   checkSuspension('Liana', mod, config, { hardpoints: { front: [2, 3, 4, 5, 6, 7], rear: ALL }, strutFront: true });

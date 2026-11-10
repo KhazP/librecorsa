@@ -172,6 +172,22 @@ console.log('\n== Driver aids through the adapter (semi_pro vs pro)');
   const abs = stop('semi_pro');
   const locked = stop('pro');
   check('ABS keeps the wheels turning on a stamp', abs.lock < 0.3 && abs.dist < locked.dist + 2, `max lock ${fmt(abs.lock, 2)} with ABS (${fmt(abs.dist, 0)} m), ${fmt(locked.lock, 2)} without (${fmt(locked.dist, 0)} m)`);
+
+  // The presets are the GT3's own switch positions, from its profile (an F1 car's semi-pro is TC 5 / ABS 5)
+  const dials = createAmgGt3Sim(wide);
+  const pos = (['pro', 'semi_pro', 'assisted'] as const).map((p) => {
+    dials.assistPreset = p;
+    return `${dials.tcLevel}/${dials.tc2Level}/${dials.absLevel}`;
+  });
+  check('Presets: TC/TC2/ABS 0/5/0, 10/6/9, 12/9/11', pos.join(', ') === '0/5/0, 10/6/9, 12/9/11', pos.join(', '));
+
+  // A constant 0.036 kg/s flat out, from the profile
+  const fuel = createAmgGt3Sim(wide);
+  fuel.teleportToDistance(1000, 0);
+  const f0 = fuel.telemetry.fuelKg;
+  for (let t = 0; t < 30; t += DT) fuel.step(DT, { throttle: 1 });
+  const burnt = f0 - fuel.telemetry.fuelKg;
+  check('30 s flat out from rest burns 1.08–1.15 kg', burnt > 1.08 && burnt < 1.15, `${fmt(burnt, 3)} kg`);
 }
 
 console.log("\n== The GT3's own handling, not the F1's");

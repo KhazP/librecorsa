@@ -22,6 +22,7 @@ import { createFlatTestTrack } from './lib/flat-track';
 import { downshiftTakenAt, measureDownshift, measureUpshift } from './lib/upshift-test';
 import { wetnessFromWater } from '../src/lib/sim/wet-tyres';
 import { noteSkip } from './lib/hosted-files';
+import { evaluateBrakePadMuFactor } from '../src/lib/sim/brake-physics';
 
 const failures: string[] = [];
 const check = (name: string, ok: boolean, detail: string) => {
@@ -255,6 +256,32 @@ console.log('\n== Driver aids through the adapter');
   check('A stamp locks the wheels on standing water, not with ABS', lockedWet.lock > 0.9 && absWet.lock < 0.4 && absWet.dist < lockedWet.dist + 2,
     `max lock ${fmt(absWet.lock, 2)} with ABS (${fmt(absWet.dist, 0)} m), ${fmt(lockedWet.lock, 2)} without (${fmt(lockedWet.dist, 0)} m)`);
   check('Dry stamp: the ABS holds its slip and costs under a tenth of the stop', abs.lock < 0.2 && abs.dist < locked.dist * 1.1, `max lock ${fmt(abs.lock, 2)} with ABS (${fmt(abs.dist, 0)} m), ${fmt(locked.lock, 2)} without (${fmt(locked.dist, 0)} m)`);
+}
+
+console.log('\n== Brakes, fuel and steering from the car\'s data');
+{
+  // The data gives the pads no temperature curve: full friction cold and hot (the steel material's was 0.80 at 20 °C)
+  const pads = [20, 380, 900].map((t) => evaluateBrakePadMuFactor(t, 'endurance-steel', 0, C.brakes.padMuCurve));
+  check('Pad friction 1.00 at 20, 380 and 900 °C', pads.every((v) => v === 1), pads.map((v) => fmt(v)).join(' / '));
+
+  const wide = createFlatTestTrack(30_000, 3000);
+  // Fuel flow follows the engine's speed: a constant 0.006 kg/s flat out burnt 0.187 kg here
+  const sim = createSuzukiLianaSim(wide);
+  sim.teleportToDistance(1000, 0);
+  const f0 = sim.telemetry.fuelKg;
+  for (let t = 0; t < 30; t += DT) sim.step(DT, { throttle: 1 });
+  const burnt = f0 - sim.telemetry.fuelKg;
+  check('30 s flat out from rest burns 0.16–0.185 kg', burnt > 0.16 && burnt < 0.185, `${fmt(burnt, 3)} kg`);
+
+  // A mouse or pad turns the rack no faster than hands turn the 540° of rim lock on its 15:1 rack (900°/s)
+  const steer = createSuzukiLianaSim(wide);
+  steer.teleportToDistance(1000, 50 / 3.6);
+  let tLock = NaN;
+  for (let t = 0; t < 2 && Number.isNaN(tLock); t += DT / 4) {
+    steer.step(DT / 4, { analogSteer: 1 });
+    if (steer.steerAngleNorm >= 0.999) tLock = t + DT / 4;
+  }
+  check('Full lock from centre in 0.59–0.61 s (540° at 900°/s)', tLock > 0.59 && tLock < 0.61, `${fmt(tLock, 3)} s`);
 }
 
 console.log('\n== Autopilot round Dunsfold Aerodrome');

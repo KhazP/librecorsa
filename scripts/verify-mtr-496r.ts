@@ -22,6 +22,8 @@ import { wetnessFromWater } from '../src/lib/sim/wet-tyres';
 import { loadGlbGeometry } from './lib/glb-geometry';
 import { createFlatTestTrack } from './lib/flat-track';
 import { downshiftTakenAt, measureDownshift, measureUpshift } from './lib/upshift-test';
+import { evaluateBrakePadMuFactor } from '../src/lib/sim/brake-physics';
+import { DEFAULT_CHASSIS_SETUP } from '../src/lib/sim/car-setup';
 import { hasFile, noteSkip } from './lib/hosted-files';
 import { readFileSync } from 'node:fs';
 
@@ -208,6 +210,56 @@ console.log('\n== Traction control through the adapter');
   const raw = exit('pro');
   // Above the TC's 50 km/h floor, its 9 % target in the second it works
   check('TC holds rear wheelspin above 50 km/h on a damp road', tc < 0.15 && tc < raw * 0.6, `mean rear slip ${fmt(tc, 2)} with TC, ${fmt(raw, 2)} without`);
+}
+
+console.log('\n== Brakes, fuel and steering from the car\'s data');
+{
+  // The pads' own curve, not the steel material's (full by ~100 °C, down to ≈ 0.6 by 900 °C)
+  const pads = [0, 400, 900, 1200].map((t) => evaluateBrakePadMuFactor(t, 'endurance-steel', 0, C.brakes.padMuCurve));
+  check('Pad friction 0.80 / 1.00 / 0.97 / 0.82 at 0 / 400 / 900 / 1200 °C', [0.8, 1, 0.97, 0.82].every((v, i) => Math.abs(pads[i] - v) < 1e-9),
+    pads.map((v) => fmt(v)).join(' / '));
+  const car = makeCar();
+  car.reset(0, 0, 0);
+  run(car, 0.5, () => ({ throttle: 0, brake: 0, steer: 0 }));
+  // Discs start at 380 °C, a little short of the curve's 400 °C peak
+  check('Fresh discs: pad friction 0.99 at 380 °C', Math.abs(car.wheels[0].brakeDisc.muFactor - 0.99) < 0.002, `${fmt(car.wheels[0].brakeDisc.muFactor, 3)}`);
+
+  // Fuel flow follows the engine's speed: a constant 0.036 kg/s flat out burnt 1.12 kg here
+  const sim = createMtr496rSim(pad);
+  sim.assistPreset = 'semi_pro';
+  sim.teleportToDistance(1000, 0);
+  const f0 = sim.telemetry.fuelKg;
+  for (let t = 0; t < 30; t += DT) sim.step(DT, { throttle: 1 });
+  const burnt = f0 - sim.telemetry.fuelKg;
+  check('30 s flat out from rest burns 0.95–1.07 kg', burnt > 0.95 && burnt < 1.07, `${fmt(burnt, 3)} kg`);
+
+  // The minimum 4 kg flat out: the tank runs dry and the engine stops firing, so the car coasts down
+  const dry = createMtr496rSim(pad);
+  dry.assistPreset = 'semi_pro';
+  dry.applyChassisSetup({ ...DEFAULT_CHASSIS_SETUP, fuelDeltaKg: -200 });
+  dry.teleportToDistance(1000, 0);
+  let tEmpty = NaN;
+  let vEmpty = 0;
+  for (let t = 0; t < 150 && !(t > tEmpty + 20); t += DT) {
+    dry.step(DT, { throttle: 1 });
+    if (Number.isNaN(tEmpty) && dry.telemetry.fuelKg <= 0) {
+      tEmpty = t;
+      vEmpty = dry.telemetry.speedKmh;
+    }
+  }
+  const vLater = dry.telemetry.speedKmh;
+  check('An empty tank: the car slows to under 60 % of its speed in 20 s', tEmpty > 90 && tEmpty < 125 && vLater < 0.6 * vEmpty && Number.isFinite(vLater),
+    `dry after ${fmt(tEmpty, 1)} s at ${fmt(vEmpty, 0)} km/h, ${fmt(vLater, 0)} km/h 20 s later`);
+
+  // A mouse or pad turns the rack no faster than hands turn the 240° of rim lock on its 14:1 rack (900°/s)
+  const steer = createMtr496rSim(pad);
+  steer.teleportToDistance(1000, 50 / 3.6);
+  let tLock = NaN;
+  for (let t = 0; t < 1 && Number.isNaN(tLock); t += DT / 4) {
+    steer.step(DT / 4, { analogSteer: 1 });
+    if (steer.steerAngleNorm >= 0.999) tLock = t + DT / 4;
+  }
+  check('Full lock from centre in 0.26–0.28 s (240° at 900°/s)', tLock > 0.26 && tLock < 0.28, `${fmt(tLock, 3)} s`);
 }
 
 console.log('\n== Ported body');
