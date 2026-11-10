@@ -257,7 +257,10 @@ export interface GearBoxData {
   downshift?: {
     /** The box is between gears until here: the engine turns free of the wheels */
     neutralS: number;
-    /** The clutch starts home here (the later of this and `neutralS`) and is fully home at `clutchHomeS` */
+    /**
+     * The clutch starts home here (the later of this and `neutralS`) and is fully home at `clutchHomeS`, or as soon as
+     * the engine turns at the wheels' speed
+     */
     clutchReleaseS: number;
     clutchHomeS: number;
     /**

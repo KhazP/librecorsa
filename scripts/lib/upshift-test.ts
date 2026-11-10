@@ -117,3 +117,34 @@ export function downshiftTakenAt(make: (track: ReturnType<typeof createFlatTestT
   for (let t = 0; t < 0.02; t += H) sim.step(H, { throttle: 0 });
   return sim.telemetry.gear === gear - 1;
 }
+
+/**
+ * Into `gear` at `kmh`, a down-shift off the throttle, then full throttle 0.3 s after it: the push a tenth of a second
+ * into the throttle (g), and the most the engine ran ahead of the wheels afterwards (rpm): a clutch still slipping
+ * under power shows as a flare
+ */
+export function downshiftThenThrottle(make: (track: ReturnType<typeof createFlatTestTrack>) => SimulatorCar, kmh: number, gear: number): { pushG: number; flareRpm: number } {
+  const sim = make(createFlatTestTrack(60_000, 3000));
+  sim.assistPreset = 'pro';
+  sim.autoGearbox = false;
+  sim.teleportToDistance(2000, kmh / 3.6);
+  let pressed = -1;
+  for (let t = 0; t < 5; t += H) {
+    const g = sim.telemetry.gear;
+    const up = g < gear && t - pressed > 0.6;
+    const down = g > gear && t - pressed > 0.6;
+    if (up || down) pressed = t;
+    sim.step(H, { throttle: Math.min(1, Math.max(0, 0.3 + 0.5 * (kmh / 3.6 - sim.vxMs))), shiftUp: up, shiftDown: down });
+  }
+  const trace: [number, number][] = [];
+  let pushG = 0;
+  for (let t = 0; t < 2.5; t += H) {
+    sim.step(H, { throttle: t < 0.5 ? 0 : 1, shiftDown: Math.abs(t - 0.2) < H / 2 });
+    if (Math.abs(t - 0.6) < H / 2) pushG = sim.telemetry.longitudinalG;
+    if (t > 0.5) trace.push([sim.telemetry.rpm, sim.vxMs]);
+  }
+  // The clutch is home by the end: the engine speed per road speed there is the gear's
+  const [rpmEnd, vEnd] = trace[trace.length - 1];
+  const flareRpm = Math.max(...trace.map(([rpm, v]) => rpm - (rpmEnd / vEnd) * v));
+  return { pushG, flareRpm };
+}

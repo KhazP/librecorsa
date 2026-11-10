@@ -2857,11 +2857,16 @@ export class VehiclePhysics {
       if (inp.clutch !== undefined) engage = Math.min(engage, 1 - inp.clutch);
       // A dog box between gears: the engine is free of the wheels
       if (gb.upshiftNeutralS !== undefined && this.sinceUpshiftS < gb.upshiftNeutralS) engage = 0;
-      // A down-shift: free between gears, then the clutch comes home over its ramp
+      // A down-shift: free between gears, then the clutch comes home over its ramp, or at once when the engine has met
+      // the wheels' speed (nothing is left to slip away, and the throttle finds the whole clutch)
       if (downshifting) {
         const from = Math.max(dn.neutralS, dn.clutchReleaseS);
-        const home = this.sinceDownshiftS < from ? 0 : (this.sinceDownshiftS - from) / Math.max(1e-6, dn.clutchHomeS - from);
-        engage = Math.min(engage, home);
+        if (this.sinceDownshiftS >= from && Math.abs(rpm - wheelSideRpm) < 0.02 * Math.max(rpm, wheelSideRpm)) {
+          this.sinceDownshiftS = dn.clutchHomeS;
+        } else {
+          const home = this.sinceDownshiftS < from ? 0 : (this.sinceDownshiftS - from) / Math.max(1e-6, dn.clutchHomeS - from);
+          engage = Math.min(engage, home);
+        }
       }
     }
     this.clutchEngagement = engage;
