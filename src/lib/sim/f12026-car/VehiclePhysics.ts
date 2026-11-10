@@ -1915,7 +1915,8 @@ export class VehiclePhysics {
     // Over-rev protection on downshifts (seamless boxes refuse the shift)
     if (g > 0 && g < this.gear) {
       this.updateBasis();
-      if (this.roadRpm(g) > gb.gears.redline_rpm - 200) return false;
+      const margin = gb.downshift?.overRevRpm ?? -200;
+      if (this.roadRpm(g) > gb.gears.redline_rpm + margin) return false;
     }
     // Reverse only near standstill
     if (g < 0 && this.velocity.length() > 2) return false;
@@ -1932,7 +1933,8 @@ export class VehiclePhysics {
     // The ECU blips the engine up to the new gear's road speed on a downshift, so the closed clutch does not
     // jerk the rear axle down by the engine's inertia (that impulse locked the rears under trail braking).
     // Road speed, not wheel speed: matching spinning wheels would feed the wheelspin.
-    if (down && this.clutchEngagement > 0.5) {
+    // A car with its own down-shift gets there by its blip and its clutch (`solveDrivetrain`)
+    if (down && !gb.downshift && this.clutchEngagement > 0.5) {
       const target = Math.min(this.roadRpm(g), gb.gears.redline_rpm) * RPM2RADS;
       this.engineOmega = Math.max(this.engineOmega, target);
     }
@@ -2767,6 +2769,17 @@ export class VehiclePhysics {
     const baseExp = (mapIdx >= 3 ? 1 + (mapIdx - 2) * 0.12 : 1) + lowGearWetExp;
     const rawThrottle = baseExp > 1 ? Math.pow(inp.throttle, baseExp) : inp.throttle;
     let plate = this.luts.throttle.evaluate(rawThrottle);
+    // The blip of a down-shift opens the throttle on the free engine, through the same air path
+    const dn = gb.downshift;
+    const downshifting = dn !== undefined && this.sinceDownshiftS < dn.clutchHomeS && this.sinceDownshiftS < this.sinceUpshiftS;
+    if (downshifting && dn.blip && this.sinceDownshiftS < Math.max(dn.neutralS, dn.clutchReleaseS)) {
+      // Held until the engine turns as fast as the driven wheels ask of it in this gear, less what it still gains while
+      // the air path empties
+      const wanted = Math.min(Math.abs(this.drivenOmega() * ratio) * RADS2RPM, gb.gears.redline_rpm);
+      const emptiesS = (eng.torqueResponseS?.fall ?? 0) + 60 / Math.max(rpm, eng.idleRpm);
+      const stillGains = ((this.icePlate * this.luts.power.evaluate(rpm) * 1000) / omegaE / eng.inertia) * emptiesS * RADS2RPM;
+      if (rpm + stillGains < wanted) plate = Math.max(plate, dn.blip.level * Math.min(1, this.sinceDownshiftS / Math.max(1e-6, dn.blip.riseS)));
+    }
     // Air path: the plate the cylinders see trails the pedal's (actuator, plenum), plus one crank revolution from the
     // intake stroke to the power stroke. The idle controller (spark advance), the limiter and the spark cut below act on
     // the combustion at once
@@ -2792,7 +2805,7 @@ export class VehiclePhysics {
     let tIce = tCombustion * boostShare - (1 - plate) * this.luts.coast.evaluate(rpm) * mode.coastTorqueScale * this.engineBrakingScale;
     // Crank torque the lag costs, which the MGU-K may fill below
     let turboDeficit = tCombustion * (1 - boostShare);
-    if (this.shiftTimer > 0 && tIce > 0) {
+    if (this.shiftTimer > 0 && tIce > 0 && !downshifting) {
       tIce *= gb.shiftTorqueFraction;
       turboDeficit *= gb.shiftTorqueFraction;
     }
@@ -2809,6 +2822,12 @@ export class VehiclePhysics {
       if (inp.clutch !== undefined) engage = Math.min(engage, 1 - inp.clutch);
       // A dog box between gears: the engine is free of the wheels
       if (gb.upshiftNeutralS !== undefined && this.sinceUpshiftS < gb.upshiftNeutralS) engage = 0;
+      // A down-shift: free between gears, then the clutch comes home over its ramp
+      if (downshifting) {
+        const from = Math.max(dn.neutralS, dn.clutchReleaseS);
+        const home = this.sinceDownshiftS < from ? 0 : (this.sinceDownshiftS - from) / Math.max(1e-6, dn.clutchHomeS - from);
+        engage = Math.min(engage, home);
+      }
     }
     this.clutchEngagement = engage;
     const clutchCap = cl.maxTorqueNm * engage;

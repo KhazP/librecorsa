@@ -245,6 +245,25 @@ export interface GearBoxData {
    * shove of a flat shift. With it the engine is not re-aligned
    */
   upshiftNeutralS?: number;
+  /**
+   * A down-shift as the car's own gearbox and control unit make it, in place of an engine that is at the lower gear's
+   * speed the moment the paddle is pulled. Times in s from the paddle
+   */
+  downshift?: {
+    /** The box is between gears until here: the engine turns free of the wheels */
+    neutralS: number;
+    /** The clutch starts home here (the later of this and `neutralS`) and is fully home at `clutchHomeS` */
+    clutchReleaseS: number;
+    clutchHomeS: number;
+    /**
+     * The throttle blip that lifts the free engine to the lower gear's speed (the control unit's, or a driver's heel and
+     * toe): this much throttle, risen over `riseS`, held until the engine is there or the box is in gear. What it leaves,
+     * the clutch takes up. Absent: the clutch takes it all
+     */
+    blip?: { level: number; riseS: number };
+    /** A down-shift may land this far above the limiter (rpm); unset, it is refused from 200 rpm under it */
+    overRevRpm?: number;
+  };
   efficiency: number;
   gears: {
     redline_rpm: number;
