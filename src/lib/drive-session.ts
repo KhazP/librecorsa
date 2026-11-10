@@ -1561,7 +1561,8 @@ export class DriveSession {
       // The worker drives the car in practice; an AI or online race steps it here, with the field around it
       if (simHost) {
         const was = simHost.remote;
-        simHost.endFrame(raceNow().kind === "practice");
+        // Not with a steering wheel yet: its force feedback is still sent from the page, a frame at a time
+        simHost.endFrame(raceNow().kind === "practice" && settingsNow.device !== "wheel");
         if (simHost.remote !== was) console.info(simHost.remote ? "[sim] the worker drives the car" : "[sim] the page drives the car");
       }
       if (mpRace && mpFrame && mpFrame.phase === "racing" && !this.snapshot.paused) {
