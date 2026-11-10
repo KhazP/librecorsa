@@ -20,7 +20,7 @@ import urllib.request
 ZERO_SHA = "0" * 40
 EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 
-MODEL = os.environ.get("REVIEW_MODEL") or "claude-opus-5-5"
+MODEL = os.environ.get("REVIEW_MODEL") or "claude-fable-5-2"
 EFFORT = os.environ.get("REVIEW_EFFORT") or "high"
 # About 150k tokens. A push over this loses its largest files, and the review names them.
 MAX_DIFF_CHARS = int(os.environ.get("REVIEW_MAX_DIFF_CHARS") or 600_000)
