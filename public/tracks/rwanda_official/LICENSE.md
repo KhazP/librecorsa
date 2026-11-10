@@ -1,12 +1,12 @@
 # RISE Motordrome: licence
 
-RISE Motordrome © 2026 KhazP, made for [LibreCorsa](https://librecorsa.org), is licensed under
+RISE Motordrome © 2026 Alp Yalay, made for [LibreCorsa](https://librecorsa.org), is licensed under
 [Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International (CC BY-NC-SA 4.0)](https://creativecommons.org/licenses/by-nc-sa/4.0/)
 ([full text](https://creativecommons.org/licenses/by-nc-sa/4.0/legalcode)).
 
 You may copy, share and adapt it (port it to another simulator, rebuild it, change it) as long as you:
 
-- **credit it**: "RISE Motordrome by KhazP (LibreCorsa), https://librecorsa.org", with a link to this licence, and say
+- **credit it**: "RISE Motordrome by Alp Yalay (LibreCorsa), https://librecorsa.org", with a link to this licence, and say
   what you changed;
 - **do not use it commercially**: no selling it, and no putting it in a paid pack or a paid product;
 - **share alike**: what you make from it carries this same licence.
