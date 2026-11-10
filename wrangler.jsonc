@@ -1,7 +1,8 @@
 // LibreCorsa on Cloudflare: the static export in ./out served from librecorsa.org.
 // Static files are served straight from Cloudflare's asset store. The Worker script (cloudflare/worker.js) only runs
-// for /__migrate, which carries a player's saved data over from the old GitHub Pages address, and for paths with no
-// static file: those are looked up in the librecorsa-assets R2 bucket, where CI puts files over the 25 MiB asset limit.
+// for /__migrate, which carries a player's saved data over from the old GitHub Pages address, for /api (the online
+// side: room codes, connection servers, lap boards; cloudflare/api), and for paths with no static file: those are
+// looked up in the librecorsa-assets R2 bucket, where CI puts files over the 25 MiB asset limit.
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "librecorsa",
@@ -12,9 +13,40 @@
     "directory": "./out",
     "binding": "ASSETS",
     "not_found_handling": "none",
-    "run_worker_first": ["/__migrate"]
+    "run_worker_first": ["/__migrate", "/api/*"]
   },
-  "r2_buckets": [{ "binding": "LARGE_ASSETS", "bucket_name": "librecorsa-assets" }],
+  "r2_buckets": [
+    { "binding": "LARGE_ASSETS", "bucket_name": "librecorsa-assets" },
+    // Ghost samples of the laps on the boards
+    { "binding": "GHOSTS", "bucket_name": "librecorsa-ghosts" }
+  ],
+  // The lap boards (cloudflare/api/board.ts). After changing cloudflare/migrations:
+  //   npx wrangler d1 migrations apply librecorsa-board --remote
+  "d1_databases": [
+    {
+      "binding": "BOARD_DB",
+      "database_name": "librecorsa-board",
+      "database_id": "25f4a169-a3fe-454b-995f-eb0509f4f56f",
+      "migrations_dir": "cloudflare/migrations"
+    }
+  ],
+  // Online switches, read by the game at run time (GET /api/config). Set one to "off" and deploy to turn that
+  // feature off for everyone: the game then falls back to what works without a server.
+  //   ONLINE_ROOMS  room codes are paired by this Worker (off: the public PeerJS broker pairs them, as before)
+  //   ONLINE_BOARD  the online lap boards (off: lap times stay in each player's browser)
+  //   ONLINE_RACES  scheduled races on this Worker's race server (off: no scheduled races; rooms are untouched)
+  "vars": { "ONLINE_ROOMS": "on", "ONLINE_BOARD": "on", "ONLINE_RACES": "on" },
+  // Private rooms: one small object per room code, asleep between messages (cloudflare/api/room.ts).
+  // Scheduled races: one object per race, which passes every car's state on while it runs (cloudflare/api/race.ts)
+  "durable_objects": {
+    "bindings": [
+      { "name": "ROOMS", "class_name": "RoomServer" },
+      { "name": "RACES", "class_name": "RaceServer" }
+    ]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["RoomServer", "RaceServer"] }],
+  // Room connections one address may open per minute
+  "ratelimits": [{ "name": "ROOM_LIMIT", "namespace_id": "1001", "simple": { "limit": 30, "period": 60 } }],
   // Workers caching: the circuit GLBs from R2 are kept at the edge, tiered, with byte ranges served from the cache
   "cache": { "enabled": true },
   // Workers Logs: the Worker's errors and requests show up in the dashboard

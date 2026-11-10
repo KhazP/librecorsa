@@ -314,6 +314,12 @@ export const DisplayPanel: React.FC<DisplayPanelProps> = ({ settings, onChangeSe
             </div>
           </div>
           <p className="m-0 text-[12px] leading-snug text-[#8E96AA]">Shown to other players in multiplayer and on leaderboards.</p>
+          <Toggle
+            label="Post my best laps online"
+            detail="A new personal best goes on the online lap board by itself"
+            checked={profile.autoUpload}
+            onChange={() => setProfile({ autoUpload: !profile.autoUpload })}
+          />
         </div>
 
         {/* HUD */}

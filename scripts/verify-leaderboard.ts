@@ -1,7 +1,7 @@
 /**
- * Headless checks of the online leaderboard rules: laps carry their conditions and are ranked per board, and the
- * sample-consistency checks pass real laps while refusing cheap fakes. Runs the reference Worker against an
- * in-memory KV. (scripts/leaderboard-supabase/schema.sql mirrors the same rules in SQL.)
+ * Headless checks of the online lap boards: laps carry their conditions, the sample-consistency checks pass real laps
+ * while refusing cheap fakes, and the board API (cloudflare/api/board.ts, run here on an in-memory SQLite and bucket)
+ * ranks every driver once on one board per circuit and car, keeps their best lap of each class, and guards names.
  *
  *   npx tsx scripts/verify-leaderboard.ts
  */
@@ -10,7 +10,14 @@ import { F1Physics2026 } from '../src/lib/f1-physics-2026';
 import { LapRecorder, validateLapRecording, type CompletedLap } from '../src/lib/sim/lap-recorder';
 import { lapPlausibilityProblem } from '../src/lib/sim/lap-plausibility';
 import { LAP_SAMPLE_STRIDE, PHYSICS_VERSION, lapBoardClass, lapPhysicsVersion, parseLapConditions, type LapRecording } from '../src/lib/sim/lap-types';
-import worker from './leaderboard-worker/worker';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { handleApi } from '../cloudflare/api/index';
+import { boardDeps, driverNameKey, listLaps, submitLap, type BoardDeps } from '../cloudflare/api/board';
+import type { Env } from '../cloudflare/api/types';
+import { fakeD1, fakeR2 } from './lib/fake-cloudflare';
+import { planImport, type SupabaseDriver, type SupabaseLap } from './migrate-supabase-board';
+import { CHALLENGE_ROTATION, challengeAt, challengeProblem, fitsChallenge, isoWeekId, timeLeftLabel } from '../src/lib/net/weekly-challenge';
 
 const failures: string[] = [];
 const check = (name: string, ok: boolean, detail = '') => {
@@ -118,47 +125,207 @@ check('a lap with a third cut out is refused', lapPlausibilityProblem(cut.data) 
 const open = { ...real, data: real.data.slice(0, Math.floor(n * 0.9) * S) };
 check('a lap that stops short of the line is refused', lapPlausibilityProblem(open.data) !== null, String(lapPlausibilityProblem(open.data)));
 
-// 3. The reference Worker ----------------------------------------------------------------------------------------------
-const kv = new Map<string, string>();
-const env = {
-  LAPS: {
-    get: async (k: string) => kv.get(k) ?? null,
-    put: async (k: string, v: string) => void kv.set(k, v),
-    delete: async (k: string) => void kv.delete(k),
-  },
-};
-const post = async (body: unknown, ip: string) =>
-  worker.fetch(
-    new Request('https://lb.test/laps', { method: 'POST', body: JSON.stringify(body), headers: { 'CF-Connecting-IP': ip } }),
-    env
+// 3. The board API -----------------------------------------------------------------------------------------------------
+const schema = readFileSync(join(__dirname, '../cloudflare/migrations/0001_lap_boards.sql'), 'utf8');
+const ghosts = fakeR2();
+// A Wednesday noon in a week whose challenge is the test lap's circuit and car (Rwanda, the 2026 prototype)
+let nowMs = Date.UTC(2026, 10, 11, 12);
+while (challengeAt(nowMs).trackId !== 'rwanda' || challengeAt(nowMs).vehicle !== 'vf26') nowMs += 7 * 86_400_000;
+const week = challengeAt(nowMs);
+const deps: BoardDeps = { db: fakeD1(schema), ghosts, eventRule: challengeProblem, now: () => nowMs };
+const KEY_A = 'a'.repeat(43);
+const KEY_B = 'b'.repeat(43);
+
+type PostAnswer = { ok: boolean; rank?: number; total?: number; eventRank?: number; eventTotal?: number; eventError?: string; error?: string };
+let ipCounter = 0;
+const post = async (rec: unknown, driverKey: string | null = KEY_A, extra: Record<string, unknown> = {}, ip?: string) => {
+  const res = await submitLap(
+    deps,
+    new Request('https://librecorsa.test/api/laps', {
+      method: 'POST',
+      body: JSON.stringify({ rec, ...(driverKey === null ? {} : { driverKey }), ...extra }),
+      headers: { 'CF-Connecting-IP': ip ?? `10.0.${Math.floor(ipCounter / 250)}.${ipCounter++ % 250}` },
+    })
   );
-const list = async (board: string | null) =>
-  worker.fetch(new Request(`https://lb.test/laps?track=rwanda&vehicle=vf26${board === null ? '' : `&board=${board}`}`), env);
-const board = lapBoardClass(real.conditions!);
+  return { status: res.status, body: res.body as PostAnswer };
+};
+type Row = { id: string; name: string; lapTimeMs: number; conditions: { assists: string; realism: string; surface: string; physicsVersion: number } };
+type ListAnswer = { laps: Row[]; total: number; physics: number[]; me: { rank: number; lap: Row } | null };
+const list = async (query = '', physics = PHYSICS_VERSION) => {
+  const res = await listLaps(deps, new URL(`https://librecorsa.test/api/laps?track=rwanda&vehicle=vf26&physics=${physics}${query}`));
+  return { status: res.status, body: res.body as ListAnswer };
+};
+/** The real lap driven by someone else, a little slower or faster, under other conditions */
+const variant = (k: number, driverName: string, conditions: Partial<NonNullable<LapRecording['conditions']>> = {}): LapRecording => ({
+  ...scaled(k),
+  driverName,
+  driverCode: driverName.slice(0, 3).toUpperCase(),
+  conditions: { ...real.conditions!, ...conditions },
+});
 
 async function main(): Promise<void> {
+  {
+    const res = await post(older);
+    check('board: a lap without conditions is refused', res.status === 400 && !res.body.ok, res.body.error);
+  }
+  {
+    const res = await post(scaled(0.95));
+    check('board: a rescaled lap is refused', res.status === 400 && !res.body.ok, res.body.error);
+  }
+  {
+    const res = await post(real, null);
+    check('board: a lap without a driver key is refused', res.status === 400 && !res.body.ok, res.body.error);
+  }
+  {
+    const res = await post(real);
+    check('board: a real lap is ranked', res.status === 200 && res.body.ok && res.body.rank === 1 && res.body.total === 1, res.body.error ?? `rank ${res.body.rank}`);
+  }
+  {
+    const { body } = await list('&name=test%20driver');
+    check('board: the lap is listed with what it was driven with', body.laps.length === 1 && body.laps[0].conditions.assists === 'assisted' && body.laps[0].conditions.realism === 'casual');
+    check('board: the driver finds their own place', body.me?.rank === 1 && body.total === 1);
+    const ghost = ghosts.objects.get(`laps/${body.laps[0].id}.json`);
+    check('board: the ghost is kept beside the row', ghost !== undefined && validateLapRecording(JSON.parse(ghost)) !== null);
+  }
+  {
+    // The same driver, slower, without assists: another class, so it is kept, and the board still shows them once
+    const res = await post(variant(1.02, 'Test Driver', { assists: 'pro', realism: 'full' }));
+    check('board: a slower lap of another class is kept, not refused', res.status === 200 && res.body.ok && res.body.rank === 1, res.body.error);
+    const all = (await list()).body;
+    check('board: a driver appears once, with their fastest lap', all.laps.length === 1 && all.total === 1 && all.laps[0].conditions.assists === 'assisted');
+    const pro = (await list('&assists=pro')).body;
+    check('board: narrowed to no assists, their no-assist lap shows', pro.laps.length === 1 && pro.laps[0].conditions.assists === 'pro' && pro.laps[0].lapTimeMs > all.laps[0].lapTimeMs);
+    check('board: an unknown filter value is refused', (await list('&assists=cheats')).status === 400);
+  }
+  {
+    const res = await post(variant(1.03, 'Test Driver', { assists: 'pro', realism: 'full' }));
+    check('board: a slower lap of the same class is refused', res.status === 409 && !res.body.ok, res.body.error);
+    const before = ghosts.objects.size;
+    const faster = await post(variant(1.01, 'Test Driver', { assists: 'pro', realism: 'full' }));
+    check('board: a faster lap of the same class replaces it, ghost included', faster.body.ok === true && ghosts.objects.size === before, `${ghosts.objects.size} ghosts`);
+  }
+  {
+    // Someone else, faster, no assists
+    const res = await post(variant(0.99, 'Quick Rival', { assists: 'pro', realism: 'full' }), KEY_B);
+    check('board: a faster driver takes first', res.body.ok === true && res.body.rank === 1 && res.body.total === 2, res.body.error);
+    const { body } = await list('&name=Test%20Driver');
+    check('board: fastest first, everyone once', body.laps.length === 2 && body.laps[0].name === 'Quick Rival' && body.laps[1].name === 'Test Driver');
+    check('board: the first driver is now second of two', body.me?.rank === 2 && body.total === 2);
+    const assisted = (await list('&assists=assisted&name=Test%20Driver')).body;
+    check('board: narrowed to assisted laps, only the assisted driver, first', assisted.laps.length === 1 && assisted.total === 1 && assisted.me?.rank === 1);
+  }
+  {
+    const res = await post(variant(0.985, '  test   DRIVER ', {}), KEY_B);
+    check('board: a claimed name needs its key (case and spaces ignored)', res.status === 409 && !res.body.ok, res.body.error);
+    check('name key: outer spaces off, inner runs as one, lower case', driverNameKey('  Test \t Driver ') === 'test driver');
+  }
+  {
+    // The weekly challenge: this week's circuit and car, its assists and realism, a dry track
+    check('challenge: weeks run Monday to Monday (UTC), named by ISO week', isoWeekId(Date.UTC(2026, 10, 9)) === '2026-W46' && isoWeekId(Date.UTC(2026, 11, 28)) === '2026-W53' && isoWeekId(Date.UTC(2027, 0, 4)) === '2027-W01');
+    const monday = Date.UTC(2026, 10, 9);
+    check('challenge: one challenge from Monday 00:00 to Sunday 23:59', challengeAt(monday).id === '2026-W46' && challengeAt(monday + 7 * 86_400_000 - 1).id === '2026-W46' && challengeAt(monday - 1).id === '2026-W45' && challengeAt(monday).endsMs - challengeAt(monday).startsMs === 7 * 86_400_000);
+    check('challenge: the next week is the next entry of the rotation', challengeAt(week.endsMs).trackId === CHALLENGE_ROTATION[1].trackId);
+    check('challenge: time left reads in days, hours, minutes', timeLeftLabel(week.endsMs, week.endsMs - 3 * 86_400_000 - 4 * 3_600_000) === '3 d 4 h' && timeLeftLabel(week.endsMs, week.endsMs - 5 * 60_000) === '5 min');
+    const fit = variant(1.015, 'Weekly Hero', { assists: week.assists, realism: week.realism });
+    check('challenge: a lap to the rules fits, one with other assists does not', fitsChallenge(fit, week) && !fitsChallenge(variant(1.015, 'x', { assists: 'assisted', realism: week.realism }), week) && !fitsChallenge({ ...fit, conditions: { ...fit.conditions!, surface: 'wet' } }, week));
+
+    const res = await post(fit, 'd'.repeat(43), { event: week.id });
+    check('challenge: a lap to the rules goes on the week\'s board', res.body.ok === true && res.body.eventRank === 1 && res.body.eventTotal === 1 && res.body.eventError === undefined, res.body.error ?? res.body.eventError);
+    const board = (await list(`&event=${week.id}&name=Weekly%20Hero`)).body;
+    check('challenge: its board lists only challenge laps', board.laps.length === 1 && board.laps[0].name === 'Weekly Hero' && board.me?.rank === 1);
+    check('challenge: the lap counts on the open board too', (await list('&name=Weekly%20Hero')).body.me !== null);
+
+    const off = await post(variant(0.995, 'Weekly Hero', { assists: 'pro', realism: 'full' }), 'd'.repeat(43), { event: week.id });
+    check('challenge: a lap not to the rules still counts on the open board, with the reason', off.body.ok === true && off.body.eventRank === undefined && typeof off.body.eventError === 'string', off.body.eventError);
+    check('challenge: and stays off the week\'s board', (await list(`&event=${week.id}`)).body.total === 1);
+    const late = await post(variant(1.01, 'Weekly Hero', { assists: week.assists, realism: week.realism }), 'd'.repeat(43), { event: '2020-W01' });
+    check('challenge: a lap sent for a past week counts on the open board only', late.body.ok === true && late.body.eventError === 'That weekly challenge has ended', late.body.eventError);
+    const junk = await post(variant(1.03, 'Weekly Hero', { assists: week.assists, realism: week.realism }), 'd'.repeat(43), { event: 'nope' });
+    check('challenge: nothing to store and a bad event: refused with the reason', junk.status === 409 && junk.body.error === 'Unknown event', junk.body.error);
+  }
+  {
+    // A lap from an older physics revision goes on that revision's board
+    const res = await post(variant(0.98, 'Old Timer', { physicsVersion: 1 }), 'c'.repeat(43));
+    check('board: an older-physics lap is ranked on its own board', res.body.ok === true && res.body.rank === 1 && res.body.total === 1);
+    const now = (await list()).body;
+    check('board: and not on the current one, which lists both revisions', now.total === 3 && now.physics.join() === `${PHYSICS_VERSION},1`, now.physics.join());
+    check('board: the older board has it', (await list('', 1)).body.laps[0]?.name === 'Old Timer');
+  }
+  {
+    let last = { status: 0, body: {} as PostAnswer };
+    for (let i = 0; i < 31; i++) last = await post(older, KEY_A, {}, '10.9.9.9');
+    check('board: upload 31 in an hour from one address is refused', last.status === 429, last.body.error);
+  }
+  {
+    // Seven months later the claim has lapsed: a new key takes the name, and the old owner's laps go
+    nowMs += 213 * 24 * 3600 * 1000;
+    const res = await post(variant(1.028, 'Test Driver', { assists: 'pro', realism: 'full' }), KEY_B);
+    check('board: a lapsed name can be claimed with a new key', res.body.ok === true, res.body.error);
+    const { body } = await list('&name=Test%20Driver');
+    check("board: the previous owner's laps went with the claim", body.me?.lap.lapTimeMs === variant(1.028, 'x').lapTimeMs && body.total === 3);
+    const stored = (await deps.db.prepare('SELECT COUNT(*) AS n FROM laps').first<{ n: number }>())?.n;
+    check('board: every row has its ghost and every ghost its row', ghosts.objects.size === stored, `${ghosts.objects.size} ghosts, ${stored} rows`);
+  }
+  {
+    // Through the API: switched on and off, never cached
+    const env = { ONLINE_BOARD: 'on', BOARD_DB: deps.db, GHOSTS: ghosts } as unknown as Env;
+    const api = (path: string, e: Env) => {
+      const url = new URL(`https://librecorsa.org${path}`);
+      return handleApi(new Request(url), e, url);
+    };
+    const listed = await api(`/api/laps?track=rwanda&vehicle=vf26&physics=${PHYSICS_VERSION}`, env);
+    const rows = ((await listed.json()) as ListAnswer).laps;
+    check('api: GET /api/laps lists the board, never cached', listed.status === 200 && rows.length === 3 && listed.headers.get('Cache-Control') === 'no-store');
+    const ghost = await api(`/api/laps/${rows[0].id}`, env);
+    check('api: GET /api/laps/<id> returns the ghost', ghost.status === 200 && validateLapRecording(await ghost.json()) !== null);
+    check('api: an unknown lap is 404', (await api('/api/laps/00000000-0000-4000-8000-000000000000', env)).status === 404);
+    check('api: the board switched off answers 404', (await api('/api/laps?track=rwanda&vehicle=vf26&physics=2', { ...env, ONLINE_BOARD: 'off' })).status === 404);
+    check('api: no database bound: off', boardDeps({} as Env, () => null) === null);
+  }
 
   {
-    const res = await post(older, '10.0.0.1');
-    const body = (await res.json()) as { ok: boolean; error?: string };
-    check('worker: a lap without conditions is refused', res.status === 400 && !body.ok, body.error);
-  }
-  {
-    const res = await post(scaled(0.95), '10.0.0.2');
-    const body = (await res.json()) as { ok: boolean; error?: string };
-    check('worker: a rescaled lap is refused', res.status === 400 && !body.ok, body.error);
-  }
-  {
-    const res = await post(real, '10.0.0.3');
-    const body = (await res.json()) as { ok: boolean; rank?: number; error?: string };
-    check('worker: a real lap is ranked', res.status === 200 && body.ok && body.rank === 1, body.error ?? `rank ${body.rank}`);
-  }
-  {
-    const rows = ((await (await list(board)).json()) as { laps: { conditions?: unknown }[] }).laps;
-    check('worker: the lap is on its own board, with its conditions', rows.length === 1 && rows[0].conditions !== undefined);
-    const other = ((await (await list(`p${PHYSICS_VERSION}-pro-full-dry`)).json()) as { laps: unknown[] }).laps;
-    check('worker: and on no other board', other.length === 0);
-    check('worker: listing without a board is refused', (await list(null)).status === 400);
+    // Carrying the old Supabase board over (scripts/migrate-supabase-board.ts), onto an empty board
+    const db = fakeD1(schema);
+    const run = async (sql: string[]) => {
+      for (const statement of sql) await db.prepare(statement).run();
+    };
+    const hash = (c: string) => c.repeat(64);
+    const stamp = '2026-10-01T10:00:00Z';
+    const oldDrivers: SupabaseDriver[] = [
+      { name_key: 'mira tanaka', key_hash: hash('a'), claimed_at: stamp, last_seen: stamp },
+      { name_key: 'jonas weber', key_hash: hash('b'), claimed_at: stamp, last_seen: stamp },
+      { name_key: 'bad', key_hash: 'nope', claimed_at: stamp, last_seen: stamp },
+    ];
+    const id = (n: number) => `00000000-0000-4000-8000-00000000000${n}`;
+    const oldLaps: SupabaseLap[] = [
+      { id: id(1), rec: variant(1.0, 'Mira Tanaka', { assists: 'pro', realism: 'full' }), created_at: stamp },
+      { id: id(2), rec: variant(1.01, 'Jonas Weber', {}), created_at: stamp },
+      { id: id(3), rec: older, created_at: stamp },
+      { id: id(4), rec: variant(1.02, 'Nobody Claimed', {}), created_at: stamp },
+      { id: id(5), rec: scaled(0.9), created_at: stamp },
+    ];
+    const plan = planImport(oldLaps, oldDrivers, new Map());
+    check('migration: valid laps under claimed names are carried over, the rest left out with a reason', plan.laps === 2 && plan.drivers === 2 && plan.ghosts.size === 2 && Object.values(plan.skipped).reduce((a, b) => a + b, 0) === 4, JSON.stringify(plan.skipped));
+    await run(plan.sql);
+    await run(plan.sql);
+    const count = async (table: string) => (await db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).first<{ n: number }>())?.n;
+    check('migration: running it twice writes each row once', (await count('laps')) === 2 && (await count('drivers')) === 2);
+    const mira = await db.prepare("SELECT key_hash FROM drivers WHERE name_key = 'mira tanaka'").first<{ key_hash: string }>();
+    check('migration: a name keeps the hash of its key', mira?.key_hash === hash('a'));
+    const migrated: BoardDeps = { db, ghosts: fakeR2(), eventRule: challengeProblem, now: () => nowMs };
+    const listed = (await listLaps(migrated, new URL(`https://librecorsa.test/api/laps?track=rwanda&vehicle=vf26&physics=${PHYSICS_VERSION}&name=Mira%20Tanaka`))).body as ListAnswer;
+    check('migration: the carried-over laps show on the new board', listed.total === 2 && listed.laps[0].name === 'Mira Tanaka' && listed.me?.rank === 1);
+
+    // Later: the driver went faster on the old board from a browser still on the old game; someone else took a name here
+    const again = planImport(
+      [{ id: id(6), rec: variant(0.99, 'Mira Tanaka', { assists: 'pro', realism: 'full' }), created_at: stamp }, { id: id(7), rec: variant(1.03, 'Mira Tanaka', { assists: 'pro', realism: 'full' }), created_at: stamp }, oldLaps[1]],
+      oldDrivers.slice(0, 2),
+      new Map([['mira tanaka', hash('a')], ['jonas weber', hash('f')]]),
+    );
+    await run(again.sql);
+    const best = await db.prepare("SELECT id, lap_time_ms FROM laps WHERE name_key = 'mira tanaka'").all<{ id: string; lap_time_ms: number }>();
+    check('migration: a second run keeps the faster lap of a driver and class', best.results.length === 1 && best.results[0].id === id(6), best.results.map((r) => r.id).join());
+    check('migration: a name claimed by someone else on the new board keeps its new owner', again.drivers === 1 && again.laps === 2 && again.skipped['lap under a name claimed by someone else on the new board'] === 1, JSON.stringify(again.skipped));
   }
 
   if (failures.length > 0) {

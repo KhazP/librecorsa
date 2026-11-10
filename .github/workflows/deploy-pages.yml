@@ -70,9 +70,8 @@ jobs:
       - name: Build static export
         env:
           NEXT_PUBLIC_BASE_PATH: ""
-          # Online leaderboard (scripts/leaderboard-supabase); repository variables, empty = local board only
-          NEXT_PUBLIC_SUPABASE_URL: ${{ vars.SUPABASE_URL }}
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY }}
+          # The online side served by this site's Worker (cloudflare/api): room codes, relay servers, lap boards
+          NEXT_PUBLIC_ONLINE_API: "/api"
           # List every car and circuit: the ones not in the repository are served from R2 (src/lib/hosted-content.ts)
           NEXT_PUBLIC_HOSTED_CONTENT: "1"
         run: npm run build
@@ -95,6 +94,9 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
+          # The lap boards' tables first (cloudflare/migrations; nothing to do when they are up to date). The token
+          # needs D1 edit rights as well as Workers'
+          npx wrangler d1 migrations apply librecorsa-board --remote
           npx wrangler deploy
           npx wrangler deploy -c cloudflare/www/wrangler.jsonc
 

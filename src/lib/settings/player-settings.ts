@@ -189,6 +189,8 @@ export interface DriverProfile {
   color: string;
   /** The game picked the name (first run): the first leaderboard upload asks the player to keep or change it */
   generated: boolean;
+  /** New personal bests go on the online board by themselves (once the player has a name of their own) */
+  autoUpload: boolean;
 }
 
 export const DEFAULT_PAD_TUNING: PadTuning = {
@@ -285,7 +287,7 @@ export const DEFAULT_GRAPHICS_SETTINGS: GraphicsSettings = { quality: "high", re
 
 export const DEFAULT_TOUCH_SETTINGS: TouchSettings = { mode: "auto", tiltSteer: false, tiltRangeDeg: 30 };
 
-export const DEFAULT_DRIVER_PROFILE: DriverProfile = { name: "Driver", code: "DRV", color: "#E10600", generated: false };
+export const DEFAULT_DRIVER_PROFILE: DriverProfile = { name: "Driver", code: "DRV", color: "#E10600", generated: false, autoUpload: true };
 
 /** Words for generated names; any pair plus " 99" fits the 16-character name limit */
 const NAME_WORDS = [
@@ -559,6 +561,7 @@ function parseProfile(v: unknown): DriverProfile {
     code: sanitizeDriverCode(isStr(v.code) ? v.code : ""),
     color: sanitizeColor(isStr(v.color) ? v.color : ""),
     generated: bool(v.generated, false),
+    autoUpload: bool(v.autoUpload, true),
   };
 }
 
