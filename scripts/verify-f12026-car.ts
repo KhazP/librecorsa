@@ -33,6 +33,7 @@ import {
 import { F12026CarSim } from '../src/lib/sim/f12026-car/F12026CarSim';
 import { loadGlbGeometry } from './lib/glb-geometry';
 import { createFlatTestTrack } from './lib/flat-track';
+import { measureUpshift } from './lib/upshift-test';
 import { checkBarrierCrashes, vehicleCrashCar } from './lib/barrier-crash';
 import { checkPlacementAndRecovery } from './lib/placement-recovery';
 import { steadyRamp, steerFor, stepSteer } from './lib/handling-tests';
@@ -1046,6 +1047,15 @@ console.log('\n== F12026CarSim (simulator adapter)');
 
   sim.autoXMode = true;
   check('Driver-operated DRS: autoXMode stays off', !sim.autoXMode && !sim.telemetry.autoXMode, `autoXMode ${sim.autoXMode}`);
+}
+
+console.log('\n== Up-shift');
+{
+  // The control unit manages the change: the engine meets the new gear at the wheels' speed (6 % of slip and a 1.3 g
+  // push when the closed clutch handed them the engine's excess)
+  const u = measureUpshift((t) => new F12026CarSim(t, null), 100);
+  check('An up-shift on a light pedal: the rear wheels gain under 3 % of slip', u.to === u.from + 1 && u.slipPeak - u.slipBefore < 0.03, `gear ${u.from} → ${u.to}, slip ${(u.slipBefore * 100).toFixed(1)} % → ${(u.slipPeak * 100).toFixed(1)} %`);
+  check('... and the car is pushed under 0.3 g harder than before it', u.gPeak - u.gBefore < 0.3, `${u.gBefore.toFixed(2)} g → ${u.gPeak.toFixed(2)} g at most`);
 }
 
 console.log(failures.length ? `\n${failures.length} check(s) failed: ${failures.join(', ')}` : '\nAll f12026-car checks passed.');

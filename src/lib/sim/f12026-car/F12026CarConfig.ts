@@ -1099,6 +1099,9 @@ const F12026_GEARBOX: GearBoxData = {
   // CHANGE_UP_TIME 5 ms / CHANGE_DN_TIME 16 ms [ref_drivetrain.ini]: one torque dip in between [derived]
   shiftTimeS: 0.01,
   shiftTorqueFraction: 0.85,
+  // The control unit manages the up-shift: the drive is away for 20 ms and the engine meets the new gear at the wheels'
+  // speed [est]
+  upshiftCutS: 0.02,
   efficiency: F12026_DRIVELINE_EFFICIENCY,
   gears: {
     // LIMITER [ref_engine.ini], AUTO_SHIFTER UP / DOWN [ref_drivetrain.ini]
