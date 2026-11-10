@@ -376,15 +376,23 @@ function autopilotProfile(track: BuiltTrackData, profile: CarSimProfile, edges: 
     gN[i] = Math.cos(into);
     gT[i] = 9.81 * Math.sin(into);
   }
+  // A crest takes load off the tyres: v² κv of the car's weight, κv the road's vertical curvature (1/m, + over a
+  // crest, read over ±20 m and averaged like the path's). Planned as level road, the esses of RISE Motordrome, which
+  // turn over a crest, were taken up to 3 m wide of the asphalt at full pace. A dip is planned as level road.
+  const crest = new Float64Array(n);
+  const vSpan = Math.max(1, Math.round(20 / ds));
+  const height = (i: number) => track.getSampleAtDistance((((i % n) + n) % n) * ds).position.y;
+  for (let i = 0; i < n; i++) crest[i] = Math.max(0, -(height(i + vSpan) - 2 * height(i) + height(i - vSpan)) / (vSpan * ds) ** 2);
   const v = new Float32Array(n);
-  // v²κ = share × decel(v) + g sin θ, with decel(v) = c (low cos θ + aero (v / ref)²) up to ref and
-  // c (low cos θ + aero) above
+  // v²κ = share × decel(v) + g sin θ, with decel(v) = c (low (cos θ − v² κv / g) + aero (v / ref)²) up to ref and
+  // c (low (cos θ − v² κv / g) + aero) above
   const c = AP_LATERAL_SHARE * 0.85 * 9.81;
   for (let i = 0; i < n; i++) {
     const kk = Math.max(1e-5, (k[(i - 1 + n) % n] + 2 * k[i] + k[(i + 1) % n]) / 4);
-    const den = kk - (c * b.aeroG) / (b.refMs * b.refMs);
+    const light = (c * b.lowG * (crest[(i - 1 + n) % n] + 2 * crest[i] + crest[(i + 1) % n])) / 4 / 9.81;
+    const den = kk + light - (c * b.aeroG) / (b.refMs * b.refMs);
     const vLow = den > 0 ? Math.sqrt(Math.max(0, c * b.lowG * gN[i] + gT[i]) / den) : Infinity;
-    v[i] = Math.min(110, vLow < b.refMs ? vLow : Math.sqrt(Math.max(0, c * (b.lowG * gN[i] + b.aeroG) + gT[i]) / kk));
+    v[i] = Math.min(110, vLow < b.refMs ? vLow : Math.sqrt(Math.max(0, c * (b.lowG * gN[i] + b.aeroG) + gT[i]) / (kk + light)));
   }
   // Backward braking pass (twice round the lap so the wrap is consistent)
   for (let pass = 0; pass < 2 * n; pass++) {
