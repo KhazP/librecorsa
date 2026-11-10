@@ -1,9 +1,11 @@
+import { statSync } from "node:fs";
+import { join } from "node:path";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowUpRight, Download, Play } from "lucide-react";
 import { LibreCorsaLogo } from "@/components/ui/LibreCorsaLogo";
 import { withBasePath } from "@/lib/base-path";
-import { coverage, discussions } from "@/lib/press";
+import { coverage, discussions, PRESS_KIT_ZIP, PRESS_SCREENSHOTS } from "@/lib/press";
 import { REPO_URL, SITE_NAME } from "@/lib/site";
 
 const DESCRIPTION = "Coverage of LibreCorsa, the free browser racing sim, plus a press kit: facts, logos, screenshots and the trailer.";
@@ -63,12 +65,8 @@ const FACTS: [string, React.ReactNode][] = [
   ],
 ];
 
-const SCREENSHOTS = [
-  { file: "spa-dusk.jpg", alt: "Dusk in the rain at Spa-Francorchamps", size: "2560 × 1440" },
-  { file: "spa-rain-pack.jpg", alt: "Chasing the field through the spray at Spa", size: "2560 × 1440" },
-  { file: "race-grid-shanghai.jpg", alt: "On the grid at Shanghai with five AI cars", size: "1600 × 900" },
-  { file: "loading-suzuka.jpg", alt: "Suzuka drawing itself while it loads", size: "1600 × 900" },
-];
+/** The press kit ZIP's size, read when the page is built */
+const KIT_MB = (statSync(join(process.cwd(), "public", PRESS_KIT_ZIP)).size / 1e6).toFixed(1);
 
 const BRAND_FILES = [
   { label: "Logo", detail: "SVG", href: "/branding/librecorsa-logo.svg" },
@@ -174,6 +172,23 @@ export default function PressPage() {
             Press kit
           </h2>
 
+          <a
+            href={withBasePath(PRESS_KIT_ZIP)}
+            download
+            className={`${CARD} group flex flex-wrap items-center justify-between gap-4 p-5 no-underline transition-colors hover:border-[#CCFF00] sm:p-6`}
+          >
+            <span className="flex min-w-0 flex-col gap-1">
+              <span className="text-[17px] font-semibold text-[#F5F7FA]">Download the press kit</span>
+              <span className="text-[14px] text-[#8E96AA]">
+                {PRESS_SCREENSHOTS.length} screenshots at 2560 × 1440, the logos and the banner, in one ZIP
+              </span>
+            </span>
+            <span className="lc-title inline-flex shrink-0 items-center gap-2 rounded-full bg-[#CCFF00] px-5 py-2.5 text-[15px] text-[#08090D] transition-colors group-hover:bg-[#99BF00]">
+              <Download aria-hidden className="h-4 w-4" strokeWidth={2.5} />
+              ZIP · {KIT_MB} MB
+            </span>
+          </a>
+
           <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
             <div className={`${CARD} flex flex-col gap-4 p-5 sm:p-6`}>
               <p className="lc-lbl">About</p>
@@ -219,19 +234,27 @@ export default function PressPage() {
           </a>
 
           <div className="flex flex-col gap-3">
-            <p className="lc-lbl">Screenshots</p>
+            <p className="lc-lbl">Screenshots · 2560 × 1440</p>
             <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              {SCREENSHOTS.map((s) => (
+              {PRESS_SCREENSHOTS.map((s) => (
                 <li key={s.file}>
-                  <a href={withBasePath(`/press/${s.file}`)} download className={`${CARD} group flex flex-col overflow-hidden no-underline`}>
+                  <a
+                    href={withBasePath(`/press/screenshots/${s.file}`)}
+                    download
+                    className={`${CARD} group flex flex-col overflow-hidden no-underline`}
+                  >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={withBasePath(`/press/${s.file}`)} alt={s.alt} width={1600} height={900} loading="lazy" className="aspect-video w-full object-cover" />
+                    <img
+                      src={withBasePath(`/press/screenshots/thumbs/${s.file.replace(/\.jpg$/, ".webp")}`)}
+                      alt={s.alt}
+                      width={1024}
+                      height={576}
+                      loading="lazy"
+                      className="aspect-video w-full object-cover"
+                    />
                     <span className="flex items-center justify-between gap-3 px-4 py-3 text-[14px] text-[#C5CBD8] group-hover:text-[#F5F7FA]">
                       {s.alt}
-                      <span className="flex shrink-0 items-center gap-2">
-                        <span className="lc-data text-[12px] font-semibold text-[#8E96AA]">{s.size}</span>
-                        <Download aria-hidden className="h-4 w-4 shrink-0 text-[#8E96AA] group-hover:text-[#CCFF00]" />
-                      </span>
+                      <Download aria-hidden className="h-4 w-4 shrink-0 text-[#8E96AA] group-hover:text-[#CCFF00]" />
                     </span>
                   </a>
                 </li>
