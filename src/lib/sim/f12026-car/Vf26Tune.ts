@@ -12,9 +12,11 @@
  *  - the wheels hop at 20 Hz (was 33), where the dampers can hold them
  *  - grip falls away with load above 4 kN, so the bars, the springs and the wing level move the balance
  *
- * The power unit, the drag and the gears stay the data's: flat out with full deployment the car pulls 1.47 / 1.16 /
- * 0.91 / 0.62 g at 160 / 200 / 240 / 280 km/h against 1.50 / 1.25 / 0.86 / 0.53 g of 2026 qualifying laps, and its
- * gears turn 34.3 rpm per km/h in eighth against the 34.4 of those laps.
+ * The combustion engine is cut to the 2026 fuel-energy limit (400 kW at the wheels; the data's makes 500), the MGU-K,
+ * the drag and the gears stay the data's: flat out with full deployment the car pulls 1.42 / 1.14 / 0.84 / 0.55 g at
+ * 160 / 200 / 240 / 280 km/h against 1.50 / 1.25 / 0.86 / 0.53 g of 2026 qualifying laps, and its gears turn 34.3 rpm
+ * per km/h in eighth against the 34.4 of those laps. An up-shift is managed (no kick to the rear wheels) and the
+ * engine's torque follows the pedal over 80 ms.
  *
  *  - [rules]   the 2026 technical regulations
  *  - [ref]     in the range of reference data for 2026 cars
@@ -155,6 +157,10 @@ export const VF26_TUNE: Vf26Overrides = {
   front: axle('front'),
   rear: axle('rear'),
   tyre,
+  // The combustion engine at the 2026 fuel-energy limit: 421 kW at the crank, 400 at the wheels. The data's curve peaks
+  // at 527 kW, a 2025 engine's, and with the MGU-K the car out-pulled 2026 laps by 16 % at 240 km/h and 30 % at 280
+  // [rules, ref; tuned: full-throttle g at 160 to 280 km/h against those laps]
+  icePowerScale: 0.8,
   // Crank, flywheel and the MGU-K geared to it [ref]
   engineInertia: 0.08,
   // Overrun: 60 Nm at 15 000 rpm, a V6's pumping and friction; the data's 30 Nm left the car coasting on a lift [ref]

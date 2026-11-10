@@ -51,6 +51,8 @@ export interface Vf26Overrides {
   rear?: Partial<Vf26AxleSuspension>;
   /** A compound's tyre on an axle, from the data's */
   tyre?: (spec: Vf26TyreSpec, axle: 'front' | 'rear') => Vf26TyreSpec;
+  /** The combustion engine's power against the data's curve */
+  icePowerScale?: number;
   /** Crank and flywheel inertia (kg·m²) */
   engineInertia?: number;
   /** Overrun torque against the data's */
@@ -541,6 +543,7 @@ export function buildVf26Config(overrides: Vf26Overrides = {}) {
       ...ENGINE,
       inertia: (overrides.engineInertia ?? VF26_ENGINE.inertia) + VF26_DRIVETRAIN.gearboxInertia,
       torqueResponseS: overrides.torqueResponseS ?? ENGINE.torqueResponseS,
+      powerCurve: overrides.icePowerScale === undefined ? ENGINE.powerCurve : (ENGINE.powerCurve.map(([rpm, kw]) => [rpm, kw * overrides.icePowerScale!]) as LutPoints),
       coastCurve: ENGINE.coastCurve.map(([rpm, nm]) => [rpm, nm * (overrides.coastScale ?? 1)]) as LutPoints,
     },
     ers: ERS,
