@@ -572,7 +572,8 @@ function protoCompound(
     name,
     shortName,
     tyre_compound,
-    wear: { curve: wearCurve },
+    // Sliding under more than FZ0 of load wears in proportion [spec VIRTUALKM USE_LOAD]
+    wear: { curve: wearCurve, loadScaled: true },
     front: PROTO_FRONT,
     rear: PROTO_REAR,
     modelData: {
