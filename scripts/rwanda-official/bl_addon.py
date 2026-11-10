@@ -269,23 +269,35 @@ def refine(ob, F, rounds=8, shortest=0.55):
     """
     bm = bmesh.new()
     bm.from_mesh(ob.data)
-    n = 0
-    for _ in range(rounds):
-        bm.verts.ensure_lookup_table()
-        ins = F.covered(np.array([v.co[:2] for v in bm.verts], float).reshape(-1, 2))
-        # ... and the ones that pass under it between two ends outside (a wide face across a narrow verge)
-        long = [e for e in bm.edges if e.calc_length() > shortest]
-        ends = np.array([[e.verts[0].co[:2], e.verts[1].co[:2]] for e in long], float).reshape(-1, 2, 2)
-        mid = np.stack([F.covered(ends[:, 0] + (ends[:, 1] - ends[:, 0]) * f) for f in (0.25, 0.5, 0.75)], 1)
-        edges = [e for e, m in zip(long, mid) if ins[e.verts[0].index] != ins[e.verts[1].index] or (m.any() and not ins[e.verts[0].index])]
-        if not edges:
-            break
-        bmesh.ops.subdivide_edges(bm, edges=edges, cuts=1, use_grid_fill=False)
-        n += len(edges)
-    if n:
+
+    def split():
+        k = 0
+        for _ in range(rounds):
+            bm.verts.ensure_lookup_table()
+            ins = F.covered(np.array([v.co[:2] for v in bm.verts], float).reshape(-1, 2))
+            # ... and the ones that pass under it between two ends outside (a wide face across a narrow verge)
+            long = [e for e in bm.edges if e.calc_length() > shortest]
+            ends = np.array([[e.verts[0].co[:2], e.verts[1].co[:2]] for e in long], float).reshape(-1, 2, 2)
+            mid = np.stack([F.covered(ends[:, 0] + (ends[:, 1] - ends[:, 0]) * f) for f in (0.25, 0.5, 0.75)], 1)
+            edges = [e for e, m in zip(long, mid) if ins[e.verts[0].index] != ins[e.verts[1].index] or (m.any() and not ins[e.verts[0].index])]
+            if not edges:
+                break
+            bmesh.ops.subdivide_edges(bm, edges=edges, cuts=1, use_grid_fill=False)
+            k += len(edges)
+        return k
+
+    n = split()
+    for _ in range(rounds if n else 0):
         many = [f for f in bm.faces if len(f.verts) > 4]
         if many:
             bmesh.ops.triangulate(bm, faces=many)
+        # ... and the diagonals that puts in: one from a corner outside to a corner well under the new road is a face
+        # that dives under its edge all the same (a notch of 11 cm beside a road standing 0.75 m over the ground)
+        k = split()
+        n += k
+        if not k:
+            break
+    if n:
         bm.to_mesh(ob.data)
         ob.data.update()
     bm.free()

@@ -13,6 +13,7 @@ SINK_OVER_M = 3.0         # it reaches its full depth this far in from the edge 
 HUG_R = 3.0               # ... and outside that edge it comes to the edge's height over this distance
 HUG_FLAT = 0.8            # (all the way within this distance: the first vertex outside is the seam)
 LIFT_M = 1.0              # ground lying lower than the add-on comes up to its edge over this distance inside it
+LIFT_FLAT = 0.8           # (all the way within this distance of the edge: the first vertex inside is the seam's other end)
 
 
 def sstep(t):
@@ -93,7 +94,9 @@ class Foot:
         d, zc, g = self.cover(P)
         under = zc - (EDGE_UNDER + (SINK - EDGE_UNDER) * sstep(d / SINK_OVER_M))
         # ground already lower than that comes up to the edge from inside as it does from outside: left where it lay,
-        # it showed as a notch between the add-on's last triangle and the ground beside it
-        inside = np.where(zo > under, under, zo + g * (1 - sstep(d / LIFT_M)) * (under - zo))
+        # it showed as a notch between the add-on's last triangle and the ground beside it. All the way up for the
+        # first vertex inside: half way up, under a road standing 1.7 m over that ground, the face across the edge
+        # met it a quarter of a metre low
+        inside = np.where(zo > under, under, zo + g * (1 - sstep((d - LIFT_FLAT) / LIFT_M)) * (under - zo))
         hug = sstep((HUG_R + d) / (HUG_R - HUG_FLAT)) * g
         return np.where(d > 0, inside, zo + hug * (zc - EDGE_UNDER - zo))
