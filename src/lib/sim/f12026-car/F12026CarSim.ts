@@ -183,6 +183,12 @@ export interface CarSimProfile {
   fuelFlowKgS?: number;
   /** The TC / ABS dial positions of each driver-assist preset; absent: the F1 or GT3 positions */
   assistDials?: Record<DriverAssistPreset, AidDials>;
+  /**
+   * Temperature the garage's cold tyre pressures are stated at (°C), where that is not the tyres' own `coldRefC`: a
+   * setup sheet that gives pressures at 20 °C for tyres that leave 80 °C blankets. `coldPsiRange` is at this
+   * temperature too. Tyre setups are converted on the way in and out, so a saved setup means the same pressure
+   */
+  setupPressureRefC?: number;
 }
 
 export const F12026_SIM_PROFILE: CarSimProfile = {
@@ -1177,10 +1183,19 @@ export class F12026CarSim implements SimulatorCar {
     return compoundData(this.config, this.config.compoundSlots[this.compound]);
   }
 
+  /** A cold pressure at the tyres' own reference temperature as the setup sheet states it, and back */
+  private setupPsi(psi: number, toSheet: boolean): number {
+    const sheetC = this.profile.setupPressureRefC;
+    if (sheetC === undefined) return psi;
+    const tyreC = this.compoundData.pressureData.coldRefC;
+    return Math.round(tyreGaugePressureAtTemperature(psi, toSheet ? tyreC : sheetC, toSheet ? sheetC : tyreC) * 10) / 10;
+  }
+
   public getTyreSetup(): TyreSetup {
     const s = this.config.suspensions;
+    const p = this.coldPsi;
     return {
-      coldPressurePsi: { ...this.coldPsi },
+      coldPressurePsi: { fl: this.setupPsi(p.fl, true), fr: this.setupPsi(p.fr, true), rl: this.setupPsi(p.rl, true), rr: this.setupPsi(p.rr, true) },
       camberDeg: { front: s.front.staticCamber, rear: s.rear.staticCamber },
     };
   }
@@ -1190,7 +1205,9 @@ export class F12026CarSim implements SimulatorCar {
     const pick = (v: number, [lo, hi]: [number, number], current: number) => (Number.isFinite(v) ? THREE.MathUtils.clamp(v, lo, hi) : current);
     const pr = this.profile;
     for (const k of ["fl", "fr", "rl", "rr"] as const) {
-      this.coldPsi[k] = Math.round(pick(setup.coldPressurePsi[k], pr.coldPsiRange, this.coldPsi[k]) * 10) / 10;
+      // Clamped as the sheet states it, kept at the tyres' own reference temperature
+      const sheet = pick(setup.coldPressurePsi[k], pr.coldPsiRange, this.setupPsi(this.coldPsi[k], true));
+      this.coldPsi[k] = pr.setupPressureRefC === undefined ? Math.round(sheet * 10) / 10 : this.setupPsi(sheet, false);
     }
     const s = this.config.suspensions;
     s.front.staticCamber = pick(setup.camberDeg.front, pr.frontCamberRange, s.front.staticCamber);

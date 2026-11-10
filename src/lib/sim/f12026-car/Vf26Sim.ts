@@ -15,6 +15,8 @@ export const VF26_SIM_PROFILE: CarSimProfile = {
   hasDrs: true,
   turbo: true,
   coldPsiRange: VF26_TYRE_SETUP_RANGES.coldPsiRange,
+  // The car's setup sheet gives cold pressures at 20 °C, as its other engine reads them
+  setupPressureRefC: 20,
   frontCamberRange: VF26_TYRE_SETUP_RANGES.frontCamberRange,
   rearCamberRange: VF26_TYRE_SETUP_RANGES.rearCamberRange,
   tcMinSpeedMs: 2,
