@@ -14,6 +14,7 @@ import * as THREE from 'three';
 import { getActiveTrackData } from '../src/lib/track-data';
 import { F1Physics2026 } from '../src/lib/f1-physics-2026';
 import { F12026CarSim } from '../src/lib/sim/f12026-car/F12026CarSim';
+import { createVf26Sim } from '../src/lib/sim/f12026-car/Vf26Sim';
 import { aiLineOffsetM } from '../src/lib/sim/speed-profile';
 import type { DriverAssistPreset } from '../src/types/f1';
 import { loadGlbGeometry } from './lib/glb-geometry';
@@ -46,9 +47,9 @@ interface LapResult {
   notes: string[];
 }
 
-function driveLap(car: 'vf26' | 'f12026', preset: DriverAssistPreset, pace: number): LapResult {
+function driveLap(car: 'vf26' | 'vf26-rigid' | 'f12026', preset: DriverAssistPreset, pace: number): LapResult {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const c: any = car === 'vf26' ? new F1Physics2026(track) : new F12026CarSim(track, root);
+  const c: any = car === 'vf26' ? new F1Physics2026(track) : car === 'vf26-rigid' ? createVf26Sim(track, root) : new F12026CarSim(track, root);
   c.assistPreset = preset;
   c.setAssistPreset?.(preset);
   c.teleportToDistance(200, 60 / 3.6);
@@ -125,14 +126,14 @@ function driveLap(car: 'vf26' | 'f12026', preset: DriverAssistPreset, pace: numb
 
 const paces = (process.argv[2] ?? '1').split(',').map(Number);
 let failed = 0;
-for (const car of ['vf26', 'f12026'] as const) {
+for (const car of ['vf26', 'vf26-rigid', 'f12026'] as const) {
   for (const preset of ['assisted', 'semi_pro', 'pro'] as const) {
     for (const pace of paces) {
       const r = driveLap(car, preset, pace);
       const ok = r.finished && r.spins === 0 && r.maxBeyondEdgeM <= 0.5;
       if (!ok) failed++;
       console.log(
-        `${ok ? 'PASS' : 'FAIL'}  ${car === 'vf26' ? 'VF26' : 'f12026-car'} ${preset} pace ${pace}: ` +
+        `${ok ? 'PASS' : 'FAIL'}  ${car === 'vf26' ? 'VF26' : car === 'vf26-rigid' ? 'VF26 (rigid-body)' : 'f12026-car'} ${preset} pace ${pace}: ` +
           `${r.finished ? `lap ${r.timeS.toFixed(2)} s` : 'did not finish'}, max body slip ${r.maxSlipDeg.toFixed(1)}°, ` +
           `${r.spins} spins, centre ${r.maxBeyondEdgeM.toFixed(1)} m past the edge ${r.notes.slice(0, 2).join('; ')}`
       );
