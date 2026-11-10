@@ -217,6 +217,40 @@ const track = getActiveTrackData(1200);
   check('the pit lane drives as pit lane', lane === pit.length - 24, `${lane} of ${pit.length - 24} points`);
 }
 {
+  // No ledge anywhere a car can get to: every metre of the lap, from the centre out to the first barrier in 25 cm
+  // steps. Where the three extra road sections join the built lap two sets of ground lie over each other, and the
+  // game drives on the higher paved one: one left low or high there is a step under a wheel
+  const walls = TrackWallQuery.fromTrackRoot(root);
+  const nearWalls = new Int32Array(64);
+  let steps = 0;
+  let worst = 0;
+  let worstAt = '';
+  let probes = 0;
+  for (let s = 0; s < track.totalLengthM; s += 1) {
+    const smp = track.getSampleAtDistance(s);
+    const b = Math.hypot(smp.binormal.x, smp.binormal.z);
+    for (const side of [-1, 1]) {
+      let prev = NaN;
+      for (let lat = 0; lat <= 40; lat += 0.25) {
+        const x = smp.position.x + (smp.binormal.x / b) * lat * side;
+        const z = smp.position.z + (smp.binormal.z / b) * lat * side;
+        if (walls.near(x, z, 0.3, nearWalls) > 0 || !ground.query(x, z, smp.position.y + 5, hit)) break;
+        probes++;
+        const step = Math.abs(hit.height - prev);
+        if (step > 0.06) {
+          steps++;
+          if (step > worst) {
+            worst = step;
+            worstAt = `, worst ${(step * 100).toFixed(0)} cm at ${s} m, ${(lat * side).toFixed(2)} m to the side`;
+          }
+        }
+        prev = hit.height;
+      }
+    }
+  }
+  check('no step over 6 cm between the barriers', steps === 0, `${probes} probes, ${steps} steps${worstAt}`);
+}
+{
   // Barriers: from every sample, the first wall to each side is where the data puts it
   const walls = TrackWallQuery.fromTrackRoot(root);
   const ids = new Int32Array(4096);

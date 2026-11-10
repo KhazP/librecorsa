@@ -14,12 +14,15 @@ import ro_design as rd
 import bl_common as bc
 import bl_track
 from bl_common import Parts
-from ro_foot import Foot, NAMES
+from mathutils import kdtree
+from ro_foot import Foot, NAMES, HUG_R
 
 RUNOFF_SPAN_M, RUNOFF_NEG_M = bl_track.RUNOFF_SPAN_M, bl_track.RUNOFF_NEG_M
 # what of the built lap lies on the ground and moves with it, and what stands on it
-SETTLE = ('Track_Runoff_Paint', 'Track_Kerbs', 'Ground_Verge', 'Ground_Gravel', 'Track_Pitlane', 'Ground_Paddock',
-          'Ground_ServiceRoad', 'Ground_Road_Lines', 'Track_Pit_Markings')
+SETTLE = ('Track_Runoff_Paint', 'Ground_Verge', 'Ground_Gravel', 'Track_Pitlane', 'Ground_Paddock', 'Ground_ServiceRoad',
+          'Track_Kerbs', 'Ground_Road_Lines', 'Track_Pit_Markings')
+LAID = ('Track_Kerbs', 'Ground_Road_Lines', 'Track_Pit_Markings')    # ... of those, what lies on other ground
+LAID_REACH_M = 1.5                      # ground this close to a point of them is the ground it lies on
 WALLS = ('Track_Barriers', 'Track_Fences', 'Track_PitWall', 'Track_PitOuterWall', 'Track_Collider_Wall_Left',
          'Track_Collider_Wall_Right', 'Track_Collider_Wall_Pit', 'Track_Collider_Wall_PitOuter')
 OBJECTS = ('Track_Asphalt_Alt', 'Track_Markings_Alt', 'Track_Kerbs_Alt', 'Track_Runoff_Alt', 'Ground_Verge_Alt',
@@ -145,7 +148,9 @@ def build():
         ob.hide_viewport = ob.hide_render = True
         out['collider quads added'] = int(sum(len(f) for f in colF))
     # ---- its ground sinks under them and meets their edges ----
-    moved = split = 0
+    moved = split = gone = 0
+    base = []                                                   # (x, y, how far it moved) of the ground that moved
+    kd = None
     for name in SETTLE:
         ob = bpy.data.objects.get(name)
         if not ob or ob.get('ro_addons'):
@@ -153,12 +158,34 @@ def build():
         split += refine(ob, F)
         V = coords(ob)
         z = F.settle(V[:, :2], V[:, 2])
+        if name not in LAID:
+            near = (F.cover(V[:, :2])[0] > -(HUG_R + LAID_REACH_M)) | (np.abs(z - V[:, 2]) > 1e-4)
+            base.append(np.c_[V[near, :2], (z - V[:, 2])[near]])
+        elif base:
+            # a kerb on the paint, a line on a road: it moves as the ground under it does and keeps its height above
+            # it. Settled on its own it came to the same height as that ground and was gone from the surface
+            if kd is None:
+                B = np.vstack(base)
+                kd = kdtree.KDTree(len(B))
+                for i, b in enumerate(B):
+                    kd.insert((b[0], b[1], 0.0), i)
+                kd.balance()
+            d, top = F.ceiling(V[:, :2])
+            for i in np.flatnonzero((d > -(HUG_R + LAID_REACH_M)) | (np.abs(z - V[:, 2]) > 1e-4)):
+                hits = [(k, r) for _, k, r in kd.find_n((V[i, 0], V[i, 1], 0.0), 3) if r < LAID_REACH_M]
+                if hits:
+                    w = np.array([1 / (r * r + 0.0025) for _, r in hits])
+                    z[i] = V[i, 2] + float((w * B[[k for k, _ in hits], 2]).sum() / w.sum())
+                    if d[i] > 0:
+                        z[i] = min(z[i], top[i])
         moved += int((np.abs(z - V[:, 2]) > 0.005).sum())
         V[:, 2] = z
         set_coords(ob, V)
+        gone += drop_covered(ob, F)
         ob['ro_addons'] = 1
     out['ground vertices moved'] = moved
     out['ground edges split'] = split
+    out['ground faces under the new roads removed'] = gone
     # ---- its barriers and fences open where an add-on passes, and stand on the moved ground beside it ----
     cut = 0
     for name in WALLS:
@@ -209,9 +236,34 @@ def built_uv(B):
     return np.stack([(B[..., 0] + RUNOFF_NEG_M) / RUNOFF_SPAN_M, B[..., 1] / 12], -1)
 
 
-def refine(ob, F, rounds=3, shortest=0.55):
+def drop_covered(ob, F):
     """
-    Split the edges of a built surface that cross an add-on's footprint, three times over: a face that is half under
+    Takes out the faces of a built surface that lie wholly under what an add-on draws. The game drives on the highest
+    paved surface under a wheel, grass or not above it: the lap's sunk paint under an add-on's verge was the ground
+    there, a quarter of a metre under the grass and a ledge at its end. Faces across the edge stay (they are the seam).
+    Returns the number of faces removed.
+    """
+    bm = bmesh.new()
+    bm.from_mesh(ob.data)
+    bm.verts.ensure_lookup_table()
+    ins = F.covered(np.array([v.co[:2] for v in bm.verts], float).reshape(-1, 2))
+    faces = [f for f in bm.faces if all(ins[v.index] for v in f.verts)]
+    if faces:
+        mid = F.covered(np.array([f.calc_center_median()[:2] for f in faces], float).reshape(-1, 2))
+        faces = [f for f, m in zip(faces, mid) if m]
+    n = len(faces)
+    if n:
+        bmesh.ops.delete(bm, geom=faces, context='FACES')
+        bmesh.ops.delete(bm, geom=[v for v in bm.verts if not v.link_faces], context='VERTS')
+        bm.to_mesh(ob.data)
+        ob.data.update()
+    bm.free()
+    return n
+
+
+def refine(ob, F, rounds=8, shortest=0.55):
+    """
+    Split the edges of a built surface that cross the edge of what an add-on draws until they are short: a face that is half under
     the new road dives under it as a whole, and its far corner stood out of the new verge as a jagged tooth. Returns
     the number of edges split.
     """
@@ -220,8 +272,12 @@ def refine(ob, F, rounds=3, shortest=0.55):
     n = 0
     for _ in range(rounds):
         bm.verts.ensure_lookup_table()
-        ins = F.at(np.array([v.co[:2] for v in bm.verts], float).reshape(-1, 2))[0]
-        edges = [e for e in bm.edges if ins[e.verts[0].index] != ins[e.verts[1].index] and e.calc_length() > shortest]
+        ins = F.covered(np.array([v.co[:2] for v in bm.verts], float).reshape(-1, 2))
+        # ... and the ones that pass under it between two ends outside (a wide face across a narrow verge)
+        long = [e for e in bm.edges if e.calc_length() > shortest]
+        ends = np.array([[e.verts[0].co[:2], e.verts[1].co[:2]] for e in long], float).reshape(-1, 2, 2)
+        mid = np.stack([F.covered(ends[:, 0] + (ends[:, 1] - ends[:, 0]) * f) for f in (0.25, 0.5, 0.75)], 1)
+        edges = [e for e, m in zip(long, mid) if ins[e.verts[0].index] != ins[e.verts[1].index] or (m.any() and not ins[e.verts[0].index])]
         if not edges:
             break
         bmesh.ops.subdivide_edges(bm, edges=edges, cuts=1, use_grid_fill=False)

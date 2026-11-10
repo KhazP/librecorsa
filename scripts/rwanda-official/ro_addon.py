@@ -17,6 +17,7 @@ from scipy.ndimage import distance_transform_edt, gaussian_filter1d
 from scipy.spatial import cKDTree
 
 import ro_design as rd
+import ro_foot as fo
 from ro_foot import Foot, NAMES, SINK
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -41,6 +42,11 @@ NOSE_CLEAR_M = 2.5        # no barrier nearer an add-on's road than this (where 
 UNDER = 0.008             # how far below the built road an add-on's asphalt lies where the two overlap (its lines and kerbs: deeper)
 BED = 0.30                # the terrain lies this far under an add-on
 PPM = 2.0                 # footprint rasters, pixels per metre
+ISLE_OUT, ISLE_IN = 6.5, 0.5   # inside a bend tighter than its own inside bands the ground levels off between these radii
+MEET_R, MEET_ROWS = 3.0, 8     # its own bands this close in plan and this many rows apart along it come to one height
+EDGE_R = 12.0             # ... and two of its outer edges within this of each other tilt their bands towards a common height
+VCOLS = 9                 # columns of an add-on's verge: close enough that a twisted quad does not stand as a bank
+CPPM = 4.0                # ... and of the rasters of what an add-on draws (ro_foot.Foot.cover)
 WARP_R = 25.0             # the built lap's ground meets an add-on's edge over this distance
 PULL_R = 3.0              # ... and within this distance of it, ground still standing above the edge is taken down to it
 LAT = np.array([-12, -8, -5, -2.5, 0, 2.5, 5, 8, 12.0])
@@ -49,6 +55,34 @@ LAT = np.array([-12, -8, -5, -2.5, 0, 2.5, 5, 8, 12.0])
 def sstep(t):
     t = np.clip(t, 0, 1)
     return t * t * (3 - 2 * t)
+
+
+def top_heights(T, W, H):
+    """
+    The highest of a set of triangles T (n, 3, 3: pixel x, pixel y, height) at every pixel centre of a W x H raster,
+    nan where none lies over it. Each triangle is laid on its own: filled together, overlapping strips (a kerb on the
+    paint beside it) cancel each other out, and a height taken from a triangulation of all their corners is not the
+    height of the surface between them.
+    """
+    Z = np.full((H, W), np.nan)
+    for a, b, c in T:
+        x0, x1 = max(int(np.ceil(min(a[0], b[0], c[0]) - 1e-6)), 0), min(int(np.floor(max(a[0], b[0], c[0]) + 1e-6)), W - 1)
+        y0, y1 = max(int(np.ceil(min(a[1], b[1], c[1]) - 1e-6)), 0), min(int(np.floor(max(a[1], b[1], c[1]) + 1e-6)), H - 1)
+        if x1 < x0 or y1 < y0:
+            continue
+        det = (b[1] - c[1]) * (a[0] - c[0]) + (c[0] - b[0]) * (a[1] - c[1])
+        if abs(det) < 1e-9:
+            continue
+        X, Y = np.meshgrid(np.arange(x0, x1 + 1), np.arange(y0, y1 + 1))
+        w1 = ((b[1] - c[1]) * (X - c[0]) + (c[0] - b[0]) * (Y - c[1])) / det
+        w2 = ((c[1] - a[1]) * (X - c[0]) + (a[0] - c[0]) * (Y - c[1])) / det
+        w3 = 1 - w1 - w2
+        m = (w1 >= -1e-6) & (w2 >= -1e-6) & (w3 >= -1e-6)
+        if m.any():
+            z = (w1 * a[2] + w2 * b[2] + w3 * c[2])[m]
+            old = Z[Y[m], X[m]]
+            Z[Y[m], X[m]] = np.where(np.isfinite(old), np.maximum(old, z), z)
+    return Z
 
 
 def g1(a, sig):
@@ -228,6 +262,24 @@ class Addon:
             gv[inn] = np.minimum(gv[inn], np.maximum(g - pa[inn], 0))
         self.pa, self.gv = g1(pa, 3.0), g1(gv, 3.0)
         self.pa[inn] = np.minimum(self.pa[inn], g)
+        # ---- the heart of a bend whose inside bands reach nearly to its centre: there every row's section meets
+        # every other's within a metre, each at its own height, and the grass stood as a spiral cliff. From the kerb
+        # inwards the ground comes to one height instead ----
+        self.isle = None
+        R = 1 / np.maximum(np.abs(kap), 1e-6)
+        sgi = np.where(kap > 0, -1.0, 1.0)                      # the inside: left of a left-hander
+        reach = hw + np.where(kap > 0, self.pa[0] + self.gv[0], self.pa[1] + self.gv[1])
+        soft = np.minimum(ISLE_OUT, R - hw - 1.5)
+        on = (R - reach < soft) & (soft > ISLE_IN + 1.0)
+        if on.any():
+            zi = np.zeros(nj)
+            for a, b in runs(on):
+                j = np.arange(a, b)
+                zi[a:b] = self.surf(j, (sgi[j] * np.minimum(reach[j], R[j] - ISLE_IN))[:, None])[1].mean()
+            k = np.flatnonzero(on)
+            zi = zi[k[np.argmin(np.abs(jj[:, None] - k[None]), 1)]]
+            gate = sstep(1 - (np.abs(jj[:, None] - k[None]).min(1) - 1) / 10.0)      # (and nothing of it ten stations beyond)
+            self.isle = (R, sgi, soft, zi, gate)
         self.tec = np.zeros((2, nj), bool)
         self.tec[out_side] = bump > 0.5
         wall = np.zeros((2, nj), bool)
@@ -264,6 +316,10 @@ class Addon:
         own = self.zo[jj][:, None] + cross(self.e[jj][:, None], self.hw[jj][:, None] + rd.KERB_HINGE_M, lat)
         ww = self.blend(q['d'] - q['hws'])
         z = ww * q['zs'] + (1 - ww) * own
+        if self.isle is not None:
+            R, sgi, soft, zi, gate = (a[jj][:, None] for a in self.isle)
+            w = np.clip((soft - (R - np.abs(lat))) / np.maximum(soft - ISLE_IN, 0.5), 0, 1) * (np.sign(lat) == sgi) * gate * (1 - ww)
+            z = z + w * (zi - z)
         return P, z, q
 
     def outer(self, side):
@@ -285,8 +341,9 @@ def bake(ad, out):
 
     def grid(lat, dz=0.0, under=True, margin=0.3, sink=UNDER):
         P, z, q = ad.surf(jr, lat)
-        on = q['d'] < q['hws']                                  # on the built road: hide beneath it
-        zz = np.where(on, q['zs'] - sink, z) if under else z
+        on = q['d'] < q['hws']                                  # on the built road: hide beneath it, deeper the further
+        # onto it (all the way down at its very edge, a strip stood as a notch between that edge and its own next column)
+        zz = np.where(on, q['zs'] - (UNDER + (sink - UNDER) * sstep((q['hws'] - q['d']) / 0.5)), z) if under else z
         deep = q['d'] < q['hws'] - margin
         hidden = deep[:-1, :-1] & deep[:-1, 1:] & deep[1:, :-1] & deep[1:, 1:]
         return np.concatenate([P, (zz + dz)[..., None]], -1), ~hidden, q
@@ -294,7 +351,10 @@ def bake(ad, out):
     lat = ad.hw[jr][:, None] * ROAD_F
     P, vis, _ = grid(lat)
     out[nm + '_road'], out[nm + '_road_m'], out[nm + '_road_lat'] = P, vis, lat
-    Pc, visc, qc = grid((ad.hw[jr] + 1.6)[:, None] * np.array([-1.0, 0.0, 1.0]), under=False, margin=-1.6)
+    drawn = [(P, np.ones_like(vis), False)]                     # every surface it lays (where hidden, the built road lies over it), and whether its faces are turned over
+    # (the road's own columns and 1.6 m beyond each edge: three columns lay flat across a section that curves
+    # where it blends into the built road, a few centimetres off the asphalt and the verge they stand in for)
+    Pc, visc, qc = grid(np.concatenate([-(ad.hw[jr] + 1.6)[:, None], lat, (ad.hw[jr] + 1.6)[:, None]], 1), under=False, margin=-1.6)
     out[nm + '_col'], out[nm + '_col_m'] = Pc, visc
     out_side = 1 if ad.kap[int(np.argmax(np.abs(ad.kap)))] > 0 else 0       # the side its tightest bend's stripes are on
     for side in (0, 1):
@@ -304,15 +364,18 @@ def bake(ad, out):
         P, vis, _ = grid(sg * (hw[:, None] + np.array([-0.25, -0.10])), dz=0.006, sink=0.05)
         out[nm + '_line' + t], out[nm + '_line' + t + '_m'] = P, vis
         kf = ad.kerb[side][jr]
-        P, vis, _ = grid(sg * (hw[:, None] + DK), sink=0.12)             # a kerb on the built road stays out of sight
-        P[..., 2] += 0.004 + kf[:, None] * HK
+        P, vis, qk = grid(sg * (hw[:, None] + DK), sink=0.12)            # a kerb on the built road stays out of sight
+        P[..., 2] += (0.004 + kf[:, None] * HK) * (1 - sstep((qk['hws'] - qk['d']) / 0.3))
         kq = (kf > 0.02)
         out[nm + '_kerb' + t], out[nm + '_kerb' + t + '_m'] = P, vis & (kq[:-1] & kq[1:])[:, None]
+        drawn.append((P, out[nm + '_kerb' + t + '_m'], side == 0))
         d = np.minimum(PCOLS[None, :], pa[:, None])
         P, vis, qp = grid(sg * (hw[:, None] + d))
         wq = d[:, 1:] - d[:, :-1]
         out[nm + '_paint' + t], out[nm + '_paint' + t + '_m'], out[nm + '_paint' + t + '_d'] = P, vis & ((wq[:-1] > 0.02) | (wq[1:] > 0.02)), d
-        d = pa[:, None] + gv[:, None] * np.linspace(0, 1, 3)
+        drawn.append((P, out[nm + '_paint' + t + '_m'], side == 0))
+        bands = (bands if side else []) + [(P, d, ad.blend(qp['d'] - qp['hws']))]
+        d = pa[:, None] + gv[:, None] * np.linspace(0, 1, VCOLS)
         P, vis, q = grid(sg * (hw[:, None] + d))
         # Where these bands lie on the built lap's painted run-off they are that paint, with its stripes carried on up
         # to the new asphalt: laid in their own pattern (or as grass) they crossed it as a second set of stripes and a
@@ -333,6 +396,8 @@ def bake(ad, out):
             out[nm + key + t + '_b'] = (n4 >= 3) & even
             out[nm + key + t + '_buv'] = np.stack([qq['pu'] + np.maximum(qq['d'] - qq['hws'], 0), sf], -1)
         out[nm + '_verge' + t], out[nm + '_verge' + t + '_m'] = P, vis & ((gv[:-1] > 0.05) | (gv[1:] > 0.05))[:, None]
+        drawn.append((P, np.broadcast_to(out[nm + '_verge' + t + '_m'], (nr - 1, P.shape[1] - 1)), side == 0))
+        bands.append((P, d, ad.blend(q['d'] - q['hws'])))
         # the outer edge: a skirt into the ground where the terrain takes over, a barrier where the built lap has none
         edge = P[:, -1]
         ls, cor, wl = q['ls'][:, -1], q['cor'][:, -1], q['wl'][:, -1]
@@ -342,6 +407,64 @@ def bake(ad, out):
         wq = ad.wall[side][jr] & ((np.abs(ls) > wl + 0.5) | (q['d'][:, -1] > 70)) & (pa + gv >= NOSE_CLEAR_M)
         out[nm + '_wall' + t], out[nm + '_wall' + t + '_m'] = edge, wq[:-1] & wq[1:]
         out[nm + '_tec' + t + '_m'] = (wq & ad.tec[side][jr])[:-1] & (wq & ad.tec[side][jr])[1:]
+    # ---- where its own bands meet or lie over each other (inside a hairpin: those of the way in, of the bend and of
+    # the way out, each at its own height) they come to one height: left as they were, the grass between the two legs
+    # stood as a cliff half a metre high where one band ended over the other. First each band tilts, from its kerb
+    # outwards, so that its outer edge meets the other leg's halfway; then what still lies over something else of
+    # its own is evened out point by point. Nothing of this where the surface is the built lap's ----
+    moved = 0.0
+    for sd in (0, 1):
+        Gv, dv, wv = bands[2 * sd + 1]
+        Ee = Gv[:, -1].copy()
+        dl = np.zeros(nr)
+        for i, nb in enumerate(cKDTree(Ee[:, :2]).query_ball_point(Ee[:, :2], EDGE_R)):
+            nb = np.asarray(nb)
+            nb = nb[np.abs(nb - i) >= MEET_ROWS]
+            if len(nb):
+                K = (1 - (np.hypot(*(Ee[nb, :2] - Ee[i, :2]).T) / EDGE_R) ** 2) ** 2
+                dl[i] = 0.5 * min(1.0, K.sum()) * ((K * Ee[nb, 2]).sum() / K.sum() - Ee[i, 2])
+        dl = g1(dl, 1.5) * (1 - wv[:, -1])
+        moved = max(moved, float(np.abs(dl).max()))
+        for G, dd, _ in bands[2 * sd:2 * sd + 2]:
+            G[..., 2] += np.clip((dd - 1.5) / np.maximum(dv[:, -1:] - 1.5, 1.0), 0, 1) * dl[:, None]
+    V = np.concatenate([G.reshape(-1, 3) for G, _, _ in bands])
+    rw = np.concatenate([np.repeat(np.arange(nr), G.shape[1]) for G, _, _ in bands])
+    beyond = np.concatenate([dd.reshape(-1) for _, dd, _ in bands])              # metres beyond the asphalt's edge
+    own = 1 - np.concatenate([ww.reshape(-1) for _, _, ww in bands])
+    z0 = V[:, 2].copy()
+    znew = z0.copy()
+    for i, nb in enumerate(cKDTree(V[:, :2]).query_ball_point(V[:, :2], MEET_R)):
+        nb = np.asarray(nb)
+        far = np.abs(rw[nb] - rw[i]) >= MEET_ROWS
+        if not far.any():
+            continue
+        K = (1 - (np.hypot(*(V[nb, :2] - V[i, :2]).T) / MEET_R) ** 2) ** 2
+        lam = sstep((beyond[i] - 1.5) / 1.5) * sstep(K[far].sum() / K.sum() / 0.3) * own[i]
+        znew[i] = z0[i] + lam * ((K * z0[nb]).sum() / K.sum() - z0[i])
+    if ad.isle is not None:
+        # ... and inside such a bend, where the level heart begins and the legs' bands turn up to it, the grass is
+        # smoothed in plan: the turn-up stood as a bank steeper than one in four
+        gz = np.concatenate([np.repeat(np.where((ad.isle[1][jr] < 0) == (b < 2), ad.isle[4][jr], 0.0), G.shape[1]) for b, (G, _, _) in enumerate(bands)])
+        lam = sstep((beyond - 1.5) / 1.5) * own * gz
+        idx = np.flatnonzero(lam > 0.01)
+        tree = cKDTree(V[:, :2])
+        near = tree.query_ball_point(V[idx, :2], 2.5)
+        for _ in range(3):
+            zs_ = znew.copy()
+            for i, nb in zip(idx, near):
+                nb = np.asarray(nb)
+                K = (1 - (np.hypot(*(V[nb, :2] - V[i, :2]).T) / 2.5) ** 2) ** 2
+                zs_[i] = znew[i] + lam[i] * ((K * znew[nb]).sum() / K.sum() - znew[i])
+            znew = zs_
+    out[nm + '_met'] = np.array([moved, float(np.abs(znew - z0).max())])
+    k = 0
+    for G, _, _ in bands:
+        G[..., 2] = znew[k:k + G[..., 2].size].reshape(G.shape[:2])
+        k += G[..., 2].size
+    for side in (0, 1):
+        t = 'LR'[side]
+        out[nm + '_skirt' + t][:, 0, 2] = out[nm + '_verge' + t][:, -1, 2]
+        out[nm + '_skirt' + t][:, 1, 2] = out[nm + '_verge' + t][:, -1, 2] - 1.2
     for k in ('x', 'y', 'tx', 'ty', 'kap', 'hw', 'w', 'zo', 'e', 'gap', 'v', 'kerb', 'pa', 'gv', 'wall', 'off'):
         out[nm + '_' + k] = getattr(ad, k)
     out[nm + '_ends'] = np.array([ad.sa, ad.sb])
@@ -388,12 +511,39 @@ def bake(ad, out):
     warp = cv2.GaussianBlur(warp * free, (0, 0), 1.5) / np.maximum(cv2.GaussianBlur(free, (0, 0), 1.5), 1e-3) * free
     out[nm + '_foot'], out[nm + '_roadfoot'], out[nm + '_zr'], out[nm + '_org'] = foot, road, zr, np.array([x0, y1, PPM])
     out[nm + '_warp'] = warp
-    # and right beside the footprint the built ground never stands proud of the add-on's edge: what the warp leaves of a
-    # step (the built road's own strip is held, so its neighbour can be high) is taken down over PULL_R
-    near_w, near_z = np.zeros((H, W), np.float32), np.zeros((H, W), np.float32)
-    near_w[py, px] = sstep(1 - dist[py, px] / PULL_R) * sstep(off / 2.0) * (np.abs(qp['ls']) < qp['cor'] + 2.0) * (qp['d'] < 70)
-    near_z[py, px] = zr[ny, nx]
-    out[nm + '_near_w'], out[nm + '_near_z'] = near_w, near_z
+    # ---- what it draws: where, how high, and how far the built ground beside it follows its edge (Foot.settle) ----
+    tris = []
+    for G, M, turned in drawn:
+        r, c = np.nonzero(M)
+        q = [G[r, c], G[r, c + 1], G[r + 1, c + 1], G[r + 1, c]]
+        if turned:
+            q = q[::-1]
+        tris += [np.stack([q[0], q[1], q[2]], 1), np.stack([q[0], q[2], q[3]], 1)]        # split as Blender splits a quad
+    Tq = np.concatenate(tris)
+    cmg = fo.HUG_R + 2
+    cx0, cy1 = Tq[..., 0].min() - cmg, Tq[..., 1].max() + cmg
+    CW, CH = int((Tq[..., 0].max() + cmg - cx0) * CPPM) + 1, int((cy1 - Tq[..., 1].min() + cmg) * CPPM) + 1
+    cz = top_heights(np.stack([(Tq[..., 0] - cx0) * CPPM, (cy1 - Tq[..., 1]) * CPPM, Tq[..., 2]], -1), CW, CH)
+    cov = np.isfinite(cz)
+    dout = distance_transform_edt(~cov) / CPPM
+    # outside it: its own section carried on outwards (the height of the nearest point of its edge is off by the
+    # grade times the pixel on a 16 % climb, and ground set level with the edge does not lie along a banked verge)
+    oy, ox = np.nonzero(~cov & (dout < fo.HUG_R + 1))
+    XYo = np.c_[cx0 + ox / CPPM, cy1 - oy / CPPM]
+    kj = cKDTree(np.c_[ad.x, ad.y]).query(XYo)[1]
+    dx, dy = XYo[:, 0] - ad.x[kj], XYo[:, 1] - ad.y[kj]
+    lo = (dx * ad.rx[kj] + dy * ad.ry[kj])[:, None]
+    ka, kb = np.maximum(kj - 1, 0), np.minimum(kj + 1, ad.n - 1)
+    zo_ = ad.surf(kj, lo)[1][:, 0]
+    cz[oy, ox] = zo_ + (ad.surf(kb, lo)[1][:, 0] - ad.surf(ka, lo)[1][:, 0]) / ((kb - ka) * ad.h) * (dx * ad.tx[kj] + dy * ad.ty[kj])
+    cz[~np.isfinite(cz)] = 0.0
+    # the strip along the built road stays the built road's: its first metre takes less and less of the edge's height
+    ay, ax = np.nonzero(cov | (dout < fo.HUG_R + 1))
+    qo = ad.spine.at(np.c_[cx0 + ax / CPPM, cy1 - ay / CPPM])
+    cg = np.zeros((CH, CW), np.float32)
+    cg[ay, ax] = sstep(np.clip(qo['d'] - qo['hws'], 0, None) / 1.0)
+    out[nm + '_cov_d'] = np.clip(np.where(cov, distance_transform_edt(cov) / CPPM, -dout), -(fo.HUG_R + 1), fo.SINK_OVER_M + 1).astype(np.float32)
+    out[nm + '_cov_z'], out[nm + '_cov_g'], out[nm + '_cov_org'] = cz.astype(np.float32), cg, np.array([cx0, cy1, CPPM])
     out[nm + '_foot_in'] = cv2.erode(foot, np.ones((3, 3), np.uint8))
     ad.warp_range = (float(warp.min()), float(warp.max()))
     out[nm + '_cloud'] = cloud[::2].astype(np.float32)

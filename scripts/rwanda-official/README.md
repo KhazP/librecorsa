@@ -57,10 +57,15 @@ Around the site: the game draws 5.5 km, so the land climbs into a rim of hills b
 121 to 194 m above the lake; the real ground is kept where it is higher) and the lake stops at its foot. Beyond the
 lap's surroundings the ground takes field, crop, fallow and woodland colours, and a second, coarser canopy sheet is
 the far country's woodlots, where no tree is planted. Trees: 17,548 spots, 14,065 instanced after thinning the ones
-deep inside the canopy sheet, in four levels of detail. The packed circuit file is 6.8 MB and 474,000 triangles.
+deep inside the canopy sheet, in four levels of detail. The packed circuit file is 6.8 MB and 481,000 triangles.
 
-Where the three extra road sections leave the built lap, the built ground is cut along their footprints and pulled
-down to them within 3 m, so paint and verge do not stand over the joining road. The open stands show scaffolding at
+Where the three extra road sections leave the built lap, the built ground gives way to them: what lies wholly under
+their asphalt, kerbs, paint and verge is taken out, what crosses their edge is cut fine and meets it a centimetre
+lower, and the ground beside them comes to the edge's height within 3 m (a kerb or a painted line keeps its height
+above the ground it lies on). Inside the link's hairpin, where the bands of the way in, the bend and the way out meet,
+they come to one height and the heart of the bend is level. The game drives on the highest paved surface under a
+wheel, so every one of these was a ledge otherwise; the layout check walks both laps from the centre to the barriers
+and allows no step over 6 cm. The open stands show scaffolding at
 the back and ends under a band of banners; the big screens show their picture on both faces.
 
 ## Steps
