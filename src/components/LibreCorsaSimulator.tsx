@@ -81,6 +81,11 @@ let pendingRaceStart: RaceStartInfo | null = null;
  * whether as a race against the AI (a scheduled race nobody else entered) rather than practice
  */
 let pendingChallenge: { id: string; race: boolean } | null = null;
+/**
+ * The player's own assists, realism and weather while a challenge or a scheduled race has the week's in their place:
+ * put back when they leave the car for the menus. (Outside the component: going to the week's circuit reloads it.)
+ */
+let ownRules: Pick<PlayerSettings, "assistPreset" | "realism" | "conditions"> | null = null;
 
 export interface LibreCorsaSimulatorProps {
   /** Active circuit (already set with `setActiveTrack`; the gate remounts this component on a change) */
@@ -296,6 +301,12 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   /** Leaves the car for the title menu: out of any race (the multiplayer one properly), the car back on the grid */
   const leaveSession = useCallback(() => {
     endMpRace(true);
+    // The week's rules were only for that drive: the player's own assists, realism and weather are back
+    if (ownRules) {
+      const own = ownRules;
+      ownRules = null;
+      setSettings((prev) => ({ ...prev, ...own }));
+    }
     session?.resetRun("session");
     session?.setRace({ kind: "practice" });
     clearSessionState();
@@ -553,6 +564,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   /** The week's challenge rules: its assists and realism, a dry track (its car and circuit are the caller's to set) */
   const applyWeekRules = useCallback(() => {
     const week = challengeAt(Date.now());
+    const own = settingsRef.current;
+    ownRules ??= { assistPreset: own.assistPreset, realism: own.realism, conditions: own.conditions };
     setSettings((prev) => ({
       ...prev,
       assistPreset: week.assists,
