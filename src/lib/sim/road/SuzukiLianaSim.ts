@@ -60,6 +60,8 @@ export const SUZUKI_LIANA_SIM_PROFILE: CarSimProfile = {
   // No wings to trim
   aeroPackagesDeg: { low_downforce: [0, 0], balanced: [0, 0], high_downforce: [0, 0] },
   padLateralMu: 0.84,
+  // 540° of rim lock on a 15:1 rack [spec car.ini STEER_RATIO]
+  steerRatio: 15,
   // 0.8 g on the brakes at town speeds to ≈ 0.95 g at the top end (drag), no downforce
   braking: { lowG: 0.8, aeroG: 0.15, refMs: 50 },
   // A nose-heavy front-driver: ≈ 8.5° more front than rear slip at 0.85 g on the steady ramp (scripts/verify-liana.ts),
@@ -68,8 +70,9 @@ export const SUZUKI_LIANA_SIM_PROFILE: CarSimProfile = {
   speedProfile: SUZUKI_LIANA_PROFILE_CAR,
   // The slower line: lower grip than an F1 car moves the apexes and braking points
   racingLine: 'gt3',
-  // AC CONSUMPTION 0.0015: ≈ 0.0083 l/s at 5500 rpm, full throttle, at 0.74 kg/l [derived]
-  fuelFlowKgS: 0.006,
+  // Fuel flow with the engine's speed: 0.0015 l/s per 1000 rpm flat out, ≈ 0.0083 l/s (0.006 kg/s) at 5500 rpm
+  // [spec car.ini FUEL CONSUMPTION]
+  fuelLPerS1000Rpm: 0.0015,
   // Levels index the electronics tables from the most intrusive (12); 9 is the mod's ABS 8 % / TC 12 %
   assistDials: {
     pro: { tcLevel: 0, tc2Level: 6, absLevel: 0 },

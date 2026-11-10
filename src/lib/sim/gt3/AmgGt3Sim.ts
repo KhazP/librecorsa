@@ -72,6 +72,14 @@ export const AMG_GT3_SIM_PROFILE: CarSimProfile = {
   speedProfile: AMG_GT3_PROFILE_CAR,
   // its own lap-time line: lower grip and downforce than an F1 car move the apexes and braking points
   racingLine: 'gt3',
+  // Flat-out fuel flow, ≈ 0.049 l/s
+  fuelFlowKgS: 0.036,
+  // Default switch positions in semi-pro, the most intrusive TC and a tighter ABS in assisted, TC and ABS off in pro
+  assistDials: {
+    pro: { tcLevel: 0, tc2Level: 5, absLevel: 0 },
+    semi_pro: { tcLevel: 10, tc2Level: 6, absLevel: 9 },
+    assisted: { tcLevel: 12, tc2Level: 9, absLevel: 11 },
+  },
 };
 
 export function createAmgGt3Sim(track: BuiltTrackData, root?: THREE.Object3D | null): F12026CarSim {

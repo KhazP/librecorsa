@@ -6,8 +6,8 @@
 import type { BuiltTrackData } from '@/lib/track-data';
 import type * as THREE from 'three';
 import { createVf26ProfileCarModel, NOMINAL_AIR_DENSITY, type SpeedProfileCarModel } from '../speed-profile';
-import { VF26_TYRE_SETUP_RANGES } from '../vf26-data';
-import { type CarSimProfile, F12026CarSim, F12026_ELECTRONICS } from './F12026CarSim';
+import { VF26_CHASSIS, VF26_TYRE_SETUP_RANGES } from '../vf26-data';
+import { type CarSimProfile, F12026CarSim, F12026_ELECTRONICS, F1_ASSIST_DIALS } from './F12026CarSim';
 import { VF26_CAR_CONFIG } from './Vf26Config';
 import { VF26_TUNED_CONFIG } from './Vf26Tune';
 
@@ -42,10 +42,13 @@ export const VF26_SIM_PROFILE: CarSimProfile = {
   tcMinSpeedMs: 2,
   // The f12026-car's driver-aid tables
   electronics: F12026_ELECTRONICS,
+  assistDials: F1_ASSIST_DIALS,
   // Wing offsets of the three aero packages, front and rear (deg) [vf26-aero AERO_PACKAGES]
   aeroPackagesDeg: { low_downforce: [-1.5, -3], balanced: [0, 0], high_downforce: [2, 3] },
   // As the f12026-car until the flat-ground probes are run on this car
   padLateralMu: 1.75,
+  // The ratio the config's lock is given on (270° of rim lock on 14:1)
+  steerRatio: VF26_CHASSIS.steering.ratio,
   braking: { lowG: 1.6, aeroG: 2.8, refMs: 70 },
   speedProfile: vf26TunedProfileCar(),
 };

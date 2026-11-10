@@ -16,6 +16,7 @@ import {
   type ChassisSetup,
   clampChassisSetup,
   DEFAULT_CHASSIS_SETUP,
+  FUEL_KG_PER_L,
   pctScale,
   startingFuelKg,
   STEER_RATIO_BASE,
@@ -115,7 +116,7 @@ export interface CarElectronicsProfile {
   /**
    * TC1 slide term on a dry road: the slip target also shrinks by `gain` × (driven axle's slip angle / peak − `from`),
    * so a driven axle that already slides sideways (the rear on an F1 car or a GT3) gets less wheelspin before the cut,
-   * as a cornering-aware GT3 TC does. Absent: only in the wet (gain 0.22 from 0.45), the F1 calibration.
+   * as a cornering-aware GT3 TC does. Absent: only in the wet (`AidControlProfile.tcWetSlide`), the F1 calibration.
    */
   tcDryRearSlide?: { gain: number; from: number };
   /**
@@ -124,13 +125,61 @@ export interface CarElectronicsProfile {
    * Gain 0 = the rears regulate slip ratio only.
    */
   absRearSlipAngleGuard?: { gain: number; deadbandRad: number; floor: number };
+  /** The TC and ABS controllers' own gains, each defaulting to `DEFAULT_AID_CONTROL` (the F1 calibration) */
+  control?: Partial<AidControlProfile>;
 }
 
+/** Gains of the TC and ABS controllers (`electronicAids`) */
+export interface AidControlProfile {
+  /** TC stage A (spark retard): up to `tcStageACut` of the torque over the first `tcStageASlip` of slip past the target */
+  tcStageASlip: number;
+  tcStageACut: number;
+  /** TC stage B (cylinder cut) past stage A: (`tcStageBSlope` + `tcStageBSlopeTc2` × TC2 0..1) per tyre peak slip of excess */
+  tcStageBSlope: number;
+  tcStageBSlopeTc2: number;
+  /** Torque the TC always leaves: `tcFloor` − `tcFloorPerTc2` × the TC2 dial (never under 5 %) */
+  tcFloor: number;
+  tcFloorPerTc2: number;
+  /** Driven-axle slip the TC reads: `tcSlipMaxWeight` × the faster wheel's + `tcSlipMeanWeight` × the pair's mean */
+  tcSlipMaxWeight: number;
+  tcSlipMeanWeight: number;
+  /** The torque comes back at this share of the TC's rate (cuts at the full rate) */
+  tcReleaseShare: number;
+  /** TC1 slide term on a wet road (see `CarElectronicsProfile.tcDryRearSlide`) */
+  tcWetSlide: { gain: number; from: number };
+  /** ABS pressure cut per unit of lock slip past the target, and the least pressure it leaves */
+  absGain: number;
+  absFloor: number;
+  /** ABS cuts at `absApplyShare` and gives the pressure back at `absReleaseShare` of its rate */
+  absApplyShare: number;
+  absReleaseShare: number;
+  /** Lock the ABS anticipates from the wheel's deceleration (s of it, as slip at the car's speed) */
+  absAnticipationS: number;
+}
+
+export const DEFAULT_AID_CONTROL: Readonly<AidControlProfile> = {
+  tcStageASlip: 0.03,
+  tcStageACut: 0.25,
+  tcStageBSlope: 1.6,
+  tcStageBSlopeTc2: 3.2,
+  tcFloor: 0.18,
+  tcFloorPerTc2: 0.011,
+  tcSlipMaxWeight: 0.65,
+  tcSlipMeanWeight: 0.35,
+  tcReleaseShare: 0.24,
+  tcWetSlide: { gain: 0.22, from: 0.45 },
+  absGain: 12.5,
+  absFloor: 0.08,
+  absApplyShare: 0.65,
+  absReleaseShare: 0.16,
+  absAnticipationS: 0.016,
+};
+
 const DEFAULT_TC_LATERAL_TIGHTENING = { gain: 0.14, exponent: 1.3, floor: 0.42 } as const;
-/** Fastest a driver turns the steering wheel (deg/s at the rim), and the rim angle per road-wheel angle (the cars' lock is
- * given as rim lock / 12.6) */
+/** Fastest a driver turns the steering wheel (deg/s at the rim) */
 const DRIVER_RIM_SPEED_DEG_S = 900;
-const RIM_PER_ROAD_WHEEL = 12.6;
+/** Rim angle per road-wheel angle where a profile gives none (`CarSimProfile.steerRatio`) */
+const DEFAULT_STEER_RATIO = 12.6;
 const DEFAULT_ABS_REAR_GUARD = { gain: 1.4, deadbandRad: 0.03, floor: 0.72 } as const;
 
 export const F12026_ELECTRONICS: CarElectronicsProfile = {
@@ -141,6 +190,20 @@ export const F12026_ELECTRONICS: CarElectronicsProfile = {
   tcDefault: 0.1,
   tcRateHz: 130,
   tcMinSpeedKmh: 7.2,
+};
+
+/** TC / ABS / TC2 dial positions */
+export interface AidDials {
+  tcLevel: number;
+  tc2Level: number;
+  absLevel: number;
+}
+
+/** The F1 cars' driver-assist presets on `F12026_ELECTRONICS` */
+export const F1_ASSIST_DIALS: Readonly<Record<DriverAssistPreset, AidDials>> = {
+  pro: { tcLevel: 0, tc2Level: 6, absLevel: 0 },
+  semi_pro: { tcLevel: 5, tc2Level: 6, absLevel: 5 },
+  assisted: { tcLevel: 8, tc2Level: 9, absLevel: 9 },
 };
 
 /**
@@ -179,10 +242,20 @@ export interface CarSimProfile {
    * acceleration) the autopilot steers in ahead of its yaw loop. Default 0: the loop's integrator finds it.
    */
   understeerRadPerMs2?: number;
-  /** Fuel flow at full throttle (kg/s); default 0.036 for the GT3, 0.0278 for an F1 car */
+  /** Fuel flow at full throttle (kg/s) where `fuelLPerS1000Rpm` is absent; default 0.0278, an F1 car's */
   fuelFlowKgS?: number;
-  /** The TC / ABS dial positions of each driver-assist preset; absent: the F1 or GT3 positions */
-  assistDials?: Record<DriverAssistPreset, AidDials>;
+  /**
+   * Fuel flow that follows the engine: litres a second per 1000 rpm at full throttle, so the flow is
+   * rpm / 1000 × this × throttle (× `FUEL_KG_PER_L`). Absent: the constant `fuelFlowKgS` × throttle
+   */
+  fuelLPerS1000Rpm?: number;
+  /** The TC / ABS dial positions of each driver-assist preset */
+  assistDials: Record<DriverAssistPreset, AidDials>;
+  /**
+   * Steering-wheel angle per road-wheel angle: the rim's lock is `maxRoadWheelDeg` × this, which the steering's
+   * hand-speed limit turns through at 900°/s. Default 12.6
+   */
+  steerRatio?: number;
   /**
    * Temperature the garage's cold tyre pressures are stated at (°C), where that is not the tyres' own `coldRefC`: a
    * setup sheet that gives pressures at 20 °C for tyres that leave 80 °C blankets. `coldPsiRange` is at this
@@ -209,6 +282,7 @@ export const F12026_SIM_PROFILE: CarSimProfile = {
   padLateralMu: 1.75,
   // Flat-ground probes: 2.3 / 3.6 / 4.0 g lateral at 100 / 200 / 280 km/h, 4.3 g on the brakes from 300
   braking: { lowG: 1.6, aeroG: 2.8, refMs: 70 },
+  assistDials: F1_ASSIST_DIALS,
 };
 
 /** How far inside the track edge the autopilot keeps the CG (m): half the track plus 0.4 m (1.2 m on the f12026-car) */
@@ -406,21 +480,9 @@ function autopilotProfile(track: BuiltTrackData, profile: CarSimProfile, edges: 
   return v;
 }
 
-/** TC / ABS / TC2 dial positions */
-export interface AidDials {
-  tcLevel: number;
-  tc2Level: number;
-  absLevel: number;
-}
-
 /** The dial positions of a driver-assist preset */
 function assistPresetDials(profile: CarSimProfile, preset: DriverAssistPreset): AidDials {
-  const own = profile.assistDials?.[preset];
-  if (own) return own;
-  const isGt3 = profile.id === 'amg-gt3';
-  if (preset === 'pro') return { tcLevel: 0, tc2Level: isGt3 ? 5 : 6, absLevel: 0 };
-  if (preset === 'semi_pro') return { tcLevel: isGt3 ? 10 : 5, tc2Level: 6, absLevel: isGt3 ? 9 : 5 };
-  return { tcLevel: isGt3 ? 12 : 8, tc2Level: 9, absLevel: isGt3 ? 11 : 9 };
+  return profile.assistDials[preset];
 }
 
 /**
@@ -767,6 +829,10 @@ export class F12026CarSim implements SimulatorCar {
   private boostCooldownS = 0;
   /** Fuel on board (kg): the garage's starting load at each restart (`fillFuel`) */
   private fuelKg = 0;
+  /** The profile's TC / ABS gains over the defaults */
+  private readonly aidControl: AidControlProfile;
+  /** Rim lock each way (deg): `maxRoadWheelDeg` × the profile's steering ratio */
+  private readonly rimLockDeg: number;
   private tcCut = 1;
   private absCut = 1;
   /** Per-wheel ABS pressure share (LF, RF, LR, RR); `absCut` is their minimum */
@@ -793,6 +859,8 @@ export class F12026CarSim implements SimulatorCar {
       ? brakingGuideFor(track.samples, profile.id, profile.speedProfile, this.line)
       : null;
     this.config = structuredClone(profile.config);
+    this.aidControl = { ...DEFAULT_AID_CONTROL, ...(profile.electronics ?? F12026_ELECTRONICS).control };
+    this.rimLockDeg = this.config.chassis.maxRoadWheelDeg * (profile.steerRatio ?? DEFAULT_STEER_RATIO);
     // Unloaded radii, used until the first step
     const geo = compoundData(this.config, this.config.compoundSlots.soft);
     const vis = (radius: number): TyreVisualState => ({
@@ -1478,7 +1546,8 @@ export class F12026CarSim implements SimulatorCar {
         this.aiAutopilot ? this.autopilot(CONTROL_DT_S) : this.driverCommand(inputs, CONTROL_DT_S);
       const vin: VehicleInputs = {
         throttle: cmd.throttle,
-        ignitionCut: cmd.ignitionCut,
+        // An empty tank (fuel is only burnt with fuel use on): the engine no longer fires
+        ignitionCut: this.fuelKg > 0 || !this.realism.fuelUse ? cmd.ignitionCut : 0,
         brake: cmd.brake,
         brakeWheelScale: cmd.brakeWheelScale,
         steer: cmd.steer,
@@ -1501,7 +1570,8 @@ export class F12026CarSim implements SimulatorCar {
       // Fuel burnt this tick: the car gets lighter tick by tick, not frame by frame
       if (v.telemetry.throttle > 0.01 && this.fuelKg > 0 && this.realism.fuelUse) {
         const mapFlowMult = v.engineMap === 1 ? 1.04 : v.engineMap === 2 ? 1.0 : v.engineMap === 3 ? 0.96 : v.engineMap === 4 ? 0.90 : 0.85;
-        const baseFlowKgS = this.profile.fuelFlowKgS ?? (this.profile.id === 'amg-gt3' ? 0.036 : 0.0278);
+        const perRpm = this.profile.fuelLPerS1000Rpm;
+        const baseFlowKgS = perRpm !== undefined ? (v.rpm / 1000) * perRpm * FUEL_KG_PER_L : (this.profile.fuelFlowKgS ?? 0.0278);
         this.fuelKg = Math.max(0, this.fuelKg - baseFlowKgS * mapFlowMult * v.telemetry.throttle * CONTROL_DT_S);
         v.setFuelMass(this.fuelKg);
       }
@@ -1540,7 +1610,7 @@ export class F12026CarSim implements SimulatorCar {
     }
     // Any other device: the rack turns no faster than hands turn a wheel (900°/s at the rim, as the VF26's): a stick
     // flick, a mouse or a phone tilt otherwise reached the tyres as an instant step, which snaps a car at speed
-    const maxStep = (DRIVER_RIM_SPEED_DEG_S / (this.config.chassis.maxRoadWheelDeg * RIM_PER_ROAD_WHEEL)) * h;
+    const maxStep = (DRIVER_RIM_SPEED_DEG_S / this.rimLockDeg) * h;
     const steer = this.steerCmd + THREE.MathUtils.clamp(want - this.steerCmd, -maxStep, maxStep);
     return { ...this.electronicAids(inputs.throttle, inputs.brake, h, this), steer, drs: false };
   }
@@ -1613,26 +1683,27 @@ export class F12026CarSim implements SimulatorCar {
       // The driven axle's tyres: the rears on an F1 car or a GT3, the fronts on a front-wheel-drive car
       const [dl, dr] = v.drivenWheels;
       const saDriven = Math.max(Math.abs(W[dl].slipAngleRad), Math.abs(W[dr].slipAngleRad)) / saLimitRad;
-      const slide = v.waterMm > 0 ? { gain: 0.22, from: 0.45 } : elec.tcDryRearSlide;
+      const ctl = this.aidControl;
+      const slide = v.waterMm > 0 ? ctl.tcWetSlide : elec.tcDryRearSlide;
       const slideTerm = slide ? slide.gain * Math.max(0, saDriven - slide.from) : 0;
       const latFactor = Math.max(tight.floor, 1 - tight.gain * Math.pow(gLat, tight.exponent) - slideTerm);
       const tcEffTarget = tcBaseTarget * latFactor;
-      // Weighted driven axle slip: 0.65 * max(k_L, k_R) + 0.35 * mean(k_L, k_R)
+      // Weighted driven axle slip (default 0.65 * max(k_L, k_R) + 0.35 * mean(k_L, k_R))
       const kL = Math.max(0, W[dl].slipRatio);
       const kR = Math.max(0, W[dr].slipRatio);
-      const kDriven = 0.65 * Math.max(kL, kR) + 0.35 * (0.5 * (kL + kR));
+      const kDriven = ctl.tcSlipMaxWeight * Math.max(kL, kR) + ctl.tcSlipMeanWeight * (0.5 * (kL + kR));
       const eTc = Math.max(0, kDriven - tcEffTarget);
       const tc2 = THREE.MathUtils.clamp(dials.tc2Level, 1, 12);
       const tc2Norm = (tc2 - 1) / 11;
-      // Stage A (0 < eTc <= 0.03): smooth spark timing retard up to 25% cut
-      const stageACut = Math.min(1, eTc / 0.03) * 0.25 * (0.55 + 0.45 * tc2Norm);
-      // Stage B (eTc > 0.03): sequential cylinder cut scaled by TC2 up to 85% total cut
+      // Stage A (0 < eTc <= 0.03 by default): smooth spark timing retard up to 25% cut
+      const stageACut = Math.min(1, eTc / ctl.tcStageASlip) * ctl.tcStageACut * (0.55 + 0.45 * tc2Norm);
+      // Stage B (past stage A): sequential cylinder cut scaled by TC2 up to 85% total cut
       const peak = Math.max(0.05, this.compoundData.modelData.slip_ratio_limit);
-      const stageBCut = eTc > 0.03 ? ((eTc - 0.03) / peak) * (1.6 + 3.2 * tc2Norm) : 0;
-      const minThrottleShare = Math.max(0.05, 0.18 - 0.011 * tc2);
+      const stageBCut = eTc > ctl.tcStageASlip ? ((eTc - ctl.tcStageASlip) / peak) * (ctl.tcStageBSlope + ctl.tcStageBSlopeTc2 * tc2Norm) : 0;
+      const minThrottleShare = Math.max(0.05, ctl.tcFloor - ctl.tcFloorPerTc2 * tc2);
       const want = eTc > 0 ? Math.max(minThrottleShare, 1 - stageACut - stageBCut) : 1;
       const tcRate = elec.tcRateHz;
-      this.tcCut += (want - this.tcCut) * Math.min(1, (want < this.tcCut ? tcRate : tcRate * 0.24) * h);
+      this.tcCut += (want - this.tcCut) * Math.min(1, (want < this.tcCut ? tcRate : tcRate * ctl.tcReleaseShare) * h);
       ignitionCut = this.tcCut;
     } else {
       this.tcCut = 1;
@@ -1646,17 +1717,18 @@ export class F12026CarSim implements SimulatorCar {
     if (absBaseTarget > 0 && speed > 3 && brake > 0.01) {
       const absRate = elec.absRateHz;
       const guard = elec.absRearSlipAngleGuard ?? DEFAULT_ABS_REAR_GUARD;
+      const ctl = this.aidControl;
       let minCut = 1;
       for (let i = 0; i < 4; i++) {
         const w = W[i];
         const wheelDecel = Math.max(0, -(w.omega - this.prevWheelOmega[i]) / Math.max(1e-4, h));
-        const decelAnticipation = ((wheelDecel * w.rollingRadius) / Math.max(8, speed)) * 0.016;
+        const decelAnticipation = ((wheelDecel * w.rollingRadius) / Math.max(8, speed)) * ctl.absAnticipationS;
         const lock = -w.slipRatio + decelAnticipation;
         // Rear channels tighten target under trail-braking slip angle to prevent rear axle step-out
         const rearLatGuard = i >= 2 ? Math.max(guard.floor, 1 - guard.gain * Math.max(0, Math.abs(w.slipAngleRad) - guard.deadbandRad)) : 1;
         const effAbsTarget = absBaseTarget * rearLatGuard;
-        const want = lock > effAbsTarget ? Math.max(0.08, 1 - (lock - effAbsTarget) * 12.5) : 1;
-        cut[i] += (want - cut[i]) * Math.min(1, (want < cut[i] ? absRate * 0.65 : absRate * 0.16) * h);
+        const want = lock > effAbsTarget ? Math.max(ctl.absFloor, 1 - (lock - effAbsTarget) * ctl.absGain) : 1;
+        cut[i] += (want - cut[i]) * Math.min(1, (want < cut[i] ? absRate * ctl.absApplyShare : absRate * ctl.absReleaseShare) * h);
         minCut = Math.min(minCut, cut[i]);
       }
       this.absCut = minCut;
@@ -1833,7 +1905,7 @@ export class F12026CarSim implements SimulatorCar {
    */
   private autopilotSteer(want: number, h: number): number {
     if (!this.aiPlan) return want;
-    const maxStep = (DRIVER_RIM_SPEED_DEG_S / (this.config.chassis.maxRoadWheelDeg * RIM_PER_ROAD_WHEEL)) * h;
+    const maxStep = (DRIVER_RIM_SPEED_DEG_S / this.rimLockDeg) * h;
     return this.steerCmd + THREE.MathUtils.clamp(want - this.steerCmd, -maxStep, maxStep);
   }
 
