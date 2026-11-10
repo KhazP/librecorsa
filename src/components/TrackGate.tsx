@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { LibreCorsaSimulator } from "@/components/LibreCorsaSimulator";
 import { RenderProfiler } from "@/components/dev/RenderProfiler";
-import { activateTrack, getTrackInfo, loadStoredTrackId, RWANDA_TRACK_ID } from "@/lib/track-registry";
+import { activateTrack, getTrackInfo, loadStoredTrackId, DEFAULT_TRACK_ID } from "@/lib/track-registry";
 import { registerAssetCache } from "@/lib/service-worker";
 
 /** How long the "couldn't load" notice stays up (ms) */
@@ -39,18 +39,18 @@ export const TrackGate: React.FC = () => {
         setError(`Couldn't load that circuit. Staying on ${getTrackInfo(current).name}.`);
         return;
       }
-      // The first load has nothing to stay on: Rwanda ships with the bundle
-      console.warn("Track load failed, using Rwanda:", err);
+      // The first load has nothing to stay on: the default circuit ships with the bundle
+      console.warn("Track load failed, using the default circuit:", err);
       try {
-        await activateTrack(RWANDA_TRACK_ID);
+        await activateTrack(DEFAULT_TRACK_ID);
       } catch (fallbackErr) {
         // This only fails if the bundled circuit is broken too
-        console.error("Rwanda fallback failed:", fallbackErr);
+        console.error("Default circuit fallback failed:", fallbackErr);
       }
       if (req !== requestRef.current) return;
-      trackIdRef.current = RWANDA_TRACK_ID;
-      setTrackId(RWANDA_TRACK_ID);
-      setError(`Couldn't load that circuit. Driving ${getTrackInfo(RWANDA_TRACK_ID).name} instead.`);
+      trackIdRef.current = DEFAULT_TRACK_ID;
+      setTrackId(DEFAULT_TRACK_ID);
+      setError(`Couldn't load that circuit. Driving ${getTrackInfo(DEFAULT_TRACK_ID).name} instead.`);
     }
   }, []);
 

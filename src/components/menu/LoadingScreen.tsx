@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { type BuiltTrackData, TURN_METADATA } from "@/lib/track-data";
+import { BASE_ALTITUDE_M, type BuiltTrackData, DEFAULT_TRACK_ID, TURN_METADATA } from "@/lib/track-data";
 import { getTrackInfo } from "@/lib/track-registry";
 import { formatMegabytes, useAssetProgress, type AssetTask } from "@/lib/loading/asset-progress";
 import { connectedPads } from "@/lib/input/device-input";
@@ -100,7 +100,7 @@ export const LoadingScreen: React.FC<{
     []
   );
   const shown = ready ? 1 : progress.progress;
-  const trackInfo = getTrackInfo(track.id ?? "rwanda");
+  const trackInfo = getTrackInfo(track.id ?? DEFAULT_TRACK_ID);
 
   const circuit = useMemo(() => {
     const samples = track.samples;
@@ -183,7 +183,8 @@ export const LoadingScreen: React.FC<{
   }, [ready, onStart, onDone]);
 
   const litLights = ready ? 0 : Math.min(LIGHTS, Math.floor(shown * LIGHTS + 0.001));
-  const isRwanda = (track.id ?? "rwanda") === "rwanda";
+  // A circuit high enough for the thin air to matter says so, to the nearest 50 m
+  const altitudeNote = BASE_ALTITUDE_M >= 1000 ? ` · ${(Math.round(BASE_ALTITUDE_M / 50) * 50).toLocaleString("en-US")} M ALTITUDE` : "";
 
   return (
     <div
@@ -362,7 +363,7 @@ export const LoadingScreen: React.FC<{
         <footer className={`mt-6 flex flex-wrap items-center justify-between gap-2.5 border-t border-[#262B3D] pt-3.5 font-f1-mono text-[11px] font-bold tracking-[0.12em] text-[#8E96AA] short:hidden ${ready ? "compact:hidden" : ""}`}>
           <span>
             {trackInfo.name.toUpperCase()} · {(track.totalLengthM / 1000).toFixed(2)} KM · {TURN_METADATA.length} TURNS
-            {isRwanda ? " · 1,400 M ALTITUDE" : ""}
+            {altitudeNote}
           </span>
           <span className="text-[#CCFF00]/80">LIBRECORSA · 500HZ VEHICLE DYNAMICS</span>
         </footer>

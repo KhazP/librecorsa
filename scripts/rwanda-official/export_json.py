@@ -43,12 +43,12 @@ NAMES = {num: name for num, a, b, d, name in CORNERS if num}
 # before / after the end of an add-on)
 LAYOUTS = {
     'long': dict(
-        id='rwanda_official', layout='Grand Prix', short='Rwanda GP', use=('t1o', 't8o'),
+        id='rwanda_official', layout='Grand Prix', short='RISE GP', use=('t1o', 't8o'),
         turns=(('t1o', 'Plateau Sweep'), 2, 3, 4, 5, 6, 7, ('t8o', 'Forest Hairpin'), 9, 10, 11, 12, 13, 14, 15, 16, 17),
         sector1=('built', 1805), drs2=(('built', 1792), ('built', 1855), ('built', 2650)),
         blurb='the Grand Prix lap: the outer line through Turn 1, the loop over the ridge and the outer hairpin at Turn 8'),
     'short': dict(
-        id='rwanda_official_short', layout='Short', short='Rwanda short', use=('link',),
+        id='rwanda_official_short', layout='Short', short='RISE short', use=('link',),
         turns=(1, 2, ('link', 'Link Hairpin'), 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17),
         sector1=('link', 0.0), drs2=(('link', -150.0), ('link', 40.0), ('built', 2650)),
         blurb='the short lap: the link road cuts out the loop over the ridge'),
@@ -377,7 +377,7 @@ def export(name):
     climb = float(dz[dz > 0].sum())
     zmin, zmax = float(z.min()), float(z.max())
     meta = {
-        'name': f"Rwanda International Circuit — {cfg['layout']} layout",
+        'name': f"RISE Motordrome — {cfg['layout']} layout",
         'shortName': cfg['short'],
         'description': (
             f"Anticlockwise {n / 1000:.2f} km circuit with {len(turns)} corners beside Lake Kidogo at Bugesera, {cfg['blurb']}. "

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { getActiveTrackData, LIVERIES } from "@/lib/track-data";
+import { DEFAULT_TRACK_ID, getActiveTrackData, LIVERIES } from "@/lib/track-data";
 import { FfbPairPrompt } from "@/components/hud/FfbPairPrompt";
 import { isVehicleModelId, vehicleModelsFor } from "@/lib/cars/vehicle-models";
 import { carForVehicle, type CarId } from "@/lib/cars/car-registry";
@@ -64,7 +64,7 @@ export interface LibreCorsaSimulatorProps {
   onSelectTrack?: (id: string) => void | Promise<void>;
 }
 
-export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackId = "rwanda", onSelectTrack }) => {
+export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackId = DEFAULT_TRACK_ID, onSelectTrack }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   /** The drive on the mounted circuit: the scene, the car and the frame loop (created once the container exists) */
   const [session, setSession] = useState<DriveSession | null>(null);

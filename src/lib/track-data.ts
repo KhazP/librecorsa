@@ -5,30 +5,34 @@ import {
   TrackSamplePoint,
   TurnMetadata,
 } from "@/types/f1";
-import rawTrackJson from "../../public/tracks/rwanda/track_data.json";
+import rawTrackJson from "../../public/tracks/rwanda_official_short/track_data.json";
 import { AI_LINE_WIDTH_SCALE, brakingZoneLevel, computeSpeedProfile, createVf26ProfileCarModel } from "./sim/speed-profile";
 import { resolveSurfaceTable, type SurfaceTable, type SurfaceTableOverrides } from "./sim/track-surfaces";
 import type { SceneryCutBox } from "./scenery-cuts";
 
-/** Raw `track_data.json` layout shared by every circuit (Rwanda's file is the reference schema) */
+/** Raw `track_data.json` layout shared by every circuit (the bundled circuit's file is the reference schema) */
 export type RawTrackJson = typeof rawTrackJson;
 
-/** Rwanda's track data as bundled (its outline in the circuit browser while another circuit is loaded) */
-export const RWANDA_TRACK_JSON: RawTrackJson = rawTrackJson;
+/**
+ * The circuit that ships inside the bundle and loads first: RISE Motordrome's short lap. The other circuits (its
+ * Grand Prix lap among them) are fetched when the player picks one (track-registry.ts).
+ */
+export const DEFAULT_TRACK_ID = "rwanda_official_short";
+
+/** The bundled circuit's track data (its outline in the circuit browser while another circuit is loaded) */
+export const DEFAULT_TRACK_JSON: RawTrackJson = rawTrackJson;
 
 /**
- * The circuit everything below describes. Rwanda by default; `setActiveTrack` swaps in another layout before
- * the simulator mounts. The exported constants are live bindings / arrays refilled in place, so modules that
+ * The circuit everything below describes. The bundled one by default; `setActiveTrack` swaps in another layout
+ * before the simulator mounts. The exported constants are live bindings / arrays refilled in place, so modules that
  * imported them (menus, F12026CarSim's DRS zones) follow the switch without changes.
  */
 let activeRaw: RawTrackJson = rawTrackJson;
-export let ACTIVE_TRACK_ID = "rwanda";
+export let ACTIVE_TRACK_ID = DEFAULT_TRACK_ID;
 
-export const RWANDA_BASE_ALTITUDE_M = 1385; // Bugesera baseline altitude (m ASL)
 /** Altitude (m ASL) of world y = 0 on the active circuit (air density) */
-export let BASE_ALTITUDE_M = RWANDA_BASE_ALTITUDE_M;
+export let BASE_ALTITUDE_M: number = rawTrackJson.metadata.baseAltitudeM;
 
-export const RWANDA_TARGET_LENGTH_M = rawTrackJson.metadata.lengthMeters;
 /** Lap length of the active circuit (m) */
 export let TRACK_TOTAL_LENGTH_M = rawTrackJson.metadata.lengthMeters;
 
@@ -51,17 +55,17 @@ export interface TracksideTvCameraDef {
 }
 
 export interface BuiltTrackData {
-  /** Circuit id (`rwanda`, or a folder under public/tracks); absent on synthetic test tracks */
+  /** Circuit id (a folder under public/tracks); absent on synthetic test tracks */
   id?: string;
   /** Circuit GLB (relative to the base path); absent on synthetic test tracks */
   meshUrl?: string;
-  /** Materials of the circuit GLB's scan that are the racing surface (asphalt shader); none for Rwanda */
+  /** Materials of the circuit GLB's scan that are the racing surface (asphalt shader); none for a circuit with its own road meshes */
   roadMaterials?: string[];
   /** World-space boxes of the scan's geometry to leave out (scenery-cuts.ts) */
   sceneryCuts?: SceneryCutBox[];
   /** Scan materials whose meshes are left out (scenery-cuts.ts) */
   sceneryCutMaterials?: string[];
-  /** Scenery files drawn with the circuit (relative to the base path); Rwanda's concept layout has its own list */
+  /** Scenery files drawn with the circuit (relative to the base path) */
   sceneryUrls?: string[];
   /** Start grid slots for this layout (behind the S/F line) */
   spawnGrid: GridSlotDef[];
@@ -164,8 +168,6 @@ function turnsOf(raw: RawTrackJson): TurnMetadata[] {
 
 /** Corners of the active circuit, detected from the centreline curvature and exported with the track */
 export const TURN_METADATA: TurnMetadata[] = turnsOf(rawTrackJson);
-
-export const RWANDA_TURN_METADATA = TURN_METADATA;
 
 function isInDrsZone(t: number): boolean {
   const normT = ((t % 1) + 1) % 1;
@@ -272,13 +274,13 @@ export function setActiveTrack(id: string, raw: RawTrackJson = rawTrackJson): vo
   const cameras = [...(raw.cameras as TracksideTvCameraDef[])];
   const spawnGrid = [...(raw.spawnGrid as GridSlotDef[])];
   const turns = turnsOf(raw);
-  if (meta.baseAltitudeM === undefined && id !== "rwanda") {
+  if (meta.baseAltitudeM === undefined) {
     console.warn(`Circuit "${id}" has no baseAltitudeM: air density as at sea level`);
   }
   activeRaw = raw;
   ACTIVE_TRACK_ID = id;
   TRACK_TOTAL_LENGTH_M = meta.lengthMeters;
-  BASE_ALTITUDE_M = meta.baseAltitudeM ?? (id === "rwanda" ? RWANDA_BASE_ALTITUDE_M : 0);
+  BASE_ALTITUDE_M = meta.baseAltitudeM ?? 0;
   refill(RWANDA_DRS_ZONES, drsZones);
   refill(RWANDA_TV_CAMERAS, cameras);
   refill(RWANDA_SPAWN_GRID, spawnGrid);
@@ -306,13 +308,7 @@ function getTurnInfoAtS(
   const turnNumber = raw.turn;
   const turnName =
     TURN_NAMES.get(turnNumber) ??
-    (sector === 1
-      ? "Start / Finish Straight"
-      : ACTIVE_TRACK_ID !== "rwanda"
-        ? `Sector ${sector}`
-        : sector === 2
-          ? "Thousand Hills Straight"
-          : "Qatar Valley Straight");
+    (sector === 1 ? "Start / Finish Straight" : `Sector ${sector}`);
   return {
     sector,
     turnNumber,
@@ -378,7 +374,7 @@ export function catmullRomWeights(t: number): [number, number, number, number] {
   ];
 }
 
-/** Built data of the active circuit (Rwanda unless `setActiveTrack` chose another) */
+/** Built data of the active circuit (the bundled one unless `setActiveTrack` chose another) */
 export function getActiveTrackData(numSamples = 1200): BuiltTrackData {
   if (cachedBuiltTrack && cachedBuiltTrack.samples.length === numSamples && cachedBuiltTrack.id === ACTIVE_TRACK_ID) {
     return cachedBuiltTrack;
@@ -971,12 +967,10 @@ export function getActiveTrackData(numSamples = 1200): BuiltTrackData {
   };
 
   const meshUrl = getActiveTrackMetadata().mesh?.url;
-  if (!meshUrl && ACTIVE_TRACK_ID !== "rwanda") {
-    console.warn(`Circuit "${ACTIVE_TRACK_ID}" has no mesh url: drawing Rwanda's road instead`);
-  }
+  if (!meshUrl) console.warn(`Circuit "${ACTIVE_TRACK_ID}" has no mesh url: drawing the procedural stand-in`);
   cachedBuiltTrack = {
     id: ACTIVE_TRACK_ID,
-    meshUrl: meshUrl ?? "/tracks/rwanda/rwanda_2026.glb",
+    meshUrl,
     roadMaterials: getActiveTrackMetadata().mesh?.roadMaterials,
     sceneryCuts: getActiveTrackMetadata().mesh?.cutBoxes,
     sceneryCutMaterials: getActiveTrackMetadata().mesh?.cutMaterials,

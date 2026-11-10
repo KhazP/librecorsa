@@ -16,6 +16,7 @@
  */
 
 import * as THREE from 'three';
+import { DEFAULT_TRACK_ID } from '@/lib/track-data';
 import { isVehicleModelId, type TireCompound, type VehicleModelId } from '@/types/f1';
 import { sanitizeWeatherSync, type WeatherSyncState } from './weather';
 import type { TyreVisualState } from './simulator-car';
@@ -306,7 +307,7 @@ function sanitizeStart(v: unknown): RaceStartInfo | null {
     laps: Math.round(laps),
     collisions: COLLISION_MODES.includes(s.collisions as CollisionMode) ? (s.collisions as CollisionMode) : 'on',
     carClass: CAR_CLASSES.includes(s.carClass as CarClassRule) ? (s.carClass as CarClassRule) : 'any',
-    trackId: clampStr(s.trackId, 64, 'rwanda'),
+    trackId: clampStr(s.trackId, 64, DEFAULT_TRACK_ID),
     grid: s.grid.filter((g): g is string => typeof g === 'string').slice(0, 32).map((g) => g.slice(0, 64)),
   };
 }
@@ -320,7 +321,7 @@ function sanitizeLobby(v: unknown): LobbyState | null {
     hostId: l.hostId.slice(0, 64),
     weather: sanitizeWeatherSync(l.weather) ?? undefined,
     settings: {
-      trackId: clampStr(st.trackId, 64, 'rwanda'),
+      trackId: clampStr(st.trackId, 64, DEFAULT_TRACK_ID),
       laps: Math.round(finite(st.laps, 1, 99) ?? 5),
       collisions: COLLISION_MODES.includes(st.collisions as CollisionMode) ? (st.collisions as CollisionMode) : 'on',
       carClass: CAR_CLASSES.includes(st.carClass as CarClassRule) ? (st.carClass as CarClassRule) : 'any',
@@ -601,7 +602,7 @@ export class MultiplayerSyncManager {
   private memberSeenMs = new Map<string, number>();
   /** Host: members dropped for silence, kept so their next packet puts them back (a guest only says hello once) */
   private lapsedMembers = new Map<string, LobbyPlayer>();
-  private lobbySettings: LobbySettings = { trackId: 'rwanda', laps: 5, collisions: 'ghost_lap1', carClass: 'any' };
+  private lobbySettings: LobbySettings = { trackId: DEFAULT_TRACK_ID, laps: 5, collisions: 'ghost_lap1', carClass: 'any' };
   private activeRace: RaceStartInfo | null = null;
   /**
    * Guest: the race this client is done with (left with leaveRace, or ended by the host); neither a repeated start

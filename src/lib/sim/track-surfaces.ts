@@ -92,7 +92,7 @@ export function resolveSurfaceTable(overrides?: SurfaceTableOverrides | null): S
 
 /**
  * Kerb cross-section: height above the road (m) vs distance outward from the asphalt edge (m). One profile for every
- * circuit: the Rwanda kerbs (scripts/rwanda-2026/build_surfaces.py), the scan kerbs (scripts/tracks/build_track.py
+ * circuit: RISE Motordrome's kerbs (scripts/rwanda-official/bl_track.py), the scan kerbs (scripts/tracks/build_track.py
  * KERB_PROFILE_*) and the sample-based contact (track-occupancy.ts). Keep the three in step.
  */
 export const KERB_PROFILE_L = [-0.3, 0.05, 0.45, 0.95, 1.35] as const;

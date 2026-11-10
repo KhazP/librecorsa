@@ -31,10 +31,10 @@ const grip = Number(opt('grip', '0.95'));
 const ceiling = opt('ceiling', '').split(',').filter(Boolean).map(Number).filter((g) => g > grip).sort((a, b) => a - b);
 const path = `public/tracks/${trackId}/track_data.json`;
 const raw = JSON.parse(readFileSync(path, 'utf8')) as RawTrackJson & { metadata: Record<string, unknown> };
-if (trackId !== 'rwanda') setActiveTrack(trackId, raw);
+setActiveTrack(trackId, raw);
 const track = getActiveTrackData(1200);
 const t = aiTrackFor(track);
-const root = loadGlbGeometry(`public${track.meshUrl ?? '/tracks/rwanda/rwanda_2026.glb'}`);
+const root = loadGlbGeometry(`public${track.meshUrl}`);
 
 const checks: Record<string, AiPlanCheck> = { ...((raw.metadata.aiPlans as Record<string, AiPlanCheck>) ?? {}) };
 for (const car of cars) {

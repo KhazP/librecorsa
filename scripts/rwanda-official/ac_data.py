@@ -132,8 +132,8 @@ def main(out, preview=None):
     print('wrote', out)
 
 
-README = """RWANDA INTERNATIONAL CIRCUIT (official layout) - Assetto Corsa project
-=====================================================================
+README = """RISE MOTORDROME - Assetto Corsa project
+======================================
 
 This is the project, not yet a track you can load: Assetto Corsa reads .kn5 models, and those are saved by Kunos'
 ksEditor, which only runs on Windows. Nothing in this folder has been opened in ksEditor or in Assetto Corsa. Expect

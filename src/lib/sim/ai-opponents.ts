@@ -9,7 +9,7 @@
 import { steerAngleOf, wheelRpmOf } from './car-pose';
 import * as THREE from 'three';
 import { F1Physics2026 } from '@/lib/f1-physics-2026';
-import { getActiveTrackMetadata, type AiPlanCheck, type BuiltTrackData } from '@/lib/track-data';
+import { DEFAULT_TRACK_ID, getActiveTrackMetadata, type AiPlanCheck, type BuiltTrackData } from '@/lib/track-data';
 import { resolveCarToCarObbCollision, type RigidBodyCollisionCar } from '@/lib/sim/track-evolution';
 import { TrackEnvironment } from '@/lib/sim/track-environment';
 import { aiLineOffsetM, computeSpeedProfile, createVf26ProfileCarModel, withPlanningGrip } from '@/lib/sim/speed-profile';
@@ -704,7 +704,7 @@ export class AiOpponentField {
     this.ownsEnvironment = !environment;
     this.spectate = options.spectate ?? false;
     this.classId = options.classId ?? classOf(player);
-    this.trackId = options.trackId ?? track.id ?? 'rwanda';
+    this.trackId = options.trackId ?? track.id ?? DEFAULT_TRACK_ID;
     this.skillLevel = THREE.MathUtils.clamp(options.skill ?? AI_SKILL_DEFAULT, 0, 100);
     this.mods = aiSkillModifiers(this.skillLevel);
     this.seed = (options.seed ?? Math.floor(Math.random() * 2 ** 31)) >>> 0;

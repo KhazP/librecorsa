@@ -11,7 +11,7 @@ import { DisplayPanel } from "@/components/hud/DisplayPanel";
 import { LeaderboardPanel } from "@/components/hud/LeaderboardPanel";
 import { buildHudMap } from "@/components/hud/styles/hud-style-parts";
 import { ACTIVE_TRACK_ID, getTrackData, TRACK_TOTAL_LENGTH_M, TURN_METADATA } from "@/lib/track-data";
-import { getTrackInfo, RWANDA_TRACK_ID, TRACKS, type TrackInfo } from "@/lib/track-registry";
+import { getTrackInfo, DEFAULT_TRACK_ID, TRACKS, type TrackInfo } from "@/lib/track-registry";
 import { SCENERY_CREDITS } from "@/lib/render/scenery-credits";
 import { isLikelyWheel, padDisplayName } from "@/lib/input/device-input";
 import { isTouchDevice } from "@/lib/input/touch-input";
@@ -210,7 +210,7 @@ const Credits: React.FC = () => (
             Converted for the simulator (rescaled, recentred, textures re-encoded, physics colliders added).
           </CreditRow>
         ) : null}
-        <CreditRow title="Trackside scenery (Rwanda)">
+        <CreditRow title="Trackside scenery (RISE Motordrome)">
           {SCENERY_CREDITS.map((c) => (
             <React.Fragment key={c.id}>
               &ldquo;{c.title}&rdquo; (
@@ -547,7 +547,7 @@ const DevicePill: React.FC<{ pad: PadState | undefined; slim?: boolean }> = ({ p
  * (rail, panel, sliders), LB / RB switch panels and Ⓑ steps back out.
  */
 export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
-  const { firstRun, onDrive, onRaceAi, onControls, trackId = RWANDA_TRACK_ID, onSelectTrack } = props;
+  const { firstRun, onDrive, onRaceAi, onControls, trackId = DEFAULT_TRACK_ID, onSelectTrack } = props;
   const track = getTrackInfo(trackId);
   // Back from Controls or a circuit load: the panel the player was on (read once; a StrictMode re-run must see it too)
   const [resume] = useState(() => (props.initialPanel ? null : peekResume(trackId)));

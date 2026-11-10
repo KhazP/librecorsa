@@ -1,4 +1,4 @@
-# Rwanda, official layout
+# RISE Motordrome
 
 Builds `public/tracks/rwanda_official/` in Blender: my reading of the circuit's official design (17 corners,
 anticlockwise, beside Lake Kidogo) from its published renders and figures, on the site's real ground. Nothing here

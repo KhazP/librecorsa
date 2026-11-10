@@ -1,19 +1,7 @@
 [
   {
-    "id": "rwanda_official",
-    "name": "Rwanda International Circuit",
-    "layout": "Grand Prix layout",
-    "country": "Rwanda",
-    "city": "Bugesera",
-    "lengthM": 5895,
-    "turns": 17,
-    "direction": "anticlockwise",
-    "dataUrl": "/tracks/rwanda_official/track_data.json",
-    "quality": "original"
-  },
-  {
     "id": "rwanda_official_short",
-    "name": "Rwanda International Circuit",
+    "name": "RISE Motordrome",
     "layout": "Short layout",
     "country": "Rwanda",
     "city": "Bugesera",
@@ -21,6 +9,18 @@
     "turns": 14,
     "direction": "anticlockwise",
     "dataUrl": "/tracks/rwanda_official_short/track_data.json",
+    "quality": "original"
+  },
+  {
+    "id": "rwanda_official",
+    "name": "RISE Motordrome",
+    "layout": "Grand Prix layout",
+    "country": "Rwanda",
+    "city": "Bugesera",
+    "lengthM": 5895,
+    "turns": 17,
+    "direction": "anticlockwise",
+    "dataUrl": "/tracks/rwanda_official/track_data.json",
     "quality": "original"
   },
   {

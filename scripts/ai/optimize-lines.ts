@@ -42,11 +42,11 @@ interface RawSample {
   b: number;
 }
 const raw = JSON.parse(readFileSync(path, 'utf8')) as unknown as RawTrackJson & { samples: RawSample[]; metadata: Record<string, unknown> };
-if (trackId !== 'rwanda') setActiveTrack(trackId, raw);
+setActiveTrack(trackId, raw);
 const track = getActiveTrackData(1200);
 const t = aiTrackFor(track);
 const limits = carLimitsFor(line === 'gt3' ? 'amg-gt3' : 'f12026-car', grip);
-const root = loadGlbGeometry(`public${track.meshUrl ?? '/tracks/rwanda/rwanda_2026.glb'}`);
+const root = loadGlbGeometry(`public${track.meshUrl}`);
 // The line stays where this car's tracker can follow it: its usable road, lips and kerbs included
 const boundsCar = line === 'gt3' ? createAmgGt3Sim(track, root) : new F12026CarSim(track, root);
 const bounds = lineBoundsFromCar(t, (s) => boundsCar.lateralRangeAt(s));
