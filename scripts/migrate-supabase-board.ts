@@ -129,9 +129,9 @@ function readEnvFile(): void {
 async function readTable<T>(base: string, key: string, table: string, order: string): Promise<T[]> {
   const rows: T[] = [];
   for (let offset = 0; ; offset += PAGE) {
-    const res = await fetch(`${base}/rest/v1/${table}?select=*&order=${order}&limit=${PAGE}&offset=${offset}`, {
-      headers: { apikey: key, Authorization: `Bearer ${key}` },
-    });
+    // Supabase's newer sb_secret_ keys go in apikey alone; the older JWT service-role keys in Authorization as well
+    const headers: Record<string, string> = key.startsWith('sb_') ? { apikey: key } : { apikey: key, Authorization: `Bearer ${key}` };
+    const res = await fetch(`${base}/rest/v1/${table}?select=*&order=${order}&limit=${PAGE}&offset=${offset}`, { headers });
     if (!res.ok) throw new Error(`Supabase ${table}: HTTP ${res.status} ${(await res.text()).slice(0, 200)}`);
     const page = (await res.json()) as T[];
     rows.push(...page);
@@ -142,8 +142,15 @@ async function readTable<T>(base: string, key: string, table: string, order: str
   return rows;
 }
 
+/** The Cloudflare account the site is on (wrangler.jsonc): a login with several accounts has to be told which */
+function accountId(): string | undefined {
+  const config = readFileSync(join(__dirname, '..', 'wrangler.jsonc'), 'utf8');
+  return /"account_id"\s*:\s*"([0-9a-f]{32})"/.exec(config)?.[1];
+}
+
 function wrangler(args: string[]): string {
-  const res = spawnSync('npx', ['wrangler', ...args], { cwd: join(__dirname, '..'), encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+  const env = { ...process.env, CLOUDFLARE_ACCOUNT_ID: process.env.CLOUDFLARE_ACCOUNT_ID ?? accountId() ?? '' };
+  const res = spawnSync('npx', ['wrangler', ...args], { cwd: join(__dirname, '..'), encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, env });
   if (res.status !== 0) throw new Error(`wrangler ${args.slice(0, 3).join(' ')} failed:\n${res.stderr || res.stdout}`);
   return res.stdout;
 }
@@ -154,7 +161,8 @@ async function main(): Promise<void> {
   const where = process.argv.includes('--local') ? '--local' : '--remote';
   const base = (process.env.SUPABASE_URL ?? '').replace(/\/+$/, '');
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
-  if (!/^https:\/\/[a-z0-9-]+\.supabase\.co$/.test(base) || !key) {
+  // (A local address is taken too, for trying the script against a stand-in)
+  if (!/^(https:\/\/[a-z0-9-]+\.supabase\.co|http:\/\/127\.0\.0\.1:\d+)$/.test(base) || !key) {
     console.error('Set SUPABASE_URL (https://<project>.supabase.co) and SUPABASE_SERVICE_ROLE_KEY (in the environment or in .env.migrate.local).');
     process.exit(1);
   }
