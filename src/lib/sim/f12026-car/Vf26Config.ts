@@ -58,6 +58,10 @@ export interface Vf26Overrides {
   brakeTorqueNm?: number;
   /** Differential lock under power, as a share of the input torque */
   diffPowerLock?: number;
+  /** A managed up-shift: the drive is cut for this long (s) and the engine meets the new gear at the wheels' speed */
+  upshiftCutS?: number;
+  /** The combustion torque's lag behind the pedal, rising and falling (s) */
+  torqueResponseS?: { rise: number; fall: number };
 }
 
 // ---------------------------------------------------------------------------
@@ -536,6 +540,7 @@ export function buildVf26Config(overrides: Vf26Overrides = {}) {
     engine: {
       ...ENGINE,
       inertia: (overrides.engineInertia ?? VF26_ENGINE.inertia) + VF26_DRIVETRAIN.gearboxInertia,
+      torqueResponseS: overrides.torqueResponseS ?? ENGINE.torqueResponseS,
       coastCurve: ENGINE.coastCurve.map(([rpm, nm]) => [rpm, nm * (overrides.coastScale ?? 1)]) as LutPoints,
     },
     ers: ERS,
@@ -547,6 +552,7 @@ export function buildVf26Config(overrides: Vf26Overrides = {}) {
       shiftTimeS: VF26_DRIVETRAIN.upshiftTimeS,
       downshiftTimeS: VF26_DRIVETRAIN.downshiftTimeS,
       shiftTorqueFraction: 0.85,
+      ...(overrides.upshiftCutS !== undefined ? { upshiftCutS: overrides.upshiftCutS } : {}),
       efficiency: VF26_DRIVETRAIN.efficiency,
       gears: { redline_rpm: VF26_ENGINE.limiterRpm, upshift_rpm: VF26_DRIVETRAIN.autoUpshiftRpm, downshift_rpm: VF26_DRIVETRAIN.autoDownshiftRpm },
     },

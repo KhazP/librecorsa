@@ -205,6 +205,92 @@ console.log('\n== Against 2026 qualifying laps, flat out');
   }
 }
 
+console.log('\n== Up-shifts, and the throttle out of a corner');
+{
+  const rearSlip = (sim: F12026CarSim) => Math.max(sim.telemetry.wheelSlipRatios[2], sim.telemetry.wheelSlipRatios[3]);
+  // One up-shift on a light pedal, well under the tyres' limit
+  {
+    const sim = fresh(100);
+    sim.autoGearbox = false;
+    for (let t = 0; t < 1.4; t += H) sim.step(H, { throttle: 0.3 });
+    const slipBefore = rearSlip(sim);
+    let gBefore = 0;
+    let n = 0;
+    for (let t = 0; t < 0.2; t += H, n++) {
+      sim.step(H, { throttle: 0.3 });
+      gBefore += sim.telemetry.longitudinalG;
+    }
+    gBefore /= n;
+    let slipPeak = 0;
+    let gPeak = -9;
+    for (let t = 0, first = true; t < 0.5; t += H, first = false) {
+      sim.step(H, { throttle: 0.3, shiftUp: first });
+      slipPeak = Math.max(slipPeak, rearSlip(sim));
+      gPeak = Math.max(gPeak, sim.telemetry.longitudinalG);
+    }
+    check('An up-shift on a light pedal: the rear wheels gain under 3 % of slip', sim.telemetry.gear === 2 && slipPeak - slipBefore < 0.03, `${f(slipBefore * 100, 1)} % → ${f(slipPeak * 100, 1)} %`);
+    check('... and the car is pushed under 0.3 g harder than before it', gPeak - gBefore < 0.3, `${f(gBefore)} g → ${f(gPeak)} g at most`);
+  }
+  // Flat out through the gears from 95 km/h, no traction control: the slip from just before each change to its worst
+  // in the eighth of a second after
+  {
+    const sim = fresh(95);
+    for (let t = 0; t < 1; t += H) sim.step(H, { throttle: 0.2 });
+    let gear = sim.telemetry.gear;
+    let watchS = 0;
+    let base = 0;
+    let worst = 0;
+    let rise = 0;
+    let shifts = 0;
+    for (let t = 0; t < 3; t += H) {
+      const before = rearSlip(sim);
+      sim.step(H, { throttle: 1 });
+      if (sim.telemetry.gear !== gear) {
+        gear = sim.telemetry.gear;
+        watchS = 0.125;
+        base = before;
+        worst = before;
+        shifts++;
+      }
+      if (watchS > 0) {
+        watchS -= H;
+        worst = Math.max(worst, rearSlip(sim));
+        rise = Math.max(rise, worst - base);
+      }
+    }
+    check('Flat out through the gears: no up-shift adds 6 % of slip', shifts >= 3 && rise < 0.06, `${shifts} shifts, ${f(rise * 100, 1)} % at most`);
+  }
+  // A 1.6 g corner at 100 km/h, then a pedal step with the box left to shift, lifted to 15 % after; the steering held,
+  // or a driver steering against the slide and its rate, 0.12 s late
+  const exit = (throttle: number, holdS: number, driver: boolean) => {
+    const sim = fresh(100);
+    const v = 100 / 3.6;
+    let steer = 0;
+    for (let t = 0; t < 7; t += H) {
+      if (Math.abs(sim.telemetry.lateralG) < 1.6) steer += 0.03 * H;
+      sim.step(H, { throttle: THREE.MathUtils.clamp(0.25 + 0.6 * (v - sim.vxMs), 0, 1), analogSteer: steer });
+    }
+    const slide = () => (Math.atan2(sim.vyMs, Math.max(1, Math.abs(sim.vxMs))) * 180) / Math.PI;
+    const b0 = slide();
+    const late: number[] = [];
+    let prev = b0;
+    let peak = 0;
+    for (let t = 0; t < holdS + 2; t += H) {
+      const b = slide();
+      late.push((b - b0) * 0.05 + ((b - prev) / H) * 0.004);
+      prev = b;
+      const against = driver ? late[Math.max(0, late.length - 1 - Math.round(0.12 / H))] : 0;
+      sim.step(H, { throttle: t < holdS ? throttle : 0.15, analogSteer: THREE.MathUtils.clamp(steer - against, -1, 1) });
+      peak = Math.max(peak, Math.abs(slide() - b0));
+    }
+    return { peak, end: Math.abs(slide() - b0) };
+  };
+  const part = exit(0.6, 0.5, false);
+  check('60 % throttle out of a 1.6 g corner, the steering held: under 3° of slide', part.peak < 3, `${f(part.peak, 1)}°`);
+  const full = exit(1, 0.3, true);
+  check('Full throttle for 0.3 s there, then a lift and opposite lock: caught under 15°', full.peak < 15 && full.end < 2, `${f(full.peak, 1)}° at most, ${f(full.end, 1)}° two seconds on`);
+}
+
 console.log('\n== Ride heights and downforce against speed');
 {
   const at = (kmh: number) => {
@@ -309,9 +395,9 @@ console.log('\n== Flat out from rest, by driver-aid preset');
     const r = flatOut(preset);
     check(`${preset}: runs straight to 200 km/h in under 7 s`, Number.isNaN(r.spunAtS) && r.to200S < 7, `${f(r.to200S)} s`);
   }
-  // No traction control: the pedal flat from rest holds the rears past their peak. Reported, not asserted
+  // No traction control: the rears spin up and the car still runs straight
   const pro = flatOut('pro');
-  console.log(`INFO  pro (no traction control), pedal flat from rest: ${Number.isNaN(pro.spunAtS) ? `runs straight, 200 km/h in ${f(pro.to200S)} s` : `spins at ${f(pro.spunAtS, 1)} s`}`);
+  check('pro (no traction control): runs straight to 200 km/h in under 7 s', Number.isNaN(pro.spunAtS) && pro.to200S < 7, Number.isNaN(pro.spunAtS) ? `${f(pro.to200S)} s` : `spins at ${f(pro.spunAtS, 1)} s`);
 }
 
 console.log(failures.length ? `\n${failures.length} check(s) failed: ${failures.join(', ')}` : '\nAll tuned VF26 checks passed.');

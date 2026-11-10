@@ -163,6 +163,14 @@ export const VF26_TUNE: Vf26Overrides = {
   brakeTorqueNm: 6200,
   // Less lock under power than the data's 0.2: with the softer rear the inside wheel keeps its share [tuned: as the bars]
   diffPowerLock: 0.15,
+  // An up-shift is the control unit's: the drive is off for 20 ms and the engine meets the next gear at the wheels'
+  // speed. The data's closed clutch handed the engine's excess to the rear wheels at every change: 6 % slip became
+  // 36 % on a shift at full throttle, 1 % became 20 % on a light pedal [ref: such cars cut for 40 to 50 ms and get
+  // part of it back from the engine; tuned: the slip across a shift, and the jolt of one on a light pedal]
+  upshiftCutS: 0.02,
+  // The engine's torque follows the pedal in 80 ms and lets go in 50 (the data: 30 and 20), so the rear tyres load up
+  // over a tenth of a second and not at once [ref]
+  torqueResponseS: { rise: 0.08, fall: 0.05 },
 };
 
 export const VF26_TUNED_CONFIG = buildVf26Config(VF26_TUNE);

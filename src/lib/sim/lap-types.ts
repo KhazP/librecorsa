@@ -15,8 +15,9 @@ export const PHYSICS_VERSION = 6;
 /**
  * The revision a lap in this car is driven under. The VF26 on its opt-in rigid-body engine (`vf26-engine.ts`) is another
  * car to drive, so its laps and ghosts get a revision of their own, away from the laps of the engine it ships on.
+ * Raise the offset by ten when that car alone changes: the other cars keep their boards.
  */
-const VF26_RIGID_BODY_OFFSET = 500;
+const VF26_RIGID_BODY_OFFSET = 510;
 export function lapPhysicsVersion(vehicle?: VehicleModelId): number {
   return vehicle === "vf26" && vf26OnRigidBody() ? PHYSICS_VERSION + VF26_RIGID_BODY_OFFSET : PHYSICS_VERSION;
 }
