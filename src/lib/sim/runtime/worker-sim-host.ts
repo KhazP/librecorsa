@@ -1,24 +1,24 @@
 /**
- * The page's end of the simulation worker: starts it and talks to it (`sim-protocol.ts`).
+ * The simulation worker as a transport for `sim-host.ts`: starts `sim-worker.ts` and passes messages to and from it.
  */
 import type { SimCommand, SimEvent } from "./sim-protocol";
+import type { SimTransport } from "./sim-host";
 
-export interface SimWorkerLink {
-  post(command: SimCommand, transfer?: Transferable[]): void;
-  /** Calls `listener` with every event from the worker; returns the unsubscribe */
-  listen(listener: (event: SimEvent) => void): () => void;
+export interface WorkerTransport extends SimTransport {
   /** Time for a message to reach the worker and its answer to come back (ms); rejects when the worker fails to start */
   ping(): Promise<number>;
-  dispose(): void;
 }
 
-export function startSimWorker(): SimWorkerLink {
+export function startSimWorker(): WorkerTransport {
   // The bundler finds the worker's code by this exact `new Worker(new URL(...))` form and emits it as its own chunk
   const worker = new Worker(new URL("./sim-worker.ts", import.meta.url), { type: "module", name: "librecorsa-sim" });
   const listeners = new Set<(event: SimEvent) => void>();
-  let failed: unknown = null;
+  let failed: string | null = null;
   const waiting = new Map<number, { sentMs: number; done: (ms: number) => void; fail: (reason: unknown) => void }>();
   let nextId = 1;
+  const deliver = (event: SimEvent) => {
+    for (const listener of listeners) listener(event);
+  };
   worker.onmessage = (e: MessageEvent<SimEvent>) => {
     const event = e.data;
     if (event.type === "pong") {
@@ -26,15 +26,21 @@ export function startSimWorker(): SimWorkerLink {
       waiting.delete(event.id);
       w?.done(performance.now() - w.sentMs);
     }
-    for (const listener of listeners) listener(event);
+    if (event.type === "error") console.warn("[sim] worker:", event.message);
+    deliver(event);
   };
   worker.onerror = (e) => {
-    failed = e.message || "The simulation worker failed to start";
+    failed = e.message || "The simulation worker failed";
+    console.warn("[sim] worker:", failed);
     for (const w of waiting.values()) w.fail(failed);
     waiting.clear();
+    // The game carries on with the page's own car
+    deliver({ type: "error", message: failed });
   };
   return {
-    post: (command, transfer) => worker.postMessage(command, transfer ?? []),
+    post: (command: SimCommand) => {
+      if (failed === null) worker.postMessage(command);
+    },
     listen: (listener) => {
       listeners.add(listener);
       return () => listeners.delete(listener);
