@@ -94,7 +94,7 @@ const NOT_CARRIED: [RegExp, string][] = [
   [/^aero\.ini \[WING_\d+\] ZONE_/, 'slipstream and damage zones: not modelled per element'],
   [/^aero\.ini \[(WING_0|FIN_0|WING_1)\] /, 'the body (and the Liana\'s boot) as constant drag and lift; the 496R\'s fin has no tables'],
   [/^electronics\.ini \[(ABS|TRACTION_CONTROL)\] CURVE$/, 'the switch positions are listed in the config'],
-  [/^electronics\.ini \[EDL\] /, 'electronic diff lock by the brakes: not modelled'],
+  [/^electronics\.ini \[EDL\] /, 'electronic diff lock by the brakes: not fitted to this car (PRESENT 0), or its switches'],
 ];
 
 /** With `--unread`: the source's physics keys this suite never read, grouped by why they are not carried */
@@ -468,6 +468,14 @@ section('Suzuki Liana', 'suzuki_liana', (mod) => {
   // virtual upper arm is this model's
   checkSuspension('Liana', mod, config, { hardpoints: { front: [2, 3, 4, 5, 6, 7], rear: ALL }, strutFront: true });
   checkDriveline('Liana', mod, config);
+  const edl = (key: string) => mod.num('electronics.ini', 'EDL', key);
+  const lock = config.differential.brakeLock;
+  eq('Liana EDL BRAKE_TORQUE_POWER', lock?.power.torqueNm ?? NaN, edl('BRAKE_TORQUE_POWER'));
+  eq('Liana EDL DEAD_ZONE_POWER', lock?.power.deadZone ?? NaN, edl('DEAD_ZONE_POWER'));
+  eq('Liana EDL MAX_SPIN_POWER', lock?.power.fullSpin ?? NaN, edl('MAX_SPIN_POWER'));
+  eq('Liana EDL BRAKE_TORQUE_COAST', lock?.coast.torqueNm ?? NaN, edl('BRAKE_TORQUE_COAST'));
+  eq('Liana EDL DEAD_ZONE_COAST', lock?.coast.deadZone ?? NaN, edl('DEAD_ZONE_COAST'));
+  eq('Liana EDL MAX_SPIN_COAST', lock?.coast.fullSpin ?? NaN, edl('MAX_SPIN_COAST'));
   eq('Liana CHANGE_UP_TIME', config.gearbox.shiftTimeS, mod.num('drivetrain.ini', 'GEARBOX', 'CHANGE_UP_TIME') / 1000);
   eq('Liana CHANGE_DN_TIME', config.gearbox.downshiftTimeS, mod.num('drivetrain.ini', 'GEARBOX', 'CHANGE_DN_TIME') / 1000);
   eq('Liana HANDBRAKE_TORQUE', config.brakes.handbrakeTorqueNm, mod.num('brakes.ini', 'DATA', 'HANDBRAKE_TORQUE'));

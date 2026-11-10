@@ -507,6 +507,8 @@ export const SUZUKI_LIANA_CONFIG = {
   differential: {
     type: 'LSD_Ramp',
     settings: { power: 0.04, coast: 0.04, preload: 0, friction_faces: 1, power_ramp_deg: 45, coast_ramp_deg: 45 },
+    // The stability system brakes the faster front wheel: up to 60 Nm on the power, 10 Nm off it [spec EDL]
+    brakeLock: { power: { torqueNm: 60, deadZone: 0.1, fullSpin: 0.4 }, coast: { torqueNm: 10, deadZone: 0.1, fullSpin: 1 } },
   },
   // Iron discs, 1600 Nm per wheel at full pedal, 75 % front, no bias adjuster; a handbrake on the rears
   // [spec brakes.ini, HANDBRAKE_TORQUE]
