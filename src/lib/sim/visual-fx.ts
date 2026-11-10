@@ -542,10 +542,11 @@ export class SimVisualFxManager {
   /** The car the peer reports (AI and older clients: the AMR, which is what F1Physics2026 models) */
   private createOpponentRig(peer: InterpolatedPeerState): SimCarRig {
     const livery = this.mapDriverToLivery(peer.driverCode);
-    const pooled = this.pool.get(poolKey(peer.vehicle, Boolean(peer.ghost)))?.pop();
+    const ghost = Boolean(peer.ghost || peer.passThrough);
+    const pooled = this.pool.get(poolKey(peer.vehicle, ghost))?.pop();
     if (pooled) {
       pooled.root.visible = true;
-      if (!peer.ghost) pooled.setLivery(livery);
+      if (!ghost) pooled.setLivery(livery);
       return pooled;
     }
     return buildOpponentRig(peer.vehicle, livery);
@@ -619,7 +620,8 @@ export class SimVisualFxManager {
     for (const peer of peers) {
       activeIds.add(peer.peerId);
       let entry = this.opponentCars.get(peer.peerId);
-      const ghost = Boolean(peer.ghost);
+      // A car passing through the player's (an open race's fair-play rule) is drawn as the lap ghost is
+      const ghost = Boolean(peer.ghost || peer.passThrough);
       if (entry && (entry.vehicle !== peer.vehicle || entry.ghost !== ghost)) {
         // The peer switched car, or became (or stopped being) a ghost: rebuild its rig with that car's materials
         this.group.remove(entry.rig.root);
@@ -634,12 +636,12 @@ export class SimVisualFxManager {
       }
       const carRig = entry.rig;
       // A late model load adds meshes to a ghost: look for them twice a second, not by walking the rig every frame
-      if (peer.ghost && (entry.ghostCheckS = (entry.ghostCheckS ?? 0) - dt) <= 0) {
+      if (ghost && (entry.ghostCheckS = (entry.ghostCheckS ?? 0) - dt) <= 0) {
         ghostify(carRig.root);
         entry.ghostMats = ghostMaterials(carRig.root);
         entry.ghostCheckS = 0.5;
       }
-      if (peer.ghost && entry.ghostMats) {
+      if (ghost && entry.ghostMats) {
         // Fades out as it nears the player's car and is gone on top of it, so it never fills the cockpit
         const fade = this.playerPosValid ? ghostFade(peer.position.distanceTo(this.playerPos)) : 1;
         carRig.root.visible = fade > 0.004;

@@ -138,10 +138,12 @@ async function main() {
   void dee;
 
   // The race: state is passed on, cleaned, to the others
+  check("the race has an open race's contact rule", start?.collisions === 'protected' && lobbyOf(bea)?.settings.collisions === 'protected', String(start?.collisions));
   bea.sent.length = 0;
-  await server.webSocketMessage(al, JSON.stringify(packet('peer_al', { extra: 'x', quat: [0, 0, 0, 2] })));
+  await server.webSocketMessage(al, JSON.stringify(packet('peer_al', { extra: 'x', quat: [0, 0, 0, 2], hz: true })));
   const relayed = states(bea)[0];
   check("a car's state reaches the others, cleaned", relayed?.peerId === 'peer_al' && relayed.extra === undefined && (relayed.quat as number[])[3] === 1);
+  check('with its hazard flag', relayed?.hz === true);
   check('and never comes back to its sender', states(al).length === 0);
   await server.webSocketMessage(al, JSON.stringify(packet('peer_bea')));
   await server.webSocketMessage(al, JSON.stringify(packet('peer_al', { pos: [1, 2, Infinity] })));

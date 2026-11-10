@@ -18,6 +18,7 @@ import { OpponentAudio } from "@/lib/sim/opponent-audio";
 import { carById, carForVehicle, carOvertakingRules, carSkinBaseUrl, type CarId } from "@/lib/cars/car-registry";
 import { carSkinFor, subscribeCarSkins } from "@/lib/cars/car-skins";
 import { trackGeometryKey } from "@/lib/sim/ghost-align";
+import type { GuardBody } from "@/lib/sim/contact-guard";
 import { carPhysics } from "@/lib/cars/f1-mod-physics";
 import { buildCircuitScene } from "@/lib/scene-builder";
 import {
@@ -1255,6 +1256,8 @@ export class DriveSession {
     const soloCars: SimulatorCar[] = [];
     const remoteWake: WakeEmitterCar[] = [];
     const ghostPos = new THREE.Vector3();
+    const guardSelf: GuardBody = { x: 0, z: 0, vx: 0, vz: 0 };
+    const guardOther: GuardBody = { x: 0, z: 0, vx: 0, vz: 0 };
     const radarInvQ = new THREE.Quaternion();
     // Audio cue edges: DRS available / open last frame, shift beep armed for this gear
     let cueDrsAvail = false;
@@ -1653,6 +1656,14 @@ export class DriveSession {
             0,
             physics.vxMs
           ).applyQuaternion(physics.worldQuaternion);
+      // An open race's fair-play rule: this car judges itself a hazard and says so with its state
+      const guard = mpRace && mpFrame?.phase === "racing" ? mpRace.guard : null;
+      guard?.self.update(dtSeconds, {
+        speedMs: physics.telemetry.speedKmh / 3.6,
+        trackS: physics.sMeters,
+        lapLengthM: track.totalLengthM,
+        offTrack: physics.telemetry.offTrack,
+      });
       const interpolatedPeers = multiplayerSync.update(
         nowMs,
         {
@@ -1660,6 +1671,7 @@ export class DriveSession {
           teamColorHex: settingsNow.profile.color,
           name: settingsNow.profile.name,
           race: mpRace?.progress(),
+          hz: guard?.self.flag || undefined,
           vehicle: vehicleNow,
           trackId,
           pos: [
@@ -1695,13 +1707,26 @@ export class DriveSession {
       if (mpRace && mpFrame) {
         mpRace.ingestPeers(samePeers, mpFrame.phase === "racing" ? mpFrame.raceTimeS : 0);
         // Contact with the other players (one-sided: each client resolves its own car)
-        if (driving) {
-          for (const p of samePeers) {
-            if (!p.isAiPeer && p.race?.id === mpRace.start.id && mpRace.collisionsActiveWith(mpFrame, p.peerId)) {
-              resolvePlayerVsRemoteCar(physics, p, dtSeconds);
-            }
+        guardSelf.x = physics.worldPosition.x;
+        guardSelf.z = physics.worldPosition.z;
+        guardSelf.vx = carVelocityWorld.x;
+        guardSelf.vz = carVelocityWorld.z;
+        for (const p of samePeers) {
+          let solid = !p.isAiPeer && p.race?.id === mpRace.start.id && mpRace.collisionsActiveWith(mpFrame, p.peerId);
+          let through = false;
+          if (guard && solid) {
+            guardOther.x = p.position.x;
+            guardOther.z = p.position.z;
+            guardOther.vx = p.linearVelocity.x;
+            guardOther.vz = p.linearVelocity.z;
+            solid = !guard.blocks(p.peerId, guardSelf, guardOther, p.hazard === true);
+            through = p.hazard === true || guard.rammed(p.peerId);
           }
+          p.passThrough = through;
+          if (driving && solid) resolvePlayerVsRemoteCar(physics, p, dtSeconds);
         }
+      } else {
+        for (const p of samePeers) p.passThrough = false;
       }
       let renderPeers = aiField ? [...samePeers, ...aiField.peers()] : samePeers;
 

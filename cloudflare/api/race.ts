@@ -186,7 +186,7 @@ export class RaceServer {
     const rules = raceRules(meta);
     const lobby: LobbyState = {
       hostId: RACE_SERVER_ID,
-      settings: { trackId: rules.trackId, laps: rules.raceLaps, collisions: "ghost_lap1", carClass: "any", vehicle: rules.vehicle },
+      settings: { trackId: rules.trackId, laps: rules.raceLaps, collisions: "protected", carClass: "any", vehicle: rules.vehicle },
       players: this.players(gone),
       race,
     };
@@ -328,7 +328,7 @@ export class RaceServer {
       lightsStartHostMs: meta.startsMs,
       holdMs: 200 + Math.random() * 2800,
       laps: rules.raceLaps,
-      collisions: "ghost_lap1",
+      collisions: "protected",
       carClass: "any",
       trackId: rules.trackId,
       grid: entrants.map((e) => e.peer),
