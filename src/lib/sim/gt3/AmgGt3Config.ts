@@ -84,8 +84,8 @@ const ENGINE = {
   idleRpm: 2100,
   // Engine 0.130 + gearbox 0.018 [spec]
   inertia: 0.148,
-  // 25 Hz limiter [spec LIMITER_HZ]
-  limiterCutS: 0.02,
+  // 100 Hz limiter: the cut lasts one cycle [spec LIMITER_HZ]
+  limiterCutS: 0.01,
 };
 
 const NONE: LutPoints = [

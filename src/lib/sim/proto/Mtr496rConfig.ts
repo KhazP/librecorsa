@@ -68,8 +68,9 @@ const ENGINE = {
   // Linear overrun torque, 120 Nm at 9600 rpm [spec COAST_REF, NON_LINEARITY 0]
   coastCurve: [
     [0, 0],
+    [2100, 0],
     [9600, 120],
-    [10800, 135],
+    [10800, 139.2],
   ] as LutPoints,
   // Pedal → throttle: a quick first tenth, then near linear [spec throttle.lut]
   throttleResponseCurve: [
@@ -91,8 +92,8 @@ const ENGINE = {
   idleRpm: 2100,
   // Engine 0.130 + gearbox 0.012 [spec engine.ini / drivetrain.ini INERTIA]
   inertia: 0.142,
-  // 25 Hz limiter: half a cycle cut [spec LIMITER_HZ]
-  limiterCutS: 0.02,
+  // 25 Hz limiter: the cut lasts one cycle [spec LIMITER_HZ]
+  limiterCutS: 0.04,
 };
 
 const NONE: LutPoints = [

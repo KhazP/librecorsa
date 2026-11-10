@@ -84,9 +84,9 @@ const NOT_CARRIED: [RegExp, string][] = [
   [/^suspensions\.ini \[HEAVE_(FRONT|REAR)\] BUMPSTOP_DN$/, 'no droop stop on a heave element'],
   [/^suspensions\.ini \[HEAVE_(FRONT|REAR)\] BUMP_STOP_RATE$/, "the element's packers lie past its own bump stop, which is rigid"],
   [/^drivetrain\.ini \[GEARS\] GEAR_7$/, 'past the gear count: unused'],
-  [/^drivetrain\.ini \[GEARBOX\] (CHANGE_UP_TIME|AUTO_CUTOFF_TIME)$/, 'one up-shift time: the longer of the change and the ignition cut'],
   [/^drivetrain\.ini \[GEARBOX\] (VALID_SHIFT_RPM_WINDOW|CONTROLS_WINDOW_GAIN)$/, 'H-pattern shift rules: not modelled'],
-  [/^drivetrain\.ini \[(AUTOCLUTCH|DOWNSHIFT_PROFILE|AUTOBLIP|DOWNSHIFT_PROTECTION|AUTO_SHIFTER|TRACTION)\] /, "clutch, blip and auto-shift timing: this sim's own gearbox logic"],
+  [/^drivetrain\.ini \[(DOWNSHIFT_PROFILE|AUTOBLIP)\] POINT_/, 'the clutch is out from the paddle and the blip holds until the revs are there: the other points of the profiles are not used'],
+  [/^drivetrain\.ini \[(AUTOCLUTCH|DOWNSHIFT_PROFILE|AUTOBLIP|DOWNSHIFT_PROTECTION|AUTO_SHIFTER|TRACTION)\] /, "clutch and auto-shift rules: this sim's own gearbox logic"],
   [/^engine\.ini \[ENGINE_DATA\] (ALTITUDE_SENSITIVITY|AMBIENT_EFFECT)$/, "air density acts on the engine through this sim's own weather"],
   [/^engine\.ini \[(COAST_REF|COAST_DATA|COAST_CURVE)\] /, 'the overrun torque is the reference line (COAST_REF) alone'],
   [/^brakes\.ini \[TEMPS_(FRONT|REAR)\] /, "brake heat: this sim's own disc model by material"],
@@ -360,8 +360,13 @@ function checkDriveline(label: string, mod: ModData, config: CarPhysicsConfig): 
   eq(`${label} engine MINIMUM`, config.engine.idleRpm, e('ENGINE_DATA', 'MINIMUM'));
   eq(`${label} engine LIMITER`, config.gearbox.gears.redline_rpm, e('ENGINE_DATA', 'LIMITER'));
   eq(`${label} engine + gearbox INERTIA`, config.engine.inertia, e('ENGINE_DATA', 'INERTIA') + d('GEARBOX', 'INERTIA'));
-  eq(`${label} LIMITER_HZ`, config.engine.limiterCutS ?? NaN, 0.5 / e('ENGINE_DATA', 'LIMITER_HZ'));
+  // The limiter's cut lasts one of its cycles
+  eq(`${label} LIMITER_HZ`, config.engine.limiterCutS ?? NaN, 1 / e('ENGINE_DATA', 'LIMITER_HZ'));
+  // The overrun line: nothing at idle, the reference torque at the reference speed, straight between
   eq(`${label} COAST_REF`, lutAt(config.engine.coastCurve, e('COAST_REF', 'RPM')), e('COAST_REF', 'TORQUE'));
+  eq(`${label} COAST_REF at idle`, lutAt(config.engine.coastCurve, e('ENGINE_DATA', 'MINIMUM')), 0);
+  const coastMidRpm = (e('ENGINE_DATA', 'MINIMUM') + e('COAST_REF', 'RPM')) / 2;
+  eq(`${label} COAST_REF half way`, lutAt(config.engine.coastCurve, coastMidRpm), e('COAST_REF', 'TORQUE') / 2);
   const count = d('GEARS', 'COUNT');
   eq(`${label} gear COUNT`, config.gearbox.ratios.length, count);
   for (let g = 1; g <= count; g++) eq(`${label} GEAR_${g}`, config.gearbox.ratios[g - 1], d('GEARS', `GEAR_${g}`));
@@ -374,6 +379,7 @@ function checkDriveline(label: string, mod: ModData, config: CarPhysicsConfig): 
   eq(`${label} clutch MAX_TORQUE`, config.clutch.maxTorqueNm, d('CLUTCH', 'MAX_TORQUE'));
   eq(`${label} autoclutch MIN_RPM`, config.clutch.biteRpm, d('AUTOCLUTCH', 'MIN_RPM'));
   eq(`${label} autoclutch MAX_RPM`, config.clutch.lockRpm, d('AUTOCLUTCH', 'MAX_RPM'));
+  shiftData(label, config, mod);
   eq(`${label} brake MAX_TORQUE`, config.brakes.maxTorqueNm, mod.num('brakes.ini', 'DATA', 'MAX_TORQUE'));
   eq(`${label} brake FRONT_SHARE`, config.brakes.front_bias, mod.num('brakes.ini', 'DATA', 'FRONT_SHARE'));
 }
@@ -489,6 +495,21 @@ section('Suzuki Liana', 'suzuki_liana', (mod) => {
   }
 });
 
+/** A gear change by the car's own data: the time between gears, the ignition cut, the down-shift's clutch and blip */
+function shiftData(label: string, config: CarPhysicsConfig, mod: ModData): void {
+  const d = (sec: string, key: string) => mod.num('drivetrain.ini', sec, key);
+  const gb = config.gearbox;
+  eq(`${label} CHANGE_UP_TIME`, gb.upshiftNeutralS ?? NaN, d('GEARBOX', 'CHANGE_UP_TIME') / 1000);
+  eq(`${label} AUTO_CUTOFF_TIME`, gb.upshiftCutS ?? NaN, d('GEARBOX', 'AUTO_CUTOFF_TIME') / 1000);
+  const dn = gb.downshift;
+  eq(`${label} CHANGE_DN_TIME (between gears)`, dn?.neutralS ?? NaN, d('GEARBOX', 'CHANGE_DN_TIME') / 1000);
+  eq(`${label} DOWNSHIFT_PROFILE POINT_1`, dn?.clutchReleaseS ?? NaN, d('DOWNSHIFT_PROFILE', 'POINT_1') / 1000);
+  eq(`${label} DOWNSHIFT_PROFILE POINT_2`, dn?.clutchHomeS ?? NaN, d('DOWNSHIFT_PROFILE', 'POINT_2') / 1000);
+  eq(`${label} AUTOBLIP LEVEL`, dn?.blip?.level ?? NaN, d('AUTOBLIP', 'LEVEL'));
+  eq(`${label} AUTOBLIP POINT_0`, dn?.blip?.riseS ?? NaN, d('AUTOBLIP', 'POINT_0') / 1000);
+  if (dn?.overRevRpm !== undefined) eq(`${label} DOWNSHIFT_PROTECTION OVERREV`, dn.overRevRpm, d('DOWNSHIFT_PROTECTION', 'OVERREV'));
+}
+
 // The GT3's base is a data set this machine doesn't hold; what it took from its second reference is checked here
 section('AMG GT3 (second reference)', 'gt3_ref', (mod) => {
   const config = AMG_GT3_CONFIG;
@@ -501,6 +522,8 @@ section('AMG GT3 (second reference)', 'gt3_ref', (mod) => {
   eq('GT3 diff POWER', diff.power, mod.num('drivetrain.ini', 'DIFFERENTIAL', 'POWER'));
   eq('GT3 diff COAST', diff.coast, mod.num('drivetrain.ini', 'DIFFERENTIAL', 'COAST'));
   eq('GT3 diff PRELOAD', diff.preload, mod.num('drivetrain.ini', 'DIFFERENTIAL', 'PRELOAD'));
+  shiftData('GT3', config, mod);
+  eq('GT3 LIMITER_HZ', config.engine.limiterCutS, 1 / mod.num('engine.ini', 'ENGINE_DATA', 'LIMITER_HZ'));
   const compound = compoundData(config, config.compoundSlots.soft);
   const keys = ['FLEX_GAIN', 'PRESSURE_FLEX_GAIN', 'COMBINED_FACTOR', 'CX_MULT', 'SPEED_SENSITIVITY', 'FALLOFF_LEVEL', 'FALLOFF_SPEED', 'PRESSURE_D_GAIN', 'BRAKE_DX_MOD', 'DCAMBER_0', 'DCAMBER_1', 'DAMP'];
   for (const axle of ['front', 'rear'] as const) {

@@ -57,8 +57,9 @@ const ENGINE = {
   // Linear overrun torque, 80 Nm at 7000 rpm [spec COAST_REF, NON_LINEARITY 0]
   coastCurve: [
     [0, 0],
+    [850, 0],
     [7000, 80],
-    [7500, 85.7],
+    [7500, 86.5],
   ] as LutPoints,
   // Pedal → throttle: a quick first tenth, then near linear [spec throttle.lut]
   throttleResponseCurve: [
@@ -77,8 +78,8 @@ const ENGINE = {
   idleRpm: 850,
   // Engine 0.165 + gearbox 0.017 [spec engine.ini / drivetrain.ini INERTIA]
   inertia: 0.182,
-  // 40 Hz limiter: half a cycle cut [spec LIMITER_HZ]
-  limiterCutS: 0.0125,
+  // 40 Hz limiter: the cut lasts one cycle [spec LIMITER_HZ]
+  limiterCutS: 0.025,
 };
 
 const NONE: LutPoints = [
