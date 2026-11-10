@@ -20,6 +20,7 @@ import { F1Physics2026 } from '../src/lib/f1-physics-2026';
 import { F12026CarSim } from '../src/lib/sim/f12026-car/F12026CarSim';
 import { VF26_CHASSIS, VF26_TYRES } from '../src/lib/sim/vf26-data';
 import {
+  advanceTreadDirt,
   computeTyreForces,
   createTyreRuntime,
   evaluateIso8608RoadRoughness,
@@ -172,6 +173,27 @@ check('Off-track excursion picks up dirt and on-track rolling cleans it off', ()
     updateTyreThermal(t, 25_000, 3500, 55, 25, 38, 1 / 60, 350, 55, 'asphalt', 0);
   }
   assert.ok(t.dirtyLevel < peakDirt * 0.4, `Expected dirt to clean off on asphalt (${t.dirtyLevel} < ${peakDirt * 0.4})`);
+});
+
+check('Rigid-body tyres: dirt goes by the distance rolled: a brush with the grass costs about 3 %, the full load takes seconds, the road cleans it', () => {
+  const roll = (level: number, surface: string, speedMs: number, seconds: number) => {
+    let l = level;
+    for (let i = 0; i < Math.round(seconds * 240); i++) l = advanceTreadDirt(l, surface, speedMs, 1 / 240, 0);
+    return l;
+  };
+  const gripLoss = (l: number) => 0.18 * l;
+  const brush = roll(0, 'grass', 30, 0.65);
+  assert.ok(gripLoss(brush) > 0.025 && gripLoss(brush) < 0.035, `0.65 s of grass at 30 m/s: ${(gripLoss(brush) * 100).toFixed(2)} % grip`);
+  let tFull = 0;
+  for (let l = 0; l < 1 && tFull < 10; tFull += 1 / 240) l = advanceTreadDirt(l, 'grass', 30, 1 / 240, 0);
+  assert.ok(tFull > 3 && tFull < 5, `grass at 30 m/s loads the tread fully in ${tFull.toFixed(2)} s`);
+  assert.ok(roll(0, 'gravel', 30, 1) > roll(0, 'grass', 30, 1) * 1.3, 'gravel dirtier than grass');
+  assert.ok(roll(0, 'grass', 0, 2) === 0, 'a tyre standing on the grass picks nothing up');
+  let tClean = 0;
+  for (let l = 1; l > 0 && tClean < 20; tClean += 1 / 240) l = advanceTreadDirt(l, 'road', 50, 1 / 240, 0);
+  assert.ok(tClean > 6 && tClean < 8, `a fully dirty tyre cleans in ${tClean.toFixed(2)} s at 50 m/s`);
+  assert.ok(roll(brush, 'road', 50, 1.3) === 0, 'the brush is gone within 1.3 s at 50 m/s');
+  assert.ok(roll(0.5, 'road', 0, 5) === 0.5, 'a parked tyre keeps its dirt');
 });
 
 check('Centrifugal carcass growth increases loaded radius at 330 km/h', () => {

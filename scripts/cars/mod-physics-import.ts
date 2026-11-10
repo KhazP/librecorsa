@@ -252,7 +252,7 @@ for (const name of mod.sections('tyres.ini').filter((s) => /^(FRONT|REAR)(_\d+)?
     `    rollingResistance: ${n(t('ROLLING_RESISTANCE_0') / 1000)}, rollingResistanceSpeedSq: ${n(t('ROLLING_RESISTANCE_1') / 1000)}, rollingResistanceSlipGain: ${n(t('ROLLING_RESISTANCE_SLIP') / 1000)}, // [spec ROLLING_RESISTANCE_0 / _1 / _SLIP]`
   );
   p(`    verticalDamping: ${n(t('DAMP'))}, // [spec DAMP]`);
-  p('    // TODO pneumaticTrail; pKy2 is unused by a brush tyre');
+  p('    // pKy2 is unused by a brush tyre');
   p('  },');
   p('  pressureData: {');
   p(`    optimalPsi: ${n(t('PRESSURE_IDEAL'))}, // [spec PRESSURE_IDEAL]`);

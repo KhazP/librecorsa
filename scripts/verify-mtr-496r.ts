@@ -187,6 +187,75 @@ for (const [kmh, lo, hi] of [
   check(`Understeers at the limit at ${kmh} km/h`, frontSa > rearSa, `front ${fmt((frontSa * 180) / Math.PI, 1)}°, rear ${fmt((rearSa * 180) / Math.PI, 1)}° slip at the peak`);
 }
 
+console.log('\n== Tyres: wear, graining, pressure in the heat, flat spots');
+{
+  type Cfg = typeof C;
+  const withTyres = (fn: (t: Cfg['tyreCompounds'][keyof Cfg['tyreCompounds']] & object) => object): Cfg =>
+    ({ ...C, tyreCompounds: Object.fromEntries(Object.entries(C.tyreCompounds).map(([k, t]) => [k, t && fn(t)])) }) as Cfg;
+  const at = (cfg: Cfg, kmh: number) => {
+    const car = new VehiclePhysics({ ground: flat, config: cfg, airDensity: 1.225 });
+    car.reset(0, 0, 0, kmh / 3.6);
+    return car;
+  };
+  const soft = C.tyreCompounds[C.compoundSlots.soft]!;
+  // Sliding wear counts the load per 2000 N [spec VIRTUALKM USE_LOAD]: the same hard corner wears 1.5 × what it would
+  // counted per the tyre's 3000 N FZ0
+  const cornerWear = (cfg: Cfg) => {
+    const car = at(cfg, 120);
+    run(car, 4, (_, t) => ({ throttle: 0.4, brake: 0, steer: 0.25 * Math.min(1, t) }));
+    return car.wheels.reduce((sum, w) => sum + w.wear, 0);
+  };
+  const perFz0 = cornerWear(withTyres((t) => ({ ...t, wear: t.wear && { ...t.wear, loadRefN: undefined } })));
+  const per2000 = cornerWear(C);
+  check('Sliding wear counted per 2000 N of load', soft.wear?.loadScaled === true && soft.wear.loadRefN === 2000 && Math.abs(per2000 / perFz0 - 1.5) < 0.02,
+    `${fmt(per2000 / perFz0, 3)} × the wear counted per FZ0`);
+
+  // Graining wears off as the tread slides, not as it rolls: a grained, warm tyre on a straight keeps its graining
+  {
+    const car = at(C, 150);
+    for (const w of car.wheels) {
+      w.grainLevel = 0.3;
+      w.bandTempsC.fill(95);
+      w.bandCoreTempsC.fill(95);
+    }
+    run(car, 60, () => ({ throttle: 0.3, brake: 0, steer: 0 }));
+    const lost = 0.3 - Math.min(...car.wheels.map((w) => w.grainLevel));
+    check('A grained tyre keeps its graining over a minute of straight', soft.thermalData.tread?.wearOffWithSlip === true && lost < 2e-4,
+      `${fmt(lost * 1e4, 2)}e-4 lost (rolling alone would take ≈ 8e-4)`);
+  }
+
+  // Pressure moves the heat: 4 psi under the set pressure runs the carcass hotter than 4 psi over (rolling heat by
+  // PRESSURE_RR_GAIN, the sliding heat), and the over-inflated tread runs on its crown
+  {
+    const weave = (dp: number) => {
+      const car = at(C, 150);
+      for (const w of car.wheels) w.coldPressurePsi += dp;
+      run(car, 60, (_, t) => ({ throttle: 0.3, brake: 0, steer: 0.04 * Math.sin(t * 0.8) }));
+      const w = car.wheels[0];
+      return { core: w.coreTempC, crown: w.bandTempsC[1] - 0.5 * (w.bandTempsC[0] + w.bandTempsC[2]) };
+    };
+    const low = weave(-4);
+    const high = weave(4);
+    check('An under-inflated tyre runs hotter, an over-inflated one on its crown', low.core - high.core > 1 && high.crown > low.crown,
+      `carcass ${fmt(low.core, 1)} °C at −4 psi, ${fmt(high.core, 1)} °C at +4; crown over shoulders ${fmt(low.crown, 2)} / ${fmt(high.crown, 2)} °C`);
+  }
+
+  // Scrub drag stops growing at the peak slip [spec ROLLING_RESISTANCE_SLIP]
+  check('Tyre scrub held at its peak-slip value past the peak', soft.modelData.rollingResistanceSlipMax === 1, '');
+
+  // A softer compound flat-spots sooner: twice the softness, twice the flat after the same locked stop
+  {
+    const lockUp = (cfg: Cfg) => {
+      const car = at(cfg, 150);
+      run(car, 0.6, () => ({ throttle: 0, brake: 1, steer: 0 }));
+      return car.wheels[0].flatSpotSeverity;
+    };
+    const base = lockUp(C);
+    const softer = lockUp(withTyres((t) => ({ ...t, flatSpotSoftness: 2 })));
+    check('Flat-spot softness scales the flat a lock-up grinds', base > 0.01 && Math.abs(softer / base - 2) < 0.1, `${fmt(base, 3)} → ${fmt(softer, 3)}`);
+  }
+}
+
 console.log('\n== Traction control through the adapter');
 {
   // At its mod's power the 496R no longer spins its slicks on a dry road at 70 km/h: on a damp one it does

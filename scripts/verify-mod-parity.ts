@@ -77,7 +77,7 @@ const NOT_CARRIED: [RegExp, string][] = [
   [/^tyres\.ini \[(FRONT|REAR)\] PRESSURE_FLEX_GAIN$/, 'not carried for this tyre data version (the Liana)'],
   [/^tyres\.ini \[(FRONT|REAR)\] (ANGULAR_INERTIA|ROLLING_RESISTANCE_[01]|ROLLING_RESISTANCE_SLIP|PRESSURE_RR_GAIN|RADIUS_ANGULAR_K|BRAKE_DX_MOD)$/, "taken from another data set or this sim's own (f12026 tyres, the other compounds' wheels)"],
   [/^tyres\.ini \[(FRONT|REAR)\] (CAMBER_SPRING_MULT|ROLLING_RADIUS_MULT|RADIUS_ANGULAR_K_2|DX_CAMBER_REF|DX_CAMBER_MULT|DROPOFF_FACTOR_.)$/, "an extension's tyre terms: not modelled"],
-  [/^tyres\.ini \[(VIRTUALKM|ADDITIONAL1|THERMAL_MODEL)\] /, 'wear by load and blanket settings: not carried'],
+  [/^tyres\.ini \[(VIRTUALKM|ADDITIONAL1|THERMAL_MODEL)\] /, 'the other wear-by-distance and blanket settings: not carried'],
   [/^car\.ini \[CONTROLS\] (FFMULT|STEER_ASSIST)$/, "force feedback scaling: this sim's own"],
   [/^car\.ini \[CONTROLS\] LINEAR_STEER_ROD_RATIO$/, 'rack travel: steering is by road-wheel angle (STEER_LOCK / STEER_RATIO) on the solved geometry'],
   [/^car\.ini \[FUEL\] (FUEL|MAX_FUEL)$/, "fuel load: the sim's own (car-setup)"],
@@ -432,6 +432,8 @@ section('MTR 496R', 'mt_mtr_496r', (mod) => {
   eq('496R TC MIN_SPEED_KMH', MTR_496R_ELECTRONICS.tcMinSpeedKmh, mod.num('electronics.ini', 'TRACTION_CONTROL', 'MIN_SPEED_KMH'));
 
   eq('496R VIRTUALKM USE_LOAD', compoundData(config, config.compoundSlots.soft).wear?.loadScaled ? 1 : 0, mod.num('tyres.ini', 'VIRTUALKM', 'USE_LOAD'));
+  // Wear by load counts the load per 2000 N, not per the tyre's FZ0
+  eq('496R VIRTUALKM USE_LOAD load per 2000 N', compoundData(config, config.compoundSlots.soft).wear?.loadRefN ?? NaN, mod.num('tyres.ini', 'VIRTUALKM', 'USE_LOAD') ? 2000 : NaN);
   // Slick Soft / Medium / Hard are the first three compounds
   const keys = [...V10_SHAPE, 'WIDTH', 'RADIUS', 'RIM_RADIUS', 'RADIUS_ANGULAR_K', 'DAMP', 'RELAXATION_LENGTH', 'ROLLING_RESISTANCE_0', 'ROLLING_RESISTANCE_1', 'ROLLING_RESISTANCE_SLIP', 'PRESSURE_RR_GAIN', 'CAMBER_GAIN', 'DCAMBER_0', 'DCAMBER_1', 'PRESSURE_IDEAL', 'PRESSURE_D_GAIN', 'FZ0', 'LS_EXPY', 'LS_EXPX', 'BRAKE_DX_MOD'];
   (['soft', 'medium', 'hard'] as const).forEach((slot, i) => {

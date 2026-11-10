@@ -10,7 +10,7 @@
  */
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { VehiclePhysics } from '../src/lib/sim/f12026-car/VehiclePhysics';
+import { VehiclePhysics, flatSpotThumpNm } from '../src/lib/sim/f12026-car/VehiclePhysics';
 import { FlatGroundQuery } from '../src/lib/sim/f12026-car/TrackColliderQuery';
 import { F12026_CAR_CONFIG } from '../src/lib/sim/f12026-car/F12026CarConfig';
 import { AMG_GT3_CONFIG } from '../src/lib/sim/gt3/AmgGt3Config';
@@ -98,6 +98,34 @@ check('in a corner the aligning moment carries the trail of the patch it has', (
   const trail = -w.mz / w.fy / Math.max(1e-6, 1 - w.combinedSlip);
   assert.ok(Math.abs(trail - w.patchHalfLengthM / 3) < 2e-3, `${trail} vs ${w.patchHalfLengthM / 3}`);
   return `${(trail * 1000).toFixed(1)} mm at ${(w.fz / 1000).toFixed(1)} kN`;
+});
+check("a tyre's own trail share replaces the third of the patch", () => {
+  const share = 0.24;
+  const own = {
+    ...F12026_CAR_CONFIG,
+    tyreCompounds: Object.fromEntries(
+      Object.entries(F12026_CAR_CONFIG.tyreCompounds).map(([k, t]) => [k, t && { ...t, modelData: { ...t.modelData, trailShare: share } }])
+    ),
+  };
+  const c = make(own as never, 120 / 3.6);
+  for (let t = 0; t < 2; t += DT) c.step(DT, { throttle: 0.3, brake: 0, steer: -0.05 * Math.min(1, t) });
+  const w = c.wheels[1];
+  const trail = -w.mz / w.fy / Math.max(1e-6, 1 - w.combinedSlip);
+  assert.ok(Math.abs(trail - w.patchHalfLengthM * share) < 1e-3, `${trail} vs ${w.patchHalfLengthM * share}`);
+  return `${(trail * 1000).toFixed(1)} mm, ${(trail / w.patchHalfLengthM).toFixed(3)} of the half-length`;
+});
+check('a flat spot thumps the rack once a revolution, as the worn sector meets the road', () => {
+  const wear = new Float32Array(16).fill(0.01);
+  wear[5] = 0.02;
+  const n = 720;
+  const shake = Array.from({ length: n }, (_, k) => flatSpotThumpNm(0.2, (k / n) * 2 * Math.PI, 80, 4000, wear));
+  let peaks = 0;
+  for (let k = 0; k < n; k++) if (shake[k] > shake[(k + n - 1) % n] && shake[k] >= shake[(k + 1) % n]) peaks++;
+  const crest = shake.indexOf(Math.max(...shake));
+  const crestSector = Math.floor((crest / n) * 16);
+  assert.ok(peaks === 1 && crestSector === 5, `${peaks} peaks, crest in sector ${crestSector}`);
+  assert.ok(flatSpotThumpNm(0.004, 1, 80, 4000, wear) === 0, 'no shake from a trace of a flat');
+  return `${Math.max(...shake).toFixed(2)} Nm crest`;
 });
 
 console.log('Moments about the kingpin');

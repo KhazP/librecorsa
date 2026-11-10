@@ -120,6 +120,59 @@ console.log('\n== Handbrake and tyre scrub');
     `${fmt(straight.torque, 0)} Nm straight, ${fmt(corner.torque, 0)} Nm at ${fmt(corner.slip, 2)} of the peak slip`);
 }
 
+console.log('\n== Tyres: scrub past the peak, pressure in the heat, graining');
+{
+  const tyre = compoundData(C, C.compoundSlots.soft);
+  const m = tyre.modelData;
+  const p = tyre.pressureData;
+  // In a slide past the peak slip the scrub holds at its value at the peak [spec ROLLING_RESISTANCE_SLIP]: each wheel's
+  // rolling drag is at most (free rolling) × (1 + gain) with the pressure's factor, however far it slides
+  {
+    const car = makeCar();
+    car.reset(0, 0, 0, 90 / 3.6);
+    let worst = 0;
+    let slid = 0;
+    run(car, 2, (_, t) => {
+      for (const w of car.wheels) {
+        if (w.combinedSlip < 1.3 || Math.abs(w.omega) < 25 || w.fz < 500) continue;
+        slid = Math.max(slid, w.combinedSlip);
+        const soft = 1 + (p.pressureRollingGain ?? 0) * (p.optimalPsi / w.pressurePsi - 1);
+        const free = (m.rollingResistance + (m.rollingResistanceSpeedSq ?? 0) * w.vx * w.vx) * soft;
+        worst = Math.max(worst, w.brakeTorqueNm / (w.fz * w.rollingRadius * free) / (1 + (m.rollingResistanceSlipGain ?? 0) * soft));
+      }
+      return { throttle: 0, brake: 0, steer: -0.6 * Math.min(1, t / 0.3), clutch: 1 };
+    });
+    check('Sliding past the peak scrubs no more than at the peak', m.rollingResistanceSlipMax === 1 && slid > 1.5 && worst < 1.02,
+      `up to ${fmt(slid, 2)} × the peak slip, drag ${fmt(worst, 3)} × its peak-slip value`);
+  }
+  // Pressure moves the heat: 4 psi under the set pressure runs the carcass hotter than 4 psi over
+  {
+    const weave = (dp: number) => {
+      const car = makeCar();
+      car.reset(0, 0, 0, 90 / 3.6);
+      for (const w of car.wheels) w.coldPressurePsi += dp;
+      run(car, 60, (_, t) => ({ throttle: 0.3, brake: 0, steer: 0.04 * Math.sin(t * 0.8) }));
+      return car.wheels[0].coreTempC;
+    };
+    const low = weave(-4);
+    const high = weave(4);
+    check('An under-inflated tyre runs hotter', tyre.thermalData.pressureHeat !== undefined && low - high > 0.4, `carcass ${fmt(low, 2)} °C at −4 psi, ${fmt(high, 2)} °C at +4`);
+  }
+  // Graining wears off as the tread slides: a grained, warm tyre on a straight keeps it
+  {
+    const car = makeCar();
+    car.reset(0, 0, 0, 90 / 3.6);
+    for (const w of car.wheels) {
+      w.grainLevel = 0.3;
+      w.bandTempsC.fill(80);
+      w.bandCoreTempsC.fill(80);
+    }
+    run(car, 60, () => ({ throttle: 0.2, brake: 0, steer: 0 }));
+    const lost = 0.3 - Math.min(...car.wheels.map((w) => w.grainLevel));
+    check('A grained tyre keeps its graining over a minute of straight', tyre.thermalData.tread?.wearOffWithSlip === true && lost < 1e-4, `${fmt(lost * 1e4, 2)}e-4 lost`);
+  }
+}
+
 console.log('\n== Straight line (flat ground, sea level)');
 {
   const car = makeCar();

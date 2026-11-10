@@ -10,7 +10,8 @@
  * loads the inner shoulder, so it runs hottest.
  */
 import { getActiveTrackData } from '../src/lib/track-data';
-import { tyreGrainThresholdsC } from '../src/lib/sim/f12026-car/VehiclePhysics';
+import { FlatGroundQuery } from '../src/lib/sim/f12026-car/TrackColliderQuery';
+import { tyreGrainThresholdsC, VehiclePhysics } from '../src/lib/sim/f12026-car/VehiclePhysics';
 import { F12026CarSim } from '../src/lib/sim/f12026-car/F12026CarSim';
 import { compoundData, F12026_CAR_CONFIG } from '../src/lib/sim/f12026-car/F12026CarConfig';
 import { AMG_GT3_CONFIG } from '../src/lib/sim/gt3/AmgGt3Config';
@@ -92,6 +93,36 @@ function stint(sim: F12026CarSim, laps: number): StintResult {
     }
   }
   return { grainByLap, blister, coreC: sim.vehicle.wheels.map((w) => w.coreTempC), lapCoreC, lapPsi, bandsC };
+}
+
+console.log('\n== Graining wears off as the tread slides');
+{
+  const tread = (c: { tyreCompounds: Record<string, { thermalData: { tread?: { wearOffWithSlip?: boolean } } } | undefined> }) =>
+    Object.values(c.tyreCompounds).filter((t) => t?.thermalData.tread).every((t) => t?.thermalData.tread?.wearOffWithSlip === true);
+  check('GT3 and F1 slicks: their GRAIN_* data wears graining off only as the tread slides', tread(AMG_GT3_CONFIG as never) && tread(F12026_CAR_CONFIG as never), '');
+}
+
+console.log('\n== Band spread');
+{
+  // Camber moves the contact pressure, and the heat, across the bands by the compound's own spread where it states one
+  const shares = (spread?: { camber: number; lateral: number }) => {
+    const cfg = spread === undefined ? AMG_GT3_CONFIG : {
+      ...AMG_GT3_CONFIG,
+      tyreCompounds: Object.fromEntries(
+        Object.entries(AMG_GT3_CONFIG.tyreCompounds).map(([k, t]) => [k, t && { ...t, thermalData: { ...t.thermalData, bandSpread: spread } }])
+      ),
+    };
+    const car = new VehiclePhysics({ ground: new FlatGroundQuery(0), config: cfg as never, airDensity: 1.225 });
+    car.reset(0, 0, 0, 30);
+    for (let t = 0; t < 1; t += 1 / 120) car.step(1 / 120, { throttle: 0.2, brake: 0, steer: 0 });
+    const sh = car.wheels[0].bandLoadShares;
+    return sh[0] - sh[2];
+  };
+  const dflt = shares();
+  const same = shares({ camber: 3.8, lateral: 0.22 });
+  const none = shares({ camber: 0, lateral: 0 });
+  check('Camber loads the inner band by the spread (3.8 / 0.22 by default; none leaves the bands even)', dflt > 0.02 && dflt === same && Math.abs(none) < 1e-9,
+    `inner − outer share ${fmt(dflt, 3)} default, ${fmt(none, 3)} with no spread`);
 }
 
 console.log('\n== Stints round Rwanda (autopilot)');
