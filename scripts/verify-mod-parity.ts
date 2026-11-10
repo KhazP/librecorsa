@@ -560,8 +560,8 @@ section('AMG GT3 (second reference)', 'gt3_ref', (mod) => {
   eq('GT3 diff POWER', diff.power, mod.num('drivetrain.ini', 'DIFFERENTIAL', 'POWER'));
   eq('GT3 diff COAST', diff.coast, mod.num('drivetrain.ini', 'DIFFERENTIAL', 'COAST'));
   eq('GT3 diff PRELOAD', diff.preload, mod.num('drivetrain.ini', 'DIFFERENTIAL', 'PRELOAD'));
+  // The gear change is this reference's; the limiter stays the base data set's
   shiftData('GT3', config, mod);
-  eq('GT3 LIMITER_HZ', config.engine.limiterCutS, 1 / mod.num('engine.ini', 'ENGINE_DATA', 'LIMITER_HZ'));
   const compound = compoundData(config, config.compoundSlots.soft);
   const keys = ['FLEX_GAIN', 'PRESSURE_FLEX_GAIN', 'COMBINED_FACTOR', 'CX_MULT', 'SPEED_SENSITIVITY', 'FALLOFF_LEVEL', 'FALLOFF_SPEED', 'PRESSURE_D_GAIN', 'BRAKE_DX_MOD', 'DCAMBER_0', 'DCAMBER_1', 'DAMP'];
   for (const axle of ['front', 'rear'] as const) {

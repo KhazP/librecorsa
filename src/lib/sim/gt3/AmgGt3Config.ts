@@ -84,8 +84,8 @@ const ENGINE = {
   idleRpm: 2100,
   // Engine 0.130 + gearbox 0.018 [spec]
   inertia: 0.148,
-  // 100 Hz limiter: the cut lasts one cycle [spec LIMITER_HZ]
-  limiterCutS: 0.01,
+  // 25 Hz limiter: the cut lasts one cycle [spec LIMITER_HZ]
+  limiterCutS: 0.04,
 };
 
 const NONE: LutPoints = [
@@ -134,7 +134,8 @@ const GEARBOX = {
   ratios: [2.5, 1.951, 1.521, 1.2414, 1.0847, 0.96],
   reverse: 3.818,
   finalDrive: 3.4285,
-  // Dog box: 50 ms between gears, the ignition cut for 70 ms [spec CHANGE_UP_TIME, AUTO_CUTOFF_TIME]
+  // Dog box: 50 ms between gears, the ignition cut for 70 ms [ref CHANGE_UP_TIME, AUTO_CUTOFF_TIME]. The first data set's
+  // 100 ms leaves the full-throttle g further from the logs across the changes [motec]
   shiftTimeS: 0.07,
   // [spec CHANGE_DN_TIME]
   downshiftTimeS: 0.1,
@@ -142,7 +143,7 @@ const GEARBOX = {
   upshiftNeutralS: 0.05,
   upshiftCutS: 0.07,
   // Down: 100 ms between gears, the clutch home from 122 to 168 ms, a 73 % blip, and up to 500 rpm over the limiter
-  // [spec CHANGE_DN_TIME, DOWNSHIFT_PROFILE, AUTOBLIP, DOWNSHIFT_PROTECTION]
+  // [ref CHANGE_DN_TIME, DOWNSHIFT_PROFILE, AUTOBLIP, DOWNSHIFT_PROTECTION]
   downshift: { neutralS: 0.1, clutchReleaseS: 0.122, clutchHomeS: 0.168, blip: { level: 0.73, riseS: 0.01 }, overRevRpm: 500 },
   efficiency: DRIVELINE_EFFICIENCY,
   gears: {
