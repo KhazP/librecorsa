@@ -6,10 +6,11 @@ LibreCorsa is an independent, non-commercial, open-source web simulator built wi
 
 ## 1. Licensing
 
-* **Source Code (`src/`, `scripts/`)**: Licensed under the [MIT License](LICENSE). The MIT licence covers the code only.
+* **Source Code (`src/`, `scripts/`)**: Licensed under the [MIT License](LICENSE). The MIT licence covers the code only: the circuit that `scripts/rwanda-official/` builds has its own licence (see *RISE Motordrome*).
 * **3D Models & Audio Assets (`public/`)**: Each asset keeps its own licence, listed below. Several are **non-commercial only**, so `public/` as a whole may not be used commercially. This repository carries only RISE Motordrome and the 2026 prototype's model (`public/amr26/`) and sound (`public/cars/f12026/`); every other asset below is served on librecorsa.org for playing there and is not in the repository:
   | Asset | Licence |
   | :--- | :--- |
+  | RISE Motordrome (`public/tracks/rwanda_official/`, `public/tracks/rwanda_official_short/`, and its source in `scripts/rwanda-official/`) | The project's own, CC BY-NC-SA 4.0 (non-commercial, share-alike); its two tree models CC BY 4.0 |
   | Circuit scans, F1 2026 model, ported F1 car models | CC BY 4.0 |
   | Chang, Okayama, Spielberg (Red Bull Ring) and Monaco circuits | By **Mitja Bonca** (Used with permission) |
   | 2026 Pirelli tyre sidewall texture (`public/cars/shared/tyres/`) and F1 rain-tyre temperature / wear curves | By **Cxjovich** ([https://www.overtake.gg/members/cxjovich.4261212/](https://www.overtake.gg/members/cxjovich.4261212/)), CC BY-NC-SA 4.0 (used with permission; non-commercial, share-alike) |
@@ -127,7 +128,7 @@ Each model below is licensed under [Creative Commons Attribution 4.0 (CC BY 4.0)
 
 ### RISE Motordrome (`public/tracks/rwanda_official/`, `public/tracks/rwanda_official_short/`)
 
-Made for this project: `scripts/rwanda-official/` builds the circuit in Blender from the published renders and figures of the official design. Its textures are drawn by the scripts; the barrier, fence, pit wall and gantry textures (`scripts/rwanda-official/assets/textures/`) are the project's own too, drawn by an earlier script of this project. The ground's heights come from [Terrain Tiles](https://registry.opendata.aws/terrain-tiles/) (Mapzen, hosted by AWS; here SRTM data by NASA / USGS). Tree spots, ground colours and the lake's outline were read from Esri World Imagery and, around the venue, from the published aerial render; no imagery is in the files.
+Made for this project and licensed under [Creative Commons Attribution-NonCommercial-ShareAlike 4.0 (CC BY-NC-SA 4.0)](https://creativecommons.org/licenses/by-nc-sa/4.0/): credit "RISE Motordrome by KhazP (LibreCorsa), https://librecorsa.org", no commercial use, and what is made from it keeps the same licence ([`LICENSE.md`](public/tracks/rwanda_official/LICENSE.md) beside the circuit). The licence covers the model, its data and its source in `scripts/rwanda-official/` (whose code stays MIT); it gives no rights to the real circuit's design or name. `scripts/rwanda-official/` builds the circuit in Blender from the published renders and figures of the official design. Its textures are drawn by the scripts; the barrier, fence, pit wall and gantry textures (`scripts/rwanda-official/assets/textures/`) are the project's own too, drawn by an earlier script of this project. The ground's heights come from [Terrain Tiles](https://registry.opendata.aws/terrain-tiles/) (Mapzen, hosted by AWS; here SRTM data by NASA / USGS). Tree spots, ground colours and the lake's outline were read from Esri World Imagery and, around the venue, from the published aerial render; no imagery is in the files.
 
 ---
 
