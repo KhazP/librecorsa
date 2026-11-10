@@ -337,11 +337,11 @@ for (const spec of PORTED_GT3_SPEC) {
 
 // The wheels stay on the road (neither sunk nor floating) while the AMG GT3 model drives them
 {
-  console.log(`\n=== 3. Wheels on the road while driving (AMG GT3 model, Rwanda colliders) ===`);
+  console.log(`\n=== 3. Wheels on the road while driving (AMG GT3 model, RISE Motordrome colliders) ===`);
   const track = getActiveTrackData(1200);
-  const trackRoot = loadGlbGeometry(resolve(process.cwd(), `public${track.meshUrl ?? "/tracks/rwanda/rwanda_2026.glb"}`));
+  const trackRoot = loadGlbGeometry(resolve(process.cwd(), `public${track.meshUrl}`));
   const ground = trackColliders(trackRoot).ground;
-  check("Rwanda track colliders load", Boolean(ground));
+  check("Track colliders load", Boolean(ground));
   if (ground) {
     const contact = measurePortedWheelContact(createAmgGt3Sim(track, trackRoot), ground, wheelExtras, AMG_GT3_CONFIG.chassis, WHEEL_CONTACT_RUN_S);
     for (const spec of PORTED_GT3_SPEC) {

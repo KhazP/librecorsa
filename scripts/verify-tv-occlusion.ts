@@ -20,7 +20,7 @@ import { hasFile, noteSkip } from './lib/hosted-files';
 const SIDES = [THREE.FrontSide, THREE.DoubleSide, THREE.BackSide] as const;
 let failed = 0;
 
-for (const id of ['yas_marina', 'rwanda']) {
+for (const id of ['yas_marina', 'rwanda_official', 'rwanda_official_short']) {
   if (!hasFile(`public/tracks/${id}/track_data.json`)) {
     noteSkip(id, `public/tracks/${id}/track_data.json`);
     continue;
@@ -28,7 +28,7 @@ for (const id of ['yas_marina', 'rwanda']) {
   const raw = JSON.parse(readFileSync(`public/tracks/${id}/track_data.json`, 'utf8'));
   setActiveTrack(id, raw);
   const track = getActiveTrackData(1200);
-  const root = loadGlbGeometry(id === 'rwanda' ? 'public/tracks/rwanda/rwanda_2026.glb' : `public/tracks/${id}/${id}.glb`);
+  const root = loadGlbGeometry(`public${raw.metadata?.mesh?.url ?? `/tracks/${id}/${id}.glb`}`);
   let k = 0;
   root.traverse((o) => {
     const mesh = o as THREE.Mesh;

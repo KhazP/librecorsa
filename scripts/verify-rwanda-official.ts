@@ -16,7 +16,7 @@ import { REPO_TRACK_IDS } from '../src/lib/hosted-content';
 import { SCENERY_CREDITS, type SceneryCredit } from '../src/lib/render/scenery-credits';
 import { createGroundHit, TrackColliderQuery, TrackWallQuery, WALL_SEGMENT_STRIDE } from '../src/lib/sim/f12026-car/TrackColliderQuery';
 import { evaluateSampleLateralHeightM, getActiveTrackData, setActiveTrack, type RawTrackJson } from '../src/lib/track-data';
-import { CIRCUIT_VENUES, TRACKS } from '../src/lib/track-registry';
+import { CIRCUIT_VENUES, DEFAULT_TRACK_ID, TRACKS } from '../src/lib/track-registry';
 import { loadGlbGeometry } from './lib/glb-geometry';
 
 // The circuit is one built scene with two laps: the Grand Prix layout (the default) and the short one (`short`)
@@ -52,9 +52,10 @@ interface Meta {
 console.log('Circuit list');
 const info = TRACKS.find((t) => t.id === ID);
 check('the layout is listed', !!info && info.layout === WANT.layout && info.quality === 'original');
-check('it is in the repository, like the concept layout', REPO_TRACK_IDS.has(ID));
-const venue = CIRCUIT_VENUES.find((v) => v.layouts.some((l) => l.id === 'rwanda'));
-check('the Rwanda venue offers the concept layout and both official laps', venue?.layouts.map((l) => l.id).join() === `rwanda,${BASE},${BASE}_short`, venue?.layouts.map((l) => l.layout).join(' | '));
+check('it is in the repository', REPO_TRACK_IDS.has(ID));
+const venue = CIRCUIT_VENUES.find((v) => v.layouts.some((l) => l.id === ID));
+check('RISE Motordrome offers the short lap, then the Grand Prix lap', venue?.name === 'RISE Motordrome' && venue.layouts.map((l) => l.id).join() === `${BASE}_short,${BASE}`, `${venue?.name}: ${venue?.layouts.map((l) => l.layout).join(' | ')}`);
+check('the short lap is the default circuit and heads the list', DEFAULT_TRACK_ID === `${BASE}_short` && TRACKS[0].id === DEFAULT_TRACK_ID);
 check('its track data is where the list says', info?.dataUrl === `/tracks/${ID}/track_data.json` && existsSync(`public${info.dataUrl}`));
 
 console.log('Track data');
@@ -413,5 +414,5 @@ void (async () => {
   check('as many trees and shrubs as it says', perModel.acacia === extras.counts?.acacia && perModel.shrub === extras.counts?.shrub && perModel.acacia > 5000, JSON.stringify(perModel));
   check('none on the road, kerbs, run-off, gravel or pit lane', onTrack === 0, `${onTrack}`);
   check('none floating or buried', floating === 0 && buried === 0, `${floating} floating, ${buried} buried`);
-  console.log(`\nAll ${passed} checks of the official Rwanda layout passed.`);
+  console.log(`\nAll ${passed} checks of RISE Motordrome passed.`);
 })();

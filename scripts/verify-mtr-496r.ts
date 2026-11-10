@@ -243,7 +243,7 @@ console.log('\n== Ported body');
 console.log('\n== Autopilot round Rwanda against the GT3');
 {
   const track = getActiveTrackData();
-  const root = loadGlbGeometry('public/tracks/rwanda/rwanda_2026.glb');
+  const root = loadGlbGeometry('public/tracks/rwanda_official/rwanda_official.glb');
   const lap = (sim: F12026CarSim) => {
     sim.resetToStartGrid(true);
     sim.aiAutopilot = true;

@@ -95,8 +95,10 @@ function duel(scenario: 'rear' | 'side', predict: boolean, seconds = 12, latency
     A.aiPaceScale = 0.8;
     B.aiPaceScale = 1;
   } else {
-    A.teleportToDistance(300, 60, -1.1);
-    B.teleportToDistance(300, 60, 1.1);
+    // Side by side into the last hairpin and out onto the pit straight: two autopilots that lean on each other all
+    // the way without either spinning on a perfect link (into The Bowl, from 300 m, one of them does)
+    A.teleportToDistance(4750, 60, -1.1);
+    B.teleportToDistance(4750, 60, 1.1);
     A.aiPaceScale = 0.9;
     B.aiPaceScale = 0.9;
   }

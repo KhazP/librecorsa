@@ -25,7 +25,7 @@ const start: RaceStartInfo = {
   laps: 2,
   collisions: "ghost_lap1",
   carClass: "any",
-  trackId: "rwanda",
+  trackId: "rwanda_official_short",
   grid: ["host", "me", "other"],
 };
 const roster = [

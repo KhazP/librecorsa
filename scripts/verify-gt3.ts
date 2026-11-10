@@ -252,7 +252,7 @@ console.log("\n== The GT3's own handling, not the F1's");
 console.log('\n== Autopilot on the Rwanda colliders');
 {
   const track = getActiveTrackData();
-  const root = loadGlbGeometry('public/tracks/rwanda/rwanda_2026.glb');
+  const root = loadGlbGeometry('public/tracks/rwanda_official/rwanda_official.glb');
   const lap = (sim: F12026CarSim, pace: number) => {
     sim.resetToStartGrid(true);
     sim.aiAutopilot = true;

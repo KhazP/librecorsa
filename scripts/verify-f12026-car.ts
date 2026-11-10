@@ -3,7 +3,7 @@
  *
  *   npx tsx scripts/verify-f12026-car.ts
  *
- * Loads the real track colliders from public/tracks/rwanda/rwanda_2026.glb (geometry + node extras only,
+ * Loads the real track colliders from public/tracks/rwanda_official/rwanda_official.glb (geometry + node extras only,
  * no textures), then runs config, collider, static, straight-line, braking, cornering, DRS, ERS and
  * full-lap checks.
  */
@@ -131,8 +131,8 @@ console.log('\n== f12026-car config');
 // 2. Track colliders
 // ---------------------------------------------------------------------------
 
-console.log('\n== Track colliders (rwanda_2026.glb)');
-const trackRoot = loadGlbGeometry('public/tracks/rwanda/rwanda_2026.glb');
+console.log('\n== Track colliders (rwanda_official.glb)');
+const trackRoot = loadGlbGeometry('public/tracks/rwanda_official/rwanda_official.glb');
 const t0 = performance.now();
 const colliders = TrackColliderQuery.fromTrackRoot(trackRoot);
 console.log(`      built ${colliders.triangleCount} triangles in ${fmt(performance.now() - t0, 0)} ms`);
@@ -168,6 +168,7 @@ const track = getActiveTrackData();
   // (less the kerb ripple), not a capped stand-in
   const v = new THREE.Vector3();
   for (const [name, surface] of [['Track_Kerbs', 'kerb'], ['Track_Kerbs_Sausage', 'sausage']] as const) {
+    if (surface === 'sausage' && !trackRoot.getObjectByName(name)) continue; // (a circuit without sausage kerbs)
     let probed = 0;
     let onSurface = 0;
     let maxBelowMm = 0;
@@ -883,7 +884,8 @@ console.log('\n== F12026CarSim (simulator adapter)');
     `lateral ${fmt(sim.lateralOffsetM, 2)}, s ${fmt(sim.sMeters, 2)}`
   );
   sim.resetToStartGrid(true);
-  check('Flying start', sim.telemetry.speedKmh > 260 && sim.telemetry.gear >= 6, `${fmt(sim.telemetry.speedKmh, 0)} km/h gear ${sim.telemetry.gear}`);
+  // (as fast as the car can be out of the last corner: the hairpin is 350 m before the line here)
+  check('Flying start', sim.telemetry.speedKmh > 150 && sim.telemetry.speedKmh < 271 && sim.telemetry.gear >= 4, `${fmt(sim.telemetry.speedKmh, 0)} km/h gear ${sim.telemetry.gear}`);
   sim.aiAutopilot = true;
   let t = 0;
   let maxLat = 0;

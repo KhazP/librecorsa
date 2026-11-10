@@ -311,14 +311,21 @@ export function runBarrierCrash(track: BuiltTrackData, walls: WallQuery, car: Cr
   };
 }
 
-/** Outside barriers of Turn 1 and Turn 2 (left side), track distance of the impact point */
+/**
+ * Outside barriers of the default circuit's Turn 8 (Lakeside, a right-hander: the barrier on the left) and Turn 12
+ * (in the esses, a left-hander: on the right), each at the end of a paved run-off, where it runs along the lap for
+ * over 100 m beyond the impact point: a car sliding along it stays on one face. Track distance of the impact point.
+ * (The gravel outside The Bowl and the hairpins holds a crashed car, as it should: there it never drives away. And
+ * off a head-on hit into a barrier that stands 6 m of grass from the road, as along the back straight, the F1 car
+ * cannot turn round between the two.)
+ */
 export const BARRIER_CRASH_CORNERS = [
-  { name: 'T1', sHit: 330, side: -1 },
-  { name: 'T2', sHit: 650, side: -1 },
+  { name: 'T8', sHit: 3800, side: -1 },
+  { name: 'T12', sHit: 4400, side: 1 },
 ] as const;
 
 /**
- * The late-braking crash matrix as verify checks: flat out at 300 km/h into the outside barrier of Turns 1 and 2 at
+ * The late-braking crash matrix as verify checks: flat out at 300 km/h into the outside barrier of Turns 8 and 12 at
  * 20 / 45 / 70 / 90°, stepped at 60 and 144 Hz. Nothing of the car may end up past the barrier face (`maxPenM`
  * tolerance), the CG never behind it, and the car must drive away afterwards.
  */

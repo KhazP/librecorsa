@@ -18,14 +18,14 @@ const check = (name: string, ok: boolean, detail = '') => {
   if (!ok) failures.push(name);
 };
 
-// A real lap: the VF26 on autopilot round Rwanda, recorded as the game records it (the second lap, a flying one)
+// A real lap: the VF26 on autopilot round RISE Motordrome, recorded as the game records it (the second lap, a flying one)
 const track = getActiveTrackData();
 const car = new F1Physics2026(track);
 car.aiAutopilot = true;
 const recorder = new LapRecorder({
   trackLengthM: track.totalLengthM,
   turns: [],
-  trackId: 'rwanda',
+  trackId: 'rwanda_official_short',
   vehicle: 'vf26',
   driverName: 'Test Driver',
   driverCode: 'TST',
@@ -114,7 +114,7 @@ const post = async (body: unknown, ip: string) =>
     env
   );
 const list = async (board: string | null) =>
-  worker.fetch(new Request(`https://lb.test/laps?track=rwanda&vehicle=vf26${board === null ? '' : `&board=${board}`}`), env);
+  worker.fetch(new Request(`https://lb.test/laps?track=rwanda_official_short&vehicle=vf26${board === null ? '' : `&board=${board}`}`), env);
 const board = lapBoardClass(real.conditions!);
 
 async function main(): Promise<void> {

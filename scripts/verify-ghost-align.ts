@@ -46,7 +46,7 @@ function lapOnLine(move?: (x: number, z: number) => { x: number; z: number }, ya
   }
   return {
     version: 1,
-    trackId: 'rwanda',
+    trackId: 'rwanda_official_short',
     vehicle: 'f12026-car',
     driverName: 'Test',
     driverCode: 'TST',

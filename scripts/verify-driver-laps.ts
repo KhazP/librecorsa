@@ -4,7 +4,7 @@
  * The driver is deliberately not the game AI: no knowledge of tyre loads or ABS internals, only what a player
  * feels. It steers by pursuit on the racing line with an integral trim, countersteers body slip, eases the lock
  * when the wheel goes light (fronts well past their peak slip angle), comes off the brake when a tyre locks, and
- * plans its braking points at 80 % of the car's deceleration. Each lap must finish without a spin and without the
+ * plans its braking points at 80 % of the car's deceleration, towards the target speeds the game shows for the car. Each lap must finish without a spin and without the
  * car's centre leaving the asphalt by more than 0.5 m.
  *
  * Usage: npx tsx scripts/verify-driver-laps.ts [pace list, default 1] (pace = fraction of the circuit's speed profile)
@@ -14,12 +14,12 @@ import * as THREE from 'three';
 import { getActiveTrackData } from '../src/lib/track-data';
 import { F1Physics2026 } from '../src/lib/f1-physics-2026';
 import { F12026CarSim } from '../src/lib/sim/f12026-car/F12026CarSim';
-import { aiLineOffsetM } from '../src/lib/sim/speed-profile';
+import { aiLineOffsetM, sampleProfile } from '../src/lib/sim/speed-profile';
 import type { DriverAssistPreset } from '../src/types/f1';
 import { loadGlbGeometry } from './lib/glb-geometry';
 
 const track = getActiveTrackData(1200);
-const root = loadGlbGeometry('public/tracks/rwanda/rwanda_2026.glb');
+const root = loadGlbGeometry('public/tracks/rwanda_official/rwanda_official.glb');
 const L = track.totalLengthM;
 const wrap = (s: number) => ((s % L) + L) % L;
 const DT = 1 / 120;
@@ -52,6 +52,8 @@ function driveLap(car: 'vf26' | 'f12026', preset: DriverAssistPreset, pace: numb
   c.assistPreset = preset;
   c.setAssistPreset?.(preset);
   c.teleportToDistance(200, 60 / 3.6);
+  // the target speed the game shows this car's driver (m/s)
+  const shownMs = (s: number): number => sampleProfile(c.brakingGuide.speedMs, wrap(s), L);
   let steerLimit = 1, latRateF = 0, thr = 0, brakeCap = 1, iLat = 0;
   let prevLat = c.lateralOffsetM, prevS = c.sMeters, dist = 0, t = 0;
   let maxSlip = 0, maxOff = 0, spins = 0, inSpin = false;
@@ -77,9 +79,9 @@ function driveLap(car: 'vf26' | 'f12026', preset: DriverAssistPreset, pace: numb
       steerLimit
     );
     // ---- speed: the circuit profile × pace, with braking points planned at a trusted deceleration
-    let vTarget = (pace * track.getSampleAtDistance(wrap(s + v * 0.4)).optimalSpeedKmh) / 3.6;
+    let vTarget = pace * shownMs(s + v * 0.4);
     for (let d = 0; d <= 300; d += 5) {
-      const vc = (pace * track.getSampleAtDistance(wrap(s + v * 0.15 + d)).optimalSpeedKmh) / 3.6;
+      const vc = pace * shownMs(s + v * 0.15 + d);
       if (vc < vTarget) vTarget = Math.min(vTarget, Math.sqrt(vc * vc + 2 * plannedDecel(vc) * d));
     }
     const e = vTarget - v;
