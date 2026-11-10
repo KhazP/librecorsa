@@ -1191,11 +1191,28 @@ export function buildCircuitScene(
       const size = box.getSize(new THREE.Vector3());
       // Four lamps per column (amber, green, red, red): sit on the first red row, 1/8 of the height below centre
       center.y -= size.y * 0.125;
-      // Extent of the box along the start direction: |sx·fx| + |sz·fz| (as for the width), not |size·fwd|, whose
-      // terms cancel on a diagonal straight
-      const depth = Math.abs(size.x * startFwd.x) + Math.abs(size.y * startFwd.y) + Math.abs(size.z * startFwd.z);
-      const width = Math.abs(size.x * startRight.x) + Math.abs(size.z * startRight.z);
-      placePods(center, depth * 0.5, Math.max(minSpacing, width / 5));
+      // Extent of the model along the start direction and across it, from its own vertices: on a diagonal straight
+      // the axis-aligned box of a thin panel is far deeper than the panel, and the pods would hang in front of it
+      let minF = Infinity;
+      let maxF = -Infinity;
+      let minR = Infinity;
+      let maxR = -Infinity;
+      const v = new THREE.Vector3();
+      gantry.traverse((obj) => {
+        const pos = obj instanceof THREE.Mesh ? obj.geometry.getAttribute("position") : undefined;
+        if (!pos) return;
+        for (let i = 0; i < pos.count; i++) {
+          v.fromBufferAttribute(pos, i).applyMatrix4(obj.matrixWorld);
+          const f = v.dot(startFwd);
+          const r = v.dot(startRight);
+          minF = Math.min(minF, f);
+          maxF = Math.max(maxF, f);
+          minR = Math.min(minR, r);
+          maxR = Math.max(maxR, r);
+        }
+      });
+      if (minF > maxF) return;
+      placePods(center, (maxF - minF) * 0.5, Math.max(minSpacing, (maxR - minR) / 5));
     };
     const gantry = root.getObjectByName("Prop_StartLights_0");
     const acGantry = root.getObjectByName("startlight_SUB1");
