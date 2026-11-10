@@ -1020,7 +1020,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         // The field for the car now on track, over the week's race distance
         const field = session.takeAiField();
         session.setRace({ kind: "ai", field });
-        startAiRace(field, { ...settingsRef.current.race, laps: week.raceLaps, start: "standing" });
+        // No damage, as in an open race with other drivers (their cars take none)
+        startAiRace(field, { ...settingsRef.current.race, laps: week.raceLaps, start: "standing", damage: "off" });
       } else {
         session?.car.resetToStartGrid(false);
       }
