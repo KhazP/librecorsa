@@ -1438,7 +1438,8 @@ export class F12026CarSim implements SimulatorCar {
         shiftUp: inputs.shiftUp,
         shiftDown: inputs.shiftDown,
       };
-      this.steerCmd = cmd.steer;
+      // A car whose state has blown up hands back a non-finite command: the rack must not keep it past the rescue
+      this.steerCmd = Number.isFinite(cmd.steer) ? cmd.steer : 0;
       _v.copy(v.velocity);
       v.step(h, vin);
       this.updateBrakes(h);
@@ -1979,10 +1980,11 @@ export class F12026CarSim implements SimulatorCar {
 
   private afterPlacement(): void {
     this.steeringAssist.reset();
+    this.steerCmd = 0;
     this.tcCut = this.absCut = 1;
     this.absWheelCut.fill(1);
     for (let i = 0; i < 4; i++) this.prevWheelOmega[i] = this.vehicle.wheels[i].omega;
-    this.apPedal = this.apYawI = this.apThrottle = 0;
+    this.apPedal = this.apYawI = this.apThrottle = this.trackI = 0;
     this.apLaunch = false;
     this.drsPressPending = false;
     this.boostRemainingS = 0;
