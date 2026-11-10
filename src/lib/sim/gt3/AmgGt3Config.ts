@@ -54,8 +54,15 @@ const WHEEL_TORQUE: [number, number][] = [
   [9500, 0],
 ];
 
+/**
+ * The curve against the reference laps [motec]: on warm tyres with fuel aboard the car pulled 4–5 % less
+ * full-throttle g than they do from 100 to 250 km/h, where the engine sets it, so the engine makes 4 % more than the
+ * curve: 406 kW (545 hp) at the crank, a GT3's balance-of-performance figure
+ */
+const TORQUE_SCALE = 1.04;
+
 /** Crank power (kW) at the curve's points [derived] */
-const POWER_CURVE: LutPoints = WHEEL_TORQUE.map(([rpm, nm]) => [rpm, ((nm / DRIVELINE_EFFICIENCY) * rpm * Math.PI) / 30 / 1000]);
+const POWER_CURVE: LutPoints = WHEEL_TORQUE.map(([rpm, nm]) => [rpm, ((nm * TORQUE_SCALE) / DRIVELINE_EFFICIENCY) * rpm * Math.PI / 30 / 1000]);
 
 const ENGINE = {
   powerCurve: POWER_CURVE,
@@ -77,8 +84,8 @@ const ENGINE = {
   idleRpm: 2100,
   // Engine 0.130 + gearbox 0.018 [spec]
   inertia: 0.148,
-  // 25 Hz limiter [spec LIMITER_HZ]
-  limiterCutS: 0.02,
+  // 25 Hz limiter: the cut lasts one cycle [spec LIMITER_HZ]
+  limiterCutS: 0.04,
 };
 
 const NONE: LutPoints = [
@@ -127,9 +134,17 @@ const GEARBOX = {
   ratios: [2.5, 1.951, 1.521, 1.2414, 1.0847, 0.96],
   reverse: 3.818,
   finalDrive: 3.4285,
-  // 100 ms up-shift with the ignition cut [spec CHANGE_UP_TIME]
-  shiftTimeS: 0.1,
+  // Dog box: 50 ms between gears, the ignition cut for 70 ms [ref CHANGE_UP_TIME, AUTO_CUTOFF_TIME]. The first data set's
+  // 100 ms leaves the full-throttle g further from the logs across the changes [motec]
+  shiftTimeS: 0.07,
+  // [spec CHANGE_DN_TIME]
+  downshiftTimeS: 0.1,
   shiftTorqueFraction: 0.1,
+  upshiftNeutralS: 0.05,
+  upshiftCutS: 0.07,
+  // Down: 100 ms between gears, the clutch home from 122 to 168 ms, a 73 % blip, and up to 500 rpm over the limiter
+  // [ref CHANGE_DN_TIME, DOWNSHIFT_PROFILE, AUTOBLIP, DOWNSHIFT_PROTECTION]
+  downshift: { neutralS: 0.1, clutchReleaseS: 0.122, clutchHomeS: 0.168, blip: { level: 0.73, riseS: 0.01 }, overRevRpm: 500 },
   efficiency: DRIVELINE_EFFICIENCY,
   gears: {
     // Reference telemetry limiter: logs peak at 7899 rpm [motec]
@@ -439,6 +454,29 @@ function buildGt3LoadCurve(dRef: number, fz0: number, lsExp: number): LutPoints 
  * keep the grip steps (DY_REF = DX_REF 1.58 / 1.56 / 1.54) scaled ×1.165 to reference GT3 grip [motec], and three
  * temperature curves.
  */
+/**
+ * Lateral grip over longitudinal [motec]: on warm tyres with fuel aboard the car held 3 % less lateral g than the
+ * reference laps while it braked 3 % harder, and the second reference's slick has the same lean (its lateral load
+ * curve sits 5–7 % over its longitudinal one)
+ */
+const GT3_LATERAL_GRIP = 1.033;
+
+/** The reference slick's wear: grip (% of new) against km slid [ref] */
+const GT3_WEAR_CURVE: [number, number][] = [
+  [0, 100],
+  [3.69, 99.62],
+  [7.37, 98.93],
+  [11.06, 97.96],
+  [14.75, 96.87],
+  [18.43, 95.82],
+  [22.12, 94.78],
+  [25.8, 93.47],
+  [29.49, 91.58],
+  [33.18, 88.81],
+  [36.86, 84.87],
+  [40.55, 80],
+];
+
 function gt3Compound(
   tyre_compound: PhysicsTyreCompound,
   name: string,
@@ -446,7 +484,9 @@ function gt3Compound(
   /** D_REF (lateral = longitudinal) of the compound */
   gripScale: number,
   thermalCurve: LutPoints,
-  window: [number, number]
+  window: [number, number],
+  /** Tread life against the soft's (× the distance of its wear curve) */
+  wearLife: number
 ): TyresCompoundData {
   // Wider 325/705-18 rear slick has ~1.2 % higher peak reference μ at Fz0 = 3910 N and flatter load sensitivity
   const rearGripScale = Number((gripScale * 1.012).toFixed(4));
@@ -454,21 +494,32 @@ function gt3Compound(
     name,
     shortName,
     tyre_compound,
+    // Grip against the distance the tread has slid, in proportion to the load over the data's 2.5 kN [ref]: little lost
+    // over the first 25 km, then the cliff. The medium and the hard stretch it [est]
+    wear: { curve: GT3_WEAR_CURVE.map(([km, pct]) => [Number((km * wearLife).toFixed(2)), pct]), loadScaled: true, loadRefN: 2500 },
     front: GT3_FRONT,
     rear: GT3_REAR,
     modelData: {
       // D_REF of the load-sensitivity law μ = D_REF·(Fz/FZ0)^(LS_EXP−1), plus 16-point tabulated DY_CURVE / DX_CURVE
-      Dy0: gripScale,
+      Dy0: Number((gripScale * GT3_LATERAL_GRIP).toFixed(4)),
       Dx0: gripScale,
       lsExpY: 0.7917,
       lsExpX: 0.8017,
       Fz0: 3787,
-      dyCurve: buildGt3LoadCurve(gripScale, 3787, 0.7917),
+      dyCurve: buildGt3LoadCurve(gripScale * GT3_LATERAL_GRIP, 3787, 0.7917),
       dxCurve: buildGt3LoadCurve(gripScale, 3787, 0.8017),
+      // A brush tyre: the brush curve to the peak slip angle [motec, with the steering compliance: understeer gradient
+      // 1.43 °/g against the logs' 1.44], and the second reference set's shape data, the peak angle growing 4.3 % per
+      // Fz0 of load (3.5 % at the rear) and with a softer tyre, the friction circle, the longitudinal stiffness × 1.05
+      // and the grip lost to sliding speed [ref]
+      curve: 'brush',
       friction_limit_angle: 6.12,
-      // Cornering stiffness peak scaled from Pacejka's MF 6.1 reference tyre by load capacity, as the f12026-car's
-      // (F12026CarConfig f1Compound): the 315 mm front on an 18" rim at 26 psi carries 2.01 × the reference, peak at
-      // 13.8 kN = 3.65 × Fz0; the 325 mm rear 2.13 ×, 14.6 kN = 3.75 × its Fz0 [Pacejka MF 6.1; TRA load formula; est]
+      peakSlipLoadGain: 0.043,
+      peakSlipPressureGain: 0.05,
+      combinedExponent: 2,
+      longStiffnessMult: 1.05,
+      speedSensitivity: 0.000353,
+      // Unused by a brush tyre (the magic-formula family's stiffness law)
       pKy2: 3.65,
       // Default TC (0.10) and ABS (0.09) limits sit around it [est]
       slip_ratio_limit: 0.1,
@@ -488,10 +539,10 @@ function gt3Compound(
       // +26 % at 300 km/h [derived]
       rollingResistanceSpeedSq: 4.6e-7,
       verticalDamping: 500,
-      pneumaticTrail: 0.04,
-      // +3 % longitudinal grip under braking. It was +9 %, which stood in for the front downforce the splitter stall used to
-      // lose under braking; with the stall gone the braking fit holds on less [motec, ref]
-      brakeDxMod: 0.03,
+      // No extra longitudinal grip under braking [ref]. It was +9 %, then +3 %: the first stood in for the front downforce
+      // the splitter stall used to lose under braking, the second for a braking measure that read the dive, not the
+      // grip. Measured over a settled stop the logs fit best with none (3.9 % RMS over 99-243 km/h) [motec]
+      brakeDxMod: 0,
     },
     thermalData: {
       thermalPerformanceCurve: thermalCurve,
@@ -500,12 +551,14 @@ function gt3Compound(
       surfaceHeatCapacity: 1800,
       coreHeatCapacity: 11000,
       slipHeatShare: 0.35,
-      hysteresis: 0.0038,
+      hysteresis: 0.0044,
       surfaceToCore: 40,
       surfaceCooling: [5, 0.6],
       coreCooling: [8, 0.2],
       thermalVerticalK: -0.001,
       thermalVerticalRefC: 90,
+      // Slow graining / blistering gains and exponents [ref]; the graining wears off as the tread slides
+      tread: { grainGain: 0.5, grainGamma: 1, blisterGain: 0.5, blisterGamma: 1, wearOffWithSlip: true },
     },
     pressureData: {
       optimalPsi: 26,
@@ -519,6 +572,8 @@ function gt3Compound(
       ],
       // ≈ 0.5 % grip per psi off the ideal over the usual ±2–4 psi
       pressureGripSensitivity: 1.0,
+      // 0.25 % of grip per psi off the ideal [ref]
+      pressureGripLossPerPsi: 0.0025,
       coldRefC: 60,
     },
     camberData: {
@@ -534,14 +589,16 @@ function gt3Compound(
     // The 325/705-18 rear [spec REAR / REAR_1 / REAR_2, flatter load-sensitivity curve + 16-pt DY/DX tables + rear spring gain]
     rearOverride: {
       modelData: {
-        Dy0: rearGripScale,
+        Dy0: Number((rearGripScale * GT3_LATERAL_GRIP).toFixed(4)),
         Dx0: rearGripScale,
         Fz0: 3910,
         lsExpY: 0.8044,
         lsExpX: 0.8144,
-        dyCurve: buildGt3LoadCurve(rearGripScale, 3910, 0.8044),
+        dyCurve: buildGt3LoadCurve(rearGripScale * GT3_LATERAL_GRIP, 3910, 0.8044),
         dxCurve: buildGt3LoadCurve(rearGripScale, 3910, 0.8144),
         friction_limit_angle: 6.06,
+        peakSlipLoadGain: 0.035,
+        speedSensitivity: 0.000351,
         pKy2: 3.75,
         relaxationLengthX: 0.10173,
         relaxationLengthY: 0.10173,
@@ -557,6 +614,7 @@ function gt3Compound(
           [34, 486_182],
         ],
         pressureGripSensitivity: 1.0,
+        pressureGripLossPerPsi: 0.0025,
         coldRefC: 60,
       },
       camberData: {
@@ -588,7 +646,8 @@ const TYRES = {
       [240, 0.8],
       [300, 0.6],
     ],
-    [70, 85]
+    [70, 85],
+    1
   ),
   PhysicsTyreCompound_GT3_Medium: gt3Compound(
     'PhysicsTyreCompound_GT3_Medium',
@@ -610,7 +669,8 @@ const TYRES = {
       [240, 0.8],
       [300, 0.6],
     ],
-    [80, 95]
+    [80, 95],
+    1.6
   ),
   PhysicsTyreCompound_GT3_Hard: gt3Compound(
     'PhysicsTyreCompound_GT3_Hard',
@@ -632,7 +692,8 @@ const TYRES = {
       [240, 0.8],
       [300, 0.6],
     ],
-    [80, 105]
+    [80, 105],
+    2.4
   ),
 } satisfies Partial<Record<PhysicsTyreCompound, TyresCompoundData>>;
 
@@ -664,10 +725,14 @@ export const AMG_GT3_CONFIG = {
     // Hub heights 55 / 60 mm below the CG on the 0.340 / 0.3525 m tyres [spec BASEY, derived]
     cgHeight: 0.4,
     inertia: { pitch: box(0.99, 3.85), roll: box(1.78, 0.99), yaw: box(1.78, 3.85) },
-    unsprungMassFront: 39,
-    unsprungMassRear: 46,
-    wheelInertiaFront: 1.75,
-    wheelInertiaRear: 1.95,
+    // An 18 in wheel and tyre (25 kg), the brake, the upright and half the links [ref]
+    unsprungMassFront: 45,
+    unsprungMassRear: 49,
+    // No tank position: the car's balance is fitted to telemetry at the CG it has, and the fuel load of those laps is
+    // not known, so the fuel rides at the CG
+    // Wheel, tyre and disc about the axle (kg·m²) [ref]
+    wheelInertiaFront: 1.6,
+    wheelInertiaRear: 1.8,
     // 320° lock [spec] on ~12.6 ratio: steering-wheel angle per path
     // curvature is 1900 deg·m over the 2.65 m wheelbase [motec]
     maxRoadWheelDeg: 320 / 12.6,
@@ -688,12 +753,12 @@ export const AMG_GT3_CONFIG = {
   gearbox: GEARBOX,
   // Auto-clutch 2300–3200 rpm [spec]
   clutch: { maxTorqueNm: 820, biteRpm: 2300, lockRpm: 3200 },
-  // Locking torque = preload + POWER / COAST × input torque [spec]. The default entry / exit dials scale these by 0.84 / 0.97,
-  // so the car runs ≈ 0.67 coast and 0.30 power lock: more coast lock and less preload keep the rear calm on lift-off and
-  // trail braking (lift-off yaw kick 24 % → 4 %) [ref]
+  // Locking torque = preload + POWER / COAST × input torque [spec]: 0.30 power and 0.67 coast lock with the dials where
+  // the car has them. The coast lock and the light preload keep the rear calm on lift-off and trail braking (lift-off
+  // yaw kick 24 % → 4 %) [ref]
   differential: {
     type: 'LSD_Ramp',
-    settings: { power: 0.31, coast: 0.8, preload: 50, friction_faces: 1, power_ramp_deg: 45, coast_ramp_deg: 45 },
+    settings: { power: 0.3, coast: 0.67, preload: 50, friction_faces: 1, power_ramp_deg: 45, coast_ramp_deg: 45 },
     // Solid steel Ø 32 mm × 0.55 m from the rear transaxle (G 80 GPa): GJ/L ≈ 15 kNm/rad, ≈ 11 kNm/rad with the CV joints;
     // shuffle 7.2 Hz in 1st, 19 Hz in 6th. Damping 10 % of critical for a wheel on its own shaft [est]
     halfshaft: { stiffnessNmPerRad: 11_000, dampingNmsPerRad: 29 },

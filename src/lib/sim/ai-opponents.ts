@@ -1177,6 +1177,7 @@ export class AiOpponentField {
       yawRateRadS: sim.yawRateRadS,
       roadYawRateRadS: sim.vxMs * sample.curvature,
       headingErrRad: Math.atan2(Math.sin(err), Math.cos(err)),
+      lateralM: sim.lateralOffsetM,
       steer: sim.steerAngleNorm,
       throttle: t.throttle,
       brake: t.brake,

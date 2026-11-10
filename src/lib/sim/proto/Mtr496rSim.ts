@@ -23,21 +23,21 @@ const tyreRadius = (axle: 'front' | 'rear') => C.tyreCompounds[C.compoundSlots.s
 
 /**
  * The 496R's planning model for its lap-time line, braking zones, braking urgency and HUD target speed: what
- * `scripts/ai/measure-ggv.ts` measures on warm tyres. It holds 1.53 g at 54 km/h and 2.78 g at 306 (μ ≈ 1.47 easing to
- * 1.23 of weight + downforce as the tyres' load sensitivity bites) and brakes at 1.68–3.63 g (μ ≈ 1.6, ≈ 1.4 at the top
- * once drag is taken out). The plan corners on μ 1.35 and brakes on 1.4, so it never brakes later than the car can stop.
+ * `scripts/ai/measure-ggv.ts` measures on warm tyres. It holds 1.55 g at 54 km/h and 2.91 g at 306 (μ ≈ 1.49 easing to
+ * 1.27 of weight + downforce as the tyres' load sensitivity bites) and brakes at 1.68–3.67 g (μ ≈ 1.6, ≈ 1.4 at the top
+ * once drag is taken out). The plan corners on μ 1.3 and brakes on 1.4, so it never brakes later than the car can stop.
  * Its aero at ρ 1.07, Rwanda's air, as the GT3's plan is (the car leans on downforce more than the GT3, so sea-level
- * numbers put it into Rwanda's fast corners too quick): downforce ≈ 1.53 v² (CL·A 2.7–3.2 m² as the car settles),
- * drag 0.64 v² (CD·A 1.19 m²), 59 % of the downforce on the rear axle; brake force and power at the wheels from the
- * car's data.
+ * numbers put it into Rwanda's fast corners too quick): downforce ≈ 1.79 v² (CL·A 3.3–3.4 m², the diffuser working
+ * from rest at its 64 / 85 mm ride height), drag 0.615 v² (CD·A 1.15 m²), 58 % of the downforce on the rear axle;
+ * brake force and power at the wheels from the car's data.
  */
 export const MTR_496R_PROFILE_CAR: SpeedProfileCarModel = {
   massKg: C.chassis.totalMassKg,
-  downforceCoef: 1.53,
-  dragCoef: 0.64,
-  rearDownforceShare: 0.59,
+  downforceCoef: 1.79,
+  dragCoef: 0.615,
+  rearDownforceShare: 0.58,
   rearWeightFraction: 1 - C.chassis.frontWeightFraction,
-  muLat: 1.35,
+  muLat: 1.3,
   muLong: 1.4,
   maxBrakeForceN:
     2 *
@@ -64,17 +64,20 @@ export const MTR_496R_SIM_PROFILE: CarSimProfile = {
   // The rear wing goes 1–15° (set 8) [spec setup.ini WING_2]; the splitter is fixed
   aeroPackagesDeg: { low_downforce: [0, -5], balanced: [0, 0], high_downforce: [0, 5] },
   padLateralMu: 1.35,
+  // 240° of rim lock on a 14:1 rack [spec car.ini STEER_RATIO]
+  steerRatio: 14,
   // The autopilot brakes on 85 % of this and corners on 1.1 × that. This car brakes harder than it corners (its tyres'
-  // 10 % BRAKE_DX_MOD, and its drag), so the envelope is sized for the corners: 1.1 × 0.85 × it is the measured 1.53 g
-  // at 54 km/h, 1.9 g at 162 and 2.8 g at 306 (the brakes' own 1.7 / 2.2 / 3.6 g plan as ≈ 70–85 % of that)
-  braking: { lowG: 1.6, aeroG: 1.4, refMs: 85 },
+  // 10 % BRAKE_DX_MOD, and its drag), so the envelope is sized for the corners: 1.1 × 0.85 × it is the measured 1.55 g
+  // at 54 km/h, 1.9 g at 162 (2.0 measured) and 2.9 g at 306 (the brakes' own 1.7 / 2.4 / 3.7 g plan as ≈ 70–85 % of that)
+  braking: { lowG: 1.6, aeroG: 1.5, refMs: 85 },
   // As the GT3's [est]; scripts/verify-mtr-496r.ts checks the autopilot's laps
   understeerRadPerMs2: 0.0035,
   speedProfile: MTR_496R_PROFILE_CAR,
   // The GT3's line: closed-wheel grip and downforce, nearer a GT3's than an F1 car's
   racingLine: 'gt3',
-  // AC CONSUMPTION 0.005659: ≈ 0.048 l/s at 8500 rpm, full throttle, at 0.74 kg/l [derived]
-  fuelFlowKgS: 0.036,
+  // Fuel flow with the engine's speed: 0.005659 l/s per 1000 rpm flat out, ≈ 0.048 l/s (0.036 kg/s) at 8500 rpm
+  // [spec car.ini FUEL CONSUMPTION]
+  fuelLPerS1000Rpm: 0.005659,
   // Levels index the electronics tables from the most intrusive (12); 6 is the mod's TC 9 %, and ABS 6 holds 12 % slip
   assistDials: {
     pro: { tcLevel: 0, tc2Level: 6, absLevel: 0 },

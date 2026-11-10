@@ -6,6 +6,8 @@ import type { CarClassRule } from "@/lib/sim/multiplayer-sync";
 import { F1Physics2026 } from "@/lib/f1-physics-2026";
 import { F12026CarSim, F12026_SIM_PROFILE } from "@/lib/sim/f12026-car/F12026CarSim";
 import { F12026_CAR_CONFIG, type CarPhysicsConfig } from "@/lib/sim/f12026-car/F12026CarConfig";
+import { createVf26Sim } from "@/lib/sim/f12026-car/Vf26Sim";
+import { vf26OnRigidBody } from "./vf26-engine";
 import { AMG_GT3_SIM_PROFILE, createAmgGt3Sim } from "@/lib/sim/gt3/AmgGt3Sim";
 import { AMG_GT3_CONFIG } from "@/lib/sim/gt3/AmgGt3Config";
 import { SUZUKI_LIANA_SIM_PROFILE, createSuzukiLianaSim } from "@/lib/sim/road/SuzukiLianaSim";
@@ -54,6 +56,8 @@ export const VEHICLE_MODELS: Readonly<Record<VehicleModelId, VehicleModel>> = {
     id: "vf26",
     classId: "f1",
     createSim: (track, trackRoot) => {
+      // The same car on the rigid-body engine, while it is opt-in (`vf26-engine.ts`)
+      if (vf26OnRigidBody()) return createVf26Sim(track, trackRoot);
       const car = new F1Physics2026(track);
       if (trackRoot) car.attachTrackRoot(trackRoot);
       return car;

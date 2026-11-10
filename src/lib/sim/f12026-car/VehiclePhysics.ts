@@ -43,10 +43,10 @@
  */
 
 import * as THREE from 'three';
-import { Lut } from '../lut';
+import { Lut, type LutPoints } from '../lut';
 import { tyreGaugePressureAtTemperature } from '../tyre-pressure';
 import {
-  advanceDirtyLevel,
+  advanceTreadDirt,
   flatSpotVibrationNm,
   tyreCentrifugalGrowthM,
   wearGripMultiplier,
@@ -59,6 +59,7 @@ import {
 } from '../suspension-kinematics';
 import {
   type BrakeCompoundKind,
+  type BrakePadMuCurve,
   type BrakeDiscState,
   computeDynamicBrakeMigration,
   createBrakeDiscState,
@@ -135,6 +136,16 @@ import {
   spinFrictionArmM,
   stepPatchTwist,
 } from './steering-torque';
+import {
+  brushForces,
+  brushPeakSlipTan,
+  brushRelaxationLength,
+  brushSlipStiffness,
+  brushSpeedGrip,
+  createBrushTyre,
+  type BrushForces,
+  type BrushTyre,
+} from './brush-tyre';
 import { roadTextureHeightM } from '../road-texture';
 
 const G = 9.81;
@@ -181,6 +192,31 @@ const LOW_SPEED_DAMPING = 0.3;
 const LOW_SPEED_FADE_MS = 4;
 /** Contact-patch / track-surface conductance while loaded (W/K) */
 const ROAD_CONDUCTANCE = 30;
+/** Heat conducted between neighbouring tyre bands (inner / middle / outer), through the tread and through the carcass (W/K) */
+const BAND_TREAD_CONDUCTANCE = 2;
+const BAND_CARCASS_CONDUCTANCE = 10;
+/**
+ * A brush tyre's graining / blistering per unit of (slip^gamma × grip × metres rolled × gain × °C outside the grip
+ * curve's peak), and the graining worn off per unit of (grip × metres rolled × gain, × slip^gamma where the tread wears
+ * it off only as it slides): full graining takes tens of minutes of hard work on a cold tyre
+ */
+const TREAD_CONDITION_RATE = 1e-6;
+const GRAIN_WEAR_OFF_RATE = 5e-7;
+/** Rolling speed from which a brush tyre's camber thrust is in full (m/s) */
+const CAMBER_THRUST_FULL_MS = 3;
+
+/**
+ * Steering shake of a flat-spotted tyre (Nm): one thump per revolution, peaking as the most worn of its sectors comes
+ * round to the road, at the size of the tyre model's flat-spot shake (`flatSpotVibrationNm` at its crest)
+ */
+export function flatSpotThumpNm(severity: number, rotationRad: number, omega: number, fz: number, sectorWear: ArrayLike<number>): number {
+  if (severity <= 0.005) return 0;
+  const n = sectorWear.length;
+  let flat = 0;
+  for (let i = 1; i < n; i++) if (sectorWear[i] > sectorWear[flat]) flat = i;
+  const flatRad = ((flat + 0.5) / n) * 2 * Math.PI;
+  return flatSpotVibrationNm(severity, Math.PI / 4, omega, fz) * Math.cos(rotationRad - flatRad);
+}
 /**
  * Rack torque that maps to full FFB output: the sum of both front tyres' moments about their kingpin axes (Nm). The
  * column sees it divided by the steering ratio (≈ 48 Nm on 12.6:1)
@@ -244,6 +280,8 @@ export interface VehicleInputs {
   steer: number;
   /** Clutch pedal 0..1 (1 = fully open); omitted = auto clutch */
   clutch?: number;
+  /** Handbrake 0..1, on the rear wheels of a car that has one (`BrakesData.handbrakeTorqueNm`) */
+  handbrake?: number;
   /** Edge-triggered */
   shiftUp?: boolean;
   shiftDown?: boolean;
@@ -527,6 +565,20 @@ export interface TyreRuntime {
   dyCurve: Lut | null;
   dxCurve: Lut | null;
   brakeDxMod: number;
+  /** Core temperatures (°C) at which the compound grains, cleans up and blisters (`tyreGrainThresholdsC`) */
+  grain: { grainBelow: number; healFrom: number; healTo: number; blisterAbove: number };
+  /** The brush family's constants when the compound is a brush tyre (`TyresModelData.curve`), else null */
+  brush: BrushTyre | null;
+  /** Core temperatures (°C) between which the grip curve is at its peak: a brush tyre grains below, blisters above */
+  peakWindowC: [number, number];
+  /**
+   * Size of this axle's tyre over the front's (tread width × radius): the compound's heat capacities and cooling are
+   * stated for the front tyre, and a wider rear holds and sheds heat in proportion
+   */
+  thermalSize: number;
+  /** The compound's own wear curve (km slid → grip, 1 = new) and the distance at which it is worn out; null: generic wear */
+  wearCurve: Lut | null;
+  wearOutKm: number;
 }
 
 /** Main spring in series with a helper that goes coil-bound after `helper_range` */
@@ -632,7 +684,21 @@ export function createTyreRuntime(compound: TyresCompoundData, rear = false): Ty
     dyCurve,
     dxCurve: model.dxCurve ? new Lut(model.dxCurve) : null,
     brakeDxMod: model.brakeDxMod ?? 0,
+    grain: tyreGrainThresholdsC(data.thermalData.optimalTempC),
+    brush: model.curve === 'brush' ? createBrushTyre(model, Math.tan(fla * DEG2RAD), fz0) : null,
+    peakWindowC: gripCurvePeakWindowC(data.thermalData.thermalPerformanceCurve),
+    thermalSize: rear ? (compound.rear.width * compound.rear.radius) / (compound.front.width * compound.front.radius) : 1,
+    wearCurve: data.wear ? new Lut(data.wear.curve.map(([km, pct]) => [km, pct / 100] as const)) : null,
+    wearOutKm: data.wear ? data.wear.curve[data.wear.curve.length - 1][0] : 0,
   };
+}
+
+/** First and last temperature (°C) at which a grip-against-temperature curve is at its peak */
+export function gripCurvePeakWindowC(curve: LutPoints): [number, number] {
+  let peak = 0;
+  for (const [, grip] of curve) peak = Math.max(peak, grip);
+  const at = curve.filter(([, grip]) => grip >= peak - 1e-6);
+  return [at[0][0], at[at.length - 1][0]];
 }
 
 /** Load (as a share of Fz0) below which the load laws are held, so they stay finite as a wheel unloads */
@@ -688,8 +754,21 @@ export function tyreCarcassStiffnessFactor(
   return Math.max(0.7, 1 + th.thermalVerticalK * (carcassC - th.thermalVerticalRefC));
 }
 
-/** Grip at hot inflation pressure `psi` (gauge): a parabola about the optimum, floored at half grip */
-export function tyrePressureGrip(p: Pick<TyresPressureData, 'optimalPsi' | 'pressureGripSensitivity'>, psi: number): number {
+/**
+ * Core temperatures (°C) at which a compound grains, cleans up and blisters, from its working window `[low, high]`:
+ * graining below low − 17, cleaning up from there to high + 5 (a tyre too warm to tear, rolled without much sliding,
+ * wears its grained tread off), blistering above high + 13. An F1 slick's 95–115 °C window gives 78 / 78–120 / 128 °C;
+ * a GT3 or road tyre's lower window moves them down with it.
+ */
+export function tyreGrainThresholdsC(optimalTempC: readonly [number, number]): { grainBelow: number; healFrom: number; healTo: number; blisterAbove: number } {
+  const [low, high] = optimalTempC;
+  return { grainBelow: low - 17, healFrom: low - 17, healTo: high + 5, blisterAbove: high + 13 };
+}
+
+/** Grip at hot inflation pressure `psi` (gauge): a parabola about the optimum, or the data's loss per psi; floored at half grip */
+export function tyrePressureGrip(p: Pick<TyresPressureData, 'optimalPsi' | 'pressureGripSensitivity' | 'pressureGripLossPerPsi'>, psi: number): number {
+  // Tyre data that states its loss per psi: linear either side of the optimum
+  if (p.pressureGripLossPerPsi !== undefined) return Math.max(0.5, 1 / (1 + p.pressureGripLossPerPsi * Math.abs(psi - p.optimalPsi)));
   const dp = (psi - p.optimalPsi) / p.optimalPsi;
   return Math.max(0.5, 1 - p.pressureGripSensitivity * dp * dp);
 }
@@ -737,6 +816,25 @@ export function combinedSlipForces(
 }
 
 const _comb = { fx: 0, fy: 0, sx: 0, sy: 0 };
+const _brush: BrushForces = { fx: 0, fy: 0, slipNorm: 0 };
+/** Share of the tread surface's temperature in the temperature a brush tyre's grip curve is read at (the rest: its carcass) */
+const GRIP_TEMP_SURFACE_SHARE = 0.25;
+/**
+ * The pressure a compound's tyre is set to by default at its `coldRefC` (psi gauge): the one its data states, else the
+ * one that reaches the optimum with the carcass at the centre of the working window
+ */
+export function defaultColdPressurePsi(t: TyresCompoundData): number {
+  const p = t.pressureData;
+  if (p.setPsi !== undefined) return p.setPsi;
+  const targetCoreC = 0.5 * (t.thermalData.optimalTempC[0] + t.thermalData.optimalTempC[1]);
+  return Math.round(tyreGaugePressureAtTemperature(p.optimalPsi, targetCoreC, p.coldRefC) * 10) / 10;
+}
+
+/** Spin past which a tyre's radius grows no further (rad/s): a wheel spun up off the ground does not balloon */
+const MAX_GROWTH_SPIN_RADS = 350;
+/** The scrub term of rolling resistance: the slip (over the peak slip) it stops growing at, and the spin it is whole from */
+const SCRUB_MAX_SLIP = 3;
+const SCRUB_FULL_SPIN_RADS = 20;
 const _roadSlope = { dhdx: 0, dhdz: 0 };
 
 // Scratch (single-threaded, never escapes a call)
@@ -744,6 +842,8 @@ const _m = new THREE.Matrix4();
 const _tyreTorque = new Float64Array(4);
 const _wheelInertia = new Float64Array(4);
 const _wheelOmega = new Float64Array(4);
+/** A tyre's inner / middle / outer shares of its heat when its pressure moves them (`TyresThermalPatchData.pressureHeat`) */
+const _heatShares = new Float64Array(3);
 const _brakeImpulse = new Float64Array(4);
 const _ex = new THREE.Vector3();
 const _ey = new THREE.Vector3();
@@ -796,6 +896,9 @@ export class VehiclePhysics {
   private ffbSamples = 0;
   /** 500 Hz outer-step FFB samples accumulated during step() */
   private ffbSubframeSamples: number[] = [];
+  /** The torque of the substeps of the outer step under way, summed, and their count: its sample is their mean */
+  private ffbStepSum = 0;
+  private ffbStepSamples = 0;
   /**
    * Commanded road-wheel angle at the last step() and its rate over that step (rad, rad/s): how fast the wheel is
    * really being turned, which the once-per-frame input otherwise only shows as steps
@@ -837,6 +940,10 @@ export class VehiclePhysics {
   public turbocharged: boolean;
   /** Disc / pad material of the brakes (`BrakesData.discMaterial`) */
   private readonly brakeCompound: BrakeCompoundKind;
+  /** The car's own pad friction against disc temperature (`BrakesData.padMuCurve`), else the material's */
+  private readonly brakePadCurve: BrakePadMuCurve | undefined;
+  /** Disc temperature at the start and every reset (°C, `BrakesData.discStartTempC`) */
+  private readonly brakeStartTempC: number;
   /** Dynamic brake bias after pressure-sensitive brake migration */
   public dynamicBrakeBias = 0.56;
   /** Live-tunable dynamic brake migration ramp amount (0..0.06) */
@@ -845,6 +952,9 @@ export class VehiclePhysics {
   public diffEntryLevel = 3;
   public diffMidLevel = 5;
   public diffExitLevel = 5;
+  /** The car's own entry / exit dial positions: a plain ramp diff has its data's lock there (the dials scale about them) */
+  private readonly diffEntryDefault: number;
+  private readonly diffExitDefault: number;
   public diffActivePhase: 'ENTRY' | 'MID' | 'EXIT' = 'MID';
   /** Live-tunable engine torque/throttle map (1 = Quali 100%, 2 = Race 98.5%, 3 = Smooth 96%, 4 = Lean 92.5%, 5 = Save 87%) */
   public engineMap = 1;
@@ -1020,6 +1130,8 @@ export class VehiclePhysics {
     this.powerSteering = ch.powerSteering;
     this.ffbMechanicalTrailM = ch.ffbMechanicalTrailM ?? DEFAULT_FFB_MECHANICAL_TRAIL_M;
     this.brakeCompound = cfg.brakes.discMaterial ?? 'carbon-ceramic';
+    this.brakePadCurve = cfg.brakes.padMuCurve;
+    this.brakeStartTempC = cfg.brakes.discStartTempC ?? 380;
     this.drivenWheels = cfg.drivenAxle === 'front' ? [0, 1] : [2, 3];
     // Body axes: X = left (pitch), Y = up (yaw), Z = forward (roll)
     this.dryInertiaBody = new THREE.Vector3(ch.inertia.pitch, ch.inertia.yaw, ch.inertia.roll);
@@ -1081,6 +1193,8 @@ export class VehiclePhysics {
     this.diffEntryLevel = cfg.differential.diffEntryLevel ?? 4;
     this.diffMidLevel = cfg.differential.diffMidLevel ?? 5;
     this.diffExitLevel = cfg.differential.diffExitLevel ?? 6;
+    this.diffEntryDefault = this.diffEntryLevel;
+    this.diffExitDefault = this.diffExitLevel;
     // F1 pull-rod cars and GT3 push-rod cars pass their unpacked 3D wishbone + tie-rod hardpoints into the 3D linkage solver
     const kinOptions = {
       geometry: susp.front.actuation === 'pull_rod' ? ('f1' as const) : ('gt3' as const),
@@ -1165,7 +1279,7 @@ export class VehiclePhysics {
         grainLevel: 0,
         blisterLevel: 0,
         dirtyLevel: 0,
-        brakeDisc: createBrakeDiscState(380, this.brakeCompound),
+        brakeDisc: createBrakeDiscState(this.brakeStartTempC, this.brakeCompound, this.brakePadCurve),
         coldPressurePsi: 0,
         pressurePsi: 0,
         brakeTorqueNm: 0,
@@ -1423,6 +1537,8 @@ export class VehiclePhysics {
     }
     this.prevVelocity.copy(this.velocity);
     this.ffbSubframeSamples.length = 0;
+    this.ffbStepSum = 0;
+    this.ffbStepSamples = 0;
     this.lastCmdSteerRad = Number.NaN;
     this.cmdSteerRateRadS = 0;
     this.updateOutputs(0);
@@ -1634,8 +1750,7 @@ export class VehiclePhysics {
     for (const w of this.wheels) {
       const t = this.tyres[w.isFront ? 0 : 1].data;
       const p = t.pressureData;
-      const targetCoreC = 0.5 * (t.thermalData.optimalTempC[0] + t.thermalData.optimalTempC[1]);
-      w.coldPressurePsi = Math.round(tyreGaugePressureAtTemperature(p.optimalPsi, targetCoreC, p.coldRefC) * 10) / 10;
+      w.coldPressurePsi = defaultColdPressurePsi(t);
       w.surfaceTempC = p.coldRefC;
       w.coreTempC = p.coldRefC;
       w.bandTempsC = [p.coldRefC, p.coldRefC, p.coldRefC];
@@ -1648,7 +1763,7 @@ export class VehiclePhysics {
       w.grainLevel = 0;
       w.blisterLevel = 0;
       w.dirtyLevel = 0;
-      resetBrakeDiscState(w.brakeDisc, 380, this.brakeCompound);
+      resetBrakeDiscState(w.brakeDisc, this.brakeStartTempC, this.brakeCompound, this.brakePadCurve);
       w.pressurePsi = w.coldPressurePsi;
     }
   }
@@ -1659,10 +1774,10 @@ export class VehiclePhysics {
   }
 
   /**
-   * Fuel on board (kg): its mass sits at the CG (the tank is behind the driver, between the axles), so the weight
-   * split stays and the moments of inertia grow with the mass, as the VF26's uniform-box body does. The spring
-   * preloads keep the load they were last set for (`refreshStaticGeometry` sets them for this load), so a car
-   * that burns fuel rises on its springs.
+   * Fuel on board (kg): its mass rides with the body and the moments of inertia grow with the mass, as the VF26's
+   * uniform-box body does. Its weight acts at the tank (`ChassisData.fuelTank`; at the CG without one), so a tank
+   * behind the CG moves the weight split rearward. The spring preloads keep the load they were last set for
+   * (`refreshStaticGeometry` sets them for this load), so a car that burns fuel rises on its springs.
    */
   public setFuelMass(kg: number): void {
     const fuel = Number.isFinite(kg) ? Math.max(0, kg) : 0;
@@ -1676,7 +1791,9 @@ export class VehiclePhysics {
 
   private staticCornerLoad(front: boolean): number {
     const ch = this.config.chassis;
-    return 0.5 * this.totalMassKg * G * (front ? ch.frontWeightFraction : 1 - ch.frontWeightFraction);
+    // The fuel's weight acts at the tank: its moment about the CG moves that much load between the axles
+    const tankShiftN = (this.fuelKg * G * (ch.fuelTank?.z ?? 0)) / ch.wheelbase;
+    return 0.5 * (this.totalMassKg * G * (front ? ch.frontWeightFraction : 1 - ch.frontWeightFraction) + (front ? tankShiftN : -tankShiftN));
   }
 
   /**
@@ -1790,6 +1907,7 @@ export class VehiclePhysics {
         ? [c(fin(i.brakeWheelScale[0]), 0, 1), c(fin(i.brakeWheelScale[1]), 0, 1), c(fin(i.brakeWheelScale[2]), 0, 1), c(fin(i.brakeWheelScale[3]), 0, 1)]
         : undefined,
       clutch: i.clutch === undefined ? undefined : c(fin(i.clutch), 0, 1),
+      handbrake: i.handbrake === undefined ? undefined : c(fin(i.handbrake), 0, 1),
       shiftUp: !!i.shiftUp,
       shiftDown: !!i.shiftDown,
       drs: !!i.drs,
@@ -1824,19 +1942,26 @@ export class VehiclePhysics {
     // Over-rev protection on downshifts (seamless boxes refuse the shift)
     if (g > 0 && g < this.gear) {
       this.updateBasis();
-      if (this.roadRpm(g) > gb.gears.redline_rpm - 200) return false;
+      const margin = gb.downshift?.overRevRpm ?? -200;
+      if (this.roadRpm(g) > gb.gears.redline_rpm + margin) return false;
     }
     // Reverse only near standstill
     if (g < 0 && this.velocity.length() > 2) return false;
     const down = g > 0 && g < this.gear;
     if (g > this.gear) this.sinceUpshiftS = 0;
     if (down) this.sinceDownshiftS = 0;
+    // A managed up-shift: the engine meets the new gear at the speed the driven wheels turn at, so the closed clutch
+    // does not spin them up with the engine's inertia. The wheels' speed, not the road's: a spinning axle keeps its spin
+    if (gb.upshiftCutS && gb.upshiftNeutralS === undefined && this.gear > 0 && g > this.gear && this.clutchEngagement > 0.5) {
+      this.engineOmega *= gb.ratios[g - 1] / gb.ratios[this.gear - 1];
+    }
     this.gear = g;
-    this.shiftTimer = gb.shiftTimeS;
+    this.shiftTimer = down ? (gb.downshiftTimeS ?? gb.shiftTimeS) : gb.shiftTimeS;
     // The ECU blips the engine up to the new gear's road speed on a downshift, so the closed clutch does not
     // jerk the rear axle down by the engine's inertia (that impulse locked the rears under trail braking).
     // Road speed, not wheel speed: matching spinning wheels would feed the wheelspin.
-    if (down && this.clutchEngagement > 0.5) {
+    // A car with its own down-shift gets there by its blip and its clutch (`solveDrivetrain`)
+    if (down && !gb.downshift && this.clutchEngagement > 0.5) {
       const target = Math.min(this.roadRpm(g), gb.gears.redline_rpm) * RPM2RADS;
       this.engineOmega = Math.max(this.engineOmega, target);
     }
@@ -1958,7 +2083,10 @@ export class VehiclePhysics {
     this.updateOutputs(dt);
     // Keep the newest samples: a long frame drops its oldest, not its latest, torque
     if (this.ffbSubframeSamples.length >= FFB_SUBFRAME_MAX) this.ffbSubframeSamples.shift();
-    this.ffbSubframeSamples.push(-this.telemetry.ffbTorqueNorm);
+    // The mean of the step's substeps, not its last: a 500 Hz sample of the 2 kHz torque without the aliasing
+    this.ffbSubframeSamples.push(-(this.ffbStepSamples > 0 ? this.ffbStepSum / this.ffbStepSamples : this.telemetry.ffbTorqueNorm));
+    this.ffbStepSum = 0;
+    this.ffbStepSamples = 0;
   }
 
   private updateBasis(): void {
@@ -2058,6 +2186,8 @@ export class VehiclePhysics {
         let f = springForce(w.springPreload + w.compression, s.springs);
         const intoRubber = w.compression - s.bumpStop.range;
         if (intoRubber > 0) f += s.bumpStop.rate * intoRubber + s.bumpStop.progression * intoRubber * intoRubber;
+        const hard = s.bumpStop.hardStop;
+        if (hard && w.compression > hard.range) f += hard.rate * (w.compression - hard.range);
         const pastDroop = -s.droopTravel - w.compression;
         if (pastDroop > 0) f -= DROOP_STOP_RATE * pastDroop + DROOP_STOP_DAMP * Math.max(0, -w.compressionVel);
         f += damperForce(d.base, w.compressionVel, knee, reboundKnee);
@@ -2071,10 +2201,12 @@ export class VehiclePhysics {
       if (axle.heaveActive) {
         const heave = 0.5 * (L.compression + R.compression);
         const hv = 0.5 * (L.compressionVel + R.compressionVel);
+        const hx = Math.max(0, heave - axle.heaveFreeM);
+        const heaveKnee = d.heaveFastThresholdMs ?? knee;
         const fh =
-          s.heave.rate * Math.max(0, heave - axle.heaveFreeM) +
+          (s.heave.rate + (s.heave.progressiveRate ?? 0) * hx) * hx +
           s.heave.packerRate * Math.max(0, heave - s.heave.packerGap) +
-          damperForce(d.heave, hv, knee);
+          damperForce(d.heave, hv, heaveKnee, d.heaveFastReboundThresholdMs ?? d.heaveFastThresholdMs ?? reboundKnee);
         L.suspensionForce += 0.5 * fh;
         R.suspensionForce += 0.5 * fh;
       }
@@ -2094,8 +2226,9 @@ export class VehiclePhysics {
       const geo = w.isFront ? tyre.data.front : tyre.data.rear;
       const model = tyre.data.modelData;
       const g = w.ground;
-      const R0 = geo.radius;
-      const dR = tyreCentrifugalGrowthM(w.omega);
+      // A tyre whose data states its growth with spin runs on the grown radius: contact, rolling radius and all
+      const R0 = geo.radius + (geo.radiusGrowthPerRadS ?? 0) * Math.min(Math.abs(w.omega), MAX_GROWTH_SPIN_RADS);
+      const dR = geo.radiusGrowthPerRadS !== undefined ? 0 : tyreCentrifugalGrowthM(w.omega);
       w.verticalRate = this.tyreVerticalRate(w);
 
       const kin = w.isFront
@@ -2158,14 +2291,20 @@ export class VehiclePhysics {
       const wWaterMm = this.wheelWaterMm[i] > 0 ? this.wheelWaterMm[i] : this.waterMm;
       const wWetness = wWaterMm > 0 ? wetnessFromWater(wWaterMm) : this.wetness;
       if (fz > 0) {
-        const bristleScale = dynamicBristleRelaxationScale(fz, tyre.fz0, wWetness);
-        const rx = model.relaxationLengthX * bristleScale;
-        // The lateral length follows the cornering stiffness (σ = Kyα / lateral carcass stiffness), so the carcass
-        // stiffness stays the one at Fz0 at every load; the bristle model's own load stretch would count load twice
-        const ry =
-          model.relaxationLengthY *
-          tyreCorneringStiffnessLoadFactor(tyre, fz) *
-          dynamicBristleRelaxationScale(tyre.fz0, tyre.fz0, wWetness);
+        let rx: number;
+        let ry: number;
+        if (tyre.brush) {
+          // A brush tyre's lag: both slips follow over the same length, from its load and how far it has slid
+          rx = ry = brushRelaxationLength(tyre.brush, fz, w.combinedSlip) * dynamicBristleRelaxationScale(tyre.fz0, tyre.fz0, wWetness);
+        } else {
+          rx = model.relaxationLengthX * dynamicBristleRelaxationScale(fz, tyre.fz0, wWetness);
+          // The lateral length follows the cornering stiffness (σ = Kyα / lateral carcass stiffness), so the carcass
+          // stiffness stays the one at Fz0 at every load; the bristle model's own load stretch would count load twice
+          ry =
+            model.relaxationLengthY *
+            tyreCorneringStiffnessLoadFactor(tyre, fz) *
+            dynamicBristleRelaxationScale(tyre.fz0, tyre.fz0, wWetness);
+        }
         w.slipRatio = (w.slipRatio + (h * vsx) / rx) / (1 + (h * absVx) / rx);
         w.tanSlipAngle = (w.tanSlipAngle + (h * vy) / ry) / (1 + (h * absVx) / ry);
         w.slipRatio = THREE.MathUtils.clamp(w.slipRatio, -5, 5);
@@ -2183,23 +2322,26 @@ export class VehiclePhysics {
       if (fz > 0) {
         const td = tyre.data;
         const cam = td.camberData;
-        // Temperature grip per band (inner / middle / outer), weighted by each band's share of the contact pressure
+        // Temperature grip per band (inner / middle / outer), weighted by each band's share of the contact pressure. A
+        // brush tyre's grip curve is drawn against the temperature of its rubber as a whole: mostly the carcass, a
+        // quarter the tread surface, so a flash of surface heat or a cool straight moves it little
         const sh = w.bandLoadShares;
+        const k = tyre.brush ? GRIP_TEMP_SURFACE_SHARE : 1;
         const thermal = realismThermalGrip(
-          sh[0] * tyre.thermal.evaluate(w.bandTempsC[0]) +
-            sh[1] * tyre.thermal.evaluate(w.bandTempsC[1]) +
-            sh[2] * tyre.thermal.evaluate(w.bandTempsC[2]),
+          sh[0] * tyre.thermal.evaluate(w.bandCoreTempsC[0] + k * (w.bandTempsC[0] - w.bandCoreTempsC[0])) +
+            sh[1] * tyre.thermal.evaluate(w.bandCoreTempsC[1] + k * (w.bandTempsC[1] - w.bandCoreTempsC[1])) +
+            sh[2] * tyre.thermal.evaluate(w.bandCoreTempsC[2] + k * (w.bandTempsC[2] - w.bandCoreTempsC[2])),
           this.realism
         );
         const pressureGrip = tyrePressureGrip(td.pressureData, w.pressurePsi);
         w.thermalGrip = thermal;
         // Wear, graining, blistering, dirt and flat-spots, as the VF26's tyre model (ac-tyre computeTyreForces)
-        const degradation =
-          wearGripMultiplier(w.wear) *
-          (1 - 0.08 * w.grainLevel) *
-          (1 - 0.12 * w.blisterLevel) *
-          (1 - 0.18 * w.dirtyLevel) *
-          (1 - 0.05 * w.flatSpotSeverity);
+        // A brush tyre's graining softens it (below, at the peak slip) rather than costing grip; its blisters cost up to
+        // a sixth of the grip
+        const treadGrip = tyre.brush ? 1 / (1 + 0.2 * w.blisterLevel) : (1 - 0.08 * w.grainLevel) * (1 - 0.12 * w.blisterLevel);
+        // Wear: the compound's own curve against the distance its tread has slid, else the generic curve
+        const wearGrip = tyre.wearCurve ? tyre.wearCurve.evaluate(w.wear * tyre.wearOutKm) : wearGripMultiplier(w.wear);
+        const degradation = wearGrip * treadGrip * (1 - 0.18 * w.dirtyLevel) * (1 - 0.05 * w.flatSpotSeverity);
         // Water: the tyre's response (film lubrication, aquaplaning past what its tread clears at this speed) and the
         // surface's (painted kerbs and grass go slicker than the asphalt in the same water)
         const severity = this.realism.wetSeverity;
@@ -2231,41 +2373,70 @@ export class VehiclePhysics {
         const dY = tyrePeakMu(tyre, fz, 'y');
         const dX = tyrePeakMu(tyre, fz, 'x');
         const brakeMod = w.slipRatio < 0 ? 1 + tyre.brakeDxMod : 1;
-        const muY = dY * base * camberGrip;
-        const muX = dX * brakeMod * base * camberGripX;
+        // A brush tyre loses grip with its sliding speed
+        const speedGrip = tyre.brush ? brushSpeedGrip(tyre.brush, Math.hypot(vsx, vy)) : 1;
+        const muY = dY * base * camberGrip * speedGrip;
+        const muX = dX * brakeMod * base * camberGripX * speedGrip;
         w.muY = muY;
         w.muX = muX;
 
-        // Peak slip angle at this load: the cornering stiffness saturates with load while the peak force keeps growing;
-        // a warm carcass is softer, so it peaks later (its lateral carcass stiffness softens alike: same relaxation length)
-        const tanPeak = tyrePeakSlipTan(tyre, fz) / tyreCarcassStiffnessFactor(td.thermalData, w.coreTempC);
+        let tanPeak: number;
+        let s: number;
+        /** Slip stiffnesses (N per unit of tan α / of slip ratio), for the patch's twist */
+        let cfa: number;
+        let cfk: number;
+        if (tyre.brush) {
+          const bt = tyre.brush;
+          // Peak slip angle from the load, the grip state and the pressure; a grained tread is softer and peaks later
+          tanPeak = brushPeakSlipTan(bt, fz, base, w.pressurePsi / td.pressureData.optimalPsi) * (1 + w.grainLevel);
+          // Camber thrust (toward the lean) as a shift of the slip angle. It comes with rolling: a leaning tyre that
+          // stands still pushes nowhere, so the shift fades in over the first metres per second
+          const camberShift = Math.sin(w.camberLeftRad) * cam.camberGain * Math.min(1, absVx / CAMBER_THRUST_FULL_MS);
+          const tanEff = Math.tan(Math.atan(w.tanSlipAngle) - camberShift);
+          brushForces(bt, w.slipRatio, tanEff, tanPeak, _brush);
+          fx = muX * fz * _brush.fx;
+          fy = -muY * fz * _brush.fy;
+          s = _brush.slipNorm;
+          cfa = muY * fz * brushSlipStiffness(bt, tanPeak);
+          cfk = muX * fz * brushSlipStiffness(bt, tanPeak / bt.longStiffnessMult);
+        } else {
+          // Peak slip angle at this load: the cornering stiffness saturates with load while the peak force keeps growing;
+          // a warm carcass is softer, so it peaks later (its lateral carcass stiffness softens alike: same relaxation length)
+          tanPeak = tyrePeakSlipTan(tyre, fz) / tyreCarcassStiffnessFactor(td.thermalData, w.coreTempC);
+
+          // Camber thrust (toward the lean) as an equivalent slip-angle shift
+          const gc = THREE.MathUtils.clamp(w.camberLeftRad, -tyre.camberThrustLimit, tyre.camberThrustLimit);
+          const thrust = cam.camberGain * (cam.contact_camber_c1 * gc - cam.contact_camber_c2 * gc * gc * gc);
+          const BC = tyre.B * tyre.C;
+          const tanEff = w.tanSlipAngle - (thrust * tanPeak) / Math.max(1e-3, muY * BC);
+
+          // Combined slip
+          combinedSlipForces(tyre, model, w.slipRatio / tyre.peakSlipRatio, tanEff / tanPeak, _comb);
+          fx = muX * fz * _comb.fx;
+          fy = -muY * fz * _comb.fy;
+          s = Math.hypot(_comb.sx, _comb.sy);
+          cfa = (muY * fz * BC) / tyre.tanPeakAngle;
+          cfk = (muX * fz * BC) / tyre.peakSlipRatio;
+          w.corneringStiffness = (muY * fz * BC) / tanPeak;
+        }
+        if (tyre.brush) w.corneringStiffness = cfa;
         w.peakSlipAngleRad = Math.atan(tanPeak);
-
-        // Camber thrust (toward the lean) as an equivalent slip-angle shift
-        const gc = THREE.MathUtils.clamp(w.camberLeftRad, -tyre.camberThrustLimit, tyre.camberThrustLimit);
-        const thrust = cam.camberGain * (cam.contact_camber_c1 * gc - cam.contact_camber_c2 * gc * gc * gc);
-        const BC = tyre.B * tyre.C;
-        const tanEff = w.tanSlipAngle - (thrust * tanPeak) / Math.max(1e-3, muY * BC);
-        w.corneringStiffness = (muY * fz * BC) / tanPeak;
-
-        // Combined slip
-        combinedSlipForces(tyre, model, w.slipRatio / tyre.peakSlipRatio, tanEff / tanPeak, _comb);
-        fx = muX * fz * _comb.fx;
-        fy = -muY * fz * _comb.fy;
-        const s = Math.hypot(_comb.sx, _comb.sy);
         w.combinedSlip = s;
 
         // Low-speed contact damping (keeps a parked car from ringing on the carcass spring)
+        const slipUse = Math.hypot(fx / (muX * fz), fy / (muY * fz));
         const fade = Math.max(0, 1 - absVx / LOW_SPEED_FADE_MS);
         if (fade > 0) {
           fx += fade * LOW_SPEED_DAMPING * muX * fz * vsx;
           fy -= fade * LOW_SPEED_DAMPING * muY * fz * vy;
         }
-        // The slip forces sit inside the friction ellipse already; the low-speed damping must not push them past it
+        // The slip forces sit on or inside the friction ellipse already (a brush tyre's combined-slip exponent may
+        // take them a little past it); the low-speed damping must not push them further
+        const limit = Math.max(1, slipUse);
         const use = Math.hypot(fx / (muX * fz), fy / (muY * fz));
-        if (use > 1) {
-          fx /= use;
-          fy /= use;
+        if (use > limit) {
+          fx *= limit / use;
+          fy *= limit / use;
         }
         // Telemetry only: share of the friction ellipse in use (1 = on it)
         w.circleFraction = Math.min(use, 1);
@@ -2275,10 +2446,11 @@ export class VehiclePhysics {
           wWaterMm > 0
             ? wetPneumaticTrailScale(td.wetTraits ?? SLICK_TRAITS, wWaterMm, absVx, w.wear)
             : 1;
-        // The pneumatic trail at zero slip is a third of the patch half-length (brush model, parabolic pressure), so it
-        // grows with the load as the patch lengthens
+        // The pneumatic trail at zero slip is a third of the patch half-length (brush model, parabolic pressure), or the
+        // tyre's own share of it, so it grows with the load as the patch lengthens
         w.patchHalfLengthM = contactHalfLengthM(R0, w.deflection);
-        w.mz = -fy * (w.patchHalfLengthM / 3) * wetTrailMult * Math.max(0, 1 - s);
+        const trail0 = model.trailShare === undefined ? w.patchHalfLengthM / 3 : w.patchHalfLengthM * model.trailShare;
+        w.mz = -fy * trail0 * wetTrailMult * Math.max(0, 1 - s);
         const yCpShift = THREE.MathUtils.clamp(
           -0.35 * geo.width * Math.sin(w.camberLeftRad) + (fy / Math.max(500, fz)) * 0.018,
           -0.45 * geo.width,
@@ -2290,8 +2462,6 @@ export class VehiclePhysics {
         // held in the patch up against the tyre's twist stiffness; rolling lets it out, and past the spin friction
         // moment the patch slides round instead
         const patchB = PATCH_HALF_WIDTH_SHARE * geo.width;
-        const cfa = (muY * fz * tyre.B * tyre.C) / tyre.tanPeakAngle;
-        const cfk = (muX * fz * tyre.B * tyre.C) / tyre.peakSlipRatio;
         const kTwist = patchTwistStiffness(cfa, cfk, model.relaxationLengthY, model.relaxationLengthX, w.patchHalfLengthM, patchB);
         const maxTwist = kTwist > 0 ? (0.5 * (muX + muY) * fz * spinFrictionArmM(w.patchHalfLengthM, patchB)) / kTwist : 0;
         // The wheel's yaw rate over the road: the driver's steering (spread over the frame), the toe / compliance
@@ -2332,7 +2502,7 @@ export class VehiclePhysics {
           _ex, _ey, _ez, _n, _fw, _lw, w.isLeft ? -1 : 1, w.steerRad, w.loadedRadius, _kpGeo, fx, fy, fz, w.mz + w.mzTwist, w.mx
         );
         w.gyroSteerNm = this.wheelGyroSteerNm(w, _fw);
-        ffbMz += tyreKingpinNm + flatSpotVibrationNm(w.flatSpotSeverity, w.rotationRad, w.omega, fz) + w.gyroSteerNm;
+        ffbMz += tyreKingpinNm + flatSpotThumpNm(w.flatSpotSeverity, w.rotationRad, w.omega, fz, w.circumferentialWear) + w.gyroSteerNm;
       }
 
       // Loose ground (gravel, grass) ploughs against the contact patch's motion, sliding or rolling, outside the
@@ -2387,6 +2557,8 @@ export class VehiclePhysics {
     this.telemetry.ffbTorqueNorm = THREE.MathUtils.clamp(driverNm / FFB_REFERENCE_NM, -1, 1);
     this.ffbSum += this.telemetry.ffbTorqueNorm;
     this.ffbSamples++;
+    this.ffbStepSum += this.telemetry.ffbTorqueNorm;
+    this.ffbStepSamples++;
 
     // ---- drivetrain, brakes and wheel spin
     this.solveDrivetrain(h, inp, tyreTorque);
@@ -2400,6 +2572,12 @@ export class VehiclePhysics {
     // Acceleration less gravity, for the next sub-step's unsprung inertia (the hubs ride with the body across)
     this.bodySpecificForce.set(this.force.x / this.totalMassKg, this.force.y / this.sprungMassKg, this.force.z / this.totalMassKg);
     this.force.y -= this.sprungMassKg * G;
+    // The fuel's weight acts at the tank, not at the CG: the moment of that offset
+    const tank = this.config.chassis.fuelTank;
+    if (tank && this.fuelKg > 0) {
+      _r.set(0, tank.y, tank.z).applyQuaternion(this.quaternion);
+      this.torque.add(_tmp.crossVectors(_r, _f.set(0, -this.fuelKg * G, 0)));
+    }
     this.velocity.x += (this.force.x / this.totalMassKg) * h;
     this.velocity.z += (this.force.z / this.totalMassKg) * h;
     this.velocity.y += (this.force.y / this.sprungMassKg) * h;
@@ -2617,11 +2795,24 @@ export class VehiclePhysics {
     if (rpm >= gb.gears.redline_rpm) this.limiterTimer = eng.limiterCutS;
     const mapIdx = THREE.MathUtils.clamp(Math.round(this.engineMap), 1, 5);
     const engineMapTorqueScale = [1.0, 0.985, 0.96, 0.925, 0.87][mapIdx - 1] ?? 1.0;
-    const wetPedalBlend = Math.max(this.wetness, mapIdx >= 4 ? (mapIdx - 3) * 0.35 : 0);
+    // The softer low-gear pedal: the driver's own choice (engine maps 4 and 5), and on a power unit with a wet pedal map
+    // the ECU's on a wet road. A car without one keeps the pedal its driver set
+    const wetPedalBlend = Math.max(eng.wetPedalMap ? this.wetness : 0, mapIdx >= 4 ? (mapIdx - 3) * 0.35 : 0);
     const lowGearWetExp = this.gear >= 1 && this.gear <= 4 ? (5 - this.gear) * 0.065 * wetPedalBlend : 0;
     const baseExp = (mapIdx >= 3 ? 1 + (mapIdx - 2) * 0.12 : 1) + lowGearWetExp;
     const rawThrottle = baseExp > 1 ? Math.pow(inp.throttle, baseExp) : inp.throttle;
     let plate = this.luts.throttle.evaluate(rawThrottle);
+    // The blip of a down-shift opens the throttle on the free engine, through the same air path
+    const dn = gb.downshift;
+    const downshifting = dn !== undefined && this.sinceDownshiftS < dn.clutchHomeS && this.sinceDownshiftS < this.sinceUpshiftS;
+    if (downshifting && dn.blip && this.sinceDownshiftS < Math.max(dn.neutralS, dn.clutchReleaseS)) {
+      // Held until the engine turns as fast as the driven wheels ask of it in this gear, less what it still gains while
+      // the air path empties
+      const wanted = Math.min(Math.abs(this.drivenOmega() * ratio) * RADS2RPM, gb.gears.redline_rpm);
+      const emptiesS = (eng.torqueResponseS?.fall ?? 0) + 60 / Math.max(rpm, eng.idleRpm);
+      const stillGains = ((this.icePlate * this.luts.power.evaluate(rpm) * 1000) / omegaE / eng.inertia) * emptiesS * RADS2RPM;
+      if (rpm + stillGains < wanted) plate = Math.max(plate, dn.blip.level * Math.min(1, this.sinceDownshiftS / Math.max(1e-6, dn.blip.riseS)));
+    }
     // Air path: the plate the cylinders see trails the pedal's (actuator, plenum), plus one crank revolution from the
     // intake stroke to the power stroke. The idle controller (spark advance), the limiter and the spark cut below act on
     // the combustion at once
@@ -2634,18 +2825,22 @@ export class VehiclePhysics {
     }
     plate = Math.max(this.icePlate, THREE.MathUtils.clamp((eng.idleRpm + 200 - rpm) / 800, 0, 0.15));
     if (this.limiterTimer > 0) plate = 0;
-    const sparkShare = inp.ignitionCut ?? 1;
+    // A managed up-shift takes the drive away while it lasts: the spark, and with it the MGU-K's deployment below
+    const shiftCut = gb.upshiftCutS !== undefined && this.sinceUpshiftS < gb.upshiftCutS;
+    const sparkShare = shiftCut ? 0 : (inp.ignitionCut ?? 1);
     // Turbo lag: the curve is the torque with the boost this plate makes in steady state; while the rotor trails it the
     // torque is (1 + boost made) / (1 + boost asked for) of that, as torque ∝ 1 + boost. A rotor still spinning faster
     // than the demand gives no more than the demand (the wastegate and the throttle hold the plenum to it)
     const turbo = eng.turbo;
     const boostShare =
       turbo && this.turbocharged ? Math.min(1, (1 + this.turboBoost) / (1 + turboSteadyBoost(turbo, rpm) * plate)) : 1;
-    const tCombustion = (plate * sparkShare * this.luts.power.evaluate(rpm) * engineMapTorqueScale * 1000) / omegaE;
+    // Thin air (altitude, heat) costs the engine a share of what it costs the wings
+    const airShare = eng.airDensitySensitivity ? 1 + eng.airDensitySensitivity * (this.airDensity / cfg.aero.airDensity - 1) : 1;
+    const tCombustion = (plate * sparkShare * this.luts.power.evaluate(rpm) * engineMapTorqueScale * airShare * 1000) / omegaE;
     let tIce = tCombustion * boostShare - (1 - plate) * this.luts.coast.evaluate(rpm) * mode.coastTorqueScale * this.engineBrakingScale;
     // Crank torque the lag costs, which the MGU-K may fill below
     let turboDeficit = tCombustion * (1 - boostShare);
-    if (this.shiftTimer > 0 && tIce > 0) {
+    if (this.shiftTimer > 0 && tIce > 0 && !downshifting) {
       tIce *= gb.shiftTorqueFraction;
       turboDeficit *= gb.shiftTorqueFraction;
     }
@@ -2660,6 +2855,19 @@ export class VehiclePhysics {
       const t = THREE.MathUtils.clamp((rpm - cl.biteRpm) / (cl.lockRpm - cl.biteRpm), 0, 1);
       engage = wheelSideRpm >= cl.lockRpm ? 1 : t * t * (3 - 2 * t);
       if (inp.clutch !== undefined) engage = Math.min(engage, 1 - inp.clutch);
+      // A dog box between gears: the engine is free of the wheels
+      if (gb.upshiftNeutralS !== undefined && this.sinceUpshiftS < gb.upshiftNeutralS) engage = 0;
+      // A down-shift: free between gears, then the clutch comes home over its ramp, or at once when the engine has met
+      // the wheels' speed (nothing is left to slip away, and the throttle finds the whole clutch)
+      if (downshifting) {
+        const from = Math.max(dn.neutralS, dn.clutchReleaseS);
+        if (this.sinceDownshiftS >= from && Math.abs(rpm - wheelSideRpm) < 0.02 * Math.max(rpm, wheelSideRpm)) {
+          this.sinceDownshiftS = dn.clutchHomeS;
+        } else {
+          const home = this.sinceDownshiftS < from ? 0 : (this.sinceDownshiftS - from) / Math.max(1e-6, dn.clutchHomeS - from);
+          engage = Math.min(engage, home);
+        }
+      }
     }
     this.clutchEngagement = engage;
     const clutchCap = cl.maxTorqueNm * engage;
@@ -2732,6 +2940,8 @@ export class VehiclePhysics {
 
     // ---- brakes (physical brake pad μ(T))
     const crankBrake = Math.max(0, -tK) + Math.max(0, -tIce);
+    // The slowing engine gives up some of its own inertia's torque, so a little less than the crank's braking reaches the
+    // wheels: this share keeps the rear axle on its demand under harvest (scripts/verify-powertrain.ts)
     const driveBrake = inp.brake > 0.05 && br.brakeByWire !== false ? (crankBrake * engage * Math.abs(ratio) * gb.efficiency) / 2 : 0;
     const [dl, dr] = this.drivenWheels;
     for (let i = 0; i < 4; i++) {
@@ -2739,10 +2949,26 @@ export class VehiclePhysics {
       const demand = inp.brake * (inp.brakeWheelScale ? inp.brakeWheelScale[i] : 1) * br.maxTorqueNm * (w.isFront ? bias : 1 - bias);
       // Pad μ(T) of the disc (1 in its window, a mild loss cold or faded)
       const friction = (i === dl || i === dr ? Math.max(0, demand - driveBrake) : demand) * w.brakeDisc.muFactor;
-      const tyre = this.tyres[w.isFront ? 0 : 1].data.modelData;
+      const compound = this.tyres[w.isFront ? 0 : 1].data;
+      const tyre = compound.modelData;
       const rollV = w.vx;
-      const rollingResistance = tyre.rollingResistance + (tyre.rollingResistanceSpeedSq ?? 0) * rollV * rollV;
-      w.brakeTorqueNm = friction + w.fz * rollingResistance * w.rollingRadius;
+      // Rolling resistance: its speed term, more of it on a soft tyre, and the scrub of a tyre working at its limit
+      // (on a turning wheel: a locked one only slides)
+      const softDrag = 1 + (compound.pressureData.pressureRollingGain ?? 0) * (compound.pressureData.optimalPsi / Math.max(1, w.pressurePsi) - 1);
+      const scrub = (tyre.rollingResistanceSlipGain ?? 0) * Math.min(w.combinedSlip, tyre.rollingResistanceSlipMax ?? SCRUB_MAX_SLIP) * Math.min(1, Math.abs(w.omega) / SCRUB_FULL_SPIN_RADS);
+      const rollingResistance = (tyre.rollingResistance + (tyre.rollingResistanceSpeedSq ?? 0) * rollV * rollV) * softDrag * (1 + scrub * softDrag);
+      const handbrake = !w.isFront && inp.handbrake ? inp.handbrake * (br.handbrakeTorqueNm ?? 0) : 0;
+      w.brakeTorqueNm = friction + handbrake + w.fz * rollingResistance * w.rollingRadius;
+    }
+    // Brake-operated diff lock: the faster driven wheel is held back
+    const brakeLock = cfg.differential.brakeLock;
+    if (brakeLock) {
+      const l = Math.abs(W[dl].omega);
+      const r = Math.abs(W[dr].omega);
+      const map = tIce + tK > 0 ? brakeLock.power : brakeLock.coast;
+      const spin = Math.max(l, r) / Math.max(1, Math.min(l, r)) - 1;
+      const share = THREE.MathUtils.clamp((spin - map.deadZone) / Math.max(1e-6, map.fullSpin - map.deadZone), 0, 1);
+      W[l > r ? dl : dr].brakeTorqueNm += share * map.torqueNm;
     }
 
     // ---- predicted velocities from the free torques
@@ -2753,7 +2979,12 @@ export class VehiclePhysics {
       Iw[i] = this.axles[W[i].isFront ? 0 : 1].wheelInertia;
       wW[i] = W[i].omega + (tyreTorque[i] / Iw[i]) * h;
     }
-    let wE = this.engineOmega + ((tIce + tK) / Ie) * h;
+    // Driveline loss: the gearbox and final drive pass `efficiency` of the torque the crank drives the wheels with, once
+    // the clutch carries it. The cars' crank curves are their wheel curves over that efficiency, so the wheels get the
+    // wheel curve. A free-revving engine loses nothing, and the overrun (engine braking, harvest) passes 1:1
+    const tCrank = tIce + tK;
+    const tDriveline = tCrank > 0 ? tCrank * (1 - (1 - gb.efficiency) * engage) : tCrank;
+    let wE = this.engineOmega + (tDriveline / Ie) * h;
 
     // ---- sequential impulses & 3-Phase Electronic Differential (Entry / Mid / Exit-HiSpd)
     const accB = _brakeImpulse.fill(0);
@@ -2813,10 +3044,11 @@ export class VehiclePhysics {
       powerCoeff = THREE.MathUtils.lerp(mid, level(this.diffExitLevel), exitW);
       coastCoeff = THREE.MathUtils.lerp(mid, level(this.diffEntryLevel), entryW);
     } else {
-      const entryScale = 0.65 + ((THREE.MathUtils.clamp(this.diffEntryLevel, 1, 12) - 1) / 11) * 0.7;
-      const exitScale = 0.65 + ((THREE.MathUtils.clamp(this.diffExitLevel, 1, 12) - 1) / 11) * 0.7;
-      powerCoeff = THREE.MathUtils.clamp(diff.power * exitScale, 0.05, 0.92);
-      coastCoeff = THREE.MathUtils.clamp(coastCoeff * entryScale, 0.05, 0.88);
+      // A plain ramp diff locks by its data (POWER / COAST) with the dials where the car has them; turning a dial
+      // scales that lock, 0.65× at 1 to 1.35× at 12, about the car's own position. An open diff stays open (no floor)
+      const dial = (level: number) => 0.65 + ((THREE.MathUtils.clamp(level, 1, 12) - 1) / 11) * 0.7;
+      powerCoeff = THREE.MathUtils.clamp((diff.power * dial(this.diffExitLevel)) / dial(this.diffExitDefault), 0, 1);
+      coastCoeff = THREE.MathUtils.clamp((coastCoeff * dial(this.diffEntryLevel)) / dial(this.diffEntryDefault), 0, 1);
     }
     this.diffActivePhase = entryW > 0.5 ? 'ENTRY' : exitW > 0.5 ? 'EXIT' : 'MID';
     const lockPower = powerCoeff * diff.friction_faces * cot(diff.power_ramp_deg);
@@ -3098,7 +3330,8 @@ export class VehiclePhysics {
       const inward = w.isLeft ? -1 : 1;
       const camberIn = inward * w.camberLeftRad;
       const fyIn = (inward * w.fy) / Math.max(500, w.fz);
-      const bias = THREE.MathUtils.clamp(-camberIn * 3.8 + fyIn * 0.22, -0.75, 0.75);
+      const spread = th.bandSpread;
+      const bias = THREE.MathUtils.clamp(-camberIn * (spread ? spread.camber : 3.8) + fyIn * (spread ? spread.lateral : 0.22), -0.75, 0.75);
       const sI = Math.max(0.08, (1 - bias) * 0.33);
       const sM = 0.34;
       const sO = Math.max(0.08, (1 + bias) * 0.33);
@@ -3107,22 +3340,53 @@ export class VehiclePhysics {
       shares[0] = sI / sSum;
       shares[1] = sM / sSum;
       shares[2] = sO / sSum;
-      for (let b = 0; b < 3; b++) {
-        const share = shares[b] * 3;
-        const bToCore = th.surfaceToCore * (w.bandTempsC[b] - w.bandCoreTempsC[b]);
-        const bSurfCool = (th.surfaceCooling[0] + th.surfaceCooling[1] * v) * (w.bandTempsC[b] - this.ambientC);
-        const bRoadCool = w.fz > 0 ? roadG * (shares[b] * 3) * (w.bandTempsC[b] - this.trackTempC) : 0;
-        const bCoreCool = (th.coreCooling[0] + th.coreCooling[1] * v + extWetCool) * (w.bandCoreTempsC[b] - this.ambientC);
-        w.bandTempsC[b] += ((th.slipHeatShare * slipPower * share - bToCore - bSurfCool - bRoadCool) / th.surfaceHeatCapacity) * dt;
-        w.bandCoreTempsC[b] += ((hyst * share + bToCore - bCoreCool) / th.coreHeatCapacity) * dt;
-        w.bandCarcassTempsC[b] = 0.55 * w.bandTempsC[b] + 0.45 * w.bandCoreTempsC[b];
+      // The compound's heat capacities and conductances are the front tyre's: this axle's scale with its size
+      const size = this.tyres[w.isFront ? 0 : 1].thermalSize;
+      const surfaceCap = th.surfaceHeatCapacity * size;
+      const coreCap = th.coreHeatCapacity * size;
+      // Inflation pressure in the heat: an under-inflated tyre works its rubber harder and flexes more, an
+      // over-inflated one runs on its crown (`TyresThermalPatchData.pressureHeat`)
+      const ph = th.pressureHeat;
+      let slipHeat = slipPower;
+      let rollHeat = hyst;
+      if (ph) {
+        const pd = td.pressureData;
+        const pRel = w.pressurePsi / pd.optimalPsi - 1;
+        slipHeat = slipPower * Math.max(0, 1 - ph.slipGain * pRel);
+        rollHeat = hyst * Math.max(0, 1 + (pd.pressureRollingGain ?? 0) * (pd.optimalPsi / Math.max(1, w.pressurePsi) - 1));
+        const hI = shares[0] * Math.max(0, 1 - ph.crownGain * pRel);
+        const hM = shares[1] * Math.max(0, 1 + 2 * ph.crownGain * pRel);
+        const hO = shares[2] * Math.max(0, 1 - ph.crownGain * pRel);
+        const hSum = hI + hM + hO;
+        _heatShares[0] = hI / hSum;
+        _heatShares[1] = hM / hSum;
+        _heatShares[2] = hO / hSum;
       }
-      // Cross-band conduction
-      const d01 = 12 * (w.bandTempsC[0] - w.bandTempsC[1]) * dt;
-      const d12 = 12 * (w.bandTempsC[1] - w.bandTempsC[2]) * dt;
+      for (let b = 0; b < 3; b++) {
+        const share = (ph ? _heatShares[b] : shares[b]) * 3;
+        const bToCore = th.surfaceToCore * size * (w.bandTempsC[b] - w.bandCoreTempsC[b]);
+        const bSurfCool = (th.surfaceCooling[0] + th.surfaceCooling[1] * v) * size * (w.bandTempsC[b] - this.ambientC);
+        const bRoadCool = w.fz > 0 ? roadG * size * (shares[b] * 3) * (w.bandTempsC[b] - this.trackTempC) : 0;
+        const bCoreCool = (th.coreCooling[0] + th.coreCooling[1] * v + extWetCool) * size * (w.bandCoreTempsC[b] - this.ambientC);
+        w.bandTempsC[b] += ((th.slipHeatShare * slipHeat * share - bToCore - bSurfCool - bRoadCool) / surfaceCap) * dt;
+        w.bandCoreTempsC[b] += ((rollHeat * share + bToCore - bCoreCool) / coreCap) * dt;
+      }
+      // Cross-band conduction: heat crosses between neighbouring bands through the tread and through the carcass (W/K),
+      // each band a third of its layer's heat capacity. Slow next to the bands' own heating and cooling, so camber and
+      // pressure keep their inner / outer temperature difference
+      const kSurf = ((3 * BAND_TREAD_CONDUCTANCE) / surfaceCap) * dt;
+      const kCore = ((3 * BAND_CARCASS_CONDUCTANCE) / coreCap) * dt;
+      const d01 = kSurf * (w.bandTempsC[0] - w.bandTempsC[1]);
+      const d12 = kSurf * (w.bandTempsC[1] - w.bandTempsC[2]);
       w.bandTempsC[0] -= d01;
       w.bandTempsC[1] += d01 - d12;
       w.bandTempsC[2] += d12;
+      const c01 = kCore * (w.bandCoreTempsC[0] - w.bandCoreTempsC[1]);
+      const c12 = kCore * (w.bandCoreTempsC[1] - w.bandCoreTempsC[2]);
+      w.bandCoreTempsC[0] -= c01;
+      w.bandCoreTempsC[1] += c01 - c12;
+      w.bandCoreTempsC[2] += c12;
+      for (let b = 0; b < 3; b++) w.bandCarcassTempsC[b] = 0.55 * w.bandTempsC[b] + 0.45 * w.bandCoreTempsC[b];
       // The tyre's surface temperature is the band surfaces weighted by contact pressure (the rubber on the road: flash
       // temperature, graining); its carcass temperature the bands' mean carcass (the inner liner the inflation gas
       // sees, and the rubber behind the carcass's vertical and cornering stiffness)
@@ -3130,8 +3394,15 @@ export class VehiclePhysics {
       w.coreTempC = (w.bandCoreTempsC[0] + w.bandCoreTempsC[1] + w.bandCoreTempsC[2]) / 3;
 
       // Wear & 16-sector flat-spotting / graining / blistering / dirt pickup
-      const wearDelta =
-        (slipPower * 1.4e-8 + w.fz * v * 2.5e-10) * dt * this.realism.tyreWearScale * wetWearScale(traits, this.wetness);
+      // A compound with its own wear curve wears by the distance its tread slides over the road (more under more load,
+      // when its data says so), as a share of the distance that wears it out; the others by sliding power and rolling
+      const wearRt = this.tyres[w.isFront ? 0 : 1];
+      const wearDelta = wearRt.wearCurve
+        ? ((Math.hypot(w.slipVelX, w.vy) * dt * (td.wear?.loadScaled ? w.fz / (td.wear.loadRefN ?? wearRt.fz0) : 1)) / (1000 * wearRt.wearOutKm)) *
+          (w.fz > 0 ? 1 : 0) *
+          this.realism.tyreWearScale *
+          wetWearScale(traits, this.wetness)
+        : (slipPower * 1.4e-8 + w.fz * v * 2.5e-10) * dt * this.realism.tyreWearScale * wetWearScale(traits, this.wetness);
       w.wear = Math.min(1, w.wear + wearDelta);
       const numSec = w.circumferentialWear.length;
       const rimSpeed = Math.abs(w.omega * w.rollingRadius);
@@ -3140,7 +3411,7 @@ export class VehiclePhysics {
         const lockFrac = (0.35 * v - rimSpeed) / (0.35 * v);
         const prevSec = (sec + numSec - 1) % numSec;
         const nextSec = (sec + 1) % numSec;
-        const locWear = wearDelta * (1 + 11 * lockFrac);
+        const locWear = td.flatSpotSoftness === undefined ? wearDelta * (1 + 11 * lockFrac) : wearDelta * (1 + 11 * lockFrac) * td.flatSpotSoftness;
         w.circumferentialWear[sec] = Math.min(1, w.circumferentialWear[sec] + locWear * 0.6);
         w.circumferentialWear[prevSec] = Math.min(1, w.circumferentialWear[prevSec] + locWear * 0.2);
         w.circumferentialWear[nextSec] = Math.min(1, w.circumferentialWear[nextSec] + locWear * 0.2);
@@ -3159,19 +3430,41 @@ export class VehiclePhysics {
       }
       w.flatSpotSeverity = Math.min(1, Math.max(0, (maxSecW - minSecW) * 18));
 
-      // Graining / blistering thresholds move down with a rain tyre's working window
-      const core = w.coreTempC - traits.tempShiftC;
-      const surfCoreDelta = w.surfaceTempC - w.coreTempC;
-      if (core < 78 && surfCoreDelta > 10 && slipPower > 6000) {
-        w.grainLevel = Math.min(1, w.grainLevel + (slipPower / 100000) * ((78 - core) / 30) * 0.25 * dt);
-      } else if (core >= 82 && core <= 120 && w.fz > 500 && slipPower < 25000) {
-        w.grainLevel = Math.max(0, w.grainLevel - 0.035 * dt);
-      }
-      if (core > 128) {
-        w.blisterLevel = Math.min(1, w.blisterLevel + (core - 128) * 0.0035 * dt);
+      // Graining / blistering against the compound's own working window (a rain tyre's sits lower, a GT or road tyre's
+      // lower than an F1 slick's): a tyre worked hard well below it tears its cold tread, one running in or near it
+      // cleans up, one far above it blisters
+      const rt = this.tyres[w.isFront ? 0 : 1];
+      const grain = rt.grain;
+      const core = w.coreTempC;
+      if (rt.brush) {
+        // A brush tyre's tread condition builds slowly, with the work done at the wrong temperature: slip^gamma × the
+        // road's grip × rolling speed × the degrees outside the grip curve's peak. Graining wears off as the tyre rolls,
+        // or, with `wearOffWithSlip`, only as its tread slides
+        const tread = th.tread;
+        if (tread && v > 2 && w.fz > 0) {
+          const work = w.ground.grip * v * this.realism.tyreWearScale * dt;
+          const slip = Math.min(2, w.combinedSlip);
+          const [peakFrom, peakTo] = rt.peakWindowC;
+          if (core < peakFrom) w.grainLevel += Math.pow(slip, tread.grainGamma) * work * tread.grainGain * (peakFrom - core) * TREAD_CONDITION_RATE;
+          const wearOff = tread.wearOffWithSlip ? Math.pow(slip, tread.grainGamma) * work : work;
+          w.grainLevel = THREE.MathUtils.clamp(w.grainLevel - wearOff * tread.grainGain * GRAIN_WEAR_OFF_RATE, 0, 1);
+          if (core > peakTo) {
+            w.blisterLevel = Math.min(1, w.blisterLevel + Math.pow(slip, tread.blisterGamma) * work * tread.blisterGain * (core - peakTo) * TREAD_CONDITION_RATE);
+          }
+        }
+      } else {
+        const surfCoreDelta = w.surfaceTempC - w.coreTempC;
+        if (core < grain.grainBelow && surfCoreDelta > 10 && slipPower > 6000) {
+          w.grainLevel = Math.min(1, w.grainLevel + (slipPower / 100000) * ((grain.grainBelow - core) / 30) * 0.25 * dt);
+        } else if (core >= grain.healFrom && core <= grain.healTo && w.fz > 500 && slipPower < 25000) {
+          w.grainLevel = Math.max(0, w.grainLevel - 0.035 * dt);
+        }
+        if (core > grain.blisterAbove) {
+          w.blisterLevel = Math.min(1, w.blisterLevel + (core - grain.blisterAbove) * 0.0035 * dt);
+        }
       }
 
-      w.dirtyLevel = advanceDirtyLevel(w.dirtyLevel, w.ground.surface, slipPower, v, dt, this.trackEvolution.marbleLevel);
+      w.dirtyLevel = advanceTreadDirt(w.dirtyLevel, w.ground.surface, v, dt, this.trackEvolution.marbleLevel);
 
       const p = td.pressureData;
       const rimWetDeltaC = rimWetEnvironmentCoolingWK(this.wetness, v) * 0.45 * Math.max(0, w.coreTempC - this.ambientC) * 0.02;
@@ -3190,7 +3483,8 @@ export class VehiclePhysics {
         dt,
         this.brakeCompound,
         w.isFront ? this.brakeDuctScale.front : this.brakeDuctScale.rear,
-        Math.min(1, this.wetness + 0.5 * sprayBoost)
+        Math.min(1, this.wetness + 0.5 * sprayBoost),
+        this.brakePadCurve
       );
     }
   }

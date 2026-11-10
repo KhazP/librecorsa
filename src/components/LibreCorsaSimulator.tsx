@@ -632,6 +632,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         compound: session?.car.tireCompound ?? "soft",
         lineWaterMm: getTrackEnv().weather.lineWaterMm,
         realism: settingsRef.current.realism,
+        vehicle: vehicleModelRef.current,
       }),
     [session, getTrackEnv]
   );

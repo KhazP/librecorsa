@@ -71,6 +71,9 @@ import { addContactShadow, seatContactShadow } from "@/lib/render/contact-shadow
 import { buildKeyLookup, HUD_TOGGLE_EVENT, type KeyAction } from "@/lib/input/bindings";
 import { carWheelLockDeg, connectedPads, DeviceInputReader, findPad } from "@/lib/input/device-input";
 import { webHidFfb, wheelFfb } from "@/lib/input/wheel-ffb";
+import { simMode } from "@/lib/sim/runtime/sim-mode";
+import { createSimHost } from "@/lib/sim/runtime/sim-host";
+import { startSimWorker } from "@/lib/sim/runtime/worker-sim-host";
 import { steeringAssistSettings } from "@/lib/sim/steering-assist";
 import { axleSlipFromTelemetry, createAxleSlipSample } from "@/lib/sim/tyre-slip";
 import { clampFov, DEFAULT_KEYBOARD_TUNING, DEFAULT_PLAYER_SETTINGS, type PlayerSettings } from "@/lib/settings/player-settings";
@@ -505,8 +508,19 @@ export class DriveSession {
      * A car of the chosen model on the start grid, with the session's presets carried over from `prev`
      * (defaults for the first car) and that car's saved tyre setup
      */
+    /**
+     * The simulation worker, while it is opt-in (`sim-mode.ts`): it drives the player's car in practice, through a
+     * stand-in the rest of the session uses as the car (`sim-host.ts`). AI and online races run on the page.
+     */
+    const simWorker = simMode() === "worker" ? startSimWorker() : null;
+    const simHost = simWorker ? createSimHost(simWorker) : null;
+    simWorker?.ping().then(
+      (ms) => console.info(`[sim] worker round trip ${ms.toFixed(1)} ms`),
+      (reason) => console.warn("[sim] worker unavailable, simulating on the page:", reason)
+    );
     const createCar = (vehicle: VehicleModelId, prev: SimulatorCar | null, carId: CarId = carIdNow): SimulatorCar => {
-      const car = vehicleModelSpec(vehicle).createSim(track, trackRoot);
+      const built = vehicleModelSpec(vehicle).createSim(track, trackRoot);
+      const car = simHost ? simHost.adopt(built, vehicle, trackRoot) : built;
       // An F1 car's overtaking aids by its year, and race control for them while a race is on (free in practice);
       // other classes have none
       const rules = carOvertakingRules(carById(carId));
@@ -1492,6 +1506,9 @@ export class DriveSession {
         steerLeft: 0,
         steerRight: 0,
         analogSteer: directSteer,
+        // A bound steering wheel's rim turns the rack at the speed of the driver's hands; a mouse, the touch pad and
+        // an unbound device keep the car's limit on how fast the rack turns
+        steerRim: device.source === "wheel" && !settings.mouseSteer && !touchSteering,
         kbSteer: kbSteerDir,
         padSteer: directSteer === undefined ? gamepadStick : undefined,
         manualOverride:
@@ -1543,6 +1560,13 @@ export class DriveSession {
         if (!aiField?.playerFrozen && !mpFrozen) physics.step(dtSeconds, inputs);
         aiField?.update(dtSeconds);
         startupMonitor?.end("sim");
+      }
+      // The worker drives the car in practice; an AI or online race steps it here, with the field around it
+      if (simHost) {
+        const was = simHost.remote;
+        // Not with a steering wheel yet: its force feedback is still sent from the page, a frame at a time
+        simHost.endFrame(raceNow().kind === "practice" && settingsNow.device !== "wheel");
+        if (simHost.remote !== was) console.info(simHost.remote ? "[sim] the worker drives the car" : "[sim] the page drives the car");
       }
       if (mpRace && mpFrame && mpFrame.phase === "racing" && !this.snapshot.paused) {
         mpRace.lapClock.update(physics.sMeters, mpFrame.raceTimeS, mpRace.start.laps, mpRace.flagOut);
@@ -2171,6 +2195,7 @@ export class DriveSession {
       haptics.stop();
       opponentAudio.dispose();
       wheelFfb.dispose();
+      simHost?.dispose();
       document.removeEventListener("visibilitychange", onVisibilityChange);
       window.removeEventListener("pagehide", onPageHide);
       window.removeEventListener("pageshow", onPageShow);

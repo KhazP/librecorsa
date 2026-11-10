@@ -8,12 +8,28 @@
  *   capturing cold bite loss ("green" / cold carbon discs) and high-temperature thermal fade:
  *   - `'carbon-ceramic'` (F1 carbon-carbon discs: soft cold bite below ~130 °C, full from ~180 °C, fade > 950 °C)
  *   - `'endurance-steel'` (GT3 cast-iron discs: cold bite below 75 °C, optimal 95–680 °C, fade > 720 °C)
+ *   - or a car's own curve from its data (`BrakePadMuCurve`), in place of the material's
  * - Cumulative pad glazing degradation (`padGlazingFactor`) under sustained extreme overheating.
  * - WEC / F1 Dynamic Brake Migration (`computeDynamicBrakeMigration`) that shifts effective brake
  *   bias forward at high hydraulic pressure and rearward during trail-braking release.
  */
 
 export type BrakeCompoundKind = 'carbon-ceramic' | 'endurance-steel';
+
+/** A car's own pad friction against disc temperature: (°C, share of full torque) points, temperature ascending */
+export type BrakePadMuCurve = ReadonlyArray<readonly [number, number]>;
+
+/** `curve` at `tempC`: linear between its points, held past its ends */
+function padCurveAt(curve: BrakePadMuCurve, tempC: number): number {
+  const n = curve.length;
+  if (tempC <= curve[0][0]) return curve[0][1];
+  if (tempC >= curve[n - 1][0]) return curve[n - 1][1];
+  let i = 1;
+  while (curve[i][0] < tempC) i++;
+  const [x0, y0] = curve[i - 1];
+  const [x1, y1] = curve[i];
+  return y0 + ((y1 - y0) * (tempC - x0)) / (x1 - x0);
+}
 
 export interface BrakeDiscState {
   /** Friction face surface temperature (°C) */
@@ -31,7 +47,8 @@ const KELVIN = 273.15;
 
 export function createBrakeDiscState(
   initialTempC = 350,
-  compound: BrakeCompoundKind = 'carbon-ceramic'
+  compound: BrakeCompoundKind = 'carbon-ceramic',
+  padCurve?: BrakePadMuCurve
 ): BrakeDiscState {
   const s: BrakeDiscState = {
     surfaceTempC: initialTempC,
@@ -39,19 +56,20 @@ export function createBrakeDiscState(
     padGlazingFactor: 0,
     muFactor: 1,
   };
-  s.muFactor = evaluateBrakePadMuFactor(initialTempC, compound, 0);
+  s.muFactor = evaluateBrakePadMuFactor(initialTempC, compound, 0, padCurve);
   return s;
 }
 
 export function resetBrakeDiscState(
   state: BrakeDiscState,
   tempC: number,
-  compound: BrakeCompoundKind = 'carbon-ceramic'
+  compound: BrakeCompoundKind = 'carbon-ceramic',
+  padCurve?: BrakePadMuCurve
 ): void {
   state.surfaceTempC = tempC;
   state.coreTempC = tempC;
   state.padGlazingFactor = 0;
-  state.muFactor = evaluateBrakePadMuFactor(tempC, compound, 0);
+  state.muFactor = evaluateBrakePadMuFactor(tempC, compound, 0, padCurve);
 }
 
 function sigmoid(x: number): number {
@@ -65,13 +83,16 @@ function sigmoid(x: number): number {
  * - Returns `1.0` inside the compound's optimal operating window (e.g., 240–920 °C for F1 carbon,
  *   95–680 °C for GT3 steel) so hot-spawn track tests maintain exact reference deceleration.
  * - Drops off smoothly when cold (cold carbon bite loss) or when overheated (thermal fade + glazing).
+ * - With a car's own `padCurve`: that curve in place of the material's, times the glazing loss.
  */
 export function evaluateBrakePadMuFactor(
   surfaceTempC: number,
   compound: BrakeCompoundKind = 'carbon-ceramic',
-  padGlazingFactor = 0
+  padGlazingFactor = 0,
+  padCurve?: BrakePadMuCurve
 ): number {
   const glazePenalty = 1 - 0.15 * Math.max(0, Math.min(1, padGlazingFactor));
+  if (padCurve && padCurve.length > 0) return padCurveAt(padCurve, surfaceTempC) * glazePenalty;
   if (compound === 'carbon-ceramic') {
     // Cold ramp: ≈0.79 at 20–30 °C -> 0.95 at 120 °C -> ~1.00 by 180 °C. Kept mild on purpose: the AI's and the
     // braking guide's planning assume full bite, and the discs of a car driven normally stay above ~150 °C
@@ -101,6 +122,7 @@ export function evaluateBrakePadMuFactor(
  * @param dt Integration step (s)
  * @param compound Brake disc/pad material ('carbon-ceramic' | 'endurance-steel')
  * @param coolingScale Brake duct opening: forced-air convection relative to the baseline duct (1)
+ * @param padCurve The car's own pad friction against temperature, in place of the material's
  */
 export function stepBrakeDiscThermal(
   state: BrakeDiscState,
@@ -111,7 +133,8 @@ export function stepBrakeDiscThermal(
   dt: number,
   compound: BrakeCompoundKind = 'carbon-ceramic',
   coolingScale = 1,
-  wetness = 0
+  wetness = 0,
+  padCurve?: BrakePadMuCurve
 ): void {
   const isCarbon = compound === 'carbon-ceramic';
   // Heat capacities (J/K): carbon friction ring + pad face (~1150 J/K) and core vanes/bell (~1450 J/K)
@@ -158,7 +181,7 @@ export function stepBrakeDiscThermal(
     state.padGlazingFactor = Math.min(1, state.padGlazingFactor + excess * 0.025 * dt);
   }
 
-  state.muFactor = evaluateBrakePadMuFactor(state.surfaceTempC, compound, state.padGlazingFactor);
+  state.muFactor = evaluateBrakePadMuFactor(state.surfaceTempC, compound, state.padGlazingFactor, padCurve);
 }
 
 /**

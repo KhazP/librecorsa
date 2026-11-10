@@ -18,8 +18,12 @@ import { MTR_496R_PROFILE_CAR, createMtr496rSim } from '../src/lib/sim/proto/Mtr
 import { createAmgGt3Sim } from '../src/lib/sim/gt3/AmgGt3Sim';
 import type { F12026CarSim } from '../src/lib/sim/f12026-car/F12026CarSim';
 import { carById } from '../src/lib/cars/car-registry';
+import { wetnessFromWater } from '../src/lib/sim/wet-tyres';
 import { loadGlbGeometry } from './lib/glb-geometry';
 import { createFlatTestTrack } from './lib/flat-track';
+import { downshiftTakenAt, measureDownshift, measureUpshift } from './lib/upshift-test';
+import { evaluateBrakePadMuFactor } from '../src/lib/sim/brake-physics';
+import { DEFAULT_CHASSIS_SETUP } from '../src/lib/sim/car-setup';
 import { hasFile, noteSkip } from './lib/hosted-files';
 import { readFileSync } from 'node:fs';
 
@@ -63,8 +67,8 @@ console.log('\n== At rest');
   const fz = car.wheels.map((w) => w.fz);
   const front = (fz[0] + fz[1]) / fz.reduce((a, b) => a + b, 0);
   check('Front axle carries ≈ 48.5 % of the weight', Math.abs(front - 0.485) < 0.01, `${fmt(front * 100, 1)} %`);
-  // The pickups 0.181 / 0.170 m under the CG, 0.28 m up: 99 / 110 mm
-  check('Rides at the mod\'s 99 / 110 mm', Math.abs(t.aeroHeightFront - 0.099) < 0.004 && Math.abs(t.aeroHeightRear - 0.11) < 0.004,
+  // The pickups 0.181 / 0.170 m under the CG's level, the body 0.245 / 0.255 m up at the axles: 64 / 85 mm
+  check('Rides at the mod\'s 64 / 85 mm', Math.abs(t.aeroHeightFront - 0.064) < 0.004 && Math.abs(t.aeroHeightRear - 0.085) < 0.004,
     `${fmt(t.aeroHeightFront * 1000, 1)} / ${fmt(t.aeroHeightRear * 1000, 1)} mm`);
 }
 
@@ -80,17 +84,23 @@ console.log('\n== Aero against speed (flat, held speed)');
     });
     const t = car.telemetry;
     const q = 0.5 * 1.225 * (kmh / 3.6) ** 2;
-    return { clA: t.downforceN / q, cdA: t.dragN / q, bal: t.AERO_BALANCE, front: t.aeroHeightFront, rear: t.aeroHeightRear };
+    // The front tyres' free radius: the rolling radius with the third of the deflection it gives up put back
+    const freeRadius = 0.5 * (car.wheels[0].rollingRadius + car.wheels[0].deflection / 3 + car.wheels[1].rollingRadius + car.wheels[1].deflection / 3);
+    return { clA: t.downforceN / q, cdA: t.dragN / q, bal: t.AERO_BALANCE, front: t.aeroHeightFront, rear: t.aeroHeightRear, freeRadius, omega: car.wheels[0].omega };
   };
   const slow = at(100);
   const fast = at(300);
-  // Splitter 0.84 + rear wing 1.43 + a diffuser that comes in as the car settles (its table peaks at 35–60 mm)
-  check('CL·A 2.5–2.9 m² at 100 km/h, more as it settles', slow.clA > 2.5 && slow.clA < 2.9 && fast.clA > slow.clA + 0.3,
+  // Splitter, rear wing and a diffuser that works from rest at this ride height (its table peaks at 35–60 mm)
+  check('CL·A 3.1–3.6 m² from 100 to 300 km/h', slow.clA > 3.1 && slow.clA < 3.6 && fast.clA > 3.1 && fast.clA < 3.6,
     `${fmt(slow.clA)} m² at 100, ${fmt(fast.clA)} m² at 300 km/h`);
   check('CD·A 1.1–1.3 m²', slow.cdA > 1.1 && slow.cdA < 1.3 && fast.cdA > 1.1 && fast.cdA < 1.3, `${fmt(slow.cdA)} / ${fmt(fast.cdA)} m²`);
   // The front wing ahead of the front axle, the rear wing behind the rear: 40–42 % on the front
   check('Aero balance 38–44 % front', slow.bal > 38 && slow.bal < 44 && fast.bal > 38 && fast.bal < 44, `${fmt(slow.bal, 1)} / ${fmt(fast.bal, 1)} %`);
   check('Floor clear of the ground at 300 km/h', Math.min(fast.front, fast.rear) > 0.04, `${fmt(fast.front * 1000, 0)} / ${fmt(fast.rear * 1000, 0)} mm`);
+  // 0.025 mm of radius per rad/s of spin: 2 mm at 100 km/h, 6 mm at 300
+  const grown = (fast.freeRadius - 0.34) * 1000;
+  check('Front tyres grow 6 mm by 300 km/h', Math.abs(grown - 0.025 * fast.omega) < 0.2 && grown > 5.5 && grown < 6.5 && (slow.freeRadius - 0.34) * 1000 < 2.3,
+    `${fmt((slow.freeRadius - 0.34) * 1000, 1)} mm at 100, ${fmt(grown, 1)} mm at 300 km/h (${fmt(fast.omega, 0)} rad/s)`);
 }
 
 const pad = createFlatTestTrack(30_000, 3000);
@@ -150,8 +160,8 @@ console.log('\n== Braking through the adapter');
 console.log('\n== Cornering (flat, steer ramp at constant speed)');
 // Slicks out of 60 °C blankets: the GT3 holds 1.6–1.9 g here; the 496R is 300 kg lighter with more downforce
 for (const [kmh, lo, hi] of [
-  [100, 1.6, 2.1],
-  [200, 1.9, 2.6],
+  [100, 1.8, 2.15],
+  [200, 2.2, 2.65],
 ] as const) {
   const car = makeCar();
   car.reset(0, 0, 0, kmh / 3.6);
@@ -177,15 +187,88 @@ for (const [kmh, lo, hi] of [
   check(`Understeers at the limit at ${kmh} km/h`, frontSa > rearSa, `front ${fmt((frontSa * 180) / Math.PI, 1)}°, rear ${fmt((rearSa * 180) / Math.PI, 1)}° slip at the peak`);
 }
 
+console.log('\n== Tyres: wear, graining, pressure in the heat, flat spots');
+{
+  type Cfg = typeof C;
+  const withTyres = (fn: (t: Cfg['tyreCompounds'][keyof Cfg['tyreCompounds']] & object) => object): Cfg =>
+    ({ ...C, tyreCompounds: Object.fromEntries(Object.entries(C.tyreCompounds).map(([k, t]) => [k, t && fn(t)])) }) as Cfg;
+  const at = (cfg: Cfg, kmh: number) => {
+    const car = new VehiclePhysics({ ground: flat, config: cfg, airDensity: 1.225 });
+    car.reset(0, 0, 0, kmh / 3.6);
+    return car;
+  };
+  const soft = C.tyreCompounds[C.compoundSlots.soft]!;
+  // Sliding wear counts the load per 2000 N [spec VIRTUALKM USE_LOAD]: the same hard corner wears 1.5 × what it would
+  // counted per the tyre's 3000 N FZ0
+  const cornerWear = (cfg: Cfg) => {
+    const car = at(cfg, 120);
+    run(car, 4, (_, t) => ({ throttle: 0.4, brake: 0, steer: 0.25 * Math.min(1, t) }));
+    return car.wheels.reduce((sum, w) => sum + w.wear, 0);
+  };
+  const perFz0 = cornerWear(withTyres((t) => ({ ...t, wear: t.wear && { ...t.wear, loadRefN: undefined } })));
+  const per2000 = cornerWear(C);
+  check('Sliding wear counted per 2000 N of load', soft.wear?.loadScaled === true && soft.wear.loadRefN === 2000 && Math.abs(per2000 / perFz0 - 1.5) < 0.02,
+    `${fmt(per2000 / perFz0, 3)} × the wear counted per FZ0`);
+
+  // Graining wears off as the tread slides, not as it rolls: a grained, warm tyre on a straight keeps its graining
+  {
+    const car = at(C, 150);
+    for (const w of car.wheels) {
+      w.grainLevel = 0.3;
+      w.bandTempsC.fill(95);
+      w.bandCoreTempsC.fill(95);
+    }
+    run(car, 60, () => ({ throttle: 0.3, brake: 0, steer: 0 }));
+    const lost = 0.3 - Math.min(...car.wheels.map((w) => w.grainLevel));
+    check('A grained tyre keeps its graining over a minute of straight', soft.thermalData.tread?.wearOffWithSlip === true && lost < 2e-4,
+      `${fmt(lost * 1e4, 2)}e-4 lost (rolling alone would take ≈ 8e-4)`);
+  }
+
+  // Pressure moves the heat: 4 psi under the set pressure runs the carcass hotter than 4 psi over (rolling heat by
+  // PRESSURE_RR_GAIN, the sliding heat), and the over-inflated tread runs on its crown
+  {
+    const weave = (dp: number) => {
+      const car = at(C, 150);
+      for (const w of car.wheels) w.coldPressurePsi += dp;
+      run(car, 60, (_, t) => ({ throttle: 0.3, brake: 0, steer: 0.04 * Math.sin(t * 0.8) }));
+      const w = car.wheels[0];
+      return { core: w.coreTempC, crown: w.bandTempsC[1] - 0.5 * (w.bandTempsC[0] + w.bandTempsC[2]) };
+    };
+    const low = weave(-4);
+    const high = weave(4);
+    check('An under-inflated tyre runs hotter, an over-inflated one on its crown', low.core - high.core > 1 && high.crown > low.crown,
+      `carcass ${fmt(low.core, 1)} °C at −4 psi, ${fmt(high.core, 1)} °C at +4; crown over shoulders ${fmt(low.crown, 2)} / ${fmt(high.crown, 2)} °C`);
+  }
+
+  // Scrub drag stops growing at the peak slip [spec ROLLING_RESISTANCE_SLIP]
+  check('Tyre scrub held at its peak-slip value past the peak', soft.modelData.rollingResistanceSlipMax === 1, '');
+
+  // A softer compound flat-spots sooner: twice the softness, twice the flat after the same locked stop
+  {
+    const lockUp = (cfg: Cfg) => {
+      const car = at(cfg, 150);
+      run(car, 0.6, () => ({ throttle: 0, brake: 1, steer: 0 }));
+      return car.wheels[0].flatSpotSeverity;
+    };
+    const base = lockUp(C);
+    const softer = lockUp(withTyres((t) => ({ ...t, flatSpotSoftness: 2 })));
+    check('Flat-spot softness scales the flat a lock-up grinds', base > 0.01 && Math.abs(softer / base - 2) < 0.1, `${fmt(base, 3)} → ${fmt(softer, 3)}`);
+  }
+}
+
 console.log('\n== Traction control through the adapter');
 {
+  // At its mod's power the 496R no longer spins its slicks on a dry road at 70 km/h: on a damp one it does
+  const damp = { waterMm: 0.3, wetness: wetnessFromWater(0.3), ambientC: 15, rain: 0.3 };
   const exit = (preset: 'pro' | 'semi_pro') => {
     const sim = createMtr496rSim(pad);
     sim.assistPreset = preset;
+    sim.setWeatherSample(damp);
     sim.teleportToDistance(1000, 70 / 3.6);
     let sum = 0;
     let n = 0;
     for (let t = 0; t < 2; t += DT) {
+      sim.setWeatherSample(damp);
       sim.step(DT, { throttle: 1 });
       sum += Math.max(sim.telemetry.wheelSlipRatios[2], sim.telemetry.wheelSlipRatios[3]);
       n++;
@@ -195,7 +278,57 @@ console.log('\n== Traction control through the adapter');
   const tc = exit('semi_pro');
   const raw = exit('pro');
   // Above the TC's 50 km/h floor, its 9 % target in the second it works
-  check('TC holds rear wheelspin above 50 km/h', tc < 0.15 && tc < raw * 0.6, `mean rear slip ${fmt(tc, 2)} with TC, ${fmt(raw, 2)} without`);
+  check('TC holds rear wheelspin above 50 km/h on a damp road', tc < 0.15 && tc < raw * 0.6, `mean rear slip ${fmt(tc, 2)} with TC, ${fmt(raw, 2)} without`);
+}
+
+console.log('\n== Brakes, fuel and steering from the car\'s data');
+{
+  // The pads' own curve, not the steel material's (full by ~100 °C, down to ≈ 0.6 by 900 °C)
+  const pads = [0, 400, 900, 1200].map((t) => evaluateBrakePadMuFactor(t, 'endurance-steel', 0, C.brakes.padMuCurve));
+  check('Pad friction 0.80 / 1.00 / 0.97 / 0.82 at 0 / 400 / 900 / 1200 °C', [0.8, 1, 0.97, 0.82].every((v, i) => Math.abs(pads[i] - v) < 1e-9),
+    pads.map((v) => fmt(v)).join(' / '));
+  const car = makeCar();
+  car.reset(0, 0, 0);
+  run(car, 0.5, () => ({ throttle: 0, brake: 0, steer: 0 }));
+  // Discs start at 380 °C, a little short of the curve's 400 °C peak
+  check('Fresh discs: pad friction 0.99 at 380 °C', Math.abs(car.wheels[0].brakeDisc.muFactor - 0.99) < 0.002, `${fmt(car.wheels[0].brakeDisc.muFactor, 3)}`);
+
+  // Fuel flow follows the engine's speed: a constant 0.036 kg/s flat out burnt 1.12 kg here
+  const sim = createMtr496rSim(pad);
+  sim.assistPreset = 'semi_pro';
+  sim.teleportToDistance(1000, 0);
+  const f0 = sim.telemetry.fuelKg;
+  for (let t = 0; t < 30; t += DT) sim.step(DT, { throttle: 1 });
+  const burnt = f0 - sim.telemetry.fuelKg;
+  check('30 s flat out from rest burns 0.95–1.07 kg', burnt > 0.95 && burnt < 1.07, `${fmt(burnt, 3)} kg`);
+
+  // The minimum 4 kg flat out: the tank runs dry and the engine stops firing, so the car coasts down
+  const dry = createMtr496rSim(pad);
+  dry.assistPreset = 'semi_pro';
+  dry.applyChassisSetup({ ...DEFAULT_CHASSIS_SETUP, fuelDeltaKg: -200 });
+  dry.teleportToDistance(1000, 0);
+  let tEmpty = NaN;
+  let vEmpty = 0;
+  for (let t = 0; t < 150 && !(t > tEmpty + 20); t += DT) {
+    dry.step(DT, { throttle: 1 });
+    if (Number.isNaN(tEmpty) && dry.telemetry.fuelKg <= 0) {
+      tEmpty = t;
+      vEmpty = dry.telemetry.speedKmh;
+    }
+  }
+  const vLater = dry.telemetry.speedKmh;
+  check('An empty tank: the car slows to under 60 % of its speed in 20 s', tEmpty > 90 && tEmpty < 125 && vLater < 0.6 * vEmpty && Number.isFinite(vLater),
+    `dry after ${fmt(tEmpty, 1)} s at ${fmt(vEmpty, 0)} km/h, ${fmt(vLater, 0)} km/h 20 s later`);
+
+  // A mouse or pad turns the rack no faster than hands turn the 240° of rim lock on its 14:1 rack (900°/s)
+  const steer = createMtr496rSim(pad);
+  steer.teleportToDistance(1000, 50 / 3.6);
+  let tLock = NaN;
+  for (let t = 0; t < 1 && Number.isNaN(tLock); t += DT / 4) {
+    steer.step(DT / 4, { analogSteer: 1 });
+    if (steer.steerAngleNorm >= 0.999) tLock = t + DT / 4;
+  }
+  check('Full lock from centre in 0.26–0.28 s (240° at 900°/s)', tLock > 0.26 && tLock < 0.28, `${fmt(tLock, 3)} s`);
 }
 
 console.log('\n== Ported body');
@@ -266,6 +399,24 @@ console.log('\n== Autopilot round Rwanda against the GT3');
     `lap ${fmt(proto.lapS, 2)} s, top ${fmt(proto.top, 0)} km/h, CG ${fmt(Math.max(0, proto.beyond), 2)} m past the edge, max body slip ${fmt(proto.maxSlip, 1)}°`);
   // 300 kg lighter, more downforce and a little more power than the GT3
   check('Quicker than the GT3', proto.lapS < gt3.lapS - 2, `${fmt(proto.lapS, 2)} s vs the GT3's ${fmt(gt3.lapS, 2)} s`);
+}
+
+console.log('\n== Up-shift');
+{
+  // A dog box: 40 ms between gears with the ignition cut for 60 ms (16 % with the gear changed in no time)
+  const u = measureUpshift((t) => createMtr496rSim(t), 90);
+  check('An up-shift on a light pedal: the dogs are out, then the driven wheels take the engine\'s excess, under 15 % of slip', u.to === u.from + 1 && u.gMin < u.gBefore - 0.1 && u.slipPeak < 0.15, `gear ${u.from} → ${u.to}, slip ${(u.slipBefore * 100).toFixed(1)} % → ${(u.slipPeak * 100).toFixed(1)} %, ${u.gBefore.toFixed(2)} g → ${u.gMin.toFixed(2)} … ${u.gPeak.toFixed(2)} g`);
+}
+
+console.log('\n== Down-shift');
+{
+  // A 60 % blip in the 100 ms between gears; the clutch takes up what it leaves
+  const d = measureDownshift((t) => createMtr496rSim(t), 190, 4, 0.5);
+  check('A down-shift on the brakes: the blip brings the engine up, no wheel slips past 6 % and the car is not tugged 0.25 g harder', d.to === d.from - 1 && d.slipPeak < 0.06 && d.gMin > d.gBefore - 0.25, `gear ${d.from} → ${d.to}, ${d.gBefore.toFixed(2)} g → ${d.gMin.toFixed(2)} … ${d.gMax.toFixed(2)} g, slip at most ${(d.slipPeak * 100).toFixed(1)} %`);
+  const g = MTR_496R_CONFIG.gearbox;
+  const taken = downshiftTakenAt((t) => createMtr496rSim(t), 4, g.ratios, g.gears.redline_rpm, 300);
+  const refused = !downshiftTakenAt((t) => createMtr496rSim(t), 4, g.ratios, g.gears.redline_rpm, 700);
+  check('The box takes a down-shift that lands 300 rpm over the limiter and refuses one 700 over', taken && refused, `300 over: ${taken ? 'taken' : 'refused'}, 700 over: ${refused ? 'refused' : 'taken'}`);
 }
 
 console.log(failures.length ? `\n${failures.length} check(s) failed: ${failures.join(', ')}` : '\nAll 496R checks passed.');

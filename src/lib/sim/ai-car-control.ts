@@ -26,6 +26,8 @@ export interface AiControlCarState {
   roadYawRateRadS: number;
   /** Heading against the track direction (rad, wrapped to ±π) */
   headingErrRad: number;
+  /** Offset from the centre of the road (m, + right) */
+  lateralM: number;
   /** Steering −1..1 and pedals as last driven */
   steer: number;
   throttle: number;
@@ -58,6 +60,9 @@ const REJOIN_CAP_MS = 12;
 const REJOIN_RAMP_S = 5;
 /** Heading error past which the car turns round before it rejoins (rad, ~70°) */
 const WRONG_WAY_RAD = 1.22;
+/** ... and the error at which the turn is done and the autopilot takes the car back (rad, ~35°) */
+const TURN_DONE_RAD = 0.6;
+/** Speed a car turning round is held to (m/s): full lock and the throttle below it, off the throttle above */
 const TURN_CAP_MS = 6;
 /** Not moving / not turned round after this long: the marshals step in (s) */
 const MARSHAL_AFTER_S = 9;
@@ -73,6 +78,10 @@ export class AiCarControl {
   private heldBrake = 0;
   /** Seconds since the car last made progress in a stop / rejoin */
   private stuckS = 0;
+  /** Turning round on the spot: from facing the wrong way until the car points down the road again */
+  private turning = false;
+  /** The lock it turns round on (−1 left, + 1 right), held for the whole turn; 0: not turning */
+  private turnSteer = 0;
   /** The marshals are needed (the field moves the car when the road behind is clear) */
   public needsMarshal = false;
   /** Spins since the start */
@@ -92,6 +101,8 @@ export class AiCarControl {
     this.mode = 'racing';
     this.timerS = 0;
     this.stuckS = 0;
+    this.turning = false;
+    this.turnSteer = 0;
     this.needsMarshal = false;
     this.spins = 0;
     this.sinceRecoveredS = Infinity;
@@ -191,13 +202,26 @@ export class AiCarControl {
         break;
       case 'rejoining': {
         this.timerS += dt;
-        const wrongWay = Math.abs(s.headingErrRad) > WRONG_WAY_RAD;
+        const headingErr = Math.abs(s.headingErrRad);
+        this.turning = headingErr > WRONG_WAY_RAD || (this.turning && headingErr > TURN_DONE_RAD);
+        if (!this.turning) this.turnSteer = 0;
+        const wrongWay = this.turning;
         // Progress: rolling and pointing the right way
         this.stuckS = speed < 1.5 || wrongWay ? this.stuckS + dt : 0;
         if (this.stuckS > MARSHAL_AFTER_S) this.needsMarshal = true;
         if (wrongWay) {
+          // A spin turn, as a driver does it: full lock and the throttle, so a rear-driven car lights its tyres and
+          // comes round within its own length (its turning circle is wider than most roads), and a front-driven one
+          // pulls its nose round on its tight lock. Off the throttle above walking pace. A car facing back up the road
+          // can come round either way: it swings its nose across the road, away from the edge it stands nearer; one
+          // still facing down the road turns the short way
           this.timerS = 0;
-          out.speedCapMs = TURN_CAP_MS;
+          if (this.turnSteer === 0) {
+            const backwards = headingErr > Math.PI / 2;
+            this.turnSteer = backwards ? (s.lateralM > 0 ? 1 : -1) : s.headingErrRad > 0 ? 1 : -1;
+          }
+          out.autopilot = false;
+          out.inputs = { throttle: speed < TURN_CAP_MS ? 1 : 0, brake: 0, analogSteer: this.turnSteer };
         } else {
           out.speedCapMs = REJOIN_CAP_MS + (this.timerS / REJOIN_RAMP_S) * 80;
           if (this.timerS > REJOIN_RAMP_S && speed > 20) this.mode = 'racing';

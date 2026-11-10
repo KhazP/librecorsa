@@ -77,6 +77,11 @@ export interface ChassisData {
   /** Unsprung mass per corner (wheel, tyre, upright, brake) (kg) */
   unsprungMassFront: number;
   unsprungMassRear: number;
+  /**
+   * Where the fuel sits, from the CG of the car without fuel (m: y up, z forward). Its weight acts there, so a tank
+   * behind the CG moves the weight split rearward as it fills. Absent: at the CG
+   */
+  fuelTank?: { y: number; z: number };
   /** Wheel + tyre spin inertia per corner (kg·m²) */
   wheelInertiaFront: number;
   wheelInertiaRear: number;
@@ -132,6 +137,11 @@ export interface EngineData {
    * at run time. Absent: the torque follows the pedal at once
    */
   torqueResponseS?: { rise: number; fall: number };
+  /**
+   * The ECU softens the pedal in the low gears by itself on a wet road (an F1 power unit's wet pedal map). Absent: the
+   * pedal map changes only when the driver picks engine map 4 or 5
+   */
+  wetPedalMap?: boolean;
   /** Turbocharger; absent: naturally aspirated */
   turbo?: TurboData;
   idleRpm: number;
@@ -139,6 +149,11 @@ export interface EngineData {
   inertia: number;
   /** Ignition cut held after the limiter trips (s) */
   limiterCutS: number;
+  /**
+   * Share of a change in air density that reaches the engine's torque (0.1: a tenth less air costs 1 %), against the
+   * density the car's data is given at (`aero.airDensity`). Unset: the engine makes its curve in any air
+   */
+  airDensitySensitivity?: number;
 }
 
 /**
@@ -220,7 +235,43 @@ export interface GearBoxData {
   finalDrive: number;
   /** Seamless shift: torque dip duration (s) and the torque kept during it */
   shiftTimeS: number;
+  /** The same for a down-shift, where it differs (s) */
+  downshiftTimeS?: number;
   shiftTorqueFraction: number;
+  /**
+   * An up-shift managed by the control unit: for this long (s) it takes the drive away (spark and MGU-K), and the engine
+   * meets the new gear at the wheels' speed, its excess taken up in the shift. Without it the closed clutch hands the
+   * engine's excess to the driven wheels, which spins them up by the ratio step
+   */
+  upshiftCutS?: number;
+  /**
+   * A dog box: for this long (s) after an up-shift the dogs are out and the engine turns free of the wheels, slowing on
+   * its own friction under the cut (`upshiftCutS`); then the dogs take the rest of its excess into the driveline, the
+   * shove of a flat shift. With it the engine is not re-aligned
+   */
+  upshiftNeutralS?: number;
+  /**
+   * A down-shift as the car's own gearbox and control unit make it, in place of an engine that is at the lower gear's
+   * speed the moment the paddle is pulled. Times in s from the paddle
+   */
+  downshift?: {
+    /** The box is between gears until here: the engine turns free of the wheels */
+    neutralS: number;
+    /**
+     * The clutch starts home here (the later of this and `neutralS`) and is fully home at `clutchHomeS`, or as soon as
+     * the engine turns at the wheels' speed
+     */
+    clutchReleaseS: number;
+    clutchHomeS: number;
+    /**
+     * The throttle blip that lifts the free engine to the lower gear's speed (the control unit's, or a driver's heel and
+     * toe): this much throttle, risen over `riseS`, held until the engine is there or the box is in gear. What it leaves,
+     * the clutch takes up. Absent: the clutch takes it all
+     */
+    blip?: { level: number; riseS: number };
+    /** A down-shift may land this far above the limiter (rpm); unset, it is refused from 200 rpm under it */
+    overRevRpm?: number;
+  };
   efficiency: number;
   gears: {
     redline_rpm: number;
@@ -263,6 +314,15 @@ export interface DifferentialData {
    * on the shafts, √(2k / (r²·I_engine)) at overall ratio r). Absent: rigid shafts
    */
   halfshaft?: { stiffnessNmPerRad: number; dampingNmsPerRad: number };
+  /**
+   * Brake-operated diff lock of a road car's stability system: a brake torque (Nm) on the driven wheel that turns the
+   * faster, growing from nothing at `deadZone` to all of it at `fullSpin` (how much faster than the other wheel it
+   * turns: 1 = twice as fast), with its own numbers on the power and off it
+   */
+  brakeLock?: {
+    power: { torqueNm: number; deadZone: number; fullSpin: number };
+    coast: { torqueNm: number; deadZone: number; fullSpin: number };
+  };
   /** Electronic diff: the coast locking (same units as `coast`) while braking, i.e. on corner entry; default `coast` */
   coastBraking?: number;
   /**
@@ -290,10 +350,19 @@ export interface BrakesData {
   brakeByWire?: boolean;
   /** Base front bias (0..1) */
   front_bias: number;
+  /** Handbrake: brake torque on each rear wheel at full pull (Nm), outside the pedal's bias and ABS. Absent: none */
+  handbrakeTorqueNm?: number;
   /** One EBB step moves the bias this much (0..1) */
   ebbStep: number;
   /** Disc / pad material for the brake thermal model and pad μ(T) (default carbon-carbon, F1) */
   discMaterial?: 'carbon-ceramic' | 'endurance-steel';
+  /**
+   * The pads' friction against disc temperature (°C → share of `maxTorqueNm`, linear between points, held past the
+   * ends), in place of the material's built-in curve. Pad glazing still acts on top. Absent: the material's curve
+   */
+  padMuCurve?: LutPoints;
+  /** Disc temperature the car starts and restarts with (°C); default 380 */
+  discStartTempC?: number;
   /**
    * Brake-by-wire migration: the bias moves forward by `amount` at full pedal, starting at `rampStart` of the pedal
    * travel (BRAKE_MIGRATION + BMIG_RAMP). Default 0.015 from the first of the travel
@@ -323,6 +392,9 @@ export interface DamperControllerData {
   fastThresholdMs: number;
   /** Rebound slow/fast knee of the base damper (m/s); default `fastThresholdMs` */
   fastReboundThresholdMs?: number;
+  /** The heave damper's own bump and rebound knees (m/s); default the base damper's */
+  heaveFastThresholdMs?: number;
+  heaveFastReboundThresholdMs?: number;
 }
 
 /** `BumpStopSettingsUnits` */
@@ -333,6 +405,8 @@ export interface BumpStopSettingsUnits {
   rate: number;
   /** Extra rate per metre of rubber compression (N/m²) */
   progression: number;
+  /** A second stop further up the travel (m from static ride) adding its own rate (N/m at the wheel) */
+  hardStop?: { range: number; rate: number };
 }
 
 /** `SuspensionSettingUnits` */
@@ -357,6 +431,8 @@ export interface HeaveSpringData {
   /** Packer: rate added once heave exceeds `packerGap` (N/m) */
   packerGap: number;
   packerRate: number;
+  /** Extra rate per metre of the element's own compression (N/m²): force = (rate + this · x) · x. Absent: linear */
+  progressiveRate?: number;
 }
 
 /** `SuspensionGeometryData` + the axle's setup values */
@@ -512,6 +588,11 @@ export interface TyreGeometry {
   rimRadius: number;
   /** Vertical-rate multiplier on `pressureSpringCurve` for this axle */
   verticalRateScale: number;
+  /**
+   * Growth of the free radius with spin (m per rad/s): the belt stretches as the wheel turns faster, which lifts the car
+   * and lengthens its gearing at speed. Absent: the model's own small growth, on the steering arms only
+   */
+  radiusGrowthPerRadS?: number;
 }
 
 /** Peak slip angle used when `friction_limit_angle` is unset or 0 (deg) */
@@ -577,16 +658,59 @@ export interface TyresModelData {
    * carcass's hysteresis work per second rises with the deflection rate). Absent: 0, no speed term
    */
   rollingResistanceSpeedSq?: number;
+  /**
+   * Its growth with slip: × (1 + this × the combined slip over the peak slip), on a rolling wheel. A tyre working at
+   * its limit scrubs: a street tyre several times its free-rolling drag, a racing slick a few per cent. Absent: 0
+   */
+  rollingResistanceSlipGain?: number;
+  /**
+   * The combined slip (over the peak slip) past which the scrub term above grows no further: 1 holds it at its value at
+   * the peak, so a slide drags no more than a tyre at its limit. Absent: 3
+   */
+  rollingResistanceSlipMax?: number;
   /** Radial damping (Ns/m) */
   verticalDamping: number;
-  /** Pneumatic trail at zero slip (m) */
-  pneumaticTrail: number;
+  /**
+   * Pneumatic trail at zero slip as a share of the contact patch's half-length (it shrinks to nothing at the peak slip).
+   * Absent: a third, the brush model's under a parabolic pressure
+   */
+  trailShare?: number;
   /**
    * Tabulated load sensitivity (DY_CURVE / DX_CURVE): vertical load (N) → peak μ. When set it replaces
    * `Dy0`·(Fz/Fz0)^(lsExp−1) for that axis; Fz0 / lsExp then only matter to code that reads them directly
    */
   dyCurve?: LutPoints;
   dxCurve?: LutPoints;
+  /**
+   * Force curve family (see `brush-tyre.ts`). 'magic' (default): sin(C·atan(B·s)) to the peak and the falloff above.
+   * 'brush': the brush model's cubic to the peak, so the cornering stiffness is 3 × the peak force over the peak slip,
+   * then a gentle decay toward `falloff_level` (`falloff_slope` per unit of slip past the peak; none without
+   * `use_slip_falloff`). A brush tyre also works on the theoretical slips (κ / (1 + κ), tan α / (1 + κ)), takes camber
+   * as a slip-angle shift of sin γ × `camberGain`, moves its peak slip with load, grip and pressure by the fields
+   * below, and lags by twice its relaxation length at small slip. `pKy2` and `slip_ratio_limit` are then unused
+   * (the limit only when `longStiffnessMult` is given)
+   */
+  curve?: 'magic' | 'brush';
+  /** 'brush': a fuller rising branch, the cubic plus this × 3s(1 − s)² (0: the plain cubic) */
+  curveFullness?: number;
+  /**
+   * 'brush': growth of the peak slip angle with load. The angle at twice the reference load is (1 + this) × the angle
+   * at the reference load, and the peak slip is linear in load between and beyond. May be negative
+   */
+  peakSlipLoadGain?: number;
+  /** 'brush': the reference load of `peakSlipLoadGain` (N); default the tyre's Fz0 */
+  peakSlipLoadRefN?: number;
+  /** 'brush': the peak slip divides by 1 + this × (pressure / optimal pressure − 1): a softer tyre peaks later */
+  peakSlipPressureGain?: number;
+  /** 'brush': exponent of the combined slip, (|s_x|^p + |s_y|^p)^(1/p); 2 (default) is the friction circle */
+  combinedExponent?: number;
+  /**
+   * 'brush': longitudinal over lateral slip stiffness, so the longitudinal force peaks at the peak slip over this.
+   * Absent: taken from `slip_ratio_limit` at Fz0
+   */
+  longStiffnessMult?: number;
+  /** 'brush': grip lost to sliding speed, μ ÷ (1 + this × sliding speed in m/s) */
+  speedSensitivity?: number;
   /** BRAKE_DX_MOD: longitudinal μ × (1 + brakeDxMod) while the tyre is braking (negative slip ratio) */
   brakeDxMod?: number;
 }
@@ -602,7 +726,10 @@ export interface TyresThermalPatchData {
   coreHeatCapacity: number;
   /** Share of sliding power that heats the tread surface */
   slipHeatShare: number;
-  /** Rolling hysteresis power coefficient (W per N per m/s) */
+  /**
+   * Rolling hysteresis power coefficient (W per N per m/s): the share of the load that the rolling tyre turns into
+   * heat in its carcass. A tyre's rolling resistance is that loss, so it sits near the rolling-resistance coefficient
+   */
   hysteresis: number;
   /** Surface → core conductance (W/K) */
   surfaceToCore: number;
@@ -612,16 +739,51 @@ export interface TyresThermalPatchData {
   /** Vertical-rate change per °C of core temperature away from the reference */
   thermalVerticalK: number;
   thermalVerticalRefC: number;
+  /**
+   * A brush tyre's slow tread condition (GRAIN_* / BLISTER_* of its data): worked below the temperature where its grip
+   * curve first reaches its peak the tread grains, above the last it blisters, each at `gain` × slip^`gamma` × rolling
+   * speed × the degrees past the threshold. Graining softens the tyre (it peaks later) and wears off with rolling;
+   * blisters cost grip and stay. Both take many laps. Absent: a brush tyre neither grains nor blisters.
+   * `wearOffWithSlip`: the graining wears off only as the tread slides, with the same slip^`grainGamma` it grows by, so
+   * a grained tyre does not clean up on a straight. Absent: it wears off with rolling alone
+   */
+  tread?: { grainGain: number; grainGamma: number; blisterGain: number; blisterGamma: number; wearOffWithSlip?: boolean };
+  /**
+   * Inflation pressure in the heat flow, with p = pressure / optimal − 1: the sliding heat × (1 − `slipGain` × p), the
+   * middle band's share of the heat × (1 + 2 × `crownGain` × p) and each shoulder's × (1 − `crownGain` × p) (an
+   * over-inflated tyre runs on its crown), and the rolling heat × the rolling-resistance factor of
+   * `TyresPressureData.pressureRollingGain` (a soft tyre flexes more and heats more). The bands' grip weighting is
+   * left alone. Absent: pressure does not move the heat
+   */
+  pressureHeat?: { slipGain: number; crownGain: number };
+  /**
+   * How the contact pressure, and with it the heat and the grip weighting, moves across the inner / middle / outer
+   * bands: the shift toward the inner shoulder per radian of camber leaning toward the car, and toward the outer one
+   * per unit of lateral force over load. Absent: 3.8 and 0.22
+   */
+  bandSpread?: { camber: number; lateral: number };
 }
 
 /** `TyresPressureData` */
 export interface TyresPressureData {
   /** Hot inflation pressure for peak grip (psi gauge) */
   optimalPsi: number;
+  /**
+   * The pressure the tyre is set to in the garage, at `coldRefC`, where the car's data states one (psi gauge). Absent:
+   * the pressure that reaches `optimalPsi` with the carcass at the centre of the working window
+   */
+  setPsi?: number;
   /** Inflation pressure (psi gauge) → radial stiffness (N/m) */
   pressureSpringCurve: LutPoints;
+  /**
+   * Rolling resistance against pressure: × (1 + this × (optimalPsi / pressure − 1)), so a soft tyre drags more.
+   * Absent: 0, no change with pressure
+   */
+  pressureRollingGain?: number;
   /** Grip loss per (ΔP / P_opt)² */
   pressureGripSensitivity: number;
+  /** Grip loss per psi away from the optimum, μ ÷ (1 + this × |ΔP|); when set it replaces the parabola above */
+  pressureGripLossPerPsi?: number;
   /** Temperature the cold pressure is set at (°C, tyre blankets) */
   coldRefC: number;
 }
@@ -647,6 +809,18 @@ export interface TyresCompoundData {
   tyre_compound: PhysicsTyreCompound;
   /** Behaviour on a wet road (`wet-tyres.ts`); absent = a slick */
   wetTraits?: WetTyreTraits;
+  /**
+   * The compound's own wear (WEAR_CURVE of its data): grip (% of new) against the distance the tread has slid over
+   * the road (km). The tyre is worn out at the curve's last point. `loadScaled`: sliding under more than Fz0 of load
+   * counts for more, in proportion (`loadRefN`: the load it counts once at, where that is not the model's Fz0).
+   * Absent: the model's generic wear
+   */
+  wear?: { curve: LutPoints; loadScaled?: boolean; loadRefN?: number };
+  /**
+   * How readily a locked wheel grinds a flat spot into this compound, × the build-up of the tread worn away at the
+   * grounded spot (a softer compound flat-spots sooner). Absent: 1
+   */
+  flatSpotSoftness?: number;
   front: TyreGeometry;
   rear: TyreGeometry;
   modelData: TyresModelData;
@@ -836,6 +1010,7 @@ const F12026_ENGINE: EngineData = {
   // revolution that is 90 % of a torque step in ≈ 85 ms at 9000 rpm. Closing 20 ms: the overrun fuel cut takes the torque
   // off before the plenum empties [est]
   torqueResponseS: { rise: 0.03, fall: 0.02 },
+  wetPedalMap: true,
   turbo: F12026_TURBO,
   // MINIMUM / INERTIA [ref_engine.ini]
   idleRpm: 3700,
@@ -996,6 +1171,9 @@ const F12026_GEARBOX: GearBoxData = {
   // CHANGE_UP_TIME 5 ms / CHANGE_DN_TIME 16 ms [ref_drivetrain.ini]: one torque dip in between [derived]
   shiftTimeS: 0.01,
   shiftTorqueFraction: 0.85,
+  // The control unit manages the up-shift: the drive is away for 20 ms and the engine meets the new gear at the wheels'
+  // speed [est]
+  upshiftCutS: 0.02,
   efficiency: F12026_DRIVELINE_EFFICIENCY,
   gears: {
     // LIMITER [ref_engine.ini], AUTO_SHIFTER UP / DOWN [ref_drivetrain.ini]
@@ -1335,52 +1513,64 @@ function f1Compound(
       lsExpY: 0.72,
       lsExpX: 0.756,
       Fz0: 3460,
+      // A brush tyre on the tyre data's own shape: the peak slip angle (FRICTION_LIMIT_ANGLE), its growth with load,
+      // 6.9 % per Fz0 (FLEX_GAIN), and with a softer tyre (PRESSURE_FLEX_GAIN), the combined-slip exponent
+      // (COMBINED_FACTOR), the longitudinal stiffness (CX_MULT) and the grip lost to sliding speed (SPEED_SENSITIVITY)
+      // [ref_tyres.ini]
+      curve: 'brush',
       friction_limit_angle: 6.137,
-      // Where the cornering stiffness peaks, scaled from Pacejka's MF 6.1 reference tyre (205/60R15, Fz0 4 kN,
-      // pKy2 1.715: peak at 6.86 kN) by load capacity, the Tire and Rim Association formula P^0.585·Sd^1.39·(Dr + Sd)
-      // (psi, section width and rim in inches; the reference at 35 psi). This 280 mm front on an 18" rim at 25 psi
-      // carries 1.59 ×: peak at 10.9 kN = 3.2 × Fz0. Peak slip 6.1° at 4 kN, 7.2° at 8 kN, 9.2° at 12 kN
-      // [Pacejka, Tire and Vehicle Dynamics 3rd ed., MF 6.1 parameter set; TRA load formula; est]
+      peakSlipLoadGain: 0.069,
+      peakSlipPressureGain: 0.1,
+      combinedExponent: 2.2,
+      longStiffnessMult: 1.15,
+      speedSensitivity: 0.001795,
+      // Unused by a brush tyre (the magic-formula family's stiffness law)
       pKy2: 3.2,
-      // The source derives it at run time; its ABS / TC limits are 0.10 [ref_electronics.ini]
+      // The slip the driver aids are scaled to; the drive force peaks at tan(6.137°) / 1.15 of theoretical slip, 10.3 %
+      // [derived]. The source's ABS / TC limits are 0.10 [ref_electronics.ini]
       slip_ratio_limit: 0.1,
       new_combined: false,
       fx_shift_SA: 0,
       fx_scale_SA: 0,
       fy_shift_SR: 0,
       fy_scale_SR: 0,
-      // FALLOFF_LEVEL / FALLOFF_SPEED
+      // FALLOFF_LEVEL / FALLOFF_SPEED [ref_tyres.ini]: 97.9 % of the grip at 1.5 × the peak slip angle, 96.3 % at 2 ×
       use_slip_falloff: true,
       falloff_level: 0.85,
-      falloff_slope: 2.1,
+      falloff_slope: 3,
       relaxationLengthX: 0.1025,
       relaxationLengthY: 0.1025,
       rollingResistance: 0.012,
       // Speed term in the proportion of a radial tyre's, f = 0.0136 + 0.40e-7·V² (V km/h; Wong, Theory of Ground
       // Vehicles): 3.8e-5 of the static value per (m/s)², so +26 % at 300 km/h [derived]
       rollingResistanceSpeedSq: 4.6e-7,
-      verticalDamping: 396,
-      pneumaticTrail: 0.035,
+      verticalDamping: 396.40625,
       brakeDxMod: 0.05,
     },
     thermalData: {
       thermalPerformanceCurve: thermalCurve,
       optimalTempC: window,
-      // The mod's thermal model is not this one: these are ours [est]
+      // The mod's thermal model is not this one: these are ours [est]. The carcass heats by most of the tyre's rolling
+      // loss (0.012 of the load): on a race stint all four settle near 100 °C, in the compounds' windows, with the
+      // pressures within a psi of their optimum (scripts/verify-tyre-thermal.ts)
       surfaceHeatCapacity: 1500,
       coreHeatCapacity: 9500,
       slipHeatShare: 0.35,
-      hysteresis: 0.0042,
+      hysteresis: 0.0107,
       surfaceToCore: 40,
       surfaceCooling: [5, 0.6],
       coreCooling: [8, 0.2],
       thermalVerticalK: -0.0012,
       thermalVerticalRefC: 100,
+      // GRAIN_GAIN / GRAIN_GAMMA, BLISTER_GAIN / BLISTER_GAMMA [ref_tyres.ini]; the graining wears off as the tread slides
+      tread: { grainGain: 0.125, grainGamma: 0.5, blisterGain: 0.125, blisterGamma: 0.5, wearOffWithSlip: true },
     },
     pressureData: {
       optimalPsi: 25,
       pressureSpringCurve: rateCurve(213_175, 16, 11_550),
       pressureGripSensitivity: 1.6,
+      // 0.25 % of grip per psi off the ideal (PRESSURE_D_GAIN) [ref_tyres.ini]
+      pressureGripLossPerPsi: 0.0025,
       // BLANKETS_TEMP 80 °C
       coldRefC: 80,
     },
@@ -1403,12 +1593,13 @@ function f1Compound(
         lsExpX: 0.7875,
         Fz0: 3460,
         friction_limit_angle: 5.411,
-        // The front's scaling for the 375 mm rear at 24 psi: 2.64 × the reference's capacity, peak at 18.1 kN; peak slip
-        // 5.4° at 4 kN, 5.3° at 8 kN, 5.9° at 12 kN [est]
+        // The rear's own load gain and sliding-speed loss [ref_tyres.ini REAR]
+        peakSlipLoadGain: 0.07,
+        speedSensitivity: 0.001665,
         pKy2: 5.2,
         relaxationLengthX: 0.1044,
         relaxationLengthY: 0.1044,
-        verticalDamping: 481,
+        verticalDamping: 480.925,
       },
       camberData: { camberGain: 0.159, dcamber0: 1.211, dcamber1: -11.584 },
       pressureData: { optimalPsi: 24, pressureSpringCurve: rateCurve(274_490, 15, 12_250) },

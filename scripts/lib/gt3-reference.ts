@@ -5,7 +5,8 @@
  * The reference numbers are what a quick driver achieved, so they are lower bounds of the car: sustained (1 s) lateral g
  * by speed, braking g by speed (95th percentile above 60 % pedal), full-throttle g by speed, engine rpm per m/s of rear
  * wheel speed by gear, the slip the ABS and TC allow, and the steering needed per curvature and per g.
- * Sea-level air (ρ 1.2) like Valencia, flat ground, no driver aids (the slip targets stand in for them).
+ * Sea-level air (ρ 1.2) like Valencia, flat ground, no driver aids (the slip targets stand in for them), and the car
+ * in the state those runs were driven in: tyres in their working window, part of a tank of fuel aboard.
  *
  * Shared by `compare-gt3-telemetry.ts` (prints the table) and `verify-gt3-telemetry.ts` (asserts it).
  */
@@ -60,11 +61,36 @@ const bodySlip = (c: VehiclePhysics) => {
 };
 
 /** Runs every reference manoeuvre on the given config (the GT3's own by default) */
-export function measureGt3(cfg = AMG_GT3_CONFIG): Gt3Measurement {
+/** The state the car is measured in: tyres at this carcass and tread temperature (°C; omitted: as they leave the blankets), this much fuel (kg) */
+export interface Gt3Conditions {
+  tyreTempC?: number;
+  fuelKg?: number;
+}
+
+/**
+ * The reference runs' state: tyres in the middle of the slick's 70–85 °C window, half the 50 kg the car starts a
+ * session on (three runs over 24 min). Measured from the blankets with an empty tank, the car reads 1–2 % less grip
+ * and 2 % more acceleration than it has on a lap
+ */
+export const GT3_LOG_CONDITIONS: Gt3Conditions = { tyreTempC: 77, fuelKg: 25 };
+
+export function measureGt3(cfg = AMG_GT3_CONFIG, conditions: Gt3Conditions = GT3_LOG_CONDITIONS): Gt3Measurement {
   const flat = new FlatGroundQuery(0);
   const makeCar = (v0 = 0) => {
     const c = new VehiclePhysics({ ground: flat, config: cfg, airDensity: RHO });
+    if (conditions.fuelKg) {
+      c.setFuelMass(conditions.fuelKg);
+      c.refreshStaticGeometry();
+    }
     c.reset(0, 0, 0, v0);
+    const warm = conditions.tyreTempC;
+    if (warm !== undefined) {
+      for (const w of c.wheels) {
+        w.surfaceTempC = w.coreTempC = warm;
+        for (let b = 0; b < 3; b++) w.bandTempsC[b] = w.bandCoreTempsC[b] = w.bandCarcassTempsC[b] = warm;
+        w.circumferentialTempsC.fill(warm);
+      }
+    }
     return c;
   };
 
@@ -104,21 +130,33 @@ export function measureGt3(cfg = AMG_GT3_CONFIG): Gt3Measurement {
   const my = slopes.reduce((a, p) => a + p.degPerG, 0) / n;
   const m = slopes.reduce((a, p) => a + (p.invV2 - mx) * (p.degPerG - my), 0) / slopes.reduce((a, p) => a + (p.invV2 - mx) ** 2, 0);
 
-  // Braking g at speed: threshold braking, slip held at the reference ABS level
+  // Braking g at speed: threshold braking, slip held at the reference ABS level. The stop starts 8 m/s above the speed,
+  // so the dive has settled, and the g is the mean over the 3 m/s around it (the time from 1.5 m/s above to 1.5 m/s
+  // below): a single sample just after the pedal goes down reads the pitch transient, not the grip
   const brakingG: [number, number, number][] = [];
   for (const [kmh, ref] of GT3_REF.brakingG) {
-    const car = makeCar(kmh / 3.6 + 3);
+    const v = kmh / 3.6;
+    const car = makeCar(v + 8);
     let pedal = 1;
+    let tAbove = NaN;
     let g = NaN;
-    run(car, 3, (c) => {
+    let prevSpeed = v + 8;
+    let prevT = 0;
+    // The moment the speed passed `at`, between the last step and this one
+    const crossed = (at: number, speed: number, t: number) => prevT + ((prevSpeed - at) / Math.max(1e-9, prevSpeed - speed)) * (t - prevT);
+    run(car, 4, (c) => {
       const sr = Math.min(...c.wheels.map((w) => w.slipRatio));
       pedal = THREE.MathUtils.clamp(pedal + (sr < -GT3_REF.absFrontSlip ? -0.08 : 0.04), 0.2, 1);
       return { throttle: 0, brake: pedal, steer: 0 };
-    }, (c) => {
-      if (c.telemetry.speedKmh <= kmh) {
-        g = -c.telemetry.lonG;
+    }, (c, t) => {
+      const speed = c.telemetry.speedKmh / 3.6;
+      if (Number.isNaN(tAbove) && speed <= v + 1.5) tAbove = crossed(v + 1.5, speed, t);
+      if (speed <= v - 1.5) {
+        g = 3 / (crossed(v - 1.5, speed, t) - tAbove) / 9.81;
         return true;
       }
+      prevSpeed = speed;
+      prevT = t;
       return false;
     });
     brakingG.push([kmh, g, ref]);

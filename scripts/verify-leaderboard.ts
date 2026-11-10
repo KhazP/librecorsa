@@ -9,7 +9,7 @@ import { getActiveTrackData } from '../src/lib/track-data';
 import { F1Physics2026 } from '../src/lib/f1-physics-2026';
 import { LapRecorder, validateLapRecording, type CompletedLap } from '../src/lib/sim/lap-recorder';
 import { lapPlausibilityProblem } from '../src/lib/sim/lap-plausibility';
-import { LAP_SAMPLE_STRIDE, PHYSICS_VERSION, lapBoardClass, type LapRecording } from '../src/lib/sim/lap-types';
+import { LAP_SAMPLE_STRIDE, PHYSICS_VERSION, lapBoardClass, lapPhysicsVersion, parseLapConditions, type LapRecording } from '../src/lib/sim/lap-types';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { handleApi } from '../cloudflare/api/index';
@@ -74,6 +74,25 @@ check('the lap carries its conditions', real.conditions?.compound === 'medium' &
 check('a moment on assists makes it an assisted lap', real.conditions?.assists === 'assisted', real.conditions?.assists);
 check('a moment on Casual makes it a Casual lap', real.conditions?.realism === 'casual', real.conditions?.realism);
 check('board class', real.conditions !== undefined && lapBoardClass(real.conditions) === `p${PHYSICS_VERSION}-assisted-casual-dry`);
+{
+  // The VF26 on its opt-in rigid-body engine (a choice kept in the browser) is ranked apart from the engine it ships on
+  const g = globalThis as { window?: unknown; localStorage?: unknown };
+  const kept = new Map([['librecorsa.vf26Engine', 'rigid']]);
+  g.window = { location: { search: '' } };
+  g.localStorage = { getItem: (k: string) => kept.get(k) ?? null, setItem: (k: string, v: string) => void kept.set(k, v) };
+  const optIn = lapPhysicsVersion('vf26');
+  const others = lapPhysicsVersion('f12026-car');
+  delete g.window;
+  delete g.localStorage;
+  check(
+    'the VF26 on its opt-in engine has a board of its own, other cars and the shipping engine keep theirs',
+    optIn !== PHYSICS_VERSION &&
+      others === PHYSICS_VERSION &&
+      lapPhysicsVersion('vf26') === PHYSICS_VERSION &&
+      parseLapConditions({ ...real.conditions, physicsVersion: optIn }) !== null,
+    `p${optIn} / p${others}`
+  );
+}
 check('a recording without its realism level is refused', validateLapRecording({ ...real, conditions: { ...real.conditions, realism: undefined } }) === null);
 check(
   'an autopilot lap is shown but never ranks',

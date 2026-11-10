@@ -26,6 +26,7 @@ import type {
   TyresCompoundData,
 } from '../f12026-car/F12026CarConfig';
 import { deriveRainCompound } from '../f12026-car/F12026CarConfig';
+import { modBodyHeightM, modCornerStops } from '../mod-suspension';
 
 /** Driveline efficiency of this model; the wheel torque curve is divided by it for crank torque */
 const DRIVELINE_EFFICIENCY = 0.92;
@@ -67,8 +68,9 @@ const ENGINE = {
   // Linear overrun torque, 120 Nm at 9600 rpm [spec COAST_REF, NON_LINEARITY 0]
   coastCurve: [
     [0, 0],
+    [2100, 0],
     [9600, 120],
-    [10800, 135],
+    [10800, 139.2],
   ] as LutPoints,
   // Pedal → throttle: a quick first tenth, then near linear [spec throttle.lut]
   throttleResponseCurve: [
@@ -90,8 +92,8 @@ const ENGINE = {
   idleRpm: 2100,
   // Engine 0.130 + gearbox 0.012 [spec engine.ini / drivetrain.ini INERTIA]
   inertia: 0.142,
-  // 25 Hz limiter: half a cycle cut [spec LIMITER_HZ]
-  limiterCutS: 0.02,
+  // 25 Hz limiter: the cut lasts one cycle [spec LIMITER_HZ]
+  limiterCutS: 0.04,
 };
 
 const NONE: LutPoints = [
@@ -140,7 +142,15 @@ const GEARBOX = {
   reverse: 2.5,
   finalDrive: 4.0,
   shiftTimeS: 0.06,
+  // [spec CHANGE_DN_TIME]
+  downshiftTimeS: 0.1,
   shiftTorqueFraction: 0.1,
+  // Dog box: 40 ms between gears, the ignition cut for 60 ms [spec CHANGE_UP_TIME, AUTO_CUTOFF_TIME]
+  upshiftNeutralS: 0.04,
+  upshiftCutS: 0.06,
+  // Down: 100 ms between gears, the clutch home by 130 ms, a 60 % blip, and up to 500 rpm over the limiter
+  // [spec CHANGE_DN_TIME, DOWNSHIFT_PROFILE, AUTOBLIP, DOWNSHIFT_PROTECTION]
+  downshift: { neutralS: 0.1, clutchReleaseS: 0.05, clutchHomeS: 0.13, blip: { level: 0.6, riseS: 0.01 }, overRevRpm: 500 },
   efficiency: DRIVELINE_EFFICIENCY,
   gears: {
     // [spec LIMITER]
@@ -163,13 +173,49 @@ const damper = (slow_bump: number, fast_bump: number, slow_rebound: number, fast
 
 const NO_DAMPER = damper(0, 0, 0, 0);
 
+const MASS = 1025;
+const WHEELBASE = 2.8;
+/** Share of the sprung weight on the front axle [spec CG_LOCATION] */
+const FRONT_WEIGHT = 0.485;
+/** Sprung load on a front / rear spring at static ride (N): the car less its hubs (36 / 39 kg) [derived] */
+const SPRUNG_KG = MASS - 2 * 36 - 2 * 39;
+const FRONT_STATIC_LOAD_N = (SPRUNG_KG * 9.81 * FRONT_WEIGHT) / 2;
+const REAR_STATIC_LOAD_N = (SPRUNG_KG * 9.81 * (1 - FRONT_WEIGHT)) / 2;
+/** Tyre radial rate at the 35 psi it runs at (N/m): 254 300 at 26 psi + 5233 per psi [spec RATE, PRESSURE_SPRING_GAIN] */
+const HOT_TYRE_RATE = 254_300 + 5233 * 9;
+/**
+ * The mod measures its stops from the suspension's design position, with the springs working on their rod lengths
+ * (`mod-suspension.ts`): at static ride the fronts sit 1.9 mm into their travel and the rears 11.4 mm, so the stops are
+ * these far from static [spec ROD_LENGTH, PACKER_RANGE, BUMPSTOP_UP / DN of FRONT / REAR / HEAVE_*; derived]
+ */
+const FRONT_STOPS = modCornerStops({
+  staticLoadN: FRONT_STATIC_LOAD_N,
+  springRate: 120_000,
+  rodLength: 0.005,
+  packerRange: 0.02,
+  bumpStopUp: 0.055,
+  bumpStopDn: 0.055,
+  heave: { springRate: 120_000, rodLength: 0.02, packerRange: 0.1, bumpStopUp: 0.06 },
+});
+const REAR_STOPS = modCornerStops({
+  staticLoadN: REAR_STATIC_LOAD_N,
+  springRate: 90_000,
+  rodLength: 0,
+  packerRange: 0.05,
+  bumpStopUp: 0.05,
+  bumpStopDn: 0.05,
+  heave: { springRate: 150_000, rodLength: 0.005, packerRange: 0.08, bumpStopUp: 0.08 },
+});
+const mm = (m: number) => Number(m.toFixed(4));
+
 /**
  * Double wishbones front and rear with a heave spring on each axle: the mod's wheel rates, anti-roll bars, bump stops,
- * packers and two-stage dampers [spec suspensions.ini]. Travel is measured from the design position, which this model
- * takes as the static one (as the Liana's); the front's packers, 20 mm up, are the first stop its wheels meet. The heave
- * elements carry their share of the weight at static (AC's heave springs are preloaded by their rod), with their bump
- * stops as packers. Hardpoints are [x inboard, y up, z forward] from the wheel centre [spec]; camber gain and roll-centre
- * heights are what the kinematic solver gives on them at static [derived].
+ * packers and two-stage dampers [spec suspensions.ini], the stops at their distance from static ride (above). The
+ * front's packers, 13 mm up, are the first stop its wheels meet, its bump stop 53 mm up the second; the rear's packer
+ * and bump stop come in together 39 mm up. The heave elements carry their share of the weight at static (their springs
+ * are preloaded by their rod); a heave element's own bump stop is rigid (500 kN/m), the front's 58 mm up, the rear's
+ * behind its 150 kN/m packer at 64 mm. Hardpoints are [x inboard, y up, z forward] from the wheel centre [spec]; camber
+ * gain and roll-centre heights are what the kinematic solver gives on them at static [derived].
  */
 const SUSPENSIONS: SuspensionsData = {
   front: {
@@ -179,12 +225,12 @@ const SUSPENSIONS: SuspensionsData = {
     staticCamber: -2.1,
     camberGainKinematic: -26.8,
     springs: { wheel_rate: 120_000, helper_rate: 0, helper_range: 0 },
-    // [spec HEAVE_FRONT SPRING_RATE, BUMPSTOP_UP, BUMP_STOP_RATE]
-    heave: { rate: 120_000, gap: 0, packerGap: 0.06, packerRate: 250_000 },
-    // [spec PACKER_RANGE, BUMP_STOP_RATE]
-    bumpStop: { range: 0.02, rate: 150_000, progression: 0 },
+    // [spec HEAVE_FRONT SPRING_RATE, PROGRESSIVE_SPRING_RATE, BUMPSTOP_UP]
+    heave: { rate: 120_000, gap: 0, packerGap: mm(FRONT_STOPS.heaveBumpStopGapM), packerRate: 500_000, progressiveRate: 10_000 },
+    // [spec PACKER_RANGE, BUMPSTOP_UP, BUMP_STOP_RATE]
+    bumpStop: { range: mm(FRONT_STOPS.packerGapM), rate: 150_000, progression: 0, hardStop: { range: mm(FRONT_STOPS.bumpStopGapM), rate: 150_000 } },
     // [spec BUMPSTOP_DN]
-    droopTravel: 0.055,
+    droopTravel: mm(FRONT_STOPS.droopM),
     rollCentreHeight: 0.0527,
     // [spec ARB FRONT]
     arb: 120_000,
@@ -206,12 +252,12 @@ const SUSPENSIONS: SuspensionsData = {
     staticCamber: -1.75,
     camberGainKinematic: -35.7,
     springs: { wheel_rate: 90_000, helper_rate: 0, helper_range: 0 },
-    // [spec HEAVE_REAR SPRING_RATE, BUMPSTOP_UP, BUMP_STOP_RATE]
-    heave: { rate: 150_000, gap: 0, packerGap: 0.08, packerRate: 150_000 },
-    // [spec BUMPSTOP_UP = PACKER_RANGE, BUMP_STOP_RATE]
-    bumpStop: { range: 0.05, rate: 150_000, progression: 0 },
+    // [spec HEAVE_REAR SPRING_RATE, PROGRESSIVE_SPRING_RATE, PACKER_RANGE, BUMP_STOP_RATE]
+    heave: { rate: 150_000, gap: 0, packerGap: mm(REAR_STOPS.heavePackerGapM), packerRate: 150_000, progressiveRate: 10_000 },
+    // The packer and the bump stop meet at the same travel: twice the rate [spec PACKER_RANGE = BUMPSTOP_UP, BUMP_STOP_RATE]
+    bumpStop: { range: mm(REAR_STOPS.packerGapM), rate: 300_000, progression: 0 },
     // [spec BUMPSTOP_DN]
-    droopTravel: 0.05,
+    droopTravel: mm(REAR_STOPS.droopM),
     rollCentreHeight: 0.1203,
     // [spec ARB REAR]
     arb: 20_000,
@@ -229,36 +275,41 @@ const SUSPENSIONS: SuspensionsData = {
   dampers_controller: {
     front: {
       base: damper(9000, 3400, 5000, 4000),
-      // [spec HEAVE_FRONT DAMP_*]
+      // [spec HEAVE_FRONT DAMP_*, DAMP_FAST_BUMPTHRESHOLD / REBOUNDTHRESHOLD]
       heave: damper(4660, 1700, 5610, 2660),
       roll: NO_DAMPER,
       pitch: NO_DAMPER,
       fastThresholdMs: 0.1,
       fastReboundThresholdMs: 0.1,
+      heaveFastThresholdMs: 0.088,
+      heaveFastReboundThresholdMs: 0.18,
     },
     rear: {
       base: damper(7500, 3000, 8400, 4000),
-      // [spec HEAVE_REAR DAMP_*]
+      // [spec HEAVE_REAR DAMP_*, DAMP_FAST_BUMPTHRESHOLD / REBOUNDTHRESHOLD]
       heave: damper(4850, 1340, 5040, 2180),
       roll: NO_DAMPER,
       pitch: NO_DAMPER,
       fastThresholdMs: 0.1,
       fastReboundThresholdMs: 0.1,
+      heaveFastThresholdMs: 0.088,
+      heaveFastReboundThresholdMs: 0.18,
     },
   },
 };
 
-const MASS = 1025;
-const WHEELBASE = 2.8;
 /**
- * GRAPHICS_OFFSET puts the ground 0.28 m under the CG: the model's tyres touch down 0.04 m below its origin, which sits
- * 0.24 m below the CG [spec car.ini, derived], as the f12026-car's CG is read. (BASEY + tyre radius would put it at
- * 0.43 m, where the splitter and diffuser would sit far above the heights their ground-effect tables work at.)
+ * The body's height at each axle is the tyre's loaded radius less the wheel centre's height in the body frame (BASEY
+ * 0.085 / 0.080 above the CG's level, plus the static offset): 0.245 m at the front, 0.255 m at the rear, so the CG,
+ * 48.5 % of the weight forward, rides 0.250 m up [spec BASEY, RADIUS; derived]. The ride-height pickups sit 0.181 m
+ * (front) and 0.170 m (rear) below the CG's level [spec RIDE]: 64 / 85 mm off the ground at rest, where the splitter's
+ * and the diffuser's ground-effect tables (25-140 mm) work.
  */
-const CG_HEIGHT = 0.28;
-/** Ride-height pickups 0.181 m (front) and 0.170 m (rear) below the CG [spec RIDE]: 99 / 110 mm off the ground at rest */
-const FRONT_TARGET_HEIGHT = CG_HEIGHT - 0.181;
-const REAR_TARGET_HEIGHT = CG_HEIGHT - 0.17;
+const FRONT_BODY_HEIGHT = modBodyHeightM(0.34, FRONT_STATIC_LOAD_N / HOT_TYRE_RATE + (36 * 9.81) / HOT_TYRE_RATE, 0.085, FRONT_STOPS.staticOffsetM);
+const REAR_BODY_HEIGHT = modBodyHeightM(0.355, REAR_STATIC_LOAD_N / HOT_TYRE_RATE + (39 * 9.81) / HOT_TYRE_RATE, 0.08, REAR_STOPS.staticOffsetM);
+const CG_HEIGHT = Number((FRONT_BODY_HEIGHT + (REAR_BODY_HEIGHT - FRONT_BODY_HEIGHT) * (1 - FRONT_WEIGHT)).toFixed(4));
+const FRONT_TARGET_HEIGHT = Number((FRONT_BODY_HEIGHT - 0.181).toFixed(4));
+const REAR_TARGET_HEIGHT = Number((REAR_BODY_HEIGHT - 0.17).toFixed(4));
 /** Static rake (deg) [derived] */
 const STATIC_RAKE_DEG = (Math.asin((REAR_TARGET_HEIGHT - FRONT_TARGET_HEIGHT) / WHEELBASE) * 180) / Math.PI;
 
@@ -479,9 +530,12 @@ const AERO: AeroData = {
   airDensity: 1.225,
 };
 
-/** Front 0.290 × R 0.340, rear 0.340 × R 0.355, rim R 0.2413 [spec tyres.ini] */
-const PROTO_FRONT: TyreGeometry = { width: 0.29, radius: 0.34, rimRadius: 0.2413, verticalRateScale: 1 };
-const PROTO_REAR: TyreGeometry = { width: 0.34, radius: 0.355, rimRadius: 0.2413, verticalRateScale: 1 };
+/**
+ * Front 0.290 × R 0.340, rear 0.340 × R 0.355, rim R 0.2413; the radius grows 0.025 mm per rad/s of spin, 6 mm at
+ * 300 km/h [spec tyres.ini RADIUS_ANGULAR_K]
+ */
+const PROTO_FRONT: TyreGeometry = { width: 0.29, radius: 0.34, rimRadius: 0.2413, verticalRateScale: 1, radiusGrowthPerRadS: 2.5e-5 };
+const PROTO_REAR: TyreGeometry = { width: 0.34, radius: 0.355, rimRadius: 0.2413, verticalRateScale: 1, radiusGrowthPerRadS: 2.5e-5 };
 
 /** The tyres' reference load [spec FZ0] */
 const FZ0 = 3000;
@@ -515,7 +569,9 @@ function protoCompound(
   /** RATE [spec] */
   rate: number,
   thermalCurve: LutPoints,
-  window: [number, number]
+  window: [number, number],
+  /** Grip (% of new) against km slid [spec Wear_*.lut] */
+  wearCurve: LutPoints
 ): TyresCompoundData {
   const dyCurve = loadTable(grip.y);
   const dxCurve = loadTable(grip.x);
@@ -523,6 +579,8 @@ function protoCompound(
     name,
     shortName,
     tyre_compound,
+    // Sliding under load wears in proportion, counted per 2000 N of it [spec VIRTUALKM USE_LOAD]
+    wear: { curve: wearCurve, loadScaled: true, loadRefN: 2000 },
     front: PROTO_FRONT,
     rear: PROTO_REAR,
     modelData: {
@@ -534,13 +592,22 @@ function protoCompound(
       Fz0: FZ0,
       dyCurve,
       dxCurve,
-      // [spec FRICTION_LIMIT_ANGLE]
+      // A brush tyre, on the mod's own shape data: the peak slip angle [spec FRICTION_LIMIT_ANGLE], its growth with load
+      // (6.2 % per FZ0) and with a soft tyre [spec FLEX_GAIN, PRESSURE_FLEX_GAIN], the combined-slip exponent
+      // [spec COMBINED_FACTOR], the longitudinal stiffness [spec CX_MULT] and the grip lost to sliding speed
+      // [spec SPEED_SENSITIVITY]
+      curve: 'brush',
       friction_limit_angle: 6.216,
-      // Cornering stiffness peak scaled from Pacejka's MF 6.1 reference tyre by load capacity, as the GT3's: the 290 mm
-      // front carries ≈ 0.92 × the GT3's 315 mm, peak at ≈ 12.7 kN = 4.2 × FZ0 [Pacejka MF 6.1; est]
+      peakSlipLoadGain: 0.0621,
+      peakSlipPressureGain: -0.06,
+      combinedExponent: 2.23,
+      longStiffnessMult: 1.24,
+      speedSensitivity: 0.002,
+      // Unused by a brush tyre (the magic-formula family's stiffness law)
       pKy2: 4.2,
-      // The mod's TC (9 % default) sits under it [est]
-      slip_ratio_limit: 0.1,
+      // Slip ratio at the peak of the drive force: tan(6.216°) / 1.24 of theoretical slip [derived]. The mod's TC
+      // (9 % default) sits just under it
+      slip_ratio_limit: 0.096,
       new_combined: false,
       fx_shift_SA: 0,
       fx_scale_SA: 0,
@@ -556,9 +623,11 @@ function protoCompound(
       // 5 N + 0.00039 N·s²/m² per kN of load [spec ROLLING_RESISTANCE_0 / _1]
       rollingResistance: 0.005,
       rollingResistanceSpeedSq: 3.9e-7,
+      // 2.2 % more at the peak slip, and no more past it [spec ROLLING_RESISTANCE_SLIP]
+      rollingResistanceSlipGain: 0.022,
+      rollingResistanceSlipMax: 1,
       // [spec DAMP]
       verticalDamping: 540,
-      pneumaticTrail: 0.04,
       // [spec BRAKE_DX_MOD]
       brakeDxMod: 0.1,
     },
@@ -566,11 +635,18 @@ function protoCompound(
       // Grip against tread temperature (°C) [spec tcurve_*.lut]
       thermalPerformanceCurve: thermalCurve,
       optimalTempC: window,
-      // The GT3 slick's heat capacities and cooling [est]
+      // [spec GRAIN_GAIN / GRAIN_GAMMA, BLISTER_GAIN / BLISTER_GAMMA]; the graining wears off as the tread slides
+      tread: { grainGain: 0.5, grainGamma: 1, blisterGain: 0.5, blisterGamma: 1, wearOffWithSlip: true },
+      // Pressure moves the heat: the sliding heat and the crown against the shoulders [ref], the rolling heat by
+      // PRESSURE_RR_GAIN [spec]
+      pressureHeat: { slipGain: 0.5, crownGain: 0.05 },
+      // The GT3 slick's heat capacities and cooling [est]; the carcass heats by the tyre's rolling loss (0.005 of the
+      // load, 0.0064 at 60 m/s, more with scrub): on a stint all four settle near 75 °C, in the window, with the
+      // pressures within a psi of their optimum
       surfaceHeatCapacity: 1800,
       coreHeatCapacity: 11000,
       slipHeatShare: 0.35,
-      hysteresis: 0.0038,
+      hysteresis: 0.0072,
       surfaceToCore: 40,
       surfaceCooling: [5, 0.6],
       coreCooling: [8, 0.2],
@@ -581,7 +657,11 @@ function protoCompound(
       // [spec PRESSURE_IDEAL]
       optimalPsi: 35,
       pressureSpringCurve: pressureSpring(rate),
+      // [spec PRESSURE_RR_GAIN]
+      pressureRollingGain: 0.97,
       pressureGripSensitivity: 1.0,
+      // 0.2 % of grip per psi off the ideal [spec PRESSURE_D_GAIN]
+      pressureGripLossPerPsi: 0.002,
       // Out of 60 °C blankets, as the GT3's, the way AC's default tyre-blanket assist starts them: the mod's curves give
       // 71 % grip at 25 °C [est]. (Its 26 psi static pressure is the ambient set that reaches 35 psi hot.)
       coldRefC: 60,
@@ -626,7 +706,8 @@ const TYRES = {
       [240, 0.8],
       [300, 0.6],
     ],
-    [70, 85]
+    [70, 85],
+    [[0, 99.5], [0.72, 100], [4, 100], [12, 99], [20, 98], [30, 96.4], [36, 94], [48, 90.5], [60, 80], [70, 70], [71, 20]]
   ),
   PhysicsTyreCompound_Proto_Medium: protoCompound(
     'PhysicsTyreCompound_Proto_Medium',
@@ -650,7 +731,8 @@ const TYRES = {
       [240, 0.8],
       [300, 0.6],
     ],
-    [80, 88]
+    [80, 88],
+    [[0, 99.5], [0.48, 100], [4.8, 100], [14, 99.7], [20, 99], [30, 97.4], [36, 95.7], [48, 92.5], [60, 81], [70, 72], [71, 22]]
   ),
   PhysicsTyreCompound_Proto_Hard: protoCompound(
     'PhysicsTyreCompound_Proto_Hard',
@@ -674,7 +756,8 @@ const TYRES = {
       [240, 0.8],
       [300, 0.6],
     ],
-    [80, 90]
+    [80, 90],
+    [[0, 99.8], [0.48, 100], [7.2, 100], [20, 99.6], [28.8, 98.5], [48, 96], [62.4, 94], [65, 89], [75, 75], [80, 74], [81, 20]]
   ),
 } satisfies Partial<Record<PhysicsTyreCompound, TyresCompoundData>>;
 
@@ -702,7 +785,7 @@ export const MTR_496R_CONFIG = {
     // With driver, no fuel [spec TOTALMASS]
     totalMassKg: MASS,
     // [spec CG_LOCATION]
-    frontWeightFraction: 0.485,
+    frontWeightFraction: FRONT_WEIGHT,
     // [spec WHEELBASE, TRACK]
     wheelbase: WHEELBASE,
     trackWidthFront: 1.54,
@@ -712,6 +795,8 @@ export const MTR_496R_CONFIG = {
     // [spec HUB_MASS]
     unsprungMassFront: 36,
     unsprungMassRear: 39,
+    // The tank sits 0.10 m behind the CG, level with it [spec FUELTANK POSITION]
+    fuelTank: { y: 0, z: -0.1 },
     // [spec ANGULAR_INERTIA]
     wheelInertiaFront: 1.8,
     wheelInertiaRear: 1.8,
@@ -732,8 +817,16 @@ export const MTR_496R_CONFIG = {
     settings: { power: 0.3, coast: 0.55, preload: 60, friction_faces: 1, power_ramp_deg: 45, coast_ramp_deg: 45 },
   },
   // 5900 Nm at full pedal, 58 % front, bias adjustable in 0.5 % steps; the pads' grip peaks at 400 °C and is 80 % of it
-  // cold, like steel discs [spec brakes.ini]
-  brakes: { maxTorqueNm: 5900, front_bias: 0.58, ebbStep: 0.005, brakeByWire: false, discMaterial: 'endurance-steel', migration: { amount: 0, rampStart: 0 } },
+  // cold, easing to 97 % at 900 °C and 82 % at 1200 (the same curve front and rear) [spec brakes.ini PERF_CURVE]
+  brakes: {
+    maxTorqueNm: 5900,
+    front_bias: 0.58,
+    ebbStep: 0.005,
+    brakeByWire: false,
+    discMaterial: 'endurance-steel',
+    padMuCurve: [[0, 0.8], [400, 1], [900, 0.97], [1200, 0.82], [2000, 0.62]],
+    migration: { amount: 0, rampStart: 0 },
+  },
   suspensions: SUSPENSIONS,
   aero: AERO,
   tyreCompounds: TYRES_WITH_RAIN,

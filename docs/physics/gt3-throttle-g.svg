@@ -57,13 +57,13 @@ svg{--surface:#fcfcfb;--ink:#0b0b0b;--ink2:#52514e;--muted:#898781;--grid:#e1e0d
 <text class="axt" x="380" y="406" text-anchor="middle">Speed (km/h)</text>
 <text class="axt" transform="translate(16 227) rotate(-90)" text-anchor="middle">Acceleration (g)</text>
 <path d="M73.5,103.7L187.2,153L301,188.6L414.8,240.7L528.5,281.8L642.3,311.9L642.3,327.1L528.5,305.8L414.8,276.7L301,239.8L187.2,214.6L73.5,179.6Z" fill="var(--s2)" fill-opacity="0.14"/>
-<path d="M73.5,161.7L187.2,162.5L301,218L414.8,257.6L528.5,288.4L642.3,313.6" fill="none" stroke="var(--s1)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-<circle cx="73.5" cy="161.7" r="4" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"/>
-<circle cx="187.2" cy="162.5" r="4" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"/>
-<circle cx="301" cy="218" r="4" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"/>
-<circle cx="414.8" cy="257.6" r="4" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"/>
-<circle cx="528.5" cy="288.4" r="4" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"/>
-<circle cx="642.3" cy="313.6" r="4" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"/>
+<path d="M73.5,170.9L187.2,174.8L301,227.4L414.8,265.2L528.5,293.7L642.3,317.2" fill="none" stroke="var(--s1)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="73.5" cy="170.9" r="4" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"/>
+<circle cx="187.2" cy="174.8" r="4" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"/>
+<circle cx="301" cy="227.4" r="4" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"/>
+<circle cx="414.8" cy="265.2" r="4" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"/>
+<circle cx="528.5" cy="293.7" r="4" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"/>
+<circle cx="642.3" cy="317.2" r="4" fill="var(--s1)" stroke="var(--surface)" stroke-width="2"/>
 <circle cx="73.5" cy="147.1" r="4" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"/>
 <circle cx="187.2" cy="188.2" r="4" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"/>
 <circle cx="301" cy="217.9" r="4" fill="var(--s2)" stroke="var(--surface)" stroke-width="2"/>

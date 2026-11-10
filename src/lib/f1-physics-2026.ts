@@ -532,6 +532,8 @@ export class F1Physics2026 {
   public autoXMode = true;
   /** Race control for Overtake Mode (the 1 s rule); null = practice, the override is free */
   public raceControl: OvertakingRaceControl | null = null;
+  /** The steering rim's position at the last frame (`ControlInputs.steerRim`): its move is spread over the next frame's steps */
+  private lastRimSteer: number | null = null;
   /** A 2026 car: Straight Mode in every zone, Overtake Mode within 1 s at the detection point */
   public readonly overtakingRules: OvertakingRules = 'straight-mode-2026';
   private readonly overtake = new OvertakeGrant();
@@ -1181,6 +1183,7 @@ export class F1Physics2026 {
       steerRight: THREE.MathUtils.clamp(rawInputs.steerRight ?? 0, 0, 1),
       analogSteer:
         rawInputs.analogSteer !== undefined ? THREE.MathUtils.clamp(rawInputs.analogSteer, -1, 1) : undefined,
+      steerRim: rawInputs.steerRim === true && Number.isFinite(rawInputs.analogSteer),
       padSteer: rawInputs.padSteer !== undefined ? THREE.MathUtils.clamp(rawInputs.padSteer, -1, 1) : undefined,
       kbSteer: rawInputs.kbSteer !== undefined ? Math.sign(rawInputs.kbSteer) : undefined,
       clutch: rawInputs.clutch,
@@ -1216,8 +1219,15 @@ export class F1Physics2026 {
     this.prevShiftDown = inputs.shiftDown;
 
     this.ffbSubframeSamples.length = 0;
+    // A steering wheel's rim is read once a frame: its move since the last frame is spread over this frame's steps, so
+    // the rack turns at the rim's own speed rather than in one jump per frame
+    const rim = inputs.steerRim && inputs.analogSteer !== undefined ? inputs.analogSteer : null;
+    const rimFrom = rim !== null && this.lastRimSteer !== null ? this.lastRimSteer : rim;
+    const stepsDue = Math.min(Math.floor(this.timeAccumulator / F1Physics2026.FIXED_DT), F1Physics2026.MAX_STEPS_PER_CALL);
+    if (stepsDue > 0 || rim === null) this.lastRimSteer = rim;
     let stepsRun = 0;
     while (this.timeAccumulator >= F1Physics2026.FIXED_DT && stepsRun < F1Physics2026.MAX_STEPS_PER_CALL) {
+      if (rim !== null && rimFrom !== null) inputs.analogSteer = rimFrom + ((rim - rimFrom) * Math.min(1, (stepsRun + 1) / stepsDue));
       this.outerStep(F1Physics2026.FIXED_DT, inputs, stepsRun === 0 ? shiftReq : 0);
       this.timeAccumulator -= F1Physics2026.FIXED_DT;
       this.simTimeMs += F1Physics2026.FIXED_DT * 1000;
@@ -1743,7 +1753,10 @@ export class F1Physics2026 {
 
     // ---- 3. Steering rack & 3D Double-Wishbone + Tie-Rod Kinematics ----------------
     const targetRoad = -steerNorm * this.maxSteerAngleRad;
-    const maxRate = (VF26_CHASSIS.steering.maxWheelSpeedDegS / VF26_CHASSIS.steering.ratio) * DEG2RAD;
+    // A steering wheel's rim goes to the rack as the driver's hands turn it; any other device (a stick, a mouse, tilt)
+    // is held to the speed of hands
+    const rimSteers = inputs.steerRim === true && !this.aiAutopilot && this.steeringAssist.source === 'direct';
+    const maxRate = rimSteers ? Infinity : (VF26_CHASSIS.steering.maxWheelSpeedDegS / VF26_CHASSIS.steering.ratio) * DEG2RAD;
     const dSteer = THREE.MathUtils.clamp(targetRoad - this.steerRoadWheelRad, -maxRate * dt, maxRate * dt);
     this.steerRoadWheelRad += dSteer;
 

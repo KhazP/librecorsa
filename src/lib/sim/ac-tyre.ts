@@ -806,10 +806,11 @@ export function stepDirtyLevel(
 }
 
 /**
- * Next tread contamination level (0..1). Grass / gravel / run-off load the tread toward fully dirty; on asphalt it
- * settles at a level set by the marbles under it (0.6 × marble density): it picks marbles up toward that level when
- * cleaner, and rolling plus shear work scrub it progressively down to it when dirtier, so off-line marbles do
- * accumulate while the racing line (no marbles, as at the start of a session) cleans the tyre.
+ * Next tread contamination level (0..1) of the tyre model above (`stepDirtyLevel`). Grass / gravel / run-off load the
+ * tread toward fully dirty; on asphalt it settles at a level set by the marbles under it (0.6 × marble density): it
+ * picks marbles up toward that level when cleaner, and rolling plus shear work scrub it progressively down to it when
+ * dirtier, so off-line marbles do accumulate while the racing line (no marbles, as at the start of a session) cleans
+ * the tyre. The rigid-body cars' tyres take theirs by distance instead (`advanceTreadDirt`).
  */
 export function advanceDirtyLevel(
   level: number,
@@ -830,6 +831,39 @@ export function advanceDirtyLevel(
   }
   const clean = (v / 25) * 0.14 + (Math.max(0, slipPowerW) / 50000) * 0.45;
   return Math.max(target, lv - clean * dt);
+}
+
+/**
+ * Dirt the tread picks up per metre rolled on a loose or dusty surface, as a share of a fully dirty tread [est]: a
+ * brush with the grass (20 m, 0.65 s at 30 m/s) leaves it a sixth dirty, about 3 % of grip, and some 110 m of it (under
+ * 4 s) the whole way; gravel loads it half as fast again, a dusty run-off a third as fast. Every other surface cleans
+ */
+export const DIRT_PICKUP_PER_M = { grass: 0.009, gravel: 0.0135, runoff: 0.003 } as const;
+/**
+ * Dirt the tread sheds per metre rolled on a clean surface [est]: a fully dirty tyre is clean after some 350 m (7 s
+ * at 50 m/s), a brush with the grass after 60 m
+ */
+export const DIRT_CLEAN_PER_M = 1 / 350;
+
+/**
+ * Next tread contamination level (0..1) by the distance rolled: grass / gravel / run-off load the tread toward fully
+ * dirty in proportion to the metres rolled over them (`DIRT_PICKUP_PER_M`); on a clean surface it settles at a level
+ * set by the marbles under it (0.6 × marble density), picking marbles up toward that level when cleaner and shedding
+ * dirt down to it with the metres rolled when dirtier (`DIRT_CLEAN_PER_M`). A tyre standing still neither picks up nor
+ * sheds anything.
+ */
+export function advanceTreadDirt(level: number, surface: string, rollSpeedMs: number, dt: number, marbleLevel = 0): number {
+  const v = Math.abs(rollSpeedMs);
+  const lv = Number.isFinite(level) ? level : 0;
+  const metres = v * dt;
+  const pickup = surface === 'grass' || surface === 'gravel' || surface === 'runoff' ? DIRT_PICKUP_PER_M[surface] : 0;
+  if (pickup > 0) return Math.min(1, lv + pickup * metres);
+  const target = 0.6 * Math.max(0, Math.min(1, Number.isFinite(marbleLevel) ? marbleLevel : 0));
+  if (lv < target) {
+    const marbles = (0.02 + (v / 35) * 0.25) * target;
+    return Math.min(target, lv + marbles * dt);
+  }
+  return Math.max(target, lv - DIRT_CLEAN_PER_M * metres);
 }
 
 /** Inflation gas (≈0.1 kg of air) */
