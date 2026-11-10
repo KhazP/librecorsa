@@ -9,11 +9,9 @@
  * and node transforms, and the script re-reads its output and fails unless every physics vertex is unchanged.
  * Already compressed files are skipped. The browser decodes with three's MeshoptDecoder (src/lib/gltf-loader.ts),
  * the Node scripts with scripts/lib/glb-geometry.ts. Run it after scripts/tracks/build_track.py rebuilds a circuit.
- * The Rwanda GLB stays uncompressed in the repository (scripts/smooth-rwanda-track.ts and the rwanda-*.mjs tools
- * edit or read it raw); the Pages deploy compresses it before the build (.github/workflows/deploy-pages.yml), along
- * with the props and stands those tools generate (scenery/props.glb, scenery/stands.glb; the browser loads them with
- * src/lib/render/scenery-instances.ts). scenery/foliage.glb is left raw: it is mostly EXT_mesh_gpu_instancing
- * transforms and textures, and comes out bigger.
+ * RISE Motordrome's GLB is compressed by its own build (scripts/rwanda-official/post.mjs) and skipped here as
+ * already compressed. Its scenery/foliage.glb is left raw: it is mostly EXT_mesh_gpu_instancing transforms and
+ * textures, and comes out bigger.
  */
 import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";

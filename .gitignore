@@ -47,10 +47,9 @@ PORT-ASSESSMENT-*.md
 UI-RESEARCH-*.md
 
 # Hosted-only cars and circuits: served on librecorsa.org from the librecorsa-assets R2 bucket
-# (npm run upload-hosted), never committed. The repository carries the Rwanda circuit and the 2026 prototype car
+# (npm run upload-hosted), never committed. The repository carries RISE Motordrome and the 2026 prototype car
 # (src/lib/hosted-content.ts)
 /public/tracks/*
-!/public/tracks/rwanda/
 !/public/tracks/rwanda_official/
 !/public/tracks/rwanda_official_short/
 !/public/tracks/index.json

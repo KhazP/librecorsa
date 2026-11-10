@@ -10,7 +10,12 @@ import { NodeIO } from '@gltf-transform/core';
 import { ALL_EXTENSIONS, EXTMeshGPUInstancing } from '@gltf-transform/extensions';
 import { dedup, prune, simplifyPrimitive } from '@gltf-transform/functions';
 import { MeshoptDecoder, MeshoptSimplifier } from 'meshoptimizer';
-import { hash } from '../lib/rwanda-ground.mjs';
+
+/** Stable 0..1 hash of a position */
+function hash(x, z, salt = 0) {
+  const s = Math.sin(x * 12.9898 + z * 78.233 + salt * 37.719) * 43758.5453;
+  return s - Math.floor(s);
+}
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, '../..');
@@ -27,7 +32,7 @@ const LAPS = ['rwanda_official', 'rwanda_official_short'];
 /** Sunk into the ground so a slope never shows a floating base */
 const SINK_M = 0.15;
 const MODELS = { acacia: 'Acacia', shrub: 'Shrub' };
-// This layout stands in ten times the concept layout's trees, so its acacias switch levels sooner and get a fourth,
+// Some 12,000 trees stand round this circuit, so its acacias switch levels early and get a fourth,
 // lighter one far out (distances are to the nearest tree of a tile, as the loader measures them)
 const ACACIA_FROM = [0, 70, 170, 420];
 /** The far level: this many of the last level's leaf cards, each this much larger, on a trunk without branches */
