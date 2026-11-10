@@ -1,5 +1,5 @@
 /**
- * The rigid-body cars' controllers (steering assist, traction control, ABS, the autopilot) run on their own 250 Hz
+ * The rigid-body cars' controllers (steering assist, traction control, ABS, the autopilot) run on their own 500 Hz
  * clock, so the same drive lands in the same state whatever frames it is stepped in: a 30 Hz phone, a 60 Hz and a
  * 144 Hz display, frames of uneven length.
  *
@@ -59,7 +59,7 @@ function drive(make: () => F12026CarSim, frameS: () => number): number[] {
 
 console.log('== The same drive, stepped in different frames');
 for (const [name, make] of CARS) {
-  const base = drive(make, () => 0.004);
+  const base = drive(make, () => 0.002);
   const random = seeded(7);
   const runs: [string, () => number][] = [
     ['30 Hz', () => 1 / 30],
@@ -71,22 +71,22 @@ for (const [name, make] of CARS) {
     const got = drive(make, frameS);
     let worst = 0;
     for (let i = 0; i < base.length; i++) worst = Math.max(worst, Math.abs(got[i] - base[i]));
-    check(`${name}: ${label} ends in the same state as 250 Hz frames`, worst === 0, worst === 0 ? `${(base[7] * 3.6).toFixed(0)} km/h after ${RUN_S} s` : `largest difference ${worst.toExponential(2)}`);
+    check(`${name}: ${label} ends in the same state as 2 ms frames`, worst === 0, worst === 0 ? `${(base[7] * 3.6).toFixed(0)} km/h after ${RUN_S} s` : `largest difference ${worst.toExponential(2)}`);
   }
 }
 
 console.log('\n== Buttons and steering between frames');
 {
   const pad = createFlatTestTrack(20_000, 3000);
-  // A paddle pressed in a frame that runs no tick (1 ms) still shifts, once
+  // A paddle pressed in a frame that runs no tick (0.5 ms) still shifts, once
   const sim = new F12026CarSim(pad, null);
   sim.autoGearbox = false;
   sim.teleportToDistance(2000, 40);
-  for (let t = 0; t < 1; t += 0.004) sim.step(0.004, { throttle: 0.3 });
+  for (let t = 0; t < 1; t += 0.002) sim.step(0.002, { throttle: 0.3 });
   const gear = sim.telemetry.gear;
-  sim.step(0.001, { throttle: 0.3, shiftUp: true });
-  for (let t = 0; t < 0.5; t += 0.001) sim.step(0.001, { throttle: 0.3 });
-  check('a paddle pressed in a 1 ms frame shifts one gear', sim.telemetry.gear === gear + 1, `gear ${gear} → ${sim.telemetry.gear}`);
+  sim.step(0.0005, { throttle: 0.3, shiftUp: true });
+  for (let t = 0; t < 0.5; t += 0.0005) sim.step(0.0005, { throttle: 0.3 });
+  check('a paddle pressed in a frame too short for a tick shifts one gear', sim.telemetry.gear === gear + 1, `gear ${gear} → ${sim.telemetry.gear}`);
 
   // Steering: half lock asked for in one frame. A wheel's rim is there within the frame; a mouse takes hands' time
   const steerAfter = (rim: boolean): number => {

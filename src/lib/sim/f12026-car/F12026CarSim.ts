@@ -425,10 +425,10 @@ function assistPresetDials(profile: CarSimProfile, preset: DriverAssistPreset): 
 
 /**
  * The car's controllers (steering assist, traction control, ABS, the autopilot) run on a clock of their own: every
- * second 2 ms physics step, 250 Hz, whatever the display's frame rate. They used to run on slices of the frame, so a
- * 60 Hz and a 144 Hz display drove different cars.
+ * 2 ms physics step, 500 Hz, whatever the display's frame rate. They used to run on slices of the frame, so a 60 Hz
+ * and a 144 Hz display drove different cars.
  */
-const CONTROL_DT_S = 2 * VehiclePhysics.FIXED_DT;
+const CONTROL_DT_S = VehiclePhysics.FIXED_DT;
 /** A stall longer than this is not caught up (s): the car does not fast-forward after a hidden tab */
 const MAX_CATCH_UP_S = 0.25;
 /**
