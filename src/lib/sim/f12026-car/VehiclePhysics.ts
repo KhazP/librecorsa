@@ -803,6 +803,8 @@ export function combinedSlipForces(
 
 const _comb = { fx: 0, fy: 0, sx: 0, sy: 0 };
 const _brush: BrushForces = { fx: 0, fy: 0, slipNorm: 0 };
+/** Share of the tread surface's temperature in the temperature a brush tyre's grip curve is read at (the rest: its carcass) */
+const GRIP_TEMP_SURFACE_SHARE = 0.25;
 /** Spin past which a tyre's radius grows no further (rad/s): a wheel spun up off the ground does not balloon */
 const MAX_GROWTH_SPIN_RADS = 350;
 /** The scrub term of rolling resistance: the slip (over the peak slip) it stops growing at, and the spin it is whole from */
@@ -2273,12 +2275,15 @@ export class VehiclePhysics {
       if (fz > 0) {
         const td = tyre.data;
         const cam = td.camberData;
-        // Temperature grip per band (inner / middle / outer), weighted by each band's share of the contact pressure
+        // Temperature grip per band (inner / middle / outer), weighted by each band's share of the contact pressure. A
+        // brush tyre's grip curve is drawn against the temperature of its rubber as a whole: mostly the carcass, a
+        // quarter the tread surface, so a flash of surface heat or a cool straight moves it little
         const sh = w.bandLoadShares;
+        const k = tyre.brush ? GRIP_TEMP_SURFACE_SHARE : 1;
         const thermal = realismThermalGrip(
-          sh[0] * tyre.thermal.evaluate(w.bandTempsC[0]) +
-            sh[1] * tyre.thermal.evaluate(w.bandTempsC[1]) +
-            sh[2] * tyre.thermal.evaluate(w.bandTempsC[2]),
+          sh[0] * tyre.thermal.evaluate(w.bandCoreTempsC[0] + k * (w.bandTempsC[0] - w.bandCoreTempsC[0])) +
+            sh[1] * tyre.thermal.evaluate(w.bandCoreTempsC[1] + k * (w.bandTempsC[1] - w.bandCoreTempsC[1])) +
+            sh[2] * tyre.thermal.evaluate(w.bandCoreTempsC[2] + k * (w.bandTempsC[2] - w.bandCoreTempsC[2])),
           this.realism
         );
         const pressureGrip = tyrePressureGrip(td.pressureData, w.pressurePsi);
