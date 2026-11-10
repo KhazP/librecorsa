@@ -15,11 +15,14 @@ PeerJS broker, lap times stay in the browser, the Races card goes away.
 
 ## What it costs
 
-- **Room server, lap boards**: within Cloudflare's free allowances at this game's size.
+- **Room server, lap boards**: expected to sit within Cloudflare's free allowances at this game's size. Not yet
+  measured on the live Worker: after the first deploy, check a lap upload's CPU time in the Workers logs (the free
+  plan allows 10 ms per request).
 - **Relay (TURN)**: billed per GB relayed, only for players who can't connect directly (roughly a cent or two per
   relayed player per hour of racing). Remove the two TURN secrets to stop it: rooms then connect directly only.
 - **Race server**: the one part that works the whole time a race runs (about a cent per 8-car race hour). Set
-  `ONLINE_RACES` to `"off"` to stop it; nothing else depends on it.
+  `ONLINE_RACES` to `"off"` to stop it: the Races card goes away, and rooms, the boards and the weekly challenge
+  carry on. (The Weekly challenge panel itself needs `ONLINE_BOARD`.)
 
 ## Setting it up on another account
 
