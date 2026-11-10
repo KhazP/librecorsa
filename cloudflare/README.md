@@ -21,8 +21,9 @@ PeerJS broker, lap times stay in the browser, the Races card goes away.
 - **Relay (TURN)**: billed per GB relayed, only for players who can't connect directly (roughly a cent or two per
   relayed player per hour of racing). Remove the two TURN secrets to stop it: rooms then connect directly only.
 - **Race server**: the one part that works the whole time a race runs (about a cent per 8-car race hour). Set
-  `ONLINE_RACES` to `"off"` to stop it: the Races card goes away, and rooms, the boards and the weekly challenge
-  carry on. (The Weekly challenge panel itself needs `ONLINE_BOARD`.)
+  `ONLINE_RACES` to `"off"` to stop it: the Open races card leaves the Multiplayer panel, and rooms, the boards and
+  the weekly challenge carry on. (The Weekly challenge panel needs `ONLINE_BOARD`; the races run without it, with the
+  grid in joining order.)
 
 ## Setting it up on another account
 

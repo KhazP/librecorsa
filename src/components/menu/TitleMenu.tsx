@@ -632,11 +632,11 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
     {
       id: "multiplayer",
       label: "Multiplayer",
-      detail: "Race friends peer-to-peer",
+      detail: props.races ? "Open races · rooms with friends" : "Race friends peer-to-peer",
       icon: Users,
       panel: "multiplayer",
       run: () => openPanel("multiplayer"),
-      badge: lobbyPlayers > 1 ? `${lobbyPlayers} in lobby` : undefined,
+      badge: props.races?.entry.state === "joined" ? "In the next race" : lobbyPlayers > 1 ? `${lobbyPlayers} in lobby` : undefined,
     },
     ...(props.challengePanel
       ? [
@@ -648,7 +648,6 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
             icon: Trophy,
             panel: "challenge" as const,
             run: () => openPanel("challenge"),
-            badge: props.challengePanel.races?.entry.state === "joined" ? "In the next race" : undefined,
           },
         ]
       : []),

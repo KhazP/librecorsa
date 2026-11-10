@@ -16,6 +16,7 @@ import {
 } from "@/lib/sim/multiplayer-sync";
 import { getTrackInfo, TRACKS } from "@/lib/track-registry";
 import { Segmented, TrackQualityBadge } from "@/components/menu/menu-ui";
+import { RacesCard, type RacesCardProps } from "./RacesCard";
 
 export interface MultiplayerPanelProps {
   p2pStatus?: P2PConnectionStatus;
@@ -46,6 +47,8 @@ export interface MultiplayerPanelProps {
   onSwitchTrack?: (trackId: string) => void;
   onSwitchVehicle?: (vehicle: string) => void;
   onOpenProfile?: () => void;
+  /** The open scheduled races (only where they run, and only from the title menu) */
+  races?: RacesCardProps;
 }
 
 const MIN_LAPS = 1;
@@ -213,6 +216,7 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
   onSwitchTrack,
   onSwitchVehicle,
   onOpenProfile,
+  races,
 }) => {
   // Connect box
   const [roomCodeInput, setRoomCodeInput] = useState(initialRoomCode);
@@ -569,9 +573,12 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
   return (
     <div
       className={`grid items-start gap-[22px] text-[#F5F7FA] ${
-        lobby ? "grid-cols-[repeat(auto-fit,minmax(min(300px,100%),1fr))]" : "max-w-xl grid-cols-1"
+        lobby || races ? "grid-cols-[repeat(auto-fit,minmax(min(300px,100%),1fr))]" : "max-w-xl grid-cols-1"
       }`}
     >
+      {/* Open races: not while in a friend's room, whose lobby takes this place */}
+      {races && !lobby ? <RacesCard {...races} /> : null}
+
       {/* Room */}
       <div className="flex min-w-0 flex-col gap-3.5">
         <div className={`${CARD} flex flex-col gap-3.5`}>
@@ -619,7 +626,7 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
           ) : (
             <>
               <p className="m-0 text-[14px] leading-snug text-[#8E96AA]">
-                Host a room and send your friends the link, or join theirs with the code they gave you.
+                {races ? "To race only your friends, host" : "Host"} a room and send them the link, or join theirs with the code they gave you.
               </p>
               <button type="button" onClick={hostRoom} className={`w-full ${joinReady ? PILL_DARK : PILL_VOLT}`}>
                 Host a room

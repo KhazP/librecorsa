@@ -805,10 +805,10 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
 
   const [localPeerId, setLocalPeerId] = useState("");
   /** The title menu's panel on its next visit (back to the lobby after a race); used up once the title is left */
-  const [titleInitialPanel, setTitleInitialPanel] = useState<"multiplayer" | "challenge" | null>(null);
+  const [titleInitialPanel, setTitleInitialPanel] = useState<"multiplayer" | null>(null);
   const handleBackToLobby = useCallback(() => {
-    // After a scheduled race there is no lobby: back to the races (asked before leaving ends the entry)
-    setTitleInitialPanel(getMultiplayerManager().inScheduledRace ? "challenge" : "multiplayer");
+    // The room's lobby, or after a scheduled race the open races: both are on the Multiplayer panel
+    setTitleInitialPanel("multiplayer");
     leaveSession();
   }, [leaveSession]);
 
@@ -1195,7 +1195,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
           : `Hold ${keyLabel(settings.keys.throttle[0])} to launch · Esc for menu`;
 
   // The one derivation of hosting: the lobby names this client as its host
-  /** Entered in a scheduled race: its lobby is the race server's, shown on the Weekly challenge panel, not as a room */
+  /** Entered in a scheduled race: its lobby is the race server's, shown on the Races card, not as a room */
   const inScheduledRace = raceEntry.state === "joining" || raceEntry.state === "joined";
   const roomLobby = inScheduledRace ? null : lobby;
   const isMpHost = roomLobby !== null && roomLobby.hostId === localPeerId;
@@ -1409,7 +1409,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
           onCycleCamera={cycleCamera}
           initialRoomCode={inviteRoom ?? ""}
           // Back where the player was when a race entry or a room moved the game to another circuit (the scene reloads)
-          initialPanel={titleInitialPanel ?? (inScheduledRace ? "challenge" : inviteRoom || (roomLobby && !isMpHost) ? "multiplayer" : null)}
+          initialPanel={titleInitialPanel ?? (inScheduledRace || inviteRoom || (roomLobby && !isMpHost) ? "multiplayer" : null)}
           firstRun={!onboarded}
           onDrive={() => handleTitleStart(false)}
           onRaceAi={() => handleTitleStart(true)}
@@ -1427,17 +1427,21 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
                   boardVersion,
                   driverName: settings.profile.name,
                   onDrive: handleDriveChallenge,
-                  races:
-                    races.on && challengeAvailable
-                      ? {
-                          slotS: races.slotS,
-                          laps: challenge.raceLaps,
-                          entry: raceEntry,
-                          entrants: inScheduledRace ? (lobby?.players ?? []).map((p) => ({ id: p.peerId, name: p.name, code: p.code, me: p.peerId === localPeerId })) : [],
-                          onJoin: handleJoinRace,
-                          onLeave: handleLeaveRace,
-                        }
-                      : undefined,
+                  hasRaces: races.on,
+                }
+              : undefined
+          }
+          races={
+            races.on && challengeAvailable
+              ? {
+                  trackName: getTrackInfo(challenge.trackId).name,
+                  carTitle: carForVehicle(challenge.vehicle).title,
+                  slotS: races.slotS,
+                  laps: challenge.raceLaps,
+                  entry: raceEntry,
+                  entrants: inScheduledRace ? (lobby?.players ?? []).map((p) => ({ id: p.peerId, name: p.name, code: p.code, me: p.peerId === localPeerId })) : [],
+                  onJoin: handleJoinRace,
+                  onLeave: handleLeaveRace,
                 }
               : undefined
           }
