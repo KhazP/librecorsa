@@ -1924,7 +1924,7 @@ export class VehiclePhysics {
     if (down) this.sinceDownshiftS = 0;
     // A managed up-shift: the engine meets the new gear at the speed the driven wheels turn at, so the closed clutch
     // does not spin them up with the engine's inertia. The wheels' speed, not the road's: a spinning axle keeps its spin
-    if (gb.upshiftCutS && this.gear > 0 && g > this.gear && this.clutchEngagement > 0.5) {
+    if (gb.upshiftCutS && gb.upshiftNeutralS === undefined && this.gear > 0 && g > this.gear && this.clutchEngagement > 0.5) {
       this.engineOmega *= gb.ratios[g - 1] / gb.ratios[this.gear - 1];
     }
     this.gear = g;
@@ -2807,6 +2807,8 @@ export class VehiclePhysics {
       const t = THREE.MathUtils.clamp((rpm - cl.biteRpm) / (cl.lockRpm - cl.biteRpm), 0, 1);
       engage = wheelSideRpm >= cl.lockRpm ? 1 : t * t * (3 - 2 * t);
       if (inp.clutch !== undefined) engage = Math.min(engage, 1 - inp.clutch);
+      // A dog box between gears: the engine is free of the wheels
+      if (gb.upshiftNeutralS !== undefined && this.sinceUpshiftS < gb.upshiftNeutralS) engage = 0;
     }
     this.clutchEngagement = engage;
     const clutchCap = cl.maxTorqueNm * engage;

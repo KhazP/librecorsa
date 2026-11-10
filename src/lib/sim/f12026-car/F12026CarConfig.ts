@@ -239,6 +239,12 @@ export interface GearBoxData {
    * engine's excess to the driven wheels, which spins them up by the ratio step
    */
   upshiftCutS?: number;
+  /**
+   * A dog box: for this long (s) after an up-shift the dogs are out and the engine turns free of the wheels, slowing on
+   * its own friction under the cut (`upshiftCutS`); then the dogs take the rest of its excess into the driveline, the
+   * shove of a flat shift. With it the engine is not re-aligned
+   */
+  upshiftNeutralS?: number;
   efficiency: number;
   gears: {
     redline_rpm: number;
