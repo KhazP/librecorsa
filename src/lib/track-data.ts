@@ -61,6 +61,8 @@ export interface BuiltTrackData {
   sceneryCuts?: SceneryCutBox[];
   /** Scan materials whose meshes are left out (scenery-cuts.ts) */
   sceneryCutMaterials?: string[];
+  /** Scenery files drawn with the circuit (relative to the base path); Rwanda's concept layout has its own list */
+  sceneryUrls?: string[];
   /** Start grid slots for this layout (behind the S/F line) */
   spawnGrid: GridSlotDef[];
   samples: TrackSamplePoint[];
@@ -199,9 +201,17 @@ export interface TrackMetaExtras {
    * `roadMaterials`: the scan's racing-surface materials (build_track.py), drawn with the asphalt shader;
    * `cutBoxes` / `cutMaterials`: scan geometry standing on the racing line, left out at load (scenery-cuts.ts);
    * `conformSurfaces`: the off-road collider bands and the visual road are fitted to `Track_Surface_Road` at load
-   * (TrackColliderQuery.ts), for converted circuits whose surfaces don't meet the road edge as exported
+   * (TrackColliderQuery.ts), for converted circuits whose surfaces don't meet the road edge as exported;
+   * `scenery`: scenery files drawn with the circuit (instanced trees: scenery-instances.ts)
    */
-  mesh?: { url?: string; roadMaterials?: string[]; cutBoxes?: SceneryCutBox[]; cutMaterials?: string[]; conformSurfaces?: boolean };
+  mesh?: {
+    url?: string;
+    roadMaterials?: string[];
+    cutBoxes?: SceneryCutBox[];
+    cutMaterials?: string[];
+    conformSurfaces?: boolean;
+    scenery?: string[];
+  };
   credit?: { title: string; author: string; url: string; short?: string; license: string; licenseUrl: string };
   /** Per-kind overrides of the default surface table (track-surfaces.ts) */
   surfaceTable?: SurfaceTableOverrides;
@@ -970,6 +980,7 @@ export function getActiveTrackData(numSamples = 1200): BuiltTrackData {
     roadMaterials: getActiveTrackMetadata().mesh?.roadMaterials,
     sceneryCuts: getActiveTrackMetadata().mesh?.cutBoxes,
     sceneryCutMaterials: getActiveTrackMetadata().mesh?.cutMaterials,
+    sceneryUrls: getActiveTrackMetadata().mesh?.scenery,
     spawnGrid: [...RWANDA_SPAWN_GRID],
     samples,
     totalLengthM: totalLength,

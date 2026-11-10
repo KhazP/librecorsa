@@ -1456,7 +1456,9 @@ export function buildCircuitScene(
       resolveTrackRoot(root);
     },
     sheenMask,
-    isRwanda ? ["/tracks/rwanda/scenery/foliage.glb", "/tracks/rwanda/scenery/stands.glb", "/tracks/rwanda/scenery/props.glb"] : [],
+    isRwanda
+      ? ["/tracks/rwanda/scenery/foliage.glb", "/tracks/rwanda/scenery/stands.glb", "/tracks/rwanda/scenery/props.glb"]
+      : (track.sceneryUrls ?? []),
     isRwanda ? "/tracks/rwanda/scenery/textures/textures.json" : null,
     track.roadMaterials ?? [],
     track.sceneryCuts ?? [],
