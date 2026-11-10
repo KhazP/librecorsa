@@ -69,7 +69,7 @@ import {
 } from './F12026CarConfig';
 import { createGroundHit, type GroundHit, type GroundQuery, type TrackSurfaceKind } from './TrackColliderQuery';
 import { trackColliders } from '../track-colliders';
-import { type VehicleEvent, type VehicleInputs, VehiclePhysics } from './VehiclePhysics';
+import { defaultColdPressurePsi, type VehicleEvent, type VehicleInputs, VehiclePhysics } from './VehiclePhysics';
 import { KERB_PROFILE_L, kerbProfileM, surfaceRippleM } from '../track-surfaces';
 import { sampleGrid } from '../ai/ai-track';
 import type { AiDrivePlan } from '../ai/drive-plan';
@@ -1064,11 +1064,7 @@ export class F12026CarSim implements SimulatorCar {
   }
 
   private defaultColdPsiForCompound(): number {
-    const cd = this.compoundData;
-    const p = cd.pressureData;
-    const th = cd.thermalData;
-    const targetCoreC = 0.5 * (th.optimalTempC[0] + th.optimalTempC[1]);
-    return Math.round(tyreGaugePressureAtTemperature(p.optimalPsi, targetCoreC, p.coldRefC) * 10) / 10;
+    return defaultColdPressurePsi(this.compoundData);
   }
 
   set tireCompound(compound: TireCompound) {

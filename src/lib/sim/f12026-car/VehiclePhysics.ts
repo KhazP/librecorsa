@@ -805,6 +805,17 @@ const _comb = { fx: 0, fy: 0, sx: 0, sy: 0 };
 const _brush: BrushForces = { fx: 0, fy: 0, slipNorm: 0 };
 /** Share of the tread surface's temperature in the temperature a brush tyre's grip curve is read at (the rest: its carcass) */
 const GRIP_TEMP_SURFACE_SHARE = 0.25;
+/**
+ * The pressure a compound's tyre is set to by default at its `coldRefC` (psi gauge): the one its data states, else the
+ * one that reaches the optimum with the carcass at the centre of the working window
+ */
+export function defaultColdPressurePsi(t: TyresCompoundData): number {
+  const p = t.pressureData;
+  if (p.setPsi !== undefined) return p.setPsi;
+  const targetCoreC = 0.5 * (t.thermalData.optimalTempC[0] + t.thermalData.optimalTempC[1]);
+  return Math.round(tyreGaugePressureAtTemperature(p.optimalPsi, targetCoreC, p.coldRefC) * 10) / 10;
+}
+
 /** Spin past which a tyre's radius grows no further (rad/s): a wheel spun up off the ground does not balloon */
 const MAX_GROWTH_SPIN_RADS = 350;
 /** The scrub term of rolling resistance: the slip (over the peak slip) it stops growing at, and the spin it is whole from */
@@ -1712,8 +1723,7 @@ export class VehiclePhysics {
     for (const w of this.wheels) {
       const t = this.tyres[w.isFront ? 0 : 1].data;
       const p = t.pressureData;
-      const targetCoreC = 0.5 * (t.thermalData.optimalTempC[0] + t.thermalData.optimalTempC[1]);
-      w.coldPressurePsi = Math.round(tyreGaugePressureAtTemperature(p.optimalPsi, targetCoreC, p.coldRefC) * 10) / 10;
+      w.coldPressurePsi = defaultColdPressurePsi(t);
       w.surfaceTempC = p.coldRefC;
       w.coreTempC = p.coldRefC;
       w.bandTempsC = [p.coldRefC, p.coldRefC, p.coldRefC];

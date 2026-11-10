@@ -686,6 +686,11 @@ export interface TyresThermalPatchData {
 export interface TyresPressureData {
   /** Hot inflation pressure for peak grip (psi gauge) */
   optimalPsi: number;
+  /**
+   * The pressure the tyre is set to in the garage, at `coldRefC`, where the car's data states one (psi gauge). Absent:
+   * the pressure that reaches `optimalPsi` with the carcass at the centre of the working window
+   */
+  setPsi?: number;
   /** Inflation pressure (psi gauge) → radial stiffness (N/m) */
   pressureSpringCurve: LutPoints;
   /**

@@ -405,6 +405,9 @@ const STREET_COMPOUND: TyresCompoundData = {
   pressureData: {
     // [spec PRESSURE_IDEAL]
     optimalPsi: 42,
+    // The mod's garage pressures: 36 psi front, 38 rear [spec PRESSURE_STATIC]. They reach the ideal at the 55–60 °C
+    // (front) and 40 °C (rear) a road tyre runs at on a lap, well under the 75 °C its grip peaks at
+    setPsi: 36,
     // RATE 309 760 N/m at the 36 psi static pressure + 9680 N/m per psi [spec RATE, PRESSURE_SPRING_GAIN]
     pressureSpringCurve: [
       [15, 106_480],
@@ -444,6 +447,7 @@ const STREET_COMPOUND: TyresCompoundData = {
     },
     pressureData: {
       optimalPsi: 40,
+      setPsi: 38,
       // RATE 290 400 N/m at the 38 psi static pressure + 9680 N/m per psi [spec REAR]
       pressureSpringCurve: [
         [15, 67_760],
