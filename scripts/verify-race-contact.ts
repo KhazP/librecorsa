@@ -73,7 +73,7 @@ function run(setup: Setup) {
   let maxHeading = 0;
   let firstContact = -1;
   let passedThrough = false;
-  const trace: { frame: number; aiVx: number; aiS: number; playerVx: number; mode: string; ds: number }[] = [];
+  const trace: { frame: number; aiVx: number; aiS: number; aiLat: number; playerVx: number; mode: string; ds: number }[] = [];
   for (let i = 0; i < setup.frames; i++) {
     player.step(DT, setup.inputs(i));
     field.update(DT);
@@ -91,7 +91,7 @@ function run(setup: Setup) {
     const ds = ai.sMeters - player.sMeters;
     // Through the other car: from behind it to more than a car length ahead within half a second of the first touch
     if (firstContact >= 0 && i - firstContact < 30 && ds < -5 && Math.abs(ai.lateralOffsetM - player.lateralOffsetM) < 1.2) passedThrough = true;
-    trace.push({ frame: i, aiVx: ai.vxMs, aiS: ai.sMeters, playerVx: player.vxMs, mode: info.mode, ds });
+    trace.push({ frame: i, aiVx: ai.vxMs, aiS: ai.sMeters, aiLat: ai.lateralOffsetM, playerVx: player.vxMs, mode: info.mode, ds });
   }
   return { field, player, ai, incidents, modes, maxHeadingDeg: (maxHeading * 180) / Math.PI, firstContact, passedThrough, trace };
 }
@@ -138,7 +138,11 @@ function run(setup: Setup) {
   // (the stuck-recovery count also catches the set-up teleport on the first frame, so the jumps are looked for here)
   const L = track.totalLengthM;
   const jumps = hit.trace.filter((t, i) => i > 1 && Math.abs(((t.aiS - hit.trace[i - 1].aiS + 1.5 * L) % L) - L / 2) > 15).length;
-  check('Rejoin: then races again by driving, no teleport', backFrame > 0 && info.stats.marshalRecoveries === 0 && jumps === 0, `racing again at ${f(backFrame / 60)} s, ${info.stats.marshalRecoveries} marshal moves, ${jumps} jumps`);
+  // A car that leaves the ground for good is put back on the road where it stood (the sim's own rescue): a jump across
+  // the road within a frame. Known to happen here: beside Monza's pit straight the rejoining car can ride a rear wheel
+  // up the grass bank on full lock and throttle and be thrown. Reported, not yet asked to be zero
+  const rescues = hit.trace.filter((t, i) => i > 1 && Math.abs(t.aiLat - hit.trace[i - 1].aiLat) > 3).length;
+  check('Rejoin: then races again: no marshal move, no jump along the track', backFrame > 0 && info.stats.marshalRecoveries === 0 && jumps === 0, `racing again at ${f(backFrame / 60)} s, ${info.stats.marshalRecoveries} marshal moves, ${jumps} jumps, ${rescues} rescue(s) across the road`);
   const late = Math.max(...hit.trace.slice(-60 * 15).map((t) => t.aiVx));
   check('Rejoin: back up to racing speed', late > 50 || info.retired, `${f(late)} m/s top speed over the last 15 s${info.retired ? ' (retired)' : ''}`);
 }
