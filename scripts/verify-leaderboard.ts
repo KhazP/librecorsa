@@ -25,14 +25,14 @@ const check = (name: string, ok: boolean, detail = '') => {
   if (!ok) failures.push(name);
 };
 
-// A real lap: the VF26 on autopilot round Rwanda, recorded as the game records it (the second lap, a flying one)
+// A real lap: the VF26 on autopilot round RISE Motordrome, recorded as the game records it (the second lap, a flying one)
 const track = getActiveTrackData();
 const car = new F1Physics2026(track);
 car.aiAutopilot = true;
 const recorder = new LapRecorder({
   trackLengthM: track.totalLengthM,
   turns: [],
-  trackId: 'rwanda',
+  trackId: 'rwanda_official_short',
   vehicle: 'vf26',
   driverName: 'Test Driver',
   driverCode: 'TST',
@@ -109,9 +109,9 @@ check('a lap that stops short of the line is refused', lapPlausibilityProblem(op
 // 3. The board API -----------------------------------------------------------------------------------------------------
 const schema = readFileSync(join(__dirname, '../cloudflare/migrations/0001_lap_boards.sql'), 'utf8');
 const ghosts = fakeR2();
-// A Wednesday noon in a week whose challenge is the test lap's circuit and car (Rwanda, the 2026 prototype)
+// A Wednesday noon in a week whose challenge is the test lap's circuit and car (RISE Motordrome's short lap, the 2026 prototype)
 let nowMs = Date.UTC(2026, 10, 11, 12);
-while (challengeAt(nowMs).trackId !== 'rwanda' || challengeAt(nowMs).vehicle !== 'vf26') nowMs += 7 * 86_400_000;
+while (challengeAt(nowMs).trackId !== 'rwanda_official_short' || challengeAt(nowMs).vehicle !== 'vf26') nowMs += 7 * 86_400_000;
 const week = challengeAt(nowMs);
 const deps: BoardDeps = { db: fakeD1(schema), ghosts, eventRule: challengeProblem, now: () => nowMs };
 const KEY_A = 'a'.repeat(43);
@@ -133,7 +133,7 @@ const post = async (rec: unknown, driverKey: string | null = KEY_A, extra: Recor
 type Row = { id: string; name: string; lapTimeMs: number; conditions: { assists: string; realism: string; surface: string; physicsVersion: number } };
 type ListAnswer = { laps: Row[]; total: number; physics: number[]; me: { rank: number; lap: Row } | null };
 const list = async (query = '', physics = PHYSICS_VERSION) => {
-  const res = await listLaps(deps, new URL(`https://librecorsa.test/api/laps?track=rwanda&vehicle=vf26&physics=${physics}${query}`));
+  const res = await listLaps(deps, new URL(`https://librecorsa.test/api/laps?track=rwanda_official_short&vehicle=vf26&physics=${physics}${query}`));
   return { status: res.status, body: res.body as ListAnswer };
 };
 /** The real lap driven by someone else, a little slower or faster, under other conditions */
@@ -254,13 +254,13 @@ async function main(): Promise<void> {
       const url = new URL(`https://librecorsa.org${path}`);
       return handleApi(new Request(url), e, url);
     };
-    const listed = await api(`/api/laps?track=rwanda&vehicle=vf26&physics=${PHYSICS_VERSION}`, env);
+    const listed = await api(`/api/laps?track=rwanda_official_short&vehicle=vf26&physics=${PHYSICS_VERSION}`, env);
     const rows = ((await listed.json()) as ListAnswer).laps;
     check('api: GET /api/laps lists the board, never cached', listed.status === 200 && rows.length === 3 && listed.headers.get('Cache-Control') === 'no-store');
     const ghost = await api(`/api/laps/${rows[0].id}`, env);
     check('api: GET /api/laps/<id> returns the ghost', ghost.status === 200 && validateLapRecording(await ghost.json()) !== null);
     check('api: an unknown lap is 404', (await api('/api/laps/00000000-0000-4000-8000-000000000000', env)).status === 404);
-    check('api: the board switched off answers 404', (await api('/api/laps?track=rwanda&vehicle=vf26&physics=2', { ...env, ONLINE_BOARD: 'off' })).status === 404);
+    check('api: the board switched off answers 404', (await api('/api/laps?track=rwanda_official_short&vehicle=vf26&physics=2', { ...env, ONLINE_BOARD: 'off' })).status === 404);
     check('api: no database bound: off', boardDeps({} as Env, () => null) === null);
   }
 
@@ -294,7 +294,7 @@ async function main(): Promise<void> {
     const mira = await db.prepare("SELECT key_hash FROM drivers WHERE name_key = 'mira tanaka'").first<{ key_hash: string }>();
     check('migration: a name keeps the hash of its key', mira?.key_hash === hash('a'));
     const migrated: BoardDeps = { db, ghosts: fakeR2(), eventRule: challengeProblem, now: () => nowMs };
-    const listed = (await listLaps(migrated, new URL(`https://librecorsa.test/api/laps?track=rwanda&vehicle=vf26&physics=${PHYSICS_VERSION}&name=Mira%20Tanaka`))).body as ListAnswer;
+    const listed = (await listLaps(migrated, new URL(`https://librecorsa.test/api/laps?track=rwanda_official_short&vehicle=vf26&physics=${PHYSICS_VERSION}&name=Mira%20Tanaka`))).body as ListAnswer;
     check('migration: the carried-over laps show on the new board', listed.total === 2 && listed.laps[0].name === 'Mira Tanaka' && listed.me?.rank === 1);
 
     // Later: the driver went faster on the old board from a browser still on the old game; someone else took a name here

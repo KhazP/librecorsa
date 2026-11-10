@@ -57,7 +57,7 @@ import { SLICK_TRAITS, wetGripFactor } from '../wet-tyres';
 import { tyreGaugePressureAtTemperature } from '../tyre-pressure';
 import { FULL_REALISM, type SimRealismFlags } from '../sim-realism';
 import { flyingExitSpeedMs, flyingStartPoint, type SimulatorCar, type SimulatorWheel, type TyreVisualState } from '../simulator-car';
-import { aiLineOffsetM, type BrakingGuide, brakingGuideFor, sampleProfile, type SpeedProfileCarModel } from '../speed-profile';
+import { aiLineOffsetM, type BrakingGuide, brakingGuideFor, circuitBrakingGuide, sampleProfile, type SpeedProfileCarModel } from '../speed-profile';
 import { evaluateDynamicBrakingUrgency } from '../track-occupancy';
 import {
   type CarPhysicsConfig,
@@ -169,7 +169,7 @@ export interface CarSimProfile {
   braking: BrakingEnvelope;
   /**
    * Planning model of this car for its braking line, braking urgency and HUD target speed (`brakingGuideFor`).
-   * Without one the car uses the circuit's (the VF26 profile baked into the track samples).
+   * Without one the car is shown the circuit's car's (`circuitBrakingGuide`).
    */
   speedProfile?: SpeedProfileCarModel;
   /** The racing line this car drives, plans on and draws (default: the F1 line) */
@@ -376,15 +376,23 @@ function autopilotProfile(track: BuiltTrackData, profile: CarSimProfile, edges: 
     gN[i] = Math.cos(into);
     gT[i] = 9.81 * Math.sin(into);
   }
+  // A crest takes load off the tyres: v² κv of the car's weight, κv the road's vertical curvature (1/m, + over a
+  // crest, read over ±20 m and averaged like the path's). Planned as level road, the esses of RISE Motordrome, which
+  // turn over a crest, were taken up to 3 m wide of the asphalt at full pace. A dip is planned as level road.
+  const crest = new Float64Array(n);
+  const vSpan = Math.max(1, Math.round(20 / ds));
+  const height = (i: number) => track.getSampleAtDistance((((i % n) + n) % n) * ds).position.y;
+  for (let i = 0; i < n; i++) crest[i] = Math.max(0, -(height(i + vSpan) - 2 * height(i) + height(i - vSpan)) / (vSpan * ds) ** 2);
   const v = new Float32Array(n);
-  // v²κ = share × decel(v) + g sin θ, with decel(v) = c (low cos θ + aero (v / ref)²) up to ref and
-  // c (low cos θ + aero) above
+  // v²κ = share × decel(v) + g sin θ, with decel(v) = c (low (cos θ − v² κv / g) + aero (v / ref)²) up to ref and
+  // c (low (cos θ − v² κv / g) + aero) above
   const c = AP_LATERAL_SHARE * 0.85 * 9.81;
   for (let i = 0; i < n; i++) {
     const kk = Math.max(1e-5, (k[(i - 1 + n) % n] + 2 * k[i] + k[(i + 1) % n]) / 4);
-    const den = kk - (c * b.aeroG) / (b.refMs * b.refMs);
+    const light = (c * b.lowG * (crest[(i - 1 + n) % n] + 2 * crest[i] + crest[(i + 1) % n])) / 4 / 9.81;
+    const den = kk + light - (c * b.aeroG) / (b.refMs * b.refMs);
     const vLow = den > 0 ? Math.sqrt(Math.max(0, c * b.lowG * gN[i] + gT[i]) / den) : Infinity;
-    v[i] = Math.min(110, vLow < b.refMs ? vLow : Math.sqrt(Math.max(0, c * (b.lowG * gN[i] + b.aeroG) + gT[i]) / kk));
+    v[i] = Math.min(110, vLow < b.refMs ? vLow : Math.sqrt(Math.max(0, c * (b.lowG * gN[i] + b.aeroG) + gT[i]) / (kk + light)));
   }
   // Backward braking pass (twice round the lap so the wrap is consistent)
   for (let pass = 0; pass < 2 * n; pass++) {
@@ -563,8 +571,8 @@ export class F12026CarSim implements SimulatorCar {
   /** Visual tyre state per corner (FR, FL, RR, RL), refreshed in `syncPose()`. Read-only for consumers. */
   public readonly tyreVisuals: [TyreVisualState, TyreVisualState, TyreVisualState, TyreVisualState];
   public readonly profile: CarSimProfile;
-  /** This car's braking guidance (null: the circuit's) */
-  public readonly brakingGuide: BrakingGuide | null;
+  /** This car's braking guidance (the circuit's car's when it has no planning model of its own) */
+  public readonly brakingGuide: BrakingGuide;
   /** The racing line this car follows (`CarSimProfile.racingLine`) */
   private readonly line: RacingLineId;
   public readonly wheelbaseM: number;
@@ -767,7 +775,7 @@ export class F12026CarSim implements SimulatorCar {
     this.line = profile.racingLine ?? 'f1';
     this.brakingGuide = profile.speedProfile
       ? brakingGuideFor(track.samples, profile.id, profile.speedProfile, this.line)
-      : null;
+      : circuitBrakingGuide(track.samples, this.line);
     this.config = structuredClone(profile.config);
     // Unloaded radii, used until the first step
     const geo = compoundData(this.config, this.config.compoundSlots.soft);
@@ -2260,7 +2268,7 @@ export class F12026CarSim implements SimulatorCar {
     t.gapToRacingLineM = this.lateral - aiLineOffsetM(sample, this.line);
     t.headingErrorRad = Math.atan2(_ez.x * bin.x + _ez.z * bin.z, _ez.x * tan.x + _ez.z * tan.z);
     const guide = this.brakingGuide;
-    t.targetCornerSpeedKmh = Math.round(guide ? sampleProfile(guide.speedMs, this.s, this.track.totalLengthM) * 3.6 : sample.optimalSpeedKmh);
+    t.targetCornerSpeedKmh = Math.round(sampleProfile(guide.speedMs, this.s, this.track.totalLengthM) * 3.6);
     t.brakingUrgency = evaluateDynamicBrakingUrgency(this.track, this.s, vx, (this.s + 25) % this.track.totalLengthM, guide);
     t.currentSector = sample.sector;
     t.currentTurnNumber = sample.turnNumber;

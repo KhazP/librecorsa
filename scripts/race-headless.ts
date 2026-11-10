@@ -2,7 +2,7 @@
  * Headless AI race for tuning: the full-physics AI field on a circuit, faster than real time and without rendering,
  * then a results table (laps, gaps, incidents, position changes) and what each car learnt.
  *
- *   npx tsx scripts/race-headless.ts [--track rwanda] [--car vf26|f12026-car|amg-gt3|liana|mtr-496r] [--laps 5] [--cars 5]
+ *   npx tsx scripts/race-headless.ts [--track rwanda_official_short] [--car vf26|f12026-car|amg-gt3|liana|mtr-496r] [--laps 5] [--cars 5]
  *       [--skill 70] [--seed 1] [--no-learn] [--laps-table] [--sweep skill | learn | <param>=v1,v2,...]
  *       [--weather clear|overcast|light_rain|heavy_rain|drying|dynamic]
  *   npm run race:headless -- --track suzuka --car amg-gt3 --sweep skill
@@ -12,7 +12,7 @@
  * The same seed replays the same race.
  */
 import { readFileSync } from 'node:fs';
-import { getActiveTrackData, setActiveTrack, type BuiltTrackData, type RawTrackJson } from '../src/lib/track-data';
+import { DEFAULT_TRACK_ID, getActiveTrackData, setActiveTrack, type BuiltTrackData, type RawTrackJson } from '../src/lib/track-data';
 import { F1Physics2026 } from '../src/lib/f1-physics-2026';
 import { F12026CarSim } from '../src/lib/sim/f12026-car/F12026CarSim';
 import { createAmgGt3Sim } from '../src/lib/sim/gt3/AmgGt3Sim';
@@ -35,7 +35,7 @@ const opt = (name: string, fallback: string) => {
   return i >= 0 && argv[i + 1] !== undefined ? argv[i + 1] : fallback;
 };
 
-const trackId = opt('track', 'rwanda');
+const trackId = opt('track', DEFAULT_TRACK_ID);
 const carKind = opt('car', 'vf26') as CarKind;
 const laps = Math.max(1, Number(opt('laps', '5')));
 const nCars = Math.max(1, Math.min(12, Number(opt('cars', '5'))));
@@ -58,9 +58,9 @@ if (!['vf26', 'f12026-car', 'amg-gt3', 'liana', 'mtr-496r'].includes(carKind)) {
 }
 
 // ---- Track and colliders
-if (trackId !== 'rwanda') setActiveTrack(trackId, JSON.parse(readFileSync(`public/tracks/${trackId}/track_data.json`, 'utf8')) as RawTrackJson);
+setActiveTrack(trackId, JSON.parse(readFileSync(`public/tracks/${trackId}/track_data.json`, 'utf8')) as RawTrackJson);
 const track: BuiltTrackData = getActiveTrackData(1200);
-const root = carKind === 'vf26' ? null : loadGlbGeometry(`public${track.meshUrl ?? '/tracks/rwanda/rwanda_2026.glb'}`);
+const root = carKind === 'vf26' ? null : loadGlbGeometry(`public${track.meshUrl}`);
 
 function makeTemplate(): SimulatorCar {
   if (carKind === 'amg-gt3') return createAmgGt3Sim(track, root);

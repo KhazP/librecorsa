@@ -37,7 +37,7 @@ const DS = 2;
 
 // --file: another copy of the track data (e.g. the committed line, from `git show HEAD:...`)
 const raw = JSON.parse(readFileSync(opt('file', `public/tracks/${trackId}/track_data.json`), 'utf8')) as RawTrackJson & { metadata: { modelOffset?: number[] } };
-if (trackId !== 'rwanda') setActiveTrack(trackId, raw);
+setActiveTrack(trackId, raw);
 const track: BuiltTrackData = getActiveTrackData(1200);
 const L = track.totalLengthM;
 const N = Math.round(L / DS);
@@ -79,7 +79,7 @@ for (let i = 0; i < N; i++) {
 // ---- The AI car's own flying lap on the full physics (lap 2 from a flying start)
 let phys: { n: Float64Array; v: Float64Array; lapS: number; offTrackFrames: number; planLapS?: number; maxTrackErrM?: number } | null = null;
 if (physics) {
-  const root = loadGlbGeometry(`public${track.meshUrl ?? '/tracks/rwanda/rwanda_2026.glb'}`);
+  const root = loadGlbGeometry(`public${track.meshUrl}`);
   const car: SimulatorCar = line === 'gt3' ? createAmgGt3Sim(track, root) : new F12026CarSim(track, root);
   car.assistPreset = 'pro';
   car.aiAutopilot = true;

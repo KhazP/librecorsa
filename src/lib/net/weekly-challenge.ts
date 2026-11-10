@@ -31,7 +31,7 @@ export interface WeeklyChallenge extends ChallengeRules {
  * every few weeks one for no assists and the full simulation.
  */
 export const CHALLENGE_ROTATION: readonly ChallengeRules[] = [
-  { trackId: "rwanda", vehicle: "vf26", assists: "semi_pro", realism: "standard", raceLaps: 5 },
+  { trackId: "rwanda_official_short", vehicle: "vf26", assists: "semi_pro", realism: "standard", raceLaps: 5 },
   { trackId: "monza", vehicle: "amg-gt3", assists: "semi_pro", realism: "standard", raceLaps: 5 },
   { trackId: "spa", vehicle: "vf26", assists: "pro", realism: "full", raceLaps: 4 },
   { trackId: "dunsfold", vehicle: "liana", assists: "semi_pro", realism: "standard", raceLaps: 6 },

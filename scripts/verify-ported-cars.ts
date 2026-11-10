@@ -378,12 +378,12 @@ console.log("\nBodies on the vehicle model's floor (BODY's lowest 0.1 m² of lev
   }
 }
 
-console.log("\nWheels on the road while driving (rigid-body model, Rwanda colliders)");
+console.log("\nWheels on the road while driving (rigid-body model, RISE Motordrome colliders)");
 {
   const track = getActiveTrackData(1200);
-  const trackRoot = loadGlbGeometry(`public${track.meshUrl ?? "/tracks/rwanda/rwanda_2026.glb"}`);
+  const trackRoot = loadGlbGeometry(`public${track.meshUrl}`);
   const ground = trackColliders(trackRoot).ground;
-  check("Rwanda track colliders load", !!ground);
+  check("Track colliders load", !!ground);
   const contact = measurePortedWheelContact(
     new F12026CarSim(track, trackRoot),
     ground!,

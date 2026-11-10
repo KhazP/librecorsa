@@ -191,18 +191,18 @@ const startOf = (trackId: string) => ({
   let started: string | null = null;
   guest.onRaceStart = (s) => (started = s.trackId);
 
-  sendCtl(toHost, 'peer_host', { type: 'lobby', lobby: lobbyOf('peer_host', 'rwanda') });
-  check('the guest follows its host', guest.hostId === 'peer_host' && guest.lobby?.settings.trackId === 'rwanda');
+  sendCtl(toHost, 'peer_host', { type: 'lobby', lobby: lobbyOf('peer_host', 'rwanda_official_short') });
+  check('the guest follows its host', guest.hostId === 'peer_host' && guest.lobby?.settings.trackId === 'rwanda_official_short');
 
   // A forged lobby that reached the guest anyway (e.g. an old host build that relays it)
   sendCtl(toHost, 'peer_x', { type: 'lobby', lobby: lobbyOf('peer_x', 'monza') });
-  check('a lobby naming another host is ignored', guest.hostId === 'peer_host' && guest.lobby?.settings.trackId === 'rwanda');
+  check('a lobby naming another host is ignored', guest.hostId === 'peer_host' && guest.lobby?.settings.trackId === 'rwanda_official_short');
   sendCtl(toHost, 'peer_x', { type: 'lobby', lobby: lobbyOf('peer_host', 'monza') });
-  check("a lobby sent under the host's id by someone else is ignored", guest.lobby?.settings.trackId === 'rwanda');
+  check("a lobby sent under the host's id by someone else is ignored", guest.lobby?.settings.trackId === 'rwanda_official_short');
   sendCtl(toHost, 'peer_x', { type: 'start', start: startOf('monza') });
   check('a start from a guest is ignored', started === null);
-  sendCtl(toHost, 'peer_host', { type: 'start', start: startOf('rwanda') });
-  check("the host's start goes through", started === 'rwanda');
+  sendCtl(toHost, 'peer_host', { type: 'start', start: startOf('rwanda_official_short') });
+  check("the host's start goes through", started === 'rwanda_official_short');
 
   // A same-browser tab can't redirect a guest that is connected to a host over WebRTC
   (guest as unknown as { handleEnvelope(env: unknown, via: null): void }).handleEnvelope(
@@ -224,8 +224,8 @@ let manualChecks: Promise<void> = Promise.resolve();
     handleEnvelope(env: unknown, via: null): void;
   }
   const more = (m: MultiplayerSyncManager) => m as unknown as More & Internals;
-  const raceOf = (id: string) => ({ ...startOf('rwanda'), id });
-  const lobbyWith = (hostId: string, race: ReturnType<typeof raceOf> | null) => ({ ...lobbyOf(hostId, 'rwanda'), race });
+  const raceOf = (id: string) => ({ ...startOf('rwanda_official_short'), id });
+  const lobbyWith = (hostId: string, race: ReturnType<typeof raceOf> | null) => ({ ...lobbyOf(hostId, 'rwanda_official_short'), race });
   const pong = (entry: Entry, from: string) => sendCtl(entry, from, { type: 'pong', t0: performance.now() - 20, now: 50_000 });
 
   // Guest: the race follows the host's lobby, a left race stays left

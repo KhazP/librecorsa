@@ -1,13 +1,15 @@
 /**
- * Circuits the simulator offers. Rwanda ships inside the bundle (track-data.ts imports its JSON); the others are
- * hand-built sim circuits (scripts/tracks/port_ac_track.py) or community scans (scripts/tracks/build_track.py),
- * written to public/tracks/<id>/ and listed in public/tracks/index.json. Their track data is fetched when the player
- * picks one.
+ * Circuits the simulator offers, as listed in public/tracks/index.json: RISE Motordrome (built for LibreCorsa,
+ * scripts/rwanda-official), hand-built sim circuits (scripts/tracks/port_ac_track.py) and community scans
+ * (scripts/tracks/build_track.py), each written to public/tracks/<id>/. The default circuit ships inside the bundle
+ * (track-data.ts imports its JSON); the others' track data is fetched when the player picks one.
  */
 import trackIndex from "../../public/tracks/index.json";
 import { withBasePath } from "@/lib/base-path";
 import { trackListed } from "@/lib/hosted-content";
-import { RWANDA_TARGET_LENGTH_M, RWANDA_TURN_METADATA, setActiveTrack, type RawTrackJson } from "@/lib/track-data";
+import { DEFAULT_TRACK_ID, setActiveTrack, type RawTrackJson } from "@/lib/track-data";
+
+export { DEFAULT_TRACK_ID };
 
 export interface TrackCredit {
   title: string;
@@ -20,7 +22,7 @@ export interface TrackCredit {
 
 /**
  * Where a circuit's model comes from, which sets how far its surfaces can be trusted:
- * - "original": built for LibreCorsa (Rwanda)
+ * - "original": built for LibreCorsa (RISE Motordrome)
  * - "sim": a hand-built sim circuit (an Assetto Corsa track) with its own road, kerb and barrier meshes
  * - "sketchfab": a community 3D model converted automatically, its road, kerbs and barriers traced from the mesh
  */
@@ -71,13 +73,13 @@ export interface TrackInfo {
   lengthM: number;
   turns: number;
   direction: string;
-  /** Track data JSON (relative to the base path); none for the bundled Rwanda layout */
+  /** Track data JSON (relative to the base path); the default circuit's is also in the bundle */
   dataUrl?: string;
   /** Model attribution (CC BY 4.0 scans or AC track mods) */
   credit?: TrackCredit;
   /** Kind of venue, when the index states it; otherwise `circuitType` reads it from the name and layout */
   type?: CircuitType;
-  /** Where its model comes from (index.json; Rwanda is the original) */
+  /** Where its model comes from (index.json) */
   quality: CircuitQuality;
 }
 
@@ -149,23 +151,8 @@ export interface CircuitVenue {
   layouts: TrackInfo[];
 }
 
-export const RWANDA_TRACK_ID = "rwanda";
-
-export const TRACKS: TrackInfo[] = [
-  {
-    id: RWANDA_TRACK_ID,
-    name: "Rwanda International Circuit",
-    layout: "2026 concept layout",
-    country: "Rwanda",
-    city: "Bugesera",
-    lengthM: RWANDA_TARGET_LENGTH_M,
-    turns: RWANDA_TURN_METADATA.length,
-    direction: "clockwise",
-    quality: "original",
-  },
-  // On librecorsa.org every circuit; in a clone of the repository only the ones it carries (`hosted-content.ts`)
-  ...(trackIndex as TrackInfo[]).filter((t) => trackListed(t.id)),
-];
+/** On librecorsa.org every circuit; in a clone of the repository only the ones it carries (`hosted-content.ts`) */
+export const TRACKS: TrackInfo[] = (trackIndex as TrackInfo[]).filter((t) => trackListed(t.id));
 
 /** The circuits grouped by venue (same name and country), in index order */
 export const CIRCUIT_VENUES: readonly CircuitVenue[] = TRACKS.reduce<CircuitVenue[]>((venues, t) => {
@@ -186,7 +173,7 @@ export function getTrackInfo(id: string): TrackInfo {
   return TRACKS[0];
 }
 
-/** The circuit picked last time (or Rwanda) */
+/** The circuit picked last time (or the default) */
 export function loadStoredTrackId(): string {
   try {
     const id = localStorage.getItem(TRACK_STORAGE_KEY);
@@ -194,7 +181,7 @@ export function loadStoredTrackId(): string {
   } catch {
     // Storage unavailable
   }
-  return RWANDA_TRACK_ID;
+  return DEFAULT_TRACK_ID;
 }
 
 function storeTrackId(id: string): void {
@@ -219,8 +206,9 @@ export async function activateTrack(id: string): Promise<TrackInfo> {
   if (!TRACKS.some((t) => t.id === id)) throw new Error(`Unknown circuit "${id}"`);
   const gen = ++activateGen;
   const info = getTrackInfo(id);
-  if (!info.dataUrl) {
-    setActiveTrack(RWANDA_TRACK_ID);
+  if (info.id === DEFAULT_TRACK_ID || !info.dataUrl) {
+    // In the bundle already
+    setActiveTrack(DEFAULT_TRACK_ID);
   } else {
     const res = await fetch(withBasePath(info.dataUrl));
     if (!res.ok) throw new Error(`Track data ${info.dataUrl}: HTTP ${res.status}`);

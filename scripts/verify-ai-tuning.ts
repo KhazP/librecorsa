@@ -49,7 +49,7 @@ const lib: AiTuningLibrary = {
     vehicles: { 'amg-gt3': { steerGain: 0.9 } },
     sections: [{ label: 'class-wide', fromM: 100, toM: 200, params: { apexSpeedScale: 0.9 } }],
   }),
-  'gt3.rwanda': sanitizeTuningFile({
+  'gt3.rwanda_official_short': sanitizeTuningFile({
     params: { brakeMargin: 0.08 },
     vehicles: { 'amg-gt3': { overtakeCaution: 0.9 } },
     sections: [
@@ -61,13 +61,13 @@ const lib: AiTuningLibrary = {
 };
 const none = resolveAiTuning({ classId: 'f1-2026' }, lib);
 check('no files: the built-in defaults', JSON.stringify(none.params) === JSON.stringify(AI_TUNING_DEFAULTS) && none.sources.join() === 'defaults');
-const r = resolveAiTuning({ classId: 'gt3', vehicleId: 'amg-gt3', trackId: 'rwanda' }, lib);
+const r = resolveAiTuning({ classId: 'gt3', vehicleId: 'amg-gt3', trackId: 'rwanda_official_short' }, lib);
 check('class sets, track overrides it', near(r.params.brakeMargin, 0.08));
 check('vehicle block overrides the class', near(r.params.steerGain, 0.9));
 check('track vehicle block applies last', near(r.params.overtakeCaution, 0.9));
 check('out-of-range values are clamped, unknown keys dropped', near(r.params.pace, 1.05) && !('bogus' in r.params));
 check('a section without a range or turns is dropped', r.sections.length === 3, `${r.sections.length} sections`);
-check('sources list every layer', r.sources.join(' > ') === 'defaults > gt3 > gt3:amg-gt3 > gt3.rwanda > gt3.rwanda:amg-gt3 > gt3.rwanda#sections(2)', r.sources.join(' > '));
+check('sources list every layer', r.sources.join(' > ') === 'defaults > gt3 > gt3:amg-gt3 > gt3.rwanda_official_short > gt3.rwanda_official_short:amg-gt3 > gt3.rwanda_official_short#sections(2)', r.sources.join(' > '));
 const other = resolveAiTuning({ classId: 'gt3', vehicleId: 'amg-gt3', trackId: 'suzuka' }, lib);
 check('another circuit keeps the class values', near(other.params.brakeMargin, 0.05) && other.sections.length === 1);
 
@@ -85,7 +85,7 @@ console.log('Shipped files (public/ai)');
 for (const [k, f] of Object.entries(AI_TUNING_LIBRARY)) check(`${k}.json parses`, Boolean(f && f.params));
 const suz = resolveAiTuning({ classId: 'f1-2026', vehicleId: 'vf26', trackId: 'suzuka' }, AI_TUNING_LIBRARY);
 check('Suzuka F1 has its Degner section', suz.sections.some((s) => s.label?.startsWith('Degner')));
-const shipped = resolveAiTuning({ classId: 'f1-2026', vehicleId: 'vf26', trackId: 'rwanda' }, AI_TUNING_LIBRARY);
+const shipped = resolveAiTuning({ classId: 'f1-2026', vehicleId: 'vf26', trackId: 'rwanda_official_short' }, AI_TUNING_LIBRARY);
 check('shipped F1 class values are the identity defaults', JSON.stringify(shipped.params) === JSON.stringify(AI_TUNING_DEFAULTS));
 
 console.log('Skill');

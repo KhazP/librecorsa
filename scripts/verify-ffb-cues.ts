@@ -99,7 +99,7 @@ check('within the grip, or both axles sliding together: neither', () => {
   }
 });
 check('telemetry-out reports the same cues as percentages', () => {
-  const extra = { car: 'f12026-car', track: 'rwanda', maxRpm: 12000, yawRateRadS: 0, pitchRad: 0, rollRad: 0, nowMs: 0 };
+  const extra = { car: 'f12026-car', track: 'rwanda_official_short', maxRpm: 12000, yawRateRadS: 0, pitchRad: 0, rollRad: 0, nowMs: 0 };
   const p = buildTelemetryPacket(car({ front: 0.7, rear: 1.2 }), extra);
   assert.ok(p.oversteerPct > 95 && p.understeerPct === 0, `${p.oversteerPct} / ${p.understeerPct}`);
 });

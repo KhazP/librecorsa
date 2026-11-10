@@ -1,7 +1,8 @@
 /**
  * Car-aware target-speed profile along the AI driving line.
  *
- * 1. Lateral limit per sample:  v²·|κ| = μ_lat·(g·cos θ + c_L·v²/m) + g·sin θ   (θ = banking into the turn)
+ * 1. Lateral limit per sample:  v²·|κ| = μ_lat·(g·cos θ + c_L·v²/m) + g·sin θ   (θ = banking into the turn; with
+ *    `crests`, less the v²·κ_v a crest takes off the load)
  * 2. Backward pass (braking):    friction-circle-limited brake deceleration incl. downforce and drag
  * 3. Forward pass (traction):    power / rear-axle grip limited acceleration minus drag
  *
@@ -54,6 +55,16 @@ export function plannedMu(car: SpeedProfileCarModel, mu: number, vMs: number): n
   if (k === 0) return mu;
   const n = 1 + (plannedDownforceCoef(car, vMs) * vMs * vMs) / (car.massKg * G);
   return mu * Math.pow(n, -k);
+}
+
+export interface SpeedProfileOptions {
+  /**
+   * Allow for the weight a crest takes off the tyres (v² × the road's vertical curvature). On for what the player is
+   * shown (a car's braking guide: line colours, braking urgency, HUD target speed): without it the target through a
+   * bend over a crest was up to 30 km/h more than the car could hold. Off for the circuit's own profile and the AI's
+   * planning, which has its own caution over crests.
+   */
+  crests?: boolean;
 }
 
 export interface SpeedProfile {
@@ -187,10 +198,14 @@ function vf26DownforceCurve(
 export function computeSpeedProfile(
   samples: ReadonlyArray<TrackSamplePoint>,
   car: SpeedProfileCarModel,
-  line: RacingLineId = 'f1'
+  line: RacingLineId = 'f1',
+  opts: SpeedProfileOptions = {}
 ): SpeedProfile {
   const n = samples.length;
   const m = car.massKg;
+  // Weight a crest takes off the tyres, per (m/s)² of speed: how fast the road falls away under the car (1/m)
+  const crest = new Float64Array(n);
+  if (opts.crests) for (let i = 0; i < n; i++) crest[i] = Math.max(0, -samples[i].verticalCurvature);
   const lineOffsetM = new Float64Array(n);
   const px = new Float64Array(n);
   const pz = new Float64Array(n);
@@ -244,13 +259,13 @@ export function computeSpeedProfile(
     gN[i] = G * Math.cos(bankInto);
     gT[i] = G * Math.sin(bankInto);
     if (constantGrip) {
-      const den = k - aeroLat;
+      const den = k + car.muLat * crest[i] - aeroLat;
       const vLat = den > 1e-7 ? Math.sqrt(Math.max(0, (car.muLat * gN[i] + gT[i]) / den)) : car.vMaxMs;
       speedMs[i] = Math.min(car.vMaxMs, vLat);
     } else {
       // Grip and downforce both change with speed: the highest speed whose lateral limit still covers v²·κ (bisection;
       // the limit grows slower than v²·κ above the corner speed)
-      const spare = (v: number) => muLatAt(v) * (gN[i] + (cl(v) * v * v) / m) + gT[i] - v * v * k;
+      const spare = (v: number) => muLatAt(v) * Math.max(0, gN[i] - crest[i] * v * v + (cl(v) * v * v) / m) + gT[i] - v * v * k;
       if (spare(car.vMaxMs) >= 0) speedMs[i] = car.vMaxMs;
       else {
         let lo = 0;
@@ -267,7 +282,7 @@ export function computeSpeedProfile(
 
   // Fraction of the friction circle still available after the lateral demand at speed v
   const longShare = (i: number, v: number) => {
-    const latMax = muLatAt(v) * (gN[i] + (cl(v) * v * v) / m);
+    const latMax = muLatAt(v) * Math.max(0, gN[i] - crest[i] * v * v + (cl(v) * v * v) / m);
     const latUsed = Math.max(0, v * v * Math.abs(curvature[i]) - gT[i]);
     // Between a friction circle and a linear trade-off: with fixed left/right brake and drive
     // torque the less-loaded tyre saturates first, so combined grip is below the ideal circle
@@ -279,7 +294,7 @@ export function computeSpeedProfile(
     // Deceleration available braking at speed u through sample i: tyre grip with u's downforce, the share of it the
     // cornering at u leaves (friction circle), and u's drag
     const decelAt = (i: number, u: number) =>
-      Math.min(muLongAt(u) * (G + (cl(u) * u * u) / m), car.maxBrakeForceN / m) * longShare(i, u) +
+      Math.min(muLongAt(u) * Math.max(0, G - crest[i] * u * u + (cl(u) * u * u) / m), car.maxBrakeForceN / m) * longShare(i, u) +
       (car.dragCoef * u * u) / m;
     for (let step = 0; step < n; step++) {
       const i = n - 1 - step;
@@ -305,7 +320,7 @@ export function computeSpeedProfile(
       const j = (i + 1) % n;
       const v = speedMs[i];
       const traction =
-        muLongAt(v) * (car.rearWeightFraction * G + (car.rearDownforceShare * cl(v) * v * v) / m);
+        muLongAt(v) * Math.max(0, car.rearWeightFraction * (G - crest[i] * v * v) + (car.rearDownforceShare * cl(v) * v * v) / m);
       const power = car.maxDrivePowerW / (m * Math.max(5, v));
       const accel = Math.min(traction, power) * longShare(i, v) - (car.dragCoef * v * v) / m;
       speedMs[j] = Math.min(speedMs[j], Math.sqrt(Math.max(0, v * v + 2 * accel * segLenM[i])));
@@ -327,7 +342,8 @@ export function brakingZoneLevel(speedMs: ArrayLike<number>, i: number): number 
 
 /**
  * A car's own braking guidance along its racing line, per track sample: the braking line's colours, the braking
- * urgency and the HUD target speed. Cars without one use the circuit's (the VF26 profile baked into the samples).
+ * urgency and the HUD target speed. It allows for crests; the circuit's profile baked into the samples (the VF26's),
+ * which the AI reads, does not.
  */
 export interface BrakingGuide {
   /** The racing line the guide (and the car) follows */
@@ -358,7 +374,7 @@ export function brakingGuideFor(
   const key = `${carId}:${line}`;
   let guide = perCar.get(key);
   if (!guide) {
-    const profile = computeSpeedProfile(samples, car, line);
+    const profile = computeSpeedProfile(samples, car, line, { crests: true });
     const n = samples.length;
     const brakingZone = new Float32Array(n);
     // The circuit's zones (`brakingZoneLevel`) are an absolute speed drop tuned to the VF26's ~4 g; for any car,
@@ -377,6 +393,11 @@ export function brakingGuideFor(
     perCar.set(key, guide);
   }
   return guide;
+}
+
+/** The guide of a car without a planning model of its own: the circuit's car's (the VF26 with balanced aero) */
+export function circuitBrakingGuide(samples: ReadonlyArray<TrackSamplePoint>, line: RacingLineId = 'f1'): BrakingGuide {
+  return brakingGuideFor(samples, 'vf26', createVf26ProfileCarModel('balanced'), line);
 }
 
 /** Linear interpolation of a per-sample profile array at track distance s */

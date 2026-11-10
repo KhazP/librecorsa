@@ -1,0 +1,418 @@
+/**
+ * The official Rwanda layout (public/tracks/rwanda_official/, built by scripts/rwanda-official/): it is listed as a
+ * second layout of the Rwanda venue, its track data is a closed anticlockwise 5.86 km lap with 17 corners, and the model
+ * the physics drives on agrees with that data: the road is where the samples say, to the centimetre, the barriers
+ * stand where the data puts them all the way round, kerbs, run-off and pit lane carry their surfaces, the start
+ * lights hang over the grid, nothing built stands on the road or hangs low over it, the TV cameras stand on their
+ * towers, nothing in the file comes from the fan-made layout's source, and no tree stands on the track.
+ *
+ *   npx tsx scripts/verify-rwanda-official.ts
+ */
+import * as THREE from 'three';
+import { existsSync, readFileSync, statSync } from 'node:fs';
+import { NodeIO } from '@gltf-transform/core';
+import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
+import { REPO_TRACK_IDS } from '../src/lib/hosted-content';
+import { SCENERY_CREDITS, type SceneryCredit } from '../src/lib/render/scenery-credits';
+import { createGroundHit, TrackColliderQuery, TrackWallQuery, WALL_SEGMENT_STRIDE } from '../src/lib/sim/f12026-car/TrackColliderQuery';
+import { evaluateSampleLateralHeightM, getActiveTrackData, setActiveTrack, type RawTrackJson } from '../src/lib/track-data';
+import { CIRCUIT_VENUES, DEFAULT_TRACK_ID, TRACKS } from '../src/lib/track-registry';
+import { loadGlbGeometry } from './lib/glb-geometry';
+
+// The circuit is one built scene with two laps: the Grand Prix layout (the default) and the short one (`short`)
+const SHORT = process.argv.includes('short');
+const BASE = 'rwanda_official';
+const ID = SHORT ? `${BASE}_short` : BASE;
+const DIR = `public/tracks/${ID}`;
+const WANT = SHORT
+  ? { layout: 'Short layout', lengthM: 5340, samples: 1068, turns: 14, straightM: 880, stepM: 0.035, gradeMax: 0.165, modelM: 0.075, cameras: 11 }
+  : { layout: 'Grand Prix layout', lengthM: 5895, samples: 1179, turns: 17, straightM: 990, stepM: 0.02, gradeMax: 0.15, modelM: 0.06, cameras: 12 };
+
+let passed = 0;
+function check(name: string, cond: boolean, detail = ''): void {
+  if (!cond) {
+    console.error(`FAIL ${name} ${detail}`);
+    process.exit(1);
+  }
+  passed++;
+  console.log(`  ok  ${name}${detail ? `  (${detail})` : ''}`);
+}
+
+type Sample = RawTrackJson['samples'][number];
+interface Meta {
+  lengthMeters: number;
+  direction: string;
+  baseAltitudeM?: number;
+  mesh: { url: string; scenery?: string[]; colliders: string[]; startLights: string[] };
+  racingLine?: { physicsAiLapS?: number };
+  racingLineGt3?: { physicsLapS?: number };
+  aiPlans?: Record<string, { ok: boolean; wallHits: number; offTrackFrames: number }>;
+}
+
+console.log('Circuit list');
+const info = TRACKS.find((t) => t.id === ID);
+check('the layout is listed', !!info && info.layout === WANT.layout && info.quality === 'original');
+check('it is in the repository', REPO_TRACK_IDS.has(ID));
+const venue = CIRCUIT_VENUES.find((v) => v.layouts.some((l) => l.id === ID));
+check('RISE Motordrome offers the short lap, then the Grand Prix lap', venue?.name === 'RISE Motordrome' && venue.layouts.map((l) => l.id).join() === `${BASE}_short,${BASE}`, `${venue?.name}: ${venue?.layouts.map((l) => l.layout).join(' | ')}`);
+check('the short lap is the default circuit and heads the list', DEFAULT_TRACK_ID === `${BASE}_short` && TRACKS[0].id === DEFAULT_TRACK_ID);
+check('its track data is where the list says', info?.dataUrl === `/tracks/${ID}/track_data.json` && existsSync(`public${info.dataUrl}`));
+
+console.log('Track data');
+const raw = JSON.parse(readFileSync(`${DIR}/track_data.json`, 'utf8')) as RawTrackJson;
+const meta = raw.metadata as unknown as Meta;
+const S = raw.samples as Sample[];
+const n = S.length;
+check(`${(WANT.lengthM / 1000).toFixed(2)} km in ${WANT.samples} samples`, meta.lengthMeters === WANT.lengthM && n === WANT.samples && info?.lengthM === WANT.lengthM);
+{
+  let area = 0;
+  let worstStep = 0;
+  for (let i = 0; i < n; i++) {
+    const a = S[i].p;
+    const b = S[(i + 1) % n].p;
+    area += a[0] * -b[2] - b[0] * -a[2];
+    worstStep = Math.max(worstStep, Math.abs(Math.hypot(b[0] - a[0], b[2] - a[2]) - 5));
+  }
+  check('a closed lap, a sample every 5 m', worstStep < WANT.stepM, `worst step off by ${(worstStep * 1000).toFixed(1)} mm`);
+  check('anticlockwise', area > 0 && meta.direction === 'anticlockwise' && info?.direction === 'anticlockwise');
+}
+check(`${WANT.turns} corners, numbered in order`, raw.turns.length === WANT.turns && raw.turns.every((t, i) => t.number === i + 1) && info?.turns === WANT.turns);
+check('every sample of a corner names a listed one', S.every((s) => s.turn >= 0 && s.turn <= WANT.turns));
+check('12 to 15 m wide', S.every((s) => s.w >= 12 && s.w <= 15));
+{
+  let climb = 0;
+  let steepest = 0;
+  for (let i = 0; i < n; i++) {
+    const dy = S[(i + 1) % n].p[1] - S[i].p[1];
+    if (dy > 0) climb += dy;
+    steepest = Math.max(steepest, Math.abs(dy) / 5);
+  }
+  // (the link climbs from a stretch already at 14 % to the upper road: 16 %)
+  check(`real hills: over 150 m climbed a lap, no grade past ${(WANT.gradeMax * 100).toFixed(1)} %`, climb > 150 && steepest <= WANT.gradeMax, `${climb.toFixed(0)} m, ${(steepest * 100).toFixed(1)} %`);
+}
+{
+  // The published back straight: over a kilometre, downhill from the upper platform into the valley, rising into the hairpin
+  const head = (i: number) => Math.atan2(S[(i + 1) % n].p[2] - S[i].p[2], S[(i + 1) % n].p[0] - S[i].p[0]);
+  const bend = (i: number) => {
+    let d = head((i + 1) % n) - head(i);
+    while (d > Math.PI) d -= 2 * Math.PI;
+    while (d < -Math.PI) d += 2 * Math.PI;
+    return Math.abs(d) / 5;
+  };
+  let best = { from: 0, len: 0 };
+  let from = -1;
+  for (let i = 0; i < 2 * n; i++) {
+    if (bend(i % n) < 1 / 1500) {
+      if (from < 0) from = i;
+      if (i - from + 1 > best.len && i - from + 1 <= n) best = { from: from % n, len: i - from + 1 };
+    } else from = -1;
+  }
+  const ys = Array.from({ length: best.len }, (_, k) => S[(best.from + k) % n].p[1]);
+  const low = Math.min(...ys);
+  check(`the back straight: ${SHORT ? 'nine hundred metres' : 'a kilometre'}, down into the valley and up into the hairpin`, best.len * 5 >= WANT.straightM && ys[0] - low > 45 && ys[ys.length - 1] - low > 8,
+    `${best.len * 5} m from s=${best.from * 5}, ${ys[0].toFixed(0)} m down to ${low.toFixed(0)} m, ${ys[ys.length - 1].toFixed(0)} m at its end`);
+}
+check('altitude of the lake for the air density', meta.baseAltitudeM === 1328);
+{
+  const grid = raw.spawnGrid;
+  const onRoad = grid.every((g) => Math.abs(g.lateral) + 1.2 < S[Math.round(g.s / 5) % n].w / 2);
+  const staggered = grid.every((g, i) => i === 0 || (Math.abs(grid[i - 1].s - g.s - 8) < 0.01 && Math.sign(g.lateral) === -Math.sign(grid[i - 1].lateral)));
+  check('20 grid slots on the road, 8 m apart, pole on the right', grid.length === 20 && onRoad && staggered && grid[0].lateral > 0 && grid[0].s > WANT.lengthM - 20);
+}
+check('three sectors, two activation zones, a pit lane', raw.sectors.length === 3 && raw.drsZones.length === 2 && raw.pitLane.centerline.length > 100);
+{
+  const wide = S.filter((s) => Math.abs(s.ro) > s.w / 2 + 0.6).length;
+  const gt3 = S.filter((s) => typeof (s as Sample & { roGt3?: number }).roGt3 === 'number').length;
+  check('an optimised racing line for both classes, inside the road', wide === 0 && gt3 === n && S.some((s) => Math.abs(s.ro) > 3));
+  const plans = meta.aiPlans ?? {};
+  check('every car drives its line cleanly on the full physics', ['vf26', 'f12026-car', 'amg-gt3'].every((c) => plans[c]?.ok && plans[c].wallHits === 0 && plans[c].offTrackFrames === 0),
+    Object.entries(plans).map(([c, p]) => `${c} ${p.ok ? 'ok' : 'FAILED'}`).join(', '));
+}
+
+console.log('Model');
+const GLB = `public${meta.mesh.url}`;
+check('the model is where the track data says: one scene for both laps', meta.mesh.url === `/tracks/${BASE}/${BASE}.glb` && existsSync(GLB));
+const bytes = statSync(GLB).size;
+check('it stays under 20 MB', bytes < 20e6, `${(bytes / 1e6).toFixed(1)} MB`);
+const root = loadGlbGeometry(GLB);
+const byName = new Map(root.children.map((c) => [c.name, c]));
+const tag = (name: string, key: string) => byName.get(name)?.userData[key];
+{
+  const names: string[] = [];
+  root.traverse((o) => {
+    names.push(o.name);
+    if (typeof o.userData.materialName === 'string') names.push(o.userData.materialName);
+  });
+  check("nothing from the fan-made layout's source file", !names.some((x) => /^KN5_/i.test(x)));
+}
+check('road, kerbs, run-off, pit lane, gravel and grass carry their surfaces',
+  tag('Track_Asphalt_Road', 'surface') === 'road' && tag('Track_Kerbs', 'surface') === 'kerb' && tag('Track_Runoff_Paint', 'surface') === 'runoff' &&
+  tag('Track_Pitlane', 'surface') === 'pitlane' && tag('Ground_Gravel', 'surface') === 'gravel' && tag('Ground_Verge', 'surface') === 'grass' && tag('Terrain', 'surface') === 'grass');
+check('the far terrain is left out of the physics', byName.has('Terrain_Far') && tag('Terrain_Far', 'surface') === undefined);
+check('every collider the track data names is there', meta.mesh.colliders.every((c) => byName.get(c)?.userData.collider === (c === 'Track_Collider_Road' ? 'road' : 'wall')), meta.mesh.colliders.join(', '));
+check('pit building, tower, stands, canopies, lake and start gantry are there',
+  ['Prop_PitBuilding', 'Env_Spire', 'Prop_Grandstand_Main', 'Env_Grandstand_Canopies', 'Prop_Paddock_Village', 'Prop_Lakeside', 'Lake', 'Prop_StartGantry', 'Prop_StartLights_0'].every((x) => byName.has(x)));
+
+const ground = TrackColliderQuery.fromTrackRoot(root);
+const hit = createGroundHit();
+const right = (s: Sample): [number, number] => {
+  const l = Math.hypot(s.t[0], s.t[2]);
+  return [-s.t[2] / l, s.t[0] / l];
+};
+const LAT = [-12, -8, -5, -2.5, 0, 2.5, 5, 8, 12];
+{
+  let worst = 0;
+  let offRoad = 0;
+  let probes = 0;
+  for (const s of S) {
+    const [rx, rz] = right(s);
+    for (let k = 2; k <= 6; k++) {
+      probes++;
+      if (!ground.query(s.p[0] + rx * LAT[k], s.p[2] + rz * LAT[k], s.yProf[k] + 3, hit) || hit.surface !== 'road') offRoad++;
+      else worst = Math.max(worst, Math.abs(hit.height - s.yProf[k]));
+    }
+  }
+  check('the road is under every sample, 5 m either side', offRoad === 0, `${probes} probes`);
+  check('its height is the track data\'s, to 1 cm', worst < 0.01, `worst ${(worst * 1000).toFixed(1)} mm`);
+}
+setActiveTrack(ID, raw);
+const track = getActiveTrackData(1200);
+{
+  // The game's own samples (resampled and lightly smoothed along the lap) against the model
+  let worst = 0;
+  for (let i = 0; i < track.samples.length; i += 2) {
+    const smp = track.samples[i];
+    const b = Math.hypot(smp.binormal.x, smp.binormal.z);
+    for (const lat of [-4, 0, 4]) {
+      const x = smp.position.x + (smp.binormal.x / b) * lat;
+      const z = smp.position.z + (smp.binormal.z / b) * lat;
+      if (ground.query(x, z, smp.position.y + 3, hit)) worst = Math.max(worst, Math.abs(hit.height - evaluateSampleLateralHeightM(smp, lat)));
+    }
+  }
+  // (the link hairpin turns over a crest: 5 m samples follow it to 7 cm)
+  check(`the game's height model follows the road within ${(WANT.modelM * 100).toFixed(1)} cm`, worst < WANT.modelM, `worst ${(worst * 100).toFixed(1)} cm`);
+}
+{
+  let kerbs = 0;
+  let kerbMiss = 0;
+  let runoff = 0;
+  let runoffMiss = 0;
+  for (const s of S) {
+    const [rx, rz] = right(s);
+    for (const side of [-1, 1]) {
+      const edge = s.w / 2;
+      if ((side < 0 ? s.kL : s.kR) === 1) {
+        kerbs++;
+        if (!ground.query(s.p[0] + rx * side * (edge + 0.7), s.p[2] + rz * side * (edge + 0.7), s.p[1] + 3, hit) || hit.surface !== 'kerb') kerbMiss++;
+      } else if ((side < 0 ? s.rL : s.rR) > 4) {
+        runoff++;
+        // (where the other route runs alongside, its asphalt or kerb is the paving)
+        if (!ground.query(s.p[0] + rx * side * (edge + 2.5), s.p[2] + rz * side * (edge + 2.5), s.p[1] + 3, hit) || (hit.surface !== 'runoff' && hit.surface !== 'road' && hit.surface !== 'kerb')) runoffMiss++;
+      }
+    }
+  }
+  check('a kerb wherever the data flags one', kerbs > 400 && kerbMiss === 0, `${kerbs} probes`);
+  check('painted run-off wherever the data gives one', runoff > 400 && runoffMiss === 0, `${runoff} probes`);
+  const pit = raw.pitLane.centerline;
+  const lane = pit.slice(12, pit.length - 12).filter((p) => ground.query(p[0], p[2], p[1] + 3, hit) && hit.surface === 'pitlane').length;
+  check('the pit lane drives as pit lane', lane === pit.length - 24, `${lane} of ${pit.length - 24} points`);
+}
+{
+  // No ledge anywhere a car can get to: every metre of the lap, from the centre out to the first barrier in 25 cm
+  // steps. Where the three extra road sections join the built lap two sets of ground lie over each other, and the
+  // game drives on the higher paved one: one left low or high there is a step under a wheel
+  const walls = TrackWallQuery.fromTrackRoot(root);
+  const nearWalls = new Int32Array(64);
+  let steps = 0;
+  let worst = 0;
+  let worstAt = '';
+  let probes = 0;
+  for (let s = 0; s < track.totalLengthM; s += 1) {
+    const smp = track.getSampleAtDistance(s);
+    const b = Math.hypot(smp.binormal.x, smp.binormal.z);
+    for (const side of [-1, 1]) {
+      let prev = NaN;
+      for (let lat = 0; lat <= 40; lat += 0.25) {
+        const x = smp.position.x + (smp.binormal.x / b) * lat * side;
+        const z = smp.position.z + (smp.binormal.z / b) * lat * side;
+        if (walls.near(x, z, 0.3, nearWalls) > 0 || !ground.query(x, z, smp.position.y + 5, hit)) break;
+        probes++;
+        const step = Math.abs(hit.height - prev);
+        if (step > 0.06) {
+          steps++;
+          if (step > worst) {
+            worst = step;
+            worstAt = `, worst ${(step * 100).toFixed(0)} cm at ${s} m, ${(lat * side).toFixed(2)} m to the side`;
+          }
+        }
+        prev = hit.height;
+      }
+    }
+  }
+  check('no step over 6 cm between the barriers', steps === 0, `${probes} probes, ${steps} steps${worstAt}`);
+}
+{
+  // Barriers: from every sample, the first wall to each side is where the data puts it
+  const walls = TrackWallQuery.fromTrackRoot(root);
+  const ids = new Int32Array(4096);
+  let worst = 0;
+  let open = 0;
+  for (const s of S) {
+    const [rx, rz] = right(s);
+    for (const side of [-1, 1]) {
+      const want = side < 0 ? s.wL : s.wR;
+      const dx = rx * side;
+      const dz = rz * side;
+      let first = Infinity;
+      const count = walls.near(s.p[0], s.p[2], want + 30, ids);
+      for (let k = 0; k < count; k++) {
+        const o = ids[k] * WALL_SEGMENT_STRIDE;
+        const ax = walls.segments[o] - s.p[0];
+        const az = walls.segments[o + 1] - s.p[2];
+        const ex = walls.segments[o + 2] - walls.segments[o];
+        const ez = walls.segments[o + 3] - walls.segments[o + 1];
+        const den = dx * ez - dz * ex;
+        if (Math.abs(den) < 1e-9) continue;
+        const along = (ax * ez - az * ex) / den;
+        const on = (ax * dz - az * dx) / den;
+        if (along > 0 && on >= -0.02 && on <= 1.02) first = Math.min(first, along);
+      }
+      if (!Number.isFinite(first)) open++;
+      else worst = Math.max(worst, Math.abs(first - want));
+    }
+  }
+  check('a barrier on both sides of every sample', open === 0, `${walls.segmentCount} wall segments`);
+  check('each one where the track data puts it', worst < 0.8, `worst ${worst.toFixed(2)} m`);
+}
+{
+  const start = track.getSampleAtDistance(0);
+  const fwd = start.tangent.clone().normalize();
+  const across = start.binormal.clone().normalize();
+  const v = new THREE.Vector3();
+  const f: number[] = [];
+  const r: number[] = [];
+  const y: number[] = [];
+  byName.get(meta.mesh.startLights[0])!.traverse((o) => {
+    const pos = (o as THREE.Mesh).isMesh ? (o as THREE.Mesh).geometry.getAttribute('position') : undefined;
+    for (let i = 0; pos && i < pos.count; i++) {
+      v.fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld).sub(start.position);
+      f.push(v.dot(fwd));
+      r.push(v.dot(across));
+      y.push(v.y);
+    }
+  });
+  const span = (a: number[]) => Math.max(...a) - Math.min(...a);
+  check('the start lights: a thin panel across the road, ahead of the grid and above it',
+    span(f) < 0.5 && span(r) > 2 && span(r) < 4 && Math.min(...f) > 0 && Math.max(...f) < 25 && Math.min(...y) > 4.5 && Math.max(...y) < 8 && Math.abs(Math.max(...r) + Math.min(...r)) < 0.5,
+    `${span(f).toFixed(2)} m deep, ${span(r).toFixed(2)} m wide, ${Math.min(...f).toFixed(1)} m past the line, ${Math.min(...y).toFixed(1)} m up`);
+}
+
+console.log('Around the track');
+check('road bridge, roads, causeway, screens, TV towers, open stands and service vehicles are there',
+  ['Prop_RoadBridge', 'Ground_Roads', 'Ground_Causeway', 'Ground_ServiceRoad', 'Prop_Screens', 'Prop_TVTowers', 'Prop_Stands_Open', 'Prop_Vehicles'].every((x) => byName.has(x)));
+check('kart circuit, fan zones and the far woodland\'s canopy are there', ['Prop_Kart', 'Prop_FanZones', 'Env_ForestCanopy'].every((x) => byName.has(x)));
+check('the roads, their lines and the causeway lie on the ground as decals',
+  ['Ground_Roads', 'Ground_Road_Lines', 'Ground_Causeway', 'Ground_Helipad'].every((x) => tag(x, 'decal') === true));
+{
+  // Every triangle of the buildings and props, sampled every 2 m: none of it may stand on the road or hang low over it
+  const CELL = 25;
+  const cells = new Set<string>();
+  for (const sm of S) {
+    for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) cells.add(`${Math.floor(sm.p[0] / CELL) + dx},${Math.floor(sm.p[2] / CELL) + dz}`);
+  }
+  const a = new THREE.Vector3();
+  const b = new THREE.Vector3();
+  const c = new THREE.Vector3();
+  const q = new THREE.Vector3();
+  const lowest = new Map<string, number>();
+  let probes = 0;
+  for (const node of root.children) {
+    if (!/^(Prop_|Env_)/.test(node.name)) continue;
+    node.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      const pos = mesh.geometry.getAttribute('position');
+      const index = mesh.geometry.getIndex();
+      const count = index ? index.count : pos.count;
+      for (let i = 0; i < count; i += 3) {
+        const [ia, ib, ic] = index ? [index.getX(i), index.getX(i + 1), index.getX(i + 2)] : [i, i + 1, i + 2];
+        a.fromBufferAttribute(pos, ia).applyMatrix4(mesh.matrixWorld);
+        b.fromBufferAttribute(pos, ib).applyMatrix4(mesh.matrixWorld);
+        c.fromBufferAttribute(pos, ic).applyMatrix4(mesh.matrixWorld);
+        const steps = Math.min(40, Math.max(1, Math.ceil(Math.max(a.distanceTo(b), b.distanceTo(c), c.distanceTo(a)) / 2)));
+        for (let u = 0; u <= steps; u++) {
+          for (let v = 0; u + v <= steps; v++) {
+            q.copy(a).multiplyScalar(1 - (u + v) / steps).addScaledVector(b, u / steps).addScaledVector(c, v / steps);
+            if (!cells.has(`${Math.floor(q.x / CELL)},${Math.floor(q.z / CELL)}`)) continue;
+            probes++;
+            if (!ground.query(q.x, q.z, q.y + 0.5, hit) || (hit.surface !== 'road' && hit.surface !== 'kerb')) continue;
+            lowest.set(node.name, Math.min(lowest.get(node.name) ?? Infinity, q.y - hit.height));
+          }
+        }
+      }
+    });
+  }
+  const over = [...lowest].sort((x, y) => x[1] - y[1]);
+  check('nothing built stands on the road or hangs under 4.5 m over it', over.every(([, h]) => h > 4.5),
+    `${probes} probes; lowest: ${over.slice(0, 3).map(([name, h]) => `${name} ${h.toFixed(1)} m`).join(', ')}`);
+  const deck = lowest.get('Prop_RoadBridge');
+  check('the road bridge crosses the track with over 5 m to spare', deck !== undefined && deck > 5 && deck < 8, `${deck?.toFixed(2)} m`);
+}
+{
+  // Each trackside TV camera stands on its scaffold tower: the tower's top is just under the lens
+  const cams = raw.cameras as { position: number[] }[];
+  const tops = cams.map(() => -Infinity);
+  const v = new THREE.Vector3();
+  byName.get('Prop_TVTowers')!.traverse((o) => {
+    const pos = (o as THREE.Mesh).isMesh ? (o as THREE.Mesh).geometry.getAttribute('position') : undefined;
+    for (let i = 0; pos && i < pos.count; i++) {
+      v.fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld);
+      cams.forEach((cam, k) => {
+        if (Math.hypot(v.x - cam.position[0], v.z - cam.position[2]) < 1.8) tops[k] = Math.max(tops[k], v.y - cam.position[1]);
+      });
+    }
+  });
+  const under = tops.slice(1);
+  check('a scaffold tower under every trackside TV camera, its top just below the lens', cams.length === WANT.cameras && under.every((t) => t > -0.7 && t < -0.1),
+    `${under.map((t) => t.toFixed(2)).join(' ')}`);
+}
+
+console.log('Trees and shrubs');
+void (async () => {
+  const FOLIAGE = `public${meta.mesh.scenery?.[0] ?? ''}`;
+  check('the track data names its scenery file', meta.mesh.scenery?.length === 1 && existsSync(FOLIAGE), FOLIAGE);
+  const doc = await new NodeIO().registerExtensions(ALL_EXTENSIONS).read(FOLIAGE);
+  const sceneryRoot = doc.getRoot().listScenes()[0]?.listChildren()[0];
+  const extras = (sceneryRoot?.getExtras() ?? {}) as { replaces?: string[]; credits?: SceneryCredit[]; counts?: Record<string, number> };
+  check('it hides nothing of the circuit', Array.isArray(extras.replaces) && extras.replaces.length === 0);
+  check('its credits are the in-app credits of the two models', JSON.stringify(extras.credits) === JSON.stringify(SCENERY_CREDITS.filter((c) => c.id === 'acacia' || c.id === 'shrub')) && extras.credits?.length === 2);
+  check('the copyright line names both authors', SCENERY_CREDITS.filter((c) => c.id === 'acacia' || c.id === 'shrub').every((c) => (doc.getRoot().getAsset().copyright ?? '').includes(c.author)));
+  check('the credits file beside it says the same', JSON.stringify(JSON.parse(readFileSync(`public/tracks/${BASE}/scenery/credits.json`, 'utf8'))) === JSON.stringify(extras.credits));
+  const perModel: Record<string, number> = {};
+  let onTrack = 0;
+  let floating = 0;
+  let buried = 0;
+  const t = [0, 0, 0];
+  const sc = [0, 0, 0];
+  for (const node of sceneryRoot?.listChildren() ?? []) {
+    const level = node.getExtras() as { tile?: string; level?: number };
+    const batch = node.getExtension('EXT_mesh_gpu_instancing') as { getAttribute(s: string): { getCount(): number; getElement(i: number, o: number[]): number[] } | null } | null;
+    if (!batch || level.level !== 0 || typeof level.tile !== 'string') continue;
+    const tr = batch.getAttribute('TRANSLATION')!;
+    const scale = batch.getAttribute('SCALE')!;
+    const model = level.tile.split(':')[0];
+    perModel[model] = (perModel[model] ?? 0) + tr.getCount();
+    for (let i = 0; i < tr.getCount(); i++) {
+      tr.getElement(i, t);
+      scale.getElement(i, sc);
+      if (!ground.query(t[0], t[2], t[1] + 5, hit)) continue;
+      if (hit.surface !== 'grass') onTrack++;
+      if (t[1] > hit.height + 0.05) floating++;
+      if (t[1] < hit.height - 0.2 * sc[1] - 0.05) buried++;
+    }
+  }
+  check('as many trees and shrubs as it says', perModel.acacia === extras.counts?.acacia && perModel.shrub === extras.counts?.shrub && perModel.acacia > 5000, JSON.stringify(perModel));
+  check('none on the road, kerbs, run-off, gravel or pit lane', onTrack === 0, `${onTrack}`);
+  check('none floating or buried', floating === 0 && buried === 0, `${floating} floating, ${buried} buried`);
+  console.log(`\nAll ${passed} checks of RISE Motordrome passed.`);
+})();

@@ -3,7 +3,7 @@
 import React, { useEffect, useReducer, useState } from "react";
 import { buildHudMap, mapPoint, SECTOR_COLORS, type HudMap } from "@/components/hud/styles/hud-style-parts";
 import { withBasePath } from "@/lib/base-path";
-import { ACTIVE_TRACK_ID, getTrackData, RWANDA_TRACK_JSON, type RawTrackJson } from "@/lib/track-data";
+import { ACTIVE_TRACK_ID, DEFAULT_TRACK_ID, DEFAULT_TRACK_JSON, getTrackData, type RawTrackJson } from "@/lib/track-data";
 import type { TrackInfo } from "@/lib/track-registry";
 
 /** Circuit outline from a centreline: a volt thumbnail, or coloured by sector with the flow dashes */
@@ -43,7 +43,7 @@ export const TrackOutline: React.FC<{ map: HudMap; sectors?: boolean; className?
 /**
  * Outlines of circuits other than the loaded one, drawn from each circuit's own `track_data.json` centreline (the same
  * samples the scene is built from). Fetched on demand, one at a time, and kept for the session; the loaded circuit and
- * the bundled Rwanda layout need no fetch. A failed fetch is retried the next time the outline is wanted, once
+ * the bundled default circuit need no fetch. A failed fetch is retried the next time the outline is wanted, once
  * RETRY_AFTER_MS has passed (or at once when the browser comes back online).
  */
 const outlines = new Map<string, HudMap>();
@@ -85,7 +85,7 @@ function outlineNow(t: TrackInfo): HudMap | null | undefined {
   }
   let map: HudMap | undefined;
   if (t.id === ACTIVE_TRACK_ID) map = buildHudMap(getTrackData());
-  else if (!t.dataUrl) map = outlineOfRaw(RWANDA_TRACK_JSON);
+  else if (t.id === DEFAULT_TRACK_ID || !t.dataUrl) map = outlineOfRaw(DEFAULT_TRACK_JSON);
   if (map) outlines.set(t.id, map);
   return map;
 }

@@ -17,7 +17,7 @@
  *      (`metadata.racingLine`).
  *    - GT3: `roGt3` and `metadata.racingLineGt3`.
  *
- *   npx tsx scripts/optimize-racing-line.ts                       # Rwanda, F1 line: optimise + validate + write
+ *   npx tsx scripts/optimize-racing-line.ts                       # the default circuit, F1 line: optimise + validate + write
  *   npx tsx scripts/optimize-racing-line.ts --track suzuka --car gt3
  *   npx tsx scripts/optimize-racing-line.ts --all                 # every circuit, both lines
  *   ... --dry-run                                                 # optimise + validate only
@@ -25,7 +25,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { spawnSync } from 'child_process';
-import { getActiveTrackData, setActiveTrack, type RawTrackJson } from '../src/lib/track-data';
+import { DEFAULT_TRACK_ID, getActiveTrackData, setActiveTrack, type RawTrackJson } from '../src/lib/track-data';
 import { F1Physics2026 } from '../src/lib/f1-physics-2026';
 import { AMG_GT3_PROFILE_CAR, AMG_GT3_SIM_PROFILE } from '../src/lib/sim/gt3/AmgGt3Sim';
 import { F12026CarSim } from '../src/lib/sim/f12026-car/F12026CarSim';
@@ -52,7 +52,7 @@ if (process.argv.includes('--all')) {
   // One process per circuit and line: the track module holds one active circuit
   const pass = process.argv.slice(2).filter((a) => a !== '--all');
   const failed: string[] = [];
-  for (const id of ['rwanda', ...TRACK_INDEX.map((e) => e.id)]) {
+  for (const id of TRACK_INDEX.map((e) => e.id)) {
     for (const line of ['f1', 'gt3']) {
       console.log(`\n===== ${id} / ${line} =====`);
       const r = spawnSync(process.execPath, [...process.execArgv, __filename, '--track', id, '--car', line, ...pass], {
@@ -65,7 +65,7 @@ if (process.argv.includes('--all')) {
   process.exit(failed.length ? 1 : 0);
 }
 
-const TRACK_ID = arg('--track') ?? 'rwanda';
+const TRACK_ID = arg('--track') ?? DEFAULT_TRACK_ID;
 const LINE = (arg('--car') ?? 'f1') as 'f1' | 'gt3';
 if (LINE !== 'f1' && LINE !== 'gt3') throw new Error(`--car must be f1 or gt3, not ${LINE}`);
 const dataUrl = TRACK_INDEX.find((e) => e.id === TRACK_ID)?.dataUrl ?? `/tracks/${TRACK_ID}/track_data.json`;
@@ -443,7 +443,7 @@ interface PhysicsLap {
   brakeOnsets: number[];
   trace: { s: number; kmh: number; gear: number }[];
 }
-const glbRoot = LINE === 'gt3' ? loadGlbGeometry(path.join(ROOT, 'public', track.meshUrl ?? '/tracks/rwanda/rwanda_2026.glb')) : null;
+const glbRoot = LINE === 'gt3' ? loadGlbGeometry(path.join(ROOT, 'public', track.meshUrl ?? '')) : null;
 /** GT3 autopilot pace: a share of its own limit speed, as a driver after a clean lap */
 const GT3_PACE = Number(process.env.GT3_PACE ?? 0.95);
 let gt3Runs = 0;

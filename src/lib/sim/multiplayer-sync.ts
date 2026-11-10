@@ -18,6 +18,7 @@
  */
 
 import * as THREE from 'three';
+import { DEFAULT_TRACK_ID } from '@/lib/track-data';
 import type { VehicleModelId } from '@/types/f1';
 import type { WeatherSyncState } from './weather';
 import type { TyreVisualState } from './simulator-car';
@@ -386,7 +387,7 @@ export class MultiplayerSyncManager {
   private memberSeenMs = new Map<string, number>();
   /** Host: members dropped for silence, kept so their next packet puts them back (a guest only says hello once) */
   private lapsedMembers = new Map<string, LobbyPlayer>();
-  private lobbySettings: LobbySettings = { trackId: 'rwanda', laps: 5, collisions: 'ghost_lap1', carClass: 'any' };
+  private lobbySettings: LobbySettings = { trackId: DEFAULT_TRACK_ID, laps: 5, collisions: 'ghost_lap1', carClass: 'any' };
   private activeRace: RaceStartInfo | null = null;
   /**
    * Guest: the race this client is done with (left with leaveRace, or ended by the host); neither a repeated start

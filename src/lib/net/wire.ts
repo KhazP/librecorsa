@@ -143,6 +143,9 @@ export interface ControlEnvelope {
   to?: string;
 }
 
+/** The default circuit (DEFAULT_TRACK_ID in track-data.ts, which loads three.js and so can't be imported here) */
+export const FALLBACK_TRACK_ID = 'rwanda_official_short';
+
 const clampStr = (v: unknown, max: number, fallback: string) =>
   typeof v === 'string' ? v.replace(/[\u0000-\u001f\u007f<>]/g, '').slice(0, max) : fallback;
 const asCode = (v: unknown) => {
@@ -187,7 +190,7 @@ export function sanitizeStart(v: unknown): RaceStartInfo | null {
     laps: Math.round(laps),
     collisions: COLLISION_MODES.includes(s.collisions as CollisionMode) ? (s.collisions as CollisionMode) : 'on',
     carClass: CAR_CLASSES.includes(s.carClass as CarClassRule) ? (s.carClass as CarClassRule) : 'any',
-    trackId: clampStr(s.trackId, 64, 'rwanda'),
+    trackId: clampStr(s.trackId, 64, FALLBACK_TRACK_ID),
     grid: s.grid.filter((g): g is string => typeof g === 'string').slice(0, 32).map((g) => g.slice(0, 64)),
     vehicle: asPeerVehicle(s.vehicle),
   };
@@ -202,7 +205,7 @@ export function sanitizeLobby(v: unknown): LobbyState | null {
     hostId: l.hostId.slice(0, 64),
     weather: sanitizeWeatherSync(l.weather) ?? undefined,
     settings: {
-      trackId: clampStr(st.trackId, 64, 'rwanda'),
+      trackId: clampStr(st.trackId, 64, FALLBACK_TRACK_ID),
       laps: Math.round(finite(st.laps, 1, 99) ?? 5),
       collisions: COLLISION_MODES.includes(st.collisions as CollisionMode) ? (st.collisions as CollisionMode) : 'on',
       carClass: CAR_CLASSES.includes(st.carClass as CarClassRule) ? (st.carClass as CarClassRule) : 'any',

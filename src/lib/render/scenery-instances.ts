@@ -9,12 +9,12 @@ import { patchShader } from "./shader-patch";
  * Trackside scenery that replaces some of a circuit's own (public/tracks/<id>/scenery/*.glb). Each file's root
  * lists in `extras.replaces` the circuit nodes it stands in for; those are hidden once it is in, so if it fails to
  * load the circuit keeps its own.
- *  - Instanced foliage (scripts/rwanda-scenery.mjs): openly licensed trees and shrubs, one EXT_mesh_gpu_instancing
+ *  - Instanced foliage (scripts/rwanda-official/foliage.mjs): openly licensed trees and shrubs, one EXT_mesh_gpu_instancing
  *    node per 250 m tile, model and level of detail. Each tile's levels go under a THREE.LOD at the tile's centre,
  *    which the renderer switches per camera (main view and mirrors; the shadow pass reuses the main view's pick).
  *    Instances inside a tile are stored in hash order, so drawing the first N of each tile thins it out evenly: that
  *    is how Medium and Low quality draw fewer.
- *  - Generated stands (scripts/rwanda-stands.mjs): plain meshes whose concrete and roof materials carry the circuit's
+ *  - Generated stands: plain meshes whose concrete and roof materials carry the circuit's
  *    flat scenery names, so they get the same surface detail as its own buildings (scenery-detail.ts).
  */
 
@@ -105,7 +105,7 @@ export function attachSceneryInstances(trackRoot: THREE.Object3D, scenery: THREE
   trackRoot.add(scenery);
 }
 
-/** One level of a foliage tile, with its node extras from scripts/rwanda-scenery.mjs */
+/** One level of a foliage tile, with its node extras from scripts/rwanda-official/foliage.mjs */
 interface TileLevel {
   obj: THREE.Object3D;
   extras: { tile: string; level: number; from: number; until?: number; shadow: boolean; shadowFrom?: number };
@@ -225,7 +225,7 @@ function addShadowProxies(level: THREE.Object3D, source: THREE.Object3D): void {
  *    falls under the alpha test and the crown disappears. Scaling the alpha up by the mip level the pixel samples
  *    keeps the leaf coverage at a distance (the canopy reads as a canopy from the helicopter camera); close up it is
  *    unchanged.
- *  - The cards' normals are baked towards the crown's outward normal (scripts/rwanda-scenery.mjs), so a card seen
+ *  - The cards' normals are baked towards the crown's outward normal (scripts/rwanda-official/foliage.mjs), so a card seen
  *    from behind keeps it rather than being flipped to face the camera: the crown shades as one volume.
  *  - Leaves are matte. With the sun low ahead the crowns' upward normals sit at the grazing angle where the standard
  *    Fresnel term climbs to full white: the canopy glinted silver-grey. Their specular is cut to a fifth.

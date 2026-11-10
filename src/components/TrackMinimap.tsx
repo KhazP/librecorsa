@@ -2,7 +2,7 @@
 
 import React, { useMemo } from "react";
 import type { CarTelemetry } from "@/types/f1";
-import { type BuiltTrackData, TURN_METADATA } from "@/lib/track-data";
+import { type BuiltTrackData, DEFAULT_TRACK_ID, TURN_METADATA } from "@/lib/track-data";
 import { getTrackInfo } from "@/lib/track-registry";
 
 /** Elevation profile size (SVG units): the profile, its viewBox and the progress dot all use it */
@@ -27,7 +27,7 @@ export const TrackMinimap: React.FC<TrackMinimapProps> = ({
   telemetry,
   onSelectTurn,
 }) => {
-  const trackInfo = getTrackInfo(track.id ?? "rwanda");
+  const trackInfo = getTrackInfo(track.id ?? DEFAULT_TRACK_ID);
 
   const {
     svgData,

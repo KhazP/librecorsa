@@ -1,7 +1,7 @@
 /**
- * Ground queries against the Rwanda glTF track colliders for `VehiclePhysics`.
+ * Ground queries against a circuit's glTF track colliders for `VehiclePhysics`.
  *
- * Node contract (see scripts/rwanda-2026/build_surfaces.py):
+ * Node contract (see scripts/rwanda-official/bl_track.py):
  *  - `Track_Collider_Road` (`userData.collider = 'road'`): low-res drivable surface, road ± (half width + 1.6 m).
  *    It carries no grip/surface tags, so it reads as `surface: 'road'`, `grip: 1` unless tagged.
  *  - Visual surfaces tagged with `userData.surface` and optionally `userData.grip`:

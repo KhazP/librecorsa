@@ -8,13 +8,12 @@ import {
   createRacingLineMask,
   type RacingLineMask,
 } from "@/lib/render/asphalt-sheen";
-import type { RacingLineId, RunoffStyle, TrackSamplePoint } from "@/types/f1";
+import type { RacingLineId, RunoffStyle } from "@/types/f1";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.js";
 import { assetProgress } from "@/lib/loading/asset-progress";
 import { applySceneryDetail, prepareTreeGeometry, sceneryKind, setSceneryTime } from "@/lib/render/scenery-detail";
 import { attachSceneryInstances, loadSceneryInstances, resetSceneryInstances } from "@/lib/render/scenery-instances";
-import { applySceneryTextures, loadSceneryTextures } from "@/lib/render/scenery-textures";
 import { cleanScanMaterial } from "@/lib/render/scan-materials";
 import { trackColliders } from "@/lib/sim/track-colliders";
 import { fitVisualRoad, inheritedTag } from "@/lib/render/fit-visual-road";
@@ -30,7 +29,6 @@ const DASH_SEAT_LIFT_M = 0.035;
 export interface BuiltCircuitScene {
   sceneGroup: THREE.Group;
   racingLineMesh: THREE.Mesh;
-  waterMesh: THREE.Mesh;
   startLightMeshes: THREE.Mesh[];
   updateEnvironment: (elapsedSeconds: number) => void;
   /** Darkens a converted circuit's tyre grooves (AC `groove.ini`) with the racing line's rubber (0..1) */
@@ -51,7 +49,7 @@ export interface BuiltCircuitScene {
   trackRoot: Promise<THREE.Object3D>;
 }
 
-// Rwanda 2026 circuit: one glTF exported from the Blender rebuild (public/tracks/rwanda/rwanda_2026.glb).
+// RISE Motordrome: one glTF exported from the Blender build (public/tracks/rwanda_official/rwanda_official.glb).
 // Node naming contract: Track_* (racing surfaces, barriers), Track_Collider_* (invisible physics proxies,
 // extras.collider = true), Terrain, Lake, Env_* (vegetation, canopies) and Prop_* (buildings, stands, gantry).
 // The other circuits (scripts/tracks/build_track.py) wrap a converted scan in `Track_Model` and append hidden
@@ -155,15 +153,14 @@ let trackLoadGen = 0;
 class SupersededLoad extends Error {}
 
 function loadTrackGlb(
-  url: string,
+  /** The circuit GLB; none on a synthetic test track, which keeps the procedural stand-in */
+  url: string | undefined,
   glbGroup: THREE.Group,
   fallbackGroup: THREE.Group,
   onLoaded: (root: THREE.Object3D) => void,
   sheenMask: RacingLineMask,
   /** Scenery files that replace some of the circuit's own (scenery-instances.ts); loaded alongside */
   sceneryUrls: readonly string[] = [],
-  /** A manifest of the circuit's own textures replacing a track pack's images (scenery-textures.ts) */
-  sceneryTexturesUrl: string | null = null,
   /** The scan's racing-surface materials (track data `mesh.roadMaterials`): drawn with the asphalt shader */
   roadMaterials: readonly string[] = [],
   /** World boxes of the scan to leave out (track data `mesh.cutBoxes`) */
@@ -173,7 +170,7 @@ function loadTrackGlb(
 ): void {
   const cutMaterialNames = new Set(cutMaterials);
   const roadMaterialNames = new Set(roadMaterials);
-  if (typeof window === "undefined" || typeof fetch === "undefined") {
+  if (!url || typeof window === "undefined" || typeof fetch === "undefined") {
     return;
   }
   // A newer circuit load (the simulator remounted on another track) supersedes this one: its late result must not
@@ -182,7 +179,6 @@ function loadTrackGlb(
   const current = () => gen === trackLoadGen;
   resetSceneryInstances();
   const sceneryLoad = Promise.all(sceneryUrls.map(loadSceneryInstances));
-  const texturesLoad = sceneryTexturesUrl ? loadSceneryTextures(sceneryTexturesUrl) : Promise.resolve(null);
 
   // `?colliders=1`: draw the physics surfaces (by type) and barriers over the scan, to check them against it
   const showColliders = new URLSearchParams(window.location.search).get("colliders") === "1";
@@ -198,7 +194,7 @@ function loadTrackGlb(
     })
     .then((gltf) => {
       const root = gltf.scene;
-      root.name = "Rwanda2026Track";
+      root.name = "CircuitTrack";
       const box = new THREE.Box3();
       const size = new THREE.Vector3();
       root.updateMatrixWorld(true);
@@ -267,7 +263,7 @@ function loadTrackGlb(
           obj.material = Array.isArray(obj.material) ? obj.material.map(cloneForDecal) : cloneForDecal(obj.material);
         }
         const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
-        // Flat, untextured scenery (Rwanda's trees, roofs, spire, lake, paint): shader detail, and the trees'
+        // Flat, untextured scenery (trees, roofs, spire, lake, paint): shader detail, and the trees'
         // normals, tint and occlusion baked into their geometry (scenery-detail.ts)
         let treeShading = false;
         let baseY = 0;
@@ -297,9 +293,8 @@ function loadTrackGlb(
         }
         if (offset !== undefined) obj.renderOrder = 1;
       });
-      return Promise.all([sceneryLoad, texturesLoad]).then(([files, textures]) => {
+      return sceneryLoad.then((files) => {
         if (!current()) throw new SupersededLoad();
-        if (textures) applySceneryTextures(root, textures);
         // Before onLoaded, so the camera occlusion pass and the shader warm-up see them
         for (const scenery of files) if (scenery) attachSceneryInstances(root, scenery);
         return root;
@@ -321,55 +316,6 @@ function loadTrackGlb(
       console.warn("Using fallback procedural track geometry:", err);
       assetProgress.fail("track");
     });
-}
-
-function getTrackFrameQuaternion(sample: TrackSamplePoint): THREE.Quaternion {
-  const left = new THREE.Vector3()
-    .crossVectors(sample.normal, sample.tangent)
-    .normalize();
-  const up = sample.normal.clone().normalize();
-  const forward = sample.tangent.clone().normalize();
-  const m = new THREE.Matrix4().makeBasis(left, up, forward);
-  return new THREE.Quaternion().setFromRotationMatrix(m);
-}
-
-function createGrandstandSeatsTexture(): THREE.CanvasTexture {
-  const canvas = document.createElement("canvas");
-  canvas.width = 512;
-  canvas.height = 256;
-  const ctx = canvas.getContext("2d");
-  if (ctx) {
-    ctx.fillStyle = "#e2e8f0";
-    ctx.fillRect(0, 0, 512, 256);
-
-    for (let row = 0; row < 18; row++) {
-      const y = 8 + row * 13;
-      const tierBase =
-        row < 8 ? "#00a3e0" : row < 13 ? "#fad201" : "#15803d";
-      ctx.fillStyle = tierBase;
-      ctx.fillRect(0, y, 512, 11);
-
-      for (let s = 0; s < 64; s++) {
-        if (s % 16 === 0 || s % 16 === 1) {
-          ctx.fillStyle = "#cbd5e1";
-          ctx.fillRect(s * 8, y, 8, 13);
-          continue;
-        }
-        const hasSpectator = (row * 11 + s * 7) % 3 !== 0;
-        if (hasSpectator) {
-          const specCols = ["#0f172a", "#1e3a8a", "#ffffff", "#dc2626", "#0284c7"];
-          ctx.fillStyle = specCols[(row * 5 + s * 3) % specCols.length];
-          ctx.fillRect(s * 8 + 1, y + 2, 5, 7);
-        }
-      }
-    }
-  }
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.wrapS = THREE.RepeatWrapping;
-  tex.wrapT = THREE.ClampToEdgeWrapping;
-  tex.anisotropy = 8;
-  return tex;
 }
 
 function createAsphaltTexture(): THREE.CanvasTexture {
@@ -510,104 +456,6 @@ function getRunoffAtlasUVRange(style: RunoffStyle): [number, number] {
   }
 }
 
-/**
- * Builds a realistic sloped stadium grandstand group facing the track.
- * In the local track frame +X is left (−binormal) and −X is right (+binormal).
- * When placed on `side` (-1 = left of track, +1 = right of track), the sloped seating bowl
- * faces inward toward the track centerline (`x = 0`).
- */
-function buildSlopedGrandstandGroup(
-  depth: number,
-  height: number,
-  length: number,
-  side: -1 | 1,
-  seatTex: THREE.Texture,
-  canopyMat?: THREE.Material | THREE.Material[]
-): THREE.Group {
-  const group = new THREE.Group();
-  group.userData.isTracksideStructure = true;
-  const concreteMat = new THREE.MeshStandardMaterial({
-    color: 0xcbd5e1,
-    roughness: 0.65,
-  });
-
-  // Lower concrete podium base
-  const baseMesh = new THREE.Mesh(
-    new THREE.BoxGeometry(depth, 2.2, length),
-    concreteMat
-  );
-  baseMesh.position.y = 1.1;
-  group.add(baseMesh);
-
-  // Rear structural backwall
-  const backWall = new THREE.Mesh(
-    new THREE.BoxGeometry(1.6, height, length),
-    concreteMat
-  );
-  // Track frame (getTrackFrameQuaternion): local +X = left = normal × tangent = −binormal. A stand placed `side * dist`
-  // along the binormal therefore sits at local X = −side·dist, so the direction back toward the centreline is +side
-  const frontSign = side; // local X direction pointing BACK toward the track centerline
-  backWall.position.set(-frontSign * (depth * 0.5 - 0.8), height * 0.5, 0);
-  group.add(backWall);
-
-  // Explicit 4-vertex sloped stadium seating quad facing the track (immune to Euler rotation order)
-  const frontX = frontSign * (depth * 0.5 - 0.2);
-  const backX = -frontSign * (depth * 0.5 - 1.6);
-  const halfL = length * 0.5;
-  const seatGeom = new THREE.BufferGeometry();
-  seatGeom.setAttribute(
-    "position",
-    new THREE.Float32BufferAttribute(
-      [
-        frontX, 2.2, -halfL, // 0: Front bottom (-Z)
-        frontX, 2.2, halfL,  // 1: Front bottom (+Z)
-        backX, height, -halfL, // 2: Back top (-Z)
-        backX, height, halfL,  // 3: Back top (+Z)
-      ],
-      3
-    )
-  );
-  seatGeom.setAttribute(
-    "uv",
-    new THREE.Float32BufferAttribute([0, 0, 1, 0, 0, 1, 1, 1], 2)
-  );
-  seatGeom.setIndex([0, 1, 2, 1, 3, 2]);
-  seatGeom.computeVertexNormals();
-
-  const seatPlane = new THREE.Mesh(
-    seatGeom,
-    new THREE.MeshStandardMaterial({
-      map: seatTex,
-      roughness: 0.55,
-      side: THREE.DoubleSide,
-    })
-  );
-  group.add(seatPlane);
-
-  // Cantilevered white stadium roof overhang + support columns
-  const roofMesh = new THREE.Mesh(
-    new THREE.BoxGeometry(depth + 4.5, 0.9, length + 4),
-    canopyMat ??
-      new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.3 })
-  );
-  roofMesh.position.set(frontSign * 1.5, height + 2.1, 0);
-  roofMesh.rotation.z = -frontSign * 0.06;
-  group.add(roofMesh);
-
-  const numCols = Math.max(3, Math.floor(length / 36));
-  for (let c = 0; c < numCols; c++) {
-    const cz = -length * 0.46 + (c / Math.max(1, numCols - 1)) * (length * 0.92);
-    const strut = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.28, 0.34, height + 2.0, 8),
-      concreteMat
-    );
-    strut.position.set(-frontSign * (depth * 0.42), (height + 2.0) * 0.5, cz);
-    group.add(strut);
-  }
-
-  return group;
-}
-
 function pushQuadUpward(
   indices: number[],
   baseVert: number,
@@ -641,20 +489,15 @@ function brakingZoneColor(level: number): THREE.Color {
   return new THREE.Color(0.98, 0.12, 0.18); // Heavy Braking Zone Red
 }
 
-/**
- * Builds the scene of the active circuit; the Rwanda-only dressing (lake, airliner, stands, tents, scenery packs) is
- * gated on the track id inside
- */
+/** Builds the scene of the active circuit: a procedural stand-in at once, the circuit's own model once it loads */
 export function buildCircuitScene(
   track: BuiltTrackData
 ): BuiltCircuitScene {
   const sceneGroup = new THREE.Group();
   // Never moves: its children update their own transforms, but it no longer forces all of theirs every frame
   sceneGroup.matrixAutoUpdate = false;
-  /** Bugesera dressing (lake, airliner) only belongs on the Rwanda circuit */
-  const isRwanda = (track.id ?? "rwanda") === "rwanda";
   const glbGroup = new THREE.Group();
-  glbGroup.name = "Rwanda2026GlbGroup";
+  glbGroup.name = "CircuitGlbGroup";
   sceneGroup.add(glbGroup);
 
   const fallbackGroup = new THREE.Group();
@@ -1062,21 +905,8 @@ export function buildCircuitScene(
   };
 
   // ============================================================================
-  // 4. SHIMMERING LAKE BUGESERA WATER PLANE & F1 STARTING LIGHTS MAST
+  // 4. F1 STARTING LIGHTS
   // ============================================================================
-  const waterGeom = new THREE.PlaneGeometry(1800, 2200, 16, 16);
-  waterGeom.rotateX(-Math.PI * 0.5);
-  const waterMat = new THREE.MeshStandardMaterial({
-    color: 0x0284c7,
-    roughness: 0.14,
-    metalness: 0.65,
-    transparent: true,
-    opacity: 0.92,
-  });
-  const waterMesh = new THREE.Mesh(waterGeom, waterMat);
-  waterMesh.position.set(-1340, -18.0, -120);
-  if (isRwanda) fallbackGroup.add(waterMesh);
-
   // F1 start lights: five pods over the first red-lamp row of the light assembly hung in the start gantry
   // (s = 14 m, right of the centreline). Until the circuit GLB is live (and headless) they hang at the same
   // place from the track frame; once it loads they snap onto the authored assembly (Prop_StartLights_0).
@@ -1191,11 +1021,28 @@ export function buildCircuitScene(
       const size = box.getSize(new THREE.Vector3());
       // Four lamps per column (amber, green, red, red): sit on the first red row, 1/8 of the height below centre
       center.y -= size.y * 0.125;
-      // Extent of the box along the start direction: |sx·fx| + |sz·fz| (as for the width), not |size·fwd|, whose
-      // terms cancel on a diagonal straight
-      const depth = Math.abs(size.x * startFwd.x) + Math.abs(size.y * startFwd.y) + Math.abs(size.z * startFwd.z);
-      const width = Math.abs(size.x * startRight.x) + Math.abs(size.z * startRight.z);
-      placePods(center, depth * 0.5, Math.max(minSpacing, width / 5));
+      // Extent of the model along the start direction and across it, from its own vertices: on a diagonal straight
+      // the axis-aligned box of a thin panel is far deeper than the panel, and the pods would hang in front of it
+      let minF = Infinity;
+      let maxF = -Infinity;
+      let minR = Infinity;
+      let maxR = -Infinity;
+      const v = new THREE.Vector3();
+      gantry.traverse((obj) => {
+        const pos = obj instanceof THREE.Mesh ? obj.geometry.getAttribute("position") : undefined;
+        if (!pos) return;
+        for (let i = 0; i < pos.count; i++) {
+          v.fromBufferAttribute(pos, i).applyMatrix4(obj.matrixWorld);
+          const f = v.dot(startFwd);
+          const r = v.dot(startRight);
+          minF = Math.min(minF, f);
+          maxF = Math.max(maxF, f);
+          minR = Math.min(minR, r);
+          maxR = Math.max(maxR, r);
+        }
+      });
+      if (minF > maxF) return;
+      placePods(center, (maxF - minF) * 0.5, Math.max(minSpacing, (maxR - minR) / 5));
     };
     const gantry = root.getObjectByName("Prop_StartLights_0");
     const acGantry = root.getObjectByName("startlight_SUB1");
@@ -1204,215 +1051,8 @@ export function buildCircuitScene(
     else if (ownLamps) startLightGroup.visible = false;
   };
 
-  // ============================================================================
-  // 5. COLLISION-VERIFIED TRACKSIDE STRUCTURES (In fallbackGroup for headless verification)
-  // ============================================================================
-  const isFootprintClearOfTrack = (
-    centerPos: THREE.Vector3,
-    quat: THREE.Quaternion,
-    halfSizeX: number,
-    halfSizeZ: number,
-    minCenterlineClearanceM = 30.0
-  ): boolean => {
-    const minSq = minCenterlineClearanceM * minCenterlineClearanceM;
-    const localPt = new THREE.Vector3();
-    for (let ix = -2; ix <= 2; ix++) {
-      for (let iz = -4; iz <= 4; iz++) {
-        localPt
-          .set((ix / 2) * halfSizeX, 0, (iz / 4) * halfSizeZ)
-          .applyQuaternion(quat)
-          .add(centerPos);
-        for (let sIdx = 0; sIdx < n; sIdx++) {
-          const sp = samples[sIdx].position;
-          const dx = localPt.x - sp.x;
-          const dz = localPt.z - sp.z;
-          if (dx * dx + dz * dz < minSq) {
-            return false;
-          }
-        }
-      }
-    }
-    return true;
-  };
-
-  const findSafeTracksidePosition = (
-    sample: TrackSamplePoint,
-    preferredSide: -1 | 1,
-    halfSizeX: number,
-    halfSizeZ: number,
-    startOffsetM = 44,
-    minCenterlineClearanceM = 30.0
-  ): { pos: THREE.Vector3; side: -1 | 1; quat: THREE.Quaternion } | null => {
-    const quat = getTrackFrameQuaternion(sample);
-    for (const side of [preferredSide, (preferredSide * -1) as -1 | 1]) {
-      for (let dist = startOffsetM; dist <= 220; dist += 6) {
-        const candidatePos = sample.position
-          .clone()
-          .addScaledVector(sample.binormal, side * dist)
-          .add(new THREE.Vector3(0, -0.5, 0));
-        if (
-          isFootprintClearOfTrack(
-            candidatePos,
-            quat,
-            halfSizeX,
-            halfSizeZ,
-            minCenterlineClearanceM
-          )
-        ) {
-          return { pos: candidatePos, side, quat };
-        }
-      }
-    }
-    return null;
-  };
-
-  const grandstandSeatTex = createGrandstandSeatsTexture();
-  grandstandSeatTex.repeat.set(6, 1);
-
-  const sectorGrandstands: {
-    sDist: number;
-    side: -1 | 1;
-    length: number;
-  }[] = [
-    { sDist: 140, side: -1, length: 68 },
-    { sDist: 140, side: 1, length: 68 },
-    { sDist: 455, side: -1, length: 64 },
-    { sDist: 1580, side: -1, length: 64 },
-    { sDist: 2940, side: 1, length: 68 },
-    { sDist: 4240, side: -1, length: 64 },
-    { sDist: 4920, side: -1, length: 68 },
-  ];
-
-  // The stands, camera towers and tents below are laid out for Rwanda (distances along its lap)
-  for (const sg of isRwanda ? sectorGrandstands : []) {
-    const sp = track.getSampleAtDistance(sg.sDist);
-    const safeGs = findSafeTracksidePosition(
-      sp,
-      sg.side,
-      14.0,
-      sg.length * 0.5 + 4.0,
-      48,
-      32.0
-    );
-    if (safeGs) {
-      const gGroup = buildSlopedGrandstandGroup(
-        16,
-        12,
-        sg.length,
-        safeGs.side,
-        grandstandSeatTex
-      );
-      gGroup.position.copy(safeGs.pos);
-      gGroup.quaternion.copy(safeGs.quat);
-      fallbackGroup.add(gGroup);
-    }
-  }
-
-  // Trackside TV Broadcast Camera Scaffold Towers
-  for (const camDist of isRwanda ? [410, 890, 1890, 3150, 4410] : []) {
-    const sp = track.getSampleAtDistance(camDist);
-    const safeCam = findSafeTracksidePosition(sp, -1, 4.0, 4.0, 38, 30.0);
-    if (safeCam) {
-      const camTower = new THREE.Mesh(
-        new THREE.BoxGeometry(2.4, 7.5, 2.4),
-        new THREE.MeshStandardMaterial({
-          color: 0x94a3b8,
-          metalness: 0.5,
-          roughness: 0.4,
-        })
-      );
-      camTower.userData.isTracksideStructure = true;
-      camTower.position.copy(safeCam.pos).add(new THREE.Vector3(0, 4.0, 0));
-      fallbackGroup.add(camTower);
-    }
-  }
-
-  // Lakeside White Peaked Hospitality Tents & Pavilions
-  const whiteTentMat = new THREE.MeshStandardMaterial({
-    color: 0xf8fafc,
-    roughness: 0.35,
-  });
-  const deckMat = new THREE.MeshStandardMaterial({
-    color: 0xe2e8f0,
-    roughness: 0.55,
-  });
-
-  // Placed at Bugesera distances: on another circuit they would wrap round to arbitrary spots
-  for (const sDist of isRwanda ? [4140, 4210, 4280, 4350, 4490, 4570, 4650] : []) {
-    const sp = track.getSampleAtDistance(sDist);
-    const safeTent = findSafeTracksidePosition(sp, -1, 12.0, 12.0, 46, 32.0);
-    if (!safeTent) continue;
-
-    const pavGroup = new THREE.Group();
-    pavGroup.userData.isTracksideStructure = true;
-    pavGroup.position
-      .copy(safeTent.pos)
-      .setY(Math.max(1.5, sp.position.y - 3.8));
-
-    const tentWalls = new THREE.Mesh(
-      new THREE.BoxGeometry(14, 3.6, 14),
-      deckMat
-    );
-    tentWalls.position.y = 1.8;
-    pavGroup.add(tentWalls);
-
-    const tentPeak = new THREE.Mesh(
-      new THREE.ConeGeometry(11.2, 5.2, 4),
-      whiteTentMat
-    );
-    tentPeak.rotation.y = Math.PI * 0.25;
-    tentPeak.position.y = 6.2;
-    pavGroup.add(tentPeak);
-    fallbackGroup.add(pavGroup);
-  }
-
-  // RwandAir Jetliner Banking in the Sky near Bugesera International Airport
-  const jetGroup = new THREE.Group();
-  const fuselageMat = new THREE.MeshStandardMaterial({
-    color: 0xf8fafc,
-    roughness: 0.25,
-    metalness: 0.3,
-  });
-  const tailBlueMat = new THREE.MeshStandardMaterial({
-    color: 0x00a3e0,
-    roughness: 0.3,
-  });
-  const fuselage = new THREE.Mesh(
-    new THREE.CylinderGeometry(1.8, 1.6, 38, 12),
-    fuselageMat
-  );
-  fuselage.rotation.x = Math.PI * 0.5;
-  jetGroup.add(fuselage);
-
-  const mainWings = new THREE.Mesh(
-    new THREE.BoxGeometry(36, 0.4, 5.2),
-    fuselageMat
-  );
-  mainWings.position.set(0, -0.2, 2);
-  jetGroup.add(mainWings);
-
-  const tailFin = new THREE.Mesh(
-    new THREE.BoxGeometry(0.4, 7.5, 5.5),
-    tailBlueMat
-  );
-  tailFin.position.set(0, 4.2, -16);
-  jetGroup.add(tailFin);
-
-  jetGroup.position.set(-420, 210, -380);
-  if (isRwanda) sceneGroup.add(jetGroup);
-
   const updateEnvironment = (elapsedSeconds: number) => {
     setSceneryTime(elapsedSeconds);
-    waterMesh.position.y = -18.0 + Math.sin(elapsedSeconds * 1.4) * 0.08;
-    // Gently circle the RwandAir jetliner across the sky near Bugesera Airport
-    const jetAngle = elapsedSeconds * 0.045;
-    jetGroup.position.set(
-      -250 + Math.cos(jetAngle) * 680,
-      205 + Math.sin(elapsedSeconds * 0.2) * 8,
-      -200 + Math.sin(jetAngle) * 680
-    );
-    jetGroup.rotation.y = -jetAngle;
-    jetGroup.rotation.z = 0.14;
   };
 
   const setGrooveRubber = (rubber: number) => {
@@ -1443,11 +1083,11 @@ export function buildCircuitScene(
     applySemaphoreMaterials(redCount);
   };
 
-  // Asynchronously load the authored Rwanda 2026 circuit (browser only)
+  // Asynchronously load the circuit's own model (browser only)
   let resolveTrackRoot: (root: THREE.Object3D) => void = () => {};
   const trackRoot = new Promise<THREE.Object3D>((resolve) => (resolveTrackRoot = resolve));
   loadTrackGlb(
-    track.meshUrl ?? "/tracks/rwanda/rwanda_2026.glb",
+    track.meshUrl,
     glbGroup,
     fallbackGroup,
     (root) => {
@@ -1456,21 +1096,19 @@ export function buildCircuitScene(
       resolveTrackRoot(root);
     },
     sheenMask,
-    isRwanda ? ["/tracks/rwanda/scenery/foliage.glb", "/tracks/rwanda/scenery/stands.glb", "/tracks/rwanda/scenery/props.glb"] : [],
-    isRwanda ? "/tracks/rwanda/scenery/textures/textures.json" : null,
+    track.sceneryUrls ?? [],
     track.roadMaterials ?? [],
     track.sceneryCuts ?? [],
     track.sceneryCutMaterials ?? []
   );
 
-  // The procedural stand-in and trackside structures are placed once
+  // The procedural stand-in is placed once
   freezeStaticTransforms(fallbackGroup);
 
   return {
     sceneGroup,
     racingLineMesh,
     seatRacingLine,
-    waterMesh,
     startLightMeshes,
     updateEnvironment,
     setGrooveRubber,
