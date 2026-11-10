@@ -118,9 +118,9 @@ Each circuit below is created by **Mitja Bonca** and used with the author's perm
 
 * `"Dunsfold Aerodrome"`: 3D AC Conversion v1.01 by **ACU** (2015, via [AssettoCorsa.club](https://assettocorsa.club/)) (`dunsfold`). No licence or permission on record, and a forum post says an AC version of this track was converted from another sim without permission, so it is kept out of public releases until that is cleared. Converted the same way as the Mitja Bonca circuits (`scripts/tracks/port_ac_track.py`), plus the mod's own surface names mapped to road and run-off, the barriers opened where the lap passes beside and across itself, and run-off over the other leg's tarmac counted as road.
 
-### Rwanda trackside trees (`public/tracks/rwanda/scenery/`)
+### Rwanda trackside trees (`public/tracks/rwanda/scenery/`, `public/tracks/rwanda_official/scenery/`)
 
-Each model below is licensed under [Creative Commons Attribution 4.0 (CC BY 4.0)](https://creativecommons.org/licenses/by/4.0/). Changes for the simulator (`scripts/rwanda-scenery.mjs`): transforms baked in, normal maps dropped, leaves toned darker and their normals turned towards the crown's shape, colour textures re-encoded to 1024 px WebP, and the models instanced at the circuit's tree and bush spots.
+Each model below is licensed under [Creative Commons Attribution 4.0 (CC BY 4.0)](https://creativecommons.org/licenses/by/4.0/). Changes for the simulator (`scripts/rwanda-scenery.mjs`): transforms baked in, normal maps dropped, leaves toned darker and their normals turned towards the crown's shape, colour textures re-encoded to 1024 px WebP, and the models instanced at the circuit's tree and bush spots. The official layout instances the same two models at its own tree spots (`scripts/rwanda-official/foliage.mjs`).
 
 * `"Acacia tree"` ([https://sketchfab.com/3d-models/acacia-tree-bb14c2bb679b4d0bb1c578a27e2ddabf](https://sketchfab.com/3d-models/acacia-tree-bb14c2bb679b4d0bb1c578a27e2ddabf)) by **evolveduk**; the bark is also simplified to 5 % of its triangles
 * `"Cliff Shrub For Terrain"` ([https://sketchfab.com/3d-models/cliff-shrub-for-terrain-7a0f2bf2982c4ff8bacc67856fdbfae2](https://sketchfab.com/3d-models/cliff-shrub-for-terrain-7a0f2bf2982c4ff8bacc67856fdbfae2)) by **Natural_Disbuster (lemedesign)**
@@ -142,6 +142,10 @@ Made for this project: `scripts/rwanda-textures.mjs` draws them to the size and 
 ### Rwanda trackside props (`public/tracks/rwanda/scenery/props.glb`)
 
 Made for this project: `scripts/rwanda-props.mjs` generates the jumbotrons, start lights, pit exit light, radio masts, paddock tents and TV camera platforms to the footprint and height of the ones in the circuit, which came from a third-party track pack and are no longer shown. The jumbotrons' circuit-map screen is the project's own texture, copied unchanged from the circuit.
+
+### Rwanda official layout (`public/tracks/rwanda_official/`)
+
+Made for this project: `scripts/rwanda-official/` builds the circuit in Blender from the published renders and figures of the official design. Its textures are drawn by the scripts, apart from the project's own barrier, fence, pit wall and gantry textures above. The ground's heights come from [Terrain Tiles](https://registry.opendata.aws/terrain-tiles/) (Mapzen, hosted by AWS; here SRTM data by NASA / USGS). Tree spots, ground colours and the lake's outline were read from Esri World Imagery and, around the venue, from the published aerial render; no imagery is in the files.
 
 ---
 

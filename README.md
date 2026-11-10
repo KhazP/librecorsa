@@ -82,7 +82,7 @@ Each car has its own cockpit, steering wheel and shift lights, plus a multi-laye
 ### Circuits
 | Circuit | Country | Length |
 | :-- | :-- | --: |
-| **Rwanda International Circuit** (fictional, default) | Rwanda | 5.30 km |
+| **Rwanda International Circuit** (fan concept layout, default / official layout) | Rwanda | 5.30 / 5.86 km |
 | Suzuka Circuit | Japan | 5.83 km |
 | Shanghai International Circuit | China | 5.44 km |
 | Mobility Resort Motegi | Japan | 4.78 km |
@@ -99,7 +99,7 @@ Each car has its own cockpit, steering wheel and shift lights, plus a multi-laye
 | Circuit de Spa-Francorchamps | Belgium | 6.99 km |
 | Dunsfold Aerodrome | United Kingdom | 2.88 km |
 
-The Rwanda circuit was built in Blender for this project: 14 corners, 52 m of elevation, 1,400 m above sea level. The Sketchfab circuits are CC BY 4.0 scans converted by `scripts/tracks/build_track.py`, and Chang, Okayama, Spielberg (Red Bull Ring), and Monaco are Assetto Corsa circuits by **Mitja Bonca** (used with permission), converted by `scripts/tracks/port_ac_track.py` with their 3D/2D trees, dynamic tyre grooves, skidmarks, starting lights and trackside semaphores, AI fast/pit lanes, kerbs, surface tables, section names, DRS zones, and TV cameras. Every circuit is meshopt-compressed (`npm run compress-tracks`) while keeping hidden physics meshes bit-exact, and has a lap-time-optimal racing line for each car class. Open the sim with `?colliders=1` to see the physics surfaces drawn over the circuit.
+The Rwanda circuit's fan concept layout was built in Blender for this project: 14 corners, 52 m of elevation, 1,400 m above sea level. Its official layout is my reading of the published design, traced on the designers' own aerial renders: 5.86 km, 17 corners, anticlockwise beside Lake Kidogo, 170 m climbed a lap, built on the site's real ground by `scripts/rwanda-official/`. The Sketchfab circuits are CC BY 4.0 scans converted by `scripts/tracks/build_track.py`, and Chang, Okayama, Spielberg (Red Bull Ring), and Monaco are Assetto Corsa circuits by **Mitja Bonca** (used with permission), converted by `scripts/tracks/port_ac_track.py` with their 3D/2D trees, dynamic tyre grooves, skidmarks, starting lights and trackside semaphores, AI fast/pit lanes, kerbs, surface tables, section names, DRS zones, and TV cameras. Every circuit is meshopt-compressed (`npm run compress-tracks`) while keeping hidden physics meshes bit-exact, and has a lap-time-optimal racing line for each car class. Open the sim with `?colliders=1` to see the physics surfaces drawn over the circuit.
 
 ### Racing
 - **Race the AI**: a 5-car field with a standing start behind the lights, traffic and side-by-side racing, and a results screen. The AI level runs from Rookie to Alien and can be changed from the pause menu. Each car class has a tuning file in [`public/ai`](public/ai), with per-circuit and per-section overrides. The AI learns braking points and apex speeds corner by corner. In the rain it fits intermediates or full wets and plans its corner speeds and braking on the wet grip.
