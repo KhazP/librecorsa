@@ -126,9 +126,11 @@ export class SimVisualFxManager {
     string,
     {
       rig: SimCarRig;
-      /** The car and look the rig was built for: a change of either rebuilds it */
+      /** The car and look the rig was built for: another car rebuilds it, the other look swaps to `spare` */
       vehicle: VehicleModelId | undefined;
       ghost: boolean;
+      /** The rig of the other look (solid / ghost), hidden, once the car has changed look */
+      spare?: SimCarRig;
       wheelRot: number;
       telemetry?: CarTelemetry;
       /** The AI car's wheels on its ground at the drawn pose (refreshed in place each frame) */
@@ -622,12 +624,22 @@ export class SimVisualFxManager {
       let entry = this.opponentCars.get(peer.peerId);
       // A car passing through the player's (an open race's fair-play rule) is drawn as the lap ghost is
       const ghost = Boolean(peer.ghost || peer.passThrough);
-      if (entry && (entry.vehicle !== peer.vehicle || entry.ghost !== ghost)) {
-        // The peer switched car, or became (or stopped being) a ghost: rebuild its rig with that car's materials
-        this.group.remove(entry.rig.root);
-        entry.rig.dispose();
-        disposeTree(entry.rig.root);
+      if (entry && entry.vehicle !== peer.vehicle) {
+        // The peer switched car: rebuild its rig with that car's materials
+        this.dropOpponentRigs(entry);
         entry = undefined;
+      } else if (entry && entry.ghost !== ghost) {
+        // Became (or stopped being) a ghost: swap to the rig of the other look and keep this one for the way back.
+        // In an open race a car changes look whenever it runs wide, so each car builds its second rig once at most
+        const other = entry.spare ?? this.createOpponentRig(peer);
+        if (!entry.spare) this.group.add(other.root);
+        entry.rig.root.visible = false;
+        entry.spare = entry.rig;
+        entry.rig = other;
+        other.root.visible = true;
+        entry.ghost = ghost;
+        entry.ghostMats = undefined;
+        entry.ghostCheckS = 0;
       }
       if (!entry) {
         entry = { rig: this.createOpponentRig(peer), vehicle: peer.vehicle, ghost, wheelRot: 0 };
@@ -718,16 +730,25 @@ export class SimVisualFxManager {
       }
     }
 
-    for (const [peerId, { rig }] of this.opponentCars.entries()) {
+    for (const [peerId, entry] of this.opponentCars.entries()) {
       if (!activeIds.has(peerId)) {
-        this.group.remove(rig.root);
-        // The rig's own dispose() only stops its updates: its canvases, geometry and materials (and the contact
-        // shadow) would otherwise stay on the GPU for every car that ever left
-        rig.dispose();
-        disposeTree(rig.root);
+        this.dropOpponentRigs(entry);
         this.opponentCars.delete(peerId);
       }
     }
+  }
+
+  /** Takes a car's rigs (the one drawn and the spare of its other look) out of the scene and off the GPU */
+  private dropOpponentRigs(entry: { rig: SimCarRig; spare?: SimCarRig }): void {
+    for (const rig of [entry.rig, entry.spare]) {
+      if (!rig) continue;
+      this.group.remove(rig.root);
+      // The rig's own dispose() only stops its updates: its canvases, geometry and materials (and the contact
+      // shadow) would otherwise stay on the GPU for every car that ever left
+      rig.dispose();
+      disposeTree(rig.root);
+    }
+    entry.spare = undefined;
   }
 }
 
