@@ -6,7 +6,14 @@
  */
 const STORAGE_KEY = "librecorsa.vf26Engine";
 
+/** The page's choice, handed to a place that cannot read it (the simulation worker has no address bar or storage) */
+let handedOver: boolean | null = null;
+export function setVf26OnRigidBody(rigid: boolean): void {
+  handedOver = rigid;
+}
+
 export function vf26OnRigidBody(): boolean {
+  if (handedOver !== null) return handedOver;
   if (typeof window === "undefined") return false;
   try {
     const fromUrl = new URLSearchParams(window.location.search).get("vf26engine");

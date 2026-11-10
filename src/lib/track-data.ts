@@ -229,6 +229,11 @@ export interface AiPlanCheck {
   checked: string;
 }
 
+/** The active circuit as it was given to `setActiveTrack`: what another thread needs to make it its own active circuit */
+export function getActiveTrackSource(): { id: string; raw: RawTrackJson } {
+  return { id: ACTIVE_TRACK_ID, raw: activeRaw };
+}
+
 /** Metadata of the active circuit */
 export function getActiveTrackMetadata(): RawTrackJson["metadata"] & TrackMetaExtras {
   return activeRaw.metadata as RawTrackJson["metadata"] & TrackMetaExtras;
