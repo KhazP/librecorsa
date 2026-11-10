@@ -149,6 +149,11 @@ export interface EngineData {
   inertia: number;
   /** Ignition cut held after the limiter trips (s) */
   limiterCutS: number;
+  /**
+   * Share of a change in air density that reaches the engine's torque (0.1: a tenth less air costs 1 %), against the
+   * density the car's data is given at (`aero.airDensity`). Unset: the engine makes its curve in any air
+   */
+  airDensitySensitivity?: number;
 }
 
 /**

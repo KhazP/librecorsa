@@ -2811,7 +2811,9 @@ export class VehiclePhysics {
     const turbo = eng.turbo;
     const boostShare =
       turbo && this.turbocharged ? Math.min(1, (1 + this.turboBoost) / (1 + turboSteadyBoost(turbo, rpm) * plate)) : 1;
-    const tCombustion = (plate * sparkShare * this.luts.power.evaluate(rpm) * engineMapTorqueScale * 1000) / omegaE;
+    // Thin air (altitude, heat) costs the engine a share of what it costs the wings
+    const airShare = eng.airDensitySensitivity ? 1 + eng.airDensitySensitivity * (this.airDensity / cfg.aero.airDensity - 1) : 1;
+    const tCombustion = (plate * sparkShare * this.luts.power.evaluate(rpm) * engineMapTorqueScale * airShare * 1000) / omegaE;
     let tIce = tCombustion * boostShare - (1 - plate) * this.luts.coast.evaluate(rpm) * mode.coastTorqueScale * this.engineBrakingScale;
     // Crank torque the lag costs, which the MGU-K may fill below
     let turboDeficit = tCombustion * (1 - boostShare);
