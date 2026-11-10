@@ -5,7 +5,8 @@
  * The reference numbers are what a quick driver achieved, so they are lower bounds of the car: sustained (1 s) lateral g
  * by speed, braking g by speed (95th percentile above 60 % pedal), full-throttle g by speed, engine rpm per m/s of rear
  * wheel speed by gear, the slip the ABS and TC allow, and the steering needed per curvature and per g.
- * Sea-level air (ρ 1.2) like Valencia, flat ground, no driver aids (the slip targets stand in for them).
+ * Sea-level air (ρ 1.2) like Valencia, flat ground, no driver aids (the slip targets stand in for them), and the car
+ * in the state those runs were driven in: tyres in their working window, part of a tank of fuel aboard.
  *
  * Shared by `compare-gt3-telemetry.ts` (prints the table) and `verify-gt3-telemetry.ts` (asserts it).
  */
@@ -60,11 +61,36 @@ const bodySlip = (c: VehiclePhysics) => {
 };
 
 /** Runs every reference manoeuvre on the given config (the GT3's own by default) */
-export function measureGt3(cfg = AMG_GT3_CONFIG): Gt3Measurement {
+/** The state the car is measured in: tyres at this carcass and tread temperature (°C; omitted: as they leave the blankets), this much fuel (kg) */
+export interface Gt3Conditions {
+  tyreTempC?: number;
+  fuelKg?: number;
+}
+
+/**
+ * The reference runs' state: tyres in the middle of the slick's 70–85 °C window, half the 50 kg the car starts a
+ * session on (three runs over 24 min). Measured from the blankets with an empty tank, the car reads 1–2 % less grip
+ * and 2 % more acceleration than it has on a lap
+ */
+export const GT3_LOG_CONDITIONS: Gt3Conditions = { tyreTempC: 77, fuelKg: 25 };
+
+export function measureGt3(cfg = AMG_GT3_CONFIG, conditions: Gt3Conditions = GT3_LOG_CONDITIONS): Gt3Measurement {
   const flat = new FlatGroundQuery(0);
   const makeCar = (v0 = 0) => {
     const c = new VehiclePhysics({ ground: flat, config: cfg, airDensity: RHO });
+    if (conditions.fuelKg) {
+      c.setFuelMass(conditions.fuelKg);
+      c.refreshStaticGeometry();
+    }
     c.reset(0, 0, 0, v0);
+    const warm = conditions.tyreTempC;
+    if (warm !== undefined) {
+      for (const w of c.wheels) {
+        w.surfaceTempC = w.coreTempC = warm;
+        for (let b = 0; b < 3; b++) w.bandTempsC[b] = w.bandCoreTempsC[b] = w.bandCarcassTempsC[b] = warm;
+        w.circumferentialTempsC.fill(warm);
+      }
+    }
     return c;
   };
 
