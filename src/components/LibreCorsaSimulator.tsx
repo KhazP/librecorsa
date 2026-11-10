@@ -72,6 +72,11 @@ const uploadLap = async (rec: LapRecording): Promise<SubmitResult> => {
 };
 // A lap on a circuit this build no longer lists keeps its id as its name (getTrackInfo would name it after another)
 const trackNameOf = (id: string) => TRACKS.find((t) => t.id === id)?.name ?? id;
+/** A circuit's name for the weekly challenge and its races, with the layout when the venue has more than one */
+const challengeTrackName = (id: string) => {
+  const t = getTrackInfo(id);
+  return TRACKS.some((o) => o.id !== t.id && o.name === t.name) ? `${t.name} · ${t.layout}` : t.name;
+};
 /** The snapshot store before the session exists: nothing to subscribe to */
 const noSubscribe = () => () => {};
 /** A race the host started before this circuit was loaded (or on another one): picked up once the scene has loaded */
@@ -1421,7 +1426,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
             boardOn
               ? {
                   challenge,
-                  trackName: getTrackInfo(challenge.trackId).name,
+                  trackName: challengeTrackName(challenge.trackId),
                   carTitle: carForVehicle(challenge.vehicle).title,
                   available: challengeAvailable,
                   loadBoard: loadChallengeBoard,
@@ -1435,7 +1440,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
           races={
             races.on && challengeAvailable
               ? {
-                  trackName: getTrackInfo(challenge.trackId).name,
+                  trackName: challengeTrackName(challenge.trackId),
                   carTitle: carForVehicle(challenge.vehicle).title,
                   slotS: races.slotS,
                   laps: challenge.raceLaps,
