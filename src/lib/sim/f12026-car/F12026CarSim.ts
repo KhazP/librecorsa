@@ -57,7 +57,7 @@ import { SLICK_TRAITS, wetGripFactor } from '../wet-tyres';
 import { tyreGaugePressureAtTemperature } from '../tyre-pressure';
 import { FULL_REALISM, type SimRealismFlags } from '../sim-realism';
 import { flyingExitSpeedMs, flyingStartPoint, type SimulatorCar, type SimulatorWheel, type TyreVisualState } from '../simulator-car';
-import { aiLineOffsetM, type BrakingGuide, brakingGuideFor, sampleProfile, type SpeedProfileCarModel } from '../speed-profile';
+import { aiLineOffsetM, type BrakingGuide, brakingGuideFor, circuitBrakingGuide, sampleProfile, type SpeedProfileCarModel } from '../speed-profile';
 import { evaluateDynamicBrakingUrgency } from '../track-occupancy';
 import {
   type CarPhysicsConfig,
@@ -169,7 +169,7 @@ export interface CarSimProfile {
   braking: BrakingEnvelope;
   /**
    * Planning model of this car for its braking line, braking urgency and HUD target speed (`brakingGuideFor`).
-   * Without one the car uses the circuit's (the VF26 profile baked into the track samples).
+   * Without one the car is shown the circuit's car's (`circuitBrakingGuide`).
    */
   speedProfile?: SpeedProfileCarModel;
   /** The racing line this car drives, plans on and draws (default: the F1 line) */
@@ -571,8 +571,8 @@ export class F12026CarSim implements SimulatorCar {
   /** Visual tyre state per corner (FR, FL, RR, RL), refreshed in `syncPose()`. Read-only for consumers. */
   public readonly tyreVisuals: [TyreVisualState, TyreVisualState, TyreVisualState, TyreVisualState];
   public readonly profile: CarSimProfile;
-  /** This car's braking guidance (null: the circuit's) */
-  public readonly brakingGuide: BrakingGuide | null;
+  /** This car's braking guidance (the circuit's car's when it has no planning model of its own) */
+  public readonly brakingGuide: BrakingGuide;
   /** The racing line this car follows (`CarSimProfile.racingLine`) */
   private readonly line: RacingLineId;
   public readonly wheelbaseM: number;
@@ -775,7 +775,7 @@ export class F12026CarSim implements SimulatorCar {
     this.line = profile.racingLine ?? 'f1';
     this.brakingGuide = profile.speedProfile
       ? brakingGuideFor(track.samples, profile.id, profile.speedProfile, this.line)
-      : null;
+      : circuitBrakingGuide(track.samples, this.line);
     this.config = structuredClone(profile.config);
     // Unloaded radii, used until the first step
     const geo = compoundData(this.config, this.config.compoundSlots.soft);
@@ -2268,7 +2268,7 @@ export class F12026CarSim implements SimulatorCar {
     t.gapToRacingLineM = this.lateral - aiLineOffsetM(sample, this.line);
     t.headingErrorRad = Math.atan2(_ez.x * bin.x + _ez.z * bin.z, _ez.x * tan.x + _ez.z * tan.z);
     const guide = this.brakingGuide;
-    t.targetCornerSpeedKmh = Math.round(guide ? sampleProfile(guide.speedMs, this.s, this.track.totalLengthM) * 3.6 : sample.optimalSpeedKmh);
+    t.targetCornerSpeedKmh = Math.round(sampleProfile(guide.speedMs, this.s, this.track.totalLengthM) * 3.6);
     t.brakingUrgency = evaluateDynamicBrakingUrgency(this.track, this.s, vx, (this.s + 25) % this.track.totalLengthM, guide);
     t.currentSector = sample.sector;
     t.currentTurnNumber = sample.turnNumber;

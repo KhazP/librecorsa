@@ -147,6 +147,8 @@ import { AxleSlipScratch } from './sim/tyre-slip';
 import { type AutoShiftSchedule, autoShift, createAutoShiftInput, ManualShiftOverride } from './sim/auto-gearbox';
 import {
   aiLineOffsetM,
+  type BrakingGuide,
+  circuitBrakingGuide,
   computeSpeedProfile,
   createVf26ProfileCarModel,
   sampleProfile,
@@ -335,6 +337,9 @@ export class F1Physics2026 {
   public readonly cgToFrontAxleM: number = VF26_CHASSIS.wheelbase * (1 - VF26_CHASSIS.frontWeightFraction);
   public readonly cgToRearAxleM: number = VF26_CHASSIS.wheelbase * VF26_CHASSIS.frontWeightFraction;
   public readonly cgHeightM: number = VF26_CG_HEIGHT_M;
+  /** What the player is shown: braking line, braking urgency and HUD target speed, with crests allowed for (the AI
+   * plans on its own profile) */
+  public readonly brakingGuide: BrakingGuide;
   public readonly maxSteerAngleRad: number =
     (VF26_CHASSIS.steering.lockDeg / VF26_CHASSIS.steering.ratio) * DEG2RAD;
   public yawInertiaKgM2 = 0;
@@ -609,6 +614,7 @@ export class F1Physics2026 {
 
   constructor(track: BuiltTrackData = getActiveTrackData()) {
     this.track = track;
+    this.brakingGuide = circuitBrakingGuide(track.samples);
 
     this.wings = createWingRuntimes();
 
@@ -3179,7 +3185,7 @@ export class F1Physics2026 {
     else if (W[0].surfaceType === 'runoff' || W[1].surfaceType === 'runoff') dominantSurface = 'runoff';
 
     const markerS = (this.sMeters + 25) % this.track.totalLengthM;
-    const brakingUrgency = evaluateDynamicBrakingUrgency(this.track, this.sMeters, this.vxMs, markerS);
+    const brakingUrgency = evaluateDynamicBrakingUrgency(this.track, this.sMeters, this.vxMs, markerS, this.brakingGuide);
 
     t.speedMs = this.vxMs;
     t.speedKmh = speedKmh;
@@ -3274,7 +3280,9 @@ export class F1Physics2026 {
     t.lateralOffsetM = this.lateralOffsetM;
     t.gapToRacingLineM = this.lastObservation.gapToRacingLineM;
     t.headingErrorRad = this.headingErrorRad;
-    t.targetCornerSpeedKmh = this.aiAutopilot ? this.aiTargetSpeedKmh : Math.round(sample.optimalSpeedKmh);
+    t.targetCornerSpeedKmh = this.aiAutopilot
+      ? this.aiTargetSpeedKmh
+      : Math.round(sampleProfile(this.brakingGuide.speedMs, this.sMeters, this.track.totalLengthM) * 3.6);
     t.brakingUrgency = brakingUrgency;
     t.currentSector = sample.sector;
     t.currentTurnNumber = sample.turnNumber;
