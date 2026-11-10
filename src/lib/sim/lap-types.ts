@@ -3,6 +3,7 @@
  * Plain JSON-friendly data so recordings can be stored (IndexedDB), exported as files and uploaded.
  */
 import type { AssistPreset, TireCompound, VehicleModelId } from "@/types/f1";
+import { vf26OnRigidBody } from "@/lib/cars/vf26-engine";
 import { SIM_REALISM_LEVELS, type SimRealism } from "./sim-realism";
 
 /**
@@ -10,6 +11,15 @@ import { SIM_REALISM_LEVELS, type SimRealism } from "./sim-realism";
  * recorded under another revision then go on another leaderboard.
  */
 export const PHYSICS_VERSION = 4;
+
+/**
+ * The revision a lap in this car is driven under. The VF26 on its opt-in rigid-body engine (`vf26-engine.ts`) is another
+ * car to drive, so its laps and ghosts get a revision of their own, away from the laps of the engine it ships on.
+ */
+const VF26_RIGID_BODY_OFFSET = 500;
+export function lapPhysicsVersion(vehicle?: VehicleModelId): number {
+  return vehicle === "vf26" && vf26OnRigidBody() ? PHYSICS_VERSION + VF26_RIGID_BODY_OFFSET : PHYSICS_VERSION;
+}
 
 /** What a lap was driven with. Laps are only ranked against laps driven under the same class (`lapBoardClass`) */
 export interface LapConditions {
@@ -34,13 +44,15 @@ export function lapConditionsNow(c: {
   compound: TireCompound;
   lineWaterMm: number;
   realism: SimRealism;
+  /** The car driven: decides the physics revision (`lapPhysicsVersion`) */
+  vehicle?: VehicleModelId;
 }): LapConditions {
   return {
     assists: c.assists,
     compound: c.compound,
     surface: c.lineWaterMm >= WET_LAP_WATER_MM ? "wet" : "dry",
     realism: c.realism,
-    physicsVersion: PHYSICS_VERSION,
+    physicsVersion: lapPhysicsVersion(c.vehicle),
   };
 }
 

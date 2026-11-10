@@ -4,7 +4,7 @@
  * Also validates untrusted recordings (imported files, downloads) before they are used.
  */
 import { isVehicleModelId, type AssistPreset, type CarTelemetry, type TireCompound, type VehicleModelId } from "@/types/f1";
-import { ASSIST_PRESETS, LAP_SAMPLE_STRIDE, PHYSICS_VERSION, parseLapConditions } from "./lap-types";
+import { ASSIST_PRESETS, LAP_SAMPLE_STRIDE, lapPhysicsVersion, parseLapConditions } from "./lap-types";
 import { SIM_REALISM_LEVELS, type SimRealism } from "./sim-realism";
 import type { CornerStat, LapConditions, LapRecording, LapSample, LapSummaryData } from "./lap-types";
 
@@ -299,7 +299,7 @@ export class LapRecorder {
       compound: c.compound,
       surface: c.surface === "wet" || prev?.surface === "wet" ? "wet" : "dry",
       realism: prev && real(prev.realism) < real(c.realism) ? prev.realism : c.realism,
-      physicsVersion: PHYSICS_VERSION,
+      physicsVersion: lapPhysicsVersion(this.vehicle),
     };
   }
 
