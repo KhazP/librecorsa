@@ -9,7 +9,9 @@
  * rack at the speed it is turned while a mouse or a stick stays limited to the speed of a driver's hands.
  */
 import { getActiveTrackData } from '../src/lib/track-data';
+import { F1Physics2026 } from '../src/lib/f1-physics-2026';
 import { F12026CarSim } from '../src/lib/sim/f12026-car/F12026CarSim';
+import type { SimulatorCar } from '../src/lib/sim/simulator-car';
 import { createVf26Sim } from '../src/lib/sim/f12026-car/Vf26Sim';
 import { createAmgGt3Sim } from '../src/lib/sim/gt3/AmgGt3Sim';
 import { createMtr496rSim } from '../src/lib/sim/proto/Mtr496rSim';
@@ -89,8 +91,8 @@ console.log('\n== Buttons and steering between frames');
   check('a paddle pressed in a frame too short for a tick shifts one gear', sim.telemetry.gear === gear + 1, `gear ${gear} → ${sim.telemetry.gear}`);
 
   // Steering: half lock asked for in one frame. A wheel's rim is there within the frame; a mouse takes hands' time
-  const steerAfter = (rim: boolean): number => {
-    const car = new F12026CarSim(pad, null);
+  const steerAfter = (rim: boolean, make: () => SimulatorCar = () => new F12026CarSim(pad, null)): number => {
+    const car = make();
     car.teleportToDistance(2000, 15);
     for (let t = 0; t < 0.5; t += 1 / 60) car.step(1 / 60, { analogSteer: 0, steerRim: rim });
     car.step(1 / 60, { analogSteer: 0.5, steerRim: rim });
@@ -100,6 +102,10 @@ console.log('\n== Buttons and steering between frames');
   const mouse = steerAfter(false);
   check("a steering wheel's rim reaches the rack within the frame", Math.abs(rim - 0.5) < 1e-9, `${rim.toFixed(3)} of lock`);
   check('a mouse or a stick turns the rack at the speed of hands', mouse > 0.01 && mouse < 0.2, `${mouse.toFixed(3)} of lock after one frame`);
+  // The VF26 on the engine it ships on: the same
+  const vfRim = steerAfter(true, () => new F1Physics2026(pad));
+  const vfMouse = steerAfter(false, () => new F1Physics2026(pad));
+  check("VF26: a steering wheel's rim reaches the rack within the frame, a mouse does not", Math.abs(vfRim - 0.5) < 0.01 && vfMouse > 0.01 && vfMouse < 0.2, `${vfRim.toFixed(3)} and ${vfMouse.toFixed(3)} of lock`);
 }
 
 if (failures.length) {

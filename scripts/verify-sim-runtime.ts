@@ -19,6 +19,7 @@ import { createSimHost, loopbackTransport } from '../src/lib/sim/runtime/sim-hos
 import type { SimulatorCar } from '../src/lib/sim/simulator-car';
 import { getActiveTrackData } from '../src/lib/track-data';
 import type { ControlInputs, VehicleModelId } from '../src/types/f1';
+import { loadGlbGeometry } from './lib/glb-geometry';
 
 const failures: string[] = [];
 const check = (name: string, ok: boolean, detail = '') => {
@@ -243,6 +244,38 @@ console.log('\n== Set-up, placement and hand-over (f12026-car)');
   r.host.endFrame(true);
   const sim2 = r.loop.runtime.simulatedCar!;
   check('after a car change the simulation runs the new car, deaf to the old one', sim2.vehicleId === 'amg-gt3' && sim2.tireCompound === 'medium' && r.host.remote, `${sim2.vehicleId}`);
+}
+
+console.log('\n== On the circuit\'s own colliders (f12026-car, autopilot)');
+{
+  // The track mesh loads on the page; its colliders cross to the simulation as data, and the car there drives on them
+  const root = loadGlbGeometry('public/tracks/rwanda/rwanda_2026.glb');
+  const r = rig('f12026-car');
+  r.car.attachTrackRoot?.(root);
+  r.car.resetToStartGrid(true);
+  r.car.aiAutopilot = true;
+  r.host.endFrame(true);
+  const sim = r.loop.runtime.simulatedCar!;
+  const direct = vehicleModelSpec('f12026-car').createSim(track, null);
+  setUp(direct);
+  direct.attachTrackRoot?.(root);
+  direct.resetToStartGrid(true);
+  direct.aiAutopilot = true;
+  let acc = 0;
+  for (let f = 0; f < 60 * 20; f++) {
+    frame(r, {});
+    for (acc += FRAME_S; acc >= SIM_TICK_S; acc -= SIM_TICK_S) direct.step(SIM_TICK_S, {});
+  }
+  check('the simulation\'s car drives on the colliders it was sent', sim.groundQuery != null && sim.groundQuery !== r.twin.groundQuery && r.host.remote);
+  const worst = worstDifference(poseOf(sim), poseOf(direct));
+  check('and ends where a car stepped directly on the mesh\'s colliders does', worst === 0, worst === 0 ? `${(sim.vxMs * 3.6).toFixed(0)} km/h, ${sim.sMeters.toFixed(0)} m` : `largest difference ${worst.toExponential(2)}`);
+  // The same car on the track samples' ground ends elsewhere: the colliders are what it drove on
+  const flat = vehicleModelSpec('f12026-car').createSim(track, null);
+  setUp(flat);
+  flat.resetToStartGrid(true);
+  flat.aiAutopilot = true;
+  for (let t = 0; t < 20 - 1e-9; t += SIM_TICK_S) flat.step(SIM_TICK_S, {});
+  check('(a car on the track samples\' ground ends elsewhere)', worstDifference(poseOf(flat), poseOf(direct)) > 1e-3);
 }
 
 if (failures.length) {
