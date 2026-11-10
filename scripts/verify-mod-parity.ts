@@ -178,6 +178,8 @@ const TYRE_KEYS: Record<string, (t: AxleTyre) => number | undefined> = {
   // Thousandths of the free-rolling drag per unit of slip over the peak slip
   ROLLING_RESISTANCE_SLIP: (t) => (t.model.rollingResistanceSlipGain ?? NaN) * 1000,
   PRESSURE_RR_GAIN: (t) => t.pressure.pressureRollingGain,
+  // The garage pressure, where the config takes the data's
+  PRESSURE_STATIC: (t) => t.pressure.setPsi,
 };
 
 interface TyreCheck {
@@ -472,7 +474,7 @@ section('Suzuki Liana', 'suzuki_liana', (mod) => {
 
   // The street tyre is the first compound: an older tyre data version, with a linear load law and no falloff
   const compound = compoundData(config, config.compoundSlots.soft);
-  const keys = ['WIDTH', 'RADIUS', 'RIM_RADIUS', 'DAMP', 'FRICTION_LIMIT_ANGLE', 'XMU', 'SPEED_SENSITIVITY', 'RELAXATION_LENGTH', 'ROLLING_RESISTANCE_0', 'ROLLING_RESISTANCE_1', 'ROLLING_RESISTANCE_SLIP', 'PRESSURE_RR_GAIN', 'CAMBER_GAIN', 'DCAMBER_0', 'DCAMBER_1', 'PRESSURE_IDEAL', 'PRESSURE_D_GAIN'];
+  const keys = ['WIDTH', 'RADIUS', 'RIM_RADIUS', 'DAMP', 'FRICTION_LIMIT_ANGLE', 'XMU', 'SPEED_SENSITIVITY', 'RELAXATION_LENGTH', 'ROLLING_RESISTANCE_0', 'ROLLING_RESISTANCE_1', 'ROLLING_RESISTANCE_SLIP', 'PRESSURE_RR_GAIN', 'CAMBER_GAIN', 'DCAMBER_0', 'DCAMBER_1', 'PRESSURE_IDEAL', 'PRESSURE_STATIC', 'PRESSURE_D_GAIN'];
   for (const axle of ['front', 'rear'] as const) {
     const AX = axle.toUpperCase();
     const tyre = axleTyre(compound, axle);
