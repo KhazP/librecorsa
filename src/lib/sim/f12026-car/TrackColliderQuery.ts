@@ -122,6 +122,31 @@ interface Layer {
   uvScaleM: number;
 }
 
+/**
+ * A ground collider's data as typed arrays and plain values: all a `TrackColliderQuery` is made of, with no reference
+ * to the track mesh it was built from. Structured-clonable, so a collider built where the mesh is loaded can be handed
+ * to a worker (`toBuffers` / `fromBuffers`); the typed arrays may be transferred rather than copied.
+ */
+export interface TrackColliderBuffers {
+  tris: Float32Array;
+  triLayer: Uint8Array;
+  triUVAt: Int32Array;
+  triUV: Float32Array;
+  triNormal: Float32Array;
+  triVertNormal: Float32Array;
+  layers: ColliderLayerData[];
+  minX: number;
+  minZ: number;
+  nx: number;
+  nz: number;
+  cellStart: Uint32Array;
+  cellTris: Uint32Array;
+  fitted: boolean;
+}
+
+/** A collider layer's surface tags (plain data) */
+export type ColliderLayerData = Layer;
+
 export interface ColliderLayerSource {
   object: THREE.Object3D;
   /** Overrides for the node's `userData` */
@@ -565,11 +590,54 @@ export class TrackColliderQuery implements GroundQuery {
    */
   private readonly fitted: boolean;
 
+  /** The collider rebuilt from its data (`toBuffers`), e.g. in a worker: no mesh, no rebuild, the same answers */
+  static fromBuffers(buffers: TrackColliderBuffers): TrackColliderQuery {
+    return new TrackColliderQuery(buffers);
+  }
+
+  /** This collider's data, sharing its arrays (not copies): see `TrackColliderBuffers` */
+  toBuffers(): TrackColliderBuffers {
+    return {
+      tris: this.tris,
+      triLayer: this.triLayer,
+      triUVAt: this.triUVAt,
+      triUV: this.triUV,
+      triNormal: this.triNormal,
+      triVertNormal: this.triVertNormal,
+      layers: this.layers,
+      minX: this.minX,
+      minZ: this.minZ,
+      nx: this.nx,
+      nz: this.nz,
+      cellStart: this.cellStart,
+      cellTris: this.cellTris,
+      fitted: this.fitted,
+    };
+  }
+
   constructor(
-    sources: ColliderLayerSource[],
+    sources: ColliderLayerSource[] | TrackColliderBuffers,
     table: SurfaceTable = DEFAULT_SURFACE_TABLE,
     options: { conformSurfaces?: boolean } = {}
   ) {
+    if (!Array.isArray(sources)) {
+      this.fitted = sources.fitted;
+      this.layers = sources.layers;
+      this.tris = sources.tris;
+      this.triLayer = sources.triLayer;
+      this.triUVAt = sources.triUVAt;
+      this.triUV = sources.triUV;
+      this.triNormal = sources.triNormal;
+      this.triVertNormal = sources.triVertNormal;
+      this.triangleCount = sources.tris.length / 9;
+      this.minX = sources.minX;
+      this.minZ = sources.minZ;
+      this.nx = sources.nx;
+      this.nz = sources.nz;
+      this.cellStart = sources.cellStart;
+      this.cellTris = sources.cellTris;
+      return;
+    }
     const fitted = options.conformSurfaces === true;
     this.fitted = fitted;
     this.layers = [];
@@ -1161,6 +1229,17 @@ export interface WallQuery {
  * 'wall'`, hidden in the render). Each vertical wall triangle becomes the segment between its two
  * vertices farthest apart in XZ; duplicates (the two halves of a quad) are dropped.
  */
+/** A wall collider's data (see `TrackColliderBuffers`): structured-clonable, its arrays transferable */
+export interface TrackWallBuffers {
+  segments: Float32Array;
+  minX: number;
+  minZ: number;
+  nx: number;
+  nz: number;
+  cellStart: Uint32Array;
+  cellSegs: Uint32Array;
+}
+
 export class TrackWallQuery implements WallQuery {
   public readonly segments: Float32Array;
   public readonly segmentCount: number;
@@ -1184,7 +1263,29 @@ export class TrackWallQuery implements WallQuery {
     return new TrackWallQuery(walls);
   }
 
-  constructor(objects: THREE.Object3D[]) {
+  /** The walls rebuilt from their data (`toBuffers`), e.g. in a worker */
+  static fromBuffers(buffers: TrackWallBuffers): TrackWallQuery {
+    return new TrackWallQuery(buffers);
+  }
+
+  /** The walls' data, sharing its arrays (not copies) */
+  toBuffers(): TrackWallBuffers {
+    return { segments: this.segments, minX: this.minX, minZ: this.minZ, nx: this.nx, nz: this.nz, cellStart: this.cellStart, cellSegs: this.cellSegs };
+  }
+
+  constructor(objects: THREE.Object3D[] | TrackWallBuffers) {
+    if (!Array.isArray(objects)) {
+      this.segments = objects.segments;
+      this.segmentCount = objects.segments.length / WALL_SEGMENT_STRIDE;
+      this.stamp = new Uint32Array(this.segmentCount);
+      this.minX = objects.minX;
+      this.minZ = objects.minZ;
+      this.nx = objects.nx;
+      this.nz = objects.nz;
+      this.cellStart = objects.cellStart;
+      this.cellSegs = objects.cellSegs;
+      return;
+    }
     const segs: number[] = [];
     const seen = new Set<string>();
     const p = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
