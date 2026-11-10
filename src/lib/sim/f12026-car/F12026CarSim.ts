@@ -423,8 +423,14 @@ function assistPresetDials(profile: CarSimProfile, preset: DriverAssistPreset): 
   return { tcLevel: isGt3 ? 12 : 8, tc2Level: 9, absLevel: isGt3 ? 11 : 9 };
 }
 
-/** Driver aids and the autopilot run on frame slices no longer than this (s) */
-const AID_SLICE_S = 1 / 240;
+/**
+ * The car's controllers (steering assist, traction control, ABS, the autopilot) run on a clock of their own: every
+ * second 2 ms physics step, 250 Hz, whatever the display's frame rate. They used to run on slices of the frame, so a
+ * 60 Hz and a 144 Hz display drove different cars.
+ */
+const CONTROL_DT_S = 2 * VehiclePhysics.FIXED_DT;
+/** A stall longer than this is not caught up (s): the car does not fast-forward after a hidden tab */
+const MAX_CATCH_UP_S = 0.25;
 /**
  * The autopilot's integrators are stale once it has been off this long (s). An AI car's hand-back after a knock
  * (its driver's reaction, under half a second) keeps them; a takeover after a real stint off resets them.
@@ -583,8 +589,13 @@ export class F12026CarSim implements SimulatorCar {
    * a 60 Hz display drew 8, 8, then 9 steps' worth of motion, a 14 cm lurch every third frame at 250 km/h (#65)
    */
   public get renderLeadS(): number {
-    return this.vehicle.unsteppedS;
+    return this.controlAccumulatorS + this.vehicle.unsteppedS;
   }
+  /** Simulated time since the car was built (s): whole control ticks, whatever frames it was stepped in */
+  public get simTimeS(): number {
+    return this.steppedTicks * CONTROL_DT_S;
+  }
+  private steppedTicks = 0;
   /** Road-wheel angle at full lock (rad), after the garage's steering ratio */
   public get maxSteerAngleRad(): number {
     return this.vehicle.maxSteerRad;
@@ -734,6 +745,13 @@ export class F12026CarSim implements SimulatorCar {
   private prevS = 0;
   private lastSector: 1 | 2 | 3 = 1;
   private simTimeMs = 0;
+  /** Frame time not yet run as control ticks (s, under one tick) */
+  private controlAccumulatorS = 0;
+  /** A paddle pressed in a frame that ran no tick waits for the next one */
+  private shiftUpPending = false;
+  private shiftDownPending = false;
+  /** The steering rim's position at the last frame (`ControlInputs.steerRim`), its move is spread over this frame's ticks */
+  private lastRimSteer: number | null = null;
   private lapStartMs = 0;
   private sectorStartMs = 0;
   private lapValid = true;
@@ -1399,25 +1417,34 @@ export class F12026CarSim implements SimulatorCar {
       analogSteer: raw.analogSteer,
       padSteer: raw.padSteer !== undefined ? THREE.MathUtils.clamp(raw.padSteer, -1, 1) : undefined,
       kbSteer: raw.kbSteer !== undefined ? Math.sign(raw.kbSteer) : undefined,
+      steerRim: raw.steerRim === true && Number.isFinite(raw.analogSteer),
       manualOverride: raw.manualOverride ?? false,
       toggleXMode: raw.toggleXMode ?? false,
       shiftUp: raw.shiftUp ?? false,
       shiftDown: raw.shiftDown ?? false,
     };
     if (inputs.toggleXMode && this.profile.hasDrs) this.drsPressPending = true;
+    // Whole control ticks of this frame; what is left over waits for the next (the pose is drawn carried forward by it)
+    this.controlAccumulatorS = Math.min(this.controlAccumulatorS + dtSeconds, MAX_CATCH_UP_S);
+    let ticks = 0;
+    for (let a = this.controlAccumulatorS; a >= CONTROL_DT_S; a -= CONTROL_DT_S) ticks++;
+    this.controlAccumulatorS -= ticks * CONTROL_DT_S;
+    const steppedS = ticks * CONTROL_DT_S;
+    this.steppedTicks += ticks;
+
     if (this.aiAutopilot) {
       // The autopilot takes the car after a stint off: its pedal and steer integrators start from zero, not from its
       // last drive. A brief hand-back (an AI driver's reaction to a knock) carries on from where it was.
       if (this.autopilotIdleS > AUTOPILOT_STALE_S) this.apPedal = this.apYawI = this.apThrottle = 0;
       this.autopilotIdleS = 0;
     } else {
-      this.autopilotIdleS += dtSeconds;
+      this.autopilotIdleS += steppedS;
     }
 
     // Push mode while the override is held / latched, or for the boost's 8 s
-    this.boostCooldownS = Math.max(0, this.boostCooldownS - dtSeconds);
-    if (this.boostRemainingS > 0) {
-      this.boostRemainingS = Math.max(0, this.boostRemainingS - dtSeconds);
+    this.boostCooldownS = Math.max(0, this.boostCooldownS - steppedS);
+    if (this.boostRemainingS > 0 && steppedS > 0) {
+      this.boostRemainingS = Math.max(0, this.boostRemainingS - steppedS);
       if (this.boostRemainingS === 0) this.boostCooldownS = BOOST_COOLDOWN_S;
     }
     // 2026: the override is Overtake Mode, earned in a race within 1 s at the detection point for the lap after it
@@ -1431,16 +1458,24 @@ export class F12026CarSim implements SimulatorCar {
     v.extraDeployJ = this.rules === 'straight-mode-2026' ? this.overtake.extraDeployJ(this.raceControl) : 0;
     const progressBefore = v.trackProgress;
 
-    const slices = Math.max(1, Math.ceil(dtSeconds / AID_SLICE_S - 1e-9));
-    const h = dtSeconds / slices;
-    // The paddles and the DRS button go to every slice of the frame: VehiclePhysics compares each slice with the one
-    // before, so a press is one edge per frame (released in the later slices, a held paddle was a new press each frame)
+    // The paddles and the DRS button go to every tick of the frame: VehiclePhysics compares each tick with the one
+    // before, so a press is one edge per frame (released in the later ticks, a held paddle was a new press each frame).
+    // A press in a frame too short for a tick is kept for the next.
+    this.shiftUpPending ||= inputs.shiftUp;
+    this.shiftDownPending ||= inputs.shiftDown;
     const drsPress = this.drsPressPending;
-    this.drsPressPending = false;
+    const shiftUp = this.shiftUpPending;
+    const shiftDown = this.shiftDownPending;
+    if (ticks > 0) this.drsPressPending = this.shiftUpPending = this.shiftDownPending = false;
     this.vehicle.autoShift = this.autoGearbox || this.aiAutopilot;
-    for (let k = 0; k < slices; k++) {
+    // A steering wheel's rim is read once a frame: its move since the last frame is spread over this frame's ticks, so
+    // the rack turns at the rim's own speed rather than in one jump per frame
+    const rim = inputs.steerRim && inputs.analogSteer !== undefined ? inputs.analogSteer : null;
+    const rimFrom = rim !== null && this.lastRimSteer !== null ? this.lastRimSteer : rim;
+    for (let k = 0; k < ticks; k++) {
+      if (rim !== null && rimFrom !== null) inputs.analogSteer = rimFrom + ((rim - rimFrom) * (k + 1)) / ticks;
       const cmd: { throttle: number; ignitionCut: number; brake: number; brakeWheelScale?: readonly [number, number, number, number]; steer: number; drs: boolean } =
-        this.aiAutopilot ? this.autopilot(h) : this.driverCommand(inputs, h);
+        this.aiAutopilot ? this.autopilot(CONTROL_DT_S) : this.driverCommand(inputs, CONTROL_DT_S);
       const vin: VehicleInputs = {
         throttle: cmd.throttle,
         ignitionCut: cmd.ignitionCut,
@@ -1448,36 +1483,38 @@ export class F12026CarSim implements SimulatorCar {
         brakeWheelScale: cmd.brakeWheelScale,
         steer: cmd.steer,
         drs: drsPress || cmd.drs,
-        shiftUp: inputs.shiftUp,
-        shiftDown: inputs.shiftDown,
+        shiftUp,
+        shiftDown,
       };
       // A car whose state has blown up hands back a non-finite command: the rack must not keep it past the rescue
       this.steerCmd = Number.isFinite(cmd.steer) ? cmd.steer : 0;
       _v.copy(v.velocity);
-      v.step(h, vin);
-      this.updateBrakes(h);
-      // Divided by the time the fixed steps actually covered: a slice runs a whole number of 2 ms steps, not h
+      v.step(CONTROL_DT_S, vin);
+      this.updateBrakes(CONTROL_DT_S);
+      // Divided by the time the fixed steps actually covered
       const stepS = v.lastStepTimeS;
       if (stepS > 0) {
         const dvx = _v.subVectors(v.velocity, _v);
         this.lastAxMs2 = dvx.dot(_ez.set(0, 0, 1).applyQuaternion(v.quaternion)) / stepS;
         this.lastAyMs2 = dvx.dot(_ex.set(1, 0, 0).applyQuaternion(v.quaternion)) / stepS;
       }
+      // Fuel burnt this tick: the car gets lighter tick by tick, not frame by frame
+      if (v.telemetry.throttle > 0.01 && this.fuelKg > 0 && this.realism.fuelUse) {
+        const mapFlowMult = v.engineMap === 1 ? 1.04 : v.engineMap === 2 ? 1.0 : v.engineMap === 3 ? 0.96 : v.engineMap === 4 ? 0.90 : 0.85;
+        const baseFlowKgS = this.profile.fuelFlowKgS ?? (this.profile.id === 'amg-gt3' ? 0.036 : 0.0278);
+        this.fuelKg = Math.max(0, this.fuelKg - baseFlowKgS * mapFlowMult * v.telemetry.throttle * CONTROL_DT_S);
+        v.setFuelMass(this.fuelKg);
+      }
     }
+    if (ticks > 0 || rim === null) this.lastRimSteer = rim;
     if (this.rules === 'straight-mode-2026' && this.profile.hasDrs) {
       this.overtake.observe(progressBefore, v.trackProgress, RWANDA_DRS_ZONES, this.raceControl);
     }
-    if (v.telemetry.throttle > 0.01 && this.fuelKg > 0 && this.realism.fuelUse) {
-      const mapFlowMult = v.engineMap === 1 ? 1.04 : v.engineMap === 2 ? 1.0 : v.engineMap === 3 ? 0.96 : v.engineMap === 4 ? 0.90 : 0.85;
-      const baseFlowKgS = this.profile.fuelFlowKgS ?? (this.profile.id === 'amg-gt3' ? 0.036 : 0.0278);
-      this.fuelKg = Math.max(0, this.fuelKg - baseFlowKgS * mapFlowMult * v.telemetry.throttle * dtSeconds);
-      v.setFuelMass(this.fuelKg);
-    }
-    this.simTimeMs += dtSeconds * 1000;
+    this.simTimeMs += steppedS * 1000;
     if (this.recoverIfLost()) return this.telemetry;
-    if (this.aiAutopilot && this.aiSelfRecovery) this.recoverIfStuck(dtSeconds);
+    if (this.aiAutopilot && this.aiSelfRecovery) this.recoverIfStuck(steppedS);
     else this.stuckS = 0;
-    this.wheelRotationRad = (this.wheelRotationRad + 0.5 * (v.wheels[2].omega + v.wheels[3].omega) * dtSeconds) % (Math.PI * 2);
+    this.wheelRotationRad = (this.wheelRotationRad + 0.5 * (v.wheels[2].omega + v.wheels[3].omega) * steppedS) % (Math.PI * 2);
     this.syncPose();
     this.updateTiming();
     this.updateTelemetry(inputs);
@@ -1497,8 +1534,12 @@ export class F12026CarSim implements SimulatorCar {
     h: number
   ): { throttle: number; ignitionCut: number; brake: number; brakeWheelScale?: readonly [number, number, number, number]; steer: number; drs: boolean } {
     const want = THREE.MathUtils.clamp(this.steeringAssist.steer(inputs, this.gamepadAssistEnabled, this.steeringAssistState, h), -1, 1);
-    // The rack turns no faster than hands turn a wheel (900°/s at the rim, as the VF26's): a stick flick or a phone tilt
-    // otherwise reached the tyres as an instant step, which snaps a car at speed
+    // A steering wheel's rim goes to the rack as the driver's hands turn it, however fast the catch
+    if (inputs.steerRim && this.steeringAssist.source === 'direct') {
+      return { ...this.electronicAids(inputs.throttle, inputs.brake, h, this), steer: want, drs: false };
+    }
+    // Any other device: the rack turns no faster than hands turn a wheel (900°/s at the rim, as the VF26's): a stick
+    // flick, a mouse or a phone tilt otherwise reached the tyres as an instant step, which snaps a car at speed
     const maxStep = (DRIVER_RIM_SPEED_DEG_S / (this.config.chassis.maxRoadWheelDeg * RIM_PER_ROAD_WHEEL)) * h;
     const steer = this.steerCmd + THREE.MathUtils.clamp(want - this.steerCmd, -maxStep, maxStep);
     return { ...this.electronicAids(inputs.throttle, inputs.brake, h, this), steer, drs: false };
@@ -1854,7 +1895,7 @@ export class F12026CarSim implements SimulatorCar {
       const b = p.sample.binormal;
       const leftOf = (b.x * _ex.x + b.z * _ex.z) / (Math.hypot(b.x, b.z) || 1);
       const errLeft = (nNow - p.lateralOffset) * leftOf;
-      this.trackI = THREE.MathUtils.clamp(this.trackI + TRACK_KI * errLeft * AID_SLICE_S, -TRACK_I_MAX_MS2, TRACK_I_MAX_MS2);
+      this.trackI = THREE.MathUtils.clamp(this.trackI + TRACK_KI * errLeft * CONTROL_DT_S, -TRACK_I_MAX_MS2, TRACK_I_MAX_MS2);
       kappa += this.trackI / Math.max(100, speed * speed);
     }
     return kappa;
@@ -1994,6 +2035,8 @@ export class F12026CarSim implements SimulatorCar {
   private afterPlacement(): void {
     this.steeringAssist.reset();
     this.steerCmd = 0;
+    this.lastRimSteer = null;
+    this.shiftUpPending = this.shiftDownPending = false;
     this.tcCut = this.absCut = 1;
     this.absWheelCut.fill(1);
     for (let i = 0; i < 4; i++) this.prevWheelOmega[i] = this.vehicle.wheels[i].omega;

@@ -10,7 +10,7 @@ import { SIM_REALISM_LEVELS, type SimRealism } from "./sim-realism";
  * Revision of the vehicle physics. Bump it whenever a physics change makes earlier lap times incomparable: laps
  * recorded under another revision then go on another leaderboard.
  */
-export const PHYSICS_VERSION = 4;
+export const PHYSICS_VERSION = 5;
 
 /**
  * The revision a lap in this car is driven under. The VF26 on its opt-in rigid-body engine (`vf26-engine.ts`) is another
