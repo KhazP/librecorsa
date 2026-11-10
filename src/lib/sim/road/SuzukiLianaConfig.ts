@@ -80,6 +80,8 @@ const ENGINE = {
   inertia: 0.182,
   // 40 Hz limiter: the cut lasts one cycle [spec LIMITER_HZ]
   limiterCutS: 0.025,
+  // A tenth of a change in air density reaches the torque [spec ALTITUDE_SENSITIVITY]
+  airDensitySensitivity: 0.1,
 };
 
 const NONE: LutPoints = [

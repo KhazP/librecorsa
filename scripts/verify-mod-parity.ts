@@ -87,7 +87,7 @@ const NOT_CARRIED: [RegExp, string][] = [
   [/^drivetrain\.ini \[GEARBOX\] (VALID_SHIFT_RPM_WINDOW|CONTROLS_WINDOW_GAIN)$/, 'H-pattern shift rules: not modelled'],
   [/^drivetrain\.ini \[(DOWNSHIFT_PROFILE|AUTOBLIP)\] POINT_/, 'the clutch is out from the paddle and the blip holds until the revs are there: the other points of the profiles are not used'],
   [/^drivetrain\.ini \[(AUTOCLUTCH|DOWNSHIFT_PROFILE|AUTOBLIP|DOWNSHIFT_PROTECTION|AUTO_SHIFTER|TRACTION)\] /, "clutch and auto-shift rules: this sim's own gearbox logic"],
-  [/^engine\.ini \[ENGINE_DATA\] (ALTITUDE_SENSITIVITY|AMBIENT_EFFECT)$/, "air density acts on the engine through this sim's own weather"],
+  [/^engine\.ini \[ENGINE_DATA\] (ALTITUDE_SENSITIVITY|AMBIENT_EFFECT)$/, 'air density against engine torque: carried only where the car is not fitted to measurements made in one air'],
   [/^engine\.ini \[(COAST_REF|COAST_DATA|COAST_CURVE)\] /, 'the overrun torque is the reference line (COAST_REF) alone'],
   [/^brakes\.ini \[TEMPS_(FRONT|REAR)\] /, "brake heat: this sim's own disc model by material"],
   [/^brakes\.ini \[DATA\] (HANDBRAKE_TORQUE|ADJUST_STEP)$/, 'no handbrake or bias adjuster on this car'],
@@ -468,6 +468,7 @@ section('Suzuki Liana', 'suzuki_liana', (mod) => {
   // virtual upper arm is this model's
   checkSuspension('Liana', mod, config, { hardpoints: { front: [2, 3, 4, 5, 6, 7], rear: ALL }, strutFront: true });
   checkDriveline('Liana', mod, config);
+  eq('Liana ALTITUDE_SENSITIVITY', config.engine.airDensitySensitivity ?? NaN, mod.num('engine.ini', 'ENGINE_DATA', 'ALTITUDE_SENSITIVITY'));
   const edl = (key: string) => mod.num('electronics.ini', 'EDL', key);
   const lock = config.differential.brakeLock;
   eq('Liana EDL BRAKE_TORQUE_POWER', lock?.power.torqueNm ?? NaN, edl('BRAKE_TORQUE_POWER'));
