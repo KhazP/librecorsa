@@ -1922,6 +1922,11 @@ export class VehiclePhysics {
     const down = g > 0 && g < this.gear;
     if (g > this.gear) this.sinceUpshiftS = 0;
     if (down) this.sinceDownshiftS = 0;
+    // A managed up-shift: the engine meets the new gear at the speed the driven wheels turn at, so the closed clutch
+    // does not spin them up with the engine's inertia. The wheels' speed, not the road's: a spinning axle keeps its spin
+    if (gb.upshiftCutS && this.gear > 0 && g > this.gear && this.clutchEngagement > 0.5) {
+      this.engineOmega *= gb.ratios[g - 1] / gb.ratios[this.gear - 1];
+    }
     this.gear = g;
     this.shiftTimer = down ? (gb.downshiftTimeS ?? gb.shiftTimeS) : gb.shiftTimeS;
     // The ECU blips the engine up to the new gear's road speed on a downshift, so the closed clutch does not
@@ -2774,7 +2779,9 @@ export class VehiclePhysics {
     }
     plate = Math.max(this.icePlate, THREE.MathUtils.clamp((eng.idleRpm + 200 - rpm) / 800, 0, 0.15));
     if (this.limiterTimer > 0) plate = 0;
-    const sparkShare = inp.ignitionCut ?? 1;
+    // A managed up-shift takes the drive away while it lasts: the spark, and with it the MGU-K's deployment below
+    const shiftCut = gb.upshiftCutS !== undefined && this.sinceUpshiftS < gb.upshiftCutS;
+    const sparkShare = shiftCut ? 0 : (inp.ignitionCut ?? 1);
     // Turbo lag: the curve is the torque with the boost this plate makes in steady state; while the rotor trails it the
     // torque is (1 + boost made) / (1 + boost asked for) of that, as torque ∝ 1 + boost. A rotor still spinning faster
     // than the demand gives no more than the demand (the wastegate and the throttle hold the plenum to it)

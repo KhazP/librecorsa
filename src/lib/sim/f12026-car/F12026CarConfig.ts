@@ -233,6 +233,12 @@ export interface GearBoxData {
   /** The same for a down-shift, where it differs (s) */
   downshiftTimeS?: number;
   shiftTorqueFraction: number;
+  /**
+   * An up-shift managed by the control unit: for this long (s) it takes the drive away (spark and MGU-K), and the engine
+   * meets the new gear at the wheels' speed, its excess taken up in the shift. Without it the closed clutch hands the
+   * engine's excess to the driven wheels, which spins them up by the ratio step
+   */
+  upshiftCutS?: number;
   efficiency: number;
   gears: {
     redline_rpm: number;
