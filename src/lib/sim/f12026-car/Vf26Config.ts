@@ -7,6 +7,10 @@
  *  - [data]     a constant of `vf26-data.ts` (its own tags say where each comes from)
  *  - [derived]  computed from those
  *  - [est]      what this engine needs and that file does not have (as the f12026-car's unless noted)
+ *
+ * `buildVf26Config` takes overrides of that data and applies them before anything is derived from it (roll centres
+ * from the tyre radius, the ground-height tables from the ride heights, the tyre's spring from its rate), so a car
+ * tuned away from the data (`Vf26Tune.ts`) stays consistent with itself. Without overrides it is the data's car.
  */
 import { Lut, type LutPoints } from '../lut';
 import { VF26_CG_HEIGHT_M } from '../vf26-aero';
@@ -40,6 +44,19 @@ import {
 } from './F12026CarConfig';
 
 const at = (points: LutPoints, x: number) => new Lut(points).evaluate(x);
+
+/** Values to use in place of the data's. Everything derived from them follows */
+export interface Vf26Overrides {
+  front?: Partial<Vf26AxleSuspension>;
+  rear?: Partial<Vf26AxleSuspension>;
+  /** A compound's tyre on an axle, from the data's */
+  tyre?: (spec: Vf26TyreSpec, axle: 'front' | 'rear') => Vf26TyreSpec;
+  /** Crank and flywheel inertia (kg·m²) */
+  engineInertia?: number;
+  /** Overrun torque against the data's */
+  coastScale?: number;
+  brakeTorqueNm?: number;
+}
 
 // ---------------------------------------------------------------------------
 // Power unit
@@ -185,37 +202,37 @@ function axle(a: Vf26AxleSuspension, tyreRadius: number, link: [[number, number,
   };
 }
 
-const F = VF26_CHASSIS.front;
-const R = VF26_CHASSIS.rear;
-const SUSPENSIONS: SuspensionsData = {
-  front: axle(F, VF26_TYRES.soft.front.radius, [
-    [F.hardpoints[0][0], F.hardpoints[0][1], 0.08],
-    [F.hardpoints[4][0], F.hardpoints[4][1], 0.08],
-  ]),
-  rear: axle(R, VF26_TYRES.soft.rear.radius, [
-    [R.hardpoints[1][0], R.hardpoints[1][1], -0.06],
-    [R.hardpoints[4][0], R.hardpoints[4][1], -0.06],
-  ]),
-  dampers_controller: {
-    front: {
-      base: damper(F.damper.bumpSlow, F.damper.bumpFast, F.damper.reboundSlow, F.damper.reboundFast),
-      // One rate for the heave damper [data heaveDamping]
-      heave: damper(F.heaveDamping, F.heaveDamping, F.heaveDamping, F.heaveDamping),
-      roll: NO_DAMPER,
-      pitch: NO_DAMPER,
-      fastThresholdMs: F.damper.bumpThreshold,
-      fastReboundThresholdMs: F.damper.reboundThreshold,
+function suspensionData(F: Vf26AxleSuspension, R: Vf26AxleSuspension, frontRadius: number, rearRadius: number): SuspensionsData {
+  return {
+    front: axle(F, frontRadius, [
+      [F.hardpoints[0][0], F.hardpoints[0][1], 0.08],
+      [F.hardpoints[4][0], F.hardpoints[4][1], 0.08],
+    ]),
+    rear: axle(R, rearRadius, [
+      [R.hardpoints[1][0], R.hardpoints[1][1], -0.06],
+      [R.hardpoints[4][0], R.hardpoints[4][1], -0.06],
+    ]),
+    dampers_controller: {
+      front: {
+        base: damper(F.damper.bumpSlow, F.damper.bumpFast, F.damper.reboundSlow, F.damper.reboundFast),
+        // One rate for the heave damper [data heaveDamping]
+        heave: damper(F.heaveDamping, F.heaveDamping, F.heaveDamping, F.heaveDamping),
+        roll: NO_DAMPER,
+        pitch: NO_DAMPER,
+        fastThresholdMs: F.damper.bumpThreshold,
+        fastReboundThresholdMs: F.damper.reboundThreshold,
+      },
+      rear: {
+        base: damper(R.damper.bumpSlow, R.damper.bumpFast, R.damper.reboundSlow, R.damper.reboundFast),
+        heave: damper(R.heaveDamping, R.heaveDamping, R.heaveDamping, R.heaveDamping),
+        roll: NO_DAMPER,
+        pitch: NO_DAMPER,
+        fastThresholdMs: R.damper.bumpThreshold,
+        fastReboundThresholdMs: R.damper.reboundThreshold,
+      },
     },
-    rear: {
-      base: damper(R.damper.bumpSlow, R.damper.bumpFast, R.damper.reboundSlow, R.damper.reboundFast),
-      heave: damper(R.heaveDamping, R.heaveDamping, R.heaveDamping, R.heaveDamping),
-      roll: NO_DAMPER,
-      pitch: NO_DAMPER,
-      fastThresholdMs: R.damper.bumpThreshold,
-      fastReboundThresholdMs: R.damper.reboundThreshold,
-    },
-  },
-};
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Aero
@@ -240,125 +257,128 @@ const flap = (w: Vf26WingSpec) => ({
   cdMult: Number((at(w.aoaCd, w.xModeAngleDeg) / at(w.aoaCd, w.angleDeg)).toFixed(4)),
 });
 
-/** The floor's reference plane below the CG: the floor elements' own height [data] */
-const FLOOR_Y = wing('FLOOR_FL').position[1];
-/** Static ride heights [data]; the body's static nose-down pitch they give */
-const STATIC_PITCH = (R.staticRideHeight - F.staticRideHeight) / VF26_CHASSIS.wheelbase;
-const CG_TO_FRONT = VF26_CHASSIS.wheelbase * (1 - VF26_CHASSIS.frontWeightFraction);
-const CG_TO_REAR = VF26_CHASSIS.wheelbase * VF26_CHASSIS.frontWeightFraction;
-/**
- * The data's ground-height tables are read at each element's own height above the road. This engine reads them at
- * the floor's height at an axle (or the mean), so each table moves by the element's height over that at static ride:
- * its own height over the floor plane, less the pitch across its distance from the axle
- */
-const overFront = (w: Vf26WingSpec) => w.position[1] - FLOOR_Y - (w.position[2] - CG_TO_FRONT) * STATIC_PITCH;
-const overRear = (w: Vf26WingSpec) => w.position[1] - FLOOR_Y - (w.position[2] + CG_TO_REAR) * STATIC_PITCH;
+/** The aero elements of the data with their ground-height tables laid on this engine's reference heights */
+function aeroData(F: Vf26AxleSuspension, R: Vf26AxleSuspension): AeroData {
+  /** The floor's reference plane below the CG: the floor elements' own height [data] */
+  const FLOOR_Y = wing('FLOOR_FL').position[1];
+  /** Static ride heights [data]; the body's static nose-down pitch they give */
+  const STATIC_PITCH = (R.staticRideHeight - F.staticRideHeight) / VF26_CHASSIS.wheelbase;
+  const CG_TO_FRONT = VF26_CHASSIS.wheelbase * (1 - VF26_CHASSIS.frontWeightFraction);
+  const CG_TO_REAR = VF26_CHASSIS.wheelbase * VF26_CHASSIS.frontWeightFraction;
+  /**
+   * The data's ground-height tables are read at each element's own height above the road. This engine reads them at
+   * the floor's height at an axle (or the mean), so each table moves by the element's height over that at static ride:
+   * its own height over the floor plane, less the pitch across its distance from the axle
+   */
+  const overFront = (w: Vf26WingSpec) => w.position[1] - FLOOR_Y - (w.position[2] - CG_TO_FRONT) * STATIC_PITCH;
+  const overRear = (w: Vf26WingSpec) => w.position[1] - FLOOR_Y - (w.position[2] + CG_TO_REAR) * STATIC_PITCH;
 
-const FRONT = wing('FRONT_L');
-const REAR = wing('REAR');
-const DRS = wing('DRS');
-const DIFFUSER = wing('DIFFUSER_RL');
-const FLOORS = VF26_WINGS.filter((w) => w.name.startsWith('FLOOR'));
-const BODY = wing('BODY');
-const area = (w: Vf26WingSpec) => w.chord * w.span;
-const floorArea = FLOORS.reduce((a, w) => a + area(w), 0);
-/** The four floor strips as one element: their areas, each with its own gain [derived] */
-const floorClGain = FLOORS.reduce((a, w) => a + area(w) * w.clGain, 0) / floorArea;
+  const FRONT = wing('FRONT_L');
+  const REAR = wing('REAR');
+  const DRS = wing('DRS');
+  const DIFFUSER = wing('DIFFUSER_RL');
+  const FLOORS = VF26_WINGS.filter((w) => w.name.startsWith('FLOOR'));
+  const BODY = wing('BODY');
+  const area = (w: Vf26WingSpec) => w.chord * w.span;
+  const floorArea = FLOORS.reduce((a, w) => a + area(w), 0);
+  /** The four floor strips as one element: their areas, each with its own gain [derived] */
+  const floorClGain = FLOORS.reduce((a, w) => a + area(w) * w.clGain, 0) / floorArea;
 
-const WINGS: WingData[] = [
-  {
-    // The two front wing halves [data FRONT_L / FRONT_R]
-    name: 'FRONT_WING',
-    area: 2 * area(FRONT),
-    positionZ: FRONT.position[2],
-    angleDeg: FRONT.angleDeg,
-    heightRef: 'front',
-    lutAOA_CL: scale(FRONT.aoaCl, FRONT.clGain),
-    lutAOA_CD: scale(FRONT.aoaCd, FRONT.cdGain),
-    lutGH_CL_mult: shiftX(FRONT.ghCl ?? [[0, 1]], -overFront(FRONT)),
-    lutGH_CD_mult: shiftX(FRONT.ghCd ?? [[0, 1]], -overFront(FRONT)),
-    drs: flap(FRONT),
-    lutYaw_CL_mult: yawTable(FRONT.yawClGain),
-  },
-  {
-    // The four floor strips [data FLOOR_*]: the data flies them at a fixed 3.5°, not at the body's rake
-    name: 'VENTURI_FLOOR',
-    area: floorArea,
-    positionZ: FLOORS[0].position[2],
-    angleDeg: FLOORS[0].angleDeg,
-    heightRef: 'mean',
-    lutAOA_CL: flat(at(FLOORS[0].aoaCl, FLOORS[0].angleDeg) * floorClGain),
-    lutAOA_CD: flat(at(FLOORS[0].aoaCd, FLOORS[0].angleDeg) * FLOORS[0].cdGain),
-    lutGH_CL_mult: FLOORS[0].ghCl ?? [[0, 1]],
-    lutGH_CD_mult: FLOORS[0].ghCd ?? [[0, 1]],
-    lutYaw_CL_mult: yawTable(FLOORS[0].yawClGain),
-  },
-  {
-    // The two diffuser halves [data DIFFUSER_RL / RR], at their own fixed angle
-    name: 'VENTURI_FLOOR',
-    area: 2 * area(DIFFUSER),
-    positionZ: DIFFUSER.position[2],
-    angleDeg: DIFFUSER.angleDeg,
-    heightRef: 'rear',
-    lutAOA_CL: flat(at(DIFFUSER.aoaCl, DIFFUSER.angleDeg) * DIFFUSER.clGain),
-    lutAOA_CD: flat(at(DIFFUSER.aoaCd, DIFFUSER.angleDeg) * DIFFUSER.cdGain),
-    lutGH_CL_mult: shiftX(DIFFUSER.ghCl ?? [[0, 1]], -overRear(DIFFUSER)),
-    lutGH_CD_mult: shiftX(DIFFUSER.ghCd ?? [[0, 1]], -overRear(DIFFUSER)),
-    lutYaw_CL_mult: yawTable(DIFFUSER.yawClGain),
-  },
-  {
-    // The rear wing's main plane [data REAR]
-    name: 'REAR_WING',
-    area: area(REAR),
-    positionZ: REAR.position[2],
-    angleDeg: REAR.angleDeg,
-    heightRef: 'rear',
-    lutAOA_CL: scale(REAR.aoaCl, REAR.clGain),
-    lutAOA_CD: scale(REAR.aoaCd, REAR.cdGain),
-    lutGH_CL_mult: [[0, 1]],
-    lutGH_CD_mult: [[0, 1]],
-    lutYaw_CL_mult: yawTable(REAR.yawClGain),
-  },
-  {
-    // ... and its flap, which lies flat in the straight-line mode [data DRS]
-    name: 'REAR_WING',
-    area: area(DRS),
-    positionZ: DRS.position[2],
-    angleDeg: DRS.angleDeg,
-    heightRef: 'rear',
-    lutAOA_CL: scale(DRS.aoaCl, DRS.clGain),
-    lutAOA_CD: scale(DRS.aoaCd, DRS.cdGain),
-    lutGH_CL_mult: [[0, 1]],
-    lutGH_CD_mult: [[0, 1]],
-    drs: flap(DRS),
-    lutYaw_CL_mult: yawTable(DRS.yawClGain),
-  },
-];
+  const WINGS: WingData[] = [
+    {
+      // The two front wing halves [data FRONT_L / FRONT_R]
+      name: 'FRONT_WING',
+      area: 2 * area(FRONT),
+      positionZ: FRONT.position[2],
+      angleDeg: FRONT.angleDeg,
+      heightRef: 'front',
+      lutAOA_CL: scale(FRONT.aoaCl, FRONT.clGain),
+      lutAOA_CD: scale(FRONT.aoaCd, FRONT.cdGain),
+      lutGH_CL_mult: shiftX(FRONT.ghCl ?? [[0, 1]], -overFront(FRONT)),
+      lutGH_CD_mult: shiftX(FRONT.ghCd ?? [[0, 1]], -overFront(FRONT)),
+      drs: flap(FRONT),
+      lutYaw_CL_mult: yawTable(FRONT.yawClGain),
+    },
+    {
+      // The four floor strips [data FLOOR_*]: the data flies them at a fixed 3.5°, not at the body's rake
+      name: 'VENTURI_FLOOR',
+      area: floorArea,
+      positionZ: FLOORS[0].position[2],
+      angleDeg: FLOORS[0].angleDeg,
+      heightRef: 'mean',
+      lutAOA_CL: flat(at(FLOORS[0].aoaCl, FLOORS[0].angleDeg) * floorClGain),
+      lutAOA_CD: flat(at(FLOORS[0].aoaCd, FLOORS[0].angleDeg) * FLOORS[0].cdGain),
+      lutGH_CL_mult: FLOORS[0].ghCl ?? [[0, 1]],
+      lutGH_CD_mult: FLOORS[0].ghCd ?? [[0, 1]],
+      lutYaw_CL_mult: yawTable(FLOORS[0].yawClGain),
+    },
+    {
+      // The two diffuser halves [data DIFFUSER_RL / RR], at their own fixed angle
+      name: 'VENTURI_FLOOR',
+      area: 2 * area(DIFFUSER),
+      positionZ: DIFFUSER.position[2],
+      angleDeg: DIFFUSER.angleDeg,
+      heightRef: 'rear',
+      lutAOA_CL: flat(at(DIFFUSER.aoaCl, DIFFUSER.angleDeg) * DIFFUSER.clGain),
+      lutAOA_CD: flat(at(DIFFUSER.aoaCd, DIFFUSER.angleDeg) * DIFFUSER.cdGain),
+      lutGH_CL_mult: shiftX(DIFFUSER.ghCl ?? [[0, 1]], -overRear(DIFFUSER)),
+      lutGH_CD_mult: shiftX(DIFFUSER.ghCd ?? [[0, 1]], -overRear(DIFFUSER)),
+      lutYaw_CL_mult: yawTable(DIFFUSER.yawClGain),
+    },
+    {
+      // The rear wing's main plane [data REAR]
+      name: 'REAR_WING',
+      area: area(REAR),
+      positionZ: REAR.position[2],
+      angleDeg: REAR.angleDeg,
+      heightRef: 'rear',
+      lutAOA_CL: scale(REAR.aoaCl, REAR.clGain),
+      lutAOA_CD: scale(REAR.aoaCd, REAR.cdGain),
+      lutGH_CL_mult: [[0, 1]],
+      lutGH_CD_mult: [[0, 1]],
+      lutYaw_CL_mult: yawTable(REAR.yawClGain),
+    },
+    {
+      // ... and its flap, which lies flat in the straight-line mode [data DRS]
+      name: 'REAR_WING',
+      area: area(DRS),
+      positionZ: DRS.position[2],
+      angleDeg: DRS.angleDeg,
+      heightRef: 'rear',
+      lutAOA_CL: scale(DRS.aoaCl, DRS.clGain),
+      lutAOA_CD: scale(DRS.aoaCd, DRS.cdGain),
+      lutGH_CL_mult: [[0, 1]],
+      lutGH_CD_mult: [[0, 1]],
+      drs: flap(DRS),
+      lutYaw_CL_mult: yawTable(DRS.yawClGain),
+    },
+  ];
 
-/** Each element's drag area at its set angle and static height, for the height the total drag acts at [derived] */
-const dragParts: [number, number][] = [
-  [area(BODY) * at(BODY.aoaCd, BODY.angleDeg) * BODY.cdGain, BODY.position[1]],
-  [2 * area(FRONT) * at(FRONT.aoaCd, FRONT.angleDeg) * FRONT.cdGain, FRONT.position[1]],
-  [area(REAR) * at(REAR.aoaCd, REAR.angleDeg) * REAR.cdGain, REAR.position[1]],
-  [area(DRS) * at(DRS.aoaCd, DRS.angleDeg) * DRS.cdGain, DRS.position[1]],
-  [floorArea * at(FLOORS[0].aoaCd, FLOORS[0].angleDeg) * FLOORS[0].cdGain, FLOOR_Y],
-];
-const dragArea = dragParts.reduce((a, [cda]) => a + cda, 0);
+  /** Each element's drag area at its set angle and static height, for the height the total drag acts at [derived] */
+  const dragParts: [number, number][] = [
+    [area(BODY) * at(BODY.aoaCd, BODY.angleDeg) * BODY.cdGain, BODY.position[1]],
+    [2 * area(FRONT) * at(FRONT.aoaCd, FRONT.angleDeg) * FRONT.cdGain, FRONT.position[1]],
+    [area(REAR) * at(REAR.aoaCd, REAR.angleDeg) * REAR.cdGain, REAR.position[1]],
+    [area(DRS) * at(DRS.aoaCd, DRS.angleDeg) * DRS.cdGain, DRS.position[1]],
+    [floorArea * at(FLOORS[0].aoaCd, FLOORS[0].angleDeg) * FLOORS[0].cdGain, FLOOR_Y],
+  ];
+  const dragArea = dragParts.reduce((a, [cda]) => a + cda, 0);
 
-const AERO: AeroData = {
-  front_lift: 0,
-  rear_lift: 0,
-  // The body element: drag only at its 3.5° [data BODY]
-  drag: Number((area(BODY) * at(BODY.aoaCd, BODY.angleDeg) * BODY.cdGain).toFixed(4)),
-  dragCentreY: Number((dragParts.reduce((a, [cda, y]) => a + cda * y, 0) / dragArea).toFixed(3)),
-  wings: WINGS,
-  front_target_height: F.staticRideHeight,
-  rear_target_height: R.staticRideHeight,
-  floorOffsetY: FLOOR_Y,
-  drsTransitionS: 0.2,
-  drsCloseThrottle: 0.5,
-  airDensity: 1.225,
-};
+  return {
+    front_lift: 0,
+    rear_lift: 0,
+    // The body element: drag only at its 3.5° [data BODY]
+    drag: Number((area(BODY) * at(BODY.aoaCd, BODY.angleDeg) * BODY.cdGain).toFixed(4)),
+    dragCentreY: Number((dragParts.reduce((a, [cda, y]) => a + cda * y, 0) / dragArea).toFixed(3)),
+    wings: WINGS,
+    front_target_height: F.staticRideHeight,
+    rear_target_height: R.staticRideHeight,
+    floorOffsetY: FLOOR_Y,
+    drsTransitionS: 0.2,
+    drsCloseThrottle: 0.5,
+    airDensity: 1.225,
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Tyres
@@ -408,9 +428,11 @@ function modelData(t: Vf26TyreSpec): TyresCompoundData['modelData'] {
   };
 }
 
-function compound(tyre_compound: PhysicsTyreCompound, name: string, shortName: 'S' | 'M' | 'H', slot: 'soft' | 'medium' | 'hard'): TyresCompoundData {
-  const f = VF26_TYRES[slot].front;
-  const r = VF26_TYRES[slot].rear;
+type TyreOf = (slot: 'soft' | 'medium' | 'hard', axle: 'front' | 'rear') => Vf26TyreSpec;
+
+function compound(tyre_compound: PhysicsTyreCompound, name: string, shortName: 'S' | 'M' | 'H', slot: 'soft' | 'medium' | 'hard', tyreOf: TyreOf): TyresCompoundData {
+  const f = tyreOf(slot, 'front');
+  const r = tyreOf(slot, 'rear');
   const rear = modelData(r);
   return {
     name,
@@ -459,15 +481,17 @@ function compound(tyre_compound: PhysicsTyreCompound, name: string, shortName: '
   };
 }
 
-const MEDIUM = compound('PhysicsTyreCompound_F1_Medium', 'Medium', 'M', 'medium');
-const TYRES = {
-  PhysicsTyreCompound_F1_Soft: compound('PhysicsTyreCompound_F1_Soft', 'Soft', 'S', 'soft'),
-  PhysicsTyreCompound_F1_Medium: MEDIUM,
-  PhysicsTyreCompound_F1_Hard: compound('PhysicsTyreCompound_F1_Hard', 'Hard', 'H', 'hard'),
-  // Rain tyres on the medium's carcass, as the data builds its own
-  PhysicsTyreCompound_F1_Intermediate: deriveRainCompound(MEDIUM, 'intermediate', 'PhysicsTyreCompound_F1_Intermediate', 'Intermediate', true),
-  PhysicsTyreCompound_F1_Wet: deriveRainCompound(MEDIUM, 'wet', 'PhysicsTyreCompound_F1_Wet', 'Full Wet', true),
-} satisfies Partial<Record<PhysicsTyreCompound, TyresCompoundData>>;
+function tyreCompounds(tyreOf: TyreOf) {
+  const MEDIUM = compound('PhysicsTyreCompound_F1_Medium', 'Medium', 'M', 'medium', tyreOf);
+  return {
+    PhysicsTyreCompound_F1_Soft: compound('PhysicsTyreCompound_F1_Soft', 'Soft', 'S', 'soft', tyreOf),
+    PhysicsTyreCompound_F1_Medium: MEDIUM,
+    PhysicsTyreCompound_F1_Hard: compound('PhysicsTyreCompound_F1_Hard', 'Hard', 'H', 'hard', tyreOf),
+    // Rain tyres on the medium's carcass, as the data builds its own
+    PhysicsTyreCompound_F1_Intermediate: deriveRainCompound(MEDIUM, 'intermediate', 'PhysicsTyreCompound_F1_Intermediate', 'Intermediate', true),
+    PhysicsTyreCompound_F1_Wet: deriveRainCompound(MEDIUM, 'wet', 'PhysicsTyreCompound_F1_Wet', 'Full Wet', true),
+  } satisfies Partial<Record<PhysicsTyreCompound, TyresCompoundData>>;
+}
 
 // ---------------------------------------------------------------------------
 // Car
@@ -477,65 +501,82 @@ const MASS = VF26_CHASSIS.totalMassKg;
 const B = VF26_CHASSIS.inertiaBox;
 const box = (a: number, b: number) => (MASS / 12) * (a * a + b * b);
 
-export const VF26_CAR_CONFIG = {
-  screenName: 'vf26',
-  chassis: {
-    totalMassKg: MASS,
-    frontWeightFraction: VF26_CHASSIS.frontWeightFraction,
-    wheelbase: VF26_CHASSIS.wheelbase,
-    trackWidthFront: F.track,
-    trackWidthRear: R.track,
-    // Wheel radius + BASEY, the axles' mean [data, derived]
-    cgHeight: Number(VF26_CG_HEIGHT_M.toFixed(4)),
-    inertia: { pitch: box(B.height, B.length), roll: box(B.width, B.height), yaw: box(B.width, B.length) },
-    unsprungMassFront: F.unsprungMassKg,
-    unsprungMassRear: R.unsprungMassKg,
-    wheelInertiaFront: VF26_TYRES.soft.front.angularInertia,
-    wheelInertiaRear: VF26_TYRES.soft.rear.angularInertia,
-    maxRoadWheelDeg: VF26_CHASSIS.steering.lockDeg / VF26_CHASSIS.steering.ratio,
-    ffbMechanicalTrailM: VF26_CHASSIS.steering.mechanicalTrail,
-    // The rack's give under load and the hydraulic assist, as the f12026-car's [est]
-    steerComplianceDegPerKN: 0.05,
-    powerSteering: { steeringRatio: VF26_CHASSIS.steering.ratio, deadbandNm: 26, rampNm: 6, maxRatio: 0.45 },
-  },
-  engine: ENGINE,
-  ers: ERS,
-  performanceModes: PERFORMANCE_MODES,
-  gearbox: {
-    ratios: [...VF26_DRIVETRAIN.gearRatios],
-    reverse: Math.abs(VF26_DRIVETRAIN.reverseRatio),
-    finalDrive: VF26_DRIVETRAIN.finalDrive,
-    shiftTimeS: VF26_DRIVETRAIN.upshiftTimeS,
-    downshiftTimeS: VF26_DRIVETRAIN.downshiftTimeS,
-    shiftTorqueFraction: 0.85,
-    efficiency: VF26_DRIVETRAIN.efficiency,
-    gears: { redline_rpm: VF26_ENGINE.limiterRpm, upshift_rpm: VF26_DRIVETRAIN.autoUpshiftRpm, downshift_rpm: VF26_DRIVETRAIN.autoDownshiftRpm },
-  },
-  clutch: { maxTorqueNm: VF26_DRIVETRAIN.clutchMaxTorqueNm, biteRpm: VF26_DRIVETRAIN.autoClutchStartRpm, lockRpm: VF26_DRIVETRAIN.autoClutchFullRpm },
-  // Locking torque = preload + POWER / COAST × input torque [data]
-  differential: {
-    type: 'LSD_Ramp',
-    settings: {
-      power: VF26_DRIVETRAIN.diffPowerLock,
-      coast: VF26_DRIVETRAIN.diffCoastLock,
-      preload: VF26_DRIVETRAIN.diffPreloadNm,
-      friction_faces: 1,
-      power_ramp_deg: 45,
-      coast_ramp_deg: 45,
+/** The VF26's car data for `VehiclePhysics`: the data's, or with `overrides` in place of some of it */
+export function buildVf26Config(overrides: Vf26Overrides = {}) {
+  const F: Vf26AxleSuspension = { ...VF26_CHASSIS.front, ...overrides.front };
+  const R: Vf26AxleSuspension = { ...VF26_CHASSIS.rear, ...overrides.rear };
+  const tyreOf: TyreOf = (slot, axle) => (overrides.tyre ? overrides.tyre(VF26_TYRES[slot][axle], axle) : VF26_TYRES[slot][axle]);
+  const softFront = tyreOf('soft', 'front');
+  const softRear = tyreOf('soft', 'rear');
+  // The body rides where the ride heights put it: a change of their mean lifts the CG with it
+  const rideChange = (F.staticRideHeight - VF26_CHASSIS.front.staticRideHeight + R.staticRideHeight - VF26_CHASSIS.rear.staticRideHeight) / 2;
+  return {
+    screenName: 'vf26',
+    chassis: {
+      totalMassKg: MASS,
+      frontWeightFraction: VF26_CHASSIS.frontWeightFraction,
+      wheelbase: VF26_CHASSIS.wheelbase,
+      trackWidthFront: F.track,
+      trackWidthRear: R.track,
+      // Wheel radius + BASEY, the axles' mean [data, derived]
+      cgHeight: Number((VF26_CG_HEIGHT_M + rideChange).toFixed(4)),
+      inertia: { pitch: box(B.height, B.length), roll: box(B.width, B.height), yaw: box(B.width, B.length) },
+      unsprungMassFront: F.unsprungMassKg,
+      unsprungMassRear: R.unsprungMassKg,
+      wheelInertiaFront: softFront.angularInertia,
+      wheelInertiaRear: softRear.angularInertia,
+      maxRoadWheelDeg: VF26_CHASSIS.steering.lockDeg / VF26_CHASSIS.steering.ratio,
+      ffbMechanicalTrailM: VF26_CHASSIS.steering.mechanicalTrail,
+      // The rack's give under load and the hydraulic assist, as the f12026-car's [est]
+      steerComplianceDegPerKN: 0.05,
+      powerSteering: { steeringRatio: VF26_CHASSIS.steering.ratio, deadbandNm: 26, rampNm: 6, maxRatio: 0.45 },
     },
-    // The f12026-car's halfshafts [est]
-    halfshaft: { stiffnessNmPerRad: 13_000, dampingNmsPerRad: 33 },
-  },
-  // The front share moves 6 % forward by full pedal [data migrationAtFullPedal]
-  brakes: { maxTorqueNm: VF26_BRAKES.maxTorqueNm, front_bias: VF26_BRAKES.frontBias, ebbStep: 0.005, migration: { amount: VF26_BRAKES.migrationAtFullPedal, rampStart: 0 } },
-  suspensions: SUSPENSIONS,
-  aero: AERO,
-  tyreCompounds: TYRES,
-  compoundSlots: {
-    soft: 'PhysicsTyreCompound_F1_Soft',
-    medium: 'PhysicsTyreCompound_F1_Medium',
-    hard: 'PhysicsTyreCompound_F1_Hard',
-    intermediate: 'PhysicsTyreCompound_F1_Intermediate',
-    wet: 'PhysicsTyreCompound_F1_Wet',
-  },
-} satisfies CarPhysicsConfig;
+    engine: {
+      ...ENGINE,
+      inertia: (overrides.engineInertia ?? VF26_ENGINE.inertia) + VF26_DRIVETRAIN.gearboxInertia,
+      coastCurve: ENGINE.coastCurve.map(([rpm, nm]) => [rpm, nm * (overrides.coastScale ?? 1)]) as LutPoints,
+    },
+    ers: ERS,
+    performanceModes: PERFORMANCE_MODES,
+    gearbox: {
+      ratios: [...VF26_DRIVETRAIN.gearRatios],
+      reverse: Math.abs(VF26_DRIVETRAIN.reverseRatio),
+      finalDrive: VF26_DRIVETRAIN.finalDrive,
+      shiftTimeS: VF26_DRIVETRAIN.upshiftTimeS,
+      downshiftTimeS: VF26_DRIVETRAIN.downshiftTimeS,
+      shiftTorqueFraction: 0.85,
+      efficiency: VF26_DRIVETRAIN.efficiency,
+      gears: { redline_rpm: VF26_ENGINE.limiterRpm, upshift_rpm: VF26_DRIVETRAIN.autoUpshiftRpm, downshift_rpm: VF26_DRIVETRAIN.autoDownshiftRpm },
+    },
+    clutch: { maxTorqueNm: VF26_DRIVETRAIN.clutchMaxTorqueNm, biteRpm: VF26_DRIVETRAIN.autoClutchStartRpm, lockRpm: VF26_DRIVETRAIN.autoClutchFullRpm },
+    // Locking torque = preload + POWER / COAST × input torque [data]
+    differential: {
+      type: 'LSD_Ramp',
+      settings: {
+        power: VF26_DRIVETRAIN.diffPowerLock,
+        coast: VF26_DRIVETRAIN.diffCoastLock,
+        preload: VF26_DRIVETRAIN.diffPreloadNm,
+        friction_faces: 1,
+        power_ramp_deg: 45,
+        coast_ramp_deg: 45,
+      },
+      // The f12026-car's halfshafts [est]
+      halfshaft: { stiffnessNmPerRad: 13_000, dampingNmsPerRad: 33 },
+    },
+    // The front share moves 6 % forward by full pedal [data migrationAtFullPedal]
+    brakes: { maxTorqueNm: overrides.brakeTorqueNm ?? VF26_BRAKES.maxTorqueNm, front_bias: VF26_BRAKES.frontBias, ebbStep: 0.005, migration: { amount: VF26_BRAKES.migrationAtFullPedal, rampStart: 0 } },
+    suspensions: suspensionData(F, R, softFront.radius, softRear.radius),
+    aero: aeroData(F, R),
+    tyreCompounds: tyreCompounds(tyreOf),
+    compoundSlots: {
+      soft: 'PhysicsTyreCompound_F1_Soft',
+      medium: 'PhysicsTyreCompound_F1_Medium',
+      hard: 'PhysicsTyreCompound_F1_Hard',
+      intermediate: 'PhysicsTyreCompound_F1_Intermediate',
+      wet: 'PhysicsTyreCompound_F1_Wet',
+    },
+  } satisfies CarPhysicsConfig;
+}
+
+/** The car of the data, as `F1Physics2026` runs it */
+export const VF26_CAR_CONFIG = buildVf26Config();
