@@ -27,11 +27,12 @@ E0, N0 = -86.0, 391.0
 
 # side: which side of the built lap it lies on (+1 right, -1 left); hug: how strongly its profile keeps to the built
 # ground while it runs through the built lap's run-off (the link climbs straight through instead); runoff: painted run-off outside its tightest corner (m); layout: the lap
-# that uses it
+# that uses it; join: the strongest crest its own profile may have just after it leaves the built road (m/s2 at that
+# road's speed; the other two keep to the built ground there and carry its crest on)
 SPEC = {
     't1o': dict(side=1, runoff=10.0, hug=1.0, layout='long'),
     't8o': dict(side=-1, runoff=23.0, hug=1.0, layout='long'),
-    'link': dict(side=-1, runoff=12.0, hug=0.0, inner_wall=True, layout='short'),
+    'link': dict(side=-1, runoff=12.0, hug=0.0, inner_wall=True, join=-3.2, layout='short'),
 }
 assert NAMES == tuple(SPEC)
 ROAD_F = np.linspace(-1, 1, 13)       # close columns: where it blends into the built road the surface curves across
@@ -50,6 +51,8 @@ CPPM = 4.0                # ... and of the rasters of what an add-on draws (ro_f
 WARP_R = 25.0             # the built lap's ground meets an add-on's edge over this distance
 PULL_R = 3.0              # ... and within this distance of it, ground still standing above the edge is taken down to it
 LAT = np.array([-12, -8, -5, -2.5, 0, 2.5, 5, 8, 12.0])
+JOIN_FADE = (60.0, 120.0)  # cars keep the built road's speed this far along an add-on that leaves it, less and less to here (m)
+JOIN_ON = 0.05            # ... which counts from where no more than this much of its surface is the built road's
 
 
 def sstep(t):
@@ -124,11 +127,13 @@ def inside_dist(m):
 class Spine:
     """The built lap around one add-on: the nearest station, lateral offset and section height of any point"""
 
-    def __init__(self, T, sa, sb):
-        self.T = T
+    def __init__(self, T, sa, sb, lerp=False):
+        self.T, self.lerp = T, lerp
         self.win = rd.wrap_range(sa - 80, sb + 80, T.n)
         self.tree = cKDTree(np.c_[T.x[self.win], T.y[self.win]])
         self.grade = np.gradient(np.r_[T.z[-1], T.z, T.z[0]])[1:-1]
+        ta, tb = (np.roll(T.tx, 1), np.roll(T.ty, 1)), (np.roll(T.tx, -1), np.roll(T.ty, -1))
+        self.kap = np.arcsin(np.clip(ta[0] * tb[1] - ta[1] * tb[0], -1, 1)) / 2          # + = the lap turns left
 
     def at(self, P):
         T = self.T
@@ -141,6 +146,16 @@ class Spine:
         lat = dx * T.rx[i] + dy * T.ry[i]
         ds = dx * T.tx[i] + dy * T.ty[i]
         z = T.z[i] + self.grade[i] * ds + T.cross_z(i, lat)
+        if self.lerp:
+            # between its two stations, not the nearer one's section carried along, and as far along the lap as the
+            # point is on the arc through it: off the centreline of a bend that climbs and changes its banking, the
+            # nearer station's section steps by up to a centimetre each time the nearer station changes
+            f = i + ds / np.maximum(1 + self.kap[i] * lat, 0.2)
+            a = np.floor(f).astype(int)
+            t = f - a
+            a, b = a % T.n, (a + 1) % T.n
+            za, zb = T.z[a] + T.cross_z(a, lat), T.z[b] + T.cross_z(b, lat)
+            z = za + t * (zb - za)
         side = (lat > 0).astype(int)
         cor = np.where(side == 1, T.corridor(1)[i], T.corridor(0)[i])
         zg = np.where(side == 1, T.ground_z(i, 1, np.abs(lat)), T.ground_z(i, 0, np.abs(lat))) + self.grade[i] * ds
@@ -171,7 +186,7 @@ class Addon:
         kap = g1(np.gradient(th, h), 2.0)
         self.sa, self.sb, self.L, self.n, self.h, self.s = sa, sb, L, nj, h, s
         self.x, self.y, self.tx, self.ty, self.rx, self.ry, self.kap = x, y, tx, ty, ty, -tx, kap
-        self.spine = Spine(T, sa, sb)
+        self.spine = Spine(T, sa, sb, lerp=bool(sp.get('join')))
         q0 = self.spine.at(np.c_[x, y])
         i0, zs0, d0 = q0['i'], q0['zs'], q0['d']
         self.i0 = i0
@@ -187,6 +202,13 @@ class Addon:
         gz = ground(x, y)
         ws = sp['hug'] * (1 - sstep((d0 - q0['wl'] - 5.0) / 20.0))
         hard = d0 - T.width[i0] / 2 < 1.0                    # its centre on the built road: exactly that road's section
+        lead = int(np.argmin(hard)) if hard[0] and not hard.all() else 0          # its first station off the built road
+        if sp.get('join') and lead:
+            # ... and for as long as its surface there is still partly that road's (`blend`): its own profile easing
+            # away underneath came through as a crest where the two are mixed
+            while lead < nj - 2 and self.w[lead] > JOIN_ON:
+                hard[lead] = True
+                lead += 1
         ws = np.where(hard, 1e12, ws)
         wg = 0.03
         tgt = (ws * zs0 + wg * gz) / (ws + wg)
@@ -198,12 +220,45 @@ class Addon:
         free = np.setdiff1d(np.arange(nj), fixed)
         own = g1((~hard).astype(float), 6.0) > 0.01           # where the profile is its own to shape
 
-        def solve(lam):
+        # ---- a crest just after it leaves the built road is judged at that road's speed. Its own lap's design
+        # speed slows there for the bend of the junction itself, which a racing line straightens: the link's profile
+        # gave up 4 % of grade within 25 m at a design 170 km/h, where an F1 car arrives at 265 ----
+        held, kmin = np.zeros(nj, bool), None
+        self.vj = self.v
+        if sp.get('join') and lead:
+            carry = 1 - sstep((s - s[lead] - JOIN_FADE[0]) / (JOIN_FADE[1] - JOIN_FADE[0]))
+            self.vj = np.maximum(self.v, T.v[i0][:lead].max() * carry)
+            held = ~hard                                      # (a station counts if it or a neighbour is free to move)
+            held[1:] |= ~hard[:-1]
+            held[:-1] |= ~hard[1:]
+            held &= (carry > 0) & (np.arange(nj) > 0) & (np.arange(nj) < nj - 1)
+            kmin = sp['join'] / self.vj ** 2                  # the least second derivative of the profile there
+
+        def solve(lam, hold=False):
             M = lam / h ** 4 * D2.T @ D2 + np.diag(ws + wg)
             rhs = (ws + wg) * tgt - M[:, fixed] @ zf
             z = np.zeros(nj)
             z[fixed] = zf
             z[free] = np.linalg.solve(M[np.ix_(free, free)], rhs[free])
+            # stations past that limit are held on it, and let go again once they pull away from it
+            act, push, nf = np.zeros(nj, bool), np.zeros(nj, bool), len(free)
+            for it in range(200 if hold else 0):
+                k2 = np.r_[0.0, D2 @ z / h ** 2, 0.0]
+                add = held & ~act & (k2 < kmin * 1.0001)
+                drop = act & ~push & (it < 100)               # (going round in circles: stop letting go)
+                if not add.any() and not drop.any():
+                    break
+                act = (act | add) & ~drop
+                ia = np.flatnonzero(act)
+                A = D2[ia - 1] / h ** 2
+                K = np.zeros((nf + len(ia), nf + len(ia)))
+                K[:nf, :nf] = M[np.ix_(free, free)]
+                K[:nf, nf:] = A[:, free].T
+                K[nf:, :nf] = A[:, free]
+                sol = np.linalg.solve(K, np.r_[rhs[free], kmin[ia] - A[:, fixed] @ zf])
+                z[free] = sol[:nf]
+                push[:] = False
+                push[ia] = sol[nf:] <= 0                      # (its multiplier: still pushing against the limit)
             return z, self.v ** 2 * g1(np.gradient(np.gradient(z, h), h), 3.0)
 
         _, a_st = solve(1e9)
@@ -216,6 +271,11 @@ class Addon:
         lam = 3e3
         while True:
             zo, acc = solve(lam)
+            if (acc[own].min() >= lo and acc[own].max() <= hi) or lam > 5e8:
+                break
+            lam *= 2
+        while held.any():                                     # (no softer than it is without that limit)
+            zo, acc = solve(lam, True)
             if (acc[own].min() >= lo and acc[own].max() <= hi) or lam > 5e8:
                 break
             lam *= 2

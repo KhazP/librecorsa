@@ -25,7 +25,7 @@ const BASE = 'rwanda_official';
 const ID = SHORT ? `${BASE}_short` : BASE;
 const DIR = `public/tracks/${ID}`;
 const WANT = SHORT
-  ? { layout: 'Short layout', lengthM: 5340, samples: 1068, turns: 14, straightM: 880, stepM: 0.035, gradeMax: 0.165, modelM: 0.075, cameras: 11 }
+  ? { layout: 'Short layout', lengthM: 5340, samples: 1068, turns: 14, straightM: 880, stepM: 0.035, gradeMax: 0.16, modelM: 0.075, cameras: 11 }
   : { layout: 'Grand Prix layout', lengthM: 5895, samples: 1179, turns: 17, straightM: 990, stepM: 0.02, gradeMax: 0.15, modelM: 0.06, cameras: 12 };
 
 let passed = 0;
@@ -87,7 +87,7 @@ check('12 to 15 m wide', S.every((s) => s.w >= 12 && s.w <= 15));
     if (dy > 0) climb += dy;
     steepest = Math.max(steepest, Math.abs(dy) / 5);
   }
-  // (the link climbs from a stretch already at 14 % to the upper road: 16 %)
+  // (the link climbs from a stretch already at 14 % to the upper road: 15.2 %)
   check(`real hills: over 150 m climbed a lap, no grade past ${(WANT.gradeMax * 100).toFixed(1)} %`, climb > 150 && steepest <= WANT.gradeMax, `${climb.toFixed(0)} m, ${(steepest * 100).toFixed(1)} %`);
 }
 {
@@ -191,6 +191,31 @@ const track = getActiveTrackData(1200);
   }
   // (the link hairpin turns over a crest: 5 m samples follow it to 7 cm)
   check(`the game's height model follows the road within ${(WANT.modelM * 100).toFixed(1)} cm`, worst < WANT.modelM, `worst ${(worst * 100).toFixed(1)} cm`);
+}
+if (SHORT) {
+  // Where the link leaves the main road (1,160 m) cars are flat out, and the road they leave climbs at 14 % on its
+  // banking. The link gave that grade up within 25 m: 15 m/s2 of lift at the 266 km/h an F1 car has there. Lift is
+  // read off the model along the centre and 4 m either side of it, at that speed
+  const v = 266 / 3.6;
+  const n = track.samples.length;
+  const ds = WANT.lengthM / n;
+  const from = Math.round(1140 / ds);
+  const to = Math.round(1260 / ds);
+  const lift = [0, 0, 0];
+  let missed = 0;
+  [-4, 0, 4].forEach((lat, c) => {
+    const h: number[] = [];
+    for (let i = from - 1; i <= to + 1; i++) {
+      const smp = track.samples[i];
+      const b = Math.hypot(smp.binormal.x, smp.binormal.z);
+      const ok = ground.query(smp.position.x + (smp.binormal.x / b) * lat, smp.position.z + (smp.binormal.z / b) * lat, smp.position.y + 3, hit);
+      if (!ok) missed++;
+      h.push(ok ? hit.height : NaN);
+    }
+    for (let k = 1; k < h.length - 1; k++) lift[c] = Math.max(lift[c], (-(h[k + 1] - 2 * h[k] + h[k - 1]) / (ds * ds)) * v * v);
+  });
+  check('the link leaves the main road without a crest: under 4.5 m/s2 of lift along its centre, 6 m/s2 4 m either side',
+    missed === 0 && lift[1] < 4.5 && lift[0] < 6 && lift[2] < 6, `${lift.map((a) => a.toFixed(1)).join(' / ')} m/s2 at 266 km/h`);
 }
 {
   let kerbs = 0;

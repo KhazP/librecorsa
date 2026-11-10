@@ -32,8 +32,14 @@ of the repository.
 Every figure in the left column is read from the two `track_data.json` files. The lengths are what the traced lines
 measure; nothing is scaled to the published 6 km. Two wide kinks on the plateau (190 to 300 m radius) keep the
 straight's 2 % crossfall. The short lap climbs 174 m between 1,336 and 1,408 m; its link road leaves a stretch that is
-already at 14 % and reaches the upper road 20 m higher within 165 m, so it peaks at 16 %; between 1,120 and 1,135 m
-of the short lap the banking is still rolling over from the bend before (under 2 % the wrong way).
+already at 14 % and reaches the upper road 20 m higher within 165 m, so it peaks at 15.2 %; between 1,120 and 1,135 m
+of the short lap the banking is still rolling over from the bend before (under 2 % the wrong way). Cars come off the
+main road onto the link flat out. The link keeps the main road's section until the surface along its centre is all its
+own, and from there its profile eases off that road's grade at no more than 3.2 m/s2 at that road's speed (15 % down
+to 12.7 % over 40 m): 4 m/s2 of lift at the 266 km/h an F1 car carries there, 5 m/s2 4 m either side. Judged at
+the short lap's own design speed, which slows for the bend of the junction, the profile gave up 4 % within 25 m, and
+the two roads' heights were mixed over that: 15 m/s2. The gentler profile stands up to 1.7 m over the main road's
+ground beside it, on 2.5 to 2.9 m of fill (4.3 m at its hairpin; 1 to 1.7 m and 3.9 m before).
 
 The climb: the profile first built stood where the smoothed ground put it and climbed 169 m. The published 190 m is
 reached without raising the summit (`src/scratch/design/climb190.py`, a linear programme over the lap's heights): the
@@ -57,12 +63,15 @@ Around the site: the game draws 5.5 km, so the land climbs into a rim of hills b
 121 to 194 m above the lake; the real ground is kept where it is higher) and the lake stops at its foot. Beyond the
 lap's surroundings the ground takes field, crop, fallow and woodland colours, and a second, coarser canopy sheet is
 the far country's woodlots, where no tree is planted. Trees: 17,548 spots, 14,065 instanced after thinning the ones
-deep inside the canopy sheet, in four levels of detail. The packed circuit file is 6.8 MB and 481,000 triangles.
+deep inside the canopy sheet, in four levels of detail. The packed circuit file is 6.8 MB and 484,000 triangles.
 
 Where the three extra road sections leave the built lap, the built ground gives way to them: what lies wholly under
 their asphalt, kerbs, paint and verge is taken out, what crosses their edge is cut fine and meets it a centimetre
 lower, and the ground beside them comes to the edge's height within 3 m (a kerb or a painted line keeps its height
-above the ground it lies on). Inside the link's hairpin, where the bands of the way in, the bend and the way out meet,
+above the ground it lies on). Ground lying lower than a new road comes all the way up to its edge at the first
+vertex under it, and the diagonals that triangulating the cut faces adds are cut as finely as their edges: beside the
+link, where it stands 0.75 to 1.7 m over the main road's ground, the one left notches of up to 26 cm and the other of
+13 cm. Inside the link's hairpin, where the bands of the way in, the bend and the way out meet,
 they come to one height and the heart of the bend is level. The game drives on the highest paved surface under a
 wheel, so every one of these was a ledge otherwise; the layout check walks both laps from the centre to the barriers
 and allows no step over 6 cm. The open stands show scaffolding at
