@@ -38,12 +38,12 @@
 <table>
   <tr>
     <td width="33%"><img src="docs/media/title-menu.jpg" alt="Title menu" /></td>
-    <td width="33%"><img src="docs/media/on-track.jpg" alt="On track at the Rwanda circuit" /></td>
+    <td width="33%"><img src="docs/media/on-track.jpg" alt="On track at RISE Motordrome" /></td>
     <td width="33%"><img src="docs/media/loading-suzuka.jpg" alt="Loading Suzuka" /></td>
   </tr>
   <tr>
     <td align="center"><sub>Title menu and garage</sub></td>
-    <td align="center"><sub>Rwanda International Circuit</sub></td>
+    <td align="center"><sub>RISE Motordrome</sub></td>
     <td align="center"><sub>Every circuit draws itself while it loads</sub></td>
   </tr>
 </table>
@@ -82,7 +82,7 @@ Each car has its own cockpit, steering wheel and shift lights, plus a multi-laye
 ### Circuits
 | Circuit | Country | Length |
 | :-- | :-- | --: |
-| **Rwanda International Circuit** (fan concept layout, default / official layout) | Rwanda | 5.30 / 5.86 km |
+| **RISE Motordrome** (default; short / Grand Prix lap) | Rwanda | 5.34 / 5.89 km |
 | Suzuka Circuit | Japan | 5.83 km |
 | Shanghai International Circuit | China | 5.44 km |
 | Mobility Resort Motegi | Japan | 4.78 km |
@@ -99,7 +99,7 @@ Each car has its own cockpit, steering wheel and shift lights, plus a multi-laye
 | Circuit de Spa-Francorchamps | Belgium | 6.99 km |
 | Dunsfold Aerodrome | United Kingdom | 2.88 km |
 
-The Rwanda circuit's fan concept layout was built in Blender for this project: 14 corners, 52 m of elevation, 1,400 m above sea level. Its official layout is my reading of the published design, traced on the designers' own aerial renders: 5.86 km, 17 corners, anticlockwise beside Lake Kidogo, 170 m climbed a lap, built on the site's real ground by `scripts/rwanda-official/`. The Sketchfab circuits are CC BY 4.0 scans converted by `scripts/tracks/build_track.py`, and Chang, Okayama, Spielberg (Red Bull Ring), and Monaco are Assetto Corsa circuits by **Mitja Bonca** (used with permission), converted by `scripts/tracks/port_ac_track.py` with their 3D/2D trees, dynamic tyre grooves, skidmarks, starting lights and trackside semaphores, AI fast/pit lanes, kerbs, surface tables, section names, DRS zones, and TV cameras. Every circuit is meshopt-compressed (`npm run compress-tracks`) while keeping hidden physics meshes bit-exact, and has a lap-time-optimal racing line for each car class. Open the sim with `?colliders=1` to see the physics surfaces drawn over the circuit.
+RISE Motordrome is my reading of the circuit planned beside Lake Kidogo at Bugesera, about 1,400 m above sea level: traced on the designers' own aerial renders and built in Blender on the site's real ground by `scripts/rwanda-official/`. Two anticlockwise laps share one model: the short lap (5.34 km, 14 corners, the default) and the Grand Prix lap (5.89 km, 17 corners, 191 m climbed a lap). The Sketchfab circuits are CC BY 4.0 scans converted by `scripts/tracks/build_track.py`, and Chang, Okayama, Spielberg (Red Bull Ring), and Monaco are Assetto Corsa circuits by **Mitja Bonca** (used with permission), converted by `scripts/tracks/port_ac_track.py` with their 3D/2D trees, dynamic tyre grooves, skidmarks, starting lights and trackside semaphores, AI fast/pit lanes, kerbs, surface tables, section names, DRS zones, and TV cameras. Every circuit is meshopt-compressed (`npm run compress-tracks`) while keeping hidden physics meshes bit-exact, and has a lap-time-optimal racing line for each car class. Open the sim with `?colliders=1` to see the physics surfaces drawn over the circuit.
 
 ### Racing
 - **Race the AI**: a 5-car field with a standing start behind the lights, traffic and side-by-side racing, and a results screen. The AI level runs from Rookie to Alien and can be changed from the pause menu. Each car class has a tuning file in [`public/ai`](public/ai), with per-circuit and per-section overrides. The AI learns braking points and apex speeds corner by corner. In the rain it fits intermediates or full wets and plans its corner speeds and braking on the wet grip.
@@ -201,7 +201,7 @@ npm run build            # static export into ./out
 The tech is **Next.js 16** (static export), **React 19**, **Three.js** (WebGL2, AgX tone mapping, PBR), the **Web Audio API**, **WebRTC**, **WebHID** and **Tailwind CSS 4**.
 
 ### What's in the repository
-A clone carries the **Rwanda circuit** and the **2026 prototype car** (both versions: its body in `public/amr26/` and its sound in `public/cars/f12026/`), so `npm run dev` gives you a working game with those. Every other car and circuit is hosted on librecorsa.org only and is gitignored: the files sit in the `librecorsa-assets` R2 bucket, and `cloudflare/worker.js` serves them at the same paths. A clone lists only what it has (`src/lib/hosted-content.ts`); the deploy sets `NEXT_PUBLIC_HOSTED_CONTENT=1` to list everything, and you can set it in `.env.local` if you have the hosted files in `public/`. The verify suites skip checks that need files a clone doesn't have.
+A clone carries **RISE Motordrome** and the **2026 prototype car** (both versions: its body in `public/amr26/` and its sound in `public/cars/f12026/`), so `npm run dev` gives you a working game with those. Every other car and circuit is hosted on librecorsa.org only and is gitignored: the files sit in the `librecorsa-assets` R2 bucket, and `cloudflare/worker.js` serves them at the same paths. A clone lists only what it has (`src/lib/hosted-content.ts`); the deploy sets `NEXT_PUBLIC_HOSTED_CONTENT=1` to list everything, and you can set it in `.env.local` if you have the hosted files in `public/`. The verify suites skip checks that need files a clone doesn't have.
 
 To add your own car, see **[Porting a car](docs/PORTING-CARS.md)**. To publish a hosted car or circuit, upload its folder with `npm run upload-hosted -- public/cars/<id>` (car models go up compressed), then push to `main` so the edge cache picks it up.
 
@@ -213,12 +213,10 @@ Every push to `main` runs typecheck and the verify suites, then builds `./out` a
 ## License & credits
 
 - **Code** is under the [MIT License](LICENSE).
-- **3D models and audio** are for non-commercial, personal and educational use. Each one keeps its own license. This repository carries only the Rwanda circuit and the 2026 prototype's model and sound; the rest are served on librecorsa.org for playing there.
+- **3D models and audio** are for non-commercial, personal and educational use. Each one keeps its own license. This repository carries only RISE Motordrome and the 2026 prototype's model and sound; the rest are served on librecorsa.org for playing there.
 - **Cars**: the 2026 car model is by **DeX** ([CC BY 4.0](https://skfb.ly/pKNCK)), and the Mercedes-AMG GT3 by **Ddiaz Design** ([CC BY-NC-SA 4.0](https://skfb.ly/pOTPL)).
 - **Circuits**: the Sketchfab scans are by **Dave** and **Dave Love SketchFab**, plus Motegi by **Kevin Love SketchFab** (all CC BY 4.0); Chang International Circuit, Okayama International Circuit, Spielberg (Red Bull Ring), and Circuit de Monaco are by **Mitja Bonca** (used with permission).
-- **Rwanda trackside trees**: the acacia by **evolveduk** and the shrub by **Natural_Disbuster (lemedesign)**, both CC BY 4.0.
-- **Rwanda stands**: the grandstands, open stands and media centre are the project's own, generated by `scripts/rwanda-stands.mjs`.
-- **Rwanda props**: the jumbotrons, start lights, masts, tents and camera platforms are the project's own (`scripts/rwanda-props.mjs`); the helicopter is "Cedric-EC135" by **PatrickBiani**, CC BY 4.0.
+- **RISE Motordrome**: the circuit, its buildings, stands and props are the project's own, built by `scripts/rwanda-official/`. Its trees are the acacia by **evolveduk** and the shrub by **Natural_Disbuster (lemedesign)**, both CC BY 4.0.
 - **Rights holders**: if you made a model, texture, sound or other asset used here and want it credited, corrected or removed, open a [**rights / takedown request**](https://github.com/KhazP/librecorsa/issues/new?template=takedown-request.yml) — it will be fixed or removed from the live site, usually within 7 days.
 
 > [!CAUTION]

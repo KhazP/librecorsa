@@ -7,7 +7,7 @@ LibreCorsa is an independent, non-commercial, open-source web simulator built wi
 ## 1. Licensing
 
 * **Source Code (`src/`, `scripts/`)**: Licensed under the [MIT License](LICENSE). The MIT licence covers the code only.
-* **3D Models & Audio Assets (`public/`)**: Each asset keeps its own licence, listed below. Several are **non-commercial only**, so `public/` as a whole may not be used commercially. This repository carries only the Rwanda circuit and the 2026 prototype's model (`public/amr26/`) and sound (`public/cars/f12026/`); every other asset below is served on librecorsa.org for playing there and is not in the repository:
+* **3D Models & Audio Assets (`public/`)**: Each asset keeps its own licence, listed below. Several are **non-commercial only**, so `public/` as a whole may not be used commercially. This repository carries only RISE Motordrome and the 2026 prototype's model (`public/amr26/`) and sound (`public/cars/f12026/`); every other asset below is served on librecorsa.org for playing there and is not in the repository:
   | Asset | Licence |
   | :--- | :--- |
   | Circuit scans, F1 2026 model, ported F1 car models | CC BY 4.0 |
@@ -118,34 +118,16 @@ Each circuit below is created by **Mitja Bonca** and used with the author's perm
 
 * `"Dunsfold Aerodrome"`: 3D AC Conversion v1.01 by **ACU** (2015, via [AssettoCorsa.club](https://assettocorsa.club/)) (`dunsfold`). No licence or permission on record, and a forum post says an AC version of this track was converted from another sim without permission, so it is kept out of public releases until that is cleared. Converted the same way as the Mitja Bonca circuits (`scripts/tracks/port_ac_track.py`), plus the mod's own surface names mapped to road and run-off, the barriers opened where the lap passes beside and across itself, and run-off over the other leg's tarmac counted as road.
 
-### Rwanda trackside trees (`public/tracks/rwanda/scenery/`, `public/tracks/rwanda_official/scenery/`)
+### RISE Motordrome trackside trees (`public/tracks/rwanda_official/scenery/`)
 
-Each model below is licensed under [Creative Commons Attribution 4.0 (CC BY 4.0)](https://creativecommons.org/licenses/by/4.0/). Changes for the simulator (`scripts/rwanda-scenery.mjs`): transforms baked in, normal maps dropped, leaves toned darker and their normals turned towards the crown's shape, colour textures re-encoded to 1024 px WebP, and the models instanced at the circuit's tree and bush spots. The official layout instances the same two models at its own tree spots (`scripts/rwanda-official/foliage.mjs`).
+Each model below is licensed under [Creative Commons Attribution 4.0 (CC BY 4.0)](https://creativecommons.org/licenses/by/4.0/). Changes for the simulator (`scripts/rwanda-official/foliage.mjs`, from `scripts/rwanda-official/assets/foliage_src.glb`): transforms baked in, normal maps dropped, leaves toned darker and their normals turned towards the crown's shape, colour textures re-encoded to 1024 px WebP, lighter levels of detail made for the distance, and the models instanced at the circuit's tree and bush spots.
 
 * `"Acacia tree"` ([https://sketchfab.com/3d-models/acacia-tree-bb14c2bb679b4d0bb1c578a27e2ddabf](https://sketchfab.com/3d-models/acacia-tree-bb14c2bb679b4d0bb1c578a27e2ddabf)) by **evolveduk**; the bark is also simplified to 5 % of its triangles
 * `"Cliff Shrub For Terrain"` ([https://sketchfab.com/3d-models/cliff-shrub-for-terrain-7a0f2bf2982c4ff8bacc67856fdbfae2](https://sketchfab.com/3d-models/cliff-shrub-for-terrain-7a0f2bf2982c4ff8bacc67856fdbfae2)) by **Natural_Disbuster (lemedesign)**
 
-### Rwanda helicopter (`public/tracks/rwanda/scenery/props.glb`)
+### RISE Motordrome (`public/tracks/rwanda_official/`, `public/tracks/rwanda_official_short/`)
 
-Licensed under [Creative Commons Attribution 4.0 (CC BY 4.0)](https://creativecommons.org/licenses/by/4.0/). Changes for the simulator (`scripts/rwanda-props.mjs`): the helicopter only (the model's figure and its animation are left out), simplified to about 3,900 triangles, textures re-encoded to 512 px WebP, parked where the circuit's helicopter stood.
-
-* `"Cedric-EC135- Waving-190 Rotor"` ([https://sketchfab.com/3d-models/cedric-ec135-waving-190-rotor-09fbae3edc0a44bea7dbb7ed7644df6b](https://sketchfab.com/3d-models/cedric-ec135-waving-190-rotor-09fbae3edc0a44bea7dbb7ed7644df6b)) by **PatrickBiani**
-
-### Rwanda grandstands, open stands and media centre (`public/tracks/rwanda/scenery/stands.glb`)
-
-Made for this project: `scripts/rwanda-stands.mjs` generates them to the footprint, height and facing of the stands in the circuit, which came from a third-party track pack and are no longer shown. Their seat pattern is drawn by the script in the circuit's blue / yellow / green bands; the "Rwanda" roof lettering is the project's own texture, copied unchanged from the circuit.
-
-### Rwanda barrier, fence, pit wall and gantry textures (`public/tracks/rwanda/scenery/textures/`)
-
-Made for this project: `scripts/rwanda-textures.mjs` draws them to the size and coarse layout of the track-pack images they replace on the circuit's own Armco, debris fence, pit wall and start gantry (the average colour of each row, the fence's rails and mesh coverage, the wall's panel joints); every detail is drawn by the script. They are swapped in at load, so the circuit file is unchanged.
-
-### Rwanda trackside props (`public/tracks/rwanda/scenery/props.glb`)
-
-Made for this project: `scripts/rwanda-props.mjs` generates the jumbotrons, start lights, pit exit light, radio masts, paddock tents and TV camera platforms to the footprint and height of the ones in the circuit, which came from a third-party track pack and are no longer shown. The jumbotrons' circuit-map screen is the project's own texture, copied unchanged from the circuit.
-
-### Rwanda official layout (`public/tracks/rwanda_official/`)
-
-Made for this project: `scripts/rwanda-official/` builds the circuit in Blender from the published renders and figures of the official design. Its textures are drawn by the scripts, apart from the project's own barrier, fence, pit wall and gantry textures above. The ground's heights come from [Terrain Tiles](https://registry.opendata.aws/terrain-tiles/) (Mapzen, hosted by AWS; here SRTM data by NASA / USGS). Tree spots, ground colours and the lake's outline were read from Esri World Imagery and, around the venue, from the published aerial render; no imagery is in the files.
+Made for this project: `scripts/rwanda-official/` builds the circuit in Blender from the published renders and figures of the official design. Its textures are drawn by the scripts; the barrier, fence, pit wall and gantry textures (`scripts/rwanda-official/assets/textures/`) are the project's own too, drawn by an earlier script of this project. The ground's heights come from [Terrain Tiles](https://registry.opendata.aws/terrain-tiles/) (Mapzen, hosted by AWS; here SRTM data by NASA / USGS). Tree spots, ground colours and the lake's outline were read from Esri World Imagery and, around the venue, from the published aerial render; no imagery is in the files.
 
 ---
 
@@ -214,7 +196,7 @@ Made for this project: `scripts/rwanda-official/` builds the circuit in Blender 
   >
   > THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-* **Lake sun glitter and highlight anti-aliasing** (the Rwanda lake in `src/lib/render/scenery-detail.ts`: a wider GGX lobe broken into separate flashes by drifting multi-scale noise, averaged out with distance, and the bumped normal's spread across a pixel widening the highlight): adapted from [**beautiful-water**](https://github.com/VictorZakharov/beautiful-water) (`src/shaders/water/fragment.js`, commit `830c7f3`) by the **beautiful-water contributors** (`@VictorZakharov`), licensed under the MIT License:
+* **Lake sun glitter and highlight anti-aliasing** (the lake at RISE Motordrome in `src/lib/render/scenery-detail.ts`: a wider GGX lobe broken into separate flashes by drifting multi-scale noise, averaged out with distance, and the bumped normal's spread across a pixel widening the highlight): adapted from [**beautiful-water**](https://github.com/VictorZakharov/beautiful-water) (`src/shaders/water/fragment.js`, commit `830c7f3`) by the **beautiful-water contributors** (`@VictorZakharov`), licensed under the MIT License:
 
   > Copyright (c) 2026 beautiful-water contributors
   >
