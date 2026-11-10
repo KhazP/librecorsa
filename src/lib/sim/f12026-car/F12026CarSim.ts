@@ -1546,8 +1546,9 @@ export class F12026CarSim implements SimulatorCar {
         this.aiAutopilot ? this.autopilot(CONTROL_DT_S) : this.driverCommand(inputs, CONTROL_DT_S);
       const vin: VehicleInputs = {
         throttle: cmd.throttle,
-        // An empty tank (fuel is only burnt with fuel use on): the engine no longer fires
-        ignitionCut: this.fuelKg > 0 || !this.realism.fuelUse ? cmd.ignitionCut : 0,
+        // An empty tank (fuel is only burnt with fuel use on): the engine no longer fires. A race field's own car is
+        // spared: it starts on a load nobody chose and has no pit stop to take
+        ignitionCut: this.fuelKg > 0 || !this.realism.fuelUse || (this.aiAutopilot && !this.aiSelfRecovery) ? cmd.ignitionCut : 0,
         brake: cmd.brake,
         brakeWheelScale: cmd.brakeWheelScale,
         steer: cmd.steer,
