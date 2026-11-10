@@ -70,6 +70,8 @@ import { addContactShadow, seatContactShadow } from "@/lib/render/contact-shadow
 import { buildKeyLookup, HUD_TOGGLE_EVENT, type KeyAction } from "@/lib/input/bindings";
 import { carWheelLockDeg, connectedPads, DeviceInputReader, findPad } from "@/lib/input/device-input";
 import { webHidFfb, wheelFfb } from "@/lib/input/wheel-ffb";
+import { simMode } from "@/lib/sim/runtime/sim-mode";
+import { startSimWorker } from "@/lib/sim/runtime/worker-sim-host";
 import { steeringAssistSettings } from "@/lib/sim/steering-assist";
 import { axleSlipFromTelemetry, createAxleSlipSample } from "@/lib/sim/tyre-slip";
 import { clampFov, DEFAULT_KEYBOARD_TUNING, DEFAULT_PLAYER_SETTINGS, type PlayerSettings } from "@/lib/settings/player-settings";
@@ -552,6 +554,12 @@ export class DriveSession {
 
     let physics = createCar(vehicleNow, null);
     this.carNow = () => physics;
+    // The simulation worker, while it is opt-in (`sim-mode.ts`): started with the session, and its round trip logged
+    const simWorker = simMode() === "worker" ? startSimWorker() : null;
+    simWorker?.ping().then(
+      (ms) => console.info(`[sim] worker round trip ${ms.toFixed(1)} ms`),
+      (reason) => console.warn("[sim] worker unavailable, simulating on the page:", reason)
+    );
     this.snapshot = {
       telemetry: { ...physics.telemetry },
       replay: { active: false, timeS: 0, startS: 0, endS: 0, playing: true, speed: 1 },
@@ -2149,6 +2157,7 @@ export class DriveSession {
       haptics.stop();
       opponentAudio.dispose();
       wheelFfb.dispose();
+      simWorker?.dispose();
       document.removeEventListener("visibilitychange", onVisibilityChange);
       window.removeEventListener("pagehide", onPageHide);
       window.removeEventListener("pageshow", onPageShow);
