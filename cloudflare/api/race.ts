@@ -186,7 +186,7 @@ export class RaceServer {
     const rules = raceRules(meta);
     const lobby: LobbyState = {
       hostId: RACE_SERVER_ID,
-      settings: { trackId: rules.trackId, laps: rules.raceLaps, collisions: "protected", carClass: "any", vehicle: rules.vehicle },
+      settings: { trackId: rules.race.trackId, laps: rules.race.laps, collisions: "protected", carClass: "any", vehicle: rules.race.vehicle },
       players: this.players(gone),
       race,
     };
@@ -321,18 +321,19 @@ export class RaceServer {
 
     const rules = raceRules(meta);
     const times = await this.challengeTimes(rules.id, rules.trackId, rules.vehicle, entrants);
-    // Fastest of this week's challenge on pole; without a time, behind them in the order they joined
+    // Fastest of this week's challenge on pole (its laps, also when the race is on another circuit); without a time,
+    // behind them in the order they joined
     entrants.sort((a, b) => (times.get(a.peer) ?? Infinity) - (times.get(b.peer) ?? Infinity) || a.joinedMs - b.joinedMs);
     const race: RaceStartInfo = {
       id: `race${meta.index}`,
       lightsStartHostMs: meta.startsMs,
       holdMs: 200 + Math.random() * 2800,
-      laps: rules.raceLaps,
+      laps: rules.race.laps,
       collisions: "protected",
       carClass: "any",
-      trackId: rules.trackId,
+      trackId: rules.race.trackId,
       grid: entrants.map((e) => e.peer),
-      vehicle: rules.vehicle,
+      vehicle: rules.race.vehicle,
     };
     this.race = race;
     await this.state.storage.put("race", race);

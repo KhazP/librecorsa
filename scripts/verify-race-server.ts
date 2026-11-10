@@ -55,7 +55,8 @@ async function main() {
   // The schedule
   check('schedule: races start on the slot, every slot', nextRaceSlot(slot.startsMs - 5 * 60_000, SLOT_S).startsMs === slot.startsMs && raceSlot(slot.index + 1, SLOT_S).startsMs - slot.startsMs === SLOT_S * 1000);
   check('schedule: too close to the lights, the next race is the one after', nextRaceSlot(slot.startsMs - RACE_JOIN_CUTOFF_MS + 1, SLOT_S).index === slot.index + 1 && nextRaceSlot(slot.startsMs - RACE_JOIN_CUTOFF_MS, SLOT_S).index === slot.index);
-  check('schedule: a race is run to the rules of its week', rules.trackId.length > 0 && rules.raceLaps >= 1 && rules.startsMs <= slot.startsMs && slot.startsMs < rules.endsMs);
+  check('schedule: this week has a time trial that is not raced on, so its races are on another circuit and car', rules.trackId === 'dunsfold' && rules.race.trackId !== rules.trackId && rules.race.vehicle !== rules.vehicle);
+  check('schedule: a race is run to the rules of its week', rules.trackId.length > 0 && rules.race.laps >= 1 && rules.startsMs <= slot.startsMs && slot.startsMs < rules.endsMs);
   check('schedule: the countdown reads minutes and seconds', countdownLabel(slot.startsMs, slot.startsMs - 754_000) === '12:34' && countdownLabel(slot.startsMs, slot.startsMs + 5000) === '0:00');
 
   const state = fakeState();
@@ -70,7 +71,7 @@ async function main() {
     const ws = new FakeSocket();
     await server.connect(ws, peer, tok, slot);
     if (name && ws.closed === null) {
-      await server.webSocketMessage(ws, JSON.stringify({ ctl: { type: 'hello', name, code: name.slice(0, 3), color: '#00FF00', vehicle: rules.vehicle }, from: peer }));
+      await server.webSocketMessage(ws, JSON.stringify({ ctl: { type: 'hello', name, code: name.slice(0, 3), color: '#00FF00', vehicle: rules.race.vehicle }, from: peer }));
     }
     return ws;
   };
@@ -79,7 +80,7 @@ async function main() {
   check('an entrant is welcomed with the start time, then the lobby', al.sent[0].t === 'welcome' && al.sent[0].startsMs === slot.startsMs && sanitizeControl(al.sent[1].ctl)?.type === 'lobby' && al.sent[1].from === RACE_SERVER_ID);
   check('the grid alarm is set for shortly before the lights', state.alarmMs === slot.startsMs - RACE_COUNTDOWN_MS);
   const lobby = lobbyOf(al);
-  check('the lobby names the server as host and the week\'s circuit, car and laps', lobby?.hostId === RACE_SERVER_ID && lobby.settings.trackId === rules.trackId && lobby.settings.vehicle === rules.vehicle && lobby.settings.laps === rules.raceLaps && lobby.race === null);
+  check('the lobby names the server as host and the week\'s circuit, car and laps', lobby?.hostId === RACE_SERVER_ID && lobby.settings.trackId === rules.race.trackId && lobby.settings.vehicle === rules.race.vehicle && lobby.settings.laps === rules.race.laps && lobby.race === null);
   check('an entrant is in the lobby once it has said hello', lobby?.players.length === 1 && lobby.players[0].name === 'Al' && lobby.players[0].isHost === false);
 
   nowMs += 1000;
@@ -131,10 +132,10 @@ async function main() {
   await server.alarm();
   const start = startOf(al);
   check('at the alarm everyone gets the same start', start !== undefined && JSON.stringify(start) === JSON.stringify(startOf(bea)));
-  check('the lights are on the server\'s clock at the slot time', start?.lightsStartHostMs === slot.startsMs && start.trackId === rules.trackId && start.vehicle === rules.vehicle && start.laps === rules.raceLaps);
+  check('the lights are on the server\'s clock at the slot time', start?.lightsStartHostMs === slot.startsMs && start.trackId === rules.race.trackId && start.vehicle === rules.race.vehicle && start.laps === rules.race.laps);
   check('the grid: this week\'s fastest first, then the order they joined; no one who never said hello', start?.grid.join() === 'peer_bea,peer_al', start?.grid.join());
   check('every lobby from now on carries the race', lobbyOf(al)?.race?.id === start?.id);
-  check('the room is set to close well after the race', (state.alarmMs ?? 0) > slot.startsMs + rules.raceLaps * 60_000);
+  check('the room is set to close well after the race', (state.alarmMs ?? 0) > slot.startsMs + rules.race.laps * 60_000);
   void dee;
 
   // The race: state is passed on, cleaned, to the others
@@ -159,7 +160,7 @@ async function main() {
   check('nobody joins a race under way', (await join_('peer_new', token('n'), 'New')).last()?.t === 'started');
 
   // The end
-  nowMs = slot.startsMs + (rules.raceLaps * 4 + 10) * 60_000;
+  nowMs = slot.startsMs + (rules.race.laps * 4 + 10) * 60_000;
   await server.alarm();
   check('long after the race the room closes and forgets everything', state.sockets.every((s) => s.closed !== null) && state.store.size === 0 && state.alarmMs === null);
 

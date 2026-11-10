@@ -1,6 +1,6 @@
 /**
- * Scheduled races: one starts every slot (20 minutes by default) on the week's challenge circuit and car, for
- * whoever has joined by then. The slots follow from the clock alone, so the game can count down to the next race
+ * Scheduled races: one starts every slot (20 minutes by default) on the circuit and car the week's challenge names
+ * for its races (`race`), for whoever has joined by then. The slots follow from the clock alone, so the game can count down to the next race
  * without asking the server. No three.js, no DOM: the Worker imports this file.
  */
 import { challengeAt, type WeeklyChallenge } from "./weekly-challenge";
@@ -25,7 +25,7 @@ export function nextRaceSlot(nowMs: number, slotS: number = DEFAULT_RACE_SLOT_S)
   return raceSlot(Math.ceil((nowMs + RACE_JOIN_CUTOFF_MS) / (slotS * 1000)), slotS);
 }
 
-/** The circuit, car, laps and settings of the race in a slot: the challenge of the week it starts in */
+/** The challenge of the week a slot's race starts in: its `race` is the circuit, car and laps */
 export const raceRules = (slot: RaceSlot): WeeklyChallenge => challengeAt(slot.startsMs);
 
 /** "12:34" until `startsMs` (never negative) */

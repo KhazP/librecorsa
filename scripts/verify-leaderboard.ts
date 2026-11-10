@@ -206,17 +206,27 @@ async function main(): Promise<void> {
     const monday = Date.UTC(2026, 10, 9);
     check('challenge: one challenge from Monday 00:00 to Sunday 23:59', challengeAt(monday).id === '2026-W46' && challengeAt(monday + 7 * 86_400_000 - 1).id === '2026-W46' && challengeAt(monday - 1).id === '2026-W45' && challengeAt(monday).endsMs - challengeAt(monday).startsMs === 7 * 86_400_000);
     {
-      // Only the project's own circuit and circuits used with permission, and each week on a listed circuit
+      // Which circuits a week may be on, and how circuits and cars are paired
       type Listed = { id: string; quality: string };
       const listed = JSON.parse(readFileSync(join(__dirname, '../public/tracks/index.json'), 'utf8')) as Listed[];
-      const off = CHALLENGE_ROTATION.filter((c) => {
-        const t = listed.find((x) => x.id === c.trackId);
-        return !t || t.quality === 'sketchfab' || t.id === 'dunsfold';
-      });
-      check('challenge: no week is on a circuit converted from a Sketchfab model, or on Dunsfold', off.length === 0, off.map((c) => c.trackId).join(', '));
-      check('challenge: the rotation starts on the week of 9 November 2026', challengeAt(monday).trackId === CHALLENGE_ROTATION[0].trackId && challengeAt(monday - 1).trackId === CHALLENGE_ROTATION[CHALLENGE_ROTATION.length - 1].trackId);
+      // Listed, and the project's own or a circuit made for a simulator: not one converted from a Sketchfab model
+      const sketchfab = (id: string) => !['original', 'sim'].includes(listed.find((x) => x.id === id)?.quality ?? '');
+      const offTrial = CHALLENGE_ROTATION.filter((c) => sketchfab(c.trackId));
+      const offRace = CHALLENGE_ROTATION.filter((c) => sketchfab(c.race.trackId) || c.race.trackId === 'dunsfold');
+      check('challenge: no week is on a circuit converted from a Sketchfab model', offTrial.length === 0, offTrial.map((c) => c.trackId).join(', '));
+      check('challenge: no week\'s races are on such a circuit, or at Dunsfold', offRace.length === 0, offRace.map((c) => c.race.trackId).join(', '));
+      const first = challengeAt(monday);
+      check('challenge: the rotation starts the week of 9 November 2026 with the Liana at Dunsfold, a time trial only', first.trackId === 'dunsfold' && first.vehicle === 'liana' && first.race.trackId === 'rwanda_official' && first.race.vehicle === 'vf26' && challengeAt(monday - 1).trackId === CHALLENGE_ROTATION[CHALLENGE_ROTATION.length - 1].trackId);
+      const elsewhere = CHALLENGE_ROTATION.filter((c) => c.race.trackId !== c.trackId || c.race.vehicle !== c.vehicle);
+      check('challenge: only the Dunsfold weeks race on another circuit and car', elsewhere.length > 0 && elsewhere.every((c) => c.trackId === 'dunsfold'));
+      const raced = CHALLENGE_ROTATION.filter((c) => c.trackId !== 'dunsfold');
+      const circuits = new Set(raced.map((c) => c.trackId));
+      const cars = new Set(raced.map((c) => c.vehicle));
+      const pairs = new Set(raced.map((c) => `${c.trackId} ${c.vehicle}`));
+      check('challenge: over the rotation every circuit is driven in every car, once', pairs.size === circuits.size * cars.size && pairs.size === raced.length, `${pairs.size} pairs, ${circuits.size} circuits, ${cars.size} cars, ${raced.length} weeks`);
+      check('challenge: a week\'s races are 3 to 14 laps (ten minutes or so on the shortest and the longest lap)', CHALLENGE_ROTATION.every((c) => c.race.laps >= 3 && c.race.laps <= 14), CHALLENGE_ROTATION.map((c) => c.race.laps).join(' '));
     }
-    check('challenge: the next week is the next entry of the rotation', challengeAt(week.endsMs).trackId === CHALLENGE_ROTATION[1].trackId);
+    check('challenge: the next week is the next entry of the rotation', challengeAt(monday + 7 * 86_400_000).trackId === CHALLENGE_ROTATION[1].trackId && challengeAt(monday + 14 * 86_400_000).trackId === CHALLENGE_ROTATION[2].trackId);
     check('challenge: time left reads in days, hours, minutes', timeLeftLabel(week.endsMs, week.endsMs - 3 * 86_400_000 - 4 * 3_600_000) === '3 d 4 h' && timeLeftLabel(week.endsMs, week.endsMs - 5 * 60_000) === '5 min');
     const fit = variant(1.015, 'Weekly Hero', { assists: week.assists, realism: week.realism });
     check('challenge: a lap to the rules fits, one with other assists does not', fitsChallenge(fit, week) && !fitsChallenge(variant(1.015, 'x', { assists: 'assisted', realism: week.realism }), week) && !fitsChallenge({ ...fit, conditions: { ...fit.conditions!, surface: 'wet' } }, week));

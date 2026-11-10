@@ -1006,13 +1006,15 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   const challengeWeek = challengeAt(Date.now()).id;
   const challenge = useMemo(() => challengeAt(Date.now()), [challengeWeek]);
   const challengeAvailable = TRACKS.some((t) => t.id === challenge.trackId) && CARS.some((c) => c.physics === challenge.vehicle);
+  // The week's races can be on another circuit and car than its time trial
+  const racesAvailable = TRACKS.some((t) => t.id === challenge.race.trackId) && CARS.some((c) => c.physics === challenge.race.vehicle);
   const loadChallengeBoard = useCallback(
     () => fetchRemoteBoard(challenge.trackId, challenge.vehicle, { event: challenge.id, name: settingsRef.current.profile.name, limit: 20 }).catch(() => null),
     [challenge]
   );
   /**
-   * Out on track to the week's rules: its car, assists and realism, a dry track. `race`: against the AI over the
-   * week's race distance (when its field is ready for this car; else practice).
+   * Out on track to the week's rules: its car, assists and realism, a dry track. `race`: against the AI in the car
+   * and over the distance of the week's races (when its field is ready for this car; else practice).
    */
   const driveChallenge = useCallback(
     (race: boolean) => {
@@ -1020,13 +1022,14 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       applyWeekRules();
       startSession({ kind: "practice" });
       // After the session reset, so the swap finds no replay or AI field to carry over (as a multiplayer race's)
-      if (vehicleModelRef.current !== week.vehicle) changeCar(carForVehicle(week.vehicle).id);
+      const vehicle = race ? week.race.vehicle : week.vehicle;
+      if (vehicleModelRef.current !== vehicle) changeCar(carForVehicle(vehicle).id);
       if (race && session) {
         // The field for the car now on track, over the week's race distance
         const field = session.takeAiField();
         session.setRace({ kind: "ai", field });
         // No damage, as in an open race with other drivers (their cars take none)
-        startAiRace(field, { ...settingsRef.current.race, laps: week.raceLaps, start: "standing", damage: "off" });
+        startAiRace(field, { ...settingsRef.current.race, laps: week.race.laps, start: "standing", damage: "off" });
       } else {
         session?.car.resetToStartGrid(false);
       }
@@ -1034,14 +1037,18 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     },
     [session, startSession, changeCar, applyWeekRules]
   );
-  /** The week's challenge from any circuit: on another one the scene loads the week's first, then goes out */
+  /**
+   * The week's challenge (`race`: its race) from any circuit: on another one the scene loads the right one first,
+   * then goes out
+   */
   const goChallenge = useCallback(
     (race: boolean) => {
       const week = challengeAt(Date.now());
-      if (week.trackId !== trackId) {
+      const circuit = race ? week.race.trackId : week.trackId;
+      if (circuit !== trackId) {
         if (!onSelectTrack) return;
         pendingChallenge = { id: week.id, race };
-        void onSelectTrack(week.trackId);
+        void onSelectTrack(circuit);
         return;
       }
       driveChallenge(race);
@@ -1063,7 +1070,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     const asked = pendingChallenge;
     pendingChallenge = null;
     const week = challengeAt(Date.now());
-    if (week.id !== asked.id || week.trackId !== trackId) return;
+    if (week.id !== asked.id || (asked.race ? week.race.trackId : week.trackId) !== trackId) return;
     if (phaseRef.current === "loading") {
       session?.unlockAudio();
       setLoadingVisible(false);
@@ -1433,17 +1440,17 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
                   boardVersion,
                   driverName: settings.profile.name,
                   onDrive: handleDriveChallenge,
-                  hasRaces: races.on,
+                  hasRaces: races.on && racesAvailable,
                 }
               : undefined
           }
           races={
-            races.on && challengeAvailable
+            races.on && racesAvailable
               ? {
-                  trackName: challengeTrackName(challenge.trackId),
-                  carTitle: carForVehicle(challenge.vehicle).title,
+                  trackName: challengeTrackName(challenge.race.trackId),
+                  carTitle: carForVehicle(challenge.race.vehicle).title,
                   slotS: races.slotS,
-                  laps: challenge.raceLaps,
+                  laps: challenge.race.laps,
                   entry: raceEntry,
                   entrants: inScheduledRace ? (lobby?.players ?? []).map((p) => ({ id: p.peerId, name: p.name, code: p.code, me: p.peerId === localPeerId })) : [],
                   onJoin: handleJoinRace,

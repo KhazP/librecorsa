@@ -85,7 +85,7 @@ export const ChallengePanel: React.FC<ChallengePanelProps> = ({
         <p className="m-0 text-[13px] leading-snug text-[#8E96AA]">
           Same circuit, car and settings for everyone, until Monday. Every lap you finish to these rules counts, and your
           best one goes on the week&apos;s board by itself.
-          {hasRaces && available ? " To race others here, open Multiplayer." : ""}
+          {hasRaces && available ? " To race others this week, open Multiplayer." : ""}
         </p>
         {available ? (
           <button

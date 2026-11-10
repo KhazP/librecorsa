@@ -1,7 +1,7 @@
 /**
  * The weekly challenge: one circuit and car for everyone, with the assists and realism fixed and a dry track, from
- * Monday 00:00 UTC to the next. It has its own online board (the lap also counts on the open one), and its scheduled
- * races run on the same circuit and car.
+ * Monday 00:00 UTC to the next. It has its own online board (the lap also counts on the open one). The week's
+ * scheduled races are on the same circuit and car, except in a week whose circuit is for time trials only.
  *
  * Everything here follows from the clock alone, so the game and the server (cloudflare/api) agree on the week
  * without asking each other. No three.js, no DOM: the Worker imports this file.
@@ -15,8 +15,8 @@ export interface ChallengeRules {
   vehicle: VehicleModelId;
   assists: AssistPreset;
   realism: SimRealism;
-  /** Laps of the week's scheduled races */
-  raceLaps: number;
+  /** The week's scheduled races: their circuit, car and laps */
+  race: { trackId: string; vehicle: VehicleModelId; laps: number };
 }
 
 export interface WeeklyChallenge extends ChallengeRules {
@@ -27,23 +27,54 @@ export interface WeeklyChallenge extends ChallengeRules {
 }
 
 /**
- * The weeks, in order, then round again: the first entry is the week of 9 November 2026. Mostly with some assists
- * and standard realism so anyone can set a time; every few weeks one for no assists and the full simulation.
- *
- * Only the project's own circuit and circuits used with their author's permission: none converted from a Sketchfab
- * model (`quality: "sketchfab"` in public/tracks/index.json), and not Dunsfold, which has no permission on record.
- * The race laps make a race of about ten minutes in that car.
+ * The circuits raced on, with the 2026 prototype's ideal lap there (s, from the game's speed planner). Only the
+ * project's own circuit and circuits used with their author's permission: none converted from a Sketchfab model
+ * (`quality: "sketchfab"` in public/tracks/index.json).
  */
-export const CHALLENGE_ROTATION: readonly ChallengeRules[] = [
-  { trackId: "rwanda_official_short", vehicle: "vf26", assists: "semi_pro", realism: "standard", raceLaps: 6 },
-  { trackId: "rwanda_official", vehicle: "vf26", assists: "pro", realism: "full", raceLaps: 5 },
-  { trackId: "spielberg", vehicle: "amg-gt3", assists: "semi_pro", realism: "standard", raceLaps: 7 },
-  { trackId: "chang", vehicle: "mtr-496r", assists: "semi_pro", realism: "standard", raceLaps: 6 },
-  { trackId: "okayama_piper", vehicle: "liana", assists: "semi_pro", realism: "standard", raceLaps: 7 },
-  { trackId: "monaco", vehicle: "amg-gt3", assists: "semi_pro", realism: "standard", raceLaps: 6 },
-  { trackId: "okayama", vehicle: "mtr-496r", assists: "pro", realism: "full", raceLaps: 6 },
-  { trackId: "spielberg_south", vehicle: "liana", assists: "semi_pro", realism: "standard", raceLaps: 7 },
+const CIRCUITS: readonly { trackId: string; lapS: number }[] = [
+  { trackId: "rwanda_official_short", lapS: 91 },
+  { trackId: "spielberg", lapS: 69 },
+  { trackId: "chang", lapS: 76 },
+  { trackId: "okayama_piper", lapS: 43 },
+  { trackId: "rwanda_official", lapS: 105 },
+  { trackId: "monaco", lapS: 76 },
+  { trackId: "okayama", lapS: 73 },
+  { trackId: "spielberg_south", lapS: 45 },
 ];
+/** The cars, with their lap time as a multiple of the prototype's */
+const CARS: readonly { vehicle: VehicleModelId; pace: number }[] = [
+  { vehicle: "vf26", pace: 1 },
+  { vehicle: "amg-gt3", pace: 1.2 },
+  { vehicle: "mtr-496r", pace: 1.22 },
+  { vehicle: "liana", pace: 1.9 },
+];
+/** A race lasts about this long (s); drivers are taken to lap a little off the ideal */
+const RACE_TARGET_S = 600;
+const DRIVER_PACE = 1.06;
+const raceLaps = (lapS: number, pace: number): number => Math.max(3, Math.round(RACE_TARGET_S / (lapS * pace * DRIVER_PACE)));
+
+/** Every fourth week is for no assists and the full simulation; the others have some assists so anyone can set a time */
+const weekRules = (week: number): Pick<ChallengeRules, "assists" | "realism"> =>
+  week % 4 === 3 ? { assists: "pro", realism: "full" } : { assists: "semi_pro", realism: "standard" };
+
+/**
+ * The weeks, in order, then round again: the first entry is the week of 9 November 2026.
+ *
+ * Each round of nine weeks opens with the time trial of the Suzuki Liana at Dunsfold. Dunsfold is not raced on, so
+ * that week's races are at RISE Motordrome's Grand Prix layout in the prototype. Then come the eight circuits, each
+ * with the next car along from the round before, so over four rounds every circuit is driven in every car.
+ */
+export const CHALLENGE_ROTATION: readonly ChallengeRules[] = Array.from({ length: (1 + CIRCUITS.length) * CARS.length }, (_, week) => {
+  const round = Math.floor(week / (1 + CIRCUITS.length));
+  const slot = week % (1 + CIRCUITS.length);
+  if (slot === 0) {
+    const home = CIRCUITS[4];
+    return { trackId: "dunsfold", vehicle: "liana", ...weekRules(week), race: { trackId: home.trackId, vehicle: CARS[0].vehicle, laps: raceLaps(home.lapS, CARS[0].pace) } };
+  }
+  const circuit = CIRCUITS[slot - 1];
+  const car = CARS[(slot - 1 + round) % CARS.length];
+  return { trackId: circuit.trackId, vehicle: car.vehicle, ...weekRules(week), race: { trackId: circuit.trackId, vehicle: car.vehicle, laps: raceLaps(circuit.lapS, car.pace) } };
+});
 
 const DAY_MS = 86_400_000;
 const WEEK_MS = 7 * DAY_MS;
