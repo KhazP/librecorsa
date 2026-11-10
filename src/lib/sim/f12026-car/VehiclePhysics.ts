@@ -3276,7 +3276,7 @@ export class VehiclePhysics {
       // when its data says so), as a share of the distance that wears it out; the others by sliding power and rolling
       const wearRt = this.tyres[w.isFront ? 0 : 1];
       const wearDelta = wearRt.wearCurve
-        ? ((Math.hypot(w.slipVelX, w.vy) * dt * (td.wear?.loadScaled ? w.fz / wearRt.fz0 : 1)) / (1000 * wearRt.wearOutKm)) *
+        ? ((Math.hypot(w.slipVelX, w.vy) * dt * (td.wear?.loadScaled ? w.fz / (td.wear.loadRefN ?? wearRt.fz0) : 1)) / (1000 * wearRt.wearOutKm)) *
           (w.fz > 0 ? 1 : 0) *
           this.realism.tyreWearScale *
           wetWearScale(traits, this.wetness)

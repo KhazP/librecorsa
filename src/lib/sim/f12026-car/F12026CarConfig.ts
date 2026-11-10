@@ -725,9 +725,10 @@ export interface TyresCompoundData {
   /**
    * The compound's own wear (WEAR_CURVE of its data): grip (% of new) against the distance the tread has slid over
    * the road (km). The tyre is worn out at the curve's last point. `loadScaled`: sliding under more than Fz0 of load
-   * counts for more, in proportion. Absent: the model's generic wear
+   * counts for more, in proportion (`loadRefN`: the load it counts once at, where that is not the model's Fz0).
+   * Absent: the model's generic wear
    */
-  wear?: { curve: LutPoints; loadScaled?: boolean };
+  wear?: { curve: LutPoints; loadScaled?: boolean; loadRefN?: number };
   front: TyreGeometry;
   rear: TyreGeometry;
   modelData: TyresModelData;
