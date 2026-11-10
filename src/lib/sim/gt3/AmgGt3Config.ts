@@ -54,8 +54,15 @@ const WHEEL_TORQUE: [number, number][] = [
   [9500, 0],
 ];
 
+/**
+ * The curve against the reference laps [motec]: on warm tyres with fuel aboard the car pulled 4–5 % less
+ * full-throttle g than they do from 100 to 250 km/h, where the engine sets it, so the engine makes 4 % more than the
+ * curve: 406 kW (545 hp) at the crank, a GT3's balance-of-performance figure
+ */
+const TORQUE_SCALE = 1.04;
+
 /** Crank power (kW) at the curve's points [derived] */
-const POWER_CURVE: LutPoints = WHEEL_TORQUE.map(([rpm, nm]) => [rpm, ((nm / DRIVELINE_EFFICIENCY) * rpm * Math.PI) / 30 / 1000]);
+const POWER_CURVE: LutPoints = WHEEL_TORQUE.map(([rpm, nm]) => [rpm, ((nm * TORQUE_SCALE) / DRIVELINE_EFFICIENCY) * rpm * Math.PI / 30 / 1000]);
 
 const ENGINE = {
   powerCurve: POWER_CURVE,
@@ -439,6 +446,13 @@ function buildGt3LoadCurve(dRef: number, fz0: number, lsExp: number): LutPoints 
  * keep the grip steps (DY_REF = DX_REF 1.58 / 1.56 / 1.54) scaled ×1.165 to reference GT3 grip [motec], and three
  * temperature curves.
  */
+/**
+ * Lateral grip over longitudinal [motec]: on warm tyres with fuel aboard the car held 3 % less lateral g than the
+ * reference laps while it braked 3 % harder, and the second reference's slick has the same lean (its lateral load
+ * curve sits 5–7 % over its longitudinal one)
+ */
+const GT3_LATERAL_GRIP = 1.033;
+
 /** The reference slick's wear: grip (% of new) against km slid [ref] */
 const GT3_WEAR_CURVE: [number, number][] = [
   [0, 100],
@@ -479,12 +493,12 @@ function gt3Compound(
     rear: GT3_REAR,
     modelData: {
       // D_REF of the load-sensitivity law μ = D_REF·(Fz/FZ0)^(LS_EXP−1), plus 16-point tabulated DY_CURVE / DX_CURVE
-      Dy0: gripScale,
+      Dy0: Number((gripScale * GT3_LATERAL_GRIP).toFixed(4)),
       Dx0: gripScale,
       lsExpY: 0.7917,
       lsExpX: 0.8017,
       Fz0: 3787,
-      dyCurve: buildGt3LoadCurve(gripScale, 3787, 0.7917),
+      dyCurve: buildGt3LoadCurve(gripScale * GT3_LATERAL_GRIP, 3787, 0.7917),
       dxCurve: buildGt3LoadCurve(gripScale, 3787, 0.8017),
       // A brush tyre: the brush curve to the peak slip angle [motec, with the steering compliance: understeer gradient
       // 1.43 °/g against the logs' 1.44], and the second reference set's shape data, the peak angle growing 4.3 % per
@@ -568,12 +582,12 @@ function gt3Compound(
     // The 325/705-18 rear [spec REAR / REAR_1 / REAR_2, flatter load-sensitivity curve + 16-pt DY/DX tables + rear spring gain]
     rearOverride: {
       modelData: {
-        Dy0: rearGripScale,
+        Dy0: Number((rearGripScale * GT3_LATERAL_GRIP).toFixed(4)),
         Dx0: rearGripScale,
         Fz0: 3910,
         lsExpY: 0.8044,
         lsExpX: 0.8144,
-        dyCurve: buildGt3LoadCurve(rearGripScale, 3910, 0.8044),
+        dyCurve: buildGt3LoadCurve(rearGripScale * GT3_LATERAL_GRIP, 3910, 0.8044),
         dxCurve: buildGt3LoadCurve(rearGripScale, 3910, 0.8144),
         friction_limit_angle: 6.06,
         peakSlipLoadGain: 0.035,
