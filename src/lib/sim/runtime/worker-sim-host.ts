@@ -29,17 +29,25 @@ export function startSimWorker(): WorkerTransport {
     if (event.type === "error") console.warn("[sim] worker:", event.message);
     deliver(event);
   };
-  worker.onerror = (e) => {
-    failed = e.message || "The simulation worker failed";
-    console.warn("[sim] worker:", failed);
-    for (const w of waiting.values()) w.fail(failed);
+  /** The worker is given up on: the game carries on with the page's own car */
+  const fail = (message: string) => {
+    if (failed !== null) return;
+    failed = message;
+    console.warn("[sim] worker:", message);
+    for (const w of waiting.values()) w.fail(message);
     waiting.clear();
-    // The game carries on with the page's own car
-    deliver({ type: "error", message: failed });
+    deliver({ type: "error", message });
   };
+  worker.onerror = (e) => fail(e.message || "The simulation worker failed");
   return {
     post: (command: SimCommand) => {
-      if (failed === null) worker.postMessage(command);
+      if (failed !== null) return;
+      try {
+        worker.postMessage(command);
+      } catch (error) {
+        // Something in the command cannot cross to a worker
+        fail(error instanceof Error ? error.message : String(error));
+      }
     },
     listen: (listener) => {
       listeners.add(listener);

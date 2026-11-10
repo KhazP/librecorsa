@@ -117,10 +117,9 @@ for (const [name, vehicle, rigid] of MODELS) {
     );
   }
 
-  // The same car set up and stepped directly: the take-over's placement, then whole ticks with each frame's controls
+  // The same car set up and stepped directly: whole ticks with each frame's controls
   const direct = vehicleModelSpec(vehicle).createSim(track, null);
   setUp(direct);
-  direct.restorePose!({ x: direct.worldPosition.x, z: direct.worldPosition.z, yawRad: yawOf(direct.worldQuaternion), speedMs: direct.vxMs, s: direct.sMeters });
   let acc = 0;
   let pressed = false;
   const FRAMES = 60 * 12;
@@ -225,6 +224,15 @@ console.log('\n== Set-up, placement and hand-over (f12026-car)');
   r.car.step(FRAME_S, { throttle: 0.5 });
   r.host.endFrame(false);
   check('and drives it itself', r.twin.sMeters > sTwin && r.car.sMeters === r.twin.sMeters && !r.loop.runtime.running);
+
+  // The worker does not take a car on the move (its own has other tyres and fuel by now): only one fresh on the grid
+  r.host.endFrame(true);
+  const leftAlone = !r.host.remote;
+  r.car.resetToStartGrid(false);
+  r.host.endFrame(true);
+  frame(r, { throttle: 1 });
+  frame(r, { throttle: 1 });
+  check('the worker takes the car again only from a grid start', leftAlone && r.host.remote && Math.abs(r.car.sMeters - r.loop.runtime.simulatedCar!.sMeters) < 0.5, `${r.car.sMeters.toFixed(1)} m`);
 
   // A car change: the old car's commands no longer reach the simulation
   const oldCar = r.car;

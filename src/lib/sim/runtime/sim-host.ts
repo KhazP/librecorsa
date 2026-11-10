@@ -23,8 +23,11 @@ export interface SimTransport {
 }
 
 export interface SimHost {
-  /** The car to hand to the game in place of `twin` (the page's own car of that model) */
-  adopt(twin: SimulatorCar, vehicle: VehicleModelId): SimulatorCar;
+  /**
+   * The car to hand to the game in place of `twin` (the page's own car of that model). `trackRoot`: the circuit's
+   * loaded mesh when the twin was built on it already (a root loaded later reaches the car's `attachTrackRoot`)
+   */
+  adopt(twin: SimulatorCar, vehicle: VehicleModelId, trackRoot?: THREE.Object3D | null): SimulatorCar;
   /**
    * Once per frame, after the frame's step: the simulation behind the transport drives the adopted car when
    * `wantRemote` and it is able to, else the page does
@@ -49,18 +52,24 @@ export function createSimHost(transport: SimTransport, wallNowMs: () => number =
     current?.receive(event);
   });
   return {
-    adopt(twin, vehicle) {
+    adopt(twin, vehicle, trackRoot) {
       const mine = ++carNumber;
-      current = createRemoteCar(twin, {
-        post: (command) => {
-          if (mine === carNumber) transport.post(command);
+      const sendColliders = (root: THREE.Object3D) => {
+        if (sentRoots.has(root)) return;
+        sentRoots.add(root);
+        transport.post({ type: "colliders", data: trackColliderData(root) });
+      };
+      current = createRemoteCar(
+        twin,
+        {
+          post: (command) => {
+            if (mine === carNumber) transport.post(command);
+          },
+          sendColliders,
         },
-        sendColliders: (root) => {
-          if (sentRoots.has(root)) return;
-          sentRoots.add(root);
-          transport.post({ type: "colliders", data: trackColliderData(root) });
-        },
-      }, wallNowMs);
+        wallNowMs
+      );
+      if (trackRoot) sendColliders(trackRoot);
       // Before anything the game sets on the car: its commands follow, so the simulation's car is set up alike
       transport.post({ type: "init", car: mine, track: trackSent ? undefined : getActiveTrackSource(), vehicle, vf26Rigid: vf26OnRigidBody() });
       trackSent = true;

@@ -9,6 +9,11 @@
  *
  * A call that places the car (the grid, a teleport, a flashback) is made on the twin at once, and the twin is what
  * is read until the worker's first state from after that placement arrives: the game never sees the car where it was.
+ *
+ * The worker takes the car over only fresh on the grid (a new car, a session start, a restart), where its car and the
+ * twin are alike: a car on the move has tyre heat, wear and fuel the other does not, so once the page has driven the
+ * twin it keeps it until the next grid start. The page can take the car back at any time (a race starting), from where
+ * the worker had it.
  */
 import * as THREE from "three";
 import type { CarTelemetry, ControlInputs } from "@/types/f1";
@@ -140,7 +145,7 @@ export interface RemoteCar {
   readonly ready: boolean;
   /** The worker is driving */
   readonly remote: boolean;
-  /** Hands the car to the worker (true) or back to the page; a no-op until the worker is ready */
+  /** Hands the car to the worker (true: only once it is ready, and the car fresh on the grid) or back to the page */
   setRemote(on: boolean): void;
   /** Once per frame, after the frame's step (if any): stops the worker's clock when the game stopped driving */
   endFrame(): void;
@@ -164,6 +169,8 @@ export function createRemoteCar(twin: SimulatorCar, link: RemoteCarLink, wallNow
   let pendingFfb: number[] = [];
   let stepped = false;
   let wasStepping = false;
+  /** The twin is as the last grid start left it: the worker's car, given the same calls, is its like */
+  let twinFresh = false;
   /** The worker drives and its state is from after the last placement: what moves is read from it */
   const live = () => remote && stateEpoch === epoch;
 
@@ -171,26 +178,20 @@ export function createRemoteCar(twin: SimulatorCar, link: RemoteCarLink, wallNow
     _forward.set(0, 0, 1).applyQuaternion(q);
     return Math.atan2(_forward.x, _forward.z);
   };
-  /** Puts the worker's car where the twin is (the worker takes over a car already on the move) */
-  const syncWorkerToTwin = () => {
-    epoch++;
-    const p = twin.worldPosition;
-    link.post(
-      twin.restorePose
-        ? { type: "call", name: "restorePose", args: [{ x: p.x, z: p.z, yawRad: yawOf(twin.worldQuaternion), speedMs: twin.vxMs, s: twin.sMeters }], epoch }
-        : { type: "call", name: "teleportToDistance", args: [twin.sMeters, twin.vxMs, twin.lateralOffsetM], epoch }
-    );
-  };
   /** Puts the twin where the worker's car is (the page takes the car back) */
   const syncTwinToWorker = () => {
     if (stateEpoch !== epoch) return;
     const p = view.worldPosition;
     if (twin.restorePose) twin.restorePose({ x: p.x, z: p.z, yawRad: yawOf(view.worldQuaternion), speedMs: view.vxMs, s: view.sMeters });
     else twin.teleportToDistance(view.sMeters, view.vxMs, view.lateralOffsetM);
+    twinFresh = false;
   };
 
   const step = (dtSeconds: number, inputs: Partial<ControlInputs>): unknown => {
-    if (!remote) return twin.step(dtSeconds, inputs);
+    if (!remote) {
+      twinFresh = false;
+      return twin.step(dtSeconds, inputs);
+    }
     stepped = true;
     link.post({ type: "inputs", inputs });
     // The steering torque of the ticks since the last frame, for the force feedback to play
@@ -233,6 +234,7 @@ export function createRemoteCar(twin: SimulatorCar, link: RemoteCarLink, wallNow
     if (!wrapper) {
       wrapper = (...args: unknown[]) => {
         const result = (method as (...a: unknown[]) => unknown).apply(twin, args);
+        if (name === "resetToStartGrid") twinFresh = true;
         if (callable.has(name) && (kind !== "liveCall" || remote)) {
           link.post(kind === "place" ? { type: "call", name: name as CarCallable, args, epoch: ++epoch } : { type: "call", name: name as CarCallable, args });
         }
@@ -267,9 +269,12 @@ export function createRemoteCar(twin: SimulatorCar, link: RemoteCarLink, wallNow
       }
     },
     set(_target, key, value) {
-      twinMembers[key] = value;
       const kind = kindOf(key);
-      if ((kind === "config" || kind === "movingSet") && settable.has(key as string)) {
+      // A setting written again with the value it has (the game sets several every frame) is not sent again; what
+      // moves is always sent, the twin's own value of it being stale while the worker drives
+      const unchanged = kind === "config" && twinMembers[key] === value;
+      twinMembers[key] = value;
+      if (!unchanged && (kind === "config" || kind === "movingSet") && settable.has(key as string)) {
         link.post({ type: "set", key: key as CarSettable, value });
       }
       return true;
@@ -286,9 +291,8 @@ export function createRemoteCar(twin: SimulatorCar, link: RemoteCarLink, wallNow
       return remote;
     },
     setRemote(on) {
-      if (on === remote || (on && (!ready || failed))) return;
+      if (on === remote || (on && (!ready || failed || !twinFresh))) return;
       if (on) {
-        syncWorkerToTwin();
         remote = true;
       } else {
         syncTwinToWorker();
