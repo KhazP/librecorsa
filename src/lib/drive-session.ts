@@ -71,6 +71,7 @@ import { buildKeyLookup, HUD_TOGGLE_EVENT, type KeyAction } from "@/lib/input/bi
 import { carWheelLockDeg, connectedPads, DeviceInputReader, findPad } from "@/lib/input/device-input";
 import { webHidFfb, wheelFfb } from "@/lib/input/wheel-ffb";
 import { simMode } from "@/lib/sim/runtime/sim-mode";
+import { createSimHost } from "@/lib/sim/runtime/sim-host";
 import { startSimWorker } from "@/lib/sim/runtime/worker-sim-host";
 import { steeringAssistSettings } from "@/lib/sim/steering-assist";
 import { axleSlipFromTelemetry, createAxleSlipSample } from "@/lib/sim/tyre-slip";
@@ -506,8 +507,19 @@ export class DriveSession {
      * A car of the chosen model on the start grid, with the session's presets carried over from `prev`
      * (defaults for the first car) and that car's saved tyre setup
      */
+    /**
+     * The simulation worker, while it is opt-in (`sim-mode.ts`): it drives the player's car in practice, through a
+     * stand-in the rest of the session uses as the car (`sim-host.ts`). AI and online races run on the page.
+     */
+    const simWorker = simMode() === "worker" ? startSimWorker() : null;
+    const simHost = simWorker ? createSimHost(simWorker) : null;
+    simWorker?.ping().then(
+      (ms) => console.info(`[sim] worker round trip ${ms.toFixed(1)} ms`),
+      (reason) => console.warn("[sim] worker unavailable, simulating on the page:", reason)
+    );
     const createCar = (vehicle: VehicleModelId, prev: SimulatorCar | null, carId: CarId = carIdNow): SimulatorCar => {
-      const car = vehicleModelSpec(vehicle).createSim(track, trackRoot);
+      const built = vehicleModelSpec(vehicle).createSim(track, trackRoot);
+      const car = simHost ? simHost.adopt(built, vehicle, trackRoot) : built;
       // An F1 car's overtaking aids by its year, and race control for them while a race is on (free in practice);
       // other classes have none
       const rules = carOvertakingRules(carById(carId));
@@ -554,12 +566,6 @@ export class DriveSession {
 
     let physics = createCar(vehicleNow, null);
     this.carNow = () => physics;
-    // The simulation worker, while it is opt-in (`sim-mode.ts`): started with the session, and its round trip logged
-    const simWorker = simMode() === "worker" ? startSimWorker() : null;
-    simWorker?.ping().then(
-      (ms) => console.info(`[sim] worker round trip ${ms.toFixed(1)} ms`),
-      (reason) => console.warn("[sim] worker unavailable, simulating on the page:", reason)
-    );
     this.snapshot = {
       telemetry: { ...physics.telemetry },
       replay: { active: false, timeS: 0, startS: 0, endS: 0, playing: true, speed: 1 },
@@ -1552,6 +1558,12 @@ export class DriveSession {
         aiField?.update(dtSeconds);
         startupMonitor?.end("sim");
       }
+      // The worker drives the car in practice; an AI or online race steps it here, with the field around it
+      if (simHost) {
+        const was = simHost.remote;
+        simHost.endFrame(raceNow().kind === "practice");
+        if (simHost.remote !== was) console.info(simHost.remote ? "[sim] the worker drives the car" : "[sim] the page drives the car");
+      }
       if (mpRace && mpFrame && mpFrame.phase === "racing" && !this.snapshot.paused) {
         mpRace.lapClock.update(physics.sMeters, mpFrame.raceTimeS, mpRace.start.laps, mpRace.flagOut);
       }
@@ -2157,7 +2169,7 @@ export class DriveSession {
       haptics.stop();
       opponentAudio.dispose();
       wheelFfb.dispose();
-      simWorker?.dispose();
+      simHost?.dispose();
       document.removeEventListener("visibilitychange", onVisibilityChange);
       window.removeEventListener("pagehide", onPageHide);
       window.removeEventListener("pageshow", onPageShow);
