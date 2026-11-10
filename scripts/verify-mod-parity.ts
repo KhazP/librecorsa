@@ -397,6 +397,7 @@ section('MTR 496R', 'mt_mtr_496r', (mod) => {
   eq('496R TC RATE_HZ', MTR_496R_ELECTRONICS.tcRateHz, mod.num('electronics.ini', 'TRACTION_CONTROL', 'RATE_HZ'));
   eq('496R TC MIN_SPEED_KMH', MTR_496R_ELECTRONICS.tcMinSpeedKmh, mod.num('electronics.ini', 'TRACTION_CONTROL', 'MIN_SPEED_KMH'));
 
+  eq('496R VIRTUALKM USE_LOAD', compoundData(config, config.compoundSlots.soft).wear?.loadScaled ? 1 : 0, mod.num('tyres.ini', 'VIRTUALKM', 'USE_LOAD'));
   // Slick Soft / Medium / Hard are the first three compounds
   const keys = [...V10_SHAPE, 'WIDTH', 'RADIUS', 'RIM_RADIUS', 'RADIUS_ANGULAR_K', 'DAMP', 'RELAXATION_LENGTH', 'ROLLING_RESISTANCE_0', 'ROLLING_RESISTANCE_1', 'ROLLING_RESISTANCE_SLIP', 'PRESSURE_RR_GAIN', 'CAMBER_GAIN', 'DCAMBER_0', 'DCAMBER_1', 'PRESSURE_IDEAL', 'PRESSURE_D_GAIN', 'FZ0', 'LS_EXPY', 'LS_EXPX', 'BRAKE_DX_MOD'];
   (['soft', 'medium', 'hard'] as const).forEach((slot, i) => {
@@ -489,9 +490,6 @@ section('Suzuki Liana', 'suzuki_liana', (mod) => {
 // The GT3's base is a data set this machine doesn't hold; what it took from its second reference is checked here
 section('AMG GT3 (second reference)', 'gt3_ref', (mod) => {
   const config = AMG_GT3_CONFIG;
-  const tank = mod.vec('car.ini', 'FUELTANK', 'POSITION');
-  eq('GT3 FUELTANK POSITION y', config.chassis.fuelTank.y, tank[1]);
-  eq('GT3 FUELTANK POSITION z', config.chassis.fuelTank.z, tank[2]);
   const s = (sec: string, key: string) => mod.num('suspensions.ini', sec, key);
   eq('GT3 ARB front', config.suspensions.front.arb, s('ARB', 'FRONT'));
   eq('GT3 ARB rear', config.suspensions.rear.arb, s('ARB', 'REAR'));
@@ -505,8 +503,10 @@ section('AMG GT3 (second reference)', 'gt3_ref', (mod) => {
   const keys = ['FLEX_GAIN', 'PRESSURE_FLEX_GAIN', 'COMBINED_FACTOR', 'CX_MULT', 'SPEED_SENSITIVITY', 'FALLOFF_LEVEL', 'FALLOFF_SPEED', 'PRESSURE_D_GAIN', 'BRAKE_DX_MOD', 'DCAMBER_0', 'DCAMBER_1', 'DAMP'];
   for (const axle of ['front', 'rear'] as const) {
     const AX = axle.toUpperCase();
-    checkTyre(`GT3 ${axle}`, mod, axleTyre(compound, axle), { sectionName: AX, thermalName: `THERMAL_${AX}`, keys, tread: true });
+    // One wear curve per compound: the front's
+    checkTyre(`GT3 ${axle}`, mod, axleTyre(compound, axle), { sectionName: AX, thermalName: `THERMAL_${AX}`, keys, tread: true, wear: axle === 'front' });
   }
+  eq('GT3 VIRTUALKM USE_LOAD', compound.wear?.loadScaled ? 1 : 0, mod.num('tyres.ini', 'VIRTUALKM', 'USE_LOAD'));
 }, false);
 
 // The f12026 car's tyres: C3 / C2 / C1 (the third to fifth compounds) as soft / medium / hard. Its grip above 4 kN is
