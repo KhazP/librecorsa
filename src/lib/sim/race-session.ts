@@ -7,6 +7,7 @@ import type { RaceResultEntry, RaceSplits, RaceStandingEntry, RaceStatus, TireCo
 import type { InterpolatedPeerState, PeerRaceProgress, RaceStartInfo } from "@/lib/sim/multiplayer-sync";
 import type { SimulatorCar } from "@/lib/sim/simulator-car";
 import { carAheadOnRoad, earnedAtDetection } from "@/lib/sim/overtaking-rules";
+import { ContactGuard } from "@/lib/sim/contact-guard";
 
 /** Gap timing resolution: the race time at which the first car reached each bucket of race distance */
 const GAP_BUCKET_M = 25;
@@ -398,6 +399,7 @@ export class MultiplayerRace {
   ) {
     this.lapClock = new LapClock(lapLengthM);
     this.lightsOutHostMs = start.lightsStartHostMs + 5 * LIGHT_INTERVAL_MS + start.holdMs;
+    this.guard = start.collisions === "protected" ? new ContactGuard() : null;
     for (const p of roster) {
       if (p.peerId === localPeerId || !start.grid.includes(p.peerId)) continue;
       this.remote.set(p.peerId, {
@@ -468,9 +470,12 @@ export class MultiplayerRace {
   /** Contact with other players this frame (never on the grid; optionally not on the opening lap) */
   collisionsActive(frame: MultiplayerRaceFrame): boolean {
     if (frame.phase !== "racing" || this.start.collisions === "off") return false;
-    if (this.start.collisions === "ghost_lap1") return this.lapClock.distM >= this.lapLengthM;
+    if (this.start.collisions !== "on") return this.lapClock.distM >= this.lapLengthM;
     return true;
   }
+
+  /** The fair-play rule of an open race (collision rule 'protected'), applied on top of `collisionsActiveWith` */
+  readonly guard: ContactGuard | null;
 
   /**
    * Contact with one other player this frame. With ghosting on the opening lap the two cars are solid only once both

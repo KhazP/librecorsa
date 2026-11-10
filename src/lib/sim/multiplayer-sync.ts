@@ -70,6 +70,10 @@ export interface InterpolatedPeerState {
   yawRateRadS?: number;
   /** False while the pose is a guess (packets stale, just appeared, just jumped): no contact then */
   contactReady?: boolean;
+  /** The car reports itself a hazard (an open race's fair-play rule, contact-guard.ts) */
+  hazard?: boolean;
+  /** Passing through the player's car for now (a hazard, or a ram): drawn translucent, still a car in every other way */
+  passThrough?: boolean;
   /** Engine rpm and gear, when the car reports them (the AI field; remote players' are estimated from wheel speed) */
   rpm?: number;
   gear?: number;
@@ -1987,6 +1991,7 @@ export class MultiplayerSyncManager {
     buffer.renderedState.teamColorHex = buffer.teamColorHex;
     buffer.renderedState.name = pkt.name;
     buffer.renderedState.race = pkt.race;
+    buffer.renderedState.hazard = pkt.hz === true;
     // The sender may switch car or circuit mid-session
     buffer.renderedState.vehicle = pkt.vehicle;
     buffer.renderedState.trackId = pkt.trackId;

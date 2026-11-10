@@ -49,6 +49,8 @@ export interface NetworkVehiclePacket {
   name?: string;
   /** Progress in a multiplayer race */
   race?: PeerRaceProgress;
+  /** The sender judges its own car a hazard (slow, wrong way, off the track): the others pass through it */
+  hz?: boolean;
 }
 
 /** A racer's progress, sent with every state packet while a multiplayer race runs */
@@ -71,7 +73,11 @@ export interface PeerRaceProgress {
   cmp?: TireCompound;
 }
 
-export type CollisionMode = 'on' | 'ghost_lap1' | 'off';
+/**
+ * 'protected' is an open race's rule: ghosted on the opening lap, and after it a car that is a danger to the others
+ * can't touch them (src/lib/sim/contact-guard.ts)
+ */
+export type CollisionMode = 'on' | 'ghost_lap1' | 'off' | 'protected';
 export type CarClassRule = 'any' | 'f1' | 'gt3';
 
 export interface LobbySettings {
@@ -146,7 +152,7 @@ const asCode = (v: unknown) => {
 const asColor = (v: unknown) => (typeof v === 'string' && /^#[0-9a-fA-F]{6}$/.test(v) ? v : '#E10600');
 const finite = (v: unknown, lo: number, hi: number): number | null =>
   typeof v === 'number' && Number.isFinite(v) && v >= lo && v <= hi ? v : null;
-const COLLISION_MODES: readonly CollisionMode[] = ['on', 'ghost_lap1', 'off'];
+const COLLISION_MODES: readonly CollisionMode[] = ['on', 'ghost_lap1', 'off', 'protected'];
 const CAR_CLASSES: readonly CarClassRule[] = ['any', 'f1', 'gt3'];
 
 function sanitizeRace(v: unknown): PeerRaceProgress | undefined {
@@ -284,6 +290,7 @@ export function sanitizePacket(v: unknown): NetworkVehiclePacket | null {
     seq,
     name: typeof p.name === 'string' ? clampStr(p.name, 16, 'Driver') : undefined,
     race: sanitizeRace(p.race),
+    hz: p.hz === true ? true : undefined,
   };
 }
 

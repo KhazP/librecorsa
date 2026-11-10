@@ -68,7 +68,11 @@ async function main() {
   const local = { driverCode: 'TST', teamColorHex: '#00FF00', pos: [0, 0, 0], quat: [0, 0, 0, 1], linVel: [0, 0, 0], angVel: [0, 0, 0], steerAngle: 0, wheelRPMs: [0, 0, 0, 0], throttle: 0, brake: 0, trackS: 0, speedKmh: 0 } as Parameters<typeof m.update>[1];
   const starts: string[] = [];
   const aborts: string[] = [];
-  m.onRaceStart = (s) => starts.push(s.id);
+  let startRule = '';
+  m.onRaceStart = (s) => {
+    starts.push(s.id);
+    startRule = s.collisions;
+  };
   m.onRaceAbort = (id) => aborts.push(id);
 
   m.joinScheduledRace();
@@ -111,10 +115,11 @@ async function main() {
   check('a lobby or a start from another car is ignored', inner.hostId === SERVER && starts.length === 0);
 
   // The start
-  const race = { id: 'race7', lightsStartHostMs: 5_010_000, holdMs: 1000, laps: 5, collisions: 'ghost_lap1', carClass: 'any', trackId: 'sepang', grid: ['peer_other', me], vehicle: 'mtr-496r' };
+  const race = { id: 'race7', lightsStartHostMs: 5_010_000, holdMs: 1000, laps: 5, collisions: 'protected', carClass: 'any', trackId: 'sepang', grid: ['peer_other', me], vehicle: 'mtr-496r' };
   ws.get({ ctl: { type: 'start', start: race }, from: SERVER });
   ws.get(lobby(race));
   check('the server\'s start begins the race, once', starts.join() === 'race7');
+  check("and carries an open race's contact rule", startRule === 'protected', startRule);
   clock += 40;
   m.update(clock, local);
   check('racing, this car\'s state goes to the server', ws.states().length === 1);
