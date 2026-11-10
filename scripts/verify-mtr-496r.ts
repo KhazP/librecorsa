@@ -81,7 +81,9 @@ console.log('\n== Aero against speed (flat, held speed)');
     });
     const t = car.telemetry;
     const q = 0.5 * 1.225 * (kmh / 3.6) ** 2;
-    return { clA: t.downforceN / q, cdA: t.dragN / q, bal: t.AERO_BALANCE, front: t.aeroHeightFront, rear: t.aeroHeightRear };
+    // The front tyres' free radius: the rolling radius with the third of the deflection it gives up put back
+    const freeRadius = 0.5 * (car.wheels[0].rollingRadius + car.wheels[0].deflection / 3 + car.wheels[1].rollingRadius + car.wheels[1].deflection / 3);
+    return { clA: t.downforceN / q, cdA: t.dragN / q, bal: t.AERO_BALANCE, front: t.aeroHeightFront, rear: t.aeroHeightRear, freeRadius, omega: car.wheels[0].omega };
   };
   const slow = at(100);
   const fast = at(300);
@@ -92,6 +94,10 @@ console.log('\n== Aero against speed (flat, held speed)');
   // The front wing ahead of the front axle, the rear wing behind the rear: 40–42 % on the front
   check('Aero balance 38–44 % front', slow.bal > 38 && slow.bal < 44 && fast.bal > 38 && fast.bal < 44, `${fmt(slow.bal, 1)} / ${fmt(fast.bal, 1)} %`);
   check('Floor clear of the ground at 300 km/h', Math.min(fast.front, fast.rear) > 0.04, `${fmt(fast.front * 1000, 0)} / ${fmt(fast.rear * 1000, 0)} mm`);
+  // 0.025 mm of radius per rad/s of spin: 2 mm at 100 km/h, 6 mm at 300
+  const grown = (fast.freeRadius - 0.34) * 1000;
+  check('Front tyres grow 6 mm by 300 km/h', Math.abs(grown - 0.025 * fast.omega) < 0.2 && grown > 5.5 && grown < 6.5 && (slow.freeRadius - 0.34) * 1000 < 2.3,
+    `${fmt((slow.freeRadius - 0.34) * 1000, 1)} mm at 100, ${fmt(grown, 1)} mm at 300 km/h (${fmt(fast.omega, 0)} rad/s)`);
 }
 
 const pad = createFlatTestTrack(30_000, 3000);
