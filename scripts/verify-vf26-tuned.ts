@@ -10,7 +10,8 @@
 import * as THREE from 'three';
 import { getActiveTrackData } from '../src/lib/track-data';
 import { F12026CarSim } from '../src/lib/sim/f12026-car/F12026CarSim';
-import { createVf26Sim, VF26_SIM_PROFILE } from '../src/lib/sim/f12026-car/Vf26Sim';
+import { createVf26Sim, VF26_SIM_PROFILE, vf26TunedProfileCar } from '../src/lib/sim/f12026-car/Vf26Sim';
+import { plannedDownforceCoef, plannedMu } from '../src/lib/sim/speed-profile';
 import { VF26_TUNED_CONFIG } from '../src/lib/sim/f12026-car/Vf26Tune';
 import { VF26_CAR_CONFIG } from '../src/lib/sim/f12026-car/Vf26Config';
 import { VF26_AI_REFERENCE } from '../src/lib/sim/vf26-data';
@@ -83,6 +84,92 @@ const m = measureVf26(VF26_TUNED.make);
   check('Steering for 1.5 g at 180 km/h 0.07 to 0.09 of lock', between(m.steerFor15G, 0.07, 0.09), f(m.steerFor15G, 3));
   check('A step of steering overshoots by under 10 %', m.stepOvershoot < 0.1, `${f(m.stepOvershoot * 100, 0)} %`);
   check('A lift in a 2.5 g corner: under 3° of slide', m.liftOffSlipDeg < 3, `${f(m.liftOffSlipDeg, 1)}°`);
+}
+
+console.log('\n== The braking line and target speed plan this car');
+{
+  // The planning model in the pad's sea-level air
+  const pm = vf26TunedProfileCar(1.225);
+  const G = 9.81;
+  const plannedStop = (fromMs: number, toMs: number) => {
+    let d = 0;
+    for (let v = fromMs; v > toMs; v -= 0.05) {
+      const grip = plannedMu(pm, pm.muLong, v) * (G + (plannedDownforceCoef(pm, v) * v * v) / pm.massKg);
+      d += (v * 0.05) / (Math.min(grip, pm.maxBrakeForceN / pm.massKg) + (pm.dragCoef * v * v) / pm.massKg);
+    }
+    return d;
+  };
+  for (const [from, to] of [
+    [300, 100],
+    [200, 60],
+  ]) {
+    // A threshold stop: the pedal held where the most-slipping wheel sits at 7 %
+    const sim = fresh(from);
+    for (let t = 0; t < 0.5; t += H) sim.step(H, { throttle: 0.6 });
+    const s0 = sim.sMeters;
+    const v0 = sim.vxMs;
+    let pedal = 1;
+    for (let t = 0; t < 8 && sim.vxMs * 3.6 > to; t += H) {
+      const slip = Math.max(...sim.telemetry.wheelSlipRatios.map((r) => Math.abs(r)));
+      pedal = THREE.MathUtils.clamp(pedal + THREE.MathUtils.clamp((0.07 - slip) * 0.6, -0.02, 0.01), 0.2, 1);
+      sim.step(H, { brake: pedal });
+    }
+    const driven = sim.sMeters - s0;
+    const planned = plannedStop(v0, to / 3.6);
+    check(`${f(v0 * 3.6, 0)}→${to} km/h is planned 0–15 % longer than the car stops`, planned >= driven && planned < driven * 1.15, `${f(planned, 1)} m planned, ${f(driven, 1)} m driven`);
+  }
+  const margins = VF26_AI_REFERENCE.lateral.map(([v], i) => {
+    const planned = (plannedMu(pm, pm.muLat, v) * (G + (plannedDownforceCoef(pm, v) * v * v) / pm.massKg)) / G;
+    return 1 - planned / m.lateralG[i];
+  });
+  check('Corners are planned 1 to 9 % under the g the car holds', margins.every((x) => x > 0.01 && x < 0.09), margins.map((x) => `${f(x * 100, 0)} %`).join(' / '));
+}
+
+console.log('\n== The other compounds, and steering from the keyboard');
+{
+  // Every compound's grip rises with temperature up to its peak: the cold side joins each compound's own curve
+  const dips = Object.entries(C.tyreCompounds).filter(([, t]) => {
+    const curve = t.thermalData.thermalPerformanceCurve;
+    const peak = Math.max(...curve.map(([, g]) => g));
+    const upTo = curve.findIndex(([, g]) => g === peak);
+    return !curve.slice(0, upTo + 1).every(([, g], i, a) => i === 0 || g >= a[i - 1][1]);
+  });
+  check('Every compound gains grip with temperature up to its peak', dips.length === 0, dips.map(([k]) => k).join(', ') || `${Object.keys(C.tyreCompounds).length} compounds`);
+  const lateral = (compound: 'soft' | 'medium' | 'hard', kmh: number) => {
+    const sim = fresh(kmh);
+    sim.tireCompound = compound;
+    sim.teleportToDistance(2000, kmh / 3.6);
+    const v = kmh / 3.6;
+    const hist: number[] = [];
+    let best = 0;
+    const T = 12;
+    for (let t = 0; t < T; t += 1 / 120) {
+      sim.step(1 / 120, { throttle: THREE.MathUtils.clamp(0.25 + 0.6 * (v - sim.vxMs), 0, 1), analogSteer: Math.min(1, t / T) * Math.min(1, (24 / v) ** 1.5) });
+      hist.push(Math.abs(sim.telemetry.lateralG));
+      if (hist.length > 120) hist.shift();
+      if (hist.length === 120) best = Math.max(best, hist.reduce((a, b) => a + b, 0) / 120);
+      if (Math.abs(Math.atan2(sim.vyMs, Math.max(1, Math.abs(sim.vxMs)))) > 0.35) break;
+    }
+    return best;
+  };
+  const g = (['soft', 'medium', 'hard'] as const).map((c) => [lateral(c, 86), lateral(c, 216)]);
+  check('Medium and hard hold 2 to 5 % less than the compound above, slow and fast', [1, 2].every((i) => [0, 1].every((k) => between(g[i][k] / g[i - 1][k], 0.95, 0.98))), g.map((x) => x.map((y) => f(y)).join(' / ')).join('   '));
+
+  // The keyboard's steering assist asks for what the car can hold: the key held down at 250 km/h
+  const sim = fresh(250);
+  const v = 250 / 3.6;
+  let sum = 0;
+  let n = 0;
+  let bodySlipDeg = 0;
+  for (let t = 0; t < 5; t += H) {
+    sim.step(H, { throttle: THREE.MathUtils.clamp(0.25 + 0.6 * (v - sim.vxMs), 0, 1), kbSteer: 1 });
+    if (t > 3) {
+      sum += Math.abs(sim.telemetry.lateralG);
+      n++;
+    }
+    bodySlipDeg = Math.max(bodySlipDeg, (Math.abs(Math.atan2(sim.vyMs, Math.max(1, Math.abs(sim.vxMs)))) * 180) / Math.PI);
+  }
+  check('A steering key held at 250 km/h: the car at its limit, under 5° of slide', sum / n > 0.95 * m.lateralG[4] && bodySlipDeg < 5, `${f(sum / n)} g, ${f(bodySlipDeg, 1)}° of body slip`);
 }
 
 console.log('\n== Against 2026 qualifying laps, flat out');

@@ -5,10 +5,28 @@
  */
 import type { BuiltTrackData } from '@/lib/track-data';
 import type * as THREE from 'three';
+import { createVf26ProfileCarModel, NOMINAL_AIR_DENSITY, type SpeedProfileCarModel } from '../speed-profile';
 import { VF26_TYRE_SETUP_RANGES } from '../vf26-data';
 import { type CarSimProfile, F12026CarSim, F12026_ELECTRONICS } from './F12026CarSim';
 import { VF26_CAR_CONFIG } from './Vf26Config';
 import { VF26_TUNED_CONFIG } from './Vf26Tune';
+
+/**
+ * The tuned car as its braking line and target speed plan it: the VF26's planning model with this car's brakes and
+ * the grip it measures. It stops in 86 m from 300 km/h where the data's car takes 77, so on the circuit's own plan
+ * (made for that car) the braking points came late: μ 1.4 on the brakes plans 2 to 5 % longer than the car stops,
+ * and 1.63 in corners 3 to 6 % under what it holds.
+ */
+export function vf26TunedProfileCar(airDensity = NOMINAL_AIR_DENSITY): SpeedProfileCarModel {
+  const { maxTorqueNm, front_bias } = VF26_TUNED_CONFIG.brakes;
+  const soft = VF26_TUNED_CONFIG.tyreCompounds.PhysicsTyreCompound_F1_Soft;
+  return {
+    ...createVf26ProfileCarModel('balanced', airDensity),
+    muLat: 1.63,
+    muLong: 1.4,
+    maxBrakeForceN: 0.92 * 2 * maxTorqueNm * (front_bias / soft.front.radius + (1 - front_bias) / soft.rear.radius),
+  };
+}
 
 export const VF26_SIM_PROFILE: CarSimProfile = {
   id: 'vf26',
@@ -29,10 +47,12 @@ export const VF26_SIM_PROFILE: CarSimProfile = {
   // As the f12026-car until the flat-ground probes are run on this car
   padLateralMu: 1.75,
   braking: { lowG: 1.6, aeroG: 2.8, refMs: 70 },
+  speedProfile: vf26TunedProfileCar(),
 };
 
 /** The same car on the data as it stands, untuned: what `F1Physics2026` drives */
-export const VF26_DATA_SIM_PROFILE: CarSimProfile = { ...VF26_SIM_PROFILE, config: VF26_CAR_CONFIG };
+// (no planning model of its own: the circuit's plan is this car's)
+export const VF26_DATA_SIM_PROFILE: CarSimProfile = { ...VF26_SIM_PROFILE, config: VF26_CAR_CONFIG, speedProfile: undefined };
 
 export function createVf26Sim(track: BuiltTrackData, root?: THREE.Object3D | null, profile: CarSimProfile = VF26_SIM_PROFILE): F12026CarSim {
   return new F12026CarSim(track, root, profile);
