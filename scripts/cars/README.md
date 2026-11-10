@@ -57,3 +57,21 @@ Flags: `--car <preset>` (default: by the car folder's name), `--skins-out <folde
 - **Wheel dash**: a preset's `steer_nodes` (the 496R's screen `GEO_LCD` and its `RPM_*` shift lights) stay nodes of their own under `STEER`; the screen's material becomes `INT_DISPLAY`, which the game draws its live display on, and the CAR node's `revLeds` extras give each light's rpm and colour from the car's `digital_instruments.ini` (`src/lib/render/ported-wheel-dash.ts`).
 - **Liveries**: the GLB's `skinMaps` extras name the materials a livery repaints and the file each takes from a skin's folder; the rig swaps them in for the livery a player picks (`CarDefinition.skins`).
 - **Cameras**: the cockpit eye from car.ini `DRIVEREYES` (read from `data/` or `data.acd`); dash, bumper and roof cameras placed from the geometry.
+
+# Physics from a mod's data (`mod-physics-import.ts`, `verify-mod-parity.ts`)
+
+`port_ac_car.py` ports a car's meshes. Its physics is a `*Config.ts` written by hand from the mod's data files, and two
+scripts keep that honest:
+
+```bash
+# Draft the part of a config the data states (car folder with data/ or data.acd, or an unpacked data folder)
+npx tsx scripts/cars/mod-physics-import.ts <folder> > /tmp/NewCarConfig.draft.ts
+
+# Check every value a config takes from its data against the files, and list the keys it leaves uncarried
+npx tsx scripts/verify-mod-parity.ts [--unread]
+```
+
+The draft carries each value converted to this sim's units and tagged with its file and key; what the data does not
+state is marked `TODO`. The parity suite reads the data folders from the local reference kit (`REALISM_REF`, default
+`~/Documents/GitHub/_realism-ref/mods/<id>`) and skips a car whose folder is absent. A new car gets a section there.
+
