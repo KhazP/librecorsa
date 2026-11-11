@@ -3,7 +3,7 @@
  * (race-incidents.ts); here each client judges the cars on the road ahead of its own from what their packets say, and
  * shows the player the same flag messages. No penalties: a flag only warns.
  *
- * A car is an incident when, past its first 150 m and before its flag, it is
+ * A car is an incident when, before its flag (and off the start, once past its first 150 m), it is
  *  - stopped or crawling (under the speed at which the fair-play rule calls a car standing, contact-guard.ts)
  *  - going the wrong way along the track
  *  - off the track by the road, about to rejoin (far out in a run-off it is in nobody's way)
@@ -33,9 +33,13 @@ export const CAR_ON_S = 0.5;
 export const CAR_OFF_S = 1;
 /** The player's flag comes down this long after the last incident left the zone (s) */
 export const YELLOW_HOLD_S = 1;
-/** Off the start everyone is slow: no flags in the first seconds, nor for a car in its first metres */
+/**
+ * Off the start everyone is slow: no flags in the first seconds, nor for a car in its first metres until the field
+ * is long gone (then a car still on the grid is a car stopped on the track)
+ */
 export const START_QUIET_S = 10;
 export const START_QUIET_M = 150;
+export const START_GRACE_S = 30;
 /** Messages stay on the feed this long (s) */
 const MESSAGE_LIFE_S = 6;
 
@@ -62,8 +66,10 @@ export interface FlagCar {
   alongMs: number;
   /** The car's packets say it is a hazard */
   hazard: boolean;
-  /** Racing in this race: started, past its first metres, not yet flagged */
+  /** Racing in this race: not yet flagged */
   racing: boolean;
+  /** Distance covered since the start (m) */
+  distM: number;
 }
 
 /** Why a car is an incident right now, or null */
@@ -118,7 +124,8 @@ export class MultiplayerFlags {
         f = { causeS: 0, clearS: 0, on: false, cause: null };
         this.cars.set(c.id, f);
       }
-      const cause = quiet ? null : causeOf(c);
+      const offTheStart = c.distM < START_QUIET_M && raceTimeS < START_GRACE_S;
+      const cause = quiet || offTheStart ? null : causeOf(c);
       if (cause) {
         f.causeS += dtS;
         f.clearS = 0;
@@ -200,7 +207,8 @@ export function flagCarsOf(track: FlagTrack, peers: readonly InterpolatedPeerSta
       speedMs: p.speedKmh / 3.6,
       alongMs: (p.linearVelocity.x * t.x + p.linearVelocity.z * t.z) / tLen,
       hazard: p.hazard === true,
-      racing: p.race.fin === null && p.race.dist >= START_QUIET_M,
+      racing: p.race.fin === null,
+      distM: p.race.dist,
     });
   }
   return out;

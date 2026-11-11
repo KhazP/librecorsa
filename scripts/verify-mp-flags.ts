@@ -16,8 +16,10 @@ import {
   CAR_ON_S,
   causeOf,
   flagCarsOf,
+  flagMultiplayerRace,
   MultiplayerFlags,
   NEAR_ROAD_M,
+  START_GRACE_S,
   YELLOW_AHEAD_M,
   YELLOW_HOLD_S,
   type FlagCar,
@@ -44,6 +46,7 @@ const car = (o: Partial<FlagCar> = {}): FlagCar => ({
   alongMs: 60,
   hazard: false,
   racing: true,
+  distM: 6000,
   ...o,
 });
 
@@ -86,7 +89,7 @@ const kinds = (f: MultiplayerFlags, t: number) => (f.feed(t) ?? []).map((m) => m
   check('a car far out in a run-off is in nobody\'s way', causeOf(car({ latM: -(HALF + NEAR_ROAD_M + 2), speedMs: 0, alongMs: 0 })) === null);
   check('its own hazard flag at low speed', causeOf(car({ hazard: true, speedMs: 15, alongMs: 15 })) === 'hazard');
   check('its own hazard flag at racing speed (the flag\'s tail)', causeOf(car({ hazard: true })) === null);
-  check('a finished car or one off the start is no incident', causeOf(car({ racing: false, speedMs: 0, alongMs: 0 })) === null);
+  check('a finished car is no incident', causeOf(car({ racing: false, speedMs: 0, alongMs: 0 })) === null);
 }
 
 // ---- 2. The player's flag ------------------------------------------------------------------------------------------------
@@ -170,17 +173,21 @@ const kinds = (f: MultiplayerFlags, t: number) => (f.feed(t) ?? []).map((m) => m
     Array.from({ length: 7 }, (_, i) => {
       const v = Math.min(70, 6 * t);
       const dist = -i * 8 + 3 * t * t;
-      return car({ id: `c${i}`, s: (LAP + dist) % LAP, speedMs: v, alongMs: v, racing: dist >= 150 });
+      return car({ id: `c${i}`, s: (LAP + dist) % LAP, speedMs: v, alongMs: v, distM: dist });
     });
   run(f, 0, 12, (t) => (LAP - 64 + 3 * t * t) % LAP, grid);
   check('the start raises no flag', !f.yellow && f.feed(12) === undefined);
-  // A car stalls on the grid: still nothing (it is in its first metres)
+  // A car stalls on the grid, the player stuck just behind it: nothing off the start ...
   f = new MultiplayerFlags();
-  run(f, 0, 15, (t) => (LAP - 64 + 3 * t * t) % LAP, () => [car({ s: LAP - 8, speedMs: 0, alongMs: 0, racing: false })]);
-  check('a car stalled on the grid raises no flag', !f.yellow);
+  const stalled = () => [car({ s: LAP - 8, speedMs: 0, alongMs: 0, distM: -8 })];
+  let r = run(f, 0, START_GRACE_S - 1, () => LAP - 100, stalled);
+  check('a car stalled on the grid raises no flag off the start', !f.yellow && r.changes === 0);
+  // ... but once the field is long gone it is a car stopped on the track, for the player coming round to it
+  r = run(f, r.t, 2, () => LAP - 100, stalled);
+  check('...and a car still on the grid later is a stopped car', f.yellow && f.feed(r.t)?.[0].detail === 'Car stopped ahead');
   // The player under yellow takes the flag: the flag is down and no green is posted
   f = new MultiplayerFlags();
-  let r = run(f, 20, 1, () => 1000, () => [car({ s: 1100, speedMs: 0, alongMs: 0 })]);
+  r = run(f, 20, 1, () => 1000, () => [car({ s: 1100, speedMs: 0, alongMs: 0 })]);
   r = run(f, r.t, 1, () => 1000, () => [car({ s: 1100, speedMs: 0, alongMs: 0 })], false);
   check('a player who has finished: no flag, no green', !f.yellow && kinds(f, r.t) === 'yellow');
   // The stopped car's packets stop (it left): the flag comes down after the hold
@@ -222,6 +229,23 @@ const kinds = (f: MultiplayerFlags, t: number) => (f.feed(t) ?? []).map((m) => m
   check('backwards along the track from the velocity', byId.get('back')?.alongMs === -15 && causeOf(byId.get('back')!) === 'wrong_way');
   check('off the track from the pose, its hazard flag carried', byId.get('off')?.latM === HALF + 3 && byId.get('off')?.hazard === true && causeOf(byId.get('off')!) === 'off_track');
   check('a finished car is not racing', byId.get('done')?.racing === false);
+
+  // Through the game's call: the flag and its message land on the race's status, kept per race
+  const raceA = { start: { id: 'race7' } };
+  const status = (phase: 'racing' | 'finished') => ({ phase, lightsOn: 0, position: 1, fieldSize: 2, lap: 2, standings: [] }) as Parameters<typeof flagMultiplayerRace>[1];
+  const stoppedPeer = [peer('x', { z: 1100, vz: 0, race: race(6100) })];
+  let st = status('racing');
+  for (let t = 20; t < 21; t += DT) {
+    st = status('racing');
+    flagMultiplayerRace(raceA, st, track, stoppedPeer, DT, t, 1000);
+  }
+  check('the status carries the yellow and its message', st.yellow === true && st.raceControl?.[0]?.kind === 'yellow');
+  const fresh = status('racing');
+  flagMultiplayerRace({ start: { id: 'race7' } }, fresh, track, stoppedPeer, DT, 21, 1000);
+  check('a new race starts with its own flags', fresh.yellow === undefined && fresh.raceControl === undefined);
+  const done = status('finished');
+  flagMultiplayerRace(raceA, done, track, stoppedPeer, DT, 21, 1000);
+  check('the player\'s flag: no yellow on the status', done.yellow === undefined);
 }
 
 console.log(failures.length ? `\n${failures.length} FAILED: ${failures.join('; ')}` : '\nAll mp-flags checks passed.');
