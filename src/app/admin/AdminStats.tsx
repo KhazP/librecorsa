@@ -280,7 +280,8 @@ function Dashboard({ stats, names }: { stats: StatsBody; names: { circuit: Namer
           {stats.races ? (
             <>
               <Small label="Open races" value={count(stats.races.open)} />
-              <Small label="Room races" value={count(stats.races.room)} />
+              {/* Only open races are stored today: a room count shows once there is one */}
+              {stats.races.room > 0 ? <Small label="Room races" value={count(stats.races.room)} /> : null}
               <Small label="Cars classified" value={count(stats.races.cars)} />
             </>
           ) : null}
