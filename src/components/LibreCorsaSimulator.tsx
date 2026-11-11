@@ -31,6 +31,8 @@ import {
 import { exportDriverKeyFile, importDriverKeyFile } from "@/lib/net/driver-key";
 import { challengeAt, fitsChallenge } from "@/lib/net/weekly-challenge";
 import { useUsageCounter } from "@/lib/net/use-usage-counter"; // polish:E
+import { timeTrialRules } from "@/lib/sim/time-trial";
+import { challengeTarget, type ChallengeTarget } from "@/lib/net/challenge-target";
 import { isTouchDevice, resetTouchInput } from "@/lib/input/touch-input";
 import { isFatalHidStatus } from "@/lib/input/webhid-ffb";
 import { SIM_REALISM_FLAGS, type SimRealism } from "@/lib/sim/sim-realism";
@@ -141,6 +143,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     tyreSetup,
     defaultTyreSetup,
     chassisSetup,
+    timeTrial,
   } = useSyncExternalStore(session?.subscribe ?? noSubscribe, session?.getSnapshot ?? (() => idleSnapshot), () => idleSnapshot);
 
   const [aeroPreset, setAeroPreset] =
@@ -433,6 +436,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         if (isMpHostRef.current && !flyingStart) getMultiplayerManager().startRace();
         return;
       }
+      // polish:A — a flying restart outside a race puts the time trial's conditions on first
+      if (race.kind === "practice" && flyingStart) return session.restartFlyingLap();
       const physics = session.car;
       session.resetRun("restart");
       // A restart from the menu uses the race's own start; the flying-lap key always gives a rolling one
@@ -1014,6 +1019,20 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     () => fetchRemoteBoard(challenge.trackId, challenge.vehicle, { event: challenge.id, name: settingsRef.current.profile.name, limit: 20 }).catch(() => null),
     [challenge]
   );
+  // polish:A — the time trial's target on the HUD: the week's board, read again after each upload. Not without a
+  // board, or before the player has a name of their own
+  const [challengeTargetNow, setChallengeTargetNow] = useState<ChallengeTarget | null>(null);
+  const targetShown = timeTrial !== null && timeTrial.vehicle === challenge.vehicle && trackId === challenge.trackId && boardOn && !settings.profile.generated;
+  useEffect(() => {
+    if (!targetShown) return setChallengeTargetNow(null);
+    let live = true;
+    void loadChallengeBoard().then((board) => {
+      if (live && board) setChallengeTargetNow(challengeTarget(board));
+    });
+    return () => {
+      live = false;
+    };
+  }, [targetShown, loadChallengeBoard, boardVersion, settings.profile.name]);
   /**
    * Out on track to the week's rules: its car, assists and realism, a dry track. `race`: against the AI in the car
    * and over the distance of the week's races (when its field is ready for this car; else practice).
@@ -1033,7 +1052,10 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         // No damage, as in an open race with other drivers (their cars take none)
         startAiRace(field, { ...settingsRef.current.race, laps: week.race.laps, start: "standing", damage: "off" });
       } else {
-        session?.car.resetToStartGrid(false);
+        // polish:A — the time trial: its fixed tyre, fuel and road, from a flying start
+        session?.setTimeTrial(timeTrialRules(week.vehicle));
+        session?.restartFlyingLap();
+        return;
       }
       setLaunchHint(true);
     },
@@ -1173,6 +1195,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       ["Cockpit FOV", "[ / ]"],
       ["Racing line", keys(k.racingLine)],
       ["Restart", keys(k.restart)],
+      ["Restart lap (flying start)", keys(k.flyingLap)],
       ["Half throttle", keys(k.throttleHalf)],
       ["Instant replay", keys(k.replay)],
     ];
@@ -1274,6 +1297,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     onToggleAiAutopilot: handleToggleAiAutopilot,
     onToggleMouseSteer: handleToggleMouseSteer,
     onResetCar: handleResetCar,
+    challengeTarget: targetShown ? challengeTargetNow : null,
     onSelectTurn: handleSelectTurn,
     onHostP2PRoom: handleHostP2PRoom,
     onJoinP2PRoom: handleJoinP2PRoom,

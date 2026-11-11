@@ -3,7 +3,8 @@
  *   POST /api/laps        { rec: LapRecording, driverKey, event? }
  *                         -> { ok: true, rank, total, eventRank?, eventTotal?, eventError? } | { ok: false, error }
  *   GET  /api/laps?track=&vehicle=&physics=&assists=&realism=&surface=&event=&name=&limit=
- *                         -> { laps: [...], total, me: { rank, lap } | null, physics: [revisions with laps] }
+ *                         -> { laps: [...], total, me: { rank, lap, aboveMs } | null, physics: [revisions with laps] }
+ *                            (aboveMs: the best lap of the place above the driver's, null at the top)
  *   GET  /api/laps/<id>   -> the lap's LapRecording (its ghost), or 404
  *
  * One board per circuit, car and physics revision: every driver appears once, with their fastest lap and what it
@@ -263,19 +264,21 @@ export async function listLaps(deps: BoardDeps, url: URL): Promise<Answer> {
     statements.push(
       deps.db.prepare(`SELECT * FROM (${best}) WHERE rn = 1 AND name_key = ?`).bind(...binds, nameKey),
       deps.db
-        .prepare(`SELECT COUNT(*) AS ahead FROM (SELECT MIN(lap_time_ms) AS b FROM laps WHERE ${where} GROUP BY name_key) WHERE b < (SELECT MIN(lap_time_ms) FROM laps WHERE ${where} AND name_key = ?)`)
+        // The drivers ahead, and the slowest of them: the place just above (the board lists only the top places)
+        .prepare(`SELECT COUNT(*) AS ahead, MAX(b) AS above FROM (SELECT MIN(lap_time_ms) AS b FROM laps WHERE ${where} GROUP BY name_key) WHERE b < (SELECT MIN(lap_time_ms) FROM laps WHERE ${where} AND name_key = ?)`)
         .bind(...binds, ...binds, nameKey),
     );
   }
   const results = await deps.db.batch(statements);
   const mine = nameKey ? (results[3].results[0] as unknown as LapRow | undefined) : undefined;
+  const ahead = nameKey ? (results[4].results[0] as { ahead: number; above: number | null } | undefined) : undefined;
   return {
     status: 200,
     body: {
       laps: (results[0].results as unknown as LapRow[]).map(entryOf),
       total: (results[1].results[0] as { total: number } | undefined)?.total ?? 0,
       physics: (results[2].results as { physics: number }[]).map((r) => r.physics),
-      me: mine ? { rank: 1 + ((results[4].results[0] as { ahead: number } | undefined)?.ahead ?? 0), lap: entryOf(mine) } : null,
+      me: mine ? { rank: 1 + (ahead?.ahead ?? 0), lap: entryOf(mine), aboveMs: ahead?.above ?? null } : null,
     },
   };
 }

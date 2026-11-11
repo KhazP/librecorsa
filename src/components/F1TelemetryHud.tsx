@@ -20,7 +20,7 @@ import type { CarId } from "@/lib/cars/car-registry";
 import { type BuiltTrackData } from "@/lib/track-data";
 import { HUD_TOGGLE_EVENT } from "@/lib/input/bindings";
 import { TrackMinimap } from "./TrackMinimap";
-import { LapPanel, TimingTower } from "./hud/TimingPanels";
+import { ChallengeTargetPanel, LapPanel, TimingTower } from "./hud/TimingPanels";
 import { SpeedCluster } from "./hud/SpeedCluster";
 import { TyrePanel } from "./hud/TyrePanel";
 import { StartLights } from "./hud/StartLights";
@@ -163,6 +163,8 @@ interface F1TelemetryHudProps extends MultiplayerPanelProps {
   weather?: WeatherHudState | null;
   /** The room in the page's invite link: the pause menu opens on it until a peer is connected */
   inviteRoom?: string | null;
+  /** polish:A — the time trial's target while the weekly challenge is driven (best, fastest, place) */
+  challengeTarget?: import("@/lib/net/challenge-target").ChallengeTarget | null;
 }
 
 /** The last DRS detection crossed (f12026-car), shown for 2.5 s after it happens */
@@ -264,6 +266,8 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
       </>
     ) : null;
   const weatherNode = props.weather && !phone && !minimal && !lightsPhase ? <WeatherBadge weather={props.weather} variant="panel" /> : null;
+  // polish:A — the time trial's target sits where a race's split gaps would
+  const leftNode = gapsNode ?? (props.challengeTarget && !race && !phone ? <ChallengeTargetPanel target={props.challengeTarget} /> : null);
 
   const showTyres = classic;
   const showMap = classic;
@@ -341,7 +345,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
           lapInvalid={lapInvalid}
           towerGaps={hud?.towerGaps}
           mapMode={hud?.mapMode}
-          leftExtra={gapsNode}
+          leftExtra={leftNode}
           rightExtra={weatherNode}
         />
       ) : (
@@ -349,7 +353,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
         <div className="absolute top-3 left-3 flex flex-col gap-2 sm:top-4 sm:left-4" style={corner("top left")}>
           {race ? <TimingTower race={race} trackCode={trackInfo.country.slice(0, 3).toUpperCase()} gaps={hud?.towerGaps} /> : null}
           <LapPanel telemetry={telemetry} deltaS={deltaS} variant={minimal ? "minimal" : "full"} lapInvalid={lapInvalid} />
-          {gapsNode}
+          {leftNode}
           {weatherNode}
         </div>
       )}

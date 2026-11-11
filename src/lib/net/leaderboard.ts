@@ -36,8 +36,11 @@ export interface RemoteBoard {
   entries: LeaderboardEntry[];
   /** Drivers on the board (with the filter applied) */
   total: number;
-  /** This player's place and lap; null when they have no lap here */
-  me: { rank: number; entry: LeaderboardEntry } | null;
+  /**
+   * This player's place and lap, and the best lap of the place above theirs (null at the top, or from a server that
+   * does not say); null when they have no lap here
+   */
+  me: { rank: number; entry: LeaderboardEntry; aboveMs: number | null } | null;
   /** Physics revisions that have laps for this circuit and car, newest first */
   physics: number[];
 }
@@ -217,7 +220,10 @@ export function parseRemoteBoard(
   if (isRecord(body.me)) {
     const rank = finiteNumber(body.me.rank);
     const entry = parseRemoteEntry(body.me.lap, trackId, vehicle, physics, filter);
-    if (entry && rank !== null && rank >= 1) me = { rank: Math.floor(rank), entry };
+    const above = finiteNumber(body.me.aboveMs);
+    // Only a time faster than the player's own is the place above
+    const aboveMs = entry && above !== null && above > 0 && above < entry.lapTimeMs ? above : null;
+    if (entry && rank !== null && rank >= 1) me = { rank: Math.floor(rank), entry, aboveMs };
   }
   const revisions = Array.isArray(body.physics)
     ? body.physics.filter((v): v is number => typeof v === "number" && Number.isInteger(v) && v >= 1 && v <= 1000).slice(0, 20)

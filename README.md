@@ -176,6 +176,7 @@ The physics is checked against data, not just tuned by feel, and the evidence is
 | `V` | 1:1 mouse steering |
 | `M` | Mute |
 | `Backspace` | Restart from a flying lap |
+| `L` | Restart the lap from a flying start (outside a race) |
 | `Esc` | Pause menu |
 | **Gamepad** | Left stick steer · `RT` / `R2` throttle · `LT` / `L2` brake · `A` / `✕` boost |
 

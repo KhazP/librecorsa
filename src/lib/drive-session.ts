@@ -76,6 +76,7 @@ import { simMode } from "@/lib/sim/runtime/sim-mode";
 import { createSimHost } from "@/lib/sim/runtime/sim-host";
 import { startSimWorker } from "@/lib/sim/runtime/worker-sim-host";
 import { steeringAssistSettings } from "@/lib/sim/steering-assist";
+import { applyTimeTrial, lowestFuelSetup, timeTrialRealism, type TimeTrialRules } from "@/lib/sim/time-trial";
 import { axleSlipFromTelemetry, createAxleSlipSample } from "@/lib/sim/tyre-slip";
 import { clampFov, DEFAULT_KEYBOARD_TUNING, DEFAULT_PLAYER_SETTINGS, type PlayerSettings } from "@/lib/settings/player-settings";
 import type { AeroSetupPreset, CameraMode, CarTelemetry, LiveTunerPatch, RadarBlip, TireCompound, TyreSetup, VehicleModelId } from "@/types/f1";
@@ -181,6 +182,8 @@ export interface DriveSnapshot {
   /** The car's own tyre setup, before the player's saved one */
   defaultTyreSetup: TyreSetup;
   chassisSetup: ChassisSetup;
+  /** The time trial being driven (the weekly challenge's fixed conditions), or none */
+  timeTrial: TimeTrialRules | null;
 }
 
 /** The snapshot before the drive exists: a throwaway VF26's numbers, as the menus need something to show */
@@ -210,6 +213,7 @@ export function idleDriveSnapshot(track: BuiltTrackData): DriveSnapshot {
     tyreSetup: car.getTyreSetup(),
     defaultTyreSetup: car.getTyreSetup(),
     chassisSetup: DEFAULT_CHASSIS_SETUP,
+    timeTrial: null,
   };
 }
 
@@ -337,6 +341,13 @@ export class DriveSession {
   readonly setTyreSetup: (setup: TyreSetup) => void;
   readonly setChassisSetup: (setup: ChassisSetup) => void;
   readonly setLiveTuner: (patch: LiveTunerPatch) => void;
+  /**
+   * The time trial's fixed conditions (tyre, lowest fuel, a road at full grip) on the car and the road from now and at
+   * every flying restart, or none (null: the player's own back). A new race or session, or another car, ends it.
+   */
+  readonly setTimeTrial: (rules: TimeTrialRules | null) => void;
+  /** Outside a race: the run starts over on a flying lap, under the time trial's conditions when one is driven */
+  readonly restartFlyingLap: () => void;
   /** The replay bar's play / pause (from the start again once at the end), seek and speed */
   readonly replayTogglePlay: () => void;
   readonly replaySeek: (timeS: number) => void;
@@ -486,9 +497,45 @@ export class DriveSession {
     let runId = 0;
     /** The instant replay: the recording, and where it is shown from while open */
     const replay: ReplayState = { buffer: new ReplayBuffer({ maxSeconds: 90, hz: 30 }), active: false, playing: true, timeS: 0, speed: 1 };
+    /** The time trial being driven, and the tyre the player had on before it */
+    let timeTrial: TimeTrialRules | null = null;
+    let ownCompound: TireCompound | null = null;
+    /** The time trial applies to this car, outside a race */
+    const timeTrialOn = () => timeTrial !== null && timeTrial.vehicle === vehicleNow && raceNow().kind === "practice";
+    /** The time trial's tyre, fuel and road, before the car is placed */
+    const putTimeTrialOn = () => {
+      if (timeTrial && timeTrialOn()) applyTimeTrial(physics, timeTrial, this.snapshot.chassisSetup, getTrackEnv().trackEvolution, this.setTireCompound);
+    };
+    /** The player's own fuel and tyre back on the car, and the road free to evolve (from the next session's reset) */
+    const endTimeTrial = () => {
+      if (!timeTrial) return;
+      timeTrial = null;
+      getTrackEnv().trackEvolution.holdFullGrip(false);
+      physics.applyChassisSetup?.(this.snapshot.chassisSetup);
+      if (ownCompound && physics.tireCompound !== ownCompound) this.setTireCompound(ownCompound);
+      ownCompound = null;
+      this.publish({ timeTrial: null });
+    };
+    /**
+     * The time trial burns no fuel: the car and the session realism it was last given that (the track environment
+     * hands every car the session's realism again whenever that changes, so it is re-asserted after each update)
+     */
+    let fuelHeld: { car: SimulatorCar; flags: object } | null = null;
+    const holdTimeTrialFuel = () => {
+      const flags = getTrackEnv().simRealism;
+      if (!timeTrialOn() || !flags.fuelUse) {
+        if (fuelHeld?.car === physics) physics.setSimRealism?.(flags);
+        fuelHeld = null;
+        return;
+      }
+      if (fuelHeld?.car === physics && fuelHeld.flags === flags) return;
+      physics.setSimRealism?.(timeTrialRealism(flags));
+      fuelHeld = { car: physics, flags };
+    };
     /** Race control's session for a race on track (or practice) */
     const limitsSessionOf = (race: SessionRace) => (race.kind === "practice" ? "practice" : "race");
     this.setRace = (next) => {
+      endTimeTrial();
       this.currentRace = next;
       setRaceKind(next.kind);
       trackLimits.reset(limitsSessionOf(next));
@@ -583,6 +630,7 @@ export class DriveSession {
       pauseNotice: null,
       boostLatch: false,
       ...carSetup,
+      timeTrial: null,
     };
 
     /**
@@ -618,6 +666,7 @@ export class DriveSession {
     this.setCar = (car) => {
       if (disposed) return;
       const newCar = car !== carRigCar;
+      endTimeTrial();
       // The run starts over before the old car goes: leaving the replay writes its saved pose into `physics`, which
       // must still be the old car then. The replay and the live delta belong to the old car.
       this.resetRun("car");
@@ -883,8 +932,24 @@ export class DriveSession {
     };
     this.setChassisSetup = (setup) => {
       if (disposed) return;
-      physics.applyChassisSetup?.(setup);
+      // The garage keeps the player's own setup; the time trial's fuel stays on the car
+      physics.applyChassisSetup?.(timeTrialOn() ? lowestFuelSetup(setup) : setup);
       this.publish({ chassisSetup: setup });
+    };
+    this.setTimeTrial = (rules) => {
+      if (disposed) return;
+      if (!rules) return endTimeTrial();
+      if (!timeTrial) ownCompound = physics.tireCompound;
+      timeTrial = rules;
+      putTimeTrialOn();
+      this.publish({ timeTrial: rules });
+    };
+    this.restartFlyingLap = () => {
+      if (disposed || raceNow().kind !== "practice") return;
+      // Out of a replay first (the reset does that), then the conditions, then the car moves
+      this.resetRun("restart");
+      putTimeTrialOn();
+      physics.resetToStartGrid(true);
     };
     this.setLiveTuner = (patch) => {
       if (disposed) return;
@@ -1033,6 +1098,9 @@ export class DriveSession {
         case "restart":
           restartRun();
           break;
+        case "flyingLap":
+          this.restartFlyingLap();
+          break;
         case "replay":
           this.toggleReplay();
           break;
@@ -1058,10 +1126,10 @@ export class DriveSession {
       // A multiplayer race is restarted by the host, from the pause menu
       const race = raceNow();
       if (race.kind === "mp") return;
+      if (race.kind === "practice") return this.restartFlyingLap();
       // Out of a replay first (the reset does that), then the car moves
       this.resetRun("restart");
-      if (race.kind === "ai") startAiRace(race.field, settings.race);
-      else physics.resetToStartGrid(true);
+      startAiRace(race.field, settings.race);
     };
 
     const onKeyUp = (e: KeyboardEvent) => {
@@ -1551,6 +1619,7 @@ export class DriveSession {
         // with the remote players placed from last frame's interpolated poses
         soloCars[0] = physics;
         trackEnv.update(dtSeconds, aiField ? aiField.sims() : soloCars, remoteWake);
+        holdTimeTrialFuel();
         // The autopilot backs off for rain like the AI field does, from the car's own pace
         if (physics.aiPaceScale !== undefined) {
           const base = autopilotPace;
@@ -1588,17 +1657,19 @@ export class DriveSession {
       physics.telemetry.race = mpRace && mpFrame ? mpRace.status(mpFrame, physics.vxMs) : aiField?.status();
       physics.telemetry.runId = runId;
 
-      // Track limits: race control judges each excursion once the car is back on the asphalt. Practice deletes
-      // the lap; a race gives warnings, and every third one is a time penalty served at the flag.
+      // Track limits: in a race, race control judges each excursion once the car is back on the asphalt (warnings,
+      // and every third one is a time penalty served at the flag). Any other driving is strict: off is a deleted lap.
       {
         const t = physics.telemetry;
         const raceNow = t.race;
-        physics.trackLimitsMode = "judged";
+        physics.trackLimitsMode = trackLimits.mode === "race" ? "judged" : "strict";
         if (driving) {
           const tlEvent = trackLimits.update({
             nowMs,
             dtS: dtSeconds,
             lapCount: t.lapCount,
+            lapTimeMs: t.currentLapTimeMs,
+            sector: t.currentSector,
             distM: t.trackDistanceM,
             offTrack: t.offTrack,
             throttle: t.throttle,
