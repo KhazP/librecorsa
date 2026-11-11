@@ -48,7 +48,7 @@ import { FirstRunWizard, type WizardMode, type WizardStepId } from "@/components
 import { keyLabel, padButtonLabel } from "@/lib/input/bindings";
 import { autoConfigureWheel, connectedPads } from "@/lib/input/device-input";
 import { webHidFfb, wheelFfb } from "@/lib/input/wheel-ffb";
-import { clampFov, codeFromName, DEFAULT_PLAYER_SETTINGS, loadCarChoice, loadOnboarded, loadPlayerSettings, loadRumble, pushLibraryRecent, saveCarChoice, saveOnboarded, toggleLibraryFavorite, type LibraryKind, sanitizeDriverName, savePlayerSettings, saveRumble, type PlayerSettings } from "@/lib/settings/player-settings";
+import { clampFov, DEFAULT_PLAYER_SETTINGS, loadCarChoice, loadOnboarded, loadPlayerSettings, loadRumble, pushLibraryRecent, saveCarChoice, saveOnboarded, toggleLibraryFavorite, type LibraryKind, savePlayerSettings, saveRumble, type PlayerSettings } from "@/lib/settings/player-settings";
 import type { AeroSetupPreset, AssistPreset, CameraMode, LiveTunerPatch, LiveryConfig, TireCompound, TyreSetup, VehicleModelId } from "@/types/f1";
 import { aiFieldOf, autoCompoundFor, DEFAULT_AERO_PRESET, DriveSession, idleDriveSnapshot, mpRaceOf, type AppPhase, type RunResetReason, type SessionRace } from "@/lib/drive-session";
 import { startAiRace, type RaceSetup } from "@/lib/sim/race-setup";
@@ -704,21 +704,22 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
             void refreshLeaderboard();
           }
           // A new personal best goes on the online board by itself, and so does the best lap of this week's
-          // challenge (which an older, faster lap of the same kind doesn't stand in for). Only once the player has a
-          // name of their own (the first upload asks for it on the lap card) and unless they turned this off. It
-          // fails quietly: the card keeps its upload button
+          // challenge (which an older, faster lap of the same kind doesn't stand in for), under the player's name,
+          // the one the game picked included, unless they turned this off. A failure offers a retry on the lap card
           const week = challengeOf(recording);
           const weekBest = week ? loadChallengeBest(week) : null;
           if (!saved && !(week && (weekBest === null || recording.lapTimeMs < weekBest))) return;
           const profile = settingsRef.current.profile;
-          if (!boardOnRef.current || !profile.autoUpload || profile.generated) return;
+          if (!boardOnRef.current || !profile.autoUpload) return;
           const shown = () => submitReq === submitReqRef.current;
           if (shown()) setSubmitState("sending");
           return uploadLap(recording).then((res) => {
             if (res.ok) setBoardVersion((v) => v + 1);
             if (!shown()) return;
-            setSubmitState(res.ok ? "sent" : "idle");
+            // The board holding a faster lap of this driver's (from another device) is no failure: nothing to show
+            setSubmitState(res.ok ? "sent" : res.notFaster ? "idle" : "error");
             setSubmitRank(placeOf(res));
+            setSubmitError(res.ok || res.notFaster ? null : (res.error ?? null));
           });
         })
         .catch(() => {});
@@ -727,22 +728,10 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   );
   useEffect(() => session?.onLapCompleted(onLapCompleted), [session, onLapCompleted]);
 
-  /**
-   * Uploads the shown lap. `name` comes from the lap card's name prompt (first upload under a generated
-   * name): it becomes the player's own name, and the lap goes up under it rather than the one it was recorded with.
-   */
-  const handleSubmitLap = useCallback(async (name?: string) => {
-    const recorded = lapSummary?.recording;
-    if (!recorded) return;
-    let rec = recorded;
-    if (name !== undefined) {
-      const profile = settingsRef.current.profile;
-      const clean = sanitizeDriverName(name);
-      // A code the game derived from the generated name follows the new name; one the player set stays
-      const code = profile.generated && clean !== profile.name ? codeFromName(clean) : profile.code;
-      setSettings((prev) => ({ ...prev, profile: { ...prev.profile, name: clean, code, generated: false } }));
-      rec = { ...recorded, driverName: clean, driverCode: code };
-    }
+  /** Uploads the shown lap: by hand with automatic posting off, or again after an upload failed */
+  const handleSubmitLap = useCallback(async () => {
+    const rec = lapSummary?.recording;
+    if (!rec) return;
     const req = ++submitReqRef.current;
     setSubmitState("sending");
     const res = await uploadLap(rec);
@@ -1037,10 +1026,9 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     () => fetchRemoteBoard(challenge.trackId, challenge.vehicle, { event: challenge.id, name: settingsRef.current.profile.name, limit: 20 }).catch(() => null),
     [challenge]
   );
-  // polish:A — the time trial's target on the HUD: the week's board, read again after each upload. Not without a
-  // board, or before the player has a name of their own
+  // polish:A — the time trial's target on the HUD: the week's board, read again after each upload. Not without a board
   const [challengeTargetNow, setChallengeTargetNow] = useState<ChallengeTarget | null>(null);
-  const targetShown = timeTrial !== null && timeTrial.vehicle === challenge.vehicle && trackId === challenge.trackId && boardOn && !settings.profile.generated;
+  const targetShown = timeTrial !== null && timeTrial.vehicle === challenge.vehicle && trackId === challenge.trackId && boardOn;
   useEffect(() => {
     if (!targetShown) return setChallengeTargetNow(null);
     let live = true;
@@ -1438,12 +1426,14 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
                   summary: lapSummary.summary,
                   onClose: closeLapSummary,
                   onSaveGhost: () => exportLapFile(lapSummary.recording),
+                  // Laps post themselves: the button is there with that turned off, or to retry a failed upload
                   onSubmit:
-                    boardOn && lapSummary.summary.valid && !lapSummary.summary.autopilot
-                      ? (name?: string) => void handleSubmitLap(name)
+                    boardOn &&
+                    lapSummary.summary.valid &&
+                    !lapSummary.summary.autopilot &&
+                    (!settings.profile.autoUpload || submitState === "error")
+                      ? () => void handleSubmitLap()
                       : undefined,
-                  driverName: settings.profile.name,
-                  askName: settings.profile.generated,
                   submitState,
                   submitRank,
                   submitError,

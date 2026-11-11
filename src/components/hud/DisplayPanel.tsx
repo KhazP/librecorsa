@@ -227,7 +227,7 @@ export const DisplayPanel: React.FC<DisplayPanelProps> = ({ settings, onChangeSe
   const commitName = () => {
     if (nameDraft === null) return;
     const name = sanitizeDriverName(nameDraft);
-    // A name the player typed is theirs: the first upload no longer asks for one
+    // A name the player typed is theirs (a code the game derived no longer follows it)
     if (name !== profile.name) setProfile({ name, generated: false });
     setNameDraft(null);
   };
