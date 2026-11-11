@@ -11,6 +11,10 @@ import { clampChassisSetup, DEFAULT_CHASSIS_SETUP } from "../src/lib/sim/car-set
 import type { CarTelemetry, RaceStandingEntry } from "../src/types/f1";
 import { F12026CarSim } from "../src/lib/sim/f12026-car/F12026CarSim";
 import { createAmgGt3Sim } from "../src/lib/sim/gt3/AmgGt3Sim";
+import { createMtr496rSim } from "../src/lib/sim/proto/Mtr496rSim";
+import { createSuzukiLianaSim } from "../src/lib/sim/road/SuzukiLianaSim";
+import { createVf26Sim } from "../src/lib/sim/f12026-car/Vf26Sim";
+import type { SimulatorCar } from "../src/lib/sim/simulator-car";
 import { F1Physics2026 } from "../src/lib/f1-physics-2026";
 import { createFlatTestTrack } from "./lib/flat-track";
 import { AiOpponentField, AI_DRIVERS } from "../src/lib/sim/ai-opponents";
@@ -131,10 +135,6 @@ console.log("Track limits · warnings and penalties");
   check("second penalty is +5 s", third[0]?.kind === "penalty" && third[0].penaltyS === 5 && m.penaltyTotalS === 8);
   check("race control banner text", m.snapshot(clock * 1000).message?.text === "+5.0s time penalty", m.snapshot(clock * 1000).message?.text);
 
-  const p = new TrackLimitsMonitor();
-  p.reset("practice");
-  const pe = [...wide(p, 0.6, 0, -0.3), ...drive(p, 6.5, { deltaS: -0.3 })];
-  check("practice: a strike deletes the lap", pe.length === 1 && pe[0].kind === "lap_invalid" && p.penaltyTotalS === 0);
 
   const q = new TrackLimitsMonitor();
   q.reset("race");
@@ -167,6 +167,76 @@ console.log("Track limits · warnings and penalties");
   drive(again, 2.0, { deltaS: null });
   const relifted = again.snapshot(clock * 1000).pending;
   check("judged again without a reference: no stale gain on the card", relifted?.stage === "give_back" && relifted.gainS === null, JSON.stringify(relifted));
+}
+
+console.log("Track limits · strict outside a race");
+{
+  const p = new TrackLimitsMonitor();
+  p.reset("practice");
+  drive(p, 0.2, { sector: 1 });
+  const touch = drive(p, 0.05, { offTrack: true, sector: 1, lateralM: 6 });
+  check("practice: even a touch off the track deletes the lap at once", touch.length === 1 && touch[0].kind === "lap_invalid" && touch[0].lap === 1, JSON.stringify(touch));
+  check("practice: nothing to give back, nothing under review", !p.judging && p.snapshot(clock * 1000).pending === null && p.penaltyTotalS === 0);
+  check("practice: the banner says the lap is deleted", p.snapshot(clock * 1000).message?.kind === "lap_invalid" && p.snapshot(clock * 1000).message?.detail === "Off the track");
+  const gained = [...wide(p, 0.6, 0, -0.3), ...drive(p, 6.5, { deltaS: -0.3 })];
+  check("practice: no give-back and no time test, one deletion per excursion", gained.length === 1 && gained[0].kind === "lap_invalid", JSON.stringify(gained));
+  const next = drive(p, 0.5, { lapCount: 2, sector: 1 });
+  check("practice: an excursion before the last sector leaves the next lap alone", next.length === 0 && !p.nextLapForfeit);
+
+  drive(p, 0.2, { lapCount: 2, sector: 3 });
+  const late = drive(p, 0.4, { lapCount: 2, sector: 3, offTrack: true, lateralM: 6 });
+  check("practice: an excursion in the last sector deletes the lap and the next", late.length === 1 && p.nextLapForfeit && p.snapshot(clock * 1000).message?.detail === "Next lap too", JSON.stringify(late));
+  drive(p, 0.3, { lapCount: 2, sector: 3 });
+  const onNext = drive(p, 0.3, { lapCount: 3, sector: 1 });
+  check("practice: the next lap is deleted from its start", onNext.length === 1 && onNext[0].kind === "lap_invalid" && onNext[0].lap === 3 && !p.nextLapForfeit, JSON.stringify(onNext));
+  check("practice: and the banner says why", p.snapshot(clock * 1000).message?.detail === "Off before the line");
+  check("practice: the lap after that is clean", drive(p, 0.3, { lapCount: 4, sector: 1 }).length === 0);
+
+  // A flying restart: the run-up is in the last sector, and the first crossing only restarts the lap clock
+  p.reset("practice");
+  drive(p, 0.2, { lapCount: 0, lapTimeMs: 1000, sector: 3 });
+  drive(p, 0.2, { lapCount: 0, lapTimeMs: 1200, sector: 3, offTrack: true, lateralM: 6 });
+  drive(p, 0.2, { lapCount: 0, lapTimeMs: 1400, sector: 3 });
+  const first = drive(p, DT, { lapCount: 0, lapTimeMs: 10, sector: 1 });
+  check("practice: off on the run-up deletes the first timed lap", first.length === 1 && first[0].lap === 0, JSON.stringify(first));
+  check("practice: and only that one", drive(p, 0.2, { lapCount: 1, lapTimeMs: 10, sector: 1 }).length === 0);
+
+  drive(p, 0.2, { lapCount: 1, sector: 3, offTrack: true, lateralM: 6 });
+  p.reset("practice");
+  check("practice: a restart clears the next lap's deletion", !p.nextLapForfeit && drive(p, 0.3, { lapCount: 2, sector: 1 }).length === 0);
+
+  check("practice: the autopilot is not judged", drive(p, 0.3, { offTrack: true, active: false, sector: 1 }).length === 0);
+}
+
+console.log("Track limits · every engine honours strict and judged");
+{
+  const track = getActiveTrackData(1200);
+  const engines = [
+    ["2026 Prototype (classic engine)", () => new F1Physics2026(track)],
+    ["2026 Prototype (rigid body)", () => createVf26Sim(track)],
+    ["AMG GT3", () => createAmgGt3Sim(track)],
+    ["MTR 496R", () => createMtr496rSim(track)],
+    ["Suzuki Liana", () => createSuzukiLianaSim(track)],
+  ] as const;
+  /** From a flying start, steered off the road: whether the running lap reads deleted once the car is off */
+  const offLap = (make: () => SimulatorCar, mode: "strict" | "judged") => {
+    const car = make();
+    car.trackLimitsMode = mode;
+    car.resetToStartGrid(true);
+    for (let i = 0; i < 60 * 8; i++) {
+      car.step(1 / 60, { throttle: 0.5, brake: 0, steerLeft: 0, steerRight: 0, analogSteer: 0.7, manualOverride: false, toggleXMode: false, shiftUp: false, shiftDown: false });
+      if (car.telemetry.offTrack) {
+        for (let k = 0; k < 3; k++) car.step(1 / 60, {});
+        return { off: true, deleted: car.telemetry.lapInvalid === true };
+      }
+    }
+    return { off: false, deleted: car.telemetry.lapInvalid === true };
+  };
+  for (const [name, make] of engines) {
+    const strict = offLap(make, "strict");
+    const judged = offLap(make, "judged");
+    check(`${name}: strict deletes the lap off the track, judged leaves it to race control`, strict.off && strict.deleted && judged.off && !judged.deleted, JSON.stringify({ strict, judged }));
+  }
 }
 
 console.log("Classification with penalties");
