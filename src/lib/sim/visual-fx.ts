@@ -2,10 +2,10 @@
  * Visual Simulation FX: Persistent Tire Skidmark Ribbons, Instanced Tire Smoke/Gravel
  * Particles & Multiplayer/AI Opponent Car 3D Renderer
  *
- * - Dynamic persistent quad-strip ribbon mesh for 4-wheel tire skidmarks on asphalt/kerbs,
- *   with vertex alpha scaled by per-wheel combined slip (`combinedSlipNorm`).
- * - `THREE.InstancedMesh` volumetric tire smoke and off-track gravel/grass debris particles
- *   emitted directly at each wheel's 3D contact patch.
+ * - Dynamic persistent quad-strip ribbon mesh for 4-wheel tire skidmarks, darkened by how hard each tyre slides past
+ *   its grip (`tyre-slide-fx.ts`), and furrows in grass.
+ * - `THREE.InstancedMesh` tire smoke (from the same sliding, `tyre-slide-fx.ts`), spray and off-track gravel/grass
+ *   debris particles emitted at each wheel's 3D contact patch.
  * - Opponent vehicle 3D rig manager driven by `MultiplayerSyncManager` Cubic Hermite + Slerp states.
  */
 
@@ -28,9 +28,18 @@ import { CarTelemetry, LiveryConfig, type VehicleModelId } from '@/types/f1';
 import type { SimulatorWheel as SimWheelState } from './simulator-car';
 import { GHOST_OPACITY, ghostFade } from './ghost-align';
 import { InterpolatedPeerState } from './multiplayer-sync';
+import { tyreMarkLevel, tyreSmokeLevel } from './tyre-slide-fx';
 
 const MAX_SKID_SEGMENTS = 900; // Ring buffer of 4-vertex quad segments across all 4 wheels
-const MAX_PARTICLES = 240;
+const MAX_PARTICLES = 360;
+/** Tyre smoke puffs per second from one wheel at full smoke (`tyre-slide-fx.ts`) */
+const SMOKE_PUFFS_PER_S = 40;
+/** Smoke builds within a few hundredths of a second of a lock-up and clears a little slower once the tyre grips again */
+const SMOKE_RISE_S = 0.05;
+const SMOKE_FALL_S = 0.18;
+/** A skid mark darkens as quickly as the tyre starts to slide and fades out over a few centimetres of road */
+const MARK_RISE_S = 0.03;
+const MARK_FALL_S = 0.08;
 
 /**
  * Soft puffs: camera-facing quads with a noisy radial falloff, fading in and out over their life, and fading out
@@ -119,6 +128,14 @@ export class SimVisualFxManager {
   private dummy = new THREE.Object3D();
   /** Road wetness under the player's car (0..1): rear-wheel spray at speed */
   private wetness = 0;
+  /** Per wheel (FR, FL, RR, RL): smoothed smoke level 0..1, puffs owed, and the contact's world velocity (smoothed) */
+  private readonly smokeLevel = [0, 0, 0, 0];
+  /** Per wheel: smoothed skid-mark darkness 0..1 on a paved surface */
+  private readonly markLevel = [0, 0, 0, 0];
+  private readonly smokeOwed = [0, 0, 0, 0];
+  private readonly wheelPrevPos = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+  private readonly wheelVel = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+  private wheelVelValid = false;
 
   // Multiplayer / AI Opponent 3D cars
   /** wheelRot: the wheels' spin angle (rad), integrated from their speed each frame */
@@ -264,6 +281,10 @@ export class SimVisualFxManager {
     else {
       this.emitTimer = 0;
       this.lastWheelSkidPos.fill(null);
+      this.smokeLevel.fill(0);
+      this.markLevel.fill(0);
+      this.smokeOwed.fill(0);
+      this.wheelVelValid = false;
     }
     this.stepParticles(dt);
     this.playerPosValid = emit;
@@ -290,14 +311,17 @@ export class SimVisualFxManager {
     const carUp = this.carUp.set(0, 1, 0).applyQuaternion(carWorldQuat);
     const carForward = this.carForward.set(0, 0, 1).applyQuaternion(carWorldQuat);
 
-    // 1. Record tire skidmarks when combined slip exceeds threshold (`> 0.68`)
+    // 1. Skid marks: rubber laid by a tyre sliding past its grip on a paved surface, darkest from a locked wheel
+    //    (`tyre-slide-fx.ts`), and the furrow any loaded tyre leaves in grass. The rubber's darkness follows the tyre
+    //    with a short rise and fall, so a mark does not break into dashes as the slide wavers
     for (let wIdx = 0; wIdx < 4; wIdx++) {
       const w = wheels[wIdx];
-      const slipNorm = w.combinedSlipNorm;
-      const isSkidding =
-        carSpeedMs > 2.5 &&
-        w.fzN > 250 &&
-        (slipNorm > 0.68 || w.surfaceType === 'grass');
+      const isGrass = w.surfaceType === 'grass';
+      const target = isGrass ? 0 : tyreMarkLevel(w.fzN, w.combinedSlipNorm, w.slideSpeedMs, w.lockShare);
+      const prevLevel = this.markLevel[wIdx];
+      const markLevel = prevLevel + (target - prevLevel) * (1 - Math.exp(-dt / (target > prevLevel ? MARK_RISE_S : MARK_FALL_S)));
+      this.markLevel[wIdx] = markLevel;
+      const isSkidding = carSpeedMs > 2.5 && w.fzN > 250 && (isGrass || markLevel > 0.04);
 
       if (isSkidding) {
         const contactPt = new THREE.Vector3(
@@ -313,8 +337,8 @@ export class SimVisualFxManager {
             contactPt,
             carRight,
             wIdx < 2 ? 0.14 : 0.18,
-            Math.min(0.85, (slipNorm - 0.62) * 1.1),
-            w.surfaceType === 'grass'
+            isGrass ? Math.min(0.85, (w.combinedSlipNorm - 0.62) * 1.1) : 0.12 + 0.73 * markLevel,
+            isGrass
           );
           this.lastWheelSkidPos[wIdx] = contactPt;
         } else if (!prevPt || prevPt.distanceToSquared(contactPt) >= 16.0) {
@@ -325,7 +349,10 @@ export class SimVisualFxManager {
       }
     }
 
-    // 2. Spawn & step tire smoke / gravel particles
+    // 2. Tyre smoke, from how hard each tyre slides (`tyre-slide-fx.ts`), at a rate set by its level
+    this.emitTyreSmoke(dt, carForward, carSpeedMs, wheels);
+
+    // 3. Spray and off-track dust
     this.emitTimer += dt;
     if (this.emitTimer >= 0.018 && carSpeedMs > 3.5) {
       this.emitTimer = 0;
@@ -356,21 +383,7 @@ export class SimVisualFxManager {
           }
           continue;
         }
-        if (w.combinedSlipNorm > 0.88 && w.surfaceType === 'asphalt') {
-          this.spawnParticle(
-            w.worldPos.x,
-            w.zRoad + 0.12,
-            w.worldPos.z,
-            carForward,
-            carUp,
-            carSpeedMs,
-            0.4,
-            2.4,
-            0.9,
-            0xd6d9dc,
-            0.32
-          );
-        } else if (w.surfaceType === 'grass' || w.surfaceType === 'runoff') {
+        if (w.surfaceType === 'grass' || w.surfaceType === 'runoff') {
           this.spawnParticle(
             w.worldPos.x,
             w.zRoad + 0.14,
@@ -387,6 +400,69 @@ export class SimVisualFxManager {
         }
       }
     }
+  }
+
+  private readonly puffVel = new THREE.Vector3();
+
+  /**
+   * Smoke from tyres sliding past their grip, thickest from a locked wheel. Each wheel's level follows the tyre with a
+   * short rise and fall (a single physics step past the peak gives at most one faint wisp), and puffs come at a rate
+   * in proportion to it. A puff starts at the contact patch, carried a little way along by the air the wheel drags with it (the wheel's
+   * own direction of travel, so a car sliding sideways leaves its smoke behind it, not ahead of its nose), and rises
+   * slowly as it spreads.
+   */
+  private emitTyreSmoke(
+    dt: number,
+    carForward: THREE.Vector3,
+    carSpeedMs: number,
+    wheels: readonly [SimWheelState, SimWheelState, SimWheelState, SimWheelState]
+  ): void {
+    if (!(dt > 0)) return;
+    // Water cools the tread and carries the rubber away: spray, not smoke, on a wet road
+    const dry = 1 - THREE.MathUtils.smoothstep(this.wetness, 0.05, 0.2);
+    const velBlend = 1 - Math.exp(-dt / 0.1);
+    for (let i = 0; i < 4; i++) {
+      const w = wheels[i];
+      const prev = this.wheelPrevPos[i];
+      const vel = this.wheelVel[i];
+      const tx = (w.worldPos.x - prev.x) / dt;
+      const ty = (w.worldPos.y - prev.y) / dt;
+      const tz = (w.worldPos.z - prev.z) / dt;
+      // A first frame or a jump (reset, flashback, teleport): the car's own speed and heading until it settles again
+      if (!this.wheelVelValid || tx * tx + ty * ty + tz * tz > 150 * 150) vel.copy(carForward).multiplyScalar(carSpeedMs);
+      else vel.set(vel.x + (tx - vel.x) * velBlend, vel.y + (ty - vel.y) * velBlend, vel.z + (tz - vel.z) * velBlend);
+      prev.set(w.worldPos.x, w.worldPos.y, w.worldPos.z);
+
+      const onRoad = w.surfaceType === 'asphalt' || w.surfaceType === 'kerb';
+      const target = onRoad ? dry * tyreSmokeLevel(w.fzN, w.combinedSlipNorm, w.slideSpeedMs, w.lockShare) : 0;
+      const level = this.smokeLevel[i];
+      this.smokeLevel[i] = level + (target - level) * (1 - Math.exp(-dt / (target > level ? SMOKE_RISE_S : SMOKE_FALL_S)));
+      const L = this.smokeLevel[i];
+      if (L < 0.02) {
+        this.smokeOwed[i] = 0;
+        continue;
+      }
+      this.smokeOwed[i] = Math.min(3, this.smokeOwed[i] + dt * SMOKE_PUFFS_PER_S * L);
+      while (this.smokeOwed[i] >= 1) {
+        this.smokeOwed[i] -= 1;
+        const pv = this.puffVel.copy(vel).multiplyScalar(0.25);
+        pv.x += (Math.random() - 0.5) * 1.2;
+        pv.y += 0.5 + Math.random() * 0.9;
+        pv.z += (Math.random() - 0.5) * 1.2;
+        this.spawnPuff(
+          w.worldPos.x,
+          w.zRoad + 0.15,
+          w.worldPos.z,
+          pv,
+          0.35 + 0.25 * L,
+          1.8 + 2.2 * L,
+          0.8 + 1.2 * L,
+          0xdfe2e5,
+          0.1 + 0.3 * L
+        );
+      }
+    }
+    this.wheelVelValid = true;
   }
 
   private appendSkidQuad(
@@ -463,6 +539,27 @@ export class SimVisualFxManager {
     alpha: number,
     lift = 1
   ): void {
+    const vel = this.puffVel
+      .copy(carForward)
+      .multiplyScalar(carSpeedMs * 0.22)
+      .addScaledVector(carUp, (1.4 + Math.random() * 1.6) * lift);
+    vel.x += (Math.random() - 0.5) * 1.8;
+    vel.z += (Math.random() - 0.5) * 1.8;
+    this.spawnPuff(wx, wy, wz, vel, scale0, scale1, maxAge, colorHex, alpha);
+  }
+
+  /** One soft puff at (wx, wy, wz) moving at `vel` (m/s, copied) */
+  private spawnPuff(
+    wx: number,
+    wy: number,
+    wz: number,
+    vel: THREE.Vector3,
+    scale0: number,
+    scale1: number,
+    maxAge: number,
+    colorHex: number,
+    alpha: number
+  ): void {
     const p = this.particles[this.particleCursor % MAX_PARTICLES];
     this.particleCursor++;
 
@@ -474,12 +571,7 @@ export class SimVisualFxManager {
       wy,
       wz + (Math.random() - 0.5) * 0.22
     );
-    p.vel
-      .copy(carForward)
-      .multiplyScalar(carSpeedMs * 0.22)
-      .addScaledVector(carUp, (1.4 + Math.random() * 1.6) * lift);
-    p.vel.x += (Math.random() - 0.5) * 1.8;
-    p.vel.z += (Math.random() - 0.5) * 1.8;
+    p.vel.copy(vel);
     p.scale0 = scale0 * (0.8 + 0.4 * Math.random());
     p.scale1 = scale1 * (0.8 + 0.4 * Math.random());
     p.alpha = alpha;
