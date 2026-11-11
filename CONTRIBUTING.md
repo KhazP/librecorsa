@@ -53,7 +53,8 @@ creator's permission. Credit every asset in [CREDITS.md](CREDITS.md) with its au
 license.
 
 - **Tracks** are converted with `scripts/tracks/build_track.py`, then compressed with
-  `npm run compress-tracks`, which also checks the physics meshes come out bit-exact.
+  `npm run compress-tracks`, which also checks the physics meshes come out bit-exact. Then
+  `npm run home-outlines` draws the new circuit's map for the home page.
 - **Big files**: compress models (meshopt, WebP textures) before committing. The whole site is downloaded by
   players.
 
