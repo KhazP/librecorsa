@@ -1763,9 +1763,13 @@ export class F1Physics2026 {
     // A steering wheel's rim goes to the rack as the driver's hands turn it; any other device (a stick, a mouse, tilt)
     // is held to the speed of hands
     const rimSteers = inputs.steerRim === true && !this.aiAutopilot && this.steeringAssist.source === 'direct';
-    const maxRate = rimSteers ? Infinity : (VF26_CHASSIS.steering.maxWheelSpeedDegS / VF26_CHASSIS.steering.ratio) * DEG2RAD;
-    const dSteer = THREE.MathUtils.clamp(targetRoad - this.steerRoadWheelRad, -maxRate * dt, maxRate * dt);
-    this.steerRoadWheelRad += dSteer;
+    if (rimSteers) {
+      // Straight to the rim's angle (a clamp to an infinite rate is NaN on a zero-length step)
+      this.steerRoadWheelRad = targetRoad;
+    } else {
+      const maxRate = (VF26_CHASSIS.steering.maxWheelSpeedDegS / VF26_CHASSIS.steering.ratio) * DEG2RAD;
+      this.steerRoadWheelRad += THREE.MathUtils.clamp(targetRoad - this.steerRoadWheelRad, -maxRate * dt, maxRate * dt);
+    }
 
     const frontKin = solveAxleKinematics3D(
       this.axles[0].hardpoints,
