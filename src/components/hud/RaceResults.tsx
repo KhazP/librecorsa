@@ -149,6 +149,18 @@ export const RaceResults: React.FC<{
     return () => window.removeEventListener("keydown", onKey);
   }, [results, onClose, hudModeRef]);
 
+  // The key that skipped the podium shot, still held or pressed twice, must not press the button the card opens on
+  const open = Boolean(results);
+  useEffect(() => {
+    if (!open) return;
+    const openedMs = performance.now();
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.key === "Enter" || e.key === " ") && (e.repeat || performance.now() - openedMs < 400)) e.preventDefault();
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [open]);
+
   if (!results) return null;
 
   const final = race.resultsFinal === true;
