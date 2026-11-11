@@ -20,9 +20,11 @@ export interface OnlineConfig {
   board: boolean;
   /** Seconds between scheduled races */
   raceSlotS: number;
+  /** The anonymous usage counter takes reports (src/lib/net/usage.ts) */
+  usage: boolean;
 }
 
-const OFF: OnlineConfig = { rooms: false, relay: false, races: false, board: false, raceSlotS: DEFAULT_RACE_SLOT_S };
+const OFF: OnlineConfig = { rooms: false, relay: false, races: false, board: false, raceSlotS: DEFAULT_RACE_SLOT_S, usage: false };
 const CONFIG_TIMEOUT_MS = 5000;
 /** A failed read is tried again after this long, a good one is kept this long (ms) */
 const RETRY_AFTER_MS = 30_000;
@@ -62,6 +64,7 @@ export function parseOnlineConfig(raw: unknown): OnlineConfig {
     races: r.races === true,
     board: r.board === true,
     raceSlotS: typeof slot === "number" && Number.isInteger(slot) && slot >= 30 && slot <= 86_400 ? slot : DEFAULT_RACE_SLOT_S,
+    usage: r.usage === true,
   };
 }
 
