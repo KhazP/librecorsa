@@ -13,7 +13,7 @@ LibreCorsa is an independent, non-commercial, open-source web simulator built wi
   | RISE Motordrome (`public/tracks/rwanda_official/`, `public/tracks/rwanda_official_short/`, and its source in `scripts/rwanda-official/`) | The project's own, CC BY-NC-SA 4.0 (non-commercial, share-alike); its two tree models CC BY 4.0 |
   | Circuit scans, F1 2026 model, ported F1 car models | CC BY 4.0 |
   | Chang, Okayama, Spielberg (Red Bull Ring) and Monaco circuits | By **Mitja Bonca** (Used with permission) |
-  | Istanbul Park circuit (`public/tracks/istanbul_park/`) | Intercity İstanbul Park by **Enver Bozkaya (SRTR)** and contributors (Used with permission; see *Istanbul Park*) |
+  | Istanbul Park circuit (`public/tracks/istanbul_park/`) | Intercity İstanbul Park by **Enver Bozkaya (SRTR)** (Used with the author's permission; the mod's other contributors are listed under *Istanbul Park*) |
   | 2026 Pirelli tyre sidewall texture (`public/cars/shared/tyres/`) and F1 rain-tyre temperature / wear curves | By **Cxjovich** ([https://www.overtake.gg/members/cxjovich.4261212/](https://www.overtake.gg/members/cxjovich.4261212/)), CC BY-NC-SA 4.0 (used with permission; non-commercial, share-alike) |
   | Mercedes-AMG GT3, Mercedes-AMG GT3 Evo and BMW M4 GT3 Evo models | CC BY-NC-SA 4.0 (non-commercial, share-alike) |
   | Car sounds ported from Assetto Corsa mods | The mod authors' terms; used non-commercially (see *Car sounds*) |
