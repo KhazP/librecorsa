@@ -14,6 +14,7 @@ import { compoundData, F12026_CAR_CONFIG, type CarPhysicsConfig } from '../src/l
 import { AMG_GT3_CONFIG } from '../src/lib/sim/gt3/AmgGt3Config';
 import { MTR_496R_CONFIG } from '../src/lib/sim/proto/Mtr496rConfig';
 import { SUZUKI_LIANA_CONFIG } from '../src/lib/sim/road/SuzukiLianaConfig';
+import { VF26_TUNED_CONFIG } from '../src/lib/sim/f12026-car/Vf26Tune';
 import { Lut } from '../src/lib/sim/lut';
 
 const failures: string[] = [];
@@ -127,6 +128,42 @@ for (const [name, config, v0] of [
   const got = lockShares(config, v0);
   check(`${name}: locks ${want.power} on power and ${want.coast} on the overrun`, Math.abs(got.power - want.power) < 0.005 && Math.abs(got.coast - want.coast) < 0.005,
     `${fmt(got.power)} / ${fmt(got.coast)}`);
+}
+
+console.log('\n== In gear with no pedal: the car stays where it stands');
+for (const [name, config] of [
+  ['VF26', VF26_TUNED_CONFIG as unknown as CarPhysicsConfig],
+  ['F1 2026', F12026_CAR_CONFIG as unknown as CarPhysicsConfig],
+  ['GT3', AMG_GT3_CONFIG],
+  ['496R', MTR_496R_CONFIG],
+  ['Liana', SUZUKI_LIANA_CONFIG],
+] as const) {
+  // Standing on the grid in first gear for 20 s, feet off
+  const grid = makeCar(config, 0);
+  let moved = 0;
+  for (let i = 0; i < 20 / DT; i++) {
+    grid.step(DT, { throttle: 0, brake: 0, steer: 0 });
+    moved = Math.max(moved, Math.abs(grid.speedMs));
+  }
+  check(`${name}: stands still on the grid, engine at its idle`, moved < 0.02 && grid.rpm > 0.9 * config.engine.idleRpm,
+    `${fmt(moved * 3.6, 2)} km/h at most, ${grid.rpm.toFixed(0)} rpm`);
+  // The pedal has the clutch back: off the line and past 60 km/h
+  let to60 = NaN;
+  for (let i = 0; i < 12 / DT && Number.isNaN(to60); i++) {
+    grid.step(DT, { throttle: 1, brake: 0, steer: 0 });
+    if (grid.speedMs * 3.6 >= 60) to60 = (i + 1) * DT;
+  }
+  check(`${name}: full pedal launches it from there`, to60 < 12, `60 km/h in ${fmt(to60, 2)} s`);
+  // Braked to a stop from 60 km/h and let go: it stays stopped
+  const stop = makeCar(config, 60 / 3.6);
+  for (let i = 0; i < 8 / DT; i++) stop.step(DT, { throttle: 0, brake: 0.6, steer: 0 });
+  // (the first seconds are the springs settling as the brakes come off)
+  let after = 0;
+  for (let i = 0; i < 10 / DT; i++) {
+    stop.step(DT, { throttle: 0, brake: 0, steer: 0 });
+    if (i >= 5 / DT) after = Math.max(after, Math.abs(stop.speedMs));
+  }
+  check(`${name}: braked to a stop and let go, it stays stopped`, after < 0.02, `${fmt(after * 3.6, 2)} km/h at most, 5 s on`);
 }
 
 console.log(failures.length ? `\n${failures.length} check(s) failed: ${failures.join(', ')}` : '\nAll powertrain checks passed.');

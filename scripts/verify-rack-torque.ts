@@ -210,7 +210,9 @@ for (const [name, config] of CARS) {
       return c.takeFfbAverage() * -1;
     })();
     const slow = at(5);
-    assert.ok(slow < 0 && Math.abs(slow) < 0.6 * Math.abs(parked), `${slow} vs parked ${parked}`);
+    // The car coasts once it is rolling (the auto-clutch lets go off the pedal), and the F1's assisted rim is then
+    // within a hundredth of nothing: it may not push the other way by more than that
+    assert.ok(slow < 0.02 * Math.abs(parked) && Math.abs(slow) < 0.6 * Math.abs(parked), `${slow} vs parked ${parked}`);
     return `parked ${parked.toFixed(2)}, 5 km/h ${slow.toFixed(2)}`;
   });
 }
