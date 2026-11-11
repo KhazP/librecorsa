@@ -211,6 +211,8 @@ export interface RaceResultEntry {
   penaltyS?: number;
   /** Track-limits warnings received (the player's own) */
   trackLimitWarnings?: number;
+  /** Place on the grid at the start (1 = pole) */
+  gridPosition?: number;
 }
 
 /** A race (AI opponents or multiplayer): start procedure, live order and the result */

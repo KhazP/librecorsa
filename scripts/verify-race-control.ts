@@ -367,6 +367,14 @@ console.log("AI race · overtaking-aid rules per car");
   check("an AI car still racing stays under the rules", ai.raceControl?.racing === true);
   if (aiCar) aiCar.clock.finishTimeS = 305;
   check("and is free after its own flag", ai.raceControl?.racing === false);
+  // The result carries each car's place on the grid (1 = pole), for places gained and lost
+  const rows = field.status().results ?? [];
+  const grid = (field.report().cars as { code: string; gridPos: number }[]).map((c) => [c.code, c.gridPos] as const);
+  check(
+    "every result row carries its car's grid place",
+    rows.length === 2 && rows.every((r) => r.gridPosition === grid.find(([code]) => code === r.driverCode)?.[1]),
+    JSON.stringify(rows.map((r) => [r.driverCode, r.gridPosition]))
+  );
 }
 
 console.log(`\n${passed} checks passed`);
