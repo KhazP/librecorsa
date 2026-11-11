@@ -44,6 +44,7 @@ import type { WakeEmitterCar } from "@/lib/sim/aero-wake";
 import { GamepadHaptics } from "@/lib/sim/gamepad-haptics";
 import { getMultiplayerManager, type InterpolatedPeerState, type P2PConnectionStatus } from "@/lib/sim/multiplayer-sync";
 import { MultiplayerRace, type MultiplayerRaceFrame } from "@/lib/sim/race-session";
+import { CoolDown } from "@/lib/sim/cool-down";
 import { GhostPlayer, LapRecorder } from "@/lib/sim/lap-recorder";
 import { ReplayBuffer } from "@/lib/sim/replay-buffer";
 import { GHOST_CAR_COLOR, steerAngleOf, steerNormOf, wheelRpmAtSpeed, wheelRpmOf } from "@/lib/sim/car-pose";
@@ -406,6 +407,8 @@ export class DriveSession {
     };
     /** The player car's dry autopilot pace, which the weather scales each frame */
     let autopilotPace: { car: unknown; pace: number } = { car: null, pace: 1 };
+    // polish:B the cool-down lap after the player's flag: the autopilot has the car, the player's inputs are ignored
+    const coolDown = new CoolDown();
     /** The boost latch, for the frame loop and the HUD at once */
     const setLatch = (boostLatch: boolean) => this.publish({ boostLatch });
     this.setBoostLatch = setLatch;
@@ -493,7 +496,7 @@ export class DriveSession {
       trackLimits.reset(limitsSessionOf(next));
     };
     this.toggleAutopilot = () => {
-      if (disposed || raceNow().kind === "mp") return;
+      if (disposed || raceNow().kind === "mp" || coolDown.active) return;
       physics.aiAutopilot = !physics.aiAutopilot;
       if (physics.aiAutopilot && physics.vxMs < 5) physics.vxMs = 45;
     };
@@ -997,7 +1000,7 @@ export class DriveSession {
       // Held controls ignore auto-repeat anyway; toggles must not flicker while a key is held
       if (isHeldKeyAction(action)) {
         heldKeys[HELD_KEYS[action]] = true;
-        if (DRIVER_KEYS.has(action) && physics.aiAutopilot) physics.aiAutopilot = false;
+        if (DRIVER_KEYS.has(action) && physics.aiAutopilot && !coolDown.active) physics.aiAutopilot = false;
         return;
       }
       // Held controls ignore auto-repeat anyway; one-shot actions must not flicker while a key is held
@@ -1522,7 +1525,7 @@ export class DriveSession {
       heldKeys.shiftDown = false;
       // The driver takes the car back from the autopilot with any device (the keys do it on key down): a pedal, the
       // stick, the touch steering pad. Not the wheel's rim, which its force feedback turns on its own.
-      if (driving && physics.aiAutopilot) {
+      if (driving && physics.aiAutopilot && !coolDown.active) {
         const pedal = Math.max(gamepadThrottle, gamepadBrake, touch?.throttle ?? 0, touch?.brake ?? 0);
         const stick = Math.abs(gamepadStick ?? 0);
         const touchSteer = touchSteering && !settingsNow.touch.tiltSteer ? Math.abs(touch.steer) : 0;
@@ -1545,6 +1548,17 @@ export class DriveSession {
           : MP_CLOCK_UNSYNCED_FRAME
         : null;
       const mpFrozen = mpFrame !== null && mpFrame.phase !== "racing";
+      // polish:B on the player's flag (last frame's status, of this run) the cool-down takes the car
+      const coolStatus = physics.telemetry.runId === runId ? physics.telemetry.race : undefined;
+      coolDown.update(
+        physics,
+        {
+          finished: raceNow().kind !== "practice" && coolStatus?.phase === "finished",
+          retired: coolStatus?.results?.find((r) => r.isPlayer)?.dnf === true,
+          roadHalfWidthM: track.getSampleAtDistance(physics.sMeters).width / 2,
+        },
+        driving ? dtSeconds : 0
+      );
       if (driving) {
         // The evolving road and the wake of the cars around: the player's car always, the AI field's too when racing,
         // with the remote players placed from last frame's interpolated poses
@@ -1554,10 +1568,10 @@ export class DriveSession {
         if (physics.aiPaceScale !== undefined) {
           const base = autopilotPace;
           if (base.car !== physics) autopilotPace = { car: physics, pace: physics.aiPaceScale };
-          physics.aiPaceScale = autopilotPace.pace * (physics.aiAutopilot ? trackEnv.weatherPaceScale(physics) : 1);
+          physics.aiPaceScale = autopilotPace.pace * (physics.aiAutopilot ? trackEnv.weatherPaceScale(physics) : 1) * coolDown.paceScale;
         }
         startupMonitor?.begin();
-        if (!aiField?.playerFrozen && !mpFrozen) physics.step(dtSeconds, inputs);
+        if (!aiField?.playerFrozen && !mpFrozen) physics.step(dtSeconds, coolDown.active ? coolDown.inputs() : inputs);
         aiField?.update(dtSeconds);
         startupMonitor?.end("sim");
       }
