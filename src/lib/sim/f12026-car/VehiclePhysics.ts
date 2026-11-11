@@ -2864,6 +2864,14 @@ export class VehiclePhysics {
     if (this.gear !== 0) {
       const t = THREE.MathUtils.clamp((rpm - cl.biteRpm) / (cl.lockRpm - cl.biteRpm), 0, 1);
       engage = wheelSideRpm >= cl.lockRpm ? 1 : t * t * (3 - 2 * t);
+      // Anti-stall: off the pedal, with the wheels turning slower than the engine idles, the auto-clutch lets go. The
+      // idle controller holds the engine at or above some cars' bite speed, and its torque through the slipping clutch
+      // walked a car standing on the grid away. A pedal past 5 % has the whole clutch again, for the launch
+      if (wheelSideRpm < eng.idleRpm) {
+        const pedal = THREE.MathUtils.clamp(inp.throttle / 0.05, 0, 1);
+        const turning = THREE.MathUtils.smoothstep(wheelSideRpm, 0.7 * eng.idleRpm, eng.idleRpm);
+        engage *= Math.max(pedal, turning);
+      }
       if (inp.clutch !== undefined) engage = Math.min(engage, 1 - inp.clutch);
       // A dog box between gears: the engine is free of the wheels
       if (gb.upshiftNeutralS !== undefined && this.sinceUpshiftS < gb.upshiftNeutralS) engage = 0;
