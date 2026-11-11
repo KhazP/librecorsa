@@ -4,6 +4,7 @@
  *   GET /api/rooms/<CODE>         WebSocket to a private room's server (room.ts)
  *   POST /api/laps, GET /api/laps, GET /api/laps/<id>   the lap boards (board.ts)
  *   GET /api/races/next, /api/races/<n>                 WebSocket to a scheduled race's server (race.ts)
+ *   GET /api/races/results, GET /api/drivers/record     the open races' results (results.ts)
  * Every feature is optional: with its binding missing or its switch off (wrangler.jsonc `vars`), the config says
  * so and the game falls back to what works without a server.
  *
@@ -12,6 +13,7 @@
 import { DEFAULT_RACE_SLOT_S, nextRaceSlot, raceSlot } from "../../src/lib/net/race-schedule";
 import { challengeProblem } from "../../src/lib/net/weekly-challenge";
 import { boardDeps, ghostOf, listLaps, submitLap } from "./board";
+import { driverRecord, listRaceResults } from "./results";
 import { ROOM_CODE_RE } from "./room";
 import { turnConfigured } from "./turn";
 import type { Env } from "./types";
@@ -106,6 +108,18 @@ export async function handleApi(request: Request, env: Env, url: URL): Promise<R
     to.searchParams.set("slot", String(slot.index));
     to.searchParams.set("slotS", String(config.raceSlotS));
     return env.RACES.get(env.RACES.idFromName(`race-${config.raceSlotS}-${slot.index}`)).fetch(new Request(to, request));
+  }
+
+  // The open races' results (results.ts), on the lap boards' database
+  if ((path === "/api/races/results" || path === "/api/drivers/record") && request.method === "GET") {
+    if (!config.races || !env.BOARD_DB) return json({ ok: false, error: "Race results are off" }, 404, origin);
+    try {
+      const answer = path === "/api/races/results" ? await listRaceResults(env.BOARD_DB, url) : await driverRecord(env.BOARD_DB, url);
+      return json(answer.body, answer.status, origin);
+    } catch (err) {
+      console.error("race results", err);
+      return json({ ok: false, error: "The race results had a problem. Try again in a moment" }, 500, origin);
+    }
   }
 
   if (path === "/api/laps" || path.startsWith("/api/laps/")) {
