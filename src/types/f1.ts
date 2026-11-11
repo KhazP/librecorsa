@@ -211,6 +211,8 @@ export interface RaceResultEntry {
   penaltyS?: number;
   /** Track-limits warnings received (the player's own) */
   trackLimitWarnings?: number;
+  /** Place on the grid at the start (1 = pole) */
+  gridPosition?: number;
 }
 
 /** A race (AI opponents or multiplayer): start procedure, live order and the result */
@@ -227,6 +229,8 @@ export interface RaceStatus {
   results?: RaceResultEntry[];
   /** True once the classification no longer changes */
   resultsFinal?: boolean;
+  /** Multiplayer: `results` are the race server's (or the room host's) classification, not this game's own */
+  resultsOfficial?: boolean;
   /** Multiplayer race (results come from every player's own timing) */
   multiplayer?: boolean;
   /** Player's position (1 = leading) */
