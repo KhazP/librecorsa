@@ -92,6 +92,9 @@ console.log("The flow");
   const behind = status([row(1, "YOU"), row(2, "B", { finishTimeS: null }), row(3, "C", { finishTimeS: null })]);
   for (let t = 0; t < PODIUM_WAIT_S + 1; t += 0.5) slow.step(behind, 1, 0.5, true, yes);
   check("the top three too long coming: the table without the shot", slow.stage === "done");
+  const out = new PodiumFlow();
+  out.step(status([row(1, "A", { finishTimeS: null }), row(2, "YOU", { finishTimeS: null, dnf: true })]), 1, 0.1, true, yes);
+  check("the player out of the race: the table at once", out.stage === "done");
 }
 
 console.log("Parked on the start/finish straight, in frame");

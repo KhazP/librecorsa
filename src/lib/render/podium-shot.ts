@@ -93,7 +93,8 @@ export class PodiumFlow {
       this.waitS = 0;
       this.playS = 0;
     }
-    if (this.stage === "idle" && race?.results) this.stage = "waiting";
+    // Out of the race (a wreck): the table at once, rather than a wait for the others with nothing on screen
+    if (this.stage === "idle" && race?.results) this.stage = race.results.some((r) => r.isPlayer && r.dnf) ? "done" : "waiting";
     if (this.stage === "waiting") {
       this.waitS += dt;
       const cue = podiumCue(race);
