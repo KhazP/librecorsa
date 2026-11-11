@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { countdownLabel, nextRaceSlot } from "@/lib/net/race-schedule";
-import { fetchDriverRecord, fetchWeekRaceResults, type DriverRecord, type WeekStanding } from "@/lib/net/race-results";
+import { fetchDriverRecord, fetchRaceWaiting, fetchWeekRaceResults, type DriverRecord, type RaceWaiting, type WeekStanding } from "@/lib/net/race-results";
 import { challengeAt } from "@/lib/net/weekly-challenge";
 import type { ScheduledRaceStatus } from "@/lib/sim/multiplayer-sync";
 import { focusOnHover } from "@/components/menu/useFocusNav";
@@ -24,11 +24,13 @@ export interface RacesCardProps {
   onLeave: () => void;
 }
 
-const CARD = "flex min-w-0 flex-col gap-3.5 rounded-[22px] border border-[#262B3D] bg-[#08090D]/60 p-[18px] text-[#F5F7FA]";
+const CARD = "flex min-w-0 flex-col gap-4 rounded-[22px] border border-[#262B3D] bg-[#08090D]/60 p-5 text-[#F5F7FA]";
 const CHIP =
   "inline-flex h-7 shrink-0 items-center rounded-full px-3 font-f1-mono text-[11px] font-extrabold tracking-[0.06em] whitespace-nowrap text-[#C5CBD8] shadow-[inset_0_0_0_1px_#262B3D]";
+/** How often the card asks who is waiting, while the player is not in the race */
+const WAITING_POLL_MS = 15_000;
 
-/** The scheduled races: where they are, when the next one starts, the button to enter it, and who else has */
+/** The scheduled races: where they are, when the next one starts, who is waiting for it, and the button to join */
 export const RacesCard: React.FC<RacesCardProps> = ({ trackName, carTitle, slotS, laps, entry, entrants, driverName, onJoin, onLeave }) => {
   // The countdown ticks every second
   const [now, setNow] = useState(() => Date.now());
@@ -38,34 +40,29 @@ export const RacesCard: React.FC<RacesCardProps> = ({ trackName, carTitle, slotS
   }, []);
   const entered = entry.state === "joined" && entry.startsMs !== null;
   const startsMs = entered && entry.startsMs !== null ? entry.startsMs : nextRaceSlot(now, slotS).startsMs;
-  const every = slotS % 60 === 0 ? `${slotS / 60} minutes` : `${slotS} seconds`;
+  const every = slotS % 60 === 0 ? `${slotS / 60} min` : `${slotS} s`;
   const racing = entered && now >= startsMs;
   const results = useRaceResults(driverName, entry.state);
+  // In the race, its lobby lists everyone; outside it, the race server is asked
+  const waiting = useRaceWaiting(!entered, startsMs);
+  const alone = entered && entrants.length <= 1;
 
   return (
     <section className={CARD} aria-label="Races">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="flex min-w-0 flex-col gap-0.5">
-          <span className="lc-title text-[20px] leading-tight">{trackName}</span>
-          <span className="text-[14px] font-semibold text-[#C5CBD8]">{carTitle}</span>
-        </div>
-        <span className={CHIP}>
-          {laps} laps · every {every}
-        </span>
-      </div>
-      <div className="flex items-baseline gap-3" aria-live="off">
-        <span className="lc-data text-[40px] leading-none tabular-nums">{racing ? "GO" : countdownLabel(startsMs, now)}</span>
+      <div className="flex flex-col gap-1">
+        <h3 className="lc-title m-0 min-w-0 text-[20px] leading-tight">{trackName}</h3>
         <span className="text-[14px] font-semibold text-[#C5CBD8]">
-          {racing ? "Your race is under way" : entered ? "until your race" : "until the next race"}
+          {carTitle} · {laps} laps · every {every}
         </span>
       </div>
-      {results ? <RaceResultsLines standings={results.standings} record={results.record} /> : null}
+
+      <div className="flex items-baseline gap-3" aria-live="off">
+        <span className="lc-data text-[44px] leading-none tabular-nums">{racing ? "GO" : countdownLabel(startsMs, now)}</span>
+        <span className="text-[14px] font-semibold text-[#C5CBD8]">{racing ? "under way" : entered ? "until your race" : "until the next race"}</span>
+      </div>
+
       {entered ? (
         <>
-          <p className="m-0 text-[13px] leading-snug text-[#8E96AA]">
-            You&apos;re in. Stay here or go out and practise: the race starts by itself, with this week&apos;s fastest on pole.
-            {entrants.length <= 1 ? " If nobody else joins, you race the AI." : ""}
-          </p>
           <ul className="m-0 flex list-none flex-wrap gap-1.5 p-0" aria-label="In this race">
             {entrants.map((e) => (
               <li key={e.id} className={`${CHIP} ${e.me ? "!text-[#CCFF00] !shadow-[inset_0_0_0_1px_rgba(204,255,0,0.45)]" : ""}`}>
@@ -73,6 +70,9 @@ export const RacesCard: React.FC<RacesCardProps> = ({ trackName, carTitle, slotS
               </li>
             ))}
           </ul>
+          <p className="m-0 text-[13px] leading-snug text-[#8E96AA]">
+            You&apos;re in. It starts on its own{alone ? ", against the AI if nobody else joins" : ""}.
+          </p>
           <button
             type="button"
             onClick={onLeave}
@@ -84,10 +84,7 @@ export const RacesCard: React.FC<RacesCardProps> = ({ trackName, carTitle, slotS
         </>
       ) : (
         <>
-          <p className="m-0 text-[13px] leading-snug text-[#8E96AA]">
-            Anyone can join. Everyone races the same car with the weekly challenge&apos;s settings, and your best challenge
-            lap this week sets your grid place.
-          </p>
+          {waiting ? <WaitingLine waiting={waiting} /> : null}
           <button
             type="button"
             onClick={onJoin}
@@ -97,6 +94,7 @@ export const RacesCard: React.FC<RacesCardProps> = ({ trackName, carTitle, slotS
           >
             {entry.state === "joining" ? "Joining…" : "Join the next race"}
           </button>
+          <p className="m-0 text-[13px] leading-snug text-[#8E96AA]">Same car for everyone. Your best challenge lap this week sets your grid slot.</p>
           {entry.state === "error" && entry.text ? (
             <p role="alert" className="m-0 text-[13px] font-semibold text-[#FFB300]">
               {entry.text}
@@ -104,9 +102,55 @@ export const RacesCard: React.FC<RacesCardProps> = ({ trackName, carTitle, slotS
           ) : null}
         </>
       )}
+
+      {results && (results.standings.length > 0 || (results.record?.starts ?? 0) > 0) ? (
+        <RaceResultsLines standings={results.standings} record={results.record} />
+      ) : null}
     </section>
   );
 };
+
+/** "2 drivers waiting: Al, Bea", or that nobody is yet */
+const WaitingLine: React.FC<{ waiting: RaceWaiting }> = ({ waiting: w }) => {
+  const shown = w.names.slice(0, 3);
+  const more = w.waiting - shown.length;
+  return (
+    <p className="m-0 flex items-center gap-2.5 text-[14px] leading-snug" aria-live="polite">
+      <span className="relative inline-flex h-2 w-2 shrink-0">
+        {w.waiting > 0 ? <span className="lc-ping absolute inset-0 rounded-full bg-[#00E676]" /> : null}
+        <span className={`relative h-2 w-2 rounded-full ${w.waiting > 0 ? "bg-[#00E676]" : "bg-[#3A4157]"}`} />
+      </span>
+      {w.waiting === 0 ? (
+        <span className="text-[#8E96AA]">Nobody waiting yet</span>
+      ) : (
+        <span className="min-w-0 text-[#C5CBD8]">
+          <span className="font-semibold text-[#F5F7FA]">{plural(w.waiting, "driver", "drivers")} waiting</span>
+          {shown.length > 0 ? `: ${shown.join(", ")}${more > 0 ? ` and ${more} more` : ""}` : ""}
+        </span>
+      )}
+    </p>
+  );
+};
+
+/** Who is waiting for the next race, asked again every few seconds while `active` and when the race changes */
+function useRaceWaiting(active: boolean, startsMs: number): RaceWaiting | null {
+  const [waiting, setWaiting] = useState<RaceWaiting | null>(null);
+  useEffect(() => {
+    if (!active) return setWaiting(null);
+    let live = true;
+    const ask = () =>
+      void fetchRaceWaiting().then((w) => {
+        if (live) setWaiting(w);
+      });
+    ask();
+    const id = window.setInterval(ask, WAITING_POLL_MS);
+    return () => {
+      live = false;
+      window.clearInterval(id);
+    };
+  }, [active, startsMs]);
+  return waiting;
+}
 
 /** The week's top drivers and the player's own record, read again when the player's entry changes (after a race) */
 function useRaceResults(driverName: string | undefined, entryState: ScheduledRaceStatus["state"]) {
@@ -129,11 +173,9 @@ const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one :
 
 /** This week's top five by wins then podiums, and the player's record in one line */
 const RaceResultsLines: React.FC<{ standings: WeekStanding[]; record: DriverRecord | null }> = ({ standings, record }) => (
-  <div className="flex flex-col gap-1.5">
-    <h3 className="m-0 text-[14px] font-semibold text-[#F5F7FA]">This week&apos;s top drivers</h3>
-    {standings.length === 0 ? (
-      <p className="m-0 text-[13px] text-[#8E96AA]">No race results yet.</p>
-    ) : (
+  <div className="flex flex-col gap-1.5 border-t border-[#262B3D] pt-4">
+    <h4 className="m-0 text-[14px] font-semibold text-[#F5F7FA]">This week&apos;s top drivers</h4>
+    {standings.length === 0 ? null : (
       <ol className="m-0 flex list-none flex-col gap-0.5 p-0">
         {standings.slice(0, 5).map((s, i) => (
           <li key={`${s.name}-${i}`} className="flex items-baseline justify-between gap-3 text-[13px]">

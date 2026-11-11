@@ -122,3 +122,22 @@ export async function fetchDriverRecord(name: string): Promise<DriverRecord | nu
   if (!trimmed) return null;
   return parseDriverRecord(await getJson("/drivers/record", { name: trimmed }));
 }
+
+/** Who is waiting for the next scheduled race: how many, and the first few names */
+export interface RaceWaiting {
+  waiting: number;
+  names: string[];
+}
+
+export function parseRaceWaiting(body: unknown): RaceWaiting | null {
+  if (!isRecord(body)) return null;
+  const waiting = count(body.waiting);
+  if (waiting === null) return null;
+  const names = Array.isArray(body.names) ? body.names.map(text).filter((n): n is string => n !== null).slice(0, 6) : [];
+  return { waiting, names };
+}
+
+/** GET /api/races/waiting: for the Races card of a player not in the next race yet. Null without races or on a failed read */
+export async function fetchRaceWaiting(): Promise<RaceWaiting | null> {
+  return parseRaceWaiting(await getJson("/races/waiting", {}));
+}
