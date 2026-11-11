@@ -19,6 +19,7 @@ export type KeyAction =
   | "autopilot"
   | "mouseSteer"
   | "restart"
+  | "flyingLap"
   | "throttleHalf"
   | "replay"
   | "mfdPage";
@@ -32,6 +33,7 @@ export type PadAction =
   | "camera"
   | "racingLine"
   | "restart"
+  | "flyingLap"
   | "pause"
   | "mfd"
   | "mfdPage"
@@ -58,6 +60,7 @@ export const KEY_ACTIONS: readonly { id: KeyAction; label: string }[] = [
   { id: "autopilot", label: "Autopilot" },
   { id: "mouseSteer", label: "Mouse steering" },
   { id: "restart", label: "Restart" },
+  { id: "flyingLap", label: "Restart lap (flying start)" },
   { id: "throttleHalf", label: "Half throttle (hold)" },
   { id: "replay", label: "Instant replay" },
   { id: "mfdPage", label: "Next MFD page" },
@@ -71,6 +74,7 @@ export const PAD_ACTIONS: readonly { id: PadAction; label: string }[] = [
   { id: "camera", label: "Camera" },
   { id: "racingLine", label: "Racing line" },
   { id: "restart", label: "Restart" },
+  { id: "flyingLap", label: "Restart lap (flying start)" },
   { id: "pause", label: "Pause menu" },
   { id: "mfd", label: "Open / close MFD" },
   { id: "mfdPage", label: "Next MFD page" },
@@ -93,6 +97,8 @@ export const DEFAULT_KEY_BINDINGS: KeyBindings = {
   autopilot: ["KeyP"],
   mouseSteer: ["KeyV"],
   restart: ["Backspace"],
+  // Outside a race: the lap starts over at speed (in a race it does nothing)
+  flyingLap: ["KeyL"],
   throttleHalf: ["KeyF"],
   replay: ["KeyT"],
   mfdPage: ["Insert", "KeyI"],
@@ -112,6 +118,7 @@ export const DEFAULT_PAD_BUTTONS: PadButtonBindings = {
   shiftUp: 5, // RB
   racingLine: null,
   restart: 8, // View
+  flyingLap: null,
   pause: 9, // Menu
   mfd: 10, // LS click (L3)
   mfdPage: 1, // B
@@ -139,6 +146,7 @@ export const PAD_LAYOUTS: Record<PadLayout, { label: string; buttons: PadButtonB
       camera: 5, // RB (R1)
       pause: 9, // Menu (Options)
       restart: 8, // View (Create)
+      flyingLap: null,
       aero: 3, // Y (△)
       mfd: 10, // LS (L3)
       mfdPage: 1, // B (○)
@@ -157,6 +165,7 @@ export const PAD_LAYOUTS: Record<PadLayout, { label: string; buttons: PadButtonB
       camera: 5, // RB (R1)
       pause: 9, // Menu (Options)
       restart: 8, // View (Create)
+      flyingLap: null,
       mfd: 10, // LS (L3)
       mfdPage: 4, // LB (L1)
       hud: 11, // RS (R3)
@@ -174,6 +183,7 @@ export const PAD_LAYOUTS: Record<PadLayout, { label: string; buttons: PadButtonB
       aero: 10, // LS (L3)
       pause: 9, // Menu (Options)
       restart: 8, // View (Create)
+      flyingLap: null,
       mfd: 4, // LB (L1)
       mfdPage: 3, // Y (△)
       hud: 11, // RS (R3)

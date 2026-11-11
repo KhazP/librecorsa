@@ -1081,6 +1081,9 @@ export class DriveSession {
         case "restart":
           restartRun();
           break;
+        case "flyingLap":
+          this.restartFlyingLap();
+          break;
         case "replay":
           this.toggleReplay();
           break;

@@ -1178,6 +1178,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       ["Cockpit FOV", "[ / ]"],
       ["Racing line", keys(k.racingLine)],
       ["Restart", keys(k.restart)],
+      ["Restart lap (flying start)", keys(k.flyingLap)],
       ["Half throttle", keys(k.throttleHalf)],
       ["Instant replay", keys(k.replay)],
     ];
