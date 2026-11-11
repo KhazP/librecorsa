@@ -11,11 +11,13 @@ const STORAGE_KEY = "librecorsa.simMode";
 
 export function simMode(): SimMode {
   if (typeof window === "undefined" || typeof Worker === "undefined") return "main";
+  const sim = new URLSearchParams(window.location.search).get("sim");
+  const fromUrl = sim === "worker" || sim === "main" ? sim : null;
   try {
-    const fromUrl = new URLSearchParams(window.location.search).get("sim");
-    if (fromUrl === "worker" || fromUrl === "main") localStorage.setItem(STORAGE_KEY, fromUrl);
+    if (fromUrl) localStorage.setItem(STORAGE_KEY, fromUrl);
     return localStorage.getItem(STORAGE_KEY) === "main" ? "main" : "worker";
   } catch {
-    return "worker";
+    // Storage blocked: the address still decides for this visit
+    return fromUrl ?? "worker";
   }
 }
