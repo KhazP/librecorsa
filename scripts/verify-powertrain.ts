@@ -166,5 +166,29 @@ for (const [name, config] of [
   check(`${name}: braked to a stop and let go, it stays stopped`, after < 0.02, `${fmt(after * 3.6, 2)} km/h at most, 5 s on`);
 }
 
+console.log('\n== The VF26 off the line: the engine is held where it has torque');
+{
+  const cfg = VF26_TUNED_CONFIG as unknown as CarPhysicsConfig;
+  const run = (pedal: number) => {
+    const car = makeCar(cfg, 0);
+    for (let i = 0; i < 1 / DT; i++) car.step(DT, { throttle: 0, brake: 1, steer: 0 });
+    let to100 = NaN;
+    let slip = 0;
+    let rpmAt1s = 0;
+    for (let i = 1; i <= 6 / DT; i++) {
+      car.step(DT, { throttle: pedal, brake: 0, steer: 0 });
+      if (i === Math.round(0.5 / DT)) rpmAt1s = car.rpm;
+      if (Number.isNaN(to100) && car.speedMs * 3.6 >= 100) to100 = i * DT;
+      slip = Math.max(slip, car.wheels[2].slipRatio, car.wheels[3].slipRatio);
+    }
+    return { to100, slip, rpmAt1s };
+  };
+  const most = run(0.8);
+  check('four fifths of the pedal: half a second in the engine is past 5500 rpm, not at its idle', most.rpmAt1s > 5500, `${most.rpmAt1s.toFixed(0)} rpm`);
+  check('... and it is at 100 km/h within 4 s, the rear wheels gripping', most.to100 < 4 && most.slip < 0.3, `${fmt(most.to100, 2)} s, slip ${fmt(most.slip, 2)} at most`);
+  const full = run(1);
+  check('the whole pedal with no traction control spins the rear wheels past their grip', full.slip > 0.3, `slip ${fmt(full.slip, 2)}`);
+}
+
 console.log(failures.length ? `\n${failures.length} check(s) failed: ${failures.join(', ')}` : '\nAll powertrain checks passed.');
 if (failures.length) process.exitCode = 1;

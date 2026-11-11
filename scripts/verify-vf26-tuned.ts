@@ -73,9 +73,10 @@ console.log('== What the tune is');
 console.log('\n== On flat ground');
 const m = measureVf26(VF26_TUNED.make);
 {
-  // From rest the car is slow against a real one (some 2.6 s to 100 km/h): first gear runs to 110 km/h, the engine is
-  // off its boost below 6 000 rpm and the MGU-K is held back under 100 km/h. From 100 to 200 km/h it takes 2.4 s, as they do
-  check('0–100 km/h in 3.5 to 4.2 s, 0–200 in 5.8 to 6.6 s', between(m.accelS[100], 3.5, 4.2) && between(m.accelS[200], 5.8, 6.6), `${f(m.accelS[100])} s, ${f(m.accelS[200])} s`);
+  // From rest the car is a little slow against a real one (some 2.6 s to 100 km/h): first gear runs to 110 km/h and the
+  // MGU-K is held back under 100 km/h; the auto-clutch holds the engine at 7000 rpm off the line, where it has its
+  // torque. From 100 to 200 km/h it takes 2.4 s, as they do
+  check('0–100 km/h in 2.7 to 3.3 s, 0–200 in 5.0 to 5.8 s', between(m.accelS[100], 2.7, 3.3) && between(m.accelS[200], 5.0, 5.8), `${f(m.accelS[100])} s, ${f(m.accelS[200])} s`);
   check('Top speed with the wings closed 288 to 303 km/h', between(m.topSpeedKmh, 288, 303), `${f(m.topSpeedKmh, 0)} km/h`);
   check('300–100 km/h in 80 to 92 m, peaking at 5.0 to 5.6 g', between(m.brakeM, 80, 92) && between(m.brakePeakG, 5.0, 5.6), `${f(m.brakeM, 1)} m, ${f(m.brakePeakG)} g`);
   // Cornering: where the tune put it, ± 4 %
