@@ -78,6 +78,8 @@ async function main() {
     return ws;
   };
 
+  const before = await (await server.fetch(new Request('https://librecorsa.test/api/races/waiting?peek=1'))).json() as { waiting: number; names: string[] };
+  check('a look at the race before anyone joins: nobody waiting, and nothing set up', before.waiting === 0 && before.names.length === 0 && state.alarmMs === null, JSON.stringify(before));
   const al = await join_('peer_al', token('a'), 'Al');
   check('an entrant is welcomed with the start time, then the lobby', al.sent[0].t === 'welcome' && al.sent[0].startsMs === slot.startsMs && sanitizeControl(al.sent[1].ctl)?.type === 'lobby' && al.sent[1].from === RACE_SERVER_ID);
   check('the grid alarm is set for shortly before the lights', state.alarmMs === slot.startsMs - RACE_COUNTDOWN_MS);
@@ -88,6 +90,8 @@ async function main() {
   nowMs += 1000;
   const bea = await join_('peer_bea', token('b'), 'Bea');
   check('everyone sees a new entrant', lobbyOf(al)?.players.length === 2 && lobbyOf(bea)?.players.length === 2);
+  const look = await (await server.fetch(new Request('https://librecorsa.test/api/races/waiting?peek=1'))).json() as { waiting: number; names: string[] };
+  check('someone not in the race sees how many are waiting, and their names', look.waiting === 2 && look.names.join() === 'Al,Bea', JSON.stringify(look));
   check('a bad id or token is refused', (await join_('peer bad!', token('c'))).last()?.t === 'bad' && (await join_(RACE_SERVER_ID, token('c'))).last()?.t === 'bad' && (await join_('peer_c', 'short')).last()?.t === 'bad');
   check("someone else can't take an entrant's id", (await join_('peer_al', token('z'))).last()?.t === 'taken' && al.closed === null);
 

@@ -5,6 +5,7 @@
  *   POST /api/laps, GET /api/laps, GET /api/laps/<id>   the lap boards (board.ts)
  *   POST /api/drivers/rename                           a driver's new name, their laps with it (board.ts)
  *   GET /api/races/next, /api/races/<n>                 WebSocket to a scheduled race's server (race.ts)
+ *   GET /api/races/waiting                              who is waiting for the next race (race.ts, read only)
  *   POST /api/usage               one stretch of driving for the anonymous daily totals (usage.ts)
  *   GET /api/admin/stats          the owner's numbers, with the X-Admin-Key header (admin.ts)
  *   GET /api/races/results, GET /api/drivers/record     the open races' results (results.ts)
@@ -95,6 +96,19 @@ export async function handleApi(request: Request, env: Env, url: URL): Promise<R
       if (!success) return json({ ok: false, error: "Too many tries, wait a minute" }, 429, origin);
     }
     return env.ROOMS.get(env.ROOMS.idFromName(code)).fetch(request);
+  }
+
+  // Who is waiting for the next race, for the Races card of anyone not in it yet: a read of its server, no socket
+  if (path === "/api/races/waiting" && request.method === "GET") {
+    if (!config.races || !env.RACES) return json({ ok: false, error: "Scheduled races are off" }, 404, origin);
+    const slot = nextRaceSlot(Date.now(), config.raceSlotS);
+    const to = new URL(request.url);
+    to.searchParams.set("peek", "1");
+    const res = await env.RACES.get(env.RACES.idFromName(`race-${config.raceSlotS}-${slot.index}`)).fetch(new Request(to));
+    const seen = (await res.json().catch(() => null)) as { waiting?: unknown; names?: unknown } | null;
+    const waiting = typeof seen?.waiting === "number" ? seen.waiting : 0;
+    const names = Array.isArray(seen?.names) ? seen.names.filter((n): n is string => typeof n === "string") : [];
+    return json({ ok: true, startsMs: slot.startsMs, waiting, names }, 200, origin);
   }
 
   const race = /^\/api\/races\/(next|\d{1,12})$/.exec(path);

@@ -28,6 +28,8 @@ import { workers, type D1Database, type DurableObjectState, type Env, type Serve
 
 export const RACE_SERVER_ID = "race_server";
 export const MAX_RACERS = 16;
+/** Names a look at the next race gives (the count covers everyone) */
+const MAX_PEEK_NAMES = 6;
 const TOKEN_RE = /^[A-Za-z0-9_-]{8,64}$/;
 const MAX_MESSAGE_CHARS = 16 * 1024;
 /** As a room's host: more than this per second from one car is a flood, and the excess is dropped */
@@ -112,6 +114,10 @@ export class RaceServer {
   ) {}
 
   async fetch(request: Request): Promise<Response> {
+    // A look from someone deciding whether to join (GET /api/races/waiting): no socket, and nothing stored
+    if (new URL(request.url).searchParams.get("peek") === "1") {
+      return new Response(JSON.stringify(this.peek()), { headers: { "Content-Type": "application/json" } });
+    }
     if (request.headers.get("Upgrade")?.toLowerCase() !== "websocket") {
       return new Response("Expected a WebSocket", { status: 426 });
     }
@@ -212,6 +218,12 @@ export class RaceServer {
     // Back in a race that has finishers: the result as it stands
     const book = race ? await this.getBook() : null;
     if (book && book.firstFinishMs !== null) send(ws, this.resultText(book));
+  }
+
+  /** Who is waiting for this race: how many, and the names of the first to join. Read only, so a look never sets a race up */
+  peek(): { waiting: number; names: string[] } {
+    const players = this.players();
+    return { waiting: players.length, names: players.slice(0, MAX_PEEK_NAMES).map((p) => p.name) };
   }
 
   private players(gone?: ServerSocket): LobbyPlayer[] {
