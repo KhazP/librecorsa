@@ -8,3 +8,5 @@ export const SITE_DESCRIPTION =
 export const REPO_URL = "https://github.com/KhazP/librecorsa";
 /** Voluntary tips (same as .github/FUNDING.yml); never unlocks anything, the assets are non-commercial */
 export const SUPPORT_URL = "https://buymeacoffee.com/alpyalayg";
+/** Where to write to me: the address the press page gives, also for privacy requests */
+export const CONTACT_EMAIL = "alpyalay@gmail.com";
