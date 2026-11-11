@@ -8,8 +8,10 @@ import { TrackLimitsMonitor, type TrackLimitsEvent, type TrackLimitsFrame } from
 import { classifiedTimeS, type RacerProgress } from "../src/lib/sim/race-session";
 import { computeRelatives, fuelStrategy, type LapRecord } from "../src/components/hud/mfd-data";
 import { clampChassisSetup, DEFAULT_CHASSIS_SETUP, FUEL_LOAD } from "../src/lib/sim/car-setup";
-import { applyTimeTrial, timeTrialRules } from "../src/lib/sim/time-trial";
+import { applyTimeTrial, lowestFuelSetup, timeTrialRealism, timeTrialRules } from "../src/lib/sim/time-trial";
+import { SIM_REALISM_FLAGS, type SimRealismFlags } from "../src/lib/sim/sim-realism";
 import { TrackEvolutionState } from "../src/lib/sim/track-evolution";
+import { LapRecorder } from "../src/lib/sim/lap-recorder";
 import type { CarTelemetry, RaceStandingEntry } from "../src/types/f1";
 import { F12026CarSim } from "../src/lib/sim/f12026-car/F12026CarSim";
 import { createAmgGt3Sim } from "../src/lib/sim/gt3/AmgGt3Sim";
@@ -208,6 +210,9 @@ console.log("Track limits · strict outside a race");
   check("practice: a restart clears the next lap's deletion", !p.nextLapForfeit && drive(p, 0.3, { lapCount: 2, sector: 1 }).length === 0);
 
   check("practice: the autopilot is not judged", drive(p, 0.3, { offTrack: true, active: false, sector: 1 }).length === 0);
+  drive(p, 0.2, { lapCount: 2, sector: 3, offTrack: true, lateralM: 6 });
+  drive(p, 0.2, { lapCount: 3, sector: 1, active: false });
+  check("practice: a lap the autopilot starts takes the next lap's deletion with it", !p.nextLapForfeit && drive(p, 0.2, { lapCount: 4, sector: 1 }).length === 0);
 }
 
 console.log("Track limits · every engine honours strict and judged");
@@ -288,6 +293,83 @@ console.log("Time trial · fixed conditions");
   road.holdFullGrip(false);
   road.reset("natural");
   check("let go, the road takes the session's rubber again", Math.abs(road.meanRacingLineRubber() - 0.65) < 1e-9);
+  for (const [name, make] of [["AMG GT3", () => createAmgGt3Sim(track)], ["MTR 496R", () => createMtr496rSim(track)]] as const) {
+    const burn = (flags: SimRealismFlags) => {
+      const car = make();
+      car.applyChassisSetup?.(lowestFuelSetup(DEFAULT_CHASSIS_SETUP));
+      car.setSimRealism?.(flags);
+      car.resetToStartGrid(true);
+      const before = car.telemetry.fuelKg;
+      for (let i = 0; i < 60 * 10; i++) car.step(1 / 60, { throttle: 1, brake: 0, steerLeft: 0, steerRight: 0, manualOverride: false, toggleXMode: false, shiftUp: false, shiftDown: false });
+      return before - car.telemetry.fuelKg;
+    };
+    const used = burn(SIM_REALISM_FLAGS.full);
+    const held = burn(timeTrialRealism(SIM_REALISM_FLAGS.full));
+    check(`${name}: the time trial burns none of its low fuel`, used > 0.05 && held === 0, `${used.toFixed(3)} kg in 10 s flat out at Full, ${held} in the time trial`);
+  }
+}
+
+console.log("Time trial · race control, the car and the lap recorder together");
+{
+  const track = getActiveTrackData(1200);
+  const car = createVf26Sim(track);
+  const monitor = new TrackLimitsMonitor();
+  const recorder = new LapRecorder({ trackLengthM: track.totalLengthM, turns: [], trackId: "test", vehicle: "vf26", driverName: "Test", driverCode: "TST" });
+  /** One frame as the drive session runs it: the car, race control (its deletion on the car), then the recorder */
+  const frame = (offTrack?: boolean) => {
+    car.step(DT, {});
+    const t = car.telemetry;
+    clock += DT;
+    const ev = monitor.update({
+      nowMs: clock * 1000,
+      dtS: DT,
+      lapCount: t.lapCount,
+      lapTimeMs: t.currentLapTimeMs,
+      sector: t.currentSector,
+      distM: t.trackDistanceM,
+      offTrack: offTrack ?? t.offTrack,
+      throttle: t.throttle,
+      brake: t.brake,
+      lateralM: car.lateralOffsetM,
+      curvature: 0,
+      deltaS: null,
+      active: true,
+    });
+    if (ev && ev.kind === "lap_invalid" && ev.lap === t.lapCount) car.invalidateLap?.();
+    return { ev, done: recorder.update({ telemetry: t, position: car.worldPosition, quaternion: car.worldQuaternion }) };
+  };
+  car.trackLimitsMode = "strict";
+  car.aiAutopilot = true;
+  monitor.reset("practice");
+  car.resetToStartGrid(true);
+  const laps: boolean[] = [];
+  let offDone = false;
+  for (let i = 0; i < 60 * 600 && laps.length < 3; i++) {
+    const t = car.telemetry;
+    // Once into the first timed lap's last sector, a moment off the track (as race control is told it)
+    const off = !offDone && laps.length === 0 && t.currentSector === 3 && t.currentLapTimeMs > 20_000;
+    if (off) offDone = true;
+    const { done } = frame(off || undefined);
+    if (done) laps.push(done.summary.valid);
+  }
+  check("an off in the last sector deletes that lap and the next, and the one after counts", laps.join() === "false,false,true", laps.join());
+
+  // Off in the gravel, then a flying restart from there: a clean lap from the first frame
+  car.aiAutopilot = false;
+  for (let i = 0; i < 60 * 8 && !car.telemetry.offTrack; i++) {
+    car.step(DT, { throttle: 0.5, brake: 0, steerLeft: 0, steerRight: 0, analogSteer: 0.7, manualOverride: false, toggleXMode: false, shiftUp: false, shiftDown: false });
+  }
+  const wentOff = car.telemetry.offTrack;
+  monitor.reset("practice");
+  recorder.reset();
+  car.resetToStartGrid(true);
+  car.aiAutopilot = true;
+  const after = [frame(), frame(), frame(), frame(), frame()];
+  check(
+    "a flying restart from off the track starts clean",
+    wentOff && !car.telemetry.offTrack && car.telemetry.lapInvalid === false && after.every((f) => f.ev === null) && !monitor.nextLapForfeit,
+    JSON.stringify({ wentOff, off: car.telemetry.offTrack, invalid: car.telemetry.lapInvalid })
+  );
 }
 
 console.log("Classification with penalties");

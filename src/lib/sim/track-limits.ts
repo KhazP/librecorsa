@@ -259,7 +259,11 @@ export class TrackLimitsMonitor {
     this.seenLapTimeMs = f.lapTimeMs ?? null;
     const wasOff = this.wasOff;
     this.wasOff = f.offTrack && f.active;
-    if (!f.active) return null;
+    if (!f.active) {
+      // A lap the autopilot starts is not the player's: the next lap's deletion lapses with it
+      if (started) this.nextLapDeleted = false;
+      return null;
+    }
 
     let deleted = false;
     if (started && this.nextLapDeleted) {
