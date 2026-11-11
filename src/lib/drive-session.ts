@@ -45,6 +45,8 @@ import { GamepadHaptics } from "@/lib/sim/gamepad-haptics";
 import { getMultiplayerManager, type InterpolatedPeerState, type P2PConnectionStatus } from "@/lib/sim/multiplayer-sync";
 import { flagMultiplayerRace } from "@/lib/sim/mp-flags"; // polish:D
 import { MultiplayerRace, type MultiplayerRaceFrame } from "@/lib/sim/race-session";
+import { CoolDown } from "@/lib/sim/cool-down";
+import { PodiumDirector } from "@/lib/render/podium-shot";
 import { GhostPlayer, LapRecorder } from "@/lib/sim/lap-recorder";
 import { ReplayBuffer } from "@/lib/sim/replay-buffer";
 import { GHOST_CAR_COLOR, steerAngleOf, steerNormOf, wheelRpmAtSpeed, wheelRpmOf } from "@/lib/sim/car-pose";
@@ -364,6 +366,8 @@ export class DriveSession {
   readonly exitReplay: () => void;
   /** Starts the run over from the replay's current point */
   readonly flashbackReplay: () => void;
+  /** polish:B the podium shot after a race, and the overlay's view of it */
+  readonly podium: PodiumDirector;
 
   constructor(container: HTMLDivElement, host: DriveSessionHost) {
     const {
@@ -418,6 +422,8 @@ export class DriveSession {
     };
     /** The player car's dry autopilot pace, which the weather scales each frame */
     let autopilotPace: { car: unknown; pace: number } = { car: null, pace: 1 };
+    // polish:B the cool-down lap after the player's flag: the autopilot has the car, the player's inputs are ignored
+    const coolDown = new CoolDown();
     /** The boost latch, for the frame loop and the HUD at once */
     const setLatch = (boostLatch: boolean) => this.publish({ boostLatch });
     this.setBoostLatch = setLatch;
@@ -541,7 +547,7 @@ export class DriveSession {
       trackLimits.reset(limitsSessionOf(next));
     };
     this.toggleAutopilot = () => {
-      if (disposed || raceNow().kind === "mp") return;
+      if (disposed || raceNow().kind === "mp" || coolDown.active) return;
       physics.aiAutopilot = !physics.aiAutopilot;
       if (physics.aiAutopilot && physics.vxMs < 5) physics.vxMs = 45;
     };
@@ -1015,6 +1021,11 @@ export class DriveSession {
       // The loading screen, title menu and setup own the keyboard outside the car
       if (appPhaseNow !== "driving") return;
       this.unlockAudio();
+      // polish:B any key skips the podium shot (not a key held over the line) and does nothing else
+      if (podium.playing) {
+        if (!e.repeat) podium.skip();
+        return;
+      }
       const code = e.code;
 
       if (code === "Escape") {
@@ -1063,7 +1074,7 @@ export class DriveSession {
       // Held controls ignore auto-repeat anyway; toggles must not flicker while a key is held
       if (isHeldKeyAction(action)) {
         heldKeys[HELD_KEYS[action]] = true;
-        if (DRIVER_KEYS.has(action) && physics.aiAutopilot) physics.aiAutopilot = false;
+        if (DRIVER_KEYS.has(action) && physics.aiAutopilot && !coolDown.active) physics.aiAutopilot = false;
         return;
       }
       // Held controls ignore auto-repeat anyway; one-shot actions must not flicker while a key is held
@@ -1320,6 +1331,12 @@ export class DriveSession {
     // The view camera: every view's placement, the menus' orbit and the driver's neck; told to start over when the
     // run does and when the replay moves the drawn car
     const cameraRig = new CameraRig(camera, track);
+    // polish:B the podium shot takes the camera for a few seconds after a race; the drive's cameras start over after it
+    const podium = new PodiumDirector(track, () => {
+      cameraRig.reset();
+      camera.layers.enable(OVERLAY_LAYER);
+    });
+    this.podium = podium;
     let frameIndex = 0;
     const deviceInput = new DeviceInputReader();
     /** Per-axle tyre slip read from the car's telemetry each frame, for the keyboard pedal help */
@@ -1497,6 +1514,11 @@ export class DriveSession {
       const gamepadBoost = driving && device.boostHeld;
       if (!inMenu) {
         for (const action of device.pressed) {
+          // polish:B any pad button skips the podium shot
+          if (podium.playing) {
+            podium.skip();
+            break;
+          }
           if (action === "pause") {
             // Opening only: in the pause menu, B / Menu resume through the menu's own navigation
             if (!this.snapshot.paused) this.togglePause();
@@ -1591,7 +1613,7 @@ export class DriveSession {
       heldKeys.shiftDown = false;
       // The driver takes the car back from the autopilot with any device (the keys do it on key down): a pedal, the
       // stick, the touch steering pad. Not the wheel's rim, which its force feedback turns on its own.
-      if (driving && physics.aiAutopilot) {
+      if (driving && physics.aiAutopilot && !coolDown.active) {
         const pedal = Math.max(gamepadThrottle, gamepadBrake, touch?.throttle ?? 0, touch?.brake ?? 0);
         const stick = Math.abs(gamepadStick ?? 0);
         const touchSteer = touchSteering && !settingsNow.touch.tiltSteer ? Math.abs(touch.steer) : 0;
@@ -1614,6 +1636,17 @@ export class DriveSession {
           : MP_CLOCK_UNSYNCED_FRAME
         : null;
       const mpFrozen = mpFrame !== null && mpFrame.phase !== "racing";
+      // polish:B on the player's flag (last frame's status, of this run) the cool-down takes the car
+      const coolStatus = physics.telemetry.runId === runId ? physics.telemetry.race : undefined;
+      coolDown.update(
+        physics,
+        {
+          finished: raceNow().kind !== "practice" && coolStatus?.phase === "finished",
+          retired: coolStatus?.results?.find((r) => r.isPlayer)?.dnf === true,
+          roadHalfWidthM: track.getSampleAtDistance(physics.sMeters).width / 2,
+        },
+        driving ? dtSeconds : 0
+      );
       if (driving) {
         // The evolving road and the wake of the cars around: the player's car always, the AI field's too when racing,
         // with the remote players placed from last frame's interpolated poses
@@ -1624,10 +1657,10 @@ export class DriveSession {
         if (physics.aiPaceScale !== undefined) {
           const base = autopilotPace;
           if (base.car !== physics) autopilotPace = { car: physics, pace: physics.aiPaceScale };
-          physics.aiPaceScale = autopilotPace.pace * (physics.aiAutopilot ? trackEnv.weatherPaceScale(physics) : 1);
+          physics.aiPaceScale = autopilotPace.pace * (physics.aiAutopilot ? trackEnv.weatherPaceScale(physics) : 1) * coolDown.paceScale;
         }
         startupMonitor?.begin();
-        if (!aiField?.playerFrozen && !mpFrozen) physics.step(dtSeconds, inputs);
+        if (!aiField?.playerFrozen && !mpFrozen) physics.step(dtSeconds, coolDown.active ? coolDown.inputs() : inputs);
         aiField?.update(dtSeconds);
         startupMonitor?.end("sim");
       }
@@ -1818,6 +1851,8 @@ export class DriveSession {
             solid = !guard.blocks(p.peerId, guardSelf, guardOther, p.hazard === true);
             through = p.hazard === true || guard.rammed(p.peerId);
           }
+          // polish:B a car that has taken the flag passes through (collisionsActiveWith), drawn as a ghost
+          if (mpFrame.phase === "racing" && p.race?.id === mpRace.start.id && (mpRace.lapClock.finishTimeS !== null || p.race.fin !== null)) through = true;
           p.passThrough = through;
           if (driving && solid) resolvePlayerVsRemoteCar(physics, p, dtSeconds);
         }
@@ -1829,6 +1864,14 @@ export class DriveSession {
         for (const p of samePeers) p.passThrough = false;
       }
       let renderPeers = aiField ? [...samePeers, ...aiField.peers()] : samePeers;
+      // polish:B the podium shot once the top three are known (this frame's race status, before the HUD sees it)
+      podium.update({
+        race: physics.telemetry.race,
+        dt: this.snapshot.paused ? 0 : dtSeconds,
+        allowed: !inMenu && !replaying && !renderer.xr.isPresenting,
+        peers: renderPeers,
+        ground: physics.groundQuery ?? null,
+      });
 
       // Proximity radar: every car within 30 m in the player's frame (model +X is the car's left)
       {
@@ -1970,7 +2013,7 @@ export class DriveSession {
 
       // The menus film the car from outside, whatever the player's camera is
       const inVr = renderer.xr.isPresenting;
-      const mode: CameraMode = inMenu ? "chase" : inVr ? "cockpit" : (settings.camera ?? "chase");
+      const mode: CameraMode = inMenu || podium.playing ? "chase" : inVr ? "cockpit" : (settings.camera ?? "chase");
       const view = CAMERA_MODES[mode];
       const vf26Cams = carRig.getCameraAnchors();
       const carFovDeg = vf26Cams ? vf26Cams.cockpit.fovDeg : FALLBACK_COCKPIT_FOV_DEG;
@@ -2006,6 +2049,7 @@ export class DriveSession {
         physics.tyreVisuals ? playerWheels : undefined
       );
       seatContactShadow(carRig.root, physics.tyreVisuals ? playerWheels : undefined);
+      podium.drawPlayer(carRig, physics.telemetry, physics.groundQuery ?? null, dtSeconds);
 
       const vf26Body = carRig.getVf26Body();
       // Built once per body (keyed on the body, not on the wheel display: a body without STEER_BASE has no display,
@@ -2060,19 +2104,20 @@ export class DriveSession {
       // Update persistent 4-wheel skidmark ribbons, tire smoke/gravel/rooster-tail particles & opponent 3D cars
       // The player's car only lays skidmarks and throws smoke / spray while it is simulated: paused, in menus or in a
       // replay its wheel state is the last driven frame, which would keep emitting on the spot
+      const drawnPeers = podium.drawPeers(renderPeers);
       visualFx.update(
         dtSeconds,
         physics.worldQuaternion,
         physics.vxMs,
         physics.wheels,
-        renderPeers,
+        drawnPeers,
         driving
       );
 
 
       floorSparks.update(dtSeconds, driving && rigModel(carRigCar).floorSparks ? physics : null);
 
-      cameraRig.update({
+      if (!podium.placeCamera(camera)) cameraRig.update({
         dt: dtSeconds,
         nowMs,
         mode,
@@ -2098,7 +2143,7 @@ export class DriveSession {
         active: driving,
         camera,
         cameraMode: mode,
-        peers: renderPeers,
+        peers: drawnPeers,
         soundFor: opponentSound,
         dt: dtSeconds,
       });
@@ -2187,7 +2232,7 @@ export class DriveSession {
       }
       env.update(physics.worldPosition, camera);
       startupMonitor?.begin();
-      reflectionProbe.update(physics.worldPosition, carRig.root, scene.environmentIntensity);
+      reflectionProbe.update(podium.focus ?? physics.worldPosition, carRig.root, scene.environmentIntensity);
       startupMonitor?.end("probe");
       // Virtual mirror: on its own in the views whose wing mirrors are off screen (or that have none), and in the
       // chase view too when the player asked for it always
@@ -2196,7 +2241,7 @@ export class DriveSession {
         view.virtualMirror === "always" ||
         (view.virtualMirror === "noSideMirrors" && !(wingMirrors?.found && wingMirrors.coversSides)) ||
         (view.virtualMirror === "onRequest" && vmSetting === "always");
-      const vmOn = driving && !inVr && container.clientWidth >= 640 && vmSetting !== "off" && vmView;
+      const vmOn = driving && !inVr && !podium.playing && container.clientWidth >= 640 && vmSetting !== "off" && vmView;
       virtualMirror.update(frameIndex, vmOn, carRig.chassisGroup, carRig.root);
       if (vmOn !== virtualMirrorShown) {
         virtualMirrorShown = vmOn;

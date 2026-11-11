@@ -465,6 +465,8 @@ export class MultiplayerRace {
    */
   collisionsActiveWith(frame: MultiplayerRaceFrame, peerId: string): boolean {
     if (frame.phase !== "racing" || this.start.collisions === "off") return false;
+    // polish:B a car that has taken the flag neither takes nor gives contact
+    if (this.lapClock.finishTimeS !== null || (this.remote.get(peerId)?.finishTimeS ?? null) !== null) return false;
     if (this.start.collisions === "on") return true;
     const other = this.remote.get(peerId);
     return this.lapClock.distM >= this.lapLengthM && other !== undefined && other.distM >= this.lapLengthM;

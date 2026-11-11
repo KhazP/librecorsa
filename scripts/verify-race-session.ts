@@ -280,6 +280,13 @@ console.log("Multiplayer: late joiners and dropped players");
     off.ingestPeers([pkt("host", 3 * L, null)], 1);
     off.lapClock.distM = 3 * L;
     check("off: never", !off.collisionsActiveWith(off.frame(lightsOut + 100_000), "host"));
+    // After the flag a car cools down: it neither takes nor gives contact
+    const flag = new MultiplayerRace({ ...start, collisions: "on" }, L, "me", me, roster);
+    const ff = flag.frame(lightsOut + 100_000);
+    flag.ingestPeers([pkt("host", 2 * L, 90, 2), pkt("other", 2 * L - 300, null)], 95);
+    check("a player who has finished is a ghost to the others", !flag.collisionsActiveWith(ff, "host") && flag.collisionsActiveWith(ff, "other"));
+    flag.lapClock.finishTimeS = 96;
+    check("once this car has finished it is a ghost to everyone", !flag.collisionsActiveWith(ff, "other"));
   }
 
   console.log("Multiplayer: the classification stands once it closes");
