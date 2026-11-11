@@ -528,7 +528,8 @@ export class MultiplayerRace {
       bestLapMs: clock.bestLapMs,
     };
     if (this.book) {
-      if (!this.book.reports[this.localPeerId]) this.takeFinish(this.localPeerId, this.finishReport);
+      // Not once the result is final: the host is then home after the close, and filing it would only resend the result
+      if (!this.book.reports[this.localPeerId] && !this.book.final) this.takeFinish(this.localPeerId, this.finishReport);
       return;
     }
     const heard = this.official?.rows.some((r) => r.peer === this.localPeerId && r.timeS !== null) ?? false;
@@ -569,7 +570,8 @@ export class MultiplayerRace {
     const L = this.lapLengthM;
     const result = resultMessage(book, (peer) => {
       const distM = peer === this.localPeerId ? this.lapClock.distM : this.remote.get(peer)?.distM;
-      return distM === undefined ? undefined : { distM, laps: Math.floor(distM / L) };
+      // A car still behind the line on the grid has done no lap, not -1
+      return distM === undefined ? undefined : { distM, laps: Math.max(0, Math.floor(distM / L)) };
     });
     this.official = result;
     this.sendResult?.(result);
