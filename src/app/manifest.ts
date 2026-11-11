@@ -9,7 +9,7 @@ export default function manifest(): MetadataRoute.Manifest {
     name: SITE_NAME,
     short_name: SITE_NAME,
     description: SITE_DESCRIPTION,
-    start_url: withBasePath("/"),
+    start_url: withBasePath("/play"),
     scope: withBasePath("/"),
     display: "fullscreen",
     orientation: "landscape",

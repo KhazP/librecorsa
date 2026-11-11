@@ -33,7 +33,7 @@ export default function PrivacyPage() {
             <LibreCorsaLogo variant="compact" size="sm" />
           </Link>
           <Link
-            href="/"
+            href="/play"
             className="lc-title inline-flex items-center gap-2 rounded-full bg-[#CCFF00] px-5 py-2.5 text-[15px] text-[#08090D] no-underline transition-colors hover:bg-[#99BF00]"
           >
             <Play aria-hidden className="h-4 w-4" strokeWidth={2.5} />

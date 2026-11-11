@@ -26,7 +26,7 @@ export const EmbeddedBadge: React.FC = () => {
   if (!framed) return null;
   return (
     <a
-      href={`${SITE_URL}/`}
+      href={`${SITE_URL}/play`}
       target="_blank"
       rel="noopener noreferrer"
       title={`Full screen, wheels and your saves work best on ${SITE_HOST}`}
