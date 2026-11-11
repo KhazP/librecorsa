@@ -18,7 +18,7 @@ const GAP_BUCKET_M = 25;
 const LIGHT_INTERVAL_MS = 1000;
 /** After the winner finishes, the classification closes once everyone is in or after this long */
 const CLASSIFICATION_CLOSE_S = 90;
-/** A multiplayer car that has sent nothing for this race for this long (never started, or dropped): DNF */
+/** A multiplayer car that has sent nothing for this race for this long is no car ahead for the overtaking aids */
 const NO_SHOW_DNF_S = 30;
 
 /** A distance difference wrapped into [−L/2, L/2) on a lap of length L */
@@ -235,6 +235,8 @@ export function classificationClosed(ordered: readonly RacerProgress[], raceTime
 /** Lap counting from the race distance of one car (the player's own) */
 export class LapClock {
   distM = 0;
+  /** Race distance on the grid, at the last reset (m) */
+  startDistM = 0;
   finishTimeS: number | null = null;
   /** Laps completed when the car took the flag; null while running */
   finishLaps: number | null = null;
@@ -254,6 +256,7 @@ export class LapClock {
     const L = this.lapLengthM;
     this.prevS = sMeters;
     this.distM = sMeters > L / 2 ? sMeters - L : sMeters;
+    this.startDistM = this.distM;
     this.finishTimeS = null;
     this.finishLaps = null;
     this.bestLapMs = null;
@@ -312,6 +315,12 @@ export class MultiplayerRace {
   /** Race time each remote racer last reported progress for this race (s) */
   private lastSeenS = new Map<string, number>();
   /**
+   * The players still in the race by the race server's (or the room host's) lobby, which every screen shares. A car
+   * that left it is out; one that is in it keeps its last reported distance, however long this screen has not heard
+   * from it (judging that per screen had each screen retire the other car and show its own leading)
+   */
+  private present: Set<string>;
+  /**
    * The furthest the start procedure has got on this client. The host clock it comes from can step back (the offset
    * is re-measured on every ping, and starts over on a host change), so the phase never goes back and the race time
    * never runs backwards
@@ -335,6 +344,7 @@ export class MultiplayerRace {
     this.lapClock = new LapClock(lapLengthM);
     this.lightsOutHostMs = start.lightsStartHostMs + 5 * LIGHT_INTERVAL_MS + start.holdMs;
     this.guard = start.collisions === "protected" ? new ContactGuard() : null;
+    this.present = new Set(roster.map((p) => p.peerId));
     for (const p of roster) {
       if (p.peerId === localPeerId || !start.grid.includes(p.peerId)) continue;
       this.remote.set(p.peerId, {
@@ -350,6 +360,11 @@ export class MultiplayerRace {
         grid: start.grid.indexOf(p.peerId),
       });
     }
+  }
+
+  /** Who is in the race now: the peer ids of the latest lobby */
+  setPresent(peerIds: Iterable<string>): void {
+    this.present = new Set(peerIds);
   }
 
   /** The player's grid slot (0 = pole); a player missing from the grid starts at the back, not on pole */
@@ -523,13 +538,14 @@ export class MultiplayerRace {
       finishLaps: this.lapClock.finishLaps ?? undefined,
       grid: this.gridSlot,
     };
-    // A remote car that has sent nothing for this race for a while (it never started, or its player dropped) is out
-    // unless it already finished; it comes back if its packets do, until the classification closes
-    const remote = [...this.remote.values()].map((r) =>
-      !r.dnf && frame.phase === "racing" && r.finishTimeS === null && frame.raceTimeS - (this.lastSeenS.get(r.id) ?? 0) > NO_SHOW_DNF_S
-        ? { ...r, dnf: true }
-        : r
-    );
+    // A remote car gone from the lobby (its player left or dropped) is out unless it already finished; it comes back
+    // if it is in the lobby again, until the classification closes
+    const remote = [...this.remote.values()].map((r) => {
+      // Not heard from yet: on the grid, placed against this car's own grid spot by grid order (a guess at a fixed
+      // distance would put a car ahead of the one in front of it on another screen)
+      const placed = this.lastSeenS.has(r.id) ? r : { ...r, distM: this.lapClock.startDistM + (this.gridSlot - (r.grid ?? this.start.grid.length)) * 8 };
+      return !r.dnf && frame.phase === "racing" && r.finishTimeS === null && !this.present.has(r.id) ? { ...placed, dnf: true } : placed;
+    });
     const field = [me, ...remote];
     const L = this.lapLengthM;
     if (frame.phase === "racing") {

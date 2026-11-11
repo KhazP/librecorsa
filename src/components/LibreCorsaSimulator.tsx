@@ -962,6 +962,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     };
     mp.onLobbyChange = (l) => {
       setLobby(l ? { ...l, players: [...l.players] } : null);
+      // Who is still in the race is the lobby's word, the same on every screen
+      if (l && session) mpRaceOf(session.race)?.setPresent(l.players.map((p) => p.peerId));
       // The host's weather and clock: a guest's session eases to them (a different preset restarts it)
       if (l?.weather && l.hostId !== mp.localPeerId) trackEnvRef.current?.applyWeatherSync(l.weather);
       follow(l);
