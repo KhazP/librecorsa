@@ -30,6 +30,7 @@ import {
 } from "@/lib/net/leaderboard";
 import { exportDriverKeyFile, importDriverKeyFile } from "@/lib/net/driver-key";
 import { challengeAt, fitsChallenge } from "@/lib/net/weekly-challenge";
+import { timeTrialRules } from "@/lib/sim/time-trial";
 import { isTouchDevice, resetTouchInput } from "@/lib/input/touch-input";
 import { isFatalHidStatus } from "@/lib/input/webhid-ffb";
 import { SIM_REALISM_FLAGS, type SimRealism } from "@/lib/sim/sim-realism";
@@ -432,6 +433,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         if (isMpHostRef.current && !flyingStart) getMultiplayerManager().startRace();
         return;
       }
+      // polish:A — a flying restart outside a race puts the time trial's conditions on first
+      if (race.kind === "practice" && flyingStart) return session.restartFlyingLap();
       const physics = session.car;
       session.resetRun("restart");
       // A restart from the menu uses the race's own start; the flying-lap key always gives a rolling one
@@ -1032,7 +1035,10 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         // No damage, as in an open race with other drivers (their cars take none)
         startAiRace(field, { ...settingsRef.current.race, laps: week.race.laps, start: "standing", damage: "off" });
       } else {
-        session?.car.resetToStartGrid(false);
+        // polish:A — the time trial: its fixed tyre, fuel and road, from a flying start
+        session?.setTimeTrial(timeTrialRules(week.vehicle));
+        session?.restartFlyingLap();
+        return;
       }
       setLaunchHint(true);
     },
