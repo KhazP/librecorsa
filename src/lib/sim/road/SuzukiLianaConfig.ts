@@ -147,6 +147,9 @@ const GEARBOX = {
     downshift_rpm: 3000,
     // Into a braking zone the auto box clicks down while the lower gear lands under 5500 rpm, near peak power [est]
     brake_downshift_rpm: 5500,
+    // An open differential: flat out of a slow corner the inside front spins and the engine ran onto the limiter at
+    // 40 km/h in first, where the box waited for the road speed of the shift point (46 km/h)
+    spin_upshift: true,
   },
 };
 

@@ -311,6 +311,39 @@ console.log('\n== Driver aids through the adapter');
   check('Dry stamp: the ABS holds its slip and costs under a tenth of the stop', abs.lock < 0.2 && abs.dist < locked.dist * 1.1, `max lock ${fmt(abs.lock, 2)} with ABS (${fmt(abs.dist, 0)} m), ${fmt(locked.lock, 2)} without (${fmt(locked.dist, 0)} m)`);
 }
 
+console.log('\n== Auto box through wheelspin (open differential)');
+{
+  // Flat out from rest on a constant lock, no traction control: the inside front spins, and the engine with it. The
+  // box shifts by the tacho there and holds the gear it took, instead of waiting on the limiter for the road speed
+  const LIMITER_RPM = C.gearbox.gears.redline_rpm - 100;
+  const flatOut = (steer: number) => {
+    const sim = createSuzukiLianaSim(createFlatTestTrack(30_000, 3000));
+    sim.assistPreset = 'semi_pro';
+    let limiterS = 0;
+    let shifts = 0;
+    let gear = 1;
+    let firstUpKmh = NaN;
+    for (let t = 0; t < 15; t += DT) {
+      sim.step(DT, { throttle: 1, analogSteer: steer });
+      const tel = sim.telemetry;
+      if (tel.rpm >= LIMITER_RPM) limiterS += DT;
+      if (tel.gear > 0 && tel.gear !== gear) {
+        if (shifts === 0) firstUpKmh = tel.speedKmh;
+        shifts++;
+        gear = tel.gear;
+      }
+    }
+    return { limiterS, shifts, gear, firstUpKmh };
+  };
+  const straight = flatOut(0);
+  check('Straight: the first shift waits for the road speed', straight.firstUpKmh > 44 && straight.limiterS === 0, `1 > 2 at ${fmt(straight.firstUpKmh, 0)} km/h, ${fmt(straight.limiterS, 1)} s on the limiter`);
+  for (const steer of [0.45, 0.7]) {
+    const r = flatOut(steer);
+    check(`Flat out on ${steer * 100} % lock: off the limiter, no hunting`, r.limiterS < 0.5 && r.shifts >= 1 && r.shifts <= 2 && r.gear >= 2,
+      `${fmt(r.limiterS, 1)} s on the limiter in 15 s, ${r.shifts} shift(s), 1 > 2 at ${fmt(r.firstUpKmh, 0)} km/h, in gear ${r.gear}`);
+  }
+}
+
 console.log('\n== Brakes, fuel and steering from the car\'s data');
 {
   // The data gives the pads no temperature curve: full friction cold and hot (the steel material's was 0.80 at 20 °C)
