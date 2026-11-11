@@ -4,7 +4,7 @@
  * The owner's numbers from the anonymous usage counter and the boards (GET <api>/admin/stats). The key is asked for
  * once and kept for this browser tab only (sessionStorage); it goes out only in the X-Admin-Key header.
  */
-import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { LibreCorsaLogo } from "@/components/ui/LibreCorsaLogo";
 import { onlineUrl } from "@/lib/net/online-config";
@@ -123,7 +123,11 @@ export function AdminStats() {
 
   useEffect(() => setKey(readKey()), []);
 
+  // Only the latest request may land: a slow answer for a range left behind must not replace the one now chosen
+  const requestRef = useRef(0);
   const load = useCallback(async (adminKey: string, range: Range) => {
+    const request = ++requestRef.current;
+    const current = () => request === requestRef.current;
     const url = onlineUrl(`/admin/stats?days=${range}`);
     if (!url) {
       setState("error");
@@ -134,6 +138,7 @@ export function AdminStats() {
     setMessage(null);
     try {
       const res = await fetch(url, { headers: { "X-Admin-Key": adminKey }, credentials: "omit", cache: "no-store" });
+      if (!current()) return;
       if (res.status === 404) {
         keepKey(null);
         setKey("");
@@ -143,9 +148,12 @@ export function AdminStats() {
         return;
       }
       if (!res.ok) throw new Error(String(res.status));
-      setStats((await res.json()) as StatsBody);
+      const body = (await res.json()) as StatsBody;
+      if (!current()) return;
+      setStats(body);
       setState("idle");
     } catch {
+      if (!current()) return;
       setState("error");
       setMessage("The numbers could not be read. Try again in a moment.");
     }
