@@ -42,15 +42,16 @@ def pit_u(T):
 
 def materials():
     return {
-        'asphalt': mat('Track_Asphalt', tex='asphalt', rough=0.86, vcol=True),
+        # the road, the pit lane and the gravel are scans of 2 m of ground (prep_scans.py) on uv that run by 8, 8 and 4 m
+        'asphalt': mat('Track_Asphalt', tex='scan-asphalt-track', nor='scan-asphalt-track-nor', tile=4, rough=0.86, vcol=True),
         'paint': mat('Paint_White', color=(0.95, 0.95, 0.95), rough=0.6),
         'kerb': mat('Kerb_RedWhite', tex='kerb', rough=0.5),
         'kerb_rw': mat('Kerb_Rwanda', tex='kerb_flag', rough=0.5),
         'kerb_base': mat('Kerb_Base', tex='concrete', rough=0.8),     # the hump under the blocks (bl_kerbs.py)
         'runoff': mat('Runoff_Paint', tex='runoff', rough=0.7),
         'grass': mat('Terrain_Grass', tex='grass', rough=0.95, vcol=True),
-        'pit': mat('Track_Pitlane_Asphalt', tex='pit_asphalt', rough=0.85),
-        'gravel': mat('Gravel_Trap', tex='gravel', rough=0.95),
+        'pit': mat('Track_Pitlane_Asphalt', tex='scan-asphalt-pit-lane', nor='scan-asphalt-pit-lane-nor', tile=4, rough=0.85),
+        'gravel': mat('Gravel_Trap', tex='scan-gravel-floor-02', nor='scan-gravel-floor-02-nor', tile=2, rough=0.95),
         'slab': mat('Pit_Apron_Concrete', tex='concrete', rough=0.8),
         'armco': mat('Barrier_Armco', tex='armco', rough=0.35, metal=0.7),
         'tecpro': mat('Barrier_Tecpro', tex='tecpro', rough=0.6),

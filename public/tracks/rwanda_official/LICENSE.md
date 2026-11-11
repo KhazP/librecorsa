@@ -21,6 +21,8 @@ You may copy, share and adapt it (port it to another simulator, rebuild it, chan
 
 - The two tree models in `scenery/foliage.glb`: each is its author's, under CC BY 4.0, credited in
   `scenery/credits.json`. Keep their credits when you reuse them.
+- The road, pit lane and gravel surface textures: made from [Poly Haven](https://polyhaven.com) scans (Asphalt Track,
+  Asphalt Pit Lane, Gravel Floor 02), which are CC0. They stay as free as the originals.
 - The real circuit: this is my reading of the design planned at Bugesera, traced from its published renders. The
   design, the venue's name and any marks belong to their owners, and this licence gives no rights to them.
 - The game's code, which is under the MIT License (`LICENSE` at the repository's root).

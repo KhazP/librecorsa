@@ -3,8 +3,8 @@
 Builds `public/tracks/rwanda_official/` in Blender: my reading of the circuit's official design (17 corners,
 anticlockwise, beside Lake Kidogo) from its published renders and figures, on the site's real ground. Nothing here
 comes from a game mod, and the build reads nothing from another circuit's folder: the two tree models (third-party,
-CC BY 4.0, credited in `assets/credits.json`) and the project's own barrier, fence, pit wall and gantry textures are
-in `assets/`.
+CC BY 4.0, credited in `assets/credits.json`), three scanned surfaces from Poly Haven (CC0) and the project's own
+barrier, fence, pit wall and gantry textures are in `assets/`.
 
 One model, two laps over it:
 
@@ -63,7 +63,7 @@ Around the site: the game draws 5.5 km, so the land climbs into a rim of hills b
 121 to 194 m above the lake; the real ground is kept where it is higher) and the lake stops at its foot. Beyond the
 lap's surroundings the ground takes field, crop, fallow and woodland colours, and a second, coarser canopy sheet is
 the far country's woodlots, where no tree is planted. Trees: 17,548 spots, 14,065 instanced after thinning the ones
-deep inside the canopy sheet, in four levels of detail. The packed circuit file is 8.5 MB and 567,000 triangles.
+deep inside the canopy sheet, in four levels of detail. The packed circuit file is 9.7 MB and 567,000 triangles.
 
 Where the three extra road sections leave the built lap, the built ground gives way to them: what lies wholly under
 their asphalt, kerbs, paint and verge is taken out, what crosses their edge is cut fine and meets it a centimetre
@@ -86,6 +86,12 @@ the lap and drops to the next, as the FIA's kerb types 1, 2 and 5 are drawn (tho
 wheel touches them. The hump under them is bare concrete and shows only where a block is left out: where an extra
 road's paving lies over the kerb, and at the cut ends of a kerb at a junction.
 
+The road, the pit lane and the gravel wear scanned surfaces: Poly Haven's Asphalt Track, Asphalt Pit Lane and Gravel
+Floor 02 (CC0), each a 2 m tile with its normal map. `prep_scans.py` keeps a scan's grain and gives it the colour of
+the drawn texture it stands in for, so the circuit's tones stay; the materials repeat the tile (`bl_common.mat`'s
+`tile`), and no mesh's texture coordinates change, as the game reads the gravel's and the kerbs' bumps from them.
+Grass, concrete and paint stay drawn.
+
 ## Steps
 
 ```bash
@@ -93,6 +99,7 @@ PY=~/.venvs/librecorsa-tracks/bin/python   # numpy, scipy, opencv, pillow, sciki
 
 $PY -I scripts/rwanda-official/prep.py all          # data/design.npz, data/addons.npz, data/terrain.npz: the design, the extra roads, the ground
 $PY -I scripts/rwanda-official/prep_textures.py     # data/tex/*.png: every texture, drawn
+$PY -I scripts/rwanda-official/prep_scans.py <dir>  # only for new scans: assets/textures/scan-*.webp from Poly Haven's 2k jpgs in <dir>
 ```
 
 In Blender (5.x), with this folder on `sys.path`:
@@ -159,8 +166,9 @@ come out of ksEditor.
 | `ro_site.py` | The site plan around the track: lagoon, causeway, marsh, level ground, roads, bridge, stands, cameras, screens, fan zones |
 | `ro_addon.py`, `ro_foot.py` | The three road sections off the built lap: their lines, profiles, bands and footprints |
 | `prep.py`, `prep_terrain.py`, `prep_textures.py` | Centreline, heights, camber, run-off, walls; terrain points, colours, trees; textures |
+| `prep_scans.py` | The scanned road, pit lane and gravel surfaces, toned to the drawn ones |
 | `bl_common.py` | Blender helpers: materials, meshes from arrays, swept strips |
 | `bl_track.py`, `bl_addon.py`, `bl_terrain.py`, `bl_scenery.py`, `bl_export.py` | The Blender build |
 | `post.mjs`, `foliage.mjs`, `export_json.py` | The game's files |
 | `ac_trees.mjs`, `bl_ac.py`, `ac_data.py` | The Assetto Corsa project |
-| `assets/` | The tree models with their credits, and the project's own barrier, fence, pit wall and gantry textures |
+| `assets/` | The tree models with their credits, the scanned surfaces (`textures/scan-*`), and the project's own barrier, fence, pit wall and gantry textures |
