@@ -378,6 +378,7 @@ def main() -> int:
     unread: list[tuple[str, list[str]]] = []  # (why, the files of a part that gave no review)
     usage = types.SimpleNamespace(input_tokens=0, output_tokens=0)
     model = MODEL
+    rejected = False  # a part the API refused as a bad request: a fault in the request, so the run fails at its end
     for index, (batch, reply) in enumerate(zip(batches, replies)):
         label = f"Part {index + 1} of {len(batches)}"
         paths = [path for path, _ in batch]
@@ -385,12 +386,16 @@ def main() -> int:
             annotate("error", f"Claude rejected the key or the model ({reply.status_code}): {reply.message}")
             return 1
         if isinstance(reply, anthropic.BadRequestError):
-            # An empty credit balance comes back as a bad request; that is not a fault in the push.
+            # An empty credit balance comes back as a bad request; that is not a fault in the push. Either way the
+            # parts that were read still make the review
             if re.search(r"credit|billing|spend", reply.message, re.IGNORECASE):
-                annotate("warning", f"Not reviewed, the API account is out of credit: {reply.message}")
-                return 0
-            annotate("error", f"Claude rejected the request (400): {reply.message}")
-            return 1
+                annotate("warning", f"{label} not reviewed, the API account is out of credit: {reply.message}")
+                unread.append(("the API account is out of credit", paths))
+            else:
+                annotate("error", f"{label}: Claude rejected the request (400): {reply.message}")
+                unread.append(("Claude rejected the request", paths))
+                rejected = True
+            continue
         if isinstance(reply, anthropic.APIError):  # rate limit, spend limit, overload, server or network trouble
             print(f"{label}: the Claude API was unavailable: {reply.message}")
             unread.append(("the Claude API was unavailable", paths))
@@ -419,7 +424,7 @@ def main() -> int:
     if not summaries:
         reasons = "; ".join(sorted({reason for reason, _ in unread}))
         annotate("warning", f"Not reviewed: {reasons}.")
-        return 0
+        return 1 if rejected else 0
     if unread:
         annotate("warning", f"{len(unread)} of {len(batches)} parts of the push were not reviewed; the review names "
                             "their files.")
@@ -429,7 +434,7 @@ def main() -> int:
     write_summary(review)
     if findings:
         post_commit_comment(repo, head, review)
-    return 0
+    return 1 if rejected else 0
 
 if __name__ == "__main__":
     sys.exit(main())
