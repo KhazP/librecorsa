@@ -97,6 +97,11 @@ export interface Env {
   TURN_KEY_API_TOKEN?: string;
   /** Extra origins allowed to call the API, comma separated (local development: .dev.vars) */
   DEV_ORIGINS?: string;
+  /** The anonymous usage counter (usage.ts): its switch, and how often one address may report */
+  ONLINE_USAGE?: string;
+  USAGE_LIMIT?: RateLimit;
+  /** Key of the private admin numbers (admin.ts), a secret; without it the route does not answer */
+  ADMIN_KEY?: string;
 }
 
 /** `new WebSocketPair()` and friends exist only in the Workers runtime */

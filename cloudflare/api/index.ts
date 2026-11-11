@@ -4,6 +4,7 @@
  *   GET /api/rooms/<CODE>         WebSocket to a private room's server (room.ts)
  *   POST /api/laps, GET /api/laps, GET /api/laps/<id>   the lap boards (board.ts)
  *   GET /api/races/next, /api/races/<n>                 WebSocket to a scheduled race's server (race.ts)
+ *   POST /api/usage               one stretch of driving for the anonymous daily totals (usage.ts)
  * Every feature is optional: with its binding missing or its switch off (wrangler.jsonc `vars`), the config says
  * so and the game falls back to what works without a server.
  *
@@ -14,6 +15,7 @@ import { challengeProblem } from "../../src/lib/net/weekly-challenge";
 import { boardDeps, ghostOf, listLaps, submitLap } from "./board";
 import { ROOM_CODE_RE } from "./room";
 import { turnConfigured } from "./turn";
+import { recordUsage } from "./usage";
 import type { Env } from "./types";
 
 export { RaceServer } from "./race";
@@ -28,13 +30,14 @@ export function raceSlotSeconds(env: Env): number {
 }
 
 /** What the game may use online, as the Worker is configured right now */
-export function onlineConfig(env: Env): { rooms: boolean; relay: boolean; races: boolean; board: boolean; raceSlotS: number } {
+export function onlineConfig(env: Env): { rooms: boolean; relay: boolean; races: boolean; board: boolean; raceSlotS: number; usage: boolean } {
   return {
     rooms: on(env.ONLINE_ROOMS) && Boolean(env.ROOMS),
     relay: on(env.ONLINE_ROOMS) && Boolean(env.ROOMS) && turnConfigured(env),
     races: on(env.ONLINE_RACES) && Boolean(env.RACES),
     board: on(env.ONLINE_BOARD) && Boolean(env.BOARD_DB) && Boolean(env.GHOSTS),
     raceSlotS: raceSlotSeconds(env),
+    usage: on(env.ONLINE_USAGE) && Boolean(env.BOARD_DB),
   };
 }
 
@@ -129,6 +132,21 @@ export async function handleApi(request: Request, env: Env, url: URL): Promise<R
     } catch (err) {
       console.error("lap board", err);
       return json({ ok: false, error: "The lap board had a problem. Try again in a moment" }, 500, origin);
+    }
+  }
+
+  if (path === "/api/usage" && request.method === "POST") {
+    if (!config.usage || !env.BOARD_DB) return json({ ok: false, error: "The usage counter is off" }, 404, origin);
+    if (env.USAGE_LIMIT) {
+      const { success } = await env.USAGE_LIMIT.limit({ key: request.headers.get("CF-Connecting-IP") ?? "unknown" });
+      if (!success) return json({ ok: false, error: "Too many reports" }, 429, origin);
+    }
+    try {
+      const answer = await recordUsage({ db: env.BOARD_DB, now: Date.now }, request);
+      return json(answer.body, answer.status, origin);
+    } catch (err) {
+      console.error("usage", err);
+      return json({ ok: false, error: "Not counted" }, 500, origin);
     }
   }
 
