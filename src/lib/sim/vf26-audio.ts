@@ -555,12 +555,14 @@ export class Vf26SoundBank {
     // Upshift cut & engagement envelope + downshift ECU auto-blip
     let shiftOnScale = 1.0;
     let shiftOffScale = 1.0;
+    // The load the engine is heard under: all of the throttle, except through a manual upshift
+    let clutchLoad = 1.0;
     if (this.upshiftTimer > 0 && manual) {
-      // Foot off and clutch in: the engine falls to the overrun note, then the throttle comes back in over the last
-      // third as the clutch bites
+      // Foot off and clutch in: the engine is heard on its overrun note while the revs fall, then the throttle comes
+      // back in over the last third as the clutch bites. The on-load voice hands over to the overrun one (a pedal
+      // still flat on the floor holds the overrun voice down, so cutting only the on-load one left a hole)
       const p = 1 - this.upshiftTimer / this.upshiftLen;
-      shiftOnScale = p < 0.65 ? 0 : (p - 0.65) / 0.35;
-      shiftOffScale = 0.7;
+      clutchLoad = p < 0.65 ? 0 : (p - 0.65) / 0.35;
     } else if (this.upshiftTimer > 0) {
       // The ignition cut: a short dip (not a hole: the engine never stops sounding through a seamless shift), then
       // back onto the next gear with a slight punch
@@ -576,7 +578,7 @@ export class Vf26SoundBank {
     }
     const blipThrottle =
       this.downshiftTimer > 0 ? Math.sin((1 - this.downshiftTimer / 0.085) * Math.PI) * 0.78 : 0;
-    const effThrottle = Math.max(this.smoothThrottle, blipThrottle);
+    const effThrottle = Math.max(this.smoothThrottle, blipThrottle) * clutchLoad;
 
     // Dynamic exhaust filter: opens up progressively with RPM and load so high revs scream cleanly
     const rpmNorm = Math.min(1, Math.max(0, (rpm - this.rpmRange[0]) / Math.max(1000, this.rpmRange[1] - this.rpmRange[0])));
