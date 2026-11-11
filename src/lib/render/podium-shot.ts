@@ -268,7 +268,11 @@ export class PodiumDirector {
     } catch (err) {
       console.warn("[podium] shot dropped", err);
       changed = this.flow.skip() || changed;
-      if (this.flow.stage === "waiting") this.flow.stage = "done";
+      if (this.flow.stage === "waiting") {
+        // Straight to the table: the overlay has to hear of it
+        this.flow.stage = "done";
+        changed = true;
+      }
     }
     if (wasPlaying && !this.playing) this.finish();
     if (changed) this.publish();
