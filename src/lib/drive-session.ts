@@ -509,10 +509,18 @@ export class DriveSession {
      * (defaults for the first car) and that car's saved tyre setup
      */
     /**
-     * The simulation worker, while it is opt-in (`sim-mode.ts`): it drives the player's car in practice, through a
-     * stand-in the rest of the session uses as the car (`sim-host.ts`). AI and online races run on the page.
+     * The simulation worker (`sim-mode.ts`): it drives the player's car in practice, through a stand-in the rest of
+     * the session uses as the car (`sim-host.ts`). AI and online races run on the page, and so does everything where
+     * a worker cannot be started.
      */
-    const simWorker = simMode() === "worker" ? startSimWorker() : null;
+    let simWorker: ReturnType<typeof startSimWorker> | null = null;
+    if (simMode() === "worker") {
+      try {
+        simWorker = startSimWorker();
+      } catch (reason) {
+        console.warn("[sim] worker unavailable, simulating on the page:", reason);
+      }
+    }
     const simHost = simWorker ? createSimHost(simWorker) : null;
     simWorker?.ping().then(
       (ms) => console.info(`[sim] worker round trip ${ms.toFixed(1)} ms`),
