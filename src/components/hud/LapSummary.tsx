@@ -71,6 +71,10 @@ interface LapSummaryProps {
   submitRank?: { rank: number; total: number | null; challengeRank?: number | null } | null;
   /** Why the board refused the last upload (e.g. the name is taken), shown under the buttons */
   submitError?: string | null;
+  /** The name the driver's laps go up under, shown once one went up (or was turned down) */
+  driverName?: string;
+  /** Changes the driver's name on the board (their laps move with it): null once it has taken, else why not */
+  onRename?: (name: string) => Promise<string | null>;
 }
 
 /** Gap between the toast and the HUD block it clears (px) */
@@ -154,7 +158,8 @@ export const LapSummary: React.FC<LapSummaryProps> = (props) => {
   useEffect(() => {
     if (!expanded || hidden) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setExpanded(false);
+      // Esc in the card's name field closes the field, not the card
+      if (e.key === "Escape" && !(e.target instanceof HTMLInputElement)) setExpanded(false);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -276,6 +281,8 @@ const LapCard: React.FC<
   submitState = "idle",
   submitRank = null,
   submitError = null,
+  driverName,
+  onRename,
 }) => {
 
   let badge: React.ReactNode = null;
@@ -434,12 +441,100 @@ const LapCard: React.FC<
           Close
         </button>
       </div>
+      {onRename && driverName && (submitState === "sent" || submitState === "error") ? (
+        <DriverNameLine name={driverName} onBoard={submitState === "sent"} onRename={onRename} />
+      ) : null}
       {submitState === "error" && submitError ? (
         <p className="-mt-1.5 text-right font-f1-mono text-[11px] leading-snug" style={{ color: HUD_RED }}>
           {submitError}
         </p>
       ) : null}
     </div>
+  );
+};
+
+/**
+ * The name the lap went up under, and a way to change it right here: the game picks a name for new drivers, and the
+ * board keeps one entry per driver, so the laps under the old name move to the new one
+ */
+const DriverNameLine: React.FC<{ name: string; onBoard: boolean; onRename: (name: string) => Promise<string | null> }> = ({ name, onBoard, onRename }) => {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(name);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const save = async () => {
+    setBusy(true);
+    const problem = await onRename(draft);
+    setBusy(false);
+    setError(problem);
+    if (problem === null) setEditing(false);
+  };
+
+  if (!editing) {
+    return (
+      <p className="-mt-1.5 flex flex-wrap items-center justify-end gap-x-1.5 text-right text-[12px] leading-snug text-[#8E96AA]">
+        {onBoard ? "On the board as" : "Racing as"} <span className="font-semibold text-[#F5F7FA]">{name}</span>
+        <button
+          type="button"
+          onClick={() => {
+            setDraft(name);
+            setError(null);
+            setEditing(true);
+          }}
+          className="cursor-pointer border-0 bg-transparent p-0 text-[12px] font-semibold text-[#C5CBD8] underline decoration-[#3A4157] underline-offset-2 hover:text-[#F5F7FA] hover:decoration-[#F5F7FA]"
+        >
+          Change name
+        </button>
+      </p>
+    );
+  }
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        void save();
+      }}
+      className="flex flex-col gap-1.5"
+    >
+      <div className="flex items-center gap-2">
+        <input
+          autoFocus
+          type="text"
+          maxLength={16}
+          value={draft}
+          aria-label="Driver name"
+          aria-invalid={error !== null}
+          onChange={(e) => {
+            setDraft(e.target.value);
+            setError(null);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") setEditing(false);
+          }}
+          className="h-10 min-w-0 flex-1 rounded-full border border-[#262B3D] bg-[#08090D] px-4 text-[14px] text-[#F5F7FA] outline-none focus:border-[#F5F7FA]/60"
+        />
+        <button
+          type="submit"
+          disabled={busy || draft.trim() === ""}
+          className={`${BTN} border border-[#262B3D] bg-[#1B1F2B] text-[#F5F7FA] hover:border-[#3A4157] hover:bg-[#262B3D] disabled:cursor-not-allowed disabled:opacity-40`}
+        >
+          {busy ? "Saving…" : "Save"}
+        </button>
+        <button
+          type="button"
+          onClick={() => setEditing(false)}
+          className={`${BTN} border border-[#262B3D] bg-transparent text-[#C5CBD8] hover:border-[#3A4157] hover:text-[#F5F7FA]`}
+        >
+          Cancel
+        </button>
+      </div>
+      {error ? (
+        <p role="alert" className="m-0 text-right font-f1-mono text-[11px] leading-snug" style={{ color: HUD_RED }}>
+          {error}
+        </p>
+      ) : null}
+    </form>
   );
 };
 

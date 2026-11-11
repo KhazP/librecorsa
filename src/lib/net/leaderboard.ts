@@ -56,6 +56,15 @@ export interface SubmitResult {
   error?: string;
   /** Refused only because the board has this driver's faster lap already */
   notFaster?: boolean;
+  /** Refused because another driver holds the name */
+  taken?: boolean;
+}
+
+export interface RenameResult {
+  ok: boolean;
+  error?: string;
+  /** Another driver holds the new name */
+  taken?: boolean;
 }
 
 const CHALLENGE_BEST_KEY = "lc.challengeBest";
@@ -345,7 +354,28 @@ export async function submitLap(rec: LapRecording, opts: { event?: string } = {}
   const message = cappedString(answer.error, MAX_ERROR_LENGTH);
   const result: SubmitResult = { ok: false, error: message ?? `Leaderboard rejected the lap (HTTP ${res.status})` };
   if (answer.notFaster === true) result.notFaster = true;
+  if (answer.taken === true) result.taken = true;
   return result;
+}
+
+/**
+ * Moves the driver's laps from `from` to `to` on the online boards (POST /api/drivers/rename), claiming `to` with this
+ * browser's key, so the boards never list them twice. Without an online board there is nothing to move: the name only
+ * changes here.
+ */
+export async function renameOnBoard(from: string, to: string, code?: string): Promise<RenameResult> {
+  const url = onlineUrl("/drivers/rename");
+  if (!url || !(await boardOnline())) return { ok: true };
+  const body = JSON.stringify({ from, to, ...(code ? { code } : {}), driverKey: getOrCreateDriverKey() });
+  const res = await requestJson(url, { method: "POST", headers: { "Content-Type": "application/json" }, body });
+  if (!res) return { ok: false, error: "Could not reach the leaderboard. Try again" };
+  const answer: Record<string, unknown> = isRecord(res.body) ? res.body : {};
+  if (res.status >= 200 && res.status < 300 && answer.ok === true) return { ok: true };
+  return {
+    ok: false,
+    error: cappedString(answer.error, MAX_ERROR_LENGTH) ?? `The name could not be changed (HTTP ${res.status})`,
+    taken: answer.taken === true,
+  };
 }
 
 /** Downloads an online lap's ghost (GET /api/laps/<id>) → LapRecording (validated) or null */

@@ -25,6 +25,7 @@ import {
   loadBoardBest,
   loadChallengeBest,
   localLeaderboard,
+  renameOnBoard,
   saveBoardBest,
   saveChallengeBest,
   submitLap,
@@ -51,7 +52,8 @@ import { FirstRunWizard, type WizardMode, type WizardStepId } from "@/components
 import { keyLabel, padButtonLabel } from "@/lib/input/bindings";
 import { autoConfigureWheel, connectedPads } from "@/lib/input/device-input";
 import { webHidFfb, wheelFfb } from "@/lib/input/wheel-ffb";
-import { clampFov, DEFAULT_PLAYER_SETTINGS, loadCarChoice, loadOnboarded, loadPlayerSettings, loadRumble, pushLibraryRecent, saveCarChoice, saveOnboarded, toggleLibraryFavorite, type LibraryKind, savePlayerSettings, saveRumble, type PlayerSettings } from "@/lib/settings/player-settings";
+import { nameProblem } from "@/lib/net/name-filter";
+import { clampFov, codeFromName, DEFAULT_PLAYER_SETTINGS, loadCarChoice, loadOnboarded, loadPlayerSettings, loadRumble, pushLibraryRecent, saveCarChoice, saveOnboarded, toggleLibraryFavorite, type LibraryKind, sanitizeDriverName, savePlayerSettings, saveRumble, type PlayerSettings } from "@/lib/settings/player-settings";
 import type { AeroSetupPreset, AssistPreset, CameraMode, LiveTunerPatch, LiveryConfig, TireCompound, TyreSetup, VehicleModelId } from "@/types/f1";
 import { aiFieldOf, autoCompoundFor, DEFAULT_AERO_PRESET, DriveSession, idleDriveSnapshot, mpRaceOf, type AppPhase, type RunResetReason, type SessionRace } from "@/lib/drive-session";
 import { startAiRace, type RaceSetup } from "@/lib/sim/race-setup";
@@ -76,11 +78,13 @@ const challengeOf = (rec: LapRecording): string | undefined => {
  * Uploads a lap, to this week's challenge board too when it fits; remembers the lap each board took (or refused for a
  * faster one of the driver's), so only a faster one is sent next time
  */
-const uploadLap = async (rec: LapRecording): Promise<SubmitResult> => {
-  const event = challengeOf(rec);
-  const res = await submitLap(rec, { event }).catch((): SubmitResult => ({ ok: false }));
+const uploadLap = async (rec: LapRecording, driver: { name: string; code: string }): Promise<SubmitResult> => {
+  // Under the name the driver has now: a lap recorded before a rename must not claim the old name back
+  const named: LapRecording = { ...rec, driverName: driver.name, driverCode: driver.code };
+  const event = challengeOf(named);
+  const res = await submitLap(named, { event }).catch((): SubmitResult => ({ ok: false }));
   if (res.ok && event && res.eventRank !== undefined) saveChallengeBest(event, rec.lapTimeMs);
-  const board = boardKeyOf(rec);
+  const board = boardKeyOf(named);
   if (board && (res.ok || res.notFaster)) saveBoardBest(board, rec.lapTimeMs);
   return res;
 };
@@ -225,6 +229,10 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   /** Place of the uploaded lap on its board, and how many drivers that board has */
   const [submitRank, setSubmitRank] = useState<ReturnType<typeof placeOf>>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  /** A name the board turned down (taken by another driver): laps under it are not sent again until it changes */
+  const refusedNameRef = useRef<{ name: string; error: string } | null>(null);
+  /** The upload on its way, which a rename waits for (so its lap moves with the rest) */
+  const uploadingRef = useRef<Promise<unknown> | null>(null);
   /** Bumped by every new or closed lap card and every upload: only the upload of the card still shown may land on it */
   const submitReqRef = useRef(0);
   const [driverKeyNotice, setDriverKeyNotice] = useState<string | null>(null);
@@ -726,9 +734,21 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
           const profile = settingsRef.current.profile;
           if (!boardOnRef.current || !profile.autoUpload) return;
           const shown = () => submitReq === submitReqRef.current;
+          // A name the board won't take is not sent again lap after lap: the card says why and offers another
+          const refused = nameProblem(profile.name) ?? (refusedNameRef.current?.name === profile.name ? refusedNameRef.current.error : null);
+          if (refused) {
+            if (shown()) {
+              setSubmitState("error");
+              setSubmitError(refused);
+            }
+            return;
+          }
           if (shown()) setSubmitState("sending");
-          return uploadLap(recording).then((res) => {
+          const upload = uploadLap(recording, profile);
+          uploadingRef.current = upload;
+          return upload.then((res) => {
             if (res.ok) setBoardVersion((v) => v + 1);
+            if (res.taken) refusedNameRef.current = { name: profile.name, error: res.error ?? "This name is taken" };
             if (!shown()) return;
             // The board holding a faster lap of this driver's (from another device) is no failure: nothing to show
             setSubmitState(res.ok ? "sent" : res.notFaster ? "idle" : "error");
@@ -742,20 +762,63 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   );
   useEffect(() => session?.onLapCompleted(onLapCompleted), [session, onLapCompleted]);
 
-  /** Uploads the shown lap: by hand with automatic posting off, or again after an upload failed */
-  const handleSubmitLap = useCallback(async () => {
+  /**
+   * Uploads the shown lap: by hand with automatic posting off, or again after an upload failed. `driver`: the name
+   * just changed to (the settings don't show it until the next render)
+   */
+  const handleSubmitLap = useCallback(async (driver?: { name: string; code: string }) => {
     const rec = lapSummary?.recording;
     if (!rec) return;
+    const as = driver ?? settingsRef.current.profile;
     const req = ++submitReqRef.current;
+    const problem = nameProblem(as.name);
+    if (problem) {
+      setSubmitState("error");
+      setSubmitError(problem);
+      return;
+    }
     setSubmitState("sending");
-    const res = await uploadLap(rec);
+    const upload = uploadLap(rec, as);
+    uploadingRef.current = upload;
+    const res = await upload;
     if (res.ok) setBoardVersion((v) => v + 1);
+    if (res.taken) refusedNameRef.current = { name: as.name, error: res.error ?? "This name is taken" };
     // The card was closed or replaced by another lap meanwhile: this answer is not about the one shown
     if (req !== submitReqRef.current) return;
     setSubmitState(res.ok ? "sent" : "error");
     setSubmitRank(placeOf(res));
     setSubmitError(res.ok ? null : (res.error ?? null));
   }, [lapSummary]);
+  /**
+   * A new driver name, from the Display settings or the lap card: checked, then claimed on the online board, where the
+   * laps and race results under the old name move with it. The name and code once it has taken, else why it didn't.
+   * Nothing changes here until the board has said yes.
+   */
+  const renameDriver = useCallback(async (raw: string): Promise<{ error: string } | { name: string; code: string }> => {
+    const name = sanitizeDriverName(raw);
+    const prev = settingsRef.current.profile;
+    if (name === prev.name) return { name, code: prev.code };
+    const problem = nameProblem(name);
+    if (problem) return { error: problem };
+    // A code the game derived from its own made-up name follows the new name; one the player set stays
+    const code = prev.generated ? codeFromName(name) : prev.code;
+    // An upload still on its way goes up under the old name first, so its lap moves with the rest
+    await uploadingRef.current?.catch(() => {});
+    if (boardOnRef.current) {
+      const res = await renameOnBoard(prev.name, name, code);
+      if (!res.ok) return { error: res.error ?? "The name could not be changed" };
+    }
+    setSettings((s) => ({ ...s, profile: { ...s.profile, name, code, generated: false } }));
+    refusedNameRef.current = null;
+    // The boards (the challenge box among them) are read again under the new name
+    setBoardVersion((v) => v + 1);
+    return { name, code };
+  }, []);
+  const renameFromSettings = useCallback(async (raw: string) => {
+    const res = await renameDriver(raw);
+    return "error" in res ? res.error : null;
+  }, [renameDriver]);
+
   const closeLapSummary = useCallback(() => {
     submitReqRef.current++;
     setLapSummary(null);
@@ -1362,6 +1425,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     displayPanel: {
       settings,
       onChangeSettings: handleChangeSettings,
+      onRenameDriver: renameFromSettings,
       vrSupported,
       vrActive: vrState === "on",
       onEnterVr: () => session?.enterVr(),
@@ -1451,6 +1515,16 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
                   submitState,
                   submitRank,
                   submitError,
+                  driverName: settings.profile.name,
+                  // A name changed from the card: the lap the card couldn't post goes up again under it
+                  onRename: boardOn
+                    ? async (raw: string) => {
+                        const res = await renameDriver(raw);
+                        if ("error" in res) return res.error;
+                        if (submitState === "error") void handleSubmitLap(res);
+                        return null;
+                      }
+                    : undefined,
                 }
               : null
           }

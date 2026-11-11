@@ -27,6 +27,11 @@ export interface DisplayPanelProps {
   vrSupported: boolean;
   vrActive: boolean;
   onEnterVr: () => void;
+  /**
+   * A new name, claimed on the online board with the driver's laps moved to it: null once it has taken, else why not
+   * (taken, or not allowed). Without it the name only changes here
+   */
+  onRenameDriver?: (name: string) => Promise<string | null>;
 }
 
 const DRIVER_COLORS = ["#E10600", "#00D2BE", "#FF8700", "#0600EF", "#006F62", "#2B4562", "#B6BABD", "#CCFF00"] as const;
@@ -205,9 +210,18 @@ function LabelledSegmented<T extends string>({
 }
 
 /** Driver identity, HUD layout, graphics and touch / ghost options, saved to the player's settings */
-export const DisplayPanel: React.FC<DisplayPanelProps> = ({ settings, onChangeSettings, vrSupported, vrActive, onEnterVr }) => {
+export const DisplayPanel: React.FC<DisplayPanelProps> = ({ settings, onChangeSettings, vrSupported, vrActive, onEnterVr, onRenameDriver }) => {
   // Live text while the name or code field is being edited; null shows the saved value
   const [nameDraft, setNameDraft] = useState<string | null>(null);
+  /** Why the board turned the typed name down; the field keeps it so it can be changed */
+  const [nameError, setNameError] = useState<string | null>(null);
+  const alive = useRef(true);
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
   const [codeDraft, setCodeDraft] = useState<string | null>(null);
 
   const { profile, hud, graphics, touch } = settings;
@@ -226,6 +240,16 @@ export const DisplayPanel: React.FC<DisplayPanelProps> = ({ settings, onChangeSe
   // An edit is saved on Enter, on leaving the field, and when the panel goes away mid-edit (resume, LB / RB)
   const commitName = () => {
     if (nameDraft === null) return;
+    if (onRenameDriver) {
+      // The board has the last word: the field keeps the typed name until it has taken, or says why it didn't
+      const typed = nameDraft;
+      void onRenameDriver(typed).then((error) => {
+        if (!alive.current) return;
+        setNameError(error);
+        if (error === null) setNameDraft((d) => (d === typed ? null : d));
+      });
+      return;
+    }
     const name = sanitizeDriverName(nameDraft);
     // A name the player typed is theirs (a code the game derived no longer follows it)
     if (name !== profile.name) setProfile({ name, generated: false });
@@ -262,11 +286,21 @@ export const DisplayPanel: React.FC<DisplayPanelProps> = ({ settings, onChangeSe
                 type="text"
                 maxLength={16}
                 value={nameDraft ?? profile.name}
-                onChange={(e) => setNameDraft(e.target.value)}
+                onChange={(e) => {
+                  setNameDraft(e.target.value);
+                  setNameError(null);
+                }}
                 onKeyDown={commitOnEnter(commitName)}
                 onBlur={commitName}
+                aria-invalid={nameError !== null}
+                aria-describedby={nameError ? "driver-name-error" : undefined}
                 className={INPUT}
               />
+              {nameError ? (
+                <span id="driver-name-error" role="alert" className="text-[12px] leading-snug text-[#FF2A3C]">
+                  {nameError}
+                </span>
+              ) : null}
             </label>
             <label className="flex min-w-0 flex-col gap-1.5">
               <span className={FIELD_LABEL}>Code</span>
