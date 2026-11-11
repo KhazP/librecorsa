@@ -12,12 +12,12 @@
 ```bash
 uv run --no-project --with numpy --with scipy --with opencv-python-headless --with pillow \
   python -P scripts/cars/port_sketchfab_gt3.py \
-  /Users/alpyalay/Downloads/librecorsa-src/amg_gt3_rb/amg_gt3_rb.glb \
+  path/to/amg_gt3_rb.glb \
   public/cars/amg-gt3-evo/model/amg-gt3-evo.glb
 
 uv run --no-project --with numpy --with scipy --with opencv-python-headless --with pillow \
   python -P scripts/cars/port_sketchfab_gt3.py \
-  /Users/alpyalay/Downloads/librecorsa-src/bmw_m4_gt3/bmw_m4_gt3.glb \
+  path/to/bmw_m4_gt3.glb \
   public/cars/bmw-m4-gt3/model/bmw-m4-gt3.glb
 ```
 

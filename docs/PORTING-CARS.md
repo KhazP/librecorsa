@@ -67,10 +67,10 @@ uv run --python 3.14 --no-project --with numpy --with scipy --with fsb5 \
   python -P scripts/audio/port_ac_bank.py --car <id>
 ```
 
-The mapping is `scripts/audio/car_configs.json`, one entry per car id. The entries there point at files on my machine, so add your own (copying `f12026` is a good start):
+The mapping is `scripts/audio/car_configs.json`, one entry per car id. Add your own entry (copying `f12026` is a good start):
 
 - `outDir`: `public/cars/<id>/audio`
-- `intBank`, plus `extBank` if the mod has separate interior and exterior banks
+- `intBank`, plus `extBank` if the mod has separate interior and exterior banks (an absolute path, or relative to `$AC_BANKS_DIR` / `~/Downloads`)
 - `sourceDescription`: where the sound came from, copied into the manifest
 - `engine.int` and `engine.ext`, each with `on` and `off` lists of `{ "rpm", "rootRpm", "sample" }`: the anchor RPM, the RPM the sample plays at natural pitch (from `--inspect`; defaults to `rpm`) and the sample name (from `--list`)
 - `throttleCurve` and `lift`, copied from an entry for a similar engine

@@ -38,6 +38,12 @@ FFMPEG_DEFAULT = "/opt/homebrew/bin/ffmpeg"
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CONFIG_PATH = Path(__file__).resolve().parent / "car_configs.json"
+BANKS_ROOT = Path(os.environ.get("AC_BANKS_DIR") or (Path.home() / "Downloads"))
+
+
+def resolve_bank_path(raw: str | Path, banks_root: Path = BANKS_ROOT) -> Path:
+    p = Path(raw).expanduser()
+    return p if p.is_absolute() else banks_root / p
 
 
 def load_fsbs_from_bank(bank_path: str | Path) -> tuple[list[tuple[fsb5.FSB5, Any]], bytes]:
@@ -558,12 +564,12 @@ class LazyBank:
         return self.items[idx][1].name, self._cache[idx]
 
 
-def port_car(car_id: str, cfg: dict[str, Any], ffmpeg: str) -> dict[str, Any]:
+def port_car(car_id: str, cfg: dict[str, Any], ffmpeg: str, banks_root: Path = BANKS_ROOT) -> dict[str, Any]:
     out_dir = REPO_ROOT / cfg["outDir"]
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    int_bank_path = Path(cfg["intBank"])
-    ext_bank_path = Path(cfg.get("extBank", cfg["intBank"]))
+    int_bank_path = resolve_bank_path(cfg["intBank"], banks_root)
+    ext_bank_path = resolve_bank_path(cfg.get("extBank", cfg["intBank"]), banks_root)
 
     int_bank = LazyBank(int_bank_path, ffmpeg)
     ext_bank = int_bank if ext_bank_path == int_bank_path else LazyBank(ext_bank_path, ffmpeg)
@@ -892,6 +898,7 @@ def main() -> None:
     ap.add_argument("--car", help="Port a single car ID from car_configs.json")
     ap.add_argument("--all", action="store_true", help="Port all configured cars in car_configs.json")
     ap.add_argument("--ffmpeg", default=FFMPEG_DEFAULT, help="Path to ffmpeg binary")
+    ap.add_argument("--banks-dir", type=Path, default=BANKS_ROOT, help="Base folder for relative bank paths (default: $AC_BANKS_DIR or ~/Downloads)")
     args = ap.parse_args()
 
     if args.list:
@@ -908,7 +915,7 @@ def main() -> None:
     if args.car:
         if args.car not in configs:
             raise SystemExit(f"Unknown car '{args.car}'. Available: {', '.join(configs.keys())}")
-        summary = port_car(args.car, configs[args.car], args.ffmpeg)
+        summary = port_car(args.car, configs[args.car], args.ffmpeg, args.banks_dir)
         print(json.dumps(summary, indent=2))
         return
 
@@ -916,7 +923,7 @@ def main() -> None:
         summaries = []
         for cid, cfg in configs.items():
             print(f"[port_ac_bank] Porting {cid} -> {cfg['outDir']} ...", file=sys.stderr)
-            s = port_car(cid, cfg, args.ffmpeg)
+            s = port_car(cid, cfg, args.ffmpeg, args.banks_dir)
             summaries.append(s)
             print(
                 f"  done: {s['totalMB']:.2f} MB ({s['filesWritten']} files, {s['samplesUsed']} raw samples, max jump={s['maxBoundaryJump']})",

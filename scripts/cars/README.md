@@ -9,7 +9,7 @@ Run with `uv` (using cached `numpy` and `Pillow`, without modifying any project 
 ```bash
 uv run --python 3.14 --no-project --with numpy --with scipy --with opencv-python-headless --with pillow \
   python -P scripts/cars/port_sketchfab_f1.py \
-  /Users/alpyalay/Downloads/librecorsa-src/<id>/<id>.glb \
+  path/to/<id>.glb \
   public/cars/<id>/model/<id>.glb
 ```
 
@@ -41,11 +41,11 @@ uv run --python 3.14 --no-project --with numpy --with scipy --with opencv-python
 ```bash
 uv run --python 3.14 --no-project --with numpy --with pillow \
   python -P scripts/cars/port_ac_car.py \
-  /Users/alpyalay/Downloads/librecorsa-src/suzuki_liana/suzuki_liana \
+  path/to/suzuki_liana \
   public/cars/liana/model/liana.glb --skin light_blue
 uv run --python 3.14 --no-project --with numpy --with pillow \
   python -P scripts/cars/port_ac_car.py \
-  /Users/alpyalay/Downloads/librecorsa-src/mt_mtr_496r/mt_mtr_496r \
+  path/to/mt_mtr_496r \
   public/cars/mtr-496r/model/mtr-496r.glb
 ```
 
@@ -73,5 +73,5 @@ npx tsx scripts/verify-mod-parity.ts [--unread]
 
 The draft carries each value converted to this sim's units and tagged with its file and key; what the data does not
 state is marked `TODO`. The parity suite reads the data folders from the local reference kit (`REALISM_REF`, default
-`~/Documents/GitHub/_realism-ref/mods/<id>`) and skips a car whose folder is absent. A new car gets a section there.
+`../_realism-ref/mods/<id>`) and skips a car whose folder is absent. A new car gets a section there.
 

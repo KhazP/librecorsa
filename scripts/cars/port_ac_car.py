@@ -3,7 +3,7 @@
 usage: python -P scripts/cars/port_ac_car.py <ac car folder> <out.glb> [--car liana] [--skin light_blue] [--kn5 x.kn5]
 
     uv run --python 3.14 --no-project --with numpy --with pillow python -P scripts/cars/port_ac_car.py \
-      ~/Downloads/librecorsa-src/suzuki_liana/suzuki_liana public/cars/liana/model/liana.glb --skin light_blue
+      path/to/suzuki_liana public/cars/liana/model/liana.glb --skin light_blue
     uv run --python 3.14 --no-project --with numpy --with pillow python -P scripts/cars/port_ac_car.py \
       <unpacked MTRacing_496R.rar>/content/cars/mt_mtr_496r public/cars/mtr-496r/model/mtr-496r.glb
 

@@ -3,8 +3,8 @@
     "outDir": "public/cars/w17/audio",
     "limiterRpm": 12500,
     "sourceDescription": "Mercedes W17 Sound Mod (Driver Mix interior / Broadcast mix exterior)",
-    "intBank": "/Users/alpyalay/Downloads/Mercedes W17 Sound Mod/Driver Mix/content/cars/f1_2026/sfx/f1_2026.bank",
-    "extBank": "/Users/alpyalay/Downloads/Mercedes W17 Sound Mod/Broadcast mix/content/cars/f1_2026/sfx/f1_2026.bank",
+    "intBank": "Mercedes W17 Sound Mod/Driver Mix/content/cars/f1_2026/sfx/f1_2026.bank",
+    "extBank": "Mercedes W17 Sound Mod/Broadcast mix/content/cars/f1_2026/sfx/f1_2026.bank",
     "engine": {
       "int": {
         "on": [
@@ -68,8 +68,8 @@
     "outDir": "public/cars/rb22/audio",
     "limiterRpm": 12500,
     "sourceDescription": "Red Bull RB22 Sound Mod (Driver Mix interior / Broadcast Mix exterior)",
-    "intBank": "/Users/alpyalay/Downloads/Red Bull RB22 Sound Mod/Driver Mix/content/cars/f1_2026/sfx/f1_2026.bank",
-    "extBank": "/Users/alpyalay/Downloads/Red Bull RB22 Sound Mod/Broadcast Mix/content/cars/f1_2026/sfx/f1_2026.bank",
+    "intBank": "Red Bull RB22 Sound Mod/Driver Mix/content/cars/f1_2026/sfx/f1_2026.bank",
+    "extBank": "Red Bull RB22 Sound Mod/Broadcast Mix/content/cars/f1_2026/sfx/f1_2026.bank",
     "engine": {
       "int": {
         "on": [
@@ -135,7 +135,7 @@
     "outDir": "public/cars/sf26/audio",
     "limiterRpm": 12500,
     "sourceDescription": "F1 2026 Sound Pack - Ferrari 2026 v3",
-    "intBank": "/Users/alpyalay/Downloads/F1 2026 Sound Pack/ferrari v3/f1_2026.bank",
+    "intBank": "F1 2026 Sound Pack/ferrari v3/f1_2026.bank",
     "engine": {
       "int": {
         "on": [
@@ -199,7 +199,7 @@
     "outDir": "public/cars/f12026/audio",
     "limiterRpm": 12500,
     "sourceDescription": "F1 2026 Sound Pack - Aston Martin 2026",
-    "intBank": "/Users/alpyalay/Downloads/F1 2026 Sound Pack/aston/f1_2026.bank",
+    "intBank": "F1 2026 Sound Pack/aston/f1_2026.bank",
     "engine": {
       "int": {
         "on": [
@@ -263,7 +263,7 @@
     "outDir": "public/cars/sf71h/audio",
     "limiterRpm": 12500,
     "sourceDescription": "Ferrari SF71H Sound Mod - content/cars/sf71h/sfx/sf71h.bank",
-    "intBank": "/Users/alpyalay/Downloads/Ferrari SF71H Sound Mod/content/cars/sf71h/sfx/sf71h.bank",
+    "intBank": "Ferrari SF71H Sound Mod/content/cars/sf71h/sfx/sf71h.bank",
     "engine": {
       "int": {
         "on": [
@@ -330,7 +330,7 @@
     "outDir": "public/cars/f2004/audio",
     "limiterRpm": 19000,
     "sourceDescription": "Ferrari F2004 V10 Sound Mod - content/cars/f2004/sfx/f2004.bank",
-    "intBank": "/Users/alpyalay/Downloads/f2004_sound/content/cars/f2004/sfx/f2004.bank",
+    "intBank": "f2004_sound/content/cars/f2004/sfx/f2004.bank",
     "engine": {
       "int": {
         "on": [
@@ -394,7 +394,7 @@
     "outDir": "public/cars/r25/audio",
     "limiterRpm": 19000,
     "sourceDescription": "Renault R25 V10 Sound Mod - content/cars/r25/sfx/r25.bank",
-    "intBank": "/Users/alpyalay/Downloads/r25/content/cars/r25/sfx/r25.bank",
+    "intBank": "r25/content/cars/r25/sfx/r25.bank",
     "engine": {
       "int": {
         "on": [
@@ -458,7 +458,7 @@
     "outDir": "public/cars/rb8/audio",
     "limiterRpm": 18000,
     "sourceDescription": "Red Bull RB8 V8 Sound Mod - content/cars/cim_2012_redbull/sfx/cim_2012_redbull.bank",
-    "intBank": "/Users/alpyalay/Downloads/rb8/assettocorsa/content/cars/cim_2012_redbull/sfx/cim_2012_redbull.bank",
+    "intBank": "rb8/assettocorsa/content/cars/cim_2012_redbull/sfx/cim_2012_redbull.bank",
     "engine": {
       "int": {
         "on": [
@@ -522,7 +522,7 @@
     "outDir": "public/cars/bmw-m4-gt3/audio",
     "limiterRpm": 7000,
     "sourceDescription": "BMW M4 GT3 Sound Mod by corsamode - content/cars/urd_bayro_gt3/sfx/urd_bayro_gt3.bank",
-    "intBank": "/Users/alpyalay/Downloads/m4gt3/content/cars/urd_bayro_gt3/sfx/urd_bayro_gt3.bank",
+    "intBank": "m4gt3/content/cars/urd_bayro_gt3/sfx/urd_bayro_gt3.bank",
     "engine": {
       "int": {
         "on": [
@@ -595,7 +595,7 @@
     "outDir": "public/cars/liana/audio",
     "limiterRpm": 7000,
     "sourceDescription": "Suzuki Liana (Top Gear) for Assetto Corsa, author unknown - content/cars/suzuki_liana/sfx/suzuki_liana.bank",
-    "intBank": "/Users/alpyalay/Downloads/librecorsa-src/suzuki_liana/suzuki_liana/sfx/suzuki_liana.bank",
+    "intBank": "librecorsa-src/suzuki_liana/suzuki_liana/sfx/suzuki_liana.bank",
     "engine": {
       "int": {
         "on": [
@@ -642,7 +642,7 @@
     "outDir": "public/cars/mtr-496r/audio",
     "limiterRpm": 10000,
     "sourceDescription": "MTRacing 496R v0.9 for Assetto Corsa by munyuturbo - content/cars/mt_mtr_496r/sfx/mt_mtr_496r.bank",
-    "intBank": "/Users/alpyalay/Downloads/librecorsa-src/mt_mtr_496r/mt_mtr_496r/sfx/mt_mtr_496r.bank",
+    "intBank": "librecorsa-src/mt_mtr_496r/mt_mtr_496r/sfx/mt_mtr_496r.bank",
     "engine": {
       "int": {
         "on": [

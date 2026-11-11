@@ -11,7 +11,7 @@
  */
 import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import type { BuiltTrackData } from '../../../src/lib/track-data';
 
 export interface RefLine {
@@ -23,7 +23,7 @@ export interface RefLine {
 }
 
 const HOME = homedir();
-export const REALISM_REF = process.env.REALISM_REF ?? join(HOME, 'Documents/GitHub/_realism-ref');
+export const REALISM_REF = process.env.REALISM_REF ?? resolve(process.cwd(), '../_realism-ref');
 const DOWNLOADS = process.env.AC_TRACKS_DIR ?? join(HOME, 'Downloads');
 
 /** Where each sim-grade circuit's AC layout keeps its `fast_lane.ai` */
