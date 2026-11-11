@@ -2862,8 +2862,17 @@ export class VehiclePhysics {
     const cl = cfg.clutch;
     let engage = 0;
     if (this.gear !== 0) {
-      const t = THREE.MathUtils.clamp((rpm - cl.biteRpm) / (cl.lockRpm - cl.biteRpm), 0, 1);
-      engage = wheelSideRpm >= cl.lockRpm ? 1 : t * t * (3 - 2 * t);
+      // Launch: in first gear the pedal moves the bite window up to end at the car's launch rpm, so the engine revs to
+      // where it has torque and the clutch slips there until the wheels have met it, instead of closing on an engine
+      // near its idle. Off the pedal the window is the anti-stall one again
+      let biteRpm = cl.biteRpm;
+      if (cl.launchRpm !== undefined && Math.abs(this.gear) === 1) {
+        const launch = THREE.MathUtils.clamp((inp.throttle - 0.2) / 0.6, 0, 1);
+        biteRpm += launch * Math.max(0, cl.launchRpm - cl.lockRpm);
+      }
+      const lockRpm = biteRpm + (cl.lockRpm - cl.biteRpm);
+      const t = THREE.MathUtils.clamp((rpm - biteRpm) / (lockRpm - biteRpm), 0, 1);
+      engage = wheelSideRpm >= lockRpm ? 1 : t * t * (3 - 2 * t);
       // Anti-stall: off the pedal, with the wheels turning slower than the engine idles, the auto-clutch lets go. The
       // idle controller holds the engine at or above some cars' bite speed, and its torque through the slipping clutch
       // walked a car standing on the grid away. A pedal past 5 % has the whole clutch again, for the launch

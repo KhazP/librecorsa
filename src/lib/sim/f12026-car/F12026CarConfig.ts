@@ -292,6 +292,12 @@ export interface ClutchData {
   /** Auto-clutch: engine rpm where the clutch starts to bite and where it is fully closed */
   biteRpm: number;
   lockRpm: number;
+  /**
+   * Engine rpm the auto-clutch holds in first gear at full pedal: the bite window moves up to end there, so the engine
+   * revs to where it has torque and the clutch slips until the wheels meet it, instead of closing on an engine near
+   * its idle. Omitted = the window stays where it is
+   */
+  launchRpm?: number;
 }
 
 /** `DifferentialSettingsUnits` */
