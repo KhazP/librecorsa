@@ -208,7 +208,11 @@ export async function submitLap(deps: BoardDeps, request: Request): Promise<Answ
   // A challenge lap also counts on the open board
   const onOpen = await storeLap(deps, rec, "", nameKey);
   const onEvent = event ? await storeLap(deps, rec, event, nameKey) : false;
-  if (!onOpen && !onEvent) return fail(eventError ?? "Not faster than your best lap", 409);
+  if (!onOpen && !onEvent) {
+    if (eventError) return fail(eventError, 409);
+    // The board has this driver's faster lap already: the game posts a new best by itself and keeps quiet about this
+    return { status: 409, body: { ok: false, error: "Not faster than your best lap", notFaster: true } };
+  }
 
   const place = await placeOf(deps, rec, "", nameKey);
   const answer: Record<string, unknown> = { ok: true, rank: place.rank, total: place.total };

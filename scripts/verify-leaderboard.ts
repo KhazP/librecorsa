@@ -154,7 +154,7 @@ const deps: BoardDeps = { db: fakeD1(schema), ghosts, eventRule: challengeProble
 const KEY_A = 'a'.repeat(43);
 const KEY_B = 'b'.repeat(43);
 
-type PostAnswer = { ok: boolean; rank?: number; total?: number; eventRank?: number; eventTotal?: number; eventError?: string; error?: string };
+type PostAnswer = { ok: boolean; rank?: number; total?: number; eventRank?: number; eventTotal?: number; eventError?: string; error?: string; notFaster?: boolean };
 let ipCounter = 0;
 const post = async (rec: unknown, driverKey: string | null = KEY_A, extra: Record<string, unknown> = {}, ip?: string) => {
   const res = await submitLap(
@@ -217,7 +217,7 @@ async function main(): Promise<void> {
   }
   {
     const res = await post(variant(1.03, 'Test Driver', { assists: 'pro', realism: 'full' }));
-    check('board: a slower lap of the same class is refused', res.status === 409 && !res.body.ok, res.body.error);
+    check('board: a slower lap of the same class is refused, marked as only not faster', res.status === 409 && !res.body.ok && res.body.notFaster === true, res.body.error);
     const before = ghosts.objects.size;
     const faster = await post(variant(1.01, 'Test Driver', { assists: 'pro', realism: 'full' }));
     check('board: a faster lap of the same class replaces it, ghost included', faster.body.ok === true && ghosts.objects.size === before, `${ghosts.objects.size} ghosts`);
@@ -258,7 +258,7 @@ async function main(): Promise<void> {
   }
   {
     const res = await post(variant(0.985, '  test   DRIVER ', {}), KEY_B);
-    check('board: a claimed name needs its key (case and spaces ignored)', res.status === 409 && !res.body.ok, res.body.error);
+    check('board: a claimed name needs its key (case and spaces ignored)', res.status === 409 && !res.body.ok && res.body.notFaster === undefined, res.body.error);
     check('name key: outer spaces off, inner runs as one, lower case', driverNameKey('  Test \t Driver ') === 'test driver');
   }
   {

@@ -54,6 +54,8 @@ export interface SubmitResult {
   eventRank?: number;
   eventTotal?: number;
   error?: string;
+  /** Refused only because the board has this driver's faster lap already */
+  notFaster?: boolean;
 }
 
 const CHALLENGE_BEST_KEY = "lc.challengeBest";
@@ -298,7 +300,9 @@ export async function submitLap(rec: LapRecording, opts: { event?: string } = {}
     return result;
   }
   const message = cappedString(answer.error, MAX_ERROR_LENGTH);
-  return { ok: false, error: message ?? `Leaderboard rejected the lap (HTTP ${res.status})` };
+  const result: SubmitResult = { ok: false, error: message ?? `Leaderboard rejected the lap (HTTP ${res.status})` };
+  if (answer.notFaster === true) result.notFaster = true;
+  return result;
 }
 
 /** Downloads an online lap's ghost (GET /api/laps/<id>) → LapRecording (validated) or null */
