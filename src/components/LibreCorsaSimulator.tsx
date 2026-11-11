@@ -1223,7 +1223,9 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     vehicle: vehicleModel,
     race: raceKind,
     scheduledRace: inScheduledRace,
-    onChallenge: raceKind === "practice" && fitsChallenge({ trackId, vehicle: vehicleModel, conditions: currentBoard() }, challenge),
+    assists: assistPreset,
+    realism: settings.realism,
+    lineWaterMm: trackEnvRef.current?.weather.lineWaterMm ?? 0,
     raceOver: telemetry.race?.phase === "finished",
   });
 

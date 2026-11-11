@@ -13,7 +13,8 @@ import { adminKeyMatches, adminStats, statsDays, type AdminStats } from '../clou
 import type { Env, RateLimit } from '../cloudflare/api/types';
 import { parseOnlineConfig } from '../src/lib/net/online-config';
 import { isUsageMode, sendUsage, USAGE_MODES, UsageClock, type UsageLine } from '../src/lib/net/usage';
-import { usageModeOf } from '../src/lib/net/use-usage-counter';
+import { onChallenge, usageModeOf } from '../src/lib/net/use-usage-counter';
+import { challengeAt } from '../src/lib/net/weekly-challenge';
 import { fakeD1 } from './lib/fake-cloudflare';
 
 const failures: string[] = [];
@@ -234,6 +235,10 @@ async function main() {
     clock.end();
     check('game: ending twice sends once', sent.length === 3);
     check('game: modes', usageModeOf('practice', false, false) === 'practice' && usageModeOf('practice', true, true) === 'time_trial' && usageModeOf('ai', false, true) === 'ai_race' && usageModeOf('mp', true, false) === 'open_race' && usageModeOf('mp', false, false) === 'room_race');
+    const week = challengeAt(Date.now());
+    const toRules = { trackId: week.trackId, vehicle: week.vehicle, assists: week.assists, realism: week.realism, wet: false };
+    check('game: practice to the week\'s rules is its time trial', onChallenge(toRules));
+    check('game: not on a wet track, other assists or another circuit', !onChallenge({ ...toRules, wet: true }) && !onChallenge({ ...toRules, assists: week.assists === 'pro' ? 'assisted' : 'pro' }) && !onChallenge({ ...toRules, trackId: `${week.trackId}_x` }));
     check('game: every mode the game sends is one the server takes', USAGE_MODES.every((m) => isUsageMode(m)) && USAGE_MODES.length === 5);
 
     // The request: to the API, surviving the page, without cookies, a plain-text body (no preflight)

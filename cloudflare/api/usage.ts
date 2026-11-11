@@ -4,7 +4,7 @@
  * address only feeds the rate limit (USAGE_LIMIT) and is never stored, and nothing ties one report to another.
  */
 import { isVehicleModelId } from "../../src/types/f1";
-import { MAX_USAGE_MINUTES, MIN_USAGE_MINUTES, isUsageMode } from "../../src/lib/net/usage";
+import { MAX_USAGE_MINUTES, MIN_USAGE_MINUTES, isUsageMode } from "../../src/lib/net/usage-modes";
 import { TRACK_ID_RE } from "./lap-check";
 import type { D1Database } from "./types";
 

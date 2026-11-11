@@ -5,17 +5,9 @@
  */
 import type { VehicleModelId } from "../../types/f1";
 import { onlineUrl } from "./online-config";
+import { MAX_USAGE_MINUTES, MIN_USAGE_MINUTES, type UsageMode } from "./usage-modes";
 
-/** What kind of driving a stretch was */
-export const USAGE_MODES = ["practice", "time_trial", "ai_race", "open_race", "room_race"] as const;
-export type UsageMode = (typeof USAGE_MODES)[number];
-
-export const isUsageMode = (value: unknown): value is UsageMode => typeof value === "string" && (USAGE_MODES as readonly string[]).includes(value);
-
-/** Stretches shorter than this are not reported (half a minute) */
-export const MIN_USAGE_MINUTES = 0.5;
-/** One report counts at most this long */
-export const MAX_USAGE_MINUTES = 240;
+export { isUsageMode, MAX_USAGE_MINUTES, MIN_USAGE_MINUTES, USAGE_MODES, type UsageMode } from "./usage-modes";
 
 /** One stretch of driving: where, in what, how */
 export interface UsageStretch {
