@@ -423,5 +423,25 @@
       "licenseUrl": "https://assettocorsa.club/"
     },
     "quality": "sim"
+  },
+  {
+    "id": "istanbul_park",
+    "name": "Istanbul Park",
+    "layout": "Grand Prix layout",
+    "country": "Turkey",
+    "city": "Tuzla, Istanbul",
+    "lengthM": 5318.57,
+    "turns": 14,
+    "direction": "anticlockwise",
+    "dataUrl": "/tracks/istanbul_park/track_data.json",
+    "credit": {
+      "title": "Intercity Istanbul Park",
+      "author": "Enver Bozkaya (SRTR)",
+      "url": "http://www.simracerstr.net/forum/viewtopic.php?t=903",
+      "short": null,
+      "license": "Used with permission",
+      "licenseUrl": "http://www.simracerstr.net/forum/viewtopic.php?t=903"
+    },
+    "quality": "sim"
   }
 ]
