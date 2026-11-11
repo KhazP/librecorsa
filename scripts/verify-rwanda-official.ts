@@ -237,6 +237,28 @@ if (SHORT) {
     }
   }
   check('a kerb wherever the data flags one', kerbs > 400 && kerbMiss === 0, `${kerbs} probes`);
+  // The kerbs' blocks are what one sees, never what a wheel touches (scripts/rwanda-official/bl_kerbs.py): they carry
+  // no surface, and lie over the kerb the cars drive on, 5 mm at a block's start and 27 mm at its end. The ground
+  // answers with that kerb's 2 mm ripple on it
+  const blocks = byName.get('Track_Kerb_Blocks');
+  let onKerb = 0;
+  let under = 0;
+  let over = 0;
+  const v = new THREE.Vector3();
+  blocks?.updateWorldMatrix(true, true);
+  blocks?.traverse((o) => {
+    const pos = (o as THREE.Mesh).geometry?.getAttribute('position');
+    for (let i = 0; pos && i < pos.count; i += 5) {
+      v.fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld);
+      if (!ground.query(v.x, v.z, v.y + 0.3, hit) || hit.surface !== 'kerb') continue;
+      onKerb++;
+      if (v.y - hit.height < 0.002) under++;
+      if (v.y - hit.height > 0.031) over++;
+    }
+  });
+  check("the kerbs' blocks lie over the kerb the cars drive on and are no surface themselves",
+    tag('Track_Kerb_Blocks', 'surface') === undefined && tag('Track_Kerbs_Alt', 'surface') === 'kerb' && onKerb > 15000 && under === 0 && over === 0,
+    `${onKerb} points, ${under} under, ${over} more than 3 cm over`);
   check('painted run-off wherever the data gives one', runoff > 400 && runoffMiss === 0, `${runoff} probes`);
   const pit = raw.pitLane.centerline;
   const lane = pit.slice(12, pit.length - 12).filter((p) => ground.query(p[0], p[2], p[1] + 3, hit) && hit.surface === 'pitlane').length;
