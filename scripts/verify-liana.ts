@@ -391,9 +391,14 @@ if (!existsSync('public/tracks/dunsfold/track_data.json')) {
       beyond = Math.max(beyond, Math.abs(sim.lateralOffsetM) - track.getSampleAtDistance(sim.sMeters).width / 2);
       maxSlip = Math.max(maxSlip, (Math.abs(Math.atan2(sim.vyMs, Math.max(1, sim.vxMs))) * 180) / Math.PI);
     }
-    return { done: sim.telemetry.lapCount === lap0 + 2, lapS: (sim.telemetry.lastLapTimeMs ?? 0) / 1000, beyond, maxSlip, top: sim.telemetry.allTimeTopSpeedKmh };
+    return { done: sim.telemetry.lapCount === lap0 + 2, lapS: (sim.telemetry.lastLapTimeMs ?? 0) / 1000, beyond, maxSlip, top: sim.telemetry.allTimeTopSpeedKmh, sectors: [...sim.telemetry.sectorTimesMs] };
   };
   const r = lap(createSuzukiLianaSim(track, root));
+  // The online board refuses a lap whose sectors miss its time by more than 50 ms: sector 3 must end at the line, not
+  // where the nearest sample turns to sector 1 (half a sample early, over 100 ms at the Liana's speed there)
+  const sectorSum = r.sectors.reduce((a, b) => a + b, 0);
+  check('The three sectors add up to the lap time (the board allows 50 ms)', Math.abs(sectorSum - r.lapS * 1000) <= 5,
+    `${r.sectors.map((s) => fmt(s / 1000, 3)).join(' + ')} = ${fmt(sectorSum / 1000, 3)} s vs ${fmt(r.lapS, 3)} s`);
   const m = Math.floor(r.lapS / 60);
   const lapStr = `${m}:${fmt(r.lapS - 60 * m, 1).padStart(4, '0')}`;
   check('Flying lap completes and stays on the track', r.done && r.beyond <= 0 && r.maxSlip < 10,

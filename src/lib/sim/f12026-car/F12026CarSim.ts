@@ -2228,7 +2228,10 @@ export class F12026CarSim implements SimulatorCar {
     const L = this.track.totalLengthM;
     const sample = this.track.getSampleAtDistance(this.s);
     if (sample.sector !== this.lastSector) {
-      this.onSectorCompleted(this.lastSector);
+      // Sectors 1 and 2 end at their boundaries; sector 3 ends at the line (onLapCompleted). The nearest sample turns
+      // to sector 1 up to half a sample before the line, and ending sector 3 there too would cut it short by that much
+      // (a slow car's sectors then miss the lap time by more than the board allows)
+      if (sample.sector === this.lastSector + 1) this.onSectorCompleted(this.lastSector);
       this.lastSector = sample.sector;
     }
     if (this.prevS > L * 0.85 && this.s < L * 0.15) {

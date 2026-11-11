@@ -2835,7 +2835,9 @@ export class F1Physics2026 {
     this.lastSyncedHeadingErrorRad = this.headingErrorRad;
 
     if (nextSample.sector !== this.lastSector) {
-      this.onSectorCompleted(this.lastSector);
+      // Sectors 1 and 2 end at their boundaries; sector 3 ends at the line (onLapCompleted), not where the nearest
+      // sample turns to sector 1, up to half a sample before it
+      if (nextSample.sector === this.lastSector + 1) this.onSectorCompleted(this.lastSector);
       this.lastSector = nextSample.sector;
     }
     if (prevS > this.track.totalLengthM * 0.85 && this.sMeters < this.track.totalLengthM * 0.15) {
