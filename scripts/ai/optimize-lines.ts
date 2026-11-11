@@ -3,13 +3,14 @@
  * validated by a full-physics AI lap tracking it (scripts/ai/lib/physics-lap.ts).
  *
  *   npx tsx scripts/ai/optimize-lines.ts --track spielberg [--car f1|gt3] [--iters 4 (sweeps per step size)] [--write] [--grip 0.95]
+ *       [--margin 0.4 (m kept between the car and a barrier)]
  *
  * Two starts (the current line, and a minimum-curvature line from the centre), each refined; the faster plan is
  * driven on the physics against the current line, and written (--write) only if its physics lap is clean and quicker.
  * The written line keeps the track data's own sample spacing (`ro` / `roGt3` in metres, `r` its world position).
  */
 import { readFileSync, writeFileSync } from 'node:fs';
-import { getActiveTrackData, setActiveTrack, type RawTrackJson } from '../../src/lib/track-data';
+import { getActiveTrackData, getActiveTrackMetadata, setActiveTrack, type RawTrackJson } from '../../src/lib/track-data';
 import { aiLineOffsetM } from '../../src/lib/sim/speed-profile';
 import { aiTrackFor, sampleGrid } from '../../src/lib/sim/ai/ai-track';
 import { carLimitsFor } from '../../src/lib/sim/ai/ggv';
@@ -19,6 +20,7 @@ import { TrackWallQuery } from '../../src/lib/sim/f12026-car/TrackColliderQuery'
 import { F12026CarSim } from '../../src/lib/sim/f12026-car/F12026CarSim';
 import { createAmgGt3Sim } from '../../src/lib/sim/gt3/AmgGt3Sim';
 import { physicsLap } from './lib/physics-lap';
+import { roadFacing } from '../../src/lib/sim/track-colliders';
 
 const argv = process.argv.slice(2);
 const opt = (name: string, fallback: string) => {
@@ -52,7 +54,7 @@ const boundsCar = line === 'gt3' ? createAmgGt3Sim(track, root) : new F12026CarS
 const bounds = lineBoundsFromCar(t, (s) => boundsCar.lateralRangeAt(s));
 const param = new LineParam(t, 6);
 // The barriers each side, found by stepping out from the centreline, and the car's own barrier probes
-const wallQ = root ? TrackWallQuery.fromTrackRoot(root) : null;
+const wallQ = root ? TrackWallQuery.fromTrackRoot(root, getActiveTrackMetadata().mesh?.barrierMeshes, roadFacing) : null;
 const walls: WallClearance | undefined = wallQ && wallQ.segmentCount > 0 ? (() => {
   const ids = new Int32Array(8);
   const scan = (i: number, side: number) => {
@@ -65,7 +67,7 @@ const walls: WallClearance | undefined = wallQ && wallQ.segmentCount > 0 ? (() =
     right[i] = scan(i, 1);
   }
   const probes = (boundsCar as unknown as { vehicle: { wallProbePoints: { x: number; z: number }[] } }).vehicle.wallProbePoints.map((p) => ({ x: p.x, z: p.z }));
-  return { left, right, probes, marginM: 0.4 };
+  return { left, right, probes, marginM: Number(opt('margin', '0.4')) };
 })() : undefined;
 const log = (m: string) => console.log(m);
 
