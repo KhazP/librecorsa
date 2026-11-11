@@ -63,37 +63,40 @@ console.log("The flow");
   const three = [row(1, "A"), row(2, "YOU"), row(3, "C")];
   const f = new PodiumFlow();
   const yes = () => true;
-  f.step(status(undefined), 1, 0.1, true, yes);
+  f.step(status(undefined), 0.1, true, yes);
   check("racing: idle", f.stage === "idle");
-  f.step(status([row(1, "YOU"), row(2, "B", { finishTimeS: null }), row(3, "C", { finishTimeS: null })]), 1, 0.1, true, yes);
+  f.step(status([row(1, "YOU"), row(2, "B", { finishTimeS: null }), row(3, "C", { finishTimeS: null })]), 0.1, true, yes);
   check("the player's flag: waiting for the top three", f.stage === "waiting");
-  f.step(status(three), 1, 0.1, true, yes);
+  f.step(status(three), 0.1, true, yes);
   check("the top three in: the shot plays", f.stage === "playing" && f.rows.length === 3);
-  for (let t = 0; t < PODIUM_SHOT_S - 0.5; t += 0.1) f.step(status(three), 1, 0.1, true, yes);
+  for (let t = 0; t < PODIUM_SHOT_S - 0.5; t += 0.1) f.step(status(three), 0.1, true, yes);
   check("for about six seconds", f.stage === "playing");
-  for (let t = 0; t < 1; t += 0.1) f.step(status(three), 1, 0.1, true, yes);
+  for (let t = 0; t < 1; t += 0.1) f.step(status(three), 0.1, true, yes);
   check("then the table", f.stage === "done" && f.rows.length === 0);
-  f.step(status(three, true), 1, 0.1, true, yes);
+  f.step(status(three, true), 0.1, true, yes);
   check("once per race (a final classification does not play it again)", f.stage === "done");
-  f.step(status(undefined), 2, 0.1, true, yes);
-  check("a restart starts it over", f.stage === "idle");
+  // A flashback starts the run over but keeps the result: the shot does not play again
+  f.step(status(three, true), 0.1, true, yes);
+  check("a flashback after the flag does not play it again", f.stage === "done");
+  f.step(status(undefined), 0.1, true, yes);
+  check("a restart (no result any more) starts it over", f.stage === "idle");
 
   const s = new PodiumFlow();
-  s.step(status(three), 1, 0.1, true, yes);
+  s.step(status(three), 0.1, true, yes);
   check("a key or tap skips to the table", s.skip() && s.stage === "done" && !s.skip());
 
   const missing = new PodiumFlow();
-  missing.step(status(three), 1, 0.1, true, () => false);
+  missing.step(status(three), 0.1, true, () => false);
   check("anything missing (a car, the place to park): straight to the table", missing.stage === "done");
   const vr = new PodiumFlow();
-  vr.step(status(three), 1, 0.1, false, yes);
+  vr.step(status(three), 0.1, false, yes);
   check("not allowed (VR, a replay): straight to the table", vr.stage === "done");
   const slow = new PodiumFlow();
   const behind = status([row(1, "YOU"), row(2, "B", { finishTimeS: null }), row(3, "C", { finishTimeS: null })]);
-  for (let t = 0; t < PODIUM_WAIT_S + 1; t += 0.5) slow.step(behind, 1, 0.5, true, yes);
+  for (let t = 0; t < PODIUM_WAIT_S + 1; t += 0.5) slow.step(behind, 0.5, true, yes);
   check("the top three too long coming: the table without the shot", slow.stage === "done");
   const out = new PodiumFlow();
-  out.step(status([row(1, "A", { finishTimeS: null }), row(2, "YOU", { finishTimeS: null, dnf: true })]), 1, 0.1, true, yes);
+  out.step(status([row(1, "A", { finishTimeS: null }), row(2, "YOU", { finishTimeS: null, dnf: true })]), 0.1, true, yes);
   check("the player out of the race: the table at once", out.stage === "done");
 }
 
@@ -170,7 +173,7 @@ console.log("The cars drawn during the shot");
   let ended = 0;
   const d = new PodiumDirector(track, () => ended++);
   const three = status([row(1, "A"), row(2, "YOU"), row(3, "SAM", { name: "Sam B" })]);
-  d.update({ race: three, runKey: 1, dt: 0.1, allowed: true, peers, ground: null });
+  d.update({ race: three, dt: 0.1, allowed: true, peers, ground: null });
   check("the overlay sees the shot and its three", d.getSnapshot().stage === "playing" && d.getSnapshot().rows.length === 3);
   const drawn = d.drawPeers(peers);
   const a = drawn.find((p) => p.peerId === "a");
@@ -181,16 +184,16 @@ console.log("The cars drawn during the shot");
   check("the race cars themselves untouched", peers[0].position.x === 100 && peers[0].speedKmh === 140);
   const cam = new THREE.PerspectiveCamera(60, 16 / 9, 0.1, 1000);
   check("the shot has the camera", d.placeCamera(cam) && cam.fov === 38);
-  d.update({ race: three, runKey: 1, dt: 0.1, allowed: true, peers: peers.filter((p) => p.peerId !== "a"), ground: null });
+  d.update({ race: three, dt: 0.1, allowed: true, peers: peers.filter((p) => p.peerId !== "a"), ground: null });
   check("a podium car gone from the race ends the shot", d.getSnapshot().stage === "done" && ended === 1);
   check("then the cars are drawn where they are", d.drawPeers(peers) === peers && !d.placeCamera(cam));
 
   const k = new PodiumDirector(track, () => ended++);
-  k.update({ race: three, runKey: 1, dt: 0.1, allowed: true, peers, ground: null });
+  k.update({ race: three, dt: 0.1, allowed: true, peers, ground: null });
   k.skip();
   check("skipped: the table, the cameras start over", k.getSnapshot().stage === "done" && ended === 2);
   const lost = new PodiumDirector(track, () => ended++);
-  lost.update({ race: three, runKey: 1, dt: 0.1, allowed: true, peers: [peer("x", "X")], ground: null });
+  lost.update({ race: three, dt: 0.1, allowed: true, peers: [peer("x", "X")], ground: null });
   check("a top-three car not on track: straight to the table", lost.getSnapshot().stage === "done" && ended === 2);
 }
 

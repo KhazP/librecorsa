@@ -67,12 +67,12 @@ export function podiumCue(race: Pick<RaceStatus, "results" | "resultsFinal"> | u
 
 /**
  * When the shot plays, per race on track: waits after the player's flag for the top three, plays once, then hands
- * over to the table. A new run (restart, a new race) starts it over. No three.js: the verify suite drives it.
+ * over to the table. A restart or a new race (a frame with no result) starts it over. No three.js: the verify suite
+ * drives it.
  */
 export class PodiumFlow {
   stage: PodiumStage = "idle";
   rows: readonly PodiumRow[] = [];
-  private runKey: number | null = null;
   private waitS = 0;
   private playS = 0;
 
@@ -85,10 +85,11 @@ export class PodiumFlow {
    * One frame. `tryStart` builds the shot for the top three and says whether it could; `allowed` false (VR, a replay)
    * goes straight to the table. Returns true when the stage changed.
    */
-  step(race: RaceStatus | undefined, runKey: number, dt: number, allowed: boolean, tryStart: (rows: PodiumRow[]) => boolean): boolean {
+  step(race: RaceStatus | undefined, dt: number, allowed: boolean, tryStart: (rows: PodiumRow[]) => boolean): boolean {
     const before = this.stage;
-    if (runKey !== this.runKey || !race?.results) {
-      this.runKey = runKey;
+    // Over once the result is gone (a restart, a new race, leaving it); a flashback keeps the result, and the shot
+    // already played
+    if (!race?.results) {
       this.stage = "idle";
       this.rows = [];
       this.waitS = 0;
@@ -253,7 +254,6 @@ export class PodiumDirector {
    */
   update(f: {
     race: RaceStatus | undefined;
-    runKey: number;
     dt: number;
     allowed: boolean;
     peers: readonly InterpolatedPeerState[];
@@ -262,7 +262,7 @@ export class PodiumDirector {
     const wasPlaying = this.playing;
     let changed = false;
     try {
-      changed = this.flow.step(f.race, f.runKey, f.dt, f.allowed, (rows) => this.build(rows, f.peers, f.ground));
+      changed = this.flow.step(f.race, f.dt, f.allowed, (rows) => this.build(rows, f.peers, f.ground));
       // A car on the podium gone from the race (its player left): the table instead
       if (this.playing && [...this.peerSlot.keys()].some((id) => !f.peers.some((p) => p.peerId === id))) changed = this.flow.skip() || changed;
     } catch (err) {

@@ -1791,7 +1791,6 @@ export class DriveSession {
       // polish:B the podium shot once the top three are known (this frame's race status, before the HUD sees it)
       podium.update({
         race: physics.telemetry.race,
-        runKey: runId,
         dt: this.snapshot.paused ? 0 : dtSeconds,
         allowed: !inMenu && !replaying && !renderer.xr.isPresenting,
         peers: renderPeers,

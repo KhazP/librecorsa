@@ -6,7 +6,7 @@ import { loadRaceHistory, recordFromResults, saveRaceRecord, type RaceKind, type
 
 /**
  * Keeps the race on track in the browser's race history as soon as the player has a result, saved again as it firms
- * up (one record per run on track), and returns the saved races, newest first. `kind` null: not a race.
+ * up (one record per race, from the result appearing until it goes), and returns the saved races, newest first. `kind` null: not a race.
  */
 export function useRaceHistory(
   race: RaceStatus | undefined,
@@ -23,12 +23,17 @@ export function useRaceHistory(
   const me = results?.find((r) => r.isPlayer);
   const final = race?.resultsFinal === true;
   // What a saved record depends on: it is saved again only when this changes
-  const key = me && results ? JSON.stringify([runId, meta.kind, final, results.length, me.position, me.finishTimeS, me.dnf, me.gridPosition, me.bestLapMs, me.penaltyS]) : null;
+  const key = me && results ? JSON.stringify([meta.kind, final, results.length, me.position, me.finishTimeS, me.dnf, me.gridPosition, me.bestLapMs, me.penaltyS]) : null;
 
   useEffect(() => {
-    if (!key || !results || !meta.kind) return;
+    // No result on track any more (a restart, a new race, leaving it): the next result is another race. A flashback
+    // after the flag keeps the result, and so its record
+    if (!key || !results || !meta.kind) {
+      if (!key) current.current = null;
+      return;
+    }
     let cur = current.current;
-    if (!cur || cur.run !== runId || cur.kind !== meta.kind) {
+    if (!cur || cur.kind !== meta.kind) {
       const atMs = Date.now();
       cur = { run: runId, kind: meta.kind, id: `${atMs.toString(36)}-${runId ?? 0}`, atMs };
       current.current = cur;
