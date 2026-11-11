@@ -236,7 +236,34 @@ let eSeed = e0;
 if (SEED) {
   const raw: number[] = JSON.parse(fs.readFileSync(SEED, 'utf8'));
   if (raw.length !== n) throw new Error(`--seed has ${raw.length} offsets, the track ${n} samples`);
-  eSeed = Float64Array.from(raw, (v, i) => Math.min(hi[i], Math.max(lo[i], v)));
+  eSeed = fitInside(raw);
+}
+
+/**
+ * A seed that goes beyond the usable width (a driven lap that takes the kerbs), brought inside it with its shape kept.
+ * Clipping it flat at the limit leaves a kink at each end of the clipped stretch, which the speed model reads as a
+ * corner to brake for. This is the line inside the limits closest to the seed in position and in bend: projected
+ * gradient descent on Σ(e − seed)² + SEED_BEND_W · Σ(e″ − seed″)², so a clipped stretch eases in and out over ~15 m.
+ */
+function fitInside(raw: number[]): Float64Array<ArrayBuffer> {
+  const pad = 0.05;
+  const inside = (v: number, i: number) => Math.min(hi[i] - pad, Math.max(lo[i] + pad, v));
+  const e = Float64Array.from(raw, inside);
+  const beyond = raw.reduce((k, v, i) => k + (v > hi[i] - pad || v < lo[i] + pad ? 1 : 0), 0);
+  if (beyond === 0) return e;
+  const W = Number(process.env.SEED_BEND_W ?? 80);
+  const step = 0.9 / (2 * (1 + 16 * W));
+  const bendOf = (a: ArrayLike<number>, i: number) => a[(i + n - 1) % n] - 2 * a[i] + a[(i + 1) % n];
+  const seedBend = Float64Array.from(raw, (_, i) => bendOf(raw, i));
+  const r = new Float64Array(n);
+  for (let it = 0; it < 20000; it++) {
+    for (let i = 0; i < n; i++) r[i] = bendOf(e, i) - seedBend[i];
+    for (let i = 0; i < n; i++) e[i] = inside(e[i] - step * (2 * (e[i] - raw[i]) + 2 * W * bendOf(r, i)), i);
+  }
+  let moved = 0;
+  for (let i = 0; i < n; i++) moved = Math.max(moved, Math.abs(e[i] - raw[i]));
+  console.log(`Seed beyond the usable width at ${beyond} of ${n} samples: brought inside with its shape kept (moved up to ${moved.toFixed(2)} m).`);
+  return e;
 }
 const c = new Float64Array(m);
 for (let j = 0; j < m; j++) c[j] = eSeed[Math.round(j * kSpan) % n];
