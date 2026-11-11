@@ -39,7 +39,6 @@ function check(name: string, cond: boolean, detail = ""): void {
 
 const EXPECTED_SOUNDS: Record<CarId, { sound: CarSoundSource; maxIdleRpm: number }> = {
   vf26: { sound: F1_2026_SOUND, maxIdleRpm: 4200 },
-  "f12026-car": { sound: F1_2026_SOUND, maxIdleRpm: 4200 },
   sf26: { sound: SF26_SOUND, maxIdleRpm: 4200 },
   w17: { sound: W17_SOUND, maxIdleRpm: 4200 },
   rb22: { sound: RB22_SOUND, maxIdleRpm: 4200 },

@@ -150,13 +150,13 @@ const creditsMd = readFileSync("CREDITS.md", "utf8");
 check("CREDITS.md credits Dave Love SketchFab under CC BY 4.0", creditsMd.includes("Dave Love SketchFab") && creditsMd.includes("http://creativecommons.org/licenses/by/4.0/"));
 
 const f1Cars = CARS.filter((c) => c.classId === "f1");
-for (const native of ["vf26", "f12026-car", "amg-gt3", "amg-gt3-evo", "bmw-m4-gt3", "mtr-496r"] as const) {
+for (const native of ["vf26", "amg-gt3", "amg-gt3-evo", "bmw-m4-gt3", "mtr-496r"] as const) {
   check(
     `${native}: physics switch leaves it on its own model`,
     !carTakesPhysicsSwitch(native) && carPhysics(native, "vf26") === carById(native).physics && carPhysics(native, "f12026-car") === carById(native).physics
   );
 }
-check("F1 class has 2 native + 7 ported cars", f1Cars.length === 9, `${f1Cars.length} cars`);
+check("F1 class has 1 native + 7 ported cars", f1Cars.length === 8, `${f1Cars.length} cars`);
 
 // The menus group each class by year, newest first; no heading may be a single car's name
 const f1Years = carsByYear("f1").map((g) => g.year);

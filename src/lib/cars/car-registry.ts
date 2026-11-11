@@ -26,7 +26,6 @@ import { carListed, REPO_CAR_IDS } from "@/lib/hosted-content";
  */
 export type CarId =
   | "vf26"
-  | "f12026-car"
   | "sf26"
   | "w17"
   | "rb22"
@@ -55,7 +54,7 @@ export interface CarClass {
 
 /**
  * Whether a car's physics belong to the car you see, the car-side counterpart of a circuit's `CircuitQuality`:
- * - "own": its vehicle model was built for this car (the F1 2026 Prototype and Rigid-Body, the Mercedes-AMG GT3s,
+ * - "own": its vehicle model was built for this car (the F1 2026 Prototype, the Mercedes-AMG GT3s,
  *   the MTRacing 496R, the Suzuki Liana)
  * - "shared": a ported body on another car's model of the same class and era (the 2026 team cars, the BMW)
  * - "era": a ported body from an earlier season on the 2026 model
@@ -134,7 +133,7 @@ export interface CarSkin {
 const CC_BY = { license: "CC BY 4.0", licenseUrl: "https://creativecommons.org/licenses/by/4.0/" } as const;
 const CC_BY_NC_SA = { license: "CC BY-NC-SA 4.0", licenseUrl: "https://creativecommons.org/licenses/by-nc-sa/4.0/" } as const;
 
-/** The F1 2026 Prototype and Rigid-Body's own body (`public/amr26/model/amr26.glb`) */
+/** The F1 2026 Prototype's own body (`public/amr26/model/amr26.glb`) */
 const DEX_F1_2026: CarCredit = { title: "AM26 - F1 25/F1 2026 DLC", author: "DeX", url: "https://skfb.ly/pKNCK", ...CC_BY };
 
 /** The 496R's 20 skins, the GLB's own MTR Green first [scripts/cars/port_ac_car.py --skins-out skins.json] */
@@ -208,18 +207,6 @@ const ALL_CARS: readonly CarDefinition[] = [
     quality: "own",
     credit: DEX_F1_2026,
     physics: "vf26",
-    year: 2026,
-    sound: F1_2026_SOUND,
-  },
-  {
-    id: "f12026-car",
-    classId: "f1",
-    title: "2026 Rigid-Body",
-    sub: "6-DOF rigid-body · track colliders · DRS",
-    badge: "6-DOF",
-    quality: "own",
-    credit: DEX_F1_2026,
-    physics: "f12026-car",
     year: 2026,
     sound: F1_2026_SOUND,
   },
