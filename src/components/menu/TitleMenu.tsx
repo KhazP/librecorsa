@@ -842,7 +842,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
                 <CompactEntry key={item.id} item={item} open={item.panel === panel} />
               ))}
               <div aria-hidden className="mx-3.5 my-2 h-px bg-[#262B3D]" />
-              {byId(["credits", "request", "press", "support", "github"]).map((item) => (
+              {byId(["credits", "request", "press", "privacy", "support", "github"]).map((item) => (
                 <CompactEntry key={item.id} item={item} open={item.panel === panel} quiet />
               ))}
             </nav>
@@ -944,7 +944,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
                   ))}
                 </div>
                 <div className="mt-3.5 ml-2.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 short:mt-2">
-                  {byId(["leaderboard", "credits", "request", "press", "support", "github"]).map((item) => (
+                  {byId(["leaderboard", "credits", "request", "press", "privacy", "support", "github"]).map((item) => (
                     <LinkEntry key={item.id} item={item} />
                   ))}
                 </div>
