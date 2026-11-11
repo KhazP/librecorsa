@@ -88,8 +88,8 @@ function useNames(active: boolean): { circuit: Namer; car: Namer } {
   useEffect(() => {
     if (!active) return;
     let live = true;
-    void Promise.all([import("@/lib/track-registry"), import("@/lib/cars/car-registry"), import("@/types/f1")])
-      .then(([tracks, cars, f1]) => {
+    void Promise.all([import("@/lib/track-registry"), import("@/lib/cars/car-registry")])
+      .then(([tracks, cars]) => {
         if (!live) return;
         const circuit: Namer = (id) => {
           const t = tracks.TRACKS.find((x) => x.id === id);
@@ -97,7 +97,8 @@ function useNames(active: boolean): { circuit: Namer; car: Namer } {
           const layouts = tracks.venueOf(id)?.layouts.length ?? 1;
           return layouts > 1 && t.layout ? `${t.name} · ${t.layout}` : t.name;
         };
-        const car: Namer = (id) => (f1.isVehicleModelId(id) ? cars.carForVehicle(id).title : id);
+        // The first car on that vehicle model, as the boards name it (not carForVehicle: it falls back to another car)
+        const car: Namer = (id) => cars.CARS.find((c) => c.physics === id)?.title ?? id;
         setNames({ circuit, car });
       })
       .catch(() => {});
@@ -289,7 +290,7 @@ function Dashboard({ stats, names }: { stats: StatsBody; names: { circuit: Namer
           <ul className="flex flex-col divide-y divide-[#262B3D]">
             {stats.board.boards.slice(0, 12).map((b) => (
               <li key={`${b.trackId}/${b.vehicle}/${b.physics}/${b.event}`} className="flex items-center justify-between gap-4 py-2 text-[14px]">
-                <span className="min-w-0 truncate text-[#C5CBD8]">
+                <span className="min-w-0 text-[#C5CBD8]">
                   {names.circuit(b.trackId)} · {names.car(b.vehicle)}
                   <span className="text-[#8E96AA]">{b.event ? ` · ${b.event}` : ""} · rev {b.physics}</span>
                 </span>
