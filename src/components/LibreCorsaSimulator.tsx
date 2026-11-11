@@ -1227,11 +1227,14 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     carId,
     kind: raceKind === "ai" ? "ai_race" : raceKind === "mp" ? (inScheduledRace ? "open_race" : "room_race") : null,
   });
-  /** Out of this open race (the others finish without this player) and into the next one */
+  /**
+   * Out of this open race (the others finish without this player) and into the next one, waited for on the title's
+   * Multiplayer panel, where its entry counts down
+   */
   const handleJoinNextRace = useCallback(() => {
-    endMpRace(true);
+    handleBackToLobby();
     handleJoinRace();
-  }, [endMpRace, handleJoinRace]);
+  }, [handleBackToLobby, handleJoinRace]);
 
   const menuProps = {
     telemetry,
