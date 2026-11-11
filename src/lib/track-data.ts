@@ -204,7 +204,9 @@ export interface TrackMetaExtras {
    * `cutBoxes` / `cutMaterials`: scan geometry standing on the racing line, left out at load (scenery-cuts.ts);
    * `conformSurfaces`: the off-road collider bands and the visual road are fitted to `Track_Surface_Road` at load
    * (TrackColliderQuery.ts), for converted circuits whose surfaces don't meet the road edge as exported;
-   * `scenery`: scenery files drawn with the circuit (instanced trees: scenery-instances.ts)
+   * `scenery`: scenery files drawn with the circuit (instanced trees: scenery-instances.ts);
+   * `barrierMeshes`: drawn barriers the converted circuit gives no collider (Monaco's Armco ends and orange blocks),
+   * by mesh name: the cars hit them and the racing line keeps clear of them as of the `Track_Collider_Wall_*` walls
    */
   mesh?: {
     url?: string;
@@ -213,6 +215,7 @@ export interface TrackMetaExtras {
     cutMaterials?: string[];
     conformSurfaces?: boolean;
     scenery?: string[];
+    barrierMeshes?: string[];
   };
   credit?: { title: string; author: string; url: string; short?: string; license: string; licenseUrl: string };
   /** Per-kind overrides of the default surface table (track-surfaces.ts) */

@@ -1240,6 +1240,17 @@ export interface TrackWallBuffers {
   cellSegs: Uint32Array;
 }
 
+/** Whether a wall face at (x, z) with horizontal normal (nx, nz) faces the road (its normal points toward the centreline) */
+export type RoadFacing = (x: number, z: number, nx: number, nz: number) => boolean;
+
+/** A drawn barrier's face steeper than this (|normal.y|) is a top or an underside, not a wall */
+const DRAWN_BARRIER_MAX_NORMAL_Y = 0.5;
+/**
+ * A drawn barrier's face shorter than this (m) is a rounded end or a cap, not a wall: a probe beside a 0.1 m face of
+ * Monaco's Armco curls read as a metre past it and threw the car back along the road a metre at a step
+ */
+const DRAWN_BARRIER_MIN_FACE_M = 0.5;
+
 export class TrackWallQuery implements WallQuery {
   public readonly segments: Float32Array;
   public readonly segmentCount: number;
@@ -1253,14 +1264,23 @@ export class TrackWallQuery implements WallQuery {
   private readonly stamp: Uint32Array;
   private queryId = 0;
 
-  /** Every node with `userData.collider === 'wall'` (or named `Track_Collider_Wall_*`) under the track root */
-  static fromTrackRoot(root: THREE.Object3D): TrackWallQuery {
+  /**
+   * Every node with `userData.collider === 'wall'` (or named `Track_Collider_Wall_*`) under the track root, and the
+   * drawn barriers named in `barrierMeshes` (a mesh `name` or its exported `name_chunkN` parts)
+   */
+  static fromTrackRoot(root: THREE.Object3D, barrierMeshes: readonly string[] = [], facesRoad?: RoadFacing): TrackWallQuery {
     root.updateMatrixWorld(true);
     const walls: THREE.Object3D[] = [];
+    const drawn = new Set<THREE.Object3D>();
+    const barrier = (name: string) => barrierMeshes.some((b) => name === b || (name.startsWith(`${b}_chunk`) && /^\d+$/.test(name.slice(b.length + 6))));
     root.traverse((obj) => {
       if (obj.userData?.collider === 'wall' || obj.name.startsWith('Track_Collider_Wall')) walls.push(obj);
+      else if (barrierMeshes.length && obj instanceof THREE.Mesh && barrier(obj.name)) {
+        walls.push(obj);
+        drawn.add(obj);
+      }
     });
-    return new TrackWallQuery(walls);
+    return new TrackWallQuery(walls, { drawn, facesRoad });
   }
 
   /** The walls rebuilt from their data (`toBuffers`), e.g. in a worker */
@@ -1273,7 +1293,12 @@ export class TrackWallQuery implements WallQuery {
     return { segments: this.segments, minX: this.minX, minZ: this.minZ, nx: this.nx, nz: this.nz, cellStart: this.cellStart, cellSegs: this.cellSegs };
   }
 
-  constructor(objects: THREE.Object3D[] | TrackWallBuffers) {
+  /**
+   * `drawn`: barriers drawn for the eye, not built as colliders. A solid one (a rail with a back, a top and end caps)
+   * keeps only its upright faces at least DRAWN_BARRIER_MIN_FACE_M long, and of those (with `facesRoad`) the ones
+   * facing the road, as a collider wall is built: one face, along the road
+   */
+  constructor(objects: THREE.Object3D[] | TrackWallBuffers, drawnBarriers?: { drawn: ReadonlySet<THREE.Object3D>; facesRoad?: RoadFacing }) {
     if (!Array.isArray(objects)) {
       this.segments = objects.segments;
       this.segmentCount = objects.segments.length / WALL_SEGMENT_STRIDE;
@@ -1289,8 +1314,11 @@ export class TrackWallQuery implements WallQuery {
     const segs: number[] = [];
     const seen = new Set<string>();
     const p = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+    const e1 = new THREE.Vector3();
+    const e2 = new THREE.Vector3();
     for (const obj of objects) {
       obj.updateWorldMatrix(true, true);
+      const drawn = drawnBarriers?.drawn.has(obj) === true;
       obj.traverse((o) => {
         if (!(o instanceof THREE.Mesh)) return;
         const geom = o.geometry as THREE.BufferGeometry;
@@ -1300,6 +1328,13 @@ export class TrackWallQuery implements WallQuery {
         const n = index ? index.count : pos.count;
         for (let i = 0; i + 2 < n; i += 3) {
           for (let k = 0; k < 3; k++) p[k].fromBufferAttribute(pos, index ? index.getX(i + k) : i + k).applyMatrix4(o.matrixWorld);
+          if (drawn) {
+            e1.subVectors(p[1], p[0]).cross(e2.subVectors(p[2], p[0]));
+            const len = e1.length();
+            if (!(len > 0) || Math.abs(e1.y) / len > DRAWN_BARRIER_MAX_NORMAL_Y) continue;
+            const facing = drawnBarriers?.facesRoad;
+            if (facing && !facing((p[0].x + p[1].x + p[2].x) / 3, (p[0].z + p[1].z + p[2].z) / 3, e1.x / len, e1.z / len)) continue;
+          }
           let best = -1;
           let ia = 0;
           let ib = 1;
@@ -1315,7 +1350,7 @@ export class TrackWallQuery implements WallQuery {
               ib = v;
             }
           }
-          if (best < 0.05) continue;
+          if (best < (drawn ? DRAWN_BARRIER_MIN_FACE_M : 0.05)) continue;
           const a = p[ia];
           const b = p[ib];
           const yMin = Math.min(p[0].y, p[1].y, p[2].y);

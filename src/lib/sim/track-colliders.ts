@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { getActiveSurfaceTable, getActiveTrackMetadata } from '@/lib/track-data';
-import { TrackColliderQuery, TrackWallQuery, type TrackColliderBuffers, type TrackWallBuffers } from './f12026-car/TrackColliderQuery';
+import { getActiveSurfaceTable, getActiveTrackData, getActiveTrackMetadata } from '@/lib/track-data';
+import { TrackColliderQuery, TrackWallQuery, type RoadFacing, type TrackColliderBuffers, type TrackWallBuffers } from './f12026-car/TrackColliderQuery';
 
 export interface TrackColliders {
   /** Null when the GLB has no `Track_Collider_Road`: the cars stay on the track samples' ground */
@@ -13,18 +13,30 @@ export interface TrackColliders {
 const cache = new WeakMap<THREE.Object3D, TrackColliders>();
 
 /**
+ * A face at (x, z) faces the road when its normal points from it toward the active circuit's centreline, within 60°:
+ * a drawn block's end, square to the road, would push a car pressed into it back along the road a metre at a step
+ */
+export const roadFacing: RoadFacing = (x, z, nx, nz) => {
+  const { sample, lateralOffset } = getActiveTrackData(1200).projectWorldToTrack(x, z);
+  const b = sample.binormal;
+  const bl = Math.hypot(b.x, b.z) || 1;
+  return (-Math.sign(lateralOffset) * (nx * b.x + nz * b.z)) / bl > 0.5;
+};
+
+/**
  * The active circuit's ground and barrier colliders for its loaded track root, built once and shared by the scene,
  * every car model and the AI field
  */
 export function trackColliders(root: THREE.Object3D): TrackColliders {
   let colliders = cache.get(root);
   if (!colliders) {
-    const conformSurfaces = getActiveTrackMetadata().mesh?.conformSurfaces === true;
+    const mesh = getActiveTrackMetadata().mesh;
+    const conformSurfaces = mesh?.conformSurfaces === true;
     // A GLB without a road collider (none of the shipped circuits) leaves the cars on the track samples' ground
     const ground = root.getObjectByName('Track_Collider_Road')
       ? TrackColliderQuery.fromTrackRoot(root, getActiveSurfaceTable(), { conformSurfaces })
       : null;
-    colliders = { ground, walls: TrackWallQuery.fromTrackRoot(root), conformSurfaces };
+    colliders = { ground, walls: TrackWallQuery.fromTrackRoot(root, mesh?.barrierMeshes, roadFacing), conformSurfaces };
     cache.set(root, colliders);
   }
   return colliders;
