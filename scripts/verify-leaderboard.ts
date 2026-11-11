@@ -15,7 +15,9 @@ import { join } from 'node:path';
 import { handleApi } from '../cloudflare/api/index';
 import { boardKeyOf, loadBoardBest, parseRemoteBoard, saveBoardBest } from '../src/lib/net/leaderboard';
 import { challengePlaceLabel, challengeTarget } from '../src/lib/net/challenge-target';
-import { boardDeps, driverNameKey, listLaps, submitLap, type BoardDeps } from '../cloudflare/api/board';
+import { boardDeps, driverNameKey, listLaps, renameDriver, submitLap, type BoardDeps } from '../cloudflare/api/board';
+import { nameProblem } from '../src/lib/net/name-filter';
+import { randomDriverProfile } from '../src/lib/settings/player-settings';
 import type { Env } from '../cloudflare/api/types';
 import { fakeD1, fakeR2 } from './lib/fake-cloudflare';
 import { planImport, type SupabaseDriver, type SupabaseLap } from './migrate-supabase-board';
@@ -419,6 +421,88 @@ async function main(): Promise<void> {
     const best = await db.prepare("SELECT id, lap_time_ms FROM laps WHERE name_key = 'mira tanaka'").all<{ id: string; lap_time_ms: number }>();
     check('migration: a second run keeps the faster lap of a driver and class', best.results.length === 1 && best.results[0].id === id(6), best.results.map((r) => r.id).join());
     check('migration: a name claimed by someone else on the new board keeps its new owner', again.drivers === 1 && again.laps === 2 && again.skipped['lap under a name claimed by someone else on the new board'] === 1, JSON.stringify(again.skipped));
+  }
+
+  // Names: the filter, and a rename that takes the driver's laps and race results along -----------------------------
+  {
+    const raceSchema = readFileSync(join(__dirname, '../cloudflare/migrations/0002_race_results.sql'), 'utf8');
+    // Back in the week of the test lap's challenge (the checks above moved the clock on)
+    const weekNow = week.startsMs + 2 * 86_400_000;
+    const r: BoardDeps = { db: fakeD1(`${schema}\n${raceSchema}`), ghosts: fakeR2(), eventRule: challengeProblem, now: () => weekNow };
+    let ip = 0;
+    const req = (path: string, body: unknown) =>
+      new Request(`https://librecorsa.test${path}`, { method: 'POST', body: JSON.stringify(body), headers: { 'CF-Connecting-IP': `10.9.${Math.floor(ip / 250)}.${ip++ % 250}` } });
+    const upload = async (rec: LapRecording, driverKey = KEY_A) => {
+      const a = await submitLap(r, req('/api/laps', { rec, driverKey, event: week.id }));
+      return { status: a.status, body: a.body as PostAnswer & { taken?: boolean } };
+    };
+    const rename = async (from: string, to: string, driverKey = KEY_A, code?: string) => {
+      const a = await renameDriver(r, req('/api/drivers/rename', { from, to, driverKey, ...(code ? { code } : {}) }));
+      return { status: a.status, body: a.body as { ok: boolean; moved?: number; error?: string; taken?: boolean } };
+    };
+    const rows = async () =>
+      (await r.db.prepare('SELECT driver_name AS name, driver_code AS code, name_key AS k, lap_time_ms AS t, event, assists FROM laps ORDER BY event, lap_time_ms').all<{ name: string; code: string; k: string; t: number; event: string; assists: string }>()).results;
+    // A lap of this week's challenge: it goes on the open board and the week's
+    const fit = (k: number, name: string) => variant(k, name, { assists: week.assists, realism: week.realism, compound: challengeCompound('vf26'), surface: 'dry' });
+
+    const bad = await upload(fit(1, 'Big Dick 9'));
+    check('names: a lap under a name the filter refuses is turned down', bad.status === 400 && bad.body.error === 'Pick another name' && (await rows()).length === 0, bad.body.error);
+    const first = await upload(fit(1.01, 'Apex Falcon 27'));
+    await upload(variant(1.02, 'Apex Falcon 27', { assists: 'pro', realism: 'full' }));
+    await r.db
+      .prepare("INSERT INTO race_cars (race_id, position, name_key, name, code, laps, dnf, grid) VALUES ('race-1', 1, 'apex falcon 27', 'Apex Falcon 27', 'FAL', 5, 0, 2)")
+      .run();
+    check('names: a made-up name posts on both boards', first.body.ok === true && first.body.eventRank === 1 && (await rows()).length === 3, first.body.error ?? first.body.eventError);
+
+    const moved = await rename('Apex Falcon 27', 'Mira Tanaka', KEY_A, 'MIR');
+    const after = await rows();
+    const race = await r.db.prepare("SELECT name, code, name_key FROM race_cars WHERE race_id = 'race-1'").first<{ name: string; code: string; name_key: string }>();
+    const oldClaim = await r.db.prepare("SELECT 1 AS x FROM drivers WHERE name_key = 'apex falcon 27'").first();
+    check(
+      'names: a rename moves every lap (open and challenge) and race result to the new name, and frees the old one',
+      moved.body.ok === true && moved.body.moved === 3 && after.every((l) => l.name === 'Mira Tanaka' && l.k === 'mira tanaka' && l.code === 'MIR') && race?.name === 'Mira Tanaka' && race.code === 'MIR' && race.name_key === 'mira tanaka' && oldClaim === null,
+      `${moved.body.error ?? `${moved.body.moved} moved`}: ${after.map((l) => l.name).join(', ')}`
+    );
+    const list = (await listLaps(r, new URL(`https://librecorsa.test/api/laps?track=rwanda_official_short&vehicle=vf26&physics=${CURRENT}&name=Mira%20Tanaka`))).body as ListAnswer;
+    check('names: the board lists the driver once, under the new name', list.total === 1 && list.laps[0].name === 'Mira Tanaka' && list.me?.rank === 1);
+
+    const freed = await upload(fit(1.04, 'Apex Falcon 27'), KEY_B);
+    const theirs = (await rows()).filter((l) => l.k === 'apex falcon 27');
+    check('names: the freed name can be taken by someone else, with none of the old laps', freed.body.ok === true && theirs.length === 2 && theirs.every((l) => l.t > after[0].t), `${theirs.length} rows`);
+
+    const taken = await rename('Mira Tanaka', 'apex  FALCON 27');
+    check('names: a name someone else holds is refused, and nothing moves', taken.status === 409 && taken.body.taken === true && (await rows()).filter((l) => l.k === 'mira tanaka').length === 3, taken.body.error);
+    const stranger = await rename('Mira Tanaka', 'Sneaky Name', KEY_B);
+    check('names: renaming from a name another key holds claims the new one but moves nothing', stranger.body.ok === true && stranger.body.moved === 0 && (await rows()).filter((l) => l.k === 'mira tanaka').length === 3);
+    const rude = await rename('Mira Tanaka', 'sh1t driver');
+    check('names: a rename to a name the filter refuses is turned down', rude.status === 400 && rude.body.error === 'Pick another name');
+
+    // The same driver had raced under a second name too: renaming back keeps the fastest lap of each class
+    await upload(fit(0.98, 'Second Name'));
+    const merge = await rename('Second Name', 'Mira Tanaka');
+    const mine = (await rows()).filter((l) => l.k === 'mira tanaka');
+    const classes = new Set(mine.map((l) => `${l.event}|${l.assists}`));
+    check('names: renaming onto a name the driver already holds keeps one lap per class, the fastest', merge.body.ok === true && classes.size === mine.length && mine.length === 3 && Math.min(...mine.map((l) => l.t)) === Math.min(...(await rows()).filter((l) => l.k === 'mira tanaka').map((l) => l.t)), `${mine.length} rows, ${classes.size} classes`);
+    const fastest = mine.filter((l) => l.assists === week.assists);
+    check('names: the merged laps are the faster ones', fastest.every((l) => l.t === Math.round(real.lapTimeMs * 0.98) || Math.abs(l.t - real.lapTimeMs * 0.98) < 5), fastest.map((l) => l.t).join());
+
+    const cased = await rename('Mira Tanaka', 'MIRA tanaka');
+    check('names: a change of letter case only rewrites how the name shows', cased.body.ok === true && (await rows()).filter((l) => l.k === 'mira tanaka').every((l) => l.name === 'MIRA tanaka'));
+
+    // Every name the game makes up for a new driver passes the filter, and so do real names it must not catch
+    const madeUp = new Set<string>();
+    for (let a = 0; a < 16; a++)
+      for (let b = 0; b < 16; b++) {
+        const picks = [b / 16 + 0.01, a / 16 + 0.01, 0.5];
+        madeUp.add(randomDriverProfile(() => picks.shift() ?? 0).name);
+      }
+    const refusedMadeUp = [...madeUp].filter((n) => nameProblem(n) !== null);
+    const realNames = ['Daniel Johansson', 'Gabrius78', 'Cockburn', 'Dickens', 'Hancock', 'Scunthorpe', 'Therapist Joe', 'Nazir', 'Niger Delta', 'Sikora', 'Amina', 'Titan', 'Spicer', 'Şükrü Ağaoğlu', 'İsmail'];
+    const caught = realNames.filter((n) => nameProblem(n) !== null);
+    check('names: every made-up name and the real names tried pass the filter', madeUp.size === 256 && refusedMadeUp.length === 0 && caught.length === 0, [...refusedMadeUp, ...caught].join(', ') || `${madeUp.size} made-up names`);
+    const rudeNames = ['F.u.u.c.k', 'a$$', 'Big Dicks', 'Orospu Çocuğu', 'AMK', 'amına koyayım', 'LibreCorsa', 'Libre Corsa', 'Admin'];
+    const missed = rudeNames.filter((n) => nameProblem(n) === null);
+    check('names: spelled with symbols, spaces, repeats or Turkish letters, refused names are still caught', missed.length === 0, missed.join(', '));
   }
 
   if (failures.length > 0) {

@@ -6,6 +6,8 @@
  *                         -> { laps: [...], total, me: { rank, lap, aboveMs } | null, physics: [revisions with laps] }
  *                            (aboveMs: the best lap of the place above the driver's, null at the top)
  *   GET  /api/laps/<id>   -> the lap's LapRecording (its ghost), or 404
+ *   POST /api/drivers/rename  { from, to, code?, driverKey }
+ *                         -> { ok: true, moved } | { ok: false, error, taken? }
  *
  * One board per circuit, car and physics revision: every driver appears once, with their fastest lap and what it
  * was driven with (assists, realism, dry or wet). A driver keeps one stored lap per such class, so the board can be
@@ -14,11 +16,14 @@
  *
  * Driver names are claimed with a driver key: a random secret the game keeps in the browser. The first upload under
  * a name stores the key's SHA-256; later uploads under that name (ignoring case and extra spaces) must bring the same
- * key. A claim lapses after six months without an upload, and the laps under it go with it.
+ * key. A claim lapses after six months without an upload, and the laps under it go with it. A driver who changes their
+ * name takes their laps and race results with them (`renameDriver`), so a board never shows them twice. Names that
+ * fail the name filter (src/lib/net/name-filter.ts) are refused on upload and on rename.
  */
 import { ASSIST_PRESETS, type LapConditions } from "../../src/lib/sim/lap-types";
 import { SIM_REALISM_LEVELS } from "../../src/lib/sim/sim-realism";
 import { isVehicleModelId } from "../../src/types/f1";
+import { nameProblem } from "../../src/lib/net/name-filter";
 import { checkLap, TRACK_ID_RE, type CheckedLap } from "./lap-check";
 import type { D1Database, D1PreparedStatement, Env, R2Bucket } from "./types";
 
@@ -146,9 +151,8 @@ async function storeLap(deps: BoardDeps, rec: CheckedLap, event: string, nameKey
   return true;
 }
 
-export async function submitLap(deps: BoardDeps, request: Request): Promise<Answer> {
-  const nowMs = deps.now();
-  // Uploads per address per hour (hashed)
+/** Counts one upload or rename from the request's address this hour (hashed); true once past the hourly limit */
+async function overPostLimit(deps: BoardDeps, request: Request, nowMs: number): Promise<boolean> {
   const hour = Math.floor(nowMs / 3_600_000);
   const client = await sha256Hex(request.headers.get("CF-Connecting-IP") ?? "unknown");
   const used = await deps.db
@@ -156,7 +160,32 @@ export async function submitLap(deps: BoardDeps, request: Request): Promise<Answ
     .bind(client, hour)
     .first<{ count: number }>();
   if (used && used.count === 1) await deps.db.prepare("DELETE FROM lap_posts WHERE hour < ?").bind(hour - 1).run();
-  if ((used?.count ?? 1) > MAX_POSTS_PER_HOUR) return fail("Too many uploads, try again later", 429);
+  return (used?.count ?? 1) > MAX_POSTS_PER_HOUR;
+}
+
+/** Puts `nameKey` under this driver key: false when another key holds it. A fresh claim starts clean: laps a lapsed owner left under the name go */
+async function claimName(deps: BoardDeps, nameKey: string, keyHash: string, nowMs: number): Promise<boolean> {
+  await deps.db.prepare("DELETE FROM drivers WHERE name_key = ? AND last_seen < ?").bind(nameKey, nowMs - CLAIM_LAPSES_MS).run();
+  const claim = await deps.db
+    .prepare("INSERT INTO drivers (name_key, key_hash, claimed_at, last_seen) VALUES (?, ?, ?, ?) ON CONFLICT (name_key) DO NOTHING")
+    .bind(nameKey, keyHash, nowMs, nowMs)
+    .run();
+  const owner = await deps.db.prepare("SELECT key_hash FROM drivers WHERE name_key = ?").bind(nameKey).first<{ key_hash: string }>();
+  if (owner?.key_hash !== keyHash) return false;
+  if (claim.meta.changes === 1) {
+    const left = await deps.db.prepare("SELECT id FROM laps WHERE name_key = ?").bind(nameKey).all<{ id: string }>();
+    await deleteLaps(deps, left.results.map((r) => r.id));
+  } else {
+    await deps.db.prepare("UPDATE drivers SET last_seen = ? WHERE name_key = ?").bind(nowMs, nameKey).run();
+  }
+  return true;
+}
+
+const NAME_TAKEN = "This name is taken. Import your driver key under Lap Times, or race under another name";
+
+export async function submitLap(deps: BoardDeps, request: Request): Promise<Answer> {
+  const nowMs = deps.now();
+  if (await overPostLimit(deps, request, nowMs)) return fail("Too many uploads, try again later", 429);
 
   if (Number(request.headers.get("Content-Length") ?? 0) > MAX_BODY_BYTES) return fail("Recording is larger than 2 MB", 413);
   const buffer = await request.arrayBuffer();
@@ -172,6 +201,8 @@ export async function submitLap(deps: BoardDeps, request: Request): Promise<Answ
   const checked = checkLap(body.rec);
   if (!checked.ok) return fail(checked.error);
   const rec = checked.rec;
+  const badName = nameProblem(rec.driverName);
+  if (badName) return fail(badName);
   // A lap sent for a challenge it doesn't fit (the week turned, a clock is off) still counts on the open board
   let event = "";
   let eventError: string | null = null;
@@ -187,23 +218,7 @@ export async function submitLap(deps: BoardDeps, request: Request): Promise<Answ
   }
   const keyHash = await sha256Hex(body.driverKey);
   const nameKey = driverNameKey(rec.driverName);
-  await deps.db.prepare("DELETE FROM drivers WHERE name_key = ? AND last_seen < ?").bind(nameKey, nowMs - CLAIM_LAPSES_MS).run();
-  const claim = await deps.db
-    .prepare("INSERT INTO drivers (name_key, key_hash, claimed_at, last_seen) VALUES (?, ?, ?, ?) ON CONFLICT (name_key) DO NOTHING")
-    .bind(nameKey, keyHash, nowMs, nowMs)
-    .run();
-  const claimed = claim.meta.changes === 1;
-  const owner = await deps.db.prepare("SELECT key_hash FROM drivers WHERE name_key = ?").bind(nameKey).first<{ key_hash: string }>();
-  if (owner?.key_hash !== keyHash) {
-    return fail("This name is taken. Import your driver key under Lap Times, or race under another name", 409);
-  }
-  if (claimed) {
-    // A fresh claim starts clean: laps left under the name by a previous owner go
-    const left = await deps.db.prepare("SELECT id FROM laps WHERE name_key = ?").bind(nameKey).all<{ id: string }>();
-    await deleteLaps(deps, left.results.map((r) => r.id));
-  } else {
-    await deps.db.prepare("UPDATE drivers SET last_seen = ? WHERE name_key = ?").bind(nowMs, nameKey).run();
-  }
+  if (!(await claimName(deps, nameKey, keyHash, nowMs))) return { status: 409, body: { ok: false, error: NAME_TAKEN, taken: true } };
 
   // A challenge lap also counts on the open board
   const onOpen = await storeLap(deps, rec, "", nameKey);
@@ -297,4 +312,71 @@ export async function ghostOf(deps: BoardDeps, id: string): Promise<string | nul
 export function boardDeps(env: Env, eventRule: EventRule): BoardDeps | null {
   if (!env.BOARD_DB || !env.GHOSTS) return null;
   return { db: env.BOARD_DB, ghosts: env.GHOSTS, eventRule, now: Date.now };
+}
+
+const MAX_RENAME_BYTES = 4096;
+const MAX_NAME_LENGTH = 64;
+const MAX_CODE_LENGTH = 16;
+
+/**
+ * A driver changes their name: the new one is claimed with their driver key (it must be free, lapsed or theirs
+ * already), and when the key holds the old one, its laps (open and challenge boards) and race results move to the new
+ * name and the old claim goes, free for anyone. A driver who already had laps under the new name keeps the fastest of
+ * each class. Ghost files keep the name they were driven under.
+ */
+export async function renameDriver(deps: BoardDeps, request: Request): Promise<Answer> {
+  const nowMs = deps.now();
+  if (await overPostLimit(deps, request, nowMs)) return fail("Too many changes, try again later", 429);
+  if (Number(request.headers.get("Content-Length") ?? 0) > MAX_RENAME_BYTES) return fail("Body is too large", 413);
+  let body: { from?: unknown; to?: unknown; code?: unknown; driverKey?: unknown };
+  try {
+    body = JSON.parse(await request.text());
+  } catch {
+    return fail("Body is not valid JSON");
+  }
+  if (typeof body !== "object" || body === null) return fail("Body is not valid JSON");
+  const from = typeof body.from === "string" ? body.from.trim() : "";
+  const to = typeof body.to === "string" ? body.to.trim() : "";
+  if (to.length === 0 || to.length > MAX_NAME_LENGTH || from.length > MAX_NAME_LENGTH) return fail("Invalid name");
+  const code = typeof body.code === "string" ? body.code.trim() : null;
+  if (code !== null && (code.length === 0 || code.length > MAX_CODE_LENGTH)) return fail("Invalid driver code");
+  const badName = nameProblem(to);
+  if (badName) return fail(badName);
+  if (typeof body.driverKey !== "string" || !DRIVER_KEY_RE.test(body.driverKey)) {
+    return fail("Missing driver key. Reload the game and try again");
+  }
+  const keyHash = await sha256Hex(body.driverKey);
+  const fromKey = from ? driverNameKey(from) : "";
+  const toKey = driverNameKey(to);
+
+  // Whether this key holds the old name, read before the new one is claimed (which may be the same name in other letters)
+  const oldOwner = fromKey ? await deps.db.prepare("SELECT key_hash FROM drivers WHERE name_key = ?").bind(fromKey).first<{ key_hash: string }>() : null;
+  const ownsOld = oldOwner?.key_hash === keyHash;
+  if (!(await claimName(deps, toKey, keyHash, nowMs))) return { status: 409, body: { ok: false, error: NAME_TAKEN, taken: true } };
+
+  let moved = 0;
+  if (ownsOld && fromKey !== toKey) {
+    // The driver's own laps already under the new name (from before): a driver keeps one lap per class, the faster
+    const pairs = await deps.db
+      .prepare(
+        "SELECT f.id AS old_id, f.lap_time_ms AS old_ms, t.id AS new_id, t.lap_time_ms AS new_ms FROM laps f JOIN laps t ON t.track_id = f.track_id AND t.vehicle = f.vehicle AND t.physics = f.physics AND t.event = f.event AND t.assists = f.assists AND t.realism = f.realism AND t.surface = f.surface WHERE f.name_key = ? AND t.name_key = ?",
+      )
+      .bind(fromKey, toKey)
+      .all<{ old_id: string; old_ms: number; new_id: string; new_ms: number }>();
+    await deleteLaps(deps, pairs.results.map((p) => (p.new_ms <= p.old_ms ? p.old_id : p.new_id)));
+    const count = await deps.db.prepare("SELECT COUNT(*) AS n FROM laps WHERE name_key = ?").bind(fromKey).first<{ n: number }>();
+    moved = count?.n ?? 0;
+    await deps.db.batch([
+      deps.db.prepare("UPDATE laps SET name_key = ?, driver_name = ?, driver_code = COALESCE(?, driver_code) WHERE name_key = ?").bind(toKey, to, code, fromKey),
+      deps.db.prepare("UPDATE race_cars SET name_key = ?, name = ?, code = COALESCE(?, code) WHERE name_key = ?").bind(toKey, to, code, fromKey),
+      deps.db.prepare("DELETE FROM drivers WHERE name_key = ?").bind(fromKey),
+    ]);
+  } else if (ownsOld || fromKey === toKey) {
+    // The same name in other letters or spacing: the boards show it as now written
+    await deps.db.batch([
+      deps.db.prepare("UPDATE laps SET driver_name = ?, driver_code = COALESCE(?, driver_code) WHERE name_key = ?").bind(to, code, toKey),
+      deps.db.prepare("UPDATE race_cars SET name = ?, code = COALESCE(?, code) WHERE name_key = ?").bind(to, code, toKey),
+    ]);
+  }
+  return { status: 200, body: { ok: true, moved } };
 }
