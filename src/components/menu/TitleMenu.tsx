@@ -206,7 +206,15 @@ const Credits: React.FC = () => (
                 <a href={t.credit!.short ?? t.credit!.url} target="_blank" rel="noreferrer" className={linkClass}>
                   {t.credit!.short ? t.credit!.short.replace(/^https?:\/\//, "") : t.credit!.url.replace(/^https?:\/\/(www\.)?([^/]+).*$/, "$2")}
                 </a>
-                ) by {t.credit!.author} ·{" "}
+                ) by{" "}
+                {t.credit!.authorUrl ? (
+                  <a href={t.credit!.authorUrl} target="_blank" rel="noreferrer" className={linkClass}>
+                    {t.credit!.author}
+                  </a>
+                ) : (
+                  t.credit!.author
+                )}{" "}
+                ·{" "}
                 <a href={t.credit!.licenseUrl} target="_blank" rel="noreferrer" className={linkClass}>
                   {t.credit!.license}
                 </a>

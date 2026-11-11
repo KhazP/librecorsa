@@ -14,6 +14,8 @@ export { DEFAULT_TRACK_ID };
 export interface TrackCredit {
   title: string;
   author: string;
+  /** The author's own site, linked from their name in the credits */
+  authorUrl?: string;
   url: string;
   short?: string;
   license: string;
