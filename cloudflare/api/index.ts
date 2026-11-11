@@ -5,6 +5,7 @@
  *   POST /api/laps, GET /api/laps, GET /api/laps/<id>   the lap boards (board.ts)
  *   GET /api/races/next, /api/races/<n>                 WebSocket to a scheduled race's server (race.ts)
  *   POST /api/usage               one stretch of driving for the anonymous daily totals (usage.ts)
+ *   GET /api/admin/stats          the owner's numbers, with the X-Admin-Key header (admin.ts)
  * Every feature is optional: with its binding missing or its switch off (wrangler.jsonc `vars`), the config says
  * so and the game falls back to what works without a server.
  *
@@ -14,6 +15,7 @@ import { DEFAULT_RACE_SLOT_S, nextRaceSlot, raceSlot } from "../../src/lib/net/r
 import { challengeProblem } from "../../src/lib/net/weekly-challenge";
 import { boardDeps, ghostOf, listLaps, submitLap } from "./board";
 import { ROOM_CODE_RE } from "./room";
+import { adminKeyMatches, adminStats } from "./admin";
 import { turnConfigured } from "./turn";
 import { recordUsage } from "./usage";
 import type { Env } from "./types";
@@ -55,7 +57,7 @@ function headersFor(origin: string | null): Record<string, string> {
   if (origin) {
     headers["Access-Control-Allow-Origin"] = origin;
     headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS";
-    headers["Access-Control-Allow-Headers"] = "Content-Type";
+    headers["Access-Control-Allow-Headers"] = "Content-Type, X-Admin-Key";
     headers["Access-Control-Max-Age"] = "86400";
   }
   return headers;
@@ -147,6 +149,17 @@ export async function handleApi(request: Request, env: Env, url: URL): Promise<R
     } catch (err) {
       console.error("usage", err);
       return json({ ok: false, error: "Not counted" }, 500, origin);
+    }
+  }
+
+  // The owner's numbers: without the right key this falls through to the plain "Not found" below
+  if (path === "/api/admin/stats" && request.method === "GET" && env.BOARD_DB && (await adminKeyMatches(request.headers.get("X-Admin-Key"), env.ADMIN_KEY))) {
+    try {
+      const answer = await adminStats({ db: env.BOARD_DB, now: Date.now }, url);
+      return json(answer.body, answer.status, origin);
+    } catch (err) {
+      console.error("admin stats", err);
+      return json({ ok: false, error: "The numbers could not be read" }, 500, origin);
     }
   }
 

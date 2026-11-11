@@ -1,6 +1,7 @@
 /**
  * Headless checks of the anonymous usage counter (cloudflare/api/usage.ts on an in-memory SQLite): every field is
  * checked, the minutes are capped, reports add up per day, circuit, car, mode and country, and the switch turns it off.
+ * The owner's numbers (cloudflare/api/admin.ts) answer only to the admin key, and as an unknown path otherwise.
  *
  *   npx tsx scripts/verify-usage.ts
  */
@@ -8,6 +9,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { handleApi, onlineConfig } from '../cloudflare/api/index';
 import { recordUsage, requestCountry, utcDay, type UsageDeps } from '../cloudflare/api/usage';
+import { adminKeyMatches, adminStats, statsDays, type AdminStats } from '../cloudflare/api/admin';
 import type { Env, RateLimit } from '../cloudflare/api/types';
 import { parseOnlineConfig } from '../src/lib/net/online-config';
 import { fakeD1 } from './lib/fake-cloudflare';
@@ -130,6 +132,76 @@ async function main() {
     check('config from the network: usage only when true', parseOnlineConfig({ usage: true }).usage && !parseOnlineConfig({ usage: 'yes' }).usage && !parseOnlineConfig(null).usage);
     const served = await handleApi(new Request('https://librecorsa.org/api/config'), env, new URL('https://librecorsa.org/api/config'));
     check('config: GET /api/config says usage', ((await served.json()) as { usage?: boolean }).usage === true);
+  }
+
+  // 3. The owner's numbers -------------------------------------------------------------------------------------------
+  {
+    const KEY = 'a-test-key-not-a-real-one';
+    const env = { ONLINE_USAGE: 'on', BOARD_DB: db, ADMIN_KEY: KEY } as unknown as Env;
+    const stats = (e: Env, key?: string, query = '') => {
+      const url = new URL(`https://librecorsa.org/api/admin/stats${query}`);
+      return handleApi(new Request(url, { headers: key === undefined ? {} : { 'X-Admin-Key': key } }), e, url);
+    };
+    const notFound = await (await handleApi(new Request('https://librecorsa.org/api/nothing'), env, new URL('https://librecorsa.org/api/nothing'))).text();
+    const hidden = async (what: string, res: Promise<Response>) => {
+      const r = await res;
+      check(`admin: ${what}: 404 as any unknown path`, r.status === 404 && (await r.text()) === notFound, String(r.status));
+    };
+    await hidden('no key', stats(env));
+    await hidden('a wrong key', stats(env, 'a-test-key-not-a-real-onE'));
+    await hidden('a key one character short', stats(env, KEY.slice(0, -1)));
+    await hidden('no secret set', stats({ ...env, ADMIN_KEY: undefined }, KEY));
+    await hidden('an empty secret and an empty key', stats({ ...env, ADMIN_KEY: '' }, ''));
+    await hidden('the key in the URL instead of the header', stats(env, undefined, `?key=${KEY}`));
+    check('admin: equal keys match, others do not', (await adminKeyMatches(KEY, KEY)) && !(await adminKeyMatches(`${KEY} `, KEY)) && !(await adminKeyMatches(null, KEY)));
+    check('admin: days 1 to 90, else 30', statsDays('7') === 7 && statsDays('90') === 90 && statsDays('91') === 30 && statsDays('0') === 30 && statsDays('2.5') === 30 && statsDays(null) === 30);
+
+    // A preflight from a development page may send the key
+    const preflight = await handleApi(
+      new Request('https://librecorsa.org/api/admin/stats', { method: 'OPTIONS', headers: { Origin: 'http://127.0.0.1:3315' } }),
+      { ...env, DEV_ORIGINS: 'http://127.0.0.1:3315' } as Env,
+      new URL('https://librecorsa.org/api/admin/stats'),
+    );
+    check('admin: the preflight allows the X-Admin-Key header', preflight.status === 204 && /X-Admin-Key/.test(preflight.headers.get('Access-Control-Allow-Headers') ?? ''));
+
+    // Some board rows to count
+    await db.prepare("INSERT INTO drivers (name_key, key_hash, claimed_at, last_seen) VALUES ('a', 'x', 0, ?), ('b', 'y', 0, 0)").bind(NOON).run();
+    const lap = "INSERT INTO laps (id, track_id, vehicle, physics, event, assists, realism, surface, compound, name_key, driver_name, driver_code, lap_time_ms, s1_ms, s2_ms, s3_ms, recorded_at, created_at) VALUES (?, ?, 'vf26', 3, '', 'pro', 'full', 'dry', 'soft', 'a', 'A', 'AAA', 90000, 30000, 30000, 30000, 0, ?)";
+    await db.prepare(lap).bind('l1', 'rwanda_official_short', NOON).run();
+    await db.prepare(lap).bind('l2', 'rwanda_official', NOON - 200 * DAY_MS).run();
+
+    // Through the API on the real clock; the numbers themselves on this test's clock
+    const res = await stats(env, KEY, '?days=7');
+    const served = (await res.json()) as AdminStats;
+    check('admin: the right key gets the numbers, never cached', res.status === 200 && served.ok && served.days === 7 && Array.isArray(served.perDay) && res.headers.get('Cache-Control') === 'no-store');
+    nowMs = NOON + 2 * DAY_MS;
+    const read = async (query: string) => (await adminStats({ db, now: () => nowMs }, new URL(`https://librecorsa.org/api/admin/stats${query}`))).body as AdminStats;
+    const body = await read('?days=7');
+    check('admin: the range is the last 7 UTC days', body.days === 7 && body.from === '2026-11-07' && body.to === '2026-11-13', `${body.from}..${body.to}`);
+    const all = await rows();
+    const sessions = all.reduce((n, r) => n + r.sessions, 0);
+    const minutes = all.reduce((n, r) => n + r.minutes, 0);
+    check('admin: the totals are every session and minute in the range', body.totals.sessions === sessions && Math.abs(body.totals.minutes - minutes) < 0.05, JSON.stringify(body.totals));
+    check('admin: one row per day, in order', body.perDay.map((d) => d.day).join() === '2026-11-11,2026-11-12,2026-11-13' && body.perDay.reduce((n, d) => n + d.sessions, 0) === sessions);
+    check('admin: by circuit, car, mode and country, most minutes first', body.byCircuit[0]?.id === 'rwanda_official_short' && body.byCar.some((c) => c.id === 'amg-gt3') && body.byMode.map((m) => m.id).includes('time_trial') && body.byCountry.map((c) => c.id).includes('XX') && body.byCountry.every((c, i, a) => i === 0 || a[i - 1].minutes >= c.minutes));
+    check('admin: board counts (names, active names, laps, laps in range)', body.board.drivers === 2 && body.board.driversActive === 1 && body.board.laps === 2 && body.board.lapsInRange === 1, JSON.stringify({ ...body.board, boards: undefined }));
+    check('admin: laps per board', body.board.boards.length === 2 && body.board.boards.every((b) => b.laps === 1 && b.vehicle === 'vf26' && b.physics === 3));
+    check('admin: no race results table: races is null', body.races === null);
+    const old = await read('?days=1');
+    check('admin: a shorter range leaves the older days out', old.perDay.length === 1 && old.perDay[0].day === '2026-11-13');
+
+    // With the race results stored (as 0002_race_results.sql keeps them): finished races in the range, by kind
+    await db.prepare('CREATE TABLE races (id TEXT PRIMARY KEY, week TEXT, kind TEXT, track_id TEXT, vehicle TEXT, laps INTEGER, finished_ms INTEGER)').run();
+    await db.prepare('CREATE TABLE race_cars (race_id TEXT, position INTEGER, name_key TEXT, name TEXT, time_s REAL, penalty_s REAL, laps INTEGER, best_lap_ms REAL, dnf INTEGER, grid INTEGER)').run();
+    const race = "INSERT INTO races (id, week, kind, track_id, vehicle, laps, finished_ms) VALUES (?, '2026-W46', ?, 'rwanda_official_short', 'vf26', 5, ?)";
+    await db.prepare(race).bind('r1', 'open', NOON).run();
+    await db.prepare(race).bind('r2', 'room', NOON + DAY_MS).run();
+    await db.prepare(race).bind('r3', 'open', NOON - 100 * DAY_MS).run();
+    for (const [id, cars] of [['r1', 3], ['r2', 2], ['r3', 4]] as const) {
+      for (let p = 1; p <= cars; p++) await db.prepare("INSERT INTO race_cars (race_id, position, name, laps, dnf, grid) VALUES (?, ?, 'X', 5, 0, ?)").bind(id, p, p).run();
+    }
+    const withRaces = await read('?days=30');
+    check('admin: races in the range by kind, and their cars', withRaces.races?.open === 1 && withRaces.races.room === 1 && withRaces.races.cars === 5, JSON.stringify(withRaces.races));
   }
 
   if (failures.length > 0) {
