@@ -1587,17 +1587,19 @@ export class DriveSession {
       physics.telemetry.race = mpRace && mpFrame ? mpRace.status(mpFrame, physics.vxMs) : aiField?.status();
       physics.telemetry.runId = runId;
 
-      // Track limits: race control judges each excursion once the car is back on the asphalt. Practice deletes
-      // the lap; a race gives warnings, and every third one is a time penalty served at the flag.
+      // Track limits: in a race, race control judges each excursion once the car is back on the asphalt (warnings,
+      // and every third one is a time penalty served at the flag). Any other driving is strict: off is a deleted lap.
       {
         const t = physics.telemetry;
         const raceNow = t.race;
-        physics.trackLimitsMode = "judged";
+        physics.trackLimitsMode = trackLimits.mode === "race" ? "judged" : "strict";
         if (driving) {
           const tlEvent = trackLimits.update({
             nowMs,
             dtS: dtSeconds,
             lapCount: t.lapCount,
+            lapTimeMs: t.currentLapTimeMs,
+            sector: t.currentSector,
             distM: t.trackDistanceM,
             offTrack: t.offTrack,
             throttle: t.throttle,
