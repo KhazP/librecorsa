@@ -109,10 +109,13 @@ def image(name):
 
 
 def mat(name, color=(1, 1, 1), rough=0.8, metal=0.0, tex=None, vcol=False, alpha=None, double=False, emit=None,
-        emit_strength=1.0, a=1.0):
+        emit_strength=1.0, a=1.0, nor=None, tile=1.0):
     """
     A glTF-friendly Principled material. `color` is a display (sRGB) colour; with a texture it becomes the base
     colour factor, unless `vcol` multiplies the 'Col' attribute in instead. alpha: None | 'BLEND' | 'MASK'.
+    `nor` is a normal map (OpenGL convention) beside the texture. `tile` repeats both that many times across one unit
+    of the mesh's uv (glTF: KHR_texture_transform): a scan of 2 m of ground on a surface whose uv runs by 8 m takes
+    4, and the uv stays what the game reads the surface's ripple from.
     """
     m = bpy.data.materials.get(name) or bpy.data.materials.new(name)
     m.use_nodes = True
@@ -126,10 +129,28 @@ def mat(name, color=(1, 1, 1), rough=0.8, metal=0.0, tex=None, vcol=False, alpha
     lin = tuple(srgb2lin(color)) + (1.0,)
     src = None
     t = None
+    where = None
+    if tile != 1.0 and (tex or nor):
+        tc = nt.nodes.new('ShaderNodeTexCoord')
+        mp = nt.nodes.new('ShaderNodeMapping')
+        mp.inputs['Scale'].default_value = (tile, tile, 1.0)
+        nt.links.new(tc.outputs['UV'], mp.inputs['Vector'])
+        where = mp.outputs['Vector']
     if tex:
-        t = nt.nodes.new('ShaderNodeTexImage')
+        t = nt.nodes.new('ShaderNodeTexImage')              # the first image node: the colour (bl_ac.py reads it so)
         t.image = image(tex)
+        if where is not None:
+            nt.links.new(where, t.inputs['Vector'])
         src = t.outputs['Color']
+    if nor:
+        tn = nt.nodes.new('ShaderNodeTexImage')
+        tn.image = image(nor)
+        tn.image.colorspace_settings.name = 'Non-Color'
+        if where is not None:
+            nt.links.new(where, tn.inputs['Vector'])
+        nm = nt.nodes.new('ShaderNodeNormalMap')
+        nt.links.new(tn.outputs['Color'], nm.inputs['Color'])
+        nt.links.new(nm.outputs['Normal'], bsdf.inputs['Normal'])
     fac = None
     if vcol:
         vc = nt.nodes.new('ShaderNodeVertexColor')
