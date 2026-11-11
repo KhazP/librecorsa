@@ -583,7 +583,9 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
       <div className="flex min-w-0 flex-col gap-3.5">
         <div className={`${CARD} flex flex-col gap-3.5`}>
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <span className="lc-lbl">Room code</span>
+            <h3 className="lc-title m-0 text-[20px] leading-tight">Private room</h3>
+            {/* How many are connected: only once there is a room to be connected to */}
+            {hostedCode || connected > 0 || (p2pStatus?.state ?? "idle") !== "idle" ? (
             <span
               className={`${CHIP} h-[26px] text-[11px] uppercase ${
                 p2pStatus?.state === "connected"
@@ -601,6 +603,7 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
               </span>
               {connected} connected
             </span>
+            ) : null}
           </div>
           {hostedCode ? (
             <>
@@ -624,16 +627,15 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
               </div>
             </>
           ) : (
-            <>
-              <p className="m-0 text-[14px] leading-snug text-[#8E96AA]">
-                {races ? "To race only your friends, host" : "Host"} a room and send them the link, or join theirs with the code they gave you.
-              </p>
-              <button type="button" onClick={hostRoom} className={`w-full ${joinReady ? PILL_DARK : PILL_VOLT}`}>
-                Host a room
-              </button>
-            </>
+            <button type="button" onClick={hostRoom} className={`w-full ${joinReady ? PILL_DARK : PILL_VOLT}`}>
+              Host a room
+            </button>
           )}
-          <div className="h-px bg-[#262B3D]" />
+          <div className="flex items-center gap-3 text-[12px] font-semibold text-[#8E96AA]" aria-hidden>
+            <span className="h-px flex-1 bg-[#262B3D]" />
+            or
+            <span className="h-px flex-1 bg-[#262B3D]" />
+          </div>
           <form
             className="flex flex-col gap-2"
             onSubmit={(e) => {
@@ -641,7 +643,7 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
               joinRoom();
             }}
           >
-            <label htmlFor="lc-room-code" className="lc-lbl">
+            <label htmlFor="lc-room-code" className="sr-only">
               {hostedCode ? "Join another room" : "Join a friend's room"}
             </label>
             <div className="flex flex-wrap gap-2">
@@ -651,11 +653,11 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
                 maxLength={6}
                 value={roomCodeInput}
                 onChange={(e) => setRoomCodeInput(e.target.value.toUpperCase())}
-                placeholder="CODE"
+                placeholder={hostedCode ? "Another room's code" : "Friend's room code"}
                 autoComplete="off"
                 autoCapitalize="characters"
                 spellCheck={false}
-                className="h-11 min-w-[7rem] flex-1 rounded-full border border-[#262B3D] bg-[#08090D] px-4 font-f1-mono text-[15px] font-extrabold tracking-[0.3em] text-[#F5F7FA] uppercase placeholder:text-[#8E96AA] focus:border-[#CCFF00] focus:shadow-[0_0_0_4px_rgba(204,255,0,0.12)] focus:outline-none"
+                className="h-11 min-w-[7rem] flex-1 rounded-full border border-[#262B3D] bg-[#08090D] px-4 font-f1-mono text-[15px] font-extrabold tracking-[0.3em] text-[#F5F7FA] uppercase placeholder:font-sans placeholder:text-[14px] placeholder:font-semibold placeholder:tracking-normal placeholder:normal-case placeholder:text-[#8E96AA] focus:border-[#CCFF00] focus:shadow-[0_0_0_4px_rgba(204,255,0,0.12)] focus:outline-none"
               />
               <button type="submit" disabled={!joinReady} className={joinReady ? PILL_VOLT : PILL_DARK}>
                 Join
@@ -674,8 +676,10 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
         </div>
 
         {profile ? (
-          <div className="flex min-w-0 items-center gap-2.5 rounded-full border border-[#262B3D] bg-[#08090D]/60 py-1.5 pr-3 pl-3.5">
-            <span className="lc-lbl">You</span>
+          <div
+            className="flex min-w-0 items-center gap-2.5 rounded-full border border-[#262B3D] bg-[#08090D]/60 py-1.5 pr-3 pl-3.5"
+            aria-label={`Racing as ${profile.name}`}
+          >
             <span className="h-3.5 w-3.5 shrink-0 rounded-full" style={{ backgroundColor: profile.color }} />
             <span className="font-f1-mono text-[12px] font-extrabold tracking-[0.1em]">{profile.code}</span>
             <span className="min-w-0 flex-1 truncate text-[14px] font-semibold">{profile.name}</span>
@@ -718,9 +722,7 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
             <div className="flex flex-col gap-4 border-t border-[#262B3D] p-4">
               <div className="flex flex-col gap-2">
                 <span className="lc-title text-[14px] text-[#00E676]">Two windows on this computer</span>
-                <p className="m-0 text-[12px] leading-snug text-[#8E96AA]">
-                  Open the game in another tab or window of this browser, then start a race between them here. No room needed.
-                </p>
+                <p className="m-0 text-[12px] leading-snug text-[#8E96AA]">Race another tab or window of this browser, without a room.</p>
                 <button
                   type="button"
                   disabled={!onHostLocal}
@@ -734,8 +736,7 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
               <div className="flex flex-col gap-2.5 border-t border-[#262B3D] pt-4">
                 <span className="lc-title text-[14px] text-[#FFB300]">Connect by hand</span>
                 <p className="m-0 text-[12px] leading-snug text-[#8E96AA]">
-                  Works without any room: the host makes an offer, the other player answers it, and you send each other the
-                  two tokens.
+                  No room: the host makes an offer, the other player answers, and you swap the two tokens.
                 </p>
                 <div className="flex flex-wrap items-center gap-2">
                   {/* A guest that answered an offer does not start one of its own (Start over first) */}
@@ -848,8 +849,7 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
               <div className="flex flex-col gap-2.5 border-t border-[#262B3D] pt-4">
                 <span className="lc-title text-[14px] text-[#00E5FF]">Your own relay server</span>
                 <p className="m-0 text-[12px] leading-snug text-[#8E96AA]">
-                  Only if players still can&apos;t reach each other: the address and login of a TURN server you run or rent.
-                  Used for connections made after you save it.
+                  If players can&apos;t reach each other: a TURN server you run or rent, for connections made after saving.
                 </p>
                 <div className="grid gap-2 sm:grid-cols-3">
                   <input
@@ -897,14 +897,17 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
           ) : null}
         </div>
 
-        <p
-          role={p2pStatus?.state === "error" ? "alert" : undefined}
-          className={`m-0 font-f1-mono leading-normal ${
-            p2pStatus?.state === "error" ? "text-[13px] font-semibold text-[#FF2A3C]" : "text-[13px] text-[#8E96AA]"
-          }`}
-        >
-          {p2pStatus?.statusText ?? "Host a room and send the link, or join with a friend's code."}
-        </p>
+        {/* What the connection is doing; nothing to say before a room is hosted or joined */}
+        {p2pStatus?.statusText && p2pStatus.state !== "idle" ? (
+          <p
+            role={p2pStatus.state === "error" ? "alert" : undefined}
+            className={`m-0 font-f1-mono leading-normal ${
+              p2pStatus.state === "error" ? "text-[13px] font-semibold text-[#FF2A3C]" : "text-[13px] text-[#8E96AA]"
+            }`}
+          >
+            {p2pStatus.statusText}
+          </p>
+        ) : null}
       </div>
 
       {lobby ? renderLobby(lobby) : null}
