@@ -182,7 +182,8 @@ async function main() {
   await finish(al, 'peer_al', { timeS: laps * 80 + 60 });
   await finish(al, 'peer_al', { laps: laps + 1 });
   await finish(al, 'peer_al', { id: 'race0' });
-  check('a finish sooner than laps of a believable lap, in the future, over the distance or of another race is refused', results(al).length === 0);
+  await finish(al, 'peer_al', { laps: laps - 1, timeS: (laps - 1) * 80 });
+  check('a finish sooner than laps of a believable lap, in the future, over the distance, short of it as the first car home or of another race is refused', results(al).length === 0);
   const alarmBefore = state.alarmMs;
   await finish(al, 'peer_al');
   const provisional = results(bea)[0];

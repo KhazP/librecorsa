@@ -62,6 +62,9 @@ export function finishProblem(book: ResultBook, peer: string, f: FinishMessage, 
   if (book.final) return "the result is final";
   if (!check.sentState) return "no state from this car";
   if (f.laps < 1 || f.laps > book.laps) return "laps out of range";
+  // The first car home ran the whole race: a lapped car is classified on fewer laps, but only after the winner, so a
+  // short first report would start the result's close with nobody at the full distance
+  if (book.firstFinishMs === null && f.laps !== book.laps) return "short of the race distance";
   if (f.timeS < check.minLapS * f.laps) return "faster than a lap can be";
   if (f.timeS > check.raceTimeS + FINISH_CLOCK_SLACK_S) return "finished in the future";
   return null;
