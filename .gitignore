@@ -64,3 +64,8 @@ UI-RESEARCH-*.md
 /public/cars/*
 !/public/cars/f12026/
 /public/gt3/
+
+# F1 2026 local reference datasets & headless Blender audit outputs
+/reference_data/
+/artifacts/
+*.blend1
