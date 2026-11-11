@@ -323,7 +323,6 @@ export const LeaderboardPanel: React.FC<LeaderboardPanelProps> = ({
       {/* Toolbar (the title menu's sheet already shows the leaderboard heading) */}
       <div className="flex flex-wrap items-end justify-between gap-3 [.lc-title-frame_&]:justify-end">
         <div className="flex min-w-0 flex-col gap-1.5 [.lc-title-frame_&]:hidden">
-          <span className="lc-lbl text-[#CCFF00]">Lap times</span>
           <span className="lc-title text-[24px] leading-none">{nameOf(circuit)}</span>
         </div>
         <div className="flex flex-wrap gap-2">

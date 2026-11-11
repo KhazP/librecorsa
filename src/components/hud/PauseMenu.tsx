@@ -48,7 +48,6 @@ import {
   Gauge,
   LogOut,
   MonitorCog,
-  Pause,
   Play,
   RotateCcw,
   SlidersHorizontal,
@@ -478,10 +477,6 @@ export const PauseMenu: React.FC<PauseMenuProps> = (props) => {
       <div className="mx-auto flex w-full max-w-[1320px] flex-1 flex-col">
         <div className="flex flex-wrap items-end justify-between gap-4 border-b border-[#262B3D] pb-[18px] short:pb-3">
           <div className="flex min-w-0 flex-col gap-2.5 short:gap-1.5">
-            <div className="flex items-center gap-2 font-f1-mono text-xs font-extrabold tracking-[0.22em] text-[#CCFF00]">
-              <Pause aria-hidden className="h-3.5 w-3.5" fill="currentColor" strokeWidth={0} />
-              PAUSED
-            </div>
             <h1 className="lc-disp m-0 text-[clamp(32px,4.2vw,60px)] text-[#F5F7FA] short:text-[28px] phone:text-[22px]">
               {trackInfo.name}
             </h1>

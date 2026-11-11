@@ -191,14 +191,17 @@ export const RaceResults: React.FC<{
               className="h-[34px] w-1.5 shrink-0 rounded-full"
               style={{ backgroundColor: final ? HUD_VOLT : HUD_YELLOW }}
             />
-            <div className="flex min-w-0 flex-col gap-1">
-              <span className="lc-lbl !text-[9px] !font-extrabold !tracking-[0.18em]">
-                Race result{race.totalLaps ? ` · ${race.totalLaps} laps` : ""}
-              </span>
-              <h1 className="lc-disp m-0 truncate text-[24px] sm:text-[30px]">{trackName}</h1>
-            </div>
+            <h1 className="lc-disp m-0 min-w-0 truncate text-[24px] sm:text-[30px]">{trackName}</h1>
           </div>
           <span className="flex shrink-0 items-center gap-2">
+          {race.totalLaps ? (
+            <span
+              className="lc-data inline-flex h-7 items-center rounded-full px-3 text-[11px] tracking-[0.1em] text-[#C5CBD8]"
+              style={{ boxShadow: "inset 0 0 0 1px #262B3D" }}
+            >
+              {race.totalLaps} {race.totalLaps === 1 ? "LAP" : "LAPS"}
+            </span>
+          ) : null}
           {trackLimitStrikes > 0 ? (
             <span
               className="lc-data inline-flex h-7 items-center rounded-full px-3 text-[11px] tracking-[0.1em]"

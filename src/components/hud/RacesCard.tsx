@@ -44,15 +44,14 @@ export const RacesCard: React.FC<RacesCardProps> = ({ trackName, carTitle, slotS
 
   return (
     <section className={CARD} aria-label="Races">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="lc-lbl text-[#00E5FF]">Open races</span>
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <span className="lc-title text-[20px] leading-tight">{trackName}</span>
+          <span className="text-[14px] font-semibold text-[#C5CBD8]">{carTitle}</span>
+        </div>
         <span className={CHIP}>
           {laps} laps · every {every}
         </span>
-      </div>
-      <div className="flex flex-col gap-0.5">
-        <span className="lc-title text-[20px] leading-tight">{trackName}</span>
-        <span className="text-[14px] font-semibold text-[#C5CBD8]">{carTitle}</span>
       </div>
       <div className="flex items-baseline gap-3" aria-live="off">
         <span className="lc-data text-[40px] leading-none tabular-nums">{racing ? "GO" : countdownLabel(startsMs, now)}</span>
@@ -131,11 +130,11 @@ const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one :
 /** This week's top five by wins then podiums, and the player's record in one line */
 const RaceResultsLines: React.FC<{ standings: WeekStanding[]; record: DriverRecord | null }> = ({ standings, record }) => (
   <div className="flex flex-col gap-1.5">
-    <span className="lc-lbl text-[#8E96AA]">This week</span>
+    <h3 className="m-0 text-[14px] font-semibold text-[#F5F7FA]">This week&apos;s top drivers</h3>
     {standings.length === 0 ? (
       <p className="m-0 text-[13px] text-[#8E96AA]">No race results yet.</p>
     ) : (
-      <ol className="m-0 flex list-none flex-col gap-0.5 p-0" aria-label="This week's top drivers">
+      <ol className="m-0 flex list-none flex-col gap-0.5 p-0">
         {standings.slice(0, 5).map((s, i) => (
           <li key={`${s.name}-${i}`} className="flex items-baseline justify-between gap-3 text-[13px]">
             <span className="min-w-0 truncate font-semibold">
