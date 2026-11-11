@@ -12,6 +12,10 @@
  *  - `bumpHeightM` / `bumpLengthM`: a sinusoidal ripple along the surface (AC `SIN_HEIGHT` / `SIN_LENGTH`, TORCS
  *    `roughness` / `roughness wavelength`, but as a true wavelength in metres). Kerb serrations live here, so they
  *    are felt whatever the mesh density.
+ *  - `bumpRise`: the ripple's shape. 0 is the sinusoid, `bumpHeightM` either side of the surface. Above 0 it is a row
+ *    of blocks standing on the surface, as a kerb is cast: each climbs to `bumpHeightM` over this share of
+ *    `bumpLengthM` in the direction of travel, and comes back down over the rest (a tyre rolls off a block's end
+ *    over about its contact patch's length, so the drop is given that much, never a step).
  *  - `vibration`: rumble gain for force feedback, haptics and audio (AC `VIBRATION_GAIN`).
  *  - `maxRiseM`: for a raised surface (kerb, sausage), the most it may stand above the drivable surface beneath it;
  *    any higher and the tyre rides at that height instead. Unlimited by default: the authored mesh is the kerb.
@@ -29,6 +33,7 @@ export interface SurfaceProps {
   rollingResistance: number;
   bumpHeightM: number;
   bumpLengthM: number;
+  bumpRise: number;
   vibration: number;
   validTrack: boolean;
   maxRiseM: number;
@@ -38,20 +43,21 @@ export type SurfaceTable = Record<TrackSurfaceKind, SurfaceProps>;
 export type SurfaceTableOverrides = Partial<Record<TrackSurfaceKind, Partial<SurfaceProps>>>;
 
 export const DEFAULT_SURFACE_TABLE: Readonly<SurfaceTable> = {
-  road: { friction: 1, wetFriction: 1, rollingResistance: 0, bumpHeightM: 0, bumpLengthM: 0, vibration: 0, validTrack: true, maxRiseM: Infinity },
+  road: { friction: 1, wetFriction: 1, rollingResistance: 0, bumpHeightM: 0, bumpLengthM: 0, bumpRise: 0, vibration: 0, validTrack: true, maxRiseM: Infinity },
   // Serrated painted concrete: a 2 mm ripple every 0.65 m, slippery when wet. The tyres feel the road over their
   // contact patch, but a 0.15-0.25 m patch barely smooths a 0.65 m wave (and at speed it comes far above the wheel-hop
   // frequency, so the tyre spring takes all of it): 4 mm still lifts an F1 wheel off for 13-20 % of its kerb time on
-  // Sepang and Suzuka (12-18 % for the GT3), against 6-14 % at 2 mm and 5-13 % with no ripple at all
-  kerb: { friction: 0.96, wetFriction: 0.72, rollingResistance: 0.002, bumpHeightM: 0.002, bumpLengthM: 0.65, vibration: 1, validTrack: true, maxRiseM: Infinity },
-  sausage: { friction: 0.85, wetFriction: 0.7, rollingResistance: 0.01, bumpHeightM: 0, bumpLengthM: 0, vibration: 1, validTrack: false, maxRiseM: Infinity },
+  // Sepang and Suzuka (12-18 % for the GT3), against 6-14 % at 2 mm and 5-13 % with no ripple at all. A circuit whose
+  // kerbs are modelled block by block gives them as `bumpRise` blocks instead (RISE Motordrome: 16 mm every 0.8 m)
+  kerb: { friction: 0.96, wetFriction: 0.72, rollingResistance: 0.002, bumpHeightM: 0.002, bumpLengthM: 0.65, bumpRise: 0, vibration: 1, validTrack: true, maxRiseM: Infinity },
+  sausage: { friction: 0.85, wetFriction: 0.7, rollingResistance: 0.01, bumpHeightM: 0, bumpLengthM: 0, bumpRise: 0, vibration: 1, validTrack: false, maxRiseM: Infinity },
   // Painted asphalt run-off
-  runoff: { friction: 0.75, wetFriction: 0.85, rollingResistance: 0.002, bumpHeightM: 0, bumpLengthM: 0, vibration: 0.15, validTrack: false, maxRiseM: Infinity },
-  pitlane: { friction: 0.97, wetFriction: 0.95, rollingResistance: 0, bumpHeightM: 0, bumpLengthM: 0, vibration: 0, validTrack: true, maxRiseM: Infinity },
+  runoff: { friction: 0.75, wetFriction: 0.85, rollingResistance: 0.002, bumpHeightM: 0, bumpLengthM: 0, bumpRise: 0, vibration: 0.15, validTrack: false, maxRiseM: Infinity },
+  pitlane: { friction: 0.97, wetFriction: 0.95, rollingResistance: 0, bumpHeightM: 0, bumpLengthM: 0, bumpRise: 0, vibration: 0, validTrack: true, maxRiseM: Infinity },
   // Soft and uneven, and very slippery once wet
-  grass: { friction: 0.6, wetFriction: 0.55, rollingResistance: 0.04, bumpHeightM: 0.01, bumpLengthM: 2.4, vibration: 0.5, validTrack: false, maxRiseM: Infinity },
+  grass: { friction: 0.6, wetFriction: 0.55, rollingResistance: 0.04, bumpHeightM: 0.01, bumpLengthM: 2.4, bumpRise: 0, vibration: 0.5, validTrack: false, maxRiseM: Infinity },
   // Loose stones: little grip, and the car ploughs in: about 0.5 g of drag at speed on top of what the tyres give
-  gravel: { friction: 0.45, wetFriction: 0.9, rollingResistance: 0.5, bumpHeightM: 0.008, bumpLengthM: 1.1, vibration: 0.8, validTrack: false, maxRiseM: Infinity },
+  gravel: { friction: 0.45, wetFriction: 0.9, rollingResistance: 0.5, bumpHeightM: 0.008, bumpLengthM: 1.1, bumpRise: 0, vibration: 0.8, validTrack: false, maxRiseM: Infinity },
 };
 
 /** Contact-patch speed (m/s) at which a surface's plough drag is fully built: a crawling car can still drive out */
@@ -109,11 +115,20 @@ export function kerbProfileM(outwardM: number): number {
   return Z[i] + (Z[i + 1] - Z[i]) * f;
 }
 
+/** The most of a block's length its climb may take (`bumpRise`): the rest is its way back down */
+export const MAX_BUMP_RISE = 0.95;
+
 /**
  * Ripple height of a surface (m) at `alongM` metres along it, scaled by `lateralFade` (0 at the edge it starts from,
  * 1 where it is fully raised, as TORCS fades a kerb's roughness in across its width).
  */
 export function surfaceRippleM(props: SurfaceProps, alongM: number, lateralFade = 1): number {
   if (props.bumpHeightM <= 0 || props.bumpLengthM <= 0) return 0;
+  if (props.bumpRise > 0) {
+    const rise = Math.min(props.bumpRise, MAX_BUMP_RISE);
+    const x = alongM / props.bumpLengthM;
+    const f = x - Math.floor(x);
+    return props.bumpHeightM * lateralFade * (f < rise ? f / rise : (1 - f) / (1 - rise));
+  }
   return props.bumpHeightM * lateralFade * Math.sin((2 * Math.PI * alongM) / props.bumpLengthM);
 }
