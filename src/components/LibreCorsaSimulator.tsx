@@ -30,6 +30,9 @@ import {
 } from "@/lib/net/leaderboard";
 import { exportDriverKeyFile, importDriverKeyFile } from "@/lib/net/driver-key";
 import { challengeAt, fitsChallenge } from "@/lib/net/weekly-challenge";
+import { useUsageCounter } from "@/lib/net/use-usage-counter"; // polish:E
+import { timeTrialRules } from "@/lib/sim/time-trial";
+import { challengeTarget, type ChallengeTarget } from "@/lib/net/challenge-target";
 import { isTouchDevice, resetTouchInput } from "@/lib/input/touch-input";
 import { isFatalHidStatus } from "@/lib/input/webhid-ffb";
 import { SIM_REALISM_FLAGS, type SimRealism } from "@/lib/sim/sim-realism";
@@ -49,6 +52,8 @@ import { clampFov, codeFromName, DEFAULT_PLAYER_SETTINGS, loadCarChoice, loadOnb
 import type { AeroSetupPreset, AssistPreset, CameraMode, LiveTunerPatch, LiveryConfig, TireCompound, TyreSetup, VehicleModelId } from "@/types/f1";
 import { aiFieldOf, autoCompoundFor, DEFAULT_AERO_PRESET, DriveSession, idleDriveSnapshot, mpRaceOf, type AppPhase, type RunResetReason, type SessionRace } from "@/lib/drive-session";
 import { startAiRace, type RaceSetup } from "@/lib/sim/race-setup";
+import type { PodiumUi } from "@/lib/render/podium-shot";
+import { useRaceHistory } from "@/components/hud/useRaceHistory";
 
 const DEFAULT_ASSIST_PRESET: AssistPreset = DEFAULT_PLAYER_SETTINGS.assistPreset;
 /** A lap record's car: records are per vehicle model, named after its first car */
@@ -79,6 +84,9 @@ const challengeTrackName = (id: string) => {
 };
 /** The snapshot store before the session exists: nothing to subscribe to */
 const noSubscribe = () => () => {};
+// polish:B the podium shot's view before the drive exists
+const IDLE_PODIUM: PodiumUi = { stage: "idle", rows: [] };
+const idlePodium = () => IDLE_PODIUM;
 /** A race the host started before this circuit was loaded (or on another one): picked up once the scene has loaded */
 let pendingRaceStart: RaceStartInfo | null = null;
 /**
@@ -140,6 +148,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     tyreSetup,
     defaultTyreSetup,
     chassisSetup,
+    timeTrial,
   } = useSyncExternalStore(session?.subscribe ?? noSubscribe, session?.getSnapshot ?? (() => idleSnapshot), () => idleSnapshot);
 
   const [aeroPreset, setAeroPreset] =
@@ -432,6 +441,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         if (isMpHostRef.current && !flyingStart) getMultiplayerManager().startRace();
         return;
       }
+      // polish:A — a flying restart outside a race puts the time trial's conditions on first
+      if (race.kind === "practice" && flyingStart) return session.restartFlyingLap();
       const physics = session.car;
       session.resetRun("restart");
       // A restart from the menu uses the race's own start; the flying-lap key always gives a rolling one
@@ -586,6 +597,9 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       const roster = mp.lobby?.players ?? [];
       const profile = settingsRef.current.profile;
       const race = new MultiplayerRace(start, track.totalLengthM, mp.localPeerId, profile, roster);
+      // The official result: the finish goes to the race server or the host; a room's host keeps the book itself
+      race.onFinish = (finish) => mp.sendRaceFinish(finish);
+      if (mp.isHost && !mp.inScheduledRace) race.collectResults((result) => mp.sendRaceResult(result));
       startSession({ kind: "mp", race });
       // The class may rule out the current car, or the race names one car for everyone (a scheduled race): take it,
       // or the first allowed one (after the session reset, so the swap finds no replay or AI field to carry over)
@@ -962,6 +976,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     };
     mp.onLobbyChange = (l) => {
       setLobby(l ? { ...l, players: [...l.players] } : null);
+      // Who is still in the race is the lobby's word, the same on every screen
+      if (l && session) mpRaceOf(session.race)?.setPresent(l.players.map((p) => p.peerId));
       // The host's weather and clock: a guest's session eases to them (a different preset restarts it)
       if (l?.weather && l.hostId !== mp.localPeerId) trackEnvRef.current?.applyWeatherSync(l.weather);
       follow(l);
@@ -991,6 +1007,12 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       if (pendingRaceStart?.id === id) pendingRaceStart = null;
       if (session && mpRaceOf(session.race)?.start.id === id) endMpRace(false);
     };
+    mp.onRaceFinish = (peerId, finish) => {
+      if (session) mpRaceOf(session.race)?.takeFinish(peerId, finish);
+    };
+    mp.onRaceResult = (result) => {
+      if (session) mpRaceOf(session.race)?.applyResult(result);
+    };
     const timer = window.setInterval(() => setPeerStats(mp.getPeerStats()), 1000);
     return () => {
       mp.onLobbyChange = undefined;
@@ -998,6 +1020,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       mp.weatherProvider = undefined;
       mp.onRaceStart = undefined;
       mp.onRaceAbort = undefined;
+      mp.onRaceFinish = undefined;
+      mp.onRaceResult = undefined;
       window.clearInterval(timer);
     };
   }, [session, trackId, onSelectTrack, takeRaceStart, endMpRace, changeCar]);
@@ -1013,6 +1037,20 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     () => fetchRemoteBoard(challenge.trackId, challenge.vehicle, { event: challenge.id, name: settingsRef.current.profile.name, limit: 20 }).catch(() => null),
     [challenge]
   );
+  // polish:A — the time trial's target on the HUD: the week's board, read again after each upload. Not without a
+  // board, or before the player has a name of their own
+  const [challengeTargetNow, setChallengeTargetNow] = useState<ChallengeTarget | null>(null);
+  const targetShown = timeTrial !== null && timeTrial.vehicle === challenge.vehicle && trackId === challenge.trackId && boardOn && !settings.profile.generated;
+  useEffect(() => {
+    if (!targetShown) return setChallengeTargetNow(null);
+    let live = true;
+    void loadChallengeBoard().then((board) => {
+      if (live && board) setChallengeTargetNow(challengeTarget(board));
+    });
+    return () => {
+      live = false;
+    };
+  }, [targetShown, loadChallengeBoard, boardVersion, settings.profile.name]);
   /**
    * Out on track to the week's rules: its car, assists and realism, a dry track. `race`: against the AI in the car
    * and over the distance of the week's races (when its field is ready for this car; else practice).
@@ -1032,7 +1070,10 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         // No damage, as in an open race with other drivers (their cars take none)
         startAiRace(field, { ...settingsRef.current.race, laps: week.race.laps, start: "standing", damage: "off" });
       } else {
-        session?.car.resetToStartGrid(false);
+        // polish:A — the time trial: its fixed tyre, fuel and road, from a flying start
+        session?.setTimeTrial(timeTrialRules(week.vehicle));
+        session?.restartFlyingLap();
+        return;
       }
       setLaunchHint(true);
     },
@@ -1172,6 +1213,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       ["Cockpit FOV", "[ / ]"],
       ["Racing line", keys(k.racingLine)],
       ["Restart", keys(k.restart)],
+      ["Restart lap (flying start)", keys(k.flyingLap)],
       ["Half throttle", keys(k.throttleHalf)],
       ["Instant replay", keys(k.replay)],
     ];
@@ -1214,6 +1256,35 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   const roomLobby = inScheduledRace ? null : lobby;
   const isMpHost = roomLobby !== null && roomLobby.hostId === localPeerId;
   isMpHostRef.current = isMpHost;
+  // polish:E the anonymous usage counter: what is driven, where, in which mode, for how long (nothing per player)
+  useUsageCounter({
+    driving: phase === "driving",
+    paused,
+    trackId,
+    vehicle: vehicleModel,
+    race: raceKind,
+    scheduledRace: inScheduledRace,
+    assists: assistPreset,
+    realism: settings.realism,
+    lineWaterMm: trackEnvRef.current?.weather.lineWaterMm ?? 0,
+    raceOver: telemetry.race?.phase === "finished",
+  });
+
+  // polish:B after the flag: the podium shot, the race kept in this browser, the next open race
+  const podiumUi = useSyncExternalStore(session?.podium.subscribe ?? noSubscribe, session?.podium.getSnapshot ?? idlePodium, idlePodium);
+  const raceHistory = useRaceHistory(telemetry.race, telemetry.runId, {
+    trackId,
+    carId,
+    kind: raceKind === "ai" ? "ai_race" : raceKind === "mp" ? (inScheduledRace ? "open_race" : "room_race") : null,
+  });
+  /**
+   * Out of this open race (the others finish without this player) and into the next one, waited for on the title's
+   * Multiplayer panel, where its entry counts down
+   */
+  const handleJoinNextRace = useCallback(() => {
+    handleBackToLobby();
+    handleJoinRace();
+  }, [handleBackToLobby, handleJoinRace]);
 
   const menuProps = {
     telemetry,
@@ -1260,6 +1331,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     onToggleAiAutopilot: handleToggleAiAutopilot,
     onToggleMouseSteer: handleToggleMouseSteer,
     onResetCar: handleResetCar,
+    challengeTarget: targetShown ? challengeTargetNow : null,
     onSelectTurn: handleSelectTurn,
     onHostP2PRoom: handleHostP2PRoom,
     onJoinP2PRoom: handleJoinP2PRoom,
@@ -1385,6 +1457,12 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
           }
           onBackToLobby={raceKind === "mp" ? handleBackToLobby : undefined}
           backToLobbyLabel={inScheduledRace ? "Back to the races" : undefined}
+          raceEnd={{
+            podium: podiumUi,
+            onSkipPodium: () => session?.podium.skip(),
+            history: raceHistory,
+            nextRace: raceKind === "mp" && inScheduledRace && races.on ? { slotS: races.slotS, onJoin: handleJoinNextRace } : undefined,
+          }}
           replay={
             replayUi.active
               ? {
@@ -1454,6 +1532,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
                   laps: challenge.race.laps,
                   entry: raceEntry,
                   entrants: inScheduledRace ? (lobby?.players ?? []).map((p) => ({ id: p.peerId, name: p.name, code: p.code, me: p.peerId === localPeerId })) : [],
+                  driverName: settings.profile.name,
                   onJoin: handleJoinRace,
                   onLeave: handleLeaveRace,
                 }

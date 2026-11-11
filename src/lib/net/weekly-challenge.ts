@@ -1,12 +1,12 @@
 /**
- * The weekly challenge: one circuit and car for everyone, with the assists and realism fixed and a dry track, from
- * Monday 00:00 UTC to the next. It has its own online board (the lap also counts on the open one). The week's
+ * The weekly challenge: one circuit and car for everyone, with the assists and realism fixed, a dry track at full
+ * grip, one tyre per car and the lowest fuel load, from Monday 00:00 UTC to the next. It has its own online board (the lap also counts on the open one). The week's
  * scheduled races are on the same circuit and car, except in a week whose circuit is for time trials only.
  *
  * Everything here follows from the clock alone, so the game and the server (cloudflare/api) agree on the week
  * without asking each other. No three.js, no DOM: the Worker imports this file.
  */
-import type { AssistPreset, VehicleModelId } from "@/types/f1";
+import type { AssistPreset, TireCompound, VehicleModelId } from "@/types/f1";
 import { lapPhysicsVersion, type LapConditions } from "@/lib/sim/lap-types";
 import type { SimRealism } from "@/lib/sim/sim-realism";
 
@@ -103,6 +103,29 @@ export function challengeAt(nowMs: number): WeeklyChallenge {
   return { ...rules, id: isoWeekId(startsMs), startsMs, endsMs: startsMs + WEEK_MS };
 }
 
+/**
+ * The one tyre a car runs in the challenge: the softest dry compound it has. Every car's softest dry slot is its
+ * "soft" (the Liana's street tyre fills every slot, so "soft" is that tyre). Listed here, not read from the car
+ * configs, because the Worker imports this file.
+ */
+const CHALLENGE_TYRES: Readonly<Record<VehicleModelId, { compound: TireCompound; label: string }>> = {
+  vf26: { compound: "soft", label: "Soft tyres" },
+  "f12026-car": { compound: "soft", label: "Soft tyres" },
+  "amg-gt3": { compound: "soft", label: "Soft tyres" },
+  "mtr-496r": { compound: "soft", label: "Soft tyres" },
+  liana: { compound: "soft", label: "Street tyres" },
+};
+
+/** The compound every lap of a challenge in this car is driven on */
+export function challengeCompound(vehicle: VehicleModelId): TireCompound {
+  return CHALLENGE_TYRES[vehicle].compound;
+}
+
+/** The challenge's rules in a few words: "Dry track · Soft tyres · Low fuel" */
+export function challengeConditionsLabel(vehicle: VehicleModelId): string {
+  return `Dry track · ${CHALLENGE_TYRES[vehicle].label} · Low fuel`;
+}
+
 /** True when a lap driven on this circuit and car under these conditions is a lap of the challenge */
 export function fitsChallenge(lap: { trackId: string; vehicle: string; conditions?: LapConditions }, c: ChallengeRules): boolean {
   const k = lap.conditions;
@@ -113,6 +136,7 @@ export function fitsChallenge(lap: { trackId: string; vehicle: string; condition
     k.assists === c.assists &&
     k.realism === c.realism &&
     k.surface === "dry" &&
+    k.compound === challengeCompound(c.vehicle) &&
     k.physicsVersion === lapPhysicsVersion(c.vehicle)
   );
 }

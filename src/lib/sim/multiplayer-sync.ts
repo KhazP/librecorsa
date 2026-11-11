@@ -39,6 +39,8 @@ import {
   type PeerRaceProgress,
   type RaceStartInfo,
 } from '@/lib/net/wire';
+import { loadDriverKey } from '@/lib/net/driver-key';
+import type { FinishMessage, ResultMessage } from '@/lib/net/official-result';
 
 // What goes over the wire, and the checks on it, live in a module of their own (the race server reads them too)
 export { sanitizePacket };
@@ -377,6 +379,10 @@ export class MultiplayerSyncManager {
   public weatherProvider?: () => WeatherSyncState | null;
   public onRaceStart?: (start: RaceStartInfo) => void;
   public onRaceAbort?: (id: string) => void;
+  /** A room's host: a car's finish report (official-result.ts keeps them) */
+  public onRaceFinish?: (peerId: string, finish: FinishMessage) => void;
+  /** The official result, from the race server or the room's host */
+  public onRaceResult?: (result: ResultMessage) => void;
   private identity: DriverIdentity = { name: 'Driver', code: 'DRV', color: '#E10600' };
   private localVehicle: VehicleModelId | undefined;
   private localTrackId: string | undefined;
@@ -1314,6 +1320,17 @@ export class MultiplayerSyncManager {
     this.onRaceAbort?.(id);
   }
 
+  /** The player took the flag: the finish goes to the race server or the host (a room's host files its own) */
+  public sendRaceFinish(finish: FinishMessage): void {
+    if (this.isHost) this.onRaceFinish?.(this.localPeerId, finish);
+    else this.sendControl(finish, this.inScheduledRace ? undefined : (this.hostId ?? undefined));
+  }
+
+  /** A room's host: the official result, to everyone */
+  public sendRaceResult(result: ResultMessage): void {
+    if (this.isHost) this.sendControl(result);
+  }
+
   /**
    * Leaves the race in progress. The host ends it for everyone (abortRace). A guest drops out alone: the race is
    * forgotten here, and neither the host repeating its start nor its lobby puts this player back in it.
@@ -1541,6 +1558,9 @@ export class MultiplayerSyncManager {
           this.doneRaceId = null;
           this.sendControl({ type: 'hello', ...this.identity, vehicle: this.localVehicle, trackId: this.localTrackId });
           if (this.localReady) this.sendControl({ type: 'ready', ready: true });
+          // The race server credits a result to a name only when this browser's driver key owns it
+          const driverKey = this.inScheduledRace ? loadDriverKey() : null;
+          if (driverKey) this.sendControl({ type: 'identify', driverKey });
         }
         this.setLobby(msg.lobby);
         if (dropped) this.onRaceAbort?.(dropped.id);
@@ -1563,6 +1583,14 @@ export class MultiplayerSyncManager {
         if (this.activeRace?.id !== msg.id) break;
         this.activeRace = null;
         this.onRaceAbort?.(msg.id);
+        break;
+      case 'finish':
+        if (this.isHost) this.onRaceFinish?.(from, msg);
+        break;
+      case 'result':
+        // As the start: only from the host (or the race server), over the connection to it
+        if (this.isHost || from !== this.hostId || (!via && this.rtcPeers.size > 0)) break;
+        this.onRaceResult?.(msg);
         break;
     }
   }

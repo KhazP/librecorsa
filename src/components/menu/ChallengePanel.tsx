@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { Play } from "lucide-react";
 import { boardLabel, driverNameKey, type RemoteBoard } from "@/lib/net/leaderboard";
-import { timeLeftLabel, type WeeklyChallenge } from "@/lib/net/weekly-challenge";
+import { challengeConditionsLabel, timeLeftLabel, type WeeklyChallenge } from "@/lib/net/weekly-challenge";
 import { formatLapTime } from "@/components/hud/hud-format";
 import { focusOnHover } from "@/components/menu/useFocusNav";
 
@@ -62,7 +62,13 @@ export const ChallengePanel: React.FC<ChallengePanelProps> = ({
   const myKey = driverNameKey(driverName);
   const me = board?.me ?? null;
   const ahead = me && me.rank >= 2 ? (board?.entries[me.rank - 2] ?? null) : null;
-  const rules = boardLabel({ assists: challenge.assists, realism: challenge.realism, surface: "dry" }).split(" · ");
+  // The time of the place above, when the board lists only the places further up
+  const aboveMs = me && me.rank >= 2 ? (me.aboveMs ?? ahead?.lapTimeMs ?? null) : null;
+  // Assists and realism, then the fixed conditions: "Dry track · Soft tyres · Low fuel"
+  const rules = [
+    ...boardLabel({ assists: challenge.assists, realism: challenge.realism, surface: "dry" }).split(" · ").slice(0, 2),
+    ...challengeConditionsLabel(challenge.vehicle).split(" · "),
+  ];
 
   return (
     <div className="grid items-start gap-[22px] grid-cols-[repeat(auto-fit,minmax(min(320px,100%),1fr))]">
@@ -78,13 +84,13 @@ export const ChallengePanel: React.FC<ChallengePanelProps> = ({
         <div className="flex flex-wrap gap-1.5" aria-label="Rules">
           {rules.map((r) => (
             <span key={r} className={CHIP}>
-              {r === "Dry" ? "Dry track" : r === "Full" || r === "Standard" || r === "Casual" ? `${r} realism` : r}
+              {r === "Full" || r === "Standard" || r === "Casual" ? `${r} realism` : r}
             </span>
           ))}
         </div>
         <p className="m-0 text-[13px] leading-snug text-[#8E96AA]">
-          Same circuit, car and settings for everyone, until Monday. Every lap you finish to these rules counts, and your
-          best one goes on the week&apos;s board by itself.
+          Same circuit, car and settings for everyone, until Monday. Flying laps: leave the track and the lap is deleted,
+          and the next one too if it was before the line. Your best lap goes on the week&apos;s board by itself.
           {hasRaces && available ? " To race others this week, open Multiplayer." : ""}
         </p>
         {available ? (
@@ -116,7 +122,11 @@ export const ChallengePanel: React.FC<ChallengePanelProps> = ({
               <span className="lc-data ml-2 text-[#C5CBD8]">{formatLapTime(me.entry.lapTimeMs)}</span>
             </span>
             <span className="text-[12px] text-[#8E96AA]">
-              {me.rank === 1 ? "Fastest this week" : ahead ? `${((me.entry.lapTimeMs - ahead.lapTimeMs) / 1000).toFixed(3)} s behind ${ahead.name}` : ""}
+              {me.rank === 1
+                ? "Fastest this week"
+                : aboveMs !== null
+                  ? `${((me.entry.lapTimeMs - aboveMs) / 1000).toFixed(3)} s behind ${ahead && ahead.lapTimeMs === aboveMs ? ahead.name : `P${me.rank - 1}`}`
+                  : ""}
             </span>
           </div>
         ) : null}

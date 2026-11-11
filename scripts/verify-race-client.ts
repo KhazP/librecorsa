@@ -50,10 +50,13 @@ Object.assign(globalThis, {
   window: globalThis,
   WebSocket: FakeWebSocket,
   fetch: async () => new Response(JSON.stringify({ rooms: true, relay: false, races: true, board: true, raceSlotS: 1200 })),
+  // This browser's driver key (src/lib/net/driver-key.ts)
+  localStorage: { getItem: (k: string) => (k === 'bugesera.driverKey' ? DRIVER_KEY : null), setItem() {} },
 });
 Object.defineProperty(globalThis.performance, 'now', { value: () => clock });
 
 const SERVER = 'race_server';
+const DRIVER_KEY = 'd'.repeat(43);
 const tick = () => new Promise((r) => setTimeout(r, 0));
 
 async function main() {
@@ -92,6 +95,9 @@ async function main() {
   ws.get(lobby(null));
   check('the lobby makes the server the host, and names the race\'s car', inner.hostId === SERVER && m.lobby?.settings.vehicle === 'mtr-496r');
   check('this car introduces itself to it', ws.controls().some((c) => c.type === 'hello'));
+  const hello = ws.controls().findIndex((c) => c.type === 'hello');
+  const identify = ws.controls().findIndex((c) => c.type === 'identify');
+  check('then sends its driver key once, after the hello and never in the address', identify > hello && (ws.controls()[identify] as { driverKey?: string }).driverKey === DRIVER_KEY && !ws.url.includes(DRIVER_KEY));
 
   // The clock: only the server's pongs set it
   m.update(clock, local);
@@ -169,6 +175,16 @@ async function main() {
   check('and is back where it is', Math.abs(x - (SPEED * (clock - t0)) / 1000) < 2, `${x.toFixed(1)} m of ${((SPEED * (clock - t0)) / 1000).toFixed(1)}`);
   ws.get({ ...carAt(clock), peerId: me });
   check("a packet claiming to be this car is not taken for another's", !inner.peers.has(me));
+
+  // The flag: the finish goes to the server, and only the server's result is taken
+  const results: { final: boolean }[] = [];
+  m.onRaceResult = (r) => results.push(r);
+  m.sendRaceFinish({ type: 'finish', id: 'race7', timeS: 400, penaltyS: 0, laps: 5, bestLapMs: 79_000 });
+  check('the finish goes to the race server', ws.controls().some((c) => c.type === 'finish'));
+  const row = { peer: me, position: 1, timeS: 400, penaltyS: 0, laps: 5, bestLapMs: 79_000, dnf: false, grid: 2 };
+  ws.get({ ctl: { type: 'result', id: 'race7', final: false, rows: [row] }, from: 'peer_other' });
+  ws.get({ ctl: { type: 'result', id: 'race7', final: true, rows: [row] }, from: SERVER });
+  check("a result from another car is nothing; the server's is taken", results.length === 1 && results[0].final);
 
   // Leaving
   m.leaveRace();

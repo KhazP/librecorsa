@@ -4,6 +4,9 @@
  *   GET /api/rooms/<CODE>         WebSocket to a private room's server (room.ts)
  *   POST /api/laps, GET /api/laps, GET /api/laps/<id>   the lap boards (board.ts)
  *   GET /api/races/next, /api/races/<n>                 WebSocket to a scheduled race's server (race.ts)
+ *   POST /api/usage               one stretch of driving for the anonymous daily totals (usage.ts)
+ *   GET /api/admin/stats          the owner's numbers, with the X-Admin-Key header (admin.ts)
+ *   GET /api/races/results, GET /api/drivers/record     the open races' results (results.ts)
  * Every feature is optional: with its binding missing or its switch off (wrangler.jsonc `vars`), the config says
  * so and the game falls back to what works without a server.
  *
@@ -12,8 +15,11 @@
 import { DEFAULT_RACE_SLOT_S, nextRaceSlot, raceSlot } from "../../src/lib/net/race-schedule";
 import { challengeProblem } from "../../src/lib/net/weekly-challenge";
 import { boardDeps, ghostOf, listLaps, submitLap } from "./board";
+import { driverRecord, listRaceResults } from "./results";
 import { ROOM_CODE_RE } from "./room";
+import { adminKeyMatches, adminStats } from "./admin";
 import { turnConfigured } from "./turn";
+import { recordUsage } from "./usage";
 import type { Env } from "./types";
 
 export { RaceServer } from "./race";
@@ -28,13 +34,14 @@ export function raceSlotSeconds(env: Env): number {
 }
 
 /** What the game may use online, as the Worker is configured right now */
-export function onlineConfig(env: Env): { rooms: boolean; relay: boolean; races: boolean; board: boolean; raceSlotS: number } {
+export function onlineConfig(env: Env): { rooms: boolean; relay: boolean; races: boolean; board: boolean; raceSlotS: number; usage: boolean } {
   return {
     rooms: on(env.ONLINE_ROOMS) && Boolean(env.ROOMS),
     relay: on(env.ONLINE_ROOMS) && Boolean(env.ROOMS) && turnConfigured(env),
     races: on(env.ONLINE_RACES) && Boolean(env.RACES),
     board: on(env.ONLINE_BOARD) && Boolean(env.BOARD_DB) && Boolean(env.GHOSTS),
     raceSlotS: raceSlotSeconds(env),
+    usage: on(env.ONLINE_USAGE) && Boolean(env.BOARD_DB),
   };
 }
 
@@ -52,7 +59,7 @@ function headersFor(origin: string | null): Record<string, string> {
   if (origin) {
     headers["Access-Control-Allow-Origin"] = origin;
     headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS";
-    headers["Access-Control-Allow-Headers"] = "Content-Type";
+    headers["Access-Control-Allow-Headers"] = "Content-Type, X-Admin-Key";
     headers["Access-Control-Max-Age"] = "86400";
   }
   return headers;
@@ -108,6 +115,18 @@ export async function handleApi(request: Request, env: Env, url: URL): Promise<R
     return env.RACES.get(env.RACES.idFromName(`race-${config.raceSlotS}-${slot.index}`)).fetch(new Request(to, request));
   }
 
+  // The open races' results (results.ts), on the lap boards' database
+  if ((path === "/api/races/results" || path === "/api/drivers/record") && request.method === "GET") {
+    if (!config.races || !env.BOARD_DB) return json({ ok: false, error: "Race results are off" }, 404, origin);
+    try {
+      const answer = path === "/api/races/results" ? await listRaceResults(env.BOARD_DB, url) : await driverRecord(env.BOARD_DB, url);
+      return json(answer.body, answer.status, origin);
+    } catch (err) {
+      console.error("race results", err);
+      return json({ ok: false, error: "The race results had a problem. Try again in a moment" }, 500, origin);
+    }
+  }
+
   if (path === "/api/laps" || path.startsWith("/api/laps/")) {
     // A weekly challenge's board takes this week's laps driven to its rules (src/lib/net/weekly-challenge.ts)
     const deps = config.board ? boardDeps(env, challengeProblem) : null;
@@ -129,6 +148,32 @@ export async function handleApi(request: Request, env: Env, url: URL): Promise<R
     } catch (err) {
       console.error("lap board", err);
       return json({ ok: false, error: "The lap board had a problem. Try again in a moment" }, 500, origin);
+    }
+  }
+
+  if (path === "/api/usage" && request.method === "POST") {
+    if (!config.usage || !env.BOARD_DB) return json({ ok: false, error: "The usage counter is off" }, 404, origin);
+    if (env.USAGE_LIMIT) {
+      const { success } = await env.USAGE_LIMIT.limit({ key: request.headers.get("CF-Connecting-IP") ?? "unknown" });
+      if (!success) return json({ ok: false, error: "Too many reports" }, 429, origin);
+    }
+    try {
+      const answer = await recordUsage({ db: env.BOARD_DB, now: Date.now }, request);
+      return json(answer.body, answer.status, origin);
+    } catch (err) {
+      console.error("usage", err);
+      return json({ ok: false, error: "Not counted" }, 500, origin);
+    }
+  }
+
+  // The owner's numbers: without the right key this falls through to the plain "Not found" below
+  if (path === "/api/admin/stats" && request.method === "GET" && env.BOARD_DB && (await adminKeyMatches(request.headers.get("X-Admin-Key"), env.ADMIN_KEY))) {
+    try {
+      const answer = await adminStats({ db: env.BOARD_DB, now: Date.now }, url);
+      return json(answer.body, answer.status, origin);
+    } catch (err) {
+      console.error("admin stats", err);
+      return json({ ok: false, error: "The numbers could not be read" }, 500, origin);
     }
   }
 

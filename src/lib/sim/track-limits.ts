@@ -1,6 +1,12 @@
 /**
- * Race control for track limits. An excursion (the physics' off-track flag) is judged after the car is back on the
- * asphalt instead of killing the lap the instant a wheel crosses the line:
+ * Race control for track limits.
+ *
+ * Outside a race (practice, the time trial) the rule is strict: the moment the car is off the track (the physics'
+ * off-track flag, all four wheels off) the running lap is deleted, with no give-back. An excursion in the last sector
+ * also deletes the next lap, as it gave the car a run onto the straight; a restart clears that.
+ *
+ * In a race an excursion is judged after the car is back on the asphalt instead of killing the lap the instant a wheel
+ * crosses the line:
  *
  *   - a touch shorter than `MIN_EXCURSION_S` is ignored;
  *   - cutting the inside of a corner is always a strike unless the time is given back;
@@ -9,8 +15,8 @@
  *   - a strike can be cancelled by giving the advantage back within `GIVE_BACK_WINDOW_S`: lose the time gained
  *     (with a reference lap), or lift and coast for long enough (without one).
  *
- * In practice a strike deletes the lap. In a race every strike is a warning, and every `STRIKES_PER_PENALTY`th strike
- * is a time penalty: +3 s the first time, +5 s after that.
+ * Every strike is a warning, and every `STRIKES_PER_PENALTY`th strike is a time penalty: +3 s the first time, +5 s
+ * after that.
  */
 import type { TrackLimitsReason, TrackLimitsStatus } from "@/types/f1";
 
@@ -46,6 +52,7 @@ export const STRIKES_PER_PENALTY = 3;
 export const FIRST_PENALTY_S = 3;
 export const REPEAT_PENALTY_S = 5;
 
+/** "practice": strict limits, any driving outside a race; "race": judged, from the lights to the flag */
 export type TrackLimitsSession = "practice" | "race";
 
 /** One frame of the player's car */
@@ -54,6 +61,10 @@ export interface TrackLimitsFrame {
   nowMs: number;
   dtS: number;
   lapCount: number;
+  /** The running lap's clock (ms): it going back is a lap starting, also the first crossing after a restart */
+  lapTimeMs?: number;
+  /** The sector the car is in (strict limits: an excursion in the last one also deletes the next lap) */
+  sector?: 1 | 2 | 3;
   /** Lap distance (m) */
   distM: number;
   offTrack: boolean;
@@ -111,6 +122,12 @@ export class TrackLimitsMonitor {
   private penaltyS = 0;
   private lastOnTrackPosition: number | null = null;
   private exc: Excursion | null = null;
+  /** Strict limits: the car was off the track last frame, and the next lap is to be deleted too */
+  private wasOff = false;
+  private nextLapDeleted = false;
+  /** Strict limits: the lap count and lap clock last frame (null until the first frame of a run) */
+  private seenLapCount: number | null = null;
+  private seenLapTimeMs: number | null = null;
   /** The last frame was judged (`TrackLimitsFrame.active`); a verdict waiting while not is kept off the HUD */
   private active = true;
   private message: TrackLimitsStatus["message"] = null;
@@ -133,12 +150,21 @@ export class TrackLimitsMonitor {
     this.penaltyS = 0;
     this.lastOnTrackPosition = null;
     this.exc = null;
+    this.wasOff = false;
+    this.nextLapDeleted = false;
+    this.seenLapCount = null;
+    this.seenLapTimeMs = null;
     this.active = true;
     this.message = null;
   }
 
   get mode(): TrackLimitsSession {
     return this.session;
+  }
+
+  /** Strict limits: an excursion in the last sector has the next lap deleted too (cleared by `reset`) */
+  get nextLapForfeit(): boolean {
+    return this.nextLapDeleted;
   }
 
   /** Time penalties so far (s) */
@@ -158,6 +184,7 @@ export class TrackLimitsMonitor {
   /** Advances the judging by one frame; returns the race-control decision taken this frame, if any */
   update(f: TrackLimitsFrame): TrackLimitsEvent | null {
     this.active = f.active;
+    if (this.session === "practice") return this.strict(f);
     if (!f.active) {
       // An excursion still in progress can't be finished by the driver any more (the autopilot, the lights or the
       // flag took over): forget it. One already back on the track owes a verdict: it waits, its clocks stopped,
@@ -217,6 +244,49 @@ export class TrackLimitsMonitor {
         : null;
     s.message = this.message && nowMs - this.message.atMs < MESSAGE_HOLD_MS ? this.message : null;
     return s;
+  }
+
+  /**
+   * Strict limits, one frame: the lap is deleted the moment the car is off the track, and an excursion in the last
+   * sector deletes the lap that starts next too (said again as that lap starts). Not driving (the autopilot) judges
+   * nothing, but the lap starts are still followed.
+   */
+  private strict(f: TrackLimitsFrame): TrackLimitsEvent | null {
+    const started =
+      this.seenLapCount !== null &&
+      (f.lapCount !== this.seenLapCount || (f.lapTimeMs !== undefined && this.seenLapTimeMs !== null && f.lapTimeMs < this.seenLapTimeMs));
+    this.seenLapCount = f.lapCount;
+    this.seenLapTimeMs = f.lapTimeMs ?? null;
+    const wasOff = this.wasOff;
+    this.wasOff = f.offTrack && f.active;
+    if (!f.active) {
+      // A lap the autopilot starts is not the player's: the next lap's deletion lapses with it
+      if (started) this.nextLapDeleted = false;
+      return null;
+    }
+
+    let deleted = false;
+    if (started && this.nextLapDeleted) {
+      this.nextLapDeleted = false;
+      deleted = true;
+      this.message = { kind: "lap_invalid", text: "Track limits · lap deleted", detail: "Off before the line", atMs: f.nowMs };
+    }
+    if (f.offTrack) {
+      const lastSector = f.sector === 3;
+      if (!wasOff || (lastSector && !this.nextLapDeleted)) {
+        deleted = true;
+        this.message = {
+          kind: "lap_invalid",
+          text: "Track limits · lap deleted",
+          detail: lastSector ? "Next lap too" : "Off the track",
+          atMs: f.nowMs,
+        };
+      }
+      if (lastSector) this.nextLapDeleted = true;
+    }
+    if (!deleted) return null;
+    this.totalStrikes++;
+    return { kind: "lap_invalid", lap: f.lapCount };
   }
 
   private startExcursion(f: TrackLimitsFrame): Excursion {

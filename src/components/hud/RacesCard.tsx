@@ -2,6 +2,8 @@
 
 import React, { useEffect, useState } from "react";
 import { countdownLabel, nextRaceSlot } from "@/lib/net/race-schedule";
+import { fetchDriverRecord, fetchWeekRaceResults, type DriverRecord, type WeekStanding } from "@/lib/net/race-results";
+import { challengeAt } from "@/lib/net/weekly-challenge";
 import type { ScheduledRaceStatus } from "@/lib/sim/multiplayer-sync";
 import { focusOnHover } from "@/components/menu/useFocusNav";
 
@@ -16,6 +18,8 @@ export interface RacesCardProps {
   entry: ScheduledRaceStatus;
   /** Who is in the race this player entered */
   entrants: { id: string; name: string; code: string; me: boolean }[];
+  /** The name the player races under: their record is shown by it */
+  driverName?: string;
   onJoin: () => void;
   onLeave: () => void;
 }
@@ -25,7 +29,7 @@ const CHIP =
   "inline-flex h-7 shrink-0 items-center rounded-full px-3 font-f1-mono text-[11px] font-extrabold tracking-[0.06em] whitespace-nowrap text-[#C5CBD8] shadow-[inset_0_0_0_1px_#262B3D]";
 
 /** The scheduled races: where they are, when the next one starts, the button to enter it, and who else has */
-export const RacesCard: React.FC<RacesCardProps> = ({ trackName, carTitle, slotS, laps, entry, entrants, onJoin, onLeave }) => {
+export const RacesCard: React.FC<RacesCardProps> = ({ trackName, carTitle, slotS, laps, entry, entrants, driverName, onJoin, onLeave }) => {
   // The countdown ticks every second
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -36,6 +40,7 @@ export const RacesCard: React.FC<RacesCardProps> = ({ trackName, carTitle, slotS
   const startsMs = entered && entry.startsMs !== null ? entry.startsMs : nextRaceSlot(now, slotS).startsMs;
   const every = slotS % 60 === 0 ? `${slotS / 60} minutes` : `${slotS} seconds`;
   const racing = entered && now >= startsMs;
+  const results = useRaceResults(driverName, entry.state);
 
   return (
     <section className={CARD} aria-label="Races">
@@ -55,6 +60,7 @@ export const RacesCard: React.FC<RacesCardProps> = ({ trackName, carTitle, slotS
           {racing ? "Your race is under way" : entered ? "until your race" : "until the next race"}
         </span>
       </div>
+      {results ? <RaceResultsLines standings={results.standings} record={results.record} /> : null}
       {entered ? (
         <>
           <p className="m-0 text-[13px] leading-snug text-[#8E96AA]">
@@ -102,3 +108,51 @@ export const RacesCard: React.FC<RacesCardProps> = ({ trackName, carTitle, slotS
     </section>
   );
 };
+
+/** The week's top drivers and the player's own record, read again when the player's entry changes (after a race) */
+function useRaceResults(driverName: string | undefined, entryState: ScheduledRaceStatus["state"]) {
+  const [results, setResults] = useState<{ standings: WeekStanding[]; record: DriverRecord | null } | null>(null);
+  useEffect(() => {
+    let live = true;
+    void Promise.all([fetchWeekRaceResults(challengeAt(Date.now()).id), driverName ? fetchDriverRecord(driverName) : Promise.resolve(null)]).then(
+      ([week, record]) => {
+        if (live) setResults(week ? { standings: week.standings, record } : null);
+      }
+    );
+    return () => {
+      live = false;
+    };
+  }, [driverName, entryState]);
+  return results;
+}
+
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+
+/** This week's top five by wins then podiums, and the player's record in one line */
+const RaceResultsLines: React.FC<{ standings: WeekStanding[]; record: DriverRecord | null }> = ({ standings, record }) => (
+  <div className="flex flex-col gap-1.5">
+    <span className="lc-lbl text-[#8E96AA]">This week</span>
+    {standings.length === 0 ? (
+      <p className="m-0 text-[13px] text-[#8E96AA]">No race results yet.</p>
+    ) : (
+      <ol className="m-0 flex list-none flex-col gap-0.5 p-0" aria-label="This week's top drivers">
+        {standings.slice(0, 5).map((s, i) => (
+          <li key={`${s.name}-${i}`} className="flex items-baseline justify-between gap-3 text-[13px]">
+            <span className="min-w-0 truncate font-semibold">
+              <span className="font-f1-mono text-[#8E96AA] tabular-nums">{i + 1}</span> {s.name}
+            </span>
+            <span className="shrink-0 font-f1-mono text-[12px] text-[#C5CBD8] tabular-nums">
+              {plural(s.wins, "win", "wins")} · {plural(s.podiums, "podium", "podiums")}
+            </span>
+          </li>
+        ))}
+      </ol>
+    )}
+    {record && record.starts > 0 ? (
+      <p className="m-0 text-[13px] text-[#C5CBD8]">
+        You: {plural(record.starts, "race", "races")} · {plural(record.wins, "win", "wins")} · {plural(record.podiums, "podium", "podiums")}
+        {record.bestFinish !== null ? ` · best P${record.bestFinish}` : ""}
+      </p>
+    ) : null}
+  </div>
+);

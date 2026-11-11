@@ -48,6 +48,7 @@ import {
   MessageSquarePlus,
   MonitorCog,
   Newspaper,
+  ShieldCheck,
   Play,
   Route,
   TabletSmartphone,
@@ -708,6 +709,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
       run: () => openPanel("request"),
     },
     { id: "press", label: "Press", detail: "Coverage and press kit", icon: Newspaper, href: withBasePath("/press") },
+    { id: "privacy", label: "Privacy", detail: "What the game keeps and sends", icon: ShieldCheck, href: withBasePath("/privacy") },
     { id: "support", label: "Buy me a coffee", detail: "Support development", icon: Coffee, href: SUPPORT_URL },
     { id: "github", label: "GitHub", detail: "Source code", icon: CodeXml, href: REPO_URL },
   ];

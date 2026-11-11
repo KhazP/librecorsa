@@ -20,7 +20,7 @@ import type { CarId } from "@/lib/cars/car-registry";
 import { type BuiltTrackData } from "@/lib/track-data";
 import { HUD_TOGGLE_EVENT } from "@/lib/input/bindings";
 import { TrackMinimap } from "./TrackMinimap";
-import { LapPanel, TimingTower } from "./hud/TimingPanels";
+import { ChallengeTargetPanel, LapPanel, TimingTower } from "./hud/TimingPanels";
 import { SpeedCluster } from "./hud/SpeedCluster";
 import { TyrePanel } from "./hud/TyrePanel";
 import { StartLights } from "./hud/StartLights";
@@ -58,6 +58,10 @@ import { PhoneHud, usePhoneLayout } from "./hud/styles/PhoneHud";
 import { useUiZoom } from "@/lib/ui-zoom";
 import { buildHudMap, revRangeOf, useLapInvalid, type HudDesignProps } from "./hud/styles/hud-style-parts";
 import type { HudPreset } from "@/lib/settings/player-settings";
+import { PodiumOverlay } from "./hud/PodiumOverlay";
+import type { NextRaceProps } from "./hud/RaceResults";
+import type { PodiumUi } from "@/lib/render/podium-shot";
+import type { RaceRecord } from "@/lib/sim/race-history";
 
 /** The full-screen HUD styles; Classic and Minimal use the corner panels below */
 const HUD_STYLES: Partial<Record<HudPreset, { component: React.FC<HudDesignProps>; bottomClearance: number }>> = {
@@ -153,6 +157,8 @@ interface F1TelemetryHudProps extends MultiplayerPanelProps {
   onRestartRace?: () => void;
   onBackToLobby?: () => void;
   backToLobbyLabel?: string;
+  /** polish:B after the flag: the podium shot (before the table), the player's last races, the next open race */
+  raceEnd?: { podium: PodiumUi; onSkipPodium: () => void; history: readonly RaceRecord[]; nextRace?: NextRaceProps };
   /** Instant replay in progress: only the transport bar shows */
   replay?: React.ComponentProps<typeof ReplayBar> | null;
   /** On-screen pedals and steering (touch screens) */
@@ -163,6 +169,8 @@ interface F1TelemetryHudProps extends MultiplayerPanelProps {
   weather?: WeatherHudState | null;
   /** The room in the page's invite link: the pause menu opens on it until a peer is connected */
   inviteRoom?: string | null;
+  /** polish:A — the time trial's target while the weekly challenge is driven (best, fastest, place) */
+  challengeTarget?: import("@/lib/net/challenge-target").ChallengeTarget | null;
 }
 
 /** The last DRS detection crossed (f12026-car), shown for 2.5 s after it happens */
@@ -222,10 +230,13 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
   const mirrorRect = props.virtualMirror && !phone && typeof window !== "undefined" ? virtualMirrorRect(window.innerWidth, window.innerHeight) : null;
   const mirrorTop = mirrorRect ? mirrorRect.y + mirrorRect.h + 10 : null;
   const uiZoom = useUiZoom();
-  const showResults = raceState(race).classified && !props.resultsClosed;
+  // polish:B the podium shot comes first: the table waits for it, and the HUD gives it the screen
+  const podiumStage = props.raceEnd?.podium.stage;
+  const podiumUp = podiumStage === "playing";
+  const showResults = raceState(race).classified && !props.resultsClosed && podiumStage !== "waiting" && !podiumUp;
   // Paused or in a replay, the HUD stays mounted (folds, lap history and timers carry on) but hides and takes no input;
   // the results card owns the D-pad and keys while it is up
-  const hudMode: HudMode = paused || props.replay ? "hidden" : showResults ? "results" : "live";
+  const hudMode: HudMode = paused || props.replay || podiumUp ? "hidden" : showResults ? "results" : "live";
   const hudModeRef = useRef(hudMode);
   hudModeRef.current = hudMode;
   // The HUD pad button (R3 by default) clears every panel off the screen; start lights and alerts stay
@@ -264,6 +275,8 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
       </>
     ) : null;
   const weatherNode = props.weather && !phone && !minimal && !lightsPhase ? <WeatherBadge weather={props.weather} variant="panel" /> : null;
+  // polish:A — the time trial's target sits where a race's split gaps would
+  const leftNode = gapsNode ?? (props.challengeTarget && !race && !phone ? <ChallengeTargetPanel target={props.challengeTarget} /> : null);
 
   const showTyres = classic;
   const showMap = classic;
@@ -341,7 +354,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
           lapInvalid={lapInvalid}
           towerGaps={hud?.towerGaps}
           mapMode={hud?.mapMode}
-          leftExtra={gapsNode}
+          leftExtra={leftNode}
           rightExtra={weatherNode}
         />
       ) : (
@@ -349,7 +362,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
         <div className="absolute top-3 left-3 flex flex-col gap-2 sm:top-4 sm:left-4" style={corner("top left")}>
           {race ? <TimingTower race={race} trackCode={trackInfo.country.slice(0, 3).toUpperCase()} gaps={hud?.towerGaps} /> : null}
           <LapPanel telemetry={telemetry} deltaS={deltaS} variant={minimal ? "minimal" : "full"} lapInvalid={lapInvalid} />
-          {gapsNode}
+          {leftNode}
           {weatherNode}
         </div>
       )}
@@ -588,10 +601,16 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
             onBackToLobby={props.onBackToLobby}
             backLabel={props.backToLobbyLabel}
             trackLimitStrikes={telemetry.trackLimits?.totalStrikes ?? 0}
+            history={props.raceEnd?.history}
+            nextRace={props.raceEnd?.nextRace}
           />
         </div>
       ) : null}
     </div>
+
+    {podiumUp && !paused && props.raceEnd ? (
+      <PodiumOverlay rows={props.raceEnd.podium.rows} trackName={trackInfo.name} onSkip={props.raceEnd.onSkipPodium} />
+    ) : null}
 
     {/* Instant replay: only the badge and the transport bar show (under the pause menu, neither) */}
     {props.replay && !paused ? (

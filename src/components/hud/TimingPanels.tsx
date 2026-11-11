@@ -19,6 +19,7 @@ import {
   COMPOUND_COLORS,
 } from "./hud-format";
 import { LibreCorsaMark } from "../ui/LibreCorsaLogo";
+import { challengePlaceLabel, type ChallengeTarget } from "@/lib/net/challenge-target";
 
 /** Black / white chequer tile for finished-car markers */
 const CHEQUER_BG = "repeating-conic-gradient(#F5F7FA 0% 25%, #08090D 0% 50%) 0 0 / 6px 6px";
@@ -278,3 +279,27 @@ export const LapPanel: React.FC<LapPanelProps> = ({ telemetry, deltaS, variant =
     </section>
   );
 };
+
+/** The time trial's target while the weekly challenge is driven: the player's best, the week's fastest, the place */
+export const ChallengeTargetPanel: React.FC<{ target: ChallengeTarget }> = ({ target }) => (
+  <section aria-label="This week's challenge" className={`w-[256px] rounded-[22px] px-3.5 py-3 ${HUD_GLASS}`}>
+    <div className="flex items-center justify-between gap-2">
+      <span className={HUD_LBL} style={{ color: HUD_VOLT }}>
+        Weekly challenge
+      </span>
+    </div>
+    <div className="mt-2 flex items-center justify-between gap-2">
+      <div>
+        <div className={HUD_LBL}>Your best</div>
+        <div className="lc-data text-[15px] text-[#F5F7FA]">{formatLapTime(target.bestMs)}</div>
+      </div>
+      <div className="text-right">
+        <div className={HUD_LBL} style={{ color: HUD_PURPLE }}>
+          Fastest
+        </div>
+        <div className="lc-data text-[15px] text-[#F5F7FA]">{formatLapTime(target.leaderMs)}</div>
+      </div>
+    </div>
+    <div className="lc-data mt-2 border-t border-[#262B3D] pt-2 text-[12px] text-[#C5CBD8]">{challengePlaceLabel(target)}</div>
+  </section>
+);

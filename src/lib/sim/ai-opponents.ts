@@ -2221,7 +2221,10 @@ export class AiOpponentField {
           penaltyS: p.penaltyS || undefined,
         };
       }),
-      results: playerFinished ? classify(orderedProgress, L, this.raceLaps, final) : undefined,
+      // polish:B each row's place on the grid (classify keeps the order it is given)
+      results: playerFinished
+        ? classify(orderedProgress, L, this.raceLaps, final).map((r, i) => ({ ...r, gridPosition: (orderedProgress[i].grid ?? 0) + 1 }))
+        : undefined,
       resultsFinal: final,
       splits: this.phase === 'racing' ? this.playerSplits.compute(this.splitTimer, this.raceTimeS, orderedProgress) : undefined,
       raceControl: this.raceControlFeed(),

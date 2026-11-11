@@ -35,7 +35,8 @@
   //   ONLINE_ROOMS  room codes are paired by this Worker (off: the public PeerJS broker pairs them, as before)
   //   ONLINE_BOARD  the online lap boards (off: lap times stay in each player's browser)
   //   ONLINE_RACES  scheduled races on this Worker's race server (off: no scheduled races; rooms are untouched)
-  "vars": { "ONLINE_ROOMS": "on", "ONLINE_BOARD": "on", "ONLINE_RACES": "on" },
+  //   ONLINE_USAGE  the anonymous usage counter: minutes driven per day, circuit, car, mode, country (off: nothing sent)
+  "vars": { "ONLINE_ROOMS": "on", "ONLINE_BOARD": "on", "ONLINE_RACES": "on", "ONLINE_USAGE": "on" },
   // Private rooms: one small object per room code, asleep between messages (cloudflare/api/room.ts).
   // Scheduled races: one object per race, which passes every car's state on while it runs (cloudflare/api/race.ts)
   "durable_objects": {
@@ -45,8 +46,11 @@
     ]
   },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["RoomServer", "RaceServer"] }],
-  // Room connections one address may open per minute
-  "ratelimits": [{ "name": "ROOM_LIMIT", "namespace_id": "1001", "simple": { "limit": 30, "period": 60 } }],
+  // Room connections one address may open per minute; usage reports one address may send per minute
+  "ratelimits": [
+    { "name": "ROOM_LIMIT", "namespace_id": "1001", "simple": { "limit": 30, "period": 60 } },
+    { "name": "USAGE_LIMIT", "namespace_id": "1002", "simple": { "limit": 10, "period": 60 } }
+  ],
   // Workers caching: the circuit GLBs from R2 are kept at the edge, tiered, with byte ranges served from the cache
   "cache": { "enabled": true },
   // Workers Logs: the Worker's errors and requests show up in the dashboard
