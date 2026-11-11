@@ -108,6 +108,33 @@ console.log('The autopilot brings each engine round at the slow pace (Rwanda col
     }
     return { dist, beyond, mode: cd.mode };
   };
+  /** The fallback: the autopilot off, the car braked gently to a stop on its own inputs */
+  const stop = (make: () => SimulatorCar) => {
+    const sim = make();
+    // On the main straight: the stop holds the wheel straight, as a car that has lost its driver would
+    sim.teleportToDistance(track.totalLengthM - 200, 40, 0);
+    const cd = new CoolDown();
+    let finite = true;
+    let t = 0;
+    let peakDecel = 0;
+    let prevV = sim.vxMs;
+    for (; t < 40 && (t < 1 || Math.abs(sim.vxMs) > 0.3); t += DT) {
+      cd.update(sim, { finished: true, retired: true, roadHalfWidthM: 6 }, DT);
+      sim.step(DT, cd.inputs());
+      finite &&= Number.isFinite(sim.vxMs) && Number.isFinite(sim.worldPosition.x);
+      if (t > 0.5) peakDecel = Math.max(peakDecel, (prevV - sim.vxMs) / DT);
+      prevV = sim.vxMs;
+    }
+    return { finite, t, speed: sim.vxMs, mode: cd.mode, autopilot: sim.aiAutopilot, peakG: peakDecel / 9.81 };
+  };
+  for (const [name, make] of cars) {
+    const s = stop(make);
+    check(
+      `${name}: the gentle stop brings the car to rest`,
+      s.mode === 'stop' && !s.autopilot && s.finite && Math.abs(s.speed) <= 0.3 && s.t > 3 && s.peakG < 2.5,
+      `at rest from 144 km/h in ${s.t.toFixed(1)} s, ${s.peakG.toFixed(1)} g at most`
+    );
+  }
   for (const [name, make] of cars) {
     const racing = run(make, false);
     const cool = run(make, true);

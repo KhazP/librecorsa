@@ -15,7 +15,7 @@ const STALL_S = 6;
 const OFF_ROAD_M = 3;
 const OFF_ROAD_S = 4;
 /** Brake pressure of the gentle stop (0..1) */
-const STOP_BRAKE = 0.35;
+const STOP_BRAKE = 0.2;
 
 /** off: racing (or no race); drive: the autopilot brings the car round; stop: the car brakes to a halt */
 export type CoolDownMode = 'off' | 'drive' | 'stop';
