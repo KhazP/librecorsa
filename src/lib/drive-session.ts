@@ -43,6 +43,7 @@ import { peerWakeEmitters, TrackEnvironment } from "@/lib/sim/track-environment"
 import type { WakeEmitterCar } from "@/lib/sim/aero-wake";
 import { GamepadHaptics } from "@/lib/sim/gamepad-haptics";
 import { getMultiplayerManager, type InterpolatedPeerState, type P2PConnectionStatus } from "@/lib/sim/multiplayer-sync";
+import { flagMultiplayerRace } from "@/lib/sim/mp-flags"; // polish:D
 import { MultiplayerRace, type MultiplayerRaceFrame } from "@/lib/sim/race-session";
 import { GhostPlayer, LapRecorder } from "@/lib/sim/lap-recorder";
 import { ReplayBuffer } from "@/lib/sim/replay-buffer";
@@ -1748,6 +1749,10 @@ export class DriveSession {
           }
           p.passThrough = through;
           if (driving && solid) resolvePlayerVsRemoteCar(physics, p, dtSeconds);
+        }
+        // polish:D yellow flags: a car stopped, off or going the wrong way on the road ahead (mp-flags.ts)
+        if (physics.telemetry.race && mpFrame.phase === "racing") {
+          flagMultiplayerRace(mpRace, physics.telemetry.race, track, samePeers, dtSeconds, mpFrame.raceTimeS, physics.sMeters);
         }
       } else {
         for (const p of samePeers) p.passThrough = false;
