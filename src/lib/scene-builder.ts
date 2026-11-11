@@ -64,6 +64,8 @@ const DECAL_NODES: Record<string, number> = {
   Track_Runoff_Decals: -2,
   Track_Kerbs: -1,
   Track_Kerbs_Visual: -1,
+  // RISE Motordrome's kerb blocks lie 5 mm over the hump the cars drive on (scripts/rwanda-official/bl_kerbs.py)
+  Track_Kerb_Blocks: -2,
   Track_Runoff_Paint: -1,
 };
 /**
@@ -114,6 +116,7 @@ const SHADOW_RECEIVE_ONLY = new Set([
   "Track_Runoff_Decals",
   "Track_Kerbs",
   "Track_Kerbs_Visual",
+  "Track_Kerb_Blocks",
 ]);
 
 const COLLIDER_DEBUG_COLOURS: Record<string, number> = {

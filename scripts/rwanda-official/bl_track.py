@@ -46,6 +46,7 @@ def materials():
         'paint': mat('Paint_White', color=(0.95, 0.95, 0.95), rough=0.6),
         'kerb': mat('Kerb_RedWhite', tex='kerb', rough=0.5),
         'kerb_rw': mat('Kerb_Rwanda', tex='kerb_flag', rough=0.5),
+        'kerb_base': mat('Kerb_Base', tex='concrete', rough=0.8),     # the hump under the blocks (bl_kerbs.py)
         'runoff': mat('Runoff_Paint', tex='runoff', rough=0.7),
         'grass': mat('Terrain_Grass', tex='grass', rough=0.95, vcol=True),
         'pit': mat('Track_Pitlane_Asphalt', tex='pit_asphalt', rough=0.85),
@@ -101,17 +102,23 @@ def markings(T, m):
     return p.build('Track_Markings', [m['paint']], uv=False)
 
 
+def signature(T):
+    """Per station: the kerbs there wear the flag's colours"""
+    sig = np.zeros(T.n, bool)
+    k0 = np.flatnonzero(np.isin(T.turn, SIGNATURE_TURNS))
+    for off in range(-40, 51):
+        sig[(k0 + off) % T.n] = True
+    return sig
+
+
 def kerbs(T, m):
+    """What the cars drive on: a smooth hump. Its blocks, the kerb one sees, are laid over it by bl_kerbs.py"""
     idx = T.idx
     n = len(idx)
     s = idx.astype(float)
     dk = np.array([0.0, 0.25, 0.7, 1.15, 1.5])
     hk = np.array([0.0, 0.018, 0.032, 0.026, 0.0])
-    sig = np.zeros(T.n, bool)
-    k0 = np.flatnonzero(np.isin(T.turn, SIGNATURE_TURNS))
-    for off in range(-40, 51):
-        sig[(k0 + off) % T.n] = True
-    sig = sig[idx]
+    sig = signature(T)[idx]
     p = Parts()
     for side in (0, 1):
         kf = T.kerb[side][idx]
