@@ -8,6 +8,7 @@ game's online side (`cloudflare/api`). Every part of it is optional and has its 
 | Room server (`api/room.ts`) | Room codes paired by this site, "room not found" at once, relay servers for networks that block a direct link | A Durable Object per room, asleep between messages; Cloudflare TURN for the relay | `ONLINE_ROOMS` |
 | Lap boards (`api/board.ts`) | The online leaderboard and the weekly challenge's board | D1 (`librecorsa-board`) and R2 (`librecorsa-ghosts`) | `ONLINE_BOARD` |
 | Race server (`api/race.ts`) | Scheduled races | A Durable Object per race, which passes every car's state on while it runs | `ONLINE_RACES` |
+| Usage counter (`api/usage.ts`) | Nothing they see: minutes driven per day, circuit, car, mode and country, for the owner | D1 (`librecorsa-board`, table `usage_daily`) | `ONLINE_USAGE` |
 
 The game asks `GET /api/config` at run time, so a switch set to `"off"` (then `npx wrangler deploy`, or a push to
 main) takes effect without a new build of the game, which falls back by itself: room codes go through the public
@@ -33,6 +34,7 @@ npx wrangler r2 bucket create librecorsa-ghosts
 npx wrangler d1 migrations apply librecorsa-board --remote
 npx wrangler secret put TURN_KEY_ID                # optional: a TURN key from the Cloudflare dashboard (Realtime > TURN)
 npx wrangler secret put TURN_KEY_API_TOKEN
+npx wrangler secret put ADMIN_KEY                  # optional: the key of the private /admin page (a long random string)
 ```
 
 Build the game with `NEXT_PUBLIC_ONLINE_API=/api` (the deploy workflow does) and deploy. Without that variable the
@@ -47,12 +49,12 @@ npx wrangler dev --port 8787
 ```
 
 and in `.env.local` for `npm run dev`: `NEXT_PUBLIC_ONLINE_API=http://127.0.0.1:8787/api`. In `.dev.vars` (not
-committed): `DEV_ORIGINS=http://127.0.0.1:3000,http://localhost:3000`, and `RACE_SLOT_S=120` for a race every two
+committed): `DEV_ORIGINS=http://127.0.0.1:3000,http://localhost:3000`, `ADMIN_KEY=<any local key>` for `/admin`, and `RACE_SLOT_S=120` for a race every two
 minutes instead of twenty.
 
 The checks run without Cloudflare: `npm run verify` covers the room server, the race server (both sides) and the
 boards on an in-memory database (`scripts/verify-room-server.ts`, `verify-race-server.ts`, `verify-race-client.ts`,
-`verify-leaderboard.ts`).
+`verify-leaderboard.ts`), and the usage counter and the admin numbers (`verify-usage.ts`).
 
 ## Rules worth knowing
 
@@ -61,5 +63,15 @@ boards on an in-memory database (`scripts/verify-room-server.ts`, `verify-race-s
   the server ever sends a lobby or a start; a socket speaks for one car.
 - The boards check laps for plausibility (`api/lap-check.ts`) but can't prove them: friendly, not a referee.
 - Driver names are claimed with a driver key kept in the browser; the board stores only its SHA-256.
+- The usage counter: when a stretch of driving of half a minute or more ends (back to the menu, another circuit, car
+  or kind of session, the flag, the page hidden or closed), the game sends `POST /api/usage` with the circuit, the car
+  model, the mode (`practice`, `time_trial`, `ai_race`, `open_race`, `room_race`) and the minutes. The Worker checks
+  each field, caps the minutes at 240, limits one address to 10 reports a minute (`USAGE_LIMIT`), and adds one session
+  and the minutes to that day's row in `usage_daily` (migration `0003_usage.sql`) with the country Cloudflare puts on
+  the request. No address, player id or cookie is stored.
+- The owner's numbers: `GET /api/admin/stats?days=30` (1 to 90 days) with the header `X-Admin-Key`, read by the page
+  `/admin` (not linked, not indexed; it asks for the key and keeps it for the tab). Set the key once with
+  `npx wrangler secret put ADMIN_KEY`, and locally in `.dev.vars`. Without the secret, or with any other key, the route
+  answers 404 like any unknown path.
 - The weekly challenge and the race times follow from the clock (`src/lib/net/weekly-challenge.ts`,
   `race-schedule.ts`): change the rotation there.
