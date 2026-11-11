@@ -9,7 +9,7 @@ import { lapConditionsNow, WET_LAP_WATER_MM } from "@/lib/sim/lap-types";
 import type { SimRealism } from "@/lib/sim/sim-realism";
 import { getOnlineConfig } from "./online-config";
 import { sendUsage, UsageClock, type UsageMode } from "./usage";
-import { challengeAt, fitsChallenge } from "./weekly-challenge";
+import { challengeAt, challengeCompound, fitsChallenge } from "./weekly-challenge";
 
 export interface UsageState {
   /** On track (not in the menus or loading) */
@@ -42,7 +42,8 @@ type Settled = Omit<UsageState, "lineWaterMm"> & { wet: boolean };
 
 /** True when practice so driven is the weekly challenge (the test its board uses) */
 export function onChallenge(s: Pick<Settled, "trackId" | "vehicle" | "assists" | "realism" | "wet">): boolean {
-  const conditions = lapConditionsNow({ assists: s.assists, compound: "medium", lineWaterMm: s.wet ? WET_LAP_WATER_MM : 0, realism: s.realism, vehicle: s.vehicle });
+  // The tyre is taken as the challenge's: the counter asks which mode was driven, not whether a lap would count
+  const conditions = lapConditionsNow({ assists: s.assists, compound: challengeCompound(s.vehicle), lineWaterMm: s.wet ? WET_LAP_WATER_MM : 0, realism: s.realism, vehicle: s.vehicle });
   return fitsChallenge({ trackId: s.trackId, vehicle: s.vehicle, conditions }, challengeAt(Date.now()));
 }
 
