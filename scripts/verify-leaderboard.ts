@@ -13,6 +13,7 @@ import { LAP_SAMPLE_STRIDE, PHYSICS_VERSION, lapBoardClass, lapPhysicsVersion, p
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { handleApi } from '../cloudflare/api/index';
+import { parseRemoteBoard } from '../src/lib/net/leaderboard';
 import { boardDeps, driverNameKey, listLaps, submitLap, type BoardDeps } from '../cloudflare/api/board';
 import type { Env } from '../cloudflare/api/types';
 import { fakeD1, fakeR2 } from './lib/fake-cloudflare';
@@ -166,7 +167,7 @@ const post = async (rec: unknown, driverKey: string | null = KEY_A, extra: Recor
   return { status: res.status, body: res.body as PostAnswer };
 };
 type Row = { id: string; name: string; lapTimeMs: number; conditions: { assists: string; realism: string; surface: string; physicsVersion: number } };
-type ListAnswer = { laps: Row[]; total: number; physics: number[]; me: { rank: number; lap: Row } | null };
+type ListAnswer = { laps: Row[]; total: number; physics: number[]; me: { rank: number; lap: Row; aboveMs: number | null } | null };
 const list = async (query = '', physics = CURRENT) => {
   const res = await listLaps(deps, new URL(`https://librecorsa.test/api/laps?track=rwanda_official_short&vehicle=vf26&physics=${physics}${query}`));
   return { status: res.status, body: res.body as ListAnswer };
@@ -227,6 +228,17 @@ async function main(): Promise<void> {
     const { body } = await list('&name=Test%20Driver');
     check('board: fastest first, everyone once', body.laps.length === 2 && body.laps[0].name === 'Quick Rival' && body.laps[1].name === 'Test Driver');
     check('board: the first driver is now second of two', body.me?.rank === 2 && body.total === 2);
+    check('board: their place says the time of the place above', body.me?.aboveMs === body.laps[0].lapTimeMs, String(body.me?.aboveMs));
+    const top = (await list('&name=Quick%20Rival')).body;
+    check('board: at the top there is no place above', top.me?.rank === 1 && top.me.aboveMs === null);
+    const parse = (me: unknown) => parseRemoteBoard({ ...body, me }, 'rwanda_official_short', 'vf26', CURRENT, {});
+    check(
+      'board: the game reads the place above, and only a time faster than the player\'s own',
+      parse(body.me)?.me?.aboveMs === body.laps[0].lapTimeMs &&
+        parse({ ...body.me, aboveMs: undefined })?.me?.aboveMs === null &&
+        parse({ ...body.me, aboveMs: body.me!.lap.lapTimeMs + 1 })?.me?.aboveMs === null &&
+        parse({ ...body.me, aboveMs: 'x' })?.me?.rank === 2
+    );
     const assisted = (await list('&assists=assisted&name=Test%20Driver')).body;
     check('board: narrowed to assisted laps, only the assisted driver, first', assisted.laps.length === 1 && assisted.total === 1 && assisted.me?.rank === 1);
   }
