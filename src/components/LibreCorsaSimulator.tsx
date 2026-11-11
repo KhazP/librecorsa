@@ -586,6 +586,9 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       const roster = mp.lobby?.players ?? [];
       const profile = settingsRef.current.profile;
       const race = new MultiplayerRace(start, track.totalLengthM, mp.localPeerId, profile, roster);
+      // The official result: the finish goes to the race server or the host; a room's host keeps the book itself
+      race.onFinish = (finish) => mp.sendRaceFinish(finish);
+      if (mp.isHost && !mp.inScheduledRace) race.collectResults((result) => mp.sendRaceResult(result));
       startSession({ kind: "mp", race });
       // The class may rule out the current car, or the race names one car for everyone (a scheduled race): take it,
       // or the first allowed one (after the session reset, so the swap finds no replay or AI field to carry over)
@@ -993,6 +996,12 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       if (pendingRaceStart?.id === id) pendingRaceStart = null;
       if (session && mpRaceOf(session.race)?.start.id === id) endMpRace(false);
     };
+    mp.onRaceFinish = (peerId, finish) => {
+      if (session) mpRaceOf(session.race)?.takeFinish(peerId, finish);
+    };
+    mp.onRaceResult = (result) => {
+      if (session) mpRaceOf(session.race)?.applyResult(result);
+    };
     const timer = window.setInterval(() => setPeerStats(mp.getPeerStats()), 1000);
     return () => {
       mp.onLobbyChange = undefined;
@@ -1000,6 +1009,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       mp.weatherProvider = undefined;
       mp.onRaceStart = undefined;
       mp.onRaceAbort = undefined;
+      mp.onRaceFinish = undefined;
+      mp.onRaceResult = undefined;
       window.clearInterval(timer);
     };
   }, [session, trackId, onSelectTrack, takeRaceStart, endMpRace, changeCar]);
