@@ -12,6 +12,8 @@ import { recordUsage, requestCountry, utcDay, type UsageDeps } from '../cloudfla
 import { adminKeyMatches, adminStats, statsDays, type AdminStats } from '../cloudflare/api/admin';
 import type { Env, RateLimit } from '../cloudflare/api/types';
 import { parseOnlineConfig } from '../src/lib/net/online-config';
+import { isUsageMode, sendUsage, USAGE_MODES, UsageClock, type UsageLine } from '../src/lib/net/usage';
+import { usageModeOf } from '../src/lib/net/use-usage-counter';
 import { fakeD1 } from './lib/fake-cloudflare';
 
 const failures: string[] = [];
@@ -202,6 +204,52 @@ async function main() {
     }
     const withRaces = await read('?days=30');
     check('admin: races in the range by kind, and their cars', withRaces.races?.open === 1 && withRaces.races.room === 1 && withRaces.races.cars === 5, JSON.stringify(withRaces.races));
+  }
+
+  // 4. The game's side: stretches, their mode, the request -----------------------------------------------------------
+  {
+    let t = 0;
+    const sent: UsageLine[] = [];
+    const clock = new UsageClock((line) => sent.push(line), () => t);
+    const at = { trackId: 'rwanda_official_short', vehicle: 'vf26' as const, mode: 'practice' as const };
+    const MIN = 60_000;
+    clock.set(at, true);
+    t += 20_000;
+    clock.set(null, false);
+    check('game: a stretch under 30 seconds is not sent', sent.length === 0);
+    clock.set(at, true);
+    t += 5 * MIN;
+    clock.set(at, false);
+    t += 30 * MIN;
+    clock.set(at, true);
+    t += 2 * MIN;
+    clock.set({ ...at, vehicle: 'amg-gt3' }, true);
+    check('game: a change of car ends the stretch, paused time left out', sent.length === 1 && sent[0].minutes === 7 && sent[0].vehicle === 'vf26', JSON.stringify(sent));
+    t += MIN;
+    clock.set({ ...at, vehicle: 'amg-gt3' }, true, 'flag');
+    check('game: taking the flag ends the stretch', sent.length === 2 && sent[1].minutes === 1 && sent[1].vehicle === 'amg-gt3');
+    t += 300 * MIN;
+    clock.end();
+    check('game: a stretch is sent with at most 240 minutes', sent.length === 3 && sent[2].minutes === 240);
+    clock.end();
+    check('game: ending twice sends once', sent.length === 3);
+    check('game: modes', usageModeOf('practice', false, false) === 'practice' && usageModeOf('practice', true, true) === 'time_trial' && usageModeOf('ai', false, true) === 'ai_race' && usageModeOf('mp', true, false) === 'open_race' && usageModeOf('mp', false, false) === 'room_race');
+    check('game: every mode the game sends is one the server takes', USAGE_MODES.every((m) => isUsageMode(m)) && USAGE_MODES.length === 5);
+
+    // The request: to the API, surviving the page, without cookies, a plain-text body (no preflight)
+    const calls: { url: string; init: RequestInit }[] = [];
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = (async (url: string, init: RequestInit) => (calls.push({ url, init }), new Response('{}'))) as typeof fetch;
+    try {
+      sendUsage({ ...at, minutes: 3 }, 'https://librecorsa.test/api/usage');
+      sendUsage({ ...at, minutes: 3 }, null);
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+    const call = calls[0];
+    check('game: one request, keepalive, no cookies, a string body', calls.length === 1 && call.init.keepalive === true && call.init.credentials === 'omit' && typeof call.init.body === 'string' && JSON.parse(call.init.body).minutes === 3, JSON.stringify(call));
+    check('game: nothing but circuit, car, mode and minutes', Object.keys(JSON.parse(String(call?.init.body))).sort().join() === 'minutes,mode,trackId,vehicle');
+    check('game: no online side, nothing sent', calls.length === 1);
   }
 
   if (failures.length > 0) {

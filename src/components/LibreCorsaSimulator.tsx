@@ -30,6 +30,7 @@ import {
 } from "@/lib/net/leaderboard";
 import { exportDriverKeyFile, importDriverKeyFile } from "@/lib/net/driver-key";
 import { challengeAt, fitsChallenge } from "@/lib/net/weekly-challenge";
+import { useUsageCounter } from "@/lib/net/use-usage-counter"; // polish:E
 import { isTouchDevice, resetTouchInput } from "@/lib/input/touch-input";
 import { isFatalHidStatus } from "@/lib/input/webhid-ffb";
 import { SIM_REALISM_FLAGS, type SimRealism } from "@/lib/sim/sim-realism";
@@ -1214,6 +1215,17 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   const roomLobby = inScheduledRace ? null : lobby;
   const isMpHost = roomLobby !== null && roomLobby.hostId === localPeerId;
   isMpHostRef.current = isMpHost;
+  // polish:E the anonymous usage counter: what is driven, where, in which mode, for how long (nothing per player)
+  useUsageCounter({
+    driving: phase === "driving",
+    paused,
+    trackId,
+    vehicle: vehicleModel,
+    race: raceKind,
+    scheduledRace: inScheduledRace,
+    onChallenge: raceKind === "practice" && fitsChallenge({ trackId, vehicle: vehicleModel, conditions: currentBoard() }, challenge),
+    raceOver: telemetry.race?.phase === "finished",
+  });
 
   const menuProps = {
     telemetry,
