@@ -10,7 +10,7 @@ import { isVehicleModelId, type AssistPreset, type VehicleModelId } from "@/type
 import { listBestLaps } from "@/lib/sim/ghost-store";
 import { lapPlausibilityProblem } from "@/lib/sim/lap-plausibility";
 import { validateLapRecording } from "@/lib/sim/lap-recorder";
-import { PHYSICS_VERSION, parseLapConditions, type LapConditions, type LapRecording, type LeaderboardEntry } from "@/lib/sim/lap-types";
+import { lapPhysicsVersion, parseLapConditions, type LapConditions, type LapRecording, type LeaderboardEntry } from "@/lib/sim/lap-types";
 import type { SimRealism } from "@/lib/sim/sim-realism";
 import { getOrCreateDriverKey } from "./driver-key";
 import { getOnlineConfig, onlineUrl } from "./online-config";
@@ -237,7 +237,7 @@ export async function fetchRemoteBoard(
   const base = onlineUrl("/laps");
   if (!base || !(await boardOnline())) return null;
   const filter = opts.filter ?? {};
-  const physics = opts.physics ?? PHYSICS_VERSION;
+  const physics = opts.physics ?? lapPhysicsVersion(vehicle);
   const count = clampLimit(opts.limit ?? DEFAULT_LIMIT);
   const query = new URLSearchParams({ track: trackId, vehicle, physics: String(physics), limit: String(count) });
   if (filter.assists) query.set("assists", filter.assists);

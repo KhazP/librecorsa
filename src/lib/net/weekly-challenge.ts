@@ -7,7 +7,7 @@
  * without asking each other. No three.js, no DOM: the Worker imports this file.
  */
 import type { AssistPreset, VehicleModelId } from "@/types/f1";
-import { PHYSICS_VERSION, type LapConditions } from "@/lib/sim/lap-types";
+import { lapPhysicsVersion, type LapConditions } from "@/lib/sim/lap-types";
 import type { SimRealism } from "@/lib/sim/sim-realism";
 
 export interface ChallengeRules {
@@ -113,7 +113,7 @@ export function fitsChallenge(lap: { trackId: string; vehicle: string; condition
     k.assists === c.assists &&
     k.realism === c.realism &&
     k.surface === "dry" &&
-    k.physicsVersion === PHYSICS_VERSION
+    k.physicsVersion === lapPhysicsVersion(c.vehicle)
   );
 }
 

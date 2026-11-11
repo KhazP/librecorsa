@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Download, Flag, RotateCw } from "lucide-react";
 import { isVehicleModelId, type VehicleModelId } from "@/types/f1";
-import { PHYSICS_VERSION, type LeaderboardEntry } from "@/lib/sim/lap-types";
+import { lapPhysicsVersion, type LeaderboardEntry } from "@/lib/sim/lap-types";
 import { boardLabel, driverNameKey, type BoardFilter, type RemoteBoard } from "@/lib/net/leaderboard";
 import { CHOSEN_PILL, CURSOR_PILL } from "@/components/menu/menu-ui";
 import { focusOnHover } from "@/components/menu/useFocusNav";
@@ -262,7 +262,9 @@ export const LeaderboardPanel: React.FC<LeaderboardPanelProps> = ({
   const [noAssists, setNoAssists] = useState(false);
   const [fullRealism, setFullRealism] = useState(false);
   const [wetOnly, setWetOnly] = useState(false);
-  const [physics, setPhysics] = useState(PHYSICS_VERSION);
+  // The revision this car is driven under now: its current board (the Prototype has its own, `lapPhysicsVersion`)
+  const currentPhysics = lapPhysicsVersion(isVehicleModelId(onlineCar) ? onlineCar : undefined);
+  const [physics, setPhysics] = useState(currentPhysics);
   const [reload, setReload] = useState(0);
   /** `key`: the circuit, car and filters `board` was read for (a board is never shown under another's heading) */
   const [online, setOnline] = useState<{ key: string; board: RemoteBoard | null; loading: boolean; error: boolean }>({
@@ -273,7 +275,7 @@ export const LeaderboardPanel: React.FC<LeaderboardPanelProps> = ({
   });
   const boardKey = `${circuit}|${onlineCar}|${noAssists}|${fullRealism}|${wetOnly}|${physics}`;
   // Another circuit or car starts on the current physics again
-  useEffect(() => setPhysics(PHYSICS_VERSION), [circuit, onlineCar]);
+  useEffect(() => setPhysics(currentPhysics), [circuit, onlineCar, currentPhysics]);
   useEffect(() => {
     if (!remoteEnabled || !loadRemote || !circuit || !isVehicleModelId(onlineCar)) {
       setOnline({ key: "", board: null, loading: false, error: false });
@@ -301,7 +303,7 @@ export const LeaderboardPanel: React.FC<LeaderboardPanelProps> = ({
   // The driver just ahead, when they are among the rows fetched
   const ahead = me && me.rank >= 2 ? (shown?.entries[me.rank - 2] ?? null) : null;
   const leader = shown?.entries[0] ?? null;
-  const olderPhysics = (shown?.physics ?? []).filter((v) => v !== PHYSICS_VERSION);
+  const olderPhysics = (shown?.physics ?? []).filter((v) => v !== currentPhysics);
   const filtered = noAssists || fullRealism || wetOnly;
 
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -470,10 +472,10 @@ export const LeaderboardPanel: React.FC<LeaderboardPanelProps> = ({
             <FilterToggle label="No assists" on={noAssists} onChange={setNoAssists} />
             <FilterToggle label="Full realism" on={fullRealism} onChange={setFullRealism} />
             <FilterToggle label="Wet laps" on={wetOnly} onChange={setWetOnly} />
-            {olderPhysics.length > 0 || physics !== PHYSICS_VERSION ? (
+            {olderPhysics.length > 0 || physics !== currentPhysics ? (
               <span className="ml-auto flex flex-wrap items-center gap-1.5">
-                <FilterToggle label="Current version" on={physics === PHYSICS_VERSION} onChange={() => setPhysics(PHYSICS_VERSION)} />
-                {[...new Set([...olderPhysics, ...(physics !== PHYSICS_VERSION ? [physics] : [])])].map((v) => (
+                <FilterToggle label="Current version" on={physics === currentPhysics} onChange={() => setPhysics(currentPhysics)} />
+                {[...new Set([...olderPhysics, ...(physics !== currentPhysics ? [physics] : [])])].map((v) => (
                   <FilterToggle key={v} label={`Older laps (v${v})`} on={physics === v} onChange={() => setPhysics(v)} />
                 ))}
               </span>
