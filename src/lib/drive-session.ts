@@ -75,7 +75,7 @@ import { simMode } from "@/lib/sim/runtime/sim-mode";
 import { createSimHost } from "@/lib/sim/runtime/sim-host";
 import { startSimWorker } from "@/lib/sim/runtime/worker-sim-host";
 import { steeringAssistSettings } from "@/lib/sim/steering-assist";
-import { applyTimeTrial, lowestFuelSetup, type TimeTrialRules } from "@/lib/sim/time-trial";
+import { applyTimeTrial, lowestFuelSetup, timeTrialRealism, type TimeTrialRules } from "@/lib/sim/time-trial";
 import { axleSlipFromTelemetry, createAxleSlipSample } from "@/lib/sim/tyre-slip";
 import { clampFov, DEFAULT_KEYBOARD_TUNING, DEFAULT_PLAYER_SETTINGS, type PlayerSettings } from "@/lib/settings/player-settings";
 import type { AeroSetupPreset, CameraMode, CarTelemetry, LiveTunerPatch, RadarBlip, TireCompound, TyreSetup, VehicleModelId } from "@/types/f1";
@@ -514,6 +514,22 @@ export class DriveSession {
       if (ownCompound && physics.tireCompound !== ownCompound) this.setTireCompound(ownCompound);
       ownCompound = null;
       this.publish({ timeTrial: null });
+    };
+    /**
+     * The time trial burns no fuel: the car and the session realism it was last given that (the track environment
+     * hands every car the session's realism again whenever that changes, so it is re-asserted after each update)
+     */
+    let fuelHeld: { car: SimulatorCar; flags: object } | null = null;
+    const holdTimeTrialFuel = () => {
+      const flags = getTrackEnv().simRealism;
+      if (!timeTrialOn() || !flags.fuelUse) {
+        if (fuelHeld?.car === physics) physics.setSimRealism?.(flags);
+        fuelHeld = null;
+        return;
+      }
+      if (fuelHeld?.car === physics && fuelHeld.flags === flags) return;
+      physics.setSimRealism?.(timeTrialRealism(flags));
+      fuelHeld = { car: physics, flags };
     };
     /** Race control's session for a race on track (or practice) */
     const limitsSessionOf = (race: SessionRace) => (race.kind === "practice" ? "practice" : "race");
@@ -1602,6 +1618,7 @@ export class DriveSession {
         // with the remote players placed from last frame's interpolated poses
         soloCars[0] = physics;
         trackEnv.update(dtSeconds, aiField ? aiField.sims() : soloCars, remoteWake);
+        holdTimeTrialFuel();
         // The autopilot backs off for rain like the AI field does, from the car's own pace
         if (physics.aiPaceScale !== undefined) {
           const base = autopilotPace;

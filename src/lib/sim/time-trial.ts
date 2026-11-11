@@ -8,6 +8,7 @@
 import type { TireCompound, VehicleModelId } from "@/types/f1";
 import { challengeCompound } from "@/lib/net/weekly-challenge";
 import { CHASSIS_LIMITS, type ChassisSetup } from "./car-setup";
+import type { SimRealismFlags } from "./sim-realism";
 import type { SimulatorCar } from "./simulator-car";
 import type { TrackEvolutionState } from "./track-evolution";
 
@@ -20,6 +21,14 @@ export interface TimeTrialRules {
 /** The time trial of a week's challenge */
 export function timeTrialRules(vehicle: VehicleModelId): TimeTrialRules {
   return { vehicle, compound: challengeCompound(vehicle) };
+}
+
+/**
+ * The realism a time trial is driven at: the session's, but no fuel burnt. The lightest loads (4–5 kg) last under two
+ * laps of a 5 km circuit in the GT3 or the 496R, so the tank stays as filled for the whole run.
+ */
+export function timeTrialRealism(flags: Readonly<SimRealismFlags>): SimRealismFlags {
+  return { ...flags, fuelUse: false };
 }
 
 /** A garage setup with the lightest fuel load: the fuel step's floor, which every car clamps to its own minimum */
