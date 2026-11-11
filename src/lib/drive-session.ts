@@ -1746,6 +1746,8 @@ export class DriveSession {
             solid = !guard.blocks(p.peerId, guardSelf, guardOther, p.hazard === true);
             through = p.hazard === true || guard.rammed(p.peerId);
           }
+          // polish:B a car that has taken the flag passes through (collisionsActiveWith), drawn as a ghost
+          if (mpFrame.phase === "racing" && p.race?.id === mpRace.start.id && (mpRace.lapClock.finishTimeS !== null || p.race.fin !== null)) through = true;
           p.passThrough = through;
           if (driving && solid) resolvePlayerVsRemoteCar(physics, p, dtSeconds);
         }
