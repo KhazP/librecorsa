@@ -15,6 +15,7 @@ import type { Env } from '../cloudflare/api/types';
 import { countdownLabel, nextRaceSlot, RACE_COUNTDOWN_MS, RACE_JOIN_CUTOFF_MS, raceRules, raceSlot } from '../src/lib/net/race-schedule';
 import { sanitizeControl, type ControlMessage, type LobbyState, type RaceStartInfo } from '../src/lib/net/wire';
 import { sha256Hex } from '../cloudflare/api/board';
+import { parseDriverRecord, parseWeekRaceResults } from '../src/lib/net/race-results';
 import { FakeSocket, fakeD1, fakeState } from './lib/fake-cloudflare';
 
 const failures: string[] = [];
@@ -291,6 +292,9 @@ async function main() {
   check('and the standings of proven drivers only', week.standings.length === 1 && week.standings[0].name === 'Al' && week.standings[0].wins === 1 && week.standings[0].podiums === 1 && week.standings[0].starts === 1, JSON.stringify(week.standings));
   const rec = (await (await api('/api/drivers/record?name=%20AL%20', withDb)).json()) as { starts: number; wins: number; podiums: number; bestFinish: number | null; name: string };
   check('GET /api/drivers/record: starts, wins, podiums and best finish, by the name\'s claim', rec.name === 'Al' && rec.starts === 1 && rec.wins === 1 && rec.podiums === 1 && rec.bestFinish === 1, JSON.stringify(rec));
+  const parsedWeek = parseWeekRaceResults(week);
+  const parsedRec = parseDriverRecord(rec);
+  check("the game's client reads both answers", parsedWeek?.standings[0]?.name === 'Al' && parsedWeek.races.length === 2 && parsedRec?.wins === 1 && parsedRec.bestFinish === 1 && parseWeekRaceResults({ races: 'x' }) === null);
   const none = (await (await api('/api/drivers/record?name=Bea', withDb)).json()) as { starts: number; bestFinish: number | null };
   check('an unproven name has no record', none.starts === 0 && none.bestFinish === null, JSON.stringify(none));
   check('a bad week or no name is refused; without races or the database, no results', (await api('/api/races/results?week=x', withDb)).status === 400 && (await api('/api/drivers/record', withDb)).status === 400 && (await api(`/api/races/results?week=${rules.id}`, live)).status === 404 && (await api(`/api/races/results?week=${rules.id}`, { ...withDb, ONLINE_RACES: 'off' })).status === 404);
