@@ -37,6 +37,7 @@ const FAST_LANE: Record<string, string> = {
   spielberg_south: 'spielberg/spielberg_ver2/circuit_south',
   spielberg_inner: 'spielberg/spielberg_ver2/circuit_inner',
   dunsfold: 'librecorsa-src/topgear/topgear',
+  istanbul_park: 'librecorsa-src/istanbul_park/1',
 };
 
 export function fastLanePath(trackId: string): string | null {
