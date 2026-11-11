@@ -21,6 +21,10 @@ next-env.d.ts
 .DS_Store
 Thumbs.db
 .claude/
+.impeccable/
+.local/
+AGENTS.md
+CLAUDE.md
 
 # Python bytecode & local asset build pipelines
 __pycache__/
@@ -44,8 +48,11 @@ acevo_physics_strings.txt
 # Private scratch reports (audits, assessments, research)
 AUDIT-*.md
 AUDIT-*.jpg
+DEVTO-*.md
 PORT-ASSESSMENT-*.md
 UI-RESEARCH-*.md
+/docs/ai/
+/scripts/__*
 
 # Hosted-only cars and circuits: served on librecorsa.org from the librecorsa-assets R2 bucket
 # (npm run upload-hosted), never committed. The repository carries RISE Motordrome and the 2026 prototype car
