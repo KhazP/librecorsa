@@ -558,7 +558,16 @@ export function buildVf26Config(overrides: Vf26Overrides = {}) {
       efficiency: VF26_DRIVETRAIN.efficiency,
       gears: { redline_rpm: VF26_ENGINE.limiterRpm, upshift_rpm: VF26_DRIVETRAIN.autoUpshiftRpm, downshift_rpm: VF26_DRIVETRAIN.autoDownshiftRpm },
     },
-    clutch: { maxTorqueNm: VF26_DRIVETRAIN.clutchMaxTorqueNm, biteRpm: VF26_DRIVETRAIN.autoClutchStartRpm, lockRpm: VF26_DRIVETRAIN.autoClutchFullRpm },
+    clutch: {
+      maxTorqueNm: VF26_DRIVETRAIN.clutchMaxTorqueNm,
+      biteRpm: VF26_DRIVETRAIN.autoClutchStartRpm,
+      lockRpm: VF26_DRIVETRAIN.autoClutchFullRpm,
+      // In first gear the engine is held where it has its torque: at the anti-stall window it makes a third of it and
+      // the car took 4 s to 100 km/h. 7000 rpm is chosen on the launches it gives: 3.0 s with or without traction
+      // control, and without it the whole pedal spins the rear wheels past their grip while the car still runs
+      // straight (from 7250 rpm up it turns round)
+      launchRpm: 7000,
+    },
     // Locking torque = preload + POWER / COAST × input torque [data]
     differential: {
       type: 'LSD_Ramp',
