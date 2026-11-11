@@ -1,13 +1,16 @@
 "use client";
 
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { RotateCcw } from "lucide-react";
 import { useFocusNav } from "@/components/menu/useFocusNav";
 import { useHudModeRef } from "./hud-mode";
 import { PromptBar } from "@/components/menu/menu-ui";
 import type { RaceResultEntry, RaceStatus } from "@/types/f1";
 import { STRIKES_PER_PENALTY } from "@/lib/sim/track-limits";
-import { HUD_CYAN, HUD_PURPLE, HUD_RED, HUD_VOLT, HUD_YELLOW, formatLapTime } from "./hud-format";
+import { HUD_CYAN, HUD_GREEN, HUD_PURPLE, HUD_RED, HUD_VOLT, HUD_YELLOW, formatLapTime } from "./hud-format";
+import { placesGained, type RaceRecord } from "@/lib/sim/race-history";
+import { countdownLabel, nextRaceSlot } from "@/lib/net/race-schedule";
+import { TRACKS } from "@/lib/track-registry";
 
 const ordinal = (n: number) => (n === 2 ? "second" : n === 3 ? "third" : n === 4 ? "fourth" : `${n}th`);
 
@@ -122,7 +125,11 @@ export const RaceResults: React.FC<{
   backLabel?: string;
   /** The player's track-limits strikes this race */
   trackLimitStrikes?: number;
-}> = ({ race, trackName, onClose, onRestart, onBackToLobby, backLabel = "Back to lobby", trackLimitStrikes = 0 }) => {
+  /** The player's last races, newest first (this one included once saved) */
+  history?: readonly RaceRecord[];
+  /** An open race: the next one to join */
+  nextRace?: NextRaceProps;
+}> = ({ race, trackName, onClose, onRestart, onBackToLobby, backLabel = "Back to lobby", trackLimitStrikes = 0, history, nextRace }) => {
   const results = race.results;
   const rootRef = useRef<HTMLDivElement | null>(null);
   // A controller closes the card with Ⓑ and reaches its buttons (Esc is handled below)
@@ -153,6 +160,8 @@ export const RaceResults: React.FC<{
   const isFastest = (r: RaceResultEntry) => r.bestLapMs !== null && r.bestLapMs === fastestMs;
   // Podium order on screen: P2, P1, P3
   const podium = [ordered[1], ordered[0], ordered[2]];
+  const me = ordered.find((r) => r.isPlayer);
+  const showGrid = ordered.some((r) => r.gridPosition !== undefined);
 
   return (
     <div className="lc-ui-zoom pointer-events-none fixed inset-0 z-50 flex items-center justify-center bg-[#08090D]/55 pt-[max(1rem,env(safe-area-inset-top))] pr-[max(1rem,env(safe-area-inset-right))] pb-[max(1rem,env(safe-area-inset-bottom))] pl-[max(1rem,env(safe-area-inset-left))]">
@@ -200,6 +209,8 @@ export const RaceResults: React.FC<{
           </span>
         </div>
 
+        {me ? <PlayerSummary me={me} fieldSize={ordered.length} fastest={isFastest(me)} /> : null}
+
         <div className="-mx-1 flex min-h-0 flex-col gap-[18px] overflow-y-auto px-1">
           {/* Podium */}
           <div className="grid grid-cols-[1fr_1.15fr_1fr] items-end gap-2.5 short:hidden">
@@ -216,6 +227,11 @@ export const RaceResults: React.FC<{
             <thead className="sticky top-0 z-[1] bg-[#0A0B10]">
               <tr>
                 <th className={`${TH} w-10`}>Pos</th>
+                {showGrid ? (
+                  <th className={`${TH} w-12`} title="Places gained or lost from the grid">
+                    +/−
+                  </th>
+                ) : null}
                 <th className="w-2 p-0" />
                 <th className={TH}>Code</th>
                 <th className={TH}>Name</th>
@@ -235,6 +251,11 @@ export const RaceResults: React.FC<{
                   <td className="px-2.5" style={{ color: r.isPlayer ? HUD_VOLT : "#8E96AA" }}>
                     {r.position}
                   </td>
+                  {showGrid ? (
+                    <td className="px-2.5">
+                      <PlacesBadge gained={r.dnf ? null : placesGained(r.gridPosition, r.position)} />
+                    </td>
+                  ) : null}
                   <td className="p-0">
                     <span
                       className="block h-4 w-1 rounded-full"
@@ -262,6 +283,8 @@ export const RaceResults: React.FC<{
               ))}
             </tbody>
           </table>
+
+          {history && history.length > 0 ? <LastRaces history={history} /> : null}
         </div>
 
         <div className="flex flex-wrap items-center justify-end gap-3 border-t border-[#262B3D] pt-3.5">
@@ -273,6 +296,7 @@ export const RaceResults: React.FC<{
             ]}
           />
           <div className="flex flex-wrap gap-2">
+            {nextRace ? <JoinNextRace {...nextRace} /> : null}
             {onRestart ? (
               <button
                 type="button"
@@ -303,5 +327,104 @@ export const RaceResults: React.FC<{
         </div>
       </div>
     </div>
+  );
+};
+
+/** Places gained (green, up) or lost (red, down) from the grid; "=" unchanged, a dash when not known */
+const PlacesBadge: React.FC<{ gained: number | null; large?: boolean }> = ({ gained, large = false }) => {
+  const size = large ? "text-[22px]" : "text-[12px]";
+  if (gained === null || gained === 0) return <span className={`lc-data ${size} text-[#8E96AA]`}>{gained === 0 ? "=" : "–"}</span>;
+  return (
+    <span
+      className={`lc-data ${size} whitespace-nowrap`}
+      style={{ color: gained > 0 ? HUD_GREEN : HUD_RED }}
+      title={`${Math.abs(gained)} ${Math.abs(gained) === 1 ? "place" : "places"} ${gained > 0 ? "gained" : "lost"}`}
+    >
+      {gained > 0 ? "▲" : "▼"}
+      {Math.abs(gained)}
+    </span>
+  );
+};
+
+/** The player's own race at a glance: the place, the places gained from the grid, the best lap */
+const PlayerSummary: React.FC<{ me: RaceResultEntry; fieldSize: number; fastest: boolean }> = ({ me, fieldSize, fastest }) => {
+  const gained = me.dnf ? null : placesGained(me.gridPosition, me.position);
+  const cell = "flex min-w-0 flex-col gap-1 rounded-[16px] border border-[#262B3D] bg-white/[0.03] px-4 py-2.5 short:py-1.5";
+  return (
+    <div className="grid grid-cols-3 gap-2.5" aria-label="Your race">
+      <div className={cell}>
+        <span className="lc-lbl truncate !text-[9px]">You finished</span>
+        <span className="lc-data text-[22px]" style={{ color: me.dnf ? HUD_RED : HUD_VOLT }}>
+          {me.dnf ? "DNF" : `P${me.position}`}
+          <span className="text-[13px] text-[#8E96AA]"> / {fieldSize}</span>
+        </span>
+      </div>
+      <div className={cell}>
+        <span className="lc-lbl truncate !text-[9px]">{me.gridPosition !== undefined ? `From P${me.gridPosition} on the grid` : "Places"}</span>
+        <PlacesBadge gained={gained} large />
+      </div>
+      <div className={cell}>
+        <span className="lc-lbl truncate !text-[9px]">{fastest ? "Fastest lap" : "Your best lap"}</span>
+        <span className="lc-data text-[22px]" style={{ color: fastest ? HUD_PURPLE : "#F5F7FA" }}>
+          {formatLapTime(me.bestLapMs)}
+        </span>
+      </div>
+    </div>
+  );
+};
+
+const circuitName = (id: string) => TRACKS.find((t) => t.id === id)?.name ?? id;
+const shortDate = (ms: number) => new Date(ms).toLocaleDateString(undefined, { day: "numeric", month: "short" });
+
+/** The player's last few races, kept in this browser */
+const LastRaces: React.FC<{ history: readonly RaceRecord[] }> = ({ history }) => (
+  <section className="flex flex-col gap-1.5" aria-label="Your last races">
+    <span className="lc-lbl !text-[9px]">Your last races</span>
+    <ul className="m-0 flex list-none flex-col p-0">
+      {history.slice(0, 5).map((r, i) => (
+        <li
+          key={r.id}
+          className={`grid h-8 grid-cols-[3.5rem_minmax(0,1fr)_4.5rem_2.5rem_5.5rem] items-center gap-2 px-2.5 font-f1-mono text-[12px] font-extrabold tabular-nums short:h-7 ${i % 2 ? "bg-white/[0.02]" : ""}`}
+        >
+          <span className="text-[#8E96AA]">{shortDate(r.atMs)}</span>
+          <span className="truncate text-[13px] font-semibold tracking-normal" style={{ fontFamily: "var(--font-geist), sans-serif" }}>
+            {circuitName(r.trackId)}
+          </span>
+          <span style={{ color: r.finish === null ? HUD_RED : "#F5F7FA" }}>
+            {r.finish === null ? "DNF" : `P${r.finish}`}
+            <span className="text-[#8E96AA]">/{r.fieldSize}</span>
+          </span>
+          <PlacesBadge gained={placesGained(r.grid, r.finish)} />
+          <span className="text-right text-[#C5CBD8]">{formatLapTime(r.bestLapMs)}</span>
+        </li>
+      ))}
+    </ul>
+  </section>
+);
+
+export interface NextRaceProps {
+  /** Seconds between scheduled races */
+  slotS: number;
+  onJoin: () => void;
+}
+
+/** "Join the next race", with the time until its lights counting down */
+const JoinNextRace: React.FC<NextRaceProps> = ({ slotS, onJoin }) => {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, []);
+  // Worked out every tick: past the join cut-off it rolls on to the race after
+  const startsMs = nextRaceSlot(now, slotS).startsMs;
+  return (
+    <button
+      type="button"
+      onClick={onJoin}
+      className={`${BUTTON_BASE} border border-[#00E5FF]/50 bg-[#00E5FF]/8 text-[#00E5FF] hover:bg-[#00E5FF]/15`}
+    >
+      Join the next race
+      <span className="lc-data text-[13px] tabular-nums opacity-80">{countdownLabel(startsMs, now)}</span>
+    </button>
   );
 };
