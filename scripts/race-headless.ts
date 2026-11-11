@@ -4,16 +4,17 @@
  *
  *   npx tsx scripts/race-headless.ts [--track rwanda_official_short] [--car vf26|f12026-car|amg-gt3|liana|mtr-496r] [--laps 5] [--cars 5]
  *       [--skill 70] [--seed 1] [--no-learn] [--laps-table] [--sweep skill | learn | <param>=v1,v2,...]
- *       [--weather clear|overcast|light_rain|heavy_rain|drying|dynamic]
+ *       [--weather clear|overcast|light_rain|heavy_rain|drying|dynamic] [--vf26-engine rigid|classic]
  *   npm run race:headless -- --track suzuka --car amg-gt3 --sweep skill
  *
  * `--sweep skill` races Rookie / Amateur / Pro / Alien, `--sweep learn` learning off and on, and
  * `--sweep brakeMargin=0,0.05,0.1` (any AiTuningParams key) the class parameter at each value.
- * The same seed replays the same race.
+ * The same seed replays the same race. `--car vf26` races the engine that car ships on, or the one `--vf26-engine` names.
  */
 import { readFileSync } from 'node:fs';
 import { DEFAULT_TRACK_ID, getActiveTrackData, setActiveTrack, type BuiltTrackData, type RawTrackJson } from '../src/lib/track-data';
-import { F1Physics2026 } from '../src/lib/f1-physics-2026';
+import { vehicleModelSpec } from '../src/lib/cars/vehicle-models';
+import { setVf26OnRigidBody, vf26OnRigidBody } from '../src/lib/cars/vf26-engine';
 import { F12026CarSim } from '../src/lib/sim/f12026-car/F12026CarSim';
 import { createAmgGt3Sim } from '../src/lib/sim/gt3/AmgGt3Sim';
 import { createSuzukiLianaSim } from '../src/lib/sim/road/SuzukiLianaSim';
@@ -60,14 +61,17 @@ if (!['vf26', 'f12026-car', 'amg-gt3', 'liana', 'mtr-496r'].includes(carKind)) {
 // ---- Track and colliders
 setActiveTrack(trackId, JSON.parse(readFileSync(`public/tracks/${trackId}/track_data.json`, 'utf8')) as RawTrackJson);
 const track: BuiltTrackData = getActiveTrackData(1200);
-const root = carKind === 'vf26' ? null : loadGlbGeometry(`public${track.meshUrl}`);
+const vf26Engine = opt('vf26-engine', '');
+if (vf26Engine === 'rigid' || vf26Engine === 'classic') setVf26OnRigidBody(vf26Engine === 'rigid');
+// (the VF26's older engine laps the track data alone, as it always has here)
+const root = carKind === 'vf26' && !vf26OnRigidBody() ? null : loadGlbGeometry(`public${track.meshUrl}`);
 
 function makeTemplate(): SimulatorCar {
   if (carKind === 'amg-gt3') return createAmgGt3Sim(track, root);
   if (carKind === 'liana') return createSuzukiLianaSim(track, root);
   if (carKind === 'mtr-496r') return createMtr496rSim(track, root);
   if (carKind === 'f12026-car') return new F12026CarSim(track, root);
-  return new F1Physics2026(track);
+  return vehicleModelSpec('vf26').createSim(track, root);
 }
 
 /** The five named drivers, then made-up ones further down the order */
