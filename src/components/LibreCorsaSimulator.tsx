@@ -57,7 +57,8 @@ import { useRaceHistory } from "@/components/hud/useRaceHistory";
 
 const DEFAULT_ASSIST_PRESET: AssistPreset = DEFAULT_PLAYER_SETTINGS.assistPreset;
 /** A lap record's car: records are per vehicle model, named after its first car */
-const vehicleLabel = (id: string) => (isVehicleModelId(id) ? carForVehicle(id).title : id);
+// The rigid-body model's board holds the laps of every ported F1 car on it, and the model has no car of its own
+const vehicleLabel = (id: string) => (id === "f12026-car" ? "F1 team cars" : isVehicleModelId(id) ? carForVehicle(id).title : id);
 /** Every personal best in this browser (Lap times switches circuit and car without reloading the scene) */
 const loadAllLocalLaps = () => listBestLaps().then((laps) => laps.map((lap) => lapToEntry(lap, "local")));
 /** The place an upload's answer gives the lap on its board (and on the week's challenge); null when it failed or said none */
