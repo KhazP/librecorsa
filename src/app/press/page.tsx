@@ -5,7 +5,15 @@ import Link from "next/link";
 import { ArrowUpRight, Download, Play } from "lucide-react";
 import { LibreCorsaLogo } from "@/components/ui/LibreCorsaLogo";
 import { withBasePath } from "@/lib/base-path";
-import { coverage, discussions, PRESS_KIT_ZIP, PRESS_SCREENSHOTS } from "@/lib/press";
+import {
+  coverage,
+  discussions,
+  PRESS_KIT_ZIP,
+  PRESS_SCREENSHOTS,
+  RISE_OFFICIAL_RENDER,
+  RISE_PRESS_KIT_ZIP,
+  RISE_RENDERS,
+} from "@/lib/press";
 import { REPO_URL, SITE_NAME } from "@/lib/site";
 
 const DESCRIPTION = "Coverage of LibreCorsa, the free browser racing sim, plus a press kit: facts, logos, screenshots and the trailer.";
@@ -65,8 +73,11 @@ const FACTS: [string, React.ReactNode][] = [
   ],
 ];
 
-/** The press kit ZIP's size, read when the page is built */
-const KIT_MB = (statSync(join(process.cwd(), "public", PRESS_KIT_ZIP)).size / 1e6).toFixed(1);
+/** A ZIP's size in MB, read when the page is built */
+const zipMb = (path: string) => (statSync(join(process.cwd(), "public", path)).size / 1e6).toFixed(1);
+const KIT_MB = zipMb(PRESS_KIT_ZIP);
+const RISE_KIT_MB = zipMb(RISE_PRESS_KIT_ZIP);
+const RISE_AERIAL = RISE_RENDERS.find((r) => r.file === "rise-aerial.jpg")!;
 
 const BRAND_FILES = [
   { label: "Logo", detail: "SVG", href: "/branding/librecorsa-logo.svg" },
@@ -283,6 +294,89 @@ export default function PressPage() {
             </ul>
             <p className="text-[13px] text-[#8E96AA]">Use these freely when writing about LibreCorsa. Please keep the logo&apos;s colours as they are.</p>
           </div>
+
+          <section className="flex flex-col gap-5 pt-4" aria-labelledby="rise">
+            <div className="flex flex-col gap-2">
+              <p className="lc-lbl">Circuit</p>
+              <h3 id="rise" className="lc-disp text-[24px] text-[#F5F7FA]">
+                RISE Motordrome
+              </h3>
+              <p className="max-w-[640px] text-[15px] leading-relaxed text-[#C5CBD8]">
+                I built the circuit planned for Bugesera, Rwanda from scratch, from its published design and the real ground
+                it sits on: 5.9 km, 17 corners and a 190 m climb beside Lake Kidogo. These are Cycles renders of the same
+                model the game drives on.
+              </p>
+            </div>
+
+            <a
+              href={withBasePath(RISE_PRESS_KIT_ZIP)}
+              download
+              className={`${CARD} group flex flex-wrap items-center justify-between gap-4 p-5 no-underline transition-colors hover:border-[#CCFF00] sm:p-6`}
+            >
+              <span className="flex min-w-0 flex-col gap-1">
+                <span className="text-[17px] font-semibold text-[#F5F7FA]">Download RISE Motordrome press kit</span>
+                <span className="text-[14px] text-[#8E96AA]">{RISE_RENDERS.length} renders of the circuit with open-wheel and GT3 cars, in one ZIP</span>
+              </span>
+              <span className="lc-title inline-flex shrink-0 items-center gap-2 rounded-full bg-[#CCFF00] px-5 py-2.5 text-[15px] text-[#08090D] transition-colors group-hover:bg-[#99BF00]">
+                <Download aria-hidden className="h-4 w-4" strokeWidth={2.5} />
+                ZIP · {RISE_KIT_MB} MB
+              </span>
+            </a>
+
+            <figure className={`${CARD} flex flex-col overflow-hidden`}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={withBasePath(RISE_OFFICIAL_RENDER)}
+                alt="The official design render of the circuit from above the lake"
+                width={1024}
+                height={683}
+                loading="lazy"
+                className="aspect-[3/2] w-full object-cover"
+              />
+              <figcaption className="px-4 py-3 text-[14px] text-[#8E96AA]">The official design render, by Tilke</figcaption>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={withBasePath(`/press/rise/${RISE_AERIAL.file}`)}
+                alt={`${RISE_AERIAL.alt}, from the same angle in LibreCorsa's model`}
+                width={3072}
+                height={2048}
+                loading="lazy"
+                className="aspect-[3/2] w-full border-t border-[#262B3D] object-cover"
+              />
+              <figcaption className="px-4 py-3 text-[14px] text-[#8E96AA]">
+                The same view of my model, rendered in Blender Cycles
+              </figcaption>
+            </figure>
+
+            <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {RISE_RENDERS.map((r) => (
+                <li key={r.file}>
+                  <a
+                    href={withBasePath(`/press/rise/${r.file}`)}
+                    download
+                    className={`${CARD} group flex flex-col overflow-hidden no-underline`}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={withBasePath(`/press/rise/thumbs/${r.file.replace(/\.jpg$/, ".webp")}`)}
+                      alt={r.alt}
+                      width={1024}
+                      height={576}
+                      loading="lazy"
+                      className="aspect-video w-full object-cover"
+                    />
+                    <span className="flex items-center justify-between gap-3 px-4 py-3 text-[14px] text-[#C5CBD8] group-hover:text-[#F5F7FA]">
+                      {r.alt}
+                      <span className="flex shrink-0 items-center gap-2">
+                        <span className="lc-data text-[12px] font-semibold text-[#8E96AA]">{r.size}</span>
+                        <Download aria-hidden className="h-4 w-4 shrink-0 text-[#8E96AA] group-hover:text-[#CCFF00]" />
+                      </span>
+                    </span>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </section>
         </section>
 
         <section className={SECTION} aria-labelledby="contact">
