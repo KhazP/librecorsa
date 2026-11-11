@@ -10,7 +10,7 @@ import { isVehicleModelId, type AssistPreset, type VehicleModelId } from "@/type
 import { listBestLaps } from "@/lib/sim/ghost-store";
 import { lapPlausibilityProblem } from "@/lib/sim/lap-plausibility";
 import { validateLapRecording } from "@/lib/sim/lap-recorder";
-import { lapPhysicsVersion, parseLapConditions, type LapConditions, type LapRecording, type LeaderboardEntry } from "@/lib/sim/lap-types";
+import { lapBoardClass, lapPhysicsVersion, parseLapConditions, type LapConditions, type LapRecording, type LeaderboardEntry } from "@/lib/sim/lap-types";
 import type { SimRealism } from "@/lib/sim/sim-realism";
 import { getOrCreateDriverKey } from "./driver-key";
 import { getOnlineConfig, onlineUrl } from "./online-config";
@@ -77,6 +77,49 @@ export function saveChallengeBest(id: string, lapTimeMs: number): void {
     localStorage.setItem(CHALLENGE_BEST_KEY, JSON.stringify({ id, lapTimeMs }));
   } catch {
     // Storage blocked: the next challenge lap is simply sent again
+  }
+}
+
+const BOARD_BEST_KEY = "lc.boardBest";
+/** Boards remembered; past this the oldest are forgotten (a forgotten board's next lap is simply sent again) */
+const MAX_BOARD_BESTS = 200;
+
+/** The online board a lap goes on: circuit, car and class (physics revision, assists, realism, surface); null without conditions */
+export function boardKeyOf(rec: Pick<LapRecording, "trackId" | "vehicle" | "conditions">): string | null {
+  return rec.conditions ? `${rec.trackId}|${rec.vehicle}|${lapBoardClass(rec.conditions)}` : null;
+}
+
+function readBoardBests(): Record<string, unknown> {
+  try {
+    const saved: unknown = JSON.parse(localStorage.getItem(BOARD_BEST_KEY) ?? "null");
+    return isRecord(saved) ? saved : {};
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * This browser's best lap (ms) on an online board, as the server last took it or turned it down for a faster one of the
+ * driver's; null when none has gone up from here. Not the local personal best: bests set before the board began, or
+ * while it was off, never went up, and laps slower than them still belong on it.
+ */
+export function loadBoardBest(key: string): number | null {
+  return finiteNumber(readBoardBests()[key]);
+}
+
+/** Remembers a lap the board took (or refused for a faster one it has); a slower time never replaces a faster one */
+export function saveBoardBest(key: string, lapTimeMs: number): void {
+  try {
+    const bests = readBoardBests();
+    const known = finiteNumber(bests[key]);
+    if (known !== null && known <= lapTimeMs) return;
+    delete bests[key];
+    bests[key] = lapTimeMs;
+    const keys = Object.keys(bests);
+    for (const old of keys.slice(0, Math.max(0, keys.length - MAX_BOARD_BESTS))) delete bests[old];
+    localStorage.setItem(BOARD_BEST_KEY, JSON.stringify(bests));
+  } catch {
+    // Storage blocked: the next lap is simply sent again, and the board keeps the faster one
   }
 }
 

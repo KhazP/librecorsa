@@ -17,12 +17,15 @@ import { GhostPlayer } from "@/lib/sim/lap-recorder";
 import { lapBoardClass, lapConditionsNow, type LapConditions, type LapRecording, type LapSummaryData, type LeaderboardEntry } from "@/lib/sim/lap-types";
 import { exportLapFile, importLapFile, listBestLaps, loadBestLap, saveBestLapIfFaster } from "@/lib/sim/ghost-store";
 import {
+  boardKeyOf,
   boardOnline,
   fetchRemoteBoard,
   fetchRemoteGhost,
   lapToEntry,
+  loadBoardBest,
   loadChallengeBest,
   localLeaderboard,
+  saveBoardBest,
   saveChallengeBest,
   submitLap,
   type BoardFilter,
@@ -69,11 +72,16 @@ const challengeOf = (rec: LapRecording): string | undefined => {
   const week = challengeAt(Date.now());
   return fitsChallenge(rec, week) ? week.id : undefined;
 };
-/** Uploads a lap, to this week's challenge board too when it fits; remembers the lap the challenge board took */
+/**
+ * Uploads a lap, to this week's challenge board too when it fits; remembers the lap each board took (or refused for a
+ * faster one of the driver's), so only a faster one is sent next time
+ */
 const uploadLap = async (rec: LapRecording): Promise<SubmitResult> => {
   const event = challengeOf(rec);
   const res = await submitLap(rec, { event }).catch((): SubmitResult => ({ ok: false }));
   if (res.ok && event && res.eventRank !== undefined) saveChallengeBest(event, rec.lapTimeMs);
+  const board = boardKeyOf(rec);
+  if (board && (res.ok || res.notFaster)) saveBoardBest(board, rec.lapTimeMs);
   return res;
 };
 // A lap on a circuit this build no longer lists keeps its id as its name (getTrackInfo would name it after another)
@@ -704,12 +712,17 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
             }
             void refreshLeaderboard();
           }
-          // A new personal best goes on the online board by itself, and so does the best lap of this week's
-          // challenge (which an older, faster lap of the same kind doesn't stand in for), under the player's name,
-          // the one the game picked included, unless they turned this off. A failure offers a retry on the lap card
+          // A lap faster than this browser's lap on its online board goes up by itself, and so does the best lap of
+          // this week's challenge (which an older, faster lap of the same kind doesn't stand in for), under the
+          // player's name, the one the game picked included, unless they turned this off. Measured against the board,
+          // not the local personal best: a best set before the board began never went up, and a returning driver's
+          // slower laps still belong on it. A failure offers a retry on the lap card
           const week = challengeOf(recording);
           const weekBest = week ? loadChallengeBest(week) : null;
-          if (!saved && !(week && (weekBest === null || recording.lapTimeMs < weekBest))) return;
+          const board = boardKeyOf(recording);
+          const boardBest = board ? loadBoardBest(board) : null;
+          const beatsBoard = board !== null && (boardBest === null || recording.lapTimeMs < boardBest);
+          if (!beatsBoard && !(week && (weekBest === null || recording.lapTimeMs < weekBest))) return;
           const profile = settingsRef.current.profile;
           if (!boardOnRef.current || !profile.autoUpload) return;
           const shown = () => submitReq === submitReqRef.current;

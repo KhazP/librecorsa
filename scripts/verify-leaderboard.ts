@@ -13,7 +13,7 @@ import { LAP_SAMPLE_STRIDE, PHYSICS_VERSION, lapBoardClass, lapPhysicsVersion, p
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { handleApi } from '../cloudflare/api/index';
-import { parseRemoteBoard } from '../src/lib/net/leaderboard';
+import { boardKeyOf, loadBoardBest, parseRemoteBoard, saveBoardBest } from '../src/lib/net/leaderboard';
 import { challengePlaceLabel, challengeTarget } from '../src/lib/net/challenge-target';
 import { boardDeps, driverNameKey, listLaps, submitLap, type BoardDeps } from '../cloudflare/api/board';
 import type { Env } from '../cloudflare/api/types';
@@ -110,6 +110,31 @@ check('board class', real.conditions !== undefined && lapBoardClass(real.conditi
     `p${older.vf26} / p${back.vf26}`
   );
   check('the other cars keep one board whichever engine the VF26 is on', fresh.others === PHYSICS_VERSION && older.others === PHYSICS_VERSION && lapPhysicsVersion() === PHYSICS_VERSION);
+}
+{
+  // A lap posts itself when it beats this browser's lap on its online board, not its local personal best: a best set
+  // before the board began never went up. Each board (circuit, car, class) keeps its own time; a slower time never
+  // replaces a faster one
+  const g = globalThis as { localStorage?: unknown };
+  const kept = new Map<string, string>();
+  g.localStorage = { getItem: (k: string) => kept.get(k) ?? null, setItem: (k: string, v: string) => void kept.set(k, v) };
+  const key = boardKeyOf(real);
+  const other = boardKeyOf({ ...real, trackId: 'dunsfold', vehicle: 'liana' });
+  const before = key ? loadBoardBest(key) : -1;
+  if (key) {
+    saveBoardBest(key, 90_000);
+    saveBoardBest(key, 95_000);
+  }
+  const after = key ? loadBoardBest(key) : -1;
+  const elsewhere = other ? loadBoardBest(other) : -1;
+  if (key) saveBoardBest(key, 88_000);
+  const faster = key ? loadBoardBest(key) : -1;
+  delete g.localStorage;
+  check(
+    'a board with no lap from this browser takes the next one; each board keeps its own best, never a slower one',
+    key === `rwanda_official_short|vf26|${lapBoardClass(real.conditions!)}` && boardKeyOf({ ...real, conditions: undefined }) === null && before === null && after === 90_000 && elsewhere === null && faster === 88_000,
+    `${before} → ${after} → ${faster}`
+  );
 }
 check('a recording without its realism level is refused', validateLapRecording({ ...real, conditions: { ...real.conditions, realism: undefined } }) === null);
 check(
