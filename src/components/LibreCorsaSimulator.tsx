@@ -49,6 +49,8 @@ import { clampFov, codeFromName, DEFAULT_PLAYER_SETTINGS, loadCarChoice, loadOnb
 import type { AeroSetupPreset, AssistPreset, CameraMode, LiveTunerPatch, LiveryConfig, TireCompound, TyreSetup, VehicleModelId } from "@/types/f1";
 import { aiFieldOf, autoCompoundFor, DEFAULT_AERO_PRESET, DriveSession, idleDriveSnapshot, mpRaceOf, type AppPhase, type RunResetReason, type SessionRace } from "@/lib/drive-session";
 import { startAiRace, type RaceSetup } from "@/lib/sim/race-setup";
+import type { PodiumUi } from "@/lib/render/podium-shot";
+import { useRaceHistory } from "@/components/hud/useRaceHistory";
 
 const DEFAULT_ASSIST_PRESET: AssistPreset = DEFAULT_PLAYER_SETTINGS.assistPreset;
 /** A lap record's car: records are per vehicle model, named after its first car */
@@ -79,6 +81,9 @@ const challengeTrackName = (id: string) => {
 };
 /** The snapshot store before the session exists: nothing to subscribe to */
 const noSubscribe = () => () => {};
+// polish:B the podium shot's view before the drive exists
+const IDLE_PODIUM: PodiumUi = { stage: "idle", rows: [] };
+const idlePodium = () => IDLE_PODIUM;
 /** A race the host started before this circuit was loaded (or on another one): picked up once the scene has loaded */
 let pendingRaceStart: RaceStartInfo | null = null;
 /**
@@ -1215,6 +1220,19 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   const isMpHost = roomLobby !== null && roomLobby.hostId === localPeerId;
   isMpHostRef.current = isMpHost;
 
+  // polish:B after the flag: the podium shot, the race kept in this browser, the next open race
+  const podiumUi = useSyncExternalStore(session?.podium.subscribe ?? noSubscribe, session?.podium.getSnapshot ?? idlePodium, idlePodium);
+  const raceHistory = useRaceHistory(telemetry.race, telemetry.runId, {
+    trackId,
+    carId,
+    kind: raceKind === "ai" ? "ai_race" : raceKind === "mp" ? (inScheduledRace ? "open_race" : "room_race") : null,
+  });
+  /** Out of this open race (the others finish without this player) and into the next one */
+  const handleJoinNextRace = useCallback(() => {
+    endMpRace(true);
+    handleJoinRace();
+  }, [endMpRace, handleJoinRace]);
+
   const menuProps = {
     telemetry,
     settings,
@@ -1385,6 +1403,12 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
           }
           onBackToLobby={raceKind === "mp" ? handleBackToLobby : undefined}
           backToLobbyLabel={inScheduledRace ? "Back to the races" : undefined}
+          raceEnd={{
+            podium: podiumUi,
+            onSkipPodium: () => session?.podium.skip(),
+            history: raceHistory,
+            nextRace: raceKind === "mp" && inScheduledRace && races.on ? { slotS: races.slotS, onJoin: handleJoinNextRace } : undefined,
+          }}
           replay={
             replayUi.active
               ? {
