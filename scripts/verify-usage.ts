@@ -108,14 +108,17 @@ async function main() {
 
   // 2. Through the API: the switch, the limit, the config ------------------------------------------------------------
   {
-    const env = { ONLINE_USAGE: 'on', BOARD_DB: db } as unknown as Env;
+    // A database of its own: the API counts on the real clock, and section 3 totals the shared one on this test's clock
+    const apiDb = fakeD1(schema);
+    const env = { ONLINE_USAGE: 'on', BOARD_DB: apiDb } as unknown as Env;
     const post = (e: Env, body: unknown = good, ip?: string) => {
       const request = report(body, 'FR', ip);
       return handleApi(request, e, new URL(request.url));
     };
     const res = await post(env);
     check('api: POST /api/usage counts, never cached', res.status === 200 && res.headers.get('Cache-Control') === 'no-store');
-    check('api: the request keeps its country through the API', (await rows()).some((r) => r.country === 'FR'));
+    const apiRows = (await apiDb.prepare('SELECT * FROM usage_daily').all<Row>()).results;
+    check('api: the request keeps its country through the API', apiRows.some((r) => r.country === 'FR'));
     check('api: switched off it answers 404', (await post({ ...env, ONLINE_USAGE: 'off' })).status === 404);
     check('api: no database: 404', (await post({ ONLINE_USAGE: 'on' } as unknown as Env)).status === 404);
     check('api: a bad report is 400', (await post(env, { ...good, mode: 'drift' })).status === 400);
