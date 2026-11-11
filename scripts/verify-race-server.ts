@@ -215,6 +215,17 @@ async function main() {
   check('a car on the grid gets back in on a new socket, and hears the race', back.sent[0].t === 'welcome' && lobbyOf(back)?.race?.id === start?.id && al.closed === 4001);
   check('and the result as it stands', results(back).some((r) => r.final));
   check('with the wrong token it does not', (await join_('peer_bea', token('q'))).last()?.t === 'taken');
+  // A car whose socket dropped: out of the lobby, then back in it under its own name when it reconnects
+  bea.closing = true;
+  await server.webSocketClose(bea, 1006);
+  bea.closing = false;
+  check('a car whose socket dropped leaves the lobby', !lobbyOf(back)?.players.some((p) => p.peerId === 'peer_bea'));
+  const beaBack = await join_('peer_bea', token('b'));
+  check(
+    'back on a new socket it is in everyone\'s lobby again, under the name it raced with',
+    lobbyOf(back)?.players.find((p) => p.peerId === 'peer_bea')?.name === 'Bea' && lobbyOf(beaBack)?.players.some((p) => p.peerId === 'peer_bea') === true,
+    JSON.stringify(lobbyOf(back)?.players.map((p) => p.name)),
+  );
   check('nobody joins a race under way', (await join_('peer_new', token('n'), 'New')).last()?.t === 'started');
 
   // The end

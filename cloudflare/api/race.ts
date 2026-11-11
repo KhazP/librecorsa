@@ -59,6 +59,13 @@ interface Entrant {
   identified?: boolean;
 }
 
+/** A car on the grid as it raced: kept at the start, for the results and for a car back on a new socket */
+interface GridName {
+  name: string;
+  code: string;
+  color?: string;
+}
+
 interface Meta {
   index: number;
   startsMs: number;
@@ -185,7 +192,14 @@ export class RaceServer {
       if (nowMs > meta.startsMs - RACE_JOIN_CUTOFF_MS) return refuse("closed");
       if (this.sockets().length >= MAX_RACERS) return refuse("full");
     }
-    const previous = same.length > 0 ? entrantOf(same[0]) : null;
+    let previous: Partial<Entrant> | null = same.length > 0 ? entrantOf(same[0]) : null;
+    // Back in the race after its old socket closed: the car is in the lobby again under the name it raced with (the
+    // game says hello only once, and every screen retires a car that is not in the lobby)
+    const restored = race !== null && previous?.name === undefined;
+    if (restored) {
+      const known = ((await this.state.storage.get<Record<string, GridName>>("names")) ?? {})[peer];
+      if (known) previous = { ...(previous ?? {}), name: known.name, code: known.code, color: known.color, vehicle: race.vehicle, trackId: race.trackId };
+    }
     for (const old of same) close(old, 4001, "replaced");
 
     this.state.acceptWebSocket(ws, ["car"]);
@@ -193,7 +207,8 @@ export class RaceServer {
     this.heard.set(ws, nowMs);
     send(ws, JSON.stringify({ t: "welcome", now: nowMs, startsMs: meta.startsMs, index: meta.index }));
     // The lobby first: it names this server as the host, which the game needs before it trusts the clock pongs
-    send(ws, this.lobbyMessage(meta, race));
+    if (restored) await this.broadcastLobby();
+    else send(ws, this.lobbyMessage(meta, race));
     // Back in a race that has finishers: the result as it stands
     const book = race ? await this.getBook() : null;
     if (book && book.firstFinishMs !== null) send(ws, this.resultText(book));
@@ -371,7 +386,7 @@ export class RaceServer {
     const meta = await this.getMeta();
     const race = await this.getRace();
     if (!db || !meta || !race) return;
-    const names = (await this.state.storage.get<Record<string, { name: string; code: string }>>("names")) ?? {};
+    const names = (await this.state.storage.get<Record<string, GridName>>("names")) ?? {};
     const keys = (await this.state.storage.get<Record<string, string>>("keys")) ?? {};
     const entrants: Record<string, RaceEntrant> = {};
     for (const peer of race.grid) entrants[peer] = { name: names[peer]?.name ?? "Driver", code: names[peer]?.code ?? "DRV", keyHash: keys[peer] };
@@ -479,7 +494,10 @@ export class RaceServer {
     await this.state.storage.put("race", race);
     await this.state.storage.put("tokens", Object.fromEntries(entrants.map((e) => [e.peer, e.token])));
     // The names the grid races under, for the results (a socket opened again later has no attachment of its own)
-    await this.state.storage.put("names", Object.fromEntries(entrants.map((e) => [e.peer, { name: e.name ?? "Driver", code: e.code ?? "DRV" }])));
+    await this.state.storage.put(
+      "names",
+      Object.fromEntries(entrants.map((e): [string, GridName] => [e.peer, { name: e.name ?? "Driver", code: e.code ?? "DRV", color: e.color }])),
+    );
     this.book = newResultBook(race);
     await this.state.storage.put("book", this.book);
     await this.state.storage.setAlarm(meta.startsMs + roomLifeMs(race.laps));
