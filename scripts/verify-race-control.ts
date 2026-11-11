@@ -7,7 +7,9 @@
 import { TrackLimitsMonitor, type TrackLimitsEvent, type TrackLimitsFrame } from "../src/lib/sim/track-limits";
 import { classifiedTimeS, type RacerProgress } from "../src/lib/sim/race-session";
 import { computeRelatives, fuelStrategy, type LapRecord } from "../src/components/hud/mfd-data";
-import { clampChassisSetup, DEFAULT_CHASSIS_SETUP } from "../src/lib/sim/car-setup";
+import { clampChassisSetup, DEFAULT_CHASSIS_SETUP, FUEL_LOAD } from "../src/lib/sim/car-setup";
+import { applyTimeTrial, timeTrialRules } from "../src/lib/sim/time-trial";
+import { TrackEvolutionState } from "../src/lib/sim/track-evolution";
 import type { CarTelemetry, RaceStandingEntry } from "../src/types/f1";
 import { F12026CarSim } from "../src/lib/sim/f12026-car/F12026CarSim";
 import { createAmgGt3Sim } from "../src/lib/sim/gt3/AmgGt3Sim";
@@ -237,6 +239,55 @@ console.log("Track limits · every engine honours strict and judged");
     const judged = offLap(make, "judged");
     check(`${name}: strict deletes the lap off the track, judged leaves it to race control`, strict.off && strict.deleted && judged.off && !judged.deleted, JSON.stringify({ strict, judged }));
   }
+}
+
+console.log("Time trial · fixed conditions");
+{
+  const track = getActiveTrackData(1200);
+  const cars = [
+    ["2026 Prototype (classic engine)", () => new F1Physics2026(track), "vf26", FUEL_LOAD.vf26.minKg],
+    ["2026 Prototype (rigid body)", () => createVf26Sim(track), "vf26", FUEL_LOAD["f12026-car"].minKg],
+    ["AMG GT3", () => createAmgGt3Sim(track), "amg-gt3", FUEL_LOAD["amg-gt3"].minKg],
+    ["MTR 496R", () => createMtr496rSim(track), "mtr-496r", FUEL_LOAD["mtr-496r"].minKg],
+    ["Suzuki Liana", () => createSuzukiLianaSim(track), "liana", FUEL_LOAD.liana.minKg],
+  ] as const;
+  for (const [name, make, vehicle, minKg] of cars) {
+    const car: SimulatorCar = make();
+    const garage = { ...DEFAULT_CHASSIS_SETUP, fuelDeltaKg: 20, frontWingClicks: 3 };
+    car.applyChassisSetup?.(garage);
+    car.tireCompound = "hard";
+    car.resetToStartGrid(false);
+    const own = car.telemetry.fuelKg;
+    const road = new TrackEvolutionState(track.totalLengthM);
+    applyTimeTrial(car, timeTrialRules(vehicle), garage, road, (c) => (car.tireCompound = c));
+    car.resetToStartGrid(true);
+    const first = car.telemetry.fuelKg;
+    for (let i = 0; i < 120; i++) car.step(1 / 60, { throttle: 1 });
+    applyTimeTrial(car, timeTrialRules(vehicle), garage, road, (c) => (car.tireCompound = c));
+    car.resetToStartGrid(true);
+    const kept = car.getChassisSetup?.();
+    check(
+      `${name}: the lowest fuel it allows and its one tyre, at every flying restart, the rest of the setup kept`,
+      Math.abs(first - minKg) < 0.01 && Math.abs(car.telemetry.fuelKg - minKg) < 0.01 && own > minKg + 5 && car.tireCompound === timeTrialRules(vehicle).compound && kept?.frontWingClicks === 3,
+      `${own.toFixed(1)} kg own, ${first.toFixed(2)} then ${car.telemetry.fuelKg.toFixed(2)} kg, ${car.tireCompound}`
+    );
+  }
+  const road = new TrackEvolutionState(track.totalLengthM);
+  road.reset("green");
+  road.holdFullGrip(true);
+  road.reset("green");
+  for (let i = 0; i < 600; i++) road.depositCarPass(500, 6, 0, 40_000, 1 / 60);
+  road.weatherWash(1, 600);
+  const held = road.sample(500, 6, 0);
+  const onLine = road.sample(500, 0, 0);
+  check(
+    "the road is held fully rubbered: no green reset, no marbles, no wash",
+    road.meanRacingLineRubber() === 1 && held.marbleLevel === 0 && onLine.gripMultiplier > 1.02,
+    `rubber ${road.meanRacingLineRubber()}, grip ${onLine.gripMultiplier.toFixed(4)}`
+  );
+  road.holdFullGrip(false);
+  road.reset("natural");
+  check("let go, the road takes the session's rubber again", Math.abs(road.meanRacingLineRubber() - 0.65) < 1e-9);
 }
 
 console.log("Classification with penalties");

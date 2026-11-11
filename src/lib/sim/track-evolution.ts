@@ -103,6 +103,11 @@ export class TrackEvolutionState {
   public baseTrackTempC: number;
   /** Dynamic road evolution rate scale (1 = normal, 0 = static) */
   public timeScale = 1;
+  /**
+   * The time trial's road: fully rubbered in and held there (no marbles, no wash, no heating), whatever the session's
+   * conditions say. A reset keeps it so until it is let go (`holdFullGrip(false)`).
+   */
+  private fullGripHeld = false;
 
   constructor(trackLengthM: number, baseTrackTempC = TRACK_EVOLUTION_BASE_C) {
     this.trackLengthM = Math.max(100, trackLengthM);
@@ -111,13 +116,28 @@ export class TrackEvolutionState {
   }
 
   public reset(initialRubber: number | SurfaceGripPresetId = BASELINE_RUBBER): void {
-    const r =
-      typeof initialRubber === 'string'
+    const r = this.fullGripHeld
+      ? 1
+      : typeof initialRubber === 'string'
         ? (SURFACE_GRIP_PRESET_RUBBER[initialRubber] ?? BASELINE_RUBBER)
         : initialRubber;
     this.racingLineRubber.fill(Math.min(1, Math.max(0, r)));
     this.offLineMarbles.fill(0);
     this.sectorTempDeltaC.fill(0);
+  }
+
+  /**
+   * Holds the road at full grip (the time trial: fully rubbered, never green, the same on every lap), or lets it go;
+   * let go, it keeps its rubber until the next reset and evolves from there
+   */
+  public holdFullGrip(on: boolean): void {
+    this.fullGripHeld = on;
+    if (on) this.reset();
+  }
+
+  /** The road is held at full grip (`holdFullGrip`) */
+  public get fullGrip(): boolean {
+    return this.fullGripHeld;
   }
 
   private sectorIndex(sMeters: number): number {
@@ -137,7 +157,7 @@ export class TrackEvolutionState {
   ): void {
     // A non-finite input (a car mid-reset) must not poison a sector for the rest of the session
     if (![sMeters, lateralOffsetM, racingLineLatM, slipPowerW, dt].every(Number.isFinite) || dt <= 0) return;
-    if (this.timeScale <= 0) return;
+    if (this.timeScale <= 0 || this.fullGripHeld) return;
     const scaledDt = dt * this.timeScale;
     const idx = this.sectorIndex(sMeters);
     const distFromLine = Math.abs(lateralOffsetM - racingLineLatM);
@@ -176,7 +196,7 @@ export class TrackEvolutionState {
    */
   public weatherWash(rainIntensity: number, dt: number): void {
     if (!(rainIntensity > 0) || !(dt > 0) || !Number.isFinite(rainIntensity + dt)) return;
-    if (this.timeScale <= 0) return;
+    if (this.timeScale <= 0 || this.fullGripHeld) return;
     const k = 1 - Math.exp(-WASH_RATE_PER_S * Math.min(1, rainIntensity) * dt * this.timeScale);
     for (let i = 0; i < TRACK_EVOLUTION_SECTORS; i++) {
       this.racingLineRubber[i] += (WASHED_RUBBER - this.racingLineRubber[i]) * k;
@@ -263,7 +283,7 @@ export class TrackEvolutionState {
 
   /** Imports a previously saved 4-property per-sector surface state */
   public importSurfaceState(snapshot: SurfaceStateSnapshot): void {
-    if (!snapshot || snapshot.sectors !== TRACK_EVOLUTION_SECTORS) return;
+    if (!snapshot || snapshot.sectors !== TRACK_EVOLUTION_SECTORS || this.fullGripHeld) return;
     for (let i = 0; i < TRACK_EVOLUTION_SECTORS; i++) {
       if (Number.isFinite(snapshot.groove[i])) {
         this.racingLineRubber[i] = Math.min(1, Math.max(0, snapshot.groove[i]));
