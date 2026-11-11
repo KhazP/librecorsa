@@ -11,14 +11,6 @@ import { coverage } from "@/lib/press";
 import { REPO_URL, SUPPORT_URL } from "@/lib/site";
 import { CIRCUIT_VENUES, DEFAULT_TRACK_ID } from "@/lib/track-registry";
 
-/**
- * Links made before the home page existed open the game at "/": invites (`?room=`), car links, the developer
- * switches, sites that frame the game and installs from before the manifest pointed at /play. Those go on to /play
- * with their query and hash, before anything here is drawn. The parameter list is every one the game reads.
- */
-const GAME_PARAMS = ["room", "car", "sim", "f1physics", "vf26engine", "depth", "sky", "colliders", "perf", "profile"];
-const FORWARD_TO_GAME = `(function(){try{var q=new URLSearchParams(location.search);var game=${JSON.stringify(GAME_PARAMS)}.some(function(k){return q.has(k)});var framed=window.self!==window.top;var app=matchMedia("(display-mode: standalone)").matches||matchMedia("(display-mode: fullscreen)").matches;if(game||framed||app)location.replace(${JSON.stringify(withBasePath("/play"))}+location.search+location.hash)}catch(e){}})()`;
-
 /** Written by scripts/build-home-outlines.ts, so its shape is LapOutline's (JSON reads a tuple as an array) */
 const OUTLINES = outlines as unknown as Record<string, LapOutline>;
 
@@ -67,10 +59,6 @@ export default function HomePage() {
     supportUrl: SUPPORT_URL,
   };
 
-  return (
-    <>
-      <script dangerouslySetInnerHTML={{ __html: FORWARD_TO_GAME }} />
-      <HomeHub data={data} />
-    </>
-  );
+  // Old links to "/" that belong to the game go on to /play from the root layout (forward-to-game.ts)
+  return <HomeHub data={data} />;
 }

@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
 import { withBasePath } from "@/lib/base-path";
+import { FORWARD_TO_GAME } from "@/lib/home/forward-to-game";
 import { REPO_URL, SITE_DESCRIPTION, SITE_NAME, SITE_TITLE, SITE_URL } from "@/lib/site";
 
 /*
@@ -129,6 +130,8 @@ export default function RootLayout({
       className={`dark ${geist.variable} ${geistMono.variable} ${chakraPetch.variable} ${orbitron.variable}`}
     >
       <body className="antialiased bg-[#08090D] text-[#F5F7FA] selection:bg-[#CCFF00] selection:text-[#08090D]">
+        {/* Old links to "/" go on to the game at /play before the home page is drawn (forward-to-game.ts) */}
+        <script dangerouslySetInnerHTML={{ __html: FORWARD_TO_GAME }} />
         <script
           type="application/ld+json"
           // Static data, escaped so it can't close the script element
