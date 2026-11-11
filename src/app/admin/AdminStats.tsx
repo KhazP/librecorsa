@@ -186,7 +186,6 @@ export function AdminStats() {
         </header>
 
         <section className="flex flex-col gap-3">
-          <p className="lc-lbl">Private</p>
           <h1 className="lc-disp text-[clamp(36px,7vw,56px)] text-[#F5F7FA]">Numbers</h1>
           <p className="max-w-[640px] text-[15px] leading-relaxed text-[#C5CBD8]">
             Minutes driven per day, circuit, car, mode and country. Nothing here tells one player from another.
