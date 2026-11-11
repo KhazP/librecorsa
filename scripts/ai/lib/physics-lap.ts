@@ -27,6 +27,13 @@ export interface PhysicsLap {
   v: Float64Array;
 }
 
+/** The VF26 on the circuit's mesh barriers when there is a mesh, as the game attaches it, else on the data's wall lines */
+function vf26On(track: BuiltTrackData, root: THREE.Object3D | null): SimulatorCar {
+  const car = new F1Physics2026(track);
+  if (root) car.attachTrackRoot(root);
+  return car as unknown as SimulatorCar;
+}
+
 export function physicsLap(
   track: BuiltTrackData,
   root: THREE.Object3D | null,
@@ -38,7 +45,7 @@ export function physicsLap(
   const t = aiTrackFor(track);
   const plan = makeDrivePlan(t, offsets, carLimitsFor(line === 'gt3' ? 'amg-gt3' : line === 'vf26' ? 'vf26' : 'f12026-car', gripScale));
   const car: SimulatorCar =
-    line === 'gt3' ? createAmgGt3Sim(track, root) : line === 'vf26' ? (new F1Physics2026(track) as unknown as SimulatorCar) : new F12026CarSim(track, root);
+    line === 'gt3' ? createAmgGt3Sim(track, root) : line === 'vf26' ? vf26On(track, root) : new F12026CarSim(track, root);
   car.assistPreset = 'pro';
   car.aiAutopilot = true;
   car.aiPaceScale = 1;

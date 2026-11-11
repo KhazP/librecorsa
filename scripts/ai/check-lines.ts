@@ -41,7 +41,7 @@ for (const car of cars) {
   const kind = car === 'amg-gt3' ? 'gt3' : car === 'vf26' ? 'vf26' : 'f1';
   const offsets = new Float64Array(t.n);
   for (let i = 0; i < t.n; i++) offsets[i] = aiLineOffsetM(track.getSampleAtDistance(i * t.ds), kind === 'gt3' ? 'gt3' : 'f1');
-  const lap = physicsLap(track, kind === 'vf26' ? null : root, kind, offsets, grip);
+  const lap = physicsLap(track, root, kind, offsets, grip);
   const ok =
     Number.isFinite(lap.lapS) && lap.wallHits === 0 && lap.offTrackFrames <= 12 && lap.maxErrM < 3;
   const r3 = (x: number) => Math.round(x * 1000) / 1000;
@@ -60,7 +60,7 @@ for (const car of cars) {
   if (ok && ceiling.length) {
     let best = grip;
     for (const g of ceiling) {
-      const l = physicsLap(track, kind === 'vf26' ? null : root, kind, offsets, g);
+      const l = physicsLap(track, root, kind, offsets, g);
       const clean = Number.isFinite(l.lapS) && l.wallHits === 0 && l.offTrackFrames <= 12 && l.maxErrM < 2.5 && l.lapS < lap.lapS;
       console.log(`  grip ${g}: ${clean ? 'clean' : 'not clean'} ${l.lapS.toFixed(3)} s, ${l.wallHits} barrier hits, ${l.offTrackFrames} off-track frames, worst ${l.maxErrM.toFixed(2)} m`);
       if (!clean) break;
