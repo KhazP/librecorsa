@@ -12,6 +12,10 @@ import { join } from "node:path";
 import { LoopGrid, Vf26SoundBank, type Vf26AudioInputs } from "../src/lib/sim/vf26-audio";
 import { SUZUKI_LIANA_SOUND, createSuzukiLianaSim } from "../src/lib/sim/road/SuzukiLianaSim";
 import { createFlatTestTrack } from "./lib/flat-track";
+import { skipSuiteWithout } from "./lib/hosted-files";
+
+// The Liana's sound bank is hosted on librecorsa.org only: a clone and CI have no bank to hear
+skipSuiteWithout("public/cars/liana/audio/manifest.json");
 
 let passed = 0;
 let failed = 0;
