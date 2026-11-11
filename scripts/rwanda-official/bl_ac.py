@@ -78,6 +78,31 @@ def tex_node(mat):
     return next((n for n in mat.node_tree.nodes if n.type == 'TEX_IMAGE' and n.image), None) if mat and mat.use_nodes else None
 
 
+def tiling(mat):
+    """How often the material repeats its texture over a unit of the mesh's uv (bl_common.mat's Mapping node)"""
+    n = next((n for n in mat.node_tree.nodes if n.type == 'MAPPING'), None) if mat and mat.use_nodes else None
+    return float(n.inputs['Scale'].default_value[0]) if n else 1.0
+
+
+def retile(me, slot, k):
+    """AC's shaders have no such repeat: the working copy's uv carries it, for the faces of that material"""
+    if k == 1.0 or not me.uv_layers or not len(me.polygons):
+        return
+    mi = np.zeros(len(me.polygons), np.int32)
+    me.polygons.foreach_get('material_index', mi)
+    start = np.zeros(len(me.polygons), np.int32)
+    me.polygons.foreach_get('loop_start', start)
+    total = np.zeros(len(me.polygons), np.int32)
+    me.polygons.foreach_get('loop_total', total)
+    pick = np.zeros(len(me.loops), bool)
+    pick[np.repeat(start, total) + (np.arange(total.sum()) - np.repeat(np.cumsum(total) - total, total))] = np.repeat(mi == slot, total)
+    uv = np.zeros(len(me.loops) * 2)
+    me.uv_layers.active.data.foreach_get('uv', uv)
+    uv = uv.reshape(-1, 2)
+    uv[pick] *= k
+    me.uv_layers.active.data.foreach_set('uv', uv.ravel())
+
+
 def uses_vcol(mat):
     return bool(mat and mat.use_nodes and any(n.type == 'VERTEX_COLOR' for n in mat.node_tree.nodes))
 
@@ -185,6 +210,7 @@ def export(out, scale='FBX_SCALE_UNITS'):
 
     for ob, src, key in copies:
         for i, mat in enumerate(list(ob.data.materials)):
+            retile(ob.data, i, tiling(mat))
             ob.data.materials[i] = material(mat, ob, key)
     for o in trees:
         for i, mat in enumerate(list(o.data.materials)):
