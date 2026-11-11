@@ -13,6 +13,8 @@ import * as THREE from 'three';
 import { setVf26OnRigidBody } from '../src/lib/cars/vf26-engine';
 import { vehicleModelSpec } from '../src/lib/cars/vehicle-models';
 import { F12026CarSim } from '../src/lib/sim/f12026-car/F12026CarSim';
+import { createGroundHit } from '../src/lib/sim/f12026-car/TrackColliderQuery';
+import { simMode } from '../src/lib/sim/runtime/sim-mode';
 import { F1Physics2026 } from '../src/lib/f1-physics-2026';
 import { SIM_TICK_S } from '../src/lib/sim/runtime/sim-protocol';
 import { createSimHost, loopbackTransport } from '../src/lib/sim/runtime/sim-host';
@@ -246,17 +248,18 @@ console.log('\n== Set-up, placement and hand-over (f12026-car)');
   check('after a car change the simulation runs the new car, deaf to the old one', sim2.vehicleId === 'amg-gt3' && sim2.tireCompound === 'medium' && r.host.remote, `${sim2.vehicleId}`);
 }
 
-console.log('\n== On the circuit\'s own colliders (f12026-car, autopilot)');
-{
-  // The track mesh loads on the page; its colliders cross to the simulation as data, and the car there drives on them
-  const root = loadGlbGeometry('public/tracks/rwanda_official/rwanda_official.glb');
-  const r = rig('f12026-car');
+console.log('\n== On the circuit\'s own colliders (autopilot)');
+// The track mesh loads on the page; its colliders cross to the simulation as data, and the car there drives on them
+const root = loadGlbGeometry('public/tracks/rwanda_official/rwanda_official.glb');
+for (const [name, vehicle] of [['f12026-car', 'f12026-car'], ['VF26 as it ships', 'vf26']] as const) {
+  setVf26OnRigidBody(true);
+  const r = rig(vehicle);
   r.car.attachTrackRoot?.(root);
   r.car.resetToStartGrid(true);
   r.car.aiAutopilot = true;
   r.host.endFrame(true);
   const sim = r.loop.runtime.simulatedCar!;
-  const direct = vehicleModelSpec('f12026-car').createSim(track, null);
+  const direct = vehicleModelSpec(vehicle).createSim(track, null);
   setUp(direct);
   direct.attachTrackRoot?.(root);
   direct.resetToStartGrid(true);
@@ -266,16 +269,72 @@ console.log('\n== On the circuit\'s own colliders (f12026-car, autopilot)');
     frame(r, {});
     for (acc += FRAME_S; acc >= SIM_TICK_S; acc -= SIM_TICK_S) direct.step(SIM_TICK_S, {});
   }
-  check('the simulation\'s car drives on the colliders it was sent', sim.groundQuery != null && sim.groundQuery !== r.twin.groundQuery && r.host.remote);
+  check(`${name}: the simulation's car drives on the colliders it was sent`, sim.groundQuery != null && sim.groundQuery !== r.twin.groundQuery && r.host.remote, sim.constructor.name);
   const worst = worstDifference(poseOf(sim), poseOf(direct));
-  check('and ends where a car stepped directly on the mesh\'s colliders does', worst === 0, worst === 0 ? `${(sim.vxMs * 3.6).toFixed(0)} km/h, ${sim.sMeters.toFixed(0)} m` : `largest difference ${worst.toExponential(2)}`);
+  check(`${name}: and ends where a car stepped directly on the mesh's colliders does`, worst === 0, worst === 0 ? `${(sim.vxMs * 3.6).toFixed(0)} km/h, ${sim.sMeters.toFixed(0)} m` : `largest difference ${worst.toExponential(2)}`);
   // The same car on the track samples' ground ends elsewhere: the colliders are what it drove on
-  const flat = vehicleModelSpec('f12026-car').createSim(track, null);
+  const flat = vehicleModelSpec(vehicle).createSim(track, null);
   setUp(flat);
   flat.resetToStartGrid(true);
   flat.aiAutopilot = true;
   for (let t = 0; t < 20 - 1e-9; t += SIM_TICK_S) flat.step(SIM_TICK_S, {});
-  check('(a car on the track samples\' ground ends elsewhere)', worstDifference(poseOf(flat), poseOf(direct)) > 1e-3);
+  check(`${name}: (a car on the track samples' ground ends elsewhere)`, worstDifference(poseOf(flat), poseOf(direct)) > 1e-3);
+
+  if (vehicle === 'vf26') {
+    // The kerbs' blocks (the circuit's surface table, read off the kerb meshes' texture coordinates) are the same under
+    // the simulation's car as under the page's: every kerb the track data flags, 0.7 m out from the road's edge
+    const here = r.twin.groundQuery!;
+    const there = sim.groundQuery!;
+    const a = createGroundHit();
+    const b = createGroundHit();
+    let kerbs = 0;
+    let differ = 0;
+    let blocks = 0;
+    let tallest = 0;
+    for (const smp of track.samples) {
+      for (const side of [-1, 1]) {
+        if (!(side < 0 ? smp.kerbLeft : smp.kerbRight)) continue;
+        const reach = side * (smp.width / 2 + 0.7);
+        for (let along = 0; along < 1; along += 0.1) {
+          const x = smp.position.x + smp.binormal.x * reach + smp.tangent.x * along;
+          const z = smp.position.z + smp.binormal.z * reach + smp.tangent.z * along;
+          if (!here.query(x, z, smp.position.y + 3, a) || a.surface !== 'kerb') continue;
+          kerbs++;
+          if (!there.query(x, z, smp.position.y + 3, b) || b.surface !== 'kerb' || b.height !== a.height) differ++;
+          if (b.props.bumpRise > 0) blocks++;
+          // (the hump alone is a smooth 3 cm; a block's crest stands out against the next sample 10 cm on)
+          tallest = Math.max(tallest, b.props.bumpHeightM);
+        }
+      }
+    }
+    check("the kerbs' blocks reach the simulation's ground: the same height under both cars at every kerb probed",
+      kerbs > 2000 && differ === 0 && blocks === kerbs && tallest === 0.016, `${kerbs} points, ${differ} differ, blocks of ${(tallest * 1000).toFixed(0)} mm`);
+  }
+}
+
+console.log('\n== Where the simulation runs');
+{
+  const g = globalThis as { window?: unknown; localStorage?: unknown; Worker?: unknown };
+  const kept = new Map<string, string>();
+  const inBrowser = (search: string, stored?: string, workers = true) => {
+    kept.clear();
+    if (stored) kept.set('librecorsa.simMode', stored);
+    const had = g.Worker;
+    g.window = { location: { search } };
+    g.localStorage = { getItem: (k: string) => kept.get(k) ?? null, setItem: (k: string, v: string) => void kept.set(k, v) };
+    g.Worker = workers ? class {} : undefined;
+    const out = { mode: simMode(), kept: kept.get('librecorsa.simMode') };
+    delete g.window;
+    delete g.localStorage;
+    g.Worker = had;
+    return out;
+  };
+  check('in the worker, in a browser that never chose', inBrowser('').mode === 'worker' && inBrowser('', 'worker').mode === 'worker');
+  const asked = inBrowser('?sim=main');
+  const back = inBrowser('?sim=worker', 'main');
+  check('on the page when asked for in the address, kept for the browser, and undone the same way',
+    asked.mode === 'main' && asked.kept === 'main' && inBrowser('', 'main').mode === 'main' && back.mode === 'worker' && back.kept === 'worker');
+  check('on the page where there are no workers, and off the browser', inBrowser('', undefined, false).mode === 'main' && simMode() === 'main');
 }
 
 if (failures.length) {
