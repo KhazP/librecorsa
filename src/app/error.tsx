@@ -59,13 +59,6 @@ export default function ErrorBoundary({
         <LibreCorsaLogo variant="compact" size="md" />
 
         <div className="flex flex-col gap-4">
-          <span className="inline-flex items-center gap-2.5 font-f1-mono text-[12px] font-extrabold tracking-[0.24em] text-[#FF2A3C] uppercase">
-            <span className="relative inline-flex h-2 w-2">
-              <span className="lc-ping absolute inset-0 rounded-full bg-[#FF2A3C]" />
-              <span className="relative h-2 w-2 rounded-full bg-[#FF2A3C]" />
-            </span>
-            Red flag
-          </span>
           <h1 className="lc-disp m-0 text-[clamp(56px,8vw,112px)] short:text-[48px]">
             The simulator
             <br />

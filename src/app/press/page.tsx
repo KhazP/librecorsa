@@ -112,7 +112,6 @@ export default function PressPage() {
         </header>
 
         <section className="flex flex-col gap-4">
-          <p className="lc-lbl">Press</p>
           <h1 className="lc-disp text-[clamp(44px,9vw,72px)] text-[#F5F7FA]">LibreCorsa in the press</h1>
           <p className="max-w-[640px] text-[17px] leading-relaxed text-[#C5CBD8]">
             LibreCorsa is a free racing simulator that runs in your browser. I make it on my own. Here is what other people have
@@ -297,7 +296,6 @@ export default function PressPage() {
 
           <section className="flex flex-col gap-5 pt-4" aria-labelledby="rise">
             <div className="flex flex-col gap-2">
-              <p className="lc-lbl">Circuit</p>
               <h3 id="rise" className="lc-disp text-[24px] text-[#F5F7FA]">
                 RISE Motordrome
               </h3>
