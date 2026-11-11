@@ -2,7 +2,6 @@
 
 import React from "react";
 import { ChevronRight, type LucideIcon } from "lucide-react";
-import { LibreCorsaLogo } from "@/components/ui/LibreCorsaLogo";
 import { circuitQualityMeta, type TrackInfo } from "@/lib/track-registry";
 import { carById, carQualityMeta, PHYSICS_CHECK, type CarDefinition, type CarId } from "@/lib/cars/car-registry";
 import { setCarSkin, useCarSkinId } from "@/lib/cars/car-skins";
@@ -600,16 +599,3 @@ export const CenterMeter: React.FC<{ label: string; value: number; detail?: stri
   );
 };
 
-/** The LibreCorsa title block shared by the loading screen and title menu */
-export const GameTitle: React.FC<{ kicker: string; size?: "lg" | "xl" }> = ({ kicker, size = "xl" }) => (
-  <div className="flex flex-col items-start gap-3">
-    <LibreCorsaLogo variant="full" size={size === "xl" ? "lg" : "md"} />
-    <div className="inline-flex h-8 items-center gap-2.5 rounded-full border border-[#262B3D] bg-[#11131A]/70 px-3.5 font-f1-mono text-[11px] font-bold tracking-[0.14em] text-[#CCFF00] uppercase backdrop-blur">
-      <span className="relative flex h-2 w-2">
-        <span className="lc-ping absolute inline-flex h-full w-full rounded-full bg-[#CCFF00]" />
-        <span className="relative inline-flex h-2 w-2 rounded-full bg-[#CCFF00]" />
-      </span>
-      {kicker}
-    </div>
-  </div>
-);

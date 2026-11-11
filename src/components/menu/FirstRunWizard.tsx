@@ -197,10 +197,6 @@ export const FirstRunWizard: React.FC<FirstRunWizardProps> = (props) => {
 
           <div className={`flex min-w-0 flex-1 flex-col ${mainWidth}`}>
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-2 font-f1-mono text-[11px] font-extrabold tracking-[0.18em] text-[#CCFF00] uppercase">
-                <span aria-hidden className="h-[7px] w-[7px] shrink-0 rounded-full bg-[#CCFF00]" />
-                {mode === "first-run" ? `First-time setup · Step ${stepIndex + 1} of ${steps.length}` : "Controls & input assists"}
-              </div>
               {mode === "controls" ? (
                 <Segmented
                   label="Input device"
@@ -221,15 +217,23 @@ export const FirstRunWizard: React.FC<FirstRunWizardProps> = (props) => {
 
             {/* Progress rail (phones and short windows, where the step rail is hidden) */}
             {mode === "first-run" ? (
-              <div className="mt-4 flex gap-1.5 not-compact:hidden short:mt-2">
+              <div className="mt-4 flex items-center gap-1.5 not-compact:hidden short:mt-2">
                 {steps.map((s, i) => (
                   <span
                     key={s}
+                    aria-hidden
                     className={`h-1.5 flex-1 rounded-full transition-colors ${
                       i < stepIndex ? "bg-[#00E5FF]" : i === stepIndex ? "bg-[#CCFF00]" : "bg-[#262B3D]"
                     }`}
                   />
                 ))}
+                <span className="lc-data ml-1.5 shrink-0 text-[11px] text-[#8E96AA]">
+                  <span className="sr-only">Step </span>
+                  {stepIndex + 1}
+                  <span aria-hidden>/</span>
+                  <span className="sr-only"> of </span>
+                  {steps.length}
+                </span>
               </div>
             ) : null}
 

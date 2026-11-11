@@ -336,10 +336,7 @@ export const RequestPanel: React.FC<{ context?: FeedbackContext }> = ({ context 
   return (
     <div className="grid grid-cols-[repeat(auto-fit,minmax(min(300px,100%),1fr))] gap-7 text-[#F5F7FA]">
       <div className="flex min-w-0 flex-col gap-[18px]">
-        <div className="flex flex-col gap-2">
-          <span className="lc-lbl text-[#00E5FF]">Feedback & requests</span>
-          <h2 className="lc-disp m-0 text-[34px] sm:text-[44px]">{copy.title}</h2>
-        </div>
+        <h2 className="lc-disp m-0 text-[34px] sm:text-[44px]">{copy.title}</h2>
         <p className="m-0 text-[17px] leading-snug font-semibold sm:text-[18px]">{copy.intro}</p>
         {content ? (
           <p className="m-0 text-[14px] leading-relaxed text-[#8E96AA]">

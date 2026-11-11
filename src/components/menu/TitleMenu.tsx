@@ -761,7 +761,6 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
   // A car with liveries of its own wears the one picked for it (read on each render: the menus re-render as panels change)
   const skin = carSkinFor(vehicle.id);
   const hudPreset = props.displayPanel?.settings.hud.preset;
-  const kicker = `${track.name} · ${track.country} · ${km(track)} KM`;
   // What a bug report gets without the player typing it
   const playerSettings = props.displayPanel?.settings;
   const feedbackContext: FeedbackContext = {
@@ -797,13 +796,6 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
             <>
               <div className="flex min-w-0 flex-wrap items-center gap-x-[22px] gap-y-3">
                 <LibreCorsaLogo variant="compact" size="md" />
-                <div className="inline-flex h-8 max-w-full min-w-0 items-center gap-2.5 rounded-full border border-[#262B3D] bg-[#11131A]/70 px-3.5 font-f1-mono text-[11px] font-bold tracking-[0.14em] text-[#CCFF00] uppercase backdrop-blur short:hidden">
-                  <span className="relative flex h-2 w-2 shrink-0">
-                    <span className="lc-ping absolute inline-flex h-full w-full rounded-full bg-[#CCFF00]" />
-                    <span className="relative inline-flex h-2 w-2 rounded-full bg-[#CCFF00]" />
-                  </span>
-                  <span className="truncate">{kicker}</span>
-                </div>
                 <EmbeddedBadge />
               </div>
               <div className="flex min-w-0 flex-wrap items-center gap-2.5">
@@ -963,12 +955,6 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
               aria-label="Up next"
               className="lc-glass lc-drift flex w-full max-w-[340px] flex-col gap-4 rounded-[26px] p-5 text-[#F5F7FA] short:hidden"
             >
-              <div className="flex items-center justify-between gap-3">
-                <span className="lc-lbl">Up next · Practice</span>
-                <span className="font-f1-mono text-[10px] font-extrabold tracking-[0.12em] text-[#CCFF00] uppercase">
-                  {track.direction}
-                </span>
-              </div>
               <div className="flex items-center gap-4">
                 {map ? <TrackOutline map={map} className="h-[92px] w-[112px] shrink-0" /> : null}
                 <div className="flex min-w-0 flex-col gap-1">
@@ -981,6 +967,9 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
                   </span>
                   <span className="font-f1-mono text-[12px] font-bold text-[#C5CBD8]">
                     {km(track)} KM · {track.turns} TURNS
+                  </span>
+                  <span className="font-f1-mono text-[10px] font-extrabold tracking-[0.12em] text-[#CCFF00] uppercase">
+                    {track.direction}
                   </span>
                 </div>
               </div>

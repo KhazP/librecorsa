@@ -73,13 +73,12 @@ export const ChallengePanel: React.FC<ChallengePanelProps> = ({
   return (
     <div className="grid items-start gap-[22px] grid-cols-[repeat(auto-fit,minmax(min(320px,100%),1fr))]">
       <section className={CARD} aria-label="This week">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <span className="lc-lbl text-[#CCFF00]">This week</span>
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div className="flex min-w-0 flex-col gap-1">
+            <span className="lc-title text-[26px] leading-tight">{trackName}</span>
+            <span className="text-[15px] font-semibold text-[#C5CBD8]">{carTitle}</span>
+          </div>
           <span className={CHIP}>{timeLeftLabel(challenge.endsMs, now)} left</span>
-        </div>
-        <div className="flex flex-col gap-1">
-          <span className="lc-title text-[26px] leading-tight">{trackName}</span>
-          <span className="text-[15px] font-semibold text-[#C5CBD8]">{carTitle}</span>
         </div>
         <div className="flex flex-wrap gap-1.5" aria-label="Rules">
           {rules.map((r) => (
