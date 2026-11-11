@@ -2,21 +2,27 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowUpRight, Check, ChevronRight, Play } from "lucide-react";
+import { currentInputMode, useInputMode } from "@/components/menu/input-mode";
+import { PadGlyph } from "@/components/menu/pad-glyph";
+import { focusables, useFocusNav } from "@/components/menu/useFocusNav";
 import { LibreCorsaLogo } from "@/components/ui/LibreCorsaLogo";
 import { withBasePath } from "@/lib/base-path";
 import { SITE_DESCRIPTION } from "@/lib/site";
 import { day, GAME_FACTS, GRADE_NOTES, km, type HomeData } from "./home-data";
-import { CarThumb, GradeBadge, GradeLegend, OutlineThumb, Prompt, KeyCap } from "./home-ui";
+import { CarThumb, GradeBadge, GradeLegend, KeyCap, OutlineThumb, PadPrompt, Prompt } from "./home-ui";
 import { LapMap } from "./LapMap";
 import { PLAY_HREF, rememberPicks, storedPicks } from "./play";
 import { PlayLink } from "./PlayLink";
-import { usePadButtons } from "./usePadButtons";
 
 /*
  * The home page, laid out like a console racer's home hub. Sections across the top (Q / E, or a controller's
  * bumpers), big picture tiles underneath: Drive takes most of the screen, the circuit's lap runs in its own tile, the
  * car and the press sit beside it. Circuits and Cars are card walls to pick from, each card marked sim grade or 3D
  * model; Drive stays in the corner of every section and opens the game (/play) on the picks.
+ *
+ * A controller or the keyboard drives it like the game's own menus (useFocusNav): the D-pad, stick or arrows move a
+ * volt cursor between tiles and cards, A / Enter picks, B / Esc goes back to Home, LB / RB or Q / E switch sections
+ * and Start drives.
  */
 
 type Tab = "home" | "circuits" | "cars" | "about";
@@ -48,7 +54,12 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
   const [tab, setTab] = useState<Tab>("home");
   const [layoutId, setLayoutId] = useState(data.defaultTrackId);
   const [carId, setCarId] = useState(data.defaultCarId);
+  const { mode, family } = useInputMode();
+  const pad = mode === "pad";
+  const mainRef = useRef<HTMLElement | null>(null);
   const driveRef = useRef<HTMLAnchorElement | null>(null);
+  /** Set when a section is opened from the controller or keys: the cursor moves into it once it has rendered */
+  const focusOnOpen = useRef(false);
   const panelRef = useRef<HTMLDivElement | null>(null);
   const speedRef = useRef<HTMLSpanElement | null>(null);
 
@@ -64,35 +75,57 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
   const car = data.cars.find((c) => c.id === carId) ?? data.cars[0];
   const picks = { trackId: layout.id, carId: car.id };
 
-  const go = useCallback((next: Tab) => {
+  const go = useCallback((next: Tab, moveCursor = false) => {
+    focusOnOpen.current = moveCursor && currentInputMode() !== "pointer";
     setTab(next);
     panelRef.current?.scrollTo({ top: 0 });
   }, []);
   const cycle = useCallback(
     (by: 1 | -1) => {
       const at = TABS.findIndex((t) => t.id === tab);
-      go(TABS[(at + by + TABS.length) % TABS.length].id);
+      go(TABS[(at + by + TABS.length) % TABS.length].id, true);
     },
     [tab, go]
   );
 
+  // A section opened from the controller or keys starts on what is in use there (Drive, the circuit, the car)
+  useEffect(() => {
+    if (!focusOnOpen.current) return;
+    focusOnOpen.current = false;
+    const panel = panelRef.current;
+    if (!panel) return;
+    const items = focusables(panel);
+    const el = items.find((x) => x.hasAttribute("data-nav-default")) ?? items[0];
+    if (!el) return;
+    (el.focus as (o?: object) => void)({ preventScroll: true, focusVisible: true });
+    el.scrollIntoView({ block: "nearest" });
+  }, [tab]);
+
+  // Enter with nothing focused is Drive (with a control focused, Enter presses that control)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.metaKey || e.ctrlKey || e.altKey) return;
-      const key = e.key.toLowerCase();
-      if (key === "q") cycle(-1);
-      else if (key === "e") cycle(1);
-      // Enter is Drive unless the focus is on a control of its own
-      else if (e.key === "Enter" && (document.activeElement === document.body || document.activeElement === null)) driveRef.current?.click();
+      if (e.key !== "Enter" || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (document.activeElement && document.activeElement !== document.body) return;
+      e.preventDefault();
+      driveRef.current?.click();
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [cycle]);
+  }, []);
 
-  usePadButtons({ lb: () => cycle(-1), rb: () => cycle(1), start: () => driveRef.current?.click() });
+  useFocusNav(mainRef, {
+    onPrevTab: () => cycle(-1),
+    onNextTab: () => cycle(1),
+    onStart: () => driveRef.current?.click(),
+    onBack: () => {
+      if (tab !== "home") go("home", true);
+    },
+    // Nothing is focused until the controller or the keys are used: a mouse visitor sees no cursor
+    autoFocus: false,
+  });
 
   return (
-    <main className="flex h-dvh flex-col bg-[#08090D] text-[#F5F7FA]">
+    <main ref={mainRef} className="flex h-dvh flex-col bg-[#08090D] text-[#F5F7FA]">
       {/* Read by screen readers and search engines */}
       <h1 className="sr-only">LibreCorsa: free open-source racing simulator in your browser</h1>
       <p className="sr-only">{SITE_DESCRIPTION}</p>
@@ -100,9 +133,7 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
       <header className={`flex shrink-0 flex-wrap items-center gap-x-3 gap-y-3 sm:gap-x-6 pt-[max(1rem,env(safe-area-inset-top))] pb-4 ${GUTTER}`}>
         <LibreCorsaLogo variant="compact" size="sm" />
         <div className="flex items-center gap-2 max-md:order-last max-md:w-full">
-          <span className="inline-flex pointer-coarse:hidden">
-            <KeyCap>Q</KeyCap>
-          </span>
+          <span className={`inline-flex ${pad ? "" : "pointer-coarse:hidden"}`}>{pad ? <PadGlyph button="lb" family={family} /> : <KeyCap>Q</KeyCap>}</span>
           <div role="tablist" aria-label="Sections" className="flex gap-1 rounded-full border border-[#262B3D] bg-[#08090D] p-1 max-md:flex-1">
             {TABS.map((t) => (
               <button
@@ -119,18 +150,23 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
               </button>
             ))}
           </div>
-          <span className="inline-flex pointer-coarse:hidden">
-            <KeyCap>E</KeyCap>
-          </span>
+          <span className={`inline-flex ${pad ? "" : "pointer-coarse:hidden"}`}>{pad ? <PadGlyph button="rb" family={family} /> : <KeyCap>E</KeyCap>}</span>
         </div>
         {/* Beside the logo on a phone too: the tabs take the row under them */}
         <PlayLink ref={driveRef} label="Drive" picks={picks} className="ml-auto max-sm:px-5" />
       </header>
 
-      <div ref={panelRef} role="tabpanel" aria-label={TABS.find((t) => t.id === tab)?.label} className={`min-h-0 flex-1 overflow-y-auto pb-4 max-lg:pb-24 ${GUTTER}`}>
+      {/* pt-2: room for the cursor's ring round the top row, which the scrolling box would clip */}
+      <div
+        ref={panelRef}
+        role="tabpanel"
+        aria-label={TABS.find((t) => t.id === tab)?.label}
+        data-nav-scroll
+        className={`min-h-0 flex-1 overflow-y-auto pt-2 pb-4 max-lg:pb-24 ${GUTTER}`}
+      >
         {tab === "home" ? (
           <div className="grid gap-4 lg:h-full lg:min-h-[520px] lg:grid-cols-12 lg:grid-rows-2">
-            <a href={PLAY_HREF} onClick={() => rememberPicks(picks)} className={`${TILE} flex min-h-[320px] lg:col-span-7 lg:row-span-2`}>
+            <a href={PLAY_HREF} onClick={() => rememberPicks(picks)} data-nav-default className={`${TILE} flex min-h-[320px] lg:col-span-7 lg:row-span-2`}>
               <img
                 src={withBasePath("/home/hero-1600.webp")}
                 srcSet={[960, 1600, 2560].map((w) => `${withBasePath(`/home/hero-${w}.webp`)} ${w}w`).join(", ")}
@@ -229,12 +265,14 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
                 const on = v === venue;
                 const shown = on ? layout : v.layouts[0];
                 return (
-                  <div key={v.name} className={`flex flex-col overflow-hidden rounded-[18px] bg-[#11131A] transition-colors duration-150 ease-out ${on ? CARD_ON : CARD_OFF}`}>
+                  <div key={v.name} className={`flex flex-col rounded-[18px] bg-[#11131A] transition-colors duration-150 ease-out ${on ? CARD_ON : CARD_OFF}`}>
+                    {/* The button clips the picture to the card's corners itself: clipping on the card would cut the cursor's ring */}
                     <button
                       type="button"
                       aria-pressed={on}
+                      data-nav-default={on ? "" : undefined}
                       onClick={() => setLayoutId(v.layouts[0].id)}
-                      className="flex cursor-pointer flex-col border-0 bg-transparent p-0 text-left text-[#F5F7FA] transition-transform duration-150 ease-out active:scale-[0.98] motion-reduce:active:scale-100"
+                      className="flex cursor-pointer flex-col overflow-hidden rounded-[16.5px] border-0 bg-transparent p-0 text-left text-[#F5F7FA] transition-transform duration-150 ease-out active:scale-[0.98] motion-reduce:active:scale-100"
                     >
                       <span className="relative block aspect-[16/10] w-full bg-[#0B0D12]">
                         <OutlineThumb outline={shown.outline} className={`absolute inset-0 h-full w-full p-3 pt-9 ${on ? "text-[#F5F7FA]" : "text-[#8E96AA]"}`} />
@@ -250,12 +288,14 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
                       </span>
                     </button>
                     {on && v.layouts.length > 1 ? (
-                      <div role="group" aria-label="Layout" className="flex flex-wrap gap-1 border-t border-[#262B3D] p-2">
+                      // A zone: moving into the chips lands on the layout in use, not the nearest chip
+                      <div role="group" aria-label="Layout" data-nav-zone="layouts" className="flex flex-wrap gap-1 border-t border-[#262B3D] p-2">
                         {v.layouts.map((l) => (
                           <button
                             key={l.id}
                             type="button"
                             aria-pressed={l === layout}
+                            data-nav-default={l === layout ? "" : undefined}
                             onClick={() => setLayoutId(l.id)}
                             className={`h-8 cursor-pointer rounded-full border-0 px-3 text-[12px] font-semibold transition-colors duration-150 ease-out ${
                               l === layout ? CHOSEN_PILL : "bg-transparent text-[#C5CBD8] hover:text-[#F5F7FA]"
@@ -284,6 +324,7 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
                     key={c.id}
                     type="button"
                     aria-pressed={on}
+                    data-nav-default={on ? "" : undefined}
                     onClick={() => setCarId(c.id)}
                     className={`relative flex cursor-pointer flex-col overflow-hidden rounded-[18px] bg-[#11131A] p-0 text-left text-[#F5F7FA] transition-[transform,border-color] duration-150 ease-out active:scale-[0.98] motion-reduce:active:scale-100 ${
                       on ? CARD_ON : CARD_OFF
@@ -355,11 +396,24 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
         ) : null}
       </div>
 
-      <footer className={`flex shrink-0 items-center justify-between gap-4 border-t border-[#262B3D]/70 pt-3 pb-[max(0.875rem,env(safe-area-inset-bottom))] max-lg:hidden pointer-coarse:hidden ${GUTTER}`}>
-        <span className="flex items-center gap-x-[22px]">
-          <Prompt keys={["Q", "E"]}>Switch section</Prompt>
-          <Prompt keys={["ENTER"]}>Drive</Prompt>
-        </span>
+      {/* The prompt bar: the controller's buttons once one is used (on any screen), else the keys */}
+      <footer
+        className={`flex shrink-0 items-center justify-between gap-4 border-t border-[#262B3D]/70 pt-3 pb-[max(0.875rem,env(safe-area-inset-bottom))] ${pad ? "" : "max-lg:hidden pointer-coarse:hidden"} ${GUTTER}`}
+      >
+        {pad ? (
+          <span className="flex flex-wrap items-center gap-x-[22px] gap-y-2">
+            <PadPrompt glyphs={[<PadGlyph key="d" button="dpad" />]}>Move</PadPrompt>
+            <PadPrompt glyphs={[<PadGlyph key="a" button="a" family={family} />]}>Select</PadPrompt>
+            {tab !== "home" ? <PadPrompt glyphs={[<PadGlyph key="b" button="b" family={family} />]}>Back</PadPrompt> : null}
+            <PadPrompt glyphs={[<PadGlyph key="l" button="lb" family={family} />, <PadGlyph key="r" button="rb" family={family} />]}>Switch section</PadPrompt>
+            <PadPrompt glyphs={[<PadGlyph key="m" button="menu" family={family} />]}>Drive</PadPrompt>
+          </span>
+        ) : (
+          <span className="flex items-center gap-x-[22px]">
+            <Prompt keys={["Q", "E"]}>Switch section</Prompt>
+            <Prompt keys={["ENTER"]}>Drive</Prompt>
+          </span>
+        )}
         <span className="max-w-[34%] truncate text-[13px] font-semibold text-[#8E96AA]">
           {venue.name}, {car.title}
         </span>

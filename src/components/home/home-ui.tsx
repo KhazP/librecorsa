@@ -51,6 +51,14 @@ export const Prompt: React.FC<{ keys: readonly string[]; children: React.ReactNo
   </span>
 );
 
+/** The prompt bar's entry for a controller: the pad's own buttons (PadGlyph), then what they do */
+export const PadPrompt: React.FC<{ glyphs: readonly React.ReactNode[]; children: React.ReactNode }> = ({ glyphs, children }) => (
+  <span className="inline-flex items-center gap-2 text-[13px] font-semibold text-[#C5CBD8]">
+    <span className="inline-flex items-center gap-1">{glyphs}</span>
+    {children}
+  </span>
+);
+
 /**
  * Sim grade or 3D model, drawn like the game's own quality chips (menu-ui `Chip`, soft): tinted, with a dot. It sits on
  * pictures, so its tint is laid over void rather than left see-through.
