@@ -1467,6 +1467,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
                   laps: challenge.race.laps,
                   entry: raceEntry,
                   entrants: inScheduledRace ? (lobby?.players ?? []).map((p) => ({ id: p.peerId, name: p.name, code: p.code, me: p.peerId === localPeerId })) : [],
+                  driverName: settings.profile.name,
                   onJoin: handleJoinRace,
                   onLeave: handleLeaveRace,
                 }
