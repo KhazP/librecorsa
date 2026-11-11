@@ -282,6 +282,8 @@ export interface GearBoxData {
      * into a braking zone (absent: on the brakes too it waits for `downshift_rpm`)
      */
     brake_downshift_rpm?: number;
+    /** Auto box: shift up by the engine through wheelspin (an open differential, see `AutoShiftSchedule.upshiftWhileSpinning`) */
+    spin_upshift?: boolean;
   };
 }
 

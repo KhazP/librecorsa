@@ -25,6 +25,12 @@ export interface AutoShiftSchedule {
   downshiftHoldS?: number;
   /** Braking into a corner: down one gear at a time, the brake past `pedal`, `gapS` apart, while the lower gear's rpm stays under `rpm` */
   brakeDownshift?: { rpm: number; pedal: number; gapS: number };
+  /**
+   * Shift up by the engine even while a driven wheel spins. For an open differential: out of a slow corner the
+   * unloaded inside wheel spins for seconds on end and takes the engine onto its limiter at a road speed well under
+   * the shift point, where a driver shifts by the tacho. Absent: wheelspin holds the gear until the road speed is there
+   */
+  upshiftWhileSpinning?: boolean;
 }
 
 /** The car as the auto box reads it this step (rpm are engine rpm) */
@@ -133,9 +139,10 @@ function wantsUpshift(car: AutoShiftInput, s: AutoShiftSchedule): boolean {
     car.engineRpm >= s.upshiftRpm &&
     car.clutchClosed &&
     car.brake < s.upshiftMaxBrake &&
-    // Not with the driven wheels in the air or spinning up, unless the road speed itself is at the upshift point
+    // Not with the driven wheels in the air or spinning up, unless the road speed itself is at the upshift point (or
+    // the box shifts through wheelspin, see `upshiftWhileSpinning`)
     car.drivenGrounded &&
-    (!car.drivenSpinning || car.roadRpm >= s.upshiftRpm)
+    (!car.drivenSpinning || car.roadRpm >= s.upshiftRpm || s.upshiftWhileSpinning === true)
   );
 }
 

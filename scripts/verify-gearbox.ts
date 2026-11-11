@@ -116,6 +116,15 @@ const car = (patch: Partial<AutoShiftInput>): AutoShiftInput => ({
     air === 0 && spin === 0 && spinAtPoint === 1,
     `policy: no upshift with the rears in the air (${air}) or spinning (${spin}) unless road speed is at the point (${spinAtPoint})`
   );
+  // An open differential's box shifts by the engine through wheelspin, never with the wheels in the air
+  const bySpin: AutoShiftSchedule = { ...SCHEDULE, upshiftWhileSpinning: true };
+  const spinByEngine = autoShift(car({ engineRpm: 11200, roadRpm: 9500, drivenSpinning: true }), bySpin, o);
+  const spinUnderPoint = autoShift(car({ engineRpm: 10800, roadRpm: 9500, drivenSpinning: true }), bySpin, o);
+  const airBySpin = autoShift(car({ engineRpm: 11200, drivenGrounded: false }), bySpin, o);
+  check(
+    spinByEngine === 1 && spinUnderPoint === 0 && airBySpin === 0,
+    `policy: a box that shifts through wheelspin goes by the engine (${spinByEngine}), from its shift point (${spinUnderPoint}), on the ground (${airBySpin})`
+  );
 }
 
 // ---- 2.–5. On the cars ----------------------------------------------------------------------------------------------

@@ -1125,6 +1125,7 @@ export class VehiclePhysics {
         gears.brake_downshift_rpm === undefined
           ? undefined
           : { rpm: gears.brake_downshift_rpm, pedal: AUTO_BRAKE_DOWNSHIFT_PEDAL, gapS: AUTO_BRAKE_DOWNSHIFT_GAP_S },
+      upshiftWhileSpinning: gears.spin_upshift,
     };
     this.steerComplianceRadPerN = ((ch.steerComplianceDegPerKN ?? 0) * DEG2RAD) / 1000;
     this.powerSteering = ch.powerSteering;
@@ -1981,8 +1982,14 @@ export class VehiclePhysics {
     const road = this.roadRpm(this.gear);
     a.gear = this.gear;
     a.topGear = this.config.gearbox.ratios.length;
-    // Wheelspin may lift the engine at most 30 % over road speed for shift purposes; road speed while the clutch slips
-    a.engineRpm = this.clutchEngagement >= 0.99 ? Math.min(this.rpm, road * 1.3) : road;
+    // Wheelspin may lift the engine at most 30 % over road speed for shift purposes; road speed while the clutch slips.
+    // A box that shifts through wheelspin goes by the engine itself, once the gear above would not lug
+    const sched = this.autoShiftSchedule;
+    const bySpin =
+      sched.upshiftWhileSpinning === true &&
+      this.gear < a.topGear &&
+      this.roadRpm(this.gear + 1) >= sched.lugRpm + sched.downshiftMarginRpm;
+    a.engineRpm = this.clutchEngagement >= 0.99 ? Math.min(this.rpm, bySpin ? Infinity : road * 1.3) : road;
     a.roadRpm = road;
     // Downshifts go by road speed: locked wheels must not drag the box down through the gears
     a.lowerGearRpm = this.roadRpm(this.gear - 1);
@@ -1993,8 +2000,11 @@ export class VehiclePhysics {
     const [dl, dr] = this.drivenWheels;
     a.drivenGrounded = this.wheels[dl].fz > 1 || this.wheels[dr].fz > 1;
     a.drivenSpinning = Math.max(this.wheels[dl].slipRatio, this.wheels[dr].slipRatio) > 0.14;
-    const shift = autoShift(a, this.autoShiftSchedule, this.manualShift);
-    if (shift !== 0) this.requestShift(this.gear + shift);
+    const shift = autoShift(a, sched, this.manualShift);
+    if (shift === 0) return;
+    const throughSpin = shift > 0 && a.drivenSpinning && road < sched.upshiftRpm;
+    // A shift taken through wheelspin is held like the driver's own: the gear below would only spin again
+    if (this.requestShift(this.gear + shift) && throughSpin) this.manualShift.shifted(1, this.gear);
   }
 
   private updateDrs(inp: VehicleInputs, dt: number): void {
