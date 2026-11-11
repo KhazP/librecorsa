@@ -5,18 +5,25 @@
  *
  * It speaks the game's own multiplayer messages (src/lib/net/wire.ts), as a room's host does over WebRTC, so the game
  * follows it with the code that follows a host:
- *   client -> server  { ctl: hello | ping | pong, from }   and car state packets
- *   server -> client  { t: "welcome", now, startsMs, index }, then { ctl: lobby | start | pong, from: "race_server" },
+ *   client -> server  { ctl: hello | identify | ping | pong | finish, from }   and car state packets
+ *   server -> client  { t: "welcome", now, startsMs, index }, then { ctl: lobby | start | pong | result, from: "race_server" },
  *                     the other cars' state packets, and their pings and pongs (each car measures its delay to each other)
  *                     { t: "closed" | "full" | "started" | "taken" | "bad" } when it won't take the socket
- * Only the server ever sends a lobby or a start. A socket speaks for one car: the id it connected with.
+ * Only the server ever sends a lobby, a start or a result. A socket speaks for one car: the id it connected with.
+ *
+ * The official result (src/lib/net/official-result.ts): each car reports its finish once; the server keeps the reports
+ * in its storage (it can be evicted mid-race), sends the result as they come in, and makes it final when the whole grid
+ * is in or 90 s after the first finish, then stores it on D1 (results.ts). A name counts there only when the car proved
+ * it with its driver key (`identify`, kept as its SHA-256 only).
  *
  * Sockets come through the Worker (GET /api/races/next, or /api/races/<n> to get back into a race under way), which
  * works out the slot from its own clock and passes it on in the query; nobody reaches this object directly.
  */
 import { RACE_COUNTDOWN_MS, RACE_JOIN_CUTOFF_MS, raceRules, raceSlot } from "../../src/lib/net/race-schedule";
-import { PEER_ID_RE, sanitizeControl, sanitizePacket, type LobbyPlayer, type LobbyState, type RaceStartInfo } from "../../src/lib/net/wire";
-import { driverNameKey } from "./board";
+import { addFinish, finishProblem, newResultBook, resultCloseMs, resultDue, resultMessage, type FinishMessage, type ResultBook } from "../../src/lib/net/official-result";
+import { PEER_ID_RE, sanitizeControl, sanitizePacket, type LobbyPlayer, type LobbyState, type OfficialResultRow, type RaceStartInfo } from "../../src/lib/net/wire";
+import { driverNameKey, sha256Hex } from "./board";
+import { storeRaceResult, type RaceEntrant } from "./results";
 import { workers, type D1Database, type DurableObjectState, type Env, type ServerSocket } from "./types";
 
 export const RACE_SERVER_ID = "race_server";
@@ -30,6 +37,13 @@ const MAX_CONTROL_PER_S = 40;
 const GONE_AFTER_MS = 12_000;
 /** The room closes this long after the lights: a lap is never more than a few minutes, plus time to read the results */
 const roomLifeMs = (laps: number) => (laps * 4 + 10) * 60_000;
+/**
+ * A week's races are planned at about ten minutes (weekly-challenge.ts), so a lap under 60 % of that share is not
+ * believable (the laps are rounded, hence the half lap)
+ */
+const minLapS = (laps: number) => (0.6 * 600) / (laps + 0.5);
+/** Lights out: five red lights a second apart, then the hold */
+const lightsOutMs = (race: RaceStartInfo) => race.lightsStartHostMs + 5 * 1000 + race.holdMs;
 
 interface Entrant {
   peer: string;
@@ -41,6 +55,8 @@ interface Entrant {
   vehicle?: LobbyPlayer["vehicle"];
   trackId?: string;
   joinedMs: number;
+  /** Its driver key was taken (one try per socket) */
+  identified?: boolean;
 }
 
 interface Meta {
@@ -76,6 +92,11 @@ export class RaceServer {
   /** The race once the grid is made (also in storage: every lobby after the start must carry it) */
   private race: RaceStartInfo | null | undefined;
   private meta: Meta | null | undefined;
+  /** The finish reports (also in storage), and the cars that have sent their state in the race (also in storage) */
+  private book: ResultBook | null | undefined;
+  private seen: Set<string> | undefined;
+  /** Each car's latest race distance (m), to order the cars still out; in memory only (lost: the grid orders them) */
+  private dist = new Map<string, number>();
 
   constructor(
     private readonly state: DurableObjectState,
@@ -110,6 +131,16 @@ export class RaceServer {
   private async getRace(): Promise<RaceStartInfo | null> {
     if (this.race === undefined) this.race = (await this.state.storage.get<RaceStartInfo>("race")) ?? null;
     return this.race;
+  }
+
+  private async getBook(): Promise<ResultBook | null> {
+    if (this.book === undefined) this.book = (await this.state.storage.get<ResultBook>("book")) ?? null;
+    return this.book;
+  }
+
+  private async getSeen(): Promise<Set<string>> {
+    this.seen ??= new Set((await this.state.storage.get<string[]>("seen")) ?? []);
+    return this.seen;
   }
 
   /**
@@ -163,6 +194,9 @@ export class RaceServer {
     send(ws, JSON.stringify({ t: "welcome", now: nowMs, startsMs: meta.startsMs, index: meta.index }));
     // The lobby first: it names this server as the host, which the game needs before it trusts the clock pongs
     send(ws, this.lobbyMessage(meta, race));
+    // Back in a race that has finishers: the result as it stands
+    const book = race ? await this.getBook() : null;
+    if (book && book.firstFinishMs !== null) send(ws, this.resultText(book));
   }
 
   private players(gone?: ServerSocket): LobbyPlayer[] {
@@ -246,6 +280,12 @@ export class RaceServer {
         case "pong":
           if (to && to !== RACE_SERVER_ID) this.relay(ws, JSON.stringify({ ctl: msg, from: who.peer, to }), to);
           break;
+        case "identify":
+          await this.identify(ws, who, msg.driverKey);
+          break;
+        case "finish":
+          await this.takeFinish(ws, who.peer, msg, nowMs);
+          break;
         default:
           // ready means nothing here, and a lobby, start or abort only ever comes from the server
           break;
@@ -257,8 +297,102 @@ export class RaceServer {
     if (!pkt || pkt.peerId !== who.peer || !this.withinRate(ws, "state", nowMs)) return;
     this.heard.set(ws, nowMs);
     // Cars only matter to each other once there is a race
-    if (!(await this.getRace())) return;
+    const race = await this.getRace();
+    if (!race) return;
     this.relay(ws, JSON.stringify(pkt));
+    if (pkt.race?.id === race.id) this.dist.set(who.peer, pkt.race.dist);
+    // Only a car that has raced may report a finish
+    const seen = await this.getSeen();
+    if (!seen.has(who.peer)) {
+      seen.add(who.peer);
+      await this.state.storage.put("seen", [...seen]);
+    }
+  }
+
+  /** Keeps the SHA-256 of a car's driver key, never the key: at the end it proves the name the car raced under */
+  private async identify(ws: ServerSocket, who: Entrant, driverKey: string): Promise<void> {
+    if (who.identified) return;
+    ws.serializeAttachment({ ...who, identified: true } satisfies Entrant);
+    const keys = (await this.state.storage.get<Record<string, string>>("keys")) ?? {};
+    keys[who.peer] = await sha256Hex(driverKey);
+    await this.state.storage.put("keys", keys);
+  }
+
+  /** A car's finish: into the book unless implausible (the first report stands; a repeat hears the result again) */
+  private async takeFinish(ws: ServerSocket, peer: string, msg: FinishMessage, nowMs: number): Promise<void> {
+    const race = await this.getRace();
+    const book = await this.getBook();
+    if (!race || !book) return;
+    if (book.reports[peer] || book.final) {
+      send(ws, this.resultText(book));
+      return;
+    }
+    const problem = finishProblem(book, peer, msg, {
+      minLapS: minLapS(race.laps),
+      raceTimeS: (nowMs - lightsOutMs(race)) / 1000,
+      sentState: (await this.getSeen()).has(peer),
+    });
+    if (problem !== null) return;
+    addFinish(book, peer, msg, nowMs);
+    if (resultDue(book, nowMs)) {
+      await this.finalize(book, nowMs);
+      return;
+    }
+    await this.state.storage.put("book", book);
+    this.broadcast(this.resultText(book));
+    await this.armAlarm(book);
+  }
+
+  private resultRows(book: ResultBook): OfficialResultRow[] {
+    return resultMessage(book, (peer) => {
+      const distM = this.dist.get(peer);
+      return distM === undefined ? undefined : { distM };
+    }).rows;
+  }
+
+  private resultText(book: ResultBook): string {
+    return JSON.stringify({ ctl: { type: "result", id: book.id, final: book.final, rows: this.resultRows(book) }, from: RACE_SERVER_ID });
+  }
+
+  /** Sends a message of the server's to every car */
+  private broadcast(text: string): void {
+    for (const ws of this.sockets()) send(ws, text);
+  }
+
+  /** The result no longer changes: everyone hears it, and it goes on the results board */
+  private async finalize(book: ResultBook, nowMs: number): Promise<void> {
+    if (book.final) return;
+    book.final = true;
+    await this.state.storage.put("book", book);
+    const rows = this.resultRows(book);
+    this.broadcast(this.resultText(book));
+    await this.armAlarm(book);
+    const db: D1Database | undefined = this.env.BOARD_DB;
+    const meta = await this.getMeta();
+    const race = await this.getRace();
+    if (!db || !meta || !race) return;
+    const names = (await this.state.storage.get<Record<string, { name: string; code: string }>>("names")) ?? {};
+    const keys = (await this.state.storage.get<Record<string, string>>("keys")) ?? {};
+    const entrants: Record<string, RaceEntrant> = {};
+    for (const peer of race.grid) entrants[peer] = { name: names[peer]?.name ?? "Driver", code: names[peer]?.code ?? "DRV", keyHash: keys[peer] };
+    const rules = raceRules(meta);
+    const stored = { id: `open-${meta.startsMs}-${meta.index}`, week: rules.id, kind: "open" as const, trackId: race.trackId, vehicle: race.vehicle ?? rules.race.vehicle, laps: race.laps, finishedMs: nowMs };
+    try {
+      await storeRaceResult(db, stored, rows, entrants);
+    } catch (err) {
+      // No results table yet (the migration not applied), or D1 down: the race still had its result
+      console.error("race results", err);
+    }
+  }
+
+  /** The alarm serves both the result's close and the room's: whichever comes first */
+  private async armAlarm(book: ResultBook | null): Promise<void> {
+    const meta = await this.getMeta();
+    const race = await this.getRace();
+    if (!meta || !race) return;
+    const roomClose = meta.startsMs + roomLifeMs(race.laps);
+    const resultClose = book ? resultCloseMs(book) : null;
+    await this.state.storage.setAlarm(resultClose !== null ? Math.min(resultClose, roomClose) : roomClose);
   }
 
   /** Passes a car's message on to the others (only to `to` when it is addressed) */
@@ -281,7 +415,7 @@ export class RaceServer {
     close(ws, 1011, "error");
   }
 
-  /** Twice in a race's life: shortly before the lights (the grid), and long after them (the room closes) */
+  /** Shortly before the lights (the grid), 90 s after the first finish (the result turns final), long after the lights (the room closes) */
   async alarm(): Promise<void> {
     const meta = await this.getMeta();
     if (!meta) return;
@@ -295,8 +429,11 @@ export class RaceServer {
       await this.startRace(meta, nowMs);
       return;
     }
+    const book = await this.getBook();
+    // An alarm may come a moment early
+    if (book && resultDue(book, nowMs + 1000)) await this.finalize(book, nowMs);
     if (nowMs < meta.startsMs + roomLifeMs(race.laps) - 1000) {
-      await this.state.storage.setAlarm(meta.startsMs + roomLifeMs(race.laps));
+      await this.armAlarm(book);
       return;
     }
     await this.shut();
@@ -306,6 +443,9 @@ export class RaceServer {
     for (const ws of this.state.getWebSockets()) close(ws, 1000, "race over");
     this.race = null;
     this.meta = null;
+    this.book = null;
+    this.seen = undefined;
+    this.dist.clear();
     await this.state.storage.deleteAll();
   }
 
@@ -338,6 +478,10 @@ export class RaceServer {
     this.race = race;
     await this.state.storage.put("race", race);
     await this.state.storage.put("tokens", Object.fromEntries(entrants.map((e) => [e.peer, e.token])));
+    // The names the grid races under, for the results (a socket opened again later has no attachment of its own)
+    await this.state.storage.put("names", Object.fromEntries(entrants.map((e) => [e.peer, { name: e.name ?? "Driver", code: e.code ?? "DRV" }])));
+    this.book = newResultBook(race);
+    await this.state.storage.put("book", this.book);
     await this.state.storage.setAlarm(meta.startsMs + roomLifeMs(race.laps));
     const start = JSON.stringify({ ctl: { type: "start", start: race }, from: RACE_SERVER_ID });
     for (const ws of this.sockets()) send(ws, start);
