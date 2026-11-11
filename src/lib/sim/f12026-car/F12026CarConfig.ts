@@ -251,6 +251,12 @@ export interface GearBoxData {
    */
   upshiftNeutralS?: number;
   /**
+   * The up-shift cut (`upshiftCutS`) is the driver's foot off the pedal, a road car's: the throttle shuts as well as the
+   * spark, so the engine slows on its overrun drag through the change. Without it, a race car's ignition cut: the
+   * throttle stays open and only the spark goes
+   */
+  upshiftCutLift?: boolean;
+  /**
    * A down-shift as the car's own gearbox and control unit make it, in place of an engine that is at the lower gear's
    * speed the moment the paddle is pulled. Times in s from the paddle
    */

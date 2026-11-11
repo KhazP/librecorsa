@@ -2837,6 +2837,8 @@ export class VehiclePhysics {
     if (this.limiterTimer > 0) plate = 0;
     // A managed up-shift takes the drive away while it lasts: the spark, and with it the MGU-K's deployment below
     const shiftCut = gb.upshiftCutS !== undefined && this.sinceUpshiftS < gb.upshiftCutS;
+    // A road car's cut is the driver's foot off: the throttle shuts too, and the engine slows on its overrun drag
+    if (shiftCut && gb.upshiftCutLift) plate = 0;
     const sparkShare = shiftCut ? 0 : (inp.ignitionCut ?? 1);
     // Turbo lag: the curve is the torque with the boost this plate makes in steady state; while the rotor trails it the
     // torque is (1 + boost made) / (1 + boost asked for) of that, as torque ∝ 1 + boost. A rotor still spinning faster
