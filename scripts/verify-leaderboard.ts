@@ -17,7 +17,7 @@ import { boardDeps, driverNameKey, listLaps, submitLap, type BoardDeps } from '.
 import type { Env } from '../cloudflare/api/types';
 import { fakeD1, fakeR2 } from './lib/fake-cloudflare';
 import { planImport, type SupabaseDriver, type SupabaseLap } from './migrate-supabase-board';
-import { CHALLENGE_ROTATION, challengeAt, challengeProblem, fitsChallenge, isoWeekId, timeLeftLabel } from '../src/lib/net/weekly-challenge';
+import { CHALLENGE_ROTATION, challengeAt, challengeCompound, challengeConditionsLabel, challengeProblem, fitsChallenge, isoWeekId, timeLeftLabel } from '../src/lib/net/weekly-challenge';
 
 /** The revision the laps here are driven under: the board of the car they are driven in (the VF26's own) */
 const CURRENT = lapPhysicsVersion('vf26');
@@ -263,8 +263,13 @@ async function main(): Promise<void> {
     }
     check('challenge: the next week is the next entry of the rotation', challengeAt(monday + 7 * 86_400_000).trackId === CHALLENGE_ROTATION[1].trackId && challengeAt(monday + 14 * 86_400_000).trackId === CHALLENGE_ROTATION[2].trackId);
     check('challenge: time left reads in days, hours, minutes', timeLeftLabel(week.endsMs, week.endsMs - 3 * 86_400_000 - 4 * 3_600_000) === '3 d 4 h' && timeLeftLabel(week.endsMs, week.endsMs - 5 * 60_000) === '5 min');
-    const fit = variant(1.015, 'Weekly Hero', { assists: week.assists, realism: week.realism });
-    check('challenge: a lap to the rules fits, one with other assists does not', fitsChallenge(fit, week) && !fitsChallenge(variant(1.015, 'x', { assists: 'assisted', realism: week.realism }), week) && !fitsChallenge({ ...fit, conditions: { ...fit.conditions!, surface: 'wet' } }, week));
+    const fit = variant(1.015, 'Weekly Hero', { assists: week.assists, realism: week.realism, compound: challengeCompound(week.vehicle) });
+    check('challenge: a lap to the rules fits, one with other assists does not', fitsChallenge(fit, week) && !fitsChallenge(variant(1.015, 'x', { assists: 'assisted', realism: week.realism, compound: challengeCompound(week.vehicle) }), week) && !fitsChallenge({ ...fit, conditions: { ...fit.conditions!, surface: 'wet' } }, week));
+    check('challenge: a lap on another tyre does not fit', !fitsChallenge({ ...fit, conditions: { ...fit.conditions!, compound: 'medium' } }, week) && challengeProblem({ ...fit, conditions: { ...fit.conditions!, compound: 'medium' } }, week.id, nowMs) !== null);
+    check(
+      'challenge: every car runs its softest dry tyre, the rules say which',
+      CHALLENGE_ROTATION.every((c) => challengeCompound(c.vehicle) === 'soft') && challengeConditionsLabel('liana') === 'Dry track · Street tyres · Low fuel' && challengeConditionsLabel('amg-gt3') === 'Dry track · Soft tyres · Low fuel'
+    );
 
     const res = await post(fit, 'd'.repeat(43), { event: week.id });
     check('challenge: a lap to the rules goes on the week\'s board', res.body.ok === true && res.body.eventRank === 1 && res.body.eventTotal === 1 && res.body.eventError === undefined, res.body.error ?? res.body.eventError);
@@ -275,7 +280,7 @@ async function main(): Promise<void> {
     const off = await post(variant(0.995, 'Weekly Hero', { assists: 'pro', realism: 'full' }), 'd'.repeat(43), { event: week.id });
     check('challenge: a lap not to the rules still counts on the open board, with the reason', off.body.ok === true && off.body.eventRank === undefined && typeof off.body.eventError === 'string', off.body.eventError);
     check('challenge: and stays off the week\'s board', (await list(`&event=${week.id}`)).body.total === 1);
-    const late = await post(variant(1.01, 'Weekly Hero', { assists: week.assists, realism: week.realism }), 'd'.repeat(43), { event: '2020-W01' });
+    const late = await post(variant(1.01, 'Weekly Hero', { assists: week.assists, realism: week.realism, compound: challengeCompound(week.vehicle) }), 'd'.repeat(43), { event: '2020-W01' });
     check('challenge: a lap sent for a past week counts on the open board only', late.body.ok === true && late.body.eventError === 'That weekly challenge has ended', late.body.eventError);
     const junk = await post(variant(1.03, 'Weekly Hero', { assists: week.assists, realism: week.realism }), 'd'.repeat(43), { event: 'nope' });
     check('challenge: nothing to store and a bad event: refused with the reason', junk.status === 409 && junk.body.error === 'Unknown event', junk.body.error);
