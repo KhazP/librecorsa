@@ -1,15 +1,16 @@
 /**
- * Remakes the press kit from the screenshots listed in src/lib/press.ts: `npm run press-kit`.
+ * Remakes the press kits from the pictures listed in src/lib/press.ts: `npm run press-kit`.
  *
  * Writes a 1024 × 576 WebP thumbnail of each screenshot for the press page (public/press/screenshots/thumbs/), and
- * public/press/librecorsa-press-kit.zip with the full-size screenshots and the logos.
+ * public/press/librecorsa-press-kit.zip with the full-size screenshots and the logos; the same for RISE Motordrome's
+ * renders in public/press/rise/ (thumbs/ and rise-motordrome-press-kit.zip).
  */
 import { execFileSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import sharp from "sharp";
-import { PRESS_KIT_ZIP, PRESS_SCREENSHOTS } from "../src/lib/press";
+import { PRESS_KIT_ZIP, PRESS_SCREENSHOTS, RISE_PRESS_KIT_ZIP, RISE_RENDERS } from "../src/lib/press";
 
 const PUBLIC = join(process.cwd(), "public");
 const SHOTS = join(PUBLIC, "press/screenshots");
@@ -41,6 +42,32 @@ async function main(): Promise<void> {
   execFileSync("zip", ["-r", "-X", "-q", zip, "librecorsa-press-kit"], { cwd: stage });
   rmSync(stage, { recursive: true, force: true });
   console.log(`${PRESS_SCREENSHOTS.length} thumbnails and ${PRESS_KIT_ZIP}`);
+  await buildRiseKit();
+}
+
+/** RISE Motordrome's renders: thumbnails beside them and their own ZIP (the official render stays out of it) */
+async function buildRiseKit(): Promise<void> {
+  const dir = join(PUBLIC, "press/rise");
+  const thumbs = join(dir, "thumbs");
+  const missing = RISE_RENDERS.filter((r) => !existsSync(join(dir, r.file))).map((r) => r.file);
+  if (missing.length) throw new Error(`Missing from public/press/rise: ${missing.join(", ")}`);
+  rmSync(thumbs, { recursive: true, force: true });
+  mkdirSync(thumbs, { recursive: true });
+  for (const r of RISE_RENDERS) {
+    await sharp(join(dir, r.file))
+      .resize(1024, 576, { fit: "cover" })
+      .webp({ quality: 80 })
+      .toFile(join(thumbs, r.file.replace(/\.jpg$/, ".webp")));
+  }
+  const stage = mkdtempSync(join(tmpdir(), "rise-kit-"));
+  const kit = join(stage, "rise-motordrome-press-kit");
+  mkdirSync(kit, { recursive: true });
+  for (const r of RISE_RENDERS) copyFileSync(join(dir, r.file), join(kit, r.file));
+  const zip = join(PUBLIC, RISE_PRESS_KIT_ZIP);
+  rmSync(zip, { force: true });
+  execFileSync("zip", ["-r", "-X", "-q", zip, "rise-motordrome-press-kit"], { cwd: stage });
+  rmSync(stage, { recursive: true, force: true });
+  console.log(`${RISE_RENDERS.length} RISE thumbnails and ${RISE_PRESS_KIT_ZIP}`);
 }
 
 main().catch((e) => {

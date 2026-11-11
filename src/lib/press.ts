@@ -217,6 +217,24 @@ export const PRESS_SCREENSHOTS: { file: string; alt: string }[] = [
 /** The press kit download: every screenshot plus the logos (made by `npm run press-kit`) */
 export const PRESS_KIT_ZIP = "/press/librecorsa-press-kit.zip";
 
+/**
+ * RISE Motordrome's own kit: Cycles renders of the Blender model the game's circuit is built from, in public/press/rise/.
+ * `npm run press-kit` makes their thumbnails and the ZIP too.
+ */
+export const RISE_RENDERS: { file: string; alt: string; size: string }[] = [
+  { file: "rise-main-straight.jpg", alt: "The field down the main straight", size: "2560 × 1440" },
+  { file: "rise-close-up.jpg", alt: "The 2026 prototype in Visit Rwanda colours on the grid", size: "2560 × 1440" },
+  { file: "rise-gt3-bowl.jpg", alt: "Two GT3 cars through The Bowl", size: "2560 × 1440" },
+  { file: "rise-esses.jpg", alt: "Open-wheelers through the Kidogo Esses", size: "2560 × 1440" },
+  { file: "rise-layout.jpg", alt: "The whole circuit from above", size: "2560 × 1440" },
+  { file: "rise-aerial.jpg", alt: "The circuit and Lake Kidogo from the air", size: "3072 × 2048" },
+];
+
+export const RISE_PRESS_KIT_ZIP = "/press/rise/rise-motordrome-press-kit.zip";
+
+/** The official design render the aerial is set up to match, shown beside it on the press page (not in the ZIP) */
+export const RISE_OFFICIAL_RENDER = "/press/rise/official-render.jpg";
+
 const newestFirst =<T extends { date: string }>(items: T[]) => [...items].sort((a, b) => b.date.localeCompare(a.date));
 
 export const coverage = () => newestFirst(COVERAGE);
