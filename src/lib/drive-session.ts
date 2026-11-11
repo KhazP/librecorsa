@@ -1263,7 +1263,10 @@ export class DriveSession {
     // run does and when the replay moves the drawn car
     const cameraRig = new CameraRig(camera, track);
     // polish:B the podium shot takes the camera for a few seconds after a race; the drive's cameras start over after it
-    const podium = new PodiumDirector(track, () => cameraRig.reset());
+    const podium = new PodiumDirector(track, () => {
+      cameraRig.reset();
+      camera.layers.enable(OVERLAY_LAYER);
+    });
     this.podium = podium;
     let frameIndex = 0;
     const deviceInput = new DeviceInputReader();

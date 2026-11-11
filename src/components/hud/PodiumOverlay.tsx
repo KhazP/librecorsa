@@ -42,11 +42,19 @@ export const PodiumOverlay: React.FC<{ rows: readonly PodiumRow[]; trackName: st
                 </span>
                 <span className="inline-flex max-w-full items-center gap-2">
                   <span aria-hidden className="h-4 w-1 shrink-0 rounded-full" style={{ backgroundColor: r.isPlayer ? HUD_VOLT : r.teamColorHex }} />
-                  <span className={`truncate font-bold ${r.position === 1 ? "text-[17px] sm:text-[22px]" : "text-[15px] sm:text-[18px]"}`}>{r.name}</span>
+                  <span
+                    className={`truncate font-bold ${r.position === 1 ? "text-[17px] sm:text-[22px]" : "text-[15px] sm:text-[18px]"}`}
+                    style={{ color: r.isPlayer ? HUD_VOLT : undefined }}
+                  >
+                    {r.name}
+                  </span>
                 </span>
-                <span className="lc-data text-[11px] tracking-[0.14em]" style={{ color: r.isPlayer ? HUD_VOLT : "#8E96AA" }}>
-                  {r.isPlayer ? "YOU" : r.driverCode}
-                </span>
+                {/* The code under the name, unless the name is the code (the AI drivers, the player against them) */}
+                {r.name !== r.driverCode ? (
+                  <span className="lc-data text-[11px] tracking-[0.14em]" style={{ color: r.isPlayer ? HUD_VOLT : "#8E96AA" }}>
+                    {r.isPlayer ? "YOU" : r.driverCode}
+                  </span>
+                ) : null}
               </div>
             ) : (
               <span key={`empty-${i}`} aria-hidden />

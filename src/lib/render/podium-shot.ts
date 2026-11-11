@@ -12,6 +12,7 @@ import type { GroundHit, GroundQuery } from "@/lib/sim/f12026-car/TrackColliderQ
 import type { SimCarRig } from "@/lib/car-builder-2026";
 import type { WheelSeating } from "@/lib/render/corner-rig";
 import { seatContactShadow } from "@/lib/render/contact-shadow";
+import { OVERLAY_LAYER } from "@/lib/render/layers";
 
 /** How long the shot runs (s) */
 export const PODIUM_SHOT_S = 6;
@@ -323,6 +324,8 @@ export class PodiumDirector {
     camera.position.copy(this.camPos);
     camera.up.set(0, 1, 0);
     camera.lookAt(this.camLook);
+    // No driving aids (the racing line) in the shot; the drive's onEnd puts them back
+    camera.layers.disable(OVERLAY_LAYER);
     if (camera.fov !== SHOT_FOV_DEG) {
       camera.fov = SHOT_FOV_DEG;
       camera.updateProjectionMatrix();
