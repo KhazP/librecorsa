@@ -27,6 +27,9 @@ on:
       head:
         description: 'Commit to review (default: the tip of the chosen branch)'
         required: false
+      exclude:
+        description: 'More files to leave out, as glob patterns separated by commas (e.g. src/lib/cars/lc26/**)'
+        required: false
 
 # GitHub asks for write access to post a commit comment. The job changes no files, and only the review step
 # is handed the token.
@@ -37,7 +40,8 @@ jobs:
   review:
     if: github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # A large push is read in several requests, four at a time
+    timeout-minutes: 45
     steps:
       - name: Check for the API key
         id: key
@@ -77,6 +81,7 @@ jobs:
           REVIEW_BEFORE: ${{ github.event.before }}
           REVIEW_BASE: ${{ github.event.inputs.base }}
           REVIEW_HEAD: ${{ github.event.inputs.head }}
+          REVIEW_EXCLUDE: ${{ github.event.inputs.exclude }}
           REVIEW_DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
           REVIEW_MODEL: claude-fable-5-2
           REVIEW_EFFORT: high

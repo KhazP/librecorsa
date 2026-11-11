@@ -2,18 +2,21 @@
 """Review the commits of one push with Claude.
 
 Run by .github/workflows/claude-review.yml. The review goes to the run summary, and to a commit comment when it has
-findings. Findings never fail the run; only a rejected API key, model or request does.
+findings. Findings never fail the run; only a rejected API key, model or request does. A large push is read in parts,
+a few files to a request, and the parts' findings make one review.
 
 Local check, no API call:  python .github/scripts/claude_review.py --dry-run --base <sha> --head <sha>
 """
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
 import json
 import os
 import re
 import subprocess
 import sys
+import types
 import urllib.error
 import urllib.request
 
@@ -22,8 +25,13 @@ EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 
 MODEL = os.environ.get("REVIEW_MODEL") or "claude-fable-5-2"
 EFFORT = os.environ.get("REVIEW_EFFORT") or "high"
-# About 150k tokens. A push over this loses its largest files, and the review names them.
-MAX_DIFF_CHARS = int(os.environ.get("REVIEW_MAX_DIFF_CHARS") or 600_000)
+# The whole push. One over this loses its largest files, and the review names them.
+MAX_DIFF_CHARS = int(os.environ.get("REVIEW_MAX_DIFF_CHARS") or 3_000_000)
+# One file's diff. A larger one is generated data more often than code, and is left out and named.
+MAX_FILE_CHARS = int(os.environ.get("REVIEW_MAX_FILE_CHARS") or 300_000)
+# One request, about 40k tokens. A push over this is read in parts: a reply to more runs out of room before it ends.
+BATCH_CHARS = int(os.environ.get("REVIEW_BATCH_CHARS") or 150_000)
+PARALLEL_REQUESTS = 4
 CONTEXT_LINES = 12
 COMMENT_LIMIT = 60_000  # GitHub cuts a comment off at 65536 characters.
 NOTES_FILE = ".github/claude-review.md"  # Optional: what a reviewer of this repo should know.
@@ -143,7 +151,9 @@ def resolve_base(before: str, head: str, branch: str, default_branch: str) -> tu
 
 def collect_diff(base: str, head: str) -> tuple[list[tuple[str, str]], list[tuple[str, int]]]:
     """Per-file diffs that fit the budget, in git's order, and the (path, size) of each file left out."""
-    excludes = [f":(exclude,glob){pattern}" for pattern in EXCLUDE]
+    # REVIEW_EXCLUDE: more glob patterns to leave out of one run, separated by commas (the workflow's `exclude` input)
+    extra = [pattern.strip() for pattern in os.environ.get("REVIEW_EXCLUDE", "").split(",") if pattern.strip()]
+    excludes = [f":(exclude,glob){pattern}" for pattern in EXCLUDE + extra]
     out = git("diff", "--no-color", "--no-ext-diff", "-M", f"-U{CONTEXT_LINES}", base, head, "--", ".", *excludes)
     files = []
     for chunk in re.split(r"(?m)^(?=diff --git )", out):
@@ -155,12 +165,28 @@ def collect_diff(base: str, head: str) -> tuple[list[tuple[str, str]], list[tupl
     total = sum(len(chunk) for _, chunk in files)
     dropped: list[tuple[str, int]] = []
     for path, chunk in sorted(files, key=lambda f: len(f[1]), reverse=True):
-        if total <= MAX_DIFF_CHARS:
+        if total <= MAX_DIFF_CHARS and len(chunk) <= MAX_FILE_CHARS:
             break
         dropped.append((path, len(chunk)))
         total -= len(chunk)
     dropped_paths = {path for path, _ in dropped}
     return [f for f in files if f[0] not in dropped_paths], dropped
+
+
+def split_batches(kept: list[tuple[str, str]]) -> list[list[tuple[str, str]]]:
+    """The files in git's order, so a folder's files stay together, cut where a request would pass its budget."""
+    batches: list[list[tuple[str, str]]] = []
+    current: list[tuple[str, str]] = []
+    size = 0
+    for item in kept:
+        if current and size + len(item[1]) > BATCH_CHARS:
+            batches.append(current)
+            current, size = [], 0
+        current.append(item)
+        size += len(item[1])
+    if current:
+        batches.append(current)
+    return batches
 
 
 def commit_list(base: str, head: str) -> str:
@@ -171,8 +197,12 @@ def commit_list(base: str, head: str) -> str:
 
 # ---- prompt and reply -----------------------------------------------------------------------------------------------
 
-def build_prompt(repo: str, branch: str, commits: str, kept: list, dropped: list) -> str:
+def build_prompt(repo: str, branch: str, commits: str, kept: list, dropped: list, part: tuple[int, int] | None) -> str:
     parts = [f"Repository: {repo}", f"Branch: {branch}", "", "Commits in this push, oldest first:", commits, ""]
+    if part:
+        parts += [f"The push is too large for one request, so it is reviewed by file in {part[1]} parts; this is part "
+                  f"{part[0]}. The other files are reviewed separately. Where a finding depends on a file this part "
+                  "does not show, say so and rate it low.", ""]
     if dropped:
         names = ", ".join(path for path, _ in dropped)
         parts += [f"These changed files were too large to include and are not part of the review: {names}", ""]
@@ -212,7 +242,18 @@ def ask_claude(prompt: str):
         return stream.get_final_message()
 
 
-def render(data: dict, *, repo: str, head: str, model: str, usage, kept: list, dropped: list, base_reason: str) -> str:
+def ask_part(prompt: str):
+    """The reply, or the API's error for the caller to sort: one part failing must not lose the others."""
+    import anthropic
+
+    try:
+        return ask_claude(prompt)
+    except anthropic.APIError as error:
+        return error
+
+
+def render(data: dict, *, repo: str, head: str, model: str, usage, kept: list, dropped: list, unread: list,
+           base_reason: str) -> str:
     server = os.environ.get("GITHUB_SERVER_URL", "https://github.com")
     order = {"high": 0, "medium": 1, "low": 2}
     findings = sorted(data["findings"], key=lambda f: order.get(f["severity"], 3))
@@ -231,6 +272,8 @@ def render(data: dict, *, repo: str, head: str, model: str, usage, kept: list, d
         ]
     if dropped:
         lines += ["Not reviewed, too large: " + ", ".join(f"`{path}`" for path, _ in dropped), ""]
+    for reason, paths in unread:
+        lines += [f"Not reviewed, {reason}: " + ", ".join(f"`{path}`" for path in paths), ""]
     lines.append(
         f"<sub>{model} · {len(kept)} files against {base_reason} · "
         f"{usage.input_tokens:,} tokens in, {usage.output_tokens:,} out</sub>"
@@ -309,56 +352,84 @@ def main() -> int:
         write_summary(f"### Claude review of `{head[:7]}`: nothing to review\n\nThe push changed no reviewable files.")
         return 0
 
-    prompt = build_prompt(repo, args.branch, commit_list(base, head), kept, dropped)
+    batches = split_batches(kept)
+    commits = commit_list(base, head)
+    prompts = [
+        build_prompt(repo, args.branch, commits, batch, dropped, (index + 1, len(batches)) if len(batches) > 1 else None)
+        for index, batch in enumerate(batches)
+    ]
     if args.dry_run:
-        for path, chunk in kept:
-            print(f"  send  {len(chunk):>8,}  {path}")
+        for index, batch in enumerate(batches):
+            print(f"Part {index + 1} of {len(batches)}: {len(prompts[index]):,} characters")
+            for path, chunk in batch:
+                print(f"  send  {len(chunk):>8,}  {path}")
         for path, size in dropped:
             print(f"  drop  {size:>8,}  {path}")
-        print(f"Prompt: {len(prompt):,} characters. Model {MODEL}, effort {EFFORT}. Dry run, nothing sent.")
+        print(f"Model {MODEL}, effort {EFFORT}. Dry run, nothing sent.")
         return 0
 
     import anthropic
 
-    try:
-        message = ask_claude(prompt)
-    except (anthropic.AuthenticationError, anthropic.PermissionDeniedError, anthropic.NotFoundError) as error:
-        annotate("error", f"Claude rejected the key or the model ({error.status_code}): {error.message}")
-        return 1
-    except anthropic.BadRequestError as error:
-        # An empty credit balance comes back as a bad request; that is not a fault in the push.
-        if re.search(r"credit|billing|spend", error.message, re.IGNORECASE):
-            annotate("warning", f"Not reviewed, the API account is out of credit: {error.message}")
-            return 0
-        annotate("error", f"Claude rejected the request (400): {error.message}")
-        return 1
-    except anthropic.APIError as error:  # rate limit, spend limit, overload, server or network trouble
-        annotate("warning", f"Not reviewed, the Claude API was unavailable: {error.message}")
-        return 0
+    with concurrent.futures.ThreadPoolExecutor(max_workers=min(PARALLEL_REQUESTS, len(prompts))) as pool:
+        replies = list(pool.map(ask_part, prompts))
 
-    usage = message.usage
-    print(f"Served by {message.model}: {usage.input_tokens:,} tokens in, {usage.output_tokens:,} out, "
-          f"stop reason {message.stop_reason}.")
-    if message.stop_reason == "refusal":
-        category = getattr(message.stop_details, "category", None) or "unspecified"
-        annotate("warning", f"Not reviewed: Claude declined this push (category: {category}).")
-        return 0
-    text = next((block.text for block in message.content if block.type == "text"), None)
-    try:
-        if message.stop_reason == "max_tokens" or text is None:
-            raise ValueError("the reply was cut off")
-        data = json.loads(text)
-    except ValueError as error:
-        annotate("warning", f"Not reviewed: the reply could not be read ({error}).")
-        return 0
+    summaries: list[str] = []
+    findings: list[dict] = []
+    unread: list[tuple[str, list[str]]] = []  # (why, the files of a part that gave no review)
+    usage = types.SimpleNamespace(input_tokens=0, output_tokens=0)
+    model = MODEL
+    for index, (batch, reply) in enumerate(zip(batches, replies)):
+        label = f"Part {index + 1} of {len(batches)}"
+        paths = [path for path, _ in batch]
+        if isinstance(reply, (anthropic.AuthenticationError, anthropic.PermissionDeniedError, anthropic.NotFoundError)):
+            annotate("error", f"Claude rejected the key or the model ({reply.status_code}): {reply.message}")
+            return 1
+        if isinstance(reply, anthropic.BadRequestError):
+            # An empty credit balance comes back as a bad request; that is not a fault in the push.
+            if re.search(r"credit|billing|spend", reply.message, re.IGNORECASE):
+                annotate("warning", f"Not reviewed, the API account is out of credit: {reply.message}")
+                return 0
+            annotate("error", f"Claude rejected the request (400): {reply.message}")
+            return 1
+        if isinstance(reply, anthropic.APIError):  # rate limit, spend limit, overload, server or network trouble
+            print(f"{label}: the Claude API was unavailable: {reply.message}")
+            unread.append(("the Claude API was unavailable", paths))
+            continue
 
-    review = render(data, repo=repo, head=head, model=message.model, usage=usage, kept=kept, dropped=dropped,
-                    base_reason=base_reason)
+        usage.input_tokens += reply.usage.input_tokens
+        usage.output_tokens += reply.usage.output_tokens
+        print(f"{label}, served by {reply.model}: {reply.usage.input_tokens:,} tokens in, "
+              f"{reply.usage.output_tokens:,} out, stop reason {reply.stop_reason}.")
+        if reply.stop_reason == "refusal":
+            category = getattr(reply.stop_details, "category", None) or "unspecified"
+            unread.append((f"Claude declined these files (category: {category})", paths))
+            continue
+        text = next((block.text for block in reply.content if block.type == "text"), None)
+        try:
+            if reply.stop_reason == "max_tokens" or text is None:
+                raise ValueError("the reply was cut off")
+            data = json.loads(text)
+        except ValueError as error:
+            unread.append((f"the reply could not be read ({error})", paths))
+            continue
+        model = reply.model
+        summaries.append(data["summary"].strip())
+        findings += data["findings"]
+
+    if not summaries:
+        reasons = "; ".join(sorted({reason for reason, _ in unread}))
+        annotate("warning", f"Not reviewed: {reasons}.")
+        return 0
+    if unread:
+        annotate("warning", f"{len(unread)} of {len(batches)} parts of the push were not reviewed; the review names "
+                            "their files.")
+
+    review = render({"summary": "\n\n".join(summaries), "findings": findings}, repo=repo, head=head, model=model,
+                    usage=usage, kept=kept, dropped=dropped, unread=unread, base_reason=base_reason)
     write_summary(review)
-    if data["findings"]:
+    if findings:
         post_commit_comment(repo, head, review)
     return 0
-
 
 if __name__ == "__main__":
     sys.exit(main())
