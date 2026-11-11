@@ -41,6 +41,10 @@ export interface VehicleWheelState {
   slipAngleRad: number;
   /** Combined normalised slip (1 = peak grip) */
   combinedSlipNorm: number;
+  /** Speed the tread slides over the road at the contact (m/s): the rim's speed less the road's, and the road's sideways */
+  slideSpeedMs: number;
+  /** Share of its road speed a braked wheel has stopped turning (0 rolling, 1 locked; `tyre-slide-fx.ts`) */
+  lockShare: number;
   /** Available lateral friction coefficient */
   effectiveMu: number;
   /** Grip multiplier from temperature / camber / wear */

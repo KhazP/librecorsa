@@ -17,6 +17,8 @@ export interface WheelState {
   zRoad: number;
   fzN: number;
   combinedSlipNorm: number;
+  slideSpeedMs: number;
+  lockShare: number;
   surfaceType: SurfaceType;
   spinVel: number;
 }
@@ -43,7 +45,7 @@ export interface CarState {
   tyres: [TyreVisualState, TyreVisualState, TyreVisualState, TyreVisualState] | null;
 }
 
-const blankWheel = (): WheelState => ({ x: 0, y: 0, z: 0, zRoad: 0, fzN: 0, combinedSlipNorm: 0, surfaceType: "asphalt", spinVel: 0 });
+const blankWheel = (): WheelState => ({ x: 0, y: 0, z: 0, zRoad: 0, fzN: 0, combinedSlipNorm: 0, slideSpeedMs: 0, lockShare: 0, surfaceType: "asphalt", spinVel: 0 });
 const blankTyre = (): TyreVisualState => ({ loadedRadiusM: 0, verticalDeflectionM: 0, lateralForceN: 0, camberRad: 0, onRoad: true });
 
 export function blankCarState(): CarState {
@@ -126,6 +128,8 @@ export function captureCarState(car: SimulatorCar, out: CarState): CarState {
     o.zRoad = w.zRoad;
     o.fzN = w.fzN;
     o.combinedSlipNorm = w.combinedSlipNorm;
+    o.slideSpeedMs = w.slideSpeedMs;
+    o.lockShare = w.lockShare;
     o.surfaceType = w.surfaceType;
     o.spinVel = w.spinVel;
   }
@@ -172,7 +176,7 @@ export class CarStateView {
 
   /** `telemetry` starts as a copy of the car's own, so every field the HUD reads is there before the first update */
   constructor(readonly telemetry: CarTelemetry) {
-    const wheel = (): SimulatorWheel => ({ worldPos: { x: 0, y: 0, z: 0 }, zRoad: 0, fzN: 0, combinedSlipNorm: 0, surfaceType: "asphalt", spinVel: 0 });
+    const wheel = (): SimulatorWheel => ({ worldPos: { x: 0, y: 0, z: 0 }, zRoad: 0, fzN: 0, combinedSlipNorm: 0, slideSpeedMs: 0, lockShare: 0, surfaceType: "asphalt", spinVel: 0 });
     this.wheels = [wheel(), wheel(), wheel(), wheel()];
   }
 
@@ -205,6 +209,8 @@ export class CarStateView {
       o.zRoad = w.zRoad;
       o.fzN = w.fzN;
       o.combinedSlipNorm = w.combinedSlipNorm;
+      o.slideSpeedMs = w.slideSpeedMs;
+      o.lockShare = w.lockShare;
       o.surfaceType = w.surfaceType;
       o.spinVel = w.spinVel;
     }

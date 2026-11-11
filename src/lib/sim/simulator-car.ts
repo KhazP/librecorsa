@@ -21,7 +21,10 @@ import type { SteeringAssistSettings, SteeringSource } from './steering-assist';
 import type { BrakingGuide } from './speed-profile';
 
 /** Per-wheel state used by the skid marks / smoke, multiplayer and AI peers. Order FR, FL, RR, RL. */
-export type SimulatorWheel = Pick<VehicleWheelState, 'worldPos' | 'zRoad' | 'fzN' | 'combinedSlipNorm' | 'surfaceType' | 'spinVel'>;
+export type SimulatorWheel = Pick<
+  VehicleWheelState,
+  'worldPos' | 'zRoad' | 'fzN' | 'combinedSlipNorm' | 'slideSpeedMs' | 'lockShare' | 'surfaceType' | 'spinVel'
+>;
 
 /** Per-corner tyre state for the GPU tyre deformation (order FR, FL, RR, RL). Updated in place each step. */
 export interface TyreVisualState {

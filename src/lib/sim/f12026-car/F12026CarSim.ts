@@ -74,6 +74,7 @@ import { defaultColdPressurePsi, type VehicleEvent, type VehicleInputs, VehicleP
 import { KERB_PROFILE_L, kerbProfileM, surfaceRippleM } from '../track-surfaces';
 import { sampleGrid } from '../ai/ai-track';
 import type { AiDrivePlan } from '../ai/drive-plan';
+import { lockShareOf } from '../tyre-slide-fx';
 
 const G = 9.81;
 const DEG2RAD = Math.PI / 180;
@@ -919,6 +920,8 @@ export class F12026CarSim implements SimulatorCar {
       zRoad: 0,
       fzN: 0,
       combinedSlipNorm: 0,
+      slideSpeedMs: 0,
+      lockShare: 0,
       surfaceType: 'asphalt',
       spinVel: 0,
       brakeTempC: 300,
@@ -2192,6 +2195,8 @@ export class F12026CarSim implements SimulatorCar {
       out.zRoad = w.ground.height;
       out.fzN = w.fz;
       out.combinedSlipNorm = w.combinedSlip;
+      out.slideSpeedMs = w.fz > 0 ? Math.hypot(w.slipVelX, w.vy) : 0;
+      out.lockShare = w.fz > 0 ? lockShareOf(w.slipVelX, w.vx) : 0;
       out.surfaceType = surfaceType(w.ground.surface);
       out.spinVel = w.omega;
       // Visual tyre state: the wheel's own deflection / loaded radius / lateral force / camber (no physics write)

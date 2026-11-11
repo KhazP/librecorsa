@@ -135,6 +135,7 @@ import { surfaceRippleM, type TrackSurfaceKind } from './sim/track-surfaces';
 import { BRAKE_DUCT_STEP, type ChassisSetup, clampChassisSetup, DEFAULT_CHASSIS_SETUP, pctScale, startingFuelKg, WING_CLICK_DEG } from './sim/car-setup';
 import { flyingExitSpeedMs, flyingStartPoint, type TyreVisualState } from './sim/simulator-car';
 import type { VehicleWheelState, WheelCornerIndex } from './sim/vehicle-types';
+import { lockShareOf } from './sim/tyre-slide-fx';
 import {
   type RaceGymObservation,
   computeLookaheadVectors,
@@ -682,6 +683,8 @@ export class F1Physics2026 {
         slipRatio: 0,
         slipAngleRad: 0,
         combinedSlipNorm: 0,
+        slideSpeedMs: 0,
+        lockShare: 0,
         effectiveMu: spec.dyRef,
         gripFactor: 1,
         torqueAlignNm: 0,
@@ -1106,6 +1109,8 @@ export class F1Physics2026 {
       w.slipRatio = 0;
       w.slipAngleRad = 0;
       w.combinedSlipNorm = 0;
+      w.slideSpeedMs = 0;
+      w.lockShare = 0;
       w.steerRad = 0;
     }
     this.syncCartesianFromCurvilinear();
@@ -1454,6 +1459,8 @@ export class F1Physics2026 {
       w.slipRatio = 0;
       w.slipAngleRad = 0;
       w.combinedSlipNorm = 0;
+      w.slideSpeedMs = 0;
+      w.lockShare = 0;
       w.steerRad = 0;
       w.brakeTempC = INITIAL_BRAKE_TEMP_C;
       resetBrakeDiscState(w.brakeDisc, INITIAL_BRAKE_TEMP_C, 'carbon-ceramic');
@@ -2458,6 +2465,8 @@ export class F1Physics2026 {
       w.slipRatio = out.slipRatio;
       w.slipAngleRad = out.slipAngle;
       w.combinedSlipNorm = out.normSlip;
+      w.slideSpeedMs = Math.hypot(tin.rimSpeed - vxw, vyw);
+      w.lockShare = lockShareOf(tin.rimSpeed - vxw, vxw);
       w.effectiveMu = out.mu;
       w.gripFactor = out.gripFactor;
       w.torqueAlignNm = out.mz;
