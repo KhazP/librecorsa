@@ -91,7 +91,7 @@ coordinate along the kerb, which the game reads the blocks from, so that both st
 every corner of every block, `scripts/verify-rwanda-official.ts`). 5,316 blocks, 81,100 triangles; they carry no
 surface. The hump under them is bare concrete and shows only where a block is left out: where a road's paving lies
 over or beside the kerb, and at the cut ends of a kerb at a junction. The older VF26 physics (the 2026 Prototype
-unless `?vf26engine=rigid`) reads kerbs off the track data, along the lap's distance: it feels the same blocks, not in
+only with `?vf26engine=classic`) reads kerbs off the track data, along the lap's distance: it feels the same blocks, not in
 step with the ones one sees, and laps within 0.02 s of what it did without them.
 
 The road, the pit lane and the gravel wear scanned surfaces: Poly Haven's Asphalt Track, Asphalt Pit Lane and Gravel

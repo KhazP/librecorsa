@@ -19,6 +19,9 @@ import { fakeD1, fakeR2 } from './lib/fake-cloudflare';
 import { planImport, type SupabaseDriver, type SupabaseLap } from './migrate-supabase-board';
 import { CHALLENGE_ROTATION, challengeAt, challengeProblem, fitsChallenge, isoWeekId, timeLeftLabel } from '../src/lib/net/weekly-challenge';
 
+/** The revision the laps here are driven under: the board of the car they are driven in (the VF26's own) */
+const CURRENT = lapPhysicsVersion('vf26');
+
 const failures: string[] = [];
 const check = (name: string, ok: boolean, detail = '') => {
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${name.padEnd(62)} ${detail}`);
@@ -54,7 +57,7 @@ for (let f = 0; f < 60 * 600 && !autopilotLap; f++) {
       compound: 'medium',
       surface: 'dry',
       realism: laps === 1 && moment ? 'casual' : 'full',
-      physicsVersion: PHYSICS_VERSION,
+      physicsVersion: CURRENT,
       autopilot: laps === 2 && moment,
     },
   });
@@ -70,28 +73,41 @@ if (!lap) {
 const real = lap;
 
 // 1. Conditions --------------------------------------------------------------------------------------------------------
-check('the lap carries its conditions', real.conditions?.compound === 'medium' && real.conditions.physicsVersion === PHYSICS_VERSION);
+check('the lap carries its conditions', real.conditions?.compound === 'medium' && real.conditions.physicsVersion === CURRENT);
 check('a moment on assists makes it an assisted lap', real.conditions?.assists === 'assisted', real.conditions?.assists);
 check('a moment on Casual makes it a Casual lap', real.conditions?.realism === 'casual', real.conditions?.realism);
-check('board class', real.conditions !== undefined && lapBoardClass(real.conditions) === `p${PHYSICS_VERSION}-assisted-casual-dry`);
+check('board class', real.conditions !== undefined && lapBoardClass(real.conditions) === `p${CURRENT}-assisted-casual-dry`);
 {
-  // The VF26 on its opt-in rigid-body engine (a choice kept in the browser) is ranked apart from the engine it ships on
+  // The VF26 ships on the rigid-body engine, with a board of its own; on its older engine (a choice kept in the
+  // browser) its laps go on the board they always went on
   const g = globalThis as { window?: unknown; localStorage?: unknown };
-  const kept = new Map([['librecorsa.vf26Engine', 'rigid']]);
-  g.window = { location: { search: '' } };
-  g.localStorage = { getItem: (k: string) => kept.get(k) ?? null, setItem: (k: string, v: string) => void kept.set(k, v) };
-  const optIn = lapPhysicsVersion('vf26');
-  const others = lapPhysicsVersion('f12026-car');
-  delete g.window;
-  delete g.localStorage;
+  const kept = new Map<string, string>();
+  const inBrowser = (search: string, stored?: string) => {
+    kept.clear();
+    if (stored) kept.set('librecorsa.vf26Engine', stored);
+    g.window = { location: { search } };
+    g.localStorage = { getItem: (k: string) => kept.get(k) ?? null, setItem: (k: string, v: string) => void kept.set(k, v) };
+    const out = { vf26: lapPhysicsVersion('vf26'), others: lapPhysicsVersion('f12026-car'), kept: kept.get('librecorsa.vf26Engine') };
+    delete g.window;
+    delete g.localStorage;
+    return out;
+  };
+  const shipped = lapPhysicsVersion('vf26');
+  const fresh = inBrowser('');
+  const older = inBrowser('', 'classic');
+  const asked = inBrowser('?vf26engine=classic');
+  const back = inBrowser('?vf26engine=rigid', 'classic');
   check(
-    'the VF26 on its opt-in engine has a board of its own, other cars and the shipping engine keep theirs',
-    optIn !== PHYSICS_VERSION &&
-      others === PHYSICS_VERSION &&
-      lapPhysicsVersion('vf26') === PHYSICS_VERSION &&
-      parseLapConditions({ ...real.conditions, physicsVersion: optIn }) !== null,
-    `p${optIn} / p${others}`
+    'the VF26 ships on the rigid-body engine with a board of its own, in a script and in a browser that never chose',
+    shipped !== PHYSICS_VERSION && fresh.vf26 === shipped && inBrowser('', 'rigid').vf26 === shipped && parseLapConditions({ ...real.conditions, physicsVersion: shipped }) !== null,
+    `p${shipped}`
   );
+  check(
+    'on its older engine its laps keep the board they had: asked for in the address, kept for the browser, and undone the same way',
+    older.vf26 === PHYSICS_VERSION && asked.vf26 === PHYSICS_VERSION && asked.kept === 'classic' && back.vf26 === shipped && back.kept === 'rigid',
+    `p${older.vf26} / p${back.vf26}`
+  );
+  check('the other cars keep one board whichever engine the VF26 is on', fresh.others === PHYSICS_VERSION && older.others === PHYSICS_VERSION && lapPhysicsVersion() === PHYSICS_VERSION);
 }
 check('a recording without its realism level is refused', validateLapRecording({ ...real, conditions: { ...real.conditions, realism: undefined } }) === null);
 check(
@@ -151,7 +167,7 @@ const post = async (rec: unknown, driverKey: string | null = KEY_A, extra: Recor
 };
 type Row = { id: string; name: string; lapTimeMs: number; conditions: { assists: string; realism: string; surface: string; physicsVersion: number } };
 type ListAnswer = { laps: Row[]; total: number; physics: number[]; me: { rank: number; lap: Row } | null };
-const list = async (query = '', physics = PHYSICS_VERSION) => {
+const list = async (query = '', physics = CURRENT) => {
   const res = await listLaps(deps, new URL(`https://librecorsa.test/api/laps?track=rwanda_official_short&vehicle=vf26&physics=${physics}${query}`));
   return { status: res.status, body: res.body as ListAnswer };
 };
@@ -269,7 +285,7 @@ async function main(): Promise<void> {
     const res = await post(variant(0.98, 'Old Timer', { physicsVersion: 1 }), 'c'.repeat(43));
     check('board: an older-physics lap is ranked on its own board', res.body.ok === true && res.body.rank === 1 && res.body.total === 1);
     const now = (await list()).body;
-    check('board: and not on the current one, which lists both revisions', now.total === 3 && now.physics.join() === `${PHYSICS_VERSION},1`, now.physics.join());
+    check('board: and not on the current one, which lists both revisions', now.total === 3 && now.physics.join() === `${CURRENT},1`, now.physics.join());
     check('board: the older board has it', (await list('', 1)).body.laps[0]?.name === 'Old Timer');
   }
   {
@@ -294,7 +310,7 @@ async function main(): Promise<void> {
       const url = new URL(`https://librecorsa.org${path}`);
       return handleApi(new Request(url), e, url);
     };
-    const listed = await api(`/api/laps?track=rwanda_official_short&vehicle=vf26&physics=${PHYSICS_VERSION}`, env);
+    const listed = await api(`/api/laps?track=rwanda_official_short&vehicle=vf26&physics=${CURRENT}`, env);
     const rows = ((await listed.json()) as ListAnswer).laps;
     check('api: GET /api/laps lists the board, never cached', listed.status === 200 && rows.length === 3 && listed.headers.get('Cache-Control') === 'no-store');
     const ghost = await api(`/api/laps/${rows[0].id}`, env);
@@ -334,7 +350,7 @@ async function main(): Promise<void> {
     const mira = await db.prepare("SELECT key_hash FROM drivers WHERE name_key = 'mira tanaka'").first<{ key_hash: string }>();
     check('migration: a name keeps the hash of its key', mira?.key_hash === hash('a'));
     const migrated: BoardDeps = { db, ghosts: fakeR2(), eventRule: challengeProblem, now: () => nowMs };
-    const listed = (await listLaps(migrated, new URL(`https://librecorsa.test/api/laps?track=rwanda_official_short&vehicle=vf26&physics=${PHYSICS_VERSION}&name=Mira%20Tanaka`))).body as ListAnswer;
+    const listed = (await listLaps(migrated, new URL(`https://librecorsa.test/api/laps?track=rwanda_official_short&vehicle=vf26&physics=${CURRENT}&name=Mira%20Tanaka`))).body as ListAnswer;
     check('migration: the carried-over laps show on the new board', listed.total === 2 && listed.laps[0].name === 'Mira Tanaka' && listed.me?.rank === 1);
 
     // Later: the driver went faster on the old board from a browser still on the old game; someone else took a name here

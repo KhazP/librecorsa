@@ -1,9 +1,8 @@
 /**
- * Which engine the VF26 model runs on: `F1Physics2026` (what it ships on) or the rigid-body `VehiclePhysics` on the
- * same car data, tuned for that engine (`createVf26Sim`, `Vf26Tune.ts`). The rigid-body one is opt-in while it is
- * being driven and compared:
- * `?vf26engine=rigid` in the address switches it on and `?vf26engine=classic` off, and the choice is kept for the
- * browser. Off the browser (scripts, the race server) it is the shipping engine.
+ * Which engine the VF26 model runs on: the rigid-body `VehiclePhysics` every other car drives on (what it ships on:
+ * `createVf26Sim`, the car of `Vf26Tune.ts`), or `F1Physics2026`, the engine the car was first built on, kept to
+ * compare the two: `?vf26engine=classic` in the address switches to it and `?vf26engine=rigid` back, and the choice
+ * is kept for the browser. Off the browser (the scripts) it is the shipping engine.
  */
 const STORAGE_KEY = "librecorsa.vf26Engine";
 
@@ -15,12 +14,12 @@ export function setVf26OnRigidBody(rigid: boolean): void {
 
 export function vf26OnRigidBody(): boolean {
   if (handedOver !== null) return handedOver;
-  if (typeof window === "undefined") return false;
+  if (typeof window === "undefined") return true;
   try {
     const fromUrl = new URLSearchParams(window.location.search).get("vf26engine");
     if (fromUrl === "rigid" || fromUrl === "classic") localStorage.setItem(STORAGE_KEY, fromUrl);
-    return localStorage.getItem(STORAGE_KEY) === "rigid";
+    return localStorage.getItem(STORAGE_KEY) !== "classic";
   } catch {
-    return false;
+    return true;
   }
 }

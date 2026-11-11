@@ -13,9 +13,11 @@ import { SIM_REALISM_LEVELS, type SimRealism } from "./sim-realism";
 export const PHYSICS_VERSION = 7;
 
 /**
- * The revision a lap in this car is driven under. The VF26 on its opt-in rigid-body engine (`vf26-engine.ts`) is another
- * car to drive, so its laps and ghosts get a revision of their own, away from the laps of the engine it ships on.
- * Raise the offset by ten when that car alone changes: the other cars keep their boards.
+ * The revision a lap in this car is driven under: the one its current board, ghosts and weekly challenges go by. The
+ * VF26 on the rigid-body engine it ships on (`vf26-engine.ts`) is another car to drive than on its older engine, so
+ * its laps have a revision of their own; the older engine's laps (still driven with `?vf26engine=classic`) stay under
+ * `PHYSICS_VERSION`, an older board of that car. Raise the offset by ten when that car alone changes: the other cars
+ * keep their boards.
  */
 const VF26_RIGID_BODY_OFFSET = 510;
 export function lapPhysicsVersion(vehicle?: VehicleModelId): number {

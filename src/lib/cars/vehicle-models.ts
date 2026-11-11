@@ -56,7 +56,7 @@ export const VEHICLE_MODELS: Readonly<Record<VehicleModelId, VehicleModel>> = {
     id: "vf26",
     classId: "f1",
     createSim: (track, trackRoot) => {
-      // The same car on the rigid-body engine, while it is opt-in (`vf26-engine.ts`)
+      // On the rigid-body engine, unless the older one was asked for (`vf26-engine.ts`)
       if (vf26OnRigidBody()) return createVf26Sim(track, trackRoot);
       const car = new F1Physics2026(track);
       if (trackRoot) car.attachTrackRoot(trackRoot);

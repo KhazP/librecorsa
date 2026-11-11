@@ -203,7 +203,7 @@ const ALL_CARS: readonly CarDefinition[] = [
     id: "vf26",
     classId: "f1",
     title: "2026 Prototype",
-    sub: "Curvilinear 2026 model · active aero",
+    sub: "2026 model · active aero",
     badge: "PROTO 26",
     quality: "own",
     credit: DEX_F1_2026,
