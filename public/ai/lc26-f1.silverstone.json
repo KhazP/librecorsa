@@ -1,0 +1,83 @@
+{
+  "schemaVersion": 1,
+  "carId": "lc26-f1",
+  "circuitId": "silverstone",
+  "version": "1.0.0",
+  "description": "VeloSoft LC-26 Silverstone AI strategy: exploits nimble 3.40 m wheelbase through Maggotts-Becketts-Chapel, deploys Straight Mode on Wellington and Hangar straights, and Super Clips before Brooklands and Stowe.",
+  "defaults": {
+    "paceScale": 1.01,
+    "brakeScale": 0.98,
+    "cornerGripScale": 1.02,
+    "straightModeAggression01": 0.91,
+    "overtakeSocReserve01": 0.15
+  },
+  "circuits": {
+    "silverstone": {
+      "paceScale": 1.01,
+      "brakeScale": 0.98,
+      "cornerGripScale": 1.02,
+      "straightModeAggression01": 0.91,
+      "overtakeSocReserve01": 0.15
+    }
+  },
+  "params": {
+    "pace": 1.005,
+    "brakeMargin": 0.02,
+    "apexSpeedScale": 1.0,
+    "extMarginM": 0.6,
+    "steerGain": 1.04,
+    "overtakeCaution": 0.25,
+    "defend": 0.46,
+    "consistency": 0.89
+  },
+  "vehicles": {
+    "lc26-f1": {
+      "apexSpeedScale": 1.01,
+      "steerGain": 1.05
+    }
+  },
+  "sections": [
+    {
+      "label": "Abbey - Farm High-Load Entry",
+      "turns": [1, 2],
+      "leadInM": 135,
+      "params": { "brakeMargin": 0.06, "apexSpeedScale": 0.96, "extMarginM": 1.3 }
+    },
+    {
+      "label": "Village - Loop Traction Complex",
+      "turns": [3, 4, 5],
+      "leadInM": 135,
+      "params": { "brakeMargin": 0.05, "apexSpeedScale": 0.985, "bumpCaution": 0.25 }
+    },
+    {
+      "label": "Wellington Straight SM Zone",
+      "fromM": 1180,
+      "toM": 1580,
+      "params": { "steerGain": 0.86 }
+    },
+    {
+      "label": "Copse High-G Sweeper",
+      "turns": [10],
+      "leadInM": 120,
+      "params": { "brakeMargin": 0.05, "apexSpeedScale": 0.975, "extMarginM": 1.25 }
+    },
+    {
+      "label": "Maggotts - Becketts - Chapel",
+      "turns": [11, 12, 13, 14],
+      "leadInM": 115,
+      "params": { "brakeMargin": 0.055, "apexSpeedScale": 0.97, "extMarginM": 1.2 }
+    },
+    {
+      "label": "Hangar Straight Overtake & Clip",
+      "fromM": 4120,
+      "toM": 4650,
+      "params": { "steerGain": 0.85 }
+    },
+    {
+      "label": "Stowe & Vale Braking",
+      "turns": [16, 17, 18],
+      "leadInM": 140,
+      "params": { "brakeMargin": 0.045, "extMarginM": 1.15, "bumpCaution": 0.28 }
+    }
+  ]
+}

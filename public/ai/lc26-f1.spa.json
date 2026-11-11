@@ -1,0 +1,78 @@
+{
+  "schemaVersion": 1,
+  "carId": "lc26-f1",
+  "circuitId": "spa",
+  "version": "1.0.0",
+  "description": "VeloSoft LC-26 Spa-Francorchamps AI strategy: plank-compression protection through Eau Rouge / Raidillon, sustained Straight Mode up Kemmel and through Blanchimont approach, and 17% SoC reserve across the 7.0 km lap.",
+  "defaults": {
+    "paceScale": 1.01,
+    "brakeScale": 0.98,
+    "cornerGripScale": 1.01,
+    "straightModeAggression01": 0.95,
+    "overtakeSocReserve01": 0.17
+  },
+  "circuits": {
+    "spa": {
+      "paceScale": 1.01,
+      "brakeScale": 0.98,
+      "cornerGripScale": 1.01,
+      "straightModeAggression01": 0.95,
+      "overtakeSocReserve01": 0.17
+    }
+  },
+  "params": {
+    "pace": 1.005,
+    "brakeMargin": 0.02,
+    "apexSpeedScale": 1.0,
+    "extMarginM": 0.5,
+    "steerGain": 1.0,
+    "overtakeCaution": 0.24,
+    "defend": 0.48,
+    "bumpCaution": 0.18,
+    "consistency": 0.89
+  },
+  "vehicles": {
+    "lc26-f1": {
+      "bumpCaution": 0.2,
+      "overtakeCaution": 0.22
+    }
+  },
+  "sections": [
+    {
+      "label": "La Source Hairpin Launch",
+      "turns": [1],
+      "leadInM": 135,
+      "params": { "brakeMargin": 0.04, "intMarginM": 0.3, "overtakeCaution": 0.3 }
+    },
+    {
+      "label": "Eau Rouge - Raidillon Compression",
+      "turns": [2, 3, 4],
+      "leadInM": 90,
+      "params": { "brakeMargin": 0.03, "apexSpeedScale": 0.975, "bumpCaution": 0.45, "extMarginM": 0.9 }
+    },
+    {
+      "label": "Kemmel Straight Overtake Zone",
+      "fromM": 1150,
+      "toM": 1950,
+      "params": { "steerGain": 0.85 }
+    },
+    {
+      "label": "Les Combes Chicane",
+      "turns": [5, 6, 7],
+      "leadInM": 150,
+      "params": { "brakeMargin": 0.05, "extMarginM": 0.85 }
+    },
+    {
+      "label": "Pouhon Double-Apex Left",
+      "turns": [10, 11],
+      "leadInM": 120,
+      "params": { "brakeMargin": 0.035, "apexSpeedScale": 0.99, "extMarginM": 1.0 }
+    },
+    {
+      "label": "Bus Stop Chicane BBW Harvest",
+      "turns": [18, 19],
+      "leadInM": 155,
+      "params": { "brakeMargin": 0.055, "intMarginM": 0.35, "overtakeCaution": 0.34 }
+    }
+  ]
+}

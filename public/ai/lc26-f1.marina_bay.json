@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "carId": "lc26-f1",
+  "circuitId": "marina_bay",
+  "version": "1.0.0",
+  "description": "VeloSoft LC-26 Marina Bay Street Circuit AI strategy: wall-clearance margins, abundant BBW harvesting across 23 corners, disciplined 350 kW traction deployment over bumps, and Raffles Boulevard Straight Mode.",
+  "defaults": {
+    "paceScale": 0.99,
+    "brakeScale": 0.96,
+    "cornerGripScale": 0.99,
+    "straightModeAggression01": 0.78,
+    "overtakeSocReserve01": 0.13
+  },
+  "circuits": {
+    "marina_bay": {
+      "paceScale": 0.99,
+      "brakeScale": 0.96,
+      "cornerGripScale": 0.99,
+      "straightModeAggression01": 0.78,
+      "overtakeSocReserve01": 0.13
+    }
+  },
+  "params": {
+    "pace": 0.99,
+    "brakeMargin": 0.035,
+    "apexSpeedScale": 0.985,
+    "intMarginM": 0.45,
+    "extMarginM": 0.85,
+    "steerGain": 1.05,
+    "overtakeCaution": 0.42,
+    "defend": 0.54,
+    "bumpCaution": 0.3,
+    "consistency": 0.9
+  },
+  "vehicles": {
+    "lc26-f1": {
+      "intMarginM": 0.4,
+      "extMarginM": 0.8,
+      "bumpCaution": 0.28
+    }
+  },
+  "sections": [
+    {
+      "label": "Sheares T1-T3 Street Complex",
+      "turns": [1, 2, 3],
+      "leadInM": 140,
+      "params": { "brakeMargin": 0.055, "intMarginM": 0.55, "extMarginM": 1.0, "overtakeCaution": 0.48 }
+    },
+    {
+      "label": "Raffles Boulevard SM Run",
+      "fromM": 760,
+      "toM": 1240,
+      "params": { "steerGain": 0.88 }
+    },
+    {
+      "label": "Memorial T7 Braking",
+      "turns": [7],
+      "leadInM": 145,
+      "params": { "brakeMargin": 0.05, "extMarginM": 0.95, "bumpCaution": 0.35 }
+    },
+    {
+      "label": "Padang & Anderson Bridge",
+      "turns": [10, 11, 12, 13],
+      "leadInM": 115,
+      "params": { "brakeMargin": 0.06, "intMarginM": 0.6, "extMarginM": 1.05, "overtakeCaution": 0.55 }
+    },
+    {
+      "label": "Esplanade & Bayfront Final Sector",
+      "turns": [16, 17, 18, 19],
+      "leadInM": 120,
+      "params": { "brakeMargin": 0.05, "extMarginM": 0.95, "bumpCaution": 0.32 }
+    }
+  ]
+}

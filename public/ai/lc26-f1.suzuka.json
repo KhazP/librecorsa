@@ -1,0 +1,71 @@
+{
+  "schemaVersion": 1,
+  "carId": "lc26-f1",
+  "circuitId": "suzuka",
+  "version": "1.0.0",
+  "description": "VeloSoft LC-26 Suzuka AI strategy: crisp front-end rhythm through S-Curves, gravel-margin discipline at Degner 1-2, high-speed Straight Mode run toward 130R, and maximum BBW recharge into Casio Triangle.",
+  "defaults": {
+    "paceScale": 1.0,
+    "brakeScale": 0.98,
+    "cornerGripScale": 1.01,
+    "straightModeAggression01": 0.86,
+    "overtakeSocReserve01": 0.15
+  },
+  "circuits": {
+    "suzuka": {
+      "paceScale": 1.0,
+      "brakeScale": 0.98,
+      "cornerGripScale": 1.01,
+      "straightModeAggression01": 0.86,
+      "overtakeSocReserve01": 0.15
+    }
+  },
+  "params": {
+    "pace": 1.0,
+    "brakeMargin": 0.02,
+    "apexSpeedScale": 1.0,
+    "extMarginM": 0.45,
+    "steerGain": 1.06,
+    "overtakeCaution": 0.28,
+    "defend": 0.46,
+    "consistency": 0.9
+  },
+  "vehicles": {
+    "lc26-f1": {
+      "steerGain": 1.08,
+      "apexSpeedScale": 1.005
+    }
+  },
+  "sections": [
+    {
+      "label": "First Curve & S-Curves",
+      "turns": [1, 2, 3, 4, 5, 6],
+      "leadInM": 120,
+      "params": { "brakeMargin": 0.03, "extMarginM": 0.75, "steerGain": 1.1 }
+    },
+    {
+      "label": "Degner 1-2 Gravel Margin",
+      "turns": [8, 9],
+      "leadInM": 130,
+      "params": { "brakeMargin": 0.065, "extMarginM": 1.35, "bumpCaution": 0.25 }
+    },
+    {
+      "label": "Hairpin & Spoon Exit",
+      "turns": [11, 13, 14],
+      "leadInM": 125,
+      "params": { "brakeMargin": 0.04, "extMarginM": 0.9 }
+    },
+    {
+      "label": "Back Straight to 130R",
+      "fromM": 4380,
+      "toM": 4960,
+      "params": { "steerGain": 0.88 }
+    },
+    {
+      "label": "Casio Triangle Chicane",
+      "turns": [16, 17],
+      "leadInM": 145,
+      "params": { "brakeMargin": 0.05, "intMarginM": 0.35, "overtakeCaution": 0.32 }
+    }
+  ]
+}

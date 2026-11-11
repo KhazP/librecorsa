@@ -1,0 +1,82 @@
+{
+  "schemaVersion": 1,
+  "carId": "lc26-f1",
+  "circuitId": "monza",
+  "version": "1.0.0",
+  "description": "VeloSoft LC-26 Monza AI strategy: ultra-high Straight Mode duty across main, Curva Grande, Serraglio and back straights, 18% SoC reserve against mid-straight derating, and measured Corner-Mode re-attachment into Rettifilo, Roggia and Ascari.",
+  "defaults": {
+    "paceScale": 1.02,
+    "brakeScale": 0.97,
+    "cornerGripScale": 0.99,
+    "straightModeAggression01": 0.97,
+    "overtakeSocReserve01": 0.18
+  },
+  "circuits": {
+    "monza": {
+      "paceScale": 1.02,
+      "brakeScale": 0.97,
+      "cornerGripScale": 0.99,
+      "straightModeAggression01": 0.97,
+      "overtakeSocReserve01": 0.18
+    }
+  },
+  "params": {
+    "pace": 1.01,
+    "brakeMargin": 0.025,
+    "apexSpeedScale": 0.99,
+    "steerGain": 0.92,
+    "overtakeCaution": 0.22,
+    "defend": 0.52,
+    "consistency": 0.9
+  },
+  "vehicles": {
+    "lc26-f1": {
+      "brakeMargin": 0.02,
+      "steerGain": 0.9
+    }
+  },
+  "sections": [
+    {
+      "label": "Rettifilo Heavy BBW Zone",
+      "turns": [1, 2],
+      "leadInM": 165,
+      "params": { "brakeMargin": 0.045, "intMarginM": 0.35, "overtakeCaution": 0.32 }
+    },
+    {
+      "label": "Biassono Straight Mode Sweep",
+      "fromM": 1220,
+      "toM": 1580,
+      "params": { "steerGain": 0.86 }
+    },
+    {
+      "label": "Roggia Chicane Kerb Guard",
+      "turns": [4, 5],
+      "leadInM": 150,
+      "params": { "brakeMargin": 0.04, "intMarginM": 0.4, "overtakeCaution": 0.36 }
+    },
+    {
+      "label": "Lesmo Double Right",
+      "turns": [6, 7],
+      "leadInM": 110,
+      "params": { "brakeMargin": 0.025, "extMarginM": 0.75 }
+    },
+    {
+      "label": "Serraglio Super-Clip Run",
+      "fromM": 2660,
+      "toM": 3400,
+      "params": { "steerGain": 0.84 }
+    },
+    {
+      "label": "Ascari Aero Re-Attachment",
+      "turns": [8, 9, 10],
+      "leadInM": 145,
+      "params": { "brakeMargin": 0.06, "apexSpeedScale": 0.97, "extMarginM": 0.6 }
+    },
+    {
+      "label": "Alboreto Final Approach",
+      "turns": [11],
+      "leadInM": 150,
+      "params": { "brakeMargin": 0.035, "apexSpeedScale": 0.99, "extMarginM": 0.7 }
+    }
+  ]
+}
