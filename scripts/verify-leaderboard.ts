@@ -14,6 +14,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { handleApi } from '../cloudflare/api/index';
 import { parseRemoteBoard } from '../src/lib/net/leaderboard';
+import { challengePlaceLabel, challengeTarget } from '../src/lib/net/challenge-target';
 import { boardDeps, driverNameKey, listLaps, submitLap, type BoardDeps } from '../cloudflare/api/board';
 import type { Env } from '../cloudflare/api/types';
 import { fakeD1, fakeR2 } from './lib/fake-cloudflare';
@@ -238,6 +239,19 @@ async function main(): Promise<void> {
         parse({ ...body.me, aboveMs: undefined })?.me?.aboveMs === null &&
         parse({ ...body.me, aboveMs: body.me!.lap.lapTimeMs + 1 })?.me?.aboveMs === null &&
         parse({ ...body.me, aboveMs: 'x' })?.me?.rank === 2
+    );
+    const second = challengeTarget(parse(body.me)!);
+    const gap = ((body.me!.lap.lapTimeMs - body.laps[0].lapTimeMs) / 1000).toFixed(3);
+    check(
+      'time trial: the target is your best, the fastest, and the gap to the place above',
+      second.bestMs === body.me!.lap.lapTimeMs && second.leaderMs === body.laps[0].lapTimeMs && challengePlaceLabel(second) === `P2 · ${gap} to P1`,
+      challengePlaceLabel(second)
+    );
+    const first = challengeTarget(parseRemoteBoard(top, 'rwanda_official_short', 'vf26', CURRENT, {})!);
+    const none = challengeTarget({ ...parse(null)!, me: null });
+    check(
+      'time trial: at the top it says so, and before a lap only the fastest shows',
+      challengePlaceLabel(first) === 'P1 · fastest this week' && none.bestMs === null && none.leaderMs === body.laps[0].lapTimeMs && challengePlaceLabel(none) === 'No time yet'
     );
     const assisted = (await list('&assists=assisted&name=Test%20Driver')).body;
     check('board: narrowed to assisted laps, only the assisted driver, first', assisted.laps.length === 1 && assisted.total === 1 && assisted.me?.rank === 1);
