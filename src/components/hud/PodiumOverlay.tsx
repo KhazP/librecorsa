@@ -21,10 +21,7 @@ export const PodiumOverlay: React.FC<{ rows: readonly PodiumRow[]; trackName: st
       // On the click, not the press: the table must not appear under a finger still down and take the tap
       onClick={onSkip}
     >
-      <div className="lc-panel-in flex flex-col items-center gap-1 text-center">
-        <span className="lc-lbl !text-[10px] !tracking-[0.22em]">Podium</span>
-        <h1 className="lc-disp m-0 text-[26px] sm:text-[34px]">{trackName}</h1>
-      </div>
+      <h1 className="lc-panel-in lc-disp m-0 text-center text-[26px] sm:text-[34px]">{trackName}</h1>
       <div className="flex flex-col items-center gap-4">
         <div className="grid w-full max-w-[760px] grid-cols-3 items-end gap-2 sm:gap-4">
           {order.map((r, i) =>

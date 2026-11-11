@@ -349,25 +349,32 @@ const PlacesBadge: React.FC<{ gained: number | null; large?: boolean }> = ({ gai
 /** The player's own race at a glance: the place, the places gained from the grid, the best lap */
 const PlayerSummary: React.FC<{ me: RaceResultEntry; fieldSize: number; fastest: boolean }> = ({ me, fieldSize, fastest }) => {
   const gained = me.dnf ? null : placesGained(me.gridPosition, me.position);
-  const cell = "flex min-w-0 flex-col gap-1 rounded-[16px] border border-[#262B3D] bg-white/[0.03] px-4 py-2.5 short:py-1.5";
+  // Each value says what it is in the words after it, with no label above
+  const cell = "flex min-w-0 flex-col gap-0.5 rounded-[16px] border border-[#262B3D] bg-white/[0.03] px-4 py-2.5 short:py-1.5";
+  const after = "truncate text-[12px] font-semibold text-[#8E96AA]";
   return (
     <div className="grid grid-cols-3 gap-2.5" aria-label="Your race">
       <div className={cell}>
-        <span className="lc-lbl truncate !text-[9px]">You finished</span>
         <span className="lc-data text-[22px]" style={{ color: me.dnf ? HUD_RED : HUD_VOLT }}>
           {me.dnf ? "DNF" : `P${me.position}`}
-          <span className="text-[13px] text-[#8E96AA]"> / {fieldSize}</span>
+        </span>
+        <span className={after}>{me.dnf ? "Out of the race" : `of ${fieldSize}`}</span>
+      </div>
+      <div className={cell}>
+        <PlacesBadge gained={gained} large />
+        <span className={after}>
+          {me.gridPosition === undefined
+            ? "Grid not known"
+            : gained === null || gained === 0
+              ? `From P${me.gridPosition}`
+              : `${Math.abs(gained) === 1 ? "place" : "places"} ${gained > 0 ? "gained" : "lost"} from P${me.gridPosition}`}
         </span>
       </div>
       <div className={cell}>
-        <span className="lc-lbl truncate !text-[9px]">{me.gridPosition !== undefined ? `From P${me.gridPosition} on the grid` : "Places"}</span>
-        <PlacesBadge gained={gained} large />
-      </div>
-      <div className={cell}>
-        <span className="lc-lbl truncate !text-[9px]">{fastest ? "Fastest lap" : "Your best lap"}</span>
         <span className="lc-data text-[22px]" style={{ color: fastest ? HUD_PURPLE : "#F5F7FA" }}>
           {formatLapTime(me.bestLapMs)}
         </span>
+        <span className={after}>{fastest ? "Fastest lap of the race" : "Your best lap"}</span>
       </div>
     </div>
   );
@@ -378,8 +385,8 @@ const shortDate = (ms: number) => new Date(ms).toLocaleDateString(undefined, { d
 
 /** The player's last few races, kept in this browser */
 const LastRaces: React.FC<{ history: readonly RaceRecord[] }> = ({ history }) => (
-  <section className="flex flex-col gap-1.5" aria-label="Your last races">
-    <span className="lc-lbl !text-[9px]">Your last races</span>
+  <section className="flex flex-col gap-1.5">
+    <h2 className="m-0 px-2.5 text-[14px] font-bold text-[#F5F7FA]">Your last races</h2>
     <ul className="m-0 flex list-none flex-col p-0">
       {history.slice(0, 5).map((r, i) => (
         <li
