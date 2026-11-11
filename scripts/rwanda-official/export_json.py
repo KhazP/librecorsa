@@ -390,6 +390,8 @@ def export(name):
         'originOffset': [0, 0, 0], 'latProfileOffsets': LAT, 'sampleSpacingM': STEP,
         'elevationRangeM': [round(zmin, 1), round(zmax, 1)], 'baseAltitudeM': BASE_ALTITUDE_M,
         'surfaces': {'roadGrip': 1.0, 'tarmacGrip': 0.75, 'kerbGrip': 0.96},
+        # the kerbs' blocks under the wheels, where bl_kerbs.py lays the ones one sees (src/lib/sim/track-surfaces.ts)
+        'surfaceTable': {'kerb': {'bumpHeightM': rd.KERB_BLOCK_RISE_M, 'bumpLengthM': rd.KERB_BLOCK_M, 'bumpRise': rd.KERB_BLOCK_RISE_SHARE}},
         'mesh': {
             'url': GLB, 'scenery': [FOLIAGE],
             'road': 'Track_Asphalt_Road', 'kerbs': 'Track_Kerbs', 'runoff': 'Track_Runoff_Paint',

@@ -15,6 +15,7 @@ import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
 import { REPO_TRACK_IDS } from '../src/lib/hosted-content';
 import { SCENERY_CREDITS, type SceneryCredit } from '../src/lib/render/scenery-credits';
 import { createGroundHit, TrackColliderQuery, TrackWallQuery, WALL_SEGMENT_STRIDE } from '../src/lib/sim/f12026-car/TrackColliderQuery';
+import { resolveSurfaceTable } from '../src/lib/sim/track-surfaces';
 import { evaluateSampleLateralHeightM, getActiveTrackData, setActiveTrack, type RawTrackJson } from '../src/lib/track-data';
 import { CIRCUIT_VENUES, DEFAULT_TRACK_ID, TRACKS } from '../src/lib/track-registry';
 import { loadGlbGeometry } from './lib/glb-geometry';
@@ -153,7 +154,11 @@ check('every collider the track data names is there', meta.mesh.colliders.every(
 check('pit building, tower, stands, canopies, lake and start gantry are there',
   ['Prop_PitBuilding', 'Env_Spire', 'Prop_Grandstand_Main', 'Env_Grandstand_Canopies', 'Prop_Paddock_Village', 'Prop_Lakeside', 'Lake', 'Prop_StartGantry', 'Prop_StartLights_0'].every((x) => byName.has(x)));
 
-const ground = TrackColliderQuery.fromTrackRoot(root);
+// The ground as the game builds it, with the circuit's own surface table (its kerbs' blocks), and the same ground
+// without the kerbs' ripple, to tell the blocks from the hump they stand on
+const surfaceTable = resolveSurfaceTable((raw.metadata as { surfaceTable?: Parameters<typeof resolveSurfaceTable>[0] }).surfaceTable);
+const ground = TrackColliderQuery.fromTrackRoot(root, surfaceTable);
+const humps = TrackColliderQuery.fromTrackRoot(root, { ...surfaceTable, kerb: { ...surfaceTable.kerb, bumpHeightM: 0 } });
 const hit = createGroundHit();
 const right = (s: Sample): [number, number] => {
   const l = Math.hypot(s.t[0], s.t[2]);
@@ -222,13 +227,37 @@ if (SHORT) {
   let kerbMiss = 0;
   let runoff = 0;
   let runoffMiss = 0;
-  for (const s of S) {
+  // A kerb's blocks alone (the ground less the hump they stand on) at a point, m; NaN off a kerb
+  const blockAt = (x: number, z: number, y: number): number => {
+    if (!ground.query(x, z, y + 3, hit) || hit.surface !== 'kerb') return NaN;
+    const h = hit.height;
+    return humps.query(x, z, y + 3, hit) ? h - hit.height : NaN;
+  };
+  let climbing = 0;
+  let falling = 0;
+  let tallest = 0;
+  for (let i = 0; i < S.length; i++) {
+    const s = S[i];
     const [rx, rz] = right(s);
     for (const side of [-1, 1]) {
       const edge = s.w / 2;
       if ((side < 0 ? s.kL : s.kR) === 1) {
         kerbs++;
-        if (!ground.query(s.p[0] + rx * side * (edge + 0.7), s.p[2] + rz * side * (edge + 0.7), s.p[1] + 3, hit) || hit.surface !== 'kerb') kerbMiss++;
+        const kx = s.p[0] + rx * side * (edge + 0.7);
+        const kz = s.p[2] + rz * side * (edge + 0.7);
+        if (!ground.query(kx, kz, s.p[1] + 3, hit) || hit.surface !== 'kerb') kerbMiss++;
+        // Along the lap from here, 2 m in 5 cm steps: is a block climbed or come down from?
+        const next = S[(i + 1) % S.length];
+        const fl = Math.hypot(next.p[0] - s.p[0], next.p[2] - s.p[2]) || 1;
+        const [fx, fz] = [(next.p[0] - s.p[0]) / fl, (next.p[2] - s.p[2]) / fl];
+        let last = NaN;
+        for (let d = 0; d <= 2; d += 0.05) {
+          const b = blockAt(kx + fx * d, kz + fz * d, s.p[1]);
+          if (b > tallest) tallest = b;
+          if (b - last > 2e-4) climbing++;
+          else if (last - b > 2e-4) falling++;
+          last = b;
+        }
       } else if ((side < 0 ? s.rL : s.rR) > 4) {
         runoff++;
         // (where the other route runs alongside, its asphalt or kerb is the paving)
@@ -237,9 +266,15 @@ if (SHORT) {
     }
   }
   check('a kerb wherever the data flags one', kerbs > 400 && kerbMiss === 0, `${kerbs} probes`);
-  // The kerbs' blocks are what one sees, never what a wheel touches (scripts/rwanda-official/bl_kerbs.py): they carry
-  // no surface, and lie over the kerb the cars drive on, 5 mm at a block's start and 27 mm at its end. The ground
-  // answers with that kerb's 2 mm ripple on it
+  // The kerbs' blocks under the wheels (the surface table's `bumpRise` ripple on the kerbs' humps): 0.8 m long, 16 mm
+  // high in the kerb's middle, climbed over 0.65 m in the direction of the lap and come down from over 0.15 m
+  const kerb = surfaceTable.kerb;
+  check("a wheel feels the kerbs' blocks: 0.8 m long and 16 mm high, climbed along the lap over four fifths of their length",
+    kerb.bumpLengthM === 0.8 && kerb.bumpHeightM === 0.016 && kerb.bumpRise === 0.8125 && tallest > 0.014 && tallest <= 0.0161 &&
+      climbing / (climbing + falling) > 0.72 && climbing / (climbing + falling) < 0.9,
+    `tallest ${(tallest * 1000).toFixed(1)} mm, climbing on ${((100 * climbing) / (climbing + falling)).toFixed(0)} % of the way`);
+  // The blocks one sees (scripts/rwanda-official/bl_kerbs.py) carry no surface: they are the ones under the wheels,
+  // drawn 5 mm higher, block for block
   const blocks = byName.get('Track_Kerb_Blocks');
   let onKerb = 0;
   let under = 0;
@@ -248,17 +283,17 @@ if (SHORT) {
   blocks?.updateWorldMatrix(true, true);
   blocks?.traverse((o) => {
     const pos = (o as THREE.Mesh).geometry?.getAttribute('position');
-    for (let i = 0; pos && i < pos.count; i += 5) {
+    for (let i = 0; pos && i < pos.count; i++) {
       v.fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld);
       if (!ground.query(v.x, v.z, v.y + 0.3, hit) || hit.surface !== 'kerb') continue;
       onKerb++;
-      if (v.y - hit.height < 0.002) under++;
-      if (v.y - hit.height > 0.031) over++;
+      if (v.y - hit.height < 0.003) under++;
+      if (v.y - hit.height > 0.007) over++;
     }
   });
-  check("the kerbs' blocks lie over the kerb the cars drive on and are no surface themselves",
-    tag('Track_Kerb_Blocks', 'surface') === undefined && tag('Track_Kerbs_Alt', 'surface') === 'kerb' && onKerb > 15000 && under === 0 && over === 0,
-    `${onKerb} points, ${under} under, ${over} more than 3 cm over`);
+  check("the kerbs' blocks one sees are the ones under the wheels, 5 mm higher and no surface themselves",
+    tag('Track_Kerb_Blocks', 'surface') === undefined && tag('Track_Kerbs_Alt', 'surface') === 'kerb' && onKerb > 80000 && under === 0 && over === 0,
+    `${onKerb} corners of blocks, ${under} less than 3 mm over the ground there, ${over} more than 7 mm over`);
   check('painted run-off wherever the data gives one', runoff > 400 && runoffMiss === 0, `${runoff} probes`);
   const pit = raw.pitLane.centerline;
   const lane = pit.slice(12, pit.length - 12).filter((p) => ground.query(p[0], p[2], p[1] + 3, hit) && hit.surface === 'pitlane').length;

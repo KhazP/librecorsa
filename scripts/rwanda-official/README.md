@@ -63,7 +63,7 @@ Around the site: the game draws 5.5 km, so the land climbs into a rim of hills b
 121 to 194 m above the lake; the real ground is kept where it is higher) and the lake stops at its foot. Beyond the
 lap's surroundings the ground takes field, crop, fallow and woodland colours, and a second, coarser canopy sheet is
 the far country's woodlots, where no tree is planted. Trees: 17,548 spots, 14,065 instanced after thinning the ones
-deep inside the canopy sheet, in four levels of detail. The packed circuit file is 9.7 MB and 567,000 triangles.
+deep inside the canopy sheet, in four levels of detail. The packed circuit file is 9.7 MB and 566,000 triangles.
 
 Where the three extra road sections leave the built lap, the built ground gives way to them: what lies wholly under
 their asphalt, kerbs, paint and verge is taken out, what crosses their edge is cut fine and meets it a centimetre
@@ -77,14 +77,20 @@ wheel, so every one of these was a ledge otherwise; the layout check walks both 
 and allows no step over 6 cm. The open stands show scaffolding at
 the back and ends under a band of banners; the big screens show their picture on both faces.
 
-The kerbs are two things. What the cars drive on is a smooth hump 1.5 m wide and 3.2 cm high, one cross-section for
-every circuit of the game, which adds the serrations as a 2 mm ripple: at 4 mm that ripple already lifts an F1 car's
-wheel off for up to a fifth of its time on a kerb. What one sees is laid over that hump by `bl_kerbs.py`: blocks 0.8 m long
-in two rows of 0.75 m, red and white in turn and the second row a block out of step, each a ramp that rises 22 mm along
-the lap and drops to the next, as the FIA's kerb types 1, 2 and 5 are drawn (those are 25 to 100 mm; these stay within
-3 cm of the hump so no tyre is seen to sink into one). 5,315 blocks, 82,500 triangles; they carry no surface and no
-wheel touches them. The hump under them is bare concrete and shows only where a block is left out: where an extra
-road's paving lies over the kerb, and at the cut ends of a kerb at a junction.
+The kerbs are blocks, under the wheel and to the eye. What the cars drive on is a smooth hump 1.5 m wide and 3.2 cm
+high, one cross-section for every circuit of the game; on it this circuit's surface table stands blocks 0.8 m long,
+each climbed over 0.65 m in the direction of the lap and come down from over 0.15 m (about a tyre's contact patch: a
+tyre rolls off a block's end, it does not drop), 16 mm high in the kerb's middle and fading to nothing at both edges.
+The FIA's kerb types 1, 2 and 5 are drawn 25 to 100 mm high: 16 mm is what the cars take without their lap changing.
+Over one AI lap the GT3 has a wheel off the ground for 11 % of its time on the Grand Prix lap's kerbs and 14 % on the
+short lap's (8 % and 12 % on the plain hump), the prototype for 13 % and 22 % (as before); at 22 mm the GT3 is at 14 %
+and 15 %, at 32 mm at 21 %. `bl_kerbs.py` lays the blocks one sees over the hump, that same shape 5 mm higher, in two
+rows of 0.75 m, red and white in turn and the second row a block out of step, and rewrites the humps' texture
+coordinate along the kerb, which the game reads the blocks from, so that both start on the same line (within 2 mm at
+every corner of every block, `scripts/verify-rwanda-official.ts`). 5,316 blocks, 81,100 triangles; they carry no
+surface. The hump under them is bare concrete and shows only where a block is left out: where a road's paving lies
+over or beside the kerb, and at the cut ends of a kerb at a junction. The older VF26 physics reads kerbs off the track
+data, along the lap's distance: it feels the same blocks, not in step with the ones one sees.
 
 The road, the pit lane and the gravel wear scanned surfaces: Poly Haven's Asphalt Track, Asphalt Pit Lane and Gravel
 Floor 02 (CC0), each a 2 m tile with its normal map. `prep_scans.py` keeps a scan's grain and gives it the colour of

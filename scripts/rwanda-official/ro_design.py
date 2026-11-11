@@ -15,6 +15,10 @@ DATA = os.path.join(HERE, 'data')
 KERB_HINGE_M = 1.5                      # the banked plane runs this far past the road edge
 RUNOFF_BANK_MAX = np.radians(2.0)       # beyond the hinge the ground keeps at most this cross slope
 MESH_STEP = 2                           # metres between mesh stations
+# The kerbs' blocks, as the wheels feel them (the game's `surfaceTable`, export_json.py) and as bl_kerbs.py lays them
+KERB_BLOCK_M = 0.8                      # a block along the lap
+KERB_BLOCK_RISE_M = 0.016               # its height at the kerb's middle; the game fades it to nothing at both edges
+KERB_BLOCK_RISE_SHARE = 0.8125          # of its length climbing (0.65 m), the rest coming back down (0.15 m)
 # paint, grass wedge, pit road, gravel, verge | wall | slab, verge behind the wall, service road, back
 BANDS = ('pw', 'ga', 'pr', 'gw', 'gb', 'sl', 'sv', 'sr', 'bk')
 WALL, BACK0, EDGE = 5, 8, 9              # columns of band_edges: the wall line, the start of the back band, the corridor's edge
