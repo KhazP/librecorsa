@@ -60,7 +60,10 @@ boards on an in-memory database (`scripts/verify-room-server.ts`, `verify-race-s
 
 - Nothing under `/api` is cached (Workers caching is on for the large files): every answer says `no-store`.
 - The race server and a room's host run the same checks on everything a player sends (`src/lib/net/wire.ts`). Only
-  the server ever sends a lobby or a start; a socket speaks for one car.
+  the server ever sends a lobby, a start or a result; a socket speaks for one car.
+- Each car reports its finish once; the race server classifies the reports with the game's own order and sends one
+  official result, final when everyone is in or 90 s after the first finish (`src/lib/net/official-result.ts`). A
+  finish faster than the race allows, or from a car that never raced, is refused.
 - The boards check laps for plausibility (`api/lap-check.ts`) but can't prove them: friendly, not a referee.
 - Driver names are claimed with a driver key kept in the browser; the board stores only its SHA-256.
 - The usage counter: when a stretch of driving of half a minute or more ends (back to the menu, another circuit, car
@@ -73,5 +76,11 @@ boards on an in-memory database (`scripts/verify-room-server.ts`, `verify-race-s
   `/admin` (not linked, not indexed; it asks for the key and keeps it for the tab). Set the key once with
   `npx wrangler secret put ADMIN_KEY`, and locally in `.dev.vars`. Without the secret, or with any other key, the route
   answers 404 like any unknown path.
+- Race results (`api/results.ts`, `migrations/0002_race_results.sql`): when an open race's result turns final, the
+  race server stores it on the boards' database, one row per race and one per car (name, place, time, laps, best lap,
+  grid place). A car's row counts for a driver (the week's standings, `GET /api/races/results`, and the record,
+  `GET /api/drivers/record`) only when its driver key owns the name it raced under; the key reaches the server once
+  per race socket and only its SHA-256 is kept. Room results are not stored. The deploy workflow applies the
+  migration (`wrangler d1 migrations apply`), as for the boards.
 - The weekly challenge and the race times follow from the clock (`src/lib/net/weekly-challenge.ts`,
   `race-schedule.ts`): change the rotation there.

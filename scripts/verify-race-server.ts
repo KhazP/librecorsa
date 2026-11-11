@@ -13,7 +13,9 @@ import { handleApi, onlineConfig, raceSlotSeconds } from '../cloudflare/api/inde
 import { MAX_RACERS, RACE_SERVER_ID, RaceServer } from '../cloudflare/api/race';
 import type { Env } from '../cloudflare/api/types';
 import { countdownLabel, nextRaceSlot, RACE_COUNTDOWN_MS, RACE_JOIN_CUTOFF_MS, raceRules, raceSlot } from '../src/lib/net/race-schedule';
-import { sanitizeControl, type LobbyState, type RaceStartInfo } from '../src/lib/net/wire';
+import { sanitizeControl, type ControlMessage, type LobbyState, type RaceStartInfo } from '../src/lib/net/wire';
+import { sha256Hex } from '../cloudflare/api/board';
+import { parseDriverRecord, parseWeekRaceResults } from '../src/lib/net/race-results';
 import { FakeSocket, fakeD1, fakeState } from './lib/fake-cloudflare';
 
 const failures: string[] = [];
@@ -61,12 +63,12 @@ async function main() {
 
   const state = fakeState();
   // The week's challenge times: Bea has one, so she starts ahead of Al, who joined first
-  const db = fakeD1(readFileSync(join(__dirname, '../cloudflare/migrations/0001_lap_boards.sql'), 'utf8'));
+  const db = fakeD1(['0001_lap_boards.sql', '0002_race_results.sql'].map((f) => readFileSync(join(__dirname, '../cloudflare/migrations', f), 'utf8')).join('\n'));
   await db
     .prepare("INSERT INTO laps (id, track_id, vehicle, physics, event, assists, realism, surface, compound, name_key, driver_name, driver_code, lap_time_ms, s1_ms, s2_ms, s3_ms, recorded_at, created_at) VALUES ('x', ?, ?, 2, ?, 'pro', 'full', 'dry', 'soft', 'bea', 'Bea', 'BEA', 90000, 1, 1, 1, 1, 1)")
     .bind(rules.trackId, rules.vehicle, rules.id)
     .run();
-  const server = new RaceServer(state, { BOARD_DB: db } as unknown as Env, () => nowMs);
+  let server = new RaceServer(state, { BOARD_DB: db } as unknown as Env, () => nowMs);
   const join_ = async (peer: string, tok: string, name?: string) => {
     const ws = new FakeSocket();
     await server.connect(ws, peer, tok, slot);
@@ -125,6 +127,16 @@ async function main() {
   nowMs = slot.startsMs - RACE_JOIN_CUTOFF_MS + 1;
   check('too close to the lights nobody new is taken', (await join_('peer_late', token('e'), 'Late')).last()?.t === 'closed');
 
+  // Driver keys: Al's owns his name on the board, Bea's is not the key her name was claimed with
+  const keyAl = 'k'.repeat(40);
+  const keyBea = 'b'.repeat(40);
+  await db.prepare("INSERT INTO drivers (name_key, key_hash, claimed_at, last_seen) VALUES ('al', ?, 1, 1), ('bea', ?, 1, 1)").bind(await sha256Hex(keyAl), await sha256Hex('x'.repeat(40))).run();
+  await server.webSocketMessage(al, JSON.stringify({ ctl: { type: 'identify', driverKey: keyAl }, from: 'peer_al' }));
+  await server.webSocketMessage(al, JSON.stringify({ ctl: { type: 'identify', driverKey: 'z'.repeat(40) }, from: 'peer_al' }));
+  await server.webSocketMessage(bea, JSON.stringify({ ctl: { type: 'identify', driverKey: keyBea }, from: 'peer_bea' }));
+  const keys = state.store.get('keys') as Record<string, string> | undefined;
+  check('a driver key is kept as its SHA-256 only, and once per socket', keys?.peer_al === (await sha256Hex(keyAl)) && !JSON.stringify([...state.store.values()]).includes(keyAl));
+
   // The grid
   nowMs = slot.startsMs - RACE_COUNTDOWN_MS;
   await server.webSocketMessage(al, JSON.stringify({ ctl: { type: 'ping', t0: 9 }, from: 'peer_al' }));
@@ -153,10 +165,67 @@ async function main() {
   for (let i = 0; i < 200; i++) await server.webSocketMessage(al, JSON.stringify(packet('peer_al', { seq: i })));
   check('a flooding car is cut off', states(bea).length <= 61, `${states(bea).length} passed of 201`);
 
+  // The official result: Al finishes, Bea never does
+  const laps = rules.race.laps;
+  const lightsOut = (start?.lightsStartHostMs ?? 0) + 5000 + (start?.holdMs ?? 0);
+  const raceId = start?.id ?? '';
+  const finish = (ws: FakeSocket, from: string, over: Record<string, unknown> = {}) =>
+    server.webSocketMessage(ws, JSON.stringify({ ctl: { type: 'finish', id: raceId, timeS: laps * 80, penaltyS: 5, laps, bestLapMs: 78_000, ...over }, from }));
+  const results = (ws: FakeSocket) => ws.sent.map((m) => sanitizeControl(m.ctl)).filter((c) => c?.type === 'result') as Extract<ControlMessage, { type: 'result' }>[];
+  nowMs = lightsOut + (laps * 80 + 5) * 1000;
+  al.sent.length = 0;
+  bea.sent.length = 0;
+  await finish(bea, 'peer_bea');
+  check('a finish from a car that sent no state in the race is refused', results(al).length === 0 && results(bea).length === 0);
+  await server.webSocketMessage(bea, JSON.stringify(packet('peer_bea', { race: { id: raceId, dist: 900, fin: null, best: null } })));
+  await finish(al, 'peer_al', { timeS: laps * 20 });
+  await finish(al, 'peer_al', { timeS: laps * 80 + 60 });
+  await finish(al, 'peer_al', { laps: laps + 1 });
+  await finish(al, 'peer_al', { id: 'race0' });
+  check('a finish sooner than laps of a believable lap, in the future, over the distance or of another race is refused', results(al).length === 0);
+  const alarmBefore = state.alarmMs;
+  await finish(al, 'peer_al');
+  const provisional = results(bea)[0];
+  check('a finish goes to everyone as a result that is not final yet', provisional !== undefined && !provisional.final && results(al).length === 1);
+  check(
+    'the result: finishers by time with the penalty in, the others after them, with their grid places',
+    provisional?.rows[0].peer === 'peer_al' && provisional.rows[0].timeS === laps * 80 + 5 && provisional.rows[0].grid === 2 && provisional.rows[1].peer === 'peer_bea' && !provisional.rows[1].dnf && provisional.rows[1].grid === 1,
+    JSON.stringify(provisional?.rows),
+  );
+  check('the alarm now closes the result 90 s after the first finish, before the room', state.alarmMs === nowMs + 90_000 && (alarmBefore ?? 0) > nowMs + 90_000, `${state.alarmMs} vs ${nowMs + 90_000}`);
+  await finish(al, 'peer_al', { timeS: laps * 79 });
+  check('the first report stands: a repeat only hears the result again', results(al).length === 2 && results(al)[1].rows[0].timeS === laps * 80 + 5);
+  // Evicted meanwhile: a new instance on the same storage
+  const revived = new RaceServer(state, { BOARD_DB: db } as unknown as Env, () => nowMs);
+  nowMs += 90_000;
+  await revived.alarm();
+  const final = results(bea).find((r) => r.final);
+  check('90 s after the first finish the result is final, the car still out DNF (after an eviction too)', final !== undefined && final.rows[0].peer === 'peer_al' && final.rows[1].dnf && final.rows[1].timeS === null, JSON.stringify(final?.rows));
+  check('then the alarm is back on the room close', state.alarmMs === slot.startsMs + (rules.race.laps * 4 + 10) * 60_000, String(state.alarmMs));
+  const stored = await db.prepare('SELECT position, name_key, name, time_s, dnf, grid FROM race_cars ORDER BY position').all<{ position: number; name_key: string | null; name: string; time_s: number | null; dnf: number; grid: number }>();
+  const storedRace = await db.prepare('SELECT week, kind, laps FROM races').first<{ week: string; kind: string; laps: number }>();
+  check('the final result is stored: the race and a row per car', storedRace?.week === rules.id && storedRace.kind === 'open' && stored.results.length === 2 && stored.results[1].dnf === 1 && stored.results[0].time_s === laps * 80 + 5, JSON.stringify(stored.results));
+  check('a name is credited only when its driver key proved it', stored.results[0].name_key === 'al' && stored.results[1].name_key === null && stored.results[1].name === 'Bea');
+  await revived.alarm();
+  check('a second alarm stores nothing twice', ((await db.prepare('SELECT COUNT(*) AS n FROM race_cars').first<{ n: number }>())?.n ?? 0) === 2 && results(bea).filter((r) => r.final).length === 1);
+  server = revived;
+
   // Getting back in
   const back = await join_('peer_al', token('a'));
   check('a car on the grid gets back in on a new socket, and hears the race', back.sent[0].t === 'welcome' && lobbyOf(back)?.race?.id === start?.id && al.closed === 4001);
+  check('and the result as it stands', results(back).some((r) => r.final));
   check('with the wrong token it does not', (await join_('peer_bea', token('q'))).last()?.t === 'taken');
+  // A car whose socket dropped: out of the lobby, then back in it under its own name when it reconnects
+  bea.closing = true;
+  await server.webSocketClose(bea, 1006);
+  bea.closing = false;
+  check('a car whose socket dropped leaves the lobby', !lobbyOf(back)?.players.some((p) => p.peerId === 'peer_bea'));
+  const beaBack = await join_('peer_bea', token('b'));
+  check(
+    'back on a new socket it is in everyone\'s lobby again, under the name it raced with',
+    lobbyOf(back)?.players.find((p) => p.peerId === 'peer_bea')?.name === 'Bea' && lobbyOf(beaBack)?.players.some((p) => p.peerId === 'peer_bea') === true,
+    JSON.stringify(lobbyOf(back)?.players.map((p) => p.name)),
+  );
   check('nobody joins a race under way', (await join_('peer_new', token('n'), 'New')).last()?.t === 'started');
 
   // The end
@@ -199,6 +268,47 @@ async function main() {
   check('GET /api/races/next goes to the next race by the server\'s clock, whatever the caller says', (await next.text()) === 'race' && routed.startsWith(`race-1200-${wanted} `) && routed.includes(`slot=${wanted}`) && routed.includes('slotS=1200'), routed);
   check('a race far in the past or the future is not found', (await api('/api/races/5', live)).status === 404 && (await api(`/api/races/${wanted + 50}`, live)).status === 404);
   check('races switched off: no race socket', (await api('/api/races/next', { ...live, ONLINE_RACES: 'off' })).status === 404);
+
+  // A race everyone finishes: final at the last finish, no wait
+  {
+    const st = fakeState();
+    let t = slot.startsMs - 60_000;
+    const srv = new RaceServer(st, { BOARD_DB: db } as unknown as Env, () => t);
+    const a = new FakeSocket();
+    const b = new FakeSocket();
+    const slot2 = raceSlot(slot.index + 1, SLOT_S);
+    t = slot2.startsMs - 20_000;
+    await srv.connect(a, 'peer_x', token('x'), slot2);
+    await srv.connect(b, 'peer_y', token('y'), slot2);
+    for (const [ws, peer, name] of [[a, 'peer_x', 'Xan'], [b, 'peer_y', 'Yul']] as const) {
+      await srv.webSocketMessage(ws, JSON.stringify({ ctl: { type: 'hello', name, code: name.toUpperCase(), color: '#00FF00' }, from: peer }));
+    }
+    t = slot2.startsMs - RACE_COUNTDOWN_MS;
+    await srv.alarm();
+    const s0 = startOf(a);
+    t = (s0?.lightsStartHostMs ?? 0) + 5000 + (s0?.holdMs ?? 0) + (laps * 90 + 10) * 1000;
+    for (const [ws, peer, time] of [[a, 'peer_x', laps * 90], [b, 'peer_y', laps * 85]] as const) {
+      await srv.webSocketMessage(ws, JSON.stringify(packet(peer)));
+      await srv.webSocketMessage(ws, JSON.stringify({ ctl: { type: 'finish', id: s0?.id, timeS: time, penaltyS: 0, laps, bestLapMs: null }, from: peer }));
+    }
+    const last = results(a)[results(a).length - 1];
+    check('everyone in: the result is final at once, and stored', last?.final === true && last.rows[0].peer === 'peer_y' && (st.alarmMs ?? 0) > t + 90_000, JSON.stringify(last));
+  }
+
+  // The results routes
+  const withDb = { ...live, BOARD_DB: db } as unknown as Env;
+  const weekRes = await api(`/api/races/results?week=${rules.id}`, withDb);
+  const week = (await weekRes.json()) as { races: { podium: { name: string; position: number }[] }[]; standings: { name: string; starts: number; wins: number; podiums: number }[] };
+  check('GET /api/races/results: the week\'s latest races with their podium, never cached', weekRes.status === 200 && weekRes.headers.get('Cache-Control') === 'no-store' && week.races.length === 2 && week.races.some((r) => r.podium[0]?.name === 'Al'), JSON.stringify(week.races));
+  check('and the standings of proven drivers only', week.standings.length === 1 && week.standings[0].name === 'Al' && week.standings[0].wins === 1 && week.standings[0].podiums === 1 && week.standings[0].starts === 1, JSON.stringify(week.standings));
+  const rec = (await (await api('/api/drivers/record?name=%20AL%20', withDb)).json()) as { starts: number; wins: number; podiums: number; bestFinish: number | null; name: string };
+  check('GET /api/drivers/record: starts, wins, podiums and best finish, by the name\'s claim', rec.name === 'Al' && rec.starts === 1 && rec.wins === 1 && rec.podiums === 1 && rec.bestFinish === 1, JSON.stringify(rec));
+  const parsedWeek = parseWeekRaceResults(week);
+  const parsedRec = parseDriverRecord(rec);
+  check("the game's client reads both answers", parsedWeek?.standings[0]?.name === 'Al' && parsedWeek.races.length === 2 && parsedRec?.wins === 1 && parsedRec.bestFinish === 1 && parseWeekRaceResults({ races: 'x' }) === null);
+  const none = (await (await api('/api/drivers/record?name=Bea', withDb)).json()) as { starts: number; bestFinish: number | null };
+  check('an unproven name has no record', none.starts === 0 && none.bestFinish === null, JSON.stringify(none));
+  check('a bad week or no name is refused; without races or the database, no results', (await api('/api/races/results?week=x', withDb)).status === 400 && (await api('/api/drivers/record', withDb)).status === 400 && (await api(`/api/races/results?week=${rules.id}`, live)).status === 404 && (await api(`/api/races/results?week=${rules.id}`, { ...withDb, ONLINE_RACES: 'off' })).status === 404);
 
   if (failures.length > 0) {
     console.error(`\n${failures.length} check(s) failed`);

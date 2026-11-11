@@ -1,6 +1,6 @@
 /**
  * What multiplayer sends over the wire, and the checks on it: the car state packet, the lobby and the control
- * messages (hello, ready, ping, lobby, start, abort). Everything from the network goes through a sanitizer here before
+ * messages (hello, ready, ping, lobby, start, abort, and finish, result, identify for the official result). Everything from the network goes through a sanitizer here before
  * the game, a room's host or the race server (cloudflare/api/race.ts) uses or passes it on.
  *
  * No three.js and no DOM: the Worker imports this file.
@@ -127,6 +127,20 @@ export interface RaceStartInfo {
   vehicle?: VehicleModelId;
 }
 
+/** One car in the official result (src/lib/net/official-result.ts) */
+export interface OfficialResultRow {
+  peer: string;
+  position: number;
+  /** Race time at the flag with the penalties added (s); null when not (yet) finished */
+  timeS: number | null;
+  penaltyS: number;
+  laps: number;
+  bestLapMs: number | null;
+  dnf: boolean;
+  /** Place on the grid at the start (1 = pole) */
+  grid: number;
+}
+
 export type ControlMessage =
   | { type: 'hello'; name: string; code: string; color: string; vehicle?: VehicleModelId; trackId?: string }
   | { type: 'ping'; t0: number }
@@ -134,7 +148,13 @@ export type ControlMessage =
   | { type: 'lobby'; lobby: LobbyState }
   | { type: 'ready'; ready: boolean }
   | { type: 'start'; start: RaceStartInfo }
-  | { type: 'abort'; id: string };
+  | { type: 'abort'; id: string }
+  /** A car took the flag: once, to the race server or the room's host. timeS is race time at the flag, penalties not added */
+  | { type: 'finish'; id: string; timeS: number; penaltyS: number; laps: number; bestLapMs: number | null }
+  /** The official result, only ever from the race server or the room's host; final once it no longer changes */
+  | { type: 'result'; id: string; final: boolean; rows: OfficialResultRow[] }
+  /** The driver key, once after hello on a race server's socket (never in a URL): proves the name for the results */
+  | { type: 'identify'; driverKey: string };
 
 export interface ControlEnvelope {
   ctl: ControlMessage;
@@ -297,6 +317,30 @@ export function sanitizePacket(v: unknown): NetworkVehiclePacket | null {
   };
 }
 
+/** A driver key as the game makes them (src/lib/net/driver-key.ts) */
+const DRIVER_KEY_RE = /^[A-Za-z0-9_-]{32,128}$/;
+const lapCount = (v: unknown): number | null => (typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= 99 ? v : null);
+const place = (v: unknown): number | null => (typeof v === 'number' && Number.isInteger(v) && v >= 1 && v <= 64 ? v : null);
+
+function sanitizeResultRow(v: unknown): OfficialResultRow | null {
+  if (!v || typeof v !== 'object') return null;
+  const r = v as Record<string, unknown>;
+  const position = place(r.position);
+  const grid = place(r.grid);
+  const laps = lapCount(r.laps);
+  if (typeof r.peer !== 'string' || !PEER_ID_RE.test(r.peer) || position === null || grid === null || laps === null) return null;
+  return {
+    peer: r.peer,
+    position,
+    timeS: finite(r.timeS, 0.001, 1e6),
+    penaltyS: finite(r.penaltyS, 0, 600) ?? 0,
+    laps,
+    bestLapMs: finite(r.bestLapMs, 1, 1e7),
+    dnf: r.dnf === true,
+    grid,
+  };
+}
+
 /** Validates a control message from the network; null when it is not one */
 export function sanitizeControl(v: unknown): ControlMessage | null {
   if (!v || typeof v !== 'object') return null;
@@ -332,6 +376,21 @@ export function sanitizeControl(v: unknown): ControlMessage | null {
     }
     case 'abort':
       return typeof m.id === 'string' ? { type: 'abort', id: m.id.slice(0, 32) } : null;
+    case 'finish': {
+      const timeS = finite(m.timeS, 0.001, 1e6);
+      const penaltyS = finite(m.penaltyS, 0, 600);
+      const laps = lapCount(m.laps);
+      if (typeof m.id !== 'string' || timeS === null || penaltyS === null || laps === null) return null;
+      return { type: 'finish', id: m.id.slice(0, 32), timeS, penaltyS, laps, bestLapMs: finite(m.bestLapMs, 1, 1e7) };
+    }
+    case 'result': {
+      if (typeof m.id !== 'string' || !Array.isArray(m.rows)) return null;
+      const rows = m.rows.slice(0, 32).map(sanitizeResultRow);
+      if (rows.some((r) => r === null)) return null;
+      return { type: 'result', id: m.id.slice(0, 32), final: m.final === true, rows: rows as OfficialResultRow[] };
+    }
+    case 'identify':
+      return typeof m.driverKey === 'string' && DRIVER_KEY_RE.test(m.driverKey) ? { type: 'identify', driverKey: m.driverKey } : null;
     default:
       return null;
   }

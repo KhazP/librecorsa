@@ -6,6 +6,7 @@
 import * as THREE from "three";
 import { GapTimer, LapClock, MultiplayerRace, classificationClosed, classify, raceOrder, type RacerProgress } from "../src/lib/sim/race-session";
 import type { InterpolatedPeerState, RaceStartInfo } from "../src/lib/sim/multiplayer-sync";
+import { sanitizePacket, type ControlMessage, type NetworkVehiclePacket } from "../src/lib/net/wire";
 
 let passed = 0;
 function check(name: string, cond: boolean, detail = ""): void {
@@ -173,8 +174,11 @@ console.log("Multiplayer: late joiners and dropped players");
   mp.ingestPeers([pkt("host", 100, null), pkt("other", 90, null)], 5);
   check("everyone reporting: nobody out", !mp.status(at(20), 50).standings.some((r) => r.name === "other" && r.finished));
   mp.ingestPeers([pkt("host", 4000, null)], 40);
-  const later = mp.status(at(40), 50);
-  check("a player silent for 30 s drops to the back", later.standings[later.standings.length - 1].name === "Other", later.standings.map((r) => r.name).join());
+  const silent = mp.status(at(40), 50);
+  check("a player silent for 30 s but still in the lobby keeps its place", silent.standings[0].name === "Host" && silent.standings[1].name === "Other", silent.standings.map((r) => r.name).join());
+  mp.setPresent(["host", "me"]);
+  const later = mp.status(at(41), 50);
+  check("a player gone from the lobby drops to the back", later.standings[later.standings.length - 1].name === "Other", later.standings.map((r) => r.name).join());
   mp.ingestPeers([pkt("host", 2 * L + 5, 300, 2)], 300);
   check("the flag is out once anyone finishes", mp.flagOut);
   const p = mp.progress();
@@ -287,27 +291,167 @@ console.log("Multiplayer: late joiners and dropped players");
     r.lapClock.distM = L + 3;
     r.lapClock.finishTimeS = 70;
     r.lapClock.finishLaps = 1;
+    r.setPresent(["host", "me"]);
     const st = r.status(at(70), 50);
     const other = (s: typeof st) => s.results?.find((e) => e.name === "Other");
-    check("closes with the silent player out", st.resultsFinal === true && other(st)?.dnf === true, JSON.stringify(other(st)));
+    check("closes with the player who left out", st.resultsFinal === true && other(st)?.dnf === true, JSON.stringify(other(st)));
     r.ingestPeers([pkt("other", L + 10, 75, 1)], 75);
+    r.setPresent(["host", "me", "other"]);
     const st2 = r.status(at(75), 50);
-    check("stays final when that player's packets come back", st2.resultsFinal === true && other(st2)?.dnf === true, JSON.stringify(other(st2)));
+    check("stays final when that player comes back", st2.resultsFinal === true && other(st2)?.dnf === true, JSON.stringify(other(st2)));
     check("and the classification no longer changes", JSON.stringify(st2.results) === JSON.stringify(st.results));
 
     const open = new MultiplayerRace(start, L, "me", me, roster);
     const at2 = (s: number) => open.frame(lightsOut + s * 1000);
     open.ingestPeers([pkt("host", 100, null), pkt("other", 90, null)], 1);
     open.ingestPeers([pkt("host", 3000, null)], 40);
+    open.setPresent(["host", "me"]);
     const s1 = open.status(at2(40), 50);
     open.ingestPeers([pkt("other", 3500, null)], 41);
+    open.setPresent(["host", "me", "other"]);
     const s2 = open.status(at2(41), 50);
     check(
-      "before it closes, a silent player comes back with its packets",
+      "before it closes, a player who left comes back with the lobby",
       s1.standings[s1.standings.length - 1]?.name === "Other" && s2.standings[0]?.name === "Other",
       `${s1.standings.map((x) => x.name).join()} then ${s2.standings.map((x) => x.name).join()}`
     );
   }
+}
+
+console.log("Multiplayer: two screens agree on the running order");
+{
+  // As the open-race test: car A drives off, then stops and pulls away again and again; car B stays on the grid. Each
+  // screen runs its own MultiplayerRace, and the cars' progress goes between them as packets through sanitizePacket
+  const duo: RaceStartInfo = { ...start, laps: 5, collisions: "protected", grid: ["peer_b", "peer_a"] };
+  const ids = [
+    { peerId: "peer_a", name: "Was", code: "WAS", color: "#ff0000" },
+    { peerId: "peer_b", name: "Rac", code: "RAC", color: "#0000ff" },
+  ];
+  const lightsOut = duo.lightsStartHostMs + 5000 + duo.holdMs;
+  const run = (silentFromS: number, silentToS: number) => {
+    const screens = ids.map((me) => ({ me, race: new MultiplayerRace(duo, L, me.peerId, me, ids), s: 0 }));
+    screens[0].s = L - 20; // A starts second, B on pole
+    screens[1].s = L - 12;
+    for (const sc of screens) sc.race.lapClock.reset(sc.s);
+    const heard = new Map<string, NetworkVehiclePacket>();
+    // Disagreements that last: a packet's trip makes the screens differ for a frame or two at a pass, no more
+    const disagreements: string[] = [];
+    let apart = 0;
+    let speed = 0;
+    for (let f = 0; f <= 60 * 30; f++) {
+      const t = f / 30;
+      // A: off the line for 13 s, then four stops and four getaways of 4.5 s each
+      if (t > 0) {
+        const phase = t < 13 ? 0 : Math.floor((t - 13) / 4.5);
+        speed = t < 13 ? Math.min(60, speed + 0.4) : phase % 2 === 0 ? Math.max(0, speed - 0.6) : Math.min(60, speed + 0.4);
+        screens[0].s = (screens[0].s + speed / 30) % L;
+      }
+      const leaders: string[] = [];
+      for (const sc of screens) {
+        const frame = sc.race.frame(lightsOut + t * 1000);
+        sc.race.lapClock.update(sc.s, frame.raceTimeS, duo.laps, sc.race.flagOut);
+        leaders.push(sc.race.status(frame, sc === screens[0] ? speed : 0).standings[0]?.driverCode ?? "");
+      }
+      apart = leaders[0] !== leaders[1] ? apart + 1 : 0;
+      if (apart === 1 && f === 0) disagreements.push(`${t.toFixed(1)} s: ${leaders.join(" / ")} on the grid`);
+      if (apart === 6) disagreements.push(`${t.toFixed(1)} s: ${leaders.join(" / ")}`);
+      // Packets at 15 Hz; B's screen hears nothing from A in the silent window (A's page and socket stay up)
+      for (const sc of screens) {
+        if (f % 2 === 0) {
+          const pkt = sanitizePacket({ peerId: sc.me.peerId, driverCode: sc.me.code, teamColorHex: sc.me.color, timestampMs: t * 1000, pos: [0, 0, 0], quat: [0, 0, 0, 1], linVel: [0, 0, 0], angVel: [0, 0, 0], wheelRPMs: [0, 0, 0, 0], trackS: sc.s, speedKmh: 0, name: sc.me.name, race: sc.race.progress() });
+          if (pkt && !(sc === screens[0] && t >= silentFromS && t < silentToS)) heard.set(`${sc.me.peerId}>`, pkt);
+        }
+      }
+      for (const sc of screens) {
+        const other = ids.find((i) => i.peerId !== sc.me.peerId)!;
+        const pkt = heard.get(`${other.peerId}>`);
+        // A buffer dropped after 5 s without packets is no longer handed to the race (multiplayer-sync update())
+        if (pkt && t * 1000 - pkt.timestampMs <= 5000) {
+          sc.race.ingestPeers([{ ...pkt, position: new THREE.Vector3() } as unknown as InterpolatedPeerState], sc.race.frame(lightsOut + t * 1000).raceTimeS);
+        }
+      }
+    }
+    return disagreements;
+  };
+  const clean = run(Infinity, Infinity);
+  check("with every packet through, both screens show the same leader all race", clean.length === 0, clean.join("; "));
+  const gap = run(20, 60);
+  check("one screen not hearing a car that is still in the race: the leader stays the same", gap.length === 0, `${gap.length} frames apart, first ${gap[0]}`);
+}
+
+console.log("Multiplayer: the official result");
+{
+  type Result = Extract<ControlMessage, { type: "result" }>;
+  type Finish = Extract<ControlMessage, { type: "finish" }>;
+  const lightsOut = start.lightsStartHostMs + 5000 + start.holdMs;
+  const pkt = (id: string, dist: number): InterpolatedPeerState =>
+    ({ peerId: id, driverCode: id.toUpperCase().slice(0, 3), teamColorHex: "#000", speedKmh: 100, position: new THREE.Vector3(), name: id, race: { id: "race-1", dist, fin: null, best: null } }) as unknown as InterpolatedPeerState;
+
+  // A guest: its own classification until the result comes, then the official one
+  const g = new MultiplayerRace(start, L, "me", { name: "Me", code: "MEE", color: "#00ff00" }, roster);
+  const sent: Finish[] = [];
+  g.onFinish = (f) => sent.push(f);
+  g.lapClock.reset(L - 20);
+  g.ingestPeers([pkt("host", 2 * L + 10), pkt("other", L)], 1);
+  g.lapClock.distM = 2 * L + 1;
+  g.lapClock.finishTimeS = 200;
+  g.lapClock.finishLaps = 2;
+  g.penaltyS = 5;
+  const own = g.status(g.frame(lightsOut + 200_000), 50);
+  check("at the flag the finish is sent, race time without the penalty", sent.length === 1 && sent[0].timeS === 200 && sent[0].penaltyS === 5 && sent[0].laps === 2 && sent[0].id === "race-1");
+  check("until a result comes, the game's own classification, with grid places", own.resultsOfficial === false && own.results?.find((r) => r.isPlayer)?.gridPosition === 2, JSON.stringify(own.results?.map((r) => r.gridPosition)));
+  g.status(g.frame(lightsOut + 202_000), 50);
+  g.status(g.frame(lightsOut + 206_000), 50);
+  check("sent again every few seconds while no result has it", sent.length === 2);
+  const rows = (final: boolean): Result["rows"] => [
+    { peer: "host", position: 1, timeS: 190, penaltyS: 0, laps: 2, bestLapMs: 90_000, dnf: false, grid: 1 },
+    { peer: "me", position: 2, timeS: 205, penaltyS: 5, laps: 2, bestLapMs: null, dnf: false, grid: 2 },
+    { peer: "other", position: 3, timeS: null, penaltyS: 0, laps: 1, bestLapMs: null, dnf: final, grid: 3 },
+  ];
+  g.applyResult({ type: "result", id: "race-1", final: false, rows: rows(false) });
+  const prov = g.status(g.frame(lightsOut + 212_000), 50);
+  check("then the official result, not yet final", prov.resultsOfficial === true && prov.resultsFinal === false && prov.results?.[0].name === "host" && prov.position === 2);
+  check("its times and gaps with the penalty in, names from the field, grid places from it", prov.results?.[1].finishTimeS === 205 && prov.results[1].gapS === 15 && prov.results[1].gridPosition === 2 && prov.results[0].gridPosition === 1, JSON.stringify(prov.results?.[1]));
+  check("and the finish is not sent again once the result has it", sent.length === 2);
+  g.applyResult({ type: "result", id: "race-1", final: true, rows: rows(true) });
+  g.applyResult({ type: "result", id: "race-1", final: false, rows: rows(false).reverse() });
+  g.applyResult({ type: "result", id: "race-9", final: true, rows: [] });
+  const fin = g.status(g.frame(lightsOut + 300_000), 50);
+  check("a final result stands: not replaced by a provisional one or another race's", fin.resultsFinal === true && fin.results?.[0].name === "host" && fin.results[2].dnf === true);
+
+  // A room: the host keeps the book; a guest's finish reaches it, the result reaches the guest
+  const hostRace = new MultiplayerRace(start, L, "host", { name: "Host", code: "HST", color: "#f00" }, roster);
+  const guest = new MultiplayerRace(start, L, "me", { name: "Me", code: "MEE", color: "#0f0" }, roster);
+  const out: Result[] = [];
+  hostRace.collectResults((r) => {
+    out.push(r);
+    guest.applyResult(r);
+  });
+  guest.onFinish = (f) => hostRace.takeFinish("me", f);
+  hostRace.frame(lightsOut + 150_000);
+  hostRace.takeFinish("me", { type: "finish", id: "race-1", timeS: 140, penaltyS: 0, laps: 2, bestLapMs: null });
+  check("the host refuses a finish from a car it never heard in the race", out.length === 0);
+  hostRace.ingestPeers([pkt("me", L), pkt("other", L)], 10);
+  hostRace.takeFinish("me", { type: "finish", id: "race-1", timeS: 20, penaltyS: 0, laps: 2, bestLapMs: null });
+  check("and one faster than a lap can be driven", out.length === 0);
+  hostRace.lapClock.reset(L - 10);
+  hostRace.lapClock.distM = 2 * L + 5;
+  hostRace.lapClock.finishTimeS = 145;
+  hostRace.lapClock.finishLaps = 2;
+  hostRace.status(hostRace.frame(lightsOut + 146_000), 50);
+  check("the host's own finish goes in its book, the result to everyone", out.length === 1 && !out[0].final && out[0].rows[0].peer === "host");
+  guest.lapClock.reset(L - 20);
+  guest.lapClock.distM = 2 * L + 2;
+  guest.lapClock.finishTimeS = 150;
+  guest.lapClock.finishLaps = 2;
+  guest.status(guest.frame(lightsOut + 150_000), 50);
+  check("a guest's finish reaches the host", out.length === 2 && out[1].rows[1].peer === "me" && out[1].rows[1].timeS === 150);
+  hostRace.status(hostRace.frame(lightsOut + 200_000), 50);
+  check("not final while a car is still out and 90 s have not passed", out.every((r) => !r.final));
+  const closed = hostRace.status(hostRace.frame(lightsOut + 241_000), 50);
+  const last = out[out.length - 1];
+  check("final 90 s after the first finish, the car still out DNF", last.final && last.rows[2].peer === "other" && last.rows[2].dnf && last.rows[2].laps === 1, JSON.stringify({ n: out.length, final: last.final, rows: last.rows }));
+  check("the host shows it too, and the guest has it", closed.resultsOfficial === true && closed.resultsFinal === true && guest.status(guest.frame(lightsOut + 241_000), 50).resultsFinal === true);
 }
 
 const gaps = new GapTimer();
