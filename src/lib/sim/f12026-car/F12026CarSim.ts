@@ -1179,7 +1179,9 @@ export class F12026CarSim implements SimulatorCar {
     const nextDefault = this.defaultColdPsiForCompound();
     const pr = this.profile;
     for (const k of ["fl", "fr", "rl", "rr"] as const) {
-      this.coldPsi[k] = Math.round(THREE.MathUtils.clamp(nextDefault + deltas[k], pr.coldPsiRange[0], pr.coldPsiRange[1]) * 10) / 10;
+      // Clamped as the setup sheet states it (as setTyreSetup does), kept at the tyres' own reference temperature
+      const sheet = THREE.MathUtils.clamp(this.setupPsi(nextDefault + deltas[k], true), pr.coldPsiRange[0], pr.coldPsiRange[1]);
+      this.coldPsi[k] = pr.setupPressureRefC === undefined ? Math.round(sheet * 10) / 10 : this.setupPsi(sheet, false);
     }
     this.applyColdPressures();
   }
