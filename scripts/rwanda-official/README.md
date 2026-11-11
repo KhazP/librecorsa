@@ -81,16 +81,18 @@ The kerbs are blocks, under the wheel and to the eye. What the cars drive on is 
 high, one cross-section for every circuit of the game; on it this circuit's surface table stands blocks 0.8 m long,
 each climbed over 0.65 m in the direction of the lap and come down from over 0.15 m (about a tyre's contact patch: a
 tyre rolls off a block's end, it does not drop), 16 mm high in the kerb's middle and fading to nothing at both edges.
-The FIA's kerb types 1, 2 and 5 are drawn 25 to 100 mm high: 16 mm is what the cars take without their lap changing.
-Over one AI lap the GT3 has a wheel off the ground for 11 % of its time on the Grand Prix lap's kerbs and 14 % on the
-short lap's (8 % and 12 % on the plain hump), the prototype for 13 % and 22 % (as before); at 22 mm the GT3 is at 14 %
-and 15 %, at 32 mm at 21 %. `bl_kerbs.py` lays the blocks one sees over the hump, that same shape 5 mm higher, in two
+The FIA's kerb types 1, 2 and 5 are drawn 25 to 100 mm high; 16 mm is a choice, not a limit. The AI's lap times do
+not move with the blocks' height up to 32 mm, on either physics engine, but the wheels leave the ground more: over one
+AI lap the GT3 has a wheel off for 11 % of its time on the Grand Prix lap's kerbs and 14 % on the short lap's (8 % and
+12 % on the plain hump), the rigid-body prototype for 13 % and 22 % (as before); at 22 mm the GT3 is at 14 % and 15 %,
+at 25 mm at 17 % on the Grand Prix lap, at 32 mm at 21 %. The AI's Liana never touches a kerb, so it is not measured. `bl_kerbs.py` lays the blocks one sees over the hump, that same shape 5 mm higher, in two
 rows of 0.75 m, red and white in turn and the second row a block out of step, and rewrites the humps' texture
 coordinate along the kerb, which the game reads the blocks from, so that both start on the same line (within 2 mm at
 every corner of every block, `scripts/verify-rwanda-official.ts`). 5,316 blocks, 81,100 triangles; they carry no
 surface. The hump under them is bare concrete and shows only where a block is left out: where a road's paving lies
-over or beside the kerb, and at the cut ends of a kerb at a junction. The older VF26 physics reads kerbs off the track
-data, along the lap's distance: it feels the same blocks, not in step with the ones one sees.
+over or beside the kerb, and at the cut ends of a kerb at a junction. The older VF26 physics (the 2026 Prototype
+unless `?vf26engine=rigid`) reads kerbs off the track data, along the lap's distance: it feels the same blocks, not in
+step with the ones one sees, and laps within 0.02 s of what it did without them.
 
 The road, the pit lane and the gravel wear scanned surfaces: Poly Haven's Asphalt Track, Asphalt Pit Lane and Gravel
 Floor 02 (CC0), each a 2 m tile with its normal map. `prep_scans.py` keeps a scan's grain and gives it the colour of
