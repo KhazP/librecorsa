@@ -12,7 +12,7 @@ LibreCorsa is an independent, non-commercial, open-source web simulator built wi
   | :--- | :--- |
   | RISE Motordrome (`public/tracks/rwanda_official/`, `public/tracks/rwanda_official_short/`, and its source in `scripts/rwanda-official/`) | The project's own, CC BY-NC-SA 4.0 (non-commercial, share-alike); its two tree models CC BY 4.0 |
   | F1 2026 model | CC BY 4.0 |
-  | Chang, Okayama, Spielberg (Red Bull Ring) and Monaco circuits | By **Mitja Bonca** (Used with permission) |
+  | Chang, Okayama, Spielberg (Red Bull Ring), Automotodrom Grobnik, Oschersleben and Monaco circuits | By **Mitja Bonca** (Used with permission) |
   | Istanbul Park circuit (`public/tracks/istanbul_park/`) | Intercity İstanbul Park by **[Enver Bozkaya](https://www.enverbozkaya.com/) (SRTR)** (Used with the author's permission; the mod's other contributors are listed under *Istanbul Park*) |
   | 2026 Pirelli tyre sidewall texture (`public/cars/shared/tyres/`) and F1 rain-tyre temperature / wear curves | By **Cxjovich** ([https://www.overtake.gg/members/cxjovich.4261212/](https://www.overtake.gg/members/cxjovich.4261212/)), CC BY-NC-SA 4.0 (used with permission; non-commercial, share-alike) |
   | Mercedes-AMG GT3 Evo and BMW M4 GT3 Evo models | CC BY-NC-SA 4.0 (non-commercial, share-alike) |
@@ -82,6 +82,8 @@ Each circuit below is created by **Mitja Bonca** and used with the author's perm
 * `"Okayama International Circuit"` ([https://www.overtake.gg/downloads/okayama-international-circuit.15846/](https://www.overtake.gg/downloads/okayama-international-circuit.15846/)) by **Mitja Bonca**, used for the Grand Prix layout (`okayama`), Piper course (`okayama_piper`), and Formula Drift layout (`okayama_drift`) — Used with permission
 * `"Spielberg (Red Bull Ring)"` ([https://www.overtake.gg/downloads/spielberg.6437/](https://www.overtake.gg/downloads/spielberg.6437/)) by **Mitja Bonca**, used for the Grand Prix layout (`spielberg`), South course (`spielberg_south`), and Inner skill course (`spielberg_inner`) — Used with permission
 * `"Monaco"` ([https://www.overtake.gg/downloads/monaco.3340/](https://www.overtake.gg/downloads/monaco.3340/)) by **Mitja Bonca** (`monaco`) — Used with permission
+* `"Automotodrom Grobnik"` v2.71 ([https://www.overtake.gg/downloads/automotodrom-grobnik.4835/](https://www.overtake.gg/downloads/automotodrom-grobnik.4835/)) by **Mitja Bonca** (`grobnik`), used with permission. Its rocky ground (`ROCK`) drives as grass, its kerb stones (`CONCRET`) as kerbs, its road surfaces are picked by texture rather than by material name, and the Croatian corner names of `sections.ini` get back their diacritics
+* `"Oschersleben"` v1.06 ([https://www.overtake.gg/downloads/oschersleben.4549/](https://www.overtake.gg/downloads/oschersleben.4549/)) by **Mitja Bonca**, the Grand Prix layout (`oschersleben`), used with permission. Its own surface names are mapped: the rumble strips (`CUBE`) as kerb and the green paint past the kerbs (`CARPET`) as run-off. The mod has no `sections.ini`, so its 14 turns are numbered, not named
 
 #### Istanbul Park (`public/tracks/istanbul_park/`)
 
