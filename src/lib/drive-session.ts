@@ -152,11 +152,16 @@ const approach = (value: number, target: number, maxStep: number) =>
 
 /** The sound bank each car plays (the F1 cars share one bank) */
 const soundFor = (car: CarId): CarSoundSource => carById(car).sound;
-/** Runs `fn` when the browser is idle (Safari has no requestIdleCallback: a short timer instead) */
-const scheduleIdle = (fn: (deadline?: IdleDeadline) => void) => {
+/**
+ * Runs `fn` when the browser is idle (Safari has no requestIdleCallback: a timer instead, `fallbackDelayMs` from now,
+ * a frame by default)
+ */
+const scheduleIdle = (fn: (deadline?: IdleDeadline) => void, fallbackDelayMs = 16) => {
   if (typeof window.requestIdleCallback === "function") window.requestIdleCallback(fn, { timeout: 500 });
-  else window.setTimeout(() => fn(), 16);
+  else window.setTimeout(() => fn(), fallbackDelayMs);
 };
+/** Safari's wait between the spare AI field's build steps (a few frames for the menus between two AI cars) */
+const AI_PREP_GAP_MS = 150;
 
 /** What the drive shows the UI: one snapshot, replaced whenever any part changes (see DriveSession.subscribe) */
 export interface DriveSnapshot {
@@ -682,18 +687,45 @@ export class DriveSession {
      * it was built for.
      */
     let aiFieldSpare: { field: AiOpponentField; physics: SimulatorCar; opponents: number } | null = null;
+    /**
+     * The AI cars of the next spare field, made one per idle slice before the field goes round them: each settles on
+     * the grid as it is made, up to half a second on Safari, so five in one task froze the menus for seconds
+     */
+    let sparePeers: { physics: SimulatorCar; cars: SimulatorCar[] } | null = null;
+    /** The spare AI cars made for this car, used up */
+    const takeSparePeers = (car: SimulatorCar) => {
+      const peers = sparePeers?.physics === car ? sparePeers.cars : undefined;
+      sparePeers = null;
+      return peers;
+    };
     /** A new AI field round the player's car, of the race setup's size, at the player's chosen skill */
     const buildAiField = (car: SimulatorCar) =>
-      new AiOpponentField(track, car, aiDriversFor(settings.race.opponents), getTrackEnv(), { skill: settings.aiSkill });
+      new AiOpponentField(track, car, aiDriversFor(settings.race.opponents), getTrackEnv(), {
+        skill: settings.aiSkill,
+        peers: takeSparePeers(car),
+      });
+    /** One build of the spare field at a time (each call while it runs would start another) */
+    let aiPrepQueued = false;
     this.prepareAiField = () => {
+      if (aiPrepQueued) return;
+      aiPrepQueued = true;
       const run = () => {
+        aiPrepQueued = false;
         // Never while driving: the build would be a hitch on track instead
         if (disposed || appPhaseNow === "driving" || appPhaseNow === "loading") return;
         const opponents = settings.race.opponents;
         if (aiFieldSpare?.physics === physics && aiFieldSpare.opponents === opponents) return;
+        if (sparePeers?.physics !== physics) sparePeers = { physics, cars: [] };
+        if (physics.createAiPeerCar && sparePeers.cars.length < aiDriversFor(opponents).length) {
+          sparePeers.cars.push(physics.createAiPeerCar());
+          // A gap between the cars, for the menus to draw and take input (Safari has no idle callback to wait for)
+          aiPrepQueued = true;
+          scheduleIdle(run, AI_PREP_GAP_MS);
+          return;
+        }
         aiFieldSpare = { field: buildAiField(physics), physics, opponents };
       };
-      scheduleIdle(run);
+      scheduleIdle(run, AI_PREP_GAP_MS);
     };
     this.takeAiField = () => {
       const spare = aiFieldSpare;
@@ -802,6 +834,7 @@ export class DriveSession {
       physics.attachTrackRoot?.(root);
       aiFieldOf(raceNow())?.attachTrackRoot(root);
       aiFieldSpare?.field.attachTrackRoot(root);
+      for (const peer of sparePeers?.cars ?? []) peer.attachTrackRoot?.(root);
       // Move broadcast cameras that would film the inside of a grandstand: about a second of raycasts on a scan,
       // spread over idle slices so neither the loading screen nor the menus freeze (until done, the TV view uses
       // the stations as built)

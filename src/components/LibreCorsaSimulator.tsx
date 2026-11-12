@@ -602,11 +602,12 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     [session, startSession]
   );
 
-  // In the menus (after loading, after a race): have the next race's AI field ready (a car swap asks for its own)
+  // In the menus (after loading, after a race): have the next race's AI field ready (a car swap asks for its own).
+  // Not before the loading screen has gone: the press that leaves it shows the menus first
   useEffect(() => {
-    if (phase === "loading" || phase === "driving" || !assetsReady) return;
+    if (phase === "loading" || phase === "driving" || !assetsReady || loadingVisible) return;
     session?.prepareAiField();
-  }, [session, phase, assetsReady]);
+  }, [session, phase, assetsReady, loadingVisible]);
 
   /** The week's challenge rules: its assists and realism, a dry track (its car and circuit are the caller's to set) */
   const applyWeekRules = useCallback(() => {
