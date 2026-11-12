@@ -516,7 +516,15 @@ const shift = (m, d) => ({ ...m, pos: m.pos.map((v, i) => v - d[i % 3]) });
  * Zones (rig metres; the front axle at z 1.5045, the rear at -1.8955). The game colours the three paint materials
  * with the picked livery (primary, secondary, accent); carbon gets the procedural weave; the rain light glows.
  */
-const ZONE = { primary: "EXT_PAINT_PRIMARY", secondary: "EXT_PAINT_SECONDARY", accent: "EXT_PAINT_ACCENT", carbon: "EXT_carbon", light: "EXT_clearled_security" };
+const ZONE = {
+  primary: "EXT_PAINT_PRIMARY",
+  secondary: "EXT_PAINT_SECONDARY",
+  accent: "EXT_PAINT_ACCENT",
+  carbon: "EXT_carbon",
+  // The cockpit's inside: matte, no weave (the onboard cameras see it from a hand's width away)
+  interior: "INT_cockpit",
+  light: "EXT_clearled_security",
+};
 
 /** Height of the line between the upper (primary) and lower (secondary) bodywork, rising toward the rear */
 const splitY = (z) => 0.33 + 0.06 * Math.min(1, Math.max(0, (0.6 - z) / 2.2));
@@ -550,7 +558,7 @@ function zoneOf(c, n) {
     if (y > 0.74) return ZONE.secondary;
   }
   // Cockpit interior (seat, tub walls inside the opening)
-  if (ax < 0.26 && z > -0.22 && z < 0.56 && y < 0.655 && y > 0.2) return ZONE.carbon;
+  if (ax < 0.26 && z > -0.22 && z < 0.56 && y < 0.655 && y > 0.2) return ZONE.interior;
   // Halo
   if (y > HALO_Y && z > HALO_Z && z < 0.66 && ax < 0.32) return ZONE.secondary;
   // Nose tip
@@ -740,6 +748,7 @@ async function main() {
     [ZONE.secondary]: material(doc, ZONE.secondary, [0.006, 0.009, 0.025], { roughness: 0.5 }),
     [ZONE.accent]: material(doc, ZONE.accent, [0.95, 0.65, 0.0], { roughness: 0.5 }),
     [ZONE.carbon]: material(doc, ZONE.carbon, [0.012, 0.012, 0.013], { roughness: 0.35 }),
+    [ZONE.interior]: material(doc, ZONE.interior, [0.018, 0.018, 0.02], { roughness: 0.8 }),
     [ZONE.light]: material(doc, ZONE.light, [0.3, 0.02, 0.02], { roughness: 0.3 }),
     exhaust: material(doc, "EXT_exhaust", [0.35, 0.33, 0.3], { metallic: 0.8, roughness: 0.35 }),
     mirrorL: material(doc, "mirror_1", [0.6, 0.6, 0.62], { metallic: 1, roughness: 0.05 }),
