@@ -159,6 +159,18 @@ export class Trajectory {
     return out;
   }
 
+  /** Steps where the car moved more than 1 m off its own velocity (a reset by the physics): the drive is not smooth */
+  teleports(): number {
+    let n = 0;
+    const h = 1 / REC_HZ;
+    for (let i = 1; i < this.px.length; i++) {
+      const ex = this.px[i] - this.px[i - 1] - 0.5 * (this.vx[i] + this.vx[i - 1]) * h;
+      const ez = this.pz[i] - this.pz[i - 1] - 0.5 * (this.vz[i] + this.vz[i - 1]) * h;
+      if (Math.hypot(ex, ez) > 1) n++;
+    }
+    return n;
+  }
+
   /** Where the hardest braking of the drive's first lap starts and ends (lap distance, m): the stop for the hairpin */
   hardestBrakingZone(): { fromS: number; toS: number } {
     const lapEnd = this.su.findIndex((s) => s - this.su[0] > this.lapLengthM);
@@ -508,13 +520,20 @@ export interface BenchSetup {
   warmupS: number;
 }
 
+/**
+ * Three drives starting apart on the lap. Each must be smooth: the autopilot dropped onto the circuit at speed
+ * somewhere awkward can be reset by the physics, a jump of the true car that the netcode can only snap to
+ */
 export function recordDrives(track: TrackData, seconds: number): Trajectory[] {
   const L = track.totalLengthM;
-  return [
+  const drives = [
     new Trajectory(track, { startS: 100, startSpeedMs: 70, pace: 1, seconds }),
     new Trajectory(track, { startS: L * 0.36, startSpeedMs: 60, pace: 0.97, seconds }),
-    new Trajectory(track, { startS: L * 0.7, startSpeedMs: 60, pace: 0.94, seconds }),
+    new Trajectory(track, { startS: L * 0.6, startSpeedMs: 50, pace: 0.94, seconds }),
   ];
+  const jumpy = drives.findIndex((d) => d.teleports() > 0);
+  if (jumpy >= 0) throw new Error(`Recorded drive ${jumpy + 1} was reset by the physics: pick another start for it`);
+  return drives;
 }
 
 const inZone = (s: number, z: { fromS: number; toS: number }) => (z.fromS <= z.toS ? s >= z.fromS && s <= z.toS : s >= z.fromS || s <= z.toS);
