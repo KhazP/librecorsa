@@ -41,7 +41,14 @@
 
 import type { ControlInputs } from "@/types/f1";
 import { PAD_SENSITIVITY } from "@/lib/input/device-input";
-import { KB_STEER_RETURN_S, KB_STEER_RISE_S, keyboardRampScales } from "@/lib/input/keyboard-steer";
+import {
+  KB_STEER_RETURN_S,
+  KB_STEER_RISE_S,
+  keyboardRampScales,
+  keyboardSteerSpeedRate,
+  NEUTRAL_KEYBOARD_STEER,
+  type KeyboardSteerProfile,
+} from "@/lib/input/keyboard-steer";
 import type { AxleSlipSample } from "./tyre-slip";
 
 export interface SteeringAssistCarState {
@@ -68,6 +75,8 @@ export interface SteeringAssistCarState {
    * + = right); absent = a stiff rack. The limit steers that much further, so the tyres reach their target slip.
    */
   frontComplianceRad?: number;
+  /** The car's own keyboard steering curve; absent = the base ramp at every speed */
+  keyboardSteer?: KeyboardSteerProfile;
 }
 
 export type SteeringDevice = "keyboard" | "controller";
@@ -504,26 +513,30 @@ export class SteeringAssist {
     const wbFactor = car.wheelbaseM / 2.5;
     const speed = Math.hypot(car.vxMs, car.vyMs);
 
-    // Keyboard: a linear ramp first, quicker back to centre (and through it) than out of it
+    // Keyboard: a linear ramp first, quicker back to centre (and through it) than out of it. It steers in at the car's
+    // own pace for this speed (its keyboard curve: quicker in slow corners, gentler at speed) and lets go at the car's
+    // return pace, whatever the speed curve
     const kbDir = Math.sign(keys);
-    const kbRateMult = steeringRateMult(speed, lockDeg, KEYBOARD_RATE, keyboard.rateIncreaseWithSpeed);
+    const kbCar = car.keyboardSteer ?? NEUTRAL_KEYBOARD_STEER;
+    const kbBaseMult = steeringRateMult(speed, lockDeg, KEYBOARD_RATE, keyboard.rateIncreaseWithSpeed);
+    const kbInMult = kbBaseMult * keyboardSteerSpeedRate(kbCar, speed);
+    const kbOutMult = kbBaseMult * kbCar.returnRate;
     const kbState = this.keyboard.state;
     const kbCentring = Math.abs(kbState) - Math.sign(kbState) * kbDir > 0;
-    const kb = this.keyboard.get(kbDir, dt, kbRateMult * (kbCentring ? 1.5 * keyboard.returnScale : keyboard.riseScale));
+    const kb = this.keyboard.get(kbDir, dt, kbCentring ? kbOutMult * (1.5 * keyboard.returnScale) : kbInMult * keyboard.riseScale);
 
     // Then the rounded smoother both inputs share
     const raw = clamp(stick + kb, -1, 1);
+    const st = this.steering.state;
+    const towardCentre = Math.sign(raw) !== Math.sign(st) || Math.abs(raw) < Math.abs(st);
     const rateMult = keyboardSteers
-      ? kbRateMult
+      ? towardCentre
+        ? kbOutMult
+        : kbInMult
       : steeringRateMult(speed, lockDeg, controller.steeringRate, controller.rateIncreaseWithSpeed);
     // Under half rate the return to centre stays at least as quick as at half rate
     let centringRate = 1;
-    if (rateMult > 0 && rateMult < 0.5) {
-      const st = this.steering.state;
-      if ((Math.abs(raw) < Math.abs(st) && Math.sign(raw) === Math.sign(st)) || Math.sign(raw) !== Math.sign(st)) {
-        centringRate = (rateMult * 0.5 + 0.25) / rateMult;
-      }
-    }
+    if (rateMult > 0 && rateMult < 0.5 && towardCentre) centringRate = (rateMult * 0.5 + 0.25) / rateMult;
     const initial = this.steering.get(raw, dt, rateMult * centringRate);
     const absInitial = this.absSteering.get(Math.abs(raw), dt, rateMult * centringRate);
 
