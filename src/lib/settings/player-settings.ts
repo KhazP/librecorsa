@@ -441,6 +441,7 @@ function parseWheel(v: unknown): WheelSettings {
     ffbEnabled: bool(v.ffbEnabled, d.ffbEnabled),
     ffbGain: num(v.ffbGain, 0, 2, d.ffbGain),
     ffbMinForce: num(v.ffbMinForce, 0, 0.2, d.ffbMinForce),
+    ffbCurve: num(v.ffbCurve, 0.5, 2, d.ffbCurve),
     ffbKerb: num(v.ffbKerb, 0, 1, d.ffbKerb),
     ffbAbs: num(v.ffbAbs, 0, 1, d.ffbAbs),
     ffbSlip: num(v.ffbSlip, 0, 1, d.ffbSlip),

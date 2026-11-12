@@ -33,8 +33,10 @@ import {
   directionTestForce,
   HID_WATCHDOG_MS,
   linkHidSink,
+  applyFfbCurve,
   shapeFfbForce,
   softLockForce,
+  unapplyFfbCurve,
   WheelFfbClient,
 } from '../src/lib/input/wheel-ffb';
 import {
@@ -295,6 +297,30 @@ check('FFB gain and minimum force: continuous through zero, monotonic, sign kept
     assert.ok(f >= prev - 1e-12, `monotonic at ${t}`);
     prev = f;
   }
+});
+check('FFB force curve: linear at 1, lifts or holds back light forces, leaves |force| > 1 for the clip meter', () => {
+  for (const f of [-1.4, -0.7, -0.05, 0, 0.3, 1, 1.6]) assert.equal(applyFfbCurve(f, 1), f);
+  // No setting (an older caller) is linear too
+  near(shapeFfbForce(0.4, { ffbGain: 1, ffbMinForce: 0 }), shapeFfbForce(0.4, { ffbGain: 1, ffbMinForce: 0, ffbCurve: 1 }));
+  near(applyFfbCurve(0.5, 2), 0.25);
+  near(applyFfbCurve(-0.5, 2), -0.25);
+  near(applyFfbCurve(0.1, 0.5), 1 - 0.9 ** 2);
+  near(applyFfbCurve(1.3, 0.5), 1.3);
+  near(applyFfbCurve(-2, 2), -2);
+  for (const g of [0.5, 0.7, 1.4, 2]) {
+    near(applyFfbCurve(1, g), 1);
+    // Finite slope at the centre below 1: no notch across zero
+    assert.ok(Math.abs(applyFfbCurve(1e-4, g)) < 1e-3, `no notch at ${g}`);
+    let prev = 0;
+    for (let a = 0.001; a <= 1; a += 0.001) {
+      const y = applyFfbCurve(a, g);
+      assert.ok(y >= prev - 1e-12, `monotonic at ${a}, curve ${g}`);
+      prev = y;
+      near(unapplyFfbCurve(y, g), a, 1e-9);
+    }
+  }
+  // Curve before minimum force: the minimum force still lifts the curved value
+  near(shapeFfbForce(0.5, { ffbGain: 1, ffbMinForce: 0.1, ffbCurve: 2 }), 0.1 + 0.9 * 0.25);
 });
 check('FFB soft lock pushes back past the car steering lock only', () => {
   const half = CAR_WHEEL_LOCK_DEG / 2;

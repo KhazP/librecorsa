@@ -48,16 +48,37 @@ export interface FfbStatus {
 }
 
 /**
- * Steering torque → rim force (+ = right): gain, then minimum force.
+ * Force curve on |force| 0..1 (`ffbCurve`, the exponent g): 1 is linear. Above 1, a^g keeps light forces lighter and
+ * saves the wheel's range for the big loads. Below 1, 1 - (1 - a)^(1/g) lifts light forces with a finite slope at the
+ * centre (1/g), so the rim does not notch across zero as a^g would. Both end at 1 at full scale, and |force| past 1 is
+ * left as it is, so clipping reads the same as on a linear curve.
+ */
+export function applyFfbCurve(force: number, curve: number | undefined): number {
+  const g = curve !== undefined && Number.isFinite(curve) && curve > 0 ? curve : 1;
+  const a = Math.abs(force);
+  if (g === 1 || a === 0 || a >= 1) return force;
+  return Math.sign(force) * (g > 1 ? a ** g : 1 - (1 - a) ** (1 / g));
+}
+
+/** The inverse of {@link applyFfbCurve}: a curved |force| back to the linear one (for the gain suggestion) */
+export function unapplyFfbCurve(force: number, curve: number | undefined): number {
+  const g = curve !== undefined && Number.isFinite(curve) && curve > 0 ? curve : 1;
+  const a = Math.abs(force);
+  if (g === 1 || a === 0 || a >= 1) return force;
+  return Math.sign(force) * (g > 1 ? a ** (1 / g) : 1 - (1 - a) ** g);
+}
+
+/**
+ * Steering torque → rim force (+ = right): gain, then the force curve, then minimum force.
  * When `speedKmh` is provided (live driving), minimum force is gated off at standstill (≤ 1 km/h) and ramps in up to
  * 6 km/h (`clamp((speedKmh - 1) * 0.2, 0, 1)`) so a parked direct-drive wheel never jumps or oscillates at rest.
  */
 export function shapeFfbForce(
   torque: number,
-  wheel: Pick<WheelSettings, "ffbGain" | "ffbMinForce">,
+  wheel: Pick<WheelSettings, "ffbGain" | "ffbMinForce"> & Partial<Pick<WheelSettings, "ffbCurve">>,
   speedKmh?: number
 ): number {
-  const f = torque * wheel.ffbGain;
+  const f = applyFfbCurve(torque * wheel.ffbGain, wheel.ffbCurve);
   const a = Math.abs(f);
   const speedGate =
     speedKmh !== undefined && Number.isFinite(speedKmh) ? Math.max(0, Math.min(1, (speedKmh - 1.0) * 0.2)) : 1;
@@ -317,7 +338,8 @@ export class WheelFfbClient {
         shaped = protect(smooth(shapeFfbForce(torque, wheel, telemetry.speedKmh), dtS), dtS);
       }
       collisionGuard = guard ? guard.blend : 0;
-      this.recordMeter(shaped, wheel.ffbGain, nowMs);
+      // The gain suggestion assumes the force scales with the gain: it is fed the force before the curve
+      this.recordMeter(unapplyFfbCurve(shaped, wheel.ffbCurve), wheel.ffbGain, nowMs);
       force = shaped + softLock + damping;
       if (wheel.ffbInvert) force = -force;
 

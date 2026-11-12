@@ -822,6 +822,16 @@ export const WheelStep: React.FC<SetupStepProps> = ({ settings, onChangeSettings
                   format={(v) => (v === 0 ? "Off" : `${v.toFixed(0)} %`)}
                   onChange={(v) => setWheel({ ffbMinForce: v / 100 })}
                 />
+                <TuningSlider
+                  label="Force curve"
+                  value={Math.round(50 * Math.log2(w.ffbCurve))}
+                  min={-50}
+                  max={50}
+                  step={5}
+                  format={(v) => (v === 0 ? "Linear" : `${v > 0 ? "+" : ""}${v}`)}
+                  hint="Below 0 lifts light forces (belt and gear wheels); above 0 keeps them light and saves the strength for the big loads"
+                  onChange={(v) => setWheel({ ffbCurve: 2 ** (v / 50) })}
+                />
                 <TyreSlider
                   label="Kerb vibration"
                   value={Math.round(w.ffbKerb * 100)}

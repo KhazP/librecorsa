@@ -61,6 +61,11 @@ export interface WheelSettings {
   ffbGain: number;
   /** Minimum force 0..0.2: lifts small torques over a belt / gear wheel's static friction */
   ffbMinForce: number;
+  /**
+   * Force curve exponent 0.5..2 on the physics torque (see applyFfbCurve in wheel-ffb.ts): 1 linear, below 1 lifts
+   * light forces, above 1 keeps them light for more detail in the big loads
+   */
+  ffbCurve: number;
   /** Kerb vibration 0..1 */
   ffbKerb: number;
   /** ABS vibration 0..1 */
@@ -159,6 +164,7 @@ export const DEFAULT_WHEEL_SETTINGS: WheelSettings = {
   ffbEnabled: false,
   ffbGain: 1,
   ffbMinForce: 0,
+  ffbCurve: 1,
   ffbKerb: 0.35,
   ffbAbs: 0.2,
   ffbSlip: 1,
