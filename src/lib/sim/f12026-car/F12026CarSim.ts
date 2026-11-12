@@ -948,7 +948,9 @@ export class F12026CarSim implements SimulatorCar {
     this.channels.hasErs = profile.hasErs;
     this.channels.hasDrs = profile.hasDrs;
     this.coldPsi = axlePressures(v.wheels[0].coldPressurePsi, v.wheels[2].coldPressurePsi);
-    if (root) this.attachTrackRoot(root);
+    // On the colliders without the re-seat `attachTrackRoot` gives a car at rest: the grid placement below seats it,
+    // and a settle where it stands now would be thrown away
+    if (root) this.attachColliders(root);
     this.resetToStartGrid(false);
   }
 
@@ -998,20 +1000,26 @@ export class F12026CarSim implements SimulatorCar {
 
   /** Switch to the GLB's road / surface colliders and barriers (no-op when they cannot be built) */
   public attachTrackRoot(root: THREE.Object3D): void {
-    this.trackRoot = root;
-    const { ground, walls } = trackColliders(root);
-    if (!ground) return;
     const wasOn = this.onColliders;
-    this.vehicle.setGround(ground);
-    this.vehicle.setWalls(walls);
-    this.onColliders = true;
-    this.collider = ground;
+    if (!this.attachColliders(root)) return;
     // A car at rest is re-seated on the collider heights; a moving one rides over the (small) step
     if (!wasOn && this.vehicle.speedMs < 0.5) {
       const p = this.vehicle.position;
       this.resetVehicle(p.x, p.z, this.yaw());
       this.syncPose();
     }
+  }
+
+  /** Puts the car on the track root's colliders, where it stands (false: the root has no road collider) */
+  private attachColliders(root: THREE.Object3D): boolean {
+    this.trackRoot = root;
+    const { ground, walls } = trackColliders(root);
+    if (!ground) return false;
+    this.vehicle.setGround(ground);
+    this.vehicle.setWalls(walls);
+    this.onColliders = true;
+    this.collider = ground;
+    return true;
   }
 
   public get onTrackColliders(): boolean {
