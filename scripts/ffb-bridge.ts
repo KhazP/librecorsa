@@ -1,5 +1,5 @@
 /**
- * Wheel force-feedback bridge (Windows): `npm run ffb`
+ * Wheel force-feedback and telemetry bridge: `npm run ffb`
  *
  * A browser cannot play DirectInput force feedback, so the sim streams its steering torque here over a localhost
  * WebSocket and this script pipes it to FfbHelper.exe (scripts/ffb-bridge/FfbHelper.cs), a small DirectInput program
@@ -13,6 +13,10 @@
  *   npm run ffb -- --max 0.6        cap the output at 60 % of the strength set in the wheel's own software
  *   npm run ffb -- --dry-run        no wheel: log what would be sent (checks the sim → bridge → helper pipeline)
  *   npm run ffb -- --direction 0    if Test direction moves nothing: the other DirectInput direction convention
+ *   npm run ffb -- --telemetry-only no force feedback: relay telemetry only
+ *
+ * Force feedback needs Windows. Without a usable wheel (none found, or it refused the effect) the bridge keeps running
+ * and relays telemetry only; on macOS and Linux it always runs that way.
  *
  * Then turn on Force feedback in Controls → Wheel. Only pages served from localhost may connect (any other page
  * could otherwise move your wheel); allow a deployed copy with FFB_ALLOW_ORIGIN=https://your.site (comma-separated).
@@ -138,50 +142,72 @@ function readFrames(buf: Buffer, onFrame: (opcode: number, payload: Buffer) => v
 // ---- Main
 
 const args = process.argv.slice(2);
-if (process.platform !== "win32") fail("The force-feedback bridge drives DirectInput and runs on Windows only.");
-ensureHelper();
+const isWindows = process.platform === "win32";
 
 if (args.includes("--list") || args.includes("--info")) {
+  if (!isWindows) fail("Listing wheels uses DirectInput and runs on Windows only.");
+  ensureHelper();
   const r = spawnSync(HELPER_EXE, [args.includes("--info") ? "--info" : "--list"], { stdio: "inherit" });
   process.exit(r.status ?? 0);
 }
 
-let status: HelperStatus = { ok: false, device: null, axes: 0, error: "Starting" };
-let client: Duplex | null = null;
+const TELEMETRY_ONLY = "Telemetry only: no force feedback through the bridge";
+const telemetryOnly = args.includes("--telemetry-only") || !isWindows;
+if (!isWindows) console.log("Force feedback through the bridge needs Windows; relaying telemetry only.");
 
-const helper: ChildProcessWithoutNullStreams = spawn(HELPER_EXE, args, { windowsHide: true });
-let helperOut = "";
-helper.stdout.setEncoding("utf8");
-helper.stdout.on("data", (chunk: string) => {
-  helperOut += chunk;
-  let nl: number;
-  while ((nl = helperOut.indexOf("\n")) >= 0) {
-    const line = helperOut.slice(0, nl).trim();
-    helperOut = helperOut.slice(nl + 1);
-    if (line.startsWith("STATUS ")) {
-      try {
-        status = JSON.parse(line.slice(7)) as HelperStatus;
-      } catch {
-        continue;
+let status: HelperStatus = telemetryOnly
+  ? { ok: false, device: null, axes: 0, error: TELEMETRY_ONLY }
+  : { ok: false, device: null, axes: 0, error: "Starting" };
+let client: Duplex | null = null;
+let shuttingDown = false;
+let helperGone = telemetryOnly;
+
+/** The wheel helper is gone (no wheel, the wheel refused the effect, or it crashed): keep relaying telemetry */
+function helperStopped(why: string) {
+  if (helperGone) return;
+  helperGone = true;
+  if (shuttingDown) process.exit(0);
+  const reason = !status.ok && status.error && status.error !== "Starting" ? status.error : "The bridge's wheel helper stopped";
+  status = { ok: false, device: null, axes: 0, error: `${reason.replace(/[.\s]+$/, "")}. Telemetry is still relayed.` };
+  client?.write(wsFrame(JSON.stringify({ type: "status", ...status })));
+  console.log(`Force-feedback helper ${why}: no force feedback. Still relaying telemetry; Ctrl+C to stop.`);
+}
+
+let helper: ChildProcessWithoutNullStreams | null = null;
+if (!telemetryOnly) {
+  ensureHelper();
+  const h = spawn(HELPER_EXE, args, { windowsHide: true });
+  helper = h;
+  let helperOut = "";
+  h.stdout.setEncoding("utf8");
+  h.stdout.on("data", (chunk: string) => {
+    helperOut += chunk;
+    let nl: number;
+    while ((nl = helperOut.indexOf("\n")) >= 0) {
+      const line = helperOut.slice(0, nl).trim();
+      helperOut = helperOut.slice(nl + 1);
+      if (line.startsWith("STATUS ")) {
+        try {
+          status = JSON.parse(line.slice(7)) as HelperStatus;
+        } catch {
+          continue;
+        }
+        console.log(status.ok ? `Wheel: ${status.device}` : `Wheel: ${status.error}`);
+        client?.write(wsFrame(JSON.stringify({ type: "status", ...status })));
+      } else if (line.startsWith("LOG ")) {
+        console.log(line.slice(4));
+      } else if (line) {
+        console.log(line);
       }
-      console.log(status.ok ? `Wheel: ${status.device}` : `Wheel: ${status.error}`);
-      client?.write(wsFrame(JSON.stringify({ type: "status", ...status })));
-    } else if (line.startsWith("LOG ")) {
-      console.log(line.slice(4));
-    } else if (line) {
-      console.log(line);
     }
-  }
-});
-helper.stderr.pipe(process.stderr);
-helper.on("exit", (code) => {
-  client?.write(wsFrame(JSON.stringify({ type: "status", ok: false, device: null, axes: 0, error: "The bridge's wheel helper stopped" })));
-  console.log(`Force-feedback helper exited (${code ?? "signal"}).`);
-  process.exit(code ?? 1);
-});
+  });
+  h.stderr.pipe(process.stderr);
+  h.on("exit", (code) => helperStopped(`exited (${code ?? "signal"})`));
+  h.on("error", (e) => helperStopped(`failed to start (${e.message})`));
+}
 
 const toHelper = (line: string) => {
-  if (helper.stdin.writable) helper.stdin.write(`${line}\n`);
+  if (helper && !helperGone && helper.stdin.writable) helper.stdin.write(`${line}\n`);
 };
 
 // ---- Telemetry out: one browser packet → one UDP datagram
@@ -291,10 +317,16 @@ server.on("error", (e: NodeJS.ErrnoException) => {
   fail(e.code === "EADDRINUSE" ? `Port ${PORT} is in use: is the bridge already running?` : String(e));
 });
 server.listen(PORT, "127.0.0.1", () => {
-  console.log(`Force-feedback bridge on ws://127.0.0.1:${PORT}. Turn on Force feedback in Controls → Wheel. Ctrl+C to stop.`);
+  console.log(
+    telemetryOnly
+      ? `Telemetry bridge on ws://127.0.0.1:${PORT}. Turn on Telemetry out in Controls → Wheel. Ctrl+C to stop.`
+      : `Force-feedback bridge on ws://127.0.0.1:${PORT}. Turn on Force feedback in Controls → Wheel. Ctrl+C to stop.`
+  );
 });
 
 const shutdown = () => {
+  shuttingDown = true;
+  if (helperGone) process.exit(0);
   toHelper("Q");
   setTimeout(() => process.exit(0), 600).unref();
 };

@@ -954,7 +954,8 @@ export const WheelStep: React.FC<SetupStepProps> = ({ settings, onChangeSettings
               />
             </div>
             <Hint>
-              Needs the bridge running: <span className="font-f1-mono text-[#F5F7FA]">npm run ffb</span>
+              Needs the bridge running: <span className="font-f1-mono text-[#F5F7FA]">npm run ffb</span>. No wheel
+              needed: without one it relays telemetry only.
             </Hint>
             {CLAIMED_TELEMETRY_PORTS[w.telemetryPort] ? (
               <Hint>

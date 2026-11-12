@@ -110,7 +110,7 @@ The online side (rooms, boards, scheduled races) is a Cloudflare Worker in [`clo
 - **Wheels**: steering, pedals and buttons through the browser for any wheel. Force feedback straight from the browser over WebHID for bases that use the standard HID PID protocol, or through a local bridge on Windows. See [Wheels and force feedback](#wheels-and-force-feedback) for what has been tested.
 - **Gamepads**: Xbox and PlayStation, with rumble and trigger rumble.
 - **Touch**: on-screen pedals and steering, or tilt to steer.
-- **Telemetry out**: 60 Hz UDP JSON through the bridge, for dashboards and motion rigs.
+- **Telemetry out**: 60 Hz UDP JSON through the bridge, for dashboards and motion rigs. The bridge relays it with or without a wheel, on Windows, macOS or Linux; the packet format is `TelemetryOutPacket` in `src/lib/input/telemetry-out.ts`.
 - **Setup wizard**: picks your device and tunes steering, pedals and force feedback on first launch.
 - **VR (work in progress)**: WebXR headsets (Quest Browser, or Chrome with SteamVR / OpenXR), from the Display panel. Expect rough edges.
 
@@ -192,7 +192,7 @@ npm run build            # static export into ./out
 | `npm run physics:report` | Regenerate the [physics validation page](docs/physics/README.md): tyre curves, the GT3 against MoTeC logs, frame-rate checks |
 | `npm run race:headless` | A full-physics AI race without rendering, faster than real time, with a results table. `-- --track suzuka --car amg-gt3 --weather heavy_rain --sweep skill` |
 | `npm run compress-tracks` | Meshopt-compress the circuit GLBs and check the physics meshes are unchanged |
-| `npm run ffb` | Local force-feedback and telemetry bridge (Windows) |
+| `npm run ffb` | Local force-feedback (Windows) and telemetry bridge. Without a wheel, or with `-- --telemetry-only`, it relays telemetry only |
 | `npm run upload-hosted -- <paths>` | Upload hosted-only cars or circuits to R2 (see [What's in the repository](#whats-in-the-repository)) |
 | `npm run car-thumbs [-- <car id> ...]` | Render the car browser's picture of each car beside its files (`public/cars/<id>/thumb.webp`; upload a hosted car's with `upload-hosted`) |
 | `npm run home-outlines` | Redraw the home page's circuit maps (`src/lib/home/circuit-outlines.json`) after adding a circuit or changing its line |
