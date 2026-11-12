@@ -29,7 +29,7 @@
   <a href="https://librecorsa.org/media/librecorsa-trailer.mp4"><img src="docs/media/trailer-poster.jpg" alt="Watch the 40-second LibreCorsa trailer" width="100%" /></a>
 </p>
 
-**LibreCorsa** is an open-source racing simulator that runs entirely in the browser. It has 500 Hz vehicle dynamics, a thermal tyre model, 2026-regulation open-wheelers, GT3 cars, a prototype and a road car. There are more than a dozen circuits, AI races, ghosts and replays, and peer-to-peer multiplayer. It works with a keyboard, gamepad, touch screen or a force-feedback wheel. Nothing to install, and no server: it ships as a static site.
+**LibreCorsa** is an open-source racing simulator that runs entirely in the browser. It has 500 Hz vehicle dynamics, a thermal tyre model, 2026-regulation open-wheelers, GT3 cars, a prototype and a road car. There are seven circuits, AI races, ghosts and replays, and peer-to-peer multiplayer. It works with a keyboard, gamepad, touch screen or a force-feedback wheel. Nothing to install, and no server: it ships as a static site.
 
 <p align="center">
   <img src="docs/media/race-grid-shanghai.jpg" alt="Lined up on the grid at Shanghai against five AI cars" width="100%" />
@@ -75,38 +75,27 @@
 | **MTRacing 496R** | 6-DOF rigid body | 2025 prototype: 4.0 L NA V8, rear-wheel drive, 6-speed paddle shift, heave springs, splitter / diffuser / rear-wing aero, TC, three slicks. 20 liveries, a live wheel screen and shift lights. Model, sound and physics from munyuturbo's mod of this car, used with permission |
 | **Suzuki Liana 1.6** | 6-DOF rigid body | 2002 road car: 1.6 L four, front-wheel drive through an open differential, 5-speed manual, ABS and TC, one street tyre. Physics from alekabul's mod of this car, used with permission |
 
-The other Formula Open-Wheel cars are ported bodies that drive on the 2026 Rigid-Body's physics, or the Prototype's with the switch in the car picker.
-
 Each car has its own cockpit, steering wheel and shift lights, plus a multi-layer sound bank (engine, turbo, transmission, shifts, backfires, limiter, tyre skid, TC cut). Interior and exterior sounds switch with the camera.
 
 ### Circuits
 | Circuit | Country | Length |
 | :-- | :-- | --: |
 | **RISE Motordrome** (default; short / Grand Prix lap) | Rwanda | 5.34 / 5.89 km |
-| Suzuka Circuit | Japan | 5.83 km |
-| Shanghai International Circuit | China | 5.44 km |
-| Mobility Resort Motegi | Japan | 4.78 km |
 | Chang International Circuit | Thailand | 4.57 km |
 | Okayama International Circuit (GP / Piper / Formula Drift) | Japan | 3.70 / 1.97 / 1.97 km |
 | Red Bull Ring — Spielberg (GP / South / Inner skill course) | Austria | 4.32 / 2.34 / 0.94 km |
 | Circuit de Monaco | Monaco | 3.30 km |
-| Sepang International Circuit | Malaysia | 5.53 km |
-| Daytona International Speedway (Oval / Road course) | United States | 4.04 / 5.78 km |
-| Marina Bay Street Circuit | Singapore | 5.04 km |
-| Autodromo Nazionale Monza | Italy | 5.79 km |
-| Yas Marina Circuit | United Arab Emirates | 5.28 km |
-| Silverstone Circuit | United Kingdom | 5.87 km |
-| Circuit de Spa-Francorchamps | Belgium | 6.99 km |
+| Istanbul Park | Turkey | 5.32 km |
 | Dunsfold Aerodrome | United Kingdom | 2.88 km |
 
-RISE Motordrome is my reading of the circuit planned beside Lake Kidogo at Bugesera, about 1,400 m above sea level: traced on the designers' own aerial renders and built in Blender on the site's real ground by `scripts/rwanda-official/`. Two anticlockwise laps share one model: the short lap (5.34 km, 14 corners, the default) and the Grand Prix lap (5.89 km, 17 corners, 191 m climbed a lap). The Sketchfab circuits are CC BY 4.0 scans converted by `scripts/tracks/build_track.py`, and Chang, Okayama, Spielberg (Red Bull Ring), and Monaco are Assetto Corsa circuits by **Mitja Bonca** (used with permission), converted by `scripts/tracks/port_ac_track.py` with their 3D/2D trees, dynamic tyre grooves, skidmarks, starting lights and trackside semaphores, AI fast/pit lanes, kerbs, surface tables, section names, DRS zones, and TV cameras. Every circuit is meshopt-compressed (`npm run compress-tracks`) while keeping hidden physics meshes bit-exact, and has a lap-time-optimal racing line for each car class. Open the sim with `?colliders=1` to see the physics surfaces drawn over the circuit.
+RISE Motordrome is my reading of the circuit planned beside Lake Kidogo at Bugesera, about 1,400 m above sea level: traced on the designers' own aerial renders and built in Blender on the site's real ground by `scripts/rwanda-official/`. Two anticlockwise laps share one model: the short lap (5.34 km, 14 corners, the default) and the Grand Prix lap (5.89 km, 17 corners, 191 m climbed a lap). Chang, Okayama, Spielberg (Red Bull Ring), and Monaco are Assetto Corsa circuits by **Mitja Bonca** (used with permission), converted by `scripts/tracks/port_ac_track.py` with their 3D/2D trees, dynamic tyre grooves, skidmarks, starting lights and trackside semaphores, AI fast/pit lanes, kerbs, surface tables, section names, DRS zones, and TV cameras. Every circuit is meshopt-compressed (`npm run compress-tracks`) while keeping hidden physics meshes bit-exact, and has a lap-time-optimal racing line for each car class. Open the sim with `?colliders=1` to see the physics surfaces drawn over the circuit.
 
 ### Racing
 - **Race the AI**: a 5-car field with a standing start behind the lights, traffic and side-by-side racing, and after the flag a cool-down lap, the top three on the podium and a results screen with places gained and your last races. The AI level runs from Rookie to Alien and can be changed from the pause menu. Each car class has a tuning file in [`public/ai`](public/ai), with per-circuit and per-section overrides. The AI learns braking points and apex speeds corner by corner. In the rain it fits intermediates or full wets and plans its corner speeds and braking on the wet grip.
 - **Split gaps**: the gap to the car ahead and behind at every sector split.
 - **Practice tools**: lap and sector timing, a live delta, a ghost of your best lap (saved in your browser, and it can be exported and imported), a 90-second instant replay with free cameras, and a lap summary.
 - **Multiplayer**: private rooms, peer-to-peer over WebRTC. Host a room and send the link, or join with a friend's 6-character code; a manual offer/answer copy-paste works with no server at all, and browser tabs on the same machine can race each other. On librecorsa.org the site's own room server pairs the players and hands out relay servers for networks that block a direct link; without it the public PeerJS broker pairs them. Other players' cars are predicted to the present from their newest packet and the measured latency, so you touch a car where you see it; contact with them is soft and switches off while their packets are stale.
-- **Weekly challenge**: one circuit and car for everyone each week, with the assists and realism fixed and a dry track. It has its own lap board. Each round opens with the Suzuki Liana at Dunsfold, then every circuit comes up with a different car than the round before; circuits converted from Sketchfab models are left out.
+- **Weekly challenge**: one circuit and car for everyone each week, with the assists and realism fixed and a dry track. It has its own lap board. Each round opens with the Suzuki Liana at Dunsfold, then every circuit comes up with a different car than the round before.
 - **Open races**: under Multiplayer, a race on the week's circuit and car (RISE Motordrome in the Dunsfold week, which is a time trial only) starts every 20 minutes for whoever has joined, with the week's fastest on pole (alone, you race the AI). Cars are ghosts on the opening lap, and after it a car that is stopped, going the wrong way, rejoining the track or ramming another passes through the others, as does a car that has taken the flag.
 - **Race results**: the race server (or a room's host) sends one official result for everyone. Open races are kept, and the Open races card shows the week's top five by wins and podiums and your own record. A result counts for your name once you've claimed it with a lap on the board.
 - **Online leaderboard**: one board per circuit and car. Every driver appears once, with their fastest lap and the assists, realism and surface it was driven with, and the board can be narrowed to no-assist, full-realism or wet laps. New personal bests are posted by themselves, and any lap on the board can be raced as a ghost. Without an online side, the board lists your own best laps.
@@ -223,7 +212,7 @@ Every push to `main` runs typecheck and the verify suites, then builds `./out` a
 - **Code** is under the [MIT License](LICENSE).
 - **3D models and audio** are for non-commercial, personal and educational use. Each one keeps its own license. This repository carries only RISE Motordrome and the 2026 prototype's model and sound; the rest are served on librecorsa.org for playing there.
 - **Cars**: the 2026 car model is by **DeX** ([CC BY 4.0](https://skfb.ly/pKNCK)), and the Mercedes-AMG GT3 by **Ddiaz Design** ([CC BY-NC-SA 4.0](https://skfb.ly/pOTPL)).
-- **Circuits**: the Sketchfab scans are by **Dave** and **Dave Love SketchFab**, plus Motegi by **Kevin Love SketchFab** (all CC BY 4.0); Chang International Circuit, Okayama International Circuit, Spielberg (Red Bull Ring), and Circuit de Monaco are by **Mitja Bonca** (used with permission).
+- **Circuits**: Chang International Circuit, Okayama International Circuit, Spielberg (Red Bull Ring), and Circuit de Monaco are by **Mitja Bonca** (used with permission).
 - **RISE Motordrome**: the circuit, its buildings, stands and props are the project's own, built by `scripts/rwanda-official/` and licensed under [CC BY-NC-SA 4.0](public/tracks/rwanda_official/LICENSE.md): port it or build on it with credit, non-commercially, under the same licence. Its trees are the acacia by **evolveduk** and the shrub by **Natural_Disbuster (lemedesign)**, both CC BY 4.0.
 - **Rights holders**: if you made a model, texture, sound or other asset used here and want it credited, corrected or removed, open a [**rights / takedown request**](https://github.com/KhazP/librecorsa/issues/new?template=takedown-request.yml) — it will be fixed or removed from the live site, usually within 7 days.
 

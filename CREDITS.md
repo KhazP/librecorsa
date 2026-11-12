@@ -11,7 +11,7 @@ LibreCorsa is an independent, non-commercial, open-source web simulator built wi
   | Asset | Licence |
   | :--- | :--- |
   | RISE Motordrome (`public/tracks/rwanda_official/`, `public/tracks/rwanda_official_short/`, and its source in `scripts/rwanda-official/`) | The project's own, CC BY-NC-SA 4.0 (non-commercial, share-alike); its two tree models CC BY 4.0 |
-  | Circuit scans, F1 2026 model, ported F1 car models | CC BY 4.0 |
+  | F1 2026 model | CC BY 4.0 |
   | Chang, Okayama, Spielberg (Red Bull Ring) and Monaco circuits | By **Mitja Bonca** (Used with permission) |
   | Istanbul Park circuit (`public/tracks/istanbul_park/`) | Intercity İstanbul Park by **[Enver Bozkaya](https://www.enverbozkaya.com/) (SRTR)** (Used with the author's permission; the mod's other contributors are listed under *Istanbul Park*) |
   | 2026 Pirelli tyre sidewall texture (`public/cars/shared/tyres/`) and F1 rain-tyre temperature / wear curves | By **Cxjovich** ([https://www.overtake.gg/members/cxjovich.4261212/](https://www.overtake.gg/members/cxjovich.4261212/)), CC BY-NC-SA 4.0 (used with permission; non-commercial, share-alike) |
@@ -35,18 +35,6 @@ LibreCorsa is an independent, non-commercial, open-source web simulator built wi
 * **Mercedes-AMG GT3 Evo 3D Car Model (`public/cars/amg-gt3-evo/model/amg-gt3-evo.glb`)**: `"Mercedes-AMG GT3 Red Bull Racing"` ([https://sketchfab.com/3d-models/mercedes-amg-gt3-red-bull-racing-035f061cb6624effbc483d5f9b5ecaba](https://sketchfab.com/3d-models/mercedes-amg-gt3-red-bull-racing-035f061cb6624effbc483d5f9b5ecaba)) by **VTX** (`@VTX_car`) is licensed under [Creative Commons Attribution-NonCommercial-ShareAlike 4.0 (CC BY-NC-SA 4.0)](http://creativecommons.org/licenses/by-nc-sa/4.0/). Changes for the simulator (`scripts/cars/port_sketchfab_gt3.py`): transforms baked and reoriented, wheels (rim and tyre) and steering wheel separated into rig nodes, and textures downscaled.
 * **BMW M4 GT3 Evo 3D Car Model (`public/cars/bmw-m4-gt3/model/bmw-m4-gt3.glb`)**: `"2025 BMW M4 GT3 EVO G82"` ([https://sketchfab.com/3d-models/2025-bmw-m4-gt3-evo-g82-113f83dd87064697a5ec2511d280b9d5](https://sketchfab.com/3d-models/2025-bmw-m4-gt3-evo-g82-113f83dd87064697a5ec2511d280b9d5)) by **Ddiaz Design** (`@ddiaz-design`) is licensed under [Creative Commons Attribution-NonCommercial-ShareAlike 4.0 (CC BY-NC-SA 4.0)](http://creativecommons.org/licenses/by-nc-sa/4.0/). Changes for the simulator (`scripts/cars/port_sketchfab_gt3.py`): transforms baked, wheels (rim and tyre) and steering wheel separated into rig nodes, transmissive glass replaced by alpha blending, and textures downscaled.
 
-### Ported F1 car models (`public/cars/<id>/model/`)
-
-Each model below is by **Dave Love SketchFab** ([https://sketchfab.com/Tyler_Dave](https://sketchfab.com/Tyler_Dave)) and is licensed under [Creative Commons Attribution 4.0 (CC BY 4.0)](http://creativecommons.org/licenses/by/4.0/). Changes for the simulator (`scripts/cars/port_sketchfab_f1.py`): node transforms baked to metre scale (`+Z` forward, `+X` left, floor `y = 0`), wheel rims and tyres split into per-corner `WHEEL_RF`/`LF`/`RR`/`LR` pivot hierarchies, steering wheel separated into a `STEER` pivot, zero-scale normal maps removed, and textures re-encoded to JPEG/PNG (max 2048 px).
-
-* `"2026 Ferrari SF-26"` ([https://sketchfab.com/3d-models/2026-ferrari-sf-26-e5ca6cecdc42449283f4bed27360f2a7](https://sketchfab.com/3d-models/2026-ferrari-sf-26-e5ca6cecdc42449283f4bed27360f2a7)) by **Dave Love SketchFab** (`sf26`)
-* `"2026 Mercedes W17"` ([https://sketchfab.com/3d-models/2026-mercedes-w17-b806f1e70aa343219e7158169549b97b](https://sketchfab.com/3d-models/2026-mercedes-w17-b806f1e70aa343219e7158169549b97b)) by **Dave Love SketchFab** (`w17`)
-* `"2026 Redbull RB22"` ([https://sketchfab.com/3d-models/2026-redbull-rb22-0a3d24a58e0549d591a5a48c22eec383](https://sketchfab.com/3d-models/2026-redbull-rb22-0a3d24a58e0549d591a5a48c22eec383)) by **Dave Love SketchFab** (`rb22`)
-* `"2018 Ferrari SF71H"` ([https://sketchfab.com/3d-models/2018-ferrari-sf71h-e54b896bd21f478f8309eecf3726700e](https://sketchfab.com/3d-models/2018-ferrari-sf71h-e54b896bd21f478f8309eecf3726700e)) by **Dave Love SketchFab** (`sf71h`)
-* `"2012 Red Bull RB8"` ([https://sketchfab.com/3d-models/2012-red-bull-rb8-b74446dcd93a49879546d756e3093b3f](https://sketchfab.com/3d-models/2012-red-bull-rb8-b74446dcd93a49879546d756e3093b3f)) by **Dave Love SketchFab** (`rb8`)
-* `"2005 Renault R25"` ([https://sketchfab.com/3d-models/2005-renault-r25-0d58fe125f5b41a2b8482576723120c4](https://sketchfab.com/3d-models/2005-renault-r25-0d58fe125f5b41a2b8482576723120c4)) by **Dave Love SketchFab** (`r25`)
-* `"2004 Ferrari F2004"` ([https://sketchfab.com/3d-models/2004-ferrari-f2004-bedade52e6f4415e90e656817c5701f8](https://sketchfab.com/3d-models/2004-ferrari-f2004-bedade52e6f4415e90e656817c5701f8)) by **Dave Love SketchFab** (`f2004`)
-
 ### Suzuki Liana (`public/cars/liana/`, `src/lib/sim/road/`)
 
 * **Physics**: from `"Physics reworked for Top Gear Liana 1.6 GLX"` ([https://www.overtake.gg/downloads/physics-reworked-for-top-gear-liana-1-6-glx.28636/](https://www.overtake.gg/downloads/physics-reworked-for-top-gear-liana-1-6-glx.28636/)) by **alekabul** ([https://www.overtake.gg/members/alekabul.294399/](https://www.overtake.gg/members/alekabul.294399/)), an Assetto Corsa physics rework of the Liana, used with the author's permission. Its engine, gearing, differential, suspension, tyre, aero, brake and electronics data are mapped onto LibreCorsa's rigid-body vehicle model in `src/lib/sim/road/SuzukiLianaConfig.ts`; each value carries a `[spec]` tag there. The front MacPherson struts are solved as double wishbones with a virtual upper arm, and the AC v3 tyre's linear load sensitivity is tabulated for the tyre model. Checked against the mod's own laps of Dunsfold by `scripts/verify-liana.ts`.
@@ -67,13 +55,6 @@ Each model below is by **Dave Love SketchFab** ([https://sketchfab.com/Tyler_Dav
 Ported from Assetto Corsa FMOD Studio `.bank` (`FSB5`) sound mods into LibreCorsa's Web Audio multi-grid sample format (`scripts/audio/port_ac_bank.py`):
 
 * **F1 2026 (`vf26`, `f12026-car` → `public/cars/f12026/audio/`)**: Ported from **F1 2026 Sound Pack** (Aston Martin 2026 sound bank; author not listed in archive or bank metadata).
-* **SF-26 (`sf26` → `public/cars/sf26/audio/`)**: Ported from **F1 2026 Sound Pack** (Ferrari 2026 v3 sound bank; author not listed in archive or bank metadata).
-* **W17 (`w17` → `public/cars/w17/audio/`)**: Ported from **Mercedes W17 Sound Mod** (`Driver Mix` interior and `Broadcast mix` exterior sound banks; author not listed in archive or bank metadata).
-* **RB22 (`rb22` → `public/cars/rb22/audio/`)**: Ported from **Red Bull RB22 Sound Mod** (`Driver Mix` interior and `Broadcast Mix` exterior sound banks; author not listed in archive or bank metadata).
-* **SF71H (`sf71h` → `public/cars/sf71h/audio/`)**: Ported from **Ferrari SF71H Sound Mod** (`content/cars/sf71h/sfx/sf71h.bank`; author not listed in archive or bank metadata).
-* **RB8 (`rb8` → `public/cars/rb8/audio/`)**: Ported from **rb8** (`assettocorsa/content/cars/cim_2012_redbull/sfx/cim_2012_redbull.bank`, CIM 2012 Red Bull RB8 package; author not listed in archive or bank metadata).
-* **R25 (`r25` → `public/cars/r25/audio/`)**: Ported from **r25** (`content/cars/r25/sfx/r25.bank`, FMOD bank `r25_base`; author not listed in archive or bank metadata).
-* **F2004 (`f2004` → `public/cars/f2004/audio/`)**: Ported from **f2004_sound** (`content/cars/f2004/sfx/f2004.bank`, FMOD bank `r25_base` / `f2004`; author not listed in archive or bank metadata).
 * **BMW M4 GT3 Evo (`bmw-m4-gt3` → `public/cars/bmw-m4-gt3/audio/`)**: Ported from **m4gt3** (`content/cars/urd_bayro_gt3/sfx/urd_bayro_gt3.bank`) by **corsamode** (`GENERAL INFO.txt`).
 * **Suzuki Liana (`liana` → `public/cars/liana/audio/`)**: Ported from the 2015 Assetto Corsa conversion `suzuki_liana` (`sfx/suzuki_liana.bank`; author not named). The bank is built from Assetto Corsa's own samples (Kunos Simulazioni; e.g. `BMW_E30_1987_backfire_int_1`, `ALFA_156_2007_backfire_int_2`), which are **not licensed for redistribution**.
 * **MTRacing 496R (`mtr-496r` → `public/cars/mtr-496r/audio/`)**: Ported from munyuturbo's MTRacing 496R v0.9 (`sfx/mt_mtr_496r.bank`), used with the author's permission.
@@ -93,19 +74,6 @@ Latin subsets as served by Google Fonts, each under the [SIL Open Font License 1
 * **JetBrains Mono** — The JetBrains Mono Project Authors
 
 ### Optional circuits (`public/tracks/<id>/`)
-
-Each Sketchfab circuit model below is licensed under [Creative Commons Attribution 4.0 (CC BY 4.0)](http://creativecommons.org/licenses/by/4.0/). Changes for the simulator: uniformly rescaled where needed to match the official lap length, recentred, far-away scenery dropped, textures re-encoded to WebP (max 2048 px), geometry quantised and meshopt-compressed, and hidden physics collider / surface meshes and track data (centreline, edges, kerbs, run-off, barriers, corners) generated from the geometry. Kerb meshes with a generated red-and-white texture are added on top of the scan.
-
-* `"Suzuka Circuit 2001 layout"` ([https://skfb.ly/pLorW](https://skfb.ly/pLorW)) by **Dave**
-* `"Shanghai International Circuit 2018 layout"` ([https://skfb.ly/pLqvL](https://skfb.ly/pLqvL)) by **Dave**
-* `"Mobility Resort Motegi (Twin Ring)"` ([https://skfb.ly/pMIoS](https://skfb.ly/pMIoS)) by **Kevin Love SketchFab**
-* `"Sepang International Circuit 2025 layout"` ([https://sketchfab.com/3d-models/sepang-international-circuit-2025-layout-590bf243480e43f18e588a3908daa4df](https://sketchfab.com/3d-models/sepang-international-circuit-2025-layout-590bf243480e43f18e588a3908daa4df)) by **Dave Love SketchFab**
-* `"Daytona International Speedway 2007 layout"` ([https://sketchfab.com/3d-models/daytona-international-speedway-2007-layout-070db794e8ee46d399ee882f67e9a18d](https://sketchfab.com/3d-models/daytona-international-speedway-2007-layout-070db794e8ee46d399ee882f67e9a18d)) by **Dave Love SketchFab**, used for both the oval (`daytona_oval`) and the road course (`daytona_road`)
-* `"Marina Bay Street Circuit"` ([https://sketchfab.com/3d-models/marina-bay-street-circuit-e665d831c57546609d4c15287a6107b7](https://sketchfab.com/3d-models/marina-bay-street-circuit-e665d831c57546609d4c15287a6107b7)) by **Dave Love SketchFab**
-* `"Autodromo Nazionale Monza Circuit 2020 layout"` ([https://sketchfab.com/3d-models/autodromo-nazionale-monza-circuit-2020-layout-25ed955115094de382935aa6d1a1e9c6](https://sketchfab.com/3d-models/autodromo-nazionale-monza-circuit-2020-layout-25ed955115094de382935aa6d1a1e9c6)) by **Dave Love SketchFab**
-* `"Yas Marina Circuit Abu Dhabi 2021 layout"` ([https://sketchfab.com/3d-models/yas-marina-circuit-abu-dhabi-2021-layout-c41b4e19912b4d79886bcd8d7d2536af](https://sketchfab.com/3d-models/yas-marina-circuit-abu-dhabi-2021-layout-c41b4e19912b4d79886bcd8d7d2536af)) by **Dave Love SketchFab**
-* `"Silverstone Circuit 2024 layout"` ([https://sketchfab.com/3d-models/silverstone-circuit-2024-layout-bbaf4b12d5244c76998fd44f771fc0b3](https://sketchfab.com/3d-models/silverstone-circuit-2024-layout-bbaf4b12d5244c76998fd44f771fc0b3)) by **Dave Love SketchFab**
-* `"Circuit de Spa-Francorchamps 2022 layout"` ([https://sketchfab.com/3d-models/circuit-de-spa-francorchamps-2022-layout-ac681fbf548144498c130c3aa0adeb54](https://sketchfab.com/3d-models/circuit-de-spa-francorchamps-2022-layout-ac681fbf548144498c130c3aa0adeb54)) by **Dave Love SketchFab**
 
 #### Assetto Corsa circuits by Mitja Bonca (`public/tracks/<id>/`)
 
