@@ -11,7 +11,8 @@
  * `MultiplayerSyncManager`, on simulated links, with their own clocks and frame rates. Each row: where each client
  * drew the other car against where that car truly was at the same moment, along its direction of travel and across
  * it (m: median, 95th percentile, worst; bias + is drawn ahead), frame-to-frame jumps against the true motion (per
- * minute), the frames whose newest packet was over 300 ms old and the frames the car was not drawn, and the state
+ * minute), the frames whose newest packet was over 300 ms old, the frames the car was drawn see-through for want of
+ * news (left out of the errors and jumps) and the frames it was not drawn, and the state
  * packets' size and rate. "Braking into the hairpin" is the 50 ms row's frames while the watched car brakes into the
  * lap's hardest stop. "true clock" reruns a row with each receiver mapping the sender's stamps to its own clock exactly
  * (no estimators): the difference to its row is what the timing estimates cost.
@@ -38,6 +39,7 @@ export const SCENARIOS: Scenario[] = [
   { name: '50 ms, long-tailed jitter', link: { oneWayMs: 50, tailMeanMs: 8, spikeChance: 0.02 } },
   { name: '50 ms, 1% loss', link: { oneWayMs: 50, jitterMs: 3, loss: 0.01 } },
   { name: '50 ms, 0.6 s stall every 15 s', link: { oneWayMs: 50, jitterMs: 3, stall: { firstS: 10, everyS: 15, ms: 600 } } },
+  { name: '50 ms, 2.5 s outage every 30 s', link: { oneWayMs: 50, jitterMs: 3, stall: { firstS: 12, everyS: 30, ms: 2500 } } },
   { name: '50 ms, 30 fps sender with hitches', link: { oneWayMs: 50, jitterMs: 3 }, b: SLOW },
   { name: '50 ms, clocks 100 ppm apart', link: { oneWayMs: 50, jitterMs: 3 }, a: { driftPpm: -50 }, b: { driftPpm: 50 } },
   { name: '30 / 70 ms asymmetric', link: { oneWayMs: 30, jitterMs: 3 }, linkBack: { oneWayMs: 70, jitterMs: 3 } },

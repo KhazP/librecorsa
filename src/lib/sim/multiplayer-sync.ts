@@ -75,6 +75,8 @@ export interface InterpolatedPeerState {
   yawRateRadS?: number;
   /** False while the pose is a guess (packets stale, just appeared, just jumped): no contact then */
   contactReady?: boolean;
+  /** Nothing heard from the car for a while (STALE_GHOST_MS): drawn see-through, and never touched */
+  stale?: boolean;
   /** The car reports itself a hazard (an open race's fair-play rule, contact-guard.ts) */
   hazard?: boolean;
   /** Passing through the player's car for now (a hazard, or a ram): drawn translucent, still a car in every other way */
@@ -328,10 +330,18 @@ const TIMING_SNAP_MS = 40;
 /** A mapping this far (ms) from the last is a clock step: the snapshots stamped on the old one are dropped */
 const CLOCK_OFFSET_SNAP_MS = 250;
 /**
- * Remote players are drawn and collided where they are now: the newest packet carried forward by its age plus the
- * one-way latency, at most this far (s). Past it the packets are stale and the car can't be touched.
+ * Remote players are drawn and collided where they are now: the newest packet carried forward by its age, with its
+ * acceleration up to this far (s). Past it the packets are stale and the car can't be touched.
  */
 const PREDICT_MAX_S = 0.3;
+/** A stale car keeps its speed and turn rate this long (s from its newest packet), rather than stopping dead */
+const STALE_COAST_S = 1;
+/**
+ * With no packet for this long (ms, by arrival), or none newer, the car is drawn see-through; with none arriving for
+ * STALE_HIDE_MS it is not drawn
+ */
+const STALE_GHOST_MS = 500;
+const STALE_HIDE_MS = 2000;
 /** A new packet's correction to the prediction blends out over this time constant (s) */
 const PREDICT_SMOOTH_S = 0.1;
 /** A correction this large (m) is a reset or teleport: snap to it, and hold contact off for PREDICT_GRACE_MS */
@@ -2188,8 +2198,13 @@ export class MultiplayerSyncManager {
         this.peers.delete(peerId);
         continue;
       }
-      if (this.predictRemotePlayers && !buf.isAiPeer) this.predictPeer(buf, nowMs);
-      else this.interpolatePeer(buf, renderTimeMs);
+      if (this.predictRemotePlayers && !buf.isAiPeer) {
+        this.predictPeer(buf, nowMs);
+        // Silent for long: no longer drawn (kept a while, so the car carries on where it was if it comes back)
+        if (nowMs - buf.lastReceivedMs > STALE_HIDE_MS) continue;
+      } else {
+        this.interpolatePeer(buf, renderTimeMs);
+      }
       activeStates.push(buf.renderedState);
     }
 
@@ -2224,7 +2239,10 @@ export class MultiplayerSyncManager {
     const s0 = snaps.length > 1 ? snaps[snaps.length - 2] : null;
     // The snapshot's stamp is mapped to this clock, the trip included (updateTiming)
     const ageS = (nowMs - s1.timestampMs) / 1000;
+    // With its acceleration up to the cap, then (stale) at that speed and turn rate for a while: a fast car that
+    // stopped dead would read as a big jump once its packets came back
     const h = Math.min(PREDICT_MAX_S, Math.max(0, ageS));
+    const coastS = Math.max(0, Math.min(STALE_COAST_S, ageS) - h);
     let ax = 0;
     let ay = 0;
     let az = 0;
@@ -2250,7 +2268,25 @@ export class MultiplayerSyncManager {
       s1.pos[1] + s1.linVel[1] * h + 0.5 * ay * h * h,
       s1.pos[2] + s1.linVel[2] * h + 0.5 * az * h * h
     );
-    const rawQuat = this.tempQuat0.setFromAxisAngle(AXIS_Y, -yawRate * h).multiply(this.tempQuat1.set(...s1.quat));
+    let vx = s1.linVel[0] + ax * h;
+    const vy = s1.linVel[1] + ay * h;
+    let vz = s1.linVel[2] + az * h;
+    if (coastS > 0) {
+      // On along an arc: the velocity turned at the yaw rate (by -yawRate·t about +Y), integrated over the coast
+      const w = yawRate;
+      const turn = w * coastS;
+      const sinT = Math.abs(w) > 1e-6 ? Math.sin(turn) / w : coastS;
+      const cosT = Math.abs(w) > 1e-6 ? (Math.cos(turn) - 1) / w : 0;
+      rawPos.x += vx * sinT + vz * cosT;
+      rawPos.y += vy * coastS;
+      rawPos.z += -vx * cosT + vz * sinT;
+      const c = Math.cos(turn);
+      const sn = Math.sin(turn);
+      const nx = vx * c - vz * sn;
+      vz = vx * sn + vz * c;
+      vx = nx;
+    }
+    const rawQuat = this.tempQuat0.setFromAxisAngle(AXIS_Y, -yawRate * (h + coastS)).multiply(this.tempQuat1.set(...s1.quat));
 
     const frameS = p.lastMs > 0 ? Math.min(0.1, Math.max(0, (nowMs - p.lastMs) / 1000)) : 0;
     if (!p.primed) {
@@ -2281,7 +2317,7 @@ export class MultiplayerSyncManager {
 
     out.position.copy(rawPos).add(p.corrPos);
     out.quaternion.copy(p.corrQuat).multiply(rawQuat);
-    out.linearVelocity.set(s1.linVel[0] + ax * h, s1.linVel[1] + ay * h, s1.linVel[2] + az * h);
+    out.linearVelocity.set(vx, vy, vz);
     out.yawRateRadS = yawRate;
     out.steerAngle = s1.steerAngle;
     out.wheelRPMs = [...s1.wheelRPMs];
@@ -2289,7 +2325,9 @@ export class MultiplayerSyncManager {
     out.brake = s1.brake;
     out.trackS = s1.trackS;
     out.speedKmh = s1.speedKmh;
-    out.contactReady = s0 !== null && ageS <= PREDICT_MAX_S && nowMs >= p.graceUntilMs;
+    // No news by arrival time, or only old news (the first of a burst held up by a stall): a guess, drawn as one
+    out.stale = nowMs - buf.lastReceivedMs > STALE_GHOST_MS || ageS * 1000 > STALE_GHOST_MS;
+    out.contactReady = s0 !== null && ageS <= PREDICT_MAX_S && !out.stale && nowMs >= p.graceUntilMs;
   }
 
   /**

@@ -636,7 +636,7 @@ export class SimVisualFxManager {
   /** The car the peer reports (AI and older clients: the AMR, which is what F1Physics2026 models) */
   private createOpponentRig(peer: InterpolatedPeerState): SimCarRig {
     const livery = this.mapDriverToLivery(peer.driverCode);
-    const ghost = Boolean(peer.ghost || peer.passThrough);
+    const ghost = Boolean(peer.ghost || peer.passThrough || peer.stale);
     const pooled = this.pool.get(poolKey(peer.vehicle, ghost))?.pop();
     if (pooled) {
       pooled.root.visible = true;
@@ -711,8 +711,9 @@ export class SimVisualFxManager {
     for (const peer of peers) {
       activeIds.add(peer.peerId);
       let entry = this.opponentCars.get(peer.peerId);
-      // A car passing through the player's (an open race's fair-play rule) is drawn as the lap ghost is
-      const ghost = Boolean(peer.ghost || peer.passThrough);
+      // A car passing through the player's (an open race's fair-play rule), or not heard from for a while, is drawn as
+      // the lap ghost is
+      const ghost = Boolean(peer.ghost || peer.passThrough || peer.stale);
       if (entry && entry.vehicle !== peer.vehicle) {
         // The peer switched car: rebuild its rig with that car's materials
         this.dropOpponentRigs(entry);

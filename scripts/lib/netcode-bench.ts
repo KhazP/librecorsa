@@ -459,8 +459,12 @@ export interface Metrics {
   /** Frame-to-frame jumps against the car's true motion: over 1 m, and over 0.3 m (per minute of watching) */
   jumpsPerMin: number;
   popsPerMin: number;
-  /** Frames the newest packet was over 300 ms old (%), and frames the car was not drawn at all (%) */
+  /**
+   * Frames the newest packet was over 300 ms old (%), frames the car was drawn see-through for want of news (%; the
+   * errors and jumps leave them out, as the car is shown as a guess) and frames it was not drawn at all (%)
+   */
   stalePct: number;
+  ghostPct: number;
   hiddenPct: number;
 }
 
@@ -479,12 +483,13 @@ interface Watch {
   target: SimClient;
   along: number[];
   across: number[];
-  braking: { along: number[]; across: number[]; frames: number; jumps: number; pops: number; stale: number; hidden: number; bias: number };
+  braking: { along: number[]; across: number[]; frames: number; jumps: number; pops: number; stale: number; ghost: number; hidden: number; bias: number };
   bias: number;
   frames: number;
   jumps: number;
   pops: number;
   stale: number;
+  ghost: number;
   hidden: number;
   prevDrawn: THREE.Vector3 | null;
   prevTrue: THREE.Vector3;
@@ -522,7 +527,7 @@ function percentile(sorted: number[], p: number): number {
 function metricsOf(
   along: number[],
   across: number[],
-  o: { frames: number; jumps: number; pops: number; stale: number; hidden: number; bias: number },
+  o: { frames: number; jumps: number; pops: number; stale: number; ghost: number; hidden: number; bias: number },
   watchedS: number
 ): Metrics {
   const a = along.map(Math.abs).sort((x, y) => x - y);
@@ -540,6 +545,7 @@ function metricsOf(
     jumpsPerMin: o.jumps * perMin,
     popsPerMin: o.pops * perMin,
     stalePct: o.frames ? (100 * o.stale) / o.frames : 0,
+    ghostPct: o.frames ? (100 * o.ghost) / o.frames : 0,
     hiddenPct: o.frames ? (100 * o.hidden) / o.frames : 0,
   };
 }
@@ -586,12 +592,13 @@ function runSeed(setup: BenchSetup, sc: Scenario) {
     target,
     along: [],
     across: [],
-    braking: { along: [], across: [], frames: 0, jumps: 0, pops: 0, stale: 0, hidden: 0, bias: 0 },
+    braking: { along: [], across: [], frames: 0, jumps: 0, pops: 0, stale: 0, ghost: 0, hidden: 0, bias: 0 },
     bias: 0,
     frames: 0,
     jumps: 0,
     pops: 0,
     stale: 0,
+    ghost: 0,
     hidden: 0,
     prevDrawn: null,
     prevTrue: new THREE.Vector3(),
@@ -655,6 +662,14 @@ function runSeed(setup: BenchSetup, sc: Scenario) {
       w.prevTrue.copy(t.pos);
       return;
     }
+    if (peer.stale) {
+      // Shown see-through as a guess: not judged, but where it goes from here is
+      w.ghost++;
+      if (braking) b.ghost++;
+      w.prevDrawn = w.prevDrawn ? w.prevDrawn.copy(peer.position) : peer.position.clone();
+      w.prevTrue.copy(t.pos);
+      return;
+    }
     dir.set(t.vel.x, 0, t.vel.z);
     if (dir.lengthSq() < 1e-6) dir.set(0, 0, 1).applyQuaternion(t.quat).setY(0);
     dir.normalize();
@@ -714,7 +729,7 @@ export function runScenario(setup: BenchSetup, sc: Scenario, seeds = 1): Scenari
   const all = metricsOf(
     pool((w) => w.along),
     pool((w) => w.across),
-    { frames: sum((w) => w.frames), jumps: sum((w) => w.jumps), pops: sum((w) => w.pops), stale: sum((w) => w.stale), hidden: sum((w) => w.hidden), bias: sum((w) => w.bias) },
+    { frames: sum((w) => w.frames), jumps: sum((w) => w.jumps), pops: sum((w) => w.pops), stale: sum((w) => w.stale), ghost: sum((w) => w.ghost), hidden: sum((w) => w.hidden), bias: sum((w) => w.bias) },
     runs.reduce((a, r) => a + r.watchedS, 0)
   );
   const braking = metricsOf(
@@ -725,6 +740,7 @@ export function runScenario(setup: BenchSetup, sc: Scenario, seeds = 1): Scenari
       jumps: sum((w) => w.braking.jumps),
       pops: sum((w) => w.braking.pops),
       stale: sum((w) => w.braking.stale),
+      ghost: sum((w) => w.braking.ghost),
       hidden: sum((w) => w.braking.hidden),
       bias: sum((w) => w.braking.bias),
     },
@@ -773,11 +789,11 @@ const f = (v: number, d = 2) => (Number.isFinite(v) ? v.toFixed(d) : '–');
 
 export function tableOf(results: { label: string; m: Metrics; bytes?: number; rate?: number }[]): string {
   const head =
-    '| Scenario | along p50 | along p95 | along max | across p50 | across p95 | across max | bias | jumps/min >1 m | pops/min >0.3 m | stale % | hidden % | B/pkt | pkt/s |';
+    '| Scenario | along p50 | along p95 | along max | across p50 | across p95 | across max | bias | jumps/min >1 m | pops/min >0.3 m | stale % | ghost % | hidden % | B/pkt | pkt/s |';
   const rule = '|' + head.split('|').slice(1, -1).map(() => '---').join('|') + '|';
   const rows = results.map(
     (r) =>
-      `| ${r.label} | ${f(r.m.alongP50)} | ${f(r.m.alongP95)} | ${f(r.m.alongMax)} | ${f(r.m.acrossP50)} | ${f(r.m.acrossP95)} | ${f(r.m.acrossMax)} | ${f(r.m.biasM)} | ${f(r.m.jumpsPerMin, 1)} | ${f(r.m.popsPerMin, 1)} | ${f(r.m.stalePct, 1)} | ${f(r.m.hiddenPct, 1)} | ${r.bytes !== undefined ? f(r.bytes, 0) : ''} | ${r.rate !== undefined ? f(r.rate, 1) : ''} |`
+      `| ${r.label} | ${f(r.m.alongP50)} | ${f(r.m.alongP95)} | ${f(r.m.alongMax)} | ${f(r.m.acrossP50)} | ${f(r.m.acrossP95)} | ${f(r.m.acrossMax)} | ${f(r.m.biasM)} | ${f(r.m.jumpsPerMin, 1)} | ${f(r.m.popsPerMin, 1)} | ${f(r.m.stalePct, 1)} | ${f(r.m.ghostPct, 1)} | ${f(r.m.hiddenPct, 1)} | ${r.bytes !== undefined ? f(r.bytes, 0) : ''} | ${r.rate !== undefined ? f(r.rate, 1) : ''} |`
   );
   return [head, rule, ...rows].join('\n');
 }
