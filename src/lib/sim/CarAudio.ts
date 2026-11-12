@@ -19,7 +19,7 @@
  * 4. `ContactAcousticsRig` (`contact-acoustics.ts`) adds road roar, damper thump and chassis rattle, brake squeal
  *    and debris clicks.
  *
- * When a multi-grid sound bank is present (`public/amr26/audio/` or `public/gt3/audio/`, see `vf26-audio.ts`),
+ * When a multi-grid sound bank is present (`public/lc26/audio/` or `public/gt3/audio/`, see `vf26-audio.ts`),
  * engine, turbo, transmission, shifts and backfires come from the multi-layer bank instead of the
  * base samples / oscillators above; tyre, kerb, gravel and wind layers stay procedural unless the bank
  * includes dedicated skid loops.
@@ -30,7 +30,7 @@ import { CameraMode, TelemetryData } from '@/types/f1';
 import { withBasePath } from '@/lib/base-path';
 import { CAMERA_MODES } from '@/lib/render/camera-modes';
 import { ContactAcousticsRig } from './contact-acoustics';
-import { AMR26_AUDIO_DIR, Vf26SoundBank } from './vf26-audio';
+import { LC26_AUDIO_DIR, Vf26SoundBank } from './vf26-audio';
 import { VF26_ENGINE } from './vf26-data';
 import { AMG_GT3_CONFIG } from './gt3/AmgGt3Config';
 
@@ -47,7 +47,7 @@ export interface CarSoundSource {
   physicsLimiterRpm?: number;
 }
 
-export const AMR26_SOUND: CarSoundSource = { id: 'amr26', assetDir: AMR26_AUDIO_DIR, limiterRpm: VF26_ENGINE.limiterRpm };
+export const LC26_SOUND: CarSoundSource = { id: 'lc26', assetDir: LC26_AUDIO_DIR, limiterRpm: VF26_ENGINE.limiterRpm };
 export const F1_2026_SOUND: CarSoundSource = { id: 'f12026', assetDir: '/cars/f12026/audio/', limiterRpm: 12500 };
 /** The AMG GT3 vehicle model's limiter (its gearbox redline) */
 const AMG_GT3_LIMITER_RPM = AMG_GT3_CONFIG.gearbox.gears.redline_rpm;
@@ -160,7 +160,7 @@ export class CarAudioEngine {
   // Multi-grid sound bank (null until loaded; stays null when the assets are absent)
   private vf26: Vf26SoundBank | null = null;
   private contactAcoustics: ContactAcousticsRig | null = null;
-  private sound: CarSoundSource = AMR26_SOUND;
+  private sound: CarSoundSource = LC26_SOUND;
   private bankDestination: AudioNode | null = null;
   private fallbackDestination: AudioNode | null = null;
   /** Bumped per bank load so a slow load for a car that has since been swapped out is dropped */

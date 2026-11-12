@@ -563,7 +563,7 @@ async function startLoaded(banks: string[], wavs = false): Promise<Run> {
   return run;
 }
 
-const AMR26_DIR = "/amr26/audio/";
+const LC26_DIR = "/lc26/audio/";
 const BMW_DIR = BMW_M4_GT3_SOUND.assetDir;
 const gearTel = (gear: number, throttle: number, rpm: number) => telemetry({ gear, throttle, rpm });
 
@@ -612,7 +612,7 @@ async function engineVoiceChecks(): Promise<void> {
 
     {
       // Reverse into first is no upshift; first into second is
-      const run = await startLoaded([AMR26_DIR]);
+      const run = await startLoaded([LC26_DIR]);
       drive(run, 0.3, 60, () => gearTel(-1, 0.2, 6000));
       frame(run, gearTel(1, 0.2, 6000));
       const fromReverse = plays(run, "gear_up", "shift_cut");
@@ -631,7 +631,7 @@ async function engineVoiceChecks(): Promise<void> {
     {
       // A restart made during a pause (5th, flat out → 1st, foot off) is not heard as a downshift and a lift
       const restart = async (pause: boolean) => {
-        const run = await startLoaded([AMR26_DIR]);
+        const run = await startLoaded([LC26_DIR]);
         drive(run, 0.5, 60, () => gearTel(5, 1, 11000));
         const before = plays(run, ...ALL_ONESHOTS);
         if (pause) {
@@ -657,7 +657,7 @@ async function engineVoiceChecks(): Promise<void> {
     {
       // A lift and a downshift on the same frame: one pop, not the blip's pop and a lift burst on top of it
       Math.random = () => 0;
-      const run = await startLoaded([AMR26_DIR]);
+      const run = await startLoaded([LC26_DIR]);
       drive(run, 0.5, 60, () => gearTel(5, 1, 11000));
       const before = plays(run, ...POPS);
       frame(run, gearTel(4, 0, 11000));
@@ -700,7 +700,7 @@ async function engineVoiceChecks(): Promise<void> {
 
     {
       // Disposed once ready: the bank's background decode (one-shots, other view) stops fetching
-      net.banks = new Set([AMR26_DIR]);
+      net.banks = new Set([LC26_DIR]);
       net.wavs = false;
       net.log = [];
       net.slow = true;

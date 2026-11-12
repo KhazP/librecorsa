@@ -1,6 +1,6 @@
 # Porting cars
 
-The repository includes one circuit (RISE Motordrome) and one car, the 2026 prototype (body in `public/amr26/`, sound in `public/cars/f12026/audio/`). This guide is how I add a car to a local clone from two kinds of source:
+The repository includes one circuit (RISE Motordrome) and one car, the 2026 prototype (body in `public/cars/f12026/model/`, sound in `public/cars/f12026/audio/`). This guide is how I add a car to a local clone from two kinds of source:
 
 - **A car mod from another racing game**: a car folder with its KN5 model, skins and an FMOD `.bank` sound file.
 - **A Sketchfab-style model**: a glTF/GLB download.

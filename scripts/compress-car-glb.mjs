@@ -7,7 +7,7 @@
  * Run by the Pages deploy before `next build` (the repository keeps the raw files the car tools edit). Normals, UVs
  * and colours are quantized (8-bit normals, 12-bit UVs); positions stay float, so every mesh keeps its own node
  * transform and its geometry stays in metres. Textures, materials, node names and extras are left as they are.
- * Nothing is pruned: the AMR26's per-compound tyre maps are textures no material uses, found by index from its root
+ * Nothing is pruned: a VF26 body's per-compound tyre maps are textures no material uses, found by index from its root
  * node's extras, so the script fails unless the texture list survives unchanged. Already compressed files are
  * skipped. The browser decodes with three's MeshoptDecoder (src/lib/render/gltf-loader.ts).
  */
@@ -43,7 +43,7 @@ function gltfJson(buf) {
 /**
  * glTF-Transform writes a `textures` entry only for textures a material uses, which renumbers them. Put the original
  * table back (images keep their order) and point the materials at the original entries, so textures found by index
- * (the AMR26's tyre maps) still resolve.
+ * (a VF26 body's tyre maps) still resolve.
  */
 function restoreTextureTable(glb, json0) {
   const json = gltfJson(glb);

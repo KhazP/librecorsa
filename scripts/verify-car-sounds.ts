@@ -9,7 +9,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { CARS, carById, type CarId } from "../src/lib/cars/car-registry";
 import {
-  AMR26_SOUND,
+  LC26_SOUND,
   BMW_M4_GT3_SOUND,
   F1_2026_SOUND,
   type CarSoundSource,
@@ -40,10 +40,10 @@ const EXPECTED_SOUNDS: Record<CarId, { sound: CarSoundSource; maxIdleRpm: number
 
 const MAX_BANK_BYTES = Math.round(3.4 * 1024 * 1024);
 
-console.log("1. Registry CarSoundSource wiring & legacy AMR26 preservation");
+console.log("1. Registry CarSoundSource wiring & legacy LC26 preservation");
 check(
-  "Legacy public/amr26/audio/manifest.json remains in place",
-  existsSync(join("public", "amr26", "audio", "manifest.json")) && AMR26_SOUND.assetDir === "/amr26/audio/"
+  "Legacy public/lc26/audio/manifest.json remains in place",
+  existsSync(join("public", "lc26", "audio", "manifest.json")) && LC26_SOUND.assetDir === "/lc26/audio/"
 );
 
 for (const car of CARS) {

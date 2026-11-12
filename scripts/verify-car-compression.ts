@@ -1,8 +1,8 @@
 /**
  * Headless checks that the deploy's car compression (`scripts/compress-car-glb.mjs`) leaves the geometry the car
- * rigs read in metres: positions stay float, no node's transform changes, and the AMR26's tyre (the AI cars',
+ * rigs read in metres: positions stay float, no node's transform changes, and the 2026 Prototype's tyre (the AI cars',
  * ghosts' and online peers' model) still measures its real radius. Quantized positions moved each mesh's scale onto
- * its node, so the AMR26 read its tyre as 1 m in radius and every opponent floated about 0.65 m up on the deployed
+ * its node, so the 2026 Prototype read its tyre as 1 m in radius and every opponent floated about 0.65 m up on the deployed
  * site only (issue #96).
  *
  *   npx tsx scripts/verify-car-compression.ts

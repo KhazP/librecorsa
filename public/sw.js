@@ -8,7 +8,7 @@ const VERSION = new URL(self.location.href).searchParams.get("v") || "dev";
 const CACHE = `librecorsa-assets-${VERSION}`;
 const PREFIX = "librecorsa-assets-";
 /** Folders (under the site's base path) whose files are content of this build: models, textures, sounds, track data */
-const ASSET_PATH = /\/(tracks|cars|amr26|gt3|audio)\/[^?#]+\.(glb|gltf|bin|webp|png|jpg|jpeg|ktx2|ogg|wav|mp3|json)$/i;
+const ASSET_PATH = /\/(tracks|cars|lc26|gt3|audio)\/[^?#]+\.(glb|gltf|bin|webp|png|jpg|jpeg|ktx2|ogg|wav|mp3|json)$/i;
 
 self.addEventListener("install", () => self.skipWaiting());
 

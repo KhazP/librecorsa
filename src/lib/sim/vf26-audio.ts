@@ -1,5 +1,5 @@
 /**
- * Multi-grid car sound bank for Web Audio (`/amr26/audio/` and `/gt3/audio/`).
+ * Multi-grid car sound bank for Web Audio (`/lc26/audio/` and `/gt3/audio/`).
  *
  * Engine, turbo and transmission loops are sampled across fixed parameter grids
  * (rpm × throttle, boost, drivetrain_speed), so crossfading neighbouring grid points with
@@ -12,7 +12,7 @@
 
 import { withBasePath } from '@/lib/base-path';
 
-export const AMR26_AUDIO_DIR = '/amr26/audio/';
+export const LC26_AUDIO_DIR = '/lc26/audio/';
 
 interface LoopEntry {
   file: string;
@@ -287,7 +287,7 @@ export class Vf26SoundBank {
   constructor(
     private readonly ctx: AudioContext,
     destination: AudioNode,
-    private readonly assetDir = AMR26_AUDIO_DIR
+    private readonly assetDir = LC26_AUDIO_DIR
   ) {
     this.bus = ctx.createGain();
     this.bus.gain.value = 1.0;

@@ -5,7 +5,7 @@
  *   node scripts/cars/port_qvist_f1.mjs <f1_2026_concept_polygon_model.glb> [out.glb] [--debug-parts <file.glb>]
  *
  * Output (default `public/cars/f12026/model/f12026.glb`), metres, +X left, +Y up, +Z forward, tyres on y = 0, the
- * front axle at z = 1.5045 (where the AMR26 body had it, so the cameras it shares stay comparable):
+ * front axle at z = 1.5045 (where the AM26 body had it, so the cameras it shares stay comparable):
  *   VF26 (extras: wheelCentres, cameras, liveryMask: false, source)
  *     BODY        the bodywork, one mesh per material
  *     WHEEL_xx    hub pivot at the tread centre; children WHEEL_xx_RIM, WHEEL_xx_TYRE (one primitive)
@@ -23,7 +23,7 @@ import { MeshoptDecoder, MeshoptSimplifier } from "meshoptimizer";
 
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
 
-/** Where the AMR26 body had its front axle (m); the porter puts this model's there too */
+/** Where the AM26 body had its front axle (m); the porter puts this model's there too */
 const FRONT_AXLE_Z = 1.5045;
 /** Tyre / rim boundary (m from the axle): the rim's outer lip ends at ~0.245, the tyre's bead starts at ~0.255 */
 const TYRE_MIN_RADIUS = 0.25;
@@ -841,7 +841,7 @@ async function main() {
   }
   if (Object.keys(wheelCentres).length !== 4) throw new Error(`wheel corners: ${Object.keys(wheelCentres)}`);
 
-  // Steering wheel (STEER_BASE: rim, paddles, dials, display, shift lights) and cameras from the AMR26 body
+  // Steering wheel (STEER_BASE: rim, paddles, dials, display, shift lights) and cameras from the AM26
   const io = new NodeIO().registerExtensions(ALL_EXTENSIONS).registerDependencies({ "meshopt.decoder": MeshoptDecoder });
   await MeshoptDecoder.ready;
   const amr = await io.read(steerFrom);
@@ -861,7 +861,7 @@ async function main() {
   for (const b of doc.getRoot().listBuffers()) if (b !== buffer) b.dispose();
   body.addChild(steer);
   const amrExtras = amrRoot.getExtras();
-  // The AMR26's cameras as they were (the front axle is where it had it)
+  // The AM26's cameras as they were (the front axle is where it had it)
   const cameras = structuredClone(amrExtras.cameras);
 
   vf.setExtras({

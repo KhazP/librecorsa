@@ -355,7 +355,7 @@ export const carTakesLivery = (id: CarId): boolean => !carById(id).modelUrl;
  * prototype's body, whose one picture is in the repository. A copy without the file shows the card without a picture.
  */
 export const carThumbUrl = (id: CarId): string => {
-  if (REPO_CAR_IDS.has(id)) return "/amr26/thumb.webp";
+  if (REPO_CAR_IDS.has(id)) return "/lc26/thumb.webp";
   // Beside the car's model, so a car that took over another's body shows that body's picture
   const modelDir = carById(id).modelUrl?.match(/^(\/cars\/[^/]+)\/model\//)?.[1];
   return `${modelDir ?? `/cars/${id}`}/thumb.webp`;

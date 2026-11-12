@@ -3,7 +3,7 @@
  *
  * Bundles scripts/car-thumbs/render.ts, serves it next to `public/` (the cars' models load from their usual paths),
  * renders each car in headless Chromium with the game's own rig code and writes a 480 x 270 WebP beside the car:
- * `public/cars/<id>/thumb.webp` (the repository's 2026 prototype, which both repo cars drive: `public/amr26/thumb.webp`).
+ * `public/cars/<id>/thumb.webp` (the repository's 2026 prototype, which both repo cars drive: `public/lc26/thumb.webp`).
  * A hosted car's picture then goes up with it: `npm run upload-hosted -- public/cars/<id>/thumb.webp`.
  * Cars whose model files this copy doesn't have are skipped.
  */
