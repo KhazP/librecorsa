@@ -102,6 +102,12 @@ export interface Env {
   USAGE_LIMIT?: RateLimit;
   /** Key of the private admin numbers (admin.ts), a secret; without it the route does not answer */
   ADMIN_KEY?: string;
+  /** Cloudflare's own numbers on the admin page (analytics.ts): a read-only analytics token (a secret), the account,
+   * and optionally the boards' database and the site's zone */
+  CF_ANALYTICS_TOKEN?: string;
+  ANALYTICS_ACCOUNT_ID?: string;
+  ANALYTICS_D1_ID?: string;
+  ANALYTICS_ZONE_ID?: string;
 }
 
 /** `new WebSocketPair()` and friends exist only in the Workers runtime */

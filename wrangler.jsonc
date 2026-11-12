@@ -35,8 +35,19 @@
   //   ONLINE_ROOMS  room codes are paired by this Worker (off: the public PeerJS broker pairs them, as before)
   //   ONLINE_BOARD  the online lap boards (off: lap times stay in each player's browser)
   //   ONLINE_RACES  scheduled races on this Worker's race server (off: no scheduled races; rooms are untouched)
-  //   ONLINE_USAGE  the anonymous usage counter: minutes driven per day, circuit, car, mode, country (off: nothing sent)
-  "vars": { "ONLINE_ROOMS": "on", "ONLINE_BOARD": "on", "ONLINE_RACES": "on", "ONLINE_USAGE": "on" },
+  //   ONLINE_USAGE  the anonymous usage counter: minutes driven per day, circuit, car, mode, country, and on their own
+  //                 input, kind of screen, weather, assists and build (off: nothing sent)
+  // ANALYTICS_*: where Cloudflare's own numbers on the /admin page come from (cloudflare/api/analytics.ts), read with
+  // the secret CF_ANALYTICS_TOKEN (npx wrangler secret put CF_ANALYTICS_TOKEN). Add "ANALYTICS_ZONE_ID" for the site's
+  // traffic per day (the zone id on the domain's overview page in the dashboard)
+  "vars": {
+    "ONLINE_ROOMS": "on",
+    "ONLINE_BOARD": "on",
+    "ONLINE_RACES": "on",
+    "ONLINE_USAGE": "on",
+    "ANALYTICS_ACCOUNT_ID": "e8e4c67fe1996448b0e6ab6238f31867",
+    "ANALYTICS_D1_ID": "25f4a169-a3fe-454b-995f-eb0509f4f56f"
+  },
   // Private rooms: one small object per room code, asleep between messages (cloudflare/api/room.ts).
   // Scheduled races: one object per race, which passes every car's state on while it runs (cloudflare/api/race.ts)
   "durable_objects": {
