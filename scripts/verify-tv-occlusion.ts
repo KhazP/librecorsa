@@ -3,8 +3,9 @@
  *
  * For each circuit, camera-like sight lines (from 4.5-8 m up, 20-45 m off the centreline, to the car's height 30-120 m
  * along the track, the last 6 m left out as the TV director does) are tested both ways. The meshes get front-, back- and
- * double-sided materials in turn, and a field of instanced boxes is added beside the track, so face culling and
- * instancing are exercised too. Every answer must match the Raycaster's, and the index must be much faster per line.
+ * double-sided materials in turn, and a field of instanced boxes, a forest of turned and stretched instanced crowns and
+ * a shadow-layer-only wall are added, so face culling, instancing and layers are exercised too. Every answer must match
+ * the Raycaster's, the index must be much faster per line, and it must keep an instanced mesh once, not per instance.
  *
  * Usage: npx tsx scripts/verify-tv-occlusion.ts
  */
@@ -13,6 +14,7 @@ import * as THREE from 'three';
 import { getActiveTrackData, setActiveTrack, type BuiltTrackData } from '../src/lib/track-data';
 import { SegmentOccluder } from '../src/lib/render/segment-occluder';
 import { TracksideBroadcastDirector } from '../src/lib/render/camera-rig';
+import { SHADOW_PROXY_LAYER } from '../src/lib/render/layers';
 import type { TrackSamplePoint } from '../src/types/f1';
 import { loadGlbGeometry } from './lib/glb-geometry';
 import { hasFile, noteSkip } from './lib/hosted-files';
@@ -43,6 +45,35 @@ for (const id of ['monaco', 'rwanda_official', 'rwanda_official_short']) {
     boxes.setMatrixAt(i, m);
   }
   root.add(boxes);
+  // A forest between the cameras and the track: a 1,280-triangle crown per tree, turned, leaning and stretched per
+  // instance, seen from both sides like leaf cards (scenery-instances.ts) and from the front only
+  const crown = new THREE.IcosahedronGeometry(3, 3);
+  const crownTris = crown.attributes.position.count / 3;
+  const forest = [THREE.DoubleSide, THREE.FrontSide].map((side, f) => {
+    const trees = new THREE.InstancedMesh(crown, new THREE.MeshBasicMaterial({ side }), 150);
+    const q = new THREE.Quaternion();
+    const e = new THREE.Euler();
+    const pos = new THREE.Vector3();
+    const scale = new THREE.Vector3();
+    for (let i = 0; i < 150; i++) {
+      const p = track.getSampleAtDistance(((i + 0.5 * f) / 150) * track.totalLengthM);
+      const off = (i % 2 ? -1 : 1) * (8 + (i % 7) * 1.5);
+      pos.set(p.position.x + p.binormal.x * off, p.position.y + 3 + (i % 3), p.position.z + p.binormal.z * off);
+      q.setFromEuler(e.set(0.2 * Math.sin(i), i * 0.7, 0.15 * Math.cos(i * 1.3)));
+      scale.set(1 + (i % 4) * 0.25, 0.6 + (i % 5) * 0.2, 0.8 + (i % 3) * 0.3);
+      trees.setMatrixAt(i, m.compose(pos, q, scale));
+    }
+    return trees;
+  });
+  root.add(...forest);
+  // Shadow-only copies of the trees, as big as a wall: a Raycaster never sees that layer, so neither may the index
+  const shadowWall = new THREE.InstancedMesh(new THREE.BoxGeometry(60, 40, 60), new THREE.MeshBasicMaterial(), 40);
+  for (let i = 0; i < 40; i++) {
+    const p = track.getSampleAtDistance((i / 40) * track.totalLengthM);
+    shadowWall.setMatrixAt(i, m.makeTranslation(p.position.x, p.position.y + 20, p.position.z));
+  }
+  shadowWall.layers.set(SHADOW_PROXY_LAYER);
+  root.add(shadowWall);
   root.updateMatrixWorld(true);
   const meshes: THREE.Object3D[] = [];
   root.traverseVisible((o) => {
@@ -87,14 +118,52 @@ for (const id of ['monaco', 'rwanda_official', 'rwanda_official_short']) {
 
   const mismatches = got.filter((g, i) => g !== expected[i]).length;
   const blocked = expected.filter(Boolean).length;
-  const ok = mismatches === 0 && occMs * 20 < rayMs;
+  // The forest on its own: the index keeps each crown once, not once per tree (a copy per tree is 36 bytes a triangle)
+  const forestOcc = new SegmentOccluder();
+  for (const _ of forestOcc.build(forest)) void _;
+  const perTreeCopy = forest.length * 150 * crownTris * 36;
+  const ok = mismatches === 0 && occMs * 20 < rayMs && forestOcc.byteLength * 20 < perTreeCopy;
   if (!ok) failed++;
   console.log(
     `${ok ? 'PASS' : 'FAIL'}  ${id}: ${lines.length} sight lines (${blocked} blocked), ${mismatches} differ from the Raycaster; ` +
-      `index built in ${buildMs.toFixed(0)} ms, ${occMs.toFixed(3)} ms a line vs the Raycaster's ${rayMs.toFixed(2)} ms`
+      `index built in ${buildMs.toFixed(0)} ms (${(occ.byteLength / 1048576).toFixed(1)} MB), ${occMs.toFixed(3)} ms a line ` +
+      `vs the Raycaster's ${rayMs.toFixed(2)} ms; the forest takes ${(forestOcc.byteLength / 1024).toFixed(0)} KB ` +
+      `(${(perTreeCopy / 1048576).toFixed(1)} MB copied per tree)`
   );
 }
 console.log(failed ? `${failed} circuit(s) failed.` : 'The sight-line index answers as the Raycaster does.');
+
+// A sight line that starts inside an instance's box: a 4 m square 5 m ahead, and two slivers 300 m out that stretch the
+// box round the camera. From inside, the box's far side is where the ray leaves it, not where it enters
+{
+  const g = new THREE.BufferGeometry();
+  g.setAttribute(
+    'position',
+    new THREE.Float32BufferAttribute(
+      [
+        -2, -2, 5, 2, -2, 5, 2, 2, 5, -2, -2, 5, 2, 2, 5, -2, 2, 5,
+        -300, -300, -300, -299, -300, -300, -300, -299, -300, 300, 300, 300, 299, 300, 300, 300, 299, 300,
+      ],
+      3
+    )
+  );
+  const inst = new THREE.InstancedMesh(g, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }), 1);
+  inst.setMatrixAt(0, new THREE.Matrix4().makeRotationY(0.3).setPosition(1, 0.5, -2));
+  inst.updateMatrixWorld(true);
+  const occ = new SegmentOccluder();
+  for (const _ of occ.build([inst])) void _;
+  const ray = new THREE.Raycaster();
+  let differ = 0;
+  for (let i = 0; i < 64; i++) {
+    const a = (i / 64) * Math.PI * 2;
+    const dir = new THREE.Vector3(Math.sin(a), 0.05 * Math.cos(3 * a), Math.cos(a)).normalize();
+    ray.set(new THREE.Vector3(0, 0, 0), dir);
+    ray.far = 50;
+    if ((ray.intersectObject(inst, false).length > 0) !== occ.blocked(ray.ray.origin, dir, 50)) differ++;
+  }
+  if (differ) failed++;
+  console.log(`${differ ? 'FAIL' : 'PASS'}  sight lines from inside an instance's box: ${differ} of 64 differ from the Raycaster`);
+}
 
 // The director on a synthetic ring: a station the occlusion pass moves while it is on air cuts to its new place, and
 // a car that moved further than a frame allows since the last update (another camera was on) starts it over
