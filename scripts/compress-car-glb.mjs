@@ -1,7 +1,7 @@
 /**
  * Meshopt-compresses car GLBs in place (EXT_meshopt_compression + KHR_mesh_quantization) for a smaller download.
  *
- *   node scripts/compress-car-glb.mjs public/cars/sf26/model/sf26.glb [more.glb ...]
+ *   node scripts/compress-car-glb.mjs public/cars/bmw-m4-gt3/model/bmw-m4-gt3.glb [more.glb ...]
  *   node scripts/compress-car-glb.mjs --all        # every car and cockpit GLB under public/ (tracks excluded)
  *
  * Run by the Pages deploy before `next build` (the repository keeps the raw files the car tools edit). Normals, UVs

@@ -19,9 +19,9 @@ uv run --python 3.14 --no-project --with numpy --with scipy --with fsb5 \
 
 # 3. Port a single configured car to public/cars/<id>/audio/
 uv run --python 3.14 --no-project --with numpy --with scipy --with fsb5 \
-  python -P scripts/audio/port_ac_bank.py --car w17
+  python -P scripts/audio/port_ac_bank.py --car bmw-m4-gt3
 
-# 4. Port all 9 configured cars
+# 4. Port every configured car
 uv run --python 3.14 --no-project --with numpy --with scipy --with fsb5 \
   python -P scripts/audio/port_ac_bank.py --all
 ```

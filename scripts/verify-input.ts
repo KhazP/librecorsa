@@ -397,26 +397,26 @@ check('browser library: favourites / recents validated, de-duplicated and capped
   assert.deepEqual(parsePlayerSettings({ library: 'x' }).library, DEFAULT_PLAYER_SETTINGS.library);
   const lib = parsePlayerSettings({
     library: {
-      favorites: { cars: ['w17', 'w17', 7, '', 'bad id', '<x>', 'a'.repeat(65), 'sf26'], circuits: 'spa' },
-      recent: { cars: Array.from({ length: 40 }, (_, i) => `car${i}`), circuits: ['daytona_oval', null] },
+      favorites: { cars: ['amg-gt3', 'amg-gt3', 7, '', 'bad id', '<x>', 'a'.repeat(65), 'bmw-m4-gt3'], circuits: 'monaco' },
+      recent: { cars: Array.from({ length: 40 }, (_, i) => `car${i}`), circuits: ['okayama', null] },
     },
   }).library;
-  assert.deepEqual(lib.favorites, { cars: ['w17', 'sf26'], circuits: [] });
+  assert.deepEqual(lib.favorites, { cars: ['amg-gt3', 'bmw-m4-gt3'], circuits: [] });
   assert.equal(lib.recent.cars.length, LIBRARY_RECENT_MAX);
-  assert.deepEqual(lib.recent.circuits, ['daytona_oval']);
+  assert.deepEqual(lib.recent.circuits, ['okayama']);
   const many = parsePlayerSettings({ library: { favorites: { cars: Array.from({ length: 999 }, (_, i) => `c${i}`) } } }).library;
   assert.equal(many.favorites.cars.length, LIBRARY_FAVORITES_MAX);
   // A venue starred through one layout comes off through any of them
-  let l = toggleLibraryFavorite(DEFAULT_PLAYER_SETTINGS.library, 'circuits', ['daytona_road', 'daytona_oval']);
-  assert.deepEqual(l.favorites.circuits, ['daytona_road']);
-  l = toggleLibraryFavorite(l, 'circuits', ['daytona_oval', 'daytona_road']);
+  let l = toggleLibraryFavorite(DEFAULT_PLAYER_SETTINGS.library, 'circuits', ['okayama_piper', 'okayama']);
+  assert.deepEqual(l.favorites.circuits, ['okayama_piper']);
+  l = toggleLibraryFavorite(l, 'circuits', ['okayama', 'okayama_piper']);
   assert.deepEqual(l.favorites.circuits, []);
   // Recents: newest first, no repeats, same object when nothing changes
-  let r = pushLibraryRecent(DEFAULT_PLAYER_SETTINGS.library, 'cars', 'w17');
-  r = pushLibraryRecent(r, 'cars', 'sf26');
-  r = pushLibraryRecent(r, 'cars', 'w17');
-  assert.deepEqual(r.recent.cars, ['w17', 'sf26']);
-  assert.equal(pushLibraryRecent(r, 'cars', 'w17'), r);
+  let r = pushLibraryRecent(DEFAULT_PLAYER_SETTINGS.library, 'cars', 'amg-gt3');
+  r = pushLibraryRecent(r, 'cars', 'bmw-m4-gt3');
+  r = pushLibraryRecent(r, 'cars', 'amg-gt3');
+  assert.deepEqual(r.recent.cars, ['amg-gt3', 'bmw-m4-gt3']);
+  assert.equal(pushLibraryRecent(r, 'cars', 'amg-gt3'), r);
   const s = { ...DEFAULT_PLAYER_SETTINGS, library: r };
   assert.deepEqual(parsePlayerSettings(JSON.parse(JSON.stringify(s))), s);
 });

@@ -67,7 +67,7 @@ function tyreRadius(json: GltfJson, nodeName: string): number {
 const work = mkdtempSync(path.join(tmpdir(), 'lc-car-compression-'));
 try {
   // The opponents' car and one ported car (small, so the suite stays quick)
-  for (const rel of ['public/amr26/model/amr26.glb', 'public/cars/rb8/model/rb8.glb']) {
+  for (const rel of ['public/amr26/model/amr26.glb', 'public/cars/bmw-m4-gt3/model/bmw-m4-gt3.glb']) {
     if (!hasFile(rel)) {
       noteSkip(path.basename(rel), rel);
       continue;

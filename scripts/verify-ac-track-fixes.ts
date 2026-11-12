@@ -3,24 +3,22 @@
  * 1. Okayama (and all AC tracks) road material depthWrite & decal isolation (preventing 100% reflective tarmac)
  * 2. Monaco barrier hitboxes (3D wall extraction, TrackWallQuery segment density, and collision response for all 3 cars)
  * 3. Kerb coverage and feel across chang, okayama, spielberg, monaco and istanbul_park for all 3 car physics models
- * 4. Kerb / edge step continuity of the fitted surfaces, and ported F1 wheel seating
+ * 4. Kerb / edge step continuity of the fitted surfaces
  */
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 
 import { F1Physics2026 } from '../src/lib/f1-physics-2026';
-import { F12026_CAR_CONFIG } from '../src/lib/sim/f12026-car/F12026CarConfig';
 import { F12026CarSim } from '../src/lib/sim/f12026-car/F12026CarSim';
 import { createGroundHit, TrackWallQuery } from '../src/lib/sim/f12026-car/TrackColliderQuery';
 import { trackColliders } from '../src/lib/sim/track-colliders';
 import { createAmgGt3Sim } from '../src/lib/sim/gt3/AmgGt3Sim';
 import { getActiveTrackData, type RawTrackJson, setActiveTrack } from '../src/lib/track-data';
 import { loadGlbGeometry } from './lib/glb-geometry';
-import { measurePortedWheelContact, type PortedWheelExtras } from './lib/ported-wheel-contact';
 import { skipSuiteWithout } from './lib/hosted-files';
 
-skipSuiteWithout('public/tracks/okayama/track_data.json', 'public/tracks/monaco/track_data.json', 'public/tracks/dunsfold/track_data.json', 'public/tracks/istanbul_park/track_data.json', 'public/cars/sf26/model/sf26.glb');
+skipSuiteWithout('public/tracks/okayama/track_data.json', 'public/tracks/monaco/track_data.json', 'public/tracks/dunsfold/track_data.json', 'public/tracks/istanbul_park/track_data.json');
 
 const ROOT = path.resolve(__dirname, '..');
 
@@ -334,8 +332,8 @@ async function verifyKerbsFeelAndSound() {
   }
 }
 
-async function verifyTrackEdgeContinuityAndPortedWheelSeating() {
-  console.log('\n=== 4. Verifying Kerb/Edge Step Continuity & Ported F1 Wheel Seating ===');
+async function verifyTrackEdgeContinuity() {
+  console.log('\n=== 4. Verifying Kerb/Edge Step Continuity ===');
   // The converted circuits' surfaces are fitted to their road at load (metadata.mesh.conformSurfaces), which is what
   // closes these steps; the other circuits keep their modelled kerb and verge edges
   for (const tid of ['spielberg', 'monaco', 'okayama', 'chang', 'istanbul_park']) {
@@ -376,35 +374,13 @@ async function verifyTrackEdgeContinuityAndPortedWheelSeating() {
     console.log(`PASS  [${tid}] 0 lateral kerb/edge step cliffs across all ${n} samples`);
   }
 
-  const carExtras: Record<string, PortedWheelExtras> = {};
-  for (const cid of ['sf26', 'f2004']) {
-    const gltf = readGlbJson(path.join(ROOT, 'public', 'cars', cid, 'model', `${cid}.glb`));
-    const carNode = gltf.nodes.find((nd: { name?: string }) => nd.name === 'CAR');
-    carExtras[cid] = carNode.extras as PortedWheelExtras;
-  }
-
-  for (const tid of ['spielberg', 'monaco']) {
-    const { track, root } = loadTrack(tid);
-    const ground = trackColliders(root).ground!;
-    const sim = new F12026CarSim(track, root);
-    const res = measurePortedWheelContact(sim, ground, carExtras, F12026_CAR_CONFIG.chassis, 15);
-    for (const [cid, r] of Object.entries(res)) {
-      assert.ok(
-        Math.abs(r.minMm) < 1.0 && Math.abs(r.maxMm) < 1.0,
-        `[${tid}/${cid}] Expected ported wheel contact within ±1.0 mm of collider, got [${r.minMm.toFixed(2)}, ${r.maxMm.toFixed(2)}] mm`
-      );
-      console.log(
-        `PASS  [${tid}/${cid}] wheel contact [${r.minMm.toFixed(2)} .. +${r.maxMm.toFixed(2)}] mm (body-frame without corner seating: [${r.bodyFrameMinMm.toFixed(1)} .. +${r.bodyFrameMaxMm.toFixed(1)}] mm)`
-      );
-    }
-  }
 }
 
 async function main() {
   await verifyOkayamaMaterialsAndDecalIsolation();
   await verifyMonacoBarrierHitboxes();
   await verifyKerbsFeelAndSound();
-  await verifyTrackEdgeContinuityAndPortedWheelSeating();
+  await verifyTrackEdgeContinuity();
   console.log('\nALL AC TRACK FIX VERIFICATIONS PASSED.');
 }
 

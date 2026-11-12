@@ -1,16 +1,5 @@
 import type { VehicleModelId } from "@/types/f1";
-import {
-  BMW_M4_GT3_SOUND,
-  F2004_SOUND,
-  F1_2026_SOUND,
-  R25_SOUND,
-  RB8_SOUND,
-  RB22_SOUND,
-  SF26_SOUND,
-  SF71H_SOUND,
-  W17_SOUND,
-  type CarSoundSource,
-} from "@/lib/sim/CarAudio";
+import { BMW_M4_GT3_SOUND, F1_2026_SOUND, type CarSoundSource } from "@/lib/sim/CarAudio";
 import { AMG_GT3_SOUND } from "@/lib/sim/gt3/AmgGt3Sim";
 import { SUZUKI_LIANA_SOUND } from "@/lib/sim/road/SuzukiLianaSim";
 import { MTR_496R_SOUND } from "@/lib/sim/proto/Mtr496rSim";
@@ -26,13 +15,6 @@ import { carListed, REPO_CAR_IDS } from "@/lib/hosted-content";
  */
 export type CarId =
   | "vf26"
-  | "sf26"
-  | "w17"
-  | "rb22"
-  | "sf71h"
-  | "rb8"
-  | "r25"
-  | "f2004"
   | "amg-gt3"
   | "amg-gt3-evo"
   | "bmw-m4-gt3"
@@ -56,7 +38,7 @@ export interface CarClass {
  * Whether a car's physics belong to the car you see, the car-side counterpart of a circuit's `CircuitQuality`:
  * - "own": its vehicle model was built for this car (the F1 2026 Prototype, the Mercedes-AMG GT3s,
  *   the MTRacing 496R, the Suzuki Liana)
- * - "shared": a ported body on another car's model of the same class and era (the 2026 team cars, the BMW)
+ * - "shared": a ported body on another car's model of the same class and era (the BMW)
  * - "era": a ported body from an earlier season on the 2026 model
  * The F1 physics switch doesn't change it: a ported F1 car borrows its physics under either model.
  */
@@ -160,8 +142,6 @@ const MTR_496R_SKINS: readonly CarSkin[] = [
   { id: "h_8_black", name: "#8 Matte Black", swatch: ["#787878", "#180818"] },
 ];
 
-const daveLove = (title: string, url: string): CarCredit => ({ title, author: "Dave Love SketchFab", url, ...CC_BY });
-
 export interface CarDefinition {
   id: CarId;
   classId: CarClassId;
@@ -209,97 +189,6 @@ const ALL_CARS: readonly CarDefinition[] = [
     physics: "vf26",
     year: 2026,
     sound: F1_2026_SOUND,
-  },
-  {
-    id: "sf26",
-    classId: "f1",
-    title: "SF-26",
-    sub: "2026 car",
-    badge: "SF-26",
-    quality: "shared",
-    credit: daveLove("2026 Ferrari SF-26", "https://sketchfab.com/3d-models/2026-ferrari-sf-26-e5ca6cecdc42449283f4bed27360f2a7"),
-    physics: "f12026-car",
-    year: 2026,
-    modelUrl: "/cars/sf26/model/sf26.glb",
-    sound: SF26_SOUND,
-  },
-  {
-    id: "w17",
-    classId: "f1",
-    title: "W17",
-    sub: "2026 car",
-    badge: "W17",
-    quality: "shared",
-    credit: daveLove("2026 Mercedes W17", "https://sketchfab.com/3d-models/2026-mercedes-w17-b806f1e70aa343219e7158169549b97b"),
-    physics: "f12026-car",
-    year: 2026,
-    modelUrl: "/cars/w17/model/w17.glb",
-    sound: W17_SOUND,
-  },
-  {
-    id: "rb22",
-    classId: "f1",
-    title: "RB22",
-    sub: "2026 car",
-    badge: "RB22",
-    quality: "shared",
-    credit: daveLove("2026 Redbull RB22", "https://sketchfab.com/3d-models/2026-redbull-rb22-0a3d24a58e0549d591a5a48c22eec383"),
-    physics: "f12026-car",
-    year: 2026,
-    modelUrl: "/cars/rb22/model/rb22.glb",
-    sound: RB22_SOUND,
-  },
-  {
-    id: "sf71h",
-    classId: "f1",
-    title: "SF71H",
-    sub: "2018 car",
-    badge: "SF71H",
-    quality: "era",
-    credit: daveLove("2018 Ferrari SF71H", "https://sketchfab.com/3d-models/2018-ferrari-sf71h-e54b896bd21f478f8309eecf3726700e"),
-    physics: "f12026-car",
-    year: 2018,
-    modelUrl: "/cars/sf71h/model/sf71h.glb",
-    sound: SF71H_SOUND,
-  },
-  {
-    id: "rb8",
-    classId: "f1",
-    title: "RB8",
-    sub: "2012 car",
-    badge: "RB8",
-    quality: "era",
-    credit: daveLove("2012 Red Bull RB8", "https://sketchfab.com/3d-models/2012-red-bull-rb8-b74446dcd93a49879546d756e3093b3f"),
-    physics: "f12026-car",
-    year: 2012,
-    modelUrl: "/cars/rb8/model/rb8.glb",
-    sound: RB8_SOUND,
-  },
-  {
-    id: "r25",
-    classId: "f1",
-    title: "R25",
-    sub: "2005 car",
-    badge: "R25",
-    quality: "era",
-    credit: daveLove("2005 Renault R25", "https://sketchfab.com/3d-models/2005-renault-r25-0d58fe125f5b41a2b8482576723120c4"),
-    physics: "f12026-car",
-    year: 2005,
-    modelUrl: "/cars/r25/model/r25.glb",
-    sound: R25_SOUND,
-  },
-  {
-    id: "f2004",
-    classId: "f1",
-    title: "F2004",
-    sub: "2004 car",
-    badge: "F2004",
-    quality: "era",
-    credit: daveLove("2004 Ferrari F2004", "https://sketchfab.com/3d-models/2004-ferrari-f2004-bedade52e6f4415e90e656817c5701f8"),
-    physics: "f12026-car",
-    year: 2004,
-    modelUrl: "/cars/f2004/model/f2004.glb",
-    sound: F2004_SOUND,
   },
   {
     id: "amg-gt3",

@@ -3,8 +3,8 @@ import type { VehicleModelId } from "@/types/f1";
 import { carById, type CarId } from "@/lib/cars/car-registry";
 
 /**
- * Which vehicle model the ported F1 cars (SF-26, W17, RB22, ...) drive on: the 6-DOF rigid-body model (default) or
- * the F1 2026 Prototype's. The F1 2026 Prototype keeps its own model; the GT3s have one model. The rigid-body model
+ * Which vehicle model a ported F1 car (one with its own GLB) drives on: the 6-DOF rigid-body model (default) or the
+ * F1 2026 Prototype's. None is listed now, so the switch shows nowhere. The F1 2026 Prototype keeps its own model; the GT3s have one model. The rigid-body model
  * has no car of its own in the list: a saved choice of it opens the Prototype.
  */
 export type F1ModPhysics = Extract<VehicleModelId, "f12026-car" | "vf26">;

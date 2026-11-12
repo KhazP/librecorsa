@@ -10,7 +10,7 @@ via /opt/homebrew/bin/ffmpeg.
 
 Usage:
   uv run --python 3.14 --no-project --with numpy --with scipy --with fsb5 python -P scripts/audio/port_ac_bank.py --list "/path/to/car.bank"
-  uv run --python 3.14 --no-project --with numpy --with scipy --with fsb5 python -P scripts/audio/port_ac_bank.py --car w17
+  uv run --python 3.14 --no-project --with numpy --with scipy --with fsb5 python -P scripts/audio/port_ac_bank.py --car bmw-m4-gt3
   uv run --python 3.14 --no-project --with numpy --with scipy --with fsb5 python -P scripts/audio/port_ac_bank.py --all
 """
 

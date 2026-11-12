@@ -11,14 +11,7 @@ import { CARS, carById, type CarId } from "../src/lib/cars/car-registry";
 import {
   AMR26_SOUND,
   BMW_M4_GT3_SOUND,
-  F2004_SOUND,
   F1_2026_SOUND,
-  R25_SOUND,
-  RB8_SOUND,
-  RB22_SOUND,
-  SF26_SOUND,
-  SF71H_SOUND,
-  W17_SOUND,
   type CarSoundSource,
 } from "../src/lib/sim/CarAudio";
 import { AMG_GT3_SOUND } from "../src/lib/sim/gt3/AmgGt3Sim";
@@ -39,13 +32,6 @@ function check(name: string, cond: boolean, detail = ""): void {
 
 const EXPECTED_SOUNDS: Record<CarId, { sound: CarSoundSource; maxIdleRpm: number }> = {
   vf26: { sound: F1_2026_SOUND, maxIdleRpm: 4200 },
-  sf26: { sound: SF26_SOUND, maxIdleRpm: 4200 },
-  w17: { sound: W17_SOUND, maxIdleRpm: 4200 },
-  rb22: { sound: RB22_SOUND, maxIdleRpm: 4200 },
-  sf71h: { sound: SF71H_SOUND, maxIdleRpm: 4200 },
-  rb8: { sound: RB8_SOUND, maxIdleRpm: 4600 },
-  r25: { sound: R25_SOUND, maxIdleRpm: 4000 },
-  f2004: { sound: F2004_SOUND, maxIdleRpm: 4000 },
   "amg-gt3": { sound: AMG_GT3_SOUND, maxIdleRpm: 1600 },
   "amg-gt3-evo": { sound: AMG_GT3_SOUND, maxIdleRpm: 1600 },
   "bmw-m4-gt3": { sound: BMW_M4_GT3_SOUND, maxIdleRpm: 1600 },
@@ -237,7 +223,7 @@ for (const [bankId, { sound, maxIdleRpm }] of seenBanks) {
 console.log("\n3. CREDITS.md Car sounds section check");
 const credits = readFileSync("CREDITS.md", "utf8");
 check("CREDITS.md has 'Car sounds' section", /###\s+Car sounds/i.test(credits));
-for (const dirId of ["f12026", "sf26", "w17", "rb22", "sf71h", "rb8", "r25", "f2004", "bmw-m4-gt3"]) {
+for (const dirId of ["f12026", "bmw-m4-gt3"]) {
   check(
     `CREDITS.md documents public/cars/${dirId}/audio/`,
     credits.includes(`public/cars/${dirId}/audio/`),

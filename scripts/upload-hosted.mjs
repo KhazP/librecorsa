@@ -3,8 +3,8 @@
  * src/lib/hosted-content.ts) to the librecorsa-assets R2 bucket, at the path the site serves them from.
  * cloudflare/worker.js answers any path with no static file from that bucket.
  *
- *   node scripts/upload-hosted.mjs public/cars/sf26 public/tracks/monza/track_data.json [more files or folders ...]
- *   node scripts/upload-hosted.mjs --dry-run public/cars/sf26
+ *   node scripts/upload-hosted.mjs public/cars/bmw-m4-gt3 public/tracks/monaco/track_data.json [more files or folders ...]
+ *   node scripts/upload-hosted.mjs --dry-run public/cars/bmw-m4-gt3
  *
  * Car and cockpit GLBs (any .glb outside public/tracks) go up meshopt-compressed, the copy the site has always served
  * (scripts/compress-car-glb.mjs, run on a temporary copy so the raw file the car tools edit stays as it is). Circuit
