@@ -55,13 +55,6 @@ const CarThumb: React.FC<{ car: CarDefinition; className?: string }> = ({ car, c
   );
 };
 
-const Spec: React.FC<{ k: string; children: React.ReactNode }> = ({ k, children }) => (
-  <div className="flex items-baseline justify-between gap-3 border-t border-white/[0.07] py-2">
-    <span className="lc-lbl">{k}</span>
-    <span className="min-w-0 text-right text-[13px] font-semibold text-[#F5F7FA]">{children}</span>
-  </div>
-);
-
 /**
  * Every car in the game, from the car registry: its classes become the categories (a new class shows up on its own),
  * each split by year, newest first, with favourites and recently driven. Opened from the Engineer's Garage.
@@ -177,23 +170,25 @@ export const CarBrowser: React.FC<{
         return (
           <>
             <CarThumb car={c} className="-mx-1 -mt-1 h-auto w-[calc(100%+0.5rem)] max-w-none" />
-            <div className="flex flex-wrap items-center gap-1.5">
-              <CarQualityBadge car={c} />
-              <Chip>{carClassYear(c)}</Chip>
-              <span className="lc-data text-[11px] tracking-[0.12em] text-[#C5CBD8]">{c.badge}</span>
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <span className="lc-disp text-[26px]">{c.title}</span>
-              <span className="text-[13px] text-[#C5CBD8]">{c.sub}</span>
-            </div>
-            <div>
-              <Spec k="Class">
-                {k.title} · {k.sub}
-              </Spec>
-              <Spec k="Year">{c.year}</Spec>
-              {own && !carTakesPhysicsSwitch(c.id) ? <Spec k="Physics">{own}</Spec> : null}
+            <div className="flex flex-col gap-2">
+              <span className="flex">
+                <CarQualityBadge car={c} />
+              </span>
+              <span className="lc-disp text-[21px] leading-[1.05] [overflow-wrap:anywhere]">{c.title}</span>
+              <span className="text-[13px] leading-snug text-[#C5CBD8]">{c.sub}</span>
+              <span className="text-[12px] text-[#8E96AA]">
+                {k.title}, {c.year}
+                {own && !carTakesPhysicsSwitch(c.id) ? ` · ${own} physics` : ""}
+              </span>
             </div>
             {carTakesPhysicsSwitch(c.id) ? <CarPhysicsSwitch color="#CCFF00" /> : null}
+            {carTakesLivery(c.id) ? (
+              <LiveryPicker liveries={LIVERIES} value={selectedLivery} onChange={onChangeLivery} surface="#11131A" />
+            ) : c.skins?.length ? (
+              <CarSkinPicker carId={c.id} surface="#11131A" />
+            ) : (
+              <p className="m-0 text-[12px] text-[#8E96AA]">{FACTORY_LIVERY_NOTE}</p>
+            )}
             <div className="flex flex-col gap-1 rounded-[10px] border border-[#262B3D] bg-[#08090D]/60 px-3 py-2.5">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="font-f1-mono text-[10px] font-extrabold tracking-[0.08em] uppercase" style={{ color: q.color }}>
@@ -215,16 +210,6 @@ export const CarBrowser: React.FC<{
               <p className="m-0 text-[12px] leading-snug text-[#8E96AA]">
                 {q.description} {PHYSICS_CHECK[carPhysics(c.id, modPhysics)]}
               </p>
-            </div>
-            <div className="flex flex-col gap-2">
-              <span className="lc-lbl">Livery</span>
-              {carTakesLivery(c.id) ? (
-                <LiveryPicker liveries={LIVERIES} value={selectedLivery} onChange={onChangeLivery} surface="#11131A" />
-              ) : c.skins?.length ? (
-                <CarSkinPicker carId={c.id} surface="#11131A" />
-              ) : (
-                <p className="m-0 text-[12px] text-[#8E96AA]">{FACTORY_LIVERY_NOTE}</p>
-              )}
             </div>
           </>
         );
