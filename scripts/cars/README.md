@@ -34,6 +34,30 @@ uv run --python 3.14 --no-project --with numpy --with scipy --with opencv-python
       - `WHEEL_xx_RIM` (rotating wheel rim, spokes, hub, and brake disc)
       - `WHEEL_xx_TYRE` (single-primitive tyre mesh for `installTyreDeformation`)
 
+# 2026 Prototype body (`port_qvist_f1.mjs`, `build_rb_livery.mjs`)
+
+`port_qvist_f1.mjs` builds the 2026 Prototype's body, `public/cars/f12026/model/f12026.glb`, from Qvist_designs'
+"F1 2026 concept (polygon model)" (Sketchfab, CC BY 4.0; download the GLB, it is not in the repository), in the layout
+`src/lib/vf26-car-model.ts` reads:
+
+```bash
+node --max-old-space-size=12288 scripts/cars/port_qvist_f1.mjs path/to/f1_2026_concept_polygon_model.glb
+```
+
+- **Source**: one CAD shell in eleven export chunks, no UVs, one grey material. Pieces are found by shared vertex
+  positions: four wheels (split into rim and tyre at 0.25 m from the axle), two mirror glasses, the exhaust, and one
+  welded body.
+- **Frame**: metres, +X left, +Y up, +Z forward, tyres on y = 0, the front axle at z = 1.5045 (where the AM26 had it,
+  so its cameras carry over unchanged). Wheelbase 3.400 m, the VF26 physics' own.
+- **Flaps**: the two upper elements of each wing are cut out of the body (between the endplates; the front ones as left
+  and right halves), both cut ends capped, each hinged on a line fitted through its leading edge, with
+  `aeroClosed` / `aeroOpen` extras (16 degrees rear, 10 front, trailing edge down).
+- **Paint**: zones by position (`zoneOf`): `EXT_PAINT_PRIMARY` / `_SECONDARY` / `_ACCENT` take the livery's colours,
+  `EXT_carbon` the procedural weave, `EXT_clearled_security` (the crash structure's rear face) the rain light. Triangles
+  are cut along the zone lines first so the edges are clean; each zone is simplified with its borders kept.
+- **From the AM26** (`public/amr26/model/amr26.glb`, `--steer-from`): `STEER_BASE` (steering wheel, shift lights,
+  display) and the root's `cameras`. The root's `helmet.pos` places the game's own helmet.
+
 # Assetto Corsa Car Porter (`port_ac_car.py`)
 
 `scripts/cars/port_ac_car.py` converts an Assetto Corsa car (its main `.kn5` plus one skin) into the same `CAR` / `BODY` / `STEER` / `WHEEL_xx` layout. Each car has a preset in `PRESETS`: its material table, the nodes and materials it leaves out, the skin files that override the kn5's, how its tyre meshes and spinning parts are named, and its windscreen. There are two, the Suzuki Liana 1.6 (`liana`) and the MTRacing 496R (`mtr-496r`); the kn5 reader, the hierarchy split and the paint bake are generic AC.
