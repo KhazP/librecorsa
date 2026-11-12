@@ -687,7 +687,8 @@ export class DriveSession {
     let aiFieldSpare: { field: AiOpponentField; physics: SimulatorCar; opponents: number } | null = null;
     /**
      * The AI cars of the next spare field, made one per idle slice before the field goes round them: each settles on
-     * the grid as it is made, up to half a second on Safari, so five in one task froze the menus for seconds
+     * the grid as it is made (the first for real, the rest are given its settle, `settle-memo.ts`). Under `next dev` a
+     * settle took half a second on Safari, so five in one task froze the menus for seconds
      */
     let sparePeers: { physics: SimulatorCar; cars: SimulatorCar[] } | null = null;
     /** The spare AI cars made for this car, used up */
@@ -702,6 +703,12 @@ export class DriveSession {
         skill: settings.aiSkill,
         peers: takeSparePeers(car),
       });
+    /**
+     * The next race's grid slots, settled ahead on a throwaway AI car each, one per idle slice once the spare field is
+     * built. A new field's AI cars are all alike, so the start then copies these settles (`settle-memo.ts`) instead of
+     * running one per car at the click: only the player's own car still settles there
+     */
+    let gridWarm: { physics: SimulatorCar; key: string; next: number } | null = null;
     /** One build of the spare field at a time (each call while it runs would start another) */
     let aiPrepQueued = false;
     this.prepareAiField = () => {
@@ -712,7 +719,19 @@ export class DriveSession {
         // Never while driving: the build would be a hitch on track instead
         if (disposed || appPhaseNow === "driving" || appPhaseNow === "loading") return;
         const opponents = settings.race.opponents;
-        if (aiFieldSpare?.physics === physics && aiFieldSpare.opponents === opponents) return;
+        if (aiFieldSpare?.physics === physics && aiFieldSpare.opponents === opponents) {
+          // The field, the player in it, on the race setup's start
+          const cars = aiDriversFor(opponents).length + 1;
+          const rolling = settings.race.start === "rolling";
+          const key = `${cars}:${rolling}`;
+          if (gridWarm?.physics !== physics || gridWarm.key !== key) gridWarm = { physics, key, next: 0 };
+          if (!physics.createAiPeerCar || gridWarm.next >= cars) return;
+          physics.createAiPeerCar().resetToStartGrid(rolling, gridWarm.next, rolling ? cars : undefined);
+          gridWarm.next++;
+          aiPrepQueued = true;
+          scheduleIdle(run, AI_PREP_GAP_MS);
+          return;
+        }
         if (sparePeers?.physics !== physics) sparePeers = { physics, cars: [] };
         if (physics.createAiPeerCar && sparePeers.cars.length < aiDriversFor(opponents).length) {
           sparePeers.cars.push(physics.createAiPeerCar());
@@ -722,6 +741,9 @@ export class DriveSession {
           return;
         }
         aiFieldSpare = { field: buildAiField(physics), physics, opponents };
+        // Then its grid slots
+        aiPrepQueued = true;
+        scheduleIdle(run, AI_PREP_GAP_MS);
       };
       scheduleIdle(run, AI_PREP_GAP_MS);
     };
