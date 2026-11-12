@@ -80,6 +80,10 @@ export interface WheelSettings {
   ffbDamping: number;
   /** Force low-pass time constant (s, 0..0.05); 0 = unfiltered */
   ffbFilterS: number;
+  /** Friction 0..1 the wheel runs itself (HID PID bases that offer it, over WebHID); 0 = off, and not set up */
+  ffbFriction: number;
+  /** Inertia 0..1 the wheel runs itself (HID PID bases that offer it, over WebHID); 0 = off, and not set up */
+  ffbInertia: number;
   /**
    * Downforce compensation 0..1: the exponent k of (static front load / current front load)^k on the physics torque,
    * so the aero load at speed does not make the rim heavier. 0 = off, 1 = the full aero share taken out
@@ -174,6 +178,8 @@ export const DEFAULT_WHEEL_SETTINGS: WheelSettings = {
   ffbInvert: false,
   ffbDamping: 0.1,
   ffbFilterS: 0,
+  ffbFriction: 0,
+  ffbInertia: 0,
   ffbDownforceComp: 0,
   ffbCollisionGuard: true,
   ffbPerCar: {},

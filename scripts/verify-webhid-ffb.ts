@@ -132,11 +132,14 @@ function pidCollections(o: DescriptorOptions = {}): HidCollectionLike[] {
   ];
 }
 
-/** pidCollections plus the Damper effect type and a Set Condition report (id 3) */
-function damperCollections(o: { noCreateNewEffect?: boolean } = {}): HidCollectionLike[] {
+/**
+ * pidCollections plus the Damper effect type and a Set Condition report (id 3); `types` lists other effect types (by
+ * default constant force, spring, damper: the damper selects as 3)
+ */
+function damperCollections(o: { noCreateNewEffect?: boolean; types?: number[] } = {}): HidCollectionLike[] {
   const base = pidCollections(o);
   const pidNode = base[1] as HidCollectionLike;
-  const types = [0x26, 0x40, 0x41].map(pid); // constant force, spring, damper: the damper selects as 3
+  const types = (o.types ?? [0x26, 0x40, 0x41]).map(pid);
   const index = variable([pid(0x22)], 8, 1, 1, 40);
   return [
     base[0] as HidCollectionLike,
@@ -989,6 +992,124 @@ async function main() {
       { kind: "out", id: 12, data: [3] },
       { kind: "out", id: 12, data: [2] },
     ]);
+  });
+
+  console.log("Friction and inertia (condition effects set up on request)");
+  /** Constant force, spring, damper, inertia, friction: every condition type the driver knows */
+  const allConditionCols = () => damperCollections({ types: [0x26, 0x40, 0x41, 0x42, 0x43] });
+  const creates = (dev: FakeHidDevice) => dev.log.filter((l) => l.kind === "feature" && l.id === 17);
+  /** Positive saturation of a Set Condition write, 0..10000 */
+  const saturation = (w: Logged) => (w.data[8] as number) | ((w.data[9] as number) << 8);
+
+  await check("a wheel offering friction and inertia: set up as before (constant force + damper) until they are asked for", async () => {
+    const cols = allConditionCols();
+    assert.deepEqual(asLayout(cols).conditions, ["damper", "friction", "inertia"]);
+    const dev = new FakeHidDevice(cols, asLayout(cols).blockLoad);
+    dev.laterBlocks = [4, 5, 6];
+    const ffb = new WebHidFfb(fakeHid([dev]).api, new FakeClock().deps);
+    await ffb.connect();
+    assert.equal(creates(dev).length, 2, "Create New Effect for the constant force and the damper only");
+    assert.equal(ffb.offersCondition("friction"), true);
+    assert.equal(ffb.hasHardwareCondition("friction"), false);
+    assert.equal(ffb.hasHardwareCondition("inertia"), false);
+    // The same traffic a damper-only wheel gets
+    const plainCols = damperCollections();
+    const plain = new FakeHidDevice(plainCols, asLayout(plainCols).blockLoad);
+    plain.laterBlocks = [4, 5, 6];
+    await new WebHidFfb(fakeHid([plain]).api, new FakeClock().deps).connect();
+    const strip = (d: FakeHidDevice) => d.log.map((l) => `${l.kind}:${l.id}:${l.kind === "feature" && l.id === 17 ? "" : l.data.join(",")}`);
+    assert.deepEqual(strip(dev), strip(plain));
+  });
+  await check("friction and inertia asked for: own blocks, saturation 30 %, their own streams; stop, emergency stop and dispose cover them", async () => {
+    const cols = allConditionCols();
+    const dev = new FakeHidDevice(cols, asLayout(cols).blockLoad);
+    dev.laterBlocks = [4, 5, 6];
+    const clock = new FakeClock();
+    const ffb = new WebHidFfb(fakeHid([dev], [dev]).api, clock.deps);
+    ffb.setWantedConditions({ friction: true, inertia: true });
+    await ffb.connect();
+    assert.equal(creates(dev).length, 4);
+    assert.equal(ffb.hasHardwareCondition("friction"), true);
+    assert.equal(ffb.hasHardwareCondition("inertia"), true);
+    const setup = conditions(dev);
+    assert.deepEqual(setup.map((w) => w.data[0]), [4, 5, 6], "damper, friction, inertia each on their own block");
+    assert.deepEqual(setup.map(saturation), [10000, 3000, 3000]);
+    assert.ok(setup.every((w) => coeff(w) === 0), "all start at coefficient 0");
+    dev.log.length = 0;
+    clock.advance(10);
+    ffb.setCondition("friction", 0.5);
+    await flush();
+    clock.advance(5);
+    await flush();
+    ffb.setCondition("inertia", 1);
+    await flush();
+    clock.advance(5);
+    await flush();
+    const live = conditions(dev);
+    // The coefficient is scaled by the 30 % cap too: 0.5 → 0.15, 1 → 0.3
+    assert.deepEqual(live.map((w) => [w.data[0], coeff(w), saturation(w)]), [[5, 1500, 3000], [6, 3000, 3000]]);
+    dev.log.length = 0;
+    ffb.stop();
+    await settle();
+    clock.advance(10);
+    await settle();
+    const zeroed = new Set(conditions(dev).filter((w) => coeff(w) === 0).map((w) => w.data[0]));
+    assert.ok(zeroed.has(5) && zeroed.has(6), "stop() zeroes friction and inertia");
+    ffb.setCondition("friction", 0.5);
+    await flush();
+    clock.advance(5);
+    await flush();
+    dev.log.length = 0;
+    ffb.emergencyStop();
+    const em = conditions(dev);
+    assert.deepEqual(em.map((w) => [w.data[0], coeff(w)]), [[4, 0], [5, 0], [6, 0]], "emergency stop zeroes every condition");
+    dev.laterBlocks = [7, 8, 9, 10];
+    assert.equal(await ffb.resume(), "Fake DD Base");
+    assert.equal(ffb.hasHardwareCondition("inertia"), true, "set up again with what was asked for");
+    dev.log.length = 0;
+    await ffb.dispose();
+    const ops = dev.log.filter((l) => l.kind === "out" && l.id === 10).map((l) => l.data[0]);
+    const frees = dev.log.filter((l) => l.kind === "out" && l.id === 11).map((l) => l.data[0]);
+    assert.equal(ops.length, 4, "stop for the constant force and each condition");
+    assert.equal(frees.length, 4, "every block freed");
+  });
+  await check("friction switched on while the wheel runs sets it up again with friction; switching it off does not", async () => {
+    const cols = allConditionCols();
+    const dev = new FakeHidDevice(cols, asLayout(cols).blockLoad);
+    dev.laterBlocks = [4, 5, 6, 7, 8, 9];
+    const clock = new FakeClock();
+    const ffb = new WebHidFfb(fakeHid([dev], [dev]).api, clock.deps);
+    await ffb.connect();
+    assert.equal(ffb.hasHardwareCondition("friction"), false);
+    const seen: boolean[] = [];
+    ffb.subscribe(() => seen.push(ffb.offersCondition("friction")));
+    ffb.setWantedConditions({ friction: true });
+    await settle();
+    assert.ok(seen.length > 0 && seen.every(Boolean), "the friction setting stays offered through the new setup");
+    assert.equal(ffb.status.state, "ready");
+    assert.equal(ffb.hasHardwareCondition("friction"), true);
+    assert.equal(ffb.hasHardwareCondition("inertia"), false);
+    const before = creates(dev).length;
+    ffb.setWantedConditions({ friction: false });
+    await settle();
+    assert.equal(creates(dev).length, before, "no new setup to drop it: it stays at the coefficient the game sends (0)");
+    ffb.setWantedConditions({ friction: true });
+    await settle();
+    assert.equal(creates(dev).length, before, "already running: no new setup");
+  });
+  await check("a wheel without friction / inertia ignores the request: no new setup, no stream", async () => {
+    const cols = damperCollections();
+    const dev = new FakeHidDevice(cols, asLayout(cols).blockLoad);
+    dev.laterBlocks = [4];
+    const ffb = new WebHidFfb(fakeHid([dev], [dev]).api, new FakeClock().deps);
+    await ffb.connect();
+    const before = dev.log.length;
+    ffb.setWantedConditions({ friction: true, inertia: true });
+    await settle();
+    ffb.setCondition("friction", 1);
+    await settle();
+    assert.equal(dev.log.length, before);
+    assert.equal(ffb.offersCondition("friction"), false);
   });
 
   console.log("Classic Logitech wheels (hid-lg4ff commands)");

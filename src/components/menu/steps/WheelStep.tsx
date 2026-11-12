@@ -884,6 +884,30 @@ export const WheelStep: React.FC<SetupStepProps> = ({ settings, onChangeSettings
                   hint="Resists fast rim movement and steadies the wheel at speed"
                   onChange={(v) => setWheel({ ffbDamping: v / 100 })}
                 />
+                {w.hidFfb && webHidFfb.offersCondition("friction") ? (
+                  <TuningSlider
+                    label="Friction"
+                    value={Math.round(w.ffbFriction * 100)}
+                    min={0}
+                    max={100}
+                    step={5}
+                    format={(v) => (v === 0 ? "Off" : `${v} %`)}
+                    hint="A steady drag on the rim, run by the wheel itself. Up to 30 % of its strength"
+                    onChange={(v) => setWheel({ ffbFriction: v / 100 })}
+                  />
+                ) : null}
+                {w.hidFfb && webHidFfb.offersCondition("inertia") ? (
+                  <TuningSlider
+                    label="Inertia"
+                    value={Math.round(w.ffbInertia * 100)}
+                    min={0}
+                    max={100}
+                    step={5}
+                    format={(v) => (v === 0 ? "Off" : `${v} %`)}
+                    hint="Weight that resists quick changes of direction, run by the wheel itself. Up to 30 % of its strength"
+                    onChange={(v) => setWheel({ ffbInertia: v / 100 })}
+                  />
+                ) : null}
                 <TuningSlider
                   label="Smoothing"
                   value={Math.round(w.ffbFilterS * 1000)}
@@ -929,8 +953,9 @@ export const WheelStep: React.FC<SetupStepProps> = ({ settings, onChangeSettings
               </div>
               <Hint>
                 Hold the rim and press Test: it should pull right for a second, then left. If it pulls left first, switch
-                on Invert. The wheel&apos;s overall strength and damping stay in its own software (Moza Pit House, Fanatec
-                control panel…); turn its centring spring off there.
+                on Invert. The wheel&apos;s overall strength stays in its own software (Moza Pit House, Fanatec control
+                panel…); turn its centring spring off there. Damping, friction and inertia set here add to the
+                wheel&apos;s own.
               </Hint>
             </>
           ) : (

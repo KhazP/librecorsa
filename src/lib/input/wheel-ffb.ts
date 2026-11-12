@@ -305,6 +305,10 @@ export class WheelFfbClient {
       if (hwDamper) {
         activeHid.setDamper(wheel.ffbDamping * (0.4 + 0.6 * gyroFactor));
       }
+      if (useHid && activeHid !== null) {
+        if (activeHid.hasHardwareCondition("friction")) activeHid.setCondition("friction", wheel.ffbFriction);
+        if (activeHid.hasHardwareCondition("inertia")) activeHid.setCondition("inertia", wheel.ffbInertia);
+      }
       const steerPad = wheel.steer ? findPad(pads, wheel.steer.padId) : undefined;
       const rimDeg =
         wheel.steer && steerPad
@@ -387,6 +391,10 @@ export class WheelFfbClient {
       }
     } else {
       if (hwDamper) activeHid.setDamper(0);
+      if (useHid && activeHid !== null) {
+        if (activeHid.hasHardwareCondition("friction")) activeHid.setCondition("friction", 0);
+        if (activeHid.hasHardwareCondition("inertia")) activeHid.setCondition("inertia", 0);
+      }
       if (hwLeds) activeHid.setRevLeds(0);
       this.resetDriving();
     }

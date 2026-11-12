@@ -99,6 +99,8 @@ export const PID = {
   EFFECT_TYPE: pidUsage(0x25),
   ET_CONSTANT_FORCE: pidUsage(0x26),
   ET_DAMPER: pidUsage(0x41),
+  ET_INERTIA: pidUsage(0x42),
+  ET_FRICTION: pidUsage(0x43),
   DURATION: pidUsage(0x50),
   SAMPLE_PERIOD: pidUsage(0x51),
   GAIN: pidUsage(0x52),
@@ -203,7 +205,24 @@ export interface PidLayout {
   blockLoad: PidReportLayout | null;
   /** Set Effect offers the Damper condition effect (0x41) and there is a Set Condition report */
   hasDamper: boolean;
+  /** Every condition effect this driver can run that Set Effect offers, with a Set Condition report */
+  conditions: ConditionKind[];
 }
+
+/**
+ * Condition effects the wheel runs itself, from the rim's own motion at the firmware's rate: the damper (speed), the
+ * friction (direction of motion) and the inertia (acceleration). The spring is left out: the game's torque centres the
+ * rim, and the wheel goes limp outside the car
+ */
+export type ConditionKind = "damper" | "friction" | "inertia";
+/** Condition effects set up only when the player asked for them (the damper always is, where the wheel offers it) */
+export type OptionalConditionKind = Exclude<ConditionKind, "damper">;
+const CONDITION_EFFECT: Record<ConditionKind, number> = { damper: 0x41, friction: 0x43, inertia: 0x42 };
+/**
+ * Saturation each condition effect is set up with (share of the wheel's range it may push with). Friction and inertia
+ * stay well under full torque: a full-strength friction that flips sign as the rim stops can oscillate a direct drive
+ */
+export const CONDITION_SATURATION: Record<ConditionKind, number> = { damper: 1, friction: 0.3, inertia: 0.3 };
 
 const hasField = (l: PidReportLayout, key: number) => key in l.fields;
 const getField = (l: PidReportLayout, key: number): PidFieldLayout | undefined => l.fields[key] as PidFieldLayout | undefined;
@@ -348,6 +367,9 @@ export function parsePidLayout(collections: readonly HidCollectionLike[]): PidLa
   if (!constantForce || !effectOperation) return null;
   const effectTypes = setEffect ? (getField(setEffect, PID.EFFECT_TYPE)?.usages ?? []) : [];
   const hasDamper = setCondition !== null && effectTypes.includes(PID.ET_DAMPER);
+  const conditions = setCondition
+    ? (Object.keys(CONDITION_EFFECT) as ConditionKind[]).filter((k) => effectTypes.includes(pidUsage(CONDITION_EFFECT[k])))
+    : [];
   return {
     constantForce,
     effectOperation,
@@ -359,6 +381,7 @@ export function parsePidLayout(collections: readonly HidCollectionLike[]): PidLa
     createNewEffect,
     blockLoad,
     hasDamper,
+    conditions,
   };
 }
 
@@ -646,6 +669,12 @@ export interface PidSession extends SessionBase {
   blockIndex: number;
   /** Effect block holding the hardware Damper condition effect; null when the wheel runs none */
   damperBlockIndex: number | null;
+  /** Every condition effect running on the wheel (the damper included), each on its own block */
+  conditionBlocks: { kind: ConditionKind; blockIndex: number }[];
+  /** Coefficient 0..1 per running condition effect, each a stream of `writer` (`setDamper` is the damper's) */
+  setCondition: Partial<Record<ConditionKind, (coeff: number, urgent?: boolean) => void>>;
+  /** The optional condition effects this session was set up to run (whether or not the wheel took them) */
+  requestedConditions: OptionalConditionKind[];
 }
 
 export interface LogitechClassicSession extends SessionBase {
@@ -673,6 +702,8 @@ export interface PidSetupOptions {
   onFail?: (message: string, fatal: boolean) => void;
   /** The device's layout when the caller has parsed it already */
   layout?: PidLayout;
+  /** Friction / inertia to set up as well, where the wheel offers them; none by default */
+  conditions?: readonly OptionalConditionKind[];
 }
 
 /* ------------------------------------------------------------------------------------------------------------ */
@@ -887,29 +918,33 @@ async function bestEffort(fn: () => Promise<unknown>): Promise<void> {
 }
 
 /**
- * Optional hardware Damper condition effect at coefficient 0, started like the constant force. Only on a wheel that
- * hands the block out itself (Create New Effect / Block Load): a guessed block index could land on the constant force
- * one. Null when the wheel has none or setting it up fails; a block it did hand out is given back.
+ * Optional hardware condition effect (damper, friction, inertia) at coefficient 0, started like the constant force.
+ * Only on a wheel that hands the block out itself (Create New Effect / Block Load): a guessed block index could land on
+ * one in use. Null when the wheel has none or setting it up fails; a block it did hand out is given back, unless it is
+ * one already in use (`taken`).
  */
-async function setupDamper(
+async function setupCondition(
   device: HidDeviceLike,
   layout: PidLayout,
   cond: PidReportLayout,
   deps: FfbDeps,
   profile: PidProfile,
-  forceBlock: number,
+  taken: readonly number[],
   start: number,
-  loopCount: number
+  loopCount: number,
+  kind: ConditionKind
 ): Promise<number | null> {
+  const effect = pidUsage(CONDITION_EFFECT[kind]);
+  const forceBlock = taken[0];
   let block: number | null = null;
   try {
-    block = await allocateEffect(device, layout, deps, profile, PID.ET_DAMPER, "damper");
-    if (block === null || block === forceBlock) return null;
+    block = await allocateEffect(device, layout, deps, profile, effect, kind);
+    if (block === null || taken.includes(block)) return null;
     if (layout.setEffect) {
-      const r = buildSetEffectReport(layout.setEffect, block, PID.ET_DAMPER, profile);
+      const r = buildSetEffectReport(layout.setEffect, block, effect, profile);
       await device.sendReport(r.reportId, r.data);
     }
-    await sendOutput(device, cond, conditionReportValues(cond, block, 0, 1));
+    await sendOutput(device, cond, conditionReportValues(cond, block, 0, CONDITION_SATURATION[kind]));
     await sendOutput(device, layout.effectOperation, {
       [PID.EFFECT_BLOCK_INDEX]: block,
       [PID.EFFECT_OPERATION]: start,
@@ -917,9 +952,9 @@ async function setupDamper(
     });
     return block;
   } catch {
-    // the constant force runs without it (effect memory full, damper refused, a write failed)
+    // the constant force runs without it (effect memory full, the effect refused, a write failed)
     const freeBlock = block;
-    if (freeBlock !== null && freeBlock !== forceBlock && layout.blockFree) {
+    if (freeBlock !== null && freeBlock !== forceBlock && !taken.includes(freeBlock) && layout.blockFree) {
       const free = layout.blockFree;
       await bestEffort(() => sendOutput(device, free, { [PID.EFFECT_BLOCK_INDEX]: freeBlock }));
     }
@@ -988,8 +1023,17 @@ export async function setupPidDevice(device: HidDeviceLike, options: PidSetupOpt
     });
 
     const cond = layout.setCondition;
-    const damperBlockIndex =
-      layout.hasDamper && cond ? await setupDamper(device, layout, cond, deps, profile, blockIndex, start, loopCount) : null;
+    const conditionBlocks: PidSession["conditionBlocks"] = [];
+    const requestedConditions = [...new Set(options.conditions ?? [])];
+    if (cond) {
+      for (const kind of ["damper", ...requestedConditions] as ConditionKind[]) {
+        if (!layout.conditions.includes(kind)) continue;
+        const taken = [blockIndex, ...conditionBlocks.map((c) => c.blockIndex)];
+        const block = await setupCondition(device, layout, cond, deps, profile, taken, start, loopCount, kind);
+        if (block !== null) conditionBlocks.push({ kind, blockIndex: block });
+      }
+    }
+    const damperBlockIndex = conditionBlocks.find((c) => c.kind === "damper")?.blockIndex ?? null;
 
     const writer = new ForceWriter(
       forceField,
@@ -997,16 +1041,31 @@ export async function setupPidDevice(device: HidDeviceLike, options: PidSetupOpt
       deps,
       options.onFail
     );
-    const session: PidSession = { kind: "pid", device, layout, blockIndex, damperBlockIndex, writer };
-    if (damperBlockIndex !== null && cond) {
-      session.setDamper = writer.addChannel({
+    const session: PidSession = {
+      kind: "pid",
+      device,
+      layout,
+      blockIndex,
+      damperBlockIndex,
+      conditionBlocks,
+      setCondition: {},
+      requestedConditions,
+      writer,
+    };
+    for (const { kind, blockIndex: block } of conditionBlocks) {
+      if (!cond) break;
+      session.setCondition[kind] = writer.addChannel({
         toRaw: (c) => Math.round(clamp(Number.isFinite(c) ? c : 0, 0, 1) * 1000),
         threshold: 25,
         zeroRaw: 0,
         initialRaw: 0,
-        send: (raw) => sendOutput(device, cond, conditionReportValues(cond, damperBlockIndex, raw / 1000, 1)),
+        // The coefficient is scaled by the same cap as the saturation, so the whole 0..1 range does something on a
+        // firmware that reads friction as the coefficient clipped at the saturation (the damper's cap is 1)
+        send: (raw) =>
+          sendOutput(device, cond, conditionReportValues(cond, block, (raw / 1000) * CONDITION_SATURATION[kind], CONDITION_SATURATION[kind])),
       });
     }
+    session.setDamper = session.setCondition.damper;
     return { ok: true, session };
   } catch (e) {
     // As in teardownPidSession: never leave the motor armed or an effect block held after a failed setup
@@ -1198,7 +1257,7 @@ export function teardownSession(session: FfbSession): Promise<void> {
 /** Best-effort shutdown: zero force, stop the effects, free them, stop all, disable actuators. Never throws. */
 export async function teardownPidSession(session: PidSession): Promise<void> {
   await session.writer.close();
-  const { device, layout, blockIndex, damperBlockIndex } = session;
+  const { device, layout, blockIndex, conditionBlocks } = session;
   const attempt = bestEffort;
   const mag = getField(layout.constantForce, PID.MAGNITUDE);
   if (mag) {
@@ -1210,16 +1269,16 @@ export async function teardownPidSession(session: PidSession): Promise<void> {
   const stop = op ? selectorValue(op, PID.OP_EFFECT_STOP) : null;
   if (stop !== null) {
     await attempt(() => sendOutput(device, layout.effectOperation, { [PID.EFFECT_BLOCK_INDEX]: blockIndex, [PID.EFFECT_OPERATION]: stop }));
-    if (damperBlockIndex) {
+    for (const c of conditionBlocks) {
       await attempt(() =>
-        sendOutput(device, layout.effectOperation, { [PID.EFFECT_BLOCK_INDEX]: damperBlockIndex, [PID.EFFECT_OPERATION]: stop })
+        sendOutput(device, layout.effectOperation, { [PID.EFFECT_BLOCK_INDEX]: c.blockIndex, [PID.EFFECT_OPERATION]: stop })
       );
     }
   }
   if (layout.blockFree) {
     await attempt(() => sendOutput(device, layout.blockFree as PidReportLayout, { [PID.EFFECT_BLOCK_INDEX]: blockIndex }));
-    if (damperBlockIndex) {
-      await attempt(() => sendOutput(device, layout.blockFree as PidReportLayout, { [PID.EFFECT_BLOCK_INDEX]: damperBlockIndex }));
+    for (const c of conditionBlocks) {
+      await attempt(() => sendOutput(device, layout.blockFree as PidReportLayout, { [PID.EFFECT_BLOCK_INDEX]: c.blockIndex }));
     }
   }
   await attempt(() => deviceControl(device, layout, PID.DC_STOP_ALL_EFFECTS));
@@ -1247,7 +1306,7 @@ export function emergencyStopSession(session: FfbSession): void {
     for (const bytes of lg4ffReleaseCommands(session)) fireAndForget(() => session.send(bytes));
     return;
   }
-  const { device, layout, blockIndex, damperBlockIndex } = session;
+  const { device, layout, blockIndex, conditionBlocks } = session;
   const mag = getField(layout.constantForce, PID.MAGNITUDE);
   if (mag) {
     fireAndForget(() =>
@@ -1255,8 +1314,8 @@ export function emergencyStopSession(session: FfbSession): void {
     );
   }
   const cond = layout.setCondition;
-  if (damperBlockIndex !== null && cond) {
-    fireAndForget(() => sendOutput(device, cond, conditionReportValues(cond, damperBlockIndex, 0, 1)));
+  for (const { kind, blockIndex: block } of cond ? conditionBlocks : []) {
+    fireAndForget(() => sendOutput(device, cond as PidReportLayout, conditionReportValues(cond as PidReportLayout, block, 0, CONDITION_SATURATION[kind])));
   }
   // deviceControl sends before its first await, so the report is handed over here
   fireAndForget(() => deviceControl(device, layout, PID.DC_STOP_ALL_EFFECTS));
@@ -1464,6 +1523,7 @@ export function describeHidDevice(device: HidDeviceLike): string {
   const types = layout.setEffect ? (getField(layout.setEffect, PID.EFFECT_TYPE)?.usages ?? []) : [];
   out.push(`Effect types: ${types.length > 0 ? types.map(usageName).join(", ") : "(no Set Effect type list)"}`);
   out.push(`Hardware damper: ${layout.hasDamper ? "yes (Damper effect type and a Set Condition report)" : "no"}`);
+  out.push(`Condition effects this driver can run: ${layout.conditions.length > 0 ? layout.conditions.join(", ") : "none"}`);
   return out.join("\n");
 }
 
@@ -1472,7 +1532,12 @@ function describeSession(session: FfbSession): string {
   if (session.kind === "pid") {
     return (
       `pid driver, constant force on effect block ${session.blockIndex}, ` +
-      `hardware damper ${session.damperBlockIndex !== null ? `on block ${session.damperBlockIndex}` : "none"}`
+      `hardware damper ${session.damperBlockIndex !== null ? `on block ${session.damperBlockIndex}` : "none"}` +
+      session.conditionBlocks
+        .filter((c) => c.kind !== "damper")
+        .map((c) => `, ${c.kind} on block ${c.blockIndex}`)
+        .join("") +
+      (session.requestedConditions.length > 0 ? ` (asked for: ${session.requestedConditions.join(", ")})` : "")
     );
   }
   return `logitech-classic driver (hid-lg4ff), ${session.model.name}, ${session.rangeChanged ? "range set from the wheel rotation setting" : "the wheel's own range"}`;
@@ -1575,6 +1640,13 @@ export class WebHidFfb {
   private lastDriveMs = 0;
   private idleTimer: unknown = null;
   private rotationDeg: number | null = null;
+  /** Friction / inertia the player has switched on: set up with the wheel (see {@link setWantedConditions}) */
+  private wantedConditions: OptionalConditionKind[] = [];
+  /**
+   * Condition effects the wheel set up last offers and can allocate (Create New Effect / Block Load). Kept while that
+   * wheel is set up again, so the settings that drive them stay on screen through it
+   */
+  private offeredConditions: ConditionKind[] = [];
   /**
    * From reconnect() (or a connect() whose picker returned a wheel) until dispose(): a granted wheel that comes back
    * is re-opened. A cancelled picker arms nothing.
@@ -1678,26 +1750,34 @@ export class WebHidFfb {
         return null;
       }
       await this.release();
-      const name = deviceName(pick.device);
-      this.setStatus("connecting", name, null);
-      for (let attempt = 1; ; attempt++) {
-        const result = await this.setUp(hid, pick);
-        if (result.ok) return name;
-        if (!this.wanted) {
-          this.setStatus("idle", null, null);
-          return null;
-        }
-        if (result.unsupported || attempt >= SETUP_ATTEMPTS) {
-          return this.fail(result.unsupported ? "unsupported" : "error", name, result.message);
-        }
-        this.setStatus("connecting", name, `${result.message}; trying again (${attempt + 1}/${SETUP_ATTEMPTS})`);
-        await this.waitForRetry(SETUP_RETRY_MS);
-        if (!this.wanted) {
-          this.setStatus("idle", null, null);
-          return null;
-        }
-      }
+      return this.setUpWithRetries(hid, pick);
     });
+  }
+
+  /**
+   * Sets a picked wheel up, staying "connecting" between up to {@link SETUP_ATTEMPTS} tries (a base just switched on may
+   * refuse at first); an unsupported wheel is not retried. Inside an operation ({@link guard})
+   */
+  private async setUpWithRetries(hid: HidApiLike, pick: FfbPick): Promise<string | null> {
+    const name = deviceName(pick.device);
+    this.setStatus("connecting", name, null);
+    for (let attempt = 1; ; attempt++) {
+      const result = await this.setUp(hid, pick);
+      if (result.ok) return name;
+      if (!this.wanted) {
+        this.setStatus("idle", null, null);
+        return null;
+      }
+      if (result.unsupported || attempt >= SETUP_ATTEMPTS) {
+        return this.fail(result.unsupported ? "unsupported" : "error", name, result.message);
+      }
+      this.setStatus("connecting", name, `${result.message}; trying again (${attempt + 1}/${SETUP_ATTEMPTS})`);
+      await this.waitForRetry(SETUP_RETRY_MS);
+      if (!this.wanted) {
+        this.setStatus("idle", null, null);
+        return null;
+      }
+    }
   }
 
   /**
@@ -1720,6 +1800,38 @@ export class WebHidFfb {
     this.noteDrive();
   }
 
+  /**
+   * Whether the wheel set up last offers this condition effect and hands out effect blocks for it (whether or not it
+   * runs yet); stays true while that wheel is set up again
+   */
+  offersCondition(kind: ConditionKind): boolean {
+    return this.offeredConditions.includes(kind);
+  }
+
+  /** Whether this condition effect runs on the connected wheel */
+  hasHardwareCondition(kind: ConditionKind): boolean {
+    return this.session?.kind === "pid" && Boolean(this.session.setCondition[kind]);
+  }
+
+  /** Coefficient 0..1 of a running condition effect (see {@link CONDITION_SATURATION}); ignored without it */
+  setCondition(kind: ConditionKind, coeff: number): void {
+    if (this.session?.kind === "pid") this.session.setCondition[kind]?.(coeff);
+    this.noteDrive();
+  }
+
+  /**
+   * Which optional condition effects the player has switched on (a settings change, not a per-frame call). A wheel
+   * sets one up only when asked, so the setup of a wheel nobody tuned stays as it was; one switched on while the wheel
+   * runs, which the wheel offers and this session was not set up with, sets the wheel up again with it.
+   */
+  setWantedConditions(want: Partial<Record<OptionalConditionKind, boolean>>): void {
+    const next = (["friction", "inertia"] as const).filter((k) => want[k] === true);
+    this.wantedConditions = next;
+    const s = this.session;
+    if (s?.kind !== "pid") return;
+    if (next.some((k) => this.offeredConditions.includes(k) && !s.requestedConditions.includes(k))) void this.resetup();
+  }
+
   /** Whether the connected wheel has rev LEDs this driver can set (a classic Logitech G27 or G29) */
   hasRevLeds(): boolean {
     return this.session?.kind === "logitech-classic" && Boolean(this.session.setLeds);
@@ -1740,11 +1852,12 @@ export class WebHidFfb {
     if (this.session?.kind === "logitech-classic" && this.rotationDeg !== null) this.session.setRange(this.rotationDeg);
   }
 
-  /** Zero force and hardware damper, rev LEDs off, now (pause menu) */
+  /** Zero force and the hardware condition effects, rev LEDs off, now (pause menu) */
   stop(): void {
-    this.session?.writer.setForce(0, true);
-    this.session?.setDamper?.(0, true);
-    if (this.session?.kind === "logitech-classic") this.session.setLeds?.(0, true);
+    const s = this.session;
+    s?.writer.setForce(0, true);
+    if (s?.kind === "pid") for (const set of Object.values(s.setCondition)) set?.(0, true);
+    if (s?.kind === "logitech-classic") s.setLeds?.(0, true);
   }
 
   /**
@@ -1855,6 +1968,23 @@ export class WebHidFfb {
     return p;
   }
 
+  /**
+   * The running wheel set up again (an optional condition effect was switched on), retried as {@link reconnect} retries
+   * a wheel that refuses its setup at first
+   */
+  private resetup(): Promise<string | null> {
+    return this.guard(async () => {
+      const hid = this.hidApi();
+      const device = this.device;
+      if (!hid || !device || !this.session) return null;
+      const pick = pickFfbDevice([device]);
+      if (!pick) return null;
+      this.trace.note("setting the wheel up again for a condition effect switched on");
+      await this.release();
+      return this.setUpWithRetries(hid, pick);
+    }, true);
+  }
+
   /** Sets the wheel up and makes it the force output; on failure the status is "error" / "unsupported" */
   private async attach(hid: HidApiLike, pick: FfbPick): Promise<string | null> {
     const r = await this.setUp(hid, pick);
@@ -1896,7 +2026,7 @@ export class WebHidFfb {
     try {
       result =
         pick.kind === "pid"
-          ? await setupPidDevice(traced, { ...options, layout: pick.layout })
+          ? await setupPidDevice(traced, { ...options, layout: pick.layout, conditions: this.wantedConditions })
           : await setupLogitechClassicDevice(traced, pick.model, options);
     } finally {
       this.trace.recording = false;
@@ -1912,6 +2042,8 @@ export class WebHidFfb {
     }
     this.trace.note(`setup ok: ${describeSession(result.session)}`);
     this.session = result.session;
+    const l = result.session.kind === "pid" ? result.session.layout : null;
+    this.offeredConditions = l && l.setCondition && l.createNewEffect && l.blockLoad ? l.conditions : [];
     this.device = device;
     if (this.listening !== hid) {
       hid.addEventListener("disconnect", this.onDisconnect);

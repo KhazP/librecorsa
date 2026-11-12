@@ -449,6 +449,8 @@ function parseWheel(v: unknown): WheelSettings {
     ffbInvert: bool(v.ffbInvert, d.ffbInvert),
     ffbDamping: num(v.ffbDamping, 0, 1, d.ffbDamping),
     ffbFilterS: num(v.ffbFilterS, 0, 0.05, d.ffbFilterS),
+    ffbFriction: num(v.ffbFriction, 0, 1, d.ffbFriction),
+    ffbInertia: num(v.ffbInertia, 0, 1, d.ffbInertia),
     ffbDownforceComp: num(v.ffbDownforceComp, 0, 1, d.ffbDownforceComp),
     ffbCollisionGuard: bool(v.ffbCollisionGuard, d.ffbCollisionGuard),
     revLeds: bool(v.revLeds, d.revLeds),

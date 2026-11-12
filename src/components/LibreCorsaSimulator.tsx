@@ -1233,6 +1233,10 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   const hidFfbWanted = settings.wheel.ffbEnabled && settings.wheel.hidFfb;
   // Before the reconnect below: a classic Logitech wheel is set to this rotation as it connects
   useEffect(() => webHidFfb.setRotationDeg(settings.wheel.rotationDeg), [settings.wheel.rotationDeg]);
+  // Also before it: friction / inertia switched on are set up with the wheel (a running one is set up again for them)
+  const wantFriction = settings.wheel.ffbFriction > 0;
+  const wantInertia = settings.wheel.ffbInertia > 0;
+  useEffect(() => webHidFfb.setWantedConditions({ friction: wantFriction, inertia: wantInertia }), [wantFriction, wantInertia]);
   useEffect(() => {
     if (!hidFfbWanted) {
       void webHidFfb.dispose();
