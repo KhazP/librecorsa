@@ -62,7 +62,7 @@ const tick = () => new Promise((r) => setTimeout(r, 0));
 async function main() {
   // After the environment above is in place: the config module reads it as it loads
   const { MultiplayerSyncManager } = await import('../src/lib/sim/multiplayer-sync');
-  type Internals = { peers: Map<string, { clockOffsetMs: number | null; snapshots: unknown[] }>; hostId: string | null; clockSynced: boolean };
+  type Internals = { peers: Map<string, { mapMs: number | null; snapshots: unknown[] }>; hostId: string | null; clockSynced: boolean };
 
   const m = new MultiplayerSyncManager();
   const inner = m as unknown as Internals;
@@ -146,7 +146,7 @@ async function main() {
     frame();
   }
   const steady = inner.peers.get('peer_other');
-  const offsetBefore = steady?.clockOffsetMs ?? 0;
+  const offsetBefore = steady?.mapMs ?? NaN;
   check('the other car is drawn about where it is', Math.abs(x - (SPEED * (clock - t0)) / 1000) < 2, `${x.toFixed(1)} m of ${((SPEED * (clock - t0)) / 1000).toFixed(1)}`);
 
   // The network stalls for 320 ms, then everything it held back lands at once
@@ -162,7 +162,7 @@ async function main() {
   const before = x;
   frame();
   const after = inner.peers.get('peer_other');
-  check('after a stall and a burst, the car\'s clock is not read as having jumped', Math.abs((after?.clockOffsetMs ?? 0) - offsetBefore) < 60, `${((after?.clockOffsetMs ?? 0) - offsetBefore).toFixed(0)} ms`);
+  check('after a stall and a burst, the car\'s clock is not read as having jumped', Math.abs((after?.mapMs ?? NaN) - offsetBefore) < 60, `${((after?.mapMs ?? NaN) - offsetBefore).toFixed(0)} ms`);
   check('its history is kept', (after?.snapshots.length ?? 0) >= 4, `${after?.snapshots.length} snapshots`);
   for (let i = 0; i < 10; i++) {
     clock += 20;
