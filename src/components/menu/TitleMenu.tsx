@@ -143,11 +143,37 @@ const Credits: React.FC = () => (
             CC BY 4.0
           </a>
           <br />
-          &ldquo;2020 Mercedes-Benz AMG GT3&rdquo; (
-          <a href="https://skfb.ly/pOTPL" target="_blank" rel="noreferrer" className={linkClass}>
-            skfb.ly/pOTPL
+          Mercedes-AMG GT3 Evo: &ldquo;Mercedes-AMG GT3&rdquo; (
+          <a
+            href="https://sketchfab.com/3d-models/mercedes-amg-gt3-wwwvecarzcom-6a3f7e3455064721b74b7f0b66427a07"
+            target="_blank"
+            rel="noreferrer"
+            className={linkClass}
+          >
+            sketchfab.com
           </a>
-          ) by Ddiaz Design · CC BY-NC-SA 4.0
+          ) by{" "}
+          <a href="https://vecarz.com/" target="_blank" rel="noreferrer" className={linkClass}>
+            Vecarz
+          </a>
+          , Red Bull Racing livery from toddeppe&apos;s and VTX&apos;s versions ·{" "}
+          <a href="http://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank" rel="noreferrer" className={linkClass}>
+            CC BY-NC-SA 4.0
+          </a>
+          <br />
+          &ldquo;2025 BMW M4 GT3 EVO G82&rdquo; (
+          <a
+            href="https://sketchfab.com/3d-models/2025-bmw-m4-gt3-evo-g82-113f83dd87064697a5ec2511d280b9d5"
+            target="_blank"
+            rel="noreferrer"
+            className={linkClass}
+          >
+            sketchfab.com
+          </a>
+          ) by Ddiaz Design ·{" "}
+          <a href="http://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank" rel="noreferrer" className={linkClass}>
+            CC BY-NC-SA 4.0
+          </a>
         </CreditRow>
         <CreditRow title="Tyres">
           &ldquo;2026 Pirelli Tire Pack&rdquo; (
