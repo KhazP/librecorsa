@@ -231,7 +231,7 @@ export const InputTrace: React.FC<InputTraceProps> = ({ sample, seconds = 5, wid
           <span style={{ color: HUD_CYAN }} title="Road wheels solid, your input dashed">
             STR
             {steerLockDeg !== undefined ? (
-              <span className="inline-block min-w-[4ch] text-right tabular-nums">{` ${Math.abs(steering * steerLockDeg).toFixed(1)}°`}</span>
+              <span className="ml-1 inline-block min-w-[5ch] text-right tabular-nums">{`${Math.abs(steering * steerLockDeg).toFixed(1)}°`}</span>
             ) : null}
           </span>
         </span>
