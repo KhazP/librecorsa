@@ -415,7 +415,7 @@ export function ContentBrowser<T>(props: ContentBrowserProps<T>) {
         ) : null}
       </div>
 
-      <div className="grid min-h-0 grid-cols-1 gap-3.5 md:grid-cols-[176px_minmax(0,1fr)] lg:h-[max(360px,min(640px,calc(100dvh-420px)))] lg:grid-cols-[180px_minmax(0,1fr)_minmax(240px,280px)]">
+      <div className="grid min-h-0 grid-cols-1 gap-3.5 md:grid-cols-[176px_minmax(0,1fr)] lg:h-[max(380px,min(760px,calc(100dvh-270px)))] lg:grid-cols-[168px_minmax(0,1fr)_minmax(272px,304px)] xl:grid-cols-[180px_minmax(0,1fr)_328px]">
         {/* Categories: a column on wide screens, a scrolling pill row on phones */}
         <nav
           ref={filtersRef}
@@ -568,8 +568,8 @@ export function ContentBrowser<T>(props: ContentBrowserProps<T>) {
               <div data-nav-scroll className="flex min-h-0 flex-1 flex-col gap-3.5 p-4 lg:overflow-y-auto lg:[scrollbar-width:thin]">
                 {props.renderDetail(selected)}
               </div>
-              <div className="flex shrink-0 flex-col gap-2 border-t border-[#262B3D] p-3">
-                <div data-browser-primary className="flex flex-col [&>button]:w-full [&>button]:justify-center">
+              <div className="flex shrink-0 items-center gap-2 border-t border-[#262B3D] p-3">
+                <div data-browser-primary className="flex min-w-0 flex-1 flex-col [&>button]:w-full [&>button]:justify-center">
                   {action.current ? (
                     <div role="status" className="inline-flex h-[52px] items-center justify-center gap-2.5 rounded-full bg-[#1B1F2B] text-[#C5CBD8] phone:h-11">
                       <Check aria-hidden className="h-[18px] w-[18px] text-[#F5F7FA]" strokeWidth={3} />
@@ -586,21 +586,22 @@ export function ContentBrowser<T>(props: ContentBrowserProps<T>) {
                   )}
                 </div>
                 {onToggleFavorite ? (
+                  // Its key (F / Ⓧ) is in the prompts under the browser
                   <button
                     type="button"
                     aria-pressed={selectedFav}
+                    aria-label={selectedFav ? "Favourite" : "Add to favourites"}
+                    title={selectedFav ? "Favourite" : "Add to favourites"}
                     onClick={() => onToggleFavorite(selected)}
                     onPointerEnter={focusOnHover}
-                    className="inline-flex h-10 w-full shrink-0 cursor-pointer items-center justify-center gap-2.5 rounded-full border border-[#262B3D] bg-[#1B1F2B]/80 px-4 text-[#F5F7FA] transition-colors hover:border-[#3A4157] hover:bg-[#262B3D]"
+                    className="inline-flex h-[52px] w-[52px] shrink-0 cursor-pointer items-center justify-center rounded-full border border-[#262B3D] bg-[#1B1F2B]/80 text-[#F5F7FA] transition-colors hover:border-[#3A4157] hover:bg-[#262B3D] phone:h-11 phone:w-11"
                   >
-                    {pad ? <PadGlyph button="x" family={family} /> : <KeyCap>F</KeyCap>}
                     <Star
                       aria-hidden
-                      className={`h-4 w-4 ${selectedFav ? "text-[#FFB300]" : "text-[#8E96AA]"}`}
+                      className={`h-5 w-5 ${selectedFav ? "text-[#FFB300]" : "text-[#8E96AA]"}`}
                       strokeWidth={2.4}
                       fill={selectedFav ? "currentColor" : "none"}
                     />
-                    <span className="lc-title text-[14px]">{selectedFav ? "Favourite" : "Add to favourites"}</span>
                   </button>
                 ) : null}
               </div>

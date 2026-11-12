@@ -48,24 +48,19 @@ const CardOutline: React.FC<{ track: TrackInfo }> = ({ track }) => {
 const DetailOutline: React.FC<{ track: TrackInfo }> = ({ track }) => {
   const map = useCircuitOutline(track, true, true);
   return (
-    <div className="flex flex-col gap-2">
-      <div className="flex items-center justify-between gap-2">
-        <span className="lc-lbl">Layout</span>
-        <span className="flex gap-2.5">
-          {SECTOR_COLORS.map((c, i) => (
-            <span key={c} className="inline-flex items-center gap-1 font-f1-mono text-[10px] font-extrabold" style={{ color: c }}>
-              <span className="h-1 w-2.5 rounded-full" style={{ background: c }} />S{i + 1}
-            </span>
-          ))}
-        </span>
-      </div>
-      <div className="flex aspect-[16/10] max-h-[130px] items-center justify-center rounded-[12px] bg-[#08090D]/60 p-1">
-        {map ? (
-          <TrackOutline map={map} sectors className="h-full w-full" label={`${track.name} · ${track.layout} by sector`} />
-        ) : (
-          <span className="text-[12px] text-[#8E96AA]">{map === null ? "Outline unavailable offline" : "Loading outline…"}</span>
-        )}
-      </div>
+    <div className="relative flex aspect-[16/10] max-h-[168px] items-center justify-center rounded-[12px] bg-[#08090D]/60 p-1 pb-6">
+      {map ? (
+        <TrackOutline map={map} sectors className="h-full w-full" label={`${track.name} · ${track.layout} by sector`} />
+      ) : (
+        <span className="text-[12px] text-[#8E96AA]">{map === null ? "Outline unavailable offline" : "Loading outline…"}</span>
+      )}
+      <span aria-hidden className="absolute right-2.5 bottom-2 flex gap-2.5">
+        {SECTOR_COLORS.map((c, i) => (
+          <span key={c} className="inline-flex items-center gap-1 font-f1-mono text-[10px] font-extrabold" style={{ color: c }}>
+            <span className="h-1 w-2.5 rounded-full" style={{ background: c }} />S{i + 1}
+          </span>
+        ))}
+      </span>
     </div>
   );
 };
@@ -244,30 +239,25 @@ export const CircuitBrowser: React.FC<{
         ];
         return (
           <>
-            <div className="flex flex-wrap items-center gap-1.5">
-              <TrackQualityBadge track={t} />
-              <Chip>{v.region}</Chip>
-              {[...typesOf(v)].map((ty) => (
-                <Chip key={ty}>{CIRCUIT_TYPE_LABELS[ty]}</Chip>
-              ))}
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <span className="lc-disp text-[24px]">{v.name}</span>
-              <span className="text-[13px] text-[#C5CBD8]">
-                {t.layout} · {placeOf(v.city, v.country)}
+            <div className="flex flex-col gap-2">
+              <span className="flex">
+                <TrackQualityBadge track={t} />
+              </span>
+              <span className="lc-disp text-[21px] leading-[1.05] [overflow-wrap:anywhere]">{v.name}</span>
+              <span className="text-[13px] leading-snug text-[#C5CBD8]">
+                {[v.layouts.length > 1 ? null : t.layout, placeOf(v.city, v.country), ...[...typesOf(v)].map((ty) => CIRCUIT_TYPE_LABELS[ty])]
+                  .filter(Boolean)
+                  .join(" · ")}
               </span>
             </div>
             {v.layouts.length > 1 ? (
-              <div className="flex flex-col gap-2">
-                <span className="lc-lbl">{v.layouts.length} layouts</span>
-                <Segmented
-                  label={`${v.name} layout`}
-                  className="[&>button]:min-h-[36px] [&>button]:px-2 [&>button]:text-[13px]"
-                  options={v.layouts.map((l) => ({ id: l.id, label: l.layout }))}
-                  value={t.id}
-                  onChange={(id) => setLayoutOf((m) => ({ ...m, [v.id]: id }))}
-                />
-              </div>
+              <Segmented
+                label={`${v.name} layout`}
+                className="flex-wrap gap-1 rounded-[22px] [&>button]:min-h-[36px] [&>button]:flex-[1_0_auto] [&>button]:px-3 [&>button]:text-[13px]"
+                options={v.layouts.map((l) => ({ id: l.id, label: l.layout }))}
+                value={t.id}
+                onChange={(id) => setLayoutOf((m) => ({ ...m, [v.id]: id }))}
+              />
             ) : null}
             <dl className="m-0 grid grid-cols-3 gap-1.5">
               {stats.map(([k, val]) => (
@@ -277,10 +267,6 @@ export const CircuitBrowser: React.FC<{
                 </div>
               ))}
             </dl>
-            <p className="m-0 flex items-start gap-2 text-[12px] leading-normal text-[#C5CBD8]">
-              <Info aria-hidden className="mt-0.5 h-4 w-4 shrink-0 text-[#00E5FF]" strokeWidth={2} />
-              Loading a circuit reloads the scene. Online, everyone in the room picks the same one.
-            </p>
             <DetailOutline track={t} />
             <div className="flex flex-col gap-1 rounded-[10px] border border-[#262B3D] bg-[#08090D]/60 px-3 py-2.5">
               <div className="flex flex-wrap items-center justify-between gap-2">
@@ -298,6 +284,10 @@ export const CircuitBrowser: React.FC<{
                 <span className="lc-data text-[13px]">{Math.round(BASE_ALTITUDE_M).toLocaleString("en-US")} m</span>
               </div>
             ) : null}
+            <p className="m-0 flex items-start gap-2 text-[12px] leading-normal text-[#8E96AA]">
+              <Info aria-hidden className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#00E5FF]" strokeWidth={2} />
+              Loading a circuit reloads the scene. Online, everyone in the room picks the same one.
+            </p>
           </>
         );
       }}
