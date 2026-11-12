@@ -421,12 +421,24 @@ export class MultiplayerSyncManager {
    * racing speed that is 5 m or more, so cars touched where the other car no longer was and missed where it was.
    */
   public predictRemotePlayers = true;
+  /**
+   * The netcode bench's ablation only (scripts/bench-netcode.ts): maps a sender's stamp to the time on this client's
+   * clock it was sent at, exactly, in place of the estimators. Unset in the game.
+   */
+  public timingOracle?: (peerId: string, senderStampMs: number) => number;
   private tempUp = new THREE.Vector3(0, 1, 0);
   private tempRight = new THREE.Vector3();
   private tempForward = new THREE.Vector3();
   private tempMatrix = new THREE.Matrix4();
 
-  constructor() {
+  /**
+   * The clock `update()` is given (requestAnimationFrame's timestamps are `performance.now()`): arrivals, pings and
+   * time-outs are read on it. The netcode bench (scripts/bench-netcode.ts) gives each client a simulated one.
+   */
+  private readonly clock: () => number;
+
+  constructor(options: { clock?: () => number } = {}) {
+    this.clock = options.clock ?? (typeof performance !== 'undefined' ? () => performance.now() : () => Date.now());
     this.localPeerId = `peer_${Math.random().toString(36).slice(2, 9)}`;
     this.initTransports();
   }
@@ -1149,7 +1161,7 @@ export class MultiplayerSyncManager {
 
   /** Host: counts a guest's message against its per-second budget; false once the guest is flooding */
   private withinRate(entry: WebRtcPeerEntry, kind: 'state' | 'control'): boolean {
-    const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    const now = this.clock();
     const r = (entry.rate ??= { windowStartMs: now, state: 0, control: 0 });
     if (now - r.windowStartMs >= 1000) {
       r.windowStartMs = now;
@@ -1352,7 +1364,7 @@ export class MultiplayerSyncManager {
   }
 
   /** The host's clock now (ms): the race timeline every client shares */
-  public hostNowMs(localNowMs: number = performance.now()): number {
+  public hostNowMs(localNowMs: number = this.clock()): number {
     return localNowMs + this.clockOffsetMs;
   }
 
@@ -1395,7 +1407,7 @@ export class MultiplayerSyncManager {
 
   private broadcastLobby(): void {
     if (!this.isHost) return;
-    this.lastLobbyMs = performance.now();
+    this.lastLobbyMs = this.clock();
     const lobby: LobbyState = {
       hostId: this.localPeerId,
       settings: { ...this.lobbySettings },
@@ -1484,7 +1496,7 @@ export class MultiplayerSyncManager {
       this.relay(JSON.stringify(to ? { ctl: msg, from, to } : { ctl: msg, from }), via.remoteId, 'control', to);
     }
     // Any message is a sign of life, also one passed on to another guest (a hello is taken in below)
-    if (msg.type !== 'hello') this.memberHeard(from, performance.now());
+    if (msg.type !== 'hello') this.memberHeard(from, this.clock());
     if (to && to !== this.localPeerId) return;
 
     switch (msg.type) {
@@ -1501,7 +1513,7 @@ export class MultiplayerSyncManager {
             ready: this.members.get(from)?.ready ?? false,
             isHost: false,
           });
-          this.memberSeenMs.set(from, performance.now());
+          this.memberSeenMs.set(from, this.clock());
           this.broadcastLobby();
         }
         break;
@@ -1515,10 +1527,10 @@ export class MultiplayerSyncManager {
         }
         break;
       case 'ping':
-        this.sendControl({ type: 'pong', t0: msg.t0, now: performance.now() + this.clockOffsetMs }, from);
+        this.sendControl({ type: 'pong', t0: msg.t0, now: this.clock() + this.clockOffsetMs }, from);
         break;
       case 'pong': {
-        const t1 = performance.now();
+        const t1 = this.clock();
         const rtt = Math.max(0, t1 - msg.t0);
         const prev = this.rtts.get(from);
         this.rtts.set(from, prev === undefined ? rtt : prev + (rtt - prev) * 0.25);
@@ -1542,7 +1554,7 @@ export class MultiplayerSyncManager {
         // that host keeps sending
         if (from !== msg.lobby.hostId) break;
         if (!via && this.rtcPeers.size > 0) break;
-        const nowMs = performance.now();
+        const nowMs = this.clock();
         if (this.hostId !== null && from !== this.hostId && nowMs - this.lastHostLobbyMs < HOST_SILENT_MS) break;
         this.lastHostLobbyMs = nowMs;
         if (via) via.gamePeerId = from;
@@ -1624,7 +1636,7 @@ export class MultiplayerSyncManager {
     if (nowMs - this.lastPingMs > (this.clockSynced ? 2000 : 400)) {
       this.lastPingMs = nowMs;
       // Stamped at send time on the same clock as the pong's arrival (nowMs is the frame's start, earlier than this)
-      if (this.hostId || this.peers.size > 0) this.sendControl({ type: 'ping', t0: performance.now() });
+      if (this.hostId || this.peers.size > 0) this.sendControl({ type: 'ping', t0: this.clock() });
     }
     if (this.isHost) {
       // memberSeenMs is kept current by every message and packet (memberHeard), so it alone says who is still here
@@ -1753,7 +1765,7 @@ export class MultiplayerSyncManager {
         const pkt = sanitizePacket(data);
         if (!pkt || pkt.peerId === this.localPeerId) return;
         const waiting = this.raceInbox.get(pkt.peerId);
-        if (!waiting || pkt.timestampMs >= waiting.pkt.timestampMs) this.raceInbox.set(pkt.peerId, { pkt, atMs: performance.now() });
+        if (!waiting || pkt.timestampMs >= waiting.pkt.timestampMs) this.raceInbox.set(pkt.peerId, { pkt, atMs: this.clock() });
       };
 
       ws.onclose = () => {
@@ -1917,17 +1929,12 @@ export class MultiplayerSyncManager {
    * Ingests a 20-30 Hz network state packet into the peer's ring buffer.
    * Uses an EWMA clock-offset estimator (`localClockMs - pkt.timestampMs`) so the sender's
    * physics timestamps (`dt`) are preserved for Cubic Hermite spline tangents without network arrival jitter.
-   * `receiveClockMs` is the arrival time on the clock `update()` is given (default `performance.now()`, the clock of
+   * `receiveClockMs` is the arrival time on the clock `update()` is given (default `this.clock`, `performance.now()`, the clock of
    * requestAnimationFrame's timestamp); pass it when driving `update()` from another clock.
    */
   /** `pkt` must come from sanitizePacket (or be built by trusted code, like the AI field's): it is not re-checked */
   public ingestPacket(pkt: NetworkVehiclePacket, isAiPeer = false, receiveClockMs?: number): void {
-    const now =
-      receiveClockMs !== undefined && Number.isFinite(receiveClockMs)
-        ? receiveClockMs
-        : typeof performance !== 'undefined'
-          ? performance.now()
-          : Date.now();
+    const now = receiveClockMs !== undefined && Number.isFinite(receiveClockMs) ? receiveClockMs : this.clock();
     if (!isAiPeer) this.memberHeard(pkt.peerId, now);
     let buffer = this.peers.get(pkt.peerId);
     if (!buffer) {
@@ -1980,7 +1987,9 @@ export class MultiplayerSyncManager {
       if (senderBackMs >= 0 && senderBackMs < SENDER_CLOCK_RESTART_MS) return;
       buffer.lastSenderTimestampMs = pkt.timestampMs;
       const rawOffset = now - pkt.timestampMs;
-      if (buffer.clockOffsetMs === null || Math.abs(rawOffset - buffer.clockOffsetMs) > CLOCK_OFFSET_SNAP_MS) {
+      if (this.timingOracle) {
+        buffer.clockOffsetMs = this.timingOracle(pkt.peerId, pkt.timestampMs) - pkt.timestampMs;
+      } else if (buffer.clockOffsetMs === null || Math.abs(rawOffset - buffer.clockOffsetMs) > CLOCK_OFFSET_SNAP_MS) {
         // First packet, or the sender's clock jumped (reload, reconnect): take the offset as measured, and drop
         // the snapshots stamped against the old one
         if (buffer.clockOffsetMs !== null) buffer.snapshots.length = 0;
@@ -2132,7 +2141,7 @@ export class MultiplayerSyncManager {
     }
     const s1 = snaps[snaps.length - 1];
     const s0 = snaps.length > 1 ? snaps[snaps.length - 2] : null;
-    const oneWayMs = (this.rtts.get(buf.peerId) ?? 0) / 2;
+    const oneWayMs = this.timingOracle ? 0 : (this.rtts.get(buf.peerId) ?? 0) / 2;
     const ageS = (nowMs - s1.timestampMs + oneWayMs) / 1000;
     const h = Math.min(PREDICT_MAX_S, Math.max(0, ageS));
     let ax = 0;
