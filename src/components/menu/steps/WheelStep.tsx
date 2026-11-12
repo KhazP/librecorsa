@@ -805,6 +805,14 @@ export const WheelStep: React.FC<SetupStepProps> = ({ settings, onChangeSettings
                   }}
                 />
                 {hidBrowserUnsupported ? null : <HidFfbStatusLine status={hid} on={w.hidFfb} />}
+                {hidActive && webHidFfb.hasRevLeds() ? (
+                  <Toggle
+                    label="Rev lights on the wheel"
+                    detail="The rim's five LEDs light up with the revs and flash at the shift point"
+                    checked={w.revLeds}
+                    onChange={() => setWheel({ revLeds: !w.revLeds })}
+                  />
+                ) : null}
               </div>
               {!w.hidFfb || hidBrowserUnsupported || ffb.connection === "connected" ? <FfbBridgeStatus status={ffb} /> : null}
               <AutoGrid min={190} className="gap-x-[18px] gap-y-1">

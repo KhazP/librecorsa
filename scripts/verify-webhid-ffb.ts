@@ -1012,6 +1012,10 @@ async function main() {
      */
     springParamsFull: [0xfe, 0x0d, 0x07, 0x07, 0xff, 0, 0],
     springOn: [0x14, 0, 0, 0, 0, 0, 0],
+    /** lg4ff_set_leds (G27 / G29 only): f8 12, then the 5-bit mask, RPM1 = bit 0 */
+    ledsOff: [0xf8, 0x12, 0, 0, 0, 0, 0],
+    leds3: [0xf8, 0x12, 0x07, 0, 0, 0, 0],
+    ledsAll: [0xf8, 0x12, 0x1f, 0, 0, 0, 0],
   };
   /** A wheel's HID interface with lg4ff's output report: no report id, 7 one-byte values */
   const logitech = (productId: number, name: string) => {
@@ -1065,8 +1069,51 @@ async function main() {
     assert.deepEqual(writes(g27).at(-1), LG4FF.range540);
     g27.log.length = 0;
     await ffb.dispose();
-    assert.deepEqual(writes(g27), [LG4FF.forceOff, LG4FF.range900, LG4FF.springParamsFull, LG4FF.springOn]);
+    assert.deepEqual(writes(g27), [LG4FF.forceOff, LG4FF.ledsOff, LG4FF.range900, LG4FF.springParamsFull, LG4FF.springOn]);
     assert.equal(g27.opened, false);
+  });
+  await check("G29 rev LEDs: lg4ff_set_leds bytes, only changes written, stop() and dispose turn them off", async () => {
+    const g29 = logitech(0xc24f, "G29");
+    const clock = new FakeClock();
+    const ffb = new WebHidFfb(fakeHid([g29]).api, clock.deps);
+    await ffb.connect();
+    assert.equal(ffb.hasRevLeds(), true);
+    assert.deepEqual(writes(g29), [LG4FF.springOff], "no LED write at connect");
+    g29.log.length = 0;
+    for (const mask of [0x07, 0x07, 0x1f, 0xff]) {
+      ffb.setRevLeds(mask);
+      await flush();
+      clock.advance(5);
+      await flush();
+    }
+    assert.deepEqual(writes(g29), [LG4FF.leds3, LG4FF.ledsAll], "unchanged masks are not resent; bits past RPM5 are dropped");
+    g29.log.length = 0;
+    ffb.stop();
+    await flush();
+    assert.ok(writes(g29).some((w) => JSON.stringify(w) === JSON.stringify(LG4FF.ledsOff)), "stop() turns the LEDs off");
+    ffb.setRevLeds(0x07);
+    await flush();
+    clock.advance(5);
+    await flush();
+    g29.log.length = 0;
+    ffb.emergencyStop();
+    await flush();
+    assert.deepEqual(writes(g29)[1], LG4FF.ledsOff, "emergency stop: LEDs off right after the force");
+  });
+  await check("Driving Force GT and G25: no rev LEDs, nothing written for them", async () => {
+    for (const [productId, name] of [[0xc29a, "Driving Force GT"], [0xc299, "G25"]] as const) {
+      const dev = logitech(productId, name);
+      const clock = new FakeClock();
+      const ffb = new WebHidFfb(fakeHid([dev]).api, clock.deps);
+      await ffb.connect();
+      assert.equal(ffb.hasRevLeds(), false, name);
+      dev.log.length = 0;
+      ffb.setRevLeds(0x1f);
+      await flush();
+      clock.advance(5);
+      await flush();
+      assert.deepEqual(writes(dev), [], name);
+    }
   });
   await check("Driving Force GT: the range is never restored when it was never set", async () => {
     const dfgt = logitech(0xc29a, "Driving Force GT");
@@ -1439,14 +1486,15 @@ async function main() {
     // Back from the back/forward cache
     assert.equal(await ffb.resume(), "Fake DD Base");
     assert.equal(ffb.status.state, "ready");
-    // A classic Logitech wheel gets what its teardown sends (hid-lg4ff bytes): force off, 900° back, centring spring on
+    // A classic Logitech wheel gets what its teardown sends (hid-lg4ff bytes): force off, rev LEDs off, 900° back,
+    // centring spring on
     const g29 = logitech(0xc24f, "G29");
     const lg = new WebHidFfb(fakeHid([g29]).api, new FakeClock().deps);
     lg.setRotationDeg(540);
     await lg.connect();
     g29.log.length = 0;
     lg.emergencyStop();
-    assert.deepEqual(writes(g29), [LG4FF.forceOff, LG4FF.range900, LG4FF.springParamsFull, LG4FF.springOn]);
+    assert.deepEqual(writes(g29), [LG4FF.forceOff, LG4FF.ledsOff, LG4FF.range900, LG4FF.springParamsFull, LG4FF.springOn]);
     assert.equal(lg.status.state, "idle");
     // Disposed, a page coming back does not reopen the wheel
     await lg.dispose();

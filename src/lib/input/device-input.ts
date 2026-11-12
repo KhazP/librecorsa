@@ -100,6 +100,8 @@ export interface WheelSettings {
    * start on the bridge (see autoConfigureWheel) and use WebHID only when switched on
    */
   hidFfb: boolean;
+  /** Rev lights on the rim (Logitech G27 / G29 over WebHID force feedback), from the car's shift-light range */
+  revLeds: boolean;
   /** Stream telemetry over UDP through the bridge (SimHub, bass shakers, dashboards) */
   telemetryOut: boolean;
   /** UDP port the bridge sends telemetry to on this PC */
@@ -177,6 +179,7 @@ export const DEFAULT_WHEEL_SETTINGS: WheelSettings = {
   ffbPerCar: {},
   steerLockPerCar: {},
   hidFfb: true,
+  revLeds: true,
   telemetryOut: false,
   telemetryPort: DEFAULT_TELEMETRY_PORT,
   buttons: emptyWheelButtons(),

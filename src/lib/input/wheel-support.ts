@@ -13,6 +13,8 @@ export const LOGITECH_VENDOR_ID = 0x046d;
 export interface LogitechClassicModel {
   productId: number;
   name: string;
+  /** Five rev LEDs on the rim, set with lg4ff_set_leds (hid-lg4ff registers them for the G27 and G29 only) */
+  revLeds?: boolean;
 }
 
 /**
@@ -27,9 +29,9 @@ export interface LogitechClassicModel {
  */
 export const LOGITECH_CLASSIC_WHEELS: readonly LogitechClassicModel[] = [
   { productId: 0xc299, name: "G25" },
-  { productId: 0xc29b, name: "G27" },
+  { productId: 0xc29b, name: "G27", revLeds: true },
   { productId: 0xc29a, name: "Driving Force GT" },
-  { productId: 0xc24f, name: "G29" },
+  { productId: 0xc24f, name: "G29", revLeds: true },
 ];
 export const LG4FF_MIN_RANGE_DEG = 40;
 export const LG4FF_MAX_RANGE_DEG = 900;

@@ -128,6 +128,23 @@ export function directionTestForce(tS: number, invert: boolean): number {
   return -sign * TEST_LEVEL * pull((tS - second) / TEST_PULL_S);
 }
 const TEST_STEP_MS = 10;
+/** Rev LEDs on a wheel that has them (Logitech G27 / G29) */
+export const REV_LED_COUNT = 5;
+/** Half-period of the all-lit flash at the shift point (ms) */
+const REV_LED_BLINK_MS = 125;
+
+/**
+ * Rev LED mask (bit 0 = the first to light … bit 4 = the last) for `rpm` over the car's shift-light range: the first
+ * LED at the range's start, one more every fifth of it, and all five flashing from the shift point on
+ */
+export function revLedMask(rpm: number, range: readonly [number, number], nowMs: number): number {
+  const [lo, hi] = range;
+  if (!Number.isFinite(rpm) || rpm < lo || !(hi > lo)) return 0;
+  if (rpm >= hi) return Math.floor(nowMs / REV_LED_BLINK_MS) % 2 === 0 ? (1 << REV_LED_COUNT) - 1 : 0;
+  const lit = Math.min(REV_LED_COUNT, 1 + Math.floor(((rpm - lo) / (hi - lo)) * REV_LED_COUNT));
+  return (1 << lit) - 1;
+}
+
 /** If WebHID frame updates stop arriving (hidden tab, stalled loop), zero the wheel's constant-force effect after 150 ms */
 export const HID_WATCHDOG_MS = 150;
 /** WebHID playback timer (ms); the physics samples it plays are 2 ms apart */
@@ -253,6 +270,7 @@ export class WheelFfbClient {
     this.lastUpdateMs = nowMs;
     const activeHid = this.hidDriver;
     const hwDamper = useHid && activeHid !== null && activeHid.hasHardwareDamper();
+    const hwLeds = useHid && activeHid !== null && activeHid.hasRevLeds();
     let force = 0;
     let kerb = 0;
     let abs = 0;
@@ -356,6 +374,10 @@ export class WheelFfbClient {
       if (speedKmh > 15 && wheel.ffbSlip > 0) {
         slide = slipCue(slip.frontNdSlip, slip.rearNdSlip, throttle, telemetry.f12026?.tcActive === true) * wheel.ffbSlip;
       }
+      if (hwLeds) {
+        const range = revRangeFor(telemetry.f12026?.carId ?? vehicle);
+        activeHid.setRevLeds(wheel.revLeds ? revLedMask(telemetry.rpm, range, nowMs) : 0);
+      }
       // Shift warning at the rpm the dash calls SHIFT (all rev lights lit)
       if (wheel.ffbShift > 0 && speedKmh > 5) {
         const shiftRpm = revRangeFor(telemetry.f12026?.carId ?? vehicle)[1];
@@ -365,6 +387,7 @@ export class WheelFfbClient {
       }
     } else {
       if (hwDamper) activeHid.setDamper(0);
+      if (hwLeds) activeHid.setRevLeds(0);
       this.resetDriving();
     }
     this.force = force;

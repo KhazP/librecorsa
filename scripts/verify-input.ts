@@ -34,6 +34,7 @@ import {
   HID_WATCHDOG_MS,
   linkHidSink,
   applyFfbCurve,
+  revLedMask,
   shapeFfbForce,
   softLockForce,
   unapplyFfbCurve,
@@ -321,6 +322,17 @@ check('FFB force curve: linear at 1, lifts or holds back light forces, leaves |f
   }
   // Curve before minimum force: the minimum force still lifts the curved value
   near(shapeFfbForce(0.5, { ffbGain: 1, ffbMinForce: 0.1, ffbCurve: 2 }), 0.1 + 0.9 * 0.25);
+});
+check('rev LEDs: off below the range, one more per fifth, all five flashing from the shift point', () => {
+  const r: [number, number] = [6200, 7500];
+  assert.equal(revLedMask(6000, r, 0), 0);
+  assert.equal(revLedMask(6200, r, 0), 0b1);
+  assert.equal(revLedMask(6200 + 1300 * 0.45, r, 0), 0b111);
+  assert.equal(revLedMask(7499, r, 0), 0b11111);
+  assert.equal(revLedMask(7500, r, 0), 0b11111);
+  assert.equal(revLedMask(7600, r, 130), 0, 'the flash is off half the time');
+  assert.equal(revLedMask(Number.NaN, r, 0), 0);
+  assert.equal(revLedMask(9000, [8000, 8000], 0), 0, 'an empty range lights nothing');
 });
 check('FFB soft lock pushes back past the car steering lock only', () => {
   const half = CAR_WHEEL_LOCK_DEG / 2;

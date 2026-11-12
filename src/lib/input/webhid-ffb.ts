@@ -657,6 +657,8 @@ export interface LogitechClassicSession extends SessionBase {
   setRange: (deg: number) => void;
   /** A range command went out, so teardown puts the 900° that lg4ff_init starts with back */
   rangeChanged: boolean;
+  /** Rev LED mask (bit 0 = RPM1 … bit 4 = RPM5), a stream of `writer`; absent on a wheel without them */
+  setLeds?: (mask: number, urgent?: boolean) => void;
 }
 
 export type FfbSession = PidSession | LogitechClassicSession;
@@ -1039,6 +1041,11 @@ function lg4ffRange(deg: number): number[] {
   return [0xf8, 0x81, deg & 0xff, (deg >> 8) & 0xff, 0, 0, 0];
 }
 
+/** lg4ff_set_leds (G27, G29): bit 0 lights RPM1 … bit 4 RPM5 */
+function lg4ffLeds(mask: number): number[] {
+  return [0xf8, 0x12, mask & 0x1f, 0, 0, 0, 0];
+}
+
 /** lg4ff_set_autocenter_default for a non-MOMO wheel: 0 switches the centring spring off, else its parameters then on */
 function lg4ffAutocenter(magnitude: number): number[][] {
   if (magnitude === 0) return [[0xf5, 0, 0, 0, 0, 0, 0]];
@@ -1145,6 +1152,16 @@ export async function setupLogitechClassicDevice(
       const r = lg4ffRangeDeg(deg);
       if (r !== null) queueRange(r);
     };
+    if (model.revLeds) {
+      // What the LEDs show before the first value is not known (another program may have left them lit): it always goes out
+      session.setLeds = writer.addChannel({
+        toRaw: (mask) => (Number.isFinite(mask) ? Math.round(mask) & 0x1f : 0),
+        threshold: 1,
+        zeroRaw: 0,
+        initialRaw: null,
+        send: (mask) => send(lg4ffLeds(mask)),
+      });
+    }
     return { ok: true, session };
   } catch (e) {
     if (springOff) for (const r of lg4ffAutocenter(LG4FF_AUTOCENTER_ON_RELEASE)) await bestEffort(() => send(r));
@@ -1159,12 +1176,16 @@ export async function setupLogitechClassicDevice(
 function lg4ffReleaseCommands(session: LogitechClassicSession): number[][] {
   return [
     lg4ffConstantForce(0x80),
+    ...(session.model.revLeds ? [lg4ffLeds(0)] : []),
     ...(session.rangeChanged ? [lg4ffRange(LG4FF_MAX_RANGE_DEG)] : []),
     ...lg4ffAutocenter(LG4FF_AUTOCENTER_ON_RELEASE),
   ];
 }
 
-/** Best-effort shutdown: force off, the range back to 900° if it was changed, centring spring on. Never throws. */
+/**
+ * Best-effort shutdown: force off, rev LEDs off (G27, G29), the range back to 900° if it was changed, centring spring
+ * on. Never throws.
+ */
 export async function teardownLogitechClassicSession(session: LogitechClassicSession): Promise<void> {
   await session.writer.close();
   for (const bytes of lg4ffReleaseCommands(session)) await bestEffort(() => session.send(bytes));
@@ -1699,6 +1720,17 @@ export class WebHidFfb {
     this.noteDrive();
   }
 
+  /** Whether the connected wheel has rev LEDs this driver can set (a classic Logitech G27 or G29) */
+  hasRevLeds(): boolean {
+    return this.session?.kind === "logitech-classic" && Boolean(this.session.setLeds);
+  }
+
+  /** Rev LED mask, bit 0 = RPM1 … bit 4 = RPM5; ignored without them. Only a change is written */
+  setRevLeds(mask: number): void {
+    if (this.session?.kind === "logitech-classic") this.session.setLeds?.(mask);
+    this.noteDrive();
+  }
+
   /**
    * The wheel rotation setting, lock to lock (deg). A classic Logitech wheel is set to it when it connects and when it
    * changes (40..900°; anything else leaves the wheel's own range); a PID wheel ignores it.
@@ -1708,10 +1740,11 @@ export class WebHidFfb {
     if (this.session?.kind === "logitech-classic" && this.rotationDeg !== null) this.session.setRange(this.rotationDeg);
   }
 
-  /** Zero force and hardware damper now (pause menu) */
+  /** Zero force and hardware damper, rev LEDs off, now (pause menu) */
   stop(): void {
     this.session?.writer.setForce(0, true);
     this.session?.setDamper?.(0, true);
+    if (this.session?.kind === "logitech-classic") this.session.setLeds?.(0, true);
   }
 
   /**
