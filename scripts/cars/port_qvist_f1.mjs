@@ -1242,10 +1242,11 @@ function suspension(rig, weld, tris, wheels, legs) {
 
 /**
  * The car at rest is filled into a grid of `voxel` cubes (m). From each vertex `rays` go out over the hemisphere about
- * its normal, more of them near the normal; one that meets the car within `reach` darkens the vertex, the more the
- * nearer. A vertex nothing is near keeps 1; none goes below `floor`.
+ * its normal, more of them near the normal; one that meets the car or the road (y = 0) within `reach` darkens the
+ * vertex, the more the nearer. A vertex nothing is near keeps 1; none goes below `floor`. The rays start `lift` cells
+ * off the surface: a cell a flat panel passes through reaches no further from it than 1.73 cells.
  */
-const OCCLUSION = { voxel: 0.012, reach: 0.3, rays: 48, floor: 0.2 };
+const OCCLUSION = { voxel: 0.012, reach: 0.3, rays: 48, floor: 0.2, lift: 2 };
 
 /** A grid of the cells the meshes' triangles pass through (`meshes`: { pos, idx } in the model's frame) */
 function occlusionGrid(meshes) {
@@ -1280,6 +1281,7 @@ function occlusionGrid(meshes) {
     }
   }
   const full = (x, y, z) => {
+    if (y < 0) return true;
     const i = Math.floor((x - min[0]) / h);
     const j = Math.floor((y - min[1]) / h);
     const k = Math.floor((z - min[2]) / h);
@@ -1304,8 +1306,8 @@ function occlusionOf(grid, mesh) {
     const n = unit([mesh.nrm[3 * v], mesh.nrm[3 * v + 1], mesh.nrm[3 * v + 2]]);
     const u = unit(Math.abs(n[1]) > 0.9 ? cross3(n, [1, 0, 0]) : cross3(n, [0, 1, 0]));
     const w = cross3(n, u);
-    // Off the surface by a cell and a half, so it does not meet itself
-    const o = along(p, n, 1.5 * h);
+    // Off the surface, so it does not meet itself
+    const o = along(p, n, OCCLUSION.lift * h);
     let dark = 0;
     for (const [rx, ry, rz] of OCCLUSION_RAYS) {
       const d = [u[0] * rx + w[0] * ry + n[0] * rz, u[1] * rx + w[1] * ry + n[1] * rz, u[2] * rx + w[2] * ry + n[2] * rz];
