@@ -11,6 +11,7 @@ import {
   HID_TRACE_SIZE,
   forceToRaw,
   FORCE_KEEPALIVE_MS,
+  GENERIC_PID_PROFILE,
   ForceWriter,
   HOTPLUG_DELAY_MS,
   IDLE_ZERO_MS,
@@ -237,7 +238,10 @@ class FakeHidDevice implements HidDeviceLike {
   async sendFeatureReport(reportId: number, data: Uint8Array) {
     this.log.push({ kind: "feature", id: reportId, data: [...data] });
   }
-  async receiveFeatureReport(_reportId: number) {
+  /** Every feature report read back: its id, and how many writes the log held when it was read */
+  reads: { id: number; at: number }[] = [];
+  async receiveFeatureReport(reportId: number) {
+    this.reads.push({ id: reportId, at: this.log.length });
     const layout = this.blockLoad;
     if (!layout) throw new Error("no block load layout");
     const { data } = buildReport(layout, { [PID.EFFECT_BLOCK_INDEX]: this.blockIndex, [PID.BLOCK_LOAD_STATUS]: this.blockStatus });
@@ -418,7 +422,7 @@ async function main() {
   });
 
   console.log("Setup sequence");
-  await check("reset, enable, gain, create effect (block from Block Load), set effect, zero force, start", async () => {
+  await check("reset, stop all, enable, gain, create effect (block from Block Load), set effect, zero force, start", async () => {
     const cols = pidCollections();
     const dev = new FakeHidDevice(cols, asLayout(cols).blockLoad);
     const clock = new FakeClock();
@@ -429,6 +433,7 @@ async function main() {
     assert.equal(res.session.blockIndex, 3);
     assert.deepEqual(dev.log, [
       { kind: "out", id: 12, data: [4] }, // device reset
+      { kind: "out", id: 12, data: [3] }, // stop all effects (pidff_reset)
       { kind: "out", id: 12, data: [1] }, // enable actuators
       { kind: "out", id: 13, data: [255] }, // device gain 100 %
       { kind: "feature", id: 17, data: [1, 0, 0] }, // create: constant force, byte count 0
@@ -442,8 +447,8 @@ async function main() {
           0, 0, // trigger repeat
           0, 0, // sample period
           255, // gain
-          255, // trigger button: none
-          0b001, // X enabled, Y not, Direction Enable cleared
+          0, // trigger button: none (0, as hid-pidff writes it)
+          0b100, // no axis flag, Direction Enable set (pidff_set_effect_direction)
           64, 0, // direction ordinal 1 = 90 degrees (X), ordinal 2 = 0
           0, 0, // start delay
         ],
@@ -502,7 +507,7 @@ async function main() {
     assert.ok(res.ok);
     assert.deepEqual(dev.forceWrites[0], { kind: "out", id: 5, data: [3, 128] });
   });
-  await check("MOZA R9 Base descriptor (Trigger Button 1..8, Duration 0..32767) writes 0xFF (no trigger) and 0xFFFF (infinite)", async () => {
+  await check("MOZA R9 Base descriptor (Trigger Button 1..8, Duration 0..32767) writes 0 (no trigger) and 0xFFFF (infinite)", async () => {
     const cols = pidCollections({
       triggerButton: variable([pid(0x53)], 8, 1, 1, 8),
       duration: variable([pid(0x50)], 16, 1, 0, 32767),
@@ -514,7 +519,137 @@ async function main() {
     assert.ok(setEffect, "Set Effect report sent");
     assert.equal(setEffect!.data[2], 0xff, "Duration low byte is 0xFF");
     assert.equal(setEffect!.data[3], 0xff, "Duration high byte is 0xFF (0xFFFF = infinite, not 32767 ms)");
-    assert.equal(setEffect!.data[9], 255, "Trigger Button byte is 0xFF (DIEB_NOTRIGGER), not clamped to 1");
+    assert.equal(setEffect!.data[9], 0, "Trigger Button byte is 0 (no button, as hid-pidff writes it), not clamped to 1");
+  });
+  await check("MOZA R9 Base as Chrome on Windows reports it: Device Control flags found, hid-pidff's values (trigger 0, Direction Enable, no axis flag)", async () => {
+    // From the diagnostics of a real R9 (346e:0002): X, Y and Direction Enable are 1-bit fields with a logical range of
+    // 0..0, and Device Control is one 1-bit flag per command (logical 0..0) instead of an array
+    const cols = pidCollections({
+      triggerButton: variable([pid(0x53)], 8, 1, 1, 8),
+      duration: variable([pid(0x50)], 16, 1, 0, 32767),
+    });
+    const node = cols[1] as HidCollectionLike;
+    const index = variable([pid(0x22)], 8, 1, 1, 10);
+    const flag = (u: number) => variable([u], 1, 1, 0, 0);
+    const outs = (node.outputReports ?? []).map((r) => {
+      if (r.reportId === 1) {
+        return {
+          reportId: 1,
+          items: [
+            index,
+            selector(ET_LIST),
+            variable([pid(0x50)], 16, 1, 0, 32767),
+            variable([pid(0x54)], 16, 1, 0, 32767),
+            variable([pid(0x51)], 16, 1, 0, 32767),
+            variable([pid(0xa7)], 16, 1, 0, 32767),
+            variable([pid(0x52)], 8, 1, 0, 255),
+            variable([pid(0x53)], 8, 1, 1, 8),
+            flag(X),
+            flag(Y),
+            flag(pid(0x56)),
+            padding(5),
+            variable([ordinalUsage(1), ordinalUsage(2)], 16, 2, 0, 36000),
+          ],
+        };
+      }
+      if (r.reportId === 12) return { reportId: 12, items: [0x97, 0x98, 0x99, 0x9a, 0x9b, 0x9c].map((u) => flag(pid(u))) };
+      return r;
+    });
+    // PID Pool (feature 19): RAM Pool Size, Simultaneous Effects Max, Device Managed Pool, Shared Parameter Blocks
+    const poolReport = {
+      reportId: 19,
+      items: [variable([pid(0x80)], 16, 1, 0, 65535), variable([pid(0x83)], 8, 1, 0, 255), flag(pid(0xa9)), flag(pid(0xaa)), padding(6)],
+    };
+    const moza: HidCollectionLike[] = [
+      cols[0] as HidCollectionLike,
+      { ...node, outputReports: outs, featureReports: [...(node.featureReports ?? []), poolReport] },
+    ];
+    const layout = asLayout(moza);
+    assert.ok(layout.deviceControl, "the 1-bit Device Control flags are found");
+    const dev = new FakeHidDevice(moza, layout.blockLoad);
+    dev.vendorId = 0x346e;
+    dev.productId = 0x0002;
+    const res = await setupPidDevice(dev, { deps: new FakeClock().deps });
+    assert.ok(res.ok);
+    const dc = dev.log.filter((l) => l.kind === "out" && l.id === 12).map((l) => l.data[0]);
+    assert.deepEqual(dc, [0x08, 0x04, 0x01], "Device Reset (4th flag), Stop All (3rd), then Enable Actuators (1st), as pidff_reset");
+    assert.ok(layout.pool, "the PID Pool feature report is found");
+    const order = dev.log.map((l) => `${l.kind}:${l.id}`);
+    const poolRead = dev.reads.find((r) => r.id === 19);
+    assert.ok(poolRead, "the pool is read once at setup");
+    assert.equal(poolRead!.at, order.lastIndexOf("out:12") + 1, "right after Enable Actuators");
+    assert.equal(order[poolRead!.at], "out:13", "and before the device gain");
+    const setEffect = dev.log.find((l) => l.kind === "out" && l.id === 1);
+    assert.ok(setEffect);
+    assert.equal(setEffect!.data[11], 0, "Trigger Button 0, as hid-pidff writes it");
+    // Bits 96.. of Set Effect: X = 0, Y = 0, Direction Enable = 1
+    assert.equal((setEffect!.data[12] as number) & 0x07, 0b100, "Direction Enable set, no axis flag");
+    assert.equal((setEffect!.data[13] as number) | ((setEffect!.data[14] as number) << 8), 9000, "direction 90°");
+    dev.log.length = 0;
+    if (res.ok) await teardownPidSession(res.session);
+    // A 0..0 range takes the field's full width: a profile that sets the X flag (PXN V99) gets it written as 1
+    const pxn = new FakeHidDevice(moza, layout.blockLoad);
+    pxn.vendorId = 0x11ff;
+    pxn.productId = 0x3245;
+    assert.ok((await setupPidDevice(pxn, { deps: new FakeClock().deps })).ok);
+    const pxnSet = pxn.log.find((l) => l.kind === "out" && l.id === 1);
+    assert.equal((pxnSet!.data[12] as number) & 0x07, 0b101, "X flag and Direction Enable written as 1");
+    const down = dev.log.filter((l) => l.kind === "out" && l.id === 12).map((l) => l.data[0]);
+    assert.deepEqual(down, [0x04, 0x02], "teardown: Stop All Effects, then Disable Actuators");
+  });
+  await check("Chrome on Windows (MOZA R9 Base): shuffled selector lists are put back into the PID spec's order", async () => {
+    // As Chrome on Windows listed the R9's arrays: the 11 effect types reversed, Effect Operation as Start, Stop, Start
+    // Solo, Block Load as Success, Error, Full. On the wheel, 0x01 is Constant Force, 0x09 Damper and 0x03 Stop
+    const types = [0x43, 0x42, 0x41, 0x40, 0x34, 0x33, 0x32, 0x31, 0x30, 0x27, 0x26];
+    const base = damperCollections({ types });
+    const node = base[1] as HidCollectionLike;
+    const index = variable([pid(0x22)], 8, 1, 1, 10);
+    const cols: HidCollectionLike[] = [
+      base[0] as HidCollectionLike,
+      {
+        ...node,
+        outputReports: (node.outputReports ?? []).map((r) =>
+          r.reportId === 10 ? { reportId: 10, items: [index, selector([0x79, 0x7b, 0x7a].map(pid)), variable([pid(0x7c)], 8, 1, 0, 255)] } : r
+        ),
+        featureReports: (node.featureReports ?? []).map((r) =>
+          r.reportId === 18
+            ? { reportId: 18, items: [index, selector([0x8c, 0x8e, 0x8d].map(pid)), variable([pid(0xad)], 16, 1, 0, 65535)] }
+            : r
+        ),
+      },
+    ];
+    const asIs = parsePidLayout(cols, "descriptor");
+    assert.ok(asIs);
+    assert.equal(selectorValue(field(asIs.setEffect!, PID.EFFECT_TYPE), PID.ET_CONSTANT_FORCE), 11, "descriptor order: taken as listed");
+    const fixed = parsePidLayout(cols, "unordered");
+    assert.ok(fixed);
+    assert.equal(selectorValue(field(fixed.setEffect!, PID.EFFECT_TYPE), PID.ET_CONSTANT_FORCE), 1);
+    assert.equal(selectorValue(field(fixed.setEffect!, PID.EFFECT_TYPE), PID.ET_DAMPER), 9);
+    assert.equal(selectorValue(field(fixed.setEffect!, PID.EFFECT_TYPE), PID.ET_FRICTION), 11);
+    assert.equal(selectorValue(field(fixed.createNewEffect!, PID.EFFECT_TYPE), PID.ET_CONSTANT_FORCE), 1);
+    assert.equal(selectorValue(field(fixed.effectOperation, PID.EFFECT_OPERATION), PID.OP_EFFECT_START), 1);
+    assert.equal(selectorValue(field(fixed.effectOperation, PID.EFFECT_OPERATION), PID.OP_EFFECT_STOP), 3);
+    assert.equal(selectorValue(field(fixed.blockLoad!, PID.BLOCK_LOAD_STATUS), PID.BLOCK_LOAD_FULL), 2);
+    // Through setup and teardown: Create New Effect and Set Effect name 0x01 and 0x09, Stop is 0x03
+    const dev = new FakeHidDevice(cols, fixed.blockLoad);
+    dev.laterBlocks = [4];
+    const res = await setupPidDevice(dev, { deps: new FakeClock().deps, layout: fixed });
+    assert.ok(res.ok);
+    assert.deepEqual(dev.log.filter((l) => l.kind === "feature" && l.id === 17).map((l) => l.data[0]), [0x01, 0x09]);
+    assert.deepEqual(dev.log.filter((l) => l.kind === "out" && l.id === 1).map((l) => l.data[1]), [0x01, 0x09]);
+    dev.log.length = 0;
+    if (res.ok) await teardownPidSession(res.session);
+    const stops = dev.log.filter((l) => l.kind === "out" && l.id === 10).map((l) => l.data[1]);
+    assert.deepEqual(stops, [0x03, 0x03], "Effect Operation Stop for both blocks");
+  });
+  await check("the PID spec's order puts ET Custom Force Data after the conditions", () => {
+    const cols = damperCollections({ types: [0x41, 0x28, 0x26, 0x43, 0x30, 0x27, 0x40, 0x42, 0x31, 0x34, 0x32, 0x33] });
+    const l = parsePidLayout(cols, "unordered");
+    assert.ok(l);
+    const et = field(l.setEffect!, PID.EFFECT_TYPE);
+    assert.equal(selectorValue(et, PID.ET_CONSTANT_FORCE), 1);
+    assert.equal(selectorValue(et, PID.ET_FRICTION), 11);
+    assert.equal(selectorValue(et, pid(0x28)), 12);
   });
   await check("PXN V99 (11ff:3245) quirk: trigger 0, Direction Enable set, Stop All, loop 1, 30 / 20 ms pauses", async () => {
     const cols = pidCollections({ triggerButton: variable([pid(0x53)], 8, 1, 1, 8) });
@@ -539,10 +674,10 @@ async function main() {
       { kind: "out", id: 10, data: [3, 1, 1] }, // loop 1
     ]);
     assert.deepEqual(pxn.sleeps, [30, 20]);
-    // another product of the same vendor gets the generic profile
+    // another product of the same vendor gets the generic profile: no axis flag, loop 255, a 60 ms pause
     const other = await run(0x11ff, 0x1212);
     const set = other.log.find((l) => l.kind === "out" && l.id === 1);
-    assert.deepEqual([set?.data[9], set?.data[10]], [0xff, 0b001]);
+    assert.deepEqual([set?.data[9], set?.data[10]], [0, 0b100]);
     assert.deepEqual(other.log.at(-1), { kind: "out", id: 10, data: [3, 1, 255] });
     assert.deepEqual(other.sleeps, [60]);
   });
@@ -571,9 +706,10 @@ async function main() {
       },
     ];
     const layout = asLayout(cols);
-    const rep = buildSetEffectReport(layout.setEffect!, 2, PID.ET_CONSTANT_FORCE);
-    // block 2, constant force, duration 0xFFFF, gain 255, Axes Enable X=1 Y=0 with Direction Enable cleared, Direction X=90° Y=0
-    assert.deepEqual([...rep.data], [2, 1, 0xff, 0xff, 255, 0b001, 64, 0]);
+    // A profile that sets the X flag, so the 1-bit X (Axes Enable) and the 8-bit X (Direction) both get written
+    const rep = buildSetEffectReport(layout.setEffect!, 2, PID.ET_CONSTANT_FORCE, { ...GENERIC_PID_PROFILE, axisFlags: "x" });
+    // block 2, constant force, duration 0xFFFF, gain 255, Axes Enable X=1 Y=0 with Direction Enable set, Direction X=90° Y=0
+    assert.deepEqual([...rep.data], [2, 1, 0xff, 0xff, 255, 0b101, 64, 0]);
   });
   await check("Set Condition: an unsigned coefficient (0..10000) starts at 0, not the midpoint", () => {
     const f = (bitOffset: number, min: number, max: number): PidFieldLayout => ({ bitOffset, bitSize: 16, min, max, signed: min < 0 });
@@ -608,7 +744,7 @@ async function main() {
     assert.ok(res.session.setDamper);
     assert.deepEqual(dev.log.slice(-4), [
       { kind: "feature", id: 17, data: [3, 0, 0] }, // create: damper
-      { kind: "out", id: 1, data: [4, 3, 0xff, 0xff, 255, 0b001, 64, 0] }, // Set Effect for block 4, type damper
+      { kind: "out", id: 1, data: [4, 3, 0xff, 0xff, 255, 0b100, 64, 0] }, // Set Effect for block 4, type damper
       { kind: "out", id: 3, data: [4, 0, 0, 0, 0, 0, 0, 0, 0x10, 0x27, 0x10, 0x27, 0, 0] }, // coefficient 0, full saturation
       { kind: "out", id: 10, data: [4, 1, 255] }, // started like the constant force
     ]);

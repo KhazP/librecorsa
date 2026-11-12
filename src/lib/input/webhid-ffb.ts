@@ -175,6 +175,16 @@ export const PID = {
   BYTE_COUNT: pidUsage(0xac),
 } as const;
 
+/** The Device Control commands, for a report that lists them as one 1-bit flag each instead of an array */
+const DEVICE_CONTROL_FLAGS: readonly number[] = [
+  PID.DC_ENABLE_ACTUATORS,
+  PID.DC_DISABLE_ACTUATORS,
+  PID.DC_STOP_ALL_EFFECTS,
+  PID.DC_DEVICE_RESET,
+  PID.DC_DEVICE_PAUSE,
+  PID.DC_DEVICE_CONTINUE,
+];
+
 /** Ordinal usage n (Direction is one Ordinal-usage field per axis: ordinal 1 = X) */
 export const ordinalUsage = (n: number) => (PAGE_ORDINAL << 16) | n;
 
@@ -241,6 +251,8 @@ export interface PidLayout {
   /** Feature reports */
   createNewEffect: PidReportLayout | null;
   blockLoad: PidReportLayout | null;
+  /** PID Pool (RAM Pool Size 0x80 / Simultaneous Effects Max 0x83), read once at setup as hid-pidff and DirectInput do */
+  pool: PidReportLayout | null;
   /** Set Effect offers the Damper condition effect (0x41) and there is a Set Condition report */
   hasDamper: boolean;
   /** Every condition effect this driver can run that Set Effect offers, with a Set Condition report */
@@ -275,6 +287,9 @@ function normaliseRange(min: number | undefined, max: number | undefined, bitSiz
     if (lo >= 0) hi = full;
     else [lo, hi] = [hi, lo];
   }
+  // A range of 0..0 holds nothing: the MOZA R9 Base declares its 1-bit Axes Enable, Direction Enable and Device Control
+  // flags so. The field takes its full width, as the HID stacks that write these bits do
+  if (lo === 0 && hi === 0) hi = full;
   return { min: lo, max: hi };
 }
 
@@ -286,16 +301,55 @@ function expandUsages(item: HidReportItemLike): number[] {
   return out;
 }
 
-/** Which selector an array item is (by the page-0x0F child usages it lists), with its list reduced to those usages */
-function detectSelector(usages: readonly number[]): { key: number; usages: number[] } | null {
+/**
+ * How the browser lists the usages of an array item, whose value is `logical minimum + index` in that list.
+ * "descriptor": in report descriptor order, as Chrome gives them on macOS, Linux and ChromeOS, where it parses the raw
+ * descriptor. "unordered": in no fixed order. Chrome on Windows has no raw descriptor: it rebuilds the items from
+ * Windows' preparsed data, one per usage, and sorts them by report id and bit position with an unstable sort
+ * (CreateReportDescriptions in services/device/hid/hid_service_win.cc), so the usages of one array item, which share a
+ * position, come out shuffled (MOZA R9 Base: the effect types reversed, Effect Operation as Start, Stop, Start Solo).
+ */
+export type UsageOrder = "descriptor" | "unordered";
+
+/** The usage order of the browser this runs in (Windows: "unordered") */
+export function platformUsageOrder(): UsageOrder {
+  const ua = typeof navigator !== "undefined" && typeof navigator.userAgent === "string" ? navigator.userAgent : "";
+  return /\bWindows\b/.test(ua) ? "unordered" : "descriptor";
+}
+
+/**
+ * The PID selector usages in the order of the USB PID 1.0 sample report descriptor, which PID firmwares copy (ET Custom
+ * Force Data last, after the conditions): the order an "unordered" list is put back into
+ */
+const SPEC_SELECTOR_ORDER: readonly number[] = [
+  0x26, 0x27, 0x30, 0x31, 0x32, 0x33, 0x34, 0x40, 0x41, 0x42, 0x43, 0x28, // Effect Type
+  0x79, 0x7a, 0x7b, // Effect Operation: Start, Start Solo, Stop
+  0x8c, 0x8d, 0x8e, // Block Load Status: Success, Full, Error
+  0x97, 0x98, 0x99, 0x9a, 0x9b, 0x9c, // Device Control: Enable / Disable Actuators, Stop All, Reset, Pause, Continue
+].map(pidUsage);
+
+/** `usages` in {@link SPEC_SELECTOR_ORDER}; any usage it does not name goes last, by id */
+function inSpecOrder(usages: readonly number[]): number[] {
+  const rank = (u: number) => {
+    const i = SPEC_SELECTOR_ORDER.indexOf(u);
+    return i >= 0 ? i : SPEC_SELECTOR_ORDER.length + (u & 0xffff);
+  };
+  return [...usages].sort((a, b) => rank(a) - rank(b));
+}
+
+/**
+ * Which selector an array item is (by the page-0x0F child usages it lists), with its list reduced to those usages; an
+ * "unordered" list is put into the PID spec's order
+ */
+function detectSelector(usages: readonly number[], order: UsageOrder): { key: number; usages: number[] } | null {
   for (const s of SELECTORS) {
     const mine = usages.filter((u) => u >>> 16 === PAGE_PID && (u & 0xffff) >= s.lo && (u & 0xffff) <= s.hi);
-    if (mine.length > 0) return { key: s.key, usages: mine };
+    if (mine.length > 0) return { key: s.key, usages: order === "unordered" ? inSpecOrder(mine) : mine };
   }
   return null;
 }
 
-function parseReport(reportId: number, items: readonly HidReportItemLike[]): PidReportLayout {
+function parseReport(reportId: number, items: readonly HidReportItemLike[], order: UsageOrder = "descriptor"): PidReportLayout {
   const fields: Record<number, PidFieldLayout> = {};
   const fieldList: PidFieldEntry[] = [];
   let offset = 0;
@@ -311,7 +365,7 @@ function parseReport(reportId: number, items: readonly HidReportItemLike[]): Pid
       const range = normaliseRange(item.logicalMinimum, item.logicalMaximum, size);
       const signed = range.min < 0;
       if (item.isArray) {
-        const sel = detectSelector(usages);
+        const sel = detectSelector(usages, order);
         if (sel) add(sel.key, { bitOffset: offset, bitSize: size, ...range, signed, usages: sel.usages });
         else if (usages.length > 0) add(usages[0] as number, { bitOffset: offset, bitSize: size, ...range, signed, usages });
       } else if (usages.length > 0) {
@@ -333,7 +387,7 @@ function parseReport(reportId: number, items: readonly HidReportItemLike[]): Pid
  */
 function gatherReports(
   collections: readonly HidCollectionLike[],
-  kind: "outputReports" | "featureReports",
+  kind: "outputReports" | "featureReports" | "inputReports",
   out = new Map<number, { items: readonly HidReportItemLike[]; bits: number }>()
 ) {
   for (const c of collections) {
@@ -360,7 +414,10 @@ function gatherReports(
  * with receiveFeatureReport). Bit offsets are summed over the items in order (size x count, constant items are
  * padding), report ids are never hard-coded. Returns null without a usable Set Constant Force + Effect Operation.
  */
-export function parsePidLayout(collections: readonly HidCollectionLike[]): PidLayout | null {
+export function parsePidLayout(
+  collections: readonly HidCollectionLike[],
+  order: UsageOrder = platformUsageOrder()
+): PidLayout | null {
   let constantForce: PidReportLayout | null = null;
   let effectOperation: PidReportLayout | null = null;
   let setEffect: PidReportLayout | null = null;
@@ -370,9 +427,10 @@ export function parsePidLayout(collections: readonly HidCollectionLike[]): PidLa
   let blockFree: PidReportLayout | null = null;
   let createNewEffect: PidReportLayout | null = null;
   let blockLoad: PidReportLayout | null = null;
+  let pool: PidReportLayout | null = null;
 
   for (const [id, raw] of gatherReports(collections, "outputReports")) {
-    const l = parseReport(id, raw.items);
+    const l = parseReport(id, raw.items, order);
     const keys = Object.keys(l.fields).length;
     if (hasField(l, PID.EFFECT_TYPE)) {
       if (!setEffect) setEffect = l;
@@ -381,7 +439,8 @@ export function parsePidLayout(collections: readonly HidCollectionLike[]): PidLa
     } else if (hasField(l, PID.EFFECT_OPERATION)) {
       const f = getField(l, PID.EFFECT_OPERATION);
       if (!effectOperation && f?.usages?.includes(PID.OP_EFFECT_START) && hasField(l, PID.EFFECT_BLOCK_INDEX)) effectOperation = l;
-    } else if (hasField(l, PID.DEVICE_CONTROL)) {
+    } else if (hasField(l, PID.DEVICE_CONTROL) || DEVICE_CONTROL_FLAGS.some((u) => hasField(l, u))) {
+      // An array of DC_* usages, or (MOZA R9 Base) one 1-bit flag per command
       if (!deviceControl) deviceControl = l;
     } else if (hasField(l, PID.DEVICE_GAIN)) {
       if (!deviceGain) deviceGain = l;
@@ -394,11 +453,13 @@ export function parsePidLayout(collections: readonly HidCollectionLike[]): PidLa
     }
   }
   for (const [id, raw] of gatherReports(collections, "featureReports")) {
-    const l = parseReport(id, raw.items);
+    const l = parseReport(id, raw.items, order);
     if (hasField(l, PID.EFFECT_TYPE)) {
       if (!createNewEffect) createNewEffect = l;
     } else if (hasField(l, PID.BLOCK_LOAD_STATUS)) {
       if (!blockLoad) blockLoad = l;
+    } else if (hasField(l, pidUsage(0x80)) || hasField(l, pidUsage(0x83))) {
+      if (!pool) pool = l;
     }
   }
 
@@ -418,6 +479,7 @@ export function parsePidLayout(collections: readonly HidCollectionLike[]): PidLa
     blockFree,
     createNewEffect,
     blockLoad,
+    pool,
     hasDamper,
     conditions,
   };
@@ -750,8 +812,8 @@ export interface PidSetupOptions {
 
 /**
  * The setup values HID PID firmwares are known to disagree on. No wheel has confirmed either choice on this code yet:
- * the generic profile keeps what the driver sent before 2ef8324, and a wheel that needs otherwise gets an entry in
- * {@link PID_QUIRKS}. Linux mainline hid-pidff.c is one outside reference; where it differs it is named below.
+ * the generic profile sends what Linux mainline hid-pidff.c sends every PID wheel, the values that moved a MOZA R9 on
+ * Windows (12 Nov 2026), and a wheel that needs otherwise gets an entry in {@link PID_QUIRKS}.
  */
 export interface PidProfile {
   /**
@@ -766,6 +828,12 @@ export interface PidProfile {
    */
   directionEnable: "unless-axes" | "always";
   /**
+   * Set Effect Axes Enable flags. "x": X alone is set. "none": every flag left clear, as hid-pidff leaves the 1-bit
+   * X / Y flags of a descriptor that names no Axes Enable (0x55) for them, so Direction Enable and the direction pick
+   * the axis
+   */
+  axisFlags: "x" | "none";
+  /**
    * Effect Operation loop count on start. "max" (at most 255) keeps the effect playing for 255 x Duration should a
    * firmware read Duration 0xFFFF as 65.535 s rather than infinite; 1 stops after one Duration in that case
    */
@@ -778,12 +846,18 @@ export interface PidProfile {
   createSettleMs: number;
 }
 
+/**
+ * hid-pidff's values: Trigger Button 0 (pidff_set_effect_report), Direction Enable set with no axis flag
+ * (pidff_set_effect_direction), Reset then Stop All before Enable Actuators (pidff_reset). Confirmed on a MOZA R9 Base,
+ * on Windows, with the page's sequence replayed through hidapi (12 Nov 2026)
+ */
 export const GENERIC_PID_PROFILE: PidProfile = {
-  noTriggerButton: 0xff,
-  directionEnable: "unless-axes",
+  noTriggerButton: 0,
+  directionEnable: "always",
+  axisFlags: "none",
   loopCount: "max",
   resetSleepMs: 60,
-  stopAllAfterReset: false,
+  stopAllAfterReset: true,
   createSettleMs: 0,
 };
 
@@ -797,7 +871,15 @@ export const PID_QUIRKS: readonly { vendorId: number; productId: number; name: s
     vendorId: 0x11ff,
     productId: 0x3245,
     name: "PXN V99",
-    profile: { noTriggerButton: 0, directionEnable: "always", loopCount: 1, resetSleepMs: 30, stopAllAfterReset: true, createSettleMs: 20 },
+    profile: {
+      noTriggerButton: 0,
+      directionEnable: "always",
+      axisFlags: "x",
+      loopCount: 1,
+      resetSleepMs: 30,
+      stopAllAfterReset: true,
+      createSettleMs: 20,
+    },
   },
 ];
 
@@ -821,13 +903,23 @@ function sendOutput(device: HidDeviceLike, layout: PidReportLayout, values: Reco
   return device.sendReport(r.reportId, r.data);
 }
 
-/** Device Control command (reset, enable, …); false when the device has no such command */
+/**
+ * Device Control command (reset, enable, …); false when the device has no such command. The report is an array that
+ * selects one command, or one 1-bit flag per command, of which only this one is set. Either way the report is handed
+ * over before the first await (the emergency stop relies on it).
+ */
 async function deviceControl(device: HidDeviceLike, layout: PidLayout, usage: number): Promise<boolean> {
   const rep = layout.deviceControl;
-  const f = rep ? getField(rep, PID.DEVICE_CONTROL) : undefined;
-  const v = f ? selectorValue(f, usage) : null;
-  if (!rep || v === null) return false;
-  await sendOutput(device, rep, { [PID.DEVICE_CONTROL]: v });
+  if (!rep) return false;
+  const f = getField(rep, PID.DEVICE_CONTROL);
+  if (f) {
+    const v = selectorValue(f, usage);
+    if (v === null) return false;
+    await sendOutput(device, rep, { [PID.DEVICE_CONTROL]: v });
+    return true;
+  }
+  if (!hasField(rep, usage)) return false;
+  await sendOutput(device, rep, { [usage]: 1 });
   return true;
 }
 
@@ -938,7 +1030,7 @@ export function buildSetEffectReport(
       else put(f, f.max >= 255 ? 255 : 0);
     } else if (f.usage === PID.AXES_ENABLE) put(f, 1);
     else if (f.usage === PID.DIRECTION_ENABLE) put(f, profile.directionEnable === "always" || !hasAxesMask ? 1 : 0);
-    else if (isAxisFlag(f)) put(f, axisFlags++ === 0 ? 1 : 0);
+    else if (isAxisFlag(f)) put(f, profile.axisFlags === "x" && axisFlags++ === 0 ? 1 : 0);
     else if (page === PAGE_ORDINAL || page === PAGE_DESKTOP || f.usage === PID.DIRECTION) {
       put(f, directions++ === 0 ? f.min + (f.max - f.min) * DIRECTION_X_FRACTION : f.min);
     }
@@ -1034,6 +1126,10 @@ export async function setupPidDevice(device: HidDeviceLike, options: PidSetupOpt
     if (profile.stopAllAfterReset) await deviceControl(device, layout, PID.DC_STOP_ALL_EFFECTS);
     actuatorsOn = true;
     await deviceControl(device, layout, PID.DC_ENABLE_ACTUATORS);
+    // Read once, as hid-pidff (pidff_fetch_pool) and DirectInput do before they create effects; a wheel that refuses it
+    // is set up all the same
+    const pool = layout.pool;
+    if (pool) await bestEffort(() => device.receiveFeatureReport(pool.reportId));
 
     if (layout.deviceGain) {
       const g = getField(layout.deviceGain, PID.DEVICE_GAIN);
@@ -1547,6 +1643,7 @@ const PID_REPORT_NAMES: readonly [keyof PidLayout, string][] = [
   ["deviceGain", "Device Gain"],
   ["createNewEffect", "Create New Effect"],
   ["blockLoad", "PID Block Load"],
+  ["pool", "PID Pool"],
 ];
 
 function describeField(f: PidFieldEntry): string {
@@ -1594,6 +1691,11 @@ export function describeHidDevice(device: HidDeviceLike): string {
     return out.join("\n");
   }
   out.push(`PID profile: ${pidProfileName(device)}`);
+  out.push(
+    platformUsageOrder() === "unordered"
+      ? "Selector order: the PID spec's (this browser lists array usages in no fixed order)"
+      : "Selector order: the report descriptor's"
+  );
   out.push("HID PID reports:");
   for (const [key, name] of PID_REPORT_NAMES) {
     const r = layout[key] as PidReportLayout | null | undefined;
