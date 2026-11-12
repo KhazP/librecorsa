@@ -34,6 +34,13 @@ export interface DiscussionItem {
 
 export const COVERAGE: CoverageItem[] = [
   {
+    outlet: "Andrey Zhuravlev",
+    title: "LibreCorsa - open-source racing simulator in your Browser",
+    url: "https://www.youtube.com/watch?v=-_mMah4gYg4",
+    date: "2026-11-12",
+    kind: "Video",
+  },
+  {
     outlet: "simRacer.es",
     title: "LibreCorsa: el simulador gratis en navegador con físicas a 500 Hz, clima dinámico y Force Feedback",
     url: "https://simracer.es/librecorsa-el-simulador-gratis-en-navegador-con-fisicas-a-500-hz-clima-dinamico-y-force-feedback/",
