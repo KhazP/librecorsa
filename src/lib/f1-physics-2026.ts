@@ -144,6 +144,7 @@ import {
 } from './sim/track-occupancy';
 import { type AiVehicleParams, RacingLineDriver } from './sim/ai-mpc';
 import { SteeringAssist, type SteeringAssistCarState } from './sim/steering-assist';
+import { OPEN_WHEEL_KEYBOARD_STEER } from './input/keyboard-steer';
 import { AxleSlipScratch } from './sim/tyre-slip';
 import { filterChassisG } from './sim/chassis-g';
 import { type AutoShiftSchedule, autoShift, createAutoShiftInput, ManualShiftOverride } from './sim/auto-gearbox';
@@ -1601,6 +1602,7 @@ export class F1Physics2026 {
       // Measured on the flat pad: ≈1.75 × (g + downforce / m) from 90 to 240 km/h, scaled by surface/wet grip
       maxLateralAccel: 1.75 * this.aiPlanGrip() * (G + this.aeroDownforceN / this.massKg),
       slip: this.slipScratch.sample(),
+      keyboardSteer: OPEN_WHEEL_KEYBOARD_STEER,
     };
   };
 

@@ -37,6 +37,14 @@ export interface KeyboardSteerProfile {
 /** The base ramp at every speed: a car without a curve of its own */
 export const NEUTRAL_KEYBOARD_STEER: KeyboardSteerProfile = { lowSpeedRate: 1, highSpeedRate: 1, returnRate: 1 };
 
+/**
+ * The 2026 open-wheelers (the Prototype on both engines, the f12026-car): quicker into slow corners (half the grip
+ * limit ≈267 ms after the key at 40–70 km/h instead of ≈333, the yaw ≈100 ms sooner) and gentler at speed, where a
+ * downforce car answers fastest (a 90 ms tap at 250 km/h ≈0.75 g instead of ≈1.1, the yaw ≈90 ms later). The return
+ * is the base one.
+ */
+export const OPEN_WHEEL_KEYBOARD_STEER: KeyboardSteerProfile = { lowSpeedRate: 1.3, highSpeedRate: 0.8, returnRate: 1 };
+
 /** Speeds the car's curve moves between its slow-corner and its high-speed steer-in (m/s) */
 export const KB_LOW_SPEED_MS = 60 / 3.6;
 export const KB_HIGH_SPEED_MS = 200 / 3.6;

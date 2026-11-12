@@ -80,6 +80,10 @@ export const AMG_GT3_SIM_PROFILE: CarSimProfile = {
     semi_pro: { tcLevel: 10, tc2Level: 6, absLevel: 9 },
     assisted: { tcLevel: 12, tc2Level: 9, absLevel: 11 },
   },
+  // A heavy car on a slow rack: quicker keys in slow and medium corners (half the grip limit ≈210 ms after the key at
+  // 70–120 km/h instead of ≈300, the yaw ≈130 ms sooner at 70) and at speed as the base, where the car is calm; a
+  // touch quicker back to centre
+  keyboardSteer: { lowSpeedRate: 1.6, highSpeedRate: 1.05, returnRate: 1.1 },
 };
 
 export function createAmgGt3Sim(track: BuiltTrackData, root?: THREE.Object3D | null): F12026CarSim {
