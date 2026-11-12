@@ -23,12 +23,20 @@ export interface SpeedPlan {
    * tracks this, accelerating as hard as its own engine allows; the full plan above times the lap
    */
   vLimit: Float64Array;
+  /**
+   * The same envelope with no top speed in it: where `vLimit` sits at the car's level-ground top speed, the corners and
+   * braking zones ahead are all that limit it. A car in a tow (or downhill) goes faster than that top speed, and this is
+   * where it brakes from there in time. Only built when asked for (`withOpen`): a drive plan needs it, a line search not
+   */
+  vOpen?: Float64Array;
   /** Lap time of the plan along the path (s) */
   lapS: number;
   geometry: PathGeometry;
 }
 
 const COMBINED_EXP = 2;
+/** `vOpen`'s ceiling, as a share of the level-ground top speed: above anything a tow gives */
+const OPEN_TOP_SHARE = 1.2;
 
 /** Grip left along the road when `aLatUsed` of `aLatMax` is cornering, as a share of the straight-line limit */
 const longShare = (aLatUsed: number, aLatMax: number) => {
@@ -36,7 +44,13 @@ const longShare = (aLatUsed: number, aLatMax: number) => {
   return Math.pow(Math.max(0, 1 - Math.pow(r, COMBINED_EXP)), 1 / COMBINED_EXP);
 };
 
-export function planSpeeds(track: AiTrack, offsets: ArrayLike<number>, limits: CarLimits, geometry = pathGeometry(track, offsets)): SpeedPlan {
+export function planSpeeds(
+  track: AiTrack,
+  offsets: ArrayLike<number>,
+  limits: CarLimits,
+  geometry = pathGeometry(track, offsets),
+  withOpen = false
+): SpeedPlan {
   const n = track.n;
   const { kappa, seg } = geometry;
   const vTop = limits.topSpeedMs;
@@ -45,22 +59,20 @@ export function planSpeeds(track: AiTrack, offsets: ArrayLike<number>, limits: C
   // helps a right-hander: + curvature)
   const bankHelp = (i: number) => G * Math.sin(track.bank[i]) * Math.sign(kappa[i] || 1);
 
-  // 1. Cornering limit (bisection on v)
-  const vLat = new Float64Array(n);
-  for (let i = 0; i < n; i++) {
+  // 1. Cornering limit (bisection on v), up to `vMax`
+  const cornerLimit = (i: number, vMax: number) => {
     const k = Math.abs(kappa[i]);
-    if (k < 1e-5) {
-      vLat[i] = vTop;
-      continue;
-    }
-    let lo = 1, hi = vTop;
+    if (k < 1e-5) return vMax;
+    let lo = 1, hi = vMax;
     for (let it = 0; it < 30; it++) {
       const v = 0.5 * (lo + hi);
       if (v * v * k <= limits.lateral(v, gEffAt(i, v)) + bankHelp(i)) lo = v;
       else hi = v;
     }
-    vLat[i] = lo;
-  }
+    return lo;
+  };
+  const vLat = new Float64Array(n);
+  for (let i = 0; i < n; i++) vLat[i] = cornerLimit(i, vTop);
 
   // 2. Backward (braking into each point) and forward (accelerating out of each) passes, twice round the lap
   const backward = (v: Float64Array) => {
@@ -89,6 +101,15 @@ export function planSpeeds(track: AiTrack, offsets: ArrayLike<number>, limits: C
   const vLimit = Float64Array.from(vLat);
   backward(vLimit);
   backward(vLimit);
+  // ... and with the top speed open (a ceiling well above it): only the points the top speed limited change
+  let vOpen: Float64Array | undefined;
+  if (withOpen) {
+    const vCeil = OPEN_TOP_SHARE * vTop;
+    vOpen = new Float64Array(n);
+    for (let i = 0; i < n; i++) vOpen[i] = vLat[i] < vTop - 0.01 ? vLat[i] : cornerLimit(i, vCeil);
+    backward(vOpen);
+    backward(vOpen);
+  }
   const v = Float64Array.from(vLimit);
   for (let round = 0; round < 2; round++) {
     forward(v);
@@ -96,5 +117,5 @@ export function planSpeeds(track: AiTrack, offsets: ArrayLike<number>, limits: C
   }
   let lapS = 0;
   for (let i = 0; i < n; i++) lapS += seg[i] / Math.max(1, 0.5 * (v[i] + v[(i + 1) % n]));
-  return { v, vLimit, lapS, geometry };
+  return { v, vLimit, vOpen, lapS, geometry };
 }

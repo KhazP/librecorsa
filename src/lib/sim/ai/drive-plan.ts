@@ -17,6 +17,11 @@ export interface AiDrivePlan {
    */
   readonly n: Float64Array;
   readonly v: Float64Array;
+  /**
+   * `v` with no top speed in it (`SpeedPlan.vOpen`): the corners and braking zones are its only limits. Where the two
+   * differ, `v` is the car's level-ground top speed, which a car in a tow goes beyond
+   */
+  readonly vOpen: Float64Array;
   /** The full plan's speeds, traction included (what the lap is expected to look like) */
   readonly vExpected: Float64Array;
   readonly kappa: Float64Array;
@@ -28,11 +33,11 @@ export interface AiDrivePlan {
 
 export function makeDrivePlan(track: AiTrack, offsets: ArrayLike<number>, limits: CarLimits): AiDrivePlan {
   const n = Float64Array.from(offsets);
-  const plan = planSpeeds(track, n, limits);
+  const plan = planSpeeds(track, n, limits, undefined, true);
   const dnds = new Float64Array(track.n);
   for (let i = 0; i < track.n; i++) {
     const a = n[(i - 1 + track.n) % track.n], b = n[(i + 1) % track.n];
     dnds[i] = (b - a) / (2 * track.ds);
   }
-  return { track, n, v: plan.vLimit, vExpected: plan.v, kappa: plan.geometry.kappa, dnds, limits, lapS: plan.lapS };
+  return { track, n, v: plan.vLimit, vOpen: plan.vOpen ?? plan.vLimit, vExpected: plan.v, kappa: plan.geometry.kappa, dnds, limits, lapS: plan.lapS };
 }
