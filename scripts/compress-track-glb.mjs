@@ -1,7 +1,7 @@
 /**
  * Meshopt-compresses circuit GLBs in place (EXT_meshopt_compression + KHR_mesh_quantization).
  *
- *   node scripts/compress-track-glb.mjs public/tracks/suzuka/suzuka.glb [more.glb ...]
+ *   node scripts/compress-track-glb.mjs public/tracks/monaco/monaco.glb [more.glb ...]
  *   node scripts/compress-track-glb.mjs --all          # every circuit in public/tracks/index.json
  *
  * The visual scan is quantized (16-bit positions, 8-bit normals, 14-bit UVs). The hidden physics meshes
