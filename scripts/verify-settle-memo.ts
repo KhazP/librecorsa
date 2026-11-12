@@ -126,25 +126,36 @@ for (const [flying, slot] of [[false, 4], [true, 3]] as const) {
     setSettleMemoEnabled(memoOn);
     clearSettleMemo();
     const player = new F12026CarSim(track, root);
-    const races: { sims: unknown[]; buildMs: number; startMs: number }[] = [];
+    const races: { sims: unknown[]; buildMs: number; startMs: number; buildHits: number; startHits: number }[] = [];
     for (let race = 0; race < 2; race++) {
+      const h0 = hits();
       let t = performance.now();
       const field = new AiOpponentField(track, player, drivers, undefined, { learning: false, seed: 3 + race });
       field.attachTrackRoot(root as never);
       const buildMs = performance.now() - t;
+      const h1 = hits();
       t = performance.now();
       field.startRace(true);
       const startMs = performance.now() - t;
+      const h2 = hits();
       for (let i = 0; i < 240; i++) field.update(1 / 120);
-      races.push({ sims: (field as unknown as { cars: { sim: unknown }[] }).cars.map((c) => c.sim), buildMs, startMs });
+      races.push({
+        sims: (field as unknown as { cars: { sim: unknown }[] }).cars.map((c) => c.sim),
+        buildMs,
+        startMs,
+        buildHits: h1 - h0,
+        startHits: h2 - h1,
+      });
     }
     return races;
   };
   const real = run(false);
   const memo = run(true);
-  const f = (r: { buildMs: number; startMs: number }[]) => r.map((x) => `${x.buildMs.toFixed(0)}+${x.startMs.toFixed(0)}`).join(', ');
-  check('Field: built faster with the reuse', memo[0].buildMs < real[0].buildMs / 3, `build+start ms, off: ${f(real)}; on: ${f(memo)}`);
-  check('Field: the second race starts faster', memo[1].startMs < real[1].startMs / 2);
+  const f = (r: { buildMs: number; startMs: number }[]) => r.map((x) => `${x.buildMs.toFixed(0)}+${x.startMs.toFixed(0)} ms`).join(', ');
+  // Counted, not timed (a loaded machine slows both): every AI car is built with the settle of the player's car (they
+  // are alike), and in the second race every AI car is given the settle the first race made on its slot
+  check('Field: every AI car is built with a copied settle', memo.every((r) => r.buildHits === drivers.length), `build+start off: ${f(real)}; on: ${f(memo)}`);
+  check('Field: the second race\'s AI cars start on the first race\'s settles', memo[1].startHits === drivers.length, `${memo[0].startHits}, then ${memo[1].startHits} given`);
   let diffs: string[] = [];
   for (let race = 0; race < 2; race++) {
     real[race].sims.forEach((sim, i) => {
