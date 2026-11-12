@@ -22,6 +22,7 @@ import {
   type AiTuningLibrary,
 } from '../src/lib/sim/ai-tuning';
 import { AI_TUNING_LIBRARY } from '../src/lib/sim/ai-tuning-data';
+import trackIndex from '../public/tracks/index.json';
 import { AiSectionLearner, LEARN_BOUNDS, type CornerFrame } from '../src/lib/sim/ai-learning';
 import { AI_DRIVERS, AiOpponentField } from '../src/lib/sim/ai-opponents';
 import { F1Physics2026 } from '../src/lib/f1-physics-2026';
@@ -68,7 +69,7 @@ check('track vehicle block applies last', near(r.params.overtakeCaution, 0.9));
 check('out-of-range values are clamped, unknown keys dropped', near(r.params.pace, 1.05) && !('bogus' in r.params));
 check('a section without a range or turns is dropped', r.sections.length === 3, `${r.sections.length} sections`);
 check('sources list every layer', r.sources.join(' > ') === 'defaults > gt3 > gt3:amg-gt3 > gt3.rwanda_official_short > gt3.rwanda_official_short:amg-gt3 > gt3.rwanda_official_short#sections(2)', r.sources.join(' > '));
-const other = resolveAiTuning({ classId: 'gt3', vehicleId: 'amg-gt3', trackId: 'suzuka' }, lib);
+const other = resolveAiTuning({ classId: 'gt3', vehicleId: 'amg-gt3', trackId: 'monaco' }, lib);
 check('another circuit keeps the class values', near(other.params.brakeMargin, 0.05) && other.sections.length === 1);
 
 const ranges = resolveSectionRanges(track, r.sections);
@@ -83,8 +84,9 @@ check('class-wide sections still apply', near(tuning.at('apexSpeedScale', 150), 
 
 console.log('Shipped files (public/ai)');
 for (const [k, f] of Object.entries(AI_TUNING_LIBRARY)) check(`${k}.json parses`, Boolean(f && f.params));
-const suz = resolveAiTuning({ classId: 'f1-2026', vehicleId: 'vf26', trackId: 'suzuka' }, AI_TUNING_LIBRARY);
-check('Suzuka F1 has its Degner section', suz.sections.some((s) => s.label?.startsWith('Degner')));
+const listedTracks = new Set((trackIndex as { id: string }[]).map((t) => t.id));
+const strayTracks = Object.keys(AI_TUNING_LIBRARY).map((k) => k.split('.')[1]).filter((t) => t && !listedTracks.has(t));
+check('every per-track file is for a listed circuit', strayTracks.length === 0, strayTracks.join(', '));
 const shipped = resolveAiTuning({ classId: 'f1-2026', vehicleId: 'vf26', trackId: 'rwanda_official_short' }, AI_TUNING_LIBRARY);
 check('shipped F1 class values are the identity defaults', JSON.stringify(shipped.params) === JSON.stringify(AI_TUNING_DEFAULTS));
 

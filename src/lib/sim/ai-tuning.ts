@@ -6,7 +6,7 @@
  *     → track file (`public/ai/<class>.<track>.json`) → its `vehicles` block → per-section overrides
  *
  * A section override applies to a stretch of track given by distance (`fromM` / `toM`, like USR's `x bgn` / `x end`)
- * or by turn numbers (`turns`, with a braking lead-in), e.g. "be more careful through Degner at Suzuka".
+ * or by turn numbers (`turns`, with a braking lead-in), e.g. "be more careful through Sainte Dévote at Monaco".
  *
  * On top of the resolved parameters sits the player's AI skill level (0–100) and a per-driver personality; at the
  * default skill and the shipped defaults the field drives exactly as it did before this module existed.

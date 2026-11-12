@@ -4,7 +4,7 @@
  * OpenF1 JSON (`car_data` samples with `date` / `speed` km/h / `throttle` / `brake`, and the `lap` entry), as written by
  * a local fetch script.
  *
- *   npx tsx scripts/compare-real-lap.ts --track suzuka --ref <path/to/suzuka_2026_Q.json> [--car vf26|f12026-car|amg-gt3]
+ *   npx tsx scripts/compare-real-lap.ts --track monaco --ref <path/to/monaco_2026_Q.json> [--car vf26|f12026-car|amg-gt3]
  *       [--pace 1]
  */
 import { readFileSync } from 'node:fs';
@@ -20,7 +20,7 @@ const opt = (name: string, fallback?: string) => {
   const i = argv.indexOf(`--${name}`);
   return i >= 0 && argv[i + 1] !== undefined ? argv[i + 1] : fallback;
 };
-const trackId = opt('track', 'suzuka')!;
+const trackId = opt('track', 'monaco')!;
 const refPath = opt('ref');
 const carKind = opt('car', 'vf26')!;
 const pace = Number(opt('pace', '1'));

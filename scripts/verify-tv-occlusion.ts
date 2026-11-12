@@ -1,5 +1,5 @@
 /**
- * The TV cameras' sight-line test (segment-occluder.ts) against three's Raycaster, on real circuit scans.
+ * The TV cameras' sight-line test (segment-occluder.ts) against three's Raycaster, on real circuits.
  *
  * For each circuit, camera-like sight lines (from 4.5-8 m up, 20-45 m off the centreline, to the car's height 30-120 m
  * along the track, the last 6 m left out as the TV director does) are tested both ways. The meshes get front-, back- and
@@ -20,7 +20,7 @@ import { hasFile, noteSkip } from './lib/hosted-files';
 const SIDES = [THREE.FrontSide, THREE.DoubleSide, THREE.BackSide] as const;
 let failed = 0;
 
-for (const id of ['yas_marina', 'rwanda_official', 'rwanda_official_short']) {
+for (const id of ['monaco', 'rwanda_official', 'rwanda_official_short']) {
   if (!hasFile(`public/tracks/${id}/track_data.json`)) {
     noteSkip(id, `public/tracks/${id}/track_data.json`);
     continue;

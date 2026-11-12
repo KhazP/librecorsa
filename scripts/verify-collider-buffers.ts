@@ -9,9 +9,6 @@ import { readFileSync } from 'node:fs';
 import { getActiveTrackData, setActiveTrack, type RawTrackJson } from '../src/lib/track-data';
 import { createGroundHit, TrackColliderQuery, TrackWallQuery } from '../src/lib/sim/f12026-car/TrackColliderQuery';
 import { loadGlbGeometry } from './lib/glb-geometry';
-import { skipSuiteWithout } from './lib/hosted-files';
-
-skipSuiteWithout('public/tracks/monza/track_data.json', 'public/tracks/monza/monza.glb');
 
 const failures: string[] = [];
 const check = (name: string, ok: boolean, detail = '') => {
@@ -19,7 +16,7 @@ const check = (name: string, ok: boolean, detail = '') => {
   if (!ok) failures.push(name);
 };
 
-setActiveTrack('monza', JSON.parse(readFileSync('public/tracks/monza/track_data.json', 'utf8')) as RawTrackJson);
+setActiveTrack('rwanda_official', JSON.parse(readFileSync('public/tracks/rwanda_official/track_data.json', 'utf8')) as RawTrackJson);
 const track = getActiveTrackData(1200);
 const root = loadGlbGeometry(`public${track.meshUrl}`);
 

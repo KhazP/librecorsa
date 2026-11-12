@@ -8,7 +8,7 @@
  *  2. Race control: who is at fault in a contact, and what it costs (a penalty when it spun / damaged the other car,
  *     a warning when it didn't)
  *  3. Grid: reversed, the player's slot
- *  4. A quicker car gets past a slower one on Monza, cleanly
+ *  4. A quicker car gets past a slower one on Istanbul Park, cleanly
  *  5. A car stopped on the racing line: the car behind sees the yellow, goes round it, and doesn't hit it
  */
 import { readFileSync } from 'node:fs';
@@ -20,7 +20,7 @@ import { COLLISION_PENALTY_S, judgeContact, RaceIncidents } from '../src/lib/sim
 import { loadGlbGeometry } from './lib/glb-geometry';
 import { skipSuiteWithout } from './lib/hosted-files';
 
-skipSuiteWithout('public/tracks/monza/track_data.json', 'public/tracks/monza/monza.glb');
+skipSuiteWithout('public/tracks/istanbul_park/track_data.json', 'public/tracks/istanbul_park/istanbul_park.glb');
 
 const failures: string[] = [];
 const check = (name: string, ok: boolean, detail = '') => {
@@ -99,9 +99,11 @@ const f = (v: number, d = 1) => v.toFixed(d);
 }
 
 // ---- Track for the driving checks
-setActiveTrack('monza', JSON.parse(readFileSync('public/tracks/monza/track_data.json', 'utf8')) as RawTrackJson);
+setActiveTrack('istanbul_park', JSON.parse(readFileSync('public/tracks/istanbul_park/track_data.json', 'utf8')) as RawTrackJson);
 const track = getActiveTrackData(1200);
 const root = loadGlbGeometry(`public${track.meshUrl}`);
+/** Where the back straight starts, near Turn 11 (it runs to Turn 12 at 4751 m) */
+const BACK_STRAIGHT_M = 4166;
 const DT = 1 / 120;
 
 // ---- 3. Grid
@@ -175,9 +177,9 @@ const DT = 1 / 120;
   for (let t = 0; t < 12; t += DT) field.update(DT);
   const stp = field.carInfo('STP')!;
   const run = field.carInfo('RUN')!;
-  // The running car on the main straight at speed, the stopped one on its line 400 m up the road, out of the race
-  run.sim.teleportToDistance(80, 70, 0.5);
-  stp.sim.teleportToDistance(480, 0, 0.5);
+  // The running car on the back straight at speed, the stopped one on its line 400 m up the road, out of the race
+  run.sim.teleportToDistance(BACK_STRAIGHT_M + 80, 70, 0.5);
+  stp.sim.teleportToDistance(BACK_STRAIGHT_M + 480, 0, 0.5);
   stp.damage.registerImpact({ localX: 0, localZ: 2.5, speedMs: 60, source: 'wall' });
   let yellowSeen = false;
   let hit = false;

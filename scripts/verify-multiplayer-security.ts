@@ -155,8 +155,8 @@ const startOf = (trackId: string) => ({
 
   // Lobby / start / abort are the host's alone: never passed on
   b.ctl.sent.length = 0;
-  sendCtl(a, 'peer_a', { type: 'lobby', lobby: lobbyOf('peer_a', 'monza') });
-  sendCtl(a, 'peer_a', { type: 'start', start: startOf('monza') });
+  sendCtl(a, 'peer_a', { type: 'lobby', lobby: lobbyOf('peer_a', 'chang') });
+  sendCtl(a, 'peer_a', { type: 'start', start: startOf('chang') });
   sendCtl(a, 'peer_a', { type: 'abort', id: 'race1' });
   const relayedTypes = b.ctl.sent.map((s) => (JSON.parse(s) as { ctl: { type: string } }).ctl.type);
   check('a forged lobby / start / abort is not relayed', !relayedTypes.some((t) => ['lobby', 'start', 'abort'].includes(t)), relayedTypes.join(','));
@@ -195,18 +195,18 @@ const startOf = (trackId: string) => ({
   check('the guest follows its host', guest.hostId === 'peer_host' && guest.lobby?.settings.trackId === 'rwanda_official_short');
 
   // A forged lobby that reached the guest anyway (e.g. an old host build that relays it)
-  sendCtl(toHost, 'peer_x', { type: 'lobby', lobby: lobbyOf('peer_x', 'monza') });
+  sendCtl(toHost, 'peer_x', { type: 'lobby', lobby: lobbyOf('peer_x', 'chang') });
   check('a lobby naming another host is ignored', guest.hostId === 'peer_host' && guest.lobby?.settings.trackId === 'rwanda_official_short');
-  sendCtl(toHost, 'peer_x', { type: 'lobby', lobby: lobbyOf('peer_host', 'monza') });
+  sendCtl(toHost, 'peer_x', { type: 'lobby', lobby: lobbyOf('peer_host', 'chang') });
   check("a lobby sent under the host's id by someone else is ignored", guest.lobby?.settings.trackId === 'rwanda_official_short');
-  sendCtl(toHost, 'peer_x', { type: 'start', start: startOf('monza') });
+  sendCtl(toHost, 'peer_x', { type: 'start', start: startOf('chang') });
   check('a start from a guest is ignored', started === null);
   sendCtl(toHost, 'peer_host', { type: 'start', start: startOf('rwanda_official_short') });
   check("the host's start goes through", started === 'rwanda_official_short');
 
   // A same-browser tab can't redirect a guest that is connected to a host over WebRTC
   (guest as unknown as { handleEnvelope(env: unknown, via: null): void }).handleEnvelope(
-    { ctl: { type: 'lobby', lobby: lobbyOf('peer_tab', 'monza') }, from: 'peer_tab' },
+    { ctl: { type: 'lobby', lobby: lobbyOf('peer_tab', 'chang') }, from: 'peer_tab' },
     null
   );
   check('a lobby from another tab is ignored while connected', guest.hostId === 'peer_host');

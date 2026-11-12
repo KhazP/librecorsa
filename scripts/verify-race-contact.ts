@@ -3,8 +3,8 @@
  *
  *   npx tsx scripts/verify-race-contact.ts
  *
- * The player's car (f12026-car physics, driven by fixed inputs) against one AI car of the field on Monza's main
- * straight, with the field's own contact, damage and driver-control code:
+ * The player's car (f12026-car physics, driven by fixed inputs) against one AI car of the field on Istanbul Park's
+ * back straight, from Turn 11 to Turn 12, with the field's own contact, damage and driver-control code:
  *
  *  1. Rear-end: momentum goes into the car ahead, both noses / tails are damaged, the cars do not pass through
  *  2. Rear-quarter hits: a light tap knocks the AI car out of shape, a firm one spins it (it used to catch every
@@ -23,7 +23,7 @@ import type { ControlInputs } from '../src/types/f1';
 import { loadGlbGeometry } from './lib/glb-geometry';
 import { skipSuiteWithout } from './lib/hosted-files';
 
-skipSuiteWithout('public/tracks/monza/track_data.json', 'public/tracks/monza/monza.glb');
+skipSuiteWithout('public/tracks/istanbul_park/track_data.json', 'public/tracks/istanbul_park/istanbul_park.glb');
 
 const failures: string[] = [];
 const check = (name: string, ok: boolean, detail: string) => {
@@ -32,9 +32,12 @@ const check = (name: string, ok: boolean, detail: string) => {
 };
 const f = (v: number, d = 1) => v.toFixed(d);
 
-setActiveTrack('monza', JSON.parse(readFileSync('public/tracks/monza/track_data.json', 'utf8')) as RawTrackJson);
+// The back straight runs from Turn 11 (4176 m) to Turn 12 (4751 m)
+setActiveTrack('istanbul_park', JSON.parse(readFileSync('public/tracks/istanbul_park/track_data.json', 'utf8')) as RawTrackJson);
 const track = getActiveTrackData(1200);
 const root = loadGlbGeometry(`public${track.meshUrl}`);
+/** The cars' distances below are from here: 300 m on is well down the straight */
+const S = 4166;
 const DT = 1 / 60;
 
 interface Setup {
@@ -98,7 +101,7 @@ function run(setup: Setup) {
 
 // ---- 1. Rear-end at 22 m/s closing
 {
-  const r = run({ player: [300, 0, 62], ai: [308, 0, 40], inputs: () => ({ throttle: 0.6 }), frames: 90 });
+  const r = run({ player: [S + 300, 0, 62], ai: [S + 308, 0, 40], inputs: () => ({ throttle: 0.6 }), frames: 90 });
   const at = r.firstContact;
   const after = r.trace[Math.min(r.trace.length - 1, at + 6)];
   const before = r.trace[Math.max(0, at - 1)];
@@ -116,17 +119,17 @@ function run(setup: Setup) {
 // ---- 2 + 3. Rear-quarter hits, then the spun car's rejoin
 {
   // A tap: 8 frames of a tenth of the lock into the rear quarter (more lock, or held longer, it is a spin-out move and
-  // wrecks the car ahead). 3.5 s: the player's fixed throttle runs it into the first chicane after that
-  const tap = run({ player: [300, -1.5, 63], ai: [304.4, 0, 59], inputs: (i) => ({ throttle: 0.5, analogSteer: i < 8 ? 0.1 : 0 }), frames: 60 * 3.5 });
+  // wrecks the car ahead). 3.5 s: the player's fixed throttle runs it into Turn 12 after that
+  const tap = run({ player: [S + 300, -1.5, 63], ai: [S + 304.4, 0, 59], inputs: (i) => ({ throttle: 0.5, analogSteer: i < 8 ? 0.1 : 0 }), frames: 60 * 3.5 });
   const tapInfo = tap.field.carInfo('AIC')!;
   check('Light tap: the AI car is knocked out of shape', tap.modes.has('startled') && tap.maxHeadingDeg > 5, `heading off the road by ${f(tap.maxHeadingDeg, 0)}°, modes ${[...tap.modes].join(' → ')}`);
   check('Light tap: ... and gathers it up', tapInfo.stats.spins === 0, `${tapInfo.stats.spins} spins`);
   // The player brakes once the AI car has gone (~0.5 s): held on throttle, its swerve keeps shoving the spinning car
-  // into the pit wall and wrecks it (≥ 0.85 damage retires it), and whether it does is down to the spin's exact path,
+  // into the wall and wrecks it (≥ 0.85 damage retires it), and whether it does is down to the spin's exact path,
   // not to the rejoin under test
   const hit = run({
-    player: [300, -1.5, 63],
-    ai: [304.4, 0, 59],
+    player: [S + 300, -1.5, 63],
+    ai: [S + 304.4, 0, 59],
     inputs: (i) => ({ throttle: i < 30 ? 0.5 : 0, brake: i < 30 ? 0 : 1, analogSteer: i < 20 ? 0.25 : 0 }),
     frames: 60 * 40,
   });
@@ -139,8 +142,8 @@ function run(setup: Setup) {
   const L = track.totalLengthM;
   const jumps = hit.trace.filter((t, i) => i > 1 && Math.abs(((t.aiS - hit.trace[i - 1].aiS + 1.5 * L) % L) - L / 2) > 15).length;
   // A car that leaves the ground for good is put back on the road where it stood (the sim's own rescue): a jump across
-  // the road within a frame. Known to happen here: beside Monza's pit straight the rejoining car can ride a rear wheel
-  // up the grass bank on full lock and throttle and be thrown. Reported, not yet asked to be zero
+  // the road within a frame. A rejoining car can ride a rear wheel up a bank on full lock and throttle and be thrown.
+  // Reported, not yet asked to be zero
   const rescues = hit.trace.filter((t, i) => i > 1 && Math.abs(t.aiLat - hit.trace[i - 1].aiLat) > 3).length;
   check('Rejoin: then races again: no marshal move, no jump along the track', backFrame > 0 && info.stats.marshalRecoveries === 0 && jumps === 0, `racing again at ${f(backFrame / 60)} s, ${info.stats.marshalRecoveries} marshal moves, ${jumps} jumps, ${rescues} rescue(s) across the road`);
   const late = Math.max(...hit.trace.slice(-60 * 15).map((t) => t.aiVx));
@@ -149,7 +152,7 @@ function run(setup: Setup) {
 
 // ---- 4. A car stopped across the road
 {
-  const r = run({ player: [300, 0.5, 36], ai: [322, 0.5, 0], aiYawDeg: 90, inputs: () => ({ throttle: 0.4 }), frames: 120 });
+  const r = run({ player: [S + 300, 0.5, 36], ai: [S + 322, 0.5, 0], aiYawDeg: 90, inputs: () => ({ throttle: 0.4 }), frames: 120 });
   const at = r.firstContact;
   const after = r.trace[Math.min(r.trace.length - 1, at + 10)];
   check('Stopped car: contact', at >= 0, `frame ${at}`);
@@ -162,14 +165,14 @@ function run(setup: Setup) {
 
 // ---- 5. Barrier
 {
-  const r = run({ player: [300, 0, 55], ai: [900, 0, 50], inputs: (i) => ({ throttle: 0.5, analogSteer: i < 40 ? -0.35 : 0 }), frames: 150 });
+  const r = run({ player: [S + 300, 0, 55], ai: [S + 900, 0, 50], inputs: (i) => ({ throttle: 0.5, analogSteer: i < 40 ? -0.35 : 0 }), frames: 150 });
   const wall = r.incidents.find((i) => i.kind === 'damage' && i.source === 'wall' && i.isPlayer);
   check('Barrier: a hit damages the player car', !!wall, wall?.kind === 'damage' ? `${wall.report.zone}, severity ${f(wall.report.severity, 2)}` : 'no wall damage');
 }
 
 // ---- 6. Damage off
 {
-  const r = run({ player: [300, 0, 62], ai: [308, 0, 40], damage: 'off', inputs: () => ({ throttle: 0.6 }), frames: 90 });
+  const r = run({ player: [S + 300, 0, 62], ai: [S + 308, 0, 40], damage: 'off', inputs: () => ({ throttle: 0.6 }), frames: 90 });
   check('Damage off: a rear-end breaks nothing', r.field.carInfo('YOU')!.damage.pristine && r.field.carInfo('AIC')!.damage.pristine, '');
 }
 

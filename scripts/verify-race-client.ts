@@ -67,7 +67,7 @@ async function main() {
   const m = new MultiplayerSyncManager();
   const inner = m as unknown as Internals;
   const me = m.localPeerId;
-  m.setIdentity({ name: 'Tester', code: 'TST', color: '#00FF00' }, 'mtr-496r', 'sepang');
+  m.setIdentity({ name: 'Tester', code: 'TST', color: '#00FF00' }, 'mtr-496r', 'chang');
   const local = { driverCode: 'TST', teamColorHex: '#00FF00', pos: [0, 0, 0], quat: [0, 0, 0, 1], linVel: [0, 0, 0], angVel: [0, 0, 0], steerAngle: 0, wheelRPMs: [0, 0, 0, 0], throttle: 0, brake: 0, trackS: 0, speedKmh: 0 } as Parameters<typeof m.update>[1];
   const starts: string[] = [];
   const aborts: string[] = [];
@@ -89,7 +89,7 @@ async function main() {
   ws.get({ t: 'welcome', now: Date.now(), startsMs: startsAt, index: 7 });
   check('welcomed: entered, with the start time', m.raceStatus.state === 'joined' && Math.abs((m.raceStatus.startsMs ?? 0) - startsAt) < 50);
   const lobby = (race: unknown, players: unknown[] = []) => ({
-    ctl: { type: 'lobby', lobby: { hostId: SERVER, settings: { trackId: 'sepang', laps: 5, collisions: 'ghost_lap1', carClass: 'any', vehicle: 'mtr-496r' }, players, race } },
+    ctl: { type: 'lobby', lobby: { hostId: SERVER, settings: { trackId: 'chang', laps: 5, collisions: 'ghost_lap1', carClass: 'any', vehicle: 'mtr-496r' }, players, race } },
     from: SERVER,
   });
   ws.get(lobby(null));
@@ -121,7 +121,7 @@ async function main() {
   check('a lobby or a start from another car is ignored', inner.hostId === SERVER && starts.length === 0);
 
   // The start
-  const race = { id: 'race7', lightsStartHostMs: 5_010_000, holdMs: 1000, laps: 5, collisions: 'protected', carClass: 'any', trackId: 'sepang', grid: ['peer_other', me], vehicle: 'mtr-496r' };
+  const race = { id: 'race7', lightsStartHostMs: 5_010_000, holdMs: 1000, laps: 5, collisions: 'protected', carClass: 'any', trackId: 'chang', grid: ['peer_other', me], vehicle: 'mtr-496r' };
   ws.get({ ctl: { type: 'start', start: race }, from: SERVER });
   ws.get(lobby(race));
   check('the server\'s start begins the race, once', starts.join() === 'race7');
