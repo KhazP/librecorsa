@@ -26,6 +26,7 @@ import {
 } from "@/lib/input/device-input";
 import { KB_STEER_RETURN_S, KB_STEER_RISE_S } from "@/lib/input/keyboard-steer";
 import { isCameraMode } from "@/lib/render/camera-modes";
+import { parseCameraNudges, type CameraNudges } from "@/lib/settings/camera-nudges";
 import { resolveCarId, type CarId } from "@/lib/cars/car-registry";
 import { AI_SKILL_DEFAULT } from "@/lib/sim/ai-tuning";
 import { DEFAULT_DEVICE_ASSIST_TUNING, sanitizeAssistTuning, type DeviceAssistTuning } from "@/lib/sim/steering-assist";
@@ -50,6 +51,8 @@ export interface PlayerSettings {
    * Driver's-eye vertical FOV (degrees); null = the car's own. The other onboard cameras move by the same amount.
    */
   cockpitFovDeg: number | null;
+  /** Where the player moved the cockpit and dash views, per car (Alt + arrows, or the MFD's CAM page) */
+  cameraNudges: CameraNudges;
   /** Controller stick / trigger shaping (the sensitivity presets fill in its rate and dead zone) */
   padTuning: PadTuning;
   /** Keyboard pedal / steering ramps and the half-throttle key */
@@ -343,6 +346,7 @@ export const DEFAULT_PLAYER_SETTINGS: PlayerSettings = {
   liveryId: null,
   camera: null,
   cockpitFovDeg: null,
+  cameraNudges: {},
   padTuning: DEFAULT_PAD_TUNING,
   keyboardTuning: DEFAULT_KEYBOARD_TUNING,
   hud: DEFAULT_HUD_SETTINGS,
@@ -633,6 +637,7 @@ export function parsePlayerSettings(raw: unknown): PlayerSettings {
       typeof raw.cockpitFovDeg === "number" && Number.isFinite(raw.cockpitFovDeg)
         ? Math.round(clampFov(raw.cockpitFovDeg))
         : null,
+    cameraNudges: parseCameraNudges(raw.cameraNudges),
     padTuning: isObj(raw.padTuning)
       ? parsePadTuning(raw.padTuning)
       : // Older saves only have the preset: start the tuning from it

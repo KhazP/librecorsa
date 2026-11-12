@@ -44,6 +44,7 @@ export type CameraMode =
   | "tv_pod"
   | "cockpit_shoulder"
   | "cockpit"
+  | "dash"
   | "nose"
   | "helicopter"
   | "tv_side";

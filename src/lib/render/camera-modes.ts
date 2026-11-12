@@ -4,6 +4,12 @@ import type { CameraMode } from "@/types/f1";
 export type OnboardAnchor = "cockpit" | "shoulder" | "tcam" | "bumper";
 
 /**
+ * Where a view sits: one of the model's anchors, or "overWheel", placed per car from the driver's eye
+ * (`onboard-views.ts`; the models' own "dash" anchors are forward-facing dashboard cameras that leave the dash out)
+ */
+export type ViewAnchor = OnboardAnchor | "overWheel";
+
+/**
  * What each view does. Every view-dependent choice in the game reads a flag here rather than testing the mode, so a
  * new view is one row. The flags are separate because the views really do differ: the nose camera hears the cabin
  * but has no steering wheel in shot, and the shoulder view moves with the driver's neck but sees no visor.
@@ -14,7 +20,7 @@ export interface CameraModeSpec {
   /** Under the label where the setup screen offers this as a starting view */
   blurb?: string;
   /** The car model's anchor this view sits on (placed by the camera code when the rig has none); null outside the car */
-  anchor: OnboardAnchor | null;
+  anchor: ViewAnchor | null;
   /** From inside the helmet: the driver's head is left out of the frame, rain lands on the visor, wing mirrors render */
   driverEye: boolean;
   /** At the driver's head: the neck moves it, unless head movement is "static" */
@@ -77,6 +83,17 @@ export const CAMERA_MODES: Readonly<Record<CameraMode, CameraModeSpec>> = {
     interiorAudio: true,
     virtualMirror: "noSideMirrors",
   },
+  dash: {
+    label: "Dash",
+    blurb: "Over the wheel, the dash in shot",
+    anchor: "overWheel",
+    driverEye: false,
+    driverHead: false,
+    wheelInShot: true,
+    playerFov: true,
+    interiorAudio: true,
+    virtualMirror: "always",
+  },
   nose: {
     label: "Nose",
     anchor: "bumper",
@@ -115,7 +132,7 @@ export const isCameraMode = (value: unknown): value is CameraMode =>
   typeof value === "string" && Object.hasOwn(CAMERA_MODES, value);
 
 /** Views the camera key (and the pause menu's camera button) cycles through */
-export const CAMERA_CYCLE: readonly CameraMode[] = ["cockpit", "tv_pod", "chase", "tv_side"];
+export const CAMERA_CYCLE: readonly CameraMode[] = ["cockpit", "dash", "tv_pod", "chase", "tv_side"];
 
 /** Views the setup screen offers to start in */
 export const STARTING_CAMERAS: readonly CameraMode[] = ["cockpit", "tv_pod", "chase"];

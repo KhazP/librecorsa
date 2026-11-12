@@ -769,7 +769,8 @@ export class CameraRig {
       );
       camera.fov = 58 + speedNorm * 5 + f.onboardFovShift;
       camera.updateProjectionMatrix();
-    } else if (mode === "cockpit") {
+    } else if (mode === "cockpit" || mode === "dash") {
+      // The dash view has no pose of its own before a model's anchors arrive: it waits at the driver's eye
       // Reference Image 3: Driver Eye-Point Camera inside cockpit framing full Butterfly Steering Wheel OLED, Labeled Buttons, Rotary Dials, 3D Gloved Hands, Wing Mirrors & Wheel Brows under Halo
       camera.position
         .copy(renderCarPos)

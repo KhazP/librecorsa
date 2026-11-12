@@ -65,6 +65,7 @@ import {
 } from "@/lib/sim/wet-tyres";
 import type { WeatherHudState } from "@/components/hud/WeatherBadge";
 import { CAMERA_MODES, FALLBACK_COCKPIT_FOV_DEG } from "@/lib/render/camera-modes";
+import { OnboardViews } from "@/lib/render/onboard-views";
 import { loadTyreSetup } from "@/lib/sim/tyre-setup";
 import { assetProgress } from "@/lib/loading/asset-progress";
 import { prefetchSoundBank } from "@/lib/sim/vf26-audio";
@@ -1330,6 +1331,8 @@ export class DriveSession {
     let portedProbeFrame = 0;
     let cockpitProbeFrame = 0;
     const lapDelta = new LapDeltaTracker(track.totalLengthM);
+    // The dash view's placement and the player's moves of the onboard views
+    const onboardViews = new OnboardViews();
     // Race control: judges every excursion past the track limits (see TrackLimitsMonitor); resetRun and setRace start
     // its session over
     const trackLimits = new TrackLimitsMonitor();
@@ -2123,7 +2126,7 @@ export class DriveSession {
         car: physics,
         carPos: renderCarPos,
         carVelocity: carVelocityWorld,
-        anchor: vf26Cams && view.anchor ? vf26Cams[view.anchor] : null,
+        anchor: onboardViews.resolve(vf26Cams, mode, carRigCar, settingsNow.cameraNudges),
         chassis: carRig.chassisGroup,
         onboardFovShift,
         headMovement: settingsNow.hud.headMovement,
