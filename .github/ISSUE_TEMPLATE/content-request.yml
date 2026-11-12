@@ -13,6 +13,9 @@ body:
         (CC BY, CC BY-SA, CC0, or non-commercial CC BY-NC / CC BY-NC-SA) or written permission from the creator. Models ripped from other games
         (Assetto Corsa, ACC, iRacing, F1 games…) can't be used unless the original creator agrees.
 
+        - **Sketchfab:** models tagged "Ripped" or "Assetto Corsa" (asseto-corsa, assetto-corsa…) aren't accepted.
+        - **OverTake mods:** ask the modder for permission first, and only request it once they've said yes.
+
         **Please ask the creator for permission before you request a model, and link their answer.**
   - type: input
     id: kind
@@ -38,8 +41,8 @@ body:
   - type: input
     id: modders
     attributes:
-      label: Asked sim modders first?
-      description: "For Sketchfab links only: did you ask the modders who made it for other sim racing games (Assetto Corsa, rFactor 2, AMS2…) for permission, and did they say no?"
+      label: Asked the modders?
+      description: "Sketchfab links: did you ask the modders who made it for other sim racing games (Assetto Corsa, rFactor 2, AMS2…) for permission, and did they say no? OverTake mods: did the modder say yes?"
   - type: input
     id: creator
     attributes:

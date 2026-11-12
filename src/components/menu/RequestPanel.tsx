@@ -177,6 +177,8 @@ export interface FeedbackForm {
   permission: string;
   /** Car / Track with a Sketchfab link: the sim modders were asked first and said no */
   askedModders: boolean;
+  /** Car / Track with an OverTake link: its modder was asked and said yes */
+  modderSaidYes: boolean;
   notes: string;
 }
 
@@ -227,6 +229,7 @@ export function feedbackIssueUrl(f: FeedbackForm, ctx: FeedbackContext | undefin
       set("license", f.license);
       set("permission", f.permission);
       if (isSketchfab(f.second) && f.askedModders) set("modders", "Yes, they said no");
+      if (isOvertake(f.second) && f.modderSaidYes) set("modders", "Yes, the modder said yes");
       set("notes", f.notes);
   }
   return `${REPO_URL}/issues/new?${q.toString()}`;
@@ -237,6 +240,60 @@ const isUrl = (s: string) => /^https?:\/\/[^\s/]+\.[^\s]+$/i.test(s.trim());
 /** A Sketchfab page or short link: only requested once the sim modders have said no */
 function isSketchfab(s: string): boolean {
   return /^https?:\/\/([a-z0-9-]+\.)*(sketchfab\.com|skfb\.ly)(\/|$)/i.test(s.trim());
+}
+
+/**
+ * A Sketchfab model's id from its page or embed link (`sketchfab.com/3d-models/<name>-<id>`, `/models/<id>`); null
+ * for a short skfb.ly link, which the browser can't follow to the model (no CORS), or any other page
+ */
+export function sketchfabModelId(s: string): string | null {
+  const m = s.trim().match(/^https?:\/\/(?:www\.)?sketchfab\.com\/(?:3d-models\/(?:[^/?#]*-)?|models\/)([0-9a-f]{32})(?:[/?#]|$)/i);
+  return m ? m[1].toLowerCase() : null;
+}
+
+/** A Sketchfab tag saying the model was ripped, or taken from Assetto Corsa ("Ripped", "ripped-model", "asseto-corsa") */
+export const isRippedTag = (tag: string): boolean =>
+  /(^|[^a-z])rip(ped)?([^a-z]|$)|(^|[^a-z])as+et+o[-_\s]?corsa/.test(tag.toLowerCase());
+
+/** An OverTake (formerly RaceDepartment) mod page: only requested with its modder's permission */
+export function isOvertake(s: string): boolean {
+  return /^https?:\/\/([a-z0-9-]+\.)*(overtake\.gg|racedepartment\.com)(\/|$)/i.test(s.trim());
+}
+
+/** What Sketchfab's tags say about a linked model */
+type TagCheck =
+  | { id: string; state: "checking" }
+  | { id: string; state: "clear" }
+  | { id: string; state: "ripped"; tags: string[] }
+  /** Sketchfab didn't answer (offline, a removed model): the request is checked by hand */
+  | { id: string; state: "unknown" };
+
+/** Reads a Sketchfab model's tags (the API allows browser requests) and flags one marked as ripped */
+function useSketchfabTagCheck(modelId: string | null): TagCheck | null {
+  const [check, setCheck] = useState<TagCheck | null>(null);
+  useEffect(() => {
+    if (!modelId) return;
+    const abort = new AbortController();
+    setCheck({ id: modelId, state: "checking" });
+    // Wait for the link to stop changing before asking
+    const timer = setTimeout(() => {
+      fetch(`https://api.sketchfab.com/v3/models/${modelId}`, { signal: abort.signal })
+        .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+        .then((model: { tags?: { name?: string; slug?: string }[] }) => {
+          const tags = (model.tags ?? []).map((t) => t.name ?? t.slug ?? "").filter(Boolean);
+          const flagged = tags.filter(isRippedTag);
+          setCheck(flagged.length ? { id: modelId, state: "ripped", tags: flagged } : { id: modelId, state: "clear" });
+        })
+        .catch(() => {
+          if (!abort.signal.aborted) setCheck({ id: modelId, state: "unknown" });
+        });
+    }, 400);
+    return () => {
+      clearTimeout(timer);
+      abort.abort();
+    };
+  }, [modelId]);
+  return modelId && check?.id === modelId ? check : null;
 }
 
 /**
@@ -251,6 +308,7 @@ export const RequestPanel: React.FC<{ context?: FeedbackContext }> = ({ context 
   const [license, setLicense] = useState<string>("");
   const [permission, setPermission] = useState<string>("");
   const [askedModders, setAskedModders] = useState(false);
+  const [modderSaidYes, setModderSaidYes] = useState(false);
   const [notes, setNotes] = useState("");
   const [sys, setSys] = useState<SystemInfo | null>(null);
   const [tried, setTried] = useState(false);
@@ -272,9 +330,18 @@ export const RequestPanel: React.FC<{ context?: FeedbackContext }> = ({ context 
   const ripped = content && !permitted && (permission !== "" || license === "Don't know");
   // Sketchfab models are a last resort (no physics, tarmac grip, kerbs or racing line): the sim modders come first
   const sketchfab = content && isSketchfab(second);
-  const moddersOk = !sketchfab || askedModders;
-  const ready = mainOk && secondOk && permitted && moddersOk;
-  const locked = !permitted || !moddersOk;
+  // A Sketchfab model tagged as ripped, or as taken from Assetto Corsa, can't be used at all. Its tags are read from
+  // its full link: a short skfb.ly link can't be followed from the browser
+  const sketchfabId = sketchfab ? sketchfabModelId(second) : null;
+  const tagCheck = useSketchfabTagCheck(sketchfabId);
+  const sketchfabLinkOk = !sketchfab || sketchfabId !== null;
+  const tagsChecking = sketchfab && tagCheck?.state === "checking";
+  const rippedModel = sketchfab && tagCheck?.state === "ripped" ? tagCheck.tags : null;
+  // An OverTake mod is only requested once its modder has said yes
+  const overtake = content && isOvertake(second);
+  const moddersOk = (!sketchfab || askedModders) && (!overtake || modderSaidYes);
+  const ready = mainOk && secondOk && sketchfabLinkOk && !tagsChecking && !rippedModel && permitted && moddersOk;
+  const locked = !permitted || !moddersOk || !!rippedModel;
   const copy = COPY[kind];
 
   const clearFields = () => {
@@ -282,6 +349,7 @@ export const RequestPanel: React.FC<{ context?: FeedbackContext }> = ({ context 
     setSecond("");
     setThird("");
     setAskedModders(false);
+    setModderSaidYes(false);
     setNotes("");
     setTried(false);
   };
@@ -297,7 +365,7 @@ export const RequestPanel: React.FC<{ context?: FeedbackContext }> = ({ context 
     if (sent) return;
     setTried(true);
     if (!ready) return;
-    const url = feedbackIssueUrl({ kind, main, second, third, license, permission, askedModders, notes }, context, sys);
+    const url = feedbackIssueUrl({ kind, main, second, third, license, permission, askedModders, modderSaidYes, notes }, context, sys);
     window.open(url, "_blank", "noopener,noreferrer");
     setSent(true);
   };
@@ -487,7 +555,7 @@ export const RequestPanel: React.FC<{ context?: FeedbackContext }> = ({ context 
               label="Model link"
               required
               hint="The page of the 3D model: Sketchfab, a mod site or a scan. Requests without a model can't be built."
-              caution={sketchfab ? undefined : "A sim mod (e.g. Assetto Corsa) is far better than Sketchfab: ask its modders first."}
+              caution={sketchfab || overtake ? undefined : "A sim mod (e.g. Assetto Corsa) is far better than Sketchfab: ask its modders first."}
             >
               <input
                 type="url"
@@ -498,7 +566,51 @@ export const RequestPanel: React.FC<{ context?: FeedbackContext }> = ({ context 
                 className={`${inputClass} ${(tried || second.trim() !== "") && !secondOk ? badClass : ""}`}
               />
             </Field>
-            {sketchfab ? (
+            {sketchfab && !sketchfabId ? (
+              <p className="m-0 rounded-[14px] border border-[#FF2A3C]/40 bg-[#FF2A3C]/[0.08] px-3.5 py-3 text-[13px] leading-normal text-[#FF6B78]">
+                Paste the model&apos;s full page link (sketchfab.com/3d-models/…), not a short link, so its tags can be
+                checked.
+              </p>
+            ) : null}
+            {rippedModel ? (
+              <p className="m-0 rounded-[14px] border border-[#FF2A3C]/40 bg-[#FF2A3C]/[0.08] px-3.5 py-3 text-[13px] leading-normal text-[#FF6B78]">
+                This model is tagged {rippedModel.map((t) => `“${t}”`).join(", ")} on Sketchfab: it was ripped from Assetto
+                Corsa or another game, so it can&apos;t be added. Find the mod&apos;s author and ask them for permission
+                instead.
+              </p>
+            ) : tagsChecking ? (
+              <p className="m-0 text-[12px] leading-snug text-[#8E96AA]">Checking the model&apos;s tags on Sketchfab…</p>
+            ) : sketchfab && tagCheck?.state === "unknown" ? (
+              <p className="m-0 text-[12px] leading-snug text-[#8E96AA]">
+                Sketchfab didn&apos;t answer, so the model&apos;s tags will be checked by hand.
+              </p>
+            ) : null}
+            {overtake ? (
+              <label
+                className={`flex cursor-pointer items-start gap-3 rounded-[14px] border bg-[#08090D] px-3.5 py-3 ${
+                  tried && !modderSaidYes ? "border-[#FF2A3C]" : "border-[#262B3D]"
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={modderSaidYes}
+                  onChange={(e) => setModderSaidYes(e.target.checked)}
+                  aria-invalid={tried && !modderSaidYes}
+                  className="mt-0.5 h-[18px] w-[18px] shrink-0 cursor-pointer accent-[#CCFF00]"
+                />
+                <span className="flex min-w-0 flex-col gap-1">
+                  <span className="text-[14px] leading-snug text-[#F5F7FA]">
+                    I asked the modder who made this {kind === "Track" ? "track" : "car"} for permission to use it in
+                    LibreCorsa, and they said yes.
+                    <span className="text-[#CCFF00]"> *</span>
+                  </span>
+                  <span className="text-[12px] leading-snug text-[#8E96AA]">
+                    Mods can only be added with their author&apos;s permission. Link their answer under Anything else.
+                  </span>
+                </span>
+              </label>
+            ) : null}
+            {sketchfab && !rippedModel ? (
               <label
                 className={`flex cursor-pointer items-start gap-3 rounded-[14px] border bg-[#08090D] px-3.5 py-3 ${
                   tried && !askedModders ? "border-[#FF2A3C]" : "border-[#262B3D]"
@@ -560,17 +672,25 @@ export const RequestPanel: React.FC<{ context?: FeedbackContext }> = ({ context 
           <p role="alert" className="m-0 text-[13px] text-[#FF2A3C]">
             {content && !secondOk
               ? "Add a link to the 3D model (starting with https://)."
-              : !permitted
-                ? "It needs an open license or the creator's written permission first."
-                : !moddersOk
-                  ? "Sketchfab is the last resort. Ask the sim modders first."
-                  : "Fill in the fields marked *."}
+              : !sketchfabLinkOk
+                ? "Paste the model's full Sketchfab page link."
+                : rippedModel
+                  ? "Models ripped from Assetto Corsa or other games can't be added."
+                  : tagsChecking
+                    ? "Still checking the model's tags on Sketchfab."
+                    : !permitted
+                      ? "It needs an open license or the creator's written permission first."
+                      : !moddersOk
+                        ? overtake
+                          ? "Ask the modder for permission first."
+                          : "Sketchfab is the last resort. Ask the sim modders first."
+                        : "Fill in the fields marked *."}
           </p>
         ) : null}
         <button
           type="submit"
           disabled={!permitted}
-          // Left pressable while only the Sketchfab box is missing, so pressing it says why
+          // Left pressable while only a modders box is missing or the model is ripped, so pressing it says why
           aria-disabled={locked || undefined}
           className={`inline-flex h-[52px] items-center gap-2.5 self-end rounded-full border-0 px-6 transition-colors ${
             !locked
