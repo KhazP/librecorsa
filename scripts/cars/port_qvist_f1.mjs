@@ -645,6 +645,67 @@ function cutAlongZones(rig, tris) {
   return { rig: grown, tris: idx.map((_, i) => i) };
 }
 
+/**
+ * The cockpit well. The concept's cockpit is a shallow tray: its flat floor sits at ~0.58 m, above the bottom of the
+ * steering wheel (0.52 m), so the onboard cameras saw the wheel sunk into it. The floor comes out and the tray's
+ * walls carry on down to `WELL_FLOOR_Y`, closed by a floor there, all in the dark cockpit material.
+ */
+const WELL_FLOOR_Y = 0.15;
+
+function isTrayFloor(rig, t) {
+  const c = centroid(rig, t);
+  return vertexNormal(rig, t)[1] > 0.9 && c[1] > 0.54 && c[1] < 0.6 && Math.abs(c[0]) < 0.27 && c[2] > -0.3 && c[2] < 0.62;
+}
+
+/** Walls from the tray floor's outline down to the well floor, facing in, and that floor; one mesh */
+function cockpitWell(rig, loop) {
+  const top = loop.map((v) => [rig.pos[3 * v], rig.pos[3 * v + 1], rig.pos[3 * v + 2]]);
+  const mid = [0, 2].map((k) => top.reduce((a, p) => a + p[k], 0) / top.length);
+  const pos = [];
+  const nrm = [];
+  const idx = [];
+  for (let i = 0; i < top.length; i++) {
+    const a = top[i];
+    const b = top[(i + 1) % top.length];
+    const quad = [a, b, [b[0], WELL_FLOOR_Y, b[2]], [a[0], WELL_FLOOR_Y, a[2]]];
+    // Facing the well's middle
+    let n = [b[2] - a[2], 0, -(b[0] - a[0])];
+    const l = Math.hypot(n[0], n[2]) || 1;
+    n = [n[0] / l, 0, n[2] / l];
+    const inward = (mid[0] - (a[0] + b[0]) / 2) * n[0] + (mid[1] - (a[2] + b[2]) / 2) * n[2] > 0;
+    if (!inward) n = [-n[0], 0, -n[2]];
+    const base = pos.length / 3;
+    for (const q of quad) {
+      pos.push(...q);
+      nrm.push(...n);
+    }
+    // Winding to match the normal
+    const e1 = quad[1].map((v, k) => v - quad[0][k]);
+    const e2 = quad[2].map((v, k) => v - quad[0][k]);
+    const fn = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]];
+    if (fn[0] * n[0] + fn[2] * n[2] >= 0) idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
+    else idx.push(base, base + 2, base + 1, base, base + 3, base + 2);
+  }
+  // The floor: the outline at the well's depth, facing up
+  const flat = { pos: Float32Array.from(top.flatMap((p) => [p[0], WELL_FLOOR_Y, p[2]])), idx: [] };
+  let floor = capMesh(flat, top.map((_, i) => i), false);
+  if (floor.nrm[1] < 0) floor = capMesh(flat, top.map((_, i) => i), true);
+  return merge([{ pos: Float32Array.from(pos), nrm: Float32Array.from(nrm), idx: Uint32Array.from(idx) }, floor]);
+}
+
+/** Vertices at the same position share an id (for boundary loops on a mesh with seams) */
+function weldMap(rig) {
+  const key = new Map();
+  const weld = new Int32Array(rig.pos.length / 3);
+  for (let i = 0; i < weld.length; i++) {
+    const k = `${rig.pos[3 * i]},${rig.pos[3 * i + 1]},${rig.pos[3 * i + 2]}`;
+    let j = key.get(k);
+    if (j === undefined) key.set(k, (j = key.size));
+    weld[i] = j;
+  }
+  return weld;
+}
+
 /** The rain light: the rear face of the crash structure, under the exhaust */
 function rainLight(rig, tris) {
   const facing = tris.filter((t) => {
@@ -803,8 +864,16 @@ async function main() {
   // Body, one mesh per zone, each simplified with its borders kept so the zones still meet
   const cutBody = cutAlongZones(rig, [...bodyTris, ...parts.other.flatMap((p) => p.tris)]);
   const light = rainLight(cutBody.rig, cutBody.tris);
+  // The cockpit's tray floor comes out; a well goes in its place
+  const tray = cutBody.tris.filter((t) => isTrayFloor(cutBody.rig, t));
+  const trayLoops = boundaryLoops(cutBody.rig, weldMap(cutBody.rig), tray).sort((a, b) => b.length - a.length);
+  if (!trayLoops.length) throw new Error("no cockpit tray floor found");
+  const well = cockpitWell(cutBody.rig, trayLoops[0]);
+  const trayTris = new Set(tray);
+  console.log(`  cockpit: tray floor ${tray.length} tris out, ${trayLoops.length} outline(s), well ${well.idx.length / 3} tris`);
   const byZone = new Map();
   for (const t of cutBody.tris) {
+    if (trayTris.has(t)) continue;
     const z = light.has(t) ? ZONE.light : zoneOf(centroid(cutBody.rig, t), vertexNormal(cutBody.rig, t));
     if (!byZone.has(z)) byZone.set(z, []);
     byZone.get(z).push(t);
@@ -812,7 +881,7 @@ async function main() {
   const bodyParts = [];
   const cutRatio = BUDGET.body / (parts.body.tris.length + (cutBody.tris.length - bodyTris.length));
   for (const [z, tris] of byZone) {
-    const extra = z === ZONE.secondary ? stubCaps : [];
+    const extra = z === ZONE.secondary ? stubCaps : z === ZONE.interior ? [well] : [];
     bodyParts.push({ geo: simplify(merge([extract(cutBody.rig, tris), ...extra]), cutRatio, { lockBorder: true }), mat: mats[z] });
     console.log(`  ${z}: ${tris.length} tris`);
   }
