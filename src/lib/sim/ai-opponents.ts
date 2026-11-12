@@ -967,7 +967,7 @@ export class AiOpponentField {
   /**
    * Lines the field up: AI cars in grid order, the player behind them. A standing start runs the
    * light sequence (five reds one second apart, then a random 0.2–3 s hold); a rolling start
-   * queues the cars on the main straight and races at once.
+   * queues the cars on the main straight, all at one formation speed, and races at once.
    */
   public startRace(standing: boolean): void {
     const L = this.track.totalLengthM;
@@ -975,7 +975,7 @@ export class AiOpponentField {
     this.environment.reset();
     this.assignGrid();
     this.cars.forEach((car) => {
-      car.sim.resetToStartGrid(!standing, car.gridSlot);
+      car.sim.resetToStartGrid(!standing, car.gridSlot, standing ? undefined : this.cars.length);
       if (car.ai) {
         car.ai.aiLineBiasM = 0;
         car.ai.aiSpeedCapMs = Infinity;

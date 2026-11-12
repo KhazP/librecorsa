@@ -144,7 +144,8 @@ export interface SimulatorCar {
 
   /** Advance by a render frame */
   step(dtSeconds: number, inputs: Partial<ControlInputs>): unknown;
-  resetToStartGrid(flyingStart?: boolean, gridSlot?: number): void;
+  /** `fieldSize`: a race's rolling start, every car of the field at one speed (`rollingStartSpeedMs`) */
+  resetToStartGrid(flyingStart?: boolean, gridSlot?: number, fieldSize?: number): void;
   teleportToDistance(sMeters: number, speedMs?: number, lateral?: number): void;
   teleportToTurn(turnNumber: number): void;
   /**
@@ -238,4 +239,75 @@ export function flyingStartPoint(track: {
 /** Speed (m/s) a car leaving the last corner at `exitMs` carries `distanceM` further on */
 export function flyingExitSpeedMs(exitMs: number, distanceM: number): number {
   return Math.sqrt(exitMs * exitMs + 2 * FLYING_EXIT_ACCEL * Math.max(0, distanceM));
+}
+
+/** Gap between grid slots in a flying start's queue (m); the slots alternate sides */
+export const FLYING_SLOT_SPACING_M = 28;
+
+/** A race's rolling start never runs faster than this (m/s): a formation pace, not racing speed */
+export const ROLLING_START_PACE_MS = 160 / 3.6;
+/** No rolling-start slot where the road within 10 m curves tighter than this (1/m: a 33 m radius, a hairpin) */
+const ROLLING_SLOT_MAX_CURVATURE = 0.03;
+/** The most cornering a car placed with no yaw rate is asked for at the field's speed (g) */
+const ROLLING_START_LAT_G = 1;
+
+interface RollingStartTrack {
+  totalLengthM: number;
+  getSampleAtDistance(s: number): { optimalSpeedKmh: number; curvature: number };
+}
+
+/**
+ * Where the first `count` grid slots of a race's rolling start line up (m along the lap): from the flying start's
+ * point back, each 28 m behind the one ahead, or up to 120 m further back past a hairpin, so no car is dropped onto
+ * one's apex with no yaw rate (it spun before it had turned in: where the final straight is short the queue runs
+ * back through the last corner). Gentler corners keep their slots, at the speed `rollingStartSpeedMs` allows there.
+ * The queue skips only within half a lap of the front: on a short, twisty layout it otherwise ran round onto itself
+ */
+export function rollingStartSlots(track: RollingStartTrack, start: { s: number }, count: number): number[] {
+  const L = track.totalLengthM;
+  const wrap = (s: number) => ((s % L) + L) % L;
+  const curved = (s: number) => {
+    for (let d = -10; d <= 10; d += 5) if (Math.abs(track.getSampleAtDistance(wrap(s + d)).curvature) > ROLLING_SLOT_MAX_CURVATURE) return true;
+    return false;
+  };
+  const slots: number[] = [];
+  let s = start.s;
+  for (let slot = 0; slot < count; slot++) {
+    if (slot > 0) {
+      s -= FLYING_SLOT_SPACING_M;
+      for (let back = 0; back < 120 && start.s - s < L / 2 && curved(s); back += 5) s -= 5;
+    }
+    slots.push(wrap(s));
+  }
+  return slots;
+}
+
+/**
+ * The one speed a whole field takes a rolling start at (m/s): the formation pace, or slower where any of its slots
+ * (`rollingStartSlots`) would be. Each slot allows `spotSpeedMs` at its spot, 90 % of the lap's speed there (the
+ * circuit's profile, which is still accelerating out of a corner where the car's grip limit alone would allow far
+ * more), no more than 1 g of cornering and, in or after the last corner, no more than the car carries out of it
+ * (`cornerExitMs` at `start.cornerS`). One speed for every car: each slot once took its own, the leader 188 km/h out
+ * of the last corner and the cars 28 m behind it 270 km/h, and they braked into each other and spun
+ */
+export function rollingStartSpeedMs(
+  track: RollingStartTrack,
+  start: { s: number; cornerS: number | null },
+  fieldSize: number,
+  spotSpeedMs: (s: number) => number,
+  cornerExitMs: number
+): number {
+  const L = track.totalLengthM;
+  let speed = ROLLING_START_PACE_MS;
+  for (const s of rollingStartSlots(track, start, fieldSize)) {
+    const sample = track.getSampleAtDistance(s);
+    speed = Math.min(speed, spotSpeedMs(s), (0.9 * sample.optimalSpeedKmh) / 3.6);
+    speed = Math.min(speed, Math.sqrt((ROLLING_START_LAT_G * 9.81) / Math.max(1e-4, Math.abs(sample.curvature))));
+    if (start.cornerS !== null) {
+      // Signed: a slot before the corner's end is still in it (unsigned, it was a whole lap from leaving it)
+      const d = ((((s - start.cornerS + L / 2) % L) + L) % L) - L / 2;
+      speed = Math.min(speed, flyingExitSpeedMs(cornerExitMs, d));
+    }
+  }
+  return speed;
 }

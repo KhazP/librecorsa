@@ -133,7 +133,7 @@ import {
 } from './sim/wet-tyres';
 import { surfaceRippleM, type TrackSurfaceKind } from './sim/track-surfaces';
 import { BRAKE_DUCT_STEP, type ChassisSetup, clampChassisSetup, DEFAULT_CHASSIS_SETUP, pctScale, startingFuelKg, WING_CLICK_DEG } from './sim/car-setup';
-import { flyingExitSpeedMs, flyingStartPoint, type TyreVisualState } from './sim/simulator-car';
+import { FLYING_SLOT_SPACING_M, flyingExitSpeedMs, flyingStartPoint, rollingStartSlots, rollingStartSpeedMs, type TyreVisualState } from './sim/simulator-car';
 import type { VehicleWheelState, WheelCornerIndex } from './sim/vehicle-types';
 import { lockShareOf } from './sim/tyre-slide-fx';
 import {
@@ -981,9 +981,10 @@ export class F1Physics2026 {
 
   /**
    * Places the car on the start grid (`gridSlot` 0 = pole) for a standing start, or on the run-up
-   * of the main straight for a flying lap (further slots queue up 28 m apart, alternating sides).
+   * of the main straight for a flying lap (further slots queue up 28 m apart, alternating sides). With `fieldSize`
+   * (a race's rolling start) every car of the field takes the one speed `rollingStartSpeedMs` gives.
    */
-  public resetToStartGrid(flyingStart = false, gridSlot = 0): void {
+  public resetToStartGrid(flyingStart = false, gridSlot = 0, fieldSize?: number): void {
     const lapLen = this.track.totalLengthM;
     let flyingGear = 7;
     if (flyingStart) {
@@ -991,16 +992,22 @@ export class F1Physics2026 {
       // no faster than 90 % of the speed the circuit's braking profile allows there, nor than it carries out of the
       // last corner, in the gear for that speed
       const start = flyingStartPoint(this.track);
-      const s = (start.s - gridSlot * 28 + lapLen) % lapLen;
+      const s =
+        fieldSize !== undefined
+          ? rollingStartSlots(this.track, start, gridSlot + 1)[gridSlot]
+          : (((start.s - gridSlot * FLYING_SLOT_SPACING_M) % lapLen) + lapLen) % lapLen;
       const smp = this.track.getSampleAtDistance(s);
       const edge = Math.max(0, smp.width / 2 - 1.2);
       const stagger = gridSlot === 0 ? 0 : gridSlot % 2 === 1 ? -2.6 : 2.6;
       const lateral = THREE.MathUtils.clamp(aiLineOffsetM(smp) + stagger, -edge, edge);
-      let speed = Math.min(75, (0.9 * (smp.brakeLimitKmh ?? smp.optimalSpeedKmh)) / 3.6);
-      if (start.cornerS !== null) {
-        const corner = (0.9 * this.track.getSampleAtDistance(start.cornerS).optimalSpeedKmh) / 3.6;
-        speed = Math.min(speed, flyingExitSpeedMs(corner, (s - start.cornerS + lapLen) % lapLen));
-      }
+      const spotSpeed = (at: number) => {
+        const sample = this.track.getSampleAtDistance(at);
+        return Math.min(75, (0.9 * (sample.brakeLimitKmh ?? sample.optimalSpeedKmh)) / 3.6);
+      };
+      const cornerExit = start.cornerS === null ? 0 : (0.9 * this.track.getSampleAtDistance(start.cornerS).optimalSpeedKmh) / 3.6;
+      let speed = spotSpeed(s);
+      if (fieldSize !== undefined) speed = rollingStartSpeedMs(this.track, start, fieldSize, spotSpeed, cornerExit);
+      else if (start.cornerS !== null) speed = Math.min(speed, flyingExitSpeedMs(cornerExit, (s - start.cornerS + lapLen) % lapLen));
       this.placeCar(s, speed, lateral);
       if (speed < 75) flyingGear = this.selectGearForSpeed(speed);
     } else {

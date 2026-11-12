@@ -57,7 +57,16 @@ import type { WeatherContactSample } from '../weather';
 import { SLICK_TRAITS, wetGripFactor } from '../wet-tyres';
 import { tyreGaugePressureAtTemperature } from '../tyre-pressure';
 import { FULL_REALISM, type SimRealismFlags } from '../sim-realism';
-import { flyingExitSpeedMs, flyingStartPoint, type SimulatorCar, type SimulatorWheel, type TyreVisualState } from '../simulator-car';
+import {
+  FLYING_SLOT_SPACING_M,
+  flyingExitSpeedMs,
+  flyingStartPoint,
+  rollingStartSlots,
+  rollingStartSpeedMs,
+  type SimulatorCar,
+  type SimulatorWheel,
+  type TyreVisualState,
+} from '../simulator-car';
 import { aiLineOffsetM, type BrakingGuide, brakingGuideFor, circuitBrakingGuide, sampleProfile, type SpeedProfileCarModel } from '../speed-profile';
 import { evaluateDynamicBrakingUrgency } from '../track-occupancy';
 import {
@@ -1401,7 +1410,7 @@ export class F12026CarSim implements SimulatorCar {
    * Standing start from grid slot `gridSlot` (0 = pole), or a flying lap from the run-up of the main
    * straight (further slots queue 28 m apart, alternating sides), as the VF26 does.
    */
-  public resetToStartGrid(flyingStart = false, gridSlot = 0): void {
+  public resetToStartGrid(flyingStart = false, gridSlot = 0, fieldSize?: number): void {
     // Fuelled before it is seated, so it settles at the ride height of that load
     this.fillFuel();
     const L = this.track.totalLengthM;
@@ -1409,18 +1418,25 @@ export class F12026CarSim implements SimulatorCar {
       // From the final straight (`flyingStartPoint`), on this car's line, kept on the asphalt, and no faster than
       // 90 % of the speed this car's autopilot plans there, nor than it can carry out of the last corner
       const start = flyingStartPoint(this.track);
-      const s = wrap(start.s - gridSlot * 28, L);
+      const s =
+        fieldSize !== undefined
+          ? rollingStartSlots(this.track, start, gridSlot + 1)[gridSlot]
+          : wrap(start.s - gridSlot * FLYING_SLOT_SPACING_M, L);
       const smp = this.track.getSampleAtDistance(s);
       const [lo, hi] = autopilotLateralRange(this.track, smp, s, this.autopilotEdges(), this.profile);
       const stagger = gridSlot === 0 ? 0 : gridSlot % 2 === 1 ? -2.6 : 2.6;
       const lateral = THREE.MathUtils.clamp(aiLineOffsetM(smp, this.line) + stagger, Math.min(0, lo), Math.max(0, hi));
       const prof = autopilotProfile(this.track, this.profile, this.autopilotEdges());
       const ownAt = (at: number) => prof[Math.floor(wrap(at, L) / (L / prof.length)) % prof.length];
-      let speed = Math.min(75, 0.9 * Math.min(ownAt(s), (smp.brakeLimitKmh ?? smp.optimalSpeedKmh) / 3.6));
-      if (start.cornerS !== null) {
-        const corner = Math.min(ownAt(start.cornerS), this.track.getSampleAtDistance(start.cornerS).optimalSpeedKmh / 3.6);
-        speed = Math.min(speed, flyingExitSpeedMs(0.9 * corner, wrap(s - start.cornerS, L)));
-      }
+      const spotSpeed = (at: number) => {
+        const sample = this.track.getSampleAtDistance(at);
+        return Math.min(75, 0.9 * Math.min(ownAt(at), (sample.brakeLimitKmh ?? sample.optimalSpeedKmh) / 3.6));
+      };
+      const cornerExit =
+        start.cornerS === null ? 0 : 0.9 * Math.min(ownAt(start.cornerS), this.track.getSampleAtDistance(start.cornerS).optimalSpeedKmh / 3.6);
+      let speed = spotSpeed(s);
+      if (fieldSize !== undefined) speed = rollingStartSpeedMs(this.track, start, fieldSize, spotSpeed, cornerExit);
+      else if (start.cornerS !== null) speed = Math.min(speed, flyingExitSpeedMs(cornerExit, wrap(s - start.cornerS, L)));
       this.placeAt(s, lateral, speed);
     } else {
       const grid = this.track.spawnGrid;
