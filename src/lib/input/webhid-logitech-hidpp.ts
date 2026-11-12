@@ -314,15 +314,19 @@ export class HidppLink {
 
   /**
    * A streamed value (force level, range): resolves once the wheel answers, or after {@link HIDPP_STREAM_REPLY_MS}
-   * without an answer, or at once on a busy reply (the next value follows soon); rejects on a failed write or another
-   * error report
+   * without an answer. A busy wheel gets the value again, up to {@link BUSY_ATTEMPTS} times as any command
+   * (hidpp_send_message_sync), since a zero it never took would not be sent again; rejects on a failed write, a wheel
+   * still busy after that, or another error report
    */
   stream(featureIndex: number, fn: number, params: readonly number[], what: string): Promise<void> {
     return this.serial(async () => {
-      try {
-        await this.exchange(featureIndex, fn, params, what, HIDPP_STREAM_REPLY_MS, true);
-      } catch (e) {
-        if (!(e instanceof HidppError && e.code === ERROR_BUSY)) throw e;
+      for (let attempt = 1; ; attempt++) {
+        try {
+          await this.exchange(featureIndex, fn, params, what, HIDPP_STREAM_REPLY_MS, true);
+          return;
+        } catch (e) {
+          if (!(e instanceof HidppError && e.code === ERROR_BUSY) || attempt >= BUSY_ATTEMPTS) throw e;
+        }
       }
     });
   }

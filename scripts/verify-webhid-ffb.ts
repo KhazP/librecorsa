@@ -1484,6 +1484,20 @@ async function main() {
     assert.deepEqual(outs(g920), [HIDPP.level(0x7f, 0xff), HIDPP.level(0x80, 0x01)], "no reply in time: counted as sent");
     assert.equal(ffb.status.state, "ready", "a missing reply is not a failure");
   });
+  await check("stop(): the zero goes out at once, and again when the wheel answers busy", async () => {
+    const g920 = new FakeHidppWheel();
+    const clock = new FakeClock();
+    const ffb = new WebHidFfb(fakeHid([g920]).api, clock.deps);
+    await ffb.connect();
+    ffb.setForce(1);
+    await step(clock);
+    g920.log.length = 0;
+    g920.busy.set((0x0b << 8) | 0x2a, 1);
+    ffb.stop();
+    await settle();
+    assert.deepEqual(outs(g920), [HIDPP.level(0, 0), HIDPP.level(0, 0)], "a zero the wheel was too busy to take is sent again");
+    assert.equal(ffb.status.state, "ready");
+  });
   await check("rotation while running, clamped as hidpp_ff_range_store clamps; dispose: zero, stop, erase, rotation back, centring spring", async () => {
     const g920 = new FakeHidppWheel();
     const clock = new FakeClock();
