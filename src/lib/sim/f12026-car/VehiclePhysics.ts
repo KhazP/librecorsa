@@ -315,6 +315,11 @@ export interface VehiclePhysicsOptions {
   trackTempC?: number;
   drsZones?: ZoneData_DRSZone[];
   /**
+   * Stretches of the lap (fractions) where the flaps may open as well as in `drsZones`, for a car whose zones are not
+   * gated by detection (2026 Straight Mode: every straight). They have no detection point.
+   */
+  straightZones?: readonly { start: number; end: number }[];
+  /**
    * Lap progress (0..1) of a world point. With it, DRS only opens inside a zone after crossing that
    * zone's detection point; without it DRS is allowed anywhere and lap energy never resets.
    */
@@ -1025,6 +1030,7 @@ export class VehiclePhysics {
   /** Roll / yaw tables of the ride-height aero map */
   private readonly mapLuts: { rollCl: Lut; rollCd: Lut; rollBalance: Lut; yawCl: Lut; yawCd: Lut; yawBalance: Lut } | null;
   private readonly drsZones: ZoneData_DRSZone[];
+  private readonly straightZones: readonly { start: number; end: number }[];
   private readonly locateProgress?: (x: number, z: number) => number;
   private readonly drsEligibleAtDetection?: (zone: ZoneData_DRSZone) => boolean;
   private readonly onEvent?: (event: VehicleEvent) => void;
@@ -1099,6 +1105,7 @@ export class VehiclePhysics {
     this.trackTempC = options.trackTempC ?? 41;
     this.baseTrackTempC = this.trackTempC;
     this.drsZones = options.drsZones ?? [];
+    this.straightZones = options.straightZones ?? [];
     this.locateProgress = options.locateProgress;
     this.drsEligibleAtDetection = options.drsEligibleAtDetection;
     this.walls = options.walls;
@@ -2036,8 +2043,14 @@ export class VehiclePhysics {
       // Leaving the zone spends its eligibility
       if (!zone && this.lastDrsZoneId !== null && this.drsArmedZone === this.lastDrsZoneId) this.drsArmedZone = null;
       this.lastDrsZoneId = zone?.id ?? null;
-      inZone = zone !== undefined;
-      armed = zone !== undefined && (!this.drsGatedByDetection || this.drsArmedZone === zone.id);
+      // A straight outside the zones: open to a car whose zones need no detection, and never to one that does
+      const straight =
+        zone === undefined &&
+        !this.drsGatedByDetection &&
+        Number.isFinite(p) &&
+        this.straightZones.some((z) => inLapWindow(p, z.start, z.end));
+      inZone = zone !== undefined || straight;
+      armed = straight || (zone !== undefined && (!this.drsGatedByDetection || this.drsArmedZone === zone.id));
     }
     if (!this.drsFitted) inZone = armed = false;
     const dryEnoughForDrs = isRearFlapAllowedInWet(this.wetness);

@@ -49,6 +49,7 @@ import {
 } from '@/lib/track-data';
 import { SteeringAssist, type SteeringAssistCarState } from '../steering-assist';
 import { type OvertakingRaceControl, type OvertakingRules, OvertakeGrant } from '../overtaking-rules';
+import { inLapWindow, straightModeWindows } from '../straight-mode-zones';
 import { AxleSlipScratch } from '../tyre-slip';
 import type { AeroWakeState } from '../aero-wake';
 import { type CarDamageEffects, withDamage } from '../car-damage';
@@ -568,6 +569,12 @@ function surfaceType(kind: TrackSurfaceKind): SurfaceType {
   }
 }
 
+/** In one of the circuit's own zones (its data), not just on a straight the 2026 flaps open on */
+function inOvertakingZone(progress: number): boolean {
+  for (const z of RWANDA_DRS_ZONES) if (inLapWindow(progress, z.start, z.end)) return true;
+  return false;
+}
+
 /**
  * Ground from the track samples (centreline + 9-point lateral height profile), with surfaces from the
  * kerb / run-off / gravel widths. Stands in for the colliders until the track GLB is loaded.
@@ -916,6 +923,8 @@ export class F12026CarSim implements SimulatorCar {
       airDensity: airDensityAt(track.baseAltitudeM ?? BASE_ALTITUDE_M),
       ambientC: AMBIENT_C,
       drsZones: profile.hasDrs ? RWANDA_DRS_ZONES : [],
+      // 2026 Straight Mode opens on every straight; the zones in the circuit's data are only some of them
+      straightZones: profile.hasDrs ? straightModeWindows(track) : [],
       locateProgress: (x, z) => {
         const p = track.projectWorldToTrack(x, z, this.progressHintS);
         this.progressHintS = p.s;
@@ -1553,7 +1562,8 @@ export class F12026CarSim implements SimulatorCar {
     // (with its extra energy); an AI car spends it in the zones, where it overtakes
     const overtakeOk = this.overtakeAvailable;
     if (!overtakeOk) this.boostRemainingS = 0;
-    const aiOvertake = this.aiAutopilot && this.rules === 'straight-mode-2026' && !!this.raceControl?.racing && overtakeOk && v.telemetry.drsZone;
+    const aiOvertake =
+      this.aiAutopilot && this.rules === 'straight-mode-2026' && !!this.raceControl?.racing && overtakeOk && inOvertakingZone(v.trackProgress);
     const push = this.profile.hasErs && overtakeOk && (inputs.manualOverride || this.boostRemainingS > 0 || aiOvertake) && v.ersEnergyJ > 0;
     this.pushActive = push;
     v.setPerformanceMode(push ? 'PSH' : this.userErsMode);
