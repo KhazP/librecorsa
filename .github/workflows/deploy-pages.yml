@@ -72,6 +72,8 @@ jobs:
           NEXT_PUBLIC_ONLINE_API: "/api"
           # List every car and circuit: the ones not in the repository are served from R2 (src/lib/hosted-content.ts)
           NEXT_PUBLIC_HOSTED_CONTENT: "1"
+          # The build's commit, in a meta tag the anonymous usage totals read (the first seven digits; src/app/layout.tsx)
+          NEXT_PUBLIC_BUILD: ${{ github.sha }}
         run: npm run build
 
       # Cloudflare's asset store takes files up to 25 MiB. Bigger ones (large circuit GLBs) go to the

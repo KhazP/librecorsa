@@ -1371,6 +1371,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     realism: settings.realism,
     lineWaterMm: trackEnvRef.current?.weather.lineWaterMm ?? 0,
     raceOver: telemetry.race?.phase === "finished",
+    input: settings.device === "keyboard" && touchVisible ? "touch" : settings.device,
   });
 
   // polish:B after the flag: the podium shot, the race kept in this browser, the next open race

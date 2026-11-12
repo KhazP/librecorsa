@@ -8,7 +8,8 @@ import type { AssistPreset, VehicleModelId } from "@/types/f1";
 import { lapConditionsNow, WET_LAP_WATER_MM } from "@/lib/sim/lap-types";
 import type { SimRealism } from "@/lib/sim/sim-realism";
 import { getOnlineConfig } from "./online-config";
-import { sendUsage, UsageClock, type UsageMode } from "./usage";
+import { sendUsage, UsageClock, type UsageExtras, type UsageMode } from "./usage";
+import { USAGE_BUILD_RE } from "./usage-modes";
 import { challengeAt, challengeCompound, fitsChallenge } from "./weekly-challenge";
 
 export interface UsageState {
@@ -29,6 +30,31 @@ export interface UsageState {
   lineWaterMm: number;
   /** The player has taken the flag */
   raceOver: boolean;
+  /** What the car is driven with (touch: the on-screen controls on a keyboard setting) */
+  input: NonNullable<UsageExtras["input"]>;
+}
+
+/** The kind of screen: a fine pointer is a desktop; a coarse one a phone below 600 px on its short side, else a tablet */
+export function usageDevice(coarse: boolean, shortSidePx: number): NonNullable<UsageExtras["device"]> {
+  if (!coarse) return "desktop";
+  return shortSidePx < 600 ? "phone" : "tablet";
+}
+
+function deviceNow(): UsageExtras["device"] {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") return undefined;
+  return usageDevice(window.matchMedia("(pointer: coarse)").matches, Math.min(window.screen.width, window.screen.height));
+}
+
+/** The deployed build: its commit from the page's lc-build meta tag (src/app/layout.tsx); a local build has none */
+function buildNow(): string | undefined {
+  if (typeof document === "undefined") return undefined;
+  const id = document.querySelector('meta[name="lc-build"]')?.getAttribute("content") ?? "";
+  return USAGE_BUILD_RE.test(id) ? id : undefined;
+}
+
+/** What a stretch was driven with, sent beside it (never part of what ends a stretch) */
+export function usageExtras(s: Pick<Settled, "input" | "wet" | "assists">, device: UsageExtras["device"], buildId: string | undefined): UsageExtras {
+  return { input: s.input, device, weather: s.wet ? "wet" : "dry", assists: s.assists, ...(buildId ? { build: buildId } : {}) };
 }
 
 /** The mode of a stretch; a multiplayer race is open or a room's as it was when it started */
@@ -53,6 +79,8 @@ let usageOn = false;
 export function useUsageCounter(state: UsageState): void {
   const stateRef = useRef<Settled | null>(null);
   const clockRef = useRef<UsageClock | null>(null);
+  /** The extras as they were while last driving: a stretch often ends after the player has left the track */
+  const extrasRef = useRef<UsageExtras>({});
   /** Whether the multiplayer race under way is a scheduled one, as it was at its start (a lost entry changes nothing) */
   const scheduledRef = useRef<boolean | null>(null);
 
@@ -71,11 +99,13 @@ export function useUsageCounter(state: UsageState): void {
     });
     const mode = usageModeOf(s.race, scheduledRef.current ?? false, s.race === "practice" && onChallenge(s));
     clock.set({ trackId: s.trackId, vehicle: s.vehicle, mode }, !s.paused, s.raceOver ? "flag" : "");
+    // After the clock: a stretch this change ended is reported with what it was driven with, not what comes next
+    extrasRef.current = usageExtras(s, deviceNow(), buildNow());
   }, []);
 
   useEffect(() => {
     const clock = new UsageClock((line) => {
-      if (usageOn) sendUsage(line);
+      if (usageOn) sendUsage({ ...line, ...extrasRef.current });
     });
     clockRef.current = clock;
     // Hidden or closed ends the stretch; back on the page starts a new one
@@ -94,10 +124,10 @@ export function useUsageCounter(state: UsageState): void {
   }, [apply]);
 
   // Only what can change the stretch reaches the effect (the water only as wet or dry)
-  const { driving, paused, trackId, vehicle, race, scheduledRace, assists, realism, raceOver } = state;
+  const { driving, paused, trackId, vehicle, race, scheduledRace, assists, realism, raceOver, input } = state;
   const wet = state.lineWaterMm >= WET_LAP_WATER_MM;
   useEffect(() => {
-    stateRef.current = { driving, paused, trackId, vehicle, race, scheduledRace, assists, realism, wet, raceOver };
+    stateRef.current = { driving, paused, trackId, vehicle, race, scheduledRace, assists, realism, wet, raceOver, input };
     apply();
-  }, [apply, driving, paused, trackId, vehicle, race, scheduledRace, assists, realism, wet, raceOver]);
+  }, [apply, driving, paused, trackId, vehicle, race, scheduledRace, assists, realism, wet, raceOver, input]);
 }

@@ -80,6 +80,9 @@ export const metadata: Metadata = {
     locale: "en_US",
   },
   twitter: { card: "summary_large_image", title: SITE_TITLE, description: SITE_DESCRIPTION },
+  // The deployed build's commit (NEXT_PUBLIC_BUILD), read by the usage counter from the page rather than built into
+  // the game's script, so a deploy doesn't change the game's cached files
+  ...(process.env.NEXT_PUBLIC_BUILD ? { other: { "lc-build": process.env.NEXT_PUBLIC_BUILD.slice(0, 7) } } : {}),
   // Metadata URLs don't get a base path on their own
   icons: {
     icon: [

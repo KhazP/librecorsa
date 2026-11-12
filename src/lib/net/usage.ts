@@ -1,13 +1,13 @@
 /**
- * The anonymous usage counter: when a stretch of driving ends, one line (circuit, car, mode, minutes) goes to the
- * online side (POST <api>/usage, cloudflare/api/usage.ts), which only adds it to the day's totals. No player id, no
+ * The anonymous usage counter: when a stretch of driving ends, one line (circuit, car, mode, minutes, and what it was
+ * driven with: input, kind of screen, weather, assists, build) goes to the online side (POST <api>/usage, cloudflare/api/usage.ts), which only adds it to the day's totals. No player id, no
  * cookie, nothing kept in the browser that ties one stretch to another.
  */
 import type { VehicleModelId } from "../../types/f1";
 import { onlineUrl } from "./online-config";
-import { MAX_USAGE_MINUTES, MIN_USAGE_MINUTES, type UsageMode } from "./usage-modes";
+import { MAX_USAGE_MINUTES, MIN_USAGE_MINUTES, type UsageExtras, type UsageMode } from "./usage-modes";
 
-export { isUsageMode, MAX_USAGE_MINUTES, MIN_USAGE_MINUTES, USAGE_MODES, type UsageMode } from "./usage-modes";
+export { isUsageMode, MAX_USAGE_MINUTES, MIN_USAGE_MINUTES, USAGE_EXTRAS, USAGE_MODES, type UsageExtras, type UsageMode } from "./usage-modes";
 
 /** One stretch of driving: where, in what, how */
 export interface UsageStretch {
@@ -15,8 +15,8 @@ export interface UsageStretch {
   vehicle: VehicleModelId;
   mode: UsageMode;
 }
-/** The line sent when a stretch ends */
-export type UsageLine = UsageStretch & { minutes: number };
+/** The line sent when a stretch ends; the extras (input, device, weather, assists, build) are as they were at its end */
+export type UsageLine = UsageStretch & { minutes: number } & UsageExtras;
 
 /**
  * Times stretches of driving. `set` says what is driven now (null: nothing) and whether the clock runs (not while
