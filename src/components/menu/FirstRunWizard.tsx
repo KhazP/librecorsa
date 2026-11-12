@@ -14,6 +14,7 @@ import { AssistsStep } from "./steps/AssistsStep";
 import { CarStep } from "./steps/CarStep";
 import type { SetupStepProps } from "./steps/types";
 import type { InputDevice } from "@/lib/input/device-input";
+import { isTouchDevice } from "@/lib/input/touch-input";
 import { LibreCorsaLogo } from "@/components/ui/LibreCorsaLogo";
 
 export type WizardStepId = "device" | "setup" | "assists" | "car";
@@ -52,7 +53,10 @@ export interface FirstRunWizardProps extends SetupStepProps {
  */
 export const FirstRunWizard: React.FC<FirstRunWizardProps> = (props) => {
   const { mode, onFinish, onExit, onSkip, onStepChange } = props;
-  const steps = STEPS[mode];
+  // A touch screen offers its own controls first; driving by touch has no key setup to go through
+  const [touchFirst] = useState(isTouchDevice);
+  const [touchPicked, setTouchPicked] = useState(touchFirst);
+  const steps = touchFirst && touchPicked ? STEPS[mode].filter((s) => s !== "setup" || mode === "controls") : STEPS[mode];
   const [rawStepIndex, setStepIndex] = useState(0);
   // Clamped: `mode` can change while open, and the shorter list must not run past its end
   const stepIndex = Math.min(rawStepIndex, steps.length - 1);
@@ -241,7 +245,13 @@ export const FirstRunWizard: React.FC<FirstRunWizardProps> = (props) => {
               ref={bodyRef}
               className="-mx-1.5 mt-4 min-h-0 flex-1 overflow-y-auto px-1.5 pt-1 pb-2 not-compact:mt-6 short:mt-2"
             >
-              {step === "device" ? <DeviceStep {...props} pickedRef={devicePickedRef} /> : null}
+              {step === "device" ? (
+                <DeviceStep
+                  {...props}
+                  pickedRef={devicePickedRef}
+                  touch={touchFirst ? { picked: touchPicked, onPick: setTouchPicked } : null}
+                />
+              ) : null}
               {step === "setup" && props.settings.device === "keyboard" ? <KeyboardStep {...props} /> : null}
               {step === "setup" && props.settings.device === "controller" ? <ControllerStep {...props} /> : null}
               {step === "setup" && props.settings.device === "wheel" ? <WheelStep {...props} /> : null}
