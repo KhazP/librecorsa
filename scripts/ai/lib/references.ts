@@ -38,6 +38,8 @@ const FAST_LANE: Record<string, string> = {
   spielberg_inner: 'spielberg/spielberg_ver2/circuit_inner',
   dunsfold: 'librecorsa-src/topgear/topgear',
   istanbul_park: 'librecorsa-src/istanbul_park/1',
+  grobnik: 'librecorsa-src/grobnik/grobnik',
+  oschersleben: 'librecorsa-src/oschersleben/oschersleben',
 };
 
 export function fastLanePath(trackId: string): string | null {

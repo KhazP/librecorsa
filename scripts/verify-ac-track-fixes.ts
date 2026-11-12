@@ -2,7 +2,7 @@
  * The converted AC circuits:
  * 1. Okayama (and all AC tracks) road material depthWrite & decal isolation (preventing 100% reflective tarmac)
  * 2. Monaco barrier hitboxes (3D wall extraction, TrackWallQuery segment density, and collision response for all 3 cars)
- * 3. Kerb coverage and feel across chang, okayama, spielberg, monaco and istanbul_park for all 3 car physics models
+ * 3. Kerb coverage and feel across chang, okayama, spielberg, monaco, istanbul_park, grobnik and oschersleben for all 3 car physics models
  * 4. Kerb / edge step continuity of the fitted surfaces
  */
 import assert from 'node:assert/strict';
@@ -18,7 +18,7 @@ import { getActiveTrackData, type RawTrackJson, setActiveTrack } from '../src/li
 import { loadGlbGeometry } from './lib/glb-geometry';
 import { skipSuiteWithout } from './lib/hosted-files';
 
-skipSuiteWithout('public/tracks/okayama/track_data.json', 'public/tracks/monaco/track_data.json', 'public/tracks/dunsfold/track_data.json', 'public/tracks/istanbul_park/track_data.json');
+skipSuiteWithout('public/tracks/okayama/track_data.json', 'public/tracks/monaco/track_data.json', 'public/tracks/dunsfold/track_data.json', 'public/tracks/istanbul_park/track_data.json', 'public/tracks/grobnik/track_data.json', 'public/tracks/oschersleben/track_data.json');
 
 const ROOT = path.resolve(__dirname, '..');
 
@@ -43,7 +43,7 @@ function readGlbJson(glbPath: string) {
 
 async function verifyOkayamaMaterialsAndDecalIsolation() {
   console.log('\n=== 1. Verifying Okayama & AC Track Road Material depthWrite & Decal Isolation ===');
-  for (const tid of ['okayama', 'okayama_piper', 'okayama_drift', 'chang', 'spielberg', 'spielberg_south', 'spielberg_inner', 'monaco', 'dunsfold', 'istanbul_park']) {
+  for (const tid of ['okayama', 'okayama_piper', 'okayama_drift', 'chang', 'spielberg', 'spielberg_south', 'spielberg_inner', 'monaco', 'dunsfold', 'istanbul_park', 'grobnik', 'oschersleben']) {
     const { raw, glbPath } = loadTrack(tid);
     const gltf = readGlbJson(glbPath);
     const roadMats = new Set((raw.metadata?.mesh?.roadMaterials ?? []).map((s) => s.toLowerCase()));
@@ -199,7 +199,7 @@ async function verifyMonacoBarrierHitboxes() {
 
 async function verifyKerbsFeelAndSound() {
   console.log('\n=== 3. Verifying Kerb Mesh Coverage, Zero Buried Triangles, Feel & Acoustics ===');
-  for (const tid of ['chang', 'okayama', 'okayama_piper', 'spielberg', 'spielberg_south', 'monaco', 'istanbul_park']) {
+  for (const tid of ['chang', 'okayama', 'okayama_piper', 'spielberg', 'spielberg_south', 'monaco', 'istanbul_park', 'grobnik', 'oschersleben']) {
     const { raw, track, root } = loadTrack(tid);
     const ground = trackColliders(root).ground!;
     const hit = createGroundHit();
@@ -255,7 +255,7 @@ async function verifyKerbsFeelAndSound() {
       `PASS  [${tid}] Track_Surface_Kerb: ${triCount} tris, ${(kerbHitRatio * 100).toFixed(2)}% surface='kerb' (${hitKerb}/${triCount}), ${((nonZeroDu / triCount) * 100).toFixed(1)}% continuous UV`
     );
 
-    if (!['chang', 'okayama', 'spielberg', 'monaco', 'istanbul_park'].includes(tid)) continue;
+    if (!['chang', 'okayama', 'spielberg', 'monaco', 'istanbul_park', 'grobnik', 'oschersleben'].includes(tid)) continue;
 
     // Find a multi-sample kerb run and locate the lateral midpoint of the 3D Track_Surface_Kerb strip
     let targetS = -1;
@@ -336,7 +336,7 @@ async function verifyTrackEdgeContinuity() {
   console.log('\n=== 4. Verifying Kerb/Edge Step Continuity ===');
   // The converted circuits' surfaces are fitted to their road at load (metadata.mesh.conformSurfaces), which is what
   // closes these steps; the other circuits keep their modelled kerb and verge edges
-  for (const tid of ['spielberg', 'monaco', 'okayama', 'chang', 'istanbul_park']) {
+  for (const tid of ['spielberg', 'monaco', 'okayama', 'chang', 'istanbul_park', 'grobnik', 'oschersleben']) {
     const { raw, root } = loadTrack(tid);
     const ground = trackColliders(root).ground!;
     const hit = createGroundHit();
