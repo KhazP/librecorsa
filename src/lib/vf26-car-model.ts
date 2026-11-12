@@ -25,6 +25,7 @@ import {
   type WheelSeating,
 } from "@/lib/render/corner-rig";
 import { singlePassTransparency } from "@/lib/render/static-scene";
+import { createSuspensionArms, type ArmHub } from "@/lib/render/suspension-arms";
 
 /**
  * The 2026 Prototype's body (`public/cars/f12026/model/f12026.glb`): Qvist Designs' 2026 concept, ported by
@@ -35,8 +36,9 @@ import { singlePassTransparency } from "@/lib/render/static-scene";
  *
  * Paint: the body's zone materials (`PAINT_ZONE_MATERIALS`) take the selected LiveryConfig's primary, secondary and
  * accent, per car. A GLB with a livery mask (root extras `liveryMask`) mixes them in the shader instead. Moving parts:
- * wheels, steering wheel, the wing flaps (extras `aeroClosed` / `aeroOpen`) and, where the GLB has one, a skinned
- * driver; a body without one gets a helmet at its extras' `helmet.pos`.
+ * wheels, the brake drums on them (`SUSP_xx`), the suspension arms (`ARM_xx_n`, `render/suspension-arms.ts`), steering
+ * wheel, the wing flaps (extras `aeroClosed` / `aeroOpen`) and, where the GLB has one, a skinned driver; a body
+ * without one gets a helmet at its extras' `helmet.pos`.
  */
 export const VF26_MODEL_URL = "/cars/f12026/model/f12026.glb";
 
@@ -193,6 +195,10 @@ export function attachVf26Model(
     discMat: THREE.MeshStandardMaterial | null;
   }
   const corners: Corner[] = [];
+  const hubs = new Map<string, ArmHub>();
+  // The arms' frame against the model's, read before anything is re-parented
+  const bodyNode = find("BODY");
+  const modelToBody = bodyNode ? relativeMatrix(bodyNode, vf).invert() : null;
   WHEELS.forEach((wheelName, i) => {
     const wheel = find(wheelName);
     if (!wheel) return;
@@ -235,6 +241,7 @@ export function attachVf26Model(
     steer.add(wheel);
     setFromMatrix(wheel, wheelLocal);
     root.add(steer);
+    hubs.set(SIDE[i], { steer, centre });
     corners.push({
       steer,
       spin,
@@ -254,6 +261,8 @@ export function attachVf26Model(
   }
   find(driver ? "HARNESS_OFF" : "HARNESS_ON")?.removeFromParent();
   chassisGroup.add(bodyGroup);
+  // Suspension arms: each keeps its outer end on its wheel's drum
+  const arms = bodyNode && modelToBody ? createSuspensionArms(bodyNode, root, hubs, modelToBody) : null;
 
   // Driver arms follow the wheel through the mod's driver_steer clip (time set from the wheel angle)
   const helmet = driver?.getObjectByName("HELMET") ?? null;
@@ -405,6 +414,7 @@ export function attachVf26Model(
     // Front wheels: telemetry.steering = road-wheel angle / max angle, + = right. rotation.y + = left.
     const roadWheel = -t.steering * maxRoadWheelRad;
     updateCorners(corners, roadWheel, wheelRotationRad, wheels);
+    arms?.update();
     if (steerBase) steerBase.rotation.z = t.steering * lockRad;
     if (driverMixer && steerAction) {
       steerAction.time = steerFrame(steerTable, t.steering * VF26_CHASSIS.steering.lockDeg) / driverFps;
