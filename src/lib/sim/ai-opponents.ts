@@ -1576,6 +1576,7 @@ export class AiOpponentField {
       const offLine = me.aiPlan ? 1 : 1 - 0.012 * Math.abs(car.biasM);
       me.aiPaceScale = Math.min(me.aiPlan ? 1.03 : 0.999, planned * attackPush) * offLine * dirtyAirPenalty * yellowLift * blueLift;
       me.aiSpeedCapMs = speedCap;
+      me.aiTopSpeedOpen = yellowLift === 1 && blueLift === 1;
       car.hooks?.setSteerGain(T.at('steerGain', me.sMeters));
       // Rain changed the grip the car plans on: new corner speeds and braking points
       if (car.hooks?.refresh?.()) this.rebuildTarget(car);
@@ -1694,7 +1695,8 @@ export class AiOpponentField {
         track: plan.track,
         line: plan.n,
         lineKappa: plan.kappa,
-        vLimit: plan.v,
+        // (past the top speed in a tow, as the tracker: `F12026CarSim.planSpeedTarget`)
+        vLimit: me.aiTopSpeedOpen ? plan.vOpen : plan.v,
         limits: plan.limits,
         lo: b.lo,
         hi: b.hi,

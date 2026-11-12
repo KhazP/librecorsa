@@ -719,6 +719,8 @@ export class F12026CarSim implements SimulatorCar {
   public aiLineBiasM = 0;
   /** Speed cap for AI traffic when following another car (m/s) */
   public aiSpeedCapMs = Infinity;
+  /** The plan's top speed is no limit (`SimulatorCar.aiTopSpeedOpen`) */
+  public aiTopSpeedOpen = false;
   /**
    * AI tuning (`ai-tuning.ts`): target speed along the lap (m/s, uniform spacing) used instead of this car's own
    * limit profile (`aiBaseSpeedProfile`), e.g. with earlier braking points; null = the limit profile
@@ -2012,8 +2014,12 @@ export class F12026CarSim implements SimulatorCar {
     const t = plan.track;
     const L = this.track.totalLengthM;
     const lead = Math.max(3, speed * 0.15);
+    // Racing, the plan's top speed is no limit: a car in a tow runs past it, held by its own drag, and brakes from there
+    // on the open envelope. Held at the plan's top speed, the tow was worth nothing and a quicker car sat behind a slower
+    // one down every straight. Told to lift (a yellow, a blue flag), the car keeps it, at its pace
+    const env = this.aiTopSpeedOpen ? plan.vOpen : plan.v;
     const at = (d: number) => {
-      let vv = sampleGrid(plan.v, s + d, t.ds) * this.aiPaceScale;
+      let vv = sampleGrid(env, s + d, t.ds) * this.aiPaceScale;
       const tab = this.aiTargetSpeedMs;
       if (tab) {
         const k = Math.floor((wrap(s + d, L) / L) * tab.length) % tab.length;

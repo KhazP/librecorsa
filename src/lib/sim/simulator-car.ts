@@ -122,6 +122,11 @@ export interface SimulatorCar {
   aiLineBiasM?: number;
   /** Traffic speed cap (m/s) */
   aiSpeedCapMs?: number;
+  /**
+   * A plan's level-ground top speed is no limit to this car: in a tow it runs past it, held by its own drag (the race
+   * field sets it unless the driver is told to lift, under a yellow or a blue flag)
+   */
+  aiTopSpeedOpen?: boolean;
   /** AI tuning: target speed along the lap replacing the autopilot's own limit profile (m/s, uniform spacing) */
   aiTargetSpeedMs?: Float64Array | null;
   /** A plan for the autopilot to track as given (`ai/drive-plan.ts`); null: its own line and limit profile */
