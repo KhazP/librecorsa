@@ -36,8 +36,9 @@ uv run --python 3.14 --no-project --with numpy --with scipy --with opencv-python
 
 # 2026 Prototype body (`port_qvist_f1.mjs`, `build_rb_livery.mjs`)
 
-`port_qvist_f1.mjs` builds the 2026 Prototype's body, `public/cars/f12026/model/f12026.glb`, from Qvist_designs'
-"F1 2026 concept (polygon model)" (Sketchfab, CC BY 4.0; download the GLB, it is not in the repository), in the layout
+`port_qvist_f1.mjs` builds the 2026 Prototype's body, `public/cars/f12026/model/f12026.glb`, from Qvist Designs'
+"F1 2026 concept (polygon model)" (CC BY 4.0, [qvistdesigns.framer.website](https://qvistdesigns.framer.website/); its GLB is not in the
+repository), in the layout
 `src/lib/vf26-car-model.ts` reads:
 
 ```bash

@@ -27,7 +27,7 @@ import {
 import { singlePassTransparency } from "@/lib/render/static-scene";
 
 /**
- * The 2026 Prototype's body (`public/cars/f12026/model/f12026.glb`): Qvist_designs' 2026 concept, ported by
+ * The 2026 Prototype's body (`public/cars/f12026/model/f12026.glb`): Qvist Designs' 2026 concept, ported by
  * `scripts/cars/port_qvist_f1.mjs`. On builds without the GLB `loadVf26Template()` resolves to null and the procedural
  * car stays in place.
  *

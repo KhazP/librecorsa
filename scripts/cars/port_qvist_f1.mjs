@@ -1,6 +1,6 @@
 /**
- * Ports Qvist_designs' "F1 2026 concept (polygon model)" (Sketchfab, CC BY 4.0) to the 2026 Prototype's body,
- * in the layout `src/lib/vf26-car-model.ts` reads:
+ * Ports Qvist Designs' "F1 2026 concept (polygon model)" (CC BY 4.0, https://qvistdesigns.framer.website/) to the 2026
+ * Prototype's body, in the layout `src/lib/vf26-car-model.ts` reads:
  *
  *   node scripts/cars/port_qvist_f1.mjs <f1_2026_concept_polygon_model.glb> [out.glb] [--debug-parts <file.glb>]
  *
@@ -57,7 +57,7 @@ async function readSource(file) {
   for (const node of doc.getRoot().listNodes()) {
     const mesh = node.getMesh();
     if (!mesh) continue;
-    // The chunks sit under the Sketchfab root's -90 degree X turn; only that is expected (the axes below undo it)
+    // The chunks sit under the download's root -90 degree X turn; only that is expected (the axes below undo it)
     const local = node.getMatrix();
     if (local.some((v, i) => Math.abs(v - (i % 5 === 0 ? 1 : 0)) > 1e-9)) throw new Error(`${node.getName()} has a transform`);
     for (const prim of mesh.listPrimitives()) {
@@ -873,8 +873,8 @@ async function main() {
     liveryMask: false,
     source: {
       title: "F1 2026 concept (polygon model)",
-      author: "Qvist_designs",
-      url: "https://sketchfab.com/3d-models/f1-2026-concept-polygon-model-ea3bde709b1e4dc9b0ec8557d106ed42",
+      author: "Qvist Designs",
+      url: "https://qvistdesigns.framer.website/",
       license: "CC BY 4.0",
       changes:
         "Re-oriented to metres; simplified; split into body, wheels and tyres; wing flaps cut free; painted in livery zones; the AM26's steering wheel added",

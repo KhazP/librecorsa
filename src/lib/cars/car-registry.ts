@@ -121,8 +121,8 @@ const CC_BY_NC_SA = { license: "CC BY-NC-SA 4.0", licenseUrl: "https://creativec
 /** The F1 2026 Prototype's own body (`public/cars/f12026/model/f12026.glb`), with the AM26's steering wheel */
 const QVIST_F1_2026: CarCredit = {
   title: "F1 2026 concept (polygon model)",
-  author: "Qvist_designs",
-  url: "https://sketchfab.com/3d-models/f1-2026-concept-polygon-model-ea3bde709b1e4dc9b0ec8557d106ed42",
+  author: "Qvist Designs",
+  url: "https://qvistdesigns.framer.website/",
   note: "Steering wheel from DeX's AM26 (CC BY 4.0)",
   ...CC_BY,
 };
