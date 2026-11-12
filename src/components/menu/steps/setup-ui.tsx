@@ -16,8 +16,13 @@ import { TuningSlider } from "./TuningSlider";
 
 /** Setup-wizard building blocks (Racing Line): frosted section cards, small pill actions, binding rows, live meters */
 
-/** A frosted section card with the volt-dot label and an optional action on the right */
+/**
+ * A frosted section card with an optional action on the right, named by a plain heading (`title`) or, on the older
+ * screens, the volt-dot label
+ */
 export const SetupCard: React.FC<{
+  /** A plain heading for the section */
+  title?: React.ReactNode;
   label?: React.ReactNode;
   action?: React.ReactNode;
   children: React.ReactNode;
@@ -25,14 +30,20 @@ export const SetupCard: React.FC<{
   className?: string;
   /** Accessible name of the section (defaults to the label when it is a string) */
   ariaLabel?: string;
-}> = ({ label, action, children, className = "", ariaLabel }) => (
+}> = ({ title, label, action, children, className = "", ariaLabel }) => (
   <section
-    aria-label={ariaLabel ?? (typeof label === "string" ? label : undefined)}
+    aria-label={ariaLabel ?? (typeof title === "string" ? title : typeof label === "string" ? label : undefined)}
     className={`lc-glass flex flex-col gap-3.5 rounded-[24px] px-4 py-4 text-[#F5F7FA] sm:px-[22px] sm:py-5 short:gap-2.5 short:py-3 ${className}`}
   >
-    {label || action ? (
+    {title || label || action ? (
       <div className="flex flex-wrap items-center justify-between gap-3">
-        {label ? <CardLabel>{label}</CardLabel> : <span />}
+        {title ? (
+          <h3 className="lc-title m-0 text-[20px] leading-tight text-[#F5F7FA]">{title}</h3>
+        ) : label ? (
+          <CardLabel>{label}</CardLabel>
+        ) : (
+          <span />
+        )}
         {action}
       </div>
     ) : null}
