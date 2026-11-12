@@ -30,11 +30,13 @@ import {
   type HidApiLike,
   type HidCollectionLike,
   type HidDeviceLike,
+  type HidInputReportEventLike,
   type HidReportItemLike,
   type PidFieldLayout,
   type PidReportLayout,
   type WebHidFfbStatus,
 } from "../src/lib/input/webhid-ffb";
+import { HIDPP_REPLY_TIMEOUT_MS, HIDPP_STREAM_REPLY_MS } from "../src/lib/input/webhid-logitech-hidpp";
 
 let passed = 0;
 async function check(name: string, fn: () => void | Promise<void>) {
@@ -648,9 +650,14 @@ async function main() {
     /** "disconnect" listeners (as `listeners`) and "connect" ones */
     const listeners: Listener[] = [];
     const connectListeners: Listener[] = [];
+    /** The filters each requestDevice call was given */
+    const requests: Parameters<HidApiLike["requestDevice"]>[0][] = [];
     const of = (t: "connect" | "disconnect") => (t === "connect" ? connectListeners : listeners);
     const api: HidApiLike = {
-      requestDevice: async () => devices,
+      requestDevice: async (options) => {
+        requests.push(options);
+        return devices;
+      },
       getDevices: async () => granted,
       addEventListener: (t, l) => void of(t).push(l),
       removeEventListener: (t, l) => {
@@ -659,7 +666,7 @@ async function main() {
         if (i >= 0) list.splice(i, 1);
       },
     };
-    return { api, listeners, connectListeners };
+    return { api, listeners, connectListeners, requests };
   }
   const wheel = () => {
     const cols = pidCollections();
@@ -1244,12 +1251,12 @@ async function main() {
     await ffb.dispose();
     assert.deepEqual(writes(dfgt), [LG4FF.forceOff, LG4FF.springParamsFull, LG4FF.springOn]);
   });
-  await check("G920 / G923 Xbox (HID++), a Logitech gamepad and the DFP are refused and never opened", async () => {
+  await check("a Logitech gamepad, the DFP, the PlayStation G923 and the G PRO are refused and never opened", async () => {
     for (const [productId, name] of [
-      [0xc262, "G920"],
-      [0xc26e, "G923 Racing Wheel for Xbox One and PC"],
       [0xc216, "Logitech Dual Action"],
       [0xc298, "Driving Force Pro"],
+      [0xc267, "G923 Racing Wheel for PlayStation and PC"],
+      [0xc272, "PRO Racing Wheel"],
     ] as const) {
       const dev = logitech(productId, name);
       const ffb = new WebHidFfb(fakeHid([dev]).api, new FakeClock().deps);
@@ -1275,6 +1282,344 @@ async function main() {
     const ffb = new WebHidFfb(fakeHid([dev]).api, new FakeClock().deps);
     assert.equal(await ffb.connect(), "Logitech PID");
     assert.ok(dev.forceWrites.length > 0, "PID Set Constant Force sent");
+  });
+
+  console.log("HID++ Logitech wheels (hid-logitech-hidpp, feature 0x8123)");
+  /**
+   * Reference messages written by hand from Linux drivers/hid/hid-logitech-hidpp.c, not from this driver's output: the
+   * data bytes after the report id (0x11 long: 19 bytes, 0x12 very long: 63 here), zero-padded. Each one is device
+   * index ff, feature index, function << 4 | software id a (not the kernel's 1), then the parameters. The fake wheel
+   * puts feature 0x8123 at index 0b, offers 4 slots (one reserved), reports 900° and gain ffff, and hands out slot 1
+   * (the centring spring) then 2 (the constant force).
+   */
+  const msg = (id: 0x11 | 0x12, text: string) => {
+    const b = text.split(/\s+/).filter(Boolean).map((h) => parseInt(h, 16));
+    const length = id === 0x11 ? 19 : 63;
+    assert.ok(b.length <= length);
+    return { id, data: [...b, ...new Array<number>(length - b.length).fill(0)] };
+  };
+  const HIDPP = {
+    /** hidpp_root_get_feature(HIDPP_PAGE_G920_FORCE_FEEDBACK): root index 00, function 0, 81 23 */
+    lookup: msg(0x11, "ff 00 0a 81 23"),
+    /** g920_get_config, in order: HIDPP_FF_GET_INFO, _RESET_ALL, _GET_APERTURE, _GET_GLOBAL_GAINS */
+    info: msg(0x11, "ff 0b 0a"),
+    reset: msg(0x11, "ff 0b 1a"),
+    getAperture: msg(0x11, "ff 0b 5a"),
+    getGains: msg(0x11, "ff 0b 7a"),
+    /** g920_ff_set_autocenter: download a spring (06) | autostart (80) into a new slot, every other parameter 0; 18 parameters, so a very long report */
+    springZero: msg(0x12, "ff 0b 2a 00 86"),
+    /** hidpp_ff_range_store: SET_APERTURE, degrees big-endian. 540 = 02 1c, 900 = 03 84 */
+    aperture540: msg(0x11, "ff 0b 6a 02 1c"),
+    aperture900: msg(0x11, "ff 0b 6a 03 84"),
+    /**
+     * hidpp_ff_upload_effect, FF_CONSTANT: slot, type 00, length 00 00, delay 00 00, level big-endian, empty envelope.
+     * Slot 00 asks for a new one; 02 is the slot the fake handed out
+     */
+    constantNew: msg(0x11, "ff 0b 2a 00 00 00 00 00 00 00 00"),
+    level: (hi: number, lo: number) => msg(0x11, `ff 0b 2a 02 00 00 00 00 00 ${hi.toString(16)} ${lo.toString(16)}`),
+    /** hidpp_ff_playback: SET_EFFECT_STATE slot 02, play 02 / stop 01 */
+    play: msg(0x11, "ff 0b 3a 02 02"),
+    stop: msg(0x11, "ff 0b 3a 02 01"),
+    /** hidpp_ff_erase_effect: DESTROY_EFFECT slot 02 */
+    destroy: msg(0x11, "ff 0b 4a 02"),
+    /**
+     * hidpp_ff_set_autocenter(0xffff) into the spring's slot 01: saturation 0xffff >> 1 = 7f ff, coefficient
+     * 0xffff >> 3 = 1f ff, left then right, no dead band, centre 0
+     */
+    springFull: msg(0x12, "ff 0b 2a 01 86 00 00 00 00 7f ff 1f ff 00 00 00 00 1f ff 7f ff"),
+  };
+  /** A G920's HID++ interface: long (0x11) and very long (0x12) reports on a vendor-defined collection */
+  const hidppCollections = (o: { veryLong?: boolean } = {}): HidCollectionLike[] => [
+    {
+      usagePage: 0xff43,
+      usage: 0x0602,
+      inputReports: [{ reportId: 0x11, items: [variable([(0xff43 << 16) | 0x0602], 8, 19, 0, 255)] }],
+      outputReports: [
+        { reportId: 0x11, items: [variable([(0xff43 << 16) | 0x0602], 8, 19, 0, 255)] },
+        ...(o.veryLong === false ? [] : [{ reportId: 0x12, items: [variable([(0xff43 << 16) | 0x0604], 8, 63, 0, 255)] }]),
+      ],
+    },
+  ];
+  class FakeHidppWheel extends FakeHidDevice {
+    /** Index the wheel gives feature 0x8123 (0: it does not list it) */
+    featureIndex = 0x0b;
+    /** Answers nothing at all */
+    silent = false;
+    /** Busy replies still to give, by (feature index << 8 | function byte) */
+    busy = new Map<number, number>();
+    /** Error code to answer with, by (feature index << 8 | function byte) */
+    errors = new Map<number, number>();
+    private nextSlot = 1;
+    private input: ((e: HidInputReportEventLike) => void)[] = [];
+    constructor(productId = 0xc262, name = "G920 Driving Force Racing Wheel", collections = hidppCollections()) {
+      super(collections);
+      this.vendorId = 0x046d;
+      this.productId = productId;
+      this.productName = name;
+    }
+    addEventListener(_type: "inputreport", l: (e: HidInputReportEventLike) => void) {
+      this.input.push(l);
+    }
+    removeEventListener(_type: "inputreport", l: (e: HidInputReportEventLike) => void) {
+      this.input = this.input.filter((x) => x !== l);
+    }
+    get inputListeners() {
+      return this.input.length;
+    }
+    override async sendReport(reportId: number, data: Uint8Array) {
+      await super.sendReport(reportId, data);
+      const reply = this.answer([...data]);
+      if (!reply) return;
+      setImmediate(() => {
+        const view = new DataView(new Uint8Array(reply).buffer);
+        for (const l of [...this.input]) l({ reportId: 0x11, data: view });
+      });
+    }
+    /** The wheel's answer to one message, as the data of an input report 0x11 (hand-written, not the driver's builders) */
+    private answer(m: number[]): number[] | null {
+      if (this.silent) return null;
+      const feature = m[1] as number;
+      const fn = m[2] as number;
+      const pad = (b: number[]) => [...b, ...new Array<number>(19 - b.length).fill(0)];
+      const key = (feature << 8) | fn;
+      const busy = this.busy.get(key) ?? 0;
+      if (busy > 0) {
+        this.busy.set(key, busy - 1);
+        return pad([0xff, 0xff, feature, fn, 0x08]);
+      }
+      const error = this.errors.get(key);
+      if (error !== undefined) return pad([0xff, 0xff, feature, fn, error]);
+      const ok = (params: number[]) => pad([0xff, feature, fn, ...params]);
+      if (feature === 0x00 && fn === 0x0a) return ok([this.featureIndex]);
+      if (feature !== this.featureIndex) return null;
+      if (fn === 0x1a) this.nextSlot = 1; // RESET_ALL frees every slot
+      if (fn === 0x0a) return ok([0x04]); // GET_INFO: 4 slots
+      if (fn === 0x5a) return ok([0x03, 0x84]); // GET_APERTURE: 900°
+      if (fn === 0x7a) return ok([0xff, 0xff, 0x00]); // GET_GLOBAL_GAINS: ffff, no boost
+      if (fn === 0x2a) return ok([(m[3] as number) || this.nextSlot++]); // DOWNLOAD_EFFECT: the effect's slot
+      return ok([]);
+    }
+  }
+  const outs = (dev: FakeHidDevice) => dev.log.filter((l) => l.kind === "out").map((l) => ({ id: l.id, data: l.data }));
+  /** Lets a write go out and its reply come back, with the 2 ms spacing passed */
+  const step = async (clock: FakeClock) => {
+    await settle();
+    clock.advance(5);
+    await settle();
+  };
+
+  await check("G920: feature lookup, then g920_get_config's order, the rotation, then the constant force downloaded and played", async () => {
+    const g920 = new FakeHidppWheel();
+    const { api, requests } = fakeHid([g920]);
+    const ffb = new WebHidFfb(api, new FakeClock().deps);
+    ffb.setRotationDeg(540);
+    assert.equal(await ffb.connect(), "G920 Driving Force Racing Wheel");
+    assert.equal(ffb.status.state, "ready");
+    assert.deepEqual(outs(g920), [
+      HIDPP.lookup,
+      HIDPP.info,
+      HIDPP.reset,
+      HIDPP.getAperture,
+      HIDPP.getGains,
+      HIDPP.springZero,
+      HIDPP.aperture540,
+      HIDPP.constantNew,
+      HIDPP.play,
+    ]);
+    assert.equal(ffb.hasHardwareDamper(), false);
+    assert.equal(ffb.hasRevLeds(), false);
+    const filters = requests[0]?.filters ?? [];
+    for (const productId of [0xc262, 0xc26e]) {
+      assert.ok(filters.some((f) => f.vendorId === 0x046d && f.productId === productId), "every interface of the wheel is offered");
+    }
+  });
+  await check("the feature index is the one the lookup returns, never a fixed number", async () => {
+    const g923 = new FakeHidppWheel(0xc26e, "G923 Racing Wheel for Xbox One and PC");
+    g923.featureIndex = 0x05;
+    const ffb = new WebHidFfb(fakeHid([g923]).api, new FakeClock().deps);
+    assert.equal(await ffb.connect(), "G923 Racing Wheel for Xbox One and PC");
+    const sent = outs(g923);
+    assert.deepEqual(sent[0], HIDPP.lookup);
+    assert.deepEqual(sent[1], msg(0x11, "ff 05 0a"));
+    assert.ok(sent.slice(1).every((w) => w.data[1] === 0x05));
+  });
+  await check("a wheel that does not list feature 0x8123 is unsupported, gets nothing past the lookup and is closed", async () => {
+    const g920 = new FakeHidppWheel();
+    g920.featureIndex = 0;
+    const ffb = new WebHidFfb(fakeHid([g920]).api, new FakeClock().deps);
+    assert.equal(await ffb.connect(), null);
+    assert.equal(ffb.status.state, "unsupported");
+    assert.match(ffb.status.message ?? "", /feature 0x8123/);
+    assert.deepEqual(outs(g920), [HIDPP.lookup]);
+    assert.equal(g920.opened, false);
+    assert.equal(g920.inputListeners, 0, "stops listening for replies");
+  });
+  await check("force: the level is downloaded again into its slot, big-endian, + force a + level", async () => {
+    const g920 = new FakeHidppWheel();
+    const clock = new FakeClock();
+    const ffb = new WebHidFfb(fakeHid([g920]).api, clock.deps);
+    await ffb.connect();
+    g920.log.length = 0;
+    for (const f of [1, -1, 0.5, 0]) {
+      ffb.setForce(f);
+      await step(clock);
+    }
+    // 0x7fff, -0x7fff = 0x8001, round(0.5 * 0x7fff) = 0x4000, 0
+    assert.deepEqual(outs(g920), [HIDPP.level(0x7f, 0xff), HIDPP.level(0x80, 0x01), HIDPP.level(0x40, 0x00), HIDPP.level(0, 0)]);
+  });
+  await check("a streamed level waits for the reply to the one before, at most the stream wait", async () => {
+    const g920 = new FakeHidppWheel();
+    const clock = new FakeClock();
+    const ffb = new WebHidFfb(fakeHid([g920]).api, clock.deps);
+    await ffb.connect();
+    g920.log.length = 0;
+    g920.silent = true;
+    ffb.setForce(1);
+    await step(clock);
+    ffb.setForce(-1);
+    await step(clock);
+    assert.deepEqual(outs(g920), [HIDPP.level(0x7f, 0xff)], "the second level waits for a reply");
+    clock.advance(HIDPP_STREAM_REPLY_MS);
+    await step(clock);
+    assert.deepEqual(outs(g920), [HIDPP.level(0x7f, 0xff), HIDPP.level(0x80, 0x01)], "no reply in time: counted as sent");
+    assert.equal(ffb.status.state, "ready", "a missing reply is not a failure");
+  });
+  await check("stop(): the zero goes out at once, and again when the wheel answers busy", async () => {
+    const g920 = new FakeHidppWheel();
+    const clock = new FakeClock();
+    const ffb = new WebHidFfb(fakeHid([g920]).api, clock.deps);
+    await ffb.connect();
+    ffb.setForce(1);
+    await step(clock);
+    g920.log.length = 0;
+    g920.busy.set((0x0b << 8) | 0x2a, 1);
+    ffb.stop();
+    await settle();
+    assert.deepEqual(outs(g920), [HIDPP.level(0, 0), HIDPP.level(0, 0)], "a zero the wheel was too busy to take is sent again");
+    assert.equal(ffb.status.state, "ready");
+  });
+  await check("rotation while running, clamped as hidpp_ff_range_store clamps; dispose: zero, stop, erase, rotation back, centring spring", async () => {
+    const g920 = new FakeHidppWheel();
+    const clock = new FakeClock();
+    const ffb = new WebHidFfb(fakeHid([g920]).api, clock.deps);
+    ffb.setRotationDeg(540);
+    await ffb.connect();
+    g920.log.length = 0;
+    ffb.setRotationDeg(1080);
+    await step(clock);
+    assert.deepEqual(outs(g920), [HIDPP.aperture900]);
+    ffb.setRotationDeg(540);
+    await step(clock);
+    g920.log.length = 0;
+    await ffb.dispose();
+    assert.deepEqual(outs(g920), [HIDPP.level(0, 0), HIDPP.stop, HIDPP.destroy, HIDPP.aperture900, HIDPP.springFull]);
+    assert.equal(g920.opened, false);
+    assert.equal(g920.inputListeners, 0);
+  });
+  await check("no rotation setting: the wheel's own rotation is never written, at setup or teardown", async () => {
+    const g920 = new FakeHidppWheel();
+    const ffb = new WebHidFfb(fakeHid([g920]).api, new FakeClock().deps);
+    await ffb.connect();
+    await ffb.dispose();
+    assert.ok(!outs(g920).some((w) => w.data[2] === 0x6a), "no SET_APERTURE");
+    assert.deepEqual(outs(g920).slice(-4), [HIDPP.level(0, 0), HIDPP.stop, HIDPP.destroy, HIDPP.springFull]);
+  });
+  await check("emergencyStop(): the release messages all go out at once, in order, without waiting for a reply", async () => {
+    const g920 = new FakeHidppWheel();
+    const clock = new FakeClock();
+    const ffb = new WebHidFfb(fakeHid([g920]).api, clock.deps);
+    ffb.setRotationDeg(540);
+    await ffb.connect();
+    ffb.setForce(1);
+    await step(clock);
+    g920.log.length = 0;
+    g920.silent = true;
+    ffb.emergencyStop();
+    assert.deepEqual(outs(g920), [HIDPP.level(0, 0), HIDPP.stop, HIDPP.destroy, HIDPP.aperture900, HIDPP.springFull]);
+    ffb.setForce(1);
+    await step(clock);
+    assert.equal(outs(g920).length, 5, "nothing after them");
+    assert.equal(g920.inputListeners, 0);
+  });
+  await check("an error reply part-way through setup: an error (not unsupported), and what was taken is given back", async () => {
+    const g920 = new FakeHidppWheel();
+    g920.errors.set((0x0b << 8) | 0x3a, 0x05); // SET_EFFECT_STATE: not allowed
+    const ffb = new WebHidFfb(fakeHid([g920]).api, new FakeClock().deps);
+    ffb.setRotationDeg(540);
+    assert.equal(await ffb.connect(), null);
+    assert.equal(ffb.status.state, "error");
+    assert.match(ffb.status.message ?? "", /HID\+\+ error 0x05/);
+    assert.deepEqual(outs(g920).slice(-4), [HIDPP.play, HIDPP.destroy, HIDPP.aperture900, HIDPP.springFull]);
+    assert.equal(g920.opened, false);
+  });
+  await check("a busy reply: the command is sent again, 3 times at most (hidpp_send_message_sync)", async () => {
+    const g920 = new FakeHidppWheel();
+    g920.busy.set((0x0b << 8) | 0x0a, 2);
+    const ffb = new WebHidFfb(fakeHid([g920]).api, new FakeClock().deps);
+    assert.equal(await ffb.connect(), "G920 Driving Force Racing Wheel");
+    assert.deepEqual(outs(g920).slice(0, 5), [HIDPP.lookup, HIDPP.info, HIDPP.info, HIDPP.info, HIDPP.reset]);
+    const stubborn = new FakeHidppWheel();
+    stubborn.busy.set((0x0b << 8) | 0x0a, 3);
+    const ffb2 = new WebHidFfb(fakeHid([stubborn]).api, new FakeClock().deps);
+    assert.equal(await ffb2.connect(), null);
+    assert.equal(ffb2.status.state, "error");
+    assert.deepEqual(outs(stubborn).slice(0, 4), [HIDPP.lookup, HIDPP.info, HIDPP.info, HIDPP.info]);
+  });
+  await check(`a wheel that does not answer: the setup fails after ${HIDPP_REPLY_TIMEOUT_MS} ms as an error, not unsupported (reconnect retries it)`, async () => {
+    const g920 = new FakeHidppWheel();
+    g920.silent = true;
+    const clock = new FakeClock();
+    const ffb = new WebHidFfb(fakeHid([g920]).api, clock.deps);
+    const connecting = ffb.connect();
+    await settle();
+    assert.equal(ffb.status.state, "connecting");
+    clock.advance(HIDPP_REPLY_TIMEOUT_MS);
+    assert.equal(await connecting, null);
+    assert.equal(ffb.status.state, "error");
+    assert.equal(isFatalHidStatus(ffb.status), true);
+    assert.match(ffb.status.message ?? "", /did not answer/);
+    assert.deepEqual(outs(g920), [HIDPP.lookup], "nothing to give back: no feature index yet");
+  });
+  await check("an interface of a listed HID++ wheel without the reports it needs is refused before it is opened", async () => {
+    const noLong = logitech(0xc262, "G920");
+    const ffb = new WebHidFfb(fakeHid([noLong]).api, new FakeClock().deps);
+    assert.equal(await ffb.connect(), null);
+    assert.equal(ffb.status.state, "unsupported");
+    assert.match(ffb.status.message ?? "", /no HID\+\+ long report/);
+    const noVeryLong = new FakeHidppWheel(0xc262, "G920", hidppCollections({ veryLong: false }));
+    const ffb2 = new WebHidFfb(fakeHid([noVeryLong]).api, new FakeClock().deps);
+    assert.equal(await ffb2.connect(), null);
+    assert.equal(ffb2.status.state, "unsupported");
+    assert.match(ffb2.status.message ?? "", /very long report/);
+    for (const d of [noLong, noVeryLong]) {
+      assert.equal(d.opened, false);
+      assert.equal(d.log.length, 0);
+    }
+  });
+  await check("a G920 with an input-only interface next to its HID++ one: the HID++ interface is driven", async () => {
+    const joystick = new FakeHidDevice([{ usagePage: 0x01, usage: 0x04, inputReports: [{ reportId: 1, items: [variable([X], 16, 1, 0, 65535)] }] }]);
+    joystick.vendorId = 0x046d;
+    joystick.productId = 0xc262;
+    joystick.productName = "G920 Driving Force Racing Wheel";
+    const hidpp = new FakeHidppWheel();
+    const ffb = new WebHidFfb(fakeHid([joystick, hidpp]).api, new FakeClock().deps);
+    assert.equal(await ffb.connect(), "G920 Driving Force Racing Wheel");
+    assert.equal(joystick.opened, false);
+    assert.equal(hidpp.opened, true);
+  });
+  await check("a granted G920 reopens on reconnect and on its connect event", async () => {
+    const g920 = new FakeHidppWheel();
+    const clock = new FakeClock();
+    const { api, listeners, connectListeners } = fakeHid([], [g920]);
+    const ffb = new WebHidFfb(api, clock.deps);
+    assert.equal(await ffb.reconnect(), "G920 Driving Force Racing Wheel");
+    for (const l of listeners) l({ device: g920 });
+    assert.equal(ffb.status.state, "idle");
+    g920.opened = false;
+    for (const l of [...connectListeners]) l({ device: g920 });
+    clock.advance(HOTPLUG_DELAY_MS);
+    await settle();
+    assert.equal(ffb.status.state, "ready");
   });
 
   console.log("WebHidFfb driver");
@@ -1350,7 +1695,7 @@ async function main() {
     assert.equal(await none.reconnect(), null);
     assert.equal(none.status.state, "idle");
   });
-  await check("reconnect(): a granted DualSense-style device (output reports, no PID) or a HID++ Logitech stays idle, not fatal", async () => {
+  await check("reconnect(): a granted DualSense-style device (output reports, no PID) or an unlisted Logitech stays idle, not fatal", async () => {
     const dualSense = new FakeHidDevice([
       {
         usagePage: 0x01,
@@ -1362,13 +1707,13 @@ async function main() {
     dualSense.vendorId = 0x054c;
     dualSense.productId = 0x0ce6;
     dualSense.productName = "DualSense Wireless Controller";
-    const g920 = logitech(0xc262, "G920");
-    const ffb = new WebHidFfb(fakeHid([], [dualSense, g920]).api, new FakeClock().deps);
+    const dfp = logitech(0xc298, "Driving Force Pro");
+    const ffb = new WebHidFfb(fakeHid([], [dualSense, dfp]).api, new FakeClock().deps);
     assert.equal(await ffb.reconnect(), null);
     assert.equal(ffb.status.state, "idle");
     assert.equal(ffb.status.message, PAIR_MESSAGE);
     assert.equal(isFatalHidStatus(ffb.status), false);
-    for (const d of [dualSense, g920]) {
+    for (const d of [dualSense, dfp]) {
       assert.equal(d.opened, false);
       assert.equal(d.log.length, 0);
     }
@@ -1506,7 +1851,7 @@ async function main() {
     await ffb.dispose();
     assert.equal(connectListeners.length, 0);
   });
-  await check("a connect event re-opens only what the driver can drive: a listed Logitech wheel yes, a DualSense or G920 never", async () => {
+  await check("a connect event re-opens only what the driver can drive: a listed Logitech wheel yes, a DualSense or the DFP never", async () => {
     const g29 = logitech(0xc24f, "G29");
     const clock = new FakeClock();
     const { api, listeners, connectListeners } = fakeHid([], [g29]);
@@ -1518,8 +1863,8 @@ async function main() {
       { usagePage: 0x01, usage: 0x05, outputReports: [{ reportId: 2, items: [variable([(0xff00 << 16) | 0x22], 8, 47, 0, 255)] }] },
     ]);
     dualSense.vendorId = 0x054c;
-    const g920 = logitech(0xc262, "G920");
-    for (const d of [dualSense, g920]) for (const l of [...connectListeners]) l({ device: d });
+    const dfp = logitech(0xc298, "Driving Force Pro");
+    for (const d of [dualSense, dfp]) for (const l of [...connectListeners]) l({ device: d });
     assert.equal(clock.timers.length, 0, "no re-open scheduled for a device the driver would not drive");
     g29.opened = false;
     for (const l of [...connectListeners]) l({ device: g29 });
@@ -1528,7 +1873,7 @@ async function main() {
     await settle();
     assert.equal(ffb.status.state, "ready");
     assert.equal(ffb.status.device, "G29");
-    for (const d of [dualSense, g920]) assert.equal(d.opened, false);
+    for (const d of [dualSense, dfp]) assert.equal(d.opened, false);
   });
   await check(`re-opening retries a failed setup up to ${SETUP_ATTEMPTS} times without a fatal status in between`, async () => {
     const dev = wheel();
@@ -1714,7 +2059,7 @@ async function main() {
   await check("describeHidDevice / diagnose(): a classic Logitech wheel, a refused Logitech device and a PID quirk are named", async () => {
     const g29 = logitech(0xc24f, "G29");
     assert.match(describeHidDevice(g29), /HID PID: none\. Logitech G29: driven with the hid-lg4ff commands on output report 0 \(7 bytes\)/);
-    assert.match(describeHidDevice(logitech(0xc262, "G920")), /HID PID: none\. Only the Logitech .* bridge/);
+    assert.match(describeHidDevice(logitech(0xc298, "Driving Force Pro")), /HID PID: none\. Only the Logitech .*G920 and G923 for Xbox.* bridge/);
     const pxn = wheel();
     pxn.vendorId = 0x11ff;
     pxn.productId = 0x3245;
@@ -1730,6 +2075,27 @@ async function main() {
     assert.match(report, /out\s+id\s+0\s+f8 81 1c 02 00 00 00/, "range 540 traced");
     await ffb.dispose();
     assert.match(await ffb.diagnose(), /teardown[\s\S]*out\s+id\s+0\s+14 00 00 00 00 00 00/, "teardown traffic (centring spring on)");
+  });
+  await check("describeHidDevice / diagnose(): a HID++ wheel, its session, and the replies traced with the messages", async () => {
+    const g920 = new FakeHidppWheel();
+    assert.match(
+      describeHidDevice(g920),
+      /HID PID: none\. Logitech G920: driven with HID\+\+ force feedback \(feature 0x8123\) on long report 0x11 \(20 bytes\), very long report 0x12 \(64 bytes\)/
+    );
+    assert.match(describeHidDevice(new FakeHidppWheel(0xc262, "G920", hidppCollections({ veryLong: false }))), /no very long report/);
+    const ffb = new WebHidFfb(fakeHid([g920], [g920]).api, new FakeClock().deps);
+    ffb.setRotationDeg(540);
+    await ffb.connect();
+    const report = await ffb.diagnose();
+    assert.match(report, /setup G920 Driving Force Racing Wheel \[046d:c262\] with the Logitech HID\+\+ driver \(hid-logitech-hidpp, G920\)/);
+    assert.match(
+      report,
+      /Session: logitech-hidpp driver \(hid-logitech-hidpp\), G920, feature 0x8123 at index 0x0b, constant force in slot 2 of 3, centring spring in slot 1, rotation 900° at setup \(changed from the wheel rotation setting\), global gain ffff/
+    );
+    assert.match(report, /out\s+id\s+17\s+ff 00 0a 81 23/, "the lookup traced");
+    assert.match(report, /in\s+id\s+17\s+ff 00 0a 0b/, "its reply traced");
+    await ffb.dispose();
+    assert.match(await ffb.diagnose(), /teardown[\s\S]*out\s+id\s+18\s+ff 0b 2a 01 86 00 00 00 00 7f ff 1f ff/, "the centring spring given back");
   });
   await check("isSupported(): false without navigator.hid (Node)", () => {
     assert.equal(WebHidFfb.isSupported(), false);

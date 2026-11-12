@@ -266,8 +266,16 @@ check('auto-setup leaves a bound wheel alone; belt wheels get their defaults', (
 });
 check('auto-setup: a Logitech WebHID cannot drive starts on the bridge, others on WebHID; CSL Elite is belt-driven, CSL DD direct', () => {
   const g923 = autoConfigureWheel([pad('G923 Racing Wheel for Xbox One and PC (Vendor: 046d Product: c26e)', '', [0])], DEFAULT_WHEEL_SETTINGS);
-  assert.equal(g923?.hidFfb, false, 'a HID++ wheel WebHID refuses: the bridge instructions show from the start');
+  assert.equal(g923?.hidFfb, true, 'a HID++ wheel the browser drives (G923 for Xbox) starts on WebHID');
   assert.equal(g923?.ffbEnabled, true);
+  assert.equal(g923?.type, 'belt_gear');
+  const g920 = autoConfigureWheel([pad('Logitech USB device (Vendor: 046d Product: c262)', '', [0])], DEFAULT_WHEEL_SETTINGS);
+  assert.equal(g920?.hidFfb, true, 'a G920 known only by its USB ids is a wheel, on WebHID');
+  assert.equal(g920?.type, 'belt_gear');
+  const g923ps = autoConfigureWheel([pad('G923 Racing Wheel for PlayStation and PC (Vendor: 046d Product: c267)', '', [0])], DEFAULT_WHEEL_SETTINGS);
+  assert.equal(g923ps?.hidFfb, false, 'the PlayStation G923 WebHID refuses: the bridge instructions show from the start');
+  const gpro = autoConfigureWheel([pad('PRO Racing Wheel (Vendor: 046d Product: c272)', '', [0])], DEFAULT_WHEEL_SETTINGS);
+  assert.equal(gpro?.hidFfb, false, 'the G PRO WebHID refuses');
   const g29 = autoConfigureWheel([pad('Logitech G29 Driving Force Racing Wheel (Vendor: 046d Product: c24f)', '', [0])], DEFAULT_WHEEL_SETTINGS);
   assert.equal(g29?.hidFfb, true, 'a classic Logitech starts on WebHID, with no bridge to install');
   const pxn = autoConfigureWheel([pad('PXN-V99 Wheel (Vendor: 11ff Product: 3245)', '', [0])], DEFAULT_WHEEL_SETTINGS);

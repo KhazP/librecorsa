@@ -15,7 +15,7 @@ import {
   type PadAction,
   type PadButtonBindings,
 } from "./bindings";
-import { logitechClassicModel } from "./wheel-support";
+import { logitechClassicModel, logitechHidppModel } from "./wheel-support";
 
 export type InputDevice = "keyboard" | "controller" | "wheel";
 export type WheelType = "direct_drive" | "belt_gear";
@@ -280,7 +280,13 @@ function isLogitechClassicPad(id: string): boolean {
   return ids !== null && logitechClassicModel(ids.vendorId, ids.productId) !== null;
 }
 
-const isWheelId = (id: string) => WHEEL_ID.test(id) || isLogitechClassicPad(id);
+/** One of the HID++ Logitech wheels in LOGITECH_HIDPP_WHEELS (G920, G923 for Xbox), by its USB ids */
+function isLogitechHidppPad(id: string): boolean {
+  const ids = padUsbIds(id);
+  return ids !== null && logitechHidppModel(ids.vendorId, ids.productId) !== null;
+}
+
+const isWheelId = (id: string) => WHEEL_ID.test(id) || isLogitechClassicPad(id) || isLogitechHidppPad(id);
 
 /** Sim wheels rarely report the standard mapping; names (or a listed Logitech's USB ids) give the rest away */
 export function isLikelyWheel(pad: Pick<PadLike, "id" | "mapping">): boolean {
@@ -468,14 +474,15 @@ export function autoConfigureWheel(pads: readonly PadLike[], current: WheelSetti
   if (current.steer) return null;
   const wheelPad = pads.find((p) => isWheelId(p.id) && !NOT_A_WHEEL_BASE.test(p.id) && !isVirtualPad(p.id) && p.axes.length > 0);
   if (!wheelPad) return null;
-  const type: WheelType = BELT_GEAR_ID.test(wheelPad.id) || isLogitechClassicPad(wheelPad.id) ? "belt_gear" : "direct_drive";
+  const type: WheelType =
+    BELT_GEAR_ID.test(wheelPad.id) || isLogitechClassicPad(wheelPad.id) || isLogitechHidppPad(wheelPad.id) ? "belt_gear" : "direct_drive";
   const rest = wheelPad.axes[0] ?? 0;
   return {
     type,
     ...WHEEL_TYPE_DEFAULTS[type],
     ffbEnabled: true,
-    // WebHID unless it is a Logitech wheel WebHID cannot drive (G920, G923, G PRO): those start on the local bridge
-    hidFfb: !LOGITECH_ID.test(wheelPad.id) || isLogitechClassicPad(wheelPad.id),
+    // WebHID unless it is a Logitech wheel WebHID cannot drive (G923 for PlayStation, G PRO): those start on the local bridge
+    hidFfb: !LOGITECH_ID.test(wheelPad.id) || isLogitechClassicPad(wheelPad.id) || isLogitechHidppPad(wheelPad.id),
     steer: { padId: wheelPad.id, axis: 0, center: Math.abs(rest) < 0.25 ? rest : 0, invert: false },
   };
 }

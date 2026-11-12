@@ -28,7 +28,7 @@ import {
 import { type FfbStatus, webHidFfb, wheelFfb } from "@/lib/input/wheel-ffb";
 import { isFatalHidStatus, type WebHidFfbStatus } from "@/lib/input/webhid-ffb";
 import {
-  LOGITECH_CLASSIC_NAMES,
+  LOGITECH_WEBHID_NAMES,
   SUPPORT_LABEL,
   type SupportLevel,
   WHEEL_SUPPORT,
@@ -787,11 +787,11 @@ export const WheelStep: React.FC<SetupStepProps> = ({ settings, onChangeSettings
             <>
               <div className="rounded-[16px] border border-[#262B3D] bg-[#08090D] p-3">
                 <Toggle
-                  label="Browser force feedback over WebHID (experimental · USB HID PID bases, classic Logitech)"
+                  label="Browser force feedback over WebHID (experimental · USB HID PID bases, listed Logitech wheels)"
                   detail={
                     hidBrowserUnsupported
                       ? (hid.message ?? "WebHID is not available in this browser")
-                      : `Drives USB HID PID wheels and the Logitech ${LOGITECH_CLASSIC_NAMES} directly from Chrome/Edge with no external helper. Other Logitech wheels need the bridge. Falls back to the local bridge when off.`
+                      : `Drives USB HID PID wheels and the Logitech ${LOGITECH_WEBHID_NAMES} directly from Chrome/Edge with no external helper (the G920 and G923 for Xbox once Logitech G HUB has put them in PC mode). Other Logitech wheels need the bridge. Falls back to the local bridge when off.`
                   }
                   checked={w.hidFfb && !hidBrowserUnsupported}
                   disabled={hidBrowserUnsupported}
@@ -961,8 +961,9 @@ export const WheelStep: React.FC<SetupStepProps> = ({ settings, onChangeSettings
           ) : (
             <Hint className="text-[13px]!">
               Switch Force Feedback on and click <strong>Connect wheel</strong> to drive your wheel directly over WebHID
-              in Chrome/Edge, including the Logitech {LOGITECH_CLASSIC_NAMES}. A wheel WebHID cannot drive (Logitech
-              G920, G923, G PRO) uses the local bridge on Windows (
+              in Chrome/Edge, including the Logitech {LOGITECH_WEBHID_NAMES} (the G920 and G923 for Xbox once Logitech
+              G HUB has put them in PC mode). A wheel WebHID cannot drive (Logitech
+              G923 for PlayStation, G PRO) uses the local bridge on Windows (
               <code className="font-f1-mono text-[12px] font-bold text-[#F5F7FA]">npm run ffb</code>).
             </Hint>
           )}
