@@ -18,12 +18,12 @@
  * Every strike is a warning, and every `STRIKES_PER_PENALTY`th strike is a time penalty: +3 s the first time, +5 s
  * after that.
  *
- * A course cut (the car jumps round the lap off its road, course-limits.ts) is no excursion to judge: practice deletes
- * the lap, and a race does not count it (the race clock takes it off), so the banner says so and any excursion being
- * judged ends with it.
+ * A course cut (the car jumps round the lap off its road, course-limits.ts) is no excursion to judge: the lap is
+ * deleted (and in a race the race clock does not count a lap that skipped part of the course), so the banner says so
+ * and any excursion being judged ends with it.
  */
 import type { TrackLimitsReason, TrackLimitsStatus } from "@/types/f1";
-import { isCourseHop } from "./course-limits";
+import { CourseCutWatch } from "./course-limits";
 
 /** Off for less than this is a touch, never judged (s) */
 const MIN_EXCURSION_S = 0.12;
@@ -135,8 +135,9 @@ export class TrackLimitsMonitor {
   /** Strict limits: the lap count and lap clock last frame (null until the first frame of a run) */
   private seenLapCount: number | null = null;
   private seenLapTimeMs: number | null = null;
-  /** Lap distance last frame (m), for course cuts; null until the first frame of a run */
+  /** Lap distance last frame (m), and its jumps round the lap, for course cuts; null until the first frame of a run */
   private seenDistM: number | null = null;
+  private readonly cutWatch = new CourseCutWatch();
   /** A course cut and the car not back on the track since: the rest of that excursion is the cut, not judged */
   private afterCut = false;
   /** The last frame was judged (`TrackLimitsFrame.active`); a verdict waiting while not is kept off the HUD */
@@ -166,6 +167,7 @@ export class TrackLimitsMonitor {
     this.seenLapCount = null;
     this.seenLapTimeMs = null;
     this.seenDistM = null;
+    this.cutWatch.reset();
     this.afterCut = false;
     this.active = true;
     this.message = null;
@@ -203,7 +205,7 @@ export class TrackLimitsMonitor {
       this.exc = null;
       this.message = {
         kind: "lap_invalid",
-        text: this.session === "race" ? "Course cut · lap not counted" : "Course cut · lap deleted",
+        text: "Course cut · lap deleted",
         detail: "Left the lap's road",
         atMs: f.nowMs,
       };
@@ -248,13 +250,16 @@ export class TrackLimitsMonitor {
     return this.whileGivingBack(e, f);
   }
 
-  /** Did the lap distance jump further than the car can have driven since last frame (judged only while driving)? */
+  /** Has a jump of the lap distance further than the car can have driven stood (judged only while driving)? */
   private courseCut(f: TrackLimitsFrame): boolean {
     const prev = this.seenDistM;
     this.seenDistM = f.distM;
     const L = f.lapLengthM;
-    if (prev === null || L === undefined || !f.active) return false;
-    return isCourseHop(((((f.distM - prev + L / 2) % L) + L) % L) - L / 2);
+    if (prev === null || L === undefined || !f.active) {
+      this.cutWatch.reset();
+      return false;
+    }
+    return this.cutWatch.update(((((f.distM - prev + L / 2) % L) + L) % L) - L / 2, f.dtS);
   }
 
   /** The state for the HUD (updated in place) */

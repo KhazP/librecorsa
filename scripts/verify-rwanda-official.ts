@@ -508,7 +508,7 @@ console.log("The other lap's road");
     const cut = drive(2000, { fromS: 1000, k: 216, toK: 292 });
     check("taking the short lap's link: off the track on it, and the lap jumps the loop",
       cut.offFrames > 60 && cut.hops === 1 && cut.hopAt !== null && cut.hopAt > 1800, `${cut.offFrames} frames off, ${cut.hops} jump(s), to ${cut.hopAt?.toFixed(0)} m`);
-    check('the lap is cut there and then, and its first sector is no best', !cut.invalidBeforeHop && cut.invalidAfter && cut.sector1 === null, `sector 1 ${cut.sector1}`);
+    check('the lap is cut, and its first sector is no best', !cut.invalidBeforeHop && cut.invalidAfter && cut.sector1 === null, `sector 1 ${cut.sector1}`);
     check('the race clock does not count it: a lap back from where the car is', cut.clockDropped);
   }
   const own = drive(SHORT ? 1500 : 2000);

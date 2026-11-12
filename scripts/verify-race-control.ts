@@ -190,7 +190,7 @@ console.log("Track limits · a course cut");
   const said = race.snapshot(clock * 1000).message?.text;
   check(
     "in a race: the cut is said as such, and the rest of that excursion is no warning on top",
-    ev.length === 1 && ev[0].kind === "lap_invalid" && said === "Course cut · lap not counted" && race.strikes === 0 && !race.judging,
+    ev.length === 1 && ev[0].kind === "lap_invalid" && said === "Course cut · lap deleted" && race.strikes === 0 && !race.judging,
     `${JSON.stringify(ev)} ${said}`
   );
   const practice = new TrackLimitsMonitor();
@@ -199,7 +199,16 @@ console.log("Track limits · a course cut");
   check("in practice: the lap is deleted", pev.some((e) => e.kind === "lap_invalid") && practice.snapshot(clock * 1000).message?.text === "Course cut · lap deleted");
   const plain = new TrackLimitsMonitor();
   plain.reset("race");
-  check("without the lap length nothing is read into a jump", drive(plain, 1, { distM: 1100 }).length === 0 && drive(plain, 1, { distM: 1885 }).length === 0);
+  check("without the lap length nothing is read into a jump", drive(plain, 1, { distM: 1100 }).length === 0 && drive(plain, 2, { distM: 1885 }).length === 0);
+  // Far off the road between two parts of the lap that lie close: the lap distance jumps there and back
+  const between = new TrackLimitsMonitor();
+  between.reset("race");
+  const there = [
+    ...drive(between, 1, { distM: 30, lapLengthM: 932 }),
+    ...drive(between, DT, { distM: 210, lapLengthM: 932 }),
+    ...drive(between, 3, { distM: 32, lapLengthM: 932 }),
+  ];
+  check("a jump there and back is no cut", there.length === 0 && between.snapshot(clock * 1000).message === null, JSON.stringify(there));
 }
 
 console.log("Track limits · strict outside a race");

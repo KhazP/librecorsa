@@ -84,7 +84,7 @@ import { KERB_PROFILE_L, kerbProfileM, surfaceRippleM } from '../track-surfaces'
 import { sampleGrid } from '../ai/ai-track';
 import type { AiDrivePlan } from '../ai/drive-plan';
 import { lockShareOf } from '../tyre-slide-fx';
-import { beyondLayoutEdge, inLapStretch, isCourseHop } from '../course-limits';
+import { beyondLayoutEdge, CourseCutWatch, inLapStretch, isCourseHop } from '../course-limits';
 
 const G = 9.81;
 const DEG2RAD = Math.PI / 180;
@@ -843,6 +843,8 @@ export class F12026CarSim implements SimulatorCar {
   public trackLimitsMode: 'strict' | 'judged' = 'strict';
   public trackLimitsHold = false;
   private lineCrossingStartsLap = true;
+  /** Jumps of the lap position round the course: one that stands cuts the lap (course-limits.ts) */
+  private readonly cutWatch = new CourseCutWatch();
   private drsPressPending = false;
   private boostRemainingS = 0;
   private boostCooldownS = 0;
@@ -1617,7 +1619,7 @@ export class F12026CarSim implements SimulatorCar {
     else this.stuckS = 0;
     this.wheelRotationRad = (this.wheelRotationRad + 0.5 * (v.wheels[2].omega + v.wheels[3].omega) * steppedS) % (Math.PI * 2);
     this.syncPose();
-    this.updateTiming();
+    this.updateTiming(steppedS);
     this.updateTelemetry(inputs);
     return this.telemetry;
   }
@@ -2160,6 +2162,7 @@ export class F12026CarSim implements SimulatorCar {
     c.wallImpact = null;
     this.syncPose();
     this.prevS = this.s;
+    this.cutWatch.reset();
     this.lastSector = this.track.getSampleAtDistance(this.s).sector;
     this.updateTelemetry(null);
   }
@@ -2241,14 +2244,15 @@ export class F12026CarSim implements SimulatorCar {
   }
 
   /** Sector / lap timing at the sector boundaries and the start / finish line (as the VF26) */
-  private updateTiming(): void {
+  private updateTiming(dtS: number): void {
     const L = this.track.totalLengthM;
     const sample = this.track.getSampleAtDistance(this.s);
     // The lap position jumped further than a car drives in a frame: the car crossed to another part of the lap off its
-    // road (another layout's, course-limits.ts). The lap under way is cut, and a sector boundary it jumped over is no
-    // sector driven
-    const hop = isCourseHop(wrapHalf(this.s - this.prevS, L));
-    if (hop) this.invalidateLap();
+    // road (another layout's, course-limits.ts). A sector boundary it jumped over is no sector driven, and a jump ahead
+    // that stands cuts the lap under way
+    const ds = wrapHalf(this.s - this.prevS, L);
+    const hop = isCourseHop(ds);
+    if (this.cutWatch.update(ds, dtS)) this.invalidateLap();
     if (sample.sector !== this.lastSector) {
       // Sectors 1 and 2 end at their boundaries; sector 3 ends at the line (onLapCompleted). The nearest sample turns
       // to sector 1 up to half a sample before the line, and ending sector 3 there too would cut it short by that much
@@ -2257,11 +2261,14 @@ export class F12026CarSim implements SimulatorCar {
       this.lastSector = sample.sector;
     }
     if (this.prevS > L * 0.85 && this.s < L * 0.15) {
+      // A jump ahead still pending at the line is the lap's
+      const cut = this.cutWatch.settle();
       if (this.lineCrossingStartsLap) {
         this.lineCrossingStartsLap = false;
         this.lapStartMs = this.simTimeMs;
         this.sectorStartMs = this.simTimeMs;
       } else {
+        if (cut) this.invalidateLap();
         this.onLapCompleted();
       }
     }
