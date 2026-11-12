@@ -87,9 +87,9 @@ export const WHEEL_SUPPORT: readonly WheelSupportRow[] = [
   },
   {
     wheel: `Logitech ${LOGITECH_CLASSIC_NAMES}`,
-    webHid: "unknown",
+    webHid: "expected",
     bridge: "expected",
-    note: "Untested; starts on the bridge. WebHID is opt-in and sends the classic Logitech commands as Linux hid-lg4ff does",
+    note: "Untested; starts on WebHID with the classic Logitech commands as Linux hid-lg4ff sends them, rev LEDs on the G27 and G29 included",
   },
   {
     wheel: "Logitech G920, G923, G PRO, Driving Force Pro",
