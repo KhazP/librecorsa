@@ -8,7 +8,7 @@ import { CONTACT_EMAIL, REPO_URL, SITE_NAME } from "@/lib/site";
 // storage, cloudflare/api (boards, races, rooms, usage) and the connection servers in multiplayer-sync.ts. Change this
 // page in the same commit as anything that changes what is stored or sent.
 const DESCRIPTION = "What LibreCorsa keeps in your browser, what it sends online and when, and how to have it removed.";
-const UPDATED = "11 November 2026";
+const UPDATED = "12 November 2026";
 
 export const metadata: Metadata = {
   title: "Privacy",
@@ -90,8 +90,11 @@ export default function PrivacyPage() {
             </li>
             <li>
               <span className={B}>Usage totals.</span> When a stretch of driving ends, the game reports the circuit, the
-              car, the mode and the minutes driven. The site adds them to that day&apos;s totals, by country. The report
-              carries no name, key or id, and it can&apos;t be tied to you or to your other sessions.
+              car, the mode and the minutes driven. The site adds them to that day&apos;s totals, by country. It also
+              says what you drove with (keyboard, controller, wheel or touch screen), on what (desktop, tablet or phone),
+              whether the track was wet, which assists were on and which version of the game you had. Each of these is
+              counted on its own, never combined with another or with the circuit or country. The report carries no
+              name, key or id, and it can&apos;t be tied to you or to your other sessions.
             </li>
           </ul>
         </section>

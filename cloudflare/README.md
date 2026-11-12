@@ -8,7 +8,7 @@ game's online side (`cloudflare/api`). Every part of it is optional and has its 
 | Room server (`api/room.ts`) | Room codes paired by this site, "room not found" at once, relay servers for networks that block a direct link | A Durable Object per room, asleep between messages; Cloudflare TURN for the relay | `ONLINE_ROOMS` |
 | Lap boards (`api/board.ts`) | The online leaderboard and the weekly challenge's board | D1 (`librecorsa-board`) and R2 (`librecorsa-ghosts`) | `ONLINE_BOARD` |
 | Race server (`api/race.ts`) | Scheduled races | A Durable Object per race, which passes every car's state on while it runs | `ONLINE_RACES` |
-| Usage counter (`api/usage.ts`) | Nothing they see: minutes driven per day, circuit, car, mode and country, for the owner | D1 (`librecorsa-board`, table `usage_daily`) | `ONLINE_USAGE` |
+| Usage counter (`api/usage.ts`) | Nothing they see: minutes driven per day, circuit, car, mode and country, and on their own input, screen, weather, assists and build, for the owner | D1 (`librecorsa-board`, tables `usage_daily` and `usage_extra`) | `ONLINE_USAGE` |
 
 The game asks `GET /api/config` at run time, so a switch set to `"off"` (then `npx wrangler deploy`, or a push to
 main) takes effect without a new build of the game, which falls back by itself: room codes go through the public
@@ -35,6 +35,8 @@ npx wrangler d1 migrations apply librecorsa-board --remote
 npx wrangler secret put TURN_KEY_ID                # optional: a TURN key from the Cloudflare dashboard (Realtime > TURN)
 npx wrangler secret put TURN_KEY_API_TOKEN
 npx wrangler secret put ADMIN_KEY                  # optional: the key of the private /admin page (a long random string)
+npx wrangler secret put CF_ANALYTICS_TOKEN         # optional: Cloudflare's own numbers on /admin (a token with Account Analytics: Read,
+                                                   # and Zone Analytics: Read for visitors); set ANALYTICS_* in wrangler.jsonc
 ```
 
 Build the game with `NEXT_PUBLIC_ONLINE_API=/api` (the deploy workflow does) and deploy. Without that variable the
@@ -71,11 +73,24 @@ boards on an in-memory database (`scripts/verify-room-server.ts`, `verify-race-s
   model, the mode (`practice`, `time_trial`, `ai_race`, `open_race`, `room_race`) and the minutes. The Worker checks
   each field, caps the minutes at 240, limits one address to 10 reports a minute (`USAGE_LIMIT`), and adds one session
   and the minutes to that day's row in `usage_daily` (migration `0003_usage.sql`) with the country Cloudflare puts on
-  the request. No address, player id or cookie is stored.
+  the request. No address, player id or cookie is stored. Newer builds add what the stretch was driven with: `input`
+  (keyboard, controller, wheel, touch), `device` (desktop, tablet, phone), `weather` (dry, wet), `assists` and `build`
+  (the commit: `NEXT_PUBLIC_BUILD` in the deploy, put in a `lc-build` meta tag so the game's script stays the same). Each is added up on its own in `usage_extra` (migration
+  `0004_admin_numbers.sql`), one row per day, field and value, never crossed with another field, the circuit or the
+  country. An unknown value is left out and the rest of the report still counts.
 - The owner's numbers: `GET /api/admin/stats?days=30` (1 to 90 days) with the header `X-Admin-Key`, read by the page
   `/admin` (not linked, not indexed; it asks for the key and keeps it for the tab). Set the key once with
   `npx wrangler secret put ADMIN_KEY`, and locally in `.dev.vars`. Without the secret, or with any other key, the route
-  answers 404 like any unknown path.
+  answers 404 like any unknown path. The page reads, for the range: hours and sessions against the days before, per day
+  and per weekday, circuits split by mode, cars, countries, the extras above, driver names (new and returning), board
+  times per day and what they were set with, the busiest boards, the weekly challenges, the open races (grid size,
+  finishes, wins and podiums by name) and who is waiting for the next one. A part whose table is not there yet reads
+  as null and the rest still answers.
+- Cloudflare's numbers: `GET /api/admin/cloudflare` (same key), from Cloudflare's GraphQL Analytics API with the
+  secret `CF_ANALYTICS_TOKEN`, for the last 7 days: the Worker's requests, errors and CPU time, the database's rows
+  and size, each R2 bucket, the Durable Objects' requests, and with `ANALYTICS_ZONE_ID` set the site's visitors and
+  page views per day (`api/analytics.ts`). One request per dataset, so a field Cloudflare renames fails only its own
+  part, listed on the page with Cloudflare's message. Without the token the route is a 404 like any unknown path.
 - Race results (`api/results.ts`, `migrations/0002_race_results.sql`): when an open race's result turns final, the
   race server stores it on the boards' database, one row per race and one per car (name, place, time, laps, best lap,
   grid place). A car's row counts for a driver (the week's standings, `GET /api/races/results`, and the record,
