@@ -17,7 +17,7 @@
  */
 import path from "node:path";
 import { Document, NodeIO } from "@gltf-transform/core";
-import { ALL_EXTENSIONS } from "@gltf-transform/extensions";
+import { ALL_EXTENSIONS, KHRMaterialsSpecular } from "@gltf-transform/extensions";
 import { copyToDocument, prune } from "@gltf-transform/functions";
 import { MeshoptDecoder, MeshoptSimplifier } from "meshoptimizer";
 
@@ -748,7 +748,7 @@ async function main() {
     [ZONE.secondary]: material(doc, ZONE.secondary, [0.006, 0.009, 0.025], { roughness: 0.5 }),
     [ZONE.accent]: material(doc, ZONE.accent, [0.95, 0.65, 0.0], { roughness: 0.5 }),
     [ZONE.carbon]: material(doc, ZONE.carbon, [0.012, 0.012, 0.013], { roughness: 0.35 }),
-    [ZONE.interior]: material(doc, ZONE.interior, [0.018, 0.018, 0.02], { roughness: 0.8 }),
+    [ZONE.interior]: material(doc, ZONE.interior, [0.006, 0.006, 0.007], { roughness: 1 }),
     [ZONE.light]: material(doc, ZONE.light, [0.3, 0.02, 0.02], { roughness: 0.3 }),
     exhaust: material(doc, "EXT_exhaust", [0.35, 0.33, 0.3], { metallic: 0.8, roughness: 0.35 }),
     mirrorL: material(doc, "mirror_1", [0.6, 0.6, 0.62], { metallic: 1, roughness: 0.05 }),
@@ -756,6 +756,10 @@ async function main() {
     rim: material(doc, "EXT_RIM", [0.05, 0.05, 0.055], { metallic: 0.6, roughness: 0.4 }),
     tyre: material(doc, "EXT_TYRE", [0.035, 0.035, 0.035], { roughness: 0.85 }),
   };
+
+  // The cockpit's inside: a weak, fully rough reflection, so the sun at grazing angles leaves it dark
+  const specular = doc.createExtension(KHRMaterialsSpecular);
+  mats[ZONE.interior].setExtension("KHR_materials_specular", specular.createSpecular().setSpecularFactor(0.35));
 
   const vf = doc.createNode("VF26");
   const scene = doc.createScene("Scene").addChild(vf);
