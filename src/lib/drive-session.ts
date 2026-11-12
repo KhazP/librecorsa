@@ -45,7 +45,7 @@ import type { WakeEmitterCar } from "@/lib/sim/aero-wake";
 import { GamepadHaptics } from "@/lib/sim/gamepad-haptics";
 import { getMultiplayerManager, type InterpolatedPeerState, type P2PConnectionStatus } from "@/lib/sim/multiplayer-sync";
 import { flagMultiplayerRace } from "@/lib/sim/mp-flags"; // polish:D
-import { MultiplayerRace, type MultiplayerRaceFrame } from "@/lib/sim/race-session";
+import { MultiplayerRace, placePeersWhereDrawn, type MultiplayerRaceFrame } from "@/lib/sim/race-session";
 import { CoolDown } from "@/lib/sim/cool-down";
 import { PodiumDirector } from "@/lib/render/podium-shot";
 import { GhostPlayer, LapRecorder } from "@/lib/sim/lap-recorder";
@@ -1914,6 +1914,8 @@ export class DriveSession {
 
       // A peer on another circuit has coordinates that mean nothing here
       const samePeers = interpolatedPeers.filter((p) => !p.trackId || p.trackId === trackId);
+      // On the lap where they are drawn, not where their newest packet put them (the tower, the relative, the gaps)
+      placePeersWhereDrawn(samePeers, track.projectWorldToTrack, track.totalLengthM);
       peerWakeEmitters(track, samePeers, remoteWake);
       if (mpRace && mpFrame) {
         mpRace.ingestPeers(samePeers, mpFrame.phase === "racing" ? mpFrame.raceTimeS : 0);
