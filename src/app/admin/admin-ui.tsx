@@ -165,7 +165,9 @@ export interface Bar {
  * readout names the highest. A table of the same numbers sits under it.
  */
 export function BarChart({ bars, label, unit, height = 160 }: { bars: Bar[]; label: string; unit: string; height?: number }) {
-  const [hover, setHover] = useState<number | null>(null);
+  const [hovered, setHover] = useState<number | null>(null);
+  // A bar hovered before the range got shorter is no longer there
+  const hover = hovered !== null && hovered < bars.length ? hovered : null;
   const max = Math.max(0, ...bars.map((b) => b.value));
   const peak = bars.reduce((best, b, i) => (b.value > bars[best].value ? i : best), 0);
   const W = 1000;
@@ -186,7 +188,10 @@ export function BarChart({ bars, label, unit, height = 160 }: { bars: Bar[]; lab
           </>
         )}
       </p>
-      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="w-full touch-pan-y" style={{ height: H }} role="img" aria-label={label} onPointerLeave={() => setHover(null)}>
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="w-full touch-pan-y" style={{ height: H }} role="img" aria-label={label} onPointerLeave={(e) => {
+          // A finger's tap ends with a pointerleave, so a tapped bar keeps its readout until another is tapped
+          if (e.pointerType !== "touch") setHover(null);
+        }}>
         <line x1={0} x2={W} y1={H - 0.5} y2={H - 0.5} stroke="#262B3D" strokeWidth={1} vectorEffect="non-scaling-stroke" />
         {bars.map((b, i) => {
           const h = max > 0 ? (b.value / max) * (H - 6) : 0;
