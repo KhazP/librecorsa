@@ -1508,7 +1508,67 @@ export class HidTrace {
   entries(): readonly string[] {
     return this.lines;
   }
+
+  /** Writes outside setup and teardown (the force, condition and LED streams), counted, the last few kept raw */
+  private readonly stream: { t: number; id: number; head: number[] }[] = [];
+  streamCount = 0;
+  streamFailures = 0;
+  lastStreamError: string | null = null;
+
+  /** The last head kept per report id: a write that repeats it (a keepalive) is counted, not kept */
+  private readonly lastHead = new Map<number, string>();
+
+  streamWrite(reportId: number, bytes: ArrayLike<number>): void {
+    this.streamCount++;
+    const head: number[] = [];
+    for (let i = 0; i < Math.min(8, bytes.length); i++) head.push(bytes[i] as number);
+    const key = head.join(",");
+    if (this.lastHead.get(reportId) === key) return;
+    this.lastHead.set(reportId, key);
+    if (this.stream.length >= HID_STREAM_TRACE_SIZE) this.stream.shift();
+    this.stream.push({ t: this.now() - this.t0, id: reportId, head });
+  }
+
+  streamFailed(message: string): void {
+    this.streamFailures++;
+    this.lastStreamError = message;
+  }
+
+  streamEntries(): string[] {
+    return this.stream.map((s) => `${s.t.toFixed(0).padStart(7)} ms  out id ${String(s.id).padStart(3)}  ${hexBytes(s.head)}`);
+  }
 }
+
+/** PID State input report flags: what the wheel says about its own motor */
+const PID_STATE_FLAGS: readonly (readonly [number, string])[] = [
+  [pidUsage(0x94), "effect playing"],
+  [pidUsage(0x9f), "device paused"],
+  [pidUsage(0xa0), "actuators enabled"],
+  [pidUsage(0xa4), "safety switch"],
+  [pidUsage(0xa6), "actuator power"],
+];
+/** PID State changes kept for {@link WebHidFfb.diagnose} */
+const PID_STATE_CHANGES = 12;
+
+/** The PID State input report (Effect Playing, Actuators Enabled, …); null when the descriptor has none */
+export function pidStateLayout(collections: readonly HidCollectionLike[]): PidReportLayout | null {
+  for (const [id, raw] of gatherReports(collections, "inputReports")) {
+    const l = parseReport(id, raw.items);
+    if (PID_STATE_FLAGS.some(([u]) => hasField(l, u))) return l;
+  }
+  return null;
+}
+
+/** "block 1: effect playing yes, actuators enabled no, …" from one PID State report's data (no report id byte) */
+export function describePidState(layout: PidReportLayout, bytes: Uint8Array): string {
+  const v = unpackReport(layout, bytes);
+  const flags = PID_STATE_FLAGS.filter(([u]) => hasField(layout, u)).map(([u, name]) => `${name} ${v[u] ? "yes" : "no"}`);
+  const block = v[PID.EFFECT_BLOCK_INDEX];
+  return `${block !== undefined ? `block ${block}: ` : ""}${flags.join(", ")}`;
+}
+
+/** Stream writes {@link WebHidFfb.diagnose} shows (their first 8 bytes) */
+export const HID_STREAM_TRACE_SIZE = 24;
 
 /**
  * `device` with every report it sends, every feature report read back and every input report its listeners get (the
@@ -1534,6 +1594,13 @@ export function tracedDevice(device: HidDeviceLike, trace: HidTrace): HidDeviceL
     open: () => device.open(),
     close: () => device.close(),
     sendReport: (id, data) => {
+      if (!trace.recording) {
+        trace.streamWrite(id, data);
+        return device.sendReport(id, data).catch((e: unknown) => {
+          trace.streamFailed(`id ${id}: ${errorMessage(e)}`);
+          throw e;
+        });
+      }
       trace.report("out", id, data);
       return device.sendReport(id, data).catch(failed("out", id));
     },
@@ -1890,6 +1957,17 @@ export class WebHidFfb {
   private readonly trace: HidTrace;
   /** The device last set up (or tried), kept after a failure so diagnose() can describe it */
   private lastDevice: HidDeviceLike | null = null;
+  /** The PID State input reports of the running PID wheel (effect playing, actuators enabled, …), for diagnose() */
+  private pidState: {
+    device: HidDeviceLike;
+    layout: PidReportLayout;
+    listener: (e: HidInputReportEventLike) => void;
+    count: number;
+    last: string | null;
+    lastAt: number;
+    /** The first states seen and each change, with times (at most PID_STATE_CHANGES) */
+    changes: string[];
+  } | null = null;
 
   /** `hid` and `deps` exist for tests; the app uses the defaults */
   constructor(
@@ -2148,8 +2226,27 @@ export class WebHidFfb {
       out.push("", `--- ${deviceName(d)}${tags.length > 0 ? ` (${tags.join(", ")})` : ""}`, describeHidDevice(d));
     }
     const lines = this.trace.entries();
-    out.push("", `Setup and teardown traffic (last ${HID_TRACE_SIZE} lines; the force stream is not recorded):`);
+    out.push("", `Setup and teardown traffic (last ${HID_TRACE_SIZE} lines):`);
     out.push(...(lines.length > 0 ? lines.map((l) => `  ${l}`) : ["  (none yet)"]));
+    const t = this.trace;
+    out.push(
+      "",
+      `Stream writes (force, condition effects, LEDs): ${t.streamCount} sent, ${t.streamFailures} failed` +
+        (t.lastStreamError ? ` (last: ${t.lastStreamError})` : "") +
+        `; the last ${HID_STREAM_TRACE_SIZE} changes (repeats are counted, not listed), first 8 bytes:`
+    );
+    const stream = t.streamEntries();
+    out.push(...(stream.length > 0 ? stream.map((l) => `  ${l}`) : ["  (none yet)"]));
+    const st = this.pidState;
+    out.push("");
+    if (!st) out.push("PID State input report: none watched (no PID session, or the descriptor has none)");
+    else {
+      out.push(
+        `PID State input report ${st.layout.reportId}: ${st.count} received` +
+          (st.last ? `; the last ${(this.deps.now() - st.lastAt).toFixed(0)} ms ago: ${st.last}` : "")
+      );
+      out.push(...st.changes.map((c) => `  ${c}`));
+    }
     return out.join("\n");
   }
 
@@ -2277,6 +2374,7 @@ export class WebHidFfb {
     }
     this.trace.note(`setup ok: ${describeSession(result.session)}`);
     this.session = result.session;
+    if (result.session.kind === "pid") this.watchPidState(device);
     const l = result.session.kind === "pid" ? result.session.layout : null;
     this.offeredConditions = l && l.setCondition && l.createNewEffect && l.blockLoad ? l.conditions : [];
     this.device = device;
@@ -2286,6 +2384,39 @@ export class WebHidFfb {
     }
     this.setStatus("ready", name, null);
     return { ok: true, name };
+  }
+
+  /** Listens to the wheel's PID State input report, where it has one (kept for diagnose(), changes nothing) */
+  private watchPidState(device: HidDeviceLike): void {
+    this.unwatchPidState();
+    const layout = pidStateLayout(device.collections);
+    if (!layout || !device.addEventListener) return;
+    const state = {
+      device,
+      layout,
+      count: 0,
+      last: null as string | null,
+      lastAt: 0,
+      changes: [] as string[],
+      listener: (e: HidInputReportEventLike) => {
+        if (e.reportId !== layout.reportId) return;
+        const text = describePidState(layout, new Uint8Array(e.data.buffer, e.data.byteOffset, e.data.byteLength));
+        state.count++;
+        state.lastAt = this.deps.now();
+        if (text !== state.last && state.changes.length < PID_STATE_CHANGES) {
+          state.changes.push(`${(state.lastAt % 1e7).toFixed(0).padStart(7)} ms  ${text}`);
+        }
+        state.last = text;
+      },
+    };
+    device.addEventListener("inputreport", state.listener);
+    this.pidState = state;
+  }
+
+  private unwatchPidState(): void {
+    const st = this.pidState;
+    if (!st) return;
+    st.device.removeEventListener?.("inputreport", st.listener);
   }
 
   /** From reconnect() (or a wheel picked in connect()) until dispose(): listen for a granted wheel coming back */
@@ -2401,6 +2532,7 @@ export class WebHidFfb {
   /** Forgets the current session and device at once (every later call sees none) and returns them */
   private detach(): { session: FfbSession | null; device: HidDeviceLike | null } {
     const held = { session: this.session, device: this.device };
+    this.unwatchPidState();
     this.session = null;
     this.device = null;
     this.clearIdle();

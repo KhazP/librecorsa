@@ -23,6 +23,7 @@ import {
   selectorValue,
   SETUP_ATTEMPTS,
   SETUP_RETRY_MS,
+  HID_STREAM_TRACE_SIZE,
   setupPidDevice,
   teardownPidSession,
   unpackReport,
@@ -2159,17 +2160,70 @@ async function main() {
     assert.match(report, /out\s+id\s+12\s+04/, "device reset");
     assert.match(report, /setup ok: pid driver, constant force on effect block 3, hardware damper none/);
     assert.match(report, /setup Fake DD Base \[1234:5678\] with the HID PID driver \(generic profile\)/);
-    const traffic = (r: string) => r.split("\n").filter((l) => /\b(out|feature (in|out))\s+id/.test(l)).length;
+    /** Report lines of the setup and teardown traffic, not the stream section after it */
+    const traffic = (r: string) =>
+      r.split("Stream writes")[0]!.split("\n").filter((l) => /\b(out|feature (in|out))\s+id/.test(l)).length;
     const before = traffic(report);
+    assert.match(report, /Stream writes \(force, condition effects, LEDs\): 0 sent, 0 failed/);
+    const setupForceWrites = dev.forceWrites.length;
     for (let i = 0; i < 300; i++) {
       clock.advance(3);
       ffb.setForce(Math.sin(i / 10));
       await flush();
     }
     assert.ok(dev.forceWrites.length > 100, "the stream did play");
-    assert.equal(traffic(await ffb.diagnose()), before, "no force writes in the trace");
+    const after = await ffb.diagnose();
+    assert.equal(traffic(after), before, "no force writes in the setup traffic");
+    const sent = Number(/Stream writes [^:]+: (\d+) sent, 0 failed/.exec(after)?.[1]);
+    assert.equal(sent, dev.forceWrites.length - setupForceWrites, "every force write after setup counted");
+    const streamLines = after.split("Stream writes")[1]!.split("\n").filter((l) => /out id\s+5\s+03 /.test(l));
+    assert.equal(streamLines.length, HID_STREAM_TRACE_SIZE, "the last force writes, block 3");
     await ffb.dispose();
     assert.match(await ffb.diagnose(), /teardown[\s\S]*out\s+id\s+12\s+02/, "teardown traffic (disable actuators)");
+  });
+  await check("PID State input reports (effect playing, actuators enabled, …) are watched and shown; force keepalives are counted, not listed", async () => {
+    // As the MOZA R9 Base declares it (there as report 2): block index, then 1-bit flags with a logical range of 0..0
+    const flag = (u: number) => variable([u], 1, 1, 0, 0);
+    const base = damperCollections();
+    const node = base[1] as HidCollectionLike;
+    const stateItems = [variable([pid(0x22)], 8, 1, 1, 10), ...[0x9f, 0xa0, 0xa4, 0xa6, 0x94].map((u) => flag(pid(u))), padding(3)];
+    const cols: HidCollectionLike[] = [base[0] as HidCollectionLike, { ...node, inputReports: [{ reportId: 4, items: stateItems }] }];
+    class StateDevice extends FakeHidDevice {
+      listeners: ((e: HidInputReportEventLike) => void)[] = [];
+      addEventListener(_t: "inputreport", l: (e: HidInputReportEventLike) => void) {
+        this.listeners.push(l);
+      }
+      removeEventListener(_t: "inputreport", l: (e: HidInputReportEventLike) => void) {
+        this.listeners = this.listeners.filter((x) => x !== l);
+      }
+      emit(reportId: number, bytes: number[]) {
+        for (const l of this.listeners) l({ reportId, data: new DataView(new Uint8Array(bytes).buffer) });
+      }
+    }
+    const dev = new StateDevice(cols, asLayout(cols).blockLoad);
+    dev.laterBlocks = [4];
+    const clock = new FakeClock();
+    const ffb = new WebHidFfb(fakeHid([dev]).api, clock.deps);
+    await ffb.connect();
+    assert.equal(dev.listeners.length, 1, "listening to the wheel's input reports");
+    dev.emit(1, [0, 0, 0]); // a joystick report: ignored
+    dev.emit(4, [3, 0b00110]); // block 3: paused no, actuators enabled yes, safety switch yes, power no, playing no
+    dev.emit(4, [3, 0b00110]);
+    dev.emit(4, [3, 0b11010]); // actuators enabled, power yes, playing yes, safety switch no
+    for (const f of [0.5, 0.5, 0.5, -0.25]) {
+      clock.advance(FORCE_KEEPALIVE_MS);
+      ffb.setForce(f);
+      await flush();
+    }
+    const report = await ffb.diagnose();
+    assert.match(report, /PID State input report 4: 3 received/);
+    assert.match(report, /block 3: effect playing no, device paused no, actuators enabled yes, safety switch yes, actuator power no/);
+    assert.match(report, /block 3: effect playing yes, device paused no, actuators enabled yes, safety switch no, actuator power yes/);
+    assert.match(report, /Stream writes [^:]+: 4 sent, 0 failed/, "keepalives counted");
+    const listed = report.split("Stream writes")[1]!.split("PID State")[0]!.split("\n").filter((l) => /out id\s+5 /.test(l));
+    assert.equal(listed.length, 2, "0.5 once (its keepalives not listed), then -0.25");
+    await ffb.dispose();
+    assert.equal(dev.listeners.length, 0, "stops listening once the wheel is let go");
   });
   await check(`the trace keeps the last ${HID_TRACE_SIZE} lines, and a failed setup is still described`, async () => {
     const dev = wheel();
@@ -2181,7 +2235,9 @@ async function main() {
     }
     const lines = (await ffb.diagnose()).split("\n");
     const start = lines.findIndex((l) => l.startsWith("Setup and teardown traffic"));
-    assert.equal(lines.length - start - 1, HID_TRACE_SIZE);
+    const end = lines.findIndex((l) => l.startsWith("Stream writes"));
+    // The traffic lines, then the blank line before the stream section
+    assert.equal(end - start - 2, HID_TRACE_SIZE);
     const broken = wheel();
     broken.blockStatus = 2; // effect memory full
     const f2 = new WebHidFfb(fakeHid([broken]).api, new FakeClock().deps);
