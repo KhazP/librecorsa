@@ -210,7 +210,20 @@ export class CarAudioEngine {
     }
     this.ctx = ctx;
     this.edgesStale = true;
+    // A context can start suspended (the autoplay rules): resumed at once, while the press that made it still counts
+    this.resumeContext();
     void this.loadEngineSounds(ctx);
+  }
+
+  /** Resumes a suspended context; a refusal (no user gesture yet) leaves it for the next press */
+  private resumeContext(): void {
+    const ctx = this.ctx;
+    if (!ctx || ctx.state !== 'suspended') return;
+    try {
+      void Promise.resolve(ctx.resume()).catch(() => {});
+    } catch {
+      // Ignore: the next press tries again
+    }
   }
 
   /** Builds the voices and buses on `ctx` (init() only takes the context once this has finished) */
@@ -537,9 +550,7 @@ export class CarAudioEngine {
     if (!this.isInitialized) {
       this.init();
     }
-    if (this.ctx && this.ctx.state === 'suspended') {
-      void this.ctx.resume();
-    }
+    this.resumeContext();
   }
 
   public setMuted(muted: boolean): void {

@@ -492,17 +492,23 @@ export class DriveSession {
     let audio: F1AudioEngine2026 | null = null;
     this.unlockAudio = () => {
       if (disposed) return;
-      if (!audio) {
-        audio = new F1AudioEngine2026();
-        audio.setCar(soundFor(carIdNow));
-        // Created paused unless the car is being driven; from then on the frame loop alone pauses and resumes it
-        audio.setPaused(this.snapshot.paused || appPhaseNow !== "driving");
-      }
-      if (!audio.isInitialized) {
-        audio.init();
-        audio.setMuted(this.snapshot.muted);
-      } else {
-        audio.resume();
+      // Called inside the press that leaves the loading screen or starts a race: a browser that refuses Web Audio
+      // leaves the game silent, never stuck on that press
+      try {
+        if (!audio) {
+          audio = new F1AudioEngine2026();
+          audio.setCar(soundFor(carIdNow));
+          // Created paused unless the car is being driven; from then on the frame loop alone pauses and resumes it
+          audio.setPaused(this.snapshot.paused || appPhaseNow !== "driving");
+        }
+        if (!audio.isInitialized) {
+          audio.init();
+          audio.setMuted(this.snapshot.muted);
+        } else {
+          audio.resume();
+        }
+      } catch (err) {
+        console.warn("Audio could not start; driving without sound", err);
       }
     };
     this.toggleMute = () => {
