@@ -93,6 +93,11 @@ export interface GroundQuery {
    */
   readonly smooth?: boolean;
   /**
+   * `query` answers from the point alone, never from the ground's own earlier queries: a car's settle on it is the same
+   * whenever the car is, so it can be reused (`settle-memo.ts`)
+   */
+  readonly stateless?: boolean;
+  /**
    * Optional: `query` for up to `GROUND_QUERY_MANY_MAX` nearby points at once (a tyre's contact patch), for a ground
    * that can share work between them. Returns a bit mask, bit i set when point i has ground (in `outs[i]`); points
    * from `fullCount` (default all) on may get only their height.
@@ -541,6 +546,8 @@ export function conformTrackSurfaceColliders(root: THREE.Object3D): void {
 }
 
 export class TrackColliderQuery implements GroundQuery {
+  /** Each query starts from cleared scratch buffers: nothing carries over from the last */
+  readonly stateless = true;
   /** Triangles: 9 floats each (a, b, c world positions) */
   private readonly tris: Float32Array;
   private readonly triLayer: Uint8Array;
@@ -1181,6 +1188,7 @@ export class TrackColliderQuery implements GroundQuery {
 /** Infinite flat ground (tests, garage) */
 export class FlatGroundQuery implements GroundQuery {
   readonly smooth = true;
+  readonly stateless = true;
 
   constructor(
     private readonly height = 0,
@@ -1222,6 +1230,8 @@ export interface WallQuery {
    * (at most `out.length`).
    */
   near(x: number, z: number, radius: number, out: Int32Array): number;
+  /** `near` answers from its arguments alone, never from earlier queries (as `GroundQuery.stateless`) */
+  readonly stateless?: boolean;
 }
 
 /**
@@ -1252,6 +1262,8 @@ const DRAWN_BARRIER_MAX_NORMAL_Y = 0.5;
 const DRAWN_BARRIER_MIN_FACE_M = 0.5;
 
 export class TrackWallQuery implements WallQuery {
+  /** The stamps only stop a segment being listed twice in one query: no answer depends on an earlier one */
+  readonly stateless = true;
   public readonly segments: Float32Array;
   public readonly segmentCount: number;
   private readonly minX: number;
