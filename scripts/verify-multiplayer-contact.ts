@@ -106,9 +106,9 @@ function duel(scenario: 'rear' | 'side', predict: boolean, seconds = 12, latency
   const mB = new MultiplayerSyncManager();
   mA.predictRemotePlayers = predict;
   mB.predictRemotePlayers = predict;
-  // What the pings would measure
-  mA.setPeerRttMs('B', 2 * latencyMs + jitterMs);
-  mB.setPeerRttMs('A', 2 * latencyMs + jitterMs);
+  // The fastest round trip the pings would measure on this link (the timing goes by the fastest)
+  mA.setPeerRttMs('B', 2 * latencyMs);
+  mB.setPeerRttMs('A', 2 * latencyMs);
   let maxPushM = 0;
   for (const c of [A, B]) {
     const apply = c.applyRigidBodyCollision.bind(c);

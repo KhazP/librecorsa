@@ -480,7 +480,7 @@ check('Player car gets a track evolution sample and remote-peer wake with no AI 
   assert.equal(roadSamples.length, 20, `Player sampled once per frame alongside a shared-environment AI field (${roadSamples.length})`);
 });
 
-check('MultiplayerSyncManager synchronizes remote peer clock offset via EWMA and rejects out-of-order UDP packets', () => {
+check('MultiplayerSyncManager maps a remote peer clock to its own and rejects out-of-order UDP packets', () => {
   const net = new MultiplayerSyncManager();
   const makePkt = (ts: number, sMeters: number): NetworkVehiclePacket => ({
     peerId: 'remote_1',

@@ -59,7 +59,7 @@ export interface DurableObjectStorage {
 
 /** The server end of a WebSocket accepted by a Durable Object */
 export interface ServerSocket {
-  send(message: string): void;
+  send(message: string | ArrayBuffer): void;
   close(code?: number, reason?: string): void;
   serializeAttachment(value: unknown): void;
   deserializeAttachment(): unknown;

@@ -18,15 +18,16 @@ class FakeWebSocket {
   static OPEN = 1;
   static last: FakeWebSocket | null = null;
   readyState = 1;
-  sent: string[] = [];
+  binaryType = 'blob';
+  sent: (string | ArrayBuffer)[] = [];
   onmessage: ((ev: { data: unknown }) => void) | null = null;
   onclose: (() => void) | null = null;
   closed = false;
   constructor(public url: string) {
     FakeWebSocket.last = this;
   }
-  send(text: string): void {
-    this.sent.push(text);
+  send(data: string | ArrayBuffer): void {
+    this.sent.push(data);
   }
   close(): void {
     this.closed = true;
@@ -36,11 +37,16 @@ class FakeWebSocket {
   get(message: unknown): void {
     this.onmessage?.({ data: JSON.stringify(message) });
   }
-  controls(): { type: string }[] {
-    return this.sent.map((s) => JSON.parse(s)).filter((m) => m.ctl).map((m) => m.ctl);
+  /** Another car's state from the server: binary, as the server passes it on */
+  getState(data: ArrayBuffer): void {
+    this.onmessage?.({ data });
   }
-  states(): unknown[] {
-    return this.sent.map((s) => JSON.parse(s)).filter((m) => !m.ctl);
+  controls(): { type: string }[] {
+    return this.sent.filter((s): s is string => typeof s === 'string').map((s) => JSON.parse(s)).filter((m) => m.ctl).map((m) => m.ctl);
+  }
+  /** Car states this game sent (binary) */
+  states(): ArrayBuffer[] {
+    return this.sent.filter((s): s is ArrayBuffer => s instanceof ArrayBuffer);
   }
 }
 
@@ -62,7 +68,9 @@ const tick = () => new Promise((r) => setTimeout(r, 0));
 async function main() {
   // After the environment above is in place: the config module reads it as it loads
   const { MultiplayerSyncManager } = await import('../src/lib/sim/multiplayer-sync');
-  type Internals = { peers: Map<string, { clockOffsetMs: number | null; snapshots: unknown[] }>; hostId: string | null; clockSynced: boolean };
+  const { encodeState, stateInfoJson, PROTOCOL_VERSION } = await import('../src/lib/net/wire');
+  const binary = (p: Record<string, unknown>) => encodeState(p as never, stateInfoJson(p as never));
+  type Internals = { peers: Map<string, { mapMs: number | null; snapshots: unknown[] }>; hostId: string | null; clockSynced: boolean };
 
   const m = new MultiplayerSyncManager();
   const inner = m as unknown as Internals;
@@ -83,13 +91,17 @@ async function main() {
   await tick();
   await tick();
   const ws = FakeWebSocket.last!;
-  check('the socket goes to the next race, as this car, with a secret', /\/api\/races\/next\?peer=peer_\w+&token=[a-f0-9]{36}$/.test(ws.url), ws.url.replace(/token=.*/, 'token=…'));
+  check(
+    'the socket goes to the next race, as this car, with a secret and its version',
+    /\/api\/races\/next\?peer=peer_\w+&token=[a-f0-9]{36}&v=\d+$/.test(ws.url) && ws.url.endsWith(`&v=${PROTOCOL_VERSION}`) && ws.binaryType === 'arraybuffer',
+    ws.url.replace(/token=[a-f0-9]*/, 'token=…')
+  );
 
   const startsAt = Date.now() + 60_000;
   ws.get({ t: 'welcome', now: Date.now(), startsMs: startsAt, index: 7 });
   check('welcomed: entered, with the start time', m.raceStatus.state === 'joined' && Math.abs((m.raceStatus.startsMs ?? 0) - startsAt) < 50);
   const lobby = (race: unknown, players: unknown[] = []) => ({
-    ctl: { type: 'lobby', lobby: { hostId: SERVER, settings: { trackId: 'chang', laps: 5, collisions: 'ghost_lap1', carClass: 'any', vehicle: 'mtr-496r' }, players, race } },
+    ctl: { type: 'lobby', lobby: { hostId: SERVER, settings: { trackId: 'chang', laps: 5, collisions: 'ghost_lap1', carClass: 'any', vehicle: 'mtr-496r' }, players, race, proto: PROTOCOL_VERSION } },
     from: SERVER,
   });
   ws.get(lobby(null));
@@ -142,11 +154,11 @@ async function main() {
   };
   for (let i = 0; i < 50; i++) {
     clock += 20;
-    if (i % 2 === 0) ws.get(carAt(clock));
+    if (i % 2 === 0) ws.getState(binary(carAt(clock)));
     frame();
   }
   const steady = inner.peers.get('peer_other');
-  const offsetBefore = steady?.clockOffsetMs ?? 0;
+  const offsetBefore = steady?.mapMs ?? NaN;
   check('the other car is drawn about where it is', Math.abs(x - (SPEED * (clock - t0)) / 1000) < 2, `${x.toFixed(1)} m of ${((SPEED * (clock - t0)) / 1000).toFixed(1)}`);
 
   // The network stalls for 320 ms, then everything it held back lands at once
@@ -158,22 +170,22 @@ async function main() {
     frame();
     if (x < before - 0.01) wentBack = true;
   }
-  for (let t = stalledFrom + 40; t <= clock; t += 40) ws.get(carAt(t));
+  for (let t = stalledFrom + 40; t <= clock; t += 40) ws.getState(binary(carAt(t)));
   const before = x;
   frame();
   const after = inner.peers.get('peer_other');
-  check('after a stall and a burst, the car\'s clock is not read as having jumped', Math.abs((after?.clockOffsetMs ?? 0) - offsetBefore) < 60, `${((after?.clockOffsetMs ?? 0) - offsetBefore).toFixed(0)} ms`);
+  check('after a stall and a burst, the car\'s clock is not read as having jumped', Math.abs((after?.mapMs ?? NaN) - offsetBefore) < 60, `${((after?.mapMs ?? NaN) - offsetBefore).toFixed(0)} ms`);
   check('its history is kept', (after?.snapshots.length ?? 0) >= 4, `${after?.snapshots.length} snapshots`);
   for (let i = 0; i < 10; i++) {
     clock += 20;
-    if (i % 2 === 0) ws.get(carAt(clock));
+    if (i % 2 === 0) ws.getState(binary(carAt(clock)));
     const was = x;
     frame();
     if (x < was - 0.01) wentBack = true;
   }
   check('the car never goes backwards through it', !wentBack && x >= before);
   check('and is back where it is', Math.abs(x - (SPEED * (clock - t0)) / 1000) < 2, `${x.toFixed(1)} m of ${((SPEED * (clock - t0)) / 1000).toFixed(1)}`);
-  ws.get({ ...carAt(clock), peerId: me });
+  ws.getState(binary({ ...carAt(clock), peerId: me }));
   check("a packet claiming to be this car is not taken for another's", !inner.peers.has(me));
 
   // The flag: the finish goes to the server, and only the server's result is taken
@@ -197,6 +209,21 @@ async function main() {
   const again = FakeWebSocket.last!;
   again.get({ t: 'full' });
   check('a full race: told so, and not entered', again.closed && m.raceStatus.state === 'error' && /full/i.test(m.raceStatus.text));
+
+  // A server of another version: told to reload (an older game is refused before it gets this far)
+  m.joinScheduledRace();
+  await tick();
+  await tick();
+  const updated = FakeWebSocket.last!;
+  updated.get({ t: 'update' });
+  check('a server that wants another version: told to reload', updated.closed && m.raceStatus.state === 'error' && /reload/i.test(m.raceStatus.text), m.raceStatus.text);
+  m.joinScheduledRace();
+  await tick();
+  await tick();
+  const mismatched = FakeWebSocket.last!;
+  mismatched.get({ t: 'welcome', now: Date.now(), startsMs: startsAt, index: 9 });
+  mismatched.get({ ctl: { type: 'lobby', lobby: { hostId: SERVER, settings: { trackId: 'chang', laps: 5 }, players: [], race: null, proto: PROTOCOL_VERSION + 1 } }, from: SERVER });
+  check("a lobby of another version ends the entry, and says why", mismatched.closed && m.raceStatus.state === 'error' && /reload/i.test(m.raceStatus.text), m.raceStatus.text);
 
   // Hosting a room leaves the race
   m.joinScheduledRace();
