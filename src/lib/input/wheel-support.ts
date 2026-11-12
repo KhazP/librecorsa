@@ -24,8 +24,8 @@ export interface LogitechClassicModel {
  * Left out, so they stay on the bridge: the Driving Force Pro (c298), whose firmware keeps reporting the steering axis
  * over its full range after a range change (hid-lg4ff rescales it in the driver, lg4ff_adjust_dfp_x_axis, which the
  * Gamepad API cannot); a wheel in a compatibility mode (c294 "Driving Force EX", which a G29 can enumerate as);
- * the G920 (c262) and the G923 for Xbox (c26e), which speak HID++ (hid-logitech-hidpp); the PlayStation G923 and the
- * G PRO, which hid-lg4ff does not list.
+ * the PlayStation G923 and the G PRO, which hid-lg4ff does not list (see {@link LOGITECH_HIDPP_WHEELS} for why they
+ * are not driven either). The G920 and the G923 for Xbox speak HID++ and have their own list below.
  */
 export const LOGITECH_CLASSIC_WHEELS: readonly LogitechClassicModel[] = [
   { productId: 0xc299, name: "G25" },
@@ -41,11 +41,47 @@ export function logitechClassicModel(vendorId: number, productId: number): Logit
   return LOGITECH_CLASSIC_WHEELS.find((m) => m.productId === productId) ?? null;
 }
 
+export interface LogitechHidppModel {
+  productId: number;
+  name: string;
+}
+
+/**
+ * Logitech wheels driven over WebHID with HID++ 2.0 force feedback (feature 0x8123), as Linux
+ * drivers/hid/hid-logitech-hidpp.c drives them (its HIDPP_QUIRK_CLASS_G920 entries); see webhid-logitech-hidpp.ts.
+ *
+ * Left out, so they stay on the bridge:
+ * - the G923 for PlayStation (c266 / c267): neither mainline driver lists it. The out-of-tree new-lg4ff drives it with
+ *   its own slot commands, not the hid-lg4ff bytes the classic path sends, and first switches it out of its
+ *   PlayStation id (c267) with a report 0x30 command, after which it comes back as another USB device (c266) that the
+ *   page would have to be granted again;
+ * - the G PRO (c268 / c272): no mainline driver lists it. The out-of-tree hid-logitech-dd (mescon) drives it through
+ *   the RS50's own force-feedback path, not feature 0x8123, says it is expected to work rather than tested, and c272
+ *   is also the RS50's id in compatibility mode;
+ * - c26d, which new-lg4ff's README names next to the G923 for Xbox: hid-logitech-hidpp's table does not list it.
+ */
+export const LOGITECH_HIDPP_WHEELS: readonly LogitechHidppModel[] = [
+  { productId: 0xc262, name: "G920" },
+  { productId: 0xc26e, name: "G923 for Xbox" },
+];
+/** The rotation hidpp_ff_range_store accepts (it clamps to these) */
+export const HIDPP_MIN_RANGE_DEG = 180;
+export const HIDPP_MAX_RANGE_DEG = 900;
+
+export function logitechHidppModel(vendorId: number, productId: number): LogitechHidppModel | null {
+  if (vendorId !== LOGITECH_VENDOR_ID) return null;
+  return LOGITECH_HIDPP_WHEELS.find((m) => m.productId === productId) ?? null;
+}
+
+const nameList = (names: readonly string[]) =>
+  names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names.at(-1)}` : (names[0] ?? "");
+
 /** "G25, G27, Driving Force GT and G29": the listed wheels, for copy */
-export const LOGITECH_CLASSIC_NAMES = (() => {
-  const names = LOGITECH_CLASSIC_WHEELS.map((m) => m.name);
-  return names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names.at(-1)}` : (names[0] ?? "");
-})();
+export const LOGITECH_CLASSIC_NAMES = nameList(LOGITECH_CLASSIC_WHEELS.map((m) => m.name));
+/** "G920 and G923 for Xbox" */
+export const LOGITECH_HIDPP_NAMES = nameList(LOGITECH_HIDPP_WHEELS.map((m) => m.name));
+/** Every Logitech wheel the browser drives, classic and HID++, for copy */
+export const LOGITECH_WEBHID_NAMES = nameList([...LOGITECH_CLASSIC_WHEELS, ...LOGITECH_HIDPP_WHEELS].map((m) => m.name));
 
 /** tested: driven by the maintainer; expected: the code path fits, untested; unknown: may not work; no: refused */
 export type SupportLevel = "tested" | "expected" | "unknown" | "no";

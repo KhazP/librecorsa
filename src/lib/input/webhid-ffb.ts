@@ -11,7 +11,9 @@
  *
  * Logitech wheels do not speak HID PID. The G25, G27, Driving Force GT and G29 (LOGITECH_CLASSIC_WHEELS in
  * wheel-support.ts) take the classic Logitech commands, sent as Linux hid-lg4ff sends them
- * ({@link setupLogitechClassicDevice}); any other Logitech device without a PID descriptor is refused (bridge).
+ * ({@link setupLogitechClassicDevice}); the G920 and G923 for Xbox (LOGITECH_HIDPP_WHEELS) take HID++ 2.0 force
+ * feedback, sent as Linux hid-logitech-hidpp sends it (webhid-logitech-hidpp.ts); any other Logitech device without a
+ * PID descriptor is refused (bridge).
  *
  * Sign convention: `WebHidFfb.setForce` takes the raw PID magnitude, −1..1 over the field's logical range. A PID /
  * DirectInput direction says where the force comes from, so + magnitude along +X (90°) pushes the rim left and − pushes
@@ -19,12 +21,24 @@
  */
 
 import {
+  describeLogitechHidppInterface,
+  describeLogitechHidppSession,
+  emergencyStopLogitechHidppSession,
+  hidppReports,
+  setupLogitechHidppDevice,
+  teardownLogitechHidppSession,
+  type LogitechHidppSession,
+} from "./webhid-logitech-hidpp";
+import {
   LG4FF_MAX_RANGE_DEG,
   LG4FF_MIN_RANGE_DEG,
-  LOGITECH_CLASSIC_NAMES,
+  LOGITECH_HIDPP_WHEELS,
   LOGITECH_VENDOR_ID,
+  LOGITECH_WEBHID_NAMES,
   logitechClassicModel,
+  logitechHidppModel,
   type LogitechClassicModel,
+  type LogitechHidppModel,
 } from "./wheel-support";
 
 /* ------------------------------------------------------------------------------------------------------------ */
@@ -61,6 +75,12 @@ export interface HidCollectionLike {
   featureReports?: readonly HidReportInfoLike[];
 }
 
+/** An input report as HIDInputReportEvent hands it over: the data without the report id */
+export interface HidInputReportEventLike {
+  reportId: number;
+  data: DataView;
+}
+
 /** The slice of HIDDevice this driver uses */
 export interface HidDeviceLike {
   opened: boolean;
@@ -73,6 +93,9 @@ export interface HidDeviceLike {
   sendReport(reportId: number, data: Uint8Array): Promise<void>;
   sendFeatureReport(reportId: number, data: Uint8Array): Promise<void>;
   receiveFeatureReport(reportId: number): Promise<DataView>;
+  /** Input reports: the replies of a HID++ wheel. Optional, as only that driver reads any */
+  addEventListener?(type: "inputreport", listener: (e: HidInputReportEventLike) => void): void;
+  removeEventListener?(type: "inputreport", listener: (e: HidInputReportEventLike) => void): void;
 }
 
 /** The slice of navigator.hid this driver uses */
@@ -654,7 +677,7 @@ function errorMessage(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
-interface SessionBase {
+export interface SessionBase {
   device: HidDeviceLike;
   /** Every write to the wheel goes through it: the force, and any other stream the session adds */
   writer: ForceWriter;
@@ -690,7 +713,7 @@ export interface LogitechClassicSession extends SessionBase {
   setLeds?: (mask: number, urgent?: boolean) => void;
 }
 
-export type FfbSession = PidSession | LogitechClassicSession;
+export type FfbSession = PidSession | LogitechClassicSession | LogitechHidppSession;
 
 export type SetupResult<S> =
   | { ok: true; session: S }
@@ -1251,6 +1274,7 @@ export async function teardownLogitechClassicSession(session: LogitechClassicSes
 }
 
 export function teardownSession(session: FfbSession): Promise<void> {
+  if (session.kind === "logitech-hidpp") return teardownLogitechHidppSession(session);
   return session.kind === "pid" ? teardownPidSession(session) : teardownLogitechClassicSession(session);
 }
 
@@ -1298,12 +1322,17 @@ function fireAndForget(send: () => Promise<unknown>): void {
  * The page is going away (pagehide): every stop command is handed to the browser at once, in order, without waiting
  * for any of them, since no later promise may get to run. The writer is killed first, so nothing it queued goes out
  * after them. A PID wheel gets zero force, the hardware damper's coefficient 0 and Stop All Effects (no block is freed:
- * the next setup resets the wheel); a classic Logitech wheel what {@link teardownLogitechClassicSession} sends.
+ * the next setup resets the wheel); a classic Logitech wheel what {@link teardownLogitechClassicSession} sends; a HID++
+ * wheel what teardownLogitechHidppSession sends, without waiting for the replies.
  */
 export function emergencyStopSession(session: FfbSession): void {
   session.writer.kill();
   if (session.kind === "logitech-classic") {
     for (const bytes of lg4ffReleaseCommands(session)) fireAndForget(() => session.send(bytes));
+    return;
+  }
+  if (session.kind === "logitech-hidpp") {
+    emergencyStopLogitechHidppSession(session);
     return;
   }
   const { device, layout, blockIndex, conditionBlocks } = session;
@@ -1363,13 +1392,20 @@ export class HidTrace {
   }
 }
 
-/** `device` with every report it sends (and every feature report read back) written to `trace` while it records */
+/**
+ * `device` with every report it sends, every feature report read back and every input report its listeners get (the
+ * replies of a HID++ wheel) written to `trace` while it records
+ */
 export function tracedDevice(device: HidDeviceLike, trace: HidTrace): HidDeviceLike {
   const failed = (kind: string, id: number) => (e: unknown) => {
     if (trace.recording) trace.note(`${kind} id ${id} FAILED: ${errorMessage(e)}`);
     throw e;
   };
-  return {
+  type InputListener = (e: HidInputReportEventLike) => void;
+  const wrapped = new Map<InputListener, InputListener>();
+  const listen = device.addEventListener?.bind(device);
+  const unlisten = device.removeEventListener?.bind(device);
+  const traced: HidDeviceLike = {
     get opened() {
       return device.opened;
     },
@@ -1393,6 +1429,23 @@ export function tracedDevice(device: HidDeviceLike, trace: HidTrace): HidDeviceL
         return view;
       }, failed("feature in", id)),
   };
+  if (listen) {
+    traced.addEventListener = (type, listener) => {
+      const w: InputListener = (e) => {
+        trace.report("in", e.reportId, new Uint8Array(e.data.buffer, e.data.byteOffset, e.data.byteLength));
+        listener(e);
+      };
+      wrapped.set(listener, w);
+      listen(type, w);
+    };
+    traced.removeEventListener = (type, listener) => {
+      const w = wrapped.get(listener);
+      if (!w) return;
+      wrapped.delete(listener);
+      unlisten?.(type, w);
+    };
+  }
+  return traced;
 }
 
 /** Names for the usages the driver knows; anything else is shown as page:id */
@@ -1490,6 +1543,8 @@ function describeNonPid(device: HidDeviceLike): string {
       ? `HID PID: none. Logitech ${model.name}: driven with the hid-lg4ff commands on output report ${report.reportId} (${report.bytes} bytes)`
       : `HID PID: none. Logitech ${model.name}, but this interface has no 7-byte output report for the hid-lg4ff commands`;
   }
+  const hidpp = logitechHidppModel(device.vendorId, device.productId);
+  if (hidpp) return describeLogitechHidppInterface(device, hidpp);
   if (device.vendorId === LOGITECH_VENDOR_ID) return `HID PID: none. ${LOGITECH_MESSAGE}`;
   return "HID PID: no usable Set Constant Force + Effect Operation report";
 }
@@ -1497,7 +1552,7 @@ function describeNonPid(device: HidDeviceLike): string {
 /**
  * Everything the driver knows about a device, as text for a bug report: ids and name, the raw report descriptor
  * (collections, reports, items), then the HID PID reports as {@link parsePidLayout} reads them and the firmware
- * profile, or which other path it takes (a listed classic Logitech wheel) or why there is none
+ * profile, or which other path it takes (a listed classic or HID++ Logitech wheel) or why there is none
  */
 export function describeHidDevice(device: HidDeviceLike): string {
   const out: string[] = [];
@@ -1540,6 +1595,7 @@ function describeSession(session: FfbSession): string {
       (session.requestedConditions.length > 0 ? ` (asked for: ${session.requestedConditions.join(", ")})` : "")
     );
   }
+  if (session.kind === "logitech-hidpp") return describeLogitechHidppSession(session);
   return `logitech-classic driver (hid-lg4ff), ${session.model.name}, ${session.rangeChanged ? "range set from the wheel rotation setting" : "the wheel's own range"}`;
 }
 
@@ -1559,16 +1615,21 @@ export function isFatalHidStatus(s: WebHidFfbStatus): boolean {
   return s.state === "error" || s.state === "unsupported";
 }
 
+/**
+ * The picker lists joysticks, gamepads, multi-axis controllers and PID devices, plus every interface of a listed HID++
+ * wheel by its ids: its HID++ reports may sit on a vendor-defined collection no usage filter names
+ */
 const REQUEST_FILTERS = [
   { usagePage: 0x01, usage: 0x04 },
   { usagePage: 0x01, usage: 0x05 },
   { usagePage: 0x01, usage: 0x08 },
   { usagePage: 0x0f },
+  ...LOGITECH_HIDPP_WHEELS.map((m) => ({ vendorId: LOGITECH_VENDOR_ID, productId: m.productId })),
 ];
 const UNSUPPORTED_BROWSER = "WebHID needs Chrome or Edge on https or localhost";
 /** Status message when the page loads with WebHID on but no wheel was granted to it yet (pairing needs a click) */
 export const PAIR_MESSAGE = "Click Connect to pair your wheel";
-const LOGITECH_MESSAGE = `Only the Logitech ${LOGITECH_CLASSIC_NAMES} take force feedback from the browser; use the native FFB bridge for this wheel`;
+const LOGITECH_MESSAGE = `Only the Logitech ${LOGITECH_WEBHID_NAMES} take force feedback from the browser; use the native FFB bridge for this wheel`;
 /**
  * With no setForce / setDamper call for this long (hidden tab, stalled loop, the app's own stop) the driver zeroes the
  * force and the hardware damper itself. wheel-ffb.ts zeroes the force after 150 ms (HID_WATCHDOG_MS) but cannot reach
@@ -1585,12 +1646,14 @@ export const SETUP_RETRY_MS = 2000;
 /** A device this driver can drive, and how (the PID layout is parsed once, here) */
 type FfbPick =
   | { kind: "pid"; device: HidDeviceLike; layout: PidLayout }
-  | { kind: "logitech-classic"; device: HidDeviceLike; model: LogitechClassicModel };
+  | { kind: "logitech-classic"; device: HidDeviceLike; model: LogitechClassicModel }
+  | { kind: "logitech-hidpp"; device: HidDeviceLike; model: LogitechHidppModel };
 
 /**
  * The interface to drive among the HIDDevices a pick or a grant returned (a wheel may list an input-only interface
  * next to its force-feedback one): the first with a HID PID layout, else the first listed classic Logitech wheel with
- * lg4ff's output report. Null when there is none, e.g. only a DualSense, a gamepad or a HID++ wheel.
+ * lg4ff's output report, else the first listed HID++ wheel interface with a HID++ long report. Null when there is
+ * none, e.g. only a DualSense, a gamepad or an unlisted Logitech wheel.
  */
 function pickFfbDevice(devices: readonly HidDeviceLike[]): FfbPick | null {
   for (const device of devices) {
@@ -1601,6 +1664,10 @@ function pickFfbDevice(devices: readonly HidDeviceLike[]): FfbPick | null {
     const model = logitechClassicModel(device.vendorId, device.productId);
     if (model && lg4ffOutputReport(device.collections)) return { kind: "logitech-classic", device, model };
   }
+  for (const device of devices) {
+    const model = logitechHidppModel(device.vendorId, device.productId);
+    if (model && hidppReports(device.collections)) return { kind: "logitech-hidpp", device, model };
+  }
   return null;
 }
 
@@ -1608,6 +1675,8 @@ function pickFfbDevice(devices: readonly HidDeviceLike[]): FfbPick | null {
 function unsupportedMessage(device: HidDeviceLike): string {
   const model = logitechClassicModel(device.vendorId, device.productId);
   if (model) return `This ${model.name} interface has no 7-byte output report for force feedback`;
+  const hidpp = logitechHidppModel(device.vendorId, device.productId);
+  if (hidpp) return `This ${hidpp.name} interface has no HID++ long report (output report 0x11) for force feedback`;
   if (device.vendorId === LOGITECH_VENDOR_ID) return LOGITECH_MESSAGE;
   return NO_PID_MESSAGE;
 }
@@ -1725,7 +1794,7 @@ export class WebHidFfb {
   /**
    * Re-opens a wheel the user granted earlier, without a prompt (page load, the wheel switched back on); null when
    * there is none, with the status asking for a Connect click ({@link PAIR_MESSAGE}). Only a device
-   * {@link pickFfbDevice} accepts is opened: any other granted device (a DualSense, a HID++ wheel) leaves the driver
+   * {@link pickFfbDevice} accepts is opened: any other granted device (a DualSense, an unlisted Logitech) leaves the driver
    * idle, not failed. Never shows the picker. A running wheel is kept. A setup that fails (not an unsupported wheel) is
    * tried {@link SETUP_ATTEMPTS} times, staying "connecting" in between, since a base that was just powered on may not
    * take it yet.
@@ -1845,11 +1914,13 @@ export class WebHidFfb {
 
   /**
    * The wheel rotation setting, lock to lock (deg). A classic Logitech wheel is set to it when it connects and when it
-   * changes (40..900°; anything else leaves the wheel's own range); a PID wheel ignores it.
+   * changes (40..900°; anything else leaves the wheel's own range), a HID++ wheel too (clamped to 180..900°); a PID
+   * wheel ignores it.
    */
   setRotationDeg(deg: number): void {
     this.rotationDeg = Number.isFinite(deg) ? deg : null;
-    if (this.session?.kind === "logitech-classic" && this.rotationDeg !== null) this.session.setRange(this.rotationDeg);
+    const s = this.session;
+    if ((s?.kind === "logitech-classic" || s?.kind === "logitech-hidpp") && this.rotationDeg !== null) s.setRange(this.rotationDeg);
   }
 
   /** Zero force and the hardware condition effects, rev LEDs off, now (pause menu) */
@@ -2007,7 +2078,9 @@ export class WebHidFfb {
     const how =
       pick.kind === "pid"
         ? `the HID PID driver (${pidProfileName(device)} profile)`
-        : `the Logitech classic driver (hid-lg4ff, ${pick.model.name})`;
+        : pick.kind === "logitech-hidpp"
+          ? `the Logitech HID++ driver (hid-logitech-hidpp, ${pick.model.name})`
+          : `the Logitech classic driver (hid-lg4ff, ${pick.model.name})`;
     this.trace.note(`setup ${name} [${hex(device.vendorId, 4)}:${hex(device.productId, 4)}] with ${how}`);
     const options: LogitechClassicSetupOptions = {
       deps: this.deps,
@@ -2027,7 +2100,9 @@ export class WebHidFfb {
       result =
         pick.kind === "pid"
           ? await setupPidDevice(traced, { ...options, layout: pick.layout, conditions: this.wantedConditions })
-          : await setupLogitechClassicDevice(traced, pick.model, options);
+          : pick.kind === "logitech-hidpp"
+            ? await setupLogitechHidppDevice(traced, pick.model, options)
+            : await setupLogitechClassicDevice(traced, pick.model, options);
     } finally {
       this.trace.recording = false;
     }
@@ -2076,7 +2151,7 @@ export class WebHidFfb {
 
   /**
    * A granted device appeared (the wheel switched back on): re-open it once it has settled. Only a device
-   * {@link pickFfbDevice} accepts (a HID PID interface, a listed classic Logitech wheel) schedules the re-open.
+   * {@link pickFfbDevice} accepts (a HID PID interface, a listed classic or HID++ Logitech wheel) schedules the re-open.
    */
   private onConnect = (e: { device: HidDeviceLike }) => {
     if (!this.wanted || this.session || !pickFfbDevice([e.device])) return;
