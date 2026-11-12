@@ -7,7 +7,8 @@
  * Output (default `public/cars/f12026/model/f12026.glb`), metres, +X left, +Y up, +Z forward, tyres on y = 0, the
  * front axle at z = 1.5045 (where the AM26 body had it, so the cameras it shares stay comparable):
  *   VF26 (extras: wheelCentres, cameras, liveryMask: false, source)
- *     BODY        the bodywork, one mesh per material
+ *     BODY        the bodywork, one mesh per material; every vertex of the body, the flaps, the arms and the
+ *                 drums carries `_OCCLUSION`: how much of the sky it sees past the rest of the car (1 = all of it)
  *       ARM_xx_n  a suspension arm, in its own frame at its root (extras `arm`: kind, tip)
  *     SUSP_xx     a brake drum with its vanes: turns and travels with the wheel
  *     WHEEL_xx    hub pivot at the tread centre; children WHEEL_xx_RIM, WHEEL_xx_TYRE (one primitive)
@@ -513,6 +514,8 @@ function merge(meshes) {
 }
 
 const shift = (m, d) => ({ ...m, pos: m.pos.map((v, i) => v - d[i % 3]) });
+/** A mesh as a part in a node at `origin`, remembered where it is in the model's frame */
+const flapPart = (mesh, origin, mat) => ({ geo: shift(mesh, origin), mat, at: mesh });
 
 // ---------------------------------------------------------------------------------------------------------------
 // Paint: the download is one grey, so the livery goes on by zone, each zone its own material
@@ -1234,6 +1237,90 @@ function suspension(rig, weld, tris, wheels, legs) {
 }
 
 // ---------------------------------------------------------------------------------------------------------------
+// Shading: how much of the sky each vertex sees past the rest of the car
+// ---------------------------------------------------------------------------------------------------------------
+
+/**
+ * The car at rest is filled into a grid of `voxel` cubes (m). From each vertex `rays` go out over the hemisphere about
+ * its normal, more of them near the normal; one that meets the car within `reach` darkens the vertex, the more the
+ * nearer. A vertex nothing is near keeps 1; none goes below `floor`.
+ */
+const OCCLUSION = { voxel: 0.012, reach: 0.3, rays: 48, floor: 0.2 };
+
+/** A grid of the cells the meshes' triangles pass through (`meshes`: { pos, idx } in the model's frame) */
+function occlusionGrid(meshes) {
+  const min = [Infinity, Infinity, Infinity];
+  const max = [-Infinity, -Infinity, -Infinity];
+  for (const m of meshes) {
+    const b = bounds(m);
+    for (let k = 0; k < 3; k++) {
+      min[k] = Math.min(min[k], b.min[k]);
+      max[k] = Math.max(max[k], b.max[k]);
+    }
+  }
+  const h = OCCLUSION.voxel;
+  const size = [0, 1, 2].map((k) => Math.ceil((max[k] - min[k]) / h) + 1);
+  const cells = new Uint8Array(size[0] * size[1] * size[2]);
+  const mark = (x, y, z) => {
+    const i = Math.floor((x - min[0]) / h);
+    const j = Math.floor((y - min[1]) / h);
+    const k = Math.floor((z - min[2]) / h);
+    cells[(k * size[1] + j) * size[0] + i] = 1;
+  };
+  for (const m of meshes) {
+    for (let t = 0; t < m.idx.length; t += 3) {
+      const [a, b, c] = [0, 1, 2].map((v) => [m.pos[3 * m.idx[t + v]], m.pos[3 * m.idx[t + v] + 1], m.pos[3 * m.idx[t + v] + 2]]);
+      const ab = sub(b, a);
+      const ac = sub(c, a);
+      // Points across the triangle no further apart than half a cell
+      const n = Math.max(1, Math.ceil(Math.max(Math.hypot(...ab), Math.hypot(...ac), Math.hypot(...sub(c, b))) / (h * 0.5)));
+      for (let i = 0; i <= n; i++) {
+        for (let j = 0; j <= n - i; j++) mark(a[0] + (ab[0] * i + ac[0] * j) / n, a[1] + (ab[1] * i + ac[1] * j) / n, a[2] + (ab[2] * i + ac[2] * j) / n);
+      }
+    }
+  }
+  const full = (x, y, z) => {
+    const i = Math.floor((x - min[0]) / h);
+    const j = Math.floor((y - min[1]) / h);
+    const k = Math.floor((z - min[2]) / h);
+    return i >= 0 && j >= 0 && k >= 0 && i < size[0] && j < size[1] && k < size[2] && cells[(k * size[1] + j) * size[0] + i] === 1;
+  };
+  return { full };
+}
+
+/** The hemisphere's directions about +z, denser toward it (a spiral), as [x, y, z] */
+const OCCLUSION_RAYS = Array.from({ length: OCCLUSION.rays }, (_, i) => {
+  const r = Math.sqrt((i + 0.5) / OCCLUSION.rays);
+  const phi = i * Math.PI * (3 - Math.sqrt(5));
+  return [r * Math.cos(phi), r * Math.sin(phi), Math.sqrt(1 - r * r)];
+});
+
+/** A byte a vertex (255: open sky, down to `floor`) for `mesh` (pos, nrm in the model's frame) */
+function occlusionOf(grid, mesh) {
+  const h = OCCLUSION.voxel;
+  const out = new Uint8Array(mesh.pos.length / 3);
+  for (let v = 0; v < out.length; v++) {
+    const p = [mesh.pos[3 * v], mesh.pos[3 * v + 1], mesh.pos[3 * v + 2]];
+    const n = unit([mesh.nrm[3 * v], mesh.nrm[3 * v + 1], mesh.nrm[3 * v + 2]]);
+    const u = unit(Math.abs(n[1]) > 0.9 ? cross3(n, [1, 0, 0]) : cross3(n, [0, 1, 0]));
+    const w = cross3(n, u);
+    // Off the surface by a cell and a half, so it does not meet itself
+    const o = along(p, n, 1.5 * h);
+    let dark = 0;
+    for (const [rx, ry, rz] of OCCLUSION_RAYS) {
+      const d = [u[0] * rx + w[0] * ry + n[0] * rz, u[1] * rx + w[1] * ry + n[1] * rz, u[2] * rx + w[2] * ry + n[2] * rz];
+      for (let s = h; s < OCCLUSION.reach; s += h) {
+        if (!grid.full(o[0] + d[0] * s, o[1] + d[1] * s, o[2] + d[2] * s)) continue;
+        dark += 1 - s / OCCLUSION.reach;
+        break;
+      }
+    }
+    out[v] = Math.round(255 * Math.max(OCCLUSION.floor, 1 - dark / OCCLUSION.rays));
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------------------------------------------
 // Output
 // ---------------------------------------------------------------------------------------------------------------
 
@@ -1245,9 +1332,13 @@ function material(doc, name, color, { metallic = 0, roughness = 0.6 } = {}) {
     .setRoughnessFactor(roughness);
 }
 
-function addMesh(doc, buffer, name, parts) {
+/**
+ * `shaded`: a list each part is added to with its primitive and its mesh in the model's frame (`at`, or `geo` when it
+ * is already there), to get its vertices' occlusion once the whole car is known
+ */
+function addMesh(doc, buffer, name, parts, shaded) {
   const mesh = doc.createMesh(name);
-  for (const { geo, mat } of parts) {
+  for (const { geo, mat, at } of parts) {
     const prim = doc
       .createPrimitive()
       .setAttribute("POSITION", doc.createAccessor().setType("VEC3").setArray(geo.pos).setBuffer(buffer))
@@ -1255,6 +1346,7 @@ function addMesh(doc, buffer, name, parts) {
       .setIndices(doc.createAccessor().setType("SCALAR").setArray(geo.idx).setBuffer(buffer))
       .setMaterial(mat);
     mesh.addPrimitive(prim);
+    shaded?.push({ prim, mesh: at ?? geo });
   }
   return mesh;
 }
@@ -1318,6 +1410,8 @@ async function main() {
   const ratio = BUDGET.body / parts.body.tris.length;
   const stubCaps = [];
   const flapNodes = [];
+  // Every part whose vertices get their occlusion baked (the wheels turn, so not them)
+  const shaded = [];
   for (const f of flaps) {
     const loops = boundaryLoops(rig, weld, f.tris);
     const caps = loops.map((l) => capMesh(rig, l, true));
@@ -1338,7 +1432,7 @@ async function main() {
     const node = doc
       .createNode(f.name)
       .setTranslation(h.pivot)
-      .setMesh(addMesh(doc, buffer, f.name, [{ geo: shift(simplify(mesh, ratio), h.pivot), mat: mats[f.zone] }]))
+      .setMesh(addMesh(doc, buffer, f.name, [flapPart(simplify(mesh, ratio), h.pivot, mats[f.zone])], shaded))
       .setExtras({ aeroClosed: matrix4(ident, h.pivot), aeroOpen: matrix4(open, h.pivot) });
     flapNodes.push(node);
     console.log(`  ${f.name}: ${f.tris.length} tris, ${loops.length} cut ends, hinge ${h.axis.map((v) => v.toFixed(3))}`);
@@ -1390,7 +1484,7 @@ async function main() {
     const geo = extract(rig, p.tris);
     bodyParts.push({ geo, mat: bounds(geo).min[0] > 0 ? mats.mirrorL : mats.mirrorR });
   }
-  const body = doc.createNode("BODY").setMesh(addMesh(doc, buffer, "BODY", bodyParts));
+  const body = doc.createNode("BODY").setMesh(addMesh(doc, buffer, "BODY", bodyParts, shaded));
   for (const n of flapNodes) body.addChild(n);
   vf.addChild(body);
 
@@ -1399,37 +1493,56 @@ async function main() {
   const armNo = {};
   for (const a of susp.arms) {
     const name = `ARM_${a.corner}_${(armNo[a.corner] = (armNo[a.corner] ?? 0) + 1)}`;
-    const { geo, rotation } = inFrame(simplify(a.mesh, Math.max(SUSPENSION_MIN_TRIS.arm, Math.round(a.tris * ratio * 1.5))), a.pivot, a.axes);
+    const at = simplify(a.mesh, Math.max(SUSPENSION_MIN_TRIS.arm, Math.round(a.tris * ratio * 1.5)));
+    const { geo, rotation } = inFrame(at, a.pivot, a.axes);
     body.addChild(
       doc
         .createNode(name)
         .setTranslation(a.pivot)
         .setRotation(rotation)
-        .setMesh(addMesh(doc, buffer, name, [{ geo, mat: mats[ZONE.carbon] }]))
+        .setMesh(addMesh(doc, buffer, name, [{ geo, mat: mats[ZONE.carbon], at }], shaded))
         .setExtras({ arm: { kind: a.kind, tip: a.tip } })
     );
   }
   for (const h of susp.hubs) {
     const name = `SUSP_${h.corner}`;
-    const geo = shift(simplify(h.mesh, Math.max(SUSPENSION_MIN_TRIS.drum, Math.round(h.tris * ratio))), h.centre);
-    vf.addChild(doc.createNode(name).setTranslation(h.centre).setMesh(addMesh(doc, buffer, name, [{ geo, mat: mats[ZONE.carbon] }])));
+    const part = flapPart(simplify(h.mesh, Math.max(SUSPENSION_MIN_TRIS.drum, Math.round(h.tris * ratio))), h.centre, mats[ZONE.carbon]);
+    vf.addChild(doc.createNode(name).setTranslation(h.centre).setMesh(addMesh(doc, buffer, name, [part], shaded)));
   }
 
   // Wheels
   const wheelCentres = {};
   const tyreRadius = {};
+  const wheelsAtRest = [];
   for (const w of wheels) {
     const name = WHEEL_NAMES[w.corner];
     wheelCentres[name] = w.centre;
     const node = doc.createNode(name).setTranslation(w.centre);
     const rim = simplify(w.rim, BUDGET.rim);
     const tyre = simplify(w.tyre, BUDGET.tyre);
+    wheelsAtRest.push(shift(rim, w.centre.map((v) => -v)), shift(tyre, w.centre.map((v) => -v)));
     tyreRadius[name] = bounds(tyre).max[1];
     node.addChild(doc.createNode(`${name}_RIM`).setMesh(addMesh(doc, buffer, `${name}_RIM`, [{ geo: rim, mat: mats.rim }])));
     node.addChild(doc.createNode(`${name}_TYRE`).setMesh(addMesh(doc, buffer, `${name}_TYRE`, [{ geo: tyre, mat: mats.tyre }])));
     vf.addChild(node);
   }
   if (Object.keys(wheelCentres).length !== 4) throw new Error(`wheel corners: ${Object.keys(wheelCentres)}`);
+
+  // Occlusion: each shaded vertex against the whole car at rest, its wheels included
+  const grid = occlusionGrid([...shaded.map((x) => x.mesh), ...wheelsAtRest]);
+  let darkest = 255;
+  let sum = 0;
+  let count = 0;
+  for (const { prim, mesh } of shaded) {
+    const ao = occlusionOf(grid, mesh);
+    for (const v of ao) {
+      darkest = Math.min(darkest, v);
+      sum += v;
+    }
+    count += ao.length;
+    prim.setAttribute("_OCCLUSION", doc.createAccessor().setType("SCALAR").setArray(ao).setNormalized(true).setBuffer(buffer));
+  }
+  console.log(`  occlusion: ${count} vertices, mean ${(sum / count / 255).toFixed(3)}, darkest ${(darkest / 255).toFixed(2)}`);
 
   // Steering wheel (STEER_BASE: rim, paddles, dials, display, shift lights) and cameras from the AM26
   const io = new NodeIO().registerExtensions(ALL_EXTENSIONS).registerDependencies({ "meshopt.decoder": MeshoptDecoder });
