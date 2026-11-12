@@ -180,6 +180,8 @@ export const DEFAULT_RACECRAFT: RacecraftParams = {
 };
 /** Rate at which an AI moves off / back onto its line (m/s) */
 const BIAS_RATE_MS = 2.2;
+/** ... and out of the tow to pass (m/s): a quick move, made with the speed the tow gave */
+const PULL_OUT_RATE_MS = 3.2;
 const LIGHT_INTERVAL_S = 1.0;
 const GAP_BUCKET_M = 10;
 /** The overtake caution the passing rules below were written for (the shipped default): no change at this value */
@@ -1418,6 +1420,10 @@ export class AiOpponentField {
         }
         if (aheadGap < reactGap) {
           const aLat = ahead.sim.lateralOffsetM;
+          // Its wake runs down its line: where it is off its own line, carried onto ours here. The line swings across the
+          // road between two cars 15 m apart, and the raw offset pulled the follower off its line through a kink and
+          // read as "out of the wake" when it wasn't, so it pulled out far too early and lost the tow
+          const aLatHere = line + aLat - aiLineOffsetM(this.track.getSampleAtDistance(ahead.sim.sMeters), me.racingLineId);
           const roomRight = half - aLat;
           const roomLeft = aLat + half;
           let side = roomRight >= roomLeft ? 1 : -1;
@@ -1446,14 +1452,19 @@ export class AiOpponentField {
             // the wake too early, the passing car lost the tow and never had the speed to get by. Already out (or
             // alongside), the move is held
             const noseToTail = aheadGap - CAR_LEN_M;
-            const pullOut = this.rc.pullOutBaseM + Math.max(0, closing) * this.rc.pullOutClosingS + (Number.isFinite(distToCorner) ? 6 : 0);
-            const out = Math.abs(me.lateralOffsetM - aLat) > CAR_WID_M * 0.75;
+            // The move across takes time, the gap closing all the while: it starts that much sooner. Started at the
+            // pull-out distance alone, the car was still in line when it ran up to the gearbox, and the follow cap took
+            // its speed away
+            const moveS = passSpacing / PULL_OUT_RATE_MS;
+            const pullOut = this.rc.pullOutBaseM + Math.max(0, closing) * (this.rc.pullOutClosingS + moveS) + (Number.isFinite(distToCorner) ? 6 : 0);
+            const out = Math.abs(me.lateralOffsetM - aLatHere) > CAR_WID_M * 0.75;
             if (noseToTail > pullOut && !out && !holding) {
-              targetLat = aLat;
+              targetLat = aLatHere;
             } else {
               targetLat = aLat + side * passSpacing;
               craft.passTargetId = ahead.id;
               craft.passSide = side;
+              if (!out) biasRate = PULL_OUT_RATE_MS;
             }
             // Committed once the braking zone for the corner is near: no switching sides on the brakes
             if (craft.commitSide === 0 && Number.isFinite(distToCorner) && distToCorner < brakingDistanceM(me.vxMs, cornerV, decel) + 80) {
