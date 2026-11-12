@@ -118,8 +118,14 @@ export interface CarSkin {
 const CC_BY = { license: "CC BY 4.0", licenseUrl: "https://creativecommons.org/licenses/by/4.0/" } as const;
 const CC_BY_NC_SA = { license: "CC BY-NC-SA 4.0", licenseUrl: "https://creativecommons.org/licenses/by-nc-sa/4.0/" } as const;
 
-/** The F1 2026 Prototype's own body (`public/amr26/model/amr26.glb`) */
-const DEX_F1_2026: CarCredit = { title: "AM26 - F1 25/F1 2026 DLC", author: "DeX", url: "https://skfb.ly/pKNCK", ...CC_BY };
+/** The F1 2026 Prototype's own body (`public/cars/f12026/model/f12026.glb`), with the AM26's steering wheel */
+const QVIST_F1_2026: CarCredit = {
+  title: "F1 2026 concept (polygon model)",
+  author: "Qvist_designs",
+  url: "https://sketchfab.com/3d-models/f1-2026-concept-polygon-model-ea3bde709b1e4dc9b0ec8557d106ed42",
+  note: "Steering wheel from DeX's AM26 (CC BY 4.0)",
+  ...CC_BY,
+};
 
 /** The 496R's 20 skins, the GLB's own MTR Green first [scripts/cars/port_ac_car.py --skins-out skins.json] */
 const MTR_496R_SKINS: readonly CarSkin[] = [
@@ -190,7 +196,7 @@ const ALL_CARS: readonly CarDefinition[] = [
     sub: "2026 model · active aero",
     badge: "PROTO 26",
     quality: "own",
-    credit: DEX_F1_2026,
+    credit: QVIST_F1_2026,
     physics: "vf26",
     year: 2026,
     sound: F1_2026_SOUND,

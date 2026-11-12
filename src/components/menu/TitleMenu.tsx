@@ -133,11 +133,24 @@ const Credits: React.FC = () => (
       </div>
       <div>
         <CreditRow title="3D car models">
-          2026 Formula car model (
+          2026 Prototype: &ldquo;F1 2026 concept (polygon model)&rdquo; (
+          <a
+            href="https://sketchfab.com/3d-models/f1-2026-concept-polygon-model-ea3bde709b1e4dc9b0ec8557d106ed42"
+            target="_blank"
+            rel="noreferrer"
+            className={linkClass}
+          >
+            sketchfab.com
+          </a>
+          ) by{" "}
+          <a href="https://qvistdesigns.framer.website/" target="_blank" rel="noreferrer" className={linkClass}>
+            Qvist_designs
+          </a>
+          , steering wheel from DeX&apos;s AM26 (
           <a href="https://skfb.ly/pKNCK" target="_blank" rel="noreferrer" className={linkClass}>
             skfb.ly/pKNCK
           </a>
-          ) by DeX ·{" "}
+          ) ·{" "}
           <a href="http://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer" className={linkClass}>
             CC BY 4.0
           </a>
