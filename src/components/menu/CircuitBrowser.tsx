@@ -102,6 +102,9 @@ export const CircuitBrowser: React.FC<{
   const byName = (a: CircuitVenue, b: CircuitVenue) => a.name.localeCompare(b.name);
   const typesOf = (v: CircuitVenue) => new Set(v.layouts.map(circuitType));
 
+  /** The graded kinds this copy lists a circuit of, for the Quality filters and the footnote */
+  const qualities = useMemo(() => (["sim", "sketchfab"] as const).filter((q) => venues.some((v) => hasQuality(v, q))), [venues]);
+
   const filterGroups = useMemo<BrowserFilterGroup<CircuitVenue>[]>(() => {
     const regions = CIRCUIT_REGIONS.filter((r) => venues.some((v) => v.region === r));
     const types = TYPES.filter((t) => venues.some((v) => typesOf(v).has(t)));
@@ -117,7 +120,7 @@ export const CircuitBrowser: React.FC<{
       },
       {
         label: "Quality",
-        filters: (["sim", "sketchfab"] as const).map((q) => ({
+        filters: qualities.map((q) => ({
           id: `quality:${q}`,
           label: CIRCUIT_QUALITY_META[q].filterLabel,
           test: (v: CircuitVenue) => hasQuality(v, q),
@@ -132,7 +135,7 @@ export const CircuitBrowser: React.FC<{
       });
     }
     return groups;
-  }, [venues, favs, recent]);
+  }, [venues, favs, recent, qualities]);
 
   const sorts: BrowserSort<CircuitVenue>[] = [
     { id: "region", label: "Region", groupBy: (v) => v.region, groupOrder: CIRCUIT_REGIONS, compare: byName },
@@ -302,7 +305,7 @@ export const CircuitBrowser: React.FC<{
       }}
       footnote={
         <p className="m-0 mx-1 mt-1 text-[12px] leading-relaxed text-[#8E96AA]">
-          {(["sim", "sketchfab"] as const).map((q) => (
+          {qualities.map((q) => (
             <React.Fragment key={q}>
               <strong style={{ color: CIRCUIT_QUALITY_META[q].color }}>{CIRCUIT_QUALITY_META[q].filterLabel}:</strong>{" "}
               {CIRCUIT_QUALITY_META[q].description}{" "}
