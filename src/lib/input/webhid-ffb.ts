@@ -13,7 +13,9 @@
  * wheel-support.ts) take the classic Logitech commands, sent as Linux hid-lg4ff sends them
  * ({@link setupLogitechClassicDevice}); the G920 and G923 for Xbox (LOGITECH_HIDPP_WHEELS) take HID++ 2.0 force
  * feedback, sent as Linux hid-logitech-hidpp sends it (webhid-logitech-hidpp.ts); any other Logitech device without a
- * PID descriptor is refused (bridge).
+ * PID descriptor is refused (bridge). The Thrustmaster belt bases in THRUSTMASTER_WHEELS take the commands of the
+ * Linux driver hid-tmff2 (webhid-thrustmaster.ts); any other Thrustmaster device without a PID descriptor is refused
+ * the same way.
  *
  * Sign convention: `WebHidFfb.setForce` takes the raw PID magnitude, −1..1 over the field's logical range. A PID /
  * DirectInput direction says where the force comes from, so + magnitude along +X (90°) pushes the rim left and − pushes
@@ -37,9 +39,22 @@ import {
   LOGITECH_WEBHID_NAMES,
   logitechClassicModel,
   logitechHidppModel,
+  THRUSTMASTER_NAMES,
+  THRUSTMASTER_STARTUP_PRODUCT_IDS,
+  THRUSTMASTER_VENDOR_ID,
+  thrustmasterModel,
   type LogitechClassicModel,
   type LogitechHidppModel,
+  type ThrustmasterModel,
 } from "./wheel-support";
+import {
+  setupThrustmasterDevice,
+  teardownThrustmasterSession,
+  thrustmasterInterfaceFits,
+  thrustmasterReleaseCommands,
+  TMFF2_REPORT_ID,
+  type ThrustmasterSession,
+} from "./webhid-thrustmaster";
 
 /* ------------------------------------------------------------------------------------------------------------ */
 /* Minimal WebHID types (the @types package is not installed)                                                    */
@@ -713,7 +728,7 @@ export interface LogitechClassicSession extends SessionBase {
   setLeds?: (mask: number, urgent?: boolean) => void;
 }
 
-export type FfbSession = PidSession | LogitechClassicSession | LogitechHidppSession;
+export type FfbSession = PidSession | LogitechClassicSession | LogitechHidppSession | ThrustmasterSession;
 
 export type SetupResult<S> =
   | { ok: true; session: S }
@@ -1274,8 +1289,10 @@ export async function teardownLogitechClassicSession(session: LogitechClassicSes
 }
 
 export function teardownSession(session: FfbSession): Promise<void> {
+  if (session.kind === "pid") return teardownPidSession(session);
   if (session.kind === "logitech-hidpp") return teardownLogitechHidppSession(session);
-  return session.kind === "pid" ? teardownPidSession(session) : teardownLogitechClassicSession(session);
+  if (session.kind === "thrustmaster") return teardownThrustmasterSession(session);
+  return teardownLogitechClassicSession(session);
 }
 
 /** Best-effort shutdown: zero force, stop the effects, free them, stop all, disable actuators. Never throws. */
@@ -1323,7 +1340,8 @@ function fireAndForget(send: () => Promise<unknown>): void {
  * for any of them, since no later promise may get to run. The writer is killed first, so nothing it queued goes out
  * after them. A PID wheel gets zero force, the hardware damper's coefficient 0 and Stop All Effects (no block is freed:
  * the next setup resets the wheel); a classic Logitech wheel what {@link teardownLogitechClassicSession} sends; a HID++
- * wheel what teardownLogitechHidppSession sends, without waiting for the replies.
+ * wheel what teardownLogitechHidppSession sends, without waiting for the replies; a Thrustmaster base what
+ * teardownThrustmasterSession sends (level 0, stop, range back, close).
  */
 export function emergencyStopSession(session: FfbSession): void {
   session.writer.kill();
@@ -1333,6 +1351,10 @@ export function emergencyStopSession(session: FfbSession): void {
   }
   if (session.kind === "logitech-hidpp") {
     emergencyStopLogitechHidppSession(session);
+    return;
+  }
+  if (session.kind === "thrustmaster") {
+    for (const c of thrustmasterReleaseCommands(session)) fireAndForget(() => session.send(c));
     return;
   }
   const { device, layout, blockIndex, conditionBlocks } = session;
@@ -1546,6 +1568,13 @@ function describeNonPid(device: HidDeviceLike): string {
   const hidpp = logitechHidppModel(device.vendorId, device.productId);
   if (hidpp) return describeLogitechHidppInterface(device, hidpp);
   if (device.vendorId === LOGITECH_VENDOR_ID) return `HID PID: none. ${LOGITECH_MESSAGE}`;
+  const tm = thrustmasterModel(device.vendorId, device.productId);
+  if (tm) {
+    return thrustmasterInterfaceFits(device.collections, tm)
+      ? `HID PID: none. Thrustmaster ${tm.name}: driven with the hid-tmff2 commands as report 0x${hex(TMFF2_REPORT_ID)} (${tm.reportBytes} bytes)`
+      : `HID PID: none. Thrustmaster ${tm.name}, but this interface has no ${tm.reportBytes}-byte output report for the hid-tmff2 commands`;
+  }
+  if (device.vendorId === THRUSTMASTER_VENDOR_ID) return `HID PID: none. ${thrustmasterRefusal(device)}`;
   return "HID PID: no usable Set Constant Force + Effect Operation report";
 }
 
@@ -1596,7 +1625,9 @@ function describeSession(session: FfbSession): string {
     );
   }
   if (session.kind === "logitech-hidpp") return describeLogitechHidppSession(session);
-  return `logitech-classic driver (hid-lg4ff), ${session.model.name}, ${session.rangeChanged ? "range set from the wheel rotation setting" : "the wheel's own range"}`;
+  const range = session.rangeChanged ? "range set from the wheel rotation setting" : "the wheel's own range";
+  if (session.kind === "thrustmaster") return `thrustmaster driver (hid-tmff2 commands), ${session.model.name}, ${range}`;
+  return `logitech-classic driver (hid-lg4ff), ${session.model.name}, ${range}`;
 }
 
 /* ------------------------------------------------------------------------------------------------------------ */
@@ -1630,6 +1661,18 @@ const UNSUPPORTED_BROWSER = "WebHID needs Chrome or Edge on https or localhost";
 /** Status message when the page loads with WebHID on but no wheel was granted to it yet (pairing needs a click) */
 export const PAIR_MESSAGE = "Click Connect to pair your wheel";
 const LOGITECH_MESSAGE = `Only the Logitech ${LOGITECH_WEBHID_NAMES} take force feedback from the browser; use the native FFB bridge for this wheel`;
+const THRUSTMASTER_MESSAGE = `Only the Thrustmaster ${THRUSTMASTER_NAMES} take force feedback from the browser; use the native FFB bridge for this wheel`;
+
+/** Why a Thrustmaster device that is not in THRUSTMASTER_WHEELS is refused */
+function thrustmasterRefusal(device: HidDeviceLike): string {
+  if (!THRUSTMASTER_STARTUP_PRODUCT_IDS.includes(device.productId)) return THRUSTMASTER_MESSAGE;
+  return (
+    `This Thrustmaster wheel is still in its start-up mode (044f:${device.productId.toString(16).padStart(4, "0")}), ` +
+    "which a driver has to switch it out of (Thrustmaster's on Windows, hid-tminit on Linux) and the browser cannot; " +
+    "use the native FFB bridge for this wheel"
+  );
+}
+
 /**
  * With no setForce / setDamper call for this long (hidden tab, stalled loop, the app's own stop) the driver zeroes the
  * force and the hardware damper itself. wheel-ffb.ts zeroes the force after 150 ms (HID_WATCHDOG_MS) but cannot reach
@@ -1647,13 +1690,15 @@ export const SETUP_RETRY_MS = 2000;
 type FfbPick =
   | { kind: "pid"; device: HidDeviceLike; layout: PidLayout }
   | { kind: "logitech-classic"; device: HidDeviceLike; model: LogitechClassicModel }
-  | { kind: "logitech-hidpp"; device: HidDeviceLike; model: LogitechHidppModel };
+  | { kind: "logitech-hidpp"; device: HidDeviceLike; model: LogitechHidppModel }
+  | { kind: "thrustmaster"; device: HidDeviceLike; model: ThrustmasterModel };
 
 /**
  * The interface to drive among the HIDDevices a pick or a grant returned (a wheel may list an input-only interface
  * next to its force-feedback one): the first with a HID PID layout, else the first listed classic Logitech wheel with
- * lg4ff's output report, else the first listed HID++ wheel interface with a HID++ long report. Null when there is
- * none, e.g. only a DualSense, a gamepad or an unlisted Logitech wheel.
+ * lg4ff's output report, else the first listed HID++ wheel interface with a HID++ long report, else the first listed
+ * Thrustmaster base with an output report long enough for its commands. Null when there is none, e.g. only a
+ * DualSense, a gamepad, an unlisted Logitech wheel or a T150.
  */
 function pickFfbDevice(devices: readonly HidDeviceLike[]): FfbPick | null {
   for (const device of devices) {
@@ -1668,6 +1713,10 @@ function pickFfbDevice(devices: readonly HidDeviceLike[]): FfbPick | null {
     const model = logitechHidppModel(device.vendorId, device.productId);
     if (model && hidppReports(device.collections)) return { kind: "logitech-hidpp", device, model };
   }
+  for (const device of devices) {
+    const model = thrustmasterModel(device.vendorId, device.productId);
+    if (model && thrustmasterInterfaceFits(device.collections, model)) return { kind: "thrustmaster", device, model };
+  }
   return null;
 }
 
@@ -1678,6 +1727,9 @@ function unsupportedMessage(device: HidDeviceLike): string {
   const hidpp = logitechHidppModel(device.vendorId, device.productId);
   if (hidpp) return `This ${hidpp.name} interface has no HID++ long report (output report 0x11) for force feedback`;
   if (device.vendorId === LOGITECH_VENDOR_ID) return LOGITECH_MESSAGE;
+  const tm = thrustmasterModel(device.vendorId, device.productId);
+  if (tm) return `This ${tm.name} interface has no ${tm.reportBytes}-byte output report for force feedback`;
+  if (device.vendorId === THRUSTMASTER_VENDOR_ID) return thrustmasterRefusal(device);
   return NO_PID_MESSAGE;
 }
 
@@ -1914,13 +1966,15 @@ export class WebHidFfb {
 
   /**
    * The wheel rotation setting, lock to lock (deg). A classic Logitech wheel is set to it when it connects and when it
-   * changes (40..900°; anything else leaves the wheel's own range), a HID++ wheel too (clamped to 180..900°); a PID
-   * wheel ignores it.
+   * changes (40..900°; anything else leaves the wheel's own range), a HID++ wheel too (clamped to 180..900°), and a
+   * Thrustmaster base, clamped to its range as hid-tmff2 clamps it; a PID wheel ignores it.
    */
   setRotationDeg(deg: number): void {
     this.rotationDeg = Number.isFinite(deg) ? deg : null;
     const s = this.session;
-    if ((s?.kind === "logitech-classic" || s?.kind === "logitech-hidpp") && this.rotationDeg !== null) s.setRange(this.rotationDeg);
+    if (this.rotationDeg !== null && (s?.kind === "logitech-classic" || s?.kind === "logitech-hidpp" || s?.kind === "thrustmaster")) {
+      s.setRange(this.rotationDeg);
+    }
   }
 
   /** Zero force and the hardware condition effects, rev LEDs off, now (pause menu) */
@@ -2080,7 +2134,9 @@ export class WebHidFfb {
         ? `the HID PID driver (${pidProfileName(device)} profile)`
         : pick.kind === "logitech-hidpp"
           ? `the Logitech HID++ driver (hid-logitech-hidpp, ${pick.model.name})`
-          : `the Logitech classic driver (hid-lg4ff, ${pick.model.name})`;
+          : pick.kind === "logitech-classic"
+            ? `the Logitech classic driver (hid-lg4ff, ${pick.model.name})`
+            : `the Thrustmaster driver (hid-tmff2 commands, ${pick.model.name})`;
     this.trace.note(`setup ${name} [${hex(device.vendorId, 4)}:${hex(device.productId, 4)}] with ${how}`);
     const options: LogitechClassicSetupOptions = {
       deps: this.deps,
@@ -2102,7 +2158,9 @@ export class WebHidFfb {
           ? await setupPidDevice(traced, { ...options, layout: pick.layout, conditions: this.wantedConditions })
           : pick.kind === "logitech-hidpp"
             ? await setupLogitechHidppDevice(traced, pick.model, options)
-            : await setupLogitechClassicDevice(traced, pick.model, options);
+            : pick.kind === "logitech-classic"
+              ? await setupLogitechClassicDevice(traced, pick.model, options)
+              : await setupThrustmasterDevice(traced, pick.model, options);
     } finally {
       this.trace.recording = false;
     }

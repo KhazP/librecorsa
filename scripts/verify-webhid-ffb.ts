@@ -2103,6 +2103,298 @@ async function main() {
     assert.equal(ffb.status.state, "unsupported");
   });
 
+  console.log("Thrustmaster belt bases (hid-tmff2 commands)");
+  /**
+   * Reference commands written by hand from the Linux driver hid-tmff2 (src/tmt300rs/hid-tmt300rs.c and the T248
+   * backend), not from this driver's output, and checked against the Windows captures in its docs/FFBEFFECTS.md.
+   * Every command is output report 0x60 with 63 data bytes (31 in PS4 mode), zero-padded, as t300rs_send_buf fills it.
+   */
+  const TMFF2 = {
+    /** t300rs_set_gain with hid-tmff2's default gain 40000: 02, then 40000 >> 8 = 156 = 0x9c */
+    gain: [0x02, 0x9c],
+    /** t300rs_set_range: 08 11, then degrees x 0x3c little-endian. 540 → 32400 = 0x7e90, 1080 → 0xfd20, 900 → 0xd2f0, 140 → 0x20d0 */
+    range540: [0x08, 0x11, 0x90, 0x7e],
+    range1080: [0x08, 0x11, 0x20, 0xfd],
+    range900: [0x08, 0x11, 0xf0, 0xd2],
+    range140: [0x08, 0x11, 0xd0, 0x20],
+    /** t300rs_send_open, t300rs_send_close */
+    open: [0x01, 0x05],
+    close: [0x01, 0x00],
+    /** t248_send_open adds 01 04 before 01 05; t248_send_close is 01 05 then 01 00 */
+    open04: [0x01, 0x04],
+    /**
+     * t300rs_upload_constant, effect slot 0 (id byte 1), level 0, no envelope, infinite: 00 01 6a, level 00 00, eight
+     * envelope bytes, 00, then 4f, duration ff ff, 00 00, offset 00 00, 00, ff ff (FFBEFFECTS.md "Initialization")
+     */
+    upload0: [0x00, 0x01, 0x6a, 0x00, 0x00, 0, 0, 0, 0, 0, 0, 0, 0, 0x00, 0x4f, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff, 0xff],
+    /** t300rs_play_effect with count 1: 00 01 89 41 01 00 */
+    play: [0x00, 0x01, 0x89, 0x41, 0x01, 0x00],
+    /** t300rs_stop_effect: 00 01 89 00 */
+    stop: [0x00, 0x01, 0x89, 0x00],
+    /**
+     * t300rs_update_constant: 00 01 6a, level (little-endian, signed), eight envelope bytes, 00 45, ff ff, 00 00.
+     * +16381 = 3f fd (the Windows driver's top, FFBEFFECTS.md), −16381 = c0 03, 8191 = 1f ff
+     */
+    update: (lo: number, hi: number) => [0x00, 0x01, 0x6a, lo, hi, 0, 0, 0, 0, 0, 0, 0, 0, 0x00, 0x45, 0xff, 0xff, 0x00, 0x00],
+    /** t248_interrupts: seven packets written to the endpoint as they are, so the first byte is the report id */
+    burst: [
+      [0x42, 0x01],
+      [0x0a, 0x04, 0x90, 0x03],
+      [0x0a, 0x04, 0x00, 0x0c],
+      [0x0a, 0x04, 0x12, 0x10],
+      [0x0a, 0x04, 0x00, 0x06],
+      [0x0a, 0x04, 0x00, 0x0e],
+      [0x0a, 0x04, 0x00, 0x0e, 0x01],
+    ],
+    /** hid-tmff2's DEFAULT_TIMER_PERIOD (ms) between updates of a playing effect */
+    spacingMs: 8,
+  };
+  /** A report as written: id, then its data zero-padded to `len` */
+  const tmOut = (bytes: readonly number[], len = 63, id = 0x60) => [id, ...bytes, ...new Array<number>(len - bytes.length).fill(0)];
+  const tmBurst = (packet: readonly number[]) => tmOut(packet.slice(1), 63, packet[0]);
+  /**
+   * A base's HID interface as its own descriptor gives it: input report 7, and the vendor output report 0x0a of 63
+   * bytes (hid-tmff2's first T300RS descriptor, before it renumbered the report 0x60); PS4 mode: report 5, 31 bytes
+   */
+  const thrustmaster = (productId: number, name: string, outBytes = 63, outId = 0x0a) => {
+    const dev = new FakeHidDevice([
+      {
+        usagePage: 0x01,
+        usage: 0x04,
+        inputReports: [{ reportId: 7, items: [variable([X], 16, 1, 0, 65535)] }],
+        outputReports: [{ reportId: outId, items: [variable([(0xff00 << 16) | outId], 8, outBytes, 0, 255)] }],
+      },
+    ]);
+    dev.vendorId = 0x044f;
+    dev.productId = productId;
+    dev.productName = name;
+    return dev;
+  };
+  const tmWrites = (dev: FakeHidDevice) => dev.log.map((l) => (l.kind === "out" ? [l.id, ...l.data] : ["feature", l.id]));
+
+  await check("T300RS: connect = gain, range, open, then the constant force loaded at 0 and started, all as report 0x60", async () => {
+    const t300 = thrustmaster(0xb66e, "Thrustmaster T300RS Racing wheel");
+    const ffb = new WebHidFfb(fakeHid([t300]).api, new FakeClock().deps);
+    ffb.setRotationDeg(540);
+    assert.equal(await ffb.connect(), "Thrustmaster T300RS Racing wheel");
+    assert.equal(ffb.status.state, "ready");
+    assert.deepEqual(tmWrites(t300), [TMFF2.gain, TMFF2.range540, TMFF2.open, TMFF2.upload0, TMFF2.play].map((c) => tmOut(c)));
+    assert.equal(ffb.hasHardwareDamper(), false);
+    assert.equal(ffb.hasRevLeds(), false);
+    assert.equal(ffb.hasHardwareCondition("friction"), false);
+  });
+  await check("T300RS: force bytes follow t300rs_update_constant, + force is + level, each write holds the writer 8 ms", async () => {
+    const t300 = thrustmaster(0xb66e, "T300RS");
+    const clock = new FakeClock();
+    const ffb = new WebHidFfb(fakeHid([t300]).api, clock.deps);
+    await ffb.connect();
+    t300.log.length = 0;
+    clock.sleeps.length = 0;
+    for (const f of [1, -1, 0.5, 0]) {
+      ffb.setForce(f);
+      await flush();
+      clock.advance(10);
+      await flush();
+    }
+    assert.deepEqual(tmWrites(t300), [
+      tmOut(TMFF2.update(0xfd, 0x3f)),
+      tmOut(TMFF2.update(0x03, 0xc0)),
+      tmOut(TMFF2.update(0xff, 0x1f)),
+      tmOut(TMFF2.update(0x00, 0x00)),
+    ]);
+    assert.deepEqual(clock.sleeps, [TMFF2.spacingMs, TMFF2.spacingMs, TMFF2.spacingMs, TMFF2.spacingMs]);
+    ffb.setForce(1);
+    await flush();
+    clock.advance(10);
+    await flush();
+    t300.log.length = 0;
+    ffb.stop();
+    await flush();
+    assert.deepEqual(tmWrites(t300), [tmOut(TMFF2.update(0x00, 0x00))], "stop() zeroes the level at once");
+  });
+  await check("T248: the setup burst (t248_interrupts), gain, range clamped to 900, the two-step open, load, start", async () => {
+    const t248 = thrustmaster(0xb696, "Thrustmaster T248");
+    const ffb = new WebHidFfb(fakeHid([t248]).api, new FakeClock().deps);
+    ffb.setRotationDeg(1080); // past the T248's 900: t248_set_range clamps it
+    assert.equal(await ffb.connect(), "Thrustmaster T248");
+    assert.deepEqual(tmWrites(t248), [
+      ...TMFF2.burst.map(tmBurst),
+      ...[TMFF2.gain, TMFF2.range900, TMFF2.open04, TMFF2.open, TMFF2.upload0, TMFF2.play].map((c) => tmOut(c)),
+    ]);
+  });
+  await check("TX: a range change while running is clamped (140..900) and sent; dispose puts 900° back and closes in two steps", async () => {
+    const tx = thrustmaster(0xb669, "Thrustmaster TX");
+    const clock = new FakeClock();
+    const ffb = new WebHidFfb(fakeHid([tx]).api, clock.deps);
+    await ffb.connect();
+    assert.ok(!tmWrites(tx).some((w) => w[1] === 0x08), "no range at connect without a rotation setting");
+    tx.log.length = 0;
+    ffb.setRotationDeg(100);
+    await flush();
+    clock.advance(10);
+    await flush();
+    ffb.setRotationDeg(Number.NaN);
+    await flush();
+    clock.advance(10);
+    await flush();
+    assert.deepEqual(tmWrites(tx), [tmOut(TMFF2.range140)]);
+    tx.log.length = 0;
+    await ffb.dispose();
+    assert.deepEqual(
+      tmWrites(tx),
+      [TMFF2.update(0x00, 0x00), TMFF2.stop, TMFF2.range900, TMFF2.open, TMFF2.close].map((c) => tmOut(c)),
+      "level 0, stop, full range, then t248_send_close (01 05, 01 00)"
+    );
+    assert.equal(tx.opened, false);
+  });
+  await check("T300RS teardown: level 0, stop, 1080° back only when it was changed, close", async () => {
+    const t300 = thrustmaster(0xb66e, "T300RS");
+    const ffb = new WebHidFfb(fakeHid([t300]).api, new FakeClock().deps);
+    ffb.setRotationDeg(540);
+    await ffb.connect();
+    t300.log.length = 0;
+    await ffb.dispose();
+    assert.deepEqual(tmWrites(t300), [TMFF2.update(0x00, 0x00), TMFF2.stop, TMFF2.range1080, TMFF2.close].map((c) => tmOut(c)));
+    assert.equal(t300.opened, false);
+    const t300b = thrustmaster(0xb66e, "T300RS");
+    const plain = new WebHidFfb(fakeHid([t300b]).api, new FakeClock().deps);
+    await plain.connect();
+    t300b.log.length = 0;
+    await plain.dispose();
+    assert.deepEqual(tmWrites(t300b), [TMFF2.update(0x00, 0x00), TMFF2.stop, TMFF2.close].map((c) => tmOut(c)));
+  });
+  await check("T300RS emergency stop: the release commands go out at once, and a queued force never after them", async () => {
+    const t300 = thrustmaster(0xb66e, "T300RS");
+    const clock = new FakeClock();
+    const ffb = new WebHidFfb(fakeHid([t300]).api, clock.deps);
+    ffb.setRotationDeg(540);
+    await ffb.connect();
+    t300.log.length = 0;
+    t300.hold = true;
+    ffb.setForce(1); // in flight
+    ffb.setForce(-1); // queued behind it
+    ffb.emergencyStop();
+    assert.deepEqual(tmWrites(t300), [
+      tmOut(TMFF2.update(0xfd, 0x3f)),
+      ...[TMFF2.update(0x00, 0x00), TMFF2.stop, TMFF2.range1080, TMFF2.close].map((c) => tmOut(c)),
+    ]);
+    t300.release();
+    await settle();
+    clock.advance(20);
+    await settle();
+    t300.release();
+    await settle();
+    assert.equal(t300.log.length, 5, "nothing after the release commands");
+    assert.equal(ffb.status.state, "idle");
+  });
+  await check("T300RS in PS4 mode (b66d): every command is 31 bytes", async () => {
+    const ps4 = thrustmaster(0xb66d, "T300RS PS4", 31, 5);
+    const ffb = new WebHidFfb(fakeHid([ps4]).api, new FakeClock().deps);
+    assert.equal(await ffb.connect(), "T300RS PS4");
+    assert.deepEqual(tmWrites(ps4), [TMFF2.gain, TMFF2.open, TMFF2.upload0, TMFF2.play].map((c) => tmOut(c, 31)));
+  });
+  await check("T150, TMX, T500RS and other Thrustmaster ids are refused for the bridge and never opened", async () => {
+    for (const [productId, name] of [
+      [0xb677, "T150"],
+      [0xb67f, "TMX"],
+      [0xb65e, "T500RS"],
+      [0xb668, "Thrustmaster device"],
+    ] as const) {
+      const dev = thrustmaster(productId, name);
+      const ffb = new WebHidFfb(fakeHid([dev]).api, new FakeClock().deps);
+      assert.equal(await ffb.connect(), null, name);
+      assert.equal(ffb.status.state, "unsupported", name);
+      assert.match(ffb.status.message ?? "", /Only the Thrustmaster .* bridge/, name);
+      assert.equal(dev.opened, false, name);
+      assert.equal(dev.log.length, 0, name);
+    }
+  });
+  await check("a wheel still on a start-up id (hid-tminit's b65d, b664, b69c) is refused with its own message", async () => {
+    for (const productId of [0xb65d, 0xb664, 0xb69c]) {
+      const startup = thrustmaster(productId, "Thrustmaster FFB Wheel");
+      const ffb = new WebHidFfb(fakeHid([startup]).api, new FakeClock().deps);
+      assert.equal(await ffb.connect(), null);
+      assert.equal(ffb.status.state, "unsupported");
+      assert.match(ffb.status.message ?? "", new RegExp(`start-up mode \\(044f:${productId.toString(16)}\\).*bridge`));
+      assert.equal(startup.opened, false);
+      assert.equal(startup.log.length, 0);
+    }
+  });
+  await check("T300RS: with no force call for IDLE_ZERO_MS the level goes to 0 by itself", async () => {
+    const t300 = thrustmaster(0xb66e, "T300RS");
+    const clock = new FakeClock();
+    const ffb = new WebHidFfb(fakeHid([t300]).api, clock.deps);
+    await ffb.connect();
+    ffb.setForce(1);
+    await flush();
+    t300.log.length = 0;
+    clock.advance(IDLE_ZERO_MS + 10);
+    await flush();
+    assert.deepEqual(tmWrites(t300), [tmOut(TMFF2.update(0x00, 0x00))]);
+  });
+  await check("a listed base's interface without an output report long enough for its commands is refused", async () => {
+    const t300 = thrustmaster(0xb66e, "T300RS", 8);
+    const ffb = new WebHidFfb(fakeHid([t300]).api, new FakeClock().deps);
+    assert.equal(await ffb.connect(), null);
+    assert.equal(ffb.status.state, "unsupported");
+    assert.match(ffb.status.message ?? "", /no 63-byte output report/);
+    assert.equal(t300.opened, false);
+  });
+  await check("a first write the system refuses: final at once, pointing to the bridge; close still tried, device closed", async () => {
+    const t300 = thrustmaster(0xb66e, "T300RS");
+    t300.failSends = true;
+    const ffb = new WebHidFfb(fakeHid([t300]).api, new FakeClock().deps);
+    assert.equal(await ffb.connect(), null);
+    assert.equal(ffb.status.state, "unsupported");
+    assert.ok(isFatalHidStatus(ffb.status), "the force goes back to the bridge");
+    assert.match(ffb.status.message ?? "", /could not send the T300RS or T-GT II its force-feedback commands .*bridge/);
+    assert.deepEqual(tmWrites(t300), [tmOut(TMFF2.gain), tmOut(TMFF2.close)]);
+    assert.equal(t300.opened, false);
+    // On page load: one attempt, not SETUP_ATTEMPTS of "connecting"
+    const granted = thrustmaster(0xb66e, "T300RS");
+    granted.failSends = true;
+    const clock = new FakeClock();
+    const again = new WebHidFfb(fakeHid([], [granted]).api, clock.deps);
+    assert.equal(await again.reconnect(), null);
+    assert.equal(again.status.state, "unsupported");
+    assert.deepEqual(tmWrites(granted), [tmOut(TMFF2.gain), tmOut(TMFF2.close)]);
+    assert.ok(!clock.timers.some((t) => t.ms === SETUP_RETRY_MS), "no retry scheduled");
+  });
+  await check("a setup that fails part-way undoes what it did: the range back, then close", async () => {
+    const t300 = thrustmaster(0xb66e, "T300RS");
+    const send = t300.sendReport.bind(t300);
+    let n = 0;
+    t300.sendReport = async (id, data) => {
+      await send(id, data);
+      if (++n === 4) throw new Error("device vanished"); // the effect load
+    };
+    const ffb = new WebHidFfb(fakeHid([t300]).api, new FakeClock().deps);
+    ffb.setRotationDeg(540);
+    assert.equal(await ffb.connect(), null);
+    assert.equal(ffb.status.state, "error");
+    assert.equal(ffb.status.message, "device vanished");
+    assert.deepEqual(
+      tmWrites(t300),
+      [TMFF2.gain, TMFF2.range540, TMFF2.open, TMFF2.upload0, TMFF2.range1080, TMFF2.close].map((c) => tmOut(c))
+    );
+  });
+  await check("reconnect(): a granted listed Thrustmaster base reopens; describeHidDevice and diagnose() name the driver", async () => {
+    const t300 = thrustmaster(0xb66e, "T300RS");
+    assert.match(describeHidDevice(t300), /HID PID: none\. Thrustmaster T300RS or T-GT II: driven with the hid-tmff2 commands as report 0x60 \(63 bytes\)/);
+    assert.match(describeHidDevice(thrustmaster(0xb677, "T150")), /HID PID: none\. Only the Thrustmaster .* bridge/);
+    assert.match(describeHidDevice(thrustmaster(0xb65d, "FFB Wheel")), /HID PID: none\. This Thrustmaster wheel is still in its start-up mode/);
+    const ffb = new WebHidFfb(fakeHid([], [t300]).api, new FakeClock().deps);
+    ffb.setRotationDeg(540);
+    assert.equal(await ffb.reconnect(), "T300RS");
+    assert.equal(ffb.status.state, "ready");
+    const report = await ffb.diagnose();
+    assert.match(report, /Session: thrustmaster driver \(hid-tmff2 commands\), T300RS or T-GT II, range set from the wheel rotation setting/);
+    assert.match(report, /setup T300RS \[044f:b66e\] with the Thrustmaster driver \(hid-tmff2 commands, T300RS or T-GT II\)/);
+    assert.match(report, /out\s+id\s+96\s+02 9c 00/, "gain traced");
+    await ffb.dispose();
+    assert.match(await ffb.diagnose(), /teardown[\s\S]*out\s+id\s+96\s+01 00 00/, "teardown traffic (close)");
+  });
+
   console.log(`\n${passed} checks passed`);
 }
 
