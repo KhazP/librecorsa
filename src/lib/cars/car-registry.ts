@@ -92,6 +92,8 @@ export const PHYSICS_CHECK: Record<VehicleModelId, string> = {
 
 /** Who made a car's 3D body (CREDITS.md has the full notes) */
 export interface CarCredit {
+  /** How the car card introduces the author (absent: "Model by"), for a car credited to its modder instead */
+  label?: string;
   title: string;
   author: string;
   url: string;
@@ -258,13 +260,14 @@ const ALL_CARS: readonly CarDefinition[] = [
     badge: "LIANA",
     quality: "own",
     // The body is Forza Motorsport 4's (Turn 10 Studios), converted for Assetto Corsa in 2015 by an author the mod
-    // doesn't name; its physics are alekabul's rework, used with permission (CREDITS.md)
+    // doesn't name (CREDITS.md); the credit shown is the modder whose physics it drives on, used with permission
     credit: {
-      title: "Suzuki Liana 1.6 GLX",
-      author: "Turn 10 Studios (Forza Motorsport 4), via an Assetto Corsa conversion",
-      url: "http://assetto-db.com/car/suzuki_liana",
-      license: "Game asset, not licensed for redistribution",
-      licenseUrl: "http://assetto-db.com/car/suzuki_liana",
+      label: "Mod by",
+      title: "Physics reworked for Top Gear Liana 1.6 GLX",
+      author: "alekabul",
+      url: "https://www.overtake.gg/downloads/physics-reworked-for-top-gear-liana-1-6-glx.28636/",
+      license: "Used with the author's permission",
+      licenseUrl: "https://www.overtake.gg/downloads/physics-reworked-for-top-gear-liana-1-6-glx.28636/",
     },
     physics: "liana",
     year: 2002,

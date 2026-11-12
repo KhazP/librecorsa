@@ -198,7 +198,7 @@ export const CarBrowser: React.FC<{
                   {q.filterLabel}
                 </span>
                 <span className="text-[11px] font-semibold text-[#C5CBD8]">
-                  Model by{" "}
+                  {c.credit.label ?? "Model by"}{" "}
                   <a
                     href={c.credit.url}
                     target="_blank"

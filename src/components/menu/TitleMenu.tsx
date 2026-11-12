@@ -217,12 +217,6 @@ const Credits: React.FC = () => (
             alekabul
           </a>{" "}
           · used with permission
-          <br />
-          Assetto Corsa conversion (2015, author not named;{" "}
-          <a href="http://assetto-db.com/car/suzuki_liana" target="_blank" rel="noreferrer" className={linkClass}>
-            assetto-db.com
-          </a>
-          ) of the Forza Motorsport 4 model by Turn 10 Studios
         </CreditRow>
         {TRACKS.some((t) => t.credit) ? (
           <CreditRow title="Circuits">
