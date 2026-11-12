@@ -936,9 +936,9 @@ export const WheelStep: React.FC<SetupStepProps> = ({ settings, onChangeSettings
           ) : (
             <Hint className="text-[13px]!">
               Switch Force Feedback on and click <strong>Connect wheel</strong> to drive your wheel directly over WebHID
-              in Chrome/Edge. Logitech wheels start on the local bridge on Windows (
-              <code className="font-f1-mono text-[12px] font-bold text-[#F5F7FA]">npm run ffb</code>), as does any wheel
-              WebHID cannot drive; the {LOGITECH_CLASSIC_NAMES} can be switched to WebHID.
+              in Chrome/Edge, including the Logitech {LOGITECH_CLASSIC_NAMES}. A wheel WebHID cannot drive (Logitech
+              G920, G923, G PRO) uses the local bridge on Windows (
+              <code className="font-f1-mono text-[12px] font-bold text-[#F5F7FA]">npm run ffb</code>).
             </Hint>
           )}
 

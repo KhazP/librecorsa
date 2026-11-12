@@ -96,8 +96,8 @@ export interface WheelSettings {
   steerLockPerCar: Partial<Record<string, number>>;
   /**
    * Experimental: force feedback straight from the browser over WebHID, no bridge. Drives HID PID bases, and the
-   * Logitech G25 / G27 / G29 / Driving Force GT with the classic Logitech commands (webhid-ffb.ts). Logitech wheels
-   * start on the bridge (see autoConfigureWheel) and use WebHID only when switched on
+   * Logitech G25 / G27 / G29 / Driving Force GT with the classic Logitech commands (webhid-ffb.ts). Other Logitech
+   * wheels start on the bridge (see autoConfigureWheel), since WebHID cannot drive them
    */
   hidFfb: boolean;
   /** Rev lights on the rim (Logitech G27 / G29 over WebHID force feedback), from the car's shift-light range */
@@ -465,8 +465,8 @@ export function autoConfigureWheel(pads: readonly PadLike[], current: WheelSetti
     type,
     ...WHEEL_TYPE_DEFAULTS[type],
     ffbEnabled: true,
-    // Logitech starts on the local bridge, even a wheel WebHID can drive: that path is opt-in and untested
-    hidFfb: !LOGITECH_ID.test(wheelPad.id),
+    // WebHID unless it is a Logitech wheel WebHID cannot drive (G920, G923, G PRO): those start on the local bridge
+    hidFfb: !LOGITECH_ID.test(wheelPad.id) || isLogitechClassicPad(wheelPad.id),
     steer: { padId: wheelPad.id, axis: 0, center: Math.abs(rest) < 0.25 ? rest : 0, invert: false },
   };
 }
