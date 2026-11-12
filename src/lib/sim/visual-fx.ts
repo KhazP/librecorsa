@@ -19,7 +19,7 @@ import { CAR_WHEEL_LOCKS_DEG } from '@/lib/input/device-input';
 import { SUZUKI_LIANA_CONFIG } from './road/SuzukiLianaConfig';
 import { MTR_496R_CONFIG } from './proto/Mtr496rConfig';
 import { AMG_GT3_CONFIG } from './gt3/AmgGt3Config';
-import { AMR26_MODEL_URL, loadVf26Template } from '@/lib/vf26-car-model';
+import { VF26_MODEL_URL, loadVf26Template } from '@/lib/vf26-car-model';
 import { assetProgress } from '@/lib/loading/asset-progress';
 import { addContactShadow, seatContactShadow } from '@/lib/render/contact-shadow';
 import { disposeTree } from '@/lib/render/dispose-tree';
@@ -669,7 +669,7 @@ export class SimVisualFxManager {
     const template: Promise<unknown> =
       kind === 'gt3' || kind === 'road' || kind === 'proto'
         ? loadPortedTemplate(PORTED_ONLY[kind].url)
-        : loadVf26Template(AMR26_MODEL_URL, 'opponents');
+        : loadVf26Template(VF26_MODEL_URL, 'opponents');
     return template
       .then(() => {
         // The rigs attach the cached template in their own `then`, registered before this one returns. One racing

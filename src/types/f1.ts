@@ -66,6 +66,33 @@ export interface LiveryConfig {
   secondary: string;
   accent: string;
   number: string;
+  /** Pictures on the paint (render/livery-decals.ts); a livery without is its three colours only */
+  decals?: LiveryDecalSet;
+}
+
+/** A livery's decals: their atlas and where each goes on the car */
+export interface LiveryDecalSet {
+  /** PNG under public/ */
+  atlas: string;
+  decals: readonly LiveryDecal[];
+}
+
+/** One picture projected flat onto the body, in the body's space (m: +X left, +Y up, +Z forward, tyres on y = 0) */
+export interface LiveryDecal {
+  /** Its rectangle in the atlas: x, y, width, height, 0-1 from the top left */
+  rect: readonly [number, number, number, number];
+  /** Projected from this side, read from outside the car */
+  face: "left" | "right" | "top" | "rear";
+  /** Centre on the body */
+  centre: readonly [number, number, number];
+  /** Width and height on the body (m) */
+  size: readonly [number, number];
+  /** Turn in its plane, counter-clockwise as seen (deg) */
+  rotDeg?: number;
+  /** Mirrored left to right (a picture facing forward on one side faces forward on the other too) */
+  flipX?: boolean;
+  /** How far either side of its centre's plane it paints (m, default 0.2) */
+  depth?: number;
 }
 
 export interface TrackControlPoint {

@@ -12,8 +12,9 @@ import {
   type TyreDeformationHandle,
 } from "@/lib/render/tyre-deformation";
 import { applyRearRainLight } from "@/lib/render/golden-hour-environment";
-import { setVf26LiveryColours, upgradeVf26Materials } from "@/lib/render/car-materials";
-import { applyLivery, collectPaintSlots, type PaintKeys } from "@/lib/render/livery-repaint";
+import { PAINT_ZONE_MATERIALS, setVf26LiveryColours, upgradeVf26Materials } from "@/lib/render/car-materials";
+import { createDriverHelmet } from "@/lib/render/driver-helmet";
+import { installLiveryDecals } from "@/lib/render/livery-decals";
 import { moveToDriverHeadLayer } from "@/lib/render/layers";
 import {
   relativeMatrix,
@@ -26,27 +27,18 @@ import {
 import { singlePassTransparency } from "@/lib/render/static-scene";
 
 /**
- * F1 3D model (`public/amr26/model/amr26.glb`). On builds without the GLB `loadVf26Template()` resolves to null
- * and the procedural car stays in place.
+ * The 2026 Prototype's body (`public/cars/f12026/model/f12026.glb`): Qvist_designs' 2026 concept, ported by
+ * `scripts/cars/port_qvist_f1.mjs`. On builds without the GLB `loadVf26Template()` resolves to null and the procedural
+ * car stays in place.
  *
- * Model space: +X left, +Y up, +Z forward, origin on the floor plane under the cockpit — the same axes as the
- * rig, so only a translation is needed.
+ * Model space: +X left, +Y up, +Z forward, tyres on y = 0 — the same axes as the rig, so only a translation is needed.
  *
- * Includes the skinned 3D driver (suit, gloves, shoes and helmet) with a "steer" animation clip, reshaped 2026
- * sidepods, mirrors, engine cover and rear wing, and an EXT_SKIN livery mask (root extras `liveryMask`) painted
- * with the selected LiveryConfig colours.
+ * Paint: the body's zone materials (`PAINT_ZONE_MATERIALS`) take the selected LiveryConfig's primary, secondary and
+ * accent, per car. A GLB with a livery mask (root extras `liveryMask`) mixes them in the shader instead. Moving parts:
+ * wheels, steering wheel, the wing flaps (extras `aeroClosed` / `aeroOpen`) and, where the GLB has one, a skinned
+ * driver; a body without one gets a helmet at its extras' `helmet.pos`.
  */
-export const AMR26_MODEL_URL = "/amr26/model/amr26.glb";
-
-/**
- * Factory colours of the AMR26 EXT_SKIN artwork (teal body, black sidepods and pixel fade, lime fade and tips),
- * repainted per livery when the GLB carries no livery mask
- */
-const AMR26_PAINT_KEYS: PaintKeys = {
-  primary: ["#006563"],
-  secondary: ["#181818", "#101410"],
-  accent: ["#cee35a"],
-};
+export const VF26_MODEL_URL = "/cars/f12026/model/f12026.glb";
 
 export interface Vf26CameraAnchor {
   /** Rig-local position (m): +X left, +Y up, +Z forward */
@@ -80,7 +72,7 @@ const templatePromises = new Map<string, Promise<THREE.Group | null>>();
 const templateAssets = new WeakMap<THREE.Object3D, TemplateAssets>();
 
 /** `task`: the loading-screen task its download counts toward (the player's car, or the opponents' when it differs) */
-export function loadVf26Template(modelUrl: string = AMR26_MODEL_URL, task: AssetTaskId = "car"): Promise<THREE.Group | null> {
+export function loadVf26Template(modelUrl: string = VF26_MODEL_URL, task: AssetTaskId = "car"): Promise<THREE.Group | null> {
   let promise = templatePromises.get(modelUrl);
   if (!promise) {
     promise = (async () => {
@@ -178,6 +170,7 @@ export function attachVf26Model(
     wheelCentres?: Record<string, [number, number, number]>;
     cameras?: Record<string, { pos: [number, number, number]; pitchDeg: number; fov: number }>;
     driver?: { steerClip: string; fps: number; steerAngleDeg: number[] };
+    helmet?: { pos: [number, number, number] };
     liveryMask?: boolean;
   };
   const find = (name: string) => model.getObjectByName(name);
@@ -350,6 +343,42 @@ export function attachVf26Model(
   for (const c of corners) upgradeVf26Materials(c.steer, { liveryMask });
   applyRearRainLight(bodyGroup);
 
+  // Each car its own paint zone materials (the upgraded ones are shared by every clone of the template); the body's
+  // carry the livery decals, the flaps' (in their own node space) do not
+  const zoneMats = new Map<string, THREE.MeshStandardMaterial[]>();
+  const ownZone = new Map<string, THREE.MeshStandardMaterial>();
+  const decalMats: THREE.Material[] = [];
+  const onFlap = (obj: THREE.Object3D) => {
+    for (let o: THREE.Object3D | null = obj; o && o !== bodyGroup; o = o.parent) if (o.userData.aeroClosed) return true;
+    return false;
+  };
+  bodyGroup.traverse((obj) => {
+    const mesh = obj as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    const flap = onFlap(mesh);
+    const own = (m: THREE.Material): THREE.Material => {
+      if (!PAINT_ZONE_MATERIALS.includes(m.name)) return m;
+      const key = `${m.uuid}:${flap}`;
+      let c = ownZone.get(key);
+      if (!c) {
+        c = (m as THREE.MeshStandardMaterial).clone();
+        ownZone.set(key, c);
+        zoneMats.set(m.name, [...(zoneMats.get(m.name) ?? []), c]);
+        if (!flap) decalMats.push(c);
+      }
+      return c;
+    };
+    mesh.material = Array.isArray(mesh.material) ? mesh.material.map(own) : own(mesh.material);
+  });
+  const decals = decalMats.length ? installLiveryDecals(decalMats) : null;
+
+  // A body without a driver of its own wears a helmet in the cockpit
+  const driverHelmet = !driver && extras.helmet ? createDriverHelmet() : null;
+  if (driverHelmet && extras.helmet) {
+    driverHelmet.group.position.fromArray(extras.helmet.pos);
+    bodyGroup.add(driverHelmet.group);
+  }
+
   const cameraAnchors = {} as Vf26ModelInstance["cameraAnchors"];
   const cams = extras.cameras ?? {};
   for (const key of ["cockpit", "tcam", "dash", "bumper", "nearChase", "farChase"] as const) {
@@ -401,20 +430,22 @@ export function attachVf26Model(
     }
   };
 
-  // Without a mask, the authored EXT_SKIN artwork (also sampled by EXT_DECALS) is repainted per livery
-  const paintSlots = liveryMask
-    ? []
-    : collectPaintSlots(
-        bodyGroup,
-        (m) => (m.name === "EXT_SKIN" || m.name === "EXT_DECALS") && !!(m as THREE.MeshStandardMaterial).map
-      );
   const setLivery = (livery: LiveryConfig) => {
     if (liveryMask) setVf26LiveryColours(livery.primary, livery.secondary, livery.accent);
-    else applyLivery(paintSlots, AMR26_PAINT_KEYS, livery);
+    const colours: Record<string, string> = {
+      EXT_PAINT_PRIMARY: livery.primary,
+      EXT_PAINT_SECONDARY: livery.secondary,
+      EXT_PAINT_ACCENT: livery.accent,
+    };
+    for (const [name, mats] of zoneMats) for (const m of mats) m.color.set(colours[name]);
+    decals?.set(livery.decals);
+    driverHelmet?.setColours(livery.primary, livery.secondary, livery.accent);
   };
 
   const dispose = () => {
     driverMixer?.stopAllAction();
+    driverHelmet?.dispose();
+    for (const m of ownZone.values()) m.dispose();
     for (const h of liveTyreHandles) h.dispose();
     bodyGroup.removeFromParent();
     for (const c of corners) c.steer.removeFromParent();

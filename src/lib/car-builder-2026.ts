@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import type { CarTelemetry, LiveryConfig, TireCompound } from "@/types/f1";
 import { SATIN_PAINT } from "@/lib/render/paint-finish";
-import { AMR26_MODEL_URL, attachVf26Model, loadVf26Template, type Vf26ModelInstance } from "@/lib/vf26-car-model";
+import { VF26_MODEL_URL, attachVf26Model, loadVf26Template, type Vf26ModelInstance } from "@/lib/vf26-car-model";
 import type { WheelSeating } from "@/lib/render/corner-rig";
 import { moveToDriverHeadLayer } from "@/lib/render/layers";
 import { PIRELLI_COMPOUND_COLORS } from "@/lib/render/pirelli-sidewall";
@@ -827,7 +827,7 @@ function buildRoundedF1TireGeometry(
 export function createF1Car2026(
   initialLivery: LiveryConfig,
   initialCompound: TireCompound = "soft",
-  modelUrl: string = AMR26_MODEL_URL
+  modelUrl: string = VF26_MODEL_URL
 ): F1CarRig2026 {
   const root = new THREE.Group();
   const chassisGroup = new THREE.Group();
@@ -2688,7 +2688,7 @@ export function createF1Car2026(
     }
   };
 
-  // Swap in the 3D model when available (public/amr26/model/amr26.glb)
+  // Swap in the 3D model when available (public/cars/f12026/model/f12026.glb)
   const proceduralParts = [...chassisGroup.children, ...root.children.filter((c) => c !== chassisGroup)];
   let rigDisposed = false;
   void loadVf26Template(modelUrl).then((template) => {

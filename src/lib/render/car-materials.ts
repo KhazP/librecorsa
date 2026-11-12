@@ -16,10 +16,16 @@ import { applyPaintFinish, SATIN_PAINT } from "./paint-finish";
  *   driving a height bump, a roughness of 0.32 +-0.06 between tows and a slight diffuse modulation. The weave
  *   fades out by pixel footprint (sub-pixel tows average to flat) and by distance, so it does not shimmer.
  *
+ * - EXT_PAINT_PRIMARY / _SECONDARY / _ACCENT (`PAINT_ZONE_MATERIALS`): a body painted in zones, no texture; the same
+ *   satin finish, coloured per car with the livery by vf26-car-model.ts.
+ *
  * Not touched: EXT_TYRE, mirror_*, INT_DISPLAY, INT_LED, EXT_clearled_security, glass, DRV_*, harness.
  */
 
 type PaintTarget = "skin" | "decal" | "carbon";
+
+/** The materials of a body painted in livery zones, primary / secondary / accent */
+export const PAINT_ZONE_MATERIALS: readonly string[] = ["EXT_PAINT_PRIMARY", "EXT_PAINT_SECONDARY", "EXT_PAINT_ACCENT"];
 
 const CARBON_MATERIALS = new Set([
   "EXT_carbon",
@@ -74,7 +80,7 @@ export function setVf26LiveryColours(primary: string, secondary: string, accent:
 }
 
 function targetFor(name: string): PaintTarget | null {
-  if (name === "EXT_SKIN") return "skin";
+  if (name === "EXT_SKIN" || PAINT_ZONE_MATERIALS.includes(name)) return "skin";
   if (name === "EXT_DECALS") return "decal";
   if (CARBON_MATERIALS.has(name)) return "carbon";
   return null;
