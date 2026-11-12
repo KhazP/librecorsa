@@ -1501,11 +1501,12 @@ export class VehiclePhysics {
     if (rolling) this.gear = this.gearForSpeed(speedMs);
     // A car in exactly the state of one settled before takes that settle's result (`settle-memo.ts`), on ground and
     // barriers whose answers never depend on their earlier queries. The step size is the class's, not the car's (a test
-    // changes it), so it goes in with the settle's own inputs
+    // changes it), so it goes in with the settle's own inputs. Not for a car keeping its worn, hot tyres (a flashback):
+    // that state never comes round again, and keeping it would only push out settles that do
     const opaque = new Set<object>([this.ground]);
     if (this.walls) opaque.add(this.walls);
     const memo =
-      this.ground.stateless === true && (this.walls === undefined || this.walls.stateless === true)
+      !keepTyres && this.ground.stateless === true && (this.walls === undefined || this.walls.stateless === true)
         ? beginSettle(this, opaque, [x, z, speedMs, VehiclePhysics.FIXED_DT, VehiclePhysics.SUBSTEPS])
         : null;
     if (!memo?.applied) {
