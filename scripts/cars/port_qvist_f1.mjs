@@ -34,10 +34,12 @@ const BUDGET = { body: 100_000, rim: 5_000, tyre: 4_000, small: 1.0 };
 const WHEEL_NAMES = { LF: "WHEEL_LF", RF: "WHEEL_RF", LR: "WHEEL_LR", RR: "WHEEL_RR" };
 
 /**
- * The AMR26 body (DeX's AM26) gives this car its steering wheel, shift lights and display, and its cockpit cameras:
- * with the front axles lined up the two cockpits sit within ~5 cm of each other (halo, headrest, roll hoop)
+ * DeX's AM26 (CC BY 4.0, the car's previous body) gives it its steering wheel, shift lights and display, and its
+ * cockpit cameras: with the front axles lined up the two cockpits sit within ~5 cm of each other (halo, headrest,
+ * roll hoop). Only those are kept, in this file: the AM26's `VF26` root with its `cameras` and `steerBase` extras and
+ * its `STEER_BASE` subtree.
  */
-const STEER_FROM = path.join(ROOT, "public/amr26/model/amr26.glb");
+const STEER_FROM = path.join(ROOT, "scripts/cars/sources/am26-steering-wheel.glb");
 /** Where the driver's helmet goes (its centre; the cockpit eye is at 0, 0.74, 0) */
 const HELMET_POS = [0, 0.745, -0.055];
 
