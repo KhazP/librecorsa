@@ -1044,6 +1044,8 @@ export class DriveSession {
 
     /** Keys pressed with Alt to move the camera, until they are let go */
     const cameraNudgeCodes = new Set<string>();
+    /** Alt keys held that the player bound to a control: while one is down, Alt moves no camera */
+    const boundAltsHeld = new Set<string>();
     /** The camera key's hold timer (a hold opens the seat panel) and the pad camera button's press time */
     let cameraKeyHold: number | null = null;
     let padCameraHeldSinceMs: number | null = null;
@@ -1075,12 +1077,13 @@ export class DriveSession {
 
       // Alt + arrows, − / = (Page Up / Down) and [ / ] move the cockpit or dash view, saved for this car; Alt + 0 puts
       // it back. Nothing else sees a key pressed with Alt (the arrows don't drive, Alt + ← / → don't leave the page),
-      // nor its repeats once Alt is let go before it. An Alt key the player bound to a control still reaches it: its
-      // own keydown has altKey set
-      const boundAlt = (code === "AltLeft" || code === "AltRight") && keyLookup.has(code);
-      if ((e.altKey && !boundAlt) || cameraNudgeCodes.has(code)) {
+      // nor its repeats once Alt is let go before it. While an Alt key the player bound to a control is held, Alt is
+      // that control and nothing else: it and the keys pressed with it drive as bound
+      if ((code === "AltLeft" || code === "AltRight") && keyLookup.has(code)) boundAltsHeld.add(code);
+      const altNudges = e.altKey && boundAltsHeld.size === 0;
+      if (altNudges || cameraNudgeCodes.has(code)) {
         e.preventDefault();
-        const step = e.altKey ? nudgeStepForKey(code) : undefined;
+        const step = altNudges ? nudgeStepForKey(code) : undefined;
         if (step !== undefined) {
           cameraNudgeCodes.add(code);
           const view = settings.camera;
@@ -1224,6 +1227,7 @@ export class DriveSession {
         return;
       }
       cameraNudgeCodes.delete(e.code);
+      boundAltsHeld.delete(e.code);
       const action = keyLookup.get(e.code);
       if (action === "camera" && cameraKeyHold !== null) {
         window.clearTimeout(cameraKeyHold);
@@ -1267,6 +1271,7 @@ export class DriveSession {
       releaseHeldKeys();
       // Their keyups go to another window: the keys would stay swallowed, and a held camera key would open the panel
       cameraNudgeCodes.clear();
+      boundAltsHeld.clear();
       if (cameraKeyHold !== null) window.clearTimeout(cameraKeyHold);
       cameraKeyHold = null;
     };
