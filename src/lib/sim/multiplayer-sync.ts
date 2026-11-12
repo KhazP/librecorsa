@@ -2189,11 +2189,12 @@ export class MultiplayerSyncManager {
         const shownQuat = this.tempQuat1.setFromAxisAngle(AXIS_Y, -(out.yawRateRadS ?? 0) * frameS).multiply(out.quaternion);
         p.corrQuat.copy(shownQuat).multiply(this.tempQuat2.copy(rawQuat).invert());
       }
-    } else {
-      const keep = Math.exp(-frameS / PREDICT_SMOOTH_S);
-      p.corrPos.multiplyScalar(keep);
-      p.corrQuat.slerp(this.tempQuat1.identity(), 1 - keep);
     }
+    // The correction blends out on every frame, also one with a new packet: with a packet every frame it would
+    // otherwise never shrink, and the car would run on its own dead reckoning
+    const keep = Math.exp(-frameS / PREDICT_SMOOTH_S);
+    p.corrPos.multiplyScalar(keep);
+    p.corrQuat.slerp(this.tempQuat1.identity(), 1 - keep);
     p.newestTs = s1.timestampMs;
     p.lastMs = nowMs;
 
