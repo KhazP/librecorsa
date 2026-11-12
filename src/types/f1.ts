@@ -342,7 +342,14 @@ export interface CarTelemetry {
   steering: number; // -1..1 (positive = right)
   longitudinalG: number;
   lateralG: number;
+  /** Aero load as a multiple of the car's weight, 1 + downforce / (mass · g): the cameras, haptics and effects read it; it carries no bumps */
   verticalG: number;
+  /**
+   * Measured vertical acceleration of the chassis (g): the specific force along the car's up axis an accelerometer on
+   * the tub at the CG reads. 1 parked on flat ground, spikes over kerbs and bumps, dips over crests, 0 in the air;
+   * low-passed at 20 Hz (`chassis-g.ts`). Feeds the telemetry packet's `gVert`. Absent on a car that does not measure it
+   */
+  chassisVerticalG?: number;
   // 2026 Aerodynamics & Rwanda Altitude
   altitudeM: number; // ~1385m + track elevation (up to 1435m)
   trackElevationM: number; // 0m to 50m

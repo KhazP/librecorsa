@@ -145,6 +145,7 @@ import {
 import { type AiVehicleParams, RacingLineDriver } from './sim/ai-mpc';
 import { SteeringAssist, type SteeringAssistCarState } from './sim/steering-assist';
 import { AxleSlipScratch } from './sim/tyre-slip';
+import { filterChassisG } from './sim/chassis-g';
 import { type AutoShiftSchedule, autoShift, createAutoShiftInput, ManualShiftOverride } from './sim/auto-gearbox';
 import {
   aiLineOffsetM,
@@ -437,6 +438,8 @@ export class F1Physics2026 {
   public rideHeightOffsetM = 0;
   private heaveM = 0;
   private heaveVelMs = 0;
+  /** Measured vertical acceleration of the chassis (g), low-passed sub-step by sub-step (`chassis-g.ts`) */
+  private chassisG = 1;
 
   private steerRoadWheelRad = 0; // + = left (body convention)
   private lastAxMs2 = 0;
@@ -1548,6 +1551,7 @@ export class F1Physics2026 {
       this.integrateVertical(F1Physics2026.FIXED_DT / SUBSTEPS, 1, 0, 0, true);
     }
     for (const w of this.wheels) w.roadOffsetPrev = w.roadOffset;
+    this.chassisG = 1;
   }
 
   private syncCartesianFromCurvilinear(): void {
@@ -2786,6 +2790,9 @@ export class F1Physics2026 {
     }
 
     this.heaveVelMs += (fz / ms) * h;
+    // An accelerometer's reading along the car's up axis: the heave acceleration plus the road frame's own (gravity's
+    // share across the road and the v²·κ of a crest or compression), which `fz` has taken out as `gExtra`
+    this.chassisG = filterChassisG(this.chassisG, 1 + (gExtra + fz / ms) / G, h);
     this.pitchVelRadS += (mPitch / this.pitchInertiaKgM2) * h;
     this.rollVelRadS += (mRoll / this.rollInertiaKgM2) * h;
     this.heaveM += this.heaveVelMs * h;
@@ -3115,6 +3122,7 @@ export class F1Physics2026 {
       longitudinalG: 0,
       lateralG: 0,
       verticalG: 1,
+      chassisVerticalG: 1,
       altitudeM: BASE_ALTITUDE_M + 35,
       trackElevationM: 35,
       airDensityKgM3: 1.06,
@@ -3235,6 +3243,7 @@ export class F1Physics2026 {
     t.longitudinalG = this.lastAxMs2 / G;
     t.lateralG = -this.lastAyMs2 / G;
     t.verticalG = 1 + this.aeroDownforceN / (this.totalMassKg * G);
+    t.chassisVerticalG = this.chassisG;
 
     t.altitudeM = BASE_ALTITUDE_M + sample.position.y;
     t.trackElevationM = sample.position.y;

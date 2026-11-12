@@ -84,6 +84,7 @@ import { KERB_PROFILE_L, kerbProfileM, surfaceRippleM } from '../track-surfaces'
 import { sampleGrid } from '../ai/ai-track';
 import type { AiDrivePlan } from '../ai/drive-plan';
 import { lockShareOf } from '../tyre-slide-fx';
+import { filterChassisG } from '../chassis-g';
 
 const G = 9.81;
 const DEG2RAD = Math.PI / 180;
@@ -867,6 +868,8 @@ export class F12026CarSim implements SimulatorCar {
   private apYawI = 0;
   private lastAxMs2 = 0;
   private lastAyMs2 = 0;
+  /** Measured vertical acceleration of the chassis (g), low-passed tick by tick (`chassis-g.ts`) */
+  private chassisG = 1;
   private stuckS = 0;
 
   constructor(track: BuiltTrackData, root?: THREE.Object3D | null, profile: CarSimProfile = F12026_SIM_PROFILE) {
@@ -1596,6 +1599,9 @@ export class F12026CarSim implements SimulatorCar {
         const dvx = _v.subVectors(v.velocity, _v);
         this.lastAxMs2 = dvx.dot(_ez.set(0, 0, 1).applyQuaternion(v.quaternion)) / stepS;
         this.lastAyMs2 = dvx.dot(_ex.set(1, 0, 0).applyQuaternion(v.quaternion)) / stepS;
+        // An accelerometer's reading along the car's up axis: the body's acceleration less gravity's
+        _ey.set(0, 1, 0).applyQuaternion(v.quaternion);
+        this.chassisG = filterChassisG(this.chassisG, (dvx.dot(_ey) / stepS + G * _ey.y) / G, stepS);
       }
       // Fuel burnt this tick: the car gets lighter tick by tick, not frame by frame
       if (v.telemetry.throttle > 0.01 && this.fuelKg > 0 && this.realism.fuelUse) {
@@ -2149,6 +2155,7 @@ export class F12026CarSim implements SimulatorCar {
     this.pushActive = false;
     this.overtake.reset();
     this.lastAxMs2 = this.lastAyMs2 = 0;
+    this.chassisG = 1;
     this.stuckS = 0;
     // The off-track verdict belongs to where the car was: the new spot is judged afresh
     this.wasOffTrack = false;
@@ -2349,6 +2356,7 @@ export class F12026CarSim implements SimulatorCar {
     t.longitudinalG = this.lastAxMs2 / G;
     t.lateralG = -this.lastAyMs2 / G;
     t.verticalG = 1 + vt.downforceN / (v.totalMassKg * G);
+    t.chassisVerticalG = this.chassisG;
     t.altitudeM = BASE_ALTITUDE_M + this.worldPosition.y;
     t.trackElevationM = sample.position.y;
     t.airDensityKgM3 = v.airDensity;
@@ -2475,6 +2483,7 @@ export class F12026CarSim implements SimulatorCar {
       longitudinalG: 0,
       lateralG: 0,
       verticalG: 1,
+      chassisVerticalG: 1,
       altitudeM: BASE_ALTITUDE_M,
       trackElevationM: 0,
       airDensityKgM3: AIR_DENSITY,

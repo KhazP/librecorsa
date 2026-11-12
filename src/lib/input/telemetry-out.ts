@@ -31,7 +31,11 @@ export interface TelemetryOutPacket {
   gLat: number;
   /** Longitudinal acceleration (g, + = forward) */
   gLon: number;
-  /** Vertical acceleration (g) */
+  /**
+   * Vertical acceleration of the chassis (g, + = up): what an accelerometer on the car reads along its up axis, so 1 at
+   * rest on flat ground, above 1 over kerbs, bumps and compressions, below 1 over crests, 0 in the air. Downforce does
+   * not raise it. Low-passed at 20 Hz in the physics (about 8 ms of lag); 1 when the car does not report it
+   */
   gVert: number;
   /** Yaw rate (rad/s, + = turning right) */
   yawRate: number;
@@ -152,7 +156,8 @@ export function buildTelemetryPacket(t: CarTelemetry, extra: TelemetryOutExtra):
     clutch: round(t.clutch, 3, 0, 1),
     gLat: round(t.lateralG, 3),
     gLon: round(t.longitudinalG, 3),
-    gVert: round(t.verticalG, 3),
+    // The measured heave, not `verticalG` (the aero load the cameras use): a motion rig plays this one
+    gVert: round(Number.isFinite(t.chassisVerticalG) ? t.chassisVerticalG : 1, 3),
     yawRate: round(extra.yawRateRadS, 3),
     pitch: round(extra.pitchRad, 3),
     roll: round(extra.rollRad, 3),

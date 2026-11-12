@@ -6,6 +6,11 @@ import assert from 'node:assert/strict';
 import type { CarTelemetry } from '../src/types/f1';
 import { buildTelemetryPacket, type TelemetryOutPacket } from '../src/lib/input/telemetry-out';
 import { GamepadHaptics, triggerMagnitudes } from '../src/lib/sim/gamepad-haptics';
+import { F12026CarSim } from '../src/lib/sim/f12026-car/F12026CarSim';
+import type { GroundQuery } from '../src/lib/sim/f12026-car/TrackColliderQuery';
+import { DEFAULT_SURFACE_TABLE } from '../src/lib/sim/track-surfaces';
+import { F1Physics2026 } from '../src/lib/f1-physics-2026';
+import { createFlatTestTrack } from './lib/flat-track';
 
 let passed = 0;
 function check(name: string, fn: () => void) {
@@ -31,7 +36,8 @@ const full = tel({
   clutch: 1,
   lateralG: 2.3456,
   longitudinalG: -0.1234,
-  verticalG: 1.0004,
+  verticalG: 2.8,
+  chassisVerticalG: 1.23456,
   ersBatteryPercent: 63.27,
   manualOverrideActive: true,
   fuelKg: 84.567,
@@ -71,7 +77,7 @@ const expected: TelemetryOutPacket = {
   clutch: 1,
   gLat: 2.346,
   gLon: -0.123,
-  gVert: 1,
+  gVert: 1.235,
   yawRate: 0.123,
   pitch: -0.042,
   roll: 0,
@@ -140,6 +146,8 @@ check('non-finite values and missing optional channels read as 0 / false / empty
   assert.equal(p.aeroMode, '');
   assert.deepEqual(p.surface, ['', '', '', '']);
   assert.equal(p.trackPos, 0.5);
+  assert.equal(p.gVert, 1, 'no measured heave reads as rest (1 g), not 0 g, which a rig would play as a drop');
+  assert.equal(buildTelemetryPacket(tel({ chassisVerticalG: NaN, verticalG: 3 }), extra).gVert, 1);
   for (const v of Object.values(p)) {
     if (typeof v === 'number') assert.ok(Number.isFinite(v));
   }
@@ -152,6 +160,102 @@ check('normalised channels are clamped to their range', () => {
   assert.equal(p.clutch, 1);
   assert.equal(p.trackPos, 1);
   assert.equal(p.ffb, 1);
+});
+
+console.log('Chassis heave (gVert) from the physics');
+const pad = createFlatTestTrack(20_000, 600);
+const G = 9.81;
+const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
+/** Flat road with `bump(z)` (m) added: a smooth surface whose normal follows its slope */
+const profileGround = (bump: (z: number) => number): GroundQuery => ({
+  smooth: true,
+  query(_x, z, probeY, out) {
+    const h = bump(z);
+    if (h > probeY) return false;
+    const slope = (bump(z + 0.005) - bump(z - 0.005)) / 0.01;
+    const ny = 1 / Math.hypot(1, slope);
+    Object.assign(out, { height: h, nx: 0, ny, nz: -slope * ny, surface: 'road', grip: DEFAULT_SURFACE_TABLE.road.friction, props: DEFAULT_SURFACE_TABLE.road, source: 'profile' });
+    return true;
+  },
+});
+/** A raised-cosine hump `heightM` tall over `lengthM` of road from z0 */
+const hump = (z0: number, lengthM: number, heightM: number) => (z: number) =>
+  z <= z0 || z >= z0 + lengthM ? 0 : heightM * Math.sin((Math.PI * (z - z0)) / lengthM) ** 2;
+type Sample = { z: number; gVert: number; verticalG: number; aeroG: number };
+/**
+ * Drives the car straight at `kmh` (0: parked on the brake) on 4 ms steps, the worker's tick, building a packet every
+ * 1/60 s from step `phase` (0..3) on, as the page sends them
+ */
+function drive(make: () => F12026CarSim | F1Physics2026, kmh: number, seconds: number, phase = 0): Sample[] {
+  const sim = make();
+  sim.teleportToDistance(1000, kmh / 3.6);
+  const out: Sample[] = [];
+  for (let i = 0; i < seconds * 240; i++) {
+    const t = sim.step(1 / 240, kmh > 0 ? { throttle: clamp01(0.3 + 0.5 * (kmh / 3.6 - sim.vxMs)), brake: 0, analogSteer: 0 } : { throttle: 0, brake: 0.5, analogSteer: 0 });
+    if (i % 4 !== phase) continue;
+    const aeroG = sim instanceof F12026CarSim ? 1 + t.downforceN / (sim.vehicle.totalMassKg * G) : NaN;
+    out.push({ z: sim.worldPosition.z, gVert: buildTelemetryPacket(t, extra).gVert, verticalG: t.verticalG, aeroG });
+  }
+  return out;
+}
+const rigid = (ground?: GroundQuery) => () => {
+  const sim = new F12026CarSim(pad);
+  if (ground) sim.vehicle.setGround(ground);
+  return sim;
+};
+const after = (s: Sample[], fromZ: number) => s.filter((x) => x.z > fromZ);
+const span = (s: Sample[], k: keyof Sample) => s.reduce((m, x) => ({ lo: Math.min(m.lo, x[k]), hi: Math.max(m.hi, x[k]) }), { lo: Infinity, hi: -Infinity });
+const mean = (s: Sample[], k: keyof Sample) => s.reduce((a, x) => a + x[k], 0) / s.length;
+check('parked on flat ground: 1 g', () => {
+  const s = drive(rigid(), 0, 2).slice(60);
+  const r = span(s, 'gVert');
+  console.log(`        gVert ${r.lo.toFixed(3)}..${r.hi.toFixed(3)}`);
+  assert.ok(r.lo > 0.98 && r.hi < 1.02);
+});
+// The modelled road texture (`road-texture.ts`, waves up to 5 m long) rides under the tyres even on this flat pad:
+// about ±0.05 g in gVert at any speed, at a frequency that grows with speed
+check('250 km/h on flat ground: still 1 g, while verticalG keeps reading the aero load for the in-game consumers', () => {
+  const s = drive(rigid(), 250, 4).slice(120);
+  const r = span(s, 'gVert');
+  const last = s[s.length - 1];
+  console.log(`        gVert mean ${mean(s, 'gVert').toFixed(3)} (${r.lo.toFixed(3)}..${r.hi.toFixed(3)}), verticalG ${last.verticalG.toFixed(2)}`);
+  near(mean(s, 'gVert'), 1, 0.01);
+  assert.ok(r.lo > 0.9 && r.hi < 1.1);
+  assert.ok(last.verticalG > 2, 'downforce well above the weight at 250 km/h');
+  for (const x of s) near(x.verticalG, x.aeroG, 1e-9);
+});
+check('a 25 mm bump at 150 km/h spikes gVert in every 60 Hz sampling phase; verticalG does not see it', () => {
+  const z0 = 1000 + 80;
+  const runs = [0, 1, 2, 3].map((phase) => drive(rigid(profileGround(hump(z0, 0.6, 0.025))), 150, 3, phase));
+  const peaks = runs.map((s) => {
+    const before = s.filter((x) => x.z > z0 - 20 && x.z < z0 - 5);
+    const over = s.filter((x) => x.z > z0 - 5 && x.z < z0 + 15);
+    return { base: mean(before, 'gVert'), g: span(over, 'gVert'), aero: span(over, 'verticalG') };
+  });
+  console.log(`        before ${peaks.map((p) => p.base.toFixed(2)).join(' / ')} g, peak ${peaks.map((p) => p.g.hi.toFixed(2)).join(' / ')} g`);
+  for (const p of peaks) {
+    near(p.base, 1, 0.05);
+    assert.ok(p.g.hi - p.base > 0.3, `spike ${p.g.hi} over ${p.base}`);
+    assert.ok(p.aero.hi - p.aero.lo < 0.05, 'the aero load does not jump on a bump');
+  }
+});
+check('over a crest gVert dips under 1 g, and the compressions either side push it over', () => {
+  const z0 = 1000 + 100;
+  const s = after(drive(rigid(profileGround(hump(z0, 30, 0.1))), 200, 3), z0 - 10).filter((x) => x.z < z0 + 40);
+  const r = span(s, 'gVert');
+  console.log(`        gVert ${r.lo.toFixed(2)}..${r.hi.toFixed(2)} g`);
+  assert.ok(r.lo < 0.6 && r.hi > 1.3);
+});
+check('the classic engine reads 1 g parked and at 250 km/h too', () => {
+  const classic = () => new F1Physics2026(pad);
+  const parked = span(drive(classic, 0, 2).slice(60), 'gVert');
+  const fast = drive(classic, 250, 4).slice(120);
+  const r = span(fast, 'gVert');
+  console.log(`        parked ${parked.lo.toFixed(3)}..${parked.hi.toFixed(3)}, 250 km/h mean ${mean(fast, 'gVert').toFixed(3)} (${r.lo.toFixed(3)}..${r.hi.toFixed(3)}), verticalG ${fast[fast.length - 1].verticalG.toFixed(2)}`);
+  assert.ok(parked.lo > 0.98 && parked.hi < 1.02);
+  near(mean(fast, 'gVert'), 1, 0.01);
+  assert.ok(r.lo > 0.85 && r.hi < 1.15);
+  assert.ok(fast[fast.length - 1].verticalG > 2);
 });
 
 console.log('Impulse triggers');
