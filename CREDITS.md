@@ -19,7 +19,7 @@ LibreCorsa is an independent, non-commercial, open-source web simulator built wi
   | Car sounds ported from Assetto Corsa mods | The mod authors' terms; used non-commercially (see *Car sounds*) |
   | Suzuki Liana model (`public/cars/liana/model/`) | Forza Motorsport 4's (Turn 10 Studios / Microsoft) via a 2015 Assetto Corsa conversion; **not licensed for redistribution** (see *Suzuki Liana*) |
   | Suzuki Liana sounds (`public/cars/liana/audio/`) | The 2015 conversion's sound bank, built from Assetto Corsa (Kunos Simulazioni) samples; **not licensed for redistribution** |
-  | Dunsfold Aerodrome (`public/tracks/dunsfold/`) | 3D AC conversion v1.01 by **ACU** (2015, via AssettoCorsa.club); no licence on record (see *Optional circuits*) |
+  | Dunsfold Aerodrome (`public/tracks/dunsfold/`) | 3D AC conversion v1.01 by **ACU** (2015, via AssettoCorsa.club) of the *Forza Motorsport 4* model (Turn 10 Studios / Microsoft); no licence or permission on record (see *Optional circuits*) |
   | Suzuki Liana physics data (in `src/lib/sim/road/SuzukiLianaConfig.ts`) | By **alekabul** ([https://www.overtake.gg/members/alekabul.294399/](https://www.overtake.gg/members/alekabul.294399/)), used with permission |
   | MTRacing 496R model, sounds and physics data (`public/cars/mtr-496r/`, `src/lib/sim/proto/Mtr496rConfig.ts`) | By **munyuturbo** ([https://www.overtake.gg/members/munyuturbo.1202939/](https://www.overtake.gg/members/munyuturbo.1202939/)), used with permission |
   | Fonts | SIL Open Font License 1.1 (see *Fonts*) |
@@ -89,7 +89,7 @@ Each circuit below is created by **Mitja Bonca** and used with the author's perm
 
 #### Dunsfold Aerodrome (`public/tracks/dunsfold/`)
 
-* `"Dunsfold Aerodrome"`: 3D AC Conversion v1.01 by **ACU** (2015, via [AssettoCorsa.club](https://assettocorsa.club/)) (`dunsfold`). No licence or permission on record, and a forum post says an AC version of this track was converted from another sim without permission, so it is kept out of public releases until that is cleared. Converted the same way as the Mitja Bonca circuits (`scripts/tracks/port_ac_track.py`), plus the mod's own surface names mapped to road and run-off, the barriers opened where the lap passes beside and across itself, and run-off over the other leg's tarmac counted as road.
+* `"Dunsfold Aerodrome"`: 3D AC Conversion v1.01 by **ACU** (2015, via [AssettoCorsa.club](https://assettocorsa.club/)) of the Dunsfold Aerodrome model from *Forza Motorsport 4* (Turn 10 Studios / Microsoft) (`dunsfold`). No licence or permission on record. Converted the same way as the Mitja Bonca circuits (`scripts/tracks/port_ac_track.py`), plus the mod's own surface names mapped to road and run-off, the barriers opened where the lap passes beside and across itself, and run-off over the other leg's tarmac counted as road.
 
 ### RISE Motordrome trackside trees (`public/tracks/rwanda_official/scenery/`)
 
