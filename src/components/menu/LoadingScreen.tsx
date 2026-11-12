@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BASE_ALTITUDE_M, type BuiltTrackData, DEFAULT_TRACK_ID, TURN_METADATA } from "@/lib/track-data";
 import { getTrackInfo } from "@/lib/track-registry";
 import { formatMegabytes, useAssetProgress, type AssetTask } from "@/lib/loading/asset-progress";
@@ -145,15 +145,21 @@ export const LoadingScreen: React.FC<{
     return () => window.clearInterval(id);
   }, []);
 
+  // The press that leaves: one only, and the screen always goes, whatever the start (audio unlock) does
+  const start = useCallback(() => {
+    if (!ready || leavingRef.current) return;
+    leavingRef.current = true;
+    try {
+      onStart();
+    } catch (err) {
+      console.warn("Loading screen start failed; leaving it anyway", err);
+    }
+    setLeaving(true);
+    doneTimer.current = window.setTimeout(onDone, 520);
+  }, [ready, onStart, onDone]);
+
   useEffect(() => {
     if (!ready) return;
-    const start = () => {
-      if (leavingRef.current) return;
-      leavingRef.current = true;
-      onStart();
-      setLeaving(true);
-      doneTimer.current = window.setTimeout(onDone, 520);
-    };
     const onKey = (e: KeyboardEvent) => {
       // Only the key that starts is used up: during the fade the menu underneath already takes keys
       if (e.repeat || leavingRef.current) return;
@@ -180,7 +186,7 @@ export const LoadingScreen: React.FC<{
       window.removeEventListener("pointerup", onPointer);
       cancelAnimationFrame(raf);
     };
-  }, [ready, onStart, onDone]);
+  }, [ready, start]);
 
   const litLights = ready ? 0 : Math.min(LIGHTS, Math.floor(shown * LIGHTS + 0.001));
   // A circuit high enough for the thin air to matter says so, to the nearest 50 m

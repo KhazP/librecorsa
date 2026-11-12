@@ -153,11 +153,16 @@ const approach = (value: number, target: number, maxStep: number) =>
 
 /** The sound bank each car plays (the F1 cars share one bank) */
 const soundFor = (car: CarId): CarSoundSource => carById(car).sound;
-/** Runs `fn` when the browser is idle (Safari has no requestIdleCallback: a short timer instead) */
-const scheduleIdle = (fn: (deadline?: IdleDeadline) => void) => {
+/**
+ * Runs `fn` when the browser is idle (Safari has no requestIdleCallback: a timer instead, `fallbackDelayMs` from now,
+ * a frame by default)
+ */
+const scheduleIdle = (fn: (deadline?: IdleDeadline) => void, fallbackDelayMs = 16) => {
   if (typeof window.requestIdleCallback === "function") window.requestIdleCallback(fn, { timeout: 500 });
-  else window.setTimeout(() => fn(), 16);
+  else window.setTimeout(() => fn(), fallbackDelayMs);
 };
+/** Safari's wait between the spare AI field's build steps (a few frames for the menus between two AI cars) */
+const AI_PREP_GAP_MS = 150;
 
 /** What the drive shows the UI: one snapshot, replaced whenever any part changes (see DriveSession.subscribe) */
 export interface DriveSnapshot {
@@ -490,17 +495,23 @@ export class DriveSession {
     let audio: F1AudioEngine2026 | null = null;
     this.unlockAudio = () => {
       if (disposed) return;
-      if (!audio) {
-        audio = new F1AudioEngine2026();
-        audio.setCar(soundFor(carIdNow));
-        // Created paused unless the car is being driven; from then on the frame loop alone pauses and resumes it
-        audio.setPaused(this.snapshot.paused || appPhaseNow !== "driving");
-      }
-      if (!audio.isInitialized) {
-        audio.init();
-        audio.setMuted(this.snapshot.muted);
-      } else {
-        audio.resume();
+      // Called inside the press that leaves the loading screen or starts a race: a browser that refuses Web Audio
+      // leaves the game silent, never stuck on that press
+      try {
+        if (!audio) {
+          audio = new F1AudioEngine2026();
+          audio.setCar(soundFor(carIdNow));
+          // Created paused unless the car is being driven; from then on the frame loop alone pauses and resumes it
+          audio.setPaused(this.snapshot.paused || appPhaseNow !== "driving");
+        }
+        if (!audio.isInitialized) {
+          audio.init();
+          audio.setMuted(this.snapshot.muted);
+        } else {
+          audio.resume();
+        }
+      } catch (err) {
+        console.warn("Audio could not start; driving without sound", err);
       }
     };
     this.toggleMute = () => {
@@ -674,18 +685,45 @@ export class DriveSession {
      * it was built for.
      */
     let aiFieldSpare: { field: AiOpponentField; physics: SimulatorCar; opponents: number } | null = null;
+    /**
+     * The AI cars of the next spare field, made one per idle slice before the field goes round them: each settles on
+     * the grid as it is made, up to half a second on Safari, so five in one task froze the menus for seconds
+     */
+    let sparePeers: { physics: SimulatorCar; cars: SimulatorCar[] } | null = null;
+    /** The spare AI cars made for this car, used up */
+    const takeSparePeers = (car: SimulatorCar) => {
+      const peers = sparePeers?.physics === car ? sparePeers.cars : undefined;
+      sparePeers = null;
+      return peers;
+    };
     /** A new AI field round the player's car, of the race setup's size, at the player's chosen skill */
     const buildAiField = (car: SimulatorCar) =>
-      new AiOpponentField(track, car, aiDriversFor(settings.race.opponents), getTrackEnv(), { skill: settings.aiSkill });
+      new AiOpponentField(track, car, aiDriversFor(settings.race.opponents), getTrackEnv(), {
+        skill: settings.aiSkill,
+        peers: takeSparePeers(car),
+      });
+    /** One build of the spare field at a time (each call while it runs would start another) */
+    let aiPrepQueued = false;
     this.prepareAiField = () => {
+      if (aiPrepQueued) return;
+      aiPrepQueued = true;
       const run = () => {
+        aiPrepQueued = false;
         // Never while driving: the build would be a hitch on track instead
         if (disposed || appPhaseNow === "driving" || appPhaseNow === "loading") return;
         const opponents = settings.race.opponents;
         if (aiFieldSpare?.physics === physics && aiFieldSpare.opponents === opponents) return;
+        if (sparePeers?.physics !== physics) sparePeers = { physics, cars: [] };
+        if (physics.createAiPeerCar && sparePeers.cars.length < aiDriversFor(opponents).length) {
+          sparePeers.cars.push(physics.createAiPeerCar());
+          // A gap between the cars, for the menus to draw and take input (Safari has no idle callback to wait for)
+          aiPrepQueued = true;
+          scheduleIdle(run, AI_PREP_GAP_MS);
+          return;
+        }
         aiFieldSpare = { field: buildAiField(physics), physics, opponents };
       };
-      scheduleIdle(run);
+      scheduleIdle(run, AI_PREP_GAP_MS);
     };
     this.takeAiField = () => {
       const spare = aiFieldSpare;
@@ -794,6 +832,7 @@ export class DriveSession {
       physics.attachTrackRoot?.(root);
       aiFieldOf(raceNow())?.attachTrackRoot(root);
       aiFieldSpare?.field.attachTrackRoot(root);
+      for (const peer of sparePeers?.cars ?? []) peer.attachTrackRoot?.(root);
       // Move broadcast cameras that would film the inside of a grandstand: about a second of raycasts on a scan,
       // spread over idle slices so neither the loading screen nor the menus freeze (until done, the TV view uses
       // the stations as built)
@@ -1441,6 +1480,13 @@ export class DriveSession {
     // first frame is drawn, then let the loading screen offer to continue
     const loadStartMs = performance.now();
     let warmupStarted = false;
+    /** The warm-up has let the loading screen go: done, failed, or given up on by the watchdog */
+    let warmupSettled = false;
+    const settleWarmup = () => {
+      if (warmupSettled || disposed) return;
+      warmupSettled = true;
+      setAssetsReady(true);
+    };
     let loggedFirstFrame = false;
     const checkAssets = () => {
       if (warmupStarted || disposed) return;
@@ -1458,16 +1504,27 @@ export class DriveSession {
         // its programs on the bound target: compiled with none bound, every shader would be the wrong variant and
         // recompile on the first frame after the player presses start. The program build runs synchronously inside
         // compileAsync, so the target only has to be bound for the call itself.
-        compileForComposer()
-          .then(() => {
-            if (disposed) return;
-            warmUpGpu();
-            visualFx.hidePrewarmed();
-            assetProgress.done("shaders");
-          }, () => assetProgress.fail("shaders"))
-          .finally(() => {
-            if (!disposed) setAssetsReady(true);
-          });
+        let compiled: Promise<unknown>;
+        try {
+          compiled = compileForComposer();
+        } catch (err) {
+          compiled = Promise.reject(err);
+        }
+        compiled
+          .then(
+            () => {
+              // Given up on already: the first frames compile what is left
+              if (disposed || warmupSettled) return;
+              warmUpGpu();
+              visualFx.hidePrewarmed();
+              assetProgress.done("shaders");
+            },
+            (err) => {
+              console.warn("Shader warm-up failed (the first frames will compile instead)", err);
+              assetProgress.fail("shaders");
+            }
+          )
+          .finally(settleWarmup);
       });
     };
     function compileForComposer(): Promise<THREE.Object3D> {
@@ -1521,6 +1578,8 @@ export class DriveSession {
           if (t.id !== "shaders" && t.status === "pending") assetProgress.fail(t.id);
         }
       }
+      // A shader compile that never finishes (a lost GPU context polls forever) has been given up on: continue anyway
+      if (warmupStarted && assetProgress.get().tasks.some((t) => t.id === "shaders" && t.status === "failed")) settleWarmup();
     }, 2000);
     checkAssets();
 
