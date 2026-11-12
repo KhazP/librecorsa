@@ -165,9 +165,12 @@ export interface Bar {
  * readout names the highest. A table of the same numbers sits under it.
  */
 export function BarChart({ bars, label, unit, height = 160 }: { bars: Bar[]; label: string; unit: string; height?: number }) {
-  const [hovered, setHover] = useState<number | null>(null);
-  // A bar hovered before the range got shorter is no longer there
-  const hover = hovered !== null && hovered < bars.length ? hovered : null;
+  // The days shown: another range shows other days, while the same range read again (or the weekdays) keeps them
+  const span = `${bars.length}|${bars[0]?.label ?? ""}|${bars[bars.length - 1]?.label ?? ""}`;
+  const [hovered, setHovered] = useState<{ span: string; i: number } | null>(null);
+  // A bar hovered or tapped under another range is not this one's
+  const hover = hovered !== null && hovered.span === span && hovered.i < bars.length ? hovered.i : null;
+  const setHover = (i: number | null) => setHovered(i === null ? null : { span, i });
   const max = Math.max(0, ...bars.map((b) => b.value));
   const peak = bars.reduce((best, b, i) => (b.value > bars[best].value ? i : best), 0);
   const W = 1000;
