@@ -3344,7 +3344,8 @@ export class F1Physics2026 {
     if (sectorDuration > 8000) {
       this.telemetry.sectorTimesMs[idx] = sectorDuration;
       const prevBest = this.telemetry.bestSectorTimesMs[idx];
-      if (prevBest === null || sectorDuration < prevBest) {
+      // A best sector only from a lap that still counts (not one off the track, or one that cut the course)
+      if (this.lapValid && (prevBest === null || sectorDuration < prevBest)) {
         this.telemetry.bestSectorTimesMs[idx] = sectorDuration;
       }
     }

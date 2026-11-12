@@ -2275,7 +2275,8 @@ export class F12026CarSim implements SimulatorCar {
     if (duration > 8000) {
       t.sectorTimesMs[sector - 1] = duration;
       const best = t.bestSectorTimesMs[sector - 1];
-      if (best === null || duration < best) t.bestSectorTimesMs[sector - 1] = duration;
+      // A best sector only from a lap that still counts (not one off the track, or one that cut the course)
+      if (this.lapValid && (best === null || duration < best)) t.bestSectorTimesMs[sector - 1] = duration;
     }
   }
 
