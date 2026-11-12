@@ -154,7 +154,7 @@ export const PAD_LAYOUTS: Record<PadLayout, { label: string; buttons: PadButtonB
       racingLine: null,
     },
   },
-  // F1 24: A up, X down, B overtake, Y DRS, RB next camera, View flashback, Menu pause
+  // F1 24: A up, X down, B overtake, Y DRS, RB next camera, Menu pause
   f1: {
     label: "Formula style",
     buttons: {

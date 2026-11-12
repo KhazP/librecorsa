@@ -453,7 +453,7 @@ export interface CarTelemetry {
   race?: RaceStatus;
   /**
    * Run counter, set by the app shell: it goes up whenever the run restarts (a new session, a restart, a
-   * teleport, a flashback, a car change). Anything that keeps lap- or run-scoped state resets when it changes,
+   * teleport, a car change). Anything that keeps lap- or run-scoped state resets when it changes,
    * instead of guessing a restart from the lap count or distance.
    */
   runId?: number;
@@ -474,7 +474,7 @@ export interface CarTelemetry {
 }
 
 /** Why an excursion counted against the driver */
-export type TrackLimitsReason = "gained" | "corner_cut" | "not_lifted" | "illegal_overtake";
+export type TrackLimitsReason = "gained" | "corner_cut" | "not_lifted" | "illegal_overtake" | "course_cut";
 
 /** The race-control state of the track-limits judging (see `TrackLimitsMonitor`) */
 export interface TrackLimitsStatus {

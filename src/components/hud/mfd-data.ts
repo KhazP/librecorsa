@@ -131,7 +131,7 @@ export function useLapHistory(t: CarTelemetry): LapRecord[] {
     const runId = t.runId ?? 0;
     const now = { fuel: t.fuelKg, ers: t.ersBatteryPercent, wear: meanWear(t) };
     if (p && runId !== p.runId) {
-      // The shell restarted the run (restart, new session, teleport, flashback, car change): a new history
+      // The shell restarted the run (restart, new session, teleport, car change): a new history
       setLaps([]);
       start.current = now;
     } else if (p && t.lapCount === p.lapCount + 1 && t.lastLapTimeMs !== null) {

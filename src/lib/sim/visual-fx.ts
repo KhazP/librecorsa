@@ -428,7 +428,7 @@ export class SimVisualFxManager {
       const tx = (w.worldPos.x - prev.x) / dt;
       const ty = (w.worldPos.y - prev.y) / dt;
       const tz = (w.worldPos.z - prev.z) / dt;
-      // A first frame or a jump (reset, flashback, teleport): the car's own speed and heading until it settles again
+      // A first frame or a jump (reset, teleport): the car's own speed and heading until it settles again
       if (!this.wheelVelValid || tx * tx + ty * ty + tz * tz > 150 * 150) vel.copy(carForward).multiplyScalar(carSpeedMs);
       else vel.set(vel.x + (tx - vel.x) * velBlend, vel.y + (ty - vel.y) * velBlend, vel.z + (tz - vel.z) * velBlend);
       prev.set(w.worldPos.x, w.worldPos.y, w.worldPos.z);

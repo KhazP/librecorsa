@@ -4,7 +4,8 @@
  * garage setup clamping.
  * Run: npx tsx scripts/verify-race-control.ts
  */
-import { TrackLimitsMonitor, type TrackLimitsEvent, type TrackLimitsFrame } from "../src/lib/sim/track-limits";
+import { COURSE_CUT_MARGIN_S, COURSE_CUT_MIN_PENALTY_S, TrackLimitsMonitor, type TrackLimitsEvent, type TrackLimitsFrame } from "../src/lib/sim/track-limits";
+import { stretchTimeS } from "../src/lib/sim/course-limits";
 import { classifiedTimeS, type RacerProgress } from "../src/lib/sim/race-session";
 import { computeRelatives, fuelStrategy, type LapRecord } from "../src/components/hud/mfd-data";
 import { clampChassisSetup, DEFAULT_CHASSIS_SETUP, FUEL_LOAD } from "../src/lib/sim/car-setup";
@@ -171,6 +172,70 @@ console.log("Track limits · warnings and penalties");
   drive(again, 2.0, { deltaS: null });
   const relifted = again.snapshot(clock * 1000).pending;
   check("judged again without a reference: no stale gain on the card", relifted?.stage === "give_back" && relifted.gainS === null, JSON.stringify(relifted));
+}
+
+console.log("Track limits · a course cut");
+{
+  // The short lap's link on the Grand Prix lap: off the road at 1,100 m, 685 m round the lap in one frame, still off
+  // until it joins the lap again at 1,900 m 3 s after leaving, then a corner of the lap cut on the way out (so a later
+  // excursion would be a strike). The reference lap runs at 50 m/s: 16 s from 1,100 to 1,900 m, so the cut saved 13 s
+  const L = 5895;
+  const ref = new Float64Array(1179).fill(50);
+  const stretchRefS = (a: number, b: number) => stretchTimeS(ref, L, a, b);
+  const link = (m: TrackLimitsMonitor, ref: typeof stretchRefS | null = stretchRefS, refS = ref ?? undefined) => [
+    ...drive(m, 1, { distM: 1100, lapLengthM: L, stretchRefS: refS, deltaS: 0 }),
+    ...drive(m, 2, { distM: 1200, lapLengthM: L, stretchRefS: refS, offTrack: true, lateralM: -30, curvature: 0.01, deltaS: 0 }),
+    ...drive(m, 1, { distM: 1885, lapLengthM: L, stretchRefS: refS, offTrack: true, lateralM: -30, curvature: 0.01, deltaS: -10 }),
+    ...drive(m, 3, { distM: 1900, lapLengthM: L, stretchRefS: refS, deltaS: -10 }),
+  ];
+  check("the reference lap's time over a stretch", Math.abs(stretchRefS(1100, 1900) - 16) < 1e-9 && Math.abs(stretchRefS(5800, 100) - 195 / 50) < 1e-9);
+  const race = new TrackLimitsMonitor();
+  race.reset("race");
+  const ev = link(race);
+  const said = race.snapshot(clock * 1000).message?.text;
+  const saved = race.lastCutSavedS ?? 0;
+  const pen = ev.filter((e) => e.kind === "penalty");
+  check(
+    "in a race: the cut deletes the lap, and back on the track it costs the time it saved and 5 s more",
+    pen.length === 1 && ev.every((e) => e.kind === "penalty" || e.kind === "lap_invalid") && pen[0].reason === "course_cut" &&
+      Math.abs(saved - 13) < 0.05 && pen[0].penaltyS === Math.ceil(saved + COURSE_CUT_MARGIN_S) && race.penaltyTotalS === pen[0].penaltyS &&
+      said === `Course cut · +${pen[0].penaltyS?.toFixed(1)}s time penalty`,
+    `${JSON.stringify(ev)} ${said}, saved ${saved.toFixed(2)} s`
+  );
+  check("no warning on top for the rest of that excursion", race.strikes === 0 && !race.judging && race.snapshot(clock * 1000).warnings === 0);
+  const blind = new TrackLimitsMonitor();
+  blind.reset("race");
+  const bev = link(blind, null);
+  check("without a reference lap: the least penalty", bev.some((e) => e.kind === "penalty" && e.penaltyS === COURSE_CUT_MIN_PENALTY_S) && blind.penaltyTotalS === COURSE_CUT_MIN_PENALTY_S);
+  // The Grand Prix lap's loop driven on the short lap: off the road at 1,100 m, the lap position jumps back to 480 m,
+  // then 10 s later ahead to 1,206 m, and the car rejoins at 1,210 m having lost over 10 s on the reference
+  const detour = new TrackLimitsMonitor();
+  detour.reset("race");
+  const dev = [
+    ...drive(detour, 1, { distM: 1100, lapLengthM: L, stretchRefS, deltaS: 0 }),
+    ...drive(detour, 2, { distM: 1150, lapLengthM: L, stretchRefS, offTrack: true, lateralM: 30, deltaS: 0 }),
+    ...drive(detour, 10, { distM: 480, lapLengthM: L, stretchRefS, offTrack: true, lateralM: 180, deltaS: 0 }),
+    ...drive(detour, 1, { distM: 1206, lapLengthM: L, stretchRefS, offTrack: true, lateralM: 30, deltaS: 0 }),
+    ...drive(detour, 2, { distM: 1210, lapLengthM: L, stretchRefS, deltaS: 0 }),
+  ];
+  check("a longer way round: the lap is deleted, no penalty", detour.penaltyTotalS === 0 && dev.some((e) => e.kind === "lap_invalid") && (detour.lastCutSavedS ?? 0) < -5,
+    `${JSON.stringify(dev)} saved ${detour.lastCutSavedS?.toFixed(1)} s`);
+  const practice = new TrackLimitsMonitor();
+  practice.reset("practice");
+  const pev = link(practice);
+  check("in practice: the lap is deleted, no penalty", pev.some((e) => e.kind === "lap_invalid") && practice.penaltyTotalS === 0 && practice.snapshot(clock * 1000).message?.text === "Course cut · lap deleted");
+  const plain = new TrackLimitsMonitor();
+  plain.reset("race");
+  check("without the lap length nothing is read into a jump", drive(plain, 1, { distM: 1100 }).length === 0 && drive(plain, 2, { distM: 1885 }).length === 0);
+  // Far off the road between two parts of the lap that lie close: the lap distance jumps there and back
+  const between = new TrackLimitsMonitor();
+  between.reset("race");
+  const there = [
+    ...drive(between, 1, { distM: 30, lapLengthM: 932 }),
+    ...drive(between, DT, { distM: 210, lapLengthM: 932 }),
+    ...drive(between, 3, { distM: 32, lapLengthM: 932 }),
+  ];
+  check("a jump there and back is no cut", there.length === 0 && between.snapshot(clock * 1000).message === null, JSON.stringify(there));
 }
 
 console.log("Track limits · strict outside a race");

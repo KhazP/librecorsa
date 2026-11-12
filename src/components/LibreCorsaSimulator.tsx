@@ -55,7 +55,7 @@ import { webHidFfb, wheelFfb } from "@/lib/input/wheel-ffb";
 import { nameProblem } from "@/lib/net/name-filter";
 import { clampFov, codeFromName, DEFAULT_PLAYER_SETTINGS, loadCarChoice, loadOnboarded, loadPlayerSettings, loadRumble, pushLibraryRecent, saveCarChoice, saveOnboarded, toggleLibraryFavorite, type LibraryKind, sanitizeDriverName, savePlayerSettings, saveRumble, type PlayerSettings } from "@/lib/settings/player-settings";
 import type { AeroSetupPreset, AssistPreset, CameraMode, LiveTunerPatch, LiveryConfig, TireCompound, TyreSetup, VehicleModelId } from "@/types/f1";
-import { aiFieldOf, autoCompoundFor, DEFAULT_AERO_PRESET, DriveSession, idleDriveSnapshot, mpRaceOf, type AppPhase, type RunResetReason, type SessionRace } from "@/lib/drive-session";
+import { aiFieldOf, autoCompoundFor, DEFAULT_AERO_PRESET, DriveSession, idleDriveSnapshot, mpRaceOf, type AppPhase, type SessionRace } from "@/lib/drive-session";
 import { startAiRace, type RaceSetup } from "@/lib/sim/race-setup";
 import type { PodiumUi } from "@/lib/render/podium-shot";
 import { useRaceHistory } from "@/components/hud/useRaceHistory";
@@ -279,9 +279,9 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   const cycleCamera = useCallback(() => setSettings((prev) => ({ ...prev, camera: nextCameraMode(prev.camera ?? "chase") })), []);
 
   // ---- Session and run: the one place that starts, restarts and leaves what is on track (the session resets the run)
-  /** A new run re-opens the race results card (a flashback keeps it as it was) */
-  const onRunReset = useCallback((reason: RunResetReason) => {
-    if (reason !== "flashback") setResultsClosed(false);
+  /** A new run re-opens the race results card */
+  const onRunReset = useCallback(() => {
+    setResultsClosed(false);
   }, []);
 
   /** What belongs to a whole session: the lap card and its upload, the pause and its notice, the boost latch, the hint */
@@ -1614,7 +1614,6 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
                   onSpeed: (speed: number) => session?.replaySpeed(speed),
                   onCycleCamera: cycleCamera,
                   onExit: () => session?.exitReplay(),
-                  onFlashback: () => session?.flashbackReplay(),
                   exitKeyLabel: settings.keys.replay[0] ? keyLabel(settings.keys.replay[0]) : "T",
                 }
               : null

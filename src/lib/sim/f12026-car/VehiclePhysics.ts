@@ -1423,7 +1423,7 @@ export class VehiclePhysics {
    * Place the car at rest on the ground under (x, z), heading along `yawRad` (atan2(forward.x, forward.z)),
    * then let the suspension settle. `speedMs` > 0 gives a rolling start.
    */
-  /** Places the car at rest (or rolling at `speedMs`) on the ground at x, z; `keepTyres` keeps tyre and brake heat and wear (a flashback) */
+  /** Places the car at rest (or rolling at `speedMs`) on the ground at x, z; `keepTyres` keeps tyre and brake heat and wear (a car put back at a pose) */
   public reset(x: number, z: number, yawRad: number, speedMs = 0, keepTyres = false): void {
     const ch = this.config.chassis;
     const aero = this.config.aero;
@@ -1462,7 +1462,7 @@ export class VehiclePhysics {
     this.mapAeroRearN = 0;
     this.mapAeroDragN = 0;
     this.wallPrevCg.copy(this.position);
-    // Tyres kept through a flashback are only worth keeping while their state is a number
+    // Tyres kept through a placement are only worth keeping while their state is a number
     if (!keepTyres || !this.tyreStateFinite()) this.setTyreBlanketState();
 
     // Hubs at their static height over the local ground
