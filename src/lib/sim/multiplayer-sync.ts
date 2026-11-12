@@ -311,6 +311,8 @@ const RACE_REFUSALS: Record<string, string> = {
   bad: "Couldn't join the race. Reload the game and try again.",
   update: 'LibreCorsa has been updated. Reload the page to join the race.',
 };
+/** A guest refused for its version is disconnected this long after being told (ms), so the refusal reaches it first */
+const REFUSED_CLOSE_MS = 1500;
 /** A room whose host and guest run different versions of the game (protocol or physics) */
 const VERSION_MISMATCH = 'This room runs another version of LibreCorsa. Everyone in it needs to reload the page.';
 /** A car's name, colour, car and race progress go with its state this often (ms), and with every change */
@@ -1260,7 +1262,7 @@ export class MultiplayerSyncManager {
   /** Host: forwards a guest's message to every other guest (only to `toPeerId` when it is addressed) */
   private relay(serialized: string | ArrayBuffer, fromRemoteId: string, channel: 'state' | 'control', toPeerId?: string): void {
     for (const entry of this.rtcPeers.values()) {
-      if (entry.remoteId === fromRemoteId) continue;
+      if (entry.remoteId === fromRemoteId || entry.refused) continue;
       if (toPeerId !== undefined && entry.gamePeerId !== toPeerId) continue;
       const ch = channel === 'state' ? entry.dc : entry.ctl;
       if (ch && ch.readyState === 'open') {
@@ -1548,6 +1550,8 @@ export class MultiplayerSyncManager {
     }
     const serialized = JSON.stringify(env);
     for (const entry of this.rtcPeers.values()) {
+      // A refused guest hears nothing more (it was told why on its own channel)
+      if (entry.refused) continue;
       if (entry.ctl && entry.ctl.readyState === 'open') {
         try {
           entry.ctl.send(serialized);
@@ -1577,9 +1581,18 @@ export class MultiplayerSyncManager {
         if (this.isHost) {
           // Another version of the game (an older one says none): told so, and nothing more taken from it
           if (msg.proto !== PROTOCOL_VERSION || msg.sim !== this.simVersion()) {
-            if (via) via.refused = true;
             this.dropMember(from);
-            this.sendControl({ type: 'refuse', reason: 'version' }, from);
+            if (via && !via.refused) {
+              // Told on its own channel; then nothing more goes to it, and the connection is closed once that is out
+              via.refused = true;
+              try {
+                via.ctl?.send(JSON.stringify({ ctl: { type: 'refuse', reason: 'version' }, from: this.localPeerId, to: from }));
+              } catch {
+                // Closed meanwhile
+              }
+              const refused = via;
+              setTimeout(() => this.losePeer(refused), REFUSED_CLOSE_MS);
+            }
             break;
           }
           this.lapsedMembers.delete(from);
@@ -2251,7 +2264,7 @@ export class MultiplayerSyncManager {
         }
       }
       for (const entry of this.rtcPeers.values()) {
-        if (entry.dc && entry.dc.readyState === 'open') {
+        if (entry.dc && entry.dc.readyState === 'open' && !entry.refused) {
           try {
             entry.dc.send(binary);
           } catch {

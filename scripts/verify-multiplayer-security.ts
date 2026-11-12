@@ -246,6 +246,16 @@ const startOf = (trackId: string) => ({
   sendState(old, packet('peer_old'));
   sendCtl(old, 'peer_old', { type: 'ready', ready: true });
   check('nothing more is taken from a refused guest', !i.peers.has('peer_old') && !i.members.has('peer_old'));
+  // Nor sent to it: the lobby heartbeat, a start, the host's car and other guests' cars and pings stop at the refusal
+  const after = (e: Entry) => e.ctl.sent.slice(e.ctl.sent.findIndex((m) => typeof m === 'string' && m.includes('"refuse"')) + 1);
+  const late = connect(host, 'remote_late');
+  sendCtl(late, 'peer_late', { type: 'hello', name: 'Late', code: 'LAT', color: '#00ff00', ...VERSIONS });
+  host.setLobbySettings({ laps: 7 });
+  host.startRace();
+  host.update(5000, { driverCode: 'HST', teamColorHex: '#ffffff', pos: [0, 0, 0], quat: [0, 0, 0, 1], linVel: [0, 0, 0], angVel: [0, 0, 0], steerAngle: 0, wheelRPMs: [0, 0, 0, 0], throttle: 0, brake: 0, trackS: 0, speedKmh: 0 });
+  sendState(late, packet('peer_late'));
+  sendCtl(late, 'peer_late', { type: 'ping', t0: 1 });
+  check('nothing more is sent to a refused guest', after(old).length === 0 && old.dc.sent.length === 0 && late.dc.sent.length > 0, `${after(old).length} control messages, ${old.dc.sent.length} states after the refusal`);
   const same = connect(host, 'remote_same');
   sendCtl(same, 'peer_same', { type: 'hello', name: 'Same', code: 'SAM', color: '#00ff00', ...VERSIONS });
   check('a guest of this version is let in', i.members.has('peer_same') && !told(same));
