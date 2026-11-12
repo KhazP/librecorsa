@@ -2,8 +2,8 @@
  * Serverless Peer-to-Peer WebRTC + BroadcastChannel Multiplayer & Dead-Reckoning Engine
  *
  * Implements:
- * - Compact network state packet:
- *   `[timestamp, pos, quat, linVel, angVel, steerAngle, wheelRPMs, throttle, brake]`
+ * - The car state packet: binary, about 80 bytes, 60 a second on a fixed schedule (src/lib/net/state-codec.ts), with
+ *   a protocol version: a room's host and the race server refuse another version of the game
  * - 3 P2P Transports (the first two free forever on a static host):
  *   1. Room Code P2P Mode: WebRTC `RTCPeerConnection` + unreliable/unordered `RTCDataChannel`
  *      (`ordered: false, maxRetransmits: 0`) using Google Public STUN (`stun:stun.l.google.com:19302`) with a
@@ -2038,13 +2038,6 @@ export class MultiplayerSyncManager {
   }
 
   /**
-   * Ingests a 20-30 Hz network state packet into the peer's ring buffer.
-   * Uses an EWMA clock-offset estimator (`localClockMs - pkt.timestampMs`) so the sender's
-   * physics timestamps (`dt`) are preserved for Cubic Hermite spline tangents without network arrival jitter.
-   * `receiveClockMs` is the arrival time on the clock `update()` is given (default `this.clock`, `performance.now()`, the clock of
-   * requestAnimationFrame's timestamp); pass it when driving `update()` from another clock.
-   */
-  /**
    * Maps a peer's stamps to this clock: the fastest gap between a packet leaving (its stamp, plus how late in its
    * frame it went out) and arriving here over GAP_WINDOW_S is the fastest trip plus the clocks' offset, and half the
    * fastest round trip of the last minute is the fastest trip. Minimums, as a late packet or a stall only ever adds
@@ -2097,7 +2090,12 @@ export class MultiplayerSyncManager {
     if (samples.length > 300) samples.shift();
   }
 
-  /** `pkt` must come from sanitizePacket (or be built by trusted code, like the AI field's): it is not re-checked */
+  /**
+   * Takes a car state packet into the peer's buffer, its stamp mapped to this clock (updateTiming). `receiveClockMs` is
+   * the arrival time on the clock `update()` is given (default `this.clock`, performance.now(), the clock of
+   * requestAnimationFrame's timestamp); pass it when driving `update()` from another clock. `pkt` must come from
+   * sanitizePacket (or be built by trusted code, like the AI field's): it is not re-checked
+   */
   public ingestPacket(pkt: NetworkVehiclePacket, isAiPeer = false, receiveClockMs?: number): void {
     const now = receiveClockMs !== undefined && Number.isFinite(receiveClockMs) ? receiveClockMs : this.clock();
     if (!isAiPeer) this.memberHeard(pkt.peerId, now);
