@@ -77,10 +77,10 @@ export const GradeBadge: React.FC<{ grade: HomeGrade; title?: string; className?
   );
 };
 
-/** What the two badges mean, above a wall of cards */
-export const GradeLegend: React.FC<{ of: keyof typeof GRADE_NOTES }> = ({ of }) => (
+/** What the badges on a wall of cards mean, for the grades that appear on it */
+export const GradeLegend: React.FC<{ of: keyof typeof GRADE_NOTES; shown: readonly HomeGrade[] }> = ({ of, shown }) => (
   <dl className="m-0 mb-4 flex flex-wrap gap-x-7 gap-y-2.5">
-    {(["sim", "model"] as const).map((grade) => (
+    {(["sim", "model"] as const).filter((grade) => shown.includes(grade)).map((grade) => (
       <div key={grade} className="flex min-w-0 items-start gap-2.5">
         {/* Stacked on a phone: the same width for both, so the two notes start in line */}
         <dt className="shrink-0 max-sm:min-w-[88px]">

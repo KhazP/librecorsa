@@ -264,7 +264,7 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
 
         {tab === "circuits" ? (
           <>
-            <GradeLegend of="circuits" />
+            <GradeLegend of="circuits" shown={data.venues.flatMap((v) => v.layouts.map((l) => l.grade))} />
             <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(230px,1fr))]">
               {data.venues.map((v) => {
                 const on = v === venue;
@@ -324,7 +324,7 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
 
         {tab === "cars" ? (
           <>
-            <GradeLegend of="cars" />
+            <GradeLegend of="cars" shown={data.cars.map((c) => c.grade)} />
             <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(210px,1fr))]">
               {data.cars.map((c) => {
                 const on = c === car;
