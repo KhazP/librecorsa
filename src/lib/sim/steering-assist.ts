@@ -11,7 +11,9 @@
  *   and the same rounded smoother the stick goes through. A short tap therefore only nudges the car while a held key
  *   rolls on to the limit along an S-curve, instead of reaching it in a straight line. The smoothing rate can rise or
  *   fall with speed (`rateIncreaseWithSpeed`), and at a low rate the steering still returns to centre at least at
- *   half speed so it never feels like it lags on the way back.
+ *   half speed so it never feels like it lags on the way back. A key steers in along the car's own curve
+ *   (`KeyboardSteerProfile`: quicker in slow corners, gentler at speed) and lets go at the car's return pace; the
+ *   player's rise time scales the ramp, their return time both smoothers.
  * - Grip limit. Full input is scaled to a steering *limit* rather than to the full lock: the road-wheel angle that puts
  *   the front tyres at (just under) their peak slip angle relative to the front axle's direction of travel, so full
  *   input = maximum front grip at any speed, on turn-in and on the brakes as much as mid-corner. The peak slip angle
@@ -530,8 +532,11 @@ export class SteeringAssist {
     const st = this.steering.state;
     const towardCentre = Math.sign(raw) !== Math.sign(st) || Math.abs(raw) < Math.abs(st);
     const rateMult = keyboardSteers
-      ? towardCentre
-        ? kbOutMult
+      ? // The player's return time reaches this stage too: on the first alone, a quicker return barely showed. Their
+        // rise time stays on the first: here as well, its ends went from a key that snaps past the grip to one that
+        // never reaches it
+        towardCentre
+        ? kbOutMult * keyboard.returnScale
         : kbInMult
       : steeringRateMult(speed, lockDeg, controller.steeringRate, controller.rateIncreaseWithSpeed);
     // Under half rate the return to centre stays at least as quick as at half rate

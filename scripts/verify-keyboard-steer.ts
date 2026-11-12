@@ -18,6 +18,8 @@
  *    released as much as held (whatever the controller's), a pad player by the controller's (whatever the keyboard's),
  *    and a keyboard player with a pad plugged in keeps the keyboard's until the stick moves.
  * 7. The self-steer the assist applies is the curve the setup screens draw (`selfSteerDeg`), capped at the car's lock.
+ * 9. The player's Steering return reaches the whole return to centre (a quicker or slower let-go shows), and neither
+ *    end spins a car on a D → A flick.
  * 8. The keyboard pedal help (ABS / traction control off) follows the tyres only while its key is held; the controller's
  *    brake trigger cue backs off at the same slip margin.
  *
@@ -320,6 +322,35 @@ for (const cc of CARS.filter((c) => !ONLY || ONLY.some((o) => c.name.includes(o)
     check(
       n.maxBetaDeg < 8 && Math.abs(n.endYaw) < 0.05,
       `${name} D → A flick at ${sp.flick} km/h: max body slip ${n.maxBetaDeg.toFixed(1)}°, final yaw ${(n.endYaw * RAD2DEG).toFixed(2)}°/s`
+    );
+  }
+  // 9. Steering return, at its ends: how long the steering takes to fall under 10 % once the key is let go, and the
+  // flick (which passes through centre at the return pace)
+  {
+    const releaseMs = (steerReturnS: number) => {
+      const assist = gameAssist(DEFAULT_PLAYER_SETTINGS.padTuning, { ...DEFAULT_PLAYER_SETTINGS.keyboardTuning, steerReturnS });
+      const n = drive(cc, sp.release, 4, (t) => ({ dir: t < 1.5 ? 1 : 0 }), { assist });
+      const i0 = Math.round(1.5 / DT);
+      const held = n.steer[i0 - 1];
+      return n.steer.slice(i0).findIndex((v) => Math.abs(v) < 0.1 * Math.abs(held)) * DT * 1000;
+    };
+    const flick = (steerReturnS: number) =>
+      drive(cc, sp.flick, 3, (t) => ({ dir: t < 0.4 ? 1 : t < 0.8 ? -1 : 0 }), {
+        assist: gameAssist(DEFAULT_PLAYER_SETTINGS.padTuning, { ...DEFAULT_PLAYER_SETTINGS.keyboardTuning, steerReturnS }),
+      });
+    const [quick, base, slow] = [0.05, DEFAULT_PLAYER_SETTINGS.keyboardTuning.steerReturnS, 1].map(releaseMs);
+    const [fQuick, fSlow] = [0.05, 1].map(flick);
+    check(
+      quick > 0 &&
+        quick < 0.75 * base &&
+        slow > 1.5 * base &&
+        fQuick.maxBetaDeg < b.betaDeg &&
+        fSlow.maxBetaDeg < b.betaDeg &&
+        Math.abs(fQuick.endYaw) < 0.05 &&
+        Math.abs(fSlow.endYaw) < 0.05,
+      `${name} Steering return: let go at ${sp.release} km/h, under 10 % in ${quick.toFixed(0)} ms at 50 ms, ` +
+        `${base.toFixed(0)} ms at the default, ${slow.toFixed(0)} ms at 1 s; flick body slip ` +
+        `${fQuick.maxBetaDeg.toFixed(1)}° / ${fSlow.maxBetaDeg.toFixed(1)}° at the two ends`
     );
   }
   // 6. The tuning of the device that steers. A held key, then 2.5 s with it released: the run's steering must not
