@@ -51,9 +51,9 @@ import {
   RacecraftMemory,
 } from '@/lib/sim/ai-racecraft';
 import { RaceIncidents } from '@/lib/sim/race-incidents';
-import { aiTrackFor, type AiTrack } from '@/lib/sim/ai/ai-track';
+import { aiTrackFor, sampleGrid, type AiTrack } from '@/lib/sim/ai/ai-track';
 import { carLimitsFor } from '@/lib/sim/ai/ggv';
-import { makeDrivePlan } from '@/lib/sim/ai/drive-plan';
+import { makeDrivePlan, type AiDrivePlan } from '@/lib/sim/ai/drive-plan';
 import { DEFAULT_PLANNER_WEIGHTS, PLAN_DT, PLAN_STEPS, planLocal, type PlannerResult, type PredictedCar } from '@/lib/sim/ai/local-planner';
 import type { AiGridOrder, PlayerGridSlot } from '@/lib/sim/race-setup';
 import { F12026_CAR_CONFIG } from '@/lib/sim/f12026-car/F12026CarConfig';
@@ -200,6 +200,23 @@ function followCapMs(ahead: SimulatorCar, gapM: number, rc: RacecraftParams = DE
   const close = Math.max(0, Math.min(1, (rc.followFadeM - gapM) / Math.max(5, rc.followFadeM - 5)));
   const margin = 2.5 + (decelAhead > 5 ? 0.12 * vAhead * close : 0);
   return Math.max(0, vAhead - 0.2 * decelAhead * close) + Math.sqrt(2 * rc.followRelAccel * Math.max(0, gapM - margin));
+}
+
+/**
+ * How much a planned car's speed over the road ahead (to `lookM`) is a corner's to set: 1 where the plan has it brake
+ * or hold a corner's limit within that distance, 0 where the slowest point ahead is well above its speed (a straight,
+ * a fast sweep it is still accelerating through). The plan's level-ground top speed is no corner: a car in a tow runs
+ * past it
+ */
+function cornerLimitedShare(plan: AiDrivePlan, s: number, vMs: number, lookM: number): number {
+  const ds = plan.track.ds;
+  let vMin = Infinity;
+  for (let d = 0; d <= lookM; d += 5) {
+    const v = sampleGrid(plan.v, s + d, ds);
+    if (sampleGrid(plan.vOpen, s + d, ds) > v + 0.05) continue;
+    vMin = Math.min(vMin, v);
+  }
+  return THREE.MathUtils.clamp((1.15 - vMin / Math.max(1, vMs)) / 0.15, 0, 1);
 }
 
 /**
@@ -1560,8 +1577,10 @@ export class AiOpponentField {
       // Off-line and in dirty air the corner is tighter than planned: give a little speed away for it
       const wakeFrontMult = me.telemetry.aeroWakeDownforceMult ?? 1;
       // (the physics lose the downforce; this is the driver's margin for it: a car on a drive plan runs at its real limit
-      // and spun in the wake at a smaller one)
-      const dirtyAirPenalty = 1 - (me.aiPlan ? this.rc.dirtyAirMargin : 0.05) * Math.max(0, 1 - wakeFrontMult);
+      // and spun in the wake at a smaller one). A planned car gives it away only where a corner sets its speed: on the
+      // straights it scaled the whole plan, and the car in the tow ran 2 % under its own top speed and never got by
+      const dirtyAirShare = me.aiPlan ? this.rc.dirtyAirMargin * cornerLimitedShare(me.aiPlan, me.sMeters, me.vxMs, lookM) : 0.05;
+      const dirtyAirPenalty = 1 - dirtyAirShare * Math.max(0, 1 - wakeFrontMult);
       // Rain: the pace the tyres' grip on this much water allows (weather.ts / track-environment.ts)
       const weatherPace = this.environment.weatherPaceScale(me);
       // Yellow flag: lift through the zone
