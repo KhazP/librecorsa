@@ -118,7 +118,7 @@ The online side (rooms, boards, scheduled races) is a Cloudflare Worker in [`clo
 
 Steering, pedals and buttons come through the browser's Gamepad API, so any wheel that Windows, macOS or Linux sees as a game controller can drive. Force feedback has two paths:
 
-- **In the browser (WebHID, Chrome or Edge)**: click **Connect wheel** in the wheel setup. It drives bases that expose the standard USB HID PID force-feedback reports, and the Logitech G25, G27, G29 and Driving Force GT, with nothing to install. On a base that offers them, friction and inertia run on the wheel itself; the G27 and G29 get rev lights. Experimental.
+- **In the browser (WebHID, Chrome or Edge)**: click **Connect wheel** in the wheel setup. It drives bases that expose the standard USB HID PID force-feedback reports, and the Logitech G25, G27, G29 and Driving Force GT, with nothing to install. It also tries the Thrustmaster T300RS, T-GT II, T248, TX, TS-XW and TS-PC (untested), once a driver has switched the wheel out of its start-up mode. On a base that offers them, friction and inertia run on the wheel itself; the G27 and G29 get rev lights. Experimental.
 - **Local bridge (Windows)**: a small helper that talks DirectInput to any force-feedback wheel. It needs a copy of this repository and Node.js: run `npm install` once, then `npm run ffb` and keep it open. The game finds it on `127.0.0.1:18500`. For the hosted site, allow its origin when you start the bridge (origin only, no path):
   - PowerShell: `$env:FFB_ALLOW_ORIGIN="https://librecorsa.org"; npm run ffb`
   - cmd: `set "FFB_ALLOW_ORIGIN=https://librecorsa.org" && npm run ffb`
@@ -132,7 +132,9 @@ Only what the maintainer has driven is marked tested. Everything else is what th
 | Simagic, Cammus, Asetek, Fanatec DD (PC mode), Thrustmaster DD | Unknown: without HID PID force feedback the page switches to the bridge | Expected | Untested |
 | Logitech G25, G27, G29, Driving Force GT | Expected: the classic Logitech commands, rev LEDs on the G27 and G29 | Expected | Untested |
 | Logitech G920, G923, G PRO | No: proprietary force feedback | Expected | Untested |
-| Thrustmaster T150, T248, T300, TMX; Fanatec CSL Elite | Unknown, likely not | Expected | Untested |
+| Thrustmaster T300RS, T-GT II, T248, TX, TS-XW, TS-PC | Unknown: the commands of the Linux driver hid-tmff2, once a driver has switched the wheel out of its start-up mode (Thrustmaster's on Windows, hid-tminit on Linux). If it has not, or Windows refuses the commands, the page switches to the bridge | Expected | Untested |
+| Thrustmaster T150, TMX, T500RS | No: a different command set (T150, TMX), or not covered by hid-tmff2 (T500RS) | Expected | Untested |
+| Fanatec CSL Elite | Unknown: without HID PID force feedback the page switches to the bridge | Expected | Untested |
 
 Drove one of these, or a wheel that isn't listed? A [wheel report](https://github.com/KhazP/librecorsa/issues/new?template=wheel-report.yml) moves it into the table.
 

@@ -152,10 +152,24 @@ export const WHEEL_SUPPORT: readonly WheelSupportRow[] = [
     note: "Untested; bridge only: the browser speaks only the classic Logitech protocol and cannot rescale the DFP's steering axis",
   },
   {
-    wheel: "Thrustmaster T150, T248, T300, TMX; Fanatec CSL Elite",
+    wheel: `Thrustmaster ${THRUSTMASTER_NAMES}`,
     webHid: "unknown",
     bridge: "expected",
-    note: "Untested; belt / gear bases likely need the bridge",
+    note:
+      "Untested; the commands of Linux hid-tmff2, once a driver has switched the wheel out of its start-up mode. If " +
+      "it has not, or Windows refuses the commands, the bridge takes over",
+  },
+  {
+    wheel: "Thrustmaster T150, TMX, T500RS",
+    webHid: "no",
+    bridge: "expected",
+    note: "Untested; bridge only: the T150 and TMX take a different command set, and hid-tmff2 does not cover the T500RS",
+  },
+  {
+    wheel: "Fanatec CSL Elite",
+    webHid: "unknown",
+    bridge: "expected",
+    note: "Untested; without HID PID force feedback the page switches to the bridge",
   },
 ];
 
