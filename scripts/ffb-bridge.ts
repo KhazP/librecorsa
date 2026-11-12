@@ -178,6 +178,8 @@ if (!telemetryOnly) {
   ensureHelper();
   const h = spawn(HELPER_EXE, args, { windowsHide: true });
   helper = h;
+  // A force write that lands after the helper died but before its "exit" raises EPIPE here; "exit" handles the rest
+  h.stdin.on("error", () => {});
   let helperOut = "";
   h.stdout.setEncoding("utf8");
   h.stdout.on("data", (chunk: string) => {
