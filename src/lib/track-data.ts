@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import {
   LiveryConfig,
+  LiveryDecalSet,
   RunoffStyle,
   TrackSamplePoint,
   TurnMetadata,
@@ -114,51 +115,71 @@ export interface GridSlotDef {
 /** Grid slots of the active circuit */
 export const RWANDA_SPAWN_GRID: GridSlotDef[] = [...(rawTrackJson.spawnGrid as GridSlotDef[])];
 
+/**
+ * The Oracle Red Bull Racing livery's pictures: cut from an Assetto Corsa skin of the RB22 by
+ * `scripts/cars/build_rb_livery.mjs` (atlas rectangles from its `decals.json`), placed on the 2026 Prototype's body
+ */
+const ORACLE_RED_BULL_DECALS: LiveryDecalSet = {
+  atlas: "/cars/f12026/liveries/oracle_red_bull/decals.png",
+  decals: [
+    // ORACLE along each sidepod
+    { rect: [0, 0, 0.53516, 0.61523], face: "left", centre: [0.62, 0.5, -0.08], size: [0.62, 0.178], depth: 0.15 },
+    { rect: [0, 0, 0.53516, 0.61523], face: "right", centre: [-0.62, 0.5, -0.08], size: [0.62, 0.178], depth: 0.15 },
+    // A bull charging forward on each side of the engine cover, the Red Bull wordmark behind it
+    { rect: [0.66699, 0, 0.19092, 0.4375], face: "left", centre: [0.34, 0.61, -0.52], size: [0.38, 0.218], depth: 0.12 },
+    { rect: [0.66699, 0, 0.19092, 0.4375], face: "right", centre: [-0.34, 0.61, -0.52], size: [0.38, 0.218], depth: 0.12, flipX: true },
+    { rect: [0, 0.63086, 0.25342, 0.33008], face: "left", centre: [0.31, 0.62, -0.98], size: [0.5, 0.163], depth: 0.12 },
+    { rect: [0, 0.63086, 0.25342, 0.33008], face: "right", centre: [-0.31, 0.62, -0.98], size: [0.5, 0.163], depth: 0.12 },
+    // The nose: a bull on each side, the number on top
+    { rect: [0.66699, 0, 0.19092, 0.4375], face: "left", centre: [0.12, 0.44, 2.05], size: [0.3, 0.172], depth: 0.1 },
+    { rect: [0.66699, 0, 0.19092, 0.4375], face: "right", centre: [-0.12, 0.44, 2.05], size: [0.3, 0.172], depth: 0.1, flipX: true },
+    { rect: [0.53906, 0, 0.12402, 0.50195], face: "top", centre: [0, 0.56, 1.72], size: [0.17, 0.172], rotDeg: -90, depth: 0.1 },
+    // ORACLE across the rear wing's main plane
+    { rect: [0, 0, 0.53516, 0.61523], face: "top", centre: [0, 0.8, -2.18], size: [0.7, 0.201], depth: 0.07 },
+  ],
+};
+
+/**
+ * The F1 liveries: the first in LibreCorsa's own colours, two more of the game's own, and the Oracle Red Bull Racing
+ * one with its pictures (the 2026 Prototype's body paints them; other bodies take the colours only)
+ */
 export const LIVERIES: LiveryConfig[] = [
   {
-    id: "rwanda_2026",
-    name: "Visit Rwanda #26",
-    team: "Kigali Apex Racing",
-    primary: "#00a1de",
-    secondary: "#0f172a",
-    accent: "#fad201",
+    id: "librecorsa",
+    name: "LibreCorsa #26",
+    team: "LibreCorsa",
+    primary: "#ccff00",
+    secondary: "#11131a",
+    accent: "#ff2a3c",
     number: "26",
   },
   {
-    id: "scuderia_red",
-    name: "Scuderia Corsa #16",
-    team: "Maranello Works",
-    primary: "#dc2626",
-    secondary: "#18181b",
-    accent: "#facc15",
-    number: "16",
+    id: "aurora",
+    name: "Aurora #7",
+    team: "Aurora GP",
+    primary: "#eef1f5",
+    secondary: "#0b3d4a",
+    accent: "#ff6a1a",
+    number: "7",
   },
   {
-    id: "silver_arrow",
-    name: "Silver Star #44",
-    team: "Brackley Aero",
-    primary: "#e2e8f0",
-    secondary: "#0f172a",
-    accent: "#06b6d4",
-    number: "44",
+    id: "verdant",
+    name: "Verdant #11",
+    team: "Greenline Racing",
+    primary: "#0d5c46",
+    secondary: "#0a0f0d",
+    accent: "#e8c35a",
+    number: "11",
   },
   {
-    id: "papaya_apex",
-    name: "Papaya Velocity #4",
-    team: "Woking Motorsport",
-    primary: "#f97316",
-    secondary: "#1e293b",
-    accent: "#38bdf8",
-    number: "4",
-  },
-  {
-    id: "carbon_stealth",
-    name: "Stealth Bull #1",
-    team: "Milton Keynes Racing",
-    primary: "#1e1b4b",
-    secondary: "#090d16",
-    accent: "#ef4444",
-    number: "1",
+    id: "oracle_red_bull",
+    name: "Max Verstappen #3",
+    team: "Oracle Red Bull Racing",
+    primary: "#15214a",
+    secondary: "#0e0f12",
+    accent: "#f2b705",
+    number: "3",
+    decals: ORACLE_RED_BULL_DECALS,
   },
 ];
 

@@ -58,6 +58,11 @@ node --max-old-space-size=12288 scripts/cars/port_qvist_f1.mjs path/to/f1_2026_c
 - **From the AM26** (`public/amr26/model/amr26.glb`, `--steer-from`): `STEER_BASE` (steering wheel, shift lights,
   display) and the root's `cameras`. The root's `helmet.pos` places the game's own helmet.
 
+`build_rb_livery.mjs <skin folder>` cuts the Oracle Red Bull Racing livery's pictures out of an Assetto Corsa skin's
+`car-body.dds` (VRC Formula Alpha 2026, RB22), keys off its navy and packs them into
+`public/cars/f12026/liveries/oracle_red_bull/decals.png`; `decals.json` gives the rectangles the livery's placements in
+`src/lib/track-data.ts` use (`render/livery-decals.ts` projects them).
+
 # Assetto Corsa Car Porter (`port_ac_car.py`)
 
 `scripts/cars/port_ac_car.py` converts an Assetto Corsa car (its main `.kn5` plus one skin) into the same `CAR` / `BODY` / `STEER` / `WHEEL_xx` layout. Each car has a preset in `PRESETS`: its material table, the nodes and materials it leaves out, the skin files that override the kn5's, how its tyre meshes and spinning parts are named, and its windscreen. There are two, the Suzuki Liana 1.6 (`liana`) and the MTRacing 496R (`mtr-496r`); the kn5 reader, the hierarchy split and the paint bake are generic AC.

@@ -154,6 +154,8 @@ const Credits: React.FC = () => (
           <a href="http://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer" className={linkClass}>
             CC BY 4.0
           </a>
+          . Its Oracle Red Bull Racing livery uses pictures from an Assetto Corsa skin made for VRC&apos;s Formula Alpha
+          2026; the logos are their owners&apos; trademarks
           <br />
           Mercedes-AMG GT3 Evo: &ldquo;Mercedes-AMG GT3&rdquo; (
           <a
