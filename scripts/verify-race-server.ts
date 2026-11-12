@@ -13,7 +13,7 @@ import { handleApi, onlineConfig, raceSlotSeconds } from '../cloudflare/api/inde
 import { MAX_RACERS, RACE_SERVER_ID, RaceServer } from '../cloudflare/api/race';
 import type { Env } from '../cloudflare/api/types';
 import { countdownLabel, nextRaceSlot, RACE_COUNTDOWN_MS, RACE_JOIN_CUTOFF_MS, raceRules, raceSlot } from '../src/lib/net/race-schedule';
-import { sanitizeControl, type ControlMessage, type LobbyState, type RaceStartInfo } from '../src/lib/net/wire';
+import { MAX_STATE_PACKETS_PER_S, sanitizeControl, type ControlMessage, type LobbyState, type RaceStartInfo } from '../src/lib/net/wire';
 import { sha256Hex } from '../cloudflare/api/board';
 import { parseDriverRecord, parseWeekRaceResults } from '../src/lib/net/race-results';
 import { FakeSocket, fakeD1, fakeState } from './lib/fake-cloudflare';
@@ -167,7 +167,7 @@ async function main() {
   await server.webSocketMessage(al, JSON.stringify(packet('peer_al', { pos: [1e9, 0, 0] })));
   check("another car's state, or an impossible one, is dropped", states(bea).length === 1);
   for (let i = 0; i < 200; i++) await server.webSocketMessage(al, JSON.stringify(packet('peer_al', { seq: i })));
-  check('a flooding car is cut off', states(bea).length <= 61, `${states(bea).length} passed of 201`);
+  check('a flooding car is cut off', states(bea).length <= MAX_STATE_PACKETS_PER_S + 1, `${states(bea).length} passed of 201`);
 
   // The official result: Al finishes, Bea never does
   const laps = rules.race.laps;

@@ -21,7 +21,7 @@
  */
 import { RACE_COUNTDOWN_MS, RACE_JOIN_CUTOFF_MS, raceRules, raceSlot } from "../../src/lib/net/race-schedule";
 import { addFinish, finishProblem, newResultBook, resultCloseMs, resultDue, resultMessage, type FinishMessage, type ResultBook } from "../../src/lib/net/official-result";
-import { PEER_ID_RE, sanitizeControl, sanitizePacket, type LobbyPlayer, type LobbyState, type OfficialResultRow, type RaceStartInfo } from "../../src/lib/net/wire";
+import { MAX_STATE_PACKETS_PER_S, PEER_ID_RE, sanitizeControl, sanitizePacket, type LobbyPlayer, type LobbyState, type OfficialResultRow, type RaceStartInfo } from "../../src/lib/net/wire";
 import { driverNameKey, sha256Hex } from "./board";
 import { storeRaceResult, type RaceEntrant } from "./results";
 import { workers, type D1Database, type DurableObjectState, type Env, type ServerSocket } from "./types";
@@ -32,8 +32,7 @@ export const MAX_RACERS = 16;
 const MAX_PEEK_NAMES = 6;
 const TOKEN_RE = /^[A-Za-z0-9_-]{8,64}$/;
 const MAX_MESSAGE_CHARS = 16 * 1024;
-/** As a room's host: more than this per second from one car is a flood, and the excess is dropped */
-const MAX_STATE_PER_S = 60;
+/** As a room's host: more than this per second from one car is a flood, and the excess is dropped (state: wire.ts) */
 const MAX_CONTROL_PER_S = 40;
 /** An entrant silent this long when the grid is made has gone (the game pings every 2 s) */
 const GONE_AFTER_MS = 12_000;
@@ -267,7 +266,7 @@ export class RaceServer {
       r = { windowStartMs: nowMs, state: 0, control: 0 };
       this.rates.set(ws, r);
     }
-    return ++r[kind] <= (kind === "state" ? MAX_STATE_PER_S : MAX_CONTROL_PER_S);
+    return ++r[kind] <= (kind === "state" ? MAX_STATE_PACKETS_PER_S : MAX_CONTROL_PER_S);
   }
 
   async webSocketMessage(ws: ServerSocket, message: string | ArrayBuffer): Promise<void> {

@@ -7,6 +7,7 @@
  * The WebRTC channels are stood in for by plain objects; the manager's channel handlers are driven directly.
  */
 import { MultiplayerSyncManager, sanitizePacket, type LobbyState, type NetworkVehiclePacket } from '../src/lib/sim/multiplayer-sync';
+import { MAX_STATE_PACKETS_PER_S } from '../src/lib/net/wire';
 
 const failures: string[] = [];
 const check = (name: string, ok: boolean, detail = '') => {
@@ -179,7 +180,7 @@ const startOf = (trackId: string) => ({
   // Flooding: the excess is dropped
   b.dc.sent.length = 0;
   for (let k = 0; k < 200; k++) sendState(a, packet('peer_a'));
-  check('a flood is cut to the per-second budget', b.dc.sent.length <= 60, `${b.dc.sent.length} of 200 relayed`);
+  check('a flood is cut to the per-second budget', b.dc.sent.length <= MAX_STATE_PACKETS_PER_S, `${b.dc.sent.length} of 200 relayed`);
 }
 
 // 3. Guest: only the host it dialled runs the room ---------------------------------------------------------------------

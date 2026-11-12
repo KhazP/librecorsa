@@ -53,6 +53,17 @@ export interface NetworkVehiclePacket {
   hz?: boolean;
 }
 
+/**
+ * Car state packets per second, sent on a fixed schedule (MultiplayerSyncManager.update). A room's host and the race
+ * server relay each car at this rate to every other.
+ */
+export const STATE_SEND_HZ = 60;
+/**
+ * A car sending more than this per second is flooding: a room's host and the race server drop the excess. Half as much
+ * again as the send rate, as packets bunch up on the way
+ */
+export const MAX_STATE_PACKETS_PER_S = 90;
+
 /** A racer's progress, sent with every state packet while a multiplayer race runs */
 export interface PeerRaceProgress {
   /** Race id the progress belongs to */

@@ -4,6 +4,8 @@
  *   npx tsx scripts/bench-netcode.ts              the full table (three minutes of racing per scenario)
  *   npx tsx scripts/bench-netcode.ts --quick      a shorter run of the main rows
  *   npx tsx scripts/bench-netcode.ts --json out.json
+ *   npx tsx scripts/bench-netcode.ts --hz 30      every client sends at this rate (default: the game's)
+ *   npx tsx scripts/bench-netcode.ts --seeds 5    runs each scenario with this many seeds (default 3, quick 1)
  *
  * Two (or three) clients race recorded F1Physics2026 drives on the default circuit through their own
  * `MultiplayerSyncManager`, on simulated links, with their own clocks and frame rates. Each row: where each client
@@ -22,6 +24,10 @@ const args = process.argv.slice(2);
 const quick = args.includes('--quick');
 const jsonAt = args.indexOf('--json');
 const jsonPath = jsonAt >= 0 ? args[jsonAt + 1] : null;
+const seedsAt = args.indexOf('--seeds');
+const seeds = seedsAt >= 0 ? Math.max(1, Number(args[seedsAt + 1])) : quick ? 1 : 3;
+const hzAt = args.indexOf('--hz');
+const sendHz = hzAt >= 0 ? Number(args[hzAt + 1]) : undefined;
 
 const SLOW: Partial<Scenario['b']> = { fps: 30, workMs: 26, sendAtMs: 18, hitch: { chance: 0.01, ms: 120 } };
 
@@ -47,19 +53,19 @@ function main() {
   const drives = recordDrives(track, durationS + 2);
   const setup: BenchSetup = { track, drives, brakingZone: drives[0].hardestBrakingZone(), durationS, warmupS: 5 };
   console.log(
-    `Netcode bench: ${track.id ?? 'default circuit'}, ${durationS} s per scenario, hairpin braking zone ${setup.brakingZone.fromS.toFixed(0)}-${setup.brakingZone.toS.toFixed(0)} m (drives recorded in ${((Date.now() - started) / 1000).toFixed(1)} s)\n`
+    `Netcode bench: ${track.id ?? 'default circuit'}, ${durationS} s per scenario and seed, hairpin braking zone ${setup.brakingZone.fromS.toFixed(0)}-${setup.brakingZone.toS.toFixed(0)} m (drives recorded in ${((Date.now() - started) / 1000).toFixed(1)} s)\n`
   );
   const results: ScenarioResult[] = [];
   const rows: Parameters<typeof tableOf>[0] = [];
   for (const sc of SCENARIOS) {
     if (quick && !QUICK.has(sc.name)) continue;
-    const r = runScenario(setup, { seed: 1, ...sc });
+    const r = runScenario(setup, { seed: 1, sendHz, ...sc }, seeds);
     results.push(r);
     rows.push({ label: r.name, m: r.all, bytes: r.bytesPerPacket, rate: r.packetsPerS });
     if (sc.name === '50 ms') rows.push({ label: 'braking into the hairpin, 50 ms', m: r.braking });
   }
   console.log(tableOf(rows));
-  console.log(`\nAlong / across / bias in metres. ${((Date.now() - started) / 1000).toFixed(1)} s in all.`);
+  console.log(`\nAlong / across / bias in metres, ${seeds} seed(s) per row. ${((Date.now() - started) / 1000).toFixed(1)} s in all.`);
   if (jsonPath) writeFileSync(jsonPath, JSON.stringify(results, null, 2));
 }
 

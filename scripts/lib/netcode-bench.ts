@@ -441,6 +441,8 @@ export interface Scenario {
   viaHost?: boolean;
   /** The bench's ablation: each receiver maps sender stamps to its own clock exactly */
   trueTiming?: boolean;
+  /** State packets per second (default: the game's) */
+  sendHz?: number;
   seed?: number;
 }
 
@@ -546,8 +548,8 @@ const JUMP_M = 1;
 const POP_M = 0.3;
 const STALE_MS = 300;
 
-/** Runs one scenario and measures every watched pair */
-export function runScenario(setup: BenchSetup, sc: Scenario): ScenarioResult {
+/** Runs one scenario with one seed and measures every watched pair */
+function runSeed(setup: BenchSetup, sc: Scenario) {
   const rng = seeded(sc.seed ?? 1);
   const net = new SimNet(rng);
   const spec = (over: Partial<ClientSpec> | undefined, offset: number): ClientSpec => ({ ...DEFAULT_CLIENT, clockOffsetMs: offset, ...over });
@@ -555,6 +557,7 @@ export function runScenario(setup: BenchSetup, sc: Scenario): ScenarioResult {
   const guest = new SimClient('B', spec(sc.b, 123_456.7), setup.drives[1], net);
   const clients = [host, guest];
   if (sc.viaHost) clients.push(new SimClient('C', spec(sc.a, 98_765.4), setup.drives[2], net));
+  if (sc.sendHz) for (const c of clients) c.mgr.stateSendHz = sc.sendHz;
   host.mgr.hostLocal();
   for (const g of clients.slice(1)) net.connect(host, g, sc.link, sc.linkBack ?? sc.link);
 
@@ -692,22 +695,33 @@ export function runScenario(setup: BenchSetup, sc: Scenario): ScenarioResult {
   }
 
   net.run(endMs + 1000);
+  for (const c of clients) c.mgr.dispose();
+  return {
+    watches,
+    watchedS: ((endMs - warmupMs) / 1000) * watches.length,
+    bytes: clients.reduce((a, c) => a + c.stateBytes, 0),
+    msgs: clients.reduce((a, c) => a + c.stateMessages, 0),
+    clientSeconds: (clients.length * endMs) / 1000,
+  };
+}
 
-  const watchedS = (endMs - warmupMs) / 1000;
+/** Runs a scenario once per seed (seed, seed + 1, …) and pools every watched frame */
+export function runScenario(setup: BenchSetup, sc: Scenario, seeds = 1): ScenarioResult {
+  const runs = Array.from({ length: seeds }, (_, k) => runSeed(setup, { ...sc, seed: (sc.seed ?? 1) + k }));
+  const watches = runs.flatMap((r) => r.watches);
   const pool = (f: (w: Watch) => number[]) => watches.flatMap(f);
   const sum = (f: (w: Watch) => number) => watches.reduce((acc, w) => acc + f(w), 0);
   const all = metricsOf(
     pool((w) => w.along),
     pool((w) => w.across),
     { frames: sum((w) => w.frames), jumps: sum((w) => w.jumps), pops: sum((w) => w.pops), stale: sum((w) => w.stale), hidden: sum((w) => w.hidden), bias: sum((w) => w.bias) },
-    watchedS * watches.length
+    runs.reduce((a, r) => a + r.watchedS, 0)
   );
-  const brakingFrames = sum((w) => w.braking.frames);
   const braking = metricsOf(
     pool((w) => w.braking.along),
     pool((w) => w.braking.across),
     {
-      frames: brakingFrames,
+      frames: sum((w) => w.braking.frames),
       jumps: sum((w) => w.braking.jumps),
       pops: sum((w) => w.braking.pops),
       stale: sum((w) => w.braking.stale),
@@ -717,16 +731,14 @@ export function runScenario(setup: BenchSetup, sc: Scenario): ScenarioResult {
     // Watched time in the zone, at the observers' frame rates
     watches.reduce((acc, w) => acc + w.braking.frames / w.observer.spec.fps, 0)
   );
-  const senders = clients;
-  const bytes = senders.reduce((a, c) => a + c.stateBytes, 0);
-  const msgs = senders.reduce((a, c) => a + c.stateMessages, 0);
-  for (const c of clients) c.mgr.dispose();
+  const bytes = runs.reduce((a, r) => a + r.bytes, 0);
+  const msgs = runs.reduce((a, r) => a + r.msgs, 0);
   return {
     name: sc.name,
     all,
     braking,
     bytesPerPacket: msgs ? bytes / msgs : 0,
-    packetsPerS: msgs / senders.length / (endMs / 1000),
+    packetsPerS: msgs / runs.reduce((a, r) => a + r.clientSeconds, 0),
   };
 }
 

@@ -25,7 +25,9 @@ import type { TyreVisualState } from './simulator-car';
 import type { GroundQuery } from './f12026-car/TrackColliderQuery';
 import { getOnlineConfig, onlineApiBase, onlineSocketUrl } from '@/lib/net/online-config';
 import {
+  MAX_STATE_PACKETS_PER_S,
   PEER_ID_RE,
+  STATE_SEND_HZ,
   sanitizeControl,
   sanitizePacket,
   type CarClassRule,
@@ -254,8 +256,7 @@ interface WebRtcPeerEntry {
   rate?: { windowStartMs: number; state: number; control: number };
 }
 
-/** Host: a guest sending more than this per second is flooding; the excess is dropped, not ingested or relayed */
-const MAX_STATE_PACKETS_PER_S = 60;
+/** Host: a guest sending more control messages than this per second is flooding (state: MAX_STATE_PACKETS_PER_S) */
 const MAX_CONTROL_MESSAGES_PER_S = 20;
 /** Only these control messages are passed between guests; the lobby, start and abort come from the host alone */
 const RELAYED_CONTROL: ReadonlySet<ControlMessage['type']> = new Set(['hello', 'ready', 'ping', 'pong']);
@@ -356,8 +357,10 @@ export class MultiplayerSyncManager {
   private manualPendingPc: RTCPeerConnection | null = null;
 
   private peers = new Map<string, PeerSnapshotBuffer>();
-  private lastBroadcastMs = 0;
-  private readonly broadcastIntervalMs = 40; // 25 Hz (within 20-30 Hz spec)
+  /** When the next state packet is due (ms, the clock `update` is given) */
+  private nextSendDueMs = -Infinity;
+  /** State packets per second (STATE_SEND_HZ; the netcode bench tries others) */
+  public stateSendHz = STATE_SEND_HZ;
   private readonly interpolationDelayMs = 65; // 65ms jitter buffer for cubic Hermite interpolation
 
   public status: P2PConnectionStatus = {
@@ -2017,7 +2020,7 @@ export class MultiplayerSyncManager {
       }
     }
     const interval = now - buffer.lastArrivalMs;
-    buffer.jitterMs += (Math.abs(interval - this.broadcastIntervalMs) - buffer.jitterMs) * 0.1;
+    buffer.jitterMs += (Math.abs(interval - 1000 / this.stateSendHz) - buffer.jitterMs) * 0.1;
     buffer.lastArrivalMs = now;
     buffer.lastReceivedMs = now;
     // Every caller passes a packet sanitizePacket already cleaned, so its fields are used as they are (checking them
@@ -2045,15 +2048,19 @@ export class MultiplayerSyncManager {
   }
 
   /**
-   * Publishes local player vehicle state at 25 Hz (every 40ms) across BroadcastChannel + WebRTC DataChannels
-   * and returns the interpolated remote peers.
+   * Publishes the local car's state (STATE_SEND_HZ, on a fixed schedule) across BroadcastChannel, WebRTC data channels
+   * and the race server, and returns the remote cars as drawn now.
    */
   public update(
     nowMs: number,
     localPacket: Omit<NetworkVehiclePacket, 'peerId' | 'timestampMs'>
   ): InterpolatedPeerState[] {
-    if (nowMs - this.lastBroadcastMs >= this.broadcastIntervalMs) {
-      this.lastBroadcastMs = nowMs;
+    // A fixed schedule: the next packet is due one interval after the last was due, not after it went out, so the rate
+    // holds at any frame rate. A frame up to a quarter interval early counts (display frames jitter); a frame more
+    // than an interval late (a hitch, a tab in the background) starts the schedule again rather than sending a burst
+    const intervalMs = 1000 / this.stateSendHz;
+    if (nowMs >= this.nextSendDueMs - intervalMs / 4) {
+      this.nextSendDueMs = nowMs - this.nextSendDueMs >= intervalMs ? nowMs + intervalMs : this.nextSendDueMs + intervalMs;
       const fullPacket: NetworkVehiclePacket = {
         ...localPacket,
         peerId: this.localPeerId,
