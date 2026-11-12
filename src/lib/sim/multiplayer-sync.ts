@@ -224,8 +224,17 @@ interface PeerSnapshotBuffer {
   jitterMs: number;
   snapshots: NetworkVehiclePacket[];
   lastReceivedMs: number;
-  /** Filtered offset (localNowMs - senderTimestampMs) so sender dt is preserved without arrival jitter */
-  clockOffsetMs: number | null;
+  /**
+   * The sender's stamps on this client's clock: stamp + mapMs is when the pose was true here. The fastest gap between
+   * a packet leaving and arriving over the last GAP_WINDOW_S (the fastest trip plus the clocks' offset), less half the
+   * fastest round trip of the last minute (the fastest trip), slid at most TIMING_SLEW_MS_PER_S. Null before a packet
+   */
+  mapMs: number | null;
+  /** When mapMs last moved (ms), and whether a round trip was known then */
+  mapAtMs: number;
+  mapHadRtt: boolean;
+  /** The smallest gap (arrival less send time, ms) of each second of arrivals, oldest first */
+  gapMins: { sec: number; gapMs: number }[];
   /** Newest sender timestamp accepted (ms, the sender's clock): older packets arrived out of order */
   lastSenderTimestampMs: number;
   renderedState: InterpolatedPeerState;
@@ -307,7 +316,16 @@ const GOOGLE_STUN_SERVERS: RTCIceServer[] = [
   { urls: 'stun:stun2.l.google.com:19302' },
 ];
 
-/** A raw clock offset this far (ms) from the filtered one is a clock step, not jitter: snap to it */
+/**
+ * Mapping a sender's stamps to this clock (`updateTiming`): the fastest trip is looked for over this long (s), long
+ * enough to catch a quick packet, short enough to follow the clocks' drift. Round trips count for RTT_WINDOW_MS
+ */
+const GAP_WINDOW_S = 15;
+const RTT_WINDOW_MS = 60_000;
+/** The mapping slides at most this fast (ms per s), so it never reads as the car surging; a change over TIMING_SNAP_MS is taken at once */
+const TIMING_SLEW_MS_PER_S = 5;
+const TIMING_SNAP_MS = 40;
+/** A mapping this far (ms) from the last is a clock step: the snapshots stamped on the old one are dropped */
 const CLOCK_OFFSET_SNAP_MS = 250;
 /** A sender timestamp this far (ms) behind the newest accepted one is a restarted clock, not an out-of-order packet */
 const SENDER_CLOCK_RESTART_MS = 1000;
@@ -407,6 +425,8 @@ export class MultiplayerSyncManager {
   private clockOffsetMs = 0;
   private bestClockRttMs = Infinity;
   private rtts = new Map<string, number>();
+  /** Each peer's round trips (ms) and when they were measured: the fastest of the last minute times its packets */
+  private rttSamples = new Map<string, { atMs: number; rttMs: number }[]>();
   private seq = 0;
   private lastPingMs = 0;
   private lastLobbyMs = 0;
@@ -1537,6 +1557,7 @@ export class MultiplayerSyncManager {
         const rtt = Math.max(0, t1 - msg.t0);
         const prev = this.rtts.get(from);
         this.rtts.set(from, prev === undefined ? rtt : prev + (rtt - prev) * 0.25);
+        this.addRttSample(from, rtt, t1);
         // Clock sync against the host (NTP-style, keeping the lowest-latency measurement; slowly forgets it)
         if (!this.isHost && from === this.hostId) {
           // Slowly forget the best sample, so a route that got slower is eventually re-measured
@@ -1935,6 +1956,59 @@ export class MultiplayerSyncManager {
    * `receiveClockMs` is the arrival time on the clock `update()` is given (default `this.clock`, `performance.now()`, the clock of
    * requestAnimationFrame's timestamp); pass it when driving `update()` from another clock.
    */
+  /**
+   * Maps a peer's stamps to this clock: the fastest gap between a packet leaving (its stamp, plus how late in its
+   * frame it went out) and arriving here over GAP_WINDOW_S is the fastest trip plus the clocks' offset, and half the
+   * fastest round trip of the last minute is the fastest trip. Minimums, as a late packet or a stall only ever adds
+   * delay: an average follows it. The mapping slides slowly, and takes a big change (the first round trip, a clock
+   * step) at once.
+   */
+  private updateTiming(buf: PeerSnapshotBuffer, pkt: NetworkVehiclePacket, now: number): void {
+    const gap = now - (pkt.timestampMs + (pkt.sendDelayMs ?? 0));
+    const sec = Math.floor(now / 1000);
+    const mins = buf.gapMins;
+    const last = mins[mins.length - 1];
+    if (last && last.sec === sec) last.gapMs = Math.min(last.gapMs, gap);
+    else mins.push({ sec, gapMs: gap });
+    while (mins.length > 0 && mins[0].sec <= sec - GAP_WINDOW_S) mins.shift();
+    let minGap = gap;
+    for (const m of mins) minGap = Math.min(minGap, m.gapMs);
+    const rtt = this.fastestRttMs(buf.peerId, now);
+    const target = minGap - (rtt ?? 0) / 2;
+    const prev = buf.mapMs;
+    if (prev === null || Math.abs(target - prev) > TIMING_SNAP_MS || (rtt !== null && !buf.mapHadRtt)) {
+      // A clock step: the snapshots stamped on the old mapping mean nothing on this one
+      if (prev !== null && Math.abs(target - prev) > CLOCK_OFFSET_SNAP_MS) buf.snapshots.length = 0;
+      buf.mapMs = target;
+    } else {
+      const step = (TIMING_SLEW_MS_PER_S * Math.max(0, now - buf.mapAtMs)) / 1000;
+      buf.mapMs = prev + Math.max(-step, Math.min(step, target - prev));
+    }
+    buf.mapAtMs = now;
+    buf.mapHadRtt = rtt !== null;
+  }
+
+  /** The fastest round trip to a peer in the last minute (ms), or null before the first */
+  private fastestRttMs(peerId: string, now: number): number | null {
+    const samples = this.rttSamples.get(peerId);
+    if (!samples) return null;
+    let best: number | null = null;
+    for (const s of samples) if (s.atMs > now - RTT_WINDOW_MS && (best === null || s.rttMs < best)) best = s.rttMs;
+    return best;
+  }
+
+  private addRttSample(peerId: string, rttMs: number, atMs: number): void {
+    let samples = this.rttSamples.get(peerId);
+    if (!samples) {
+      if (this.rttSamples.size >= 64) this.rttSamples.clear();
+      samples = [];
+      this.rttSamples.set(peerId, samples);
+    }
+    samples.push({ atMs, rttMs });
+    while (samples.length > 0 && samples[0].atMs <= atMs - RTT_WINDOW_MS) samples.shift();
+    if (samples.length > 300) samples.shift();
+  }
+
   /** `pkt` must come from sanitizePacket (or be built by trusted code, like the AI field's): it is not re-checked */
   public ingestPacket(pkt: NetworkVehiclePacket, isAiPeer = false, receiveClockMs?: number): void {
     const now = receiveClockMs !== undefined && Number.isFinite(receiveClockMs) ? receiveClockMs : this.clock();
@@ -1953,7 +2027,10 @@ export class MultiplayerSyncManager {
         jitterMs: 0,
         snapshots: [],
         lastReceivedMs: now,
-        clockOffsetMs: null,
+        mapMs: null,
+        mapAtMs: now,
+        mapHadRtt: false,
+        gapMins: [],
         lastSenderTimestampMs: -Infinity,
         renderedState: {
           peerId: pkt.peerId,
@@ -1989,19 +2066,9 @@ export class MultiplayerSyncManager {
       const senderBackMs = buffer.lastSenderTimestampMs - pkt.timestampMs;
       if (senderBackMs >= 0 && senderBackMs < SENDER_CLOCK_RESTART_MS) return;
       buffer.lastSenderTimestampMs = pkt.timestampMs;
-      const rawOffset = now - pkt.timestampMs;
-      if (this.timingOracle) {
-        buffer.clockOffsetMs = this.timingOracle(pkt.peerId, pkt.timestampMs) - pkt.timestampMs;
-      } else if (buffer.clockOffsetMs === null || Math.abs(rawOffset - buffer.clockOffsetMs) > CLOCK_OFFSET_SNAP_MS) {
-        // First packet, or the sender's clock jumped (reload, reconnect): take the offset as measured, and drop
-        // the snapshots stamped against the old one
-        if (buffer.clockOffsetMs !== null) buffer.snapshots.length = 0;
-        buffer.clockOffsetMs = rawOffset;
-      } else {
-        // Soft EWMA clock-offset slew (5%) rejects per-packet network jitter while tracking clock drift
-        buffer.clockOffsetMs += (rawOffset - buffer.clockOffsetMs) * 0.05;
-      }
-      syncedTimestampMs = pkt.timestampMs + buffer.clockOffsetMs;
+      if (this.timingOracle) buffer.mapMs = this.timingOracle(pkt.peerId, pkt.timestampMs) - pkt.timestampMs;
+      else this.updateTiming(buffer, pkt, now);
+      syncedTimestampMs = pkt.timestampMs + (buffer.mapMs ?? 0);
       // Keep the local stamps strictly increasing while the offset slews
       const lastSnap = buffer.snapshots[buffer.snapshots.length - 1];
       if (lastSnap && syncedTimestampMs <= lastSnap.timestampMs) syncedTimestampMs = lastSnap.timestampMs + 1;
@@ -2061,10 +2128,14 @@ export class MultiplayerSyncManager {
     const intervalMs = 1000 / this.stateSendHz;
     if (nowMs >= this.nextSendDueMs - intervalMs / 4) {
       this.nextSendDueMs = nowMs - this.nextSendDueMs >= intervalMs ? nowMs + intervalMs : this.nextSendDueMs + intervalMs;
+      // Stamped with the frame's time, the moment its pose is from; how much later it leaves goes with it, so a
+      // receiver's timing counts from the send (a clock other than the frame's reads as on time)
+      const lateMs = this.clock() - nowMs;
       const fullPacket: NetworkVehiclePacket = {
         ...localPacket,
         peerId: this.localPeerId,
         timestampMs: nowMs,
+        sendDelayMs: lateMs > 0 && lateMs < 1000 ? lateMs : 0,
         seq: this.seq++,
       };
       const serialized = JSON.stringify(fullPacket);
@@ -2127,9 +2198,14 @@ export class MultiplayerSyncManager {
     return activeStates;
   }
 
-  /** Round-trip time to a peer (ms), for transports that don't ping (and tests); the pings overwrite it */
+  /**
+   * The fastest round trip to a peer (ms), for transports that don't ping (and tests): it stands until the pings
+   * measure a faster one
+   */
   public setPeerRttMs(peerId: string, rttMs: number): void {
-    if (Number.isFinite(rttMs) && rttMs >= 0) this.rtts.set(peerId, rttMs);
+    if (!Number.isFinite(rttMs) || rttMs < 0) return;
+    this.rtts.set(peerId, rttMs);
+    this.rttSamples.set(peerId, [{ atMs: Infinity, rttMs }]);
   }
 
   /**
@@ -2148,8 +2224,8 @@ export class MultiplayerSyncManager {
     }
     const s1 = snaps[snaps.length - 1];
     const s0 = snaps.length > 1 ? snaps[snaps.length - 2] : null;
-    const oneWayMs = this.timingOracle ? 0 : (this.rtts.get(buf.peerId) ?? 0) / 2;
-    const ageS = (nowMs - s1.timestampMs + oneWayMs) / 1000;
+    // The snapshot's stamp is mapped to this clock, the trip included (updateTiming)
+    const ageS = (nowMs - s1.timestampMs) / 1000;
     const h = Math.min(PREDICT_MAX_S, Math.max(0, ageS));
     let ax = 0;
     let ay = 0;

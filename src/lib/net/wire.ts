@@ -45,6 +45,8 @@ export interface NetworkVehiclePacket {
   speedKmh: number;
   /** Sender's packet counter (loss statistics); absent from older clients */
   seq?: number;
+  /** How long after `timestampMs` the packet left (ms): its sender's frame work before the send (absent from older clients) */
+  sendDelayMs?: number;
   /** Driver name (absent from older clients) */
   name?: string;
   /** Progress in a multiplayer race */
@@ -322,6 +324,7 @@ export function sanitizePacket(v: unknown): NetworkVehiclePacket | null {
     trackS: clampNum(p.trackS, -10_000, 10_000_000, 0),
     speedKmh: clampNum(p.speedKmh, 0, 600, 0),
     seq,
+    sendDelayMs: finite(p.sendDelayMs, 0, 1000) ?? undefined,
     name: typeof p.name === 'string' ? clampStr(p.name, 16, 'Driver') : undefined,
     race: sanitizeRace(p.race),
     hz: p.hz === true ? true : undefined,
