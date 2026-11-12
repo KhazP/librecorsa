@@ -8,6 +8,9 @@
 import { isVehicleModelId, type TireCompound, type VehicleModelId } from '../../types/f1';
 import { sanitizeWeatherSync, type WeatherSyncState } from '../sim/weather';
 
+// The car state packet travels in binary (state-codec.ts); everything else is JSON
+export { decodeState, encodeState, MAX_STATE_BYTES, PROTOCOL_VERSION, stateInfoJson, StateInfoMemory } from './state-codec';
+
 const PEER_COMPOUNDS: readonly TireCompound[] = ['soft', 'medium', 'hard', 'intermediate', 'wet'];
 /** Network input is untrusted: only a known model id is kept */
 const asPeerVehicle = (v: unknown): VehicleModelId | undefined =>
@@ -121,6 +124,9 @@ export interface LobbyState {
   race: RaceStartInfo | null;
   /** The host's weather and clock (host-authoritative; guests ease theirs to it) */
   weather?: WeatherSyncState;
+  /** The host's protocol version (PROTOCOL_VERSION) and physics revision; a guest on another one can't race it */
+  proto?: number;
+  sim?: number;
 }
 
 /** Everything every client needs to run the same start: the lights are timed on the host's clock */
@@ -155,7 +161,10 @@ export interface OfficialResultRow {
 }
 
 export type ControlMessage =
-  | { type: 'hello'; name: string; code: string; color: string; vehicle?: VehicleModelId; trackId?: string }
+  /** `proto`, `sim`: the sender's protocol version and physics revision (absent from older clients) */
+  | { type: 'hello'; name: string; code: string; color: string; vehicle?: VehicleModelId; trackId?: string; proto?: number; sim?: number }
+  /** A room's host to a guest on another version of the game: not let in */
+  | { type: 'refuse'; reason: 'version' }
   | { type: 'ping'; t0: number }
   | { type: 'pong'; t0: number; now: number }
   | { type: 'lobby'; lobby: LobbyState }
@@ -189,6 +198,7 @@ const asColor = (v: unknown) => (typeof v === 'string' && /^#[0-9a-fA-F]{6}$/.te
 const finite = (v: unknown, lo: number, hi: number): number | null =>
   typeof v === 'number' && Number.isFinite(v) && v >= lo && v <= hi ? v : null;
 const COLLISION_MODES: readonly CollisionMode[] = ['on', 'ghost_lap1', 'off', 'protected'];
+const version = (v: unknown): number | undefined => (typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= 1e6 ? v : undefined);
 const CAR_CLASSES: readonly CarClassRule[] = ['any', 'f1', 'gt3'];
 
 function sanitizeRace(v: unknown): PeerRaceProgress | undefined {
@@ -237,6 +247,8 @@ export function sanitizeLobby(v: unknown): LobbyState | null {
   return {
     hostId: l.hostId.slice(0, 64),
     weather: sanitizeWeatherSync(l.weather) ?? undefined,
+    proto: version(l.proto),
+    sim: version(l.sim),
     settings: {
       trackId: clampStr(st.trackId, 64, FALLBACK_TRACK_ID),
       laps: Math.round(finite(st.laps, 1, 99) ?? 5),
@@ -368,7 +380,11 @@ export function sanitizeControl(v: unknown): ControlMessage | null {
         color: asColor(m.color),
         vehicle: asPeerVehicle(m.vehicle),
         trackId: typeof m.trackId === 'string' ? m.trackId.slice(0, 64) : undefined,
+        proto: version(m.proto),
+        sim: version(m.sim),
       };
+    case 'refuse':
+      return m.reason === 'version' ? { type: 'refuse', reason: 'version' } : null;
     case 'ping': {
       const t0 = finite(m.t0, -1e15, 1e15);
       return t0 === null ? null : { type: 'ping', t0 };

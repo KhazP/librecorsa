@@ -25,11 +25,17 @@ import type { TyreVisualState } from './simulator-car';
 import type { GroundQuery } from './f12026-car/TrackColliderQuery';
 import { getOnlineConfig, onlineApiBase, onlineSocketUrl } from '@/lib/net/online-config';
 import {
+  MAX_STATE_BYTES,
   MAX_STATE_PACKETS_PER_S,
   PEER_ID_RE,
+  PROTOCOL_VERSION,
   STATE_SEND_HZ,
+  StateInfoMemory,
+  decodeState,
+  encodeState,
   sanitizeControl,
   sanitizePacket,
+  stateInfoJson,
   type CarClassRule,
   type CollisionMode,
   type ControlEnvelope,
@@ -42,6 +48,7 @@ import {
   type RaceStartInfo,
 } from '@/lib/net/wire';
 import { loadDriverKey } from '@/lib/net/driver-key';
+import { lapPhysicsVersion } from '@/lib/sim/lap-types';
 import type { FinishMessage, ResultMessage } from '@/lib/net/official-result';
 
 // What goes over the wire, and the checks on it, live in a module of their own (the race server reads them too)
@@ -265,6 +272,8 @@ interface WebRtcPeerEntry {
   gamePeerId?: string;
   /** Host: messages accepted from this guest in the current one-second window (flood limit) */
   rate?: { windowStartMs: number; state: number; control: number };
+  /** Host: a guest on another version of the game, told so; nothing more from it is taken */
+  refused?: boolean;
 }
 
 /** Host: a guest sending more control messages than this per second is flooding (state: MAX_STATE_PACKETS_PER_S) */
@@ -300,7 +309,13 @@ const RACE_REFUSALS: Record<string, string> = {
   started: 'That race has started without you. Join the next one.',
   taken: 'You are already in this race in another window.',
   bad: "Couldn't join the race. Reload the game and try again.",
+  update: 'LibreCorsa has been updated. Reload the page to join the race.',
 };
+/** A room whose host and guest run different versions of the game (protocol or physics) */
+const VERSION_MISMATCH = 'This room runs another version of LibreCorsa. Everyone in it needs to reload the page.';
+/** A car's name, colour, car and race progress go with its state this often (ms), and with every change */
+const STATE_INFO_EVERY_MS = 250;
+
 
 /** The room server answers a literal "ping" without waking up; sent this often to keep the socket alive (ms) */
 const ROOM_SERVER_PING_MS = 30000;
@@ -436,6 +451,12 @@ export class MultiplayerSyncManager {
   /** Each peer's round trips (ms) and when they were measured: the fastest of the last minute times its packets */
   private rttSamples = new Map<string, { atMs: number; rttMs: number }[]>();
   private seq = 0;
+  /** The slow fields (name, car, race progress) last sent, when, and how many packets more carry them anyway */
+  private sentInfoJson = '';
+  private sentInfoMs = -Infinity;
+  private infoRepeats = 0;
+  /** The slow fields last heard from each car: binary packets carry them only every so often */
+  private stateInfo = new StateInfoMemory();
   private lastPingMs = 0;
   private lastLobbyMs = 0;
   /** Guest: when the host's last lobby arrived (performance.now ms) */
@@ -1159,7 +1180,7 @@ export class MultiplayerSyncManager {
   private bindControlChannel(entry: WebRtcPeerEntry, ctl: RTCDataChannel): void {
     ctl.onopen = () => {
       // Introduce ourselves; the host answers with the lobby, a guest starts pinging
-      this.sendControl({ type: 'hello', ...this.identity, vehicle: this.localVehicle, trackId: this.localTrackId });
+      this.sendControl(this.helloMessage());
       if (this.isHost) this.broadcastLobby();
     };
     ctl.onmessage = (ev) => {
@@ -1168,7 +1189,7 @@ export class MultiplayerSyncManager {
         const env = JSON.parse(ev.data) as ControlEnvelope;
         if (!env || typeof env.from !== 'string') return;
         // The host holds each guest to the id it first spoke with, so no guest can speak as another (or as the host)
-        if (this.isHost && (!this.bindGuest(entry, env.from) || !this.withinRate(entry, 'control'))) return;
+        if (this.isHost && (entry.refused || !this.bindGuest(entry, env.from) || !this.withinRate(entry, 'control'))) return;
         this.handleEnvelope(env, entry);
       } catch {
         // Ignore malformed control message
@@ -1204,6 +1225,7 @@ export class MultiplayerSyncManager {
   }
 
   private bindDataChannel(remoteId: string, dc: RTCDataChannel): void {
+    dc.binaryType = 'arraybuffer';
     dc.onopen = () => {
       this.emitStatus({
         state: 'connected',
@@ -1215,34 +1237,36 @@ export class MultiplayerSyncManager {
       if (entry && entry.dc === dc) this.losePeer(entry);
     };
     dc.onmessage = (ev) => {
-      if (typeof ev.data !== 'string' || ev.data.length > 16384) return;
-      try {
-        const pkt = sanitizePacket(JSON.parse(ev.data));
-        if (!pkt || pkt.peerId === this.localPeerId) return;
-        if (this.isHost) {
-          // A guest may only send its own car, and not too often
-          const entry = this.rtcPeers.get(remoteId);
-          if (!entry || !this.bindGuest(entry, pkt.peerId) || !this.withinRate(entry, 'state')) return;
-        }
-        this.ingestPacket(pkt, false);
-        // The host relays every guest's state to the other guests (star topology: guests only connect to it). The
-        // cleaned packet goes on, never the raw text
-        if (this.isHost) this.relay(JSON.stringify(pkt), remoteId, 'state');
-      } catch {
-        // Ignore malformed packet
+      // Binary only: text is an older version's state, and its sender was refused at its hello
+      if (!(ev.data instanceof ArrayBuffer) || ev.data.byteLength > MAX_STATE_BYTES) return;
+      const decoded = decodeState(ev.data, this.stateInfo);
+      if (!decoded.ok) return;
+      const pkt = sanitizePacket(decoded.packet);
+      if (!pkt || pkt.peerId === this.localPeerId) return;
+      if (this.isHost) {
+        // A guest may only send its own car, and not too often
+        const entry = this.rtcPeers.get(remoteId);
+        if (!entry || entry.refused || !this.bindGuest(entry, pkt.peerId) || !this.withinRate(entry, 'state')) return;
       }
+      // Only now that the sender is known to speak for this car are its name and colour taken
+      if (decoded.info) this.stateInfo.set(pkt.peerId, decoded.info);
+      this.ingestPacket(pkt, false);
+      // The host relays every guest's state to the other guests (star topology: guests only connect to it). The
+      // cleaned packet goes on, never the raw bytes, with its slow fields when it carried them
+      if (this.isHost) this.relay(encodeState(pkt, decoded.info ? stateInfoJson(pkt) : undefined), remoteId, 'state');
     };
   }
 
   /** Host: forwards a guest's message to every other guest (only to `toPeerId` when it is addressed) */
-  private relay(serialized: string, fromRemoteId: string, channel: 'state' | 'control', toPeerId?: string): void {
+  private relay(serialized: string | ArrayBuffer, fromRemoteId: string, channel: 'state' | 'control', toPeerId?: string): void {
     for (const entry of this.rtcPeers.values()) {
       if (entry.remoteId === fromRemoteId) continue;
       if (toPeerId !== undefined && entry.gamePeerId !== toPeerId) continue;
       const ch = channel === 'state' ? entry.dc : entry.ctl;
       if (ch && ch.readyState === 'open') {
         try {
-          ch.send(serialized);
+          if (typeof serialized === 'string') ch.send(serialized);
+          else ch.send(serialized);
         } catch {
           // Ignore relay send failure
         }
@@ -1253,6 +1277,22 @@ export class MultiplayerSyncManager {
   // ---------------------------------------------------------------------------------------------
   // Lobby, race start and clock sync (control channel + BroadcastChannel for same-browser tabs)
   // ---------------------------------------------------------------------------------------------
+
+  /** This game's physics revision: players on another one can't race together */
+  private simVersion(): number {
+    return lapPhysicsVersion('vf26');
+  }
+
+  private helloMessage(): ControlMessage {
+    return { type: 'hello', ...this.identity, vehicle: this.localVehicle, trackId: this.localTrackId, proto: PROTOCOL_VERSION, sim: this.simVersion() };
+  }
+
+  /** Guest: the host runs another version of the game: out of the room, and told why */
+  private leaveForVersion(): void {
+    this.closeSignaling();
+    this.becomeGuest();
+    this.emitStatus({ state: 'error', roomCode: '', statusText: VERSION_MISMATCH });
+  }
 
   /** Name, code and colour shown to other players; car and circuit for the lobby */
   public setIdentity(identity: DriverIdentity, vehicle?: VehicleModelId, trackId?: string): void {
@@ -1270,7 +1310,7 @@ export class MultiplayerSyncManager {
       if (trackId) this.lobbySettings = { ...this.lobbySettings, trackId };
       this.broadcastLobby();
     } else if (this.hostId) {
-      this.sendControl({ type: 'hello', ...this.identity, vehicle, trackId });
+      this.sendControl(this.helloMessage());
     }
   }
 
@@ -1445,6 +1485,8 @@ export class MultiplayerSyncManager {
       players: this.lobbyPlayers(),
       race: this.activeRace,
       weather: this.weatherProvider?.() ?? undefined,
+      proto: PROTOCOL_VERSION,
+      sim: this.simVersion(),
     };
     this.setLobby(lobby);
     this.sendControl({ type: 'lobby', lobby });
@@ -1533,6 +1575,13 @@ export class MultiplayerSyncManager {
     switch (msg.type) {
       case 'hello':
         if (this.isHost) {
+          // Another version of the game (an older one says none): told so, and nothing more taken from it
+          if (msg.proto !== PROTOCOL_VERSION || msg.sim !== this.simVersion()) {
+            if (via) via.refused = true;
+            this.dropMember(from);
+            this.sendControl({ type: 'refuse', reason: 'version' }, from);
+            break;
+          }
           this.lapsedMembers.delete(from);
           this.members.set(from, {
             peerId: from,
@@ -1579,6 +1628,10 @@ export class MultiplayerSyncManager {
         }
         break;
       }
+      case 'refuse':
+        // From the host this guest dialled (a guest's refusal is never relayed: it is not a guest's to send)
+        if (!this.isHost && via) this.leaveForVersion();
+        break;
       case 'lobby': {
         if (this.isHost) break;
         // Only a host sends the lobby, under its own id. Connected to a host over WebRTC, a guest takes the lobby from
@@ -1588,6 +1641,12 @@ export class MultiplayerSyncManager {
         if (!via && this.rtcPeers.size > 0) break;
         const nowMs = this.clock();
         if (this.hostId !== null && from !== this.hostId && nowMs - this.lastHostLobbyMs < HOST_SILENT_MS) break;
+        // A host on another version of the game (an older one says none; the race server says no physics revision)
+        if (msg.lobby.proto !== PROTOCOL_VERSION || (msg.lobby.sim !== undefined && msg.lobby.sim !== this.simVersion())) {
+          if (this.inScheduledRace) this.failRace(RACE_REFUSALS.update);
+          else this.leaveForVersion();
+          break;
+        }
         this.lastHostLobbyMs = nowMs;
         if (via) via.gamePeerId = from;
         let dropped: RaceStartInfo | null = null;
@@ -1600,7 +1659,7 @@ export class MultiplayerSyncManager {
           dropped = this.activeRace;
           this.activeRace = null;
           this.doneRaceId = null;
-          this.sendControl({ type: 'hello', ...this.identity, vehicle: this.localVehicle, trackId: this.localTrackId });
+          this.sendControl(this.helloMessage());
           if (this.localReady) this.sendControl({ type: 'ready', ready: true });
           // The race server credits a result to a name only when this browser's driver key owns it
           const driverKey = this.inScheduledRace ? loadDriverKey() : null;
@@ -1752,7 +1811,7 @@ export class MultiplayerSyncManager {
       // Left, or another race or room chosen, while the config was read
       if (this.raceStatus.state === 'idle' || this.raceStatus.state === 'error' || this.raceWs) return;
       const url = config.races
-        ? onlineSocketUrl(`/races/${which}?peer=${encodeURIComponent(this.localPeerId)}&token=${this.raceToken}`)
+        ? onlineSocketUrl(`/races/${which}?peer=${encodeURIComponent(this.localPeerId)}&token=${this.raceToken}&v=${PROTOCOL_VERSION}`)
         : null;
       if (!url) {
         this.failRace('Scheduled races are not running right now.');
@@ -1766,10 +1825,24 @@ export class MultiplayerSyncManager {
         return;
       }
       this.raceWs = ws;
+      ws.binaryType = 'arraybuffer';
       let welcomed = false;
 
       ws.onmessage = (ev) => {
-        if (this.raceWs !== ws || typeof ev.data !== 'string' || ev.data.length > 65536) return;
+        if (this.raceWs !== ws) return;
+        if (ev.data instanceof ArrayBuffer) {
+          // Another car's state, as the server cleaned and passed it on
+          if (ev.data.byteLength > MAX_STATE_BYTES) return;
+          const decoded = decodeState(ev.data, this.stateInfo);
+          if (!decoded.ok) return;
+          const pkt = sanitizePacket(decoded.packet);
+          if (!pkt || pkt.peerId === this.localPeerId) return;
+          if (decoded.info) this.stateInfo.set(pkt.peerId, decoded.info);
+          const waiting = this.raceInbox.get(pkt.peerId);
+          if (!waiting || pkt.timestampMs >= waiting.pkt.timestampMs) this.raceInbox.set(pkt.peerId, { pkt, atMs: this.clock() });
+          return;
+        }
+        if (typeof ev.data !== 'string' || ev.data.length > 65536) return;
         let data: Record<string, unknown>;
         try {
           data = JSON.parse(ev.data);
@@ -1790,14 +1863,8 @@ export class MultiplayerSyncManager {
           }
           return;
         }
-        if (data.ctl !== undefined) {
-          this.handleEnvelope(data as unknown as ControlEnvelope, null);
-          return;
-        }
-        const pkt = sanitizePacket(data);
-        if (!pkt || pkt.peerId === this.localPeerId) return;
-        const waiting = this.raceInbox.get(pkt.peerId);
-        if (!waiting || pkt.timestampMs >= waiting.pkt.timestampMs) this.raceInbox.set(pkt.peerId, { pkt, atMs: this.clock() });
+        // Text is control only: car states come in binary
+        if (data.ctl !== undefined) this.handleEnvelope(data as unknown as ControlEnvelope, null);
       };
 
       ws.onclose = () => {
@@ -2146,13 +2213,25 @@ export class MultiplayerSyncManager {
         sendDelayMs: lateMs > 0 && lateMs < 1000 ? lateMs : 0,
         seq: this.seq++,
       };
-      const serialized = JSON.stringify(fullPacket);
+      // Binary: the name, car and race progress go along when they change, and every STATE_INFO_EVERY_MS anyway (a
+      // receiver keeps the last it had). A change goes in the next three packets, in case one is lost
+      const infoJson = stateInfoJson(fullPacket);
+      if (infoJson !== this.sentInfoJson) {
+        this.sentInfoJson = infoJson;
+        this.infoRepeats = 3;
+      }
+      const withInfo = this.infoRepeats > 0 || nowMs - this.sentInfoMs >= STATE_INFO_EVERY_MS;
+      if (withInfo) {
+        this.infoRepeats = Math.max(0, this.infoRepeats - 1);
+        this.sentInfoMs = nowMs;
+      }
+      const binary = encodeState(fullPacket, withInfo ? infoJson : undefined);
 
       if (this.inScheduledRace) {
         // The race server passes cars on only once the race is made, so nothing is sent while waiting in its lobby
         if (this.activeRace && this.raceWs?.readyState === WebSocket.OPEN) {
           try {
-            this.raceWs.send(serialized);
+            this.raceWs.send(binary);
           } catch {
             // Ignore send failure
           }
@@ -2166,7 +2245,7 @@ export class MultiplayerSyncManager {
       }
       if (this.ws && this.ws.readyState === WebSocket.OPEN) {
         try {
-          this.ws.send(serialized);
+          this.ws.send(JSON.stringify(fullPacket));
         } catch {
           // Ignore send failure
         }
@@ -2174,7 +2253,7 @@ export class MultiplayerSyncManager {
       for (const entry of this.rtcPeers.values()) {
         if (entry.dc && entry.dc.readyState === 'open') {
           try {
-            entry.dc.send(serialized);
+            entry.dc.send(binary);
           } catch {
             // Ignore DataChannel send failure
           }
@@ -2222,8 +2301,8 @@ export class MultiplayerSyncManager {
   }
 
   /**
-   * A human peer where it is now: the newest snapshot carried forward by its age plus the one-way latency (half the
-   * measured round trip), at the acceleration between the last two snapshots, the heading turned at the yaw rate.
+   * A human peer where it is now: the newest snapshot carried forward by its age (its stamp mapped to this clock, the
+   * trip included: updateTiming), at the acceleration between the last two snapshots, the heading turned at the yaw rate.
    * What you see is then what you can touch. The jump a new packet makes in the prediction blends out over
    * PREDICT_SMOOTH_S; a big one (a reset) snaps and holds contact off for a moment.
    */

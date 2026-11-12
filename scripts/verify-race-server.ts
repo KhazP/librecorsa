@@ -13,7 +13,8 @@ import { handleApi, onlineConfig, raceSlotSeconds } from '../cloudflare/api/inde
 import { MAX_RACERS, RACE_SERVER_ID, RaceServer } from '../cloudflare/api/race';
 import type { Env } from '../cloudflare/api/types';
 import { countdownLabel, nextRaceSlot, RACE_COUNTDOWN_MS, RACE_JOIN_CUTOFF_MS, raceRules, raceSlot } from '../src/lib/net/race-schedule';
-import { MAX_STATE_PACKETS_PER_S, sanitizeControl, type ControlMessage, type LobbyState, type RaceStartInfo } from '../src/lib/net/wire';
+import { encodeState, MAX_STATE_PACKETS_PER_S, PROTOCOL_VERSION, sanitizeControl, stateInfoJson, type ControlMessage, type LobbyState, type RaceStartInfo } from '../src/lib/net/wire';
+import type { StatePacketFields } from '../src/lib/net/state-codec';
 import { sha256Hex } from '../cloudflare/api/board';
 import { parseDriverRecord, parseWeekRaceResults } from '../src/lib/net/race-results';
 import { FakeSocket, fakeD1, fakeState } from './lib/fake-cloudflare';
@@ -47,6 +48,9 @@ const packet = (peerId: string, over: Record<string, unknown> = {}) => ({
   speedKmh: 36,
   ...over,
 });
+/** A car state as the game sends it: binary, with its slow fields */
+const carState = (p: Record<string, unknown>) => encodeState(p as unknown as StatePacketFields, stateInfoJson(p as unknown as StatePacketFields));
+const V = String(PROTOCOL_VERSION);
 const lobbyOf = (ws: FakeSocket): LobbyState | undefined =>
   [...ws.sent].reverse().map((m) => sanitizeControl(m.ctl)).find((c) => c?.type === 'lobby')?.lobby as LobbyState | undefined;
 const startOf = (ws: FakeSocket): RaceStartInfo | undefined =>
@@ -71,7 +75,7 @@ async function main() {
   let server = new RaceServer(state, { BOARD_DB: db } as unknown as Env, () => nowMs);
   const join_ = async (peer: string, tok: string, name?: string) => {
     const ws = new FakeSocket();
-    await server.connect(ws, peer, tok, slot);
+    await server.connect(ws, peer, tok, slot, V);
     if (name && ws.closed === null) {
       await server.webSocketMessage(ws, JSON.stringify({ ctl: { type: 'hello', name, code: name.slice(0, 3), color: '#00FF00', vehicle: rules.race.vehicle }, from: peer }));
     }
@@ -95,6 +99,8 @@ async function main() {
   check('a bad id or token is refused', (await join_('peer bad!', token('c'))).last()?.t === 'bad' && (await join_(RACE_SERVER_ID, token('c'))).last()?.t === 'bad' && (await join_('peer_c', 'short')).last()?.t === 'bad');
   check("someone else can't take an entrant's id", (await join_('peer_al', token('z'))).last()?.t === 'taken' && al.closed === null);
 
+  check("the lobby says the server's protocol version", lobbyOf(bea)?.proto === PROTOCOL_VERSION);
+
   // Clock and delays
   al.sent.length = 0;
   bea.sent.length = 0;
@@ -116,7 +122,7 @@ async function main() {
   check("a car can't speak as another, nor send a lobby, a start or an abort", bea.sent.length === n);
 
   // Before the race, cars are not passed on
-  await server.webSocketMessage(al, JSON.stringify(packet('peer_al')));
+  await server.webSocketMessage(al, carState(packet('peer_al')));
   check('before the race, car state is not passed on', states(bea).length === 0);
 
   // A late entrant, and one who left
@@ -157,16 +163,18 @@ async function main() {
   // The race: state is passed on, cleaned, to the others
   check("the race has an open race's contact rule", start?.collisions === 'protected' && lobbyOf(bea)?.settings.collisions === 'protected', String(start?.collisions));
   bea.sent.length = 0;
-  await server.webSocketMessage(al, JSON.stringify(packet('peer_al', { extra: 'x', quat: [0, 0, 0, 2], hz: true })));
+  await server.webSocketMessage(al, carState(packet('peer_al', { quat: [0, 0, 0, 2], hz: true })));
   const relayed = states(bea)[0];
-  check("a car's state reaches the others, cleaned", relayed?.peerId === 'peer_al' && relayed.extra === undefined && (relayed.quat as number[])[3] === 1);
+  check("a car's state reaches the others, cleaned, in binary", relayed?.peerId === 'peer_al' && relayed.binary === true && Math.abs((relayed.quat as number[])[3] - 1) < 1e-6 && relayed.driverCode === 'ABC');
   check('with its hazard flag', relayed?.hz === true);
   check('and never comes back to its sender', states(al).length === 0);
-  await server.webSocketMessage(al, JSON.stringify(packet('peer_bea')));
-  await server.webSocketMessage(al, JSON.stringify(packet('peer_al', { pos: [1, 2, Infinity] })));
-  await server.webSocketMessage(al, JSON.stringify(packet('peer_al', { pos: [1e9, 0, 0] })));
-  check("another car's state, or an impossible one, is dropped", states(bea).length === 1);
-  for (let i = 0; i < 200; i++) await server.webSocketMessage(al, JSON.stringify(packet('peer_al', { seq: i })));
+  await server.webSocketMessage(al, carState(packet('peer_bea')));
+  await server.webSocketMessage(al, carState(packet('peer_al', { pos: [1, 2, Infinity] })));
+  await server.webSocketMessage(al, carState(packet('peer_al', { pos: [1e9, 0, 0] })));
+  // Text state is an older game's, which the server never let in: not passed on
+  await server.webSocketMessage(al, JSON.stringify(packet('peer_al')));
+  check("another car's state, an impossible one or one in text is dropped", states(bea).length === 1);
+  for (let i = 0; i < 200; i++) await server.webSocketMessage(al, carState(packet('peer_al', { seq: i })));
   check('a flooding car is cut off', states(bea).length <= MAX_STATE_PACKETS_PER_S + 1, `${states(bea).length} passed of 201`);
 
   // The official result: Al finishes, Bea never does
@@ -181,7 +189,7 @@ async function main() {
   bea.sent.length = 0;
   await finish(bea, 'peer_bea');
   check('a finish from a car that sent no state in the race is refused', results(al).length === 0 && results(bea).length === 0);
-  await server.webSocketMessage(bea, JSON.stringify(packet('peer_bea', { race: { id: raceId, dist: 900, fin: null, best: null } })));
+  await server.webSocketMessage(bea, carState(packet('peer_bea', { race: { id: raceId, dist: 900, fin: null, best: null } })));
   await finish(al, 'peer_al', { timeS: laps * 20 });
   await finish(al, 'peer_al', { timeS: laps * 80 + 60 });
   await finish(al, 'peer_al', { laps: laps + 1 });
@@ -243,7 +251,7 @@ async function main() {
   const quiet = new RaceServer(empty, {} as Env, () => nowMs);
   nowMs = slot.startsMs - 60_000;
   const lone = new FakeSocket();
-  await quiet.connect(lone, 'peer_lone', token('l'), slot);
+  await quiet.connect(lone, 'peer_lone', token('l'), slot, V);
   await quiet.webSocketClose(lone, 1001);
   lone.close();
   nowMs = slot.startsMs - RACE_COUNTDOWN_MS;
@@ -253,10 +261,16 @@ async function main() {
   // Full
   const packed = fakeState();
   const busy = new RaceServer(packed, {} as Env, () => slot.startsMs - 60_000);
-  for (let i = 0; i < MAX_RACERS; i++) await busy.connect(new FakeSocket(), `peer_${i}`, token('p'), slot);
+  for (let i = 0; i < MAX_RACERS; i++) await busy.connect(new FakeSocket(), `peer_${i}`, token('p'), slot, V);
   const extra = new FakeSocket();
-  await busy.connect(extra, 'peer_extra', token('p'), slot);
+  await busy.connect(extra, 'peer_extra', token('p'), slot, V);
   check(`entrant ${MAX_RACERS + 1} is told the race is full`, extra.last()?.t === 'full');
+  // Another version of the game: told to reload, before anything else is looked at
+  const older = new FakeSocket();
+  await busy.connect(older, 'peer_older', token('o'), slot, null);
+  const newer = new FakeSocket();
+  await busy.connect(newer, 'peer_newer', token('n'), slot, String(PROTOCOL_VERSION + 1));
+  check('a game of another version (an older one says none) is told to reload', older.last()?.t === 'update' && newer.last()?.t === 'update' && older.closed !== null && newer.closed !== null);
 
   // Through the API
   let routed = '';
@@ -283,8 +297,8 @@ async function main() {
     const b = new FakeSocket();
     const slot2 = raceSlot(slot.index + 1, SLOT_S);
     t = slot2.startsMs - 20_000;
-    await srv.connect(a, 'peer_x', token('x'), slot2);
-    await srv.connect(b, 'peer_y', token('y'), slot2);
+    await srv.connect(a, 'peer_x', token('x'), slot2, V);
+    await srv.connect(b, 'peer_y', token('y'), slot2, V);
     for (const [ws, peer, name] of [[a, 'peer_x', 'Xan'], [b, 'peer_y', 'Yul']] as const) {
       await srv.webSocketMessage(ws, JSON.stringify({ ctl: { type: 'hello', name, code: name.toUpperCase(), color: '#00FF00' }, from: peer }));
     }
@@ -293,7 +307,7 @@ async function main() {
     const s0 = startOf(a);
     t = (s0?.lightsStartHostMs ?? 0) + 5000 + (s0?.holdMs ?? 0) + (laps * 90 + 10) * 1000;
     for (const [ws, peer, time] of [[a, 'peer_x', laps * 90], [b, 'peer_y', laps * 85]] as const) {
-      await srv.webSocketMessage(ws, JSON.stringify(packet(peer)));
+      await srv.webSocketMessage(ws, carState(packet(peer)));
       await srv.webSocketMessage(ws, JSON.stringify({ ctl: { type: 'finish', id: s0?.id, timeS: time, penaltyS: 0, laps, bestLapMs: null }, from: peer }));
     }
     const last = results(a)[results(a).length - 1];
