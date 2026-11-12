@@ -626,7 +626,7 @@ const InputAssistPanel: React.FC<{
         <div className="flex flex-col gap-1">
           <div className="grid gap-x-4 gap-y-0.5 sm:grid-cols-2">
             <TuningSlider
-              label="Steering rise"
+              label="Steering smoothing"
               value={kb.steerRiseS}
               min={0.05}
               max={1}

@@ -159,13 +159,13 @@ export const KeyboardStep: React.FC<SetupStepProps & { steerLockDeg?: number }> 
             onChange={(v) => setTuning({ brakeRiseS: v })}
           />
           <TuningSlider
-            label="Steering rise"
+            label="Steering smoothing"
             value={tuning.steerRiseS}
             min={0.05}
             max={1}
             step={0.01}
             format={ms}
-            hint="How quickly a held key steers in to the tyres' grip limit (shorter = sharper)"
+            hint="How gently a held key steers in, on top of each car's own curve (quicker in slow corners, gentler at speed). Shorter = sharper"
             onChange={(v) => setTuning({ steerRiseS: v })}
           />
           <TuningSlider
@@ -175,7 +175,7 @@ export const KeyboardStep: React.FC<SetupStepProps & { steerLockDeg?: number }> 
             max={1}
             step={0.01}
             format={ms}
-            hint="How quickly the steering lets go when the key is released (shorter = sharper)"
+            hint="How quickly the steering returns to centre when the key is let go (shorter = quicker)"
             onChange={(v) => setTuning({ steerReturnS: v })}
           />
           <TuningSlider
@@ -189,6 +189,14 @@ export const KeyboardStep: React.FC<SetupStepProps & { steerLockDeg?: number }> 
             onChange={(v) => setTuning({ halfThrottle: v })}
           />
         </AutoGrid>
+        <div className="border-t border-[#262B3D] pt-2.5">
+          <Toggle
+            label="Input trace on the HUD"
+            detail="Your keys dashed against the road-wheel angle, with throttle and brake (always on in the Telemetry HUD)"
+            checked={settings.hud.inputTrace}
+            onChange={() => onChangeSettings((s) => ({ ...s, hud: { ...s.hud, inputTrace: !s.hud.inputTrace } }))}
+          />
+        </div>
       </SetupCard>
 
       <AssistTuningCard device="keyboard" tuning={tuning} onChange={setTuning} lockDeg={steerLockDeg} />
