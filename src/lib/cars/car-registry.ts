@@ -16,7 +16,6 @@ import { carListed, REPO_CAR_IDS } from "@/lib/hosted-content";
 export type CarId =
   | "vf26"
   | "amg-gt3"
-  | "amg-gt3-evo"
   | "bmw-m4-gt3"
   | "mtr-496r"
   | "liana";
@@ -36,7 +35,7 @@ export interface CarClass {
 
 /**
  * Whether a car's physics belong to the car you see, the car-side counterpart of a circuit's `CircuitQuality`:
- * - "own": its vehicle model was built for this car (the F1 2026 Prototype, the Mercedes-AMG GT3s,
+ * - "own": its vehicle model was built for this car (the F1 2026 Prototype, the Mercedes-AMG GT3 Evo,
  *   the MTRacing 496R, the Suzuki Liana)
  * - "shared": a ported body on another car's model of the same class and era (the BMW)
  * - "era": a ported body from an earlier season on the 2026 model
@@ -193,26 +192,15 @@ const ALL_CARS: readonly CarDefinition[] = [
   {
     id: "amg-gt3",
     classId: "gt3",
-    title: "Mercedes-AMG GT3",
-    sub: "GT3 Pro · 6.2L V8 · Multi-stage ABS / TC",
-    badge: "GT3 PRO",
-    quality: "own",
-    credit: { title: "2020 Mercedes-Benz AMG GT3", author: "Ddiaz Design", url: "https://skfb.ly/pOTPL", ...CC_BY_NC_SA },
-    physics: "amg-gt3",
-    year: 2020,
-    sound: AMG_GT3_SOUND,
-  },
-  {
-    id: "amg-gt3-evo",
-    classId: "gt3",
     title: "Mercedes-AMG GT3 Evo",
-    sub: "GT3 Evo · AMG GT3 physics · ABS / TC",
+    sub: "GT3 Evo · 6.2L V8 · Multi-stage ABS / TC",
     badge: "GT3 EVO",
     quality: "own",
+    // Vecarz's model, in the Red Bull Racing livery of toddeppe's and VTX's versions of it (CREDITS.md)
     credit: {
-      title: "Mercedes-AMG GT3 Red Bull Racing",
-      author: "VTX",
-      url: "https://sketchfab.com/3d-models/mercedes-amg-gt3-red-bull-racing-035f061cb6624effbc483d5f9b5ecaba",
+      title: "Mercedes-AMG GT3",
+      author: "Vecarz",
+      url: "https://sketchfab.com/3d-models/mercedes-amg-gt3-wwwvecarzcom-6a3f7e3455064721b74b7f0b66427a07",
       ...CC_BY_NC_SA,
     },
     physics: "amg-gt3",
@@ -221,6 +209,8 @@ const ALL_CARS: readonly CarDefinition[] = [
     modelUrl: "/cars/amg-gt3-evo/model/amg-gt3-evo.glb",
     sound: AMG_GT3_SOUND,
   },
+
+
   {
     id: "bmw-m4-gt3",
     classId: "gt3",
@@ -290,6 +280,15 @@ const BY_ID = new Map<string, CarDefinition>(CARS.map((c) => [c.id, c]));
 
 export const isCarId = (value: unknown): value is CarId => typeof value === "string" && BY_ID.has(value);
 
+/** Cars folded into another: a saved choice or a `?car=` link to one opens the car that took its place */
+const FOLDED_CAR_IDS: Readonly<Record<string, CarId>> = { "amg-gt3-evo": "amg-gt3" };
+
+/** A car id from a save or a link, followed to the car that took its place; null when it names no car here */
+export const resolveCarId = (value: unknown): CarId | null => {
+  const id = typeof value === "string" ? (FOLDED_CAR_IDS[value] ?? value) : value;
+  return isCarId(id) ? id : null;
+};
+
 export const carById = (id: CarId): CarDefinition => {
   const car = BY_ID.get(id);
   if (car) return car;
@@ -330,10 +329,15 @@ export const carTakesLivery = (id: CarId): boolean => !carById(id).modelUrl;
 
 /**
  * The car browser's picture of a car (`npm run car-thumbs` renders them): beside a hosted car's files, so it goes up to
- * R2 with them (`npm run upload-hosted`); both repository cars drive the 2026 prototype's body, whose one picture is
- * in the repository. A copy without the file shows the card without a picture.
+ * R2 with them (`npm run upload-hosted`), in the folder of the car's model; the repository car drives the 2026
+ * prototype's body, whose one picture is in the repository. A copy without the file shows the card without a picture.
  */
-export const carThumbUrl = (id: CarId): string => (REPO_CAR_IDS.has(id) ? "/amr26/thumb.webp" : `/cars/${id}/thumb.webp`);
+export const carThumbUrl = (id: CarId): string => {
+  if (REPO_CAR_IDS.has(id)) return "/amr26/thumb.webp";
+  // Beside the car's model, so a car that took over another's body shows that body's picture
+  const modelDir = carById(id).modelUrl?.match(/^(\/cars\/[^/]+)\/model\//)?.[1];
+  return `${modelDir ?? `/cars/${id}`}/thumb.webp`;
+};
 
 /** A car's skin by id, its first (the GLB's own paint) when the id is unknown or absent; null for a car without skins */
 export const carSkin = (id: CarId, skinId: string | null | undefined): CarSkin | null => {

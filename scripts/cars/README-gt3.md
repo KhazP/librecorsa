@@ -1,10 +1,10 @@
-# Ported GT3 cars (`amg-gt3-evo`, `bmw-m4-gt3`)
+# Ported GT3 cars (`amg-gt3`, `bmw-m4-gt3`)
 
 `scripts/cars/port_sketchfab_gt3.py` converts the two Sketchfab GT3 GLBs into the generic car rig layout read by `src/lib/ported-car-model.ts`.
 
 ## Sources (CC BY-NC-SA 4.0)
 
-* **Mercedes-AMG GT3 Evo (`amg-gt3-evo`)**: `"Mercedes-AMG GT3 Red Bull Racing"` by **VTX** (`@VTX_car`), <https://sketchfab.com/3d-models/mercedes-amg-gt3-red-bull-racing-035f061cb6624effbc483d5f9b5ecaba>
+* **Mercedes-AMG GT3 Evo (`amg-gt3`, its GLB in `public/cars/amg-gt3-evo/`)**: `"Mercedes-AMG GT3"` by **Vecarz** (`@heynic`), <https://sketchfab.com/3d-models/mercedes-amg-gt3-wwwvecarzcom-6a3f7e3455064721b74b7f0b66427a07>, ported from the Red Bull Racing version by **VTX** (`@VTX_car`), <https://sketchfab.com/3d-models/mercedes-amg-gt3-red-bull-racing-035f061cb6624effbc483d5f9b5ecaba>
 * **BMW M4 GT3 Evo (`bmw-m4-gt3`)**: `"2025 BMW M4 GT3 EVO G82"` by **Ddiaz Design** (`@ddiaz-design`), <https://sketchfab.com/3d-models/2025-bmw-m4-gt3-evo-g82-113f83dd87064697a5ec2511d280b9d5>
 
 ## Run commands

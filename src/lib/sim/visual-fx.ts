@@ -13,12 +13,12 @@ import { steerNormOf } from './car-pose';
 import * as THREE from 'three';
 import { createF1Car2026, type SimCarRig } from '@/lib/car-builder-2026';
 import type { WheelSeating } from '@/lib/render/corner-rig';
-import { createGt3CarRig, loadGt3Cockpit, loadGt3Template } from '@/lib/gt3-car-model';
 import { createPortedCarRig, loadTemplate as loadPortedTemplate } from '@/lib/ported-car-model';
 import { staticFloorOf } from '@/lib/render/body-floor';
 import { CAR_WHEEL_LOCKS_DEG } from '@/lib/input/device-input';
 import { SUZUKI_LIANA_CONFIG } from './road/SuzukiLianaConfig';
 import { MTR_496R_CONFIG } from './proto/Mtr496rConfig';
+import { AMG_GT3_CONFIG } from './gt3/AmgGt3Config';
 import { AMR26_MODEL_URL, loadVf26Template } from '@/lib/vf26-car-model';
 import { assetProgress } from '@/lib/loading/asset-progress';
 import { addContactShadow, seatContactShadow } from '@/lib/render/contact-shadow';
@@ -667,16 +667,13 @@ export class SimVisualFxManager {
 
   private buildPrewarm(vehicle: VehicleModelId | undefined, kind: string): Promise<boolean> {
     const template: Promise<unknown> =
-      kind === 'gt3'
-        ? Promise.all([loadGt3Template('opponents'), loadGt3Cockpit()])
-        : kind === 'road' || kind === 'proto'
-          ? loadPortedTemplate(PORTED_ONLY[kind].url)
-          : loadVf26Template(AMR26_MODEL_URL, 'opponents');
+      kind === 'gt3' || kind === 'road' || kind === 'proto'
+        ? loadPortedTemplate(PORTED_ONLY[kind].url)
+        : loadVf26Template(AMR26_MODEL_URL, 'opponents');
     return template
       .then(() => {
         // The rigs attach the cached template in their own `then`, registered before this one returns. One racing
-        // rig per AI driver, in its livery (a GT3 livery is a repainted texture: done here, not on lap one's first
-        // frame), and one ghost
+        // rig per AI driver, in its livery, and one ghost
         const builds: { ghost: boolean; livery: LiveryConfig }[] = [
           ...PREWARM_DRIVERS.map((code) => ({ ghost: false, livery: this.mapDriverToLivery(code) })),
           { ghost: true, livery: LIVERIES[0] },
@@ -935,9 +932,10 @@ const rigKind = (vehicle: VehicleModelId | undefined) =>
   vehicle === 'amg-gt3' ? 'gt3' : vehicle === 'liana' ? 'road' : vehicle === 'mtr-496r' ? 'proto' : 'f1';
 /**
  * The models with no body of their own: their opponents wear the car's ported GLB (car-registry's `modelUrl`), on the
- * model's chassis and wheel lock
+ * model's chassis and wheel lock. The GT3s race as the Mercedes-AMG GT3 Evo, the model's own car.
  */
 const PORTED_ONLY = {
+  gt3: { url: '/cars/amg-gt3-evo/model/amg-gt3-evo.glb', config: AMG_GT3_CONFIG, lockDeg: CAR_WHEEL_LOCKS_DEG['amg-gt3'] },
   road: { url: '/cars/liana/model/liana.glb', config: SUZUKI_LIANA_CONFIG, lockDeg: CAR_WHEEL_LOCKS_DEG.liana },
   proto: { url: '/cars/mtr-496r/model/mtr-496r.glb', config: MTR_496R_CONFIG, lockDeg: CAR_WHEEL_LOCKS_DEG['mtr-496r'] },
 } as const;
@@ -945,11 +943,8 @@ const poolKey = (vehicle: VehicleModelId | undefined, ghost: boolean) => `${rigK
 
 function buildOpponentRig(vehicle: VehicleModelId | undefined, livery: LiveryConfig): SimCarRig {
   let rig: SimCarRig;
-  if (vehicle === 'amg-gt3') {
-    rig = createGt3CarRig();
-    rig.setLivery(livery);
-  } else if (vehicle === 'liana' || vehicle === 'mtr-496r') {
-    const own = PORTED_ONLY[rigKind(vehicle) as 'road' | 'proto'];
+  if (vehicle === 'amg-gt3' || vehicle === 'liana' || vehicle === 'mtr-496r') {
+    const own = PORTED_ONLY[rigKind(vehicle) as 'gt3' | 'road' | 'proto'];
     rig = createPortedCarRig({
       url: own.url,
       chassis: own.config.chassis,

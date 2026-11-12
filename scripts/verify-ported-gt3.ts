@@ -1,5 +1,5 @@
 /**
- * Verification suite for the ported GT3 cars (`amg-gt3-evo` and `bmw-m4-gt3`).
+ * Verification suite for the ported GT3 cars: the `amg-gt3` (the Mercedes-AMG GT3 Evo model) and the `bmw-m4-gt3`.
  *
  * Run with: npx tsx scripts/verify-ported-gt3.ts
  */
@@ -41,6 +41,8 @@ function check(name: string, cond: boolean, detail = ""): void {
 
 const PORTED_GT3_SPEC: ReadonlyArray<{
   id: CarId;
+  /** The folder and file name of its GLB, `public/cars/<model>/model/<model>.glb` */
+  model: string;
   title: string;
   expectedWheelbaseM: number;
   creditTitle: string;
@@ -48,15 +50,17 @@ const PORTED_GT3_SPEC: ReadonlyArray<{
   creditUrl: string;
 }> = [
   {
-    id: "amg-gt3-evo",
+    id: "amg-gt3",
+    model: "amg-gt3-evo",
     title: "Mercedes-AMG GT3 Evo",
     expectedWheelbaseM: 2.63,
-    creditTitle: "Mercedes-AMG GT3 Red Bull Racing",
-    creditAuthor: "VTX",
-    creditUrl: "https://sketchfab.com/3d-models/mercedes-amg-gt3-red-bull-racing-035f061cb6624effbc483d5f9b5ecaba",
+    creditTitle: "Mercedes-AMG GT3",
+    creditAuthor: "Vecarz",
+    creditUrl: "https://sketchfab.com/3d-models/mercedes-amg-gt3-wwwvecarzcom-6a3f7e3455064721b74b7f0b66427a07",
   },
   {
     id: "bmw-m4-gt3",
+    model: "bmw-m4-gt3",
     title: "BMW M4 GT3 Evo",
     expectedWheelbaseM: 2.92,
     creditTitle: "2025 BMW M4 GT3 EVO G82",
@@ -76,11 +80,8 @@ console.log("\n=== 1. Car Registry & Credits ===");
 {
   const gt3Cars = carsInClass("gt3");
   check(
-    "GT3 class starts with amg-gt3 followed by amg-gt3-evo and bmw-m4-gt3",
-    gt3Cars.length >= 3 &&
-      gt3Cars[0].id === "amg-gt3" &&
-      gt3Cars[1].id === "amg-gt3-evo" &&
-      gt3Cars[2].id === "bmw-m4-gt3",
+    "GT3 class is the amg-gt3 followed by the bmw-m4-gt3",
+    gt3Cars.length === 2 && gt3Cars[0].id === "amg-gt3" && gt3Cars[1].id === "bmw-m4-gt3",
     gt3Cars.map((c) => c.id).join(", ")
   );
 
@@ -99,7 +100,7 @@ console.log("\n=== 1. Car Registry & Credits ===");
       `${spec.id} uses amg-gt3 physics and expected sound bank`,
       def.classId === "gt3" && def.physics === "amg-gt3" && def.sound === expectedSound
     );
-    const expectedUrl = `/cars/${spec.id}/model/${spec.id}.glb`;
+    const expectedUrl = `/cars/${spec.model}/model/${spec.model}.glb`;
     check(`${spec.id} modelUrl is ${expectedUrl}`, def.modelUrl === expectedUrl, def.modelUrl);
 
     check(
@@ -122,9 +123,9 @@ console.log("\n=== 1. Car Registry & Credits ===");
 const wheelExtras: Record<string, PortedWheelExtras> = {};
 for (const spec of PORTED_GT3_SPEC) {
   console.log(`\n=== 2. Ported GLB: ${spec.id} (${spec.title}) ===`);
-  const glbPath = resolve(process.cwd(), `public/cars/${spec.id}/model/${spec.id}.glb`);
+  const glbPath = resolve(process.cwd(), `public/cars/${spec.model}/model/${spec.model}.glb`);
   if (!existsSync(glbPath)) {
-    noteSkip(spec.id, `public/cars/${spec.id}/model/${spec.id}.glb`);
+    noteSkip(spec.id, `public/cars/${spec.model}/model/${spec.model}.glb`);
     continue;
   }
 
@@ -305,7 +306,7 @@ for (const spec of PORTED_GT3_SPEC) {
   for (const spec of PORTED_GT3_SPEC) {
     const extras = wheelExtras[spec.id];
     if (!extras) continue;
-    const scene = loadGlbGeometry(resolve(process.cwd(), `public/cars/${spec.id}/model/${spec.id}.glb`));
+    const scene = loadGlbGeometry(resolve(process.cwd(), `public/cars/${spec.model}/model/${spec.model}.glb`));
     scene.updateMatrixWorld(true);
     const car = scene.getObjectByName("CAR") ?? scene;
     const offset = portedModelOffset(extras, AMG_GT3_CONFIG.chassis);
