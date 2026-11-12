@@ -8,6 +8,7 @@
  *   GET /api/races/waiting                              who is waiting for the next race (race.ts, read only)
  *   POST /api/usage               one stretch of driving for the anonymous daily totals (usage.ts)
  *   GET /api/admin/stats          the owner's numbers, with the X-Admin-Key header (admin.ts)
+ *   GET /api/admin/cloudflare     Cloudflare's numbers for the site, the same way, once an analytics token is set (analytics.ts)
  *   GET /api/races/results, GET /api/drivers/record     the open races' results (results.ts)
  * Every feature is optional: with its binding missing or its switch off (wrangler.jsonc `vars`), the config says
  * so and the game falls back to what works without a server.
@@ -20,9 +21,10 @@ import { boardDeps, ghostOf, listLaps, renameDriver, submitLap } from "./board";
 import { driverRecord, listRaceResults } from "./results";
 import { ROOM_CODE_RE } from "./room";
 import { adminKeyMatches, adminStats } from "./admin";
+import { analyticsConfigured, cloudflareStats } from "./analytics";
 import { turnConfigured } from "./turn";
 import { recordUsage } from "./usage";
-import type { Env } from "./types";
+import type { DurableObjectNamespace, Env } from "./types";
 
 export { RaceServer } from "./race";
 export { RoomServer } from "./room";
@@ -74,6 +76,19 @@ export function json(body: unknown, status: number, origin: string | null): Resp
   });
 }
 
+/** The next scheduled race and who is waiting for it: a read of its server, no socket */
+async function raceWaiting(races: DurableObjectNamespace, slotS: number, url: URL): Promise<{ startsMs: number; waiting: number; names: string[] }> {
+  const slot = nextRaceSlot(Date.now(), slotS);
+  const to = new URL(url.toString());
+  to.search = "";
+  to.searchParams.set("peek", "1");
+  const res = await races.get(races.idFromName(`race-${slotS}-${slot.index}`)).fetch(new Request(to));
+  const seen = (await res.json().catch(() => null)) as { waiting?: unknown; names?: unknown } | null;
+  const waiting = typeof seen?.waiting === "number" ? seen.waiting : 0;
+  const names = Array.isArray(seen?.names) ? seen.names.filter((n): n is string => typeof n === "string") : [];
+  return { startsMs: slot.startsMs, waiting, names };
+}
+
 export async function handleApi(request: Request, env: Env, url: URL): Promise<Response> {
   const origin = allowedOrigin(request, url, env);
   // A browser on another site gets no answer it can read, and no socket
@@ -101,14 +116,7 @@ export async function handleApi(request: Request, env: Env, url: URL): Promise<R
   // Who is waiting for the next race, for the Races card of anyone not in it yet: a read of its server, no socket
   if (path === "/api/races/waiting" && request.method === "GET") {
     if (!config.races || !env.RACES) return json({ ok: false, error: "Scheduled races are off" }, 404, origin);
-    const slot = nextRaceSlot(Date.now(), config.raceSlotS);
-    const to = new URL(request.url);
-    to.searchParams.set("peek", "1");
-    const res = await env.RACES.get(env.RACES.idFromName(`race-${config.raceSlotS}-${slot.index}`)).fetch(new Request(to));
-    const seen = (await res.json().catch(() => null)) as { waiting?: unknown; names?: unknown } | null;
-    const waiting = typeof seen?.waiting === "number" ? seen.waiting : 0;
-    const names = Array.isArray(seen?.names) ? seen.names.filter((n): n is string => typeof n === "string") : [];
-    return json({ ok: true, startsMs: slot.startsMs, waiting, names }, 200, origin);
+    return json({ ok: true, ...(await raceWaiting(env.RACES, config.raceSlotS, url)) }, 200, origin);
   }
 
   const race = /^\/api\/races\/(next|\d{1,12})$/.exec(path);
@@ -195,12 +203,31 @@ export async function handleApi(request: Request, env: Env, url: URL): Promise<R
 
   // The owner's numbers: without the right key this falls through to the plain "Not found" below
   if (path === "/api/admin/stats" && request.method === "GET" && env.BOARD_DB && (await adminKeyMatches(request.headers.get("X-Admin-Key"), env.ADMIN_KEY))) {
+    const races = config.races ? env.RACES : undefined;
     try {
-      const answer = await adminStats({ db: env.BOARD_DB, now: Date.now }, url);
+      const nextRace = races ? async () => (({ startsMs, waiting }) => ({ startsMs, waiting }))(await raceWaiting(races, config.raceSlotS, url)) : undefined;
+      const answer = await adminStats({ db: env.BOARD_DB, now: Date.now, nextRace }, url);
       return json(answer.body, answer.status, origin);
     } catch (err) {
       console.error("admin stats", err);
       return json({ ok: false, error: "The numbers could not be read" }, 500, origin);
+    }
+  }
+
+  // Cloudflare's own numbers for the site (analytics.ts): only with the admin key and an analytics token set
+  if (
+    path === "/api/admin/cloudflare" &&
+    request.method === "GET" &&
+    analyticsConfigured(env) &&
+    (await adminKeyMatches(request.headers.get("X-Admin-Key"), env.ADMIN_KEY))
+  ) {
+    try {
+      // Called as a plain function: the runtime's fetch refuses to run as another object's method
+      const answer = await cloudflareStats(env, Date.now(), (input, init) => fetch(input, init));
+      return json(answer, 200, origin);
+    } catch (err) {
+      console.error("cloudflare stats", err);
+      return json({ ok: false, error: "Cloudflare's numbers could not be read" }, 500, origin);
     }
   }
 
