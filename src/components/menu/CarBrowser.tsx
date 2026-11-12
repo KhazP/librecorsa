@@ -24,6 +24,8 @@ import { ContentBrowser, type BrowserFilterGroup, type BrowserSort, type Library
 import { CarPhysicsSwitch } from "./CarPicker";
 import { withBasePath } from "@/lib/base-path";
 import { CarQualityBadge, CarSkinPicker, Chip, LiveryPicker } from "./menu-ui";
+import { SourceChip } from "@/components/SourceChip";
+import { carModelSource } from "@/lib/model-source";
 
 const byName = (a: CarDefinition, b: CarDefinition) => a.title.localeCompare(b.title);
 const QUALITIES: readonly CarQuality[] = ["own", "shared", "era"];
@@ -208,6 +210,7 @@ export const CarBrowser: React.FC<{
                     {c.credit.author}
                   </a>
                 </span>
+                <SourceChip source={carModelSource(c)} />
               </div>
               <p className="m-0 text-[12px] leading-snug text-[#8E96AA]">
                 {q.description} {PHYSICS_CHECK[carPhysics(c.id, modPhysics)]}

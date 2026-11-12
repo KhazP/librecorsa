@@ -32,7 +32,7 @@ import { DEFAULT_RACE_SETUP, RACE_START_LABELS } from "@/lib/sim/race-setup";
 import { TIME_OF_DAY_LABELS, WEATHER_LABELS } from "@/lib/sim/weather";
 import { LibreCorsaLogo } from "@/components/ui/LibreCorsaLogo";
 import { AI_SKILL_DEFAULT, aiSkillLabel } from "@/lib/sim/ai-tuning";
-import { REPO_URL, SUPPORT_URL } from "@/lib/site";
+import { REPO_URL, SUPPORT_URL, TAKEDOWN_URL } from "@/lib/site";
 import { withBasePath } from "@/lib/base-path";
 import { EmbeddedBadge } from "./EmbeddedBadge";
 import {
@@ -106,7 +106,6 @@ const HUD_LABELS: Record<HudPreset, string> = {
 
 const km = (t: TrackInfo) => (t.lengthM / 1000).toFixed(2);
 
-const TAKEDOWN_URL = "https://github.com/KhazP/librecorsa/issues/new?template=takedown-request.yml";
 
 const CreditRow: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
   <div className="flex flex-col gap-2 border-t border-[#262B3D] py-4">

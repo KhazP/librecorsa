@@ -94,6 +94,8 @@ export const PHYSICS_CHECK: Record<VehicleModelId, string> = {
 export interface CarCredit {
   /** How the car card introduces the author (absent: "Model by"), for a car credited to its modder instead */
   label?: string;
+  /** More on where the model comes from, shown with its source */
+  note?: string;
   title: string;
   author: string;
   url: string;
@@ -154,6 +156,8 @@ export interface CarDefinition {
   quality: CarQuality;
   /** Its 3D body's author */
   credit: CarCredit;
+  /** Where its 3D body comes from, when the credit names someone else (its modder); absent: the credit */
+  modelSource?: CarCredit;
   /** The vehicle model that drives it */
   physics: VehicleModelId;
   /**
@@ -198,12 +202,12 @@ const ALL_CARS: readonly CarDefinition[] = [
     sub: "GT3 Evo · 6.2L V8 · Multi-stage ABS / TC",
     badge: "GT3 EVO",
     quality: "own",
-    // Vecarz's model, in the Red Bull Racing livery of toddeppe's and VTX's versions of it (CREDITS.md)
     credit: {
       title: "Mercedes-AMG GT3",
       author: "Vecarz",
       url: "https://sketchfab.com/3d-models/mercedes-amg-gt3-wwwvecarzcom-6a3f7e3455064721b74b7f0b66427a07",
       ...CC_BY_NC_SA,
+      note: "In the Red Bull Racing livery of toddeppe's and VTX's versions of it.",
     },
     physics: "amg-gt3",
     // The model's title gives no year: the Evo's homologation year
@@ -259,8 +263,16 @@ const ALL_CARS: readonly CarDefinition[] = [
     sub: "2002 · 1.6 L four · front-wheel drive",
     badge: "LIANA",
     quality: "own",
-    // The body is Forza Motorsport 4's (Turn 10 Studios), converted for Assetto Corsa in 2015 by an author the mod
-    // doesn't name (CREDITS.md); the credit shown is the modder whose physics it drives on, used with permission
+    // The credit shown is the modder whose physics it drives on, used with permission; the body is Forza Motorsport
+    // 4's (Turn 10 Studios), converted for Assetto Corsa in 2015 by an author the mod doesn't name (CREDITS.md)
+    modelSource: {
+      title: "Suzuki Liana",
+      author: "Turn 10 Studios (Forza Motorsport 4)",
+      url: "http://assetto-db.com/car/suzuki_liana",
+      license: "Game asset, not licensed for redistribution",
+      licenseUrl: "http://assetto-db.com/car/suzuki_liana",
+      note: "Converted for Assetto Corsa in 2015 by an author the conversion doesn't name.",
+    },
     credit: {
       label: "Mod by",
       title: "Physics reworked for Top Gear Liana 1.6 GLX",

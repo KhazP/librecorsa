@@ -7,6 +7,7 @@ import { CAR_CLASSES, CARS, carThumbUrl, type CarId } from "@/lib/cars/car-regis
 import { REPO_CAR_IDS } from "@/lib/hosted-content";
 import outlines from "@/lib/home/circuit-outlines.json";
 import type { LapOutline } from "@/lib/home/lap-outline";
+import { carModelSource, trackModelSource } from "@/lib/model-source";
 import { coverage } from "@/lib/press";
 import { REPO_URL, SUPPORT_URL } from "@/lib/site";
 import { CIRCUIT_VENUES, DEFAULT_TRACK_ID } from "@/lib/track-registry";
@@ -43,6 +44,7 @@ export default function HomePage() {
         grade: t.quality === "sketchfab" ? "model" : "sim",
         outline: OUTLINES[t.id] ?? null,
       })),
+      source: trackModelSource(v.layouts[0]),
     })),
     cars: CARS.map((c) => ({
       id: c.id,
@@ -51,6 +53,7 @@ export default function HomePage() {
       year: c.year,
       grade: c.quality === "own" ? "sim" : "model",
       thumb: thumbOf(c.id),
+      source: carModelSource(c),
     })),
     coverage: coverage()
       .slice(0, 4)

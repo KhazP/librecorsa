@@ -20,6 +20,8 @@ export interface TrackCredit {
   short?: string;
   license: string;
   licenseUrl: string;
+  /** More on where the model comes from, shown with its source */
+  note?: string;
 }
 
 /**

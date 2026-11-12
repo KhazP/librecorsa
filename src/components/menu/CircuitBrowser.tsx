@@ -19,6 +19,8 @@ import {
 import { ContentBrowser, type BrowserFilterGroup, type BrowserSort, type LibraryProps } from "./ContentBrowser";
 import { TrackOutline, useCircuitOutline, useNearView } from "./circuit-outline";
 import { Chip, Segmented, TrackQualityBadge } from "./menu-ui";
+import { SourceChip } from "@/components/SourceChip";
+import { trackModelSource } from "@/lib/model-source";
 
 const km = (t: TrackInfo) => (t.lengthM / 1000).toFixed(2);
 const dirShort = (d: string) => (/counter|anti/i.test(d) ? "CCW" : /clock/i.test(d) ? "CW" : d);
@@ -234,6 +236,7 @@ export const CircuitBrowser: React.FC<{
         const t = shownLayout(v);
         const active = t.id === trackId;
         const qMeta = circuitQualityMeta(t);
+        const source = trackModelSource(t);
         const stats: [string, string][] = [
           ["Km", km(t)],
           ["Turns", String(t.turns)],
@@ -285,6 +288,7 @@ export const CircuitBrowser: React.FC<{
                   {qMeta.badge}
                 </span>
                 {t.credit?.author ? <span className="text-[11px] font-semibold text-[#C5CBD8]">By {t.credit.author}</span> : null}
+                {source ? <SourceChip source={source} /> : null}
               </div>
               <p className="m-0 text-[12px] leading-snug text-[#8E96AA]">{qMeta.description}</p>
             </div>

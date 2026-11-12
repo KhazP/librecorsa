@@ -1,4 +1,5 @@
 import type { LapOutline } from "@/lib/home/lap-outline";
+import type { ModelSource } from "@/lib/model-source";
 
 /**
  * How far a circuit or car can be trusted, in the two kinds the home page shows (from the registries' `quality`):
@@ -39,6 +40,8 @@ export interface HomeVenue {
   name: string;
   country: string;
   layouts: HomeLayout[];
+  /** Where its model comes from (its layouts share one); null when there is no source to show */
+  source: ModelSource | null;
 }
 
 export interface HomeCar {
@@ -49,6 +52,8 @@ export interface HomeCar {
   grade: HomeGrade;
   /** null when this copy of the game has no picture of it */
   thumb: string | null;
+  /** Where its 3D body comes from */
+  source: ModelSource;
 }
 
 export interface HomeCoverage {

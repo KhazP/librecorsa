@@ -200,7 +200,8 @@
       "url": "https://assettocorsa.club/",
       "short": null,
       "license": "AC conversion v1.01, 2015",
-      "licenseUrl": "https://assettocorsa.club/"
+      "licenseUrl": "https://assettocorsa.club/",
+      "note": "A conversion of the Dunsfold Aerodrome model from Forza Motorsport 4 (Turn 10 Studios)."
     },
     "quality": "sim"
   },

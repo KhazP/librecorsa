@@ -6,6 +6,7 @@ import { currentInputMode, useInputMode } from "@/components/menu/input-mode";
 import { PadGlyph } from "@/components/menu/pad-glyph";
 import { focusables, useFocusNav } from "@/components/menu/useFocusNav";
 import { LibreCorsaLogo } from "@/components/ui/LibreCorsaLogo";
+import { SourceChip } from "@/components/SourceChip";
 import { withBasePath } from "@/lib/base-path";
 import { SITE_DESCRIPTION } from "@/lib/site";
 import { day, GAME_FACTS, GRADE_NOTES, km, type HomeData } from "./home-data";
@@ -41,6 +42,10 @@ const CHOSEN_PILL = "bg-[#262B3D] text-[#F5F7FA] shadow-[inset_0_0_0_1px_rgba(24
 const TILE =
   "group relative overflow-hidden rounded-[26px] border border-[#262B3D] bg-[#0D0F15] text-left text-[#F5F7FA] no-underline transition-[transform,border-color] duration-150 ease-out hover:border-[#3A4157] active:scale-[0.99] motion-reduce:active:scale-100";
 const MORE = "inline-flex items-center gap-1 text-[13px] font-semibold text-[#C5CBD8] group-hover:text-[#F5F7FA]";
+/** A card's Source chip: a strip along its bottom (presses pass through to the card), the chip at its right, the
+ * panel across the card above it */
+const CARD_SOURCE_BOX = "pointer-events-none absolute inset-x-0 bottom-0 flex justify-end p-3";
+const CARD_SOURCE_PANEL = "inset-x-1 bottom-full";
 const CARD_ON = "border-[1.5px] border-[#F5F7FA]/60";
 const CARD_OFF = "border border-[#262B3D] hover:border-[#3A4157]";
 
@@ -266,27 +271,31 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
                 const shown = on ? layout : v.layouts[0];
                 return (
                   <div key={v.name} className={`flex flex-col rounded-[18px] bg-[#11131A] transition-colors duration-150 ease-out ${on ? CARD_ON : CARD_OFF}`}>
-                    {/* The button clips the picture to the card's corners itself: clipping on the card would cut the cursor's ring */}
-                    <button
-                      type="button"
-                      aria-pressed={on}
-                      data-nav-default={on ? "" : undefined}
-                      onClick={() => setLayoutId(v.layouts[0].id)}
-                      className="flex cursor-pointer flex-col overflow-hidden rounded-[16.5px] border-0 bg-transparent p-0 text-left text-[#F5F7FA] transition-transform duration-150 ease-out active:scale-[0.98] motion-reduce:active:scale-100"
-                    >
-                      <span className="relative block aspect-[16/10] w-full bg-[#0B0D12]">
-                        <OutlineThumb outline={shown.outline} className={`absolute inset-0 h-full w-full p-3 pt-9 ${on ? "text-[#F5F7FA]" : "text-[#8E96AA]"}`} />
-                        <GradeBadge grade={shown.grade} title={GRADE_NOTES.circuits[shown.grade]} className="absolute top-2.5 left-2.5" />
-                        {on ? <ChosenMark /> : null}
-                      </span>
-                      <span className="flex flex-col gap-1 px-4 pt-3 pb-3.5">
-                        <span className="lc-title text-[16px] leading-[1.15]">{v.name}</span>
-                        <span className="text-[13px] text-[#8E96AA]">{v.country}</span>
-                        <span className="lc-data text-[12px] text-[#C5CBD8]">
-                          {km(shown)} km, {shown.turns} turns
+                    {/* The Source chip sits beside the card's button, not inside it, at the bottom right of its text */}
+                    <div className="relative flex grow flex-col">
+                      {/* The button clips the picture to the card's corners itself: clipping on the card would cut the cursor's ring */}
+                      <button
+                        type="button"
+                        aria-pressed={on}
+                        data-nav-default={on ? "" : undefined}
+                        onClick={() => setLayoutId(v.layouts[0].id)}
+                        className="flex grow cursor-pointer flex-col overflow-hidden rounded-[16.5px] border-0 bg-transparent p-0 text-left text-[#F5F7FA] transition-transform duration-150 ease-out active:scale-[0.98] motion-reduce:active:scale-100"
+                      >
+                        <span className="relative block aspect-[16/10] w-full bg-[#0B0D12]">
+                          <OutlineThumb outline={shown.outline} className={`absolute inset-0 h-full w-full p-3 pt-9 ${on ? "text-[#F5F7FA]" : "text-[#8E96AA]"}`} />
+                          <GradeBadge grade={shown.grade} title={GRADE_NOTES.circuits[shown.grade]} className="absolute top-2.5 left-2.5" />
+                          {on ? <ChosenMark /> : null}
                         </span>
-                      </span>
-                    </button>
+                        <span className="flex flex-col gap-1 px-4 pt-3 pb-3.5">
+                          <span className="lc-title text-[16px] leading-[1.15]">{v.name}</span>
+                          <span className="text-[13px] text-[#8E96AA]">{v.country}</span>
+                          <span className={`lc-data text-[12px] text-[#C5CBD8] ${v.source ? "pr-20" : ""}`}>
+                            {km(shown)} km, {shown.turns} turns
+                          </span>
+                        </span>
+                      </button>
+                      {v.source ? <SourceChip source={v.source} className={CARD_SOURCE_BOX} panelClassName={CARD_SOURCE_PANEL} /> : null}
+                    </div>
                     {on && v.layouts.length > 1 ? (
                       // A zone: moving into the chips lands on the layout in use, not the nearest chip
                       <div role="group" aria-label="Layout" data-nav-zone="layouts" className="flex flex-wrap gap-1 border-t border-[#262B3D] p-2">
@@ -320,28 +329,31 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
               {data.cars.map((c) => {
                 const on = c === car;
                 return (
-                  <button
-                    key={c.id}
-                    type="button"
-                    aria-pressed={on}
-                    data-nav-default={on ? "" : undefined}
-                    onClick={() => setCarId(c.id)}
-                    className={`relative flex cursor-pointer flex-col overflow-hidden rounded-[18px] bg-[#11131A] p-0 text-left text-[#F5F7FA] transition-[transform,border-color] duration-150 ease-out active:scale-[0.98] motion-reduce:active:scale-100 ${
-                      on ? CARD_ON : CARD_OFF
-                    }`}
-                  >
-                    <span className="block aspect-[16/9] w-full bg-[#0B0D12] pt-7">
-                      <CarThumb src={c.thumb} className="h-full w-full object-contain p-2.5" />
-                    </span>
-                    <GradeBadge grade={c.grade} title={GRADE_NOTES.cars[c.grade]} className="absolute top-2.5 left-2.5" />
-                    {on ? <ChosenMark /> : null}
-                    <span className="flex flex-col gap-1 px-4 pt-3 pb-3.5">
-                      <span className="lc-title text-[16px] leading-[1.15]">{c.title}</span>
-                      <span className="text-[13px] text-[#8E96AA]">
-                        {c.classTitle}, {c.year}
+                  // The Source chip sits beside the card's button, not inside it, at the bottom right of its text
+                  <div key={c.id} className="relative flex flex-col">
+                    <button
+                      type="button"
+                      aria-pressed={on}
+                      data-nav-default={on ? "" : undefined}
+                      onClick={() => setCarId(c.id)}
+                      className={`relative flex grow cursor-pointer flex-col overflow-hidden rounded-[18px] bg-[#11131A] p-0 text-left text-[#F5F7FA] transition-[transform,border-color] duration-150 ease-out active:scale-[0.98] motion-reduce:active:scale-100 ${
+                        on ? CARD_ON : CARD_OFF
+                      }`}
+                    >
+                      <span className="block aspect-[16/9] w-full bg-[#0B0D12] pt-7">
+                        <CarThumb src={c.thumb} className="h-full w-full object-contain p-2.5" />
                       </span>
-                    </span>
-                  </button>
+                      <GradeBadge grade={c.grade} title={GRADE_NOTES.cars[c.grade]} className="absolute top-2.5 left-2.5" />
+                      {on ? <ChosenMark /> : null}
+                      <span className="flex flex-col gap-1 px-4 pt-3 pb-3.5">
+                        <span className="lc-title text-[16px] leading-[1.15]">{c.title}</span>
+                        <span className="pr-20 text-[13px] text-[#8E96AA]">
+                          {c.classTitle}, {c.year}
+                        </span>
+                      </span>
+                    </button>
+                    <SourceChip source={c.source} className={CARD_SOURCE_BOX} panelClassName={CARD_SOURCE_PANEL} />
+                  </div>
                 );
               })}
             </div>
