@@ -17,6 +17,10 @@
  * downloading it again into the same slot, which is what the kernel sends when a game updates a playing effect. Each
  * message waits for its reply before the next goes out, as the kernel's do (one command in flight).
  *
+ * The page only sees these wheels in their PC mode (USB ids c262 / c26e), where they are HID devices. Out of the box
+ * they start in Xbox mode, a vendor-specific USB device (c261 on the G920), until Logitech's software (G HUB) switches
+ * them; Linux had an xpad patch for the same switch that was never merged. Nothing here switches the mode.
+ *
  * Sign: `setForce` takes a PID magnitude along +X (see webhid-ffb.ts). hidpp_ff_upload_effect plays a Linux constant
  * effect as level x sin(direction) (fixp_sin16), + at direction 0x4000 (+X, 90°), the direction hid-pidff hands a PID
  * wheel unchanged; so + force → + level here, as on the classic Logitech path. Unverified on a wheel: Test direction /

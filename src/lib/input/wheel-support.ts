@@ -1,8 +1,8 @@
 /**
  * Which wheels are known to work, and how. Steering, pedals and buttons come through the browser's Gamepad API for
- * every wheel; force feedback has two paths: WebHID in Chrome/Edge (bases that speak USB HID PID, and the classic
- * Logitech wheels listed below; see webhid-ffb.ts) and the local bridge on Windows (`npm run ffb`, any DirectInput
- * force-feedback wheel).
+ * every wheel; force feedback has two paths: WebHID in Chrome/Edge (bases that speak USB HID PID, and the classic and
+ * HID++ Logitech wheels listed below; see webhid-ffb.ts) and the local bridge on Windows (`npm run ffb`, any
+ * DirectInput force-feedback wheel).
  *
  * Only what the maintainer has driven is marked tested. Reports from other wheels move rows up (README:
  * "Wheels and force feedback", issue template "Wheel report").
@@ -49,6 +49,8 @@ export interface LogitechHidppModel {
 /**
  * Logitech wheels driven over WebHID with HID++ 2.0 force feedback (feature 0x8123), as Linux
  * drivers/hid/hid-logitech-hidpp.c drives them (its HIDPP_QUIRK_CLASS_G920 entries); see webhid-logitech-hidpp.ts.
+ * These are their PC-mode ids: in Xbox mode, how they start until Logitech G HUB switches them, they are not HID
+ * devices and the browser cannot see them.
  *
  * Left out, so they stay on the bridge:
  * - the G923 for PlayStation (c266 / c267): neither mainline driver lists it. The out-of-tree new-lg4ff drives it with
@@ -58,7 +60,8 @@ export interface LogitechHidppModel {
  * - the G PRO (c268 / c272): no mainline driver lists it. The out-of-tree hid-logitech-dd (mescon) drives it through
  *   the RS50's own force-feedback path, not feature 0x8123, says it is expected to work rather than tested, and c272
  *   is also the RS50's id in compatibility mode;
- * - c26d, which new-lg4ff's README names next to the G923 for Xbox: hid-logitech-hidpp's table does not list it.
+ * - c26d, which new-lg4ff's README names next to the G923 for Xbox: most likely its Xbox-mode id, as c261 is the
+ *   G920's (not a HID device); hid-logitech-hidpp's table does not list it.
  */
 export const LOGITECH_HIDPP_WHEELS: readonly LogitechHidppModel[] = [
   { productId: 0xc262, name: "G920" },
@@ -128,10 +131,16 @@ export const WHEEL_SUPPORT: readonly WheelSupportRow[] = [
     note: "Untested; starts on WebHID with the classic Logitech commands as Linux hid-lg4ff sends them, rev LEDs on the G27 and G29 included",
   },
   {
-    wheel: "Logitech G920, G923, G PRO, Driving Force Pro",
+    wheel: `Logitech ${LOGITECH_HIDPP_NAMES}`,
+    webHid: "expected",
+    bridge: "expected",
+    note: "Untested; starts on WebHID with HID++ force feedback as Linux hid-logitech-hidpp sends it, once Logitech G HUB has switched the wheel to PC mode",
+  },
+  {
+    wheel: "Logitech G923 for PlayStation, G PRO, Driving Force Pro",
     webHid: "no",
     bridge: "expected",
-    note: "Untested; bridge only: the browser speaks only the classic Logitech protocol and cannot rescale the DFP's steering axis",
+    note: "Untested; bridge only: no mainline Linux driver drives the G923 for PlayStation or the G PRO, and the browser cannot rescale the DFP's steering axis",
   },
   {
     wheel: "Thrustmaster T150, T248, T300, TMX; Fanatec CSL Elite",
