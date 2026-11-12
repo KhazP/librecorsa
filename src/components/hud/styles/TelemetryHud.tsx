@@ -141,10 +141,12 @@ export const TelemetryHud: React.FC<HudDesignProps> = ({ t, deltaS, map, compoun
               throttle: t.throttle,
               brake: t.brake,
               steering: t.steering,
+              steerInput: t.steerInput,
               throttleOut: p.throttleOut,
               brakeOut: p.brakeOut,
               ffbClip: p.ffbClip,
             }}
+            steerLockDeg={t.steerLockDeg}
             width={148}
             aside={<PedalBars t={t} />}
           />

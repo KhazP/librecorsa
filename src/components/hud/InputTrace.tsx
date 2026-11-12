@@ -17,7 +17,10 @@ const CAPACITY = 512;
 interface InputSample {
   throttle: number;
   brake: number;
+  /** Road-wheel angle over the lock, −1..1 */
   steering: number;
+  /** The player's own steering (keys, stick or wheel), −1..1: drawn dashed behind the road-wheel angle */
+  steerInput?: number;
   throttleOut?: number;
   brakeOut?: number;
   ffbClip?: boolean;
@@ -41,13 +44,19 @@ interface InputTraceProps {
   width?: number;
   /** Live gauges beside the trace (the dual-layer pedal bars); replaces the built-in current-value strip */
   aside?: React.ReactNode;
+  /** Road-wheel angle at full lock (deg): the legend then reads the road-wheel angle in degrees */
+  steerLockDeg?: number;
 }
 
-/** Scrolling throttle / brake / steering trace (newest at the right) with current-value gauges */
-export const InputTrace: React.FC<InputTraceProps> = ({ sample, seconds = 5, width = WIDTH, aside }) => {
+/**
+ * Scrolling throttle / brake / steering trace (newest at the right) with current-value gauges. Dashed lines are what
+ * the player asked for where the car gave something else: the pedal under TC or ABS, and the steering input against
+ * the road-wheel angle (a held key against the angle the steering assist holds the tyres at).
+ */
+export const InputTrace: React.FC<InputTraceProps> = ({ sample, seconds = 5, width = WIDTH, aside, steerLockDeg }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const ringRef = useRef<Ring>({ buf: new Array<Point | undefined>(CAPACITY), head: 0, count: 0 });
-  const { throttle, brake, steering, throttleOut, brakeOut, ffbClip } = sample;
+  const { throttle, brake, steering, steerInput, throttleOut, brakeOut, ffbClip } = sample;
   const hasAside = aside !== undefined && aside !== null;
   // The HUD stays mounted under the pause menu: the trace idles there instead of redrawing an invisible canvas
   const hudModeRef = useHudModeRef();
@@ -55,10 +64,10 @@ export const InputTrace: React.FC<InputTraceProps> = ({ sample, seconds = 5, wid
   // Record a point whenever an input changes; between changes the trace holds the last value
   useEffect(() => {
     const ring = ringRef.current;
-    ring.buf[ring.head] = { t: performance.now(), throttle, brake, steering, throttleOut, brakeOut, ffbClip };
+    ring.buf[ring.head] = { t: performance.now(), throttle, brake, steering, steerInput, throttleOut, brakeOut, ffbClip };
     ring.head = (ring.head + 1) % CAPACITY;
     ring.count = Math.min(CAPACITY, ring.count + 1);
-  }, [throttle, brake, steering, throttleOut, brakeOut, ffbClip]);
+  }, [throttle, brake, steering, steerInput, throttleOut, brakeOut, ffbClip]);
 
   // Redraw every frame while mounted
   useEffect(() => {
@@ -159,6 +168,11 @@ export const InputTrace: React.FC<InputTraceProps> = ({ sample, seconds = 5, wid
       if (anyAbsCut) {
         strokeSeries("rgba(255, 61, 203, 0.55)", pts, xOf, (p) => yPedal(p.brake), true);
       }
+      // The player's steering where it differs from the road wheels' (no input recorded: the wheels' own)
+      const anySteerGap = pts.some((p) => p.steerInput !== undefined && Math.abs(p.steerInput - p.steering) > 0.01);
+      if (anySteerGap) {
+        strokeSeries("rgba(0, 229, 255, 0.5)", pts, xOf, (p) => ySteer(p.steerInput ?? p.steering), true);
+      }
       strokeSeries(HUD_GREEN, pts, xOf, (p) => yPedal(p.throttleOut ?? p.throttle));
       strokeSeries(HUD_RED, pts, xOf, (p) => yPedal(p.brakeOut ?? p.brake));
       strokeSeries(HUD_CYAN, pts, xOf, (p) => ySteer(p.steering));
@@ -214,14 +228,19 @@ export const InputTrace: React.FC<InputTraceProps> = ({ sample, seconds = 5, wid
         <span className="flex items-center gap-2 font-f1-mono text-[9px] font-extrabold tracking-[0.12em]">
           <span style={{ color: HUD_GREEN }}>THR</span>
           <span style={{ color: HUD_RED }}>BRK</span>
-          <span style={{ color: HUD_CYAN }}>STR</span>
+          <span style={{ color: HUD_CYAN }} title="Road wheels solid, your input dashed">
+            STR
+            {steerLockDeg !== undefined ? (
+              <span className="inline-block min-w-[4ch] text-right tabular-nums">{` ${Math.abs(steering * steerLockDeg).toFixed(1)}°`}</span>
+            ) : null}
+          </span>
         </span>
       </div>
       <div className="flex items-end gap-2.5">
         <canvas
           ref={canvasRef}
           role="img"
-          aria-label="Throttle, brake and steering trace"
+          aria-label="Throttle, brake and steering trace: dashed steering is your input, solid the road-wheel angle"
           className="block rounded-[8px]"
           style={{ width, height: HEIGHT }}
         />

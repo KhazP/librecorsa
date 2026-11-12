@@ -2372,8 +2372,19 @@ export class DriveSession {
       // 4 Hz keeps what can still move there (remote players) current
       if (nowMs - lastHudSyncMs > (frozen ? 250 : 33)) {
         lastHudSyncMs = nowMs;
+        // What the player steered with against what the wheels did, for the input trace
+        const steerSource = physics.steeringAssist.source;
+        const steerInput = !driving
+          ? undefined
+          : steerSource === "keyboard"
+            ? kbSteerDir
+            : steerSource === "controller"
+              ? (gamepadStick ?? 0)
+              : (directSteer ?? 0);
         setTelemetry({
           ...physics.telemetry,
+          steerInput,
+          steerLockDeg: physics.maxSteerAngleRad * (180 / Math.PI),
           tireTempsC: [...physics.telemetry.tireTempsC],
           brakeTempsC: [...physics.telemetry.brakeTempsC],
           wheelSlipRatios: [...physics.telemetry.wheelSlipRatios],
