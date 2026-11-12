@@ -77,6 +77,11 @@ wheel, so every one of these was a ledge otherwise; the layout check walks both 
 and allows no step over 6 cm. The open stands show scaffolding at
 the back and ends under a band of banners; the big screens show their picture on both faces.
 
+Each lap's track limits leave out the other lap's road. The other lap's asphalt and kerbs are paved like the lap's own,
+so each track data lists where that road leaves the lap (`otherLayoutRoads`, from `layout-limits.ts`), and there the
+lap's own road edge and kerbs are the limit (`src/lib/sim/course-limits.ts`). The short lap's link, taken on the Grand
+Prix lap, also moves the car 685 m round the lap in one frame: that lap is cut, and a race does not count it.
+
 The kerbs are blocks, under the wheel and to the eye. What the cars drive on is a smooth hump 1.5 m wide and 3.2 cm
 high, one cross-section for every circuit of the game; on it this circuit's surface table stands blocks 0.8 m long,
 each climbed over 0.65 m in the direction of the lap and come down from over 0.15 m (about a tyre's contact patch: a
@@ -129,6 +134,7 @@ node scripts/rwanda-official/post.mjs                # rwanda_official.glb: alph
 
 # only when the design changed (it resets the racing lines):
 $PY scripts/rwanda-official/export_json.py           # both laps' track_data.json
+npx tsx scripts/rwanda-official/layout-limits.ts     # each lap's otherLayoutRoads: where the other lap's road leaves it
 for id in rwanda_official rwanda_official_short; do
   npx tsx scripts/optimize-racing-line.ts --track $id --car f1
   npx tsx scripts/optimize-racing-line.ts --track $id --car gt3

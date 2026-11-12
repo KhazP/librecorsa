@@ -84,7 +84,7 @@ import { KERB_PROFILE_L, kerbProfileM, surfaceRippleM } from '../track-surfaces'
 import { sampleGrid } from '../ai/ai-track';
 import type { AiDrivePlan } from '../ai/drive-plan';
 import { lockShareOf } from '../tyre-slide-fx';
-import { isCourseHop } from '../course-limits';
+import { beyondLayoutEdge, inLapStretch, isCourseHop } from '../course-limits';
 
 const G = 9.81;
 const DEG2RAD = Math.PI / 180;
@@ -2323,12 +2323,18 @@ export class F12026CarSim implements SimulatorCar {
     // All four wheels on surfaces the table does not count as the track (run-off, gravel, grass, sausage kerbs)
     // Judged on the wheels touching the road: an airborne wheel's ground is its last contact (the probe only reaches
     // 0.6 m), so a jump keeps the verdict it took off with rather than reading stale surfaces
+    // Where another layout's road leaves the lap, this lap's road edge and kerbs are the limit: that road's asphalt and
+    // kerbs past it are off the track (course-limits.ts)
+    const fenced = inLapStretch(this.track.otherLayoutRoads, this.s, this.track.totalLengthM);
     let anyGrounded = false;
     let allOff = true;
     for (const w of W) {
       if (!w.grounded) continue;
       anyGrounded = true;
-      if (w.ground.props.validTrack) allOff = false;
+      const kind = w.ground.surface;
+      if (!w.ground.props.validTrack) continue;
+      if (fenced && (kind === 'road' || kind === 'kerb') && beyondLayoutEdge(sample, w.hardpointWorld.x, w.hardpointWorld.z)) continue;
+      allOff = false;
     }
     const offTrack = anyGrounded ? allOff : this.wasOffTrack;
     this.wasOffTrack = offTrack;
