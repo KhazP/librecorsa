@@ -36,6 +36,7 @@ import { type ChassisSetup, DEFAULT_CHASSIS_SETUP, loadChassisSetup } from "@/li
 import { CameraRig } from "@/lib/render/camera-rig";
 import { LapDeltaTracker } from "@/lib/sim/lap-delta";
 import { TrackLimitsMonitor } from "@/lib/sim/track-limits";
+import { stretchTimeS } from "@/lib/sim/course-limits";
 import { SimVisualFxManager } from "@/lib/sim/visual-fx";
 import { AiOpponentField, aiDriversFor, resolvePlayerVsRemoteCar } from "@/lib/sim/ai-opponents";
 import { startAiRace } from "@/lib/sim/race-setup";
@@ -1373,6 +1374,13 @@ export class DriveSession {
     let portedProbeFrame = 0;
     let cockpitProbeFrame = 0;
     const lapDelta = new LapDeltaTracker(track.totalLengthM);
+    // Race control measures what a course cut saved against this: the best lap, else the car's own speed profile
+    const stretchRefS = (fromM: number, toM: number): number | null => {
+      const best = lapDelta.referenceGapS(fromM, toM, track.totalLengthM);
+      if (best !== null) return best;
+      const guide = physics.brakingGuide?.speedMs;
+      return guide ? stretchTimeS(guide, track.totalLengthM, fromM, toM) : null;
+    };
     // The dash view's placement and the player's moves of the onboard views
     const onboardViews = new OnboardViews();
     // Race control: judges every excursion past the track limits (see TrackLimitsMonitor); resetRun and setRace start
@@ -1777,6 +1785,7 @@ export class DriveSession {
             sector: t.currentSector,
             distM: t.trackDistanceM,
             lapLengthM: track.totalLengthM,
+            stretchRefS,
             offTrack: t.offTrack,
             throttle: t.throttle,
             brake: t.brake,

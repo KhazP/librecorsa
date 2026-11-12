@@ -41,6 +41,11 @@ export class CourseCutWatch {
     this.sinceS = 0;
   }
 
+  /** A jump is waiting to be settled */
+  get pending(): boolean {
+    return this.pendingM !== 0;
+  }
+
   /** One update: `ds` the change of lap position (m, wrapped), `dtS` the time it took. True when a cut settles */
   update(ds: number, dtS: number): boolean {
     if (isCourseHop(ds)) {
@@ -60,6 +65,24 @@ export class CourseCutWatch {
     this.reset();
     return cut;
   }
+}
+
+/**
+ * Time a speed profile (m/s per sample, evenly spaced round the lap) takes from lap distance `fromM` to `toM` (s),
+ * going forwards round the lap
+ */
+export function stretchTimeS(speedMs: ArrayLike<number>, lapLengthM: number, fromM: number, toM: number): number {
+  const n = speedMs.length;
+  const ds = lapLengthM / n;
+  const wrap = (m: number) => ((m % lapLengthM) + lapLengthM) % lapLengthM;
+  const a = wrap(fromM);
+  const len = ((wrap(toM) - a) % lapLengthM + lapLengthM) % lapLengthM;
+  let t = 0;
+  for (let d = 0; d < len; d += ds) {
+    const step = Math.min(ds, len - d);
+    t += step / Math.max(5, speedMs[Math.floor(wrap(a + d) / ds) % n]);
+  }
+  return t;
 }
 
 /** Kerb width beyond the asphalt edge where a sample has a kerb (m), and the slack past it before a wheel is off (m) */

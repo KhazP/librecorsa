@@ -467,7 +467,7 @@ export interface CarTelemetry {
 }
 
 /** Why an excursion counted against the driver */
-export type TrackLimitsReason = "gained" | "corner_cut" | "not_lifted" | "illegal_overtake";
+export type TrackLimitsReason = "gained" | "corner_cut" | "not_lifted" | "illegal_overtake" | "course_cut";
 
 /** The race-control state of the track-limits judging (see `TrackLimitsMonitor`) */
 export interface TrackLimitsStatus {

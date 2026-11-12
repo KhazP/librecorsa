@@ -19,8 +19,9 @@
  * after that.
  *
  * A course cut (the car jumps round the lap off its road, course-limits.ts) is no excursion to judge: the lap is
- * deleted (and in a race the race clock does not count a lap that skipped part of the course), so the banner says so
- * and any excursion being judged ends with it.
+ * deleted, and in a race, once the car is back on the track, a time penalty takes back more than it gained: the time
+ * saved (the reference time over the stretch from where it left the road to where it rejoined, less the time it took)
+ * plus `COURSE_CUT_MARGIN_S`, and never under `COURSE_CUT_MIN_PENALTY_S`. Any excursion being judged ends with it.
  */
 import type { TrackLimitsReason, TrackLimitsStatus } from "@/types/f1";
 import { CourseCutWatch } from "./course-limits";
@@ -54,6 +55,9 @@ const CORNER_CURVATURE = 1 / 450;
 const MESSAGE_HOLD_MS = 4200;
 
 export const STRIKES_PER_PENALTY = 3;
+/** A course cut's penalty: the time it saved plus this, rounded up to the second, and at least the minimum (s) */
+export const COURSE_CUT_MARGIN_S = 5;
+export const COURSE_CUT_MIN_PENALTY_S = 10;
 export const FIRST_PENALTY_S = 3;
 export const REPEAT_PENALTY_S = 5;
 
@@ -74,6 +78,11 @@ export interface TrackLimitsFrame {
   distM: number;
   /** Lap length (m): with it, a jump of the lap distance no car can drive is a course cut */
   lapLengthM?: number;
+  /**
+   * Time the car's reference lap takes from one lap distance to another (s, forwards round the lap): the best lap,
+   * else its speed profile; null without one. What a course cut saved is measured against it
+   */
+  stretchRefS?: (fromM: number, toM: number) => number | null;
   offTrack: boolean;
   throttle: number;
   brake: number;
@@ -138,6 +147,11 @@ export class TrackLimitsMonitor {
   /** Lap distance last frame (m), and its jumps round the lap, for course cuts; null until the first frame of a run */
   private seenDistM: number | null = null;
   private readonly cutWatch = new CourseCutWatch();
+  /** Session clock (s, the frames' dtS); where and when the car was last on the track with no jump pending */
+  private clockS = 0;
+  private onRoad: { distM: number; clockS: number } | null = null;
+  /** A race's course cut owing its penalty: where and when the car left the road */
+  private cutFrom: { distM: number; clockS: number } | null = null;
   /** A course cut and the car not back on the track since: the rest of that excursion is the cut, not judged */
   private afterCut = false;
   /** The last frame was judged (`TrackLimitsFrame.active`); a verdict waiting while not is kept off the HUD */
@@ -168,6 +182,9 @@ export class TrackLimitsMonitor {
     this.seenLapTimeMs = null;
     this.seenDistM = null;
     this.cutWatch.reset();
+    this.onRoad = null;
+    this.cutFrom = null;
+    this.lastCutSavedS = null;
     this.afterCut = false;
     this.active = true;
     this.message = null;
@@ -181,6 +198,9 @@ export class TrackLimitsMonitor {
   get nextLapForfeit(): boolean {
     return this.nextLapDeleted;
   }
+
+  /** What the last course cut saved against the reference lap (s), as its penalty measured it; null without one */
+  lastCutSavedS: number | null = null;
 
   /** Time penalties so far (s) */
   get penaltyTotalS(): number {
@@ -199,22 +219,30 @@ export class TrackLimitsMonitor {
   /** Advances the judging by one frame; returns the race-control decision taken this frame, if any */
   update(f: TrackLimitsFrame): TrackLimitsEvent | null {
     this.active = f.active;
+    this.clockS += f.dtS;
     if (this.courseCut(f)) {
-      const deleted = this.session === "practice" ? this.strict(f) : null;
-      if (!deleted && this.session === "practice") this.totalStrikes++;
+      const race = this.session === "race";
+      const deleted = race ? null : this.strict(f);
+      if (!deleted && !race) this.totalStrikes++;
       this.exc = null;
       this.message = {
         kind: "lap_invalid",
         text: "Course cut · lap deleted",
-        detail: "Left the lap's road",
+        detail: race ? "Time penalty once back on the track" : "Left the lap's road",
         atMs: f.nowMs,
       };
+      if (race) this.cutFrom = this.onRoad ?? { distM: f.distM, clockS: this.clockS };
       this.afterCut = f.offTrack;
+      if (race && !f.offTrack) return this.cutPenalty(f);
       return { kind: "lap_invalid", lap: f.lapCount };
     }
     if (this.afterCut) {
-      if (!f.offTrack) this.afterCut = false;
-      else if (this.session === "race") return null;
+      if (f.offTrack) {
+        if (this.session === "race") return null;
+      } else {
+        this.afterCut = false;
+        if (this.cutFrom) return this.cutPenalty(f);
+      }
     }
     if (this.session === "practice") return this.strict(f);
     if (!f.active) {
@@ -259,7 +287,32 @@ export class TrackLimitsMonitor {
       this.cutWatch.reset();
       return false;
     }
-    return this.cutWatch.update(((((f.distM - prev + L / 2) % L) + L) % L) - L / 2, f.dtS);
+    const cut = this.cutWatch.update(((((f.distM - prev + L / 2) % L) + L) % L) - L / 2, f.dtS);
+    // Where the car left the road: its last spot on the track before the jump
+    if (!cut && !f.offTrack && !this.cutWatch.pending) this.onRoad = { distM: f.distM, clockS: this.clockS };
+    return cut;
+  }
+
+  /**
+   * A race's course cut, the car back on the track: a time penalty of what the cut saved against the reference lap
+   * (from where it left the road to here), plus the margin, and at least the minimum
+   */
+  private cutPenalty(f: TrackLimitsFrame): TrackLimitsEvent {
+    const from = this.cutFrom;
+    this.cutFrom = null;
+    const ref = from && f.stretchRefS ? f.stretchRefS(from.distM, f.distM) : null;
+    const savedS = from && ref !== null ? ref - (this.clockS - from.clockS) : null;
+    const seconds = Math.max(COURSE_CUT_MIN_PENALTY_S, Math.ceil((savedS ?? 0) + COURSE_CUT_MARGIN_S));
+    this.penalties++;
+    this.penaltyS += seconds;
+    this.lastCutSavedS = savedS;
+    this.message = {
+      kind: "penalty",
+      text: `Course cut · +${seconds.toFixed(1)}s time penalty`,
+      detail: savedS !== null && savedS > 0 ? `${savedS.toFixed(1)} s gained` : "Lap deleted",
+      atMs: f.nowMs,
+    };
+    return { kind: "penalty", reason: "course_cut", penaltyS: seconds, lap: f.lapCount };
   }
 
   /** The state for the HUD (updated in place) */
