@@ -61,6 +61,7 @@ const MEMBERS: Record<keyof SimulatorCar, MemberKind> = {
   aiPaceScale: "config",
   aiLineBiasM: "config",
   aiSpeedCapMs: "config",
+  aiTopSpeedOpen: "config",
   aiSteerGain: "config",
   aeroPreset: "config",
   assistPreset: "config",

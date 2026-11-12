@@ -17,6 +17,7 @@ export const CAR_SETTABLE = [
   "aiPaceScale",
   "aiLineBiasM",
   "aiSpeedCapMs",
+  "aiTopSpeedOpen",
   "aiSteerGain",
   "aeroPreset",
   "assistPreset",

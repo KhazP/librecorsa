@@ -48,6 +48,19 @@ const f = (v: number, d = 1) => v.toFixed(d);
     'Pass: 8 m back at 6 m/s closing, corner 250 m away: on',
     passFeasible({ gapM: 8, closingMs: 6, speedMs: 80, distToCornerM: 250, brakingZoneM: 120 })
   );
+  check(
+    'Pass: 4 m back at 1 m/s closing, corner 150 m away: on when it brakes 8 m later',
+    passFeasible({ gapM: 4, closingMs: 1, speedMs: 80, distToCornerM: 150, brakingZoneM: 120, brakeGainM: 8 }) &&
+      !passFeasible({ gapM: 4, closingMs: 1, speedMs: 80, distToCornerM: 150, brakingZoneM: 120 })
+  );
+  check(
+    'Pass: ... but not from 10 m back',
+    !passFeasible({ gapM: 10, closingMs: 1, speedMs: 80, distToCornerM: 150, brakingZoneM: 120, brakeGainM: 8 })
+  );
+  check(
+    'Pass: 3 m back at 5 m/s closing at the braking point: a lunge (the closing stops where it brakes)',
+    !passFeasible({ gapM: 3, closingMs: 5, speedMs: 80, distToCornerM: 125, brakingZoneM: 120 })
+  );
   const hl = hazardLine(-2, 2.5, 6, 1.95);
   check('Hazard: passed on the side with room', hl !== null && hl.latM > 0.5, hl ? `line ${f(hl.latM)} m, room ${f(hl.roomM)} m` : 'blocked');
   check('Hazard: a road blocked across is blocked', hazardLine(0, 5.5, 6, 1.95) === null);
@@ -127,7 +140,9 @@ const DT = 1 / 120;
 // ---- 4. A quicker car gets by
 // Four races from different seeds: where and when the quicker car closes up differs from one to the next, and so does
 // whether its tow ends at a braking zone. It gets by in most, and a race with a hard contact is the exception: in one
-// seed in eight the car behind sits a car length off the gearbox down a straight and nudges the leader when he brakes
+// seed in eight the car behind sits a car length off the gearbox down a straight and nudges the leader when he brakes.
+// The quicker car gets by on the tow and the brakes: it runs past its plan's top speed in the slower car's wake, pulls
+// out with that speed, and brakes later. Held at its top speed (and 2 % under it in dirty air) it sat behind for laps
 {
   const results: string[] = [];
   let passes = 0;

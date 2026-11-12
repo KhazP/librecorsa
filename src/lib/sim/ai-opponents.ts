@@ -51,9 +51,9 @@ import {
   RacecraftMemory,
 } from '@/lib/sim/ai-racecraft';
 import { RaceIncidents } from '@/lib/sim/race-incidents';
-import { aiTrackFor, type AiTrack } from '@/lib/sim/ai/ai-track';
+import { aiTrackFor, sampleGrid, type AiTrack } from '@/lib/sim/ai/ai-track';
 import { carLimitsFor } from '@/lib/sim/ai/ggv';
-import { makeDrivePlan } from '@/lib/sim/ai/drive-plan';
+import { makeDrivePlan, type AiDrivePlan } from '@/lib/sim/ai/drive-plan';
 import { DEFAULT_PLANNER_WEIGHTS, PLAN_DT, PLAN_STEPS, planLocal, type PlannerResult, type PredictedCar } from '@/lib/sim/ai/local-planner';
 import type { AiGridOrder, PlayerGridSlot } from '@/lib/sim/race-setup';
 import { F12026_CAR_CONFIG } from '@/lib/sim/f12026-car/F12026CarConfig';
@@ -180,6 +180,8 @@ export const DEFAULT_RACECRAFT: RacecraftParams = {
 };
 /** Rate at which an AI moves off / back onto its line (m/s) */
 const BIAS_RATE_MS = 2.2;
+/** ... and out of the tow to pass (m/s): a quick move, made with the speed the tow gave */
+const PULL_OUT_RATE_MS = 3.2;
 const LIGHT_INTERVAL_S = 1.0;
 const GAP_BUCKET_M = 10;
 /** The overtake caution the passing rules below were written for (the shipped default): no change at this value */
@@ -200,6 +202,23 @@ function followCapMs(ahead: SimulatorCar, gapM: number, rc: RacecraftParams = DE
   const close = Math.max(0, Math.min(1, (rc.followFadeM - gapM) / Math.max(5, rc.followFadeM - 5)));
   const margin = 2.5 + (decelAhead > 5 ? 0.12 * vAhead * close : 0);
   return Math.max(0, vAhead - 0.2 * decelAhead * close) + Math.sqrt(2 * rc.followRelAccel * Math.max(0, gapM - margin));
+}
+
+/**
+ * How much a planned car's speed over the road ahead (to `lookM`) is a corner's to set: 1 where the plan has it brake
+ * or hold a corner's limit within that distance, 0 where the slowest point ahead is well above its speed (a straight,
+ * a fast sweep it is still accelerating through). The plan's level-ground top speed is no corner: a car in a tow runs
+ * past it
+ */
+function cornerLimitedShare(plan: AiDrivePlan, s: number, vMs: number, lookM: number): number {
+  const ds = plan.track.ds;
+  let vMin = Infinity;
+  for (let d = 0; d <= lookM; d += 5) {
+    const v = sampleGrid(plan.v, s + d, ds);
+    if (sampleGrid(plan.vOpen, s + d, ds) > v + 0.05) continue;
+    vMin = Math.min(vMin, v);
+  }
+  return THREE.MathUtils.clamp((1.15 - vMin / Math.max(1, vMs)) / 0.15, 0, 1);
 }
 
 /**
@@ -1401,6 +1420,10 @@ export class AiOpponentField {
         }
         if (aheadGap < reactGap) {
           const aLat = ahead.sim.lateralOffsetM;
+          // Its wake runs down its line: where it is off its own line, carried onto ours here. The line swings across the
+          // road between two cars 15 m apart, and the raw offset pulled the follower off its line through a kink and
+          // read as "out of the wake" when it wasn't, so it pulled out far too early and lost the tow
+          const aLatHere = line + aLat - aiLineOffsetM(this.track.getSampleAtDistance(ahead.sim.sMeters), me.racingLineId);
           const roomRight = half - aLat;
           const roomLeft = aLat + half;
           let side = roomRight >= roomLeft ? 1 : -1;
@@ -1411,6 +1434,16 @@ export class AiOpponentField {
           const cornerV = Number.isFinite(distToCorner)
             ? (this.track.getSampleAtDistance((me.sMeters + distToCorner) % L).optimalSpeedKmh / 3.6) * car.pace
             : me.vxMs;
+          const brakingZone = brakingDistanceM(me.vxMs, cornerV, decel);
+          // The car ahead on less grip brakes earlier for a slower corner (its speeds go with its pace, its braking with
+          // pace²): the metres that buys a later braker
+          const paceRatio = THREE.MathUtils.clamp(ahead.pace / Math.max(0.5, car.pace), 0.8, 1.25);
+          const itsZone = brakingDistanceM(ahead.sim.vxMs, cornerV * paceRatio, decel * paceRatio * paceRatio);
+          // Holding a pass already under way needs less than starting one: the tow is gone once out of it
+          const holding = craft.passTargetId === ahead.id;
+          // A committed pass not alongside by the turn-in is over: the corner is the other car's. Held on into it, the
+          // passing car ran down the inside a few metres behind and the other car turned in across its nose
+          if (craft.commitSide !== 0 && holding && (inCorner || distToCorner <= 10) && aheadGap > 0.5 * CAR_LEN_M) craft.commitSide = 0;
           const feasible =
             craft.commitSide !== 0 ||
             passFeasible({
@@ -1418,33 +1451,43 @@ export class AiOpponentField {
               closingMs: closing,
               speedMs: me.vxMs,
               distToCornerM: distToCorner,
-              brakingZoneM: brakingDistanceM(me.vxMs, cornerV, decel),
+              brakingZoneM: brakingZone,
               // A bold driver will finish the pass deeper into the braking zone
               brakingShare: 0.35 + 0.3 * Math.max(0, this.aggressionOf(car)),
+              brakeGainM: itsZone - brakingZone,
             });
-          // Holding a pass already under way needs less than starting one: the tow is gone once out of it
-          const holding = craft.passTargetId === ahead.id;
           if (!yellow && room >= passSpacing && (closing > minClosing || (holding && closing > minClosing - 2.5)) && feasible) {
             // Use the tow first: stay in the car's wake until close, then pull out with the speed it gave. Out of
             // the wake too early, the passing car lost the tow and never had the speed to get by. Already out (or
             // alongside), the move is held
             const noseToTail = aheadGap - CAR_LEN_M;
-            const pullOut = this.rc.pullOutBaseM + Math.max(0, closing) * this.rc.pullOutClosingS + (Number.isFinite(distToCorner) ? 6 : 0);
-            const out = Math.abs(me.lateralOffsetM - aLat) > CAR_WID_M * 0.75;
+            // The move across takes time, the gap closing all the while: it starts that much sooner. Started at the
+            // pull-out distance alone, the car was still in line when it ran up to the gearbox, and the follow cap took
+            // its speed away
+            const moveS = passSpacing / PULL_OUT_RATE_MS;
+            const pullOut = this.rc.pullOutBaseM + Math.max(0, closing) * (this.rc.pullOutClosingS + moveS) + (Number.isFinite(distToCorner) ? 6 : 0);
+            const out = Math.abs(me.lateralOffsetM - aLatHere) > CAR_WID_M * 0.75;
             if (noseToTail > pullOut && !out && !holding) {
-              targetLat = aLat;
+              targetLat = aLatHere;
             } else {
               targetLat = aLat + side * passSpacing;
               craft.passTargetId = ahead.id;
               craft.passSide = side;
+              if (!out) biasRate = PULL_OUT_RATE_MS;
             }
             // Committed once the braking zone for the corner is near: no switching sides on the brakes
-            if (craft.commitSide === 0 && Number.isFinite(distToCorner) && distToCorner < brakingDistanceM(me.vxMs, cornerV, decel) + 80) {
+            if (craft.commitSide === 0 && Number.isFinite(distToCorner) && distToCorner < brakingZone + 80) {
               craft.commitSide = side;
               craft.commitUntilS = (me.sMeters + distToCorner + 120) % L;
             }
           } else {
-            // No room, no time or a yellow: sit in the tow and wait
+            // No room, no time or a yellow: sit in the tow and wait. A pass called off with the car already out beside
+            // the other's gearbox backs off first (below)
+            const outBeside = Math.abs(me.lateralOffsetM - aLatHere) > CAR_WID_M * 0.75;
+            if (holding && outBeside) {
+              craft.backOffId = ahead.id;
+              craft.backOffSide = Math.sign(me.lateralOffsetM - aLatHere);
+            }
             craft.passTargetId = null;
             speedCap = ahead.sim.vxMs + Math.max(-4, (aheadGap - followGap) * 0.5);
           }
@@ -1452,6 +1495,28 @@ export class AiOpponentField {
       }
       // The pass is done (the other car is behind) or off (it is far ahead again)
       if (craft.passTargetId !== null && (!ahead || ahead.id !== craft.passTargetId)) craft.passTargetId = null;
+      // Backing off a pass called off: stay out beside the other car's line and drop back behind it before moving back
+      // across. Moving back at once, with the run's speed and the corner's braking under way, put the nose into its
+      // gearbox. Done once a few metres behind it and no quicker, or once it is gone, alongside or a hazard
+      let holdingOut = false;
+      if (craft.backOffId !== null) {
+        const o = this.cars.find((c) => c.id === craft.backOffId);
+        const dsO = o && !o.removed ? wrapHalf(o.sim.sMeters - me.sMeters, L) : -Infinity;
+        const behindBy = dsO - CAR_LEN_M;
+        // (a car spun or stopped is a hazard, passed as one: no backing off behind it)
+        if (!o || this.isHazard(o) || dsO <= 0 || dsO > 60 || (behindBy > 4 && me.vxMs <= o.sim.vxMs + 1)) {
+          craft.backOffId = null;
+        } else {
+          const oLatHere = line + o.sim.lateralOffsetM - aiLineOffsetM(this.track.getSampleAtDistance(o.sim.sMeters), me.racingLineId);
+          if (targetLat === null) {
+            targetLat = oLatHere + craft.backOffSide * Math.max(Math.abs(me.lateralOffsetM - oLatHere), CAR_WID_M + 0.5);
+            holdingOut = true;
+          }
+          // ... and never closer than it could stop behind the other car if that braked now: held beside it, the corner's
+          // room took the car back across onto its line while the other braked for the turn-in
+          speedCap = Math.min(speedCap, Math.max(0, o.sim.vxMs - 1), followCapMs(o.sim, behindBy, this.rc));
+        }
+      }
 
       // Off the start: run down the grid lane, side by side, until the first corner comes into view
       if (car.startLaneM !== null) {
@@ -1541,7 +1606,20 @@ export class AiOpponentField {
           if (Math.abs(kept - want) > 1e-3) pos = kept;
         }
       }
+      // (backing off beside a car, the corner's room is no limit: held to it, the car was taken back across into the other)
+      if (holdingOut) maxBias = Math.max(maxBias, sample.width / 2);
       const biasTarget = pos === null ? 0 : THREE.MathUtils.clamp(pos - line, -maxBias, maxBias);
+      // A pass the corner ahead has no room for: held to its line there, the passing car is back in the other car's path,
+      // so it follows it in. With a run from the tow and a later braking point, it went on and ran into its rear corner
+      let passBlocked = false;
+      if (craft.passTargetId !== null && ahead && ahead.id === craft.passTargetId && aheadGap > 0.5 * CAR_LEN_M) {
+        // (both off their lines: where we will be against where it is, carried onto our line here)
+        const aheadOff = ahead.sim.lateralOffsetM - aiLineOffsetM(this.track.getSampleAtDistance(ahead.sim.sMeters), me.racingLineId);
+        if (Math.abs(biasTarget - aheadOff) < CAR_WID_M + 0.35) {
+          passBlocked = true;
+          speedCap = Math.min(speedCap, followCapMs(ahead.sim, aheadGap - CAR_LEN_M, this.rc));
+        }
+      }
       if (this.localPlanner && me.aiPlan && car.control?.racing !== false && this.trafficNear(car)) {
         // The local planner chooses the path among the cars around: the behaviour above is its intent
         car.intentD = pos === null && !hazard ? null : biasTarget;
@@ -1560,14 +1638,16 @@ export class AiOpponentField {
       // Off-line and in dirty air the corner is tighter than planned: give a little speed away for it
       const wakeFrontMult = me.telemetry.aeroWakeDownforceMult ?? 1;
       // (the physics lose the downforce; this is the driver's margin for it: a car on a drive plan runs at its real limit
-      // and spun in the wake at a smaller one)
-      const dirtyAirPenalty = 1 - (me.aiPlan ? this.rc.dirtyAirMargin : 0.05) * Math.max(0, 1 - wakeFrontMult);
+      // and spun in the wake at a smaller one). A planned car gives it away only where a corner sets its speed: on the
+      // straights it scaled the whole plan, and the car in the tow ran 2 % under its own top speed and never got by
+      const dirtyAirShare = me.aiPlan ? this.rc.dirtyAirMargin * cornerLimitedShare(me.aiPlan, me.sMeters, me.vxMs, lookM) : 0.05;
+      const dirtyAirPenalty = 1 - dirtyAirShare * Math.max(0, 1 - wakeFrontMult);
       // Rain: the pace the tyres' grip on this much water allows (weather.ts / track-environment.ts)
       const weatherPace = this.environment.weatherPaceScale(me);
       // Yellow flag: lift through the zone
       const yellowLift = yellow ? 0.93 : 1;
       // Making a pass stick: a little more into the corner (a later brake, more speed) once alongside
-      const passing = craft.passTargetId !== null && ahead !== null && aheadGap < CAR_LEN_M * 1.2;
+      const passing = craft.passTargetId !== null && ahead !== null && aheadGap < CAR_LEN_M * 1.2 && !passBlocked;
       const attackPush = passing ? 1 + this.rc.attackPush * (1 + Math.max(0, this.aggressionOf(car))) : 1;
       // A car on a drive plan has its pace and the weather in the plan's grip already
       this.refreshPlan(car);
@@ -1576,6 +1656,7 @@ export class AiOpponentField {
       const offLine = me.aiPlan ? 1 : 1 - 0.012 * Math.abs(car.biasM);
       me.aiPaceScale = Math.min(me.aiPlan ? 1.03 : 0.999, planned * attackPush) * offLine * dirtyAirPenalty * yellowLift * blueLift;
       me.aiSpeedCapMs = speedCap;
+      me.aiTopSpeedOpen = yellowLift === 1 && blueLift === 1;
       car.hooks?.setSteerGain(T.at('steerGain', me.sMeters));
       // Rain changed the grip the car plans on: new corner speeds and braking points
       if (car.hooks?.refresh?.()) this.rebuildTarget(car);
@@ -1694,7 +1775,8 @@ export class AiOpponentField {
         track: plan.track,
         line: plan.n,
         lineKappa: plan.kappa,
-        vLimit: plan.v,
+        // (past the top speed in a tow, as the tracker: `F12026CarSim.planSpeedTarget`)
+        vLimit: me.aiTopSpeedOpen ? plan.vOpen : plan.v,
         limits: plan.limits,
         lo: b.lo,
         hi: b.hi,
