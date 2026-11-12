@@ -62,66 +62,6 @@ check("finishes after the race distance", finished && clock.finishTimeS !== null
 check("best lap recorded", clock.bestLapMs !== null && clock.bestLapMs > 0);
 check("no more laps after the flag", clock.update((s + 5) % L, t + 0.1, 2) === false);
 
-console.log("A lap that skips part of the course");
-{
-  // A car driven 5 m an update from lap distance `from` to `to`, over the line when `to` is not past `from`
-  const drive = (c: LapClock, from: number, to: number, at: { t: number }, laps = 3): void => {
-    const end = to <= from ? to + L : to;
-    for (let x = from; x <= end; x += 5) c.update(x % L, (at.t += 0.1), laps);
-  };
-  const at = { t: 0 };
-  const honest = new LapClock(L);
-  honest.reset(L - 30);
-  drive(honest, L - 30, 100, at);
-  drive(honest, 100, 100, at);
-  check("an honest lap counts", honest.lapsDone === 1 && honest.cutLaps === 0 && Math.abs(honest.distM - (L + 100)) < 1e-6);
-
-  // The short lap's link on the Grand Prix lap: 685 m further round in one update, 1200 m into the lap
-  const cut = new LapClock(L);
-  cut.reset(L - 30);
-  drive(cut, L - 30, 1200, at);
-  const before = cut.distM;
-  at.t += 0.1;
-  cut.update(1885, at.t, 3);
-  check(
-    "a jump round the lap is no distance gained: the race distance drops a lap there and then",
-    Math.abs(cut.distM - (1885 - L)) < 1e-6 && cut.distM < before,
-    `${before.toFixed(0)} m before, ${cut.distM.toFixed(0)} m after`
-  );
-  drive(cut, 1885, 50, at);
-  check("over the line that lap does not count", cut.lapsDone === 0 && cut.cutLaps === 1 && Math.abs(cut.distM - 50) < 1e-6);
-  drive(cut, 50, 50, at);
-  check("the next full lap does", cut.lapsDone === 1 && Math.abs(cut.distM - (L + 50)) < 1e-6);
-
-  // Running wide onto a part of the lap further on and back again, then on round the lap: nothing skipped
-  const wide = new LapClock(L);
-  wide.reset(L - 30);
-  drive(wide, L - 30, 1200, at);
-  wide.update(1550, (at.t += 0.1), 3);
-  const dipped = wide.distM < 0;
-  wide.update(1205, (at.t += 0.1), 3);
-  drive(wide, 1205, 100, at);
-  check("a jump there and back is no cut", dipped && wide.lapsDone === 1 && wide.cutLaps === 0);
-
-  // A start past the line: the lap from the line to the car is no cut
-  const ahead = new LapClock(L);
-  ahead.reset(120);
-  drive(ahead, 120, 10, at);
-  check("a start past the line: the first lap counts", ahead.lapsDone === 1 && ahead.cutLaps === 0);
-
-  // On the last lap, a cut car does not take the flag at the line but a lap later
-  const last = new LapClock(L);
-  last.reset(L - 30);
-  drive(last, L - 30, 10, at, 2);
-  drive(last, 10, 10, at, 2);
-  drive(last, 10, 1200, at, 2);
-  last.update(1885, (at.t += 0.1), 2);
-  drive(last, 1885, 10, at, 2);
-  const flagAtLine = last.finishTimeS !== null;
-  drive(last, 10, 10, at, 2);
-  check("a cut on the last lap: no flag at the line, the flag a lap later", !flagAtLine && last.finishTimeS !== null && last.finishLaps === 2);
-}
-
 console.log("Contact rules");
 race.lapClock.reset(L - 20);
 check("ghosted on the opening lap", !race.collisionsActive(go));

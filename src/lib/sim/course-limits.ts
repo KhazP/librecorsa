@@ -10,7 +10,7 @@
  *   - In the stretches a layout lists in `otherLayoutRoads` (its track data), the lap's own road edge, with its kerbs,
  *     is the track limit, whatever is paved beyond: a wheel past it is off the track.
  *   - A change of lap position no car can drive in one update (`isCourseHop`) that is not undone is a cut
- *     (`CourseCutWatch`): the lap under way does not count. Honest driving moves it at most ~25 m in an update (the
+ *     (`CourseCutWatch`): the lap under way is deleted. Honest driving moves it at most ~25 m in an update (the
  *     frame's 0.25 s catch-up at 100 m/s); the projection hops to another part of the lap at a distance of about
  *     200 m (its search window) or more.
  *

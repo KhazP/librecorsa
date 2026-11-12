@@ -252,30 +252,9 @@ export function classificationClosed(ordered: readonly RacerProgress[], raceTime
   return ordered.every((r) => r.finishTimeS !== null || r.dnf) || raceTimeS - winner.finishTimeS > CLASSIFICATION_CLOSE_S;
 }
 
-/**
- * A lap counts only if the car was in every stretch of it about this long (m): skipping one (a cut through another
- * layout's road, course-limits.ts) has the lap not count. Far more than a car moves in a frame (~25 m at most)
- */
-const COVER_STRETCH_M = 100;
-
-/**
- * Lap counting from the race distance of one car (the player's own).
- *
- * The race distance follows the car round the lap, less a whole lap for every lap that skipped part of the course:
- * a car whose lap position jumps ahead (a cut through another layout's road, course-limits.ts) has a stretch behind
- * it that it never drove, and from then on that lap does not count. It stays where it is on the lap (the line, the
- * gaps on the road and the contact rules read the race distance), a lap further back.
- */
+/** Lap counting from the race distance of one car (the player's own) */
 export class LapClock {
-  /** Distance round the lap from the start line as driven (m), every lap included */
-  private rawDistM = 0;
-  /** Laps that did not count: each skipped part of the course */
-  cutLaps = 0;
-  /** The stretches of the lap under way the car has been in, `coverLap` the lap they are of */
-  private readonly covered: Uint8Array;
-  private coverLap = 0;
-  /** A stretch of the lap under way behind the car that it never drove: this lap will not count */
-  private skipped = false;
+  distM = 0;
   /** Race distance on the grid, at the last reset (m) */
   startDistM = 0;
   finishTimeS: number | null = null;
@@ -290,35 +269,13 @@ export class LapClock {
   private prevS = 0;
   private lapStartS = 0;
 
-  constructor(private readonly lapLengthM: number) {
-    this.covered = new Uint8Array(Math.max(1, Math.round(lapLengthM / COVER_STRETCH_M)));
-  }
-
-  /** Race distance from the start line (m), laps included, less the laps that did not count; negative on the grid */
-  get distM(): number {
-    return this.rawDistM - this.lapLengthM * (this.cutLaps + (this.skipped ? 1 : 0));
-  }
-
-  /** Puts the car at race distance `v` (m), the lap so far driven in full */
-  set distM(v: number) {
-    this.rawDistM = v;
-    this.cutLaps = 0;
-    this.skipped = false;
-    this.coverLap = Math.floor(v / this.lapLengthM);
-    this.covered.fill(1);
-  }
+  constructor(private readonly lapLengthM: number) {}
 
   /** Starts from the grid: a car behind the line has a negative distance */
   reset(sMeters: number): void {
     const L = this.lapLengthM;
     this.prevS = sMeters;
-    this.rawDistM = sMeters > L / 2 ? sMeters - L : sMeters;
-    this.cutLaps = 0;
-    this.skipped = false;
-    this.coverLap = Math.floor(this.rawDistM / L);
-    // Behind the line there is nothing to cover before it; past it, the lap from the line to the car is taken as driven
-    this.covered.fill(this.coverLap < 0 ? 1 : 0);
-    if (this.coverLap >= 0) this.covered.fill(1, 0, this.stretchAt(this.rawDistM) + 1);
+    this.distM = sMeters > L / 2 ? sMeters - L : sMeters;
     this.startDistM = this.distM;
     this.finishTimeS = null;
     this.finishLaps = null;
@@ -335,9 +292,8 @@ export class LapClock {
    */
   update(sMeters: number, raceTimeS: number, totalLaps: number, flagOut = false): boolean {
     const L = this.lapLengthM;
-    this.rawDistM += wrapHalf(sMeters - this.prevS, L);
+    this.distM += wrapHalf(sMeters - this.prevS, L);
     this.prevS = sMeters;
-    this.cover();
     const laps = Math.floor(this.distM / L);
     if (laps > this.lapsDone && this.finishTimeS === null) {
       const lapMs = (raceTimeS - this.lapStartS) * 1000;
@@ -354,35 +310,6 @@ export class LapClock {
       }
     }
     return false;
-  }
-
-  /** The stretch of the lap the race distance `d` is in */
-  private stretchAt(d: number): number {
-    const L = this.lapLengthM;
-    const n = this.covered.length;
-    return Math.min(n - 1, Math.floor((((d % L) + L) % L) / (L / n)));
-  }
-
-  /** Marks the car's stretch of the lap; over the line, a lap with a stretch never driven does not count */
-  private cover(): void {
-    const lap = Math.floor(this.rawDistM / this.lapLengthM);
-    if (lap > this.coverLap) {
-      if (this.covered.includes(0)) this.cutLaps++;
-      this.covered.fill(0);
-    } else if (lap < this.coverLap) {
-      // Back over the line the wrong way: the lap before is taken as driven
-      this.covered.fill(1);
-    }
-    this.coverLap = lap;
-    const k = this.stretchAt(this.rawDistM);
-    this.covered[k] = 1;
-    this.skipped = false;
-    for (let i = 0; i < k; i++) {
-      if (!this.covered[i]) {
-        this.skipped = true;
-        break;
-      }
-    }
   }
 }
 
