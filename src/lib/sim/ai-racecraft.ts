@@ -46,9 +46,12 @@ export function brakingDistanceM(vMs: number, vCornerMs: number, decelMs2: numbe
 
 /**
  * Whether a pass started now can draw alongside (the passing car's centre level with the other's) before the corner
- * ahead: at the closing speed, the distance this car covers until then against the distance to the corner's
- * turn-in plus `brakingShare` of its braking zone (a pass completed on the brakes is fair; one started too late to
- * get there is a lunge). `distToCornerM` Infinity: no corner in sight.
+ * ahead: what the closing speed makes up until this car's braking point, and what braking later than the other car
+ * makes up in `brakingShare` of its braking zone (`brakeGainM`: how much shorter this car's braking zone is). A pass
+ * completed on the brakes is fair; one started too late to get there is a lunge. The closing speed stops at the braking
+ * point: a car carrying more speed from a tow brakes earlier, and counted on into the braking zone it dived down the
+ * inside a few metres short. Without the later braking, a quicker car 10 m behind at the end of a straight never
+ * tried. `distToCornerM` Infinity: no corner in sight.
  */
 export function passFeasible(opts: {
   gapM: number;
@@ -57,13 +60,14 @@ export function passFeasible(opts: {
   distToCornerM: number;
   brakingZoneM: number;
   brakingShare?: number;
+  brakeGainM?: number;
 }): boolean {
   if (!Number.isFinite(opts.distToCornerM)) return true;
-  if (opts.closingMs <= 0.2) return false;
-  const t = Math.max(0, opts.gapM) / opts.closingMs;
-  const covered = opts.speedMs * t;
-  const reach = opts.distToCornerM - opts.brakingZoneM * (1 - (opts.brakingShare ?? 0.5));
-  return covered < reach;
+  const share = opts.brakingShare ?? 0.5;
+  const toBraking = Math.max(0, opts.distToCornerM - opts.brakingZoneM);
+  const closing = opts.closingMs > 0.2 ? opts.closingMs : 0;
+  const madeUp = (closing * toBraking) / Math.max(1, opts.speedMs) + share * Math.max(0, opts.brakeGainM ?? 0);
+  return madeUp > Math.max(0, opts.gapM) && madeUp > 0;
 }
 
 /**
@@ -133,6 +137,9 @@ export class RacecraftMemory {
   /** The car being passed (its id) and on which side (+1 right, −1 left): the move is held until it is done */
   public passTargetId: string | null = null;
   public passSide = 0;
+  /** A pass called off with the car still out beside the other's gearbox: that car (its id), and the side we are out on */
+  public backOffId: string | null = null;
+  public backOffSide = 0;
 
   public reset(): void {
     this.alongside.clear();
@@ -144,5 +151,7 @@ export class RacecraftMemory {
     this.wasInCorner = false;
     this.passTargetId = null;
     this.passSide = 0;
+    this.backOffId = null;
+    this.backOffSide = 0;
   }
 }
