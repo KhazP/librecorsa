@@ -225,5 +225,45 @@
       "licenseUrl": "http://www.simracerstr.net/forum/viewtopic.php?t=903"
     },
     "quality": "sim"
+  },
+  {
+    "id": "oschersleben",
+    "name": "Motorsport Arena Oschersleben",
+    "layout": "Grand Prix layout",
+    "country": "Germany",
+    "city": "Oschersleben, Saxony-Anhalt",
+    "lengthM": 3686.26,
+    "turns": 14,
+    "direction": "clockwise",
+    "dataUrl": "/tracks/oschersleben/track_data.json",
+    "credit": {
+      "title": "Oschersleben",
+      "author": "Mitja Bonca",
+      "url": "https://www.overtake.gg/downloads/oschersleben.4549/",
+      "short": null,
+      "license": "Used with permission",
+      "licenseUrl": "https://www.overtake.gg/downloads/oschersleben.4549/"
+    },
+    "quality": "sim"
+  },
+  {
+    "id": "grobnik",
+    "name": "Automotodrom Grobnik",
+    "layout": "Full circuit",
+    "country": "Croatia",
+    "city": "Rijeka",
+    "lengthM": 4166.78,
+    "turns": 15,
+    "direction": "anticlockwise",
+    "dataUrl": "/tracks/grobnik/track_data.json",
+    "credit": {
+      "title": "Automotodrom Grobnik",
+      "author": "Mitja Bonca",
+      "url": "https://www.overtake.gg/downloads/automotodrom-grobnik.4835/",
+      "short": null,
+      "license": "Used with permission",
+      "licenseUrl": "https://www.overtake.gg/downloads/automotodrom-grobnik.4835/"
+    },
+    "quality": "sim"
   }
 ]
