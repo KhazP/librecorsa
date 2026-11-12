@@ -87,8 +87,7 @@ export class PodiumFlow {
    */
   step(race: RaceStatus | undefined, dt: number, allowed: boolean, tryStart: (rows: PodiumRow[]) => boolean): boolean {
     const before = this.stage;
-    // Over once the result is gone (a restart, a new race, leaving it); a flashback keeps the result, and the shot
-    // already played
+    // Over once the result is gone (a restart, a new race, leaving it)
     if (!race?.results) {
       this.stage = "idle";
       this.rows = [];

@@ -1074,14 +1074,14 @@ export class F1Physics2026 {
     this.finishPlacement();
   }
 
-  /** Flashback: back at a replayed pose (heading included), rolling at its speed, with the tyres and brakes as they are */
+  /** Back at a recorded pose (heading included), rolling at its speed, with the tyres and brakes as they are */
   public restorePose(pose: { x: number; z: number; yawRad: number; speedMs: number; s?: number }): void {
     const p = this.track.projectWorldToTrack(pose.x, pose.z, pose.s ?? this.sMeters);
     const speedMs = Math.max(0, pose.speedMs);
     const tangent = this.track.getSampleAtDistance(p.s).tangent;
     const trackHeadingRad = Math.atan2(tangent.x, tangent.z);
     this.lineCrossingStartsLap = false;
-    // A flashback moves the car mid-lap: the lap under way can't count
+    // Put back mid-lap: the lap under way can't count
     this.invalidateLap();
     this.timeAccumulator = 0;
     this.sMeters = p.s;

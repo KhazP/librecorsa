@@ -1,15 +1,15 @@
 "use client";
 
 import React, { useEffect, useRef } from "react";
-import { Camera, Pause, Play, RotateCcw } from "lucide-react";
+import { Camera, Pause, Play } from "lucide-react";
 
 const SPEEDS = [0.25, 0.5, 1, 2] as const;
 /** Arrow-key seek step (s) */
 const SEEK_STEP_S = 5;
 
 /**
- * Bottom-centre transport bar for replays. Keys: Space play / pause, ArrowLeft / ArrowRight seek,
- * F flashback (resume driving from current replay point), and the replay key (handled by the simulator) exits.
+ * Bottom-centre transport bar for replays. Keys: Space play / pause, ArrowLeft / ArrowRight seek, and the replay key
+ * (handled by the simulator) exits.
  * Keys are ignored while an input (e.g. the slider) has focus.
  */
 export const ReplayBar: React.FC<{
@@ -24,8 +24,6 @@ export const ReplayBar: React.FC<{
   onSpeed: (speed: number) => void;
   onCycleCamera: () => void;
   onExit: () => void;
-  /** Resumes live driving from the scrubbed replay timestamp (Instant Flashback) */
-  onFlashback?: () => void;
   /** Label of the key that leaves the replay */
   exitKeyLabel?: string;
 }> = ({
@@ -40,20 +38,19 @@ export const ReplayBar: React.FC<{
   onSpeed,
   onCycleCamera,
   onExit,
-  onFlashback,
   exitKeyLabel = "T",
 }) => {
   const shown = Math.min(endS, Math.max(startS, timeS));
 
   // The key listeners read the latest clock and callbacks from here, so they are added once: re-adding them every frame
   // (the clock moves while playing) dropped the Space latch between keydown and keyup
-  const latest = useRef({ timeS, startS, endS, onTogglePlay, onSeek, onFlashback });
-  latest.current = { timeS, startS, endS, onTogglePlay, onSeek, onFlashback };
+  const latest = useRef({ timeS, startS, endS, onTogglePlay, onSeek });
+  latest.current = { timeS, startS, endS, onTogglePlay, onSeek };
 
   useEffect(() => {
     const clamp = (t: number) => Math.min(latest.current.endS, Math.max(latest.current.startS, t));
     const onKey = (e: KeyboardEvent) => {
-      const { timeS, onTogglePlay, onSeek, onFlashback } = latest.current;
+      const { timeS, onTogglePlay, onSeek } = latest.current;
       const target = e.target as HTMLElement | null;
       if (
         target &&
@@ -75,9 +72,6 @@ export const ReplayBar: React.FC<{
       } else if (e.key === "ArrowRight") {
         e.preventDefault();
         onSeek(clamp(timeS + SEEK_STEP_S));
-      } else if (onFlashback && (e.code === "KeyF" || e.key === "f" || e.key === "F")) {
-        e.preventDefault();
-        onFlashback();
       }
     };
     // A focused button clicks itself on Space's keyup: the key already toggled play, so that click must not toggle
@@ -173,21 +167,6 @@ export const ReplayBar: React.FC<{
               {cameraLabel}
             </button>
 
-            {onFlashback ? (
-              <button
-                type="button"
-                onClick={onFlashback}
-                title="Flashback — resume driving from this moment (F)"
-                className="inline-flex h-10 shrink-0 cursor-pointer items-center justify-center gap-2 rounded-full border border-[#CCFF00]/60 bg-[#CCFF00]/15 px-3.5 text-[13px] font-bold whitespace-nowrap text-[#CCFF00] transition-colors hover:bg-[#CCFF00] hover:text-[#08090D]"
-              >
-                <RotateCcw size={15} aria-hidden />
-                Flashback
-                <span className="inline-flex h-[22px] min-w-[22px] items-center justify-center rounded-full border border-current/40 bg-[#08090D]/60 px-1.5 font-f1-mono text-[10px] font-extrabold">
-                  F
-                </span>
-              </button>
-            ) : null}
-
             <button type="button" onClick={onExit} className={ctrlClass}>
               Exit
               <span className="inline-flex h-[22px] min-w-[22px] items-center justify-center rounded-full border border-[#3A4157] bg-[#08090D] px-1.5 font-f1-mono text-[10px] font-extrabold">
@@ -204,7 +183,6 @@ export const ReplayBar: React.FC<{
       >
         <span>SPACE PLAY / PAUSE</span>
         <span>← → SEEK {SEEK_STEP_S} S</span>
-        {onFlashback ? <span>F FLASHBACK</span> : null}
       </div>
     </>
   );

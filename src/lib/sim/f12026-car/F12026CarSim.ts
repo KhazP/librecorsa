@@ -1469,9 +1469,9 @@ export class F12026CarSim implements SimulatorCar {
     this.afterPlacement();
   }
 
-  /** Flashback: back on the ground at a replayed pose, rolling at its speed, with the tyres as they are now */
+  /** Back on the ground at a recorded pose, rolling at its speed, with the tyres as they are now */
   public restorePose(pose: { x: number; z: number; yawRad: number; speedMs: number; s?: number }): void {
-    // A flashback moves the car mid-lap: the timed lap under way can't count (an out-lap, not yet timed, carries on)
+    // Put back mid-lap: the timed lap under way can't count (an out-lap, not yet timed, carries on)
     if (!this.lineCrossingStartsLap) this.invalidateLap();
     const p = this.track.projectWorldToTrack(pose.x, pose.z, pose.s ?? this.s);
     this.progressHintS = this.poseHintS = p.s;

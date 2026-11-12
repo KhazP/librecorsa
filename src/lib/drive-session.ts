@@ -91,7 +91,7 @@ export const DEFAULT_AERO_PRESET: AeroSetupPreset = "balanced";
 const MAX_FRAME_CATCH_UP_S = F1Physics2026.MAX_CATCH_UP_S;
 
 // Keyboard-only input shaping: a key press becomes a pedal squeeze, not a step
-/** A replay / flashback opens this far before the present, paused (s) */
+/** A replay opens this far before the present, paused (s) */
 const REPLAY_OPEN_BACK_S = 3;
 const KB_THROTTLE_RISE_S = DEFAULT_KEYBOARD_TUNING.throttleRiseS;
 const KB_THROTTLE_FALL_S = 0.1;
@@ -113,7 +113,7 @@ export const aiFieldOf = (race: SessionRace): AiOpponentField | null => (race.ki
 /** The multiplayer race on track, when the session is an online race */
 export const mpRaceOf = (race: SessionRace): MultiplayerRace | null => (race.kind === "mp" ? race.race : null);
 /** Why the run on track starts over (see resetRun) */
-export type RunResetReason = "session" | "restart" | "teleport" | "car" | "race" | "flashback";
+export type RunResetReason = "session" | "restart" | "teleport" | "car" | "race";
 /** The VR headset: off, being asked for a session, or presenting */
 export type VrState = "off" | "requesting" | "on";
 
@@ -299,10 +299,9 @@ export class DriveSession {
   /** The race on track with the player: practice, the AI field or an online race (setRace is its only writer) */
   private currentRace: SessionRace = { kind: "practice" };
   /**
-   * The run starts over: a new session, a restart or reset, a corner jump, a car change, AI opponents on or off, a
-   * flashback. It never moves the car: the caller places it afterwards, so leaving the replay (which puts the drawn
-   * car back where the replay found it) comes first and can't undo the move. A flashback keeps its own trimmed
-   * replay and the race results.
+   * The run starts over: a new session, a restart or reset, a corner jump, a car change, AI opponents on or off. It
+   * never moves the car: the caller places it afterwards, so leaving the replay (which puts the drawn car back where
+   * the replay found it) comes first and can't undo the move.
    */
   readonly resetRun: (reason: RunResetReason) => void;
   /** Puts a race on track with the player (or none): the AI field and a multiplayer race never run together */
@@ -374,8 +373,6 @@ export class DriveSession {
   readonly toggleReplay: () => void;
   /** Leaves the replay: the drawn car goes back to the live pose */
   readonly exitReplay: () => void;
-  /** Starts the run over from the replay's current point */
-  readonly flashbackReplay: () => void;
   /** polish:B the podium shot after a race, and the overlay's view of it */
   readonly podium: PodiumDirector;
 
@@ -1280,8 +1277,6 @@ export class DriveSession {
     let replayClockS = 0;
     let lastReplayPushS = -1;
     const replaySaved = { pos: new THREE.Vector3(), quat: new THREE.Quaternion() };
-    const replayFwd = new THREE.Vector3();
-    const replayQuat = new THREE.Quaternion();
     const replayPeerState = (car: ReplayCarState): InterpolatedPeerState => ({
       peerId: car.id,
       driverCode: replayNames.get(car.id)?.code ?? "",
@@ -1312,33 +1307,8 @@ export class DriveSession {
       cameraRig.reset();
       setReplayUi((u) => ({ ...u, active: false }));
     };
-    const flashbackReplay = () => {
-      const rp = replay;
-      if (!rp.active) return;
-      const frame = rp.buffer.frameAt(rp.timeS);
-      const car = frame?.cars.find((c) => c.id === "player");
-      if (car) {
-        // Re-seat the car on the ground at that pose (heading from the recorded orientation), rolling at its speed
-        replayFwd.set(0, 0, 1).applyQuaternion(replayQuat.set(car.qx, car.qy, car.qz, car.qw));
-        const pose = { x: car.x, z: car.z, yawRad: Math.atan2(replayFwd.x, replayFwd.z), speedMs: car.speedKmh / 3.6, s: car.s };
-        if (physics.restorePose) physics.restorePose(pose);
-        else physics.teleportToDistance(car.s ?? physics.sMeters, pose.speedMs);
-      }
-      // A flashback lap never counts
-      physics.invalidateLap?.();
-      rp.buffer.truncateAfter(rp.timeS);
-      replayClockS = rp.timeS;
-      lastReplayPushS = rp.timeS;
-      rp.active = false;
-      setReplayUi((u) => ({ ...u, active: false }));
-      // A new run from here (the lap in progress is dropped; the trimmed replay stays)
-      this.resetRun("flashback");
-    };
     this.exitReplay = () => {
       if (!disposed) exitReplay();
-    };
-    this.flashbackReplay = () => {
-      if (!disposed) flashbackReplay();
     };
     this.toggleReplay = () => {
       if (disposed) return;
@@ -1360,10 +1330,8 @@ export class DriveSession {
     this.resetRun = (reason) => {
       if (disposed) return;
       runId++;
-      if (reason !== "flashback") {
-        exitReplay();
-        replay.buffer.clear();
-      }
+      exitReplay();
+      replay.buffer.clear();
       onRunReset(reason);
       // Race control and the cameras start over with the run (the car is about to be put somewhere else)
       trackLimits.reset(limitsSessionOf(raceNow()));
@@ -2042,9 +2010,6 @@ export class DriveSession {
               brake: physics.telemetry.brake,
               gear: physics.telemetry.gear,
               rpm: physics.telemetry.rpm,
-              s: physics.sMeters,
-              vyMs: physics.vyMs,
-              yawRateRadS: physics.yawRateRadS,
             },
           ];
           for (const p of renderPeers) {
@@ -2079,7 +2044,7 @@ export class DriveSession {
           const peers: InterpolatedPeerState[] = [];
           for (const car of frame.cars) {
             if (car.id === "player") {
-              // Only the drawn pose: the car's physics stays as it was until a flashback places it
+              // Only the drawn pose: the car's physics stays where it is
               physics.worldPosition.set(car.x, car.y, car.z);
               physics.worldQuaternion.set(car.qx, car.qy, car.qz, car.qw);
             } else {
