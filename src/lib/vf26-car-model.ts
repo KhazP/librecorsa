@@ -13,6 +13,7 @@ import {
 } from "@/lib/render/tyre-deformation";
 import { applyRearRainLight } from "@/lib/render/golden-hour-environment";
 import { PAINT_ZONE_MATERIALS, setVf26LiveryColours, upgradeVf26Materials } from "@/lib/render/car-materials";
+import { installVertexOcclusion } from "@/lib/render/vertex-occlusion";
 import { createDriverHelmet } from "@/lib/render/driver-helmet";
 import { installLiveryDecals } from "@/lib/render/livery-decals";
 import { moveToDriverHeadLayer } from "@/lib/render/layers";
@@ -380,6 +381,9 @@ export function attachVf26Model(
     mesh.material = Array.isArray(mesh.material) ? mesh.material.map(own) : own(mesh.material);
   });
   const decals = decalMats.length ? installLiveryDecals(decalMats) : null;
+
+  // The body's baked shading, where its porter made it
+  installVertexOcclusion([bodyGroup, ...corners.map((c) => c.steer)]);
 
   // A body without a driver of its own wears a helmet in the cockpit
   const driverHelmet = !driver && extras.helmet ? createDriverHelmet() : null;
