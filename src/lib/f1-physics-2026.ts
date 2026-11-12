@@ -136,6 +136,7 @@ import { BRAKE_DUCT_STEP, type ChassisSetup, clampChassisSetup, DEFAULT_CHASSIS_
 import { FLYING_SLOT_SPACING_M, flyingExitSpeedMs, flyingStartPoint, rollingStartSlots, rollingStartSpeedMs, type TyreVisualState } from './sim/simulator-car';
 import type { VehicleWheelState, WheelCornerIndex } from './sim/vehicle-types';
 import { lockShareOf } from './sim/tyre-slide-fx';
+import { isCourseHop } from './sim/course-limits';
 import {
   type RaceGymObservation,
   computeLookaheadVectors,
@@ -2830,6 +2831,12 @@ export class F1Physics2026 {
     const nextSample = projected.sample;
     this.sMeters = projected.s;
     this.lateralOffsetM = projected.lateralOffset;
+    // The lap position jumped further than a car drives in a step: the car crossed to another part of the lap off its
+    // road (another layout's, course-limits.ts). The lap under way is cut, and a sector boundary it jumped over is no
+    // sector driven
+    const L = this.track.totalLengthM;
+    const hop = isCourseHop(((((this.sMeters - prevS + L / 2) % L) + L) % L) - L / 2);
+    if (hop) this.invalidateLap();
 
     const trackHeadingRad = Math.atan2(nextSample.tangent.x, nextSample.tangent.z);
     let headingErr = trackHeadingRad - this.worldYawRad;
@@ -2844,7 +2851,7 @@ export class F1Physics2026 {
     if (nextSample.sector !== this.lastSector) {
       // Sectors 1 and 2 end at their boundaries; sector 3 ends at the line (onLapCompleted), not where the nearest
       // sample turns to sector 1, up to half a sample before it
-      if (nextSample.sector === this.lastSector + 1) this.onSectorCompleted(this.lastSector);
+      if (!hop && nextSample.sector === this.lastSector + 1) this.onSectorCompleted(this.lastSector);
       this.lastSector = nextSample.sector;
     }
     if (prevS > this.track.totalLengthM * 0.85 && this.sMeters < this.track.totalLengthM * 0.15) {

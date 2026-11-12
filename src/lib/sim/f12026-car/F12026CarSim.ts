@@ -84,6 +84,7 @@ import { KERB_PROFILE_L, kerbProfileM, surfaceRippleM } from '../track-surfaces'
 import { sampleGrid } from '../ai/ai-track';
 import type { AiDrivePlan } from '../ai/drive-plan';
 import { lockShareOf } from '../tyre-slide-fx';
+import { isCourseHop } from '../course-limits';
 
 const G = 9.81;
 const DEG2RAD = Math.PI / 180;
@@ -2243,11 +2244,16 @@ export class F12026CarSim implements SimulatorCar {
   private updateTiming(): void {
     const L = this.track.totalLengthM;
     const sample = this.track.getSampleAtDistance(this.s);
+    // The lap position jumped further than a car drives in a frame: the car crossed to another part of the lap off its
+    // road (another layout's, course-limits.ts). The lap under way is cut, and a sector boundary it jumped over is no
+    // sector driven
+    const hop = isCourseHop(wrapHalf(this.s - this.prevS, L));
+    if (hop) this.invalidateLap();
     if (sample.sector !== this.lastSector) {
       // Sectors 1 and 2 end at their boundaries; sector 3 ends at the line (onLapCompleted). The nearest sample turns
       // to sector 1 up to half a sample before the line, and ending sector 3 there too would cut it short by that much
       // (a slow car's sectors then miss the lap time by more than the board allows)
-      if (sample.sector === this.lastSector + 1) this.onSectorCompleted(this.lastSector);
+      if (!hop && sample.sector === this.lastSector + 1) this.onSectorCompleted(this.lastSector);
       this.lastSector = sample.sector;
     }
     if (this.prevS > L * 0.85 && this.s < L * 0.15) {

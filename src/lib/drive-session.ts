@@ -1776,6 +1776,7 @@ export class DriveSession {
             lapTimeMs: t.currentLapTimeMs,
             sector: t.currentSector,
             distM: t.trackDistanceM,
+            lapLengthM: track.totalLengthM,
             offTrack: t.offTrack,
             throttle: t.throttle,
             brake: t.brake,

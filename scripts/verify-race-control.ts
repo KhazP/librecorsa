@@ -173,6 +173,35 @@ console.log("Track limits · warnings and penalties");
   check("judged again without a reference: no stale gain on the card", relifted?.stage === "give_back" && relifted.gainS === null, JSON.stringify(relifted));
 }
 
+console.log("Track limits · a course cut");
+{
+  // The short lap's link on the Grand Prix lap: off the track on its way in, 685 m round the lap in one frame, still off
+  // until it joins the lap again, then a corner of the lap cut on the way out (so a later excursion would be a strike)
+  const L = 5895;
+  const link = (m: TrackLimitsMonitor) => [
+    ...drive(m, 1, { distM: 1100, lapLengthM: L, deltaS: 0 }),
+    ...drive(m, 2, { distM: 1200, lapLengthM: L, offTrack: true, lateralM: -30, curvature: 0.01, deltaS: 0 }),
+    ...drive(m, 1, { distM: 1885, lapLengthM: L, offTrack: true, lateralM: -30, curvature: 0.01, deltaS: -10 }),
+    ...drive(m, 3, { distM: 1900, lapLengthM: L, deltaS: -10 }),
+  ];
+  const race = new TrackLimitsMonitor();
+  race.reset("race");
+  const ev = link(race);
+  const said = race.snapshot(clock * 1000).message?.text;
+  check(
+    "in a race: the cut is said as such, and the rest of that excursion is no warning on top",
+    ev.length === 1 && ev[0].kind === "lap_invalid" && said === "Course cut · lap not counted" && race.strikes === 0 && !race.judging,
+    `${JSON.stringify(ev)} ${said}`
+  );
+  const practice = new TrackLimitsMonitor();
+  practice.reset("practice");
+  const pev = link(practice);
+  check("in practice: the lap is deleted", pev.some((e) => e.kind === "lap_invalid") && practice.snapshot(clock * 1000).message?.text === "Course cut · lap deleted");
+  const plain = new TrackLimitsMonitor();
+  plain.reset("race");
+  check("without the lap length nothing is read into a jump", drive(plain, 1, { distM: 1100 }).length === 0 && drive(plain, 1, { distM: 1885 }).length === 0);
+}
+
 console.log("Track limits · strict outside a race");
 {
   const p = new TrackLimitsMonitor();

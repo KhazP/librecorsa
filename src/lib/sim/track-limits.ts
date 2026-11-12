@@ -17,8 +17,13 @@
  *
  * Every strike is a warning, and every `STRIKES_PER_PENALTY`th strike is a time penalty: +3 s the first time, +5 s
  * after that.
+ *
+ * A course cut (the car jumps round the lap off its road, course-limits.ts) is no excursion to judge: practice deletes
+ * the lap, and a race does not count it (the race clock takes it off), so the banner says so and any excursion being
+ * judged ends with it.
  */
 import type { TrackLimitsReason, TrackLimitsStatus } from "@/types/f1";
+import { isCourseHop } from "./course-limits";
 
 /** Off for less than this is a touch, never judged (s) */
 const MIN_EXCURSION_S = 0.12;
@@ -67,6 +72,8 @@ export interface TrackLimitsFrame {
   sector?: 1 | 2 | 3;
   /** Lap distance (m) */
   distM: number;
+  /** Lap length (m): with it, a jump of the lap distance no car can drive is a course cut */
+  lapLengthM?: number;
   offTrack: boolean;
   throttle: number;
   brake: number;
@@ -128,6 +135,10 @@ export class TrackLimitsMonitor {
   /** Strict limits: the lap count and lap clock last frame (null until the first frame of a run) */
   private seenLapCount: number | null = null;
   private seenLapTimeMs: number | null = null;
+  /** Lap distance last frame (m), for course cuts; null until the first frame of a run */
+  private seenDistM: number | null = null;
+  /** A course cut and the car not back on the track since: the rest of that excursion is the cut, not judged */
+  private afterCut = false;
   /** The last frame was judged (`TrackLimitsFrame.active`); a verdict waiting while not is kept off the HUD */
   private active = true;
   private message: TrackLimitsStatus["message"] = null;
@@ -154,6 +165,8 @@ export class TrackLimitsMonitor {
     this.nextLapDeleted = false;
     this.seenLapCount = null;
     this.seenLapTimeMs = null;
+    this.seenDistM = null;
+    this.afterCut = false;
     this.active = true;
     this.message = null;
   }
@@ -184,6 +197,23 @@ export class TrackLimitsMonitor {
   /** Advances the judging by one frame; returns the race-control decision taken this frame, if any */
   update(f: TrackLimitsFrame): TrackLimitsEvent | null {
     this.active = f.active;
+    if (this.courseCut(f)) {
+      const deleted = this.session === "practice" ? this.strict(f) : null;
+      if (!deleted && this.session === "practice") this.totalStrikes++;
+      this.exc = null;
+      this.message = {
+        kind: "lap_invalid",
+        text: this.session === "race" ? "Course cut · lap not counted" : "Course cut · lap deleted",
+        detail: "Left the lap's road",
+        atMs: f.nowMs,
+      };
+      this.afterCut = f.offTrack;
+      return { kind: "lap_invalid", lap: f.lapCount };
+    }
+    if (this.afterCut) {
+      if (!f.offTrack) this.afterCut = false;
+      else if (this.session === "race") return null;
+    }
     if (this.session === "practice") return this.strict(f);
     if (!f.active) {
       // An excursion still in progress can't be finished by the driver any more (the autopilot, the lights or the
@@ -216,6 +246,15 @@ export class TrackLimitsMonitor {
     }
     if (e.stage === "judging") return this.whileJudging(e, f);
     return this.whileGivingBack(e, f);
+  }
+
+  /** Did the lap distance jump further than the car can have driven since last frame (judged only while driving)? */
+  private courseCut(f: TrackLimitsFrame): boolean {
+    const prev = this.seenDistM;
+    this.seenDistM = f.distM;
+    const L = f.lapLengthM;
+    if (prev === null || L === undefined || !f.active) return false;
+    return isCourseHop(((((f.distM - prev + L / 2) % L) + L) % L) - L / 2);
   }
 
   /** The state for the HUD (updated in place) */
