@@ -8,7 +8,7 @@ import { F1AudioEngine2026 } from "@/lib/f1-audio-2026";
 import { createF1Car2026, type SimCarRig } from "@/lib/car-builder-2026";
 import { createGt3CarRig, gt3RigCameraAnchors } from "@/lib/gt3-car-model";
 import { disposeTree } from "@/lib/render/dispose-tree";
-import { GT3_DASH_MESH, GT3_WING_MIRROR_MATERIAL, Gt3DashDisplay } from "@/lib/render/gt3-dash-display";
+import { Gt3DashDisplay, gt3MirrorPatches } from "@/lib/render/gt3-dash-display";
 import { createPortedCarRig } from "@/lib/ported-car-model";
 import { staticFloorOf } from "@/lib/render/body-floor";
 import { FloorSparks } from "@/lib/render/floor-sparks";
@@ -1323,7 +1323,7 @@ export class DriveSession {
     let wingMirrors: WingMirrors | null = null;
     /** The VF26 body the wheel display and mirrors above were built for */
     let vf26ExtrasFor: THREE.Object3D | null = null;
-    // The AMG GT3's MoTeC dash and rear-view mirror, once its cockpit model has loaded
+    // The AMG GT3 Evo body's dash screen, shift lights, mirrors and rear-view monitor, once its GLB has loaded
     let gt3Dash: Gt3DashDisplay | null = null;
     // A ported body's wheel screen and shift lights (the 496R's), once its GLB has loaded under the rig
     let portedDash: PortedWheelDash | null = null;
@@ -2071,41 +2071,32 @@ export class DriveSession {
       if (!vf26Body && !portedDash && carById(carRigCar).modelUrl && portedProbeFrame++ % 30 === 0) {
         portedDash = PortedWheelDash.from(carRig.chassisGroup, revRangeFor(carById(carRigCar).physics));
       }
-      if (!vf26Body && !gt3Dash && rigModel(carRigCar).gt3Cockpit && cockpitProbeFrame++ % 30 === 0) {
+      // A ported body's anchors are set once its GLB has loaded; a body without the Evo's screen or mirror glass
+      // gets an empty display and no mirrors, so it is probed once
+      if (!vf26Body && !gt3Dash && carById(carRigCar).modelUrl && cockpitProbeFrame++ % 30 === 0) {
         const anchors = carRig.getCameraAnchors();
-        if (anchors && carRig.chassisGroup.getObjectByName(GT3_DASH_MESH)) {
-          gt3Dash = new Gt3DashDisplay(carRig.chassisGroup);
-          // The body's wing-mirror glass is a rear-facing patch of its trim material, one each side
-          const bodyFrame = carRig.chassisGroup.getObjectByName("BODY")?.parent ?? null;
-          wingMirrors = new WingMirrors(renderer, scene, carRig.chassisGroup, {
-            materials: ["MIRROR"],
-            eyeInModel: anchors.cockpit.pos,
-            coversSides: false,
-            upAxis: "z",
-            glassPatches: bodyFrame
-              ? [1, -1].map((side) => ({
-                  material: GT3_WING_MIRROR_MATERIAL,
-                  frame: bodyFrame,
-                  box: new THREE.Box3(
-                    new THREE.Vector3(side > 0 ? 0.8 : -1.04, 0.84, -0.03),
-                    new THREE.Vector3(side > 0 ? 1.04 : -0.8, 0.98, 0.15)
-                  ),
-                  facing: new THREE.Vector3(0, 0, -1),
-                }))
-              : undefined,
-          });
+        if (anchors) {
+          gt3Dash = new Gt3DashDisplay(carRig.chassisGroup, revRangeFor(carById(carRigCar).physics));
+          const glassPatches = gt3MirrorPatches(carRig.chassisGroup);
+          if (glassPatches.length) {
+            wingMirrors = new WingMirrors(renderer, scene, carRig.chassisGroup, {
+              materials: [],
+              eyeInModel: anchors.cockpit.pos,
+              glassPatches,
+            });
+          }
         }
       }
       lapDelta.update(physics.telemetry);
       // The wheel is only in shot from the onboard views; the display redraws itself at 30 Hz
-      if (view.wheelInShot && (wheelDisplay || gt3Dash || portedDash?.found)) {
+      if (view.wheelInShot && (wheelDisplay || gt3Dash?.found || portedDash?.found)) {
         const delta = lapDelta.delta(physics.telemetry);
         const deltaMs = delta === null ? null : delta * 1000;
         if (wheelDisplay) {
           displayExtra.deltaMs = deltaMs;
           wheelDisplay.update(physics.telemetry, nowMs, displayExtra);
         }
-        gt3Dash?.update(physics.telemetry, nowMs, { deltaMs });
+        if (gt3Dash?.found) gt3Dash.update(physics.telemetry, nowMs, { deltaMs });
         if (portedDash?.found) portedDash.update(physics.telemetry, nowMs, { deltaMs });
       }
 
