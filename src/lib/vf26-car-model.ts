@@ -14,6 +14,7 @@ import {
 import { applyRearRainLight } from "@/lib/render/golden-hour-environment";
 import { PAINT_ZONE_MATERIALS, setVf26LiveryColours, upgradeVf26Materials } from "@/lib/render/car-materials";
 import { installVertexOcclusion } from "@/lib/render/vertex-occlusion";
+import { createDriverFigure } from "@/lib/render/driver-figure";
 import { createDriverHelmet } from "@/lib/render/driver-helmet";
 import { installLiveryDecals } from "@/lib/render/livery-decals";
 import { moveToDriverHeadLayer } from "@/lib/render/layers";
@@ -163,7 +164,8 @@ function steerFrame(table: number[], deg: number): number {
 export function attachVf26Model(
   template: THREE.Group,
   root: THREE.Group,
-  chassisGroup: THREE.Group
+  chassisGroup: THREE.Group,
+  options: { opponent?: boolean } = {}
 ): Vf26ModelInstance {
   const assets = templateAssets.get(template) ?? { tyreMaps: {}, animations: [] };
   const model = cloneSkinned(template) as THREE.Group;
@@ -382,15 +384,21 @@ export function attachVf26Model(
   });
   const decals = decalMats.length ? installLiveryDecals(decalMats) : null;
 
-  // The body's baked shading, where its porter made it
-  installVertexOcclusion([bodyGroup, ...corners.map((c) => c.steer)]);
-
-  // A body without a driver of its own wears a helmet in the cockpit
+  // A body without a driver of its own gets one: a helmet in the cockpit and, with a steering wheel to hold, the
+  // figure under it
   const driverHelmet = !driver && extras.helmet ? createDriverHelmet() : null;
   if (driverHelmet && extras.helmet) {
     driverHelmet.group.position.fromArray(extras.helmet.pos);
     bodyGroup.add(driverHelmet.group);
   }
+  const driverFigure =
+    driverHelmet && steerBase
+      ? createDriverFigure({ helmet: driverHelmet.group.position, wheel: steerBase, frame: bodyGroup, coarse: options.opponent })
+      : null;
+  if (driverFigure) bodyGroup.add(driverFigure.group);
+
+  // The body's baked shading, where its porter made it
+  installVertexOcclusion([bodyGroup, ...corners.map((c) => c.steer)]);
 
   const cameraAnchors = {} as Vf26ModelInstance["cameraAnchors"];
   const cams = extras.cameras ?? {};
@@ -420,6 +428,7 @@ export function attachVf26Model(
     updateCorners(corners, roadWheel, wheelRotationRad, wheels);
     arms?.update();
     if (steerBase) steerBase.rotation.z = t.steering * lockRad;
+    driverFigure?.update(t.steering * lockRad, dtSeconds);
     if (driverMixer && steerAction) {
       steerAction.time = steerFrame(steerTable, t.steering * VF26_CHASSIS.steering.lockDeg) / driverFps;
       driverMixer.update(0);
@@ -454,11 +463,13 @@ export function attachVf26Model(
     for (const [name, mats] of zoneMats) for (const m of mats) m.color.set(colours[name]);
     decals?.set(livery.decals);
     driverHelmet?.setColours(livery.primary, livery.secondary, livery.accent);
+    driverFigure?.setColours(livery.primary, livery.secondary, livery.accent);
   };
 
   const dispose = () => {
     driverMixer?.stopAllAction();
     driverHelmet?.dispose();
+    driverFigure?.dispose();
     for (const m of ownZone.values()) m.dispose();
     for (const h of liveTyreHandles) h.dispose();
     bodyGroup.removeFromParent();

@@ -952,7 +952,7 @@ function buildOpponentRig(vehicle: VehicleModelId | undefined, livery: LiveryCon
       floor: staticFloorOf(own.config),
     });
   } else {
-    rig = createF1Car2026(livery, 'medium');
+    rig = createF1Car2026(livery, 'medium', undefined, { opponent: true });
   }
   addContactShadow(rig.root, vehicle);
   return rig;
