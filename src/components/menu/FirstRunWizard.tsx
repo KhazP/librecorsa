@@ -130,10 +130,11 @@ export const FirstRunWizard: React.FC<FirstRunWizardProps> = (props) => {
       : STEP_INFO[step];
 
   const stepTitle = (s: WizardStepId) => (s === "setup" ? SETUP_TITLES[props.settings.device] : STEP_INFO[s].title);
-  // The main column's width follows the boards: the wheel's two columns get the most room, the car the least
+  // The main column's width follows the boards: the wheel's two columns get the most room (more on a wide screen), the
+  // car the least
   const mainWidth =
     step === "setup" && props.settings.device === "wheel"
-      ? "max-w-[980px]"
+      ? "max-w-[980px] min-[1500px]:max-w-[1240px] min-[1900px]:max-w-[1440px]"
       : step === "car"
         ? "max-w-[640px]"
         : step === "setup" || step === "assists"

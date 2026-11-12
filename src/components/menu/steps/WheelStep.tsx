@@ -292,11 +292,10 @@ function SupportCell({ path, level }: { path: string; level: SupportLevel }) {
 function SupportedWheels() {
   const [open, setOpen] = useState(false);
   return (
-    <div className="flex flex-col gap-2.5 rounded-[18px] border border-[#262B3D] bg-[#08090D] p-3.5">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <SubHead>Supported wheels</SubHead>
-        <PillAction onClick={() => setOpen((v) => !v)}>{open ? "Hide list" : "Show list"}</PillAction>
-      </div>
+    <SetupCard
+      title="Supported wheels"
+      action={<PillAction onClick={() => setOpen((v) => !v)}>{open ? "Hide list" : "Show list"}</PillAction>}
+    >
       <Hint>{WHEEL_SUPPORT_SUMMARY} Steering, pedals and buttons work through the browser for any wheel.</Hint>
       {open ? (
         <ul className="m-0 flex list-none flex-col gap-2.5 p-0">
@@ -312,6 +311,31 @@ function SupportedWheels() {
           ))}
         </ul>
       ) : null}
+    </SetupCard>
+  );
+}
+
+/** Settings most players never touch, folded away under a full-width row that opens them */
+function MoreSettings({ label, children }: { label: string; children: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="flex flex-col gap-3 border-t border-[#262B3D] pt-3">
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+        className="flex min-h-[40px] w-full cursor-pointer items-center justify-between gap-3 rounded-[12px] border-0 bg-transparent px-1 text-left text-[14px] font-bold text-[#F5F7FA] transition-colors duration-200 hover:bg-[#F5F7FA]/[0.04]"
+      >
+        {label}
+        <svg
+          aria-hidden
+          viewBox="0 0 16 16"
+          className={`h-4 w-4 shrink-0 text-[#8E96AA] transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+        >
+          <path d="M3.5 6l4.5 4.5L12.5 6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+      {open ? children : null}
     </div>
   );
 }
@@ -569,32 +593,10 @@ export const WheelStep: React.FC<SetupStepProps> = ({ settings, onChangeSettings
     }`;
 
   return (
-    <div
-      className="grid items-start gap-4"
-      style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(420px, 100%), 1fr))" }}
-    >
-      <div className="flex min-w-0 flex-col gap-4">
-        <SetupCard label="Wheel base">
-          <div className="grid grid-cols-2 gap-2">
-            {(
-              [
-                { id: "direct_drive", title: "Direct drive", sub: "Fanatec DD, Moza, Simucube, Simagic… · raw, unfiltered" },
-                { id: "belt_gear", title: "Belt / gear", sub: "Logitech, Thrustmaster, CSL Elite… · light filter" },
-              ] as const
-            ).map((t) => (
-              <Choice
-                key={t.id}
-                active={w.type === t.id}
-                onClick={() => setWheel({ type: t.id as WheelType, ...WHEEL_TYPE_DEFAULTS[t.id] })}
-              >
-                <ChoiceText title={t.title} detail={t.sub} size={14} />
-              </Choice>
-            ))}
-          </div>
-        </SetupCard>
-
+    <div className="grid items-start gap-5 lg:grid-cols-2">
+      <div className="flex min-w-0 flex-col gap-5">
         <SetupCard
-          label="Steering"
+          title="Wheel"
           action={
             <SolidPill
               tone="volt"
@@ -612,6 +614,22 @@ export const WheelStep: React.FC<SetupStepProps> = ({ settings, onChangeSettings
               Pedals not set up yet: press <strong>Calibrate all</strong> to set steering, throttle and brake in one go.
             </p>
           ) : null}
+          <div className="grid grid-cols-2 gap-2">
+            {(
+              [
+                { id: "direct_drive", title: "Direct drive", sub: "Fanatec DD, Moza, Simucube, Simagic… · raw, unfiltered" },
+                { id: "belt_gear", title: "Belt / gear", sub: "Logitech, Thrustmaster, CSL Elite… · light filter" },
+              ] as const
+            ).map((t) => (
+              <Choice
+                key={t.id}
+                active={w.type === t.id}
+                onClick={() => setWheel({ type: t.id as WheelType, ...WHEEL_TYPE_DEFAULTS[t.id] })}
+              >
+                <ChoiceText title={t.title} detail={t.sub} size={14} />
+              </Choice>
+            ))}
+          </div>
           {calRow(
             "steer",
             "Steering axis",
@@ -671,57 +689,86 @@ export const WheelStep: React.FC<SetupStepProps> = ({ settings, onChangeSettings
               still reaches full lock.
             </Hint>
           </div>
-          <div className="flex flex-col gap-2.5 border-t border-[#262B3D] pt-3">
-            <SubHead>Steering lock · per car</SubHead>
+          <MoreSettings label="More steering settings">
+            <div className="flex flex-col gap-2.5 border-t border-[#262B3D] pt-3">
+              <SubHead>Steering lock · per car</SubHead>
+              <AutoGrid min={180} className="gap-x-4 gap-y-1">
+                {STEER_LOCK_CLASSES.map((c) => {
+                  const real = CAR_WHEEL_LOCKS_DEG[c.models[0]];
+                  const own = w.steerLockPerCar?.[c.models[0]];
+                  const value = typeof own === "number" && own < real ? own : real;
+                  return (
+                    <TyreSlider
+                      key={c.label}
+                      label={c.label}
+                      value={value}
+                      limits={{ min: STEER_LOCK_MIN_DEG, max: real, step: 20 }}
+                      format={(v) => (v >= real ? `${v.toFixed(0)}° real` : `${v.toFixed(0)}°`)}
+                      onChange={(v) => {
+                        const next = { ...w.steerLockPerCar };
+                        for (const m of c.models) {
+                          if (v >= real) delete next[m];
+                          else next[m] = v;
+                        }
+                        setWheel({ steerLockPerCar: next });
+                      }}
+                    />
+                  );
+                })}
+              </AutoGrid>
+              <Hint>
+                How far round the rim full lock is. The real car&apos;s lock is the most realistic; a smaller one gives a
+                quicker rack, which suits a wheel without force feedback, above all in the GT3.
+              </Hint>
+            </div>
             <AutoGrid min={180} className="gap-x-4 gap-y-1">
-              {STEER_LOCK_CLASSES.map((c) => {
-                const real = CAR_WHEEL_LOCKS_DEG[c.models[0]];
-                const own = w.steerLockPerCar?.[c.models[0]];
-                const value = typeof own === "number" && own < real ? own : real;
-                return (
-                  <TyreSlider
-                    key={c.label}
-                    label={c.label}
-                    value={value}
-                    limits={{ min: STEER_LOCK_MIN_DEG, max: real, step: 20 }}
-                    format={(v) => (v >= real ? `${v.toFixed(0)}° real` : `${v.toFixed(0)}°`)}
-                    onChange={(v) => {
-                      const next = { ...w.steerLockPerCar };
-                      for (const m of c.models) {
-                        if (v >= real) delete next[m];
-                        else next[m] = v;
-                      }
-                      setWheel({ steerLockPerCar: next });
-                    }}
-                  />
-                );
-              })}
+              <TyreSlider
+                label="Centre dead zone"
+                value={Math.round(w.steerDeadzone * 1000) / 10}
+                limits={{ min: 0, max: 10, step: 0.5 }}
+                format={(v) => `${v.toFixed(1)} %`}
+                onChange={(v) => setWheel({ steerDeadzone: v / 100 })}
+              />
+              <TyreSlider
+                label="Input filter"
+                value={Math.round(w.steerSmoothingS * 1000)}
+                limits={{ min: 0, max: 80, step: 5 }}
+                format={(v) => (v === 0 ? "Off" : `${v.toFixed(0)} ms`)}
+                onChange={(v) => setWheel({ steerSmoothingS: v / 1000 })}
+              />
             </AutoGrid>
-            <Hint>
-              How far round the rim full lock is. The real car&apos;s lock is the most realistic; a smaller one gives a
-              quicker rack, which suits a wheel without force feedback, above all in the GT3.
+          </MoreSettings>
+        </SetupCard>
+
+        <SetupCard title="Pedals">
+          {calRow(
+            "throttle",
+            "Throttle",
+            w.throttle,
+            throttle !== null ? <TrackMeter compact label="Throttle" value={throttle} /> : notConnected
+          )}
+          {calRow(
+            "brake",
+            "Brake",
+            w.brake,
+            brake !== null ? <TrackMeter compact label="Brake" value={brake} color="#FF2A3C" /> : notConnected
+          )}
+          <div className="flex flex-col gap-1 border-t border-[#262B3D] pt-2.5">
+            <TyreSlider
+              label="Brake curve"
+              value={w.brakeGamma}
+              limits={{ min: 0.5, max: 2.5, step: 0.1 }}
+              format={(v) => (Math.abs(v - 1) < 0.05 ? "Linear" : v > 1 ? `Progressive ${v.toFixed(1)}` : `Aggressive ${v.toFixed(1)}`)}
+              onChange={(v) => setWheel({ brakeGamma: v })}
+            />
+            <Hint className="px-2">
+              Load-cell brakes usually feel best linear; potentiometer pedals often like 1.3–1.6. A clutch is not needed.
             </Hint>
           </div>
-          <AutoGrid min={180} className="gap-x-4 gap-y-1">
-            <TyreSlider
-              label="Centre dead zone"
-              value={Math.round(w.steerDeadzone * 1000) / 10}
-              limits={{ min: 0, max: 10, step: 0.5 }}
-              format={(v) => `${v.toFixed(1)} %`}
-              onChange={(v) => setWheel({ steerDeadzone: v / 100 })}
-            />
-            <TyreSlider
-              label="Input filter"
-              value={Math.round(w.steerSmoothingS * 1000)}
-              limits={{ min: 0, max: 80, step: 5 }}
-              format={(v) => (v === 0 ? "Off" : `${v.toFixed(0)} ms`)}
-              onChange={(v) => setWheel({ steerSmoothingS: v / 1000 })}
-            />
-          </AutoGrid>
         </SetupCard>
 
         <SetupCard
-          label="Buttons · paddles, rim, button box"
+          title="Buttons"
           action={<PillAction onClick={() => setWheel({ buttons: emptyWheelButtons() })}>Clear</PillAction>}
         >
           <AutoGrid min={260} className="gap-x-4 gap-y-0.5">
@@ -751,9 +798,9 @@ export const WheelStep: React.FC<SetupStepProps> = ({ settings, onChangeSettings
         </SetupCard>
       </div>
 
-      <div className="flex min-w-0 flex-col gap-4">
+      <div className="flex min-w-0 flex-col gap-5">
         <SetupCard
-          label="Force feedback"
+          title="Force feedback"
           action={
             <button
               type="button"
@@ -786,7 +833,7 @@ export const WheelStep: React.FC<SetupStepProps> = ({ settings, onChangeSettings
         >
           {w.ffbEnabled ? (
             <>
-              <div className="rounded-[16px] border border-[#262B3D] bg-[#08090D] p-3">
+              <div className="flex flex-col gap-2">
                 <Toggle
                   label="Browser force feedback over WebHID (experimental · USB HID PID bases, listed Logitech wheels, Thrustmaster)"
                   detail={
@@ -816,126 +863,62 @@ export const WheelStep: React.FC<SetupStepProps> = ({ settings, onChangeSettings
                 ) : null}
               </div>
               {!w.hidFfb || hidBrowserUnsupported || ffb.connection === "connected" ? <FfbBridgeStatus status={ffb} /> : null}
-              <AutoGrid min={190} className="gap-x-[18px] gap-y-1">
-                <TyreSlider
-                  label="Strength"
-                  value={Math.round(w.ffbGain * 100)}
-                  limits={{ min: 0, max: 200, step: 5 }}
-                  format={(v) => `${v.toFixed(0)} %`}
-                  onChange={(v) => setWheel({ ffbGain: v / 100 })}
-                />
-                <TyreSlider
-                  label="Minimum force"
-                  value={Math.round(w.ffbMinForce * 100)}
-                  limits={{ min: 0, max: 20, step: 1 }}
-                  format={(v) => (v === 0 ? "Off" : `${v.toFixed(0)} %`)}
-                  onChange={(v) => setWheel({ ffbMinForce: v / 100 })}
-                />
-                <TuningSlider
-                  label="Force curve"
-                  value={Math.round(50 * Math.log2(w.ffbCurve))}
-                  min={-50}
-                  max={50}
-                  step={5}
-                  format={(v) => (v === 0 ? "Linear" : `${v > 0 ? "+" : ""}${v}`)}
-                  hint="Below 0 lifts light forces (belt and gear wheels); above 0 keeps them light and saves the strength for the big loads"
-                  onChange={(v) => setWheel({ ffbCurve: 2 ** (v / 50) })}
-                />
-                <TyreSlider
-                  label="Kerb vibration"
-                  value={Math.round(w.ffbKerb * 100)}
-                  limits={{ min: 0, max: 100, step: 5 }}
-                  format={(v) => (v === 0 ? "Off" : `${v.toFixed(0)} %`)}
-                  onChange={(v) => setWheel({ ffbKerb: v / 100 })}
-                />
-                <TyreSlider
-                  label="ABS vibration"
-                  value={Math.round(w.ffbAbs * 100)}
-                  limits={{ min: 0, max: 100, step: 5 }}
-                  format={(v) => (v === 0 ? "Off" : `${v.toFixed(0)} %`)}
-                  onChange={(v) => setWheel({ ffbAbs: v / 100 })}
-                />
-                <TuningSlider
-                  label="Slip vibration"
-                  value={Math.round(w.ffbSlip * 100)}
-                  min={0}
-                  max={100}
-                  step={5}
-                  format={(v) => (v === 0 ? "Off" : `${v} %`)}
-                  hint="Buzzes from just before the tyres' grip peak: understeer, lock-ups, wheelspin. WebHID wheels"
-                  onChange={(v) => setWheel({ ffbSlip: v / 100 })}
-                />
-                <TuningSlider
-                  label="Shift warning"
-                  value={Math.round(w.ffbShift * 100)}
-                  min={0}
-                  max={100}
-                  step={5}
-                  format={(v) => (v === 0 ? "Off" : `${v} %`)}
-                  hint="Buzzes as the revs reach the shift lights, until the next gear. WebHID wheels"
-                  onChange={(v) => setWheel({ ffbShift: v / 100 })}
-                />
-                <TuningSlider
-                  label="Damping"
-                  value={Math.round(w.ffbDamping * 100)}
-                  min={0}
-                  max={100}
-                  step={1}
-                  format={(v) => (v === 0 ? "Off" : `${v} %`)}
-                  hint="Resists fast rim movement and steadies the wheel at speed"
-                  onChange={(v) => setWheel({ ffbDamping: v / 100 })}
-                />
-                {w.hidFfb && webHidFfb.offersCondition("friction") ? (
+              <div className="flex flex-col gap-2.5 border-t border-[#262B3D] pt-3">
+                <SubHead>Strength and effects</SubHead>
+                <AutoGrid min={220} className="gap-x-[18px] gap-y-1">
+                  <TyreSlider
+                    label="Strength"
+                    value={Math.round(w.ffbGain * 100)}
+                    limits={{ min: 0, max: 200, step: 5 }}
+                    format={(v) => `${v.toFixed(0)} %`}
+                    onChange={(v) => setWheel({ ffbGain: v / 100 })}
+                  />
                   <TuningSlider
-                    label="Friction"
-                    value={Math.round(w.ffbFriction * 100)}
+                    label="Damping"
+                    value={Math.round(w.ffbDamping * 100)}
+                    min={0}
+                    max={100}
+                    step={1}
+                    format={(v) => (v === 0 ? "Off" : `${v} %`)}
+                    hint="Resists fast rim movement and steadies the wheel at speed"
+                    onChange={(v) => setWheel({ ffbDamping: v / 100 })}
+                  />
+                  <TyreSlider
+                    label="Kerb vibration"
+                    value={Math.round(w.ffbKerb * 100)}
+                    limits={{ min: 0, max: 100, step: 5 }}
+                    format={(v) => (v === 0 ? "Off" : `${v.toFixed(0)} %`)}
+                    onChange={(v) => setWheel({ ffbKerb: v / 100 })}
+                  />
+                  <TyreSlider
+                    label="ABS vibration"
+                    value={Math.round(w.ffbAbs * 100)}
+                    limits={{ min: 0, max: 100, step: 5 }}
+                    format={(v) => (v === 0 ? "Off" : `${v.toFixed(0)} %`)}
+                    onChange={(v) => setWheel({ ffbAbs: v / 100 })}
+                  />
+                  <TuningSlider
+                    label="Slip vibration"
+                    value={Math.round(w.ffbSlip * 100)}
                     min={0}
                     max={100}
                     step={5}
                     format={(v) => (v === 0 ? "Off" : `${v} %`)}
-                    hint="A steady drag on the rim, run by the wheel itself. Up to 30 % of its strength"
-                    onChange={(v) => setWheel({ ffbFriction: v / 100 })}
+                    hint="Buzzes from just before the tyres' grip peak: understeer, lock-ups, wheelspin. WebHID wheels"
+                    onChange={(v) => setWheel({ ffbSlip: v / 100 })}
                   />
-                ) : null}
-                {w.hidFfb && webHidFfb.offersCondition("inertia") ? (
                   <TuningSlider
-                    label="Inertia"
-                    value={Math.round(w.ffbInertia * 100)}
+                    label="Shift warning"
+                    value={Math.round(w.ffbShift * 100)}
                     min={0}
                     max={100}
                     step={5}
                     format={(v) => (v === 0 ? "Off" : `${v} %`)}
-                    hint="Weight that resists quick changes of direction, run by the wheel itself. Up to 30 % of its strength"
-                    onChange={(v) => setWheel({ ffbInertia: v / 100 })}
+                    hint="Buzzes as the revs reach the shift lights, until the next gear. WebHID wheels"
+                    onChange={(v) => setWheel({ ffbShift: v / 100 })}
                   />
-                ) : null}
-                <TuningSlider
-                  label="Smoothing"
-                  value={Math.round(w.ffbFilterS * 1000)}
-                  min={0}
-                  max={50}
-                  step={1}
-                  format={(v) => (v === 0 ? "0 = raw" : `${v} ms`)}
-                  hint="Low-pass filter on the force. 0 = raw"
-                  onChange={(v) => setWheel({ ffbFilterS: v / 1000 })}
-                />
-                <TuningSlider
-                  label="Downforce compensation"
-                  value={Math.round(w.ffbDownforceComp * 100)}
-                  min={0}
-                  max={100}
-                  step={5}
-                  format={(v) => (v === 0 ? "Off" : `${v} %`)}
-                  hint="Takes the aero load out of the steering weight, so fast corners do not clip. Raise Strength to match"
-                  onChange={(v) => setWheel({ ffbDownforceComp: v / 100 })}
-                />
-              </AutoGrid>
-              <Toggle
-                label="Collision protection"
-                detail="Holds back the force spike of a hit so it never yanks the rim"
-                checked={w.ffbCollisionGuard}
-                onChange={() => setWheel({ ffbCollisionGuard: !w.ffbCollisionGuard })}
-              />
+                </AutoGrid>
+              </div>
               <div className="flex flex-wrap items-center gap-2">
                 <SolidPill disabled={!ffbReady} onClick={() => wheelFfb.test(w.ffbInvert)} className="h-10!">
                   Test direction
@@ -958,6 +941,77 @@ export const WheelStep: React.FC<SetupStepProps> = ({ settings, onChangeSettings
                 panel…); turn its centring spring off there. Damping, friction and inertia set here add to the
                 wheel&apos;s own.
               </Hint>
+              <MoreSettings label="Fine tuning">
+                <AutoGrid min={220} className="gap-x-[18px] gap-y-1">
+                  <TuningSlider
+                    label="Force curve"
+                    value={Math.round(50 * Math.log2(w.ffbCurve))}
+                    min={-50}
+                    max={50}
+                    step={5}
+                    format={(v) => (v === 0 ? "Linear" : `${v > 0 ? "+" : ""}${v}`)}
+                    hint="Below 0 lifts light forces (belt and gear wheels); above 0 keeps them light and saves the strength for the big loads"
+                    onChange={(v) => setWheel({ ffbCurve: 2 ** (v / 50) })}
+                  />
+                  <TyreSlider
+                    label="Minimum force"
+                    value={Math.round(w.ffbMinForce * 100)}
+                    limits={{ min: 0, max: 20, step: 1 }}
+                    format={(v) => (v === 0 ? "Off" : `${v.toFixed(0)} %`)}
+                    onChange={(v) => setWheel({ ffbMinForce: v / 100 })}
+                  />
+                  {w.hidFfb && webHidFfb.offersCondition("friction") ? (
+                    <TuningSlider
+                      label="Friction"
+                      value={Math.round(w.ffbFriction * 100)}
+                      min={0}
+                      max={100}
+                      step={5}
+                      format={(v) => (v === 0 ? "Off" : `${v} %`)}
+                      hint="A steady drag on the rim, run by the wheel itself. Up to 30 % of its strength"
+                      onChange={(v) => setWheel({ ffbFriction: v / 100 })}
+                    />
+                  ) : null}
+                  {w.hidFfb && webHidFfb.offersCondition("inertia") ? (
+                    <TuningSlider
+                      label="Inertia"
+                      value={Math.round(w.ffbInertia * 100)}
+                      min={0}
+                      max={100}
+                      step={5}
+                      format={(v) => (v === 0 ? "Off" : `${v} %`)}
+                      hint="Weight that resists quick changes of direction, run by the wheel itself. Up to 30 % of its strength"
+                      onChange={(v) => setWheel({ ffbInertia: v / 100 })}
+                    />
+                  ) : null}
+                  <TuningSlider
+                    label="Smoothing"
+                    value={Math.round(w.ffbFilterS * 1000)}
+                    min={0}
+                    max={50}
+                    step={1}
+                    format={(v) => (v === 0 ? "0 = raw" : `${v} ms`)}
+                    hint="Low-pass filter on the force. 0 = raw"
+                    onChange={(v) => setWheel({ ffbFilterS: v / 1000 })}
+                  />
+                  <TuningSlider
+                    label="Downforce compensation"
+                    value={Math.round(w.ffbDownforceComp * 100)}
+                    min={0}
+                    max={100}
+                    step={5}
+                    format={(v) => (v === 0 ? "Off" : `${v} %`)}
+                    hint="Takes the aero load out of the steering weight, so fast corners do not clip. Raise Strength to match"
+                    onChange={(v) => setWheel({ ffbDownforceComp: v / 100 })}
+                  />
+                </AutoGrid>
+                <Toggle
+                  label="Collision protection"
+                  detail="Holds back the force spike of a hit so it never yanks the rim"
+                  checked={w.ffbCollisionGuard}
+                  onChange={() => setWheel({ ffbCollisionGuard: !w.ffbCollisionGuard })}
+                />
+              </MoreSettings>
             </>
           ) : (
             <Hint className="text-[13px]!">
@@ -968,75 +1022,47 @@ export const WheelStep: React.FC<SetupStepProps> = ({ settings, onChangeSettings
               <code className="font-f1-mono text-[12px] font-bold text-[#F5F7FA]">npm run ffb</code>).
             </Hint>
           )}
+        </SetupCard>
 
-          <SupportedWheels />
-
-          <div className="flex flex-col gap-2.5 rounded-[18px] border border-[#262B3D] bg-[#08090D] p-3.5">
-            <SubHead>Telemetry out</SubHead>
-            <Toggle
-              label="Send UDP telemetry through the bridge (SimHub, dashboards, bass shakers)"
-              checked={w.telemetryOut}
-              onChange={() => setWheel({ telemetryOut: !w.telemetryOut })}
+        <SetupCard title="Telemetry out">
+          <Toggle
+            label="Send UDP telemetry through the bridge (SimHub, dashboards, bass shakers)"
+            checked={w.telemetryOut}
+            onChange={() => setWheel({ telemetryOut: !w.telemetryOut })}
+          />
+          <div className={`flex items-center justify-between gap-3 px-2 ${w.telemetryOut ? "" : "opacity-40"}`}>
+            <span className="font-f1-mono text-[11px] font-bold text-[#8E96AA]">UDP port</span>
+            <input
+              ref={portRef}
+              type="number"
+              inputMode="numeric"
+              min={1024}
+              max={65535}
+              step={1}
+              disabled={!w.telemetryOut}
+              value={portText}
+              onChange={(e) => {
+                setPortText(e.target.value);
+                const n = Number(e.target.value);
+                if (Number.isInteger(n) && n >= 1024 && n <= 65535) setWheel({ telemetryPort: n });
+              }}
+              onBlur={() => setPortText(String(w.telemetryPort))}
+              className="h-[34px] w-28 rounded-full border border-[#262B3D] bg-[#11131A] px-3 text-right font-f1-mono text-[13px] font-extrabold text-[#F5F7FA] tabular-nums disabled:cursor-not-allowed"
             />
-            <div className={`flex items-center justify-between gap-3 px-2 ${w.telemetryOut ? "" : "opacity-40"}`}>
-              <span className="font-f1-mono text-[11px] font-bold text-[#8E96AA]">UDP port</span>
-              <input
-                ref={portRef}
-                type="number"
-                inputMode="numeric"
-                min={1024}
-                max={65535}
-                step={1}
-                disabled={!w.telemetryOut}
-                value={portText}
-                onChange={(e) => {
-                  setPortText(e.target.value);
-                  const n = Number(e.target.value);
-                  if (Number.isInteger(n) && n >= 1024 && n <= 65535) setWheel({ telemetryPort: n });
-                }}
-                onBlur={() => setPortText(String(w.telemetryPort))}
-                className="h-[34px] w-28 rounded-full border border-[#262B3D] bg-[#11131A] px-3 text-right font-f1-mono text-[13px] font-extrabold text-[#F5F7FA] tabular-nums disabled:cursor-not-allowed"
-              />
-            </div>
+          </div>
+          <Hint>
+            Needs the bridge running: <span className="font-f1-mono text-[#F5F7FA]">npm run ffb</span>. No wheel
+            needed: without one it relays telemetry only.
+          </Hint>
+          {CLAIMED_TELEMETRY_PORTS[w.telemetryPort] ? (
             <Hint>
-              Needs the bridge running: <span className="font-f1-mono text-[#F5F7FA]">npm run ffb</span>. No wheel
-              needed: without one it relays telemetry only.
+              Port {w.telemetryPort} is {CLAIMED_TELEMETRY_PORTS[w.telemetryPort]}: tools listening there will misread
+              this JSON. The default is {DEFAULT_TELEMETRY_PORT}.
             </Hint>
-            {CLAIMED_TELEMETRY_PORTS[w.telemetryPort] ? (
-              <Hint>
-                Port {w.telemetryPort} is {CLAIMED_TELEMETRY_PORTS[w.telemetryPort]}: tools listening there will misread
-                this JSON. The default is {DEFAULT_TELEMETRY_PORT}.
-              </Hint>
-            ) : null}
-          </div>
+          ) : null}
         </SetupCard>
 
-        <SetupCard label="Pedals">
-          {calRow(
-            "throttle",
-            "Throttle",
-            w.throttle,
-            throttle !== null ? <TrackMeter compact label="Throttle" value={throttle} /> : notConnected
-          )}
-          {calRow(
-            "brake",
-            "Brake",
-            w.brake,
-            brake !== null ? <TrackMeter compact label="Brake" value={brake} color="#FF2A3C" /> : notConnected
-          )}
-          <div className="flex flex-col gap-1 border-t border-[#262B3D] pt-2.5">
-            <TyreSlider
-              label="Brake curve"
-              value={w.brakeGamma}
-              limits={{ min: 0.5, max: 2.5, step: 0.1 }}
-              format={(v) => (Math.abs(v - 1) < 0.05 ? "Linear" : v > 1 ? `Progressive ${v.toFixed(1)}` : `Aggressive ${v.toFixed(1)}`)}
-              onChange={(v) => setWheel({ brakeGamma: v })}
-            />
-            <Hint className="px-2">
-              Load-cell brakes usually feel best linear; potentiometer pedals often like 1.3–1.6. A clutch is not needed.
-            </Hint>
-          </div>
-        </SetupCard>
+        <SupportedWheels />
       </div>
     </div>
   );
