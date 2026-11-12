@@ -1075,8 +1075,10 @@ export class DriveSession {
 
       // Alt + arrows, − / = (Page Up / Down) and [ / ] move the cockpit or dash view, saved for this car; Alt + 0 puts
       // it back. Nothing else sees a key pressed with Alt (the arrows don't drive, Alt + ← / → don't leave the page),
-      // nor its repeats once Alt is let go before it
-      if (e.altKey || cameraNudgeCodes.has(code)) {
+      // nor its repeats once Alt is let go before it. An Alt key the player bound to a control still reaches it: its
+      // own keydown has altKey set
+      const boundAlt = (code === "AltLeft" || code === "AltRight") && keyLookup.has(code);
+      if ((e.altKey && !boundAlt) || cameraNudgeCodes.has(code)) {
         e.preventDefault();
         const step = e.altKey ? nudgeStepForKey(code) : undefined;
         if (step !== undefined) {
