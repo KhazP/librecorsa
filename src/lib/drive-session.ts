@@ -1464,6 +1464,13 @@ export class DriveSession {
     // first frame is drawn, then let the loading screen offer to continue
     const loadStartMs = performance.now();
     let warmupStarted = false;
+    /** The warm-up has let the loading screen go: done, failed, or given up on by the watchdog */
+    let warmupSettled = false;
+    const settleWarmup = () => {
+      if (warmupSettled || disposed) return;
+      warmupSettled = true;
+      setAssetsReady(true);
+    };
     let loggedFirstFrame = false;
     const checkAssets = () => {
       if (warmupStarted || disposed) return;
@@ -1481,16 +1488,27 @@ export class DriveSession {
         // its programs on the bound target: compiled with none bound, every shader would be the wrong variant and
         // recompile on the first frame after the player presses start. The program build runs synchronously inside
         // compileAsync, so the target only has to be bound for the call itself.
-        compileForComposer()
-          .then(() => {
-            if (disposed) return;
-            warmUpGpu();
-            visualFx.hidePrewarmed();
-            assetProgress.done("shaders");
-          }, () => assetProgress.fail("shaders"))
-          .finally(() => {
-            if (!disposed) setAssetsReady(true);
-          });
+        let compiled: Promise<unknown>;
+        try {
+          compiled = compileForComposer();
+        } catch (err) {
+          compiled = Promise.reject(err);
+        }
+        compiled
+          .then(
+            () => {
+              // Given up on already: the first frames compile what is left
+              if (disposed || warmupSettled) return;
+              warmUpGpu();
+              visualFx.hidePrewarmed();
+              assetProgress.done("shaders");
+            },
+            (err) => {
+              console.warn("Shader warm-up failed (the first frames will compile instead)", err);
+              assetProgress.fail("shaders");
+            }
+          )
+          .finally(settleWarmup);
       });
     };
     function compileForComposer(): Promise<THREE.Object3D> {
@@ -1544,6 +1562,8 @@ export class DriveSession {
           if (t.id !== "shaders" && t.status === "pending") assetProgress.fail(t.id);
         }
       }
+      // A shader compile that never finishes (a lost GPU context polls forever) has been given up on: continue anyway
+      if (warmupStarted && assetProgress.get().tasks.some((t) => t.id === "shaders" && t.status === "failed")) settleWarmup();
     }, 2000);
     checkAssets();
 
