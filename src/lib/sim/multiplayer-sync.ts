@@ -327,8 +327,6 @@ const TIMING_SLEW_MS_PER_S = 5;
 const TIMING_SNAP_MS = 40;
 /** A mapping this far (ms) from the last is a clock step: the snapshots stamped on the old one are dropped */
 const CLOCK_OFFSET_SNAP_MS = 250;
-/** A sender timestamp this far (ms) behind the newest accepted one is a restarted clock, not an out-of-order packet */
-const SENDER_CLOCK_RESTART_MS = 1000;
 /**
  * Remote players are drawn and collided where they are now: the newest packet carried forward by its age plus the
  * one-way latency, at most this far (s). Past it the packets are stale and the car can't be touched.
@@ -2061,10 +2059,10 @@ export class MultiplayerSyncManager {
 
     let syncedTimestampMs = now;
     if (Number.isFinite(pkt.timestampMs)) {
-      // Drop out-of-order UDP packets: judged on the sender's own clock, which the offset filter cannot reorder. A
-      // jump back by more than a second is the sender's clock restarting (page reload), not a late packet
-      const senderBackMs = buffer.lastSenderTimestampMs - pkt.timestampMs;
-      if (senderBackMs >= 0 && senderBackMs < SENDER_CLOCK_RESTART_MS) return;
+      // Drop out-of-order packets: judged on the sender's own clock, which the mapping cannot reorder. However old: a
+      // stall delivers what it held all at once and in any order, and the sender's clock never restarts under the same
+      // id (a reloaded page is a new peer)
+      if (pkt.timestampMs <= buffer.lastSenderTimestampMs) return;
       buffer.lastSenderTimestampMs = pkt.timestampMs;
       if (this.timingOracle) buffer.mapMs = this.timingOracle(pkt.peerId, pkt.timestampMs) - pkt.timestampMs;
       else this.updateTiming(buffer, pkt, now);
