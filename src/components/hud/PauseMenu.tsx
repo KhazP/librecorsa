@@ -828,7 +828,7 @@ export const SessionPanel: React.FC<PauseMenuProps> = (p) => {
         {p.onChangeCockpitFov ? (
           <div className="border-t border-[#262B3D] pt-1.5">
             <TyreSlider
-              label="Cockpit FOV · [ ]"
+              label="Base FOV · all cars"
               value={p.cockpitFovDeg ?? p.cockpitFovDefaultDeg ?? 60}
               limits={{ min: COCKPIT_FOV_MIN_DEG, max: COCKPIT_FOV_MAX_DEG, step: 1 }}
               format={(v) => (p.cockpitFovDeg == null ? `${v}° · car` : `${v}°`)}
@@ -863,7 +863,9 @@ export const SessionPanel: React.FC<PauseMenuProps> = (p) => {
                 ["Active aero X / Z", "X"],
                 ["Gear up / down", "E / Q"],
                 ["Camera", "C"],
-                ["Cockpit FOV", "[ / ]"],
+                ["Seat & camera (cockpit, dash)", "Hold C · hold Y"],
+                ["FOV, this car", "[ / ]"],
+                ["Nudge the view", "Alt + arrows · − = · [ ]"],
                 ["Racing line", "R"],
                 ["Restart", "Backspace"],
                 ["Pad", "RT / LT · stick · A boost"],

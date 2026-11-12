@@ -4,7 +4,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExtern
 import { DEFAULT_TRACK_ID, getActiveTrackData, LIVERIES } from "@/lib/track-data";
 import { FfbPairPrompt } from "@/components/hud/FfbPairPrompt";
 import { isVehicleModelId, vehicleModelsFor } from "@/lib/cars/vehicle-models";
-import { CARS, carForVehicle, type CarId } from "@/lib/cars/car-registry";
+import { CARS, carById, carForVehicle, type CarId } from "@/lib/cars/car-registry";
 import { alignGhostToTrack } from "@/lib/sim/ghost-align";
 import { carPhysics, carTakesPhysicsSwitch, subscribeF1ModPhysics } from "@/lib/cars/f1-mod-physics";
 import { type ChassisSetup, saveChassisSetup } from "@/lib/sim/car-setup";
@@ -59,6 +59,9 @@ import { aiFieldOf, autoCompoundFor, DEFAULT_AERO_PRESET, DriveSession, idleDriv
 import { startAiRace, type RaceSetup } from "@/lib/sim/race-setup";
 import type { PodiumUi } from "@/lib/render/podium-shot";
 import { useRaceHistory } from "@/components/hud/useRaceHistory";
+import { isNudgeView, markSeatHintSeen, nudgeOf, seatHintSeen, stepNudge, type CameraNudge, type NudgeView } from "@/lib/settings/camera-nudges";
+import { dashViewFovDeg } from "@/lib/render/onboard-views";
+import { SeatPanel } from "@/components/hud/SeatPanel";
 
 const DEFAULT_ASSIST_PRESET: AssistPreset = DEFAULT_PLAYER_SETTINGS.assistPreset;
 /** A lap record's car: records are per vehicle model, named after its first car */
@@ -156,6 +159,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     muted,
     paused,
     pauseNotice,
+    seatPanel,
     boostLatch,
     tireCompound,
     tyreSetup,
@@ -576,6 +580,16 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     setSettings((prev) => ({ ...prev, cockpitFovDeg: fovDeg === null ? null : Math.round(clampFov(fovDeg)) }));
   }, []);
 
+  /** The seat panel's view: the one on screen (the panel switches to the cockpit from any other) */
+  const seatView: NudgeView = isNudgeView(cameraMode) ? cameraMode : "cockpit";
+  /** The seat panel: moves that view for the car being driven a step, or puts it back where the car puts it */
+  const handleSeatStep = useCallback(
+    (step: Partial<CameraNudge> | null) => {
+      setSettings((prev) => ({ ...prev, cameraNudges: stepNudge(prev.cameraNudges, carId, seatView, step) }));
+    },
+    [carId, seatView]
+  );
+
   /** Leaves the menus for the car: a practice run from the grid, or a race against the AI field */
   const startDriving = useCallback(
     (race: boolean) => {
@@ -969,6 +983,23 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   useEffect(() => {
     if (launchHint && telemetry.speedKmh > 15) setLaunchHint(false);
   }, [launchHint, telemetry.speedKmh]);
+  // A car's first drive also names the seat panel in the launch hint; once it has shown (or the panel opened), not again
+  const [seatHintOn, setSeatHintOn] = useState(false);
+  useEffect(() => {
+    if (launchHint) {
+      setSeatHintOn(!seatHintSeen(carId));
+      return;
+    }
+    setSeatHintOn((on) => {
+      if (on) markSeatHintSeen(carId);
+      return false;
+    });
+  }, [launchHint, carId]);
+  useEffect(() => {
+    if (!seatPanel) return;
+    markSeatHintSeen(carId);
+    setSeatHintOn(false);
+  }, [seatPanel, carId]);
 
   // Silence the pad rumble and FFB as soon as the pause menu opens or the car is left for the menus (the car audio
   // follows the frame loop, which pauses it on every frame the car is not driven, in every phase)
@@ -1279,7 +1310,9 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       ["Active aero X / Z", keys(k.aero)],
       ["Gear up / down", `${keys(k.shiftUp)} / ${keys(k.shiftDown)}`],
       ["Camera", keys(k.camera)],
-      ["Cockpit FOV", "[ / ]"],
+      ["Seat & camera (cockpit, dash)", `Hold ${keys(k.camera)}`],
+      ["FOV, this car", "[ / ]"],
+      ["Nudge the view", "Alt + arrows · − = · [ ]"],
       ["Racing line", keys(k.racingLine)],
       ["Restart", keys(k.restart)],
       ["Restart lap (flying start)", keys(k.flyingLap)],
@@ -1291,6 +1324,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       "Pad",
       `RT / LT · stick · ${padButtonLabel(pb.boost)} boost · ${padButtonLabel(pb.shiftUp)}/${padButtonLabel(pb.shiftDown)} gears`,
     ]);
+    rows.push(["Seat & camera on a pad", `Hold ${padButtonLabel(pb.camera)}`]);
     return rows;
   }, [settings.keys, settings.padButtons]);
 
@@ -1312,12 +1346,12 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   // With the touch pads up and no wheel or controller picked, the pads are what the player drives with
   const launchHintText =
     settings.device === "wheel"
-      ? "Press the throttle to launch · pause button or Esc for menu"
+      ? `Press the throttle to launch · ${seatHintOn ? "hold the camera button for your seat · " : ""}pause button or Esc for menu`
       : settings.device === "controller"
-        ? `Hold RT to launch · ${padButtonLabel(settings.padButtons.pause)} for menu`
+        ? `Hold RT to launch · ${seatHintOn ? `hold ${padButtonLabel(settings.padButtons.camera)} for your seat · ` : ""}${padButtonLabel(settings.padButtons.pause)} for menu`
         : touchVisible && vrState !== "on"
           ? "Hold Throttle to launch"
-          : `Hold ${keyLabel(settings.keys.throttle[0])} to launch · Esc for menu`;
+          : `Hold ${keyLabel(settings.keys.throttle[0])} to launch · ${seatHintOn ? `hold ${keyLabel(settings.keys.camera[0])} for your seat · ` : ""}Esc for menu`;
 
   // The one derivation of hosting: the lobby names this client as its host
   /** Entered in a scheduled race: its lobby is the race server's, shown on the Races card, not as a room */
@@ -1433,6 +1467,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       vrSupported,
       vrActive: vrState === "on",
       onEnterVr: () => session?.enterVr(),
+      onOpenSeatPanel: phase === "driving" ? () => session?.openSeatPanel() : undefined,
     },
     library,
     leaderboardPanel: {
@@ -1465,9 +1500,28 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     >
       <div ref={containerRef} className="h-full w-full" />
 
+      {phase === "driving" && seatPanel ? (
+        <SeatPanel
+          carTitle={carById(carId).title}
+          view={seatView}
+          nudge={nudgeOf(settings.cameraNudges, carId, seatView)}
+          fovDeg={clampFov(
+            (seatView === "dash" ? dashViewFovDeg(carId) : carCockpitFov) +
+              (settings.cockpitFovDeg === null ? 0 : settings.cockpitFovDeg - carCockpitFov) +
+              nudgeOf(settings.cameraNudges, carId, seatView).fovDeg
+          )}
+          onStep={handleSeatStep}
+          onSetView={setCameraMode}
+          onClose={() => session?.closeSeatPanel()}
+          cameraKeys={settings.keys.camera}
+          cameraButton={settings.padButtons.camera}
+        />
+      ) : null}
+
       {phase === "driving" ? (
         <F1TelemetryHud
           {...menuProps}
+          seatPanel={seatPanel}
           track={track}
           weather={weatherHud}
           boostLatch={boostLatch}

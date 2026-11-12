@@ -374,7 +374,8 @@ export const TunerMfdPanel: React.FC<TunerMfdPanelProps> = ({
   // Keyboard shortcuts: , / . cycle MFD dials; - / = adjust value ([ / ] belong to the cockpit FOV)
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || hudModeRef.current !== "live") {
+      // With Alt held these keys move the camera instead (drive-session)
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || hudModeRef.current !== "live" || e.altKey) {
         return;
       }
       if (e.key === "," || e.key === "<") {

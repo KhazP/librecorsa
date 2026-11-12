@@ -19,6 +19,7 @@ import { Toggle } from "./PauseMenu";
 import { isTouchDevice } from "@/lib/input/touch-input";
 import { CHOSEN_PILL, CHOSEN_TILE, CURSOR_PILL, CURSOR_TILE, Segmented } from "@/components/menu/menu-ui";
 import { focusOnHover } from "@/components/menu/useFocusNav";
+import { keyLabel, padButtonLabel } from "@/lib/input/bindings";
 
 export interface DisplayPanelProps {
   settings: PlayerSettings;
@@ -32,6 +33,8 @@ export interface DisplayPanelProps {
    * (taken, or not allowed). Without it the name only changes here
    */
   onRenameDriver?: (name: string) => Promise<string | null>;
+  /** Closes the menu onto the seat panel (only while driving) */
+  onOpenSeatPanel?: () => void;
 }
 
 const DRIVER_COLORS = ["#E10600", "#00D2BE", "#FF8700", "#0600EF", "#006F62", "#2B4562", "#B6BABD", "#CCFF00"] as const;
@@ -210,7 +213,15 @@ function LabelledSegmented<T extends string>({
 }
 
 /** Driver identity, HUD layout, graphics and touch / ghost options, saved to the player's settings */
-export const DisplayPanel: React.FC<DisplayPanelProps> = ({ settings, onChangeSettings, vrSupported, vrActive, onEnterVr, onRenameDriver }) => {
+export const DisplayPanel: React.FC<DisplayPanelProps> = ({
+  settings,
+  onChangeSettings,
+  vrSupported,
+  vrActive,
+  onEnterVr,
+  onRenameDriver,
+  onOpenSeatPanel,
+}) => {
   // Live text while the name or code field is being edited; null shows the saved value
   const [nameDraft, setNameDraft] = useState<string | null>(null);
   /** Why the board turned the typed name down; the field keeps it so it can be changed */
@@ -560,6 +571,39 @@ export const DisplayPanel: React.FC<DisplayPanelProps> = ({ settings, onChangeSe
                 VR headset not detected (needs a WebXR browser, e.g. Quest Browser or Chrome with SteamVR/OpenXR)
               </span>
             )}
+          </div>
+        </div>
+
+        {/* SEAT & CAMERA */}
+        <div className={CARD}>
+          <CardHeader label="Seat & camera" color="#CCFF00" />
+          <p className="text-[13px] leading-snug text-[#8E96AA]">
+            Move the cockpit and dash views and set the FOV, for each car on its own. While driving, hold{" "}
+            <span className="lc-data text-[#F5F7FA]">{keyLabel(settings.keys.camera[0])}</span> on the keyboard or{" "}
+            <span className="lc-data text-[#F5F7FA]">{padButtonLabel(settings.padButtons.camera)}</span> on a controller; a
+            tap still changes the view. Alt + arrows nudge the view without opening anything.
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            {onOpenSeatPanel ? (
+              <button
+                type="button"
+                onClick={onOpenSeatPanel}
+                onPointerEnter={focusOnHover}
+                className={`inline-flex min-h-[40px] cursor-pointer items-center rounded-full px-4 text-[13px] font-bold transition-[background-color,box-shadow,color] duration-200 ${CHOSEN_PILL} ${CURSOR_PILL}`}
+              >
+                Adjust seat now
+              </button>
+            ) : null}
+            {Object.keys(settings.cameraNudges).length > 0 ? (
+              <button
+                type="button"
+                onClick={() => onChangeSettings((prev) => ({ ...prev, cameraNudges: {} }))}
+                onPointerEnter={focusOnHover}
+                className={`inline-flex min-h-[40px] cursor-pointer items-center rounded-full border border-[#262B3D] px-4 text-[13px] font-bold text-[#8E96AA] transition-colors hover:text-[#CCFF00] ${CURSOR_PILL}`}
+              >
+                Reset every car
+              </button>
+            ) : null}
           </div>
         </div>
 

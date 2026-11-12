@@ -225,6 +225,8 @@ export interface DeviceFrame {
   boostHeld: boolean;
   /** Button actions pressed this frame (rising edges) */
   pressed: Set<PadAction>;
+  /** Button actions held down this frame (a held camera button opens the seat panel) */
+  held?: ReadonlySet<PadAction>;
   source: "wheel" | "controller" | "legacy" | null;
   /**
    * The bound steering wheel, or a separate pedal set bound to it, was there last frame and is gone now (unplugged,
@@ -442,6 +444,7 @@ export class DeviceInputReader {
     if (!switched) for (const a of held) if (!this.prevHeld.has(a)) frame.pressed.add(a);
     this.prevHeld = held;
     this.prevSource = source;
+    frame.held = held;
     frame.boostHeld = held.has("boost");
     return frame;
   }

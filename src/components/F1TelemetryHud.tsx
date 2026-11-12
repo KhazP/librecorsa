@@ -78,6 +78,8 @@ interface F1TelemetryHudProps extends MultiplayerPanelProps {
   aeroPreset: AeroSetupPreset;
   assistPreset: DriverAssistPreset;
   cameraMode: CameraMode;
+  /** The seat panel is open: the HUD steps aside, as for the pause menu */
+  seatPanel?: boolean;
   /** Player's driver's-eye field of view (vertical °); null = the car's own */
   cockpitFovDeg?: number | null;
   /** The current car's own driver's-eye field of view */
@@ -236,7 +238,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
   const showResults = raceState(race).classified && !props.resultsClosed && podiumStage !== "waiting" && !podiumUp;
   // Paused or in a replay, the HUD stays mounted (folds, lap history and timers carry on) but hides and takes no input;
   // the results card owns the D-pad and keys while it is up
-  const hudMode: HudMode = paused || props.replay || podiumUp ? "hidden" : showResults ? "results" : "live";
+  const hudMode: HudMode = paused || props.seatPanel || props.replay || podiumUp ? "hidden" : showResults ? "results" : "live";
   const hudModeRef = useRef(hudMode);
   hudModeRef.current = hudMode;
   // The HUD pad button (R3 by default) clears every panel off the screen; start lights and alerts stay

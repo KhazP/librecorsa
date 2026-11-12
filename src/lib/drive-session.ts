@@ -66,6 +66,7 @@ import {
 import type { WeatherHudState } from "@/components/hud/WeatherBadge";
 import { CAMERA_MODES, FALLBACK_COCKPIT_FOV_DEG } from "@/lib/render/camera-modes";
 import { OnboardViews } from "@/lib/render/onboard-views";
+import { isNudgeView, NUDGE_FOV_STEP_DEG, nudgeStepForKey, stepNudge } from "@/lib/settings/camera-nudges";
 import { loadTyreSetup } from "@/lib/sim/tyre-setup";
 import { assetProgress } from "@/lib/loading/asset-progress";
 import { prefetchSoundBank } from "@/lib/sim/vf26-audio";
@@ -96,6 +97,8 @@ const KB_THROTTLE_RISE_S = DEFAULT_KEYBOARD_TUNING.throttleRiseS;
 const KB_THROTTLE_FALL_S = 0.1;
 const KB_BRAKE_RISE_S = DEFAULT_KEYBOARD_TUNING.brakeRiseS;
 const KB_BRAKE_FALL_S = 0.08;
+/** Holding the camera key or button this long opens the seat panel; a shorter press changes the view */
+const SEAT_PANEL_HOLD_MS = 450;
 
 /**
  * Session flow: assets loading → "press any key" → title menu → (first-run / controls setup) → driving.
@@ -177,6 +180,8 @@ export interface DriveSnapshot {
   /** The pause menu is open, and why the game paused itself (cleared on resume) */
   paused: boolean;
   pauseNotice: string | null;
+  /** The seat panel is open (hold the camera button): the car waits while the player moves the onboard view */
+  seatPanel: boolean;
   /** The manual-override boost is latched on */
   boostLatch: boolean;
   /** The car's setup as the garage shows it */
@@ -211,6 +216,7 @@ export function idleDriveSnapshot(track: BuiltTrackData): DriveSnapshot {
     muted: false,
     paused: false,
     pauseNotice: null,
+    seatPanel: false,
     boostLatch: false,
     tireCompound: "soft",
     tyreSetup: car.getTyreSetup(),
@@ -326,6 +332,9 @@ export class DriveSession {
   readonly togglePause: () => void;
   /** Closes the pause menu and its notice (a new session) */
   readonly endPause: () => void;
+  /** Opens the seat panel over the driver's view (a cockpit or dash view), the car waiting meanwhile */
+  readonly openSeatPanel: () => void;
+  readonly closeSeatPanel: () => void;
   readonly setBoostLatch: (on: boolean) => void;
   /** A one-shot driving action, as from a key, a pad button or a touch pad */
   readonly runAction: (action: DriveAction) => void;
@@ -465,7 +474,19 @@ export class DriveSession {
         releaseHeldKeys();
       }
     };
-    this.endPause = () => this.publish({ paused: false, pauseNotice: null });
+    this.endPause = () => this.publish({ paused: false, pauseNotice: null, seatPanel: false });
+    this.openSeatPanel = () => {
+      if (disposed || this.snapshot.seatPanel || appPhaseNow !== "driving") return;
+      // The seat moves the views from the driver's seat: from any other view the panel starts in the cockpit
+      if (!isNudgeView(settings.camera)) setSettings((prev) => ({ ...prev, camera: "cockpit" }));
+      this.publish({ seatPanel: true, paused: false });
+      wheelFfb.stop();
+      releaseHeldKeys();
+    };
+    this.closeSeatPanel = () => {
+      if (disposed || !this.snapshot.seatPanel) return;
+      this.publish({ seatPanel: false });
+    };
 
     /** The car sounds: created by the first unlockAudio, then paused and resumed by the frame loop alone */
     let audio: F1AudioEngine2026 | null = null;
@@ -643,6 +664,7 @@ export class DriveSession {
       muted: false,
       paused: false,
       pauseNotice: null,
+      seatPanel: false,
       boostLatch: false,
       ...carSetup,
       timeTrial: null,
@@ -1020,6 +1042,11 @@ export class DriveSession {
         Math.sign(clamped) * Math.pow(Math.abs(clamped), 1.18);
     };
 
+    /** Keys pressed with Alt to move the camera, until they are let go */
+    const cameraNudgeCodes = new Set<string>();
+    /** The camera key's hold timer (a hold opens the seat panel) and the pad camera button's press time */
+    let cameraKeyHold: number | null = null;
+    let padCameraHeldSinceMs: number | null = null;
     const onKeyDown = (e: KeyboardEvent) => {
       if (
         e.target instanceof HTMLInputElement ||
@@ -1035,6 +1062,8 @@ export class DriveSession {
         if (!e.repeat) podium.skip();
         return;
       }
+      // The seat panel owns the keyboard while it is open (SeatPanel.tsx)
+      if (this.snapshot.seatPanel) return;
       const code = e.code;
 
       if (code === "Escape") {
@@ -1044,9 +1073,32 @@ export class DriveSession {
       }
       if (this.snapshot.paused) return;
 
+      // Alt + arrows, − / = (Page Up / Down) and [ / ] move the cockpit or dash view, saved for this car; Alt + 0 puts
+      // it back. Nothing else sees a key pressed with Alt (the arrows don't drive, Alt + ← / → don't leave the page),
+      // nor its repeats once Alt is let go before it
+      if (e.altKey || cameraNudgeCodes.has(code)) {
+        e.preventDefault();
+        const step = e.altKey ? nudgeStepForKey(code) : undefined;
+        if (step !== undefined) {
+          cameraNudgeCodes.add(code);
+          const view = settings.camera;
+          const car = carRigCar;
+          if (isNudgeView(view)) setSettings((prev) => ({ ...prev, cameraNudges: stepNudge(prev.cameraNudges, car, view, step) }));
+        }
+        return;
+      }
+
       // [ / ] narrow / widen the onboard FOV live, unless the player bound those keys to a control
+      // In the cockpit and dash views they set this car's FOV for the view (the seat panel's FOV row); elsewhere the
+      // base FOV every car shares
       if ((code === "BracketLeft" || code === "BracketRight") && !keyLookup.has(code)) {
         const step = code === "BracketLeft" ? -1 : 1;
+        const view = settings.camera;
+        const car = carRigCar;
+        if (isNudgeView(view)) {
+          setSettings((prev) => ({ ...prev, cameraNudges: stepNudge(prev.cameraNudges, car, view, { fovDeg: step * NUDGE_FOV_STEP_DEG }) }));
+          return;
+        }
         setSettings((prev) => ({
           ...prev,
           cockpitFovDeg: Math.round(clampFov((prev.cockpitFovDeg ?? this.snapshot.carCockpitFovDeg) + step)),
@@ -1080,6 +1132,16 @@ export class DriveSession {
 
       const action = keyLookup.get(code);
       if (!action) return;
+      // The camera key: a tap changes the view (on release), held it opens the seat panel
+      if (action === "camera") {
+        if (!e.repeat && cameraKeyHold === null) {
+          cameraKeyHold = window.setTimeout(() => {
+            cameraKeyHold = null;
+            this.openSeatPanel();
+          }, SEAT_PANEL_HOLD_MS);
+        }
+        return;
+      }
       // Held controls ignore auto-repeat anyway; toggles must not flicker while a key is held
       if (isHeldKeyAction(action)) {
         heldKeys[HELD_KEYS[action]] = true;
@@ -1159,7 +1221,13 @@ export class DriveSession {
       ) {
         return;
       }
+      cameraNudgeCodes.delete(e.code);
       const action = keyLookup.get(e.code);
+      if (action === "camera" && cameraKeyHold !== null) {
+        window.clearTimeout(cameraKeyHold);
+        cameraKeyHold = null;
+        if (!this.snapshot.paused && !this.snapshot.seatPanel) cycleCamera();
+      }
       if (action && isHeldKeyAction(action)) heldKeys[HELD_KEYS[action]] = false;
     };
 
@@ -1193,7 +1261,13 @@ export class DriveSession {
       if (e.persisted) void webHidFfb.resume();
     };
     // Keys held while focus leaves the window (Cmd-Tab, a system dialog) never get their keyup
-    const onWindowBlur = () => releaseHeldKeys();
+    const onWindowBlur = () => {
+      releaseHeldKeys();
+      // Their keyups go to another window: the keys would stay swallowed, and a held camera key would open the panel
+      cameraNudgeCodes.clear();
+      if (cameraKeyHold !== null) window.clearTimeout(cameraKeyHold);
+      cameraKeyHold = null;
+    };
     document.addEventListener("visibilitychange", onVisibilityChange);
     window.addEventListener("pagehide", onPageHide);
     window.addEventListener("pageshow", onPageShow);
@@ -1509,7 +1583,9 @@ export class DriveSession {
         if (!this.snapshot.paused) this.togglePause();
         setPauseNotice("Steering wheel disconnected. Reconnect it, or resume to drive with what's left.");
       }
-      const driving = !inMenu && !this.snapshot.paused && !replaying && !device.wheelLost;
+      // The pause menu or the seat panel: the car waits
+      const frozen = this.snapshot.paused || this.snapshot.seatPanel;
+      const driving = !inMenu && !frozen && !replaying && !device.wheelLost;
       const padTuning = settingsNow.padTuning;
       const kbTuning = settingsNow.keyboardTuning;
       const isPad = device.source === "controller";
@@ -1531,13 +1607,30 @@ export class DriveSession {
             break;
           }
           if (action === "pause") {
+            // The seat panel's Menu closes it (its own buttons are read by SeatPanel.tsx)
+            if (this.snapshot.seatPanel) this.closeSeatPanel();
             // Opening only: in the pause menu, B / Menu resume through the menu's own navigation
-            if (!this.snapshot.paused) this.togglePause();
+            else if (!this.snapshot.paused) this.togglePause();
             continue;
           }
           if (!driving) continue;
+          // The camera button, like the key: a tap changes the view on release, held it opens the seat panel
+          if (action === "camera") {
+            padCameraHeldSinceMs = nowMs;
+            continue;
+          }
           // Boost acts while held (`boostHeld`); L3 folds the Live Tuner MFD, R3 clears the whole HUD off the screen
           if (action !== "boost") runAction(action);
+        }
+        if (padCameraHeldSinceMs !== null) {
+          if (!driving) padCameraHeldSinceMs = null;
+          else if (!device.held?.has("camera")) {
+            padCameraHeldSinceMs = null;
+            cycleCamera();
+          } else if (nowMs - padCameraHeldSinceMs >= SEAT_PANEL_HOLD_MS) {
+            padCameraHeldSinceMs = null;
+            this.openSeatPanel();
+          }
         }
       }
 
@@ -1682,7 +1775,7 @@ export class DriveSession {
         simHost.endFrame(raceNow().kind === "practice" && settingsNow.device !== "wheel");
         if (simHost.remote !== was) console.info(simHost.remote ? "[sim] the worker drives the car" : "[sim] the page drives the car");
       }
-      if (mpRace && mpFrame && mpFrame.phase === "racing" && !this.snapshot.paused) {
+      if (mpRace && mpFrame && mpFrame.phase === "racing" && !frozen) {
         mpRace.lapClock.update(physics.sMeters, mpFrame.raceTimeS, mpRace.start.laps, mpRace.flagOut);
       }
       haptics.update(physics.telemetry, dtSeconds, rumbleEnabled && driving, {
@@ -1878,7 +1971,7 @@ export class DriveSession {
       // polish:B the podium shot once the top three are known (this frame's race status, before the HUD sees it)
       podium.update({
         race: physics.telemetry.race,
-        dt: this.snapshot.paused ? 0 : dtSeconds,
+        dt: frozen ? 0 : dtSeconds,
         allowed: !inMenu && !replaying && !renderer.xr.isPresenting,
         peers: renderPeers,
         ground: physics.groundQuery ?? null,
@@ -1977,7 +2070,7 @@ export class DriveSession {
           rp.buffer.push(replayClockS, cars);
         }
       } else if (replaying) {
-        if (rp.playing && !this.snapshot.paused) {
+        if (rp.playing && !frozen) {
           rp.timeS = Math.min(rp.buffer.endS, rp.timeS + dtSeconds * rp.speed);
           if (rp.timeS >= rp.buffer.endS) rp.playing = false;
         }
@@ -2277,7 +2370,7 @@ export class DriveSession {
 
       // Paused, the car is frozen but the pause menu (and the HUD under it) would still re-render at 30 Hz for nothing;
       // 4 Hz keeps what can still move there (remote players) current
-      if (nowMs - lastHudSyncMs > (this.snapshot.paused ? 250 : 33)) {
+      if (nowMs - lastHudSyncMs > (frozen ? 250 : 33)) {
         lastHudSyncMs = nowMs;
         setTelemetry({
           ...physics.telemetry,
