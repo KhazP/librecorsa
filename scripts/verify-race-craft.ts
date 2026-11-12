@@ -10,10 +10,12 @@
  *  3. Grid: reversed, the player's slot
  *  4. A quicker car gets past a slower one on Istanbul Park, cleanly
  *  5. A car stopped on the racing line: the car behind sees the yellow, goes round it, and doesn't hit it
+ *  6. A rolling start: the whole field at one speed, and no AI car spins off it
  */
 import { readFileSync } from 'node:fs';
 import { getActiveTrackData, setActiveTrack, type RawTrackJson } from '../src/lib/track-data';
 import { F12026CarSim } from '../src/lib/sim/f12026-car/F12026CarSim';
+import { createAmgGt3Sim } from '../src/lib/sim/gt3/AmgGt3Sim';
 import { AiOpponentField, launchReactionS, type FieldIncident } from '../src/lib/sim/ai-opponents';
 import { hazardLine, inYellowZone, overlapNow, ownsCorner, passFeasible } from '../src/lib/sim/ai-racecraft';
 import { COLLISION_PENALTY_S, judgeContact, RaceIncidents } from '../src/lib/sim/race-incidents';
@@ -238,6 +240,25 @@ const DT = 1 / 120;
     shares.every((x) => x > 0.93),
     cars.map((c, i) => `${c.code} ${f(c.ai!.telemetry.speedKmh, 0)} km/h (${f(100 * shares[i], 0)} %, react ${f(c.launchReactS, 2)} s)`).join(', ')
   );
+}
+
+// ---- 6. Rolling start
+// Istanbul Park's final straight is short: the queue runs back into the last corner. Each car once took its own slot's
+// speed, the leader 188 km/h out of the corner and the cars behind it 270 km/h, and they braked into each other and spun
+{
+  const drivers = ['AAA', 'BBB', 'CCC', 'DDD', 'EEE'].map((code, i) => ({ code, teamColorHex: '#fff', pace: 0.97 - 0.005 * i }));
+  const field = new AiOpponentField(track, createAmgGt3Sim(track, root), drivers, undefined, { spectate: true, learning: false, seed: 1 });
+  field.raceLaps = 1;
+  field.startRace(false);
+  const speeds = field.sims().map((sim) => sim.vxMs);
+  const spread = Math.max(...speeds) - Math.min(...speeds);
+  check('Rolling start: the whole field at one speed', spread < 0.5 && Math.min(...speeds) > 10, speeds.map((v) => `${f(v * 3.6, 0)}`).join(' ') + ' km/h');
+  const spins: string[] = [];
+  for (let t = 0; t < 10; t += DT) {
+    field.update(DT);
+    for (const i of field.incidents) if (i.kind === 'spin') spins.push(`${i.code} at ${f(t)} s`);
+  }
+  check('Rolling start: no AI car spins off it (GT3, five cars)', spins.length === 0, spins.join(', ') || 'no spins in 10 s');
 }
 
 console.log(failures.length ? `\n${failures.length} check(s) failed: ${failures.join(', ')}` : '\nAll racecraft checks passed.');
