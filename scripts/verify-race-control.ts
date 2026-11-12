@@ -207,6 +207,19 @@ console.log("Track limits · a course cut");
   blind.reset("race");
   const bev = link(blind, null);
   check("without a reference lap: the least penalty", bev.some((e) => e.kind === "penalty" && e.penaltyS === COURSE_CUT_MIN_PENALTY_S) && blind.penaltyTotalS === COURSE_CUT_MIN_PENALTY_S);
+  // The Grand Prix lap's loop driven on the short lap: off the road at 1,100 m, the lap position jumps back to 480 m,
+  // then 10 s later ahead to 1,206 m, and the car rejoins at 1,210 m having lost over 10 s on the reference
+  const detour = new TrackLimitsMonitor();
+  detour.reset("race");
+  const dev = [
+    ...drive(detour, 1, { distM: 1100, lapLengthM: L, stretchRefS, deltaS: 0 }),
+    ...drive(detour, 2, { distM: 1150, lapLengthM: L, stretchRefS, offTrack: true, lateralM: 30, deltaS: 0 }),
+    ...drive(detour, 10, { distM: 480, lapLengthM: L, stretchRefS, offTrack: true, lateralM: 180, deltaS: 0 }),
+    ...drive(detour, 1, { distM: 1206, lapLengthM: L, stretchRefS, offTrack: true, lateralM: 30, deltaS: 0 }),
+    ...drive(detour, 2, { distM: 1210, lapLengthM: L, stretchRefS, deltaS: 0 }),
+  ];
+  check("a longer way round: the lap is deleted, no penalty", detour.penaltyTotalS === 0 && dev.some((e) => e.kind === "lap_invalid") && (detour.lastCutSavedS ?? 0) < -5,
+    `${JSON.stringify(dev)} saved ${detour.lastCutSavedS?.toFixed(1)} s`);
   const practice = new TrackLimitsMonitor();
   practice.reset("practice");
   const pev = link(practice);

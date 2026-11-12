@@ -21,7 +21,9 @@
  * A course cut (the car jumps round the lap off its road, course-limits.ts) is no excursion to judge: the lap is
  * deleted, and in a race, once the car is back on the track, a time penalty takes back more than it gained: the time
  * saved (the reference time over the stretch from where it left the road to where it rejoined, less the time it took)
- * plus `COURSE_CUT_MARGIN_S`, and never under `COURSE_CUT_MIN_PENALTY_S`. Any excursion being judged ends with it.
+ * plus `COURSE_CUT_MARGIN_S`, and never under `COURSE_CUT_MIN_PENALTY_S`; none when the reference shows the road the
+ * car took lost it the margin or more (the Grand Prix lap's loop driven on the short lap). Any excursion being judged
+ * ends with it.
  */
 import type { TrackLimitsReason, TrackLimitsStatus } from "@/types/f1";
 import { CourseCutWatch } from "./course-limits";
@@ -302,10 +304,15 @@ export class TrackLimitsMonitor {
     this.cutFrom = null;
     const ref = from && f.stretchRefS ? f.stretchRefS(from.distM, f.distM) : null;
     const savedS = from && ref !== null ? ref - (this.clockS - from.clockS) : null;
+    this.lastCutSavedS = savedS;
+    if (savedS !== null && savedS + COURSE_CUT_MARGIN_S <= 0) {
+      // A longer way round: nothing gained to take back
+      this.message = { kind: "lap_invalid", text: "Course cut · lap deleted", detail: "No time gained", atMs: f.nowMs };
+      return { kind: "lap_invalid", lap: f.lapCount };
+    }
     const seconds = Math.max(COURSE_CUT_MIN_PENALTY_S, Math.ceil((savedS ?? 0) + COURSE_CUT_MARGIN_S));
     this.penalties++;
     this.penaltyS += seconds;
-    this.lastCutSavedS = savedS;
     this.message = {
       kind: "penalty",
       text: `Course cut · +${seconds.toFixed(1)}s time penalty`,
