@@ -315,6 +315,60 @@ console.log('\n== Up-shifts, and the throttle out of a corner');
   check('... and with the steering held it is a spin: the slide is the driver\'s to catch', held.peak > 25, `${f(held.peak, 0)}°`);
 }
 
+console.log('\n== A lift, in every gear');
+{
+  // Held at a speed in a gear, the store half full, then the pedals set: the mean deceleration and MGU-K power from
+  // 0.3 s on, over 0.4 s
+  const pedals = (mode: 'RAC' | 'LIC', kmh: number, gear: number, throttle: number, brake: number) => {
+    const sim = fresh(kmh);
+    sim.autoGearbox = false;
+    sim.setLiveTuner({ ersMode: mode });
+    const v = kmh / 3.6;
+    const hold = () => THREE.MathUtils.clamp(0.3 + 0.6 * (v - sim.vxMs), 0.06, 1);
+    for (let tries = 0; tries < 16 && sim.telemetry.gear !== gear; tries++) {
+      const up = sim.telemetry.gear < gear;
+      sim.step(H, { throttle: hold(), shiftUp: up, shiftDown: !up });
+      for (let t = 0; t < 0.25; t += H) sim.step(H, { throttle: hold() });
+    }
+    for (let t = 0; t < 1.5; t += H) sim.step(H, { throttle: hold() });
+    sim.vehicle.ersEnergyJ = 0.5 * C.ers.ERS_MAX_CHARGE;
+    for (let t = 0; t < 0.3; t += H) sim.step(H, { throttle, brake });
+    let g = 0;
+    let kW = 0;
+    let n = 0;
+    for (let t = 0; t < 0.4; t += H, n++) {
+      sim.step(H, { throttle, brake });
+      g -= sim.telemetry.longitudinalG;
+      kW -= sim.vehicle.telemetry.MGUK_POWER / 1000;
+    }
+    return { g: g / n, kW: kW / n, inGear: sim.telemetry.gear === gear };
+  };
+  // The lift-and-coast map recovers the most on a lift (90 kW), so a gear that recovered none would show there
+  const gears = [5, 6, 7, 8].map((gear) => pedals('LIC', 200, gear, 0, 0));
+  const kW = gears.map((x) => x.kW);
+  const g = gears.map((x) => x.g);
+  check('A lift at 200 km/h recovers the same power in fifth to eighth', gears.every((x) => x.inGear) && Math.max(...kW) - Math.min(...kW) < 2 && Math.min(...kW) > 80, kW.map((x) => `${f(x, 0)} kW`).join(' / '));
+  check('... and slows the car alike in each, within 0.02 g', Math.max(...g) - Math.min(...g) < 0.02, g.map((x) => `${f(x, 3)} g`).join(' / '));
+  const race = [5, 6, 7, 8].map((gear) => pedals('RAC', 200, gear, 0, 0).g);
+  check('In the race map each gear up slows it a little less, eighth as the others', race.every((x, i) => i === 0 || (x < race[i - 1] && race[i - 1] - x < 0.03)), race.map((x) => `${f(x, 3)} g`).join(' / '));
+  // The data's 900 Nm at the rear axle: at 80 km/h that is 53 kW, in whichever gear
+  const slow = [1, 2, 3].map((gear) => pedals('LIC', 80, gear, 0, 0));
+  check('At 80 km/h the rear axle is held back by 900 Nm, 53 kW, in first to third', slow.every((x) => x.inGear && between(x.kW, 50, 56)), slow.map((x) => `${f(x.kW, 0)} kW, ${f(x.g, 3)} g`).join(' / '));
+  // From a part throttle through nothing to the brake, the car only ever slows more
+  const sweep: [number, number][] = [
+    [0.08, 0],
+    [0.04, 0],
+    [0.02, 0],
+    [0, 0],
+    [0, 0.04],
+    [0, 0.06],
+    [0, 0.1],
+    [0, 0.2],
+  ];
+  const decel = sweep.map(([throttle, brake]) => pedals('LIC', 120, 3, throttle, brake).g);
+  check('From 8 % throttle to 20 % brake in third at 120 km/h the car slows more at every step', decel.every((x, i) => i === 0 || x > decel[i - 1]), decel.map((x) => f(x)).join(' / '));
+}
+
 console.log('\n== Ride heights and downforce against speed');
 {
   const at = (kmh: number) => {

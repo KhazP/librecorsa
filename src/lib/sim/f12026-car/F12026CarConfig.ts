@@ -201,6 +201,15 @@ export interface ERSData {
   liftThrottle: number;
   /** Harvest power while lifting in top gear (W, before the mode scale) */
   topGearLiftHarvestW: number;
+  /**
+   * The lift harvest in every gear, not in top gear alone: `topGearLiftHarvestW` × the mode's scale with the pedal
+   * shut, easing to nothing as the pedal reaches `liftThrottle`, and never more than `maxAxleTorqueNm` at the driven
+   * axle (Nm), which at low speed holds it to what the tyres there carry on a lift. The same power in every gear is the
+   * same force at the wheels, so a lift slows the car alike whichever gear it is in. The brake pedal keeps it (as it
+   * keeps the engine's overrun) until the pedal's own harvest is the greater, so a touch of the brake never slows the
+   * car less than the lift did. Absent: top gear only, the whole of it below `liftThrottle`, and none on the brake
+   */
+  liftHarvestEveryGear?: { maxAxleTorqueNm: number };
   /** Deploy multiplier by gear (gear number → 0..1, the source's per-gear table); default 1 in every gear */
   deployVsGear?: LutPoints;
 }

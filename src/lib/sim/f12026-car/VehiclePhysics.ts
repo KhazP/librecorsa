@@ -2908,11 +2908,22 @@ export class VehiclePhysics {
     let pK = 0;
     /** The ECU may deploy now: the MGU-K then also fills the torque the turbo lag costs */
     let deployAllowed = false;
+    /**
+     * On a car that harvests on a lift in every gear: that harvest now (W), the same power in every gear, easing off as
+     * the throttle comes back to the lift threshold. The brake pedal keeps it, as it keeps the engine's overrun
+     */
+    let liftW = 0;
+    const everyGear = ers.liftHarvestEveryGear;
     const coupled = engage > 0.9 && this.gear > 0;
     if (coupled) {
+      if (everyGear && inp.throttle < ers.liftThrottle) {
+        liftW = ers.topGearLiftHarvestW * mode.liftHarvestScale * (1 - inp.throttle / ers.liftThrottle);
+      }
       if (inp.brake > 0.05) {
         pK = -ers.maxHarvestW * mode.brakeHarvestScale * Math.min(1, inp.brake * 3);
-      } else if (topGear && inp.throttle < ers.liftThrottle) {
+      } else if (liftW > 0) {
+        pK = -liftW;
+      } else if (!everyGear && topGear && inp.throttle < ers.liftThrottle) {
         pK = -ers.topGearLiftHarvestW * mode.liftHarvestScale;
       } else if (topGear && inp.throttle > 0.95 && mode.topGearClipHarvestW > 0) {
         pK = -mode.topGearClipHarvestW;
@@ -2933,8 +2944,9 @@ export class VehiclePhysics {
           (1 - 0.32 * this.wetness) * (1 - 0.18 * Math.min(1.5, Math.abs(this.telemetry.latG)) * this.wetness)
         );
         pK *= wetClip;
+        liftW *= wetClip;
       }
-      if (pK < 0 && (soc >= 1 || this.lapHarvestJ >= ers.harvestPerLapJ)) pK = 0;
+      if (pK < 0 && (soc >= 1 || this.lapHarvestJ >= ers.harvestPerLapJ)) pK = liftW = 0;
     }
     // ---- brake bias (brake-by-wire + live-tunable dynamic brake migration)
     const br = cfg.brakes;
@@ -2957,6 +2969,11 @@ export class VehiclePhysics {
         cap = Math.min(cap, Math.max(0, rearDemand / (Math.abs(ratio) * gb.efficiency) - Math.max(0, -tIce)));
       }
       tK = -Math.min(-pK / omegaE, cap);
+      // A lift's harvest under its ceiling at the axle; on the brake, the pedal's own harvest once that is the greater
+      if (everyGear && liftW > 0 && ratio !== 0) {
+        const lift = Math.min(liftW / omegaE, this.luts.mgukHarvest.evaluate(rpm), everyGear.maxAxleTorqueNm / Math.abs(ratio));
+        tK = inp.brake > 0.05 ? Math.min(tK, -lift) : -lift;
+      }
     }
     // Torque fill: with no MGU-H to spin the turbo, the MGU-K makes up the torque its lag costs, within the motor's torque
     // curve and the gear's power clip, from the same store and lap allowance as the deploy
@@ -2971,7 +2988,8 @@ export class VehiclePhysics {
     const crankBrake = Math.max(0, -tK) + Math.max(0, -tIce);
     // The slowing engine gives up some of its own inertia's torque, so a little less than the crank's braking reaches the
     // wheels: this share keeps the rear axle on its demand under harvest (scripts/verify-powertrain.ts)
-    const driveBrake = inp.brake > 0.05 && br.brakeByWire !== false ? (crankBrake * engage * Math.abs(ratio) * gb.efficiency) / 2 : 0;
+    // (a lift's harvest is on from the first of the pedal, so the rear calipers give way to it from there too)
+    const driveBrake = (inp.brake > 0.05 || liftW > 0) && br.brakeByWire !== false ? (crankBrake * engage * Math.abs(ratio) * gb.efficiency) / 2 : 0;
     const [dl, dr] = this.drivenWheels;
     for (let i = 0; i < 4; i++) {
       const w = W[i];

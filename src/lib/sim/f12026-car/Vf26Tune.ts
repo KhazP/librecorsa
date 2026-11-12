@@ -24,7 +24,7 @@
  */
 import type { LutPoints } from '../lut';
 import { Lut } from '../lut';
-import { VF26_CHASSIS, type Vf26AxleSuspension, type Vf26TyreSpec } from '../vf26-data';
+import { VF26_CHASSIS, VF26_ERS, type Vf26AxleSuspension, type Vf26TyreSpec } from '../vf26-data';
 import { buildVf26Config, type Vf26Overrides } from './Vf26Config';
 
 // ---------------------------------------------------------------------------
@@ -177,6 +177,12 @@ export const VF26_TUNE: Vf26Overrides = {
   // The engine's torque follows the pedal in 80 ms and lets go in 50 (the data: 30 and 20), so the rear tyres load up
   // over a tenth of a second and not at once [ref]
   torqueResponseS: { rise: 0.08, fall: 0.05 },
+  // A lift recovers energy in every gear, not in eighth alone, where it was a step in the car's deceleration between
+  // seventh and eighth (0.19 g at 200 km/h in the lift-and-coast map). It is whole with the pedal shut and gone by the
+  // 5 % where the deployment starts, in every gear alike (eighth harvested up to 15 %); the rear axle is never held
+  // back by more than the data's 900 Nm, which is 0.33 g under 125 km/h [ref: recovery on a lift in every gear, easing
+  // off with the pedal; data: the axle's ceiling; tuned: lift-off deceleration at 60 to 280 km/h in each gear]
+  ers: { liftThrottle: 0.05, liftHarvestEveryGear: { maxAxleTorqueNm: VF26_ERS.coastHarvestMaxAxleTorqueNm } },
 };
 
 export const VF26_TUNED_CONFIG = buildVf26Config(VF26_TUNE);

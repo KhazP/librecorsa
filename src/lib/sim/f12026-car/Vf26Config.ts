@@ -64,6 +64,8 @@ export interface Vf26Overrides {
   upshiftCutS?: number;
   /** The combustion torque's lag behind the pedal, rising and falling (s) */
   torqueResponseS?: { rise: number; fall: number };
+  /** Energy recovery values in place of the data's */
+  ers?: Partial<ERSData>;
 }
 
 // ---------------------------------------------------------------------------
@@ -545,7 +547,7 @@ export function buildVf26Config(overrides: Vf26Overrides = {}) {
       powerCurve: overrides.icePowerScale === undefined ? ENGINE.powerCurve : (ENGINE.powerCurve.map(([rpm, kw]) => [rpm, kw * overrides.icePowerScale!]) as LutPoints),
       coastCurve: ENGINE.coastCurve.map(([rpm, nm]) => [rpm, nm * (overrides.coastScale ?? 1)]) as LutPoints,
     },
-    ers: ERS,
+    ers: overrides.ers ? { ...ERS, ...overrides.ers } : ERS,
     performanceModes: PERFORMANCE_MODES,
     gearbox: {
       ratios: [...VF26_DRIVETRAIN.gearRatios],
