@@ -147,6 +147,7 @@ import {
   type BrushTyre,
 } from './brush-tyre';
 import { roadTextureHeightM } from '../road-texture';
+import { beginSettle } from './settle-memo';
 
 const G = 9.81;
 const DEG2RAD = Math.PI / 180;
@@ -1035,7 +1036,7 @@ export class VehiclePhysics {
   private readonly straightZones: readonly { start: number; end: number }[];
   private readonly locateProgress?: (x: number, z: number) => number;
   private readonly drsEligibleAtDetection?: (zone: ZoneData_DRSZone) => boolean;
-  private readonly onEvent?: (event: VehicleEvent) => void;
+  private onEvent?: (event: VehicleEvent) => void;
   private walls?: WallQuery;
   private readonly wallIds = new Int32Array(256);
   /** Body-frame points probed against the barriers (floor level, around the outline) */
@@ -1436,7 +1437,7 @@ export class VehiclePhysics {
    * Place the car at rest on the ground under (x, z), heading along `yawRad` (atan2(forward.x, forward.z)),
    * then let the suspension settle. `speedMs` > 0 gives a rolling start.
    */
-  /** Places the car at rest (or rolling at `speedMs`) on the ground at x, z; `keepTyres` keeps tyre and brake heat and wear (a flashback) */
+  /** Places the car at rest (or rolling at `speedMs`) on the ground at x, z; `keepTyres` keeps tyre and brake heat and wear (a car put back at a pose) */
   public reset(x: number, z: number, yawRad: number, speedMs = 0, keepTyres = false): void {
     const ch = this.config.chassis;
     const aero = this.config.aero;
@@ -1475,7 +1476,7 @@ export class VehiclePhysics {
     this.mapAeroRearN = 0;
     this.mapAeroDragN = 0;
     this.wallPrevCg.copy(this.position);
-    // Tyres kept through a flashback are only worth keeping while their state is a number
+    // Tyres kept through a placement are only worth keeping while their state is a number
     if (!keepTyres || !this.tyreStateFinite()) this.setTyreBlanketState();
 
     // Hubs at their static height over the local ground
@@ -1511,21 +1512,45 @@ export class VehiclePhysics {
     const rolling = speedMs > 0;
     const hold: VehicleInputs = { throttle: 0, brake: rolling ? 0 : 1, steer: 0 };
     if (rolling) this.gear = this.gearForSpeed(speedMs);
-    for (let k = 0; k < 300 * VehiclePhysics.SUBSTEPS; k++) {
-      this.updateBasis();
-      this.velocity.x = speedMs * _ez.x;
-      this.velocity.z = speedMs * _ez.z;
-      // Free-rolling at the road speed under each tyre: held at speed / r, the tyres would drive (or brake) the
-      // pinned car through the whole settle, and on a grade that thrust pitches it up
-      for (const w of this.wheels) w.omega = (k === 0 ? speedMs : Math.max(0, w.vx)) / Math.max(0.2, w.rollingRadius || 0.35);
-      if (rolling) this.engineOmega = this.drivenOmega() * this.totalRatio();
-      this.substep(h, hold);
-      this.position.x = x;
-      this.position.z = z;
-      this.angularVelocity.y = 0;
+    // A car in exactly the state of one settled before takes that settle's result (`settle-memo.ts`), on ground and
+    // barriers whose answers never depend on their earlier queries. The step size is the class's, not the car's (a test
+    // changes it), so it goes in with the settle's own inputs. Not for a car keeping its worn, hot tyres (a flashback):
+    // that state never comes round again, and keeping it would only push out settles that do
+    const opaque = new Set<object>([this.ground]);
+    if (this.walls) opaque.add(this.walls);
+    const memo =
+      !keepTyres && this.ground.stateless === true && (this.walls === undefined || this.walls.stateless === true)
+        ? beginSettle(this, opaque, [x, z, speedMs, VehiclePhysics.FIXED_DT, VehiclePhysics.SUBSTEPS])
+        : null;
+    if (!memo?.applied) {
+      // Events seen here (a barrier hit) would not be seen by a car given this settle's result: it is not kept then
+      let events = 0;
+      const onEvent = this.onEvent;
+      this.onEvent = (e) => {
+        events++;
+        onEvent?.(e);
+      };
+      try {
+        for (let k = 0; k < 300 * VehiclePhysics.SUBSTEPS; k++) {
+          this.updateBasis();
+          this.velocity.x = speedMs * _ez.x;
+          this.velocity.z = speedMs * _ez.z;
+          // Free-rolling at the road speed under each tyre: held at speed / r, the tyres would drive (or brake) the
+          // pinned car through the whole settle, and on a grade that thrust pitches it up
+          for (const w of this.wheels) w.omega = (k === 0 ? speedMs : Math.max(0, w.vx)) / Math.max(0.2, w.rollingRadius || 0.35);
+          if (rolling) this.engineOmega = this.drivenOmega() * this.totalRatio();
+          this.substep(h, hold);
+          this.position.x = x;
+          this.position.z = z;
+          this.angularVelocity.y = 0;
+        }
+        if (!rolling) for (let k = 0; k < 600 * VehiclePhysics.SUBSTEPS; k++) this.substep(h, hold);
+      } finally {
+        this.onEvent = onEvent;
+      }
+      memo?.store(events > 0);
     }
     if (!rolling) {
-      for (let k = 0; k < 600 * VehiclePhysics.SUBSTEPS; k++) this.substep(h, hold);
       this.velocity.set(0, 0, 0);
       this.angularVelocity.set(0, 0, 0);
     } else {

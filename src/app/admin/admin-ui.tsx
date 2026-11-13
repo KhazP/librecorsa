@@ -165,7 +165,12 @@ export interface Bar {
  * readout names the highest. A table of the same numbers sits under it.
  */
 export function BarChart({ bars, label, unit, height = 160 }: { bars: Bar[]; label: string; unit: string; height?: number }) {
-  const [hover, setHover] = useState<number | null>(null);
+  // The days shown: another range shows other days, while the same range read again (or the weekdays) keeps them
+  const span = `${bars.length}|${bars[0]?.label ?? ""}|${bars[bars.length - 1]?.label ?? ""}`;
+  const [hovered, setHovered] = useState<{ span: string; i: number } | null>(null);
+  // A bar hovered or tapped under another range is not this one's
+  const hover = hovered !== null && hovered.span === span && hovered.i < bars.length ? hovered.i : null;
+  const setHover = (i: number | null) => setHovered(i === null ? null : { span, i });
   const max = Math.max(0, ...bars.map((b) => b.value));
   const peak = bars.reduce((best, b, i) => (b.value > bars[best].value ? i : best), 0);
   const W = 1000;
@@ -186,7 +191,10 @@ export function BarChart({ bars, label, unit, height = 160 }: { bars: Bar[]; lab
           </>
         )}
       </p>
-      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="w-full touch-pan-y" style={{ height: H }} role="img" aria-label={label} onPointerLeave={() => setHover(null)}>
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="w-full touch-pan-y" style={{ height: H }} role="img" aria-label={label} onPointerLeave={(e) => {
+          // A finger's tap ends with a pointerleave, so a tapped bar keeps its readout until another is tapped
+          if (e.pointerType !== "touch") setHover(null);
+        }}>
         <line x1={0} x2={W} y1={H - 0.5} y2={H - 0.5} stroke="#262B3D" strokeWidth={1} vectorEffect="non-scaling-stroke" />
         {bars.map((b, i) => {
           const h = max > 0 ? (b.value / max) * (H - 6) : 0;

@@ -12,9 +12,10 @@
  */
 import { mkdirSync, openSync, readSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import sharp from "sharp";
 
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const W = 9216;
 const H = 3072;
 const ATLAS = 2048;

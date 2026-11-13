@@ -5,10 +5,11 @@
  *
  * It speaks the game's own multiplayer messages (src/lib/net/wire.ts), as a room's host does over WebRTC, so the game
  * follows it with the code that follows a host:
- *   client -> server  { ctl: hello | identify | ping | pong | finish, from }   and car state packets
+ *   client -> server  { ctl: hello | identify | ping | pong | finish, from }   and car state packets (binary, state-codec.ts)
  *   server -> client  { t: "welcome", now, startsMs, index }, then { ctl: lobby | start | pong | result, from: "race_server" },
  *                     the other cars' state packets, and their pings and pongs (each car measures its delay to each other)
- *                     { t: "closed" | "full" | "started" | "taken" | "bad" } when it won't take the socket
+ *                     { t: "closed" | "full" | "started" | "taken" | "bad" | "update" } when it won't take the socket
+ *                     ("update": the game is another version than this server's, PROTOCOL_VERSION, which it says in `v`)
  * Only the server ever sends a lobby, a start or a result. A socket speaks for one car: the id it connected with.
  *
  * The official result (src/lib/net/official-result.ts): each car reports its finish once; the server keeps the reports
@@ -21,7 +22,18 @@
  */
 import { RACE_COUNTDOWN_MS, RACE_JOIN_CUTOFF_MS, raceRules, raceSlot } from "../../src/lib/net/race-schedule";
 import { addFinish, finishProblem, newResultBook, resultCloseMs, resultDue, resultMessage, type FinishMessage, type ResultBook } from "../../src/lib/net/official-result";
-import { PEER_ID_RE, sanitizeControl, sanitizePacket, type LobbyPlayer, type LobbyState, type OfficialResultRow, type RaceStartInfo } from "../../src/lib/net/wire";
+import {
+  MAX_STATE_BYTES,
+  MAX_STATE_PACKETS_PER_S,
+  PEER_ID_RE,
+  PROTOCOL_VERSION,
+  StateInfoMemory,
+  decodeState,
+  encodeState,
+  sanitizeControl,
+  sanitizePacket,
+  stateInfoJson,
+  type LobbyPlayer, type LobbyState, type OfficialResultRow, type RaceStartInfo } from "../../src/lib/net/wire";
 import { driverNameKey, sha256Hex } from "./board";
 import { storeRaceResult, type RaceEntrant } from "./results";
 import { workers, type D1Database, type DurableObjectState, type Env, type ServerSocket } from "./types";
@@ -32,8 +44,7 @@ export const MAX_RACERS = 16;
 const MAX_PEEK_NAMES = 6;
 const TOKEN_RE = /^[A-Za-z0-9_-]{8,64}$/;
 const MAX_MESSAGE_CHARS = 16 * 1024;
-/** As a room's host: more than this per second from one car is a flood, and the excess is dropped */
-const MAX_STATE_PER_S = 60;
+/** As a room's host: more than this per second from one car is a flood, and the excess is dropped (state: wire.ts) */
 const MAX_CONTROL_PER_S = 40;
 /** An entrant silent this long when the grid is made has gone (the game pings every 2 s) */
 const GONE_AFTER_MS = 12_000;
@@ -78,7 +89,7 @@ function entrantOf(ws: ServerSocket): Entrant | null {
   return a && typeof a === "object" && typeof a.peer === "string" ? a : null;
 }
 
-function send(ws: ServerSocket, text: string): void {
+function send(ws: ServerSocket, text: string | ArrayBuffer): void {
   try {
     ws.send(text);
   } catch {
@@ -98,6 +109,8 @@ export class RaceServer {
   /** Per socket, in memory: when it was last heard from, and its messages in the current second */
   private heard = new WeakMap<ServerSocket, number>();
   private rates = new WeakMap<ServerSocket, { windowStartMs: number; state: number; control: number }>();
+  /** Per socket, in memory: its car's name, car and race progress, which its binary state carries only every so often */
+  private stateInfo = new WeakMap<ServerSocket, StateInfoMemory>();
   /** The race once the grid is made (also in storage: every lobby after the start must carry it) */
   private race: RaceStartInfo | null | undefined;
   private meta: Meta | null | undefined;
@@ -126,7 +139,7 @@ export class RaceServer {
     const slotS = Number(q.get("slotS"));
     if (!Number.isInteger(index) || index < 1 || !Number.isFinite(slotS) || slotS < 10) return new Response("Bad slot", { status: 400 });
     const pair = new workers.WebSocketPair();
-    await this.connect(pair[1], q.get("peer") ?? "", q.get("token") ?? "", raceSlot(index, slotS));
+    await this.connect(pair[1], q.get("peer") ?? "", q.get("token") ?? "", raceSlot(index, slotS), q.get("v"));
     return new Response(null, { status: 101, webSocket: pair[0] } as ResponseInit);
   }
 
@@ -170,13 +183,15 @@ export class RaceServer {
     return [...byCar.values()];
   }
 
-  /** Takes a new socket into the race, or tells it why not (the game closes it then) */
-  async connect(ws: ServerSocket, peer: string, token: string, slot: Meta): Promise<void> {
+  /** Takes a new socket into the race, or tells it why not (the game closes it then). `proto`: the game's PROTOCOL_VERSION */
+  async connect(ws: ServerSocket, peer: string, token: string, slot: Meta, proto: string | null): Promise<void> {
     const refuse = (t: string) => {
       this.state.acceptWebSocket(ws, ["refused"]);
       send(ws, JSON.stringify({ t }));
       close(ws, 4000, t);
     };
+    // Another version of the game (an older one says none) can't race this one: it is told to reload
+    if (proto !== String(PROTOCOL_VERSION)) return refuse("update");
     if (!PEER_ID_RE.test(peer) || peer === RACE_SERVER_ID || !TOKEN_RE.test(token)) return refuse("bad");
     const meta = await this.getMeta(slot);
     if (!meta) return refuse("bad");
@@ -250,6 +265,8 @@ export class RaceServer {
       settings: { trackId: rules.race.trackId, laps: rules.race.laps, collisions: "protected", carClass: "any", vehicle: rules.race.vehicle },
       players: this.players(gone),
       race,
+      // The game checks it runs the same version (the physics revision is the game's own, not this server's)
+      proto: PROTOCOL_VERSION,
     };
     return JSON.stringify({ ctl: { type: "lobby", lobby }, from: RACE_SERVER_ID });
   }
@@ -267,14 +284,18 @@ export class RaceServer {
       r = { windowStartMs: nowMs, state: 0, control: 0 };
       this.rates.set(ws, r);
     }
-    return ++r[kind] <= (kind === "state" ? MAX_STATE_PER_S : MAX_CONTROL_PER_S);
+    return ++r[kind] <= (kind === "state" ? MAX_STATE_PACKETS_PER_S : MAX_CONTROL_PER_S);
   }
 
   async webSocketMessage(ws: ServerSocket, message: string | ArrayBuffer): Promise<void> {
-    if (typeof message !== "string" || message.length > MAX_MESSAGE_CHARS) return;
     const who = entrantOf(ws);
     if (!who) return;
     const nowMs = this.now();
+    if (message instanceof ArrayBuffer) {
+      await this.takeState(ws, who, message, nowMs);
+      return;
+    }
+    if (typeof message !== "string" || message.length > MAX_MESSAGE_CHARS) return;
     let data: Record<string, unknown>;
     try {
       data = JSON.parse(message);
@@ -320,13 +341,27 @@ export class RaceServer {
       return;
     }
 
-    const pkt = sanitizePacket(data);
+    // Text is control only: car states come in binary (takeState)
+  }
+
+  /** A car's state: cleaned, then passed on to the others in binary, with its slow fields when it carried them */
+  private async takeState(ws: ServerSocket, who: Entrant, message: ArrayBuffer, nowMs: number): Promise<void> {
+    if (message.byteLength > MAX_STATE_BYTES) return;
+    let memory = this.stateInfo.get(ws);
+    if (!memory) {
+      memory = new StateInfoMemory();
+      this.stateInfo.set(ws, memory);
+    }
+    const decoded = decodeState(message, memory);
+    if (!decoded.ok) return;
+    const pkt = sanitizePacket(decoded.packet);
     if (!pkt || pkt.peerId !== who.peer || !this.withinRate(ws, "state", nowMs)) return;
+    if (decoded.info) memory.set(pkt.peerId, decoded.info);
     this.heard.set(ws, nowMs);
     // Cars only matter to each other once there is a race
     const race = await this.getRace();
     if (!race) return;
-    this.relay(ws, JSON.stringify(pkt));
+    this.relay(ws, encodeState(pkt, decoded.info ? stateInfoJson(pkt) : undefined));
     if (pkt.race?.id === race.id) this.dist.set(who.peer, pkt.race.dist);
     // Only a car that has raced may report a finish
     const seen = await this.getSeen();
@@ -423,7 +458,7 @@ export class RaceServer {
   }
 
   /** Passes a car's message on to the others (only to `to` when it is addressed) */
-  private relay(from: ServerSocket, text: string, to?: string): void {
+  private relay(from: ServerSocket, text: string | ArrayBuffer, to?: string): void {
     for (const ws of this.sockets()) {
       if (ws === from) continue;
       if (to !== undefined && entrantOf(ws)?.peer !== to) continue;

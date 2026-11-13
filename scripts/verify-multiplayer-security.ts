@@ -7,6 +7,12 @@
  * The WebRTC channels are stood in for by plain objects; the manager's channel handlers are driven directly.
  */
 import { MultiplayerSyncManager, sanitizePacket, type LobbyState, type NetworkVehiclePacket } from '../src/lib/sim/multiplayer-sync';
+import { decodeState, encodeState, MAX_STATE_PACKETS_PER_S, PROTOCOL_VERSION, StateInfoMemory, stateInfoJson } from '../src/lib/net/wire';
+import type { StatePacketFields } from '../src/lib/net/state-codec';
+import { lapPhysicsVersion } from '../src/lib/sim/lap-types';
+
+/** What this build says in its hello and lobby: its protocol version and physics revision */
+const VERSIONS = { proto: PROTOCOL_VERSION, sim: lapPhysicsVersion('vf26') };
 
 const failures: string[] = [];
 const check = (name: string, ok: boolean, detail = '') => {
@@ -17,8 +23,8 @@ const check = (name: string, ok: boolean, detail = '') => {
 interface FakeChannel {
   label: string;
   readyState: 'open';
-  sent: string[];
-  send(s: string): void;
+  sent: (string | ArrayBuffer)[];
+  send(s: string | ArrayBuffer): void;
   close(): void;
   onopen: (() => void) | null;
   onclose: (() => void) | null;
@@ -72,7 +78,15 @@ function connect(m: MultiplayerSyncManager, remoteId: string): Entry {
 }
 const sendCtl = (entry: Entry, from: string, ctl: unknown, to?: string) =>
   entry.ctl.onmessage?.({ data: JSON.stringify(to ? { ctl, from, to } : { ctl, from }) });
-const sendState = (entry: Entry, pkt: unknown) => entry.dc.onmessage?.({ data: JSON.stringify(pkt) });
+/** A car state as the game sends it: binary, with its slow fields */
+const sendState = (entry: Entry, pkt: Record<string, unknown>) =>
+  entry.dc.onmessage?.({ data: encodeState(pkt as unknown as StatePacketFields, stateInfoJson(pkt as unknown as StatePacketFields)) });
+/** A state a guest was sent, decoded as the game would (null: not a car state) */
+const stateSent = (data: string | ArrayBuffer | undefined) => {
+  if (!(data instanceof ArrayBuffer)) return null;
+  const d = decodeState(data, new StateInfoMemory());
+  return d.ok ? d.packet : null;
+};
 
 let clock = 1000;
 const packet = (peerId: string, over: Partial<Record<keyof NetworkVehiclePacket, unknown>> = {}) => ({
@@ -94,6 +108,7 @@ const packet = (peerId: string, over: Partial<Record<keyof NetworkVehiclePacket,
 });
 
 const lobbyOf = (hostId: string, trackId: string): LobbyState => ({
+  ...VERSIONS,
   hostId,
   settings: { trackId, laps: 3, collisions: 'on', carClass: 'any' },
   players: [{ peerId: hostId, name: 'Host', code: 'HST', color: '#ffffff', ready: true, isHost: true }],
@@ -133,6 +148,40 @@ const startOf = (trackId: string) => ({
   check('refused: NaN after a JSON round trip', sanitizePacket(JSON.parse(JSON.stringify(packet('p_a', { pos: [NaN, 0, 0] })))) === null);
 }
 
+// 1b. The binary state packet: what goes in comes out, to the precision it is sent at --------------------------------
+{
+  const yaw = 0.7;
+  const p = {
+    ...packet('peer_rt', { pos: [1234.5678, 3.25, -2345.125], quat: [0, Math.sin(yaw / 2), 0, Math.cos(yaw / 2)], linVel: [61.3, -0.4, 28.9], angVel: [0, 0.8125, 0] }),
+    seq: 123456,
+    sendDelayMs: 4.3,
+    hz: true,
+    name: 'Round Trip',
+    race: { id: 'race9', dist: 12345.5, fin: null, laps: 3, best: 81234, last: 82345, pen: 5, cmp: 'soft' },
+  };
+  const bytes = encodeState(p as unknown as StatePacketFields, stateInfoJson(p as unknown as StatePacketFields));
+  const memory = new StateInfoMemory();
+  const d = decodeState(bytes, memory);
+  const back = d.ok ? sanitizePacket(d.packet) : null;
+  const q = back?.quat ?? [0, 0, 0, 1];
+  const angle = 2 * Math.acos(Math.min(1, Math.abs(q[1] * Math.sin(yaw / 2) + q[3] * Math.cos(yaw / 2))));
+  check('a state survives the binary round trip', !!back && back.peerId === 'peer_rt' && back.seq === 123456 && back.hz === true && back.name === 'Round Trip' && back.race?.id === 'race9' && back.race.dist === 12345.5 && back.race.pen === 5, `${bytes.byteLength} bytes`);
+  check('position to a millimetre, velocity to a tenth of a m/s, heading to a third of a degree',
+    !!back && Math.hypot(back.pos[0] - 1234.5678, back.pos[1] - 3.25, back.pos[2] + 2345.125) < 1e-3 && Math.hypot(back.linVel[0] - 61.3, back.linVel[1] + 0.4, back.linVel[2] - 28.9) < 0.1 && angle < 0.006 && Math.abs(back.sendDelayMs! - 4.3) < 0.051,
+    `heading off ${(angle * 57.3).toFixed(3)}°`);
+  // The receiver keeps a packet's slow fields once it has taken the packet
+  if (d.ok && d.info) memory.set('peer_rt', d.info);
+  const lean = encodeState({ ...p, seq: 123457 } as unknown as StatePacketFields);
+  const dl = decodeState(lean, memory);
+  const leanBack = dl.ok ? sanitizePacket(dl.packet) : null;
+  check('a packet without the slow fields takes the ones remembered for its car', leanBack?.name === 'Round Trip' && leanBack.race?.dist === 12345.5, `${lean.byteLength} bytes`);
+  check("and is dropped when the car's slow fields are not known yet", (decodeState(lean, new StateInfoMemory()) as { reason?: string }).reason === 'no-info');
+  const other = new Uint8Array(bytes.slice(0));
+  other[0] = PROTOCOL_VERSION + 1;
+  check('another protocol version is refused', (decodeState(other.buffer, memory) as { reason?: string }).reason === 'version');
+  check('a cut-short packet is refused', (decodeState(bytes.slice(0, 40), memory) as { reason?: string }).reason === 'malformed' && (decodeState(bytes.slice(0, bytes.byteLength - 3), memory) as { reason?: string }).reason === 'malformed');
+}
+
 // 2. Host: guests are bound to their own id ---------------------------------------------------------------------------
 {
   const host = new MultiplayerSyncManager();
@@ -140,17 +189,17 @@ const startOf = (trackId: string) => ({
   const i = internals(host);
   const a = connect(host, 'remote_a');
   const b = connect(host, 'remote_b');
-  sendCtl(a, 'peer_a', { type: 'hello', name: 'Alice', code: 'ALI', color: '#ff0000' });
-  sendCtl(b, 'peer_b', { type: 'hello', name: 'Bob', code: 'BOB', color: '#00ff00' });
+  sendCtl(a, 'peer_a', { type: 'hello', name: 'Alice', code: 'ALI', color: '#ff0000', ...VERSIONS });
+  sendCtl(b, 'peer_b', { type: 'hello', name: 'Bob', code: 'BOB', color: '#00ff00', ...VERSIONS });
   check('two guests join the lobby', i.members.size === 2, `${i.members.size} members`);
 
-  sendCtl(a, 'peer_b', { type: 'hello', name: 'Mallory', code: 'MAL', color: '#000000' });
+  sendCtl(a, 'peer_b', { type: 'hello', name: 'Mallory', code: 'MAL', color: '#000000', ...VERSIONS });
   check("a guest can't rename another guest", i.members.get('peer_b')?.name === 'Bob', i.members.get('peer_b')?.name);
 
   const c = connect(host, 'remote_c');
-  sendCtl(c, 'peer_a', { type: 'hello', name: 'Clone', code: 'CLN', color: '#000000' });
+  sendCtl(c, 'peer_a', { type: 'hello', name: 'Clone', code: 'CLN', color: '#000000', ...VERSIONS });
   check("a new connection can't claim a taken id", c.gamePeerId === undefined && i.members.get('peer_a')?.name === 'Alice');
-  sendCtl(c, host.localPeerId, { type: 'hello', name: 'Fake', code: 'FAK', color: '#000000' });
+  sendCtl(c, host.localPeerId, { type: 'hello', name: 'Fake', code: 'FAK', color: '#000000', ...VERSIONS });
   check("a guest can't claim the host's id", c.gamePeerId === undefined);
 
   // Lobby / start / abort are the host's alone: never passed on
@@ -158,11 +207,11 @@ const startOf = (trackId: string) => ({
   sendCtl(a, 'peer_a', { type: 'lobby', lobby: lobbyOf('peer_a', 'chang') });
   sendCtl(a, 'peer_a', { type: 'start', start: startOf('chang') });
   sendCtl(a, 'peer_a', { type: 'abort', id: 'race1' });
-  const relayedTypes = b.ctl.sent.map((s) => (JSON.parse(s) as { ctl: { type: string } }).ctl.type);
+  const relayedTypes = b.ctl.sent.map((s) => (JSON.parse(s as string) as { ctl: { type: string } }).ctl.type);
   check('a forged lobby / start / abort is not relayed', !relayedTypes.some((t) => ['lobby', 'start', 'abort'].includes(t)), relayedTypes.join(','));
   check('the host keeps its room', host.isHost && host.lobby?.hostId === host.localPeerId);
   sendCtl(a, 'peer_a', { type: 'ready', ready: true });
-  check("a guest's ready is still relayed", b.ctl.sent.some((s) => (JSON.parse(s) as { ctl: { type: string } }).ctl.type === 'ready'));
+  check("a guest's ready is still relayed", b.ctl.sent.some((s) => (JSON.parse(s as string) as { ctl: { type: string } }).ctl.type === 'ready'));
 
   // State packets: own car only, cleaned before relay
   sendState(a, packet('peer_a'));
@@ -170,7 +219,7 @@ const startOf = (trackId: string) => ({
   check("a guest can't move another guest's car", i.peers.has('peer_a') && !i.peers.has('peer_b'));
   b.dc.sent.length = 0;
   sendState(a, { ...packet('peer_a'), extra: 'x'.repeat(100) });
-  const relayed = b.dc.sent.length === 1 ? (JSON.parse(b.dc.sent[0]) as Record<string, unknown>) : null;
+  const relayed = b.dc.sent.length === 1 ? stateSent(b.dc.sent[0]) : null;
   check('the relayed packet is the cleaned one', relayed !== null && !('extra' in relayed));
   b.dc.sent.length = 0;
   sendState(a, packet('peer_a', { pos: [NaN, 0, 0] }));
@@ -179,7 +228,53 @@ const startOf = (trackId: string) => ({
   // Flooding: the excess is dropped
   b.dc.sent.length = 0;
   for (let k = 0; k < 200; k++) sendState(a, packet('peer_a'));
-  check('a flood is cut to the per-second budget', b.dc.sent.length <= 60, `${b.dc.sent.length} of 200 relayed`);
+  check('a flood is cut to the per-second budget', b.dc.sent.length <= MAX_STATE_PACKETS_PER_S, `${b.dc.sent.length} of 200 relayed`);
+}
+
+// 2b. Versions: a guest on another version of the game is told so and not let in; a guest leaves a host on another --------
+{
+  const host = new MultiplayerSyncManager();
+  host.hostLocal();
+  const i = internals(host);
+  const old = connect(host, 'remote_old');
+  sendCtl(old, 'peer_old', { type: 'hello', name: 'Old', code: 'OLD', color: '#ff0000' });
+  const other = connect(host, 'remote_other');
+  sendCtl(other, 'peer_other', { type: 'hello', name: 'Other', code: 'OTH', color: '#ff0000', ...VERSIONS, proto: PROTOCOL_VERSION + 1 });
+  const told = (e: Entry) => e.ctl.sent.some((m) => typeof m === 'string' && (JSON.parse(m) as { ctl: { type: string } }).ctl.type === 'refuse');
+  check('a guest of an older version (no version said) is told so and not let in', !i.members.has('peer_old') && told(old));
+  check('a guest of another version is told so and not let in', !i.members.has('peer_other') && told(other));
+  sendState(old, packet('peer_old'));
+  sendCtl(old, 'peer_old', { type: 'ready', ready: true });
+  check('nothing more is taken from a refused guest', !i.peers.has('peer_old') && !i.members.has('peer_old'));
+  // Nor sent to it: the lobby heartbeat, a start, the host's car and other guests' cars and pings stop at the refusal
+  const after = (e: Entry) => e.ctl.sent.slice(e.ctl.sent.findIndex((m) => typeof m === 'string' && m.includes('"refuse"')) + 1);
+  const late = connect(host, 'remote_late');
+  sendCtl(late, 'peer_late', { type: 'hello', name: 'Late', code: 'LAT', color: '#00ff00', ...VERSIONS });
+  host.setLobbySettings({ laps: 7 });
+  host.startRace();
+  host.update(5000, { driverCode: 'HST', teamColorHex: '#ffffff', pos: [0, 0, 0], quat: [0, 0, 0, 1], linVel: [0, 0, 0], angVel: [0, 0, 0], steerAngle: 0, wheelRPMs: [0, 0, 0, 0], throttle: 0, brake: 0, trackS: 0, speedKmh: 0 });
+  sendState(late, packet('peer_late'));
+  sendCtl(late, 'peer_late', { type: 'ping', t0: 1 });
+  check('nothing more is sent to a refused guest', after(old).length === 0 && old.dc.sent.length === 0 && late.dc.sent.length > 0, `${after(old).length} control messages, ${old.dc.sent.length} states after the refusal`);
+  const same = connect(host, 'remote_same');
+  sendCtl(same, 'peer_same', { type: 'hello', name: 'Same', code: 'SAM', color: '#00ff00', ...VERSIONS });
+  check('a guest of this version is let in', i.members.has('peer_same') && !told(same));
+
+  for (const [label, lobby] of [
+    ['an older host (no version said)', { ...lobbyOf('peer_host', 'chang'), proto: undefined }],
+    ['a host on another physics revision', { ...lobbyOf('peer_host', 'chang'), sim: VERSIONS.sim + 1 }],
+  ] as const) {
+    const guest = new MultiplayerSyncManager();
+    internals(guest).becomeGuest();
+    const toHost = connect(guest, 'remote_host');
+    sendCtl(toHost, 'peer_host', { type: 'lobby', lobby });
+    check(`a guest leaves ${label}, and says why`, guest.hostId === null && guest.status.state === 'error' && /version/.test(guest.status.statusText), guest.status.statusText);
+  }
+  const refused = new MultiplayerSyncManager();
+  internals(refused).becomeGuest();
+  const toHost = connect(refused, 'remote_host');
+  sendCtl(toHost, 'peer_host', { type: 'refuse', reason: 'version' });
+  check('a guest the host refuses leaves, and says why', refused.status.state === 'error' && /version/.test(refused.status.statusText));
 }
 
 // 3. Guest: only the host it dialled runs the room ---------------------------------------------------------------------
@@ -277,7 +372,7 @@ let manualChecks: Promise<void> = Promise.resolve();
     host.hostLocal();
     const i = more(host);
     const a = connect(host, 'remote_a');
-    sendCtl(a, 'peer_a', { type: 'hello', name: 'Alice', code: 'ALI', color: '#ff0000' });
+    sendCtl(a, 'peer_a', { type: 'hello', name: 'Alice', code: 'ALI', color: '#ff0000', ...VERSIONS });
     i.memberSeenMs.set('peer_a', performance.now() - 7000);
     sendCtl(a, 'peer_a', { type: 'ready', ready: true });
     i.tickControl(performance.now() + 2000);
@@ -297,7 +392,7 @@ let manualChecks: Promise<void> = Promise.resolve();
     const b = connect(host, 'remote_b');
     let closedA = 0;
     a.pc.close = () => void closedA++;
-    sendCtl(a, 'peer_a', { type: 'hello', name: 'Alice', code: 'ALI', color: '#ff0000' });
+    sendCtl(a, 'peer_a', { type: 'hello', name: 'Alice', code: 'ALI', color: '#ff0000', ...VERSIONS });
     host.status = { ...host.status, mode: 'room_host', roomCode: 'ABCDEF' };
     a.dc.onclose?.();
     check('a closed channel closes the whole connection and drops the member', closedA === 1 && !i.rtcPeers.has('remote_a') && !i.members.has('peer_a'));

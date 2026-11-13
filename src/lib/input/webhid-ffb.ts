@@ -2375,6 +2375,7 @@ export class WebHidFfb {
     this.trace.note(`setup ok: ${describeSession(result.session)}`);
     this.session = result.session;
     if (result.session.kind === "pid") this.watchPidState(device);
+    else this.unwatchPidState();
     const l = result.session.kind === "pid" ? result.session.layout : null;
     this.offeredConditions = l && l.setCondition && l.createNewEffect && l.blockLoad ? l.conditions : [];
     this.device = device;
@@ -2383,6 +2384,11 @@ export class WebHidFfb {
       this.listening = hid;
     }
     this.setStatus("ready", name, null);
+    // Friction or inertia switched on while this setup ran (setWantedConditions saw no session) goes on now
+    const s = result.session;
+    if (s.kind === "pid" && this.wantedConditions.some((k) => this.offeredConditions.includes(k) && !s.requestedConditions.includes(k))) {
+      void this.resetup();
+    }
     return { ok: true, name };
   }
 
@@ -2417,6 +2423,8 @@ export class WebHidFfb {
     const st = this.pidState;
     if (!st) return;
     st.device.removeEventListener?.("inputreport", st.listener);
+    // diagnose() then says none is watched instead of reporting the last wheel's
+    this.pidState = null;
   }
 
   /** From reconnect() (or a wheel picked in connect()) until dispose(): listen for a granted wheel coming back */

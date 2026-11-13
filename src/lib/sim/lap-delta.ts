@@ -24,7 +24,7 @@ export class LapDeltaTracker {
   /** Records the current lap's trace */
   update(t: LapSample): void {
     const cur = this.current;
-    // A new run (restart, teleport, flashback): the trace so far is not one lap any more, and the lap counter's jump
+    // A new run (restart, teleport): the trace so far is not one lap any more, and the lap counter's jump
     // is no completed lap. The best lap stays the reference (same car, same session)
     const runId = t.runId ?? 0;
     if (this.runId !== null && runId !== this.runId) this.restartLap();

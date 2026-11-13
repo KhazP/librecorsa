@@ -117,6 +117,8 @@ export function AdminStats() {
   const [draft, setDraft] = useState("");
   const [days, setDays] = useState<Range>(30);
   const [stats, setStats] = useState<StatsBody | null>(null);
+  /** When the shown numbers arrived: "Starts in …" counts from here */
+  const [statsAtMs, setStatsAtMs] = useState(0);
   const [cloudflare, setCloudflare] = useState<CloudflareState>({ state: "loading" });
   const [state, setState] = useState<"idle" | "loading" | "error">("idle");
   const [message, setMessage] = useState<string | null>(null);
@@ -168,6 +170,7 @@ export function AdminStats() {
       const body = (await res.json()) as StatsBody;
       if (!current()) return;
       setStats(body);
+      setStatsAtMs(Date.now());
       setState("idle");
     } catch {
       if (!current()) return;
@@ -291,7 +294,7 @@ export function AdminStats() {
               ) : null}
             </div>
             {message ? <p className="text-[14px] text-[#FF6B6B]">{message}</p> : null}
-            {stats ? <Dashboard stats={stats} names={names} cloudflare={cloudflare} /> : null}
+            {stats ? <Dashboard stats={stats} nowMs={statsAtMs} names={names} cloudflare={cloudflare} /> : null}
           </>
         )}
       </div>
@@ -310,13 +313,11 @@ const minutesOf = (rows: UsageGroup[]) => rows.reduce((n, r) => n + r.minutes, 0
 const countsOf = (rows: Count[]) => rows.reduce((n, r) => n + r.n, 0);
 const WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
-function Dashboard({ stats, names, cloudflare }: { stats: StatsBody; names: { circuit: Namer; car: Namer }; cloudflare: CloudflareState }) {
+function Dashboard({ stats, nowMs, names, cloudflare }: { stats: StatsBody; nowMs: number; names: { circuit: Namer; car: Namer }; cloudflare: CloudflareState }) {
   const { totals, previous, board, races, extras } = stats;
   const perSession = totals.sessions > 0 ? totals.minutes / totals.sessions : 0;
   const countries = stats.byCountry.filter((c) => c.id !== "XX").length;
   const raceCount = races ? races.open + races.room : 0;
-  // Snapshotted once per answer so the render stays pure
-  const [nowMs] = useState(() => Date.now());
 
   const days = everyDay(stats.from, stats.to, stats.perDay, (day) => ({ day, sessions: 0, minutes: 0 }));
   // Average hours on each weekday (Monday first), over the weekdays the range covers

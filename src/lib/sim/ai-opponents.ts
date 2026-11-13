@@ -357,6 +357,11 @@ export interface AiFieldOptions {
    * rules on the drive plans race cleaner until its weights are tuned)
    */
   localPlanner?: boolean;
+  /**
+   * AI cars already made with `player.createAiPeerCar()`, one per driver in order (a field built ahead makes them a
+   * few at a time); any missing are made here
+   */
+  peers?: readonly SimulatorCar[];
 }
 
 export type { AiGridOrder, PlayerGridSlot } from '@/lib/sim/race-setup';
@@ -733,8 +738,8 @@ export class AiOpponentField {
     this.corners = cornerSections(track);
     const library = options.library ?? AI_TUNING_LIBRARY;
     let tuning: AiTrackTuning | null = null;
-    for (const d of drivers) {
-      const sim = player.createAiPeerCar ? player.createAiPeerCar() : new F1Physics2026(track);
+    for (const [i, d] of drivers.entries()) {
+      const sim = options.peers?.[i] ?? (player.createAiPeerCar ? player.createAiPeerCar() : new F1Physics2026(track));
       sim.assistPreset = 'pro';
       sim.aiAutopilot = true;
       // The field rejoins its own cars after a spin, by driving, not by the car's own teleport

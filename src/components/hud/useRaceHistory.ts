@@ -26,8 +26,7 @@ export function useRaceHistory(
   const key = me && results ? JSON.stringify([meta.kind, final, results.length, me.position, me.finishTimeS, me.dnf, me.gridPosition, me.bestLapMs, me.penaltyS]) : null;
 
   useEffect(() => {
-    // No result on track any more (a restart, a new race, leaving it): the next result is another race. A flashback
-    // after the flag keeps the result, and so its record
+    // No result on track any more (a restart, a new race, leaving it): the next result is another race
     if (!key || !results || !meta.kind) {
       if (!key) current.current = null;
       return;

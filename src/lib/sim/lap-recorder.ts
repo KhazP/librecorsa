@@ -218,7 +218,7 @@ export class LapRecorder {
   /** Call every frame while driving; returns the lap once one is completed, else null */
   update(input: LapRecorderInput): CompletedLap | null {
     const t = input.telemetry;
-    // A new run (restart, teleport, flashback, new session) since the last update: whatever the lap counter did in
+    // A new run (restart, teleport, new session) since the last update: whatever the lap counter did in
     // between, it is not a line crossing. The recorder may not have been updated for a while (a race in between)
     const runId = t.runId ?? 0;
     if (this.lastRunId !== null && runId !== this.lastRunId) this.reset();

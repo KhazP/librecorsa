@@ -7,7 +7,7 @@
  * worker does not drive (it is not ready, it failed, or an AI or online race is on, which still run on the page), the
  * stand-in is the twin: it steps it and reads it.
  *
- * A call that places the car (the grid, a teleport, a flashback) is made on the twin at once, and the twin is what
+ * A call that places the car (the grid, a teleport) is made on the twin at once, and the twin is what
  * is read until the worker's first state from after that placement arrives: the game never sees the car where it was.
  *
  * The worker takes the car over only fresh on the grid (a new car, a session start, a restart), where its car and the

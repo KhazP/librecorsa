@@ -4,6 +4,7 @@
  */
 import { DatabaseSync } from 'node:sqlite';
 import type { D1Database, D1PreparedStatement, D1Result, DurableObjectState, R2Bucket, ServerSocket } from '../../cloudflare/api/types';
+import { decodeState, StateInfoMemory } from '../../src/lib/net/wire';
 
 type Bind = null | number | bigint | string;
 
@@ -62,9 +63,22 @@ export class FakeSocket implements ServerSocket {
   readyState = 1;
   tags: string[] = [];
   private attachment: unknown = null;
-  send(message: string): void {
+  /** The slow fields of the binary car states this socket was sent, as the game keeps them */
+  private stateInfo = new StateInfoMemory();
+  send(message: string | ArrayBuffer): void {
     if (this.closed !== null) throw new Error('closed');
-    this.sent.push(JSON.parse(message));
+    if (typeof message === 'string') {
+      this.sent.push(JSON.parse(message));
+      return;
+    }
+    // A car state, in binary: kept decoded (`binary` marks it), or as undecodable
+    const decoded = decodeState(message, this.stateInfo);
+    if (!decoded.ok) {
+      this.sent.push({ undecodable: decoded.reason });
+      return;
+    }
+    if (decoded.info && typeof decoded.packet.peerId === 'string') this.stateInfo.set(decoded.packet.peerId, decoded.info);
+    this.sent.push({ ...decoded.packet, binary: true });
   }
   close(code?: number): void {
     this.closed ??= code ?? 1000;

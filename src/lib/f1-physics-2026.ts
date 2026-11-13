@@ -136,6 +136,7 @@ import { BRAKE_DUCT_STEP, type ChassisSetup, clampChassisSetup, DEFAULT_CHASSIS_
 import { FLYING_SLOT_SPACING_M, flyingExitSpeedMs, flyingStartPoint, rollingStartSlots, rollingStartSpeedMs, type TyreVisualState } from './sim/simulator-car';
 import type { VehicleWheelState, WheelCornerIndex } from './sim/vehicle-types';
 import { lockShareOf } from './sim/tyre-slide-fx';
+import { CourseCutWatch, isCourseHop } from './sim/course-limits';
 import {
   type RaceGymObservation,
   computeLookaheadVectors,
@@ -600,6 +601,8 @@ export class F1Physics2026 {
   private lastSector: 1 | 2 | 3 = 1;
   /** Set by a grid / flying-start reset: the next S/F crossing starts lap timing instead of completing a lap */
   private lineCrossingStartsLap = false;
+  /** Jumps of the lap position round the course: one that stands cuts the lap (course-limits.ts) */
+  private readonly cutWatch = new CourseCutWatch();
   private lapValid = true;
   /**
    * Track limits: 'strict' deletes the lap the instant the car is off the track; 'judged' leaves the verdict to race
@@ -1077,14 +1080,14 @@ export class F1Physics2026 {
     this.finishPlacement();
   }
 
-  /** Flashback: back at a replayed pose (heading included), rolling at its speed, with the tyres and brakes as they are */
+  /** Back at a recorded pose (heading included), rolling at its speed, with the tyres and brakes as they are */
   public restorePose(pose: { x: number; z: number; yawRad: number; speedMs: number; s?: number }): void {
     const p = this.track.projectWorldToTrack(pose.x, pose.z, pose.s ?? this.sMeters);
     const speedMs = Math.max(0, pose.speedMs);
     const tangent = this.track.getSampleAtDistance(p.s).tangent;
     const trackHeadingRad = Math.atan2(tangent.x, tangent.z);
     this.lineCrossingStartsLap = false;
-    // A flashback moves the car mid-lap: the lap under way can't count
+    // Put back mid-lap: the lap under way can't count
     this.invalidateLap();
     this.timeAccumulator = 0;
     this.sMeters = p.s;
@@ -1482,6 +1485,7 @@ export class F1Physics2026 {
 
   private finishPlacement(): void {
     this.overtake.reset();
+    this.cutWatch.reset();
     const sample = this.track.getSampleAtDistance(this.sMeters);
     this.manualShift.clear();
     this.pendingShift = 0;
@@ -1929,7 +1933,7 @@ export class F1Physics2026 {
     this.totalMassKg = VF26_CHASSIS.totalMassKg + drv.fuelKg;
 
     // ---- 9. Barriers, project onto the track, timing ------------------------------
-    this.postIntegrate(prevS, prevX, prevZ);
+    this.postIntegrate(prevS, prevX, prevZ, dt);
 
     // ---- 10. Outputs & True 3D Steering Rack FFB ----------------------------------
     this.rpm = drv.engineOmega * RADS2RPM;
@@ -2822,7 +2826,7 @@ export class F1Physics2026 {
   // Track projection, barriers, timing
   // ---------------------------------------------------------------------------
 
-  private postIntegrate(prevS: number, prevX: number, prevZ: number): void {
+  private postIntegrate(prevS: number, prevX: number, prevZ: number, dtS: number): void {
     let projected = this.track.projectWorldToTrack(this.worldX, this.worldZ, prevS);
     // Barrier height test against the road under the car, so a bridge's parapets (Suzuka's crossover) or the
     // barriers of a road passing below are not hit. The window spans both the centreline and the ground under the
@@ -2837,6 +2841,13 @@ export class F1Physics2026 {
     const nextSample = projected.sample;
     this.sMeters = projected.s;
     this.lateralOffsetM = projected.lateralOffset;
+    // The lap position jumped further than a car drives in a step: the car crossed to another part of the lap off its
+    // road (another layout's, course-limits.ts). A sector boundary it jumped over is no sector driven, and a jump
+    // ahead that stands cuts the lap under way
+    const L = this.track.totalLengthM;
+    const ds = ((((this.sMeters - prevS + L / 2) % L) + L) % L) - L / 2;
+    const hop = isCourseHop(ds);
+    if (this.cutWatch.update(ds, dtS)) this.invalidateLap();
 
     const trackHeadingRad = Math.atan2(nextSample.tangent.x, nextSample.tangent.z);
     let headingErr = trackHeadingRad - this.worldYawRad;
@@ -2851,10 +2862,13 @@ export class F1Physics2026 {
     if (nextSample.sector !== this.lastSector) {
       // Sectors 1 and 2 end at their boundaries; sector 3 ends at the line (onLapCompleted), not where the nearest
       // sample turns to sector 1, up to half a sample before it
-      if (nextSample.sector === this.lastSector + 1) this.onSectorCompleted(this.lastSector);
+      if (!hop && nextSample.sector === this.lastSector + 1) this.onSectorCompleted(this.lastSector);
       this.lastSector = nextSample.sector;
     }
     if (prevS > this.track.totalLengthM * 0.85 && this.sMeters < this.track.totalLengthM * 0.15) {
+      // A jump ahead still pending at the line is the lap's
+      const cut = this.cutWatch.settle();
+      if (!this.lineCrossingStartsLap && cut) this.invalidateLap();
       if (this.lineCrossingStartsLap) {
         this.lineCrossingStartsLap = false;
         this.currentLapStartMs = this.simTimeMs;
@@ -3346,7 +3360,8 @@ export class F1Physics2026 {
     if (sectorDuration > 8000) {
       this.telemetry.sectorTimesMs[idx] = sectorDuration;
       const prevBest = this.telemetry.bestSectorTimesMs[idx];
-      if (prevBest === null || sectorDuration < prevBest) {
+      // A best sector only from a lap that still counts (not one off the track, or one that cut the course)
+      if (this.lapValid && (prevBest === null || sectorDuration < prevBest)) {
         this.telemetry.bestSectorTimesMs[idx] = sectorDuration;
       }
     }

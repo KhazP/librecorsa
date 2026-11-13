@@ -176,9 +176,9 @@ export async function adminStats(deps: AdminDeps, url: URL): Promise<Answer> {
       sinceMs,
       sinceMs,
     ),
-    all<{ id: string; n: number }>(`SELECT ${DAY_OF("claimed_at")} AS id, COUNT(*) AS n FROM drivers WHERE claimed_at >= ? GROUP BY id ORDER BY id`, sinceMs),
+    all<{ id: string; n: number }>(`SELECT ${DAY_OF("claimed_at")} AS id, COUNT(*) AS n FROM drivers WHERE claimed_at >= ? GROUP BY 1 ORDER BY 1`, sinceMs),
     first<{ total: number; inRange: number }>("SELECT COUNT(*) AS total, SUM(CASE WHEN created_at >= ? THEN 1 ELSE 0 END) AS inRange FROM laps", sinceMs),
-    all<{ id: string; n: number }>(`SELECT ${DAY_OF("created_at")} AS id, COUNT(*) AS n FROM laps WHERE created_at >= ? GROUP BY id ORDER BY id`, sinceMs),
+    all<{ id: string; n: number }>(`SELECT ${DAY_OF("created_at")} AS id, COUNT(*) AS n FROM laps WHERE created_at >= ? GROUP BY 1 ORDER BY 1`, sinceMs),
     all<{ dim: string; id: string; n: number }>(
       ["assists", "realism", "surface", "compound"]
         .map((c) => `SELECT '${c}' AS dim, ${c} AS id, COUNT(*) AS n FROM laps WHERE created_at >= ? GROUP BY ${c}`)

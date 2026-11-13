@@ -4,7 +4,8 @@
  * the physics drives on agrees with that data: the road is where the samples say, to the centimetre, the barriers
  * stand where the data puts them all the way round, kerbs, run-off and pit lane carry their surfaces, the start
  * lights hang over the grid, nothing built stands on the road or hangs low over it, the TV cameras stand on their
- * towers, nothing in the file comes from the fan-made layout's source, and no tree stands on the track.
+ * towers, nothing in the file comes from the fan-made layout's source, and no tree stands on the track. Where the other
+ * lap's road leaves this one, it is off the track, and a car that takes it does not get a lap out of it.
  *
  *   npx tsx scripts/verify-rwanda-official.ts
  */
@@ -13,6 +14,11 @@ import { existsSync, readFileSync, statSync } from 'node:fs';
 import { NodeIO } from '@gltf-transform/core';
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
 import { REPO_TRACK_IDS } from '../src/lib/hosted-content';
+import { F12026CarSim } from '../src/lib/sim/f12026-car/F12026CarSim';
+import { LapClock } from '../src/lib/sim/race-session';
+import { stretchTimeS } from '../src/lib/sim/course-limits';
+import { COURSE_CUT_MIN_PENALTY_S, TrackLimitsMonitor } from '../src/lib/sim/track-limits';
+import { otherLayoutRoads } from './lib/layout-limits';
 import { SCENERY_CREDITS, type SceneryCredit } from '../src/lib/render/scenery-credits';
 import { createGroundHit, TrackColliderQuery, TrackWallQuery, WALL_SEGMENT_STRIDE } from '../src/lib/sim/f12026-car/TrackColliderQuery';
 import { resolveSurfaceTable } from '../src/lib/sim/track-surfaces';
@@ -48,6 +54,7 @@ interface Meta {
   racingLine?: { physicsAiLapS?: number };
   racingLineGt3?: { physicsLapS?: number };
   aiPlans?: Record<string, { ok: boolean; wallHits: number; offTrackFrames: number }>;
+  otherLayoutRoads?: [number, number][];
 }
 
 console.log('Circuit list');
@@ -387,6 +394,146 @@ if (SHORT) {
   check('the start lights: a thin panel across the road, ahead of the grid and above it',
     span(f) < 0.5 && span(r) > 2 && span(r) < 4 && Math.min(...f) > 0 && Math.max(...f) < 25 && Math.min(...y) > 4.5 && Math.max(...y) < 8 && Math.abs(Math.max(...r) + Math.min(...r)) < 0.5,
     `${span(f).toFixed(2)} m deep, ${span(r).toFixed(2)} m wide, ${Math.min(...f).toFixed(1)} m past the line, ${Math.min(...y).toFixed(1)} m up`);
+}
+
+console.log("The other lap's road");
+{
+  const OTHER = SHORT ? BASE : `${BASE}_short`;
+  const otherRaw = JSON.parse(readFileSync(`public/tracks/${OTHER}/track_data.json`, 'utf8')) as RawTrackJson;
+  const O = otherRaw.samples as Sample[];
+  const stretches = meta.otherLayoutRoads ?? [];
+  const want = otherLayoutRoads(ID, raw, otherRaw);
+  setActiveTrack(ID, raw);
+  check(`where the ${SHORT ? 'Grand Prix' : 'short'} lap's road leaves this one is in the track data, as the two laps give it`,
+    stretches.length === (SHORT ? 3 : 4) && JSON.stringify(stretches) === JSON.stringify(want), stretches.map(([a, b]) => `${a}-${b} m`).join(', '));
+
+  const L = track.totalLengthM;
+  const dt = 1 / 60;
+  const wrapHalf = (d: number) => ((((d + L / 2) % L) + L) % L) - L / 2;
+  // Steers along the other lap's samples from `k` on: a few samples ahead, at 80 % of that lap's line speed
+  const follow = (car: F12026CarSim, k: number): { k: number; inputs: Record<string, number> } => {
+    const x = car.worldPosition.x;
+    const z = car.worldPosition.z;
+    const d = (i: number) => Math.hypot(O[i].p[0] - x, O[i].p[2] - z);
+    while (k + 1 < O.length && d(k + 1) < d(k)) k++;
+    const v = car.telemetry.speedKmh / 3.6;
+    const aim = O[Math.min(O.length - 1, k + Math.round(Math.max(3, Math.min(8, (v * 0.55) / 5))))].p;
+    const q = car.worldQuaternion;
+    const fx = 2 * (q.x * q.z + q.w * q.y);
+    const fz = 1 - 2 * (q.x * q.x + q.y * q.y);
+    const dl = Math.hypot(aim[0] - x, aim[2] - z) || 1;
+    const right = ((aim[0] - x) * -fz + (aim[2] - z) * fx) / dl;
+    const want = (Math.min(...O.slice(k, k + 30).map((o) => o.v)) / 3.6) * 0.8;
+    return { k, inputs: { throttle: v < want ? 1 : 0, brake: v > want + 4 ? 0.8 : 0, analogSteer: THREE.MathUtils.clamp(right * 2.5, -1, 1), steerLeft: 0, steerRight: 0 } };
+  };
+
+  // A car stopped on the other lap's asphalt past this lap's edge, in every stretch (where it is under 34 m out, so the
+  // lap position still follows it): off the track; on this lap's road at the same point it is not
+  const car = new F12026CarSim(track, root);
+  const parked = (s: number, lat: number) => {
+    car.teleportToDistance(s, 0, lat);
+    for (let i = 0; i < 30; i++) car.step(dt, {});
+    return car.telemetry.offTrack;
+  };
+  const spots: string[] = [];
+  let wrong = 0;
+  let hint: number | undefined;
+  const far = stretches.map(() => ({ s: 0, lat: 0 }));
+  for (const o of O) {
+    const p = track.projectWorldToTrack(o.p[0], o.p[2], hint);
+    hint = p.s;
+    const i = stretches.findIndex(([a, b]) => p.s >= a && p.s <= b);
+    if (i >= 0 && Math.abs(p.lateralOffset) < 34 && Math.abs(p.lateralOffset) > Math.abs(far[i].lat)) far[i] = { s: p.s, lat: p.lateralOffset };
+  }
+  far.forEach(({ s, lat }, i) => {
+    const onAsphalt = ground.query(...((): [number, number, number] => {
+      const sm = track.getSampleAtDistance(s);
+      const b = Math.hypot(sm.binormal.x, sm.binormal.z);
+      return [sm.position.x + (sm.binormal.x / b) * lat, sm.position.z + (sm.binormal.z / b) * lat, sm.position.y + 5];
+    })(), hit) && (hit.surface === 'road' || hit.surface === 'kerb');
+    const off = parked(s, lat);
+    const own = parked(s, 0);
+    if (!onAsphalt || !off || own) wrong++;
+    spots.push(`${stretches[i][0]}-${stretches[i][1]} m: ${lat.toFixed(0)} m out at ${s.toFixed(0)} m ${off ? 'off' : 'ON'}${onAsphalt ? '' : ' (not asphalt)'}${own ? ', own road OFF' : ''}`);
+  });
+  check("parked on the other lap's asphalt it is off the track, on this lap's road it is not", wrong === 0, spots.join('; '));
+
+  // Driving: the autopilot on this lap's line from a flying start to `untilS`; from `cut` on, the other lap's road.
+  // Race-style (judged) limits, so only a cut deletes the lap; the race clock and race control follow the car, race
+  // control measuring a cut against the car's own speed profile (there is no best lap yet)
+  const drive = (untilS: number, cut?: { fromS: number; k: number; toK: number }) => {
+    const c = new F12026CarSim(track, root);
+    c.trackLimitsMode = 'judged';
+    c.resetToStartGrid(true);
+    c.aiAutopilot = true;
+    const clock = new LapClock(L);
+    clock.reset(c.sMeters);
+    const limits = new TrackLimitsMonitor();
+    limits.reset('race');
+    const stretchRefS = (a: number, b: number) => (c.brakingGuide ? stretchTimeS(c.brakingGuide.speedMs, L, a, b) : null);
+    let t = 0;
+    let k = -1;
+    let crossed = false;
+    let prevS = c.sMeters;
+    const out = { hopAt: null as null | number, hops: 0, offFrames: 0, invalidBeforeHop: false, invalidAfter: false, clockFollows: false, sector1: null as number | null, penaltyS: 0, estSavedS: null as number | null, endS: 0 };
+    for (let i = 0; i < 60 * 90; i++) {
+      if (cut && crossed && k < 0 && c.sMeters > cut.fromS && c.sMeters < cut.fromS + 100) {
+        c.aiAutopilot = false;
+        k = cut.k;
+      }
+      let inputs = {};
+      if (k >= 0 && k < cut!.toK) {
+        const f = follow(c, k);
+        k = f.k;
+        inputs = f.inputs;
+        if (k >= cut!.toK) c.aiAutopilot = true;
+      }
+      c.step(dt, inputs);
+      clock.update(c.sMeters, (t += dt), 10);
+      const tl = c.telemetry;
+      limits.update({
+        nowMs: t * 1000, dtS: dt, lapCount: tl.lapCount, lapTimeMs: tl.currentLapTimeMs, sector: tl.currentSector, distM: tl.trackDistanceM,
+        lapLengthM: L, stretchRefS, offTrack: tl.offTrack, throttle: tl.throttle, brake: tl.brake, lateralM: c.lateralOffsetM,
+        curvature: track.getSampleAtDistance(c.sMeters).curvature, deltaS: null, active: crossed,
+      });
+      const ds = wrapHalf(c.sMeters - prevS);
+      prevS = c.sMeters;
+      if (!crossed) {
+        crossed = !c.telemetry.lapInvalid && c.sMeters < 200 && c.sMeters > 0 && c.telemetry.currentLapTimeMs > 0;
+        continue;
+      }
+      if (c.telemetry.offTrack) out.offFrames++;
+      if (Math.abs(ds) > 100) {
+        out.hops++;
+        out.hopAt ??= c.sMeters;
+      }
+      if (out.hopAt === null && c.telemetry.lapInvalid) out.invalidBeforeHop = true;
+      if (out.hopAt !== null) out.invalidAfter = c.telemetry.lapInvalid === true;
+      if (c.sMeters > untilS && c.sMeters < untilS + 200 && (!cut || k >= cut.toK)) break;
+    }
+    out.sector1 = c.telemetry.bestSectorTimesMs[0];
+    out.clockFollows = Math.abs(clock.distM - c.sMeters) < 1;
+    out.penaltyS = limits.penaltyTotalS;
+    out.estSavedS = limits.lastCutSavedS;
+    out.endS = t;
+    return out;
+  };
+  const own = drive(SHORT ? 1500 : 2000);
+  check(`the ${SHORT ? 'link' : 'loop'} on this lap's own line: on the track all the way, the lap counts, no penalty`,
+    own.offFrames === 0 && own.hops === 0 && !own.invalidBeforeHop && !own.invalidAfter && own.penaltyS === 0, `${own.offFrames} frames off, ${own.hops} jump(s)`);
+  if (!SHORT) {
+    // The short lap's link: its samples from 1,080 to 1,460 m. Both drives start alike, so the time the cut saved is
+    // the honest drive's time to 2,000 m less the cut one's
+    const cut = drive(2000, { fromS: 1000, k: 216, toK: 292 });
+    check("taking the short lap's link: off the track on it, and the lap jumps the loop",
+      cut.offFrames > 60 && cut.hops === 1 && cut.hopAt !== null && cut.hopAt > 1800, `${cut.offFrames} frames off, ${cut.hops} jump(s), to ${cut.hopAt?.toFixed(0)} m`);
+    check('the lap is cut, and its first sector is no best', !cut.invalidBeforeHop && cut.invalidAfter && cut.sector1 === null, `sector 1 ${cut.sector1}`);
+    const savedS = own.endS - cut.endS;
+    check('in a race it costs a time penalty larger than the time it saved, and at least the least one',
+      cut.penaltyS > savedS && cut.penaltyS >= COURSE_CUT_MIN_PENALTY_S && savedS > 2,
+      `saved ${savedS.toFixed(1)} s (race control measured ${cut.estSavedS?.toFixed(1)} s), +${cut.penaltyS} s`);
+    check('the race clock counts the lap as driven: the penalty is the price', cut.clockFollows);
+  }
 }
 
 console.log('Around the track');

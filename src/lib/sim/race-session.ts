@@ -313,6 +313,32 @@ export class LapClock {
   }
 }
 
+/** A car drawn further than this from its newest packet's lap position (m) is left there: the projection jumped */
+const DRAWN_AHEAD_MAX_M = 50;
+
+/**
+ * Puts the other players on the lap where they are drawn. Each is drawn where it is now (`predictPeer`: its newest
+ * packet carried forward by the packet's age and half the round trip), but the lap position and race distance it
+ * reports are that packet's: at racing speed several metres back, enough to show a car a length behind as ahead.
+ * Sets each one's `trackS` to the lap position it is drawn at and `aheadM` to how far that is ahead of the packet's.
+ */
+export function placePeersWhereDrawn(
+  peers: readonly InterpolatedPeerState[],
+  project: (x: number, z: number, hintS: number) => { s: number },
+  lapLengthM: number
+): void {
+  for (const p of peers) {
+    const s = project(p.position.x, p.position.z, p.trackS).s;
+    const ahead = wrapHalf(s - p.trackS, lapLengthM);
+    if (!Number.isFinite(ahead) || Math.abs(ahead) > DRAWN_AHEAD_MAX_M) {
+      p.aheadM = 0;
+      continue;
+    }
+    p.trackS = s;
+    p.aheadM = ahead;
+  }
+}
+
 export interface MultiplayerRaceFrame {
   phase: "countdown" | "lights" | "racing";
   lightsOn: number;
@@ -634,7 +660,8 @@ export class MultiplayerRace {
         name: p.name ?? existing?.name ?? p.driverCode,
         color: p.teamColorHex,
         isPlayer: false,
-        distM: p.race.dist,
+        // Where it is drawn: its race distance as reported, moved on as far as it is drawn ahead of that packet
+        distM: p.race.dist + (p.race.fin === null ? (p.aheadM ?? 0) : 0),
         speedMs: p.speedKmh / 3.6,
         finishTimeS: p.race.fin,
         finishLaps: p.race.fin !== null ? p.race.laps : undefined,

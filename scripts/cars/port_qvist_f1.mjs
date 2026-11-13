@@ -19,12 +19,13 @@
  * simplified on its own with meshoptimizer (attribute seams kept), and the source normals are kept.
  */
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { Document, NodeIO } from "@gltf-transform/core";
 import { ALL_EXTENSIONS, KHRMaterialsSpecular } from "@gltf-transform/extensions";
 import { copyToDocument, prune } from "@gltf-transform/functions";
 import { MeshoptDecoder, MeshoptSimplifier } from "meshoptimizer";
 
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
 /** Where the AM26 body had its front axle (m); the porter puts this model's there too */
 const FRONT_AXLE_Z = 1.5045;
