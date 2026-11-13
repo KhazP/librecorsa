@@ -1,10 +1,10 @@
 import * as THREE from "three";
 import type { CarTelemetry } from "@/types/f1";
 import { planarUvGeometry } from "./planar-uv";
-import { VF26_ENGINE } from "@/lib/sim/vf26-data";
+import { LC26_ENGINE } from "@/lib/sim/lc26-data";
 
 /**
- * Steering-wheel screen for the VF26 GLB.
+ * Steering-wheel screen for the LC26 GLB.
  *
  * The display is the `INT_DISPLAY` primitive under `STEER_BASE`: a flat 2-triangle quad facing the driver
  * (normal -Z in model space), 94 mm x 55 mm (aspect ~1.72). Its UVs run 0.04..0.96 x 0.23..0.77 of the unit
@@ -26,8 +26,8 @@ const LED_GAP = 4;
 const LED_TOP = 6;
 const LED_H = 24;
 const LED_START_RPM = 10000;
-/** The VF26 wheel's last LED lights at the engine's limiter */
-const LIMITER_RPM = VF26_ENGINE.limiterRpm;
+/** The LC26 wheel's last LED lights at the engine's limiter */
+const LIMITER_RPM = LC26_ENGINE.limiterRpm;
 
 const COLOR_BG = "#000000";
 const COLOR_LED_OFF = "#16191e";
@@ -114,7 +114,7 @@ export class SteeringWheelDisplay {
   private readonly ctx: CanvasRenderingContext2D | null = null;
   private readonly texture: THREE.CanvasTexture | null = null;
   private lastDrawMs = -Infinity;
-  /** The LED bar's first LED and its limiter (rpm): the VF26's by default */
+  /** The LED bar's first LED and its limiter (rpm): the LC26's by default */
   private readonly ledStartRpm: number;
   private readonly limiterRpm: number;
 

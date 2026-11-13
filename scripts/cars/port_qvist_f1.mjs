@@ -1,13 +1,16 @@
 /**
  * Ports Qvist Designs' "F1 2026 concept (polygon model)" (CC BY 4.0, https://qvistdesigns.framer.website/) to the 2026
- * Prototype's body, in the layout `src/lib/vf26-car-model.ts` reads:
+ * Prototype's body, in the layout `src/lib/lc26-car-model.ts` reads:
  *
  *   node scripts/cars/port_qvist_f1.mjs <f1_2026_concept_polygon_model.glb> [out.glb] [--debug-parts <file.glb>]
  *
  * Output (default `public/cars/f12026/model/f12026.glb`), metres, +X left, +Y up, +Z forward, tyres on y = 0, the
  * front axle at z = 1.5045 (where the AM26 body had it, so the cameras it shares stay comparable):
- *   VF26 (extras: wheelCentres, cameras, liveryMask: false, source)
- *     BODY        the bodywork, one mesh per material
+ *   LC26 (extras: wheelCentres, cameras, liveryMask: false, source)
+ *     BODY        the bodywork, one mesh per material; every vertex of the body, the flaps, the arms and the
+ *                 drums carries `_OCCLUSION`: how much of the sky it sees past the rest of the car (1 = all of it)
+ *       ARM_xx_n  a suspension arm, in its own frame at its root (extras `arm`: kind, tip)
+ *     SUSP_xx     a brake drum with its vanes: turns and travels with the wheel
  *     WHEEL_xx    hub pivot at the tread centre; children WHEEL_xx_RIM, WHEEL_xx_TYRE (one primitive)
  *
  * The download is one CAD shell exported as eleven 65k-vertex chunks, with no UVs, one grey material and constant
@@ -31,13 +34,15 @@ const TYRE_MIN_RADIUS = 0.25;
 
 /** Triangle budgets after simplification */
 const BUDGET = { body: 100_000, rim: 5_000, tyre: 4_000, small: 1.0 };
+/** The arms and drums keep the body's share of their triangles, the thin arms half as many again, and at least these */
+const SUSPENSION_MIN_TRIS = { arm: 400, drum: 1_500 };
 
 const WHEEL_NAMES = { LF: "WHEEL_LF", RF: "WHEEL_RF", LR: "WHEEL_LR", RR: "WHEEL_RR" };
 
 /**
  * DeX's AM26 (CC BY 4.0, the car's previous body) gives it its steering wheel, shift lights and display, and its
  * cockpit cameras: with the front axles lined up the two cockpits sit within ~5 cm of each other (halo, headrest,
- * roll hoop). Only those are kept, in this file: the AM26's `VF26` root with its `cameras` and `steerBase` extras and
+ * roll hoop). Only those are kept, in this file: the AM26's `LC26` root with its `cameras` and `steerBase` extras and
  * its `STEER_BASE` subtree.
  */
 const STEER_FROM = path.join(ROOT, "scripts/cars/sources/am26-steering-wheel.glb");
@@ -510,6 +515,8 @@ function merge(meshes) {
 }
 
 const shift = (m, d) => ({ ...m, pos: m.pos.map((v, i) => v - d[i % 3]) });
+/** A mesh as a part in a node at `origin`, remembered where it is in the model's frame */
+const flapPart = (mesh, origin, mat) => ({ geo: shift(mesh, origin), mat, at: mesh });
 
 // ---------------------------------------------------------------------------------------------------------------
 // Paint: the download is one grey, so the livery goes on by zone, each zone its own material
@@ -599,11 +606,16 @@ const ZONE_LINES = [
  * the mesh stays connected for the simplifier) and appended to `rig`, which is returned grown.
  */
 function cutAlongZones(rig, tris) {
+  return cutAlong(rig, tris, ZONE_LINES);
+}
+
+/** Cuts triangles along `lines` (each f(p, n) = 0 where `where(centroid)` holds), as `cutAlongZones` does */
+function cutAlong(rig, tris, lines) {
   const pos = Array.from(rig.pos);
   const nrm = Array.from(rig.nrm);
   let idx = tris.map((t) => [rig.idx[3 * t], rig.idx[3 * t + 1], rig.idx[3 * t + 2]]);
   const P = (v) => [pos[3 * v], pos[3 * v + 1], pos[3 * v + 2]];
-  for (const [li, line] of ZONE_LINES.entries()) {
+  for (const [li, line] of lines.entries()) {
     const cache = new Map();
     const cut = (a, b, fa, fb) => {
       const k = a < b ? `${a},${b}` : `${b},${a}`;
@@ -752,6 +764,566 @@ function faceNormal(rig, t) {
 }
 
 // ---------------------------------------------------------------------------------------------------------------
+// Suspension: the brake drums and the arms are cut out of the welded body
+// ---------------------------------------------------------------------------------------------------------------
+
+/** The arms are found where they cross a plane this far inboard of a drum's inner face (m) */
+const ARM_PLANE_IN = 0.16;
+/** Their axis and thickness are measured on the planes this far inboard and outboard of that one (m) */
+const ARM_BAND = [0.05, 0.03];
+/** Bodywork below this is floor, not suspension (m) */
+const ARM_MIN_Y = 0.2;
+/** An arm ends where the surface around its axis reaches this many times its own thickness: the chassis, a fairing */
+const ARM_FLARE = 1.3;
+/** Step (m) an arm is followed toward the chassis in */
+const ARM_STEP = 0.005;
+/** A drum: within this of the axle (m) */
+const DRUM_RADIUS = 0.23;
+/** Nothing inboard of this (m from the centreline) is suspension */
+const ARM_MIN_X = 0.1;
+/** How far an arm's open ends reach into the chassis and into the drum (m), so no gap opens when it moves */
+const ARM_REACH = { root: 0.03, tip: 0.07 };
+/** A point on the front track rods (|x|, y, z): they turn with the wheels, the wishbones and the pushrod do not */
+const TRACK_ROD = [0.44, 0.345, 1.63];
+
+const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const cross3 = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+const unit = (a) => {
+  const l = Math.hypot(a[0], a[1], a[2]) || 1;
+  return [a[0] / l, a[1] / l, a[2] / l];
+};
+const along = (o, a, t) => [o[0] + a[0] * t, o[1] + a[1] * t, o[2] + a[2] * t];
+const vert = (rig, v) => [rig.pos[3 * v], rig.pos[3 * v + 1], rig.pos[3 * v + 2]];
+/** Distance of `p` from the line through `o` along the unit `a` */
+const offAxis = (p, o, a) => {
+  const d = sub(p, o);
+  const t = dot(d, a);
+  return Math.hypot(d[0] - a[0] * t, d[1] - a[1] * t, d[2] - a[2] * t);
+};
+
+/**
+ * Whether `p` is within an arm's section, `grow` times as wide and as thick plus `margin` (m). The section is a box
+ * across the axis (`u` along its chord, `v` through its thickness), since the arms are flat blades, not tubes.
+ */
+const inSection = (p, l, grow, margin) => {
+  const d = sub(p, l.o);
+  return Math.abs(dot(d, l.u)) <= l.hu * grow + margin && Math.abs(dot(d, l.v)) <= l.hv * grow + margin;
+};
+
+/** Triangles by the welded vertices they use, for walking from one to its neighbours */
+function trianglesAround(rig, weld, tris) {
+  const around = new Map();
+  for (const t of tris) {
+    for (let c = 0; c < 3; c++) {
+      const w = weld[rig.idx[3 * t + c]];
+      let l = around.get(w);
+      if (!l) around.set(w, (l = []));
+      l.push(t);
+    }
+  }
+  return around;
+}
+
+/** Every triangle reached from `seeds` through shared vertices over triangles `open` lets in (the seeds included) */
+function flood(rig, weld, around, seeds, open) {
+  const seen = new Set(seeds);
+  const queue = [...seeds];
+  while (queue.length) {
+    const t = queue.pop();
+    for (let c = 0; c < 3; c++) {
+      for (const u of around.get(weld[rig.idx[3 * t + c]]) ?? []) {
+        if (seen.has(u) || !open(u)) continue;
+        seen.add(u);
+        queue.push(u);
+      }
+    }
+  }
+  return seen;
+}
+
+/** `tris` in connected groups */
+function groupsOf(rig, weld, around, tris) {
+  const inSet = new Set(tris);
+  const left = new Set(tris);
+  const groups = [];
+  for (const t of tris) {
+    if (!left.has(t)) continue;
+    const g = flood(rig, weld, around, [t], (u) => inSet.has(u));
+    for (const u of g) left.delete(u);
+    groups.push([...g]);
+  }
+  return groups;
+}
+
+/**
+ * Where `tris` cross the plane n . p = d: one segment a triangle, its ends `p` and `q` with the welded edges they
+ * lie on (`kp`, `kq`), which neighbouring segments share
+ */
+function planeCuts(rig, weld, tris, n, d) {
+  const f = (v) => n[0] * rig.pos[3 * v] + n[1] * rig.pos[3 * v + 1] + n[2] * rig.pos[3 * v + 2] - d;
+  const segs = [];
+  for (const t of tris) {
+    const v = [rig.idx[3 * t], rig.idx[3 * t + 1], rig.idx[3 * t + 2]];
+    const fv = v.map(f);
+    const ends = [];
+    for (let c = 0; c < 3; c++) {
+      const b = (c + 1) % 3;
+      if (fv[c] < 0 === fv[b] < 0) continue;
+      const s = fv[c] / (fv[c] - fv[b]);
+      const pa = vert(rig, v[c]);
+      const pb = vert(rig, v[b]);
+      const wa = weld[v[c]];
+      const wb = weld[v[b]];
+      ends.push({ at: [0, 1, 2].map((k) => pa[k] + s * (pb[k] - pa[k])), key: wa < wb ? `${wa},${wb}` : `${wb},${wa}` });
+    }
+    if (ends.length === 2) segs.push({ p: ends[0].at, q: ends[1].at, kp: ends[0].key, kq: ends[1].key });
+  }
+  return segs;
+}
+
+/** The middle of a section's outline: its segments' midpoints weighed by their lengths */
+function sectionCentre(segs) {
+  const c = [0, 0, 0];
+  let total = 0;
+  for (const { p, q } of segs) {
+    const l = Math.hypot(...sub(p, q));
+    total += l;
+    for (let k = 0; k < 3; k++) c[k] += (l * (p[k] + q[k])) / 2;
+  }
+  return c.map((v) => v / (total || 1));
+}
+
+/** |x| of a drum's inner face: the largest flat, axle-facing area inboard of the wheel's middle */
+function drumFace(rig, tris, w) {
+  const [cx, cy, cz] = w.centre;
+  const s = Math.sign(cx);
+  const bins = new Map();
+  for (const t of tris) {
+    const v = [rig.idx[3 * t], rig.idx[3 * t + 1], rig.idx[3 * t + 2]].map((i) => vert(rig, i));
+    if (!v.every((p) => Math.hypot(p[1] - cy, p[2] - cz) < DRUM_RADIUS - 0.01 && s * p[0] > Math.abs(cx) - 0.4 && s * p[0] < Math.abs(cx) - 0.05)) continue;
+    const n = cross3(sub(v[1], v[0]), sub(v[2], v[0]));
+    const area = Math.hypot(...n) / 2;
+    if (Math.abs(n[0]) < 0.98 * 2 * area) continue;
+    const k = Math.round(s * v[0][0] * 200);
+    const b = bins.get(k) ?? { area: 0, x: 0 };
+    b.area += area;
+    b.x += area * s * v[0][0];
+    bins.set(k, b);
+  }
+  const best = [...bins.values()].sort((a, b) => b.area - a.area)[0];
+  if (!best || best.area < 0.05) throw new Error(`${w.corner}: no drum face found`);
+  return best.x / best.area;
+}
+
+/**
+ * The arms of one corner, each as a straight axis: body triangles crossing the mid plane, in connected members, each
+ * member's axis through the middles of its two sections either side, its thickness the furthest those sections reach
+ * from it. An arm is followed along its axis toward the chassis until the surface around it widens (`ARM_FLARE`):
+ * there it is cut, and there it turns.
+ */
+function findLegs(rig, weld, tris, w) {
+  const [, , cz] = w.centre;
+  const s = Math.sign(w.centre[0]);
+  const n = [s, 0, 0];
+  const xMid = w.xFace - ARM_PLANE_IN;
+  const xA = xMid - ARM_BAND[0];
+  const xB = xMid + ARM_BAND[1];
+  const region = tris.filter((t) => {
+    const c = centroid(rig, t);
+    return s * c[0] > ARM_MIN_X - 0.05 && Math.abs(c[2] - cz) < 0.9;
+  });
+  const slab = region.filter((t) => {
+    let lo = Infinity;
+    let hi = -Infinity;
+    for (let c = 0; c < 3; c++) {
+      const p = vert(rig, rig.idx[3 * t + c]);
+      if (Math.abs(p[2] - cz) > 0.7 || p[1] > 0.8) return false;
+      lo = Math.min(lo, s * p[0]);
+      hi = Math.max(hi, s * p[0]);
+    }
+    return lo < xB && hi > xA;
+  });
+  const around = trianglesAround(rig, weld, slab);
+  const legs = [];
+  for (const member of groupsOf(rig, weld, around, slab)) {
+    const a0 = planeCuts(rig, weld, member, n, xA);
+    const b0 = planeCuts(rig, weld, member, n, xB);
+    if (!a0.length || !b0.length) continue;
+    const pts = [...a0, ...b0].flatMap((g) => [g.p, g.q]);
+    if (Math.min(...pts.map((p) => p[1])) < ARM_MIN_Y) continue;
+    const o = sectionCentre(a0);
+    const a = unit(sub(sectionCentre(b0), o));
+    // It has to point at the drum
+    const atFace = along(o, a, (w.xFace - s * o[0]) / (s * a[0]));
+    if (!(s * a[0] > 0.3) || Math.hypot(atFace[1] - w.centre[1], atFace[2] - cz) > DRUM_RADIUS + 0.05) continue;
+    // The section's chord: the direction across the axis its points spread most in
+    const across = pts.map((p) => {
+      const d = sub(p, o);
+      const t = dot(d, a);
+      return [d[0] - a[0] * t, d[1] - a[1] * t, d[2] - a[2] * t];
+    });
+    const cov = [0, 1, 2].map((i) => [0, 1, 2].map((j) => across.reduce((sum, d) => sum + d[i] * d[j], 0)));
+    let u = unit(cross3(a, [0, 1, 0]));
+    for (let it = 0; it < 60; it++) u = unit(mul3(cov, u));
+    const v = cross3(a, u);
+    const leg = { corner: w.corner, s, o, a, u, v, hu: Math.max(...across.map((d) => Math.abs(dot(d, u)))), hv: Math.max(...across.map((d) => Math.abs(dot(d, v)))) };
+    const within = (p) => inSection(p, leg, ARM_FLARE, 0.004);
+    const near = region.filter((t) => [0, 1, 2].some((c) => inSection(vert(rig, rig.idx[3 * t + c]), leg, 2.5, 0.05)));
+    // How far the arm runs on its own along its axis, toward the chassis (dir -1) or the drum (+1), from the first
+    // section: to the last plane on which its outline closes within the limit, before the surface carries on past it
+    const follow = (dir, end) => {
+      let last = 0;
+      for (let t = dir * ARM_STEP; dir * t < end; t += dir * ARM_STEP) {
+        const segs = planeCuts(rig, weld, near, a, dot(o, a) + t);
+        const byKey = new Map();
+        segs.forEach((g, i) => {
+          for (const k of [g.kp, g.kq]) byKey.set(k, [...(byKey.get(k) ?? []), i]);
+        });
+        const own = segs.map((g, i) => (inSection(g.p, leg, 1.05, 0.002) && inSection(g.q, leg, 1.05, 0.002) ? i : -1)).filter((i) => i >= 0);
+        const seen = new Set(own);
+        const queue = [...own];
+        let leaving = false;
+        while (queue.length && !leaving) {
+          const g = segs[queue.pop()];
+          if (!within(g.p) || !within(g.q)) leaving = true;
+          for (const k of [g.kp, g.kq]) {
+            for (const j of byKey.get(k)) {
+              if (seen.has(j)) continue;
+              seen.add(j);
+              queue.push(j);
+            }
+          }
+        }
+        if (!own.length || leaving) return { t: last, stopped: true };
+        last = t;
+      }
+      return { t: last, stopped: false };
+    };
+    const tRoot = follow(-1, 0.9).t;
+    // On an axle that does not steer the arms end where they join the drum's own structure (winglets, the other leg
+    // of a wishbone): the drum only rises and falls there, so those stay on it. A steered drum turns about the arms'
+    // ends, so there the arms run to its face and pass through it.
+    const toFace = (w.xFace - s * o[0]) / (s * a[0]) - 0.01;
+    const out = w.corner[1] === "F" ? null : follow(1, toFace);
+    const tTip = out?.stopped ? out.t : null;
+    legs.push({ ...leg, tRoot, pivot: along(o, a, tRoot), end: tTip === null ? null : along(o, a, tTip) });
+  }
+  return legs;
+}
+
+/** The planes the suspension is cut on: each arm's root and (where it has one) outer end, across its axis, and each drum's inner face */
+function suspensionLines(legs, wheels) {
+  const lines = [];
+  for (const l of legs) {
+    for (const at of [l.pivot, l.end]) {
+      if (!at) continue;
+      lines.push({
+        f: (p) => dot(sub(p, at), l.a),
+        where: (c) => Math.sign(c[0]) === l.s && inSection(c, l, ARM_FLARE, 0.012) && Math.abs(dot(sub(c, at), l.a)) < 0.45,
+      });
+    }
+  }
+  for (const w of wheels) {
+    const [cx, cy, cz] = w.centre;
+    const s = Math.sign(cx);
+    lines.push({ f: (p) => s * p[0] - w.xCut, where: (c) => s * c[0] > ARM_MIN_X && Math.hypot(c[1] - cy, c[2] - cz) < 0.34 });
+  }
+  return lines;
+}
+
+/** A wall from a cut's outline (`loop`, as `boundaryLoops` gives it) out along `e`: an open end's reach past the cut */
+function skirt(rig, loop, e) {
+  const n = loop.length;
+  const pos = new Float32Array(n * 6);
+  const nrm = new Float32Array(n * 6);
+  const idx = new Uint32Array(n * 6);
+  for (let i = 0; i < n; i++) {
+    const p = vert(rig, loop[i]);
+    const q = [rig.nrm[3 * loop[i]], rig.nrm[3 * loop[i] + 1], rig.nrm[3 * loop[i] + 2]];
+    pos.set(p, 3 * i);
+    pos.set([p[0] + e[0], p[1] + e[1], p[2] + e[2]], 3 * (i + n));
+    nrm.set(q, 3 * i);
+    nrm.set(q, 3 * (i + n));
+    const j = (i + 1) % n;
+    idx.set([j, i, i + n, j, i + n, j + n], 6 * i);
+  }
+  return { pos, nrm, idx };
+}
+
+/** `mesh` in the frame at `origin` whose axes are the unit `ex`, `ey`, `ez`, and that frame's rotation (x, y, z, w) */
+function inFrame(mesh, origin, [ex, ey, ez]) {
+  const pos = new Float32Array(mesh.pos.length);
+  const nrm = new Float32Array(mesh.nrm.length);
+  for (let i = 0; i < pos.length; i += 3) {
+    const p = [mesh.pos[i] - origin[0], mesh.pos[i + 1] - origin[1], mesh.pos[i + 2] - origin[2]];
+    const q = [mesh.nrm[i], mesh.nrm[i + 1], mesh.nrm[i + 2]];
+    pos.set([dot(p, ex), dot(p, ey), dot(p, ez)], i);
+    nrm.set([dot(q, ex), dot(q, ey), dot(q, ez)], i);
+  }
+  const [m00, m10, m20] = ex;
+  const [m01, m11, m21] = ey;
+  const [m02, m12, m22] = ez;
+  const tr = m00 + m11 + m22;
+  let q;
+  if (tr > 0) {
+    const k = Math.sqrt(tr + 1) * 2;
+    q = [(m21 - m12) / k, (m02 - m20) / k, (m10 - m01) / k, k / 4];
+  } else if (m00 > m11 && m00 > m22) {
+    const k = Math.sqrt(1 + m00 - m11 - m22) * 2;
+    q = [k / 4, (m01 + m10) / k, (m02 + m20) / k, (m21 - m12) / k];
+  } else if (m11 > m22) {
+    const k = Math.sqrt(1 + m11 - m00 - m22) * 2;
+    q = [(m01 + m10) / k, k / 4, (m12 + m21) / k, (m02 - m20) / k];
+  } else {
+    const k = Math.sqrt(1 + m22 - m00 - m11) * 2;
+    q = [(m02 + m20) / k, (m12 + m21) / k, k / 4, (m10 - m01) / k];
+  }
+  return { geo: { pos, nrm, idx: mesh.idx }, rotation: q };
+}
+
+/** Axes with z along the unit `ez` and x level */
+function axesAlong(ez) {
+  const ex = unit(Math.abs(ez[1]) > 0.95 ? cross3([0, 0, 1], ez) : cross3([0, 1, 0], ez));
+  return [ex, cross3(ez, ex), ez];
+}
+
+/**
+ * Splits the body (already cut on `suspensionLines`) into the arms, the drums and the rest. Per corner: the arms are
+ * what the mid plane's members reach between their roots and the drum's face; members that meet before the face
+ * (a wishbone's two legs) are one part. The drum is what is left joined to the wheel's side of the face: the drum,
+ * its vanes and winglets. The holes both leave are capped: in the chassis, and across the drum's face, which the arms
+ * then pass through.
+ */
+function suspension(rig, weld, tris, wheels, legs) {
+  const around = trianglesAround(rig, weld, tris);
+  const gone = new Set();
+  const arms = [];
+  const hubs = [];
+  const bodyCaps = [];
+  for (const w of wheels) {
+    const [cx, cy, cz] = w.centre;
+    const s = Math.sign(cx);
+    const mine = legs.filter((l) => l.corner === w.corner);
+    const xMid = w.xFace - ARM_PLANE_IN;
+    // Each cut's outline: the welded vertices on its plane around the arm's own axis. Another arm crossing the same
+    // plane has an outline of its own, further from the axis, and is left alone.
+    const cuts = mine.flatMap((l) => [{ l, at: l.pivot, side: 1 }, ...(l.end ? [{ l, at: l.end, side: -1 }] : [])]);
+    for (const cut of cuts) {
+      const on = new Map();
+      const here = [];
+      for (const t of tris) {
+        let any = false;
+        for (let c = 0; c < 3; c++) {
+          const v = rig.idx[3 * t + c];
+          if (Math.sign(rig.pos[3 * v]) !== s) continue;
+          const p = vert(rig, v);
+          if (Math.abs(dot(sub(p, cut.at), cut.l.a)) > 2e-5 || !inSection(p, cut.l, ARM_FLARE, 0.006)) continue;
+          on.set(weld[v], p);
+          any = true;
+        }
+        if (any) here.push(t);
+      }
+      const parent = new Map([...on.keys()].map((k) => [k, k]));
+      const find = (x) => {
+        while (parent.get(x) !== x) x = parent.get(x);
+        return x;
+      };
+      for (const t of here) {
+        const ws = [0, 1, 2].map((c) => weld[rig.idx[3 * t + c]]).filter((k) => on.has(k));
+        for (let i = 1; i < ws.length; i++) parent.set(find(ws[i]), find(ws[0]));
+      }
+      const outlines = new Map();
+      for (const k of on.keys()) outlines.set(find(k), [...(outlines.get(find(k)) ?? []), k]);
+      const off = (ks) => Math.hypot(...sub([0, 1, 2].map((j) => ks.reduce((sum, k) => sum + on.get(k)[j], 0) / ks.length), cut.at));
+      const own = [...outlines.values()].sort((a, b) => off(a) - off(b))[0] ?? [];
+      cut.outline = new Set(own);
+    }
+    // A triangle on the far side of an arm's root (or of its outer end) that touches the cut's outline: the walk
+    // stops there
+    const behindRoot = (t) => {
+      const vs = [0, 1, 2].map((c) => rig.idx[3 * t + c]);
+      return cuts.some((cut) => vs.some((v) => cut.outline.has(weld[v])) && vs.every((v) => cut.side * dot(sub(vert(rig, v), cut.at), cut.l.a) < 2e-5));
+    };
+    const open = (t) => {
+      const c = centroid(rig, t);
+      return s * c[0] < w.xCut && s * c[0] > ARM_MIN_X && Math.abs(c[2] - cz) < 0.9 && !behindRoot(t);
+    };
+    const legOf = new Map();
+    for (const t of tris) {
+      let lo = Infinity;
+      let hi = -Infinity;
+      for (let c = 0; c < 3; c++) {
+        const x = s * rig.pos[3 * rig.idx[3 * t + c]];
+        lo = Math.min(lo, x);
+        hi = Math.max(hi, x);
+      }
+      if (lo >= xMid || hi < xMid || !open(t)) continue;
+      const cut = planeCuts(rig, weld, [t], [s, 0, 0], xMid)[0];
+      if (!cut) continue;
+      const m = [(cut.p[0] + cut.q[0]) / 2, (cut.p[1] + cut.q[1]) / 2, (cut.p[2] + cut.q[2]) / 2];
+      const i = mine.findIndex((l) => inSection(m, l, 1.05, 0.01));
+      if (i >= 0) legOf.set(t, i);
+    }
+    const reached = flood(rig, weld, around, [...legOf.keys()], open);
+    const partsHere = [];
+    for (const g of groupsOf(rig, weld, around, [...reached])) {
+      const own = [...new Set(g.filter((t) => legOf.has(t)).map((t) => legOf.get(t)))].map((i) => mine[i]);
+      if (!own.length) continue;
+      const describe = () => {
+        const b = bounds(extract(rig, g));
+        return `${g.length} tris, ${b.min.map((v) => v.toFixed(2))} to ${b.max.map((v) => v.toFixed(2))}`;
+      };
+      const ended = own.some((l) => l.end);
+      const atFace = g.some((t) =>
+        [0, 1, 2].some((c) => {
+          const p = vert(rig, rig.idx[3 * t + c]);
+          return s * p[0] > w.xCut - 0.001 && Math.hypot(p[1] - cy, p[2] - cz) < DRUM_RADIUS + 0.03;
+        })
+      );
+      if (!ended && !atFace) continue;
+      if (own.length > (ended ? 1 : 2)) throw new Error(`${w.corner}: ${own.length} arms meet in one part (${describe()})`);
+      for (const t of g) gone.add(t);
+      const loops = boundaryLoops(rig, weld, g);
+      const mean = (l, f) => l.reduce((sum, v) => sum + f(vert(rig, v)), 0) / l.length;
+      const tips = loops.filter((l) => (ended ? Math.abs(mean(l, (p) => dot(sub(p, own[0].end), own[0].a))) < 0.004 : mean(l, (p) => s * p[0]) > w.xCut - 0.002));
+      const roots = loops.filter((l) => !tips.includes(l));
+      // An arm with a closed outer end stops short of the drum (a fairing beside it): its end is its furthest point
+      let tip;
+      if (tips.length) {
+        const tipPts = tips.flat().map((v) => vert(rig, v));
+        tip = [0, 1, 2].map((k) => tipPts.reduce((sum, p) => sum + p[k], 0) / tipPts.length);
+      } else {
+        if (own.length > 1) throw new Error(`${w.corner}: a wishbone has no outer end (${describe()})`);
+        let far = -Infinity;
+        for (const t of g) for (let c = 0; c < 3; c++) far = Math.max(far, dot(sub(vert(rig, rig.idx[3 * t + c]), own[0].o), own[0].a));
+        tip = along(own[0].o, own[0].a, far);
+      }
+      const skirts = tips.map((l) => skirt(rig, l, ended ? own[0].a.map((v) => v * ARM_REACH.root) : [s * ARM_REACH.tip, 0, 0]));
+      for (const l of roots) {
+        const pts = l.map((v) => vert(rig, v));
+        const c = [0, 1, 2].map((k) => pts.reduce((sum, p) => sum + p[k], 0) / pts.length);
+        const leg = own.map((x) => ({ x, d: Math.hypot(...sub(c, x.pivot)) })).sort((a, b) => a.d - b.d)[0];
+        // Seams the download's own triangles leave open along an arm are not cut ends
+        if (leg.d > 0.08) continue;
+        skirts.push(skirt(rig, l, leg.x.a.map((v) => -v * ARM_REACH.root)));
+        bodyCaps.push(capMesh(rig, l, false));
+      }
+      const trackRod = own.length === 1 && cz > 0 && offAxis([s * TRACK_ROD[0], TRACK_ROD[1], TRACK_ROD[2]], own[0].o, own[0].a) < 0.03;
+      const kind = own.length === 2 ? "wishbone" : trackRod ? "trackrod" : "link";
+      const pivot = own[0].pivot;
+      const ez = unit(sub(own.length === 2 ? own[1].pivot : tip, pivot));
+      partsHere.push({ corner: w.corner, kind, pivot, tip, axes: axesAlong(ez), mesh: merge([extract(rig, g), ...skirts]), faceCaps: tips.map((l) => capMesh(rig, l, false)), tris: g.length });
+    }
+    // Front to back, top to bottom: a stable order for the names
+    partsHere.sort((a, b) => b.tip[2] - a.tip[2] || b.tip[1] - a.tip[1]);
+    arms.push(...partsHere);
+    if (cz > 0 && partsHere.filter((p) => p.kind === "trackrod").length !== 1) throw new Error(`${w.corner}: no track rod found`);
+
+    // The drum: everything still joined to the wheel's side of the face
+    const seeds = tris.filter((t) =>
+      [0, 1, 2].every((c) => {
+        const p = vert(rig, rig.idx[3 * t + c]);
+        return s * p[0] > w.xFace + 0.02 && Math.hypot(p[1] - cy, p[2] - cz) < DRUM_RADIUS - 0.02;
+      })
+    );
+    const drum = flood(rig, weld, around, seeds, (t) => !gone.has(t));
+    for (const t of drum) {
+      if (s * centroid(rig, t)[0] < w.xFace - 0.4) throw new Error(`${w.corner}: the drum is still joined to the body`);
+      gone.add(t);
+    }
+    hubs.push({ corner: w.corner, centre: w.centre, mesh: merge([extract(rig, [...drum]), ...partsHere.flatMap((p) => p.faceCaps)]), tris: drum.size });
+  }
+  return { arms, hubs, bodyCaps, rest: tris.filter((t) => !gone.has(t)) };
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Shading: how much of the sky each vertex sees past the rest of the car
+// ---------------------------------------------------------------------------------------------------------------
+
+/**
+ * The car at rest is filled into a grid of `voxel` cubes (m). From each vertex `rays` go out over the hemisphere about
+ * its normal, more of them near the normal; one that meets the car or the road (y = 0) within `reach` darkens the
+ * vertex, the more the nearer. A vertex nothing is near keeps 1; none goes below `floor`. The rays start `lift` cells
+ * off the surface: a cell a flat panel passes through reaches no further from it than 1.73 cells.
+ */
+const OCCLUSION = { voxel: 0.012, reach: 0.3, rays: 48, floor: 0.2, lift: 2 };
+
+/** A grid of the cells the meshes' triangles pass through (`meshes`: { pos, idx } in the model's frame) */
+function occlusionGrid(meshes) {
+  const min = [Infinity, Infinity, Infinity];
+  const max = [-Infinity, -Infinity, -Infinity];
+  for (const m of meshes) {
+    const b = bounds(m);
+    for (let k = 0; k < 3; k++) {
+      min[k] = Math.min(min[k], b.min[k]);
+      max[k] = Math.max(max[k], b.max[k]);
+    }
+  }
+  const h = OCCLUSION.voxel;
+  const size = [0, 1, 2].map((k) => Math.ceil((max[k] - min[k]) / h) + 1);
+  const cells = new Uint8Array(size[0] * size[1] * size[2]);
+  const mark = (x, y, z) => {
+    const i = Math.floor((x - min[0]) / h);
+    const j = Math.floor((y - min[1]) / h);
+    const k = Math.floor((z - min[2]) / h);
+    cells[(k * size[1] + j) * size[0] + i] = 1;
+  };
+  for (const m of meshes) {
+    for (let t = 0; t < m.idx.length; t += 3) {
+      const [a, b, c] = [0, 1, 2].map((v) => [m.pos[3 * m.idx[t + v]], m.pos[3 * m.idx[t + v] + 1], m.pos[3 * m.idx[t + v] + 2]]);
+      const ab = sub(b, a);
+      const ac = sub(c, a);
+      // Points across the triangle no further apart than half a cell
+      const n = Math.max(1, Math.ceil(Math.max(Math.hypot(...ab), Math.hypot(...ac), Math.hypot(...sub(c, b))) / (h * 0.5)));
+      for (let i = 0; i <= n; i++) {
+        for (let j = 0; j <= n - i; j++) mark(a[0] + (ab[0] * i + ac[0] * j) / n, a[1] + (ab[1] * i + ac[1] * j) / n, a[2] + (ab[2] * i + ac[2] * j) / n);
+      }
+    }
+  }
+  const full = (x, y, z) => {
+    if (y < 0) return true;
+    const i = Math.floor((x - min[0]) / h);
+    const j = Math.floor((y - min[1]) / h);
+    const k = Math.floor((z - min[2]) / h);
+    return i >= 0 && j >= 0 && k >= 0 && i < size[0] && j < size[1] && k < size[2] && cells[(k * size[1] + j) * size[0] + i] === 1;
+  };
+  return { full };
+}
+
+/** The hemisphere's directions about +z, denser toward it (a spiral), as [x, y, z] */
+const OCCLUSION_RAYS = Array.from({ length: OCCLUSION.rays }, (_, i) => {
+  const r = Math.sqrt((i + 0.5) / OCCLUSION.rays);
+  const phi = i * Math.PI * (3 - Math.sqrt(5));
+  return [r * Math.cos(phi), r * Math.sin(phi), Math.sqrt(1 - r * r)];
+});
+
+/** A byte a vertex (255: open sky, down to `floor`) for `mesh` (pos, nrm in the model's frame) */
+function occlusionOf(grid, mesh) {
+  const h = OCCLUSION.voxel;
+  const out = new Uint8Array(mesh.pos.length / 3);
+  for (let v = 0; v < out.length; v++) {
+    const p = [mesh.pos[3 * v], mesh.pos[3 * v + 1], mesh.pos[3 * v + 2]];
+    const n = unit([mesh.nrm[3 * v], mesh.nrm[3 * v + 1], mesh.nrm[3 * v + 2]]);
+    const u = unit(Math.abs(n[1]) > 0.9 ? cross3(n, [1, 0, 0]) : cross3(n, [0, 1, 0]));
+    const w = cross3(n, u);
+    // Off the surface, so it does not meet itself
+    const o = along(p, n, OCCLUSION.lift * h);
+    let dark = 0;
+    for (const [rx, ry, rz] of OCCLUSION_RAYS) {
+      const d = [u[0] * rx + w[0] * ry + n[0] * rz, u[1] * rx + w[1] * ry + n[1] * rz, u[2] * rx + w[2] * ry + n[2] * rz];
+      for (let s = h; s < OCCLUSION.reach; s += h) {
+        if (!grid.full(o[0] + d[0] * s, o[1] + d[1] * s, o[2] + d[2] * s)) continue;
+        dark += 1 - s / OCCLUSION.reach;
+        break;
+      }
+    }
+    out[v] = Math.round(255 * Math.max(OCCLUSION.floor, 1 - dark / OCCLUSION.rays));
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------------------------------------------
 // Output
 // ---------------------------------------------------------------------------------------------------------------
 
@@ -763,9 +1335,13 @@ function material(doc, name, color, { metallic = 0, roughness = 0.6 } = {}) {
     .setRoughnessFactor(roughness);
 }
 
-function addMesh(doc, buffer, name, parts) {
+/**
+ * `shaded`: a list each part is added to with its primitive and its mesh in the model's frame (`at`, or `geo` when it
+ * is already there), to get its vertices' occlusion once the whole car is known
+ */
+function addMesh(doc, buffer, name, parts, shaded) {
   const mesh = doc.createMesh(name);
-  for (const { geo, mat } of parts) {
+  for (const { geo, mat, at } of parts) {
     const prim = doc
       .createPrimitive()
       .setAttribute("POSITION", doc.createAccessor().setType("VEC3").setArray(geo.pos).setBuffer(buffer))
@@ -773,6 +1349,7 @@ function addMesh(doc, buffer, name, parts) {
       .setIndices(doc.createAccessor().setType("SCALAR").setArray(geo.idx).setBuffer(buffer))
       .setMaterial(mat);
     mesh.addPrimitive(prim);
+    shaded?.push({ prim, mesh: at ?? geo });
   }
   return mesh;
 }
@@ -825,7 +1402,7 @@ async function main() {
   const specular = doc.createExtension(KHRMaterialsSpecular);
   mats[ZONE.interior].setExtension("KHR_materials_specular", specular.createSpecular().setSpecularFactor(0.35));
 
-  const vf = doc.createNode("VF26");
+  const vf = doc.createNode("LC26");
   const scene = doc.createScene("Scene").addChild(vf);
   void scene;
 
@@ -836,6 +1413,8 @@ async function main() {
   const ratio = BUDGET.body / parts.body.tris.length;
   const stubCaps = [];
   const flapNodes = [];
+  // Every part whose vertices get their occlusion baked (the wheels turn, so not them)
+  const shaded = [];
   for (const f of flaps) {
     const loops = boundaryLoops(rig, weld, f.tris);
     const caps = loops.map((l) => capMesh(rig, l, true));
@@ -856,14 +1435,29 @@ async function main() {
     const node = doc
       .createNode(f.name)
       .setTranslation(h.pivot)
-      .setMesh(addMesh(doc, buffer, f.name, [{ geo: shift(simplify(mesh, ratio), h.pivot), mat: mats[f.zone] }]))
+      .setMesh(addMesh(doc, buffer, f.name, [flapPart(simplify(mesh, ratio), h.pivot, mats[f.zone])], shaded))
       .setExtras({ aeroClosed: matrix4(ident, h.pivot), aeroOpen: matrix4(open, h.pivot) });
     flapNodes.push(node);
     console.log(`  ${f.name}: ${f.tris.length} tris, ${loops.length} cut ends, hinge ${h.axis.map((v) => v.toFixed(3))}`);
   }
 
+  // Suspension: the body is cut on each arm's root and each drum's face, then the arms and the drums come out of it
+  for (const w of wheels) {
+    w.xFace = drumFace(rig, bodyTris, w);
+    // The arms are cut just inboard of the face, so the face's own triangles stay on the drum
+    w.xCut = w.xFace - 0.002;
+  }
+  const legs = wheels.flatMap((w) => findLegs(rig, weld, bodyTris, w));
+  const cutSusp = cutAlong(rig, [...bodyTris, ...parts.other.flatMap((p) => p.tris)], suspensionLines(legs, wheels));
+  const susp = suspension(cutSusp.rig, weldMap(cutSusp.rig), cutSusp.tris, wheels, legs);
+  for (const w of wheels) {
+    const here = susp.arms.filter((a) => a.corner === w.corner);
+    const drum = susp.hubs.find((h) => h.corner === w.corner);
+    console.log(`  ${w.corner}: drum face at ${w.xFace.toFixed(3)} m, ${drum.tris} tris; arms ${here.map((a) => `${a.kind} ${a.tris}`).join(", ")}`);
+  }
+
   // Body, one mesh per zone, each simplified with its borders kept so the zones still meet
-  const cutBody = cutAlongZones(rig, [...bodyTris, ...parts.other.flatMap((p) => p.tris)]);
+  const cutBody = cutAlongZones(cutSusp.rig, susp.rest);
   const light = rainLight(cutBody.rig, cutBody.tris);
   // The cockpit's tray floor comes out; a well goes in its place
   const tray = cutBody.tris.filter((t) => isTrayFloor(cutBody.rig, t));
@@ -880,30 +1474,56 @@ async function main() {
     byZone.get(z).push(t);
   }
   const bodyParts = [];
-  const cutRatio = BUDGET.body / (parts.body.tris.length + (cutBody.tris.length - bodyTris.length));
+  const cutRatio = BUDGET.body / (parts.body.tris.length + (cutBody.tris.length - susp.rest.length));
   for (const [z, tris] of byZone) {
     const extra = z === ZONE.secondary ? stubCaps : z === ZONE.interior ? [well] : [];
     bodyParts.push({ geo: simplify(merge([extract(cutBody.rig, tris), ...extra]), cutRatio, { lockBorder: true }), mat: mats[z] });
     console.log(`  ${z}: ${tris.length} tris`);
   }
+  // The holes the arms left in the chassis
+  if (susp.bodyCaps.length) bodyParts.push({ geo: merge(susp.bodyCaps), mat: mats[ZONE.carbon] });
   if (parts.exhaust) bodyParts.push({ geo: simplify(extract(rig, parts.exhaust.tris), 0.3), mat: mats.exhaust });
   for (const p of parts.mirrors) {
     const geo = extract(rig, p.tris);
     bodyParts.push({ geo, mat: bounds(geo).min[0] > 0 ? mats.mirrorL : mats.mirrorR });
   }
-  const body = doc.createNode("BODY").setMesh(addMesh(doc, buffer, "BODY", bodyParts));
+  const body = doc.createNode("BODY").setMesh(addMesh(doc, buffer, "BODY", bodyParts, shaded));
   for (const n of flapNodes) body.addChild(n);
   vf.addChild(body);
+
+  // Arms: each in its own frame at its root, z along it (a wishbone's along its two roots), with where its outer end
+  // is (`tip`) and how it moves (`kind`). Drums: on the wheel's centre, where the game puts them on the steer pivot.
+  const armNo = {};
+  for (const a of susp.arms) {
+    const name = `ARM_${a.corner}_${(armNo[a.corner] = (armNo[a.corner] ?? 0) + 1)}`;
+    const at = simplify(a.mesh, Math.max(SUSPENSION_MIN_TRIS.arm, Math.round(a.tris * ratio * 1.5)));
+    const { geo, rotation } = inFrame(at, a.pivot, a.axes);
+    body.addChild(
+      doc
+        .createNode(name)
+        .setTranslation(a.pivot)
+        .setRotation(rotation)
+        .setMesh(addMesh(doc, buffer, name, [{ geo, mat: mats[ZONE.carbon], at }], shaded))
+        .setExtras({ arm: { kind: a.kind, tip: a.tip } })
+    );
+  }
+  for (const h of susp.hubs) {
+    const name = `SUSP_${h.corner}`;
+    const part = flapPart(simplify(h.mesh, Math.max(SUSPENSION_MIN_TRIS.drum, Math.round(h.tris * ratio))), h.centre, mats[ZONE.carbon]);
+    vf.addChild(doc.createNode(name).setTranslation(h.centre).setMesh(addMesh(doc, buffer, name, [part], shaded)));
+  }
 
   // Wheels
   const wheelCentres = {};
   const tyreRadius = {};
+  const wheelsAtRest = [];
   for (const w of wheels) {
     const name = WHEEL_NAMES[w.corner];
     wheelCentres[name] = w.centre;
     const node = doc.createNode(name).setTranslation(w.centre);
     const rim = simplify(w.rim, BUDGET.rim);
     const tyre = simplify(w.tyre, BUDGET.tyre);
+    wheelsAtRest.push(shift(rim, w.centre.map((v) => -v)), shift(tyre, w.centre.map((v) => -v)));
     tyreRadius[name] = bounds(tyre).max[1];
     node.addChild(doc.createNode(`${name}_RIM`).setMesh(addMesh(doc, buffer, `${name}_RIM`, [{ geo: rim, mat: mats.rim }])));
     node.addChild(doc.createNode(`${name}_TYRE`).setMesh(addMesh(doc, buffer, `${name}_TYRE`, [{ geo: tyre, mat: mats.tyre }])));
@@ -911,13 +1531,29 @@ async function main() {
   }
   if (Object.keys(wheelCentres).length !== 4) throw new Error(`wheel corners: ${Object.keys(wheelCentres)}`);
 
+  // Occlusion: each shaded vertex against the whole car at rest, its wheels included
+  const grid = occlusionGrid([...shaded.map((x) => x.mesh), ...wheelsAtRest]);
+  let darkest = 255;
+  let sum = 0;
+  let count = 0;
+  for (const { prim, mesh } of shaded) {
+    const ao = occlusionOf(grid, mesh);
+    for (const v of ao) {
+      darkest = Math.min(darkest, v);
+      sum += v;
+    }
+    count += ao.length;
+    prim.setAttribute("_OCCLUSION", doc.createAccessor().setType("SCALAR").setArray(ao).setNormalized(true).setBuffer(buffer));
+  }
+  console.log(`  occlusion: ${count} vertices, mean ${(sum / count / 255).toFixed(3)}, darkest ${(darkest / 255).toFixed(2)}`);
+
   // Steering wheel (STEER_BASE: rim, paddles, dials, display, shift lights) and cameras from the AM26
   const io = new NodeIO().registerExtensions(ALL_EXTENSIONS).registerDependencies({ "meshopt.decoder": MeshoptDecoder });
   await MeshoptDecoder.ready;
   const amr = await io.read(steerFrom);
-  const amrRoot = amr.getRoot().listNodes().find((n) => n.getName() === "VF26");
+  const amrRoot = amr.getRoot().listNodes().find((n) => n.getName() === "LC26" || n.getName() === "VF26"); // keep-old-id: the wheel's source was ported before the rename
   const steerSrc = amr.getRoot().listNodes().find((n) => n.getName() === "STEER_BASE");
-  if (!amrRoot || !steerSrc) throw new Error(`${steerFrom}: no VF26 / STEER_BASE`);
+  if (!amrRoot || !steerSrc) throw new Error(`${steerFrom}: no LC26 / STEER_BASE`);
   const subtree = [];
   const walk = (n) => {
     subtree.push(n);
@@ -947,7 +1583,7 @@ async function main() {
       url: "https://qvistdesigns.framer.website/",
       license: "CC BY 4.0",
       changes:
-        "Re-oriented to metres; simplified; split into body, wheels and tyres; wing flaps cut free; painted in livery zones; the AM26's steering wheel added",
+        "Re-oriented to metres; simplified; split into body, wheels and tyres; wing flaps, suspension arms and brake drums cut free; painted in livery zones; the AM26's steering wheel added",
     },
   });
 
@@ -965,6 +1601,10 @@ async function main() {
     const colours = [[0.9, 0.2, 0.2], [0.2, 0.8, 0.3], [0.2, 0.4, 0.9], [0.9, 0.8, 0.2], [0.8, 0.3, 0.9], [0.2, 0.9, 0.9]];
     const sc = d.createScene();
     const add = (name, geo, i) => sc.addChild(d.createNode(name).setMesh(addMesh(d, b, name, [{ geo, mat: material(d, name, colours[i % colours.length]) }])));
+    susp.arms.forEach((a, i) => add(`${a.corner}_${a.kind}_${i}`, a.mesh, i));
+    const plain = (name, geo, colour) => sc.addChild(d.createNode(name).setMesh(addMesh(d, b, name, [{ geo, mat: material(d, name, colour) }])));
+    susp.hubs.forEach((h) => plain(`${h.corner}_drum`, h.mesh, [1, 0.45, 0.05]));
+    plain("body", extract(cutSusp.rig, susp.rest), [0.5, 0.5, 0.5]);
     wheels.forEach((w, i) => {
       add(`${w.corner}_tyre`, { ...w.tyre, pos: w.tyre.pos.map((v, j) => v + w.centre[j % 3]) }, 2 * i);
       add(`${w.corner}_rim`, { ...w.rim, pos: w.rim.pos.map((v, j) => v + w.centre[j % 3]) }, 2 * i + 1);

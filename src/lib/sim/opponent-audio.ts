@@ -4,7 +4,7 @@
  * A fixed pool of voices is handed each frame to the cars nearest the camera, so a car keeps its voice while it stays
  * among them, and the pool never grows with the field (nothing to leak across restarts, car swaps or lobbies):
  *
- * - engine: the exterior on/off-load loops of that car's sound bank (`vf26-audio.ts` grid), crossfaded by its rpm and
+ * - engine: the exterior on/off-load loops of that car's sound bank (`lc26-audio.ts` grid), crossfaded by its rpm and
  *   throttle. The decoded buffers are shared by every voice on the same bank; only the exterior grid is loaded.
  *   The AI field reports rpm and gear; a remote player's rpm comes from its rear-wheel speed through a nominal gearbox.
  * - tyres: the bank's exterior skid loop (or band-passed noise) when the car slides, from the angle between its heading
@@ -26,7 +26,7 @@ import { withBasePath } from '@/lib/base-path';
 import type { InterpolatedPeerState } from './multiplayer-sync';
 import { type CarSoundSource } from './CarAudio';
 import { CAMERA_MODES } from '@/lib/render/camera-modes';
-import { LoopGrid, LoopVoice, lerpTable, type Vf26AudioManifest } from './vf26-audio';
+import { LoopGrid, LoopVoice, lerpTable, type Lc26AudioManifest } from './lc26-audio';
 
 /** Voices in the pool: the nearest cars get one, the rest are not heard */
 export const OPPONENT_VOICES = 8;
@@ -68,7 +68,7 @@ async function loadSharedBank(ctx: AudioContext, assetDir: string, bank: SharedB
   try {
     const res = await fetch(withBasePath(`${assetDir}manifest.json`));
     if (!res.ok) throw new Error('no manifest');
-    const m = (await res.json()) as Vf26AudioManifest;
+    const m = (await res.json()) as Lc26AudioManifest;
     const ext = m.engine?.ext ?? [];
     if (ext.length === 0) throw new Error('no exterior engine');
     const decode = async (file: string): Promise<AudioBuffer> => {

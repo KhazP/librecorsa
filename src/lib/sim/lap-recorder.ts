@@ -3,7 +3,7 @@
  * summary (deltas, sector and corner bests) and plays recorded laps back as ghosts.
  * Also validates untrusted recordings (imported files, downloads) before they are used.
  */
-import { isVehicleModelId, type AssistPreset, type CarTelemetry, type TireCompound, type VehicleModelId } from "@/types/f1";
+import { foldVehicleModelId, isVehicleModelId, type AssistPreset, type CarTelemetry, type TireCompound, type VehicleModelId } from "@/types/f1";
 import { ASSIST_PRESETS, LAP_SAMPLE_STRIDE, lapPhysicsVersion, parseLapConditions } from "./lap-types";
 import { SIM_REALISM_LEVELS, type SimRealism } from "./sim-realism";
 import type { CornerStat, LapConditions, LapRecording, LapSample, LapSummaryData } from "./lap-types";
@@ -218,7 +218,7 @@ export class LapRecorder {
   /** Call every frame while driving; returns the lap once one is completed, else null */
   update(input: LapRecorderInput): CompletedLap | null {
     const t = input.telemetry;
-    // A new run (restart, teleport, flashback, new session) since the last update: whatever the lap counter did in
+    // A new run (restart, teleport, new session) since the last update: whatever the lap counter did in
     // between, it is not a line crossing. The recorder may not have been updated for a while (a race in between)
     const runId = t.runId ?? 0;
     if (this.lastRunId !== null && runId !== this.lastRunId) this.reset();
@@ -540,7 +540,8 @@ export function validateLapRecording(raw: unknown): LapRecording | null {
   const finite = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
 
   if (r.version !== 1) return null;
-  const { trackId, vehicle, driverName, driverCode, lapTimeMs, recordedAt, sampleHz } = r;
+  const { trackId, driverName, driverCode, lapTimeMs, recordedAt, sampleHz } = r;
+  const vehicle = foldVehicleModelId(r.vehicle);
   if (typeof trackId !== "string" || trackId.length > 64) return null;
   if (!isVehicleModelId(vehicle)) return null;
   if (typeof driverName !== "string") return null;

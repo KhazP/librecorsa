@@ -1,5 +1,5 @@
 /**
- * Verification for the sound banks' gear changes (`src/lib/sim/vf26-audio.ts`): the bank of the car with a manual
+ * Verification for the sound banks' gear changes (`src/lib/sim/lc26-audio.ts`): the bank of the car with a manual
  * box (the Liana's) is loaded on a mock Web Audio graph and fed the Liana's own sim, flat out through its 2 > 3
  * up-shift, and the engine's on-load and overrun voices are read off every frame. Through the clutch the engine is
  * heard on its overrun note as the revs fall: it never goes quiet.
@@ -9,7 +9,7 @@
 
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { LoopGrid, Vf26SoundBank, type Vf26AudioInputs } from "../src/lib/sim/vf26-audio";
+import { LoopGrid, Lc26SoundBank, type Lc26AudioInputs } from "../src/lib/sim/lc26-audio";
 import { SUZUKI_LIANA_SOUND, createSuzukiLianaSim } from "../src/lib/sim/road/SuzukiLianaSim";
 import { createFlatTestTrack } from "./lib/flat-track";
 import { skipSuiteWithout } from "./lib/hosted-files";
@@ -96,7 +96,7 @@ type EngineGrids = Record<"ext" | "int", { on: LoopGrid; off: LoopGrid }>;
 
 /** The Liana flat out from rest on a flat road, its telemetry heard by its bank as CarAudio hands it over */
 async function upshiftFlatOut() {
-  const bank = new Vf26SoundBank(ctx as unknown as AudioContext, ctx.destination as unknown as AudioNode, SUZUKI_LIANA_SOUND.assetDir);
+  const bank = new Lc26SoundBank(ctx as unknown as AudioContext, ctx.destination as unknown as AudioNode, SUZUKI_LIANA_SOUND.assetDir);
   const loaded = await bank.load("ext");
   const engine = (bank as unknown as { engine: EngineGrids }).engine.ext;
   const sim = createSuzukiLianaSim(createFlatTestTrack(30_000, 3000));
@@ -112,7 +112,7 @@ async function upshiftFlatOut() {
     sim.step(dt, { throttle: 1 });
     const tm = sim.telemetry;
     ctx.currentTime += dt;
-    const inp: Vf26AudioInputs = {
+    const inp: Lc26AudioInputs = {
       rpm: tm.rpm,
       throttle: tm.throttle,
       pedal: tm.throttle,

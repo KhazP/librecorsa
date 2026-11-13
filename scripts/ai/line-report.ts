@@ -12,7 +12,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { getActiveTrackData, setActiveTrack, type BuiltTrackData, type RawTrackJson } from '../../src/lib/track-data';
-import { aiLineOffsetM, computeSpeedProfile, createVf26ProfileCarModel } from '../../src/lib/sim/speed-profile';
+import { aiLineOffsetM, computeSpeedProfile, createLc26ProfileCarModel } from '../../src/lib/sim/speed-profile';
 import { AMG_GT3_PROFILE_CAR, createAmgGt3Sim } from '../../src/lib/sim/gt3/AmgGt3Sim';
 import { F12026CarSim } from '../../src/lib/sim/f12026-car/F12026CarSim';
 import type { SimulatorCar } from '../../src/lib/sim/simulator-car';
@@ -66,7 +66,7 @@ for (let i = 0; i < N; i++) {
   for (let i = 0; i < N; i += 5) agree += Math.sign(centreK[i]) * Math.sign(track.getSampleAtDistance(i * DS).curvature);
   if (agree < 0) for (let i = 0; i < N; i++) centreK[i] = -centreK[i];
 }
-const carModel = line === 'gt3' ? AMG_GT3_PROFILE_CAR : createVf26ProfileCarModel('balanced');
+const carModel = line === 'gt3' ? AMG_GT3_PROFILE_CAR : createLc26ProfileCarModel('balanced');
 const prof = computeSpeedProfile(track.samples, carModel, line);
 const modelV = new Float64Array(N);
 for (let i = 0; i < N; i++) {

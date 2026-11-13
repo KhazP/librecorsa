@@ -21,7 +21,7 @@
  *   the hub per unit of travel (`contact*PerBump`, `hub*PerBump`): the virtual-work coefficients that give a multibody
  *   suspension's roll centre, jacking, anti-dive, anti-squat and anti-lift. The f12026-car / GT3 physics uses these.
  *   `dynamicCamberDeltaRad`, `roadSteerRad`, `bumpSteerToeInRad`, `scrubRadiusM` and the axle's `rollCentreHeightM`
- *   keep their earlier blended forms for the VF26, whose hardpoints carry no tie rod.
+ *   keep their earlier blended forms for the LC26, whose hardpoints carry no tie rod.
  */
 
 export type Vec3Tuple = readonly [number, number, number];
@@ -136,16 +136,16 @@ export interface AxleKinematicsState {
   antiPitchFraction: number;
 }
 
-import { VF26_CHASSIS } from './vf26-data';
+import { LC26_CHASSIS } from './lc26-data';
 
 const DEG2RAD = Math.PI / 180;
 
 /** Raw hardpoints [carTopFront, carTopRear, carBottomFront, carBottomRear, tyreTop, tyreBottom] */
 type RawHardpoints = ReadonlyArray<readonly [number, number, number]>;
 
-/** F1 (VF26 mod) front / rear double wishbones, used when no raw hardpoints are given (the car's own data) */
-const F1_FRONT_HARDPOINTS: RawHardpoints = VF26_CHASSIS.front.hardpoints;
-const F1_REAR_HARDPOINTS: RawHardpoints = VF26_CHASSIS.rear.hardpoints;
+/** F1 (LC26 mod) front / rear double wishbones, used when no raw hardpoints are given (the car's own data) */
+const F1_FRONT_HARDPOINTS: RawHardpoints = LC26_CHASSIS.front.hardpoints;
+const F1_REAR_HARDPOINTS: RawHardpoints = LC26_CHASSIS.rear.hardpoints;
 /**
  * GT3 (Mercedes-AMG GT3 Evo 18" upright & double-wishbone geometry from unpacked reference data, expressed in
  * [x_inboard, y_up, z_fwd] from wheel center):
@@ -174,7 +174,7 @@ const GT3_REAR_HARDPOINTS: RawHardpoints = [
 ];
 
 export interface DoubleWishboneOptions {
-  /** Default geometry when no raw hardpoints are given (F1 = the VF26 mod's) */
+  /** Default geometry when no raw hardpoints are given (F1 = the LC26 mod's) */
   geometry?: 'f1' | 'gt3';
   /**
    * The car's static mechanical caster trail (m): the solver reports it plus the kinematic change with travel.
@@ -185,7 +185,7 @@ export interface DoubleWishboneOptions {
 
 /**
  * Builds a complete `DoubleWishboneHardpoints` descriptor from the 6-tuple (or 8-tuple with steer link) hardpoints
- * array in `VF26_CHASSIS.front.hardpoints` / `F12026_SUSPENSIONS` / `AMG_GT3_SUSPENSIONS` (or synthesizes default
+ * array in `LC26_CHASSIS.front.hardpoints` / `F12026_SUSPENSIONS` / `AMG_GT3_SUSPENSIONS` (or synthesizes default
  * F1/GT3 double-wishbone geometry when raw hardpoints are omitted).
  */
 export function buildDoubleWishboneHardpoints(

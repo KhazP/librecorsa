@@ -171,6 +171,8 @@ export interface GraphicsSettings {
   quality: GraphicsQuality;
   /** Render resolution relative to the screen (0.5..1.5) */
   renderScale: number;
+  /** The drivers' bodies and arms in the cars that have them (their helmets always show) */
+  driverBody: boolean;
 }
 
 export type TouchMode = "auto" | "on" | "off";
@@ -286,7 +288,7 @@ export const LIBRARY_FAVORITES_MAX = 256;
 export const LIBRARY_RECENT_MAX = 12;
 const LIBRARY_ID_MAX_LENGTH = 64;
 
-export const DEFAULT_GRAPHICS_SETTINGS: GraphicsSettings = { quality: "high", renderScale: 1 };
+export const DEFAULT_GRAPHICS_SETTINGS: GraphicsSettings = { quality: "high", renderScale: 1, driverBody: false };
 
 export const DEFAULT_TOUCH_SETTINGS: TouchSettings = { mode: "auto", tiltSteer: false, tiltRangeDeg: 30 };
 
@@ -549,6 +551,7 @@ function parseGraphics(v: unknown): GraphicsSettings {
   return {
     quality: oneOf(v.quality, ["low", "medium", "high"] as const, d.quality),
     renderScale: num(v.renderScale, 0.5, 1.5, d.renderScale),
+    driverBody: bool(v.driverBody, d.driverBody),
   };
 }
 
@@ -727,15 +730,15 @@ export function saveOnboarded() {
 const CAR_STORAGE_KEY = "bugesera.vehicle";
 const RUMBLE_STORAGE_KEY = "bugesera.rumble";
 
-/** The car to drive: `?car=` in the URL, else the last choice, else the VF26 */
+/** The car to drive: `?car=` in the URL, else the last choice, else the LC26 */
 export function loadCarChoice(): CarId {
   try {
     const fromUrl = new URLSearchParams(window.location.search).get("car");
     const linked = resolveCarId(fromUrl);
     if (linked) return linked;
-    return resolveCarId(localStorage.getItem(CAR_STORAGE_KEY)) ?? "vf26";
+    return resolveCarId(localStorage.getItem(CAR_STORAGE_KEY)) ?? "lc26";
   } catch {
-    return "vf26";
+    return "lc26";
   }
 }
 

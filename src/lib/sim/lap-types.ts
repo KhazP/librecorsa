@@ -3,7 +3,7 @@
  * Plain JSON-friendly data so recordings can be stored (IndexedDB), exported as files and uploaded.
  */
 import type { AssistPreset, TireCompound, VehicleModelId } from "@/types/f1";
-import { vf26OnRigidBody } from "@/lib/cars/vf26-engine";
+import { lc26OnRigidBody } from "@/lib/cars/lc26-engine";
 import { SIM_REALISM_LEVELS, type SimRealism } from "./sim-realism";
 
 /**
@@ -14,14 +14,14 @@ export const PHYSICS_VERSION = 7;
 
 /**
  * The revision a lap in this car is driven under: the one its current board, ghosts and weekly challenges go by. The
- * VF26 on the rigid-body engine it ships on (`vf26-engine.ts`) is another car to drive than on its older engine, so
- * its laps have a revision of their own; the older engine's laps (still driven with `?vf26engine=classic`) stay under
+ * LC26 on the rigid-body engine it ships on (`lc26-engine.ts`) is another car to drive than on its older engine, so
+ * its laps have a revision of their own; the older engine's laps (still driven with `?lc26engine=classic`) stay under
  * `PHYSICS_VERSION`, an older board of that car. Raise the offset by ten when that car alone changes: the other cars
  * keep their boards.
  */
-const VF26_RIGID_BODY_OFFSET = 510;
+const LC26_RIGID_BODY_OFFSET = 520;
 export function lapPhysicsVersion(vehicle?: VehicleModelId): number {
-  return vehicle === "vf26" && vf26OnRigidBody() ? PHYSICS_VERSION + VF26_RIGID_BODY_OFFSET : PHYSICS_VERSION;
+  return vehicle === "lc26" && lc26OnRigidBody() ? PHYSICS_VERSION + LC26_RIGID_BODY_OFFSET : PHYSICS_VERSION;
 }
 
 /** What a lap was driven with. Laps are only ranked against laps driven under the same class (`lapBoardClass`) */
@@ -209,10 +209,6 @@ export interface ReplayCarState {
   brake: number;
   gear: number;
   rpm: number;
-  /** Optional extended kinematic state for Instant Flashback resume */
-  s?: number;
-  vyMs?: number;
-  yawRateRadS?: number;
 }
 
 export interface ReplayFrame {

@@ -1,10 +1,10 @@
 /**
- * VF26 aero helpers shared by the vehicle model and the speed-profile / AI planner.
+ * LC26 aero helpers shared by the vehicle model and the speed-profile / AI planner.
  */
 
 import type { AeroSetupPreset } from '@/types/f1';
 import { Lut } from './lut';
-import { VF26_CHASSIS, VF26_TYRES, VF26_WINGS, type Vf26WingSpec } from './vf26-data';
+import { LC26_CHASSIS, LC26_TYRES, LC26_WINGS, type Lc26WingSpec } from './lc26-data';
 
 /** Wing-angle setup offsets (deg) for the three aero packages */
 export const AERO_PACKAGES: Record<AeroSetupPreset, { front: number; rear: number; flap: number }> = {
@@ -16,11 +16,11 @@ export const AERO_PACKAGES: Record<AeroSetupPreset, { front: number; rear: numbe
 const NO_TRIM = { front: 0, rear: 0 };
 
 /** CG height above the road (m): wheel radius + BASEY, averaged over the axles */
-export const VF26_CG_HEIGHT_M =
-  0.5 * (VF26_TYRES.soft.front.radius + VF26_CHASSIS.front.baseY + VF26_TYRES.soft.rear.radius + VF26_CHASSIS.rear.baseY);
+export const LC26_CG_HEIGHT_M =
+  0.5 * (LC26_TYRES.soft.front.radius + LC26_CHASSIS.front.baseY + LC26_TYRES.soft.rear.radius + LC26_CHASSIS.rear.baseY);
 
 export interface WingRuntime {
-  spec: Vf26WingSpec;
+  spec: Lc26WingSpec;
   area: number;
   aoaCl: Lut;
   aoaCd: Lut;
@@ -29,7 +29,7 @@ export interface WingRuntime {
 }
 
 export function createWingRuntimes(): WingRuntime[] {
-  return VF26_WINGS.map((spec) => ({
+  return LC26_WINGS.map((spec) => ({
     spec,
     area: spec.chord * spec.span,
     aoaCl: new Lut(spec.aoaCl),
@@ -41,7 +41,7 @@ export function createWingRuntimes(): WingRuntime[] {
 
 /** Element angle of attack (deg) for an aero package, blended toward the 2026 X-mode angle */
 export function wingAngleDeg(
-  spec: Vf26WingSpec,
+  spec: Lc26WingSpec,
   preset: AeroSetupPreset,
   xModeBlend: number,
   /** Garage wing clicks on top of the package (deg) */
@@ -77,12 +77,12 @@ export function estimateAeroCoefficients(
   let down = 0;
   let drag = 0;
   let front = 0;
-  const L = VF26_CHASSIS.wheelbase;
-  const b = L * VF26_CHASSIS.frontWeightFraction;
+  const L = LC26_CHASSIS.wheelbase;
+  const b = L * LC26_CHASSIS.frontWeightFraction;
   for (const w of wings) {
     const s = w.spec;
     const angle = wingAngleDeg(s, preset, xModeBlend, trim);
-    const h = Math.max(0, VF26_CG_HEIGHT_M + s.position[1] + heaveM + s.position[2] * pitchRad);
+    const h = Math.max(0, LC26_CG_HEIGHT_M + s.position[1] + heaveM + s.position[2] * pitchRad);
     const ghCl = w.ghCl ? w.ghCl.evaluate(h) : 1;
     const ghCd = w.ghCd ? w.ghCd.evaluate(h) : 1;
     const fd = w.area * w.aoaCl.evaluate(angle) * s.clGain * ghCl;

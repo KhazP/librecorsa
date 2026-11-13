@@ -1,7 +1,7 @@
 /**
- * Vehicle constants for the 2026 "Grand Prix VF26".
+ * Vehicle constants for the 2026 "Grand Prix LC26".
  *
- * Source: the VF26 car data package (see CREDITS.md).
+ * Source: the LC26 car data package (see CREDITS.md).
  *
  * Parameters transcribed and adapted into TypeScript:
  *  - [mod]: Direct extraction from mod data files
@@ -20,7 +20,7 @@ import { F1_RAIN_TYRE_PACK, f1RainTraits, type WetTyreTraits } from './wet-tyres
 // Tyres  (`tyres/f1_2026/f12026_*_305_720_18.tyre` / `*_405_720_18.tyre`)
 // ---------------------------------------------------------------------------
 
-export interface Vf26TyreSpec {
+export interface Lc26TyreSpec {
   name: string;
   /** Section width (m) [mod] */
   width: number;
@@ -90,7 +90,7 @@ export interface Vf26TyreSpec {
  * rear (405/720-18) slicks: matches D_REF · (Fz / Fz0)^(lsExp − 1) across nominal loads with realistic
  * contact-patch shoulder saturation at extreme aero + curb loads (> 6.5 kN).
  */
-function buildVf26LoadCurve(dRef: number, fz0: number, lsExp: number): LutPoints {
+function buildLc26LoadCurve(dRef: number, fz0: number, lsExp: number): LutPoints {
   const loads = [0, 500, 1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 5000, 6000, 7000, 8000, 9000, 10500];
   return loads.map((fz) => {
     const ratio = Math.max(0.18, fz / fz0);
@@ -182,7 +182,7 @@ const REAR_COMMON = {
   brakeDxMod: 0.05,
 } as const;
 
-const VF26_SLICKS: Record<'soft' | 'medium' | 'hard', { front: Vf26TyreSpec; rear: Vf26TyreSpec }> = {
+const LC26_SLICKS: Record<'soft' | 'medium' | 'hard', { front: Lc26TyreSpec; rear: Lc26TyreSpec }> = {
   soft: {
     front: {
       ...FRONT_COMMON,
@@ -191,8 +191,8 @@ const VF26_SLICKS: Record<'soft' | 'medium' | 'hard', { front: Vf26TyreSpec; rea
       damp: 1367.08,
       dyRef: 1.85569,
       dxRef: 1.96326,
-      dyCurve: buildVf26LoadCurve(1.85569, FRONT_COMMON.fz0, FRONT_COMMON.lsExpY),
-      dxCurve: buildVf26LoadCurve(1.96326, FRONT_COMMON.fz0, FRONT_COMMON.lsExpX),
+      dyCurve: buildLc26LoadCurve(1.85569, FRONT_COMMON.fz0, FRONT_COMMON.lsExpY),
+      dxCurve: buildLc26LoadCurve(1.96326, FRONT_COMMON.fz0, FRONT_COMMON.lsExpX),
       falloffLevel: 0.81,
       camberGain: CAMBER_GAIN.soft.front,
       thermalCurve: TCURVE_SOFT,
@@ -205,8 +205,8 @@ const VF26_SLICKS: Record<'soft' | 'medium' | 'hard', { front: Vf26TyreSpec; rea
       damp: 1499.88,
       dyRef: 1.93114,
       dxRef: 2.04199,
-      dyCurve: buildVf26LoadCurve(1.93114, REAR_COMMON.fz0, REAR_COMMON.lsExpY),
-      dxCurve: buildVf26LoadCurve(2.04199, REAR_COMMON.fz0, REAR_COMMON.lsExpX),
+      dyCurve: buildLc26LoadCurve(1.93114, REAR_COMMON.fz0, REAR_COMMON.lsExpY),
+      dxCurve: buildLc26LoadCurve(2.04199, REAR_COMMON.fz0, REAR_COMMON.lsExpX),
       falloffLevel: 0.81,
       camberGain: CAMBER_GAIN.soft.rear,
       thermalCurve: TCURVE_SOFT,
@@ -221,8 +221,8 @@ const VF26_SLICKS: Record<'soft' | 'medium' | 'hard', { front: Vf26TyreSpec; rea
       damp: 1421.76,
       dyRef: 1.8115,
       dxRef: 1.91707,
-      dyCurve: buildVf26LoadCurve(1.8115, FRONT_COMMON.fz0, FRONT_COMMON.lsExpY),
-      dxCurve: buildVf26LoadCurve(1.91707, FRONT_COMMON.fz0, FRONT_COMMON.lsExpX),
+      dyCurve: buildLc26LoadCurve(1.8115, FRONT_COMMON.fz0, FRONT_COMMON.lsExpY),
+      dxCurve: buildLc26LoadCurve(1.91707, FRONT_COMMON.fz0, FRONT_COMMON.lsExpX),
       falloffLevel: 0.8,
       camberGain: CAMBER_GAIN.medium.front,
       thermalCurve: TCURVE_MED,
@@ -235,8 +235,8 @@ const VF26_SLICKS: Record<'soft' | 'medium' | 'hard', { front: Vf26TyreSpec; rea
       damp: 1499.88,
       dyRef: 1.88516,
       dxRef: 1.99395,
-      dyCurve: buildVf26LoadCurve(1.88516, REAR_COMMON.fz0, REAR_COMMON.lsExpY),
-      dxCurve: buildVf26LoadCurve(1.99395, REAR_COMMON.fz0, REAR_COMMON.lsExpX),
+      dyCurve: buildLc26LoadCurve(1.88516, REAR_COMMON.fz0, REAR_COMMON.lsExpY),
+      dxCurve: buildLc26LoadCurve(1.99395, REAR_COMMON.fz0, REAR_COMMON.lsExpX),
       falloffLevel: 0.8,
       camberGain: CAMBER_GAIN.medium.rear,
       thermalCurve: TCURVE_MED,
@@ -251,8 +251,8 @@ const VF26_SLICKS: Record<'soft' | 'medium' | 'hard', { front: Vf26TyreSpec; rea
       damp: 1421.76,
       dyRef: 1.76732,
       dxRef: 1.87087,
-      dyCurve: buildVf26LoadCurve(1.76732, FRONT_COMMON.fz0, FRONT_COMMON.lsExpY),
-      dxCurve: buildVf26LoadCurve(1.87087, FRONT_COMMON.fz0, FRONT_COMMON.lsExpX),
+      dyCurve: buildLc26LoadCurve(1.76732, FRONT_COMMON.fz0, FRONT_COMMON.lsExpY),
+      dxCurve: buildLc26LoadCurve(1.87087, FRONT_COMMON.fz0, FRONT_COMMON.lsExpX),
       falloffLevel: 0.79,
       camberGain: CAMBER_GAIN.hard.front,
       thermalCurve: TCURVE_HARD,
@@ -265,8 +265,8 @@ const VF26_SLICKS: Record<'soft' | 'medium' | 'hard', { front: Vf26TyreSpec; rea
       damp: 1499.88,
       dyRef: 1.83918,
       dxRef: 1.9459,
-      dyCurve: buildVf26LoadCurve(1.83918, REAR_COMMON.fz0, REAR_COMMON.lsExpY),
-      dxCurve: buildVf26LoadCurve(1.9459, REAR_COMMON.fz0, REAR_COMMON.lsExpX),
+      dyCurve: buildLc26LoadCurve(1.83918, REAR_COMMON.fz0, REAR_COMMON.lsExpY),
+      dxCurve: buildLc26LoadCurve(1.9459, REAR_COMMON.fz0, REAR_COMMON.lsExpX),
       falloffLevel: 0.79,
       camberGain: CAMBER_GAIN.hard.rear,
       thermalCurve: TCURVE_HARD,
@@ -280,7 +280,7 @@ const VF26_SLICKS: Record<'soft' | 'medium' | 'hard', { front: Vf26TyreSpec; rea
  * the pack's temperature curve and window (`F1_RAIN_TYRE_PACK`), a longer, softer tread (relaxation length, peak slip
  * angle) and the medium's wear rate. Its water behaviour, extra heat and wear on a dry road come from `wet` at run time
  */
-function deriveVf26RainTyre(base: Vf26TyreSpec, kind: 'intermediate' | 'wet'): Vf26TyreSpec {
+function deriveLc26RainTyre(base: Lc26TyreSpec, kind: 'intermediate' | 'wet'): Lc26TyreSpec {
   // The medium slick's curve peaks at 102.5 °C
   const traits = f1RainTraits(kind, 102.5);
   const k = traits.dryGrip;
@@ -302,21 +302,21 @@ function deriveVf26RainTyre(base: Vf26TyreSpec, kind: 'intermediate' | 'wet'): V
   };
 }
 
-export const VF26_TYRES: Record<TireCompound, { front: Vf26TyreSpec; rear: Vf26TyreSpec }> = {
-  ...VF26_SLICKS,
+export const LC26_TYRES: Record<TireCompound, { front: Lc26TyreSpec; rear: Lc26TyreSpec }> = {
+  ...LC26_SLICKS,
   intermediate: {
-    front: deriveVf26RainTyre(VF26_SLICKS.medium.front, 'intermediate'),
-    rear: deriveVf26RainTyre(VF26_SLICKS.medium.rear, 'intermediate'),
+    front: deriveLc26RainTyre(LC26_SLICKS.medium.front, 'intermediate'),
+    rear: deriveLc26RainTyre(LC26_SLICKS.medium.rear, 'intermediate'),
   },
   wet: {
-    front: deriveVf26RainTyre(VF26_SLICKS.medium.front, 'wet'),
-    rear: deriveVf26RainTyre(VF26_SLICKS.medium.rear, 'wet'),
+    front: deriveLc26RainTyre(LC26_SLICKS.medium.front, 'wet'),
+    rear: deriveLc26RainTyre(LC26_SLICKS.medium.rear, 'wet'),
   },
 
 };
 
 /** Tyre setup ranges: cold gauge pressure at 20 °C (psi, includes the 15.7 / 14.1 defaults) and static camber (deg) */
-export const VF26_TYRE_SETUP_RANGES: {
+export const LC26_TYRE_SETUP_RANGES: {
   coldPsiRange: [number, number];
   frontCamberRange: [number, number];
   rearCamberRange: [number, number];
@@ -327,10 +327,10 @@ export const VF26_TYRE_SETUP_RANGES: {
 };
 
 // ---------------------------------------------------------------------------
-// Chassis  (`data/cardata.car` section 1 / 2, `data/setup/vf26_setup.carsetup`)
+// Chassis  (`data/cardata.car` section 1 / 2, `data/setup/lc26_setup.carsetup`)
 // ---------------------------------------------------------------------------
 
-export interface Vf26AxleSuspension {
+export interface Lc26AxleSuspension {
   /** Wheel rate of the corner spring (N/m) [setup] */
   springRate: number;
   /** Progressive spring rate (N/m per m of travel) [mod] */
@@ -390,8 +390,8 @@ export interface Vf26AxleSuspension {
   hardpoints: ReadonlyArray<readonly [number, number, number]>;
 }
 
-export const VF26_CHASSIS = {
-  name: 'VF26 2026',
+export const LC26_CHASSIS = {
+  name: 'LC26 2026',
   /** Total mass incl. driver, excluding fuel (kg) [mod] */
   totalMassKg: 768,
   /** Default race fuel (kg) [setup] */
@@ -452,7 +452,7 @@ export const VF26_CHASSIS = {
       [0.12506, 0.17361, -0.0138],
       [0.0725, -0.025136, 0.0185],
     ],
-  } satisfies Vf26AxleSuspension,
+  } satisfies Lc26AxleSuspension,
   rear: {
     springRate: 185000,
     progressiveRate: 20000,
@@ -481,7 +481,7 @@ export const VF26_CHASSIS = {
       [0.119245, 0.196534, 0.06647],
       [0.09259, 0.0129, 0.052143],
     ],
-  } satisfies Vf26AxleSuspension,
+  } satisfies Lc26AxleSuspension,
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -489,7 +489,7 @@ export const VF26_CHASSIS = {
 // Aero model: F = ½ρV² · chord·span · CL(AoA) · CL_GAIN · GH_CL(height)
 // ---------------------------------------------------------------------------
 
-export interface Vf26WingSpec {
+export interface Lc26WingSpec {
   name: string;
   chord: number;
   span: number;
@@ -537,7 +537,7 @@ const GH_DIFF_REAR_CD: LutPoints = [[0, 1], [0.012, 1], [0.0124, 1], [0.02, 0.7]
  * 2026 car's downforce, CL·A ≈ 4.4 m² static and 5.1 at speed (L/D ≈ 3), and the front wings carry the balance back to
  * ≈ 47 % front. [derived]
  */
-export const VF26_WINGS: ReadonlyArray<Vf26WingSpec> = [
+export const LC26_WINGS: ReadonlyArray<Lc26WingSpec> = [
   { name: 'BODY', chord: 1, span: 1.366, position: [0, 0.15, -0.08], aoaCl: AOA_BODY_CL, aoaCd: AOA_BODY_CD, clGain: 0.9, cdGain: 0.5, angleDeg: 3.5, xModeAngleDeg: 3.5, yawClGain: -0.2 },
   { name: 'FRONT_L', chord: 1, span: 0.42, position: [-0.56, -0.09, 2.9], aoaCl: AOA_FRONT_CL, aoaCd: AOA_FRONT_CD, ghCl: GH_FRONTWING_CL, ghCd: GH_FRONTWING_CD, clGain: 3.3, cdGain: 1.25, angleDeg: 6, xModeAngleDeg: -2, yawClGain: -0.571 },
   { name: 'FRONT_R', chord: 1, span: 0.42, position: [0.56, -0.09, 2.9], aoaCl: AOA_FRONT_CL, aoaCd: AOA_FRONT_CD, ghCl: GH_FRONTWING_CL, ghCd: GH_FRONTWING_CD, clGain: 3.3, cdGain: 1.25, angleDeg: 6, xModeAngleDeg: -2, yawClGain: -0.571 },
@@ -552,13 +552,13 @@ export const VF26_WINGS: ReadonlyArray<Vf26WingSpec> = [
 ];
 
 /** 2026 active aero actuator: full Z↔X transition time, each way (s) [assumed — 0.2 s actuator delay] */
-export const VF26_ACTIVE_AERO_TRANSITION_S = 0.2;
+export const LC26_ACTIVE_AERO_TRANSITION_S = 0.2;
 
 // ---------------------------------------------------------------------------
-// Power unit  (`data/vf26_ref.carengine`, `*.turbo`, `data/kers/*`)
+// Power unit  (`data/lc26_ref.carengine`, `*.turbo`, `data/kers/*`)
 // ---------------------------------------------------------------------------
 
-export const VF26_ENGINE = {
+export const LC26_ENGINE = {
   /** Crank + flywheel inertia (kg·m²) [mod] */
   inertia: 0.05,
   /** Idle speed held by the anti-stall (rpm) [assumed — mod clutch engages 4000→5500 rpm] */
@@ -588,7 +588,7 @@ export const VF26_ENGINE = {
   turboDecayTauS: 0.18,
 } as const;
 
-export const VF26_ERS = {
+export const LC26_ERS = {
   /** MGU-K deploy torque at the crank (rpm → Nm) [mod: ers_kinetic_torque.curve] */
   kineticTorque: [
     [500, 654], [5730, 654], [6000, 654], [6500, 610], [7000, 543], [7500, 547], [8000, 494], [8500, 445], [9000, 448],
@@ -662,16 +662,16 @@ const MGUK_ZERO_KMH = 355;
  */
 export function mgukDeployCapW(speedKmh: number, overrideActive: boolean): number {
   const start = overrideActive ? MGUK_OVERRIDE_TAPER_START_KMH : MGUK_TAPER_START_KMH;
-  if (speedKmh <= start) return VF26_ERS.maxPowerW;
+  if (speedKmh <= start) return LC26_ERS.maxPowerW;
   if (speedKmh >= MGUK_ZERO_KMH) return 0;
-  return (VF26_ERS.maxPowerW * (MGUK_ZERO_KMH - speedKmh)) / (MGUK_ZERO_KMH - start);
+  return (LC26_ERS.maxPowerW * (MGUK_ZERO_KMH - speedKmh)) / (MGUK_ZERO_KMH - start);
 }
 
 // ---------------------------------------------------------------------------
-// Drivetrain  (`data/vf26_ref.gearbox|.clutch|.drivetrain`)
+// Drivetrain  (`data/lc26_ref.gearbox|.clutch|.drivetrain`)
 // ---------------------------------------------------------------------------
 
-export const VF26_DRIVETRAIN = {
+export const LC26_DRIVETRAIN = {
   /** Forward gear ratios 1..8 [mod] */
   gearRatios: [2.9688, 2.3978, 2.0334, 1.7155, 1.48, 1.28, 1.1111, 0.9667] as const,
   reverseRatio: -4.5,
@@ -709,10 +709,10 @@ export const VF26_DRIVETRAIN = {
 } as const;
 
 // ---------------------------------------------------------------------------
-// Brakes  (`data/vf26_ref.brakesystem`, setup)
+// Brakes  (`data/lc26_ref.brakesystem`, setup)
 // ---------------------------------------------------------------------------
 
-export const VF26_BRAKES = {
+export const LC26_BRAKES = {
   /** Max brake torque per wheel scaled by share (MAX_TORQUE) (Nm) [mod] */
   maxTorqueNm: 6500,
   /** Front brake share [setup: 56 %] */
@@ -730,7 +730,7 @@ export const VF26_BRAKES = {
  * Reference performance envelope recorded by the mod's own AI calibration
  * (`aicardata`). Used by `scripts/verify-sim.ts` as validation targets.
  */
-export const VF26_AI_REFERENCE = {
+export const LC26_AI_REFERENCE = {
   topSpeedKmh: 331,
   /** Seconds from standstill to speed (m/s) */
   accel: [[2.817, 24.0], [5.496, 54.75], [8.181, 73.94], [12.585, 83.74]] as LutPoints,
@@ -742,7 +742,7 @@ export const VF26_AI_REFERENCE = {
  * Computes the kinematic roll-centre height (m above ground) of a double-wishbone axle
  * from its hardpoints (front view instant-centre construction).
  */
-export function computeRollCentreHeight(axle: Vf26AxleSuspension, tyreRadius: number): number {
+export function computeRollCentreHeight(axle: Lc26AxleSuspension, tyreRadius: number): number {
   const hp = axle.hardpoints;
   const avg = (a: readonly [number, number, number], b: readonly [number, number, number]) =>
     [(a[0] + b[0]) * 0.5, (a[1] + b[1]) * 0.5] as const;

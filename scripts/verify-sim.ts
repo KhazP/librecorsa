@@ -9,15 +9,15 @@ import {
   updateTyreThermal,
   wearGripMultiplier,
 } from '../src/lib/sim/ac-tyre';
-import { estimateAeroCoefficients } from '../src/lib/sim/vf26-aero';
+import { estimateAeroCoefficients } from '../src/lib/sim/lc26-aero';
 import { NOMINAL_AIR_DENSITY } from '../src/lib/sim/speed-profile';
 import { Lut } from '../src/lib/sim/lut';
-import { mgukDeployCapW, VF26_AI_REFERENCE, VF26_CHASSIS, VF26_TYRES } from '../src/lib/sim/vf26-data';
+import { mgukDeployCapW, LC26_AI_REFERENCE, LC26_CHASSIS, LC26_TYRES } from '../src/lib/sim/lc26-data';
 import { buildCircuitScene } from '../src/lib/scene-builder';
 import { MultiplayerSyncManager } from '../src/lib/sim/multiplayer-sync';
 import { AiOpponentField } from '../src/lib/sim/ai-opponents';
 import { createFlatTestTrack } from './lib/flat-track';
-import { checkBarrierCrashes, vf26CrashCar } from './lib/barrier-crash';
+import { checkBarrierCrashes, lc26CrashCar } from './lib/barrier-crash';
 import { loadGlbGeometry } from './lib/glb-geometry';
 import { TrackWallQuery } from '../src/lib/sim/f12026-car/TrackColliderQuery';
 import * as THREE from 'three';
@@ -71,7 +71,7 @@ function assert(condition: boolean, message: string): void {
 }
 
 async function runVerification() {
-  console.log('=== LIBRECORSA SIMULATOR VERIFICATION SUITE (VF26, RISE Motordrome) ===\n');
+  console.log('=== LIBRECORSA SIMULATOR VERIFICATION SUITE (LC26, RISE Motordrome) ===\n');
   const track = getActiveTrackData(1200);
   const flat = createFlatTestTrack(30_000);
 
@@ -100,13 +100,13 @@ async function runVerification() {
   console.log('\n2. Testing Straight-Line Acceleration & Self-Steer on the Flat Pad...');
   const simStraight = new F1Physics2026(flat);
   simStraight.teleportToDistance(100, 0);
-  const accelRef = new Lut(VF26_AI_REFERENCE.accel);
+  const accelRef = new Lut(LC26_AI_REFERENCE.accel);
   const accelChecks: string[] = [];
   let accelOk = true;
   let tAccel = 0;
   let t100: number | null = null;
   let clutchLock: { t: number; kmh: number } | null = null;
-  for (const [tRef] of VF26_AI_REFERENCE.accel) {
+  for (const [tRef] of LC26_AI_REFERENCE.accel) {
     while (tAccel < tRef) {
       simStraight.step(1 / 120, { throttle: 1 });
       tAccel += 1 / 120;
@@ -147,10 +147,10 @@ async function runVerification() {
     `500 Hz sub-stepped solver is frame-rate independent (speedDiff=${speedDiff.toExponential(2)}, sDiff=${sDiff.toExponential(2)})`
   );
 
-  // 4. Tyre load sensitivity & ground-effect aero (VF26 data)
+  // 4. Tyre load sensitivity & ground-effect aero (LC26 data)
   console.log('\n4. Testing Tyre Load Sensitivity, Ground Effect & Active Aero...');
   const tyreMu = (fz: number) => {
-    const tyre = createTyreRuntime(VF26_TYRES.soft.front, 90);
+    const tyre = createTyreRuntime(LC26_TYRES.soft.front, 90);
     let mu = 0;
     for (let i = 0; i < 400; i++) {
       mu = computeTyreForces(tyre, { fz, vx: 50, vy: -4, rimSpeed: 50, camberLeftRad: 0, surfaceGrip: 1, dt: 0.0005 }).mu;
@@ -165,7 +165,7 @@ async function runVerification() {
   );
   // Magic Formula slip curve: peak (1.0) at the mod's peak slip, mod stiffness, mod falloff by x = 3
   {
-    const spec = VF26_TYRES.soft.front;
+    const spec = LC26_TYRES.soft.front;
     const tyre = createTyreRuntime(spec, 90);
     let peakX = 0;
     let peak = 0;
@@ -185,7 +185,7 @@ async function runVerification() {
   }
   // Inflation: ideal gas, P_absolute/T constant; pressure stiffens the carcass; load shortens the rolling radius
   {
-    const spec = VF26_TYRES.soft.front;
+    const spec = LC26_TYRES.soft.front;
     const tyre = createTyreRuntime(spec, 20);
     const pCold = tyre.pressurePsi;
     setTyreTemperature(tyre, 95);
@@ -206,7 +206,7 @@ async function runVerification() {
   }
   // 9-node thermal: static negative camber loads and heats the inner shoulder; cornering moves load outward
   {
-    const spec = VF26_TYRES.soft.front;
+    const spec = LC26_TYRES.soft.front;
     const run = (camberInRad: number, slipVy: number) => {
       const tyre = createTyreRuntime(spec, 80);
       let out = computeTyreForces(tyre, { fz: 5000, vx: 60, vy: 0, rimSpeed: 60, camberLeftRad: camberInRad, surfaceGrip: 1, inwardSign: 1, dt: 0.0005 });
@@ -436,7 +436,7 @@ async function runVerification() {
   );
   const sumWheelFz = simHighSpeed.wheels.reduce((acc, w) => acc + w.fzN, 0);
   const expectedTotalFz =
-    (VF26_CHASSIS.totalMassKg + simHighSpeed.telemetry.fuelKg) * 9.81 + simHighSpeed.telemetry.downforceN;
+    (LC26_CHASSIS.totalMassKg + simHighSpeed.telemetry.fuelKg) * 9.81 + simHighSpeed.telemetry.downforceN;
   assert(
     Math.abs(sumWheelFz - expectedTotalFz) / expectedTotalFz < 0.05,
     `Sum of 4 wheel loads matches weight + aero downforce on the flat pad (sumFz=${sumWheelFz.toFixed(0)}N vs expected=${expectedTotalFz.toFixed(0)}N)`
@@ -734,7 +734,7 @@ async function runVerification() {
   );
 
   // 9.9 Dynamic braking-line urgency ahead of Turn 2 (the first heavy stop: Turn 1 is a flat-out sweeper)
-  // follows the VF26 speed profile
+  // follows the LC26 speed profile
   const t1S = TURN_METADATA.find((t) => t.number === 1)?.sApprox ?? 366;
   const t2S = TURN_METADATA.find((t) => t.number === 2)?.sApprox ?? 664;
   const carS = t1S + 40;
@@ -856,7 +856,7 @@ async function runVerification() {
         const W = sim.telemetry.wheelSlipRatios;
         const loads = sim.telemetry.wheelLoadsN;
         const outer = loads && loads[2] > loads[3] ? 2 : 3;
-        if (W) rearLock = Math.max(rearLock, -W[outer] / VF26_TYRES.soft.rear.peakSlipRatio);
+        if (W) rearLock = Math.max(rearLock, -W[outer] / LC26_TYRES.soft.rear.peakSlipRatio);
       }
     }
     return { maxSlip, rearLock };
@@ -1074,7 +1074,7 @@ async function runVerification() {
   }
 
   // 12. Missed braking points: flat out at 300 km/h into the outside barriers of two corners, then drive away.
-  // Measured against the GLB barrier face; on the track-data wall lines (no GLB attached) the VF26 can reach up to
+  // Measured against the GLB barrier face; on the track-data wall lines (no GLB attached) the LC26 can reach up to
   // ~0.5 m past it where those lines sit outside the modelled barrier.
   {
     console.log('\n12. Barrier hits (missed braking points)...');
@@ -1082,12 +1082,12 @@ async function runVerification() {
     const trackRoot = loadGlbGeometry('public/tracks/rwanda_official/rwanda_official.glb');
     const walls = TrackWallQuery.fromTrackRoot(trackRoot);
     const check = (name: string, ok: boolean, detail: string) => assert(ok, `${name} (${detail})`);
-    checkBarrierCrashes(check, 'VF26 (GLB walls)', crashTrack, walls, () => {
+    checkBarrierCrashes(check, 'LC26 (GLB walls)', crashTrack, walls, () => {
       const sim = new F1Physics2026(crashTrack);
       sim.attachTrackRoot(trackRoot);
-      return vf26CrashCar(sim, crashTrack);
+      return lc26CrashCar(sim, crashTrack);
     });
-    checkBarrierCrashes(check, 'VF26 (track-data walls)', crashTrack, walls, () => vf26CrashCar(new F1Physics2026(crashTrack), crashTrack), 0.55);
+    checkBarrierCrashes(check, 'LC26 (track-data walls)', crashTrack, walls, () => lc26CrashCar(new F1Physics2026(crashTrack), crashTrack), 0.55);
   }
 
   // 13. Driver-facing states: the tuner reads back what was picked, a restart and an autopilot hand-back restore the

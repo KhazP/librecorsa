@@ -1,7 +1,7 @@
 /**
  * Placement and blow-up recovery checks for the f12026-car vehicle model (f12026-car, AMG GT3) on the Rwanda colliders.
  *
- * Every rejoin goes through `VehiclePhysics.reset`: flashbacks, the autopilot's stuck rejoin, the AI's rejoin, and the
+ * Every rejoin goes through `VehiclePhysics.reset`: a car put back at a pose, the autopilot's stuck rejoin, the AI's rejoin, and the
  * recovery of a car whose state blew up. On Rwanda's 10–14 % hills a car placed level, rolling at speed, used to be
  * pitched over by its own springs and driven tyres before it was released (issue #21: "the car just starts flying"),
  * and a car whose state had gone non-finite could never be put back, so it stayed NaN for the rest of the session.

@@ -185,7 +185,7 @@ export function stepBrakeDiscThermal(
 }
 
 /**
- * Brake-by-wire brake migration, in the shape of the VF26 mod's `ebb_controller_migration_N.curve` (`0|0  1|N/100`,
+ * Brake-by-wire brake migration, in the shape of the LC26 mod's `ebb_controller_migration_N.curve` (`0|0  1|N/100`,
  * brake pedal in, additive front-share shift out; setup default Mig6): the set bias at a light pedal, moving
  * linearly forward to `base + migrationRange` at full pedal, so the bias comes back rearward as the driver releases
  * into the corner. The data do not label the sign; forward-at-high-pressure is the F1 convention. Continuous in the

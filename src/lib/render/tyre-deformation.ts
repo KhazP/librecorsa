@@ -96,7 +96,7 @@ export interface TyreDeformationHandle {
 }
 
 export interface TyreDeformationOptions {
-  /** Undeformed radius of the mesh (m): half the mesh height, e.g. 0.349 for the VF26 tyre */
+  /** Undeformed radius of the mesh (m): half the mesh height, e.g. 0.349 for the LC26 tyre */
   unloadedRadiusM: number;
   /** Half the tread width (m): the sidewall faces sit at |x| ≈ halfWidthM */
   halfWidthM: number;
@@ -292,7 +292,7 @@ export function installTyreDeformation(
     sidewall?.patch(shader);
   };
   // Tyres with and without the sidewall compile to different programs
-  const programKey = sidewall ? 'vf26-tyre-deform-sidewall' : 'vf26-tyre-deform';
+  const programKey = sidewall ? 'lc26-tyre-deform-sidewall' : 'lc26-tyre-deform';
   material.customProgramCacheKey = () => programKey;
   mesh.material = material;
 
@@ -301,7 +301,7 @@ export function installTyreDeformation(
     Object.assign(shader.uniforms, uniforms);
     shader.vertexShader = injectDeform(shader.vertexShader, false);
   };
-  depth.customProgramCacheKey = () => 'vf26-tyre-deform-depth';
+  depth.customProgramCacheKey = () => 'lc26-tyre-deform-depth';
   mesh.customDepthMaterial = depth;
 
   const distance = new THREE.MeshDistanceMaterial();
@@ -309,7 +309,7 @@ export function installTyreDeformation(
     Object.assign(shader.uniforms, uniforms);
     shader.vertexShader = injectDeform(shader.vertexShader, false);
   };
-  distance.customProgramCacheKey = () => 'vf26-tyre-deform-distance';
+  distance.customProgramCacheKey = () => 'lc26-tyre-deform-distance';
   mesh.customDistanceMaterial = distance;
 
   const deflectionOf = (state: TyreVisualState) =>

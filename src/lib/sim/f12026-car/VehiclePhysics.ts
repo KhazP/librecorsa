@@ -147,6 +147,7 @@ import {
   type BrushTyre,
 } from './brush-tyre';
 import { roadTextureHeightM } from '../road-texture';
+import { beginSettle } from './settle-memo';
 
 const G = 9.81;
 const DEG2RAD = Math.PI / 180;
@@ -314,6 +315,11 @@ export interface VehiclePhysicsOptions {
   ambientC?: number;
   trackTempC?: number;
   drsZones?: ZoneData_DRSZone[];
+  /**
+   * Stretches of the lap (fractions) where the flaps may open as well as in `drsZones`, for a car whose zones are not
+   * gated by detection (2026 Straight Mode: every straight). They have no detection point.
+   */
+  straightZones?: readonly { start: number; end: number }[];
   /**
    * Lap progress (0..1) of a world point. With it, DRS only opens inside a zone after crossing that
    * zone's detection point; without it DRS is allowed anywhere and lap energy never resets.
@@ -944,6 +950,8 @@ export class VehiclePhysics {
   private readonly brakePadCurve: BrakePadMuCurve | undefined;
   /** Disc temperature at the start and every reset (°C, `BrakesData.discStartTempC`) */
   private readonly brakeStartTempC: number;
+  /** The rear discs' cooling air against the front's (`BrakesData.rearDuctShare`) */
+  private readonly brakeRearDuctShare: number;
   /** Dynamic brake bias after pressure-sensitive brake migration */
   public dynamicBrakeBias = 0.56;
   /** Live-tunable dynamic brake migration ramp amount (0..0.06) */
@@ -1025,9 +1033,10 @@ export class VehiclePhysics {
   /** Roll / yaw tables of the ride-height aero map */
   private readonly mapLuts: { rollCl: Lut; rollCd: Lut; rollBalance: Lut; yawCl: Lut; yawCd: Lut; yawBalance: Lut } | null;
   private readonly drsZones: ZoneData_DRSZone[];
+  private readonly straightZones: readonly { start: number; end: number }[];
   private readonly locateProgress?: (x: number, z: number) => number;
   private readonly drsEligibleAtDetection?: (zone: ZoneData_DRSZone) => boolean;
-  private readonly onEvent?: (event: VehicleEvent) => void;
+  private onEvent?: (event: VehicleEvent) => void;
   private walls?: WallQuery;
   private readonly wallIds = new Int32Array(256);
   /** Body-frame points probed against the barriers (floor level, around the outline) */
@@ -1081,6 +1090,8 @@ export class VehiclePhysics {
   private mapAeroFrontN = 0;
   private mapAeroRearN = 0;
   private mapAeroDragN = 0;
+  /** The wing elements carry their own drag heights (`WingData.dragY`): the drag acts where its parts put it */
+  private readonly dragAtElements: boolean;
   private readonly prevVelocity = new THREE.Vector3();
   /** The body's acceleration less gravity at the last sub-step (m/s², world): what the unsprung masses ride with */
   private readonly bodySpecificForce = new THREE.Vector3();
@@ -1099,6 +1110,7 @@ export class VehiclePhysics {
     this.trackTempC = options.trackTempC ?? 41;
     this.baseTrackTempC = this.trackTempC;
     this.drsZones = options.drsZones ?? [];
+    this.straightZones = options.straightZones ?? [];
     this.locateProgress = options.locateProgress;
     this.drsEligibleAtDetection = options.drsEligibleAtDetection;
     this.walls = options.walls;
@@ -1133,6 +1145,7 @@ export class VehiclePhysics {
     this.brakeCompound = cfg.brakes.discMaterial ?? 'carbon-ceramic';
     this.brakePadCurve = cfg.brakes.padMuCurve;
     this.brakeStartTempC = cfg.brakes.discStartTempC ?? 380;
+    this.brakeRearDuctShare = cfg.brakes.rearDuctShare ?? 1;
     this.drivenWheels = cfg.drivenAxle === 'front' ? [0, 1] : [2, 3];
     // Body axes: X = left (pitch), Y = up (yaw), Z = forward (roll)
     this.dryInertiaBody = new THREE.Vector3(ch.inertia.pitch, ch.inertia.yaw, ch.inertia.roll);
@@ -1160,6 +1173,7 @@ export class VehiclePhysics {
       yawCl: spec.lutYaw_CL_mult ? new Lut(spec.lutYaw_CL_mult) : null,
       yawCd: spec.lutYaw_CD_mult ? new Lut(spec.lutYaw_CD_mult) : null,
     }));
+    this.dragAtElements = cfg.aero.wings.some((w) => w.dragY !== undefined);
 
     const modes = cfg.performanceModes;
     this.luts = {
@@ -1423,7 +1437,7 @@ export class VehiclePhysics {
    * Place the car at rest on the ground under (x, z), heading along `yawRad` (atan2(forward.x, forward.z)),
    * then let the suspension settle. `speedMs` > 0 gives a rolling start.
    */
-  /** Places the car at rest (or rolling at `speedMs`) on the ground at x, z; `keepTyres` keeps tyre and brake heat and wear (a flashback) */
+  /** Places the car at rest (or rolling at `speedMs`) on the ground at x, z; `keepTyres` keeps tyre and brake heat and wear (a car put back at a pose) */
   public reset(x: number, z: number, yawRad: number, speedMs = 0, keepTyres = false): void {
     const ch = this.config.chassis;
     const aero = this.config.aero;
@@ -1462,7 +1476,7 @@ export class VehiclePhysics {
     this.mapAeroRearN = 0;
     this.mapAeroDragN = 0;
     this.wallPrevCg.copy(this.position);
-    // Tyres kept through a flashback are only worth keeping while their state is a number
+    // Tyres kept through a placement are only worth keeping while their state is a number
     if (!keepTyres || !this.tyreStateFinite()) this.setTyreBlanketState();
 
     // Hubs at their static height over the local ground
@@ -1498,21 +1512,45 @@ export class VehiclePhysics {
     const rolling = speedMs > 0;
     const hold: VehicleInputs = { throttle: 0, brake: rolling ? 0 : 1, steer: 0 };
     if (rolling) this.gear = this.gearForSpeed(speedMs);
-    for (let k = 0; k < 300 * VehiclePhysics.SUBSTEPS; k++) {
-      this.updateBasis();
-      this.velocity.x = speedMs * _ez.x;
-      this.velocity.z = speedMs * _ez.z;
-      // Free-rolling at the road speed under each tyre: held at speed / r, the tyres would drive (or brake) the
-      // pinned car through the whole settle, and on a grade that thrust pitches it up
-      for (const w of this.wheels) w.omega = (k === 0 ? speedMs : Math.max(0, w.vx)) / Math.max(0.2, w.rollingRadius || 0.35);
-      if (rolling) this.engineOmega = this.drivenOmega() * this.totalRatio();
-      this.substep(h, hold);
-      this.position.x = x;
-      this.position.z = z;
-      this.angularVelocity.y = 0;
+    // A car in exactly the state of one settled before takes that settle's result (`settle-memo.ts`), on ground and
+    // barriers whose answers never depend on their earlier queries. The step size is the class's, not the car's (a test
+    // changes it), so it goes in with the settle's own inputs. Not for a car keeping its worn, hot tyres (a flashback):
+    // that state never comes round again, and keeping it would only push out settles that do
+    const opaque = new Set<object>([this.ground]);
+    if (this.walls) opaque.add(this.walls);
+    const memo =
+      !keepTyres && this.ground.stateless === true && (this.walls === undefined || this.walls.stateless === true)
+        ? beginSettle(this, opaque, [x, z, speedMs, VehiclePhysics.FIXED_DT, VehiclePhysics.SUBSTEPS])
+        : null;
+    if (!memo?.applied) {
+      // Events seen here (a barrier hit) would not be seen by a car given this settle's result: it is not kept then
+      let events = 0;
+      const onEvent = this.onEvent;
+      this.onEvent = (e) => {
+        events++;
+        onEvent?.(e);
+      };
+      try {
+        for (let k = 0; k < 300 * VehiclePhysics.SUBSTEPS; k++) {
+          this.updateBasis();
+          this.velocity.x = speedMs * _ez.x;
+          this.velocity.z = speedMs * _ez.z;
+          // Free-rolling at the road speed under each tyre: held at speed / r, the tyres would drive (or brake) the
+          // pinned car through the whole settle, and on a grade that thrust pitches it up
+          for (const w of this.wheels) w.omega = (k === 0 ? speedMs : Math.max(0, w.vx)) / Math.max(0.2, w.rollingRadius || 0.35);
+          if (rolling) this.engineOmega = this.drivenOmega() * this.totalRatio();
+          this.substep(h, hold);
+          this.position.x = x;
+          this.position.z = z;
+          this.angularVelocity.y = 0;
+        }
+        if (!rolling) for (let k = 0; k < 600 * VehiclePhysics.SUBSTEPS; k++) this.substep(h, hold);
+      } finally {
+        this.onEvent = onEvent;
+      }
+      memo?.store(events > 0);
     }
     if (!rolling) {
-      for (let k = 0; k < 600 * VehiclePhysics.SUBSTEPS; k++) this.substep(h, hold);
       this.velocity.set(0, 0, 0);
       this.angularVelocity.set(0, 0, 0);
     } else {
@@ -1775,7 +1813,7 @@ export class VehiclePhysics {
   }
 
   /**
-   * Fuel on board (kg): its mass rides with the body and the moments of inertia grow with the mass, as the VF26's
+   * Fuel on board (kg): its mass rides with the body and the moments of inertia grow with the mass, as the LC26's
    * uniform-box body does. Its weight acts at the tank (`ChassisData.fuelTank`; at the CG without one), so a tank
    * behind the CG moves the weight split rearward. The spring preloads keep the load they were last set for
    * (`refreshStaticGeometry` sets them for this load), so a car that burns fuel rises on its springs.
@@ -2036,8 +2074,14 @@ export class VehiclePhysics {
       // Leaving the zone spends its eligibility
       if (!zone && this.lastDrsZoneId !== null && this.drsArmedZone === this.lastDrsZoneId) this.drsArmedZone = null;
       this.lastDrsZoneId = zone?.id ?? null;
-      inZone = zone !== undefined;
-      armed = zone !== undefined && (!this.drsGatedByDetection || this.drsArmedZone === zone.id);
+      // A straight outside the zones: open to a car whose zones need no detection, and never to one that does
+      const straight =
+        zone === undefined &&
+        !this.drsGatedByDetection &&
+        Number.isFinite(p) &&
+        this.straightZones.some((z) => inLapWindow(p, z.start, z.end));
+      inZone = zone !== undefined || straight;
+      armed = straight || (zone !== undefined && (!this.drsGatedByDetection || this.drsArmedZone === zone.id));
     }
     if (!this.drsFitted) inZone = armed = false;
     const dryEnoughForDrs = isRearFlapAllowedInWet(this.wetness);
@@ -2114,12 +2158,13 @@ export class VehiclePhysics {
   }
 
   /**
-   * Aero drag −`perMs`·air (N) at the drag's centre of pressure (`AeroData.dragCentreY` above the CG): above the CG it
-   * pitches the nose up and loads the rear axle, as the rear wing's and wheels' drag do on the real car
+   * Aero drag −`perMs`·air (N) at the drag's centre of pressure, `centreY` above the CG (`AeroData.dragCentreY` unless
+   * given): above the CG it pitches the nose up and loads the rear axle, as the rear wing's and wheels' drag do on the
+   * real car
    */
-  private addDragAtCentre(air: THREE.Vector3, perMs: number): void {
+  private addDragAtCentre(air: THREE.Vector3, perMs: number, centreY = this.config.aero.dragCentreY ?? 0): void {
     _f.copy(air).multiplyScalar(-perMs);
-    _p.set(0, this.config.aero.dragCentreY ?? 0, 0).applyQuaternion(this.quaternion).add(this.position);
+    _p.set(0, centreY, 0).applyQuaternion(this.quaternion).add(this.position);
     this.addForceAt(_f, _p);
   }
 
@@ -2345,7 +2390,7 @@ export class VehiclePhysics {
         );
         const pressureGrip = tyrePressureGrip(td.pressureData, w.pressurePsi);
         w.thermalGrip = thermal;
-        // Wear, graining, blistering, dirt and flat-spots, as the VF26's tyre model (ac-tyre computeTyreForces)
+        // Wear, graining, blistering, dirt and flat-spots, as the LC26's tyre model (ac-tyre computeTyreForces)
         // A brush tyre's graining softens it (below, at the peak slip) rather than costing grip; its blisters cost up to
         // a sixth of the grip
         const treadGrip = tyre.brush ? 1 / (1 + 0.2 * w.blisterLevel) : (1 - 0.08 * w.grainLevel) * (1 - 0.12 * w.blisterLevel);
@@ -2503,7 +2548,7 @@ export class VehiclePhysics {
       // Fz's KPI / caster weight-jacking, Mz and Mx projected onto the axis), plus the flat-spot shake. Any other moment
       // about the kingpin joins this sum as its own term
       if (w.isFront) {
-        // The solved upright's own kingpin ground offsets (the blended scrub / trail fields stay for the VF26)
+        // The solved upright's own kingpin ground offsets (the blended scrub / trail fields stay for the LC26)
         _kpGeo.kpiRad = kin.kpiRad;
         _kpGeo.casterRad = kin.casterRad;
         _kpGeo.scrubRadiusM = kin.kingpinScrubM;
@@ -2908,11 +2953,22 @@ export class VehiclePhysics {
     let pK = 0;
     /** The ECU may deploy now: the MGU-K then also fills the torque the turbo lag costs */
     let deployAllowed = false;
+    /**
+     * On a car that harvests on a lift in every gear: that harvest now (W), the same power in every gear, easing off as
+     * the throttle comes back to the lift threshold. The brake pedal keeps it, as it keeps the engine's overrun
+     */
+    let liftW = 0;
+    const everyGear = ers.liftHarvestEveryGear;
     const coupled = engage > 0.9 && this.gear > 0;
     if (coupled) {
+      if (everyGear && inp.throttle < ers.liftThrottle) {
+        liftW = ers.topGearLiftHarvestW * mode.liftHarvestScale * (1 - inp.throttle / ers.liftThrottle);
+      }
       if (inp.brake > 0.05) {
         pK = -ers.maxHarvestW * mode.brakeHarvestScale * Math.min(1, inp.brake * 3);
-      } else if (topGear && inp.throttle < ers.liftThrottle) {
+      } else if (liftW > 0) {
+        pK = -liftW;
+      } else if (!everyGear && topGear && inp.throttle < ers.liftThrottle) {
         pK = -ers.topGearLiftHarvestW * mode.liftHarvestScale;
       } else if (topGear && inp.throttle > 0.95 && mode.topGearClipHarvestW > 0) {
         pK = -mode.topGearClipHarvestW;
@@ -2933,8 +2989,9 @@ export class VehiclePhysics {
           (1 - 0.32 * this.wetness) * (1 - 0.18 * Math.min(1.5, Math.abs(this.telemetry.latG)) * this.wetness)
         );
         pK *= wetClip;
+        liftW *= wetClip;
       }
-      if (pK < 0 && (soc >= 1 || this.lapHarvestJ >= ers.harvestPerLapJ)) pK = 0;
+      if (pK < 0 && (soc >= 1 || this.lapHarvestJ >= ers.harvestPerLapJ)) pK = liftW = 0;
     }
     // ---- brake bias (brake-by-wire + live-tunable dynamic brake migration)
     const br = cfg.brakes;
@@ -2957,6 +3014,11 @@ export class VehiclePhysics {
         cap = Math.min(cap, Math.max(0, rearDemand / (Math.abs(ratio) * gb.efficiency) - Math.max(0, -tIce)));
       }
       tK = -Math.min(-pK / omegaE, cap);
+      // A lift's harvest under its ceiling at the axle; on the brake, the pedal's own harvest once that is the greater
+      if (everyGear && liftW > 0 && ratio !== 0) {
+        const lift = Math.min(liftW / omegaE, this.luts.mgukHarvest.evaluate(rpm), everyGear.maxAxleTorqueNm / Math.abs(ratio));
+        tK = inp.brake > 0.05 ? Math.min(tK, -lift) : -lift;
+      }
     }
     // Torque fill: with no MGU-H to spin the turbo, the MGU-K makes up the torque its lag costs, within the motor's torque
     // curve and the gear's power clip, from the same store and lap allowance as the deploy
@@ -2971,7 +3033,8 @@ export class VehiclePhysics {
     const crankBrake = Math.max(0, -tK) + Math.max(0, -tIce);
     // The slowing engine gives up some of its own inertia's torque, so a little less than the crank's braking reaches the
     // wheels: this share keeps the rear axle on its demand under harvest (scripts/verify-powertrain.ts)
-    const driveBrake = inp.brake > 0.05 && br.brakeByWire !== false ? (crankBrake * engage * Math.abs(ratio) * gb.efficiency) / 2 : 0;
+    // (a lift's harvest is on from the first of the pedal, so the rear calipers give way to it from there too)
+    const driveBrake = (inp.brake > 0.05 || liftW > 0) && br.brakeByWire !== false ? (crankBrake * engage * Math.abs(ratio) * gb.efficiency) / 2 : 0;
     const [dl, dr] = this.drivenWheels;
     for (let i = 0; i < 4; i++) {
       const w = W[i];
@@ -3182,6 +3245,10 @@ export class VehiclePhysics {
     let down = 0;
     let front = 0;
     let drag = aero.drag * wake.dragMultiplier;
+    // With the elements' own drag heights: Σ drag area × height, the bodywork's at `dragCentreY`
+    const perElement = this.dragAtElements;
+    const bodyY = aero.dragCentreY ?? 0;
+    let dragMoment = perElement ? drag * bodyY : 0;
 
     for (const wing of this.wings) {
       const s = wing.spec;
@@ -3202,7 +3269,9 @@ export class VehiclePhysics {
             ? wake.rearDownforceMultiplier
             : 0.5 * (wake.frontDownforceMultiplier + wake.rearDownforceMultiplier);
       const fd = q * cl * s.area * wakeClMult;
-      drag += cd * s.area * wake.dragMultiplier;
+      const dragArea = cd * s.area * wake.dragMultiplier;
+      drag += dragArea;
+      if (perElement) dragMoment += dragArea * (s.dragY ?? bodyY);
       down += fd;
       front += fd * ((s.positionZ + b) / L);
       _f.copy(_ey).multiplyScalar(-fd);
@@ -3224,7 +3293,10 @@ export class VehiclePhysics {
 
     const speed = air.length();
     const dragN = 0.5 * this.airDensity * speed * speed * drag;
-    if (speed > 1e-3) this.addDragAtCentre(air, dragN / speed);
+    if (speed > 1e-3) {
+      if (perElement && drag > 0) this.addDragAtCentre(air, dragN / speed, dragMoment / drag);
+      else this.addDragAtCentre(air, dragN / speed);
+    }
 
     this.aeroDownN = down;
     this.aeroFrontN = front;
@@ -3511,7 +3583,7 @@ export class VehiclePhysics {
         this.ambientC,
         dt,
         this.brakeCompound,
-        w.isFront ? this.brakeDuctScale.front : this.brakeDuctScale.rear,
+        w.isFront ? this.brakeDuctScale.front : this.brakeDuctScale.rear * this.brakeRearDuctShare,
         Math.min(1, this.wetness + 0.5 * sprayBoost),
         this.brakePadCurve
       );

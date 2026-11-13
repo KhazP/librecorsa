@@ -29,7 +29,7 @@ const roadY = (car: SimulatorCar) => {
 };
 
 const cars: [string, () => SimulatorCar][] = [
-  ["vf26", () => new F1Physics2026(track)],
+  ["lc26", () => new F1Physics2026(track)],
   ["f12026-car", () => new F12026CarSim(track)],
   ["amg-gt3", () => createAmgGt3Sim(track)],
 ];

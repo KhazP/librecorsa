@@ -1,5 +1,5 @@
 /**
- * How a tyre copes with water on the road, shared by every tyre model (the VF26's `ac-tyre.ts` and the f12026-car /
+ * How a tyre copes with water on the road, shared by every tyre model (the LC26's `ac-tyre.ts` and the f12026-car /
  * GT3 `VehiclePhysics.ts`). Re-implemented from the general behaviour of wet racing tyres (Speed Dreams gives its
  * Wet / Extreme-wet compounds a water-clearing capacity; AC gives intermediates and wets their own grip and thermal
  * curves), not from any code:

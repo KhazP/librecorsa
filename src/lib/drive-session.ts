@@ -1,3 +1,4 @@
+import { setDriverBodyShown } from "@/lib/render/driver-figure";
 import * as THREE from "three";
 import { LIVERIES, TURN_METADATA, inDeadZone, type BuiltTrackData } from "@/lib/track-data";
 import { F1Physics2026, type ControlInputs } from "@/lib/f1-physics-2026";
@@ -36,6 +37,7 @@ import { type ChassisSetup, DEFAULT_CHASSIS_SETUP, loadChassisSetup } from "@/li
 import { CameraRig } from "@/lib/render/camera-rig";
 import { LapDeltaTracker } from "@/lib/sim/lap-delta";
 import { TrackLimitsMonitor } from "@/lib/sim/track-limits";
+import { stretchTimeS } from "@/lib/sim/course-limits";
 import { SimVisualFxManager } from "@/lib/sim/visual-fx";
 import { AiOpponentField, aiDriversFor, resolvePlayerVsRemoteCar } from "@/lib/sim/ai-opponents";
 import { startAiRace } from "@/lib/sim/race-setup";
@@ -44,7 +46,7 @@ import type { WakeEmitterCar } from "@/lib/sim/aero-wake";
 import { GamepadHaptics } from "@/lib/sim/gamepad-haptics";
 import { getMultiplayerManager, type InterpolatedPeerState, type P2PConnectionStatus } from "@/lib/sim/multiplayer-sync";
 import { flagMultiplayerRace } from "@/lib/sim/mp-flags"; // polish:D
-import { MultiplayerRace, type MultiplayerRaceFrame } from "@/lib/sim/race-session";
+import { MultiplayerRace, placePeersWhereDrawn, type MultiplayerRaceFrame } from "@/lib/sim/race-session";
 import { CoolDown } from "@/lib/sim/cool-down";
 import { PodiumDirector } from "@/lib/render/podium-shot";
 import { GhostPlayer, LapRecorder } from "@/lib/sim/lap-recorder";
@@ -69,7 +71,7 @@ import { OnboardViews } from "@/lib/render/onboard-views";
 import { isNudgeView, NUDGE_FOV_STEP_DEG, nudgeStepForKey, stepNudge } from "@/lib/settings/camera-nudges";
 import { loadTyreSetup } from "@/lib/sim/tyre-setup";
 import { assetProgress } from "@/lib/loading/asset-progress";
-import { prefetchSoundBank } from "@/lib/sim/vf26-audio";
+import { prefetchSoundBank } from "@/lib/sim/lc26-audio";
 import { CarReflectionProbe } from "@/lib/render/car-reflection-probe";
 import { StartupMonitor } from "@/lib/render/startup-monitor";
 import { addContactShadow, seatContactShadow } from "@/lib/render/contact-shadow";
@@ -91,7 +93,7 @@ export const DEFAULT_AERO_PRESET: AeroSetupPreset = "balanced";
 const MAX_FRAME_CATCH_UP_S = F1Physics2026.MAX_CATCH_UP_S;
 
 // Keyboard-only input shaping: a key press becomes a pedal squeeze, not a step
-/** A replay / flashback opens this far before the present, paused (s) */
+/** A replay opens this far before the present, paused (s) */
 const REPLAY_OPEN_BACK_S = 3;
 const KB_THROTTLE_RISE_S = DEFAULT_KEYBOARD_TUNING.throttleRiseS;
 const KB_THROTTLE_FALL_S = 0.1;
@@ -113,7 +115,7 @@ export const aiFieldOf = (race: SessionRace): AiOpponentField | null => (race.ki
 /** The multiplayer race on track, when the session is an online race */
 export const mpRaceOf = (race: SessionRace): MultiplayerRace | null => (race.kind === "mp" ? race.race : null);
 /** Why the run on track starts over (see resetRun) */
-export type RunResetReason = "session" | "restart" | "teleport" | "car" | "race" | "flashback";
+export type RunResetReason = "session" | "restart" | "teleport" | "car" | "race";
 /** The VR headset: off, being asked for a session, or presenting */
 export type VrState = "off" | "requesting" | "on";
 
@@ -152,11 +154,16 @@ const approach = (value: number, target: number, maxStep: number) =>
 
 /** The sound bank each car plays (the F1 cars share one bank) */
 const soundFor = (car: CarId): CarSoundSource => carById(car).sound;
-/** Runs `fn` when the browser is idle (Safari has no requestIdleCallback: a short timer instead) */
-const scheduleIdle = (fn: (deadline?: IdleDeadline) => void) => {
+/**
+ * Runs `fn` when the browser is idle (Safari has no requestIdleCallback: a timer instead, `fallbackDelayMs` from now,
+ * a frame by default)
+ */
+const scheduleIdle = (fn: (deadline?: IdleDeadline) => void, fallbackDelayMs = 16) => {
   if (typeof window.requestIdleCallback === "function") window.requestIdleCallback(fn, { timeout: 500 });
-  else window.setTimeout(() => fn(), 16);
+  else window.setTimeout(() => fn(), fallbackDelayMs);
 };
+/** Safari's wait between the spare AI field's build steps (a few frames for the menus between two AI cars) */
+const AI_PREP_GAP_MS = 150;
 
 /** What the drive shows the UI: one snapshot, replaced whenever any part changes (see DriveSession.subscribe) */
 export interface DriveSnapshot {
@@ -194,7 +201,7 @@ export interface DriveSnapshot {
   timeTrial: TimeTrialRules | null;
 }
 
-/** The snapshot before the drive exists: a throwaway VF26's numbers, as the menus need something to show */
+/** The snapshot before the drive exists: a throwaway LC26's numbers, as the menus need something to show */
 export function idleDriveSnapshot(track: BuiltTrackData): DriveSnapshot {
   const car = new F1Physics2026(track);
   return {
@@ -299,17 +306,16 @@ export class DriveSession {
   /** The race on track with the player: practice, the AI field or an online race (setRace is its only writer) */
   private currentRace: SessionRace = { kind: "practice" };
   /**
-   * The run starts over: a new session, a restart or reset, a corner jump, a car change, AI opponents on or off, a
-   * flashback. It never moves the car: the caller places it afterwards, so leaving the replay (which puts the drawn
-   * car back where the replay found it) comes first and can't undo the move. A flashback keeps its own trimmed
-   * replay and the race results.
+   * The run starts over: a new session, a restart or reset, a corner jump, a car change, AI opponents on or off. It
+   * never moves the car: the caller places it afterwards, so leaving the replay (which puts the drawn car back where
+   * the replay found it) comes first and can't undo the move.
    */
   readonly resetRun: (reason: RunResetReason) => void;
   /** Puts a race on track with the player (or none): the AI field and a multiplayer race never run together */
   readonly setRace: (next: SessionRace) => void;
   /** The autopilot takes or hands back the player's car; never in a multiplayer race */
   readonly toggleAutopilot: () => void;
-  /** The player's car: the VF26 (F1Physics2026) or the f12026-car (F12026CarSim); a car swap replaces it */
+  /** The player's car: the LC26 (F1Physics2026) or the f12026-car (F12026CarSim); a car swap replaces it */
   get car(): SimulatorCar {
     return this.carNow();
   }
@@ -374,8 +380,6 @@ export class DriveSession {
   readonly toggleReplay: () => void;
   /** Leaves the replay: the drawn car goes back to the live pose */
   readonly exitReplay: () => void;
-  /** Starts the run over from the replay's current point */
-  readonly flashbackReplay: () => void;
   /** polish:B the podium shot after a race, and the overlay's view of it */
   readonly podium: PodiumDirector;
 
@@ -497,17 +501,23 @@ export class DriveSession {
     let audio: F1AudioEngine2026 | null = null;
     this.unlockAudio = () => {
       if (disposed) return;
-      if (!audio) {
-        audio = new F1AudioEngine2026();
-        audio.setCar(soundFor(carIdNow));
-        // Created paused unless the car is being driven; from then on the frame loop alone pauses and resumes it
-        audio.setPaused(this.snapshot.paused || appPhaseNow !== "driving");
-      }
-      if (!audio.isInitialized) {
-        audio.init();
-        audio.setMuted(this.snapshot.muted);
-      } else {
-        audio.resume();
+      // Called inside the press that leaves the loading screen or starts a race: a browser that refuses Web Audio
+      // leaves the game silent, never stuck on that press
+      try {
+        if (!audio) {
+          audio = new F1AudioEngine2026();
+          audio.setCar(soundFor(carIdNow));
+          // Created paused unless the car is being driven; from then on the frame loop alone pauses and resumes it
+          audio.setPaused(this.snapshot.paused || appPhaseNow !== "driving");
+        }
+        if (!audio.isInitialized) {
+          audio.init();
+          audio.setMuted(this.snapshot.muted);
+        } else {
+          audio.resume();
+        }
+      } catch (err) {
+        console.warn("Audio could not start; driving without sound", err);
       }
     };
     this.toggleMute = () => {
@@ -681,18 +691,67 @@ export class DriveSession {
      * it was built for.
      */
     let aiFieldSpare: { field: AiOpponentField; physics: SimulatorCar; opponents: number } | null = null;
+    /**
+     * The AI cars of the next spare field, made one per idle slice before the field goes round them: each settles on
+     * the grid as it is made (the first for real, the rest are given its settle, `settle-memo.ts`). Under `next dev` a
+     * settle took half a second on Safari, so five in one task froze the menus for seconds
+     */
+    let sparePeers: { physics: SimulatorCar; cars: SimulatorCar[] } | null = null;
+    /** The spare AI cars made for this car, used up */
+    const takeSparePeers = (car: SimulatorCar) => {
+      const peers = sparePeers?.physics === car ? sparePeers.cars : undefined;
+      sparePeers = null;
+      return peers;
+    };
     /** A new AI field round the player's car, of the race setup's size, at the player's chosen skill */
     const buildAiField = (car: SimulatorCar) =>
-      new AiOpponentField(track, car, aiDriversFor(settings.race.opponents), getTrackEnv(), { skill: settings.aiSkill });
+      new AiOpponentField(track, car, aiDriversFor(settings.race.opponents), getTrackEnv(), {
+        skill: settings.aiSkill,
+        peers: takeSparePeers(car),
+      });
+    /**
+     * The next race's grid slots, settled ahead on a throwaway AI car each, one per idle slice once the spare field is
+     * built. A new field's AI cars are all alike, so the start then copies these settles (`settle-memo.ts`) instead of
+     * running one per car at the click: only the player's own car still settles there
+     */
+    let gridWarm: { physics: SimulatorCar; key: string; next: number } | null = null;
+    /** One build of the spare field at a time (each call while it runs would start another) */
+    let aiPrepQueued = false;
     this.prepareAiField = () => {
+      if (aiPrepQueued) return;
+      aiPrepQueued = true;
       const run = () => {
+        aiPrepQueued = false;
         // Never while driving: the build would be a hitch on track instead
         if (disposed || appPhaseNow === "driving" || appPhaseNow === "loading") return;
         const opponents = settings.race.opponents;
-        if (aiFieldSpare?.physics === physics && aiFieldSpare.opponents === opponents) return;
+        if (aiFieldSpare?.physics === physics && aiFieldSpare.opponents === opponents) {
+          // The field, the player in it, on the race setup's start
+          const cars = aiDriversFor(opponents).length + 1;
+          const rolling = settings.race.start === "rolling";
+          const key = `${cars}:${rolling}`;
+          if (gridWarm?.physics !== physics || gridWarm.key !== key) gridWarm = { physics, key, next: 0 };
+          if (!physics.createAiPeerCar || gridWarm.next >= cars) return;
+          physics.createAiPeerCar().resetToStartGrid(rolling, gridWarm.next, rolling ? cars : undefined);
+          gridWarm.next++;
+          aiPrepQueued = true;
+          scheduleIdle(run, AI_PREP_GAP_MS);
+          return;
+        }
+        if (sparePeers?.physics !== physics) sparePeers = { physics, cars: [] };
+        if (physics.createAiPeerCar && sparePeers.cars.length < aiDriversFor(opponents).length) {
+          sparePeers.cars.push(physics.createAiPeerCar());
+          // A gap between the cars, for the menus to draw and take input (Safari has no idle callback to wait for)
+          aiPrepQueued = true;
+          scheduleIdle(run, AI_PREP_GAP_MS);
+          return;
+        }
         aiFieldSpare = { field: buildAiField(physics), physics, opponents };
+        // Then its grid slots
+        aiPrepQueued = true;
+        scheduleIdle(run, AI_PREP_GAP_MS);
       };
-      scheduleIdle(run);
+      scheduleIdle(run, AI_PREP_GAP_MS);
     };
     this.takeAiField = () => {
       const spare = aiFieldSpare;
@@ -801,6 +860,7 @@ export class DriveSession {
       physics.attachTrackRoot?.(root);
       aiFieldOf(raceNow())?.attachTrackRoot(root);
       aiFieldSpare?.field.attachTrackRoot(root);
+      for (const peer of sparePeers?.cars ?? []) peer.attachTrackRoot?.(root);
       // Move broadcast cameras that would film the inside of a grandstand: about a second of raycasts on a scan,
       // spread over idle slices so neither the loading screen nor the menus freeze (until done, the TV view uses
       // the stations as built)
@@ -832,7 +892,7 @@ export class DriveSession {
     /**
      * The 3D car: a ported car's own GLB on the generic rig, else the vehicle model's own car
      */
-    // The body follows the car's registry model, not `carPhysics`: a ported F1 car switched to the VF26 physics
+    // The body follows the car's registry model, not `carPhysics`: a ported F1 car switched to the LC26 physics
     // keeps the geometry it was fitted to
     const rigModel = (car: CarId) => vehicleModelSpec(carById(car).physics);
     /** The livery files the player picked for a car with its own (null: the paint its model was made in) */
@@ -878,7 +938,7 @@ export class DriveSession {
       wheelDisplay = null;
       wingMirrors?.dispose();
       wingMirrors = null;
-      vf26ExtrasFor = null;
+      lc26ExtrasFor = null;
       gt3Dash?.dispose();
       gt3Dash = null;
       portedDash?.dispose();
@@ -928,6 +988,7 @@ export class DriveSession {
       postFx.setSize(container.clientWidth, container.clientHeight);
     };
     this.applyGraphics(settings.graphics.quality, settings.graphics.renderScale);
+    setDriverBodyShown(settings.graphics.driverBody);
     this.applySettings = (next) => {
       const prev = settings;
       if (disposed || next === prev) return;
@@ -949,6 +1010,7 @@ export class DriveSession {
       if (next.graphics.quality !== prev.graphics.quality || next.graphics.renderScale !== prev.graphics.renderScale) {
         this.applyGraphics(next.graphics.quality, next.graphics.renderScale);
       }
+      if (next.graphics.driverBody !== prev.graphics.driverBody) setDriverBodyShown(next.graphics.driverBody);
       // Another field size needs another field: a race running restarts from the lights with it
       if (next.race.opponents !== prev.race.opponents) {
         aiFieldSpare = null;
@@ -1292,8 +1354,6 @@ export class DriveSession {
     let replayClockS = 0;
     let lastReplayPushS = -1;
     const replaySaved = { pos: new THREE.Vector3(), quat: new THREE.Quaternion() };
-    const replayFwd = new THREE.Vector3();
-    const replayQuat = new THREE.Quaternion();
     const replayPeerState = (car: ReplayCarState): InterpolatedPeerState => ({
       peerId: car.id,
       driverCode: replayNames.get(car.id)?.code ?? "",
@@ -1324,33 +1384,8 @@ export class DriveSession {
       cameraRig.reset();
       setReplayUi((u) => ({ ...u, active: false }));
     };
-    const flashbackReplay = () => {
-      const rp = replay;
-      if (!rp.active) return;
-      const frame = rp.buffer.frameAt(rp.timeS);
-      const car = frame?.cars.find((c) => c.id === "player");
-      if (car) {
-        // Re-seat the car on the ground at that pose (heading from the recorded orientation), rolling at its speed
-        replayFwd.set(0, 0, 1).applyQuaternion(replayQuat.set(car.qx, car.qy, car.qz, car.qw));
-        const pose = { x: car.x, z: car.z, yawRad: Math.atan2(replayFwd.x, replayFwd.z), speedMs: car.speedKmh / 3.6, s: car.s };
-        if (physics.restorePose) physics.restorePose(pose);
-        else physics.teleportToDistance(car.s ?? physics.sMeters, pose.speedMs);
-      }
-      // A flashback lap never counts
-      physics.invalidateLap?.();
-      rp.buffer.truncateAfter(rp.timeS);
-      replayClockS = rp.timeS;
-      lastReplayPushS = rp.timeS;
-      rp.active = false;
-      setReplayUi((u) => ({ ...u, active: false }));
-      // A new run from here (the lap in progress is dropped; the trimmed replay stays)
-      this.resetRun("flashback");
-    };
     this.exitReplay = () => {
       if (!disposed) exitReplay();
-    };
-    this.flashbackReplay = () => {
-      if (!disposed) flashbackReplay();
     };
     this.toggleReplay = () => {
       if (disposed) return;
@@ -1372,10 +1407,8 @@ export class DriveSession {
     this.resetRun = (reason) => {
       if (disposed) return;
       runId++;
-      if (reason !== "flashback") {
-        exitReplay();
-        replay.buffer.clear();
-      }
+      exitReplay();
+      replay.buffer.clear();
       onRunReset(reason);
       // Race control and the cameras start over with the run (the car is about to be put somewhere else)
       trackLimits.reset(limitsSessionOf(raceNow()));
@@ -1405,11 +1438,11 @@ export class DriveSession {
     const renderCarPos = new THREE.Vector3();
     /** The player car's tyres on its ground, at the pose it is drawn at (refreshed in place every frame) */
     const playerWheels: WheelSeating = { ground: null, position: renderCarPos, quaternion: new THREE.Quaternion() };
-    // Cockpit extras, created once the VF26 model has loaded: the wheel's LCD and the live wing mirrors
+    // Cockpit extras, created once the LC26 model has loaded: the wheel's LCD and the live wing mirrors
     let wheelDisplay: SteeringWheelDisplay | null = null;
     let wingMirrors: WingMirrors | null = null;
-    /** The VF26 body the wheel display and mirrors above were built for */
-    let vf26ExtrasFor: THREE.Object3D | null = null;
+    /** The LC26 body the wheel display and mirrors above were built for */
+    let lc26ExtrasFor: THREE.Object3D | null = null;
     // The AMG GT3 Evo body's dash screen, shift lights, mirrors and rear-view monitor, once its GLB has loaded
     let gt3Dash: Gt3DashDisplay | null = null;
     // A ported body's wheel screen and shift lights (the 496R's), once its GLB has loaded under the rig
@@ -1417,6 +1450,13 @@ export class DriveSession {
     let portedProbeFrame = 0;
     let cockpitProbeFrame = 0;
     const lapDelta = new LapDeltaTracker(track.totalLengthM);
+    // Race control measures what a course cut saved against this: the best lap, else the car's own speed profile
+    const stretchRefS = (fromM: number, toM: number): number | null => {
+      const best = lapDelta.referenceGapS(fromM, toM, track.totalLengthM);
+      if (best !== null) return best;
+      const guide = physics.brakingGuide?.speedMs;
+      return guide ? stretchTimeS(guide, track.totalLengthM, fromM, toM) : null;
+    };
     // The dash view's placement and the player's moves of the onboard views
     const onboardViews = new OnboardViews();
     // Race control: judges every excursion past the track limits (see TrackLimitsMonitor); resetRun and setRace start
@@ -1440,7 +1480,7 @@ export class DriveSession {
     const kbAxleSlip = createAxleSlipSample();
     // The other cars, heard where they are from the active camera
     const opponentAudio = new OpponentAudio();
-    const opponentSound = (p: InterpolatedPeerState): CarSoundSource => carForVehicle(p.vehicle ?? "vf26").sound;
+    const opponentSound = (p: InterpolatedPeerState): CarSoundSource => carForVehicle(p.vehicle ?? "lc26").sound;
     const trackEnv = getTrackEnv();
     // Time of day / weather look: the sky follows the session's WeatherState at 10 Hz, the HUD badge at 2 Hz
     let lastSkyMs = -Infinity;
@@ -1470,6 +1510,13 @@ export class DriveSession {
     // first frame is drawn, then let the loading screen offer to continue
     const loadStartMs = performance.now();
     let warmupStarted = false;
+    /** The warm-up has let the loading screen go: done, failed, or given up on by the watchdog */
+    let warmupSettled = false;
+    const settleWarmup = () => {
+      if (warmupSettled || disposed) return;
+      warmupSettled = true;
+      setAssetsReady(true);
+    };
     let loggedFirstFrame = false;
     const checkAssets = () => {
       if (warmupStarted || disposed) return;
@@ -1487,16 +1534,27 @@ export class DriveSession {
         // its programs on the bound target: compiled with none bound, every shader would be the wrong variant and
         // recompile on the first frame after the player presses start. The program build runs synchronously inside
         // compileAsync, so the target only has to be bound for the call itself.
-        compileForComposer()
-          .then(() => {
-            if (disposed) return;
-            warmUpGpu();
-            visualFx.hidePrewarmed();
-            assetProgress.done("shaders");
-          }, () => assetProgress.fail("shaders"))
-          .finally(() => {
-            if (!disposed) setAssetsReady(true);
-          });
+        let compiled: Promise<unknown>;
+        try {
+          compiled = compileForComposer();
+        } catch (err) {
+          compiled = Promise.reject(err);
+        }
+        compiled
+          .then(
+            () => {
+              // Given up on already: the first frames compile what is left
+              if (disposed || warmupSettled) return;
+              warmUpGpu();
+              visualFx.hidePrewarmed();
+              assetProgress.done("shaders");
+            },
+            (err) => {
+              console.warn("Shader warm-up failed (the first frames will compile instead)", err);
+              assetProgress.fail("shaders");
+            }
+          )
+          .finally(settleWarmup);
       });
     };
     function compileForComposer(): Promise<THREE.Object3D> {
@@ -1550,6 +1608,8 @@ export class DriveSession {
           if (t.id !== "shaders" && t.status === "pending") assetProgress.fail(t.id);
         }
       }
+      // A shader compile that never finishes (a lost GPU context polls forever) has been given up on: continue anyway
+      if (warmupStarted && assetProgress.get().tasks.some((t) => t.id === "shaders" && t.status === "failed")) settleWarmup();
     }, 2000);
     checkAssets();
 
@@ -1833,6 +1893,8 @@ export class DriveSession {
             lapTimeMs: t.currentLapTimeMs,
             sector: t.currentSector,
             distM: t.trackDistanceM,
+            lapLengthM: track.totalLengthM,
+            stretchRefS,
             offTrack: t.offTrack,
             throttle: t.throttle,
             brake: t.brake,
@@ -1961,6 +2023,8 @@ export class DriveSession {
 
       // A peer on another circuit has coordinates that mean nothing here
       const samePeers = interpolatedPeers.filter((p) => !p.trackId || p.trackId === trackId);
+      // On the lap where they are drawn, not where their newest packet put them (the tower, the relative, the gaps)
+      placePeersWhereDrawn(samePeers, track.projectWorldToTrack, track.totalLengthM);
       peerWakeEmitters(track, samePeers, remoteWake);
       if (mpRace && mpFrame) {
         mpRace.ingestPeers(samePeers, mpFrame.phase === "racing" ? mpFrame.raceTimeS : 0);
@@ -2067,9 +2131,6 @@ export class DriveSession {
               brake: physics.telemetry.brake,
               gear: physics.telemetry.gear,
               rpm: physics.telemetry.rpm,
-              s: physics.sMeters,
-              vyMs: physics.vyMs,
-              yawRateRadS: physics.yawRateRadS,
             },
           ];
           for (const p of renderPeers) {
@@ -2104,7 +2165,7 @@ export class DriveSession {
           const peers: InterpolatedPeerState[] = [];
           for (const car of frame.cars) {
             if (car.id === "player") {
-              // Only the drawn pose: the car's physics stays as it was until a flashback places it
+              // Only the drawn pose: the car's physics stays where it is
               physics.worldPosition.set(car.x, car.y, car.z);
               physics.worldQuaternion.set(car.qx, car.qy, car.qz, car.qw);
             } else {
@@ -2144,12 +2205,12 @@ export class DriveSession {
       const inVr = renderer.xr.isPresenting;
       const mode: CameraMode = inMenu || podium.playing ? "chase" : inVr ? "cockpit" : (settings.camera ?? "chase");
       const view = CAMERA_MODES[mode];
-      const vf26Cams = carRig.getCameraAnchors();
-      const carFovDeg = vf26Cams ? vf26Cams.cockpit.fovDeg : FALLBACK_COCKPIT_FOV_DEG;
+      const lc26Cams = carRig.getCameraAnchors();
+      const carFovDeg = lc26Cams ? lc26Cams.cockpit.fovDeg : FALLBACK_COCKPIT_FOV_DEG;
       if (carFovDeg !== this.snapshot.carCockpitFovDeg) setCarCockpitFov(carFovDeg);
       const onboardFovShift = settings.cockpitFovDeg === null ? 0 : settings.cockpitFovDeg - carFovDeg;
-      // The procedural helmet goes once the VF26 model (with its own driver) has replaced the procedural car
-      carRig.helmetGroup.visible = !vf26Cams;
+      // The procedural helmet goes once the LC26 model (with its own driver) has replaced the procedural car
+      carRig.helmetGroup.visible = !lc26Cams;
       // From the driver's eye point the helmet would fill the view: the camera leaves its layer out, while the
       // sun's shadow camera keeps it so the head still shadows the cockpit
       if (view.driverEye) camera.layers.disable(DRIVER_HEAD_LAYER);
@@ -2180,21 +2241,21 @@ export class DriveSession {
       seatContactShadow(carRig.root, physics.tyreVisuals ? playerWheels : undefined);
       podium.drawPlayer(carRig, physics.telemetry, physics.groundQuery ?? null, dtSeconds);
 
-      const vf26Body = carRig.getVf26Body();
+      const lc26Body = carRig.getLc26Body();
       // Built once per body (keyed on the body, not on the wheel display: a body without STEER_BASE has no display,
       // and keying on it rebuilt the mirrors' render target every frame)
-      if (vf26Body && vf26ExtrasFor !== vf26Body) {
-        vf26ExtrasFor = vf26Body;
-        const steerBase = vf26Body.getObjectByName("STEER_BASE");
+      if (lc26Body && lc26ExtrasFor !== lc26Body) {
+        lc26ExtrasFor = lc26Body;
+        const steerBase = lc26Body.getObjectByName("STEER_BASE");
         if (steerBase) wheelDisplay = new SteeringWheelDisplay(steerBase);
-        wingMirrors = new WingMirrors(renderer, scene, vf26Body);
+        wingMirrors = new WingMirrors(renderer, scene, lc26Body);
       }
-      if (!vf26Body && !portedDash && carById(carRigCar).modelUrl && portedProbeFrame++ % 30 === 0) {
+      if (!lc26Body && !portedDash && carById(carRigCar).modelUrl && portedProbeFrame++ % 30 === 0) {
         portedDash = PortedWheelDash.from(carRig.chassisGroup, revRangeFor(carById(carRigCar).physics));
       }
       // A ported body's anchors are set once its GLB has loaded; a body without the Evo's screen or mirror glass
       // gets an empty display and no mirrors, so it is probed once
-      if (!vf26Body && !gt3Dash && carById(carRigCar).modelUrl && cockpitProbeFrame++ % 30 === 0) {
+      if (!lc26Body && !gt3Dash && carById(carRigCar).modelUrl && cockpitProbeFrame++ % 30 === 0) {
         const anchors = carRig.getCameraAnchors();
         if (anchors) {
           gt3Dash = new Gt3DashDisplay(carRig.chassisGroup, revRangeFor(carById(carRigCar).physics));
@@ -2244,7 +2305,7 @@ export class DriveSession {
         car: physics,
         carPos: renderCarPos,
         carVelocity: carVelocityWorld,
-        anchor: onboardViews.resolve(vf26Cams, mode, carRigCar, settingsNow.cameraNudges),
+        anchor: onboardViews.resolve(lc26Cams, mode, carRigCar, settingsNow.cameraNudges),
         chassis: carRig.chassisGroup,
         onboardFovShift,
         headMovement: settingsNow.hud.headMovement,
@@ -2271,7 +2332,7 @@ export class DriveSession {
       audio?.setPaused(!driving);
       if (driving) {
         audio?.update(physics.telemetry, dtSeconds);
-        // Cues: DRS enabled (two-tone), flap open (chime; VF26: X-mode), shift point (150 rpm short of the limiter)
+        // Cues: DRS enabled (two-tone), flap open (chime; LC26: X-mode), shift point (150 rpm short of the limiter)
         const tc = physics.telemetry;
         const cues = settingsNow.hud;
         const drsAvail = Boolean(

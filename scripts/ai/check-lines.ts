@@ -3,7 +3,7 @@
  * (scripts/ai/lib/physics-lap.ts) per car, written to the track's `metadata.aiPlans`. The field puts a car on plans only
  * where its check passed; elsewhere that car keeps its own driver.
  *
- *   npx tsx scripts/ai/check-lines.ts --track monaco [--cars vf26,f12026-car,amg-gt3] [--grip 0.95]
+ *   npx tsx scripts/ai/check-lines.ts --track monaco [--cars lc26,f12026-car,amg-gt3] [--grip 0.95]
  *       [--ceiling 1,1.04,1.08] [--write]
  *
  * With --ceiling, a car that passes is driven again at each grip in turn until one fails, held to a tighter 2.5 m off
@@ -11,7 +11,7 @@
  * plan grip the fastest AI level may use here.
  *
  * Passes: a finished lap with no barrier hit, at most 12 frames off the road and never 3 m off the line. The time against
- * the plan's is recorded, not judged: the VF26's own driver runs 2–4 % under its plan and is still safe on it.
+ * the plan's is recorded, not judged: the LC26's own driver runs 2–4 % under its plan and is still safe on it.
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { getActiveTrackData, setActiveTrack, type AiPlanCheck, type RawTrackJson } from '../../src/lib/track-data';
@@ -26,7 +26,7 @@ const opt = (name: string, fallback: string) => {
   return i >= 0 && argv[i + 1] !== undefined ? argv[i + 1] : fallback;
 };
 const trackId = opt('track', 'spielberg');
-const cars = opt('cars', 'vf26,f12026-car,amg-gt3').split(',');
+const cars = opt('cars', 'lc26,f12026-car,amg-gt3').split(',');
 const grip = Number(opt('grip', '0.95'));
 const ceiling = opt('ceiling', '').split(',').filter(Boolean).map(Number).filter((g) => g > grip).sort((a, b) => a - b);
 const path = `public/tracks/${trackId}/track_data.json`;
@@ -38,7 +38,7 @@ const root = loadGlbGeometry(`public${track.meshUrl}`);
 
 const checks: Record<string, AiPlanCheck> = { ...((raw.metadata.aiPlans as Record<string, AiPlanCheck>) ?? {}) };
 for (const car of cars) {
-  const kind = car === 'amg-gt3' ? 'gt3' : car === 'vf26' ? 'vf26' : 'f1';
+  const kind = car === 'amg-gt3' ? 'gt3' : car === 'lc26' ? 'lc26' : 'f1';
   const offsets = new Float64Array(t.n);
   for (let i = 0; i < t.n; i++) offsets[i] = aiLineOffsetM(track.getSampleAtDistance(i * t.ds), kind === 'gt3' ? 'gt3' : 'f1');
   const lap = physicsLap(track, root, kind, offsets, grip);

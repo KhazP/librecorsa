@@ -75,9 +75,6 @@ console.log("The flow");
   check("then the table", f.stage === "done" && f.rows.length === 0);
   f.step(status(three, true), 0.1, true, yes);
   check("once per race (a final classification does not play it again)", f.stage === "done");
-  // A flashback starts the run over but keeps the result: the shot does not play again
-  f.step(status(three, true), 0.1, true, yes);
-  check("a flashback after the flag does not play it again", f.stage === "done");
   f.step(status(undefined), 0.1, true, yes);
   check("a restart (no result any more) starts it over", f.stage === "idle");
 

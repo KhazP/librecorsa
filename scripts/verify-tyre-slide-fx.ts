@@ -8,7 +8,7 @@
  */
 import { FlatGroundQuery } from '../src/lib/sim/f12026-car/TrackColliderQuery';
 import { VehiclePhysics, type VehicleInputs } from '../src/lib/sim/f12026-car/VehiclePhysics';
-import { VF26_TUNED_CONFIG } from '../src/lib/sim/f12026-car/Vf26Tune';
+import { LC26_TUNED_CONFIG } from '../src/lib/sim/f12026-car/Lc26Tune';
 import { AMG_GT3_CONFIG } from '../src/lib/sim/gt3/AmgGt3Config';
 import { MTR_496R_CONFIG } from '../src/lib/sim/proto/Mtr496rConfig';
 import { SUZUKI_LIANA_CONFIG } from '../src/lib/sim/road/SuzukiLianaConfig';
@@ -31,7 +31,7 @@ const markOf = (w: Wheel) => fxOf(w, tyreMarkLevel);
 const median = (a: number[]) => (a.length ? [...a].sort((x, y) => x - y)[Math.floor(a.length / 2)] : NaN);
 
 const CARS = [
-  { name: 'VF26', config: VF26_TUNED_CONFIG, fullSteer: 0.6 },
+  { name: 'LC26', config: LC26_TUNED_CONFIG, fullSteer: 0.6 },
   { name: 'AMG GT3', config: AMG_GT3_CONFIG, fullSteer: 0.6 },
   { name: 'MTR 496R', config: MTR_496R_CONFIG, fullSteer: 0.6 },
   { name: 'Liana', config: SUZUKI_LIANA_CONFIG, fullSteer: 1 },

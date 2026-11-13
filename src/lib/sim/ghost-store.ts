@@ -98,11 +98,13 @@ export async function loadBestLap(trackId: string, vehicle: VehicleModelId, boar
     const lap = validateLapRecording(raw);
     return lap && lap.trackId === trackId && lap.vehicle === vehicle ? lap : null;
   };
+  // A best saved before the 2026 Prototype was renamed sits under its old id
+  const old = vehicle === "lc26" ? ("vf26" as VehicleModelId) : null; // keep-old-id
   if (board) {
-    const lap = await read(lapKey(trackId, vehicle, board));
+    const lap = (await read(lapKey(trackId, vehicle, board))) ?? (old ? await read(lapKey(trackId, old, board)) : null);
     if (lap) return lap;
   }
-  const legacy = await read(lapKey(trackId, vehicle));
+  const legacy = (await read(lapKey(trackId, vehicle))) ?? (old ? await read(lapKey(trackId, old)) : null);
   return legacy && (!board || boardOf(legacy) === null || boardOf(legacy) === board) ? legacy : null;
 }
 

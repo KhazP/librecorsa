@@ -34,7 +34,7 @@ function check(name: string, cond: boolean, detail = ""): void {
 const flat = createFlatTestTrack();
 const track = getActiveTrackData();
 const makers: Record<VehicleModelId, (t: typeof track) => SimulatorCar> = {
-  vf26: (t) => new F1Physics2026(t),
+  lc26: (t) => new F1Physics2026(t),
   "f12026-car": (t) => new F12026CarSim(t),
   "amg-gt3": (t) => createAmgGt3Sim(t),
   liana: (t) => createSuzukiLianaSim(t),
@@ -45,20 +45,20 @@ const DT = 1 / 60;
 
 // ---- The sheets ----
 console.log("Sheets");
-check("both F1 cars use the F1 sheet, the GT3 the GT3 sheet", SETUP_CLASS.vf26 === "f1" && SETUP_CLASS["f12026-car"] === "f1" && SETUP_CLASS["amg-gt3"] === "gt3");
+check("both F1 cars use the F1 sheet, the GT3 the GT3 sheet", SETUP_CLASS.lc26 === "f1" && SETUP_CLASS["f12026-car"] === "f1" && SETUP_CLASS["amg-gt3"] === "gt3");
 const tuner: GarageTuner = { tcLevel: 5, tc2Level: 6, absLevel: 5, brakeBiasPct: 56, brakeMigrationPct: 2.5, diffEntry: 3, diffMid: 5, diffExit: 5, engineMap: 2 };
 const defaultTyre = (v: VehicleModelId): TyreSetup => makers[v](flat).getTyreSetup();
 const sheets = Object.fromEntries(vehicles.map((v) => [v, setupSheet(v, TYRE_SETUP_LIMITS[v], defaultTyre(v))]));
 const groupIds = (v: VehicleModelId) => sheets[v].map((g) => g.id).join(",");
-check("the F1 cars share one sheet layout", groupIds("vf26") === groupIds("f12026-car"), groupIds("vf26"));
-check("F1 sheet: its pages in order", groupIds("vf26") === "aero,transmission,geometry,suspension,dampers,brakes,tyres,electronics,fuel");
+check("the F1 cars share one sheet layout", groupIds("lc26") === groupIds("f12026-car"), groupIds("lc26"));
+check("F1 sheet: its pages in order", groupIds("lc26") === "aero,transmission,geometry,suspension,dampers,brakes,tyres,electronics,fuel");
 check("GT3 sheet: its pages in order", groupIds("amg-gt3") === "tyres,electronics,mechanical,dampers,aero,fuel");
 const paramIds = (v: VehicleModelId) => sheets[v].flatMap((g) => g.params.map((q) => q.id));
-check("the F1 cars share the same parameters", paramIds("vf26").join() === paramIds("f12026-car").join());
+check("the F1 cars share the same parameters", paramIds("lc26").join() === paramIds("f12026-car").join());
 for (const id of ["steerRatioDelta", "bumpStopRateFrontPct", "diffPreloadNm", "fastBumpFrontPct", "brakeDuctFront", "toeFrontDeg"])
   check(`GT3 sheet has ${id}`, paramIds("amg-gt3").includes(id));
 for (const id of ["frontWingClicks", "diffExit", "diffEntry", "engineBrakingPct", "toeRearDeg", "brakePowerPct", "brakeMigrationPct"])
-  check(`F1 sheet has ${id}`, paramIds("vf26").includes(id));
+  check(`F1 sheet has ${id}`, paramIds("lc26").includes(id));
 const DAMPER_IDS: (keyof ChassisSetup)[] = [
   "bumpFrontPct", "bumpRearPct", "fastBumpFrontPct", "fastBumpRearPct",
   "reboundFrontPct", "reboundRearPct", "fastReboundFrontPct", "fastReboundRearPct",
@@ -125,9 +125,9 @@ for (const v of ["f12026-car", "amg-gt3"] as const) {
   check(`${v}: 80 % brake power is 80 % of the torque`, Math.abs(low / base - 0.8) < 1e-6);
 }
 {
-  // VF26: a light pedal at moderate speed is torque-limited, so lower brake pressure stops less
+  // LC26: a light pedal at moderate speed is torque-limited, so lower brake pressure stops less
   const stop = (pct: number) => {
-    const car = withSetup("vf26", { brakePowerPct: pct });
+    const car = withSetup("lc26", { brakePowerPct: pct });
     car.resetToStartGrid(true);
     for (let i = 0; i < 60; i++) car.step(DT, { throttle: 1 });
     const v0 = car.telemetry.speedKmh;
@@ -136,7 +136,7 @@ for (const v of ["f12026-car", "amg-gt3"] as const) {
   };
   const full = stop(0);
   const low = stop(-20);
-  check("vf26: lower brake pressure loses less speed on the same pedal", low < full - 0.2, `${full.toFixed(1)} vs ${low.toFixed(1)} km/h`);
+  check("lc26: lower brake pressure loses less speed on the same pedal", low < full - 0.2, `${full.toFixed(1)} vs ${low.toFixed(1)} km/h`);
 }
 
 console.log("Brake ducts");
@@ -170,22 +170,22 @@ for (const v of ["f12026-car", "amg-gt3"] as const) {
   check(`${v}: diff preload follows the setup`, Math.abs(pre(50) - pre(0) - 50) < 1e-6);
 }
 {
-  const car = withSetup("vf26", { toeRearDeg: 0.2 });
+  const car = withSetup("lc26", { toeRearDeg: 0.2 });
   const spec = (car as unknown as { axles: { spec: { staticToeDeg: number } }[] }).axles[1].spec.staticToeDeg;
-  const base = (withSetup("vf26", {}) as unknown as { axles: { spec: { staticToeDeg: number } }[] }).axles[1].spec.staticToeDeg;
-  check("vf26: rear toe adds to the car's static toe", Math.abs(spec - base - 0.2) < 1e-9, `${base} → ${spec}°`);
+  const base = (withSetup("lc26", {}) as unknown as { axles: { spec: { staticToeDeg: number } }[] }).axles[1].spec.staticToeDeg;
+  check("lc26: rear toe adds to the car's static toe", Math.abs(spec - base - 0.2) < 1e-9, `${base} → ${spec}°`);
 }
 
 console.log("Dampers");
 {
   // Each damper setting scales its own curve: +40 % on one channel is 1.4× that channel's baseline, the rest untouched
   type Curve = { slow_bump: number; fast_bump: number; slow_rebound: number; fast_rebound: number };
-  type Vf26Damper = { bumpSlow: number; bumpFast: number; reboundSlow: number; reboundFast: number };
+  type Lc26Damper = { bumpSlow: number; bumpFast: number; reboundSlow: number; reboundFast: number };
   const rigid = (c: SimulatorCar) => (c as unknown as { config: { suspensions: { dampers_controller: { front: { base: Curve }; rear: { base: Curve } } } } }).config.suspensions.dampers_controller;
-  const vf26 = (c: SimulatorCar) => (c as unknown as { axles: { spec: { damper: Vf26Damper } }[] }).axles;
+  const lc26 = (c: SimulatorCar) => (c as unknown as { axles: { spec: { damper: Lc26Damper } }[] }).axles;
   const curves = (v: VehicleModelId, c: SimulatorCar): number[] => {
-    if (v === "vf26") {
-      const [f, r] = vf26(c).map((a) => a.spec.damper);
+    if (v === "lc26") {
+      const [f, r] = lc26(c).map((a) => a.spec.damper);
       return [f.bumpSlow, r.bumpSlow, f.bumpFast, r.bumpFast, f.reboundSlow, r.reboundSlow, f.reboundFast, r.reboundFast];
     }
     const { front: { base: f }, rear: { base: r } } = rigid(c);
@@ -203,9 +203,9 @@ console.log("Dampers");
     });
     check(`${v}: each damper setting scales only its own curve`, bad.length === 0, bad.slice(0, 3).join("; "));
     // And it acts on the car: on a step steer at speed, stiffer dampers slow the body's roll in the first 0.1 s
-    // (roll is the corner dampers' alone; the VF26's heave damper would mask them in pitch)
+    // (roll is the corner dampers' alone; the LC26's heave damper would mask them in pitch)
     const comp = (c: SimulatorCar): { comp: number; front: boolean; left: boolean }[] =>
-      v === "vf26"
+      v === "lc26"
         ? (c as unknown as { wheels: { suspCompression: number; isFront: boolean; isLeft: boolean }[] }).wheels.map((w) => ({ comp: w.suspCompression, front: w.isFront, left: w.isLeft }))
         : (c as unknown as { vehicle: { wheels: { compression: number; isFront: boolean; isLeft: boolean }[] } }).vehicle.wheels.map((w) => ({ comp: w.compression, front: w.isFront, left: w.isLeft }));
     const frontRoll = (c: SimulatorCar) => {
@@ -233,7 +233,7 @@ console.log("Dampers");
 console.log("Fuel load");
 {
   // What every car started on before the garage had a fuel setting
-  const LEGACY_FUEL_KG: Record<VehicleModelId, number> = { vf26: 40, "f12026-car": 35, "amg-gt3": 50, liana: 22, "mtr-496r": 22 };
+  const LEGACY_FUEL_KG: Record<VehicleModelId, number> = { lc26: 40, "f12026-car": 35, "amg-gt3": 50, liana: 22, "mtr-496r": 22 };
   // A setup saved before the fuel setting: no fuel field at all
   const { fuelDeltaKg: _drop, ...modern } = DEFAULT_CHASSIS_SETUP;
   void _drop;
@@ -300,13 +300,13 @@ console.log("Fuel load");
     const per10 = ((heavy - light) / (f.maxKg - f.minKg)) * 10;
     check(
       `${v}: more fuel, slower lap`,
-      // The VF26's autopilot drives the track's fixed speed profile, so a light car can't corner faster on it and
+      // The LC26's autopilot drives the track's fixed speed profile, so a light car can't corner faster on it and
       // only gains on the exits: there it has to be no slower than the default, not strictly quicker
-      (v === "vf26" ? light <= base + 0.1 : light < base) && base < heavy && per10 > 0.05 && per10 < 1,
+      (v === "lc26" ? light <= base + 0.1 : light < base) && base < heavy && per10 > 0.05 && per10 < 1,
       `${light.toFixed(3)} / ${base.toFixed(3)} / ${heavy.toFixed(3)} s at ${f.minKg} / ${f.defaultKg} / ${f.maxKg} kg, ${per10.toFixed(3)} s per 10 kg`
     );
   }
-  check("startingFuelKg keeps to each car's range", startingFuelKg("amg-gt3", { fuelDeltaKg: 80 }) === FUEL_LOAD["amg-gt3"].maxKg && startingFuelKg("vf26", { fuelDeltaKg: -50 }) === FUEL_LOAD.vf26.minKg);
+  check("startingFuelKg keeps to each car's range", startingFuelKg("amg-gt3", { fuelDeltaKg: 80 }) === FUEL_LOAD["amg-gt3"].maxKg && startingFuelKg("lc26", { fuelDeltaKg: -50 }) === FUEL_LOAD.lc26.minKg);
 }
 
 console.log(`\nAll ${passed} setup sheet checks passed.`);

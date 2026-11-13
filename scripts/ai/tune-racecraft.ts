@@ -3,7 +3,7 @@
  * Gaussian over the normalised knobs, refitted to the best candidates each generation).
  *
  *   npx tsx scripts/ai/tune-racecraft.ts [--gens 40] [--pop 12] [--workers 10] [--tracks spielberg,okayama]
- *       [--planner on|off] [--laps 3] [--cars 8] [--car vf26|f12026-car|amg-gt3] [--seeds 1] [--mode pass|defence]
+ *       [--planner on|off] [--laps 3] [--cars 8] [--car lc26|f12026-car|amg-gt3] [--seeds 1] [--mode pass|defence]
  *
  * Each candidate races every track `--seeds` times (the same seeds for every candidate in a generation: common random
  * numbers; one race each is noisy, the same knobs scoring from −25 to −35 between generations), and is scored on what a
@@ -61,7 +61,7 @@ if (argv.includes('--eval')) {
   const track = getActiveTrackData(1200);
   const carId = opt('car', 'f12026-car');
   const tmpl: SimulatorCar =
-    carId === 'vf26'
+    carId === 'lc26'
       ? (new F1Physics2026(track) as unknown as SimulatorCar)
       : carId === 'amg-gt3'
         ? createAmgGt3Sim(track, loadGlbGeometry(`public${track.meshUrl}`))

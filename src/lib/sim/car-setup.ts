@@ -6,7 +6,7 @@
 
 import type { AeroSetupPreset, LiveTunerPatch, TireCompound, TyreSetup, VehicleModelId, WheelPressures } from "@/types/f1";
 import { axlePressures } from "@/types/f1";
-import { VF26_CHASSIS } from "./vf26-data";
+import { LC26_CHASSIS } from "./lc26-data";
 
 export interface ChassisSetup {
   /** Wing steps from the baseline (see WING_CLICK_DEG for a step's size on each car) */
@@ -125,7 +125,7 @@ export const CHASSIS_LIMITS: Record<keyof ChassisSetup, SetupRange> = {
 
 /** Element angle one wing step adds (deg): F1 cars on a 0–50 scale, the GT3 rear wing in its own clicks */
 export const WING_CLICK_DEG: Record<VehicleModelId, { front: number; rear: number }> = {
-  vf26: { front: 0.1, rear: 0.14 },
+  lc26: { front: 0.1, rear: 0.14 },
   "f12026-car": { front: 0.2, rear: 0.2 },
   "amg-gt3": { front: 0.4, rear: 0.6 },
   // No wings
@@ -139,7 +139,7 @@ export const WING_CLICK_DEG: Record<VehicleModelId, { front: number; rear: numbe
  * allows and the tank. The GT3's tank is 120 L of race fuel at 0.74 kg/L.
  */
 export const FUEL_LOAD: Record<VehicleModelId, { defaultKg: number; minKg: number; maxKg: number }> = {
-  vf26: { defaultKg: VF26_CHASSIS.fuelKg, minKg: 5, maxKg: VF26_CHASSIS.fuelTankKg },
+  lc26: { defaultKg: LC26_CHASSIS.fuelKg, minKg: 5, maxKg: LC26_CHASSIS.fuelTankKg },
   "f12026-car": { defaultKg: 35, minKg: 5, maxKg: 110 },
   "amg-gt3": { defaultKg: 50, minKg: 5, maxKg: 89 },
   // 30 l of a 50 l tank of petrol [spec car.ini FUEL / MAX_FUEL]
@@ -163,7 +163,7 @@ export const BRAKE_DUCT_STEP = 0.18;
 
 /** Steering ratio each car is built with (steering-wheel degrees per road-wheel degree) */
 export const STEER_RATIO_BASE: Record<VehicleModelId, number> = {
-  vf26: 11,
+  lc26: 11,
   "f12026-car": 11,
   "amg-gt3": 12.6,
   liana: 15,
@@ -212,10 +212,13 @@ export interface GaragePreset {
 
 const chassisKey = (v: VehicleModelId) => `lc.garage.chassis.${v}`;
 const presetsKey = (v: VehicleModelId) => `lc.garage.presets.${v}`;
+/** A saved item under the model's id, or under the id the 2026 Prototype had before it was renamed */
+const readSaved = (key: (v: VehicleModelId) => string, v: VehicleModelId): string | null =>
+  window.localStorage.getItem(key(v)) ?? (v === "lc26" ? window.localStorage.getItem(key("vf26" as VehicleModelId)) : null); // keep-old-id
 
 export function loadChassisSetup(vehicle: VehicleModelId): ChassisSetup {
   try {
-    const raw = window.localStorage.getItem(chassisKey(vehicle));
+    const raw = readSaved(chassisKey, vehicle);
     return raw ? clampChassisSetup(JSON.parse(raw)) : { ...DEFAULT_CHASSIS_SETUP };
   } catch {
     return { ...DEFAULT_CHASSIS_SETUP };
@@ -253,7 +256,7 @@ function perWheelTyreSetup(tyre: TyreSetup): TyreSetup {
 
 export function loadGaragePresets(vehicle: VehicleModelId): GaragePreset[] {
   try {
-    const raw = window.localStorage.getItem(presetsKey(vehicle));
+    const raw = readSaved(presetsKey, vehicle);
     const list = raw ? (JSON.parse(raw) as unknown) : [];
     if (!Array.isArray(list)) return [];
     return list

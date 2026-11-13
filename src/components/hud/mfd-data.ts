@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { CarTelemetry, TireCompound } from "@/types/f1";
 import type { LapDeltaTracker } from "@/lib/sim/lap-delta";
-import { VF26_CHASSIS } from "@/lib/sim/vf26-data";
+import { LC26_CHASSIS } from "@/lib/sim/lc26-data";
 import { raceState } from "./hud-format";
 
 /** One line of the relative: a car near the player on the road, whatever its race position */
@@ -131,7 +131,7 @@ export function useLapHistory(t: CarTelemetry): LapRecord[] {
     const runId = t.runId ?? 0;
     const now = { fuel: t.fuelKg, ers: t.ersBatteryPercent, wear: meanWear(t) };
     if (p && runId !== p.runId) {
-      // The shell restarted the run (restart, new session, teleport, flashback, car change): a new history
+      // The shell restarted the run (restart, new session, teleport, car change): a new history
       setLaps([]);
       start.current = now;
     } else if (p && t.lapCount === p.lapCount + 1 && t.lastLapTimeMs !== null) {
@@ -214,7 +214,7 @@ export function fuelStrategy(t: CarTelemetry, laps: LapRecord[], L: number): Fue
     targetKg,
     saveKg,
     // Coasting saves the full-throttle flow for as long as the driver is off the pedal
-    liftS: saveKg !== null ? saveKg / VF26_CHASSIS.fuelFlowKgS : null,
+    liftS: saveKg !== null ? saveKg / LC26_CHASSIS.fuelFlowKgS : null,
     marginKg: hasFuel && avgFuelKg !== null && raceLapsLeft !== null ? t.fuelKg - avgFuelKg * raceLapsLeft : null,
     samples: n,
   };

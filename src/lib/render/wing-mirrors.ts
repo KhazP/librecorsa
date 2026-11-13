@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { planarUvGeometry } from "./planar-uv";
 
 /**
- * Wing mirrors for the VF26 GLB (`mirror_1` = left, +X; `mirror_2` = right, -X).
+ * Wing mirrors for the LC26 GLB (`mirror_1` = left, +X; `mirror_2` = right, -X).
  *
  * One rear-facing camera at the driver's eye point renders the scene behind the car into a 256x128 half-float
  * target every second frame while the cockpit view is active. Both mirror meshes show that image through a
@@ -33,9 +33,9 @@ const CAMERA_NEAR = 0.3;
 const CAMERA_FAR = 400;
 
 export interface WingMirrorOptions {
-  /** Material names of the mirror faces (default: the VF26's `mirror_1` / `mirror_2`) */
+  /** Material names of the mirror faces (default: the LC26's `mirror_1` / `mirror_2`) */
   materials?: readonly string[];
-  /** Driver eye point in the model root's frame (default: the VF26's) */
+  /** Driver eye point in the model root's frame (default: the LC26's) */
   eyeInModel?: THREE.Vector3;
   /** Whether the mirrors show the car's flanks; false for an interior mirror only, so the HUD mirror stays */
   coversSides?: boolean;

@@ -10,7 +10,7 @@
 const RAD2DEG = 180 / Math.PI;
 /**
  * tan(peak slip angle) / peak slip ratio of the tyres, to split a tyre's normalised slip into its longitudinal and
- * lateral parts from the raw slip ratio and angle (VF26 slicks: tan 6.7° / 0.1005 ≈ 1.17)
+ * lateral parts from the raw slip ratio and angle (LC26 slicks: tan 6.7° / 0.1005 ≈ 1.17)
  */
 const PEAK_ANGLE_OVER_RATIO = 1.2;
 

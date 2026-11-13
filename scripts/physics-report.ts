@@ -1,5 +1,5 @@
 /**
- * Physics validation report: tyre curves, the GT3 against real-car telemetry, the VF26 against its reference data,
+ * Physics validation report: tyre curves, the GT3 against real-car telemetry, the LC26 against its reference data,
  * plausibility bands and the fixed-step integrator, all measured from the simulator's own code and written to
  * docs/physics/ (README.md, one SVG and one CSV per chart). Deterministic: re-running on the same commit gives the
  * same files.
@@ -10,8 +10,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { execSync } from 'child_process';
 import * as THREE from 'three';
-import { computeTyreForces, createTyreRuntime as createVf26Tyre } from '../src/lib/sim/ac-tyre';
-import { VF26_AI_REFERENCE, VF26_TYRES } from '../src/lib/sim/vf26-data';
+import { computeTyreForces, createTyreRuntime as createLc26Tyre } from '../src/lib/sim/ac-tyre';
+import { LC26_AI_REFERENCE, LC26_TYRES } from '../src/lib/sim/lc26-data';
 import { F1Physics2026 } from '../src/lib/f1-physics-2026';
 import { compoundData, F12026_CAR_CONFIG, type CarPhysicsConfig } from '../src/lib/sim/f12026-car/F12026CarConfig';
 import { AMG_GT3_CONFIG } from '../src/lib/sim/gt3/AmgGt3Config';
@@ -93,16 +93,16 @@ function rigidTyre(cfg: CarPhysicsConfig, rear = false): RigidTyre {
   };
 }
 
-/** The VF26 tyre (ac-tyre's model) at its optimum: fresh, in its window, steady state at 50 m/s */
-function vf26Tyre() {
-  const spec = VF26_TYRES.soft.front;
+/** The LC26 tyre (ac-tyre's model) at its optimum: fresh, in its window, steady state at 50 m/s */
+function lc26Tyre() {
+  const spec = LC26_TYRES.soft.front;
   const curve = spec.thermalCurve;
   const tempC = curve.reduce((best, p) => (p[1] > best[1] ? p : best))[0];
   return {
     spec,
     tempC,
     fy(fz: number, alphaRad: number) {
-      const t = createVf26Tyre(spec, tempC);
+      const t = createLc26Tyre(spec, tempC);
       const v = 50;
       // One long step: the carcass relaxation is integrated exactly, so this is the steady state
       const r = computeTyreForces(t, { fz, vx: v, vy: v * Math.tan(alphaRad), rimSpeed: v, camberLeftRad: 0, surfaceGrip: 1, dt: 1 });
@@ -113,7 +113,7 @@ function vf26Tyre() {
 
 const gt3Front = rigidTyre(AMG_GT3_CONFIG);
 const f1Front = rigidTyre(F12026_CAR_CONFIG);
-const vf26Front = vf26Tyre();
+const lc26Front = lc26Tyre();
 
 const LOADS = [2000, 4000, 6000, 8000];
 const LOAD_COLORS: SeriesColor[] = ['r1', 'r2', 'r3', 'r4'];
@@ -130,7 +130,7 @@ function fySeries(fy: (fz: number, a: number) => number): ChartSeries[] {
 const tyreCars = [
   { id: 'gt3', label: 'Mercedes-AMG GT3', tyre: 'GT3 soft front', fy: (fz: number, a: number) => gt3Front.fy(fz, a) },
   { id: 'f12026', label: 'F1 2026 Rigid-Body (f12026-car)', tyre: 'soft (C3) front', fy: (fz: number, a: number) => f1Front.fy(fz, a) },
-  { id: 'vf26', label: 'F1 2026 Prototype (VF26)', tyre: 'soft front', fy: (fz: number, a: number) => vf26Front.fy(fz, a) },
+  { id: 'lc26', label: 'F1 2026 Prototype (LC26)', tyre: 'soft front', fy: (fz: number, a: number) => lc26Front.fy(fz, a) },
 ];
 const fyMd: string[] = [];
 for (const c of tyreCars) {
@@ -147,7 +147,7 @@ for (const c of tyreCars) {
           x: { min: 0, max: 15, step: 3, label: 'Slip angle (deg)' },
           y: { min: 0, max: yMax, step: yMax > 16 ? 4 : 2, label: 'Lateral force (kN)' },
           series,
-          description: `Steady-state lateral force of the ${c.tyre} tyre of the ${c.label} against slip angle at 2, 4, 6 and 8 kN vertical load. Each curve rises to a peak near ${c.id === 'vf26' ? vf26Front.spec.frictionLimitAngleDeg.toFixed(1) : ((Math.atan((c.id === 'gt3' ? gt3Front : f1Front).rt.tanPeakAngle) / DEG).toFixed(1))} degrees and falls off gently past it; heavier loads give more force but less per newton (load sensitivity).`,
+          description: `Steady-state lateral force of the ${c.tyre} tyre of the ${c.label} against slip angle at 2, 4, 6 and 8 kN vertical load. Each curve rises to a peak near ${c.id === 'lc26' ? lc26Front.spec.frictionLimitAngleDeg.toFixed(1) : ((Math.atan((c.id === 'gt3' ? gt3Front : f1Front).rt.tanPeakAngle) / DEG).toFixed(1))} degrees and falls off gently past it; heavier loads give more force but less per newton (load sensitivity).`,
         }),
         seriesCsv('slip_angle_deg', 'fy_kN', series)
       )
@@ -156,14 +156,14 @@ for (const c of tyreCars) {
 
 // Peak μ vs load, all three cars
 const loadsMu = Array.from({ length: 37 }, (_, i) => 1000 + i * 250);
-const vf26PeakMu = (fz: number) => {
+const lc26PeakMu = (fz: number) => {
   // ac-tyre's μ at the peak slip angle, read back from the force at the friction-limit angle
-  return vf26Front.fy(fz, vf26Front.spec.frictionLimitAngleDeg * DEG) / fz;
+  return lc26Front.fy(fz, lc26Front.spec.frictionLimitAngleDeg * DEG) / fz;
 };
 const muSeries: ChartSeries[] = [
   { name: 'GT3', color: 's1', points: loadsMu.map((fz) => [fz / 1000, gt3Front.peakMu(fz)] as const) },
   { name: 'f12026-car', color: 's2', points: loadsMu.map((fz) => [fz / 1000, f1Front.peakMu(fz)] as const) },
-  { name: 'VF26', color: 's3', points: loadsMu.map((fz) => [fz / 1000, vf26PeakMu(fz)] as const) },
+  { name: 'LC26', color: 's3', points: loadsMu.map((fz) => [fz / 1000, lc26PeakMu(fz)] as const) },
 ];
 const muChart = chart(
   'tyre-mu-vs-load',
@@ -173,7 +173,7 @@ const muChart = chart(
     x: { min: 0, max: 10, step: 2, label: 'Vertical load (kN)' },
     y: { min: 1.2, max: 2.6, step: 0.2, label: 'Peak lateral μ' },
     series: muSeries,
-    description: 'Peak lateral friction coefficient of the soft front tyre of the GT3, the f12026-car and the VF26 from 0.5 to 10 kN. All three fall as the load rises, the property that makes weight transfer cost grip.',
+    description: 'Peak lateral friction coefficient of the soft front tyre of the GT3, the f12026-car and the LC26 from 0.5 to 10 kN. All three fall as the load rises, the property that makes weight transfer cost grip.',
   }),
   seriesCsv('fz_kN', 'peak_mu', muSeries)
 );
@@ -183,7 +183,7 @@ const temps = Array.from({ length: 41 }, (_, i) => i * 5);
 const tSeries: ChartSeries[] = [
   { name: 'GT3', color: 's1', points: temps.map((t) => [t, gt3Front.rt.thermal.evaluate(t)] as const) },
   { name: 'f12026-car', color: 's2', points: temps.map((t) => [t, f1Front.rt.thermal.evaluate(t)] as const) },
-  { name: 'VF26', color: 's3', points: temps.map((t) => [t, interp(vf26Front.spec.thermalCurve, t)] as const) },
+  { name: 'LC26', color: 's3', points: temps.map((t) => [t, interp(lc26Front.spec.thermalCurve, t)] as const) },
 ];
 function interp(lut: readonly (readonly [number, number])[], x: number): number {
   if (x <= lut[0][0]) return lut[0][1];
@@ -218,7 +218,7 @@ const tyreTable = [
   '| :-- | --: | --: | :-- | --: |',
   `| GT3 | ${fmt(peakSlipDeg(gt3Front, 4000), 1)}° | ${fmt(gt3Front.peakMu(4000))} | ${gt3Front.rt.data.thermalData.optimalTempC.join('–')} °C | ${gt3Front.rt.data.pressureData.optimalPsi} psi |`,
   `| f12026-car | ${fmt(peakSlipDeg(f1Front, 4000), 1)}° | ${fmt(f1Front.peakMu(4000))} | ${f1Front.rt.data.thermalData.optimalTempC.join('–')} °C | ${f1Front.rt.data.pressureData.optimalPsi} psi |`,
-  `| VF26 | ${fmt(vf26Front.spec.frictionLimitAngleDeg, 1)}° | ${fmt(vf26PeakMu(4000))} | peak at ${vf26Front.tempC} °C | ${vf26Front.spec.pressureRefPsi} psi |`,
+  `| LC26 | ${fmt(lc26Front.spec.frictionLimitAngleDeg, 1)}° | ${fmt(lc26PeakMu(4000))} | peak at ${lc26Front.tempC} °C | ${lc26Front.spec.pressureRefPsi} psi |`,
 ].join('\n');
 
 // ---------------------------------------------------------------------------
@@ -265,12 +265,12 @@ const gt3Table = [
 ].join('\n');
 
 // ---------------------------------------------------------------------------
-// 3. VF26 against its reference data; f12026-car against plausibility bands
+// 3. LC26 against its reference data; f12026-car against plausibility bands
 // ---------------------------------------------------------------------------
 
 const wideFlat = createFlatTestTrack(40_000, 3000);
-/** Best 1 s average lateral g of the VF26 on a slow steer ramp at constant speed (no driver aids) */
-function vf26Lateral(vMs: number): number {
+/** Best 1 s average lateral g of the LC26 on a slow steer ramp at constant speed (no driver aids) */
+function lc26Lateral(vMs: number): number {
   const sim = new F1Physics2026(wideFlat);
   sim.setAssistPreset('pro');
   sim.teleportToDistance(1500, vMs);
@@ -287,21 +287,21 @@ function vf26Lateral(vMs: number): number {
   }
   return best;
 }
-const vfRef = VF26_AI_REFERENCE.lateral.map(([v, a]) => [v * 3.6, a / 9.81] as const);
-const vfSim = VF26_AI_REFERENCE.lateral.map(([v]) => [v * 3.6, vf26Lateral(v)] as const);
+const vfRef = LC26_AI_REFERENCE.lateral.map(([v, a]) => [v * 3.6, a / 9.81] as const);
+const vfSim = LC26_AI_REFERENCE.lateral.map(([v]) => [v * 3.6, lc26Lateral(v)] as const);
 const vfSeries: ChartSeries[] = [
   { name: 'Simulator', color: 's1', points: vfSim, markers: true },
   { name: 'Reference data', color: 's2', points: vfRef, line: false },
 ];
 const vfChart = chart(
-  'vf26-lateral-g',
+  'lc26-lateral-g',
   lineChart({
-    title: 'VF26 sustained lateral g vs speed',
+    title: 'LC26 sustained lateral g vs speed',
     subtitle: "Simulator (no aids, steer ramp at constant speed) vs the car package's own cornering-limit table",
     x: { min: 80, max: 260, step: 30, label: 'Speed (km/h)' },
     y: { min: 1.6, max: 4.4, step: 0.4, label: 'Lateral acceleration (g)' },
     series: vfSeries,
-    description: 'Best one-second lateral acceleration of the VF26 on a slow steering ramp at constant speed, against the cornering-limit table that ships with its reference car data. Downforce makes the limit rise with speed.',
+    description: 'Best one-second lateral acceleration of the LC26 on a slow steering ramp at constant speed, against the cornering-limit table that ships with its reference car data. Downforce makes the limit rise with speed.',
   }),
   seriesCsv('speed_kmh', 'g', vfSeries)
 );
@@ -365,7 +365,7 @@ const standing = (s: { resetToStartGrid(f?: boolean): void }) => s.resetToStartG
 const integratorTable = [
   '| Car (3 s from a standing start, full throttle, slight steer) | 30 Hz | 60 Hz | 144 Hz | 240 Hz | Largest speed difference | Largest distance difference |',
   '| :-- | --: | --: | --: | --: | --: | --: |',
-  frameRateRow('VF26 (km/h)', () => {
+  frameRateRow('LC26 (km/h)', () => {
     const s = new F1Physics2026(track);
     standing(s);
     return { step: (dt, i) => s.step(dt, i as never), speed: () => s.vxMs, dist: () => s.sMeters };
@@ -399,7 +399,7 @@ function tagCounts(file: string): Record<string, number> {
 const prov = {
   gt3: tagCounts('src/lib/sim/gt3/AmgGt3Config.ts'),
   f1: tagCounts('src/lib/sim/f12026-car/F12026CarConfig.ts'),
-  vf: tagCounts('src/lib/sim/vf26-data.ts'),
+  vf: tagCounts('src/lib/sim/lc26-data.ts'),
 };
 const c = (r: Record<string, number>, ...k: string[]) => k.reduce((s, x) => s + (r[x] ?? 0), 0) || '–';
 const provTable = [
@@ -407,7 +407,7 @@ const provTable = [
   '| :-- | --: | --: | --: | --: | --: | --: |',
   `| GT3 (\`AmgGt3Config.ts\`) | ${c(prov.gt3, 'motec')} | – | ${c(prov.gt3, 'spec')} | – | ${c(prov.gt3, 'est')} | ${c(prov.gt3, 'derived')} |`,
   `| f12026-car (\`F12026CarConfig.ts\`) | – | ${c(prov.f1, 'ref')} | ${c(prov.f1, 'spec')} | – | ${c(prov.f1, 'est')} | ${c(prov.f1, 'derived')} |`,
-  `| VF26 (\`vf26-data.ts\`) | – | ${c(prov.vf, 'mod', 'setup')} | – | ${c(prov.vf, 'assumed')} | – | ${c(prov.vf, 'derived')} |`,
+  `| LC26 (\`lc26-data.ts\`) | – | ${c(prov.vf, 'mod', 'setup')} | – | ${c(prov.vf, 'assumed')} | – | ${c(prov.vf, 'derived')} |`,
 ].join('\n');
 
 // ---------------------------------------------------------------------------
@@ -422,7 +422,7 @@ md.push(
   `How much each comparison proves differs, so each section says what it is compared against:`,
   '',
   `- **Real-car telemetry**: the Mercedes-AMG GT3 against values extracted from reference GT3 Evo MoTeC logs. This is the only comparison with a measured car.`,
-  `- **Reference data**: the VF26 against the cornering-limit table that ships with its reference car data. This checks that the simulator reproduces its inputs, not that those inputs match a real car.`,
+  `- **Reference data**: the LC26 against the cornering-limit table that ships with its reference car data. This checks that the simulator reproduces its inputs, not that those inputs match a real car.`,
   `- **Plausibility bands**: ranges a car of the class should fall in. CI enforces them on every commit (\`npm run verify\`).`,
   '',
   `## Tyres`,
@@ -448,9 +448,9 @@ md.push(
   '',
   gt3Table,
   '',
-  `## VF26 against its reference data`,
+  `## LC26 against its reference data`,
   '',
-  `The VF26's tyre, aero and chassis values come from reference data from a community car package, which also ships the cornering-limit table plotted here. The simulator is never given that table: it reaches its own limit from its tyres, aero and suspension.`,
+  `The LC26's tyre, aero and chassis values come from reference data from a community car package, which also ships the cornering-limit table plotted here. The simulator is never given that table: it reaches its own limit from its tyres, aero and suspension.`,
   '',
   `Measured at sea level, it runs ${vfGaps[0].toFixed(0)} % below the table at the lowest speed, where the car runs out of front grip (the peak comes at about half lock and more steering adds nothing), and up to ${(-Math.min(...vfGaps)).toFixed(0)} % above it at speed, where the floor's ground effect now works at its ride height. Real 2026 cars corner harder than the table at speed (≈ 3.7–4 g from 140 km/h up, from their position traces), so the table is a lower reference there, not a target.`,
   '',

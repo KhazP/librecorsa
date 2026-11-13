@@ -1,16 +1,16 @@
 /**
- * Measures a VF26 on flat ground, the same way whichever engine it runs on: both are driven through `SimulatorCar`
+ * Measures a LC26 on flat ground, the same way whichever engine it runs on: both are driven through `SimulatorCar`
  * with the same pedal and steering traces, soft tyres, no driver aids, sea-level air. Shared by
- * `compare-vf26-engines.ts` (prints the table) and `verify-vf26-fold.ts` (asserts it).
+ * `compare-lc26-engines.ts` (prints the table) and `verify-lc26-fold.ts` (asserts it).
  */
 import * as THREE from 'three';
 import { F1Physics2026 } from '../../src/lib/f1-physics-2026';
 import type { SimulatorCar } from '../../src/lib/sim/simulator-car';
-import { VF26_AI_REFERENCE } from '../../src/lib/sim/vf26-data';
-import { createVf26Sim, VF26_DATA_SIM_PROFILE } from '../../src/lib/sim/f12026-car/Vf26Sim';
+import { LC26_AI_REFERENCE } from '../../src/lib/sim/lc26-data';
+import { createLc26Sim, LC26_DATA_SIM_PROFILE } from '../../src/lib/sim/f12026-car/Lc26Sim';
 import { createFlatTestTrack } from './flat-track';
 
-export interface Vf26Measurement {
+export interface Lc26Measurement {
   /** Seconds from rest to 100 / 200 / 300 km/h */
   accelS: Record<number, number>;
   topSpeedKmh: number;
@@ -30,13 +30,13 @@ export interface Vf26Measurement {
 const pad = createFlatTestTrack(60_000, 3000);
 const H = 1 / 240;
 
-/** The engines a VF26 can run on, each on the car data as it stands: the one it ships on, and the rigid-body one */
-export const VF26_ENGINES: { name: string; make: () => SimulatorCar }[] = [
+/** The engines a LC26 can run on, each on the car data as it stands: the one it ships on, and the rigid-body one */
+export const LC26_ENGINES: { name: string; make: () => SimulatorCar }[] = [
   { name: 'F1Physics2026', make: () => new F1Physics2026(pad) },
-  { name: 'VehiclePhysics', make: () => createVf26Sim(pad, null, VF26_DATA_SIM_PROFILE) },
+  { name: 'VehiclePhysics', make: () => createLc26Sim(pad, null, LC26_DATA_SIM_PROFILE) },
 ];
-/** The car a driver gets on the rigid-body engine: the data's, tuned (`Vf26Tune.ts`) */
-export const VF26_TUNED = { name: 'VehiclePhysics, tuned', make: (): SimulatorCar => createVf26Sim(pad) };
+/** The car a driver gets on the rigid-body engine: the data's, tuned (`Lc26Tune.ts`) */
+export const LC26_TUNED = { name: 'VehiclePhysics, tuned', make: (): SimulatorCar => createLc26Sim(pad) };
 
 function fresh(make: () => SimulatorCar, speedMs: number): SimulatorCar {
   const sim = make();
@@ -47,7 +47,7 @@ function fresh(make: () => SimulatorCar, speedMs: number): SimulatorCar {
 }
 const bodySlip = (sim: SimulatorCar) => Math.atan2(sim.vyMs, Math.max(1, Math.abs(sim.vxMs)));
 
-export function measureVf26(make: () => SimulatorCar): Vf26Measurement {
+export function measureLc26(make: () => SimulatorCar): Lc26Measurement {
   // Straight line: from rest on a throttle eased whenever a rear wheel passes 9 % slip (a driver's foot: neither
   // engine's traction control), then on to the top speed
   let sim = fresh(make, 0);
@@ -79,7 +79,7 @@ export function measureVf26(make: () => SimulatorCar): Vf26Measurement {
   const brakeM = sim.sMeters - s0;
 
   // Sustained lateral g: a slow steering ramp at a held speed, best one-second mean
-  const lateralG = VF26_AI_REFERENCE.lateral.map(([v]) => {
+  const lateralG = LC26_AI_REFERENCE.lateral.map(([v]) => {
     const car = fresh(make, v);
     const hist: number[] = [];
     let best = 0;

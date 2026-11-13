@@ -4,7 +4,7 @@ import { sharpenCarMaps } from "@/lib/render/ported-car-materials";
 import { assetProgress, type AssetTaskId } from "@/lib/loading/asset-progress";
 import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js";
 import { withBasePath } from "@/lib/base-path";
-import { VF26_CHASSIS } from "@/lib/sim/vf26-data";
+import { LC26_CHASSIS } from "@/lib/sim/lc26-data";
 import type { CarTelemetry, LiveryConfig, TireCompound } from "@/types/f1";
 import {
   installTyreDeformation,
@@ -12,7 +12,9 @@ import {
   type TyreDeformationHandle,
 } from "@/lib/render/tyre-deformation";
 import { applyRearRainLight } from "@/lib/render/golden-hour-environment";
-import { PAINT_ZONE_MATERIALS, setVf26LiveryColours, upgradeVf26Materials } from "@/lib/render/car-materials";
+import { PAINT_ZONE_MATERIALS, setLc26LiveryColours, upgradeLc26Materials } from "@/lib/render/car-materials";
+import { installVertexOcclusion } from "@/lib/render/vertex-occlusion";
+import { createDriverFigure } from "@/lib/render/driver-figure";
 import { createDriverHelmet } from "@/lib/render/driver-helmet";
 import { installLiveryDecals } from "@/lib/render/livery-decals";
 import { moveToDriverHeadLayer } from "@/lib/render/layers";
@@ -25,33 +27,35 @@ import {
   type WheelSeating,
 } from "@/lib/render/corner-rig";
 import { singlePassTransparency } from "@/lib/render/static-scene";
+import { createSuspensionArms, type ArmHub } from "@/lib/render/suspension-arms";
 
 /**
  * The 2026 Prototype's body (`public/cars/f12026/model/f12026.glb`): Qvist Designs' 2026 concept, ported by
- * `scripts/cars/port_qvist_f1.mjs`. On builds without the GLB `loadVf26Template()` resolves to null and the procedural
+ * `scripts/cars/port_qvist_f1.mjs`. On builds without the GLB `loadLc26Template()` resolves to null and the procedural
  * car stays in place.
  *
  * Model space: +X left, +Y up, +Z forward, tyres on y = 0 — the same axes as the rig, so only a translation is needed.
  *
  * Paint: the body's zone materials (`PAINT_ZONE_MATERIALS`) take the selected LiveryConfig's primary, secondary and
  * accent, per car. A GLB with a livery mask (root extras `liveryMask`) mixes them in the shader instead. Moving parts:
- * wheels, steering wheel, the wing flaps (extras `aeroClosed` / `aeroOpen`) and, where the GLB has one, a skinned
- * driver; a body without one gets a helmet at its extras' `helmet.pos`.
+ * wheels, the brake drums on them (`SUSP_xx`), the suspension arms (`ARM_xx_n`, `render/suspension-arms.ts`), steering
+ * wheel, the wing flaps (extras `aeroClosed` / `aeroOpen`) and, where the GLB has one, a skinned driver; a body
+ * without one gets a helmet at its extras' `helmet.pos`.
  */
-export const VF26_MODEL_URL = "/cars/f12026/model/f12026.glb";
+export const LC26_MODEL_URL = "/cars/f12026/model/f12026.glb";
 
-export interface Vf26CameraAnchor {
+export interface Lc26CameraAnchor {
   /** Rig-local position (m): +X left, +Y up, +Z forward */
   pos: THREE.Vector3;
   pitchRad: number;
   fovDeg: number;
 }
 
-export interface Vf26ModelInstance {
+export interface Lc26ModelInstance {
   bodyGroup: THREE.Group;
   cameraAnchors: Record<
     "cockpit" | "shoulder" | "tcam" | "dash" | "bumper" | "nearChase" | "farChase",
-    Vf26CameraAnchor
+    Lc26CameraAnchor
   >;
   /** `wheels` drives the contact-patch / sidewall deformation and seats the wheels on the road; omitted = undeformed */
   update: (telemetry: CarTelemetry, wheelRotationRad: number, dtSeconds: number, wheels?: WheelSeating) => void;
@@ -72,7 +76,7 @@ const templatePromises = new Map<string, Promise<THREE.Group | null>>();
 const templateAssets = new WeakMap<THREE.Object3D, TemplateAssets>();
 
 /** `task`: the loading-screen task its download counts toward (the player's car, or the opponents' when it differs) */
-export function loadVf26Template(modelUrl: string = VF26_MODEL_URL, task: AssetTaskId = "car"): Promise<THREE.Group | null> {
+export function loadLc26Template(modelUrl: string = LC26_MODEL_URL, task: AssetTaskId = "car"): Promise<THREE.Group | null> {
   let promise = templatePromises.get(modelUrl);
   if (!promise) {
     promise = (async () => {
@@ -83,7 +87,7 @@ export function loadVf26Template(modelUrl: string = VF26_MODEL_URL, task: AssetT
         const gltf = await createGltfLoader().loadAsync(url, (event) => assetProgress.progress(task, event));
         const scene = gltf.scene;
         // Per-compound tyre maps are stored as extra textures (index list in the root node extras)
-        const tyreIdx = (scene.getObjectByName("VF26")?.userData?.tyreMaps ?? {}) as Record<string, number>;
+        const tyreIdx = ((scene.getObjectByName("LC26") ?? scene.getObjectByName("VF26"))?.userData /* keep-old-id */?.tyreMaps ?? {}) as Record<string, number>;
         const tyreMaps: Partial<Record<TireCompound, THREE.Texture>> = {};
         for (const [compound, idx] of Object.entries(tyreIdx)) {
           const tex = (await gltf.parser.getDependency("texture", idx)) as THREE.Texture;
@@ -111,7 +115,7 @@ export function loadVf26Template(modelUrl: string = VF26_MODEL_URL, task: AssetT
         assetProgress.done(task);
         return scene;
       } catch (err) {
-        console.warn("VF26 model not loaded, using the procedural car", err);
+        console.warn("LC26 model not loaded, using the procedural car", err);
         assetProgress.fail(task);
         return null;
       }
@@ -153,19 +157,21 @@ function steerFrame(table: number[], deg: number): number {
 }
 
 /**
- * Attach a clone of the VF26 template to an existing car rig.
+ * Attach a clone of the LC26 template to an existing car rig.
  * - body + cockpit go into `chassisGroup` (sprung: pitch / roll / heave)
  * - wheels, uprights and discs go into per-corner pivots under `root` (unsprung), steered and spun here
  */
-export function attachVf26Model(
+export function attachLc26Model(
   template: THREE.Group,
   root: THREE.Group,
-  chassisGroup: THREE.Group
-): Vf26ModelInstance {
+  chassisGroup: THREE.Group,
+  options: { opponent?: boolean } = {}
+): Lc26ModelInstance {
   const assets = templateAssets.get(template) ?? { tyreMaps: {}, animations: [] };
   const model = cloneSkinned(template) as THREE.Group;
   model.updateMatrixWorld(true);
-  const vf = model.getObjectByName("VF26") ?? model;
+  // Hosted car bodies ported before the rename still name their root the old way
+  const vf = model.getObjectByName("LC26") ?? model.getObjectByName("VF26") ?? model; // keep-old-id
   const extras = (vf.userData ?? {}) as {
     wheelCentres?: Record<string, [number, number, number]>;
     cameras?: Record<string, { pos: [number, number, number]; pitchDeg: number; fov: number }>;
@@ -177,7 +183,7 @@ export function attachVf26Model(
 
   // Align the model's front axle with the physics front axle (the rig origin is the CG projected on the
   // ground) and sit the tyres on the ground.
-  const cgToFront = VF26_CHASSIS.wheelbase * (1 - VF26_CHASSIS.frontWeightFraction);
+  const cgToFront = LC26_CHASSIS.wheelbase * (1 - LC26_CHASSIS.frontWeightFraction);
   const lf = extras.wheelCentres?.WHEEL_LF ?? [0.731, 0.26, 1.521];
   const tyre = find("WHEEL_LF_TYRE") as THREE.Mesh | undefined;
   tyre?.geometry.computeBoundingBox();
@@ -185,7 +191,7 @@ export function attachVf26Model(
   const offset = new THREE.Vector3(0, tyreRadius - lf[1], cgToFront - lf[2]);
 
   const bodyGroup = new THREE.Group();
-  bodyGroup.name = "VF26_BODY";
+  bodyGroup.name = "LC26_BODY";
   bodyGroup.position.copy(offset);
 
   // Per-corner pivots. Built before re-parenting so the bind matrices can be read from the clone.
@@ -193,13 +199,17 @@ export function attachVf26Model(
     discMat: THREE.MeshStandardMaterial | null;
   }
   const corners: Corner[] = [];
+  const hubs = new Map<string, ArmHub>();
+  // The arms' frame against the model's, read before anything is re-parented
+  const bodyNode = find("BODY");
+  const modelToBody = bodyNode ? relativeMatrix(bodyNode, vf).invert() : null;
   WHEELS.forEach((wheelName, i) => {
     const wheel = find(wheelName);
     if (!wheel) return;
     const wheelBind = relativeMatrix(wheel, vf);
     const centre = new THREE.Vector3().setFromMatrixPosition(wheelBind);
     const steer = new THREE.Group();
-    steer.name = `VF26_STEER_${SIDE[i]}`;
+    steer.name = `LC26_STEER_${SIDE[i]}`;
     steer.position.copy(centre).add(offset);
     const pivotBind = new THREE.Matrix4().makeTranslation(centre.x, centre.y, centre.z);
     const pivotInv = pivotBind.clone().invert();
@@ -215,7 +225,7 @@ export function attachVf26Model(
     const wheelLocal = pivotInv.clone().multiply(wheelBind);
     const wheelInv = wheelBind.clone().invert();
     const spin = new THREE.Group();
-    spin.name = `VF26_SPIN_${SIDE[i]}`;
+    spin.name = `LC26_SPIN_${SIDE[i]}`;
     for (const child of [...wheel.children]) spin.add(child);
     const disc = find(`DISC_${SIDE[i]}`);
     let discMat: THREE.MeshStandardMaterial | null = null;
@@ -235,6 +245,7 @@ export function attachVf26Model(
     steer.add(wheel);
     setFromMatrix(wheel, wheelLocal);
     root.add(steer);
+    hubs.set(SIDE[i], { steer, centre });
     corners.push({
       steer,
       spin,
@@ -254,6 +265,8 @@ export function attachVf26Model(
   }
   find(driver ? "HARNESS_OFF" : "HARNESS_ON")?.removeFromParent();
   chassisGroup.add(bodyGroup);
+  // Suspension arms: each keeps its outer end on its wheel's drum
+  const arms = bodyNode && modelToBody ? createSuspensionArms(bodyNode, root, hubs, modelToBody) : null;
 
   // Driver arms follow the wheel through the mod's driver_steer clip (time set from the wheel angle)
   const helmet = driver?.getObjectByName("HELMET") ?? null;
@@ -295,8 +308,8 @@ export function attachVf26Model(
   // Steering wheel (STEER_BASE, bind rotation = identity): +rotation.z turns the rim clockwise as seen by
   // the driver (top of the rim moves to the right, -X), i.e. a right turn.
   const steerBase = bodyGroup.getObjectByName("STEER_BASE");
-  const lockRad = VF26_CHASSIS.steering.lockDeg * THREE.MathUtils.DEG2RAD;
-  const maxRoadWheelRad = lockRad / VF26_CHASSIS.steering.ratio;
+  const lockRad = LC26_CHASSIS.steering.lockDeg * THREE.MathUtils.DEG2RAD;
+  const maxRoadWheelRad = lockRad / LC26_CHASSIS.steering.ratio;
 
   // Shift lights on the wheel rim
   const ledMats: THREE.MeshStandardMaterial[] = [];
@@ -339,8 +352,8 @@ export function attachVf26Model(
 
   // Clearcoat paint, carbon weave (body, wings, uprights) and the rear FIA rain / ERS light, bright enough to bloom
   const liveryMask = extras.liveryMask === true;
-  upgradeVf26Materials(bodyGroup, { liveryMask });
-  for (const c of corners) upgradeVf26Materials(c.steer, { liveryMask });
+  upgradeLc26Materials(bodyGroup, { liveryMask });
+  for (const c of corners) upgradeLc26Materials(c.steer, { liveryMask });
   applyRearRainLight(bodyGroup);
 
   // Each car its own paint zone materials (the upgraded ones are shared by every clone of the template); the body's
@@ -372,14 +385,23 @@ export function attachVf26Model(
   });
   const decals = decalMats.length ? installLiveryDecals(decalMats) : null;
 
-  // A body without a driver of its own wears a helmet in the cockpit
+  // A body without a driver of its own gets one: a helmet in the cockpit and, with a steering wheel to hold, the
+  // figure under it
   const driverHelmet = !driver && extras.helmet ? createDriverHelmet() : null;
   if (driverHelmet && extras.helmet) {
     driverHelmet.group.position.fromArray(extras.helmet.pos);
     bodyGroup.add(driverHelmet.group);
   }
+  const driverFigure =
+    driverHelmet && steerBase
+      ? createDriverFigure({ helmet: driverHelmet.group.position, wheel: steerBase, frame: bodyGroup, coarse: options.opponent })
+      : null;
+  if (driverFigure) bodyGroup.add(driverFigure.group);
 
-  const cameraAnchors = {} as Vf26ModelInstance["cameraAnchors"];
+  // The body's baked shading, where its porter made it
+  installVertexOcclusion([bodyGroup, ...corners.map((c) => c.steer)]);
+
+  const cameraAnchors = {} as Lc26ModelInstance["cameraAnchors"];
   const cams = extras.cameras ?? {};
   for (const key of ["cockpit", "tcam", "dash", "bumper", "nearChase", "farChase"] as const) {
     const c = cams[key] ?? { pos: [0, 0.74, 0], pitchDeg: -5, fov: 55 };
@@ -405,9 +427,11 @@ export function attachVf26Model(
     // Front wheels: telemetry.steering = road-wheel angle / max angle, + = right. rotation.y + = left.
     const roadWheel = -t.steering * maxRoadWheelRad;
     updateCorners(corners, roadWheel, wheelRotationRad, wheels);
+    arms?.update();
     if (steerBase) steerBase.rotation.z = t.steering * lockRad;
+    driverFigure?.update(t.steering * lockRad, dtSeconds);
     if (driverMixer && steerAction) {
-      steerAction.time = steerFrame(steerTable, t.steering * VF26_CHASSIS.steering.lockDeg) / driverFps;
+      steerAction.time = steerFrame(steerTable, t.steering * LC26_CHASSIS.steering.lockDeg) / driverFps;
       driverMixer.update(0);
     }
 
@@ -431,7 +455,7 @@ export function attachVf26Model(
   };
 
   const setLivery = (livery: LiveryConfig) => {
-    if (liveryMask) setVf26LiveryColours(livery.primary, livery.secondary, livery.accent);
+    if (liveryMask) setLc26LiveryColours(livery.primary, livery.secondary, livery.accent);
     const colours: Record<string, string> = {
       EXT_PAINT_PRIMARY: livery.primary,
       EXT_PAINT_SECONDARY: livery.secondary,
@@ -440,11 +464,13 @@ export function attachVf26Model(
     for (const [name, mats] of zoneMats) for (const m of mats) m.color.set(colours[name]);
     decals?.set(livery.decals);
     driverHelmet?.setColours(livery.primary, livery.secondary, livery.accent);
+    driverFigure?.setColours(livery.primary, livery.secondary, livery.accent);
   };
 
   const dispose = () => {
     driverMixer?.stopAllAction();
     driverHelmet?.dispose();
+    driverFigure?.dispose();
     for (const m of ownZone.values()) m.dispose();
     for (const h of liveTyreHandles) h.dispose();
     bodyGroup.removeFromParent();

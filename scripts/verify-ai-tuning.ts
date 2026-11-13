@@ -5,7 +5,7 @@
  * Run: npx tsx scripts/verify-ai-tuning.ts
  */
 import { getActiveTrackData } from '../src/lib/track-data';
-import { computeSpeedProfile, createVf26ProfileCarModel } from '../src/lib/sim/speed-profile';
+import { computeSpeedProfile, createLc26ProfileCarModel } from '../src/lib/sim/speed-profile';
 import {
   AI_SKILL_DEFAULT,
   AI_SKILL_LEVELS,
@@ -87,7 +87,7 @@ for (const [k, f] of Object.entries(AI_TUNING_LIBRARY)) check(`${k}.json parses`
 const listedTracks = new Set((trackIndex as { id: string }[]).map((t) => t.id));
 const strayTracks = Object.keys(AI_TUNING_LIBRARY).map((k) => k.split('.')[1]).filter((t) => t && !listedTracks.has(t));
 check('every per-track file is for a listed circuit', strayTracks.length === 0, strayTracks.join(', '));
-const shipped = resolveAiTuning({ classId: 'f1-2026', vehicleId: 'vf26', trackId: 'rwanda_official_short' }, AI_TUNING_LIBRARY);
+const shipped = resolveAiTuning({ classId: 'f1-2026', vehicleId: 'lc26', trackId: 'rwanda_official_short' }, AI_TUNING_LIBRARY);
 check('shipped F1 class values are the identity defaults', JSON.stringify(shipped.params) === JSON.stringify(AI_TUNING_DEFAULTS));
 
 console.log('Skill');
@@ -120,7 +120,7 @@ check('Rookie < Amateur < Pro < Alien for every driver', paces.every((ps, k) => 
 
 console.log('Target speed');
 for (const [name, base] of [
-  ['VF26 profile', computeSpeedProfile(track.samples, createVf26ProfileCarModel('balanced')).speedMs],
+  ['LC26 profile', computeSpeedProfile(track.samples, createLc26ProfileCarModel('balanced')).speedMs],
   ['f12026-car autopilot profile', new F12026CarSim(track).aiBaseSpeedProfile()],
 ] as const) {
   const env = decelEnvelope(base, L);

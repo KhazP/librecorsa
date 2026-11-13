@@ -4,7 +4,8 @@
  * garage setup clamping.
  * Run: npx tsx scripts/verify-race-control.ts
  */
-import { TrackLimitsMonitor, type TrackLimitsEvent, type TrackLimitsFrame } from "../src/lib/sim/track-limits";
+import { COURSE_CUT_MARGIN_S, COURSE_CUT_MIN_PENALTY_S, TrackLimitsMonitor, type TrackLimitsEvent, type TrackLimitsFrame } from "../src/lib/sim/track-limits";
+import { stretchTimeS } from "../src/lib/sim/course-limits";
 import { classifiedTimeS, type RacerProgress } from "../src/lib/sim/race-session";
 import { computeRelatives, fuelStrategy, type LapRecord } from "../src/components/hud/mfd-data";
 import { clampChassisSetup, DEFAULT_CHASSIS_SETUP, FUEL_LOAD } from "../src/lib/sim/car-setup";
@@ -17,7 +18,7 @@ import { F12026CarSim } from "../src/lib/sim/f12026-car/F12026CarSim";
 import { createAmgGt3Sim } from "../src/lib/sim/gt3/AmgGt3Sim";
 import { createMtr496rSim } from "../src/lib/sim/proto/Mtr496rSim";
 import { createSuzukiLianaSim } from "../src/lib/sim/road/SuzukiLianaSim";
-import { createVf26Sim } from "../src/lib/sim/f12026-car/Vf26Sim";
+import { createLc26Sim } from "../src/lib/sim/f12026-car/Lc26Sim";
 import type { SimulatorCar } from "../src/lib/sim/simulator-car";
 import { F1Physics2026 } from "../src/lib/f1-physics-2026";
 import { createFlatTestTrack } from "./lib/flat-track";
@@ -173,6 +174,70 @@ console.log("Track limits · warnings and penalties");
   check("judged again without a reference: no stale gain on the card", relifted?.stage === "give_back" && relifted.gainS === null, JSON.stringify(relifted));
 }
 
+console.log("Track limits · a course cut");
+{
+  // The short lap's link on the Grand Prix lap: off the road at 1,100 m, 685 m round the lap in one frame, still off
+  // until it joins the lap again at 1,900 m 3 s after leaving, then a corner of the lap cut on the way out (so a later
+  // excursion would be a strike). The reference lap runs at 50 m/s: 16 s from 1,100 to 1,900 m, so the cut saved 13 s
+  const L = 5895;
+  const ref = new Float64Array(1179).fill(50);
+  const stretchRefS = (a: number, b: number) => stretchTimeS(ref, L, a, b);
+  const link = (m: TrackLimitsMonitor, ref: typeof stretchRefS | null = stretchRefS, refS = ref ?? undefined) => [
+    ...drive(m, 1, { distM: 1100, lapLengthM: L, stretchRefS: refS, deltaS: 0 }),
+    ...drive(m, 2, { distM: 1200, lapLengthM: L, stretchRefS: refS, offTrack: true, lateralM: -30, curvature: 0.01, deltaS: 0 }),
+    ...drive(m, 1, { distM: 1885, lapLengthM: L, stretchRefS: refS, offTrack: true, lateralM: -30, curvature: 0.01, deltaS: -10 }),
+    ...drive(m, 3, { distM: 1900, lapLengthM: L, stretchRefS: refS, deltaS: -10 }),
+  ];
+  check("the reference lap's time over a stretch", Math.abs(stretchRefS(1100, 1900) - 16) < 1e-9 && Math.abs(stretchRefS(5800, 100) - 195 / 50) < 1e-9);
+  const race = new TrackLimitsMonitor();
+  race.reset("race");
+  const ev = link(race);
+  const said = race.snapshot(clock * 1000).message?.text;
+  const saved = race.lastCutSavedS ?? 0;
+  const pen = ev.filter((e) => e.kind === "penalty");
+  check(
+    "in a race: the cut deletes the lap, and back on the track it costs the time it saved and 5 s more",
+    pen.length === 1 && ev.every((e) => e.kind === "penalty" || e.kind === "lap_invalid") && pen[0].reason === "course_cut" &&
+      Math.abs(saved - 13) < 0.05 && pen[0].penaltyS === Math.ceil(saved + COURSE_CUT_MARGIN_S) && race.penaltyTotalS === pen[0].penaltyS &&
+      said === `Course cut · +${pen[0].penaltyS?.toFixed(1)}s time penalty`,
+    `${JSON.stringify(ev)} ${said}, saved ${saved.toFixed(2)} s`
+  );
+  check("no warning on top for the rest of that excursion", race.strikes === 0 && !race.judging && race.snapshot(clock * 1000).warnings === 0);
+  const blind = new TrackLimitsMonitor();
+  blind.reset("race");
+  const bev = link(blind, null);
+  check("without a reference lap: the least penalty", bev.some((e) => e.kind === "penalty" && e.penaltyS === COURSE_CUT_MIN_PENALTY_S) && blind.penaltyTotalS === COURSE_CUT_MIN_PENALTY_S);
+  // The Grand Prix lap's loop driven on the short lap: off the road at 1,100 m, the lap position jumps back to 480 m,
+  // then 10 s later ahead to 1,206 m, and the car rejoins at 1,210 m having lost over 10 s on the reference
+  const detour = new TrackLimitsMonitor();
+  detour.reset("race");
+  const dev = [
+    ...drive(detour, 1, { distM: 1100, lapLengthM: L, stretchRefS, deltaS: 0 }),
+    ...drive(detour, 2, { distM: 1150, lapLengthM: L, stretchRefS, offTrack: true, lateralM: 30, deltaS: 0 }),
+    ...drive(detour, 10, { distM: 480, lapLengthM: L, stretchRefS, offTrack: true, lateralM: 180, deltaS: 0 }),
+    ...drive(detour, 1, { distM: 1206, lapLengthM: L, stretchRefS, offTrack: true, lateralM: 30, deltaS: 0 }),
+    ...drive(detour, 2, { distM: 1210, lapLengthM: L, stretchRefS, deltaS: 0 }),
+  ];
+  check("a longer way round: the lap is deleted, no penalty", detour.penaltyTotalS === 0 && dev.some((e) => e.kind === "lap_invalid") && (detour.lastCutSavedS ?? 0) < -5,
+    `${JSON.stringify(dev)} saved ${detour.lastCutSavedS?.toFixed(1)} s`);
+  const practice = new TrackLimitsMonitor();
+  practice.reset("practice");
+  const pev = link(practice);
+  check("in practice: the lap is deleted, no penalty", pev.some((e) => e.kind === "lap_invalid") && practice.penaltyTotalS === 0 && practice.snapshot(clock * 1000).message?.text === "Course cut · lap deleted");
+  const plain = new TrackLimitsMonitor();
+  plain.reset("race");
+  check("without the lap length nothing is read into a jump", drive(plain, 1, { distM: 1100 }).length === 0 && drive(plain, 2, { distM: 1885 }).length === 0);
+  // Far off the road between two parts of the lap that lie close: the lap distance jumps there and back
+  const between = new TrackLimitsMonitor();
+  between.reset("race");
+  const there = [
+    ...drive(between, 1, { distM: 30, lapLengthM: 932 }),
+    ...drive(between, DT, { distM: 210, lapLengthM: 932 }),
+    ...drive(between, 3, { distM: 32, lapLengthM: 932 }),
+  ];
+  check("a jump there and back is no cut", there.length === 0 && between.snapshot(clock * 1000).message === null, JSON.stringify(there));
+}
+
 console.log("Track limits · strict outside a race");
 {
   const p = new TrackLimitsMonitor();
@@ -220,7 +285,7 @@ console.log("Track limits · every engine honours strict and judged");
   const track = getActiveTrackData(1200);
   const engines = [
     ["2026 Prototype (classic engine)", () => new F1Physics2026(track)],
-    ["2026 Prototype (rigid body)", () => createVf26Sim(track)],
+    ["2026 Prototype (rigid body)", () => createLc26Sim(track)],
     ["AMG GT3", () => createAmgGt3Sim(track)],
     ["MTR 496R", () => createMtr496rSim(track)],
     ["Suzuki Liana", () => createSuzukiLianaSim(track)],
@@ -250,8 +315,8 @@ console.log("Time trial · fixed conditions");
 {
   const track = getActiveTrackData(1200);
   const cars = [
-    ["2026 Prototype (classic engine)", () => new F1Physics2026(track), "vf26", FUEL_LOAD.vf26.minKg],
-    ["2026 Prototype (rigid body)", () => createVf26Sim(track), "vf26", FUEL_LOAD["f12026-car"].minKg],
+    ["2026 Prototype (classic engine)", () => new F1Physics2026(track), "lc26", FUEL_LOAD.lc26.minKg],
+    ["2026 Prototype (rigid body)", () => createLc26Sim(track), "lc26", FUEL_LOAD["f12026-car"].minKg],
     ["AMG GT3", () => createAmgGt3Sim(track), "amg-gt3", FUEL_LOAD["amg-gt3"].minKg],
     ["MTR 496R", () => createMtr496rSim(track), "mtr-496r", FUEL_LOAD["mtr-496r"].minKg],
     ["Suzuki Liana", () => createSuzukiLianaSim(track), "liana", FUEL_LOAD.liana.minKg],
@@ -312,9 +377,9 @@ console.log("Time trial · fixed conditions");
 console.log("Time trial · race control, the car and the lap recorder together");
 {
   const track = getActiveTrackData(1200);
-  const car = createVf26Sim(track);
+  const car = createLc26Sim(track);
   const monitor = new TrackLimitsMonitor();
-  const recorder = new LapRecorder({ trackLengthM: track.totalLengthM, turns: [], trackId: "test", vehicle: "vf26", driverName: "Test", driverCode: "TST" });
+  const recorder = new LapRecorder({ trackLengthM: track.totalLengthM, turns: [], trackId: "test", vehicle: "lc26", driverName: "Test", driverCode: "TST" });
   /** One frame as the drive session runs it: the car, race control (its deletion on the car), then the recorder */
   const frame = (offTrack?: boolean) => {
     car.step(DT, {});
@@ -500,9 +565,9 @@ console.log("Garage on the sims");
   type VfAxles = { axles: { spec: { arbRate: number } }[] };
   const a = (vf as unknown as VfAxles).axles[1].spec.arbRate;
   const b = (other as unknown as VfAxles).axles[1].spec.arbRate;
-  check("vf26: the setup changes this car only (the AI cars keep the baseline)", Math.abs(a - b * 1.5) < 1e-6, `${a} vs ${b}`);
+  check("lc26: the setup changes this car only (the AI cars keep the baseline)", Math.abs(a - b * 1.5) < 1e-6, `${a} vs ${b}`);
 
-  // VF26 ride-height setup affects ground-effect downforce and rideHeightOffsetM
+  // LC26 ride-height setup affects ground-effect downforce and rideHeightOffsetM
   const vfLow = new F1Physics2026(flat);
   vfLow.applyChassisSetup({ ...DEFAULT_CHASSIS_SETUP, rideHeightFrontMm: -6, rideHeightRearMm: -6 });
   vfLow.resetToStartGrid(true);
@@ -512,7 +577,7 @@ console.log("Garage on the sims");
   vfHigh.resetToStartGrid(true);
   for (let i = 0; i < 30; i++) vfHigh.step(1 / 60, { throttle: 1 });
   check(
-    "vf26: ride-height setup shifts ground-effect downforce and chassis height",
+    "lc26: ride-height setup shifts ground-effect downforce and chassis height",
     Math.abs(vfHigh.telemetry.downforceN - vfLow.telemetry.downforceN) > 50 &&
       vfHigh.rideHeightOffsetM > vfLow.rideHeightOffsetM + 0.01,
     `df: ${vfLow.telemetry.downforceN.toFixed(0)} vs ${vfHigh.telemetry.downforceN.toFixed(0)} N`

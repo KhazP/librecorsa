@@ -38,7 +38,7 @@ import {
   type SteeringAssistSettings,
   selfSteerDeg,
 } from '../src/lib/sim/steering-assist';
-import { VF26_TYRES } from '../src/lib/sim/vf26-data';
+import { LC26_TYRES } from '../src/lib/sim/lc26-data';
 import type { ControlInputs } from '../src/types/f1';
 import { createFlatTestTrack } from './lib/flat-track';
 
@@ -93,7 +93,7 @@ const CARS: CarCase[] = [
   {
     name: 'F1 2026 Prototype',
     make: () => new F1Physics2026(pad),
-    peakDeg: (c) => VF26_TYRES[c.tireCompound].front.frictionLimitAngleDeg,
+    peakDeg: (c) => LC26_TYRES[c.tireCompound].front.frictionLimitAngleDeg,
     minSettledSlip: 0.84,
   },
 ];

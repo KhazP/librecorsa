@@ -33,7 +33,12 @@ const check = (name: string, ok: boolean, detail: string) => {
 const f = (v: number, d = 1) => v.toFixed(d);
 
 // The back straight runs from Turn 11 (4176 m) to Turn 12 (4751 m)
-setActiveTrack('istanbul_park', JSON.parse(readFileSync('public/tracks/istanbul_park/track_data.json', 'utf8')) as RawTrackJson);
+// The AI drives a line of its own here, 1.15 m right of the middle (where the hosted line ran along this straight
+// when the hits below were set up): a re-optimised line that crosses the straight here steers the AI car into the
+// player's, and a tap becomes a firm hit
+const raw = JSON.parse(readFileSync('public/tracks/istanbul_park/track_data.json', 'utf8')) as RawTrackJson & { samples: { ro?: number }[] };
+for (const p of raw.samples) p.ro = 1.15;
+setActiveTrack('istanbul_park', raw);
 const track = getActiveTrackData(1200);
 const root = loadGlbGeometry(`public${track.meshUrl}`);
 /** The cars' distances below are from here: 300 m on is well down the straight */

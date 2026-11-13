@@ -1,21 +1,21 @@
 /**
- * The VF26's data on the rigid-body engine (`VF26_DATA_SIM_PROFILE`, `Vf26Config`) against the engine it ships on
+ * The LC26's data on the rigid-body engine (`LC26_DATA_SIM_PROFILE`, `Lc26Config`) against the engine it ships on
  * (`F1Physics2026`): the same car data must give the same car. The car a driver gets on the rigid-body engine is that
- * data tuned (`Vf26Tune.ts`), held by `verify-vf26-tuned.ts`. Flat-ground measures from `scripts/lib/vf26-measure.ts`, then autopilot
+ * data tuned (`Lc26Tune.ts`), held by `verify-lc26-tuned.ts`. Flat-ground measures from `scripts/lib/lc26-measure.ts`, then autopilot
  * laps of Rwanda on both.
  *
- *   npx tsx scripts/verify-vf26-fold.ts
+ *   npx tsx scripts/verify-lc26-fold.ts
  *
  * The bands are what two models of one car may differ by (a planar chassis against a rigid body on its suspension):
  * a few per cent on times, speeds and g, and no worse behaved past the limit.
  */
 import { getActiveTrackData } from '../src/lib/track-data';
 import { F1Physics2026 } from '../src/lib/f1-physics-2026';
-import { createVf26Sim, VF26_DATA_SIM_PROFILE } from '../src/lib/sim/f12026-car/Vf26Sim';
+import { createLc26Sim, LC26_DATA_SIM_PROFILE } from '../src/lib/sim/f12026-car/Lc26Sim';
 import type { SimulatorCar } from '../src/lib/sim/simulator-car';
-import { VF26_AI_REFERENCE, VF26_TYRES } from '../src/lib/sim/vf26-data';
+import { LC26_AI_REFERENCE, LC26_TYRES } from '../src/lib/sim/lc26-data';
 import { createFlatTestTrack } from './lib/flat-track';
-import { measureVf26, VF26_ENGINES } from './lib/vf26-measure';
+import { measureLc26, LC26_ENGINES } from './lib/lc26-measure';
 
 const failures: string[] = [];
 const check = (name: string, ok: boolean, detail = '') => {
@@ -28,14 +28,14 @@ const sign = (v: number) => `${v >= 0 ? '+' : ''}${v.toFixed(1)} %`;
 
 console.log('== Flat ground');
 {
-  const [old, rigid] = VF26_ENGINES.map(({ make }) => measureVf26(make));
+  const [old, rigid] = LC26_ENGINES.map(({ make }) => measureLc26(make));
   // Off the line the rigid-body car holds its engine at 7000 rpm and is the quicker one by 0.7 s; the old engine holds
   // 10 500 rpm for a second and lets the clutch home
   for (const [kmh, tol] of [[100, 22], [200, 10], [300, 6]] as const)
     check(`0–${kmh} km/h within ${tol} %`, within(rigid.accelS[kmh], old.accelS[kmh], tol), `${rigid.accelS[kmh]?.toFixed(2)} s vs ${old.accelS[kmh]?.toFixed(2)} s (${sign(pct(rigid.accelS[kmh], old.accelS[kmh]))})`);
   check('Top speed within 2 %', within(rigid.topSpeedKmh, old.topSpeedKmh, 2), `${rigid.topSpeedKmh.toFixed(0)} vs ${old.topSpeedKmh.toFixed(0)} km/h`);
   check('300–100 km/h within 8 %', within(rigid.brakeM, old.brakeM, 8), `${rigid.brakeM.toFixed(1)} m vs ${old.brakeM.toFixed(1)} m (${sign(pct(rigid.brakeM, old.brakeM))})`);
-  VF26_AI_REFERENCE.lateral.forEach(([v], i) =>
+  LC26_AI_REFERENCE.lateral.forEach(([v], i) =>
     check(`Lateral g at ${(v * 3.6).toFixed(0)} km/h within 5 %`, within(rigid.lateralG[i], old.lateralG[i], 5), `${rigid.lateralG[i].toFixed(2)} g vs ${old.lateralG[i].toFixed(2)} g (${sign(pct(rigid.lateralG[i], old.lateralG[i]))})`)
   );
   check('Steering for 1.5 g at 180 km/h within 12 %', within(rigid.steerFor15G, old.steerFor15G, 12), `${rigid.steerFor15G.toFixed(3)} vs ${old.steerFor15G.toFixed(3)} of lock`);
@@ -69,7 +69,7 @@ console.log('\n== Autopilot laps of Rwanda');
     return { lapS, maxSlipDeg, pastEdgeM, done: sim.telemetry.lapCount >= lap0 + 3 };
   };
   const old = laps(() => new F1Physics2026(track));
-  const rigid = laps(() => createVf26Sim(track, null, VF26_DATA_SIM_PROFILE));
+  const rigid = laps(() => createLc26Sim(track, null, LC26_DATA_SIM_PROFILE));
   // 2 % (was 1.5 %): on the short lap's driven line the rigid car's autopilot laps 0.17 s slower than on the optimised
   // one, the other engine the same to 0.03 s, which puts the two 1.51 % apart
   check('Flying lap within 2 % of the other engine', rigid.done && within(rigid.lapS, old.lapS, 2), `${rigid.lapS.toFixed(2)} s vs ${old.lapS.toFixed(2)} s (${sign(pct(rigid.lapS, old.lapS))})`);
@@ -96,7 +96,7 @@ console.log('\n== Flat out from rest, by driver-aid preset');
   };
   for (const preset of ['assisted', 'semi_pro'] as const) {
     const old = flatOut(() => new F1Physics2026(pad), preset);
-    const rigid = flatOut(() => createVf26Sim(pad, null, VF26_DATA_SIM_PROFILE), preset);
+    const rigid = flatOut(() => createLc26Sim(pad, null, LC26_DATA_SIM_PROFILE), preset);
     check(`${preset}: straight, 0–200 km/h within 20 % of the other engine`, Number.isNaN(rigid.spunAtS) && within(rigid.to200S, old.to200S, 20),
       `${rigid.to200S.toFixed(2)} s vs ${old.to200S.toFixed(2)} s`);
   }
@@ -104,7 +104,7 @@ console.log('\n== Flat out from rest, by driver-aid preset');
   // their peak, through second and third gear: on the rigid body the rears then have a fifth of their cornering
   // stiffness left and the car turns round at about 140 km/h, as a car with this power does; the planar engine has
   // nothing to turn it and runs straight. Reported, not asserted: it is the difference a driver on Pro will meet
-  const pro = flatOut(() => createVf26Sim(pad, null, VF26_DATA_SIM_PROFILE), 'pro');
+  const pro = flatOut(() => createLc26Sim(pad, null, LC26_DATA_SIM_PROFILE), 'pro');
   console.log(`INFO  pro (no traction control), pedal flat from rest: ${Number.isNaN(pro.spunAtS) ? 'runs straight' : `spins at ${pro.spunAtS.toFixed(1)} s`} (the other engine runs straight)`);
 }
 
@@ -112,7 +112,7 @@ console.log('\n== A saved setup means the same on both engines');
 {
   const track = getActiveTrackData();
   const old = new F1Physics2026(track);
-  const rigid = createVf26Sim(track);
+  const rigid = createLc26Sim(track);
   const sheet = old.getTyreSetup();
   rigid.setTyreSetup(sheet);
   const back = rigid.getTyreSetup();
@@ -125,7 +125,7 @@ console.log('\n== A saved setup means the same on both engines');
   const lap0 = rigid.telemetry.lapCount;
   for (let t = 0; t < 300 && rigid.telemetry.lapCount < lap0 + 3; t += 1 / 60) rigid.step(1 / 60, {});
   const hot = rigid.vehicle.wheels.map((w) => w.pressurePsi);
-  const soft = VF26_TYRES.soft;
+  const soft = LC26_TYRES.soft;
   check('On them the warm tyres sit within 1.5 psi of their optimum', hot.every((p, i) => Math.abs(p - (i < 2 ? soft.front : soft.rear).pressureRefPsi) <= 1.5),
     `${hot.map((p) => p.toFixed(1)).join(' / ')} psi against ${soft.front.pressureRefPsi} / ${soft.rear.pressureRefPsi}`);
   const chassis = old.getChassisSetup();
@@ -133,5 +133,5 @@ console.log('\n== A saved setup means the same on both engines');
   check('The chassis setup reads back the same', JSON.stringify(rigid.getChassisSetup()) === JSON.stringify(chassis), JSON.stringify(chassis).slice(0, 90));
 }
 
-console.log(failures.length ? `\n${failures.length} check(s) failed: ${failures.join(', ')}` : '\nAll VF26 fold checks passed.');
+console.log(failures.length ? `\n${failures.length} check(s) failed: ${failures.join(', ')}` : '\nAll LC26 fold checks passed.');
 if (failures.length) process.exitCode = 1;

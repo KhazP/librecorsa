@@ -19,7 +19,7 @@ import { CAR_WHEEL_LOCKS_DEG } from '@/lib/input/device-input';
 import { SUZUKI_LIANA_CONFIG } from './road/SuzukiLianaConfig';
 import { MTR_496R_CONFIG } from './proto/Mtr496rConfig';
 import { AMG_GT3_CONFIG } from './gt3/AmgGt3Config';
-import { VF26_MODEL_URL, loadVf26Template } from '@/lib/vf26-car-model';
+import { LC26_MODEL_URL, loadLc26Template } from '@/lib/lc26-car-model';
 import { assetProgress } from '@/lib/loading/asset-progress';
 import { addContactShadow, seatContactShadow } from '@/lib/render/contact-shadow';
 import { disposeTree } from '@/lib/render/dispose-tree';
@@ -428,7 +428,7 @@ export class SimVisualFxManager {
       const tx = (w.worldPos.x - prev.x) / dt;
       const ty = (w.worldPos.y - prev.y) / dt;
       const tz = (w.worldPos.z - prev.z) / dt;
-      // A first frame or a jump (reset, flashback, teleport): the car's own speed and heading until it settles again
+      // A first frame or a jump (reset, teleport): the car's own speed and heading until it settles again
       if (!this.wheelVelValid || tx * tx + ty * ty + tz * tz > 150 * 150) vel.copy(carForward).multiplyScalar(carSpeedMs);
       else vel.set(vel.x + (tx - vel.x) * velBlend, vel.y + (ty - vel.y) * velBlend, vel.z + (tz - vel.z) * velBlend);
       prev.set(w.worldPos.x, w.worldPos.y, w.worldPos.z);
@@ -669,7 +669,7 @@ export class SimVisualFxManager {
     const template: Promise<unknown> =
       kind === 'gt3' || kind === 'road' || kind === 'proto'
         ? loadPortedTemplate(PORTED_ONLY[kind].url)
-        : loadVf26Template(VF26_MODEL_URL, 'opponents');
+        : loadLc26Template(LC26_MODEL_URL, 'opponents');
     return template
       .then(() => {
         // The rigs attach the cached template in their own `then`, registered before this one returns. One racing
@@ -953,7 +953,7 @@ function buildOpponentRig(vehicle: VehicleModelId | undefined, livery: LiveryCon
       floor: staticFloorOf(own.config),
     });
   } else {
-    rig = createF1Car2026(livery, 'medium');
+    rig = createF1Car2026(livery, 'medium', undefined, { opponent: true });
   }
   addContactShadow(rig.root, vehicle);
   return rig;

@@ -3,7 +3,7 @@
  *
  *   npx tsx scripts/verify-multiplayer-contact.ts
  *
- * Two VF26s on autopilot, each client seeing the other only through its own `MultiplayerSyncManager` (25 Hz packets,
+ * Two LC26s on autopilot, each client seeing the other only through its own `MultiplayerSyncManager` (25 Hz packets,
  * 40 ± 15 ms one way) and resolving its own car with `resolvePlayerVsRemoteCar`, as the simulator does. Contact is
  * judged against the true poses of both cars.
  *
@@ -14,7 +14,8 @@
 import * as THREE from 'three';
 import { getActiveTrackData } from '../src/lib/track-data';
 import { F1Physics2026 } from '../src/lib/f1-physics-2026';
-import { MultiplayerSyncManager, type NetworkVehiclePacket } from '../src/lib/sim/multiplayer-sync';
+import { MultiplayerSyncManager, type NetworkVehiclePacket, type RaceStartInfo } from '../src/lib/sim/multiplayer-sync';
+import { MultiplayerRace, placePeersWhereDrawn } from '../src/lib/sim/race-session';
 import { resolvePlayerVsRemoteCar } from '../src/lib/sim/ai-opponents';
 import { resolveCarToCarObbCollision, type RigidBodyCollisionCar } from '../src/lib/sim/track-evolution';
 
@@ -227,6 +228,26 @@ console.log('\n== Remote pose');
   run(90);
   const err = seen ? seen.position.distanceTo(sim.worldPosition) : Infinity;
   check('Predicted to now: newest packet + age + one-way latency', !!seen && err < 0.5 && seen.contactReady === true, `${fmt(err)} m from the true car`);
+  {
+    // Its lap position and race distance are its newest packet's: the car's of 40 ms plus the packet's age ago.
+    // Placed on the lap where it is drawn, it is where the true car is, and a car half that lag behind it (which the
+    // packet's numbers put ahead) is classified behind it
+    const L = track.totalLengthM;
+    const wrap = (d: number) => ((((d + L / 2) % L) + L) % L) - L / 2;
+    const reportedS = seen!.trackS;
+    const lagM = wrap(sim.sMeters - reportedS);
+    const peer = { ...seen!, race: { id: 'race-1', dist: reportedS, fin: null, best: null } };
+    placePeersWhereDrawn([peer], track.projectWorldToTrack, L);
+    const placedErr = Math.abs(wrap(sim.sMeters - peer.trackS));
+    check('On the lap where it is drawn, not where its newest packet put it', lagM > 2 && placedErr < 0.5, `${fmt(lagM)} m behind as reported, ${fmt(placedErr)} m off once placed`);
+    const start: RaceStartInfo = { id: 'race-1', lightsStartHostMs: 0, holdMs: 0, laps: 3, collisions: 'on', carClass: 'any', trackId: 'x', grid: ['L', 'R'] };
+    const race = new MultiplayerRace(start, L, 'L', { name: 'L', code: 'LLL', color: '#fff' }, [{ peerId: 'R', name: 'R', code: 'R', color: '#fff' }]);
+    const frame = race.frame(60_000);
+    race.lapClock.distM = sim.sMeters - lagM / 2;
+    race.ingestPeers([peer], frame.raceTimeS);
+    const st = race.status(frame, 60);
+    check('A car half a lag behind it is classified behind it', st.position === 2 && st.standings[0].driverCode === 'R', `P${st.position}, ${fmt(lagM / 2)} m behind the drawn car`);
+  }
   // A teleport (a reset): snap, then no contact for a moment
   const readyAfterJump = run(12, true, 0);
   check('A jump in the pose holds contact off', readyAfterJump < 12 && !!seen && seen.position.distanceTo(sim.worldPosition) < 1, `ready ${readyAfterJump}/12 frames, ${fmt(seen ? seen.position.distanceTo(sim.worldPosition) : Infinity)} m off`);

@@ -1,6 +1,6 @@
 /**
  * f12026-car in the simulator: wraps `VehiclePhysics` behind the `SimulatorCar` surface the simulator,
- * the AI field and the renderer use for the VF26 model, and maps its live telemetry channels to `CarTelemetry`.
+ * the AI field and the renderer use for the LC26 model, and maps its live telemetry channels to `CarTelemetry`.
  *
  * Ground: the `Track_Collider_Road` colliders and `Track_Collider_Wall_*` barriers once the track GLB has
  * loaded (`attachTrackRoot`); until then (or when it never loads) a ground built from the track samples'
@@ -49,6 +49,7 @@ import {
 } from '@/lib/track-data';
 import { SteeringAssist, type SteeringAssistCarState } from '../steering-assist';
 import { type OvertakingRaceControl, type OvertakingRules, OvertakeGrant } from '../overtaking-rules';
+import { inLapWindow, straightModeWindows } from '../straight-mode-zones';
 import { AxleSlipScratch } from '../tyre-slip';
 import type { AeroWakeState } from '../aero-wake';
 import { type CarDamageEffects, withDamage } from '../car-damage';
@@ -85,6 +86,7 @@ import { sampleGrid } from '../ai/ai-track';
 import type { AiDrivePlan } from '../ai/drive-plan';
 import { lockShareOf } from '../tyre-slide-fx';
 import { filterChassisG } from '../chassis-g';
+import { beyondLayoutEdge, CourseCutWatch, inLapStretch, isCourseHop } from '../course-limits';
 
 const G = 9.81;
 const DEG2RAD = Math.PI / 180;
@@ -96,7 +98,7 @@ const leastBent = (left: number, right: number) => (Math.abs(left) < Math.abs(ri
 const RAD2DEG = 180 / Math.PI;
 /** Rwanda (≈1400 m ASL) air density: what the braking envelopes below are planned at */
 const AIR_DENSITY = 1.06;
-/** Standard-atmosphere air density at an altitude (as the VF26's): 1.07 at Rwanda, 1.21 at Silverstone */
+/** Standard-atmosphere air density at an altitude (as the LC26's): 1.07 at Rwanda, 1.21 at Silverstone */
 const airDensityAt = (altitudeM: number) => 1.225 * Math.pow(1 - 2.25577e-5 * altitudeM, 4.25588);
 /** A braking envelope at a circuit's air: the aero part grows with the density it was planned at (1.06) */
 const envelopeAt = (b: BrakingEnvelope, rho: number): BrakingEnvelope => ({ ...b, aeroG: (b.aeroG * rho) / AIR_DENSITY });
@@ -308,10 +310,19 @@ const AP_EDGE_STEP_M = 0.08;
 const AP_EDGE_PROBE_M = 0.1;
 /** Clear ground the autopilot keeps between its usable road and a raised step out past it (m) */
 const AP_EDGE_APRON_M = 0.6;
+/** Furthest past the track's width the kerb-and-road probe looks (m) */
+const AP_KERB_PROBE_M = 3;
 /** Road either side of the centreline the autopilot may use (m, every `AP_PROFILE_STEP_M`): - and + lateral sides */
 interface AutopilotEdges {
   neg: Float32Array;
   pos: Float32Array;
+  /**
+   * How far a flat kerb runs on past the track's width, - and + sides (m, 0 where there is none): to its last point,
+   * with no lip on the way, up to `AP_KERB_PROBE_M`. A line may run its outer tyres out to it, as a driver uses the
+   * kerbs (`lateralRangeAt`)
+   */
+  negOut: Float32Array;
+  posOut: Float32Array;
 }
 const apEdges = new WeakMap<GroundQuery, WeakMap<BuiltTrackData, AutopilotEdges>>();
 
@@ -330,6 +341,7 @@ function autopilotEdges(track: BuiltTrackData, ground: GroundQuery): AutopilotEd
   const L = track.totalLengthM;
   const n = Math.ceil(L / AP_PROFILE_STEP_M);
   const raw = { neg: new Float32Array(n), pos: new Float32Array(n) };
+  const rawOut = { neg: new Float32Array(n), pos: new Float32Array(n) };
   const hit = createGroundHit();
   for (let i = 0; i < n; i++) {
     const smp = track.getSampleAtDistance((i * L) / n);
@@ -351,10 +363,24 @@ function autopilotEdges(track: BuiltTrackData, ground: GroundQuery): AutopilotEd
       }
       // how far inside the track's width the road ends
       (side < 0 ? raw.neg : raw.pos)[i] = Math.min(1, half - usable);
+      // How far a flat kerb runs on past the width, with no lip on the way: out to the kerb's last point. Asphalt past
+      // the width does not count of itself (on a street circuit it runs on to the barriers)
+      let out = 0;
+      let last = usable >= half ? at(side * half) : null;
+      for (let d = AP_EDGE_PROBE_M; last !== null && d <= AP_KERB_PROBE_M + 1e-6; d += AP_EDGE_PROBE_M) {
+        const h = at(side * (half + d));
+        if (h === null || (hit.surface !== 'kerb' && hit.surface !== 'road')) break;
+        if (h - last - b.y * side * AP_EDGE_PROBE_M > AP_EDGE_STEP_M) break;
+        if (hit.surface === 'kerb') out = d;
+        last = h;
+      }
+      (side < 0 ? rawOut.neg : rawOut.pos)[i] = out;
     }
   }
   const hold = Math.round(10 / (L / n));
-  const out = { neg: new Float32Array(n), pos: new Float32Array(n) };
+  // A kerb past the width counts where it runs on for ±5 m (its ends, a gap between two: not a target)
+  const holdOut = Math.max(1, Math.round(5 / (L / n)));
+  const out = { neg: new Float32Array(n), pos: new Float32Array(n), negOut: new Float32Array(n), posOut: new Float32Array(n) };
   for (let i = 0; i < n; i++) {
     let neg = 0;
     let pos = 0;
@@ -363,9 +389,19 @@ function autopilotEdges(track: BuiltTrackData, ground: GroundQuery): AutopilotEd
       neg = Math.max(neg, raw.neg[j]);
       pos = Math.max(pos, raw.pos[j]);
     }
+    let negOut = Infinity;
+    let posOut = Infinity;
+    for (let k = -holdOut; k <= holdOut; k++) {
+      const j = (i + k + n) % n;
+      negOut = Math.min(negOut, rawOut.neg[j]);
+      posOut = Math.min(posOut, rawOut.pos[j]);
+    }
     const half = track.getSampleAtDistance((i * L) / n).width / 2;
     out.neg[i] = half - neg;
     out.pos[i] = half - pos;
+    // A lip anywhere near: none of the surface past it
+    out.negOut[i] = neg > 0 ? 0 : negOut;
+    out.posOut[i] = pos > 0 ? 0 : posOut;
   }
   perTrack.set(track, out);
   return out;
@@ -409,7 +445,7 @@ const apProfiles = new WeakMap<BuiltTrackData, Map<string, Float32Array>>();
 /**
  * The f12026-car's own speed limit along the path its autopilot drives (the racing line kept on the asphalt),
  * every `AP_PROFILE_STEP_M`: corner speed from its own grip and downforce, then a backward braking pass on the
- * friction circle, so no braking is planned that the tyres need for turning. The circuit's profile is the VF26's,
+ * friction circle, so no braking is planned that the tyres need for turning. The circuit's profile is the LC26's,
  * which corners and brakes harder than this car.
  */
 function autopilotProfile(track: BuiltTrackData, profile: CarSimProfile, edges: AutopilotEdges | null): Float32Array {
@@ -538,6 +574,8 @@ const TRACK_KI = 1.2;
 const TRACK_I_MAX_MS2 = 2.5;
 /** A line may put two wheels on a kerb: this much past the autopilot's usual edge margin where the edge has one (m) */
 const TRACK_KERB_ALLOW_M = 0.6;
+/** On a kerb past the track's width, the outer tyres' outer edges stay this far inside where it ends (m): half a tyre's width and 0.1 m to spare */
+const TRACK_KERB_EDGE_ROOM_M = 0.3;
 /** Autopilot pedals ease off past this share of the rears' peak slip angle, by this much per share beyond it */
 const AP_REAR_GUARD = 0.9;
 const AP_REAR_GUARD_GAIN = 4;
@@ -566,6 +604,12 @@ function surfaceType(kind: TrackSurfaceKind): SurfaceType {
     default:
       return 'asphalt';
   }
+}
+
+/** In one of the circuit's own zones (its data), not just on a straight the 2026 flaps open on */
+function inOvertakingZone(progress: number): boolean {
+  for (const z of RWANDA_DRS_ZONES) if (inLapWindow(progress, z.start, z.end)) return true;
+  return false;
 }
 
 /**
@@ -849,6 +893,8 @@ export class F12026CarSim implements SimulatorCar {
   public trackLimitsMode: 'strict' | 'judged' = 'strict';
   public trackLimitsHold = false;
   private lineCrossingStartsLap = true;
+  /** Jumps of the lap position round the course: one that stands cuts the lap (course-limits.ts) */
+  private readonly cutWatch = new CourseCutWatch();
   private drsPressPending = false;
   private boostRemainingS = 0;
   private boostCooldownS = 0;
@@ -920,6 +966,8 @@ export class F12026CarSim implements SimulatorCar {
       airDensity: airDensityAt(track.baseAltitudeM ?? BASE_ALTITUDE_M),
       ambientC: AMBIENT_C,
       drsZones: profile.hasDrs ? RWANDA_DRS_ZONES : [],
+      // 2026 Straight Mode opens on every straight; the zones in the circuit's data are only some of them
+      straightZones: profile.hasDrs ? straightModeWindows(track) : [],
       locateProgress: (x, z) => {
         const p = track.projectWorldToTrack(x, z, this.progressHintS);
         this.progressHintS = p.s;
@@ -952,7 +1000,9 @@ export class F12026CarSim implements SimulatorCar {
     this.channels.hasErs = profile.hasErs;
     this.channels.hasDrs = profile.hasDrs;
     this.coldPsi = axlePressures(v.wheels[0].coldPressurePsi, v.wheels[2].coldPressurePsi);
-    if (root) this.attachTrackRoot(root);
+    // On the colliders without the re-seat `attachTrackRoot` gives a car at rest: the grid placement below seats it,
+    // and a settle where it stands now would be thrown away
+    if (root) this.attachColliders(root);
     this.resetToStartGrid(false);
   }
 
@@ -1002,20 +1052,26 @@ export class F12026CarSim implements SimulatorCar {
 
   /** Switch to the GLB's road / surface colliders and barriers (no-op when they cannot be built) */
   public attachTrackRoot(root: THREE.Object3D): void {
-    this.trackRoot = root;
-    const { ground, walls } = trackColliders(root);
-    if (!ground) return;
     const wasOn = this.onColliders;
-    this.vehicle.setGround(ground);
-    this.vehicle.setWalls(walls);
-    this.onColliders = true;
-    this.collider = ground;
+    if (!this.attachColliders(root)) return;
     // A car at rest is re-seated on the collider heights; a moving one rides over the (small) step
     if (!wasOn && this.vehicle.speedMs < 0.5) {
       const p = this.vehicle.position;
       this.resetVehicle(p.x, p.z, this.yaw());
       this.syncPose();
     }
+  }
+
+  /** Puts the car on the track root's colliders, where it stands (false: the root has no road collider) */
+  private attachColliders(root: THREE.Object3D): boolean {
+    this.trackRoot = root;
+    const { ground, walls } = trackColliders(root);
+    if (!ground) return false;
+    this.vehicle.setGround(ground);
+    this.vehicle.setWalls(walls);
+    this.onColliders = true;
+    this.collider = ground;
+    return true;
   }
 
   public get onTrackColliders(): boolean {
@@ -1110,7 +1166,7 @@ export class F12026CarSim implements SimulatorCar {
   }
 
   /** The vehicle model whose setup limits, wing steps and fuel this car takes */
-  private get setupCar(): Exclude<VehicleModelId, 'vf26'> {
+  private get setupCar(): Exclude<VehicleModelId, 'lc26'> {
     const id = this.profile.id;
     return id === 'amg-gt3' || id === 'liana' || id === 'mtr-496r' ? id : 'f12026-car';
   }
@@ -1417,7 +1473,7 @@ export class F12026CarSim implements SimulatorCar {
 
   /**
    * Standing start from grid slot `gridSlot` (0 = pole), or a flying lap from the run-up of the main
-   * straight (further slots queue 28 m apart, alternating sides), as the VF26 does.
+   * straight (further slots queue 28 m apart, alternating sides), as the LC26 does.
    */
   public resetToStartGrid(flyingStart = false, gridSlot = 0, fieldSize?: number): void {
     // A point-to-point course is driven from a standing start: its road ends behind the start line
@@ -1482,9 +1538,9 @@ export class F12026CarSim implements SimulatorCar {
     this.afterPlacement();
   }
 
-  /** Flashback: back on the ground at a replayed pose, rolling at its speed, with the tyres as they are now */
+  /** Back on the ground at a recorded pose, rolling at its speed, with the tyres as they are now */
   public restorePose(pose: { x: number; z: number; yawRad: number; speedMs: number; s?: number }): void {
-    // A flashback moves the car mid-lap: the timed lap under way can't count (an out-lap, not yet timed, carries on)
+    // Put back mid-lap: the timed lap under way can't count (an out-lap, not yet timed, carries on)
     if (!this.lineCrossingStartsLap) this.invalidateLap();
     const p = this.track.projectWorldToTrack(pose.x, pose.z, pose.s ?? this.s);
     this.progressHintS = this.poseHintS = p.s;
@@ -1561,7 +1617,8 @@ export class F12026CarSim implements SimulatorCar {
     // (with its extra energy); an AI car spends it in the zones, where it overtakes
     const overtakeOk = this.overtakeAvailable;
     if (!overtakeOk) this.boostRemainingS = 0;
-    const aiOvertake = this.aiAutopilot && this.rules === 'straight-mode-2026' && !!this.raceControl?.racing && overtakeOk && v.telemetry.drsZone;
+    const aiOvertake =
+      this.aiAutopilot && this.rules === 'straight-mode-2026' && !!this.raceControl?.racing && overtakeOk && inOvertakingZone(v.trackProgress);
     const push = this.profile.hasErs && overtakeOk && (inputs.manualOverride || this.boostRemainingS > 0 || aiOvertake) && v.ersEnergyJ > 0;
     this.pushActive = push;
     v.setPerformanceMode(push ? 'PSH' : this.userErsMode);
@@ -1632,7 +1689,7 @@ export class F12026CarSim implements SimulatorCar {
     else this.stuckS = 0;
     this.wheelRotationRad = (this.wheelRotationRad + 0.5 * (v.wheels[2].omega + v.wheels[3].omega) * steppedS) % (Math.PI * 2);
     this.syncPose();
-    this.updateTiming();
+    this.updateTiming(steppedS);
     this.updateTelemetry(inputs);
     return this.telemetry;
   }
@@ -1654,7 +1711,7 @@ export class F12026CarSim implements SimulatorCar {
     if (inputs.steerRim && this.steeringAssist.source === 'direct') {
       return { ...this.electronicAids(inputs.throttle, inputs.brake, h, this), steer: want, drs: false };
     }
-    // Any other device: the rack turns no faster than hands turn a wheel (900°/s at the rim, as the VF26's): a stick
+    // Any other device: the rack turns no faster than hands turn a wheel (900°/s at the rim, as the LC26's): a stick
     // flick, a mouse or a phone tilt otherwise reached the tyres as an instant step, which snaps a car at speed
     const maxStep = (DRIVER_RIM_SPEED_DEG_S / this.rimLockDeg) * h;
     const steer = this.steerCmd + THREE.MathUtils.clamp(want - this.steerCmd, -maxStep, maxStep);
@@ -1965,14 +2022,21 @@ export class F12026CarSim implements SimulatorCar {
     let [lo, hi] = autopilotLateralRange(this.track, sample, s, edges, this.profile);
     const half = sample.width / 2;
     let lipNeg = false, lipPos = false;
+    let outNeg = 0, outPos = 0;
     if (edges) {
       const n = edges.neg.length;
       const i = Math.round((wrap(s, this.track.totalLengthM) / this.track.totalLengthM) * n) % n;
       lipNeg = edges.neg[i] < half - 0.05;
       lipPos = edges.pos[i] < half - 0.05;
+      outNeg = edges.negOut[i];
+      outPos = edges.posOut[i];
     }
     if (sample.kerbLeft && !lipNeg) lo -= TRACK_KERB_ALLOW_M;
     if (sample.kerbRight && !lipPos) hi += TRACK_KERB_ALLOW_M;
+    // A kerb past the width: the outer tyres may run out to where it ends, as the quick drivers do
+    const halfTrack = 0.5 * Math.max(this.profile.config.chassis.trackWidthFront, this.profile.config.chassis.trackWidthRear);
+    if (!lipNeg && outNeg > 0) lo = Math.min(lo, -(half + outNeg - halfTrack - TRACK_KERB_EDGE_ROOM_M));
+    if (!lipPos && outPos > 0) hi = Math.max(hi, half + outPos - halfTrack - TRACK_KERB_EDGE_ROOM_M);
     return [lo, hi];
   }
 
@@ -2180,6 +2244,7 @@ export class F12026CarSim implements SimulatorCar {
     c.wallImpact = null;
     this.syncPose();
     this.prevS = this.s;
+    this.cutWatch.reset();
     this.lastSector = this.track.getSampleAtDistance(this.s).sector;
     this.updateTelemetry(null);
   }
@@ -2260,15 +2325,21 @@ export class F12026CarSim implements SimulatorCar {
     }
   }
 
-  /** Sector / lap timing at the sector boundaries and the start / finish line (as the VF26) */
-  private updateTiming(): void {
+  /** Sector / lap timing at the sector boundaries and the start / finish line (as the LC26) */
+  private updateTiming(dtS: number): void {
     const L = this.track.totalLengthM;
     const sample = this.track.getSampleAtDistance(this.s);
+    // The lap position jumped further than a car drives in a frame: the car crossed to another part of the lap off its
+    // road (another layout's, course-limits.ts). A sector boundary it jumped over is no sector driven, and a jump ahead
+    // that stands cuts the lap under way
+    const ds = wrapHalf(this.s - this.prevS, L);
+    const hop = isCourseHop(ds);
+    if (this.cutWatch.update(ds, dtS)) this.invalidateLap();
     if (sample.sector !== this.lastSector) {
       // Sectors 1 and 2 end at their boundaries; sector 3 ends at the line (onLapCompleted). The nearest sample turns
       // to sector 1 up to half a sample before the line, and ending sector 3 there too would cut it short by that much
       // (a slow car's sectors then miss the lap time by more than the board allows)
-      if (sample.sector === this.lastSector + 1) this.onSectorCompleted(this.lastSector);
+      if (!hop && sample.sector === this.lastSector + 1) this.onSectorCompleted(this.lastSector);
       this.lastSector = sample.sector;
     }
     const p2p = this.track.pointToPoint;
@@ -2277,6 +2348,8 @@ export class F12026CarSim implements SimulatorCar {
       // A run counts from a standing start: at rest within 10 m of the line first, or the run is timed but not valid
       if (this.s >= L - 10 && Math.abs(this.vxMs) < 0.5) this.atRestOnLine = true;
       if (this.prevS > L * 0.85 && this.s < L * 0.15) {
+        // A jump before the start line is not the run's
+        this.cutWatch.reset();
         this.lineCrossingStartsLap = false;
         this.runActive = true;
         this.lapStartMs = this.simTimeMs;
@@ -2285,15 +2358,20 @@ export class F12026CarSim implements SimulatorCar {
         this.telemetry.lapInvalid = !this.atRestOnLine;
         this.atRestOnLine = false;
       } else if (this.runActive && this.prevS < p2p.finishS && this.s >= p2p.finishS && this.s - this.prevS < 50) {
+        // A jump ahead still pending at the finish is the run's
+        if (this.cutWatch.settle()) this.invalidateLap();
         this.runActive = false;
         this.onLapCompleted();
       }
     } else if (this.prevS > L * 0.85 && this.s < L * 0.15) {
+      // A jump ahead still pending at the line is the lap's
+      const cut = this.cutWatch.settle();
       if (this.lineCrossingStartsLap) {
         this.lineCrossingStartsLap = false;
         this.lapStartMs = this.simTimeMs;
         this.sectorStartMs = this.simTimeMs;
       } else {
+        if (cut) this.invalidateLap();
         this.onLapCompleted();
       }
     }
@@ -2307,7 +2385,8 @@ export class F12026CarSim implements SimulatorCar {
     if (duration > Math.min(8000, this.minLapMs / 5)) {
       t.sectorTimesMs[sector - 1] = duration;
       const best = t.bestSectorTimesMs[sector - 1];
-      if (best === null || duration < best) t.bestSectorTimesMs[sector - 1] = duration;
+      // A best sector only from a lap that still counts (not one off the track, or one that cut the course)
+      if (this.lapValid && (best === null || duration < best)) t.bestSectorTimesMs[sector - 1] = duration;
     }
   }
 
@@ -2362,12 +2441,18 @@ export class F12026CarSim implements SimulatorCar {
     // All four wheels on surfaces the table does not count as the track (run-off, gravel, grass, sausage kerbs)
     // Judged on the wheels touching the road: an airborne wheel's ground is its last contact (the probe only reaches
     // 0.6 m), so a jump keeps the verdict it took off with rather than reading stale surfaces
+    // Where another layout's road leaves the lap, this lap's road edge and kerbs are the limit: that road's asphalt and
+    // kerbs past it are off the track (course-limits.ts)
+    const fenced = inLapStretch(this.track.otherLayoutRoads, this.s, this.track.totalLengthM);
     let anyGrounded = false;
     let allOff = true;
     for (const w of W) {
       if (!w.grounded) continue;
       anyGrounded = true;
-      if (w.ground.props.validTrack) allOff = false;
+      const kind = w.ground.surface;
+      if (!w.ground.props.validTrack) continue;
+      if (fenced && (kind === 'road' || kind === 'kerb') && beyondLayoutEdge(sample, w.hardpointWorld.x, w.hardpointWorld.z)) continue;
+      allOff = false;
     }
     const offTrack = anyGrounded ? allOff : this.wasOffTrack;
     this.wasOffTrack = offTrack;

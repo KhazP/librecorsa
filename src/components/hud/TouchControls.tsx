@@ -173,6 +173,8 @@ interface TiltIndicatorProps {
   value: number;
   status: TiltStatus;
   onRecentre: (e: React.PointerEvent<HTMLButtonElement>) => void;
+  /** The finger leaving Recentre: asks for tilt again while it is off or was refused */
+  onRecentreRelease: () => void;
 }
 
 const TILT_LABEL: Record<TiltStatus, string> = {
@@ -184,7 +186,7 @@ const TILT_LABEL: Record<TiltStatus, string> = {
 };
 
 /** Tilt-steer readout with a Recentre button that stores the current tilt as the zero offset */
-const TiltIndicator: React.FC<TiltIndicatorProps> = ({ value, status, onRecentre }) => {
+const TiltIndicator: React.FC<TiltIndicatorProps> = ({ value, status, onRecentre, onRecentreRelease }) => {
   const half = Math.abs(value) * 50;
   const fillLeft = value < 0 ? 50 - half : 50;
 
@@ -212,6 +214,7 @@ const TiltIndicator: React.FC<TiltIndicatorProps> = ({ value, status, onRecentre
         className="pointer-events-auto touch-none h-11 rounded-full border border-[#262B3D] bg-[#11131A] text-[14px] font-bold active:scale-95 short:h-9"
         style={{ color: HUD_WHITE, touchAction: "none" }}
         onPointerDown={onRecentre}
+        onPointerUp={onRecentreRelease}
       >
         Recentre
       </button>
@@ -449,14 +452,18 @@ export const TouchControls: React.FC<TouchControlsProps> = ({
     else if (!tiltNeedsPermission()) setTiltStatus("ready");
   }, [tiltSteer, setTiltStatus]);
 
-  /** Until tilt is enabled, the first tap anywhere requests permission (not taps on the pause menu) */
+  /**
+   * Until tilt is enabled, the first tap anywhere requests permission (not taps on the pause menu), as the finger
+   * lifts: iOS only shows its prompt to a request made inside a user gesture, and a touch's pointerdown is not one (its
+   * pointerup is). Asked on the press, iOS refused it without asking and tilt never came on.
+   */
   useEffect(() => {
     if (!tiltSteer || tiltStatus !== "off" || suspended) return;
     const onFirstTap = () => {
       void enableTilt();
     };
-    window.addEventListener("pointerdown", onFirstTap, { capture: true, once: true });
-    return () => window.removeEventListener("pointerdown", onFirstTap, { capture: true });
+    window.addEventListener("pointerup", onFirstTap, { capture: true, once: true });
+    return () => window.removeEventListener("pointerup", onFirstTap, { capture: true });
   }, [tiltSteer, tiltStatus, suspended, enableTilt]);
 
   /** Tilt listener, only while tilt is ready and shown: the first sample after enabling (or Recentre) becomes the zero */
@@ -491,6 +498,9 @@ export const TouchControls: React.FC<TouchControlsProps> = ({
   const onRecentre = (e: React.PointerEvent<HTMLButtonElement>) => {
     e.preventDefault();
     tiltNeedsZero.current = true;
+  };
+  // On the release, like the first tap: the press is no user gesture to iOS
+  const onRecentreRelease = () => {
     if (statusRef.current === "off" || statusRef.current === "denied") void enableTilt();
   };
 
@@ -508,7 +518,7 @@ export const TouchControls: React.FC<TouchControlsProps> = ({
       {/* Bottom-left: steering */}
       <div className="absolute" style={{ left: edge("left", 16), bottom: edge("bottom", 16) }}>
         {tiltSteer ? (
-          <TiltIndicator value={vis.steer} status={tiltStatus} onRecentre={onRecentre} />
+          <TiltIndicator value={vis.steer} status={tiltStatus} onRecentre={onRecentre} onRecentreRelease={onRecentreRelease} />
         ) : (
           <SteerPad value={vis.steer} onChange={setSteer} suspended={suspended} />
         )}

@@ -14,7 +14,7 @@ import { carListed, REPO_CAR_IDS } from "@/lib/hosted-content";
  * The first car of each vehicle model keeps the model's id, so saved choices and `?car=` links still resolve.
  */
 export type CarId =
-  | "vf26"
+  | "lc26"
   | "amg-gt3"
   | "bmw-m4-gt3"
   | "mtr-496r"
@@ -84,7 +84,7 @@ export const CAR_QUALITY_META: Record<CarQuality, CarQualityMeta> = {
  */
 export const PHYSICS_CHECK: Record<VehicleModelId, string> = {
   "amg-gt3": "Its physics are checked against a real GT3 Evo's telemetry.",
-  vf26: "Its physics are checked against the reference data they were built from.",
+  lc26: "Its physics are checked against the reference data they were built from.",
   "f12026-car": "Its physics are checked against the range a 2026 open-wheeler should fall in.",
   liana: "Its physics come from an Assetto Corsa mod of this car and are checked against its laps of Dunsfold there.",
   "mtr-496r": "Its physics come from the Assetto Corsa mod this car was made for.",
@@ -190,14 +190,14 @@ export const CAR_CLASSES: readonly CarClass[] = [
 /** Every car the game knows, whether or not this copy has its files (`hosted-content.ts`) */
 const ALL_CARS: readonly CarDefinition[] = [
   {
-    id: "vf26",
+    id: "lc26",
     classId: "f1",
     title: "2026 Prototype",
     sub: "2026 model · active aero",
     badge: "PROTO 26",
     quality: "own",
     credit: QVIST_F1_2026,
-    physics: "vf26",
+    physics: "lc26",
     year: 2026,
     sound: F1_2026_SOUND,
   },
@@ -303,7 +303,11 @@ const BY_ID = new Map<string, CarDefinition>(CARS.map((c) => [c.id, c]));
 export const isCarId = (value: unknown): value is CarId => typeof value === "string" && BY_ID.has(value);
 
 /** Cars folded into another: a saved choice or a `?car=` link to one opens the car that took its place */
-const FOLDED_CAR_IDS: Readonly<Record<string, CarId>> = { "amg-gt3-evo": "amg-gt3" };
+const FOLDED_CAR_IDS: Readonly<Record<string, CarId>> = {
+  "amg-gt3-evo": "amg-gt3",
+  // The 2026 Prototype's id before it was renamed
+  vf26: "lc26", // keep-old-id
+};
 
 /** A car id from a save or a link, followed to the car that took its place; null when it names no car here */
 export const resolveCarId = (value: unknown): CarId | null => {

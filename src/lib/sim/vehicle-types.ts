@@ -1,5 +1,5 @@
 /**
- * Shared runtime types for the VF26 vehicle model (consumed by the renderer & visual FX).
+ * Shared runtime types for the LC26 vehicle model (consumed by the renderer & visual FX).
  */
 
 import type { SurfaceType } from '@/types/f1';

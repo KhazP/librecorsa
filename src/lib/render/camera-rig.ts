@@ -6,7 +6,7 @@ import { clampFov } from "@/lib/settings/player-settings";
 import type { CameraMode, CarTelemetry, TrackSamplePoint } from "@/types/f1";
 import type { BuiltTrackData } from "@/lib/track-data";
 import type { SimulatorCar } from "@/lib/sim/simulator-car";
-import type { Vf26CameraAnchor } from "@/lib/vf26-car-model";
+import type { Lc26CameraAnchor } from "@/lib/lc26-car-model";
 
 const TWO_PI = Math.PI * 2;
 const RAD2DEG = 180 / Math.PI;
@@ -582,7 +582,7 @@ export interface CameraRigFrame {
   carPos: THREE.Vector3;
   carVelocity: THREE.Vector3;
   /** The car model's anchor for this view, on its sprung chassis; null places the view from the car's pose instead */
-  anchor: Vf26CameraAnchor | null;
+  anchor: Lc26CameraAnchor | null;
   chassis: THREE.Object3D;
   /** Degrees the player's FOV setting moves the onboard views off the car's own */
   onboardFovShift: number;
@@ -599,7 +599,7 @@ export interface CameraRigFrame {
  * Places the view camera every frame: on the car model's onboard anchor when it has one for the view, else from the
  * car's pose (the chase camera, the procedural onboard views, the helicopter, the trackside TV cameras); then the
  * menus' orbit, and the driver's neck in the views at the driver's head. The fallback onboard poses are tuned to the
- * procedural VF26 and apply to any car without anchors.
+ * procedural LC26 and apply to any car without anchors.
  */
 export class CameraRig {
   private readonly cockpitShake = new CockpitMicroShake();
@@ -908,7 +908,7 @@ export class CameraRig {
       }
 
       neckYawTarget = THREE.MathUtils.clamp(velYaw + apexYaw, -0.17, 0.17);
-      // Hold the head against the body's quick pitch and roll. The VF26 reports its suspension pitch (about the
+      // Hold the head against the body's quick pitch and roll. The LC26 reports its suspension pitch (about the
       // car's +X, carLeft) and roll (about carForward) apart from its pose; the rigid-body cars carry theirs in
       // the pose, which the lagging head-up takes out.
       const headUp = this.headUp.lerp(carUp, Math.min(1, dtSeconds * 2.5)).normalize();

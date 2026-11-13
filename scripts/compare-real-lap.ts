@@ -4,14 +4,17 @@
  * OpenF1 JSON (`car_data` samples with `date` / `speed` km/h / `throttle` / `brake`, and the `lap` entry), as written by
  * a local fetch script.
  *
- *   npx tsx scripts/compare-real-lap.ts --track monaco --ref <path/to/monaco_2026_Q.json> [--car vf26|f12026-car|amg-gt3]
- *       [--pace 1]
+ *   npx tsx scripts/compare-real-lap.ts --track monaco --ref <path/to/monaco_2026_Q.json>
+ *       [--car lc26|lc26-classic|f12026-car|amg-gt3|...] [--pace 1]
+ *
+ * `--car` is a vehicle model, built as the game builds it (the engine the game drives it on, its season's overtaking
+ * aids free to use as in practice). `lc26-classic` is the 2026 Prototype on its older engine.
  */
 import { readFileSync } from 'node:fs';
 import { getActiveTrackData, setActiveTrack, type RawTrackJson } from '../src/lib/track-data';
 import { F1Physics2026 } from '../src/lib/f1-physics-2026';
-import { F12026CarSim } from '../src/lib/sim/f12026-car/F12026CarSim';
-import { createAmgGt3Sim } from '../src/lib/sim/gt3/AmgGt3Sim';
+import { isVehicleModelId, vehicleModelSpec } from '../src/lib/cars/vehicle-models';
+import { overtakingRulesForSeason } from '../src/lib/sim/overtaking-rules';
 import type { SimulatorCar } from '../src/lib/sim/simulator-car';
 import { loadGlbGeometry } from './lib/glb-geometry';
 
@@ -22,7 +25,7 @@ const opt = (name: string, fallback?: string) => {
 };
 const trackId = opt('track', 'monaco')!;
 const refPath = opt('ref');
-const carKind = opt('car', 'vf26')!;
+const carKind = opt('car', 'lc26')!;
 const pace = Number(opt('pace', '1'));
 if (!refPath) throw new Error('--ref <telemetry json> is required');
 
@@ -85,9 +88,12 @@ if (ref.location?.length) {
 }
 
 // ---- Simulated lap: autopilot from a flying start, second lap recorded
-const root = carKind === 'vf26' ? null : loadGlbGeometry(`public${track.meshUrl}`);
-const car: SimulatorCar =
-  carKind === 'amg-gt3' ? createAmgGt3Sim(track, root) : carKind === 'f12026-car' ? new F12026CarSim(track, root) : new F1Physics2026(track);
+const classic = carKind === 'lc26-classic';
+if (!classic && !isVehicleModelId(carKind)) throw new Error(`--car ${carKind}: not a vehicle model`);
+const root = classic ? null : loadGlbGeometry(`public${track.meshUrl}`);
+const car: SimulatorCar = classic ? new F1Physics2026(track) : vehicleModelSpec(carKind as never).createSim(track, root);
+// As the game's own car: an F1 model's aids are its season's (both are 2026 cars), free to use outside a race
+if (!classic && vehicleModelSpec(carKind as never).classId === 'f1') car.setOvertakingRules?.(overtakingRulesForSeason(2026));
 car.resetToStartGrid(true);
 car.aiAutopilot = true;
 car.aiPaceScale = pace;

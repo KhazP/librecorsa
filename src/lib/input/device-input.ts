@@ -121,7 +121,7 @@ export const CAR_WHEEL_LOCK_DEG = 360;
  * 1080° for the Liana (540° each way), 480° for the 496R (240° each way)
  */
 export const CAR_WHEEL_LOCKS_DEG: Readonly<Record<string, number>> = {
-  vf26: 360,
+  lc26: 360,
   "f12026-car": 360,
   "amg-gt3": 640,
   liana: 1080,

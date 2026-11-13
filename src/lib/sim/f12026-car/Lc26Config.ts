@@ -1,35 +1,36 @@
 /**
- * The Grand Prix VF26 for `VehiclePhysics` (same data model as the f12026-car, see `F12026CarConfig`): the car of
- * `vf26-data.ts`, which `F1Physics2026` drives today, laid out for the rigid-body engine. Every number here is read
+ * The Grand Prix LC26 for `VehiclePhysics` (same data model as the f12026-car, see `F12026CarConfig`): the car of
+ * `lc26-data.ts`, which `F1Physics2026` drives today, laid out for the rigid-body engine. Every number here is read
  * from that file's constants or computed from them, so the two engines run the same car and
- * `scripts/compare-vf26-engines.ts` puts them side by side.
+ * `scripts/compare-lc26-engines.ts` puts them side by side.
  *
- *  - [data]     a constant of `vf26-data.ts` (its own tags say where each comes from)
+ *  - [data]     a constant of `lc26-data.ts` (its own tags say where each comes from)
  *  - [derived]  computed from those
  *  - [est]      what this engine needs and that file does not have (as the f12026-car's unless noted)
  *
- * `buildVf26Config` takes overrides of that data and applies them before anything is derived from it (roll centres
+ * `buildLc26Config` takes overrides of that data and applies them before anything is derived from it (roll centres
  * from the tyre radius, the ground-height tables from the ride heights, the tyre's spring from its rate), so a car
- * tuned away from the data (`Vf26Tune.ts`) stays consistent with itself. Without overrides it is the data's car.
+ * tuned away from the data (`Lc26Tune.ts`) stays consistent with itself. Without overrides it is the data's car.
  */
 import { Lut, type LutPoints } from '../lut';
-import { VF26_CG_HEIGHT_M } from '../vf26-aero';
+import { LC26_CG_HEIGHT_M } from '../lc26-aero';
 import {
   computeRollCentreHeight,
-  VF26_BRAKES,
-  VF26_CHASSIS,
-  VF26_DRIVETRAIN,
-  VF26_ENGINE,
-  VF26_ERS,
-  VF26_TYRES,
-  VF26_WINGS,
-  type Vf26AxleSuspension,
-  type Vf26TyreSpec,
-  type Vf26WingSpec,
-} from '../vf26-data';
+  LC26_BRAKES,
+  LC26_CHASSIS,
+  LC26_DRIVETRAIN,
+  LC26_ENGINE,
+  LC26_ERS,
+  LC26_TYRES,
+  LC26_WINGS,
+  type Lc26AxleSuspension,
+  type Lc26TyreSpec,
+  type Lc26WingSpec,
+} from '../lc26-data';
 import {
   deriveRainCompound,
   type AeroData,
+  type BrakesData,
   type CarPhysicsConfig,
   type DamperSettingsUnits,
   type EngineData,
@@ -46,11 +47,11 @@ import {
 const at = (points: LutPoints, x: number) => new Lut(points).evaluate(x);
 
 /** Values to use in place of the data's. Everything derived from them follows */
-export interface Vf26Overrides {
-  front?: Partial<Vf26AxleSuspension>;
-  rear?: Partial<Vf26AxleSuspension>;
+export interface Lc26Overrides {
+  front?: Partial<Lc26AxleSuspension>;
+  rear?: Partial<Lc26AxleSuspension>;
   /** A compound's tyre on an axle, from the data's */
-  tyre?: (spec: Vf26TyreSpec, axle: 'front' | 'rear') => Vf26TyreSpec;
+  tyre?: (spec: Lc26TyreSpec, axle: 'front' | 'rear') => Lc26TyreSpec;
   /** The combustion engine's power against the data's curve */
   icePowerScale?: number;
   /** Crank and flywheel inertia (kg·m²) */
@@ -58,12 +59,33 @@ export interface Vf26Overrides {
   /** Overrun torque against the data's */
   coastScale?: number;
   brakeTorqueNm?: number;
+  /** The discs and pads: their grip against temperature, the temperature they start at, the rear ducts' airflow */
+  brakes?: Pick<BrakesData, 'padMuCurve' | 'discStartTempC' | 'rearDuctShare'>;
   /** Differential lock under power, as a share of the input torque */
   diffPowerLock?: number;
   /** A managed up-shift: the drive is cut for this long (s) and the engine meets the new gear at the wheels' speed */
   upshiftCutS?: number;
   /** The combustion torque's lag behind the pedal, rising and falling (s) */
   torqueResponseS?: { rise: number; fall: number };
+  /** Energy recovery values in place of the data's */
+  ers?: Partial<ERSData>;
+  /** Where the fuel sits, from the centre of gravity of the car without fuel (m: y up, z forward); absent: at it */
+  fuelTank?: { y: number; z: number };
+  /**
+   * Inflation pressure in the tyres' heat, every compound alike (`TyresThermalPatchData.pressureHeat` and
+   * `TyresPressureData.pressureRollingGain`); absent: pressure does not move the heat
+   */
+  tyreHeat?: Lc26TyreHeat;
+  /**
+   * Every aero element's drag at the element's own height, so the drag's line of action moves with the flaps, the ride
+   * heights and the yaw; absent: all of it at the one height the elements give at rest with the flaps shut
+   */
+  dragAtElements?: boolean;
+}
+
+export interface Lc26TyreHeat {
+  pressureHeat: NonNullable<TyresCompoundData['thermalData']['pressureHeat']>;
+  pressureRollingGain: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -79,21 +101,21 @@ const TURBO: TurboData = {
   maxBoost: 2.2,
   referenceRpm: 7000,
   gamma: 2,
-  spoolUpS: VF26_ENGINE.turboSpoolTauS,
+  spoolUpS: LC26_ENGINE.turboSpoolTauS,
   spoolRefRpm: 10_000,
-  spoolDownS: VF26_ENGINE.turboDecayTauS,
+  spoolDownS: LC26_ENGINE.turboDecayTauS,
   displayMaxBoostBar: 2.2,
 };
 
 /** Crank power with the boost made (kW): the torque curve × (1 + boost) [derived] */
-const POWER_CURVE: LutPoints = VF26_ENGINE.torqueCurve
-  .filter(([rpm]) => rpm > 0 && rpm <= VF26_ENGINE.maxRpm)
-  .map(([rpm, nm]) => [rpm, (nm * (1 + at(VF26_ENGINE.boostCurve, rpm)) * rpm * Math.PI) / 30 / 1000]);
+const POWER_CURVE: LutPoints = LC26_ENGINE.torqueCurve
+  .filter(([rpm]) => rpm > 0 && rpm <= LC26_ENGINE.maxRpm)
+  .map(([rpm, nm]) => [rpm, (nm * (1 + at(LC26_ENGINE.boostCurve, rpm)) * rpm * Math.PI) / 30 / 1000]);
 
 const ENGINE: EngineData = {
   powerCurve: POWER_CURVE,
   // Overrun torque as a positive magnitude [data coastCurve]
-  coastCurve: VF26_ENGINE.coastCurve.map(([rpm, nm]) => [rpm, -nm]),
+  coastCurve: LC26_ENGINE.coastCurve.map(([rpm, nm]) => [rpm, -nm]),
   throttleResponseCurve: [
     [0, 0],
     [1, 1],
@@ -101,9 +123,9 @@ const ENGINE: EngineData = {
   torqueResponseS: { rise: 0.03, fall: 0.02 },
   wetPedalMap: true,
   turbo: TURBO,
-  idleRpm: VF26_ENGINE.idleRpm,
+  idleRpm: LC26_ENGINE.idleRpm,
   // Crank and flywheel + the gearbox's input side [data]
-  inertia: VF26_ENGINE.inertia + VF26_DRIVETRAIN.gearboxInertia,
+  inertia: LC26_ENGINE.inertia + LC26_DRIVETRAIN.gearboxInertia,
   limiterCutS: 0.02,
 };
 
@@ -119,19 +141,19 @@ function harvestTorque(maxW: number, maxNm: number): LutPoints {
 }
 
 const ERS: ERSData = {
-  torqueLut: VF26_ERS.kineticTorque,
-  coastLut: harvestTorque(VF26_ERS.maxPowerW, 654),
-  ERS_MAX_DEPLOY: VF26_ERS.maxPowerW,
-  maxHarvestW: VF26_ERS.maxPowerW,
-  ERS_MAX_CHARGE: VF26_ERS.batteryJ,
+  torqueLut: LC26_ERS.kineticTorque,
+  coastLut: harvestTorque(LC26_ERS.maxPowerW, 654),
+  ERS_MAX_DEPLOY: LC26_ERS.maxPowerW,
+  maxHarvestW: LC26_ERS.maxPowerW,
+  ERS_MAX_CHARGE: LC26_ERS.batteryJ,
   // The 2026 lap allowances, as the f12026-car's
   deployPerLapJ: 9_000_000,
   harvestPerLapJ: 8_500_000,
   deployEfficiency: 0.95,
-  harvestEfficiency: VF26_ERS.harvestEfficiency,
+  harvestEfficiency: LC26_ERS.harvestEfficiency,
   liftThrottle: 0.15,
   topGearLiftHarvestW: 90_000,
-  deployVsGear: VF26_ERS.deployVsGear,
+  deployVsGear: LC26_ERS.deployVsGear,
 };
 
 /**
@@ -164,7 +186,7 @@ const mode = (
   ...rest,
 });
 
-const M = VF26_ERS.modes;
+const M = LC26_ERS.modes;
 const PERFORMANCE_MODES: Record<PerformanceModeName, PerformanceModeData> = {
   // The override: its own map held to 337 km/h, the store used to the bottom
   PSH: mode('PSH', deployVsSpeed(M.PSH.speed, 1, 337), 0),
@@ -194,7 +216,7 @@ const NO_DAMPER = damper(0, 0, 0, 0);
  * wishbone points [data] plus a tie rod (front) or toe link (rear) that this engine's solver needs and the data does
  * not have, laid beside the upper wishbone so it adds next to no bump steer [est]
  */
-function axle(a: Vf26AxleSuspension, tyreRadius: number, link: [[number, number, number], [number, number, number]]): SuspensionsData['front'] {
+function axle(a: Lc26AxleSuspension, tyreRadius: number, link: [[number, number, number], [number, number, number]]): SuspensionsData['front'] {
   return {
     type: 'SuspensionType_DoubleWishbone',
     actuation: 'push_rod',
@@ -210,7 +232,7 @@ function axle(a: Vf26AxleSuspension, tyreRadius: number, link: [[number, number,
   };
 }
 
-function suspensionData(F: Vf26AxleSuspension, R: Vf26AxleSuspension, frontRadius: number, rearRadius: number): SuspensionsData {
+function suspensionData(F: Lc26AxleSuspension, R: Lc26AxleSuspension, frontRadius: number, rearRadius: number): SuspensionsData {
   return {
     front: axle(F, frontRadius, [
       [F.hardpoints[0][0], F.hardpoints[0][1], 0.08],
@@ -246,9 +268,9 @@ function suspensionData(F: Vf26AxleSuspension, R: Vf26AxleSuspension, frontRadiu
 // Aero
 // ---------------------------------------------------------------------------
 
-const wing = (name: string): Vf26WingSpec => {
-  const w = VF26_WINGS.find((x) => x.name === name);
-  if (!w) throw new Error(`VF26 has no aero element ${name}`);
+const wing = (name: string): Lc26WingSpec => {
+  const w = LC26_WINGS.find((x) => x.name === name);
+  if (!w) throw new Error(`LC26 has no aero element ${name}`);
   return w;
 };
 const scale = (points: LutPoints, k: number): LutPoints => points.map(([x, y]) => [x, Number((y * k).toFixed(5))]);
@@ -260,34 +282,34 @@ const flat = (y: number): LutPoints => [
 /** CL × (1 + gain × |yaw| in radians) as a table against |yaw| in degrees [data yawClGain] */
 const yawTable = (gain: number): LutPoints => [0, 2, 5, 10, 20, 30].map((deg) => [deg, Number(Math.max(0, 1 + (gain * deg * Math.PI) / 180).toFixed(4))]);
 /** What an element's flap opening to its straight-line angle does to its lift and drag [data xModeAngleDeg, derived] */
-const flap = (w: Vf26WingSpec) => ({
+const flap = (w: Lc26WingSpec) => ({
   clMult: Number((at(w.aoaCl, w.xModeAngleDeg) / at(w.aoaCl, w.angleDeg)).toFixed(4)),
   cdMult: Number((at(w.aoaCd, w.xModeAngleDeg) / at(w.aoaCd, w.angleDeg)).toFixed(4)),
 });
 
 /** The aero elements of the data with their ground-height tables laid on this engine's reference heights */
-function aeroData(F: Vf26AxleSuspension, R: Vf26AxleSuspension): AeroData {
+function aeroData(F: Lc26AxleSuspension, R: Lc26AxleSuspension, dragAtElements = false): AeroData {
   /** The floor's reference plane below the CG: the floor elements' own height [data] */
   const FLOOR_Y = wing('FLOOR_FL').position[1];
   /** Static ride heights [data]; the body's static nose-down pitch they give */
-  const STATIC_PITCH = (R.staticRideHeight - F.staticRideHeight) / VF26_CHASSIS.wheelbase;
-  const CG_TO_FRONT = VF26_CHASSIS.wheelbase * (1 - VF26_CHASSIS.frontWeightFraction);
-  const CG_TO_REAR = VF26_CHASSIS.wheelbase * VF26_CHASSIS.frontWeightFraction;
+  const STATIC_PITCH = (R.staticRideHeight - F.staticRideHeight) / LC26_CHASSIS.wheelbase;
+  const CG_TO_FRONT = LC26_CHASSIS.wheelbase * (1 - LC26_CHASSIS.frontWeightFraction);
+  const CG_TO_REAR = LC26_CHASSIS.wheelbase * LC26_CHASSIS.frontWeightFraction;
   /**
    * The data's ground-height tables are read at each element's own height above the road. This engine reads them at
    * the floor's height at an axle (or the mean), so each table moves by the element's height over that at static ride:
    * its own height over the floor plane, less the pitch across its distance from the axle
    */
-  const overFront = (w: Vf26WingSpec) => w.position[1] - FLOOR_Y - (w.position[2] - CG_TO_FRONT) * STATIC_PITCH;
-  const overRear = (w: Vf26WingSpec) => w.position[1] - FLOOR_Y - (w.position[2] + CG_TO_REAR) * STATIC_PITCH;
+  const overFront = (w: Lc26WingSpec) => w.position[1] - FLOOR_Y - (w.position[2] - CG_TO_FRONT) * STATIC_PITCH;
+  const overRear = (w: Lc26WingSpec) => w.position[1] - FLOOR_Y - (w.position[2] + CG_TO_REAR) * STATIC_PITCH;
 
   const FRONT = wing('FRONT_L');
   const REAR = wing('REAR');
   const DRS = wing('DRS');
   const DIFFUSER = wing('DIFFUSER_RL');
-  const FLOORS = VF26_WINGS.filter((w) => w.name.startsWith('FLOOR'));
+  const FLOORS = LC26_WINGS.filter((w) => w.name.startsWith('FLOOR'));
   const BODY = wing('BODY');
-  const area = (w: Vf26WingSpec) => w.chord * w.span;
+  const area = (w: Lc26WingSpec) => w.chord * w.span;
   const floorArea = FLOORS.reduce((a, w) => a + area(w), 0);
   /** The four floor strips as one element: their areas, each with its own gain [derived] */
   const floorClGain = FLOORS.reduce((a, w) => a + area(w) * w.clGain, 0) / floorArea;
@@ -371,14 +393,17 @@ function aeroData(F: Vf26AxleSuspension, R: Vf26AxleSuspension): AeroData {
     [floorArea * at(FLOORS[0].aoaCd, FLOORS[0].angleDeg) * FLOORS[0].cdGain, FLOOR_Y],
   ];
   const dragArea = dragParts.reduce((a, [cda]) => a + cda, 0);
+  /** Each element's own height above the CG, in the order of WINGS [data] */
+  const elementY = [FRONT.position[1], FLOOR_Y, DIFFUSER.position[1], REAR.position[1], DRS.position[1]];
 
   return {
     front_lift: 0,
     rear_lift: 0,
     // The body element: drag only at its 3.5° [data BODY]
     drag: Number((area(BODY) * at(BODY.aoaCd, BODY.angleDeg) * BODY.cdGain).toFixed(4)),
-    dragCentreY: Number((dragParts.reduce((a, [cda, y]) => a + cda * y, 0) / dragArea).toFixed(3)),
-    wings: WINGS,
+    // The one height of all the drag; with the elements at their own heights, the body element's alone
+    dragCentreY: dragAtElements ? BODY.position[1] : Number((dragParts.reduce((a, [cda, y]) => a + cda * y, 0) / dragArea).toFixed(3)),
+    wings: dragAtElements ? WINGS.map((w, i) => ({ ...w, dragY: elementY[i] })) : WINGS,
     front_target_height: F.staticRideHeight,
     rear_target_height: R.staticRideHeight,
     floorOffsetY: FLOOR_Y,
@@ -403,7 +428,7 @@ function peakWindow(curve: LutPoints): [number, number] {
   return [top[0][0], top[top.length - 1][0]];
 }
 
-function modelData(t: Vf26TyreSpec): TyresCompoundData['modelData'] {
+function modelData(t: Lc26TyreSpec): TyresCompoundData['modelData'] {
   return {
     Dy0: t.dyRef,
     Dx0: t.dxRef,
@@ -435,9 +460,9 @@ function modelData(t: Vf26TyreSpec): TyresCompoundData['modelData'] {
   };
 }
 
-type TyreOf = (slot: 'soft' | 'medium' | 'hard', axle: 'front' | 'rear') => Vf26TyreSpec;
+type TyreOf = (slot: 'soft' | 'medium' | 'hard', axle: 'front' | 'rear') => Lc26TyreSpec;
 
-function compound(tyre_compound: PhysicsTyreCompound, name: string, shortName: 'S' | 'M' | 'H', slot: 'soft' | 'medium' | 'hard', tyreOf: TyreOf): TyresCompoundData {
+function compound(tyre_compound: PhysicsTyreCompound, name: string, shortName: 'S' | 'M' | 'H', slot: 'soft' | 'medium' | 'hard', tyreOf: TyreOf, heat?: Lc26TyreHeat): TyresCompoundData {
   const f = tyreOf(slot, 'front');
   const r = tyreOf(slot, 'rear');
   const rear = modelData(r);
@@ -463,6 +488,7 @@ function compound(tyre_compound: PhysicsTyreCompound, name: string, shortName: '
       coreCooling: [8, 0.2],
       thermalVerticalK: -0.0012,
       thermalVerticalRefC: 100,
+      ...(heat ? { pressureHeat: heat.pressureHeat } : {}),
     },
     pressureData: {
       optimalPsi: f.pressureRefPsi,
@@ -470,6 +496,7 @@ function compound(tyre_compound: PhysicsTyreCompound, name: string, shortName: '
       pressureGripSensitivity: 1.0,
       // Out of the blankets, as the f12026-car [est]
       coldRefC: 80,
+      ...(heat ? { pressureRollingGain: heat.pressureRollingGain } : {}),
     },
     camberData: {
       camberGain: f.camberGain,
@@ -488,12 +515,12 @@ function compound(tyre_compound: PhysicsTyreCompound, name: string, shortName: '
   };
 }
 
-function tyreCompounds(tyreOf: TyreOf) {
-  const MEDIUM = compound('PhysicsTyreCompound_F1_Medium', 'Medium', 'M', 'medium', tyreOf);
+function tyreCompounds(tyreOf: TyreOf, heat?: Lc26TyreHeat) {
+  const MEDIUM = compound('PhysicsTyreCompound_F1_Medium', 'Medium', 'M', 'medium', tyreOf, heat);
   return {
-    PhysicsTyreCompound_F1_Soft: compound('PhysicsTyreCompound_F1_Soft', 'Soft', 'S', 'soft', tyreOf),
+    PhysicsTyreCompound_F1_Soft: compound('PhysicsTyreCompound_F1_Soft', 'Soft', 'S', 'soft', tyreOf, heat),
     PhysicsTyreCompound_F1_Medium: MEDIUM,
-    PhysicsTyreCompound_F1_Hard: compound('PhysicsTyreCompound_F1_Hard', 'Hard', 'H', 'hard', tyreOf),
+    PhysicsTyreCompound_F1_Hard: compound('PhysicsTyreCompound_F1_Hard', 'Hard', 'H', 'hard', tyreOf, heat),
     // Rain tyres on the medium's carcass, as the data builds its own
     PhysicsTyreCompound_F1_Intermediate: deriveRainCompound(MEDIUM, 'intermediate', 'PhysicsTyreCompound_F1_Intermediate', 'Intermediate', true),
     PhysicsTyreCompound_F1_Wet: deriveRainCompound(MEDIUM, 'wet', 'PhysicsTyreCompound_F1_Wet', 'Full Wet', true),
@@ -504,64 +531,65 @@ function tyreCompounds(tyreOf: TyreOf) {
 // Car
 // ---------------------------------------------------------------------------
 
-const MASS = VF26_CHASSIS.totalMassKg;
-const B = VF26_CHASSIS.inertiaBox;
+const MASS = LC26_CHASSIS.totalMassKg;
+const B = LC26_CHASSIS.inertiaBox;
 const box = (a: number, b: number) => (MASS / 12) * (a * a + b * b);
 
-/** The VF26's car data for `VehiclePhysics`: the data's, or with `overrides` in place of some of it */
-export function buildVf26Config(overrides: Vf26Overrides = {}) {
-  const F: Vf26AxleSuspension = { ...VF26_CHASSIS.front, ...overrides.front };
-  const R: Vf26AxleSuspension = { ...VF26_CHASSIS.rear, ...overrides.rear };
-  const tyreOf: TyreOf = (slot, axle) => (overrides.tyre ? overrides.tyre(VF26_TYRES[slot][axle], axle) : VF26_TYRES[slot][axle]);
+/** The LC26's car data for `VehiclePhysics`: the data's, or with `overrides` in place of some of it */
+export function buildLc26Config(overrides: Lc26Overrides = {}) {
+  const F: Lc26AxleSuspension = { ...LC26_CHASSIS.front, ...overrides.front };
+  const R: Lc26AxleSuspension = { ...LC26_CHASSIS.rear, ...overrides.rear };
+  const tyreOf: TyreOf = (slot, axle) => (overrides.tyre ? overrides.tyre(LC26_TYRES[slot][axle], axle) : LC26_TYRES[slot][axle]);
   const softFront = tyreOf('soft', 'front');
   const softRear = tyreOf('soft', 'rear');
   // The body rides where the ride heights put it: a change of their mean lifts the CG with it
-  const rideChange = (F.staticRideHeight - VF26_CHASSIS.front.staticRideHeight + R.staticRideHeight - VF26_CHASSIS.rear.staticRideHeight) / 2;
+  const rideChange = (F.staticRideHeight - LC26_CHASSIS.front.staticRideHeight + R.staticRideHeight - LC26_CHASSIS.rear.staticRideHeight) / 2;
   return {
-    screenName: 'vf26',
+    screenName: 'lc26',
     chassis: {
       totalMassKg: MASS,
-      frontWeightFraction: VF26_CHASSIS.frontWeightFraction,
-      wheelbase: VF26_CHASSIS.wheelbase,
+      frontWeightFraction: LC26_CHASSIS.frontWeightFraction,
+      wheelbase: LC26_CHASSIS.wheelbase,
       trackWidthFront: F.track,
       trackWidthRear: R.track,
       // Wheel radius + BASEY, the axles' mean [data, derived]
-      cgHeight: Number((VF26_CG_HEIGHT_M + rideChange).toFixed(4)),
+      cgHeight: Number((LC26_CG_HEIGHT_M + rideChange).toFixed(4)),
       inertia: { pitch: box(B.height, B.length), roll: box(B.width, B.height), yaw: box(B.width, B.length) },
       unsprungMassFront: F.unsprungMassKg,
       unsprungMassRear: R.unsprungMassKg,
+      ...(overrides.fuelTank ? { fuelTank: overrides.fuelTank } : {}),
       wheelInertiaFront: softFront.angularInertia,
       wheelInertiaRear: softRear.angularInertia,
-      maxRoadWheelDeg: VF26_CHASSIS.steering.lockDeg / VF26_CHASSIS.steering.ratio,
-      ffbMechanicalTrailM: VF26_CHASSIS.steering.mechanicalTrail,
+      maxRoadWheelDeg: LC26_CHASSIS.steering.lockDeg / LC26_CHASSIS.steering.ratio,
+      ffbMechanicalTrailM: LC26_CHASSIS.steering.mechanicalTrail,
       // The rack's give under load and the hydraulic assist, as the f12026-car's [est]
       steerComplianceDegPerKN: 0.05,
-      powerSteering: { steeringRatio: VF26_CHASSIS.steering.ratio, deadbandNm: 26, rampNm: 6, maxRatio: 0.45 },
+      powerSteering: { steeringRatio: LC26_CHASSIS.steering.ratio, deadbandNm: 26, rampNm: 6, maxRatio: 0.45 },
     },
     engine: {
       ...ENGINE,
-      inertia: (overrides.engineInertia ?? VF26_ENGINE.inertia) + VF26_DRIVETRAIN.gearboxInertia,
+      inertia: (overrides.engineInertia ?? LC26_ENGINE.inertia) + LC26_DRIVETRAIN.gearboxInertia,
       torqueResponseS: overrides.torqueResponseS ?? ENGINE.torqueResponseS,
       powerCurve: overrides.icePowerScale === undefined ? ENGINE.powerCurve : (ENGINE.powerCurve.map(([rpm, kw]) => [rpm, kw * overrides.icePowerScale!]) as LutPoints),
       coastCurve: ENGINE.coastCurve.map(([rpm, nm]) => [rpm, nm * (overrides.coastScale ?? 1)]) as LutPoints,
     },
-    ers: ERS,
+    ers: overrides.ers ? { ...ERS, ...overrides.ers } : ERS,
     performanceModes: PERFORMANCE_MODES,
     gearbox: {
-      ratios: [...VF26_DRIVETRAIN.gearRatios],
-      reverse: Math.abs(VF26_DRIVETRAIN.reverseRatio),
-      finalDrive: VF26_DRIVETRAIN.finalDrive,
-      shiftTimeS: VF26_DRIVETRAIN.upshiftTimeS,
-      downshiftTimeS: VF26_DRIVETRAIN.downshiftTimeS,
+      ratios: [...LC26_DRIVETRAIN.gearRatios],
+      reverse: Math.abs(LC26_DRIVETRAIN.reverseRatio),
+      finalDrive: LC26_DRIVETRAIN.finalDrive,
+      shiftTimeS: LC26_DRIVETRAIN.upshiftTimeS,
+      downshiftTimeS: LC26_DRIVETRAIN.downshiftTimeS,
       shiftTorqueFraction: 0.85,
       ...(overrides.upshiftCutS !== undefined ? { upshiftCutS: overrides.upshiftCutS } : {}),
-      efficiency: VF26_DRIVETRAIN.efficiency,
-      gears: { redline_rpm: VF26_ENGINE.limiterRpm, upshift_rpm: VF26_DRIVETRAIN.autoUpshiftRpm, downshift_rpm: VF26_DRIVETRAIN.autoDownshiftRpm },
+      efficiency: LC26_DRIVETRAIN.efficiency,
+      gears: { redline_rpm: LC26_ENGINE.limiterRpm, upshift_rpm: LC26_DRIVETRAIN.autoUpshiftRpm, downshift_rpm: LC26_DRIVETRAIN.autoDownshiftRpm },
     },
     clutch: {
-      maxTorqueNm: VF26_DRIVETRAIN.clutchMaxTorqueNm,
-      biteRpm: VF26_DRIVETRAIN.autoClutchStartRpm,
-      lockRpm: VF26_DRIVETRAIN.autoClutchFullRpm,
+      maxTorqueNm: LC26_DRIVETRAIN.clutchMaxTorqueNm,
+      biteRpm: LC26_DRIVETRAIN.autoClutchStartRpm,
+      lockRpm: LC26_DRIVETRAIN.autoClutchFullRpm,
       // In first gear the engine is held where it has its torque: at the anti-stall window it makes a third of it and
       // the car took 4 s to 100 km/h. 7000 rpm is chosen on the launches it gives: 3.0 s with or without traction
       // control, and without it the whole pedal spins the rear wheels past their grip while the car still runs
@@ -572,9 +600,9 @@ export function buildVf26Config(overrides: Vf26Overrides = {}) {
     differential: {
       type: 'LSD_Ramp',
       settings: {
-        power: overrides.diffPowerLock ?? VF26_DRIVETRAIN.diffPowerLock,
-        coast: VF26_DRIVETRAIN.diffCoastLock,
-        preload: VF26_DRIVETRAIN.diffPreloadNm,
+        power: overrides.diffPowerLock ?? LC26_DRIVETRAIN.diffPowerLock,
+        coast: LC26_DRIVETRAIN.diffCoastLock,
+        preload: LC26_DRIVETRAIN.diffPreloadNm,
         friction_faces: 1,
         power_ramp_deg: 45,
         coast_ramp_deg: 45,
@@ -583,10 +611,16 @@ export function buildVf26Config(overrides: Vf26Overrides = {}) {
       halfshaft: { stiffnessNmPerRad: 13_000, dampingNmsPerRad: 33 },
     },
     // The front share moves 6 % forward by full pedal [data migrationAtFullPedal]
-    brakes: { maxTorqueNm: overrides.brakeTorqueNm ?? VF26_BRAKES.maxTorqueNm, front_bias: VF26_BRAKES.frontBias, ebbStep: 0.005, migration: { amount: VF26_BRAKES.migrationAtFullPedal, rampStart: 0 } },
+    brakes: {
+      maxTorqueNm: overrides.brakeTorqueNm ?? LC26_BRAKES.maxTorqueNm,
+      front_bias: LC26_BRAKES.frontBias,
+      ebbStep: 0.005,
+      migration: { amount: LC26_BRAKES.migrationAtFullPedal, rampStart: 0 },
+      ...overrides.brakes,
+    },
     suspensions: suspensionData(F, R, softFront.radius, softRear.radius),
-    aero: aeroData(F, R),
-    tyreCompounds: tyreCompounds(tyreOf),
+    aero: aeroData(F, R, overrides.dragAtElements),
+    tyreCompounds: tyreCompounds(tyreOf, overrides.tyreHeat),
     compoundSlots: {
       soft: 'PhysicsTyreCompound_F1_Soft',
       medium: 'PhysicsTyreCompound_F1_Medium',
@@ -598,4 +632,4 @@ export function buildVf26Config(overrides: Vf26Overrides = {}) {
 }
 
 /** The car of the data, as `F1Physics2026` runs it */
-export const VF26_CAR_CONFIG = buildVf26Config();
+export const LC26_CAR_CONFIG = buildLc26Config();

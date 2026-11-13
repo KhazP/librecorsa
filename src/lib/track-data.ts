@@ -7,9 +7,10 @@ import {
   TurnMetadata,
 } from "@/types/f1";
 import rawTrackJson from "../../public/tracks/rwanda_official_short/track_data.json";
-import { AI_LINE_WIDTH_SCALE, brakingZoneLevel, computeSpeedProfile, createVf26ProfileCarModel } from "./sim/speed-profile";
+import { AI_LINE_WIDTH_SCALE, brakingZoneLevel, computeSpeedProfile, createLc26ProfileCarModel } from "./sim/speed-profile";
 import { resolveSurfaceTable, type SurfaceTable, type SurfaceTableOverrides } from "./sim/track-surfaces";
 import type { SceneryCutBox } from "./scenery-cuts";
+import type { LapStretches } from "./sim/course-limits";
 
 /** Raw `track_data.json` layout shared by every circuit (the bundled circuit's file is the reference schema) */
 export type RawTrackJson = typeof rawTrackJson;
@@ -96,6 +97,8 @@ export interface BuiltTrackData {
   totalLengthM: number;
   /** Altitude (m ASL) of world y = 0 on this track, for the air density; absent: the active circuit's */
   baseAltitudeM?: number;
+  /** Where another layout's road leaves this lap: there its own road edge and kerbs are the limit (course-limits.ts) */
+  otherLayoutRoads?: LapStretches;
   spline: THREE.CatmullRomCurve3;
   getSampleAtDistance: (s: number) => TrackSamplePoint;
   projectWorldToTrack: (
@@ -265,6 +268,11 @@ export interface TrackMetaExtras {
   pointToPoint?: PointToPointDef;
   /** Per-kind overrides of the default surface table (track-surfaces.ts) */
   surfaceTable?: SurfaceTableOverrides;
+  /**
+   * A layout sharing its model with another: the stretches of this lap ([from, to], m) where the other layout's road
+   * leaves it, beyond its edges. There this lap's road edge and kerbs are the track limits (course-limits.ts)
+   */
+  otherLayoutRoads?: [number, number][];
   /**
    * Drive-plan check per car (scripts/ai/check-lines.ts): a flying AI lap on the full physics tracking the stored line.
    * The field drives a car on plans only where its check passed (no barrier hit, on the road, on the line, near the
@@ -750,8 +758,8 @@ export function getActiveTrackData(numSamples = 1200): BuiltTrackData {
     });
   }
 
-  // Target speeds along the AI line from the VF26 vehicle model (balanced aero package)
-  const nominalProfile = computeSpeedProfile(samples, createVf26ProfileCarModel('balanced'));
+  // Target speeds along the AI line from the LC26 vehicle model (balanced aero package)
+  const nominalProfile = computeSpeedProfile(samples, createLc26ProfileCarModel('balanced'));
   for (let i = 0; i < NUM_SAMPLES; i++) {
     samples[i].optimalSpeedKmh = nominalProfile.speedMs[i] * 3.6;
     samples[i].brakeLimitKmh = nominalProfile.brakeEnvelopeMs[i] * 3.6;
@@ -1045,6 +1053,7 @@ export function getActiveTrackData(numSamples = 1200): BuiltTrackData {
     sceneryCuts: getActiveTrackMetadata().mesh?.cutBoxes,
     sceneryCutMaterials: getActiveTrackMetadata().mesh?.cutMaterials,
     sceneryUrls: getActiveTrackMetadata().mesh?.scenery,
+    otherLayoutRoads: getActiveTrackMetadata().otherLayoutRoads,
     spawnGrid: [...RWANDA_SPAWN_GRID],
     samples,
     totalLengthM: totalLength,

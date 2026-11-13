@@ -4,7 +4,7 @@ import { assetProgress } from "@/lib/loading/asset-progress";
 import { withBasePath } from "@/lib/base-path";
 import type { CarTelemetry, TireCompound } from "@/types/f1";
 import type { SimCarRig } from "@/lib/car-builder-2026";
-import type { Vf26ModelInstance } from "@/lib/vf26-car-model";
+import type { Lc26ModelInstance } from "@/lib/lc26-car-model";
 import { installTyreDeformation, type TyreDeformationHandle } from "@/lib/render/tyre-deformation";
 import { cleanPortedCarMaterial, sharpenCarMaps } from "@/lib/render/ported-car-materials";
 import {
@@ -42,7 +42,7 @@ export interface PortedCarOptions {
    * Rig-space cameras to use instead of the GLB's own (e.g. the AMG GT3's for every car on the GT3 model), built from
    * where this model's steering wheel and front axle landed in rig space
    */
-  cameraAnchors?: (fit: PortedCameraFit) => Vf26ModelInstance["cameraAnchors"];
+  cameraAnchors?: (fit: PortedCameraFit) => Lc26ModelInstance["cameraAnchors"];
   /** A 2018+ car: its tyres get the 2026 Pirelli sidewall, recoloured by the compound (the model's own otherwise) */
   pirelliSidewall?: boolean;
   /**
@@ -275,7 +275,7 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
   const { chassis } = options;
   const maxRoadWheelRad = chassis.maxRoadWheelDeg * THREE.MathUtils.DEG2RAD;
   const steerLockRad = options.steerLockDeg * THREE.MathUtils.DEG2RAD;
-  let cameraAnchors: Vf26ModelInstance["cameraAnchors"] | null = null;
+  let cameraAnchors: Lc26ModelInstance["cameraAnchors"] | null = null;
 
   const corners: RigCorner[] = [];
   let steerPivot: THREE.Object3D | null = null;
@@ -401,7 +401,7 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
     chassisGroup.add(bodyGroup);
 
     const cams = extras.cameras ?? {};
-    const anchors = {} as Vf26ModelInstance["cameraAnchors"];
+    const anchors = {} as Lc26ModelInstance["cameraAnchors"];
     for (const key of CAMERA_KEYS) {
       const c = cams[key] ?? { pos: [0, 0.9, 0] as [number, number, number], pitchDeg: -5, fov: 58 };
       anchors[key] = {
@@ -454,7 +454,7 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
       for (const corner of corners) corner.tyre?.setCompound(c);
     },
     getCameraAnchors: () => cameraAnchors,
-    getVf26Body: () => null,
+    getLc26Body: () => null,
     updateFromTelemetry,
     dispose: () => {
       disposed = true;

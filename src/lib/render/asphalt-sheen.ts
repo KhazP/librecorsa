@@ -199,10 +199,10 @@ export function applyAsphaltSheen(material: THREE.MeshStandardMaterial, mask: Ra
 type Patch = ShaderPatch;
 
 const VERTEX_PATCHES: readonly Patch[] = [
-  ["#include <common>", "#include <common>\nvarying vec3 vVf26WorldPos;"],
+  ["#include <common>", "#include <common>\nvarying vec3 vLc26WorldPos;"],
   [
     "#include <begin_vertex>",
-    "#include <begin_vertex>\nvVf26WorldPos = ( modelMatrix * vec4( transformed, 1.0 ) ).xyz;",
+    "#include <begin_vertex>\nvLc26WorldPos = ( modelMatrix * vec4( transformed, 1.0 ) ).xyz;",
   ],
 ];
 
@@ -210,31 +210,31 @@ const VERTEX_PATCHES: readonly Patch[] = [
 // scale; here dH and dP are both metres per pixel, so the slope is a true world-space gradient).
 /** World-space noise helpers shared by the asphalt sheen and the scenery detail (no uniforms or varyings) */
 export const WORLD_NOISE_GLSL = /* glsl */ `
-float vf26Hash( vec2 p ) {
+float lc26Hash( vec2 p ) {
 	vec3 p3 = fract( vec3( p.xyx ) * 0.1031 );
 	p3 += dot( p3, p3.yzx + 33.33 );
 	return fract( ( p3.x + p3.y ) * p3.z );
 }
 
 // Value noise in [-1, 1]
-float vf26ValueNoise( vec2 p ) {
+float lc26ValueNoise( vec2 p ) {
 	vec2 i = floor( p );
 	vec2 f = fract( p );
 	vec2 u = f * f * ( 3.0 - 2.0 * f );
-	float a = vf26Hash( i );
-	float b = vf26Hash( i + vec2( 1.0, 0.0 ) );
-	float c = vf26Hash( i + vec2( 0.0, 1.0 ) );
-	float d = vf26Hash( i + vec2( 1.0, 1.0 ) );
+	float a = lc26Hash( i );
+	float b = lc26Hash( i + vec2( 1.0, 0.0 ) );
+	float c = lc26Hash( i + vec2( 0.0, 1.0 ) );
+	float d = lc26Hash( i + vec2( 1.0, 1.0 ) );
 	return mix( mix( a, b, u.x ), mix( c, d, u.x ), u.y ) * 2.0 - 1.0;
 }
 
 // Animated concentric raindrop splash ripple height in world XZ
-float vf26RainSplash( vec2 worldXZ, float time, float intensity ) {
+float lc26RainSplash( vec2 worldXZ, float time, float intensity ) {
 	vec2 cell = floor( worldXZ * 2.8 );
 	vec2 local = fract( worldXZ * 2.8 ) - 0.5;
-	float h = vf26Hash( cell );
+	float h = lc26Hash( cell );
 	float phase = fract( time * ( 1.6 + 0.8 * h ) + h * 6.28318 );
-	vec2 center = ( vec2( vf26Hash( cell + 7.1 ), vf26Hash( cell + 19.3 ) ) - 0.5 ) * 0.45;
+	vec2 center = ( vec2( lc26Hash( cell + 7.1 ), lc26Hash( cell + 19.3 ) ) - 0.5 ) * 0.45;
 	float dist = length( local - center );
 	float radius = phase * 0.42;
 	float ring = exp( -90.0 * ( dist - radius ) * ( dist - radius ) ) * sin( ( dist - radius ) * 55.0 );
@@ -242,7 +242,7 @@ float vf26RainSplash( vec2 worldXZ, float time, float intensity ) {
 	return ring * envelope * intensity;
 }
 
-vec3 vf26PerturbNormal( vec3 eyePos, vec3 surfNorm, vec2 dHdxy, float faceDir ) {
+vec3 lc26PerturbNormal( vec3 eyePos, vec3 surfNorm, vec2 dHdxy, float faceDir ) {
 	vec3 dPdx = dFdx( eyePos );
 	vec3 dPdy = dFdy( eyePos );
 	vec3 R1 = cross( dPdy, surfNorm );
@@ -262,7 +262,7 @@ uniform float uWetness;
 uniform float uLineWetness;
 uniform float uRainIntensity;
 uniform float uWetTime;
-varying vec3 vVf26WorldPos;
+varying vec3 vLc26WorldPos;
 ${WORLD_NOISE_GLSL}`;
 
 const FRAGMENT_PATCHES: readonly Patch[] = [
@@ -270,33 +270,33 @@ const FRAGMENT_PATCHES: readonly Patch[] = [
 	[
 		"#include <roughnessmap_fragment>",
 		/* glsl */ `
-float vf26Rubber = texture2D( uRubberMask, ( vVf26WorldPos.xz - uMaskMin ) / uMaskSize ).r;
-float roughnessFactor = mix( 0.78, 0.32, vf26Rubber );
+float lc26Rubber = texture2D( uRubberMask, ( vLc26WorldPos.xz - uMaskMin ) / uMaskSize ).r;
+float roughnessFactor = mix( 0.78, 0.32, lc26Rubber );
 #ifdef USE_ROUGHNESSMAP
 	// The map's variation only nudges the result
 	roughnessFactor *= mix( 1.0, texture2D( roughnessMap, vRoughnessMapUv ).g, 0.35 );
 #endif
-diffuseColor.rgb *= mix( 1.0, 0.85, vf26Rubber );
+diffuseColor.rgb *= mix( 1.0, 0.85, lc26Rubber );
 // Rain: water fills the macro-texture pores (WetAlbedoReduction = 0.25 base + puddle/groove darkening),
 // standing water puddles flatten roughness to mirror gloss, and grazing view angles boost Fresnel reflection.
-float vf26WetRaw = mix( uWetness, uLineWetness, vf26Rubber );
-float vf26PuddleMask = 0.0;
-if ( vf26WetRaw > 0.0 ) {
-	float vf26PatchNoise = vf26ValueNoise( vVf26WorldPos.xz / 2.2 ) * 0.5 + 0.5;
-	float vf26FinePatch = vf26ValueNoise( vVf26WorldPos.xz / 0.65 ) * 0.5 + 0.5;
-	float vf26Wet = vf26WetRaw * mix( 0.72, 1.08, 0.7 * vf26PatchNoise + 0.3 * vf26FinePatch );
-	vf26Wet = clamp( vf26Wet, 0.0, 1.0 );
+float lc26WetRaw = mix( uWetness, uLineWetness, lc26Rubber );
+float lc26PuddleMask = 0.0;
+if ( lc26WetRaw > 0.0 ) {
+	float lc26PatchNoise = lc26ValueNoise( vLc26WorldPos.xz / 2.2 ) * 0.5 + 0.5;
+	float lc26FinePatch = lc26ValueNoise( vLc26WorldPos.xz / 0.65 ) * 0.5 + 0.5;
+	float lc26Wet = lc26WetRaw * mix( 0.72, 1.08, 0.7 * lc26PatchNoise + 0.3 * lc26FinePatch );
+	lc26Wet = clamp( lc26Wet, 0.0, 1.0 );
 	// Standing water puddles pool in low-frequency depressions off the crowned racing line
-	vf26PuddleMask = smoothstep( 0.52, 0.86, vf26Wet * ( 1.0 - 0.35 * vf26Rubber ) * ( 0.65 + 0.35 * vf26PatchNoise ) );
+	lc26PuddleMask = smoothstep( 0.52, 0.86, lc26Wet * ( 1.0 - 0.35 * lc26Rubber ) * ( 0.65 + 0.35 * lc26PatchNoise ) );
 	// WetAlbedoReduction: 25% base porosity darkening + extra darkening in rubbered groove & standing puddles
-	float vf26AlbedoReduction = 0.25 * smoothstep( 0.0, 0.35, vf26Wet ) + 0.18 * vf26Wet + 0.08 * vf26PuddleMask;
-	diffuseColor.rgb *= 1.0 - vf26AlbedoReduction;
+	float lc26AlbedoReduction = 0.25 * smoothstep( 0.0, 0.35, lc26Wet ) + 0.18 * lc26Wet + 0.08 * lc26PuddleMask;
+	diffuseColor.rgb *= 1.0 - lc26AlbedoReduction;
 	// Grazing-angle wet Fresnel specular boost
-	vec3 vf26ViewDir = normalize( vViewPosition );
-	float vf26NdotV = clamp( abs( vf26ViewDir.y ), 0.0, 1.0 );
-	float vf26WetFresnel = pow( 1.0 - vf26NdotV, 3.0 ) * vf26Wet;
-	float vf26WetRough = mix( 0.14, 0.025, vf26PuddleMask );
-	roughnessFactor = mix( roughnessFactor, vf26WetRough, clamp( vf26Wet + 0.35 * vf26WetFresnel, 0.0, 1.0 ) );
+	vec3 lc26ViewDir = normalize( vViewPosition );
+	float lc26NdotV = clamp( abs( lc26ViewDir.y ), 0.0, 1.0 );
+	float lc26WetFresnel = pow( 1.0 - lc26NdotV, 3.0 ) * lc26Wet;
+	float lc26WetRough = mix( 0.14, 0.025, lc26PuddleMask );
+	roughnessFactor = mix( roughnessFactor, lc26WetRough, clamp( lc26Wet + 0.35 * lc26WetFresnel, 0.0, 1.0 ) );
 }
 `,
 	],
@@ -304,18 +304,18 @@ if ( vf26WetRaw > 0.0 ) {
 		"#include <normal_fragment_maps>",
 		/* glsl */ `
 #include <normal_fragment_maps>
-vec2 vf26AggP = vVf26WorldPos.xz;
+vec2 lc26AggP = vLc26WorldPos.xz;
 // Amplitude 8 mm: about 3 to 4 degrees of tilt once the 0.3 gradient scale is applied; submerged in puddles
-float vf26AggH = 0.008 * ( 0.6 * vf26ValueNoise( vf26AggP / 0.03 ) + 0.4 * vf26ValueNoise( vf26AggP / 0.12 ) );
-vf26AggH *= mix( 1.0, 0.12, vf26PuddleMask );
-if ( uRainIntensity > 0.02 && vf26WetRaw > 0.15 ) {
-	float vf26SplashFade = ( 1.0 - smoothstep( 12.0, 42.0, length( vViewPosition ) ) ) * clamp( vf26WetRaw, 0.0, 1.0 );
-	vf26AggH += 0.0035 * vf26RainSplash( vf26AggP, uWetTime, uRainIntensity ) * vf26SplashFade;
+float lc26AggH = 0.008 * ( 0.6 * lc26ValueNoise( lc26AggP / 0.03 ) + 0.4 * lc26ValueNoise( lc26AggP / 0.12 ) );
+lc26AggH *= mix( 1.0, 0.12, lc26PuddleMask );
+if ( uRainIntensity > 0.02 && lc26WetRaw > 0.15 ) {
+	float lc26SplashFade = ( 1.0 - smoothstep( 12.0, 42.0, length( vViewPosition ) ) ) * clamp( lc26WetRaw, 0.0, 1.0 );
+	lc26AggH += 0.0035 * lc26RainSplash( lc26AggP, uWetTime, uRainIntensity ) * lc26SplashFade;
 }
-float vf26AggAa = 1.0 - smoothstep( 0.25, 0.5, max( fwidth( vf26AggP.x ), fwidth( vf26AggP.y ) ) / 0.03 );
-float vf26AggFade = vf26AggAa * ( 1.0 - smoothstep( 30.0, 90.0, length( vViewPosition ) ) );
-vec2 vf26AggGrad = vec2( dFdx( vf26AggH ), dFdy( vf26AggH ) ) * uAggregateNormalScale * vf26AggFade;
-normal = vf26PerturbNormal( -vViewPosition, normal, vf26AggGrad, faceDirection );
+float lc26AggAa = 1.0 - smoothstep( 0.25, 0.5, max( fwidth( lc26AggP.x ), fwidth( lc26AggP.y ) ) / 0.03 );
+float lc26AggFade = lc26AggAa * ( 1.0 - smoothstep( 30.0, 90.0, length( vViewPosition ) ) );
+vec2 lc26AggGrad = vec2( dFdx( lc26AggH ), dFdy( lc26AggH ) ) * uAggregateNormalScale * lc26AggFade;
+normal = lc26PerturbNormal( -vViewPosition, normal, lc26AggGrad, faceDirection );
 `,
 	],
 ];

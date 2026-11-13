@@ -31,7 +31,7 @@ uv run --python 3.14 --no-project --with numpy --with scipy --with fsb5 \
 1. **FMOD Parameter Intervals & Autopitch Roots (`car_configs.json`)**:
    - Each AC engine event (`event:/cars/<car>/engine_int` and `engine_ext`) uses two FMOD `PMLB` parameter tables (power/on-throttle and coast/off-throttle) mapping RPM intervals `[start, end]` to instrument `INST` chunks.
    - Each `INST` chunk stores an FMOD **Autopitch Reference (`rootRpm`)** — the exact RPM at which the raw sample plays at `1.0x` pitch.
-   - During porting, `port_ac_bank.py` resamples each loop by `anchorRpm / rootRpm` so that when `Vf26SoundBank` (`LoopGrid`) plays the loop at `playbackRate = rpm / anchorRpm`, the effective pitch is `rpm / rootRpm`, matching FMOD Studio's exact pitch curve across the entire rev range.
+   - During porting, `port_ac_bank.py` resamples each loop by `anchorRpm / rootRpm` so that when `Lc26SoundBank` (`LoopGrid`) plays the loop at `playbackRate = rpm / anchorRpm`, the effective pitch is `rpm / rootRpm`, matching FMOD Studio's exact pitch curve across the entire rev range.
 2. **Click-Free Seamless Loops (`make_seamless_loop`)**:
    - For long recordings (10–85 s), `pick_steady_window` scans the middle 84% of the sample to pick the window with the lowest sub-block RMS variance and lowest crest factor, avoiding fade-ins or clicks.
    - For short recordings (`< 2.65 s`), the inner steady core is crossfade-tiled seamlessly before loop extraction.

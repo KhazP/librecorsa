@@ -73,6 +73,11 @@ export interface InterpolatedPeerState {
   trackS: number;
   speedKmh: number;
   isAiPeer: boolean;
+  /**
+   * How far the car as drawn is ahead of its newest packet on the lap (m), with `trackS` its drawn lap position: set
+   * by `placePeersWhereDrawn` (race-session.ts) each frame on the circuit the player drives
+   */
+  aheadM?: number;
   /** Remote player's name */
   name?: string;
   race?: PeerRaceProgress;
@@ -1282,7 +1287,7 @@ export class MultiplayerSyncManager {
 
   /** This game's physics revision: players on another one can't race together */
   private simVersion(): number {
-    return lapPhysicsVersion('vf26');
+    return lapPhysicsVersion('lc26');
   }
 
   private helloMessage(): ControlMessage {
