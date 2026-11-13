@@ -39,6 +39,10 @@ export interface HomeLayout {
 export interface HomeVenue {
   name: string;
   country: string;
+  /** The kinds of course its layouts are ("Permanent", "Hill climb"), for the Circuits filters */
+  types: string[];
+  /** Who made its model (its credited author, or LibreCorsa), for the Circuits filters */
+  modders: string[];
   layouts: HomeLayout[];
   /** Where its model comes from (its layouts share one); null when there is no source to show */
   source: ModelSource | null;

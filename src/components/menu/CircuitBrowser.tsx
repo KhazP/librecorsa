@@ -8,7 +8,10 @@ import {
   CIRCUIT_QUALITY_META,
   CIRCUIT_REGIONS,
   CIRCUIT_TYPE_LABELS,
+  CIRCUIT_TYPES,
   CIRCUIT_VENUES,
+  LIBRECORSA_MODDER,
+  circuitModder,
   circuitQualityMeta,
   circuitType,
   type CircuitQuality,
@@ -27,7 +30,8 @@ const dirShort = (d: string) => (/counter|anti/i.test(d) ? "CCW" : /clock/i.test
 const hasQuality = (v: CircuitVenue, q: CircuitQuality) => v.layouts.some((l) => l.quality === q);
 const isOriginal = (v: CircuitVenue) => hasQuality(v, "original");
 const placeOf = (city: string, country: string) => (city && city !== country ? `${city}, ${country}` : country);
-const TYPES: readonly CircuitType[] = ["permanent", "street", "oval"];
+/** A–Z, with LibreCorsa's own circuits first */
+const byModder = (a: string, b: string) => Number(b === LIBRECORSA_MODDER) - Number(a === LIBRECORSA_MODDER) || a.localeCompare(b);
 
 /** Card thumbnail: the layout's real outline once it is loaded (cards load theirs as they scroll near the view) */
 const CardOutline: React.FC<{ track: TrackInfo }> = ({ track }) => {
@@ -97,14 +101,16 @@ export const CircuitBrowser: React.FC<{
     return ranks.length ? Math.min(...ranks) : Infinity;
   };
   const byName = (a: CircuitVenue, b: CircuitVenue) => a.name.localeCompare(b.name);
-  const typesOf = (v: CircuitVenue) => new Set(v.layouts.map(circuitType));
+  const typesOf = (v: CircuitVenue): Set<CircuitType> => new Set(v.layouts.map(circuitType));
+  const moddersOf = (v: CircuitVenue) => new Set(v.layouts.map(circuitModder));
 
   /** The graded kinds this copy lists a circuit of, for the Quality filters and the footnote */
   const qualities = useMemo(() => (["sim", "sketchfab"] as const).filter((q) => venues.some((v) => hasQuality(v, q))), [venues]);
 
   const filterGroups = useMemo<BrowserFilterGroup<CircuitVenue>[]>(() => {
-    const regions = CIRCUIT_REGIONS.filter((r) => venues.some((v) => v.region === r));
-    const types = TYPES.filter((t) => venues.some((v) => typesOf(v).has(t)));
+    const countries = [...new Set(venues.map((v) => v.country))].sort((a, b) => a.localeCompare(b));
+    const types = CIRCUIT_TYPES.filter((t) => venues.some((v) => typesOf(v).has(t)));
+    const modders = [...new Set(venues.flatMap((v) => [...moddersOf(v)]))].sort(byModder);
     const groups: BrowserFilterGroup<CircuitVenue>[] = [
       {
         label: "Library",
@@ -123,12 +129,24 @@ export const CircuitBrowser: React.FC<{
           test: (v: CircuitVenue) => hasQuality(v, q),
         })),
       },
-      { label: "Region", filters: regions.map((r) => ({ id: `region:${r}`, label: r, test: (v: CircuitVenue) => v.region === r })) },
     ];
+    // A group with one category narrows nothing: it is left out
     if (types.length > 1) {
       groups.push({
         label: "Type",
         filters: types.map((t) => ({ id: `type:${t}`, label: CIRCUIT_TYPE_LABELS[t], test: (v: CircuitVenue) => typesOf(v).has(t) })),
+      });
+    }
+    if (countries.length > 1) {
+      groups.push({
+        label: "Location",
+        filters: countries.map((c) => ({ id: `country:${c}`, label: c, test: (v: CircuitVenue) => v.country === c })),
+      });
+    }
+    if (modders.length > 1) {
+      groups.push({
+        label: "Modder",
+        filters: modders.map((m) => ({ id: `modder:${m}`, label: m, test: (v: CircuitVenue) => moddersOf(v).has(m) })),
       });
     }
     return groups;
@@ -173,7 +191,7 @@ export const CircuitBrowser: React.FC<{
           v.region,
           ...v.layouts.flatMap((l) => {
             const q = circuitQualityMeta(l);
-            return [l.layout, CIRCUIT_TYPE_LABELS[circuitType(l)], l.credit?.author ?? "", q.badge, q.filterLabel];
+            return [l.layout, CIRCUIT_TYPE_LABELS[circuitType(l)], circuitModder(l), q.badge, q.filterLabel];
           }),
         ].join(" ")
       }
