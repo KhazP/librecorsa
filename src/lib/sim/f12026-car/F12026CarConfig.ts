@@ -201,6 +201,15 @@ export interface ERSData {
   liftThrottle: number;
   /** Harvest power while lifting in top gear (W, before the mode scale) */
   topGearLiftHarvestW: number;
+  /**
+   * The lift harvest in every gear, not in top gear alone: `topGearLiftHarvestW` × the mode's scale with the pedal
+   * shut, easing to nothing as the pedal reaches `liftThrottle`, and never more than `maxAxleTorqueNm` at the driven
+   * axle (Nm), which at low speed holds it to what the tyres there carry on a lift. The same power in every gear is the
+   * same force at the wheels, so a lift slows the car alike whichever gear it is in. The brake pedal keeps it (as it
+   * keeps the engine's overrun) until the pedal's own harvest is the greater, so a touch of the brake never slows the
+   * car less than the lift did. Absent: top gear only, the whole of it below `liftThrottle`, and none on the brake
+   */
+  liftHarvestEveryGear?: { maxAxleTorqueNm: number };
   /** Deploy multiplier by gear (gear number → 0..1, the source's per-gear table); default 1 in every gear */
   deployVsGear?: LutPoints;
 }
@@ -378,6 +387,12 @@ export interface BrakesData {
   /** Disc temperature the car starts and restarts with (°C); default 380 */
   discStartTempC?: number;
   /**
+   * The cooling air the rear discs get against the front's (0..1), on top of the garage's duct setting: rear ducts
+   * blanked down on a car whose MGU-K takes most of the rear axle's braking, so the rear discs keep the heat of the
+   * little work left to them. Absent: 1, the front's airflow
+   */
+  rearDuctShare?: number;
+  /**
    * Brake-by-wire migration: the bias moves forward by `amount` at full pedal, starting at `rampStart` of the pedal
    * travel (BRAKE_MIGRATION + BMIG_RAMP). Default 0.015 from the first of the travel
    */
@@ -513,6 +528,13 @@ export interface WingData {
    */
   lutYaw_CL_mult?: LutPoints;
   lutYaw_CD_mult?: LutPoints;
+  /**
+   * Height of this element's drag above the CG, body frame (m). When any element has one, the total drag acts at the
+   * height its parts give it as they stand (flaps open or shut, ride heights, yaw), with the bodywork's drag at
+   * `AeroData.dragCentreY` and an element without a height there too. Absent on every element: all the drag at
+   * `dragCentreY`
+   */
+  dragY?: number;
 }
 
 /** `ZoneData_DRSZone` (fractions of a lap) */
@@ -532,7 +554,8 @@ export interface AeroData {
   /**
    * Height of the total drag's line of action above the CG, body frame (m). Wings, wheels and body each drag at their
    * own height, so the sum pitches the car (nose up when it acts above the CG). Absent: through the CG, no pitch moment.
-   * Set it for wing-element aero; a ride-height map whose balance is an axle split already carries the drag's moment
+   * Set it for wing-element aero; a ride-height map whose balance is an axle split already carries the drag's moment.
+   * With `WingData.dragY` on the elements it is the height of the bodywork's drag alone
    */
   dragCentreY?: number;
   wings: WingData[];

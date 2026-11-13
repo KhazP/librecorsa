@@ -30,6 +30,7 @@ import {
 import {
   deriveRainCompound,
   type AeroData,
+  type BrakesData,
   type CarPhysicsConfig,
   type DamperSettingsUnits,
   type EngineData,
@@ -58,12 +59,33 @@ export interface Vf26Overrides {
   /** Overrun torque against the data's */
   coastScale?: number;
   brakeTorqueNm?: number;
+  /** The discs and pads: their grip against temperature, the temperature they start at, the rear ducts' airflow */
+  brakes?: Pick<BrakesData, 'padMuCurve' | 'discStartTempC' | 'rearDuctShare'>;
   /** Differential lock under power, as a share of the input torque */
   diffPowerLock?: number;
   /** A managed up-shift: the drive is cut for this long (s) and the engine meets the new gear at the wheels' speed */
   upshiftCutS?: number;
   /** The combustion torque's lag behind the pedal, rising and falling (s) */
   torqueResponseS?: { rise: number; fall: number };
+  /** Energy recovery values in place of the data's */
+  ers?: Partial<ERSData>;
+  /** Where the fuel sits, from the centre of gravity of the car without fuel (m: y up, z forward); absent: at it */
+  fuelTank?: { y: number; z: number };
+  /**
+   * Inflation pressure in the tyres' heat, every compound alike (`TyresThermalPatchData.pressureHeat` and
+   * `TyresPressureData.pressureRollingGain`); absent: pressure does not move the heat
+   */
+  tyreHeat?: Vf26TyreHeat;
+  /**
+   * Every aero element's drag at the element's own height, so the drag's line of action moves with the flaps, the ride
+   * heights and the yaw; absent: all of it at the one height the elements give at rest with the flaps shut
+   */
+  dragAtElements?: boolean;
+}
+
+export interface Vf26TyreHeat {
+  pressureHeat: NonNullable<TyresCompoundData['thermalData']['pressureHeat']>;
+  pressureRollingGain: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -266,7 +288,7 @@ const flap = (w: Vf26WingSpec) => ({
 });
 
 /** The aero elements of the data with their ground-height tables laid on this engine's reference heights */
-function aeroData(F: Vf26AxleSuspension, R: Vf26AxleSuspension): AeroData {
+function aeroData(F: Vf26AxleSuspension, R: Vf26AxleSuspension, dragAtElements = false): AeroData {
   /** The floor's reference plane below the CG: the floor elements' own height [data] */
   const FLOOR_Y = wing('FLOOR_FL').position[1];
   /** Static ride heights [data]; the body's static nose-down pitch they give */
@@ -371,14 +393,17 @@ function aeroData(F: Vf26AxleSuspension, R: Vf26AxleSuspension): AeroData {
     [floorArea * at(FLOORS[0].aoaCd, FLOORS[0].angleDeg) * FLOORS[0].cdGain, FLOOR_Y],
   ];
   const dragArea = dragParts.reduce((a, [cda]) => a + cda, 0);
+  /** Each element's own height above the CG, in the order of WINGS [data] */
+  const elementY = [FRONT.position[1], FLOOR_Y, DIFFUSER.position[1], REAR.position[1], DRS.position[1]];
 
   return {
     front_lift: 0,
     rear_lift: 0,
     // The body element: drag only at its 3.5° [data BODY]
     drag: Number((area(BODY) * at(BODY.aoaCd, BODY.angleDeg) * BODY.cdGain).toFixed(4)),
-    dragCentreY: Number((dragParts.reduce((a, [cda, y]) => a + cda * y, 0) / dragArea).toFixed(3)),
-    wings: WINGS,
+    // The one height of all the drag; with the elements at their own heights, the body element's alone
+    dragCentreY: dragAtElements ? BODY.position[1] : Number((dragParts.reduce((a, [cda, y]) => a + cda * y, 0) / dragArea).toFixed(3)),
+    wings: dragAtElements ? WINGS.map((w, i) => ({ ...w, dragY: elementY[i] })) : WINGS,
     front_target_height: F.staticRideHeight,
     rear_target_height: R.staticRideHeight,
     floorOffsetY: FLOOR_Y,
@@ -437,7 +462,7 @@ function modelData(t: Vf26TyreSpec): TyresCompoundData['modelData'] {
 
 type TyreOf = (slot: 'soft' | 'medium' | 'hard', axle: 'front' | 'rear') => Vf26TyreSpec;
 
-function compound(tyre_compound: PhysicsTyreCompound, name: string, shortName: 'S' | 'M' | 'H', slot: 'soft' | 'medium' | 'hard', tyreOf: TyreOf): TyresCompoundData {
+function compound(tyre_compound: PhysicsTyreCompound, name: string, shortName: 'S' | 'M' | 'H', slot: 'soft' | 'medium' | 'hard', tyreOf: TyreOf, heat?: Vf26TyreHeat): TyresCompoundData {
   const f = tyreOf(slot, 'front');
   const r = tyreOf(slot, 'rear');
   const rear = modelData(r);
@@ -463,6 +488,7 @@ function compound(tyre_compound: PhysicsTyreCompound, name: string, shortName: '
       coreCooling: [8, 0.2],
       thermalVerticalK: -0.0012,
       thermalVerticalRefC: 100,
+      ...(heat ? { pressureHeat: heat.pressureHeat } : {}),
     },
     pressureData: {
       optimalPsi: f.pressureRefPsi,
@@ -470,6 +496,7 @@ function compound(tyre_compound: PhysicsTyreCompound, name: string, shortName: '
       pressureGripSensitivity: 1.0,
       // Out of the blankets, as the f12026-car [est]
       coldRefC: 80,
+      ...(heat ? { pressureRollingGain: heat.pressureRollingGain } : {}),
     },
     camberData: {
       camberGain: f.camberGain,
@@ -488,12 +515,12 @@ function compound(tyre_compound: PhysicsTyreCompound, name: string, shortName: '
   };
 }
 
-function tyreCompounds(tyreOf: TyreOf) {
-  const MEDIUM = compound('PhysicsTyreCompound_F1_Medium', 'Medium', 'M', 'medium', tyreOf);
+function tyreCompounds(tyreOf: TyreOf, heat?: Vf26TyreHeat) {
+  const MEDIUM = compound('PhysicsTyreCompound_F1_Medium', 'Medium', 'M', 'medium', tyreOf, heat);
   return {
-    PhysicsTyreCompound_F1_Soft: compound('PhysicsTyreCompound_F1_Soft', 'Soft', 'S', 'soft', tyreOf),
+    PhysicsTyreCompound_F1_Soft: compound('PhysicsTyreCompound_F1_Soft', 'Soft', 'S', 'soft', tyreOf, heat),
     PhysicsTyreCompound_F1_Medium: MEDIUM,
-    PhysicsTyreCompound_F1_Hard: compound('PhysicsTyreCompound_F1_Hard', 'Hard', 'H', 'hard', tyreOf),
+    PhysicsTyreCompound_F1_Hard: compound('PhysicsTyreCompound_F1_Hard', 'Hard', 'H', 'hard', tyreOf, heat),
     // Rain tyres on the medium's carcass, as the data builds its own
     PhysicsTyreCompound_F1_Intermediate: deriveRainCompound(MEDIUM, 'intermediate', 'PhysicsTyreCompound_F1_Intermediate', 'Intermediate', true),
     PhysicsTyreCompound_F1_Wet: deriveRainCompound(MEDIUM, 'wet', 'PhysicsTyreCompound_F1_Wet', 'Full Wet', true),
@@ -530,6 +557,7 @@ export function buildVf26Config(overrides: Vf26Overrides = {}) {
       inertia: { pitch: box(B.height, B.length), roll: box(B.width, B.height), yaw: box(B.width, B.length) },
       unsprungMassFront: F.unsprungMassKg,
       unsprungMassRear: R.unsprungMassKg,
+      ...(overrides.fuelTank ? { fuelTank: overrides.fuelTank } : {}),
       wheelInertiaFront: softFront.angularInertia,
       wheelInertiaRear: softRear.angularInertia,
       maxRoadWheelDeg: VF26_CHASSIS.steering.lockDeg / VF26_CHASSIS.steering.ratio,
@@ -545,7 +573,7 @@ export function buildVf26Config(overrides: Vf26Overrides = {}) {
       powerCurve: overrides.icePowerScale === undefined ? ENGINE.powerCurve : (ENGINE.powerCurve.map(([rpm, kw]) => [rpm, kw * overrides.icePowerScale!]) as LutPoints),
       coastCurve: ENGINE.coastCurve.map(([rpm, nm]) => [rpm, nm * (overrides.coastScale ?? 1)]) as LutPoints,
     },
-    ers: ERS,
+    ers: overrides.ers ? { ...ERS, ...overrides.ers } : ERS,
     performanceModes: PERFORMANCE_MODES,
     gearbox: {
       ratios: [...VF26_DRIVETRAIN.gearRatios],
@@ -583,10 +611,16 @@ export function buildVf26Config(overrides: Vf26Overrides = {}) {
       halfshaft: { stiffnessNmPerRad: 13_000, dampingNmsPerRad: 33 },
     },
     // The front share moves 6 % forward by full pedal [data migrationAtFullPedal]
-    brakes: { maxTorqueNm: overrides.brakeTorqueNm ?? VF26_BRAKES.maxTorqueNm, front_bias: VF26_BRAKES.frontBias, ebbStep: 0.005, migration: { amount: VF26_BRAKES.migrationAtFullPedal, rampStart: 0 } },
+    brakes: {
+      maxTorqueNm: overrides.brakeTorqueNm ?? VF26_BRAKES.maxTorqueNm,
+      front_bias: VF26_BRAKES.frontBias,
+      ebbStep: 0.005,
+      migration: { amount: VF26_BRAKES.migrationAtFullPedal, rampStart: 0 },
+      ...overrides.brakes,
+    },
     suspensions: suspensionData(F, R, softFront.radius, softRear.radius),
-    aero: aeroData(F, R),
-    tyreCompounds: tyreCompounds(tyreOf),
+    aero: aeroData(F, R, overrides.dragAtElements),
+    tyreCompounds: tyreCompounds(tyreOf, overrides.tyreHeat),
     compoundSlots: {
       soft: 'PhysicsTyreCompound_F1_Soft',
       medium: 'PhysicsTyreCompound_F1_Medium',
