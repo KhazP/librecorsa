@@ -19,7 +19,7 @@ export const PHYSICS_VERSION = 7;
  * `PHYSICS_VERSION`, an older board of that car. Raise the offset by ten when that car alone changes: the other cars
  * keep their boards.
  */
-const LC26_RIGID_BODY_OFFSET = 510;
+const LC26_RIGID_BODY_OFFSET = 520;
 export function lapPhysicsVersion(vehicle?: VehicleModelId): number {
   return vehicle === "lc26" && lc26OnRigidBody() ? PHYSICS_VERSION + LC26_RIGID_BODY_OFFSET : PHYSICS_VERSION;
 }
