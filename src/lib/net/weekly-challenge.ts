@@ -13,10 +13,15 @@ import type { SimRealism } from "@/lib/sim/sim-realism";
 export interface ChallengeRules {
   trackId: string;
   vehicle: VehicleModelId;
+  /**
+   * The car the week is shown and driven in, when its vehicle has more than one (an id of car-registry.ts, which the
+   * Worker cannot import, so a string). A lap in any car of the vehicle counts: they drive the same.
+   */
+  car?: string;
   assists: AssistPreset;
   realism: SimRealism;
   /** The week's scheduled races: their circuit, car and laps */
-  race: { trackId: string; vehicle: VehicleModelId; laps: number };
+  race: { trackId: string; vehicle: VehicleModelId; car?: string; laps: number };
 }
 
 export interface WeeklyChallenge extends ChallengeRules {
@@ -80,13 +85,13 @@ const weekRules = (week: number): Pick<ChallengeRules, "assists" | "realism"> =>
  *
  * Dunsfold is not raced on, so in its weeks the races are at RISE Motordrome's Grand Prix layout in the prototype.
  */
-const WEEKS: readonly (readonly [Circuit | "dunsfold", Car])[] = [
+const WEEKS: readonly (readonly [circuit: Circuit | "dunsfold", vehicle: Car, car?: string])[] = [
   ["dunsfold", "liana"], // 9 Nov 2026
   ["le_mans_82", "lc-lmdh"], // 16 Nov
   ["spielberg", "amg-gt3"], // 23 Nov
   ["chang", "mtr-496r"], // 30 Nov
   ["monaco", "liana"], // 7 Dec
-  ["rwanda_official", "amg-gt3"], // 14 Dec
+  ["rwanda_official", "amg-gt3", "bmw-m4-gt3"], // 14 Dec
   ["okayama", "nissan-r32-jtcc"], // 21 Dec
   ["grobnik", "lc26"], // 28 Dec
   ["oschersleben", "nissan-r33-jgtc"], // 4 Jan 2027
@@ -105,7 +110,7 @@ const WEEKS: readonly (readonly [Circuit | "dunsfold", Car])[] = [
   ["istanbul_park", "lc-lmdh"], // 5 Apr
   ["dunsfold", "liana"], // 12 Apr
   ["spielberg", "amg-gt3"], // 19 Apr: GT3 race weekend, 23-25 Apr
-  ["chang", "amg-gt3"], // 26 Apr: GT3 race weekend, 1-2 May
+  ["chang", "amg-gt3", "bmw-m4-gt3"], // 26 Apr: GT3 race weekend, 1-2 May
   ["oschersleben", "amg-gt3"], // 3 May: GT3 race weekend, 7-9 May
   ["sachsenring", "lc26"], // 10 May
   ["vir", "mtr-496r"], // 17 May
@@ -130,9 +135,10 @@ const WEEKS: readonly (readonly [Circuit | "dunsfold", Car])[] = [
   ["istanbul_park", "lc26"], // 27 Sep: the grand prix, 1-3 Oct
   ["le_mans_82", "mtr-496r"], // 4 Oct
 ];
-export const CHALLENGE_ROTATION: readonly ChallengeRules[] = WEEKS.map(([trackId, vehicle], week) => {
-  const [raceTrack, raceCar]: readonly [Circuit, Car] = trackId === "dunsfold" ? [HOME, "lc26"] : [trackId, vehicle];
-  return { trackId, vehicle, ...weekRules(week), race: { trackId: raceTrack, vehicle: raceCar, laps: raceLaps(LAP_S[raceTrack], PACE[raceCar]) } };
+export const CHALLENGE_ROTATION: readonly ChallengeRules[] = WEEKS.map(([trackId, vehicle, car], week) => {
+  const body = car === undefined ? {} : { car };
+  const [raceTrack, raceCar, raceBody]: readonly [Circuit, Car, { car?: string }] = trackId === "dunsfold" ? [HOME, "lc26", {}] : [trackId, vehicle, body];
+  return { trackId, vehicle, ...body, ...weekRules(week), race: { trackId: raceTrack, vehicle: raceCar, ...raceBody, laps: raceLaps(LAP_S[raceTrack], PACE[raceCar]) } };
 });
 
 const DAY_MS = 86_400_000;

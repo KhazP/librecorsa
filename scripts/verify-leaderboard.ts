@@ -21,6 +21,7 @@ import { randomDriverProfile } from '../src/lib/settings/player-settings';
 import type { Env } from '../cloudflare/api/types';
 import { fakeD1, fakeR2 } from './lib/fake-cloudflare';
 import { planImport, type SupabaseDriver, type SupabaseLap } from './migrate-supabase-board';
+import { carById, type CarId } from '../src/lib/cars/car-registry';
 import { CHALLENGE_ROTATION, challengeAt, challengeCompound, challengeConditionsLabel, challengeProblem, fitsChallenge, isoWeekId, timeLeftLabel } from '../src/lib/net/weekly-challenge';
 
 /** The revision the laps here are driven under: the board of the car they are driven in (the LC26's own) */
@@ -326,6 +327,12 @@ async function main(): Promise<void> {
       const venue = (id: string) => id.split('_')[0];
       const twice = CHALLENGE_ROTATION.filter((c, i) => venue(c.trackId) === venue(CHALLENGE_ROTATION[(i + 1) % CHALLENGE_ROTATION.length].trackId));
       check('challenge: no venue two weeks running', twice.length === 0, twice.map((c) => c.trackId).join(', '));
+      // A week may name one car of its vehicle (the GT3 has two); its races are in the same one
+      const named = CHALLENGE_ROTATION.filter((c) => c.car !== undefined);
+      const wrongCar = named.filter((c) => carById(c.car as CarId).id !== c.car || carById(c.car as CarId).physics !== c.vehicle || c.race.car !== c.car);
+      check('challenge: a week that names its car names one of its vehicle, 14 Dec the BMW', wrongCar.length === 0 && on(2026, 12, 14).car === 'bmw-m4-gt3' && on(2026, 11, 23).car === undefined, wrongCar.map((c) => c.car).join(', '));
+      const dunsfold = CHALLENGE_ROTATION.filter((c) => c.trackId === 'dunsfold');
+      check('challenge: a Dunsfold week\'s races name no car', dunsfold.every((c) => c.race.car === undefined));
       const cars = new Set(CHALLENGE_ROTATION.map((c) => c.vehicle));
       check('challenge: every car but the F1 team cars has its weeks', ['lc26', 'lc-lmdh', 'amg-gt3', 'mtr-496r', 'liana', 'nissan-r33-jgtc', 'nissan-r32-jtcc'].every((v) => cars.has(v as never)) && cars.size === 7, [...cars].join(', '));
       check('challenge: a week\'s races are 3 to 14 laps (ten minutes or so on the shortest and the longest lap)', CHALLENGE_ROTATION.every((c) => c.race.laps >= 3 && c.race.laps <= 14), CHALLENGE_ROTATION.map((c) => c.race.laps).join(' '));
