@@ -354,6 +354,22 @@ export interface DifferentialData {
   hiSpdSwitchKmh?: number;
 }
 
+/**
+ * Four-wheel drive through a centre coupling (Assetto Corsa's AWD2 layout): the engine drives the primary axle
+ * (`CarPhysicsConfig.drivenAxle`) through the clutch and `differential`, and a coupling on that axle's drive hands the
+ * other axle torque as the primary axle's wheels run ahead of it: `rampNmPerRadS` per rad/s by which the primary axle's
+ * mean wheel speed exceeds the secondary's, up to `maxTorqueNm`, both at the axles (rad/s of the wheels, Nm on the
+ * axle). It works one way, in the drive direction while the engine drives (an electronically controlled clutch engaged
+ * by the primary axle's wheelspin, as ATTESA E-TS): a secondary axle running ahead (its longer path round a corner, a
+ * smaller rolling radius) gets nothing, and the coupling lets go off the throttle and on the brakes. The secondary axle
+ * has its own differential
+ */
+export interface AwdData {
+  centre: { rampNmPerRadS: number; maxTorqueNm: number };
+  /** The secondary axle's differential: locking = preload + power / coast × the torque the coupling hands it */
+  secondaryDiff: DifferentialSettingsUnits;
+}
+
 export interface BrakesData {
   /** Brake torque at full pedal before the bias split (Nm per wheel pair-equivalent) */
   maxTorqueNm: number;
@@ -860,6 +876,8 @@ export interface CarPhysicsConfig {
   screenName: string;
   /** The axle the engine drives through the clutch and differential; absent: the rear */
   drivenAxle?: 'front' | 'rear';
+  /** Four-wheel drive: the other axle is driven through a centre coupling (`AwdData`); absent: two-wheel drive */
+  awd?: AwdData;
   chassis: ChassisData;
   engine: EngineData;
   ers: ERSData;
