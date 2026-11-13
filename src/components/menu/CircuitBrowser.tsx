@@ -304,7 +304,9 @@ export const CircuitBrowser: React.FC<{
             ) : null}
             <p className="m-0 flex items-start gap-2 text-[12px] leading-normal text-[#8E96AA]">
               <Info aria-hidden className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#00E5FF]" strokeWidth={2} />
-              Loading a circuit reloads the scene. Online, everyone in the room picks the same one.
+              {circuitType(t) === "hillclimb"
+                ? "A hill climb is one timed run from the start line to the finish, one car at a time: no AI or online races. Loading it reloads the scene."
+                : "Loading a circuit reloads the scene. Online, everyone in the room picks the same one."}
             </p>
           </>
         );
