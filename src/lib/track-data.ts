@@ -304,6 +304,9 @@ export function getActivePointToPoint(): PointToPointDef | null {
   return getActiveTrackMetadata().pointToPoint ?? null;
 }
 
+/** What a timed lap is called on the active circuit: a hill climb's is a run */
+export const activeLapWord = (): "Run" | "Lap" => (getActivePointToPoint() ? "Run" : "Lap");
+
 /**
  * The distance a lap time is set over: the lap, or on a point-to-point course the run from the start line to the
  * finish line (`TRACK_TOTAL_LENGTH_M` there is the whole loop, most of it not road)

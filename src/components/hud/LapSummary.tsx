@@ -1,5 +1,6 @@
 "use client";
 
+import { activeLapWord } from "@/lib/track-data";
 import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useUiZoom } from "@/lib/ui-zoom";
@@ -221,10 +222,10 @@ const LapToast: React.FC<{ summary: LapSummaryData; onOpen: () => void; onClose:
       <button
         type="button"
         onClick={onOpen}
-        aria-label={`Lap ${s.lapNumber}: show sector data`}
+        aria-label={`${activeLapWord()} ${s.lapNumber}: show sector data`}
         className="flex min-w-0 cursor-pointer items-center gap-3 text-left transition-opacity hover:opacity-85 sm:gap-3.5"
       >
-        <span className="lc-lbl shrink-0 !text-[9px] !font-extrabold !tracking-[0.18em]">LAP {s.lapNumber}</span>
+        <span className="lc-lbl shrink-0 !text-[9px] !font-extrabold !tracking-[0.18em]">{activeLapWord().toUpperCase()} {s.lapNumber}</span>
         <span className="lc-data text-[22px] leading-none sm:text-[24px]">{formatLapTime(s.lapTimeMs)}</span>
         {statusBadge(s)}
         <span className="flex shrink-0 gap-[3px]" aria-hidden>
@@ -331,7 +332,7 @@ const LapCard: React.FC<
         <div className="flex items-center justify-between gap-3">
           <span className="lc-data inline-flex items-center gap-2 text-[12px] tracking-[0.12em]">
             <span aria-hidden className="h-[7px] w-[7px] rounded-full bg-[#CCFF00]" />
-            LAP {s.lapNumber}
+            {activeLapWord().toUpperCase()} {s.lapNumber}
           </span>
           <div className="flex shrink-0 items-center gap-2">
             {badge}

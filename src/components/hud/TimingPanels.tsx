@@ -1,5 +1,6 @@
 "use client";
 
+import { activeLapWord } from "@/lib/track-data";
 import React from "react";
 import type { CarTelemetry, RaceStatus, TireCompound } from "@/types/f1";
 import {
@@ -172,7 +173,7 @@ export const LapPanel: React.FC<LapPanelProps> = ({ telemetry, deltaS, variant =
       <div className="flex flex-col items-start gap-1.5">
         <section aria-label="Lap" className={`flex items-center gap-3.5 rounded-full py-2 pr-[18px] pl-2 ${HUD_GLASS}`}>
           <span className="lc-data inline-flex h-10 items-center rounded-full bg-[#1B1F2B] px-3.5 text-[12px] tracking-[0.1em] text-[#F5F7FA]">
-            LAP {lap}
+            {activeLapWord().toUpperCase()} {lap}
           </span>
           <span className="lc-data text-[30px] leading-none" style={{ color: timeColor }}>
             {formatLapTime(telemetry.currentLapTimeMs)}
@@ -211,7 +212,7 @@ export const LapPanel: React.FC<LapPanelProps> = ({ telemetry, deltaS, variant =
       <div className="flex items-center justify-between gap-2">
         <span className="lc-data inline-flex items-center gap-2 text-[13px] tracking-[0.1em] text-[#F5F7FA]">
           <span className="h-[7px] w-[7px] rounded-full bg-[#CCFF00]" />
-          LAP {lap}
+          {activeLapWord().toUpperCase()} {lap}
         </span>
         {deltaS !== null ? (
           <span

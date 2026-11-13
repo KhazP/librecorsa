@@ -1,5 +1,6 @@
 "use client";
 
+import { activeLapWord } from "@/lib/track-data";
 import React, { useSyncExternalStore } from "react";
 import { Zap } from "lucide-react";
 import { atShiftPoint, formatDelta, formatLapTime, HUD_RED } from "../hud-format";
@@ -109,7 +110,7 @@ export const PhoneHud: React.FC<HudDesignProps> = ({ t, deltaS, map, revRange, s
                 <span className="text-[16px] text-[#8E96AA] phone:text-[13px]">/{race.standings.length}</span>
               </span>
             ) : (
-              <span className="lc-disp text-[22px] leading-none text-[#F5F7FA] phone:text-[18px]">Lap {Math.max(1, t.lapCount)}</span>
+              <span className="lc-disp text-[22px] leading-none text-[#F5F7FA] phone:text-[18px]">{activeLapWord()} {Math.max(1, t.lapCount)}</span>
             )}
             {race ? (
               <span className={HUD_LBL}>
