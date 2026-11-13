@@ -262,16 +262,20 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
             </button>
 
             <a href={withBasePath("/press")} className={`${TILE} flex min-h-[230px] flex-col gap-3 p-5 lg:col-span-2`}>
-              <span className="lc-disp text-[22px]">In the press</span>
-              <span className="flex flex-col gap-1.5 text-[13px] leading-snug text-[#C5CBD8]">
-                {data.coverage.slice(0, 4).map((a) => (
-                  <span key={a.url} className="truncate">
-                    {a.outlet}
+              <span className="flex flex-col gap-1">
+                <span className="lc-disp text-[22px]">Press & media</span>
+                <span className="text-[13px] text-[#8E96AA]">{data.coverageCount} articles and videos so far</span>
+              </span>
+              <span className="flex flex-col">
+                {data.coverage.slice(0, 3).map((a) => (
+                  <span key={a.url} className="flex min-w-0 flex-col gap-0.5 border-t border-[#262B3D] py-2.5">
+                    <span className="truncate text-[13px] font-semibold text-[#F5F7FA]">{a.outlet}</span>
+                    <span className="line-clamp-2 text-[12px] leading-snug text-[#C5CBD8]">{a.title}</span>
                   </span>
                 ))}
               </span>
               <span className={`${MORE} mt-auto`}>
-                Read it
+                Coverage and press kit
                 <ChevronRight aria-hidden className="h-4 w-4" strokeWidth={2.4} />
               </span>
             </a>
@@ -438,9 +442,22 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
                   </div>
                 ))}
               </dl>
+              <div className="flex flex-col gap-3 pt-2">
+                <h2 className="lc-disp m-0 text-[28px]">Add your mod</h2>
+                <p className="m-0 max-w-[560px] text-[15px] leading-relaxed text-[#C5CBD8]">
+                  Made a car or track mod and want to see it in LibreCorsa? Email me at{" "}
+                  <a
+                    href={`mailto:${data.contactEmail}`}
+                    className="font-semibold text-[#F5F7FA] underline decoration-[#3A4157] underline-offset-4 hover:decoration-[#F5F7FA]"
+                  >
+                    {data.contactEmail}
+                  </a>{" "}
+                  with a link to it. Every modder gets credited by name in the game.
+                </p>
+              </div>
             </div>
             <div className="flex min-w-0 flex-col gap-6">
-              <h2 className="lc-disp m-0 text-[28px]">In the press</h2>
+              <h2 className="lc-disp m-0 text-[28px]">Press & media</h2>
               <ul className="m-0 flex list-none flex-col p-0">
                 {data.coverage.map((a) => (
                   <li key={a.url} className="border-t border-[#262B3D] last:border-b">

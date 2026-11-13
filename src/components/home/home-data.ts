@@ -73,7 +73,12 @@ export interface HomeData {
   defaultCarId: string;
   venues: HomeVenue[];
   cars: HomeCar[];
+  /** The newest few */
   coverage: HomeCoverage[];
+  /** How many articles and videos the press page lists in all */
+  coverageCount: number;
+  /** Where to write to me, e.g. with a mod */
+  contactEmail: string;
   repoUrl: string;
   supportUrl: string;
 }

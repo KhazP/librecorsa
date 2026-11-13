@@ -9,7 +9,7 @@ import outlines from "@/lib/home/circuit-outlines.json";
 import type { LapOutline } from "@/lib/home/lap-outline";
 import { carModelSource, trackModelSource } from "@/lib/model-source";
 import { coverage } from "@/lib/press";
-import { REPO_URL, SUPPORT_URL } from "@/lib/site";
+import { CONTACT_EMAIL, REPO_URL, SUPPORT_URL } from "@/lib/site";
 import { CIRCUIT_TYPE_LABELS, CIRCUIT_VENUES, DEFAULT_TRACK_ID, circuitModder, circuitType } from "@/lib/track-registry";
 
 /** Written by scripts/build-home-outlines.ts, so its shape is LapOutline's (JSON reads a tuple as an array) */
@@ -29,6 +29,7 @@ function thumbOf(id: CarId): string | null {
 export default function HomePage() {
   const missing = CIRCUIT_VENUES.flatMap((v) => v.layouts.filter((t) => !OUTLINES[t.id]).map((t) => t.id));
   if (missing.length) console.warn(`Home page: no outline for ${missing.join(", ")} (npm run home-outlines)`);
+  const articles = coverage();
 
   const data: HomeData = {
     defaultTrackId: DEFAULT_TRACK_ID,
@@ -57,9 +58,9 @@ export default function HomePage() {
       thumb: thumbOf(c.id),
       source: carModelSource(c),
     })),
-    coverage: coverage()
-      .slice(0, 4)
-      .map((a) => ({ outlet: a.outlet, title: a.title, url: a.url, date: a.date })),
+    coverage: articles.slice(0, 4).map((a) => ({ outlet: a.outlet, title: a.title, url: a.url, date: a.date })),
+    coverageCount: articles.length,
+    contactEmail: CONTACT_EMAIL,
     repoUrl: REPO_URL,
     supportUrl: SUPPORT_URL,
   };

@@ -14,7 +14,7 @@ import {
   RISE_PRESS_KIT_ZIP,
   RISE_RENDERS,
 } from "@/lib/press";
-import { REPO_URL, SITE_NAME } from "@/lib/site";
+import { CONTACT_EMAIL, REPO_URL, SITE_NAME } from "@/lib/site";
 
 const DESCRIPTION = "Coverage of LibreCorsa, the free browser racing sim, plus a press kit: facts, logos, screenshots and the trailer.";
 // The share card from src/app/opengraph-image.jpg: file-based images only cover the home page, so it's named here
@@ -41,7 +41,6 @@ export const metadata: Metadata = {
   twitter: { card: "summary_large_image", title: `Press | ${SITE_NAME}`, description: DESCRIPTION, images: [SHARE_IMAGE] },
 };
 
-const CONTACT_EMAIL = "alpyalay@gmail.com";
 const TRAILER_URL = "/media/librecorsa-trailer.mp4";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];

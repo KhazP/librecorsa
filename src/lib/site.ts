@@ -10,5 +10,5 @@ export const REPO_URL = "https://github.com/KhazP/librecorsa";
 export const TAKEDOWN_URL = `${REPO_URL}/issues/new?template=takedown-request.yml`;
 /** Voluntary tips (same as .github/FUNDING.yml); never unlocks anything, the assets are non-commercial */
 export const SUPPORT_URL = "https://buymeacoffee.com/alpyalayg";
-/** Where to write to me: the address the press page gives, also for privacy requests */
-export const CONTACT_EMAIL = "alpyalay@gmail.com";
+/** Where to write to me: the press page, privacy requests and mods sent in from the home page's About section */
+export const CONTACT_EMAIL = "contact@alpyalay.org";
