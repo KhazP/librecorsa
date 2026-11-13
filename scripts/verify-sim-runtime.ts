@@ -104,6 +104,7 @@ const MODELS: [string, VehicleModelId, boolean][] = [
   ['f12026-car', 'f12026-car', false],
   ['AMG GT3', 'amg-gt3', false],
   ['MTR 496R', 'mtr-496r', false],
+  ['LC-LMDH', 'lc-lmdh', false],
   ['Nissan R33 JGTC', 'nissan-r33-jgtc', false],
   ['Nissan R32 JTCC', 'nissan-r32-jtcc', false],
   ['Liana', 'liana', false],

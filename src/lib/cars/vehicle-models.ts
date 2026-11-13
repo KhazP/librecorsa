@@ -14,6 +14,8 @@ import { SUZUKI_LIANA_SIM_PROFILE, createSuzukiLianaSim } from "@/lib/sim/road/S
 import { SUZUKI_LIANA_CONFIG } from "@/lib/sim/road/SuzukiLianaConfig";
 import { MTR_496R_SIM_PROFILE, createMtr496rSim } from "@/lib/sim/proto/Mtr496rSim";
 import { MTR_496R_CONFIG } from "@/lib/sim/proto/Mtr496rConfig";
+import { LC_LMDH_SIM_PROFILE, createLcLmdhSim } from "@/lib/sim/proto/LcLmdhSim";
+import { LC_LMDH_CONFIG } from "@/lib/sim/proto/LcLmdhConfig";
 import { NISSAN_R33_SIM_PROFILE, createNissanR33Sim } from "@/lib/sim/classic/NissanR33Sim";
 import { NISSAN_R33_CONFIG } from "@/lib/sim/classic/NissanR33Config";
 import { NISSAN_R32_SIM_PROFILE, createNissanR32Sim } from "@/lib/sim/classic/NissanR32Sim";
@@ -118,6 +120,18 @@ export const VEHICLE_MODELS: Readonly<Record<VehicleModelId, VehicleModel>> = {
     tyreSetupRanges: MTR_496R_SIM_PROFILE,
     rigConfig: MTR_496R_CONFIG,
     // Its only body is the ported GLB, which brings its own cameras
+    gt3Cockpit: false,
+    floorSparks: false,
+  },
+  "lc-lmdh": {
+    id: "lc-lmdh",
+    classId: "proto",
+    createSim: (track, trackRoot) => createLcLmdhSim(track, trackRoot),
+    limiterRpm: LC_LMDH_CONFIG.gearbox.gears.redline_rpm,
+    telemetryMaxRpm: 9000,
+    tyreSetupRanges: LC_LMDH_SIM_PROFILE,
+    rigConfig: LC_LMDH_CONFIG,
+    // Its only body is a ported GLB, which brings its own cameras
     gt3Cockpit: false,
     floorSparks: false,
   },

@@ -15,6 +15,7 @@ const GT_MODELS: ReadonlySet<string> = new Set<VehicleModelId>([
   'amg-gt3',
   'liana',
   'mtr-496r',
+  'lc-lmdh',
   'nissan-r33-jgtc',
   'nissan-r32-jtcc',
 ]);

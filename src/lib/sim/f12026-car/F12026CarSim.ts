@@ -1181,6 +1181,7 @@ export class F12026CarSim implements SimulatorCar {
     return id === 'amg-gt3' ||
       id === 'liana' ||
       id === 'mtr-496r' ||
+      id === 'lc-lmdh' ||
       id === 'nissan-r33-jgtc' ||
       id === 'nissan-r32-jtcc'
       ? id

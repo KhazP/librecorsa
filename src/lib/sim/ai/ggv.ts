@@ -67,6 +67,14 @@ export const GGV_TABLES: Record<VehicleModelId, GgvTable> = {
     lockKappa: Math.tan((240 / 14) * (Math.PI / 180)) / 2.8,
   },
   // Measured 2026-11-13
+  'lc-lmdh': {
+    speedsMs: [15, 25, 35, 45, 55, 65, 75, 85],
+    latG: [1.52, 1.65, 1.8, 2.01, 2.27, 2.59, 2.94, 3.32],
+    brakeG: [1.69, 1.76, 1.93, 2.13, 2.4, 2.71, 3.09, 3.41],
+    accelG: [1.05, 0.99, 0.84, 0.68, 0.52, 0.37, 0.22, 0.08],
+    lockKappa: Math.tan((225 / 12.5) * (Math.PI / 180)) / 3.148,
+  },
+  // Measured 2026-11-13
   'nissan-r33-jgtc': {
     speedsMs: [15, 25, 35, 45, 55, 65, 75, 85],
     latG: [1.37, 1.46, 1.6, 1.77, 1.94, 2.14, 2.33, 2.49],

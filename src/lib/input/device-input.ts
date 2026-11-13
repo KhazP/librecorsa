@@ -126,6 +126,8 @@ export const CAR_WHEEL_LOCKS_DEG: Readonly<Record<string, number>> = {
   "amg-gt3": 640,
   liana: 1080,
   "mtr-496r": 480,
+  // 225° each way [est]
+  "lc-lmdh": 450,
   // Twice each car's STEER_LOCK [spec car.ini]
   "nissan-r33-jgtc": 500,
   "nissan-r32-jtcc": 720,

@@ -8,6 +8,7 @@ import {
   revRangeFor,
   HUD_CYAN,
   HUD_PROTO,
+  PROTO_CAR_IDS,
   HUD_CLASSIC,
   CLASSIC_CAR_IDS,
   HUD_ROAD,
@@ -69,7 +70,7 @@ export const SpeedCluster: React.FC<SpeedClusterProps> = ({
   const channels = telemetry.f12026;
   const isGt3 = channels?.carId === "amg-gt3";
   const isRoad = channels?.carId === "liana";
-  const isProto = channels?.carId === "mtr-496r";
+  const isProto = PROTO_CAR_IDS.has(channels?.carId ?? "");
   const isClassic = CLASSIC_CAR_IDS.has(channels?.carId ?? "");
   const [revStart, revFull] = revRangeFor(channels?.carId);
   const hasErs = channels?.hasErs ?? true;

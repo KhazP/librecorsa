@@ -31,6 +31,7 @@ export const TYRE_SETUP_LIMITS: Record<VehicleModelId, TyreSetupLimits> = {
   "amg-gt3": limitsOf(VEHICLE_MODELS["amg-gt3"].tyreSetupRanges),
   liana: limitsOf(VEHICLE_MODELS.liana.tyreSetupRanges),
   "mtr-496r": limitsOf(VEHICLE_MODELS["mtr-496r"].tyreSetupRanges),
+  "lc-lmdh": limitsOf(VEHICLE_MODELS["lc-lmdh"].tyreSetupRanges),
   "nissan-r33-jgtc": limitsOf(VEHICLE_MODELS["nissan-r33-jgtc"].tyreSetupRanges),
   "nissan-r32-jtcc": limitsOf(VEHICLE_MODELS["nissan-r32-jtcc"].tyreSetupRanges),
 };
@@ -42,6 +43,7 @@ const STORAGE_KEYS: Record<VehicleModelId, string> = {
   "amg-gt3": "bugesera.tyreSetup.amg-gt3",
   liana: "bugesera.tyreSetup.liana",
   "mtr-496r": "bugesera.tyreSetup.mtr-496r",
+  "lc-lmdh": "bugesera.tyreSetup.lc-lmdh",
   "nissan-r33-jgtc": "bugesera.tyreSetup.nissan-r33-jgtc",
   "nissan-r32-jtcc": "bugesera.tyreSetup.nissan-r32-jtcc",
 };
