@@ -78,7 +78,7 @@ if (typeof window !== "undefined") {
 const outlineOfRaw = (raw: RawTrackJson): HudMap =>
   buildHudMap({
     totalLengthM: raw.metadata.lengthMeters,
-    pointToPoint: (raw.metadata as TrackMetaExtras).pointToPoint,
+    pointToPoint: (raw.metadata as RawTrackJson["metadata"] & TrackMetaExtras).pointToPoint,
     samples: raw.samples.map((s) => ({ position: { x: s.p[0], z: s.p[2] }, sector: s.sec })),
   });
 
