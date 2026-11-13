@@ -4,8 +4,11 @@
  */
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import { createDriverFigure, type DriverFigure } from '../src/lib/render/driver-figure';
+import { createDriverFigure, setDriverBodyShown, type DriverFigure } from '../src/lib/render/driver-figure';
 import { VF26_CHASSIS } from '../src/lib/sim/vf26-data';
+
+// The Display setting is off until the player turns it on: a hidden figure is not posed
+setDriverBodyShown(true);
 
 let passed = 0;
 function check(name: string, fn: () => void) {

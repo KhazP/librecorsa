@@ -1,3 +1,4 @@
+import { setDriverBodyShown } from "@/lib/render/driver-figure";
 import * as THREE from "three";
 import { LIVERIES, TURN_METADATA, type BuiltTrackData } from "@/lib/track-data";
 import { F1Physics2026, type ControlInputs } from "@/lib/f1-physics-2026";
@@ -923,6 +924,7 @@ export class DriveSession {
       postFx.setSize(container.clientWidth, container.clientHeight);
     };
     this.applyGraphics(settings.graphics.quality, settings.graphics.renderScale);
+    setDriverBodyShown(settings.graphics.driverBody);
     this.applySettings = (next) => {
       const prev = settings;
       if (disposed || next === prev) return;
@@ -944,6 +946,7 @@ export class DriveSession {
       if (next.graphics.quality !== prev.graphics.quality || next.graphics.renderScale !== prev.graphics.renderScale) {
         this.applyGraphics(next.graphics.quality, next.graphics.renderScale);
       }
+      if (next.graphics.driverBody !== prev.graphics.driverBody) setDriverBodyShown(next.graphics.driverBody);
       // Another field size needs another field: a race running restarts from the lights with it
       if (next.race.opponents !== prev.race.opponents) {
         aiFieldSpare = null;

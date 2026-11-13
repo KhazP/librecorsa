@@ -547,6 +547,12 @@ export const DisplayPanel: React.FC<DisplayPanelProps> = ({
             hint="Lower is faster"
             onChange={(renderScale) => setGraphics({ renderScale })}
           />
+          <Toggle
+            label="Driver body"
+            detail="Arms on the wheel and a body in the seat, in cars that have them"
+            checked={graphics.driverBody}
+            onChange={() => setGraphics({ driverBody: !graphics.driverBody })}
+          />
 
           <div className="flex flex-wrap items-center gap-x-3.5 gap-y-2 border-t border-[#262B3D] px-2 pt-3">
             <span className="w-[34px] shrink-0 text-[15px] font-bold">VR</span>

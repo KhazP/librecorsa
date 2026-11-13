@@ -30,6 +30,16 @@ export interface DriverFigure {
   dispose: () => void;
 }
 
+/** Every figure alive, so the setting reaches the cars already built */
+const figures = new Set<THREE.Group>();
+let bodyShown = false;
+
+/** The Display setting "Driver body": shows or hides every car's figure (the helmet is not part of it) */
+export function setDriverBodyShown(shown: boolean): void {
+  bodyShown = shown;
+  for (const g of figures) g.visible = shown;
+}
+
 export interface DriverFigureOptions {
   /** The helmet's centre in `frame` */
   helmet: THREE.Vector3;
@@ -444,6 +454,7 @@ export function createDriverFigure(options: DriverFigureOptions): DriverFigure {
   let posedRegrip = NaN;
 
   const update = (steerRad: number, dtSeconds: number) => {
+    if (!group.visible) return;
     if (!Number.isFinite(steerRad)) return;
     const onGrips = steerRad - Math.PI * grips;
     if (onGrips > REGRIP_AT || (grips < 0 && onGrips > REGRIP_BACK)) grips++;
@@ -469,6 +480,8 @@ export function createDriverFigure(options: DriverFigureOptions): DriverFigure {
     for (const a of arms) poseArm(a, handRad, liftM);
   };
   update(0, 0);
+  group.visible = bodyShown;
+  figures.add(group);
 
   return {
     group,
@@ -481,6 +494,7 @@ export function createDriverFigure(options: DriverFigureOptions): DriverFigure {
     dispose: () => {
       // The shapes are shared by every figure and stay
       for (const m of [suit, trim, gloves]) m.dispose();
+      figures.delete(group);
       group.removeFromParent();
     },
   };
