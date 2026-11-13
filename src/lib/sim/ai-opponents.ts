@@ -867,14 +867,24 @@ export class AiOpponentField {
     const sim = car.ai;
     if (!sim || !AiOpponentField.tracksPlans(sim)) return;
     const weather = this.environment.weatherPaceScale(sim);
-    // A damaged car (a broken wing, bent suspension) has less grip to plan with
-    const damaged = car.damage.pristine ? 1 : 1 - 0.35 * car.damage.overall;
+    // A damaged car (a broken wing, bent suspension) has less grip to plan with, and a puncture leaves its tyre under
+    // half: the plan takes the weaker axle's grip too, as a car through a corner is held by its worse end, with the
+    // weak tyre on the outside carrying 70 % of its axle (a puncture: 0.6)
+    let damaged = 1;
+    if (!car.damage.pristine) {
+      const g = car.damage.effects().wheelGripMult;
+      const axle = (a: number, b: number) => 0.7 * Math.min(a, b) + 0.3 * Math.max(a, b);
+      damaged = Math.min(1 - 0.35 * car.damage.overall, axle(g[0], g[1]), axle(g[2], g[3]));
+    }
     // The fastest levels plan toward the most grip this car drove cleanly here (the circuit's line check), one step
     // (0.04) under it: the check is a flying lap alone, and a race adds traffic, dirty air and a pack on lap 1 (at
     // the full step the LC26 hit Okayama's barriers four times as often)
     const checked = (getActiveTrackMetadata().aiPlans?.[sim.vehicleId ?? ''] as AiPlanCheck | undefined)?.maxGrip;
     const ceiling = Math.max(PLAN_GRIP, (checked ?? PLAN_GRIP) - RACE_GRIP_MARGIN);
-    const planGrip = PLAN_GRIP + (ceiling - PLAN_GRIP) * this.mods.gripReach;
+    // On a race's first lap the pack brakes into the corners together: the extra grip waits for the second lap (with
+    // it, Alien GT3 fields went off at Spielberg's Turn 1 on lap 1 two races in six)
+    const reach = this.started && car.clock.lapsDone === 0 ? 0 : this.mods.gripReach;
+    const planGrip = PLAN_GRIP + (ceiling - PLAN_GRIP) * reach;
     const grip = Math.round(planGrip * car.pace * car.pace * weather * weather * damaged * 200) / 200;
     if (sim.aiPlan && grip === car.planGrip) return;
     this.aiTrack ??= aiTrackFor(this.track);
