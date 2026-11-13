@@ -278,6 +278,12 @@ export interface CarSimProfile {
   setupPressureRefC?: number;
   /** The car's own keyboard steering curve (`keyboard-steer.ts`); absent = the keyboard's base ramp at every speed */
   keyboardSteer?: KeyboardSteerProfile;
+  /**
+   * The hybrid motor sits on the gearbox's input shaft, behind the clutch (a P2 layout), so it turns with the gearbox
+   * and not with the engine while the clutch slips: the telemetry's `mguRpm` is then that shaft's speed (the motor's own
+   * gear on it taken as 1 : 1). Absent: the motor is on the crank and `mguRpm` is left unset (the engine's speed)
+   */
+  motorOnGearbox?: boolean;
 }
 
 export const F12026_SIM_PROFILE: CarSimProfile = {
@@ -2512,6 +2518,16 @@ export class F12026CarSim implements SimulatorCar {
     t.dragN = vt.dragN;
     t.icePowerKw = iceKw;
     t.mgukPowerKw = mgukKw;
+    // The driven shafts: their mean speed and the torque they carry (negative on the overrun and under regeneration)
+    const [shaftL, shaftR] = v.drivenWheels;
+    t.driveshaftRadS = 0.5 * (W[shaftL].omega + W[shaftR].omega);
+    t.driveshaftTorqueNm = W[shaftL].driveTorqueNm + W[shaftR].driveTorqueNm;
+    if (this.profile.motorOnGearbox) {
+      const gb = v.config.gearbox;
+      const ratio = vt.gear > 0 ? gb.ratios[vt.gear - 1] * gb.finalDrive : vt.gear < 0 ? gb.reverse * gb.finalDrive : 0;
+      // In gear the shaft turns with the wheels; out of gear the closed clutch turns it with the engine
+      t.mguRpm = ratio > 0 ? (Math.abs(t.driveshaftRadS) * ratio * 30) / Math.PI : vt.rpm;
+    }
     t.totalPowerKw = Math.max(0, iceKw + Math.max(0, mgukKw));
     t.ersBatteryPercent = vt.ERS_CHARGE * 100;
     // Push actually running (the override or the boost), not PSH picked in the tuner
