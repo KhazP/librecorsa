@@ -7,7 +7,7 @@
  * What the regulations fix (dimensions, the power curve, the gearbox's rules), the car at rest and at its top speed on
  * the engine's 500 Hz tick, the aero against speed, straight line and braking, the regulated power at the driveshafts,
  * the hybrid's energy bookkeeping, the gearbox and its limiter, cornering, the driver aids, the telemetry the sound
- * plays from, the registry's preview entry, autopilot laps of RISE Motordrome and the body's GLB against the chassis.
+ * plays from, the registry's entry, autopilot laps of RISE Motordrome and the body's GLB against the chassis.
  * The ranges are what the car's own data should give (power against drag and mass, grip against load) and the class's
  * published speed-trap figures, not lap times of a real car: none of the circuits with a published benchmark lap is in
  * the track registry.
@@ -648,14 +648,14 @@ console.log('\n== What the sound hears: driveshaft and motor telemetry');
   check('Deploying: the motor\'s power is positive', (flat.mgukPowerKw ?? 0) > 0 || flat.ersBatteryPercent < 1, `${fmt(flat.mgukPowerKw ?? NaN, 1)} kW flat out, store ${fmt(flat.ersBatteryPercent, 0)} %`);
 }
 
-console.log('\n== Registry: a preview car on its own body and sound');
+console.log('\n== Registry: listed, on its own body and sound');
 {
   if (!HOSTED_CONTENT) {
     console.log('SKIP  (NEXT_PUBLIC_HOSTED_CONTENT is not 1: this copy lists only the repository\'s car)');
   } else {
     const def = carById('lc-lmdh');
     check('Reached by its link, on its own physics', resolveCarId('lc-lmdh') === 'lc-lmdh' && def.physics === 'lc-lmdh' && carForVehicle('lc-lmdh').id === 'lc-lmdh', '');
-    check('Left out of the pickers until it has been driven', def.preview === true && !CARS.some((c) => c.id === 'lc-lmdh'), `${CARS.length} cars listed`);
+    check('Listed with the prototypes', !def.preview && def.classId === 'proto' && CARS.some((c) => c.id === 'lc-lmdh'), `${CARS.length} cars listed`);
     check('Its own body and sound bank', def.modelUrl === '/cars/lc-lmdh/model/lc-lmdh.glb' && def.sound === LC_LMDH_SOUND && LC_LMDH_SOUND.assetDir === '/cars/lc-lmdh/audio/' && LC_LMDH_SOUND.limiterRpm === C.gearbox.gears.redline_rpm,
       `limiter ${LC_LMDH_SOUND.limiterRpm} rpm`);
   }

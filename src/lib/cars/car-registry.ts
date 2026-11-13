@@ -299,9 +299,6 @@ const ALL_CARS: readonly CarDefinition[] = [
     sub: "LMDh prototype · twin-turbo V8 hybrid · rear-wheel drive",
     badge: "LC-LMDH",
     quality: "own",
-    // A preview: its body (scripts/cars/port_lmdh_body.py) and sound are in, but it has not been driven and cleared
-    // yet, so it stays out of the pickers
-    preview: true,
     credit: {
       title: "LMDh prototype (3D model)",
       author: "kilianhoffmann13",
