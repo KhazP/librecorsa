@@ -549,10 +549,12 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
                     throttle: telemetry.throttle,
                     brake: telemetry.brake,
                     steering: telemetry.steering,
+                    steerInput: telemetry.steerInput,
                     throttleOut: p.throttleOut,
                     brakeOut: p.brakeOut,
                     ffbClip: p.ffbClip,
                   }}
+                  steerLockDeg={telemetry.steerLockDeg}
                   aside={<PedalBars t={telemetry} />}
                 />
               </div>

@@ -418,7 +418,7 @@ export const DisplayPanel: React.FC<DisplayPanelProps> = ({
           <div className="-mt-1 flex flex-col">
             <Toggle
               label="Input trace"
-              detail="Rolling throttle, brake and steering trace"
+              detail="Rolling throttle, brake and steering trace: your steering dashed, the road wheels solid"
               checked={hud.inputTrace}
               onChange={() => setHud({ inputTrace: !hud.inputTrace })}
             />

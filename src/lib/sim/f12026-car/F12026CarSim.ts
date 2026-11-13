@@ -48,6 +48,7 @@ import {
   RWANDA_DRS_ZONES,
 } from '@/lib/track-data';
 import { SteeringAssist, type SteeringAssistCarState } from '../steering-assist';
+import { OPEN_WHEEL_KEYBOARD_STEER, type KeyboardSteerProfile } from '@/lib/input/keyboard-steer';
 import { type OvertakingRaceControl, type OvertakingRules, OvertakeGrant } from '../overtaking-rules';
 import { inLapWindow, straightModeWindows } from '../straight-mode-zones';
 import { AxleSlipScratch } from '../tyre-slip';
@@ -275,6 +276,8 @@ export interface CarSimProfile {
    * temperature too. Tyre setups are converted on the way in and out, so a saved setup means the same pressure
    */
   setupPressureRefC?: number;
+  /** The car's own keyboard steering curve (`keyboard-steer.ts`); absent = the keyboard's base ramp at every speed */
+  keyboardSteer?: KeyboardSteerProfile;
 }
 
 export const F12026_SIM_PROFILE: CarSimProfile = {
@@ -296,6 +299,7 @@ export const F12026_SIM_PROFILE: CarSimProfile = {
   // Flat-ground probes: 2.3 / 3.6 / 4.0 g lateral at 100 / 200 / 280 km/h, 4.3 g on the brakes from 300
   braking: { lowG: 1.6, aeroG: 2.8, refMs: 70 },
   assistDials: F1_ASSIST_DIALS,
+  keyboardSteer: OPEN_WHEEL_KEYBOARD_STEER,
 };
 
 /** How far inside the track edge the autopilot keeps the CG (m): half the track plus 0.4 m (1.2 m on the f12026-car) */
@@ -1754,6 +1758,7 @@ export class F12026CarSim implements SimulatorCar {
       maxLateralAccel: this.profile.padLateralMu * wetMuScale * (G + v.telemetry.downforceN / v.totalMassKg),
       slip: this.slipScratch.sample(),
       frontComplianceRad: -leastBent(v.wheels[0].complianceRad, v.wheels[1].complianceRad),
+      keyboardSteer: this.profile.keyboardSteer,
     };
   };
 

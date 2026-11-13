@@ -9,6 +9,7 @@ import { createLc26ProfileCarModel, NOMINAL_AIR_DENSITY, type SpeedProfileCarMod
 import { LC26_CHASSIS, LC26_TYRE_SETUP_RANGES } from '../lc26-data';
 import { type CarSimProfile, F12026CarSim, F12026_ELECTRONICS, F1_ASSIST_DIALS } from './F12026CarSim';
 import { LC26_CAR_CONFIG } from './Lc26Config';
+import { OPEN_WHEEL_KEYBOARD_STEER } from '@/lib/input/keyboard-steer';
 import { LC26_TUNED_CONFIG } from './Lc26Tune';
 
 /**
@@ -51,6 +52,7 @@ export const LC26_SIM_PROFILE: CarSimProfile = {
   steerRatio: LC26_CHASSIS.steering.ratio,
   braking: { lowG: 1.6, aeroG: 2.8, refMs: 70 },
   speedProfile: lc26TunedProfileCar(),
+  keyboardSteer: OPEN_WHEEL_KEYBOARD_STEER,
 };
 
 /** The same car on the data as it stands, untuned: what `F1Physics2026` drives */

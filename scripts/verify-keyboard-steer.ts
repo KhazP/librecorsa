@@ -3,7 +3,8 @@
  * are built from the player's settings by `steeringAssistSettings`, as LibreCorsaSimulator builds them, and the keys
  * reach the cars the way the game sends them (`kbSteer`, with `padSteer` only when a controller is connected).
  *
- * On every vehicle model (AMG GT3, F1 2026 Rigid-Body, F1 2026 Prototype), on a flat pad:
+ * On every vehicle model (AMG GT3, F1 2026 Rigid-Body, the 2026 Prototype on both engines, MTR 496R, Suzuki Liana), on
+ * a flat pad (the Liana at its own, lower speeds):
  *
  * 1. D held for 3 s at a steady speed: the fronts stay near their peak slip on turn-in (first second) and when settled
  *    (last second), the car does not spin, and it corners at least as hard as the old open-loop keyboard steering did
@@ -17,6 +18,8 @@
  *    released as much as held (whatever the controller's), a pad player by the controller's (whatever the keyboard's),
  *    and a keyboard player with a pad plugged in keeps the keyboard's until the stick moves.
  * 7. The self-steer the assist applies is the curve the setup screens draw (`selfSteerDeg`), capped at the car's lock.
+ * 9. The player's Steering return reaches the whole return to centre (a quicker or slower let-go shows), and neither
+ *    end spins a car on a D → A flick.
  * 8. The keyboard pedal help (ABS / traction control off) follows the tyres only while its key is held; the controller's
  *    brake trigger cue backs off at the same slip margin.
  *
@@ -29,6 +32,9 @@ import { compoundData, F12026_CAR_CONFIG, type CarPhysicsConfig } from '../src/l
 import { F12026CarSim } from '../src/lib/sim/f12026-car/F12026CarSim';
 import { AMG_GT3_CONFIG } from '../src/lib/sim/gt3/AmgGt3Config';
 import { createAmgGt3Sim } from '../src/lib/sim/gt3/AmgGt3Sim';
+import { createLc26Sim } from '../src/lib/sim/f12026-car/Lc26Sim';
+import { createMtr496rSim } from '../src/lib/sim/proto/Mtr496rSim';
+import { createSuzukiLianaSim } from '../src/lib/sim/road/SuzukiLianaSim';
 import type { SimulatorCar } from '../src/lib/sim/simulator-car';
 import {
   deviceAssistTuning,
@@ -72,10 +78,34 @@ interface CarCase {
   peakDeg: (c: SimulatorCar) => number;
   /** Least the fronts' settled slip may be, as a share of their peak, with a key held */
   minSettledSlip: number;
+  /** Speeds of the cases (km/h); absent: an F1 car's or a GT3's */
+  speeds?: CaseSpeeds;
+  /** Most the fronts' slip may be over their peak (turn-in, settled) and the most body slip (deg); absent: STRICT */
+  bounds?: CaseBounds;
 }
+
+interface CaseBounds {
+  turnInSlip: number;
+  settledSlip: number;
+  betaDeg: number;
+}
+
+const STRICT: CaseBounds = { turnInSlip: 1.1, settledSlip: 1.05, betaDeg: 8 };
+
+interface CaseSpeeds {
+  held: number[];
+  trail: number[];
+  tap: number;
+  release: number;
+  flick: number;
+}
+
+const RACE_SPEEDS: CaseSpeeds = { held: [70, 110, 150, 190], trail: [120, 180], tap: 200, release: 150, flick: 180 };
 
 const rigidBodyPeak = (config: CarPhysicsConfig) => (c: SimulatorCar) =>
   compoundData(config, config.compoundSlots[c.tireCompound]).modelData.friction_limit_angle || 7;
+/** The front peak slip of a rigid-body car's own config (a profile's, not a fixed one) */
+const ownPeak = (c: SimulatorCar) => rigidBodyPeak((c as F12026CarSim).profile.config)(c);
 
 const CARS: CarCase[] = [
   {
@@ -95,6 +125,30 @@ const CARS: CarCase[] = [
     make: () => new F1Physics2026(pad),
     peakDeg: (c) => LC26_TYRES[c.tireCompound].front.frictionLimitAngleDeg,
     minSettledSlip: 0.84,
+  },
+  {
+    // The 2026 Prototype as players drive it (on the rigid-body engine)
+    name: 'Prototype (RB)',
+    make: () => createLc26Sim(pad),
+    peakDeg: ownPeak,
+    minSettledSlip: 0.84,
+  },
+  {
+    name: 'MTR 496R',
+    make: () => createMtr496rSim(pad),
+    peakDeg: ownPeak,
+    minSettledSlip: 0.84,
+  },
+  {
+    // A 1.6 L road car tops out near 180 km/h and cannot hold 150 in a corner
+    name: 'Suzuki Liana',
+    make: () => createSuzukiLianaSim(pad),
+    peakDeg: ownPeak,
+    minSettledSlip: 0.84,
+    speeds: { held: [50, 70, 90, 110], trail: [80, 110], tap: 130, release: 100, flick: 110 },
+    // Its street tyres corner 5–9 % past the data's peak slip with a key held (their grip curve is flat past the
+    // peak) and it slides to ≈8.4° trail-braking from 110 km/h: bounds at those values, so no change goes past them
+    bounds: { turnInSlip: 1.12, settledSlip: 1.1, betaDeg: 9 },
   },
 ];
 
@@ -219,48 +273,84 @@ const FIRM = { selfSteerStrength: 1, dampingStrength: 1, speedSensitivity: 1, sl
 const padTuning = (t: typeof SOFT): PadTuning => ({ ...DEFAULT_PLAYER_SETTINGS.padTuning, ...t });
 const kbTuning = (t: typeof SOFT): KeyboardTuning => ({ ...DEFAULT_PLAYER_SETTINGS.keyboardTuning, ...t });
 
-for (const cc of CARS) {
+const ONLY = process.env.CARS?.split(',');
+for (const cc of CARS.filter((c) => !ONLY || ONLY.some((o) => c.name.includes(o)))) {
   const name = cc.name.padEnd(17);
+  const sp = cc.speeds ?? RACE_SPEEDS;
+  const b = cc.bounds ?? STRICT;
   // 1. Held key
-  [70, 110, 150, 190].forEach((kmh) => {
+  sp.held.forEach((kmh) => {
     const n = drive(cc, kmh, 3, () => ({ dir: 1 }));
     const minG = 0.9 * wheelLatG(cc, kmh);
     check(
-      n.turnInSlip <= 1.1 && n.settledSlip >= cc.minSettledSlip && n.settledSlip <= 1.05 && n.maxBetaDeg < 8 && n.latG >= minG,
+      n.turnInSlip <= b.turnInSlip &&
+        n.settledSlip >= cc.minSettledSlip &&
+        n.settledSlip <= b.settledSlip &&
+        n.maxBetaDeg < b.betaDeg &&
+        n.latG >= minG,
       `${name} D held at ${String(kmh).padStart(3)} km/h: fronts ${f2(n.turnInSlip)}× their peak slip on turn-in, ` +
         `${f2(n.settledSlip)}× settled; ${f2(n.latG)} g (at least ${f2(minG)}); body slip ${n.maxBetaDeg.toFixed(1)}°`
     );
   });
   // 2. Trail-braked turn-in
-  for (const kmh of [120, 180]) {
+  for (const kmh of sp.trail) {
     const n = drive(cc, kmh, 1.2, (t) => ({ dir: 1, brake: t < 1.2 ? 0.6 : 0 }), { holdSpeed: false });
     check(
-      n.turnInSlip <= 1.1 && n.maxBetaDeg < 8,
+      n.turnInSlip <= b.turnInSlip && n.maxBetaDeg < b.betaDeg,
       `${name} D + brake from ${kmh} km/h: fronts at ${f2(n.turnInSlip)}× their peak slip, body slip ${n.maxBetaDeg.toFixed(1)}°`
     );
   }
   // 3. Tap
   {
-    const n = drive(cc, 200, 2.5, (t) => ({ dir: t < 0.09 ? 1 : 0 }));
+    const n = drive(cc, sp.tap, 2.5, (t) => ({ dir: t < 0.09 ? 1 : 0 }));
     check(
       n.peakLatG <= 0.9 && Math.abs(n.endYaw) < 0.03,
-      `${name} 90 ms tap at 200 km/h: peak ${f2(n.peakLatG)} g, final yaw ${(n.endYaw * RAD2DEG).toFixed(2)}°/s`
+      `${name} 90 ms tap at ${sp.tap} km/h: peak ${f2(n.peakLatG)} g, final yaw ${(n.endYaw * RAD2DEG).toFixed(2)}°/s`
     );
   }
   // 4. Release
   {
-    const n = drive(cc, 150, 4, (t) => ({ dir: t < 1.5 ? 1 : 0 }));
+    const n = drive(cc, sp.release, 4, (t) => ({ dir: t < 1.5 ? 1 : 0 }));
     check(
       Math.abs(n.endYaw) < 0.05 && Math.abs(n.endBetaDeg) < 2,
-      `${name} D held 1.5 s at 150 km/h then let go: straightens (yaw ${(n.endYaw * RAD2DEG).toFixed(2)}°/s, body slip ${n.endBetaDeg.toFixed(2)}°)`
+      `${name} D held 1.5 s at ${sp.release} km/h then let go: straightens (yaw ${(n.endYaw * RAD2DEG).toFixed(2)}°/s, body slip ${n.endBetaDeg.toFixed(2)}°)`
     );
   }
   // 5. Flick
   {
-    const n = drive(cc, 180, 3, (t) => ({ dir: t < 0.4 ? 1 : t < 0.8 ? -1 : 0 }));
+    const n = drive(cc, sp.flick, 3, (t) => ({ dir: t < 0.4 ? 1 : t < 0.8 ? -1 : 0 }));
     check(
       n.maxBetaDeg < 8 && Math.abs(n.endYaw) < 0.05,
-      `${name} D → A flick at 180 km/h: max body slip ${n.maxBetaDeg.toFixed(1)}°, final yaw ${(n.endYaw * RAD2DEG).toFixed(2)}°/s`
+      `${name} D → A flick at ${sp.flick} km/h: max body slip ${n.maxBetaDeg.toFixed(1)}°, final yaw ${(n.endYaw * RAD2DEG).toFixed(2)}°/s`
+    );
+  }
+  // 9. Steering return, at its ends: how long the steering takes to fall under 10 % once the key is let go, and the
+  // flick (which passes through centre at the return pace)
+  {
+    const releaseMs = (steerReturnS: number) => {
+      const assist = gameAssist(DEFAULT_PLAYER_SETTINGS.padTuning, { ...DEFAULT_PLAYER_SETTINGS.keyboardTuning, steerReturnS });
+      const n = drive(cc, sp.release, 4, (t) => ({ dir: t < 1.5 ? 1 : 0 }), { assist });
+      const i0 = Math.round(1.5 / DT);
+      const held = n.steer[i0 - 1];
+      return n.steer.slice(i0).findIndex((v) => Math.abs(v) < 0.1 * Math.abs(held)) * DT * 1000;
+    };
+    const flick = (steerReturnS: number) =>
+      drive(cc, sp.flick, 3, (t) => ({ dir: t < 0.4 ? 1 : t < 0.8 ? -1 : 0 }), {
+        assist: gameAssist(DEFAULT_PLAYER_SETTINGS.padTuning, { ...DEFAULT_PLAYER_SETTINGS.keyboardTuning, steerReturnS }),
+      });
+    const [quick, base, slow] = [0.05, DEFAULT_PLAYER_SETTINGS.keyboardTuning.steerReturnS, 1].map(releaseMs);
+    const [fQuick, fSlow] = [0.05, 1].map(flick);
+    check(
+      quick > 0 &&
+        quick < 0.75 * base &&
+        slow > 1.5 * base &&
+        fQuick.maxBetaDeg < b.betaDeg &&
+        fSlow.maxBetaDeg < b.betaDeg &&
+        Math.abs(fQuick.endYaw) < 0.05 &&
+        Math.abs(fSlow.endYaw) < 0.05,
+      `${name} Steering return: let go at ${sp.release} km/h, under 10 % in ${quick.toFixed(0)} ms at 50 ms, ` +
+        `${base.toFixed(0)} ms at the default, ${slow.toFixed(0)} ms at 1 s; flick body slip ` +
+        `${fQuick.maxBetaDeg.toFixed(1)}° / ${fSlow.maxBetaDeg.toFixed(1)}° at the two ends`
     );
   }
   // 6. The tuning of the device that steers. A held key, then 2.5 s with it released: the run's steering must not
@@ -268,7 +358,7 @@ for (const cc of CARS) {
   {
     const keys: Keys = (t) => ({ dir: t < 1.5 ? 1 : 0 });
     const run = (pad: typeof SOFT, kb: typeof SOFT, steering: (dir: number) => Partial<ControlInputs>) =>
-      drive(cc, 150, 4, keys, { assist: gameAssist(padTuning(pad), kbTuning(kb)), steering }).steer;
+      drive(cc, sp.release, 4, keys, { assist: gameAssist(padTuning(pad), kbTuning(kb)), steering }).steer;
     const keyboardOnly = (dir: number) => ({ kbSteer: dir });
     const keysWithPad = (dir: number) => ({ kbSteer: dir, padSteer: 0 });
     const kbOnly = traceDiff(run(SOFT, FIRM, keyboardOnly), run(FIRM, FIRM, keyboardOnly));
@@ -313,16 +403,18 @@ for (const cc of CARS) {
     };
     const capped = settledSelfSteer(8, 60);
     const full = settledSelfSteer(30, 60);
+    // The slider stops at 30°: a car with more lock than that (the Liana's 36°) is capped there
+    const fullCapDeg = Math.min(lockDeg, 30);
     const small = settledSelfSteer(30, 6);
     check(
       Math.abs(capped.appliedDeg - capped.curveDeg) < 0.05 &&
         Math.abs(capped.curveDeg - 8) < 0.05 &&
         Math.abs(full.appliedDeg - full.curveDeg) < 0.05 &&
-        full.curveDeg <= lockDeg + 1e-9 &&
-        full.curveDeg > lockDeg - 0.05 &&
+        full.curveDeg <= fullCapDeg + 1e-9 &&
+        full.curveDeg > fullCapDeg - 0.05 &&
         Math.abs(small.appliedDeg - small.curveDeg) < 0.05,
       `${name} self-steer in a 60° slide: ${capped.appliedDeg.toFixed(2)}° with an 8° cap (curve ${capped.curveDeg.toFixed(2)}°), ` +
-        `${full.appliedDeg.toFixed(2)}° with a 30° cap = the car's ${lockDeg.toFixed(1)}° lock (curve ` +
+        `${full.appliedDeg.toFixed(2)}° with a 30° cap (the car's lock ${lockDeg.toFixed(1)}°; curve ` +
         `${full.curveDeg.toFixed(2)}°); a 6° slide ${small.appliedDeg.toFixed(2)}° (curve ${small.curveDeg.toFixed(2)}°)`
     );
   }

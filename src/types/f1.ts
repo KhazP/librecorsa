@@ -340,6 +340,14 @@ export interface CarTelemetry {
   brake: number; // 0..1
   clutch: number; // 0..1 (1 = engaged, 0 = disengaged)
   steering: number; // -1..1 (positive = right)
+  /**
+   * The player's own steering this frame, −1..1 (+ = right): the keys' direction, the shaped stick, or the wheel, mouse
+   * or touch, whichever steered. The session sets it on the HUD's copy, so the input trace can draw it against
+   * `steering` (the road-wheel angle over the lock); absent while not driving and on other cars.
+   */
+  steerInput?: number;
+  /** Road-wheel angle at full lock (deg), to read `steering` in degrees; on the HUD's copy, as `steerInput` */
+  steerLockDeg?: number;
   longitudinalG: number;
   lateralG: number;
   /** Aero load as a multiple of the car's weight, 1 + downforce / (mass · g): the cameras, haptics and effects read it; it carries no bumps */

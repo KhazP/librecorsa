@@ -84,6 +84,10 @@ export const MTR_496R_SIM_PROFILE: CarSimProfile = {
     semi_pro: { tcLevel: 6, tc2Level: 6, absLevel: 6 },
     assisted: { tcLevel: 9, tc2Level: 9, absLevel: 9 },
   },
+  // Light, short-locked and high on downforce: quicker into slow corners (half the grip limit ≈220 ms after the key at
+  // 70 km/h instead of ≈283) and gentler at speed, where it answers the quickest of the cars (a 90 ms tap at 250 km/h
+  // ≈0.7 g instead of ≈0.96)
+  keyboardSteer: { lowSpeedRate: 1.35, highSpeedRate: 0.85, returnRate: 1 },
 };
 
 export function createMtr496rSim(track: BuiltTrackData, root?: THREE.Object3D | null): F12026CarSim {

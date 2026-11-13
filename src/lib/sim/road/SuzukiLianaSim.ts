@@ -79,6 +79,9 @@ export const SUZUKI_LIANA_SIM_PROFILE: CarSimProfile = {
     semi_pro: { tcLevel: 0, tc2Level: 6, absLevel: 9 },
     assisted: { tcLevel: 9, tc2Level: 9, absLevel: 9 },
   },
+  // A road car with 36° of lock to wind on: quicker keys around town speeds (half the grip limit ≈210 ms after the key
+  // at 40–70 km/h instead of ≈275), its few fast corners as the base, and a touch quicker back from a big angle
+  keyboardSteer: { lowSpeedRate: 1.3, highSpeedRate: 1, returnRate: 1.1 },
 };
 
 export function createSuzukiLianaSim(track: BuiltTrackData, root?: THREE.Object3D | null): F12026CarSim {
