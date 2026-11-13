@@ -355,11 +355,14 @@ const perArea = (lut: LutPoints): LutPoints => lut.map(([x, v]) => [x, Number((v
 /**
  * Splitter, underfloor and rear wing, with the body's drag as a constant [est]. Nothing public gives the car's map:
  * the regulations homologate each car inside a window of downforce and drag measured in one wind tunnel (Art. 3.9),
- * and the figures for it are in an appendix that was not retrieved. The numbers here make a car of CL·A ≈ 3.96 m² and
- * CD·A ≈ 0.99 m² (4 : 1) with 46.5 % of the downforce on the front axle, running 30 mm front and 42 mm rear at speed
- * on a 5.5° rear wing:
- *  - the splitter (CL·A 1.17 m²) works in ground effect: most at 22 mm, losing it quickly below 15 mm as it chokes
- *  - the underfloor and diffuser (1.84 m²) read the mean ride height and the rake
+ * and the figures for it are in an appendix that was not retrieved. The numbers here make a car of CL·A ≈ 4.25 m² and
+ * CD·A ≈ 0.99 m² (4.3 : 1) with 46.5 % of the downforce on the front axle, running 30 mm front and 42 mm rear at speed
+ * on a 5.5° rear wing. The drag is held by the class's speed-trap figures (scripts/verify-lc-lmdh.ts); the downforce
+ * was raised from 3.96 m² after the corner speeds read off a race lap's onboard footage of one of the class's cars came
+ * out about a tenth above what the car could hold between 110 and 145 km/h (each ± 15 %: the radii are an ideal
+ * line's), all of the gain under the floor, where it costs the least drag:
+ *  - the splitter (CL·A 1.185 m²) works in ground effect: most at 22 mm, losing it quickly below 15 mm as it chokes
+ *  - the underfloor and diffuser (2.115 m²) read the mean ride height and the rake
  *  - the rear wing (0.95 m² at 5.5°) gains 0.065 m² of CL·A and 0.022 m² of CD·A a degree over its 1–9° range; it sits
  *    0.8 m behind the rear axle, so a degree moves the balance ≈ 1.1 % rearward
  */
@@ -378,12 +381,12 @@ const AERO: AeroData = {
       heightRef: 'front',
       // Against the body's pitch from its static rake (deg, + nose down)
       lutAOA_CL: perArea([
-        [-3, 0.98],
-        [-1, 1.11],
-        [0, 1.17],
-        [1, 1.22],
-        [2, 1.26],
-        [4, 1.3],
+        [-3, 0.99],
+        [-1, 1.125],
+        [0, 1.185],
+        [1, 1.235],
+        [2, 1.275],
+        [4, 1.315],
       ]),
       lutAOA_CD: perArea([
         [-3, 0.045],
@@ -417,13 +420,13 @@ const AERO: AeroData = {
       heightRef: 'mean',
       // Against the rake (deg): 0.22° at speed, 0.36° at rest
       lutAOA_CL: perArea([
-        [-1, 1.47],
-        [-0.3, 1.71],
-        [0.2, 1.84],
-        [0.6, 1.9],
-        [1, 1.88],
-        [1.6, 1.75],
-        [2.5, 1.47],
+        [-1, 1.69],
+        [-0.3, 1.965],
+        [0.2, 2.115],
+        [0.6, 2.185],
+        [1, 2.16],
+        [1.6, 2.01],
+        [2.5, 1.69],
       ]),
       lutAOA_CD: perArea([
         [-1, 0.11],
@@ -499,6 +502,8 @@ const LMDH_REAR: TyreGeometry = { width: LC_LMDH_HARDPOINTS.tyreWidthRear, radiu
 
 /** The tyres' reference load (N) [est] */
 const FZ0 = 3500;
+/** Lateral grip over longitudinal [est] */
+const LATERAL_GRIP = 1.05;
 
 /**
  * Peak grip against load (N → μ) [est]: μ0 · (Fz / Fz0)^(n − 1), held below a fifth of the reference load, with the
@@ -518,8 +523,10 @@ const pressureSpring = (rate: number): LutPoints => [18, 22, 26, 30, 34].map((p)
 
 /**
  * The class's spec slick [est]: nothing of the supplier's data is public. A brush tyre of μ 1.68 front and 1.72 rear at
- * 3.5 kN, losing a fifth of that per doubling of the load, peaking near 6.5° of slip angle and 10 % of slip ratio; the
- * thermal, pressure and camber terms are the simulator's closed-wheel slick estimates. `grip` scales a compound
+ * 3.5 kN along the car and 5 % more across it, losing a fifth of that per doubling of the load, peaking near 6.5° of
+ * slip angle and 10 % of slip ratio; the thermal, pressure and camber terms are the simulator's closed-wheel slick
+ * estimates. The lateral grip was raised with the downforce (see the aero map's note): braking read off the same
+ * footage, about 3.2 g from 280 km/h, already matched, so the longitudinal grip stayed. `grip` scales a compound
  */
 function lmdhCompound(
   tyre_compound: PhysicsTyreCompound,
@@ -531,6 +538,8 @@ function lmdhCompound(
 ): TyresCompoundData {
   const front = Number((1.68 * grip).toFixed(4));
   const rear = Number((1.72 * grip).toFixed(4));
+  const frontLat = Number((front * LATERAL_GRIP).toFixed(4));
+  const rearLat = Number((rear * LATERAL_GRIP).toFixed(4));
   return {
     name,
     shortName,
@@ -538,12 +547,12 @@ function lmdhCompound(
     front: LMDH_FRONT,
     rear: LMDH_REAR,
     modelData: {
-      Dy0: front,
+      Dy0: frontLat,
       Dx0: front,
       lsExpY: 0.8,
       lsExpX: 0.82,
       Fz0: FZ0,
-      dyCurve: loadCurve(front, 0.8),
+      dyCurve: loadCurve(frontLat, 0.8),
       dxCurve: loadCurve(front, 0.82),
       curve: 'brush',
       friction_limit_angle: 6.5,
@@ -602,7 +611,7 @@ function lmdhCompound(
     },
     // The 34 cm rear: its own grip at the same reference load, and a stiffer carcass
     rearOverride: {
-      modelData: { Dy0: rear, Dx0: rear, Fz0: FZ0, dyCurve: loadCurve(rear, 0.8), dxCurve: loadCurve(rear, 0.82), friction_limit_angle: 6.3 },
+      modelData: { Dy0: rearLat, Dx0: rear, Fz0: FZ0, dyCurve: loadCurve(rearLat, 0.8), dxCurve: loadCurve(rear, 0.82), friction_limit_angle: 6.3 },
       pressureData: { pressureSpringCurve: pressureSpring(320_000) },
     },
   };

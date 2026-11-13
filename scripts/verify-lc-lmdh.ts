@@ -176,11 +176,11 @@ console.log('\n== Aero against speed (flat, held speed)');
   const slow = at(100);
   const mid = at(250);
   const fast = at(300);
-  // The floor and the splitter gain as the car settles: ≈ 3.6 m² near its static ride height, ≈ 4.1 m² at 300 km/h
-  check('CL·A 3.5–4.2 m² from 100 to 300 km/h, growing as it settles', slow.clA > 3.5 && fast.clA < 4.2 && slow.clA < mid.clA && mid.clA < fast.clA,
+  // The floor and the splitter gain as the car settles: ≈ 3.9 m² near its static ride height, ≈ 4.3 m² at 300 km/h
+  check('CL·A 3.8–4.5 m² from 100 to 300 km/h, growing as it settles', slow.clA > 3.8 && fast.clA < 4.5 && slow.clA < mid.clA && mid.clA < fast.clA,
     `${fmt(slow.clA)} / ${fmt(mid.clA)} / ${fmt(fast.clA)} m² at 100 / 250 / 300 km/h`);
   check('CD·A 0.97–1.01 m²', [slow, mid, fast].every((s) => s.cdA > 0.97 && s.cdA < 1.01), `${fmt(slow.cdA, 3)} / ${fmt(mid.cdA, 3)} / ${fmt(fast.cdA, 3)} m²`);
-  check('Downforce over drag 4 : 1 at 250 km/h, on 30 / 44 mm', Math.abs(mid.clA / mid.cdA - 4) < 0.1 && Math.abs(mid.front - 0.03) < 0.003 && Math.abs(mid.rear - 0.043) < 0.004,
+  check('Downforce over drag 4.3 : 1 at 250 km/h, on 28 / 43 mm', Math.abs(mid.clA / mid.cdA - 4.3) < 0.1 && Math.abs(mid.front - 0.03) < 0.003 && Math.abs(mid.rear - 0.043) < 0.004,
     `${fmt(mid.clA / mid.cdA, 2)} : 1 at ${fmt(mid.front * 1000, 1)} / ${fmt(mid.rear * 1000, 1)} mm`);
   // Under the 54 % of the weight on the rear axle, so the car gains understeer with speed
   check('Aero balance 44–48 % front', [slow, mid, fast].every((s) => s.bal > 44 && s.bal < 48), `${fmt(slow.bal, 1)} / ${fmt(mid.bal, 1)} / ${fmt(fast.bal, 1)} %`);
@@ -493,11 +493,13 @@ console.log('\n== Braking through the adapter');
 }
 
 console.log('\n== Cornering (flat, steer ramp at constant speed)');
-// Slicks out of 60 °C: μ ≈ 1.6 on the tyres at low speed, the downforce adding its share of the weight above it
+// Slicks out of 60 °C: μ ≈ 1.7 across the car at low speed, the downforce adding its share of the weight above it.
+// One of the class's cars held about 2.1 g at 115 km/h and 2.3 g at 142 km/h on a race lap (speeds read off its onboard
+// footage, radii from an ideal line, each ± 15 %): the peaks here sit around those, not under them
 for (const [kmh, lo, hi] of [
-  [100, 1.65, 2.05],
-  [200, 2.25, 2.75],
-  [250, 2.55, 3.15],
+  [100, 1.8, 2.2],
+  [200, 2.45, 2.95],
+  [250, 2.85, 3.4],
 ] as const) {
   const car = makeCar();
   car.reset(0, 0, 0, kmh / 3.6);
