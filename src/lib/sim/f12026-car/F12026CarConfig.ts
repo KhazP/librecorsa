@@ -387,6 +387,12 @@ export interface BrakesData {
   /** Disc temperature the car starts and restarts with (°C); default 380 */
   discStartTempC?: number;
   /**
+   * The cooling air the rear discs get against the front's (0..1), on top of the garage's duct setting: rear ducts
+   * blanked down on a car whose MGU-K takes most of the rear axle's braking, so the rear discs keep the heat of the
+   * little work left to them. Absent: 1, the front's airflow
+   */
+  rearDuctShare?: number;
+  /**
    * Brake-by-wire migration: the bias moves forward by `amount` at full pedal, starting at `rampStart` of the pedal
    * travel (BRAKE_MIGRATION + BMIG_RAMP). Default 0.015 from the first of the travel
    */

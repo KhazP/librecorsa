@@ -944,6 +944,8 @@ export class VehiclePhysics {
   private readonly brakePadCurve: BrakePadMuCurve | undefined;
   /** Disc temperature at the start and every reset (°C, `BrakesData.discStartTempC`) */
   private readonly brakeStartTempC: number;
+  /** The rear discs' cooling air against the front's (`BrakesData.rearDuctShare`) */
+  private readonly brakeRearDuctShare: number;
   /** Dynamic brake bias after pressure-sensitive brake migration */
   public dynamicBrakeBias = 0.56;
   /** Live-tunable dynamic brake migration ramp amount (0..0.06) */
@@ -1133,6 +1135,7 @@ export class VehiclePhysics {
     this.brakeCompound = cfg.brakes.discMaterial ?? 'carbon-ceramic';
     this.brakePadCurve = cfg.brakes.padMuCurve;
     this.brakeStartTempC = cfg.brakes.discStartTempC ?? 380;
+    this.brakeRearDuctShare = cfg.brakes.rearDuctShare ?? 1;
     this.drivenWheels = cfg.drivenAxle === 'front' ? [0, 1] : [2, 3];
     // Body axes: X = left (pitch), Y = up (yaw), Z = forward (roll)
     this.dryInertiaBody = new THREE.Vector3(ch.inertia.pitch, ch.inertia.yaw, ch.inertia.roll);
@@ -3529,7 +3532,7 @@ export class VehiclePhysics {
         this.ambientC,
         dt,
         this.brakeCompound,
-        w.isFront ? this.brakeDuctScale.front : this.brakeDuctScale.rear,
+        w.isFront ? this.brakeDuctScale.front : this.brakeDuctScale.rear * this.brakeRearDuctShare,
         Math.min(1, this.wetness + 0.5 * sprayBoost),
         this.brakePadCurve
       );

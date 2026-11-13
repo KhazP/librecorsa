@@ -150,6 +150,23 @@ function tyre(spec: Vf26TyreSpec, a: 'front' | 'rear'): Vf26TyreSpec {
 }
 
 // ---------------------------------------------------------------------------
+// Brakes
+// ---------------------------------------------------------------------------
+
+/**
+ * Carbon discs and pads grip by their temperature: all of it from 400 to 950 °C, 85 % at 250 °C and 70 % at 100 °C
+ * on the way up, 92 % at 1150 °C and 75 % at 1300 °C on the way out [ref]. The engine's own carbon curve is whole
+ * from 180 °C, so a disc at 250 °C bit as hard as one at 600 °C
+ */
+const PAD_GRIP: LutPoints = [
+  [0, 0.6],
+  [400, 1],
+  [950, 1],
+  [1150, 0.92],
+  [1300, 0.75],
+];
+
+// ---------------------------------------------------------------------------
 // The car
 // ---------------------------------------------------------------------------
 
@@ -165,8 +182,15 @@ export const VF26_TUNE: Vf26Overrides = {
   engineInertia: 0.08,
   // Overrun: 60 Nm at 15 000 rpm, a V6's pumping and friction; the data's 30 Nm left the car coasting on a lift [ref]
   coastScale: 2,
-  // 5.3 g at 300 km/h, where the brakes and not the tyres set the limit [tuned]
+  // 5.2 g at 300 km/h on discs at their temperature, where the brakes and not the tyres set the limit [tuned]
   brakeTorqueNm: 6200,
+  // The discs start at 250 °C, which is where the front pair arrives at the first corner of a flying lap (240 to
+  // 445 °C at the pedal round Rwanda): the first stop from 300 km/h peaks at 4.7 g, one on discs at 400 °C at 5.2 g
+  // and one at 100 °C at 4.2 g, over 6.6 m more road. The rear ducts pass a fifth of the front's air: the MGU-K does
+  // most of the rear axle's braking, and on the front's airflow the rear discs ran at 60 to 90 °C, where these pads
+  // have 69 % of their grip; on a fifth they run at 270 to 315 °C and have 91 % (the engine's own curve: 92 %)
+  // [tuned: the rear discs at the pedal over a lap of Rwanda]
+  brakes: { padMuCurve: PAD_GRIP, discStartTempC: 250, rearDuctShare: 0.2 },
   // Less lock under power than the data's 0.2: with the softer rear the inside wheel keeps its share [tuned: as the bars]
   diffPowerLock: 0.15,
   // An up-shift is the control unit's: the drive is off for 20 ms and the engine meets the next gear at the wheels'

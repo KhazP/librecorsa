@@ -30,6 +30,7 @@ import {
 import {
   deriveRainCompound,
   type AeroData,
+  type BrakesData,
   type CarPhysicsConfig,
   type DamperSettingsUnits,
   type EngineData,
@@ -58,6 +59,8 @@ export interface Vf26Overrides {
   /** Overrun torque against the data's */
   coastScale?: number;
   brakeTorqueNm?: number;
+  /** The discs and pads: their grip against temperature, the temperature they start at, the rear ducts' airflow */
+  brakes?: Pick<BrakesData, 'padMuCurve' | 'discStartTempC' | 'rearDuctShare'>;
   /** Differential lock under power, as a share of the input torque */
   diffPowerLock?: number;
   /** A managed up-shift: the drive is cut for this long (s) and the engine meets the new gear at the wheels' speed */
@@ -588,7 +591,13 @@ export function buildVf26Config(overrides: Vf26Overrides = {}) {
       halfshaft: { stiffnessNmPerRad: 13_000, dampingNmsPerRad: 33 },
     },
     // The front share moves 6 % forward by full pedal [data migrationAtFullPedal]
-    brakes: { maxTorqueNm: overrides.brakeTorqueNm ?? VF26_BRAKES.maxTorqueNm, front_bias: VF26_BRAKES.frontBias, ebbStep: 0.005, migration: { amount: VF26_BRAKES.migrationAtFullPedal, rampStart: 0 } },
+    brakes: {
+      maxTorqueNm: overrides.brakeTorqueNm ?? VF26_BRAKES.maxTorqueNm,
+      front_bias: VF26_BRAKES.frontBias,
+      ebbStep: 0.005,
+      migration: { amount: VF26_BRAKES.migrationAtFullPedal, rampStart: 0 },
+      ...overrides.brakes,
+    },
     suspensions: suspensionData(F, R, softFront.radius, softRear.radius),
     aero: aeroData(F, R),
     tyreCompounds: tyreCompounds(tyreOf),

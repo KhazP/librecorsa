@@ -78,7 +78,8 @@ const m = measureVf26(VF26_TUNED.make);
   // torque. From 100 to 200 km/h it takes 2.4 s, as they do
   check('0–100 km/h in 2.7 to 3.3 s, 0–200 in 5.0 to 5.8 s', between(m.accelS[100], 2.7, 3.3) && between(m.accelS[200], 5.0, 5.8), `${f(m.accelS[100])} s, ${f(m.accelS[200])} s`);
   check('Top speed with the wings closed 288 to 303 km/h', between(m.topSpeedKmh, 288, 303), `${f(m.topSpeedKmh, 0)} km/h`);
-  check('300–100 km/h in 80 to 92 m, peaking at 5.0 to 5.6 g', between(m.brakeM, 80, 92) && between(m.brakePeakG, 5.0, 5.6), `${f(m.brakeM, 1)} m, ${f(m.brakePeakG)} g`);
+  // From a restart: the discs at the 250 °C they start with (hot and cold discs: "Carbon brakes" below)
+  check('300–100 km/h in 80 to 92 m, peaking at 4.5 to 5.0 g on discs at 250 °C', between(m.brakeM, 80, 92) && between(m.brakePeakG, 4.5, 5.0), `${f(m.brakeM, 1)} m, ${f(m.brakePeakG)} g`);
   // Cornering: where the tune put it, ± 4 %
   const set = [2.05, 2.66, 3.21, 3.75, 4.18];
   VF26_AI_REFERENCE.lateral.forEach(([v], i) => {
@@ -369,6 +370,31 @@ console.log('\n== A lift, in every gear');
   check('From 8 % throttle to 20 % brake in third at 120 km/h the car slows more at every step', decel.every((x, i) => i === 0 || x > decel[i - 1]), decel.map((x) => f(x)).join(' / '));
 }
 
+console.log('\n== Carbon brakes, by their temperature');
+{
+  // 300→100 km/h at the threshold (as the stop on flat ground above), the four discs set to one temperature first
+  const stop = (discC: number) => {
+    const sim = fresh(300);
+    for (const w of sim.vehicle.wheels) w.brakeDisc.surfaceTempC = w.brakeDisc.coreTempC = discC;
+    for (let t = 0; t < 0.5; t += H) sim.step(H, { throttle: 0.6 });
+    const s0 = sim.sMeters;
+    let pedal = 1;
+    let peak = 0;
+    for (let t = 0; t < 8 && sim.vxMs * 3.6 > 100; t += H) {
+      const slip = Math.max(...sim.telemetry.wheelSlipRatios.map((r) => Math.abs(r)));
+      pedal = THREE.MathUtils.clamp(pedal + THREE.MathUtils.clamp((0.07 - slip) * 0.6, -0.02, 0.01), 0.2, 1);
+      sim.step(H, { brake: pedal });
+      peak = Math.max(peak, -sim.telemetry.longitudinalG);
+    }
+    return { m: sim.sMeters - s0, peak };
+  };
+  const [cold, start, hot] = [100, 250, 450].map(stop);
+  const row = (x: { m: number; peak: number }) => `${f(x.m, 1)} m, ${f(x.peak)} g`;
+  check('300–100 km/h on discs at 450 °C peaks at 5.0 to 5.6 g', between(hot.peak, 5.0, 5.6), row(hot));
+  check('... at the 250 °C the car starts with, 6 to 12 % under that', between(1 - start.peak / hot.peak, 0.06, 0.12), row(start));
+  check('... and at 100 °C 15 to 25 % under it, over 4 to 9 m more road', between(1 - cold.peak / hot.peak, 0.15, 0.25) && between(cold.m - hot.m, 4, 9), row(cold));
+}
+
 console.log('\n== Fuel on board');
 {
   // At rest on flat ground, the springs set for the load: the front axle's share of the weight on the four tyres
@@ -436,9 +462,24 @@ console.log('\n== Laps of Rwanda (autopilot)');
   let lapCoreC = coreSum;
   let lapPsi = psiSum;
   let samples = 0;
+  // The discs each time the pedal goes down on the last lap: the coolest and hottest front and rear (°C)
+  const discC = { front: [Infinity, 0], rear: [Infinity, 0] };
+  let offPedalS = 9;
   const LAPS = 4;
   for (let t = 0; t < 600 && sim.telemetry.lapCount < lap0 + LAPS + 1; t += 1 / 60) {
     sim.step(1 / 60, {});
+    const onPedal = sim.vehicle.telemetry.brake > 0.3;
+    if (onPedal && offPedalS > 1 && sim.telemetry.lapCount === lap0 + LAPS) {
+      const W = sim.vehicle.wheels;
+      for (const [axle, c] of [
+        ['front', W[0].brakeDisc.surfaceTempC],
+        ['rear', W[2].brakeDisc.surfaceTempC],
+      ] as const) {
+        discC[axle][0] = Math.min(discC[axle][0], c);
+        discC[axle][1] = Math.max(discC[axle][1], c);
+      }
+    }
+    offPedalS = onPedal ? 0 : offPedalS + 1 / 60;
     if (sim.telemetry.lapCount >= lap0 + 1) {
       maxSlipDeg = Math.max(maxSlipDeg, (Math.abs(Math.atan2(sim.vyMs, Math.max(5, Math.abs(sim.vxMs)))) * 180) / Math.PI);
       pastEdgeM = Math.max(pastEdgeM, Math.abs(sim.lateralOffsetM) - track.getSampleAtDistance(sim.sMeters).width / 2);
@@ -472,6 +513,12 @@ console.log('\n== Laps of Rwanda (autopilot)');
   check(`Carcasses within 5 °C of the ${lo}–${hi} °C window over lap ${LAPS}`, lapCoreC.every((c) => c >= lo - 5 && c <= hi + 5), lapCoreC.map((c) => f(c, 0)).join(' / '));
   check(`Pressures within 1.5 psi of ${optF} / ${optR}`, lapPsi.every((p, i) => Math.abs(p - (i < 2 ? optF : optR)) <= 1.5), lapPsi.map((p) => f(p, 1)).join(' / '));
   check('No graining or blistering', grain < 0.1 && blister === 0, `grain ${f(grain)}, blister ${f(blister)}`);
+  // At 200 °C the pads have 80 % of their grip; the rear discs, which the MGU-K leaves little to do, are the test
+  check(
+    `Every disc at 200 to 600 °C when the pedal goes down over lap ${LAPS}`,
+    [discC.front, discC.rear].every(([coolest, hottest]) => coolest >= 200 && hottest <= 600),
+    `front ${f(discC.front[0], 0)} to ${f(discC.front[1], 0)} °C, rear ${f(discC.rear[0], 0)} to ${f(discC.rear[1], 0)} °C`
+  );
 }
 
 console.log('\n== Flat out from rest, by driver-aid preset');
