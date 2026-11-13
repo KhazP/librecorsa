@@ -867,8 +867,15 @@ export class AiOpponentField {
     const sim = car.ai;
     if (!sim || !AiOpponentField.tracksPlans(sim)) return;
     const weather = this.environment.weatherPaceScale(sim);
-    // A damaged car (a broken wing, bent suspension) has less grip to plan with
-    const damaged = car.damage.pristine ? 1 : 1 - 0.35 * car.damage.overall;
+    // A damaged car (a broken wing, bent suspension) has less grip to plan with, and a puncture leaves its tyre under
+    // half: the plan takes the weaker axle's grip too, as a car through a corner is held by its worse end, with the
+    // weak tyre on the outside carrying 70 % of its axle (a puncture: 0.6)
+    let damaged = 1;
+    if (!car.damage.pristine) {
+      const g = car.damage.effects().wheelGripMult;
+      const axle = (a: number, b: number) => 0.7 * Math.min(a, b) + 0.3 * Math.max(a, b);
+      damaged = Math.min(1 - 0.35 * car.damage.overall, axle(g[0], g[1]), axle(g[2], g[3]));
+    }
     // The fastest levels plan toward the most grip this car drove cleanly here (the circuit's line check), one step
     // (0.04) under it: the check is a flying lap alone, and a race adds traffic, dirty air and a pack on lap 1 (at
     // the full step the VF26 hit Okayama's barriers four times as often)
