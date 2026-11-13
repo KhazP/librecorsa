@@ -18,6 +18,8 @@ import { moveToDriverHeadLayer } from "./layers";
  *
  * The neck is on the driver-head layer with the helmet (the driver's-eye camera and a VR headset sit right above
  * it); the rest is on the default layer and single-sided, so an eye that ends up inside the torso sees through it.
+ * An arm that a view's near plane would cut open is left out of that view (`skipWhenCut`): the dash view, ahead of
+ * the eye, has the top hand's arm come past it at big wheel angles. The driver's-eye view never does.
  */
 export interface DriverFigure {
   group: THREE.Group;
@@ -52,6 +54,9 @@ const DEG = Math.PI / 180;
 const SHOULDER = new THREE.Vector3(0.185, -0.24, -0.03);
 const UPPER_ARM_M = 0.31;
 const FOREARM_M = 0.27;
+/** Each sleeve's radius at its widest, the joint it starts from */
+const UPPER_ARM_R = 0.058;
+const FOREARM_R = 0.045;
 /** An arm stops short of straight by this share of its length; the shoulder comes forward for the rest */
 const REACH = 0.985;
 const SHOULDER_GIVE_M = 0.07;
@@ -231,7 +236,7 @@ function buildShapes(): FigureShapes {
   neck.translate(0, -0.158, -0.025);
 
   // Forearm: the sleeve, and the glove's cuff over the end of it (material groups 0 and 1)
-  const sleeve = limb(FOREARM_M, 0.045, 0.042, 0.031);
+  const sleeve = limb(FOREARM_M, FOREARM_R, 0.042, 0.031);
   const cuff = new THREE.CylinderGeometry(0.035, 0.037, 0.046, 14, 1, false);
   cuff.rotateX(Math.PI / 2);
   cuff.translate(0, 0, FOREARM_M - 0.023);
@@ -259,7 +264,7 @@ function buildShapes(): FigureShapes {
   return {
     torso,
     neck,
-    upperArm: limb(UPPER_ARM_M, 0.058, 0.052, 0.043),
+    upperArm: limb(UPPER_ARM_M, UPPER_ARM_R, 0.052, 0.043),
     forearm,
     gloveL,
     gloveR: mirrored(gloveL),
@@ -297,6 +302,44 @@ function swivelFor(over: number): number {
   return SWIVEL_REST + (SWIVEL_UNDER - SWIVEL_REST) * THREE.MathUtils.smoothstep(-over, 0, 80 * DEG);
 }
 
+const _inView = new THREE.Vector3();
+
+/**
+ * Whether a view would cut a limb open: its near plane passes through the sleeve inside the frame. A camera ahead of
+ * the eye (the dash view) has the top hand's arm come right past it at a big wheel angle.
+ */
+function cutByNearPlane(camera: THREE.Camera, limb: THREE.Mesh, lengthM: number, radiusM: number): boolean {
+  const cam = camera as THREE.PerspectiveCamera;
+  if (!cam.isPerspectiveCamera) return false;
+  const view = cam.matrixWorldInverse;
+  const m = limb.matrixWorld.elements;
+  const reach = lengthM + 0.5;
+  if (_inView.set(m[12], m[13], m[14]).applyMatrix4(view).lengthSq() > reach * reach) return false;
+  const p = cam.projectionMatrix.elements;
+  const halfWidth = cam.near / p[0] + radiusM;
+  const halfHeight = cam.near / p[5] + radiusM;
+  for (let i = 0; i <= 6; i++) {
+    _inView.set(0, 0, (lengthM * i) / 6).applyMatrix4(limb.matrixWorld).applyMatrix4(view);
+    if (Math.abs(-_inView.z - cam.near) < radiusM && Math.abs(_inView.x) < halfWidth && Math.abs(_inView.y) < halfHeight) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/** Leaves a limb out of any view that would cut it open (a sliced sleeve shows its inside); its shadow stays */
+function skipWhenCut(limb: THREE.Mesh, lengthM: number, radiusM: number): void {
+  let skipped = false;
+  limb.onBeforeRender = (_renderer, _scene, camera, geometry) => {
+    skipped = cutByNearPlane(camera, limb, lengthM, radiusM);
+    if (skipped) geometry.setDrawRange(0, 0);
+  };
+  limb.onAfterRender = (_renderer, _scene, _camera, geometry) => {
+    if (skipped) geometry.setDrawRange(0, Infinity);
+    skipped = false;
+  };
+}
+
 export function createDriverFigure(options: DriverFigureOptions): DriverFigure {
   const geo = (shapes ??= buildShapes());
   const coarse = options.coarse === true;
@@ -325,12 +368,11 @@ export function createDriverFigure(options: DriverFigureOptions): DriverFigure {
 
   const arm = (side: 1 | -1): Arm => {
     const tag = side > 0 ? "L" : "R";
-    return {
-      side,
-      upper: mesh(`DRIVER_UPPER_ARM_${tag}`, geo.upperArm, suit),
-      fore: mesh(`DRIVER_FOREARM_${tag}`, geo.forearm, [suit, gloves]),
-      glove: mesh(`DRIVER_GLOVE_${tag}`, side > 0 ? geo.gloveL : geo.gloveR, gloves),
-    };
+    const upper = mesh(`DRIVER_UPPER_ARM_${tag}`, geo.upperArm, suit);
+    const fore = mesh(`DRIVER_FOREARM_${tag}`, geo.forearm, [suit, gloves]);
+    skipWhenCut(upper, UPPER_ARM_M, UPPER_ARM_R);
+    skipWhenCut(fore, FOREARM_M, FOREARM_R);
+    return { side, upper, fore, glove: mesh(`DRIVER_GLOVE_${tag}`, side > 0 ? geo.gloveL : geo.gloveR, gloves) };
   };
   const arms = [arm(1), arm(-1)];
 
