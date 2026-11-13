@@ -65,6 +65,11 @@ export interface SpeedProfileOptions {
    * planning, which has its own caution over crests.
    */
   crests?: boolean;
+  /**
+   * A sample the car stands still at: a hill climb's start line, for the racing-line optimiser's run from rest. The
+   * profile brakes to a stop there and accelerates away from it
+   */
+  standingStartAt?: number;
 }
 
 export interface SpeedProfile {
@@ -279,6 +284,8 @@ export function computeSpeedProfile(
       }
     }
   }
+
+  if (opts.standingStartAt !== undefined) speedMs[opts.standingStartAt] = Math.min(speedMs[opts.standingStartAt], 0.5);
 
   // Fraction of the friction circle still available after the lateral demand at speed v
   const longShare = (i: number, v: number) => {
