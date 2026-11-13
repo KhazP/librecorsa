@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { DEFAULT_TRACK_ID, getActiveTrackData, LIVERIES } from "@/lib/track-data";
+import { DEFAULT_TRACK_ID, getActivePointToPoint, getActiveTrackData, LIVERIES } from "@/lib/track-data";
 import { FfbPairPrompt } from "@/components/hud/FfbPairPrompt";
 import { isVehicleModelId, vehicleModelsFor } from "@/lib/cars/vehicle-models";
 import { CARS, carById, carForVehicle, type CarId } from "@/lib/cars/car-registry";
@@ -459,7 +459,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       // In a multiplayer race only the host can restart it (for everyone); others keep their place
       const race = session.race;
       if (race.kind === "mp") {
-        if (isMpHostRef.current && !flyingStart) getMultiplayerManager().startRace();
+        if (isMpHostRef.current && !flyingStart && !getActivePointToPoint()) getMultiplayerManager().startRace();
         return;
       }
       // polish:A — a flying restart outside a race puts the time trial's conditions on first
@@ -475,8 +475,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
 
   const handleToggleAiOpponents = useCallback(() => {
     session?.unlockAudio();
-    // Not in a multiplayer race: the AI field would run alongside it
-    if (!session || session.race.kind === "mp") return;
+    // Not in a multiplayer race: the AI field would run alongside it. Not on a hill climb: one car at a time
+    if (!session || session.race.kind === "mp" || getActivePointToPoint()) return;
     session.resetRun("race");
     if (session.race.kind === "ai") {
       session.setRace({ kind: "practice" });
@@ -516,6 +516,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   const handleSetLobbySettings = useCallback((patch: Partial<LobbySettings>) => getMultiplayerManager().setLobbySettings(patch), []);
   const handleSetReady = useCallback((ready: boolean) => getMultiplayerManager().setReady(ready), []);
   const handleStartMpRace = useCallback(() => {
+    // A hill climb has no races: one car at a time, start to finish
+    if (getActivePointToPoint()) return;
     getMultiplayerManager().startRace();
   }, []);
   const handleAbortMpRace = useCallback(() => getMultiplayerManager().abortRace(), []);
@@ -593,6 +595,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   /** Leaves the menus for the car: a practice run from the grid, or a race against the AI field */
   const startDriving = useCallback(
     (race: boolean) => {
+      // A hill climb has no races: one car at a time, start to finish
+      if (getActivePointToPoint()) race = false;
       const field = race && session ? (aiFieldOf(session.race) ?? session.takeAiField()) : null;
       startSession(field ? { kind: "ai", field } : { kind: "practice" });
       if (field) startAiRace(field, settingsRef.current.race);
@@ -1454,6 +1458,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     vehicleLabel,
     vehiclesForClass: vehicleModelsFor,
     raceRunning: raceKind === "mp",
+    startBlocked: getActivePointToPoint() ? "No races on a hill climb" : undefined,
     onHostLocal: handleHostLocal,
     onSetLobbySettings: handleSetLobbySettings,
     onSetReady: handleSetReady,

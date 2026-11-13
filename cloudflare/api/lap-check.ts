@@ -3,6 +3,7 @@
  * uploads: anyone can fabricate a lap that passes them, so the boards are friendly, not a referee.
  */
 import { lapPlausibilityProblem } from "../../src/lib/sim/lap-plausibility";
+import { isPointToPointTrack } from "../../src/lib/track-kinds";
 import { LAP_SAMPLE_STRIDE, parseLapConditions, type LapConditions, type LapRecording } from "../../src/lib/sim/lap-types";
 import { isVehicleModelId } from "../../src/types/f1";
 
@@ -88,8 +89,9 @@ export function checkLap(raw: unknown): LapCheck {
     const distance = Math.hypot(samples[b + 2] - samples[a + 2], samples[b + 3] - samples[a + 3], samples[b + 4] - samples[a + 4]);
     if ((distance / dt) * 3.6 > MAX_SPEED_KMH) return bad("Positions imply a speed above 420 km/h");
   }
-  // The samples agree with each other: the lap closes, and speed, positions and track distance match
-  const problem = lapPlausibilityProblem(samples);
+  // The samples agree with each other: the lap closes (a hill climb's run does not), and speed, positions and track
+  // distance match
+  const problem = lapPlausibilityProblem(samples, { open: isPointToPointTrack(trackId) });
   if (problem) return bad(problem);
 
   return {

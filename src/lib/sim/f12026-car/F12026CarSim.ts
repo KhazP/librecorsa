@@ -827,6 +827,8 @@ export class F12026CarSim implements SimulatorCar {
   private lateral = 0;
   private prevS = 0;
   private lastSector: 1 | 2 | 3 = 1;
+  /** On a point-to-point course: a run is under way (started at the start line, not yet at the finish) */
+  private runActive = false;
   private simTimeMs = 0;
   /** Frame time not yet run as control ticks (s, under one tick) */
   private controlAccumulatorS = 0;
@@ -1416,6 +1418,9 @@ export class F12026CarSim implements SimulatorCar {
    * straight (further slots queue 28 m apart, alternating sides), as the VF26 does.
    */
   public resetToStartGrid(flyingStart = false, gridSlot = 0, fieldSize?: number): void {
+    // A point-to-point course is driven from a standing start: its road ends behind the start line
+    if (this.track.pointToPoint) flyingStart = false;
+    this.runActive = false;
     // Fuelled before it is seated, so it settles at the ride height of that load
     this.fillFuel();
     const L = this.track.totalLengthM;
@@ -2263,7 +2268,21 @@ export class F12026CarSim implements SimulatorCar {
       if (sample.sector === this.lastSector + 1) this.onSectorCompleted(this.lastSector);
       this.lastSector = sample.sector;
     }
-    if (this.prevS > L * 0.85 && this.s < L * 0.15) {
+    const p2p = this.track.pointToPoint;
+    if (p2p) {
+      // A point-to-point course: the start line starts a run (again, when it is crossed again), the finish line ends it
+      if (this.prevS > L * 0.85 && this.s < L * 0.15) {
+        this.lineCrossingStartsLap = false;
+        this.runActive = true;
+        this.lapStartMs = this.simTimeMs;
+        this.sectorStartMs = this.simTimeMs;
+        this.lapValid = true;
+        this.telemetry.lapInvalid = false;
+      } else if (this.runActive && this.prevS < p2p.finishS && this.s >= p2p.finishS && this.s - this.prevS < 50) {
+        this.runActive = false;
+        this.onLapCompleted();
+      }
+    } else if (this.prevS > L * 0.85 && this.s < L * 0.15) {
       if (this.lineCrossingStartsLap) {
         this.lineCrossingStartsLap = false;
         this.lapStartMs = this.simTimeMs;
@@ -2279,7 +2298,7 @@ export class F12026CarSim implements SimulatorCar {
     const t = this.telemetry;
     const duration = this.simTimeMs - this.sectorStartMs;
     this.sectorStartMs = this.simTimeMs;
-    if (duration > 8000) {
+    if (duration > Math.min(8000, this.minLapMs / 5)) {
       t.sectorTimesMs[sector - 1] = duration;
       const best = t.bestSectorTimesMs[sector - 1];
       if (best === null || duration < best) t.bestSectorTimesMs[sector - 1] = duration;
@@ -2293,7 +2312,7 @@ export class F12026CarSim implements SimulatorCar {
     this.lapStartMs = this.simTimeMs;
     // Judged track limits: a lap that ends while an excursion is still being judged cannot count
     const valid = this.lapValid && !(this.trackLimitsMode === 'judged' && (this.trackLimitsHold || t.offTrack));
-    if (lapTime > 45_000) {
+    if (lapTime > this.minLapMs) {
       t.lastLapTimeMs = lapTime;
       if (valid && (t.bestLapTimeMs === null || lapTime < t.bestLapTimeMs)) t.bestLapTimeMs = lapTime;
     }
@@ -2302,6 +2321,14 @@ export class F12026CarSim implements SimulatorCar {
     t.topSpeedThisLapKmh = this.vxMs * 3.6;
     this.lapValid = true;
     t.lapInvalid = false;
+  }
+
+  /**
+   * A lap (or a hill climb's run) quicker than this is no lap: 90 m/s on average, and never more than 45 s, which a
+   * short layout's lap (Sachsenring's short course, 1.5 km) or a hill climb's run can take less than
+   */
+  private get minLapMs(): number {
+    return Math.min(45_000, ((this.track.pointToPoint?.finishS ?? this.track.totalLengthM) / 90) * 1000);
   }
 
   /** Race control deleted the running lap (judged track limits) */

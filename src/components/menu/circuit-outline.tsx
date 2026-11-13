@@ -3,7 +3,14 @@
 import React, { useEffect, useReducer, useState } from "react";
 import { buildHudMap, mapPoint, SECTOR_COLORS, type HudMap } from "@/components/hud/styles/hud-style-parts";
 import { withBasePath } from "@/lib/base-path";
-import { ACTIVE_TRACK_ID, DEFAULT_TRACK_ID, DEFAULT_TRACK_JSON, getTrackData, type RawTrackJson } from "@/lib/track-data";
+import {
+  ACTIVE_TRACK_ID,
+  DEFAULT_TRACK_ID,
+  DEFAULT_TRACK_JSON,
+  getTrackData,
+  type RawTrackJson,
+  type TrackMetaExtras,
+} from "@/lib/track-data";
 import type { TrackInfo } from "@/lib/track-registry";
 
 /** Circuit outline from a centreline: a volt thumbnail, or coloured by sector with the flow dashes */
@@ -71,6 +78,7 @@ if (typeof window !== "undefined") {
 const outlineOfRaw = (raw: RawTrackJson): HudMap =>
   buildHudMap({
     totalLengthM: raw.metadata.lengthMeters,
+    pointToPoint: (raw.metadata as TrackMetaExtras).pointToPoint,
     samples: raw.samples.map((s) => ({ position: { x: s.p[0], z: s.p[2] }, sector: s.sec })),
   });
 

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useId, useRef, useState } from "react";
 import type { CarTelemetry, TireCompound } from "@/types/f1";
-import type { BuiltTrackData } from "@/lib/track-data";
+import { inDeadZone, type BuiltTrackData, type PointToPointDef } from "@/lib/track-data";
 import { HUD_CYAN, HUD_GREEN, HUD_PURPLE, HUD_RED, HUD_VOLT, HUD_YELLOW, revRangeFor, sectorTimeColor } from "../hud-format";
 
 /** Circuit outline for the HUD maps, in a 0..1000 box (aspect kept) */
@@ -21,13 +21,23 @@ export interface HudMap {
 export interface HudMapSource {
   samples: readonly { position: { x: number; z: number }; sector: number }[];
   totalLengthM: BuiltTrackData["totalLengthM"];
+  /** A point-to-point course (a hill climb): its map is its road, without the stretch that closes its loop */
+  pointToPoint?: PointToPointDef;
 }
 
 export function buildHudMap(track: HudMapSource): HudMap {
   const samples = track.samples;
   const n = samples.length;
+  const p2p = track.pointToPoint;
+  // The samples drawn, in driving order: a point-to-point course's road from its start (before the start line) to its
+  // end past the finish; a circuit's whole lap. Every sample keeps its point: cars are placed by lap fraction
+  const startI = p2p ? Math.ceil((p2p.startS / track.totalLengthM) * n) % n : 0;
+  const order = Array.from({ length: n }, (_, k) => (startI + k) % n).filter(
+    (i) => !p2p || !inDeadZone(p2p, (i / n) * track.totalLengthM)
+  );
   let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
-  for (const s of samples) {
+  for (const i of order) {
+    const s = samples[i];
     minX = Math.min(minX, s.position.x);
     maxX = Math.max(maxX, s.position.x);
     minZ = Math.min(minZ, s.position.z);
@@ -38,16 +48,23 @@ export function buildHudMap(track: HudMapSource): HudMap {
   const toPath = (pts: [number, number][], close: boolean) =>
     pts.map(([x, y], i) => `${i ? "L" : "M"}${x.toFixed(1)} ${y.toFixed(1)}`).join("") + (close ? "Z" : "");
   const sectorPaths = [1, 2, 3].map((sec) => {
-    const idx = samples.flatMap((s, i) => (s.sector === sec ? [i] : []));
-    if (!idx.length) return "";
-    // One sample of overlap so the sector lines join
-    return toPath([...idx, (idx[idx.length - 1] + 1) % n].map((i) => points[i]), false);
+    // Each run of the sector in driving order, with one sample of overlap so the sector lines join
+    const runs: number[][] = [];
+    order.forEach((i, k) => {
+      if (samples[i].sector !== sec) return;
+      const prev = k > 0 && samples[order[k - 1]].sector === sec;
+      if (!prev) runs.push([]);
+      runs[runs.length - 1].push(i);
+      const next = order[k + 1] ?? (p2p ? undefined : order[0]);
+      if (next !== undefined && samples[next].sector !== sec) runs[runs.length - 1].push(next);
+    });
+    return runs.map((r) => toPath(r.map((i) => points[i]), false)).join("");
   }) as [string, string, string];
   return {
     w: Math.round(((maxX - minX) / span) * 1000),
     h: Math.round(((maxZ - minZ) / span) * 1000),
     points,
-    path: toPath(points, true),
+    path: toPath(order.map((i) => points[i]), !p2p),
     sectorPaths,
     lengthM: track.totalLengthM,
     unitsPerM: 1000 / span,

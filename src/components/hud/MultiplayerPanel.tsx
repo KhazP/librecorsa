@@ -39,6 +39,8 @@ export interface MultiplayerPanelProps {
   /** Vehicle ids allowed by a car-class rule */
   vehiclesForClass?: (rule: CarClassRule) => string[];
   raceRunning?: boolean;
+  /** Why the host can't start a race here (a hill climb: one car at a time) */
+  startBlocked?: string;
   onHostLocal?: () => void;
   onSetLobbySettings?: (patch: Partial<LobbySettings>) => void;
   onSetReady?: (ready: boolean) => void;
@@ -208,6 +210,7 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
   vehicleLabel,
   vehiclesForClass,
   raceRunning = false,
+  startBlocked,
   onHostLocal,
   onSetLobbySettings,
   onSetReady,
@@ -525,12 +528,12 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
           <div className="flex flex-col gap-2">
             <button
               type="button"
-              disabled={raceRunning}
+              disabled={raceRunning || startBlocked !== undefined}
               onClick={() => onStartRace?.()}
               className="inline-flex h-14 cursor-pointer items-center justify-center gap-3 rounded-full border-0 bg-[#CCFF00] text-[#08090D] shadow-[0_0_0_5px_rgba(204,255,0,0.12),0_14px_34px_rgba(204,255,0,0.2)] transition-colors hover:bg-[#d9ff33] disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
             >
               <Play aria-hidden className="h-[18px] w-[18px]" fill="currentColor" strokeWidth={0} />
-              <span className="lc-disp text-[22px]">{raceRunning ? "Race in progress" : "Start race"}</span>
+              <span className="lc-disp text-[22px]">{raceRunning ? "Race in progress" : (startBlocked ?? "Start race")}</span>
             </button>
             {raceRunning && onAbortRace ? (
               <button

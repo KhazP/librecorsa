@@ -600,6 +600,8 @@ export class F1Physics2026 {
   private lastSector: 1 | 2 | 3 = 1;
   /** Set by a grid / flying-start reset: the next S/F crossing starts lap timing instead of completing a lap */
   private lineCrossingStartsLap = false;
+  /** On a point-to-point course: a run is under way (started at the start line, not yet at the finish) */
+  private runActive = false;
   private lapValid = true;
   /**
    * Track limits: 'strict' deletes the lap the instant the car is off the track; 'judged' leaves the verdict to race
@@ -988,6 +990,9 @@ export class F1Physics2026 {
    * (a race's rolling start) every car of the field takes the one speed `rollingStartSpeedMs` gives.
    */
   public resetToStartGrid(flyingStart = false, gridSlot = 0, fieldSize?: number): void {
+    // A point-to-point course is driven from a standing start: its road ends behind the start line
+    if (this.track.pointToPoint) flyingStart = false;
+    this.runActive = false;
     const lapLen = this.track.totalLengthM;
     let flyingGear = 7;
     if (flyingStart) {
@@ -2854,7 +2859,21 @@ export class F1Physics2026 {
       if (nextSample.sector === this.lastSector + 1) this.onSectorCompleted(this.lastSector);
       this.lastSector = nextSample.sector;
     }
-    if (prevS > this.track.totalLengthM * 0.85 && this.sMeters < this.track.totalLengthM * 0.15) {
+    const p2p = this.track.pointToPoint;
+    if (p2p) {
+      // A point-to-point course: the start line starts a run (again, when it is crossed again), the finish line ends it
+      if (prevS > this.track.totalLengthM * 0.85 && this.sMeters < this.track.totalLengthM * 0.15) {
+        this.lineCrossingStartsLap = false;
+        this.runActive = true;
+        this.currentLapStartMs = this.simTimeMs;
+        this.currentSectorStartMs = this.simTimeMs;
+        this.lapValid = true;
+        this.telemetry.lapInvalid = false;
+      } else if (this.runActive && prevS < p2p.finishS && this.sMeters >= p2p.finishS && this.sMeters - prevS < 50) {
+        this.runActive = false;
+        this.onLapCompleted();
+      }
+    } else if (prevS > this.track.totalLengthM * 0.85 && this.sMeters < this.track.totalLengthM * 0.15) {
       if (this.lineCrossingStartsLap) {
         this.lineCrossingStartsLap = false;
         this.currentLapStartMs = this.simTimeMs;
@@ -3343,13 +3362,21 @@ export class F1Physics2026 {
     const sectorDuration = nowMs - this.currentSectorStartMs;
     this.currentSectorStartMs = nowMs;
     const idx = completedSector - 1;
-    if (sectorDuration > 8000) {
+    if (sectorDuration > Math.min(8000, this.minLapMs / 5)) {
       this.telemetry.sectorTimesMs[idx] = sectorDuration;
       const prevBest = this.telemetry.bestSectorTimesMs[idx];
       if (prevBest === null || sectorDuration < prevBest) {
         this.telemetry.bestSectorTimesMs[idx] = sectorDuration;
       }
     }
+  }
+
+  /**
+   * A lap (or a hill climb's run) quicker than this is no lap: 90 m/s on average, and never more than 45 s, which a
+   * short layout's lap or a hill climb's run can take less than
+   */
+  private get minLapMs(): number {
+    return Math.min(45_000, ((this.track.pointToPoint?.finishS ?? this.track.totalLengthM) / 90) * 1000);
   }
 
   private onLapCompleted(): void {
@@ -3359,7 +3386,7 @@ export class F1Physics2026 {
     this.currentLapStartMs = nowMs;
     // Judged track limits: a lap that ends while an excursion is still being judged cannot count
     const valid = this.lapValid && !(this.trackLimitsMode === 'judged' && (this.trackLimitsHold || this.lastObservation.outOfTrack));
-    if (lapTime > 45_000) {
+    if (lapTime > this.minLapMs) {
       this.telemetry.lastLapTimeMs = lapTime;
       if (valid && (this.telemetry.bestLapTimeMs === null || lapTime < this.telemetry.bestLapTimeMs)) {
         this.telemetry.bestLapTimeMs = lapTime;

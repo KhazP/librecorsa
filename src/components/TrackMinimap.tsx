@@ -2,7 +2,7 @@
 
 import React, { useMemo } from "react";
 import type { CarTelemetry } from "@/types/f1";
-import { type BuiltTrackData, DEFAULT_TRACK_ID, TURN_METADATA } from "@/lib/track-data";
+import { type BuiltTrackData, DEFAULT_TRACK_ID, inDeadZone, TURN_METADATA } from "@/lib/track-data";
 import { getTrackInfo } from "@/lib/track-registry";
 
 /** Elevation profile size (SVG units): the profile, its viewBox and the progress dot all use it */
@@ -37,8 +37,14 @@ export const TrackMinimap: React.FC<TrackMinimapProps> = ({
     elevationPath,
     elevationAreaPath,
     elevation,
+    profileLengthM,
   } = useMemo(() => {
-    const samples = track.samples;
+    // A point-to-point course (a hill climb): its road only, without the stretch that closes its loop; the elevation
+    // profile runs from the start line to the end of the road
+    const p2p = track.pointToPoint;
+    const samples = p2p ? track.samples.filter((s) => !inDeadZone(p2p, s.s)) : track.samples;
+    const profiled = p2p ? samples.filter((s) => s.s <= p2p.endS) : samples;
+    const profileLengthM = p2p ? p2p.endS : track.totalLengthM;
     let minX = Infinity;
     let maxX = -Infinity;
     let minZ = Infinity;
@@ -73,6 +79,8 @@ export const TrackMinimap: React.FC<TrackMinimapProps> = ({
     for (let i = 0; i < samples.length; i += 2) {
       const s0 = samples[i];
       const s1 = samples[(i + 2) % samples.length];
+      // An open road's ends are not joined
+      if (p2p && Math.abs(s1.s - s0.s) > 30) continue;
       const p0 = toSvg(s0.position.x, s0.position.z);
       const p1 = toSvg(s1.position.x, s1.position.z);
       const seg = `M ${p0.x.toFixed(1)} ${p0.y.toFixed(1)} L ${p1.x.toFixed(1)} ${p1.y.toFixed(1)}`;
@@ -97,20 +105,20 @@ export const TrackMinimap: React.FC<TrackMinimapProps> = ({
 
     const elevW = ELEV_W;
     const elevH = ELEV_H;
-    let low = samples[0];
-    let high = samples[0];
-    for (const s of samples) {
+    let low = profiled[0];
+    let high = profiled[0];
+    for (const s of profiled) {
       if (s.position.y < low.position.y) low = s;
       if (s.position.y > high.position.y) high = s;
     }
     const yMin = low.position.y;
     const ySpan = Math.max(1, high.position.y - yMin);
     const toElevY = (y: number) => elevH - ((y - yMin) / ySpan) * (elevH - 8) - 4;
-    const toElevX = (s: number) => (s / track.totalLengthM) * elevW;
+    const toElevX = (s: number) => (s / profileLengthM) * elevW;
     const turnAt = (s: (typeof samples)[number]) => (s.turnNumber ? `T${s.turnNumber} ` : "");
     const elevPts: string[] = [];
-    for (let i = 0; i < samples.length; i += 6) {
-      const s = samples[i];
+    for (let i = 0; i < profiled.length; i += 6) {
+      const s = profiled[i];
       const ex = toElevX(s.s);
       const ey = toElevY(s.position.y);
       elevPts.push(
@@ -134,16 +142,17 @@ export const TrackMinimap: React.FC<TrackMinimapProps> = ({
       elevation: {
         toY: toElevY,
         span: Math.round(ySpan),
-        sfLabel: `S/F ${Math.round(samples[0].position.y - yMin)}m`,
+        sfLabel: `${p2p ? "Start" : "S/F"} ${Math.round(track.getSampleAtDistance(0).position.y - yMin)}m`,
         low: { x: toElevX(low.s), label: `${turnAt(low)}+0m` },
         high: { x: toElevX(high.s), label: `${turnAt(high)}+${Math.round(ySpan)}m` },
       },
+      profileLengthM,
     };
   }, [track]);
 
   const currentSample = track.getSampleAtDistance(telemetry.trackDistanceM);
   const carSvg = carPoint(currentSample.position.x, currentSample.position.z);
-  const elevProgressX = (telemetry.trackDistanceM / track.totalLengthM) * ELEV_W;
+  const elevProgressX = Math.min(1, telemetry.trackDistanceM / profileLengthM) * ELEV_W;
   const elevProgressY = elevation.toY(telemetry.trackElevationM);
 
   // Elevation extremes, in lap order for the label row under the profile
@@ -165,7 +174,7 @@ export const TrackMinimap: React.FC<TrackMinimapProps> = ({
         <div className="min-w-0">
           <div className="lc-title line-clamp-2 text-[14px] leading-tight">{trackInfo.name}</div>
           <p className={`${HUD_LBL} mt-0.5`}>
-            {trackInfo.country} · {(track.totalLengthM / 1000).toFixed(2)} km · {TURN_METADATA.length} turns
+            {trackInfo.country} · {((track.pointToPoint?.finishS ?? track.totalLengthM) / 1000).toFixed(2)} km · {TURN_METADATA.length} turns
           </p>
         </div>
         <span className="lc-data shrink-0 rounded-full bg-[#CCFF00] px-[7px] py-0.5 text-[9px] text-[#08090D]">GPS</span>
