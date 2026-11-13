@@ -1,5 +1,6 @@
 "use client";
 
+import { activeLapWord } from "@/lib/track-data";
 import React from "react";
 import { Fuel, Zap } from "lucide-react";
 import type { CarTelemetry, TireCompound } from "@/types/f1";
@@ -32,7 +33,7 @@ export const BroadcastTower: React.FC<{
             </>
           ) : (
             <>
-              Practice <span className="opacity-45">· Lap {Math.max(1, t.lapCount)}</span>
+              Practice <span className="opacity-45">· {activeLapWord()} {Math.max(1, t.lapCount)}</span>
             </>
           )}
         </div>

@@ -29,7 +29,7 @@
   <a href="https://librecorsa.org/media/librecorsa-trailer.mp4"><img src="docs/media/trailer-poster.jpg" alt="Watch the 40-second LibreCorsa trailer" width="100%" /></a>
 </p>
 
-**LibreCorsa** is an open-source racing simulator that runs entirely in the browser. It has 500 Hz vehicle dynamics, a thermal tyre model, 2026-regulation open-wheelers, GT3 cars, a prototype and a road car. There are nine circuits, AI races, ghosts and replays, and peer-to-peer multiplayer. It works with a keyboard, gamepad, touch screen or a force-feedback wheel. Nothing to install, and no server: it ships as a static site.
+**LibreCorsa** is an open-source racing simulator that runs entirely in the browser. It has 500 Hz vehicle dynamics, a thermal tyre model, 2026-regulation open-wheelers, GT3 cars, a prototype and a road car. There are fourteen circuits and two hill climbs, AI races, ghosts and replays, and peer-to-peer multiplayer. It works with a keyboard, gamepad, touch screen or a force-feedback wheel. Nothing to install, and no server: it ships as a static site.
 
 <p align="center">
   <img src="docs/media/race-grid-shanghai.jpg" alt="Lined up on the grid at Shanghai against five AI cars" width="100%" />
@@ -89,8 +89,19 @@ Each car has its own cockpit, steering wheel and shift lights, plus a multi-laye
 | Circuit de Monaco | Monaco | 3.30 km |
 | Istanbul Park | Turkey | 5.32 km |
 | Dunsfold Aerodrome | United Kingdom | 2.88 km |
+| Barbagallo Raceway | Australia | 2.39 km |
+| Virginia International Raceway (Full / North / South / Grand East / Grand West / Patriot, both ways) | United States | 5.25 / 3.66 / 2.61 / 6.45 / 6.63 / 1.57 km |
+| Sachsenring (GP / short course) | Germany | 3.66 / 1.52 km |
+| Norisring | Germany | 2.16 km |
+| Circuit de la Sarthe, 1982 | France | 13.65 km |
 
-RISE Motordrome is my reading of the circuit planned beside Lake Kidogo at Bugesera, about 1,400 m above sea level: traced on the designers' own aerial renders and built in Blender on the site's real ground by `scripts/rwanda-official/`. Two anticlockwise laps share one model: the short lap (5.34 km, 14 corners, the default) and the Grand Prix lap (5.89 km, 17 corners, 191 m climbed a lap). Chang, Okayama, Spielberg (Red Bull Ring), Grobnik, Oschersleben and Monaco are Assetto Corsa circuits by **Mitja Bonca** (used with permission), converted by `scripts/tracks/port_ac_track.py` with their 3D/2D trees, dynamic tyre grooves, skidmarks, starting lights and trackside semaphores, AI fast/pit lanes, kerbs, surface tables, section names, DRS zones, and TV cameras. Every circuit is meshopt-compressed (`npm run compress-tracks`) while keeping hidden physics meshes bit-exact, and has a lap-time-optimal racing line for each car class. Open the sim with `?colliders=1` to see the physics surfaces drawn over the circuit.
+### Hill climbs
+| Hill climb | Country | Run | Climb |
+| :-- | :-- | --: | --: |
+| Goodwood (Festival of Speed) | United Kingdom | 1.89 km | 94 m |
+| Borgloh (Osnabrück hill climb) | Germany | 2.02 km | 76 m |
+
+RISE Motordrome is my reading of the circuit planned beside Lake Kidogo at Bugesera, about 1,400 m above sea level: traced on the designers' own aerial renders and built in Blender on the site's real ground by `scripts/rwanda-official/`. Two anticlockwise laps share one model: the short lap (5.34 km, 14 corners, the default) and the Grand Prix lap (5.89 km, 17 corners, 191 m climbed a lap). Chang, Okayama, Spielberg (Red Bull Ring), Grobnik, Oschersleben and Monaco are Assetto Corsa circuits by **Mitja Bonca** (used with permission), converted by `scripts/tracks/port_ac_track.py` with their 3D/2D trees, dynamic tyre grooves, skidmarks, starting lights and trackside semaphores, AI fast/pit lanes, kerbs, surface tables, section names, DRS zones, and TV cameras. Barbagallo and VIR are by **dazzyb2k3**, and Sachsenring, Norisring, Le Mans 1982 and the two hill climbs by **gunnar333**, all used with permission and converted the same way. A hill climb is one timed run from the start line to the finish, one car at a time, so it has no AI or online races. Every circuit is meshopt-compressed (`npm run compress-tracks`) while keeping hidden physics meshes bit-exact, and has a lap-time-optimal racing line for each car class (the hill climbs and Le Mans keep a geometric one for now). Open the sim with `?colliders=1` to see the physics surfaces drawn over the circuit.
 
 ### Racing
 - **Race the AI**: a 5-car field with a standing start behind the lights, traffic and side-by-side racing, and after the flag a cool-down lap, the top three on the podium and a results screen with places gained and your last races. The AI level runs from Rookie to Alien and can be changed from the pause menu. Each car class has a tuning file in [`public/ai`](public/ai), with per-circuit and per-section overrides. The AI learns braking points and apex speeds corner by corner. In the rain it fits intermediates or full wets and plans its corner speeds and braking on the wet grip.

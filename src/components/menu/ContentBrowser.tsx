@@ -23,7 +23,12 @@ export interface BrowserFilter<T> {
   test: (item: T) => boolean;
 }
 
-/** A heading in the filter column and its categories (Library; then groups taken from the data) */
+/**
+ * A heading in the filter column and its categories (Library; then groups taken from the data). One category is
+ * picked per group and the groups narrow the list together (Germany + Hill climb + one modder). A second press of
+ * the picked category lets it go; the group holding the `all` filter then shows `all`, which also lets every other
+ * group's pick go.
+ */
 export interface BrowserFilterGroup<T> {
   label: string;
   filters: BrowserFilter<T>[];
@@ -117,7 +122,8 @@ export function ContentBrowser<T>(props: ContentBrowserProps<T>) {
   const { mode, family } = useInputMode();
   const pad = mode === "pad";
   const [query, setQuery] = useState("");
-  const [filterId, setFilterId] = useState(ALL);
+  /** The picked category of each group, by the group's label */
+  const [picks, setPicks] = useState<Record<string, string>>({});
   const [sortId, setSortId] = useState(sorts[0]?.id ?? "");
   const [selectedId, setSelectedId] = useState<string | undefined>(props.initialSelectedId);
 
@@ -129,9 +135,23 @@ export function ContentBrowser<T>(props: ContentBrowserProps<T>) {
 
   const words = useMemo(() => query.trim().toLowerCase().split(/\s+/).filter(Boolean), [query]);
   const searched = useMemo(() => (words.length ? items.filter((i) => matches(searchText(i), words)) : items), [items, words, searchText]);
-  const allFilters = filterGroups.flatMap((g) => g.filters);
-  const filter = allFilters.find((f) => f.id === filterId) ?? allFilters[0];
-  const visible = useMemo(() => (filter ? searched.filter(filter.test) : searched), [searched, filter]);
+  /**
+   * Each group's picked category: a pick whose category is gone (they come from the data) counts as none, and the
+   * group with the `all` filter falls back to it
+   */
+  const pickOf = (g: BrowserFilterGroup<T>): BrowserFilter<T> | undefined =>
+    g.filters.find((f) => f.id === picks[g.label]) ?? g.filters.find((f) => f.id === ALL);
+  /** The picks that narrow the list (`all` does not) */
+  const narrowing = filterGroups.flatMap((g) => {
+    const f = pickOf(g);
+    return f && f.id !== ALL ? [{ group: g.label, filter: f }] : [];
+  });
+  const narrowKey = narrowing.map((n) => n.filter.id).join("|");
+  const visible = useMemo(
+    () => (narrowing.length ? searched.filter((i) => narrowing.every((n) => n.filter.test(i))) : searched),
+    // `narrowing` is rebuilt each render: its picks are in `narrowKey`, their tests in `filterGroups`
+    [searched, narrowKey, filterGroups]
+  );
   const sort = sorts.find((s) => s.id === sortId) ?? sorts[0];
 
   const groups = useMemo(() => {
@@ -165,8 +185,9 @@ export function ContentBrowser<T>(props: ContentBrowserProps<T>) {
     return keys.map((k) => ({ key: k, label: k, items: byKey.get(k)!, runs: runsOf(byKey.get(k)!) }));
   }, [visible, sort]);
 
-  // Nothing matches the search or category: the detail pane empties too, rather than offering a hidden card's action
-  const selected = visible.length ? (items.find((i) => idOf(i) === selectedId) ?? visible[0]) : undefined;
+  // The detail pane shows a card that is in the list: the chosen one, else the first. Nothing matches the search or
+  // categories: it empties too, rather than offering a hidden card's action
+  const selected = visible.find((i) => idOf(i) === selectedId) ?? visible[0];
   const selectedKey = selected ? idOf(selected) : undefined;
   const action = selected ? props.primaryAction(selected) : null;
   const selectedFav = selected ? props.isFavorite(selected) : false;
@@ -195,8 +216,17 @@ export function ContentBrowser<T>(props: ContentBrowserProps<T>) {
 
   const clearAll = () => {
     setQuery("");
-    setFilterId(ALL);
+    setPicks({});
   };
+  /** Picks a category; pressing the picked one again lets it go, and `all` lets every group's pick go */
+  const pick = (g: BrowserFilterGroup<T>, f: BrowserFilter<T>) =>
+    setPicks((p) => {
+      if (f.id === ALL) return {};
+      const next = { ...p };
+      if (pickOf(g)?.id === f.id) delete next[g.label];
+      else next[g.label] = f.id;
+      return next;
+    });
 
   // Ⓑ / Esc: detail → its card → close
   useBackHandler(() => {
@@ -368,8 +398,13 @@ export function ContentBrowser<T>(props: ContentBrowserProps<T>) {
     };
   }, []);
 
-  const countOf = (f: BrowserFilter<T>) => searched.reduce((n, i) => n + (f.test(i) ? 1 : 0), 0);
-  const filtered = query.trim() !== "" || (filter && filter.id !== ALL);
+  /** How many entries a category would show with the other groups' picks kept */
+  const countOf = (g: BrowserFilterGroup<T>, f: BrowserFilter<T>) => {
+    const others = narrowing.filter((n) => n.group !== g.label);
+    return searched.reduce((n, i) => n + (f.test(i) && others.every((o) => o.filter.test(i)) ? 1 : 0), 0);
+  };
+  const filtered = query.trim() !== "" || narrowing.length > 0;
+  const narrowLabels = narrowing.map((n) => n.filter.label);
 
   return (
     <div ref={rootRef} className="flex min-w-0 flex-col gap-3.5" role="region" aria-label={props.label}>
@@ -428,14 +463,14 @@ export function ContentBrowser<T>(props: ContentBrowserProps<T>) {
             <div key={g.label} className="contents md:flex md:flex-col md:gap-0.5">
               <span className={`lc-lbl hidden px-3 pb-1.5 md:block ${gi ? "pt-3.5" : "pt-0.5"}`}>{g.label}</span>
               {g.filters.map((f) => {
-                const on = f.id === filter?.id;
-                const n = countOf(f);
+                const on = f.id === pickOf(g)?.id;
+                const n = countOf(g, f);
                 return (
                   <button
                     key={f.id}
                     type="button"
                     aria-pressed={on}
-                    onClick={() => setFilterId(f.id)}
+                    onClick={() => pick(g, f)}
                     onPointerEnter={focusOnHover}
                     className={`group flex min-h-[36px] shrink-0 cursor-pointer items-center gap-2.5 rounded-full px-3.5 text-left text-[14px] font-semibold whitespace-nowrap outline-none transition-[background-color,box-shadow,color] duration-[220ms] ease-[cubic-bezier(.2,.8,.2,1)] focus:bg-[#CCFF00] focus:text-[#08090D] focus:shadow-[0_0_0_5px_rgba(204,255,0,0.12)] md:w-full md:min-h-[38px] md:px-3 ${
                       on
@@ -538,8 +573,10 @@ export function ContentBrowser<T>(props: ContentBrowserProps<T>) {
             <div className="flex flex-col items-start gap-3 px-1 py-6">
               <p className="m-0 text-[14px] leading-relaxed text-[#C5CBD8]">
                 {words.length ? `Nothing matches “${query.trim()}”` : `No ${props.noun} here yet`}
-                {filter && filter.id !== ALL ? ` in ${filter.label}` : ""}.
-                {filter?.id === "fav" && !words.length && onToggleFavorite ? " Star one from its card or the detail pane." : ""}
+                {narrowLabels.length ? ` in ${narrowLabels.join(", ")}` : ""}.
+                {narrowing.length === 1 && narrowing[0].filter.id === "fav" && !words.length && onToggleFavorite
+                  ? " Star one from its card or the detail pane."
+                  : ""}
               </p>
               {filtered ? (
                 <button

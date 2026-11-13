@@ -56,9 +56,31 @@ export interface TracksideTvCameraDef {
   outPoint: number;
 }
 
+/**
+ * A point-to-point course (a hill climb): one timed run from the start line to a finish line somewhere else.
+ *
+ * Its track data is still a closed loop, so everything built on a lap keeps working: the start line is s = 0, the
+ * road runs on past the finish line to `endS`, and from there a line with no road under it closes the loop back to
+ * `startS`, where the road begins a little before the start line. Between `endS` and `startS` there is nothing to
+ * drive on: a car that gets there is put back on the start line (`inDeadZone`).
+ */
+export interface PointToPointDef {
+  /** The finish line (m from the start line): the length of the timed run */
+  finishS: number;
+  /** Where the road past the finish ends (m from the start line) */
+  endS: number;
+  /** Where the road before the start line begins (m along the loop, a little short of its length) */
+  startS: number;
+}
+
+/** Whether `s` (m along the loop) is on the stretch of a point-to-point course that has no road */
+export const inDeadZone = (p: PointToPointDef, s: number): boolean => s > p.endS && s < p.startS;
+
 export interface BuiltTrackData {
   /** Circuit id (a folder under public/tracks); absent on synthetic test tracks */
   id?: string;
+  /** Set on a point-to-point course (a hill climb); absent on a circuit */
+  pointToPoint?: PointToPointDef;
   /** Circuit GLB (relative to the base path); absent on synthetic test tracks */
   meshUrl?: string;
   /** Materials of the circuit GLB's scan that are the racing surface (asphalt shader); none for a circuit with its own road meshes */
@@ -242,6 +264,8 @@ export interface TrackMetaExtras {
     barrierMeshes?: string[];
   };
   credit?: { title: string; author: string; url: string; short?: string; license: string; licenseUrl: string };
+  /** A point-to-point course (a hill climb): its finish line and the ends of its road */
+  pointToPoint?: PointToPointDef;
   /** Per-kind overrides of the default surface table (track-surfaces.ts) */
   surfaceTable?: SurfaceTableOverrides;
   /**
@@ -281,6 +305,22 @@ export function getActiveTrackSource(): { id: string; raw: RawTrackJson } {
 /** Metadata of the active circuit */
 export function getActiveTrackMetadata(): RawTrackJson["metadata"] & TrackMetaExtras {
   return activeRaw.metadata as RawTrackJson["metadata"] & TrackMetaExtras;
+}
+
+/** The active circuit's point-to-point course, or null on a circuit that laps */
+export function getActivePointToPoint(): PointToPointDef | null {
+  return getActiveTrackMetadata().pointToPoint ?? null;
+}
+
+/** What a timed lap is called on the active circuit: a hill climb's is a run */
+export const activeLapWord = (): "Run" | "Lap" => (getActivePointToPoint() ? "Run" : "Lap");
+
+/**
+ * The distance a lap time is set over: the lap, or on a point-to-point course the run from the start line to the
+ * finish line (`TRACK_TOTAL_LENGTH_M` there is the whole loop, most of it not road)
+ */
+export function getActiveTimedLengthM(): number {
+  return getActivePointToPoint()?.finishS ?? TRACK_TOTAL_LENGTH_M;
 }
 
 /** The active circuit's surface table, with the track data it was resolved from (as cachedBuiltTrack keeps its id) */
@@ -1007,6 +1047,7 @@ export function getActiveTrackData(numSamples = 1200): BuiltTrackData {
   if (!meshUrl) console.warn(`Circuit "${ACTIVE_TRACK_ID}" has no mesh url: drawing the procedural stand-in`);
   cachedBuiltTrack = {
     id: ACTIVE_TRACK_ID,
+    pointToPoint: getActiveTrackMetadata().pointToPoint,
     meshUrl,
     roadMaterials: getActiveTrackMetadata().mesh?.roadMaterials,
     sceneryCuts: getActiveTrackMetadata().mesh?.cutBoxes,

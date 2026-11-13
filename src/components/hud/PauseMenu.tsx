@@ -13,7 +13,7 @@ import type {
   TyreSetup,
   VehicleModelId,
 } from "@/types/f1";
-import { ACTIVE_TRACK_ID, LIVERIES, TRACK_TOTAL_LENGTH_M, TURN_METADATA, getTrackData } from "@/lib/track-data";
+import { ACTIVE_TRACK_ID, LIVERIES, TURN_METADATA, activeLapWord, getActiveTimedLengthM, getTrackData } from "@/lib/track-data";
 import { getTrackInfo } from "@/lib/track-registry";
 import type { ChassisSetup } from "@/lib/sim/car-setup";
 import { EngineersGarage } from "@/components/menu/EngineersGarage";
@@ -491,7 +491,7 @@ export const PauseMenu: React.FC<PauseMenuProps> = (props) => {
                 {trackInfo.city && trackInfo.city !== trackInfo.country ? `${trackInfo.city}, ${trackInfo.country}` : trackInfo.country}
               </span>
               <span className={`${HEADER_CHIP} border border-[#262B3D] bg-[#11131A] text-[#F5F7FA]`}>
-                Lap {Math.max(1, race?.lap ?? telemetry.lapCount)}
+                {race ? "Lap" : activeLapWord()} {Math.max(1, race?.lap ?? telemetry.lapCount)}
                 {race?.totalLaps ? ` / ${race.totalLaps}` : ""}
               </span>
               {race ? (
@@ -556,7 +556,7 @@ export const PauseMenu: React.FC<PauseMenuProps> = (props) => {
             ]}
           />
           <span className="hidden font-f1-mono text-[11px] font-bold tracking-[0.12em] text-[#8E96AA] md:inline">
-            {(TRACK_TOTAL_LENGTH_M / 1000).toFixed(2)} KM · {TURN_METADATA.length} TURNS · LIBRECORSA
+            {(getActiveTimedLengthM() / 1000).toFixed(2)} KM · {TURN_METADATA.length} TURNS · LIBRECORSA
           </span>
         </div>
       </div>

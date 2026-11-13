@@ -12,7 +12,7 @@ import { timeLeftLabel } from "@/lib/net/weekly-challenge";
 import { DisplayPanel } from "@/components/hud/DisplayPanel";
 import { LeaderboardPanel } from "@/components/hud/LeaderboardPanel";
 import { buildHudMap } from "@/components/hud/styles/hud-style-parts";
-import { ACTIVE_TRACK_ID, getTrackData, TRACK_TOTAL_LENGTH_M, TURN_METADATA } from "@/lib/track-data";
+import { ACTIVE_TRACK_ID, getActivePointToPoint, getActiveTimedLengthM, getTrackData, TURN_METADATA } from "@/lib/track-data";
 import { getTrackInfo, DEFAULT_TRACK_ID, TRACKS, type TrackInfo } from "@/lib/track-registry";
 import { SCENERY_CREDITS } from "@/lib/render/scenery-credits";
 import { isLikelyWheel, padDisplayName } from "@/lib/input/device-input";
@@ -646,23 +646,25 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
   const vehicle = carById(props.carId);
   // The car is fixed for an online race (the shell refuses the swap too)
   const carLocked = props.telemetry.race?.multiplayer === true || props.raceRunning === true;
+  // A hill climb is driven one car at a time, from the start line to the finish: no races against the AI
+  const hillClimb = activeTrackId === trackId && getActivePointToPoint() !== null;
   const items: MenuItem[] = [
     {
       id: "drive",
       label: "Drive",
-      detail: firstRun ? "Quick setup, then out on track" : "Practice from the grid",
+      detail: firstRun ? "Quick setup, then out on track" : hillClimb ? "Timed runs, start to finish" : "Practice from the grid",
       icon: Play,
       run: onDrive,
       primary: true,
     },
-    {
+    ...(hillClimb ? [] : [{
       id: "race",
       label: "Race AI",
       detail: `${raceSetup.opponents} AI cars · ${raceSetup.laps} laps · ${aiSkillLabel(props.aiSkill ?? AI_SKILL_DEFAULT)} · ${RACE_START_LABELS[raceSetup.start].toLowerCase()} start`,
       icon: Flag,
       // The race is set up first; its panel has the start (without a setter there is nothing to set: straight to the lights)
       ...(props.onChangeRaceSetup ? { panel: "race" as const, run: () => openPanel("race") } : { run: onRaceAi }),
-    },
+    } satisfies MenuItem]),
     {
       id: "multiplayer",
       label: "Multiplayer",
@@ -1081,7 +1083,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
           {/* The circuit's numbers are on the title screen's own cards; a panel already says what it is about */}
           {panel ? null : (
             <span className="font-f1-mono text-[11px] font-bold tracking-[0.12em] text-[#8E96AA]">
-              {(TRACK_TOTAL_LENGTH_M / 1000).toFixed(2)} KM · {TURN_METADATA.length} TURNS
+              {(getActiveTimedLengthM() / 1000).toFixed(2)} KM · {TURN_METADATA.length} TURNS
               <span className="hidden text-[#CCFF00]/80 xl:inline"> · 500 HZ VEHICLE DYNAMICS</span>
             </span>
           )}

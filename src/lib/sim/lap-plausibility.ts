@@ -1,6 +1,7 @@
 /**
- * Consistency checks of an uploaded lap's samples, beyond their shape: the lap closes on itself, and the recorded
- * speed, the distance along the track and the distance driven between positions all tell the same story.
+ * Consistency checks of an uploaded lap's samples, beyond their shape: the lap closes on itself (but on a
+ * point-to-point course, a hill climb), and the recorded speed, the distance along the track and the distance driven
+ * between positions all tell the same story.
  *
  * Autopilot laps of Rwanda agree to about 0.3 % on both; the limits leave room for spins and wet laps.
  *
@@ -19,15 +20,18 @@ export const SPEED_PATH_MARGIN_M = 50;
 export const MAX_TRACK_PATH_MISMATCH = 0.06;
 export const TRACK_PATH_MARGIN_M = 100;
 
-/** Null when the samples are consistent, else the reason they are not. `data` is the flattened LapRecording.data */
-export function lapPlausibilityProblem(data: readonly number[]): string | null {
+/**
+ * Null when the samples are consistent, else the reason they are not. `data` is the flattened LapRecording.data;
+ * `open`: a point-to-point course's run, which ends at a finish line away from its start (track-kinds.ts)
+ */
+export function lapPlausibilityProblem(data: readonly number[], opts: { open?: boolean } = {}): string | null {
   const S = LAP_SAMPLE_STRIDE;
   const n = Math.floor(data.length / S);
   if (n < 2) return "Recording has too few samples";
 
   const last = (n - 1) * S;
   const gap = Math.hypot(data[last + 2] - data[2], data[last + 3] - data[3], data[last + 4] - data[4]);
-  if (gap > MAX_LAP_GAP_M) return "The lap does not end where it started";
+  if (!opts.open && gap > MAX_LAP_GAP_M) return "The lap does not end where it started";
 
   let path = 0;
   let speedPath = 0;

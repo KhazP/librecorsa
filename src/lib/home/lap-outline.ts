@@ -8,7 +8,7 @@ export interface LapOutline {
   /** The outline's box; its longer side is 1000 */
   w: number;
   h: number;
-  /** A closed SVG path from the start line, in lap order */
+  /** An SVG path from the start line, in lap order: closed for a circuit, open for a hill climb's run */
   d: string;
   /** The racing line's speed (km/h) at evenly spaced points round the lap; empty when the circuit has none */
   kmh: number[];
@@ -19,7 +19,8 @@ export interface LapOutline {
 
 /** The part of a circuit's track data this reads */
 export interface RawLap {
-  metadata: { lengthMeters: number };
+  /** `pointToPoint`: a hill climb, whose outline is its run from the start line to the finish */
+  metadata: { lengthMeters: number; pointToPoint?: { finishS: number } };
   samples: { p: number[]; v?: number }[];
 }
 
@@ -65,7 +66,10 @@ function simplify(pts: Pt[], tol: number): number[] {
 }
 
 export function lapOutlineOf(raw: RawLap): LapOutline {
-  const s = raw.samples;
+  // A point-to-point course (a hill climb): its run, not the loop its track data closes beyond the finish
+  const finishS = raw.metadata.pointToPoint?.finishS;
+  const all = raw.samples;
+  const s = finishS === undefined ? all : all.slice(0, Math.min(all.length, Math.ceil((finishS / raw.metadata.lengthMeters) * all.length) + 1));
   const n = s.length;
   let minX = Infinity;
   let maxX = -Infinity;
@@ -81,7 +85,7 @@ export function lapOutlineOf(raw: RawLap): LapOutline {
   const pts = s.map((q): Pt => [(q.p[0] - minX) * k, (q.p[2] - minZ) * k]);
   const d = `${simplify(pts, TOLERANCE)
     .map((i, j) => `${j ? "L" : "M"}${pts[i][0].toFixed(1)} ${pts[i][1].toFixed(1)}`)
-    .join("")}Z`;
+    .join("")}${finishS === undefined ? "Z" : ""}`;
   const paced = s.some((q) => typeof q.v === "number" && q.v > 0);
   const kmh = paced ? Array.from({ length: PACE_POINTS }, (_, i) => Math.round(s[Math.floor((i / PACE_POINTS) * n)].v ?? 0)) : [];
   const ahead = pts[Math.min(3, n - 1)];
@@ -90,7 +94,7 @@ export function lapOutlineOf(raw: RawLap): LapOutline {
     h: Math.round((maxZ - minZ) * k),
     d,
     kmh,
-    lengthM: raw.metadata.lengthMeters,
+    lengthM: finishS ?? raw.metadata.lengthMeters,
     start: [
       Math.round(pts[0][0] * 10) / 10,
       Math.round(pts[0][1] * 10) / 10,

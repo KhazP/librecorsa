@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowUpRight, Check, ChevronRight, Play } from "lucide-react";
+import { ArrowUpRight, Check, ChevronDown, ChevronRight, Play } from "lucide-react";
 import { currentInputMode, useInputMode } from "@/components/menu/input-mode";
 import { PadGlyph } from "@/components/menu/pad-glyph";
 import { focusables, useFocusNav } from "@/components/menu/useFocusNav";
@@ -9,7 +9,7 @@ import { LibreCorsaLogo } from "@/components/ui/LibreCorsaLogo";
 import { SourceChip } from "@/components/SourceChip";
 import { withBasePath } from "@/lib/base-path";
 import { SITE_DESCRIPTION } from "@/lib/site";
-import { day, GAME_FACTS, GRADE_NOTES, km, type HomeData } from "./home-data";
+import { day, GAME_FACTS, GRADE_NOTES, km, type HomeData, type HomeVenue } from "./home-data";
 import { CarThumb, GradeBadge, GradeLegend, KeyCap, OutlineThumb, PadPrompt, Prompt } from "./home-ui";
 import { LapMap } from "./LapMap";
 import { PLAY_HREF, rememberPicks, storedPicks } from "./play";
@@ -49,6 +49,15 @@ const CARD_SOURCE_PANEL = "inset-x-1 bottom-full";
 const CARD_ON = "border-[1.5px] border-[#F5F7FA]/60";
 const CARD_OFF = "border border-[#262B3D] hover:border-[#3A4157]";
 
+/** The Circuits filters: one pick each, narrowing the wall together */
+type VenueFilterKey = "type" | "country" | "modder";
+const VENUE_FILTERS: readonly { key: VenueFilterKey; all: string; label: string; of: (v: HomeVenue) => readonly string[] }[] = [
+  { key: "type", all: "All types", label: "Type", of: (v) => v.types },
+  { key: "country", all: "All locations", label: "Location", of: (v) => [v.country] },
+  { key: "modder", all: "All modders", label: "Modder", of: (v) => v.modders },
+];
+const NO_VENUE_FILTERS: Record<VenueFilterKey, string> = { type: "", country: "", modder: "" };
+
 const ChosenMark: React.FC = () => (
   <span className="absolute top-2.5 right-2.5 inline-flex h-6 w-6 items-center justify-center rounded-full bg-[#F5F7FA] text-[#08090D]">
     <Check aria-hidden className="h-3.5 w-3.5" strokeWidth={3.5} />
@@ -74,6 +83,13 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
     if (trackId && data.venues.some((v) => v.layouts.some((l) => l.id === trackId))) setLayoutId(trackId);
     if (stored && data.cars.some((c) => c.id === stored)) setCarId(stored);
   }, [data.venues, data.cars]);
+
+  const [venueFilters, setVenueFilters] = useState(NO_VENUE_FILTERS);
+  /** The venues the filters leave, `except` one of them (for that filter's own options and their counts) */
+  const venuesWith = (except?: VenueFilterKey) =>
+    data.venues.filter((v) => VENUE_FILTERS.every((f) => f.key === except || !venueFilters[f.key] || f.of(v).includes(venueFilters[f.key])));
+  const shownVenues = venuesWith();
+  const venuesFiltered = VENUE_FILTERS.some((f) => venueFilters[f.key]);
 
   const venue = data.venues.find((v) => v.layouts.some((l) => l.id === layoutId)) ?? data.venues[0];
   const layout = venue.layouts.find((l) => l.id === layoutId) ?? venue.layouts[0];
@@ -265,8 +281,56 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
         {tab === "circuits" ? (
           <>
             <GradeLegend of="circuits" shown={data.venues.flatMap((v) => v.layouts.map((l) => l.grade))} />
+            {/* Left / right on a filter steps through its options (useFocusNav), up / down moves on */}
+            <div role="group" aria-label="Filter circuits" className="mb-4 flex flex-wrap items-center gap-2">
+              {VENUE_FILTERS.map((f) => {
+                const pool = venuesWith(f.key);
+                const all = [...new Set(data.venues.flatMap((v) => f.of(v)))].sort((a, b) => a.localeCompare(b));
+                // A filter with one option narrows nothing
+                if (all.length < 2) return null;
+                const picked = venueFilters[f.key];
+                const countOf = (o: string) => pool.filter((v) => f.of(v).includes(o)).length;
+                // Only what the other filters leave a circuit for (and the pick itself)
+                const options = all.filter((o) => o === picked || countOf(o) > 0);
+                return (
+                  <span key={f.key} className="relative inline-flex">
+                    <select
+                      aria-label={f.label}
+                      value={picked}
+                      onChange={(e) => setVenueFilters((cur) => ({ ...cur, [f.key]: e.target.value }))}
+                      className={`h-10 max-w-[min(100%,260px)] cursor-pointer appearance-none truncate rounded-full border-0 pr-9 pl-4 text-[13px] font-semibold transition-colors duration-150 ease-out ${
+                        picked ? CHOSEN_PILL : "bg-[#11131A] text-[#C5CBD8] shadow-[inset_0_0_0_1px_#262B3D] hover:text-[#F5F7FA]"
+                      }`}
+                    >
+                      <option value="">{f.all}</option>
+                      {options.map((o) => (
+                        <option key={o} value={o}>
+                          {o} ({countOf(o)})
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown aria-hidden className="pointer-events-none absolute top-3 right-3 h-4 w-4 text-[#8E96AA]" strokeWidth={2.4} />
+                  </span>
+                );
+              })}
+              {venuesFiltered ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setVenueFilters(NO_VENUE_FILTERS)}
+                    className="h-10 cursor-pointer rounded-full border-0 bg-transparent px-3 text-[13px] font-semibold text-[#C5CBD8] transition-colors duration-150 ease-out hover:text-[#F5F7FA]"
+                  >
+                    Clear
+                  </button>
+                  <span role="status" className="lc-data ml-auto text-[12px] text-[#8E96AA]">
+                    {shownVenues.length} of {data.venues.length} circuits
+                  </span>
+                </>
+              ) : null}
+            </div>
+            {shownVenues.length ? null : <p className="m-0 py-6 text-[14px] text-[#C5CBD8]">No circuit matches these filters.</p>}
             <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(230px,1fr))]">
-              {data.venues.map((v) => {
+              {shownVenues.map((v) => {
                 const on = v === venue;
                 const shown = on ? layout : v.layouts[0];
                 return (

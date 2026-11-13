@@ -9,6 +9,7 @@
 import { isVehicleModelId, type AssistPreset, type VehicleModelId } from "@/types/f1";
 import { listBestLaps } from "@/lib/sim/ghost-store";
 import { lapPlausibilityProblem } from "@/lib/sim/lap-plausibility";
+import { isPointToPointTrack } from "@/lib/track-kinds";
 import { validateLapRecording } from "@/lib/sim/lap-recorder";
 import { lapBoardClass, lapPhysicsVersion, parseLapConditions, type LapConditions, type LapRecording, type LeaderboardEntry } from "@/lib/sim/lap-types";
 import type { SimRealism } from "@/lib/sim/sim-realism";
@@ -336,7 +337,7 @@ export async function submitLap(rec: LapRecording, opts: { event?: string } = {}
   // Without its assists, realism, surface and physics revision a lap can't be shown fairly
   if (!valid.conditions) return { ok: false, error: "This lap was recorded by an older version of the game" };
   // The board refuses a lap whose samples don't agree with each other; say so before uploading
-  const problem = lapPlausibilityProblem(valid.data);
+  const problem = lapPlausibilityProblem(valid.data, { open: isPointToPointTrack(valid.trackId) });
   if (problem) return { ok: false, error: problem };
   const body: Record<string, unknown> = { rec: toWirePayload({ ...valid, conditions: valid.conditions }), driverKey: getOrCreateDriverKey() };
   if (opts.event) body.event = opts.event;

@@ -1,6 +1,6 @@
 import { setDriverBodyShown } from "@/lib/render/driver-figure";
 import * as THREE from "three";
-import { LIVERIES, TURN_METADATA, type BuiltTrackData } from "@/lib/track-data";
+import { LIVERIES, TURN_METADATA, inDeadZone, type BuiltTrackData } from "@/lib/track-data";
 import { F1Physics2026, type ControlInputs } from "@/lib/f1-physics-2026";
 import { trackColliders } from "@/lib/sim/track-colliders";
 import type { SimulatorCar } from "@/lib/sim/simulator-car";
@@ -436,6 +436,11 @@ export class DriveSession {
     };
     /** The player car's dry autopilot pace, which the weather scales each frame */
     let autopilotPace: { car: unknown; pace: number } = { car: null, pace: 1 };
+    /**
+     * A point-to-point course (a hill climb): how long the car has stood still past the finish, and a hold after
+     * putting it back on the start line (the worker's car reports its new place a frame or two later)
+     */
+    const runEnd = { stoppedS: 0, holdS: 0 };
     // polish:B the cool-down lap after the player's flag: the autopilot has the car, the player's inputs are ignored
     const coolDown = new CoolDown();
     /** The boost latch, for the frame loop and the HUD at once */
@@ -1834,6 +1839,19 @@ export class DriveSession {
         if (!aiField?.playerFrozen && !mpFrozen) physics.step(dtSeconds, coolDown.active ? coolDown.inputs() : inputs);
         aiField?.update(dtSeconds);
         startupMonitor?.end("sim");
+        // A hill climb: off the end of its road, or stopped past the finish, the car goes back to the start line
+        const p2p = track.pointToPoint;
+        if (p2p && raceNow().kind === "practice") {
+          runEnd.holdS = Math.max(0, runEnd.holdS - dtSeconds);
+          const s = physics.sMeters;
+          const pastFinish = s > p2p.finishS && s <= p2p.endS;
+          runEnd.stoppedS = pastFinish && Math.abs(physics.vxMs) < 1 ? runEnd.stoppedS + dtSeconds : 0;
+          if (runEnd.holdS === 0 && (inDeadZone(p2p, s) || runEnd.stoppedS > 2)) {
+            runEnd.stoppedS = 0;
+            runEnd.holdS = 1;
+            queueMicrotask(() => this.restartFlyingLap());
+          }
+        }
       }
       // The worker drives the car in practice; an AI or online race steps it here, with the field around it
       if (simHost) {

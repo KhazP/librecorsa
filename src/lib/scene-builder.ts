@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import type { BuiltTrackData } from "@/lib/track-data";
+import { inDeadZone, type BuiltTrackData } from "@/lib/track-data";
 import { withBasePath } from "@/lib/base-path";
 import { aiLineOffsetM, type BrakingGuide } from "@/lib/sim/speed-profile";
 import { evaluateDynamicBrakingUrgency } from "@/lib/sim/track-occupancy";
@@ -759,9 +759,15 @@ export function buildCircuitScene(
   let dashGround: GroundQuery | null = null;
   const dashHit = createGroundHit();
   // Crisp 3D dashed rectangular marker segments along a car's racing line: the four corners of dash i
+  const p2p = track.pointToPoint;
   const dashCorners = (i: number, line: RacingLineId): number[] => {
     const s0 = samples[i];
     const s1 = samples[(i + 1) % n];
+    // A point-to-point course's dead stretch has no road: no dash (all four corners at one point)
+    if (p2p && inDeadZone(p2p, s0.s)) {
+      const { x, y, z } = s0.position;
+      return [x, y, z, x, y, z, x, y, z, x, y, z];
+    }
 
     // The exact line the AI drives and the speed profile / braking markers are computed on
     const p0Base = s0.position.clone().addScaledVector(s0.binormal, aiLineOffsetM(s0, line));

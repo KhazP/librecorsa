@@ -40,6 +40,18 @@ const FAST_LANE: Record<string, string> = {
   istanbul_park: 'librecorsa-src/istanbul_park/1',
   grobnik: 'librecorsa-src/grobnik/grobnik',
   oschersleben: 'librecorsa-src/oschersleben/oschersleben',
+  barbagallo: 'librecorsa-src/barbagallo/barbagallo',
+  vir: 'librecorsa-src/vir/vir/full course',
+  vir_north: 'librecorsa-src/vir/vir/north course',
+  vir_south: 'librecorsa-src/vir/vir/south course',
+  vir_grand_east: 'librecorsa-src/vir/vir/grand east course',
+  vir_grand_west: 'librecorsa-src/vir/vir/grand west course',
+  vir_patriot: 'librecorsa-src/vir/vir/patriot course',
+  vir_patriot_reverse: 'librecorsa-src/vir/vir/patriot reverse course',
+  sachsenring: 'librecorsa-src/sachsenring/content/tracks/g333_sachsenring_2022/event',
+  sachsenring_short: 'librecorsa-src/sachsenring/content/tracks/g333_sachsenring_2022/trackday_short',
+  norisring: 'librecorsa-src/norisring/Norisring2009_v3.23/content/tracks/norisring',
+  le_mans_82: 'librecorsa-src/le_mans_82/content/tracks/le_mans_82/regular',
 };
 
 export function fastLanePath(trackId: string): string | null {

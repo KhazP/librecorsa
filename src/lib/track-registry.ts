@@ -87,8 +87,15 @@ export interface TrackInfo {
   quality: CircuitQuality;
 }
 
-export type CircuitType = "permanent" | "street" | "oval";
-export const CIRCUIT_TYPE_LABELS: Record<CircuitType, string> = { permanent: "Permanent", street: "Street", oval: "Oval" };
+/** "hillclimb": a road from a start line to a finish line somewhere else, driven as one timed run */
+export type CircuitType = "permanent" | "street" | "oval" | "hillclimb";
+export const CIRCUIT_TYPES: readonly CircuitType[] = ["permanent", "street", "oval", "hillclimb"];
+export const CIRCUIT_TYPE_LABELS: Record<CircuitType, string> = {
+  permanent: "Permanent",
+  street: "Street",
+  oval: "Oval",
+  hillclimb: "Hill climb",
+};
 
 export const circuitQualityMeta = (t: Pick<TrackInfo, "quality">): CircuitQualityMeta => CIRCUIT_QUALITY_META[t.quality];
 
@@ -133,6 +140,7 @@ const COUNTRY_REGION: Record<string, CircuitRegion> = {
   Hungary: "Europe",
   Netherlands: "Europe",
   Russia: "Europe",
+  Croatia: "Europe",
   Australia: "Oceania",
   "New Zealand": "Oceania",
 };
@@ -140,9 +148,13 @@ const COUNTRY_REGION: Record<string, CircuitRegion> = {
 /** A circuit's region; a country missing from the map lands in "Other" until it is added */
 export const circuitRegion = (t: Pick<TrackInfo, "country">): CircuitRegion => COUNTRY_REGION[t.country] ?? "Other";
 
-/** Permanent, street or oval: the index's own field, else an oval or street layout named as such */
+/** Permanent, street, oval or hill climb: the index's own field, else an oval or street layout named as such */
 export const circuitType = (t: TrackInfo): CircuitType =>
   t.type ?? (/\boval\b/i.test(t.layout) ? "oval" : /\bstreet\b/i.test(`${t.name} ${t.layout}`) ? "street" : "permanent");
+
+/** Who made a circuit's model, for the circuit browser's Modder filter: its credited author, else LibreCorsa itself */
+export const LIBRECORSA_MODDER = "LibreCorsa";
+export const circuitModder = (t: Pick<TrackInfo, "credit">): string => t.credit?.author ?? LIBRECORSA_MODDER;
 
 /** One venue in the circuit browser: its layouts (Daytona's oval and road course) share a card */
 export interface CircuitVenue {

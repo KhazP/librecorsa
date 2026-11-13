@@ -103,7 +103,9 @@ export const LoadingScreen: React.FC<{
   const trackInfo = getTrackInfo(track.id ?? DEFAULT_TRACK_ID);
 
   const circuit = useMemo(() => {
-    const samples = track.samples;
+    // A hill climb draws its run, from the start line to the finish, not the loop its data closes
+    const finishS = track.pointToPoint?.finishS;
+    const samples = finishS === undefined ? track.samples : track.samples.filter((s) => s.s <= finishS);
     let minX = Infinity;
     let maxX = -Infinity;
     let minZ = Infinity;
@@ -121,7 +123,7 @@ export const LoadingScreen: React.FC<{
       .filter((_, i) => i % 3 === 0)
       .map((s) => [((s.position.x - minX + ox) / size) * 100, ((s.position.z - minZ + oz) / size) * 100] as const);
     const d = pts.map(([x, y], i) => `${i === 0 ? "M" : "L"}${x.toFixed(2)} ${y.toFixed(2)}`).join(" ");
-    return { d: `${d} Z`, pts };
+    return { d: finishS === undefined ? `${d} Z` : d, pts };
   }, [track]);
   const outline = circuit.d;
   // Start / finish marker across the first segment, and the comet at the drawing's leading edge
@@ -358,7 +360,7 @@ export const LoadingScreen: React.FC<{
                     className="font-f1-mono"
                     style={{ fontSize: 2.8, fontWeight: 700, letterSpacing: "0.2em" }}
                   >
-                    S/F
+                    {track.pointToPoint ? "START" : "S/F"}
                   </text>
                 </>
               ) : null}
@@ -368,7 +370,7 @@ export const LoadingScreen: React.FC<{
 
         <footer className={`mt-6 flex flex-wrap items-center justify-between gap-2.5 border-t border-[#262B3D] pt-3.5 font-f1-mono text-[11px] font-bold tracking-[0.12em] text-[#8E96AA] short:hidden ${ready ? "compact:hidden" : ""}`}>
           <span>
-            {trackInfo.name.toUpperCase()} · {(track.totalLengthM / 1000).toFixed(2)} KM · {TURN_METADATA.length} TURNS
+            {trackInfo.name.toUpperCase()} · {((track.pointToPoint?.finishS ?? track.totalLengthM) / 1000).toFixed(2)} KM · {TURN_METADATA.length} TURNS
             {altitudeNote}
           </span>
           <span className="text-[#CCFF00]/80">LIBRECORSA · 500HZ VEHICLE DYNAMICS</span>

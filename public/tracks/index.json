@@ -265,5 +265,288 @@
       "licenseUrl": "https://www.overtake.gg/downloads/automotodrom-grobnik.4835/"
     },
     "quality": "sim"
+  },
+  {
+    "id": "barbagallo",
+    "name": "Barbagallo Raceway",
+    "layout": "Long circuit",
+    "country": "Australia",
+    "city": "Wanneroo, Western Australia",
+    "lengthM": 2393.72,
+    "turns": 7,
+    "direction": "clockwise",
+    "dataUrl": "/tracks/barbagallo/track_data.json",
+    "credit": {
+      "title": "Barbagallo Raceway",
+      "author": "dazzyb2k3",
+      "url": "https://www.overtake.gg/downloads/barbagallo-raceway.4407/",
+      "short": null,
+      "license": "Used with permission",
+      "licenseUrl": "https://www.overtake.gg/downloads/barbagallo-raceway.4407/"
+    },
+    "quality": "sim"
+  },
+  {
+    "id": "vir",
+    "name": "Virginia International Raceway",
+    "layout": "Full course",
+    "country": "United States",
+    "city": "Alton, Virginia",
+    "lengthM": 5251.48,
+    "turns": 17,
+    "direction": "clockwise",
+    "dataUrl": "/tracks/vir/track_data.json",
+    "credit": {
+      "title": "Virginia International Raceway",
+      "author": "dazzyb2k3",
+      "url": "https://www.overtake.gg/downloads/virginia-international-raceway.11892/",
+      "short": null,
+      "license": "Used with permission",
+      "licenseUrl": "https://www.overtake.gg/downloads/virginia-international-raceway.11892/"
+    },
+    "quality": "sim"
+  },
+  {
+    "id": "le_mans_82",
+    "name": "Circuit de la Sarthe",
+    "layout": "1982 layout",
+    "country": "France",
+    "city": "Le Mans",
+    "lengthM": 13646.33,
+    "turns": 17,
+    "direction": "clockwise",
+    "dataUrl": "/tracks/le_mans_82/track_data.json",
+    "credit": {
+      "title": "Le Mans 1982",
+      "author": "gunnar333",
+      "url": "https://www.overtake.gg/downloads/le-mans-1982.52192/",
+      "short": null,
+      "license": "Used with permission",
+      "licenseUrl": "https://www.overtake.gg/downloads/le-mans-1982.52192/"
+    },
+    "quality": "sim"
+  },
+  {
+    "id": "sachsenring",
+    "name": "Sachsenring",
+    "layout": "Grand Prix layout",
+    "country": "Germany",
+    "city": "Hohenstein-Ernstthal, Saxony",
+    "lengthM": 3655.88,
+    "turns": 11,
+    "direction": "anticlockwise",
+    "dataUrl": "/tracks/sachsenring/track_data.json",
+    "credit": {
+      "title": "Sachsenring 2022",
+      "author": "gunnar333",
+      "url": "https://www.overtake.gg/downloads/sachsenring-2022.41511/",
+      "short": null,
+      "license": "Used with permission",
+      "licenseUrl": "https://www.overtake.gg/downloads/sachsenring-2022.41511/"
+    },
+    "quality": "sim"
+  },
+  {
+    "id": "sachsenring_short",
+    "name": "Sachsenring",
+    "layout": "Short course",
+    "country": "Germany",
+    "city": "Hohenstein-Ernstthal, Saxony",
+    "lengthM": 1520.29,
+    "turns": 3,
+    "direction": "anticlockwise",
+    "dataUrl": "/tracks/sachsenring_short/track_data.json",
+    "credit": {
+      "title": "Sachsenring 2022",
+      "author": "gunnar333",
+      "url": "https://www.overtake.gg/downloads/sachsenring-2022.41511/",
+      "short": null,
+      "license": "Used with permission",
+      "licenseUrl": "https://www.overtake.gg/downloads/sachsenring-2022.41511/"
+    },
+    "quality": "sim"
+  },
+  {
+    "id": "norisring",
+    "name": "Norisring",
+    "layout": "Street circuit",
+    "country": "Germany",
+    "city": "Nuremberg, Bavaria",
+    "lengthM": 2157.33,
+    "turns": 6,
+    "direction": "anticlockwise",
+    "dataUrl": "/tracks/norisring/track_data.json",
+    "credit": {
+      "title": "Norisring 2009",
+      "author": "gunnar333",
+      "url": "https://www.overtake.gg/downloads/norisring-2009.27646/",
+      "short": null,
+      "license": "Used with permission",
+      "licenseUrl": "https://www.overtake.gg/downloads/norisring-2009.27646/"
+    },
+    "type": "street",
+    "quality": "sim"
+  },
+  {
+    "id": "borgloh",
+    "name": "Borgloh",
+    "layout": "Osnabrück hill climb",
+    "country": "Germany",
+    "city": "Borgloh, Lower Saxony",
+    "lengthM": 2016.84,
+    "turns": 10,
+    "direction": "uphill",
+    "dataUrl": "/tracks/borgloh/track_data.json",
+    "credit": {
+      "title": "Borgloh 2024",
+      "author": "gunnar333",
+      "url": "https://www.overtake.gg/downloads/borgloh-2024.18393/",
+      "short": null,
+      "license": "Used with permission",
+      "licenseUrl": "https://www.overtake.gg/downloads/borgloh-2024.18393/"
+    },
+    "type": "hillclimb",
+    "quality": "sim"
+  },
+  {
+    "id": "goodwood",
+    "name": "Goodwood",
+    "layout": "Festival of Speed hill climb",
+    "country": "United Kingdom",
+    "city": "Chichester, West Sussex",
+    "lengthM": 1888.07,
+    "turns": 6,
+    "direction": "uphill",
+    "dataUrl": "/tracks/goodwood/track_data.json",
+    "credit": {
+      "title": "Goodwood Festival of Speed 2017",
+      "author": "gunnar333",
+      "url": "https://www.overtake.gg/downloads/goodwood-festival-of-speed-2017.26839/",
+      "short": null,
+      "license": "Used with permission",
+      "licenseUrl": "https://www.overtake.gg/downloads/goodwood-festival-of-speed-2017.26839/"
+    },
+    "type": "hillclimb",
+    "quality": "sim"
+  },
+  {
+    "id": "vir_north",
+    "name": "Virginia International Raceway",
+    "layout": "North course",
+    "country": "United States",
+    "city": "Alton, Virginia",
+    "lengthM": 3659.61,
+    "turns": 17,
+    "direction": "clockwise",
+    "dataUrl": "/tracks/vir_north/track_data.json",
+    "credit": {
+      "title": "Virginia International Raceway",
+      "author": "dazzyb2k3",
+      "url": "https://www.overtake.gg/downloads/virginia-international-raceway.11892/",
+      "short": null,
+      "license": "Used with permission",
+      "licenseUrl": "https://www.overtake.gg/downloads/virginia-international-raceway.11892/"
+    },
+    "quality": "sim"
+  },
+  {
+    "id": "vir_south",
+    "name": "Virginia International Raceway",
+    "layout": "South course",
+    "country": "United States",
+    "city": "Alton, Virginia",
+    "lengthM": 2610.3,
+    "turns": 8,
+    "direction": "clockwise",
+    "dataUrl": "/tracks/vir_south/track_data.json",
+    "credit": {
+      "title": "Virginia International Raceway",
+      "author": "dazzyb2k3",
+      "url": "https://www.overtake.gg/downloads/virginia-international-raceway.11892/",
+      "short": null,
+      "license": "Used with permission",
+      "licenseUrl": "https://www.overtake.gg/downloads/virginia-international-raceway.11892/"
+    },
+    "quality": "sim"
+  },
+  {
+    "id": "vir_grand_east",
+    "name": "Virginia International Raceway",
+    "layout": "Grand East course",
+    "country": "United States",
+    "city": "Alton, Virginia",
+    "lengthM": 6456.36,
+    "turns": 26,
+    "direction": "clockwise",
+    "dataUrl": "/tracks/vir_grand_east/track_data.json",
+    "credit": {
+      "title": "Virginia International Raceway",
+      "author": "dazzyb2k3",
+      "url": "https://www.overtake.gg/downloads/virginia-international-raceway.11892/",
+      "short": null,
+      "license": "Used with permission",
+      "licenseUrl": "https://www.overtake.gg/downloads/virginia-international-raceway.11892/"
+    },
+    "quality": "sim"
+  },
+  {
+    "id": "vir_grand_west",
+    "name": "Virginia International Raceway",
+    "layout": "Grand West course",
+    "country": "United States",
+    "city": "Alton, Virginia",
+    "lengthM": 6635.02,
+    "turns": 28,
+    "direction": "clockwise",
+    "dataUrl": "/tracks/vir_grand_west/track_data.json",
+    "credit": {
+      "title": "Virginia International Raceway",
+      "author": "dazzyb2k3",
+      "url": "https://www.overtake.gg/downloads/virginia-international-raceway.11892/",
+      "short": null,
+      "license": "Used with permission",
+      "licenseUrl": "https://www.overtake.gg/downloads/virginia-international-raceway.11892/"
+    },
+    "quality": "sim"
+  },
+  {
+    "id": "vir_patriot",
+    "name": "Virginia International Raceway",
+    "layout": "Patriot course",
+    "country": "United States",
+    "city": "Alton, Virginia",
+    "lengthM": 1571.08,
+    "turns": 13,
+    "direction": "anticlockwise",
+    "dataUrl": "/tracks/vir_patriot/track_data.json",
+    "credit": {
+      "title": "Virginia International Raceway",
+      "author": "dazzyb2k3",
+      "url": "https://www.overtake.gg/downloads/virginia-international-raceway.11892/",
+      "short": null,
+      "license": "Used with permission",
+      "licenseUrl": "https://www.overtake.gg/downloads/virginia-international-raceway.11892/"
+    },
+    "quality": "sim"
+  },
+  {
+    "id": "vir_patriot_reverse",
+    "name": "Virginia International Raceway",
+    "layout": "Patriot course reversed",
+    "country": "United States",
+    "city": "Alton, Virginia",
+    "lengthM": 1571.38,
+    "turns": 13,
+    "direction": "clockwise",
+    "dataUrl": "/tracks/vir_patriot_reverse/track_data.json",
+    "credit": {
+      "title": "Virginia International Raceway",
+      "author": "dazzyb2k3",
+      "url": "https://www.overtake.gg/downloads/virginia-international-raceway.11892/",
+      "short": null,
+      "license": "Used with permission",
+      "licenseUrl": "https://www.overtake.gg/downloads/virginia-international-raceway.11892/"
+    },
+    "quality": "sim"
   }
 ]

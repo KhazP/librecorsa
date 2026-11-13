@@ -10,7 +10,7 @@ import type { LapOutline } from "@/lib/home/lap-outline";
 import { carModelSource, trackModelSource } from "@/lib/model-source";
 import { coverage } from "@/lib/press";
 import { REPO_URL, SUPPORT_URL } from "@/lib/site";
-import { CIRCUIT_VENUES, DEFAULT_TRACK_ID } from "@/lib/track-registry";
+import { CIRCUIT_TYPE_LABELS, CIRCUIT_VENUES, DEFAULT_TRACK_ID, circuitModder, circuitType } from "@/lib/track-registry";
 
 /** Written by scripts/build-home-outlines.ts, so its shape is LapOutline's (JSON reads a tuple as an array) */
 const OUTLINES = outlines as unknown as Record<string, LapOutline>;
@@ -36,6 +36,8 @@ export default function HomePage() {
     venues: CIRCUIT_VENUES.map((v) => ({
       name: v.name,
       country: v.country,
+      types: [...new Set(v.layouts.map((t) => CIRCUIT_TYPE_LABELS[circuitType(t)]))],
+      modders: [...new Set(v.layouts.map(circuitModder))],
       layouts: v.layouts.map((t) => ({
         id: t.id,
         layout: t.layout,
