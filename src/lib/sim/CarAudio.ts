@@ -669,6 +669,11 @@ export class CarAudioEngine {
           skid: bankSkid ? 0.55 * Math.sqrt(squeal.amp) : 0,
           skidRate: 0.85 + 0.25 * squeal.pitch,
           tcActive: telemetry.f12026?.tcActive ?? false,
+          // Heard only by banks that carry a driveline section or an electric machine loop
+          driveshaftRadS: telemetry.driveshaftRadS,
+          driveshaftTorqueNm: telemetry.driveshaftTorqueNm,
+          mguPowerKw: telemetry.mgukPowerKw,
+          mguRpm: telemetry.mguRpm,
         },
         legacyDt
       );
