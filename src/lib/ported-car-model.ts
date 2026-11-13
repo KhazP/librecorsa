@@ -377,11 +377,12 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
       steerRest.copy(steerNode.quaternion);
       if (extras.revLeds) steerNode.userData.revLeds = extras.revLeds;
     }
-    // The materials a livery repaints, copied for this car (the template's are every car's)
+    // The materials a livery repaints, copied for this car (the template's are every car's): the body's and the
+    // wheels' (a livery can recolour the rims)
     const skinMaps = extras.skinMaps;
     if (skinMaps) {
       const copies = new Map<THREE.Material, THREE.MeshStandardMaterial>();
-      bodyGroup.traverse((o) => {
+      const visit = (o: THREE.Object3D) => {
         const mesh = o as THREE.Mesh;
         if (!mesh.isMesh || Array.isArray(mesh.material)) return;
         const src = mesh.material as THREE.MeshStandardMaterial;
@@ -394,7 +395,9 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
           skinSlots.push({ mat: copy, file, own: src.map });
         }
         mesh.material = copy;
-      });
+      };
+      bodyGroup.traverse(visit);
+      for (const corner of corners) corner.spin.traverse(visit);
       applySkin();
     }
     placeholder.removeFromParent();
