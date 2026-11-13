@@ -37,17 +37,38 @@ function build(coarse = false) {
   wheel.position.copy(WHEEL);
   frame.add(wheel);
   const figure = createDriverFigure({ helmet: HELMET, wheel, frame, coarse });
-  const part = (name: string) => {
+  frame.add(figure.group);
+  const mesh = (name: string) => {
     const obj = figure.group.getObjectByName(name);
     assert.ok(obj, `${name} is in the figure`);
-    return obj.position;
+    return obj as THREE.Mesh;
   };
   const arm = (tag: 'L' | 'R'): Arm => ({
-    shoulder: part(`DRIVER_UPPER_ARM_${tag}`),
-    elbow: part(`DRIVER_FOREARM_${tag}`),
-    wrist: part(`DRIVER_GLOVE_${tag}`),
+    shoulder: mesh(`DRIVER_UPPER_ARM_${tag}`).position,
+    elbow: mesh(`DRIVER_FOREARM_${tag}`).position,
+    wrist: mesh(`DRIVER_GLOVE_${tag}`).position,
   });
-  return { figure, left: arm('L'), right: arm('R') };
+  const limbs = ['UPPER_ARM_L', 'FOREARM_L', 'UPPER_ARM_R', 'FOREARM_R'].map((n) => mesh(`DRIVER_${n}`));
+  return { figure, frame, limbs, left: arm('L'), right: arm('R') };
+}
+
+/** An onboard view in the car's frame: `pitchDeg` below (-) the horizon, looking forward */
+function onboardView(pos: THREE.Vector3, pitchDeg: number, fovDeg: number, aspect = 16 / 9): THREE.PerspectiveCamera {
+  const cam = new THREE.PerspectiveCamera(fovDeg, aspect, 0.12, 5500);
+  cam.position.copy(pos);
+  cam.lookAt(pos.x, pos.y + Math.sin(pitchDeg * DEG), pos.z + Math.cos(pitchDeg * DEG));
+  cam.updateMatrixWorld(true);
+  return cam;
+}
+
+/** Whether a view draws a limb, by the hooks the renderer calls round its draw */
+function draws(cam: THREE.Camera, limb: THREE.Mesh): boolean {
+  const hook = (fn: unknown) => (fn as (...args: unknown[]) => void).call(limb, null, null, cam, limb.geometry, null, null);
+  hook(limb.onBeforeRender);
+  const drawn = limb.geometry.drawRange.count > 0;
+  hook(limb.onAfterRender);
+  assert.equal(limb.geometry.drawRange.count, Infinity, 'the shared shape is whole again after the draw');
+  return drawn;
 }
 
 /** Holds the wheel at `deg` long enough for a change of grips to finish */
@@ -160,6 +181,32 @@ check("an opponent's arms follow the wheel in steps", () => {
   assert.ok(left.wrist.distanceTo(onGrip(1, 3)) < 1e-6, 'a larger one moves the hands');
   figure.update(200 * DEG, 1 / 60);
   assert.ok(left.wrist.distanceTo(onGrip(1, 20)) < 1e-6, 'a change of grips is made in one step');
+});
+
+// The 2026 Prototype's driver's-eye view (its model's cockpit camera) and the dash view ahead of it (onboard-views.ts)
+const EYE = new THREE.Vector3(0, 0.74, 0);
+const DASH = EYE.clone().add(new THREE.Vector3(0, -0.03, 0.18));
+
+check("the driver's-eye view never cuts an arm open", () => {
+  const { figure, frame, limbs } = build();
+  const views = [16 / 9, 32 / 9].map((aspect) => onboardView(EYE, -5.865, 55, aspect));
+  for (const deg of sweep()) {
+    settle(figure, deg);
+    frame.updateMatrixWorld(true);
+    for (const view of views) for (const limb of limbs) assert.ok(draws(view, limb), `${limb.name} at ${deg}`);
+  }
+});
+
+check('the dash view leaves out an arm it would cut open, and only then', () => {
+  const { figure, frame, limbs } = build();
+  const view = onboardView(DASH, -14, 58);
+  settle(figure, 0);
+  frame.updateMatrixWorld(true);
+  for (const limb of limbs) assert.ok(draws(view, limb), `${limb.name} straight ahead`);
+  settle(figure, LOCK_DEG);
+  frame.updateMatrixWorld(true);
+  assert.ok(!draws(view, limbs[1]), 'the top hand\'s forearm at full lock');
+  assert.ok(draws(view, limbs[3]), 'the other forearm at full lock');
 });
 
 console.log(`\n${passed} checks passed`);
