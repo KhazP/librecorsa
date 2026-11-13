@@ -309,10 +309,19 @@ const AP_EDGE_STEP_M = 0.08;
 const AP_EDGE_PROBE_M = 0.1;
 /** Clear ground the autopilot keeps between its usable road and a raised step out past it (m) */
 const AP_EDGE_APRON_M = 0.6;
+/** Furthest past the track's width the kerb-and-road probe looks (m) */
+const AP_KERB_PROBE_M = 3;
 /** Road either side of the centreline the autopilot may use (m, every `AP_PROFILE_STEP_M`): - and + lateral sides */
 interface AutopilotEdges {
   neg: Float32Array;
   pos: Float32Array;
+  /**
+   * How far a flat kerb runs on past the track's width, - and + sides (m, 0 where there is none): to its last point,
+   * with no lip on the way, up to `AP_KERB_PROBE_M`. A line may run its outer tyres out to it, as a driver uses the
+   * kerbs (`lateralRangeAt`)
+   */
+  negOut: Float32Array;
+  posOut: Float32Array;
 }
 const apEdges = new WeakMap<GroundQuery, WeakMap<BuiltTrackData, AutopilotEdges>>();
 
@@ -331,6 +340,7 @@ function autopilotEdges(track: BuiltTrackData, ground: GroundQuery): AutopilotEd
   const L = track.totalLengthM;
   const n = Math.ceil(L / AP_PROFILE_STEP_M);
   const raw = { neg: new Float32Array(n), pos: new Float32Array(n) };
+  const rawOut = { neg: new Float32Array(n), pos: new Float32Array(n) };
   const hit = createGroundHit();
   for (let i = 0; i < n; i++) {
     const smp = track.getSampleAtDistance((i * L) / n);
@@ -352,10 +362,24 @@ function autopilotEdges(track: BuiltTrackData, ground: GroundQuery): AutopilotEd
       }
       // how far inside the track's width the road ends
       (side < 0 ? raw.neg : raw.pos)[i] = Math.min(1, half - usable);
+      // How far a flat kerb runs on past the width, with no lip on the way: out to the kerb's last point. Asphalt past
+      // the width does not count of itself (on a street circuit it runs on to the barriers)
+      let out = 0;
+      let last = usable >= half ? at(side * half) : null;
+      for (let d = AP_EDGE_PROBE_M; last !== null && d <= AP_KERB_PROBE_M + 1e-6; d += AP_EDGE_PROBE_M) {
+        const h = at(side * (half + d));
+        if (h === null || (hit.surface !== 'kerb' && hit.surface !== 'road')) break;
+        if (h - last - b.y * side * AP_EDGE_PROBE_M > AP_EDGE_STEP_M) break;
+        if (hit.surface === 'kerb') out = d;
+        last = h;
+      }
+      (side < 0 ? rawOut.neg : rawOut.pos)[i] = out;
     }
   }
   const hold = Math.round(10 / (L / n));
-  const out = { neg: new Float32Array(n), pos: new Float32Array(n) };
+  // A kerb past the width counts where it runs on for ±5 m (its ends, a gap between two: not a target)
+  const holdOut = Math.max(1, Math.round(5 / (L / n)));
+  const out = { neg: new Float32Array(n), pos: new Float32Array(n), negOut: new Float32Array(n), posOut: new Float32Array(n) };
   for (let i = 0; i < n; i++) {
     let neg = 0;
     let pos = 0;
@@ -364,9 +388,19 @@ function autopilotEdges(track: BuiltTrackData, ground: GroundQuery): AutopilotEd
       neg = Math.max(neg, raw.neg[j]);
       pos = Math.max(pos, raw.pos[j]);
     }
+    let negOut = Infinity;
+    let posOut = Infinity;
+    for (let k = -holdOut; k <= holdOut; k++) {
+      const j = (i + k + n) % n;
+      negOut = Math.min(negOut, rawOut.neg[j]);
+      posOut = Math.min(posOut, rawOut.pos[j]);
+    }
     const half = track.getSampleAtDistance((i * L) / n).width / 2;
     out.neg[i] = half - neg;
     out.pos[i] = half - pos;
+    // A lip anywhere near: none of the surface past it
+    out.negOut[i] = neg > 0 ? 0 : negOut;
+    out.posOut[i] = pos > 0 ? 0 : posOut;
   }
   perTrack.set(track, out);
   return out;
@@ -539,6 +573,8 @@ const TRACK_KI = 1.2;
 const TRACK_I_MAX_MS2 = 2.5;
 /** A line may put two wheels on a kerb: this much past the autopilot's usual edge margin where the edge has one (m) */
 const TRACK_KERB_ALLOW_M = 0.6;
+/** On a kerb past the track's width, the outer tyres' outer edges stay this far inside where it ends (m): half a tyre's width and 0.1 m to spare */
+const TRACK_KERB_EDGE_ROOM_M = 0.3;
 /** Autopilot pedals ease off past this share of the rears' peak slip angle, by this much per share beyond it */
 const AP_REAR_GUARD = 0.9;
 const AP_REAR_GUARD_GAIN = 4;
@@ -1968,14 +2004,21 @@ export class F12026CarSim implements SimulatorCar {
     let [lo, hi] = autopilotLateralRange(this.track, sample, s, edges, this.profile);
     const half = sample.width / 2;
     let lipNeg = false, lipPos = false;
+    let outNeg = 0, outPos = 0;
     if (edges) {
       const n = edges.neg.length;
       const i = Math.round((wrap(s, this.track.totalLengthM) / this.track.totalLengthM) * n) % n;
       lipNeg = edges.neg[i] < half - 0.05;
       lipPos = edges.pos[i] < half - 0.05;
+      outNeg = edges.negOut[i];
+      outPos = edges.posOut[i];
     }
     if (sample.kerbLeft && !lipNeg) lo -= TRACK_KERB_ALLOW_M;
     if (sample.kerbRight && !lipPos) hi += TRACK_KERB_ALLOW_M;
+    // A kerb past the width: the outer tyres may run out to where it ends, as the quick drivers do
+    const halfTrack = 0.5 * Math.max(this.profile.config.chassis.trackWidthFront, this.profile.config.chassis.trackWidthRear);
+    if (!lipNeg && outNeg > 0) lo = Math.min(lo, -(half + outNeg - halfTrack - TRACK_KERB_EDGE_ROOM_M));
+    if (!lipPos && outPos > 0) hi = Math.max(hi, half + outPos - halfTrack - TRACK_KERB_EDGE_ROOM_M);
     return [lo, hi];
   }
 
