@@ -881,7 +881,10 @@ export class AiOpponentField {
     // the full step the VF26 hit Okayama's barriers four times as often)
     const checked = (getActiveTrackMetadata().aiPlans?.[sim.vehicleId ?? ''] as AiPlanCheck | undefined)?.maxGrip;
     const ceiling = Math.max(PLAN_GRIP, (checked ?? PLAN_GRIP) - RACE_GRIP_MARGIN);
-    const planGrip = PLAN_GRIP + (ceiling - PLAN_GRIP) * this.mods.gripReach;
+    // On a race's first lap the pack brakes into the corners together: the extra grip waits for the second lap (with
+    // it, Alien GT3 fields went off at Spielberg's Turn 1 on lap 1 two races in six)
+    const reach = this.started && car.clock.lapsDone === 0 ? 0 : this.mods.gripReach;
+    const planGrip = PLAN_GRIP + (ceiling - PLAN_GRIP) * reach;
     const grip = Math.round(planGrip * car.pace * car.pace * weather * weather * damaged * 200) / 200;
     if (sim.aiPlan && grip === car.planGrip) return;
     this.aiTrack ??= aiTrackFor(this.track);
