@@ -39,11 +39,12 @@ export const GGV_TABLES: Record<VehicleModelId, GgvTable> = {
     accelG: [0.894, 0.82, 0.614, 0.462, 0.335, 0.227, 0.128, 0.02],
     lockKappa: Math.tan((320 / 12.6) * (Math.PI / 180)) / 2.65,
   },
+  // Measured 2026-11-12 on the rigid-body engine the VF26 ships on (`vf26-engine.ts`)
   vf26: {
     speedsMs: [15, 25, 35, 45, 55, 65, 75, 85],
-    latG: [1.787, 2.056, 2.463, 3.003, 3.614, 4.144, 4.432, 4.492],
-    brakeG: [1.338, 1.696, 2.181, 2.783, 3.419, 4.084, 4.684, 5.022],
-    accelG: [1.318, 1.444, 1.525, 1.322, 1.061, 0.75, 0.366, -0.068],
+    latG: [1.789, 2.072, 2.412, 2.913, 3.455, 4.036, 4.499, 4.655],
+    brakeG: [1.977, 2.133, 2.447, 2.898, 3.481, 3.946, 4.397, 4.819],
+    accelG: [1.122, 1.207, 1.305, 1.146, 0.842, 0.555, 0.27, -0.078],
     // Rwanda's banked dip at s ≈ 640 m (g̃ ≈ 2.1 g at 262 km/h): front tyres saturated at ~4.5 g, barely above the
     // flat-road limit; the ride height lost to the load costs the floor most of what the load adds
     compressionGain: 0.15,

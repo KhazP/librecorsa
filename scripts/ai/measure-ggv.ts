@@ -10,11 +10,11 @@
  * with no wind, warm tyres, a half fuel load (the car's default).
  */
 import { writeFileSync } from 'node:fs';
-import { F1Physics2026 } from '../../src/lib/f1-physics-2026';
 import { F12026CarSim } from '../../src/lib/sim/f12026-car/F12026CarSim';
 import { createAmgGt3Sim } from '../../src/lib/sim/gt3/AmgGt3Sim';
 import { createSuzukiLianaSim } from '../../src/lib/sim/road/SuzukiLianaSim';
 import { createMtr496rSim } from '../../src/lib/sim/proto/Mtr496rSim';
+import { createVf26Sim } from '../../src/lib/sim/f12026-car/Vf26Sim';
 import type { SimulatorCar } from '../../src/lib/sim/simulator-car';
 import { createFlatTestTrack } from '../lib/flat-track';
 import { steadyRamp } from '../lib/handling-tests';
@@ -33,7 +33,8 @@ const DT = 1 / 240;
 const makers: Record<CarId, () => SimulatorCar> = {
   'f12026-car': () => new F12026CarSim(pad),
   'amg-gt3': () => createAmgGt3Sim(pad),
-  vf26: () => new F1Physics2026(pad),
+  // The VF26 as it ships: on the rigid-body engine (`vf26-engine.ts`)
+  vf26: () => createVf26Sim(pad),
   liana: () => createSuzukiLianaSim(pad),
   'mtr-496r': () => createMtr496rSim(pad),
 };
