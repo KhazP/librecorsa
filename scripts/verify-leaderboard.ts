@@ -21,6 +21,7 @@ import { randomDriverProfile } from '../src/lib/settings/player-settings';
 import type { Env } from '../cloudflare/api/types';
 import { fakeD1, fakeR2 } from './lib/fake-cloudflare';
 import { planImport, type SupabaseDriver, type SupabaseLap } from './migrate-supabase-board';
+import { carById, type CarId } from '../src/lib/cars/car-registry';
 import { CHALLENGE_ROTATION, challengeAt, challengeCompound, challengeConditionsLabel, challengeProblem, fitsChallenge, isoWeekId, timeLeftLabel } from '../src/lib/net/weekly-challenge';
 
 /** The revision the laps here are driven under: the board of the car they are driven in (the LC26's own) */
@@ -307,11 +308,33 @@ async function main(): Promise<void> {
       check('challenge: the rotation starts the week of 9 November 2026 with the Liana at Dunsfold, a time trial only', first.trackId === 'dunsfold' && first.vehicle === 'liana' && first.race.trackId === 'rwanda_official' && first.race.vehicle === 'lc26' && challengeAt(monday - 1).trackId === CHALLENGE_ROTATION[CHALLENGE_ROTATION.length - 1].trackId);
       const elsewhere = CHALLENGE_ROTATION.filter((c) => c.race.trackId !== c.trackId || c.race.vehicle !== c.vehicle);
       check('challenge: only the Dunsfold weeks race on another circuit and car', elsewhere.length > 0 && elsewhere.every((c) => c.trackId === 'dunsfold'));
-      const raced = CHALLENGE_ROTATION.filter((c) => c.trackId !== 'dunsfold');
-      const circuits = new Set(raced.map((c) => c.trackId));
-      const cars = new Set(raced.map((c) => c.vehicle));
-      const pairs = new Set(raced.map((c) => `${c.trackId} ${c.vehicle}`));
-      check('challenge: over the rotation every circuit is driven in every car, once', pairs.size === circuits.size * cars.size && pairs.size === raced.length, `${pairs.size} pairs, ${circuits.size} circuits, ${cars.size} cars, ${raced.length} weeks`);
+      type Kind = { id: string; type?: string };
+      const climbs = CHALLENGE_ROTATION.filter((c) => (listed as Kind[]).find((x) => x.id === c.race.trackId)?.type === 'hillclimb');
+      check('challenge: no week is on a hill climb', climbs.length === 0, climbs.map((c) => c.trackId).join(', '));
+      // The weeks asked for by date
+      const on = (y: number, m: number, d: number) => challengeAt(Date.UTC(y, m - 1, d));
+      const is = (c: { trackId: string; vehicle: string }, trackId: string, vehicle: string) => c.trackId === trackId && c.vehicle === vehicle;
+      check(
+        'challenge: 16 Nov the LMDh at Le Mans, 23 Nov the GT3 at the Red Bull Ring, 30 Nov the 496R at Chang (no assists), 7 Dec the Liana at Monaco, 14 Dec the GT3 at RISE',
+        is(on(2026, 11, 16), 'le_mans_82', 'lc-lmdh') && is(on(2026, 11, 23), 'spielberg', 'amg-gt3') && is(on(2026, 11, 30), 'chang', 'mtr-496r') && on(2026, 11, 30).assists === 'pro' && is(on(2026, 12, 7), 'monaco', 'liana') && is(on(2026, 12, 14), 'rwanda_official', 'amg-gt3')
+      );
+      check(
+        'challenge: the weeks of the 2027 races at Monaco, Le Mans, the Red Bull Ring and Istanbul are on those circuits',
+        is(on(2027, 6, 4), 'monaco', 'lc26') && is(on(2027, 6, 12), 'le_mans_82', 'lc-lmdh') && is(on(2027, 7, 9), 'spielberg', 'lc26') && is(on(2027, 10, 1), 'istanbul_park', 'lc26')
+      );
+      check('challenge: every fourth week has no assists, also when the list starts again', CHALLENGE_ROTATION.length % 4 === 0 && CHALLENGE_ROTATION.every((c, i) => (c.assists === 'pro') === (i % 4 === 3)), String(CHALLENGE_ROTATION.length));
+      // A venue's layouts share the start of their id ("okayama", "okayama_piper")
+      const venue = (id: string) => id.split('_')[0];
+      const twice = CHALLENGE_ROTATION.filter((c, i) => venue(c.trackId) === venue(CHALLENGE_ROTATION[(i + 1) % CHALLENGE_ROTATION.length].trackId));
+      check('challenge: no venue two weeks running', twice.length === 0, twice.map((c) => c.trackId).join(', '));
+      // A week may name one car of its vehicle (the GT3 has two); its races are in the same one
+      const named = CHALLENGE_ROTATION.filter((c) => c.car !== undefined);
+      const wrongCar = named.filter((c) => carById(c.car as CarId).id !== c.car || carById(c.car as CarId).physics !== c.vehicle || c.race.car !== c.car);
+      check('challenge: a week that names its car names one of its vehicle, 14 Dec the BMW', wrongCar.length === 0 && on(2026, 12, 14).car === 'bmw-m4-gt3' && on(2026, 11, 23).car === undefined, wrongCar.map((c) => c.car).join(', '));
+      const dunsfold = CHALLENGE_ROTATION.filter((c) => c.trackId === 'dunsfold');
+      check('challenge: a Dunsfold week\'s races name no car', dunsfold.every((c) => c.race.car === undefined));
+      const cars = new Set(CHALLENGE_ROTATION.map((c) => c.vehicle));
+      check('challenge: every car but the F1 team cars has its weeks', ['lc26', 'lc-lmdh', 'amg-gt3', 'mtr-496r', 'liana', 'nissan-r33-jgtc', 'nissan-r32-jtcc'].every((v) => cars.has(v as never)) && cars.size === 7, [...cars].join(', '));
       check('challenge: a week\'s races are 3 to 14 laps (ten minutes or so on the shortest and the longest lap)', CHALLENGE_ROTATION.every((c) => c.race.laps >= 3 && c.race.laps <= 14), CHALLENGE_ROTATION.map((c) => c.race.laps).join(' '));
     }
     check('challenge: the next week is the next entry of the rotation', challengeAt(monday + 7 * 86_400_000).trackId === CHALLENGE_ROTATION[1].trackId && challengeAt(monday + 14 * 86_400_000).trackId === CHALLENGE_ROTATION[2].trackId);

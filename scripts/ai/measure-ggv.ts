@@ -2,7 +2,7 @@
  * What each car can do, measured on its own physics: steady cornering, braking and traction limits against speed
  * (a g-g-v table), on the flat test pad with the aids the AI drives with.
  *
- *   npx tsx scripts/ai/measure-ggv.ts [--car f12026-car|amg-gt3|lc26|liana|mtr-496r|nissan-r33-jgtc|
+ *   npx tsx scripts/ai/measure-ggv.ts [--car f12026-car|amg-gt3|lc26|liana|mtr-496r|lc-lmdh|nissan-r33-jgtc|
  *     nissan-r32-jtcc|all] [--out public/ai/ggv.json]
  *
  * Cornering: an ISO 4138-style slow steer ramp at each held speed, the best 1 s mean lateral g (scripts/lib/handling-
@@ -15,6 +15,7 @@ import { F12026CarSim } from '../../src/lib/sim/f12026-car/F12026CarSim';
 import { createAmgGt3Sim } from '../../src/lib/sim/gt3/AmgGt3Sim';
 import { createSuzukiLianaSim } from '../../src/lib/sim/road/SuzukiLianaSim';
 import { createMtr496rSim } from '../../src/lib/sim/proto/Mtr496rSim';
+import { createLcLmdhSim } from '../../src/lib/sim/proto/LcLmdhSim';
 import { createNissanR33Sim } from '../../src/lib/sim/classic/NissanR33Sim';
 import { createNissanR32Sim } from '../../src/lib/sim/classic/NissanR32Sim';
 import { createLc26Sim } from '../../src/lib/sim/f12026-car/Lc26Sim';
@@ -28,6 +29,7 @@ type CarId =
   | 'lc26'
   | 'liana'
   | 'mtr-496r'
+  | 'lc-lmdh'
   | 'nissan-r33-jgtc'
   | 'nissan-r32-jtcc';
 const argv = process.argv.slice(2);
@@ -47,6 +49,7 @@ const makers: Record<CarId, () => SimulatorCar> = {
   lc26: () => createLc26Sim(pad),
   liana: () => createSuzukiLianaSim(pad),
   'mtr-496r': () => createMtr496rSim(pad),
+  'lc-lmdh': () => createLcLmdhSim(pad),
   'nissan-r33-jgtc': () => createNissanR33Sim(pad),
   'nissan-r32-jtcc': () => createNissanR32Sim(pad),
 };

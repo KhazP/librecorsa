@@ -2,7 +2,7 @@
 
 import React from "react";
 import type { F12026Channels } from "@/types/f1";
-import { CLASSIC_CAR_IDS, HUD_CLASSIC, HUD_CYAN, HUD_PROTO, HUD_ROAD, HUD_GLASS, HUD_GREEN, HUD_LBL, HUD_RED, HUD_VOLT, HUD_WELL, HUD_YELLOW } from "./hud-format";
+import { CLASSIC_CAR_IDS, HUD_CLASSIC, HUD_CYAN, HUD_PROTO, PROTO_CAR_IDS, HUD_ROAD, HUD_GLASS, HUD_GREEN, HUD_LBL, HUD_RED, HUD_VOLT, HUD_WELL, HUD_YELLOW } from "./hud-format";
 import type { AeroReadout } from "./aero-label";
 
 const WHEELS = ["LF", "RF", "LR", "RR"] as const;
@@ -53,7 +53,7 @@ export const F12026ChannelsPanel: React.FC<{
                   ? HUD_CYAN
                   : c.carId === "liana"
                     ? HUD_ROAD
-                    : c.carId === "mtr-496r"
+                    : PROTO_CAR_IDS.has(c.carId)
                       ? HUD_PROTO
                       : CLASSIC_CAR_IDS.has(c.carId)
                         ? HUD_CLASSIC
@@ -65,7 +65,7 @@ export const F12026ChannelsPanel: React.FC<{
               ? "AMG GT3 · CHANNELS"
               : c.carId === "liana"
                 ? "ROAD CAR · CHANNELS"
-                : c.carId === "mtr-496r"
+                : PROTO_CAR_IDS.has(c.carId)
                   ? "PROTOTYPE · CHANNELS"
                   : CLASSIC_CAR_IDS.has(c.carId)
                     ? "CLASSIC · CHANNELS"

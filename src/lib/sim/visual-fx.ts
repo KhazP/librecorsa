@@ -19,6 +19,7 @@ import { staticFloorOf } from '@/lib/render/body-floor';
 import { CAR_WHEEL_LOCKS_DEG } from '@/lib/input/device-input';
 import { SUZUKI_LIANA_CONFIG } from './road/SuzukiLianaConfig';
 import { MTR_496R_CONFIG } from './proto/Mtr496rConfig';
+import { LC_LMDH_CONFIG } from './proto/LcLmdhConfig';
 import { NISSAN_R33_CONFIG } from './classic/NissanR33Config';
 import { NISSAN_R32_CONFIG } from './classic/NissanR32Config';
 import { AMG_GT3_CONFIG } from './gt3/AmgGt3Config';
@@ -940,6 +941,7 @@ const PORTED_ONLY = {
   gt3: { url: '/cars/amg-gt3-evo/model/amg-gt3-evo.glb', config: AMG_GT3_CONFIG, lockDeg: CAR_WHEEL_LOCKS_DEG['amg-gt3'] },
   road: { url: '/cars/liana/model/liana.glb', config: SUZUKI_LIANA_CONFIG, lockDeg: CAR_WHEEL_LOCKS_DEG.liana },
   proto: { url: '/cars/mtr-496r/model/mtr-496r.glb', config: MTR_496R_CONFIG, lockDeg: CAR_WHEEL_LOCKS_DEG['mtr-496r'] },
+  'lc-lmdh': { url: '/cars/lc-lmdh/model/lc-lmdh.glb', config: LC_LMDH_CONFIG, lockDeg: CAR_WHEEL_LOCKS_DEG['lc-lmdh'] },
   'nissan-r33-jgtc': {
     url: '/cars/nissan-r33-jgtc/model/nissan-r33-jgtc.glb',
     config: NISSAN_R33_CONFIG,
@@ -960,7 +962,7 @@ const rigKind = (vehicle: VehicleModelId | undefined): PortedKind | 'f1' =>
       ? 'road'
       : vehicle === 'mtr-496r'
         ? 'proto'
-        : vehicle === 'nissan-r33-jgtc' || vehicle === 'nissan-r32-jtcc'
+        : vehicle === 'lc-lmdh' || vehicle === 'nissan-r33-jgtc' || vehicle === 'nissan-r32-jtcc'
           ? vehicle
           : 'f1';
 const poolKey = (vehicle: VehicleModelId | undefined, ghost: boolean) => `${rigKind(vehicle)}${ghost ? ':ghost' : ''}`;

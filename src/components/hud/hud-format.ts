@@ -12,6 +12,8 @@ export const HUD_CYAN = "#00E5FF";
 export const HUD_ROAD = "#FF8A3D";
 /** The prototype class colour (car-registry `CAR_CLASSES`) */
 export const HUD_PROTO = "#B388FF";
+/** The prototypes' vehicle models */
+export const PROTO_CAR_IDS: ReadonlySet<string> = new Set(["mtr-496r", "lc-lmdh"]);
 /** The classic GT and touring class colour (car-registry `CAR_CLASSES`) */
 export const HUD_CLASSIC = "#FFD23F";
 /** The classic Nissans' vehicle models */

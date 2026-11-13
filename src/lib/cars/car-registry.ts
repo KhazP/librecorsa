@@ -3,6 +3,7 @@ import { BMW_M4_GT3_SOUND, F1_2026_SOUND, type CarSoundSource } from "@/lib/sim/
 import { AMG_GT3_SOUND } from "@/lib/sim/gt3/AmgGt3Sim";
 import { SUZUKI_LIANA_SOUND } from "@/lib/sim/road/SuzukiLianaSim";
 import { MTR_496R_SOUND } from "@/lib/sim/proto/Mtr496rSim";
+import { LC_LMDH_SOUND } from "@/lib/sim/proto/LcLmdhSim";
 import { NISSAN_R33_SOUND } from "@/lib/sim/classic/NissanR33Sim";
 import { NISSAN_R32_SOUND } from "@/lib/sim/classic/NissanR32Sim";
 import { NISSAN_R32_SKINS, NISSAN_R33_SKINS } from "./classic-skins";
@@ -21,6 +22,7 @@ export type CarId =
   | "amg-gt3"
   | "bmw-m4-gt3"
   | "mtr-496r"
+  | "lc-lmdh"
   | "liana"
   | "nissan-r33-jgtc"
   | "nissan-r32-jtcc";
@@ -41,7 +43,7 @@ export interface CarClass {
 /**
  * Whether a car's physics belong to the car you see, the car-side counterpart of a circuit's `CircuitQuality`:
  * - "own": its vehicle model was built for this car (the F1 2026 Prototype, the Mercedes-AMG GT3 Evo,
- *   the MTRacing 496R, the Suzuki Liana, the classic Nissans)
+ *   the MTRacing 496R, the LC-LMDH, the Suzuki Liana, the classic Nissans)
  * - "shared": a ported body on another car's model of the same class and era (the BMW)
  * - "era": a ported body from an earlier season on the 2026 model
  * The F1 physics switch doesn't change it: a ported F1 car borrows its physics under either model.
@@ -93,6 +95,7 @@ export const PHYSICS_CHECK: Record<VehicleModelId, string> = {
   "f12026-car": "Its physics are checked against the range a 2026 open-wheeler should fall in.",
   liana: "Its physics come from an Assetto Corsa mod of this car and are checked against its laps of Dunsfold there.",
   "mtr-496r": "Its physics come from the Assetto Corsa mod this car was made for.",
+  "lc-lmdh": "Its physics follow the LMDh regulations' published limits, with estimates where a car's data is not public.",
   "nissan-r33-jgtc": "Its physics come from the Assetto Corsa mod this car was made for.",
   "nissan-r32-jtcc": "Its physics come from the Assetto Corsa mod this car was made for.",
 };
@@ -199,6 +202,11 @@ export interface CarDefinition {
   /** The liveries a player can pick for it (the first is the one its GLB is painted in); absent: its factory paint */
   skins?: readonly CarSkin[];
   sound: CarSoundSource;
+  /**
+   * A car still being built or not yet driven: left out of every picker and list, and reached only by its
+   * link (`?car=<id>`) in a copy that has its files. Absent: listed
+   */
+  preview?: boolean;
 }
 
 export const CAR_CLASSES: readonly CarClass[] = [
@@ -285,6 +293,25 @@ const ALL_CARS: readonly CarDefinition[] = [
     sound: MTR_496R_SOUND,
   },
   {
+    id: "lc-lmdh",
+    classId: "proto",
+    title: "LC-LMDH",
+    sub: "LMDh prototype · twin-turbo V8 hybrid · rear-wheel drive",
+    badge: "LC-LMDH",
+    quality: "own",
+    credit: {
+      title: "LMDh prototype (3D model)",
+      author: "kilianhoffmann13",
+      url: "https://sketchfab.com/models/d786aa263a804254aa92543dda11dba0",
+      note: "Cut to the simulator's budget, its marks removed and repainted",
+      ...CC_BY,
+    },
+    physics: "lc-lmdh",
+    year: 2026,
+    modelUrl: "/cars/lc-lmdh/model/lc-lmdh.glb",
+    sound: LC_LMDH_SOUND,
+  },
+  {
     id: "liana",
     classId: "road",
     title: "Suzuki Liana 1.6",
@@ -345,10 +372,13 @@ const ALL_CARS: readonly CarDefinition[] = [
   },
 ];
 
-/** The cars this copy lists: all of them on librecorsa.org, the 2026 prototype in a clone of the repository */
-export const CARS: readonly CarDefinition[] = ALL_CARS.filter((c) => carListed(c.id));
+/** The cars this copy can drive: all of them on librecorsa.org, the 2026 prototype in a clone of the repository */
+const KNOWN_CARS: readonly CarDefinition[] = ALL_CARS.filter((c) => carListed(c.id));
 
-const BY_ID = new Map<string, CarDefinition>(CARS.map((c) => [c.id, c]));
+/** The cars this copy lists: the ones it can drive, less the previews (`CarDefinition.preview`) */
+export const CARS: readonly CarDefinition[] = KNOWN_CARS.filter((c) => !c.preview);
+
+const BY_ID = new Map<string, CarDefinition>(KNOWN_CARS.map((c) => [c.id, c]));
 
 export const isCarId = (value: unknown): value is CarId => typeof value === "string" && BY_ID.has(value);
 
@@ -389,7 +419,7 @@ export const carOvertakingRules = (car: Pick<CarDefinition, "classId" | "year">)
   car.classId === "f1" ? overtakingRulesForSeason(car.year) : undefined;
 
 const CLASS_ORDER = new Map<CarClassId, number>(CAR_CLASSES.map((k, i) => [k.id, i]));
-const REGISTRY_ORDER = new Map<CarId, number>(CARS.map((c, i) => [c.id, i]));
+const REGISTRY_ORDER = new Map<CarId, number>(KNOWN_CARS.map((c, i) => [c.id, i]));
 
 /** The menus' order: by class, then newest first, then as listed here */
 export const compareCarsByClassAndYear = (a: CarDefinition, b: CarDefinition): number =>
@@ -443,4 +473,4 @@ export const carsByYear = (id: CarClassId): { year: number; cars: CarDefinition[
 
 /** The car that stands for a vehicle model (its first car), e.g. for a leaderboard entry or a class rule */
 export const carForVehicle = (vehicle: VehicleModelId): CarDefinition =>
-  CARS.find((c) => c.physics === vehicle) ?? CARS[0];
+  KNOWN_CARS.find((c) => c.physics === vehicle) ?? CARS[0];

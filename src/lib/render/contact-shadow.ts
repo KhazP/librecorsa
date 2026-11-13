@@ -42,7 +42,7 @@ function shadowTexture(): THREE.CanvasTexture | null {
   return texture;
 }
 
-type ShadowKind = "f1" | "gt3" | "road" | "proto" | "classic";
+type ShadowKind = "f1" | "gt3" | "road" | "proto" | "lmdh" | "classic";
 const geometries = new Map<ShadowKind, THREE.PlaneGeometry>();
 let material: THREE.MeshBasicMaterial | null = null;
 
@@ -52,6 +52,7 @@ const FOOTPRINT: Record<ShadowKind, [number, number]> = {
   gt3: [5.6, 2.7],
   road: [5.1, 2.5],
   proto: [5.4, 2.4],
+  lmdh: [5.9, 2.6],
   classic: [5.3, 2.5],
 };
 
@@ -72,7 +73,9 @@ export function addContactShadow(root: THREE.Object3D, vehicle: VehicleModelId |
         ? "road"
         : vehicle === "mtr-496r"
           ? "proto"
-          : vehicle === "nissan-r33-jgtc" || vehicle === "nissan-r32-jtcc"
+          : vehicle === "lc-lmdh"
+            ? "lmdh"
+            : vehicle === "nissan-r33-jgtc" || vehicle === "nissan-r32-jtcc"
             ? "classic"
             : "f1";
   // One quad per car model and one material for all of them, rather than a fresh pair per rig

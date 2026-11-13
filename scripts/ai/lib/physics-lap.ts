@@ -10,6 +10,7 @@ import { createAmgGt3Sim } from '../../../src/lib/sim/gt3/AmgGt3Sim';
 import { createLc26Sim } from '../../../src/lib/sim/f12026-car/Lc26Sim';
 import { createSuzukiLianaSim } from '../../../src/lib/sim/road/SuzukiLianaSim';
 import { createMtr496rSim } from '../../../src/lib/sim/proto/Mtr496rSim';
+import { createLcLmdhSim } from '../../../src/lib/sim/proto/LcLmdhSim';
 import { createNissanR33Sim } from '../../../src/lib/sim/classic/NissanR33Sim';
 import { createNissanR32Sim } from '../../../src/lib/sim/classic/NissanR32Sim';
 import type { VehicleModelId } from '../../../src/types/f1';
@@ -49,6 +50,8 @@ function simFor(vehicle: VehicleModelId, track: BuiltTrackData, root: THREE.Obje
       return createSuzukiLianaSim(track, root);
     case 'mtr-496r':
       return createMtr496rSim(track, root);
+    case 'lc-lmdh':
+      return createLcLmdhSim(track, root);
     case 'nissan-r33-jgtc':
       return createNissanR33Sim(track, root);
     case 'nissan-r32-jtcc':
