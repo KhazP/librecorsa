@@ -305,7 +305,7 @@ const ALL_CARS: readonly CarDefinition[] = [
     credit: {
       title: "LMDh prototype (3D model)",
       author: "kilianhoffmann13",
-      url: "https://sketchfab.com/kilianhoffmann13",
+      url: "https://sketchfab.com/models/d786aa263a804254aa92543dda11dba0",
       note: "Cut to the simulator's budget, its marks removed and repainted",
       ...CC_BY,
     },
