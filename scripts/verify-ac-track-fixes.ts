@@ -256,8 +256,8 @@ async function verifyKerbsFeelAndSound() {
       `PASS  [${tid}] Track_Surface_Kerb: ${triCount} tris, ${(kerbHitRatio * 100).toFixed(2)}% surface='kerb' (${hitKerb}/${triCount}), ${((nonZeroDu / triCount) * 100).toFixed(1)}% continuous UV`
     );
 
-    // Norisring's few kerbs (its hairpins') are left out of the drive-over check: the f12026 car crosses the one this
-    // picks without a wheel on it
+    // Norisring is left out of the drive-over check: the f12026 car registered no kerb on the run it picks (s = 473 m),
+    // not yet looked into
     if (!['chang', 'okayama', 'spielberg', 'monaco', 'istanbul_park', 'grobnik', 'oschersleben', 'barbagallo', 'vir', 'sachsenring', 'le_mans_82'].includes(tid)) continue;
 
     // Find a multi-sample kerb run and locate the lateral midpoint of the 3D Track_Surface_Kerb strip

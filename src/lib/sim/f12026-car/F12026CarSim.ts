@@ -829,6 +829,8 @@ export class F12026CarSim implements SimulatorCar {
   private lastSector: 1 | 2 | 3 = 1;
   /** On a point-to-point course: a run is under way (started at the start line, not yet at the finish) */
   private runActive = false;
+  /** On a point-to-point course: the car has stood still just behind the start line, so its next run starts from rest */
+  private atRestOnLine = false;
   private simTimeMs = 0;
   /** Frame time not yet run as control ticks (s, under one tick) */
   private controlAccumulatorS = 0;
@@ -1421,6 +1423,7 @@ export class F12026CarSim implements SimulatorCar {
     // A point-to-point course is driven from a standing start: its road ends behind the start line
     if (this.track.pointToPoint) flyingStart = false;
     this.runActive = false;
+    this.atRestOnLine = false;
     // Fuelled before it is seated, so it settles at the ride height of that load
     this.fillFuel();
     const L = this.track.totalLengthM;
@@ -2270,14 +2273,17 @@ export class F12026CarSim implements SimulatorCar {
     }
     const p2p = this.track.pointToPoint;
     if (p2p) {
-      // A point-to-point course: the start line starts a run (again, when it is crossed again), the finish line ends it
+      // A point-to-point course: the start line starts a run (again, when it is crossed again), the finish line ends it.
+      // A run counts from a standing start: at rest within 10 m of the line first, or the run is timed but not valid
+      if (this.s >= L - 10 && Math.abs(this.vxMs) < 0.5) this.atRestOnLine = true;
       if (this.prevS > L * 0.85 && this.s < L * 0.15) {
         this.lineCrossingStartsLap = false;
         this.runActive = true;
         this.lapStartMs = this.simTimeMs;
         this.sectorStartMs = this.simTimeMs;
-        this.lapValid = true;
-        this.telemetry.lapInvalid = false;
+        this.lapValid = this.atRestOnLine;
+        this.telemetry.lapInvalid = !this.atRestOnLine;
+        this.atRestOnLine = false;
       } else if (this.runActive && this.prevS < p2p.finishS && this.s >= p2p.finishS && this.s - this.prevS < 50) {
         this.runActive = false;
         this.onLapCompleted();
