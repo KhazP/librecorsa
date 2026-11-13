@@ -71,6 +71,16 @@ export interface Vf26Overrides {
   ers?: Partial<ERSData>;
   /** Where the fuel sits, from the centre of gravity of the car without fuel (m: y up, z forward); absent: at it */
   fuelTank?: { y: number; z: number };
+  /**
+   * Inflation pressure in the tyres' heat, every compound alike (`TyresThermalPatchData.pressureHeat` and
+   * `TyresPressureData.pressureRollingGain`); absent: pressure does not move the heat
+   */
+  tyreHeat?: Vf26TyreHeat;
+}
+
+export interface Vf26TyreHeat {
+  pressureHeat: NonNullable<TyresCompoundData['thermalData']['pressureHeat']>;
+  pressureRollingGain: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -444,7 +454,7 @@ function modelData(t: Vf26TyreSpec): TyresCompoundData['modelData'] {
 
 type TyreOf = (slot: 'soft' | 'medium' | 'hard', axle: 'front' | 'rear') => Vf26TyreSpec;
 
-function compound(tyre_compound: PhysicsTyreCompound, name: string, shortName: 'S' | 'M' | 'H', slot: 'soft' | 'medium' | 'hard', tyreOf: TyreOf): TyresCompoundData {
+function compound(tyre_compound: PhysicsTyreCompound, name: string, shortName: 'S' | 'M' | 'H', slot: 'soft' | 'medium' | 'hard', tyreOf: TyreOf, heat?: Vf26TyreHeat): TyresCompoundData {
   const f = tyreOf(slot, 'front');
   const r = tyreOf(slot, 'rear');
   const rear = modelData(r);
@@ -470,6 +480,7 @@ function compound(tyre_compound: PhysicsTyreCompound, name: string, shortName: '
       coreCooling: [8, 0.2],
       thermalVerticalK: -0.0012,
       thermalVerticalRefC: 100,
+      ...(heat ? { pressureHeat: heat.pressureHeat } : {}),
     },
     pressureData: {
       optimalPsi: f.pressureRefPsi,
@@ -477,6 +488,7 @@ function compound(tyre_compound: PhysicsTyreCompound, name: string, shortName: '
       pressureGripSensitivity: 1.0,
       // Out of the blankets, as the f12026-car [est]
       coldRefC: 80,
+      ...(heat ? { pressureRollingGain: heat.pressureRollingGain } : {}),
     },
     camberData: {
       camberGain: f.camberGain,
@@ -495,12 +507,12 @@ function compound(tyre_compound: PhysicsTyreCompound, name: string, shortName: '
   };
 }
 
-function tyreCompounds(tyreOf: TyreOf) {
-  const MEDIUM = compound('PhysicsTyreCompound_F1_Medium', 'Medium', 'M', 'medium', tyreOf);
+function tyreCompounds(tyreOf: TyreOf, heat?: Vf26TyreHeat) {
+  const MEDIUM = compound('PhysicsTyreCompound_F1_Medium', 'Medium', 'M', 'medium', tyreOf, heat);
   return {
-    PhysicsTyreCompound_F1_Soft: compound('PhysicsTyreCompound_F1_Soft', 'Soft', 'S', 'soft', tyreOf),
+    PhysicsTyreCompound_F1_Soft: compound('PhysicsTyreCompound_F1_Soft', 'Soft', 'S', 'soft', tyreOf, heat),
     PhysicsTyreCompound_F1_Medium: MEDIUM,
-    PhysicsTyreCompound_F1_Hard: compound('PhysicsTyreCompound_F1_Hard', 'Hard', 'H', 'hard', tyreOf),
+    PhysicsTyreCompound_F1_Hard: compound('PhysicsTyreCompound_F1_Hard', 'Hard', 'H', 'hard', tyreOf, heat),
     // Rain tyres on the medium's carcass, as the data builds its own
     PhysicsTyreCompound_F1_Intermediate: deriveRainCompound(MEDIUM, 'intermediate', 'PhysicsTyreCompound_F1_Intermediate', 'Intermediate', true),
     PhysicsTyreCompound_F1_Wet: deriveRainCompound(MEDIUM, 'wet', 'PhysicsTyreCompound_F1_Wet', 'Full Wet', true),
@@ -600,7 +612,7 @@ export function buildVf26Config(overrides: Vf26Overrides = {}) {
     },
     suspensions: suspensionData(F, R, softFront.radius, softRear.radius),
     aero: aeroData(F, R),
-    tyreCompounds: tyreCompounds(tyreOf),
+    tyreCompounds: tyreCompounds(tyreOf, overrides.tyreHeat),
     compoundSlots: {
       soft: 'PhysicsTyreCompound_F1_Soft',
       medium: 'PhysicsTyreCompound_F1_Medium',

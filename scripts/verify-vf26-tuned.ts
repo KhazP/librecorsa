@@ -395,6 +395,32 @@ console.log('\n== Carbon brakes, by their temperature');
   check('... and at 100 °C 15 to 25 % under it, over 4 to 9 m more road', between(1 - cold.peak / hot.peak, 0.15, 0.25) && between(cold.m - hot.m, 4, 9), row(cold));
 }
 
+console.log('\n== Tyre pressure in the tyres\' heat');
+{
+  // 60 s at 2 g and 150 km/h with the cold pressures moved: the more loaded front tyre at the end
+  const corner = (dPsi: number) => {
+    const sim = fresh(150);
+    for (const w of sim.vehicle.wheels) {
+      w.coldPressurePsi += dPsi;
+      w.pressurePsi = w.coldPressurePsi;
+    }
+    const v = 150 / 3.6;
+    let steer = 0;
+    for (let t = 0; t < 60; t += H) {
+      steer += Math.abs(sim.telemetry.lateralG) < 2 ? 0.02 * H : -0.005 * H;
+      sim.step(H, { throttle: THREE.MathUtils.clamp(0.25 + 0.6 * (v - sim.vxMs), 0, 1), analogSteer: steer });
+    }
+    const W = sim.vehicle.wheels;
+    const w = W[0].fz > W[1].fz ? W[0] : W[1];
+    return { carcassC: w.coreTempC, crownC: w.bandTempsC[1] - 0.5 * (w.bandTempsC[0] + w.bandTempsC[2]), g: Math.abs(sim.telemetry.lateralG) };
+  };
+  const under = corner(-4);
+  const over = corner(4);
+  const row = (x: typeof under) => `${f(x.carcassC, 1)} °C`;
+  check('Set 4 psi under, a tyre worked at 2 g runs 4 to 12 °C hotter in the carcass than set 4 psi over', between(under.g, 1.8, 2.2) && between(over.g, 1.8, 2.2) && between(under.carcassC - over.carcassC, 4, 12), `${row(under)} against ${row(over)}`);
+  check('... and the over-inflated one is the hotter on its crown against its shoulders', over.crownC > under.crownC, `${f(over.crownC, 1)} °C against ${f(under.crownC, 1)} °C`);
+}
+
 console.log('\n== Fuel on board');
 {
   // At rest on flat ground, the springs set for the load: the front axle's share of the weight on the four tyres

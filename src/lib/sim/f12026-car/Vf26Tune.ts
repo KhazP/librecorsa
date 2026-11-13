@@ -212,6 +212,12 @@ export const VF26_TUNE: Vf26Overrides = {
   // takes 0.6 point off the front axle's share (45.65 % empty, 45.42 % with 40 kg, 45.07 % full) and the car gets it
   // back as the fuel burns [measured at rest on flat ground]
   fuelTank: { y: 0.2, z: -0.15 },
+  // Inflation pressure is in the tyres' heat: an under-inflated tyre flexes more as it rolls (1.3 × the pressure it
+  // is short of its best [ref]) and slides its tread harder, an over-inflated one runs on its crown (the sliding
+  // heat and the crown's share as the 496R's [est]). The pressure moved the grip and the spring before, never the
+  // temperature: after 60 s at 2 g the loaded front's carcass was at 87 °C whatever the pressure; now 93 °C set
+  // 4 psi under and 86 °C set 4 psi over [measured on flat ground at 150 km/h]
+  tyreHeat: { pressureHeat: { slipGain: 0.5, crownGain: 0.05 }, pressureRollingGain: 1.3 },
 };
 
 export const VF26_TUNED_CONFIG = buildVf26Config(VF26_TUNE);
