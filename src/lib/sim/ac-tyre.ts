@@ -1,5 +1,5 @@
 /**
- * Tyre model driven by the VF26 `.tyre` data.
+ * Tyre model driven by the LC26 `.tyre` data.
  *
  * - Slip curve:                Pacejka Magic Formula F = D·sin(C·atan(Bx − E(Bx − atan Bx))) on the
  *                              normalised slip x. B, C, E are fitted per compound so the curve keeps the
@@ -36,7 +36,7 @@ import {
 } from './wet-tyres';
 import { Lut } from './lut';
 import { tyreGaugePressureAtTemperature } from './tyre-pressure';
-import type { Vf26TyreSpec } from './vf26-data';
+import type { Lc26TyreSpec } from './lc26-data';
 
 /** Thermal node index: band (0 inner, 1 middle, 2 outer) × layer (0 surface, 1 bulk, 2 carcass) */
 export const TYRE_BANDS = 3;
@@ -64,7 +64,7 @@ export interface ContactPatch5PointResult {
 }
 
 export interface TyreRuntime {
-  spec: Vf26TyreSpec;
+  spec: Lc26TyreSpec;
   thermal: Lut;
   dyLut: Lut | null;
   dxLut: Lut | null;
@@ -304,7 +304,7 @@ export function coldPressureFor(refPsi: number): number {
   return tyreGaugePressureAtTemperature(refPsi, GAS_REF_C, COLD_REF_C);
 }
 
-export function createTyreRuntime(spec: Vf26TyreSpec, initialTempC: number): TyreRuntime {
+export function createTyreRuntime(spec: Lc26TyreSpec, initialTempC: number): TyreRuntime {
   const t: TyreRuntime = {
     spec,
     thermal: new Lut(spec.thermalCurve),
@@ -346,7 +346,7 @@ export function createTyreRuntime(spec: Vf26TyreSpec, initialTempC: number): Tyr
  * Switches the compound / section. The cold inflation pressure is left as set (the driver's setup), it is
  * not reset to the compound default.
  */
-export function setTyreSpec(t: TyreRuntime, spec: Vf26TyreSpec): void {
+export function setTyreSpec(t: TyreRuntime, spec: Lc26TyreSpec): void {
   if (t.spec === spec) return;
   t.spec = spec;
   t.thermal = new Lut(spec.thermalCurve);
@@ -426,7 +426,7 @@ export function tyreBandSurfaceTempC(t: TyreRuntime, band: number): number {
 }
 
 /** Optimum running pressure (psi gauge), shifted to the wet compound's gas temperature. */
-function hotPressureRefPsi(spec: Vf26TyreSpec): number {
+function hotPressureRefPsi(spec: Lc26TyreSpec): number {
   const shift = spec.wet?.tempShiftC ?? 0;
   if (shift === 0) return spec.pressureRefPsi;
   const refGasC = GAS_REF_C + 0.75 * shift;

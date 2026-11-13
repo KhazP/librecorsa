@@ -1,12 +1,12 @@
 /**
  * Ports Qvist Designs' "F1 2026 concept (polygon model)" (CC BY 4.0, https://qvistdesigns.framer.website/) to the 2026
- * Prototype's body, in the layout `src/lib/vf26-car-model.ts` reads:
+ * Prototype's body, in the layout `src/lib/lc26-car-model.ts` reads:
  *
  *   node scripts/cars/port_qvist_f1.mjs <f1_2026_concept_polygon_model.glb> [out.glb] [--debug-parts <file.glb>]
  *
  * Output (default `public/cars/f12026/model/f12026.glb`), metres, +X left, +Y up, +Z forward, tyres on y = 0, the
  * front axle at z = 1.5045 (where the AM26 body had it, so the cameras it shares stay comparable):
- *   VF26 (extras: wheelCentres, cameras, liveryMask: false, source)
+ *   LC26 (extras: wheelCentres, cameras, liveryMask: false, source)
  *     BODY        the bodywork, one mesh per material; every vertex of the body, the flaps, the arms and the
  *                 drums carries `_OCCLUSION`: how much of the sky it sees past the rest of the car (1 = all of it)
  *       ARM_xx_n  a suspension arm, in its own frame at its root (extras `arm`: kind, tip)
@@ -42,7 +42,7 @@ const WHEEL_NAMES = { LF: "WHEEL_LF", RF: "WHEEL_RF", LR: "WHEEL_LR", RR: "WHEEL
 /**
  * DeX's AM26 (CC BY 4.0, the car's previous body) gives it its steering wheel, shift lights and display, and its
  * cockpit cameras: with the front axles lined up the two cockpits sit within ~5 cm of each other (halo, headrest,
- * roll hoop). Only those are kept, in this file: the AM26's `VF26` root with its `cameras` and `steerBase` extras and
+ * roll hoop). Only those are kept, in this file: the AM26's `LC26` root with its `cameras` and `steerBase` extras and
  * its `STEER_BASE` subtree.
  */
 const STEER_FROM = path.join(ROOT, "scripts/cars/sources/am26-steering-wheel.glb");
@@ -1402,7 +1402,7 @@ async function main() {
   const specular = doc.createExtension(KHRMaterialsSpecular);
   mats[ZONE.interior].setExtension("KHR_materials_specular", specular.createSpecular().setSpecularFactor(0.35));
 
-  const vf = doc.createNode("VF26");
+  const vf = doc.createNode("LC26");
   const scene = doc.createScene("Scene").addChild(vf);
   void scene;
 
@@ -1551,9 +1551,9 @@ async function main() {
   const io = new NodeIO().registerExtensions(ALL_EXTENSIONS).registerDependencies({ "meshopt.decoder": MeshoptDecoder });
   await MeshoptDecoder.ready;
   const amr = await io.read(steerFrom);
-  const amrRoot = amr.getRoot().listNodes().find((n) => n.getName() === "VF26");
+  const amrRoot = amr.getRoot().listNodes().find((n) => n.getName() === "LC26" || n.getName() === "VF26"); // keep-old-id: the wheel's source was ported before the rename
   const steerSrc = amr.getRoot().listNodes().find((n) => n.getName() === "STEER_BASE");
-  if (!amrRoot || !steerSrc) throw new Error(`${steerFrom}: no VF26 / STEER_BASE`);
+  if (!amrRoot || !steerSrc) throw new Error(`${steerFrom}: no LC26 / STEER_BASE`);
   const subtree = [];
   const walk = (n) => {
     subtree.push(n);

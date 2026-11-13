@@ -1287,7 +1287,7 @@ export class MultiplayerSyncManager {
 
   /** This game's physics revision: players on another one can't race together */
   private simVersion(): number {
-    return lapPhysicsVersion('vf26');
+    return lapPhysicsVersion('lc26');
   }
 
   private helloMessage(): ControlMessage {

@@ -14,7 +14,7 @@ import { compoundData, F12026_CAR_CONFIG, type CarPhysicsConfig } from '../src/l
 import { AMG_GT3_CONFIG } from '../src/lib/sim/gt3/AmgGt3Config';
 import { MTR_496R_CONFIG } from '../src/lib/sim/proto/Mtr496rConfig';
 import { SUZUKI_LIANA_CONFIG } from '../src/lib/sim/road/SuzukiLianaConfig';
-import { VF26_TUNED_CONFIG } from '../src/lib/sim/f12026-car/Vf26Tune';
+import { LC26_TUNED_CONFIG } from '../src/lib/sim/f12026-car/Lc26Tune';
 import { Lut } from '../src/lib/sim/lut';
 
 const failures: string[] = [];
@@ -132,7 +132,7 @@ for (const [name, config, v0] of [
 
 console.log('\n== In gear with no pedal: the car stays where it stands');
 for (const [name, config] of [
-  ['VF26', VF26_TUNED_CONFIG as unknown as CarPhysicsConfig],
+  ['LC26', LC26_TUNED_CONFIG as unknown as CarPhysicsConfig],
   ['F1 2026', F12026_CAR_CONFIG as unknown as CarPhysicsConfig],
   ['GT3', AMG_GT3_CONFIG],
   ['496R', MTR_496R_CONFIG],
@@ -166,9 +166,9 @@ for (const [name, config] of [
   check(`${name}: braked to a stop and let go, it stays stopped`, after < 0.02, `${fmt(after * 3.6, 2)} km/h at most, 5 s on`);
 }
 
-console.log('\n== The VF26 off the line: the engine is held where it has torque');
+console.log('\n== The LC26 off the line: the engine is held where it has torque');
 {
-  const cfg = VF26_TUNED_CONFIG as unknown as CarPhysicsConfig;
+  const cfg = LC26_TUNED_CONFIG as unknown as CarPhysicsConfig;
   const run = (pedal: number) => {
     const car = makeCar(cfg, 0);
     for (let i = 0; i < 1 / DT; i++) car.step(DT, { throttle: 0, brake: 1, steer: 0 });

@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 420" width="720" height="420" role="img" aria-labelledby="t d">
-<title id="t">VF26 sustained lateral g vs speed</title>
-<desc id="d">Best one-second lateral acceleration of the VF26 on a slow steering ramp at constant speed, against the cornering-limit table that ships with its reference car data. Downforce makes the limit rise with speed.</desc>
+<title id="t">LC26 sustained lateral g vs speed</title>
+<desc id="d">Best one-second lateral acceleration of the LC26 on a slow steering ramp at constant speed, against the cornering-limit table that ships with its reference car data. Downforce makes the limit rise with speed.</desc>
 <style>
 svg{--surface:#fcfcfb;--ink:#0b0b0b;--ink2:#52514e;--muted:#898781;--grid:#e1e0d9;--axis:#c3c2b7;--s1:#2a78d6;--s2:#eb6834;--s3:#1baf7a;--r1:#86b6ef;--r2:#3987e5;--r3:#1c5cab;--r4:#0d366b;--mutedSeries:#898781;font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
 @media (prefers-color-scheme: dark){svg{--surface:#1a1a19;--ink:#f0efec;--ink2:#c3c2b7;--muted:#898781;--grid:#2c2c2a;--axis:#383835;--s1:#3987e5;--s2:#d95926;--s3:#199e70;--r1:#1c5cab;--r2:#3987e5;--r3:#86b6ef;--r4:#cde2fb;--mutedSeries:#898781;}}
@@ -10,7 +10,7 @@ svg{--surface:#fcfcfb;--ink:#0b0b0b;--ink2:#52514e;--muted:#898781;--grid:#e1e0d
 .grid{stroke:var(--grid);stroke-width:1}.base{stroke:var(--axis);stroke-width:1}
 </style>
 <rect width="720" height="420" rx="8" fill="var(--surface)"/>
-<text class="ttl" x="64" y="28">VF26 sustained lateral g vs speed</text>
+<text class="ttl" x="64" y="28">LC26 sustained lateral g vs speed</text>
 <text class="sub" x="64" y="48">Simulator (no aids, steer ramp at constant speed) vs the car package's own cornering-limit table</text>
 <line x1="64" y1="70" x2="80" y2="70" stroke="var(--s1)" stroke-width="2" stroke-linecap="round"/>
 <text class="leg" x="86" y="74">Simulator</text>

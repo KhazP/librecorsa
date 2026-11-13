@@ -622,7 +622,7 @@ async function engineVoiceChecks(): Promise<void> {
       const upshift = plays(run, "gear_up") - gearUps;
       check(
         "Reverse to first plays no gear or shift-cut sound; first to second does",
-        run.engine.usingVf26Sounds && fromReverse === 0 && upshift === 1,
+        run.engine.usingLc26Sounds && fromReverse === 0 && upshift === 1,
         `reverse→1: ${fromReverse}, 1→2: ${upshift}`
       );
       run.engine.dispose();
@@ -681,7 +681,7 @@ async function engineVoiceChecks(): Promise<void> {
       const playingAfter = wavLoops.filter((src) => !(wavGain(src) === 0)).length;
       check(
         "WAV loops then a bank: the loops go silent, only the bank plays",
-        wavLoops.length === 5 && playingBefore > 0 && run.engine.usingVf26Sounds && playingAfter === 0,
+        wavLoops.length === 5 && playingBefore > 0 && run.engine.usingLc26Sounds && playingAfter === 0,
         `${wavLoops.length} loops, ${playingBefore} heard before the bank, ${playingAfter} after`
       );
       run.engine.dispose();
@@ -705,8 +705,8 @@ async function engineVoiceChecks(): Promise<void> {
       net.log = [];
       net.slow = true;
       const run = start();
-      for (let k = 0; k < 20 && !run.engine.usingVf26Sounds; k++) await tick();
-      const ready = run.engine.usingVf26Sounds;
+      for (let k = 0; k < 20 && !run.engine.usingLc26Sounds; k++) await tick();
+      const ready = run.engine.usingLc26Sounds;
       run.engine.dispose();
       await settle();
       net.slow = false;

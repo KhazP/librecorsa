@@ -7,7 +7,7 @@
 import { getActiveTrackData } from '../src/lib/track-data';
 import { F1Physics2026 } from '../src/lib/f1-physics-2026';
 import { F12026CarSim } from '../src/lib/sim/f12026-car/F12026CarSim';
-import { createVf26Sim } from '../src/lib/sim/f12026-car/Vf26Sim';
+import { createLc26Sim } from '../src/lib/sim/f12026-car/Lc26Sim';
 import { createAmgGt3Sim } from '../src/lib/sim/gt3/AmgGt3Sim';
 import { createMtr496rSim } from '../src/lib/sim/proto/Mtr496rSim';
 import { createSuzukiLianaSim } from '../src/lib/sim/road/SuzukiLianaSim';
@@ -71,8 +71,8 @@ console.log('The autopilot brings each engine round at the slow pace (Rwanda col
   const track = getActiveTrackData();
   const root = loadGlbGeometry('public/tracks/rwanda_official/rwanda_official.glb');
   const cars: [string, () => SimulatorCar][] = [
-    ['VF26 (older engine)', () => new F1Physics2026(track)],
-    ['VF26 (rigid-body engine)', () => createVf26Sim(track, root)],
+    ['LC26 (older engine)', () => new F1Physics2026(track)],
+    ['LC26 (rigid-body engine)', () => createLc26Sim(track, root)],
     ['f12026-car', () => new F12026CarSim(track, root)],
     ['AMG GT3', () => createAmgGt3Sim(track, root)],
     ['MTR 496R', () => createMtr496rSim(track, root)],

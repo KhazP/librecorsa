@@ -730,15 +730,15 @@ export function saveOnboarded() {
 const CAR_STORAGE_KEY = "bugesera.vehicle";
 const RUMBLE_STORAGE_KEY = "bugesera.rumble";
 
-/** The car to drive: `?car=` in the URL, else the last choice, else the VF26 */
+/** The car to drive: `?car=` in the URL, else the last choice, else the LC26 */
 export function loadCarChoice(): CarId {
   try {
     const fromUrl = new URLSearchParams(window.location.search).get("car");
     const linked = resolveCarId(fromUrl);
     if (linked) return linked;
-    return resolveCarId(localStorage.getItem(CAR_STORAGE_KEY)) ?? "vf26";
+    return resolveCarId(localStorage.getItem(CAR_STORAGE_KEY)) ?? "lc26";
   } catch {
-    return "vf26";
+    return "lc26";
   }
 }
 

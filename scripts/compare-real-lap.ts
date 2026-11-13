@@ -5,10 +5,10 @@
  * a local fetch script.
  *
  *   npx tsx scripts/compare-real-lap.ts --track monaco --ref <path/to/monaco_2026_Q.json>
- *       [--car vf26|vf26-classic|f12026-car|amg-gt3|...] [--pace 1]
+ *       [--car lc26|lc26-classic|f12026-car|amg-gt3|...] [--pace 1]
  *
  * `--car` is a vehicle model, built as the game builds it (the engine the game drives it on, its season's overtaking
- * aids free to use as in practice). `vf26-classic` is the 2026 Prototype on its older engine.
+ * aids free to use as in practice). `lc26-classic` is the 2026 Prototype on its older engine.
  */
 import { readFileSync } from 'node:fs';
 import { getActiveTrackData, setActiveTrack, type RawTrackJson } from '../src/lib/track-data';
@@ -25,7 +25,7 @@ const opt = (name: string, fallback?: string) => {
 };
 const trackId = opt('track', 'monaco')!;
 const refPath = opt('ref');
-const carKind = opt('car', 'vf26')!;
+const carKind = opt('car', 'lc26')!;
 const pace = Number(opt('pace', '1'));
 if (!refPath) throw new Error('--ref <telemetry json> is required');
 
@@ -88,7 +88,7 @@ if (ref.location?.length) {
 }
 
 // ---- Simulated lap: autopilot from a flying start, second lap recorded
-const classic = carKind === 'vf26-classic';
+const classic = carKind === 'lc26-classic';
 if (!classic && !isVehicleModelId(carKind)) throw new Error(`--car ${carKind}: not a vehicle model`);
 const root = classic ? null : loadGlbGeometry(`public${track.meshUrl}`);
 const car: SimulatorCar = classic ? new F1Physics2026(track) : vehicleModelSpec(carKind as never).createSim(track, root);

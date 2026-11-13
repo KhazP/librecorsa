@@ -49,7 +49,7 @@ function buildRig(id: CarId): SimCarRig {
 }
 
 /** The car's model has replaced its placeholder: the 2026 body, or a loaded GLB (which brings its camera anchors) */
-const loaded = (rig: SimCarRig) => Boolean(rig.getVf26Body() || rig.getCameraAnchors());
+const loaded = (rig: SimCarRig) => Boolean(rig.getLc26Body() || rig.getCameraAnchors());
 
 async function main(): Promise<void> {
   const id = new URLSearchParams(location.search).get("car") as CarId | null;

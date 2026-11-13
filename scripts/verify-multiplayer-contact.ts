@@ -3,7 +3,7 @@
  *
  *   npx tsx scripts/verify-multiplayer-contact.ts
  *
- * Two VF26s on autopilot, each client seeing the other only through its own `MultiplayerSyncManager` (25 Hz packets,
+ * Two LC26s on autopilot, each client seeing the other only through its own `MultiplayerSyncManager` (25 Hz packets,
  * 40 ± 15 ms one way) and resolving its own car with `resolvePlayerVsRemoteCar`, as the simulator does. Contact is
  * judged against the true poses of both cars.
  *

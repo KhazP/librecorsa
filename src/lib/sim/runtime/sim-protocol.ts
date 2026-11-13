@@ -63,7 +63,7 @@ export type SimCommand =
    * The car to simulate, and with the first one the circuit; answered with `ready`. A later `init` replaces the car
    * (a car change). `car` numbers the cars: the events about one carry its number
    */
-  | { type: "init"; car: number; track?: { id: string; raw: RawTrackJson }; vehicle: VehicleModelId; vf26Rigid: boolean }
+  | { type: "init"; car: number; track?: { id: string; raw: RawTrackJson }; vehicle: VehicleModelId; lc26Rigid: boolean }
   /** The circuit's colliders, once its mesh has loaded on the page */
   | { type: "colliders"; data: TrackColliderData }
   | { type: "set"; key: CarSettable; value: unknown }

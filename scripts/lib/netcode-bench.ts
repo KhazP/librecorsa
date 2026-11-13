@@ -784,7 +784,7 @@ function packetOf(st: CarSample, c: SimClient): Omit<NetworkVehiclePacket, 'peer
     driverCode: c.name.repeat(3).slice(0, 3),
     teamColorHex: '#3671c6',
     name: `Driver ${c.name}`,
-    vehicle: 'vf26',
+    vehicle: 'lc26',
     trackId: 'rwanda_official_short',
     race: { id: 'r8k2m4x1', dist: st.s, fin: null, laps: 0, best: 91234.5, last: 92345.25, pen: 0, cmp: 'soft' },
     pos: [st.pos.x, st.pos.y, st.pos.z],

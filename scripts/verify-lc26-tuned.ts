@@ -1,24 +1,24 @@
 /**
- * The VF26 a driver gets on the rigid-body engine: the car data with the tune of `Vf26Tune.ts`. Holds it where it was
+ * The LC26 a driver gets on the rigid-body engine: the car data with the tune of `Lc26Tune.ts`. Holds it where it was
  * set: on flat ground, against 2026 qualifying laps on the straights, on its ride heights at speed, and over laps of
  * Rwanda (on the road, off its plank, tyres in their window).
  *
- *   npx tsx scripts/verify-vf26-tuned.ts
+ *   npx tsx scripts/verify-lc26-tuned.ts
  *
- * `verify-vf26-fold.ts` compares the two engines on the untouched data; this is the tuned car on its own bands.
+ * `verify-lc26-fold.ts` compares the two engines on the untouched data; this is the tuned car on its own bands.
  */
 import * as THREE from 'three';
 import { getActiveTrackData } from '../src/lib/track-data';
 import { F12026CarSim } from '../src/lib/sim/f12026-car/F12026CarSim';
 import { FlatGroundQuery } from '../src/lib/sim/f12026-car/TrackColliderQuery';
 import { VehiclePhysics } from '../src/lib/sim/f12026-car/VehiclePhysics';
-import { createVf26Sim, VF26_SIM_PROFILE, vf26TunedProfileCar } from '../src/lib/sim/f12026-car/Vf26Sim';
+import { createLc26Sim, LC26_SIM_PROFILE, lc26TunedProfileCar } from '../src/lib/sim/f12026-car/Lc26Sim';
 import { plannedDownforceCoef, plannedMu } from '../src/lib/sim/speed-profile';
-import { VF26_TUNED_CONFIG } from '../src/lib/sim/f12026-car/Vf26Tune';
-import { VF26_CAR_CONFIG } from '../src/lib/sim/f12026-car/Vf26Config';
-import { VF26_AI_REFERENCE } from '../src/lib/sim/vf26-data';
+import { LC26_TUNED_CONFIG } from '../src/lib/sim/f12026-car/Lc26Tune';
+import { LC26_CAR_CONFIG } from '../src/lib/sim/f12026-car/Lc26Config';
+import { LC26_AI_REFERENCE } from '../src/lib/sim/lc26-data';
 import { createFlatTestTrack } from './lib/flat-track';
-import { measureVf26, VF26_TUNED } from './lib/vf26-measure';
+import { measureLc26, LC26_TUNED } from './lib/lc26-measure';
 
 const failures: string[] = [];
 const check = (name: string, ok: boolean, detail = '') => {
@@ -28,11 +28,11 @@ const check = (name: string, ok: boolean, detail = '') => {
 const f = (v: number, d = 2) => v.toFixed(d);
 const between = (v: number, lo: number, hi: number) => v >= lo && v <= hi;
 
-const C = VF26_TUNED_CONFIG;
+const C = LC26_TUNED_CONFIG;
 const pad = createFlatTestTrack(60_000, 3000);
 const H = 1 / 240;
 function fresh(kmh: number, config = C): F12026CarSim {
-  const sim = new F12026CarSim(pad, null, { ...VF26_SIM_PROFILE, config });
+  const sim = new F12026CarSim(pad, null, { ...LC26_SIM_PROFILE, config });
   sim.assistPreset = 'pro';
   sim.autoGearbox = true;
   sim.teleportToDistance(2000, kmh / 3.6);
@@ -63,7 +63,7 @@ console.log('== What the tune is');
   };
   const fr = axle(false);
   const rr = axle(true);
-  check('Wheels of 28 to 36 kg', between(ch.unsprungMassFront, 28, 36) && between(ch.unsprungMassRear, 28, 36), `${ch.unsprungMassFront} / ${ch.unsprungMassRear} kg (the data's car: ${VF26_CAR_CONFIG.chassis.unsprungMassFront} / ${VF26_CAR_CONFIG.chassis.unsprungMassRear})`);
+  check('Wheels of 28 to 36 kg', between(ch.unsprungMassFront, 28, 36) && between(ch.unsprungMassRear, 28, 36), `${ch.unsprungMassFront} / ${ch.unsprungMassRear} kg (the data's car: ${LC26_CAR_CONFIG.chassis.unsprungMassFront} / ${LC26_CAR_CONFIG.chassis.unsprungMassRear})`);
   check('... that hop at 17 to 23 Hz', between(fr.hopHz, 17, 23) && between(rr.hopHz, 17, 23), `${f(fr.hopHz, 1)} / ${f(rr.hopHz, 1)} Hz`);
   check('Corner dampers 0.35 to 0.5 of critical in slow bump, softer past the knee', between(fr.rollBump, 0.35, 0.5) && between(rr.rollBump, 0.35, 0.5) && fr.digressive && rr.digressive, `${f(fr.rollBump)} / ${f(rr.rollBump)}`);
   // Eighth gear against the laps: engine speed per km/h
@@ -73,7 +73,7 @@ console.log('== What the tune is');
 }
 
 console.log('\n== On flat ground');
-const m = measureVf26(VF26_TUNED.make);
+const m = measureLc26(LC26_TUNED.make);
 {
   // From rest the car is a little slow against a real one (some 2.6 s to 100 km/h): first gear runs to 110 km/h and the
   // MGU-K is held back under 100 km/h; the auto-clutch holds the engine at 7000 rpm off the line, where it has its
@@ -84,7 +84,7 @@ const m = measureVf26(VF26_TUNED.make);
   check('300–100 km/h in 80 to 92 m, peaking at 4.5 to 5.0 g on discs at 250 °C', between(m.brakeM, 80, 92) && between(m.brakePeakG, 4.5, 5.0), `${f(m.brakeM, 1)} m, ${f(m.brakePeakG)} g`);
   // Cornering: where the tune put it, ± 4 %
   const set = [2.05, 2.66, 3.21, 3.75, 4.18];
-  VF26_AI_REFERENCE.lateral.forEach(([v], i) => {
+  LC26_AI_REFERENCE.lateral.forEach(([v], i) => {
     check(`Lateral g at ${f(v * 3.6, 0)} km/h within 4 % of ${f(set[i])}`, Math.abs(m.lateralG[i] / set[i] - 1) < 0.04, `${f(m.lateralG[i])} g`);
   });
   check('Steering for 1.5 g at 180 km/h 0.07 to 0.09 of lock', between(m.steerFor15G, 0.07, 0.09), f(m.steerFor15G, 3));
@@ -95,7 +95,7 @@ const m = measureVf26(VF26_TUNED.make);
 console.log('\n== The braking line and target speed plan this car');
 {
   // The planning model in the pad's sea-level air
-  const pm = vf26TunedProfileCar(1.225);
+  const pm = lc26TunedProfileCar(1.225);
   const G = 9.81;
   const plannedStop = (fromMs: number, toMs: number) => {
     let d = 0;
@@ -124,7 +124,7 @@ console.log('\n== The braking line and target speed plan this car');
     const planned = plannedStop(v0, to / 3.6);
     check(`${f(v0 * 3.6, 0)}→${to} km/h is planned 0–15 % longer than the car stops`, planned >= driven && planned < driven * 1.15, `${f(planned, 1)} m planned, ${f(driven, 1)} m driven`);
   }
-  const margins = VF26_AI_REFERENCE.lateral.map(([v], i) => {
+  const margins = LC26_AI_REFERENCE.lateral.map(([v], i) => {
     const planned = (plannedMu(pm, pm.muLat, v) * (G + (plannedDownforceCoef(pm, v) * v * v) / pm.massKg)) / G;
     return 1 - planned / m.lateralG[i];
   });
@@ -474,7 +474,7 @@ console.log('\n== Where the drag acts');
 {
   // Held at 300 km/h on flat ground, the flaps shut and then open: the front axle's load with every element's drag at
   // its own height, against the same car with all the drag at the one height the elements give at rest
-  const lumped = { ...C, aero: { ...C.aero, dragCentreY: VF26_CAR_CONFIG.aero.dragCentreY, wings: C.aero.wings.map((w) => ({ ...w, dragY: undefined })) } } as typeof C;
+  const lumped = { ...C, aero: { ...C.aero, dragCentreY: LC26_CAR_CONFIG.aero.dragCentreY, wings: C.aero.wings.map((w) => ({ ...w, dragY: undefined })) } } as typeof C;
   const frontAxle = (config: typeof C, open: boolean) => {
     const car = new VehiclePhysics({ ground: new FlatGroundQuery(0), config, airDensity: 1.225 });
     const v = 300 / 3.6;
@@ -503,7 +503,7 @@ console.log('\n== Where the drag acts');
 console.log('\n== Laps of Rwanda (autopilot)');
 {
   const track = getActiveTrackData();
-  const sim = createVf26Sim(track);
+  const sim = createLc26Sim(track);
   sim.resetToStartGrid(true);
   sim.aiAutopilot = true;
   sim.aiPaceScale = 1;
@@ -603,5 +603,5 @@ console.log('\n== Flat out from rest, by driver-aid preset');
   check('pro (no traction control): runs straight to 200 km/h in under 7 s', Number.isNaN(pro.spunAtS) && pro.to200S < 7, Number.isNaN(pro.spunAtS) ? `${f(pro.to200S)} s` : `spins at ${f(pro.spunAtS, 1)} s`);
 }
 
-console.log(failures.length ? `\n${failures.length} check(s) failed: ${failures.join(', ')}` : '\nAll tuned VF26 checks passed.');
+console.log(failures.length ? `\n${failures.length} check(s) failed: ${failures.join(', ')}` : '\nAll tuned LC26 checks passed.');
 process.exit(failures.length ? 1 : 0);

@@ -54,7 +54,7 @@ Damage is judged by the closing speed along the contact normal. Barrier hits cou
 | One hit that retires the car | 34 m/s | 24 m/s |
 
 On the f12026-car physics, damage reaches the car through the wake multipliers (downforce, drag), per-wheel grip
-and toe, and engine torque. On the VF26 model it only takes the aero loss.
+and toe, and engine torque. On the LC26 model it only takes the aero loss.
 
 ## Race control
 

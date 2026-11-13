@@ -5,7 +5,7 @@
  *
  * No three.js and no DOM: the Worker imports this file.
  */
-import { isVehicleModelId, type TireCompound, type VehicleModelId } from '../../types/f1';
+import { foldVehicleModelId, isVehicleModelId, type TireCompound, type VehicleModelId } from '../../types/f1';
 import { sanitizeWeatherSync, type WeatherSyncState } from '../sim/weather';
 
 // The car state packet travels in binary (state-codec.ts); everything else is JSON
@@ -13,8 +13,10 @@ export { decodeState, encodeState, MAX_STATE_BYTES, PROTOCOL_VERSION, stateInfoJ
 
 const PEER_COMPOUNDS: readonly TireCompound[] = ['soft', 'medium', 'hard', 'intermediate', 'wet'];
 /** Network input is untrusted: only a known model id is kept */
-const asPeerVehicle = (v: unknown): VehicleModelId | undefined =>
-  isVehicleModelId(v) ? v : undefined;
+const asPeerVehicle = (raw: unknown): VehicleModelId | undefined => {
+  const v = foldVehicleModelId(raw);
+  return isVehicleModelId(v) ? v : undefined;
+};
 
 export interface NetworkVehiclePacket {
   peerId: string;

@@ -5,7 +5,7 @@
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { createDriverFigure, setDriverBodyShown, type DriverFigure } from '../src/lib/render/driver-figure';
-import { VF26_CHASSIS } from '../src/lib/sim/vf26-data';
+import { LC26_CHASSIS } from '../src/lib/sim/lc26-data';
 
 // The Display setting is off until the player turns it on: a hidden figure is not posed
 setDriverBodyShown(true);
@@ -18,7 +18,7 @@ function check(name: string, fn: () => void) {
 }
 
 const DEG = Math.PI / 180;
-const LOCK_DEG = VF26_CHASSIS.steering.lockDeg;
+const LOCK_DEG = LC26_CHASSIS.steering.lockDeg;
 // The 2026 Prototype's cockpit, as its model has it: the helmet, the wheel's hub, and the tub's walls at the elbows
 const HELMET = new THREE.Vector3(0, 0.745, -0.055);
 const WHEEL = new THREE.Vector3(0, 0.596, 0.474);

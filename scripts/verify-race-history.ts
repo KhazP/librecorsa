@@ -43,7 +43,7 @@ const row = (position: number, isPlayer: boolean, extra: Partial<RaceResultEntry
   dnf: false,
   ...extra,
 });
-const meta = { id: "race-a", atMs: 1_000, trackId: "rwanda_official_short", carId: "vf26", kind: "ai_race" as const };
+const meta = { id: "race-a", atMs: 1_000, trackId: "rwanda_official_short", carId: "lc26", kind: "ai_race" as const };
 
 console.log("The record from a classification");
 {

@@ -7,7 +7,7 @@
  *  2. Weather state (`weather.ts`): golden-hour default unchanged, rain wets / drying dries, cars dry the line,
  *     dynamic weather is deterministic, host sync round-trips
  *  3. f12026-car (`VehiclePhysics`): peak lateral g and braking dry vs wet per compound, rain tyres overheat in the dry
- *  4. VF26 tyre (`ac-tyre.ts`): peak lateral force per compound dry vs wet, rain tyres overheat in the dry
+ *  4. LC26 tyre (`ac-tyre.ts`): peak lateral force per compound dry vs wet, rain tyres overheat in the dry
  *  5. Realism levels: casual has no wear / fuel use, full is the default
  *  6. AI: weather pace and tyre call
  */
@@ -18,7 +18,7 @@ import { F12026_CAR_CONFIG } from '../src/lib/sim/f12026-car/F12026CarConfig';
 import { AMG_GT3_CONFIG } from '../src/lib/sim/gt3/AmgGt3Config';
 import { VehiclePhysics, type VehicleInputs } from '../src/lib/sim/f12026-car/VehiclePhysics';
 import { computeTyreForces, createTyreRuntime, updateTyreThermal } from '../src/lib/sim/ac-tyre';
-import { VF26_TYRES } from '../src/lib/sim/vf26-data';
+import { LC26_TYRES } from '../src/lib/sim/lc26-data';
 import {
   dynamicBristleRelaxationScale,
   evaluateFlashTempAndWlfGrip,
@@ -213,14 +213,14 @@ for (const [label, cfg] of [['f12026-car', F12026_CAR_CONFIG], ['AMG GT3', AMG_G
 }
 
 // ---------------------------------------------------------------------------
-// 4. VF26 tyre (ac-tyre)
+// 4. LC26 tyre (ac-tyre)
 // ---------------------------------------------------------------------------
-console.log('\n== VF26 tyre (ac-tyre): peak lateral force at 4 kN, 55 m/s');
+console.log('\n== LC26 tyre (ac-tyre): peak lateral force at 4 kN, 55 m/s');
 {
   const peakFy = (c: TireCompound, waterMm: number) => {
     let best = 0;
     for (let deg = 1; deg <= 14; deg += 0.5) {
-      const t = createTyreRuntime(VF26_TYRES[c].front, c === 'medium' ? 95 : 95 + (VF26_TYRES[c].front.wet?.tempShiftC ?? 0));
+      const t = createTyreRuntime(LC26_TYRES[c].front, c === 'medium' ? 95 : 95 + (LC26_TYRES[c].front.wet?.tempShiftC ?? 0));
       t.waterMm = waterMm;
       t.wetness = wetnessFromWater(waterMm);
       let fy = 0;
@@ -234,12 +234,12 @@ console.log('\n== VF26 tyre (ac-tyre): peak lateral force at 4 kN, 55 m/s');
   const d = { s: peakFy('medium', 0), i: peakFy('intermediate', 0), w: peakFy('wet', 0) };
   const r = { s: peakFy('medium', 1), i: peakFy('intermediate', 1), w: peakFy('wet', 1) };
   console.log(`      dry ${fmt(d.s, 0)} / ${fmt(d.i, 0)} / ${fmt(d.w, 0)} N · 1 mm ${fmt(r.s, 0)} / ${fmt(r.i, 0)} / ${fmt(r.w, 0)} N (slick / inter / wet)`);
-  check('VF26: rain tyres slower in the dry', d.s > d.i && d.i > d.w, `${fmt(d.s, 0)} > ${fmt(d.i, 0)} > ${fmt(d.w, 0)} N`);
-  check('VF26: rain tyres beat slicks on 1 mm of water', r.i > 2 * r.s && r.w > 2 * r.s, `${fmt(r.i, 0)} / ${fmt(r.w, 0)} vs ${fmt(r.s, 0)} N`);
+  check('LC26: rain tyres slower in the dry', d.s > d.i && d.i > d.w, `${fmt(d.s, 0)} > ${fmt(d.i, 0)} > ${fmt(d.w, 0)} N`);
+  check('LC26: rain tyres beat slicks on 1 mm of water', r.i > 2 * r.s && r.w > 2 * r.s, `${fmt(r.i, 0)} / ${fmt(r.w, 0)} vs ${fmt(r.s, 0)} N`);
 
   // Thermal: 5 min of sliding at 6 kW on a dry road (to equilibrium)
   const heat = (c: TireCompound, wetness: number) => {
-    const t = createTyreRuntime(VF26_TYRES[c].front, 80);
+    const t = createTyreRuntime(LC26_TYRES[c].front, 80);
     t.wetness = wetness;
     for (let i = 0; i < 300 * 200; i++) updateTyreThermal(t, 6000, 4000, 55, 27, 41, 1 / 200);
     return t.surfaceTempC;
@@ -247,8 +247,8 @@ console.log('\n== VF26 tyre (ac-tyre): peak lateral force at 4 kN, 55 m/s');
   const sDry = heat('medium', 0);
   const wDry = heat('wet', 0);
   const wWet = heat('wet', 1);
-  check('VF26: full wets run hotter than slicks on a dry road', wDry > sDry + 10, `wet ${fmt(wDry, 0)} vs slick ${fmt(sDry, 0)} °C`);
-  check('VF26: water on the road cools the tread', wWet < wDry - 15, `wet road ${fmt(wWet, 0)} vs dry ${fmt(wDry, 0)} °C`);
+  check('LC26: full wets run hotter than slicks on a dry road', wDry > sDry + 10, `wet ${fmt(wDry, 0)} vs slick ${fmt(sDry, 0)} °C`);
+  check('LC26: water on the road cools the tread', wWet < wDry - 15, `wet road ${fmt(wWet, 0)} vs dry ${fmt(wDry, 0)} °C`);
 }
 
 // ---------------------------------------------------------------------------
@@ -257,10 +257,10 @@ console.log('\n== VF26 tyre (ac-tyre): peak lateral force at 4 kN, 55 m/s');
 console.log('\n== Simulation realism');
 {
   check('Default realism is Full', DEFAULT_PLAYER_SETTINGS.realism === 'full', DEFAULT_PLAYER_SETTINGS.realism);
-  const t = createTyreRuntime(VF26_TYRES.soft.front, 95);
+  const t = createTyreRuntime(LC26_TYRES.soft.front, 95);
   t.wearScale = SIM_REALISM_FLAGS.casual.tyreWearScale;
   for (let i = 0; i < 2000; i++) updateTyreThermal(t, 30000, 4000, 55, 27, 41, 1 / 200);
-  const full = createTyreRuntime(VF26_TYRES.soft.front, 95);
+  const full = createTyreRuntime(LC26_TYRES.soft.front, 95);
   for (let i = 0; i < 2000; i++) updateTyreThermal(full, 30000, 4000, 55, 27, 41, 1 / 200);
   check('Casual: no tyre wear', t.wear === 0 && full.wear > 0, `casual ${t.wear}, full ${fmt(full.wear * 100, 3)} %`);
 
@@ -291,12 +291,12 @@ console.log('\n== AI in the wet');
   env.update(1 / 60, [ai]);
   const fitted = ai.tireCompound as TireCompound;
   check('AI fits full wets in heavy rain', fitted === 'wet', fitted);
-  // The VF26 plans its corner speeds and braking points on its wet grip
+  // The LC26 plans its corner speeds and braking points on its wet grip
   const planGrip = ai.aiPlanGrip();
   ai.tireCompound = 'soft';
   const slickPlanGrip = ai.aiPlanGrip();
   const dryAi = new F1Physics2026(track).createAiPeerCar();
-  check('VF26 AI plans on its wet grip, less on slicks', planGrip < 0.9 && slickPlanGrip < planGrip && dryAi.aiPlanGrip() === 1, `wets ${fmt(planGrip, 2)}, slicks ${fmt(slickPlanGrip, 2)}, dry ${fmt(dryAi.aiPlanGrip(), 2)}`);
+  check('LC26 AI plans on its wet grip, less on slicks', planGrip < 0.9 && slickPlanGrip < planGrip && dryAi.aiPlanGrip() === 1, `wets ${fmt(planGrip, 2)}, slicks ${fmt(slickPlanGrip, 2)}, dry ${fmt(dryAi.aiPlanGrip(), 2)}`);
   // A car without its own wet plan gets a pace factor instead
   const plain = (tireCompound: TireCompound) => ({ sMeters: 100, lateralOffsetM: 0, tireCompound }) as unknown as SimulatorCar;
   const pace = env.weatherPaceScale(plain('wet'));
@@ -362,8 +362,8 @@ console.log('\n== RealRoad wet surface evolution, tread depth & 5-node weather')
   );
 
   // Wet rim & internal gas cooling drops hot tyre pressure in the wet
-  const dryTyre = createTyreRuntime(VF26_TYRES.intermediate.front, 85);
-  const wetTyre = createTyreRuntime(VF26_TYRES.intermediate.front, 85);
+  const dryTyre = createTyreRuntime(LC26_TYRES.intermediate.front, 85);
+  const wetTyre = createTyreRuntime(LC26_TYRES.intermediate.front, 85);
   wetTyre.wetness = 0.9;
   for (let i = 0; i < 60 * 200; i++) {
     updateTyreThermal(dryTyre, 4000, 3800, 60, 22, 26, 1 / 200, 320);

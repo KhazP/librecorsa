@@ -7,17 +7,17 @@ import { carById, type CarId } from "@/lib/cars/car-registry";
  * F1 2026 Prototype's. None is listed now, so the switch shows nowhere. The F1 2026 Prototype keeps its own model; the GT3s have one model. The rigid-body model
  * has no car of its own in the list: a saved choice of it opens the Prototype.
  */
-export type F1ModPhysics = Extract<VehicleModelId, "f12026-car" | "vf26">;
+export type F1ModPhysics = Extract<VehicleModelId, "f12026-car" | "lc26">;
 
 export const F1_MOD_PHYSICS_OPTIONS: readonly { id: F1ModPhysics; title: string; sub: string }[] = [
   { id: "f12026-car", title: "Rigid-body", sub: "6-DOF multibody · track colliders · DRS" },
-  { id: "vf26", title: "2026 Prototype", sub: "The Prototype's car · active aero" },
+  { id: "lc26", title: "2026 Prototype", sub: "The Prototype's car · active aero" },
 ];
 
 const STORAGE_KEY = "librecorsa.f1ModPhysics";
 const DEFAULT: F1ModPhysics = "f12026-car";
 
-const isF1ModPhysics = (v: unknown): v is F1ModPhysics => v === "f12026-car" || v === "vf26";
+const isF1ModPhysics = (v: unknown): v is F1ModPhysics => v === "f12026-car" || v === "lc26";
 
 function load(): F1ModPhysics {
   try {

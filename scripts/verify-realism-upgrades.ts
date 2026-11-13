@@ -18,7 +18,7 @@ import * as THREE from 'three';
 import { getActiveTrackData } from '../src/lib/track-data';
 import { F1Physics2026 } from '../src/lib/f1-physics-2026';
 import { F12026CarSim } from '../src/lib/sim/f12026-car/F12026CarSim';
-import { VF26_CHASSIS, VF26_TYRES } from '../src/lib/sim/vf26-data';
+import { LC26_CHASSIS, LC26_TYRES } from '../src/lib/sim/lc26-data';
 import {
   advanceTreadDirt,
   computeTyreForces,
@@ -104,7 +104,7 @@ check('contact patch sampler shifts the load centroid toward a kerb rising acros
   );
   assert.ok(Math.abs(patch.centroidShiftInwardNorm) > 0.01, `Expected lateral centroid shift: ${patch.centroidShiftInwardNorm}`);
 
-  const tyre = createTyreRuntime(VF26_TYRES.soft.front, 95);
+  const tyre = createTyreRuntime(LC26_TYRES.soft.front, 95);
   const out = computeTyreForces(tyre, {
     fz: 4200,
     vx: 55,
@@ -135,7 +135,7 @@ check('ISO 8608 spatial road micro-roughness is deterministic in (x, z) and roug
 console.log('\nP2: 16-Sector Circumferential Tire Grid, Flat-Spots, Graining, Blistering, Dirt & Centrifugal Growth');
 
 check('Locked wheel concentrates wear and heat into the grounded circumferential sector (flat-spot) and excites harmonic vibration', () => {
-  const t = createTyreRuntime(VF26_TYRES.soft.front, 90);
+  const t = createTyreRuntime(LC26_TYRES.soft.front, 90);
   // Simulate a 1.0-second full lockup (rimSpeed = 0 at rollSpeed = 75 m/s)
   for (let i = 0; i < 240; i++) {
     updateTyreThermal(t, 180_000, 3800, 75, 25, 38, 1 / 240, 450, 0, 'asphalt', 0);
@@ -163,7 +163,7 @@ check('Locked wheel concentrates wear and heat into the grounded circumferential
 });
 
 check('Off-track excursion picks up dirt and on-track rolling cleans it off', () => {
-  const t = createTyreRuntime(VF26_TYRES.soft.front, 90);
+  const t = createTyreRuntime(LC26_TYRES.soft.front, 90);
   for (let i = 0; i < 60; i++) {
     updateTyreThermal(t, 5000, 3000, 35, 25, 38, 1 / 60, 350, 35, 'grass', 0);
   }
@@ -197,7 +197,7 @@ check('Rigid-body tyres: dirt goes by the distance rolled: a brush with the gras
 });
 
 check('Centrifugal carcass growth increases loaded radius at 330 km/h', () => {
-  const t = createTyreRuntime(VF26_TYRES.soft.front, 95);
+  const t = createTyreRuntime(LC26_TYRES.soft.front, 95);
   const rRest = tyreLoadedRadius(t, 3500, 0);
   const rHighSpeed = tyreLoadedRadius(t, 3500, 260); // ~335 km/h
   assert.ok(rHighSpeed > rRest + 0.002, `Expected >2 mm centrifugal growth at 335 km/h (${rHighSpeed - rRest} m)`);
@@ -208,7 +208,7 @@ check('Centrifugal carcass growth increases loaded radius at 330 km/h', () => {
 // -----------------------------------------------------------------------------
 console.log('\nP3: 3D Double-Wishbone Kinematics & Chassis Torsion Spring');
 
-check('3D double-wishbone solver reproduces the VF26 camber gains in bump and computes kingpin/caster/scrub/bump-steer/roll-centre', () => {
+check('3D double-wishbone solver reproduces the LC26 camber gains in bump and computes kingpin/caster/scrub/bump-steer/roll-centre', () => {
   const frontHp = buildDoubleWishboneHardpoints(undefined, true, 'pull_rod');
   const rest = solveCornerKinematics3D(frontHp, 0, 0, true, 0.345);
   const bump = solveCornerKinematics3D(frontHp, 0.025, 0, true, 0.345);
@@ -220,14 +220,14 @@ check('3D double-wishbone solver reproduces the VF26 camber gains in bump and co
     (180 / Math.PI);
   const gF = gainDegPerM(frontHp);
   const gR = gainDegPerM(buildDoubleWishboneHardpoints(undefined, false, 'push_rod'));
-  assert.ok(Math.abs(gF - VF26_CHASSIS.front.camberGainDegPerM) < 2, `Front camber gain ${gF} vs ${VF26_CHASSIS.front.camberGainDegPerM} deg/m`);
-  assert.ok(Math.abs(gR - VF26_CHASSIS.rear.camberGainDegPerM) < 2, `Rear camber gain ${gR} vs ${VF26_CHASSIS.rear.camberGainDegPerM} deg/m`);
+  assert.ok(Math.abs(gF - LC26_CHASSIS.front.camberGainDegPerM) < 2, `Front camber gain ${gF} vs ${LC26_CHASSIS.front.camberGainDegPerM} deg/m`);
+  assert.ok(Math.abs(gR - LC26_CHASSIS.rear.camberGainDegPerM) < 2, `Rear camber gain ${gR} vs ${LC26_CHASSIS.rear.camberGainDegPerM} deg/m`);
   assert.ok(Math.abs(bump.bumpSteerToeInRad) > 1e-5, 'Tie-rod arc produces physical bump steer');
   assert.ok(bump.casterTrailM > 0.008 && bump.scrubRadiusM > 0.008, 'Physical caster trail and scrub radius');
 
   const axle = solveAxleKinematics3D(frontHp, 0.02, -0.01, 0.08, 1.60, 0.34, 0.35);
   assert.ok(Number.isFinite(axle.rollCentreHeightM) && Math.abs(axle.rollCentreLatOffsetM) > 0, 'Roll centre migrates laterally under asymmetric roll');
-  // Side-view slope at the contact patch: the VF26 front's inclined arm axes give anti-dive
+  // Side-view slope at the contact patch: the LC26 front's inclined arm axes give anti-dive
   assert.ok(axle.antiPitchFraction > 0.05, '3D wishbone plane inclinations yield anti-dive / anti-squat');
 });
 
@@ -515,17 +515,17 @@ check('MultiplayerSyncManager maps a remote peer clock to its own and rejects ou
 console.log('\nP0: Full Physics Parity Between F1Physics2026 & F12026CarSim');
 
 check('Both F1Physics2026 and F12026CarSim populate all P0-P7 telemetry fields and 240/500 Hz FFB subframes', () => {
-  const vf26 = new F1Physics2026(track);
+  const lc26 = new F1Physics2026(track);
   const f126 = new F12026CarSim(track);
-  vf26.aiAutopilot = false;
+  lc26.aiAutopilot = false;
   f126.aiAutopilot = false;
 
   for (let i = 0; i < 60; i++) {
-    vf26.step(1 / 60, { throttle: 0.85, brake: 0, steerLeft: 0, steerRight: 0, analogSteer: 0.15 });
+    lc26.step(1 / 60, { throttle: 0.85, brake: 0, steerLeft: 0, steerRight: 0, analogSteer: 0.15 });
     f126.step(1 / 60, { throttle: 0.85, brake: 0, steerLeft: 0, steerRight: 0, analogSteer: 0.15 });
   }
 
-  for (const [name, sim] of [['F1Physics2026', vf26], ['F12026CarSim', f126]] as const) {
+  for (const [name, sim] of [['F1Physics2026', lc26], ['F12026CarSim', f126]] as const) {
     const t = sim.telemetry;
     assert.equal(t.tireTempsC.length, 4, `${name} tireTempsC`);
     assert.equal(t.tireWearPct.length, 4, `${name} tireWearPct`);
@@ -546,23 +546,23 @@ check('Both F1Physics2026 and F12026CarSim populate all P0-P7 telemetry fields a
 });
 
 check('Front vs Rear Tire Load-Sensitivity Asymmetry (16-pt DY_CURVE/DX_CURVE), 3-Phase Diff, Per-Gear MGU-K Clipping & Live Tuner MFD API', () => {
-  // 1. Verify VF26 front vs rear 16-pt load-sensitivity asymmetry at heavy load (8 kN)
-  const frontTyre = createTyreRuntime(VF26_TYRES.soft.front, 95);
-  const rearTyre = createTyreRuntime(VF26_TYRES.soft.rear, 95);
-  assert.equal(VF26_TYRES.soft.front.dyCurve?.length, 16, 'VF26 front 16-point DY_CURVE');
-  assert.equal(VF26_TYRES.soft.rear.dyCurve?.length, 16, 'VF26 rear 16-point DY_CURVE');
+  // 1. Verify LC26 front vs rear 16-pt load-sensitivity asymmetry at heavy load (8 kN)
+  const frontTyre = createTyreRuntime(LC26_TYRES.soft.front, 95);
+  const rearTyre = createTyreRuntime(LC26_TYRES.soft.rear, 95);
+  assert.equal(LC26_TYRES.soft.front.dyCurve?.length, 16, 'LC26 front 16-point DY_CURVE');
+  assert.equal(LC26_TYRES.soft.rear.dyCurve?.length, 16, 'LC26 rear 16-point DY_CURVE');
   assert.ok(
-    VF26_TYRES.soft.rear.lsExpY > VF26_TYRES.soft.front.lsExpY,
-    `Rear lsExpY (${VF26_TYRES.soft.rear.lsExpY}) > Front lsExpY (${VF26_TYRES.soft.front.lsExpY})`
+    LC26_TYRES.soft.rear.lsExpY > LC26_TYRES.soft.front.lsExpY,
+    `Rear lsExpY (${LC26_TYRES.soft.rear.lsExpY}) > Front lsExpY (${LC26_TYRES.soft.front.lsExpY})`
   );
   const fOut = computeTyreForces(frontTyre, { fz: 8000, vx: 60, vy: 5, rimSpeed: 60, camberLeftRad: 0, surfaceGrip: 1, dt: 1 / 240 });
   const rOut = computeTyreForces(rearTyre, { fz: 8000, vx: 60, vy: 5, rimSpeed: 60, camberLeftRad: 0, surfaceGrip: 1, dt: 1 / 240 });
   assert.ok(rOut.mu > fOut.mu * 0.96, `Wider rear tire retains strong mu at 8kN load (rear=${rOut.mu.toFixed(3)}, front=${fOut.mu.toFixed(3)})`);
 
   // 2. Verify Live Tuner MFD round-trip & 3-Phase Diff + Per-Gear MGU-K Clipping on F1Physics2026 & F12026CarSim
-  const vf26 = new F1Physics2026(track);
+  const lc26 = new F1Physics2026(track);
   const f126 = new F12026CarSim(track);
-  for (const sim of [vf26, f126]) {
+  for (const sim of [lc26, f126]) {
     sim.setLiveTuner({
       tcLevel: 9,
       tc2Level: 7,
@@ -590,7 +590,7 @@ check('Front vs Rear Tire Load-Sensitivity Asymmetry (16-pt DY_CURVE/DX_CURVE), 
   }
 });
 
-check('AiOpponentField dynamically instantiates AI peers matching the player vehicle (vf26, f12026-car, amg-gt3) and CarAudioEngine silences when paused', () => {
+check('AiOpponentField dynamically instantiates AI peers matching the player vehicle (lc26, f12026-car, amg-gt3) and CarAudioEngine silences when paused', () => {
   for (const playerCar of [new F1Physics2026(track), new F12026CarSim(track), createAmgGt3Sim(track)]) {
     const field = new AiOpponentField(track, playerCar);
     field.startRace(false);

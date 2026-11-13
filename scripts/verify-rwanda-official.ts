@@ -133,7 +133,7 @@ check('three sectors, two activation zones, a pit lane', raw.sectors.length === 
   const gt3 = S.filter((s) => typeof (s as Sample & { roGt3?: number }).roGt3 === 'number').length;
   check('an optimised racing line for both classes, inside the road', wide === 0 && gt3 === n && S.some((s) => Math.abs(s.ro) > 3));
   const plans = meta.aiPlans ?? {};
-  check('every car drives its line cleanly on the full physics', ['vf26', 'f12026-car', 'amg-gt3'].every((c) => plans[c]?.ok && plans[c].wallHits === 0 && plans[c].offTrackFrames === 0),
+  check('every car drives its line cleanly on the full physics', ['lc26', 'f12026-car', 'amg-gt3'].every((c) => plans[c]?.ok && plans[c].wallHits === 0 && plans[c].offTrackFrames === 0),
     Object.entries(plans).map(([c, p]) => `${c} ${p.ok ? 'ok' : 'FAILED'}`).join(', '));
 }
 

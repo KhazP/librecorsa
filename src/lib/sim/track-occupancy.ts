@@ -212,7 +212,7 @@ const BRAKE_WARNING_S = 0.6;
  * given the player's current speed `carSpeedMs` and position `carS`.
  *
  * Uses the car model's braking envelope (the backward pass of its speed profile: the car's own `guide`, else
- * the circuit's VF26 profile in `brakeLimitKmh`): a car arriving at the marker at its current speed must already
+ * the circuit's LC26 profile in `brakeLimitKmh`): a car arriving at the marker at its current speed must already
  * be braking there when that speed exceeds the envelope. The marker goes yellow up to 0.6 s before that point.
  */
 export function evaluateDynamicBrakingUrgency(

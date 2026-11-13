@@ -1,6 +1,6 @@
 /**
  * f12026-car in the simulator: wraps `VehiclePhysics` behind the `SimulatorCar` surface the simulator,
- * the AI field and the renderer use for the VF26 model, and maps its live telemetry channels to `CarTelemetry`.
+ * the AI field and the renderer use for the LC26 model, and maps its live telemetry channels to `CarTelemetry`.
  *
  * Ground: the `Track_Collider_Road` colliders and `Track_Collider_Wall_*` barriers once the track GLB has
  * loaded (`attachTrackRoot`); until then (or when it never loads) a ground built from the track samples'
@@ -98,7 +98,7 @@ const leastBent = (left: number, right: number) => (Math.abs(left) < Math.abs(ri
 const RAD2DEG = 180 / Math.PI;
 /** Rwanda (≈1400 m ASL) air density: what the braking envelopes below are planned at */
 const AIR_DENSITY = 1.06;
-/** Standard-atmosphere air density at an altitude (as the VF26's): 1.07 at Rwanda, 1.21 at Silverstone */
+/** Standard-atmosphere air density at an altitude (as the LC26's): 1.07 at Rwanda, 1.21 at Silverstone */
 const airDensityAt = (altitudeM: number) => 1.225 * Math.pow(1 - 2.25577e-5 * altitudeM, 4.25588);
 /** A braking envelope at a circuit's air: the aero part grows with the density it was planned at (1.06) */
 const envelopeAt = (b: BrakingEnvelope, rho: number): BrakingEnvelope => ({ ...b, aeroG: (b.aeroG * rho) / AIR_DENSITY });
@@ -411,7 +411,7 @@ const apProfiles = new WeakMap<BuiltTrackData, Map<string, Float32Array>>();
 /**
  * The f12026-car's own speed limit along the path its autopilot drives (the racing line kept on the asphalt),
  * every `AP_PROFILE_STEP_M`: corner speed from its own grip and downforce, then a backward braking pass on the
- * friction circle, so no braking is planned that the tyres need for turning. The circuit's profile is the VF26's,
+ * friction circle, so no braking is planned that the tyres need for turning. The circuit's profile is the LC26's,
  * which corners and brakes harder than this car.
  */
 function autopilotProfile(track: BuiltTrackData, profile: CarSimProfile, edges: AutopilotEdges | null): Float32Array {
@@ -1126,7 +1126,7 @@ export class F12026CarSim implements SimulatorCar {
   }
 
   /** The vehicle model whose setup limits, wing steps and fuel this car takes */
-  private get setupCar(): Exclude<VehicleModelId, 'vf26'> {
+  private get setupCar(): Exclude<VehicleModelId, 'lc26'> {
     const id = this.profile.id;
     return id === 'amg-gt3' || id === 'liana' || id === 'mtr-496r' ? id : 'f12026-car';
   }
@@ -1433,7 +1433,7 @@ export class F12026CarSim implements SimulatorCar {
 
   /**
    * Standing start from grid slot `gridSlot` (0 = pole), or a flying lap from the run-up of the main
-   * straight (further slots queue 28 m apart, alternating sides), as the VF26 does.
+   * straight (further slots queue 28 m apart, alternating sides), as the LC26 does.
    */
   public resetToStartGrid(flyingStart = false, gridSlot = 0, fieldSize?: number): void {
     // Fuelled before it is seated, so it settles at the ride height of that load
@@ -1667,7 +1667,7 @@ export class F12026CarSim implements SimulatorCar {
     if (inputs.steerRim && this.steeringAssist.source === 'direct') {
       return { ...this.electronicAids(inputs.throttle, inputs.brake, h, this), steer: want, drs: false };
     }
-    // Any other device: the rack turns no faster than hands turn a wheel (900°/s at the rim, as the VF26's): a stick
+    // Any other device: the rack turns no faster than hands turn a wheel (900°/s at the rim, as the LC26's): a stick
     // flick, a mouse or a phone tilt otherwise reached the tyres as an instant step, which snaps a car at speed
     const maxStep = (DRIVER_RIM_SPEED_DEG_S / this.rimLockDeg) * h;
     const steer = this.steerCmd + THREE.MathUtils.clamp(want - this.steerCmd, -maxStep, maxStep);
@@ -2274,7 +2274,7 @@ export class F12026CarSim implements SimulatorCar {
     }
   }
 
-  /** Sector / lap timing at the sector boundaries and the start / finish line (as the VF26) */
+  /** Sector / lap timing at the sector boundaries and the start / finish line (as the LC26) */
   private updateTiming(dtS: number): void {
     const L = this.track.totalLengthM;
     const sample = this.track.getSampleAtDistance(this.s);

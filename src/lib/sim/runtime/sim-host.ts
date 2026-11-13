@@ -7,7 +7,7 @@
  */
 import type * as THREE from "three";
 import type { VehicleModelId } from "@/types/f1";
-import { vf26OnRigidBody } from "@/lib/cars/vf26-engine";
+import { lc26OnRigidBody } from "@/lib/cars/lc26-engine";
 import { getActiveTrackSource } from "@/lib/track-data";
 import type { SimulatorCar } from "../simulator-car";
 import { trackColliderData } from "../track-colliders";
@@ -71,7 +71,7 @@ export function createSimHost(transport: SimTransport, wallNowMs: () => number =
       );
       if (trackRoot) sendColliders(trackRoot);
       // Before anything the game sets on the car: its commands follow, so the simulation's car is set up alike
-      transport.post({ type: "init", car: mine, track: trackSent ? undefined : getActiveTrackSource(), vehicle, vf26Rigid: vf26OnRigidBody() });
+      transport.post({ type: "init", car: mine, track: trackSent ? undefined : getActiveTrackSource(), vehicle, lc26Rigid: lc26OnRigidBody() });
       trackSent = true;
       return current.car;
     },

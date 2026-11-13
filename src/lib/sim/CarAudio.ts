@@ -19,7 +19,7 @@
  * 4. `ContactAcousticsRig` (`contact-acoustics.ts`) adds road roar, damper thump and chassis rattle, brake squeal
  *    and debris clicks.
  *
- * When a multi-grid sound bank is present (`public/lc26/audio/` or `public/gt3/audio/`, see `vf26-audio.ts`),
+ * When a multi-grid sound bank is present (`public/lc26/audio/` or `public/gt3/audio/`, see `lc26-audio.ts`),
  * engine, turbo, transmission, shifts and backfires come from the multi-layer bank instead of the
  * base samples / oscillators above; tyre, kerb, gravel and wind layers stay procedural unless the bank
  * includes dedicated skid loops.
@@ -30,8 +30,8 @@ import { CameraMode, TelemetryData } from '@/types/f1';
 import { withBasePath } from '@/lib/base-path';
 import { CAMERA_MODES } from '@/lib/render/camera-modes';
 import { ContactAcousticsRig } from './contact-acoustics';
-import { LC26_AUDIO_DIR, Vf26SoundBank } from './vf26-audio';
-import { VF26_ENGINE } from './vf26-data';
+import { LC26_AUDIO_DIR, Lc26SoundBank } from './lc26-audio';
+import { LC26_ENGINE } from './lc26-data';
 import { AMG_GT3_CONFIG } from './gt3/AmgGt3Config';
 
 /** Where a car's converted sound bank lives, and its rev limiter (for the limiter bounce) */
@@ -47,7 +47,7 @@ export interface CarSoundSource {
   physicsLimiterRpm?: number;
 }
 
-export const LC26_SOUND: CarSoundSource = { id: 'lc26', assetDir: LC26_AUDIO_DIR, limiterRpm: VF26_ENGINE.limiterRpm };
+export const LC26_SOUND: CarSoundSource = { id: 'lc26', assetDir: LC26_AUDIO_DIR, limiterRpm: LC26_ENGINE.limiterRpm };
 export const F1_2026_SOUND: CarSoundSource = { id: 'f12026', assetDir: '/cars/f12026/audio/', limiterRpm: 12500 };
 /** The AMG GT3 vehicle model's limiter (its gearbox redline) */
 const AMG_GT3_LIMITER_RPM = AMG_GT3_CONFIG.gearbox.gears.redline_rpm;
@@ -158,7 +158,7 @@ export class CarAudioEngine {
   private engineVoice: EngineVoice = 'loading';
 
   // Multi-grid sound bank (null until loaded; stays null when the assets are absent)
-  private vf26: Vf26SoundBank | null = null;
+  private lc26: Lc26SoundBank | null = null;
   private contactAcoustics: ContactAcousticsRig | null = null;
   private sound: CarSoundSource = LC26_SOUND;
   private bankDestination: AudioNode | null = null;
@@ -402,15 +402,15 @@ export class CarAudioEngine {
 
   /** The car whose sound bank plays; swaps the bank when the car changes */
   public setCar(sound: CarSoundSource): void {
-    // Also when the sound stays: the vf26 and f12026-car physics share one
+    // Also when the sound stays: the lc26 and f12026-car physics share one
     this.contactAcoustics?.reset();
     // Another car: its gear and pedal are not the last car's
     this.edgesStale = true;
     if (sound.id === this.sound.id) return;
     this.sound = sound;
     if (!this.ctx) return;
-    this.vf26?.dispose();
-    this.vf26 = null;
+    this.lc26?.dispose();
+    this.lc26 = null;
     void this.loadEngineSounds(this.ctx);
   }
 
@@ -437,7 +437,7 @@ export class CarAudioEngine {
   private async loadEngineSounds(ctx: AudioContext): Promise<void> {
     const loadId = ++this.bankLoadId;
     this.setEngineVoice('loading');
-    const bank = new Vf26SoundBank(ctx, this.bankDestination ?? ctx.destination, this.sound.assetDir);
+    const bank = new Lc26SoundBank(ctx, this.bankDestination ?? ctx.destination, this.sound.assetDir);
     const ok = await bank.load(CAMERA_MODES[this.cameraMode].interiorAudio ? 'int' : 'ext');
     // A later car, or dispose() (a closed context): this load is not wanted any more
     if (loadId !== this.bankLoadId || this.ctx !== ctx) {
@@ -445,7 +445,7 @@ export class CarAudioEngine {
       return;
     }
     if (ok) {
-      this.vf26 = bank;
+      this.lc26 = bank;
       this.setEngineVoice('bank');
       return;
     }
@@ -474,8 +474,8 @@ export class CarAudioEngine {
     return this.masterGain;
   }
 
-  /** True when the VF26 mod sound bank is playing instead of the bundled samples */
-  public get usingVf26Sounds(): boolean {
+  /** True when the LC26 mod sound bank is playing instead of the bundled samples */
+  public get usingLc26Sounds(): boolean {
     return this.engineVoice === 'bank';
   }
 
@@ -641,20 +641,20 @@ export class CarAudioEngine {
       this.edgesStale = false;
       this.prevGear = telemetry.gear;
       this.shiftCutTimer = 0;
-      this.vf26?.resync();
+      this.lc26?.resync();
     }
 
     const now = this.ctx.currentTime;
     const tau = 0.024;
     const legacyDt = THREE.MathUtils.clamp(Number.isFinite(dtSeconds) ? (dtSeconds as number) : 1 / 60, 0, 0.1);
 
-    const vf26 = this.engineVoice === 'bank' ? this.vf26 : null;
+    const lc26 = this.engineVoice === 'bank' ? this.lc26 : null;
     const squeal = this.tyreSqueal(telemetry);
     // A bank with its own skid recordings plays them in place of the synthesised squeal and scrub
-    const bankSkid = vf26?.hasSkid === true;
-    if (vf26) {
+    const bankSkid = lc26?.hasSkid === true;
+    if (lc26) {
       const rpmScale = this.sound.physicsLimiterRpm ? this.sound.limiterRpm / this.sound.physicsLimiterRpm : 1;
-      vf26.update(
+      lc26.update(
         {
           rpm: telemetry.rpm * rpmScale,
           // The load the engine delivers: the pedal less the traction control's cut, so the cut is heard
@@ -877,8 +877,8 @@ export class CarAudioEngine {
     this.edgesStale = true;
     // Closing the context below stops the rig's voices with everything else
     this.contactAcoustics = null;
-    this.vf26?.dispose();
-    this.vf26 = null;
+    this.lc26?.dispose();
+    this.lc26 = null;
     if (this.ctx) {
       void this.ctx.close();
       this.ctx = null;

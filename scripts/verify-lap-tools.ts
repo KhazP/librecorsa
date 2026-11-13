@@ -118,7 +118,7 @@ function makeRecorder(overrides: Partial<LapRecorderOptions> = {}): LapRecorder 
     trackLengthM: TRACK_M,
     turns: TURNS,
     trackId: 'test-track',
-    vehicle: 'vf26',
+    vehicle: 'lc26',
     driverName: 'Test Driver',
     driverCode: 'TST',
     ...overrides,
@@ -157,7 +157,7 @@ check('a clean lap: time, sectors, validity and sample count', () => {
   assert.equal(lap1.summary.valid, true);
   assert.equal(lap1.recording.version, 1);
   assert.equal(lap1.recording.trackId, 'test-track');
-  assert.equal(lap1.recording.vehicle, 'vf26');
+  assert.equal(lap1.recording.vehicle, 'lc26');
   assert.equal(lap1.recording.sampleHz, 20);
   assert.ok(Math.abs(sumOf(lap1.summary.sectorTimesMs) - lap1.summary.lapTimeMs) <= 2, 'sectors add up to the lap');
   const samples = lap1.recording.data.length / STRIDE;
@@ -334,7 +334,7 @@ check('a quaternion pair with opposite signs blends the short way', () => {
   const flipped: LapRecording = {
     version: 1,
     trackId: 't',
-    vehicle: 'vf26',
+    vehicle: 'lc26',
     driverName: 'A',
     driverCode: 'AAA',
     lapTimeMs: 20_000,

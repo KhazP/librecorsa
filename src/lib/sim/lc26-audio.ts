@@ -44,7 +44,7 @@ interface OneshotEntry {
   peak: number;
 }
 
-export interface Vf26AudioManifest {
+export interface Lc26AudioManifest {
   sampleRate: number;
   loopSeconds: number;
   engine: { ext: EngineEntry[]; int: EngineEntry[] };
@@ -54,13 +54,13 @@ export interface Vf26AudioManifest {
   throttleCurve: { ext: [number, number][]; int: [number, number][] };
   limiterParamEffect?: { ext: number; int: number };
   /**
-   * Overrun pops on a lift above `popMinRpm`, then crackle above `crackleMinRpm` (default: the VF26's 8500 / 9000);
+   * Overrun pops on a lift above `popMinRpm`, then crackle above `crackleMinRpm` (default: the LC26's 8500 / 9000);
    * `downshiftPopChance`: chance of a pop on each off-throttle downshift blip above `popMinRpm` (default 0)
    */
   lift?: { popMinRpm: number; crackleMinRpm: number; downshiftPopChance?: number };
-  /** Tyre skid loops per view, played by `Vf26AudioInputs.skid` (banks without them leave the squeal to CarAudio) */
+  /** Tyre skid loops per view, played by `Lc26AudioInputs.skid` (banks without them leave the squeal to CarAudio) */
   skid?: { int?: RawLoopEntry; ext?: RawLoopEntry };
-  /** Traction-control cut loop, played while `Vf26AudioInputs.tcActive` */
+  /** Traction-control cut loop, played while `Lc26AudioInputs.tcActive` */
   tractionControl?: RawLoopEntry;
   /** Rev-limiter one-shot retrigger interval while held on the limiter (default 0.9 s) */
   limiterRetriggerS?: number;
@@ -72,9 +72,9 @@ export interface Vf26AudioManifest {
   shift?: { style: 'sequential' | 'manual'; clutchS?: number };
 }
 
-export type Vf26View = 'ext' | 'int';
+export type Lc26View = 'ext' | 'int';
 
-export interface Vf26AudioInputs {
+export interface Lc26AudioInputs {
   /** The driver's pedal, when `throttle` is the engine's delivered load (lift-off pops follow the foot) */
   pedal?: number;
   rpm: number;
@@ -82,7 +82,7 @@ export interface Vf26AudioInputs {
   gear: number;
   speedKmh: number;
   boostBarGauge: number; // turbo boost above atmospheric (bar)
-  view: Vf26View;
+  view: Lc26View;
   limiterRpm: number;
   /** Tyre skid level 0..1 and playback rate (banks with skid loops) */
   skid?: number;
@@ -245,14 +245,14 @@ export const lerpTable = (table: [number, number][], x: number): number => {
   return table[table.length - 1][1];
 };
 
-export class Vf26SoundBank {
+export class Lc26SoundBank {
   public ready = false;
-  private manifest: Vf26AudioManifest | null = null;
+  private manifest: Lc26AudioManifest | null = null;
   private readonly bus: GainNode;
   private readonly engineFilter: BiquadFilterNode;
   private readonly engineShelf: BiquadFilterNode;
-  private readonly viewBus: Record<Vf26View, GainNode>;
-  private readonly engine: Record<Vf26View, { on: LoopGrid; off: LoopGrid }> = {
+  private readonly viewBus: Record<Lc26View, GainNode>;
+  private readonly engine: Record<Lc26View, { on: LoopGrid; off: LoopGrid }> = {
     ext: { on: null as unknown as LoopGrid, off: null as unknown as LoopGrid },
     int: { on: null as unknown as LoopGrid, off: null as unknown as LoopGrid },
   };
@@ -261,7 +261,7 @@ export class Vf26SoundBank {
   private transOn: LoopGrid | null = null;
   private transOff: LoopGrid | null = null;
   private readonly oneshots = new Map<string, AudioBuffer[]>();
-  private skidVoices: Partial<Record<Vf26View, LoopVoice>> = {};
+  private skidVoices: Partial<Record<Lc26View, LoopVoice>> = {};
   private tcVoice: LoopVoice | null = null;
   private tcLevel = 0;
 
@@ -316,12 +316,12 @@ export class Vf26SoundBank {
   /** Fetch the manifest and decode every buffer; resolves false when the converted assets are absent */
   private disposed = false;
 
-  public async load(initialView: Vf26View = 'ext'): Promise<boolean> {
-    let manifest: Vf26AudioManifest;
+  public async load(initialView: Lc26View = 'ext'): Promise<boolean> {
+    let manifest: Lc26AudioManifest;
     try {
       const res = await fetchBankFile(withBasePath(`${this.assetDir}manifest.json`));
       if (!res.ok) return false;
-      manifest = (await res.json()) as Vf26AudioManifest;
+      manifest = (await res.json()) as Lc26AudioManifest;
     } catch {
       return false;
     }
@@ -337,7 +337,7 @@ export class Vf26SoundBank {
     const rpms = [...manifest.engine.ext, ...manifest.engine.int].map((e) => e.rpm);
     this.rpmRange = [Math.min(...rpms) * 0.75, Math.max(...rpms) * 1.35];
 
-    for (const view of ['ext', 'int'] as Vf26View[]) {
+    for (const view of ['ext', 'int'] as Lc26View[]) {
       const entries = manifest.engine[view];
       this.engine[view] = {
         on: new LoopGrid(ctx, this.viewBus[view], entries.filter((e) => e.layer === 'on').map((e) => e.rpm)),
@@ -358,7 +358,7 @@ export class Vf26SoundBank {
     );
 
     const rawLoops: { file: string; voice: LoopVoice }[] = [];
-    for (const view of ['ext', 'int'] as Vf26View[]) {
+    for (const view of ['ext', 'int'] as Lc26View[]) {
       const entry = manifest.skid?.[view];
       if (!entry) continue;
       const voice = new LoopVoice(ctx, this.viewBus[view], 0);
@@ -372,7 +372,7 @@ export class Vf26SoundBank {
 
     // Decode order: the view in use first so sound starts as early as possible
     type Job = { file: string; assign: (b: AudioBuffer) => void };
-    const engineJobs = (view: Vf26View): Job[] =>
+    const engineJobs = (view: Lc26View): Job[] =>
       manifest.engine[view].map((e) => ({
         file: e.file,
         assign: (b) => {
@@ -473,7 +473,7 @@ export class Vf26SoundBank {
     };
   }
 
-  public update(inp: Vf26AudioInputs, dt: number): void {
+  public update(inp: Lc26AudioInputs, dt: number): void {
     if (!this.ready || !this.manifest) return;
     const now = this.ctx.currentTime;
     const tau = 0.03;
@@ -499,7 +499,7 @@ export class Vf26SoundBank {
     }
 
     // Gear change: upshift ignition cut + pitch drop, or downshift ECU throttle blip + overrun bark (a manual road
-    // car: a lift and a clutch, see `Vf26AudioManifest.shift`). Between forward gears only: into or out of neutral (0)
+    // car: a lift and a clutch, see `Lc26AudioManifest.shift`). Between forward gears only: into or out of neutral (0)
     // or reverse (-1) is no shift to hear
     const manual = m.shift?.style === 'manual';
     if (inp.gear !== this.prevGear) {
@@ -588,7 +588,7 @@ export class Vf26SoundBank {
     this.engineShelf.gain.setTargetAtTime(shelfDb, now, 0.018);
 
     const engineTau = this.upshiftTimer > 0 || this.downshiftTimer > 0 ? 0.012 : tau;
-    for (const view of ['ext', 'int'] as Vf26View[]) {
+    for (const view of ['ext', 'int'] as Lc26View[]) {
       const onness = lerpTable(m.throttleCurve[view], effThrottle);
       const wOn = Math.sin(onness * Math.PI * 0.5) * shiftOnScale;
       const wOff = Math.cos(onness * Math.PI * 0.5) * shiftOffScale;
@@ -636,7 +636,7 @@ export class Vf26SoundBank {
     this.prevThrottle = foot;
 
     // Tyre skid (the bank's own recordings, per view) and the traction-control cut
-    for (const view of ['ext', 'int'] as Vf26View[]) {
+    for (const view of ['ext', 'int'] as Lc26View[]) {
       const viewLevel = view === 'int' ? this.viewMix : 1 - this.viewMix;
       this.skidVoices[view]?.set(viewLevel > 0.002 ? (inp.skid ?? 0) : 0, inp.skidRate ?? 1, now, dt, 0.05);
     }
@@ -667,7 +667,7 @@ export class Vf26SoundBank {
   }
 
   public dispose(): void {
-    for (const view of ['ext', 'int'] as Vf26View[]) {
+    for (const view of ['ext', 'int'] as Lc26View[]) {
       this.engine[view].on?.stopAll();
       this.engine[view].off?.stopAll();
     }
@@ -731,7 +731,7 @@ export function prefetchSoundBank(assetDir: string): void {
   // No manifest fetched: a later call may try again
   const forget = () => prefetchedBanks.delete(manifestUrl);
   void manifest
-    .then((r) => (r.ok ? (r.json() as Promise<Vf26AudioManifest>) : null))
+    .then((r) => (r.ok ? (r.json() as Promise<Lc26AudioManifest>) : null))
     .then((m) => {
       if (!m) {
         forget();

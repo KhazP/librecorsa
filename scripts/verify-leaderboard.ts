@@ -23,8 +23,8 @@ import { fakeD1, fakeR2 } from './lib/fake-cloudflare';
 import { planImport, type SupabaseDriver, type SupabaseLap } from './migrate-supabase-board';
 import { CHALLENGE_ROTATION, challengeAt, challengeCompound, challengeConditionsLabel, challengeProblem, fitsChallenge, isoWeekId, timeLeftLabel } from '../src/lib/net/weekly-challenge';
 
-/** The revision the laps here are driven under: the board of the car they are driven in (the VF26's own) */
-const CURRENT = lapPhysicsVersion('vf26');
+/** The revision the laps here are driven under: the board of the car they are driven in (the LC26's own) */
+const CURRENT = lapPhysicsVersion('lc26');
 
 const failures: string[] = [];
 const check = (name: string, ok: boolean, detail = '') => {
@@ -32,7 +32,7 @@ const check = (name: string, ok: boolean, detail = '') => {
   if (!ok) failures.push(name);
 };
 
-// A real lap: the VF26 on autopilot round RISE Motordrome, recorded as the game records it (the second lap, a flying one)
+// A real lap: the LC26 on autopilot round RISE Motordrome, recorded as the game records it (the second lap, a flying one)
 const track = getActiveTrackData();
 const car = new F1Physics2026(track);
 car.aiAutopilot = true;
@@ -40,7 +40,7 @@ const recorder = new LapRecorder({
   trackLengthM: track.totalLengthM,
   turns: [],
   trackId: 'rwanda_official_short',
-  vehicle: 'vf26',
+  vehicle: 'lc26',
   driverName: 'Test Driver',
   driverCode: 'TST',
 });
@@ -82,36 +82,36 @@ check('a moment on assists makes it an assisted lap', real.conditions?.assists =
 check('a moment on Casual makes it a Casual lap', real.conditions?.realism === 'casual', real.conditions?.realism);
 check('board class', real.conditions !== undefined && lapBoardClass(real.conditions) === `p${CURRENT}-assisted-casual-dry`);
 {
-  // The VF26 ships on the rigid-body engine, with a board of its own; on its older engine (a choice kept in the
+  // The LC26 ships on the rigid-body engine, with a board of its own; on its older engine (a choice kept in the
   // browser) its laps go on the board they always went on
   const g = globalThis as { window?: unknown; localStorage?: unknown };
   const kept = new Map<string, string>();
   const inBrowser = (search: string, stored?: string) => {
     kept.clear();
-    if (stored) kept.set('librecorsa.vf26Engine', stored);
+    if (stored) kept.set('librecorsa.lc26Engine', stored);
     g.window = { location: { search } };
     g.localStorage = { getItem: (k: string) => kept.get(k) ?? null, setItem: (k: string, v: string) => void kept.set(k, v) };
-    const out = { vf26: lapPhysicsVersion('vf26'), others: lapPhysicsVersion('f12026-car'), kept: kept.get('librecorsa.vf26Engine') };
+    const out = { lc26: lapPhysicsVersion('lc26'), others: lapPhysicsVersion('f12026-car'), kept: kept.get('librecorsa.lc26Engine') };
     delete g.window;
     delete g.localStorage;
     return out;
   };
-  const shipped = lapPhysicsVersion('vf26');
+  const shipped = lapPhysicsVersion('lc26');
   const fresh = inBrowser('');
   const older = inBrowser('', 'classic');
-  const asked = inBrowser('?vf26engine=classic');
-  const back = inBrowser('?vf26engine=rigid', 'classic');
+  const asked = inBrowser('?lc26engine=classic');
+  const back = inBrowser('?lc26engine=rigid', 'classic');
   check(
-    'the VF26 ships on the rigid-body engine with a board of its own, in a script and in a browser that never chose',
-    shipped !== PHYSICS_VERSION && fresh.vf26 === shipped && inBrowser('', 'rigid').vf26 === shipped && parseLapConditions({ ...real.conditions, physicsVersion: shipped }) !== null,
+    'the LC26 ships on the rigid-body engine with a board of its own, in a script and in a browser that never chose',
+    shipped !== PHYSICS_VERSION && fresh.lc26 === shipped && inBrowser('', 'rigid').lc26 === shipped && parseLapConditions({ ...real.conditions, physicsVersion: shipped }) !== null,
     `p${shipped}`
   );
   check(
     'on its older engine its laps keep the board they had: asked for in the address, kept for the browser, and undone the same way',
-    older.vf26 === PHYSICS_VERSION && asked.vf26 === PHYSICS_VERSION && asked.kept === 'classic' && back.vf26 === shipped && back.kept === 'rigid',
-    `p${older.vf26} / p${back.vf26}`
+    older.lc26 === PHYSICS_VERSION && asked.lc26 === PHYSICS_VERSION && asked.kept === 'classic' && back.lc26 === shipped && back.kept === 'rigid',
+    `p${older.lc26} / p${back.lc26}`
   );
-  check('the other cars keep one board whichever engine the VF26 is on', fresh.others === PHYSICS_VERSION && older.others === PHYSICS_VERSION && lapPhysicsVersion() === PHYSICS_VERSION);
+  check('the other cars keep one board whichever engine the LC26 is on', fresh.others === PHYSICS_VERSION && older.others === PHYSICS_VERSION && lapPhysicsVersion() === PHYSICS_VERSION);
 }
 {
   // A lap posts itself when it beats this browser's lap on its online board, not its local personal best: a best set
@@ -134,7 +134,7 @@ check('board class', real.conditions !== undefined && lapBoardClass(real.conditi
   delete g.localStorage;
   check(
     'a board with no lap from this browser takes the next one; each board keeps its own best, never a slower one',
-    key === `rwanda_official_short|vf26|${lapBoardClass(real.conditions!)}` && boardKeyOf({ ...real, conditions: undefined }) === null && before === null && after === 90_000 && elsewhere === null && faster === 88_000,
+    key === `rwanda_official_short|lc26|${lapBoardClass(real.conditions!)}` && boardKeyOf({ ...real, conditions: undefined }) === null && before === null && after === 90_000 && elsewhere === null && faster === 88_000,
     `${before} → ${after} → ${faster}`
   );
 }
@@ -175,7 +175,7 @@ const schema = readFileSync(join(__dirname, '../cloudflare/migrations/0001_lap_b
 const ghosts = fakeR2();
 // A Wednesday noon in a week whose challenge is the test lap's circuit and car (RISE Motordrome's short lap, the 2026 prototype)
 let nowMs = Date.UTC(2026, 10, 11, 12);
-while (challengeAt(nowMs).trackId !== 'rwanda_official_short' || challengeAt(nowMs).vehicle !== 'vf26') nowMs += 7 * 86_400_000;
+while (challengeAt(nowMs).trackId !== 'rwanda_official_short' || challengeAt(nowMs).vehicle !== 'lc26') nowMs += 7 * 86_400_000;
 const week = challengeAt(nowMs);
 const deps: BoardDeps = { db: fakeD1(schema), ghosts, eventRule: challengeProblem, now: () => nowMs };
 const KEY_A = 'a'.repeat(43);
@@ -197,7 +197,7 @@ const post = async (rec: unknown, driverKey: string | null = KEY_A, extra: Recor
 type Row = { id: string; name: string; lapTimeMs: number; conditions: { assists: string; realism: string; surface: string; physicsVersion: number } };
 type ListAnswer = { laps: Row[]; total: number; physics: number[]; me: { rank: number; lap: Row; aboveMs: number | null } | null };
 const list = async (query = '', physics = CURRENT) => {
-  const res = await listLaps(deps, new URL(`https://librecorsa.test/api/laps?track=rwanda_official_short&vehicle=vf26&physics=${physics}${query}`));
+  const res = await listLaps(deps, new URL(`https://librecorsa.test/api/laps?track=rwanda_official_short&vehicle=lc26&physics=${physics}${query}`));
   return { status: res.status, body: res.body as ListAnswer };
 };
 /** The real lap driven by someone else, a little slower or faster, under other conditions */
@@ -259,7 +259,7 @@ async function main(): Promise<void> {
     check('board: their place says the time of the place above', body.me?.aboveMs === body.laps[0].lapTimeMs, String(body.me?.aboveMs));
     const top = (await list('&name=Quick%20Rival')).body;
     check('board: at the top there is no place above', top.me?.rank === 1 && top.me.aboveMs === null);
-    const parse = (me: unknown) => parseRemoteBoard({ ...body, me }, 'rwanda_official_short', 'vf26', CURRENT, {});
+    const parse = (me: unknown) => parseRemoteBoard({ ...body, me }, 'rwanda_official_short', 'lc26', CURRENT, {});
     check(
       'board: the game reads the place above, and only a time faster than the player\'s own',
       parse(body.me)?.me?.aboveMs === body.laps[0].lapTimeMs &&
@@ -274,7 +274,7 @@ async function main(): Promise<void> {
       second.bestMs === body.me!.lap.lapTimeMs && second.leaderMs === body.laps[0].lapTimeMs && challengePlaceLabel(second) === `P2 · ${gap} to P1`,
       challengePlaceLabel(second)
     );
-    const first = challengeTarget(parseRemoteBoard(top, 'rwanda_official_short', 'vf26', CURRENT, {})!);
+    const first = challengeTarget(parseRemoteBoard(top, 'rwanda_official_short', 'lc26', CURRENT, {})!);
     const none = challengeTarget({ ...parse(null)!, me: null });
     check(
       'time trial: at the top it says so, and before a lap only the fastest shows',
@@ -304,7 +304,7 @@ async function main(): Promise<void> {
       check('challenge: no week is on a circuit converted from a Sketchfab model', offTrial.length === 0, offTrial.map((c) => c.trackId).join(', '));
       check('challenge: no week\'s races are on such a circuit, or at Dunsfold', offRace.length === 0, offRace.map((c) => c.race.trackId).join(', '));
       const first = challengeAt(monday);
-      check('challenge: the rotation starts the week of 9 November 2026 with the Liana at Dunsfold, a time trial only', first.trackId === 'dunsfold' && first.vehicle === 'liana' && first.race.trackId === 'rwanda_official' && first.race.vehicle === 'vf26' && challengeAt(monday - 1).trackId === CHALLENGE_ROTATION[CHALLENGE_ROTATION.length - 1].trackId);
+      check('challenge: the rotation starts the week of 9 November 2026 with the Liana at Dunsfold, a time trial only', first.trackId === 'dunsfold' && first.vehicle === 'liana' && first.race.trackId === 'rwanda_official' && first.race.vehicle === 'lc26' && challengeAt(monday - 1).trackId === CHALLENGE_ROTATION[CHALLENGE_ROTATION.length - 1].trackId);
       const elsewhere = CHALLENGE_ROTATION.filter((c) => c.race.trackId !== c.trackId || c.race.vehicle !== c.vehicle);
       check('challenge: only the Dunsfold weeks race on another circuit and car', elsewhere.length > 0 && elsewhere.every((c) => c.trackId === 'dunsfold'));
       const raced = CHALLENGE_ROTATION.filter((c) => c.trackId !== 'dunsfold');
@@ -368,13 +368,13 @@ async function main(): Promise<void> {
       const url = new URL(`https://librecorsa.org${path}`);
       return handleApi(new Request(url), e, url);
     };
-    const listed = await api(`/api/laps?track=rwanda_official_short&vehicle=vf26&physics=${CURRENT}`, env);
+    const listed = await api(`/api/laps?track=rwanda_official_short&vehicle=lc26&physics=${CURRENT}`, env);
     const rows = ((await listed.json()) as ListAnswer).laps;
     check('api: GET /api/laps lists the board, never cached', listed.status === 200 && rows.length === 3 && listed.headers.get('Cache-Control') === 'no-store');
     const ghost = await api(`/api/laps/${rows[0].id}`, env);
     check('api: GET /api/laps/<id> returns the ghost', ghost.status === 200 && validateLapRecording(await ghost.json()) !== null);
     check('api: an unknown lap is 404', (await api('/api/laps/00000000-0000-4000-8000-000000000000', env)).status === 404);
-    check('api: the board switched off answers 404', (await api('/api/laps?track=rwanda_official_short&vehicle=vf26&physics=2', { ...env, ONLINE_BOARD: 'off' })).status === 404);
+    check('api: the board switched off answers 404', (await api('/api/laps?track=rwanda_official_short&vehicle=lc26&physics=2', { ...env, ONLINE_BOARD: 'off' })).status === 404);
     check('api: no database bound: off', boardDeps({} as Env, () => null) === null);
   }
 
@@ -408,7 +408,7 @@ async function main(): Promise<void> {
     const mira = await db.prepare("SELECT key_hash FROM drivers WHERE name_key = 'mira tanaka'").first<{ key_hash: string }>();
     check('migration: a name keeps the hash of its key', mira?.key_hash === hash('a'));
     const migrated: BoardDeps = { db, ghosts: fakeR2(), eventRule: challengeProblem, now: () => nowMs };
-    const listed = (await listLaps(migrated, new URL(`https://librecorsa.test/api/laps?track=rwanda_official_short&vehicle=vf26&physics=${CURRENT}&name=Mira%20Tanaka`))).body as ListAnswer;
+    const listed = (await listLaps(migrated, new URL(`https://librecorsa.test/api/laps?track=rwanda_official_short&vehicle=lc26&physics=${CURRENT}&name=Mira%20Tanaka`))).body as ListAnswer;
     check('migration: the carried-over laps show on the new board', listed.total === 2 && listed.laps[0].name === 'Mira Tanaka' && listed.me?.rank === 1);
 
     // Later: the driver went faster on the old board from a browser still on the old game; someone else took a name here
@@ -443,7 +443,7 @@ async function main(): Promise<void> {
     const rows = async () =>
       (await r.db.prepare('SELECT driver_name AS name, driver_code AS code, name_key AS k, lap_time_ms AS t, event, assists FROM laps ORDER BY event, lap_time_ms').all<{ name: string; code: string; k: string; t: number; event: string; assists: string }>()).results;
     // A lap of this week's challenge: it goes on the open board and the week's
-    const fit = (k: number, name: string) => variant(k, name, { assists: week.assists, realism: week.realism, compound: challengeCompound('vf26'), surface: 'dry' });
+    const fit = (k: number, name: string) => variant(k, name, { assists: week.assists, realism: week.realism, compound: challengeCompound('lc26'), surface: 'dry' });
 
     const bad = await upload(fit(1, 'Big Dick 9'));
     check('names: a lap under a name the filter refuses is turned down', bad.status === 400 && bad.body.error === 'Pick another name' && (await rows()).length === 0, bad.body.error);
@@ -463,7 +463,7 @@ async function main(): Promise<void> {
       moved.body.ok === true && moved.body.moved === 3 && after.every((l) => l.name === 'Mira Tanaka' && l.k === 'mira tanaka' && l.code === 'MIR') && race?.name === 'Mira Tanaka' && race.code === 'MIR' && race.name_key === 'mira tanaka' && oldClaim === null,
       `${moved.body.error ?? `${moved.body.moved} moved`}: ${after.map((l) => l.name).join(', ')}`
     );
-    const list = (await listLaps(r, new URL(`https://librecorsa.test/api/laps?track=rwanda_official_short&vehicle=vf26&physics=${CURRENT}&name=Mira%20Tanaka`))).body as ListAnswer;
+    const list = (await listLaps(r, new URL(`https://librecorsa.test/api/laps?track=rwanda_official_short&vehicle=lc26&physics=${CURRENT}&name=Mira%20Tanaka`))).body as ListAnswer;
     check('names: the board lists the driver once, under the new name', list.total === 1 && list.laps[0].name === 'Mira Tanaka' && list.me?.rank === 1);
 
     const freed = await upload(fit(1.04, 'Apex Falcon 27'), KEY_B);

@@ -380,8 +380,8 @@ export function checkBarrierCrashes(
   check(`${label}: barrier hits, drives away afterwards`, stuck.length === 0, stuck.length ? stuck.join(', ') : '16 runs drove off along the track');
 }
 
-/** The VF26 (F1Physics2026) behind the crash harness: placed through its track coordinates */
-export function vf26CrashCar(sim: F1Physics2026, track: BuiltTrackData): CrashCar {
+/** The LC26 (F1Physics2026) behind the crash harness: placed through its track coordinates */
+export function lc26CrashCar(sim: F1Physics2026, track: BuiltTrackData): CrashCar {
   return {
     outline: sim.wallProbePoints,
     hasReverse: true,

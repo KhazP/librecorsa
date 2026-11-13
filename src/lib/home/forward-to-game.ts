@@ -14,7 +14,7 @@ import { withBasePath } from "@/lib/base-path";
  * tag again on an in-site visit to "/" (and say so), though only a fresh load needs it. Anywhere but "/" it does
  * nothing.
  */
-const GAME_PARAMS = ["room", "car", "sim", "f1physics", "vf26engine", "depth", "sky", "colliders", "perf", "profile"];
+const GAME_PARAMS = ["room", "car", "sim", "f1physics", "lc26engine", "vf26engine", "depth", "sky", "colliders", "perf", "profile"]; // keep-old-id: the engine switch under the car's old name
 const HOME = withBasePath("/").replace(/\/+$/, "") || "/";
 
 export const FORWARD_TO_GAME = `(function(){try{if((location.pathname.replace(/\\/+$/,"")||"/")!==${JSON.stringify(HOME)})return;var q=new URLSearchParams(location.search);var game=${JSON.stringify(GAME_PARAMS)}.some(function(k){return q.has(k)});var framed=window.self!==window.top;var app=matchMedia("(display-mode: standalone)").matches;if(game||framed||app)location.replace(${JSON.stringify(withBasePath("/play"))}+location.search+location.hash)}catch(e){}})()`;

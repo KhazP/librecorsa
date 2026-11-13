@@ -39,7 +39,7 @@ uv run --python 3.14 --no-project --with numpy --with scipy --with opencv-python
 `port_qvist_f1.mjs` builds the 2026 Prototype's body, `public/cars/f12026/model/f12026.glb`, from Qvist Designs'
 "F1 2026 concept (polygon model)" (CC BY 4.0, [qvistdesigns.framer.website](https://qvistdesigns.framer.website/); its GLB is not in the
 repository), in the layout
-`src/lib/vf26-car-model.ts` reads:
+`src/lib/lc26-car-model.ts` reads:
 
 ```bash
 node --max-old-space-size=12288 scripts/cars/port_qvist_f1.mjs path/to/f1_2026_concept_polygon_model.glb
@@ -49,7 +49,7 @@ node --max-old-space-size=12288 scripts/cars/port_qvist_f1.mjs path/to/f1_2026_c
   positions: four wheels (split into rim and tyre at 0.25 m from the axle), two mirror glasses, the exhaust, and one
   welded body.
 - **Frame**: metres, +X left, +Y up, +Z forward, tyres on y = 0, the front axle at z = 1.5045 (where the AM26 had it,
-  so its cameras carry over unchanged). Wheelbase 3.400 m, the VF26 physics' own.
+  so its cameras carry over unchanged). Wheelbase 3.400 m, the LC26 physics' own.
 - **Flaps**: the two upper elements of each wing are cut out of the body (between the endplates; the front ones as left
   and right halves), both cut ends capped, each hinged on a line fitted through its leading edge, with
   `aeroClosed` / `aeroOpen` extras (16 degrees rear, 10 front, trailing edge down).
@@ -58,7 +58,7 @@ node --max-old-space-size=12288 scripts/cars/port_qvist_f1.mjs path/to/f1_2026_c
   are cut along the zone lines first so the edges are clean; each zone is simplified with its borders kept.
 - **From the AM26** (`scripts/cars/sources/am26-steering-wheel.glb`, `--steer-from`): `STEER_BASE` (steering wheel,
   shift lights, display) and the root's `cameras`. That file is DeX's AM26 (CC BY 4.0, the car's previous body) cut
-  down to its `VF26` root (with its `cameras` and `steerBase` extras) and `STEER_BASE` subtree, 1 MB instead of 16. The root's `helmet.pos` places the game's own helmet.
+  down to its `LC26` root (with its `cameras` and `steerBase` extras) and `STEER_BASE` subtree, 1 MB instead of 16. The root's `helmet.pos` places the game's own helmet.
 
 `build_rb_livery.mjs <skin folder>` cuts the Oracle Red Bull Racing livery's pictures out of an Assetto Corsa skin's
 `car-body.dds` (VRC Formula Alpha 2026, RB22), keys off its navy and packs them into

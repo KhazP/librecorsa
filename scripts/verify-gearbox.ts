@@ -1,5 +1,5 @@
 /**
- * The automatic gearbox and its manual override (src/lib/sim/auto-gearbox.ts), on both gearbox models: the VF26's
+ * The automatic gearbox and its manual override (src/lib/sim/auto-gearbox.ts), on both gearbox models: the LC26's
  * (F1Physics2026) and VehiclePhysics' (F1 2026 Rigid-Body, AMG GT3).
  *
  * 1. The schedule and the override on their own: an auto shift the driver's paddle shift would undo is held, one the
@@ -29,7 +29,7 @@ import { F12026CarSim } from '../src/lib/sim/f12026-car/F12026CarSim';
 import { AMG_GT3_CONFIG } from '../src/lib/sim/gt3/AmgGt3Config';
 import { createAmgGt3Sim } from '../src/lib/sim/gt3/AmgGt3Sim';
 import type { SimulatorCar } from '../src/lib/sim/simulator-car';
-import { VF26_DRIVETRAIN, VF26_ENGINE } from '../src/lib/sim/vf26-data';
+import { LC26_DRIVETRAIN, LC26_ENGINE } from '../src/lib/sim/lc26-data';
 import type { ControlInputs } from '../src/types/f1';
 import { createFlatTestTrack } from './lib/flat-track';
 
@@ -148,12 +148,12 @@ const MODELS: Model[] = [
   {
     name: 'F1 2026 Prototype (F1Physics2026)',
     make: () => new F1Physics2026(pad),
-    upshiftRpm: VF26_DRIVETRAIN.autoUpshiftRpm,
-    limiterRpm: VF26_ENGINE.limiterRpm,
+    upshiftRpm: LC26_DRIVETRAIN.autoUpshiftRpm,
+    limiterRpm: LC26_ENGINE.limiterRpm,
     shortShiftKmh: 110,
     limiterKmh: 190,
     placement: { dir: 1, fromKmh: 110, toKmh: 150 },
-    upshiftS: VF26_DRIVETRAIN.upshiftTimeS,
+    upshiftS: LC26_DRIVETRAIN.upshiftTimeS,
   },
   {
     name: 'F1 2026 Rigid-Body (VehiclePhysics)',
@@ -187,7 +187,7 @@ function placed(m: Model, kmh: number): SimulatorCar {
 
 const step = (c: SimulatorCar, inputs: Partial<ControlInputs>) => c.step(DT, { analogSteer: 0, ...inputs });
 
-/** One frame with the paddle pressed, then three released (the VF26's seamless shift takes 15–20 ms) */
+/** One frame with the paddle pressed, then three released (the LC26's seamless shift takes 15–20 ms) */
 function paddle(c: SimulatorCar, dir: 1 | -1, inputs: Partial<ControlInputs>): void {
   step(c, { ...inputs, shiftUp: dir > 0, shiftDown: dir < 0 });
   for (let i = 0; i < 3; i++) step(c, inputs);
@@ -257,7 +257,7 @@ for (const m of MODELS) {
       if (c.telemetry.gear > shifted) backUpS = t;
       else maxRpm = Math.max(maxRpm, c.telemetry.rpm);
     }
-    // The VF26 shifts up 300 rpm under its limiter: its hold past the upshift point is too short to see
+    // The LC26 shifts up 300 rpm under its limiter: its hold past the upshift point is too short to see
     const heldPastPoint = m.limiterRpm - m.upshiftRpm < 500 || maxRpm > (m.upshiftRpm + m.limiterRpm) / 2;
     check(
       shifted === before - 1 && backUpS < 0.8 && heldPastPoint,

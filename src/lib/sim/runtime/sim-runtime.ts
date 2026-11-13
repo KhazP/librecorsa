@@ -6,7 +6,7 @@
  * checks drive it directly (`scripts/verify-sim-runtime.ts`). Nothing here may touch the page (window, storage, DOM).
  */
 import type { ControlInputs } from "@/types/f1";
-import { setVf26OnRigidBody } from "@/lib/cars/vf26-engine";
+import { setLc26OnRigidBody } from "@/lib/cars/lc26-engine";
 import { vehicleModelSpec } from "@/lib/cars/vehicle-models";
 import { getActiveTrackData, setActiveTrack, type BuiltTrackData } from "@/lib/track-data";
 import type * as THREE from "three";
@@ -51,7 +51,7 @@ export class SimRuntime {
         this.emit({ type: "pong", id: command.id });
         return;
       case "init": {
-        setVf26OnRigidBody(command.vf26Rigid);
+        setLc26OnRigidBody(command.lc26Rigid);
         if (command.track) {
           setActiveTrack(command.track.id, command.track.raw);
           this.track = getActiveTrackData(1200);

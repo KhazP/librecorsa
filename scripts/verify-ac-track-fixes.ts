@@ -158,7 +158,7 @@ async function verifyMonacoBarrierHitboxes() {
 
   // Include standard Armco stations AND stepping runoff stations (S/F s=2m, Sainte Devote s=205m, Nouvelle Chicane s=2095m, Piscine s=2710m, Rascasse s=2955m)
   const testS = [2, 100, 205, 450, 880, 1700, 2095, 2480, 2710, 2955];
-  for (const carKind of ['vf26', 'f12026', 'gt3'] as const) {
+  for (const carKind of ['lc26', 'f12026', 'gt3'] as const) {
     for (const side of [-1, 1] as const) {
       for (const s0 of testS) {
         const dt = 1 / 120;
@@ -171,7 +171,7 @@ async function verifyMonacoBarrierHitboxes() {
             ? Math.max(wLs[idx0], wLs[idx1], wLs[idx2])
             : Math.max(wRs[idx0], wRs[idx1], wRs[idx2]);
 
-        if (carKind === 'vf26') {
+        if (carKind === 'lc26') {
           const car = new F1Physics2026(track);
           car.attachTrackRoot(root);
           car.teleportToDistance(s0, 110 / 3.6, side * 1.5);
@@ -285,13 +285,13 @@ async function verifyKerbsFeelAndSound() {
     }
     assert.ok(targetS >= 0, `[${tid}] Expected to find a 3D Track_Surface_Kerb run`);
 
-    for (const carKind of ['vf26', 'f12026', 'gt3'] as const) {
+    for (const carKind of ['lc26', 'f12026', 'gt3'] as const) {
       const dt = 1 / 120;
       const side = Math.sign(targetLat);
       /** 90 frames along the kerb run at `lat`: the frames on a kerb, and the four corners' RMS shock velocity on them (m/s) */
       const run = (lat: number) => {
         const car =
-          carKind === 'vf26'
+          carKind === 'lc26'
             ? (() => {
                 const c = new F1Physics2026(track);
                 c.attachTrackRoot(root);

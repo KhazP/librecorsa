@@ -1,8 +1,8 @@
 /**
  * A flying lap of the AI car on the full physics, tracking a supplied line with its speed plan (the D1 tracker),
  * timed on its second lap from a flying start. Reports the lap time, the frames spent off the track, the barrier hits
- * and the worst distance from the line. `line` names the car: the F1 line is driven by the f12026-car, or by the VF26
- * (`vf26`, its own physics and limits on the same line).
+ * and the worst distance from the line. `line` names the car: the F1 line is driven by the f12026-car, or by the LC26
+ * (`lc26`, its own physics and limits on the same line).
  */
 import type { BuiltTrackData } from '../../../src/lib/track-data';
 import { F12026CarSim } from '../../../src/lib/sim/f12026-car/F12026CarSim';
@@ -19,7 +19,7 @@ export interface PhysicsLap {
   offTrackFrames: number;
   maxErrM: number;
   meanErrM: number;
-  /** Barrier impacts over the timed lap (above 2 m/s; on the VF26, decelerations no brake can give) */
+  /** Barrier impacts over the timed lap (above 2 m/s; on the LC26, decelerations no brake can give) */
   wallHits: number;
   plan: AiDrivePlan;
   /** Driven lateral offset and speed per AI grid point (NaN where not visited) */
@@ -27,8 +27,8 @@ export interface PhysicsLap {
   v: Float64Array;
 }
 
-/** The VF26 on the circuit's mesh barriers when there is a mesh, as the game attaches it, else on the data's wall lines */
-function vf26On(track: BuiltTrackData, root: THREE.Object3D | null): SimulatorCar {
+/** The LC26 on the circuit's mesh barriers when there is a mesh, as the game attaches it, else on the data's wall lines */
+function lc26On(track: BuiltTrackData, root: THREE.Object3D | null): SimulatorCar {
   const car = new F1Physics2026(track);
   if (root) car.attachTrackRoot(root);
   return car as unknown as SimulatorCar;
@@ -37,15 +37,15 @@ function vf26On(track: BuiltTrackData, root: THREE.Object3D | null): SimulatorCa
 export function physicsLap(
   track: BuiltTrackData,
   root: THREE.Object3D | null,
-  line: 'f1' | 'gt3' | 'vf26',
+  line: 'f1' | 'gt3' | 'lc26',
   offsets: ArrayLike<number>,
   gripScale = 0.95,
   maxS = 400
 ): PhysicsLap {
   const t = aiTrackFor(track);
-  const plan = makeDrivePlan(t, offsets, carLimitsFor(line === 'gt3' ? 'amg-gt3' : line === 'vf26' ? 'vf26' : 'f12026-car', gripScale));
+  const plan = makeDrivePlan(t, offsets, carLimitsFor(line === 'gt3' ? 'amg-gt3' : line === 'lc26' ? 'lc26' : 'f12026-car', gripScale));
   const car: SimulatorCar =
-    line === 'gt3' ? createAmgGt3Sim(track, root) : line === 'vf26' ? vf26On(track, root) : new F12026CarSim(track, root);
+    line === 'gt3' ? createAmgGt3Sim(track, root) : line === 'lc26' ? lc26On(track, root) : new F12026CarSim(track, root);
   car.assistPreset = 'pro';
   car.aiAutopilot = true;
   car.aiPaceScale = 1;
@@ -67,7 +67,7 @@ export function physicsLap(
       if (laps === 1) lapStart = time;
     }
     prev = s;
-    // Impacts: the rigid-body cars report theirs; on the VF26 one is a deceleration no brake can give, counted once
+    // Impacts: the rigid-body cars report theirs; on the LC26 one is a deceleration no brake can give, counted once
     const wall = car.telemetry.f12026?.wallImpact;
     const rigidHit = !!wall && wall.atMs !== lastWallMs && wall.speedMs > 2;
     lastWallMs = wall?.atMs ?? lastWallMs;

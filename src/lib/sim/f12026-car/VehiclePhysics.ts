@@ -1813,7 +1813,7 @@ export class VehiclePhysics {
   }
 
   /**
-   * Fuel on board (kg): its mass rides with the body and the moments of inertia grow with the mass, as the VF26's
+   * Fuel on board (kg): its mass rides with the body and the moments of inertia grow with the mass, as the LC26's
    * uniform-box body does. Its weight acts at the tank (`ChassisData.fuelTank`; at the CG without one), so a tank
    * behind the CG moves the weight split rearward. The spring preloads keep the load they were last set for
    * (`refreshStaticGeometry` sets them for this load), so a car that burns fuel rises on its springs.
@@ -2390,7 +2390,7 @@ export class VehiclePhysics {
         );
         const pressureGrip = tyrePressureGrip(td.pressureData, w.pressurePsi);
         w.thermalGrip = thermal;
-        // Wear, graining, blistering, dirt and flat-spots, as the VF26's tyre model (ac-tyre computeTyreForces)
+        // Wear, graining, blistering, dirt and flat-spots, as the LC26's tyre model (ac-tyre computeTyreForces)
         // A brush tyre's graining softens it (below, at the peak slip) rather than costing grip; its blisters cost up to
         // a sixth of the grip
         const treadGrip = tyre.brush ? 1 / (1 + 0.2 * w.blisterLevel) : (1 - 0.08 * w.grainLevel) * (1 - 0.12 * w.blisterLevel);
@@ -2548,7 +2548,7 @@ export class VehiclePhysics {
       // Fz's KPI / caster weight-jacking, Mz and Mx projected onto the axis), plus the flat-spot shake. Any other moment
       // about the kingpin joins this sum as its own term
       if (w.isFront) {
-        // The solved upright's own kingpin ground offsets (the blended scrub / trail fields stay for the VF26)
+        // The solved upright's own kingpin ground offsets (the blended scrub / trail fields stay for the LC26)
         _kpGeo.kpiRad = kin.kpiRad;
         _kpGeo.casterRad = kin.casterRad;
         _kpGeo.scrubRadiusM = kin.kingpinScrubM;

@@ -1,8 +1,8 @@
 /**
- * 2026 Formula 1 vehicle dynamics — VF26 physics (`f1-physics-2026.ts`)
+ * 2026 Formula 1 vehicle dynamics — LC26 physics (`f1-physics-2026.ts`)
  *
- * An assist-free vehicle model driven by the VF26 parameter set
- * (see `src/lib/sim/vf26-data.ts`).
+ * An assist-free vehicle model driven by the LC26 parameter set
+ * (see `src/lib/sim/lc26-data.ts`).
  *
  * Model overview (fixed 500 Hz outer step, 4 × 2 kHz inner sub-steps):
  * - Chassis:      planar 3-DOF (vx, vy, yaw) on the local road plane + sprung heave / pitch / roll
@@ -56,17 +56,17 @@ import { type OvertakingRaceControl, type OvertakingRules, OvertakeGrant } from 
 import {
   computeRollCentreHeight,
   mgukDeployCapW,
-  VF26_ACTIVE_AERO_TRANSITION_S,
-  VF26_BRAKES,
-  VF26_CHASSIS,
-  VF26_DRIVETRAIN,
-  VF26_ENGINE,
-  VF26_ERS,
-  VF26_TYRES,
-  VF26_TYRE_SETUP_RANGES,
-  VF26_WINGS,
-  type Vf26AxleSuspension,
-} from './sim/vf26-data';
+  LC26_ACTIVE_AERO_TRANSITION_S,
+  LC26_BRAKES,
+  LC26_CHASSIS,
+  LC26_DRIVETRAIN,
+  LC26_ENGINE,
+  LC26_ERS,
+  LC26_TYRES,
+  LC26_TYRE_SETUP_RANGES,
+  LC26_WINGS,
+  type Lc26AxleSuspension,
+} from './sim/lc26-data';
 import {
   createGroundHit,
   createWallHit,
@@ -76,7 +76,7 @@ import {
   wallSweep,
 } from './sim/f12026-car/TrackColliderQuery';
 import { trackColliders } from './sim/track-colliders';
-import { createWingRuntimes, VF26_CG_HEIGHT_M, type WingRuntime, wingAngleDeg } from './sim/vf26-aero';
+import { createWingRuntimes, LC26_CG_HEIGHT_M, type WingRuntime, wingAngleDeg } from './sim/lc26-aero';
 import {
   coldPressureFor,
   computeTyreForces,
@@ -153,10 +153,10 @@ import {
   type BrakingGuide,
   circuitBrakingGuide,
   computeSpeedProfile,
-  createVf26ProfileCarModel,
+  createLc26ProfileCarModel,
   sampleProfile,
   type SpeedProfile,
-  vf26FullBrakeForceN,
+  lc26FullBrakeForceN,
   withPlanningGrip,
 } from './sim/speed-profile';
 
@@ -175,11 +175,11 @@ const INITIAL_BRAKE_TEMP_C = 380;
 const AI_PLAN_WET_REF_MS = 50;
 /** Share of the wet grip the AI plan leaves in hand on a fully wet road */
 const AI_PLAN_WET_MARGIN = 0.15;
-/** The VF26's auto box: it shifts down on a lift under 60 % throttle, and always under 6200 rpm */
-const VF26_AUTO_SHIFT: AutoShiftSchedule = {
-  upshiftRpm: VF26_DRIVETRAIN.autoUpshiftRpm,
-  limiterRpm: VF26_ENGINE.limiterRpm,
-  downshiftRpm: VF26_DRIVETRAIN.autoDownshiftRpm,
+/** The LC26's auto box: it shifts down on a lift under 60 % throttle, and always under 6200 rpm */
+const LC26_AUTO_SHIFT: AutoShiftSchedule = {
+  upshiftRpm: LC26_DRIVETRAIN.autoUpshiftRpm,
+  limiterRpm: LC26_ENGINE.limiterRpm,
+  downshiftRpm: LC26_DRIVETRAIN.autoDownshiftRpm,
   lugRpm: 6200,
   downshiftMarginRpm: 600,
   upshiftMaxBrake: 0.1,
@@ -218,7 +218,7 @@ type TrackProjection = ReturnType<BuiltTrackData['projectWorldToTrack']>;
 
 const _wallHit = createWallHit();
 /**
- * A mesh kerb's crown above the road for the VF26, which takes its road height from the track samples rather than the
+ * A mesh kerb's crown above the road for the LC26, which takes its road height from the track samples rather than the
  * mesh (the converted circuits were driven with this)
  */
 const MESH_KERB_CROWN_M = 0.018;
@@ -252,14 +252,14 @@ function defaultTyreSetup(): TyreSetup {
   const round = (psi: number) => Math.round(psi * 10) / 10;
   return {
     coldPressurePsi: axlePressures(
-      round(coldPressureFor(VF26_TYRES.soft.front.pressureRefPsi)),
-      round(coldPressureFor(VF26_TYRES.soft.rear.pressureRefPsi))
+      round(coldPressureFor(LC26_TYRES.soft.front.pressureRefPsi)),
+      round(coldPressureFor(LC26_TYRES.soft.rear.pressureRefPsi))
     ),
-    camberDeg: { front: VF26_CHASSIS.front.staticCamberDeg, rear: VF26_CHASSIS.rear.staticCamberDeg },
+    camberDeg: { front: LC26_CHASSIS.front.staticCamberDeg, rear: LC26_CHASSIS.rear.staticCamberDeg },
   };
 }
 
-type ErsControllerKey = keyof typeof VF26_ERS.modes;
+type ErsControllerKey = keyof typeof LC26_ERS.modes;
 
 interface ErsControllerRuntime {
   throttle: Lut;
@@ -270,7 +270,7 @@ interface ErsControllerRuntime {
 }
 
 interface AxleRuntime {
-  spec: Vf26AxleSuspension;
+  spec: Lc26AxleSuspension;
   hardpoints: DoubleWishboneHardpoints;
   rollCentreHeight: number;
   /** Static sprung load carried by each corner spring (N) */
@@ -334,17 +334,17 @@ export class F1Physics2026 {
   private timeAccumulator = 0;
 
   // Chassis constants (exposed for camera / HUD / AI)
-  public readonly massKg: number = VF26_CHASSIS.totalMassKg;
-  public readonly wheelbaseM: number = VF26_CHASSIS.wheelbase;
-  public readonly wheeltrackM: number = (VF26_CHASSIS.front.track + VF26_CHASSIS.rear.track) * 0.5;
-  public readonly cgToFrontAxleM: number = VF26_CHASSIS.wheelbase * (1 - VF26_CHASSIS.frontWeightFraction);
-  public readonly cgToRearAxleM: number = VF26_CHASSIS.wheelbase * VF26_CHASSIS.frontWeightFraction;
-  public readonly cgHeightM: number = VF26_CG_HEIGHT_M;
+  public readonly massKg: number = LC26_CHASSIS.totalMassKg;
+  public readonly wheelbaseM: number = LC26_CHASSIS.wheelbase;
+  public readonly wheeltrackM: number = (LC26_CHASSIS.front.track + LC26_CHASSIS.rear.track) * 0.5;
+  public readonly cgToFrontAxleM: number = LC26_CHASSIS.wheelbase * (1 - LC26_CHASSIS.frontWeightFraction);
+  public readonly cgToRearAxleM: number = LC26_CHASSIS.wheelbase * LC26_CHASSIS.frontWeightFraction;
+  public readonly cgHeightM: number = LC26_CG_HEIGHT_M;
   /** What the player is shown: braking line, braking urgency and HUD target speed, with crests allowed for (the AI
    * plans on its own profile) */
   public readonly brakingGuide: BrakingGuide;
   public readonly maxSteerAngleRad: number =
-    (VF26_CHASSIS.steering.lockDeg / VF26_CHASSIS.steering.ratio) * DEG2RAD;
+    (LC26_CHASSIS.steering.lockDeg / LC26_CHASSIS.steering.ratio) * DEG2RAD;
   public yawInertiaKgM2 = 0;
   private pitchInertiaKgM2 = 0;
   private rollInertiaKgM2 = 0;
@@ -353,13 +353,13 @@ export class F1Physics2026 {
    * wheels, sidepods, rear wheels, tail
    */
   public readonly wallProbePoints: ReadonlyArray<readonly [number, number]> = (() => {
-    const a = VF26_CHASSIS.wheelbase * (1 - VF26_CHASSIS.frontWeightFraction);
-    const b = VF26_CHASSIS.wheelbase * VF26_CHASSIS.frontWeightFraction;
-    const wingZ = VF26_WINGS.map((w) => w.position[2]);
+    const a = LC26_CHASSIS.wheelbase * (1 - LC26_CHASSIS.frontWeightFraction);
+    const b = LC26_CHASSIS.wheelbase * LC26_CHASSIS.frontWeightFraction;
+    const wingZ = LC26_WINGS.map((w) => w.position[2]);
     const noseZ = Math.max(a, ...wingZ) + 0.3;
     const tailZ = Math.min(-b, ...wingZ) - 0.3;
-    const halfF = 0.5 * (VF26_CHASSIS.front.track + VF26_TYRES.soft.front.width);
-    const halfR = 0.5 * (VF26_CHASSIS.rear.track + VF26_TYRES.soft.rear.width);
+    const halfF = 0.5 * (LC26_CHASSIS.front.track + LC26_TYRES.soft.front.width);
+    const halfR = 0.5 * (LC26_CHASSIS.rear.track + LC26_TYRES.soft.rear.width);
     const out: [number, number][] = [];
     for (const side of [1, -1]) {
       for (const [x, z] of [[halfF, noseZ], [halfF, a], [0.85, 0], [halfR, -b], [0.5, tailZ]] as const) out.push([side * x, z]);
@@ -383,8 +383,8 @@ export class F1Physics2026 {
   public tcLevel = 5;
   public tc2Level = 6;
   public absLevel = 5;
-  public liveBrakeBias: number = VF26_BRAKES.frontBias;
-  public liveBrakeMigration: number = VF26_BRAKES.migrationAtFullPedal;
+  public liveBrakeBias: number = LC26_BRAKES.frontBias;
+  public liveBrakeMigration: number = LC26_BRAKES.migrationAtFullPedal;
   public diffEntryLevel = 3;
   public diffMidLevel = 5;
   public diffExitLevel = 5;
@@ -516,10 +516,10 @@ export class F1Physics2026 {
     CornerKinematicsState,
     CornerKinematicsState,
   ] = [this.frontKin.right, this.frontKin.left, this.rearKin.right, this.rearKin.left];
-  private readonly torqueLut = new Lut(VF26_ENGINE.torqueCurve);
-  private readonly coastLut = new Lut(VF26_ENGINE.coastCurve);
-  private readonly boostLut = new Lut(VF26_ENGINE.boostCurve);
-  private readonly kineticLut = new Lut(VF26_ERS.kineticTorque);
+  private readonly torqueLut = new Lut(LC26_ENGINE.torqueCurve);
+  private readonly coastLut = new Lut(LC26_ENGINE.coastCurve);
+  private readonly boostLut = new Lut(LC26_ENGINE.boostCurve);
+  private readonly kineticLut = new Lut(LC26_ERS.kineticTorque);
   private readonly ersControllers: Record<ErsControllerKey, ErsControllerRuntime>;
   private sprungMassKg = 0;
   private totalMassKg = 0;
@@ -529,10 +529,10 @@ export class F1Physics2026 {
   public lastObservation: RaceGymObservation;
 
   // Mirrors for external readers
-  public rpm: number = VF26_ENGINE.idleRpm;
+  public rpm: number = LC26_ENGINE.idleRpm;
   public gear = 1;
-  public ersEnergyJ: number = VF26_ERS.batteryJ;
-  public readonly maxErsEnergyJ: number = VF26_ERS.batteryJ;
+  public ersEnergyJ: number = LC26_ERS.batteryJ;
+  public readonly maxErsEnergyJ: number = LC26_ERS.batteryJ;
   public activeAeroMode: ActiveAeroMode = 'Z_MODE';
   public autoXMode = true;
   /** Race control for Overtake Mode (the 1 s rule); null = practice, the override is free */
@@ -628,17 +628,17 @@ export class F1Physics2026 {
     this.wings = createWingRuntimes();
 
     const mkCtrl = (k: ErsControllerKey): ErsControllerRuntime => ({
-      throttle: new Lut(VF26_ERS.modes[k].throttle),
-      speed: new Lut(VF26_ERS.modes[k].speed),
-      gear: new Lut(VF26_ERS.modes[k].gear),
-      soc: new Lut(VF26_ERS.modes[k].soc),
-      coastHarvest: VF26_ERS.modes[k].coastHarvest,
+      throttle: new Lut(LC26_ERS.modes[k].throttle),
+      speed: new Lut(LC26_ERS.modes[k].speed),
+      gear: new Lut(LC26_ERS.modes[k].gear),
+      soc: new Lut(LC26_ERS.modes[k].soc),
+      coastHarvest: LC26_ERS.modes[k].coastHarvest,
     });
     this.ersControllers = { RAC: mkCtrl('RAC'), BAL: mkCtrl('BAL'), PSH: mkCtrl('PSH'), CHR: mkCtrl('CHR') };
 
-    const tyres = VF26_TYRES[this.tireCompound];
+    const tyres = LC26_TYRES[this.tireCompound];
     const mkAxle = (
-      spec: Vf26AxleSuspension,
+      spec: Lc26AxleSuspension,
       radius: number,
       rate: number,
       damp: number,
@@ -646,7 +646,7 @@ export class F1Physics2026 {
     ): AxleRuntime => ({
       spec,
       hardpoints: buildDoubleWishboneHardpoints(spec.hardpoints, isFront, isFront ? 'pull_rod' : 'push_rod', {
-        staticCasterTrailM: VF26_CHASSIS.steering.mechanicalTrail,
+        staticCasterTrailM: LC26_CHASSIS.steering.mechanicalTrail,
       }),
       rollCentreHeight: computeRollCentreHeight(spec, radius),
       staticSpringForce: 0,
@@ -657,14 +657,14 @@ export class F1Physics2026 {
     });
     this.axles = [
       // Own copies of the axle specs: the garage setup changes them per car (the AI field shares the module data)
-      mkAxle(structuredClone(VF26_CHASSIS.front), tyres.front.radius, tyres.front.rate, tyres.front.damp, true),
-      mkAxle(structuredClone(VF26_CHASSIS.rear), tyres.rear.radius, tyres.rear.rate, tyres.rear.damp, false),
+      mkAxle(structuredClone(LC26_CHASSIS.front), tyres.front.radius, tyres.front.rate, tyres.front.damp, true),
+      mkAxle(structuredClone(LC26_CHASSIS.rear), tyres.rear.radius, tyres.rear.rate, tyres.rear.damp, false),
     ];
 
     const a = this.cgToFrontAxleM;
     const b = this.cgToRearAxleM;
-    const tf = VF26_CHASSIS.front.track * 0.5;
-    const tr = VF26_CHASSIS.rear.track * 0.5;
+    const tf = LC26_CHASSIS.front.track * 0.5;
+    const tr = LC26_CHASSIS.rear.track * 0.5;
     const mkWheel = (index: WheelCornerIndex, x: number, y: number): VehicleWheelState => {
       const isFront = index < 2;
       const spec = isFront ? tyres.front : tyres.rear;
@@ -694,7 +694,7 @@ export class F1Physics2026 {
         effectiveMu: spec.dyRef,
         gripFactor: 1,
         torqueAlignNm: 0,
-        rideHeight: (isFront ? VF26_CHASSIS.front : VF26_CHASSIS.rear).staticRideHeight,
+        rideHeight: (isFront ? LC26_CHASSIS.front : LC26_CHASSIS.rear).staticRideHeight,
         suspCompression: 0,
         suspCompressionVel: 0,
         hubZ: 0,
@@ -708,7 +708,7 @@ export class F1Physics2026 {
         contactCentroidShiftLeftM: 0,
         kinematicsCamberDeltaRad: 0,
         kinematicsBumpSteerRad: 0,
-        casterTrailM: VF26_CHASSIS.steering.mechanicalTrail,
+        casterTrailM: LC26_CHASSIS.steering.mechanicalTrail,
         scrubRadiusM: isFront ? 0.018 : 0.012,
         kpiRad: (isFront ? 11.5 : 8.0) * DEG2RAD,
       };
@@ -740,7 +740,7 @@ export class F1Physics2026 {
     this.aeroWakeState = withDamage(wake, this.damage) ?? wake;
   }
 
-  /** Damage (car-damage.ts): on the VF26 model the aero loss only, through the wake multipliers */
+  /** Damage (car-damage.ts): on the LC26 model the aero loss only, through the wake multipliers */
   public setDamageEffects(effects: Readonly<CarDamageEffects> | null): void {
     this.damage = effects;
     if (this.lastWake) this.aeroWakeState = withDamage(this.lastWake, effects) ?? this.lastWake;
@@ -926,17 +926,17 @@ export class F1Physics2026 {
     return { ...this.chassis };
   }
 
-  /** Garage chassis setup, as offsets from the VF26 baseline; springs, bars, dampers and ride height act at once */
+  /** Garage chassis setup, as offsets from the LC26 baseline; springs, bars, dampers and ride height act at once */
   public applyChassisSetup(setup: ChassisSetup): void {
     const s = clampChassisSetup(setup);
     // A new fuel load is put in the car now (and at every restart); other changes leave the fuel burnt so far
     if (s.fuelDeltaKg !== this.chassis.fuelDeltaKg) {
-      this.drivetrain.fuelKg = startingFuelKg('vf26', s);
+      this.drivetrain.fuelKg = startingFuelKg('lc26', s);
       this.telemetry.fuelKg = this.drivetrain.fuelKg;
     }
     this.chassis = s;
-    this.wingTrimDeg = { front: s.frontWingClicks * WING_CLICK_DEG.vf26.front, rear: s.rearWingClicks * WING_CLICK_DEG.vf26.rear };
-    const bases = [VF26_CHASSIS.front, VF26_CHASSIS.rear] as const;
+    this.wingTrimDeg = { front: s.frontWingClicks * WING_CLICK_DEG.lc26.front, rear: s.rearWingClicks * WING_CLICK_DEG.lc26.rear };
+    const bases = [LC26_CHASSIS.front, LC26_CHASSIS.rear] as const;
     this.axles.forEach((ax, i) => {
       const b = bases[i];
       const front = i === 0;
@@ -958,13 +958,13 @@ export class F1Physics2026 {
   }
 
   /**
-   * Sets the tyre setup, clamped to `VF26_TYRE_SETUP_RANGES` (cold pressures 14–27 psi to 0.1 psi, front camber
+   * Sets the tyre setup, clamped to `LC26_TYRE_SETUP_RANGES` (cold pressures 14–27 psi to 0.1 psi, front camber
    * −4.5…−1.5°, rear camber −3.0…−0.5°). A non-finite value keeps the current setting.
    */
   public setTyreSetup(setup: TyreSetup): void {
     const pick = (v: number, [lo, hi]: [number, number], current: number) =>
       Number.isFinite(v) ? THREE.MathUtils.clamp(v, lo, hi) : current;
-    const ranges = VF26_TYRE_SETUP_RANGES;
+    const ranges = LC26_TYRE_SETUP_RANGES;
     const cp = this.tyreSetup.coldPressurePsi;
     for (const k of ["fl", "fr", "rl", "rr"] as const) {
       cp[k] = Math.round(pick(setup.coldPressurePsi[k], ranges.coldPsiRange, cp[k]) * 10) / 10;
@@ -1050,7 +1050,7 @@ export class F1Physics2026 {
     return this.ground ?? null;
   }
 
-  public readonly vehicleId = 'vf26' as const;
+  public readonly vehicleId = 'lc26' as const;
   public readonly racingLineId = 'f1' as const;
 
   public createAiPeerCar(): F1Physics2026 {
@@ -1358,7 +1358,7 @@ export class F1Physics2026 {
       shiftTarget: 1,
       shiftTimerS: 0,
       autoShiftCooldownS: 0,
-      engineOmega: VF26_ENGINE.idleRpm * RPM2RADS,
+      engineOmega: LC26_ENGINE.idleRpm * RPM2RADS,
       clutchLocked: false,
       clutchEngagement: 0,
       launchPedal: 0,
@@ -1369,9 +1369,9 @@ export class F1Physics2026 {
       mgukPowerW: 0,
       harvestAxleTorqueNm: 0,
       limiterCut: false,
-      fuelKg: startingFuelKg('vf26', this.chassis),
+      fuelKg: startingFuelKg('lc26', this.chassis),
       ersMode: 'BALANCED',
-      ersEnergyJ: VF26_ERS.batteryJ,
+      ersEnergyJ: LC26_ERS.batteryJ,
       boostRemainingS: 0,
       boostCooldownS: 0,
       diffLockedFraction: 0,
@@ -1380,18 +1380,18 @@ export class F1Physics2026 {
 
   private recomputeMassProperties(): void {
     const fuel = this.drivetrain.fuelKg;
-    const m = VF26_CHASSIS.totalMassKg + fuel;
+    const m = LC26_CHASSIS.totalMassKg + fuel;
     this.totalMassKg = m;
-    const unsprung = 2 * VF26_CHASSIS.front.unsprungMassKg + 2 * VF26_CHASSIS.rear.unsprungMassKg;
+    const unsprung = 2 * LC26_CHASSIS.front.unsprungMassKg + 2 * LC26_CHASSIS.rear.unsprungMassKg;
     this.sprungMassKg = m - unsprung;
-    const box = VF26_CHASSIS.inertiaBox;
+    const box = LC26_CHASSIS.inertiaBox;
     // Principal moments of inertia of a uniform box of the car's mass
     this.yawInertiaKgM2 = (m * (box.width ** 2 + box.length ** 2)) / 12;
     this.pitchInertiaKgM2 = (m * (box.height ** 2 + box.length ** 2)) / 12;
     this.rollInertiaKgM2 = (m * (box.width ** 2 + box.height ** 2)) / 12;
 
     const weight = m * G;
-    const frontAxleLoad = weight * VF26_CHASSIS.frontWeightFraction;
+    const frontAxleLoad = weight * LC26_CHASSIS.frontWeightFraction;
     const rearAxleLoad = weight - frontAxleLoad;
     const setAxle = (ax: AxleRuntime, axleLoad: number) => {
       ax.staticTyreLoad = axleLoad * 0.5;
@@ -1403,7 +1403,7 @@ export class F1Physics2026 {
   }
 
   private applyCompound(): void {
-    const set = VF26_TYRES[this.tireCompound];
+    const set = LC26_TYRES[this.tireCompound];
     for (const w of this.wheels) {
       const targetSpec = w.isFront ? set.front : set.rear;
       if (w.tyre.spec !== targetSpec) {
@@ -1511,15 +1511,15 @@ export class F1Physics2026 {
   }
 
   private overallRatio(gear: number): number {
-    if (gear >= 1 && gear <= VF26_DRIVETRAIN.gearRatios.length) {
-      return VF26_DRIVETRAIN.gearRatios[gear - 1] * VF26_DRIVETRAIN.finalDrive;
+    if (gear >= 1 && gear <= LC26_DRIVETRAIN.gearRatios.length) {
+      return LC26_DRIVETRAIN.gearRatios[gear - 1] * LC26_DRIVETRAIN.finalDrive;
     }
-    if (gear === -1) return VF26_DRIVETRAIN.reverseRatio * VF26_DRIVETRAIN.finalDrive;
+    if (gear === -1) return LC26_DRIVETRAIN.reverseRatio * LC26_DRIVETRAIN.finalDrive;
     return 0;
   }
 
   private selectGearForSpeed(speedMs: number): number {
-    const r = VF26_TYRES.soft.rear.radius;
+    const r = LC26_TYRES.soft.rear.radius;
     for (let g = 1; g <= 8; g++) {
       const rpm = (speedMs / r) * this.overallRatio(g) * RADS2RPM;
       if (rpm < 11200) return g;
@@ -1531,8 +1531,8 @@ export class F1Physics2026 {
     const dt = this.drivetrain;
     const rearOmega = 0.5 * (this.wheels[2].spinVel + this.wheels[3].spinVel);
     const engineFromRoad = rearOmega * this.overallRatio(dt.gear);
-    const idle = VF26_ENGINE.idleRpm * RPM2RADS;
-    if (engineFromRoad > VF26_DRIVETRAIN.autoClutchFullRpm * RPM2RADS) {
+    const idle = LC26_ENGINE.idleRpm * RPM2RADS;
+    if (engineFromRoad > LC26_DRIVETRAIN.autoClutchFullRpm * RPM2RADS) {
       dt.engineOmega = engineFromRoad;
       dt.clutchLocked = true;
       dt.clutchEngagement = 1;
@@ -1600,7 +1600,7 @@ export class F1Physics2026 {
       cgToRearAxleM: this.cgToRearAxleM,
       wheelbaseM: this.wheelbaseM,
       maxSteerAngleRad: this.maxSteerAngleRad,
-      frontPeakSlipRad: VF26_TYRES[this.tireCompound].front.frictionLimitAngleDeg * DEG2RAD,
+      frontPeakSlipRad: LC26_TYRES[this.tireCompound].front.frictionLimitAngleDeg * DEG2RAD,
       brake,
       // Measured on the flat pad: ≈1.75 × (g + downforce / m) from 90 to 240 km/h, scaled by surface/wet grip
       maxLateralAccel: 1.75 * this.aiPlanGrip() * (G + this.aeroDownforceN / this.massKg),
@@ -1634,7 +1634,7 @@ export class F1Physics2026 {
       const vxSafe = Math.max(3, this.vxMs);
       const frontCourseLeft = Math.atan2(this.vyMs - this.yawRateRadS * this.cgToFrontAxleM, vxSafe);
       this.aiFrontCourseRad += (frontCourseLeft - this.aiFrontCourseRad) * Math.min(1, dt / 0.05);
-      const alphaLim = 1.05 * VF26_TYRES[this.tireCompound].front.frictionLimitAngleDeg * DEG2RAD;
+      const alphaLim = 1.05 * LC26_TYRES[this.tireCompound].front.frictionLimitAngleDeg * DEG2RAD;
       const wantLeft = THREE.MathUtils.clamp(
         ai.steerCmd * this.maxSteerAngleRad,
         this.aiFrontCourseRad - alphaLim,
@@ -1673,7 +1673,7 @@ export class F1Physics2026 {
       // using the grip left over after its current cornering force
       // Front torque per wheel at pedal p is T·(bias + mig·p)·p with the migration, so the cap is the root of
       // mig·p² + bias·p − τ/T = 0 for the torque τ the tyre can take
-      const brakeTorqueFull = VF26_BRAKES.maxTorqueNm * VF26_BRAKES.powerMult * this.brakePowerScale;
+      const brakeTorqueFull = LC26_BRAKES.maxTorqueNm * LC26_BRAKES.powerMult * this.brakePowerScale;
       // The live bias and migration (the tuner can move them), as the brake distribution itself uses
       const bias0 = this.liveBrakeBias;
       const mig = this.liveBrakeMigration;
@@ -1782,7 +1782,7 @@ export class F1Physics2026 {
       // Straight to the rim's angle (a clamp to an infinite rate is NaN on a zero-length step)
       this.steerRoadWheelRad = targetRoad;
     } else {
-      const maxRate = (VF26_CHASSIS.steering.maxWheelSpeedDegS / VF26_CHASSIS.steering.ratio) * DEG2RAD;
+      const maxRate = (LC26_CHASSIS.steering.maxWheelSpeedDegS / LC26_CHASSIS.steering.ratio) * DEG2RAD;
       this.steerRoadWheelRad += THREE.MathUtils.clamp(targetRoad - this.steerRoadWheelRad, -maxRate * dt, maxRate * dt);
     }
 
@@ -1846,14 +1846,14 @@ export class F1Physics2026 {
       this.activeAeroMode = 'Z_MODE';
     }
     const xTarget = this.activeAeroMode === 'X_MODE' ? 1 : 0;
-    const aeroRate = dt / VF26_ACTIVE_AERO_TRANSITION_S;
+    const aeroRate = dt / LC26_ACTIVE_AERO_TRANSITION_S;
     this.xModeBlend += THREE.MathUtils.clamp(xTarget - this.xModeBlend, -aeroRate, aeroRate);
     this.updateAero();
 
     // ---- 6. Power unit & brakes (controls for the sub-steps) ----------------------
     this.updatePowerUnitControls(dt, throttle, brake);
     const effectiveFrontBias = computeDynamicBrakeMigration(this.liveBrakeBias, brake, this.liveBrakeMigration);
-    const brakeDemand = brake * VF26_BRAKES.maxTorqueNm * VF26_BRAKES.powerMult * this.brakePowerScale;
+    const brakeDemand = brake * LC26_BRAKES.maxTorqueNm * LC26_BRAKES.powerMult * this.brakePowerScale;
     const frontPerWheel = brakeDemand * effectiveFrontBias;
     const rearPerWheelDemand = brakeDemand * (1 - effectiveFrontBias);
     // Brake-by-wire: MGU-K harvest replaces part of the rear hydraulic torque. The BBW keeps the
@@ -1866,7 +1866,7 @@ export class F1Physics2026 {
     const coastPerWheel =
       brake > 0.02 && drv.clutchLocked
         ? (0.5 * Math.max(0, -this.coastLut.evaluate(drv.engineOmega * RADS2RPM) * this.engineBrakingScale) * Math.abs(this.overallRatio(drv.gear)) * (1 - throttle)) /
-          VF26_DRIVETRAIN.efficiency
+          LC26_DRIVETRAIN.efficiency
         : 0;
     this.wheels[0].brakeTorqueNm = frontPerWheel * this.absFactor[0] * this.wheels[0].brakeDisc.muFactor;
     this.wheels[1].brakeTorqueNm = frontPerWheel * this.absFactor[1] * this.wheels[1].brakeDisc.muFactor;
@@ -1928,9 +1928,9 @@ export class F1Physics2026 {
       );
     }
     if (this.realism.fuelUse && throttle > 0.01 && drv.fuelKg > 0) {
-      drv.fuelKg = Math.max(0, drv.fuelKg - VF26_CHASSIS.fuelFlowKgS * throttle * dt);
+      drv.fuelKg = Math.max(0, drv.fuelKg - LC26_CHASSIS.fuelFlowKgS * throttle * dt);
     }
-    this.totalMassKg = VF26_CHASSIS.totalMassKg + drv.fuelKg;
+    this.totalMassKg = LC26_CHASSIS.totalMassKg + drv.fuelKg;
 
     // ---- 9. Barriers, project onto the track, timing ------------------------------
     this.postIntegrate(prevS, prevX, prevZ, dt);
@@ -1939,8 +1939,8 @@ export class F1Physics2026 {
     this.rpm = drv.engineOmega * RADS2RPM;
     this.gear = drv.gear;
     this.ersEnergyJ = drv.ersEnergyJ;
-    const dhFOut = this.axles[0].spec.staticRideHeight - VF26_CHASSIS.front.staticRideHeight;
-    const dhROut = this.axles[1].spec.staticRideHeight - VF26_CHASSIS.rear.staticRideHeight;
+    const dhFOut = this.axles[0].spec.staticRideHeight - LC26_CHASSIS.front.staticRideHeight;
+    const dhROut = this.axles[1].spec.staticRideHeight - LC26_CHASSIS.rear.staticRideHeight;
     this.rideHeightOffsetM = this.heaveM + 0.5 * (dhFOut + dhROut);
     this.wheelRotationRad = this.wheels[0].rotationRad;
     this.frontSlipRatioNorm = Math.max(this.wheels[0].combinedSlipNorm, this.wheels[1].combinedSlipNorm);
@@ -1954,8 +1954,8 @@ export class F1Physics2026 {
     // 1. Pneumatic trail self-aligning torque Mz
     const mzPneumatic = (wFR.torqueAlignNm + wFL.torqueAlignNm) * lowSpeedScale;
     // 2. Dynamic 3D caster trail lateral force moment
-    const casterTrailR = wFR.casterTrailM ?? VF26_CHASSIS.steering.mechanicalTrail;
-    const casterTrailL = wFL.casterTrailM ?? VF26_CHASSIS.steering.mechanicalTrail;
+    const casterTrailR = wFR.casterTrailM ?? LC26_CHASSIS.steering.mechanicalTrail;
+    const casterTrailL = wFL.casterTrailM ?? LC26_CHASSIS.steering.mechanicalTrail;
     const mzCaster = -(casterTrailR * wFR.fnN + casterTrailL * wFL.fnN) * lowSpeedScale;
     // 3. Scrub radius longitudinal force moment (cancels on symmetric straight braking, pulls on asymmetric lockup/kerb)
     const scrubR = wFR.scrubRadiusM ?? 0.018;
@@ -1980,7 +1980,7 @@ export class F1Physics2026 {
     const totalKingpinTorqueNm =
       mzPneumatic + mzCaster + mzScrub + mzKpi + mzGyro + mzFlatSpot + mzRoadTexture + mzOverturn;
     this.ffbTorqueNorm = THREE.MathUtils.clamp(
-      (-totalKingpinTorqueNm / 650) * VF26_CHASSIS.steering.ffbMult,
+      (-totalKingpinTorqueNm / 650) * LC26_CHASSIS.steering.ffbMult,
       -1,
       1
     );
@@ -2019,7 +2019,7 @@ export class F1Physics2026 {
         drv.gear = drv.shiftTarget;
         if (drv.clutchLocked) {
           const rearOmega = 0.5 * (this.wheels[2].spinVel + this.wheels[3].spinVel);
-          drv.engineOmega = Math.max(VF26_ENGINE.idleRpm * RPM2RADS, rearOmega * this.overallRatio(drv.gear));
+          drv.engineOmega = Math.max(LC26_ENGINE.idleRpm * RPM2RADS, rearOmega * this.overallRatio(drv.gear));
         }
       }
       return;
@@ -2032,21 +2032,21 @@ export class F1Physics2026 {
     let desired = drv.gear;
     const rearOmega = 0.5 * (this.wheels[2].spinVel + this.wheels[3].spinVel);
     if (shiftRequest !== 0) {
-      desired = THREE.MathUtils.clamp(drv.gear + shiftRequest, 1, VF26_DRIVETRAIN.gearRatios.length);
+      desired = THREE.MathUtils.clamp(drv.gear + shiftRequest, 1, LC26_DRIVETRAIN.gearRatios.length);
       // Reverse sits below first (no neutral in between), and only near standstill
       if (drv.gear === 1 && shiftRequest < 0) desired = Math.abs(this.vxMs) < 2 ? -1 : 1;
       else if (drv.gear === -1) desired = shiftRequest > 0 && Math.abs(this.vxMs) < 2 ? 1 : -1;
       if (shiftRequest < 0 && desired > 0) {
         // Gearbox protection: refuse a downshift that would over-rev the engine
         const rpmAfter = rearOmega * this.overallRatio(desired) * RADS2RPM;
-        if (rpmAfter > VF26_ENGINE.maxRpm - 500) desired = drv.gear;
+        if (rpmAfter > LC26_ENGINE.maxRpm - 500) desired = drv.gear;
       }
       if (desired !== drv.gear) this.manualShift.shifted(desired > drv.gear ? 1 : -1, desired);
     } else if ((this.autoGearbox || this.aiAutopilot) && drv.gear >= 1 && drv.autoShiftCooldownS <= 0) {
       const a = this.autoShiftIn;
       const roadOmega = Math.max(0, this.vxMs) / this.wheels[2].tyre.spec.radius;
       a.gear = drv.gear;
-      a.topGear = VF26_DRIVETRAIN.gearRatios.length;
+      a.topGear = LC26_DRIVETRAIN.gearRatios.length;
       a.engineRpm = drv.engineOmega * RADS2RPM;
       a.roadRpm = roadOmega * this.overallRatio(drv.gear) * RADS2RPM;
       // Downshifts go by road speed (or the rears' if faster) so a locking rear axle can't cascade the box down
@@ -2056,13 +2056,13 @@ export class F1Physics2026 {
       a.brake = brake;
       a.drivenGrounded = this.wheels[2].fzN > 1 || this.wheels[3].fzN > 1;
       a.drivenSpinning = Math.max(this.wheels[2].slipRatio, this.wheels[3].slipRatio) > 0.14;
-      desired = drv.gear + autoShift(a, VF26_AUTO_SHIFT, this.manualShift);
+      desired = drv.gear + autoShift(a, LC26_AUTO_SHIFT, this.manualShift);
       if (desired !== drv.gear) drv.autoShiftCooldownS = 0.12;
     }
 
     if (desired !== drv.gear) {
       drv.shiftTarget = desired;
-      drv.shiftTimerS = desired > drv.gear ? VF26_DRIVETRAIN.upshiftTimeS : VF26_DRIVETRAIN.downshiftTimeS;
+      drv.shiftTimerS = desired > drv.gear ? LC26_DRIVETRAIN.upshiftTimeS : LC26_DRIVETRAIN.downshiftTimeS;
     }
   }
 
@@ -2090,17 +2090,17 @@ export class F1Physics2026 {
     }
 
     // Rev limiter (fuel cut with 150 rpm hysteresis)
-    if (rpm > VF26_ENGINE.limiterRpm) drv.limiterCut = true;
-    else if (rpm < VF26_ENGINE.limiterRpm - 150) drv.limiterCut = false;
+    if (rpm > LC26_ENGINE.limiterRpm) drv.limiterCut = true;
+    else if (rpm < LC26_ENGINE.limiterRpm - 150) drv.limiterCut = false;
 
     // Turbo: boost target from the controller LUT, scaled by throttle, with spool lag
     const boostTarget = drv.limiterCut ? 0 : this.boostLut.evaluate(rpm) * throttle;
-    const tau = boostTarget > drv.boostBar ? VF26_ENGINE.turboSpoolTauS : VF26_ENGINE.turboDecayTauS;
+    const tau = boostTarget > drv.boostBar ? LC26_ENGINE.turboSpoolTauS : LC26_ENGINE.turboDecayTauS;
     drv.boostBar += (boostTarget - drv.boostBar) * (1 - Math.exp(-dt / tau));
 
     // MGU-K deployment (mod ERS controller curves) / harvesting
     const { ctrl, override } = this.ersController();
-    const soc = drv.ersEnergyJ / VF26_ERS.batteryJ;
+    const soc = drv.ersEnergyJ / LC26_ERS.batteryJ;
     const omega = Math.max(drv.engineOmega, 1);
     const shifting = drv.shiftTimerS > 0;
     let mgukTorque = 0;
@@ -2140,15 +2140,15 @@ export class F1Physics2026 {
                   (1 - 0.18 * Math.min(1.5, Math.abs(this.lastAyMs2) / G) * this.weatherSample.wetness)
               )
             : 1;
-        let harvestTorque = Math.min(kinetic, VF26_ERS.maxPowerW / omega) * frac * wetClip;
+        let harvestTorque = Math.min(kinetic, LC26_ERS.maxPowerW / omega) * frac * wetClip;
         if (brake <= 0.02 && ratio > 0) {
-          harvestTorque = Math.min(harvestTorque, (VF26_ERS.coastHarvestMaxAxleTorqueNm * wetClip) / ratio);
+          harvestTorque = Math.min(harvestTorque, (LC26_ERS.coastHarvestMaxAxleTorqueNm * wetClip) / ratio);
         }
         harvestAxle = harvestTorque * ratio;
         mgukTorque = -harvestTorque;
         drv.ersEnergyJ = Math.min(
-          VF26_ERS.batteryJ,
-          drv.ersEnergyJ + harvestTorque * omega * dt * VF26_ERS.harvestEfficiency
+          LC26_ERS.batteryJ,
+          drv.ersEnergyJ + harvestTorque * omega * dt * LC26_ERS.harvestEfficiency
         );
       }
     }
@@ -2355,8 +2355,8 @@ export class F1Physics2026 {
     const xb = this.xModeBlend;
     const xEase = xb * xb * (3 - 2 * xb);
 
-    const dhF = this.axles[0].spec.staticRideHeight - VF26_CHASSIS.front.staticRideHeight;
-    const dhR = this.axles[1].spec.staticRideHeight - VF26_CHASSIS.rear.staticRideHeight;
+    const dhF = this.axles[0].spec.staticRideHeight - LC26_CHASSIS.front.staticRideHeight;
+    const dhR = this.axles[1].spec.staticRideHeight - LC26_CHASSIS.rear.staticRideHeight;
     let down = 0;
     let front = 0;
     let drag = 0;
@@ -2579,11 +2579,11 @@ export class F1Physics2026 {
     const wr = this.wheels[2];
     const Iw = wl.tyre.spec.angularInertia;
     const ratio = this.overallRatio(drv.gear);
-    const eta = VF26_DRIVETRAIN.efficiency;
-    const Ie = VF26_ENGINE.inertia;
-    const Igb = VF26_DRIVETRAIN.gearboxInertia;
-    const idle = VF26_ENGINE.idleRpm * RPM2RADS;
-    const maxOmega = VF26_ENGINE.maxRpm * RPM2RADS;
+    const eta = LC26_DRIVETRAIN.efficiency;
+    const Ie = LC26_ENGINE.inertia;
+    const Igb = LC26_DRIVETRAIN.gearboxInertia;
+    const idle = LC26_ENGINE.idleRpm * RPM2RADS;
+    const maxOmega = LC26_ENGINE.maxRpm * RPM2RADS;
 
     let omegaAxle = 0.5 * (wl.spinVel + wr.spinVel);
     let deltaOmega = wl.spinVel - wr.spinVel;
@@ -2603,7 +2603,7 @@ export class F1Physics2026 {
       drv.engineOmega = Math.min(maxOmega, omegaAxle * ratio);
 
       // Auto-clutch opens when the engine would drop below the launch window (anti-stall)
-      if (drv.engineOmega < VF26_DRIVETRAIN.autoClutchStartRpm * RPM2RADS || ratio === 0) {
+      if (drv.engineOmega < LC26_DRIVETRAIN.autoClutchStartRpm * RPM2RADS || ratio === 0) {
         drv.clutchLocked = false;
         drv.engineOmega = Math.max(idle, drv.engineOmega);
       }
@@ -2612,18 +2612,18 @@ export class F1Physics2026 {
       // pedal down the window moves up to the launch rpm, so the engine revs up and the clutch slips
       // there instead of bogging the engine at idle.
       const rpm = drv.engineOmega * RADS2RPM;
-      const window = VF26_DRIVETRAIN.autoClutchFullRpm - VF26_DRIVETRAIN.autoClutchStartRpm;
+      const window = LC26_DRIVETRAIN.autoClutchFullRpm - LC26_DRIVETRAIN.autoClutchStartRpm;
       const launch = THREE.MathUtils.clamp((drv.launchPedal - 0.2) / 0.6, 0, 1);
       // Once the car rolls, the launch window comes down to the anti-stall one over launchReleaseS
       drv.launchSlipS = launch > 0 && ratio !== 0 && omegaAxle * Math.sign(ratio) > 1 ? drv.launchSlipS + h : 0;
-      const hold = Math.max(0, 1 - drv.launchSlipS / VF26_DRIVETRAIN.launchReleaseS);
+      const hold = Math.max(0, 1 - drv.launchSlipS / LC26_DRIVETRAIN.launchReleaseS);
       const startRpm =
-        VF26_DRIVETRAIN.autoClutchStartRpm +
-        launch * hold * Math.max(0, VF26_DRIVETRAIN.launchRpm - window - VF26_DRIVETRAIN.autoClutchStartRpm);
+        LC26_DRIVETRAIN.autoClutchStartRpm +
+        launch * hold * Math.max(0, LC26_DRIVETRAIN.launchRpm - window - LC26_DRIVETRAIN.autoClutchStartRpm);
       const engage = THREE.MathUtils.clamp((rpm - startRpm) / window, 0, 1);
       drv.clutchEngagement = engage * engage * (3 - 2 * engage);
       const slip = drv.engineOmega - omegaAxle * ratio;
-      const capacity = drv.clutchEngagement * VF26_DRIVETRAIN.clutchMaxTorqueNm;
+      const capacity = drv.clutchEngagement * LC26_DRIVETRAIN.clutchMaxTorqueNm;
       const tClutch = ratio !== 0 ? THREE.MathUtils.clamp(slip * 40, -capacity, capacity) : 0;
 
       drv.engineOmega += ((tEngine - tClutch) / (Ie + 0.002)) * h;
@@ -2665,16 +2665,16 @@ export class F1Physics2026 {
     if (this.diffActivePhase === 'ENTRY') {
       coastLock = entryLock;
       powerLock = exitLock * 0.85;
-      preload = VF26_DRIVETRAIN.diffPreloadNm * (0.65 + 0.06 * this.diffEntryLevel);
+      preload = LC26_DRIVETRAIN.diffPreloadNm * (0.65 + 0.06 * this.diffEntryLevel);
     } else if (this.diffActivePhase === 'MID') {
       const midScale = 0.4 + (midLv - 1) * (1.5 / 11);
       coastLock = 0.5 * (entryLock + exitLock) * (midLv / 5);
       powerLock = coastLock;
-      preload = VF26_DRIVETRAIN.diffPreloadNm * midScale;
+      preload = LC26_DRIVETRAIN.diffPreloadNm * midScale;
     } else {
       coastLock = entryLock;
       powerLock = exitLock;
-      preload = VF26_DRIVETRAIN.diffPreloadNm * (0.75 + 0.05 * this.diffExitLevel);
+      preload = LC26_DRIVETRAIN.diffPreloadNm * (0.75 + 0.05 * this.diffExitLevel);
     }
     const lock = tIn >= 0 ? powerLock : coastLock;
     const capacity = preload + lock * Math.abs(tIn);
@@ -3058,7 +3058,7 @@ export class F1Physics2026 {
     const rho = Math.round(this.computeAirDensity(this.track.baseAltitudeM ?? BASE_ALTITUDE_M) * 50) / 50;
     const p = this.aiProfile;
     if (!p || p.preset !== this.aeroPreset || p.grip !== grip || p.trim !== trim || p.massKg !== massKg || p.rho !== rho) {
-      const car = withPlanningGrip({ ...createVf26ProfileCarModel(this.aeroPreset, rho, trim), massKg }, grip);
+      const car = withPlanningGrip({ ...createLc26ProfileCarModel(this.aeroPreset, rho, trim), massKg }, grip);
       this.aiProfile = {
         preset: this.aeroPreset,
         grip,
@@ -3070,8 +3070,8 @@ export class F1Physics2026 {
           wheelbaseM: this.wheelbaseM,
           maxSteerLockRad: this.maxSteerAngleRad,
           car,
-          fullBrakeForceN: vf26FullBrakeForceN(),
-          aeroTransitionS: VF26_ACTIVE_AERO_TRANSITION_S,
+          fullBrakeForceN: lc26FullBrakeForceN(),
+          aeroTransitionS: LC26_ACTIVE_AERO_TRANSITION_S,
         },
       };
       return this.aiProfile;
@@ -3127,7 +3127,7 @@ export class F1Physics2026 {
     return {
       speedKmh: 0,
       speedMs: 0,
-      rpm: VF26_ENGINE.idleRpm,
+      rpm: LC26_ENGINE.idleRpm,
       gear: 1,
       throttle: 0,
       brake: 0,
@@ -3157,7 +3157,7 @@ export class F1Physics2026 {
       manualOverrideActive: false,
       boostRemainingS: 0,
       turboBoostBar: 1.0,
-      fuelKg: startingFuelKg('vf26', this.chassis),
+      fuelKg: startingFuelKg('lc26', this.chassis),
       tireSlipRatio: [0, 0, 0, 0],
       wheelSlipRatios: [0, 0, 0, 0],
       wheelSlipAnglesDeg: [0, 0, 0, 0],
@@ -3250,7 +3250,7 @@ export class F1Physics2026 {
     t.gear = this.gear;
     t.throttle = this.aiAutopilot ? THREE.MathUtils.clamp(drv.iceTorqueNm / 450, 0, 1) : inputs.throttle;
     t.brake = this.aiAutopilot
-      ? THREE.MathUtils.clamp(this.wheels[1].brakeTorqueNm / (VF26_BRAKES.maxTorqueNm * VF26_BRAKES.frontBias), 0, 1)
+      ? THREE.MathUtils.clamp(this.wheels[1].brakeTorqueNm / (LC26_BRAKES.maxTorqueNm * LC26_BRAKES.frontBias), 0, 1)
       : inputs.brake;
     t.clutch = drv.clutchLocked ? 1 : drv.clutchEngagement;
     t.steering = this.steerAngleNorm;
@@ -3276,7 +3276,7 @@ export class F1Physics2026 {
     t.icePowerKw = icePowerKw;
     t.mgukPowerKw = mgukPowerKw;
     t.totalPowerKw = Math.max(0, icePowerKw + Math.max(0, mgukPowerKw));
-    t.ersBatteryPercent = (drv.ersEnergyJ / VF26_ERS.batteryJ) * 100;
+    t.ersBatteryPercent = (drv.ersEnergyJ / LC26_ERS.batteryJ) * 100;
     t.manualOverrideActive = drv.ersMode === 'OVERRIDE' || drv.boostRemainingS > 0;
     t.boostRemainingS = drv.boostRemainingS;
     t.overtakingRules = this.overtakingRules;

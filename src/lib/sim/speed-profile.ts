@@ -11,8 +11,8 @@
  */
 
 import type { AeroSetupPreset, RacingLineId, TrackSamplePoint } from '@/types/f1';
-import { estimateAeroCoefficients } from './vf26-aero';
-import { VF26_BRAKES, VF26_CHASSIS, VF26_TYRES } from './vf26-data';
+import { estimateAeroCoefficients } from './lc26-aero';
+import { LC26_BRAKES, LC26_CHASSIS, LC26_TYRES } from './lc26-data';
 
 const G = 9.81;
 
@@ -111,19 +111,19 @@ export function withPlanningGrip(car: SpeedProfileCarModel, grip: number): Speed
 export const NOMINAL_AIR_DENSITY = 1.06;
 
 /** Total brake force at the contact patches with the pedal fully pressed (N) */
-export function vf26FullBrakeForceN(): number {
-  const t = VF26_BRAKES.maxTorqueNm * VF26_BRAKES.powerMult;
+export function lc26FullBrakeForceN(): number {
+  const t = LC26_BRAKES.maxTorqueNm * LC26_BRAKES.powerMult;
   return (
-    2 * ((t * VF26_BRAKES.frontBias) / VF26_TYRES.soft.front.radius) +
-    2 * ((t * (1 - VF26_BRAKES.frontBias)) / VF26_TYRES.soft.rear.radius)
+    2 * ((t * LC26_BRAKES.frontBias) / LC26_TYRES.soft.front.radius) +
+    2 * ((t * (1 - LC26_BRAKES.frontBias)) / LC26_TYRES.soft.rear.radius)
   );
 }
 
 /**
- * Nominal VF26 planning model for an aero package. μ values sit ~4 % under what the car
+ * Nominal LC26 planning model for an aero package. μ values sit ~4 % under what the car
  * achieves on the skidpad / in straight-line braking with tyres in their window.
  */
-export function createVf26ProfileCarModel(
+export function createLc26ProfileCarModel(
   preset: AeroSetupPreset = 'balanced',
   airDensity = NOMINAL_AIR_DENSITY,
   /** Garage wing trim (deg); the AI field drives the untrimmed package */
@@ -131,16 +131,16 @@ export function createVf26ProfileCarModel(
 ): SpeedProfileCarModel {
   // Typical at-speed attitude: ~17 mm lower than static, slight nose-up rake change
   const aero = estimateAeroCoefficients(preset, airDensity, -0.017, 0.0015, 0, undefined, wingTrimDeg);
-  const downforceCoefAt = vf26DownforceCurve(preset, airDensity, wingTrimDeg);
+  const downforceCoefAt = lc26DownforceCurve(preset, airDensity, wingTrimDeg);
   return {
-    massKg: VF26_CHASSIS.totalMassKg + VF26_CHASSIS.fuelKg,
+    massKg: LC26_CHASSIS.totalMassKg + LC26_CHASSIS.fuelKg,
     downforceCoef: aero.downforceCoef,
     dragCoef: aero.dragCoef,
     rearDownforceShare: 1 - aero.frontShare,
-    rearWeightFraction: 1 - VF26_CHASSIS.frontWeightFraction,
+    rearWeightFraction: 1 - LC26_CHASSIS.frontWeightFraction,
     muLat: 1.66,
     muLong: 1.65,
-    maxBrakeForceN: vf26FullBrakeForceN() * 0.92,
+    maxBrakeForceN: lc26FullBrakeForceN() * 0.92,
     maxDrivePowerW: 650_000,
     vMaxMs: 95,
     // Fitted to the car's own steady cornering limit on the flat pad (2.03 / 3.33 / 4.27 g at 86 / 180 / 248 km/h, sea
@@ -151,21 +151,21 @@ export function createVf26ProfileCarModel(
 }
 
 /**
- * The VF26's downforce per (m/s)² against speed: the car settles on its springs, heave springs, packers and tyres under
+ * The LC26's downforce per (m/s)² against speed: the car settles on its springs, heave springs, packers and tyres under
  * its own downforce, and the floor's ground effect follows that ride height (it peaks near 33 mm and falls away below
  * it). Solved for the steady attitude at each speed (fixed point), tabulated every 5 m/s and interpolated.
  */
-function vf26DownforceCurve(
+function lc26DownforceCurve(
   preset: AeroSetupPreset,
   airDensity: number,
   wingTrimDeg?: { front: number; rear: number }
 ): (vMs: number) => number {
-  const L = VF26_CHASSIS.wheelbase;
-  const a = L * (1 - VF26_CHASSIS.frontWeightFraction);
+  const L = LC26_CHASSIS.wheelbase;
+  const a = L * (1 - LC26_CHASSIS.frontWeightFraction);
   const b = L - a;
   // Axle heave stiffness: two corner springs and the heave spring, in series with two tyres; the packer adds its rate
   // past its travel
-  const axleDrop = (ax: typeof VF26_CHASSIS.front, tyreRate: number, forceN: number) => {
+  const axleDrop = (ax: typeof LC26_CHASSIS.front, tyreRate: number, forceN: number) => {
     const sprung = 2 * ax.springRate + ax.heaveRate;
     let d = forceN / sprung;
     if (d > ax.heavePackerTravel) d = ax.heavePackerTravel + (forceN - ax.heavePackerTravel * sprung) / (sprung + ax.heavePackerRate);
@@ -180,8 +180,8 @@ function vf26DownforceCurve(
       const e = estimateAeroCoefficients(preset, airDensity, heave, pitch, 0, undefined, wingTrimDeg);
       coef = e.downforceCoef;
       const df = coef * v * v;
-      const dF = axleDrop(VF26_CHASSIS.front, VF26_TYRES.soft.front.rate, df * e.frontShare);
-      const dR = axleDrop(VF26_CHASSIS.rear, VF26_TYRES.soft.rear.rate, df * (1 - e.frontShare));
+      const dF = axleDrop(LC26_CHASSIS.front, LC26_TYRES.soft.front.rate, df * e.frontShare);
+      const dR = axleDrop(LC26_CHASSIS.rear, LC26_TYRES.soft.rear.rate, df * (1 - e.frontShare));
       // Body heave at the CG and pitch (+ nose up) from the two axle drops
       pitch = (dR - dF) / L;
       heave = -(dF * b + dR * a) / L;
@@ -342,7 +342,7 @@ export function brakingZoneLevel(speedMs: ArrayLike<number>, i: number): number 
 
 /**
  * A car's own braking guidance along its racing line, per track sample: the braking line's colours, the braking
- * urgency and the HUD target speed. It allows for crests; the circuit's profile baked into the samples (the VF26's),
+ * urgency and the HUD target speed. It allows for crests; the circuit's profile baked into the samples (the LC26's),
  * which the AI reads, does not.
  */
 export interface BrakingGuide {
@@ -377,9 +377,9 @@ export function brakingGuideFor(
     const profile = computeSpeedProfile(samples, car, line, { crests: true });
     const n = samples.length;
     const brakingZone = new Float32Array(n);
-    // The circuit's zones (`brakingZoneLevel`) are an absolute speed drop tuned to the VF26's ~4 g; for any car,
+    // The circuit's zones (`brakingZoneLevel`) are an absolute speed drop tuned to the LC26's ~4 g; for any car,
     // grade the deceleration the profile asks for over the next three samples against what this car can brake
-    // with at that speed. These fractions give the VF26 the same 540 m of red / 300 m of amber on Rwanda.
+    // with at that speed. These fractions give the LC26 the same 540 m of red / 300 m of amber on Rwanda.
     for (let i = 0; i < n; i++) {
       const v = profile.speedMs[i];
       const w = profile.speedMs[(i + 3) % n];
@@ -395,9 +395,9 @@ export function brakingGuideFor(
   return guide;
 }
 
-/** The guide of a car without a planning model of its own: the circuit's car's (the VF26 with balanced aero) */
+/** The guide of a car without a planning model of its own: the circuit's car's (the LC26 with balanced aero) */
 export function circuitBrakingGuide(samples: ReadonlyArray<TrackSamplePoint>, line: RacingLineId = 'f1'): BrakingGuide {
-  return brakingGuideFor(samples, 'vf26', createVf26ProfileCarModel('balanced'), line);
+  return brakingGuideFor(samples, 'lc26', createLc26ProfileCarModel('balanced'), line);
 }
 
 /** Linear interpolation of a per-sample profile array at track distance s */

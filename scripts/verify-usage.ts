@@ -55,7 +55,7 @@ async function main() {
   let nowMs = NOON;
   const deps: UsageDeps = { db, now: () => nowMs };
   const rows = async () => (await db.prepare('SELECT * FROM usage_daily ORDER BY day, track_id, vehicle, mode, country').all<Row>()).results;
-  const good = { trackId: 'rwanda_official_short', vehicle: 'vf26', mode: 'practice', minutes: 12.34 };
+  const good = { trackId: 'rwanda_official_short', vehicle: 'lc26', mode: 'practice', minutes: 12.34 };
 
   {
     const res = await recordUsage(deps, report(good, 'RW'));
@@ -206,11 +206,11 @@ async function main() {
     // Some board rows to count
     // 'a' claimed long ago and seen in the range (returning), 'b' long ago and not seen, 'c' new in the range
     await db.prepare("INSERT INTO drivers (name_key, key_hash, claimed_at, last_seen) VALUES ('a', 'x', 0, ?), ('b', 'y', 0, 0), ('c', 'z', ?, ?)").bind(NOON, NOON, NOON).run();
-    const lap = "INSERT INTO laps (id, track_id, vehicle, physics, event, assists, realism, surface, compound, name_key, driver_name, driver_code, lap_time_ms, s1_ms, s2_ms, s3_ms, recorded_at, created_at) VALUES (?, ?, 'vf26', 3, '', 'pro', 'full', 'dry', 'soft', 'a', 'A', 'AAA', 90000, 30000, 30000, 30000, 0, ?)";
+    const lap = "INSERT INTO laps (id, track_id, vehicle, physics, event, assists, realism, surface, compound, name_key, driver_name, driver_code, lap_time_ms, s1_ms, s2_ms, s3_ms, recorded_at, created_at) VALUES (?, ?, 'lc26', 3, '', 'pro', 'full', 'dry', 'soft', 'a', 'A', 'AAA', 90000, 30000, 30000, 30000, 0, ?)";
     await db.prepare(lap).bind('l1', 'rwanda_official_short', NOON).run();
     await db.prepare(lap).bind('l2', 'rwanda_official', NOON - 200 * DAY_MS).run();
     // Usage before the range, for the comparison with the days before it
-    await db.prepare("INSERT INTO usage_daily (day, track_id, vehicle, mode, country, sessions, minutes) VALUES ('2026-11-04', 'rwanda_official', 'vf26', 'practice', 'RW', 3, 30)").run();
+    await db.prepare("INSERT INTO usage_daily (day, track_id, vehicle, mode, country, sessions, minutes) VALUES ('2026-11-04', 'rwanda_official', 'lc26', 'practice', 'RW', 3, 30)").run();
 
     // Through the API on the real clock; the numbers themselves on this test's clock
     const res = await stats(env, KEY, '?days=7');
@@ -232,7 +232,7 @@ async function main() {
     check('admin: board counts (names, active names, laps, laps in range)', body.board.drivers === 3 && body.board.driversActive === 2 && body.board.laps === 2 && body.board.lapsInRange === 1, JSON.stringify({ ...body.board, boards: undefined }));
     check('admin: new names and returning ones', body.board.driversNew === 1 && body.board.driversReturning === 1 && body.board.namesPerDay.map((d) => `${d.id}:${d.n}`).join() === '2026-11-11:1', JSON.stringify(body.board.namesPerDay));
     check('admin: times set per day, and what with', body.board.lapsPerDay.map((d) => `${d.id}:${d.n}`).join() === '2026-11-11:1' && body.board.lapsBy.assists[0]?.id === 'pro' && body.board.lapsBy.surface[0]?.id === 'dry' && body.board.lapsBy.compound[0]?.n === 1 && body.board.lapsBy.realism[0]?.id === 'full', JSON.stringify(body.board.lapsBy));
-    check('admin: laps and drivers per board', body.board.boards.length === 2 && body.board.boards.every((b) => b.laps === 1 && b.drivers === 1 && b.vehicle === 'vf26' && b.physics === 3));
+    check('admin: laps and drivers per board', body.board.boards.length === 2 && body.board.boards.every((b) => b.laps === 1 && b.drivers === 1 && b.vehicle === 'lc26' && b.physics === 3));
     check('admin: most times set in the range, by name', body.board.topDrivers.length === 1 && body.board.topDrivers[0].name === 'A' && body.board.topDrivers[0].laps === 1 && body.board.topDrivers[0].boards === 1);
     check('admin: no weekly challenge laps yet: none listed', body.board.challenges.length === 0);
     check('admin: no race results table: races is null', body.races === null);
@@ -249,7 +249,7 @@ async function main() {
 
     // With the race results stored (migration 0002_race_results.sql): finished races in the range, by kind
     for (const statement of sql('0002_race_results.sql').replace(/--.*$/gm, '').split(';').filter((q) => q.trim())) await db.prepare(statement).run();
-    const race = "INSERT INTO races (id, week, kind, track_id, vehicle, laps, finished_ms) VALUES (?, '2026-W46', ?, 'rwanda_official_short', 'vf26', 5, ?)";
+    const race = "INSERT INTO races (id, week, kind, track_id, vehicle, laps, finished_ms) VALUES (?, '2026-W46', ?, 'rwanda_official_short', 'lc26', 5, ?)";
     await db.prepare(race).bind('r1', 'open', NOON).run();
     await db.prepare(race).bind('r2', 'room', NOON + DAY_MS).run();
     await db.prepare(race).bind('r3', 'open', NOON - 100 * DAY_MS).run();
@@ -271,7 +271,7 @@ async function main() {
     let t = 0;
     const sent: UsageLine[] = [];
     const clock = new UsageClock((line) => sent.push(line), () => t);
-    const at = { trackId: 'rwanda_official_short', vehicle: 'vf26' as const, mode: 'practice' as const };
+    const at = { trackId: 'rwanda_official_short', vehicle: 'lc26' as const, mode: 'practice' as const };
     const MIN = 60_000;
     clock.set(at, true);
     t += 20_000;
@@ -284,7 +284,7 @@ async function main() {
     clock.set(at, true);
     t += 2 * MIN;
     clock.set({ ...at, vehicle: 'amg-gt3' }, true);
-    check('game: a change of car ends the stretch, paused time left out', sent.length === 1 && sent[0].minutes === 7 && sent[0].vehicle === 'vf26', JSON.stringify(sent));
+    check('game: a change of car ends the stretch, paused time left out', sent.length === 1 && sent[0].minutes === 7 && sent[0].vehicle === 'lc26', JSON.stringify(sent));
     t += MIN;
     clock.set({ ...at, vehicle: 'amg-gt3' }, true, 'flag');
     check('game: taking the flag ends the stretch', sent.length === 2 && sent[1].minutes === 1 && sent[1].vehicle === 'amg-gt3');

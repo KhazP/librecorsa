@@ -111,7 +111,7 @@ For another closed-wheel car, add a `port_<model>` function beside those two, mo
 1. In `src/lib/cars/car-registry.ts`, add the id to the `CarId` union and an entry to `ALL_CARS`:
    - `id`, `classId` (`"f1"`, `"gt3"` or `"road"`), `title`, `sub`, `badge`, `year`
    - `quality`: `"own"`, `"shared"` or `"era"`, i.e. whether the physics were built for this car
-   - `physics`: the vehicle model under it, one of `"vf26"`, `"f12026-car"`, `"amg-gt3"` or `"liana"`
+   - `physics`: the vehicle model under it, one of `"lc26"`, `"f12026-car"`, `"amg-gt3"` or `"liana"`
    - `modelUrl: "/cars/<id>/model/<id>.glb"`
    - `credit: { title, author, url, license, licenseUrl }` for the model's author
    - `sound`: a `CarSoundSource` (next section)
@@ -138,7 +138,7 @@ npx tsx scripts/verify-ported-roots.ts   # loads every listed ported GLB the way
 npm run dev
 ```
 
-Then open `http://localhost:3000/?car=<id>`. For a ported car of class `f1`, add `&f1physics=vf26` or `&f1physics=f12026-car` to try each physics model.
+Then open `http://localhost:3000/?car=<id>`. For a ported car of class `f1`, add `&f1physics=lc26` or `&f1physics=f12026-car` to try each physics model.
 
 `verify-ported-cars.ts` and `verify-ported-gt3.ts` check the cars hosted on librecorsa.org by name (and skip them in a clone), so they don't check yours. Read them for what a good port measures: GLB size, one-primitive tyres, mirrored wheel centres, the body's height off the road, all six cameras.
 

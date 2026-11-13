@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import type { CarTelemetry, LiveryConfig, TireCompound } from "@/types/f1";
 import { SATIN_PAINT } from "@/lib/render/paint-finish";
-import { VF26_MODEL_URL, attachVf26Model, loadVf26Template, type Vf26ModelInstance } from "@/lib/vf26-car-model";
+import { LC26_MODEL_URL, attachLc26Model, loadLc26Template, type Lc26ModelInstance } from "@/lib/lc26-car-model";
 import type { WheelSeating } from "@/lib/render/corner-rig";
 import { moveToDriverHeadLayer } from "@/lib/render/layers";
 import { PIRELLI_COMPOUND_COLORS } from "@/lib/render/pirelli-sidewall";
@@ -16,9 +16,9 @@ export interface SimCarRig {
   setSkin?: (baseUrl: string | null) => void;
   setTireCompound: (compound: TireCompound) => void;
   /** Onboard camera anchors once the 3D model has loaded (null until then, or for the procedural car) */
-  getCameraAnchors: () => Vf26ModelInstance["cameraAnchors"] | null;
-  /** The VF26 body / cockpit group once the model has replaced the procedural car (null until then) */
-  getVf26Body: () => THREE.Group | null;
+  getCameraAnchors: () => Lc26ModelInstance["cameraAnchors"] | null;
+  /** The LC26 body / cockpit group once the model has replaced the procedural car (null until then) */
+  getLc26Body: () => THREE.Group | null;
   updateFromTelemetry: (
     telemetry: CarTelemetry,
     pitchRad: number,
@@ -827,15 +827,15 @@ function buildRoundedF1TireGeometry(
 export function createF1Car2026(
   initialLivery: LiveryConfig,
   initialCompound: TireCompound = "soft",
-  modelUrl: string = VF26_MODEL_URL,
+  modelUrl: string = LC26_MODEL_URL,
   /** `opponent`: a car that is not the player's (its driver's arms follow the wheel in steps) */
   options: { opponent?: boolean } = {}
 ): F1CarRig2026 {
   const root = new THREE.Group();
   const chassisGroup = new THREE.Group();
   root.add(chassisGroup);
-  /** VF26 mod model; replaces the procedural car once loaded (see the end of this function) */
-  let vf26: Vf26ModelInstance | null = null;
+  /** LC26 mod model; replaces the procedural car once loaded (see the end of this function) */
+  let lc26: Lc26ModelInstance | null = null;
 
   const carbonTex = createCarbonWeaveTexture();
 
@@ -2583,7 +2583,7 @@ export function createF1Car2026(
   let currentLivery = initialLivery;
   const setLivery = (livery: LiveryConfig) => {
     currentLivery = livery;
-    vf26?.setLivery(livery);
+    lc26?.setLivery(livery);
     primaryPaintMat.color.set(livery.primary);
     secondaryPaintMat.color.set(livery.secondary);
     accentPaintMat.color.set(livery.accent);
@@ -2596,7 +2596,7 @@ export function createF1Car2026(
   let currentCompound = initialCompound;
   const setTireCompound = (compound: TireCompound) => {
     currentCompound = compound;
-    vf26?.setTireCompound(compound);
+    lc26?.setTireCompound(compound);
     const col = TIRE_STRIPE_COLORS[compound];
     tireStripeMat.color.setHex(col);
     tireStripeMat.emissive.setHex(col);
@@ -2612,8 +2612,8 @@ export function createF1Car2026(
   ) => {
     chassisGroup.rotation.x = pitchRad;
     chassisGroup.rotation.z = rollRad;
-    if (vf26) {
-      vf26.update(telemetry, wheelRotationRad, _dtOrOffset > 0 && _dtOrOffset < 0.25 ? _dtOrOffset : 1 / 60, wheels);
+    if (lc26) {
+      lc26.update(telemetry, wheelRotationRad, _dtOrOffset > 0 && _dtOrOffset < 0.25 ? _dtOrOffset : 1 / 60, wheels);
       return;
     }
 
@@ -2693,11 +2693,11 @@ export function createF1Car2026(
   // Swap in the 3D model when available (public/cars/f12026/model/f12026.glb)
   const proceduralParts = [...chassisGroup.children, ...root.children.filter((c) => c !== chassisGroup)];
   let rigDisposed = false;
-  void loadVf26Template(modelUrl).then((template) => {
+  void loadLc26Template(modelUrl).then((template) => {
     if (!template || rigDisposed) return;
-    vf26 = attachVf26Model(template, root, chassisGroup, options);
-    vf26.setTireCompound(currentCompound);
-    vf26.setLivery(currentLivery);
+    lc26 = attachLc26Model(template, root, chassisGroup, options);
+    lc26.setTireCompound(currentCompound);
+    lc26.setLivery(currentLivery);
     for (const part of proceduralParts) part.visible = false;
   });
 
@@ -2717,12 +2717,12 @@ export function createF1Car2026(
     brakeGlowMaterials,
     setLivery,
     setTireCompound,
-    getCameraAnchors: () => vf26?.cameraAnchors ?? null,
-    getVf26Body: () => vf26?.bodyGroup ?? null,
+    getCameraAnchors: () => lc26?.cameraAnchors ?? null,
+    getLc26Body: () => lc26?.bodyGroup ?? null,
     updateFromTelemetry,
     dispose: () => {
       rigDisposed = true;
-      vf26?.dispose();
+      lc26?.dispose();
       root.removeFromParent();
     },
   };

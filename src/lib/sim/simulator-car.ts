@@ -1,5 +1,5 @@
 /**
- * What the simulator, the AI field and the renderer need from the player's car. Implemented by the VF26
+ * What the simulator, the AI field and the renderer need from the player's car. Implemented by the LC26
  * model (`F1Physics2026`) and by the f12026-car adapter (`F12026CarSim`), so either can be driven.
  */
 import type { ChassisSetup } from './car-setup';
@@ -59,7 +59,7 @@ export interface TyreVisualState {
   /**
    * The tyre stands on the road: its contact is the road under it, and the rigs seat it on the car's ground under
    * the model's own corner (`seatCorner`). False for a rigid-body tyre off the ground, which hangs at `contactInCar`.
-   * The VF26 draws no wheel travel (its body moves on the rig, its wheels stay on the road), so its tyres always do.
+   * The LC26 draws no wheel travel (its body moves on the rig, its wheels stay on the road), so its tyres always do.
    */
   onRoad: boolean;
 }
@@ -88,7 +88,7 @@ export interface SimulatorCar {
   /** Mass (kg) and yaw inertia (kg·m²) for car-to-car contact (absent: an F1 car's) */
   readonly contactMassKg?: number;
   readonly contactYawInertiaKgM2?: number;
-  /** The car's own braking guidance for the braking line (absent / null: the circuit's VF26 profile) */
+  /** The car's own braking guidance for the braking line (absent / null: the circuit's LC26 profile) */
   readonly brakingGuide?: BrakingGuide | null;
 
   /** Track distance (m) and signed offset from the centreline (m, + right); writable to move the car */

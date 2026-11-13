@@ -18,7 +18,7 @@ import { F12026CarSim } from "../src/lib/sim/f12026-car/F12026CarSim";
 import { createAmgGt3Sim } from "../src/lib/sim/gt3/AmgGt3Sim";
 import { createMtr496rSim } from "../src/lib/sim/proto/Mtr496rSim";
 import { createSuzukiLianaSim } from "../src/lib/sim/road/SuzukiLianaSim";
-import { createVf26Sim } from "../src/lib/sim/f12026-car/Vf26Sim";
+import { createLc26Sim } from "../src/lib/sim/f12026-car/Lc26Sim";
 import type { SimulatorCar } from "../src/lib/sim/simulator-car";
 import { F1Physics2026 } from "../src/lib/f1-physics-2026";
 import { createFlatTestTrack } from "./lib/flat-track";
@@ -285,7 +285,7 @@ console.log("Track limits · every engine honours strict and judged");
   const track = getActiveTrackData(1200);
   const engines = [
     ["2026 Prototype (classic engine)", () => new F1Physics2026(track)],
-    ["2026 Prototype (rigid body)", () => createVf26Sim(track)],
+    ["2026 Prototype (rigid body)", () => createLc26Sim(track)],
     ["AMG GT3", () => createAmgGt3Sim(track)],
     ["MTR 496R", () => createMtr496rSim(track)],
     ["Suzuki Liana", () => createSuzukiLianaSim(track)],
@@ -315,8 +315,8 @@ console.log("Time trial · fixed conditions");
 {
   const track = getActiveTrackData(1200);
   const cars = [
-    ["2026 Prototype (classic engine)", () => new F1Physics2026(track), "vf26", FUEL_LOAD.vf26.minKg],
-    ["2026 Prototype (rigid body)", () => createVf26Sim(track), "vf26", FUEL_LOAD["f12026-car"].minKg],
+    ["2026 Prototype (classic engine)", () => new F1Physics2026(track), "lc26", FUEL_LOAD.lc26.minKg],
+    ["2026 Prototype (rigid body)", () => createLc26Sim(track), "lc26", FUEL_LOAD["f12026-car"].minKg],
     ["AMG GT3", () => createAmgGt3Sim(track), "amg-gt3", FUEL_LOAD["amg-gt3"].minKg],
     ["MTR 496R", () => createMtr496rSim(track), "mtr-496r", FUEL_LOAD["mtr-496r"].minKg],
     ["Suzuki Liana", () => createSuzukiLianaSim(track), "liana", FUEL_LOAD.liana.minKg],
@@ -377,9 +377,9 @@ console.log("Time trial · fixed conditions");
 console.log("Time trial · race control, the car and the lap recorder together");
 {
   const track = getActiveTrackData(1200);
-  const car = createVf26Sim(track);
+  const car = createLc26Sim(track);
   const monitor = new TrackLimitsMonitor();
-  const recorder = new LapRecorder({ trackLengthM: track.totalLengthM, turns: [], trackId: "test", vehicle: "vf26", driverName: "Test", driverCode: "TST" });
+  const recorder = new LapRecorder({ trackLengthM: track.totalLengthM, turns: [], trackId: "test", vehicle: "lc26", driverName: "Test", driverCode: "TST" });
   /** One frame as the drive session runs it: the car, race control (its deletion on the car), then the recorder */
   const frame = (offTrack?: boolean) => {
     car.step(DT, {});
@@ -565,9 +565,9 @@ console.log("Garage on the sims");
   type VfAxles = { axles: { spec: { arbRate: number } }[] };
   const a = (vf as unknown as VfAxles).axles[1].spec.arbRate;
   const b = (other as unknown as VfAxles).axles[1].spec.arbRate;
-  check("vf26: the setup changes this car only (the AI cars keep the baseline)", Math.abs(a - b * 1.5) < 1e-6, `${a} vs ${b}`);
+  check("lc26: the setup changes this car only (the AI cars keep the baseline)", Math.abs(a - b * 1.5) < 1e-6, `${a} vs ${b}`);
 
-  // VF26 ride-height setup affects ground-effect downforce and rideHeightOffsetM
+  // LC26 ride-height setup affects ground-effect downforce and rideHeightOffsetM
   const vfLow = new F1Physics2026(flat);
   vfLow.applyChassisSetup({ ...DEFAULT_CHASSIS_SETUP, rideHeightFrontMm: -6, rideHeightRearMm: -6 });
   vfLow.resetToStartGrid(true);
@@ -577,7 +577,7 @@ console.log("Garage on the sims");
   vfHigh.resetToStartGrid(true);
   for (let i = 0; i < 30; i++) vfHigh.step(1 / 60, { throttle: 1 });
   check(
-    "vf26: ride-height setup shifts ground-effect downforce and chassis height",
+    "lc26: ride-height setup shifts ground-effect downforce and chassis height",
     Math.abs(vfHigh.telemetry.downforceN - vfLow.telemetry.downforceN) > 50 &&
       vfHigh.rideHeightOffsetM > vfLow.rideHeightOffsetM + 0.01,
     `df: ${vfLow.telemetry.downforceN.toFixed(0)} vs ${vfHigh.telemetry.downforceN.toFixed(0)} N`

@@ -6,7 +6,7 @@ import { withBasePath } from "@/lib/base-path";
 import { AMG_GT3_CONFIG } from "@/lib/sim/gt3/AmgGt3Config";
 import type { CarTelemetry, LiveryConfig } from "@/types/f1";
 import type { SimCarRig } from "@/lib/car-builder-2026";
-import type { Vf26CameraAnchor, Vf26ModelInstance } from "@/lib/vf26-car-model";
+import type { Lc26CameraAnchor, Lc26ModelInstance } from "@/lib/lc26-car-model";
 import { installTyreDeformation, type TyreDeformationHandle } from "@/lib/render/tyre-deformation";
 import { applyLivery, collectPaintSlots, type PaintKeys, type PaintSlot } from "@/lib/render/livery-repaint";
 import {
@@ -193,7 +193,7 @@ export function loadGt3Template(task: AssetTaskId = "car"): Promise<THREE.Group 
 }
 
 
-const anchor = (pos: [number, number, number], pitchDeg: number, fovDeg: number): Vf26CameraAnchor => ({
+const anchor = (pos: [number, number, number], pitchDeg: number, fovDeg: number): Lc26CameraAnchor => ({
   pos: new THREE.Vector3(...pos),
   pitchRad: pitchDeg * THREE.MathUtils.DEG2RAD,
   fovDeg,
@@ -202,7 +202,7 @@ const anchor = (pos: [number, number, number], pitchDeg: number, fovDeg: number)
 /**
  * Onboard cameras in model space, aligned with the left-hand driver seat and roof/bonnet mounts.
  */
-const CAMERAS: Vf26ModelInstance["cameraAnchors"] = {
+const CAMERAS: Lc26ModelInstance["cameraAnchors"] = {
   cockpit: anchor([0.403, 0.955, -0.58], -4.17, 60),
   // Behind and inboard of the driver's head, under the roof
   shoulder: anchor([0.12, 1.05, -0.95], -6, 62),
@@ -230,9 +230,9 @@ function gt3ModelOffset(extras: Gt3Extras): THREE.Vector3 {
   return new THREE.Vector3(0, (extras.tyreRadius?.LF ?? 0.34) - lf[1], physicsMidZ - 0.5 * (lf[2] + lr[2]));
 }
 
-function cameraAnchorsAt(offset: THREE.Vector3): Vf26ModelInstance["cameraAnchors"] {
-  const anchors = {} as Vf26ModelInstance["cameraAnchors"];
-  for (const [key, c] of Object.entries(CAMERAS) as [keyof typeof CAMERAS, Vf26CameraAnchor][]) {
+function cameraAnchorsAt(offset: THREE.Vector3): Lc26ModelInstance["cameraAnchors"] {
+  const anchors = {} as Lc26ModelInstance["cameraAnchors"];
+  for (const [key, c] of Object.entries(CAMERAS) as [keyof typeof CAMERAS, Lc26CameraAnchor][]) {
     anchors[key] = { pos: c.pos.clone().add(offset), pitchRad: c.pitchRad, fovDeg: c.fovDeg };
   }
   return anchors;
@@ -258,7 +258,7 @@ const DRIVER_CAMERAS = new Set<string>(["cockpit", "shoulder", "dash", "tcam"]);
  * their place relative to that car's own steering wheel (the roof pod stays on the centre line), the bonnet camera
  * its place behind the front axle, and the chase cameras stay put. Without, the AMG's positions as they are.
  */
-export function gt3RigCameraAnchors(fit?: Gt3CameraFit): Vf26ModelInstance["cameraAnchors"] {
+export function gt3RigCameraAnchors(fit?: Gt3CameraFit): Lc26ModelInstance["cameraAnchors"] {
   const offset = gt3ModelOffset(GT3_MODEL_WHEELS);
   const anchors = cameraAnchorsAt(offset);
   if (!fit) return anchors;
@@ -301,7 +301,7 @@ export function createGt3CarRig(): SimCarRig {
 
   const chassis = AMG_GT3_CONFIG.chassis;
   const maxRoadWheelRad = chassis.maxRoadWheelDeg * THREE.MathUtils.DEG2RAD;
-  let cameraAnchors: Vf26ModelInstance["cameraAnchors"] | null = null;
+  let cameraAnchors: Lc26ModelInstance["cameraAnchors"] | null = null;
 
   const corners: RigCorner[] = [];
   let disposed = false;
@@ -468,7 +468,7 @@ export function createGt3CarRig(): SimCarRig {
     // The model keeps its own tyres
     setTireCompound: () => {},
     getCameraAnchors: () => cameraAnchors,
-    getVf26Body: () => null,
+    getLc26Body: () => null,
     updateFromTelemetry,
     dispose: () => {
       disposed = true;

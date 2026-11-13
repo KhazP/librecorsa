@@ -10,7 +10,7 @@
  * and the page takes the car back where the simulation had it.
  */
 import * as THREE from 'three';
-import { setVf26OnRigidBody } from '../src/lib/cars/vf26-engine';
+import { setLc26OnRigidBody } from '../src/lib/cars/lc26-engine';
 import { vehicleModelSpec } from '../src/lib/cars/vehicle-models';
 import { F12026CarSim } from '../src/lib/sim/f12026-car/F12026CarSim';
 import { createGroundHit } from '../src/lib/sim/f12026-car/TrackColliderQuery';
@@ -99,20 +99,20 @@ function frame(r: Rig, inputs: Partial<ControlInputs>, driving = true): void {
 
 console.log('== Each car through the messages, against a car stepped directly');
 const MODELS: [string, VehicleModelId, boolean][] = [
-  ['VF26', 'vf26', false],
-  ['VF26 (rigid-body)', 'vf26', true],
+  ['LC26', 'lc26', false],
+  ['LC26 (rigid-body)', 'lc26', true],
   ['f12026-car', 'f12026-car', false],
   ['AMG GT3', 'amg-gt3', false],
   ['MTR 496R', 'mtr-496r', false],
   ['Liana', 'liana', false],
 ];
 for (const [name, vehicle, rigid] of MODELS) {
-  setVf26OnRigidBody(rigid);
+  setLc26OnRigidBody(rigid);
   const r = rig(vehicle);
   // The simulation takes the car over before it moves
   r.host.endFrame(true);
   const sim = r.loop.runtime.simulatedCar!;
-  if (vehicle === 'vf26') {
+  if (vehicle === 'lc26') {
     check(
       `${name}: the simulation built the engine the page chose`,
       rigid ? sim instanceof F12026CarSim : sim instanceof F1Physics2026,
@@ -161,7 +161,7 @@ for (const [name, vehicle, rigid] of MODELS) {
   check(`${name}: telemetry reaches the game`, Math.abs(r.car.telemetry.speedKmh - sim.telemetry.speedKmh) < 1 && r.car.telemetry.gear === sim.telemetry.gear, `${r.car.telemetry.speedKmh.toFixed(1)} km/h, gear ${r.car.telemetry.gear}`);
   check(`${name}: the page's own car stood still meanwhile`, Math.abs(r.twin.vxMs) < 0.5 && r.twin.sMeters !== sim.sMeters);
 }
-setVf26OnRigidBody(false);
+setLc26OnRigidBody(false);
 
 console.log('\n== Set-up, placement and hand-over (f12026-car)');
 {
@@ -251,8 +251,8 @@ console.log('\n== Set-up, placement and hand-over (f12026-car)');
 console.log('\n== On the circuit\'s own colliders (autopilot)');
 // The track mesh loads on the page; its colliders cross to the simulation as data, and the car there drives on them
 const root = loadGlbGeometry('public/tracks/rwanda_official/rwanda_official.glb');
-for (const [name, vehicle] of [['f12026-car', 'f12026-car'], ['VF26 as it ships', 'vf26']] as const) {
-  setVf26OnRigidBody(true);
+for (const [name, vehicle] of [['f12026-car', 'f12026-car'], ['LC26 as it ships', 'lc26']] as const) {
+  setLc26OnRigidBody(true);
   const r = rig(vehicle);
   r.car.attachTrackRoot?.(root);
   r.car.resetToStartGrid(true);
@@ -280,7 +280,7 @@ for (const [name, vehicle] of [['f12026-car', 'f12026-car'], ['VF26 as it ships'
   for (let t = 0; t < 20 - 1e-9; t += SIM_TICK_S) flat.step(SIM_TICK_S, {});
   check(`${name}: (a car on the track samples' ground ends elsewhere)`, worstDifference(poseOf(flat), poseOf(direct)) > 1e-3);
 
-  if (vehicle === 'vf26') {
+  if (vehicle === 'lc26') {
     // The kerbs' blocks (the circuit's surface table, read off the kerb meshes' texture coordinates) are the same under
     // the simulation's car as under the page's: every kerb the track data flags, 0.7 m out from the road's edge
     const here = r.twin.groundQuery!;

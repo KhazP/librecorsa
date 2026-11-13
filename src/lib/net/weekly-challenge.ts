@@ -43,7 +43,7 @@ const CIRCUITS: readonly { trackId: string; lapS: number }[] = [
 ];
 /** The cars, with their lap time as a multiple of the prototype's */
 const CARS: readonly { vehicle: VehicleModelId; pace: number }[] = [
-  { vehicle: "vf26", pace: 1 },
+  { vehicle: "lc26", pace: 1 },
   { vehicle: "amg-gt3", pace: 1.2 },
   { vehicle: "mtr-496r", pace: 1.22 },
   { vehicle: "liana", pace: 1.9 },
@@ -109,7 +109,7 @@ export function challengeAt(nowMs: number): WeeklyChallenge {
  * configs, because the Worker imports this file.
  */
 const CHALLENGE_TYRES: Readonly<Record<VehicleModelId, { compound: TireCompound; label: string }>> = {
-  vf26: { compound: "soft", label: "Soft tyres" },
+  lc26: { compound: "soft", label: "Soft tyres" },
   "f12026-car": { compound: "soft", label: "Soft tyres" },
   "amg-gt3": { compound: "soft", label: "Soft tyres" },
   "mtr-496r": { compound: "soft", label: "Soft tyres" },

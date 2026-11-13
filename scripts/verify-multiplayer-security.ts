@@ -12,7 +12,7 @@ import type { StatePacketFields } from '../src/lib/net/state-codec';
 import { lapPhysicsVersion } from '../src/lib/sim/lap-types';
 
 /** What this build says in its hello and lobby: its protocol version and physics revision */
-const VERSIONS = { proto: PROTOCOL_VERSION, sim: lapPhysicsVersion('vf26') };
+const VERSIONS = { proto: PROTOCOL_VERSION, sim: lapPhysicsVersion('lc26') };
 
 const failures: string[] = [];
 const check = (name: string, ok: boolean, detail = '') => {

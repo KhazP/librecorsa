@@ -2,7 +2,7 @@
  * What each car can do, measured on its own physics: steady cornering, braking and traction limits against speed
  * (a g-g-v table), on the flat test pad with the aids the AI drives with.
  *
- *   npx tsx scripts/ai/measure-ggv.ts [--car f12026-car|amg-gt3|vf26|liana|mtr-496r|all] [--out public/ai/ggv.json]
+ *   npx tsx scripts/ai/measure-ggv.ts [--car f12026-car|amg-gt3|lc26|liana|mtr-496r|all] [--out public/ai/ggv.json]
  *
  * Cornering: an ISO 4138-style slow steer ramp at each held speed, the best 1 s mean lateral g (scripts/lib/handling-
  * tests.ts). Braking: full pedal with the AI's ABS from each speed, the mean deceleration from 0.15 s to 0.5 s.
@@ -19,7 +19,7 @@ import type { SimulatorCar } from '../../src/lib/sim/simulator-car';
 import { createFlatTestTrack } from '../lib/flat-track';
 import { steadyRamp } from '../lib/handling-tests';
 
-type CarId = 'f12026-car' | 'amg-gt3' | 'vf26' | 'liana' | 'mtr-496r';
+type CarId = 'f12026-car' | 'amg-gt3' | 'lc26' | 'liana' | 'mtr-496r';
 const argv = process.argv.slice(2);
 const opt = (name: string, fallback: string) => {
   const i = argv.indexOf(`--${name}`);
@@ -33,7 +33,7 @@ const DT = 1 / 240;
 const makers: Record<CarId, () => SimulatorCar> = {
   'f12026-car': () => new F12026CarSim(pad),
   'amg-gt3': () => createAmgGt3Sim(pad),
-  vf26: () => new F1Physics2026(pad),
+  lc26: () => new F1Physics2026(pad),
   liana: () => createSuzukiLianaSim(pad),
   'mtr-496r': () => createMtr496rSim(pad),
 };

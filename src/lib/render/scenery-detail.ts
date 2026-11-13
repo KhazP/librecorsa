@@ -223,7 +223,7 @@ export const VERTEX_PATCHES: readonly Patch[] = [
   [
     "#include <common>",
     /* glsl */ `#include <common>
-varying vec3 vVf26WorldPos;
+varying vec3 vLc26WorldPos;
 varying vec3 vSceneryWorldNormal;
 #ifdef SCENERY_AO
 attribute float sceneryAo;
@@ -233,7 +233,7 @@ varying float vSceneryAo;
   [
     "#include <begin_vertex>",
     /* glsl */ `#include <begin_vertex>
-vVf26WorldPos = ( modelMatrix * vec4( transformed, 1.0 ) ).xyz;
+vLc26WorldPos = ( modelMatrix * vec4( transformed, 1.0 ) ).xyz;
 vSceneryWorldNormal = normalize( mat3( modelMatrix ) * objectNormal );
 #ifdef SCENERY_AO
 vSceneryAo = sceneryAo;
@@ -251,7 +251,7 @@ uniform float uSceneryBaseY;
 uniform float uWetness;
 uniform float uRainIntensity;
 uniform float uWetTime;
-varying vec3 vVf26WorldPos;
+varying vec3 vLc26WorldPos;
 varying vec3 vSceneryWorldNormal;
 #ifdef SCENERY_AO
 varying float vSceneryAo;
@@ -262,7 +262,7 @@ ${WORLD_NOISE_GLSL}`,
     "#include <color_fragment>",
     /* glsl */ `#include <color_fragment>
 vec3 scnN = normalize( vSceneryWorldNormal );
-vec3 scnP = vVf26WorldPos;
+vec3 scnP = vLc26WorldPos;
 float scnDist = length( vViewPosition );
 // Detail fades out with distance, where it would only shimmer
 float scnDetail = uSceneryDetail * ( 1.0 - smoothstep( 60.0, 220.0, scnDist ) );
@@ -270,15 +270,15 @@ float scnDetail = uSceneryDetail * ( 1.0 - smoothstep( 60.0, 220.0, scnDist ) );
 	if ( scnDetail > 0.0 ) {
 		// Leaf clumps / bark: two octaves of world noise, the height folded in so the canopy's sides vary too
 		vec2 scnQ = scnP.xz + scnP.y * vec2( 0.37, -0.61 );
-		diffuseColor.rgb *= 1.0 + scnDetail * ( 0.2 * vf26ValueNoise( scnQ / 0.9 ) + 0.12 * vf26ValueNoise( scnQ / 2.7 ) );
+		diffuseColor.rgb *= 1.0 + scnDetail * ( 0.2 * lc26ValueNoise( scnQ / 0.9 ) + 0.12 * lc26ValueNoise( scnQ / 2.7 ) );
 	}
 #elif defined( SCENERY_ROOF ) || defined( SCENERY_BUILDING )
 	if ( scnDetail > 0.0 ) {
 		// Weathering: triplanar world noise, plus vertical streaks on the walls
 		vec3 scnW = pow( abs( scnN ), vec3( 4.0 ) );
 		scnW /= scnW.x + scnW.y + scnW.z;
-		float scnGrime = scnW.x * vf26ValueNoise( scnP.zy / 1.7 ) + scnW.y * vf26ValueNoise( scnP.xz / 1.7 ) + scnW.z * vf26ValueNoise( scnP.xy / 1.7 );
-		float scnStreak = vf26ValueNoise( vec2( ( scnP.x + scnP.z ) / 0.45, scnP.y / 7.0 ) );
+		float scnGrime = scnW.x * lc26ValueNoise( scnP.zy / 1.7 ) + scnW.y * lc26ValueNoise( scnP.xz / 1.7 ) + scnW.z * lc26ValueNoise( scnP.xy / 1.7 );
+		float scnStreak = lc26ValueNoise( vec2( ( scnP.x + scnP.z ) / 0.45, scnP.y / 7.0 ) );
 		scnGrime = 0.6 * scnGrime + 0.4 * scnStreak * ( 1.0 - scnW.y );
 		diffuseColor.rgb *= 1.0 - scnDetail * 0.16 * smoothstep( -0.3, 0.9, scnGrime );
 	}
@@ -290,7 +290,7 @@ float scnDetail = uSceneryDetail * ( 1.0 - smoothstep( 60.0, 220.0, scnDist ) );
 	#endif
 #elif defined( SCENERY_PAINT )
 	if ( scnDetail > 0.0 ) {
-		float scnDirt = 0.6 * vf26ValueNoise( scnP.xz / 1.3 ) + 0.4 * vf26ValueNoise( scnP.xz / 0.35 );
+		float scnDirt = 0.6 * lc26ValueNoise( scnP.xz / 1.3 ) + 0.4 * lc26ValueNoise( scnP.xz / 0.35 );
 		diffuseColor.rgb *= 1.0 - scnDetail * 0.12 * smoothstep( -0.2, 0.8, scnDirt );
 	}
 	// Wet paint darkens like the asphalt around it
@@ -301,7 +301,7 @@ float scnDetail = uSceneryDetail * ( 1.0 - smoothstep( 60.0, 220.0, scnDist ) );
 	// than shimmering. Slow gusts leave calmer, glossier patches between ruffled ones.
 	vec2 scnL = scnP.xz;
 	float scnFw = max( fwidth( scnL.x ), fwidth( scnL.y ) );
-	float scnGust = 0.35 + 0.65 * smoothstep( -0.45, 0.55, vf26ValueNoise( scnL / 160.0 + uSceneryTime * vec2( 0.0035, 0.002 ) ) );
+	float scnGust = 0.35 + 0.65 * smoothstep( -0.45, 0.55, lc26ValueNoise( scnL / 160.0 + uSceneryTime * vec2( 0.0035, 0.002 ) ) );
 	vec3 scnOct = 1.0 - smoothstep( vec3( 0.25 ), vec3( 0.5 ), scnFw / vec3( 9.0, 3.2, 0.8 ) );
 	float scnLost = scnGust * dot( 1.0 - scnOct * uSceneryDetail, vec3( 0.05, 0.06, 0.05 ) );
 	// Ruffled water scatters a little more light back than a calm patch
@@ -312,7 +312,7 @@ float scnDetail = uSceneryDetail * ( 1.0 - smoothstep( 60.0, 220.0, scnDist ) );
     "#include <roughnessmap_fragment>",
     /* glsl */ `#include <roughnessmap_fragment>
 #if defined( SCENERY_ROOF ) || defined( SCENERY_BUILDING )
-	roughnessFactor = clamp( roughnessFactor + 0.1 * scnDetail * vf26ValueNoise( scnP.xz / 3.1 + scnP.y * 0.2 ), 0.04, 1.0 );
+	roughnessFactor = clamp( roughnessFactor + 0.1 * scnDetail * lc26ValueNoise( scnP.xz / 3.1 + scnP.y * 0.2 ), 0.04, 1.0 );
 #elif defined( SCENERY_PAINT )
 	roughnessFactor = mix( roughnessFactor, 0.12, 0.8 * uWetness );
 #elif defined( SCENERY_WATER )
@@ -328,18 +328,18 @@ float scnDetail = uSceneryDetail * ( 1.0 - smoothstep( 60.0, 220.0, scnDist ) );
 	#ifdef SCENERY_TREE
 		vec2 scnB = scnP.xz + scnP.y * vec2( 0.37, -0.61 );
 		float scnAa = 1.0 - smoothstep( 0.25, 0.5, max( fwidth( scnB.x ), fwidth( scnB.y ) ) / 0.55 );
-		scnH = 0.09 * ( 0.65 * vf26ValueNoise( scnB / 0.55 ) + 0.35 * vf26ValueNoise( scnB / 1.6 ) ) * scnDetail * scnAa;
+		scnH = 0.09 * ( 0.65 * lc26ValueNoise( scnB / 0.55 ) + 0.35 * lc26ValueNoise( scnB / 1.6 ) ) * scnDetail * scnAa;
 	#else
 		// The lake's wind waves drifting with the gusts, and rain rings close to the camera
-		scnH = 0.07 * scnOct.x * vf26ValueNoise( scnL / 9.0 + uSceneryTime * vec2( 0.035, 0.02 ) )
-			+ 0.03 * scnOct.y * vf26ValueNoise( scnL / 3.2 + uSceneryTime * vec2( -0.05, 0.06 ) )
-			+ 0.01 * scnOct.z * vf26ValueNoise( scnL / 0.8 - uSceneryTime * vec2( 0.05, 0.08 ) );
+		scnH = 0.07 * scnOct.x * lc26ValueNoise( scnL / 9.0 + uSceneryTime * vec2( 0.035, 0.02 ) )
+			+ 0.03 * scnOct.y * lc26ValueNoise( scnL / 3.2 + uSceneryTime * vec2( -0.05, 0.06 ) )
+			+ 0.01 * scnOct.z * lc26ValueNoise( scnL / 0.8 - uSceneryTime * vec2( 0.05, 0.08 ) );
 		scnH *= scnGust * uSceneryDetail;
 		if ( uRainIntensity > 0.02 ) {
-			scnH += 0.004 * vf26RainSplash( scnL, uWetTime, uRainIntensity ) * uSceneryDetail * ( 1.0 - smoothstep( 15.0, 45.0, scnDist ) );
+			scnH += 0.004 * lc26RainSplash( scnL, uWetTime, uRainIntensity ) * uSceneryDetail * ( 1.0 - smoothstep( 15.0, 45.0, scnDist ) );
 		}
 	#endif
-	normal = vf26PerturbNormal( -vViewPosition, normal, vec2( dFdx( scnH ), dFdy( scnH ) ), faceDirection );
+	normal = lc26PerturbNormal( -vViewPosition, normal, vec2( dFdx( scnH ), dFdy( scnH ) ), faceDirection );
 	#ifdef SCENERY_WATER
 		// Specular anti-aliasing: the bumped normal's spread across a pixel widens the lobe (from beautiful-water)
 		vec3 scnNx = dFdx( normal );
@@ -371,9 +371,9 @@ float scnDetail = uSceneryDetail * ( 1.0 - smoothstep( 60.0, 220.0, scnDist ) );
 	vec2 scnGp = scnL - scnWind * ( uSceneryTime * 0.31 ) + scnCross * ( uSceneryTime * 0.047 );
 	vec2 scnGuv = vec2( dot( scnGp, scnWind ) * 0.72, dot( scnGp, scnCross ) * 1.58 );
 	mat2 scnTurn = mat2( 0.61, -0.79, 0.79, 0.61 );
-	float scnG = 0.5 + 0.5 * ( 0.26 * vf26ValueNoise( scnGuv * 2.5 + vec2( 7.3, -4.8 ) )
-		+ 0.47 * vf26ValueNoise( scnTurn * scnGuv * 8.8 + vec2( -13.2, 19.6 ) )
-		+ 0.27 * vf26ValueNoise( scnTurn * scnGuv * 21.5 + vec2( 31.7, -9.1 ) ) );
+	float scnG = 0.5 + 0.5 * ( 0.26 * lc26ValueNoise( scnGuv * 2.5 + vec2( 7.3, -4.8 ) )
+		+ 0.47 * lc26ValueNoise( scnTurn * scnGuv * 8.8 + vec2( -13.2, 19.6 ) )
+		+ 0.27 * lc26ValueNoise( scnTurn * scnGuv * 21.5 + vec2( 31.7, -9.1 ) ) );
 	float scnGaa = max( fwidth( scnG ) * 1.45, 0.022 );
 	float scnResolved = uSceneryDetail * ( 1.0 - smoothstep( 62.0, 175.0, scnDist ) );
 	float scnOcc = mix( 0.18, smoothstep( 0.5 - scnGaa, 0.69 + scnGaa, scnG ), scnResolved );

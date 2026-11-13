@@ -351,18 +351,18 @@ check('FFB soft lock pushes back past the car steering lock only', () => {
   near(softLockForce(half + 50), -1);
 });
 check('per-car steering lock: 360° for Formula cars, 640° for AMG GT3 (steering & soft lock)', () => {
-  assert.equal(carWheelLockDeg('vf26'), 360);
+  assert.equal(carWheelLockDeg('lc26'), 360);
   assert.equal(carWheelLockDeg('f12026-car'), 360);
   assert.equal(carWheelLockDeg('amg-gt3'), 640);
   const binding = { padId: 'Simucube 2 Pro', axis: 0, center: 0, invert: false };
   // On a 900° wheel turned 180° right (raw = +0.4): full lock (+1.0) in F1, 180/320 = 0.5625 in AMG GT3
-  near(wheelSteerValue(0.4, binding, 900, 0, carWheelLockDeg('vf26')), 1);
+  near(wheelSteerValue(0.4, binding, 900, 0, carWheelLockDeg('lc26')), 1);
   near(wheelSteerValue(0.4, binding, 900, 0, carWheelLockDeg('amg-gt3')), 180 / 320);
   // On a 540° wheel driving the 640° AMG GT3, full physical lock (raw = ±1) still reaches full rack travel (±1)
   near(wheelSteerValue(1.0, binding, 540, 0, carWheelLockDeg('amg-gt3')), 1);
   near(wheelSteerValue(-1.0, binding, 540, 0, carWheelLockDeg('amg-gt3')), -1);
   // Soft lock at 250° right: past lock in F1 (< 0), still inside the 320° half-lock in AMG GT3 (0)
-  assert.ok(softLockForce(250, carWheelLockDeg('vf26')) < 0);
+  assert.ok(softLockForce(250, carWheelLockDeg('lc26')) < 0);
   assert.equal(softLockForce(250, carWheelLockDeg('amg-gt3')), 0);
   assert.ok(softLockForce(330, carWheelLockDeg('amg-gt3')) < 0);
 });
@@ -370,7 +370,7 @@ check("a player's steering lock quickens the rack, never slows it, and loads fro
   const binding = { padId: 'Simucube 2 Pro', axis: 0, center: 0, invert: false };
   const locks = { 'amg-gt3': 400 };
   assert.equal(carWheelLockDeg('amg-gt3', locks), 400);
-  assert.equal(carWheelLockDeg('vf26', locks), 360);
+  assert.equal(carWheelLockDeg('lc26', locks), 360);
   assert.equal(carWheelLockDeg('amg-gt3', { 'amg-gt3': 800 }), 640, 'slower than the real car: ignored');
   assert.equal(carWheelLockDeg('amg-gt3', { 'amg-gt3': 90 }), 640, 'below the minimum: ignored');
   // 200° right on a 900° wheel (raw 0.4444): full lock on the 400° GT3 rack, 200/320 on the real one

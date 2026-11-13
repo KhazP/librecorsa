@@ -10,7 +10,7 @@
 
 import type { TyreSetup, VehicleModelId } from "@/types/f1";
 import { type ChassisSetup, CHASSIS_LIMITS, FUEL_KG_PER_L, FUEL_LOAD, type GarageTuner, STEER_RATIO_BASE, WING_CLICK_DEG } from "./car-setup";
-import { VF26_CHASSIS } from "./vf26-data";
+import { LC26_CHASSIS } from "./lc26-data";
 import { F12026_CAR_CONFIG } from "./f12026-car/F12026CarConfig";
 import { AMG_GT3_CONFIG } from "./gt3/AmgGt3Config";
 import { SUZUKI_LIANA_CONFIG } from "./road/SuzukiLianaConfig";
@@ -19,7 +19,7 @@ import { MTR_496R_CONFIG } from "./proto/Mtr496rConfig";
 export type SetupClassId = "f1" | "gt3";
 
 export const SETUP_CLASS: Record<VehicleModelId, SetupClassId> = {
-  vf26: "f1",
+  lc26: "f1",
   "f12026-car": "f1",
   "amg-gt3": "gt3",
   // A closed road car: the GT3 sheet (tyres, electronics, mechanical grip, dampers, fuel)
@@ -121,19 +121,19 @@ const rigidBaseline = (
 });
 
 const BASELINES: Record<VehicleModelId, CarBaseline> = {
-  vf26: {
-    rideFrontMm: VF26_CHASSIS.front.staticRideHeight * 1000,
-    rideRearMm: VF26_CHASSIS.rear.staticRideHeight * 1000,
-    toeFrontDeg: VF26_CHASSIS.front.staticToeDeg,
-    toeRearDeg: VF26_CHASSIS.rear.staticToeDeg,
-    wheelRateFrontNmm: VF26_CHASSIS.front.springRate / 1000,
-    wheelRateRearNmm: VF26_CHASSIS.rear.springRate / 1000,
+  lc26: {
+    rideFrontMm: LC26_CHASSIS.front.staticRideHeight * 1000,
+    rideRearMm: LC26_CHASSIS.rear.staticRideHeight * 1000,
+    toeFrontDeg: LC26_CHASSIS.front.staticToeDeg,
+    toeRearDeg: LC26_CHASSIS.rear.staticToeDeg,
+    wheelRateFrontNmm: LC26_CHASSIS.front.springRate / 1000,
+    wheelRateRearNmm: LC26_CHASSIS.rear.springRate / 1000,
     bumpStopRateFrontNmm: 0,
     bumpStopRateRearNmm: 0,
     bumpStopRangeFrontMm: 0,
     bumpStopRangeRearMm: 0,
     diffPreloadNm: 0,
-    steerRatio: STEER_RATIO_BASE.vf26,
+    steerRatio: STEER_RATIO_BASE.lc26,
   },
   "f12026-car": rigidBaseline(F12026_CAR_CONFIG, "f12026-car"),
   "amg-gt3": rigidBaseline(AMG_GT3_CONFIG, "amg-gt3"),

@@ -1,6 +1,6 @@
 /**
- * The VF26 as the rigid-body engine runs it: the car of `vf26-data.ts` with the values below in place of the data's.
- * `Vf26Config.ts` builds the data's car (the one `F1Physics2026` drives, kept for the side-by-side of the two
+ * The LC26 as the rigid-body engine runs it: the car of `lc26-data.ts` with the values below in place of the data's.
+ * `Lc26Config.ts` builds the data's car (the one `F1Physics2026` drives, kept for the side-by-side of the two
  * engines); this is the car a driver gets with the rigid-body engine.
  *
  * Why these: the data's chassis is sprung at the corners (200 / 185 kN/m) with light third springs, wheels of 13 and
@@ -24,8 +24,8 @@
  */
 import type { LutPoints } from '../lut';
 import { Lut } from '../lut';
-import { VF26_CHASSIS, VF26_ERS, type Vf26AxleSuspension, type Vf26TyreSpec } from '../vf26-data';
-import { buildVf26Config, type Vf26Overrides } from './Vf26Config';
+import { LC26_CHASSIS, LC26_ERS, type Lc26AxleSuspension, type Lc26TyreSpec } from '../lc26-data';
+import { buildLc26Config, type Lc26Overrides } from './Lc26Config';
 
 // ---------------------------------------------------------------------------
 // Springs, third elements, bars
@@ -55,16 +55,16 @@ const PACKER = { gap: { front: 0.003, rear: 0.004 }, rate: 800_000 };
  */
 const BAR = { front: 58_000, rear: 25_000 };
 /** The rear rides 2 mm higher at rest, which centres the floor's height band on 150 to 300 km/h [tuned] */
-const RIDE_HEIGHT = { front: VF26_CHASSIS.front.staticRideHeight, rear: VF26_CHASSIS.rear.staticRideHeight + 0.002 };
+const RIDE_HEIGHT = { front: LC26_CHASSIS.front.staticRideHeight, rear: LC26_CHASSIS.rear.staticRideHeight + 0.002 };
 
 /**
  * Corner dampers from damping ratios: against a wheel's rate in roll (its spring and the bar), `zeta` of critical in
  * slow bump, 1.45 times that in slow rebound, and 55 % of each past the knee, where a kerb's speed would otherwise
  * lift the car [tuned: 0.4 in bump, 0.58 in rebound; wheel hop at a third of critical with the tyre's own damping]
  */
-function cornerDamper(axle: 'front' | 'rear', zeta: number): Vf26AxleSuspension['damper'] {
-  const sprungKg = VF26_CHASSIS.totalMassKg - 2 * (UNSPRUNG_KG.front + UNSPRUNG_KG.rear);
-  const cornerKg = (sprungKg * (axle === 'front' ? VF26_CHASSIS.frontWeightFraction : 1 - VF26_CHASSIS.frontWeightFraction)) / 2;
+function cornerDamper(axle: 'front' | 'rear', zeta: number): Lc26AxleSuspension['damper'] {
+  const sprungKg = LC26_CHASSIS.totalMassKg - 2 * (UNSPRUNG_KG.front + UNSPRUNG_KG.rear);
+  const cornerKg = (sprungKg * (axle === 'front' ? LC26_CHASSIS.frontWeightFraction : 1 - LC26_CHASSIS.frontWeightFraction)) / 2;
   const critical = 2 * Math.sqrt((WHEEL_RATE[axle] + 2 * BAR[axle]) * cornerKg);
   const round = (c: number) => Math.round(c / 100) * 100;
   const bump = round(zeta * critical);
@@ -72,7 +72,7 @@ function cornerDamper(axle: 'front' | 'rear', zeta: number): Vf26AxleSuspension[
   return { bumpSlow: bump, bumpFast: round(0.55 * bump), reboundSlow: rebound, reboundFast: round(0.55 * rebound), bumpThreshold: 0.05, reboundThreshold: 0.05 };
 }
 
-const axle = (a: 'front' | 'rear'): Partial<Vf26AxleSuspension> => ({
+const axle = (a: 'front' | 'rear'): Partial<Lc26AxleSuspension> => ({
   springRate: WHEEL_RATE[a],
   heaveRate: HEAVE_RATE[a],
   heavePackerTravel: PACKER.gap[a],
@@ -124,7 +124,7 @@ const COLD_SIDE: LutPoints = [
   [80, 0.985],
 ];
 
-function tyre(spec: Vf26TyreSpec, a: 'front' | 'rear'): Vf26TyreSpec {
+function tyre(spec: Lc26TyreSpec, a: 'front' | 'rear'): Lc26TyreSpec {
   const front = a === 'front';
   return {
     ...spec,
@@ -170,7 +170,7 @@ const PAD_GRIP: LutPoints = [
 // The car
 // ---------------------------------------------------------------------------
 
-export const VF26_TUNE: Vf26Overrides = {
+export const LC26_TUNE: Lc26Overrides = {
   front: axle('front'),
   rear: axle('rear'),
   tyre,
@@ -206,7 +206,7 @@ export const VF26_TUNE: Vf26Overrides = {
   // 5 % where the deployment starts, in every gear alike (eighth harvested up to 15 %); the rear axle is never held
   // back by more than the data's 900 Nm, which is 0.33 g under 125 km/h [ref: recovery on a lift in every gear, easing
   // off with the pedal; data: the axle's ceiling; tuned: lift-off deceleration at 60 to 280 km/h in each gear]
-  ers: { liftThrottle: 0.05, liftHarvestEveryGear: { maxAxleTorqueNm: VF26_ERS.coastHarvestMaxAxleTorqueNm } },
+  ers: { liftThrottle: 0.05, liftHarvestEveryGear: { maxAxleTorqueNm: LC26_ERS.coastHarvestMaxAxleTorqueNm } },
   // The fuel cell is behind the driver: 0.15 m behind the centre of gravity of the car without fuel and 0.2 m above
   // it [ref]. With the fuel at that centre the weight split never moved with the load; from here a full 110 kg tank
   // takes 0.6 point off the front axle's share (45.65 % empty, 45.42 % with 40 kg, 45.07 % full) and the car gets it
@@ -226,4 +226,4 @@ export const VF26_TUNE: Vf26Overrides = {
   dragAtElements: true,
 };
 
-export const VF26_TUNED_CONFIG = buildVf26Config(VF26_TUNE);
+export const LC26_TUNED_CONFIG = buildLc26Config(LC26_TUNE);

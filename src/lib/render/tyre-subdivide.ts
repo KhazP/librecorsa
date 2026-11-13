@@ -3,8 +3,8 @@
  * (`tyre-deformation.ts`) can only move the vertices a model has: a tread of 40-80 segments round the tyre (the AMG
  * GT3's has 40) shows its facets where the patch flattens, shears and bulges. A tyre coarser than TARGET_SEGMENTS has
  * the circumferential edges of its tread band split once at load, doubling its segments there (the AMG GT3's 40 become
- * 80, the 64-80 of the older F1 cars 128-160); finer tyres (the VF26's 105) are left as they are. One pass keeps the
- * AI field's tyres within the triangle count the VF26's already have.
+ * 80, the 64-80 of the older F1 cars 128-160); finer tyres (the LC26's 105) are left as they are. One pass keeps the
+ * AI field's tyres within the triangle count the LC26's already have.
  *
  * The split is crack-free: each edge is split or not by itself (its two ends in the tread band, spanning an angle round
  * the axle), so both triangles on an edge agree, and every triangle is re-cut by how many of its edges were split

@@ -59,7 +59,7 @@ export interface AiSectionOverride {
 export interface AiTuningFile {
   description?: string;
   params?: Partial<AiTuningParams>;
-  /** Overrides for one vehicle model of the class (`vf26`, `f12026-car`, `amg-gt3`) */
+  /** Overrides for one vehicle model of the class (`lc26`, `f12026-car`, `amg-gt3`) */
   vehicles?: Record<string, Partial<AiTuningParams>>;
   sections?: AiSectionOverride[];
 }

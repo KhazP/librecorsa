@@ -17,7 +17,7 @@ import {
 import { AMG_GT3_SOUND } from "../src/lib/sim/gt3/AmgGt3Sim";
 import { SUZUKI_LIANA_SOUND } from "../src/lib/sim/road/SuzukiLianaSim";
 import { MTR_496R_SOUND } from "../src/lib/sim/proto/Mtr496rSim";
-import type { Vf26AudioManifest } from "../src/lib/sim/vf26-audio";
+import type { Lc26AudioManifest } from "../src/lib/sim/lc26-audio";
 import { noteSkip, REPO_CAR_IDS } from "./lib/hosted-files";
 
 let passed = 0;
@@ -31,7 +31,7 @@ function check(name: string, cond: boolean, detail = ""): void {
 }
 
 const EXPECTED_SOUNDS: Record<CarId, { sound: CarSoundSource; maxIdleRpm: number }> = {
-  vf26: { sound: F1_2026_SOUND, maxIdleRpm: 4200 },
+  lc26: { sound: F1_2026_SOUND, maxIdleRpm: 4200 },
   "amg-gt3": { sound: AMG_GT3_SOUND, maxIdleRpm: 1600 },
   "bmw-m4-gt3": { sound: BMW_M4_GT3_SOUND, maxIdleRpm: 1600 },
   liana: { sound: SUZUKI_LIANA_SOUND, maxIdleRpm: 1000 },
@@ -78,7 +78,7 @@ for (const [bankId, { sound, maxIdleRpm }] of seenBanks) {
   }
   check(`${bankId}: manifest exists at ${manifestPath}`, existsSync(manifestPath));
 
-  const m = JSON.parse(readFileSync(manifestPath, "utf8")) as Vf26AudioManifest;
+  const m = JSON.parse(readFileSync(manifestPath, "utf8")) as Lc26AudioManifest;
   check(
     `${bankId}: sampleRate=48000 and valid loopSeconds`,
     m.sampleRate === 48000 && typeof m.loopSeconds === "number" && m.loopSeconds >= 1.5 && m.loopSeconds <= 3.5,

@@ -3,7 +3,7 @@ import { strict as assert } from 'node:assert';
 import {
   coldPressureFor, createTyreRuntime, setTyreColdPressure, setTyreTemperature, updateTyreThermal,
 } from '../src/lib/sim/ac-tyre';
-import { VF26_TYRES } from '../src/lib/sim/vf26-data';
+import { LC26_TYRES } from '../src/lib/sim/lc26-data';
 import { compoundData, F12026_CAR_CONFIG } from '../src/lib/sim/f12026-car/F12026CarConfig';
 import { createTyreRuntime as createVehicleTyre, VehiclePhysics } from '../src/lib/sim/f12026-car/VehiclePhysics';
 import { FlatGroundQuery } from '../src/lib/sim/f12026-car/TrackColliderQuery';
@@ -36,13 +36,13 @@ function gasInvariant(psi: number, tempC: number): number {
   return (psi + ATM) / (tempC + K);
 }
 
-check('VF26: known hot-to-cold gauge pressures at 95 → 20 °C', () => {
+check('LC26: known hot-to-cold gauge pressures at 95 → 20 °C', () => {
   near(coldPressureFor(23.5), 15.71868124405813);
   near(coldPressureFor(21.5), 14.126123862556023);
 });
 
-check('VF26: explicit setup, heating, cooling and no-change temperature', () => {
-  const tyre = createTyreRuntime(VF26_TYRES.soft.front, 20);
+check('LC26: explicit setup, heating, cooling and no-change temperature', () => {
+  const tyre = createTyreRuntime(LC26_TYRES.soft.front, 20);
   setTyreColdPressure(tyre, 20);
   near(tyre.pressurePsi, 20);
   setTyreTemperature(tyre, 95);
@@ -55,16 +55,16 @@ check('VF26: explicit setup, heating, cooling and no-change temperature', () => 
   near(tyre.pressurePsi, 20);
 });
 
-check('VF26: zero gauge pressure still contains gas and rises when heated', () => {
-  const tyre = createTyreRuntime(VF26_TYRES.soft.front, 20);
+check('LC26: zero gauge pressure still contains gas and rises when heated', () => {
+  const tyre = createTyreRuntime(LC26_TYRES.soft.front, 20);
   setTyreColdPressure(tyre, 0);
   setTyreTemperature(tyre, 95);
   near(tyre.pressurePsi, 3.759824322019446);
 });
 
-for (const [compound, axles] of Object.entries(VF26_TYRES)) {
+for (const [compound, axles] of Object.entries(LC26_TYRES)) {
   for (const axle of ['front', 'rear'] as const) {
-    check(`VF26 ${compound} ${axle}: reference pressure, wet shift and thermal update`, () => {
+    check(`LC26 ${compound} ${axle}: reference pressure, wet shift and thermal update`, () => {
       const spec = axles[axle];
       const tyre = createTyreRuntime(spec, 95);
       near(tyre.pressurePsi, spec.pressureRefPsi);
@@ -116,11 +116,11 @@ for (const [name, config] of [['F12026', F12026_CAR_CONFIG], ['AMG GT3', AMG_GT3
 }
 
 const track = createFlatTestTrack();
-check('VF26: physical defaults fit garage/save limits and survive setup reset/reload', () => {
+check('LC26: physical defaults fit garage/save limits and survive setup reset/reload', () => {
   const sim = new F1Physics2026(track);
   const defaults = sim.getTyreSetup();
   assert.deepEqual(defaults.coldPressurePsi, { fl: 15.7, fr: 15.7, rl: 14.1, rr: 14.1 });
-  const range = TYRE_SETUP_LIMITS.vf26.pressurePsi;
+  const range = TYRE_SETUP_LIMITS.lc26.pressurePsi;
   for (const psi of Object.values(defaults.coldPressurePsi)) assert.ok(psi >= range.min && psi <= range.max);
   sim.setTyreSetup(JSON.parse(JSON.stringify(defaults)));
   sim.resetToStartGrid(false);

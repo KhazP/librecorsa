@@ -6,15 +6,15 @@ import type { CarClassRule } from "@/lib/sim/multiplayer-sync";
 import { F1Physics2026 } from "@/lib/f1-physics-2026";
 import { F12026CarSim, F12026_SIM_PROFILE } from "@/lib/sim/f12026-car/F12026CarSim";
 import { F12026_CAR_CONFIG, type CarPhysicsConfig } from "@/lib/sim/f12026-car/F12026CarConfig";
-import { createVf26Sim } from "@/lib/sim/f12026-car/Vf26Sim";
-import { vf26OnRigidBody } from "./vf26-engine";
+import { createLc26Sim } from "@/lib/sim/f12026-car/Lc26Sim";
+import { lc26OnRigidBody } from "./lc26-engine";
 import { AMG_GT3_SIM_PROFILE, createAmgGt3Sim } from "@/lib/sim/gt3/AmgGt3Sim";
 import { AMG_GT3_CONFIG } from "@/lib/sim/gt3/AmgGt3Config";
 import { SUZUKI_LIANA_SIM_PROFILE, createSuzukiLianaSim } from "@/lib/sim/road/SuzukiLianaSim";
 import { SUZUKI_LIANA_CONFIG } from "@/lib/sim/road/SuzukiLianaConfig";
 import { MTR_496R_SIM_PROFILE, createMtr496rSim } from "@/lib/sim/proto/Mtr496rSim";
 import { MTR_496R_CONFIG } from "@/lib/sim/proto/Mtr496rConfig";
-import { VF26_ENGINE, VF26_TYRE_SETUP_RANGES } from "@/lib/sim/vf26-data";
+import { LC26_ENGINE, LC26_TYRE_SETUP_RANGES } from "@/lib/sim/lc26-data";
 import type { CarClassId } from "./car-registry";
 
 /** Cold pressure (psi) and static camber (deg) a model's tyre setup is clamped to */
@@ -40,7 +40,7 @@ export interface VehicleModel {
   tyreSetupRanges: TyreSetupRanges;
   /** The chassis a ported body on this model is fitted to (axles, floor) */
   rigConfig: Pick<CarPhysicsConfig, "chassis" | "aero">;
-  /** The model's own car (no ported GLB) has the GT3 dash and mirrors rather than the VF26 wheel display */
+  /** The model's own car (no ported GLB) has the GT3 dash and mirrors rather than the LC26 wheel display */
   gt3Cockpit: boolean;
   /** The plank throws sparks off the road at speed */
   floorSparks: boolean;
@@ -52,20 +52,20 @@ export interface VehicleModel {
 }
 
 export const VEHICLE_MODELS: Readonly<Record<VehicleModelId, VehicleModel>> = {
-  vf26: {
-    id: "vf26",
+  lc26: {
+    id: "lc26",
     classId: "f1",
     createSim: (track, trackRoot) => {
-      // On the rigid-body engine, unless the older one was asked for (`vf26-engine.ts`)
-      if (vf26OnRigidBody()) return createVf26Sim(track, trackRoot);
+      // On the rigid-body engine, unless the older one was asked for (`lc26-engine.ts`)
+      if (lc26OnRigidBody()) return createLc26Sim(track, trackRoot);
       const car = new F1Physics2026(track);
       if (trackRoot) car.attachTrackRoot(trackRoot);
       return car;
     },
-    limiterRpm: VF26_ENGINE.limiterRpm,
-    telemetryMaxRpm: VF26_ENGINE.maxRpm,
-    tyreSetupRanges: VF26_TYRE_SETUP_RANGES,
-    // No ported body runs on the VF26 model today; one would be fitted like the other F1 cars
+    limiterRpm: LC26_ENGINE.limiterRpm,
+    telemetryMaxRpm: LC26_ENGINE.maxRpm,
+    tyreSetupRanges: LC26_TYRE_SETUP_RANGES,
+    // No ported body runs on the LC26 model today; one would be fitted like the other F1 cars
     rigConfig: F12026_CAR_CONFIG,
     gt3Cockpit: false,
     floorSparks: true,

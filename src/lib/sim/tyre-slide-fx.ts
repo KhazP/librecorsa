@@ -8,7 +8,7 @@
  * rubber that stays on the road instead of spreading it round the tyre, so it smokes thickest and marks darkest for
  * its sliding power. A tyre lays rubber before it smokes: marks start at a lower heat than smoke.
  *
- * Measured on the rigid-body cars (VF26, AMG GT3, MTR 496R, Liana) by `scripts/verify-tyre-slide-fx.ts`: a clean
+ * Measured on the rigid-body cars (LC26, AMG GT3, MTR 496R, Liana) by `scripts/verify-tyre-slide-fx.ts`: a clean
  * steer ramp to peak lateral g reaches normalised slip ≈ 1.0–1.6 and 10–50 kW of load × slip speed; a locked wheel
  * slides at road speed with normalised slip in the thousands, 20–300 kW.
  */

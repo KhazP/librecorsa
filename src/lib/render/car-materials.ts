@@ -4,11 +4,11 @@ import { toPhysical } from "./to-physical";
 import { applyPaintFinish, SATIN_PAINT } from "./paint-finish";
 
 /**
- * PBR upgrades for the VF26 GLB materials (see vf26-car-model.ts; the GLB itself is not edited).
+ * PBR upgrades for the LC26 GLB materials (see lc26-car-model.ts; the GLB itself is not edited).
  *
- * - EXT_SKIN with a livery mask (restyled GLB, root extras `liveryMask`, see scripts/vf26/livery_vf26.py): the
+ * - EXT_SKIN with a livery mask (restyled GLB, root extras `liveryMask`, see scripts/lc26/livery_lc26.py): the
  *   texture holds primary / secondary / accent weights in R / G / B and the shader mixes the selected livery's
- *   colours (`setVf26LiveryColours`).
+ *   colours (`setLc26LiveryColours`).
  * - EXT_SKIN with the mod's authored colour texture: two-tone livery in one material.
  *   Both are satin all over (paint-finish.ts), like a race livery; the authored metallicRoughness map is dropped.
  *   The paint reflects less than the plain satin finish and its coat is thinner and sharper (`applyBodyPaint`).
@@ -18,7 +18,7 @@ import { applyPaintFinish, SATIN_PAINT } from "./paint-finish";
  *   fades out by pixel footprint (sub-pixel tows average to flat) and by distance, so it does not shimmer.
  *
  * - EXT_PAINT_PRIMARY / _SECONDARY / _ACCENT (`PAINT_ZONE_MATERIALS`): a body painted in zones, no texture; the same
- *   satin finish, coloured per car with the livery by vf26-car-model.ts.
+ *   satin finish, coloured per car with the livery by lc26-car-model.ts.
  *
  * Not touched: EXT_TYRE, mirror_*, INT_DISPLAY, INT_LED, EXT_clearled_security, glass, DRV_*, harness.
  */
@@ -63,7 +63,7 @@ const conversions = new WeakMap<THREE.Material, THREE.Material>();
  * Idempotent: already-upgraded materials are left alone, and a source material shared by several meshes is
  * converted once and the same replacement is assigned to all of them.
  */
-export function upgradeVf26Materials(root: THREE.Object3D, options: { liveryMask?: boolean } = {}): void {
+export function upgradeLc26Materials(root: THREE.Object3D, options: { liveryMask?: boolean } = {}): void {
   const upgrade = (m: THREE.Material) => upgradeOne(m, options.liveryMask === true);
   root.traverse((obj) => {
     const mesh = obj as THREE.Mesh;
@@ -76,18 +76,18 @@ export function upgradeVf26Materials(root: THREE.Object3D, options: { liveryMask
   });
 }
 
-/** Livery colours for the masked EXT_SKIN paint (linear, shared by every VF26 instance) */
+/** Livery colours for the masked EXT_SKIN paint (linear, shared by every LC26 instance) */
 const liveryUniforms = {
-  vf26Primary: { value: new THREE.Color("#00a1de") },
-  vf26Secondary: { value: new THREE.Color("#0f172a") },
-  vf26Accent: { value: new THREE.Color("#fad201") },
+  lc26Primary: { value: new THREE.Color("#00a1de") },
+  lc26Secondary: { value: new THREE.Color("#0f172a") },
+  lc26Accent: { value: new THREE.Color("#fad201") },
 };
 
 /** Sets the colours the livery mask mixes (CSS colour strings, sRGB). No shader recompile. */
-export function setVf26LiveryColours(primary: string, secondary: string, accent: string): void {
-  liveryUniforms.vf26Primary.value.set(primary);
-  liveryUniforms.vf26Secondary.value.set(secondary);
-  liveryUniforms.vf26Accent.value.set(accent);
+export function setLc26LiveryColours(primary: string, secondary: string, accent: string): void {
+  liveryUniforms.lc26Primary.value.set(primary);
+  liveryUniforms.lc26Secondary.value.set(secondary);
+  liveryUniforms.lc26Accent.value.set(accent);
 }
 
 function targetFor(name: string): PaintTarget | null {
@@ -131,7 +131,7 @@ function configure(
         out.map = out.map.clone();
         out.map.colorSpace = THREE.NoColorSpace;
         out.map.needsUpdate = true;
-        out.customProgramCacheKey = () => "vf26-skin-livery-mask-v2";
+        out.customProgramCacheKey = () => "lc26-skin-livery-mask-v2";
         out.onBeforeCompile = (shader) => {
           Object.assign(shader.uniforms, liveryUniforms);
           shader.fragmentShader = patch(shader.fragmentShader, SKIN_MASK_FRAGMENT_PATCHES, out.name);
@@ -157,7 +157,7 @@ function configure(
       out.metalnessMap = null;
       out.clearcoat = 0.2;
       out.clearcoatRoughness = 0.2;
-      out.customProgramCacheKey = () => "vf26-carbon-weave-v1";
+      out.customProgramCacheKey = () => "lc26-carbon-weave-v1";
       out.onBeforeCompile = (shader) => {
         shader.vertexShader = patch(shader.vertexShader, CARBON_VERTEX_PATCHES, out.name);
         shader.fragmentShader = patch(shader.fragmentShader, CARBON_FRAGMENT_PATCHES, out.name);
@@ -184,14 +184,14 @@ const patch = patchShader;
 
 // EXT_SKIN with the livery mask: R / G / B = primary / secondary / accent weights
 const SKIN_MASK_FRAGMENT_PATCHES: readonly Patch[] = [
-	["#include <common>", "#include <common>\nuniform vec3 vf26Primary;\nuniform vec3 vf26Secondary;\nuniform vec3 vf26Accent;"],
+	["#include <common>", "#include <common>\nuniform vec3 lc26Primary;\nuniform vec3 lc26Secondary;\nuniform vec3 lc26Accent;"],
 	[
 		"#include <map_fragment>",
 		/* glsl */ `
 #ifdef USE_MAP
-	vec3 vf26Mix = texture2D( map, vMapUv ).rgb;
-	vf26Mix /= max( vf26Mix.r + vf26Mix.g + vf26Mix.b, 1e-3 );
-	diffuseColor.rgb *= vf26Mix.r * vf26Primary + vf26Mix.g * vf26Secondary + vf26Mix.b * vf26Accent;
+	vec3 lc26Mix = texture2D( map, vMapUv ).rgb;
+	lc26Mix /= max( lc26Mix.r + lc26Mix.g + lc26Mix.b, 1e-3 );
+	diffuseColor.rgb *= lc26Mix.r * lc26Primary + lc26Mix.g * lc26Secondary + lc26Mix.b * lc26Accent;
 #endif
 `,
 	],
@@ -202,18 +202,18 @@ const SKIN_MASK_FRAGMENT_PATCHES: readonly Patch[] = [
 // ---------------------------------------------------------------------------------------------------------------
 
 const CARBON_VERTEX_PATCHES: readonly Patch[] = [
-	["#include <common>", "#include <common>\nvarying vec3 vVf26ObjPos;\nvarying vec3 vVf26ObjNrm;"],
-	["#include <begin_vertex>", "#include <begin_vertex>\nvVf26ObjPos = position;\nvVf26ObjNrm = normal;"],
+	["#include <common>", "#include <common>\nvarying vec3 vLc26ObjPos;\nvarying vec3 vLc26ObjNrm;"],
+	["#include <begin_vertex>", "#include <begin_vertex>\nvLc26ObjPos = position;\nvLc26ObjNrm = normal;"],
 ];
 
 // Unnormalised-sigma version of three's perturbNormalArb (see asphalt-sheen.ts for why the sigmas stay unnormalised)
 const CARBON_FRAGMENT_HELPERS_GLSL = /* glsl */ `
-varying vec3 vVf26ObjPos;
-varying vec3 vVf26ObjNrm;
+varying vec3 vLc26ObjPos;
+varying vec3 vLc26ObjNrm;
 
 // 2x2 twill: warp floats over two weft tows, then under two, shifting by one per row.
 // Returns (profile across the tow, 1 where the warp is on top).
-vec2 vf26Twill( vec2 p ) {
+vec2 lc26Twill( vec2 p ) {
 	vec2 c = floor( p );
 	vec2 f = fract( p );
 	float warpOver = step( mod( c.x + c.y, 4.0 ), 1.5 );
@@ -221,7 +221,7 @@ vec2 vf26Twill( vec2 p ) {
 	return vec2( prof, warpOver );
 }
 
-vec3 vf26PerturbNormal( vec3 eyePos, vec3 surfNorm, vec2 dHdxy, float faceDir ) {
+vec3 lc26PerturbNormal( vec3 eyePos, vec3 surfNorm, vec2 dHdxy, float faceDir ) {
 	vec3 dPdx = dFdx( eyePos );
 	vec3 dPdy = dFdy( eyePos );
 	vec3 R1 = cross( dPdy, surfNorm );
@@ -237,30 +237,30 @@ const CARBON_FRAGMENT_PATCHES: readonly Patch[] = [
 	[
 		"#include <roughnessmap_fragment>",
 		/* glsl */ `
-vec3 vf26N = normalize( vVf26ObjNrm );
-vec3 vf26W = pow( abs( vf26N ), vec3( 4.0 ) );
-vf26W /= ( vf26W.x + vf26W.y + vf26W.z );
-float vf26Inv = ${(1 / CARBON_TOW_PITCH).toFixed(1)};
-vec2 vf26Hx = vf26Twill( vVf26ObjPos.zy * vf26Inv );
-vec2 vf26Hy = vf26Twill( vVf26ObjPos.xz * vf26Inv );
-vec2 vf26Hz = vf26Twill( vVf26ObjPos.xy * vf26Inv );
-float vf26Height = dot( vf26W, vec3( vf26Hx.x, vf26Hy.x, vf26Hz.x ) );
-float vf26Tow = dot( vf26W, vec3( vf26Hx.y, vf26Hy.y, vf26Hz.y ) );
+vec3 lc26N = normalize( vLc26ObjNrm );
+vec3 lc26W = pow( abs( lc26N ), vec3( 4.0 ) );
+lc26W /= ( lc26W.x + lc26W.y + lc26W.z );
+float lc26Inv = ${(1 / CARBON_TOW_PITCH).toFixed(1)};
+vec2 lc26Hx = lc26Twill( vLc26ObjPos.zy * lc26Inv );
+vec2 lc26Hy = lc26Twill( vLc26ObjPos.xz * lc26Inv );
+vec2 lc26Hz = lc26Twill( vLc26ObjPos.xy * lc26Inv );
+float lc26Height = dot( lc26W, vec3( lc26Hx.x, lc26Hy.x, lc26Hz.x ) );
+float lc26Tow = dot( lc26W, vec3( lc26Hx.y, lc26Hy.y, lc26Hz.y ) );
 // Tows per pixel: sub-pixel weave averages to flat instead of shimmering
-vec3 vf26DP = fwidth( vVf26ObjPos );
-float vf26TowPerPx = max( vf26DP.x, max( vf26DP.y, vf26DP.z ) ) * vf26Inv;
-float vf26Fade = ( 1.0 - smoothstep( 0.15, 0.3, vf26TowPerPx ) ) * ( 1.0 - smoothstep( 8.0, 25.0, length( vViewPosition ) ) );
-float vf26Sign = 2.0 * vf26Tow - 1.0;
-float roughnessFactor = 0.32 + 0.06 * vf26Sign * vf26Fade;
-diffuseColor.rgb *= 1.0 + 0.2 * vf26Sign * vf26Fade;
-float vf26ReliefM = vf26Height * ${CARBON_RELIEF_M.toExponential()} * vf26Fade;
+vec3 lc26DP = fwidth( vLc26ObjPos );
+float lc26TowPerPx = max( lc26DP.x, max( lc26DP.y, lc26DP.z ) ) * lc26Inv;
+float lc26Fade = ( 1.0 - smoothstep( 0.15, 0.3, lc26TowPerPx ) ) * ( 1.0 - smoothstep( 8.0, 25.0, length( vViewPosition ) ) );
+float lc26Sign = 2.0 * lc26Tow - 1.0;
+float roughnessFactor = 0.32 + 0.06 * lc26Sign * lc26Fade;
+diffuseColor.rgb *= 1.0 + 0.2 * lc26Sign * lc26Fade;
+float lc26ReliefM = lc26Height * ${CARBON_RELIEF_M.toExponential()} * lc26Fade;
 `,
 	],
 	[
 		"#include <normal_fragment_maps>",
 		/* glsl */ `
 #include <normal_fragment_maps>
-normal = vf26PerturbNormal( -vViewPosition, normal, vec2( dFdx( vf26ReliefM ), dFdy( vf26ReliefM ) ), faceDirection );
+normal = lc26PerturbNormal( -vViewPosition, normal, vec2( dFdx( lc26ReliefM ), dFdy( lc26ReliefM ) ), faceDirection );
 `,
 	],
 ];

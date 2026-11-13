@@ -71,7 +71,7 @@ import { OnboardViews } from "@/lib/render/onboard-views";
 import { isNudgeView, NUDGE_FOV_STEP_DEG, nudgeStepForKey, stepNudge } from "@/lib/settings/camera-nudges";
 import { loadTyreSetup } from "@/lib/sim/tyre-setup";
 import { assetProgress } from "@/lib/loading/asset-progress";
-import { prefetchSoundBank } from "@/lib/sim/vf26-audio";
+import { prefetchSoundBank } from "@/lib/sim/lc26-audio";
 import { CarReflectionProbe } from "@/lib/render/car-reflection-probe";
 import { StartupMonitor } from "@/lib/render/startup-monitor";
 import { addContactShadow, seatContactShadow } from "@/lib/render/contact-shadow";
@@ -201,7 +201,7 @@ export interface DriveSnapshot {
   timeTrial: TimeTrialRules | null;
 }
 
-/** The snapshot before the drive exists: a throwaway VF26's numbers, as the menus need something to show */
+/** The snapshot before the drive exists: a throwaway LC26's numbers, as the menus need something to show */
 export function idleDriveSnapshot(track: BuiltTrackData): DriveSnapshot {
   const car = new F1Physics2026(track);
   return {
@@ -315,7 +315,7 @@ export class DriveSession {
   readonly setRace: (next: SessionRace) => void;
   /** The autopilot takes or hands back the player's car; never in a multiplayer race */
   readonly toggleAutopilot: () => void;
-  /** The player's car: the VF26 (F1Physics2026) or the f12026-car (F12026CarSim); a car swap replaces it */
+  /** The player's car: the LC26 (F1Physics2026) or the f12026-car (F12026CarSim); a car swap replaces it */
   get car(): SimulatorCar {
     return this.carNow();
   }
@@ -887,7 +887,7 @@ export class DriveSession {
     /**
      * The 3D car: a ported car's own GLB on the generic rig, else the vehicle model's own car
      */
-    // The body follows the car's registry model, not `carPhysics`: a ported F1 car switched to the VF26 physics
+    // The body follows the car's registry model, not `carPhysics`: a ported F1 car switched to the LC26 physics
     // keeps the geometry it was fitted to
     const rigModel = (car: CarId) => vehicleModelSpec(carById(car).physics);
     /** The livery files the player picked for a car with its own (null: the paint its model was made in) */
@@ -933,7 +933,7 @@ export class DriveSession {
       wheelDisplay = null;
       wingMirrors?.dispose();
       wingMirrors = null;
-      vf26ExtrasFor = null;
+      lc26ExtrasFor = null;
       gt3Dash?.dispose();
       gt3Dash = null;
       portedDash?.dispose();
@@ -1433,11 +1433,11 @@ export class DriveSession {
     const renderCarPos = new THREE.Vector3();
     /** The player car's tyres on its ground, at the pose it is drawn at (refreshed in place every frame) */
     const playerWheels: WheelSeating = { ground: null, position: renderCarPos, quaternion: new THREE.Quaternion() };
-    // Cockpit extras, created once the VF26 model has loaded: the wheel's LCD and the live wing mirrors
+    // Cockpit extras, created once the LC26 model has loaded: the wheel's LCD and the live wing mirrors
     let wheelDisplay: SteeringWheelDisplay | null = null;
     let wingMirrors: WingMirrors | null = null;
-    /** The VF26 body the wheel display and mirrors above were built for */
-    let vf26ExtrasFor: THREE.Object3D | null = null;
+    /** The LC26 body the wheel display and mirrors above were built for */
+    let lc26ExtrasFor: THREE.Object3D | null = null;
     // The AMG GT3 Evo body's dash screen, shift lights, mirrors and rear-view monitor, once its GLB has loaded
     let gt3Dash: Gt3DashDisplay | null = null;
     // A ported body's wheel screen and shift lights (the 496R's), once its GLB has loaded under the rig
@@ -1475,7 +1475,7 @@ export class DriveSession {
     const kbAxleSlip = createAxleSlipSample();
     // The other cars, heard where they are from the active camera
     const opponentAudio = new OpponentAudio();
-    const opponentSound = (p: InterpolatedPeerState): CarSoundSource => carForVehicle(p.vehicle ?? "vf26").sound;
+    const opponentSound = (p: InterpolatedPeerState): CarSoundSource => carForVehicle(p.vehicle ?? "lc26").sound;
     const trackEnv = getTrackEnv();
     // Time of day / weather look: the sky follows the session's WeatherState at 10 Hz, the HUD badge at 2 Hz
     let lastSkyMs = -Infinity;
@@ -2187,12 +2187,12 @@ export class DriveSession {
       const inVr = renderer.xr.isPresenting;
       const mode: CameraMode = inMenu || podium.playing ? "chase" : inVr ? "cockpit" : (settings.camera ?? "chase");
       const view = CAMERA_MODES[mode];
-      const vf26Cams = carRig.getCameraAnchors();
-      const carFovDeg = vf26Cams ? vf26Cams.cockpit.fovDeg : FALLBACK_COCKPIT_FOV_DEG;
+      const lc26Cams = carRig.getCameraAnchors();
+      const carFovDeg = lc26Cams ? lc26Cams.cockpit.fovDeg : FALLBACK_COCKPIT_FOV_DEG;
       if (carFovDeg !== this.snapshot.carCockpitFovDeg) setCarCockpitFov(carFovDeg);
       const onboardFovShift = settings.cockpitFovDeg === null ? 0 : settings.cockpitFovDeg - carFovDeg;
-      // The procedural helmet goes once the VF26 model (with its own driver) has replaced the procedural car
-      carRig.helmetGroup.visible = !vf26Cams;
+      // The procedural helmet goes once the LC26 model (with its own driver) has replaced the procedural car
+      carRig.helmetGroup.visible = !lc26Cams;
       // From the driver's eye point the helmet would fill the view: the camera leaves its layer out, while the
       // sun's shadow camera keeps it so the head still shadows the cockpit
       if (view.driverEye) camera.layers.disable(DRIVER_HEAD_LAYER);
@@ -2223,21 +2223,21 @@ export class DriveSession {
       seatContactShadow(carRig.root, physics.tyreVisuals ? playerWheels : undefined);
       podium.drawPlayer(carRig, physics.telemetry, physics.groundQuery ?? null, dtSeconds);
 
-      const vf26Body = carRig.getVf26Body();
+      const lc26Body = carRig.getLc26Body();
       // Built once per body (keyed on the body, not on the wheel display: a body without STEER_BASE has no display,
       // and keying on it rebuilt the mirrors' render target every frame)
-      if (vf26Body && vf26ExtrasFor !== vf26Body) {
-        vf26ExtrasFor = vf26Body;
-        const steerBase = vf26Body.getObjectByName("STEER_BASE");
+      if (lc26Body && lc26ExtrasFor !== lc26Body) {
+        lc26ExtrasFor = lc26Body;
+        const steerBase = lc26Body.getObjectByName("STEER_BASE");
         if (steerBase) wheelDisplay = new SteeringWheelDisplay(steerBase);
-        wingMirrors = new WingMirrors(renderer, scene, vf26Body);
+        wingMirrors = new WingMirrors(renderer, scene, lc26Body);
       }
-      if (!vf26Body && !portedDash && carById(carRigCar).modelUrl && portedProbeFrame++ % 30 === 0) {
+      if (!lc26Body && !portedDash && carById(carRigCar).modelUrl && portedProbeFrame++ % 30 === 0) {
         portedDash = PortedWheelDash.from(carRig.chassisGroup, revRangeFor(carById(carRigCar).physics));
       }
       // A ported body's anchors are set once its GLB has loaded; a body without the Evo's screen or mirror glass
       // gets an empty display and no mirrors, so it is probed once
-      if (!vf26Body && !gt3Dash && carById(carRigCar).modelUrl && cockpitProbeFrame++ % 30 === 0) {
+      if (!lc26Body && !gt3Dash && carById(carRigCar).modelUrl && cockpitProbeFrame++ % 30 === 0) {
         const anchors = carRig.getCameraAnchors();
         if (anchors) {
           gt3Dash = new Gt3DashDisplay(carRig.chassisGroup, revRangeFor(carById(carRigCar).physics));
@@ -2287,7 +2287,7 @@ export class DriveSession {
         car: physics,
         carPos: renderCarPos,
         carVelocity: carVelocityWorld,
-        anchor: onboardViews.resolve(vf26Cams, mode, carRigCar, settingsNow.cameraNudges),
+        anchor: onboardViews.resolve(lc26Cams, mode, carRigCar, settingsNow.cameraNudges),
         chassis: carRig.chassisGroup,
         onboardFovShift,
         headMovement: settingsNow.hud.headMovement,
@@ -2314,7 +2314,7 @@ export class DriveSession {
       audio?.setPaused(!driving);
       if (driving) {
         audio?.update(physics.telemetry, dtSeconds);
-        // Cues: DRS enabled (two-tone), flap open (chime; VF26: X-mode), shift point (150 rpm short of the limiter)
+        // Cues: DRS enabled (two-tone), flap open (chime; LC26: X-mode), shift point (150 rpm short of the limiter)
         const tc = physics.telemetry;
         const cues = settingsNow.hud;
         const drsAvail = Boolean(

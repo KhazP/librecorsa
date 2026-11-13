@@ -128,7 +128,7 @@ export interface TrackSamplePoint {
   kerbLeft: boolean;
   kerbRight: boolean;
   drsZone: boolean;
-  /** Lap-time line of the F1 cars (VF26, f12026-car), normalised: see `aiLineOffsetM` */
+  /** Lap-time line of the F1 cars (LC26, f12026-car), normalised: see `aiLineOffsetM` */
   racingLineOffset: number;
   /** The GT3's own lap-time line, same scale (the F1 line where a track has none) */
   racingLineOffsetGt3?: number;
@@ -324,7 +324,7 @@ export const axlePressures = (front: number, rear: number): WheelPressures => ({
 
 /** Driver-set tyre setup. Camber in degrees per axle, negative = top of the tyre leaning inward. */
 export interface TyreSetup {
-  /** Psi gauge per tyre at the model's cold reference: VF26 20 °C; F12026/GT3 compound blanket temperature. */
+  /** Psi gauge per tyre at the model's cold reference: LC26 20 °C; F12026/GT3 compound blanket temperature. */
   coldPressurePsi: WheelPressures;
   camberDeg: { front: number; rear: number };
 }
@@ -560,14 +560,14 @@ export type LiveTunerPatch = Partial<
 >;
 
 /**
- * Player car: the VF26 model (F1Physics2026), the 6-DOF f12026-car, or the Mercedes-AMG GT3, the Suzuki Liana and the
+ * Player car: the LC26 model (F1Physics2026), the 6-DOF f12026-car, or the Mercedes-AMG GT3, the Suzuki Liana and the
  * MTRacing 496R on the same vehicle model
  */
-export type VehicleModelId = "vf26" | "f12026-car" | "amg-gt3" | "liana" | "mtr-496r";
+export type VehicleModelId = "lc26" | "f12026-car" | "amg-gt3" | "liana" | "mtr-496r";
 
 /** Typed as a Record over VehicleModelId so adding a car fails to compile until it is listed here */
 const VEHICLE_MODEL_ID_SET: Record<VehicleModelId, true> = {
-  vf26: true,
+  lc26: true,
   "f12026-car": true,
   "amg-gt3": true,
   liana: true,
@@ -576,6 +576,14 @@ const VEHICLE_MODEL_ID_SET: Record<VehicleModelId, true> = {
 
 /** Every vehicle model id, for validating ids from storage and the network */
 export const VEHICLE_MODEL_IDS = Object.keys(VEHICLE_MODEL_ID_SET) as readonly VehicleModelId[];
+
+/**
+ * A vehicle model id from a file, a save or the network, followed to the model's present id: the 2026 Prototype's
+ * was renamed, and ghost files and older clients still carry the old one
+ */
+export function foldVehicleModelId(value: unknown): unknown {
+  return value === "vf26" ? "lc26" : value; // keep-old-id
+}
 
 export function isVehicleModelId(value: unknown): value is VehicleModelId {
   return typeof value === "string" && Object.prototype.hasOwnProperty.call(VEHICLE_MODEL_ID_SET, value);

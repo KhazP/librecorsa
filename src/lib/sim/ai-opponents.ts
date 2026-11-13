@@ -1,9 +1,9 @@
 /**
- * AI opponents: full-physics VF26 cars driven by the racing-line AI, with a standing start behind
+ * AI opponents: full-physics LC26 cars driven by the racing-line AI, with a standing start behind
  * the five start lights, traffic awareness (follow or pass on the free side, give room alongside),
  * simple car-to-car contact and live race standings.
  *
- * The player's car (the VF26 or the f12026-car) is passed in so that it takes part in the start
+ * The player's car (the LC26 or the f12026-car) is passed in so that it takes part in the start
  * procedure, contact and order; it is stepped by the caller (the field only steps its AI cars).
  */
 import { steerAngleOf, wheelRpmOf } from './car-pose';
@@ -12,7 +12,7 @@ import { F1Physics2026 } from '@/lib/f1-physics-2026';
 import { DEFAULT_TRACK_ID, getActiveTrackMetadata, type AiPlanCheck, type BuiltTrackData } from '@/lib/track-data';
 import { resolveCarToCarObbCollision, type RigidBodyCollisionCar } from '@/lib/sim/track-evolution';
 import { TrackEnvironment } from '@/lib/sim/track-environment';
-import { aiLineOffsetM, computeSpeedProfile, createVf26ProfileCarModel, withPlanningGrip } from '@/lib/sim/speed-profile';
+import { aiLineOffsetM, computeSpeedProfile, createLc26ProfileCarModel, withPlanningGrip } from '@/lib/sim/speed-profile';
 import { RacingLineDriver } from '@/lib/sim/ai-mpc';
 import {
   AI_SKILL_DEFAULT,
@@ -271,7 +271,7 @@ interface AiDriveHooks {
   refresh?(): boolean;
 }
 
-const vf26Bases = new WeakMap<BuiltTrackData, Map<string, { base: Float64Array; env: Float32Array }>>();
+const lc26Bases = new WeakMap<BuiltTrackData, Map<string, { base: Float64Array; env: Float32Array }>>();
 
 function driveHooksFor(sim: SimulatorCar, track: BuiltTrackData): AiDriveHooks | null {
   const L = track.totalLengthM;
@@ -284,19 +284,19 @@ function driveHooksFor(sim: SimulatorCar, track: BuiltTrackData): AiDriveHooks |
       setSteerGain: (g) => (sim.aiSteerGain = g),
     };
   }
-  // The VF26 drives on a RacingLineDriver over the profile it builds from this planning model; f1-physics-2026.ts has
+  // The LC26 drives on a RacingLineDriver over the profile it builds from this planning model; f1-physics-2026.ts has
   // no tuning setters of its own, so the tuning goes straight to its driver
   const driver = (sim as unknown as { aiDriver?: unknown }).aiDriver;
   if (driver instanceof RacingLineDriver) {
-    let perTrack = vf26Bases.get(track);
-    if (!perTrack) vf26Bases.set(track, (perTrack = new Map()));
+    let perTrack = lc26Bases.get(track);
+    if (!perTrack) lc26Bases.set(track, (perTrack = new Map()));
     const cache = perTrack;
     // The limit profile on the tyres' grip on this road (the dry one unless it rains)
     const entryFor = (grip: number) => {
       const key = `${sim.aeroPreset}@${grip}`;
       let entry = cache.get(key);
       if (!entry) {
-        const base = computeSpeedProfile(track.samples, withPlanningGrip(createVf26ProfileCarModel(sim.aeroPreset), grip)).speedMs;
+        const base = computeSpeedProfile(track.samples, withPlanningGrip(createLc26ProfileCarModel(sim.aeroPreset), grip)).speedMs;
         entry = { base, env: decelEnvelope(base, L) };
         cache.set(key, entry);
       }
@@ -392,7 +392,7 @@ interface FieldCar {
   wasOff: boolean;
   lastWallMs: number;
   prevVx: number;
-  /** Decelerating like a wall hit last frame (the VF26's impacts are counted from this) */
+  /** Decelerating like a wall hit last frame (the LC26's impacts are counted from this) */
   inWallHit: boolean;
   /** Touched another car this frame */
   contact: boolean;
@@ -837,7 +837,7 @@ export class AiOpponentField {
       },
       hooks.env
     );
-    if (car.ai?.vehicleId === 'vf26' && car.ai.aiPlan) return;
+    if (car.ai?.vehicleId === 'lc26' && car.ai.aiPlan) return;
     hooks.setTarget(target);
   }
 
@@ -871,7 +871,7 @@ export class AiOpponentField {
     const damaged = car.damage.pristine ? 1 : 1 - 0.35 * car.damage.overall;
     // The fastest levels plan toward the most grip this car drove cleanly here (the circuit's line check), one step
     // (0.04) under it: the check is a flying lap alone, and a race adds traffic, dirty air and a pack on lap 1 (at
-    // the full step the VF26 hit Okayama's barriers four times as often)
+    // the full step the LC26 hit Okayama's barriers four times as often)
     const checked = (getActiveTrackMetadata().aiPlans?.[sim.vehicleId ?? ''] as AiPlanCheck | undefined)?.maxGrip;
     const ceiling = Math.max(PLAN_GRIP, (checked ?? PLAN_GRIP) - RACE_GRIP_MARGIN);
     const planGrip = PLAN_GRIP + (ceiling - PLAN_GRIP) * this.mods.gripReach;
@@ -888,8 +888,8 @@ export class AiOpponentField {
     }
     sim.aiPlan = makeDrivePlan(t, line, carLimitsFor(sim.vehicleId, grip));
     car.planGrip = grip;
-    // The VF26's driver takes a tuning target in place of its profile's speeds: with a plan, the plan's speeds rule
-    if (sim.vehicleId === 'vf26') car.hooks?.setTarget(null);
+    // The LC26's driver takes a tuning target in place of its profile's speeds: with a plan, the plan's speeds rule
+    if (sim.vehicleId === 'lc26') car.hooks?.setTarget(null);
   }
 
   public attachTrackRoot(root: THREE.Object3D): void {
@@ -1267,7 +1267,7 @@ export class AiOpponentField {
     const off = t.offTrack;
     if (off && !car.wasOff) car.stats.offTracks++;
     car.wasOff = off;
-    // A wall hit: the rigid-body cars report their impacts; on the VF26 it is a deceleration no brake can give
+    // A wall hit: the rigid-body cars report their impacts; on the LC26 it is a deceleration no brake can give
     const wall = t.f12026?.wallImpact;
     if (t.f12026) {
       if (wall && wall.atMs !== car.lastWallMs && wall.speedMs > 2) car.stats.wallHits++;

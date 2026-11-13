@@ -7,7 +7,7 @@ import {
   TurnMetadata,
 } from "@/types/f1";
 import rawTrackJson from "../../public/tracks/rwanda_official_short/track_data.json";
-import { AI_LINE_WIDTH_SCALE, brakingZoneLevel, computeSpeedProfile, createVf26ProfileCarModel } from "./sim/speed-profile";
+import { AI_LINE_WIDTH_SCALE, brakingZoneLevel, computeSpeedProfile, createLc26ProfileCarModel } from "./sim/speed-profile";
 import { resolveSurfaceTable, type SurfaceTable, type SurfaceTableOverrides } from "./sim/track-surfaces";
 import type { SceneryCutBox } from "./scenery-cuts";
 import type { LapStretches } from "./sim/course-limits";
@@ -718,8 +718,8 @@ export function getActiveTrackData(numSamples = 1200): BuiltTrackData {
     });
   }
 
-  // Target speeds along the AI line from the VF26 vehicle model (balanced aero package)
-  const nominalProfile = computeSpeedProfile(samples, createVf26ProfileCarModel('balanced'));
+  // Target speeds along the AI line from the LC26 vehicle model (balanced aero package)
+  const nominalProfile = computeSpeedProfile(samples, createLc26ProfileCarModel('balanced'));
   for (let i = 0; i < NUM_SAMPLES; i++) {
     samples[i].optimalSpeedKmh = nominalProfile.speedMs[i] * 3.6;
     samples[i].brakeLimitKmh = nominalProfile.brakeEnvelopeMs[i] * 3.6;
