@@ -42,15 +42,17 @@ function shadowTexture(): THREE.CanvasTexture | null {
   return texture;
 }
 
-const geometries = new Map<"f1" | "gt3" | "road" | "proto", THREE.PlaneGeometry>();
+type ShadowKind = "f1" | "gt3" | "road" | "proto" | "classic";
+const geometries = new Map<ShadowKind, THREE.PlaneGeometry>();
 let material: THREE.MeshBasicMaterial | null = null;
 
 /** Footprint (length, width in m) of each car model, a little larger than its floor */
-const FOOTPRINT: Record<"f1" | "gt3" | "road" | "proto", [number, number]> = {
+const FOOTPRINT: Record<ShadowKind, [number, number]> = {
   f1: [6.4, 2.6],
   gt3: [5.6, 2.7],
   road: [5.1, 2.5],
   proto: [5.4, 2.4],
+  classic: [5.3, 2.5],
 };
 
 /** The shadow sits this far above the road under the car (m), clear of its z-fighting */
@@ -63,7 +65,16 @@ const LIFT_M = 0.012;
 export function addContactShadow(root: THREE.Object3D, vehicle: VehicleModelId | undefined): THREE.Mesh | null {
   const map = shadowTexture();
   if (!map) return null;
-  const kind = vehicle === "amg-gt3" ? "gt3" : vehicle === "liana" ? "road" : vehicle === "mtr-496r" ? "proto" : "f1";
+  const kind: ShadowKind =
+    vehicle === "amg-gt3"
+      ? "gt3"
+      : vehicle === "liana"
+        ? "road"
+        : vehicle === "mtr-496r"
+          ? "proto"
+          : vehicle === "nissan-r33-jgtc" || vehicle === "nissan-r32-jtcc"
+            ? "classic"
+            : "f1";
   // One quad per car model and one material for all of them, rather than a fresh pair per rig
   let geometry = geometries.get(kind);
   if (!geometry) {

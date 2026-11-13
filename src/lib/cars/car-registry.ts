@@ -3,6 +3,9 @@ import { BMW_M4_GT3_SOUND, F1_2026_SOUND, type CarSoundSource } from "@/lib/sim/
 import { AMG_GT3_SOUND } from "@/lib/sim/gt3/AmgGt3Sim";
 import { SUZUKI_LIANA_SOUND } from "@/lib/sim/road/SuzukiLianaSim";
 import { MTR_496R_SOUND } from "@/lib/sim/proto/Mtr496rSim";
+import { NISSAN_R33_SOUND } from "@/lib/sim/classic/NissanR33Sim";
+import { NISSAN_R32_SOUND } from "@/lib/sim/classic/NissanR32Sim";
+import { NISSAN_R32_SKINS, NISSAN_R33_SKINS } from "./classic-skins";
 import { overtakingRulesForSeason, type OvertakingRules } from "@/lib/sim/overtaking-rules";
 import { carListed, REPO_CAR_IDS } from "@/lib/hosted-content";
 
@@ -18,13 +21,15 @@ export type CarId =
   | "amg-gt3"
   | "bmw-m4-gt3"
   | "mtr-496r"
-  | "liana";
+  | "liana"
+  | "nissan-r33-jgtc"
+  | "nissan-r32-jtcc";
 
 /**
  * The kinds of car, one menu category each; a car's year groups it within its class. Class ids live only in code
  * and the menus' state (saved choices are `CarId`s, an online room's rule is `CarClassRule`), so they can be renamed.
  */
-export type CarClassId = "f1" | "gt3" | "proto" | "road";
+export type CarClassId = "f1" | "gt3" | "proto" | "classic" | "road";
 
 export interface CarClass {
   id: CarClassId;
@@ -36,7 +41,7 @@ export interface CarClass {
 /**
  * Whether a car's physics belong to the car you see, the car-side counterpart of a circuit's `CircuitQuality`:
  * - "own": its vehicle model was built for this car (the F1 2026 Prototype, the Mercedes-AMG GT3 Evo,
- *   the MTRacing 496R, the Suzuki Liana)
+ *   the MTRacing 496R, the Suzuki Liana, the classic Nissans)
  * - "shared": a ported body on another car's model of the same class and era (the BMW)
  * - "era": a ported body from an earlier season on the 2026 model
  * The F1 physics switch doesn't change it: a ported F1 car borrows its physics under either model.
@@ -88,6 +93,8 @@ export const PHYSICS_CHECK: Record<VehicleModelId, string> = {
   "f12026-car": "Its physics are checked against the range a 2026 open-wheeler should fall in.",
   liana: "Its physics come from an Assetto Corsa mod of this car and are checked against its laps of Dunsfold there.",
   "mtr-496r": "Its physics come from the Assetto Corsa mod this car was made for.",
+  "nissan-r33-jgtc": "Its physics come from the Assetto Corsa mod this car was made for.",
+  "nissan-r32-jtcc": "Its physics come from the Assetto Corsa mod this car was made for.",
 };
 
 /** Who made a car's 3D body (CREDITS.md has the full notes) */
@@ -113,6 +120,11 @@ export interface CarSkin {
   name: string;
   /** Its two main colours, for the picker */
   swatch: readonly [string, string];
+  /**
+   * The livery files it has, when it changes only some of what a livery can (the classic Nissans' skins): the rest stay
+   * as the model was made. Absent: every file the model's `skinMaps` name
+   */
+  files?: readonly string[];
 }
 
 const CC_BY = { license: "CC BY 4.0", licenseUrl: "https://creativecommons.org/licenses/by/4.0/" } as const;
@@ -126,6 +138,15 @@ const QVIST_F1_2026: CarCredit = {
   note: "Steering wheel from DeX's AM26 (CC BY 4.0)",
   ...CC_BY,
 };
+
+/** gregsediting's (Greg_ST's) Assetto Corsa cars, model, physics and sound, used with his permission, credited as he asked (CREDITS.md) */
+const gregSt = (title: string, url: string): CarCredit => ({
+  title,
+  author: "gregsediting",
+  url: "https://www.patreon.com/gregsediting",
+  license: "Used with the author's permission",
+  licenseUrl: url,
+});
 
 /** The 496R's 20 skins, the GLB's own MTR Green first [scripts/cars/port_ac_car.py --skins-out skins.json] */
 const MTR_496R_SKINS: readonly CarSkin[] = [
@@ -184,6 +205,7 @@ export const CAR_CLASSES: readonly CarClass[] = [
   { id: "f1", title: "Formula Open-Wheel", sub: "Single-seaters · DRS / active aero", color: "#CCFF00" },
   { id: "gt3", title: "GT3", sub: "Closed-wheel · ABS / TC", color: "#00E5FF" },
   { id: "proto", title: "Prototypes", sub: "Closed-wheel · high downforce · TC", color: "#B388FF" },
+  { id: "classic", title: "Classic GT & Touring", sub: "1990s JGTC and Group A · turbo", color: "#FFD23F" },
   { id: "road", title: "Road cars", sub: "Road-legal · street tyres", color: "#FF8A3D" },
 ];
 
@@ -292,6 +314,34 @@ const ALL_CARS: readonly CarDefinition[] = [
     year: 2002,
     modelUrl: "/cars/liana/model/liana.glb",
     sound: SUZUKI_LIANA_SOUND,
+  },
+  {
+    id: "nissan-r33-jgtc",
+    classId: "classic",
+    title: "Nissan Skyline GT-R R33 JGTC",
+    sub: "1998 GT500 · twin-turbo six · rear-wheel drive",
+    badge: "R33 GT500",
+    quality: "own",
+    credit: gregSt("Nissan Skyline BCNR33 JGTC 1998", "https://www.gtplanet.net/forum/downloads/nissan-skyline-bcnr33-jgtc-1998.7199/"),
+    physics: "nissan-r33-jgtc",
+    year: 1998,
+    modelUrl: "/cars/nissan-r33-jgtc/model/nissan-r33-jgtc.glb",
+    skins: NISSAN_R33_SKINS,
+    sound: NISSAN_R33_SOUND,
+  },
+  {
+    id: "nissan-r32-jtcc",
+    classId: "classic",
+    title: "Nissan Skyline GT-R R32 JTCC",
+    sub: "1993 Group A · twin-turbo six · four-wheel drive",
+    badge: "R32 GR.A",
+    quality: "own",
+    credit: gregSt("Nissan R32 JTCC (Base 5)", "https://www.gtplanet.net/forum/downloads/nissan-r32-jtcc-base-5.6522/"),
+    physics: "nissan-r32-jtcc",
+    year: 1993,
+    modelUrl: "/cars/nissan-r32-jtcc/model/nissan-r32-jtcc.glb",
+    skins: NISSAN_R32_SKINS,
+    sound: NISSAN_R32_SOUND,
   },
 ];
 

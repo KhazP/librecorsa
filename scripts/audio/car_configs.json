@@ -246,5 +246,121 @@
     },
     "lift": { "popMinRpm": 6000, "crackleMinRpm": 6500, "downshiftPopChance": 0.65 },
     "limiterRetriggerS": 0.85
+  },
+  "nissan-r33-jgtc": {
+    "outDir": "public/cars/nissan-r33-jgtc/audio",
+    "limiterRpm": 7000,
+    "sourceDescription": "Nissan Skyline GT-R BCNR33 JGTC for Assetto Corsa by Greg_ST - content/cars/nissan_skyline_bcnr33_jgtc/sfx/nissan_skyline_bcnr33_jgtc.bank",
+    "intBank": "librecorsa-src/nissan_skyline_bcnr33_jgtc_src/content/cars/nissan_skyline_bcnr33_jgtc/sfx/nissan_skyline_bcnr33_jgtc.bank",
+    "rawPcm16": true,
+    "resampleRange": [0.4, 1.65],
+    "engine": {
+      "int": {
+        "on": [
+          { "rpm": 1200, "sample": "avr_500_idle_interior_1_extra_layers_motor_front_WIDE_lessVerb123123#13" },
+          { "rpm": 3200, "rootRpm": 8000, "sample": "avr_500_upshift_interior_extra_layers_noShift#8" }
+        ],
+        "off": [
+          { "rpm": 1200, "sample": "avr_500_idle_interior_1_extra_layers_motor_front_WIDE_lessVerb123123#13" },
+          { "rpm": 3200, "rootRpm": 8000, "sample": "avr_500_downshift_interior_extra_layers_noShift1#11" }
+        ]
+      },
+      "ext": {
+        "on": [
+          { "rpm": 1200, "sample": "avr_500_idle_exterior_1_extra_layers_12312313#7" },
+          { "rpm": 3200, "rootRpm": 7500, "sample": "avr_500_upshift_exterior_extra_layers_NEW_punch_noShift1#10" }
+        ],
+        "off": [
+          { "rpm": 1200, "sample": "avr_500_idle_exterior_1_extra_layers_12312313#7" },
+          { "rpm": 3200, "rootRpm": 7500, "sample": "avr_500_downshift_exterior_1_extra_layers_NEWPunch_NoShift1#3" }
+        ]
+      }
+    },
+    "turbo": [
+      { "layer": "on", "boost": 1.0, "sample": "turbo#46" },
+      { "layer": "off", "boost": 1.0, "sample": "turbo#46" }
+    ],
+    "transmission": [
+      { "layer": "on", "drivetrainSpeed": 172, "sample": "trans on#2", "rms": 0.05 },
+      { "layer": "off", "drivetrainSpeed": 172, "sample": "trans on#2", "rms": 0.035 }
+    ],
+    "skid": { "int": "Skid#24", "ext": "skid_ext_mono#20" },
+    "tractionControl": "traction_control#39",
+    "oneshots": {
+      "backfire_int": ["backfire#21", "backfire1#32", "backfire2#40", "backfire3#23"],
+      "backfire_ext": ["backfirePop_01#44", "backfirePop_03#43", "backfirePop_05#30", "backfirePop_07#45", "backfirePop_09#31", "backfirePop_11#19", "backfirePop_13#47", "backfirePop_15#29", "backfirePop_18#16"]
+    },
+    "shiftFallbackSample": "backfire#21",
+    "limiterRootRpm": 8000,
+    "throttleCurve": {
+      "ext": [[0.0, 0.0], [0.2, 0.04], [0.3, 0.21], [0.4, 0.66], [0.47, 0.88], [0.6, 0.96], [0.85, 1.0], [1.0, 1.0]],
+      "int": [[0.0, 0.0], [0.2, 0.02], [0.3, 0.06], [0.4, 0.19], [0.47, 0.4], [0.5, 0.52], [0.6, 0.82], [0.7, 0.95], [0.8, 0.98], [0.9, 0.99], [1.0, 1.0]]
+    },
+    "lift": { "popMinRpm": 5500, "crackleMinRpm": 6000, "downshiftPopChance": 0.5 },
+    "limiterRetriggerS": 0.85
+  },
+  "nissan-r32-jtcc": {
+    "outDir": "public/cars/nissan-r32-jtcc/audio",
+    "limiterRpm": 8000,
+    "sourceDescription": "Nissan Skyline GT-R R32 JTCC for Assetto Corsa by Greg_ST - content/cars/nissan_r32_jtcc/sfx/nissan_r32_jtcc.bank",
+    "intBank": "librecorsa-src/nissan_r32_jtcc_src/content/cars/nissan_r32_jtcc/sfx/nissan_r32_jtcc.bank",
+    "rawPcm16": true,
+    "resampleRange": [0.58, 1.9],
+    "engine": {
+      "int": {
+        "on": [
+          { "rpm": 2100, "rootRpm": 2000, "sample": "r32_int_off_low#5" },
+          { "rpm": 3100, "rootRpm": 2300, "sample": "r32_int_on_2300#36" },
+          { "rpm": 5200, "rootRpm": 5700, "sample": "r32_int_on_mid#38" },
+          { "rpm": 8000, "rootRpm": 6500, "sample": "r32_int_on_high#46" }
+        ],
+        "off": [
+          { "rpm": 2100, "rootRpm": 2000, "sample": "r32_int_off_low#5" },
+          { "rpm": 4600, "rootRpm": 5200, "sample": "r32_int_off_mid#17" },
+          { "rpm": 5700, "rootRpm": 6000, "sample": "r32_int_off_midhigh#27" },
+          { "rpm": 8000, "rootRpm": 7000, "sample": "r32_int_off_high#47" }
+        ]
+      },
+      "ext": {
+        "on": [
+          { "rpm": 2100, "rootRpm": 2200, "sample": "r32_ext_rear_idle#43" },
+          { "rpm": 3100, "rootRpm": 2200, "sample": "r32_ext_front_on_low#23" },
+          { "rpm": 4700, "rootRpm": 3900, "sample": "r32_ext_rear_on_mid#3" },
+          { "rpm": 8000, "rootRpm": 5600, "sample": "r32_ext_rear_on_high#31" }
+        ],
+        "off": [
+          { "rpm": 2100, "rootRpm": 2200, "sample": "r32_ext_rear_idle#43" },
+          { "rpm": 3000, "rootRpm": 3000, "sample": "r32_ext_rear_off_low#21" },
+          { "rpm": 4700, "rootRpm": 3700, "sample": "r32_ext_rear_off_mid#14" },
+          { "rpm": 8000, "rootRpm": 4300, "sample": "r32_ext_rear_off_high#18" }
+        ]
+      }
+    },
+    "turbo": [
+      { "layer": "on", "boost": 0.34, "sample": "962c_turbo#34" },
+      { "layer": "on", "boost": 0.25, "sample": "962c_turbo_low2#22" },
+      { "layer": "off", "boost": 0.34, "sample": "962c_turbo#34" },
+      { "layer": "off", "boost": 0.25, "sample": "962c_turbo_low2#22" }
+    ],
+    "transmission": [
+      { "layer": "on", "drivetrainSpeed": 175, "pitchRatio": 0.5833, "sample": "tranny_p_max mono#0", "rms": 0.05 },
+      { "layer": "off", "drivetrainSpeed": 175, "pitchRatio": 0.5833, "sample": "tranny_p_max mono#0", "rms": 0.035 }
+    ],
+    "skid": { "int": "Skid#11", "ext": "skid_ext_mono#7" },
+    "tractionControl": "traction_control#37",
+    "oneshots": {
+      "gear_up": ["r32_int_gear_shift#40", "gearupEXT#49"],
+      "gear_down": ["r32_int_gear_shift#40", "geardnEXT#42"],
+      "backfire_int": ["500_backfire3#10", "500_backfire4#44", "500_backfire5#19", "500_backfire7#12"],
+      "backfire_ext": ["backfireEXT_1#24", "backfireEXT_2#45", "backfireEXT_3#30", "backfireEXT_4#41", "backfireEXT_5#29", "backfireEXT_6#39", "backfireEXT_7#26", "backfireEXT_9#16"]
+    },
+    "shiftFallbackSample": "backfireEXT_2#45",
+    "limiterFallbackSample": "r32_int_on_limit#28",
+    "throttleCurve": {
+      "ext": [[0.0, 0.0], [0.2, 0.04], [0.3, 0.21], [0.4, 0.66], [0.47, 0.88], [0.6, 0.96], [0.85, 1.0], [1.0, 1.0]],
+      "int": [[0.0, 0.0], [0.2, 0.02], [0.3, 0.07], [0.4, 0.22], [0.47, 0.45], [0.5, 0.57], [0.6, 0.85], [0.7, 0.95], [0.8, 0.99], [1.0, 1.0]]
+    },
+    "lift": { "popMinRpm": 5500, "crackleMinRpm": 6000, "downshiftPopChance": 0.5 },
+    "limiterRetriggerS": 0.85
   }
 }

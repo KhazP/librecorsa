@@ -17,6 +17,8 @@ import {
 import { AMG_GT3_SOUND } from "../src/lib/sim/gt3/AmgGt3Sim";
 import { SUZUKI_LIANA_SOUND } from "../src/lib/sim/road/SuzukiLianaSim";
 import { MTR_496R_SOUND } from "../src/lib/sim/proto/Mtr496rSim";
+import { NISSAN_R33_SOUND } from "../src/lib/sim/classic/NissanR33Sim";
+import { NISSAN_R32_SOUND } from "../src/lib/sim/classic/NissanR32Sim";
 import type { Vf26AudioManifest } from "../src/lib/sim/vf26-audio";
 import { noteSkip, REPO_CAR_IDS } from "./lib/hosted-files";
 
@@ -36,6 +38,9 @@ const EXPECTED_SOUNDS: Record<CarId, { sound: CarSoundSource; maxIdleRpm: number
   "bmw-m4-gt3": { sound: BMW_M4_GT3_SOUND, maxIdleRpm: 1600 },
   liana: { sound: SUZUKI_LIANA_SOUND, maxIdleRpm: 1000 },
   "mtr-496r": { sound: MTR_496R_SOUND, maxIdleRpm: 2200 },
+  // [spec engine.ini MINIMUM]
+  "nissan-r33-jgtc": { sound: NISSAN_R33_SOUND, maxIdleRpm: 1400 },
+  "nissan-r32-jtcc": { sound: NISSAN_R32_SOUND, maxIdleRpm: 2200 },
 };
 
 const MAX_BANK_BYTES = Math.round(3.4 * 1024 * 1024);

@@ -114,6 +114,8 @@ const CHALLENGE_TYRES: Readonly<Record<VehicleModelId, { compound: TireCompound;
   "amg-gt3": { compound: "soft", label: "Soft tyres" },
   "mtr-496r": { compound: "soft", label: "Soft tyres" },
   liana: { compound: "soft", label: "Street tyres" },
+  "nissan-r33-jgtc": { compound: "soft", label: "Soft tyres" },
+  "nissan-r32-jtcc": { compound: "soft", label: "Soft tyres" },
 };
 
 /** The compound every lap of a challenge in this car is driven on */

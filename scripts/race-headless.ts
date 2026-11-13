@@ -2,7 +2,8 @@
  * Headless AI race for tuning: the full-physics AI field on a circuit, faster than real time and without rendering,
  * then a results table (laps, gaps, incidents, position changes) and what each car learnt.
  *
- *   npx tsx scripts/race-headless.ts [--track rwanda_official_short] [--car vf26|f12026-car|amg-gt3|liana|mtr-496r] [--laps 5] [--cars 5]
+ *   npx tsx scripts/race-headless.ts [--track rwanda_official_short] [--car vf26|f12026-car|amg-gt3|liana|mtr-496r|
+ *     nissan-r33-jgtc|nissan-r32-jtcc] [--laps 5] [--cars 5]
  *       [--skill 70] [--seed 1] [--no-learn] [--laps-table] [--sweep skill | learn | <param>=v1,v2,...]
  *       [--weather clear|overcast|light_rain|heavy_rain|drying|dynamic] [--vf26-engine rigid|classic]
  *   npm run race:headless -- --track suzuka --car amg-gt3 --sweep skill
@@ -27,7 +28,16 @@ import { TrackEnvironment } from '../src/lib/sim/track-environment';
 import { DEFAULT_SESSION_CONDITIONS, WEATHER_PRESETS, type WeatherPresetId } from '../src/lib/sim/weather';
 import { loadGlbGeometry } from './lib/glb-geometry';
 
-type CarKind = 'vf26' | 'f12026-car' | 'amg-gt3' | 'liana' | 'mtr-496r';
+const CAR_KINDS = [
+  'vf26',
+  'f12026-car',
+  'amg-gt3',
+  'liana',
+  'mtr-496r',
+  'nissan-r33-jgtc',
+  'nissan-r32-jtcc',
+] as const;
+type CarKind = (typeof CAR_KINDS)[number];
 
 const argv = process.argv.slice(2);
 const flag = (name: string) => argv.includes(`--${name}`);
@@ -53,7 +63,7 @@ if (!WEATHER_PRESETS.includes(weather)) {
   console.error(`unknown --weather ${weather}`);
   process.exit(2);
 }
-if (!['vf26', 'f12026-car', 'amg-gt3', 'liana', 'mtr-496r'].includes(carKind)) {
+if (!(CAR_KINDS as readonly string[]).includes(carKind)) {
   console.error(`unknown --car ${carKind}`);
   process.exit(2);
 }
@@ -71,6 +81,7 @@ function makeTemplate(): SimulatorCar {
   if (carKind === 'liana') return createSuzukiLianaSim(track, root);
   if (carKind === 'mtr-496r') return createMtr496rSim(track, root);
   if (carKind === 'f12026-car') return new F12026CarSim(track, root);
+  if (carKind !== 'vf26') return vehicleModelSpec(carKind).createSim(track, root);
   return vehicleModelSpec('vf26').createSim(track, root);
 }
 
@@ -229,7 +240,7 @@ function printSummary(runs: RaceRun[]): void {
 
 /** The tuning library with one class parameter replaced */
 function libraryWith(key: keyof AiTuningParams, value: number): AiTuningLibrary {
-  const classId = carKind === 'amg-gt3' || carKind === 'liana' || carKind === 'mtr-496r' ? 'gt3' : 'f1-2026';
+  const classId = carKind === 'vf26' || carKind === 'f12026-car' ? 'f1-2026' : 'gt3';
   const base = AI_TUNING_LIBRARY[classId] ?? {};
   return { ...AI_TUNING_LIBRARY, [classId]: { ...base, params: { ...base.params, [key]: value } } };
 }

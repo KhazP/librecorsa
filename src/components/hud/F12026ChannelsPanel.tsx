@@ -2,7 +2,7 @@
 
 import React from "react";
 import type { F12026Channels } from "@/types/f1";
-import { HUD_CYAN, HUD_PROTO, HUD_ROAD, HUD_GLASS, HUD_GREEN, HUD_LBL, HUD_RED, HUD_VOLT, HUD_WELL, HUD_YELLOW } from "./hud-format";
+import { CLASSIC_CAR_IDS, HUD_CLASSIC, HUD_CYAN, HUD_PROTO, HUD_ROAD, HUD_GLASS, HUD_GREEN, HUD_LBL, HUD_RED, HUD_VOLT, HUD_WELL, HUD_YELLOW } from "./hud-format";
 import type { AeroReadout } from "./aero-label";
 
 const WHEELS = ["LF", "RF", "LR", "RR"] as const;
@@ -49,7 +49,15 @@ export const F12026ChannelsPanel: React.FC<{
             className="h-[7px] w-[7px] rounded-full"
             style={{
               backgroundColor:
-                c.carId === "amg-gt3" ? HUD_CYAN : c.carId === "liana" ? HUD_ROAD : c.carId === "mtr-496r" ? HUD_PROTO : HUD_VOLT,
+                c.carId === "amg-gt3"
+                  ? HUD_CYAN
+                  : c.carId === "liana"
+                    ? HUD_ROAD
+                    : c.carId === "mtr-496r"
+                      ? HUD_PROTO
+                      : CLASSIC_CAR_IDS.has(c.carId)
+                        ? HUD_CLASSIC
+                        : HUD_VOLT,
             }}
           />
           <span className="lc-data text-[11px] tracking-[0.12em] text-[#F5F7FA]">
@@ -59,7 +67,9 @@ export const F12026ChannelsPanel: React.FC<{
                 ? "ROAD CAR · CHANNELS"
                 : c.carId === "mtr-496r"
                   ? "PROTOTYPE · CHANNELS"
-                  : "FORMULA · CHANNELS"}
+                  : CLASSIC_CAR_IDS.has(c.carId)
+                    ? "CLASSIC · CHANNELS"
+                    : "FORMULA · CHANNELS"}
           </span>
         </div>
         <span className="lc-data rounded-full bg-[#1B1F2B] px-2 py-0.5 text-[9px] uppercase text-[#CCFF00]">

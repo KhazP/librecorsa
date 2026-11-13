@@ -560,10 +560,17 @@ export type LiveTunerPatch = Partial<
 >;
 
 /**
- * Player car: the VF26 model (F1Physics2026), the 6-DOF f12026-car, or the Mercedes-AMG GT3, the Suzuki Liana and the
- * MTRacing 496R on the same vehicle model
+ * Player car: the VF26 model (F1Physics2026), the 6-DOF f12026-car, or the Mercedes-AMG GT3, the Suzuki Liana, the
+ * MTRacing 496R and the three classic Nissans on the same vehicle model
  */
-export type VehicleModelId = "vf26" | "f12026-car" | "amg-gt3" | "liana" | "mtr-496r";
+export type VehicleModelId =
+  | "vf26"
+  | "f12026-car"
+  | "amg-gt3"
+  | "liana"
+  | "mtr-496r"
+  | "nissan-r33-jgtc"
+  | "nissan-r32-jtcc";
 
 /** Typed as a Record over VehicleModelId so adding a car fails to compile until it is listed here */
 const VEHICLE_MODEL_ID_SET: Record<VehicleModelId, true> = {
@@ -572,6 +579,8 @@ const VEHICLE_MODEL_ID_SET: Record<VehicleModelId, true> = {
   "amg-gt3": true,
   liana: true,
   "mtr-496r": true,
+  "nissan-r33-jgtc": true,
+  "nissan-r32-jtcc": true,
 };
 
 /** Every vehicle model id, for validating ids from storage and the network */
