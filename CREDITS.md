@@ -14,6 +14,8 @@ LibreCorsa is an independent, non-commercial, open-source web simulator built wi
   | F1 2026 model (Qvist Designs) and the AM26 steering wheel (DeX) | CC BY 4.0 |
   | Oracle Red Bull Racing livery pictures (`public/cars/f12026/liveries/oracle_red_bull/`) | Cut from an Assetto Corsa skin; the logos are their owners' trademarks; **not licensed** (see *Oracle Red Bull Racing livery*) |
   | Chang, Okayama, Spielberg (Red Bull Ring), Automotodrom Grobnik, Oschersleben and Monaco circuits | By **Mitja Bonca** (Used with permission) |
+  | Barbagallo Raceway and Virginia International Raceway circuits | By **dazzyb2k3** (Used with permission) |
+  | Sachsenring, Norisring and Circuit de la Sarthe (1982) circuits, and the Goodwood and Borgloh hill climbs | By **gunnar333** (Used with permission) |
   | Istanbul Park circuit (`public/tracks/istanbul_park/`) | Intercity İstanbul Park by **[Enver Bozkaya](https://www.enverbozkaya.com/) (SRTR)** (Used with the author's permission; the mod's other contributors are listed under *Istanbul Park*) |
   | 2026 Pirelli tyre sidewall texture (`public/cars/shared/tyres/`) and F1 rain-tyre temperature / wear curves | By **Cxjovich** ([https://www.overtake.gg/members/cxjovich.4261212/](https://www.overtake.gg/members/cxjovich.4261212/)), CC BY-NC-SA 4.0 (used with permission; non-commercial, share-alike) |
   | Mercedes-AMG GT3 Evo and BMW M4 GT3 Evo models | CC BY-NC-SA 4.0 (non-commercial, share-alike) |
@@ -87,6 +89,25 @@ Each circuit below is created by **Mitja Bonca** and used with the author's perm
 * `"Monaco"` ([https://www.overtake.gg/downloads/monaco.3340/](https://www.overtake.gg/downloads/monaco.3340/)) by **Mitja Bonca** (`monaco`) — Used with permission
 * `"Automotodrom Grobnik"` v2.71 ([https://www.overtake.gg/downloads/automotodrom-grobnik.4835/](https://www.overtake.gg/downloads/automotodrom-grobnik.4835/)) by **Mitja Bonca** (`grobnik`), used with permission. Its rocky ground (`ROCK`) drives as grass, its kerb stones (`CONCRET`) as kerbs, its road surfaces are picked by texture rather than by material name, and the Croatian corner names of `sections.ini` get back their diacritics
 * `"Oschersleben"` v1.06 ([https://www.overtake.gg/downloads/oschersleben.4549/](https://www.overtake.gg/downloads/oschersleben.4549/)) by **Mitja Bonca**, the Grand Prix layout (`oschersleben`), used with permission. Its own surface names are mapped: the rumble strips (`CUBE`) as kerb and the green paint past the kerbs (`CARPET`) as run-off. The mod has no `sections.ini`, so its 14 turns are numbered, not named
+
+#### Assetto Corsa circuits by dazzyb2k3 (`public/tracks/<id>/`)
+
+Each circuit below is created by **dazzyb2k3** ([https://www.overtake.gg/members/dazzyb2k3.10025/](https://www.overtake.gg/members/dazzyb2k3.10025/)) and used with the author's permission. Converted the same way as the Mitja Bonca circuits (`scripts/tracks/port_ac_track.py`).
+
+* `"Barbagallo Raceway"` v1.2 ([https://www.overtake.gg/downloads/barbagallo-raceway.4407/](https://www.overtake.gg/downloads/barbagallo-raceway.4407/)) by **dazzyb2k3** (`barbagallo`), used with permission. The rubbered line (`RACELINE`) drives as road, the motocross crossing (`MXTRACK`) and the out-of-bounds paving (`RESTRICTED`) as run-off
+* `"Virginia International Raceway"` v1.1 ([https://www.overtake.gg/downloads/virginia-international-raceway.11892/](https://www.overtake.gg/downloads/virginia-international-raceway.11892/)) by **dazzyb2k3**, used for the Full course (`vir`), North course (`vir_north`), South course (`vir_south`), Grand East course (`vir_grand_east`), Grand West course (`vir_grand_west`), and the Patriot course both ways (`vir_patriot`, `vir_patriot_reverse`), used with permission. The slip roads (`SLIP`) drive as run-off
+
+#### Assetto Corsa circuits and hill climbs by gunnar333 (`public/tracks/<id>/`)
+
+Each circuit and hill climb below is created by **gunnar333** ([https://www.overtake.gg/members/gunnar333.243674/](https://www.overtake.gg/members/gunnar333.243674/)) and used with the author's permission. Converted the same way as the Mitja Bonca circuits (`scripts/tracks/port_ac_track.py`).
+
+* `"Sachsenring 2022"` v1.25 ([https://www.overtake.gg/downloads/sachsenring-2022.41511/](https://www.overtake.gg/downloads/sachsenring-2022.41511/)) by **gunnar333**, the Grand Prix layout (`sachsenring`) and the short course (`sachsenring_short`), used with permission. The painted run-off (`PAINTED`) and the skid pad (`SKID`) drive as run-off, and the walls, bridge, stairs and kart hall stand as barriers
+* `"Norisring 2009"` v3.23 ([https://www.overtake.gg/downloads/norisring-2009.27646/](https://www.overtake.gg/downloads/norisring-2009.27646/)) by **gunnar333** (`norisring`), used with permission. The paved ground off the lap (`OUT`) drives as run-off
+* `"Le Mans 1982"` v1.03 ([https://www.overtake.gg/downloads/le-mans-1982.52192/](https://www.overtake.gg/downloads/le-mans-1982.52192/)) by **gunnar333**, the Circuit de la Sarthe as it was in 1982 (`le_mans_82`), used with permission. The carpet past the kerbs (`CARPET`) drives as run-off
+* `"Goodwood Festival of Speed 2017"` v1.13 ([https://www.overtake.gg/downloads/goodwood-festival-of-speed-2017.26839/](https://www.overtake.gg/downloads/goodwood-festival-of-speed-2017.26839/)) by **gunnar333**, the hill climb (`goodwood`), used with permission. Converted from its LQ layout, which does without Custom Shaders Patch's flow shader
+* `"Borgloh 2024"` v3.00 ([https://www.overtake.gg/downloads/borgloh-2024.18393/](https://www.overtake.gg/downloads/borgloh-2024.18393/)) by **gunnar333**, the Osnabrück hill climb (`borgloh`), used with permission
+
+The two hill climbs are driven from their start gate to their finish gate (`AC_AB_START`, `AC_AB_FINISH`), with their split gates (`AC_TIME_*`) as sector lines. Where the mod's AI lane stops at the finish, the road on past it is traced from the physical road mesh. A stretch with no road, kept well clear of the course, closes each one into the loop the game's track data needs.
 
 #### Istanbul Park (`public/tracks/istanbul_park/`)
 
