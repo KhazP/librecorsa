@@ -144,6 +144,14 @@ export interface EngineData {
   wetPedalMap?: boolean;
   /** Turbocharger; absent: naturally aspirated */
   turbo?: TurboData;
+  /**
+   * A regulated limit on the power the driven axle's shafts carry, engine and hybrid motor together, as the torque
+   * sensors on an LMDh car's driveshafts enforce it: `curve` is that power against engine speed (rpm → kW after the
+   * gearbox's losses), × `vsSpeedKmh` at the road speed where the limit moves with it (km/h → ×, a balance-of-performance
+   * table's speed bands). The engine gives way first: while the motor deploys, the combustion torque is trimmed until the
+   * sum sits on the limit, so deploying adds no power there. Absent: no limit
+   */
+  outputPowerCap?: { curve: LutPoints; vsSpeedKmh?: LutPoints };
   idleRpm: number;
   /** Crank + flywheel + MGU-K/H rotor inertia reflected to the crank (kg·m²) */
   inertia: number;

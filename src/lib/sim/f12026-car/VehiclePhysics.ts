@@ -1046,6 +1046,9 @@ export class VehiclePhysics {
     mgukHarvest: Lut;
     deployVsSpeed: Record<PerformanceModeName, Lut>;
     deployVsGear: Lut;
+    /** `EngineData.outputPowerCap`: the limit at the driven shafts (rpm → kW) and its change with road speed */
+    powerCap: Lut | null;
+    powerCapVsSpeed: Lut | null;
   };
   /** Roll / yaw tables of the ride-height aero map */
   private readonly mapLuts: { rollCl: Lut; rollCd: Lut; rollBalance: Lut; yawCl: Lut; yawCd: Lut; yawBalance: Lut } | null;
@@ -1203,6 +1206,8 @@ export class VehiclePhysics {
       mgukDeploy: new Lut(cfg.ers.torqueLut),
       mgukHarvest: new Lut(cfg.ers.coastLut),
       deployVsGear: new Lut(cfg.ers.deployVsGear ?? [[0, 1], [1, 1]]),
+      powerCap: cfg.engine.outputPowerCap ? new Lut(cfg.engine.outputPowerCap.curve) : null,
+      powerCapVsSpeed: cfg.engine.outputPowerCap?.vsSpeedKmh ? new Lut(cfg.engine.outputPowerCap.vsSpeedKmh) : null,
       deployVsSpeed: {
         PSH: new Lut(modes.PSH.deployVsSpeed),
         RAC: new Lut(modes.RAC.deployVsSpeed),
@@ -3055,6 +3060,17 @@ export class VehiclePhysics {
       tK = Math.max(tK, Math.min(fillCap * sparkShare, tK + turboDeficit));
     }
     if (this.limiterTimer > 0 && tK > 0) tK = 0;
+    // A regulated limit on the power at the driven shafts (`EngineData.outputPowerCap`), which carry the crank's torque
+    // less the gearbox's losses: the engine gives way to the motor's deployment, then the motor to the limit
+    const powerCap = this.luts.powerCap;
+    if (powerCap && tIce + tK > 0) {
+      const capW = powerCap.evaluate(rpm) * (this.luts.powerCapVsSpeed?.evaluate(speedKmh) ?? 1) * 1000;
+      const capNm = capW / (omegaE * gb.efficiency);
+      if (tIce + tK > capNm) {
+        tIce = Math.max(Math.min(tIce, 0), capNm - tK);
+        tK = Math.min(tK, capNm - tIce);
+      }
+    }
     this.mgukTorque = tK;
 
     // ---- brakes (physical brake pad μ(T))
