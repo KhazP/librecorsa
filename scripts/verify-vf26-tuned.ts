@@ -369,6 +369,26 @@ console.log('\n== A lift, in every gear');
   check('From 8 % throttle to 20 % brake in third at 120 km/h the car slows more at every step', decel.every((x, i) => i === 0 || x > decel[i - 1]), decel.map((x) => f(x)).join(' / '));
 }
 
+console.log('\n== Fuel on board');
+{
+  // At rest on flat ground, the springs set for the load: the front axle's share of the weight on the four tyres
+  const frontShare = (kg: number) => {
+    const sim = fresh(0);
+    sim.vehicle.setFuelMass(kg);
+    sim.vehicle.refreshStaticGeometry();
+    sim.teleportToDistance(2000, 0);
+    for (let t = 0; t < 4; t += H) sim.step(H, { brake: 1 });
+    const W = sim.vehicle.wheels;
+    return (100 * (W[0].fz + W[1].fz)) / (W[0].fz + W[1].fz + W[2].fz + W[3].fz);
+  };
+  const share = [0, 40, 110].map(frontShare);
+  check(
+    'A full tank takes 0.4 to 0.8 point off the front axle\'s share of the weight',
+    between(share[0] - share[2], 0.4, 0.8) && share[1] < share[0] && share[1] > share[2],
+    share.map((x, i) => `${f(x)} % with ${[0, 40, 110][i]} kg`).join(', ')
+  );
+}
+
 console.log('\n== Ride heights and downforce against speed');
 {
   const at = (kmh: number) => {

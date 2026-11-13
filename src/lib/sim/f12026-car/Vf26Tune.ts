@@ -183,6 +183,11 @@ export const VF26_TUNE: Vf26Overrides = {
   // back by more than the data's 900 Nm, which is 0.33 g under 125 km/h [ref: recovery on a lift in every gear, easing
   // off with the pedal; data: the axle's ceiling; tuned: lift-off deceleration at 60 to 280 km/h in each gear]
   ers: { liftThrottle: 0.05, liftHarvestEveryGear: { maxAxleTorqueNm: VF26_ERS.coastHarvestMaxAxleTorqueNm } },
+  // The fuel cell is behind the driver: 0.15 m behind the centre of gravity of the car without fuel and 0.2 m above
+  // it [ref]. With the fuel at that centre the weight split never moved with the load; from here a full 110 kg tank
+  // takes 0.6 point off the front axle's share (45.65 % empty, 45.42 % with 40 kg, 45.07 % full) and the car gets it
+  // back as the fuel burns [measured at rest on flat ground]
+  fuelTank: { y: 0.2, z: -0.15 },
 };
 
 export const VF26_TUNED_CONFIG = buildVf26Config(VF26_TUNE);

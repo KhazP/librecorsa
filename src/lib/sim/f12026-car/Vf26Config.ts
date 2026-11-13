@@ -66,6 +66,8 @@ export interface Vf26Overrides {
   torqueResponseS?: { rise: number; fall: number };
   /** Energy recovery values in place of the data's */
   ers?: Partial<ERSData>;
+  /** Where the fuel sits, from the centre of gravity of the car without fuel (m: y up, z forward); absent: at it */
+  fuelTank?: { y: number; z: number };
 }
 
 // ---------------------------------------------------------------------------
@@ -532,6 +534,7 @@ export function buildVf26Config(overrides: Vf26Overrides = {}) {
       inertia: { pitch: box(B.height, B.length), roll: box(B.width, B.height), yaw: box(B.width, B.length) },
       unsprungMassFront: F.unsprungMassKg,
       unsprungMassRear: R.unsprungMassKg,
+      ...(overrides.fuelTank ? { fuelTank: overrides.fuelTank } : {}),
       wheelInertiaFront: softFront.angularInertia,
       wheelInertiaRear: softRear.angularInertia,
       maxRoadWheelDeg: VF26_CHASSIS.steering.lockDeg / VF26_CHASSIS.steering.ratio,
