@@ -3,7 +3,7 @@ import { createGltfLoader } from "@/lib/render/gltf-loader";
 import { assetProgress } from "@/lib/loading/asset-progress";
 import { withBasePath } from "@/lib/base-path";
 import type { CarTelemetry, TireCompound } from "@/types/f1";
-import type { SimCarRig } from "@/lib/car-builder-2026";
+import type { PortedSkin, SimCarRig } from "@/lib/car-builder-2026";
 import type { Lc26ModelInstance } from "@/lib/lc26-car-model";
 import { installTyreDeformation, type TyreDeformationHandle } from "@/lib/render/tyre-deformation";
 import { cleanPortedCarMaterial, sharpenCarMaps } from "@/lib/render/ported-car-materials";
@@ -46,10 +46,10 @@ export interface PortedCarOptions {
   /** A 2018+ car: its tyres get the 2026 Pirelli sidewall, recoloured by the compound (the model's own otherwise) */
   pirelliSidewall?: boolean;
   /**
-   * A livery of the car's own to wear instead of the paint its GLB was made in: the folder of its files
-   * (`carSkinBaseUrl`), which replace the textures of the materials the GLB's `skinMaps` extras name
+   * A livery of the car's own to wear instead of the paint its GLB was made in: its files (`carSkinBaseUrl`) replace
+   * the textures of the materials the GLB's `skinMaps` extras name
    */
-  skinBaseUrl?: string | null;
+  skin?: PortedSkin | null;
 }
 
 /** A ported model's driver and nose in rig space, once loaded */
@@ -285,16 +285,18 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
   let compound: TireCompound = "medium";
   // The livery: this rig's copies of the materials it repaints (with their own textures), and the skin it wears
   const skinSlots: { mat: THREE.MeshStandardMaterial; file: string; own: THREE.Texture | null }[] = [];
-  let skinBase = options.skinBaseUrl ?? null;
+  let skin = options.skin ?? null;
   const applySkin = () => {
-    const base = skinBase;
+    const wearing = skin;
     for (const slot of skinSlots) {
-      if (!base) {
+      // No livery, or one that leaves this file as the model has it
+      if (!wearing || (wearing.files && !wearing.files.includes(slot.file))) {
         slot.mat.map = slot.own;
+        slot.mat.needsUpdate = true;
         continue;
       }
-      void loadSkinTexture(`${base}/${slot.file}`, slot.own).then((tex) => {
-        if (disposed || skinBase !== base || !tex) return;
+      void loadSkinTexture(`${wearing.baseUrl}/${slot.file}`, slot.own).then((tex) => {
+        if (disposed || skin !== wearing || !tex) return;
         slot.mat.map = tex;
         slot.mat.needsUpdate = true;
       });
@@ -375,11 +377,12 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
       steerRest.copy(steerNode.quaternion);
       if (extras.revLeds) steerNode.userData.revLeds = extras.revLeds;
     }
-    // The materials a livery repaints, copied for this car (the template's are every car's)
+    // The materials a livery repaints, copied for this car (the template's are every car's): the body's and the
+    // wheels' (a livery can recolour the rims)
     const skinMaps = extras.skinMaps;
     if (skinMaps) {
       const copies = new Map<THREE.Material, THREE.MeshStandardMaterial>();
-      bodyGroup.traverse((o) => {
+      const visit = (o: THREE.Object3D) => {
         const mesh = o as THREE.Mesh;
         if (!mesh.isMesh || Array.isArray(mesh.material)) return;
         const src = mesh.material as THREE.MeshStandardMaterial;
@@ -392,7 +395,9 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
           skinSlots.push({ mat: copy, file, own: src.map });
         }
         mesh.material = copy;
-      });
+      };
+      bodyGroup.traverse(visit);
+      for (const corner of corners) corner.spin.traverse(visit);
       applySkin();
     }
     placeholder.removeFromParent();
@@ -444,9 +449,9 @@ export function createPortedCarRig(options: PortedCarOptions): SimCarRig {
     // The model keeps its own paint (or wears a livery of its own, `setSkin`); a 2026 car's tyre sidewalls show the
     // compound
     setLivery: () => {},
-    setSkin: (baseUrl) => {
-      if (baseUrl === skinBase) return;
-      skinBase = baseUrl;
+    setSkin: (next) => {
+      if (next?.baseUrl === skin?.baseUrl) return;
+      skin = next;
       applySkin();
     },
     setTireCompound: (c) => {

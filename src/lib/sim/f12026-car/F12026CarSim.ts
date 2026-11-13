@@ -1172,7 +1172,13 @@ export class F12026CarSim implements SimulatorCar {
   /** The vehicle model whose setup limits, wing steps and fuel this car takes */
   private get setupCar(): Exclude<VehicleModelId, 'lc26'> {
     const id = this.profile.id;
-    return id === 'amg-gt3' || id === 'liana' || id === 'mtr-496r' ? id : 'f12026-car';
+    return id === 'amg-gt3' ||
+      id === 'liana' ||
+      id === 'mtr-496r' ||
+      id === 'nissan-r33-jgtc' ||
+      id === 'nissan-r32-jtcc'
+      ? id
+      : 'f12026-car';
   }
 
   /** The garage's starting fuel into the car, with the spring preloads set for that load */
@@ -1796,10 +1802,15 @@ export class F12026CarSim implements SimulatorCar {
       const slideTerm = slide ? slide.gain * Math.max(0, saDriven - slide.from) : 0;
       const latFactor = Math.max(tight.floor, 1 - tight.gain * Math.pow(gLat, tight.exponent) - slideTerm);
       const tcEffTarget = tcBaseTarget * latFactor;
-      // Weighted driven axle slip (default 0.65 * max(k_L, k_R) + 0.35 * mean(k_L, k_R))
-      const kL = Math.max(0, W[dl].slipRatio);
-      const kR = Math.max(0, W[dr].slipRatio);
-      const kDriven = ctl.tcSlipMaxWeight * Math.max(kL, kR) + ctl.tcSlipMeanWeight * (0.5 * (kL + kR));
+      // Weighted driven axle slip (default 0.65 * max(k_L, k_R) + 0.35 * mean(k_L, k_R)); on a four-wheel-drive car the
+      // axle that spins the more (the slide term above stays with the axle the engine drives directly)
+      const axleSlip = (l: number, r: number) => {
+        const kL = Math.max(0, W[l].slipRatio);
+        const kR = Math.max(0, W[r].slipRatio);
+        return ctl.tcSlipMaxWeight * Math.max(kL, kR) + ctl.tcSlipMeanWeight * (0.5 * (kL + kR));
+      };
+      let kDriven = axleSlip(dl, dr);
+      if (v.coupledWheels) kDriven = Math.max(kDriven, axleSlip(v.coupledWheels[0], v.coupledWheels[1]));
       const eTc = Math.max(0, kDriven - tcEffTarget);
       const tc2 = THREE.MathUtils.clamp(dials.tc2Level, 1, 12);
       const tc2Norm = (tc2 - 1) / 11;

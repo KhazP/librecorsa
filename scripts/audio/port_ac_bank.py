@@ -68,12 +68,18 @@ def load_fsbs_from_bank(bank_path: str | Path) -> tuple[list[tuple[fsb5.FSB5, An
 
 
 def decode_sample(
-    fsb: fsb5.FSB5, sample: Any, target_sr: int = RATE, ffmpeg: str = FFMPEG_DEFAULT
+    fsb: fsb5.FSB5, sample: Any, target_sr: int = RATE, ffmpeg: str = FFMPEG_DEFAULT, raw_pcm16: bool = False
 ) -> tuple[np.ndarray, int]:
-    """Decode a single FSB5 subsound (PCM16 WAV or rebuilt Ogg Vorbis) to float32 (frames, channels) at target_sr."""
-    rebuilt = bytes(fsb.rebuild_sample(sample))
+    """Decode a single FSB5 subsound (PCM16 WAV or rebuilt Ogg Vorbis) to float32 (frames, channels) at target_sr.
+
+    raw_pcm16 reads a PCM16 subsound's own bytes (frames x channels x 2) instead of fsb5's rebuilt WAV, whose data
+    chunk holds only frames x 2 bytes: half of a stereo sample (opt-in per car, `rawPcm16`)."""
     ch = int(sample.channels)
     sr = int(sample.frequency)
+    if raw_pcm16 and int(fsb.header.mode) == 2:  # FSB5 PCM16
+        rebuilt = b"data" + struct.pack("<I", int(sample.samples) * ch * 2) + bytes(sample.data)
+    else:
+        rebuilt = bytes(fsb.rebuild_sample(sample))
 
     if rebuilt[:4] == b"OggS":
         proc = subprocess.run(
@@ -239,15 +245,18 @@ def ensure_2d(x: np.ndarray) -> np.ndarray:
     return x
 
 
-def pitch_resample(x: np.ndarray, anchor_rpm: float, root_rpm: float) -> np.ndarray:
+def pitch_resample(
+    x: np.ndarray, anchor_rpm: float, root_rpm: float, ratio_range: tuple[float, float] = (0.58, 1.65)
+) -> np.ndarray:
     """
     Resample audio captured at root_rpm so that playing it at 1.0x corresponds to anchor_rpm.
     When LoopGrid plays at rate = rpm / anchor_rpm, the resulting pitch is rpm / root_rpm.
     """
     if root_rpm <= 0 or anchor_rpm <= 0 or abs(anchor_rpm - root_rpm) / root_rpm < 0.005:
         return x
-    # Clamp extreme pitch shifts during offline bake to [0.58, 1.65] so formants stay natural
-    ratio = float(np.clip(anchor_rpm / root_rpm, 0.58, 1.65))
+    # Clamp extreme pitch shifts during offline bake to [0.58, 1.65] so formants stay natural, unless the car's config
+    # widens it (`resampleRange`: a bank whose FMOD autopitch roots sit far from where it plays a recording)
+    ratio = float(np.clip(anchor_rpm / root_rpm, ratio_range[0], ratio_range[1]))
     new_len = max(64, int(round(len(x) / ratio)))
     old_idx = np.linspace(0.0, len(x) - 1, new_len, dtype=np.float64)
     i0 = np.floor(old_idx).astype(np.int64)
@@ -531,9 +540,10 @@ def derive_transmission_from_engine(mid_on_x: np.ndarray, is_on: bool = True) ->
 class LazyBank:
     """On-demand decoder for an FMOD .bank file's FSB5 subsounds across all embedded FSB5 containers."""
 
-    def __init__(self, bank_path: str | Path, ffmpeg: str = FFMPEG_DEFAULT) -> None:
+    def __init__(self, bank_path: str | Path, ffmpeg: str = FFMPEG_DEFAULT, raw_pcm16: bool = False) -> None:
         self.bank_path = Path(bank_path)
         self.ffmpeg = ffmpeg
+        self.raw_pcm16 = raw_pcm16
         self.items, _ = load_fsbs_from_bank(self.bank_path)
         self._cache: dict[int, np.ndarray] = {}
 
@@ -559,7 +569,7 @@ class LazyBank:
 
         if idx not in self._cache:
             fsb, s = self.items[idx]
-            arr, _ = decode_sample(fsb, s, RATE, self.ffmpeg)
+            arr, _ = decode_sample(fsb, s, RATE, self.ffmpeg, self.raw_pcm16)
             self._cache[idx] = arr
         return self.items[idx][1].name, self._cache[idx]
 
@@ -571,8 +581,9 @@ def port_car(car_id: str, cfg: dict[str, Any], ffmpeg: str, banks_root: Path = B
     int_bank_path = resolve_bank_path(cfg["intBank"], banks_root)
     ext_bank_path = resolve_bank_path(cfg.get("extBank", cfg["intBank"]), banks_root)
 
-    int_bank = LazyBank(int_bank_path, ffmpeg)
-    ext_bank = int_bank if ext_bank_path == int_bank_path else LazyBank(ext_bank_path, ffmpeg)
+    raw_pcm16 = bool(cfg.get("rawPcm16", False))
+    int_bank = LazyBank(int_bank_path, ffmpeg, raw_pcm16)
+    ext_bank = int_bank if ext_bank_path == int_bank_path else LazyBank(ext_bank_path, ffmpeg, raw_pcm16)
 
     manifest: dict[str, Any] = {
         "source": cfg["sourceDescription"],
@@ -591,6 +602,8 @@ def port_car(car_id: str, cfg: dict[str, Any], ffmpeg: str, banks_root: Path = B
 
     used_samples: set[str] = set()
     max_boundary_jump = 0.0
+    lo_hi = cfg.get("resampleRange", [0.58, 1.65])
+    resample_range = (float(lo_hi[0]), float(lo_hi[1]))
 
     # 1. Engine loops (ext and int, on and off)
     for view, bank in (("int", int_bank), ("ext", ext_bank)):
@@ -604,7 +617,7 @@ def port_car(car_id: str, cfg: dict[str, Any], ffmpeg: str, banks_root: Path = B
                 sname, raw_x = bank.get(spec)
                 used_samples.add(f"{view}:{sname}")
 
-                resampled = pitch_resample(raw_x, anchor_rpm, root_rpm)
+                resampled = pitch_resample(raw_x, anchor_rpm, root_rpm, resample_range)
                 loop = make_seamless_loop(resampled, LOOP_S, XFADE_S, RATE)
 
                 # Consistent RMS curve across RPM: rises smoothly from idle to limiter, unless the anchor sets its own
@@ -793,6 +806,9 @@ def port_car(car_id: str, cfg: dict[str, Any], ffmpeg: str, banks_root: Path = B
         lim_spec = cfg.get("limiterFallbackSample", high_on_spec)
         lim_name, lim_x = int_bank.get(lim_spec)
         used_samples.add(f"oneshot:{lim_name}")
+        if "limiterRootRpm" in cfg:
+            # The source's FMOD autopitch root: pitch it to the car's limiter like the engine loops around it
+            lim_x = pitch_resample(lim_x, float(cfg["limiterRpm"]), float(cfg["limiterRootRpm"]), resample_range)
         clip = derive_limiter_from_high_rpm(lim_x)
         fn = "oneshot_limiter.ogg"
         ch = encode_ogg(ffmpeg, clip, out_dir / fn, force_mono=True, quality=4)

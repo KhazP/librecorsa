@@ -67,7 +67,7 @@ node --max-old-space-size=12288 scripts/cars/port_qvist_f1.mjs path/to/f1_2026_c
 
 # Assetto Corsa Car Porter (`port_ac_car.py`)
 
-`scripts/cars/port_ac_car.py` converts an Assetto Corsa car (its main `.kn5` plus one skin) into the same `CAR` / `BODY` / `STEER` / `WHEEL_xx` layout. Each car has a preset in `PRESETS`: its material table, the nodes and materials it leaves out, the skin files that override the kn5's, how its tyre meshes and spinning parts are named, and its windscreen. There are two, the Suzuki Liana 1.6 (`liana`) and the MTRacing 496R (`mtr-496r`); the kn5 reader, the hierarchy split and the paint bake are generic AC.
+`scripts/cars/port_ac_car.py` converts an Assetto Corsa car (its main `.kn5` plus one skin) into the same `CAR` / `BODY` / `STEER` / `WHEEL_xx` layout. Each car has a preset in `PRESETS`: its material table, the nodes and materials it leaves out, the skin files that override the kn5's, how its tyre meshes and spinning parts are named, and its windscreen. The Suzuki Liana 1.6 (`liana`) and the MTRacing 496R (`mtr-496r`) have hand-written material tables; gregsediting's Nissans (`nissan-r33-jgtc`, `nissan-r32-jtcc`) are `auto` presets (below). The kn5 reader, the hierarchy split and the paint bake are generic AC.
 
 ```bash
 uv run --python 3.14 --no-project --with numpy --with pillow \
@@ -88,6 +88,40 @@ Flags: `--car <preset>` (default: by the car folder's name), `--skins-out <folde
 - **Wheel dash**: a preset's `steer_nodes` (the 496R's screen `GEO_LCD` and its `RPM_*` shift lights) stay nodes of their own under `STEER`; the screen's material becomes `INT_DISPLAY`, which the game draws its live display on, and the CAR node's `revLeds` extras give each light's rpm and colour from the car's `digital_instruments.ini` (`src/lib/render/ported-wheel-dash.ts`).
 - **Liveries**: the GLB's `skinMaps` extras name the materials a livery repaints and the file each takes from a skin's folder; the rig swaps them in for the livery a player picks (`CarDefinition.skins`).
 - **Cameras**: the cockpit eye from car.ini `DRIVEREYES` (read from `data/` or `data.acd`); dash, bumper and roof cameras placed from the geometry.
+
+## Automatic materials (`auto` presets)
+
+An `auto` preset names only its paint material(s), its tyre materials (`tyre_materials`: several kn5 materials on one
+tyre, such as a tread and a sidewall, become one primitive in the first's), what it leaves out and the textures a
+livery replaces (`skin_textures`); every other material comes from its AC shader values (`auto_spec`):
+
+- **Colour**: the diffuse map, or its flat colour; a multimap's detail baked over it as AC shades it (`bake:` on the same
+  UVs, `bakemean:` when the detail tiles finer), or the detail texture itself tinted by a flat diffuse (carbon weave). The
+  colour is dimmed by `ksDiffuse` against AC's usual ~0.4, since modders darken a grey map that way.
+- **Finish**: roughness from `ksSpecularEXP` (snapped to steps), metal when `fresnelC` is high, or `fresnelMaxLevel` is
+  high on a part named or textured as metal; BLEND / MASK from the material's blend flag and alpha-tested shaders.
+- **Names**: the GLB material is named by its class and a number (`paint_059`, `glass_069`, `metal_002`, `part_012`), so
+  the game's material clean-up (`src/lib/render/ported-car-materials.ts`) classes it right; its kn5 names are in its
+  extras. Kn5 materials that come out the same share one glTF material.
+- **Palettes**: flat-coloured opaque parts with no map share one material per class and finish, drawn from a small
+  palette texture (8 px cells, unfiltered) with each part's UVs on its colour's cell.
+- **Paint atlas**: another part drawn from the paint's own atlas (a banner, a weatherstrip) takes the paint's texture.
+
+With `--skins-out`, every skin folder becomes a livery (`export_auto_skins`): each colour map made from a `skin_textures`
+texture is a livery file, written only for the skins whose textures differ from the default skin's (the one the GLB is
+painted in), and `skins.json` lists each skin's `files`. `src/lib/cars/classic-skins.ts` copies those lists into the
+registry (`CarSkin.files`); the rig keeps the model's own texture for any file a skin doesn't list. Skin textures match
+the kn5's regardless of case, as AC does.
+
+```bash
+uv run --python 3.14 --no-project --with numpy --with pillow python -P scripts/cars/port_ac_car.py \
+  <...>/content/cars/nissan_r32_jtcc public/cars/nissan-r32-jtcc/model/nissan-r32-jtcc.glb \
+  --skins-out public/cars/nissan-r32-jtcc/skins
+# the R33's kn5 isn't named after its folder; its skins/ was merged with the mod's 1997skins.zip (23_pennzoil as
+# 23_pennzoil_97)
+uv run ... port_ac_car.py <...>/nissan_skyline_bcnr33_jgtc public/cars/nissan-r33-jgtc/model/nissan-r33-jgtc.glb \
+  --kn5 Nissan_r33_JGTC.kn5 --skins-out public/cars/nissan-r33-jgtc/skins
+```
 
 # Physics from a mod's data (`mod-physics-import.ts`, `verify-mod-parity.ts`)
 

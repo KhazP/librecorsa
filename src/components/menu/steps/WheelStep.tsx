@@ -195,6 +195,9 @@ const STEER_LOCK_CLASSES = [
   { label: "Formula cars", models: ["lc26", "f12026-car"] },
   { label: "GT3", models: ["amg-gt3"] },
   { label: "Prototypes", models: ["mtr-496r"] },
+  // The classic class's cars turn through different locks
+  { label: "JGTC GT500", models: ["nissan-r33-jgtc"] },
+  { label: "Group A touring", models: ["nissan-r32-jtcc"] },
   { label: "Road cars", models: ["liana"] },
 ] as const;
 
@@ -685,6 +688,7 @@ export const WheelStep: React.FC<SetupStepProps> = ({ settings, onChangeSettings
             <Hint>
               Match your wheel driver&apos;s rotation. Steering is 1:1 up to the car&apos;s lock ({CAR_WHEEL_LOCKS_DEG.lc26}°
               open-wheelers, {CAR_WHEEL_LOCKS_DEG["amg-gt3"]}° GT3, {CAR_WHEEL_LOCKS_DEG["mtr-496r"]}° prototypes,{" "}
+              {CAR_WHEEL_LOCKS_DEG["nissan-r33-jgtc"]}–{CAR_WHEEL_LOCKS_DEG["nissan-r32-jtcc"]}° classic racers,{" "}
               {CAR_WHEEL_LOCKS_DEG.liana}° road cars); a base with less rotation
               still reaches full lock.
             </Hint>

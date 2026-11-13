@@ -333,7 +333,8 @@ export class Lc26SoundBank {
     manifest.oneshots ??= [];
     this.manifest = manifest;
     const ctx = this.ctx;
-    // Engine loops pitch across 0.75x of the lowest anchor up to 1.35x of the highest anchor (covers idle to limiter)
+    // Engine loops pitch across 0.75x of the lowest anchor up to 1.35x of the highest anchor, and at least up to the
+    // car's limiter (`update`): a bank whose top anchor sits far below it still rises with the revs
     const rpms = [...manifest.engine.ext, ...manifest.engine.int].map((e) => e.rpm);
     this.rpmRange = [Math.min(...rpms) * 0.75, Math.max(...rpms) * 1.35];
 
@@ -537,12 +538,13 @@ export class Lc26SoundBank {
 
     // Audio RPM: a seamless upshift drops the revs in ~20 ms (a fast slew, under the cut's dip); elsewhere a ~25 ms
     // smoothing takes the physics' frame steps out of the pitch
-    const targetRpm = Math.min(this.rpmRange[1], Math.max(this.rpmRange[0], inp.rpm));
+    const rpmTop = Math.max(this.rpmRange[1], inp.limiterRpm * 1.05);
+    const targetRpm = Math.min(rpmTop, Math.max(this.rpmRange[0], inp.rpm));
     const shifting = this.upshiftTimer > 0 || this.downshiftTimer > 0;
     if (this.audioRpm === 0) {
       this.audioRpm = targetRpm;
     } else if (shifting && !manual) {
-      const span = Math.max(4000, this.rpmRange[1] - this.rpmRange[0]);
+      const span = Math.max(4000, rpmTop - this.rpmRange[0]);
       const maxSlew = span * 12 * dt;
       const diff = targetRpm - this.audioRpm;
       this.audioRpm += Math.sign(diff) * Math.min(Math.abs(diff), maxSlew);
@@ -581,7 +583,7 @@ export class Lc26SoundBank {
     const effThrottle = Math.max(this.smoothThrottle, blipThrottle) * clutchLoad;
 
     // Dynamic exhaust filter: opens up progressively with RPM and load so high revs scream cleanly
-    const rpmNorm = Math.min(1, Math.max(0, (rpm - this.rpmRange[0]) / Math.max(1000, this.rpmRange[1] - this.rpmRange[0])));
+    const rpmNorm = Math.min(1, Math.max(0, (rpm - this.rpmRange[0]) / Math.max(1000, rpmTop - this.rpmRange[0])));
     const cutoffHz = 3200 + rpmNorm * 6800 + effThrottle * 3800;
     const shelfDb = -1.5 + rpmNorm * 5.0 * (0.4 + 0.6 * effThrottle);
     this.engineFilter.frequency.setTargetAtTime(cutoffHz, now, 0.018);

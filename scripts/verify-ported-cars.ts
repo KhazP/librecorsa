@@ -21,7 +21,7 @@ function check(name: string, cond: boolean, detail = ""): void {
 }
 
 console.log("Registry checks");
-for (const native of ["lc26", "amg-gt3", "bmw-m4-gt3", "mtr-496r"] as const) {
+for (const native of ["lc26", "amg-gt3", "bmw-m4-gt3", "mtr-496r", "nissan-r33-jgtc", "nissan-r32-jtcc"] as const) {
   check(
     `${native}: physics switch leaves it on its own model`,
     !carTakesPhysicsSwitch(native) && carPhysics(native, "lc26") === carById(native).physics && carPhysics(native, "f12026-car") === carById(native).physics

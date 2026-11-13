@@ -132,6 +132,10 @@ export const WING_CLICK_DEG: Record<VehicleModelId, { front: number; rear: numbe
   liana: { front: 0, rear: 0 },
   // A fixed splitter; the rear wing in its 1° setup clicks [spec setup.ini WING_2]
   "mtr-496r": { front: 0, rear: 1 },
+  // Splitter and rear wing in 1° clicks [spec setup.ini WING_0, WING_1]
+  "nissan-r33-jgtc": { front: 1, rear: 1 },
+  // No wing adjusters in its setup
+  "nissan-r32-jtcc": { front: 0, rear: 0 },
 };
 
 /**
@@ -146,6 +150,10 @@ export const FUEL_LOAD: Record<VehicleModelId, { defaultKg: number; minKg: numbe
   liana: { defaultKg: 22, minKg: 4, maxKg: 37 },
   // 30 l of a 90 l tank [spec car.ini FUEL / MAX_FUEL]
   "mtr-496r": { defaultKg: 22, minKg: 4, maxKg: 67 },
+  // 40 l of a 100 l tank [spec car.ini FUEL / MAX_FUEL]
+  "nissan-r33-jgtc": { defaultKg: 30, minKg: 4, maxKg: 74 },
+  // 30 l of a 120 l tank [spec car.ini FUEL / MAX_FUEL]
+  "nissan-r32-jtcc": { defaultKg: 22, minKg: 4, maxKg: 89 },
 };
 
 /** Race fuel density (kg per litre), for the litre readouts */
@@ -168,6 +176,9 @@ export const STEER_RATIO_BASE: Record<VehicleModelId, number> = {
   "amg-gt3": 12.6,
   liana: 15,
   "mtr-496r": 14,
+  // [spec car.ini STEER_RATIO]
+  "nissan-r33-jgtc": 15,
+  "nissan-r32-jtcc": 12.4,
 };
 
 export function clampChassisSetup(v: unknown): ChassisSetup {

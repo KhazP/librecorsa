@@ -14,6 +14,10 @@ import { SUZUKI_LIANA_SIM_PROFILE, createSuzukiLianaSim } from "@/lib/sim/road/S
 import { SUZUKI_LIANA_CONFIG } from "@/lib/sim/road/SuzukiLianaConfig";
 import { MTR_496R_SIM_PROFILE, createMtr496rSim } from "@/lib/sim/proto/Mtr496rSim";
 import { MTR_496R_CONFIG } from "@/lib/sim/proto/Mtr496rConfig";
+import { NISSAN_R33_SIM_PROFILE, createNissanR33Sim } from "@/lib/sim/classic/NissanR33Sim";
+import { NISSAN_R33_CONFIG } from "@/lib/sim/classic/NissanR33Config";
+import { NISSAN_R32_SIM_PROFILE, createNissanR32Sim } from "@/lib/sim/classic/NissanR32Sim";
+import { NISSAN_R32_CONFIG } from "@/lib/sim/classic/NissanR32Config";
 import { LC26_ENGINE, LC26_TYRE_SETUP_RANGES } from "@/lib/sim/lc26-data";
 import type { CarClassId } from "./car-registry";
 
@@ -114,6 +118,29 @@ export const VEHICLE_MODELS: Readonly<Record<VehicleModelId, VehicleModel>> = {
     tyreSetupRanges: MTR_496R_SIM_PROFILE,
     rigConfig: MTR_496R_CONFIG,
     // Its only body is the ported GLB, which brings its own cameras
+    gt3Cockpit: false,
+    floorSparks: false,
+  },
+  // The classic Nissans: each only body is its ported GLB, which brings its own cameras
+  "nissan-r33-jgtc": {
+    id: "nissan-r33-jgtc",
+    classId: "classic",
+    createSim: (track, trackRoot) => createNissanR33Sim(track, trackRoot),
+    limiterRpm: NISSAN_R33_CONFIG.gearbox.gears.redline_rpm,
+    telemetryMaxRpm: 8000,
+    tyreSetupRanges: NISSAN_R33_SIM_PROFILE,
+    rigConfig: NISSAN_R33_CONFIG,
+    gt3Cockpit: false,
+    floorSparks: false,
+  },
+  "nissan-r32-jtcc": {
+    id: "nissan-r32-jtcc",
+    classId: "classic",
+    createSim: (track, trackRoot) => createNissanR32Sim(track, trackRoot),
+    limiterRpm: NISSAN_R32_CONFIG.gearbox.gears.redline_rpm,
+    telemetryMaxRpm: 9000,
+    tyreSetupRanges: NISSAN_R32_SIM_PROFILE,
+    rigConfig: NISSAN_R32_CONFIG,
     gt3Cockpit: false,
     floorSparks: false,
   },

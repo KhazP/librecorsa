@@ -233,6 +233,10 @@ const DIFF_BRAKE_PHASE = [0.02, 0.2] as const;
 const DIFF_POWER_PHASE = [0.1, 0.4] as const;
 const DIFF_TURNED_IN_DEG = [1, 6] as const;
 const DIFF_HISPD_BLEND_KMH = 20;
+/** Throttle pedal over which a four-wheel-drive car's centre coupling comes in: open off the throttle */
+const AWD_THROTTLE_ENGAGE = 0.05;
+/** Brake pedal by which the centre coupling has let go: an electronic coupling releases on the brakes (ABS) */
+const AWD_BRAKE_RELEASE = 0.1;
 /** Outer-step FFB samples kept per frame for the 500 Hz bridge (≈ one 60 Hz frame; the newest are kept) */
 const FFB_SUBFRAME_MAX = 8;
 /** Caster (mechanical) trail when the chassis data has none: keeps the wheel weighted once the pneumatic trail collapses */
@@ -887,6 +891,19 @@ export class VehiclePhysics {
   public readonly wheelbaseM: number;
   /** The wheels the engine drives (left, right): 0/1 the front pair, 2/3 the rear (`CarPhysicsConfig.drivenAxle`) */
   public readonly drivenWheels: readonly [number, number];
+  /**
+   * Four-wheel drive (`CarPhysicsConfig.awd`): the other axle's wheels (left, right), driven through the centre coupling
+   * off `drivenWheels`' drive. null on a two-wheel-drive car
+   */
+  public readonly coupledWheels: readonly [number, number] | null;
+  /** Every wheel the engine drives: `drivenWheels`, then `coupledWheels` on a four-wheel-drive car */
+  public readonly allDrivenWheels: readonly number[];
+  /** The driven axles' wheel pairs: `drivenWheels`, then `coupledWheels` */
+  private readonly drivenPairs: ReadonlyArray<readonly [number, number]>;
+  /** Torque the centre coupling hands the coupled axle (Nm at the axle, + forward: backwards in reverse); 0 without AWD */
+  public centreCouplingTorqueNm = 0;
+  /** Locking torque of the coupled axle's differential (Nm); 0 without AWD */
+  public coupledLockTorqueNm = 0;
   /** Road-wheel angle at full lock (rad); the garage's steering ratio changes it */
   public maxSteerRad: number;
   /** Garage: static toe per axle (rad, + = toe-in), engine braking and brake duct cooling relative to the baseline */
@@ -1147,6 +1164,9 @@ export class VehiclePhysics {
     this.brakeStartTempC = cfg.brakes.discStartTempC ?? 380;
     this.brakeRearDuctShare = cfg.brakes.rearDuctShare ?? 1;
     this.drivenWheels = cfg.drivenAxle === 'front' ? [0, 1] : [2, 3];
+    this.coupledWheels = cfg.awd ? (cfg.drivenAxle === 'front' ? [2, 3] : [0, 1]) : null;
+    this.drivenPairs = this.coupledWheels ? [this.drivenWheels, this.coupledWheels] : [this.drivenWheels];
+    this.allDrivenWheels = this.drivenPairs.flat();
     // Body axes: X = left (pitch), Y = up (yaw), Z = forward (roll)
     this.dryInertiaBody = new THREE.Vector3(ch.inertia.pitch, ch.inertia.yaw, ch.inertia.roll);
     this.inertiaBody = this.dryInertiaBody.clone();
@@ -1654,6 +1674,8 @@ export class VehiclePhysics {
     this.clutchEngagement = 1;
     this.icePlate = 0;
     this.lsdLockTorque = 0;
+    this.centreCouplingTorqueNm = 0;
+    this.coupledLockTorqueNm = 0;
     this.shaftTwistMeanRad = 0;
     this.shaftTwistHalfDiffRad = 0;
     this.mgukTorque = 0;
@@ -2035,9 +2057,15 @@ export class VehiclePhysics {
     a.brake = brake;
     a.sinceUpshiftS = this.sinceUpshiftS;
     a.sinceDownshiftS = this.sinceDownshiftS;
-    const [dl, dr] = this.drivenWheels;
-    a.drivenGrounded = this.wheels[dl].fz > 1 || this.wheels[dr].fz > 1;
-    a.drivenSpinning = Math.max(this.wheels[dl].slipRatio, this.wheels[dr].slipRatio) > 0.14;
+    // Every driven wheel: a four-wheel-drive car's coupled axle too
+    let grounded = false;
+    let spin = -Infinity;
+    for (const i of this.allDrivenWheels) {
+      grounded ||= this.wheels[i].fz > 1;
+      spin = Math.max(spin, this.wheels[i].slipRatio);
+    }
+    a.drivenGrounded = grounded;
+    a.drivenSpinning = spin > 0.14;
     const shift = autoShift(a, sched, this.manualShift);
     if (shift === 0) return;
     const throughSpin = shift > 0 && a.drivenSpinning && road < sched.upshiftRpm;
@@ -3052,15 +3080,18 @@ export class VehiclePhysics {
       const handbrake = !w.isFront && inp.handbrake ? inp.handbrake * (br.handbrakeTorqueNm ?? 0) : 0;
       w.brakeTorqueNm = friction + handbrake + w.fz * rollingResistance * w.rollingRadius;
     }
-    // Brake-operated diff lock: the faster driven wheel is held back
+    // Brake-operated diff lock: the faster driven wheel is held back (on a four-wheel-drive car, on each driven axle)
     const brakeLock = cfg.differential.brakeLock;
+    const cw = this.coupledWheels;
     if (brakeLock) {
-      const l = Math.abs(W[dl].omega);
-      const r = Math.abs(W[dr].omega);
       const map = tIce + tK > 0 ? brakeLock.power : brakeLock.coast;
-      const spin = Math.max(l, r) / Math.max(1, Math.min(l, r)) - 1;
-      const share = THREE.MathUtils.clamp((spin - map.deadZone) / Math.max(1e-6, map.fullSpin - map.deadZone), 0, 1);
-      W[l > r ? dl : dr].brakeTorqueNm += share * map.torqueNm;
+      for (const [pl, pr] of this.drivenPairs) {
+        const l = Math.abs(W[pl].omega);
+        const r = Math.abs(W[pr].omega);
+        const spin = Math.max(l, r) / Math.max(1, Math.min(l, r)) - 1;
+        const share = THREE.MathUtils.clamp((spin - map.deadZone) / Math.max(1e-6, map.fullSpin - map.deadZone), 0, 1);
+        W[l > r ? pl : pr].brakeTorqueNm += share * map.torqueNm;
+      }
     }
 
     // ---- predicted velocities from the free torques
@@ -3146,6 +3177,41 @@ export class VehiclePhysics {
     const lockPower = powerCoeff * diff.friction_faces * cot(diff.power_ramp_deg);
     const lockCoast = coastCoeff * diff.friction_faces * cot(diff.coast_ramp_deg);
     let lockTorque = diff.preload;
+    // Four-wheel drive (`AwdData`): the centre coupling's row and the coupled axle's differential. The coupling row
+    // (J = ½ on each coupled wheel, −½ on each driven one; its impulse is the coupled axle's torque × h) is a damper of
+    // `rampNmPerRadS`, implicit as the halfshafts' soft rows (γ = 1 / (h · ramp), no spring), clamped one way: in the
+    // drive direction (backwards in reverse), up to `maxTorqueNm`, and only on the throttle
+    const awd = cfg.awd;
+    let accX = 0;
+    let accS = 0;
+    let mX = 0;
+    let gammaX = 0;
+    let xLo = 0;
+    let xHi = 0;
+    let mS = 0;
+    let lockPowerS = 0;
+    let lockCoastS = 0;
+    let lockS = 0;
+    let sl = 0;
+    let sr = 0;
+    if (awd && cw) {
+      [sl, sr] = cw;
+      const ramp = Math.max(1e-6, awd.centre.rampNmPerRadS);
+      gammaX = 1 / (h * ramp);
+      mX = 1 / (0.25 * (1 / Iw[sl] + 1 / Iw[sr] + 1 / Iw[dl] + 1 / Iw[dr]) + gammaX);
+      // Engaged with the driver's foot on the throttle, not by the torque of the moment (the limiter's and the traction
+      // control's cuts don't release it), and let go as the brake pedal goes down (a down-shift's blip drives too)
+      const gate =
+        THREE.MathUtils.clamp(inp.throttle / AWD_THROTTLE_ENGAGE, 0, 1) * THREE.MathUtils.clamp(1 - inp.brake / AWD_BRAKE_RELEASE, 0, 1);
+      const cap = awd.centre.maxTorqueNm * gate * h;
+      if (ratio < 0) xLo = -cap;
+      else xHi = cap;
+      mS = 1 / (1 / Iw[sl] + 1 / Iw[sr]);
+      const sd = awd.secondaryDiff;
+      lockPowerS = sd.power * sd.friction_faces * cot(sd.power_ramp_deg);
+      lockCoastS = sd.coast * sd.friction_faces * cot(sd.coast_ramp_deg);
+      lockS = sd.preload;
+    }
     for (let it = 0; it < SOLVER_ITERATIONS; it++) {
       for (let i = 0; i < 4; i++) {
         const max = W[i].brakeTorqueNm * h;
@@ -3163,8 +3229,19 @@ export class VehiclePhysics {
         wW[dl] -= (half * d) / Iw[dl];
         wW[dr] -= (half * d) / Iw[dr];
       }
-      // Torque into the diff (Nm): + when the engine drives the wheels forward
-      const tIn = (-accC / h) * ratio;
+      if (awd && cw) {
+        const c = 0.5 * (wW[sl] + wW[sr]) - 0.5 * (wW[dl] + wW[dr]);
+        const prev = accX;
+        accX = THREE.MathUtils.clamp(prev - (c + gammaX * prev) * mX, xLo, xHi);
+        const d = 0.5 * (accX - prev);
+        wW[sl] += d / Iw[sl];
+        wW[sr] += d / Iw[sr];
+        wW[dl] -= d / Iw[dl];
+        wW[dr] -= d / Iw[dr];
+      }
+      // Torque into the diff (Nm): + when the engine drives the wheels forward (less what the coupling takes off it)
+      let tIn = (-accC / h) * ratio;
+      if (awd) tIn -= accX / h;
       lockTorque = diff.preload + Math.abs(tIn) * (tIn >= 0 ? lockPower : lockCoast);
       {
         const c = wW[dl] - wW[dr];
@@ -3175,8 +3252,24 @@ export class VehiclePhysics {
         wW[dl] += d / Iw[dl];
         wW[dr] -= d / Iw[dr];
       }
+      // The coupled axle's differential, locking on the torque the coupling hands it
+      if (awd && cw) {
+        const tInS = (ratio < 0 ? -accX : accX) / h;
+        lockS = awd.secondaryDiff.preload + Math.abs(tInS) * (tInS >= 0 ? lockPowerS : lockCoastS);
+        const c = wW[sl] - wW[sr];
+        const max = lockS * h;
+        const prev = accS;
+        accS = THREE.MathUtils.clamp(prev - c * mS, -max, max);
+        const d = accS - prev;
+        wW[sl] += d / Iw[sl];
+        wW[sr] -= d / Iw[sr];
+      }
     }
     this.lsdLockTorque = lockTorque;
+    if (awd) {
+      this.centreCouplingTorqueNm = accX / h;
+      this.coupledLockTorqueNm = lockS;
+    }
     if (shaft) {
       // The twists follow the torque the rows delivered (c·θ̇ + k·θ = T, implicit), so a slipping clutch or diff holds
       // the shafts at the torque it passes rather than winding them up by its slip
@@ -3190,6 +3283,14 @@ export class VehiclePhysics {
     for (let i = 0; i < 4; i++) {
       W[i].driveTorqueNm = i === dl || i === dr ? -(accC / h) * half : 0;
       W[i].omega = wW[i];
+    }
+    // The coupling's torque leaves the driven axle for the coupled one, half to each of its wheels
+    if (awd && cw) {
+      const tX = (0.5 * accX) / h;
+      W[dl].driveTorqueNm -= tX;
+      W[dr].driveTorqueNm -= tX;
+      W[sl].driveTorqueNm = tX;
+      W[sr].driveTorqueNm = tX;
     }
 
     // ---- energy store

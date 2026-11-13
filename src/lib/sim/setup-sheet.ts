@@ -15,6 +15,9 @@ import { F12026_CAR_CONFIG } from "./f12026-car/F12026CarConfig";
 import { AMG_GT3_CONFIG } from "./gt3/AmgGt3Config";
 import { SUZUKI_LIANA_CONFIG } from "./road/SuzukiLianaConfig";
 import { MTR_496R_CONFIG } from "./proto/Mtr496rConfig";
+import { NISSAN_R33_CONFIG } from "./classic/NissanR33Config";
+import { NISSAN_R32_CONFIG } from "./classic/NissanR32Config";
+import type { CarPhysicsConfig } from "./f12026-car/F12026CarConfig";
 
 export type SetupClassId = "f1" | "gt3";
 
@@ -26,6 +29,9 @@ export const SETUP_CLASS: Record<VehicleModelId, SetupClassId> = {
   liana: "gt3",
   // A closed-wheel car on a rear wing: the GT3 sheet
   "mtr-496r": "gt3",
+  // The classic Nissans: closed-wheel race cars, the GT3 sheet
+  "nissan-r33-jgtc": "gt3",
+  "nissan-r32-jtcc": "gt3",
 };
 
 export interface SetupState {
@@ -102,7 +108,7 @@ interface CarBaseline {
 }
 
 const rigidBaseline = (
-  cfg: typeof F12026_CAR_CONFIG | typeof AMG_GT3_CONFIG | typeof SUZUKI_LIANA_CONFIG | typeof MTR_496R_CONFIG,
+  cfg: typeof F12026_CAR_CONFIG | typeof AMG_GT3_CONFIG | typeof SUZUKI_LIANA_CONFIG | typeof MTR_496R_CONFIG | CarPhysicsConfig,
   vehicle: VehicleModelId
 ): CarBaseline => ({
   rideFrontMm: cfg.aero.front_target_height * 1000,
@@ -141,6 +147,9 @@ const BASELINES: Record<VehicleModelId, CarBaseline> = {
   // Its 58 % sits below a GT3's bias range: the mod's adjuster runs from 52 % [spec setup.ini FRONT_BIAS] to the 78 %
   // every car stops at
   "mtr-496r": { ...rigidBaseline(MTR_496R_CONFIG, "mtr-496r"), brakeBiasRangePct: [52, 78] },
+  // The classic Nissans' adjusters [spec setup.ini FRONT_BIAS]
+  "nissan-r33-jgtc": { ...rigidBaseline(NISSAN_R33_CONFIG, "nissan-r33-jgtc"), brakeBiasRangePct: [50, 80] },
+  "nissan-r32-jtcc": { ...rigidBaseline(NISSAN_R32_CONFIG, "nissan-r32-jtcc"), brakeBiasRangePct: [52, 80] },
 };
 
 const clampTo = (v: number, r: { min: number; max: number }) => Math.max(r.min, Math.min(r.max, v));
