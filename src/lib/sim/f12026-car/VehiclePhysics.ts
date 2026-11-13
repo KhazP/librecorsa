@@ -1083,6 +1083,8 @@ export class VehiclePhysics {
   private mapAeroFrontN = 0;
   private mapAeroRearN = 0;
   private mapAeroDragN = 0;
+  /** The wing elements carry their own drag heights (`WingData.dragY`): the drag acts where its parts put it */
+  private readonly dragAtElements: boolean;
   private readonly prevVelocity = new THREE.Vector3();
   /** The body's acceleration less gravity at the last sub-step (m/s², world): what the unsprung masses ride with */
   private readonly bodySpecificForce = new THREE.Vector3();
@@ -1163,6 +1165,7 @@ export class VehiclePhysics {
       yawCl: spec.lutYaw_CL_mult ? new Lut(spec.lutYaw_CL_mult) : null,
       yawCd: spec.lutYaw_CD_mult ? new Lut(spec.lutYaw_CD_mult) : null,
     }));
+    this.dragAtElements = cfg.aero.wings.some((w) => w.dragY !== undefined);
 
     const modes = cfg.performanceModes;
     this.luts = {
@@ -2117,12 +2120,13 @@ export class VehiclePhysics {
   }
 
   /**
-   * Aero drag −`perMs`·air (N) at the drag's centre of pressure (`AeroData.dragCentreY` above the CG): above the CG it
-   * pitches the nose up and loads the rear axle, as the rear wing's and wheels' drag do on the real car
+   * Aero drag −`perMs`·air (N) at the drag's centre of pressure, `centreY` above the CG (`AeroData.dragCentreY` unless
+   * given): above the CG it pitches the nose up and loads the rear axle, as the rear wing's and wheels' drag do on the
+   * real car
    */
-  private addDragAtCentre(air: THREE.Vector3, perMs: number): void {
+  private addDragAtCentre(air: THREE.Vector3, perMs: number, centreY = this.config.aero.dragCentreY ?? 0): void {
     _f.copy(air).multiplyScalar(-perMs);
-    _p.set(0, this.config.aero.dragCentreY ?? 0, 0).applyQuaternion(this.quaternion).add(this.position);
+    _p.set(0, centreY, 0).applyQuaternion(this.quaternion).add(this.position);
     this.addForceAt(_f, _p);
   }
 
@@ -3203,6 +3207,10 @@ export class VehiclePhysics {
     let down = 0;
     let front = 0;
     let drag = aero.drag * wake.dragMultiplier;
+    // With the elements' own drag heights: Σ drag area × height, the bodywork's at `dragCentreY`
+    const perElement = this.dragAtElements;
+    const bodyY = aero.dragCentreY ?? 0;
+    let dragMoment = perElement ? drag * bodyY : 0;
 
     for (const wing of this.wings) {
       const s = wing.spec;
@@ -3223,7 +3231,9 @@ export class VehiclePhysics {
             ? wake.rearDownforceMultiplier
             : 0.5 * (wake.frontDownforceMultiplier + wake.rearDownforceMultiplier);
       const fd = q * cl * s.area * wakeClMult;
-      drag += cd * s.area * wake.dragMultiplier;
+      const dragArea = cd * s.area * wake.dragMultiplier;
+      drag += dragArea;
+      if (perElement) dragMoment += dragArea * (s.dragY ?? bodyY);
       down += fd;
       front += fd * ((s.positionZ + b) / L);
       _f.copy(_ey).multiplyScalar(-fd);
@@ -3245,7 +3255,10 @@ export class VehiclePhysics {
 
     const speed = air.length();
     const dragN = 0.5 * this.airDensity * speed * speed * drag;
-    if (speed > 1e-3) this.addDragAtCentre(air, dragN / speed);
+    if (speed > 1e-3) {
+      if (perElement && drag > 0) this.addDragAtCentre(air, dragN / speed, dragMoment / drag);
+      else this.addDragAtCentre(air, dragN / speed);
+    }
 
     this.aeroDownN = down;
     this.aeroFrontN = front;

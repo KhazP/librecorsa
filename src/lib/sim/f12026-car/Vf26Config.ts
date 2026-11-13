@@ -76,6 +76,11 @@ export interface Vf26Overrides {
    * `TyresPressureData.pressureRollingGain`); absent: pressure does not move the heat
    */
   tyreHeat?: Vf26TyreHeat;
+  /**
+   * Every aero element's drag at the element's own height, so the drag's line of action moves with the flaps, the ride
+   * heights and the yaw; absent: all of it at the one height the elements give at rest with the flaps shut
+   */
+  dragAtElements?: boolean;
 }
 
 export interface Vf26TyreHeat {
@@ -283,7 +288,7 @@ const flap = (w: Vf26WingSpec) => ({
 });
 
 /** The aero elements of the data with their ground-height tables laid on this engine's reference heights */
-function aeroData(F: Vf26AxleSuspension, R: Vf26AxleSuspension): AeroData {
+function aeroData(F: Vf26AxleSuspension, R: Vf26AxleSuspension, dragAtElements = false): AeroData {
   /** The floor's reference plane below the CG: the floor elements' own height [data] */
   const FLOOR_Y = wing('FLOOR_FL').position[1];
   /** Static ride heights [data]; the body's static nose-down pitch they give */
@@ -388,14 +393,17 @@ function aeroData(F: Vf26AxleSuspension, R: Vf26AxleSuspension): AeroData {
     [floorArea * at(FLOORS[0].aoaCd, FLOORS[0].angleDeg) * FLOORS[0].cdGain, FLOOR_Y],
   ];
   const dragArea = dragParts.reduce((a, [cda]) => a + cda, 0);
+  /** Each element's own height above the CG, in the order of WINGS [data] */
+  const elementY = [FRONT.position[1], FLOOR_Y, DIFFUSER.position[1], REAR.position[1], DRS.position[1]];
 
   return {
     front_lift: 0,
     rear_lift: 0,
     // The body element: drag only at its 3.5° [data BODY]
     drag: Number((area(BODY) * at(BODY.aoaCd, BODY.angleDeg) * BODY.cdGain).toFixed(4)),
-    dragCentreY: Number((dragParts.reduce((a, [cda, y]) => a + cda * y, 0) / dragArea).toFixed(3)),
-    wings: WINGS,
+    // The one height of all the drag; with the elements at their own heights, the body element's alone
+    dragCentreY: dragAtElements ? BODY.position[1] : Number((dragParts.reduce((a, [cda, y]) => a + cda * y, 0) / dragArea).toFixed(3)),
+    wings: dragAtElements ? WINGS.map((w, i) => ({ ...w, dragY: elementY[i] })) : WINGS,
     front_target_height: F.staticRideHeight,
     rear_target_height: R.staticRideHeight,
     floorOffsetY: FLOOR_Y,
@@ -611,7 +619,7 @@ export function buildVf26Config(overrides: Vf26Overrides = {}) {
       ...overrides.brakes,
     },
     suspensions: suspensionData(F, R, softFront.radius, softRear.radius),
-    aero: aeroData(F, R),
+    aero: aeroData(F, R, overrides.dragAtElements),
     tyreCompounds: tyreCompounds(tyreOf, overrides.tyreHeat),
     compoundSlots: {
       soft: 'PhysicsTyreCompound_F1_Soft',

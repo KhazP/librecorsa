@@ -528,6 +528,13 @@ export interface WingData {
    */
   lutYaw_CL_mult?: LutPoints;
   lutYaw_CD_mult?: LutPoints;
+  /**
+   * Height of this element's drag above the CG, body frame (m). When any element has one, the total drag acts at the
+   * height its parts give it as they stand (flaps open or shut, ride heights, yaw), with the bodywork's drag at
+   * `AeroData.dragCentreY` and an element without a height there too. Absent on every element: all the drag at
+   * `dragCentreY`
+   */
+  dragY?: number;
 }
 
 /** `ZoneData_DRSZone` (fractions of a lap) */
@@ -547,7 +554,8 @@ export interface AeroData {
   /**
    * Height of the total drag's line of action above the CG, body frame (m). Wings, wheels and body each drag at their
    * own height, so the sum pitches the car (nose up when it acts above the CG). Absent: through the CG, no pitch moment.
-   * Set it for wing-element aero; a ride-height map whose balance is an axle split already carries the drag's moment
+   * Set it for wing-element aero; a ride-height map whose balance is an axle split already carries the drag's moment.
+   * With `WingData.dragY` on the elements it is the height of the bodywork's drag alone
    */
   dragCentreY?: number;
   wings: WingData[];

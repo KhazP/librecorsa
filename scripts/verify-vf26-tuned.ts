@@ -10,6 +10,8 @@
 import * as THREE from 'three';
 import { getActiveTrackData } from '../src/lib/track-data';
 import { F12026CarSim } from '../src/lib/sim/f12026-car/F12026CarSim';
+import { FlatGroundQuery } from '../src/lib/sim/f12026-car/TrackColliderQuery';
+import { VehiclePhysics } from '../src/lib/sim/f12026-car/VehiclePhysics';
 import { createVf26Sim, VF26_SIM_PROFILE, vf26TunedProfileCar } from '../src/lib/sim/f12026-car/Vf26Sim';
 import { plannedDownforceCoef, plannedMu } from '../src/lib/sim/speed-profile';
 import { VF26_TUNED_CONFIG } from '../src/lib/sim/f12026-car/Vf26Tune';
@@ -466,6 +468,36 @@ console.log('\n== Ride heights and downforce against speed');
   check('CL·A 5.0 or more from 150 to 250 km/h', p.slice(0, 3).every((x) => x.cla >= 5.0), p.slice(0, 3).map((x) => f(x.cla)).join(' / '));
   check('... and at 300 km/h still 88 % of its value at 200', p[3].cla >= 0.88 * p[1].cla, `${f(p[3].cla)} against ${f(p[1].cla)}`);
   check('At 300 km/h the front axle rides 18 mm or more off the road', p[3].front >= 18, `${f(p[3].front, 1)} mm`);
+}
+
+console.log('\n== Where the drag acts');
+{
+  // Held at 300 km/h on flat ground, the flaps shut and then open: the front axle's load with every element's drag at
+  // its own height, against the same car with all the drag at the one height the elements give at rest
+  const lumped = { ...C, aero: { ...C.aero, dragCentreY: VF26_CAR_CONFIG.aero.dragCentreY, wings: C.aero.wings.map((w) => ({ ...w, dragY: undefined })) } } as typeof C;
+  const frontAxle = (config: typeof C, open: boolean) => {
+    const car = new VehiclePhysics({ ground: new FlatGroundQuery(0), config, airDensity: 1.225 });
+    const v = 300 / 3.6;
+    car.reset(0, 0, 0, v);
+    const dt = VehiclePhysics.FIXED_DT;
+    let sum = 0;
+    let n = 0;
+    for (let t = 0; t < 6; t += dt) {
+      // The flaps' button once, on a throttle that keeps them open; the speed is held, so only the drag's height differs
+      car.step(dt, { throttle: 0.7, brake: 0, steer: 0, drs: open && t > 0.5 && t < 0.6 });
+      car.velocity.multiplyScalar(v / car.speedMs);
+      if (t > 4) {
+        sum += car.wheels[0].fz + car.wheels[1].fz;
+        n++;
+      }
+    }
+    return { n: sum / n, flaps: car.drsBlend };
+  };
+  const shut = frontAxle(C, false).n - frontAxle(lumped, false).n;
+  const own = frontAxle(C, true);
+  const open = own.n - frontAxle(lumped, true).n;
+  check('Flaps shut at 300 km/h: the front axle within 60 N of its load with the drag at one height', Math.abs(shut) < 60, `${f(shut, 0)} N`);
+  check('Flaps open: the drag acts lower, and the front axle carries 100 to 200 N more', own.flaps > 0.99 && between(open, 100, 200), `${f(open, 0)} N`);
 }
 
 console.log('\n== Laps of Rwanda (autopilot)');

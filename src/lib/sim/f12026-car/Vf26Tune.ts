@@ -218,6 +218,12 @@ export const VF26_TUNE: Vf26Overrides = {
   // temperature: after 60 s at 2 g the loaded front's carcass was at 87 °C whatever the pressure; now 93 °C set
   // 4 psi under and 86 °C set 4 psi over [measured on flat ground at 150 km/h]
   tyreHeat: { pressureHeat: { slipGain: 0.5, crownGain: 0.05 }, pressureRollingGain: 1.3 },
+  // Every aero element drags at its own height [data: the rear wing 0.55 m over the centre of gravity and its flap
+  // 0.59 m, the body 0.15 m, the front wing 0.09 m under it and the floor 0.23 m], not all of them at the 0.25 m they
+  // give together at rest with the flaps shut. Shut, the drag still acts at 0.24 m. Open, the rear wing sheds its
+  // drag and the line of action drops to 0.15 m: at 300 km/h the front axle carries 144 N more and the rear as much
+  // less, 45.4 % of the load on the front (was 44.8 %) [measured on flat ground]
+  dragAtElements: true,
 };
 
 export const VF26_TUNED_CONFIG = buildVf26Config(VF26_TUNE);
