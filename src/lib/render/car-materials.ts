@@ -11,6 +11,7 @@ import { applyPaintFinish, SATIN_PAINT } from "./paint-finish";
  *   colours (`setVf26LiveryColours`).
  * - EXT_SKIN with the mod's authored colour texture: two-tone livery in one material.
  *   Both are satin all over (paint-finish.ts), like a race livery; the authored metallicRoughness map is dropped.
+ *   The paint reflects less than the plain satin finish and its coat is thinner and sharper (`applyBodyPaint`).
  * - EXT_DECALS: the same satin finish.
  * - Carbon: procedural 2x2 twill weave (object-space triplanar, ~5 mm tow pitch, object units assumed metres)
  *   driving a height bump, a roughness of 0.32 +-0.06 between tows and a slight diffuse modulation. The weave
@@ -34,6 +35,16 @@ const CARBON_MATERIALS = new Set([
   // Steering-wheel carbon (the tub's matte INT_cockpit_carbon / _2 keep their authored look)
   "INT_sw_2026_carbon",
 ]);
+
+/**
+ * The body paint's own reflection, as a share of a plain surface's (three's `specularIntensity`). Satin paint spreads
+ * a low sun ahead of the car over every surface that faces it, and from behind a dark livery then reads as silver;
+ * at this share the colour holds.
+ */
+const PAINT_REFLECTION = 0.18;
+/** The coat over it: thinner than the satin finish's and sharper, so the sun shows in it as a line of light */
+const PAINT_COAT = 0.12;
+const PAINT_COAT_ROUGHNESS = 0.15;
 
 /** Carbon base colour floor (linear). The GLB carbon is 0.007, which is too dark for the weave to read. */
 const CARBON_BASE_FLOOR = 0.015;
@@ -113,7 +124,7 @@ function configure(
     case "skin": {
       out.roughnessMap = null;
       out.metalnessMap = null;
-      applyPaintFinish(out, SATIN_PAINT);
+      applyBodyPaint(out);
       if (liveryMask && out.map) {
         // The mask holds weights, not colour: no sRGB decode. On a copy: toPhysical shares the source's texture
         // object, and another material still sampling it as colour must keep its sRGB decode
@@ -129,7 +140,7 @@ function configure(
       break;
     }
     case "decal": {
-      applyPaintFinish(out, SATIN_PAINT);
+      applyBodyPaint(out);
       break;
     }
     case "carbon": {
@@ -154,6 +165,14 @@ function configure(
       break;
     }
   }
+}
+
+/** The satin finish, with its reflection toned so the livery's colour reads when the car heads into a low sun */
+function applyBodyPaint(out: THREE.MeshPhysicalMaterial): void {
+  applyPaintFinish(out, SATIN_PAINT);
+  out.specularIntensity = PAINT_REFLECTION;
+  out.clearcoat = PAINT_COAT;
+  out.clearcoatRoughness = PAINT_COAT_ROUGHNESS;
 }
 
 type Patch = ShaderPatch;

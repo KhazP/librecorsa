@@ -827,7 +827,9 @@ function buildRoundedF1TireGeometry(
 export function createF1Car2026(
   initialLivery: LiveryConfig,
   initialCompound: TireCompound = "soft",
-  modelUrl: string = VF26_MODEL_URL
+  modelUrl: string = VF26_MODEL_URL,
+  /** `opponent`: a car that is not the player's (its driver's arms follow the wheel in steps) */
+  options: { opponent?: boolean } = {}
 ): F1CarRig2026 {
   const root = new THREE.Group();
   const chassisGroup = new THREE.Group();
@@ -2693,7 +2695,7 @@ export function createF1Car2026(
   let rigDisposed = false;
   void loadVf26Template(modelUrl).then((template) => {
     if (!template || rigDisposed) return;
-    vf26 = attachVf26Model(template, root, chassisGroup);
+    vf26 = attachVf26Model(template, root, chassisGroup, options);
     vf26.setTireCompound(currentCompound);
     vf26.setLivery(currentLivery);
     for (const part of proceduralParts) part.visible = false;
