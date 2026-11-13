@@ -212,10 +212,13 @@ export interface GaragePreset {
 
 const chassisKey = (v: VehicleModelId) => `lc.garage.chassis.${v}`;
 const presetsKey = (v: VehicleModelId) => `lc.garage.presets.${v}`;
+/** A saved item under the model's id, or under the id the 2026 Prototype had before it was renamed */
+const readSaved = (key: (v: VehicleModelId) => string, v: VehicleModelId): string | null =>
+  window.localStorage.getItem(key(v)) ?? (v === "lc26" ? window.localStorage.getItem(key("vf26" as VehicleModelId)) : null); // keep-old-id
 
 export function loadChassisSetup(vehicle: VehicleModelId): ChassisSetup {
   try {
-    const raw = window.localStorage.getItem(chassisKey(vehicle));
+    const raw = readSaved(chassisKey, vehicle);
     return raw ? clampChassisSetup(JSON.parse(raw)) : { ...DEFAULT_CHASSIS_SETUP };
   } catch {
     return { ...DEFAULT_CHASSIS_SETUP };
@@ -253,7 +256,7 @@ function perWheelTyreSetup(tyre: TyreSetup): TyreSetup {
 
 export function loadGaragePresets(vehicle: VehicleModelId): GaragePreset[] {
   try {
-    const raw = window.localStorage.getItem(presetsKey(vehicle));
+    const raw = readSaved(presetsKey, vehicle);
     const list = raw ? (JSON.parse(raw) as unknown) : [];
     if (!Array.isArray(list)) return [];
     return list

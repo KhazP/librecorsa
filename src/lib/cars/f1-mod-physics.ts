@@ -23,7 +23,8 @@ function load(): F1ModPhysics {
   try {
     const fromUrl = new URLSearchParams(window.location.search).get("f1physics");
     if (isF1ModPhysics(fromUrl)) return fromUrl;
-    const saved = localStorage.getItem(STORAGE_KEY);
+    const stored = localStorage.getItem(STORAGE_KEY);
+    const saved = stored === "vf26" ? "lc26" : stored; // keep-old-id: the choice saved before the car was renamed
     return isF1ModPhysics(saved) ? saved : DEFAULT;
   } catch {
     return DEFAULT;

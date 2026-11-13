@@ -27,7 +27,10 @@ const write = (key: string, value: string | undefined): void => {
 };
 
 /** The circuit and car the game would open on: the player's last picks, when there are any */
-export const storedPicks = (): { trackId: string | null; carId: string | null } => ({ trackId: read(TRACK_KEY), carId: read(CAR_KEY) });
+export const storedPicks = (): { trackId: string | null; carId: string | null } => {
+  const carId = read(CAR_KEY);
+  return { trackId: read(TRACK_KEY), carId: carId === "vf26" ? "lc26" : carId }; // keep-old-id: a pick saved before the rename
+};
 
 /** For a Drive link's onClick: remember what was picked, then let the link go */
 export const rememberPicks = (picks: { trackId?: string; carId?: string }): void => {
