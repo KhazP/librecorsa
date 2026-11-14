@@ -218,9 +218,14 @@ const startOf = (trackId: string) => ({
   sendState(a, packet('peer_b', { pos: [999, 0, 999] }));
   check("a guest can't move another guest's car", i.peers.has('peer_a') && !i.peers.has('peer_b'));
   b.dc.sent.length = 0;
-  sendState(a, { ...packet('peer_a'), extra: 'x'.repeat(100) });
-  const relayed = b.dc.sent.length === 1 ? stateSent(b.dc.sent[0]) : null;
-  check('the relayed packet is the cleaned one', relayed !== null && !('extra' in relayed));
+  // The stray field rides in the packet's slow-field JSON, the only place a forged extra can reach the wire
+  const own = packet('peer_a') as unknown as StatePacketFields;
+  const stray = 'x'.repeat(100);
+  a.dc.onmessage?.({ data: encodeState(own, JSON.stringify({ ...JSON.parse(stateInfoJson(own)), extra: stray })) });
+  const raw = b.dc.sent.length === 1 ? b.dc.sent[0] : undefined;
+  const relayed = stateSent(raw);
+  const carried = raw instanceof ArrayBuffer && new TextDecoder().decode(raw).includes(stray);
+  check('the relayed packet is the cleaned one', relayed !== null && !carried);
   b.dc.sent.length = 0;
   sendState(a, packet('peer_a', { pos: [NaN, 0, 0] }));
   check('a bad packet is not relayed', b.dc.sent.length === 0);

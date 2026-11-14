@@ -128,7 +128,8 @@ export const RaceSetupPanel: React.FC<RaceSetupPanelProps> = ({
         <LinkRow navDefault label="Circuit" value={track.layout ? `${track.name} · ${track.layout}` : track.name} onClick={onOpenCircuit} />
         <LinkRow label="Conditions" value={conditionsLabel ?? "As set"} onClick={onOpenConditions} />
         <LinkRow label="Car" value={`${car.title}, for the whole field`} onClick={onOpenGarage} />
-        <Disclosure moreLabel={`Show the grid (${grid.length} cars)`} lessLabel="Hide the grid">
+        {/* A random slot leaves the player out of the preview, not out of the field */}
+        <Disclosure moreLabel={`Show the grid (${grid.length + (setup.grid === "random" ? 1 : 0)} cars)`} lessLabel="Hide the grid">
           <GridList grid={grid} drawn={setup.grid === "random"} />
         </Disclosure>
       </Card>

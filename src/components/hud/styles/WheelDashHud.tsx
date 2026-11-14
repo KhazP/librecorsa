@@ -120,7 +120,7 @@ export const WheelDash: React.FC<Pick<HudDesignProps, "t" | "deltaS" | "revRange
             </Cell>
           ) : (
             <Cell label="Top speed">
-              <span className="lc-data self-end text-[14px] text-lc-chalk">{Math.round(t.topSpeedThisLapKmh)}</span>
+              <span className="lc-data self-end text-[14px] text-lc-chalk">{formatSpeed(t.topSpeedThisLapKmh, units)}</span>
             </Cell>
           )}
         </div>

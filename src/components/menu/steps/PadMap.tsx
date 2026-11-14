@@ -152,11 +152,11 @@ const PadArt: React.FC<{ family: PadFamily; look: (button: number) => Look; axes
       {family === "playstation" ? (
         <rect x={328} y={116} width={104} height={62} rx={10} fill={tokenColor("well")} stroke={tokenColor("line")} strokeWidth={1.5} />
       ) : null}
-      <circle cx={L.home[0]} cy={L.home[1]} r={family === "xbox" ? 12 : 8} fill={tokenColor("well")} stroke={tokenColor("keyline")} strokeWidth={1.5} />
+      <circle cx={L.home[0]} cy={L.home[1]} r={family !== "playstation" ? 12 : 8} fill={tokenColor("well")} stroke={tokenColor("keyline")} strokeWidth={1.5} />
 
       {/* View / Create and Menu / Options */}
-      <rect x={L.view[0] - 7} y={L.view[1] - (family === "xbox" ? 5 : 8)} width={14} height={family === "xbox" ? 10 : 16} rx={5} {...part(8)} />
-      <rect x={L.menu[0] - 7} y={L.menu[1] - (family === "xbox" ? 5 : 8)} width={14} height={family === "xbox" ? 10 : 16} rx={5} {...part(9)} />
+      <rect x={L.view[0] - 7} y={L.view[1] - (family !== "playstation" ? 5 : 8)} width={14} height={family !== "playstation" ? 10 : 16} rx={5} {...part(8)} />
+      <rect x={L.menu[0] - 7} y={L.menu[1] - (family !== "playstation" ? 5 : 8)} width={14} height={family !== "playstation" ? 10 : 16} rx={5} {...part(9)} />
 
       {stick(L.lstick, 10, axes[0] ?? 0, axes[1] ?? 0)}
       {stick(L.rstick, 11, axes[2] ?? 0, axes[3] ?? 0)}

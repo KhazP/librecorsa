@@ -15,7 +15,7 @@ import {
 } from "@/components/ui";
 import { Icon, type IconName } from "@/components/ui/icons";
 import { KeyCap, PadGlyph, PromptBar, type Prompt } from "@/components/ui/prompts";
-import { focusables, tabStops, useFocusNav, useMoveHandler } from "@/components/menu/useFocusNav";
+import { focusables, scrollPast, tabStops, useFocusNav, useMoveHandler } from "@/components/menu/useFocusNav";
 import { isMenuNavSuspended } from "@/components/menu/useMenuNav";
 import { useInputMode } from "@/components/menu/input-mode";
 import { SettingsEnvProvider, type SettingsEnv } from "./env";
@@ -226,7 +226,10 @@ export function SettingsScreen({ env, initialCategory = "driving", initialTab, o
       const checked = group && !group.contains(from) ? group.querySelector<HTMLElement>('[aria-checked="true"]') : null;
       return focusEl(checked ?? best);
     }
-    if (dir === "up") return hasTabs ? focusTabs() : true;
+    if (dir === "up" && hasTabs) return focusTabs();
+    // Nothing further that way in the pane: it scrolls on instead, so a card below the last control (Fixed keys) still
+    // comes into view, and the cursor stays in the pane
+    scrollPast(from, dir);
     return true;
   };
 

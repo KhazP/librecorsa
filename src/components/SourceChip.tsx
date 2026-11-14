@@ -97,6 +97,8 @@ export const SourceChip: React.FC<{
   // links, and off either end of them back to the button
   const links = () => Array.from(panelRef.current?.querySelectorAll<HTMLAnchorElement>("a") ?? []);
   const onButtonKey = (e: React.KeyboardEvent) => {
+    // React carries the panel's key events up to this span through the portal: only the button's own Tab is handled here
+    if (panelRef.current?.contains(e.target as Node)) return;
     if (e.key !== "Tab" || e.shiftKey || !open) return;
     const first = links()[0];
     if (!first) return;

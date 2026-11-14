@@ -191,7 +191,7 @@ export const BroadcastHud: React.FC<HudDesignProps> = ({ t, deltaS, map, compoun
             <span className="lc-data text-[11px] tracking-[0.1em]" style={{ color: ahead.color }}>
               {ahead.code}
             </span>
-            <span className="lc-data text-[11px] text-lc-chalk">{formatGap(ahead.gap, true)} s</span>
+            <span className="lc-data text-[11px] text-lc-chalk">{formatGap(ahead.gap, true)}{Math.abs(ahead.gap) < 100 ? " s" : ""}</span>
           </div>
         ) : null}
 

@@ -209,7 +209,8 @@ export function createTyreWrap(
     tint.setHex(ART_COLORS[c]);
     uniforms.uTyreWrapCinturato.value = c === "intermediate" || c === "wet" ? 1 : 0;
     const rubber = rubberOf(c);
-    if (rubber === wanted || typeof window === "undefined" || !HOSTED_CONTENT) return;
+    // Once the textures could not be fetched the tyre has gone over to the sidewall for good: no fetch on every change
+    if (told || rubber === wanted || typeof window === "undefined" || !HOSTED_CONTENT) return;
     wanted = rubber;
     // The tyre keeps the rubber it has until the new one is in
     void Promise.all([loadTexture(RUBBER_URL[rubber], THREE.SRGBColorSpace), loadTexture(ART_URL, THREE.NoColorSpace)]).then(

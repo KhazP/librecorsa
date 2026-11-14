@@ -160,7 +160,11 @@ export const DeviceStep: React.FC<{
     if (choice === "touch" || choice === "tilt") {
       const tiltSteer = choice === "tilt";
       // iOS asks before it sends tilt, and only from inside a tap: asked here, the prompt comes with the choice
-      if (tiltSteer) void requestTiltPermission();
+      // Refused: the choice goes back to the on-screen pads, so the drive doesn't start on a tilt it will never get
+      if (tiltSteer)
+        void requestTiltPermission().then((ok) => {
+          if (!ok) update((s) => ({ ...s, touch: { ...s.touch, tiltSteer: false } }));
+        });
       touch?.onPick(true);
       update((s) => ({ ...s, touch: { ...s.touch, mode: s.touch.mode === "off" ? "auto" : s.touch.mode, tiltSteer } }));
       return;

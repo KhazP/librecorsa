@@ -132,6 +132,7 @@ export function testDualSenseRumble(settings: DualSenseSettings) {
   dualSenseHid.playTest([
     { ms: 350, output: { rumble: { low: Math.min(1, 0.8 * g), high: 0 } } },
     { ms: 350, output: { rumble: { low: 0, high: Math.min(1, 0.8 * g) } } },
+    { ms: 400, output: { rumble: { low: Math.min(1, 0.8 * g), high: Math.min(1, 0.8 * g) } } },
     { ms: 50, output: { rumble: { low: 0, high: 0 } } },
   ]);
 }

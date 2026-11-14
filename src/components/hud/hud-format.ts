@@ -99,12 +99,16 @@ export function formatDelta(seconds: number): string {
 
 /**
  * A gap between two cars in seconds, one rule for the tower, the MFD tables and the dash: one decimal, or three
- * (`precise`) under ten seconds where a tenth hides the fight; 99+ past a hundred. No sign: the column says which way.
+ * (`precise`) under ten seconds where a tenth hides the fight; minutes and seconds (1:43) from a hundred, where the
+ * field spreads out on a long lap. No sign: the column says which way.
  */
 export function formatGap(seconds: number, precise = false): string {
   const s = Math.abs(seconds);
   if (!Number.isFinite(s)) return NO_TIME;
-  if (s >= 100) return "99+";
+  if (s >= 100) {
+    const whole = Math.floor(s);
+    return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, "0")}`;
+  }
   return s.toFixed(precise && s < 10 ? 3 : 1);
 }
 

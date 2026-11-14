@@ -336,6 +336,7 @@ export const MultiPageMfd: React.FC<MultiPageMfdProps> = ({
   const [page, setPage] = useState<MfdPageId>(readPage);
   const [folded, setFolded] = useState(defaultFolded);
   const laps = useLapHistory(t);
+  const units = useUnits();
   const hudModeRef = useHudModeRef();
   // Opened by the D-pad (not by the driver asking for the MFD): the auto-fold timer applies
   const padOpened = useRef(false);
@@ -476,7 +477,7 @@ export const MultiPageMfd: React.FC<MultiPageMfdProps> = ({
       const hot = Math.max(...t.tireTempsC);
       return (
         <span className="lc-data text-[10px] text-lc-chalk">
-          {formatTemp(Math.min(...t.tireTempsC))}–{formatTemp(hot, undefined, true)} · {Math.round(100 - Math.max(...t.tireWearPct))}%
+          {formatTemp(Math.min(...t.tireTempsC), units)}–{formatTemp(hot, units, true)} · {Math.round(100 - Math.max(...t.tireWearPct))}%
         </span>
       );
     }

@@ -69,6 +69,8 @@ export function DriverTab() {
   const [nameDraft, setNameDraft] = useState<string | null>(null);
   const [nameError, setNameError] = useState<string | null>(null);
   const [codeDraft, setCodeDraft] = useState<string | null>(null);
+  /** The name last sent to the board: Enter then leaving the field, or the screen closing, must not send it again */
+  const sentName = useRef<string | null>(null);
   const alive = useRef(true);
   useEffect(() => {
     alive.current = true;
@@ -82,6 +84,9 @@ export function DriverTab() {
     if (env.onRenameDriver) {
       // The board has the last word: the field keeps the typed name until it has taken, or says why it did not
       const typed = nameDraft;
+      // Sent once per edit (in flight, taken or turned down); typing in the field again allows another try
+      if (sentName.current === typed) return;
+      sentName.current = typed;
       void env.onRenameDriver(typed).then((error) => {
         if (!alive.current) return;
         setNameError(error);
@@ -123,6 +128,7 @@ export function DriverTab() {
           spellCheck={false}
           value={nameDraft ?? profile.name}
           onChange={(v) => {
+            sentName.current = null;
             setNameDraft(v);
             setNameError(null);
           }}

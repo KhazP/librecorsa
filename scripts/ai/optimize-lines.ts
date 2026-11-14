@@ -154,10 +154,19 @@ for (const cand of candidates) {
   console.log(`${cand.name}: ${laps.map(fmt).join(' · ')}${wp}${clean ? '' : ' · NOT CLEAN'}`);
   if (clean) quick.push({ name: cand.name, n: cand.n, laps });
 }
+/**
+ * A line is timed by the judges clean on the current line: one excused for being off it may not finish the lap at all
+ * (an infinite time), which would make every sum infinite and stop the search at the first candidate
+ */
+const timed = (ls: PhysicsLap[]) => ls.reduce((a, l, k) => a + (anyClean && !mustBeClean[k] ? 0 : l.lapS), 0);
 let best: { name: string; n: Float64Array; laps: PhysicsLap[] } | null = null;
-for (const cand of quick.sort((a, b) => sum(a.laps) - sum(b.laps))) {
+let notQuicker = false;
+for (const cand of quick.sort((a, b) => timed(a.laps) - timed(b.laps))) {
   // Only a quicker line (or any clean one, when the current line is not) is worth the check
-  if (currentClean && sum(cand.laps) >= sum(oldLaps) - 0.05) break;
+  if (currentClean && timed(cand.laps) >= timed(oldLaps) - 0.05) {
+    notQuicker = true;
+    break;
+  }
   const robust = judges.map((car) => physicsLap(track, root, car, cand.n, robustGrip));
   const holds = robust.every((l, k) => isClean(l) || !isClean(oldRobust[k]));
   console.log(`${cand.name} at grip ${robustGrip}: ${robust.map(fmt).join(' · ')}${holds ? '' : ' · NOT CLEAN'}`);
@@ -166,12 +175,12 @@ for (const cand of quick.sort((a, b) => sum(a.laps) - sum(b.laps))) {
     break;
   }
 }
-const better = !!best && (sum(best.laps) < sum(oldLaps) - 0.05 || !currentClean);
+const better = !!best && (timed(best.laps) < timed(oldLaps) - 0.05 || !currentClean);
 if (opt('dump', '') && best) writeFileSync(opt('dump', ''), JSON.stringify({ n: Array.from(best.n), ds: t.ds, name: best.name }));
 console.log(
   best && better
-    ? `Using: ${best.name} (${sum(oldLaps).toFixed(3)} → ${sum(best.laps).toFixed(3)} s${judges.length > 1 ? ', laps summed' : ''}).`
-    : `Keeping the current line (${best ? 'nothing quicker' : 'nothing clean'}).`
+    ? `Using: ${best.name} (${timed(oldLaps).toFixed(3)} → ${timed(best.laps).toFixed(3)} s${judges.length > 1 ? ', laps summed' : ''}).`
+    : `Keeping the current line (${!quick.length ? 'nothing clean' : notQuicker ? 'nothing quicker' : `nothing clean at grip ${robustGrip}`}).`
 );
 const newLap = best?.laps[0];
 

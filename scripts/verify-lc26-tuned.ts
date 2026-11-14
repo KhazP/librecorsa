@@ -574,7 +574,8 @@ console.log('\n== Laps of Rwanda (autopilot)');
   // At 200 °C the pads have 80 % of their grip; the rear discs, which the MGU-K leaves little to do, are the test
   check(
     `Every disc at 200 to 600 °C when the pedal goes down over lap ${LAPS}`,
-    [discC.front, discC.rear].every(([coolest, hottest]) => coolest >= 200 && hottest <= 600),
+    // Infinity: the pedal was never sampled on that lap, which is no pass
+    [discC.front, discC.rear].every(([coolest, hottest]) => Number.isFinite(coolest) && coolest >= 200 && hottest <= 600),
     `front ${f(discC.front[0], 0)} to ${f(discC.front[1], 0)} °C, rear ${f(discC.rear[0], 0)} to ${f(discC.rear[1], 0)} °C`
   );
 }

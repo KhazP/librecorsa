@@ -179,7 +179,8 @@ export const LibreCorsaMark: React.FC<LibreCorsaMarkProps> = ({
     : ({ "aria-hidden": true } as const);
   if (detail !== "auto") return <EmblemSvg small={detail === "small"} tone={tone} ns={uid} className={className} a11y={a11y} />;
   return (
-    <span className={`@container inline-block ${className}`} {...a11y}>
+    // Square from its height alone: the size container gives the span no width of its own, unlike the bare SVG
+    <span className={`@container inline-block aspect-square ${className}`} {...a11y}>
       <EmblemSvg small={false} tone={tone} ns={`${uid}f`} className="block size-full @max-[32px]:hidden" />
       <EmblemSvg small tone={tone} ns={`${uid}s`} className="hidden size-full @max-[32px]:block" />
     </span>

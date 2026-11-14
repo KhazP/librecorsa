@@ -56,7 +56,8 @@ const RULES = [
       if (/^src\/components\/ui\/(prompts\/|Badge\.tsx$)/.test(f)) return false;
       const floor = isHud(f) ? 9 : 11;
       for (const m of line.matchAll(/text-\[(\d+(?:\.\d+)?)px\]/g)) if (Number(m[1]) < floor) return true;
-      for (const m of line.matchAll(/fontSize:\s*["']?(\d+(?:\.\d+)?)(?:px)?["']?/g)) if (Number(m[1]) < floor) return true;
+      // A bare number or a px value only, ended by a comma, a brace or the line's end: rem, em and computed sizes are not px
+      for (const m of line.matchAll(/fontSize:\s*["']?(\d+(?:\.\d+)?)(?:px)?["']?(?=\s*(?:[,}]|$))/g)) if (Number(m[1]) < floor) return true;
       return false;
     },
   },
