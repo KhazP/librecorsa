@@ -308,8 +308,8 @@
   },
   {
     "id": "le_mans_82",
-    "name": "Circuit de la Sarthe",
-    "layout": "1982 layout",
+    "name": "Circuit de la Sarthe 1982",
+    "layout": "Full circuit",
     "country": "France",
     "city": "Le Mans",
     "lengthM": 13646.33,

@@ -17,7 +17,7 @@ import {
   type CircuitVenue,
   type TrackInfo,
 } from "@/lib/track-registry";
-import { Disclosure, Segmented, Select, SettingRow, Skeleton } from "@/components/ui";
+import { Disclosure, SettingRow, Skeleton } from "@/components/ui";
 import { Badge } from "@/components/ui/Badge";
 import { StateBadge } from "@/components/ui/badges/StateBadge";
 import { useUnits } from "@/lib/settings/ui-prefs";
@@ -26,6 +26,7 @@ import type { UnitSettings } from "@/lib/settings/player-settings";
 import { ContentBrowser, type BrowserFilterGroup, type BrowserSort, type LibraryProps } from "./ContentBrowser";
 import { TrackOutline, useCircuitOutline, useNearView } from "./circuit-outline";
 import { TrackQualityBadge } from "./menu-content-ui";
+import { LayoutChoice } from "@/components/LayoutChoice";
 import { SourceChip } from "@/components/SourceChip";
 import { trackModelSource } from "@/lib/model-source";
 
@@ -270,11 +271,7 @@ export const CircuitBrowser: React.FC<{
             </div>
             {v.layouts.length > 1 ? (
               <SettingRow label="Layout" stacked>
-                {layoutOptions.length <= 3 ? (
-                  <Segmented fill size="sm" options={layoutOptions} value={t.id} onChange={(id) => setLayoutOf((m) => ({ ...m, [v.id]: id }))} />
-                ) : (
-                  <Select options={layoutOptions} value={t.id} onChange={(id) => setLayoutOf((m) => ({ ...m, [v.id]: id }))} />
-                )}
+                <LayoutChoice options={layoutOptions} value={t.id} onChange={(id) => setLayoutOf((m) => ({ ...m, [v.id]: id }))} />
               </SettingRow>
             ) : null}
             <div className="flex flex-wrap items-center justify-between gap-2">

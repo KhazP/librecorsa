@@ -3,8 +3,9 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { currentInputMode, useInputMode } from "@/components/menu/input-mode";
 import { focusables, focusOnHover, useFocusNav } from "@/components/menu/useFocusNav";
+import { LayoutChoice } from "@/components/LayoutChoice";
 import { SourceChip } from "@/components/SourceChip";
-import { Button, EmptyState, MediaTile, Segmented, Select, Tabs } from "@/components/ui";
+import { Button, EmptyState, MediaTile, Select, Tabs } from "@/components/ui";
 import { Icon } from "@/components/ui/icons";
 import { LibreCorsaLogo } from "@/components/ui/LibreCorsaLogo";
 import { KeyCap, PadGlyph, PromptBar, type Prompt } from "@/components/ui/prompts";
@@ -410,10 +411,8 @@ export const HomeHub: React.FC<{ data: HomeData }> = ({ data }) => {
                           action={v.source ? <SourceChip source={v.source} /> : undefined}
                         />
                         {on && v.layouts.length > 1 ? (
-                          <Segmented
+                          <LayoutChoice
                             aria-label={`${v.name} layout`}
-                            size="sm"
-                            fill
                             value={layout.id}
                             onChange={setLayoutId}
                             options={v.layouts.map((l) => ({ id: l.id, label: l.layout }))}
