@@ -236,7 +236,7 @@ export class CarAudioEngine {
     compressor.release.value = 0.12;
 
     const masterGain = ctx.createGain();
-    masterGain.gain.value = this.isMuted || this.isPaused ? 0 : 0.36;
+    masterGain.gain.value = this.outputLevel();
     compressor.connect(masterGain);
     masterGain.connect(ctx.destination);
     this.masterGain = masterGain;
@@ -437,7 +437,7 @@ export class CarAudioEngine {
   private async loadEngineSounds(ctx: AudioContext): Promise<void> {
     const loadId = ++this.bankLoadId;
     this.setEngineVoice('loading');
-    const bank = new Lc26SoundBank(ctx, this.bankDestination ?? ctx.destination, this.sound.assetDir);
+    const bank = new Lc26SoundBank(ctx, this.bankDestination ?? this.masterGain ?? ctx.destination, this.sound.assetDir);
     const ok = await bank.load(CAMERA_MODES[this.cameraMode].interiorAudio ? 'int' : 'ext');
     // A later car, or dispose() (a closed context): this load is not wanted any more
     if (loadId !== this.bankLoadId || this.ctx !== ctx) {
@@ -456,7 +456,7 @@ export class CarAudioEngine {
     }
     // The synthesised voices until the WAV loops are in (loadRealSamples switches to them)
     this.setEngineVoice('synth');
-    await this.loadRealSamples(ctx, this.fallbackDestination ?? ctx.destination);
+    await this.loadRealSamples(ctx, this.fallbackDestination ?? this.masterGain ?? ctx.destination);
   }
 
   /** Current camera, used to pick the interior or exterior engine sound */
@@ -553,10 +553,27 @@ export class CarAudioEngine {
     this.resumeContext();
   }
 
+  /** Master volume, 0 to 1 (Settings > Audio): every sound reaches the speakers through the master gain */
+  private volume = 1;
+
+  /** The master gain's level: silent while muted or paused, else the mix level times the master volume */
+  private outputLevel(): number {
+    return this.isMuted || this.isPaused ? 0 : 0.36 * this.volume;
+  }
+
+  public setVolume(volume: number): void {
+    const v = Math.min(1, Math.max(0, volume));
+    if (v === this.volume) return;
+    this.volume = v;
+    if (this.ctx && this.masterGain) {
+      this.masterGain.gain.setTargetAtTime(this.outputLevel(), this.ctx.currentTime, 0.04);
+    }
+  }
+
   public setMuted(muted: boolean): void {
     this.isMuted = muted;
     if (this.ctx && this.masterGain) {
-      this.masterGain.gain.setTargetAtTime(this.isMuted || this.isPaused ? 0 : 0.36, this.ctx.currentTime, 0.04);
+      this.masterGain.gain.setTargetAtTime(this.outputLevel(), this.ctx.currentTime, 0.04);
     }
   }
 
@@ -568,7 +585,7 @@ export class CarAudioEngine {
     if (this.isPaused === paused) return;
     this.isPaused = paused;
     if (this.ctx && this.masterGain) {
-      this.masterGain.gain.setTargetAtTime(this.isMuted || this.isPaused ? 0 : 0.36, this.ctx.currentTime, 0.025);
+      this.masterGain.gain.setTargetAtTime(this.outputLevel(), this.ctx.currentTime, 0.025);
     }
   }
 

@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
-import { ChevronDown, ExternalLink } from "lucide-react";
-import { Segmented } from "./menu-ui";
+import React, { useEffect, useId, useRef, useState } from "react";
+import { Button, Card, Segmented, Select, SettingRow, TextField, Toggle } from "@/components/ui";
+import { Icon } from "@/components/ui/icons";
 
 /**
  * Feedback goes to GitHub as a pre-filled issue form (.github/ISSUE_TEMPLATE): bug-report.yml, wheel-report.yml,
@@ -43,7 +43,7 @@ const COPY: Record<FeedbackKind, { title: string; intro: string; send: string }>
   },
   Wheel: {
     title: "Report a wheel",
-    intro: "Tell us how your wheel works in LibreCorsa: steering, pedals, buttons and force feedback. Every report makes more wheels work.",
+    intro: "Tell me how your wheel works in LibreCorsa: steering, pedals, buttons and force feedback. Every report makes more wheels work.",
     send: "Send report",
   },
   Idea: {
@@ -53,57 +53,51 @@ const COPY: Record<FeedbackKind, { title: string; intro: string; send: string }>
   },
   Car: {
     title: "Request a car",
-    intro: "Missing your favourite car? Tell us what it is and link the 3D model, so it can be checked and built.",
+    intro: "Missing your favourite car? Tell me what it is and link the 3D model, so it can be checked and built.",
     send: "Send request",
   },
   Track: {
     title: "Request a track",
-    intro: "Missing your favourite circuit? Tell us which one and link the 3D model or scan, so it can be checked and built.",
+    intro: "Missing your favourite circuit? Tell me which one and link the 3D model or scan, so it can be checked and built.",
     send: "Send request",
   },
 };
 
-const fieldClass =
-  "w-full min-w-0 rounded-[14px] border border-[#262B3D] bg-[#08090D] px-3.5 text-[15px] text-[#F5F7FA] placeholder:text-[#8E96AA]/60 focus:border-[#CCFF00] focus:shadow-[0_0_0_4px_rgba(204,255,0,0.12)] focus:outline-none";
-const inputClass = `${fieldClass} h-11`;
-const areaClass = `${fieldClass} resize-y py-3`;
-const badClass = "!border-[#FF2A3C] focus:!shadow-[0_0_0_4px_rgba(255,42,60,0.14)]";
+/** A field's hint, with a caution line under it when there is one */
+const hintWith = (hint?: string, caution?: string): React.ReactNode =>
+  caution ? (
+    <>
+      {hint ? <span className="block">{hint}</span> : null}
+      <span className="mt-0.5 flex items-start gap-1.5 text-lc-caution">
+        <Icon name="warning" size="xs" className="mt-px" />
+        {caution}
+      </span>
+    </>
+  ) : (
+    hint
+  );
 
-const Field: React.FC<{ label: string; hint?: string; caution?: string; required?: boolean; children: React.ReactNode }> = ({
+/** A labelled drop-down in the form: the field label above, the kit's select at full width */
+const FieldSelect: React.FC<{ label: string; value: string; onChange: (value: string) => void; options: readonly string[] }> = ({
   label,
-  hint,
-  caution,
-  required,
-  children,
-}) => (
-  <label className="flex min-w-0 flex-col gap-1.5">
-    <span className="lc-lbl">
-      {label}
-      {required ? <span className="text-[#CCFF00]"> *</span> : null}
-    </span>
-    {children}
-    {hint ? <span className="text-[12px] leading-snug text-[#8E96AA]">{hint}</span> : null}
-    {caution ? <span className="text-[12px] leading-snug text-[#FFB300]">{caution}</span> : null}
-  </label>
-);
-
-/** Native drop-down drawn as a field, with its own chevron */
-const Select: React.FC<{ value: string; onChange: (value: string) => void; options: readonly string[] }> = ({
   value,
   onChange,
   options,
 }) => (
-  <span className="relative block">
-    <select value={value} onChange={(e) => onChange(e.target.value)} className={`${inputClass} cursor-pointer appearance-none pr-10`}>
-      <option value="">Choose…</option>
-      {options.map((o) => (
-        <option key={o} value={o}>
-          {o}
-        </option>
-      ))}
-    </select>
-    <ChevronDown aria-hidden className="pointer-events-none absolute top-3.5 right-3.5 h-4 w-4 text-[#8E96AA]" strokeWidth={2.4} />
-  </span>
+  <div className="flex min-w-0 flex-col gap-1.5">
+    <span className="lc-field-label" aria-hidden>
+      {label}
+    </span>
+    <Select aria-label={label} className="w-full" placeholder="Choose" value={value} onChange={onChange} options={options.map((o) => ({ id: o, label: o }))} />
+  </div>
+);
+
+/** A problem with the request, said in the loss colour on the form itself */
+const Problem: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <p className="m-0 flex items-start gap-2 text-[13px] leading-snug font-medium text-lc-loss">
+    <Icon name="error" size="xs" className="mt-0.5" />
+    <span>{children}</span>
+  </p>
 );
 
 /** Browser and OS from the user agent, e.g. "Chrome 141 on Windows" */
@@ -315,6 +309,10 @@ export const RequestPanel: React.FC<{ context?: FeedbackContext }> = ({ context 
   // sent: the issue has been opened on GitHub; the form waits for "Write another" so a second press opens no second one
   const [sent, setSent] = useState(false);
   const newReportRef = useRef<HTMLButtonElement | null>(null);
+  const formRef = useRef<HTMLFormElement | null>(null);
+  const sentNoteId = useId();
+  /** "Write another" was pressed: the form's first control takes the focus once it is back */
+  const refocusForm = useRef(false);
 
   // Read in the browser after mount (the page is pre-rendered without these)
   useEffect(() => setSys(readSystem()), []);
@@ -341,7 +339,6 @@ export const RequestPanel: React.FC<{ context?: FeedbackContext }> = ({ context 
   const overtake = content && isOvertake(second);
   const moddersOk = (!sketchfab || askedModders) && (!overtake || modderSaidYes);
   const ready = mainOk && secondOk && sketchfabLinkOk && !tagsChecking && !rippedModel && permitted && moddersOk;
-  const locked = !permitted || !moddersOk || !!rippedModel;
   const copy = COPY[kind];
 
   const clearFields = () => {
@@ -364,7 +361,11 @@ export const RequestPanel: React.FC<{ context?: FeedbackContext }> = ({ context 
     e.preventDefault();
     if (sent) return;
     setTried(true);
-    if (!ready) return;
+    if (!ready) {
+      // The first field that says what is wrong takes the focus (its error is read with it)
+      requestAnimationFrame(() => formRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus());
+      return;
+    }
     const url = feedbackIssueUrl({ kind, main, second, third, license, permission, askedModders, modderSaidYes, notes }, context, sys);
     window.open(url, "_blank", "noopener,noreferrer");
     setSent(true);
@@ -374,21 +375,27 @@ export const RequestPanel: React.FC<{ context?: FeedbackContext }> = ({ context 
     clearFields();
     setLicense("");
     setPermission("");
+    refocusForm.current = true;
     setSent(false);
   };
 
   // The send button is gone once sent: keep the focus (a controller's) on the way to a new report
   useEffect(() => {
     if (sent) newReportRef.current?.focus({ preventScroll: true });
+    else if (refocusForm.current) {
+      // "Write another" is gone with the card it sat on: the focus goes to the form, not to the page
+      refocusForm.current = false;
+      formRef.current?.querySelector<HTMLElement>('button:not([tabindex="-1"]), input, textarea')?.focus({ preventScroll: true });
+    }
   }, [sent]);
 
   const added: [string, string][] =
     kind === "Bug"
       ? [
-          ["Circuit", context?.circuit ?? "—"],
-          ["Car", context?.car ?? "—"],
-          ["Input", context?.device ?? "—"],
-          ["Graphics", context?.graphics ?? "—"],
+          ["Circuit", context?.circuit ?? "Not known"],
+          ["Car", context?.car ?? "Not known"],
+          ["Input", context?.device ?? "Not known"],
+          ["Graphics", context?.graphics ?? "Not known"],
           ["Browser", sys?.browser ?? "…"],
           ["Screen", sys?.screen ?? "…"],
           ["GPU", sys?.gpu ?? "…"],
@@ -401,306 +408,284 @@ export const RequestPanel: React.FC<{ context?: FeedbackContext }> = ({ context 
           ]
         : [];
 
+  const lockedReason = rippedModel
+    ? "Models ripped from other games can't be added."
+    : !permitted
+      ? "It needs an open license or the creator's written permission first."
+      : !moddersOk
+        ? overtake
+          ? "Ask the modder for permission first."
+          : "Sketchfab is the last resort. Ask the sim modders first."
+        : undefined;
+
   return (
-    <div className="grid grid-cols-[repeat(auto-fit,minmax(min(300px,100%),1fr))] gap-7 text-[#F5F7FA]">
-      <div className="flex min-w-0 flex-col gap-[18px]">
-        <h2 className="lc-disp m-0 text-[34px] sm:text-[44px]">{copy.title}</h2>
-        <p className="m-0 text-[17px] leading-snug font-semibold sm:text-[18px]">{copy.intro}</p>
+    <div className="grid grid-cols-[repeat(auto-fit,minmax(min(300px,100%),1fr))] gap-7 text-lc-chalk">
+      <div className="flex min-w-0 flex-col gap-4">
+        <h2 className="lc-h2">{copy.title}</h2>
+        <p className="m-0 text-[16px] leading-snug text-lc-fog">{copy.intro}</p>
         {content ? (
-          <p className="m-0 text-[14px] leading-relaxed text-[#8E96AA]">
+          <p className="lc-body m-0">
             LibreCorsa can only ship models it is allowed to share: ones under an open or non-commercial license (CC BY, CC BY-SA, CC0,
-            CC BY-NC, CC BY-NC-SA) or with <span className="text-[#F5F7FA]">written permission from the creator</span>. Mods taken from
+            CC BY-NC, CC BY-NC-SA) or with <span className="text-lc-chalk">written permission from the creator</span>. Mods taken from
             other games can only be used if their original creator agrees.
           </p>
         ) : null}
         {added.length ? (
-          <div className="flex flex-col gap-2 rounded-[18px] border border-[#262B3D] bg-[#08090D]/60 px-4 py-3.5">
-            <span className="lc-lbl">Added to your report</span>
+          <Card title="Added to your report">
             <dl className="m-0 grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1 text-[13px]">
               {added.map(([k, v]) => (
                 <React.Fragment key={k}>
-                  <dt className="text-[#8E96AA]">{k}</dt>
-                  <dd className="m-0 truncate text-[#C5CBD8]" title={v}>
+                  <dt className="text-lc-slate">{k}</dt>
+                  <dd className="m-0 truncate text-lc-fog" title={v}>
                     {v}
                   </dd>
                 </React.Fragment>
               ))}
             </dl>
-          </div>
+          </Card>
         ) : null}
-        <div className="mt-auto flex items-start gap-3 rounded-[18px] border border-[#262B3D] bg-[#08090D]/60 px-4 py-3.5">
-          <ExternalLink aria-hidden className="mt-0.5 h-[18px] w-[18px] shrink-0 text-[#00E5FF]" strokeWidth={2} />
-          <span className="text-[13px] leading-normal text-[#C5CBD8]">
-            Opens a pre-filled issue on GitHub (free account needed); check it and press Create. Screenshots and videos can be
-            dragged in there.
-          </span>
-        </div>
+        <p className="lc-hint m-0 mt-auto flex items-start gap-2">
+          <Icon name="externalLink" className="mt-px text-lc-info" />
+          Opens a pre-filled issue on GitHub (free account needed); check it and press Create. Screenshots and videos can be dragged
+          in there.
+        </p>
       </div>
 
       {sent ? (
-        <div role="status" className="flex min-w-0 flex-col items-start gap-3.5 self-start rounded-[18px] border border-[#262B3D] bg-[#08090D]/60 px-4 py-4">
-          <span className="lc-lbl text-[#CCFF00]">Opened on GitHub</span>
-          <p className="m-0 text-[15px] leading-snug text-[#C5CBD8]">
-            Check the new tab and press Create there to send it. Thanks!
-          </p>
-          <button
-            ref={newReportRef}
-            type="button"
-            onClick={newReport}
-            className="inline-flex h-11 cursor-pointer items-center rounded-full border border-[#262B3D] bg-[#F5F7FA]/[0.08] px-5 text-[14px] font-bold text-[#F5F7FA] transition-colors duration-200 hover:border-[#3A4157]"
-          >
-            Write another
-          </button>
+        <div className="self-start">
+          <Card title="Opened on GitHub" bodyClassName="gap-3.5">
+            <p id={sentNoteId} className="lc-body m-0">
+              Check the new tab and press Create there to send it. Thanks.
+            </p>
+            {/* The focus lands here once sent: the button reads the note with it */}
+            <Button ref={newReportRef} variant="secondary" className="self-start" aria-describedby={sentNoteId} onClick={newReport}>
+              Write another
+            </Button>
+          </Card>
         </div>
       ) : null}
       {/* Hidden, not unmounted, once sent: "Write another" clears it */}
-      <form onSubmit={submit} noValidate className={`${sent ? "hidden" : "flex"} min-w-0 flex-col gap-3.5`}>
-        <Segmented
-          label="What is it about?"
-          className="[&_button]:min-w-0"
-          options={KINDS.map((k) => ({ id: k, label: k }))}
-          value={kind}
-          onChange={pickKind}
-        />
+      <form ref={formRef} onSubmit={submit} noValidate className={`${sent ? "hidden" : "flex"} min-w-0 flex-col gap-4`}>
+        <Segmented aria-label="What is it about?" fill options={KINDS.map((k) => ({ id: k, label: k }))} value={kind} onChange={pickKind} />
 
         {kind === "Bug" ? (
           <>
-            <Field label="What happened?" required hint="And what you expected instead.">
-              <textarea
-                value={main}
-                onChange={(e) => setMain(e.target.value)}
-                rows={3}
-                maxLength={1500}
-                placeholder="The wheels of the GT3 sink into the road at Monza…"
-                aria-invalid={tried && !mainOk}
-                className={`${areaClass} ${tried && !mainOk ? badClass : ""}`}
-              />
-            </Field>
-            <Field label="How to make it happen" required hint="The steps, even rough ones, e.g. “Load Monza in the BMW, drive out of the pits”.">
-              <textarea
-                value={second}
-                onChange={(e) => setSecond(e.target.value)}
-                rows={2}
-                maxLength={1500}
-                aria-invalid={tried && !secondOk}
-                className={`${areaClass} ${tried && !secondOk ? badClass : ""}`}
-              />
-            </Field>
+            <TextField
+              label="What happened? *"
+              required
+              multiline
+              rows={3}
+              maxLength={1500}
+              hint="And what you expected instead."
+              placeholder="The car's wheels sink into the road in the last corner…"
+              value={main}
+              onChange={setMain}
+              error={tried && !mainOk ? "Say what happened, in a few words at least." : undefined}
+            />
+            <TextField
+              label="How to make it happen *"
+              required
+              multiline
+              rows={2}
+              maxLength={1500}
+              hint="The steps, even rough ones, e.g. “Load the circuit in the GT3, drive out of the pits”."
+              value={second}
+              onChange={setSecond}
+              error={tried && !secondOk ? "Add the steps, even rough ones." : undefined}
+            />
             {context && context.device !== "Keyboard" ? (
-              <Field label="Controller or wheel model" hint="For example Xbox Series pad, Logitech G29, Moza R9.">
-                <input value={third} onChange={(e) => setThird(e.target.value)} maxLength={80} className={inputClass} />
-              </Field>
+              <TextField
+                label="Controller or wheel model"
+                hint="The make and model, as written on the box."
+                maxLength={80}
+                autoComplete="off"
+                value={third}
+                onChange={setThird}
+              />
             ) : null}
           </>
         ) : null}
 
         {kind === "Wheel" ? (
           <>
-            <Field label="Wheel base and rim" required hint="For example Moza R9 with ES rim, Logitech G923, Fanatec CSL DD.">
-              <input
-                value={main}
-                onChange={(e) => setMain(e.target.value)}
-                maxLength={120}
-                aria-invalid={tried && !mainOk}
-                className={`${inputClass} ${tried && !mainOk ? badClass : ""}`}
-              />
-            </Field>
-            <Field label="Firmware or driver version" hint="Optional. In the maker's app (Pit House, G Hub, Fanatec app…).">
-              <input value={second} onChange={(e) => setSecond(e.target.value)} maxLength={80} className={inputClass} />
-            </Field>
-            <Field label="What worked, and what didn't?" hint="GitHub then asks which force-feedback path you used, with one click.">
-              <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} maxLength={1500} className={areaClass} />
-            </Field>
+            <TextField
+              label="Wheel base and rim *"
+              required
+              maxLength={120}
+              autoComplete="off"
+              hint="The make and model of the base and of the rim."
+              value={main}
+              onChange={setMain}
+              error={tried && !mainOk ? "Name the wheel base and rim." : undefined}
+            />
+            <TextField
+              label="Firmware or driver version"
+              maxLength={80}
+              autoComplete="off"
+              hint="Optional. The wheel maker's own app shows it."
+              value={second}
+              onChange={setSecond}
+            />
+            <TextField
+              label="What worked, and what didn't?"
+              multiline
+              rows={3}
+              maxLength={1500}
+              hint="GitHub then asks which force-feedback path you used, with one click."
+              value={notes}
+              onChange={setNotes}
+            />
           </>
         ) : null}
 
         {kind === "Idea" ? (
           <>
-            <Field label="Your idea" required>
-              <textarea
-                value={main}
-                onChange={(e) => setMain(e.target.value)}
-                rows={3}
-                maxLength={1500}
-                placeholder="A replay camera that follows the leader…"
-                aria-invalid={tried && !mainOk}
-                className={`${areaClass} ${tried && !mainOk ? badClass : ""}`}
-              />
-            </Field>
-            <Field label="Why it matters" hint="What it would fix or make more fun. Games that do it well help too.">
-              <textarea value={second} onChange={(e) => setSecond(e.target.value)} rows={2} maxLength={1500} className={areaClass} />
-            </Field>
-            <Field label="Area" hint="Menus, HUD, physics, AI, multiplayer, wheel, sound, graphics…">
-              <input value={third} onChange={(e) => setThird(e.target.value)} maxLength={60} className={inputClass} />
-            </Field>
+            <TextField
+              label="Your idea *"
+              required
+              multiline
+              rows={3}
+              maxLength={1500}
+              placeholder="A replay camera that follows the leader…"
+              value={main}
+              onChange={setMain}
+              error={tried && !mainOk ? "Describe the idea, in a few words at least." : undefined}
+            />
+            <TextField
+              label="Why it matters"
+              multiline
+              rows={2}
+              maxLength={1500}
+              hint="What it would fix or make more fun. Games that do it well help too."
+              value={second}
+              onChange={setSecond}
+            />
+            <TextField
+              label="Area"
+              maxLength={60}
+              autoComplete="off"
+              hint="Menus, HUD, physics, AI, multiplayer, wheel, sound, graphics…"
+              value={third}
+              onChange={setThird}
+            />
           </>
         ) : null}
 
         {content ? (
           <>
-            <Field
-              label={kind === "Track" ? "Which track?" : "Which car?"}
+            <TextField
+              label={kind === "Track" ? "Which track? *" : "Which car? *"}
               required
-              hint={kind === "Track" ? "Name and layout or year, e.g. Spa-Francorchamps, 2022 layout" : "Make, model and year, e.g. Porsche 911 GT3 R 2023"}
-            >
-              <input
-                value={main}
-                onChange={(e) => setMain(e.target.value)}
-                maxLength={120}
-                aria-invalid={tried && !mainOk}
-                className={`${inputClass} ${tried && !mainOk ? badClass : ""}`}
-              />
-            </Field>
-            <Field
-              label="Model link"
+              maxLength={120}
+              autoComplete="off"
+              hint={kind === "Track" ? "The name, and the layout or year." : "Make, model and year."}
+              value={main}
+              onChange={setMain}
+              error={tried && !mainOk ? (kind === "Track" ? "Name the track." : "Name the car.") : undefined}
+            />
+            <TextField
+              label="Model link *"
               required
-              hint="The page of the 3D model: Sketchfab, a mod site or a scan. Requests without a model can't be built."
-              caution={sketchfab || overtake ? undefined : "A sim mod (e.g. Assetto Corsa) is far better than Sketchfab: ask its modders first."}
+              type="url"
+              inputMode="url"
+              autoComplete="url"
+              placeholder="https://"
+              hint={hintWith(
+                "The page of the 3D model: Sketchfab, a mod site or a scan. Requests without a model can't be built.",
+                sketchfab || overtake ? undefined : "A mod made for a racing sim is far better than Sketchfab: ask its modders first.",
+              )}
+              value={second}
+              onChange={setSecond}
+              error={
+                (tried || second.trim() !== "") && !secondOk
+                  ? "Add a link to the 3D model, starting with https://"
+                  : sketchfab && !sketchfabId
+                    ? "Paste the model's full page link (sketchfab.com/3d-models/…), not a short link, so its tags can be checked."
+                    : undefined
+              }
+            />
+            {/* The tag check runs while the player waits: what it finds is read out */}
+            <div
+              aria-live="polite"
+              // Empty, it takes back the form's gap
+              className={rippedModel || tagsChecking || (sketchfab && tagCheck?.state === "unknown") ? undefined : "-mt-4"}
             >
-              <input
-                type="url"
-                value={second}
-                onChange={(e) => setSecond(e.target.value)}
-                placeholder="https://"
-                aria-invalid={(tried || second.trim() !== "") && !secondOk}
-                className={`${inputClass} ${(tried || second.trim() !== "") && !secondOk ? badClass : ""}`}
-              />
-            </Field>
-            {sketchfab && !sketchfabId ? (
-              <p className="m-0 rounded-[14px] border border-[#FF2A3C]/40 bg-[#FF2A3C]/[0.08] px-3.5 py-3 text-[13px] leading-normal text-[#FF6B78]">
-                Paste the model&apos;s full page link (sketchfab.com/3d-models/…), not a short link, so its tags can be
-                checked.
-              </p>
-            ) : null}
-            {rippedModel ? (
-              <p className="m-0 rounded-[14px] border border-[#FF2A3C]/40 bg-[#FF2A3C]/[0.08] px-3.5 py-3 text-[13px] leading-normal text-[#FF6B78]">
-                This model is tagged {rippedModel.map((t) => `“${t}”`).join(", ")} on Sketchfab: it was ripped from Assetto
-                Corsa or another game, so it can&apos;t be added. Find the mod&apos;s author and ask them for permission
-                instead.
-              </p>
-            ) : tagsChecking ? (
-              <p className="m-0 text-[12px] leading-snug text-[#8E96AA]">Checking the model&apos;s tags on Sketchfab…</p>
-            ) : sketchfab && tagCheck?.state === "unknown" ? (
-              <p className="m-0 text-[12px] leading-snug text-[#8E96AA]">
-                Sketchfab didn&apos;t answer, so the model&apos;s tags will be checked by hand.
-              </p>
-            ) : null}
+              {rippedModel ? (
+                <Problem>
+                  This model is tagged {rippedModel.map((t) => `“${t}”`).join(", ")} on Sketchfab: it was ripped from another game,
+                  so it can&apos;t be added. Find the mod&apos;s author and ask them for permission instead.
+                </Problem>
+              ) : tagsChecking ? (
+                <p className="lc-hint m-0">Checking the model&apos;s tags on Sketchfab…</p>
+              ) : sketchfab && tagCheck?.state === "unknown" ? (
+                <p className="lc-hint m-0">Sketchfab didn&apos;t answer, so the model&apos;s tags will be checked by hand.</p>
+              ) : null}
+            </div>
             {overtake ? (
-              <label
-                className={`flex cursor-pointer items-start gap-3 rounded-[14px] border bg-[#08090D] px-3.5 py-3 ${
-                  tried && !modderSaidYes ? "border-[#FF2A3C]" : "border-[#262B3D]"
-                }`}
+              <SettingRow
+                label={`I asked the modder who made this ${kind === "Track" ? "track" : "car"} for permission to use it in LibreCorsa, and they said yes. *`}
+                hint="Mods can only be added with their author's permission. Link their answer under Anything else."
               >
-                <input
-                  type="checkbox"
-                  checked={modderSaidYes}
-                  onChange={(e) => setModderSaidYes(e.target.checked)}
-                  aria-invalid={tried && !modderSaidYes}
-                  className="mt-0.5 h-[18px] w-[18px] shrink-0 cursor-pointer accent-[#CCFF00]"
-                />
-                <span className="flex min-w-0 flex-col gap-1">
-                  <span className="text-[14px] leading-snug text-[#F5F7FA]">
-                    I asked the modder who made this {kind === "Track" ? "track" : "car"} for permission to use it in
-                    LibreCorsa, and they said yes.
-                    <span className="text-[#CCFF00]"> *</span>
-                  </span>
-                  <span className="text-[12px] leading-snug text-[#8E96AA]">
-                    Mods can only be added with their author&apos;s permission. Link their answer under Anything else.
-                  </span>
-                </span>
-              </label>
+                <Toggle checked={modderSaidYes} onChange={setModderSaidYes} onLabel="Yes" offLabel="No" />
+              </SettingRow>
             ) : null}
             {sketchfab && !rippedModel ? (
-              <label
-                className={`flex cursor-pointer items-start gap-3 rounded-[14px] border bg-[#08090D] px-3.5 py-3 ${
-                  tried && !askedModders ? "border-[#FF2A3C]" : "border-[#262B3D]"
-                }`}
+              <SettingRow
+                label={`I asked the modders who made this ${kind === "Track" ? "track" : "car"} for other sim racing games for permission, and they said no. *`}
+                hint={
+                  kind === "Track"
+                    ? "Sketchfab tracks are made to look at, not to race on: no grip for the tarmac, no real kerbs, no racing line. A sim mod is far better, so ask its modders first."
+                    : "Sketchfab cars are made to look at, not to drive: no physics comes with them. A sim mod is far better, so ask its modders first."
+                }
               >
-                <input
-                  type="checkbox"
-                  checked={askedModders}
-                  onChange={(e) => setAskedModders(e.target.checked)}
-                  aria-invalid={tried && !askedModders}
-                  className="mt-0.5 h-[18px] w-[18px] shrink-0 cursor-pointer accent-[#CCFF00]"
-                />
-                <span className="flex min-w-0 flex-col gap-1">
-                  <span className="text-[14px] leading-snug text-[#F5F7FA]">
-                    I asked the modders who made this {kind === "Track" ? "track" : "car"} for other sim racing games (Assetto Corsa,
-                    rFactor 2, AMS2…) for permission, and they said no.
-                    <span className="text-[#CCFF00]"> *</span>
-                  </span>
-                  <span className="text-[12px] leading-snug text-[#8E96AA]">
-                    {kind === "Track"
-                      ? "Sketchfab tracks are made to look at, not to race on: no grip for the tarmac, no real kerbs, no racing line. A sim mod is far better, so ask its modders first."
-                      : "Sketchfab cars are made to look at, not to drive: no physics comes with them. A sim mod is far better, so ask its modders first."}
-                  </span>
-                </span>
-              </label>
+                <Toggle checked={askedModders} onChange={setAskedModders} onLabel="Yes" offLabel="No" />
+              </SettingRow>
             ) : null}
-            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-              <Field label="Creator / modder">
-                <input value={third} onChange={(e) => setThird(e.target.value)} maxLength={80} className={inputClass} />
-              </Field>
-              <Field label="License">
-                <Select value={license} onChange={setLicense} options={LICENSES} />
-              </Field>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <TextField label="Creator / modder" maxLength={80} autoComplete="off" value={third} onChange={setThird} />
+              <FieldSelect label="License" value={license} onChange={setLicense} options={LICENSES} />
             </div>
-            <Field label="Permission to use it" required>
-              <Select value={permission} onChange={setPermission} options={PERMISSIONS} />
-            </Field>
+            <FieldSelect label="Permission to use it *" value={permission} onChange={setPermission} options={PERMISSIONS} />
             {ripped ? (
-              <p className="m-0 rounded-[14px] border border-[#FFB300]/35 bg-[#FFB300]/[0.08] px-3.5 py-3 text-[13px] leading-normal text-[#FFB300]">
+              <p className="m-0 flex items-start gap-2 text-[13px] leading-snug font-medium text-lc-caution">
+                <Icon name="warning" size="xs" className="mt-0.5" />
                 {license === "Don't know" && !writtenPermission
                   ? "Find out the model's license, or ask the creator for written permission: without either it can't be added."
                   : "Ask the creator first, and link their answer under Anything else. Without an open license or their permission it can't be added."}
               </p>
             ) : null}
-            <Field label="Anything else?">
-              <textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                rows={2}
-                maxLength={1500}
-                placeholder="Why it would be fun, a link to the creator's permission, reference photos…"
-                className={areaClass}
-              />
-            </Field>
+            <TextField
+              label="Anything else?"
+              multiline
+              rows={2}
+              maxLength={1500}
+              placeholder="Why it would be fun, a link to the creator's permission, reference photos…"
+              value={notes}
+              onChange={setNotes}
+            />
           </>
         ) : null}
 
-        {tried && !ready ? (
-          <p role="alert" className="m-0 text-[13px] text-[#FF2A3C]">
-            {content && !secondOk
-              ? "Add a link to the 3D model (starting with https://)."
-              : !sketchfabLinkOk
-                ? "Paste the model's full Sketchfab page link."
-                : rippedModel
-                  ? "Models ripped from Assetto Corsa or other games can't be added."
+        {/* Always in the page, so the problem is read out when it appears */}
+        <div role="alert" className={tried && !ready && !lockedReason ? undefined : "-mt-4"}>
+          {tried && !ready && !lockedReason ? (
+            <Problem>
+              {content && !secondOk
+                ? "Add a link to the 3D model (starting with https://)."
+                : !sketchfabLinkOk
+                  ? "Paste the model's full Sketchfab page link."
                   : tagsChecking
                     ? "Still checking the model's tags on Sketchfab."
-                    : !permitted
-                      ? "It needs an open license or the creator's written permission first."
-                      : !moddersOk
-                        ? overtake
-                          ? "Ask the modder for permission first."
-                          : "Sketchfab is the last resort. Ask the sim modders first."
-                        : "Fill in the fields marked *."}
-          </p>
-        ) : null}
-        <button
-          type="submit"
-          disabled={!permitted}
-          // Left pressable while only a modders box is missing or the model is ripped, so pressing it says why
-          aria-disabled={locked || undefined}
-          className={`inline-flex h-[52px] items-center gap-2.5 self-end rounded-full border-0 px-6 transition-colors ${
-            !locked
-              ? "cursor-pointer bg-[#CCFF00] text-[#08090D] shadow-[0_0_0_5px_rgba(204,255,0,0.12)] hover:bg-[#d9ff33]"
-              : "cursor-not-allowed bg-[#262B3D] text-[#8E96AA]"
-          }`}
-        >
-          <span className="lc-disp text-[18px]">{copy.send}</span>
-          <ExternalLink aria-hidden className="h-4 w-4" strokeWidth={2.4} />
-        </button>
+                    : "Fill in the fields marked *."}
+            </Problem>
+          ) : null}
+        </div>
+        <div className="flex flex-wrap items-center justify-end gap-x-4 gap-y-2">
+          {lockedReason ? <span className="lc-hint">{lockedReason}</span> : null}
+          <Button type="submit" variant="primary" size="lg" disabledReason={lockedReason} icon={<Icon name="externalLink" />}>
+            {copy.send}
+          </Button>
+        </div>
       </form>
     </div>
   );

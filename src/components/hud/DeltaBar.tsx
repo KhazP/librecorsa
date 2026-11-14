@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
-import { HUD_GREEN, HUD_RED, HUD_SLATE, formatDelta } from "./hud-format";
+import { Trend as TrendArrow } from "@/components/ui/icons/Trend";
+import { HUD_GAIN, HUD_LOSS, HUD_SLATE, NO_TIME, formatDelta } from "./hud-format";
 
 /** Trend window: the slope is taken across about this much history */
 const TREND_WINDOW_MS = 500;
@@ -55,23 +56,19 @@ export function useDeltaTrend(deltaS: number | null, runId = 0): { trend: Trend;
   return out;
 }
 
-/** Double chevron pointing the way the delta is moving: left / green while gaining, right / red while losing */
+/** The kit's gain / loss arrow on the side the delta is moving: up on the left while gaining, down on the right while losing */
 const Chevron: React.FC<{ trend: Trend; rate: number; side: "left" | "right" }> = ({ trend, rate, side }) => {
   const show = (trend === "gaining" && side === "left") || (trend === "losing" && side === "right");
-  const color = trend === "gaining" ? HUD_GREEN : HUD_RED;
-  // Stronger rate, brighter chevron
+  // Stronger rate, brighter arrow
   const strength = Math.min(1, Math.abs(rate) / 0.4);
   return (
-    <svg
-      viewBox="0 0 16 12"
-      width={16}
-      height={12}
+    <span
       aria-hidden
-      className="shrink-0 transition-opacity duration-150"
-      style={{ opacity: show ? 0.45 + strength * 0.55 : 0, transform: side === "left" ? "scaleX(-1)" : undefined }}
+      className="inline-flex w-3.5 shrink-0 justify-center transition-opacity duration-150"
+      style={{ opacity: show ? 0.45 + strength * 0.55 : 0, color: side === "left" ? HUD_GAIN : HUD_LOSS }}
     >
-      <path d="M2 1l5 5-5 5M8 1l5 5-5 5" fill="none" stroke={color} strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
+      <TrendArrow direction={side === "left" ? "up" : "down"} size={12} />
+    </span>
   );
 };
 
@@ -89,15 +86,15 @@ export const DeltaBar: React.FC<{ deltaS: number | null; width?: number; /** The
   const has = deltaS !== null;
   const d = deltaS ?? 0;
   const ahead = d <= 0;
-  const frac = Math.min(1, Math.abs(d)) * 50;
-  const aheadPct = has && ahead ? frac : 0;
-  const behindPct = has && !ahead ? frac : 0;
+  const frac = Math.min(1, Math.abs(d));
+  const aheadK = has && ahead ? frac : 0;
+  const behindK = has && !ahead ? frac : 0;
 
-  const textColor = has ? (ahead ? HUD_GREEN : HUD_RED) : HUD_SLATE;
+  const textColor = has ? (ahead ? HUD_GAIN : HUD_LOSS) : HUD_SLATE;
 
   return (
     <div
-      className="relative h-[26px]"
+      className="relative h-6.5"
       style={{ width }}
       role="meter"
       aria-label="Delta to reference lap"
@@ -106,27 +103,28 @@ export const DeltaBar: React.FC<{ deltaS: number | null; width?: number; /** The
       aria-valuenow={has ? Math.max(-1, Math.min(1, d)) : 0}
       aria-valuetext={has ? `${formatDelta(d)} seconds, ${trend}` : "No reference lap"}
     >
-      <div className="absolute inset-x-0 top-2 h-2.5 overflow-hidden rounded-full bg-[#08090D]/70 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]">
+      <div className="absolute inset-x-0 top-2 h-2.5 overflow-hidden rounded-full bg-lc-void/70 inset-ring inset-ring-white/8">
+        {/* Each half scales from the centre line (transform only, so the bar never re-lays out) */}
         <span
-          className="absolute inset-y-0 right-1/2 transition-[width] duration-[120ms] ease-out"
-          style={{ width: `${aheadPct}%`, backgroundColor: HUD_GREEN }}
+          className="absolute inset-y-0 right-1/2 w-1/2 origin-right bg-lc-gain transition-transform duration-[120ms] ease-out"
+          style={{ transform: `scaleX(${aheadK})` }}
         />
         <span
-          className="absolute inset-y-0 left-1/2 transition-[width] duration-[120ms] ease-out"
-          style={{ width: `${behindPct}%`, backgroundColor: HUD_RED }}
+          className="absolute inset-y-0 left-1/2 w-1/2 origin-left bg-lc-loss transition-transform duration-[120ms] ease-out"
+          style={{ transform: `scaleX(${behindK})` }}
         />
         {/* ±0.5 s ticks */}
-        <span className="absolute inset-y-0 left-1/4 w-px bg-[#F5F7FA]/15" />
-        <span className="absolute inset-y-0 left-3/4 w-px bg-[#F5F7FA]/15" />
-        <span className="absolute inset-y-0 left-1/2 w-px bg-[#F5F7FA]/50" />
+        <span className="absolute inset-y-0 left-1/4 w-px bg-lc-chalk/15" />
+        <span className="absolute inset-y-0 left-3/4 w-px bg-lc-chalk/15" />
+        <span className="absolute inset-y-0 left-1/2 w-px bg-lc-chalk/50" />
       </div>
       <span className="absolute top-0 left-1/2 flex -translate-x-1/2 items-center gap-1">
         <Chevron trend={trend} rate={rate} side="left" />
         <span
-          className="lc-data rounded-full border border-[#262B3D] bg-[#08090D] px-2.5 py-[5px] text-[12px] leading-none"
+          className="lc-data rounded-full border border-white/7 bg-lc-void px-2.5 py-1.25 text-[12px] leading-none"
           style={{ color: textColor }}
         >
-          {has ? `${formatDelta(d)}s` : "—"}
+          {has ? formatDelta(d) : NO_TIME}
         </span>
         <Chevron trend={trend} rate={rate} side="right" />
       </span>

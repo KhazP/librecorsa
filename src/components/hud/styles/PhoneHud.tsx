@@ -2,10 +2,13 @@
 
 import { activeLapWord } from "@/lib/track-data";
 import React, { useSyncExternalStore } from "react";
-import { Zap } from "lucide-react";
-import { atShiftPoint, formatDelta, formatLapTime, HUD_RED } from "../hud-format";
+import { Badge } from "@/components/ui/Badge";
+import { Icon } from "@/components/ui/icons/Icon";
+import { DeltaBadge } from "@/components/ui/badges/DeltaBadge";
+import { useUnits } from "@/lib/settings/ui-prefs";
+import { atShiftPoint, formatLapTime, formatSpeed, HUD_BEST, HUD_GAIN, HUD_GREEN, HUD_RED, HUD_SHIFT, NO_TIME, speedUnit } from "../hud-format";
 import { aeroReadout } from "../aero-label";
-import { anchor, deltaColor, gearLabel, HUD_GLASS, HUD_LBL, MiniMap, type HudDesignProps } from "./hud-style-parts";
+import { anchor, gearLabel, HUD_GLASS, HUD_LBL, InvalidTag, MiniMap, type HudDesignProps } from "./hud-style-parts";
 
 /** A phone in either orientation: narrow, or a landscape screen this short */
 const PHONE_QUERY = "(max-width: 639px), (max-height: 479px)";
@@ -27,10 +30,10 @@ export function usePhoneLayout(): boolean {
 
 /** Rev lights in the speed pod */
 const LEDS = 12;
-const ledColor = (i: number) => (i < 5 ? "#00E676" : i < 9 ? HUD_RED : "#2F8BE5");
+const ledColor = (i: number) => (i < 5 ? HUD_GREEN : i < 9 ? HUD_RED : HUD_SHIFT);
 
 /**
- * Phone: one HUD for small screens, after the mobile racers (Real Racing 3, GRID). Everything lives
+ * Phone: one HUD for small screens, after the mobile racers. Everything lives
  * along the top edge so the thumbs on the steering pad and pedals never cover it: speed and gear
  * top-centre, position, lap and delta top-right, a small map top-left under the touch Menu / Cam.
  * In portrait the speed pod drops under the top row and the map steps aside. It sits in the HUD's
@@ -42,6 +45,8 @@ export const PhoneHud: React.FC<HudDesignProps> = ({ t, deltaS, map, revRange, s
   const lit = Math.round(Math.min(1, Math.max(0, (t.rpm - revStart) / (revFull - revStart))) * LEDS);
   const shift = atShiftPoint(t.rpm, revFull);
   const hasErs = t.f12026?.hasErs ?? true;
+  const units = useUnits();
+  const aero = aeroReadout(t);
 
   return (
     <div className="pointer-events-none absolute inset-0 select-none">
@@ -50,7 +55,7 @@ export const PhoneHud: React.FC<HudDesignProps> = ({ t, deltaS, map, revRange, s
         className="absolute hidden landscape:block"
         style={{ top: touch ? 64 : 12, left: 12, ...anchor(scale, "top left") }}
       >
-        <div className={`h-[92px] w-[92px] rounded-[20px] p-2 phone:h-[72px] phone:w-[72px] phone:rounded-[16px] phone:p-1.5 ${HUD_GLASS}`}>
+        <div className={`h-[92px] w-[92px] rounded-lc-tile p-2 phone:h-[72px] phone:w-[72px] phone:rounded-lc-row phone:p-1.5 ${HUD_GLASS}`}>
           <MiniMap map={map} t={t} sectors className="block h-full w-full" stroke={30} />
         </div>
       </div>
@@ -60,37 +65,35 @@ export const PhoneHud: React.FC<HudDesignProps> = ({ t, deltaS, map, revRange, s
         className="absolute left-1/2 -translate-x-1/2 portrait:top-[124px] landscape:top-3"
         style={anchor(scale, "top center")}
       >
-        <div className={`flex items-center gap-2.5 rounded-[22px] p-1.5 pr-3.5 phone:gap-2 phone:rounded-[18px] phone:p-1 phone:pr-3 ${HUD_GLASS}`}>
+        <div className={`flex items-center gap-2.5 rounded-lc-card p-1.5 pr-3.5 phone:gap-2 phone:rounded-lc-tile phone:p-1 phone:pr-3 ${HUD_GLASS}`}>
           <span
-            className={`flex h-[60px] w-[56px] shrink-0 items-center justify-center rounded-[16px] transition-colors duration-75 phone:h-[46px] phone:w-[44px] phone:rounded-[14px] ${
-              shift ? "bg-[#2F8BE5] text-[#F5F7FA]" : "bg-[#CCFF00] text-[#08090D]"
+            className={`flex h-[60px] w-[56px] shrink-0 items-center justify-center rounded-lc-row transition-colors duration-75 phone:h-[46px] phone:w-[44px] phone:rounded-lc-row ${
+              shift ? "bg-lc-cyan text-lc-void" : "bg-lc-volt text-lc-void"
             }`}
           >
             <span className="lc-disp text-[40px] leading-none phone:text-[30px]">{gearLabel(t.gear)}</span>
           </span>
           <div className="flex w-[112px] flex-col gap-1.5 phone:w-[96px] phone:gap-1">
-            <div className="flex gap-[3px]" aria-hidden>
+            <div className="flex gap-0.75" aria-hidden>
               {Array.from({ length: LEDS }, (_, i) => (
                 <span
                   key={i}
                   className="h-1 flex-1 rounded-full"
-                  style={{ backgroundColor: shift ? "#2F8BE5" : i < lit ? ledColor(i) : "#1B1F2B" }}
+                  style={{ backgroundColor: shift ? HUD_SHIFT : i < lit ? ledColor(i) : "var(--color-lc-titanium)" }}
                 />
               ))}
             </div>
             <div className="flex items-baseline justify-between">
-              <span className="lc-data text-[30px] leading-none tracking-[-0.02em] text-[#F5F7FA] tabular-nums phone:text-[23px]">{Math.round(t.speedKmh)}</span>
-              <span className="font-f1-mono text-[9px] font-extrabold tracking-[0.16em] text-[#8E96AA]">KM/H</span>
+              <span className="lc-data text-[30px] leading-none tracking-[-0.02em] text-lc-chalk phone:text-[23px]">{formatSpeed(t.speedKmh, units)}</span>
+              <span className={HUD_LBL}>{speedUnit(units)}</span>
             </div>
             {hasErs ? (
               <div className="flex items-center gap-1.5">
-                <Zap aria-hidden className="h-2.5 w-2.5 shrink-0 text-[#00E5FF]" fill={t.mgukPowerKw > 0 ? "#00E5FF" : "none"} />
+                <Icon name="ers" size="xs" className={`size-3 ${t.mgukPowerKw > 0 ? "text-lc-info" : "text-lc-slate"}`} />
                 <span className="relative h-1 flex-1 overflow-hidden rounded-full bg-white/10">
-                  <span className="absolute inset-y-0 left-0 rounded-full bg-[#00E5FF]" style={{ width: `${t.ersBatteryPercent}%` }} />
+                  <span className="absolute inset-y-0 left-0 rounded-full bg-lc-info" style={{ width: `${t.ersBatteryPercent}%` }} />
                 </span>
-                {aeroReadout(t).open ? (
-                  <span className="rounded-full bg-[#CCFF00] px-1.5 font-f1-mono text-[8px] leading-[14px] font-extrabold text-[#08090D]">X</span>
-                ) : null}
+                {aero.open ? <Badge tone="info" variant="solid" size="hud" icon="drsOpen" aria-label={aero.label} /> : null}
               </div>
             ) : null}
           </div>
@@ -102,15 +105,15 @@ export const PhoneHud: React.FC<HudDesignProps> = ({ t, deltaS, map, revRange, s
         className="absolute w-[176px] landscape:w-[196px] phone:w-[160px]"
         style={{ top: 12, right: 12, ...anchor(scale, "top right") }}
       >
-        <section aria-label="Timing" className={`flex flex-col gap-1.5 rounded-[20px] px-3 pt-2 pb-2.5 phone:gap-1 phone:rounded-[16px] phone:px-2.5 phone:pt-1.5 phone:pb-2 ${HUD_GLASS}`}>
+        <section aria-label="Timing" className={`flex flex-col gap-1.5 rounded-lc-tile px-3 pt-2 pb-2.5 phone:gap-1 phone:rounded-lc-row phone:px-2.5 phone:pt-1.5 phone:pb-2 ${HUD_GLASS}`}>
           <div className="flex items-baseline justify-between gap-2">
             {race ? (
-              <span className="lc-disp text-[26px] leading-none text-[#F5F7FA] phone:text-[21px]">
+              <span className="lc-disp text-[26px] leading-none text-lc-chalk phone:text-[21px]">
                 P{race.position}
-                <span className="text-[16px] text-[#8E96AA] phone:text-[13px]">/{race.standings.length}</span>
+                <span className="text-[16px] text-lc-slate phone:text-[13px]">/{race.standings.length}</span>
               </span>
             ) : (
-              <span className="lc-disp text-[22px] leading-none text-[#F5F7FA] phone:text-[18px]">{activeLapWord()} {Math.max(1, t.lapCount)}</span>
+              <span className="lc-disp text-[22px] leading-none text-lc-chalk phone:text-[18px]">{activeLapWord()} {Math.max(1, t.lapCount)}</span>
             )}
             {race ? (
               <span className={HUD_LBL}>
@@ -120,18 +123,22 @@ export const PhoneHud: React.FC<HudDesignProps> = ({ t, deltaS, map, revRange, s
             ) : null}
           </div>
           <div className="flex items-center justify-between gap-2">
-            <span className={`lc-data text-[17px] leading-none tabular-nums phone:text-[15px] ${lapInvalid ? "text-[#FF2A3C]" : "text-[#F5F7FA]"}`}>
+            <span className={`lc-data text-[17px] leading-none phone:text-[15px] ${lapInvalid ? "text-lc-loss" : "text-lc-chalk"}`}>
               {formatLapTime(t.currentLapTimeMs)}
             </span>
-            <span
-              className="lc-data inline-flex h-[22px] w-[66px] shrink-0 items-center justify-center rounded-full text-[11px] whitespace-nowrap phone:h-5 phone:w-[60px] phone:text-[10px] text-[#08090D] tabular-nums"
-              style={{ backgroundColor: deltaS === null ? "#1B1F2B" : deltaColor(deltaS), color: deltaS === null ? "#8E96AA" : "#08090D" }}
-            >
-              {deltaS === null ? "--.---" : formatDelta(Math.max(-9.999, Math.min(9.999, deltaS)))}
-            </span>
+            {deltaS === null ? (
+              <Badge size="sm" className="lc-mono w-17 justify-center phone:w-15">
+                {NO_TIME}
+              </Badge>
+            ) : (
+              <DeltaBadge seconds={Math.max(-9.999, Math.min(9.999, deltaS))} size="sm" variant="solid" className="w-17 justify-center phone:w-15" />
+            )}
           </div>
-          <span className={`${HUD_LBL} flex justify-between`}>
-            Best <span className="text-[#B845FF] tabular-nums">{formatLapTime(t.bestLapTimeMs)}</span>
+          <span className="flex items-center justify-between">
+            {lapInvalid ? <InvalidTag /> : <span className={HUD_LBL}>Best</span>}
+            <span className="lc-data text-[11px]" style={{ color: t.bestLapTimeMs ? (race ? HUD_GAIN : HUD_BEST) : "var(--color-lc-slate)" }}>
+              {formatLapTime(t.bestLapTimeMs)}
+            </span>
           </span>
         </section>
       </div>

@@ -4,35 +4,15 @@ import React, { useEffect, useState } from "react";
 import type { InputDevice } from "@/lib/input/device-input";
 import { isLikelyWheel, padDisplayName } from "@/lib/input/device-input";
 import { requestTiltPermission } from "@/lib/input/touch-input";
+import { Button, OptionTile, OptionTileGroup } from "@/components/ui";
+import { Badge } from "@/components/ui/Badge";
+import { Icon, type IconName } from "@/components/ui/icons";
+import { useSettingsEnv } from "@/components/settings/env";
+import { SettingsCard } from "@/components/settings/fields";
 import { useGamepads } from "../useMenuNav";
-import { Check, Gamepad2, Keyboard, Smartphone } from "lucide-react";
-import { Hint, PillAction, SetupCard } from "./setup-ui";
+import { Hint } from "./setup-ui";
 import { PadMap } from "./PadMap";
 import { padFamilyOf } from "../input-mode";
-import type { SetupStepProps } from "./types";
-
-/** Steering wheel glyph in the lucide style (lucide has no wheel icon) */
-const WheelIcon: React.FC<{ className?: string; strokeWidth?: number }> = ({ className, strokeWidth = 1.8 }) => (
-  <svg
-    viewBox="0 0 24 24"
-    className={className}
-    fill="none"
-    stroke="currentColor"
-    strokeWidth={strokeWidth}
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden
-  >
-    <circle cx="12" cy="12" r="10" />
-    <circle cx="12" cy="12" r="2" />
-    <path d="M12 14v8M10.2 11.1 2.5 9.5M13.8 11.1l7.7-1.6" />
-  </svg>
-);
-
-/** Lucide's phone, leaning as it does when tilted to steer */
-const TiltIcon: React.FC<{ className?: string; strokeWidth?: number }> = ({ className, strokeWidth }) => (
-  <Smartphone className={`${className ?? ""} -rotate-[24deg]`} strokeWidth={strokeWidth} />
-);
 
 type Choice = InputDevice | "touch" | "tilt";
 
@@ -40,20 +20,115 @@ interface DeviceChoice {
   id: Choice;
   title: string;
   detail: string;
-  icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
+  icon: IconName;
 }
 
-const DEVICES: DeviceChoice[] = [
-  { id: "keyboard", title: "Keyboard", detail: "Arrows / WASD with smoothed steering. Rebind any key.", icon: Keyboard },
-  { id: "controller", title: "Controller", detail: "Xbox, PlayStation and other pads, with a steering assist.", icon: Gamepad2 },
-  { id: "wheel", title: "Wheel", detail: "Direct drive or belt / gear wheels with pedals. Calibrated 1:1.", icon: WheelIcon },
+export const DEVICES: readonly DeviceChoice[] = [
+  { id: "keyboard", title: "Keyboard", detail: "Arrows or WASD with smoothed steering. Every key can be changed", icon: "keyboard" },
+  { id: "controller", title: "Controller", detail: "Any standard controller, with a steering assist", icon: "controller" },
+  { id: "wheel", title: "Wheel", detail: "Direct drive, belt or gear wheels with pedals, calibrated one to one", icon: "wheel" },
 ];
 
 /** On a touch screen, ahead of the rest: the on-screen controls, steered with the slider or by tilting the device */
-const TOUCH_CHOICES: DeviceChoice[] = [
-  { id: "touch", title: "Touch", detail: "Steering slider and pedals on the screen.", icon: Smartphone },
-  { id: "tilt", title: "Tilt", detail: "Tilt the device to steer, with the pedals on the screen.", icon: TiltIcon },
+const TOUCH_CHOICES: readonly DeviceChoice[] = [
+  { id: "touch", title: "Touch", detail: "A steering slider and pedals on the screen", icon: "touch" },
+  { id: "tilt", title: "Tilt", detail: "Tilt the device to steer, with the pedals on the screen", icon: "tilt" },
 ];
+
+/** The device a connected pad or wheel suggests */
+export const detectedDevice = (pads: readonly Gamepad[] | readonly { id: string; axes: readonly number[] }[]): InputDevice | null =>
+  pads.length ? ((pads as readonly Gamepad[]).some(isLikelyWheel) ? "wheel" : "controller") : null;
+
+/** The device tiles: picking one is the choice, the cursor passing over them changes nothing */
+export function DeviceTiles({
+  choices,
+  value,
+  detected,
+  onPick,
+  first,
+}: {
+  choices: readonly DeviceChoice[];
+  value: Choice;
+  detected: InputDevice | null;
+  onPick: (choice: Choice) => void;
+  first?: boolean;
+}) {
+  return (
+    <OptionTileGroup aria-label="Input device" columns={3}>
+      {choices.map((d) => (
+        <OptionTile
+          key={d.id}
+          checked={value === d.id}
+          onSelect={() => onPick(d.id)}
+          navDefault={first && value === d.id}
+          media={
+            <span className="flex h-12 items-center text-lc-fog [&_svg]:size-7">
+              <Icon name={d.icon} size="lg" />
+            </span>
+          }
+          title={
+            <span className="flex flex-wrap items-center gap-2">
+              {d.title}
+              {detected === d.id ? (
+                <Badge tone="good" size="sm" dot>
+                  Connected
+                </Badge>
+              ) : null}
+            </span>
+          }
+          description={d.detail}
+        />
+      ))}
+    </OptionTileGroup>
+  );
+}
+
+/** Every controller and wheel the browser can see, with the button map of a standard controller */
+export function ConnectedDevicesCard() {
+  const { settings } = useSettingsEnv();
+  const pads = useGamepads();
+  // The controller whose button map is open (by pad id), if any
+  const [mapFor, setMapFor] = useState<string | null>(null);
+  return (
+    <SettingsCard
+      title="Connected devices"
+      description={pads.length === 0 ? "None yet. A browser only shows a controller or wheel after one of its buttons is pressed: press one now" : undefined}
+    >
+      {pads.length > 0 ? (
+        <ul className="m-0 flex list-none flex-col gap-2 p-0">
+          {pads.map((p) => {
+            // Only a standard-layout pad has a known button map
+            const mappable = p.mapping === "standard" && !isLikelyWheel(p);
+            const open = mappable && mapFor === p.id;
+            return (
+              <li key={`${p.index}-${p.id}`} className="flex flex-col gap-3 rounded-lc-row border border-lc-line bg-lc-well px-3.5 py-3">
+                <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                  <span className="flex min-w-0 items-center gap-2.5">
+                    <Badge tone="good" dot size="sm">
+                      {isLikelyWheel(p) ? "Wheel" : "Controller"}
+                    </Badge>
+                    <span className="lc-row-label truncate">{padDisplayName(p.id)}</span>
+                  </span>
+                  <span className="flex shrink-0 items-center gap-3">
+                    <span className="lc-mono text-[12px] text-lc-slate">
+                      {p.axes.length} axes, {p.buttons.length} buttons
+                    </span>
+                    {mappable ? (
+                      <Button size="sm" variant="ghost" aria-expanded={open} onClick={() => setMapFor(open ? null : p.id)}>
+                        {open ? "Hide map" : "Button map"}
+                      </Button>
+                    ) : null}
+                  </span>
+                </div>
+                {open ? <PadMap family={padFamilyOf(p.id)} bindings={settings.padButtons} pad={p} /> : null}
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
+    </SettingsCard>
+  );
+}
 
 /** The touch choice, where the screen is one (null elsewhere): owned by the wizard, which skips the key setup for it */
 export interface TouchPick {
@@ -61,26 +136,24 @@ export interface TouchPick {
   onPick: (picked: boolean) => void;
 }
 
-/** Step 1: how the player drives. A connected controller or wheel is detected and preselected. */
-export const DeviceStep: React.FC<
-  SetupStepProps & {
-    /** Set once the player picks a device; owned by the wizard, so it survives this step unmounting (Next, Back) */
-    pickedRef: React.MutableRefObject<boolean>;
-    touch: TouchPick | null;
-  }
-> = ({ settings, onChangeSettings, pickedRef, touch }) => {
+/** First-run setup's first step: how the player drives. A connected controller or wheel is detected and preselected. */
+export const DeviceStep: React.FC<{
+  /** Set once the player picks a device; owned by the wizard, so it survives this step unmounting (Next, Back) */
+  pickedRef: React.MutableRefObject<boolean>;
+  touch: TouchPick | null;
+}> = ({ pickedRef, touch }) => {
+  const { settings, update } = useSettingsEnv();
   const pads = useGamepads();
-  // The controller whose button map is open (by pad id), if any
-  const [mapFor, setMapFor] = useState<string | null>(null);
+  const detected = detectedDevice(pads);
 
-  // Preselect what is plugged in, until the player picks something themselves
-  const detected: InputDevice | null = pads.length ? (pads.some(isLikelyWheel) ? "wheel" : "controller") : null;
+  // Preselect what is plugged in, until the player picks something themselves (first run only: in Settings the
+  // device is the player's explicit choice)
   useEffect(() => {
     if (!pickedRef.current && detected && (detected !== settings.device || touch?.picked)) {
       touch?.onPick(false);
-      onChangeSettings((s) => ({ ...s, device: detected }));
+      update((s) => ({ ...s, device: detected }));
     }
-  }, [detected, settings.device, onChangeSettings, touch]);
+  }, [detected, settings.device, update, touch, pickedRef]);
 
   const pick = (choice: Choice) => {
     pickedRef.current = true;
@@ -89,114 +162,25 @@ export const DeviceStep: React.FC<
       // iOS asks before it sends tilt, and only from inside a tap: asked here, the prompt comes with the choice
       if (tiltSteer) void requestTiltPermission();
       touch?.onPick(true);
-      onChangeSettings((s) => ({ ...s, touch: { ...s.touch, mode: s.touch.mode === "off" ? "auto" : s.touch.mode, tiltSteer } }));
+      update((s) => ({ ...s, touch: { ...s.touch, mode: s.touch.mode === "off" ? "auto" : s.touch.mode, tiltSteer } }));
       return;
     }
     touch?.onPick(false);
-    onChangeSettings((s) => ({ ...s, device: choice }));
+    update((s) => ({ ...s, device: choice }));
   };
   // Browsers only send tilt to a secure page (https, or localhost): over plain http on the LAN it never arrives
   const [tiltAvailable] = useState(
-    () => typeof window !== "undefined" && window.isSecureContext !== false && "DeviceOrientationEvent" in window
+    () => typeof window !== "undefined" && window.isSecureContext !== false && "DeviceOrientationEvent" in window,
   );
   const activeChoice: Choice = touch?.picked ? (settings.touch.tiltSteer && tiltAvailable ? "tilt" : "touch") : settings.device;
   const choices = touch ? [...TOUCH_CHOICES.filter((c) => c.id !== "tilt" || tiltAvailable), ...DEVICES] : DEVICES;
 
   return (
-    <div className="flex flex-col gap-4 sm:gap-[22px]">
-      <div className={`grid gap-3 ${touch ? "sm:grid-cols-2 lg:grid-cols-3" : "sm:grid-cols-3"}`}>
-        {choices.map((d) => {
-          const active = activeChoice === d.id;
-          const Icon = d.icon;
-          return (
-            <button
-              key={d.id}
-              type="button"
-              onClick={() => pick(d.id)}
-              aria-pressed={active}
-              className={`lc-glass relative flex cursor-pointer flex-col items-start gap-3.5 rounded-[24px] p-5 text-left transition-[background-color,border-color,box-shadow] duration-200 not-compact:min-h-[220px] short:p-3.5 short:flex-row short:flex-wrap short:items-center short:gap-3 max-sm:grid max-sm:grid-cols-[auto_minmax(0,1fr)] max-sm:items-center max-sm:gap-x-3.5 max-sm:gap-y-1 max-sm:p-4 max-sm:pr-12 phone:rounded-[20px] ${
-                active
-                  ? "border-[1.5px]! border-[#CCFF00]! bg-[#CCFF00]/[0.07]! shadow-[0_0_0_6px_rgba(204,255,0,0.08)]!"
-                  : "hover:border-[#3A4157]!"
-              }`}
-            >
-              <span
-                aria-hidden
-                className={`inline-flex h-14 w-14 shrink-0 items-center justify-center rounded-full short:h-10 short:w-10 max-sm:row-span-2 max-sm:h-11 max-sm:w-11 ${
-                  active ? "bg-[#CCFF00] text-[#08090D]" : "bg-[#1B1F2B] text-[#C5CBD8]"
-                }`}
-              >
-                <Icon className="h-[26px] w-[26px] short:h-5 short:w-5 max-sm:h-[22px] max-sm:w-[22px]" strokeWidth={1.8} />
-              </span>
-              <span className={`lc-disp text-[28px] short:text-[22px] phone:text-[20px] ${active ? "text-[#F5F7FA]" : "text-[#C5CBD8]"}`}>
-                {d.title}
-              </span>
-              <span className={`text-[14px] leading-[1.45] short:hidden max-sm:text-[13px] max-sm:leading-snug ${active ? "text-[#C5CBD8]" : "text-[#8E96AA]"}`}>
-                {d.detail}
-              </span>
-              {detected === d.id ? (
-                <span className="mt-auto inline-flex h-6 items-center gap-1.5 rounded-full bg-[#CCFF00] max-sm:col-start-2 max-sm:mt-1 max-sm:justify-self-start px-2.5 font-f1-mono text-[10px] font-extrabold tracking-[0.1em] text-[#08090D]">
-                  <span aria-hidden className="relative inline-flex h-1.5 w-1.5">
-                    <span className="lc-ping absolute inset-0 rounded-full bg-[#08090D]" />
-                    <span className="relative h-1.5 w-1.5 rounded-full bg-[#08090D]" />
-                  </span>
-                  DETECTED
-                </span>
-              ) : null}
-              {active ? (
-                <span
-                  aria-hidden
-                  className="absolute top-4 right-4 inline-flex h-[26px] w-[26px] items-center justify-center rounded-full bg-[#CCFF00]"
-                >
-                  <Check className="h-[15px] w-[15px] text-[#08090D]" strokeWidth={3.2} />
-                </span>
-              ) : null}
-            </button>
-          );
-        })}
-      </div>
-
+    <div className="flex flex-col gap-3">
+      <DeviceTiles choices={choices} value={activeChoice} detected={detected} onPick={pick} first />
       {/* Driving by touch, the call to press a pad's button is noise until one is connected */}
-      {touch?.picked && pads.length === 0 ? null : (
-        <SetupCard label="Connected devices" className="gap-3!">
-          {pads.length === 0 ? (
-            <Hint className="text-[14px]!">
-              None yet. Browsers only show a controller or wheel after you press one of its buttons, so press any
-              button now.
-            </Hint>
-          ) : (
-            <ul className="flex flex-col gap-2">
-              {pads.map((p) => {
-                // Only a standard-layout pad has a known button map
-                const mappable = p.mapping === "standard" && !isLikelyWheel(p);
-                const open = mappable && mapFor === p.id;
-                return (
-                  <li
-                    key={`${p.index}-${p.id}`}
-                    className="flex flex-col gap-3 rounded-2xl border border-[#262B3D] bg-[#08090D] px-3.5 py-3"
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-                      <span className="flex min-w-0 items-center gap-2.5 text-[15px] font-bold text-[#F5F7FA]">
-                        <span aria-hidden className="h-2 w-2 shrink-0 rounded-full bg-[#CCFF00] shadow-[0_0_8px_#CCFF00]" />
-                        <span className="truncate">{padDisplayName(p.id)}</span>
-                      </span>
-                      <span className="flex shrink-0 items-center gap-3">
-                        <span className="font-f1-mono text-[11px] font-bold tracking-[0.1em] text-[#8E96AA]">
-                          {isLikelyWheel(p) ? "WHEEL / PEDALS" : "CONTROLLER"} · {p.axes.length} AXES · {p.buttons.length} BUTTONS
-                        </span>
-                        {mappable ? (
-                          <PillAction onClick={() => setMapFor(open ? null : p.id)}>{open ? "Hide map" : "Button map"}</PillAction>
-                        ) : null}
-                      </span>
-                    </div>
-                    {open ? <PadMap family={padFamilyOf(p.id)} bindings={settings.padButtons} pad={p} /> : null}
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </SetupCard>
-      )}
+      {touch?.picked && pads.length === 0 ? null : <ConnectedDevicesCard />}
+      {touch?.picked ? <Hint>The touch controls can be changed later in Settings, under Controls.</Hint> : null}
     </div>
   );
 };

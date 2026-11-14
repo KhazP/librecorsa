@@ -74,6 +74,48 @@ export interface PlayerSettings {
   conditions: SessionConditions;
   /** Starred and recently chosen cars and circuits (the car and circuit browsers) */
   library: ContentLibrary;
+  /** Master volume and mute (Settings > Audio) */
+  audio: AudioSettings;
+  /** Units, UI scale, colour palette and how much of Settings is shown (Settings > Display > Interface) */
+  ui: InterfaceSettings;
+}
+
+export interface AudioSettings {
+  /** Master volume, 0 to 1 */
+  volume: number;
+  /** Silences everything without losing the volume (the Mute key toggles it) */
+  muted: boolean;
+}
+
+export type SpeedUnit = "kmh" | "mph";
+export type TemperatureUnit = "c" | "f";
+export type PressureUnit = "bar" | "psi";
+
+export interface UnitSettings {
+  speed: SpeedUnit;
+  temperature: TemperatureUnit;
+  pressure: PressureUnit;
+}
+
+/**
+ * Which colours carry gain / loss, cold / hot and the like. "standard" is the palette of docs/DESIGN.md; the others
+ * swap the pairs that the named colour-vision type confuses. The volt cursor never changes.
+ */
+export type ColorPalette = "standard" | "protan" | "deutan" | "tritan";
+export const COLOR_PALETTES: readonly ColorPalette[] = ["standard", "protan", "deutan", "tritan"];
+
+/** Simple shows the short list of settings; Advanced shows every row */
+export type SettingsDetail = "simple" | "advanced";
+
+export const UI_SCALE_MIN = 0.8;
+export const UI_SCALE_MAX = 1.5;
+
+export interface InterfaceSettings {
+  units: UnitSettings;
+  /** Multiplies the automatic big-screen scale (src/lib/ui-zoom.ts); 1 = as the screen size decides */
+  scale: number;
+  palette: ColorPalette;
+  detail: SettingsDetail;
 }
 
 export type LibraryKind = "cars" | "circuits";
@@ -292,6 +334,15 @@ export const DEFAULT_GRAPHICS_SETTINGS: GraphicsSettings = { quality: "high", re
 
 export const DEFAULT_TOUCH_SETTINGS: TouchSettings = { mode: "auto", tiltSteer: false, tiltRangeDeg: 30 };
 
+export const DEFAULT_AUDIO_SETTINGS: AudioSettings = { volume: 1, muted: false };
+
+export const DEFAULT_INTERFACE_SETTINGS: InterfaceSettings = {
+  units: { speed: "kmh", temperature: "c", pressure: "bar" },
+  scale: 1,
+  palette: "standard",
+  detail: "simple",
+};
+
 export const DEFAULT_DRIVER_PROFILE: DriverProfile = { name: "Driver", code: "DRV", color: "#E10600", generated: false, autoUpload: true };
 
 /** Words for generated names; any pair plus " 99" fits the 16-character name limit */
@@ -361,6 +412,8 @@ export const DEFAULT_PLAYER_SETTINGS: PlayerSettings = {
   realism: "full",
   conditions: DEFAULT_SESSION_CONDITIONS,
   library: DEFAULT_CONTENT_LIBRARY,
+  audio: DEFAULT_AUDIO_SETTINGS,
+  ui: DEFAULT_INTERFACE_SETTINGS,
 };
 
 type Obj = Record<string, unknown>;
@@ -565,6 +618,28 @@ function parseTouch(v: unknown): TouchSettings {
   };
 }
 
+function parseAudio(v: unknown): AudioSettings {
+  const d = DEFAULT_AUDIO_SETTINGS;
+  if (!isObj(v)) return { ...d };
+  return { volume: num(v.volume, 0, 1, d.volume), muted: bool(v.muted, d.muted) };
+}
+
+export function parseInterface(v: unknown): InterfaceSettings {
+  const d = DEFAULT_INTERFACE_SETTINGS;
+  if (!isObj(v)) return structuredClone(d);
+  const units = isObj(v.units) ? v.units : {};
+  return {
+    units: {
+      speed: oneOf(units.speed, ["kmh", "mph"] as const, d.units.speed),
+      temperature: oneOf(units.temperature, ["c", "f"] as const, d.units.temperature),
+      pressure: oneOf(units.pressure, ["bar", "psi"] as const, d.units.pressure),
+    },
+    scale: num(v.scale, UI_SCALE_MIN, UI_SCALE_MAX, d.scale),
+    palette: oneOf(v.palette, COLOR_PALETTES, d.palette),
+    detail: oneOf(v.detail, ["simple", "advanced"] as const, d.detail),
+  };
+}
+
 function parseProfile(v: unknown): DriverProfile {
   if (!isObj(v)) return { ...DEFAULT_DRIVER_PROFILE };
   return {
@@ -660,6 +735,8 @@ export function parsePlayerSettings(raw: unknown): PlayerSettings {
     realism: oneOf(raw.realism, SIM_REALISM_LEVELS, d.realism),
     conditions: sanitizeConditions(raw.conditions),
     library: parseLibrary(raw.library),
+    audio: parseAudio(raw.audio),
+    ui: parseInterface(raw.ui),
   };
 }
 

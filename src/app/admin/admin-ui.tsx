@@ -5,20 +5,24 @@
  * plain names and formats the numbers are shown with.
  */
 import { type ReactNode, useState } from "react";
+import { SiteSection } from "@/components/home/SitePage";
+import { Card as KitCard, Meter } from "@/components/ui";
+import { Trend } from "@/components/ui/icons";
+import { cx } from "@/components/ui/styles";
 
-export const CARD = "rounded-[18px] border border-[#262B3D] bg-[#11131A]";
-export const H2 = "lc-title text-[22px] text-[#F5F7FA]";
-export const H3 = "lc-title text-[16px] text-[#F5F7FA]";
-export const NOTE = "text-[14px] leading-relaxed text-[#8E96AA]";
-const ACCENT = "#CCFF00";
+/** A quiet sentence: an empty list, a footnote */
+export const NOTE = "lc-body m-0 text-lc-slate";
 
-/** The modes in a fixed order, each with its colour (validated against the card surface) and name */
+/**
+ * The modes in a fixed order, each with its name and colour. The colours are a data palette (which mode, not how it
+ * went), so they come from the palette's hues and never volt, and never the crimson of an error.
+ */
 export const MODES = [
-  { id: "practice", name: "Practice", color: "#3987e5" },
-  { id: "time_trial", name: "Time trial", color: "#d95926" },
-  { id: "ai_race", name: "Race against AI", color: "#199e70" },
-  { id: "open_race", name: "Open race", color: "#c98500" },
-  { id: "room_race", name: "Room race", color: "#d55181" },
+  { id: "practice", name: "Practice", swatch: "bg-lc-cyan" },
+  { id: "time_trial", name: "Time trial", swatch: "bg-lc-purple" },
+  { id: "ai_race", name: "Race against AI", swatch: "bg-lc-green" },
+  { id: "open_race", name: "Open race", swatch: "bg-lc-amber" },
+  { id: "room_race", name: "Room race", swatch: "bg-lc-pink" },
 ] as const;
 export const modeName = (id: string) => MODES.find((m) => m.id === id)?.name ?? id;
 
@@ -101,50 +105,40 @@ export function everyDay<T extends { day: string }>(from: string, to: string, ro
 /** A section of the page with its title and a sentence that says what it shows */
 export function Section({ id, title, intro, children }: { id: string; title: string; intro?: ReactNode; children: ReactNode }) {
   return (
-    <section id={id} aria-labelledby={`${id}-title`} className="flex flex-col gap-4">
-      <div className="flex flex-col gap-1.5">
-        <h2 id={`${id}-title`} className={H2}>
-          {title}
-        </h2>
-        {intro ? <p className="max-w-[720px] text-[15px] leading-relaxed text-[#C5CBD8]">{intro}</p> : null}
-      </div>
+    <SiteSection id={id} title={title} gap="gap-4">
+      {intro ? <p className="lc-body m-0 -mt-1 mb-1 max-w-[72ch] text-[15px] leading-[1.55]">{intro}</p> : null}
       {children}
-    </section>
+    </SiteSection>
   );
 }
 
-/** A card with a small title */
-export function Card({ title, aside, children, className = "" }: { title?: string; aside?: ReactNode; children: ReactNode; className?: string }) {
+/** A card with its title and, under it, a word on what it counts */
+export function Card({ title, aside, children, className }: { title?: string; aside?: ReactNode; children: ReactNode; className?: string }) {
   return (
-    <div className={`${CARD} flex min-w-0 flex-col gap-3 p-5 ${className}`}>
-      {title ? (
-        <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-          <h3 className={H3}>{title}</h3>
-          {aside ? <span className="text-[13px] text-[#8E96AA]">{aside}</span> : null}
-        </div>
-      ) : null}
+    <KitCard title={title} description={aside} bodyClassName="gap-3" className={className}>
       {children}
-    </div>
+    </KitCard>
   );
 }
 
-/** One number with what it is, and optionally how it compares or a word on it */
+/** One number, what it is, and how it compares or a word on it */
 export function Tile({ label, value, note, trend }: { label: string; value: string; note?: string; trend?: { text: string; up: boolean } | null }) {
   return (
-    <div className={`${CARD} flex min-w-0 flex-col gap-2 p-4`}>
-      <p className="text-[14px] text-[#C5CBD8]">{label}</p>
-      <p className="lc-data text-[30px] leading-none text-[#F5F7FA]">{value}</p>
+    <KitCard bodyClassName="gap-1.5" className="justify-between">
+      <p className="lc-data m-0 text-[30px] leading-none text-lc-chalk">{value}</p>
+      <p className="lc-row-label m-0 pt-1 text-[14px]">{label}</p>
       {trend ? (
-        <p className="text-[13px] text-[#8E96AA]">
-          <span className="lc-data text-[#F5F7FA]">
-            {trend.up ? "▲" : "▼"} {trend.text}
+        <p className="lc-hint m-0">
+          <span className={cx("lc-data inline-flex items-center gap-1", trend.up ? "text-lc-gain" : "text-lc-loss")}>
+            <Trend direction={trend.up ? "up" : "down"} />
+            {trend.text}
           </span>{" "}
           on the days before
         </p>
       ) : note ? (
-        <p className="text-[13px] text-[#8E96AA]">{note}</p>
+        <p className="lc-hint m-0">{note}</p>
       ) : null}
-    </div>
+    </KitCard>
   );
 }
 
@@ -181,13 +175,13 @@ export function BarChart({ bars, label, unit, height = 160 }: { bars: Bar[]; lab
   const ticks = bars.length > 14 ? [0, Math.floor((bars.length - 1) / 2), bars.length - 1] : bars.map((_, i) => i);
   return (
     <div className="flex flex-col gap-2">
-      <p className="min-h-[20px] text-[14px] text-[#C5CBD8]" aria-live="polite">
+      <p className="lc-body m-0 min-h-5 text-[14px]" aria-live="polite">
         {shown === null ? (
           "Nothing in this range."
         ) : (
           <>
             {hover === null ? "Most: " : ""}
-            <span className="lc-data text-[#F5F7FA]">{bars[shown].readout}</span>
+            <span className="lc-data text-lc-chalk">{bars[shown].readout}</span>
           </>
         )}
       </p>
@@ -195,19 +189,20 @@ export function BarChart({ bars, label, unit, height = 160 }: { bars: Bar[]; lab
           // A finger's tap ends with a pointerleave, so a tapped bar keeps its readout until another is tapped
           if (e.pointerType !== "touch") setHover(null);
         }}>
-        <line x1={0} x2={W} y1={H - 0.5} y2={H - 0.5} stroke="#262B3D" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+        <line x1={0} x2={W} y1={H - 0.5} y2={H - 0.5} className="stroke-lc-line" strokeWidth={1} vectorEffect="non-scaling-stroke" />
         {bars.map((b, i) => {
           const h = max > 0 ? (b.value / max) * (H - 6) : 0;
           return (
             <g key={`${b.label}-${i}`} onPointerEnter={() => setHover(i)} onPointerDown={() => setHover(i)}>
               {/* The whole column answers the pointer, not only the bar */}
               <rect x={i * step} y={0} width={step} height={H} fill="transparent" />
-              {h > 0 ? <rect x={i * step + gap / 2} y={H - h} width={Math.max(1, step - gap)} height={h} rx={3} fill={ACCENT} opacity={hover === null || hover === i ? 1 : 0.45} /> : null}
+              {/* Neutral ink; the bar the readout names is chalk */}
+              {h > 0 ? <rect x={i * step + gap / 2} y={H - h} width={Math.max(1, step - gap)} height={h} rx={3} className={i === shown ? "fill-lc-chalk" : "fill-lc-slate/60"} /> : null}
             </g>
           );
         })}
       </svg>
-      <div className="relative h-4 text-[12px] text-[#8E96AA]">
+      <div className="lc-mono relative h-4 text-[12px] text-lc-slate">
         {ticks.map((i) => (
           <span
             key={i}
@@ -218,18 +213,22 @@ export function BarChart({ bars, label, unit, height = 160 }: { bars: Bar[]; lab
           </span>
         ))}
       </div>
-      <details className="text-[13px] text-[#8E96AA]">
-        <summary className="cursor-pointer select-none hover:text-[#C5CBD8]">Show as a table</summary>
+      <details className="text-[13px] text-lc-slate">
+        <summary className="inline-flex min-h-9 cursor-pointer items-center rounded-lc-nub select-none hover:text-lc-chalk pointer-coarse:min-h-11">Show as a table</summary>
         <table className="mt-2 w-full text-left">
           <thead>
-            <tr className="text-[#8E96AA]">
-              <th className="py-1 font-normal">Day</th>
-              <th className="py-1 text-right font-normal">{unit}</th>
+            <tr className="text-lc-slate">
+              <th scope="col" className="lc-lbl py-1.5">
+                Day
+              </th>
+              <th scope="col" className="lc-lbl py-1.5 text-right">
+                {unit}
+              </th>
             </tr>
           </thead>
-          <tbody className="lc-data text-[#C5CBD8]">
+          <tbody className="lc-mono text-lc-fog">
             {bars.map((b, i) => (
-              <tr key={`${b.label}-${i}`} className="border-t border-[#1A1E2A]">
+              <tr key={`${b.label}-${i}`} className="border-t border-lc-titanium">
                 <td className="py-1 font-normal">{b.label}</td>
                 <td className="py-1 text-right">{b.readout.split(": ").pop()}</td>
               </tr>
@@ -252,27 +251,16 @@ export interface Row {
   extra?: string;
 }
 
-/** A ranked list: each row's name and number, and a bar against the largest */
+/** A ranked list: each row's name and number over a bar against the largest */
 export function RankList({ rows, empty = "Nothing in this range.", limit = 10 }: { rows: Row[]; empty?: string; limit?: number }) {
   const top = rows.slice(0, limit);
   const max = Math.max(1, ...top.map((r) => r.value));
   if (!top.length) return <p className={NOTE}>{empty}</p>;
   return (
-    <ul className="flex flex-col gap-2.5">
+    <ul className="m-0 flex list-none flex-col gap-3 p-0">
       {top.map((r) => (
-        <li key={r.id} className="flex flex-col gap-1">
-          <div className="flex items-baseline justify-between gap-3 text-[14px]">
-            <span className="min-w-0 break-words text-[#C5CBD8]" title={r.id}>
-              {r.name}
-            </span>
-            <span className="lc-data shrink-0 text-[#F5F7FA]">
-              {r.shown}
-              {r.extra ? <span className="font-normal text-[#8E96AA]"> · {r.extra}</span> : null}
-            </span>
-          </div>
-          <div className="h-1.5 overflow-hidden rounded-full bg-[#1A1E2A]">
-            <div className="h-full rounded-full" style={{ width: `${(r.value / max) * 100}%`, background: ACCENT }} />
-          </div>
+        <li key={r.id} title={r.id !== r.name ? r.id : undefined}>
+          <Meter stacked tone="neutral" label={r.name} value={r.value / max} detail={r.extra ? `${r.shown} · ${r.extra}` : r.shown} />
         </li>
       ))}
     </ul>
@@ -283,18 +271,10 @@ export function RankList({ rows, empty = "Nothing in this range.", limit = 10 }:
 export function ShareList({ rows, total, unit, empty = "Nothing in this range." }: { rows: { id: string; value: number }[]; total: number; unit: (v: number) => string; empty?: string }) {
   if (!rows.length || total <= 0) return <p className={NOTE}>{empty}</p>;
   return (
-    <ul className="flex flex-col gap-2.5">
+    <ul className="m-0 flex list-none flex-col gap-3 p-0">
       {rows.map((r) => (
-        <li key={r.id} className="flex flex-col gap-1">
-          <div className="flex items-baseline justify-between gap-3 text-[14px]">
-            <span className="min-w-0 truncate text-[#C5CBD8]">{settingName(r.id)}</span>
-            <span className="lc-data shrink-0 text-[#F5F7FA]">
-              {percent(r.value, total)} <span className="font-normal text-[#8E96AA]">· {unit(r.value)}</span>
-            </span>
-          </div>
-          <div className="h-1.5 overflow-hidden rounded-full bg-[#1A1E2A]">
-            <div className="h-full rounded-full" style={{ width: `${(r.value / total) * 100}%`, background: ACCENT }} />
-          </div>
+        <li key={r.id}>
+          <Meter stacked tone="neutral" label={settingName(r.id)} value={r.value / total} detail={`${percent(r.value, total)} · ${unit(r.value)}`} />
         </li>
       ))}
     </ul>
@@ -304,10 +284,10 @@ export function ShareList({ rows, total, unit, empty = "Nothing in this range." 
 /** The mode colours with their names, above a chart that uses them */
 export function ModeLegend({ present }: { present: string[] }) {
   return (
-    <ul className="flex flex-wrap gap-x-4 gap-y-1.5 text-[13px] text-[#C5CBD8]" aria-label="Modes">
+    <ul className="lc-hint m-0 flex list-none flex-wrap gap-x-4 gap-y-1.5 p-0 text-[13px] text-lc-fog" aria-label="Modes">
       {MODES.filter((m) => present.includes(m.id)).map((m) => (
         <li key={m.id} className="flex items-center gap-1.5">
-          <span aria-hidden className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: m.color }} />
+          <span aria-hidden className={cx("inline-block size-2.5 rounded-full", m.swatch)} />
           {m.name}
         </li>
       ))}
@@ -324,24 +304,24 @@ export function ModeSplitList({ rows }: { rows: { id: string; name: string; minu
   return (
     <div className="flex flex-col gap-3">
       <ModeLegend present={present} />
-      <ul className="flex flex-col gap-2.5">
+      <ul className="m-0 flex list-none flex-col gap-3 p-0">
         {top.map((r) => (
-          <li key={r.id} className="flex flex-col gap-1">
-            <div className="flex items-baseline justify-between gap-3 text-[14px]">
-              <span className="min-w-0 break-words text-[#C5CBD8]" title={r.id}>
+          <li key={r.id} className="flex flex-col gap-1.5">
+            <div className="flex items-baseline justify-between gap-3">
+              <span className="min-w-0 truncate text-[14px] leading-tight font-medium text-lc-chalk" title={r.id}>
                 {r.name}
               </span>
-              <span className="lc-data shrink-0 text-[#F5F7FA]">
-                {hours(r.minutes)} h<span className="font-normal text-[#8E96AA]"> · {count(r.sessions)} sessions</span>
+              <span className="lc-data shrink-0 text-[12px] text-lc-fog">
+                {hours(r.minutes)} h · {count(r.sessions)} sessions
               </span>
             </div>
-            <div className="h-2 rounded-full bg-[#1A1E2A]">
-              <div className="flex h-full gap-[2px]" style={{ width: `${(r.minutes / max) * 100}%` }}>
+            <div className="h-2 rounded-full bg-lc-titanium">
+              <div className="flex h-full gap-0.5" style={{ width: `${(r.minutes / max) * 100}%` }}>
                 {MODES.map((m) => {
                   const part = r.modes.find((x) => x.mode === m.id)?.minutes ?? 0;
                   if (part <= 0) return null;
                   return (
-                    <div key={m.id} className="h-full rounded-full" style={{ flexGrow: part, flexBasis: 0, background: m.color, minWidth: 3 }} title={`${m.name}: ${hours(part)} h`} />
+                    <div key={m.id} className={cx("h-full min-w-[3px] rounded-full", m.swatch)} style={{ flexGrow: part, flexBasis: 0 }} title={`${m.name}: ${hours(part)} h`} />
                   );
                 })}
               </div>
@@ -361,9 +341,9 @@ export function NumberTable({ head, rows, empty = "Nothing in this range." }: { 
       <table className="w-full min-w-[280px] text-left text-[14px]">
         {head ? (
           <thead>
-            <tr className="text-[13px] text-[#8E96AA]">
+            <tr>
               {head.map((h, i) => (
-                <th key={h} className={`pb-2 font-normal ${i > 0 ? "text-right" : ""}`}>
+                <th key={h} scope="col" className={`lc-lbl pb-2 ${i > 0 ? "text-right" : ""}`}>
                   {h}
                 </th>
               ))}
@@ -372,9 +352,9 @@ export function NumberTable({ head, rows, empty = "Nothing in this range." }: { 
         ) : null}
         <tbody>
           {rows.map((r) => (
-            <tr key={r.key} className="border-t border-[#1A1E2A] first:border-t-0">
+            <tr key={r.key} className="border-t border-lc-titanium first:border-t-0">
               {r.cells.map((c, i) => (
-                <td key={i} className={`py-2 ${i > 0 ? "lc-data text-right text-[#F5F7FA]" : "max-w-[220px] truncate pr-3 text-[#C5CBD8]"}`}>
+                <td key={i} title={i === 0 ? c : undefined} className={`py-2 ${i > 0 ? "lc-data text-right text-lc-chalk" : "max-w-[220px] truncate pr-3 text-lc-fog"}`}>
                   {c}
                 </td>
               ))}

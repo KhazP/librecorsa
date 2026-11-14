@@ -75,7 +75,8 @@ export const ProximityRadar: React.FC<{ blips: RadarBlip[] | undefined; size?: n
   const rightCar = pickSide(1);
 
   const renderSideArc = (s: 1 | -1, target: EvaluatedBlip) => {
-    const color = target.overlapLevel === 2 ? "#FF6000" : "#FFD700";
+    // Alongside: caution when overlapping a little, loss when the cars overlap fully (the arc also thickens)
+    const color = target.overlapLevel === 2 ? "var(--color-lc-loss)" : "var(--color-lc-caution)";
     const absX = Math.abs(target.blip.x);
     const r = Math.max(3.0, Math.min(8.2, absX));
     // Shift arc center toward rival longitudinal offset so the warning bar tracks their nose/tail
@@ -94,7 +95,6 @@ export const ProximityRadar: React.FC<{ blips: RadarBlip[] | undefined; size?: n
         strokeOpacity={Math.max(0.55, target.opacity)}
         strokeWidth={target.overlapLevel === 2 ? 2.1 : 1.6}
         strokeLinecap="round"
-        style={{ filter: `drop-shadow(0 0 1.4px ${color})` }}
       />
     );
   };
@@ -114,19 +114,19 @@ export const ProximityRadar: React.FC<{ blips: RadarBlip[] | undefined; size?: n
       <svg viewBox={`${-VIEW_RANGE_M} ${-VIEW_RANGE_M} ${VIEW_RANGE_M * 2} ${VIEW_RANGE_M * 2}`} className="h-full w-full">
         <defs>
           <radialGradient id="lc-radar-bg">
-            <stop offset="0%" stopColor="rgba(8,9,13,0.58)" />
-            <stop offset="100%" stopColor="rgba(8,9,13,0)" />
+            <stop offset="0%" stopColor="var(--color-lc-void)" stopOpacity={0.58} />
+            <stop offset="100%" stopColor="var(--color-lc-void)" stopOpacity={0} />
           </radialGradient>
         </defs>
         <circle r={VIEW_RANGE_M} fill="url(#lc-radar-bg)" />
-        <circle r={8} fill="none" stroke="rgba(245,247,250,0.14)" strokeWidth={0.25} />
-        <circle r={16} fill="none" stroke="rgba(245,247,250,0.08)" strokeWidth={0.25} />
-        <line x1={0} y1={-VIEW_RANGE_M} x2={0} y2={VIEW_RANGE_M} stroke="rgba(245,247,250,0.06)" strokeWidth={0.25} />
-        <line x1={-VIEW_RANGE_M} y1={0} x2={VIEW_RANGE_M} y2={0} stroke="rgba(245,247,250,0.06)" strokeWidth={0.25} />
+        <circle r={8} fill="none" stroke="var(--color-lc-chalk)" strokeOpacity={0.14} strokeWidth={0.25} />
+        <circle r={16} fill="none" stroke="var(--color-lc-chalk)" strokeOpacity={0.08} strokeWidth={0.25} />
+        <line x1={0} y1={-VIEW_RANGE_M} x2={0} y2={VIEW_RANGE_M} stroke="var(--color-lc-chalk)" strokeOpacity={0.06} strokeWidth={0.25} />
+        <line x1={-VIEW_RANGE_M} y1={0} x2={VIEW_RANGE_M} y2={0} stroke="var(--color-lc-chalk)" strokeOpacity={0.06} strokeWidth={0.25} />
         {leftCar ? renderSideArc(-1, leftCar) : null}
         {rightCar ? renderSideArc(1, rightCar) : null}
         {evaluated.map(({ blip: b, opacity: carOp, overlapLevel }, i) => {
-          const fill = overlapLevel === 2 ? "#FF6000" : overlapLevel === 1 ? "#FFD700" : b.color;
+          const fill = overlapLevel === 2 ? "var(--color-lc-loss)" : overlapLevel === 1 ? "var(--color-lc-caution)" : b.color;
           return (
             <rect
               key={i}
@@ -137,7 +137,7 @@ export const ProximityRadar: React.FC<{ blips: RadarBlip[] | undefined; size?: n
               rx={0.6}
               fill={fill}
               fillOpacity={Math.max(0.25, carOp)}
-              stroke="#08090D"
+              stroke="var(--color-lc-void)"
               strokeOpacity={Math.max(0.35, carOp)}
               strokeWidth={0.35}
               transform={`translate(${b.x.toFixed(2)} ${(-b.z).toFixed(2)}) rotate(${((b.yaw * 180) / Math.PI).toFixed(1)})`}
@@ -145,7 +145,7 @@ export const ProximityRadar: React.FC<{ blips: RadarBlip[] | undefined; size?: n
           );
         })}
         {/* The player's car */}
-        <rect x={-CAR_W / 2} y={-CAR_L / 2} width={CAR_W} height={CAR_L} rx={0.6} fill="#CCFF00" stroke="#08090D" strokeWidth={0.35} />
+        <rect x={-CAR_W / 2} y={-CAR_L / 2} width={CAR_W} height={CAR_L} rx={0.6} fill="var(--color-lc-volt)" stroke="var(--color-lc-void)" strokeWidth={0.35} />
       </svg>
     </div>
   );

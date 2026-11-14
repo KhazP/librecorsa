@@ -7,16 +7,8 @@ import {
   tiltToSteer,
   touchInput,
 } from "@/lib/input/touch-input";
-import {
-  HUD_CYAN,
-  HUD_GREEN,
-  HUD_PURPLE,
-  HUD_RED,
-  HUD_SLATE,
-  HUD_VOID,
-  HUD_VOLT,
-  HUD_WHITE,
-} from "./hud-format";
+import { Icon } from "@/components/ui/icons/Icon";
+import { HUD_BRAKE, HUD_GLASS, HUD_INFO, HUD_LBL, HUD_SLATE, HUD_THROTTLE, HUD_VOID, HUD_VOLT, HUD_WHITE } from "./hud-format";
 import { useHudMode } from "./hud-mode";
 
 /** Finger travel from the touch-down point that gives full steering lock, as a fraction of window width */
@@ -41,11 +33,10 @@ const STICK_WIDTH = "w-[min(clamp(200px,38vw,400px),calc(100vw-216px))] phone:w-
 
 /** Steering knob diameter (px) */
 const KNOB = 52;
-/** Frosted card the steering / tilt controls sit on */
-const STICK_CARD =
-  "rounded-[32px] border border-white/8 bg-[#08090D]/55 backdrop-blur-[10px]";
-/** Small mono label (STEER, BRAKE…) */
-const LABEL = "font-f1-mono text-[10px] font-extrabold tracking-[0.16em] uppercase text-[#8E96AA]";
+/** The HUD glass card the steering / tilt controls sit on */
+const STICK_CARD = `rounded-lc-sheet ${HUD_GLASS}`;
+/** The HUD label (Steer, Brake…) */
+const LABEL = HUD_LBL;
 
 /** Safe-area-aware offset from a viewport edge */
 const edge = (side: "top" | "right" | "bottom" | "left", px: number) =>
@@ -122,7 +113,7 @@ const SteerPad: React.FC<SteerPadProps> = ({ value, onChange, suspended }) => {
       aria-valuemin={-100}
       aria-valuemax={100}
       aria-valuenow={Math.round(value * 100)}
-      className={`${STICK_CARD} ${STICK_WIDTH} pointer-events-auto touch-none relative flex flex-col gap-2.5 overflow-hidden px-4 pt-3.5 pb-[18px] phone:gap-1.5 phone:pt-2.5 phone:pb-3`}
+      className={`${STICK_CARD} ${STICK_WIDTH} pointer-events-auto touch-none relative flex flex-col gap-2.5 overflow-hidden px-4 pt-3.5 pb-4.5 phone:gap-1.5 phone:pt-2.5 phone:pb-3`}
       style={{ touchAction: "none" }}
       onPointerDown={down}
       onPointerMove={move}
@@ -132,13 +123,11 @@ const SteerPad: React.FC<SteerPadProps> = ({ value, onChange, suspended }) => {
     >
       <div className="pointer-events-none flex items-center justify-between">
         <span className={LABEL}>Steer</span>
-        <span className="font-f1-mono text-[14px] font-extrabold tabular-nums" style={{ color: HUD_VOLT }}>
-          {Math.round(value * 100)}
-        </span>
+        <span className="lc-data text-[14px] text-lc-chalk">{Math.round(value * 100)}</span>
       </div>
       <div className="pointer-events-none relative h-14 phone:h-11">
         {/* Track */}
-        <span className="absolute inset-x-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-[#1B1F2B]" />
+        <span className="absolute inset-x-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-lc-titanium" />
         {/* Fill from the centre to the knob */}
         <span
           className="absolute top-1/2 h-1.5 -translate-y-1/2"
@@ -151,7 +140,7 @@ const SteerPad: React.FC<SteerPadProps> = ({ value, onChange, suspended }) => {
           }}
         />
         {/* Centre reference */}
-        <span className="absolute inset-y-2 left-1/2 w-0.5 -translate-x-1/2 bg-[#F5F7FA]/40" />
+        <span className="absolute inset-y-2 left-1/2 w-0.5 -translate-x-1/2 bg-lc-chalk/40" />
         {/* Knob */}
         <span
           className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border-[3px] phone:scale-[0.85]"
@@ -161,7 +150,6 @@ const SteerPad: React.FC<SteerPadProps> = ({ value, onChange, suspended }) => {
             height: KNOB,
             borderColor: HUD_VOLT,
             backgroundColor: HUD_VOID,
-            boxShadow: `0 0 20px ${HUD_VOLT}73`,
           }}
         />
       </div>
@@ -197,21 +185,19 @@ const TiltIndicator: React.FC<TiltIndicatorProps> = ({ value, status, onRecentre
     >
       <div className="flex items-center justify-between">
         <span className={LABEL}>{TILT_LABEL[status]}</span>
-        <span className="font-f1-mono text-[14px] font-extrabold tabular-nums" style={{ color: HUD_VOLT }}>
-          {Math.round(value * 100)}
-        </span>
+        <span className="lc-data text-[14px] text-lc-chalk">{Math.round(value * 100)}</span>
       </div>
-      <div className="relative h-1.5 overflow-hidden rounded-full bg-[#1B1F2B]">
+      <div className="relative h-1.5 overflow-hidden rounded-full bg-lc-titanium">
         <div
           className="absolute inset-y-0 rounded-full"
           style={{ left: `${fillLeft}%`, width: `${half}%`, backgroundColor: HUD_VOLT }}
         />
-        <div className="absolute inset-y-0 left-1/2 w-0.5 -translate-x-1/2 bg-[#F5F7FA]/40" />
+        <div className="absolute inset-y-0 left-1/2 w-0.5 -translate-x-1/2 bg-lc-chalk/40" />
       </div>
       <button
         type="button"
         aria-label="Recentre tilt"
-        className="pointer-events-auto touch-none h-11 rounded-full border border-[#262B3D] bg-[#11131A] text-[14px] font-bold active:scale-95 short:h-9"
+        className="pointer-events-auto touch-none h-11 rounded-full border border-lc-line bg-lc-carbon text-[14px] font-bold active:scale-95"
         style={{ color: HUD_WHITE, touchAction: "none" }}
         onPointerDown={onRecentre}
         onPointerUp={onRecentreRelease}
@@ -276,21 +262,18 @@ const Pedal: React.FC<PedalProps> = ({ label, color, value, onChange, suspended 
       aria-valuemin={0}
       aria-valuemax={100}
       aria-valuenow={Math.round(value * 100)}
-      className="pointer-events-auto touch-none relative flex h-[150px] w-[100px] flex-col justify-between overflow-hidden rounded-[30px] border-2 bg-[#08090D]/60 p-3 backdrop-blur-[10px] max-sm:portrait:w-[80px] short:w-[88px] phone:h-[116px] phone:rounded-[24px]"
-      style={{
-        borderColor: color,
-        boxShadow: value > 0 ? `0 0 30px ${color}59` : "none",
-        touchAction: "none",
-      }}
+      className="pointer-events-auto touch-none relative flex h-37.5 w-25 flex-col justify-between overflow-hidden rounded-lc-sheet border-2 bg-lc-void/74 p-3 backdrop-blur-[14px] max-sm:portrait:w-20 short:w-22 phone:h-29 phone:rounded-lc-card"
+      style={{ borderColor: color, touchAction: "none" }}
       onPointerDown={down}
       onPointerMove={move}
       onPointerUp={release}
       onPointerCancel={release}
       onLostPointerCapture={release}
     >
+      {/* The pedal's travel, scaled from the bottom (transform only) */}
       <div
-        className="pointer-events-none absolute inset-x-0 bottom-0"
-        style={{ height: `${value * 100}%`, backgroundColor: color }}
+        className="pointer-events-none absolute inset-0 origin-bottom"
+        style={{ transform: `scaleY(${value})`, backgroundColor: color }}
       />
       <span
         className={`${LABEL} pointer-events-none relative`}
@@ -299,7 +282,7 @@ const Pedal: React.FC<PedalProps> = ({ label, color, value, onChange, suspended 
         {label}
       </span>
       <span
-        className="font-f1-mono pointer-events-none relative text-[15px] font-extrabold tabular-nums"
+        className="lc-data pointer-events-none relative text-[15px]"
         style={{ color: value > 0.14 ? HUD_VOID : HUD_WHITE }}
       >
         {Math.round(value * 100)}
@@ -330,10 +313,8 @@ const TapButton: React.FC<TapButtonProps> = ({ label, ariaLabel, color, textColo
     aria-label={ariaLabel ?? label}
     className={`pointer-events-auto touch-none flex items-center justify-center rounded-full active:scale-95 ${
       small
-        ? "h-11 min-w-[72px] border border-white/8 bg-[#08090D]/70 px-4 text-[14px] font-bold backdrop-blur-[14px] short:h-9 short:min-w-[64px]"
-        : `h-14 border-2 bg-[#08090D]/60 font-f1-mono text-[13px] font-extrabold backdrop-blur-[10px] phone:h-12 ${
-            wide ? "w-[84px] phone:w-[72px]" : "w-14 phone:w-12"
-          }`
+        ? `h-11 min-w-18 px-4 text-[14px] font-bold ${HUD_GLASS}`
+        : `lc-chip-text h-14 border-2 bg-lc-void/74 text-[13px] backdrop-blur-[14px] phone:h-12 ${wide ? "w-21 phone:w-18" : "w-14 phone:w-12"}`
     }`}
     style={{
       color: small ? HUD_WHITE : (textColor ?? color),
@@ -349,12 +330,8 @@ const TapButton: React.FC<TapButtonProps> = ({ label, ariaLabel, color, textColo
   </button>
 );
 
-/** Filled triangle for the shift buttons */
-const ShiftArrow: React.FC<{ up?: boolean }> = ({ up }) => (
-  <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden>
-    <path d={up ? "M12 6 4 18h16z" : "M12 18 4 6h16z"} />
-  </svg>
-);
+/** The shift buttons' arrows: the kit's shift icons */
+const ShiftArrow: React.FC<{ up?: boolean }> = ({ up }) => <Icon name={up ? "shiftUp" : "shiftDown"} size="md" />;
 
 export interface TouchControlsProps {
   /** Steer from device tilt instead of the on-screen slider */
@@ -531,27 +508,24 @@ export const TouchControls: React.FC<TouchControlsProps> = ({
       >
         <div className="flex gap-2">
           <TapButton
-            label="▲"
-            ariaLabel="Shift up"
-            color={HUD_VOLT}
+            label="Shift up"
+            color={HUD_WHITE}
             icon={<ShiftArrow up />}
             onTap={() => {
               touchInput.shiftUp = true;
             }}
           />
           <TapButton
-            label="▼"
-            ariaLabel="Shift down"
-            color={HUD_VOLT}
+            label="Shift down"
+            color={HUD_WHITE}
             icon={<ShiftArrow />}
             onTap={() => {
               touchInput.shiftDown = true;
             }}
           />
           <TapButton
-            label="BOOST"
-            color={HUD_PURPLE}
-            textColor="#D99BFF"
+            label="Boost"
+            color={HUD_INFO}
             wide
             onTap={() => {
               touchInput.boost = true;
@@ -560,15 +534,15 @@ export const TouchControls: React.FC<TouchControlsProps> = ({
           <TapButton
             label="X/Z"
             ariaLabel="Active aero"
-            color={HUD_CYAN}
+            color={HUD_INFO}
             onTap={() => {
               touchInput.aero = true;
             }}
           />
         </div>
         <div className="flex gap-3 phone:gap-2">
-          <Pedal label="BRAKE" color={HUD_RED} value={vis.brake} onChange={setBrake} suspended={suspended} />
-          <Pedal label="THROTTLE" color={HUD_GREEN} value={vis.throttle} onChange={setThrottle} suspended={suspended} />
+          <Pedal label="Brake" color={HUD_BRAKE} value={vis.brake} onChange={setBrake} suspended={suspended} />
+          <Pedal label="Throttle" color={HUD_THROTTLE} value={vis.throttle} onChange={setThrottle} suspended={suspended} />
         </div>
       </div>
     </div>

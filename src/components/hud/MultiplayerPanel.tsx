@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Check, ChevronDown, Copy, Crown, Minus, Pencil, Play, Plus, Share2 } from "lucide-react";
 import {
   hasTurnServer,
   loadUserTurnServer,
@@ -15,7 +14,11 @@ import {
   type PeerNetStats,
 } from "@/lib/sim/multiplayer-sync";
 import { getTrackInfo, TRACKS } from "@/lib/track-registry";
-import { Segmented, TrackQualityBadge } from "@/components/menu/menu-ui";
+import { Button, Card, ConfirmDialog, Disclosure, Select, SettingRow, Stepper, TextField, Well } from "@/components/ui";
+import { Badge } from "@/components/ui/Badge";
+import { PlayerTag, SessionBadge } from "@/components/ui/badges";
+import { Icon } from "@/components/ui/icons";
+import { TrackQualityBadge } from "@/components/menu/menu-content-ui";
 import { RacesCard, type RacesCardProps } from "./RacesCard";
 
 export interface MultiplayerPanelProps {
@@ -111,61 +114,23 @@ type ManualSdp =
   | { stage: "answered"; token: string }
   | { stage: "accepted" };
 
-/** Ping chip tint: green under 80 ms, amber under 160 ms, else crimson */
-const pingChip = (ms: number) =>
-  ms < 80 ? "bg-[#00E676]/[0.12] text-[#00E676]" : ms < 160 ? "bg-[#FFB300]/[0.12] text-[#FFB300]" : "bg-[#FF2A3C]/[0.12] text-[#FF2A3C]";
-
-/**
- * A card inside the panel. In the pause menu it is a frosted card over the dimmed scene; inside the title
- * menu's panel sheet (`.lc-title-frame`) it becomes the darker inset card of the Racing Line boards.
- */
-const CARD =
-  "rounded-[24px] border border-white/[0.07] bg-[#0D0F15]/[0.82] p-[18px] [.lc-title-frame_&]:rounded-[22px] [.lc-title-frame_&]:border-[#262B3D] [.lc-title-frame_&]:bg-[#08090D]/60";
-const CHIP =
-  "inline-flex h-6 shrink-0 items-center gap-1.5 rounded-full px-2.5 font-f1-mono text-[10px] font-extrabold tracking-[0.06em] whitespace-nowrap";
-const PILL =
-  "inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-2 rounded-full px-4 text-[14px] font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-40";
-const PILL_VOLT = `${PILL} border-0 bg-[#CCFF00] text-[#08090D] hover:bg-[#d9ff33]`;
-const PILL_DARK = `${PILL} border border-[#262B3D] bg-[#1B1F2B] text-[#F5F7FA] hover:border-[#3A4157] hover:bg-[#262B3D]`;
-const PILL_CYAN = `${PILL} border-0 bg-[#00E5FF] px-5 text-[#08090D] hover:opacity-90`;
-const stepButtonClass =
-  "flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border border-[#262B3D] bg-[#1B1F2B] text-[#F5F7FA] transition-colors hover:border-[#CCFF00] disabled:cursor-not-allowed disabled:opacity-40";
-const inputClass =
-  "h-11 w-full min-w-0 rounded-[14px] border border-[#262B3D] bg-[#08090D] px-3.5 font-f1-mono text-[13px] text-[#F5F7FA] placeholder:text-[#8E96AA] focus:border-[#CCFF00] focus:shadow-[0_0_0_4px_rgba(204,255,0,0.12)] focus:outline-none";
+/** Ping badge tone: good under 80 ms, caution under 160 ms, else a loss */
+const pingTone = (ms: number) => (ms < 80 ? "good" : ms < 160 ? "warn" : "bad");
 
 function ReadValue({ children }: { children: React.ReactNode }) {
-  return <span className="text-[14px] leading-tight font-bold text-[#F5F7FA]">{children}</span>;
+  return <span className="text-[15px] leading-tight font-semibold text-lc-chalk">{children}</span>;
 }
 
-/** Host's choice of a lobby rule (a pill segmented control), or its value for everyone else */
-function RuleRow<T extends string>({
-  label,
-  value,
-  options,
-  editable,
-  onChange,
-}: {
-  label: string;
-  value: T;
-  options: { value: T; label: string }[];
-  editable: boolean;
-  onChange: (value: T) => void;
-}) {
+/** A sub-section of "More ways to connect": a plain heading and one line on what it is for */
+function ConnectSection({ title, intro, children }: { title: string; intro: string; children: React.ReactNode }) {
   return (
-    <div className="col-span-full flex flex-wrap items-center gap-x-3 gap-y-2">
-      <span className="lc-lbl w-[74px] shrink-0">{label}</span>
-      {editable ? (
-        <Segmented
-          label={label}
-          className="min-w-0 flex-1 [&_button]:min-h-9 [&_button]:px-2 [&_button]:text-[12px] [&_button]:whitespace-nowrap"
-          options={options.map((o) => ({ id: o.value, label: o.label }))}
-          value={value}
-          onChange={onChange}
-        />
-      ) : (
-        <ReadValue>{optionLabel(options, value)}</ReadValue>
-      )}
-    </div>
+    <section className="flex flex-col gap-2.5 border-t border-lc-line pt-3.5 first:border-t-0 first:pt-1">
+      <div className="flex flex-col gap-0.5">
+        <h4 className="lc-row-label m-0">{title}</h4>
+        <p className="lc-hint m-0">{intro}</p>
+      </div>
+      {children}
+    </section>
   );
 }
 
@@ -174,19 +139,18 @@ function NetBadge({ stats }: { stats?: PeerNetStats }) {
   return (
     <>
       {stats.relayed ? (
-        <span
-          title="Traffic reaches you through the host"
-          className={`${CHIP} uppercase shadow-[inset_0_0_0_1px_rgba(0,229,255,0.5)] text-[#00E5FF]`}
-        >
-          relayed
-        </span>
+        <Badge size="sm" tone="info" icon="relay" title="Traffic reaches you through the host">
+          Relayed
+        </Badge>
       ) : null}
       {stats.rttMs == null ? (
-        <span className={`${CHIP} text-[#8E96AA] shadow-[inset_0_0_0_1px_#262B3D]`}>measuring…</span>
+        <Badge size="sm" variant="outline">
+          Measuring
+        </Badge>
       ) : (
-        <span className={`${CHIP} ${pingChip(stats.rttMs)}`}>
+        <Badge size="sm" tone={pingTone(stats.rttMs)} icon="latency" className="lc-mono">
           {Math.round(stats.rttMs)} ms · {Math.round(stats.lossPct)}% loss
-        </span>
+        </Badge>
       )}
     </>
   );
@@ -223,6 +187,11 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
 }) => {
   // Connect box
   const [roomCodeInput, setRoomCodeInput] = useState(initialRoomCode);
+  /** What the player did last in the room card: a failed join is told at the code field */
+  const [lastAction, setLastAction] = useState<"host" | "join" | null>(null);
+  /** Why the typed code can't be joined, before anything is asked of the network */
+  const [joinHint, setJoinHint] = useState<string | null>(null);
+  const [confirmEnd, setConfirmEnd] = useState(false);
   const joinReady = roomCodeInput.trim().length >= 3;
   const [copiedLink, flashCopiedLink] = useFlash(2000);
   const [canShare, setCanShare] = useState(false);
@@ -236,7 +205,6 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
   const generatedToken = sdp.stage === "offered" || sdp.stage === "answered" ? sdp.token : "";
 
   // TURN relay (advanced)
-  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [turnUrl, setTurnUrl] = useState("");
   const [turnUser, setTurnUser] = useState("");
   const [turnCred, setTurnCred] = useState("");
@@ -361,17 +329,29 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
   const hostRoom = () => {
     onHostP2PRoom?.();
     setRoomCodeInput("");
+    setJoinHint(null);
+    setLastAction("host");
   };
   const joinRoom = () => {
-    if (joinReady) onJoinP2PRoom?.(roomCodeInput.trim());
+    if (!joinReady) {
+      setJoinHint("Type the code your friend sent you: at least 3 letters or digits.");
+      return;
+    }
+    setJoinHint(null);
+    setLastAction("join");
+    onJoinP2PRoom?.(roomCodeInput.trim());
   };
 
   const connected = p2pStatus?.connectedWebRtcPeers ?? 0;
   const hostedCode = p2pStatus?.roomCode;
+  const p2pState = p2pStatus?.state ?? "idle";
+  // A failed join is said under the code field; any other failure under the room card
+  const joinFailed = lastAction === "join" && p2pState === "error";
+  const joinError = joinHint ?? (joinFailed ? p2pStatus?.statusText || "Couldn't join that room. Check the code." : undefined);
 
   const renderLobby = (state: LobbyState) => {
     const settings = state.settings;
-    // Who hosts comes from one place, the lobby's host id: the crown, "You are host" and the host's controls agree
+    // Who hosts comes from one place, the lobby's host id: the host badge, "You are host" and the host's controls agree
     const isHostPlayer = (p: LobbyPlayer) => p.peerId === state.hostId;
     const hostPlayer = state.players.find(isHostPlayer);
     const isHost = localPeerId !== undefined && state.hostId === localPeerId;
@@ -382,369 +362,331 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
     const vehicleBlocked = !!allowedVehicles && !!currentVehicle && !allowedVehicles.includes(currentVehicle);
 
     return (
-      <div className="flex min-w-0 flex-col gap-3.5">
-        <div className="flex flex-wrap items-center justify-between gap-2.5">
-          <span className="lc-title text-[18px] leading-tight text-[#F5F7FA]">
-            Lobby · host <span className="text-[#CCFF00]">{hostPlayer?.name ?? "—"}</span>
-          </span>
-          {isHost ? <span className={`${CHIP} bg-[#CCFF00]/[0.12] text-[#CCFF00] uppercase`}>You are host</span> : null}
-        </div>
-
-        <div className="grid grid-cols-2 gap-2.5">
-          <div className={`${CARD} flex flex-col gap-2 !p-3 !rounded-[18px]`}>
-            <span className="lc-lbl">Laps</span>
+      <div className="flex min-w-0 flex-col gap-3">
+        <Card
+          title="Lobby"
+          description={`Hosted by ${hostPlayer?.name ?? "nobody yet"}`}
+          action={isHost ? <SessionBadge session="host">You are host</SessionBadge> : null}
+        >
+          <SettingRow label="Laps">
             {isHost ? (
-              <div className="flex items-center justify-between gap-1.5">
-                <button
-                  type="button"
-                  aria-label="Fewer laps"
-                  disabled={settings.laps <= MIN_LAPS}
-                  onClick={() => setLaps(settings.laps - 1)}
-                  className={stepButtonClass}
-                >
-                  <Minus className="h-4 w-4" />
-                </button>
-                <span className="lc-data min-w-8 text-center text-[24px] leading-none text-[#F5F7FA]">{settings.laps}</span>
-                <button
-                  type="button"
-                  aria-label="More laps"
-                  disabled={settings.laps >= MAX_LAPS}
-                  onClick={() => setLaps(settings.laps + 1)}
-                  className={stepButtonClass}
-                >
-                  <Plus className="h-4 w-4" />
-                </button>
-              </div>
+              <Stepper value={settings.laps} min={MIN_LAPS} max={MAX_LAPS} onChange={setLaps} />
             ) : (
-              <span className="lc-data text-[24px] leading-none text-[#F5F7FA]">{settings.laps}</span>
+              <span className="lc-mono text-[18px] font-bold text-lc-chalk">{settings.laps}</span>
             )}
-          </div>
-
-          <div className={`${CARD} flex flex-col gap-2 !p-3 !rounded-[18px]`}>
-            <span className="lc-lbl">Circuit</span>
-            <div className="flex flex-wrap items-center gap-1.5">
+          </SettingRow>
+          <SettingRow label="Circuit">
+            <span className="flex min-w-0 flex-wrap items-center justify-end gap-1.5">
               <ReadValue>{trackName(settings.trackId)}</ReadValue>
               <TrackQualityBadge track={getTrackInfo(settings.trackId)} size="xs" />
-            </div>
-          </div>
-
-          <RuleRow
-            label="Collisions"
-            value={settings.collisions}
-            options={COLLISION_OPTIONS}
-            editable={isHost}
-            onChange={(collisions) => onSetLobbySettings?.({ collisions })}
-          />
-          <RuleRow
-            label="Car class"
-            value={settings.carClass}
-            options={CLASS_OPTIONS}
-            editable={isHost}
-            onChange={(carClass) => onSetLobbySettings?.({ carClass })}
-          />
-        </div>
-
-        <ul className="flex flex-col gap-1.5">
-          {state.players.map((p) => {
-            const isMe = p.peerId === localPeerId;
-            const carName = p.vehicle ? (vehicleLabel?.(p.vehicle) ?? p.vehicle) : "—";
-            return (
-              <li
-                key={p.peerId}
-                className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-[16px] border border-[#262B3D] bg-[#11131A] px-3 py-2.5"
-              >
-                <span className="h-8 w-1 shrink-0 rounded-full" style={{ backgroundColor: p.color }} />
-                <div className="flex min-w-0 flex-[1_1_90px] flex-col">
-                  <span className="flex min-w-0 items-center gap-2 text-[14px] font-bold text-[#F5F7FA]">
-                    <span className="font-f1-mono text-[12px] font-extrabold tracking-[0.1em]">{p.code}</span>
-                    <span className="truncate">
-                      {p.name}
-                      {isMe ? <span className="font-normal text-[#8E96AA]"> (you)</span> : null}
-                    </span>
-                  </span>
-                  <span className="truncate text-[12px] text-[#8E96AA]">{carName}</span>
-                </div>
-                <div className="flex flex-wrap items-center gap-1.5">
-                  {isHostPlayer(p) ? (
-                    <span className={`${CHIP} bg-[#CCFF00]/[0.12] text-[#CCFF00] uppercase`}>
-                      <Crown className="h-3 w-3" strokeWidth={2.4} />
-                      Host
-                    </span>
-                  ) : null}
-                  {!isMe ? <NetBadge stats={peerStats?.find((s) => s.peerId === p.peerId)} /> : null}
-                  <span
-                    className={`${CHIP} uppercase ${
-                      p.ready ? "bg-[#00E676]/[0.12] text-[#00E676]" : "text-[#8E96AA] shadow-[inset_0_0_0_1px_#262B3D]"
-                    }`}
-                  >
-                    {p.ready ? "Ready" : "Not ready"}
-                  </span>
-                </div>
-              </li>
-            );
-          })}
-        </ul>
-
-        {trackMismatch || vehicleBlocked ? (
-          <div className="flex flex-col gap-2">
-            {trackMismatch ? (
-              <div className="flex flex-wrap items-center justify-between gap-2 rounded-[16px] border border-[#FFB300]/40 bg-[#FFB300]/[0.08] px-3.5 py-2.5">
-                <span className="text-[13px] font-semibold text-[#FFB300]">The host is on {trackName(settings.trackId)}</span>
-                {onSwitchTrack ? (
-                  <button
-                    type="button"
-                    onClick={() => onSwitchTrack(settings.trackId)}
-                    className="inline-flex min-h-9 cursor-pointer items-center rounded-full border border-[#FFB300]/60 bg-[#FFB300]/15 px-3.5 text-[13px] font-bold text-[#FFB300] hover:bg-[#FFB300]/25"
-                  >
-                    Switch circuit
-                  </button>
-                ) : null}
-              </div>
-            ) : null}
-            {vehicleBlocked && allowedVehicles ? (
-              <div className="flex flex-col gap-2 rounded-[16px] border border-[#FFB300]/40 bg-[#FFB300]/[0.08] px-3.5 py-2.5">
-                <span className="text-[13px] font-semibold text-[#FFB300]">
-                  Your car is not allowed in {optionLabel(CLASS_OPTIONS, settings.carClass)} races. Pick one:
-                </span>
-                <div className="flex flex-wrap gap-1.5">
-                  {allowedVehicles.map((id) => (
-                    <button
-                      key={id}
-                      type="button"
-                      onClick={() => onSwitchVehicle?.(id)}
-                      disabled={!onSwitchVehicle}
-                      className="inline-flex min-h-9 cursor-pointer items-center rounded-full border border-[#FFB300]/60 bg-[#FFB300]/15 px-3.5 text-[13px] font-bold text-[#FFB300] hover:bg-[#FFB300]/25 disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      {vehicleLabel?.(id) ?? id}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-          </div>
-        ) : null}
-
-        {isHost ? (
-          <div className="flex flex-col gap-2">
-            <button
-              type="button"
-              disabled={raceRunning || startBlocked !== undefined}
-              onClick={() => onStartRace?.()}
-              className="inline-flex h-14 cursor-pointer items-center justify-center gap-3 rounded-full border-0 bg-[#CCFF00] text-[#08090D] shadow-[0_0_0_5px_rgba(204,255,0,0.12),0_14px_34px_rgba(204,255,0,0.2)] transition-colors hover:bg-[#d9ff33] disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
-            >
-              <Play aria-hidden className="h-[18px] w-[18px]" fill="currentColor" strokeWidth={0} />
-              <span className="lc-disp text-[22px]">{raceRunning ? "Race in progress" : (startBlocked ?? "Start race")}</span>
-            </button>
-            {raceRunning && onAbortRace ? (
-              <button
-                type="button"
-                onClick={() => onAbortRace()}
-                className="inline-flex min-h-[44px] cursor-pointer items-center justify-center rounded-full border border-[#FF2A3C]/60 bg-[#FF2A3C]/[0.12] px-4 text-[14px] font-bold text-[#FF2A3C] hover:bg-[#FF2A3C]/25"
-              >
-                End race for everyone
-              </button>
-            ) : null}
-            {!raceRunning ? (
-              <span className="text-center text-[12px] text-[#8E96AA]">Everyone not ready will still start.</span>
-            ) : null}
-          </div>
-        ) : (
-          <div className="flex flex-col gap-2">
-            <button
-              type="button"
-              aria-pressed={ready}
-              disabled={!onSetReady}
-              onClick={toggleReady}
-              className={`inline-flex h-14 w-full cursor-pointer items-center justify-center gap-2.5 rounded-full border-0 text-[#08090D] transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
-                ready
-                  ? "bg-[#00E676] shadow-[0_0_0_5px_rgba(0,230,118,0.12)] hover:bg-[#2BEB8A]"
-                  : "bg-[#CCFF00] shadow-[0_0_0_5px_rgba(204,255,0,0.12),0_14px_34px_rgba(204,255,0,0.2)] hover:bg-[#d9ff33]"
-              }`}
-            >
-              {ready ? <Check aria-hidden className="h-5 w-5" strokeWidth={3} /> : null}
-              <span className="lc-disp text-[22px]">{ready ? "Ready" : "Ready up"}</span>
-            </button>
-            <span className="text-center text-[12px] text-[#8E96AA]">
-              {raceRunning ? "Race in progress." : "Tap to toggle. The host starts the race."}
             </span>
-          </div>
-        )}
+          </SettingRow>
+          <SettingRow label="Collisions">
+            {isHost ? (
+              <Select
+                value={settings.collisions}
+                options={COLLISION_OPTIONS.map((o) => ({ id: o.value, label: o.label }))}
+                onChange={(collisions) => onSetLobbySettings?.({ collisions })}
+              />
+            ) : (
+              <ReadValue>{optionLabel(COLLISION_OPTIONS, settings.collisions)}</ReadValue>
+            )}
+          </SettingRow>
+          <SettingRow label="Car class">
+            {isHost ? (
+              <Select
+                value={settings.carClass}
+                options={CLASS_OPTIONS.map((o) => ({ id: o.value, label: o.label }))}
+                onChange={(carClass) => onSetLobbySettings?.({ carClass })}
+              />
+            ) : (
+              <ReadValue>{optionLabel(CLASS_OPTIONS, settings.carClass)}</ReadValue>
+            )}
+          </SettingRow>
+        </Card>
+
+        <Card title="Drivers" action={<Badge variant="outline">{state.players.length}</Badge>} bodyClassName="gap-3">
+          <ul className="m-0 flex list-none flex-col p-0">
+            {state.players.map((p) => {
+              const isMe = p.peerId === localPeerId;
+              const carName = p.vehicle ? (vehicleLabel?.(p.vehicle) ?? p.vehicle) : "No car yet";
+              return (
+                <li key={p.peerId} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-white/5 py-2.5 last:border-b-0">
+                  {/* The driver's own colour: data */}
+                  <span aria-hidden className="h-8 w-1 shrink-0 rounded-full" style={{ backgroundColor: p.color }} />
+                  <div className="flex min-w-0 flex-[1_1_120px] flex-col">
+                    <span className="flex min-w-0 items-center gap-2">
+                      <span className="lc-mono shrink-0 text-[12px] font-bold tracking-[0.08em] text-lc-slate">{p.code}</span>
+                      <span className="truncate text-[14px] font-semibold text-lc-chalk" title={p.name}>
+                        {p.name}
+                      </span>
+                      {isMe ? <PlayerTag size="sm" /> : null}
+                    </span>
+                    <span className="lc-hint truncate" title={carName}>
+                      {carName}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {isHostPlayer(p) ? <SessionBadge session="host" size="sm" /> : null}
+                    {!isMe ? <NetBadge stats={peerStats?.find((s) => s.peerId === p.peerId)} /> : null}
+                    {p.ready ? (
+                      <Badge size="sm" tone="good" icon="success">
+                        Ready
+                      </Badge>
+                    ) : (
+                      <Badge size="sm" variant="outline">
+                        Not ready
+                      </Badge>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+
+          {trackMismatch ? (
+            <Well className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-3.5 py-2.5">
+              <span className="flex items-start gap-2 text-[13px] leading-snug font-medium text-lc-caution">
+                <Icon name="warning" className="mt-px" />
+                The host is on {trackName(settings.trackId)}
+              </span>
+              {onSwitchTrack ? (
+                <Button size="sm" variant="secondary" onClick={() => onSwitchTrack(settings.trackId)}>
+                  Switch circuit
+                </Button>
+              ) : null}
+            </Well>
+          ) : null}
+          {vehicleBlocked && allowedVehicles ? (
+            <Well className="flex flex-col gap-2.5 px-3.5 py-2.5">
+              <span className="flex items-start gap-2 text-[13px] leading-snug font-medium text-lc-caution">
+                <Icon name="warning" className="mt-px" />
+                Your car is not allowed in {optionLabel(CLASS_OPTIONS, settings.carClass)} races. Pick one:
+              </span>
+              <div className="flex flex-wrap gap-1.5">
+                {allowedVehicles.map((id) => (
+                  <Button key={id} size="sm" variant="secondary" disabled={!onSwitchVehicle} onClick={() => onSwitchVehicle?.(id)}>
+                    {vehicleLabel?.(id) ?? id}
+                  </Button>
+                ))}
+              </div>
+            </Well>
+          ) : null}
+
+          {isHost ? (
+            <div className="flex flex-col gap-2 pt-1">
+              <Button
+                variant="primary"
+                size="lg"
+                block
+                icon={raceRunning ? undefined : <Icon name="drive" />}
+                disabled={raceRunning}
+                disabledReason={!raceRunning ? startBlocked : undefined}
+                onClick={() => onStartRace?.()}
+              >
+                {raceRunning ? "Race in progress" : "Start race"}
+              </Button>
+              {raceRunning && onAbortRace ? (
+                <Button variant="danger" block onClick={() => setConfirmEnd(true)}>
+                  End race for everyone
+                </Button>
+              ) : null}
+              {!raceRunning ? (
+                <p className={`m-0 text-center text-[12px] ${startBlocked ? "font-medium text-lc-caution" : "text-lc-slate"}`}>
+                  {startBlocked ?? "Everyone not ready will still start."}
+                </p>
+              ) : null}
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2 pt-1">
+              <Button
+                variant={ready ? "secondary" : "primary"}
+                size="lg"
+                block
+                aria-pressed={ready}
+                icon={ready ? <Icon name="success" /> : undefined}
+                disabled={!onSetReady}
+                onClick={toggleReady}
+              >
+                {ready ? "Ready" : "Ready up"}
+              </Button>
+              <p className="lc-hint m-0 text-center">
+                {raceRunning ? "Race in progress." : ready ? "Press again if you are not ready. The host starts the race." : "The host starts the race."}
+              </p>
+            </div>
+          )}
+        </Card>
+        <ConfirmDialog
+          open={confirmEnd}
+          title="End the race for everyone?"
+          confirmLabel="End race"
+          cancelLabel="Keep racing"
+          icon={<Icon name="warning" />}
+          onCancel={() => setConfirmEnd(false)}
+          onConfirm={() => {
+            setConfirmEnd(false);
+            onAbortRace?.();
+          }}
+        >
+          Every driver in the room stops where they are and goes back to the lobby.
+        </ConfirmDialog>
       </div>
     );
   };
 
+  const roomStatus =
+    hostedCode || connected > 0 || p2pState !== "idle" ? (
+      p2pState === "connected" ? (
+        <Badge tone="good" dot="live">
+          {connected} connected
+        </Badge>
+      ) : p2pState === "signaling" ? (
+        <Badge tone="warn" dot>
+          Connecting
+        </Badge>
+      ) : p2pState === "error" ? (
+        <Badge tone="bad" icon="error">
+          Not connected
+        </Badge>
+      ) : (
+        <Badge variant="outline">{connected} connected</Badge>
+      )
+    ) : null;
+
   return (
     <div
-      className={`grid items-start gap-[22px] text-[#F5F7FA] ${
-        lobby || races ? "grid-cols-[repeat(auto-fit,minmax(min(300px,100%),1fr))]" : "max-w-xl grid-cols-1"
+      className={`grid items-start gap-3 text-lc-chalk ${
+        lobby || races ? "grid-cols-[repeat(auto-fit,minmax(min(320px,100%),1fr))]" : "max-w-xl grid-cols-1"
       }`}
     >
+      {/* The connection the player waits on, read out as it changes (the badge on the room card says it on screen;
+          an error is also an alert under the field or the room) */}
+      <span className="sr-only" aria-live="polite">
+        {p2pState === "connected"
+          ? `${connected} connected`
+          : p2pState === "signaling"
+            ? "Connecting"
+            : ""}
+      </span>
       {/* Open races: not while in a friend's room, whose lobby takes this place */}
       {races && !lobby ? <RacesCard {...races} /> : null}
 
       {/* Room */}
-      <div className="flex min-w-0 flex-col gap-3.5">
-        <div className={`${CARD} flex flex-col gap-3.5`}>
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h3 className="lc-title m-0 text-[20px] leading-tight">Private room</h3>
-            {/* How many are connected: only once there is a room to be connected to */}
-            {hostedCode || connected > 0 || (p2pStatus?.state ?? "idle") !== "idle" ? (
-            <span
-              className={`${CHIP} h-[26px] text-[11px] uppercase ${
-                p2pStatus?.state === "connected"
-                  ? "bg-[#00E676]/[0.12] text-[#00E676]"
-                  : p2pStatus?.state === "signaling"
-                    ? "bg-[#FFB300]/[0.12] text-[#FFB300]"
-                    : "text-[#8E96AA] shadow-[inset_0_0_0_1px_#262B3D]"
-              }`}
-            >
-              <span className="relative inline-flex h-[7px] w-[7px]">
-                {p2pStatus?.state === "connected" ? (
-                  <span className="lc-ping absolute inset-0 rounded-full bg-current" />
-                ) : null}
-                <span className="relative h-[7px] w-[7px] rounded-full bg-current" />
-              </span>
-              {connected} connected
-            </span>
-            ) : null}
-          </div>
+      <div className="flex min-w-0 flex-col gap-3">
+        <Card title="Private room" action={roomStatus} bodyClassName="gap-3.5">
           {hostedCode ? (
             <>
-              <div
-                className="font-f1-mono text-[40px] leading-none font-extrabold tracking-[0.14em] break-all text-[#CCFF00] tabular-nums sm:text-[46px]"
-                aria-label={`Room code ${hostedCode}`}
-              >
-                {hostedCode}
-              </div>
+              <Well className="flex flex-col gap-1 px-4 py-3">
+                <span
+                  className="lc-mono text-[40px] leading-none font-bold tracking-[0.14em] break-all text-lc-chalk sm:text-[46px]"
+                  aria-label={`Room code ${hostedCode}`}
+                >
+                  {hostedCode}
+                </span>
+                <span className="lc-hint">Your room code. Friends join with it, or with the invite link.</span>
+              </Well>
               <div className="flex flex-wrap gap-2">
-                <button type="button" disabled={!activeCode} onClick={copyLink} className={`flex-1 ${PILL_VOLT}`}>
-                  {copiedLink ? <Check aria-hidden className="h-4 w-4" strokeWidth={2.4} /> : <Copy aria-hidden className="h-4 w-4" strokeWidth={2.2} />}
+                <Button
+                  variant={lobby ? "secondary" : "primary"}
+                  className="flex-1"
+                  disabled={!activeCode}
+                  icon={<Icon name={copiedLink ? "copied" : "copy"} />}
+                  onClick={copyLink}
+                >
                   {copiedLink ? "Link copied" : "Copy invite link"}
-                </button>
+                </Button>
                 {canShare ? (
-                  <button type="button" disabled={!activeCode} onClick={() => void shareInvite()} className={`flex-1 ${PILL_DARK}`}>
-                    <Share2 aria-hidden className="h-4 w-4" strokeWidth={2.2} />
-                    Share…
-                  </button>
+                  <Button variant="secondary" className="flex-1" disabled={!activeCode} icon={<Icon name="share" />} onClick={() => void shareInvite()}>
+                    Share
+                  </Button>
                 ) : null}
               </div>
             </>
           ) : (
-            <button type="button" onClick={hostRoom} className={`w-full ${joinReady ? PILL_DARK : PILL_VOLT}`}>
+            <Button variant={races || lobby || joinReady ? "secondary" : "primary"} block onClick={hostRoom}>
               Host a room
-            </button>
+            </Button>
           )}
-          <div className="flex items-center gap-3 text-[12px] font-semibold text-[#8E96AA]" aria-hidden>
-            <span className="h-px flex-1 bg-[#262B3D]" />
-            or
-            <span className="h-px flex-1 bg-[#262B3D]" />
-          </div>
           <form
-            className="flex flex-col gap-2"
+            noValidate
             onSubmit={(e) => {
               e.preventDefault();
               joinRoom();
             }}
           >
-            <label htmlFor="lc-room-code" className="sr-only">
-              {hostedCode ? "Join another room" : "Join a friend's room"}
-            </label>
-            <div className="flex flex-wrap gap-2">
-              <input
-                id="lc-room-code"
-                type="text"
-                maxLength={6}
-                value={roomCodeInput}
-                onChange={(e) => setRoomCodeInput(e.target.value.toUpperCase())}
-                placeholder={hostedCode ? "Another room's code" : "Friend's room code"}
-                autoComplete="off"
-                autoCapitalize="characters"
-                spellCheck={false}
-                className="h-11 min-w-[7rem] flex-1 rounded-full border border-[#262B3D] bg-[#08090D] px-4 font-f1-mono text-[15px] font-extrabold tracking-[0.3em] text-[#F5F7FA] uppercase placeholder:font-sans placeholder:text-[14px] placeholder:font-semibold placeholder:tracking-normal placeholder:normal-case placeholder:text-[#8E96AA] focus:border-[#CCFF00] focus:shadow-[0_0_0_4px_rgba(204,255,0,0.12)] focus:outline-none"
-              />
-              <button type="submit" disabled={!joinReady} className={joinReady ? PILL_VOLT : PILL_DARK}>
-                Join
-              </button>
-            </div>
+            <TextField
+              id="lc-room-code"
+              label={hostedCode ? "Join another room" : "Join a friend's room"}
+              value={roomCodeInput}
+              onChange={(v) => {
+                setRoomCodeInput(v.toUpperCase());
+                setJoinHint(null);
+                if (lastAction === "join") setLastAction(null);
+              }}
+              placeholder="Room code"
+              maxLength={6}
+              autoComplete="off"
+              autoCapitalize="characters"
+              autoCorrect="off"
+              spellCheck={false}
+              enterKeyHint="go"
+              error={joinError}
+              trailing={
+                <Button type="submit" size="sm" variant={joinReady && !hostedCode && !races && !lobby ? "primary" : "secondary"} className="-mr-2">
+                  Join
+                </Button>
+              }
+            />
           </form>
           {hostedCode ? (
-            <button
-              type="button"
-              onClick={hostRoom}
-              className="self-start cursor-pointer text-left text-[13px] font-semibold text-[#00E5FF] hover:text-[#CCFF00] hover:underline"
-            >
+            <Button size="sm" variant="ghost" className="self-start" onClick={hostRoom}>
               Host a new room instead
-            </button>
+            </Button>
           ) : null}
-        </div>
+          {/* What the connection is doing; nothing to say before a room is hosted or joined (a failed join says it at the field) */}
+          {p2pStatus?.statusText && p2pState !== "idle" && p2pState !== "connected" && !joinFailed ? (
+            <p
+              role={p2pState === "error" ? "alert" : undefined}
+              className={`m-0 flex items-start gap-2 text-[13px] leading-snug ${p2pState === "error" ? "font-medium text-lc-loss" : "text-lc-slate"}`}
+            >
+              {p2pState === "error" ? <Icon name="error" size="xs" className="mt-0.5" /> : null}
+              {p2pStatus.statusText}
+            </p>
+          ) : null}
+        </Card>
 
         {profile ? (
-          <div
-            className="flex min-w-0 items-center gap-2.5 rounded-full border border-[#262B3D] bg-[#08090D]/60 py-1.5 pr-3 pl-3.5"
-            aria-label={`Racing as ${profile.name}`}
-          >
-            <span className="h-3.5 w-3.5 shrink-0 rounded-full" style={{ backgroundColor: profile.color }} />
-            <span className="font-f1-mono text-[12px] font-extrabold tracking-[0.1em]">{profile.code}</span>
+          <Well className="flex min-h-11 min-w-0 items-center gap-2.5 py-1 pr-1 pl-3.5" aria-label={`Racing as ${profile.name}`}>
+            {/* The driver's own colour: data */}
+            <span aria-hidden className="size-3 shrink-0 rounded-full" style={{ backgroundColor: profile.color }} />
+            <span className="lc-mono text-[12px] font-bold tracking-[0.08em] text-lc-slate">{profile.code}</span>
             <span className="min-w-0 flex-1 truncate text-[14px] font-semibold">{profile.name}</span>
             {onOpenProfile ? (
-              <button
-                type="button"
-                onClick={onOpenProfile}
-                className="inline-flex min-h-8 shrink-0 cursor-pointer items-center gap-1.5 px-1 text-[13px] font-bold text-[#00E5FF] hover:text-[#CCFF00]"
-              >
-                <Pencil aria-hidden className="h-3.5 w-3.5" strokeWidth={2.2} />
+              <Button size="sm" variant="ghost" icon={<Icon name="edit" />} onClick={onOpenProfile}>
                 Edit
-              </button>
+              </Button>
             ) : null}
-          </div>
+          </Well>
         ) : null}
 
-        <div
-          className={`border border-[#262B3D] transition-[border-radius] ${
-            advancedOpen ? "rounded-[22px] bg-[#08090D]/60" : "rounded-[22px] bg-transparent"
-          }`}
-        >
-          <button
-            type="button"
-            aria-expanded={advancedOpen}
-            onClick={() => setAdvancedOpen((open) => !open)}
-            className="flex min-h-[44px] w-full cursor-pointer items-center justify-between gap-2 rounded-[22px] px-4 py-2 text-left hover:bg-white/[0.04]"
-          >
-            <span className="lc-title text-[14px] text-[#8E96AA]">More ways to connect</span>
-            <span className="flex shrink-0 items-center gap-2">
-              {turnConfigured ? <span className={`${CHIP} bg-[#00E5FF]/[0.12] text-[#00E5FF] uppercase`}>Own relay</span> : null}
-              <ChevronDown
-                aria-hidden
-                className={`h-4 w-4 text-[#8E96AA] transition-transform ${advancedOpen ? "rotate-180" : ""}`}
-                strokeWidth={2.2}
-              />
-            </span>
-          </button>
-
-          {advancedOpen ? (
-            <div className="flex flex-col gap-4 border-t border-[#262B3D] p-4">
-              <div className="flex flex-col gap-2">
-                <span className="lc-title text-[14px] text-[#00E676]">Two windows on this computer</span>
-                <p className="m-0 text-[12px] leading-snug text-[#8E96AA]">Race another tab or window of this browser, without a room.</p>
-                <button
-                  type="button"
-                  disabled={!onHostLocal}
-                  onClick={() => onHostLocal?.()}
-                  className={`${PILL_DARK} min-h-9 self-start text-[13px]`}
-                >
+        <div className="flex flex-col gap-1 px-2">
+          <Disclosure moreLabel="More ways to connect" lessLabel="Fewer ways to connect">
+            <div className="flex flex-col gap-3.5 pb-2">
+              <ConnectSection title="Two windows on this computer" intro="Race another tab or window of this browser, without a room.">
+                <Button size="sm" variant="secondary" className="self-start" disabled={!onHostLocal} onClick={() => onHostLocal?.()}>
                   Race these tabs
-                </button>
-              </div>
+                </Button>
+              </ConnectSection>
 
-              <div className="flex flex-col gap-2.5 border-t border-[#262B3D] pt-4">
-                <span className="lc-title text-[14px] text-[#FFB300]">Connect by hand</span>
-                <p className="m-0 text-[12px] leading-snug text-[#8E96AA]">
-                  No room: the host makes an offer, the other player answers, and you swap the two tokens.
-                </p>
+              <ConnectSection
+                title="Connect by hand"
+                intro="No room: the host makes an offer, the other player answers, and you swap the two tokens."
+              >
                 <div className="flex flex-wrap items-center gap-2">
                   {/* A guest that answered an offer does not start one of its own (Start over first) */}
-                  <button
-                    type="button"
+                  <Button
+                    size="sm"
+                    variant="secondary"
                     disabled={sdpBusy || sdp.stage === "answered"}
                     onClick={() =>
                       runSdp(async () => {
@@ -756,13 +698,13 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
                         }
                       }, "Couldn't create an offer. Try again.")
                     }
-                    className="inline-flex min-h-9 cursor-pointer items-center rounded-full border border-[#00E5FF]/50 bg-[#00E5FF]/[0.12] px-3.5 text-[12px] font-bold text-[#00E5FF] disabled:cursor-not-allowed disabled:opacity-40"
                   >
-                    1 · Create offer (host)
-                  </button>
+                    1. Create offer (host)
+                  </Button>
                   {/* A host waiting on the answer to its own offer does not paste an offer (Start over first) */}
-                  <button
-                    type="button"
+                  <Button
+                    size="sm"
+                    variant="secondary"
                     disabled={sdpBusy || !sdpInput.trim() || sdp.stage === "offered"}
                     onClick={() =>
                       runSdp(async () => {
@@ -774,13 +716,13 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
                         }
                       }, "That offer didn't work. Check you pasted all of it.")
                     }
-                    className="inline-flex min-h-9 cursor-pointer items-center rounded-full border border-[#FFB300]/50 bg-[#FFB300]/[0.12] px-3.5 text-[12px] font-bold text-[#FFB300] disabled:cursor-not-allowed disabled:opacity-40"
                   >
-                    2 · Paste offer, get answer
-                  </button>
+                    2. Paste offer, get answer
+                  </Button>
                   {/* Only the host that made the offer accepts an answer */}
-                  <button
-                    type="button"
+                  <Button
+                    size="sm"
+                    variant="secondary"
                     disabled={sdpBusy || !sdpInput.trim() || sdp.stage !== "offered"}
                     onClick={() =>
                       runSdp(async () => {
@@ -791,126 +733,102 @@ export const MultiplayerPanel: React.FC<MultiplayerPanelProps> = ({
                         cancelCopiedToken();
                       }, "That answer didn't work. Check you pasted all of it.")
                     }
-                    className="inline-flex min-h-9 cursor-pointer items-center rounded-full border border-[#00E676]/50 bg-[#00E676]/[0.12] px-3.5 text-[12px] font-bold text-[#00E676] disabled:cursor-not-allowed disabled:opacity-40"
                   >
-                    3 · Accept answer (host)
-                  </button>
+                    3. Accept answer (host)
+                  </Button>
                 </div>
-                <input
-                  type="text"
+                <TextField
+                  label="Token from the other player"
                   value={sdpInput}
-                  onChange={(e) => {
-                    setSdpInput(e.target.value);
+                  onChange={(v) => {
+                    setSdpInput(v);
                     setSdpError("");
                   }}
-                  placeholder="Paste the other player's token here"
-                  aria-label="Connection token"
-                  className={inputClass}
+                  placeholder="Paste it here"
+                  autoComplete="off"
+                  spellCheck={false}
+                  error={sdpError || undefined}
                 />
-                {sdpError ? (
-                  <p role="alert" className="m-0 text-[12px] font-semibold text-[#FF2A3C]">
-                    {sdpError}
+                {sdp.stage === "accepted" ? (
+                  <p className="m-0 flex items-center gap-2 text-[13px] font-medium text-lc-gain">
+                    <Icon name="success" size="xs" />
+                    Answer accepted. Connecting…
                   </p>
                 ) : null}
-                {sdp.stage === "accepted" ? (
-                  <p className="m-0 text-[12px] font-semibold text-[#00E676]">Answer accepted. Connecting…</p>
-                ) : null}
                 {generatedToken ? (
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      readOnly
-                      value={generatedToken}
-                      aria-label="Generated token"
-                      className={`${inputClass} flex-1 !border-[#00E676]/50 text-[#00E676]`}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        navigator.clipboard?.writeText(generatedToken).catch(() => undefined);
-                        flashCopiedToken();
-                      }}
-                      className="inline-flex h-11 shrink-0 cursor-pointer items-center gap-1.5 rounded-full bg-[#00E676] px-4 text-[13px] font-bold text-[#08090D]"
-                    >
-                      {copiedToken ? <Check aria-hidden className="h-4 w-4" /> : <Copy aria-hidden className="h-4 w-4" />}
-                      {copiedToken ? "Copied" : "Copy"}
-                    </button>
-                  </div>
+                  <TextField
+                    label="Your token: send it to the other player"
+                    value={generatedToken}
+                    onChange={() => undefined}
+                    readOnly
+                    trailing={
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        className="-mr-2"
+                        icon={<Icon name={copiedToken ? "copied" : "copy"} />}
+                        onClick={() => {
+                          navigator.clipboard?.writeText(generatedToken).catch(() => undefined);
+                          flashCopiedToken();
+                        }}
+                      >
+                        {copiedToken ? "Copied" : "Copy"}
+                      </Button>
+                    }
+                  />
                 ) : null}
                 {sdp.stage !== "idle" ? (
-                  <button
-                    type="button"
-                    disabled={sdpBusy}
-                    onClick={resetSdp}
-                    className="self-start cursor-pointer text-[12px] font-semibold text-[#8E96AA] hover:text-[#CCFF00] disabled:cursor-not-allowed disabled:opacity-40"
-                  >
+                  <Button size="sm" variant="ghost" className="self-start" disabled={sdpBusy} onClick={resetSdp}>
                     Start over
-                  </button>
+                  </Button>
                 ) : null}
-              </div>
+              </ConnectSection>
 
-              <div className="flex flex-col gap-2.5 border-t border-[#262B3D] pt-4">
-                <span className="lc-title text-[14px] text-[#00E5FF]">Your own relay server</span>
-                <p className="m-0 text-[12px] leading-snug text-[#8E96AA]">
-                  If players can&apos;t reach each other: a TURN server you run or rent, for connections made after saving.
-                </p>
-                <div className="grid gap-2 sm:grid-cols-3">
-                  <input
-                    type="text"
+              <ConnectSection
+                title="Your own relay server"
+                intro="If players can't reach each other: a relay (TURN) server you run or rent, for connections made after saving."
+              >
+                <div className="grid gap-2.5 sm:grid-cols-3">
+                  <TextField
+                    label="Relay address"
                     value={turnUrl}
-                    onChange={(e) => {
-                      setTurnUrl(e.target.value);
+                    onChange={(v) => {
+                      setTurnUrl(v);
                       setTurnError("");
                     }}
                     placeholder="turn:host:3478"
-                    aria-label="Relay address"
+                    inputMode="url"
                     autoComplete="off"
-                    className={inputClass}
+                    spellCheck={false}
+                    error={turnError || undefined}
                   />
-                  <input
-                    type="text"
-                    value={turnUser}
-                    onChange={(e) => setTurnUser(e.target.value)}
-                    placeholder="Username"
-                    aria-label="Relay username"
-                    autoComplete="off"
-                    className={inputClass}
-                  />
-                  <input
-                    type="password"
-                    value={turnCred}
-                    onChange={(e) => setTurnCred(e.target.value)}
-                    placeholder="Password"
-                    aria-label="Relay password"
-                    autoComplete="new-password"
-                    className={inputClass}
-                  />
+                  <TextField label="Username" value={turnUser} onChange={setTurnUser} autoComplete="off" spellCheck={false} />
+                  <TextField label="Password" type="password" value={turnCred} onChange={setTurnCred} autoComplete="new-password" />
                 </div>
-                {turnError ? <p className="m-0 text-[12px] font-semibold text-[#FF2A3C]">{turnError}</p> : null}
                 <div className="flex flex-wrap items-center gap-2">
-                  <button type="button" disabled={!turnUrl.trim()} onClick={saveTurn} className={`${PILL_CYAN} min-h-9 text-[13px]`}>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    icon={turnSaved ? <Icon name="success" /> : undefined}
+                    disabled={!turnUrl.trim()}
+                    onClick={saveTurn}
+                  >
                     {turnSaved ? "Saved" : "Save"}
-                  </button>
-                  <button type="button" onClick={clearTurn} className={`${PILL_DARK} min-h-9 text-[13px] hover:!border-[#FF2A3C]`}>
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={clearTurn}>
                     Clear
-                  </button>
+                  </Button>
                 </div>
-              </div>
+              </ConnectSection>
             </div>
+          </Disclosure>
+          {turnConfigured ? (
+            <p className="lc-hint m-0 flex items-center gap-1.5">
+              <Icon name="relay" size="xs" />
+              Using your own relay server
+            </p>
           ) : null}
         </div>
-
-        {/* What the connection is doing; nothing to say before a room is hosted or joined */}
-        {p2pStatus?.statusText && p2pStatus.state !== "idle" ? (
-          <p
-            role={p2pStatus.state === "error" ? "alert" : undefined}
-            className={`m-0 font-f1-mono leading-normal ${
-              p2pStatus.state === "error" ? "text-[13px] font-semibold text-[#FF2A3C]" : "text-[13px] text-[#8E96AA]"
-            }`}
-          >
-            {p2pStatus.statusText}
-          </p>
-        ) : null}
       </div>
 
       {lobby ? renderLobby(lobby) : null}

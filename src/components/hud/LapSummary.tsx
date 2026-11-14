@@ -1,65 +1,46 @@
 "use client";
 
 import { activeLapWord } from "@/lib/track-data";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useUiZoom } from "@/lib/ui-zoom";
-import { ChevronDown, ChevronUp, X } from "lucide-react";
+import { useUnits } from "@/lib/settings/ui-prefs";
+import { SPEED_LABEL, speedIn } from "@/lib/settings/units";
+import type { UnitSettings } from "@/lib/settings/player-settings";
 import type { CornerStat, LapSummaryData } from "@/lib/sim/lap-types";
+import { Button, IconButton, TextField, Well } from "@/components/ui";
+import { Badge } from "@/components/ui/Badge";
+import { DeltaBadge } from "@/components/ui/badges";
+import { Icon } from "@/components/ui/icons";
 import {
-  HUD_GREEN,
-  HUD_PURPLE,
-  HUD_RED,
-  HUD_SLATE,
-  HUD_VOLT,
-  HUD_YELLOW,
-  formatDelta,
+  HUD_CAUTION,
+  HUD_GAIN,
+  LAP_MARK_COLOR,
+  LAP_MARK_WORD,
   formatLapTime,
   formatSectorTime,
-  sectorTimeColor,
+  lapMark,
+  type LapMark,
 } from "./hud-format";
 import { useHudMode } from "./hud-mode";
 
-const EMPTY = "—";
+const EMPTY = "-";
 const MINUS = "−";
 /** Bar colour for a corner with no change (or no reference yet) */
-const SAME = "#3A4157";
+const SAME = "var(--color-lc-keyline)";
 
-/** Coloured badge used for the lap-status pill */
-const Pill: React.FC<{ color: string; textColor?: string; size?: "sm" | "md"; children: React.ReactNode }> = ({
-  color,
-  textColor = "#08090D",
-  size = "md",
-  children,
-}) => (
-  <span
-    className={`lc-data inline-flex shrink-0 items-center rounded-full text-[11px] tracking-[0.1em] whitespace-nowrap ${
-      size === "sm" ? "h-6 px-2.5" : "h-7 px-3"
-    }`}
-    style={{ backgroundColor: color, color: textColor }}
-  >
-    {children}
-  </span>
-);
-
-/** Corner delta vs the best minimum speed: green faster, yellow slower, dash when there is no reference */
-function cornerDelta(c: CornerStat): { text: string; color: string; bar: string } {
-  if (c.bestMinSpeedKmh === null) return { text: EMPTY, color: HUD_SLATE, bar: SAME };
-  const d = c.minSpeedKmh - c.bestMinSpeedKmh;
-  if (Math.abs(d) < 0.05) return { text: "0.0", color: HUD_SLATE, bar: SAME };
+/** Corner delta vs the best minimum speed, in the player's unit: green faster, amber slower, dash with no reference */
+function cornerDelta(c: CornerStat, u: UnitSettings): { text: string; color: string; bar: string; word: string } {
+  if (c.bestMinSpeedKmh === null) return { text: EMPTY, color: "var(--color-lc-slate)", bar: SAME, word: "no reference yet" };
+  const d = speedIn(c.minSpeedKmh, u.speed) - speedIn(c.bestMinSpeedKmh, u.speed);
+  if (Math.abs(d) < 0.05) return { text: "0.0", color: "var(--color-lc-slate)", bar: SAME, word: "same as best" };
   return d > 0
-    ? { text: `+${d.toFixed(1)}`, color: HUD_GREEN, bar: HUD_GREEN }
-    : { text: `${MINUS}${Math.abs(d).toFixed(1)}`, color: HUD_YELLOW, bar: HUD_YELLOW };
+    ? { text: `+${d.toFixed(1)}`, color: HUD_GAIN, bar: HUD_GAIN, word: "faster than best" }
+    : { text: `${MINUS}${Math.abs(d).toFixed(1)}`, color: HUD_CAUTION, bar: HUD_CAUTION, word: "slower than best" };
 }
 
-const sectorColor = sectorTimeColor;
-
-/** Sheet border / ring tint for the lap's status */
-function statusTint(s: LapSummaryData): { border: string; ring: string } {
-  if (!s.valid) return { border: "rgba(255,42,60,0.4)", ring: "rgba(255,42,60,0.08)" };
-  if (s.isPersonalBest) return { border: "rgba(184,69,255,0.38)", ring: "rgba(184,69,255,0.08)" };
-  return { border: "rgba(255,255,255,0.08)", ring: "transparent" };
-}
+/** A speed in km/h as a whole number in the player's unit */
+const speed = (kmh: number, u: UnitSettings) => Math.round(speedIn(kmh, u.speed));
 
 interface LapSummaryProps {
   summary: LapSummaryData;
@@ -162,8 +143,10 @@ export const LapSummary: React.FC<LapSummaryProps> = (props) => {
       // Esc in the card's name field closes the field, not the card
       if (e.key === "Escape" && !(e.target instanceof HTMLInputElement)) setExpanded(false);
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    // Capture: ahead of the shell's pause on the same press, which would otherwise hide the HUD (and drop this
+    // listener) before it ran
+    window.addEventListener("keydown", onKey, { capture: true });
+    return () => window.removeEventListener("keydown", onKey, { capture: true });
   }, [expanded, hidden]);
 
   const boxRef = useRef<HTMLDivElement>(null);
@@ -177,14 +160,19 @@ export const LapSummary: React.FC<LapSummaryProps> = (props) => {
       key={s.lapNumber}
       ref={boxRef}
       inert={hidden}
-      className={`lc-ui-zoom lc-panel-in pointer-events-auto fixed right-[calc(env(safe-area-inset-right,0px)+0.75rem)] bottom-[calc(env(safe-area-inset-bottom,0px)+1rem)] z-30 w-[min(440px,calc(100vw-1.5rem))] sm:right-[calc(env(safe-area-inset-right,0px)+1rem)] pointer-coarse:top-[calc(env(safe-area-inset-top,0px)+104px)] pointer-coarse:portrait:top-[calc(env(safe-area-inset-top,0px)+216px)] pointer-coarse:right-auto pointer-coarse:bottom-auto pointer-coarse:left-1/2 pointer-coarse:w-[min(400px,calc(100vw-1.5rem))] pointer-coarse:-translate-x-1/2 ${hidden ? "invisible" : ""}`}
+      className={`lc-ui-zoom lc-panel-in pointer-events-auto fixed right-[calc(env(safe-area-inset-right,0px)+0.75rem)] bottom-[calc(env(safe-area-inset-bottom,0px)+1rem)] z-(--z-lc-toast) w-[min(440px,calc(100vw-1.5rem))] sm:right-[calc(env(safe-area-inset-right,0px)+1rem)] pointer-coarse:top-[calc(env(safe-area-inset-top,0px)+104px)] pointer-coarse:portrait:top-[calc(env(safe-area-inset-top,0px)+216px)] pointer-coarse:right-auto pointer-coarse:bottom-auto pointer-coarse:left-1/2 pointer-coarse:w-[min(400px,calc(100vw-1.5rem))] pointer-coarse:-translate-x-1/2 ${hidden ? "invisible" : ""}`}
       style={
         lift === null
           ? undefined
           : ({ bottom: lift / zoom, "--lc-room": `calc((100dvh - ${lift + 16}px) / ${zoom})` } as React.CSSProperties)
       }
       onPointerEnter={() => setHovered(true)}
-      onPointerLeave={() => setHovered(false)}
+      onPointerLeave={() => {
+        setHovered(false);
+        // A button the pointer focused must not take the driver's Space or Enter once the pointer has gone
+        const active = document.activeElement;
+        if (active instanceof HTMLButtonElement && boxRef.current?.contains(active)) active.blur();
+      }}
     >
       {expanded ? (
         <LapCard {...props} onCollapse={() => setExpanded(false)} />
@@ -196,15 +184,38 @@ export const LapSummary: React.FC<LapSummaryProps> = (props) => {
   );
 };
 
+/**
+ * A personal best wears the colour the HUD gives it (`lapMark`): on your own the session is yours, so it is the
+ * session's best (purple), the same as its sectors
+ */
+const PB_TONE = lapMark(1, null) === "best" ? "best" : "good";
+
+/** The lap's status in the toast: invalid, a personal best, or the gap to the best */
 function statusBadge(s: LapSummaryData): React.ReactNode {
-  if (!s.valid) return <Pill size="sm" color={HUD_RED} textColor="#F5F7FA">INVALID</Pill>;
-  if (s.isPersonalBest) return <Pill size="sm" color={HUD_PURPLE} textColor="#F5F7FA">PB</Pill>;
+  if (!s.valid)
+    return (
+      <Badge tone="bad" size="sm" icon="trackLimits">
+        Invalid
+      </Badge>
+    );
+  if (s.isPersonalBest)
+    return (
+      <Badge tone={PB_TONE} size="sm" icon="success">
+        PB
+      </Badge>
+    );
   if (s.deltaToBestMs === null) return null;
-  return (
-    <Pill size="sm" color={s.deltaToBestMs <= 0 ? HUD_GREEN : HUD_YELLOW}>
-      {formatDelta(s.deltaToBestMs / 1000)}s
-    </Pill>
-  );
+  return <DeltaBadge seconds={s.deltaToBestMs / 1000} size="sm" />;
+}
+
+/** Colour and word of a sector against the best (no time: neither) */
+function sectorMark(
+  ms: number | null | undefined,
+  best: number | null | undefined,
+): { color: string; word: string; mark: LapMark | null } {
+  if (!ms || !Number.isFinite(ms) || ms <= 0) return { color: "var(--color-lc-slate)", word: "", mark: null };
+  const mark = lapMark(ms, best);
+  return { color: LAP_MARK_COLOR[mark], word: LAP_MARK_WORD[mark], mark };
 }
 
 /** Collapsed toast: lap time, status and the three sector colours; the whole card opens the details */
@@ -212,61 +223,50 @@ const LapToast: React.FC<{ summary: LapSummaryData; onOpen: () => void; onClose:
   summary: s,
   onOpen,
   onClose,
-}) => {
-  const tint = statusTint(s);
-  return (
-    <div
-      className="ml-auto flex w-fit max-w-full items-center gap-3 rounded-full border pointer-coarse:mx-auto bg-[#08090D]/75 py-2 pr-2 pl-[18px] text-[#F5F7FA] shadow-[0_14px_40px_rgba(0,0,0,0.5)] backdrop-blur-[14px]"
-      style={{ borderColor: tint.border }}
+}) => (
+  <div className="ml-auto flex w-fit max-w-full items-center gap-2 rounded-full border border-white/7 bg-lc-void/75 py-1.5 pr-1.5 pl-4.5 text-lc-chalk shadow-lc-pop backdrop-blur-[14px] pointer-coarse:mx-auto">
+    <button
+      type="button"
+      onClick={onOpen}
+      aria-label={`${activeLapWord()} ${s.lapNumber}: show sector data`}
+      className="flex min-h-9 min-w-0 pointer-coarse:min-h-11 cursor-pointer items-center gap-3 rounded-full text-left transition-opacity duration-200 hover:opacity-85 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-lc-volt sm:gap-3.5"
     >
-      <button
-        type="button"
-        onClick={onOpen}
-        aria-label={`${activeLapWord()} ${s.lapNumber}: show sector data`}
-        className="flex min-w-0 cursor-pointer items-center gap-3 text-left transition-opacity hover:opacity-85 sm:gap-3.5"
-      >
-        <span className="lc-lbl shrink-0 !text-[9px] !font-extrabold !tracking-[0.18em]">{activeLapWord().toUpperCase()} {s.lapNumber}</span>
-        <span className="lc-data text-[22px] leading-none sm:text-[24px]">{formatLapTime(s.lapTimeMs)}</span>
-        {statusBadge(s)}
-        <span className="flex shrink-0 gap-[3px]" aria-hidden>
-          {s.sectorTimesMs.map((t, idx) => (
+      <span className="lc-mono shrink-0 text-[12px] font-bold text-lc-slate">
+        {activeLapWord()} {s.lapNumber}
+      </span>
+      <span className="lc-mono text-[22px] leading-none font-bold sm:text-[24px]">{formatLapTime(s.lapTimeMs)}</span>
+      {statusBadge(s)}
+      {/* Shape as well as colour: a best sector is a solid bar, a slower one an outline */}
+      <span className="flex shrink-0 items-center gap-0.5" aria-hidden>
+        {s.sectorTimesMs.map((t, idx) => {
+          const m = sectorMark(t, s.bestSectorTimesMs[idx]);
+          return (
             <span
               key={idx}
-              className="h-1.5 w-[22px] rounded-full"
-              style={{ backgroundColor: sectorColor(t, s.bestSectorTimesMs[idx]) }}
+              className={`w-5.5 rounded-full ${m.mark === "slower" ? "h-1.5" : "h-2"}`}
+              style={
+                m.mark === "slower"
+                  ? { boxShadow: `inset 0 0 0 1.5px ${m.color}` }
+                  : { backgroundColor: m.color }
+              }
             />
-          ))}
-        </span>
-        <span className="lc-lbl hidden shrink-0 items-center gap-1 !text-[9px] !font-extrabold !tracking-[0.18em] sm:inline-flex">
-          Sectors <ChevronUp className="h-3 w-3" strokeWidth={2.6} />
-        </span>
-      </button>
-      <span aria-hidden className="h-6 w-px shrink-0 bg-[#262B3D]" />
-      <button
-        type="button"
-        onClick={onClose}
-        aria-label="Dismiss lap summary"
-        className="inline-flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full bg-[#1B1F2B] text-[#8E96AA] transition-colors hover:text-[#F5F7FA]"
-      >
-        <X className="h-3.5 w-3.5" strokeWidth={2.4} />
-      </button>
-    </div>
-  );
-};
-
-/** Small stat tile inside the card */
-const StatTile: React.FC<{ label: string; children: React.ReactNode; className?: string }> = ({
-  label,
-  children,
-  className = "",
-}) => (
-  <div className={`flex flex-col gap-[3px] rounded-[14px] border border-[#1B1F2B] bg-[#050608] px-3 py-2.5 ${className}`}>
-    {children}
-    <span className="lc-lbl order-first !text-[9px] !font-extrabold !tracking-[0.18em]">{label}</span>
+          );
+        })}
+      </span>
+      <Icon name="next" size="xs" className="text-lc-slate max-sm:hidden" />
+    </button>
+    <IconButton size="sm" variant="ghost" aria-label="Dismiss lap summary" icon={<Icon name="close" />} onClick={onClose} />
   </div>
 );
 
-const BTN = "inline-flex h-10 cursor-pointer items-center gap-2 rounded-full px-4 text-[13px] font-bold transition-colors";
+/** A read-out inside the card: the value, then the words that say what it is (no label above) */
+const Stat: React.FC<{ value: React.ReactNode; label: string; className?: string }> = ({ value, label, className = "" }) => (
+  <Well className={`flex min-w-0 flex-col gap-0.5 px-3 py-2.5 short:py-2 ${className}`}>
+    <span className="lc-mono truncate text-[18px] leading-tight font-bold text-lc-chalk">{value}</span>
+    {/* Wraps rather than cuts: "Average km/h" is wider than a quarter of the card */}
+    <span className="lc-hint leading-tight text-balance">{label}</span>
+  </Well>
+);
 
 /** Open card: lap time with status badge, sector splits vs session best, stats, and per-corner speeds */
 const LapCard: React.FC<
@@ -285,170 +285,142 @@ const LapCard: React.FC<
   driverName,
   onRename,
 }) => {
+  const units = useUnits();
+  const unit = SPEED_LABEL[units.speed];
 
   let badge: React.ReactNode = null;
   if (!s.valid) {
-    badge = <Pill color={HUD_RED} textColor="#F5F7FA">INVALID · TRACK LIMITS</Pill>;
-  } else if (s.autopilot) {
-    badge = <Pill color={HUD_YELLOW}>AUTOPILOT · NOT RANKED</Pill>;
-  } else if (s.isPersonalBest) {
-    badge = <Pill color={HUD_PURPLE} textColor="#F5F7FA">PERSONAL BEST</Pill>;
-  } else if (s.deltaToBestMs !== null) {
-    const ahead = s.deltaToBestMs <= 0;
     badge = (
-      <Pill color={ahead ? HUD_GREEN : HUD_YELLOW}>{formatDelta(s.deltaToBestMs / 1000)}s</Pill>
+      <Badge tone="bad" icon="trackLimits">
+        Invalid: track limits
+      </Badge>
     );
+  } else if (s.autopilot) {
+    badge = (
+      <Badge tone="warn" icon="warning">
+        Autopilot: not ranked
+      </Badge>
+    );
+  } else if (s.isPersonalBest) {
+    badge = (
+      <Badge tone={PB_TONE} icon="success">
+        Personal best
+      </Badge>
+    );
+  } else if (s.deltaToBestMs !== null) {
+    badge = <DeltaBadge seconds={s.deltaToBestMs / 1000} />;
   }
 
-  const submitLabel =
-    submitState === "sending"
-      ? "Sending…"
-      : submitState === "sent"
-        ? submitRank != null
-          ? `Online · P${submitRank.rank}${submitRank.total ? ` of ${submitRank.total}` : ""}${submitRank.challengeRank ? ` · P${submitRank.challengeRank} this week` : ""}`
-          : "Online"
-        : submitState === "error"
-          ? "Failed — retry"
-          : "Post online";
-  const submitDisabled = !s.valid || s.autopilot || submitState === "sending" || submitState === "sent";
+  const sentLabel =
+    submitRank != null
+      ? `Online: P${submitRank.rank}${submitRank.total ? ` of ${submitRank.total}` : ""}${submitRank.challengeRank ? `, P${submitRank.challengeRank} this week` : ""}`
+      : "Online";
+  const notRanked = !s.valid ? "Invalid laps don't go online" : s.autopilot ? "Laps on autopilot aren't ranked" : undefined;
 
   const stats: { label: string; value: string }[] = [
-    { label: "TOP KM/H", value: `${Math.round(s.topSpeedKmh)}` },
-    { label: "AVG KM/H", value: `${Math.round(s.avgSpeedKmh)}` },
-    { label: "FULL THR", value: `${s.fullThrottlePct.toFixed(0)}%` },
-    { label: "BRAKING", value: `${s.brakingPct.toFixed(0)}%` },
+    { label: `Top ${unit}`, value: `${speed(s.topSpeedKmh, units)}` },
+    { label: `Avg ${unit}`, value: `${speed(s.avgSpeedKmh, units)}` },
+    { label: "Full throttle", value: `${s.fullThrottlePct.toFixed(0)}%` },
+    { label: "Braking", value: `${s.brakingPct.toFixed(0)}%` },
   ];
-  const tint = statusTint(s);
 
   return (
     <div
       role="dialog"
       aria-label={`Lap ${s.lapNumber} summary`}
-      className="flex max-h-[min(calc(100dvh-9rem),var(--lc-room,100dvh))] w-full flex-col gap-3.5 overflow-y-auto rounded-[28px] border bg-[#0A0B10]/90 p-5 text-[#F5F7FA] backdrop-blur-[20px] pointer-coarse:max-h-[calc(100dvh-12rem)] short:gap-2.5 short:p-4"
-      style={{ borderColor: tint.border, boxShadow: `0 30px 80px rgba(0,0,0,0.6), 0 0 0 6px ${tint.ring}` }}
+      className="lc-glass flex max-h-[min(calc(100dvh-9rem),var(--lc-room,100dvh))] w-full flex-col gap-3.5 overflow-y-auto rounded-lc-sheet p-5 text-lc-chalk shadow-lc-sheet pointer-coarse:max-h-[calc(100dvh-12rem)] short:gap-2.5 short:p-4"
     >
-      {/* Header: lap number and status badge, then the big lap time on a row of its own (a long badge left it too little room beside it) */}
-      <div className="flex flex-col gap-1.5">
+      {/* The lap and its status, then the lap time on a row of its own (a long badge left it too little room beside it) */}
+      <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between gap-3">
-          <span className="lc-data inline-flex items-center gap-2 text-[12px] tracking-[0.12em]">
-            <span aria-hidden className="h-[7px] w-[7px] rounded-full bg-[#CCFF00]" />
-            {activeLapWord().toUpperCase()} {s.lapNumber}
-          </span>
-          <div className="flex shrink-0 items-center gap-2">
+          <h2 className="lc-h3">
+            {activeLapWord()} {s.lapNumber}
+          </h2>
+          <div className="flex min-w-0 items-center gap-1.5">
             {badge}
-            <button
-              type="button"
-              onClick={onCollapse}
-              aria-label="Collapse lap summary"
-              className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border border-[#262B3D] text-[#8E96AA] transition-colors hover:border-[#3A4157] hover:text-[#F5F7FA]"
-            >
-              <ChevronDown className="h-4 w-4" strokeWidth={2.4} />
-            </button>
+            <IconButton size="sm" variant="ghost" aria-label="Collapse lap summary" icon={<Icon name="expand" />} onClick={onCollapse} />
           </div>
         </div>
-        <span className="lc-data text-[40px] leading-none tracking-[-0.02em] sm:text-[46px] short:text-[34px]">
+        <span className="lc-mono text-[40px] leading-none font-bold tracking-[-0.02em] sm:text-[46px] short:text-[34px]">
           {formatLapTime(s.lapTimeMs)}
         </span>
       </div>
 
-      {/* Sector splits, coloured against the session best */}
+      {/* Sector splits against the session best: the colour and its word */}
       <div className="grid grid-cols-3 gap-1.5">
         {s.sectorTimesMs.map((t, idx) => {
-          const color = sectorColor(t, s.bestSectorTimesMs[idx]);
+          const mark = sectorMark(t, s.bestSectorTimesMs[idx]);
           return (
-            <div
-              key={idx}
-              className="flex flex-col gap-[3px] rounded-[14px] border border-[#1B1F2B] bg-[#050608] px-3 py-2.5"
-            >
-              <span aria-hidden className="h-1 rounded-full" style={{ backgroundColor: color }} />
-              <span className="lc-lbl mt-1 !text-[9px] !font-extrabold !tracking-[0.18em]">S{idx + 1}</span>
-              <span className="lc-data text-[16px]" style={{ color }}>
+            <Well key={idx} className="flex min-w-0 flex-col gap-0.5 px-3 py-2.5 short:py-2">
+              <span className="lc-mono text-[18px] leading-tight font-bold" style={{ color: mark.color }}>
                 {formatSectorTime(t)}
               </span>
-            </div>
+              <span className="lc-hint truncate">
+                Sector {idx + 1}
+                {mark.word ? `: ${mark.word.toLowerCase()}` : ""}
+              </span>
+            </Well>
           );
         })}
       </div>
 
-      {/* Theoretical best */}
-      <div className="flex items-center justify-between gap-2 rounded-[14px] bg-[#B845FF]/8 px-3.5 py-2.5">
-        <span className="lc-lbl !text-[9px] !font-extrabold !tracking-[0.18em]" style={{ color: HUD_PURPLE }}>
-          Theoretical best
-        </span>
-        <span className="lc-data text-[18px]">
-          {s.theoreticalBestMs === null ? EMPTY : formatLapTime(s.theoreticalBestMs)}
-        </span>
-      </div>
-
-      {/* Stats row */}
-      <div className="grid grid-cols-4 gap-1.5">
+      <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
         {stats.map((st) => (
-          <StatTile key={st.label} label={st.label}>
-            <span className="lc-data text-[18px]">{st.value}</span>
-          </StatTile>
+          <Stat key={st.label} value={st.value} label={st.label} />
         ))}
       </div>
 
+      <Well className="flex items-center justify-between gap-2 px-3.5 py-2.5">
+        <span className="text-[13px] font-semibold text-lc-fog">Theoretical best</span>
+        <span className="lc-mono text-[18px] font-bold">{s.theoreticalBestMs === null ? EMPTY : formatLapTime(s.theoreticalBestMs)}</span>
+      </Well>
+
       {/* Minimum speed per corner */}
-      <CornerChart corners={s.corners} />
+      <CornerChart corners={s.corners} units={units} />
 
       {/* Footer actions */}
       <div className="flex flex-wrap items-center justify-end gap-2">
+        {/* Where posting the lap went, said once it changes (the badges below come and go) */}
+        <span className="sr-only" aria-live="polite">
+          {submitState === "sent" ? sentLabel : submitState === "sending" ? "Posting" : ""}
+        </span>
+        {/* Why the lap cannot go online, in words beside the greyed button */}
+        {onSubmit && notRanked && submitState !== "sent" ? <span className="lc-hint mr-auto">{notRanked}</span> : null}
         {onSaveGhost ? (
-          <button
-            type="button"
-            onClick={onSaveGhost}
-            className={`${BTN} border border-[#262B3D] bg-transparent text-[#C5CBD8] hover:border-[#CCFF00] hover:text-[#CCFF00]`}
-          >
+          <Button size="sm" variant="ghost" onClick={onSaveGhost}>
             Save ghost file
-          </button>
+          </Button>
         ) : null}
-        {!onSubmit && (submitState === "sending" || submitState === "sent") ? (
+        {submitState === "sent" ? (
+          <Badge tone="good" icon="online">
+            {sentLabel}
+          </Badge>
+        ) : !onSubmit && submitState === "sending" ? (
           // Posted by itself: where the lap went, nothing to press
-          <span
-            role="status"
-            className={`${BTN} cursor-default border`}
-            style={
-              submitState === "sent"
-                ? { borderColor: HUD_GREEN, color: HUD_GREEN, backgroundColor: "transparent" }
-                : { borderColor: "#262B3D", color: "#8E96AA", backgroundColor: "transparent" }
-            }
-          >
-            {submitLabel}
-          </span>
-        ) : null}
-        {onSubmit ? (
-          <button
-            type="button"
+          <Badge>Posting</Badge>
+        ) : onSubmit ? (
+          <Button
+            size="sm"
+            variant={submitState === "error" ? "secondary" : "primary"}
+            loading={submitState === "sending"}
+            disabledReason={notRanked}
             onClick={onSubmit}
-            disabled={submitDisabled}
-            className={`${BTN} border disabled:cursor-not-allowed disabled:opacity-40`}
-            style={
-              submitState === "error"
-                ? { borderColor: HUD_RED, color: HUD_RED, backgroundColor: "transparent" }
-                : submitState === "sent"
-                  ? { borderColor: HUD_GREEN, color: HUD_GREEN, backgroundColor: "transparent" }
-                  : { borderColor: HUD_VOLT, color: "#08090D", backgroundColor: HUD_VOLT }
-            }
           >
-            {submitLabel}
-          </button>
+            {submitState === "error" ? "Retry upload" : "Post online"}
+          </Button>
         ) : null}
-        <button
-          type="button"
-          onClick={onClose}
-          className={`${BTN} border border-[#262B3D] bg-[#1B1F2B] text-[#F5F7FA] hover:border-[#3A4157] hover:bg-[#262B3D]`}
-        >
+        <Button size="sm" variant="secondary" onClick={onClose}>
           Close
-        </button>
+        </Button>
       </div>
-      {onRename && driverName && (submitState === "sent" || submitState === "error") ? (
-        <DriverNameLine name={driverName} onBoard={submitState === "sent"} onRename={onRename} />
-      ) : null}
       {submitState === "error" && submitError ? (
-        <p className="-mt-1.5 text-right font-f1-mono text-[11px] leading-snug" style={{ color: HUD_RED }}>
+        <p role="alert" className="-mt-1.5 flex items-start justify-end gap-1.5 text-right text-[12px] leading-snug font-medium text-lc-loss">
+          <Icon name="error" size="xs" className="mt-px" />
           {submitError}
         </p>
+      ) : null}
+      {onRename && driverName && (submitState === "sent" || submitState === "error") ? (
+        <DriverNameLine name={driverName} onBoard={submitState === "sent"} onRename={onRename} />
       ) : null}
     </div>
   );
@@ -474,19 +446,19 @@ const DriverNameLine: React.FC<{ name: string; onBoard: boolean; onRename: (name
 
   if (!editing) {
     return (
-      <p className="-mt-1.5 flex flex-wrap items-center justify-end gap-x-1.5 text-right text-[12px] leading-snug text-[#8E96AA]">
-        {onBoard ? "On the board as" : "Racing as"} <span className="font-semibold text-[#F5F7FA]">{name}</span>
-        <button
-          type="button"
+      <p className="-mt-1 flex flex-wrap items-center justify-end gap-x-1.5 text-right text-[12px] leading-snug text-lc-slate">
+        {onBoard ? "On the board as" : "Racing as"} <span className="font-semibold text-lc-chalk">{name}</span>
+        <Button
+          size="sm"
+          variant="ghost"
           onClick={() => {
             setDraft(name);
             setError(null);
             setEditing(true);
           }}
-          className="cursor-pointer border-0 bg-transparent p-0 text-[12px] font-semibold text-[#C5CBD8] underline decoration-[#3A4157] underline-offset-2 hover:text-[#F5F7FA] hover:decoration-[#F5F7FA]"
         >
           Change name
-        </button>
+        </Button>
       </p>
     );
   }
@@ -496,45 +468,32 @@ const DriverNameLine: React.FC<{ name: string; onBoard: boolean; onRename: (name
         e.preventDefault();
         void save();
       }}
-      className="flex flex-col gap-1.5"
+      className="flex flex-col gap-2"
     >
-      <div className="flex items-center gap-2">
-        <input
-          autoFocus
-          type="text"
-          maxLength={16}
-          value={draft}
-          aria-label="Driver name"
-          aria-invalid={error !== null}
-          onChange={(e) => {
-            setDraft(e.target.value);
-            setError(null);
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "Escape") setEditing(false);
-          }}
-          className="h-10 min-w-0 flex-1 rounded-full border border-[#262B3D] bg-[#08090D] px-4 text-[14px] text-[#F5F7FA] outline-none focus:border-[#F5F7FA]/60"
-        />
-        <button
-          type="submit"
-          disabled={busy || draft.trim() === ""}
-          className={`${BTN} border border-[#262B3D] bg-[#1B1F2B] text-[#F5F7FA] hover:border-[#3A4157] hover:bg-[#262B3D] disabled:cursor-not-allowed disabled:opacity-40`}
-        >
-          {busy ? "Saving…" : "Save"}
-        </button>
-        <button
-          type="button"
-          onClick={() => setEditing(false)}
-          className={`${BTN} border border-[#262B3D] bg-transparent text-[#C5CBD8] hover:border-[#3A4157] hover:text-[#F5F7FA]`}
-        >
+      <TextField
+        label="Driver name"
+        autoFocus
+        maxLength={16}
+        autoComplete="nickname"
+        spellCheck={false}
+        value={draft}
+        error={error ?? undefined}
+        onChange={(v) => {
+          setDraft(v);
+          setError(null);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") setEditing(false);
+        }}
+      />
+      <div className="flex justify-end gap-2">
+        <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>
           Cancel
-        </button>
+        </Button>
+        <Button size="sm" variant="secondary" type="submit" loading={busy} disabled={draft.trim() === ""}>
+          Save name
+        </Button>
       </div>
-      {error ? (
-        <p role="alert" className="m-0 text-right font-f1-mono text-[11px] leading-snug" style={{ color: HUD_RED }}>
-          {error}
-        </p>
-      ) : null}
     </form>
   );
 };
@@ -554,29 +513,40 @@ function defaultCorner(corners: CornerStat[]): number {
   return pick;
 }
 
+/** A corner's own name, without the "Turn 3 -" its data starts with (the T number is shown beside it) */
+const cornerName = (name: string) => name.replace(/^Turn \d+\s*[\u2014-]\s*/, "");
+
 /**
  * Per-corner minimum speed as bars, coloured faster green / slower amber / same keyline against the best
- * earlier lap. Hovering or tapping a bar shows that corner's numbers in the readout.
+ * earlier lap. Hovering, tapping or focusing a bar shows that corner's numbers in the readout; the bars are one radio
+ * group, so Tab enters it once and left / right (Home / End) walk the corners.
  */
-const CornerChart: React.FC<{ corners: CornerStat[] }> = ({ corners }) => {
+const CornerChart: React.FC<{ corners: CornerStat[]; units: UnitSettings }> = ({ corners, units }) => {
   const [picked, setPicked] = useState<number | null>(null);
+  const groupRef = useRef<HTMLDivElement>(null);
+  const titleId = useId();
   const sel = picked !== null && picked < corners.length ? picked : defaultCorner(corners);
   const maxSpeed = corners.reduce((m, c) => Math.max(m, c.minSpeedKmh), 1);
   const cols = { gridTemplateColumns: `repeat(${Math.max(1, corners.length)}, minmax(0, 1fr))` };
   const cur = corners[sel];
-  const curDelta = cur ? cornerDelta(cur) : null;
+  const curDelta = cur ? cornerDelta(cur, units) : null;
+  const unit = SPEED_LABEL[units.speed];
 
   return (
-    <div className="flex flex-col gap-2 rounded-2xl border border-[#1B1F2B] bg-[#050608] px-3 pt-3 pb-2.5">
-      <div className="flex items-center justify-between gap-2">
-        <span className="lc-lbl shrink-0 !text-[9px] !font-extrabold !tracking-[0.18em]">Corners · min km/h vs best</span>
+    <Well className="flex flex-col gap-2 px-3 pt-3 pb-2.5">
+      <div className="flex items-baseline justify-between gap-3">
+        <span id={titleId} className="shrink-0 text-[13px] font-semibold text-lc-fog">
+          Slowest speed per corner
+        </span>
         {cur && curDelta ? (
-          <span className="lc-data flex min-w-0 items-baseline gap-1.5 text-[11px]">
-            <span className="text-[#F5F7FA]">T{cur.turnNumber}</span>
-            <span className="min-w-0 truncate font-f1-mono font-bold text-[#8E96AA]" title={cur.name}>
-              {cur.name}
+          <span className="lc-mono flex min-w-0 items-baseline gap-1.5 text-[12px] font-bold">
+            <span className="text-lc-chalk">T{cur.turnNumber}</span>
+            <span className="min-w-0 truncate text-lc-slate" title={cornerName(cur.name)}>
+              {cornerName(cur.name)}
             </span>
-            <span className="shrink-0 text-[#8E96AA]">{Math.round(cur.minSpeedKmh)} km/h</span>
+            <span className="shrink-0 text-lc-fog">
+              {speed(cur.minSpeedKmh, units)} {unit}
+            </span>
             <span className="shrink-0" style={{ color: curDelta.color }}>
               {curDelta.text}
             </span>
@@ -585,66 +555,77 @@ const CornerChart: React.FC<{ corners: CornerStat[] }> = ({ corners }) => {
       </div>
 
       {corners.length === 0 ? (
-        <div className="py-2 font-f1-mono text-[11px] text-[#8E96AA]">No corner data</div>
+        <p className="lc-hint m-0 py-2">No corner data for this lap.</p>
       ) : (
         <>
           <div
-            aria-hidden
+            ref={groupRef}
+            role="radiogroup"
+            aria-labelledby={titleId}
             className="grid h-[84px] items-end gap-[3px] short:h-[60px]"
             style={cols}
-            onPointerLeave={() => setPicked(null)}
+            onPointerLeave={() => {
+              // The pointer leaving puts the readout back, unless the keys are walking the bars
+              if (!groupRef.current?.contains(document.activeElement)) setPicked(null);
+            }}
+            onKeyDown={(e) => {
+              const step: Record<string, number> = { ArrowLeft: -1, ArrowRight: 1, Home: -Infinity, End: Infinity };
+              const d = step[e.key];
+              if (d === undefined) return;
+              // The bars' own keys: they never reach the car or a menu behind
+              e.preventDefault();
+              e.stopPropagation();
+              const next = d === -Infinity ? 0 : d === Infinity ? corners.length - 1 : Math.min(corners.length - 1, Math.max(0, sel + d));
+              setPicked(next);
+              groupRef.current?.querySelectorAll<HTMLElement>('[role="radio"]')[next]?.focus();
+            }}
           >
             {corners.map((c, i) => {
-              const d = cornerDelta(c);
+              const d = cornerDelta(c, units);
               const pct = 17 + (c.minSpeedKmh / maxSpeed) * 83;
               return (
-                <span
+                // The whole column is the target, not only the bar drawn in it
+                <button
                   key={c.turnNumber}
-                  className="cursor-pointer self-end"
-                  style={{ height: `${pct}%` }}
+                  type="button"
+                  role="radio"
+                  aria-checked={i === sel}
+                  aria-label={`T${c.turnNumber} ${cornerName(c.name)}: ${speed(c.minSpeedKmh, units)} ${unit}, ${d.text === EMPTY ? d.word : `${d.text}, ${d.word}`}`}
+                  tabIndex={i === sel ? 0 : -1}
+                  className="flex h-full min-w-0 cursor-pointer items-end rounded-full"
                   onPointerEnter={() => setPicked(i)}
                   onPointerDown={() => setPicked(i)}
+                  onFocus={() => setPicked(i)}
                 >
                   <span
-                    className="lc-grow block h-full rounded-t-full rounded-b-[3px] transition-shadow"
-                    style={{ background: d.bar, boxShadow: i === sel ? "0 0 0 2px #F5F7FA" : "none", animationDelay: `${i * 25}ms` }}
+                    className={`lc-grow block w-full rounded-full ${i === sel ? "ring-2 ring-lc-chalk" : ""}`}
+                    style={{ height: `${pct}%`, background: d.bar, animationDelay: `${i * 25}ms` }}
                   />
-                </span>
+                </button>
               );
             })}
           </div>
-          <div aria-hidden className="grid gap-[3px] text-center font-f1-mono text-[8px] font-extrabold" style={cols}>
+          <div aria-hidden className="lc-mono grid gap-[3px] text-center text-[11px] font-bold" style={cols}>
             {corners.map((c, i) => (
-              <span key={c.turnNumber} style={{ color: i === sel ? "#F5F7FA" : "#5B6275" }}>
+              <span key={c.turnNumber} className={i === sel ? "text-lc-chalk" : "text-lc-slate"}>
                 {c.turnNumber}
               </span>
             ))}
           </div>
-          {/* The same numbers for screen readers */}
-          <ul className="sr-only">
-            {corners.map((c) => (
-              <li key={c.turnNumber}>
-                T{c.turnNumber} {c.name}: {Math.round(c.minSpeedKmh)} km/h, {cornerDelta(c).text} vs best
-              </li>
-            ))}
-          </ul>
-          <div className="flex flex-wrap gap-3.5">
+          <div className="flex flex-wrap gap-x-4 gap-y-1" aria-hidden>
             {[
-              { label: "Faster", color: HUD_GREEN },
-              { label: "Slower", color: HUD_YELLOW },
+              { label: "Faster", color: HUD_GAIN },
+              { label: "Slower", color: HUD_CAUTION },
               { label: "Same", color: SAME },
             ].map((k) => (
-              <span
-                key={k.label}
-                className="lc-lbl inline-flex items-center gap-[5px] !text-[9px] !font-extrabold !tracking-[0.18em]"
-              >
-                <span aria-hidden className="h-2 w-2 rounded-[3px]" style={{ background: k.color }} />
+              <span key={k.label} className="lc-hint inline-flex items-center gap-1.5">
+                <span className="size-2 rounded-full" style={{ background: k.color }} />
                 {k.label}
               </span>
             ))}
           </div>
         </>
       )}
-    </div>
+    </Well>
   );
 };

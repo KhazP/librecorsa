@@ -2,12 +2,13 @@
 
 import React from "react";
 import type { CarTelemetry } from "@/types/f1";
-import { HUD_CYAN, HUD_GREEN, HUD_LBL, HUD_RED, HUD_YELLOW, aidsActive } from "./hud-format";
+import { HUD_BRAKE, HUD_CAUTION, HUD_INFO, HUD_LBL, HUD_LOSS, HUD_THROTTLE, aidsActive } from "./hud-format";
 
-/** ABS release shows in magenta so it never reads as the throttle's amber TC cut */
-const ABS_COLOR = "#FF3DCB";
-const TC_COLOR = HUD_YELLOW;
-const CLUTCH_COLOR = "#5AA9FF";
+/** What an aid cuts is a caution on its own bar (ABS on the brake, TC on the throttle); the label under it lights too */
+const ABS_COLOR = HUD_CAUTION;
+const TC_COLOR = HUD_CAUTION;
+/** The clutch is identity, not state */
+const CLUTCH_COLOR = "var(--color-lc-azure)";
 
 /** What the pedals asked for and what the electronics let through (0..1 each) */
 export function pedalLayers(t: CarTelemetry) {
@@ -53,7 +54,7 @@ const Bar: React.FC<{
   return (
     <span className="flex flex-col items-center gap-1">
       <span
-        className="relative overflow-hidden rounded-[5px] bg-white/[0.07] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.05)]"
+        className="relative overflow-hidden rounded-sm bg-white/7 inset-ring inset-ring-white/5"
         style={{ height: h, width: w }}
         role="meter"
         aria-label={label}
@@ -68,16 +69,15 @@ const Bar: React.FC<{
             style={{
               bottom: `${output * 100}%`,
               height: `${cut * 100}%`,
-              background: `repeating-linear-gradient(135deg, ${cutColor} 0 3px, ${cutColor}99 3px 6px)`,
-              boxShadow: `0 0 8px ${cutColor}`,
+              background: `repeating-linear-gradient(135deg, ${cutColor} 0 3px, color-mix(in srgb, ${cutColor} 60%, transparent) 3px 6px)`,
             }}
           />
         ) : null}
-        {clip ? <span className="absolute inset-x-0 top-0 h-[4px] bg-[#FF2A3C] shadow-[0_0_6px_#FF2A3C]" /> : null}
+        {clip ? <span className="absolute inset-x-0 top-0 h-1 bg-lc-loss" /> : null}
       </span>
       {showLabel ? (
-        <span className={`${HUD_LBL} !text-[8px] !tracking-[0.1em]`} style={active ? { color: cutColor } : undefined}>
-          {label}
+        <span className={`${HUD_LBL} tracking-[0.06em]`} style={active ? { color: cutColor } : clip ? { color: HUD_LOSS } : undefined}>
+          {clip ? "Clip" : label}
         </span>
       ) : null}
     </span>
@@ -103,21 +103,23 @@ export const PedalBars: React.FC<{
   const hasFfb = showFfb && t.ffbTorqueNorm !== undefined;
   return (
     <div className={`flex flex-col gap-1.5 ${className}`} aria-label="Pedals and electronics">
-      <div className={`flex items-end ${full ? "gap-2" : "gap-[5px]"}`}>
+      <div className={`flex items-end ${full ? "gap-2" : "gap-1.25"}`}>
         {showClutch ? <Bar label="CLU" demand={p.clutch} color={CLUTCH_COLOR} h={h} w={w} showLabel={full} /> : null}
-        <Bar label="ABS" demand={p.brake} output={p.brakeOut} color={HUD_RED} cutColor={ABS_COLOR} active={p.absActive} h={h} w={w} showLabel={full} />
-        <Bar label="TC" demand={p.throttle} output={p.throttleOut} color={HUD_GREEN} cutColor={TC_COLOR} active={p.tcActive} h={h} w={w} showLabel={full} />
-        {hasFfb ? <Bar label="FFB" demand={p.ffb} color={p.ffbClip ? HUD_RED : "#C5CBD8"} clip={p.ffbClip} h={h} w={w} showLabel={full} /> : null}
+        <Bar label="ABS" demand={p.brake} output={p.brakeOut} color={HUD_BRAKE} cutColor={ABS_COLOR} active={p.absActive} h={h} w={w} showLabel={full} />
+        <Bar label="TC" demand={p.throttle} output={p.throttleOut} color={HUD_THROTTLE} cutColor={TC_COLOR} active={p.tcActive} h={h} w={w} showLabel={full} />
+        {hasFfb ? (
+          <Bar label="FFB" demand={p.ffb} color={p.ffbClip ? HUD_LOSS : "var(--color-lc-fog)"} clip={p.ffbClip} h={h} w={w} showLabel={full} />
+        ) : null}
       </div>
       {full ? (
-        <span className="relative h-[5px] w-full overflow-hidden rounded-full bg-white/[0.07]" aria-label="Steering">
-          <span className="absolute inset-y-0 left-1/2 w-px bg-[#F5F7FA]/40" />
+        <span className="relative h-1.25 w-full overflow-hidden rounded-full bg-white/7" aria-label="Steering">
+          <span className="absolute inset-y-0 left-1/2 w-px bg-lc-chalk/40" />
           <span
             className="absolute inset-y-0 rounded-full"
             style={{
               left: `${50 + Math.min(0, p.steer) * 50}%`,
               width: `${Math.abs(p.steer) * 50}%`,
-              backgroundColor: HUD_CYAN,
+              backgroundColor: HUD_INFO,
             }}
           />
         </span>

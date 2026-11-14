@@ -8,9 +8,10 @@ import type { ModelSource } from "@/lib/model-source";
  */
 export type HomeGrade = "sim" | "model";
 
-export const GRADE_BADGES: Record<HomeGrade, { label: string; color: string }> = {
-  sim: { label: "Sim grade", color: "#00E676" },
-  model: { label: "3D model", color: "#FFB300" },
+/** The tones the game's own quality badges use: sim grade green, a converted model amber (the wrappers in menu-content-ui.tsx) */
+export const GRADE_BADGES: Record<HomeGrade, { label: string; tone: "good" | "warn" }> = {
+  sim: { label: "Sim grade", tone: "good" },
+  model: { label: "3D model", tone: "warn" },
 };
 
 /** The legend above the circuit and car cards, and each badge's hover text */
@@ -83,7 +84,6 @@ export interface HomeData {
   supportUrl: string;
 }
 
-export const km = (l: Pick<HomeLayout, "lengthM">): string => (l.lengthM / 1000).toFixed(2);
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 /** 2026-11-09 → 9 Nov 2026 */

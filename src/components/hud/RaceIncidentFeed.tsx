@@ -2,17 +2,44 @@
 
 import React from "react";
 import type { RaceControlFeedMessage } from "@/types/f1";
-import { HUD_BORDER, HUD_GREEN, HUD_RED, HUD_SLATE, HUD_WHITE, HUD_YELLOW } from "./hud-format";
+import { Badge, type BadgeTone } from "@/components/ui/Badge";
+import type { IconName } from "@/components/ui/icons/registry";
+import { FlagBadge } from "@/components/ui/badges/FlagBadge";
+import { PenaltyBadge } from "@/components/ui/badges/PenaltyBadge";
+import { HUD_GLASS, HUD_LBL } from "./hud-format";
 
-const TONES: Record<RaceControlFeedMessage["kind"], { bg: string; fg: string; badge: string; badgeFg: string; label: string }> = {
-  yellow: { bg: HUD_YELLOW, fg: "#08090D", badge: "#08090D", badgeFg: HUD_YELLOW, label: "FLAG" },
-  green: { bg: HUD_GREEN, fg: "#08090D", badge: "#08090D", badgeFg: HUD_GREEN, label: "FLAG" },
-  investigation: { bg: "rgba(8,9,13,0.9)", fg: HUD_WHITE, badge: HUD_YELLOW, badgeFg: "#08090D", label: "RC" },
-  penalty: { bg: HUD_RED, fg: HUD_WHITE, badge: HUD_WHITE, badgeFg: HUD_RED, label: "RC" },
-  warning: { bg: HUD_YELLOW, fg: "#08090D", badge: "#08090D", badgeFg: HUD_YELLOW, label: "RC" },
-  nfa: { bg: "rgba(8,9,13,0.86)", fg: HUD_WHITE, badge: "#1B1F2B", badgeFg: HUD_SLATE, label: "RC" },
-  retired: { bg: "rgba(8,9,13,0.9)", fg: HUD_WHITE, badge: HUD_RED, badgeFg: HUD_WHITE, label: "OUT" },
-  info: { bg: "rgba(8,9,13,0.86)", fg: HUD_WHITE, badge: "#1B1F2B", badgeFg: HUD_SLATE, label: "RC" },
+type Kind = RaceControlFeedMessage["kind"];
+
+/** The badge each call wears (word and icon), and the hairline of its pill */
+const BADGE: Record<Exclude<Kind, "yellow" | "green" | "warning">, { tone: BadgeTone; label: string; icon: IconName }> = {
+  investigation: { tone: "warn", label: "Investigation", icon: "search" },
+  penalty: { tone: "bad", label: "Penalty", icon: "penalty" },
+  nfa: { tone: "neutral", label: "No action", icon: "info" },
+  retired: { tone: "bad", label: "Out", icon: "damage" },
+  info: { tone: "neutral", label: "Race control", icon: "info" },
+};
+
+const RING: Record<Kind, string> = {
+  yellow: "inset-ring-lc-caution/60",
+  green: "inset-ring-lc-gain/60",
+  investigation: "inset-ring-lc-caution/60",
+  penalty: "inset-ring-lc-loss/70",
+  warning: "inset-ring-lc-caution/60",
+  nfa: "inset-ring-white/7",
+  retired: "inset-ring-lc-loss/70",
+  info: "inset-ring-white/7",
+};
+
+const CallBadge: React.FC<{ kind: Kind }> = ({ kind }) => {
+  if (kind === "yellow") return <FlagBadge flag="yellow" variant="solid" size="lg" />;
+  if (kind === "green") return <FlagBadge flag="green" variant="solid" size="lg" />;
+  if (kind === "warning") return <PenaltyBadge penalty={{ kind: "warning" }} variant="solid" size="lg" />;
+  const b = BADGE[kind];
+  return (
+    <Badge tone={b.tone} variant="solid" size="lg" icon={b.icon}>
+      {b.label}
+    </Badge>
+  );
 };
 
 /** Race control's latest calls in an AI race: flags, contact investigations, penalties, retirements */
@@ -24,38 +51,33 @@ export const RaceIncidentFeed: React.FC<{ messages: RaceControlFeedMessage[] | u
     return (
       <div
         role="status"
-        className="relative mt-1 inline-flex h-9 items-center gap-2 rounded-full pr-4 pl-1.5 shadow-[0_10px_28px_rgba(0,0,0,0.4)]"
-        style={{ backgroundColor: HUD_YELLOW, color: "#08090D" }}
+        className={`relative mt-1 inline-flex h-10 items-center gap-2.5 rounded-full pr-4 pl-1.5 text-lc-chalk inset-ring ${RING.yellow} ${HUD_GLASS}`}
       >
-        <span className="inline-flex h-6 items-center rounded-full bg-[#08090D] px-2 font-f1-mono text-[9px] font-extrabold tracking-[0.14em] text-[#FFB300]">
-          FLAG
-        </span>
-        <span className="lc-disp text-[15px] whitespace-nowrap">Yellow · no overtaking</span>
+        <FlagBadge flag="yellow" variant="solid" size="lg" />
+        <span className="lc-disp text-[15px] whitespace-nowrap">No overtaking</span>
       </div>
     );
   }
-  const tone = TONES[latest.kind];
+  // Bad news and cautions interrupt; the rest is read when convenient. Only bad news pulses (a crimson halo)
+  const urgent = latest.kind === "penalty" || latest.kind === "retired" || latest.kind === "yellow" || latest.kind === "warning" || latest.kind === "investigation";
+  const bad = latest.kind === "penalty" || latest.kind === "retired";
   return (
     <div className="flex flex-col items-center gap-1">
       <div
         key={latest.id}
-        role="alert"
-        className="lc-alert relative mt-1 inline-flex min-h-11 items-center gap-3 rounded-full py-1.5 pr-5 pl-2 shadow-[0_12px_34px_rgba(0,0,0,0.4)]"
-        style={{ backgroundColor: tone.bg, color: tone.fg, border: tone.bg.startsWith("rgba") ? `1px solid ${HUD_BORDER}` : undefined }}
+        role={urgent ? "alert" : "status"}
+        className={`relative mt-1 inline-flex min-h-11 items-center gap-3 rounded-full py-1.5 pr-5 pl-2 text-lc-chalk inset-ring ${RING[latest.kind]} ${
+          bad ? "lc-alert" : ""
+        } ${HUD_GLASS}`}
       >
-        <span
-          className="inline-flex h-7 shrink-0 items-center rounded-full px-2.5 font-f1-mono text-[10px] font-extrabold tracking-[0.14em]"
-          style={{ backgroundColor: tone.badge, color: tone.badgeFg }}
-        >
-          {tone.label}
-        </span>
+        <CallBadge kind={latest.kind} />
         <span className="flex min-w-0 flex-col leading-tight">
           <span className="lc-disp text-[16px] whitespace-nowrap sm:text-[18px]">{latest.text}</span>
-          {latest.detail ? <span className="font-f1-mono text-[10px] font-extrabold tracking-[0.12em] uppercase opacity-75">{latest.detail}</span> : null}
+          {latest.detail ? <span className={`${HUD_LBL} text-lc-fog`}>{latest.detail}</span> : null}
         </span>
       </div>
       {messages && messages[1] ? (
-        <span className="font-f1-mono text-[10px] font-extrabold tracking-[0.12em] text-[#8E96AA] uppercase">
+        <span className={`${HUD_LBL} hud-text-shadow text-lc-fog`}>
           {messages[1].text}
           {messages[1].detail ? ` · ${messages[1].detail}` : ""}
         </span>

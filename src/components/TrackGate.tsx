@@ -5,6 +5,7 @@ import { LibreCorsaSimulator } from "@/components/LibreCorsaSimulator";
 import { RenderProfiler } from "@/components/dev/RenderProfiler";
 import { activateTrack, getTrackInfo, loadStoredTrackId, DEFAULT_TRACK_ID } from "@/lib/track-registry";
 import { registerAssetCache } from "@/lib/service-worker";
+import { Toast } from "@/components/ui";
 
 /** How long the "couldn't load" notice stays up (ms) */
 const ERROR_NOTICE_MS = 6000;
@@ -71,15 +72,13 @@ export const TrackGate: React.FC = () => {
       <RenderProfiler id="sim">
         <LibreCorsaSimulator key={trackId} trackId={trackId} onSelectTrack={select} />
       </RenderProfiler>
-      {error ? (
-        <div
-          role="alert"
-          className="lc-ui-zoom pointer-events-none fixed bottom-[calc(env(safe-area-inset-bottom,0px)+1rem)] left-[max(1rem,env(safe-area-inset-left))] right-[max(1rem,env(safe-area-inset-right))] mx-auto z-50 flex w-fit items-center gap-2.5 rounded-full border border-[#FF2A3C]/45 bg-[#08090D]/85 px-4 py-2 font-f1-mono text-[12px] font-bold text-[#F5F7FA] shadow-[0_14px_40px_rgba(0,0,0,0.5)] backdrop-blur-md"
-        >
-          <span aria-hidden className="h-2 w-2 shrink-0 rounded-full bg-[#FF2A3C]" />
-          {error}
-        </div>
-      ) : null}
+      {/* Over the menus: a failed circuit load is said wherever the player is */}
+      <div
+        role="alert"
+        className="lc-ui-zoom pointer-events-none fixed right-[max(1rem,env(safe-area-inset-right))] bottom-[calc(env(safe-area-inset-bottom,0px)+1rem)] left-[max(1rem,env(safe-area-inset-left))] z-(--z-lc-notice) mx-auto flex w-fit max-w-[calc(100%-2rem)] justify-center"
+      >
+        {error ? <Toast tone="bad">{error}</Toast> : null}
+      </div>
     </>
   );
 };

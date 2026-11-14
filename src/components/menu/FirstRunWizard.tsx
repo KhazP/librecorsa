@@ -1,10 +1,8 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
-import { Check } from "lucide-react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useFocusNav } from "./useFocusNav";
 import { isMenuNavSuspended } from "./useMenuNav";
-import { PadGlyph, PrimaryButton, PromptBar, Segmented } from "./menu-ui";
 import { useInputMode } from "./input-mode";
 import { DeviceStep } from "./steps/DeviceStep";
 import { KeyboardStep } from "./steps/KeyboardStep";
@@ -13,24 +11,25 @@ import { WheelStep } from "./steps/WheelStep";
 import { AssistsStep } from "./steps/AssistsStep";
 import { CarStep } from "./steps/CarStep";
 import type { SetupStepProps } from "./steps/types";
-import type { InputDevice } from "@/lib/input/device-input";
 import { isTouchDevice } from "@/lib/input/touch-input";
 import { LibreCorsaLogo } from "@/components/ui/LibreCorsaLogo";
+import { Button, SettingsDetailProvider } from "@/components/ui";
+import { Icon } from "@/components/ui/icons";
+import { KeyCap, PadGlyph, PromptBar } from "@/components/ui/prompts";
+import { cx } from "@/components/ui/styles";
+import { SettingsEnvProvider, type SettingsEnv } from "@/components/settings/env";
 
 export type WizardStepId = "device" | "setup" | "assists" | "car";
-export type WizardMode = "first-run" | "controls";
+/** The first visit, or the same setup run again from Settings > Controls > Device */
+export type WizardMode = "first-run" | "again";
 
-const STEPS: Record<WizardMode, readonly WizardStepId[]> = {
-  "first-run": ["device", "setup", "assists", "car"],
-  controls: ["setup"],
-};
+const STEPS: readonly WizardStepId[] = ["device", "setup", "assists", "car"];
 
-const DEVICES: readonly InputDevice[] = ["keyboard", "controller", "wheel"];
-const SETUP_TITLES = { keyboard: "Keyboard", controller: "Controller", wheel: "Wheel & pedals" } as const;
+const SETUP_TITLES = { keyboard: "Keyboard", controller: "Controller", wheel: "Wheel and pedals" } as const;
 
 const STEP_INFO: Record<Exclude<WizardStepId, "setup">, { title: string; detail: string }> = {
-  device: { title: "How do you drive?", detail: "Pick your input. You can change it any time from the menu." },
-  assists: { title: "Driving assists", detail: "Pick a starting point; every switch stays in the pause menu." },
+  device: { title: "How do you drive?", detail: "Pick your input. It can be changed any time in Settings." },
+  assists: { title: "Driving assists", detail: "Pick a starting point. Every assist is in Settings, under Driving." },
   car: { title: "Your car", detail: "Choose a car and livery, then head for the grid." },
 };
 
@@ -38,7 +37,7 @@ export interface FirstRunWizardProps extends SetupStepProps {
   mode: WizardMode;
   /** The current car's steering lock (road-wheel degrees), for the countersteer sliders */
   steerLockDeg?: number;
-  /** Finished (first run: start driving; controls: return) */
+  /** Finished (first run: start driving; again: return) */
   onFinish: () => void;
   /** Left via Back on the first step */
   onExit: () => void;
@@ -48,62 +47,64 @@ export interface FirstRunWizardProps extends SetupStepProps {
 }
 
 /**
- * First-run setup (device → device setup → assists → car) and the shorter controls setup reopened
- * from the menus. Docked left so the car stays visible on the right.
+ * First-run setup (device, its setup, assists, car), also run again from Settings. Docked left so the car stays
+ * visible on the right. Its rows are the Settings screen's own, shown at the Simple level.
  */
 export const FirstRunWizard: React.FC<FirstRunWizardProps> = (props) => {
   const { mode, onFinish, onExit, onSkip, onStepChange } = props;
   // A touch screen offers its own controls first; driving by touch has no key setup to go through
   const [touchFirst] = useState(isTouchDevice);
   const [touchPicked, setTouchPicked] = useState(touchFirst);
-  const steps = touchFirst && touchPicked ? STEPS[mode].filter((s) => s !== "setup" || mode === "controls") : STEPS[mode];
+  const steps = touchFirst && touchPicked ? STEPS.filter((s) => s !== "setup") : STEPS;
   const [rawStepIndex, setStepIndex] = useState(0);
-  // Clamped: `mode` can change while open, and the shorter list must not run past its end
+  // Clamped: the list can get shorter while open (touch picked), and must not run past its end
   const stepIndex = Math.min(rawStepIndex, steps.length - 1);
   const step = steps[stepIndex];
   const last = stepIndex === steps.length - 1;
   const bodyRef = useRef<HTMLDivElement | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
   /** The player chose a device on the first step: auto-detect must not override it when they come back to it */
-  const devicePickedRef = useRef(false);
+  const devicePickedRef = useRef(mode === "again");
   const { mode: inputMode, family } = useInputMode();
   const pad = inputMode === "pad";
+
+  const env: SettingsEnv = useMemo(
+    () => ({
+      settings: props.settings,
+      update: props.onChangeSettings,
+      rumble: props.gamepadRumble,
+      onToggleRumble: props.onToggleGamepadRumble,
+      steerLockDeg: props.steerLockDeg,
+      carId: props.carId,
+      vehicleModel: props.vehicleModel,
+    }),
+    [props.settings, props.onChangeSettings, props.gamepadRumble, props.onToggleGamepadRumble, props.steerLockDeg, props.carId, props.vehicleModel],
+  );
 
   useEffect(() => {
     onStepChange?.(step);
     bodyRef.current?.scrollTo({ top: 0 });
-    // A new step starts on its selected option (or its first control)
+    // A new step starts on its marked first row (or its first control), never on a reset
     requestAnimationFrame(() => {
       const body = bodyRef.current;
       if (!body) return;
       const el =
-        body.querySelector<HTMLElement>('[aria-pressed="true"], [aria-selected="true"], [data-nav-default]') ??
-        body.querySelector<HTMLElement>("button:not([disabled]), input:not([disabled]), select:not([disabled])");
+        body.querySelector<HTMLElement>("[data-nav-default]") ??
+        body.querySelector<HTMLElement>("button:not([disabled]):not([data-card-reset]):not([data-nav-skip]), input:not([disabled])");
       el?.focus({ preventScroll: true });
     });
   }, [step, onStepChange]);
 
   const next = () => (last ? onFinish() : setStepIndex(stepIndex + 1));
   const back = () => (stepIndex === 0 ? onExit() : setStepIndex(stepIndex - 1));
-  const selectDevice = (device: InputDevice) => props.onChangeSettings((s) => ({ ...s, device }));
-  const cycleDevice = (dir: -1 | 1) => {
-    const idx = DEVICES.indexOf(props.settings.device);
-    selectDevice(DEVICES[(idx + dir + DEVICES.length) % DEVICES.length]);
-  };
 
-  // Ⓑ / Esc back, Menu next, LB / RB (Q / E) step back / next (or switch device in Controls); Enter continues unless a control has focus
-  useFocusNav(rootRef, {
-    onBack: back,
-    onStart: next,
-    onPrevTab: mode === "controls" ? () => cycleDevice(-1) : back,
-    onNextTab: mode === "controls" ? () => cycleDevice(1) : next,
-    autoFocus: false,
-  });
+  // B / Esc back, Menu next, LB / RB (Q / E) step back / next; Enter continues unless a control has focus
+  useFocusNav(rootRef, { onBack: back, onStart: next, onPrevTab: back, onNextTab: next, autoFocus: false });
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       // useFocusNav runs first and marks the keys it handled; like it, this stays out of a capture or calibration
       if (e.defaultPrevented || isMenuNavSuspended() || (e.code !== "Enter" && e.code !== "NumpadEnter")) return;
-      // Controls that take Enter themselves (buttons, links, fields, drop-downs), as useFocusNav leaves them
+      // Controls that take Enter themselves (buttons, links, fields), as useFocusNav leaves them
       const el = document.activeElement;
       if (
         el instanceof HTMLButtonElement ||
@@ -120,178 +121,131 @@ export const FirstRunWizard: React.FC<FirstRunWizardProps> = (props) => {
     return () => window.removeEventListener("keydown", onKey);
   });
 
+  const device = props.settings.device;
   const info =
     step === "setup"
       ? {
-          title: SETUP_TITLES[props.settings.device],
+          title: SETUP_TITLES[device],
           detail:
-            props.settings.device === "wheel"
-              ? "Calibrate steering and pedals; map your paddles."
-              : props.settings.device === "controller"
+            device === "wheel"
+              ? "Calibrate steering and pedals, and map your paddles."
+              : device === "controller"
                 ? "Check your inputs and pick how the steering feels."
-                : "Every key can be rebound. Click a key, then press the new one.",
+                : "Every key can be changed: press a key's slot, then the new key.",
         }
       : STEP_INFO[step];
 
-  const stepTitle = (s: WizardStepId) => (s === "setup" ? SETUP_TITLES[props.settings.device] : STEP_INFO[s].title);
-  // The main column's width follows the boards: the wheel's two columns get the most room (more on a wide screen), the
-  // car the least
+  const stepTitle = (s: WizardStepId) => (s === "setup" ? SETUP_TITLES[device] : STEP_INFO[s].title);
+  // The main column's width follows the step: the wheel's two columns get the most room, the car the least
   const mainWidth =
-    step === "setup" && props.settings.device === "wheel"
-      ? "max-w-[980px] min-[1500px]:max-w-[1240px] min-[1900px]:max-w-[1440px]"
+    step === "setup" && device === "wheel"
+      ? "max-w-[1240px]"
       : step === "car"
         ? "max-w-[640px]"
-        : step === "setup" || step === "assists"
-          ? "max-w-[800px]"
-          : "max-w-[760px]";
+        : "max-w-[800px]";
 
   return (
     <div
       ref={rootRef}
-      className={`lc-ui-zoom pointer-events-auto fixed inset-0 z-40 flex bg-gradient-to-r from-[#08090D]/95 via-[#08090D]/82 to-[#08090D]/15 ${
-        step === "car"
-          ? "not-compact:bg-[linear-gradient(90deg,rgba(8,9,13,0.97)_0%,rgba(8,9,13,0.88)_45%,rgba(8,9,13,0)_68%)]"
-          : "not-compact:bg-[linear-gradient(90deg,rgba(8,9,13,0.97)_0%,rgba(8,9,13,0.9)_55%,rgba(8,9,13,0.15)_80%)]"
-      }`}
+      className="lc-ui-zoom pointer-events-auto fixed inset-0 z-40 flex bg-linear-to-r from-lc-void/96 via-lc-void/88 to-lc-void/20"
     >
-      <div className="flex h-full w-full flex-col pl-[max(1.25rem,env(safe-area-inset-left))] pr-[max(1.25rem,env(safe-area-inset-right))] pt-[max(1.5rem,env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:pl-[max(2.5rem,env(safe-area-inset-left))] sm:pr-[max(2.5rem,env(safe-area-inset-right))] lg:pl-[max(clamp(20px,3.9vw,56px),env(safe-area-inset-left))] lg:pr-[max(clamp(20px,3.9vw,56px),env(safe-area-inset-right))] short:pt-[max(0.75rem,env(safe-area-inset-top))] short:pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-        <div className="flex min-h-0 flex-1 gap-[clamp(24px,3.4vw,48px)]">
-          {/* Step rail (roomy screens): where you are in the setup */}
-          <aside className="hidden w-[230px] shrink-0 flex-col gap-9 not-compact:flex">
-            <LibreCorsaLogo variant="compact" size="sm" />
-            <nav aria-label="Setup steps" className="flex flex-col">
-              <span className="lc-lbl mb-3.5">{mode === "first-run" ? "First-time setup" : "Controls"}</span>
-              {steps.map((s, i) => {
-                const done = i < stepIndex;
-                const current = i === stepIndex;
-                return (
-                  <React.Fragment key={s}>
-                    {i > 0 ? (
-                      <span
-                        aria-hidden
-                        className={`ml-3.5 h-[26px] w-0.5 rounded-sm transition-colors duration-200 ${
-                          i <= stepIndex ? "bg-[#00E5FF]" : "bg-[#262B3D]"
-                        }`}
-                      />
-                    ) : null}
-                    <div aria-current={current ? "step" : undefined} className="flex min-h-[44px] items-center gap-3.5">
-                      <span
-                        className={`inline-flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full font-f1-mono text-[12px] font-extrabold ${
-                          current
-                            ? "bg-[#CCFF00] text-[#08090D] shadow-[0_0_0_5px_rgba(204,255,0,0.15)]"
-                            : done
-                              ? "bg-[#00E5FF] text-[#08090D]"
-                              : "border-2 border-[#262B3D] text-[#8E96AA]"
-                        }`}
-                      >
-                        {done ? <Check aria-label="Done" className="h-[15px] w-[15px]" strokeWidth={3.2} /> : i + 1}
-                      </span>
-                      <span
-                        className={`text-[16px] leading-tight ${
-                          current ? "font-bold text-[#F5F7FA]" : done ? "font-semibold text-[#C5CBD8]" : "font-semibold text-[#8E96AA]"
-                        }`}
-                      >
-                        {stepTitle(s)}
-                      </span>
-                    </div>
-                  </React.Fragment>
-                );
-              })}
-            </nav>
-          </aside>
+      <SettingsEnvProvider value={env}>
+        <SettingsDetailProvider value="simple">
+          <div className="flex h-full w-full flex-col pt-[max(1.5rem,env(safe-area-inset-top))] pr-[max(1.25rem,env(safe-area-inset-right))] pb-[max(1.25rem,env(safe-area-inset-bottom))] pl-[max(1.25rem,env(safe-area-inset-left))] sm:pr-[max(2.5rem,env(safe-area-inset-right))] sm:pl-[max(2.5rem,env(safe-area-inset-left))] short:pt-[max(0.75rem,env(safe-area-inset-top))] short:pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+            <div className="flex min-h-0 flex-1 gap-10">
+              {/* Step rail (roomy screens): where the player is in the setup */}
+              <aside className="hidden w-56 shrink-0 flex-col gap-9 not-compact:flex">
+                <LibreCorsaLogo variant="compact" size="sm" />
+                <nav aria-label="Setup steps" className="flex flex-col">
+                  {steps.map((s, i) => {
+                    const done = i < stepIndex;
+                    const current = i === stepIndex;
+                    return (
+                      <React.Fragment key={s}>
+                        {i > 0 ? (
+                          <span aria-hidden className={cx("ml-3.5 h-6 w-0.5 rounded-full", i <= stepIndex ? "bg-lc-fog" : "bg-lc-line")} />
+                        ) : null}
+                        <div aria-current={current ? "step" : undefined} className="flex min-h-11 items-center gap-3.5">
+                          <span
+                            className={cx(
+                              "lc-mono inline-flex size-7.5 shrink-0 items-center justify-center rounded-full text-[12px] font-bold",
+                              current ? "bg-lc-chalk text-lc-void" : done ? "bg-lc-line text-lc-chalk" : "text-lc-slate inset-ring-2 inset-ring-lc-line",
+                            )}
+                          >
+                            {done ? <Icon name="check" label="Done" /> : i + 1}
+                          </span>
+                          <span className={cx("text-[16px] leading-tight", current ? "font-semibold text-lc-chalk" : done ? "text-lc-fog" : "text-lc-slate")}>
+                            {stepTitle(s)}
+                          </span>
+                        </div>
+                      </React.Fragment>
+                    );
+                  })}
+                </nav>
+              </aside>
 
-          <div className={`flex min-w-0 flex-1 flex-col ${mainWidth}`}>
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              {mode === "controls" ? (
-                <Segmented
-                  label="Input device"
-                  value={props.settings.device}
-                  onChange={selectDevice}
-                  options={DEVICES.map((id) => ({ id, label: SETUP_TITLES[id] }))}
-                />
-              ) : (
+              <div className={cx("flex min-w-0 flex-1 flex-col", mainWidth)}>
                 <span className="not-compact:hidden">
-                  <LibreCorsaLogo variant="compact" className="hidden sm:inline-flex" />
+                  <LibreCorsaLogo variant="compact" size="sm" className="hidden sm:inline-flex" />
                 </span>
-              )}
-            </div>
-            <h1 className="lc-disp mt-3 text-[clamp(30px,min(5.4vw,9vh),76px)] text-[#F5F7FA] short:mt-1 short:text-[26px] phone:text-[24px]">
-              {info.title}
-            </h1>
-            <p className="mt-3 text-[15px] leading-snug text-[#C5CBD8] sm:text-[17px] short:hidden">{info.detail}</p>
+                <h1 className="lc-h1 mt-3 short:mt-1">{info.title}</h1>
+                <p className="lc-body mt-2 text-[15px] short:hidden">{info.detail}</p>
 
-            {/* Progress rail (phones and short windows, where the step rail is hidden) */}
-            {mode === "first-run" ? (
-              <div className="mt-4 flex items-center gap-1.5 not-compact:hidden short:mt-2">
-                {steps.map((s, i) => (
-                  <span
-                    key={s}
-                    aria-hidden
-                    className={`h-1.5 flex-1 rounded-full transition-colors ${
-                      i < stepIndex ? "bg-[#00E5FF]" : i === stepIndex ? "bg-[#CCFF00]" : "bg-[#262B3D]"
-                    }`}
-                  />
-                ))}
-                <span className="lc-data ml-1.5 shrink-0 text-[11px] text-[#8E96AA]">
-                  <span className="sr-only">Step </span>
-                  {stepIndex + 1}
-                  <span aria-hidden>/</span>
-                  <span className="sr-only"> of </span>
-                  {steps.length}
-                </span>
+                {/* Progress (phones and short windows, where the step rail is hidden) */}
+                <div className="mt-4 flex items-center gap-1.5 not-compact:hidden short:mt-2" aria-hidden>
+                  {steps.map((s, i) => (
+                    <span
+                      key={s}
+                      className={cx("h-1.5 flex-1 rounded-full", i < stepIndex ? "bg-lc-fog" : i === stepIndex ? "bg-lc-chalk" : "bg-lc-line")}
+                    />
+                  ))}
+                  <span className="lc-mono ml-1.5 shrink-0 text-[11px] text-lc-slate">
+                    {stepIndex + 1} of {steps.length}
+                  </span>
+                </div>
+
+                <div ref={bodyRef} className="-mx-1.5 mt-4 min-h-0 flex-1 overflow-y-auto px-1.5 pt-1 pb-2 not-compact:mt-6 short:mt-2">
+                  {step === "device" ? (
+                    <DeviceStep pickedRef={devicePickedRef} touch={touchFirst ? { picked: touchPicked, onPick: setTouchPicked } : null} />
+                  ) : null}
+                  {step === "setup" && device === "keyboard" ? <KeyboardStep /> : null}
+                  {step === "setup" && device === "controller" ? <ControllerStep /> : null}
+                  {step === "setup" && device === "wheel" ? <WheelStep /> : null}
+                  {step === "assists" ? <AssistsStep /> : null}
+                  {step === "car" ? <CarStep {...props} /> : null}
+                </div>
               </div>
-            ) : null}
+            </div>
 
-            <div
-              ref={bodyRef}
-              className="-mx-1.5 mt-4 min-h-0 flex-1 overflow-y-auto px-1.5 pt-1 pb-2 not-compact:mt-6 short:mt-2"
-            >
-              {step === "device" ? (
-                <DeviceStep
-                  {...props}
-                  pickedRef={devicePickedRef}
-                  touch={touchFirst ? { picked: touchPicked, onPick: setTouchPicked } : null}
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3.5 border-t border-lc-line pt-4 short:mt-2 short:pt-2">
+              <div className="flex items-center gap-3">
+                <Button variant="secondary" onClick={back} prompt={pad ? <PadGlyph button="b" family={family} /> : <KeyCap>Esc</KeyCap>}>
+                  {stepIndex === 0 ? (mode === "first-run" ? "Main menu" : "Close") : "Back"}
+                </Button>
+                {onSkip && !last ? (
+                  <Button variant="ghost" size="sm" onClick={onSkip}>
+                    Skip and use defaults
+                  </Button>
+                ) : null}
+              </div>
+              <div className="flex flex-wrap items-center gap-5.5">
+                <PromptBar
+                  rule={false}
+                  className="hidden sm:flex"
+                  prompts={[
+                    { action: "move", label: "Move" },
+                    { action: "select", label: "Select" },
+                    { action: "tabs", label: "Step" },
+                  ]}
                 />
-              ) : null}
-              {step === "setup" && props.settings.device === "keyboard" ? <KeyboardStep {...props} /> : null}
-              {step === "setup" && props.settings.device === "controller" ? <ControllerStep {...props} /> : null}
-              {step === "setup" && props.settings.device === "wheel" ? <WheelStep {...props} /> : null}
-              {step === "assists" ? <AssistsStep {...props} /> : null}
-              {step === "car" ? <CarStep {...props} /> : null}
+                <Button variant="primary" onClick={next} prompt={pad ? <PadGlyph button="menu" family={family} /> : <KeyCap tone="ink">Enter</KeyCap>}>
+                  {last ? (mode === "first-run" ? "Lights out" : "Done") : "Next"}
+                </Button>
+              </div>
             </div>
           </div>
-        </div>
-
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3.5 border-t border-[#262B3D]/70 pt-4 short:mt-2 short:pt-2">
-          <div className="flex items-center gap-[18px]">
-            <PrimaryButton tone="dark" onClick={back} prompt={pad ? <PadGlyph button="b" family={family} /> : "ESC"}>
-              {stepIndex === 0 ? (mode === "first-run" ? "Main menu" : "Close") : "Back"}
-            </PrimaryButton>
-            {onSkip && !last ? (
-              <button
-                type="button"
-                onClick={onSkip}
-                className="min-h-[44px] cursor-pointer border-0 bg-transparent p-0 font-f1-mono text-[11px] font-extrabold tracking-[0.14em] text-[#8E96AA] uppercase transition-colors duration-200 hover:text-[#CCFF00]"
-              >
-                Skip · use defaults
-              </button>
-            ) : null}
-          </div>
-          <div className="flex flex-wrap items-center gap-[22px]">
-            <PromptBar
-              className="hidden sm:flex"
-              prompts={[
-                { action: "move", label: "Move" },
-                { action: "select", label: "Select" },
-                { action: "tabs", label: "Step" },
-              ]}
-            />
-            <PrimaryButton onClick={next} prompt={pad ? <PadGlyph button="menu" family={family} /> : "ENTER"}>
-              {last ? (mode === "first-run" ? "Lights out" : "Done") : "Next"}
-            </PrimaryButton>
-          </div>
-        </div>
-      </div>
+        </SettingsDetailProvider>
+      </SettingsEnvProvider>
     </div>
   );
 };

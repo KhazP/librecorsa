@@ -1,4 +1,94 @@
 @import "tailwindcss";
+@import "./palette.css";
+
+/*
+ * Design tokens (docs/DESIGN.md §2-§5). Every colour, radius, shadow and easing a component uses comes from here:
+ * `bg-lc-volt`, `text-lc-fog`, `border-lc-line`, `rounded-lc-card`, `shadow-lc-sheet`, `ease-lc`.
+ * No hex value belongs in a component.
+ */
+@theme {
+  /* Brand and focus */
+  --color-lc-volt: #ccff00; /* the cursor, the main action, the player */
+  --color-lc-volt-hi: #d9ff33; /* volt under the pointer */
+  --color-lc-volt-dim: #99bf00; /* volt pressed */
+
+  /* Meaning */
+  --color-lc-crimson: #ff2a3c; /* losing time, invalid, braking, alerts, destructive */
+  --color-lc-cyan: #00e5ff; /* information, an open panel, ERS and aero */
+  --color-lc-purple: #b845ff; /* overall fastest */
+  --color-lc-green: #00e676; /* personal best, gaining time, success */
+  --color-lc-amber: #ffb300; /* caution, warnings */
+  --color-lc-pink: #ff6b8a; /* third sector on maps */
+  /* Text in a soft badge: crimson and purple a quarter of the way to chalk, so they hold 4.5:1 on a 12 % fill */
+  --color-lc-crimson-hi: #fc5d6c;
+  --color-lc-purple-hi: #c772fe;
+
+  /* Colour-blind palettes only (palette.css): the pairs that stay apart without red against green */
+  --color-lc-azure: #4da6ff;
+  --color-lc-tangerine: #ff8a1f;
+  --color-lc-lemon: #f2e24a;
+  --color-lc-copper: #d98162; /* best, apart from caution, the player's volt and information in red-green vision */
+
+  /* Surfaces, darkest first */
+  --color-lc-well: #050608; /* inset wells inside a card: inputs, stat tiles */
+  --color-lc-void: #08090d; /* the canvas, ink on volt */
+  --color-lc-carbon: #11131a; /* panels and cards */
+  --color-lc-titanium: #1b1f2b; /* raised wells, slider track, an off switch */
+  --color-lc-line: #262b3d; /* hairlines inside a sheet, a chosen pill */
+  --color-lc-keyline: #3a4157; /* key caps, prompt outlines, hairline under the pointer */
+
+  /* Text, dimmest first */
+  --color-lc-dim: #5b6275; /* placeholders, disabled text */
+  --color-lc-slate: #8e96aa; /* labels, secondary text */
+  --color-lc-fog: #c5cbd8; /* body copy on dark sheets */
+  --color-lc-chalk: #f5f7fa; /* primary text */
+
+  /* Shape */
+  --radius-lc-sheet: 28px; /* a sheet over the scene */
+  --radius-lc-card: 24px; /* a card inside a sheet */
+  --radius-lc-tile: 18px; /* choice tiles, content cards, rail entries, cards nested in a card */
+  --radius-lc-row: 14px; /* setting rows, inputs */
+  --radius-lc-nub: 10px; /* small tiles inside a row or a HUD panel */
+
+  /* Depth: one shadow per level, hairline or shadow but not both for the same edge */
+  --shadow-lc-pop: 0 12px 32px rgba(0, 0, 0, 0.5); /* popovers, toasts, HUD panels */
+  --shadow-lc-sheet: 0 30px 80px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  --shadow-lc-focus: 0 0 0 5px rgba(204, 255, 0, 0.12); /* the cursor's halo */
+
+  /* Motion: 200 ms on this curve for every state change */
+  --ease-lc: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* Faces, set on <html> by next/font (layout.tsx) */
+@theme inline {
+  /* Semantic colours (palette.css): `text-lc-gain`, `bg-lc-loss/15`, `border-lc-best` */
+  --color-lc-gain: var(--lc-sem-gain);
+  --color-lc-loss: var(--lc-sem-loss);
+  --color-lc-best: var(--lc-sem-best);
+  /* The same meanings as text on their own 12 % fill (soft badges) */
+  --color-lc-best-ink: var(--lc-sem-best-ink);
+  --color-lc-loss-ink: var(--lc-sem-loss-ink);
+  --color-lc-caution: var(--lc-sem-caution);
+  --color-lc-info: var(--lc-sem-info);
+  --color-lc-cold: var(--lc-sem-cold);
+  --color-lc-ideal: var(--lc-sem-ideal);
+  --color-lc-hot: var(--lc-sem-hot);
+  --font-lc-display: var(--font-chakra), "Segoe UI", system-ui, sans-serif;
+  --font-lc-body: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
+  --font-lc-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, monospace;
+}
+
+/* Stacking order of the fixed layers: `z-(--z-lc-menu)` */
+:root {
+  --z-lc-hud: 10;
+  --z-lc-touch: 20;
+  --z-lc-toast: 30;
+  --z-lc-overlay: 40; /* seat panel, replay bar */
+  --z-lc-menu: 50; /* title menu, pause menu, setup */
+  --z-lc-results: 60; /* race results, podium */
+  --z-lc-loading: 70;
+  --z-lc-notice: 80; /* errors that must sit over everything */
+}
 
 /* Phones, tablets and short laptop windows, where the full-size menu layouts run off the bottom */
 @custom-variant compact (@media not all and (min-width: 64rem) and (min-height: 48rem));
@@ -38,8 +128,9 @@
     --lc-ui-zoom: 2;
   }
 }
+/* --lc-ui-scale is the player's own multiplier (Settings > Display > Interface), set on <html> by ui-prefs.ts */
 .lc-ui-zoom {
-  zoom: var(--lc-ui-zoom);
+  zoom: calc(var(--lc-ui-zoom) * var(--lc-ui-scale, 1));
 }
 
 /*
@@ -94,23 +185,6 @@ body {
   color: #f5f7fa;
   font-family: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
   overflow: hidden;
-}
-
-.font-f1-display {
-  font-family: var(--font-orbitron), var(--font-chakra), sans-serif;
-  letter-spacing: 0.05em;
-}
-
-.font-f1-italic {
-  font-family: var(--font-chakra), sans-serif;
-  font-style: italic;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-}
-
-.font-f1-mono {
-  font-family: var(--font-geist-mono), ui-monospace, SFMono-Regular, monospace;
-  font-variant-numeric: tabular-nums;
 }
 
 .f1-panel {
@@ -180,6 +254,23 @@ body {
 .hud-fade-out {
   animation: hud-fade-out 2s ease-out forwards;
 }
+/* Reduced motion: the same fade without the grow (still an animation, so its end still fires: the start lights wait on
+   it) */
+@keyframes hud-fade-out-still {
+  0%,
+  60% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hud-fade-out {
+    animation-name: hud-fade-out-still;
+  }
+}
 
 /* ---- Menu focus: a controller or the keyboard always sees where it is ----
    In the base layer so components that paint their own focus (rail items, tabs) override it */
@@ -211,6 +302,40 @@ body {
   input[type="range"] {
     accent-color: var(--lc-volt);
   }
+
+  /* The browser's own surfaces, themed from the palette: selection, the text caret, scrollbars in menus */
+  ::selection {
+    background-color: var(--color-lc-volt);
+    color: var(--color-lc-void);
+  }
+  :where(input, textarea, [contenteditable="true"]) {
+    caret-color: var(--color-lc-volt);
+  }
+  :root {
+    /* Inherited by every scroll box; a `[scrollbar-width:none]` utility still hides one */
+    scrollbar-color: var(--color-lc-keyline) transparent;
+  }
+  :where(*) {
+    scrollbar-width: thin;
+  }
+  /* Safari, which ignores scrollbar-color */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    border: 2px solid transparent;
+    border-radius: 999px;
+    background-color: var(--color-lc-keyline);
+    background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: var(--color-lc-slate);
+  }
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
 }
 
 @layer components {
@@ -240,10 +365,169 @@ body {
     color: #8e96aa;
   }
 
+  /* The name of a field, above it: sentence case, never tracked caps (that would read as an eyebrow) */
+  .lc-field-label {
+    font-family: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
+    font-weight: 500;
+    font-size: 13px;
+    line-height: 1.3;
+    color: var(--color-lc-fog);
+  }
+
   .lc-data {
     font-family: var(--font-geist-mono), ui-monospace, monospace;
     font-weight: 700;
     font-variant-numeric: tabular-nums;
+  }
+
+  /* ---- Type roles (UI standard §2). Fixed px; phones step the two display headings down ---- */
+  .lc-h1,
+  .lc-h2,
+  .lc-h3 {
+    font-family: var(--font-chakra), "Segoe UI", system-ui, sans-serif;
+    font-weight: 700;
+    font-style: italic;
+    text-transform: uppercase;
+    margin: 0;
+  }
+  .lc-h1 {
+    font-size: 44px;
+    line-height: 0.95;
+  }
+  .lc-h2 {
+    font-size: 34px;
+    line-height: 1;
+  }
+  .lc-h3 {
+    font-size: 18px;
+    line-height: 1.1;
+    color: var(--color-lc-chalk);
+  }
+  @media (max-width: 40rem), (max-height: 32rem) {
+    .lc-h1 {
+      font-size: 28px;
+    }
+    .lc-h2 {
+      font-size: 24px;
+    }
+  }
+  .lc-row-label {
+    font-family: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
+    font-weight: 600;
+    font-size: 15px;
+    line-height: 1.25;
+    color: var(--color-lc-chalk);
+  }
+  .lc-body {
+    font-family: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
+    font-weight: 400;
+    font-size: 14px;
+    line-height: 1.45;
+    color: var(--color-lc-fog);
+  }
+  .lc-hint {
+    font-family: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
+    font-weight: 400;
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--color-lc-slate);
+  }
+  .lc-chip-text {
+    font-family: var(--font-geist-mono), ui-monospace, monospace;
+    font-weight: 800;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .lc-mono {
+    font-family: var(--font-geist-mono), ui-monospace, SFMono-Regular, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+  .lc-hud-lbl {
+    font-family: var(--font-geist-mono), ui-monospace, monospace;
+    font-weight: 700;
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--color-lc-slate);
+  }
+
+  /*
+   * Setting rows (src/components/ui/SettingRow.tsx): the whole row takes the cursor ring when its control has the
+   * focus (a controller always, the keyboard when focus is visible), or when the kit forces it with data-cursor.
+   * Controls that paint no cursor of their own (switch, slider, stepper) mark themselves data-row-quiet and lose
+   * their own ring inside the row; pills keep their volt fill so the option under the cursor still shows.
+   * A tile draws its own ring (data-own-ring), so a row of tiles does not ring a second time around it.
+   */
+  .lc-row-ring:has(:focus-visible):not(:has([data-own-ring]:focus-visible)),
+  :where(html[data-input="pad"]) .lc-row-ring:has(:focus):not(:has([data-own-ring]:focus)),
+  .lc-row-ring[data-cursor] {
+    outline: 2px solid var(--color-lc-volt);
+    outline-offset: 1px;
+    background-color: color-mix(in srgb, var(--color-lc-volt) 6%, transparent);
+  }
+  .lc-row-ring [data-row-quiet]:focus,
+  .lc-row-ring [data-row-quiet]:focus-visible {
+    outline: none;
+    box-shadow: none;
+  }
+
+  /* Three-dot pulse in a loading button; the dots stand still under reduced motion */
+  @keyframes lc-dot {
+    0%,
+    80%,
+    100% {
+      opacity: 0.3;
+    }
+    40% {
+      opacity: 1;
+    }
+  }
+  .lc-dot {
+    animation: lc-dot 1.1s ease-in-out infinite;
+  }
+  .lc-dot:nth-child(2) {
+    animation-delay: 0.15s;
+  }
+  .lc-dot:nth-child(3) {
+    animation-delay: 0.3s;
+  }
+  /* Skeleton blocks: a slow opacity pulse */
+  @keyframes lc-skeleton {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.55;
+    }
+  }
+  .lc-skeleton {
+    animation: lc-skeleton 1.8s ease-in-out infinite;
+  }
+  /* Toasts rise into place */
+  @keyframes lc-toast-in {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  .lc-toast-in {
+    animation: lc-toast-in 200ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .lc-dot,
+    .lc-skeleton,
+    .lc-toast-in {
+      animation: none;
+    }
+    .lc-dot {
+      opacity: 0.7;
+    }
   }
 
   /* Frosted sheet floating over the live scene */
@@ -438,9 +722,10 @@ body {
   .lc-vign {
     animation: lc-vign 1.8s ease-in-out infinite;
   }
-  /* TC / ABS intervention zone on the pedal bars: a fast strobe like a real ABS pump */
+  /* TC / ABS intervention zone on the pedal bars: a pulse like an ABS pump, held to 2.5 a second (nothing in the
+     game flashes more than three times a second) */
   .lc-cut {
-    animation: lc-rev 0.16s steps(2) infinite;
+    animation: lc-rev 0.4s steps(2) infinite;
   }
   @media (prefers-reduced-motion: reduce) {
     .lc-breathe,

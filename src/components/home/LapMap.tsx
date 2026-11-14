@@ -2,6 +2,8 @@
 
 import React, { useEffect, useRef } from "react";
 import { paceAt, type LapOutline } from "@/lib/home/lap-outline";
+import { currentUnits } from "@/lib/settings/ui-prefs";
+import { speedIn } from "@/lib/settings/units";
 
 /** How much faster than real time the dot laps: a 90 s lap takes about 22 s */
 export const LAP_SPEED_UP = 4;
@@ -35,7 +37,9 @@ export const LapMap: React.FC<{
     const tail = tailRef.current;
     const dot = dotRef.current;
     if (!svg || !line || !tail || !dot) return;
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    // Reduced motion: the dot rests on the start line (followed live, so switching it on stops the lap)
+    const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    if (motion.matches) return;
 
     const total = line.getTotalLength();
     let frac = 0;
@@ -57,7 +61,7 @@ export const LapMap: React.FC<{
       // A tab coming back from the background must not jump the dot half a lap
       const dt = last ? Math.min(0.1, (now - last) / 1000) : 0;
       last = now;
-      if (!inView) return;
+      if (!inView || motion.matches) return;
       const kmh = paceAt(o, frac) || 200;
       frac = (frac + ((Math.max(kmh, MIN_KMH) / 3.6) * dt * LAP_SPEED_UP) / o.lengthM) % 1;
       const p = line.getPointAtLength(frac * total);
@@ -65,7 +69,7 @@ export const LapMap: React.FC<{
       tail.style.strokeDashoffset = String(TAIL - frac * 1000);
       if (speedRef?.current && now - shownAt > READOUT_MS) {
         shownAt = now;
-        speedRef.current.textContent = String(Math.round(kmh));
+        speedRef.current.textContent = String(Math.round(speedIn(kmh, currentUnits().speed)));
       }
     };
     raf = requestAnimationFrame(tick);
@@ -85,15 +89,15 @@ export const LapMap: React.FC<{
       role="img"
       aria-label={label}
     >
-      <path d={o.d} fill="none" stroke="#1B1F2B" strokeWidth={36} strokeLinejoin="round" />
-      <path ref={lineRef} d={o.d} fill="none" stroke="#C5CBD8" strokeWidth={6} strokeLinejoin="round" />
-      <rect x={-4} y={-27} width={8} height={54} rx={3} fill="#F5F7FA" transform={`translate(${sx} ${sy}) rotate(${deg})`} />
+      <path d={o.d} fill="none" stroke="var(--color-lc-titanium)" strokeWidth={36} strokeLinejoin="round" />
+      <path ref={lineRef} d={o.d} fill="none" stroke="var(--color-lc-fog)" strokeWidth={6} strokeLinejoin="round" />
+      <rect x={-4} y={-27} width={8} height={54} rx={3} fill="var(--color-lc-chalk)" transform={`translate(${sx} ${sy}) rotate(${deg})`} />
       <path
         ref={tailRef}
         d={o.d}
         pathLength={1000}
         fill="none"
-        stroke="#CCFF00"
+        stroke="var(--color-lc-volt)"
         strokeWidth={9}
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -101,8 +105,8 @@ export const LapMap: React.FC<{
         strokeDashoffset={TAIL}
       />
       <g ref={dotRef} transform={`translate(${sx} ${sy})`}>
-        <circle r={34} fill="#CCFF00" opacity={0.16} />
-        <circle r={15} fill="#CCFF00" />
+        <circle r={34} fill="var(--color-lc-volt)" opacity={0.16} />
+        <circle r={15} fill="var(--color-lc-volt)" />
       </g>
     </svg>
   );

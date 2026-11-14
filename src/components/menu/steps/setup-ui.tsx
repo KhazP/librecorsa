@@ -1,163 +1,30 @@
 "use client";
 
 import React from "react";
-import {
-  ASSIST_PRESETS,
-  ASSIST_SLIDERS,
-  assistPresetDetail,
-  DEFAULT_DEVICE_ASSIST_TUNING,
-  deviceAssistTuning,
-  matchingAssistPreset,
-  selfSteerDeg,
-  type DeviceAssistTuning,
-  type SteeringDevice,
-} from "@/lib/sim/steering-assist";
-import { TuningSlider } from "./TuningSlider";
+import { deviceAssistTuning, selfSteerDeg, type DeviceAssistTuning, type SteeringDevice } from "@/lib/sim/steering-assist";
+import { StatusDot } from "@/components/ui/Badge";
 
-/** Setup-wizard building blocks (Racing Line): frosted section cards, small pill actions, binding rows, live meters */
+/** Setup building blocks the Settings screen and first-run setup share: status lines, hints, live meters, the assist curve */
 
-/**
- * A frosted section card with an optional action on the right, named by a plain heading (`title`) or, on the older
- * screens, the volt-dot label
- */
-export const SetupCard: React.FC<{
-  /** A plain heading for the section */
-  title?: React.ReactNode;
-  label?: React.ReactNode;
-  action?: React.ReactNode;
-  children: React.ReactNode;
-  /** Extra classes (padding overrides go here; avoid repeating the base padding utilities) */
-  className?: string;
-  /** Accessible name of the section (defaults to the label when it is a string) */
-  ariaLabel?: string;
-}> = ({ title, label, action, children, className = "", ariaLabel }) => (
-  <section
-    aria-label={ariaLabel ?? (typeof title === "string" ? title : typeof label === "string" ? label : undefined)}
-    className={`lc-glass flex flex-col gap-3.5 rounded-[24px] px-4 py-4 text-[#F5F7FA] sm:px-[22px] sm:py-5 short:gap-2.5 short:py-3 ${className}`}
-  >
-    {title || label || action ? (
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        {title ? (
-          <h3 className="lc-title m-0 text-[20px] leading-tight text-[#F5F7FA]">{title}</h3>
-        ) : label ? (
-          <CardLabel>{label}</CardLabel>
-        ) : (
-          <span />
-        )}
-        {action}
-      </div>
-    ) : null}
-    {children}
-  </section>
-);
-
-export const CardLabel: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <span className="flex min-w-0 items-center gap-2">
-    <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#CCFF00]" />
-    <span className="lc-lbl">{children}</span>
-  </span>
-);
-
-/** Small outlined pill for secondary actions: RESET, CLEAR, TEST, CANCEL */
-export const PillAction: React.FC<{
-  children: React.ReactNode;
-  onClick: () => void;
-  disabled?: boolean;
-  className?: string;
-}> = ({ children, onClick, disabled, className = "" }) => (
-  <button
-    type="button"
-    onClick={onClick}
-    disabled={disabled}
-    className={`inline-flex h-[30px] shrink-0 cursor-pointer items-center justify-center rounded-full border border-[#262B3D] bg-transparent px-3 font-f1-mono text-[10px] font-extrabold tracking-[0.12em] text-[#8E96AA] uppercase transition-colors duration-200 hover:border-[#CCFF00] hover:text-[#CCFF00] disabled:cursor-not-allowed disabled:opacity-30 ${className}`}
-  >
-    {children}
-  </button>
-);
-
-/** Filled pill for a step's working actions: white (Recalibrate, Test direction) or volt (Calibrate all) */
-export const SolidPill: React.FC<{
-  children: React.ReactNode;
-  onClick: () => void;
-  disabled?: boolean;
-  tone?: "white" | "volt";
-  className?: string;
-}> = ({ children, onClick, disabled, tone = "white", className = "" }) => (
-  <button
-    type="button"
-    onClick={onClick}
-    disabled={disabled}
-    className={`inline-flex h-[34px] shrink-0 cursor-pointer items-center justify-center rounded-full border-0 px-3.5 text-[13px] font-bold whitespace-nowrap text-[#08090D] transition-colors duration-200 disabled:cursor-not-allowed disabled:opacity-30 ${
-      tone === "volt" ? "bg-[#CCFF00] hover:bg-[#d9ff33]" : "bg-[#F5F7FA] hover:bg-[#CCFF00] disabled:hover:bg-[#F5F7FA]"
-    } ${className}`}
-  >
-    {children}
-  </button>
-);
-
-/** One action of a binding list; the row lights up while it waits for an input */
-export const BindRow: React.FC<{ label: string; listening?: boolean; children: React.ReactNode }> = ({
-  label,
-  listening,
-  children,
-}) => (
-  <div
-    className={`flex min-h-[44px] items-center justify-between gap-2.5 rounded-[14px] py-1 pr-1 pl-3 transition-colors duration-200 ${
-      listening ? "bg-[#CCFF00]/[0.06] shadow-[inset_0_0_0_1px_rgba(204,255,0,0.3)]" : "hover:bg-white/[0.03]"
-    }`}
-  >
-    <span className="lc-title min-w-0 text-[14px] text-[#F5F7FA]">{label}</span>
-    {children}
-  </div>
-);
-
-/** Class for a binding chip: a bound key / button, an empty slot, or the one listening */
-export const bindKeyClass = (state: "bound" | "empty" | "listening", minWidth = "min-w-[56px]") =>
-  `inline-flex h-[34px] ${minWidth} shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-full px-2.5 font-f1-mono font-extrabold whitespace-nowrap transition-colors duration-200 ${
-    state === "listening"
-      ? "lc-listen border-0 bg-[#CCFF00] text-[12px] text-[#08090D]"
-      : state === "bound"
-        ? "border-0 bg-[#F5F7FA] text-[12px] text-[#08090D] hover:bg-[#CCFF00]"
-        : "border border-dashed border-[#3A4157] bg-transparent text-[13px] text-[#5B6275] hover:border-[#8E96AA] hover:text-[#C5CBD8]"
-  }`;
-
-/** The mono status pill under a binding list ("Press a key · Esc cancels") */
+/** The status line under a binding list ("Press a key · Esc cancels"): a status dot, live while it listens, and the words */
 export const StatusPill: React.FC<{ children: React.ReactNode; tone?: "live" | "info" | "idle" }> = ({
   children,
   tone = "idle",
 }) => (
   <p
     role="status"
-    className={`m-0 rounded-full bg-[#08090D] px-3.5 py-2.5 font-f1-mono text-[12px] font-bold ${
-      tone === "live" ? "text-[#CCFF00]" : tone === "info" ? "text-[#C5CBD8]" : "text-[#8E96AA]"
+    className={`m-0 flex items-center gap-2.5 rounded-full bg-lc-void px-3.5 py-2.5 lc-mono text-[12px] font-bold ${
+      tone === "idle" ? "text-lc-slate" : "text-lc-fog"
     }`}
   >
-    {children}
+    <StatusDot tone={tone === "live" ? "info" : "neutral"} live={tone === "live"} />
+    <span className="min-w-0">{children}</span>
   </p>
 );
 
 /** Body copy under a control */
 export const Hint: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className = "" }) => (
-  <p className={`m-0 text-[12px] leading-[1.45] text-[#8E96AA] ${className}`}>{children}</p>
-);
-
-/** Italic uppercase sub-heading inside a card (Steering axis, Rotation, Telemetry out) */
-export const SubHead: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className = "" }) => (
-  <span className={`lc-title text-[14px] text-[#F5F7FA] ${className}`}>{children}</span>
-);
-
-/** Choice card content: title + one line */
-export const ChoiceText: React.FC<{ title: React.ReactNode; detail?: React.ReactNode; size?: number }> = ({
-  title,
-  detail,
-  size = 16,
-}) => (
-  <span className="flex flex-col items-start gap-0.5">
-    <span className="lc-title leading-tight" style={{ fontSize: size }}>
-      {title}
-    </span>
-    {detail ? <span className="text-[12px] leading-[1.4] opacity-75">{detail}</span> : null}
-  </span>
+  <p className={`m-0 text-[12px] leading-[1.45] text-lc-slate ${className}`}>{children}</p>
 );
 
 /**
@@ -171,7 +38,7 @@ export const TrackMeter: React.FC<{
   detail?: string;
   centered?: boolean;
   compact?: boolean;
-}> = ({ label, value, color = "#00E676", detail, centered, compact }) => {
+}> = ({ label, value, color = "var(--lc-sem-throttle)", detail, centered, compact }) => {
   const v = centered ? Math.max(-1, Math.min(1, value)) : Math.max(0, Math.min(1, value));
   const idle = Math.abs(v) < 0.005;
   return (
@@ -180,13 +47,11 @@ export const TrackMeter: React.FC<{
         compact ? "grid-cols-[64px_minmax(0,1fr)_56px]" : "grid-cols-[72px_minmax(0,1fr)_64px] sm:grid-cols-[84px_minmax(0,1fr)_74px] sm:gap-3.5"
       }`}
     >
-      <span className={`font-f1-mono font-extrabold tracking-[0.12em] text-[#8E96AA] uppercase ${compact ? "text-[10px]" : "text-[11px]"}`}>
-        {label}
-      </span>
-      <span className="relative h-2.5 overflow-hidden rounded-full bg-[#08090D] shadow-[inset_0_0_0_1px_#262B3D]">
+      <span className="lc-lbl">{label}</span>
+      <span className="relative h-2.5 overflow-hidden rounded-full bg-lc-void inset-ring inset-ring-lc-line">
         {centered ? (
           <>
-            <span aria-hidden className="absolute inset-y-0 left-1/2 w-px bg-[#F5F7FA]/50" />
+            <span aria-hidden className="absolute inset-y-0 left-1/2 w-px bg-lc-chalk/50" />
             <span
               className={`absolute inset-y-0 ${v >= 0 ? "rounded-r-full" : "rounded-l-full"}`}
               style={{
@@ -200,66 +65,12 @@ export const TrackMeter: React.FC<{
         )}
       </span>
       <span
-        className="text-right font-f1-mono text-[12px] font-extrabold tabular-nums"
-        style={{ color: idle ? "#8E96AA" : centered ? color : "#F5F7FA" }}
+        className="text-right lc-mono text-[12px] font-extrabold tabular-nums"
+        style={{ color: idle ? "var(--color-lc-slate)" : centered ? color : "var(--color-lc-chalk)" }}
       >
         {detail ??
           (centered ? `${v >= 0 ? "+" : "−"}${Math.abs(Math.round(v * 100))}` : `${Math.round(v * 100)}%`)}
       </span>
-    </div>
-  );
-};
-
-/** Responsive grid of sliders / toggles (auto-fit columns of at least `min` px) */
-export const AutoGrid: React.FC<{ min: number; children: React.ReactNode; className?: string }> = ({
-  min,
-  children,
-  className = "",
-}) => (
-  <div className={`grid ${className}`} style={{ gridTemplateColumns: `repeat(auto-fit, minmax(min(${min}px, 100%), 1fr))` }}>
-    {children}
-  </div>
-);
-
-/** One-click factory assist presets (Balanced, Stable, Loose, Drift, Calm at speed) */
-export const AssistPresetBar: React.FC<{
-  tuning: DeviceAssistTuning;
-  onSelect: (presetTuning: DeviceAssistTuning) => void;
-  lockDeg?: number;
-  compact?: boolean;
-}> = ({ tuning, onSelect, lockDeg, compact }) => {
-  const activePreset = matchingAssistPreset(tuning);
-  return (
-    <div className="flex flex-col gap-1.5">
-      <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Assist presets">
-        <span className="mr-1 font-f1-mono text-[10px] font-extrabold tracking-[0.12em] text-[#8E96AA] uppercase">
-          Presets
-        </span>
-        {ASSIST_PRESETS.map((preset) => {
-          const active = activePreset?.id === preset.id;
-          return (
-            <button
-              key={preset.id}
-              type="button"
-              aria-pressed={active}
-              title={assistPresetDetail(preset.tuning, lockDeg)}
-              onClick={() => onSelect({ ...preset.tuning })}
-              className={`inline-flex h-[30px] cursor-pointer items-center justify-center rounded-full px-3 font-f1-mono text-[11px] font-extrabold tracking-[0.1em] uppercase transition-colors duration-200 ${
-                active
-                  ? "border border-[#CCFF00] bg-[#CCFF00] text-[#08090D]"
-                  : "border border-[#262B3D] bg-[#08090D]/60 text-[#C5CBD8] hover:border-[#CCFF00] hover:text-[#CCFF00]"
-              }`}
-            >
-              {preset.label}
-            </button>
-          );
-        })}
-      </div>
-      {!compact ? (
-        <span className="text-[12px] text-[#8E96AA]">
-          {activePreset ? `${activePreset.label}: ${assistPresetDetail(activePreset.tuning, lockDeg)}` : "Custom tuning"}
-        </span>
-      ) : null}
     </div>
   );
 };
@@ -294,22 +105,22 @@ export const AssistCurve: React.FC<{ tuning: DeviceAssistTuning; device: Steerin
   const capLabel = capDeg >= lockDeg - 0.5 ? "full lock" : `${Math.round(capDeg)}° cap`;
 
   return (
-    <div className="flex flex-col gap-2 rounded-[18px] border border-[#262B3D] bg-[#08090D] p-3.5">
+    <div className="flex flex-col gap-2 rounded-lc-tile border border-lc-line bg-lc-void p-3.5">
       <div className="flex items-center justify-between gap-2">
-        <span className="lc-lbl!">Self-steer curve</span>
-        <span className="font-f1-mono text-[11px] font-extrabold text-[#CCFF00] tabular-nums">
+        <span className="lc-field-label">Self-steer curve</span>
+        <span className="lc-mono text-[11px] font-bold text-lc-fog">
           {Math.round(resolved.targetSlip * 100)}% grip · {capLabel}
         </span>
       </div>
       <svg viewBox="0 0 160 100" className="block h-auto w-full" role="img" aria-label="Self-steer response curve">
-        <rect x="6" y="6" width="148" height="88" rx="10" fill="none" stroke="#262B3D" strokeWidth="1" />
+        <rect x="6" y="6" width="148" height="88" rx="10" fill="none" stroke="var(--color-lc-line)" strokeWidth="1" />
         {/* Steering that matches the rear's slide one to one, up to full lock */}
         <line
           x1={toX(0).toFixed(1)}
           y1={toY(0).toFixed(1)}
           x2={toX(Math.min(maxRearDeg, lockDeg)).toFixed(1)}
           y2={toY(lockDeg).toFixed(1)}
-          stroke="#5B6275"
+          stroke="var(--color-lc-dim)"
           strokeWidth="1"
           strokeDasharray="3 3"
         />
@@ -318,7 +129,7 @@ export const AssistCurve: React.FC<{ tuning: DeviceAssistTuning; device: Steerin
           y1={capY.toFixed(1)}
           x2={x1}
           y2={capY.toFixed(1)}
-          stroke="#00E5FF"
+          stroke="var(--color-lc-info)"
           strokeOpacity="0.45"
           strokeWidth="1"
           strokeDasharray="2 3"
@@ -326,71 +137,18 @@ export const AssistCurve: React.FC<{ tuning: DeviceAssistTuning; device: Steerin
         <path
           d={points.join(" ")}
           fill="none"
-          stroke="#CCFF00"
+          stroke="var(--color-lc-chalk)"
           strokeWidth="2.6"
           strokeLinecap="round"
           strokeLinejoin="round"
         />
-        <text x="14" y="91" fill="#8E96AA" fontSize="8" fontFamily="monospace">
+        <text x="14" y="91" fill="var(--color-lc-slate)" fontSize="8" fontFamily="monospace">
           0° slide
         </text>
-        <text x="146" y="91" fill="#8E96AA" fontSize="8" fontFamily="monospace" textAnchor="end">
+        <text x="146" y="91" fill="var(--color-lc-slate)" fontSize="8" fontFamily="monospace" textAnchor="end">
           45° slide
         </text>
       </svg>
     </div>
-  );
-};
-
-/** The countersteer slider's top (deg): the curve's lock where the car's is not known */
-const COUNTERSTEER_TOP_DEG = ASSIST_SLIDERS.find((s) => s.key === "maxSelfSteerAngleDeg")?.max ?? 30;
-
-/**
- * A device's steering assist tuning, the one card of the Keyboard and Controller setups and the pause menu: the
- * presets, the sliders of ASSIST_SLIDERS and the self-steer curve; Reset restores exactly these sliders. The
- * countersteer slider stops at the current car's lock (`lockDeg`, road-wheel degrees; a larger saved cap is full lock
- * there); without it, at the slider's own top.
- */
-export const AssistTuningCard: React.FC<{
-  device: SteeringDevice;
-  tuning: DeviceAssistTuning;
-  onChange: (patch: Partial<DeviceAssistTuning>) => void;
-  lockDeg?: number;
-  label?: string;
-  /** No hints and no preset line (the pause menu) */
-  compact?: boolean;
-}> = ({ device, tuning, onChange, lockDeg, label = "Steering assist", compact }) => {
-  const sliders = ASSIST_SLIDERS.map((s) => {
-    if (s.key !== "maxSelfSteerAngleDeg" || lockDeg === undefined) {
-      return { spec: s, max: s.max, value: tuning[s.key], format: s.format };
-    }
-    const max = Math.max(s.min, Math.min(s.max, Math.floor(lockDeg)));
-    const format = (v: number) => (v >= max ? `${s.format(v)} · full lock` : s.format(v));
-    return { spec: s, max, value: Math.min(tuning[s.key], max), format };
-  });
-  return (
-    <SetupCard label={label} action={<PillAction onClick={() => onChange({ ...DEFAULT_DEVICE_ASSIST_TUNING })}>Reset</PillAction>}>
-      <AssistPresetBar tuning={tuning} onSelect={onChange} lockDeg={lockDeg} compact={compact} />
-      <div className="flex flex-wrap gap-[22px] border-t border-[#262B3D] pt-3">
-        <AutoGrid min={200} className="min-w-0 flex-[1_1_340px] gap-x-5 gap-y-3">
-          {sliders.map(({ spec, max, value, format }) => (
-            <TuningSlider
-              key={spec.key}
-              label={spec.label}
-              value={value}
-              min={spec.min}
-              max={max}
-              step={spec.step}
-              format={format}
-              hint={compact ? undefined : spec.hint}
-              onChange={(v) => onChange({ [spec.key]: v })}
-            />
-          ))}
-        </AutoGrid>
-        <div className="flex min-w-0 flex-[1_1_200px] flex-col gap-3 sm:max-w-[240px]">
-          <AssistCurve tuning={tuning} device={device} lockDeg={lockDeg ?? COUNTERSTEER_TOP_DEG} />
-        </div>
-      </div>
-    </SetupCard>
   );
 };

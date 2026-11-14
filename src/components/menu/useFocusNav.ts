@@ -26,10 +26,17 @@ export interface FocusNavOptions {
   onPrevTab?: () => void;
   /** RB / E */
   onNextTab?: () => void;
+  /** Y (pad) / Y (key): the screen's one extra action, such as Settings' Simple / Advanced switch */
+  onAlt?: () => void;
   /** Esc calls onBack (off where another handler owns Esc); Backspace always does */
   keyboardBack?: boolean;
   /** Focus a control when the screen opens (default true) */
   autoFocus?: boolean;
+  /**
+   * Delete / pad X put the focused setting row back to its default (its `[data-row-reset]` button). Off by default:
+   * only Settings asks for it, so X and Delete do nothing in the Garage, first-run setup and the other menus.
+   */
+  rowReset?: boolean;
 }
 
 export type Dir = "up" | "down" | "left" | "right";
@@ -100,8 +107,24 @@ const isTextEntry = (el: Element | null): el is HTMLInputElement | HTMLTextAreaE
   el instanceof HTMLTextAreaElement ||
   (el instanceof HTMLInputElement && !["range", "checkbox", "radio", "button", "submit", "color"].includes(el.type));
 
-/** The box a control is seen as: a visually-hidden input inside a label is the label */
+/** A part the cursor can land on: not skipped, and not at tabindex -1 unless it is a roving option of a group */
+const landable = (el: HTMLElement): boolean =>
+  !el.closest("[data-nav-skip]") &&
+  (el.tabIndex >= 0 || ["radio", "tab", "option"].includes(el.getAttribute("role") ?? ""));
+
+/**
+ * The box a control is seen as: the control alone in a settings row is the whole row (`data-setting-row`), so the
+ * D-pad treats the row as the target; a visually-hidden input inside a label is the label. A row holding more than
+ * one control the cursor can land on (a segmented row) keeps each control's own box, or they would share one box and
+ * could not be told apart. A reset button is skipped by the cursor, so it does not count.
+ */
+
 function boxOf(el: HTMLElement): DOMRect {
+  const row = el.closest("[data-setting-row]");
+  // Counted as the cursor sees the row, so a reset button appearing beside a changed value does not change the box
+  if (row && Array.from(row.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(landable).length === 1) {
+    return row.getBoundingClientRect();
+  }
   const r = el.getBoundingClientRect();
   if (r.width <= 2 || r.height <= 2) {
     const label = el.closest("label");
@@ -121,6 +144,20 @@ function visible(el: HTMLElement): boolean {
 
 export function focusables(root: Element): HTMLElement[] {
   return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(visible);
+}
+
+/**
+ * What the Tab key itself stops on inside `root`, in order: shown, not inert, and not at tabindex -1 (a roving
+ * option). Unlike `focusables`, it keeps parts the arrows skip (`data-nav-skip`), which Tab still reaches.
+ */
+export function tabStops(root: Element): HTMLElement[] {
+  return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE)).filter((el) => {
+    if (el.tabIndex < 0 || el.closest("[inert], [aria-hidden='true']")) return false;
+    const r = el.getBoundingClientRect();
+    if (r.width === 0 && r.height === 0) return false;
+    const check = (el as HTMLElement & { checkVisibility?: (o?: object) => boolean }).checkVisibility;
+    return !check || check.call(el.closest("label") ?? el, { visibilityProperty: true, opacityProperty: false });
+  });
 }
 
 /** A remembered control can still take the focus: still there, shown, and not disabled since (greyed out mid-capture) */
@@ -249,6 +286,18 @@ function setNativeValue(el: HTMLInputElement | HTMLSelectElement, value: string)
 }
 
 /** Left / right on a slider or drop-down changes its value; returns true when it did */
+/**
+ * Puts the focused setting back to its default: presses the row's own reset button (`[data-row-reset]` inside the
+ * `[data-setting-row]` the focus is in). The button is kept out of the cursor's path, so left / right on a row only
+ * ever change its value; Delete or Ⓧ is how keys and a pad reach it. False when the row has nothing to reset.
+ */
+function resetRow(): boolean {
+  const reset = document.activeElement?.closest("[data-setting-row]")?.querySelector<HTMLElement>("[data-row-reset]");
+  if (!reset) return false;
+  reset.click();
+  return true;
+}
+
 function adjust(el: Element | null, dir: Dir, big: boolean): boolean {
   if (dir !== "left" && dir !== "right") return false;
   const sign = dir === "right" ? 1 : -1;
@@ -268,6 +317,54 @@ function adjust(el: Element | null, dir: Dir, big: boolean): boolean {
     return true;
   }
   return false;
+}
+
+/** A control whose own arrow keys change its value: an arrow with nowhere to go must still not reach it */
+const ownsArrows = (el: Element | null): boolean =>
+  el instanceof HTMLSelectElement ||
+  (el instanceof HTMLInputElement && (el.type === "range" || el.type === "number" || el.type === "radio"));
+
+/**
+ * A drop-down's list is open, so its arrow keys are the list's. Where the browser says so (`:open`), that is the answer.
+ * Otherwise only Firefox matters: it sends a key pressed in the open list to the page too, where Chrome and Safari keep
+ * those keys to the list (and a flag set here would stick: the Esc that closed the list never arrives). For Firefox a
+ * flag follows it: a press on the control opens it, so do Space, F4 and Alt + up / down; picking, Esc, Enter, Tab or
+ * leaving the control closes it.
+ */
+const openSelector = typeof CSS !== "undefined" && CSS.supports?.("selector(:open)");
+const firefox = typeof navigator !== "undefined" && /\bFirefox\//.test(navigator.userAgent);
+let pickerOpen = false;
+const listOpen = (el: HTMLSelectElement): boolean => (openSelector ? el.matches(":open") : firefox && pickerOpen);
+if (typeof window !== "undefined" && !openSelector && firefox) {
+  const onSelect = (e: Event) => e.target instanceof HTMLSelectElement;
+  window.addEventListener("pointerdown", (e) => void (pickerOpen = onSelect(e)), { capture: true, passive: true });
+  window.addEventListener(
+    "keydown",
+    (e) => {
+      if (!onSelect(e)) return;
+      if (e.code === "Escape" || e.code === "Enter" || e.code === "NumpadEnter" || e.code === "Tab") pickerOpen = false;
+      else if (e.code === "Space") pickerOpen = true;
+      else if (e.code === "F4" || (e.altKey && (e.code === "ArrowDown" || e.code === "ArrowUp"))) pickerOpen = !pickerOpen;
+    },
+    { capture: true },
+  );
+  for (const type of ["change", "focusout"] as const) {
+    window.addEventListener(type, (e) => void (onSelect(e) && (pickerOpen = false)), { capture: true });
+  }
+}
+
+/** Scrolls the nearest box that can scroll that way (the stick has no native scrolling to fall back on) */
+function scrollPast(from: Element | null, dir: "up" | "down"): void {
+  for (let el = from; el && el !== document.documentElement; el = el.parentElement) {
+    const { overflowY } = getComputedStyle(el);
+    if (overflowY !== "auto" && overflowY !== "scroll") continue;
+    const room = dir === "down" ? el.scrollHeight - el.clientHeight - el.scrollTop : el.scrollTop;
+    if (room < 1) continue;
+    // About an arrow key's own pace while the stick is held (a step every repeat)
+    const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    el.scrollBy({ top: (dir === "down" ? 1 : -1) * Math.min(room, 120), behavior: still ? "auto" : "smooth" });
+    return;
+  }
 }
 
 export function useFocusNav(rootRef: React.RefObject<HTMLElement | null>, options: FocusNavOptions = {}) {
@@ -310,22 +407,24 @@ export function useFocusNav(rootRef: React.RefObject<HTMLElement | null>, option
     };
     document.addEventListener("focusin", remember);
 
-    const move = (dir: Dir, big = false) => {
+    /** Returns false when there was nothing in that direction (the key can scroll the page instead) */
+    const move = (dir: Dir, big = false): boolean => {
       const r = root();
-      if (!r) return;
+      if (!r) return false;
       const active = document.activeElement as HTMLElement | null;
       if (!active || !r.contains(active) || active === r) {
         const el = entryOf(r);
         if (el) focusEl(el);
-        return;
+        return Boolean(el);
       }
-      if (adjust(active, dir, big)) return;
-      for (let i = moveHandlers.length - 1; i >= 0; i--) if (moveHandlers[i](dir)) return;
+      if (adjust(active, dir, big)) return true;
+      for (let i = moveHandlers.length - 1; i >= 0; i--) if (moveHandlers[i](dir)) return true;
       const items = focusables(r).filter((el) => !scrolledAway(el, active));
       const target = nearest(active, items, dir);
-      if (!target) return;
+      if (!target) return false;
       // Entering another zone resumes where that zone was left (or starts at its default)
       focusEl(landingFor(target, active, r));
+      return true;
     };
 
     const press = () => {
@@ -349,6 +448,8 @@ export function useFocusNav(rootRef: React.RefObject<HTMLElement | null>, option
 
     const onKey = (e: KeyboardEvent) => {
       if (isMenuNavSuspended() || e.defaultPrevented || !owns()) return;
+      // Alt / Cmd + ← is the browser's Back, Ctrl + Q its own shortcut: none of them are menu keys (Shift is: big steps)
+      if (e.altKey || e.ctrlKey || e.metaKey) return;
       const o = ref.current;
       const back = o.onBack || backHandlers.length ? goBack : undefined;
       const target = e.target as Element | null;
@@ -363,11 +464,15 @@ export function useFocusNav(rootRef: React.RefObject<HTMLElement | null>, option
         case "ArrowDown":
         case "ArrowLeft":
         case "ArrowRight": {
+          // A text area's arrows move its caret, all four; Esc / Tab leave it
+          if (target instanceof HTMLTextAreaElement) return;
           if (isTextEntry(target) && (e.code === "ArrowLeft" || e.code === "ArrowRight")) return;
-          if (target instanceof HTMLSelectElement && (e.code === "ArrowUp" || e.code === "ArrowDown")) return;
-          e.preventDefault();
+          // A drop-down's open list takes the arrows; closed, up / down move on and left / right step its options
+          if (target instanceof HTMLSelectElement && listOpen(target)) return;
           const dir = e.code.slice(5).toLowerCase() as Dir;
-          move(dir, e.shiftKey);
+          // Nothing that way: the key scrolls the screen as it would anywhere else (not on a control whose own arrow
+          // keys would change its value instead)
+          if (move(dir, e.shiftKey) || ownsArrows(target)) e.preventDefault();
           return;
         }
         case "Enter":
@@ -386,12 +491,19 @@ export function useFocusNav(rootRef: React.RefObject<HTMLElement | null>, option
         case "Backspace":
           if (typing) return;
           return call(back);
+        case "Delete":
+          if (!o.rowReset || typing || e.repeat) return;
+          if (resetRow()) e.preventDefault();
+          return;
         case "KeyQ":
           if (typing || e.repeat) return;
           return call(o.onPrevTab);
         case "KeyE":
           if (typing || e.repeat) return;
           return call(o.onNextTab);
+        case "KeyY":
+          if (typing || e.repeat) return;
+          return call(o.onAlt);
       }
     };
     window.addEventListener("keydown", onKey);
@@ -417,7 +529,7 @@ export function useFocusNav(rootRef: React.RefObject<HTMLElement | null>, option
       }
       const ax = pad.axes;
       const down = (i: number) => Boolean(pad.buttons[i]?.pressed);
-      // up, down, left, right, A, B, Menu, LB, RB, LT/RT (held: bigger slider steps)
+      // up, down, left, right, A, B, Menu, LB, RB, X, Y; LT/RT held: bigger slider steps
       const now = [
         down(12) || (ax[1] ?? 0) < -STICK_THRESHOLD,
         down(13) || (ax[1] ?? 0) > STICK_THRESHOLD,
@@ -428,6 +540,8 @@ export function useFocusNav(rootRef: React.RefObject<HTMLElement | null>, option
         down(9),
         down(4),
         down(5),
+        down(2),
+        down(3),
       ];
       // Not the screen on top: keep the baseline current, so a button held as it takes over does not fire
       if (prev === null || isMenuNavSuspended() || !owns()) {
@@ -439,7 +553,10 @@ export function useFocusNav(rootRef: React.RefObject<HTMLElement | null>, option
       const o = ref.current;
       const dirs: Dir[] = ["up", "down", "left", "right"];
       const handlers: (() => void)[] = [
-        ...dirs.map((d) => () => move(d, big)),
+        ...dirs.map((d) => () => {
+          // Past the last control up or down, the stick scrolls on to the text below (or above) it
+          if (!move(d, big) && (d === "up" || d === "down")) scrollPast(document.activeElement ?? root(), d);
+        }),
         press,
         () => {
           // Ⓑ in a text field just leaves the field
@@ -453,6 +570,8 @@ export function useFocusNav(rootRef: React.RefObject<HTMLElement | null>, option
         () => o.onStart?.(),
         () => o.onPrevTab?.(),
         () => o.onNextTab?.(),
+        () => void (o.rowReset && resetRow()),
+        () => o.onAlt?.(),
       ];
       now.forEach((isDown, i) => {
         if (isDown && !prev![i]) {

@@ -1,15 +1,34 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, ChevronUp } from "lucide-react";
 import type { CarTelemetry, LiveTunerPatch, TireCompound } from "@/types/f1";
 import type { LapDeltaTracker } from "@/lib/sim/lap-delta";
 import { HUD_TOGGLE_EVENT } from "@/lib/input/bindings";
-import { formatLapTime, formatSectorTime, HUD_CYAN, HUD_GREEN, HUD_PURPLE, HUD_SLATE, HUD_VOLT, HUD_YELLOW, tyreHeatColor } from "./hud-format";
+import { Badge } from "@/components/ui/Badge";
+import { Icon } from "@/components/ui/icons/Icon";
+import { Trend } from "@/components/ui/icons/Trend";
+import { CompoundGlyph } from "@/components/ui/badges/CompoundBadge";
+import { PenaltyBadge } from "@/components/ui/badges/PenaltyBadge";
+import { useUnits } from "@/lib/settings/ui-prefs";
+import {
+  formatGap,
+  formatLapTime,
+  formatPressureDeltaPsi,
+  formatPressurePsi,
+  formatSectorTime,
+  formatTemp,
+  HUD_BEST,
+  HUD_CAUTION,
+  HUD_GLASS,
+  HUD_INFO,
+  HUD_LBL,
+  HUD_SLATE,
+  tyreHeatColor,
+} from "./hud-format";
 import { MfdStatusChips, TunerMfdPanel } from "./TunerMfdPanel";
 import { BrakeBar, cornerData, psiDeltaColor, TyreGlyph } from "./TyreBrakeWidget";
 import { computeRelatives, fuelStrategy, useLapHistory, type LapRecord, type RelativeRow } from "./mfd-data";
-import { COMPOUND_COLORS } from "./styles/hud-style-parts";
+import { HUD_CHOSEN, HUD_CONTROL, HUD_IDLE, LapMarkGlyph } from "./styles/hud-style-parts";
 import { useHudModeRef } from "./hud-mode";
 
 export type MfdPageId = "elec" | "rel" | "tyre" | "fuel" | "stnd";
@@ -25,11 +44,13 @@ const PAGES: { id: MfdPageId; tag: string; title: string }[] = [
 /** D-pad quiet time after which an MFD opened via D-pad folds back to its compact status pill */
 const AUTO_FOLD_MS = 3500;
 const PAGE_KEY = "lc.mfdPage";
-/** A car this many laps up shows orange (let it by), down blue (you are lapping it) */
-const LAP_UP = "#FF8A3D";
-const LAP_DOWN = "#5AA9FF";
+/** A car laps up shows tangerine (let it by), laps down azure (you are lapping it); "+1L" / "−1L" says it too */
+const LAP_UP = "var(--color-lc-tangerine)";
+const LAP_DOWN = "var(--color-lc-azure)";
+/** No value yet */
+const NONE = "--";
 
-const LBL = "font-f1-mono text-[9px] font-extrabold tracking-[0.16em] text-[#8E96AA] uppercase";
+const LBL = HUD_LBL;
 
 function readPage(): MfdPageId {
   try {
@@ -42,22 +63,10 @@ function readPage(): MfdPageId {
 }
 
 const CompoundBadge: React.FC<{ c?: TireCompound }> = ({ c }) =>
-  c ? (
-    <span
-      className="inline-flex h-[15px] w-[15px] shrink-0 items-center justify-center rounded-full border-[2px] font-f1-mono text-[8px] leading-none font-extrabold text-[#F5F7FA]"
-      style={{ borderColor: COMPOUND_COLORS[c] }}
-      aria-label={`${c} tyres`}
-    >
-      {c[0].toUpperCase()}
-    </span>
-  ) : (
-    <span className="w-[15px] shrink-0" />
-  );
+  c ? <CompoundGlyph compound={c} size={15} /> : <span className="w-3.75 shrink-0" />;
 
 const PenaltyChip: React.FC<{ s?: number }> = ({ s }) =>
-  s && s > 0 ? (
-    <span className="rounded-[4px] bg-[#FF2A3C] px-1 font-f1-mono text-[8px] leading-[14px] font-extrabold text-[#F5F7FA]">+{s.toFixed(0)}s</span>
-  ) : null;
+  s && s > 0 ? <PenaltyBadge penalty={{ kind: "time", seconds: Math.round(s) }} size="hud" variant="solid" /> : null;
 
 /* ── Pages ─────────────────────────────────────────────────────────────── */
 
@@ -66,38 +75,36 @@ const RelativePage: React.FC<{ rows: RelativeRow[]; racing: boolean }> = ({ rows
     return <Empty text="No cars on track" />;
   }
   return (
-    <ol className="flex flex-col gap-[3px]" aria-label="Relative">
+    <ol className="flex flex-col gap-0.75" aria-label="Relative">
       {rows.map((r) => {
-        const tone = r.isPlayer ? HUD_VOLT : r.lapDiff > 0 ? LAP_UP : r.lapDiff < 0 ? LAP_DOWN : "#F5F7FA";
+        // The player's own row is volt with void ink (every table); laps up / down tint the others
+        const tone = r.isPlayer ? undefined : r.lapDiff > 0 ? LAP_UP : r.lapDiff < 0 ? LAP_DOWN : "var(--color-lc-chalk)";
         return (
           <li
             key={r.key}
-            className={`flex h-[24px] items-center gap-2 rounded-[8px] px-2 font-f1-mono text-[11px] font-extrabold tabular-nums ${
-              r.isPlayer ? "bg-[#CCFF00]/[0.12] shadow-[inset_0_0_0_1px_rgba(204,255,0,0.35)]" : "bg-white/[0.03]"
+            className={`lc-data flex h-6 items-center gap-2 rounded-lc-nub px-2 text-[11px] ${
+              r.isPlayer ? "bg-lc-volt text-lc-void" : "bg-white/3"
             }`}
           >
-            <span className="w-[18px] text-right text-[10px] text-[#8E96AA]">{racing && r.position ? r.position : ""}</span>
-            <span className="h-3 w-[3px] shrink-0 rounded-full" style={{ backgroundColor: r.color }} />
-            <span className="w-[34px] tracking-[0.06em]" style={{ color: tone }}>
+            <span className={`w-4.5 text-right text-[10px] ${r.isPlayer ? "" : "text-lc-slate"}`}>{racing && r.position ? r.position : ""}</span>
+            <span className="h-3 w-0.75 shrink-0 rounded-full" style={{ backgroundColor: r.isPlayer ? "var(--color-lc-void)" : r.color }} />
+            <span className="w-8.5 tracking-[0.06em]" style={{ color: tone }}>
               {r.code}
             </span>
             <CompoundBadge c={r.compound} />
-            <span className="w-[26px] text-[9px]" style={{ color: tone }}>
-              {r.lapDiff !== 0 ? `${r.lapDiff > 0 ? "+" : "−"}${Math.abs(r.lapDiff)}L` : ""}
+            <span className="w-6.5 text-[9px]" style={{ color: tone }}>
+              {r.lapDiff !== 0 ? `${r.lapDiff > 0 ? "+" : "\u2212"}${Math.abs(r.lapDiff)}L` : ""}
             </span>
             <PenaltyChip s={r.penaltyS} />
-            <span className="ml-auto flex items-center gap-1" style={{ color: r.isPlayer ? HUD_VOLT : tone }}>
-              {r.isPlayer ? (
-                "—"
-              ) : (
-                <>
-                  <span className="text-[8px]" style={{ color: r.gapS > 0 ? HUD_CYAN : HUD_YELLOW }} aria-hidden>
-                    {r.gapS > 0 ? "▲" : "▼"}
-                  </span>
-                  {Math.abs(r.gapS).toFixed(Math.abs(r.gapS) < 10 ? 2 : 1)}
-                </>
-              )}
-            </span>
+            {r.isPlayer ? null : (
+              <span className="ml-auto flex items-center gap-1" style={{ color: tone }}>
+                {/* Ahead or behind on the road: the arrow shows which way, the number how far */}
+                <span className="inline-flex text-lc-slate">
+                  <Trend direction={r.gapS > 0 ? "up" : "down"} size={8} label={r.gapS > 0 ? "Ahead" : "Behind"} />
+                </span>
+                {formatGap(r.gapS, true)}
+              </span>
+            )}
           </li>
         );
       })}
@@ -105,13 +112,19 @@ const RelativePage: React.FC<{ rows: RelativeRow[]; racing: boolean }> = ({ rows
   );
 };
 
-const Stat: React.FC<{ label: string; value: string; sub?: string; tone?: string; big?: boolean }> = ({ label, value, sub, tone = "#F5F7FA", big }) => (
-  <div className="flex min-w-0 flex-col justify-center gap-1 rounded-[12px] bg-white/[0.03] px-2.5 py-2">
-    <span className={LBL}>{label}</span>
-    <span className={`lc-data leading-none tabular-nums ${big ? "text-[24px]" : "text-[16px]"}`} style={{ color: tone }}>
+const Stat: React.FC<{ label: string; value: string; sub?: string; tone?: string; big?: boolean }> = ({
+  label,
+  value,
+  sub,
+  tone = "var(--color-lc-chalk)",
+  big,
+}) => (
+  <div className="flex min-w-0 flex-col justify-center gap-1 rounded-lc-nub bg-white/3 px-2.5 py-2">
+    <span className={`${LBL} tracking-[0.08em] whitespace-nowrap`}>{label}</span>
+    <span className={`lc-data leading-none ${big ? "text-[24px]" : "text-[16px]"}`} style={{ color: tone }}>
       {value}
     </span>
-    {sub ? <span className="font-f1-mono text-[10px] font-extrabold text-[#8E96AA] tabular-nums">{sub}</span> : null}
+    {sub ? <span className="lc-data text-[10px] text-lc-slate">{sub}</span> : null}
   </div>
 );
 
@@ -119,15 +132,15 @@ const FuelPage: React.FC<{ t: CarTelemetry; laps: LapRecord[]; L: number }> = ({
   const f = fuelStrategy(t, laps, L);
   const ers = f.avgErsPct;
   const energy = [
-    <Stat key="b" label="Battery" value={`${Math.round(t.ersBatteryPercent)}%`} tone={HUD_CYAN} big={!f.hasFuel} />,
+    <Stat key="b" label="Battery" value={`${Math.round(t.ersBatteryPercent)}%`} tone={HUD_INFO} big={!f.hasFuel} />,
     <Stat
       key="e"
       label="ERS / lap"
-      value={ers === null ? "—" : `${ers > 0 ? "−" : "+"}${Math.abs(ers).toFixed(1)}%`}
-      tone={ers === null ? HUD_SLATE : ers > 2 ? HUD_YELLOW : HUD_GREEN}
+      value={ers === null ? NONE : `${ers > 0 ? "\u2212" : "+"}${Math.abs(ers).toFixed(1)}%`}
+      tone={ers === null ? HUD_SLATE : ers > 2 ? HUD_CAUTION : undefined}
       big={!f.hasFuel}
     />,
-    <Stat key="w" label="Tread / lap" value={f.avgWearPct === null ? "—" : `${f.avgWearPct.toFixed(1)}%`} big={!f.hasFuel} />,
+    <Stat key="w" label="Tread / lap" value={f.avgWearPct === null ? NONE : `${f.avgWearPct.toFixed(1)}%`} big={!f.hasFuel} />,
   ];
   if (!f.hasFuel) {
     return <div className="grid h-full grid-cols-3 gap-1.5">{energy}</div>;
@@ -138,22 +151,26 @@ const FuelPage: React.FC<{ t: CarTelemetry; laps: LapRecord[]; L: number }> = ({
         <Stat label="Fuel" value={f.fuelKg.toFixed(1)} sub={f.lapsOfFuel !== null ? `${f.lapsOfFuel.toFixed(1)} laps` : "kg"} big />
         <Stat
           label="Per lap"
-          value={f.avgFuelKg !== null ? f.avgFuelKg.toFixed(2) : "—"}
+          value={f.avgFuelKg !== null ? f.avgFuelKg.toFixed(2) : NONE}
           sub={f.targetKg !== null ? `target ${f.targetKg.toFixed(2)}` : "kg"}
           big
         />
       </div>
       {f.raceLapsLeft !== null && f.avgFuelKg !== null ? (
         f.saveKg !== null ? (
-          <div className="flex h-[30px] items-center justify-between rounded-[12px] bg-[#FFB300] px-2.5 font-f1-mono text-[11px] font-extrabold text-[#08090D] tabular-nums">
-            <span className="tracking-[0.12em]">LIFT · SAVE {f.saveKg.toFixed(2)}</span>
-            <span>≈{(f.liftS ?? 0).toFixed(1)}s</span>
-          </div>
+          <Badge tone="warn" variant="solid" size="lg" icon="fuel" className="w-full">
+            <span className="flex flex-1 justify-between">
+              <span>Lift · save {f.saveKg.toFixed(2)} kg</span>
+              <span className="lc-mono">≈{(f.liftS ?? 0).toFixed(1)} s</span>
+            </span>
+          </Badge>
         ) : (
-          <div className="flex h-[30px] items-center justify-between rounded-[12px] bg-[#00E676]/[0.14] px-2.5 font-f1-mono text-[11px] font-extrabold text-[#00E676] tabular-nums">
-            <span className="tracking-[0.12em]">FUEL OK</span>
-            <span>+{(f.marginKg ?? 0).toFixed(1)} kg</span>
-          </div>
+          <Badge tone="good" size="lg" icon="success" className="w-full">
+            <span className="flex flex-1 justify-between">
+              <span>Fuel ok</span>
+              <span className="lc-mono">+{(f.marginKg ?? 0).toFixed(1)} kg</span>
+            </span>
+          </Badge>
         )
       ) : null}
       <div className="grid grid-cols-3 gap-1.5">{energy}</div>
@@ -164,30 +181,33 @@ const FuelPage: React.FC<{ t: CarTelemetry; laps: LapRecord[]; L: number }> = ({
 /** One corner on the MFD's tyre page: tread bands, brake glow, temperature, pressure against its optimum, life */
 const TyreCorner: React.FC<{ t: CarTelemetry; i: number }> = ({ t, i }) => {
   const c = cornerData(t, i);
+  const units = useUnits();
   const w = t.tireOptimalTempC;
   const right = i % 2 === 1;
   const worst = c.conditions.reduce<(typeof c.conditions)[number] | null>((a, k) => (!a || k.level > a.level ? k : a), null);
   return (
-    <div className={`flex min-w-0 items-center gap-2 rounded-[14px] border border-[#1B1F2B] bg-[#050608] px-2 ${right ? "flex-row-reverse" : ""}`}>
-      <TyreGlyph c={c} window={w} className="h-[56px] w-[30px]" />
-      <BrakeBar c={c} className="h-[56px] w-[6px]" />
-      <span className={`flex min-w-0 flex-1 flex-col gap-[3px] ${right ? "items-end" : "items-start"}`}>
+    <div className={`flex min-w-0 items-center gap-2 rounded-lc-row border border-lc-titanium bg-lc-well px-2 ${right ? "flex-row-reverse" : ""}`}>
+      <TyreGlyph c={c} window={w} className="h-14 w-7.5" />
+      <BrakeBar c={c} className="h-14 w-1.5" />
+      <span className={`flex min-w-0 flex-1 flex-col gap-0.75 ${right ? "items-end" : "items-start"}`}>
         <span className="lc-data text-[20px] leading-none" style={{ color: tyreHeatColor(c.temp, w) }}>
-          {Math.round(c.temp)}°
+          {formatTemp(c.temp, units)}
         </span>
-        <span className="lc-data text-[11px] leading-none tabular-nums" style={{ color: psiDeltaColor(c.psiDelta) }}>
-          {c.psi !== null ? c.psi.toFixed(1) : "—"}
-        </span>
-        <span className="lc-data text-[11px] leading-none text-[#8E96AA] tabular-nums">{Math.round(c.life)}%</span>
-        <span className="h-[12px]">
-          {worst ? (
-            <span
-              title={worst.title}
-              className="rounded-full px-[5px] py-px font-f1-mono text-[8px] font-extrabold tracking-[0.06em] text-[#08090D]"
-              style={{ backgroundColor: worst.color }}
-            >
-              {worst.label}
+        {/* Pressure, and against its optimum with the sign (never the colour alone) */}
+        <span className="lc-data text-[11px] leading-none whitespace-nowrap text-lc-fog">
+          {c.psi !== null ? formatPressurePsi(c.psi, units) : NONE}
+          {c.psiDelta !== null ? (
+            <span className="ml-1 text-[10px]" style={{ color: psiDeltaColor(c.psiDelta) }}>
+              {formatPressureDeltaPsi(c.psiDelta, units)}
             </span>
+          ) : null}
+        </span>
+        <span className="lc-data text-[11px] leading-none text-lc-slate">{Math.round(c.life)}%</span>
+        <span className="h-4">
+          {worst ? (
+            <Badge tone={worst.tone} variant="solid" size="hud" title={worst.title}>
+              {worst.label}
+            </Badge>
           ) : null}
         </span>
       </span>
@@ -204,7 +224,7 @@ const TyrePage: React.FC<{ t: CarTelemetry }> = ({ t }) => (
 );
 
 const Empty: React.FC<{ text: string }> = ({ text }) => (
-  <p className="flex h-full items-center justify-center font-f1-mono text-[11px] font-extrabold tracking-[0.14em] text-[#5B6275] uppercase">{text}</p>
+  <p className="flex h-full items-center justify-center lc-hint">{text}</p>
 );
 
 const StandingsPage: React.FC<{ t: CarTelemetry; laps: LapRecord[] }> = ({ t, laps }) => {
@@ -216,25 +236,29 @@ const StandingsPage: React.FC<{ t: CarTelemetry; laps: LapRecord[] }> = ({ t, la
     const from = Math.max(0, Math.min(standings.length - 9, meIdx - 4));
     const shown = standings.slice(from, from + 9);
     return (
-      <table className="w-full font-f1-mono text-[11px] font-extrabold tabular-nums" aria-label="Standings">
+      <table className="lc-data w-full text-[11px]" aria-label="Standings">
         <tbody>
           {shown.map((s, k) => {
             const pos = from + k + 1;
             const purple = fastest !== null && s.bestLapMs === fastest;
             return (
-              <tr key={`${s.driverCode}-${pos}`} className={`h-[23px] ${s.isPlayer ? "bg-[#CCFF00]/[0.12] text-[#CCFF00]" : "text-[#F5F7FA]"}`}>
-                <td className="w-6 pr-2 text-right text-[#8E96AA]">{pos}</td>
+              // The player's row is volt with void ink; the fill sits on the cells so the row's ends can round
+              <tr key={`${s.driverCode}-${pos}`} className={`h-5.75 ${s.isPlayer ? "text-lc-void [&>td]:bg-lc-volt" : "text-lc-chalk"}`}>
+                <td className={`w-6 rounded-l-lc-nub pr-2 text-right ${s.isPlayer ? "" : "text-lc-slate"}`}>{pos}</td>
                 <td>
                   <span className="inline-flex items-center gap-1.5">
-                    <span className="h-3 w-[3px] rounded-full" style={{ backgroundColor: s.teamColorHex }} />
+                    <span className="h-3 w-0.75 rounded-full" style={{ backgroundColor: s.isPlayer ? "var(--color-lc-void)" : s.teamColorHex }} />
                     {s.driverCode}
                     <PenaltyChip s={s.penaltyS} />
                   </span>
                 </td>
-                <td className="text-right" style={purple ? { color: HUD_PURPLE } : { color: "#C5CBD8" }}>
-                  {s.bestLapMs ? formatLapTime(s.bestLapMs) : "—"}
+                <td className="text-right" style={s.isPlayer ? undefined : { color: purple ? HUD_BEST : "var(--color-lc-fog)" }}>
+                  <span className="inline-flex items-center gap-1">
+                    {purple ? <Badge tone="best" variant="solid" size="hud" aria-label="Fastest lap">FL</Badge> : null}
+                    {formatLapTime(s.bestLapMs)}
+                  </span>
                 </td>
-                <td className="w-[52px] pr-1 text-right">{pos === 1 ? "LEAD" : `+${(s.intervalS ?? s.gapToLeaderS).toFixed(1)}`}</td>
+                <td className="w-13 rounded-r-lc-nub pr-1 text-right">{pos === 1 ? "Lead" : `+${formatGap(s.intervalS ?? s.gapToLeaderS)}`}</td>
               </tr>
             );
           })}
@@ -250,18 +274,28 @@ const StandingsPage: React.FC<{ t: CarTelemetry; laps: LapRecord[] }> = ({ t, la
     valid.reduce<number | null>((m, l) => (l.sectorsMs[i] > 0 && (m === null || l.sectorsMs[i] < m) ? l.sectorsMs[i] : m), null)
   );
   return (
-    <table className="w-full font-f1-mono text-[11px] font-extrabold tabular-nums" aria-label="Lap times">
+    <table className="lc-data w-full text-[11px]" aria-label="Lap times">
       <tbody>
         {laps
           .slice(-9)
           .reverse()
           .map((l) => (
-            <tr key={l.lap} className={`h-[23px] ${l.valid ? "text-[#F5F7FA]" : "text-[#FF2A3C]/80 line-through"}`}>
-              <td className="w-6 pr-2 text-right text-[#8E96AA]">{l.lap}</td>
-              <td style={l.valid && l.timeMs === best ? { color: HUD_PURPLE } : undefined}>{formatLapTime(l.timeMs)}</td>
+            // An invalid lap is struck through as well as in the loss colour; the session best wears the best colour and its arrow
+            <tr key={l.lap} className={`h-5.75 ${l.valid ? "text-lc-chalk" : "text-lc-loss/80 line-through"}`}>
+              <td className="w-6 pr-2 text-right text-lc-slate">{l.lap}</td>
+              <td style={l.valid && l.timeMs === best ? { color: HUD_BEST } : undefined}>
+                <span className="inline-flex items-center gap-1">
+                  {formatLapTime(l.timeMs)}
+                  {l.valid && l.timeMs === best ? <LapMarkGlyph mark="best" /> : null}
+                </span>
+              </td>
               {l.sectorsMs.map((ms, i) => (
-                <td key={i} className="text-right" style={l.valid && ms > 0 && ms === bestS[i] ? { color: HUD_PURPLE } : { color: "#8E96AA" }}>
-                  {ms > 0 ? formatSectorTime(ms) : "—"}
+                <td
+                  key={i}
+                  className={`text-right ${l.valid && ms > 0 && ms === bestS[i] ? "underline decoration-2 underline-offset-2" : ""}`}
+                  style={l.valid && ms > 0 && ms === bestS[i] ? { color: HUD_BEST } : { color: "var(--color-lc-slate)" }}
+                >
+                  {ms > 0 ? formatSectorTime(ms) : NONE}
                 </td>
               ))}
             </tr>
@@ -388,8 +422,9 @@ export const MultiPageMfd: React.FC<MultiPageMfdProps> = ({
       padOpened.current = false;
       setFolded((f) => !f);
     };
+    // Not under the results card either: Ⓑ is the page button and also closes the card, and one press must do one thing
     const next = () => {
-      if (hudModeRef.current === "hidden") return;
+      if (hudModeRef.current !== "live") return;
       clearFold();
       padOpened.current = false;
       if (foldedRef.current) {
@@ -420,31 +455,41 @@ export const MultiPageMfd: React.FC<MultiPageMfdProps> = ({
       const ahead = rows[i - 1];
       const behind = rows[i + 1];
       return (
-        <span className="flex items-center gap-2 font-f1-mono text-[10px] font-extrabold tabular-nums">
-          {ahead ? <span className="text-[#00E5FF]">▲ {ahead.code} {ahead.gapS.toFixed(1)}</span> : null}
-          {behind ? <span className="text-[#FFB300]">▼ {behind.code} {Math.abs(behind.gapS).toFixed(1)}</span> : null}
-          {!ahead && !behind ? <span className="text-[#5B6275]">CLEAR</span> : null}
+        <span className="lc-data flex items-center gap-2 text-[10px] text-lc-chalk">
+          {ahead ? (
+            <span className="inline-flex items-center gap-1">
+              <Trend direction="up" size={8} label="Ahead" />
+              {ahead.code} {formatGap(ahead.gapS)}
+            </span>
+          ) : null}
+          {behind ? (
+            <span className="inline-flex items-center gap-1">
+              <Trend direction="down" size={8} label="Behind" />
+              {behind.code} {formatGap(behind.gapS)}
+            </span>
+          ) : null}
+          {!ahead && !behind ? <span className="text-lc-slate">Clear</span> : null}
         </span>
       );
     }
     if (page === "tyre") {
       const hot = Math.max(...t.tireTempsC);
       return (
-        <span className="font-f1-mono text-[10px] font-extrabold text-[#F5F7FA] tabular-nums">
-          {Math.round(Math.min(...t.tireTempsC))}–{Math.round(hot)}°C · {Math.round(100 - Math.max(...t.tireWearPct))}%
+        <span className="lc-data text-[10px] text-lc-chalk">
+          {formatTemp(Math.min(...t.tireTempsC))}–{formatTemp(hot, undefined, true)} · {Math.round(100 - Math.max(...t.tireWearPct))}%
         </span>
       );
     }
     if (page === "fuel") {
       return (
-        <span className="font-f1-mono text-[10px] font-extrabold text-[#F5F7FA] tabular-nums">
+        <span className="lc-data text-[10px] text-lc-chalk">
           {t.fuelKg > 0.01 ? `${t.fuelKg.toFixed(1)} kg · ` : ""}
-          <span className="text-[#00E5FF]">{Math.round(t.ersBatteryPercent)}%</span>
+          <span className="text-lc-info">{Math.round(t.ersBatteryPercent)}%</span>
         </span>
       );
     }
     return (
-      <span className="font-f1-mono text-[10px] font-extrabold text-[#F5F7FA] tabular-nums">
+      <span className="lc-data text-[10px] text-lc-chalk">
         {t.race ? `P${t.race.position}/${t.race.fieldSize}` : `${laps.length} laps`}
       </span>
     );
@@ -452,15 +497,17 @@ export const MultiPageMfd: React.FC<MultiPageMfdProps> = ({
 
   return (
     <div
-      className={`pointer-events-auto select-none overflow-hidden border border-white/[0.08] bg-[#0A0B10]/92 shadow-[0_20px_50px_rgba(0,0,0,0.55)] backdrop-blur-md ${
+      className={`pointer-events-auto select-none overflow-hidden ${HUD_GLASS} ${
         // Folded, the pill takes its summary's width (Geist Mono chips run past 300 px), never narrower than the panel
-        folded ? "w-max min-w-[300px] rounded-full p-1.5" : "flex w-[300px] flex-col gap-2 rounded-[24px] p-2.5"
+        folded ? "w-max min-w-[300px] rounded-full p-1.5" : "flex w-[300px] flex-col gap-2 rounded-lc-card p-2.5"
       }`}
       aria-label={`MFD · ${meta.title}`}
     >
       {folded ? (
         <div className="flex items-center gap-2">
-          <span className="shrink-0 rounded-full bg-[#CCFF00] px-2 py-[3px] font-f1-mono text-[9px] font-extrabold tracking-[0.14em] text-[#08090D]">{meta.tag}</span>
+          <Badge variant="solid" size="sm">
+            {meta.tag}
+          </Badge>
           <span className="flex min-w-0 flex-1 overflow-hidden">{pillSummary()}</span>
           <button
             type="button"
@@ -469,18 +516,18 @@ export const MultiPageMfd: React.FC<MultiPageMfdProps> = ({
               padOpened.current = false;
               setFolded(false);
             }}
-            className="flex h-[26px] w-[26px] shrink-0 cursor-pointer items-center justify-center rounded-full text-[#8E96AA] transition-colors hover:bg-white/10 hover:text-[#CCFF00]"
+            className={`flex size-6.5 shrink-0 items-center justify-center rounded-full ${HUD_IDLE} ${HUD_CONTROL}`}
             title="Open the MFD"
             aria-label="Open the MFD"
           >
-            <ChevronUp className="h-3.5 w-3.5" strokeWidth={2.6} />
+            <Icon name="collapse" size="xs" />
           </button>
         </div>
       ) : (
         <>
           {/* Page strip */}
           <div className="flex items-center gap-1">
-            <div className="flex min-w-0 flex-1 gap-1" role="tablist" aria-label="MFD pages" title="D-pad ◀ ▶ or Ins: next page">
+            <div className="flex min-w-0 flex-1 gap-1" role="tablist" aria-label="MFD pages" title="D-pad left or right, or Ins: next page">
               {PAGES.map((p) => (
                 <button
                   key={p.id}
@@ -492,8 +539,9 @@ export const MultiPageMfd: React.FC<MultiPageMfdProps> = ({
                     padOpened.current = false;
                     choose(p.id);
                   }}
-                  className={`h-[26px] flex-1 cursor-pointer rounded-full font-f1-mono text-[10px] font-extrabold tracking-[0.1em] transition-colors ${
-                    p.id === page ? "bg-[#CCFF00] text-[#08090D]" : "bg-[#1B1F2B] text-[#8E96AA] hover:text-[#F5F7FA]"
+                  className={`lc-chip-text h-6.5 flex-1 rounded-full text-[10px] ${HUD_CONTROL} ${
+                    // Chosen is chalk on line with a hairline (UI standard §4); volt stays the cursor
+                    p.id === page ? HUD_CHOSEN : `bg-lc-titanium ${HUD_IDLE}`
                   }`}
                   title={p.title}
                 >
@@ -508,11 +556,11 @@ export const MultiPageMfd: React.FC<MultiPageMfdProps> = ({
                 padOpened.current = false;
                 setFolded(true);
               }}
-              className="flex h-[26px] w-[26px] shrink-0 cursor-pointer items-center justify-center rounded-full text-[#8E96AA] transition-colors hover:bg-white/10 hover:text-[#CCFF00]"
+              className={`flex size-6.5 shrink-0 items-center justify-center rounded-full ${HUD_IDLE} ${HUD_CONTROL}`}
               title="Fold the MFD"
               aria-label="Fold the MFD"
             >
-              <ChevronDown className="h-3.5 w-3.5" strokeWidth={2.6} />
+              <Icon name="expand" size="xs" />
             </button>
           </div>
         </>
@@ -531,7 +579,7 @@ export const MultiPageMfd: React.FC<MultiPageMfdProps> = ({
       />
       {/* Every page fills the same box, so the MFD's top edge never moves between tabs */}
       {folded || page === "elec" ? null : (
-        <div className="h-[212px] overflow-hidden">
+        <div className="h-53 overflow-hidden">
           {page === "rel" ? (
             <RelativePage rows={rows} racing={racing} />
           ) : page === "tyre" ? (

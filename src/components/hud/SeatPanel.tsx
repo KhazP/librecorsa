@@ -11,8 +11,14 @@ import {
   type NudgeView,
 } from "@/lib/settings/camera-nudges";
 import { keyLabel } from "@/lib/input/bindings";
-import { PadGlyph } from "@/components/menu/pad-glyph";
-import { useInputMode } from "@/components/menu/input-mode";
+import { useUnits } from "@/lib/settings/ui-prefs";
+import { SMALL_LENGTH_LABEL, smallLengthIn } from "@/lib/settings/units";
+import type { UnitSettings } from "@/lib/settings/player-settings";
+import { Button, IconButton } from "@/components/ui";
+import { Icon } from "@/components/ui/icons";
+import { PromptBar } from "@/components/ui/prompts";
+import { HUD_GLASS } from "./hud-format";
+import { CHOSEN_PILL, CURSOR_ROW, cx, HOVER_PILL, MOTION } from "@/components/ui/styles";
 
 export interface SeatPanelProps {
   carTitle: string;
@@ -54,11 +60,8 @@ const REPEAT_RATE_MS = 60;
 /** Standard-mapping buttons the panel reads */
 const PAD = { a: 0, b: 1, x: 2, up: 12, down: 13, left: 14, right: 15 } as const;
 
-const ROUND_BTN =
-  "flex h-[30px] w-[30px] shrink-0 cursor-pointer touch-none items-center justify-center rounded-full border border-white/15 bg-black/30 font-f1-mono text-[15px] font-extrabold text-[#F5F7FA] transition-colors hover:border-[#CCFF00] hover:text-[#CCFF00] active:bg-[#CCFF00] active:text-[#08090D]";
-
-/** A − / + button that keeps stepping while it is held */
-const HoldButton: React.FC<{ onStep: () => void; label: string; children: React.ReactNode }> = ({ onStep, label, children }) => {
+/** A − / + button that keeps stepping while it is held (pointer only: keys and the pad step the row) */
+const HoldButton: React.FC<{ onStep: () => void; label: string; icon: "add" | "remove" }> = ({ onStep, label, icon }) => {
   const timer = useRef<number | null>(null);
   const stepRef = useRef(onStep);
   stepRef.current = onStep;
@@ -68,12 +71,14 @@ const HoldButton: React.FC<{ onStep: () => void; label: string; children: React.
   };
   useEffect(() => stop, []);
   return (
-    <button
-      type="button"
+    <IconButton
+      size="sm"
+      variant="secondary"
       tabIndex={-1}
-      className={ROUND_BTN}
+      className="touch-none"
       aria-label={label}
       title={label}
+      icon={<Icon name={icon} />}
       onPointerDown={(e) => {
         e.preventDefault();
         stop();
@@ -89,27 +94,22 @@ const HoldButton: React.FC<{ onStep: () => void; label: string; children: React.
       onPointerUp={stop}
       onPointerLeave={stop}
       onPointerCancel={stop}
-    >
-      {children}
-    </button>
+    />
   );
 };
 
-function formatValue(row: Row, nudge: CameraNudge, fovDeg: number): string {
+function formatValue(row: Row, nudge: CameraNudge, fovDeg: number, units: UnitSettings): string {
   if (row.key === "view") return "";
   const v = nudge[row.key];
   if (row.key === "fovDeg") return `${Math.round(fovDeg)}°`;
-  if (row.key === "tiltDeg") return v === 0 ? "0°" : `${v > 0 ? "+" : "−"}${Math.abs(v).toFixed(1)}°`;
-  const cm = Math.round(v * 100);
-  return cm === 0 ? "0 cm" : `${cm > 0 ? "+" : "−"}${Math.abs(cm)} cm`;
+  if (row.key === "tiltDeg") return v === 0 ? "0°" : `${v > 0 ? "+" : "\u2212"}${Math.abs(v).toFixed(1)}°`;
+  // Offsets are stored in metres; shown in cm, or inches with miles per hour
+  const unit = SMALL_LENGTH_LABEL[units.speed];
+  const shown = smallLengthIn(v * 100, units.speed);
+  const text = units.speed === "mph" ? Math.abs(shown).toFixed(1) : String(Math.abs(Math.round(shown)));
+  if (Number(text) === 0) return `0 ${unit}`;
+  return `${shown > 0 ? "+" : "\u2212"}${text} ${unit}`;
 }
-
-/** A key cap for the legend */
-const Key: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <span className="inline-flex h-[20px] min-w-[20px] items-center justify-center rounded-[6px] border border-white/25 bg-black/40 px-1.5 font-f1-mono text-[10px] font-extrabold text-[#F5F7FA]">
-    {children}
-  </span>
-);
 
 /**
  * The seat: moves the cockpit or dash view of the car being driven and sets its FOV, kept for that car. Held camera
@@ -118,7 +118,7 @@ const Key: React.FC<{ children: React.ReactNode }> = ({ children }) => (
  */
 export const SeatPanel: React.FC<SeatPanelProps> = (p) => {
   const [row, setRow] = useState(0);
-  const { mode, family } = useInputMode();
+  const units = useUnits();
   // The latest props for the key and pad handlers, which are attached once
   const latest = useRef(p);
   latest.current = p;
@@ -211,20 +211,24 @@ export const SeatPanel: React.FC<SeatPanelProps> = (p) => {
   }, []);
 
   const moved = Object.values(p.nudge).some((v) => v !== 0);
-  const pad = mode === "pad";
   const cameraKey = keyLabel(p.cameraKeys[0]);
 
   return (
     <div
-      className="pointer-events-none fixed inset-y-0 left-0 z-40 flex items-center p-3 sm:p-5"
+      className="pointer-events-none fixed inset-y-0 left-0 z-(--z-lc-overlay) flex items-center p-3 sm:p-5"
       role="dialog"
       aria-modal="false"
       aria-label={`Seat and camera, ${p.carTitle}`}
     >
-      <div className="pointer-events-auto flex w-[330px] max-w-[calc(100vw-24px)] flex-col gap-2.5 rounded-[24px] border border-white/10 bg-[#0A0B10]/55 p-3 text-[#F5F7FA] shadow-[0_20px_50px_rgba(0,0,0,0.35)] [text-shadow:0_1px_2px_rgba(0,0,0,0.6)]">
-        <div className="flex items-baseline justify-between gap-3 px-1">
-          <h2 className="lc-title text-[18px] leading-none">Seat &amp; camera</h2>
-          <span className="truncate font-f1-mono text-[10px] font-extrabold tracking-[0.1em] text-[#C9CFDB] uppercase">{p.carTitle}</span>
+      {/* The HUD's own glass (74 % void, blurred), as on every panel over the scene */}
+      <div
+        className={`pointer-events-auto flex max-h-full w-[340px] max-w-[calc(100vw-24px)] flex-col gap-2.5 overflow-y-auto overscroll-contain rounded-lc-card p-3.5 text-lc-chalk [text-shadow:0_1px_2px_rgba(0,0,0,0.6)] ${HUD_GLASS}`}
+      >
+        <div className="flex flex-col gap-0.5 px-1">
+          <h2 className="lc-h3">Seat and camera</h2>
+          <span className="lc-hint truncate text-lc-fog" title={p.carTitle}>
+            {p.carTitle}
+          </span>
         </div>
 
         <div className="flex flex-col gap-1">
@@ -235,15 +239,16 @@ export const SeatPanel: React.FC<SeatPanelProps> = (p) => {
               <div
                 key={r.key}
                 onPointerDown={() => setRow(i)}
-                className={`flex h-[42px] items-center gap-2 rounded-[14px] px-2 transition-colors ${
-                  active ? "bg-[#CCFF00]/[0.14] shadow-[inset_0_0_0_1px_rgba(204,255,0,0.55)]" : "bg-black/20"
-                }`}
+                data-cursor={active ? "" : undefined}
+                className={cx(
+                  "flex min-h-11 shrink-0 items-center gap-2 rounded-lc-row px-2 py-0.5",
+                  MOTION,
+                  active ? CURSOR_ROW : "bg-lc-void/30",
+                )}
               >
-                <span className={`w-[64px] font-f1-mono text-[11px] font-extrabold tracking-[0.12em] uppercase ${active ? "text-[#CCFF00]" : "text-[#C9CFDB]"}`}>
-                  {r.label}
-                </span>
+                <span className={`w-16 shrink-0 text-[13px] font-semibold ${active ? "text-lc-chalk" : "text-lc-fog"}`}>{r.label}</span>
                 {r.key === "view" ? (
-                  <div className="flex flex-1 gap-1" role="radiogroup" aria-label="View">
+                  <div className="flex flex-1 gap-1 rounded-full bg-lc-void/80 p-1 inset-ring inset-ring-lc-line" role="radiogroup" aria-label="View">
                     {NUDGE_VIEWS.map((v) => (
                       <button
                         key={v}
@@ -252,9 +257,11 @@ export const SeatPanel: React.FC<SeatPanelProps> = (p) => {
                         role="radio"
                         aria-checked={p.view === v}
                         onClick={() => p.onSetView(v)}
-                        className={`h-[30px] flex-1 cursor-pointer rounded-full font-f1-mono text-[11px] font-extrabold tracking-[0.1em] uppercase transition-colors ${
-                          p.view === v ? "bg-[#CCFF00] text-[#08090D] [text-shadow:none]" : "bg-black/30 text-[#C9CFDB] hover:text-[#F5F7FA]"
-                        }`}
+                        className={cx(
+                          "h-8 flex-1 cursor-pointer rounded-full text-[13px] font-semibold [text-shadow:none] pointer-coarse:h-9",
+                          MOTION,
+                          p.view === v ? CHOSEN_PILL : cx("text-lc-slate", HOVER_PILL),
+                        )}
                       >
                         {CAMERA_MODES[v].label}
                       </button>
@@ -262,18 +269,11 @@ export const SeatPanel: React.FC<SeatPanelProps> = (p) => {
                   </div>
                 ) : (
                   <>
-                    <HoldButton label={r.less} onStep={() => change(i, -1)}>
-                      −
-                    </HoldButton>
-                    <span
-                      className="flex-1 text-center font-f1-mono text-[15px] font-extrabold tabular-nums"
-                      style={{ color: zero ? "#C9CFDB" : "#CCFF00" }}
-                    >
-                      {formatValue(r, p.nudge, p.fovDeg)}
+                    <HoldButton label={r.less} icon="remove" onStep={() => change(i, -1)} />
+                    <span className={`lc-mono flex-1 text-center text-[15px] font-bold ${zero ? "text-lc-slate" : "text-lc-chalk"}`}>
+                      {formatValue(r, p.nudge, p.fovDeg, units)}
                     </span>
-                    <HoldButton label={r.more} onStep={() => change(i, 1)}>
-                      +
-                    </HoldButton>
+                    <HoldButton label={r.more} icon="add" onStep={() => change(i, 1)} />
                   </>
                 )}
               </div>
@@ -281,63 +281,26 @@ export const SeatPanel: React.FC<SeatPanelProps> = (p) => {
           })}
         </div>
 
-        <div className="flex gap-2">
-          <button
-            type="button"
-            tabIndex={-1}
-            disabled={!moved}
-            onClick={() => p.onStep(null)}
-            className="h-[36px] flex-1 cursor-pointer rounded-full bg-black/30 font-f1-mono text-[11px] font-extrabold tracking-[0.12em] text-[#C9CFDB] uppercase transition-colors hover:text-[#CCFF00] disabled:cursor-default disabled:opacity-40 disabled:hover:text-[#C9CFDB]"
-          >
+        <div className="flex gap-2 [text-shadow:none]">
+          <Button size="sm" variant="ghost" className="flex-1" tabIndex={-1} disabled={!moved} onClick={() => p.onStep(null)}>
             Reset view
-          </button>
-          <button
-            type="button"
-            tabIndex={-1}
-            onClick={p.onClose}
-            className="h-[36px] flex-1 cursor-pointer rounded-full bg-[#CCFF00] font-f1-mono text-[11px] font-extrabold tracking-[0.12em] text-[#08090D] uppercase [text-shadow:none]"
-          >
+          </Button>
+          <Button size="sm" variant="primary" className="flex-1" tabIndex={-1} onClick={p.onClose}>
             Done
-          </button>
+          </Button>
         </div>
 
-        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 px-1 font-f1-mono text-[10px] font-extrabold text-[#C9CFDB]">
-          {pad ? (
-            <>
-              <span className="flex items-center gap-1">
-                <PadGlyph button="dpad" family={family} /> row · change
-              </span>
-              <span className="flex items-center gap-1">
-                <PadGlyph button="a" family={family} /> reset row
-              </span>
-              <span className="flex items-center gap-1">
-                <PadGlyph button="x" family={family} /> reset view
-              </span>
-              <span className="flex items-center gap-1">
-                <PadGlyph button="b" family={family} /> done
-              </span>
-            </>
-          ) : (
-            <>
-              <span className="flex items-center gap-1">
-                <Key>↑↓</Key> row
-              </span>
-              <span className="flex items-center gap-1">
-                <Key>←→</Key> change
-              </span>
-              <span className="flex items-center gap-1">
-                <Key>Enter</Key> reset row
-              </span>
-              <span className="flex items-center gap-1">
-                <Key>R</Key> reset view
-              </span>
-              <span className="flex items-center gap-1">
-                <Key>Esc</Key> or <Key>{cameraKey}</Key> done
-              </span>
-            </>
-          )}
-        </div>
-        <p className="px-1 text-[11px] leading-snug text-[#C9CFDB]">Kept for this car. The car waits while this is open.</p>
+        <PromptBar
+          className="px-1 [text-shadow:none]"
+          prompts={[
+            { action: "move", label: "Row", key: "\u2191 \u2193", pad: "dpad-vertical" },
+            { action: "adjust", label: "Change" },
+            { action: "select", label: "Reset row" },
+            { action: "start", label: "Reset view", key: "R", pad: "x" },
+            { action: "back", label: "Done", key: `Esc / ${cameraKey}` },
+          ]}
+        />
+        <p className="lc-hint m-0 px-1 text-lc-fog short:hidden">Kept for this car. The car waits while this is open.</p>
       </div>
     </div>
   );

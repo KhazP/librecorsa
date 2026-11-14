@@ -1,7 +1,10 @@
 "use client";
 
 import React from "react";
-import { HUD_CYAN, HUD_GLASS, HUD_LBL, HUD_SLATE, HUD_YELLOW } from "./hud-format";
+import { Icon } from "@/components/ui/icons/Icon";
+import { SurfaceBadge, type TrackSurface } from "@/components/ui/badges/SurfaceBadge";
+import { useUnits } from "@/lib/settings/ui-prefs";
+import { formatSpeed, formatTemp, HUD_GLASS, HUD_LBL, speedUnit } from "./hud-format";
 
 /** What the HUD shows of the weather (LibreCorsaSimulator samples the session's WeatherState a few times a second) */
 export interface WeatherHudState {
@@ -23,12 +26,12 @@ export interface WeatherHudState {
   windDirection?: string;
 }
 
-/** Track surface word and colour from the water on the racing line */
-function surface(waterMm: number): { label: string; color: string } {
-  if (waterMm < 0.03) return { label: "Dry", color: "#F5F7FA" };
-  if (waterMm < 0.14) return { label: "Damp", color: HUD_YELLOW };
-  if (waterMm < 1.1) return { label: "Wet", color: "#00E676" };
-  return { label: "Flooded", color: "#2E7BFF" };
+/** Track surface from the water on the racing line (the kit's `SurfaceBadge` draws it) */
+function surface(waterMm: number): TrackSurface {
+  if (waterMm < 0.03) return "dry";
+  if (waterMm < 0.14) return "damp";
+  if (waterMm < 1.1) return "wet";
+  return "flooded";
 }
 
 const clock = (h: number) => {
@@ -39,34 +42,35 @@ const clock = (h: number) => {
 /** Small pill: air / track temperature, the track's state and rain */
 export const WeatherBadge: React.FC<{ weather: WeatherHudState; variant?: "pill" | "panel" }> = ({ weather, variant = "pill" }) => {
   const s = surface(weather.waterMm);
+  const units = useUnits();
   const shape =
     variant === "panel"
-      ? "flex w-full flex-wrap items-center gap-x-3 gap-y-1.5 rounded-[18px] px-3.5 py-2.5" // under the circuit map
+      ? "flex w-full flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lc-tile px-3.5 py-2.5" // under the circuit map
       : "inline-flex h-8 items-center gap-3 rounded-full py-1 pr-3.5 pl-3.5";
   return (
-    <div className={`${shape} ${HUD_GLASS}`} role="status" aria-label="Weather">
-      {weather.timeMoving ? <span className="lc-data text-[11px] tabular-nums text-[#F5F7FA]">{clock(weather.clockH)}</span> : null}
+    <div className={`${shape} ${HUD_GLASS}`} aria-label="Weather">
+      {weather.timeMoving ? <span className="lc-data text-[11px] text-lc-chalk">{clock(weather.clockH)}</span> : null}
       <span className="flex items-center gap-1.5">
         <span className={HUD_LBL}>Air</span>
-        <span className="lc-data text-[12px] tabular-nums text-[#F5F7FA]">{weather.airC.toFixed(0)}°</span>
+        <span className="lc-data text-[12px] text-lc-chalk">{formatTemp(weather.airC, units)}</span>
       </span>
       <span className="flex items-center gap-1.5">
         <span className={HUD_LBL}>Track</span>
-        <span className="lc-data text-[12px] tabular-nums text-[#F5F7FA]">{weather.trackC.toFixed(0)}°</span>
+        <span className="lc-data text-[12px] text-lc-chalk">{formatTemp(weather.trackC, units)}</span>
       </span>
-      <span aria-hidden className="h-4 w-px bg-[#262B3D]" />
-      <span className="lc-data text-[11px] tracking-[0.1em] uppercase" style={{ color: s.color }}>
-        {s.label}
-      </span>
+      <SurfaceBadge surface={s} size="sm" />
       {weather.rain > 0.05 ? (
-        <span className="lc-data text-[11px] tracking-[0.1em] uppercase" style={{ color: weather.rain > 0.5 ? HUD_CYAN : HUD_SLATE }}>
+        <span className={`inline-flex items-center gap-1 ${HUD_LBL} ${weather.rain > 0.5 ? "text-lc-info" : ""}`}>
+          <Icon name={weather.rain > 0.5 ? "weatherStorm" : "weatherRain"} size="xs" className="size-3" />
           {weather.rain > 0.5 ? "Heavy rain" : "Rain"}
         </span>
       ) : null}
       {weather.windSpeedMs !== undefined && weather.windSpeedMs >= 0.5 ? (
         <span className="flex items-center gap-1">
           <span className={HUD_LBL}>{weather.windDirection ?? "Wind"}</span>
-          <span className="lc-data text-[11px] tabular-nums text-[#C5CBD8]">{Math.round(weather.windSpeedMs * 3.6)} km/h</span>
+          <span className="lc-data text-[11px] text-lc-fog">
+            {formatSpeed(weather.windSpeedMs * 3.6, units)} {speedUnit(units)}
+          </span>
         </span>
       ) : null}
     </div>

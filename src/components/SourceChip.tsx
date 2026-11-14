@@ -3,11 +3,13 @@
 import React, { useEffect, useId, useRef, useState } from "react";
 import type { ModelSource } from "@/lib/model-source";
 import { TAKEDOWN_URL } from "@/lib/site";
+import { IconButton } from "@/components/ui/Button";
+import { Icon } from "@/components/ui/icons";
 
-const linkClass = "text-[#F5F7FA] underline decoration-[#4A5268] underline-offset-2 hover:decoration-[#F5F7FA]";
+const linkClass = "text-lc-chalk underline decoration-lc-keyline underline-offset-2 hover:decoration-lc-chalk";
 
 /**
- * A small "Source" button that opens where a car's or circuit's 3D model comes from: the model, its author, its
+ * A small round "Source" button (the kit's secondary `IconButton`) that opens where a car's or circuit's 3D model comes from: the model, its author, its
  * licence or permission, and a link to report a problem with it. It sits beside a card's own button, never inside it,
  * so pressing it doesn't pick the car or circuit.
  */
@@ -20,7 +22,6 @@ export const SourceChip: React.FC<{
 }> = ({ source, className = "relative inline-flex", panelClassName = "right-0 bottom-full mb-2 w-[min(264px,calc(100vw-32px))]" }) => {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLSpanElement | null>(null);
-  const chipRef = useRef<HTMLButtonElement | null>(null);
   const panelId = useId();
 
   // Closes on a press elsewhere or on Escape (which hands the focus back to the chip)
@@ -33,7 +34,7 @@ export const SourceChip: React.FC<{
       if (e.key !== "Escape") return;
       e.stopPropagation();
       setOpen(false);
-      chipRef.current?.focus();
+      rootRef.current?.querySelector<HTMLButtonElement>("button")?.focus();
     };
     document.addEventListener("pointerdown", onPointer);
     document.addEventListener("keydown", onKey, true);
@@ -45,26 +46,23 @@ export const SourceChip: React.FC<{
 
   return (
     <span ref={rootRef} className={className}>
-      <button
-        ref={chipRef}
-        type="button"
+      <IconButton
+        size="sm"
+        variant="secondary"
+        icon={<Icon name="source" />}
+        aria-label={`Source of ${source.title}`}
+        title="Source"
         aria-expanded={open}
         aria-controls={panelId}
         onClick={() => setOpen((o) => !o)}
-        className={`pointer-events-auto h-7 cursor-pointer rounded-full border px-2.5 text-[11px] font-semibold transition-colors duration-150 ease-out ${
-          open
-            ? "border-[#4A5268] bg-[#262B3D] text-[#F5F7FA]"
-            : "border-[#262B3D] bg-[#08090D]/80 text-[#C5CBD8] hover:border-[#4A5268] hover:text-[#F5F7FA]"
-        }`}
-      >
-        Source
-      </button>
+        className="pointer-events-auto"
+      />
       {open ? (
         <span
           id={panelId}
           role="group"
           aria-label={`Source of ${source.title}`}
-          className={`pointer-events-auto absolute z-30 flex flex-col gap-1.5 rounded-[14px] border border-[#262B3D] bg-[#11131A] p-3 text-left text-[12px] leading-snug font-normal text-[#C5CBD8] shadow-[0_12px_32px_rgba(0,0,0,0.55)] ${panelClassName}`}
+          className={`pointer-events-auto absolute z-30 flex flex-col gap-1.5 rounded-lc-tile border border-white/7 bg-lc-carbon p-3.5 text-left text-[13px] leading-snug font-normal text-lc-fog shadow-lc-pop ${panelClassName}`}
         >
           <span>
             &ldquo;
@@ -77,7 +75,7 @@ export const SourceChip: React.FC<{
                 {source.author}
               </a>
             ) : (
-              <span className="text-[#F5F7FA]">{source.author}</span>
+              <span className="text-lc-chalk">{source.author}</span>
             )}
           </span>
           <span>
@@ -89,12 +87,12 @@ export const SourceChip: React.FC<{
               source.license
             )}
           </span>
-          {source.note ? <span className="text-[#8E96AA]">{source.note}</span> : null}
+          {source.note ? <span className="text-lc-slate">{source.note}</span> : null}
           <a
             href={TAKEDOWN_URL}
             target="_blank"
             rel="noreferrer"
-            className="self-start text-[#8E96AA] underline decoration-[#4A5268] underline-offset-2 hover:text-[#F5F7FA]"
+            className="self-start text-lc-slate underline decoration-lc-keyline underline-offset-2 hover:text-lc-chalk"
           >
             Report a problem with it
           </a>

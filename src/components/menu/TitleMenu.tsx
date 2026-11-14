@@ -9,24 +9,33 @@ import { EngineersGarage } from "./EngineersGarage";
 import { MultiplayerPanel } from "@/components/hud/MultiplayerPanel";
 import { ChallengePanel, type ChallengePanelProps } from "@/components/menu/ChallengePanel";
 import { timeLeftLabel } from "@/lib/net/weekly-challenge";
-import { DisplayPanel } from "@/components/hud/DisplayPanel";
 import { LeaderboardPanel } from "@/components/hud/LeaderboardPanel";
 import { buildHudMap } from "@/components/hud/styles/hud-style-parts";
-import { ACTIVE_TRACK_ID, getActivePointToPoint, getActiveTimedLengthM, getTrackData, TURN_METADATA } from "@/lib/track-data";
+import { ACTIVE_TRACK_ID, getActivePointToPoint, getTrackData } from "@/lib/track-data";
 import { getTrackInfo, DEFAULT_TRACK_ID, TRACKS, type TrackInfo } from "@/lib/track-registry";
 import { SCENERY_CREDITS } from "@/lib/render/scenery-credits";
 import { isLikelyWheel, padDisplayName } from "@/lib/input/device-input";
 import { isTouchDevice } from "@/lib/input/touch-input";
-import type { HudPreset } from "@/lib/settings/player-settings";
+import type { HudPreset, SpeedUnit } from "@/lib/settings/player-settings";
+import { useUnits } from "@/lib/settings/ui-prefs";
+import { DISTANCE_LABEL, distanceIn } from "@/lib/settings/units";
 import { useGamepads, type PadState } from "./useMenuNav";
-import { focusInZone, focusOnHover, useFocusNav } from "./useFocusNav";
+import { focusInZone, focusZone, useFocusNav } from "./useFocusNav";
 import { useInputMode } from "./input-mode";
-import { KeyCap, PadGlyph, PromptBar, TrackQualityBadge } from "./menu-ui";
+import { Button, Sheet } from "@/components/ui";
+import { Badge } from "@/components/ui/Badge";
+import { Icon } from "@/components/ui/icons/Icon";
+import type { IconName } from "@/components/ui/icons/registry";
+import { KeyCap } from "@/components/ui/prompts/KeyCap";
+import { PadGlyph } from "@/components/ui/prompts/PadGlyph";
+import type { Prompt } from "@/components/ui/prompts/PromptBar";
+import { CarClassTag, TrackQualityBadge } from "./menu-content-ui";
+import { HeroAction, RailRow, RESET_ROW_PROMPT, ShellPrompts, usePanelReadingOrder, useRowResettable } from "./menu-shell";
 import { RequestPanel, type FeedbackContext } from "./RequestPanel";
 import { CircuitBrowser } from "./CircuitBrowser";
 import { CarBrowser } from "./CarBrowser";
 import { TrackOutline } from "./circuit-outline";
-import { ConditionsPanel, type ConditionsPanelProps } from "./ConditionsPanel";
+import { ConditionsPanel } from "./ConditionsPanel";
 import { RaceSetupPanel } from "./RaceSetupPanel";
 import { DEFAULT_RACE_SETUP, RACE_START_LABELS } from "@/lib/sim/race-setup";
 import { TIME_OF_DAY_LABELS, WEATHER_LABELS } from "@/lib/sim/weather";
@@ -35,29 +44,6 @@ import { AI_SKILL_DEFAULT, aiSkillLabel } from "@/lib/sim/ai-tuning";
 import { REPO_URL, SUPPORT_URL, TAKEDOWN_URL } from "@/lib/site";
 import { withBasePath } from "@/lib/base-path";
 import { EmbeddedBadge } from "./EmbeddedBadge";
-import {
-  CarFront,
-  CloudSun,
-  CodeXml,
-  Coffee,
-  ExternalLink,
-  Flag,
-  Gamepad2,
-  Info,
-  Keyboard,
-  MessageSquarePlus,
-  MonitorCog,
-  Newspaper,
-  ShieldCheck,
-  Play,
-  Route,
-  TabletSmartphone,
-  Timer,
-  Trophy,
-  Users,
-  Wrench,
-  type LucideIcon,
-} from "lucide-react";
 
 type TitlePanel = "race" | "circuit" | "car" | "conditions" | "garage" | "multiplayer" | "challenge" | "leaderboard" | "display" | "credits" | "request";
 
@@ -79,16 +65,13 @@ export interface TitleMenuProps extends PauseMenuProps {
   initialPanel?: TitlePanel | null;
   /** Active circuit id */
   trackId?: string;
-  /** Switches circuit (reloads the scene) */
   /** Switches circuit (reloads the scene); settles when the load fails or lands */
   onSelectTrack?: (id: string) => void | Promise<void>;
-  /** Weather, time of day and simulation realism */
-  conditionsPanel?: ConditionsPanelProps;
   /** This week's challenge (only with an online board) */
   challengePanel?: ChallengePanelProps;
 }
 
-const linkClass = "underline decoration-[#00E5FF]/40 underline-offset-2 text-[#00E5FF] hover:text-[#CCFF00]";
+const linkClass = "text-lc-chalk underline decoration-lc-keyline underline-offset-2 hover:decoration-lc-chalk";
 
 const ASSIST_LABELS: Record<PauseMenuProps["assistPreset"], string> = {
   pro: "No assists",
@@ -98,27 +81,27 @@ const ASSIST_LABELS: Record<PauseMenuProps["assistPreset"], string> = {
 
 const HUD_LABELS: Record<HudPreset, string> = {
   broadcast: "Broadcast",
-  dash: "Wheel Dash",
+  dash: "Wheel dash",
   telemetry: "Telemetry",
   classic: "Classic",
   minimal: "Minimal",
 };
 
-const km = (t: TrackInfo) => (t.lengthM / 1000).toFixed(2);
-
+/** A circuit's length in the player's units ("5.34 km") */
+const lengthOf = (t: TrackInfo, unit: SpeedUnit) => `${distanceIn(t.lengthM / 1000, unit).toFixed(2)} ${DISTANCE_LABEL[unit]}`;
 
 const CreditRow: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
-  <div className="flex flex-col gap-2 border-t border-[#262B3D] py-4">
-    <span className="lc-title text-[16px] text-[#F5F7FA]">{title}</span>
-    <p className="m-0 text-[14px] leading-relaxed text-[#C5CBD8]">{children}</p>
+  <div className="flex flex-col gap-1.5 border-t border-lc-line py-4">
+    <h3 className="lc-row-label m-0">{title}</h3>
+    <p className="lc-body m-0">{children}</p>
   </div>
 );
 
 const Credits: React.FC = () => (
-  <div className="flex flex-col gap-[18px]">
-    <p className="m-0 max-w-[760px] text-[18px] leading-snug font-semibold text-[#F5F7FA] sm:text-[22px]">
-      <span className="text-[#CCFF00]">LibreCorsa</span> is an open-source, multi-class browser racing simulator built for
-      everyone — featuring Formula prototypes, GT3 machinery, and an open circuit pipeline.
+  <div className="flex flex-col gap-4.5">
+    <p className="m-0 max-w-[760px] text-[18px] leading-snug font-semibold text-lc-chalk sm:text-[20px]">
+      LibreCorsa is an open-source browser racing sim with open-wheel prototypes, GT3 cars, road cars and an open
+      circuit pipeline.
     </p>
 
     <div className="grid grid-cols-[repeat(auto-fit,minmax(min(320px,100%),1fr))] gap-x-8">
@@ -269,37 +252,23 @@ const Credits: React.FC = () => (
       </div>
     </div>
 
-    <div className="flex flex-wrap items-center justify-between gap-4 rounded-[20px] border border-[#262B3D] bg-[#08090D]/60 px-4 py-3.5 sm:px-5 sm:py-4">
+    <div className="flex flex-wrap items-center justify-between gap-4 rounded-lc-tile border border-lc-line bg-lc-well px-4 py-3.5 sm:px-5 sm:py-4">
       <div className="flex max-w-[600px] min-w-0 flex-col gap-1">
-        <span className="lc-title text-[16px] text-[#F5F7FA]">Rights holders &amp; takedown</span>
-        <p className="m-0 text-[13px] leading-relaxed text-[#C5CBD8]">
+        <h3 className="lc-row-label m-0">Rights holders and takedown</h3>
+        <p className="lc-body m-0">
           If you made a model, texture, sound or other asset used here and it is uncredited, credited wrongly, under the
-          wrong license, or not meant to be in LibreCorsa, let us know — it will be fixed or removed, usually within 7 days.
+          wrong license, or not meant to be in LibreCorsa, tell me: I will fix it or take it down, usually within 7 days.
         </p>
       </div>
-      <a
-        href={TAKEDOWN_URL}
-        target="_blank"
-        rel="noopener noreferrer"
-        onPointerEnter={focusOnHover}
-        className="inline-flex h-11 shrink-0 items-center gap-2 rounded-full border border-[#00E5FF]/45 bg-[#00E5FF]/10 px-4 text-[14px] font-bold text-[#F5F7FA] no-underline outline-none transition-[background-color,border-color,box-shadow,color] duration-200 hover:border-[#CCFF00] hover:bg-[#CCFF00] hover:text-[#08090D] focus:border-[#CCFF00] focus:bg-[#CCFF00] focus:text-[#08090D] focus:shadow-[0_0_0_5px_rgba(204,255,0,0.12)]"
-      >
-        <span>Rights / takedown request</span>
-        <ExternalLink aria-hidden className="h-4 w-4 shrink-0" strokeWidth={2.2} />
-      </a>
+      <Button href={TAKEDOWN_URL} target="_blank" rel="noopener noreferrer" variant="secondary" size="md" icon={<Icon name="externalLink" />}>
+        Rights or takedown request
+      </Button>
     </div>
 
-    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#262B3D] pt-3.5">
-      <p className="m-0 max-w-[620px] text-[13px] leading-relaxed text-[#8E96AA]">
-        Built with Next.js, React, Three.js and Tailwind CSS. Source code licensed under MIT; 3D and audio assets are for
-        non-commercial educational use only.
-      </p>
-      <span className="flex gap-[3px]" aria-hidden>
-        <span className="h-[5px] w-[18px] rounded-full bg-[#CCFF00]" />
-        <span className="h-[5px] w-[18px] rounded-full bg-[#00E5FF]" />
-        <span className="h-[5px] w-[18px] rounded-full bg-[#FF2A3C]" />
-      </span>
-    </div>
+    <p className="lc-hint m-0 max-w-[620px] border-t border-lc-line pt-3.5">
+      Built with Next.js, React, Three.js and Tailwind CSS. Source code licensed under MIT; 3D and audio assets are for
+      non-commercial educational use only.
+    </p>
   </div>
 );
 
@@ -308,7 +277,7 @@ const Credits: React.FC = () => (
  * shared panels (also shown in the pause menu) switch their cards to the inset look of this sheet.
  */
 const PanelFrame: React.FC<{
-  /** A line under the heading where the panel is about one thing (the circuit a race or a leaderboard is on) */
+  /** A line under the heading where the panel is about one thing (the circuit a race is on) */
   subtitle?: string;
   title?: string;
   onClose: () => void;
@@ -316,31 +285,24 @@ const PanelFrame: React.FC<{
 }> = ({ subtitle, title, onClose, children }) => {
   const { mode, family } = useInputMode();
   return (
-    <div className="lc-title-frame lc-glass flex min-w-0 flex-col gap-[18px] rounded-[28px] p-5 text-[#F5F7FA] sm:px-7 sm:pt-6 sm:pb-[26px]">
+    <div className="lc-title-frame lc-glass flex min-w-0 flex-col gap-4.5 rounded-lc-sheet p-5 text-lc-chalk sm:px-7 sm:pt-6 sm:pb-6.5 phone:gap-3.5 phone:p-3.5">
       {title ? (
-        <div className="flex flex-wrap items-end justify-between gap-4">
+        <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
           <div className="flex min-w-0 flex-col gap-1.5">
-            <h2 className="lc-disp m-0 text-[34px] sm:text-[44px]">{title}</h2>
-            {subtitle ? <p className="m-0 truncate text-[14px] font-semibold text-[#C5CBD8]">{subtitle}</p> : null}
+            <h2 className="lc-h2 text-lc-chalk">{title}</h2>
+            {subtitle ? <p className="lc-body m-0 text-pretty">{subtitle}</p> : null}
           </div>
-          {/* A pointer / touch affordance: a controller steps back with Ⓑ, so the focus skips it */}
-          <button
-            type="button"
-            data-nav-skip
+          {/* A pointer / touch affordance: a controller steps back with B, so the cursor skips it */}
+          <Button
+            variant="ghost"
+            size="sm"
+            data-nav-skip=""
             onClick={onClose}
-            className={`inline-flex h-10 cursor-pointer items-center gap-2 rounded-full border border-[#262B3D] bg-[#08090D]/60 pr-3.5 pl-2 text-[13px] font-bold text-[#C5CBD8] transition-colors hover:border-[#3A4157] hover:text-[#F5F7FA] ${
-              mode === "pad" ? "" : "pointer-coarse:pl-3.5"
-            }`}
+            prompt={mode === "pad" ? <PadGlyph button="b" family={family} /> : <KeyCap>Esc</KeyCap>}
+            icon={mode === "pad" ? undefined : <Icon name="close" />}
           >
-            {mode === "pad" ? (
-              <PadGlyph button="b" family={family} />
-            ) : (
-              <span className="inline-flex pointer-coarse:hidden">
-                <KeyCap>ESC</KeyCap>
-              </span>
-            )}
             Close
-          </button>
+          </Button>
         </div>
       ) : null}
       {children}
@@ -352,7 +314,7 @@ interface MenuItem {
   id: string;
   label: string;
   detail: string;
-  icon: LucideIcon;
+  icon: IconName;
   run?: () => void;
   /** A link out instead of an action: opens in a new tab */
   href?: string;
@@ -363,220 +325,25 @@ interface MenuItem {
   short?: string;
 }
 
-/** Shared by every menu entry: the highlight follows the focus (controller, arrows, or the hovering mouse) */
-const ENTRY_FOCUS =
-  "group cursor-pointer border-0 text-left text-[#F5F7FA] outline-none transition-[background-color,box-shadow,color] duration-[220ms] ease-[cubic-bezier(.2,.8,.2,1)] focus:bg-[#CCFF00] focus:text-[#08090D] focus:shadow-[0_0_0_5px_rgba(204,255,0,0.12)] focus-visible:outline-none";
-const ENTRY_ICON = "shrink-0 text-[#8E96AA] group-focus:text-[#08090D]";
-const ENTRY_DETAIL = "truncate text-[#8E96AA] group-focus:font-semibold group-focus:text-[#08090D]/75";
-
-const Badge: React.FC<{ children: React.ReactNode; small?: boolean }> = ({ children, small }) => (
-  <span
-    className={`inline-flex shrink-0 items-center rounded-full bg-[#00E5FF] font-f1-mono font-extrabold tracking-[0.06em] text-[#08090D] uppercase not-italic group-focus:bg-[#08090D] group-focus:text-[#CCFF00] ${
-      small ? "h-5 px-[7px] text-[9px]" : "h-5 px-2 text-[10px]"
-    }`}
-  >
-    {children}
-  </span>
-);
-
-/** Drive, the screen's main action: the big volt card of the title screen */
-const DriveHero: React.FC<{ item: MenuItem; pad: boolean; family: "xbox" | "playstation" }> = ({ item, pad, family }) => (
-  <button
-    type="button"
-    data-rail-id={item.id}
-    data-nav-default=""
-    onPointerEnter={focusOnHover}
-    onClick={item.run}
-    className={`${ENTRY_FOCUS} relative flex min-h-[92px] w-full items-center gap-[18px] rounded-[28px] bg-[#CCFF00]/[0.06] py-3.5 pr-6 pl-4 shadow-[inset_0_0_0_1.5px_rgba(204,255,0,0.35)] hover:bg-[#CCFF00]/[0.1] focus:shadow-[0_0_0_6px_rgba(204,255,0,0.12),0_18px_48px_rgba(204,255,0,0.22)] compact:min-h-[76px] compact:gap-4 compact:rounded-[24px] compact:pr-5 short:min-h-[64px] phone:min-h-[56px] phone:gap-3 phone:rounded-[20px] phone:py-2 phone:pr-4 phone:pl-2.5`}
-  >
-    <span className="inline-flex h-[60px] w-[60px] shrink-0 items-center justify-center rounded-full bg-[#CCFF00] text-[#08090D] transition-colors group-focus:bg-[#08090D] group-focus:text-[#CCFF00] compact:h-12 compact:w-12 short:h-10 short:w-10 phone:h-9 phone:w-9">
-      <Play aria-hidden className="ml-0.5 h-6 w-6 compact:h-5 compact:w-5 phone:h-4 phone:w-4" fill="currentColor" strokeWidth={0} />
-    </span>
-    <span className="flex min-w-0 flex-1 flex-col gap-1 phone:gap-0.5">
-      <span className="lc-disp text-[50px] compact:text-[38px] short:text-[30px] phone:text-[24px]">{item.label}</span>
-      <span className={`${ENTRY_DETAIL} text-[15px] font-semibold compact:text-[14px] phone:text-[12px]`}>{item.detail}</span>
-    </span>
-    <span className={`hidden shrink-0 sm:inline-flex ${pad ? "" : "pointer-coarse:hidden!"}`}>
-      {pad ? (
-        <PadGlyph button="a" family={family} />
-      ) : (
-        <span className="inline-flex h-7 items-center rounded-full px-2.5 font-f1-mono text-[11px] font-extrabold tracking-[0.08em] text-[#CCFF00] shadow-[inset_0_0_0_1px_rgba(204,255,0,0.4)] group-focus:bg-[#08090D] group-focus:shadow-none">
-          ENTER
-        </span>
-      )}
-    </span>
-  </button>
-);
-
-/** Race AI / Multiplayer on the title screen */
-const MainEntry: React.FC<{ item: MenuItem }> = ({ item }) => {
-  const Icon = item.icon;
-  return (
-    <button
-      type="button"
-      data-rail-id={item.id}
-      onPointerEnter={focusOnHover}
-      onClick={item.run}
-      aria-expanded={item.panel ? false : undefined}
-      className={`${ENTRY_FOCUS} flex min-h-[64px] w-full items-center gap-4 rounded-[22px] bg-transparent py-2 pr-5 pl-[22px] hover:bg-white/[0.04] compact:min-h-[56px] short:min-h-[48px] phone:min-h-[46px] phone:gap-3 phone:rounded-[16px] phone:py-1 phone:pr-4 phone:pl-4`}
-    >
-      <Icon aria-hidden className={`${ENTRY_ICON} h-6 w-6 phone:h-5 phone:w-5`} strokeWidth={2} />
-      <span className="flex min-w-0 flex-col gap-0.5">
-        <span className="flex flex-wrap items-center gap-2.5">
-          <span className="lc-disp text-[30px] compact:text-[24px] phone:text-[18px]">{item.label}</span>
-          {item.badge ? <Badge>{item.badge}</Badge> : null}
-        </span>
-        <span className={`${ENTRY_DETAIL} text-[14px] phone:text-[12px]`}>{item.detail}</span>
-      </span>
-    </button>
-  );
-};
-
-/** The two-column setup grid of the title screen (circuit, garage, controls, display) */
-const GridEntry: React.FC<{ item: MenuItem }> = ({ item }) => {
-  const Icon = item.icon;
-  return (
-    <button
-      type="button"
-      data-rail-id={item.id}
-      onPointerEnter={focusOnHover}
-      onClick={item.run}
-      aria-expanded={item.panel ? false : undefined}
-      className={`${ENTRY_FOCUS} flex min-h-[56px] min-w-0 items-center gap-3 rounded-[18px] bg-transparent py-1.5 pr-3.5 pl-[22px] hover:bg-white/[0.04] compact:pl-4 phone:min-h-[46px] phone:rounded-[16px] phone:py-1`}
-    >
-      <Icon aria-hidden className={`${ENTRY_ICON} h-5 w-5`} strokeWidth={2} />
-      <span className="flex min-w-0 flex-col">
-        <span className="lc-title text-[18px] leading-[1.1] phone:text-[15px]">{item.label}</span>
-        <span className={`${ENTRY_DETAIL} text-[12px] phone:text-[11px]`}>{item.detail}</span>
-      </span>
-    </button>
-  );
-};
-
-/** A menu entry's element: a button, or a link out when the entry has an href */
-const EntryShell: React.FC<{ item: MenuItem; expanded?: boolean; className: string; children: React.ReactNode }> = ({
-  item,
-  expanded,
-  className,
-  children,
-}) =>
-  item.href ? (
-    <a
-      href={item.href}
-      target="_blank"
-      rel="noopener noreferrer"
-      data-rail-id={item.id}
-      onPointerEnter={focusOnHover}
-      className={`${className} no-underline`}
-    >
-      {children}
-    </a>
-  ) : (
-    <button
-      type="button"
-      data-rail-id={item.id}
-      onPointerEnter={focusOnHover}
-      onClick={item.run}
-      aria-expanded={item.panel ? expanded : undefined}
-      className={className}
-    >
-      {children}
-    </button>
-  );
-
-/** Lap times / Credits / Request / Coffee / GitHub: the quiet text links under the grid */
-const LinkEntry: React.FC<{ item: MenuItem }> = ({ item }) => {
-  const Icon = item.icon;
-  return (
-    <EntryShell
-      item={item}
-      expanded={false}
-      className={`${ENTRY_FOCUS} inline-flex min-h-[44px] items-center gap-2 rounded-full bg-transparent px-3 text-[14px] font-semibold text-[#C5CBD8] hover:bg-white/[0.04] hover:text-[#F5F7FA]`}
-    >
-      <Icon aria-hidden className={`${ENTRY_ICON} h-4 w-4`} strokeWidth={2} />
-      {item.label}
-      {item.href ? <ExternalLink aria-hidden className={`${ENTRY_ICON} h-3.5 w-3.5`} strokeWidth={2} /> : null}
-    </EntryShell>
-  );
-};
-
-/** The slim rail beside an open panel: the open entry keeps a cyan edge */
-const CompactEntry: React.FC<{ item: MenuItem; open: boolean; quiet?: boolean }> = ({ item, open, quiet }) => {
-  const Icon = item.icon;
-  if (item.primary) {
-    return (
-      <button
-        type="button"
-        data-rail-id={item.id}
-        data-nav-default=""
-        onPointerEnter={focusOnHover}
-        onClick={item.run}
-        className={`${ENTRY_FOCUS} mb-1.5 flex min-h-[54px] w-full items-center gap-3 rounded-[16px] bg-transparent px-3.5 hover:bg-white/[0.04]`}
-      >
-        <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#CCFF00] text-[#08090D] group-focus:bg-[#08090D] group-focus:text-[#CCFF00]">
-          <Play aria-hidden className="ml-px h-3.5 w-3.5" fill="currentColor" strokeWidth={0} />
-        </span>
-        <span className="lc-disp text-[26px]">{item.label}</span>
-      </button>
-    );
-  }
-  return (
-    <EntryShell
-      item={item}
-      expanded={open}
-      className={`${ENTRY_FOCUS} flex min-h-[44px] w-full items-center gap-3 rounded-[14px] px-3.5 ${
-        open ? "bg-[#00E5FF]/[0.08] shadow-[inset_0_0_0_1px_rgba(0,229,255,0.4)]" : "bg-transparent hover:bg-white/[0.04]"
-      }`}
-    >
-      <Icon
-        aria-hidden
-        className={`h-[18px] w-[18px] shrink-0 group-focus:text-[#08090D] ${open ? "text-[#00E5FF]" : "text-[#8E96AA]"}`}
-        strokeWidth={2}
-      />
-      <span
-        className={`lc-title min-w-0 flex-1 truncate text-[15px] tracking-[0.02em] ${quiet && !open ? "text-[#C5CBD8] group-focus:text-[#08090D]" : ""}`}
-      >
-        {item.short ?? item.label}
-      </span>
-      {item.badge ? <Badge small>{item.badge}</Badge> : null}
-      {item.href ? <ExternalLink aria-hidden className={`${ENTRY_ICON} h-3.5 w-3.5`} strokeWidth={2} /> : null}
-      {open ? (
-        <span aria-hidden className="h-2 w-2 shrink-0 rounded-full bg-[#00E5FF] shadow-[0_0_10px_#00E5FF] group-focus:hidden" />
-      ) : null}
-    </EntryShell>
-  );
-};
-
-/** Controller / wheel / keyboard status pill */
-const DevicePill: React.FC<{ pad: PadState | undefined; slim?: boolean }> = ({ pad, slim }) => {
+/** The input in use, as one quiet line: what drives the menus, and how to switch */
+const InputHint: React.FC<{ pad: PadState | undefined }> = ({ pad }) => {
   // A phone or tablet drives with the on-screen controls until a pad is plugged in
   const touch = !pad && isTouchDevice();
-  const kind = pad ? (isLikelyWheel(pad) ? "Wheel" : "Controller") : touch ? "Touch" : "Keyboard";
-  const name = pad ? padDisplayName(pad.id).slice(0, 40) : "Press any button on a controller or wheel";
-  if (slim) {
-    return (
-      <div className="inline-flex h-8 max-w-full min-w-0 items-center gap-2 rounded-full border border-[#262B3D] bg-[#11131A]/70 px-3.5 font-f1-mono text-[11px] font-bold tracking-[0.12em] text-[#C5CBD8] uppercase backdrop-blur">
-        <span className={`h-2 w-2 shrink-0 rounded-full ${pad ? "bg-[#CCFF00]" : "bg-[#8E96AA]"}`} />
-        <span className="truncate">
-          {kind}
-          <span className="hidden sm:inline"> · {name}</span>
-        </span>
-      </div>
-    );
-  }
-  const Icon = pad ? Gamepad2 : touch ? TabletSmartphone : Keyboard;
+  const wheel = pad ? isLikelyWheel(pad) : false;
+  const kind = pad ? (wheel ? "Wheel" : "Controller") : touch ? "Touch" : "Keyboard";
+  const icon: IconName = pad ? (wheel ? "wheel" : "controller") : touch ? "touch" : "keyboard";
+  const rest = pad ? padDisplayName(pad.id).slice(0, 40) : "press any button on a controller or wheel to use it";
   return (
-    <div className="inline-flex h-9 max-w-full min-w-0 items-center gap-2 rounded-full border border-[#262B3D] bg-[#11131A]/70 py-0 pr-3.5 pl-1.5 font-f1-mono text-[11px] font-bold tracking-[0.12em] text-[#C5CBD8] uppercase backdrop-blur">
-      <span
-        className={`inline-flex h-6 shrink-0 items-center gap-1.5 rounded-full px-2.5 font-extrabold ${
-          pad ? "bg-[#CCFF00] text-[#08090D]" : "bg-[#1B1F2B] text-[#F5F7FA]"
-        }`}
-      >
-        <Icon aria-hidden className="h-3.5 w-3.5" strokeWidth={2.4} />
-        {kind}
+    <p className="m-0 flex min-w-0 items-center gap-2 text-[13px] text-lc-slate">
+      <Icon name={icon} className="text-lc-fog" />
+      <span className="min-w-0 truncate">
+        <span className="font-semibold text-lc-fog">{kind}</span>
+        <span className="max-sm:hidden short:hidden">
+          {pad ? ": " : ", or "}
+          {rest}
+        </span>
       </span>
-      <span className="hidden truncate sm:inline short:hidden">{name}</span>
-    </div>
+    </p>
   );
 };
 
@@ -594,12 +361,16 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
   const [chosenPanel, setPanel] = useState<TitlePanel | null>(props.initialPanel ?? resume?.panel ?? null);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const panelRef = useRef<HTMLElement | null>(null);
-  const { mode, family } = useInputMode();
+  const { mode } = useInputMode();
+  const units = useUnits();
   // The circuit panel opened from the race setup's Event card: loading a circuit then returns to the race setup
   const fromRaceRef = useRef(false);
 
+  // Scrolled down a long panel, LB / RB or Ⓑ still lands on an entry the player can see
   const focusRail = (id: string) => {
-    rootRef.current?.querySelector<HTMLElement>(`[data-rail-id="${id}"]`)?.focus({ preventScroll: true });
+    const entry = rootRef.current?.querySelector<HTMLElement>(`[data-rail-id="${id}"]`);
+    entry?.focus({ preventScroll: true });
+    entry?.scrollIntoView({ block: "nearest", inline: "nearest" });
   };
 
   useEffect(() => {
@@ -653,15 +424,15 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
       id: "drive",
       label: "Drive",
       detail: firstRun ? "Quick setup, then out on track" : hillClimb ? "Timed runs, start to finish" : "Practice from the grid",
-      icon: Play,
+      icon: "drive" as const,
       run: onDrive,
       primary: true,
     },
     ...(hillClimb ? [] : [{
       id: "race",
       label: "Race AI",
-      detail: `${raceSetup.opponents} AI cars · ${raceSetup.laps} laps · ${aiSkillLabel(props.aiSkill ?? AI_SKILL_DEFAULT)} · ${RACE_START_LABELS[raceSetup.start].toLowerCase()} start`,
-      icon: Flag,
+      detail: `${raceSetup.opponents} AI ${raceSetup.opponents === 1 ? "car" : "cars"} · ${raceSetup.laps} ${raceSetup.laps === 1 ? "lap" : "laps"} · ${aiSkillLabel(props.aiSkill ?? AI_SKILL_DEFAULT)} · ${RACE_START_LABELS[raceSetup.start].toLowerCase()} start`,
+      icon: "race" as const,
       // The race is set up first; its panel has the start (without a setter there is nothing to set: straight to the lights)
       ...(props.onChangeRaceSetup ? { panel: "race" as const, run: () => openPanel("race") } : { run: onRaceAi }),
     } satisfies MenuItem]),
@@ -669,7 +440,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
       id: "multiplayer",
       label: "Multiplayer",
       detail: props.races ? "Open races · rooms with friends" : "Race friends peer-to-peer",
-      icon: Users,
+      icon: "multiplayer" as const,
       panel: "multiplayer",
       run: () => openPanel("multiplayer"),
       badge: props.races?.entry.state === "joined" ? "In the next race" : lobbyPlayers > 1 ? `${lobbyPlayers} in lobby` : undefined,
@@ -681,7 +452,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
             label: "Weekly challenge",
             short: "Challenge",
             detail: `${props.challengePanel.trackName} · ${props.challengePanel.carTitle} · ${timeLeftLabel(props.challengePanel.challenge.endsMs, Date.now())} left`,
-            icon: Trophy,
+            icon: "challenge" as const,
             panel: "challenge" as const,
             run: () => openPanel("challenge"),
           },
@@ -690,8 +461,8 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
     {
       id: "circuit",
       label: "Circuit",
-      detail: `${track.name} · ${km(track)} km`,
-      icon: Route,
+      detail: `${track.name} · ${lengthOf(track, units.speed)}`,
+      icon: "circuit" as const,
       panel: "circuit",
       run: () => openPanel("circuit"),
     },
@@ -699,7 +470,7 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
       id: "car",
       label: "Car",
       detail: carLocked ? `${vehicle.title} · fixed for this race` : vehicle.title,
-      icon: CarFront,
+      icon: "car" as const,
       panel: "car",
       run: () => openPanel("car"),
     },
@@ -709,44 +480,38 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
             id: "conditions",
             label: "Conditions",
             detail: `${WEATHER_LABELS[props.conditionsPanel.conditions.weather].label} · ${TIME_OF_DAY_LABELS[props.conditionsPanel.conditions.timeOfDay]}`,
-            icon: CloudSun,
+            icon: "conditions" as const,
             panel: "conditions" as const,
             run: () => openPanel("conditions"),
           },
         ]
       : []),
-    { id: "garage", label: "Garage", detail: "Setup, presets and livery", icon: Wrench, panel: "garage", run: () => openPanel("garage") },
+    { id: "garage", label: "Garage", detail: "Setup, presets and livery", icon: "garage" as const, panel: "garage", run: () => openPanel("garage") },
     ...(props.leaderboardPanel
-      ? [{ id: "leaderboard", label: "Lap times", detail: "Leaderboard and ghosts", icon: Timer, panel: "leaderboard" as const, run: () => openPanel("leaderboard") }]
-      : []),
-    ...(props.displayPanel
-      ? [{ id: "display", label: "Display", detail: "HUD, graphics, touch, VR", icon: MonitorCog, panel: "display" as const, run: () => openPanel("display") }]
+      ? [{ id: "leaderboard", label: "Lap times", detail: "Leaderboard and ghosts", icon: "lapTimes" as const, panel: "leaderboard" as const, run: () => openPanel("leaderboard") }]
       : []),
     {
-      id: "controls",
-      label: "Controls",
-      detail: "Keyboard, controller or wheel",
-      icon: Gamepad2,
-      // A screen of its own: coming back lands on this entry, with the panel that was open still open
-      run: () => {
-        resumeHere("controls", panel);
-        onControls();
-      },
+      id: "settings",
+      label: "Settings",
+      detail: "Controls, assists, display, sound",
+      icon: "settings" as const,
+      // A screen over this one: closing it lands back on this entry, with the panel that was open still open
+      run: () => (props.onOpenSettings ? props.onOpenSettings() : onControls()),
     },
-    { id: "credits", label: "Credits", detail: "Open-source sim · asset sources", icon: Info, panel: "credits", run: () => openPanel("credits") },
+    { id: "credits", label: "Credits", detail: "Open-source sim · asset sources", icon: "credits" as const, panel: "credits", run: () => openPanel("credits") },
     {
       id: "request",
       label: "Feedback & requests",
       short: "Feedback",
       detail: "Bugs, ideas, cars and tracks",
-      icon: MessageSquarePlus,
+      icon: "feedback" as const,
       panel: "request",
       run: () => openPanel("request"),
     },
-    { id: "press", label: "Press & media", detail: "Coverage and press kit", icon: Newspaper, href: withBasePath("/press") },
-    { id: "privacy", label: "Privacy", detail: "What the game keeps and sends", icon: ShieldCheck, href: withBasePath("/privacy") },
-    { id: "support", label: "Buy me a coffee", detail: "Support development", icon: Coffee, href: SUPPORT_URL },
-    { id: "github", label: "GitHub", detail: "Source code", icon: CodeXml, href: REPO_URL },
+    { id: "press", label: "Press & media", detail: "Coverage and press kit", icon: "press" as const, href: withBasePath("/press") },
+    { id: "privacy", label: "Privacy", detail: "What the game keeps and sends", icon: "privacy" as const, href: withBasePath("/privacy") },
+    { id: "support", label: "Buy me a coffee", detail: "Support development", icon: "support" as const, href: SUPPORT_URL },
+    { id: "github", label: "GitHub", detail: "Source code", icon: "source" as const, href: REPO_URL },
   ];
   const panelItems = items.filter((i) => i.panel);
   // Some panels exist only while their props do: when an open one's go away, back to the title screen (and it stays
@@ -774,7 +539,12 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
     if (!next?.panel) return;
     fromRaceRef.current = false;
     flushSync(() => setPanel(next.panel!));
-    focusRail(next.id);
+    const entry = rootRef.current?.querySelector<HTMLElement>(`[data-rail-id="${next.id}"]`);
+    // Below lg the slim rail is hidden: the cursor goes into the panel instead of nowhere
+    if (entry && entry.offsetParent === null) {
+      focusZone(rootRef.current, "panel");
+      panelRef.current?.scrollIntoView({ block: "start" });
+    } else focusRail(next.id);
   };
   // Menu / Start is the screen's main action: the race on the race setup, Drive on the title screen
   const raceOpen = panel === "race" && Boolean(props.onChangeRaceSetup);
@@ -783,7 +553,12 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
     onPrevTab: () => cycle(-1),
     onNextTab: () => cycle(1),
     onStart: raceOpen ? onRaceAi : panel ? undefined : onDrive,
+    // The Garage's rows have a reset each: Delete / X puts the row under the cursor back, and the prompt bar says so
+    rowReset: panel === "garage",
   });
+  const rowResettable = useRowResettable(panel === "garage");
+  // Up / down inside an open panel follow reading order and never fall out to the rail
+  usePanelReadingOrder(rootRef);
 
   const panelTitle = items.find((i) => i.panel === panel)?.label;
   // The heading speaks for itself; the race setup says which circuit it is on, under it (Lap times picks its own)
@@ -807,79 +582,101 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
       : "Unknown",
   };
 
+  // A rail entry for the title screen or the slim rail: the open panel's entry is chosen
+  const row = (item: MenuItem, size: "lg" | "md" | "sm", slim = false) => (
+    <RailRow
+      key={item.id}
+      id={item.id}
+      label={slim ? (item.short ?? item.label) : item.label}
+      detail={slim || size === "sm" ? undefined : item.detail}
+      icon={item.icon}
+      size={size}
+      tone={slim ? "slate" : "chalk"}
+      chosen={slim && item.panel === panel}
+      expanded={item.panel ? item.panel === panel : undefined}
+      href={item.href}
+      onClick={item.run}
+      badge={
+        item.badge ? (
+          <Badge tone="info" size="sm" className="group-focus:bg-lc-void group-focus:text-lc-volt">
+            {item.badge}
+          </Badge>
+        ) : undefined
+      }
+    />
+  );
+  const drive = items.find((i) => i.id === "drive")!;
+
+  const prompts: Prompt[] = [
+    { action: "move", label: "Move" },
+    { action: "select", label: "Select" },
+    ...(rowResettable ? [RESET_ROW_PROMPT] : []),
+    ...(panel ? [{ action: "back" as const, label: panelTitle ? `Close ${panelTitle}` : "Back" }] : []),
+    { action: "tabs", label: "Switch panel" },
+    // A controller's Menu button has no key: shown with a pad only
+    ...(mode === "pad" && (raceOpen || !panel) ? [{ action: "start" as const, label: raceOpen ? "Start race" : "Drive" }] : []),
+  ];
+  const phonePrompts = prompts.filter((p) => p.action !== "move" && p.action !== "tabs");
+
   return (
     <div
       ref={rootRef}
-      className={`lc-ui-zoom pointer-events-auto fixed inset-0 z-40 flex flex-col overflow-y-auto pl-[max(1.25rem,env(safe-area-inset-left))] pr-[max(1.25rem,env(safe-area-inset-right))] pb-[max(1.25rem,env(safe-area-inset-bottom))] sm:pl-[max(2.5rem,env(safe-area-inset-left))] sm:pr-[max(2.5rem,env(safe-area-inset-right))] ${
+      className={`lc-ui-zoom pointer-events-auto fixed inset-0 z-40 flex flex-col overflow-y-auto pr-[max(1.25rem,env(safe-area-inset-right))] pb-[max(1.25rem,env(safe-area-inset-bottom))] pl-[max(1.25rem,env(safe-area-inset-left))] sm:pr-[max(2.5rem,env(safe-area-inset-right))] sm:pl-[max(2.5rem,env(safe-area-inset-left))] ${
         panel
-          ? "bg-[linear-gradient(90deg,rgba(8,9,13,0.97)_0%,rgba(8,9,13,0.9)_60%,rgba(8,9,13,0.4)_85%)] pt-[max(1.75rem,env(safe-area-inset-top))] short:pt-[max(1rem,env(safe-area-inset-top))]"
-          : "bg-[linear-gradient(90deg,rgba(8,9,13,0.97)_0%,rgba(8,9,13,0.86)_30%,rgba(8,9,13,0.2)_58%,rgba(8,9,13,0)_70%)] pt-[max(clamp(1.5rem,3.6vh,2.5rem),env(safe-area-inset-top))] max-lg:bg-[#08090D]/80 short:pt-[max(1rem,env(safe-area-inset-top))]"
-      }`}
+          ? "bg-linear-to-r from-lc-void/97 via-lc-void/90 via-60% to-lc-void/40 pt-[max(1.75rem,env(safe-area-inset-top))] short:pt-[max(1rem,env(safe-area-inset-top))]"
+          : "bg-linear-to-r from-lc-void/97 via-lc-void/80 via-35% to-transparent to-70% pt-[max(clamp(1.5rem,3.6vh,2.5rem),env(safe-area-inset-top))] max-lg:bg-lc-void/80 max-lg:bg-none short:pt-[max(1rem,env(safe-area-inset-top))]"
+      } ${raceOpen ? "scroll-pb-24" : ""}`}
     >
-      <div className={`flex w-full flex-1 flex-col ${panel ? "gap-[22px]" : "gap-[clamp(20px,3vh,32px)]"} short:gap-4`}>
-        {/* Header */}
-        <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
-          {panel ? (
-            <>
-              <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2">
-                <LibreCorsaLogo variant="compact" size="sm" />
-                <EmbeddedBadge />
-              </div>
-              <DevicePill pad={pad} slim />
-            </>
-          ) : (
-            <>
-              <div className="flex min-w-0 flex-wrap items-center gap-x-[22px] gap-y-3">
-                <LibreCorsaLogo variant="compact" size="md" />
-                <EmbeddedBadge />
-              </div>
-              <div className="flex min-w-0 flex-wrap items-center gap-2.5">
-                <DevicePill pad={pad} />
-                {props.profile ? (
-                  props.displayPanel ? (
-                    <button
-                      type="button"
-                      aria-label="Edit driver profile"
-                      onClick={() => openPanel("display")}
-                      className="inline-flex h-9 cursor-pointer items-center gap-2.5 rounded-full border border-[#262B3D] bg-[#11131A]/70 py-0 pr-3.5 pl-2 text-[#F5F7FA] backdrop-blur transition-colors hover:border-[#3A4157]"
-                    >
-                      <span
-                        className="h-[22px] w-[22px] shrink-0 rounded-full shadow-[inset_0_0_0_2px_rgba(255,255,255,0.25)]"
-                        style={{ background: props.profile.color }}
-                      />
-                      <span className="font-f1-mono text-[12px] font-extrabold tracking-[0.12em]">{props.profile.code}</span>
-                      <span className="hidden max-w-[10rem] truncate text-[14px] font-semibold text-[#C5CBD8] sm:inline">
-                        {props.profile.name}
-                      </span>
-                    </button>
-                  ) : (
-                    <span className="inline-flex h-9 items-center gap-2.5 rounded-full border border-[#262B3D] bg-[#11131A]/70 py-0 pr-3.5 pl-2 backdrop-blur">
-                      <span className="h-[22px] w-[22px] shrink-0 rounded-full" style={{ background: props.profile.color }} />
-                      <span className="font-f1-mono text-[12px] font-extrabold tracking-[0.12em]">{props.profile.code}</span>
-                    </span>
-                  )
-                ) : null}
-              </div>
-            </>
-          )}
+      <div className={`flex w-full flex-1 flex-col ${panel ? "gap-5.5" : "gap-[clamp(20px,3vh,32px)]"} short:gap-4`}>
+        <header className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
+          <div className="flex min-w-0 flex-wrap items-center gap-x-5 gap-y-3">
+            <LibreCorsaLogo variant="compact" size={panel ? "sm" : "md"} />
+            <EmbeddedBadge />
+          </div>
+          <div className="flex min-w-0 flex-wrap items-center gap-x-5 gap-y-2">
+            <InputHint pad={pad} />
+            {panel || !props.profile ? null : props.displayPanel ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                // The name shown comes first, so saying it presses the button
+                aria-label={`${props.profile.name}, edit driver profile`}
+                onClick={() => props.onOpenSettings?.("profile")}
+                icon={
+                  <span
+                    className="size-4 rounded-full inset-ring-2 inset-ring-white/25"
+                    // The driver's own colour is data
+                    style={{ background: props.profile.color }}
+                  />
+                }
+              >
+                <span className="max-w-[10rem] truncate">{props.profile.name}</span>
+              </Button>
+            ) : (
+              <span className="inline-flex items-center gap-2 text-[14px] font-semibold text-lc-chalk">
+                <span
+                  aria-hidden
+                  className="size-4 rounded-full"
+                  // The driver's own colour is data
+                  style={{ background: props.profile.color }}
+                />
+                {props.profile.name}
+              </span>
+            )}
+          </div>
         </header>
 
         {panel ? (
           /* Panel view: slim rail + the panel's sheet */
-          <div className="grid flex-1 grid-cols-1 items-start gap-5 lg:grid-cols-[250px_minmax(0,1000px)] lg:gap-7">
+          <div className="grid flex-1 grid-cols-1 items-start gap-5 lg:grid-cols-[240px_minmax(0,1000px)] lg:gap-7">
             {/* Below lg the rail would stack 13 rows above the panel: the panel takes the screen, Close goes back */}
             <nav className="flex flex-col gap-0.5 max-lg:hidden" data-nav-zone="rail" aria-label="Main menu">
-              {byId(["drive", "race", "multiplayer", "challenge"]).map((item) => (
-                <CompactEntry key={item.id} item={item} open={item.panel === panel} />
-              ))}
-              <div aria-hidden className="mx-3.5 my-2 h-px bg-[#262B3D]" />
-              {byId(["circuit", "car", "conditions", "garage", "leaderboard", "display", "controls"]).map((item) => (
-                <CompactEntry key={item.id} item={item} open={item.panel === panel} />
-              ))}
-              <div aria-hidden className="mx-3.5 my-2 h-px bg-[#262B3D]" />
-              {byId(["credits", "request", "press", "privacy", "support", "github"]).map((item) => (
-                <CompactEntry key={item.id} item={item} open={item.panel === panel} quiet />
-              ))}
+              <HeroAction id={drive.id} label={drive.label} onClick={drive.run!} size="slim" />
+              {byId(["race", "multiplayer", "challenge"]).map((item) => row(item, "md", true))}
+              <div aria-hidden className="h-3" />
+              {byId(["circuit", "car", "conditions", "garage", "leaderboard", "settings"]).map((item) => row(item, "md", true))}
+              <div aria-hidden className="h-3" />
+              {byId(["credits", "request", "press", "privacy", "support", "github"]).map((item) => row(item, "md", true))}
             </nav>
 
             <section ref={panelRef} className="min-h-0 min-w-0 scroll-mt-4" data-nav-zone="panel" aria-label={panelTitle}>
@@ -925,7 +722,9 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
                       library={props.library}
                     />
                   ) : null}
-                  {panel === "conditions" && props.conditionsPanel ? <ConditionsPanel {...props.conditionsPanel} /> : null}
+                  {panel === "conditions" && props.conditionsPanel ? (
+                    <ConditionsPanel {...props.conditionsPanel} onOpenSettings={props.onOpenSettings} />
+                  ) : null}
                   {panel === "car" ? (
                     <CarBrowser
                       carId={props.carId}
@@ -944,7 +743,6 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
                   {panel === "multiplayer" ? <MultiplayerPanel {...props} /> : null}
                   {panel === "challenge" && props.challengePanel ? <ChallengePanel {...props.challengePanel} /> : null}
                   {panel === "leaderboard" && props.leaderboardPanel ? <LeaderboardPanel {...props.leaderboardPanel} /> : null}
-                  {panel === "display" && props.displayPanel ? <DisplayPanel {...props.displayPanel} /> : null}
                   {panel === "credits" ? <Credits /> : null}
                   {panel === "request" ? <RequestPanel context={feedbackContext} /> : null}
                 </PanelFrame>
@@ -952,88 +750,63 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
             </section>
           </div>
         ) : (
-          /* Title screen: the menu bottom-left, what Drive launches bottom-right */
-          <main className="flex flex-1 flex-wrap items-end justify-between gap-8 compact:items-start short:gap-5">
+          /* Title screen: the menu bottom-left, what Drive launches bottom-right (a div: the /play page's <main> holds it) */
+          <div className="flex flex-1 flex-wrap items-end justify-between gap-8 compact:items-start short:gap-5">
             {/* Landscape phones put the setup beside the actions instead of under them, so it all fits one screen */}
             <nav
-              className="flex w-full max-w-[460px] flex-col gap-1.5 xl:max-w-[520px] short:grid short:max-w-none short:grid-cols-2 short:items-start short:gap-x-5"
+              className="flex w-full max-w-[460px] flex-col gap-1 xl:max-w-[500px] short:grid short:max-w-none short:grid-cols-2 short:items-start short:gap-x-5"
               data-nav-zone="rail"
               aria-label="Main menu"
             >
-              <div className="flex flex-col gap-1.5 phone:gap-1">
-                {byId(["drive"]).map((item) => (
-                  <DriveHero key={item.id} item={item} pad={mode === "pad"} family={family} />
-                ))}
-                {byId(["race", "multiplayer", "challenge"]).map((item) => (
-                  <MainEntry key={item.id} item={item} />
-                ))}
+              <div className="flex flex-col gap-1 phone:gap-0.5">
+                <HeroAction id={drive.id} label={drive.label} detail={drive.detail} onClick={drive.run!} />
+                {byId(["race", "multiplayer", "challenge"]).map((item) => row(item, "lg"))}
               </div>
-              <div className="flex flex-col">
-                <div className="mt-[18px] mb-1 ml-[22px] flex items-center gap-2.5 compact:mt-3 short:mt-1 phone:ml-4">
-                  <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-[#CCFF00]" />
-                  <span className="lc-lbl">Setup</span>
-                </div>
+              <div className="flex flex-col gap-3 pt-4 compact:pt-2 short:pt-0">
                 <div className="grid grid-cols-1 gap-1 min-[360px]:grid-cols-2">
-                  {byId(["circuit", "car", "conditions", "garage", "controls", "display"]).map((item) => (
-                    <GridEntry key={item.id} item={item} />
-                  ))}
+                  {byId(["circuit", "car", "conditions", "garage", "leaderboard", "settings"]).map((item) => row(item, "md"))}
                 </div>
-                <div className="mt-3.5 ml-2.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 short:mt-2">
-                  {byId(["leaderboard", "credits", "request", "press", "privacy", "support", "github"]).map((item) => (
-                    <LinkEntry key={item.id} item={item} />
-                  ))}
+                <div className="flex flex-wrap items-center gap-x-0.5 gap-y-0.5 border-t border-lc-line pt-2.5 short:pt-1.5">
+                  {byId(["credits", "request", "press", "privacy", "support", "github"]).map((item) => row(item, "sm"))}
                 </div>
               </div>
             </nav>
 
-            <section
-              aria-label="Up next"
-              className="lc-glass lc-drift flex w-full max-w-[340px] flex-col gap-4 rounded-[26px] p-5 text-[#F5F7FA] short:hidden"
-            >
+            <Sheet role="region" aria-label="Up next" className="flex w-full max-w-[340px] flex-col gap-4 short:hidden">
               <div className="flex items-center gap-4">
-                {map ? <TrackOutline map={map} className="h-[92px] w-[112px] shrink-0" /> : null}
+                {map ? <TrackOutline map={map} thin className="h-[84px] w-[104px] shrink-0" /> : null}
                 <div className="flex min-w-0 flex-col gap-1">
-                  <div className="flex items-center">
-                    <TrackQualityBadge track={track} size="xs" />
+                  <h2 className="lc-h3 line-clamp-2 text-balance">{track.name}</h2>
+                  <p className="lc-hint m-0 line-clamp-2">{[track.layout, track.city].filter(Boolean).join(" · ")}</p>
+                  <p className="lc-hint m-0">
+                    <span className="lc-mono text-lc-fog">{lengthOf(track, units.speed)}</span>
+                    {" · "}
+                    <span className="lc-mono text-lc-fog">{track.turns}</span> turns
+                  </p>
+                  <div className="pt-1">
+                    <TrackQualityBadge track={track} size="sm" />
                   </div>
-                  <span className="lc-title text-[18px] leading-[1.05]">{track.name}</span>
-                  <span className="text-[13px] text-[#8E96AA]">
-                    {track.layout} · {track.city}
-                  </span>
-                  <span className="font-f1-mono text-[12px] font-bold text-[#C5CBD8]">
-                    {km(track)} KM · {track.turns} TURNS
-                  </span>
-                  <span className="font-f1-mono text-[10px] font-extrabold tracking-[0.12em] text-[#CCFF00] uppercase">
-                    {track.direction}
-                  </span>
                 </div>
               </div>
-              <div className="h-px bg-[#262B3D]" />
-              <dl className="m-0 grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-4 gap-y-2.5">
-                <>
-                  <dt className="lc-lbl">Car</dt>
-                  <dd className="m-0 flex min-w-0 items-center justify-end gap-2 text-[14px] font-semibold">
-                    <span
-                      className="shrink-0 rounded-full px-1.5 py-0.5 font-f1-mono text-[9px] font-extrabold text-[#08090D]"
-                      style={{ background: vehicleColor }}
-                    >
-                      {vehicle.badge}
-                    </span>
-                    <span className="truncate">{vehicle.title}</span>
-                  </dd>
-                </>
+              <dl className="m-0 grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-4 gap-y-2.5 border-t border-lc-line pt-3.5">
+                <dt className="lc-hint">Car</dt>
+                <dd className="m-0 flex min-w-0 items-center justify-end gap-2 text-[14px] font-semibold">
+                  <CarClassTag car={vehicle} size="sm" />
+                  <span className="line-clamp-2 text-right">{vehicle.title}</span>
+                </dd>
                 {livery ? (
                   <>
-                    <dt className="lc-lbl">Livery</dt>
+                    <dt className="lc-hint">Livery</dt>
                     <dd className="m-0 flex min-w-0 items-center justify-end gap-2 text-[14px] font-semibold">
                       {skin ? (
                         <>
                           <span
                             aria-hidden
                             className="h-3 w-7 shrink-0 rounded-full"
+                            // A livery's own swatch is data
                             style={{ background: `linear-gradient(135deg, ${skin.swatch[0]} 0 60%, ${skin.swatch[1]} 60% 100%)` }}
                           />
-                          <span className="truncate">{skin.name}</span>
+                          <span className="line-clamp-2 text-right">{skin.name}</span>
                         </>
                       ) : vehicle.modelUrl ? (
                         <span className="truncate">Factory</span>
@@ -1043,50 +816,35 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
                             aria-hidden
                             className="h-3 w-7 shrink-0 rounded-full"
                             style={{
+                              // A livery's own colours are data
                               background: `linear-gradient(135deg, ${livery.primary} 0 50%, ${livery.secondary} 50% 62%, ${livery.accent} 62% 100%)`,
                             }}
                           />
-                          <span className="truncate">{livery.name}</span>
+                          <span className="line-clamp-2 text-right">{livery.name}</span>
                         </>
                       )}
                     </dd>
                   </>
                 ) : null}
-                <dt className="lc-lbl">Assists</dt>
-                <dd className="m-0 truncate text-right text-[14px] font-semibold">
+                <dt className="lc-hint">Assists</dt>
+                <dd className="m-0 line-clamp-2 text-right text-[14px] font-semibold">
                   {ASSIST_LABELS[props.assistPreset] ?? props.assistPreset}
-                  {props.showRacingLine ? " · racing line" : ""}
+                  {props.showRacingLine ? ", racing line" : ""}
                 </dd>
                 {hudPreset ? (
                   <>
-                    <dt className="lc-lbl">HUD</dt>
-                    <dd className="m-0 truncate text-right text-[14px] font-semibold">{HUD_LABELS[hudPreset] ?? hudPreset}</dd>
+                    <dt className="lc-hint">HUD</dt>
+                    <dd className="m-0 line-clamp-2 text-right text-[14px] font-semibold">{HUD_LABELS[hudPreset] ?? hudPreset}</dd>
                   </>
                 ) : null}
               </dl>
-            </section>
-          </main>
+            </Sheet>
+          </div>
         )}
 
-        {/* Prompts */}
-        <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-[#262B3D]/70 pt-3">
-          <PromptBar
-            prompts={[
-              { action: "move", label: "Move" },
-              { action: "select", label: "Select" },
-              ...(panel ? [{ action: "back" as const, label: panelTitle ? `Close ${panelTitle}` : "Back" }] : []),
-              { action: "tabs", label: "Switch panel" },
-              // A controller's Menu button has no key: shown with a pad only
-              ...(mode === "pad" && (raceOpen || !panel) ? [{ action: "start" as const, label: raceOpen ? "Start race" : "Drive" }] : []),
-            ]}
-          />
-          {/* The circuit's numbers are on the title screen's own cards; a panel already says what it is about */}
-          {panel ? null : (
-            <span className="font-f1-mono text-[11px] font-bold tracking-[0.12em] text-[#8E96AA]">
-              {(getActiveTimedLengthM() / 1000).toFixed(2)} KM · {TURN_METADATA.length} TURNS
-              <span className="hidden text-[#CCFF00]/80 xl:inline"> · 500 HZ VEHICLE DYNAMICS</span>
-            </span>
-          )}
+        {/* Touch screens have no keys to show: the footer comes back with a pad */}
+        <footer className={`flex items-center justify-between gap-3 border-t border-lc-line pt-3 ${mode === "pad" ? "" : "pointer-coarse:hidden"}`}>
+          <ShellPrompts prompts={prompts} phonePrompts={phonePrompts} />
         </footer>
       </div>
     </div>

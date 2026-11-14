@@ -10,34 +10,35 @@ import { connectedPads } from "@/lib/input/device-input";
  * `<html data-input="…">` for the focus styles.
  */
 export type InputMode = "keyboard" | "pointer" | "pad";
-/** Face-button labels to show: Xbox (A B X Y) or PlayStation (✕ ○ □ △) */
-export type PadFamily = "xbox" | "playstation";
+/**
+ * The pad's button names to show: Xbox (A B X Y), PlayStation (cross, circle, square, triangle) or a generic pad (any
+ * other standard-mapping controller), whose face buttons go by position and are named A B X Y like an Xbox pad's
+ */
+export type PadFamily = "xbox" | "playstation" | "generic";
 
-/** Standard-mapping face buttons 0..3 as printed on each pad family (A B X Y / ✕ ○ □ △), with their colours */
-export const FACE_BUTTONS: Record<PadFamily, readonly { label: string; color: string }[]> = {
-  xbox: [
-    { label: "A", color: "#5DC21E" },
-    { label: "B", color: "#E5413A" },
-    { label: "X", color: "#2F8BE5" },
-    { label: "Y", color: "#F4C21B" },
-  ],
-  playstation: [
-    { label: "✕", color: "#7EA6E6" },
-    { label: "○", color: "#EE6A6A" },
-    { label: "□", color: "#D78DD6" },
-    { label: "△", color: "#45C9A6" },
-  ],
-};
-
-/** Standard-mapping buttons 0..11 as printed on each pad family */
+/** Standard-mapping buttons 0..11 as named on each pad family (words, never shape characters) */
 export const PAD_BUTTON_NAMES: Record<PadFamily, Record<number, string>> = {
   xbox: { 0: "A", 1: "B", 2: "X", 3: "Y", 4: "LB", 5: "RB", 6: "LT", 7: "RT", 8: "View", 9: "Menu", 10: "LS", 11: "RS" },
-  playstation: { 0: "✕", 1: "○", 2: "□", 3: "△", 4: "L1", 5: "R1", 6: "L2", 7: "R2", 8: "Create", 9: "Options", 10: "L3", 11: "R3" },
+  playstation: {
+    0: "Cross",
+    1: "Circle",
+    2: "Square",
+    3: "Triangle",
+    4: "L1",
+    5: "R1",
+    6: "L2",
+    7: "R2",
+    8: "Create",
+    9: "Options",
+    10: "L3",
+    11: "R3",
+  },
+  generic: { 0: "A", 1: "B", 2: "X", 3: "Y", 4: "LB", 5: "RB", 6: "LT", 7: "RT", 8: "Select", 9: "Start", 10: "LS", 11: "RS" },
 };
 
-/** A standard-mapping button's name on this pad family ("—" when unbound) */
+/** A standard-mapping button's name on this pad family ("None" when unbound) */
 export const padButtonName = (button: number | null | undefined, family: PadFamily): string =>
-  button === null || button === undefined ? "—" : (PAD_BUTTON_NAMES[family][button] ?? padButtonLabel(button));
+  button === null || button === undefined ? "None" : (PAD_BUTTON_NAMES[family][button] ?? padButtonLabel(button));
 
 let mode: InputMode = "pointer";
 let family: PadFamily = "xbox";
@@ -63,7 +64,8 @@ export function padFamilyOf(id: string): PadFamily {
   // Chrome names the Xbox pad "Xbox Wireless Controller (… Vendor: 045e …)": check Microsoft first, since
   // "wireless controller" alone also matches Sony's "Wireless Controller" / "DualSense Wireless Controller"
   if (/045e|xbox|xinput/i.test(id)) return "xbox";
-  return /054c|playstation|dualsense|dualshock|wireless controller/i.test(id) ? "playstation" : "xbox";
+  if (/054c|playstation|dualsense|dualshock|wireless controller/i.test(id)) return "playstation";
+  return "generic";
 }
 
 export function currentInputMode(): InputMode {

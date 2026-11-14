@@ -1,26 +1,49 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { flushSync } from "react-dom";
-import { ChevronLeft, LayoutGrid, X } from "lucide-react";
 import type { AeroSetupPreset, LiveTunerPatch, LiveTunerState, TireCompound } from "@/types/f1";
 import { DEFAULT_CHASSIS_SETUP, loadGaragePresets, saveGaragePresets, type GaragePreset, type GarageTuner } from "@/lib/sim/car-setup";
-import { setupSheet, type SetupEffect, type SetupGroup, type SetupParam, type SetupState } from "@/lib/sim/setup-sheet";
-import { COMPOUNDS, PanelSection, type PauseMenuProps } from "@/components/hud/PauseMenu";
+import { setupSheet, type SetupGroup, type SetupParam, type SetupState } from "@/lib/sim/setup-sheet";
+import type { PauseMenuProps } from "@/components/hud/PauseMenu";
+import { Button, Card, IconButton, Segmented, SettingRow, Slider, Tabs, TextField, Toast } from "@/components/ui";
+import { StatusDot } from "@/components/ui/Badge";
+import { CompoundGlyph } from "@/components/ui/badges/CompoundBadge";
+import { COMPOUND_ORDER, COMPOUNDS } from "@/components/ui/badges/compounds";
+import { Icon } from "@/components/ui/icons";
+import { PadGlyph } from "@/components/ui/prompts";
 import { TYRE_SETUP_LIMITS } from "@/lib/sim/tyre-setup";
+import { useUnits } from "@/lib/settings/ui-prefs";
+import { PRESSURE_LABEL, pressureDecimals, pressureIn } from "@/lib/settings/units";
 import { CarPhysicsSwitch } from "./CarPicker";
 import { CarBrowser } from "./CarBrowser";
-import { CarQualityBadge, CarSkinPicker, CHOSEN_PILL, Chip, CURSOR_PILL, LiveryPicker, PadGlyph, Segmented } from "./menu-ui";
+import { CarClassTag, CarQualityBadge, CarSkinPicker, LiveryPicker } from "./menu-content-ui";
 import { currentInputMode, useInputMode } from "./input-mode";
-import { focusOnHover } from "./useFocusNav";
+import { focusables, useMoveHandler } from "./useFocusNav";
 import { carTakesPhysicsSwitch } from "@/lib/cars/f1-mod-physics";
 import { TyreBrakeGrid } from "@/components/hud/TyreBrakeWidget";
 import { LIVERIES } from "@/lib/track-data";
+import { FACTORY_LIVERY_NOTE, carById, carClass, carTakesLivery } from "@/lib/cars/car-registry";
+import { vehicleModelSpec } from "@/lib/cars/vehicle-models";
+
+/** Short tab names for the pages whose full name would push the strip onto a second row */
+const TAB_NAME: Record<string, string> = {
+  Aerodynamics: "Aero",
+  "Suspension geometry": "Geometry",
+  "Mechanical grip": "Mechanical",
+};
+
+/** The `phone:` variant's query: phones either way up */
+const PHONE_QUERY = "(max-width: 40rem), (max-height: 32rem)";
+const subscribePhone = (cb: () => void) => {
+  const mq = window.matchMedia(PHONE_QUERY);
+  mq.addEventListener("change", cb);
+  return () => mq.removeEventListener("change", cb);
+};
+const isPhone = () => window.matchMedia(PHONE_QUERY).matches;
 
 const TIRE_COMPOUNDS: readonly TireCompound[] = ["soft", "medium", "hard", "intermediate", "wet"];
 const AERO_PRESETS: readonly AeroSetupPreset[] = ["low_downforce", "balanced", "high_downforce"];
-import { CARS, FACTORY_LIVERY_NOTE, carById, carClassYear, carTakesLivery } from "@/lib/cars/car-registry";
-import { vehicleModelSpec } from "@/lib/cars/vehicle-models";
 
 const FALLBACK_TUNER: Pick<
   LiveTunerState,
@@ -30,126 +53,86 @@ const FALLBACK_TUNER: Pick<
 /** Changed from the car's baseline (the electronics have no fixed baseline: each car and assist level brings its own) */
 const isChanged = (q: SetupParam, st: SetupState) => q.writes !== "tuner" && Math.abs(q.get(st) - q.base) > 1e-6;
 
-/** The garage's segmented rows run a little tighter than the menus' */
-const GARAGE_SEGMENTED = "[&>button]:min-h-[38px] [&>button]:px-2 [&>button]:text-[13px]";
+/** The electronics' dials, named as on the MFD (the sheet's own labels name them differently) */
+const DIAL_NAMES: Record<string, string> = {
+  tcLevel: "Traction control (TC1)",
+  tc2Level: "TC cut (TC2)",
+  absLevel: "ABS",
+  brakeBiasPct: "Brake bias",
+  diffEntry: "Diff entry",
+  diffExit: "Diff exit",
+  engineMap: "Engine map",
+};
+
+/** Words for the assist preset, as Settings > Driving names them */
+const ASSIST_WORDS: Record<string, string> = { pro: "Off", semi_pro: "TC + ABS", assisted: "Full" };
+
+/** Effect texts without a leading arrow glyph (the sheet writes some with one) */
+const plain = (t: string) => t.replace(/^[\u25B2\u25BC\u25B4\u25BE]\s*/, "");
+
+/** Pressures are kept in psi (the sheet's grid); the read-out is in the player's unit */
+const PSI_PER_BAR = pressureIn(1, "psi");
+const PRESSURE_IDS = new Set(["psiFL", "psiFR", "psiRL", "psiRR"]);
 
 /**
- * One setup row: label, readout, slider with the baseline marked, and a plain-English line on what the current
- * direction does (the full both-ways text sits in the info tooltip).
+ * One setup row: the label, a hint, the slider with the baseline ticked. The hint says what the way the slider has
+ * moved does; with the cursor on the row it says both ways. A changed row shows the dot and resets (Delete / pad X).
  */
 const SetupRow: React.FC<{
-  label: string;
+  q: SetupParam;
   value: number;
-  min: number;
-  max: number;
-  step: number;
-  base?: number;
+  disabled: boolean;
   format: (v: number) => string;
-  fx?: SetupEffect;
-  /** The effect text's "more" is the slider's left side (e.g. more negative camber) */
-  invert?: boolean;
-  disabled?: boolean;
   onChange: (v: number) => void;
-}> = ({ label, value, min, max, step, base, format, fx, invert = false, disabled = false, onChange }) => {
-  const pct = ((value - min) / (max - min || 1)) * 100;
-  const basePct = base === undefined ? null : ((base - min) / (max - min || 1)) * 100;
+}> = ({ q, value, disabled, format, onChange }) => {
+  const tuner = q.writes === "tuner";
+  const base = tuner ? undefined : q.base;
   // Without a baseline (the electronics' dials), the text follows the way the slider last moved
   const [moved, setMoved] = useState(0);
-  const dir = (base === undefined ? moved : Math.sign(value - base)) * (invert ? -1 : 1);
-  const text = fx ? (dir > 0 ? fx.more : dir < 0 ? fx.less : base === undefined ? `▲ ${fx.more}` : "Baseline.") : null;
+  const [near, setNear] = useState(false);
+  const invert = q.invert ? -1 : 1;
+  const dir = (base === undefined ? moved : Math.sign(value - base)) * invert;
+  const right = invert > 0 ? q.fx.more : q.fx.less;
+  const left = invert > 0 ? q.fx.less : q.fx.more;
+  const hint = near ? `Right: ${plain(right)}. Left: ${plain(left)}.` : dir > 0 ? plain(q.fx.more) : dir < 0 ? plain(q.fx.less) : undefined;
+  const changed = !tuner && Math.abs(value - q.base) > 1e-6;
   const change = (v: number) => {
     if (v !== value) setMoved(Math.sign(v - value));
     onChange(v);
   };
   return (
-    <label className={`group/row flex flex-col gap-2 rounded-[14px] px-2 py-2 hover:bg-white/[0.04] ${disabled ? "opacity-45" : ""}`}>
-      <span className="flex items-center justify-between gap-3">
-        <span className="flex min-w-0 items-center gap-1.5">
-          <span className="min-w-0 text-[14px] leading-tight font-bold text-[#F5F7FA]">{label}</span>
-          {fx ? (
-            <span aria-hidden className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-[#3A4157] font-f1-mono text-[9px] font-extrabold text-[#8E96AA]">
-              i
-            </span>
-          ) : null}
-        </span>
-        <span className="shrink-0 font-f1-mono text-sm font-extrabold whitespace-nowrap text-[#F5F7FA] tabular-nums">{format(value)}</span>
-      </span>
-      <span className="relative">
-        <input
-          type="range"
-          min={min}
-          max={max}
-          step={step}
-          value={value}
-          disabled={disabled}
-          onChange={(e) => change(Number((Math.round(Number(e.target.value) / step) * step).toFixed(3)))}
-          onDoubleClick={() => (base !== undefined ? change(base) : undefined)}
-          className="lc-range w-full"
-          style={{ "--lc-fill": `${pct}%` } as React.CSSProperties}
-        />
-        {basePct !== null ? (
-          <span aria-hidden className="pointer-events-none absolute top-1/2 h-3 w-0.5 -translate-y-1/2 rounded-full bg-[#F5F7FA]/40" style={{ left: `${basePct}%` }} />
-        ) : null}
-      </span>
-      {text ? <span className={`text-[12px] leading-[1.4] ${dir === 0 ? "text-[#8E96AA]" : "text-[#C5CBD8]"}`}>{text}</span> : null}
-      {/* Both ways, where a controller or keyboard can read it too: shown while the row is pointed at or focused */}
-      {fx ? (
-        <span className="hidden flex-col gap-0.5 rounded-[10px] bg-[#08090D]/70 px-2.5 py-2 text-[12px] leading-[1.4] text-[#C5CBD8] group-focus-within/row:flex group-hover/row:flex">
-          <span>
-            <span className="font-bold text-[#F5F7FA]">{invert ? "Left" : "Right"}:</span> {fx.more.replace(/^▲\s*/, "")}
-          </span>
-          <span>
-            <span className="font-bold text-[#F5F7FA]">{invert ? "Right" : "Left"}:</span> {fx.less.replace(/^▼\s*/, "")}
-          </span>
-        </span>
-      ) : null}
-    </label>
+    <div
+      onFocus={() => setNear(true)}
+      onBlur={() => setNear(false)}
+      onPointerEnter={() => setNear(true)}
+      onPointerLeave={(e) => {
+        if (!e.currentTarget.contains(document.activeElement)) setNear(false);
+      }}
+    >
+      <SettingRow
+        label={DIAL_NAMES[q.id] ?? q.label}
+        hint={hint}
+        disabled={disabled}
+        changed={changed}
+        onReset={changed ? () => change(q.base) : undefined}
+        resetLabel={`Reset ${(DIAL_NAMES[q.id] ?? q.label).toLowerCase()} to the baseline, ${format(q.base)}`}
+      >
+        <Slider value={value} min={q.min} max={q.max} step={q.step} defaultValue={base} format={format} onChange={change} />
+      </SettingRow>
+    </div>
   );
 };
 
-const GarageCard: React.FC<{ title: string; color?: string; children: React.ReactNode; aside?: React.ReactNode }> = ({ title, color, children, aside }) => (
-  <div className="flex min-w-0 flex-col gap-2 rounded-[20px] border border-[#262B3D] bg-[#08090D]/55 p-4">
-    <div className="flex items-center justify-between gap-3">
-      <PanelSection color={color}>{title}</PanelSection>
-      {aside}
-    </div>
-    {children}
-  </div>
-);
-
-const SmallButton: React.FC<{ onClick: () => void; children: React.ReactNode; tone?: "volt" | "plain" | "danger"; disabled?: boolean; title?: string }> = ({
-  onClick,
-  children,
-  tone = "plain",
-  disabled,
-  title,
-}) => (
-  <button
-    type="button"
-    onClick={onClick}
-    disabled={disabled}
-    title={title}
-    onPointerEnter={focusOnHover}
-    className={`inline-flex h-9 shrink-0 cursor-pointer items-center rounded-full px-3.5 font-f1-mono text-[11px] font-extrabold tracking-[0.12em] uppercase transition-[background-color,border-color,box-shadow,color] duration-200 disabled:cursor-not-allowed disabled:opacity-40 ${CURSOR_PILL} focus:border-transparent ${
-      tone === "volt"
-        ? "border border-[#F5F7FA]/40 text-[#F5F7FA] hover:border-[#F5F7FA]"
-        : tone === "danger"
-          ? "border border-[#262B3D] text-[#8E96AA] hover:border-[#FF2A3C] hover:text-[#FF2A3C]"
-          : "border border-[#262B3D] text-[#C5CBD8] hover:border-[#3A4157] hover:text-[#F5F7FA]"
-    }`}
-  >
-    {children}
-  </button>
-);
-
 /**
- * Engineer's Garage: the car's setup sheet (one layout for the F1 cars, another for the GT3s, shared by every car
- * of the class), and named presets saved per car. Opened from the title screen's Garage and from Pause → Car setup.
+ * The Garage: the car's setup sheet (one layout for the open-wheelers, another for the GT3s, shared by every car of
+ * the class), and named setups saved per car. Opened from the title menu's Garage and from the pause menu's Garage.
  */
 export const EngineersGarage: React.FC<
   PauseMenuProps & {
     /** Change car opens this instead of the garage's own car browser (the title menu's Car panel) */
     onOpenCarBrowser?: () => void;
+    /** Opens Settings at a category (the assists live in Settings > Driving) */
+    onOpenSettings?: (category: "driving") => void;
   }
 > = (p) => {
   const sheet = useMemo(() => setupSheet(p.vehicleModel, TYRE_SETUP_LIMITS[p.vehicleModel], p.defaultTyreSetup), [p.vehicleModel, p.defaultTyreSetup]);
@@ -306,68 +289,79 @@ export const EngineersGarage: React.FC<
   const groupChanged = changedIn(group);
   const live = Boolean(group.extras?.includes("liveTyres"));
 
+  const units = useUnits();
+  const tabsRef = useRef<HTMLDivElement | null>(null);
+  const pageRef = useRef<HTMLDivElement | null>(null);
+  const phone = useSyncExternalStore(subscribePhone, isPhone, () => false);
+  // The page strip may wrap onto a second row: up / down leave the strip (down into the page, up to the car) instead
+  // of walking into the other row, which would switch the page under the cursor
+  useMoveHandler((dir) => {
+    const active = document.activeElement;
+    if (!active || !tabsRef.current?.contains(active) || (dir !== "up" && dir !== "down")) return false;
+    const target = dir === "down" ? (pageRef.current ? focusables(pageRef.current)[0] : undefined) : browseRef.current;
+    if (!target) return false;
+    // A segmented row is entered on the option it is set to
+    const chosen = target.closest('[role="radiogroup"]')?.querySelector<HTMLElement>('[aria-checked="true"]');
+    (chosen ?? target).focus({ preventScroll: false, focusVisible: true } as FocusOptions);
+    return true;
+  });
+  /** A pressure in the player's unit, the rest as the sheet writes them */
+  const formatOf = (q: SetupParam) =>
+    PRESSURE_IDS.has(q.id)
+      ? (v: number) => `${pressureIn(v / PSI_PER_BAR, units.pressure).toFixed(pressureDecimals(units.pressure))} ${PRESSURE_LABEL[units.pressure]}`
+      : q.format;
+
   const extra = (x: string) => {
     const onlyTyre = vehicleModelSpec(car.physics).onlyTyre;
     if (x === "compound" && onlyTyre)
-      return (
-        <div key={x} className="flex min-h-[46px] items-center rounded-full border border-[#262B3D] bg-[#08090D] px-4 text-[13px] font-bold text-[#C5CBD8]">
-          {onlyTyre}
-        </div>
-      );
+      return <SettingRow key={x} label="Tyre compound" hint={`${onlyTyre}: this car runs on one compound`}>{null}</SettingRow>;
     if (x === "compound")
       return (
-        <Segmented<TireCompound>
-          key={x}
-          label="Tyre compound"
-          className={GARAGE_SEGMENTED}
-          value={p.tireCompound}
-          onChange={p.onChangeTireCompound}
-          options={COMPOUNDS.map((c) => ({
-            id: c.id,
-            label: (
-              <>
-                <span aria-hidden className="h-3.5 w-3.5 rounded-full border-[3px] bg-[#08090D]" style={{ borderColor: c.ring }} />
-                {c.label}
-              </>
-            ),
-          }))}
-        />
+        <SettingRow key={x} label="Tyre compound" hint="The weather picks one for you; change it here" stacked>
+          <Segmented<TireCompound>
+            fill
+            byContent
+            value={p.tireCompound}
+            onChange={p.onChangeTireCompound}
+            options={COMPOUND_ORDER.map((c) => ({
+              id: c,
+              label: COMPOUNDS[c].name,
+              icon: <CompoundGlyph compound={c} size={18} decorative />,
+            }))}
+          />
+        </SettingRow>
       );
     if (x === "aeroPackage")
       return (
-        <Segmented<AeroSetupPreset>
-          key={x}
-          label="Aero package"
-          className={GARAGE_SEGMENTED}
-          value={p.aeroPreset}
-          onChange={p.onChangeAeroPreset}
-          options={[
-            { id: "low_downforce", label: "Low downforce" },
-            { id: "balanced", label: "Balanced" },
-            { id: "high_downforce", label: "High downforce" },
-          ]}
-        />
+        <SettingRow key={x} label="Aero package" stacked>
+          <Segmented<AeroSetupPreset>
+            fill
+            value={p.aeroPreset}
+            onChange={p.onChangeAeroPreset}
+            options={[
+              { id: "low_downforce", label: "Low downforce" },
+              { id: "balanced", label: "Balanced" },
+              { id: "high_downforce", label: "High downforce" },
+            ]}
+          />
+        </SettingRow>
       );
     if (x === "assists")
+      // The TC & ABS preset lives in Settings > Driving now: the Garage shows it and links there
       return (
-        <Segmented<typeof p.assistPreset>
-          key={x}
-          label="Assists"
-          className={GARAGE_SEGMENTED}
-          value={p.assistPreset}
-          onChange={p.onChangeAssistPreset}
-          options={[
-            { id: "pro", label: "Assists off" },
-            { id: "semi_pro", label: "TC + ABS" },
-            { id: "assisted", label: "Full" },
-          ]}
-        />
+        <SettingRow key={x} label="Traction control & ABS" hint={`${ASSIST_WORDS[p.assistPreset] ?? p.assistPreset}, set in Settings`}>
+          {p.onOpenSettings ? (
+            <Button size="sm" variant="secondary" icon={<Icon name="settings" />} onClick={() => p.onOpenSettings?.("driving")}>
+              Settings
+            </Button>
+          ) : null}
+        </SettingRow>
       );
     return null;
   };
 
   const sheetClass =
-    "lc-glass flex flex-col gap-[18px] rounded-[28px] p-5 text-[#F5F7FA] sm:px-7 sm:pt-6 sm:pb-[26px] short:p-4 [.lc-title-frame_&]:border-0 [.lc-title-frame_&]:bg-transparent [.lc-title-frame_&]:p-0 [.lc-title-frame_&]:shadow-none [.lc-title-frame_&]:[backdrop-filter:none]";
+    "lc-glass flex flex-col gap-3 rounded-lc-sheet p-5 text-lc-chalk sm:px-7 sm:pt-6 sm:pb-6.5 short:p-4 [.lc-title-frame_&]:border-0 [.lc-title-frame_&]:bg-transparent [.lc-title-frame_&]:p-0 [.lc-title-frame_&]:shadow-none [.lc-title-frame_&]:[backdrop-filter:none]";
 
   if (browsing) {
     return (
@@ -381,16 +375,17 @@ export const EngineersGarage: React.FC<
           onClose={closeBrowser}
           toolbar={
             /* A pointer / touch affordance: a controller steps back with Ⓑ, so the focus skips it */
-            <button
-              type="button"
-              data-nav-skip
+            <Button
+              size="md"
+              variant="secondary"
+              data-nav-skip=""
               onClick={closeBrowser}
-              aria-label="Back to the garage"
-              className="inline-flex h-11 shrink-0 cursor-pointer items-center gap-2 rounded-full border border-[#262B3D] bg-[#08090D]/60 pr-4 pl-2.5 text-[13px] font-bold text-[#C5CBD8] transition-colors hover:border-[#3A4157] hover:text-[#F5F7FA]"
+              aria-label="Back to the Garage"
+              prompt={mode === "pad" ? <PadGlyph button="b" family={family} /> : undefined}
+              icon={mode === "pad" ? undefined : <Icon name="back" />}
             >
-              {mode === "pad" ? <PadGlyph button="b" family={family} /> : <ChevronLeft aria-hidden className="h-4 w-4" strokeWidth={2.4} />}
               Garage
-            </button>
+            </Button>
           }
         />
       </div>
@@ -399,180 +394,158 @@ export const EngineersGarage: React.FC<
 
   return (
     <div className={sheetClass}>
-      {/* Car and presets */}
-      <div className="flex flex-col gap-3">
-        {/* The current car; the whole row opens the car browser (so the d-pad finds it from anywhere on its row) */}
-        <button
-          ref={browseRef}
-          type="button"
-          // Where the garage starts: the car, not the preset name field
-          data-nav-default=""
-          onClick={openBrowser}
-          onPointerEnter={focusOnHover}
-          disabled={carLocked}
-          aria-label={carLocked ? `${car.title}: fixed for this race` : `Change car: ${car.title}`}
-          className="group flex w-full cursor-pointer flex-wrap items-center gap-3 rounded-[18px] disabled:cursor-not-allowed disabled:opacity-60 border border-[#262B3D] bg-[#08090D]/55 py-3 pr-3 pl-4 text-left text-[#F5F7FA] outline-none transition-[border-color,box-shadow,background-color] duration-200 hover:border-[#3A4157] focus:border-[#CCFF00] focus:shadow-[0_0_0_5px_rgba(204,255,0,0.12)]"
-        >
-          <span className="flex min-w-0 flex-1 flex-col gap-1">
-            <span className="flex items-center gap-2">
-              <Chip size="sm">{carClassYear(car)}</Chip>
-              <span className="lc-data text-[11px] tracking-[0.12em] text-[#C5CBD8]">{car.badge}</span>
-              <CarQualityBadge car={car} size="sm" />
-            </span>
-            <span className="lc-disp text-[22px] leading-[1.05]">{car.title}</span>
-            <span className="truncate text-[12px] text-[#8E96AA]">{car.sub}</span>
-          </span>
-          <span className="inline-flex h-11 shrink-0 items-center gap-2.5 rounded-full border border-[#262B3D] bg-[#1B1F2B]/80 px-4 transition-colors group-hover:border-[#3A4157] group-focus:border-transparent group-focus:bg-[#CCFF00] group-focus:text-[#08090D]">
-            <LayoutGrid aria-hidden className="h-4 w-4" strokeWidth={2.4} />
-            <span className="lc-title text-[15px]">{carLocked ? "Fixed for this race" : "Change car"}</span>
-            {carLocked ? null : <span className="lc-data text-[11px] opacity-70">{CARS.length}</span>}
-          </span>
-        </button>
-        {carTakesPhysicsSwitch(p.carId) ? <CarPhysicsSwitch color="#CCFF00" /> : null}
-        <div className="flex min-h-[54px] flex-wrap items-center gap-x-3 gap-y-2 rounded-[18px] border border-[#262B3D] bg-[#08090D]/55 px-3 py-2">
-          <span className="lc-lbl w-[68px] shrink-0">Livery</span>
-          {carById(p.carId).skins?.length ? (
-            <CarSkinPicker carId={p.carId} />
-          ) : !carTakesLivery(p.carId) ? (
-            <p className="m-0 text-[13px] text-[#8E96AA]">{FACTORY_LIVERY_NOTE}</p>
-          ) : (
-            <LiveryPicker liveries={LIVERIES} value={p.selectedLivery} onChange={p.onChangeLivery} />
-          )}
-        </div>
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-[18px] border border-[#262B3D] bg-[#08090D]/55 px-3 py-2">
-          <span className="lc-lbl w-[68px] shrink-0">Presets</span>
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") savePreset();
-            }}
-            placeholder="Name this setup"
-            maxLength={32}
-            className="h-9 min-w-[160px] flex-1 rounded-full border border-[#262B3D] bg-[#08090D] px-3.5 text-[13px] text-[#F5F7FA] outline-none placeholder:text-[#8E96AA] focus:border-[#CCFF00]"
-          />
-          <SmallButton tone="volt" onClick={savePreset}>
-            Save
-          </SmallButton>
-          <span aria-hidden className="mx-1 h-6 w-px bg-[#262B3D] max-sm:hidden" />
-          <SmallButton tone="danger" onClick={resetAll} title="Every chassis setting, tyre pressure and camber back to the car's baseline">
-            Reset all
-          </SmallButton>
-          {note ? (
-            <div role="status" className="flex w-full flex-wrap items-center justify-between gap-x-3 gap-y-1.5 rounded-[14px] border border-[#262B3D] bg-[#11131A] py-1.5 pr-1.5 pl-3.5">
-              <span className="text-[14px] font-semibold text-[#F5F7FA]">{note.text}</span>
-              {note.undo ? (
-                <span className="flex items-center gap-1">
-                  <SmallButton
-                    onClick={() => {
-                      note.undo?.();
-                      setNoteState(null);
-                    }}
-                  >
-                    Undo
-                  </SmallButton>
-                  <button
-                    type="button"
-                    aria-label="Dismiss"
-                    onClick={() => setNoteState(null)}
-                    onPointerEnter={focusOnHover}
-                    className="inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-full text-[#8E96AA] outline-none hover:text-[#F5F7FA] focus:bg-[#CCFF00] focus:text-[#08090D]"
-                  >
-                    <X aria-hidden className="h-4 w-4" strokeWidth={2.6} />
-                  </button>
-                </span>
-              ) : null}
-            </div>
-          ) : null}
-          {presets.length > 0 ? (
-            <div className="flex w-full flex-wrap gap-1.5">
-              {presets.map((x) => (
-                <span key={x.id} className="inline-flex items-center gap-1 rounded-full border border-[#262B3D] bg-[#11131A] py-0.5 pr-0.5 pl-3">
-                  <button
-                    type="button"
-                    onClick={() => loadPreset(x)}
-                    onPointerEnter={focusOnHover}
-                    aria-label={`Load ${x.name}`}
-                    className="cursor-pointer rounded-full px-1 text-[13px] font-bold text-[#F5F7FA] outline-none focus:bg-[#CCFF00] focus:text-[#08090D]"
-                  >
-                    {x.name}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => deletePreset(x)}
-                    aria-label={`Delete ${x.name}`}
-                    onPointerEnter={focusOnHover}
-                    className="inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-full text-[#8E96AA] outline-none hover:bg-white/10 hover:text-[#FF2A3C] focus:bg-[#CCFF00] focus:text-[#08090D]"
-                  >
-                    <X aria-hidden className="h-3.5 w-3.5" strokeWidth={2.6} />
-                  </button>
-                </span>
-              ))}
-            </div>
-          ) : null}
-        </div>
-      </div>
-
-
-      {/* Sheet pages */}
-      <div role="tablist" aria-label="Setup" className="flex flex-wrap gap-0.5 rounded-[24px] border border-[#262B3D] bg-[#08090D] p-1">
-        {sheet.map((g) => {
-          const n = changedIn(g);
-          return (
-            <button
-              key={g.id}
-              type="button"
-              role="tab"
-              aria-selected={group.id === g.id}
-              onClick={() => setTab(g.id)}
-              title={g.label}
-              className={`group inline-flex min-h-[40px] flex-[1_0_auto] cursor-pointer items-center justify-center gap-1.5 rounded-full px-3 text-[13px] font-bold whitespace-nowrap transition-[background-color,box-shadow,color] duration-200 ${CURSOR_PILL} ${
-                group.id === g.id ? CHOSEN_PILL : "text-[#8E96AA] hover:text-[#F5F7FA]"
-              }`}
+      {/* data-nav-columns: up / down read down the car card, then the saved setups (menu-shell's reading order) */}
+      <div data-nav-columns="" className="grid items-start gap-3 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
+        {/* The car */}
+        <Card
+          title={car.title}
+          description={`${carClass(car.classId).title}, ${car.year}`}
+          action={
+            <Button
+              ref={browseRef}
+              size="sm"
+              variant="secondary"
+              // Where the garage starts: the car, not the setup name field
+              data-nav-default=""
+              onClick={openBrowser}
+              disabledReason={carLocked ? "The car is fixed for this race" : undefined}
+              icon={<Icon name="car" />}
             >
-              {/* Full names always: the strip wraps to a second row instead of shortening them to "Susp." and "Electr." */}
-              <span>{g.label}</span>
-              {n ? <span aria-label={`${n} changed`} className="h-1.5 w-1.5 rounded-full bg-[#00E5FF] group-focus:bg-[#08090D]" /> : null}
-            </button>
-          );
-        })}
+              {carLocked ? "Fixed for this race" : "Change car"}
+            </Button>
+          }
+        >
+          <span className="flex flex-wrap gap-1.5 pb-1">
+            <CarClassTag car={car} />
+            <CarQualityBadge car={car} size="sm" />
+          </span>
+          {carTakesPhysicsSwitch(p.carId) ? <CarPhysicsSwitch /> : null}
+          <SettingRow label="Livery" hint={!carTakesLivery(p.carId) && !car.skins?.length ? FACTORY_LIVERY_NOTE : undefined} stacked={Boolean(car.skins?.length || carTakesLivery(p.carId))}>
+            {car.skins?.length ? (
+              <CarSkinPicker carId={p.carId} surface="var(--color-lc-carbon)" />
+            ) : carTakesLivery(p.carId) ? (
+              <LiveryPicker liveries={LIVERIES} value={p.selectedLivery} onChange={p.onChangeLivery} surface="var(--color-lc-carbon)" />
+            ) : null}
+          </SettingRow>
+        </Card>
+
+        {/* Named setups */}
+        <Card
+          title="Saved setups"
+          action={
+            <Button size="sm" variant="ghost" icon={<Icon name="reset" />} onClick={resetAll} title="Every chassis setting, tyre pressure and camber back to the car's baseline">
+              Reset all
+            </Button>
+          }
+        >
+          <div className="flex items-end gap-2">
+            <div className="min-w-0 flex-1">
+            <TextField
+              label="Name"
+              value={name}
+              onChange={setName}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") savePreset();
+              }}
+              placeholder="Setup name"
+              maxLength={32}
+              autoComplete="off"
+            />
+            </div>
+            <Button size="md" variant="secondary" onClick={savePreset} icon={<Icon name="add" />}>
+              Save
+            </Button>
+          </div>
+          {presets.length > 0 ? (
+            <ul className="m-0 flex list-none flex-col gap-1 p-0 pt-2">
+              {presets.map((x) => (
+                <li key={x.id} className="flex items-center gap-1">
+                  <span className="min-w-0 flex-1">
+                    <Button size="sm" variant="ghost" block onClick={() => loadPreset(x)} aria-label={`Load ${x.name}`}>
+                      <span className="truncate">{x.name}</span>
+                    </Button>
+                  </span>
+                  <IconButton size="sm" variant="ghost" aria-label={`Delete ${x.name}`} icon={<Icon name="delete" />} onClick={() => deletePreset(x)} />
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="lc-hint m-0 pt-1">Name a setup and save it to come back to it on this car.</p>
+          )}
+          {note ? (
+            <div role="status" className="pt-2">
+              <Toast
+                tone="neutral"
+                className="w-full"
+                action={
+                  note.undo ? (
+                    <span className="flex items-center gap-1">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          note.undo?.();
+                          setNoteState(null);
+                        }}
+                      >
+                        Undo
+                      </Button>
+                      <IconButton size="sm" variant="ghost" aria-label="Dismiss" icon={<Icon name="close" />} onClick={() => setNoteState(null)} />
+                    </span>
+                  ) : undefined
+                }
+              >
+                {note.text}
+              </Toast>
+            </div>
+          ) : null}
+        </Card>
       </div>
 
-      <div className={`grid items-start gap-3.5 ${live ? "lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]" : ""}`}>
-        <GarageCard
-          title={group.label}
-          aside={
+      {/* The sheet's pages */}
+      <div ref={tabsRef} className="min-w-0">
+      <Tabs<string>
+        aria-label="Garage pages"
+        navZone="garage-pages"
+        // One row always: the tabs share the width (short names for the long pages); on a phone, and wherever they
+        // still do not fit, the strip scrolls sideways
+        fill={!phone}
+        size="sm"
+        value={group.id}
+        onChange={setTab}
+        tabs={sheet.map((g) => {
+          const n = changedIn(g);
+          const short = TAB_NAME[g.label];
+          return {
+            id: g.id,
+            label: short ?? g.label,
+            title: short ? g.label : undefined,
+            badge: n ? <StatusDot tone="info" label={`${n} changed`} /> : undefined,
+          };
+        })}
+      />
+      </div>
+
+      <div ref={pageRef} className={`grid items-start gap-3 ${live ? "xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]" : ""}`}>
+        <Card
+          aria-label={group.label}
+          action={
             groupChanged ? (
-              <SmallButton onClick={() => resetGroup(group)} title="This page back to the car's baseline">
-                Reset · {groupChanged}
-              </SmallButton>
-            ) : null
+              <Button size="sm" variant="ghost" icon={<Icon name="reset" />} onClick={() => resetGroup(group)} title="This page back to the car's baseline">
+                Reset page ({groupChanged})
+              </Button>
+            ) : undefined
           }
         >
           {group.extras?.map(extra)}
-          <div className="grid grid-cols-[repeat(auto-fit,minmax(min(220px,100%),1fr))] gap-x-5">
-            {group.params.map((q) => (
-              <SetupRow
-                key={q.id}
-                label={q.label}
-                value={q.get(st)}
-                min={q.min}
-                max={q.max}
-                step={q.step}
-                base={q.writes === "tuner" ? undefined : q.base}
-                format={q.format}
-                fx={q.fx}
-                invert={q.invert}
-                disabled={!canWrite(q)}
-                onChange={(v) => apply(q, v)}
-              />
-            ))}
-          </div>
-        </GarageCard>
+          {group.params.map((q) => (
+            <SetupRow key={q.id} q={q} value={q.get(st)} disabled={!canWrite(q)} format={formatOf(q)} onChange={(v) => apply(q, v)} />
+          ))}
+        </Card>
         {live ? (
-          <GarageCard title="Current tyres & brakes" color="#00E5FF">
+          <Card title="Tyres and brakes now">
             <TyreBrakeGrid t={p.telemetry} compound={p.tireCompound} dense />
-          </GarageCard>
+          </Card>
         ) : null}
       </div>
     </div>

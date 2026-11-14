@@ -1,0 +1,46 @@
+/*
+ * Semantic colours: what a colour means, apart from which colour it is. Components that show gain and loss, hot and
+ * cold, best laps or cautions use these (`text-lc-gain`, `bg-lc-loss`, `var(--lc-sem-best)`), so a colour-blind
+ * palette changes them all in one place. The volt cursor is never part of this: focus stays volt in every palette.
+ * Colour is never alone (docs/DESIGN.md §1.5): each of these states also carries a sign, glyph or word.
+ */
+:root {
+  --lc-sem-gain: var(--color-lc-green); /* gaining time, personal best, connected, success */
+  --lc-sem-loss: var(--color-lc-crimson); /* losing time, invalid lap, error */
+  --lc-sem-best: var(--color-lc-purple); /* overall or session best */
+  --lc-sem-best-ink: var(--color-lc-purple-hi); /* best as text on its own soft fill */
+  --lc-sem-loss-ink: var(--color-lc-crimson-hi); /* loss as text on its own soft fill */
+  --lc-sem-caution: var(--color-lc-amber); /* warnings, yellow flag */
+  --lc-sem-info: var(--color-lc-cyan); /* information, ERS and aero, DRS open */
+  --lc-sem-cold: var(--color-lc-cyan); /* below the working temperature */
+  --lc-sem-ideal: var(--color-lc-green); /* in the working window */
+  --lc-sem-hot: var(--color-lc-crimson); /* above it */
+  --lc-sem-throttle: var(--color-lc-green);
+  --lc-sem-brake: var(--color-lc-crimson);
+}
+
+/* Red-green colour vision (protan, deutan): gain and loss move to blue and orange, the working window to chalk, best
+   to copper (lemon sat too close to caution amber and the player's volt) */
+html[data-palette="protan"],
+html[data-palette="deutan"] {
+  --lc-sem-gain: var(--color-lc-azure);
+  --lc-sem-loss: var(--color-lc-tangerine);
+  --lc-sem-best: var(--color-lc-copper);
+  --lc-sem-best-ink: var(--color-lc-copper);
+  --lc-sem-loss-ink: var(--color-lc-tangerine);
+  --lc-sem-caution: var(--color-lc-amber);
+  --lc-sem-info: var(--color-lc-chalk);
+  --lc-sem-cold: var(--color-lc-azure);
+  --lc-sem-ideal: var(--color-lc-chalk);
+  --lc-sem-hot: var(--color-lc-tangerine);
+  --lc-sem-throttle: var(--color-lc-azure);
+  --lc-sem-brake: var(--color-lc-tangerine);
+}
+
+/* Blue-yellow colour vision (tritan): green and red stay apart, cyan and amber move to chalk and pink; best stays
+   purple, which keeps clear of pink, crimson and chalk there */
+html[data-palette="tritan"] {
+  --lc-sem-caution: var(--color-lc-pink);
+  --lc-sem-info: var(--color-lc-chalk);
+  --lc-sem-cold: var(--color-lc-chalk);
+}

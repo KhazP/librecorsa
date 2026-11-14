@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import type {
   AeroSetupPreset,
@@ -13,93 +13,51 @@ import type {
   TyreSetup,
   VehicleModelId,
 } from "@/types/f1";
-import { ACTIVE_TRACK_ID, LIVERIES, TURN_METADATA, activeLapWord, getActiveTimedLengthM, getTrackData } from "@/lib/track-data";
+import { ACTIVE_TRACK_ID, TURN_METADATA, activeLapWord, getActiveTimedLengthM, getTrackData } from "@/lib/track-data";
 import { getTrackInfo } from "@/lib/track-registry";
 import type { ChassisSetup } from "@/lib/sim/car-setup";
+import type { RaceSetup } from "@/lib/sim/race-setup";
 import { EngineersGarage } from "@/components/menu/EngineersGarage";
-import { CarPicker } from "@/components/menu/CarPicker";
 import type { LibraryProps } from "@/components/menu/ContentBrowser";
-import { AssistTuningCard } from "@/components/menu/steps/setup-ui";
-import { TuningSlider } from "@/components/menu/steps/TuningSlider";
-import { keyLabel } from "@/lib/input/bindings";
-import type { SteeringDevice } from "@/lib/sim/steering-assist";
-import { FACTORY_LIVERY_NOTE, carTakesLivery, type CarId } from "@/lib/cars/car-registry";
-import { vehicleModelSpec } from "@/lib/cars/vehicle-models";
-import {
-  COCKPIT_FOV_MAX_DEG,
-  COCKPIT_FOV_MIN_DEG,
-  PAUSE_KEYBOARD_FIELDS,
-  PAUSE_PAD_FIELDS,
-  resetKeyboardTuning,
-  resetPadTuning,
-  type KeyboardTuning,
-  type PadTuning,
-  type PlayerSettings,
-} from "@/lib/settings/player-settings";
+import { ConditionsPanel, type ConditionsPanelProps } from "@/components/menu/ConditionsPanel";
+import { RaceRules } from "@/components/menu/RaceRules";
+import type { SettingsCategory } from "@/components/settings/SettingsScreen";
+import type { CarId } from "@/lib/cars/car-registry";
+import type { PlayerSettings } from "@/lib/settings/player-settings";
+import { useUnits } from "@/lib/settings/ui-prefs";
+import { SPEED_LABEL, speedIn } from "@/lib/settings/units";
 import { MultiplayerPanel, type MultiplayerPanelProps } from "./MultiplayerPanel";
-import { DisplayPanel, type DisplayPanelProps } from "./DisplayPanel";
 import { LeaderboardPanel, type LeaderboardPanelProps } from "./LeaderboardPanel";
 import { focusInZone, focusOnHover, focusZone, useFocusNav } from "@/components/menu/useFocusNav";
-import { PromptBar, RailItem, Segmented, TabStrip, TrackQualityBadge } from "@/components/menu/menu-ui";
-import {
-  ChevronRight,
-  CornerDownRight,
-  Gamepad2,
-  Gauge,
-  LogOut,
-  MonitorCog,
-  Play,
-  RotateCcw,
-  SlidersHorizontal,
-  Timer,
-  Users,
-  Wrench,
-  type LucideIcon,
-} from "lucide-react";
+import { useInputMode } from "@/components/menu/input-mode";
+import { TrackQualityBadge } from "@/components/menu/menu-content-ui";
+import { HeroAction, RailRow, RESET_ROW_PROMPT, ShellPrompts, usePanelReadingOrder, useRowResettable } from "@/components/menu/menu-shell";
+import { Card, SettingRow, Tabs, Toggle } from "@/components/ui";
+import { Badge } from "@/components/ui/Badge";
+import { SessionBadge } from "@/components/ui/badges/SessionBadge";
+import { Icon } from "@/components/ui/icons/Icon";
+import type { IconName } from "@/components/ui/icons/registry";
+import { KeyCap } from "@/components/ui/prompts/KeyCap";
+import { PadGlyph } from "@/components/ui/prompts/PadGlyph";
+import type { Prompt } from "@/components/ui/prompts/PromptBar";
+import { CURSOR_PILL, cx, HOVER_PILL, MOTION, PRESSED_PILL } from "@/components/ui/styles";
 import { LibreCorsaLogo } from "@/components/ui/LibreCorsaLogo";
-import { AI_SKILL_DEFAULT, AI_SKILL_LEVELS, aiSkillLabel } from "@/lib/sim/ai-tuning";
-import { CAMERA_MODES } from "@/lib/render/camera-modes";
-import { TYRE_SETUP_LIMITS } from "@/lib/sim/tyre-setup";
-import {
-  AI_GRID_LABELS,
-  DEFAULT_RACE_SETUP,
-  PLAYER_GRID_LABELS,
-  RACE_LAP_OPTIONS,
-  RACE_OPPONENT_OPTIONS,
-  RACE_AGGRESSION_LABELS,
-  RACE_START_LABELS,
-  type RaceSetup,
-} from "@/lib/sim/race-setup";
-import { DAMAGE_LEVEL_LABELS, DAMAGE_LEVELS } from "@/lib/sim/car-damage";
 
-/** A row of choices as chips (the race setup) */
-function SetupChips<T extends string | number>(props: {
-  label: string;
-  value: T;
-  options: readonly T[];
-  format?: (v: T) => string;
-  onChange: (v: T) => void;
-}) {
-  return (
-    <div className="flex min-h-[44px] flex-wrap items-center justify-between gap-x-3 gap-y-1 px-2">
-      <span className="text-[15px] leading-tight font-bold text-[#F5F7FA]">{props.label}</span>
-      <span className="flex flex-wrap gap-1.5">
-        {props.options.map((o) => (
-          <button
-            key={String(o)}
-            type="button"
-            aria-pressed={props.value === o}
-            onClick={() => props.onChange(o)}
-            className={`min-h-[30px] cursor-pointer rounded-full px-3 font-f1-mono text-[11px] font-extrabold tracking-[0.1em] uppercase transition-colors ${
-              props.value === o ? "bg-[#CCFF00] text-[#08090D]" : "border border-[#262B3D] text-[#8E96AA] hover:border-[#CCFF00] hover:text-[#CCFF00]"
-            }`}
-          >
-            {props.format ? props.format(o) : String(o)}
-          </button>
-        ))}
-      </span>
-    </div>
-  );
+/**
+ * What the HUD and the menus pass along as the player's settings (the old Display panel's props, whose rows now live
+ * in the Settings screen): the title menu reads them for the profile button and the feedback form.
+ */
+export interface DisplayPanelProps {
+  settings: PlayerSettings;
+  onChangeSettings: (update: (prev: PlayerSettings) => PlayerSettings) => void;
+  /** WebXR immersive-vr is available on this device */
+  vrSupported: boolean;
+  vrActive: boolean;
+  onEnterVr: () => void;
+  /** A new name, claimed on the online board: null once it has taken, else why not */
+  onRenameDriver?: (name: string) => Promise<string | null>;
+  /** Closes the menu onto the seat panel (only while driving) */
+  onOpenSeatPanel?: () => void;
 }
 
 export interface PauseMenuProps extends MultiplayerPanelProps {
@@ -164,10 +122,12 @@ export interface PauseMenuProps extends MultiplayerPanelProps {
   onTogglePause: () => void;
   /** Opens the controls setup (keyboard / controller / wheel) */
   onOpenControls?: () => void;
+  /** Opens the Settings screen over this menu, on a category (the links from Conditions and the Garage) */
+  onOpenSettings?: (category?: SettingsCategory) => void;
+  /** Weather, time of day and the track's grip: applies live, so pause offers it too */
+  conditionsPanel?: ConditionsPanelProps;
   /** Leaves the session for the title menu */
   onExitToTitle?: () => void;
-  /** Rows of the controls cheat-sheet, from the player's bindings */
-  controlsCheatSheet?: readonly (readonly [string, string])[];
   /** Key names for the hints on the toggles (defaults: the original layout) */
   keyNames?: Partial<Record<"camera" | "racingLine" | "mute" | "mouseSteer" | "autopilot" | "restart" | "shiftUp" | "shiftDown", string>>;
   /** HUD layout, graphics, touch controls and VR */
@@ -178,178 +138,15 @@ export interface PauseMenuProps extends MultiplayerPanelProps {
   library?: LibraryProps;
 }
 
-type Panel = "settings" | "setup" | "corners" | "multiplayer" | "display" | "leaderboard";
-
-export const Toggle: React.FC<{
-  label: string;
-  detail?: string;
-  checked: boolean;
-  onChange: () => void;
-  disabled?: boolean;
-}> = ({ label, detail, checked, onChange, disabled }) => (
-  <label
-    className={`flex min-h-[44px] items-center justify-between gap-4 rounded-[14px] px-2 py-1.5 transition-colors ${
-      disabled ? "cursor-not-allowed opacity-40" : "cursor-pointer hover:bg-white/[0.04]"
-    }`}
-  >
-    <span className="flex min-w-0 flex-col">
-      <span className="text-[15px] leading-tight font-bold text-[#F5F7FA]">{label}</span>
-      {detail ? <span className="text-[12px] leading-snug text-[#8E96AA]">{detail}</span> : null}
-    </span>
-    <input type="checkbox" checked={checked} onChange={onChange} disabled={disabled} className="peer sr-only" />
-    {/* DESIGN.md §6 Switch: ON / OFF written inside; on is lit white (volt is the cursor, which rings the whole row) */}
-    <span
-      aria-hidden
-      className={`relative h-[30px] w-16 shrink-0 rounded-full font-f1-mono text-[11px] font-extrabold tracking-[0.08em] transition-colors duration-200 ${
-        checked ? "bg-[#F5F7FA] text-[#08090D]" : "bg-[#1B1F2B] text-[#8E96AA] shadow-[inset_0_0_0_1px_#262B3D]"
-      }`}
-    >
-      <span className={`absolute inset-y-0 flex items-center ${checked ? "left-2.5" : "right-2"}`}>{checked ? "ON" : "OFF"}</span>
-      <span
-        className={`absolute top-[5px] left-[5px] h-5 w-5 rounded-full transition-transform duration-[220ms] ease-[cubic-bezier(.2,.8,.2,1)] ${
-          checked ? "translate-x-[34px] bg-[#08090D]" : "translate-x-0 bg-[#8E96AA]"
-        }`}
-      />
-    </span>
-  </label>
-);
-
-export const TyreSlider: React.FC<{
-  label: string;
-  value: number;
-  limits: { min: number; max: number; step: number };
-  format: (value: number) => string;
-  onChange: (value: number) => void;
-}> = ({ label, value, limits, format, onChange }) => (
-  <label className="flex flex-col gap-2.5 rounded-[14px] px-2 py-2 hover:bg-white/[0.04]">
-    <span className="flex items-center justify-between gap-3">
-      <span className="min-w-0 truncate text-[14px] font-bold text-[#F5F7FA]" title={label}>
-        {label}
-      </span>
-      <span className="shrink-0 font-f1-mono text-sm font-extrabold whitespace-nowrap text-[#F5F7FA] tabular-nums">{format(value)}</span>
-    </span>
-    <input
-      type="range"
-      min={limits.min}
-      max={limits.max}
-      step={limits.step}
-      value={value}
-      onChange={(e) => onChange(Number((Math.round(Number(e.target.value) / limits.step) * limits.step).toFixed(1)))}
-      className="lc-range"
-      style={{ "--lc-fill": `${((value - limits.min) / (limits.max - limits.min || 1)) * 100}%` } as React.CSSProperties}
-    />
-  </label>
-);
-
-export const formatPsi = (value: number) => `${value.toFixed(1)} psi`;
-export const formatCamber = (value: number) => `${value < 0 ? "−" : ""}${Math.abs(value).toFixed(1)}°`;
-
-/** Compounds in the garage's segmented row, with their sidewall ring colour */
-export const COMPOUNDS: readonly { id: TireCompound; label: string; name: string; ring: string }[] = [
-  { id: "soft", label: "Soft", name: "Soft tyres", ring: "#FF2A3C" },
-  { id: "medium", label: "Med", name: "Medium tyres", ring: "#FFB300" },
-  { id: "hard", label: "Hard", name: "Hard tyres", ring: "#F5F7FA" },
-  { id: "intermediate", label: "Inter", name: "Intermediate tyres (wet track)", ring: "#3CCB4A" },
-  { id: "wet", label: "Wet", name: "Full wet tyres (standing water)", ring: "#2E7BFF" },
-];
-
-/** One option of a pill segmented row (aria-pressed, like Choice) */
-const SEG_BTN =
-  "inline-flex min-h-[44px] min-w-0 flex-1 cursor-pointer items-center justify-center gap-2 rounded-full px-1.5 text-[13px] font-bold whitespace-nowrap transition-[background-color,color,box-shadow] duration-200";
-
-export const Choice: React.FC<{
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}> = ({ active, onClick, children }) => (
-  <button
-    type="button"
-    onClick={onClick}
-    aria-pressed={active}
-    className={`relative min-h-[44px] cursor-pointer rounded-[18px] px-4 py-3 text-left transition-[background-color,border-color,color] duration-200 ${
-      active
-        ? "border-[1.5px] border-[#CCFF00] bg-[#CCFF00]/[0.08] pr-10 text-[#F5F7FA]"
-        : "border border-[#262B3D] bg-[#08090D]/50 text-[#C5CBD8] hover:border-[#3A4157] hover:bg-[#1B1F2B] hover:text-[#F5F7FA]"
-    }`}
-  >
-    {children}
-    {active ? (
-      <span
-        aria-hidden
-        className="absolute top-3 right-3 inline-flex h-[22px] w-[22px] items-center justify-center rounded-full bg-[#CCFF00]"
-      >
-        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#08090D" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M20 6 9 17l-5-5" />
-        </svg>
-      </span>
-    ) : null}
-  </button>
-);
-
-/** Pill status tag in the pause header (place, lap, online) */
-const HEADER_CHIP =
-  "inline-flex h-7 items-center rounded-full px-3 font-f1-mono text-[11px] font-extrabold tracking-[0.08em] whitespace-nowrap uppercase";
-
-/** A card inside a pause panel: the frosted 24 px sheet of the Racing Line boards */
-const PANEL_CARD =
-  "flex flex-col gap-3 rounded-[24px] border border-white/[0.07] bg-[#0D0F15]/82 px-5 py-[18px] text-[#F5F7FA]";
-
-/** Dot + tracked mono label heading a group of controls */
-export const PanelSection: React.FC<{ children: React.ReactNode; color?: string; className?: string }> = ({
-  children,
-  color = "#CCFF00",
-  className = "",
-}) => (
-  <div className={`flex items-center gap-2 ${className}`}>
-    <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: color }} />
-    <span className="lc-lbl">{children}</span>
-  </div>
-);
-
-/**
- * The rail's main action (Resume): RailItem's behaviour (focus follows the pointer, the rail's
- * default focus, volt when focused) with the round play badge of the pause board.
- */
-const PrimaryRailItem: React.FC<{
-  label: string;
-  detail?: string;
-  icon: LucideIcon;
-  onClick: () => void;
-  navId: string;
-}> = ({ label, detail, icon: Icon, onClick, navId }) => (
-  <button
-    type="button"
-    data-rail-id={navId}
-    data-nav-default=""
-    onPointerEnter={focusOnHover}
-    onClick={onClick}
-    className="group relative mb-1 flex min-h-[76px] w-full cursor-pointer items-center gap-3.5 rounded-[22px] border-0 phone:min-h-[52px] phone:gap-3 phone:rounded-[18px] phone:px-3 bg-[#CCFF00]/10 px-4 py-1.5 text-left text-[#F5F7FA] shadow-[inset_0_0_0_1.5px_rgba(204,255,0,0.5)] outline-none transition-[background-color,box-shadow,color] duration-[220ms] ease-[cubic-bezier(.2,.8,.2,1)] focus:bg-[#CCFF00] focus:text-[#08090D] focus:shadow-[0_0_0_6px_rgba(204,255,0,0.12),0_16px_40px_rgba(204,255,0,0.2)] focus-visible:outline-none short:min-h-[60px]"
-  >
-    <span
-      aria-hidden
-      className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#CCFF00] text-[#08090D] transition-colors duration-[220ms] group-focus:bg-[#08090D] group-focus:text-[#CCFF00] short:h-9 short:w-9 phone:h-8 phone:w-8"
-    >
-      <Icon className="h-[18px] w-[18px]" fill="currentColor" strokeWidth={0} />
-    </span>
-    <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-      <span className="lc-disp text-[30px] short:text-[24px] phone:text-[20px]">{label}</span>
-      {detail ? (
-        <span className="truncate text-[12px] text-[#C5CBD8] group-focus:font-semibold group-focus:text-[#08090D]/70">
-          {detail}
-        </span>
-      ) : null}
-    </span>
-    <ChevronRight aria-hidden className="hidden h-[18px] w-[18px] shrink-0 group-focus:block" strokeWidth={2.6} />
-  </button>
-);
+type Panel = "settings" | "conditions" | "setup" | "corners" | "multiplayer" | "leaderboard";
 
 /**
  * Esc / Menu: race actions in a rail on the left, the session's panels as tabs on the right.
- * A controller reaches every control; LB / RB switch tabs, Ⓑ steps back (panel → tabs → rail →
- * resume) and Menu resumes from anywhere.
+ * A controller reaches every control; LB / RB switch tabs, B steps back (panel, tabs, rail, resume) and Menu resumes
+ * from anywhere.
  */
 export const PauseMenu: React.FC<PauseMenuProps> = (props) => {
-  const { telemetry, onTogglePause, onResetCar, aiOpponents, onOpenControls, onExitToTitle, displayPanel, leaderboardPanel } = props;
+  const { telemetry, onTogglePause, onResetCar, aiOpponents, onOpenControls, onExitToTitle, leaderboardPanel, conditionsPanel } = props;
   // Online: the host restarts the race for everyone and nobody has a flying lap; a guest in a lobby restarts nothing
   // (racing or not). The shell guards the same handlers.
   const mpRace = telemetry.race?.multiplayer === true || props.raceRunning === true;
@@ -358,6 +155,7 @@ export const PauseMenu: React.FC<PauseMenuProps> = (props) => {
   const canFly = !mpRace && !guest;
   const [chosenPanel, setPanel] = useState<Panel>(props.openMultiplayer ? "multiplayer" : "settings");
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const { mode, family } = useInputMode();
   // Restart, then close the menu, unless the restart already did: an online host's restart resumes everyone itself,
   // and toggling after it would pause again. By the next frame React has rendered the reset, so a menu still mounted
   // means the game is still paused.
@@ -378,25 +176,25 @@ export const PauseMenu: React.FC<PauseMenuProps> = (props) => {
     [onResetCar, onTogglePause]
   );
   const panelRef = useRef<HTMLElement | null>(null);
+  const panelId = useId();
   const trackInfo = getTrackInfo(ACTIVE_TRACK_ID);
 
   const tabs = useMemo(
     () =>
       [
-        { id: "settings" as const, label: "Session", icon: SlidersHorizontal },
-        { id: "setup" as const, label: "Car setup", icon: Wrench },
+        { id: "settings" as const, label: "Session", icon: "options" as const },
+        ...(conditionsPanel ? [{ id: "conditions" as const, label: "Conditions", icon: "conditions" as const }] : []),
+        { id: "setup" as const, label: "Garage", icon: "garage" as const },
         // No jumping round the circuit in an online race
-        ...(mpRace ? [] : [{ id: "corners" as const, label: "Corners", icon: CornerDownRight }]),
-        { id: "multiplayer" as const, label: "Multiplayer", icon: Users },
-        ...(leaderboardPanel ? [{ id: "leaderboard" as const, label: "Lap times", icon: Timer }] : []),
-        ...(displayPanel ? [{ id: "display" as const, label: "Display", icon: MonitorCog }] : []),
-      ] satisfies { id: Panel; label: string; icon: LucideIcon }[],
-    [leaderboardPanel, displayPanel, mpRace]
+        ...(mpRace ? [] : [{ id: "corners" as const, label: "Corners", icon: "corners" as const }]),
+        { id: "multiplayer" as const, label: "Multiplayer", icon: "multiplayer" as const },
+        ...(leaderboardPanel ? [{ id: "leaderboard" as const, label: "Lap times", icon: "lapTimes" as const }] : []),
+      ] satisfies { id: Panel; label: string; icon: IconName }[],
+    [leaderboardPanel, mpRace, conditionsPanel]
   );
 
   const actions = useMemo(
     () => [
-      { id: "resume", label: "Resume", detail: "Back on track", icon: Play, primary: true, run: () => onTogglePause() },
       ...(canRestart
         ? [
             {
@@ -407,7 +205,7 @@ export const PauseMenu: React.FC<PauseMenuProps> = (props) => {
                 : aiOpponents
                   ? "Line up on the grid behind the lights"
                   : "Standing start from the grid",
-              icon: RotateCcw,
+              icon: "restart" as const,
               run: () => restartAndResume(false),
             },
           ]
@@ -418,30 +216,38 @@ export const PauseMenu: React.FC<PauseMenuProps> = (props) => {
               id: "flying",
               label: aiOpponents ? "Rolling start" : "Flying lap",
               detail: aiOpponents ? "Restart the race on the move" : "Timed lap from the main straight",
-              icon: Gauge,
+              icon: "flyingLap" as const,
               run: () => restartAndResume(true),
             },
           ]
         : []),
       ...(onOpenControls
-        ? [{ id: "controls", label: "Controls", detail: "Keys, controller, wheel calibration", icon: Gamepad2, run: onOpenControls }]
+        ? [{ id: "settings", label: "Settings", detail: "Controls, assists, display, sound", icon: "settings" as const, run: onOpenControls }]
         : []),
-      ...(onExitToTitle ? [{ id: "title", label: "Main menu", detail: "Leave the session", icon: LogOut, run: onExitToTitle }] : []),
+      ...(onExitToTitle ? [{ id: "title", label: "Main menu", detail: "Leave the session", icon: "leave" as const, run: onExitToTitle }] : []),
     ],
-    [aiOpponents, mpRace, canRestart, canFly, restartAndResume, onTogglePause, onOpenControls, onExitToTitle]
+    [aiOpponents, mpRace, canRestart, canFly, restartAndResume, onOpenControls, onExitToTitle]
   );
 
   // A tab that went away while open (Corners when an online race starts) shows the session tab instead
   const panel: Panel = tabs.some((t) => t.id === chosenPanel) ? chosenPanel : "settings";
 
-  const focusActiveTab = () =>
-    rootRef.current?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]')?.focus({ preventScroll: true });
+  // Scrolled down a long panel, LB / RB or B still lands on a tab the player can see
+  const focusActiveTab = () => {
+    const tab = rootRef.current?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]');
+    tab?.focus({ preventScroll: true });
+    tab?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    // Then the strip, whose scroll margin keeps the tab's ring clear of the top edge (the tab's own margin is lost to
+    // the tab list it scrolls in)
+    tab?.closest('[data-nav-zone="tabs"]')?.scrollIntoView({ block: "nearest" });
+  };
 
   const selectTab = useCallback((next: Panel) => {
     setPanel(next);
-    // Below lg the panel sits under the rail: bring it into view
+    // Below lg the panel sits under the rail: bring the tabs to the top with the panel under them (the panel itself
+    // at the top would push the focused tab off the screen)
     if (!window.matchMedia("(min-width: 64rem)").matches) {
-      requestAnimationFrame(() => panelRef.current?.scrollIntoView({ block: "start" }));
+      requestAnimationFrame(() => rootRef.current?.querySelector('[data-nav-zone="tabs"]')?.scrollIntoView({ block: "start" }));
     }
   }, []);
 
@@ -458,77 +264,104 @@ export const PauseMenu: React.FC<PauseMenuProps> = (props) => {
     if (focusInZone(root, "tabs")) return void focusZone(root, "rail");
     onTogglePause();
   };
-  // Esc is the simulator's pause toggle; Ⓑ steps back, Menu resumes
+  // Esc is the simulator's pause toggle; B steps back, Menu resumes
   useFocusNav(rootRef, {
     onBack: back,
     onStart: onTogglePause,
     onPrevTab: () => cycle(-1),
     onNextTab: () => cycle(1),
     keyboardBack: false,
+    // The Garage's rows have a reset each: Delete / X puts the row under the cursor back, and the prompt bar says so
+    rowReset: panel === "setup",
   });
+  const rowResettable = useRowResettable(panel === "setup");
+  // Up / down inside a panel follow reading order and never fall out to the rail
+  usePanelReadingOrder(rootRef);
 
   const race = telemetry.race;
+  const place = trackInfo.city && trackInfo.city !== trackInfo.country ? `${trackInfo.city}, ${trackInfo.country}` : trackInfo.country;
+  // The shoulder prompts show from `sm` up, as before
+  const shoulder = (button: "lb" | "rb", key: string) => (
+    <span className="hidden sm:inline-flex">{mode === "pad" ? <PadGlyph button={button} family={family} /> : <KeyCap>{key}</KeyCap>}</span>
+  );
+
+  const prompts: Prompt[] = [
+    { action: "move", label: "Move" },
+    { action: "select", label: panel === "corners" ? "Jump there" : "Select" },
+    ...(rowResettable ? [RESET_ROW_PROMPT] : []),
+    { action: "tabs", label: "Tabs" },
+    { action: "back", label: "Back", key: "Bksp" },
+    { action: "start", label: "Resume", key: "Esc" },
+  ];
+  const phonePrompts = prompts.filter((p) => p.action !== "move" && p.action !== "tabs");
 
   return (
     <div
       ref={rootRef}
-      className="lc-ui-zoom pointer-events-auto fixed inset-0 z-40 flex flex-col overflow-y-auto bg-[#08090D]/84 pl-[max(1.25rem,env(safe-area-inset-left))] pr-[max(1.25rem,env(safe-area-inset-right))] pt-[max(26px,env(safe-area-inset-top))] pb-[max(1.125rem,env(safe-area-inset-bottom))] backdrop-blur-md sm:pl-[max(clamp(20px,3.4vw,48px),env(safe-area-inset-left))] sm:pr-[max(clamp(20px,3.4vw,48px),env(safe-area-inset-right))] short:pt-[max(0.75rem,env(safe-area-inset-top))]"
+      className="lc-ui-zoom pointer-events-auto fixed inset-0 z-40 flex flex-col overflow-y-auto bg-lc-void/84 pt-[max(1.5rem,env(safe-area-inset-top))] pr-[max(1.25rem,env(safe-area-inset-right))] pb-[max(1.125rem,env(safe-area-inset-bottom))] pl-[max(1.25rem,env(safe-area-inset-left))] backdrop-blur-md sm:pr-[max(2.5rem,env(safe-area-inset-right))] sm:pl-[max(2.5rem,env(safe-area-inset-left))] short:pt-[max(0.75rem,env(safe-area-inset-top))]"
     >
       <div className="mx-auto flex w-full max-w-[1320px] flex-1 flex-col">
-        <div className="flex flex-wrap items-end justify-between gap-4 border-b border-[#262B3D] pb-[18px] short:pb-3">
+        <header className="flex flex-wrap items-end justify-between gap-4 border-b border-lc-line pb-4 short:pb-3">
           <div className="flex min-w-0 flex-col gap-2.5 short:gap-1.5">
-            <h1 className="lc-disp m-0 text-[clamp(32px,4.2vw,60px)] text-[#F5F7FA] short:text-[28px] phone:text-[22px]">
-              {trackInfo.name}
-            </h1>
+            <h2 className="lc-h1 text-lc-chalk">{trackInfo.name}</h2>
             {props.pauseNotice ? (
-              <p role="alert" className="m-0 text-[14px] font-semibold text-[#FFB020]">
+              <p role="alert" className="m-0 flex items-center gap-2 text-[14px] font-semibold text-lc-caution">
+                <Icon name="warning" />
                 {props.pauseNotice}
               </p>
             ) : null}
             <div className="flex flex-wrap items-center gap-2">
               <TrackQualityBadge track={trackInfo} />
-              <span className={`${HEADER_CHIP} border border-[#262B3D] bg-[#11131A] text-[#8E96AA]`}>
-                {trackInfo.city && trackInfo.city !== trackInfo.country ? `${trackInfo.city}, ${trackInfo.country}` : trackInfo.country}
-              </span>
-              <span className={`${HEADER_CHIP} border border-[#262B3D] bg-[#11131A] text-[#F5F7FA]`}>
+              <Badge>{place}</Badge>
+              <Badge>
                 {race ? "Lap" : activeLapWord()} {Math.max(1, race?.lap ?? telemetry.lapCount)}
-                {race?.totalLaps ? ` / ${race.totalLaps}` : ""}
-              </span>
+                {race?.totalLaps ? ` of ${race.totalLaps}` : ""}
+              </Badge>
               {race ? (
-                <span className={`${HEADER_CHIP} bg-[#CCFF00] text-[#08090D]`}>
+                <Badge variant="solid">
                   P{race.position} of {race.fieldSize}
-                </span>
+                </Badge>
               ) : null}
-              {mpRace ? <span className={`${HEADER_CHIP} bg-[#00E5FF] text-[#08090D]`}>Online race</span> : null}
+              {mpRace ? <SessionBadge session="online">Online race</SessionBadge> : null}
             </div>
           </div>
-          <LibreCorsaLogo variant="compact" />
-        </div>
+          <LibreCorsaLogo variant="compact" size="sm" />
+        </header>
 
         <div className="mt-5 grid flex-1 grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(240px,270px)_minmax(0,1fr)] short:mt-3 short:gap-4">
-          <nav className="flex flex-col gap-1" data-nav-zone="rail" aria-label="Pause menu">
-            {actions.map((a) =>
-              "primary" in a && a.primary ? (
-                <PrimaryRailItem
-                  key={a.id}
-                  navId={a.id}
-                  label={a.label}
-                  detail={a.detail}
-                  icon={a.icon}
-                  onClick={a.run}
-                />
-              ) : (
-                <RailItem key={a.id} navId={a.id} label={a.label} detail={a.detail} icon={a.icon} onClick={a.run} />
-              )
-            )}
+          <nav className="flex flex-col gap-0.5" data-nav-zone="rail" aria-label="Pause menu">
+            <HeroAction id="resume" label="Resume" detail="Back on track" onClick={() => onTogglePause()} size="rail" />
+            {actions.map((a) => (
+              <RailRow key={a.id} id={a.id} label={a.label} detail={a.detail} icon={a.icon} onClick={a.run} />
+            ))}
           </nav>
 
           <div className="flex min-h-0 min-w-0 flex-col gap-3.5">
-            <TabStrip tabs={tabs} value={panel} onChange={selectTab} />
-            <section ref={panelRef} className="min-h-0 scroll-mt-4" data-nav-zone="panel">
+            <Tabs
+              aria-label="Sections"
+              tabs={tabs.map((t) => ({ id: t.id, label: t.label, icon: <Icon name={t.icon} /> }))}
+              value={panel}
+              onChange={selectTab}
+              prevPrompt={shoulder("lb", "Q")}
+              nextPrompt={shoulder("rb", "E")}
+              reselect
+              panelId={panelId}
+              className="scroll-mt-4 [&>[role=tablist]]:flex-1"
+            />
+            <section
+              ref={panelRef}
+              id={panelId}
+              role="tabpanel"
+              className="min-h-0 scroll-mt-4"
+              data-nav-zone="panel"
+              aria-label={tabs.find((t) => t.id === panel)?.label}
+            >
               <div key={panel} className="lc-panel-in">
                 {panel === "settings" ? <SessionPanel {...props} /> : null}
-                {panel === "setup" ? <EngineersGarage {...props} /> : null}
+                {panel === "conditions" && conditionsPanel ? (
+                  <ConditionsPanel {...conditionsPanel} onOpenSettings={props.onOpenSettings} session />
+                ) : null}
+                {panel === "setup" ? <EngineersGarage {...props} onOpenSettings={props.onOpenSettings} /> : null}
                 {panel === "corners" ? (
                   <CornersPanel
                     onSelect={(n) => {
@@ -538,570 +371,48 @@ export const PauseMenu: React.FC<PauseMenuProps> = (props) => {
                   />
                 ) : null}
                 {panel === "multiplayer" ? <MultiplayerPanel {...props} /> : null}
-                {panel === "display" && displayPanel ? <DisplayPanel {...displayPanel} /> : null}
                 {panel === "leaderboard" && leaderboardPanel ? <LeaderboardPanel {...leaderboardPanel} /> : null}
               </div>
             </section>
           </div>
         </div>
 
-        <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-[#262B3D] pt-3 short:mt-3">
-          <PromptBar
-            prompts={[
-              { action: "move", label: "Move" },
-              { action: "select", label: panel === "corners" ? "Jump there" : "Select" },
-              { action: "tabs", label: "Tabs" },
-              { action: "back", label: "Back", key: "Bksp" },
-              { action: "start", label: "Resume", key: "Esc" },
-            ]}
-          />
-          <span className="hidden font-f1-mono text-[11px] font-bold tracking-[0.12em] text-[#8E96AA] md:inline">
-            {(getActiveTimedLengthM() / 1000).toFixed(2)} KM · {TURN_METADATA.length} TURNS · LIBRECORSA
-          </span>
-        </div>
+        {/* Touch screens have no keys to show: the footer comes back with a pad */}
+        <footer className={`mt-5 flex items-center gap-3 border-t border-lc-line pt-3 short:mt-3 ${mode === "pad" ? "" : "pointer-coarse:hidden"}`}>
+          <ShellPrompts prompts={prompts} phonePrompts={phonePrompts} />
+        </footer>
       </div>
     </div>
   );
 };
 
 /**
- * The pause menu's input assists for the keyboard or the controller (the player's device first): the steering assist
- * card the setup screens show, and below it the device's own rows with their reset
+ * The session tab: the race's rules (the same rows as the title's Race panel), with Autopilot in the field card. Rows
+ * that restart the race say so; the rest apply from the next start.
  */
-const InputAssistPanel: React.FC<{
-  settings: PlayerSettings;
-  onChangeSettings: (update: (prev: PlayerSettings) => PlayerSettings) => void;
-  lockDeg?: number;
-}> = ({ settings, onChangeSettings, lockDeg }) => {
-  // Opens on the player's device and follows it when it changes; a tab picked here holds while that device stays
-  const playerDevice: SteeringDevice = settings.device === "controller" ? "controller" : "keyboard";
-  const [picked, setPicked] = useState<{ device: SteeringDevice; whileDevice: PlayerSettings["device"] } | null>(null);
-  const device = picked && picked.whileDevice === settings.device ? picked.device : playerDevice;
-  const setDevice = (d: SteeringDevice) => setPicked({ device: d, whileDevice: settings.device });
-  const kb = settings.keyboardTuning;
-  const pad = settings.padTuning;
-  const setKb = (patch: Partial<KeyboardTuning>) =>
-    onChangeSettings((s) => ({ ...s, keyboardTuning: { ...s.keyboardTuning, ...patch } }));
-  const setPad = (patch: Partial<PadTuning>) => onChangeSettings((s) => ({ ...s, padTuning: { ...s.padTuning, ...patch } }));
-  const resetRows = () =>
-    onChangeSettings((s) =>
-      device === "keyboard"
-        ? { ...s, keyboardTuning: resetKeyboardTuning(s.keyboardTuning, PAUSE_KEYBOARD_FIELDS) }
-        : { ...s, padTuning: resetPadTuning(s.padTuning, PAUSE_PAD_FIELDS, s.padSensitivity) }
-    );
-  const pct = (v: number) => `${Math.round(v * 100)} %`;
-  const ms = (v: number) => `${Math.round(v * 1000)} ms`;
-  return (
-    <section className={PANEL_CARD} aria-label="Steering and pedal assist">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <PanelSection color="#CCFF00">Input assist options</PanelSection>
-        <Segmented
-          label="Assist device"
-          value={device}
-          onChange={setDevice}
-          options={[
-            { id: "keyboard", label: "Keyboard" },
-            { id: "controller", label: "Controller" },
-          ]}
-        />
-      </div>
-      <AssistTuningCard
-        compact
-        device={device}
-        tuning={device === "keyboard" ? kb : pad}
-        onChange={device === "keyboard" ? setKb : setPad}
-        lockDeg={lockDeg}
-      />
-      <div className="flex items-center justify-between gap-2 px-2 pt-1">
-        <span className="lc-lbl">{device === "keyboard" ? "Keys" : "Stick & triggers"}</span>
-        <button
-          type="button"
-          onClick={resetRows}
-          className="inline-flex h-[30px] shrink-0 cursor-pointer items-center rounded-full border border-[#262B3D] px-3 font-f1-mono text-[10px] font-extrabold tracking-[0.12em] text-[#8E96AA] uppercase transition-colors hover:border-[#CCFF00] hover:text-[#CCFF00]"
-        >
-          Reset
-        </button>
-      </div>
-      {device === "keyboard" ? (
-        <div className="flex flex-col gap-1">
-          <div className="grid gap-x-4 gap-y-0.5 sm:grid-cols-2">
-            <TuningSlider
-              label="Steering smoothing"
-              value={kb.steerRiseS}
-              min={0.05}
-              max={1}
-              step={0.01}
-              format={ms}
-              onChange={(v) => setKb({ steerRiseS: v })}
-            />
-            <TuningSlider
-              label="Steering return"
-              value={kb.steerReturnS}
-              min={0.05}
-              max={1}
-              step={0.01}
-              format={ms}
-              onChange={(v) => setKb({ steerReturnS: v })}
-            />
-            <TuningSlider
-              label="Pedal help strength"
-              value={kb.pedalAssistStrength}
-              min={0}
-              max={1}
-              step={0.05}
-              format={pct}
-              onChange={(v) => setKb({ pedalAssistStrength: v })}
-            />
-          </div>
-          <div className="grid gap-x-4 border-t border-[#262B3D] pt-1 sm:grid-cols-2">
-            <Toggle
-              label="Throttle help"
-              detail={`Eases ${keyLabel(settings.keys.throttle[0])} while the rears spin (TC off)`}
-              checked={kb.exitAssist}
-              onChange={() => setKb({ exitAssist: !kb.exitAssist })}
-            />
-            <Toggle
-              label="Brake help"
-              detail={`Eases ${keyLabel(settings.keys.brake[0])} while the tyres lock (ABS off)`}
-              checked={kb.brakeAssist}
-              onChange={() => setKb({ brakeAssist: !kb.brakeAssist })}
-            />
-          </div>
-        </div>
-      ) : (
-        <div className="flex flex-col gap-1">
-          <TuningSlider
-            label="Steering speed"
-            value={pad.steeringRate}
-            min={0.1}
-            max={1.5}
-            step={0.05}
-            format={(v) => `×${v.toFixed(2)}`}
-            onChange={(v) => setPad({ steeringRate: v })}
-          />
-          <div className="grid gap-x-4 border-t border-[#262B3D] pt-1 sm:grid-cols-2">
-            <Toggle
-              label="Impulse-trigger rumble"
-              detail="Slip, ABS & wheelspin in LT / RT"
-              checked={pad.triggerRumble}
-              onChange={() => setPad({ triggerRumble: !pad.triggerRumble })}
-            />
-            {pad.triggerRumble ? (
-              <Toggle
-                label="Trigger slip with ABS & TC"
-                detail="LT / RT slip buzz even with ABS & TC on"
-                checked={pad.triggerSlipAlwaysOn}
-                onChange={() => setPad({ triggerSlipAlwaysOn: !pad.triggerSlipAlwaysOn })}
-              />
-            ) : null}
-          </div>
-        </div>
-      )}
-    </section>
-  );
-};
-
 export const SessionPanel: React.FC<PauseMenuProps> = (p) => {
-  const k = {
-    camera: "C",
-    racingLine: "R",
-    mute: "M",
-    mouseSteer: "V",
-    autopilot: "P",
-    shiftUp: "E",
-    shiftDown: "Q",
-    ...p.keyNames,
-  };
-  return (
-    <div className="grid items-start gap-3.5 xl:grid-cols-[1.35fr_1.1fr]">
-      <section className={PANEL_CARD} aria-label="Session">
-        <PanelSection>Session</PanelSection>
-        <div className="grid gap-x-[22px] gap-y-0.5 sm:grid-cols-2">
-          {/* An online race has no AI cars to add */}
-          {p.telemetry.race?.multiplayer || p.raceRunning ? null : (
-            <Toggle
-              label="AI opponents"
-              detail="Race 5 AI cars from a standing start"
-              checked={p.aiOpponents}
-              onChange={p.onToggleAiOpponents}
-            />
-          )}
-          <Toggle
-            label="Racing line"
-            detail={`Braking-aware line on the track (${k.racingLine})`}
-            checked={p.showRacingLine}
-            onChange={p.onToggleRacingLine}
-          />
-          <Toggle label="Engine sound" detail={k.mute} checked={!p.isMuted} onChange={p.onToggleMute} />
-          <Toggle
-            label="Automatic gearbox"
-            detail={`Shifts for you and keeps your own shifts (${k.shiftUp} / ${k.shiftDown}) · Off: full manual`}
-            checked={p.autoGearbox ?? true}
-            onChange={() => p.onSetAutoGearbox?.(!(p.autoGearbox ?? true))}
-          />
-          <Toggle
-            label="Gamepad steering assist"
-            detail="Stick steers up to the front-tyre grip limit (the keyboard always does)"
-            checked={p.gamepadAssist}
-            onChange={() => p.onToggleGamepadAssist?.()}
-          />
-          <Toggle
-            label="Gamepad rumble"
-            detail="Kerbs, lock-up, wheelspin and grass through the pad"
-            checked={p.gamepadRumble}
-            onChange={p.onToggleGamepadRumble}
-          />
-          <Toggle
-            label="Mouse steering"
-            detail={k.mouseSteer}
-            checked={p.mouseSteerEnabled}
-            onChange={() => p.onToggleMouseSteer?.()}
-          />
-          <Toggle
-            label="Autopilot"
-            detail={`The AI drives your car (${k.autopilot})`}
-            checked={p.telemetry.aiAutopilot}
-            onChange={p.onToggleAiAutopilot}
-          />
-          <div className="flex min-h-[48px] items-center justify-between gap-3 px-2">
-            <span className="text-[16px] leading-tight font-bold text-[#F5F7FA]">Camera</span>
-            <button
-              type="button"
-              onClick={p.onCycleCamera}
-              className="inline-flex h-9 shrink-0 cursor-pointer items-center rounded-full border border-[#262B3D] bg-[#08090D] px-3.5 font-f1-mono text-xs font-extrabold text-[#CCFF00] transition-colors hover:border-[#CCFF00]"
-            >
-              {CAMERA_MODES[p.cameraMode].label} · {k.camera}
-            </button>
-          </div>
-        </div>
-        {p.onChangeAiSkill ? (
-          <div className="border-t border-[#262B3D] pt-1.5">
-            <TyreSlider
-              label="AI level"
-              value={p.aiSkill ?? AI_SKILL_DEFAULT}
-              limits={{ min: 0, max: 100, step: 5 }}
-              format={(v) => `${aiSkillLabel(v)} · ${Math.round(v)}`}
-              onChange={p.onChangeAiSkill}
-            />
-            <div className="flex flex-wrap gap-1.5 px-2 pb-1">
-              {AI_SKILL_LEVELS.map((l) => (
-                <button
-                  key={l.id}
-                  type="button"
-                  aria-pressed={Math.round(p.aiSkill ?? AI_SKILL_DEFAULT) === l.value}
-                  onClick={() => p.onChangeAiSkill?.(l.value)}
-                  className={`min-h-[32px] cursor-pointer rounded-full px-3 font-f1-mono text-[11px] font-extrabold tracking-[0.12em] uppercase transition-colors ${
-                    Math.round(p.aiSkill ?? AI_SKILL_DEFAULT) === l.value
-                      ? "bg-[#CCFF00] text-[#08090D]"
-                      : "border border-[#262B3D] text-[#8E96AA] hover:border-[#CCFF00] hover:text-[#CCFF00]"
-                  }`}
-                >
-                  {l.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        ) : null}
-        {p.onChangeRaceSetup ? (
-          <div className="border-t border-[#262B3D] pt-1.5 pb-1">
-            <div className="flex items-baseline justify-between px-2 pb-0.5">
-              <span className="font-f1-mono text-[10px] font-extrabold tracking-[0.18em] text-[#8E96AA] uppercase">Race setup</span>
-              <span className="font-f1-mono text-[10px] text-[#5A6275]">From the next start</span>
-            </div>
-            {(() => {
-              const r = p.raceSetup ?? DEFAULT_RACE_SETUP;
-              const set = p.onChangeRaceSetup;
-              return (
-                <>
-                  <SetupChips label="Laps" value={r.laps} options={RACE_LAP_OPTIONS} onChange={(laps) => set({ laps })} />
-                  <SetupChips label="Opponents" value={r.opponents} options={RACE_OPPONENT_OPTIONS} onChange={(opponents) => set({ opponents })} />
-                  <SetupChips label="Your grid slot" value={r.grid} options={["back", "middle", "front", "random"] as const} format={(v) => PLAYER_GRID_LABELS[v]} onChange={(grid) => set({ grid })} />
-                  <SetupChips label="AI grid" value={r.aiGrid} options={["qualifying", "pace", "reversed"] as const} format={(v) => AI_GRID_LABELS[v]} onChange={(aiGrid) => set({ aiGrid })} />
-                  <SetupChips label="Damage" value={r.damage} options={DAMAGE_LEVELS} format={(v) => DAMAGE_LEVEL_LABELS[v]} onChange={(damage) => set({ damage })} />
-                  <SetupChips label="Start" value={r.start} options={["standing", "rolling"] as const} format={(v) => RACE_START_LABELS[v]} onChange={(start) => set({ start })} />
-                  <SetupChips label="Racing" value={r.aggression} options={["clean", "normal", "hard"] as const} format={(v) => RACE_AGGRESSION_LABELS[v]} onChange={(aggression) => set({ aggression })} />
-                </>
-              );
-            })()}
-          </div>
-        ) : null}
-        {p.onChangeCockpitFov ? (
-          <div className="border-t border-[#262B3D] pt-1.5">
-            <TyreSlider
-              label="Base FOV · all cars"
-              value={p.cockpitFovDeg ?? p.cockpitFovDefaultDeg ?? 60}
-              limits={{ min: COCKPIT_FOV_MIN_DEG, max: COCKPIT_FOV_MAX_DEG, step: 1 }}
-              format={(v) => (p.cockpitFovDeg == null ? `${v}° · car` : `${v}°`)}
-              onChange={p.onChangeCockpitFov}
-            />
-            {p.cockpitFovDeg != null ? (
-              <button
-                type="button"
-                onClick={() => p.onChangeCockpitFov?.(null)}
-                className="min-h-[32px] cursor-pointer px-2 font-f1-mono text-[11px] font-extrabold tracking-[0.12em] text-[#8E96AA] uppercase transition-colors hover:text-[#CCFF00]"
-              >
-                Car default{p.cockpitFovDefaultDeg ? ` (${p.cockpitFovDefaultDeg}°)` : ""}
-              </button>
-            ) : null}
-          </div>
-        ) : null}
-      </section>
-
-      <div className="flex flex-col gap-3.5">
-        {p.settings && p.onChangeSettings ? (
-          <InputAssistPanel settings={p.settings} onChangeSettings={p.onChangeSettings} lockDeg={p.steerLockDeg} />
-        ) : null}
-
-        <section className={PANEL_CARD} aria-label="Controls">
-          <PanelSection color="#00E5FF">Controls</PanelSection>
-          <div className="flex flex-col">
-            {(
-              p.controlsCheatSheet ?? [
-                ["Throttle / brake", "W S · ↑ ↓"],
-                ["Steer", "A D · ← →"],
-                ["Boost (manual override)", "Space · B"],
-                ["Active aero X / Z", "X"],
-                ["Gear up / down", "E / Q"],
-                ["Camera", "C"],
-                ["Seat & camera (cockpit, dash)", "Hold C · hold Y"],
-                ["FOV, this car", "[ / ]"],
-                ["Nudge the view", "Alt + arrows · − = · [ ]"],
-                ["Racing line", "R"],
-                ["Restart", "Backspace"],
-                ["Pad", "RT / LT · stick · A boost"],
-              ]
-            ).map(([label, keys]) => (
-              <div
-                key={label}
-                className="flex items-baseline justify-between gap-3 border-b border-[#262B3D]/70 py-[7px] last:border-b-0"
-              >
-                <span className="text-[13px] text-[#8E96AA]">{label}</span>
-                <span className="text-right font-f1-mono text-[12px] font-extrabold text-[#F5F7FA]">{keys}</span>
-              </div>
-            ))}
-          </div>
-        </section>
-      </div>
-    </div>
+  const mpRace = p.telemetry.race?.multiplayer === true || p.raceRunning === true;
+  const autopilot = (
+    <SettingRow label="Autopilot" hint={`The AI drives your car. Key ${p.keyNames?.autopilot ?? "P"}`}>
+      <Toggle checked={p.telemetry.aiAutopilot} onChange={() => p.onToggleAiAutopilot()} />
+    </SettingRow>
   );
-};
-
-export const SetupPanel: React.FC<PauseMenuProps> = (p) => {
-  const limits = TYRE_SETUP_LIMITS[p.vehicleModel];
+  if (!p.onChangeRaceSetup) {
+    return <Card title="Session">{autopilot}</Card>;
+  }
   return (
-    <div className="lc-glass flex flex-col gap-[18px] rounded-[28px] p-5 text-[#F5F7FA] sm:px-7 sm:pt-6 sm:pb-[26px] short:p-4 [.lc-title-frame_&]:border-0 [.lc-title-frame_&]:bg-transparent [.lc-title-frame_&]:p-0 [.lc-title-frame_&]:shadow-none [.lc-title-frame_&]:[backdrop-filter:none]">
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(min(360px,100%),1fr))] gap-[26px] short:gap-5">
-        <div className="flex min-w-0 flex-col gap-[18px]">
-          <div className="flex flex-col gap-2.5">
-            <PanelSection>Vehicle class &amp; chassis</PanelSection>
-            <CarPicker carId={p.carId} onChangeCar={p.onChangeCar} />
-          </div>
-
-          <div className="flex flex-col gap-2.5">
-            <PanelSection color="#00E5FF">Aero package</PanelSection>
-            <div className="grid grid-cols-3 gap-2">
-              {(
-                [
-                  { id: "low_downforce", title: "Low downforce", sub: "Top speed" },
-                  { id: "balanced", title: "Balanced", sub: "Reference setup" },
-                  {
-                    id: "high_downforce",
-                    title: "High downforce",
-                    sub: "Corner grip",
-                  },
-                ] as const
-              ).map((item) => {
-                const active = p.aeroPreset === item.id;
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    aria-pressed={active}
-                    onClick={() => p.onChangeAeroPreset(item.id)}
-                    className={`flex min-h-[60px] min-w-0 cursor-pointer flex-col justify-center gap-0.5 rounded-2xl px-3 py-2.5 text-left transition-[background-color,border-color,color] duration-200 ${
-                      active
-                        ? "border-[1.5px] border-[#CCFF00] bg-[#CCFF00]/[0.07] text-[#F5F7FA]"
-                        : "border border-[#262B3D] bg-[#08090D]/50 text-[#C5CBD8] hover:border-[#3A4157] hover:bg-[#1B1F2B] hover:text-[#F5F7FA]"
-                    }`}
-                  >
-                    <span className="text-[14px] leading-tight font-bold">{item.title}</span>
-                    <span className={`text-[12px] ${active ? "text-[#C5CBD8]" : "text-[#8E96AA]"}`}>{item.sub}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-
-        <div className="flex min-w-0 flex-col gap-[18px]">
-          <div className="grid gap-3.5 sm:grid-cols-2">
-            <div className="flex min-w-0 flex-col gap-2.5">
-              <PanelSection>Tyres</PanelSection>
-              {vehicleModelSpec(p.vehicleModel).onlyTyre ? (
-                <div className="flex min-h-[46px] items-center rounded-full border border-[#262B3D] bg-[#08090D] px-4 text-[13px] font-bold text-[#C5CBD8]">
-                  {vehicleModelSpec(p.vehicleModel).onlyTyre}
-                </div>
-              ) : (
-              <div className="flex rounded-full border border-[#262B3D] bg-[#08090D] p-1">
-                {COMPOUNDS.map((c) => {
-                  const active = p.tireCompound === c.id;
-                  return (
-                    <button
-                      key={c.id}
-                      type="button"
-                      aria-pressed={active}
-                      aria-label={c.name}
-                      onClick={() => p.onChangeTireCompound(c.id)}
-                      className={`${SEG_BTN} ${
-                        active
-                          ? "bg-[#1B1F2B] text-[#F5F7FA] shadow-[inset_0_0_0_1px_#3A4157]"
-                          : "text-[#8E96AA] hover:text-[#F5F7FA]"
-                      }`}
-                    >
-                      <span
-                        aria-hidden
-                        className="h-3 w-3 shrink-0 rounded-full border-[3px]"
-                        style={{ borderColor: c.ring }}
-                      />
-                      {c.label}
-                    </button>
-                  );
-                })}
-              </div>
-              )}
-            </div>
-            <div className="flex min-w-0 flex-col gap-2.5">
-              <PanelSection>Traction &amp; ABS</PanelSection>
-              <div className="flex rounded-full border border-[#262B3D] bg-[#08090D] p-1">
-                {(
-                  [
-                    { id: "pro", label: "Off" },
-                    { id: "semi_pro", label: "TC + ABS" },
-                    { id: "assisted", label: "Full" },
-                  ] as const
-                ).map((a) => {
-                  const active = p.assistPreset === a.id;
-                  return (
-                    <button
-                      key={a.id}
-                      type="button"
-                      aria-pressed={active}
-                      onClick={() => p.onChangeAssistPreset(a.id)}
-                      className={`${SEG_BTN} ${
-                        active ? "flex-[1.6] bg-[#CCFF00] text-[#08090D]" : "text-[#8E96AA] hover:text-[#F5F7FA]"
-                      }`}
-                    >
-                      {a.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-3 rounded-[20px] border border-[#262B3D] bg-[#08090D]/55 p-4">
-            <div className="flex items-center justify-between gap-3">
-              <PanelSection>Tyres · pressure &amp; camber</PanelSection>
-              <button
-                type="button"
-                onClick={() => p.onChangeTyreSetup(p.defaultTyreSetup)}
-                className="inline-flex h-[30px] shrink-0 cursor-pointer items-center rounded-full border border-[#262B3D] px-3 font-f1-mono text-[10px] font-extrabold tracking-[0.12em] text-[#8E96AA] uppercase transition-colors hover:border-[#CCFF00] hover:text-[#CCFF00]"
-              >
-                Reset
-              </button>
-            </div>
-            <div className="grid gap-x-5 gap-y-1 sm:grid-cols-2">
-              {(
-                [
-                  ["fl", "Front-left cold pressure"],
-                  ["fr", "Front-right cold pressure"],
-                  ["rl", "Rear-left cold pressure"],
-                  ["rr", "Rear-right cold pressure"],
-                ] as const
-              ).map(([k, label]) => (
-                <TyreSlider
-                  key={k}
-                  label={label}
-                  value={p.tyreSetup.coldPressurePsi[k]}
-                  limits={limits.pressurePsi}
-                  format={formatPsi}
-                  onChange={(v) =>
-                    p.onChangeTyreSetup({
-                      ...p.tyreSetup,
-                      coldPressurePsi: { ...p.tyreSetup.coldPressurePsi, [k]: v },
-                    })
-                  }
-                />
-              ))}
-              <TyreSlider
-                label="Front camber"
-                value={p.tyreSetup.camberDeg.front}
-                limits={limits.camberFrontDeg}
-                format={formatCamber}
-                onChange={(v) =>
-                  p.onChangeTyreSetup({
-                    ...p.tyreSetup,
-                    camberDeg: { ...p.tyreSetup.camberDeg, front: v },
-                  })
-                }
-              />
-              <TyreSlider
-                label="Rear camber"
-                value={p.tyreSetup.camberDeg.rear}
-                limits={limits.camberRearDeg}
-                format={formatCamber}
-                onChange={(v) =>
-                  p.onChangeTyreSetup({
-                    ...p.tyreSetup,
-                    camberDeg: { ...p.tyreSetup.camberDeg, rear: v },
-                  })
-                }
-              />
-            </div>
-            <p className="m-0 text-[12px] leading-normal text-[#8E96AA]">
-              Read the tread temps on the tyre panel: inner hotter than outer by 5–10 °C is ideal.
-            </p>
-          </div>
-
-          <div className="flex flex-col gap-2.5">
-            <PanelSection>Livery</PanelSection>
-            {!carTakesLivery(p.carId) ? (
-              <p className="m-0 text-[12px] text-[#8E96AA]">{FACTORY_LIVERY_NOTE}</p>
-            ) : (
-              <div className="grid grid-cols-5 gap-2">
-                {LIVERIES.map((liv) => {
-                  const active = p.selectedLivery.id === liv.id;
-                  return (
-                    <button
-                      key={liv.id}
-                      type="button"
-                      aria-pressed={active}
-                      aria-label={liv.name}
-                      title={`${liv.name} · ${liv.team}`}
-                      onClick={() => p.onChangeLivery(liv)}
-                      className={`flex min-h-[44px] min-w-0 cursor-pointer flex-col gap-2 rounded-2xl p-2 text-left transition-[background-color,border-color,color] duration-200 ${
-                        active
-                          ? "border-[1.5px] border-[#CCFF00] bg-[#CCFF00]/[0.07] text-[#F5F7FA]"
-                          : "border border-[#262B3D] bg-[#08090D]/50 text-[#C5CBD8] hover:border-[#3A4157] hover:bg-[#1B1F2B] hover:text-[#F5F7FA]"
-                      }`}
-                    >
-                      <span
-                        aria-hidden
-                        className="block h-[26px] w-full rounded-[10px]"
-                        style={{
-                          background: `linear-gradient(135deg, ${liv.primary} 0 55%, ${liv.accent} 55% 65%, ${liv.secondary} 65% 100%)`,
-                        }}
-                      />
-                      <span className="truncate text-[11px] font-bold">{liv.name}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
+    <RaceRules
+      context="pause"
+      setup={p.raceSetup}
+      onChange={p.onChangeRaceSetup}
+      aiSkill={p.aiSkill}
+      onChangeAiSkill={p.onChangeAiSkill}
+      aiOpponents={p.aiOpponents}
+      // An online race has no AI cars to add
+      onToggleAiOpponents={mpRace ? undefined : p.onToggleAiOpponents}
+      trackLengthM={getActiveTimedLengthM()}
+      extraFieldRows={autopilot}
+    />
   );
 };
 
@@ -1156,6 +467,8 @@ function buildCornerMap() {
 
 const CornersPanel: React.FC<{ onSelect: (turn: number) => void }> = ({ onSelect }) => {
   const map = useMemo(buildCornerMap, []);
+  const units = useUnits();
+  const speedUnit = SPEED_LABEL[units.speed];
   // The corner under the pointer, else the focused one, lit on the map (kept apart, so leaving one row with the pointer
   // falls back to the focused row instead of clearing)
   const [hover, setHover] = useState<number | null>(null);
@@ -1165,99 +478,99 @@ const CornersPanel: React.FC<{ onSelect: (turn: number) => void }> = ({ onSelect
   const hotPoint = hot == null ? undefined : map.turns.find((t) => t.number === hot);
 
   return (
-    <section
-      aria-label="Jump to a corner"
-      className="grid grid-cols-[repeat(auto-fit,minmax(min(340px,100%),1fr))] gap-3.5 rounded-[24px] border border-white/[0.07] bg-[#0D0F15]/82 p-[18px] text-[#F5F7FA] short:p-3.5"
-    >
-      <div className="flex min-w-0 flex-col gap-2.5">
-        <PanelSection>Jump to a corner · apex speed · gear</PanelSection>
-        <svg
-          viewBox={map.viewBox}
-          role="img"
-          aria-label={`Circuit map with ${TURN_METADATA.length} numbered turns`}
-          className="hidden h-auto max-h-[400px] w-full sm:block short:max-h-[200px]"
-        >
-          <path d={map.d} fill="none" stroke="#141822" strokeWidth={46} strokeLinejoin="round" />
-          <path d={map.d} fill="none" stroke="#3A4157" strokeWidth={10} strokeLinejoin="round" />
-          <path
-            d={map.d}
-            fill="none"
-            stroke="#CCFF00"
-            strokeOpacity={0.6}
-            strokeWidth={3}
-            strokeDasharray="3 37"
-            className="lc-flow"
-          />
-          <line {...map.startLine} stroke="#F5F7FA" strokeWidth={8} />
-          <g className="font-f1-mono" fontSize={20} fontWeight={800} textAnchor="middle">
-            {map.turns.map((t) =>
-              t.number === hot ? null : (
-                <g key={t.number}>
-                  <circle cx={t.x} cy={t.y} r={22} fill="#11131A" stroke="#5B6275" strokeWidth={3} />
-                  <text x={t.x} y={t.y + 7} fill="#F5F7FA">
-                    {t.number}
+    <Card title="Jump to a corner" description={`Apex speed in ${speedUnit} and gear for each turn`}>
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(min(340px,100%),1fr))] gap-3.5">
+        <div className="flex min-w-0 flex-col gap-2.5">
+          <svg
+            viewBox={map.viewBox}
+            role="img"
+            aria-label={`Circuit map with ${TURN_METADATA.length} numbered turns`}
+            className="hidden h-auto max-h-[400px] w-full sm:block short:max-h-[200px]"
+          >
+            <path d={map.d} fill="none" stroke="var(--color-lc-carbon)" strokeWidth={46} strokeLinejoin="round" />
+            <path d={map.d} fill="none" stroke="var(--color-lc-keyline)" strokeWidth={10} strokeLinejoin="round" />
+            <line {...map.startLine} stroke="var(--color-lc-chalk)" strokeWidth={8} />
+            <g className="lc-mono" fontSize={20} fontWeight={800} textAnchor="middle">
+              {map.turns.map((t) =>
+                t.number === hot ? null : (
+                  <g key={t.number}>
+                    <circle cx={t.x} cy={t.y} r={22} fill="var(--color-lc-carbon)" stroke="var(--color-lc-dim)" strokeWidth={3} />
+                    <text x={t.x} y={t.y + 7} fill="var(--color-lc-chalk)">
+                      {t.number}
+                    </text>
+                  </g>
+                )
+              )}
+              {/* The corner under the cursor wears the cursor's volt */}
+              {hotPoint ? (
+                <g>
+                  <circle cx={hotPoint.x} cy={hotPoint.y} r={40} fill="var(--color-lc-volt)" opacity={0.22} />
+                  <circle cx={hotPoint.x} cy={hotPoint.y} r={26} fill="var(--color-lc-volt)" stroke="var(--color-lc-void)" strokeWidth={4} />
+                  <text x={hotPoint.x} y={hotPoint.y + 7} fill="var(--color-lc-void)">
+                    {hotPoint.number}
                   </text>
                 </g>
-              )
-            )}
-            {hotPoint ? (
-              <g>
-                <circle cx={hotPoint.x} cy={hotPoint.y} r={40} fill="#CCFF00" opacity={0.22} />
-                <circle cx={hotPoint.x} cy={hotPoint.y} r={26} fill="#CCFF00" stroke="#08090D" strokeWidth={4} />
-                <text x={hotPoint.x} y={hotPoint.y + 7} fill="#08090D">
-                  {hotPoint.number}
-                </text>
-              </g>
-            ) : null}
-          </g>
-        </svg>
-        <div className="hidden min-h-[44px] items-center gap-3 sm:flex">
-          {hotTurn ? (
-            <>
-              <span className="lc-disp shrink-0 text-[24px] text-[#CCFF00]">T{hotTurn.number}</span>
-              <span className="flex min-w-0 flex-col">
-                <span className="lc-title truncate text-[15px] text-[#F5F7FA]">{cornerName(hotTurn.name)}</span>
-                <span className="truncate text-[12px] text-[#8E96AA]">
-                  {hotTurn.complexName} · Sector {hotTurn.sector}
+              ) : null}
+            </g>
+          </svg>
+          <div className="hidden min-h-11 items-center gap-3 sm:flex">
+            {hotTurn ? (
+              <>
+                <span className="lc-disp shrink-0 text-[24px] text-lc-chalk">T{hotTurn.number}</span>
+                <span className="flex min-w-0 flex-col">
+                  <span className="lc-row-label truncate">{cornerName(hotTurn.name)}</span>
+                  <span className="lc-hint truncate">
+                    {hotTurn.complexName} · Sector {hotTurn.sector}
+                  </span>
                 </span>
-              </span>
-            </>
-          ) : (
-            <span className="text-[13px] text-[#8E96AA]">Pick a corner to jump there.</span>
-          )}
+              </>
+            ) : (
+              <span className="lc-hint">Pick a corner to jump there.</span>
+            )}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 content-start gap-1.5 min-[420px]:grid-cols-2">
+          {TURN_METADATA.map((t) => {
+            const apex = Math.round(speedIn(t.apexSpeedKmh, units.speed));
+            return (
+              <button
+                key={t.number}
+                type="button"
+                onClick={() => onSelect(t.number)}
+                onPointerEnter={(e) => {
+                  setHover(t.number);
+                  focusOnHover(e);
+                }}
+                onPointerLeave={() => setHover((h) => (h === t.number ? null : h))}
+                onFocus={() => setFocused(t.number)}
+                onBlur={() => setFocused((f) => (f === t.number ? null : f))}
+                aria-label={`T${t.number}, turn ${t.number}: ${cornerName(t.name)}, ${t.complexName}. Apex ${apex} ${speedUnit}, gear ${t.gear}`}
+                title={`${cornerName(t.name)} · ${t.complexName}`}
+                className={cx(
+                  "group grid min-h-11 cursor-pointer grid-cols-[44px_minmax(0,1fr)_auto] items-center gap-2.5 rounded-lc-row bg-lc-well px-3 py-1 text-left text-lc-chalk inset-ring inset-ring-lc-line",
+                  MOTION,
+                  HOVER_PILL,
+                  PRESSED_PILL,
+                  CURSOR_PILL,
+                )}
+              >
+                <span className="lc-disp text-[20px]">T{t.number}</span>
+                <span className="flex min-w-0 flex-col">
+                  <span className="lc-data text-[13px]">
+                    {apex}
+                    <span className="lc-hint font-normal text-lc-slate group-focus:text-lc-void/70"> {speedUnit}</span>
+                  </span>
+                  <span className="truncate text-[11px] text-lc-slate group-focus:text-lc-void/70 sm:hidden">{cornerName(t.name)}</span>
+                </span>
+                <span className="lc-hint text-lc-slate group-focus:text-lc-void/70">
+                  Gear <span className="lc-data text-[13px] text-lc-chalk group-focus:text-lc-void">{t.gear}</span>
+                </span>
+              </button>
+            );
+          })}
         </div>
       </div>
-
-      <div className="grid grid-cols-1 content-start gap-1.5 min-[420px]:grid-cols-2">
-        {TURN_METADATA.map((t) => (
-          <button
-            key={t.number}
-            type="button"
-            onClick={() => onSelect(t.number)}
-            onPointerEnter={() => setHover(t.number)}
-            onPointerLeave={() => setHover((h) => (h === t.number ? null : h))}
-            onFocus={() => setFocused(t.number)}
-            onBlur={() => setFocused((f) => (f === t.number ? null : f))}
-            aria-label={`Turn ${t.number}: ${cornerName(t.name)}, ${t.complexName}. Apex ${t.apexSpeedKmh} km/h, gear ${t.gear}`}
-            title={`${cornerName(t.name)} · ${t.complexName}`}
-            className="group grid min-h-[44px] cursor-pointer grid-cols-[44px_minmax(0,1fr)_auto] items-center gap-2.5 rounded-[14px] bg-[#08090D]/55 px-3 py-1 text-left text-[#F5F7FA] shadow-[inset_0_0_0_1px_#1B1F2B] outline-none transition-[background-color,box-shadow,color] duration-200 hover:shadow-[inset_0_0_0_1px_#CCFF00] focus:bg-[#CCFF00] focus:text-[#08090D] focus:shadow-[0_0_0_4px_rgba(204,255,0,0.15)]"
-          >
-            <span className="lc-disp text-[20px] text-[#CCFF00] group-focus:text-[#08090D]">T{t.number}</span>
-            <span className="flex min-w-0 flex-col">
-              <span className="font-f1-mono text-[13px] font-extrabold tabular-nums">
-                {t.apexSpeedKmh}
-                <span className="text-[10px] text-[#8E96AA] group-focus:text-[#08090D]/70"> KM/H</span>
-              </span>
-              <span className="truncate text-[11px] text-[#8E96AA] group-focus:text-[#08090D]/70 sm:hidden">
-                {cornerName(t.name)}
-              </span>
-            </span>
-            <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-[#00E5FF]/12 font-f1-mono text-[12px] font-extrabold text-[#00E5FF] group-focus:bg-[#08090D] group-focus:text-[#CCFF00]">
-              {t.gear}
-            </span>
-          </button>
-        ))}
-      </div>
-    </section>
+    </Card>
   );
 };

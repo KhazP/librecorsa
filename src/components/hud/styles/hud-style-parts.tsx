@@ -3,7 +3,31 @@
 import React, { useEffect, useId, useRef, useState } from "react";
 import type { CarTelemetry, TireCompound } from "@/types/f1";
 import { inDeadZone, type BuiltTrackData, type PointToPointDef } from "@/lib/track-data";
-import { HUD_CYAN, HUD_GREEN, HUD_PURPLE, HUD_RED, HUD_VOLT, HUD_YELLOW, revRangeFor, sectorTimeColor } from "../hud-format";
+import { Badge, type BadgeSize } from "@/components/ui/Badge";
+import { CHOSEN_PILL, cx, DISABLED, HOVER_PILL, MOTION, PRESSED_PILL } from "@/components/ui/styles";
+import { Trend } from "@/components/ui/icons/Trend";
+import {
+  HUD_CYAN,
+  HUD_GAIN,
+  HUD_GLASS,
+  HUD_GREEN,
+  HUD_LBL,
+  HUD_LOSS,
+  HUD_PINK,
+  HUD_PURPLE,
+  HUD_RED,
+  HUD_SLATE,
+  HUD_VOLT,
+  HUD_YELLOW,
+  formatDelta,
+  LAP_MARK_COLOR,
+  LAP_MARK_WORD,
+  NO_TIME,
+  lapMark,
+  revRangeFor,
+  sectorTimeColor,
+  type LapMark,
+} from "../hud-format";
 
 /** Circuit outline for the HUD maps, in a 0..1000 box (aspect kept) */
 export interface HudMap {
@@ -111,12 +135,29 @@ export function revRangeOf(t: CarTelemetry): [number, number] {
 export const anchor = (scale: number | undefined, origin: string): React.CSSProperties | undefined =>
   !scale || scale === 1 ? undefined : { transform: `scale(${scale})`, transformOrigin: origin };
 
-/** Racing Line frosted HUD sheet over the live scene; each panel adds its own radius and padding */
-export const HUD_GLASS =
-  "border border-white/[0.07] bg-[#08090D]/[0.74] shadow-[0_14px_40px_rgba(0,0,0,0.5)] backdrop-blur-[14px]";
+/** The one HUD glass and the one HUD label (hud-format), for the styles that import them from here */
+export { HUD_GLASS, HUD_LBL };
 
-/** Racing Line HUD label: mono 800, tracked, slate */
-export const HUD_LBL = "font-f1-mono text-[9px] font-extrabold tracking-[0.18em] text-[#8E96AA] uppercase";
+/*
+ * The HUD's own small controls (MFD page tabs and fold buttons, the tuner's strips and round buttons, the replay
+ * speeds): drawn smaller than the kit's parts and driven by the D-pad, so they are built here once from the kit's
+ * recipes (ui/styles.ts) and every one of them uses these. The cursor shows for the keyboard and the pad only, so a
+ * click with the mouse never leaves a volt tab behind over the driving view.
+ */
+/** The cursor: the volt fill with void ink and the halo (focus-visible, and any focus with a pad) */
+const HUD_CURSOR = cx(
+  "outline-none focus-visible:outline-none",
+  "focus-visible:bg-lc-volt focus-visible:text-lc-void focus-visible:inset-ring-transparent focus-visible:shadow-lc-focus",
+  "in-data-[input=pad]:focus:bg-lc-volt in-data-[input=pad]:focus:text-lc-void in-data-[input=pad]:focus:inset-ring-transparent",
+);
+/** On a touch screen the hit area grows to 44 px round a drawing as small as 24 px */
+const HUD_HIT = "relative pointer-coarse:before:absolute pointer-coarse:before:-inset-2.5 pointer-coarse:before:content-['']";
+/** Every HUD control: hover, pressed, cursor, disabled and the touch hit area */
+export const HUD_CONTROL = cx("cursor-pointer", MOTION, HOVER_PILL, PRESSED_PILL, HUD_CURSOR, DISABLED, HUD_HIT);
+/** The option a HUD control is on (chalk on line with a lit hairline, never volt) */
+export const HUD_CHOSEN = CHOSEN_PILL;
+/** An option it is not on */
+export const HUD_IDLE = "text-lc-slate";
 
 /**
  * Positions of `n` lights spread evenly along an arc (centre cx, cy; radius r; ±span/2 degrees
@@ -131,7 +172,8 @@ export function arcPoints(n: number, cx: number, cy: number, r: number, spanDeg:
 
 export { COMPOUND_COLORS } from "../hud-format";
 
-export const SECTOR_COLORS = [HUD_CYAN, HUD_VOLT, "#FF6B8A"] as const;
+/** Sector colours on the circuit maps (docs/DESIGN.md §2): identity, not state */
+export const SECTOR_COLORS = [HUD_CYAN, HUD_VOLT, HUD_PINK] as const;
 
 /** Point on the map outline at a lap fraction */
 export function mapPoint(map: HudMap, progress: number): [number, number] {
@@ -168,7 +210,7 @@ export const MiniMap: React.FC<{
   rivals?: boolean;
   /** Zoomed heading-up map around the car instead of the whole circuit */
   local?: boolean;
-}> = ({ map, t, className, sectors = false, stroke = 22, outline = "rgba(245,247,250,0.85)", rivals = true, local = false }) => {
+}> = ({ map, t, className, sectors = false, stroke = 22, outline = "var(--color-lc-chalk)", rivals = true, local = false }) => {
   const [cx, cy] = mapPoint(map, t.trackProgress);
   const [sx, sy] = mapPoint(map, 0);
   const pad = 60;
@@ -204,7 +246,7 @@ export const MiniMap: React.FC<{
       ) : null}
       <g clipPath={local ? `url(#${clipId})` : undefined}>
         <g transform={local ? `rotate(${rot.toFixed(2)} ${cx} ${cy})` : undefined}>
-          <path d={map.path} fill="none" stroke="rgba(0,0,0,0.55)" strokeWidth={sw + 16 * k} strokeLinejoin="round" />
+          <path d={map.path} fill="none" stroke="var(--color-lc-void)" strokeOpacity={0.6} strokeWidth={sw + 16 * k} strokeLinejoin="round" />
           {sectors ? (
             map.sectorPaths.map((d, i) => (
               <path
@@ -219,35 +261,56 @@ export const MiniMap: React.FC<{
               />
             ))
           ) : (
-            <path d={map.path} fill="none" stroke={outline} strokeWidth={sw} strokeLinejoin="round" />
+            <path d={map.path} fill="none" stroke={outline} strokeOpacity={0.85} strokeWidth={sw} strokeLinejoin="round" />
           )}
-          <rect x={sx - 6 * k} y={sy - 26 * k} width={12 * k} height={52 * k} fill="#F5F7FA" />
+          <rect x={sx - 6 * k} y={sy - 26 * k} width={12 * k} height={52 * k} fill="var(--color-lc-chalk)" />
           {spots.map((e) => {
             const [x, y] = mapPoint(map, e.p);
-            return <circle key={e.key} cx={x} cy={y} r={20 * k} fill={e.color} stroke="#08090D" strokeWidth={7 * k} />;
+            return <circle key={e.key} cx={x} cy={y} r={20 * k} fill={e.color} stroke="var(--color-lc-void)" strokeWidth={7 * k} />;
           })}
         </g>
       </g>
-      {local ? <circle cx={cx} cy={cy} r={r * 0.98} fill="none" stroke="rgba(245,247,250,0.12)" strokeWidth={4 * k} /> : null}
+      {local ? <circle cx={cx} cy={cy} r={r * 0.98} fill="none" stroke="var(--color-lc-chalk)" strokeOpacity={0.12} strokeWidth={4 * k} /> : null}
       <circle cx={cx} cy={cy} r={46 * k} fill={HUD_VOLT} opacity={0.22} />
+      {/* A chalk ring keeps the player's volt dot apart from sector 2's volt line */}
+      {local ? null : <circle cx={cx} cy={cy} r={36} fill="none" stroke="var(--color-lc-chalk)" strokeWidth={6} />}
       {local ? (
         // Heading-up: the car is an arrow pointing up the screen
         <path
           d={`M ${cx} ${cy - 34 * k} L ${cx + 22 * k} ${cy + 24 * k} L ${cx} ${cy + 12 * k} L ${cx - 22 * k} ${cy + 24 * k} Z`}
           fill={HUD_VOLT}
-          stroke="#08090D"
+          stroke="var(--color-lc-void)"
           strokeWidth={6 * k}
           strokeLinejoin="round"
         />
       ) : (
-        <circle cx={cx} cy={cy} r={26} fill={HUD_VOLT} stroke="#08090D" strokeWidth={8} />
+        <circle cx={cx} cy={cy} r={26} fill={HUD_VOLT} stroke="var(--color-lc-void)" strokeWidth={8} />
       )}
     </svg>
   );
 };
 
-/** Sector time colour (see sectorTimeColor): purple at or inside the best, yellow slower */
+/** Sector time colour (see `lapMark`): purple the session best, green a personal best, amber slower */
 export const sectorColor = sectorTimeColor;
+
+/**
+ * The sign that goes with a sector or lap colour, so the colour is never alone: an up arrow for a best, a down arrow
+ * for slower. Sizes with the text beside it.
+ */
+export const LapMarkGlyph: React.FC<{ mark: LapMark; className?: string }> = ({ mark, className = "" }) => (
+  <span className={`inline-flex shrink-0 ${className}`} style={{ color: LAP_MARK_COLOR[mark] }}>
+    <Trend direction={mark === "slower" ? "down" : "up"} label={LAP_MARK_WORD[mark]} />
+  </span>
+);
+
+/** The running lap was cut: the word beside the crimson clock, in every style */
+export const InvalidTag: React.FC<{ className?: string }> = ({ className = "" }) => (
+  <Badge tone="bad" variant="solid" size="hud" icon="trackLimits" className={className}>
+    Invalid
+  </Badge>
+);
+
+export { lapMark, type LapMark };
 
 /**
  * True from the moment the car leaves the track until the next lap starts or the run restarts, like the
@@ -276,8 +339,8 @@ export function useLapInvalid(t: CarTelemetry): boolean {
 }
 
 /** The last completed sector (or lap), for a few seconds after it completes; a new run clears it */
-export function useSectorFlash(t: CarTelemetry, holdMs = 3500): { sector: number; ms: number; color: string } | null {
-  const [flash, setFlash] = useState<{ sector: number; ms: number; color: string } | null>(null);
+export function useSectorFlash(t: CarTelemetry, holdMs = 3500): { sector: number; ms: number; color: string; mark: LapMark } | null {
+  const [flash, setFlash] = useState<{ sector: number; ms: number; color: string; mark: LapMark } | null>(null);
   const runId = t.runId ?? 0;
   const prev = useRef({ sector: t.currentSector, lap: t.lapCount, runId });
   // Edges only set the flash; its timer belongs to the flash itself, so a frame that changes a dependency without an
@@ -295,8 +358,9 @@ export function useSectorFlash(t: CarTelemetry, holdMs = 3500): { sector: number
     const ms = t.lapCount !== p.lap ? (t.lastLapTimeMs ?? 0) : t.sectorTimesMs[done - 1];
     if (!ms) return;
     const best = t.lapCount !== p.lap ? t.bestLapTimeMs : t.bestSectorTimesMs[done - 1];
-    setFlash({ sector: t.lapCount !== p.lap ? 0 : done, ms, color: sectorColor(ms, best) });
-  }, [t.currentSector, t.lapCount, runId, t.lastLapTimeMs, t.sectorTimesMs, t.bestSectorTimesMs, t.bestLapTimeMs]);
+    const mark = lapMark(ms, best, !t.race);
+    setFlash({ sector: t.lapCount !== p.lap ? 0 : done, ms, color: LAP_MARK_COLOR[mark], mark });
+  }, [t.currentSector, t.lapCount, runId, t.lastLapTimeMs, t.sectorTimesMs, t.bestSectorTimesMs, t.bestLapTimeMs, t.race]);
   useEffect(() => {
     if (!flash) return;
     const id = window.setTimeout(() => setFlash(null), holdMs);
@@ -307,7 +371,8 @@ export function useSectorFlash(t: CarTelemetry, holdMs = 3500): { sector: number
 
 export const gearLabel = (g: number) => (g < 0 ? "R" : g === 0 ? "N" : String(g));
 
-export const deltaColor = (d: number | null) => (d === null ? "#8E96AA" : d <= 0 ? HUD_GREEN : HUD_RED);
+/** Live delta colour: gaining or level, losing, or slate without a reference lap (semantic, so the palette applies) */
+export const deltaColor = (d: number | null) => (d === null ? HUD_SLATE : d <= 0 ? HUD_GAIN : HUD_LOSS);
 
 /** Gap ahead / behind the player in a race (s), null at the front / back */
 export function raceNeighbours(t: CarTelemetry) {
@@ -325,3 +390,38 @@ export function raceNeighbours(t: CarTelemetry) {
 }
 
 export { HUD_CYAN, HUD_GREEN, HUD_PURPLE, HUD_RED, HUD_VOLT, HUD_YELLOW };
+
+/** The flaps' state as a HUD badge: info filled while open, outlined while armed, neutral shut */
+export const AeroBadge: React.FC<{ open: boolean; armed: boolean; label: string; size?: BadgeSize; className?: string }> = ({
+  open,
+  armed,
+  label,
+  size = "hud",
+  className = "",
+}) => (
+  <Badge
+    tone={open || armed ? "info" : "neutral"}
+    variant={open ? "solid" : armed ? "outline" : "soft"}
+    size={size}
+    icon={open ? "drsOpen" : "drsClosed"}
+    className={`w-fit ${className}`}
+  >
+    {label}
+  </Badge>
+);
+
+/**
+ * A big live delta read-out for the tiles and dash cells: the arrow and the signed time (clamped to ±99.999), in the
+ * current colour, so the tile or cell decides the tone. Placeholder without a reference lap.
+ */
+export const DeltaReadout: React.FC<{ deltaS: number | null; className?: string }> = ({ deltaS, className = "" }) => {
+  if (deltaS === null) return <span className={`lc-data leading-none whitespace-nowrap ${className}`}>{NO_TIME}</span>;
+  const text = formatDelta(Math.max(-99.999, Math.min(99.999, deltaS)));
+  const level = text.startsWith("\u00b1");
+  return (
+    <span className={`lc-data inline-flex items-center gap-1 leading-none whitespace-nowrap ${className}`}>
+      <Trend direction={level ? "level" : deltaS < 0 ? "up" : "down"} size="0.6em" />
+      {text}
+    </span>
+  );
+};

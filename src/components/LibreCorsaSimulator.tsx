@@ -49,6 +49,9 @@ import { saveTyreSetup } from "@/lib/sim/tyre-setup";
 import { LoadingScreen } from "@/components/menu/LoadingScreen";
 import { TitleMenu } from "@/components/menu/TitleMenu";
 import { FirstRunWizard, type WizardMode, type WizardStepId } from "@/components/menu/FirstRunWizard";
+import { SettingsScreen, type SettingsCategory } from "@/components/settings/SettingsScreen";
+import type { SettingsEnv } from "@/components/settings/env";
+import { applyInterfaceSettings } from "@/lib/settings/ui-prefs";
 import { keyLabel, padButtonLabel } from "@/lib/input/bindings";
 import { autoConfigureWheel, connectedPads } from "@/lib/input/device-input";
 import { webHidFfb, wheelFfb } from "@/lib/input/wheel-ffb";
@@ -66,7 +69,7 @@ import { SeatPanel } from "@/components/hud/SeatPanel";
 const DEFAULT_ASSIST_PRESET: AssistPreset = DEFAULT_PLAYER_SETTINGS.assistPreset;
 /** A lap record's car: records are per vehicle model, named after its first car */
 // The rigid-body model's board holds the laps of every ported F1 car on it, and the model has no car of its own
-const vehicleLabel = (id: string) => (id === "f12026-car" ? "F1 team cars" : isVehicleModelId(id) ? carForVehicle(id).title : id);
+const vehicleLabel = (id: string) => (id === "f12026-car" ? "Formula team cars" : isVehicleModelId(id) ? carForVehicle(id).title : id);
 /** Every personal best in this browser (Lap times switches circuit and car without reloading the scene) */
 const loadAllLocalLaps = () => listBestLaps().then((laps) => laps.map((lap) => lapToEntry(lap, "local")));
 /** The place an upload's answer gives the lap on its board (and on the week's challenge); null when it failed or said none */
@@ -917,14 +920,34 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     leaveSession();
   }, [leaveSession]);
 
-  const openControls = useCallback(
-    (from: "title" | "pause") => {
-      wizardReturnRef.current = from;
-      setWizardMode("controls");
-      setPhase("wizard");
+  /** The Settings screen, over the title menu or the pause menu, and where it opens */
+  const [settingsOpen, setSettingsOpen] = useState<{ from: "title" | "pause"; category?: SettingsCategory; tab?: string } | null>(null);
+  const openSettings = useCallback(
+    (from: "title" | "pause", category?: SettingsCategory, tab?: string) => {
+      // Opened from the car (the HUD's "pedals not set up"): the session pauses under it, as from the pause menu
+      if (from === "pause" && !session?.getSnapshot().paused) session?.togglePause();
+      setSettingsOpen({ from, category, tab });
     },
-    [setPhase]
+    [session]
   );
+  const closeSettings = useCallback(() => setSettingsOpen(null), []);
+  // Every way out of the pause (the touch pause button, a wheel's pause button, a race restart) closes it too
+  const wasPausedRef = useRef(paused);
+  useEffect(() => {
+    const resumed = wasPausedRef.current && !paused;
+    wasPausedRef.current = paused;
+    if (settingsOpen?.from === "pause" && (resumed || phase !== "driving")) setSettingsOpen(null);
+    if (settingsOpen?.from === "title" && phase !== "title") setSettingsOpen(null);
+  }, [settingsOpen, paused, phase]);
+
+  /** First-run setup again, from Settings > Controls > Device: back where Settings was opened from when done */
+  const runSetupAgain = useCallback(() => {
+    const from = settingsOpen?.from ?? "title";
+    setSettingsOpen(null);
+    wizardReturnRef.current = from;
+    setWizardMode("again");
+    setPhase("wizard");
+  }, [settingsOpen, setPhase]);
 
   /** Title "Drive" / "Race AI": the first time through, the setup comes first */
   const handleTitleStart = useCallback(
@@ -942,7 +965,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
   );
 
   const leaveWizard = useCallback(() => {
-    // The controls setup opened from the pause menu goes back to it (still paused)
+    // Setup run again from pause goes back to it (still paused)
     setPhase(wizardReturnRef.current === "pause" ? "driving" : "title");
   }, [setPhase]);
 
@@ -1047,6 +1070,11 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     if (!settingsHydrated) return;
     savePlayerSettings(settings);
   }, [settingsHydrated, settings]);
+
+  // Units, interface size and the colour-blind palette: once at start-up (the defaults, then the save) and on change
+  useEffect(() => {
+    applyInterfaceSettings(settings.ui);
+  }, [settings.ui]);
 
   // Recently driven / raced, for the browsers: the car and circuit in use once the save is read, then every change
   useEffect(() => {
@@ -1304,35 +1332,6 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     []
   );
 
-  /** The pause menu's controls list, from the player's bindings */
-  const controlsCheatSheet = useMemo(() => {
-    const keys = (codes: string[]) => codes.map(keyLabel).join(" · ") || "—";
-    const k = settings.keys;
-    const rows: [string, string][] = [
-      ["Throttle / brake", `${keys(k.throttle)} / ${keys(k.brake)}`],
-      ["Steer", `${keys(k.steerLeft)} / ${keys(k.steerRight)}`],
-      ["Boost (manual override)", `${keys(k.boostHold)} · ${keys(k.boostLatch)}`],
-      ["Active aero X / Z", keys(k.aero)],
-      ["Gear up / down", `${keys(k.shiftUp)} / ${keys(k.shiftDown)}`],
-      ["Camera", keys(k.camera)],
-      ["Seat & camera (cockpit, dash)", `Hold ${keys(k.camera)}`],
-      ["FOV, this car", "[ / ]"],
-      ["Nudge the view", "Alt + arrows · − = · [ ]"],
-      ["Racing line", keys(k.racingLine)],
-      ["Restart", keys(k.restart)],
-      ["Restart lap (flying start)", keys(k.flyingLap)],
-      ["Half throttle", keys(k.throttleHalf)],
-      ["Instant replay", keys(k.replay)],
-    ];
-    const pb = settings.padButtons;
-    rows.push([
-      "Pad",
-      `RT / LT · stick · ${padButtonLabel(pb.boost)} boost · ${padButtonLabel(pb.shiftUp)}/${padButtonLabel(pb.shiftDown)} gears`,
-    ]);
-    rows.push(["Seat & camera on a pad", `Hold ${padButtonLabel(pb.camera)}`]);
-    return rows;
-  }, [settings.keys, settings.padButtons]);
-
   const keyNames = useMemo(() => {
     const first = (codes: string[]) => (codes[0] ? keyLabel(codes[0]) : "—");
     const k = settings.keys;
@@ -1476,6 +1475,15 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       onEnterVr: () => session?.enterVr(),
       onOpenSeatPanel: phase === "driving" ? () => session?.openSeatPanel() : undefined,
     },
+    // Weather, time of day and the track's grip: the title's Conditions panel and the pause menu's Conditions tab
+    conditionsPanel: {
+      conditions: settings.conditions,
+      realism: settings.realism,
+      onChangeConditions: handleChangeConditions,
+      onChangeRealism: handleChangeRealism,
+      hostControlled: roomLobby !== null && !isMpHost,
+      readout: weatherHud,
+    },
     library,
     leaderboardPanel: {
       trackName: getTrackInfo(trackId).name,
@@ -1498,9 +1506,39 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     },
   };
 
+  /** What the Settings screen reads and changes (the same rows first-run setup draws) */
+  const settingsEnv: SettingsEnv = {
+    settings,
+    update: handleChangeSettings,
+    rumble: gamepadRumble,
+    onToggleRumble: handleToggleGamepadRumble,
+    steerLockDeg,
+    carId,
+    vehicleModel,
+    vehicleLabel,
+    carFovDeg: carCockpitFov,
+    vrSupported,
+    vrActive: vrState === "on",
+    onEnterVr: () => session?.enterVr(),
+    onRenameDriver: renameFromSettings,
+    onOpenSeatPanel:
+      phase === "driving"
+        ? () => {
+            setSettingsOpen(null);
+            session?.openSeatPanel();
+          }
+        : undefined,
+    onRunSetup: runSetupAgain,
+    driverKey: {
+      onExport: handleExportDriverKey,
+      onImport: (file: File) => void handleImportDriverKey(file),
+      notice: driverKeyNotice,
+    },
+  };
+
   return (
     <div
-      className="relative h-screen w-screen overflow-hidden bg-[#0B0B10] supports-[height:100dvh]:h-dvh"
+      className="relative h-screen w-screen overflow-hidden bg-lc-void supports-[height:100dvh]:h-dvh"
       onPointerDown={() => {
         if (phaseRef.current !== "loading") session?.unlockAudio();
       }}
@@ -1547,9 +1585,14 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
           onToggleBoostLatch={handleToggleBoostLatch}
           onChangeLiveTuner={handleChangeLiveTuner}
           paused={paused}
-          onOpenControls={() => openControls("pause")}
+          onOpenControls={() =>
+            // A wheel whose pedals are not set up yet opens on its calibration (the HUD's "pedals not set up" too)
+            settings.device === "wheel" && (!settings.wheel.throttle || !settings.wheel.brake)
+              ? openSettings("pause", "controls", "wheel")
+              : openSettings("pause")
+          }
           onExitToTitle={leaveSession}
-          controlsCheatSheet={controlsCheatSheet}
+          onOpenSettings={(category?: SettingsCategory) => openSettings("pause", category)}
           hud={settings.hud}
           virtualMirror={virtualMirrorOn}
           ffbMeter={
@@ -1647,7 +1690,8 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
           firstRun={!onboarded}
           onDrive={() => handleTitleStart(false)}
           onRaceAi={() => handleTitleStart(true)}
-          onControls={() => openControls("title")}
+          onControls={() => openSettings("title")}
+          onOpenSettings={(category?: SettingsCategory) => openSettings("title", category)}
           trackId={trackId}
           onSelectTrack={onSelectTrack}
           challengePanel={
@@ -1680,14 +1724,6 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
                 }
               : undefined
           }
-          conditionsPanel={{
-            conditions: settings.conditions,
-            realism: settings.realism,
-            onChangeConditions: handleChangeConditions,
-            onChangeRealism: handleChangeRealism,
-            hostControlled: roomLobby !== null && !isMpHost,
-            readout: weatherHud,
-          }}
         />
       ) : null}
 
@@ -1723,9 +1759,18 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         />
       ) : null}
 
+      {settingsOpen ? (
+        <SettingsScreen
+          env={settingsEnv}
+          initialCategory={settingsOpen.category}
+          initialTab={settingsOpen.tab}
+          onClose={closeSettings}
+        />
+      ) : null}
+
       {/* Wheel force feedback over WebHID waits for one pairing click: offered on the title and the pause menu (not over
-          the controls setup opened from it), never mid-lap */}
-      <FfbPairPrompt wanted={hidFfbWanted && settings.wheel.steer !== null && (phase === "title" || (phase === "driving" && paused))} />
+          Settings, which offers it itself), never mid-lap */}
+      <FfbPairPrompt wanted={hidFfbWanted && settings.wheel.steer !== null && !settingsOpen && (phase === "title" || (phase === "driving" && paused))} />
 
       {loadingVisible ? (
         <LoadingScreen track={track} ready={assetsReady} onStart={handleLoadingStart} onDone={handleLoadingDone} />

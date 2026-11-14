@@ -2,28 +2,31 @@
 
 import React from "react";
 import type { F12026Channels } from "@/types/f1";
-import { HUD_CYAN, HUD_PROTO, HUD_ROAD, HUD_GLASS, HUD_GREEN, HUD_LBL, HUD_RED, HUD_VOLT, HUD_WELL, HUD_YELLOW } from "./hud-format";
+import { Badge } from "@/components/ui/Badge";
+import { ClassTag } from "@/components/ui/badges/ClassTag";
+import { HUD_CAUTION, HUD_GLASS, HUD_LBL, HUD_LOSS, HUD_SLATE, HUD_WELL } from "./hud-format";
 import type { AeroReadout } from "./aero-label";
 
 const WHEELS = ["LF", "RF", "LR", "RR"] as const;
 
-/** Remaining travel to the bump rubber: red once on the rubber, yellow within 2 mm */
-const bumpColor = (m: number) => (m < 0 ? HUD_RED : m < 0.002 ? HUD_YELLOW : "#8E96AA");
+/** Remaining travel to the bump rubber: loss once on the rubber (the reading goes negative), caution within 2 mm */
+const bumpColor = (m: number) => (m < 0 ? HUD_LOSS : m < 0.002 ? HUD_CAUTION : HUD_SLATE);
 
-/** Friction-circle use: green below 85 %, yellow to the limit, red past it */
-const circleColor = (f: number) => (f >= 1 ? HUD_RED : f >= 0.85 ? HUD_YELLOW : HUD_GREEN);
+/** Friction-circle use: fog while there is grip to spare, caution from 85 %, loss past the limit */
+const circleColor = (f: number) => (f >= 1 ? HUD_LOSS : f >= 0.85 ? HUD_CAUTION : "var(--color-lc-fog)");
 
-/** Driver-aid lamp, lit while the aid is intervening */
+/** Driver-aid lamp, lit (caution, with a live dot) while the aid is intervening */
 export const AidLamp: React.FC<{ label: string; active: boolean }> = ({ label, active }) => (
-  <span
-    className="lc-data inline-flex h-6 items-center rounded-full px-2.5 text-[11px] transition-colors"
-    style={{
-      backgroundColor: active ? HUD_YELLOW : "#1B1F2B",
-      color: active ? "#08090D" : "#8E96AA",
-    }}
+  <Badge
+    tone={active ? "warn" : "neutral"}
+    variant={active ? "solid" : "soft"}
+    size="md"
+    dot={active ? "live" : undefined}
+    icon={label === "ABS" ? "abs" : "tractionControl"}
+    aria-label={`${label}${active ? ", intervening" : ""}`}
   >
     {label}
-  </span>
+  </Badge>
 );
 
 /**
@@ -38,33 +41,16 @@ export const F12026ChannelsPanel: React.FC<{
 }> = ({ channels: c, aero, aids }) => {
   const sr = [c.WHEEL_SR_LF, c.WHEEL_SR_RF, c.WHEEL_SR_LR, c.WHEEL_SR_RR];
   const bump = [c.BUMPSTOPUP_TRAVEL_LF, c.BUMPSTOPUP_TRAVEL_RF, c.BUMPSTOPUP_TRAVEL_LR, c.BUMPSTOPUP_TRAVEL_RR];
-  const drsState = aero.open ? "OPEN" : aero.armed ? "ARMED" : c.drsZone ? "ZONE" : "OFF";
-  const drsColor = aero.open ? HUD_CYAN : aero.armed ? HUD_VOLT : "rgba(255,255,255,0.22)";
+  const drsState = aero.open ? "Open" : aero.armed ? "Armed" : c.drsZone ? "Zone" : "Off";
 
   return (
-    <section aria-label="Engineering channels" className={`w-[320px] rounded-[22px] px-3.5 py-3 ${HUD_GLASS}`} data-testid="f12026-channels">
+    <section aria-label="Engineering channels" className={`w-[320px] rounded-lc-card px-3.5 py-3 ${HUD_GLASS}`} data-testid="f12026-channels">
       <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <span
-            className="h-[7px] w-[7px] rounded-full"
-            style={{
-              backgroundColor:
-                c.carId === "amg-gt3" ? HUD_CYAN : c.carId === "liana" ? HUD_ROAD : c.carId === "mtr-496r" ? HUD_PROTO : HUD_VOLT,
-            }}
-          />
-          <span className="lc-data text-[11px] tracking-[0.12em] text-[#F5F7FA]">
-            {c.carId === "amg-gt3"
-              ? "AMG GT3 · CHANNELS"
-              : c.carId === "liana"
-                ? "ROAD CAR · CHANNELS"
-                : c.carId === "mtr-496r"
-                  ? "PROTOTYPE · CHANNELS"
-                  : "FORMULA · CHANNELS"}
-          </span>
-        </div>
-        <span className="lc-data rounded-full bg-[#1B1F2B] px-2 py-0.5 text-[9px] uppercase text-[#CCFF00]">
-          {c.performanceMode}
-        </span>
+        <ClassTag
+          carClass={c.carId === "amg-gt3" ? "gt3" : c.carId === "liana" ? "road" : c.carId === "mtr-496r" ? "proto" : "openWheel"}
+          size="hud"
+        />
+        <Badge size="hud">{c.performanceMode}</Badge>
       </div>
 
       <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5">
@@ -73,21 +59,21 @@ export const F12026ChannelsPanel: React.FC<{
           return (
             <div
               key={name}
-              className={`flex flex-col gap-1 rounded-[12px] px-2 py-1.5 ${HUD_WELL}`}
-              title={`WHEEL_SR_${name} · BUMPSTOPUP_TRAVEL_${name} · circleFraction`}
+              className={`flex flex-col gap-1 rounded-lc-nub px-2 py-1.5 ${HUD_WELL}`}
+              title={`${name}: slip ratio, travel left to the bump rubber, grip used`}
             >
               <div className="flex items-baseline justify-between">
                 <span className={HUD_LBL}>{name}</span>
-                <span className="lc-data text-[11px] text-[#F5F7FA]">
+                <span className="lc-data text-[11px] text-lc-chalk">
                   {(sr[i] * 100).toFixed(1)}
-                  <span className="text-[8px] text-[#8E96AA]"> %SR</span>
+                  <span className="text-[9px] text-lc-slate"> %SR</span>
                 </span>
                 <span className="lc-data text-[10px]" style={{ color: bumpColor(bump[i]) }}>
                   {(bump[i] * 1000).toFixed(1)}
-                  <span className="text-[8px] text-[#8E96AA]"> mm</span>
+                  <span className="text-[9px] text-lc-slate"> mm</span>
                 </span>
               </div>
-              <span className="relative h-1.5 overflow-hidden rounded-full bg-[#1B1F2B]">
+              <span className="relative h-1.5 overflow-hidden rounded-full bg-lc-titanium">
                 <span
                   className="absolute inset-y-0 left-0 rounded-full"
                   style={{
@@ -102,38 +88,37 @@ export const F12026ChannelsPanel: React.FC<{
       </div>
 
       <div className="mt-2 grid grid-cols-3 gap-1.5">
-        <div className={`flex flex-col rounded-[12px] px-2 py-1.5 ${HUD_WELL}`} title="AERO_HEIGHT">
-          <span className={`${HUD_LBL} !text-[8px]`}>AERO HGT</span>
-          <span className="lc-data mt-0.5 text-[12px] text-[#F5F7FA]">{(c.AERO_HEIGHT * 1000).toFixed(0)} mm</span>
+        <div className={`flex flex-col rounded-lc-nub px-2 py-1.5 ${HUD_WELL}`} title="Aero ride height">
+          <span className={`${HUD_LBL} tracking-[0.1em]`}>Aero hgt</span>
+          <span className="lc-data mt-0.5 text-[12px] text-lc-chalk">{(c.AERO_HEIGHT * 1000).toFixed(0)} mm</span>
         </div>
         <div
-          className={`flex flex-col rounded-[12px] px-2 py-1.5 ${HUD_WELL}`}
-          title="AERO_BALANCE (front share of downforce)"
+          className={`flex flex-col rounded-lc-nub px-2 py-1.5 ${HUD_WELL}`}
+          title="Aero balance (front share of downforce)"
         >
-          <span className={`${HUD_LBL} !text-[8px]`}>AERO BAL</span>
-          <span className="lc-data mt-0.5 text-[12px] text-[#00E5FF]">{c.AERO_BALANCE.toFixed(1)}%</span>
+          <span className={`${HUD_LBL} tracking-[0.1em]`}>Aero bal</span>
+          <span className="lc-data mt-0.5 text-[12px] text-lc-info">{c.AERO_BALANCE.toFixed(1)}%</span>
         </div>
-        <div className={`flex flex-col rounded-[12px] px-2 py-1.5 ${HUD_WELL}`} title="LSD_LOCKING_TORQUE">
-          <span className={`${HUD_LBL} !text-[8px]`}>LSD LOCK</span>
-          <span className="lc-data mt-0.5 text-[12px] text-[#F5F7FA]">{Math.round(c.LSD_LOCKING_TORQUE)} Nm</span>
+        <div className={`flex flex-col rounded-lc-nub px-2 py-1.5 ${HUD_WELL}`} title="Differential locking torque">
+          <span className={`${HUD_LBL} tracking-[0.1em]`}>LSD lock</span>
+          <span className="lc-data mt-0.5 text-[12px] text-lc-chalk">{Math.round(c.LSD_LOCKING_TORQUE)} Nm</span>
         </div>
       </div>
 
-      <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-[#262B3D] pt-2">
+      <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-lc-line pt-2">
         {c.hasDrs ? (
           <>
-            <span className="flex items-center gap-1.5" title="CHANGED_DRS_OPEN">
+            <span className="flex items-center gap-1.5" title="DRS state and openings this session">
               <span className={HUD_LBL}>DRS</span>
-              <span
-                className="lc-data rounded-full px-2 py-0.5 text-[10px]"
-                style={{
-                  backgroundColor: drsColor,
-                  color: aero.open || aero.armed ? "#08090D" : "#F5F7FA",
-                }}
+              <Badge
+                tone={aero.open || aero.armed ? "info" : "neutral"}
+                variant={aero.open ? "solid" : aero.armed ? "outline" : "soft"}
+                size="hud"
+                icon={aero.open ? "drsOpen" : "drsClosed"}
               >
                 {drsState}
-              </span>
-              <span className="lc-data text-[10px] text-[#8E96AA]">×{c.drsOpenEvents}</span>
+              </Badge>
+              <span className="lc-data text-[10px] text-lc-slate">×{c.drsOpenEvents}</span>
             </span>
             <span className={`${HUD_LBL} truncate`}>
               {c.drsDetection
@@ -148,9 +133,9 @@ export const F12026ChannelsPanel: React.FC<{
           </span>
         )}
         {c.wallContact ? (
-          <span className="lc-data rounded-full px-2 py-0.5 text-[10px] text-[#F5F7FA]" style={{ backgroundColor: HUD_RED }}>
-            WALL
-          </span>
+          <Badge tone="bad" variant="solid" size="hud" icon="warning">
+            Wall
+          </Badge>
         ) : null}
       </div>
     </section>
