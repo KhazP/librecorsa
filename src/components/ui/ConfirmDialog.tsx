@@ -8,16 +8,23 @@ import { cx } from "./styles";
 
 export interface ConfirmDialogProps {
   open: boolean;
-  /** The question ("Reset key bindings?") */
+  /** The question ("Reset key bindings?"); for `info`, what it explains ("Add LibreCorsa to your Home Screen") */
   title: string;
-  /** One sentence on what happens */
+  /** One sentence on what happens; for `info`, the few it takes */
   children: React.ReactNode;
-  /** The destructive action's label, a verb ("Reset bindings") */
+  /** The destructive action's label, a verb ("Reset bindings"); for `info`, the acknowledgement ("Got it") */
   confirmLabel: string;
   cancelLabel?: string;
   onConfirm: () => void;
   onCancel: () => void;
-  /** Icon beside the question (24 px) */
+  /**
+   * Esc, B and the backdrop; `onCancel` unless given. Set it when the cancel button does more than close ("Don't show
+   * again"), so a stray tap beside the sheet does not do that
+   */
+  onDismiss?: () => void;
+  /** `danger` (the default) asks before a destructive action; `info` explains something, and the acknowledgement leads */
+  tone?: "danger" | "info";
+  /** Icon beside the question (24 px): crimson, or info for `info` */
   icon?: React.ReactNode;
   /**
    * The confirm action is running: its label pulses, and nothing dismisses the dialog (Cancel, Esc, B and the backdrop
@@ -28,9 +35,12 @@ export interface ConfirmDialogProps {
 
 /**
  * Asks before a destructive action (reset bindings, clear data, end the race for everyone): a small sheet with the
- * question, one sentence, and the safe and danger buttons. The focus starts on the safe one; Esc or B cancels. Not a
- * native `<dialog>`: in a race Esc is also the pause key, so the dialog catches Esc before anything else hears it.
- * It runs its own menu navigation while open, so the screen below takes no input.
+ * question, one sentence, and the safe and danger buttons. The focus starts on the safe one; Esc or B cancels.
+ * The `info` tone is the same sheet explaining something instead (how to install the game): the icon in info, the
+ * acknowledgement a primary button with the focus, the other choice a ghost one. Esc, B and the backdrop call
+ * `onDismiss`, which is `onCancel` unless given. Not a native `<dialog>`: in a race Esc is also the pause key, so the
+ * dialog catches Esc before anything else hears it. It runs its own menu navigation while open, so the screen below
+ * takes no input.
  */
 export function ConfirmDialog({
   open,
@@ -40,19 +50,22 @@ export function ConfirmDialog({
   cancelLabel = "Cancel",
   onConfirm,
   onCancel,
+  onDismiss,
+  tone = "danger",
   icon,
   busy,
 }: ConfirmDialogProps) {
+  const info = tone === "info";
   const sheetRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
   const bodyId = useId();
-  const cancelLatest = useRef(onCancel);
-  cancelLatest.current = onCancel;
+  const dismissLatest = useRef(onDismiss ?? onCancel);
+  dismissLatest.current = onDismiss ?? onCancel;
   const busyRef = useRef(busy);
   busyRef.current = busy;
-  /** Cancels unless the confirm action is running */
+  /** Esc, B and the backdrop: dismisses unless the confirm action is running */
   const dismiss = () => {
-    if (!busyRef.current) cancelLatest.current();
+    if (!busyRef.current) dismissLatest.current();
   };
 
   useFocusNav(sheetRef, { enabled: open, onBack: dismiss, autoFocus: false });
@@ -60,7 +73,7 @@ export function ConfirmDialog({
   useEffect(() => {
     if (!open) return;
     const before = document.activeElement as HTMLElement | null;
-    // The safe choice takes the focus first
+    // The safe choice takes the focus first; in an info dialog, the acknowledgement
     const raf = requestAnimationFrame(() =>
       sheetRef.current?.querySelector<HTMLElement>("[data-nav-default]")?.focus({ preventScroll: true }),
     );
@@ -101,7 +114,8 @@ export function ConfirmDialog({
     >
       <div
         ref={sheetRef}
-        role="alertdialog"
+        // An explainer is no alert: the player opened it
+        role={info ? "dialog" : "alertdialog"}
         aria-modal="true"
         aria-labelledby={titleId}
         aria-describedby={bodyId}
@@ -109,7 +123,10 @@ export function ConfirmDialog({
       >
         <div className="flex items-start gap-3">
           {icon ? (
-            <span aria-hidden className="mt-px inline-flex shrink-0 text-lc-crimson [&_svg]:size-6">
+            <span
+              aria-hidden
+              className={cx("mt-px inline-flex shrink-0 [&_svg]:size-6", info ? "text-lc-info" : "text-lc-crimson")}
+            >
               {icon}
             </span>
           ) : null}
@@ -124,15 +141,21 @@ export function ConfirmDialog({
         </div>
         <div className={cx("flex flex-wrap items-center justify-end gap-2.5 pt-1")}>
           <Button
-            variant="secondary"
+            variant={info ? "ghost" : "secondary"}
             size="md"
             onClick={onCancel}
-            data-nav-default=""
+            data-nav-default={info ? undefined : ""}
             disabledReason={busy ? "Wait for it to finish" : undefined}
           >
             {cancelLabel}
           </Button>
-          <Button variant="danger" size="md" loading={busy} onClick={onConfirm}>
+          <Button
+            variant={info ? "primary" : "danger"}
+            size="md"
+            loading={busy}
+            onClick={onConfirm}
+            data-nav-default={info ? "" : undefined}
+          >
             {confirmLabel}
           </Button>
         </div>

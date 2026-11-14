@@ -44,6 +44,7 @@ import { AI_SKILL_DEFAULT, aiSkillLabel } from "@/lib/sim/ai-tuning";
 import { REPO_URL, SUPPORT_URL, TAKEDOWN_URL } from "@/lib/site";
 import { withBasePath } from "@/lib/base-path";
 import { EmbeddedBadge } from "./EmbeddedBadge";
+import { InstallAppButton } from "./InstallAppButton";
 
 type TitlePanel = "race" | "circuit" | "car" | "conditions" | "garage" | "multiplayer" | "challenge" | "leaderboard" | "display" | "credits" | "request";
 
@@ -650,6 +651,8 @@ export const TitleMenu: React.FC<TitleMenuProps> = (props) => {
           <div className="flex min-w-0 flex-wrap items-center gap-x-5 gap-y-3">
             <LibreCorsaLogo variant="compact" size={panel ? "sm" : "md"} />
             <EmbeddedBadge />
+            {/* Never beside the badge: a framed game offers no install */}
+            <InstallAppButton />
           </div>
           <div className="flex min-w-0 flex-wrap items-center gap-x-5 gap-y-2">
             <InputHint pad={pad} />

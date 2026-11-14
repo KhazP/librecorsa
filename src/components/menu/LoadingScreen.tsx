@@ -5,6 +5,7 @@ import { BASE_ALTITUDE_M, type BuiltTrackData, DEFAULT_TRACK_ID, TURN_METADATA }
 import { getTrackInfo } from "@/lib/track-registry";
 import { formatMegabytes, useAssetProgress, type AssetTask } from "@/lib/loading/asset-progress";
 import { connectedPads } from "@/lib/input/device-input";
+import { enterFullscreenOnTouch } from "@/lib/install-app";
 import { padPressTracker } from "./useMenuNav";
 import { LibreCorsaLogo } from "@/components/ui/LibreCorsaLogo";
 import { Meter } from "@/components/ui";
@@ -161,6 +162,10 @@ export const LoadingScreen: React.FC<{
     } catch (err) {
       console.warn("Loading screen start failed; leaving it anyway", err);
     }
+    // A phone or tablet tab goes full screen on this tap, after the audio unlock: a fullscreen request uses up the
+    // tap's user activation, and starting the sound does not, so both get it in this order. From the pad poll there
+    // is no activation, and the browser just says no (it never throws)
+    enterFullscreenOnTouch();
     setLeaving(true);
     doneTimer.current = window.setTimeout(onDone, 520);
   }, [ready, onStart, onDone]);

@@ -83,6 +83,14 @@ import {
   steeringAssistSettings,
 } from '../src/lib/sim/steering-assist';
 import { resetAllSettings } from '../src/components/settings/storage';
+import {
+  enterFullscreenOnTouch,
+  installedFrom,
+  installStore,
+  isAppleTouch,
+  isAppleTouchAgent,
+  isInstalledApp,
+} from '../src/lib/install-app';
 
 let passed = 0;
 function check(name: string, fn: () => void) {
@@ -809,6 +817,46 @@ check('bridge socket: replaced is final until FFB goes off and on; a retry after
   } finally {
     g.WebSocket = prevWs;
   }
+});
+
+console.log('Install app');
+check('an install is the Home Screen app or an app display mode; fullscreen counts only without a fullscreen element', () => {
+  const facts = (modes: string[], extra: { standalone?: boolean; elementFullscreen?: boolean } = {}) => ({
+    standalone: extra.standalone,
+    displayMode: (mode: string) => modes.includes(mode),
+    elementFullscreen: extra.elementFullscreen ?? false,
+  });
+  assert.equal(installedFrom(facts(['browser'])), false, 'a tab');
+  assert.equal(installedFrom(facts(['browser'], { standalone: true })), true, 'iOS Home Screen app');
+  assert.equal(installedFrom(facts(['browser'], { standalone: false })), false, 'iOS Safari tab');
+  assert.equal(installedFrom(facts(['standalone'])), true);
+  assert.equal(installedFrom(facts(['minimal-ui'])), true);
+  assert.equal(installedFrom(facts(['fullscreen'])), true, 'Android fullscreen app');
+  // The loading screen's tap takes a tab full screen, and Chrome then reports display-mode fullscreen
+  assert.equal(installedFrom(facts(['fullscreen'], { elementFullscreen: true })), false, 'a tab the Fullscreen API made full screen');
+  assert.equal(installedFrom(facts(['standalone'], { elementFullscreen: true })), true, 'an installed app with a fullscreen element');
+});
+check('Apple touch devices: iPhone, iPad, iPod, and iPadOS with its Mac user agent; never a Mac or an Android', () => {
+  const iphone = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1';
+  const iphoneChrome = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/130.0.0.0 Mobile/15E148 Safari/604.1';
+  const ipadOld = 'Mozilla/5.0 (iPad; CPU OS 12_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/12.1.2 Mobile/15E148 Safari/604.1';
+  const mac = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15';
+  const android = 'Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36';
+  assert.equal(isAppleTouchAgent(iphone, 5), true);
+  assert.equal(isAppleTouchAgent(iphoneChrome, 5), true, 'Chrome on iOS installs through Share too');
+  assert.equal(isAppleTouchAgent(ipadOld, 5), true);
+  assert.equal(isAppleTouchAgent('Mozilla/5.0 (iPod touch; CPU iPhone OS 12_0 like Mac OS X)', 5), true);
+  assert.equal(isAppleTouchAgent(mac, 5), true, 'iPadOS asks for the desktop site with a Mac user agent');
+  assert.equal(isAppleTouchAgent(mac, 0), false, 'a Mac');
+  assert.equal(isAppleTouchAgent(mac, 1), false, 'a Mac reporting one touch point');
+  assert.equal(isAppleTouchAgent(android, 5), false);
+});
+check('without a window: not installed, not Apple, no prompt, and going full screen does nothing', () => {
+  assert.equal(isInstalledApp(), false);
+  assert.equal(isAppleTouch(), false);
+  assert.deepEqual(installStore.getSnapshot(), { canPrompt: false, installed: false });
+  assert.equal(installStore.getSnapshot(), installStore.getServerSnapshot(), 'one snapshot object until something changes');
+  enterFullscreenOnTouch();
 });
 
 /** Manual clock and timers for the WebHID driver and its writer */

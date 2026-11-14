@@ -8,6 +8,7 @@ import {
   ArrowLeft,
   ArrowRight,
   ArrowUp,
+  Download,
   Gamepad2,
   Inbox,
   KeyRound,
@@ -17,6 +18,7 @@ import {
   RotateCcw,
   Search,
   Settings,
+  Smartphone,
   Timer,
   Trash2,
   TriangleAlert,
@@ -643,10 +645,11 @@ function SurfacesGroup() {
 function FeedbackGroup({ onToast }: { onToast: (message: string, tone: ToastTone) => void }) {
   const [confirm, setConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [explain, setExplain] = useState(false);
   return (
     <Group
       title="Feedback"
-      caption="Toasts take their tone from the icon and hairline, never a fill. Empty states teach what goes there. Skeletons stand in at the size of the content and stop pulsing under reduced motion."
+      caption="Toasts take their tone from the icon and hairline, never a fill. Empty states teach what goes there. Skeletons stand in at the size of the content and stop pulsing under reduced motion. A dialog asks before a destructive action, with the focus on the safe choice, or in the info tone explains one thing, with the focus on the acknowledgement."
     >
       <Scene>
         <Sheet className="grid gap-3 lg:grid-cols-2">
@@ -703,6 +706,11 @@ function FeedbackGroup({ onToast }: { onToast: (message: string, tone: ToastTone
                 Delete
               </Button>
             </SettingRow>
+            <SettingRow label="Install the game" hint="The same dialog explains, in the info tone">
+              <Button variant="secondary" size="sm" icon={icon16(Download)} onClick={() => setExplain(true)}>
+                Install app
+              </Button>
+            </SettingRow>
           </Card>
         </Sheet>
       </Scene>
@@ -723,6 +731,23 @@ function FeedbackGroup({ onToast }: { onToast: (message: string, tone: ToastTone
         }}
       >
         Every saved ghost lap on this device goes. Your lap times stay.
+      </ConfirmDialog>
+      <ConfirmDialog
+        open={explain}
+        tone="info"
+        title="Add LibreCorsa to your Home Screen"
+        confirmLabel="Got it"
+        cancelLabel="Don't show again"
+        icon={<Smartphone size={24} strokeWidth={2} />}
+        onConfirm={() => setExplain(false)}
+        onCancel={() => {
+          setExplain(false);
+          onToast("The install hint stays hidden", "neutral");
+        }}
+        // Esc, B and the backdrop only close: hiding the hint for good takes its own button
+        onDismiss={() => setExplain(false)}
+      >
+        Opened from there, it runs full screen without the browser&apos;s bars. Tap Share, then Add to Home Screen.
       </ConfirmDialog>
       <div className="flex flex-col gap-2">
             <Meter label="Throttle" value={0.92} tone="good" />

@@ -10,7 +10,8 @@ const SITE_HOST = new URL(SITE_URL).host;
 // Being framed never changes while the page is open
 const subscribe = () => () => {};
 
-function isFramed(): boolean {
+/** Another site has put the game in a frame (also read by the Install app button, which a frame can't use) */
+export function isFramed(): boolean {
   try {
     return window.self !== window.top;
   } catch {
