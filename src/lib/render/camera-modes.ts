@@ -85,7 +85,7 @@ export const CAMERA_MODES: Readonly<Record<CameraMode, CameraModeSpec>> = {
   },
   dash: {
     label: "Dash",
-    blurb: "Over the wheel, the dash in shot",
+    blurb: "Ahead of the wheel, the dash in shot",
     anchor: "overWheel",
     driverEye: false,
     driverHead: false,
