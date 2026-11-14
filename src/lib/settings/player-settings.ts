@@ -55,6 +55,8 @@ export interface PlayerSettings {
   cameraNudges: CameraNudges;
   /** Controller stick / trigger shaping (the sensitivity presets fill in its rate and dead zone) */
   padTuning: PadTuning;
+  /** DualSense over WebHID: adaptive triggers, rumble, HD haptics (USB) and lights */
+  dualSense: DualSenseSettings;
   /** Keyboard pedal / steering ramps and the half-throttle key */
   keyboardTuning: KeyboardTuning;
   hud: HudSettings;
@@ -147,6 +149,40 @@ export interface PadTuning extends DeviceAssistTuning {
   /** Buzz LT / RT as the tyres near their peak slip with ABS / traction control on too (off: only with them off) */
   triggerSlipAlwaysOn: boolean;
 }
+
+/** What the lightbar shows while driving: the revs (green to red, flashing at the shift), the driver colour, nothing */
+export type DualSenseLightbar = "revs" | "driver" | "off";
+
+export interface DualSenseSettings {
+  /** Brake and throttle resistance, with ABS, lock-up, wheelspin and traction control felt in L2 / R2 */
+  adaptiveTriggers: boolean;
+  /** Trigger resistance and vibration 0..1 */
+  triggerStrength: number;
+  /** Rumble emulation strength 0..1.5 (Bluetooth, or USB with HD haptics off) */
+  rumbleStrength: number;
+  /** HD haptics through the pad's USB audio (asks the browser to list audio devices once) */
+  hdHaptics: boolean;
+  /** HD haptics level 0..1.5 */
+  hapticStrength: number;
+  /** Engine vibration in the HD haptics 0..1 */
+  engineHaptics: number;
+  lightbar: DualSenseLightbar;
+  /** The five player LEDs as rev lights */
+  revLeds: boolean;
+}
+
+export const DUALSENSE_LIGHTBAR_MODES = ["revs", "driver", "off"] as const satisfies readonly DualSenseLightbar[];
+
+export const DEFAULT_DUALSENSE_SETTINGS: DualSenseSettings = {
+  adaptiveTriggers: true,
+  triggerStrength: 0.6,
+  rumbleStrength: 1,
+  hdHaptics: false,
+  hapticStrength: 1,
+  engineHaptics: 0.3,
+  lightbar: "revs",
+  revLeds: true,
+};
 
 export interface KeyboardTuning extends DeviceAssistTuning {
   /** Pedal ramp times 0 → 1 (s) */
@@ -401,6 +437,7 @@ export const DEFAULT_PLAYER_SETTINGS: PlayerSettings = {
   cockpitFovDeg: null,
   cameraNudges: {},
   padTuning: DEFAULT_PAD_TUNING,
+  dualSense: DEFAULT_DUALSENSE_SETTINGS,
   keyboardTuning: DEFAULT_KEYBOARD_TUNING,
   hud: DEFAULT_HUD_SETTINGS,
   graphics: DEFAULT_GRAPHICS_SETTINGS,
@@ -556,6 +593,21 @@ function parsePadTuning(v: unknown): PadTuning {
     triggerRumble: bool(v.triggerRumble, d.triggerRumble),
     triggerSlipAlwaysOn: bool(v.triggerSlipAlwaysOn, d.triggerSlipAlwaysOn),
     ...sanitizeAssistTuning(v),
+  };
+}
+
+function parseDualSense(v: unknown): DualSenseSettings {
+  const d = DEFAULT_DUALSENSE_SETTINGS;
+  if (!isObj(v)) return structuredClone(d);
+  return {
+    adaptiveTriggers: bool(v.adaptiveTriggers, d.adaptiveTriggers),
+    triggerStrength: num(v.triggerStrength, 0, 1, d.triggerStrength),
+    rumbleStrength: num(v.rumbleStrength, 0, 1.5, d.rumbleStrength),
+    hdHaptics: bool(v.hdHaptics, d.hdHaptics),
+    hapticStrength: num(v.hapticStrength, 0, 1.5, d.hapticStrength),
+    engineHaptics: num(v.engineHaptics, 0, 1, d.engineHaptics),
+    lightbar: oneOf(v.lightbar, DUALSENSE_LIGHTBAR_MODES, d.lightbar),
+    revLeds: bool(v.revLeds, d.revLeds),
   };
 }
 
@@ -724,6 +776,7 @@ export function parsePlayerSettings(raw: unknown): PlayerSettings {
           steeringRate: PAD_SENSITIVITY[oneOf(raw.padSensitivity, Object.keys(PAD_SENSITIVITY) as PadSensitivity[], d.padSensitivity)].steeringRate,
           deadzone: PAD_SENSITIVITY[oneOf(raw.padSensitivity, Object.keys(PAD_SENSITIVITY) as PadSensitivity[], d.padSensitivity)].deadzone,
         },
+    dualSense: parseDualSense(raw.dualSense),
     keyboardTuning: parseKeyboardTuning(raw.keyboardTuning),
     hud: parseHud(raw.hud),
     graphics: parseGraphics(raw.graphics),
