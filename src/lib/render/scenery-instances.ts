@@ -3,7 +3,7 @@ import { withBasePath } from "@/lib/base-path";
 import { createGltfLoader } from "@/lib/render/gltf-loader";
 import { SHADOW_PROXY_LAYER } from "@/lib/render/layers";
 import { applySceneryDetail, sceneryKind } from "@/lib/render/scenery-detail";
-import { patchShader } from "./shader-patch";
+import { leafShading } from "./leaf-shading";
 
 /**
  * Trackside scenery that replaces some of a circuit's own (public/tracks/<id>/scenery/*.glb). Each file's root
@@ -217,49 +217,6 @@ function addShadowProxies(level: THREE.Object3D, source: THREE.Object3D): void {
     proxies.push(proxy);
   });
   for (const p of proxies) level.add(p);
-}
-
-/**
- * Leaf cards, two fixes in their shader:
- *  - Alpha-tested leaves thin out with distance: each smaller mip level averages the cut-outs' alpha down, until it
- *    falls under the alpha test and the crown disappears. Scaling the alpha up by the mip level the pixel samples
- *    keeps the leaf coverage at a distance (the canopy reads as a canopy from the helicopter camera); close up it is
- *    unchanged.
- *  - The cards' normals are baked towards the crown's outward normal (scripts/rwanda-official/foliage.mjs), so a card seen
- *    from behind keeps it rather than being flipped to face the camera: the crown shades as one volume.
- *  - Leaves are matte. With the sun low ahead the crowns' upward normals sit at the grazing angle where the standard
- *    Fresnel term climbs to full white: the canopy glinted silver-grey. Their specular is cut to a fifth.
- */
-function leafShading(mat: THREE.Material): void {
-  const std = mat as THREE.MeshStandardMaterial;
-  if (!std.isMeshStandardMaterial || !std.map || !(std.alphaTest > 0) || std.userData.leafShading) return;
-  std.userData.leafShading = true;
-  std.onBeforeCompile = (shader) => {
-    shader.fragmentShader = patchShader(shader.fragmentShader, [
-      [
-        "#include <normal_fragment_begin>",
-        patchShader(THREE.ShaderChunk.normal_fragment_begin, [["normal *= faceDirection;", ""]], "leaf normal chunk"),
-      ],
-      [
-        "#include <lights_physical_fragment>",
-        "#include <lights_physical_fragment>\n\tmaterial.specularColor *= 0.2;\n\tmaterial.specularColorBlended *= 0.2;\n\tmaterial.specularF90 *= 0.2;",
-      ],
-      [
-        "#include <alphatest_fragment>",
-        /* glsl */ `
-#ifdef USE_MAP
-	vec2 leafTexel = vMapUv * vec2( textureSize( map, 0 ) );
-	vec2 leafDx = dFdx( leafTexel );
-	vec2 leafDy = dFdy( leafTexel );
-	float leafMip = max( 0.0, 0.5 * log2( max( dot( leafDx, leafDx ), dot( leafDy, leafDy ) ) ) );
-	diffuseColor.a *= 1.0 + leafMip * 0.6;
-#endif
-#include <alphatest_fragment>`,
-      ],
-    ], "scenery leaves");
-  };
-  std.customProgramCacheKey = () => "scenery-leaf-v3";
-  std.needsUpdate = true;
 }
 
 /** Forget scenery from a previous circuit (its meshes are disposed with the scene) */

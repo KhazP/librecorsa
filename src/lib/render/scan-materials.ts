@@ -1,4 +1,6 @@
 import * as THREE from "three";
+import { applyGroundDetail } from "./ground-detail";
+import { leafShading } from "./leaf-shading";
 
 /**
  * Material clean-up for the scanned circuits (`Track_Model`, Sketchfab exports converted by build_track.py).
@@ -15,6 +17,10 @@ import * as THREE from "three";
  * - a blended material whose own opacity is 1 is classified by its texture's alpha (most names are generic, e.g.
  *   `Sepang691Mtl_4`): an opaque texture → opaque; mostly hard-edged alpha (foliage, crowds, signs) → alpha-tested
  *   cut-out that writes depth; soft alpha (baked shadows, gradients, glass) stays blended.
+ * - an alpha-tested, double-sided card (the converted circuits' trees, bushes, crowds and railings) gets the leaf
+ *   shading (leaf-shading.ts): its own normal from both sides, matte, and its coverage kept at a distance.
+ * - a converted circuit's ground with `extras.groundDetail` gets its detail texture as a world-tiled layer
+ *   (ground-detail.ts).
  */
 
 const METAL = /metal|steel|chrome|armco|rail|guard|post|pole|truss/i;
@@ -90,5 +96,7 @@ export function cleanScanMaterial(mat: THREE.Material): void {
       std.depthWrite = true;
     }
   }
+  if (std.alphaTest > 0 && std.side === THREE.DoubleSide) leafShading(std);
+  applyGroundDetail(std);
   std.needsUpdate = true;
 }
