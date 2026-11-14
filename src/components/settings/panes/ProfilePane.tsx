@@ -72,6 +72,8 @@ export function DriverTab() {
   /** The name last sent to the board, and whether it is still on its way: one request at a time */
   const sentName = useRef<string | null>(null);
   const sending = useRef(false);
+  /** A commit came while a rename was on its way: it runs once that one settles, with the field as it is then */
+  const queued = useRef(false);
   const alive = useRef(true);
   useEffect(() => {
     alive.current = true;
@@ -87,19 +89,33 @@ export function DriverTab() {
       // The board has the last word: the field keeps the typed name until it has taken, or says why it did not
       const typed = nameDraft;
       // Leaving the field or closing the screen never sends a name already sent; Enter tries it again
-      if (sending.current || (!retry && sentName.current === typed)) return;
+      if (sending.current) {
+        queued.current = true;
+        return;
+      }
+      if (!retry && sentName.current === typed) return;
       sentName.current = typed;
       sending.current = true;
-      void env.onRenameDriver(typed).then((error) => {
+      const settle = () => {
         sending.current = false;
-        if (!alive.current) return;
-        setNameError(error);
-        if (error === null) setNameDraft((d) => (d === typed ? null : d));
-      }, () => {
-        // Failed on the way: the next commit may send it again
-        sending.current = false;
-        sentName.current = null;
-      });
+        if (!queued.current) return;
+        queued.current = false;
+        commits.current.commitName();
+      };
+      void env.onRenameDriver(typed).then(
+        (error) => {
+          if (alive.current) {
+            setNameError(error);
+            if (error === null) setNameDraft((d) => (d === typed ? null : d));
+          }
+          settle();
+        },
+        () => {
+          // Failed on the way: the next commit may send it again
+          sentName.current = null;
+          settle();
+        },
+      );
       return;
     }
     const name = sanitizeDriverName(nameDraft);
