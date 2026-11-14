@@ -24,7 +24,7 @@
     "@takram/three-atmosphere": "^0.19.1",
     "@takram/three-clouds": "^0.7.6",
     "@takram/three-geospatial": "^0.9.1",
-    "lucide-react": "^1.65.0",
+    "lucide-react": "^1.70.0",
     "next": "^16.4.1",
     "postprocessing": "^6.39.6",
     "react": "^19.3.1",
