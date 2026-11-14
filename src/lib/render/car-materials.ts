@@ -228,7 +228,9 @@ vec3 lc26PerturbNormal( vec3 eyePos, vec3 surfNorm, vec2 dHdxy, float faceDir ) 
 	vec3 R2 = cross( surfNorm, dPdx );
 	float det = dot( dPdx, R1 ) * faceDir;
 	vec3 grad = sign( det ) * ( dHdxy.x * R1 + dHdxy.y * R2 );
-	return normalize( abs( det ) * surfNorm - grad );
+	vec3 bumped = abs( det ) * surfNorm - grad;
+	// No area under the derivatives (det 0): no bump, rather than normalize( 0 ), which is NaN (asphalt-sheen.ts)
+	return dot( bumped, bumped ) > 0.0 ? normalize( bumped ) : surfNorm;
 }
 `;
 
