@@ -52,7 +52,7 @@ import { RaceControlBanner } from "./hud/RaceControlBanner";
 import { RaceIncidentFeed } from "./hud/RaceIncidentFeed";
 import { DamageWidget } from "./hud/DamageWidget";
 import { ReplayBar } from "./hud/ReplayBar";
-import { TouchControls, type TouchControlsProps } from "./hud/TouchControls";
+import { TouchControls, type TouchCarState, type TouchControlsProps } from "./hud/TouchControls";
 import { getTrackInfo } from "@/lib/track-registry";
 import { useInputMode } from "./menu/input-mode";
 import { ACTIVE_TRACK_ID } from "@/lib/track-data";
@@ -206,6 +206,26 @@ function useDrsDetectionNotice(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
   return notice;
+}
+
+/** Which touch driving buttons the car uses and how lit they are, read the way the speed cluster reads them */
+function touchCarState(t: CarTelemetry, lights: boolean): TouchCarState {
+  const channels = t.f12026;
+  const aero = aeroReadout(t);
+  const overtakeLocked = t.overtakingRules === "straight-mode-2026" && t.overtakeAvailable === false;
+  return {
+    hasErs: channels?.hasErs ?? true,
+    hasAero: (!channels || channels.hasDrs) && t.overtakingRules !== "none",
+    aeroOpen: aero.open,
+    // A car without the DRS channel cannot say where the flaps may open: its button never looks unusable
+    aeroArmed: aero.armed || !channels,
+    boostOn: !overtakeLocked && t.manualOverrideActive,
+    boostLocked: overtakeLocked,
+    gear: t.gear,
+    speedKmh: t.speedKmh,
+    runId: t.runId ?? 0,
+    lights,
+  };
 }
 
 /**
@@ -597,7 +617,7 @@ export const F1TelemetryHud: React.FC<F1TelemetryHudProps> = (props) => {
 
       {props.touchControls ? (
         <div className="pointer-events-auto">
-          <TouchControls {...props.touchControls} />
+          <TouchControls {...props.touchControls} car={touchCarState(telemetry, lightsPhase)} />
         </div>
       ) : null}
 

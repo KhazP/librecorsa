@@ -1686,6 +1686,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
               ? {
                   tiltSteer: settings.touch.tiltSteer,
                   tiltRangeDeg: settings.touch.tiltRangeDeg,
+                  autoGearbox,
                   onPause: togglePause,
                   onCycleCamera: cycleCamera,
                 }

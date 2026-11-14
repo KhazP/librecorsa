@@ -116,7 +116,7 @@ export interface HudDesignProps {
   ffb?: React.ReactNode;
   /** Live Tuner Multi-Function Display (MFD) */
   mfd?: React.ReactNode;
-  /** The on-screen touch controls are up (their Menu / Cam sit top-left) */
+  /** The on-screen touch controls are up (their pause and camera buttons sit top-left) */
   touch?: boolean;
   /** The running lap was cut (`useLapInvalid`, the one reading every style shows): its clock stays red until the next lap */
   lapInvalid: boolean;

@@ -8,11 +8,17 @@ import {
   touchInput,
 } from "@/lib/input/touch-input";
 import { Icon } from "@/components/ui/icons/Icon";
-import { HUD_BRAKE, HUD_GLASS, HUD_INFO, HUD_LBL, HUD_SLATE, HUD_THROTTLE, HUD_VOID, HUD_VOLT, HUD_WHITE } from "./hud-format";
+import { HUD_BRAKE, HUD_INFO, HUD_THROTTLE, HUD_VOID, HUD_VOLT, HUD_WHITE } from "./hud-format";
 import { useHudMode } from "./hud-mode";
 
 /** Finger travel from the touch-down point that gives full steering lock, as a fraction of window width */
 const STEER_SPAN_VW = 0.18;
+/** With tilt on and no reading in this long, the device has no tilt sensor and the slider takes over (ms) */
+const TILT_SILENT_MS = 2000;
+/** Under this speed, once the car has driven off, an automatic gearbox offers reverse (km/h) */
+const REVERSE_OFFER_KMH = 5;
+/** The car counts as having driven off once past this speed (km/h): no reverse button on the grid */
+const DRIVEN_OFF_KMH = 15;
 
 type Analog = "steer" | "throttle" | "brake";
 type TiltStatus = "off" | "asking" | "ready" | "denied" | "unsupported";
@@ -25,7 +31,7 @@ interface Visual {
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
 /**
- * Width of the steering / tilt card: on a portrait phone it ends a gap short of the pedal column
+ * Width of the steering slider: on a portrait phone it ends a gap short of the pedal column
  * (16 px edges, two 80 px pedals and their 12 px gap, 12 px between); on a landscape phone it stays
  * a thumb's sweep wide instead of taking a third of the screen
  */
@@ -33,10 +39,14 @@ const STICK_WIDTH = "w-[min(clamp(200px,38vw,400px),calc(100vw-216px))] phone:w-
 
 /** Steering knob diameter (px) */
 const KNOB = 52;
-/** The HUD glass card the steering / tilt controls sit on */
-const STICK_CARD = `rounded-lc-sheet ${HUD_GLASS}`;
-/** The HUD label (Steer, Brake…) */
-const LABEL = HUD_LBL;
+/**
+ * The touch pads are drawn as ghosts over the driving view: a faint wash and a thin ring, no card, no blur, lighting
+ * up only under a finger. The dark hairline keeps them visible over a bright sky or a white kerb.
+ */
+const GHOST_BG = "rgb(0 0 0 / 0.2)";
+const GHOST_RING = "inset 0 0 0 1.5px rgb(255 255 255 / 0.26), 0 0 0 1px rgb(0 0 0 / 0.16)";
+/** Mixes a CSS colour with transparency (the pedal colours are theme variables) */
+const tint = (color: string, pct: number) => `color-mix(in srgb, ${color} ${pct}%, transparent)`;
 
 /** Safe-area-aware offset from a viewport edge */
 const edge = (side: "top" | "right" | "bottom" | "left", px: number) =>
@@ -105,6 +115,7 @@ const SteerPad: React.FC<SteerPadProps> = ({ value, onChange, suspended }) => {
   const frac = ((value + 1) / 2).toFixed(4);
   const knobLeft = `calc(${KNOB / 2}px + (100% - ${KNOB}px) * ${frac})`;
   const fillWidth = `calc((100% - ${KNOB}px) * ${(Math.abs(value) / 2).toFixed(4)})`;
+  const held = value !== 0;
 
   return (
     <div
@@ -113,24 +124,20 @@ const SteerPad: React.FC<SteerPadProps> = ({ value, onChange, suspended }) => {
       aria-valuemin={-100}
       aria-valuemax={100}
       aria-valuenow={Math.round(value * 100)}
-      className={`${STICK_CARD} ${STICK_WIDTH} pointer-events-auto touch-none relative flex flex-col gap-2.5 overflow-hidden px-4 pt-3.5 pb-4.5 phone:gap-1.5 phone:pt-2.5 phone:pb-3`}
-      style={{ touchAction: "none" }}
+      className={`${STICK_WIDTH} pointer-events-auto touch-none relative h-20 rounded-full px-3 phone:h-16`}
+      style={{ touchAction: "none", backgroundColor: GHOST_BG, boxShadow: GHOST_RING }}
       onPointerDown={down}
       onPointerMove={move}
       onPointerUp={release}
       onPointerCancel={release}
       onLostPointerCapture={release}
     >
-      <div className="pointer-events-none flex items-center justify-between">
-        <span className={LABEL}>Steer</span>
-        <span className="lc-data text-[14px] text-lc-chalk">{Math.round(value * 100)}</span>
-      </div>
-      <div className="pointer-events-none relative h-14 phone:h-11">
+      <div className="pointer-events-none relative h-full">
         {/* Track */}
-        <span className="absolute inset-x-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-lc-titanium" />
+        <span className="absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 rounded-full bg-white/24" />
         {/* Fill from the centre to the knob */}
         <span
-          className="absolute top-1/2 h-1.5 -translate-y-1/2"
+          className="absolute top-1/2 h-1 -translate-y-1/2"
           style={{
             width: fillWidth,
             backgroundColor: HUD_VOLT,
@@ -140,16 +147,16 @@ const SteerPad: React.FC<SteerPadProps> = ({ value, onChange, suspended }) => {
           }}
         />
         {/* Centre reference */}
-        <span className="absolute inset-y-2 left-1/2 w-0.5 -translate-x-1/2 bg-lc-chalk/40" />
+        <span className="absolute top-1/2 left-1/2 h-4 w-0.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/40" />
         {/* Knob */}
         <span
-          className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border-[3px] phone:scale-[0.85]"
+          className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border-[3px] phone:scale-[0.82]"
           style={{
             left: knobLeft,
             width: KNOB,
             height: KNOB,
-            borderColor: HUD_VOLT,
-            backgroundColor: HUD_VOID,
+            borderColor: held ? HUD_VOLT : "rgb(255 255 255 / 0.7)",
+            backgroundColor: tint(HUD_VOID, held ? 70 : 45),
           }}
         />
       </div>
@@ -157,60 +164,46 @@ const SteerPad: React.FC<SteerPadProps> = ({ value, onChange, suspended }) => {
   );
 };
 
-interface TiltIndicatorProps {
-  value: number;
-  status: TiltStatus;
-  onRecentre: (e: React.PointerEvent<HTMLButtonElement>) => void;
-  /** The finger leaving Recentre: asks for tilt again while it is off or was refused */
-  onRecentreRelease: () => void;
-}
-
-const TILT_LABEL: Record<TiltStatus, string> = {
-  off: "TILT: TAP TO ENABLE",
-  asking: "TILT: ASKING",
-  ready: "TILT",
-  denied: "TILT DENIED",
-  unsupported: "NO TILT SENSOR",
+/** Tilt steering's only readout while driving: a slim bar along the bottom edge, its tick where the steering is */
+const TiltMeter: React.FC<{ value: number }> = ({ value }) => {
+  const half = Math.abs(value) * 50;
+  return (
+    <div aria-hidden className="relative h-1 w-[min(36vw,168px)] rounded-full bg-white/24 shadow-[0_0_0_1px_rgb(0_0_0/0.16)]">
+      <span
+        className="absolute inset-y-0 rounded-full"
+        style={{ left: `${value < 0 ? 50 - half : 50}%`, width: `${half}%`, backgroundColor: HUD_VOLT }}
+      />
+      <span className="absolute -inset-y-1 left-1/2 w-0.5 -translate-x-1/2 rounded-full bg-white/70" />
+    </div>
+  );
 };
 
-/** Tilt-steer readout with a Recentre button that stores the current tilt as the zero offset */
-const TiltIndicator: React.FC<TiltIndicatorProps> = ({ value, status, onRecentre, onRecentreRelease }) => {
-  const half = Math.abs(value) * 50;
-  const fillLeft = value < 0 ? 50 - half : 50;
-
-  return (
-    <div
-      className={`${STICK_CARD} ${STICK_WIDTH} pointer-events-auto touch-none flex flex-col gap-2.5 px-4 pt-3.5 pb-4 phone:gap-2 phone:pt-2.5 phone:pb-3`}
-      style={{ touchAction: "none" }}
-    >
-      <div className="flex items-center justify-between">
-        <span className={LABEL}>{TILT_LABEL[status]}</span>
-        <span className="lc-data text-[14px] text-lc-chalk">{Math.round(value * 100)}</span>
-      </div>
-      <div className="relative h-1.5 overflow-hidden rounded-full bg-lc-titanium">
-        <div
-          className="absolute inset-y-0 rounded-full"
-          style={{ left: `${fillLeft}%`, width: `${half}%`, backgroundColor: HUD_VOLT }}
-        />
-        <div className="absolute inset-y-0 left-1/2 w-0.5 -translate-x-1/2 bg-lc-chalk/40" />
-      </div>
-      <button
-        type="button"
-        aria-label="Recentre tilt"
-        className="pointer-events-auto touch-none h-11 rounded-full border border-lc-line bg-lc-carbon text-[14px] font-bold active:scale-95"
-        style={{ color: HUD_WHITE, touchAction: "none" }}
-        onPointerDown={onRecentre}
-        onPointerUp={onRecentreRelease}
-      >
-        Recentre
-      </button>
-    </div>
+/** One line about tilt while it is not steering: off, being asked for, refused or missing */
+const TiltNote: React.FC<{ children: React.ReactNode; onRetry?: () => void; maxWidth: string }> = ({ children, onRetry, maxWidth }) => {
+  // Capped to the room it has on a portrait phone (between the pedals, or over the slider)
+  const cls = `inline-flex h-8 items-center gap-2 whitespace-nowrap rounded-full bg-lc-void/62 pr-3.5 pl-2.5 text-[12px] font-bold text-lc-chalk ${maxWidth}`;
+  const body = (
+    <>
+      <Icon name="tilt" size="xs" />
+      <span className="truncate">{children}</span>
+    </>
+  );
+  // A retry asks for permission as the finger lifts: iOS takes a pointerup as a user gesture, not a pointerdown
+  return onRetry ? (
+    <button type="button" className={`${cls} pointer-events-auto touch-none active:scale-95`} style={{ touchAction: "none" }} onPointerUp={onRetry}>
+      {body}
+    </button>
+  ) : (
+    <span role="status" className={cls}>
+      {body}
+    </span>
   );
 };
 
 interface PedalProps {
   label: string;
   color: string;
+  icon: "brake" | "keyUp";
   value: number;
   onChange: (v: number) => void;
   /** Hidden under the pause menu or a replay: a finger still down is let go */
@@ -218,7 +211,7 @@ interface PedalProps {
 }
 
 /** Vertical pedal: the finger's height on the pedal (bottom 0 → top 1) is the input */
-const Pedal: React.FC<PedalProps> = ({ label, color, value, onChange, suspended }) => {
+const Pedal: React.FC<PedalProps> = ({ label, color, icon, value, onChange, suspended }) => {
   const pid = useRef<number | null>(null);
 
   useEffect(() => {
@@ -255,6 +248,9 @@ const Pedal: React.FC<PedalProps> = ({ label, color, value, onChange, suspended 
     onChange(0);
   };
 
+  const pressed = value > 0;
+
+  // The visible pedal is the whole hit area: the travel is measured over its height
   return (
     <div
       role="slider"
@@ -262,8 +258,12 @@ const Pedal: React.FC<PedalProps> = ({ label, color, value, onChange, suspended 
       aria-valuemin={0}
       aria-valuemax={100}
       aria-valuenow={Math.round(value * 100)}
-      className="pointer-events-auto touch-none relative flex h-37.5 w-25 flex-col justify-between overflow-hidden rounded-lc-sheet border-2 bg-lc-void/74 p-3 backdrop-blur-[14px] max-sm:portrait:w-20 short:w-22 phone:h-29 phone:rounded-lc-card"
-      style={{ borderColor: color, touchAction: "none" }}
+      className="pointer-events-auto touch-none relative flex h-37.5 w-25 items-end justify-center overflow-hidden rounded-lc-sheet pb-3 max-sm:portrait:w-20 short:w-22 phone:h-29 phone:rounded-lc-card phone:pb-2.5"
+      style={{
+        touchAction: "none",
+        backgroundColor: pressed ? tint(color, 14) : GHOST_BG,
+        boxShadow: `inset 0 0 0 1.5px ${tint(color, pressed ? 95 : 55)}, 0 0 0 1px rgb(0 0 0 / 0.16)`,
+      }}
       onPointerDown={down}
       onPointerMove={move}
       onPointerUp={release}
@@ -273,88 +273,115 @@ const Pedal: React.FC<PedalProps> = ({ label, color, value, onChange, suspended 
       {/* The pedal's travel, scaled from the bottom (transform only) */}
       <div
         className="pointer-events-none absolute inset-0 origin-bottom"
-        style={{ transform: `scaleY(${value})`, backgroundColor: color }}
+        style={{ transform: `scaleY(${value})`, backgroundColor: tint(color, 62) }}
       />
-      <span
-        className={`${LABEL} pointer-events-none relative`}
-        style={{ color: value > 0.82 ? HUD_VOID : color }}
-      >
-        {label}
-      </span>
-      <span
-        className="lc-data pointer-events-none relative text-[15px]"
-        style={{ color: value > 0.14 ? HUD_VOID : HUD_WHITE }}
-      >
-        {Math.round(value * 100)}
+      <span className="pointer-events-none relative" style={{ color: pressed ? HUD_WHITE : color }}>
+        <Icon name={icon} size="md" />
       </span>
     </div>
   );
 };
 
-interface TapButtonProps {
+interface GhostButtonProps {
+  /** Accessible name */
   label: string;
-  ariaLabel?: string;
-  /** Ring colour (and text colour unless `textColor` is set) */
-  color: string;
-  textColor?: string;
-  /** 84px wide pill instead of a round 56px button */
-  wide?: boolean;
-  /** Frosted text pill (Menu / Cam) instead of a coloured ring */
-  small?: boolean;
-  /** Drawn instead of the label text (the label stays as the accessible name) */
-  icon?: React.ReactNode;
+  /** Icon or glyph */
+  children: React.ReactNode;
   onTap: () => void;
+  /** A toggle that is on: filled */
+  on?: boolean;
+  /** Usable here (a DRS zone, say): a brighter ring */
+  armed?: boolean;
+  /** Not usable right now */
+  dim?: boolean;
+  /** Fill / ring colour when on or armed */
+  tone?: string;
 }
 
-/** One-shot button: fires on pointer down */
-const TapButton: React.FC<TapButtonProps> = ({ label, ariaLabel, color, textColor, wide, small, icon, onTap }) => (
+/** Round one-shot driving button (shift, boost, aero, reverse): fires on pointer down */
+const GhostButton: React.FC<GhostButtonProps> = ({ label, children, onTap, on, armed, dim, tone = HUD_INFO }) => (
   <button
     type="button"
-    aria-label={ariaLabel ?? label}
-    className={`pointer-events-auto touch-none flex items-center justify-center rounded-full active:scale-95 ${
-      small
-        ? `h-11 min-w-18 px-4 text-[14px] font-bold ${HUD_GLASS}`
-        : `lc-chip-text h-14 border-2 bg-lc-void/74 text-[13px] backdrop-blur-[14px] phone:h-12 ${wide ? "w-21 phone:w-18" : "w-14 phone:w-12"}`
-    }`}
+    aria-label={label}
+    aria-pressed={on === undefined ? undefined : on}
+    className={`pointer-events-auto touch-none flex size-13 items-center justify-center rounded-full active:scale-95 phone:size-12 ${dim ? "opacity-45" : ""}`}
     style={{
-      color: small ? HUD_WHITE : (textColor ?? color),
-      borderColor: small ? undefined : color,
       touchAction: "none",
+      color: on ? HUD_VOID : HUD_WHITE,
+      backgroundColor: on ? tone : GHOST_BG,
+      boxShadow: on ? undefined : armed ? `inset 0 0 0 2px ${tone}, 0 0 0 1px rgb(0 0 0 / 0.16)` : GHOST_RING,
     }}
     onPointerDown={(e) => {
       e.preventDefault();
       onTap();
     }}
   >
-    {icon ?? label}
+    {children}
   </button>
 );
 
-/** The shift buttons' arrows: the kit's shift icons */
-const ShiftArrow: React.FC<{ up?: boolean }> = ({ up }) => <Icon name={up ? "shiftUp" : "shiftDown"} size="md" />;
+/** Small round icon button for the top corner (pause, camera, recentre): 44 px to the touch */
+const ChromeButton: React.FC<{ label: string; icon: "pause" | "camera" | "tilt"; onTap: () => void }> = ({ label, icon, onTap }) => (
+  <button
+    type="button"
+    aria-label={label}
+    className="pointer-events-auto touch-none flex size-11 items-center justify-center rounded-full bg-lc-void/45 text-lc-chalk shadow-[inset_0_0_0_1px_rgb(255_255_255/0.12)] active:scale-95"
+    style={{ touchAction: "none" }}
+    onPointerDown={(e) => {
+      e.preventDefault();
+      onTap();
+    }}
+  >
+    <Icon name={icon} size="md" />
+  </button>
+);
+
+/** What the car can do right now, from its telemetry: which driving buttons to show and how lit */
+export interface TouchCarState {
+  hasErs: boolean;
+  /** DRS / X-mode flaps (and rules that allow them) */
+  hasAero: boolean;
+  aeroOpen: boolean;
+  aeroArmed: boolean;
+  /** Boost / Overtake latched on */
+  boostOn: boolean;
+  /** Overtake not earned this lap (2026 rules in a race) */
+  boostLocked: boolean;
+  gear: number;
+  speedKmh: number;
+  /** Changes on every restart */
+  runId: number;
+  /** Start lights are on */
+  lights: boolean;
+}
 
 export interface TouchControlsProps {
   /** Steer from device tilt instead of the on-screen slider */
   tiltSteer: boolean;
   /** Tilt angle that gives full steering lock, in degrees */
   tiltRangeDeg: number;
+  /** Automatic gearbox: no shift buttons, only reverse (or drive) once the car has stopped */
+  autoGearbox: boolean;
   onPause: () => void;
   onCycleCamera: () => void;
 }
 
 /**
- * Landscape-phone touch overlay: steering (slider or tilt), brake and throttle pedals, shift,
- * boost and aero buttons, plus Menu and Cam. Writes into the `touchInput` singleton.
+ * Phone touch overlay: steering (slider or tilt), brake and throttle pedals, the driving buttons the car and gearbox
+ * use, plus pause and camera. With tilt steering the pedals split, brake under the left thumb and throttle under the
+ * right. Writes into the `touchInput` singleton.
  */
-export const TouchControls: React.FC<TouchControlsProps> = ({
+export const TouchControls: React.FC<TouchControlsProps & { car: TouchCarState }> = ({
   tiltSteer,
   tiltRangeDeg,
+  autoGearbox,
   onPause,
   onCycleCamera,
+  car,
 }) => {
   const [vis, setVis] = useState<Visual>({ steer: 0, throttle: 0, brake: 0 });
-  // The one source for tilt: the label shows it and the orientation listener only steers while it is "ready".
-  // `statusRef` mirrors it for the same-event guard (a first tap on Recentre reaches both tap handlers before a render)
+  // The one source for tilt: the note shows it and the orientation listener only steers while it is "ready".
+  // `statusRef` mirrors it for the same-event guard (a first tap on a retry reaches both tap handlers before a render)
   const [tiltStatus, setTiltStatusState] = useState<TiltStatus>("off");
   const statusRef = useRef<TiltStatus>("off");
   const setTiltStatus = useCallback((s: TiltStatus) => {
@@ -443,11 +470,21 @@ export const TouchControls: React.FC<TouchControlsProps> = ({
     return () => window.removeEventListener("pointerup", onFirstTap, { capture: true });
   }, [tiltSteer, tiltStatus, suspended, enableTilt]);
 
-  /** Tilt listener, only while tilt is ready and shown: the first sample after enabling (or Recentre) becomes the zero */
+  /**
+   * Tilt listener, only while tilt is ready and shown: the first sample after enabling (or unpausing, or Recentre)
+   * becomes the zero. A browser with the API but no sensor (a laptop, the iOS simulator, some tablets) sends nothing,
+   * or only empty readings: after a quiet spell the slider takes over.
+   */
   useEffect(() => {
     if (!tiltSteer || tiltStatus !== "ready" || suspended) return;
     tiltNeedsZero.current = true;
+    let heard = false;
+    const silent = window.setTimeout(() => {
+      if (!heard) setTiltStatus("unsupported");
+    }, TILT_SILENT_MS);
     const onOrientation = (ev: DeviceOrientationEvent) => {
+      if (ev.beta === null && ev.gamma === null) return;
+      heard = true;
       if (tiltNeedsZero.current) {
         tiltOffset.current = { beta: ev.beta ?? 0, gamma: ev.gamma ?? 0 };
         tiltNeedsZero.current = false;
@@ -467,84 +504,159 @@ export const TouchControls: React.FC<TouchControlsProps> = ({
     };
     window.addEventListener("deviceorientation", onOrientation);
     return () => {
+      window.clearTimeout(silent);
       window.removeEventListener("deviceorientation", onOrientation);
       setSteer(0);
     };
-  }, [tiltSteer, tiltStatus, suspended, tiltRangeDeg, setSteer]);
+  }, [tiltSteer, tiltStatus, suspended, tiltRangeDeg, setSteer, setTiltStatus]);
 
-  const onRecentre = (e: React.PointerEvent<HTMLButtonElement>) => {
-    e.preventDefault();
+  /** Taken for sensorless after a quiet start: a real reading arriving later still hands steering back to tilt */
+  useEffect(() => {
+    if (!tiltSteer || tiltStatus !== "unsupported" || suspended || !("DeviceOrientationEvent" in window)) return;
+    const onOrientation = (ev: DeviceOrientationEvent) => {
+      if (ev.beta !== null || ev.gamma !== null) setTiltStatus("ready");
+    };
+    window.addEventListener("deviceorientation", onOrientation);
+    return () => window.removeEventListener("deviceorientation", onOrientation);
+  }, [tiltSteer, tiltStatus, suspended, setTiltStatus]);
+
+  const onRecentre = () => {
     tiltNeedsZero.current = true;
   };
   // On the release, like the first tap: the press is no user gesture to iOS
-  const onRecentreRelease = () => {
+  const onRetryTilt = () => {
     if (statusRef.current === "off" || statusRef.current === "denied") void enableTilt();
+  };
+
+  // Tilt steers (or is about to): the pedals split. Refused or missing: the slider takes over, pedals on the right
+  const tiltFallback = tiltSteer && (tiltStatus === "denied" || tiltStatus === "unsupported");
+  const tilt = tiltSteer && !tiltFallback;
+
+  // An automatic gearbox needs one gear button: reverse once the car has driven off and stopped (never on the grid),
+  // or drive while in reverse. Downshifting from first at a standstill selects reverse in every car.
+  const [drivenOffRun, setDrivenOffRun] = useState<number | null>(null);
+  const speed = Math.abs(car.speedKmh);
+  useEffect(() => {
+    if (speed > DRIVEN_OFF_KMH && drivenOffRun !== car.runId) setDrivenOffRun(car.runId);
+  }, [speed, car.runId, drivenOffRun]);
+  const drivenOff = drivenOffRun === car.runId;
+  const gearButton = !autoGearbox || car.lights ? null : car.gear < 0 ? (
+    <GhostButton key="drive" label="Drive" onTap={() => { touchInput.shiftUp = true; }}>
+      <span className="lc-disp text-[20px] leading-none">D</span>
+    </GhostButton>
+  ) : drivenOff && speed < REVERSE_OFFER_KMH ? (
+    <GhostButton key="reverse" label="Reverse" onTap={() => { touchInput.shiftDown = true; }}>
+      <span className="lc-disp text-[20px] leading-none">R</span>
+    </GhostButton>
+  ) : null;
+
+  const shiftDown = autoGearbox ? null : (
+    <GhostButton key="down" label="Shift down" onTap={() => { touchInput.shiftDown = true; }}>
+      <Icon name="shiftDown" size="md" />
+    </GhostButton>
+  );
+  const shiftUp = autoGearbox ? null : (
+    <GhostButton key="up" label="Shift up" onTap={() => { touchInput.shiftUp = true; }}>
+      <Icon name="shiftUp" size="md" />
+    </GhostButton>
+  );
+  const boost = car.hasErs ? (
+    <GhostButton key="boost" label="Boost" on={car.boostOn} dim={car.boostLocked} onTap={() => { touchInput.boost = true; }}>
+      <Icon name="overtake" size="md" />
+    </GhostButton>
+  ) : null;
+  const aero = car.hasAero ? (
+    <GhostButton
+      key="aero"
+      label="Active aero"
+      on={car.aeroOpen}
+      armed={car.aeroArmed}
+      dim={!car.aeroOpen && !car.aeroArmed}
+      onTap={() => { touchInput.aero = true; }}
+    >
+      <Icon name={car.aeroOpen ? "drsOpen" : "drsClosed"} size="md" />
+    </GhostButton>
+  ) : null;
+
+  const brakePedal = (
+    <Pedal label="Brake" color={HUD_BRAKE} icon="brake" value={vis.brake} onChange={setBrake} suspended={suspended} />
+  );
+  const throttlePedal = (
+    <Pedal label="Throttle" color={HUD_THROTTLE} icon="keyUp" value={vis.throttle} onChange={setThrottle} suspended={suspended} />
+  );
+  /** A row of driving buttons over a pedal; nothing at all when the car and gearbox use none */
+  const buttonRow = (buttons: React.ReactNode[], align: "start" | "end") => {
+    const shown = buttons.filter(Boolean);
+    return shown.length ? (
+      <div className={`flex gap-2 ${align === "end" ? "justify-end" : "justify-start"}`}>{shown}</div>
+    ) : null;
   };
 
   return (
     <div className="pointer-events-none fixed inset-0 z-30 touch-none select-none">
-      {/* Top-left: Menu and Cam */}
-      <div
-        className="absolute flex gap-2"
-        style={{ top: edge("top", 12), left: edge("left", 16) }}
-      >
-        <TapButton label="Menu" color={HUD_SLATE} small onTap={onPause} />
-        <TapButton label="Cam" color={HUD_SLATE} small onTap={onCycleCamera} />
+      {/* Top-left: pause, camera and (tilt steering) recentre */}
+      <div className="absolute flex gap-2" style={{ top: edge("top", 12), left: edge("left", 16) }}>
+        <ChromeButton label="Pause" icon="pause" onTap={onPause} />
+        <ChromeButton label="Camera" icon="camera" onTap={onCycleCamera} />
+        {tilt && tiltStatus === "ready" ? <ChromeButton label="Recentre tilt" icon="tilt" onTap={onRecentre} /> : null}
       </div>
 
-      {/* Bottom-left: steering */}
-      <div className="absolute" style={{ left: edge("left", 16), bottom: edge("bottom", 16) }}>
-        {tiltSteer ? (
-          <TiltIndicator value={vis.steer} status={tiltStatus} onRecentre={onRecentre} onRecentreRelease={onRecentreRelease} />
-        ) : (
-          <SteerPad value={vis.steer} onChange={setSteer} suspended={suspended} />
-        )}
-      </div>
-
-      {/* Bottom-right: shift / boost / aero buttons above the pedals */}
-      <div
-        className="absolute flex flex-col items-end gap-3 phone:gap-2"
-        style={{ right: edge("right", 16), bottom: edge("bottom", 16) }}
-      >
-        <div className="flex gap-2">
-          <TapButton
-            label="Shift up"
-            color={HUD_WHITE}
-            icon={<ShiftArrow up />}
-            onTap={() => {
-              touchInput.shiftUp = true;
-            }}
-          />
-          <TapButton
-            label="Shift down"
-            color={HUD_WHITE}
-            icon={<ShiftArrow />}
-            onTap={() => {
-              touchInput.shiftDown = true;
-            }}
-          />
-          <TapButton
-            label="Boost"
-            color={HUD_INFO}
-            wide
-            onTap={() => {
-              touchInput.boost = true;
-            }}
-          />
-          <TapButton
-            label="X/Z"
-            ariaLabel="Active aero"
-            color={HUD_INFO}
-            onTap={() => {
-              touchInput.aero = true;
-            }}
-          />
-        </div>
-        <div className="flex gap-3 phone:gap-2">
-          <Pedal label="Brake" color={HUD_BRAKE} value={vis.brake} onChange={setBrake} suspended={suspended} />
-          <Pedal label="Throttle" color={HUD_THROTTLE} value={vis.throttle} onChange={setThrottle} suspended={suspended} />
-        </div>
-      </div>
+      {tilt ? (
+        <>
+          {/* Bottom-left: brake under the left thumb (and the gear buttons that go down) */}
+          <div
+            className="absolute flex flex-col items-start gap-3 phone:gap-2"
+            style={{ left: edge("left", 16), bottom: edge("bottom", 16) }}
+          >
+            {buttonRow([shiftDown, gearButton], "start")}
+            {brakePedal}
+          </div>
+          {/* Bottom-centre: the steering readout, or why tilt is not steering yet */}
+          <div className="absolute left-1/2 -translate-x-1/2" style={{ bottom: edge("bottom", 18) }}>
+            {tiltStatus === "ready" ? (
+              <TiltMeter value={vis.steer} />
+            ) : (
+              <TiltNote maxWidth="max-w-[calc(100vw-232px)]">{tiltStatus === "asking" ? "Allow motion access" : "Tap to turn on tilt"}</TiltNote>
+            )}
+          </div>
+          {/* Bottom-right: throttle under the right thumb, the other buttons over it */}
+          <div
+            className="absolute flex flex-col items-end gap-3 phone:gap-2"
+            style={{ right: edge("right", 16), bottom: edge("bottom", 16) }}
+          >
+            {buttonRow([shiftUp, boost, aero], "end")}
+            {throttlePedal}
+          </div>
+        </>
+      ) : (
+        <>
+          {/* Bottom-left: steering slider (and why tilt is not steering, when it was chosen) */}
+          <div
+            className="absolute flex flex-col items-start gap-2"
+            style={{ left: edge("left", 16), bottom: edge("bottom", 16) }}
+          >
+            {tiltFallback ? (
+              tiltStatus === "denied" ? (
+                <TiltNote maxWidth="max-w-[calc(100vw-216px)]" onRetry={onRetryTilt}>Tilt blocked · Retry</TiltNote>
+              ) : (
+                <TiltNote maxWidth="max-w-[calc(100vw-216px)]">No tilt sensor</TiltNote>
+              )
+            ) : null}
+            <SteerPad value={vis.steer} onChange={setSteer} suspended={suspended} />
+          </div>
+          {/* Bottom-right: driving buttons above the pedals */}
+          <div
+            className="absolute flex flex-col items-end gap-3 phone:gap-2"
+            style={{ right: edge("right", 16), bottom: edge("bottom", 16) }}
+          >
+            {buttonRow([gearButton, shiftDown, shiftUp, boost, aero], "end")}
+            <div className="flex gap-3 phone:gap-2">
+              {brakePedal}
+              {throttlePedal}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 };
