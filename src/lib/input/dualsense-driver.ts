@@ -25,26 +25,35 @@ export class DualSenseDriver {
   private retryAtMs = 0;
   /** A start failed with a reason: no silent retries (they would wipe the message) until the setting goes off again */
   private gaveUp = false;
-  /** The haptics state last frame: giving up latches only on the change into "error", so going off and on retries */
-  private lastState = "";
+  /** HD haptics were wanted last frame (the setting on, the pad on USB) */
+  private wanted = false;
 
   update(telemetry: CarTelemetry, dtS: number, options: DualSenseDriveOptions): void {
-    const state = dualSenseAudioHaptics.getStatus().state;
-    const intoError = state === "error" && this.lastState !== "error";
-    this.lastState = state;
     const usb = dualSenseHid.transportNow() === "usb";
     const wantHaptics = options.settings.hdHaptics && usb;
+    const state = dualSenseAudioHaptics.getStatus().state;
     if (!wantHaptics) {
       this.gaveUp = false;
-      if (dualSenseAudioHaptics.getStatus().state === "on") void dualSenseAudioHaptics.stop();
-    } else if (!dualSenseAudioHaptics.running() && dualSenseAudioHaptics.getStatus().state !== "starting") {
-      if (intoError) this.gaveUp = true;
+      this.wanted = false;
+      if (state === "on") void dualSenseAudioHaptics.stop();
+    } else if (!dualSenseAudioHaptics.running() && state !== "starting") {
+      // Just back on (the setting, or the pad on USB again): one try straight away, even over an old error
+      const fresh = !this.wanted;
+      this.wanted = true;
+      if (fresh) this.retryAtMs = 0;
+      // An error left by a start the player asked for (in Settings) keeps its message: no silent try over it
+      else if (state === "error") this.gaveUp = true;
       // Granted on an earlier visit: the browser lists the pad again without asking
       const now = Date.now();
       if (!this.gaveUp && now >= this.retryAtMs) {
         this.retryAtMs = now + HAPTICS_RETRY_MS;
-        void dualSenseAudioHaptics.start(false);
+        // A silent try that fails with a reason (not just "pad not listed yet") stops the tries, read from its own result
+        void dualSenseAudioHaptics.start(false).then((ok) => {
+          if (!ok && dualSenseAudioHaptics.getStatus().state === "error") this.gaveUp = true;
+        });
       }
+    } else {
+      this.wanted = true;
     }
     if (!dualSenseHid.connected()) return;
     const hdHaptics = wantHaptics && dualSenseAudioHaptics.running();
