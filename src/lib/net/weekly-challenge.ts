@@ -13,10 +13,15 @@ import type { SimRealism } from "@/lib/sim/sim-realism";
 export interface ChallengeRules {
   trackId: string;
   vehicle: VehicleModelId;
+  /**
+   * The car the week is shown and driven in, when its vehicle has more than one (an id of car-registry.ts, which the
+   * Worker cannot import, so a string). A lap in any car of the vehicle counts: they drive the same.
+   */
+  car?: string;
   assists: AssistPreset;
   realism: SimRealism;
   /** The week's scheduled races: their circuit, car and laps */
-  race: { trackId: string; vehicle: VehicleModelId; laps: number };
+  race: { trackId: string; vehicle: VehicleModelId; car?: string; laps: number };
 }
 
 export interface WeeklyChallenge extends ChallengeRules {
@@ -27,27 +32,42 @@ export interface WeeklyChallenge extends ChallengeRules {
 }
 
 /**
- * The circuits raced on, with the 2026 prototype's ideal lap there (s, from the game's speed planner). Only the
- * project's own circuit and circuits used with their author's permission: none converted from a Sketchfab model
- * (`quality: "sketchfab"` in public/tracks/index.json).
+ * The circuits, with the 2026 prototype's ideal lap there (s, from the game's speed planner). Only the project's own
+ * circuit and circuits used with their author's permission: none converted from a Sketchfab model
+ * (`quality: "sketchfab"` in public/tracks/index.json), and no hill climb (a week's races need a lap).
  */
-const CIRCUITS: readonly { trackId: string; lapS: number }[] = [
-  { trackId: "rwanda_official_short", lapS: 91 },
-  { trackId: "spielberg", lapS: 69 },
-  { trackId: "chang", lapS: 76 },
-  { trackId: "okayama_piper", lapS: 43 },
-  { trackId: "rwanda_official", lapS: 105 },
-  { trackId: "monaco", lapS: 76 },
-  { trackId: "okayama", lapS: 73 },
-  { trackId: "spielberg_south", lapS: 45 },
-];
+const LAP_S = {
+  rwanda_official_short: 91,
+  rwanda_official: 105,
+  spielberg: 69,
+  spielberg_south: 45,
+  chang: 76,
+  okayama: 73,
+  okayama_piper: 43,
+  monaco: 76,
+  le_mans_82: 198,
+  istanbul_park: 95,
+  vir: 85,
+  oschersleben: 69,
+  sachsenring: 64,
+  grobnik: 64,
+  norisring: 42,
+  barbagallo: 43,
+} as const;
+type Circuit = keyof typeof LAP_S;
+/** Dunsfold is for time trials only: that week's races are here, in the 2026 prototype */
+const HOME: Circuit = "rwanda_official";
 /** The cars, with their lap time as a multiple of the prototype's */
-const CARS: readonly { vehicle: VehicleModelId; pace: number }[] = [
-  { vehicle: "lc26", pace: 1 },
-  { vehicle: "amg-gt3", pace: 1.2 },
-  { vehicle: "mtr-496r", pace: 1.22 },
-  { vehicle: "liana", pace: 1.9 },
-];
+const PACE = {
+  lc26: 1,
+  "lc-lmdh": 1.15,
+  "amg-gt3": 1.2,
+  "mtr-496r": 1.22,
+  "nissan-r33-jgtc": 1.3,
+  "nissan-r32-jtcc": 1.4,
+  liana: 1.9,
+} as const satisfies Partial<Record<VehicleModelId, number>>;
+type Car = keyof typeof PACE;
 /** A race lasts about this long (s); drivers are taken to lap a little off the ideal */
 const RACE_TARGET_S = 600;
 const DRIVER_PACE = 1.06;
@@ -58,22 +78,67 @@ const weekRules = (week: number): Pick<ChallengeRules, "assists" | "realism"> =>
   week % 4 === 3 ? { assists: "pro", realism: "full" } : { assists: "semi_pro", realism: "standard" };
 
 /**
- * The weeks, in order, then round again: the first entry is the week of 9 November 2026.
+ * The weeks, in order, then round again: the first entry is the week of 9 November 2026, the last the week of
+ * 4 October 2027. Written out by hand, a circuit with a car that belongs there, and where a real race weekend at a
+ * circuit falls in one of these weeks, that week is on it in the nearest car. The dates only hold for this first time
+ * round: write the next list before this one starts again.
  *
- * Each round of nine weeks opens with the time trial of the Suzuki Liana at Dunsfold. Dunsfold is not raced on, so
- * that week's races are at RISE Motordrome's Grand Prix layout in the prototype. Then come the eight circuits, each
- * with the next car along from the round before, so over four rounds every circuit is driven in every car.
+ * Dunsfold is not raced on, so in its weeks the races are at RISE Motordrome's Grand Prix layout in the prototype.
  */
-export const CHALLENGE_ROTATION: readonly ChallengeRules[] = Array.from({ length: (1 + CIRCUITS.length) * CARS.length }, (_, week) => {
-  const round = Math.floor(week / (1 + CIRCUITS.length));
-  const slot = week % (1 + CIRCUITS.length);
-  if (slot === 0) {
-    const home = CIRCUITS[4];
-    return { trackId: "dunsfold", vehicle: "liana", ...weekRules(week), race: { trackId: home.trackId, vehicle: CARS[0].vehicle, laps: raceLaps(home.lapS, CARS[0].pace) } };
-  }
-  const circuit = CIRCUITS[slot - 1];
-  const car = CARS[(slot - 1 + round) % CARS.length];
-  return { trackId: circuit.trackId, vehicle: car.vehicle, ...weekRules(week), race: { trackId: circuit.trackId, vehicle: car.vehicle, laps: raceLaps(circuit.lapS, car.pace) } };
+const WEEKS: readonly (readonly [circuit: Circuit | "dunsfold", vehicle: Car, car?: string])[] = [
+  ["dunsfold", "liana"], // 9 Nov 2026
+  ["le_mans_82", "lc-lmdh"], // 16 Nov
+  ["spielberg", "amg-gt3"], // 23 Nov
+  ["chang", "mtr-496r"], // 30 Nov
+  ["monaco", "liana"], // 7 Dec
+  ["rwanda_official", "amg-gt3", "bmw-m4-gt3"], // 14 Dec
+  ["okayama", "nissan-r32-jtcc"], // 21 Dec
+  ["grobnik", "lc26"], // 28 Dec
+  ["oschersleben", "nissan-r33-jgtc"], // 4 Jan 2027
+  ["rwanda_official_short", "lc26"], // 11 Jan
+  ["vir", "lc-lmdh"], // 18 Jan
+  ["sachsenring", "mtr-496r"], // 25 Jan
+  ["okayama_piper", "liana"], // 1 Feb
+  ["istanbul_park", "amg-gt3"], // 8 Feb
+  ["barbagallo", "nissan-r32-jtcc"], // 15 Feb
+  ["spielberg", "lc-lmdh"], // 22 Feb
+  ["chang", "lc26"], // 1 Mar
+  ["norisring", "nissan-r33-jgtc"], // 8 Mar
+  ["spielberg_south", "liana"], // 15 Mar
+  ["rwanda_official", "mtr-496r"], // 22 Mar
+  ["okayama", "nissan-r33-jgtc"], // 29 Mar: the GT season opens here on 3-4 Apr
+  ["istanbul_park", "lc-lmdh"], // 5 Apr
+  ["dunsfold", "liana"], // 12 Apr
+  ["spielberg", "amg-gt3"], // 19 Apr: GT3 race weekend, 23-25 Apr
+  ["chang", "amg-gt3", "bmw-m4-gt3"], // 26 Apr: GT3 race weekend, 1-2 May
+  ["oschersleben", "amg-gt3"], // 3 May: GT3 race weekend, 7-9 May
+  ["sachsenring", "lc26"], // 10 May
+  ["vir", "mtr-496r"], // 17 May
+  ["barbagallo", "liana"], // 24 May
+  ["monaco", "lc26"], // 31 May: the grand prix, 4-6 Jun
+  ["le_mans_82", "lc-lmdh"], // 7 Jun: the 24 hours, 12-13 Jun
+  ["sachsenring", "nissan-r32-jtcc"], // 14 Jun
+  ["rwanda_official_short", "lc-lmdh"], // 21 Jun
+  ["norisring", "amg-gt3"], // 28 Jun: GT3 race weekend, 2-4 Jul
+  ["spielberg", "lc26"], // 5 Jul: the grand prix, 9-11 Jul
+  ["okayama_piper", "nissan-r32-jtcc"], // 12 Jul
+  ["chang", "nissan-r33-jgtc"], // 19 Jul
+  ["rwanda_official", "lc-lmdh"], // 26 Jul
+  ["okayama", "amg-gt3"], // 2 Aug: GT3 race weekend, 7-8 Aug
+  ["grobnik", "mtr-496r"], // 9 Aug
+  ["vir", "amg-gt3"], // 16 Aug: GT race weekend, 20-22 Aug
+  ["spielberg_south", "nissan-r32-jtcc"], // 23 Aug
+  ["oschersleben", "mtr-496r"], // 30 Aug
+  ["rwanda_official_short", "amg-gt3"], // 6 Sep
+  ["barbagallo", "nissan-r33-jgtc"], // 13 Sep
+  ["sachsenring", "amg-gt3"], // 20 Sep: GT3 race weekend, 24-26 Sep
+  ["istanbul_park", "lc26"], // 27 Sep: the grand prix, 1-3 Oct
+  ["le_mans_82", "mtr-496r"], // 4 Oct
+];
+export const CHALLENGE_ROTATION: readonly ChallengeRules[] = WEEKS.map(([trackId, vehicle, car], week) => {
+  const body = car === undefined ? {} : { car };
+  const [raceTrack, raceCar, raceBody]: readonly [Circuit, Car, { car?: string }] = trackId === "dunsfold" ? [HOME, "lc26", {}] : [trackId, vehicle, body];
+  return { trackId, vehicle, ...body, ...weekRules(week), race: { trackId: raceTrack, vehicle: raceCar, ...raceBody, laps: raceLaps(LAP_S[raceTrack], PACE[raceCar]) } };
 });
 
 const DAY_MS = 86_400_000;
@@ -113,7 +178,10 @@ const CHALLENGE_TYRES: Readonly<Record<VehicleModelId, { compound: TireCompound;
   "f12026-car": { compound: "soft", label: "Soft tyres" },
   "amg-gt3": { compound: "soft", label: "Soft tyres" },
   "mtr-496r": { compound: "soft", label: "Soft tyres" },
+  "lc-lmdh": { compound: "soft", label: "Soft tyres" },
   liana: { compound: "soft", label: "Street tyres" },
+  "nissan-r33-jgtc": { compound: "soft", label: "Soft tyres" },
+  "nissan-r32-jtcc": { compound: "soft", label: "Soft tyres" },
 };
 
 /** The compound every lap of a challenge in this car is driven on */

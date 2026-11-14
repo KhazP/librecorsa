@@ -11,13 +11,17 @@
 
 import { steerNormOf } from './car-pose';
 import * as THREE from 'three';
-import { createF1Car2026, type SimCarRig } from '@/lib/car-builder-2026';
+import { createF1Car2026, type PortedSkin, type SimCarRig } from '@/lib/car-builder-2026';
+import { carForVehicle, carSkinBaseUrl } from '@/lib/cars/car-registry';
 import type { WheelSeating } from '@/lib/render/corner-rig';
 import { createPortedCarRig, loadTemplate as loadPortedTemplate } from '@/lib/ported-car-model';
 import { staticFloorOf } from '@/lib/render/body-floor';
 import { CAR_WHEEL_LOCKS_DEG } from '@/lib/input/device-input';
 import { SUZUKI_LIANA_CONFIG } from './road/SuzukiLianaConfig';
 import { MTR_496R_CONFIG } from './proto/Mtr496rConfig';
+import { LC_LMDH_CONFIG } from './proto/LcLmdhConfig';
+import { NISSAN_R33_CONFIG } from './classic/NissanR33Config';
+import { NISSAN_R32_CONFIG } from './classic/NissanR32Config';
 import { AMG_GT3_CONFIG } from './gt3/AmgGt3Config';
 import { LC26_MODEL_URL, loadLc26Template } from '@/lib/lc26-car-model';
 import { assetProgress } from '@/lib/loading/asset-progress';
@@ -638,12 +642,14 @@ export class SimVisualFxManager {
     const livery = this.mapDriverToLivery(peer.driverCode);
     const ghost = Boolean(peer.ghost || peer.passThrough || peer.stale);
     const pooled = this.pool.get(poolKey(peer.vehicle, ghost))?.pop();
+    const rig = pooled ?? buildOpponentRig(peer.vehicle, livery);
     if (pooled) {
       pooled.root.visible = true;
       if (!ghost) pooled.setLivery(livery);
-      return pooled;
     }
-    return buildOpponentRig(peer.vehicle, livery);
+    // A ported car with liveries of its own races each driver in one of them (the ghost in the car's first)
+    rig.setSkin?.(ghost ? null : opponentSkin(peer.vehicle, peer.driverCode));
+    return rig;
   }
 
   /**
@@ -667,9 +673,7 @@ export class SimVisualFxManager {
 
   private buildPrewarm(vehicle: VehicleModelId | undefined, kind: string): Promise<boolean> {
     const template: Promise<unknown> =
-      kind === 'gt3' || kind === 'road' || kind === 'proto'
-        ? loadPortedTemplate(PORTED_ONLY[kind].url)
-        : loadLc26Template(LC26_MODEL_URL, 'opponents');
+      kind !== 'f1' ? loadPortedTemplate(PORTED_ONLY[kind as PortedKind].url) : loadLc26Template(LC26_MODEL_URL, 'opponents');
     return template
       .then(() => {
         // The rigs attach the cached template in their own `then`, registered before this one returns. One racing
@@ -929,8 +933,6 @@ function createPeerTelemetry(): CarTelemetry {
 
 /** The AI field's drivers (ai-opponents.ts AI_DRIVERS), whose liveries the pool is built in */
 const PREWARM_DRIVERS = ['KIG', 'MUS', 'NYA', 'RUB', 'HUY'] as const;
-const rigKind = (vehicle: VehicleModelId | undefined) =>
-  vehicle === 'amg-gt3' ? 'gt3' : vehicle === 'liana' ? 'road' : vehicle === 'mtr-496r' ? 'proto' : 'f1';
 /**
  * The models with no body of their own: their opponents wear the car's ported GLB (car-registry's `modelUrl`), on the
  * model's chassis and wheel lock. The GT3s race as the Mercedes-AMG GT3 Evo, the model's own car.
@@ -939,13 +941,37 @@ const PORTED_ONLY = {
   gt3: { url: '/cars/amg-gt3-evo/model/amg-gt3-evo.glb', config: AMG_GT3_CONFIG, lockDeg: CAR_WHEEL_LOCKS_DEG['amg-gt3'] },
   road: { url: '/cars/liana/model/liana.glb', config: SUZUKI_LIANA_CONFIG, lockDeg: CAR_WHEEL_LOCKS_DEG.liana },
   proto: { url: '/cars/mtr-496r/model/mtr-496r.glb', config: MTR_496R_CONFIG, lockDeg: CAR_WHEEL_LOCKS_DEG['mtr-496r'] },
+  'lc-lmdh': { url: '/cars/lc-lmdh/model/lc-lmdh.glb', config: LC_LMDH_CONFIG, lockDeg: CAR_WHEEL_LOCKS_DEG['lc-lmdh'] },
+  'nissan-r33-jgtc': {
+    url: '/cars/nissan-r33-jgtc/model/nissan-r33-jgtc.glb',
+    config: NISSAN_R33_CONFIG,
+    lockDeg: CAR_WHEEL_LOCKS_DEG['nissan-r33-jgtc'],
+  },
+  'nissan-r32-jtcc': {
+    url: '/cars/nissan-r32-jtcc/model/nissan-r32-jtcc.glb',
+    config: NISSAN_R32_CONFIG,
+    lockDeg: CAR_WHEEL_LOCKS_DEG['nissan-r32-jtcc'],
+  },
 } as const;
+type PortedKind = keyof typeof PORTED_ONLY;
+/** Which opponent rig a model's AI cars get: a ported body (`PORTED_ONLY`), or the 2026 car's for the F1 models */
+const rigKind = (vehicle: VehicleModelId | undefined): PortedKind | 'f1' =>
+  vehicle === 'amg-gt3'
+    ? 'gt3'
+    : vehicle === 'liana'
+      ? 'road'
+      : vehicle === 'mtr-496r'
+        ? 'proto'
+        : vehicle === 'lc-lmdh' || vehicle === 'nissan-r33-jgtc' || vehicle === 'nissan-r32-jtcc'
+          ? vehicle
+          : 'f1';
 const poolKey = (vehicle: VehicleModelId | undefined, ghost: boolean) => `${rigKind(vehicle)}${ghost ? ':ghost' : ''}`;
 
 function buildOpponentRig(vehicle: VehicleModelId | undefined, livery: LiveryConfig): SimCarRig {
   let rig: SimCarRig;
-  if (vehicle === 'amg-gt3' || vehicle === 'liana' || vehicle === 'mtr-496r') {
-    const own = PORTED_ONLY[rigKind(vehicle) as 'gt3' | 'road' | 'proto'];
+  const kind = rigKind(vehicle);
+  if (kind !== 'f1') {
+    const own = PORTED_ONLY[kind];
     rig = createPortedCarRig({
       url: own.url,
       chassis: own.config.chassis,
@@ -957,6 +983,21 @@ function buildOpponentRig(vehicle: VehicleModelId | undefined, livery: LiveryCon
   }
   addContactShadow(rig.root, vehicle);
   return rig;
+}
+
+/**
+ * The livery an opponent in a car with its own wears: one of the car's skins picked by the driver's code, so a driver
+ * keeps theirs from race to race (null: the car's first, the paint its model was made in)
+ */
+function opponentSkin(vehicle: VehicleModelId | undefined, driverCode: string): PortedSkin | null {
+  if (!vehicle) return null;
+  const car = carForVehicle(vehicle);
+  const skins = car.physics === vehicle ? car.skins : undefined;
+  if (!skins || skins.length < 2) return null;
+  let h = 0;
+  for (const ch of driverCode) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  const skin = skins[h % skins.length];
+  return skin === skins[0] ? null : { baseUrl: carSkinBaseUrl(car.id, skin.id), files: skin.files };
 }
 
 /** The translucent materials `ghostify` gave a car */

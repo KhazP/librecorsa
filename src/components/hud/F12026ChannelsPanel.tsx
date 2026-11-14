@@ -4,7 +4,7 @@ import React from "react";
 import type { F12026Channels } from "@/types/f1";
 import { Badge } from "@/components/ui/Badge";
 import { ClassTag } from "@/components/ui/badges/ClassTag";
-import { HUD_CAUTION, HUD_GLASS, HUD_LBL, HUD_LOSS, HUD_SLATE, HUD_WELL } from "./hud-format";
+import { CLASSIC_CAR_IDS, HUD_CAUTION, HUD_GLASS, HUD_LBL, HUD_LOSS, HUD_SLATE, PROTO_CAR_IDS, HUD_WELL } from "./hud-format";
 import type { AeroReadout } from "./aero-label";
 
 const WHEELS = ["LF", "RF", "LR", "RR"] as const;
@@ -47,7 +47,17 @@ export const F12026ChannelsPanel: React.FC<{
     <section aria-label="Engineering channels" className={`w-[320px] rounded-lc-card px-3.5 py-3 ${HUD_GLASS}`} data-testid="f12026-channels">
       <div className="flex items-center justify-between gap-2">
         <ClassTag
-          carClass={c.carId === "amg-gt3" ? "gt3" : c.carId === "liana" ? "road" : c.carId === "mtr-496r" ? "proto" : "openWheel"}
+          carClass={
+            c.carId === "amg-gt3"
+              ? "gt3"
+              : c.carId === "liana"
+                ? "road"
+                : PROTO_CAR_IDS.has(c.carId)
+                  ? "proto"
+                  : CLASSIC_CAR_IDS.has(c.carId)
+                    ? "classic"
+                    : "openWheel"
+          }
           size="hud"
         />
         <Badge size="hud">{c.performanceMode}</Badge>

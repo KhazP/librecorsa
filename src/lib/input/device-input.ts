@@ -118,7 +118,7 @@ export const CAR_WHEEL_LOCK_DEG = 360;
 
 /**
  * Per-car real steering-wheel rotation lock-to-lock (degrees): 360° for Formula cars, 640° for the GT3 (320° each way),
- * 1080° for the Liana (540° each way), 480° for the 496R (240° each way)
+ * 1080° for the Liana (540° each way), 480° for the 496R (240° each way), the classic Nissans their own
  */
 export const CAR_WHEEL_LOCKS_DEG: Readonly<Record<string, number>> = {
   lc26: 360,
@@ -126,6 +126,11 @@ export const CAR_WHEEL_LOCKS_DEG: Readonly<Record<string, number>> = {
   "amg-gt3": 640,
   liana: 1080,
   "mtr-496r": 480,
+  // 225° each way [est]
+  "lc-lmdh": 450,
+  // Twice each car's STEER_LOCK [spec car.ini]
+  "nissan-r33-jgtc": 500,
+  "nissan-r32-jtcc": 720,
 };
 
 /** Range of a player-set steering lock (deg, lock to lock): never slower than the real car's */

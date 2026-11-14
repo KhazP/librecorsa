@@ -162,7 +162,7 @@ export const CarSkinPicker: React.FC<{ carId: CarId; surface?: string }> = ({ ca
 };
 
 /** The registry's class ids on the kit's class codes (one colour table, in class-colors.ts) */
-const CLASS_CODE: Record<CarClassId, CarClassCode> = { f1: "openWheel", gt3: "gt3", proto: "proto", road: "road" };
+const CLASS_CODE: Record<CarClassId, CarClassCode> = { f1: "openWheel", gt3: "gt3", proto: "proto", classic: "classic", road: "road" };
 
 /** A car's class as the kit's `ClassTag` */
 export const CarClassTag: React.FC<{ car: Pick<CarDefinition, "classId">; size?: BadgeSize; className?: string }> = ({

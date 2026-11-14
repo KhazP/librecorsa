@@ -7,13 +7,22 @@ import { moveToDriverHeadLayer } from "@/lib/render/layers";
 import { PIRELLI_COMPOUND_COLORS } from "@/lib/render/pirelli-sidewall";
 
 /** What the simulator drives on any car rig (the F1 rig below, or the GT3's in gt3-car-model) */
+/**
+ * A ported car's own livery: the folder of its files (`carSkinBaseUrl`) and, when the skin lists them, which files it
+ * has; a material whose file the list leaves out keeps the texture its model was made with
+ */
+export interface PortedSkin {
+  baseUrl: string;
+  files?: readonly string[];
+}
+
 export interface SimCarRig {
   root: THREE.Group;
   chassisGroup: THREE.Group;
   helmetGroup: THREE.Group;
   setLivery: (livery: LiveryConfig) => void;
-  /** A ported car's own livery: the folder of its files, or null for the paint its model was made in */
-  setSkin?: (baseUrl: string | null) => void;
+  /** A ported car's own livery (`PortedSkin`), or null for the paint its model was made in */
+  setSkin?: (skin: PortedSkin | null) => void;
   setTireCompound: (compound: TireCompound) => void;
   /** Onboard camera anchors once the 3D model has loaded (null until then, or for the procedural car) */
   getCameraAnchors: () => Lc26ModelInstance["cameraAnchors"] | null;

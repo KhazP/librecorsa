@@ -10,7 +10,7 @@ import type { IconName } from "./icons/registry";
 /** What the badge means */
 export type BadgeTone = "neutral" | "player" | "info" | "good" | "best" | "warn" | "bad";
 /** Token colours a data table may use (never volt, which belongs to the player and the cursor) */
-export type PaletteColor = "crimson" | "amber" | "green" | "cyan" | "purple" | "pink" | "chalk" | "slate";
+export type PaletteColor = "crimson" | "amber" | "lemon" | "green" | "cyan" | "purple" | "pink" | "chalk" | "slate";
 export type BadgeToneProp = BadgeTone | { color: PaletteColor };
 export type BadgeVariant = "solid" | "soft" | "outline";
 export type BadgeSize = "lg" | "md" | "sm" | "hud";
@@ -107,6 +107,13 @@ const SWATCH: Record<Swatch, Record<BadgeVariant | "dot" | "inkDot", string>> = 
     soft: "bg-lc-amber/12 text-lc-amber",
     outline: "border-lc-amber text-lc-amber",
     dot: "bg-lc-amber",
+    inkDot: "bg-lc-void",
+  },
+  lemon: {
+    solid: "bg-lc-lemon text-lc-void",
+    soft: "bg-lc-lemon/12 text-lc-lemon",
+    outline: "border-lc-lemon text-lc-lemon",
+    dot: "bg-lc-lemon",
     inkDot: "bg-lc-void",
   },
   crimson: {

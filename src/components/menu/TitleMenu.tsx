@@ -190,6 +190,14 @@ const Credits: React.FC = () => (
           </a>{" "}
           · used with permission
         </CreditRow>
+        <CreditRow title="Classic Nissans">
+          Models, liveries, sound and physics of the Skyline GT-R R33 JGTC and Skyline GT-R R32 JTCC by{" "}
+          <a href="https://www.patreon.com/gregsediting" target="_blank" rel="noreferrer" className={linkClass}>
+            gregsediting
+          </a>{" "}
+          · used with permission. R32 liveries also by Shin956 (UNISIA, Castrol), TOHIRA official (OTX, WISE SPORTS) and
+          tomo 427 S/C (427 Motorsports, Tamiya); R32 sound by Neko Taisen
+        </CreditRow>
         <CreditRow title="Suzuki Liana">
           Physics from &ldquo;Physics reworked for Top Gear Liana 1.6 GLX&rdquo; (
           <a

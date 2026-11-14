@@ -202,7 +202,12 @@ const AxisCalibrator: React.FC<{
 const STEER_LOCK_CLASSES = [
   { label: "Formula cars", models: ["lc26", "f12026-car"] },
   { label: "GT3", models: ["amg-gt3"] },
+  // The two prototypes turn through different locks
   { label: "Prototypes", models: ["mtr-496r"] },
+  { label: "LMDh prototype", models: ["lc-lmdh"] },
+  // The classic class's cars turn through different locks
+  { label: "JGTC GT500", models: ["nissan-r33-jgtc"] },
+  { label: "Group A touring", models: ["nissan-r32-jtcc"] },
   { label: "Road cars", models: ["liana"] },
 ] as const;
 
@@ -614,7 +619,7 @@ export function WheelSetup({ first }: { first?: boolean }) {
         )}
         <SettingRow
           label="Rotation"
-          hint={`Match the wheel driver's lock to lock. Steering is one to one up to the car's lock (${CAR_WHEEL_LOCKS_DEG.lc26}° formula cars, ${CAR_WHEEL_LOCKS_DEG["amg-gt3"]}° GT3)`}
+          hint={`Match the wheel driver's lock to lock. Steering is one to one up to the car's lock (${CAR_WHEEL_LOCKS_DEG.lc26}° formula cars, ${CAR_WHEEL_LOCKS_DEG["amg-gt3"]}° GT3, ${CAR_WHEEL_LOCKS_DEG["lc-lmdh"]} to ${CAR_WHEEL_LOCKS_DEG["mtr-496r"]}° prototypes, ${CAR_WHEEL_LOCKS_DEG["nissan-r33-jgtc"]} to ${CAR_WHEEL_LOCKS_DEG["nissan-r32-jtcc"]}° classic racers, ${CAR_WHEEL_LOCKS_DEG.liana}° road cars)`}
           changed={w.rotationDeg !== DEFAULT_PLAYER_SETTINGS.wheel.rotationDeg}
           onReset={() => {
             setCustomRotation(false);
