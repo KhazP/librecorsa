@@ -44,6 +44,8 @@ import { startAiRace } from "@/lib/sim/race-setup";
 import { peerWakeEmitters, TrackEnvironment } from "@/lib/sim/track-environment";
 import type { WakeEmitterCar } from "@/lib/sim/aero-wake";
 import { GamepadHaptics } from "@/lib/sim/gamepad-haptics";
+import { DualSenseDriver } from "@/lib/input/dualsense-driver";
+import { dualSenseHid } from "@/lib/input/webhid-dualsense";
 import { getMultiplayerManager, type InterpolatedPeerState, type P2PConnectionStatus } from "@/lib/sim/multiplayer-sync";
 import { flagMultiplayerRace } from "@/lib/sim/mp-flags"; // polish:D
 import { MultiplayerRace, placePeersWhereDrawn, type MultiplayerRaceFrame } from "@/lib/sim/race-session";
@@ -796,8 +798,11 @@ export class DriveSession {
     };
 
     const haptics = new GamepadHaptics();
+    const dualSense = new DualSenseDriver();
+    const ownedByDualSense = (padId: string) => dualSenseHid.ownsPad(padId);
     this.silenceFeedback = () => {
       haptics.stop();
+      dualSense.stop();
       wheelFfb.stop();
     };
 
@@ -1873,6 +1878,15 @@ export class DriveSession {
       haptics.update(physics.telemetry, dtSeconds, rumbleEnabled && driving, {
         triggerRumble: padTuning.triggerRumble,
         triggerSlipAlwaysOn: padTuning.triggerSlipAlwaysOn,
+        skipPad: ownedByDualSense,
+      });
+      dualSense.update(physics.telemetry, dtSeconds, {
+        driving,
+        rumbleOn: rumbleEnabled,
+        settings: settingsNow.dualSense,
+        triggerSlipAlwaysOn: padTuning.triggerSlipAlwaysOn,
+        driverColor: settingsNow.profile.color,
+        vehicle: vehicleNow,
       });
       // Forces only while driving with the wheel: on a pad or the keyboard a plugged-in wheel stays limp
       wheelFfb.update(
@@ -2513,6 +2527,7 @@ export class DriveSession {
       renderer.setAnimationLoop(null);
       void renderer.xr.getSession()?.end();
       haptics.stop();
+      dualSense.stop();
       opponentAudio.dispose();
       wheelFfb.dispose();
       simHost?.dispose();

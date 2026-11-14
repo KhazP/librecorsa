@@ -7,10 +7,11 @@ import { isNudgeView, isZeroNudge, nudgeOf, type CameraNudges } from "@/lib/sett
 
 /**
  * Where the dash view sits in each car: from the driver's eye (the car's cockpit anchor, in the chassis' axes: +X left,
- * +Y up, +Z forward), with its pitch and field of view. Placed from each model and checked in the car: in the GT3s,
- * whose screens stand on the dash, the camera is just past the rim, over the screen; where the screen is on the wheel
- * (the 2026 Prototype, the 496R) or the dials sit low behind it (the Liana) it stays on the driver's side, looking over
- * or through the rim.
+ * +Y up, +Z forward), with its pitch and field of view. Placed from each model and checked in the car. In the closed cars
+ * the camera sits just past the front of the steering wheel, under the windscreen, looking nearly level, so the dash
+ * fills about the bottom quarter of the screen and a player's own wheel stands in for the car's (measured on each GLB:
+ * the rim's front, the windscreen 5-16 cm above the lens, the dash and bonnet the rays down the view meet). The 2026
+ * Prototype, whose screen is on its wheel, keeps the view over the rim.
  */
 interface OverWheelView {
   fromEye: readonly [number, number, number];
@@ -21,13 +22,14 @@ interface OverWheelView {
 const OVER_WHEEL: Readonly<Record<CarId, OverWheelView>> = {
   lc26: { fromEye: [0, -0.03, 0.18], pitchDeg: -14, fovDeg: 58 },
   // Both GT3 cameras sit ahead of everything the wheel sweeps (the near plane is 12 cm), so no grip crosses the lens
-  "amg-gt3": { fromEye: [0, -0.08, 0.56], pitchDeg: -13, fovDeg: 58 },
-  "bmw-m4-gt3": { fromEye: [0, -0.05, 0.62], pitchDeg: -18, fovDeg: 58 },
-  "mtr-496r": { fromEye: [0, -0.04, 0.14], pitchDeg: -10, fovDeg: 58 },
+  "amg-gt3": { fromEye: [0, 0.02, 0.56], pitchDeg: -4, fovDeg: 58 },
+  "bmw-m4-gt3": { fromEye: [0, 0.02, 0.62], pitchDeg: -7, fovDeg: 58 },
+  // Just past its wheel (whose screen and paddles reach 0.70 m ahead of the eye), 5 cm under the windscreen
+  "mtr-496r": { fromEye: [0, -0.05, 0.7], pitchDeg: -4, fovDeg: 58 },
   "lc-lmdh": { fromEye: [0, -0.04, 0.14], pitchDeg: -10, fovDeg: 58 },
-  liana: { fromEye: [0, -0.075, 0.3], pitchDeg: -20, fovDeg: 58 },
-  "nissan-r33-jgtc": { fromEye: [0, -0.06, 0.25], pitchDeg: -14, fovDeg: 58 },
-  "nissan-r32-jtcc": { fromEye: [0, -0.06, 0.25], pitchDeg: -14, fovDeg: 58 },
+  liana: { fromEye: [0, 0, 0.61], pitchDeg: -6, fovDeg: 58 },
+  "nissan-r33-jgtc": { fromEye: [0, 0.03, 0.53], pitchDeg: -3, fovDeg: 58 },
+  "nissan-r32-jtcc": { fromEye: [0, 0.02, 0.56], pitchDeg: -3, fovDeg: 58 },
 };
 
 /** A car not in the table: a little ahead of and below the eye */

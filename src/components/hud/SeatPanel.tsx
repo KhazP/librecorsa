@@ -11,6 +11,7 @@ import {
   type NudgeView,
 } from "@/lib/settings/camera-nudges";
 import { keyLabel } from "@/lib/input/bindings";
+import { connectedPads } from "@/lib/input/device-input";
 import { useUnits } from "@/lib/settings/ui-prefs";
 import { SMALL_LENGTH_LABEL, smallLengthIn } from "@/lib/settings/units";
 import type { UnitSettings } from "@/lib/settings/player-settings";
@@ -178,7 +179,7 @@ export const SeatPanel: React.FC<SeatPanelProps> = (p) => {
     const repeatAt: Record<number, number> = {};
     const poll = () => {
       raf = requestAnimationFrame(poll);
-      const pad = Array.from(navigator.getGamepads?.() ?? []).find((g) => g && g.mapping === "standard");
+      const pad = connectedPads().find((g) => g.mapping === "standard");
       if (!pad) return;
       const down = pad.buttons.map((b) => b.pressed || b.value > 0.5);
       const was = prev ?? down;

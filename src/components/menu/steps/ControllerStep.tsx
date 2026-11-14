@@ -19,13 +19,15 @@ import type { PadButtonName } from "@/components/ui/prompts";
 import { useSettingsEnv } from "@/components/settings/env";
 import { choice, SettingsCard, type RowDef } from "@/components/settings/fields";
 import { controllerFineTuning, triggerRumble, triggerSlip, vibration } from "@/components/settings/defs";
-import { DEFAULT_PLAYER_SETTINGS } from "@/lib/settings/player-settings";
+import { DEFAULT_PLAYER_SETTINGS, type DualSenseSettings } from "@/lib/settings/player-settings";
+import { dualSenseHid } from "@/lib/input/webhid-dualsense";
 import { useGamepads } from "../useMenuNav";
 import { CAPTURE_TIMEOUT_S, useButtonCapture } from "./button-capture";
 import { padButtonName, padFamilyOf, useInputMode } from "../input-mode";
 import { StickCurve, TriggerBars } from "./TuningSlider";
 import { PadMap } from "./PadMap";
 import { Hint, StatusPill, TrackMeter } from "./setup-ui";
+import { DualSenseCard, testDualSenseRumble } from "./DualSenseCard";
 
 /** Standard-mapping buttons 0..11 as the glyphs name them */
 const GLYPH: readonly PadButtonName[] = ["a", "b", "x", "y", "lb", "rb", "lt", "rt", "view", "menu", "l3", "r3"];
@@ -34,8 +36,11 @@ type VibratingPad = Gamepad & {
   vibrationActuator?: { playEffect?: (type: string, params: Record<string, number>) => Promise<unknown> } | null;
 };
 
-function testRumble() {
+/** A short buzz through every pad; a paired DualSense plays its own test (left grip, right, both) */
+function testRumble(dualSense: DualSenseSettings) {
+  if (dualSenseHid.connected()) testDualSenseRumble(dualSense);
   for (const pad of connectedPads() as VibratingPad[]) {
+    if (dualSenseHid.ownsPad(pad.id)) continue;
     try {
       void pad.vibrationActuator
         ?.playEffect?.("dual-rumble", { startDelay: 0, duration: 450, weakMagnitude: 0.6, strongMagnitude: 0.9 })
@@ -94,10 +99,11 @@ const steeringFeel: RowDef = choice("tiles", {
 });
 
 export function SteeringFeelCard({ first }: { first?: boolean }) {
+  const { settings } = useSettingsEnv();
   return (
     <SettingsCard title="Feel and vibration" rows={[steeringFeel, vibration]} first={first}>
       <SettingRow label="Test vibration" hint="A short buzz through every connected controller">
-        <Button size="sm" variant="secondary" onClick={testRumble}>
+        <Button size="sm" variant="secondary" onClick={() => testRumble(settings.dualSense)}>
           Test
         </Button>
       </SettingRow>
@@ -206,6 +212,7 @@ export function ControllerSetup() {
     <>
       <SteeringFeelCard first />
       <InputCheckCard />
+      <DualSenseCard />
       <ControllerButtonsCard />
       <ControllerFineTuningCard />
     </>
