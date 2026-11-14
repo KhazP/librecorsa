@@ -354,7 +354,7 @@ if (typeof window !== "undefined" && !openSelector && firefox) {
 }
 
 /** Scrolls the nearest box that can scroll that way (the stick has no native scrolling to fall back on) */
-function scrollPast(from: Element | null, dir: "up" | "down"): void {
+export function scrollPast(from: Element | null, dir: "up" | "down"): void {
   for (let el = from; el && el !== document.documentElement; el = el.parentElement) {
     const { overflowY } = getComputedStyle(el);
     if (overflowY !== "auto" && overflowY !== "scroll") continue;

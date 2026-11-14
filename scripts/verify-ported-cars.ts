@@ -9,6 +9,7 @@
  */
 import { CAR_CLASSES, carById, CARS, carsByYear, carsInClass, carThumbUrl, resolveCarId } from "../src/lib/cars/car-registry";
 import { carPhysics, carTakesPhysicsSwitch } from "../src/lib/cars/f1-mod-physics";
+import { carListed } from "../src/lib/hosted-content";
 
 let passed = 0;
 function check(name: string, cond: boolean, detail = ""): void {
@@ -22,6 +23,11 @@ function check(name: string, cond: boolean, detail = ""): void {
 
 console.log("Registry checks");
 for (const native of ["lc26", "amg-gt3", "bmw-m4-gt3", "mtr-496r", "lc-lmdh", "nissan-r33-jgtc", "nissan-r32-jtcc"] as const) {
+  // A hosted car is only listed where hosted content is on; elsewhere carById falls back to another car
+  if (!carListed(native)) {
+    console.log(`  SKIP  ${native}: hosted on librecorsa.org only, not listed in this copy`);
+    continue;
+  }
   check(
     `${native}: physics switch leaves it on its own model`,
     !carTakesPhysicsSwitch(native) && carPhysics(native, "lc26") === carById(native).physics && carPhysics(native, "f12026-car") === carById(native).physics

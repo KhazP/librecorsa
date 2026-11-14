@@ -25,6 +25,11 @@ import { leafShading } from "./leaf-shading";
 
 const METAL = /metal|steel|chrome|armco|rail|guard|post|pole|truss/i;
 const GROUND = /asph|apsh|road|tarmac|grass|gras|terrain|ground|curb|kerb|cord|gravel|sand|concrete|runoff/i;
+/**
+ * Fences, nets and wire: sparse cut-outs. The leaf shading lifts alpha with distance to keep dense foliage from
+ * thinning out, which would turn a catch fence of thin strands into a solid sheet far away, so they keep the plain test
+ */
+const SPARSE_CUTOUT = /fence|chain|chian|wire|grate|cage|catch|mesh|(^|[^a-z])net([^a-z]|$)/i;
 
 /** Blended texels (alpha between these) that make a texture "soft" rather than a cut-out */
 const SOFT_LO = 0.15;
@@ -96,7 +101,7 @@ export function cleanScanMaterial(mat: THREE.Material): void {
       std.depthWrite = true;
     }
   }
-  if (std.alphaTest > 0 && std.side === THREE.DoubleSide) leafShading(std);
+  if (std.alphaTest > 0 && std.side === THREE.DoubleSide && !SPARSE_CUTOUT.test(name)) leafShading(std);
   applyGroundDetail(std);
   std.needsUpdate = true;
 }

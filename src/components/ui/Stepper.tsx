@@ -58,6 +58,12 @@ export function Stepper({ value, onChange, min, max, step = 1, format, forceCurs
     const repeat = (delay: number) => {
       timer.current = window.setTimeout(() => {
         set(latest.current + sign * step);
+        // At the limit the button turns disabled, and some browsers then send it no pointerup: the hold ends here, or
+        // it would keep pushing a later key step straight back to the limit
+        if (sign > 0 ? latest.current >= max : latest.current <= min) {
+          timer.current = null;
+          return;
+        }
         repeat(HOLD_RATE_MS);
       }, delay);
     };

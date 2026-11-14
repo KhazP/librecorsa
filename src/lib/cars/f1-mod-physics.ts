@@ -21,10 +21,11 @@ const isF1ModPhysics = (v: unknown): v is F1ModPhysics => v === "f12026-car" || 
 
 function load(): F1ModPhysics {
   try {
-    const fromUrl = new URLSearchParams(window.location.search).get("f1physics");
+    // A link or a choice saved before the car was renamed
+    const renamed = (v: string | null) => (v === "vf26" ? "lc26" : v); // keep-old-id
+    const fromUrl = renamed(new URLSearchParams(window.location.search).get("f1physics"));
     if (isF1ModPhysics(fromUrl)) return fromUrl;
-    const stored = localStorage.getItem(STORAGE_KEY);
-    const saved = stored === "vf26" ? "lc26" : stored; // keep-old-id: the choice saved before the car was renamed
+    const saved = renamed(localStorage.getItem(STORAGE_KEY));
     return isF1ModPhysics(saved) ? saved : DEFAULT;
   } catch {
     return DEFAULT;

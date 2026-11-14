@@ -73,6 +73,9 @@ export function ConfirmDialog({
   useEffect(() => {
     if (!open) return;
     const before = document.activeElement as HTMLElement | null;
+    // The boxes round the opener, nearest first: where the focus goes if the opener is gone when the dialog closes
+    const around: HTMLElement[] = [];
+    for (let el = before?.parentElement ?? null; el && el !== document.body; el = el.parentElement) around.push(el);
     // The safe choice takes the focus first; in an info dialog, the acknowledgement
     const raf = requestAnimationFrame(() =>
       sheetRef.current?.querySelector<HTMLElement>("[data-nav-default]")?.focus({ preventScroll: true }),
@@ -99,8 +102,22 @@ export function ConfirmDialog({
     return () => {
       cancelAnimationFrame(raf);
       window.removeEventListener("keydown", onKey, true);
-      // Back to where the player was
-      if (before?.isConnected) before.focus({ preventScroll: true });
+      // Back to where the player was. An opener that went away (a card's Reset once nothing is left to reset) or turned
+      // disabled hands the focus to the first control still in the nearest box round it, never to the page
+      if (before?.isConnected && !(before as HTMLButtonElement).disabled) {
+        before.focus({ preventScroll: true });
+        return;
+      }
+      for (const box of around) {
+        if (!box.isConnected) continue;
+        const next = box.querySelector<HTMLElement>(
+          "button:not([disabled]):not([data-card-reset]), input:not([disabled]), select:not([disabled]), textarea:not([disabled])",
+        );
+        if (next) {
+          next.focus({ preventScroll: true });
+          return;
+        }
+      }
     };
   }, [open]);
 

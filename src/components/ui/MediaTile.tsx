@@ -123,7 +123,14 @@ export function MediaTile(props: MediaTileProps) {
   return (
     <div className={cx("relative min-w-0", className)}>
       {props.href !== undefined ? (
-        <Link href={props.href} {...shared}>
+        <Link
+          href={props.href}
+          {...shared}
+          // A disabled link tile stays put, as the button form does
+          onClick={(e) => {
+            if (disabled) e.preventDefault();
+          }}
+        >
           {inner}
         </Link>
       ) : (

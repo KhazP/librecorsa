@@ -23,16 +23,20 @@ export interface DualSenseDriveOptions {
 export class DualSenseDriver {
   private readonly feedback = new DualSenseFeedback();
   private retryAtMs = 0;
+  /** A start failed with a reason: no silent retries (they would wipe the message) until the setting goes off again */
+  private gaveUp = false;
 
   update(telemetry: CarTelemetry, dtS: number, options: DualSenseDriveOptions): void {
     const usb = dualSenseHid.transportNow() === "usb";
     const wantHaptics = options.settings.hdHaptics && usb;
     if (!wantHaptics) {
+      this.gaveUp = false;
       if (dualSenseAudioHaptics.getStatus().state === "on") void dualSenseAudioHaptics.stop();
     } else if (!dualSenseAudioHaptics.running() && dualSenseAudioHaptics.getStatus().state !== "starting") {
+      if (dualSenseAudioHaptics.getStatus().state === "error") this.gaveUp = true;
       // Granted on an earlier visit: the browser lists the pad again without asking
       const now = Date.now();
-      if (now >= this.retryAtMs) {
+      if (!this.gaveUp && now >= this.retryAtMs) {
         this.retryAtMs = now + HAPTICS_RETRY_MS;
         void dualSenseAudioHaptics.start(false);
       }
