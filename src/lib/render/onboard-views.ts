@@ -24,7 +24,10 @@ const OVER_WHEEL: Readonly<Record<CarId, OverWheelView>> = {
   "amg-gt3": { fromEye: [0, -0.08, 0.56], pitchDeg: -13, fovDeg: 58 },
   "bmw-m4-gt3": { fromEye: [0, -0.05, 0.62], pitchDeg: -18, fovDeg: 58 },
   "mtr-496r": { fromEye: [0, -0.04, 0.14], pitchDeg: -10, fovDeg: 58 },
+  "lc-lmdh": { fromEye: [0, -0.04, 0.14], pitchDeg: -10, fovDeg: 58 },
   liana: { fromEye: [0, -0.075, 0.3], pitchDeg: -20, fovDeg: 58 },
+  "nissan-r33-jgtc": { fromEye: [0, -0.06, 0.25], pitchDeg: -14, fovDeg: 58 },
+  "nissan-r32-jtcc": { fromEye: [0, -0.06, 0.25], pitchDeg: -14, fovDeg: 58 },
 };
 
 /** A car not in the table: a little ahead of and below the eye */

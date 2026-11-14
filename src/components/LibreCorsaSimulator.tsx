@@ -74,6 +74,13 @@ const loadAllLocalLaps = () => listBestLaps().then((laps) => laps.map((lap) => l
 /** The place an upload's answer gives the lap on its board (and on the week's challenge); null when it failed or said none */
 const placeOf = (res: SubmitResult): { rank: number; total: number | null; challengeRank: number | null } | null =>
   res.ok && res.rank !== undefined ? { rank: res.rank, total: res.total ?? null, challengeRank: res.eventRank ?? null } : null;
+/** The car a week's challenge or its races are driven in: the one it names when this copy lists it, else the vehicle's */
+const weekCar = (rules: { vehicle: VehicleModelId; car?: string }) => CARS.find((c) => c.id === rules.car && c.physics === rules.vehicle) ?? carForVehicle(rules.vehicle);
+/** The car to take for a race in `vehicle`: the week's in a scheduled race, the vehicle's in any other */
+const raceCarFor = (vehicle: VehicleModelId, scheduled: boolean) => {
+  const race = challengeAt(Date.now()).race;
+  return scheduled && race.vehicle === vehicle ? weekCar(race) : carForVehicle(vehicle);
+};
 /** The weekly challenge a lap was driven to (its id), if it fits this week's */
 const challengeOf = (rec: LapRecording): string | undefined => {
   const week = challengeAt(Date.now());
@@ -642,7 +649,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       // The class may rule out the current car, or the race names one car for everyone (a scheduled race): take it,
       // or the first allowed one (after the session reset, so the swap finds no replay or AI field to carry over)
       const allowed = start.vehicle ? [start.vehicle] : vehicleModelsFor(start.carClass);
-      if (!allowed.includes(vehicleModelRef.current)) changeCar(carForVehicle(allowed[0]).id);
+      if (!allowed.includes(vehicleModelRef.current)) changeCar(raceCarFor(allowed[0], mp.inScheduledRace).id);
       // A scheduled race is driven to the week's rules: its assists and realism, a dry track
       if (mp.inScheduledRace) applyWeekRules();
       const physics = session?.car;
@@ -1076,7 +1083,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
         return;
       }
       const allowed = l.settings.vehicle ? [l.settings.vehicle] : vehicleModelsFor(l.settings.carClass);
-      if (allowed.length > 0 && !allowed.includes(vehicleModelRef.current)) changeCar(carForVehicle(allowed[0]).id);
+      if (allowed.length > 0 && !allowed.includes(vehicleModelRef.current)) changeCar(raceCarFor(allowed[0], mp.inScheduledRace).id);
     };
     mp.onLobbyChange = (l) => {
       setLobby(l ? { ...l, players: [...l.players] } : null);
@@ -1164,8 +1171,9 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       applyWeekRules();
       startSession({ kind: "practice" });
       // After the session reset, so the swap finds no replay or AI field to carry over (as a multiplayer race's)
-      const vehicle = race ? week.race.vehicle : week.vehicle;
-      if (vehicleModelRef.current !== vehicle) changeCar(carForVehicle(vehicle).id);
+      // A week that names its car is driven in it (a no-op when already in it); any other in the car one is in, if it is the week's vehicle
+      const rules = race ? week.race : week;
+      if (vehicleModelRef.current !== rules.vehicle || rules.car !== undefined) changeCar(weekCar(rules).id);
       if (race && session) {
         // The field for the car now on track, over the week's race distance
         const field = session.takeAiField();
@@ -1661,7 +1669,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
               ? {
                   challenge,
                   trackName: challengeTrackName(challenge.trackId),
-                  carTitle: carForVehicle(challenge.vehicle).title,
+                  carTitle: weekCar(challenge).title,
                   available: challengeAvailable,
                   loadBoard: loadChallengeBoard,
                   boardVersion,
@@ -1675,7 +1683,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
             races.on && racesAvailable
               ? {
                   trackName: challengeTrackName(challenge.race.trackId),
-                  carTitle: carForVehicle(challenge.race.vehicle).title,
+                  carTitle: weekCar(challenge.race).title,
                   slotS: races.slotS,
                   laps: challenge.race.laps,
                   entry: raceEntry,

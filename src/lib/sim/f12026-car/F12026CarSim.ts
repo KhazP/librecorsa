@@ -278,6 +278,12 @@ export interface CarSimProfile {
   setupPressureRefC?: number;
   /** The car's own keyboard steering curve (`keyboard-steer.ts`); absent = the keyboard's base ramp at every speed */
   keyboardSteer?: KeyboardSteerProfile;
+  /**
+   * The hybrid motor sits on the gearbox's input shaft, behind the clutch (a P2 layout), so it turns with the gearbox
+   * and not with the engine while the clutch slips: the telemetry's `mguRpm` is then that shaft's speed (the motor's own
+   * gear on it taken as 1 : 1). Absent: the motor is on the crank and `mguRpm` is left unset (the engine's speed)
+   */
+  motorOnGearbox?: boolean;
 }
 
 export const F12026_SIM_PROFILE: CarSimProfile = {
@@ -1172,7 +1178,14 @@ export class F12026CarSim implements SimulatorCar {
   /** The vehicle model whose setup limits, wing steps and fuel this car takes */
   private get setupCar(): Exclude<VehicleModelId, 'lc26'> {
     const id = this.profile.id;
-    return id === 'amg-gt3' || id === 'liana' || id === 'mtr-496r' ? id : 'f12026-car';
+    return id === 'amg-gt3' ||
+      id === 'liana' ||
+      id === 'mtr-496r' ||
+      id === 'lc-lmdh' ||
+      id === 'nissan-r33-jgtc' ||
+      id === 'nissan-r32-jtcc'
+      ? id
+      : 'f12026-car';
   }
 
   /** The garage's starting fuel into the car, with the spring preloads set for that load */
@@ -1796,10 +1809,15 @@ export class F12026CarSim implements SimulatorCar {
       const slideTerm = slide ? slide.gain * Math.max(0, saDriven - slide.from) : 0;
       const latFactor = Math.max(tight.floor, 1 - tight.gain * Math.pow(gLat, tight.exponent) - slideTerm);
       const tcEffTarget = tcBaseTarget * latFactor;
-      // Weighted driven axle slip (default 0.65 * max(k_L, k_R) + 0.35 * mean(k_L, k_R))
-      const kL = Math.max(0, W[dl].slipRatio);
-      const kR = Math.max(0, W[dr].slipRatio);
-      const kDriven = ctl.tcSlipMaxWeight * Math.max(kL, kR) + ctl.tcSlipMeanWeight * (0.5 * (kL + kR));
+      // Weighted driven axle slip (default 0.65 * max(k_L, k_R) + 0.35 * mean(k_L, k_R)); on a four-wheel-drive car the
+      // axle that spins the more (the slide term above stays with the axle the engine drives directly)
+      const axleSlip = (l: number, r: number) => {
+        const kL = Math.max(0, W[l].slipRatio);
+        const kR = Math.max(0, W[r].slipRatio);
+        return ctl.tcSlipMaxWeight * Math.max(kL, kR) + ctl.tcSlipMeanWeight * (0.5 * (kL + kR));
+      };
+      let kDriven = axleSlip(dl, dr);
+      if (v.coupledWheels) kDriven = Math.max(kDriven, axleSlip(v.coupledWheels[0], v.coupledWheels[1]));
       const eTc = Math.max(0, kDriven - tcEffTarget);
       const tc2 = THREE.MathUtils.clamp(dials.tc2Level, 1, 12);
       const tc2Norm = (tc2 - 1) / 11;
@@ -2501,6 +2519,16 @@ export class F12026CarSim implements SimulatorCar {
     t.dragN = vt.dragN;
     t.icePowerKw = iceKw;
     t.mgukPowerKw = mgukKw;
+    // The driven shafts: their mean speed and the torque they carry (negative on the overrun and under regeneration)
+    const [shaftL, shaftR] = v.drivenWheels;
+    t.driveshaftRadS = 0.5 * (W[shaftL].omega + W[shaftR].omega);
+    t.driveshaftTorqueNm = W[shaftL].driveTorqueNm + W[shaftR].driveTorqueNm;
+    if (this.profile.motorOnGearbox) {
+      const gb = v.config.gearbox;
+      const ratio = vt.gear > 0 ? gb.ratios[vt.gear - 1] * gb.finalDrive : vt.gear < 0 ? gb.reverse * gb.finalDrive : 0;
+      // In gear the shaft turns with the wheels; out of gear the closed clutch turns it with the engine
+      t.mguRpm = ratio > 0 ? (Math.abs(t.driveshaftRadS) * ratio * 30) / Math.PI : vt.rpm;
+    }
     t.totalPowerKw = Math.max(0, iceKw + Math.max(0, mgukKw));
     t.ersBatteryPercent = vt.ERS_CHARGE * 100;
     // Push actually running (the override or the boost), not PSH picked in the tuner

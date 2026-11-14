@@ -373,6 +373,12 @@ export interface CarTelemetry {
   // 2026 Power Unit (~540 kW ICE + 350 kW MGU-K)
   icePowerKw: number;
   mgukPowerKw: number; // -350 (harvest) to +350 (deploy)
+  /** Electric machine speed (rpm), where it differs from the engine's (a unit that can drive with the engine off) */
+  mguRpm?: number;
+  /** Mean speed of the driven shafts (rad/s) and the torque they carry (Nm, negative on the overrun and under
+   * regeneration): heard by sound banks with a `driveline` section (`lc26-audio.ts`) */
+  driveshaftRadS?: number;
+  driveshaftTorqueNm?: number;
   totalPowerKw: number;
   ersBatteryPercent: number; // 0..100
   manualOverrideActive: boolean; // 2026 MOM 350kW boost
@@ -568,10 +574,18 @@ export type LiveTunerPatch = Partial<
 >;
 
 /**
- * Player car: the LC26 model (F1Physics2026), the 6-DOF f12026-car, or the Mercedes-AMG GT3, the Suzuki Liana and the
- * MTRacing 496R on the same vehicle model
+ * Player car: the LC26 model (F1Physics2026), the 6-DOF f12026-car, or the Mercedes-AMG GT3, the Suzuki Liana, the
+ * MTRacing 496R, the LC-LMDH and the classic Nissans on the same vehicle model
  */
-export type VehicleModelId = "lc26" | "f12026-car" | "amg-gt3" | "liana" | "mtr-496r";
+export type VehicleModelId =
+  | "lc26"
+  | "f12026-car"
+  | "amg-gt3"
+  | "liana"
+  | "mtr-496r"
+  | "lc-lmdh"
+  | "nissan-r33-jgtc"
+  | "nissan-r32-jtcc";
 
 /** Typed as a Record over VehicleModelId so adding a car fails to compile until it is listed here */
 const VEHICLE_MODEL_ID_SET: Record<VehicleModelId, true> = {
@@ -580,6 +594,9 @@ const VEHICLE_MODEL_ID_SET: Record<VehicleModelId, true> = {
   "amg-gt3": true,
   liana: true,
   "mtr-496r": true,
+  "lc-lmdh": true,
+  "nissan-r33-jgtc": true,
+  "nissan-r32-jtcc": true,
 };
 
 /** Every vehicle model id, for validating ids from storage and the network */

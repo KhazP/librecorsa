@@ -10,5 +10,10 @@
 export function revRangeFor(carId: string | undefined): [number, number] {
   if (carId === "liana") return [5200, 6500];
   if (carId === "mtr-496r") return [8000, 9400];
+  // The LC-LMDH up to the engine speed its regulated power curve is set on (the lights' last stage) [claim]
+  if (carId === "lc-lmdh") return [6900, 8150];
+  // The classic Nissans up to their shift lights or shift points [spec digital_instruments.ini, drivetrain.ini]
+  if (carId === "nissan-r33-jgtc") return [5000, 6700];
+  if (carId === "nissan-r32-jtcc") return [6300, 7500];
   return carId === "amg-gt3" ? [6200, 7500] : [10_800, 14_600];
 }

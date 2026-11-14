@@ -6,7 +6,7 @@ import { trackColliders } from "@/lib/sim/track-colliders";
 import type { SimulatorCar } from "@/lib/sim/simulator-car";
 import type { WheelSeating } from "@/lib/render/corner-rig";
 import { F1AudioEngine2026 } from "@/lib/f1-audio-2026";
-import { createF1Car2026, type SimCarRig } from "@/lib/car-builder-2026";
+import { createF1Car2026, type PortedSkin, type SimCarRig } from "@/lib/car-builder-2026";
 import { createGt3CarRig, gt3RigCameraAnchors } from "@/lib/gt3-car-model";
 import { disposeTree } from "@/lib/render/dispose-tree";
 import { Gt3DashDisplay, gt3MirrorPatches } from "@/lib/render/gt3-dash-display";
@@ -900,11 +900,11 @@ export class DriveSession {
     // The body follows the car's registry model, not `carPhysics`: a ported F1 car switched to the LC26 physics
     // keeps the geometry it was fitted to
     const rigModel = (car: CarId) => vehicleModelSpec(carById(car).physics);
-    /** The livery files the player picked for a car with its own (null: the paint its model was made in) */
-    const skinUrlFor = (car: CarId): string | null => {
+    /** The livery the player picked for a car with its own (null: the paint its model was made in) */
+    const skinFor = (car: CarId): PortedSkin | null => {
       const skins = carById(car).skins;
       const skin = carSkinFor(car);
-      return skin && skins && skin.id !== skins[0].id ? carSkinBaseUrl(car, skin.id) : null;
+      return skin && skins && skin.id !== skins[0].id ? { baseUrl: carSkinBaseUrl(car, skin.id), files: skin.files } : null;
     };
     const createCarRig = (car: CarId): SimCarRig => {
       const def = carById(car);
@@ -920,7 +920,7 @@ export class DriveSession {
             cameraAnchors: model.gt3Cockpit ? gt3RigCameraAnchors : undefined,
             // F1 cars from 2018 on wear the 2026 Pirelli sidewall (the SF71H on its 13" tyres too; the models' own are poor)
             pirelliSidewall: def.classId === "f1" && def.year >= 2018,
-            skinBaseUrl: skinUrlFor(car),
+            skin: skinFor(car),
           })
         : model.gt3Cockpit
           ? createGt3CarRig()
@@ -935,7 +935,7 @@ export class DriveSession {
     let carRig = createCarRig(carIdNow);
     let carRigCar: CarId = carIdNow;
     // A livery picked in the menus goes onto the car at once
-    const unsubscribeCarSkins = subscribeCarSkins(() => carRig.setSkin?.(skinUrlFor(carRigCar)));
+    const unsubscribeCarSkins = subscribeCarSkins(() => carRig.setSkin?.(skinFor(carRigCar)));
     const swapCarRig = (car: CarId) => {
       if (car === carRigCar) return;
       // The cockpit extras belong to the old body

@@ -138,11 +138,26 @@ p('  efficiency: DRIVELINE_EFFICIENCY,');
 p(`  gears: { redline_rpm: ${n(eng('ENGINE_DATA', 'LIMITER'))}, upshift_rpm: ${n(drv('AUTO_SHIFTER', 'UP'))}, downshift_rpm: ${n(drv('AUTO_SHIFTER', 'DOWN'))}, brake_downshift_rpm: NaN /* TODO */ },`);
 p('};');
 p(`const clutch = { maxTorqueNm: ${n(drv('CLUTCH', 'MAX_TORQUE'))}, biteRpm: ${n(drv('AUTOCLUTCH', 'MIN_RPM'))}, lockRpm: ${n(drv('AUTOCLUTCH', 'MAX_RPM'))} }; // [spec CLUTCH, AUTOCLUTCH]`);
-p(`// ${mod.text('drivetrain.ini', 'TRACTION', 'TYPE') ?? 'RWD'}: set drivenAxle: 'front' for a front-driven car`);
-p('const differential = {');
-p("  type: 'LSD_Ramp',");
-p(`  settings: { power: ${n(drv('DIFFERENTIAL', 'POWER'))}, coast: ${n(drv('DIFFERENTIAL', 'COAST'))}, preload: ${n(drv('DIFFERENTIAL', 'PRELOAD'))}, friction_faces: 1, power_ramp_deg: 45, coast_ramp_deg: 45 }, // [spec DIFFERENTIAL]`);
-p('};');
+const traction = mod.text('drivetrain.ini', 'TRACTION', 'TYPE') ?? 'RWD';
+if (traction === 'AWD2') {
+  // The rears driven through their own diff, the fronts through a centre coupling (`AwdData`)
+  const awd = (key: string) => drv('AWD2', key);
+  p('// AWD2: the rear diff and the centre coupling to the fronts (`CarPhysicsConfig.awd`) [spec AWD2]');
+  p('const differential = {');
+  p("  type: 'LSD_Ramp',");
+  p(`  settings: { power: ${n(awd('REAR_DIFF_POWER'))}, coast: ${n(awd('REAR_DIFF_COAST'))}, preload: ${n(awd('REAR_DIFF_PRELOAD'))}, friction_faces: 1, power_ramp_deg: 45, coast_ramp_deg: 45 }, // [spec REAR_DIFF_*]`);
+  p('};');
+  p('const awd = {');
+  p(`  centre: { rampNmPerRadS: ${n(awd('CENTRE_RAMP_TORQUE'))}, maxTorqueNm: ${n(awd('CENTRE_MAX_TORQUE'))} }, // [spec CENTRE_RAMP_TORQUE, CENTRE_MAX_TORQUE]`);
+  p(`  secondaryDiff: { power: ${n(awd('FRONT_DIFF_POWER'))}, coast: ${n(awd('FRONT_DIFF_COAST'))}, preload: ${n(awd('FRONT_DIFF_PRELOAD'))}, friction_faces: 1, power_ramp_deg: 45, coast_ramp_deg: 45 }, // [spec FRONT_DIFF_*]`);
+  p('};');
+} else {
+  p(`// ${traction}: ${traction === 'AWD' ? 'TODO: AWD (a centre differential) has no model here; ' : ''}set drivenAxle: 'front' for a front-driven car`);
+  p('const differential = {');
+  p("  type: 'LSD_Ramp',");
+  p(`  settings: { power: ${n(drv('DIFFERENTIAL', 'POWER'))}, coast: ${n(drv('DIFFERENTIAL', 'COAST'))}, preload: ${n(drv('DIFFERENTIAL', 'PRELOAD'))}, friction_faces: 1, power_ramp_deg: 45, coast_ramp_deg: 45 }, // [spec DIFFERENTIAL]`);
+  p('};');
+}
 const handbrake = mod.num('brakes.ini', 'DATA', 'HANDBRAKE_TORQUE');
 p(
   `const brakes = { maxTorqueNm: ${n(mod.num('brakes.ini', 'DATA', 'MAX_TORQUE'))}, front_bias: ${n(mod.num('brakes.ini', 'DATA', 'FRONT_SHARE'))}, ` +

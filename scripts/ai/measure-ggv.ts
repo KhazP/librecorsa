@@ -2,7 +2,8 @@
  * What each car can do, measured on its own physics: steady cornering, braking and traction limits against speed
  * (a g-g-v table), on the flat test pad with the aids the AI drives with.
  *
- *   npx tsx scripts/ai/measure-ggv.ts [--car f12026-car|amg-gt3|lc26|liana|mtr-496r|all] [--out public/ai/ggv.json]
+ *   npx tsx scripts/ai/measure-ggv.ts [--car f12026-car|amg-gt3|lc26|liana|mtr-496r|lc-lmdh|nissan-r33-jgtc|
+ *     nissan-r32-jtcc|all] [--out public/ai/ggv.json]
  *
  * Cornering: an ISO 4138-style slow steer ramp at each held speed, the best 1 s mean lateral g (scripts/lib/handling-
  * tests.ts). Braking: full pedal with the AI's ABS from each speed, the mean deceleration from 0.15 s to 0.5 s.
@@ -14,12 +15,23 @@ import { F12026CarSim } from '../../src/lib/sim/f12026-car/F12026CarSim';
 import { createAmgGt3Sim } from '../../src/lib/sim/gt3/AmgGt3Sim';
 import { createSuzukiLianaSim } from '../../src/lib/sim/road/SuzukiLianaSim';
 import { createMtr496rSim } from '../../src/lib/sim/proto/Mtr496rSim';
+import { createLcLmdhSim } from '../../src/lib/sim/proto/LcLmdhSim';
+import { createNissanR33Sim } from '../../src/lib/sim/classic/NissanR33Sim';
+import { createNissanR32Sim } from '../../src/lib/sim/classic/NissanR32Sim';
 import { createLc26Sim } from '../../src/lib/sim/f12026-car/Lc26Sim';
 import type { SimulatorCar } from '../../src/lib/sim/simulator-car';
 import { createFlatTestTrack } from '../lib/flat-track';
 import { steadyRamp } from '../lib/handling-tests';
 
-type CarId = 'f12026-car' | 'amg-gt3' | 'lc26' | 'liana' | 'mtr-496r';
+type CarId =
+  | 'f12026-car'
+  | 'amg-gt3'
+  | 'lc26'
+  | 'liana'
+  | 'mtr-496r'
+  | 'lc-lmdh'
+  | 'nissan-r33-jgtc'
+  | 'nissan-r32-jtcc';
 const argv = process.argv.slice(2);
 const opt = (name: string, fallback: string) => {
   const i = argv.indexOf(`--${name}`);
@@ -37,6 +49,9 @@ const makers: Record<CarId, () => SimulatorCar> = {
   lc26: () => createLc26Sim(pad),
   liana: () => createSuzukiLianaSim(pad),
   'mtr-496r': () => createMtr496rSim(pad),
+  'lc-lmdh': () => createLcLmdhSim(pad),
+  'nissan-r33-jgtc': () => createNissanR33Sim(pad),
+  'nissan-r32-jtcc': () => createNissanR32Sim(pad),
 };
 
 function straightLine(make: () => SimulatorCar, vMs: number, mode: 'brake' | 'throttle', windowS: number): number {

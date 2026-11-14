@@ -69,7 +69,98 @@ export interface Lc26AudioManifest {
    * snapping to the next gear. "manual": a road car's clutch, the throttle off for `clutchS` while the revs fall with
    * the physics, and no shift one-shots or ignition-cut bark
    */
-  shift?: { style: 'sequential' | 'manual'; clutchS?: number };
+  shift?: { style: 'sequential' | 'manual'; clutchS?: number; cutS?: number };
+  /**
+   * The transmission loops follow the driveshafts instead of the road speed and the pedal, where the physics gives
+   * `Lc26AudioInputs.driveshaftRadS`: pitch from the shaft speed (so wheelspin and a locked axle are heard), level
+   * and the on/off-load blend from the shaft torque. Without those inputs the loops play as in any other bank
+   */
+  driveline?: DrivelineSpec;
+  /** Electric machine whine: pitch from its speed, level from the power it puts in or takes out */
+  mgu?: MguSpec;
+  /**
+   * Engine low-pass set by load alone, from `coastHz` on the overrun to `loadHz` at full load, the load smoothed
+   * over `tauS` (default 0.025 s). Without it the filter follows revs and load as in any other bank
+   */
+  loadFilter?: LoadFilterSpec;
+  /** A tone stage per view on the engine: a peak (cabin resonance) and a high shelf (air between car and camera) */
+  viewTone?: Partial<Record<Lc26View, ViewToneSpec>>;
+}
+
+export interface DrivelineSpec {
+  /** Road speed of the transmission loops' axis per rad/s of driveshaft: 3.6 x the driven tyre's radius (m) */
+  kmhPerRadS: number;
+  /** Shaft torque heard as full drive load (Nm), and as full overrun load (default: the same) */
+  torqueRefNm: number;
+  coastTorqueRefNm?: number;
+  /** Level with no torque on the shafts, 0..1 (default 0.15): gears turning unloaded still whine a little */
+  floor?: number;
+  /** Level per view (default 1): the whine is a cockpit sound more than a trackside one */
+  gain?: Partial<Record<Lc26View, number>>;
+}
+
+export interface MguSpec extends RawLoopEntry {
+  /** Machine speed at which the loop plays at its recorded pitch (rpm) */
+  baseRpm: number;
+  /** Power heard at full level (kW), driving or regenerating */
+  fullKw: number;
+  gain?: Partial<Record<Lc26View, number>>;
+}
+
+export interface LoadFilterSpec {
+  coastHz: number;
+  loadHz: number;
+  tauS?: number;
+}
+
+export interface ViewToneSpec {
+  peakHz: number;
+  peakDb: number;
+  peakQ?: number;
+  shelfHz: number;
+  shelfDb: number;
+}
+
+const clamp01 = (x: number): number => Math.min(1, Math.max(0, x));
+
+/**
+ * Where the transmission loops sit for a driveshaft speed and torque: the grid axis (km/h), the on-load share of
+ * the on/off blend (drive torque 1, overrun 0, crossing over within a tenth of the drive reference either side of
+ * zero) and the level (the floor at no torque, rising with the square root of the load: a whine is there early)
+ */
+export function drivelineMix(
+  spec: DrivelineSpec,
+  shaftRadS: number,
+  shaftTorqueNm: number
+): { axisKmh: number; onness: number; level: number } {
+  const torque = Number.isFinite(shaftTorqueNm) ? shaftTorqueNm : 0;
+  const ref = Math.max(1, torque >= 0 ? spec.torqueRefNm : (spec.coastTorqueRefNm ?? spec.torqueRefNm));
+  const floor = clamp01(spec.floor ?? 0.15);
+  return {
+    axisKmh: Math.abs(Number.isFinite(shaftRadS) ? shaftRadS : 0) * spec.kmhPerRadS,
+    onness: clamp01(0.5 + torque / (0.2 * Math.max(1, spec.torqueRefNm))),
+    level: floor + (1 - floor) * Math.sqrt(clamp01(Math.abs(torque) / ref)),
+  };
+}
+
+/** Playback rate and level of the electric machine's loop: silent with no power, whichever way it flows */
+export function mguMix(
+  spec: Pick<MguSpec, 'baseRpm' | 'fullKw' | 'gain'>,
+  machineRpm: number,
+  powerKw: number | undefined,
+  viewMix: number
+): { rate: number; gain: number } {
+  const kw = Number.isFinite(powerKw) ? Math.abs(powerKw as number) : 0;
+  const viewGain = (spec.gain?.ext ?? 1) * (1 - viewMix) + (spec.gain?.int ?? 1) * viewMix;
+  return {
+    rate: Math.min(4, Math.max(0.25, (Number.isFinite(machineRpm) ? machineRpm : 0) / Math.max(1, spec.baseRpm))),
+    gain: viewGain * Math.pow(clamp01(kw / Math.max(1e-3, spec.fullKw)), 0.6),
+  };
+}
+
+/** Cutoff of a load-driven engine low-pass: a constant ratio per step of load, so it opens evenly to the ear */
+export function loadFilterHz(spec: LoadFilterSpec, load: number): number {
+  return spec.coastHz * Math.pow(spec.loadHz / spec.coastHz, clamp01(load));
 }
 
 export type Lc26View = 'ext' | 'int';
@@ -89,6 +180,14 @@ export interface Lc26AudioInputs {
   skidRate?: number;
   /** Traction control is cutting the engine */
   tcActive?: boolean;
+  /** Mean speed of the driven shafts (rad/s) and the torque they carry (Nm, negative on the overrun and under
+   * regeneration): banks with a `driveline` section pitch and level their transmission loops from these */
+  driveshaftRadS?: number;
+  driveshaftTorqueNm?: number;
+  /** Electric machine: its power (kW, either sign) and speed (rpm; default: the engine's, a unit on the gearbox
+   * input turns with it). Banks with an `mgu` loop stay silent without the power */
+  mguPowerKw?: number;
+  mguRpm?: number;
 }
 
 /** One looping grid point (buffer + lazily created voice); also used by the opponent voices (`opponent-audio.ts`) */
@@ -264,6 +363,8 @@ export class Lc26SoundBank {
   private skidVoices: Partial<Record<Lc26View, LoopVoice>> = {};
   private tcVoice: LoopVoice | null = null;
   private tcLevel = 0;
+  private mguVoice: LoopVoice | null = null;
+  private readonly toneNodes: AudioNode[] = [];
 
   private smoothThrottle = 0;
   /**
@@ -333,7 +434,8 @@ export class Lc26SoundBank {
     manifest.oneshots ??= [];
     this.manifest = manifest;
     const ctx = this.ctx;
-    // Engine loops pitch across 0.75x of the lowest anchor up to 1.35x of the highest anchor (covers idle to limiter)
+    // Engine loops pitch across 0.75x of the lowest anchor up to 1.35x of the highest anchor, and at least up to the
+    // car's limiter (`update`): a bank whose top anchor sits far below it still rises with the revs
     const rpms = [...manifest.engine.ext, ...manifest.engine.int].map((e) => e.rpm);
     this.rpmRange = [Math.min(...rpms) * 0.75, Math.max(...rpms) * 1.35];
 
@@ -368,6 +470,29 @@ export class Lc26SoundBank {
     if (manifest.tractionControl) {
       this.tcVoice = new LoopVoice(ctx, this.bus, 0);
       rawLoops.push({ file: manifest.tractionControl.file, voice: this.tcVoice });
+    }
+    if (manifest.mgu?.file && manifest.mgu.baseRpm > 0 && manifest.mgu.fullKw > 0) {
+      this.mguVoice = new LoopVoice(ctx, this.bus, 0);
+      rawLoops.push({ file: manifest.mgu.file, voice: this.mguVoice });
+    }
+    // Per-view tone stage, between the view's bus and the shared engine filter
+    for (const view of ['ext', 'int'] as Lc26View[]) {
+      const tone = manifest.viewTone?.[view];
+      if (!tone) continue;
+      const peak = ctx.createBiquadFilter();
+      peak.type = 'peaking';
+      peak.frequency.value = tone.peakHz;
+      peak.Q.value = tone.peakQ ?? 1;
+      peak.gain.value = tone.peakDb;
+      const shelf = ctx.createBiquadFilter();
+      shelf.type = 'highshelf';
+      shelf.frequency.value = tone.shelfHz;
+      shelf.gain.value = tone.shelfDb;
+      this.viewBus[view].disconnect();
+      this.viewBus[view].connect(peak);
+      peak.connect(shelf);
+      shelf.connect(this.engineFilter);
+      this.toneNodes.push(peak, shelf);
     }
 
     // Decode order: the view in use first so sound starts as early as possible
@@ -485,9 +610,9 @@ export class Lc26SoundBank {
     this.viewBus.ext.gain.setTargetAtTime(Math.cos(this.viewMix * Math.PI * 0.5), now, 0.02);
     this.viewBus.int.gain.setTargetAtTime(Math.sin(this.viewMix * Math.PI * 0.5), now, 0.02);
 
-    // Pedal smoothing (fast attack, slightly slower release)
+    // Pedal smoothing (fast attack, slightly slower release; one short time constant with a load filter)
     const thr = Math.min(1, Math.max(0, inp.throttle));
-    const k = thr > this.smoothThrottle ? 18 : 10;
+    const k = m.loadFilter ? 1 / Math.max(0.005, m.loadFilter.tauS ?? 0.025) : thr > this.smoothThrottle ? 18 : 10;
     this.smoothThrottle += (thr - this.smoothThrottle) * Math.min(1, dt * k);
 
     // First frame, or the first after a gap (pause, mute, restart): the gear and pedal as they are now
@@ -506,7 +631,7 @@ export class Lc26SoundBank {
       if (this.prevGear > 0 && inp.gear > 0) {
         const up = inp.gear > this.prevGear;
         if (up) {
-          this.upshiftLen = manual ? (m.shift?.clutchS ?? 0.25) : UPSHIFT_S;
+          this.upshiftLen = manual ? (m.shift?.clutchS ?? 0.25) : (m.shift?.cutS ?? UPSHIFT_S);
           this.upshiftTimer = this.upshiftLen;
           this.downshiftTimer = 0;
           if (!manual) {
@@ -537,12 +662,13 @@ export class Lc26SoundBank {
 
     // Audio RPM: a seamless upshift drops the revs in ~20 ms (a fast slew, under the cut's dip); elsewhere a ~25 ms
     // smoothing takes the physics' frame steps out of the pitch
-    const targetRpm = Math.min(this.rpmRange[1], Math.max(this.rpmRange[0], inp.rpm));
+    const rpmTop = Math.max(this.rpmRange[1], inp.limiterRpm * 1.05);
+    const targetRpm = Math.min(rpmTop, Math.max(this.rpmRange[0], inp.rpm));
     const shifting = this.upshiftTimer > 0 || this.downshiftTimer > 0;
     if (this.audioRpm === 0) {
       this.audioRpm = targetRpm;
     } else if (shifting && !manual) {
-      const span = Math.max(4000, this.rpmRange[1] - this.rpmRange[0]);
+      const span = Math.max(4000, rpmTop - this.rpmRange[0]);
       const maxSlew = span * 12 * dt;
       const diff = targetRpm - this.audioRpm;
       this.audioRpm += Math.sign(diff) * Math.min(Math.abs(diff), maxSlew);
@@ -581,8 +707,8 @@ export class Lc26SoundBank {
     const effThrottle = Math.max(this.smoothThrottle, blipThrottle) * clutchLoad;
 
     // Dynamic exhaust filter: opens up progressively with RPM and load so high revs scream cleanly
-    const rpmNorm = Math.min(1, Math.max(0, (rpm - this.rpmRange[0]) / Math.max(1000, this.rpmRange[1] - this.rpmRange[0])));
-    const cutoffHz = 3200 + rpmNorm * 6800 + effThrottle * 3800;
+    const rpmNorm = Math.min(1, Math.max(0, (rpm - this.rpmRange[0]) / Math.max(1000, rpmTop - this.rpmRange[0])));
+    const cutoffHz = m.loadFilter ? loadFilterHz(m.loadFilter, effThrottle) : 3200 + rpmNorm * 6800 + effThrottle * 3800;
     const shelfDb = -1.5 + rpmNorm * 5.0 * (0.4 + 0.6 * effThrottle);
     this.engineFilter.frequency.setTargetAtTime(cutoffHz, now, 0.018);
     this.engineShelf.gain.setTargetAtTime(shelfDb, now, 0.018);
@@ -605,13 +731,31 @@ export class Lc26SoundBank {
     this.turboOn?.update(boost, boostFade * Math.sin(onnessExt * Math.PI * 0.5), false, now, dt, tau);
     this.turboOff?.update(boost, boostFade * Math.cos(onnessExt * Math.PI * 0.5), false, now, dt, tau);
 
-    // Transmission whine (`drivetrain_speed`; taken as road speed in km/h, clamped to its 0..300 range)
-    const ds = Math.min(300, Math.max(0, inp.speedKmh));
+    // Transmission whine (`drivetrain_speed`; taken as road speed in km/h, clamped to its 0..300 range). A bank with
+    // a `driveline` section, on physics that gives the driveshafts, takes the speed, the on/off blend and the level
+    // from them instead
+    const drive =
+      m.driveline && inp.driveshaftRadS !== undefined
+        ? drivelineMix(m.driveline, inp.driveshaftRadS, inp.driveshaftTorqueNm ?? 0)
+        : null;
+    const ds = Math.min(drive ? 400 : 300, Math.max(0, drive ? drive.axisKmh : inp.speedKmh));
     const minDs = this.transOn?.voices[0]?.key ?? 20;
     const dsFade = Math.min(1, ds / Math.max(20, minDs * 0.45));
     const dsAxis = Math.max(25, ds);
-    this.transOn?.update(dsAxis, dsFade * Math.sin(onnessExt * Math.PI * 0.5), true, now, dt, tau);
-    this.transOff?.update(dsAxis, dsFade * Math.cos(onnessExt * Math.PI * 0.5), true, now, dt, tau);
+    const transOnness = drive ? drive.onness : onnessExt;
+    const transLevel = drive
+      ? dsFade *
+        drive.level *
+        ((m.driveline?.gain?.ext ?? 1) * (1 - this.viewMix) + (m.driveline?.gain?.int ?? 1) * this.viewMix)
+      : dsFade;
+    this.transOn?.update(dsAxis, transLevel * Math.sin(transOnness * Math.PI * 0.5), true, now, dt, tau);
+    this.transOff?.update(dsAxis, transLevel * Math.cos(transOnness * Math.PI * 0.5), true, now, dt, tau);
+
+    // Electric machine whine: silent unless the physics reports its power
+    if (this.mguVoice && m.mgu) {
+      const mgu = mguMix(m.mgu, inp.mguRpm ?? inp.rpm, inp.mguPowerKw, this.viewMix);
+      this.mguVoice.set(mgu.gain, mgu.rate, now, dt, 0.04, 0.03);
+    }
 
     // Lift-off: blow-off valve + overrun backfires / pops
     this.popCooldown = Math.max(0, this.popCooldown - dt);
@@ -677,6 +821,8 @@ export class Lc26SoundBank {
     this.transOff?.stopAll();
     for (const v of Object.values(this.skidVoices)) v?.stop();
     this.tcVoice?.stop();
+    this.mguVoice?.stop();
+    for (const n of this.toneNodes) n.disconnect();
     this.engineFilter.disconnect();
     this.engineShelf.disconnect();
     this.bus.disconnect();
@@ -744,6 +890,7 @@ export function prefetchSoundBank(assetDir: string): void {
         ...(m.oneshots ?? []).map((e) => e.file),
         ...Object.values(m.skid ?? {}).filter(Boolean).map((e) => (e as { file: string }).file),
         ...(m.tractionControl ? [m.tractionControl.file] : []),
+        ...(m.mgu?.file ? [m.mgu.file] : []),
       ]);
       for (const f of files) {
         const url = withBasePath(assetDir + f);

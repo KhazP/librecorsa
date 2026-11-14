@@ -66,6 +66,31 @@ export const GGV_TABLES: Record<VehicleModelId, GgvTable> = {
     accelG: [1.01, 0.98, 0.81, 0.64, 0.46, 0.29, 0.14, 0],
     lockKappa: Math.tan((240 / 14) * (Math.PI / 180)) / 2.8,
   },
+  // Measured 2026-11-14
+  'lc-lmdh': {
+    speedsMs: [15, 25, 35, 45, 55, 65, 75, 85],
+    latG: [1.59, 1.74, 1.91, 2.15, 2.45, 2.81, 3.16, 3.55],
+    brakeG: [1.7, 1.77, 1.94, 2.16, 2.44, 2.77, 3.15, 3.46],
+    accelG: [1.05, 0.99, 0.84, 0.68, 0.52, 0.37, 0.22, 0.08],
+    lockKappa: Math.tan((225 / 12.5) * (Math.PI / 180)) / 3.148,
+  },
+  // Measured 2026-11-13
+  'nissan-r33-jgtc': {
+    speedsMs: [15, 25, 35, 45, 55, 65, 75, 85],
+    latG: [1.37, 1.46, 1.6, 1.77, 1.94, 2.14, 2.33, 2.49],
+    brakeG: [1.27, 1.48, 1.53, 1.58, 1.62, 1.68, 1.74, 1.81],
+    accelG: [0.78, 0.69, 0.43, 0.34, 0.24, 0.13, 0.01, -0.36],
+    lockKappa: Math.tan((250 / 15) * (Math.PI / 180)) / 2.72,
+  },
+  // Measured 2026-11-13. Its brakeG at 15 and 35 m/s read 1.02 and 1.01: the auto box's 300 ms down-shift and blip
+  // land in the measuring window there, so those two are taken between their neighbours (the brakes' own ≈ 1.25 g)
+  'nissan-r32-jtcc': {
+    speedsMs: [15, 25, 35, 45, 55, 65, 75, 85],
+    latG: [1.14, 1.17, 1.18, 1.18, 1.17, 1.15, 1.15, 1.14],
+    brakeG: [1.2, 1.22, 1.3, 1.37, 1.41, 1.48, 1.51, 1.59],
+    accelG: [0.79, 0.57, 0.52, 0.37, 0.24, 0.17, 0.05, -0.02],
+    lockKappa: Math.tan((360 / 12.4) * (Math.PI / 180)) / 2.62,
+  },
 };
 
 export const G = 9.81;
