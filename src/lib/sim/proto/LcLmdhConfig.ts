@@ -356,13 +356,19 @@ const perArea = (lut: LutPoints): LutPoints => lut.map(([x, v]) => [x, Number((v
  * Splitter, underfloor and rear wing, with the body's drag as a constant [est]. Nothing public gives the car's map:
  * the regulations homologate each car inside a window of downforce and drag measured in one wind tunnel (Art. 3.9),
  * and the figures for it are in an appendix that was not retrieved. The numbers here make a car of CL·A ≈ 4.25 m² and
- * CD·A ≈ 0.99 m² (4.3 : 1) with 46.5 % of the downforce on the front axle, running 30 mm front and 42 mm rear at speed
- * on a 5.5° rear wing. The drag is held by the class's speed-trap figures (scripts/verify-lc-lmdh.ts); the downforce
- * was raised from 3.96 m² after the corner speeds read off a race lap's onboard footage of one of the class's cars came
- * out about a tenth above what the car could hold between 110 and 145 km/h (each ± 15 %: the radii are an ideal
- * line's), all of the gain under the floor, where it costs the least drag:
- *  - the splitter (CL·A 1.185 m²) works in ground effect: most at 22 mm, losing it quickly below 15 mm as it chokes
- *  - the underfloor and diffuser (2.115 m²) read the mean ride height and the rake
+ * CD·A ≈ 0.99 m² (4.3 : 1) with 44.5 % of the downforce on the front axle from 100 to 300 km/h held steady, running
+ * 30 mm front and 42 mm rear at speed on a 5.5° rear wing. The drag is held by the class's speed-trap figures
+ * (scripts/verify-lc-lmdh.ts); the downforce was raised from 3.96 m² after the corner speeds read off a race lap's
+ * onboard footage of one of the class's cars came out about a tenth above what the car could hold between 110 and
+ * 145 km/h (each ± 15 %: the radii are an ideal line's), all of the gain under the floor, where it costs the least drag.
+ * The balance stays behind the 46 % of the weight on the front axle as the car settles, so the car keeps its understeer
+ * at speed. With the splitter gaining more than the floor as the nose came down, it had moved from 44.4 % at 100 km/h
+ * to 46.9 % at 300, ahead of the weight: in a fast corner the rears worked nearly as hard as the fronts, and a lift, a
+ * quick change of direction or full throttle at 230 km/h used up what they had left:
+ *  - the splitter (CL·A 1.185 m²) works in ground effect: a little more down to 22 mm, losing it quickly below 15 mm as
+ *    it chokes
+ *  - the underfloor and diffuser (2.115 m²) read the mean ride height and the rake; they take the downforce the splitter
+ *    gives up as the car settles
  *  - the rear wing (0.95 m² at 5.5°) gains 0.065 m² of CL·A and 0.022 m² of CD·A a degree over its 1–9° range; it sits
  *    0.8 m behind the rear axle, so a degree moves the balance ≈ 1.1 % rearward
  */
@@ -395,10 +401,10 @@ const AERO: AeroData = {
       ]),
       lutGH_CL_mult: [
         [0, 0.3],
-        [0.008, 0.62],
-        [0.015, 0.98],
-        [0.022, 1.08],
-        [0.03, 1],
+        [0.008, 0.58],
+        [0.015, 0.86],
+        [0.022, 0.93],
+        [0.03, 0.915],
         [0.045, 0.9],
         [0.06, 0.82],
         [0.08, 0.72],
@@ -435,11 +441,11 @@ const AERO: AeroData = {
       ]),
       lutGH_CL_mult: [
         [0, 0.2],
-        [0.01, 0.55],
-        [0.02, 0.95],
-        [0.028, 1.05],
-        [0.036, 1],
-        [0.05, 0.9],
+        [0.01, 0.56],
+        [0.02, 1.04],
+        [0.028, 1.11],
+        [0.036, 1.06],
+        [0.05, 0.925],
         [0.065, 0.78],
         [0.085, 0.62],
         [0.11, 0.48],
@@ -726,8 +732,11 @@ export const LC_LMDH_POWER = { nMax: N_MAX, curve500Kw: POWER_CURVE_500, scaleVs
 
 /**
  * Traction control (Art. 9.3) [spec]: allowed wheelspin for each of the twelve switch positions, 8 % by default,
- * working from 40 km/h [est]. The car has no ABS (Art. 11.5.1) [spec]: the ABS table is the simulator's own, for the
- * driver-assist presets that add one
+ * working from 40 km/h [est]. It allows less wheelspin as the rears slide sideways: from 45 % of their peak slip angle
+ * the target falls by twice the excess, down to a quarter of the switch's figure [est], so the 507 kW out of a 130 or
+ * 180 km/h corner does not take the rears past their grip. Starting at 65 % and stopping at half the figure, it let
+ * them go. The car has no ABS (Art. 11.5.1) [spec]: the ABS table is the simulator's own, for the driver-assist
+ * presets that add one
  */
 export const LC_LMDH_ELECTRONICS = {
   absLevels: [0.06, 0.07, 0.08, 0.09, 0.1, 0.11, 0.12, 0.13, 0.14, 0.15, 0.16, 0.17],
@@ -737,6 +746,6 @@ export const LC_LMDH_ELECTRONICS = {
   tcDefault: 0.08,
   tcRateHz: 250,
   tcMinSpeedKmh: 40,
-  tcLateralTightening: { gain: 0.055, exponent: 1.3, floor: 0.5 },
-  tcDryRearSlide: { gain: 1.0, from: 0.65 },
+  tcLateralTightening: { gain: 0.055, exponent: 1.3, floor: 0.25 },
+  tcDryRearSlide: { gain: 2, from: 0.45 },
 };
