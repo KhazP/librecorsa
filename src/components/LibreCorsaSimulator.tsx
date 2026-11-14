@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { DEFAULT_TRACK_ID, getActivePointToPoint, getActiveTrackData, LIVERIES } from "@/lib/track-data";
 import { FfbPairPrompt } from "@/components/hud/FfbPairPrompt";
+import { DualSensePairPrompt } from "@/components/hud/DualSensePairPrompt";
 import { isVehicleModelId, vehicleModelsFor } from "@/lib/cars/vehicle-models";
 import { CARS, carById, carForVehicle, type CarId } from "@/lib/cars/car-registry";
 import { alignGhostToTrack } from "@/lib/sim/ghost-align";
@@ -51,6 +52,7 @@ import { TitleMenu } from "@/components/menu/TitleMenu";
 import { FirstRunWizard, type WizardMode, type WizardStepId } from "@/components/menu/FirstRunWizard";
 import { keyLabel, padButtonLabel } from "@/lib/input/bindings";
 import { autoConfigureWheel, connectedPads } from "@/lib/input/device-input";
+import { dualSenseHid } from "@/lib/input/webhid-dualsense";
 import { webHidFfb, wheelFfb } from "@/lib/input/wheel-ffb";
 import { nameProblem } from "@/lib/net/name-filter";
 import { clampFov, codeFromName, DEFAULT_PLAYER_SETTINGS, loadCarChoice, loadOnboarded, loadPlayerSettings, loadRumble, pushLibraryRecent, saveCarChoice, saveOnboarded, toggleLibraryFavorite, type LibraryKind, sanitizeDriverName, savePlayerSettings, saveRumble, type PlayerSettings } from "@/lib/settings/player-settings";
@@ -1280,6 +1282,10 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
     }
     void webHidFfb.reconnect();
   }, [hidFfbWanted]);
+  // A DualSense paired on an earlier visit opens again without a prompt (adaptive triggers, rumble, lights)
+  useEffect(() => {
+    void dualSenseHid.restore();
+  }, []);
   // A recognised wheel with no steering bound (the wizard's wheel step skipped, or plugged in later) is set up as a
   // wheel straight away; otherwise it drives as a gamepad, through the stick steering assist
   useEffect(() => {
@@ -1726,6 +1732,7 @@ export const LibreCorsaSimulator: React.FC<LibreCorsaSimulatorProps> = ({ trackI
       {/* Wheel force feedback over WebHID waits for one pairing click: offered on the title and the pause menu (not over
           the controls setup opened from it), never mid-lap */}
       <FfbPairPrompt wanted={hidFfbWanted && settings.wheel.steer !== null && (phase === "title" || (phase === "driving" && paused))} />
+      <DualSensePairPrompt wanted={phase === "title" && !(hidFfbWanted && settings.wheel.steer !== null)} />
 
       {loadingVisible ? (
         <LoadingScreen track={track} ready={assetsReady} onStart={handleLoadingStart} onDone={handleLoadingDone} />

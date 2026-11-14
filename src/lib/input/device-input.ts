@@ -16,6 +16,8 @@ import {
   type PadButtonBindings,
 } from "./bindings";
 import { logitechClassicModel, logitechHidppModel } from "./wheel-support";
+import { isDualSensePadId } from "./dualsense-protocol";
+import { dualSenseHid } from "./webhid-dualsense";
 
 export type InputDevice = "keyboard" | "controller" | "wheel";
 export type WheelType = "direct_drive" | "belt_gear";
@@ -244,7 +246,17 @@ const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v
  */
 export function connectedPads(): PadLike[] {
   if (typeof navigator === "undefined" || typeof navigator.getGamepads !== "function") return [];
-  const pads = navigator.getGamepads().filter((p): p is Gamepad => Boolean(p && p.connected !== false));
+  const pads: PadLike[] = navigator.getGamepads().filter((p): p is Gamepad => Boolean(p && p.connected !== false));
+  // A DualSense on Bluetooth that the WebHID driver writes to sends its extended report, which the Gamepad API may
+  // no longer read: the pad parsed from the HID reports takes its place, under the browser's id for it
+  const hidPad = dualSenseHid.bluetoothPad();
+  if (hidPad) {
+    const i = pads.findIndex((p) => isDualSensePadId(p.id));
+    const native = i >= 0 ? pads[i] : undefined;
+    const stand = native ? { ...hidPad, id: native.id, index: native.index } : { ...hidPad, index: pads.length };
+    if (i >= 0) pads[i] = stand;
+    else pads.push(stand);
+  }
   const seen = new Map<string, number>();
   return pads.map((p) => {
     const n = (seen.get(p.id) ?? 0) + 1;

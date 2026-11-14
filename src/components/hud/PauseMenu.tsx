@@ -71,6 +71,7 @@ import {
   type RaceSetup,
 } from "@/lib/sim/race-setup";
 import { DAMAGE_LEVEL_LABELS, DAMAGE_LEVELS } from "@/lib/sim/car-damage";
+import { DualSenseCard } from "@/components/menu/steps/DualSenseCard";
 
 /** A row of choices as chips (the race setup) */
 function SetupChips<T extends string | number>(props: {
@@ -850,6 +851,13 @@ export const SessionPanel: React.FC<PauseMenuProps> = (p) => {
       <div className="flex flex-col gap-3.5">
         {p.settings && p.onChangeSettings ? (
           <InputAssistPanel settings={p.settings} onChangeSettings={p.onChangeSettings} lockDeg={p.steerLockDeg} />
+        ) : null}
+        {p.settings && p.onChangeSettings ? (
+          <DualSenseCard
+            variant="pause"
+            settings={p.settings.dualSense}
+            onChange={(patch) => p.onChangeSettings?.((s) => ({ ...s, dualSense: { ...s.dualSense, ...patch } }))}
+          />
         ) : null}
 
         <section className={PANEL_CARD} aria-label="Controls">

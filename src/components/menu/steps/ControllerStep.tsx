@@ -25,6 +25,8 @@ import { CAPTURE_TIMEOUT_S, useButtonCapture } from "./button-capture";
 import { FACE_BUTTONS, padButtonName, padFamilyOf, useInputMode, type PadFamily } from "../input-mode";
 import { StickCurve, TriggerBars, TuningSlider } from "./TuningSlider";
 import { PadMap } from "./PadMap";
+import { DualSenseCard, testDualSenseRumble } from "./DualSenseCard";
+import { dualSenseHid } from "@/lib/input/webhid-dualsense";
 import { AssistTuningCard, AutoGrid, BindRow, bindKeyClass, ChoiceText, Hint, PillAction, SetupCard, StatusPill, TrackMeter } from "./setup-ui";
 import type { SetupStepProps } from "./types";
 
@@ -49,8 +51,10 @@ type VibratingPad = Gamepad & {
   vibrationActuator?: { playEffect?: (type: string, params: Record<string, number>) => Promise<unknown> } | null;
 };
 
-function testRumble() {
+function testRumble(settings: SetupStepProps["settings"]) {
+  if (dualSenseHid.connected()) testDualSenseRumble(settings.dualSense);
   for (const pad of connectedPads() as VibratingPad[]) {
+    if (dualSenseHid.ownsPad(pad.id)) continue;
     try {
       void pad.vibrationActuator
         ?.playEffect?.("dual-rumble", { startDelay: 0, duration: 450, weakMagnitude: 0.6, strongMagnitude: 0.9 })
@@ -170,12 +174,17 @@ export const ControllerStep: React.FC<SetupStepProps & { steerLockDeg?: number }
                 onChange={onToggleGamepadRumble}
               />
             </div>
-            <PillAction onClick={testRumble} className="h-[34px]!">
+            <PillAction onClick={() => testRumble(settings)} className="h-[34px]!">
               Test
             </PillAction>
           </div>
         </div>
       </SetupCard>
+
+      <DualSenseCard
+        settings={settings.dualSense}
+        onChange={(patch) => onChangeSettings((s) => ({ ...s, dualSense: { ...s.dualSense, ...patch } }))}
+      />
 
       <SetupCard
         label="Buttons · RT throttle · LT brake · left stick steers"
