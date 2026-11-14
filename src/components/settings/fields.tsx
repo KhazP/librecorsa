@@ -16,7 +16,7 @@ import {
   useSettingsDetail,
 } from "@/components/ui";
 import { Icon } from "@/components/ui/icons";
-import { DEFAULT_PLAYER_SETTINGS, type PlayerSettings } from "@/lib/settings/player-settings";
+import { defaultPlayerSettings, type PlayerSettings } from "@/lib/settings/player-settings";
 import { useSettingsEnv, type SettingsEnv } from "./env";
 
 /**
@@ -75,12 +75,12 @@ export type RowDef = ToggleDef | SliderDef | ChoiceDef;
 
 type S = PlayerSettings;
 
-/** Read, write and default of a value inside the saved settings */
+/** Read, write and default of a value inside the saved settings; the default is this device's (Medium on a touch screen) */
 export function lens<T>(get: (s: S) => T, put: (s: S, value: T) => S) {
   return {
     read: (env: SettingsEnv) => get(env.settings),
     write: (env: SettingsEnv, value: T) => env.update((s) => put(s, value)),
-    initial: () => get(DEFAULT_PLAYER_SETTINGS),
+    initial: () => get(defaultPlayerSettings()),
   };
 }
 

@@ -86,7 +86,7 @@ import { startSimWorker } from "@/lib/sim/runtime/worker-sim-host";
 import { steeringAssistSettings } from "@/lib/sim/steering-assist";
 import { applyTimeTrial, lowestFuelSetup, timeTrialRealism, type TimeTrialRules } from "@/lib/sim/time-trial";
 import { axleSlipFromTelemetry, createAxleSlipSample } from "@/lib/sim/tyre-slip";
-import { clampFov, DEFAULT_KEYBOARD_TUNING, DEFAULT_PLAYER_SETTINGS, type PlayerSettings } from "@/lib/settings/player-settings";
+import { clampFov, DEFAULT_KEYBOARD_TUNING, defaultPlayerSettings, type PlayerSettings } from "@/lib/settings/player-settings";
 import type { AeroSetupPreset, CameraMode, CarTelemetry, LiveTunerPatch, RadarBlip, TireCompound, TyreSetup, VehicleModelId } from "@/types/f1";
 
 /** Matches the aero package the track's target speeds / braking markers are computed for */
@@ -529,8 +529,11 @@ export class DriveSession {
       this.unlockAudio();
       setSettings((prev) => ({ ...prev, audio: { ...prev.audio, muted: !prev.audio.muted } }));
     };
-    /** The player's preferences (applySettings), and what the frame loop derives from them */
-    let settings: PlayerSettings = DEFAULT_PLAYER_SETTINGS;
+    /**
+     * The player's preferences (applySettings), and what the frame loop derives from them. Until the save arrives,
+     * this device's defaults: a touch screen starts on Medium graphics rather than building High first
+     */
+    let settings: PlayerSettings = defaultPlayerSettings();
     let keyLookup = buildKeyLookup(settings.keys);
     let assistSettings = steeringAssistSettings(settings.padTuning, settings.keyboardTuning);
     const liveryFor = (id: string | null) => LIVERIES.find((l) => l.id === id) ?? LIVERIES[0];
@@ -844,8 +847,8 @@ export class DriveSession {
     });
     // Rain streaks around the camera (one GPU-animated draw, hidden in the dry)
     const rainFx = createRainFx(scene);
-    // Scene render + one merged effect pass (mipmap bloom, then AgX tone mapping); applyGraphicsQuality puts the
-    // physical sky's clouds in front of it
+    // Scene render + one merged effect pass (mipmap bloom on High, then AgX tone mapping and the grade);
+    // applyGraphicsQuality puts the physical sky's clouds in front of it
     const postFx = createPostFx(renderer, scene, camera);
     // Live reflections of the world on the cars (High / Medium); Low keeps the sky's
     const reflectionProbe = new CarReflectionProbe(renderer, scene);
@@ -1579,15 +1582,17 @@ export class DriveSession {
       }
     }
     /**
-     * Behind the opaque loading screen: upload every texture, then draw one full frame through the composer with frustum
-     * culling off, so the shadow-map and post-processing programs and every vertex buffer are ready before the first
-     * visible frame instead of stalling it
+     * Behind the opaque loading screen: upload the textures of everything shown, then draw one full frame through the
+     * composer with frustum culling off, so the shadow-map and post-processing programs and every vertex buffer are
+     * ready before the first visible frame instead of stalling it
      */
     const warmUpGpu = () => {
       const t0 = performance.now();
       const textures = new Set<THREE.Texture>();
       const unculled: THREE.Object3D[] = [];
-      scene.traverse((o) => {
+      // What this frame draws: a hidden object (or one under a hidden parent) is left for the frame that shows it,
+      // rather than putting its textures on the GPU for nothing
+      scene.traverseVisible((o) => {
         const mat = (o as THREE.Mesh).material as THREE.Material | THREE.Material[] | undefined;
         for (const m of Array.isArray(mat) ? mat : mat ? [mat] : []) {
           for (const v of Object.values(m)) if (v instanceof THREE.Texture) textures.add(v);

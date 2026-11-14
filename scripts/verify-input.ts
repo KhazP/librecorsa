@@ -53,6 +53,7 @@ import {
   DEFAULT_KEYBOARD_TUNING,
   DEFAULT_PAD_TUNING,
   DEFAULT_PLAYER_SETTINGS,
+  defaultGraphicsSettings,
   FFB_POLARITY_V2_KEY,
   KEYBOARD_FEEL_FIELDS,
   KEYBOARD_PEDAL_HELP_FIELDS,
@@ -81,6 +82,7 @@ import {
   sanitizeAssistTuning,
   steeringAssistSettings,
 } from '../src/lib/sim/steering-assist';
+import { resetAllSettings } from '../src/components/settings/storage';
 
 let passed = 0;
 function check(name: string, fn: () => void) {
@@ -572,6 +574,36 @@ check('pre-fix ffbInvert: true save is reset once on load; post-v2 ffbInvert: tr
     if (prevStorage === undefined) delete g.localStorage;
     else g.localStorage = prevStorage;
   }
+});
+check('a touch screen starts on Medium graphics until the player picks; a saved preset is kept', () => {
+  const store = new Map<string, string>();
+  const g = globalThis as unknown as { localStorage?: Storage; window?: unknown };
+  const prevStorage = g.localStorage;
+  g.localStorage = {
+    getItem: (k: string) => store.get(k) ?? null,
+    setItem: (k: string, v: string) => void store.set(k, v),
+    removeItem: (k: string) => void store.delete(k),
+    clear: () => store.clear(),
+    key: () => null,
+    length: 0,
+  };
+  g.window = { matchMedia: (q: string) => ({ matches: q === '(pointer: coarse)' }) };
+  try {
+    assert.equal(defaultGraphicsSettings().quality, 'medium');
+    assert.equal(loadPlayerSettings().graphics.quality, 'medium', 'first visit');
+    assert.equal(parsePlayerSettings({}).graphics.quality, 'medium', 'a save without graphics');
+    assert.equal(parsePlayerSettings({ graphics: { quality: 'ultra', renderScale: 0.8 } }).graphics.quality, 'medium', 'an unknown preset');
+    assert.equal(parsePlayerSettings({ graphics: { quality: 'high' } }).graphics.quality, 'high', 'a saved High is kept');
+    store.set(SETTINGS_STORAGE_KEY, JSON.stringify({ ...DEFAULT_PLAYER_SETTINGS, graphics: { ...DEFAULT_PLAYER_SETTINGS.graphics, quality: 'low' } }));
+    assert.equal(loadPlayerSettings().graphics.quality, 'low', 'a saved Low is kept');
+    assert.equal(resetAllSettings(loadPlayerSettings()).graphics.quality, 'medium', 'Reset all settings');
+    assert.equal(DEFAULT_PLAYER_SETTINGS.graphics.quality, 'high', 'the prerendered defaults stay as they were');
+  } finally {
+    delete g.window;
+    if (prevStorage === undefined) delete g.localStorage;
+    else g.localStorage = prevStorage;
+  }
+  assert.equal(defaultGraphicsSettings().quality, 'high', 'no touch screen (or no window): High');
 });
 
 check('direction test: right then left (left first inverted), zero in the gap and after', () => {

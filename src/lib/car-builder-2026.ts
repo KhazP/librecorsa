@@ -4,6 +4,7 @@ import { SATIN_PAINT } from "@/lib/render/paint-finish";
 import { LC26_MODEL_URL, attachLc26Model, loadLc26Template, type Lc26ModelInstance } from "@/lib/lc26-car-model";
 import type { WheelSeating } from "@/lib/render/corner-rig";
 import { moveToDriverHeadLayer } from "@/lib/render/layers";
+import { disposeTree } from "@/lib/render/dispose-tree";
 import { PIRELLI_COMPOUND_COLORS } from "@/lib/render/pirelli-sidewall";
 
 /** What the simulator drives on any car rig (the F1 rig below, or the GT3's in gt3-car-model) */
@@ -831,6 +832,28 @@ function buildRoundedF1TireGeometry(
   const geom = new THREE.LatheGeometry(pts, 36);
   geom.rotateZ(Math.PI * 0.5);
   return geom;
+}
+
+/**
+ * Takes the procedural car out of its rig once the model has replaced it and frees it: disposeTree's geometry,
+ * materials and textures, then the 2D canvases those textures were drawn on, which disposeTree leaves alone (each
+ * keeps its pixels, in GPU memory where the browser accelerates 2D canvases). Out of the scene graph, the shader
+ * compile, the reflection probe and the ghost's material swap no longer reach it either.
+ */
+function freeProceduralParts(parts: readonly THREE.Object3D[]): void {
+  const canvases = new Set<HTMLCanvasElement>();
+  for (const part of parts) {
+    part.removeFromParent();
+    part.traverse((obj) => {
+      const mat = (obj as THREE.Mesh).material;
+      for (const m of Array.isArray(mat) ? mat : mat ? [mat] : []) {
+        for (const v of Object.values(m)) if (v instanceof THREE.Texture && v.image instanceof HTMLCanvasElement) canvases.add(v.image);
+      }
+    });
+    disposeTree(part);
+  }
+  // A zero-sized canvas lets go of its pixels; its texture is freed and out of the scene, so it is never uploaded again
+  for (const canvas of canvases) canvas.width = canvas.height = 0;
 }
 
 export function createF1Car2026(
@@ -2592,7 +2615,11 @@ export function createF1Car2026(
   let currentLivery = initialLivery;
   const setLivery = (livery: LiveryConfig) => {
     currentLivery = livery;
-    lc26?.setLivery(livery);
+    // Once the model is on, the procedural car has been freed: its canvases are not drawn again
+    if (lc26) {
+      lc26.setLivery(livery);
+      return;
+    }
     primaryPaintMat.color.set(livery.primary);
     secondaryPaintMat.color.set(livery.secondary);
     accentPaintMat.color.set(livery.accent);
@@ -2699,7 +2726,7 @@ export function createF1Car2026(
     }
   };
 
-  // Swap in the 3D model when available (public/cars/f12026/model/f12026.glb)
+  // Swap in the 3D model when available (public/cars/f12026/model/f12026.glb); without it the procedural car stays
   const proceduralParts = [...chassisGroup.children, ...root.children.filter((c) => c !== chassisGroup)];
   let rigDisposed = false;
   void loadLc26Template(modelUrl).then((template) => {
@@ -2707,7 +2734,9 @@ export function createF1Car2026(
     lc26 = attachLc26Model(template, root, chassisGroup, options);
     lc26.setTireCompound(currentCompound);
     lc26.setLivery(currentLivery);
-    for (const part of proceduralParts) part.visible = false;
+    // Never shown again, so freed rather than hidden: this runs for the player's car and every F1 opponent and ghost
+    // rig, each with its own 25 canvas textures (13 of them the steering wheel's button caps)
+    freeProceduralParts(proceduralParts);
   });
 
   return {
