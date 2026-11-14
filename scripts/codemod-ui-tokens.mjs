@@ -181,7 +181,7 @@ const rootFontSize = /(?:^|[\s}])(?:html|:root)\s*\{[^}]*\bfont-size\s*:\s*([^;]
 
 // Rule 5: the two class bodies, compared rather than assumed
 function cssRuleBody(selector) {
-  const re = new RegExp(`(^|\\n)\\s*${selector.replace(/[.]/g, "\\.")}\\s*\\{([^}]*)\\}`);
+  const re = new RegExp(`(^|\\n)\\s*${selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*\\{([^}]*)\\}`);
   const m = re.exec(css);
   if (!m) return null;
   const layered = (() => {
@@ -1317,7 +1317,7 @@ for (const e of allEdits) byRule.set(e.rule, (byRule.get(e.rule) ?? 0) + 1);
 
 const L = [];
 const out = (s = "") => L.push(s);
-const cell = (s) => String(s).replace(/\|/g, "\\|").replace(/`/g, "'");
+const cell = (s) => String(s).replace(/\\/g, "\\\\").replace(/\|/g, "\\|").replace(/`/g, "'");
 const code = (s) => "`" + String(s).replace(/`/g, "'") + "`";
 const group = (list, key) => {
   const m = new Map();
