@@ -46,7 +46,7 @@ export async function loadSceneryInstances(url: string): Promise<THREE.Object3D 
     const gltf = await createGltfLoader().loadAsync(withBasePath(url));
     return gltf.scene;
   } catch (err) {
-    console.warn(`[scenery] ${url} did not load; keeping the circuit's own scenery it replaces:`, err);
+    console.warn("[scenery] %s did not load; keeping the circuit's own scenery it replaces:", url, err);
     return null;
   }
 }
