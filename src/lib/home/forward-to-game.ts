@@ -17,4 +17,8 @@ import { withBasePath } from "@/lib/base-path";
 const GAME_PARAMS = ["room", "car", "sim", "f1physics", "lc26engine", "vf26engine", "depth", "sky", "colliders", "perf", "profile"]; // keep-old-id: the engine switch under the car's old name
 const HOME = withBasePath("/").replace(/\/+$/, "") || "/";
 
-export const FORWARD_TO_GAME = `(function(){try{if((location.pathname.replace(/\\/+$/,"")||"/")!==${JSON.stringify(HOME)})return;var q=new URLSearchParams(location.search);var game=${JSON.stringify(GAME_PARAMS)}.some(function(k){return q.has(k)});var framed=window.self!==window.top;var app=matchMedia("(display-mode: standalone)").matches;if(game||framed||app)location.replace(${JSON.stringify(withBasePath("/play"))}+location.search+location.hash)}catch(e){}})()`;
+/** A value as script source: JSON, with the characters that could close the script tag or end a line escaped. */
+const inline = (value: unknown) =>
+  JSON.stringify(value).replace(/[<>\u2028\u2029]/g, (c) => "\\u" + c.charCodeAt(0).toString(16).padStart(4, "0"));
+
+export const FORWARD_TO_GAME = `(function(){try{if((location.pathname.replace(/\\/+$/,"")||"/")!==${inline(HOME)})return;var q=new URLSearchParams(location.search);var game=${inline(GAME_PARAMS)}.some(function(k){return q.has(k)});var framed=window.self!==window.top;var app=matchMedia("(display-mode: standalone)").matches;if(game||framed||app)location.replace(${inline(withBasePath("/play"))}+location.search+location.hash)}catch(e){}})()`;
